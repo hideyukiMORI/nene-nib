@@ -477,15 +477,15 @@ std::size_t skip_variable(LexCursor &cursor, std::size_t at)
     {
         return std::nullopt;
     }
-    if (lex_folded_in(php_constants, word))
+    if (lex_folded_in<php_constants>(word))
     {
         return SyntaxRole::constant;
     }
-    if (lex_folded_in(php_keywords, word))
+    if (lex_folded_in<php_keywords>(word))
     {
         return SyntaxRole::keyword;
     }
-    if (lex_folded_in(php_types, word))
+    if (lex_folded_in<php_types>(word))
     {
         return SyntaxRole::type;
     }

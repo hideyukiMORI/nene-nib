@@ -3,6 +3,7 @@
 #include "LexCharacter.hpp"
 #include "LexCursor.hpp"
 #include "LexKind.hpp"
+#include "LexScan.hpp"
 #include "SyntaxRole.hpp"
 
 #include <algorithm>
@@ -369,12 +370,12 @@ std::size_t prefixed_literal(LexCursor &cursor, std::size_t at, std::size_t end)
         return unclosed;
     }
     const std::string_view word = line.substr(at, end - at);
-    if (line[end] == '"' && std::ranges::binary_search(raw_prefixes, word))
+    if (line[end] == '"' && lex_in<raw_prefixes>(word))
     {
         return lex_raw(cursor, at, end);
     }
     const bool quoted = line[end] == '"' || line[end] == '\'';
-    if (quoted && std::ranges::binary_search(string_prefixes, word))
+    if (quoted && lex_in<string_prefixes>(word))
     {
         return mark_quoted(cursor, at, end);
     }
@@ -384,15 +385,15 @@ std::size_t prefixed_literal(LexCursor &cursor, std::size_t at, std::size_t end)
 // 予約語・型・定数の表の順に引き、どれでもなく直後が `(` なら関数。
 [[nodiscard]] std::optional<SyntaxRole> word_role(std::string_view word, bool called) noexcept
 {
-    if (std::ranges::binary_search(cpp_keywords, word))
+    if (lex_in<cpp_keywords>(word))
     {
         return SyntaxRole::keyword;
     }
-    if (std::ranges::binary_search(cpp_types, word))
+    if (lex_in<cpp_types>(word))
     {
         return SyntaxRole::type;
     }
-    if (std::ranges::binary_search(cpp_constants, word))
+    if (lex_in<cpp_constants>(word))
     {
         return SyntaxRole::constant;
     }

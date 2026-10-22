@@ -240,7 +240,7 @@ std::size_t lex_word(LexCursor &cursor, std::size_t at)
     {
         cursor.mark(at, end, SyntaxRole::type);
     }
-    else if (std::ranges::binary_search(resource_constants, line.substr(at, end - at)))
+    else if (lex_in<resource_constants>(line.substr(at, end - at)))
     {
         cursor.mark(at, end, SyntaxRole::constant);
     }

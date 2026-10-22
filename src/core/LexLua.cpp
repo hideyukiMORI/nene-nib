@@ -198,12 +198,12 @@ std::size_t lex_word(LexCursor &cursor, std::size_t at)
     const std::string_view line = cursor.line();
     const std::size_t end = lex_word_end(line, at);
     const std::string_view word = line.substr(at, end - at);
-    if (std::ranges::binary_search(lua_constants, word))
+    if (lex_in<lua_constants>(word))
     {
         cursor.mark(at, end, SyntaxRole::constant);
         return end;
     }
-    if (!std::ranges::binary_search(lua_keywords, word))
+    if (!lex_in<lua_keywords>(word))
     {
         return end;
     }

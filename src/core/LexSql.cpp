@@ -237,19 +237,19 @@ std::size_t lex_operators(LexCursor &cursor, std::size_t at)
 // 定数・予約語・型・関数の表の順に大小を畳んで引く。
 [[nodiscard]] std::optional<SyntaxRole> word_role(std::string_view word) noexcept
 {
-    if (lex_folded_in(sql_constants, word))
+    if (lex_folded_in<sql_constants>(word))
     {
         return SyntaxRole::constant;
     }
-    if (lex_folded_in(sql_keywords, word))
+    if (lex_folded_in<sql_keywords>(word))
     {
         return SyntaxRole::keyword;
     }
-    if (lex_folded_in(sql_types, word))
+    if (lex_folded_in<sql_types>(word))
     {
         return SyntaxRole::type;
     }
-    return lex_folded_in(sql_functions, word) ? std::optional{SyntaxRole::function} : std::nullopt;
+    return lex_folded_in<sql_functions>(word) ? std::optional{SyntaxRole::function} : std::nullopt;
 }
 
 std::size_t lex_word(LexCursor &cursor, std::size_t at)

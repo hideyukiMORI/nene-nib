@@ -220,7 +220,7 @@ std::size_t lex_word(LexCursor &cursor, std::size_t at)
     const std::string_view line = cursor.line();
     const std::size_t end = lex_word_end(line, at);
     const std::size_t suffixed = notfound_end(line, end);
-    if (suffixed != end || lex_folded_in(cmake_constants, line.substr(at, end - at)))
+    if (suffixed != end || lex_folded_in<cmake_constants>(line.substr(at, end - at)))
     {
         cursor.mark(at, suffixed, SyntaxRole::constant);
     }
@@ -238,7 +238,7 @@ std::size_t lex_first_word(LexCursor &cursor, std::size_t at)
     {
         return lex_word(cursor, at);
     }
-    const bool control = lex_folded_in(cmake_control_commands, line.substr(at, end - at));
+    const bool control = lex_folded_in<cmake_control_commands>(line.substr(at, end - at));
     cursor.mark(at, end, control ? SyntaxRole::keyword : SyntaxRole::function);
     return end;
 }

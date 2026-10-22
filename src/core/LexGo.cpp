@@ -241,19 +241,19 @@ std::size_t lex_slash(LexCursor &cursor, std::size_t at, std::size_t named)
 // 定数・予約語・型・組み込みの関数の表の順に引き、どれでもなく `func` の名前なら関数。
 [[nodiscard]] std::optional<SyntaxRole> word_role(std::string_view word, bool named) noexcept
 {
-    if (std::ranges::binary_search(go_constants, word))
+    if (lex_in<go_constants>(word))
     {
         return SyntaxRole::constant;
     }
-    if (std::ranges::binary_search(go_keywords, word))
+    if (lex_in<go_keywords>(word))
     {
         return SyntaxRole::keyword;
     }
-    if (std::ranges::binary_search(go_types, word))
+    if (lex_in<go_types>(word))
     {
         return SyntaxRole::type;
     }
-    const bool builtin = std::ranges::binary_search(go_builtins, word);
+    const bool builtin = lex_in<go_builtins>(word);
     return builtin || named ? std::optional{SyntaxRole::function} : std::nullopt;
 }
 
