@@ -24,6 +24,9 @@ enum class Language : std::uint8_t
     css,
     powershell,
     shell,
-    cmake
+    cmake,
+    gdscript,
+    dosini,
+    gdresource
 };
 } // namespace nenenib::core

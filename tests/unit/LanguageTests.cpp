@@ -162,10 +162,31 @@ void verify_extension_table()
            "an empty extension is plain and a dot file uses the text after the dot");
 }
 
-// 名前の表と逆引き（決定 3）。16 本の往復と、小文字だけを受けること。
+// #855: GDScript と Ini と Godot の設定の拡張子（Vim の filetype.vim に寄せる）。`.cfg` は Vim では
+// 別の filetype（cfg）なので plain のまま。`.godot`（project.godot）は Vim に行が無く gdresource。
+void verify_godot_extensions()
+{
+    using Row = std::pair<std::string_view, Language>;
+    constexpr std::array<Row, 7> rows{{
+        {"player.gd", Language::gdscript},
+        {"php.ini", Language::dosini},
+        {"SETTINGS.INI", Language::dosini},
+        {"main.tscn", Language::gdresource},
+        {"theme.tres", Language::gdresource},
+        {"C:\\game\\project.godot", Language::gdresource},
+        {"export_presets.cfg", Language::plain},
+    }};
+    for (const auto &[path, language] : rows)
+    {
+        expect(core::language_of_path(path) == language,
+               "language_of_path maps the Godot and Ini extensions");
+    }
+}
+
+// 名前の表と逆引き（決定 3）。19 本の往復と、小文字だけを受けること。
 void verify_names()
 {
-    constexpr std::array<std::pair<Language, std::string_view>, 16> names{{
+    constexpr std::array<std::pair<Language, std::string_view>, 19> names{{
         {Language::plain, "text"},
         {Language::markdown, "markdown"},
         {Language::html, "html"},
@@ -182,6 +203,9 @@ void verify_names()
         {Language::powershell, "ps1"},
         {Language::shell, "sh"},
         {Language::cmake, "cmake"},
+        {Language::gdscript, "gdscript"},
+        {Language::dosini, "dosini"},
+        {Language::gdresource, "gdresource"},
     }};
     for (const auto &[language, name] : names)
     {
@@ -424,6 +448,7 @@ void verify_unloaded_document()
 void verify_language_scope()
 {
     verify_extension_table();
+    verify_godot_extensions();
     verify_names();
     verify_ex_evaluation();
     verify_completion();

@@ -118,6 +118,33 @@ constexpr std::array<std::string_view, template_count> toml_templates{
     "inline = { x = 1, y.z = \"w\", flag = true } # inline table with dotted key",
     "numbers = [ 1_000, 0xDEAD_BEEF, 6.626e-34, -inf, nan, +99 ] # array of numbers",
     "when = 1979-05-27T07:32:00-08:00 # offset date-time and 'literal' text"};
+// GDScript（#855）: 注釈・型の注釈・3 連引用符（2 行目が開き 3 行目が閉じる）・StringName と
+// NodePath・ノードのパス・`%`・数の形。
+constexpr std::array<std::string_view, template_count> gdscript_templates{
+    "@export var speed: float = 120.5  # exported with a type annotation and a default",
+    "    var doc := \"\"\"multi-line string opens here with 'quotes' and \\t escapes",
+    "    still inside\"\"\" + &\"name\" + ^\"Path/To:prop\"; var n = $Path/To/Node",
+    "func move(delta: float, dir: Vector2) -> void: position += dir * speed * delta",
+    "    if hp % 2 == 0 and not self.dead: await get_tree().create_timer(1.5).timeout",
+    "    match state: State.IDLE when %Label.visible: return 0xFF_FF + 1_000 + .5"};
+// Ini（#855・dosini）: 見出し・空白の入ったキー・数の値・コメント・文字列。行をまたがない。
+constexpr std::array<std::string_view, template_count> dosini_templates{
+    "[Section Name] ; a section header followed by trailing text",
+    "key with spaces = some plain value text that is not a number at all",
+    "count = 42",
+    "; comment line with = equals and \"quotes\" inside it",
+    "name = \"quoted value\" and \"another one\" in the same line",
+    "path=C:\\Windows\\System32\\drivers\\etc ; not a comment in dosini"};
+// Godot の設定（#855・gdresource）: 見出しと属性・行をまたぐ `"…"`（2 行目が開き 3 行目が閉じる）・
+// 呼び出しの名前・数・StringName と NodePath・定数・`;` のコメント。
+constexpr std::array<std::string_view, template_count> gdresource_templates{
+    "[gd_scene load_steps=3 format=3 uid=\"uid://cvx1a2b3c4d5\"]",
+    "script/source = \"extends Node2D multi-line string opens here with \\\"escaped\\\" quotes",
+    "func _ready(): pass\" ; closes the embedded script string",
+    "[node name=\"Player\" type=\"CharacterBody2D\" parent=\".\" groups=[\"solid\", \"wall\"]]",
+    "points = PackedVector2Array(-8, -8, 8, -8, 1e+06, .25) ; polygon points",
+    "config/features=PackedStringArray(\"4.3\", \"GL Compatibility\"), &\"jump\", ^\"../Player\", "
+    "true"};
 
 [[nodiscard]] constexpr core::Language language_of(LexerWorkload workload)
 {
@@ -152,19 +179,28 @@ constexpr std::array<std::string_view, template_count> toml_templates{
     case LexerWorkload::toml_visible_60:
     case LexerWorkload::toml_backfill_200:
         return core::Language::toml;
+    case LexerWorkload::gdscript_visible_60:
+    case LexerWorkload::gdscript_backfill_200:
+        return core::Language::gdscript;
+    case LexerWorkload::dosini_visible_60:
+        return core::Language::dosini;
+    case LexerWorkload::gdresource_visible_60:
+    case LexerWorkload::gdresource_backfill_200:
+        return core::Language::gdresource;
     }
     std::unreachable();
 }
 
 [[nodiscard]] constexpr bool is_visible(LexerWorkload workload)
 {
-    constexpr std::array<LexerWorkload, 11> visible{
+    constexpr std::array<LexerWorkload, 14> visible{
         LexerWorkload::cpp_visible_60,      LexerWorkload::json_visible_60,
         LexerWorkload::python_visible_60,   LexerWorkload::markdown_visible_60,
         LexerWorkload::markdown_worst_line, LexerWorkload::javascript_visible_60,
         LexerWorkload::html_visible_60,     LexerWorkload::xml_visible_60,
         LexerWorkload::css_visible_60,      LexerWorkload::yaml_visible_60,
-        LexerWorkload::toml_visible_60};
+        LexerWorkload::toml_visible_60,     LexerWorkload::gdscript_visible_60,
+        LexerWorkload::dosini_visible_60,   LexerWorkload::gdresource_visible_60};
     return std::ranges::find(visible, workload) != visible.end();
 }
 
@@ -175,7 +211,7 @@ constexpr std::array<std::string_view, template_count> toml_templates{
 
 [[nodiscard]] constexpr std::span<const std::string_view> templates_of(LexerWorkload workload)
 {
-    constexpr std::array<std::pair<core::Language, std::span<const std::string_view>>, 9> tables{
+    constexpr std::array<std::pair<core::Language, std::span<const std::string_view>>, 12> tables{
         {{core::Language::json, json_templates},
          {core::Language::markdown, markdown_templates},
          {core::Language::javascript, javascript_templates},
@@ -184,7 +220,10 @@ constexpr std::array<std::string_view, template_count> toml_templates{
          {core::Language::xml, xml_templates},
          {core::Language::css, css_templates},
          {core::Language::yaml, yaml_templates},
-         {core::Language::toml, toml_templates}}};
+         {core::Language::toml, toml_templates},
+         {core::Language::gdscript, gdscript_templates},
+         {core::Language::dosini, dosini_templates},
+         {core::Language::gdresource, gdresource_templates}}};
     const core::Language language = language_of(workload);
     for (const auto &[table_language, templates] : tables)
     {
@@ -196,14 +235,19 @@ constexpr std::array<std::string_view, template_count> toml_templates{
     return cpp_templates;
 }
 
-// 各行は「型の行 + 言語の行末コメントの印（JSON・Markdown・HTML・XML・CSS は空白）+ 詰め物」で
-// 100 バイトにそろえる。詰め物は `-` で、Markdown だけ空白（フェンスの閉じの行を閉じのまま保つ）。
+// 各行は「型の行 + 言語の行末コメントの印（JSON・Markdown・HTML・XML・CSS・Ini は空白・
+// gdresource は ` ;`）+ 詰め物」で 100 バイトにそろえる。詰め物は `-` で、Markdown だけ空白
+// （フェンスの閉じの行を閉じのまま保つ）。
 [[nodiscard]] constexpr std::string_view suffix_of(LexerWorkload workload)
 {
     const core::Language language = language_of(workload);
     const bool hashed = language == core::Language::python || language == core::Language::yaml ||
-                        language == core::Language::toml;
+                        language == core::Language::toml || language == core::Language::gdscript;
     const bool slashed = language == core::Language::cpp || language == core::Language::javascript;
+    if (language == core::Language::gdresource)
+    {
+        return " ;";
+    }
     if (hashed)
     {
         return " #";
@@ -223,8 +267,8 @@ constexpr std::array<std::string_view, template_count> toml_templates{
 {
     const core::Language language = language_of(workload);
     const std::size_t row = index % template_count;
-    return language != core::Language::json &&
-           (row == 1U || (language == core::Language::yaml && row == 2U));
+    const bool single_line = language == core::Language::json || language == core::Language::dosini;
+    return !single_line && (row == 1U || (language == core::Language::yaml && row == 2U));
 }
 
 [[nodiscard]] std::string padded(std::string_view line, std::string_view suffix, char padding)
