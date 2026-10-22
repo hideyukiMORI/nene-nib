@@ -714,6 +714,19 @@ constexpr std::array<LexCase, 10> typescript_only_cases{{
     {"x satisfies Y; a is B", plain, "  kkkkkkkkk  o   kk", plain},
 }};
 
+// #864: `.tsx` `.jsx` の典型の行（JS と TS で同じ答え）。`<` の直後の `/` は除算で、`</div>` `</>`
+// を正規表現と読まず、どの行も行末まで string / error に崩れない。タグは区間なしか演算子のまま
+// （JSX のタグの色は後続）。`a </re/` の稀な形は除算として読む。
+constexpr std::array<LexCase, 6> jsx_cases{{
+    {"return <div className=\"a\">{x}</div>;", plain, "kkkkkk o             osssoo ooO   oo",
+     plain},
+    {"<Foo bar={1} />", plain, "o       oono oO", plain},
+    {"</>", plain, "oOO", plain},
+    {"const a = b < c / d;", plain, "kkkkk   o   o   o  o", plain},
+    {"if (a </re/.test(s))", plain, "kk o  oO  oOffffo oo", plain},
+    {"x = a < /re/;", plain, "  o   o o  oO", plain},
+}};
+
 // #838: HTML と XML で同じ答えの行（タグ・属性・コメントの行またぎ・実体参照・宣言・UTF-8 の
 // 本文・閉じない引用符は行末まで string・行をまたぐタグの属性は区間なし（後続）・ほかの言語の
 // 状態は行頭から）。
@@ -2378,6 +2391,8 @@ void verify_lexer_scope()
     verify_language_table(Language::typescript, javascript_cases);
     verify_language_table(Language::javascript, javascript_only_cases);
     verify_language_table(Language::typescript, typescript_only_cases);
+    verify_language_table(Language::javascript, jsx_cases);
+    verify_language_table(Language::typescript, jsx_cases);
     verify_language_table(Language::html, html_common_cases);
     verify_language_table(Language::html, html_only_cases);
     verify_language_table(Language::xml, html_common_cases);
