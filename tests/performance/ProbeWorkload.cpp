@@ -884,6 +884,11 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     case LexerWorkload::yaml_backfill_200:
     case LexerWorkload::toml_visible_60:
     case LexerWorkload::toml_backfill_200:
+    case LexerWorkload::gdscript_visible_60:
+    case LexerWorkload::gdscript_backfill_200:
+    case LexerWorkload::dosini_visible_60:
+    case LexerWorkload::gdresource_visible_60:
+    case LexerWorkload::gdresource_backfill_200:
         return 159U + static_cast<std::size_t>(workload);
     }
     std::unreachable();
@@ -904,7 +909,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 178> dispatches{{
+constexpr std::array<ProbeDispatch, 183> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1269,6 +1274,16 @@ constexpr std::array<ProbeDispatch, 178> dispatches{{
                      lexed_lines},
     ProbeDispatchRow{LexerWorkload::toml_backfill_200, "lexer-toml-backfill-200", lexer_input,
                      lexed_lines},
+    ProbeDispatchRow{LexerWorkload::gdscript_visible_60, "lexer-gdscript-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::gdscript_backfill_200, "lexer-gdscript-backfill-200",
+                     lexer_input, lexed_lines},
+    ProbeDispatchRow{LexerWorkload::dosini_visible_60, "lexer-dosini-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::gdresource_visible_60, "lexer-gdresource-visible-60",
+                     lexer_input, lexed_lines},
+    ProbeDispatchRow{LexerWorkload::gdresource_backfill_200, "lexer-gdresource-backfill-200",
+                     lexer_input, lexed_lines},
 }};
 
 constexpr auto dispatch_names = []
@@ -1311,7 +1326,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 178U);
+static_assert(dispatches.size() == 183U);
 static_assert(dispatch_is_complete());
 
 } // namespace

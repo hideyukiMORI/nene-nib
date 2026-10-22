@@ -3,7 +3,9 @@
 #include "LexCpp.hpp"
 #include "LexCss.hpp"
 #include "LexCursor.hpp"
+#include "LexGdscript.hpp"
 #include "LexHtml.hpp"
+#include "LexIni.hpp"
 #include "LexJavaScript.hpp"
 #include "LexJson.hpp"
 #include "LexMarkdown.hpp"
@@ -54,6 +56,13 @@ void lex_language(Language language, LexCursor &cursor, const LexState &in)
     case Language::toml:
         lex_toml(cursor, in);
         return;
+    case Language::gdscript:
+        lex_gdscript(cursor, in);
+        return;
+    case Language::dosini:
+    case Language::gdresource:
+        lex_ini(cursor, in, language);
+        return;
     case Language::plain:
     case Language::powershell:
     case Language::shell:
@@ -95,6 +104,9 @@ bool has_lexer(Language language) noexcept
     case Language::toml:
     case Language::xml:
     case Language::css:
+    case Language::gdscript:
+    case Language::dosini:
+    case Language::gdresource:
         return true;
     case Language::plain:
     case Language::powershell:
@@ -110,6 +122,7 @@ std::size_t syntax_backfill_lines(Language language) noexcept
     switch (language)
     {
     case Language::json:
+    case Language::dosini:
         return 1;
     case Language::c:
     case Language::cpp:
@@ -120,6 +133,8 @@ std::size_t syntax_backfill_lines(Language language) noexcept
     case Language::xml:
     case Language::css:
     case Language::toml:
+    case Language::gdscript:
+    case Language::gdresource:
         return 200;
     case Language::yaml:
         return 100;

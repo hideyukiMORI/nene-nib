@@ -32,3 +32,7 @@
 
 - 言語で振る舞いを変える所は、文書の値を 1 つ読むだけになる。表を足すのは core の 1 か所。
 - 言語は保存されないので、`:set filetype=` の選び直しは窓を閉じると消える（拡張子から引き直す）。
+
+## 追補（2026-10-22・#855）
+
+- **言語を 3 つ足す（決定 1・2・3 の表の各 1 行）。** `Language` の末尾に `gdscript` `dosini` `gdresource`（名前は Vim 9.1 の filetype 名）を足し、拡張子は Vim の `filetype.vim` に寄せて `gd` → gdscript・`ini` → dosini・`tscn` `tres` → gdresource。`godot`（`project.godot`）は Vim に行が無いが同じ書式なので gdresource。`cfg` は Vim では別の filetype（`cfg`・中身で `rapid` も）なので表に入れず plain のまま（Issue #855 の初めの案と違う所）。名前の往復は 19 本。貼り付けの切り分け（`paste_kind_of`）では 3 つとも text。

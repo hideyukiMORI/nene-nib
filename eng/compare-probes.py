@@ -174,7 +174,12 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              'lexer-yaml-visible-60',
              'lexer-yaml-backfill-200',
              'lexer-toml-visible-60',
-             'lexer-toml-backfill-200')
+             'lexer-toml-backfill-200',
+             'lexer-gdscript-visible-60',
+             'lexer-gdscript-backfill-200',
+             'lexer-dosini-visible-60',
+             'lexer-gdresource-visible-60',
+             'lexer-gdresource-backfill-200')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -293,19 +298,41 @@ LEXER_TEMPLATES = {
         'inline = { x = 1, y.z = "w", flag = true } # inline table with dotted key',
         'numbers = [ 1_000, 0xDEAD_BEEF, 6.626e-34, -inf, nan, +99 ] # array of numbers',
         "when = 1979-05-27T07:32:00-08:00 # offset date-time and 'literal' text"),
+    "gdscript": (
+        "@export var speed: float = 120.5  # exported with a type annotation and a default",
+        "    var doc := \"\"\"multi-line string opens here with 'quotes' and \\t escapes",
+        '    still inside""" + &"name" + ^"Path/To:prop"; var n = $Path/To/Node',
+        "func move(delta: float, dir: Vector2) -> void: position += dir * speed * delta",
+        "    if hp % 2 == 0 and not self.dead: await get_tree().create_timer(1.5).timeout",
+        "    match state: State.IDLE when %Label.visible: return 0xFF_FF + 1_000 + .5"),
+    "dosini": (
+        "[Section Name] ; a section header followed by trailing text",
+        "key with spaces = some plain value text that is not a number at all",
+        "count = 42",
+        '; comment line with = equals and "quotes" inside it',
+        'name = "quoted value" and "another one" in the same line',
+        "path=C:\\Windows\\System32\\drivers\\etc ; not a comment in dosini"),
+    "gdresource": (
+        '[gd_scene load_steps=3 format=3 uid="uid://cvx1a2b3c4d5"]',
+        'script/source = "extends Node2D multi-line string opens here with \\"escaped\\" quotes',
+        'func _ready(): pass" ; closes the embedded script string',
+        '[node name="Player" type="CharacterBody2D" parent="." groups=["solid", "wall"]]',
+        'points = PackedVector2Array(-8, -8, 8, -8, 1e+06, .25) ; polygon points',
+        'config/features=PackedStringArray("4.3", "GL Compatibility"), &"jump", ^"../Player", true'),
 }
-# 行末の印（JSON・Markdown・HTML・XML・CSS は空白）。続けて詰め物で 100 バイトにそろえる。
-# 詰め物は `-` で、Markdown だけ空白（フェンスの閉じの行を閉じのまま保つ・#833）。
+# 行末の印（JSON・Markdown・HTML・XML・CSS・Ini は空白・gdresource は ` ;`）。続けて詰め物で
+# 100 バイトにそろえる。詰め物は `-` で、Markdown だけ空白（フェンスの閉じの行を閉じのまま保つ・#833）。
 LEXER_SUFFIXES = {"cpp": " //", "json": " ", "python": " #", "markdown": " ", "javascript": " //",
-                  "html": " ", "xml": " ", "css": " ", "yaml": " #", "toml": " #"}
+                  "html": " ", "xml": " ", "css": " ", "yaml": " #", "toml": " #",
+                  "gdscript": " #", "dosini": " ", "gdresource": " ;"}
 LEXER_PADDING = {"markdown": " "}
 # 閉じの無い `[` を並べた 1 行（#836 のレビュー R1）。LexerProbe.cpp の worst_line_bytes と同じ。
 LEXER_WORST_LINE_BYTES = 16384
 
 
 def lexer_input(workload: str) -> bytes:
-    """行の字句器の 18 本（#815 の C++・#830 の JSON と Python・#833 の Markdown と JavaScript・
-    #838 の HTML / XML・CSS・YAML・TOML）。
+    """行の字句器の 23 本（#815 の C++・#830 の JSON と Python・#833 の Markdown と JavaScript・
+    #838 の HTML / XML・CSS・YAML・TOML・#855 の GDScript・Ini・gdresource）。
     tests/performance/LexerProbe.cpp と同じ 100 バイトの行。"""
     if workload == "lexer-markdown-worst-line":
         return b"[" * LEXER_WORST_LINE_BYTES + b"\n"
@@ -318,7 +345,7 @@ def lexer_input(workload: str) -> bytes:
 
 
 def fixed_input(workload: str) -> bytes:
-    if workload in WORKLOADS[152:171]:
+    if workload in WORKLOADS[152:176]:
         return lexer_input(workload)
     if workload in WORKLOADS[148:152]:
         return text_object_input(workload)

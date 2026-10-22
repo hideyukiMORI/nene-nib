@@ -1,5 +1,6 @@
 // scope `--lexer` の単体テスト（#815・段 2 の ADR 0156 の決定 1〜6・#830 の JSON と Python・
-// #833 の Markdown と JS / TS・#838 の HTML / XML・CSS・YAML・TOML）。core の lex_line が 1 行を
+// #833 の Markdown と JS / TS・#838 の HTML / XML・CSS・YAML・TOML・#855 の GDScript と Ini と
+// gdresource）。core の lex_line が 1 行を
 // 役割の区間に分け、行をまたぐ状態（ブロックコメント・raw string・フェンス・テンプレート・script
 // の中・CDATA・ブロックスカラー）を値で次の行へ渡すこと。
 // 期待の区間は「塗り」の文字列で書く: 行の code point 1 つに 1 文字で、c comment・k keyword・
@@ -82,6 +83,11 @@ constexpr LexState block00 = raw("00");
 constexpr LexState block02 = raw("02");
 constexpr LexState block04 = raw("04");
 constexpr LexState block99 = raw("99");
+// #855: gdresource と GDScript の行をまたぐ `"…"` の中（delimiter は `"`）。
+constexpr LexState in_quote = raw("\"");
+// #856: GDScript の行をまたぐ `'…'` とノードのパス `$"…"` の中（delimiter は閉じの前に `$`）。
+constexpr LexState in_squote = raw("'");
+constexpr LexState in_node = raw("$\"");
 
 [[nodiscard]] std::optional<SyntaxRole> role_of(char letter)
 {
@@ -913,6 +919,224 @@ constexpr std::array<LexCase, 49> toml_cases{{
     {"int x; /* c", raw_xyz, "", plain},
 }};
 
+// GDScript（#855）: 宣言・注釈・型の注釈・ノードのパス・StringName と NodePath・3 連引用符の
+// 行またぎ・数の形・UTF-8 のコメント。`%` は式の始まりでだけノード、`@` は行のどこでも注釈。
+// #856: 引用符 1 つの文字列とノードのパスも行をまたぎ（Godot 4 の tokenizer）、生の文字列 `r"…"`
+// は `r` を含めて string（`\` は次の 1 バイトを飛ばすので `r"\"` は閉じない）。
+constexpr std::array<LexCase, 76> gdscript_cases{{
+    {"extends CharacterBody2D", plain, "kkkkkkk", plain},
+    {"class_name Player", plain, "kkkkkkkkkk", plain},
+    {"@tool", plain, "kkkkk", plain},
+    {"@export var speed: int = 3", plain, "kkkkkkk kkk      o ttt o n", plain},
+    {"@export_range(0, 100) var hp_max := 100", plain, "kkkkkkkkkkkkkono nnno kkk        oo nnn",
+     plain},
+    {"@onready var n = $Path/To", plain, "kkkkkkkk kkk   o vvvvvvvv", plain},
+    {"@onready var label := %Label as Label", plain, "kkkkkkkk kkk       oo vvvvvv kk", plain},
+    {"var hp: Health = null", plain, "kkk   o tttttt o vvvv", plain},
+    {"var arr: Array[int] = []", plain, "kkk    o tttttottto o oo", plain},
+    {"const MAX_SPEED: float = 1.5e3", plain, "kkkkk          o ttttt o nnnnn", plain},
+    {"signal health_changed(value: int)", plain, "kkkkkk               o     o ttto", plain},
+    {"enum {A, B}", plain, "kkkk o o  o", plain},
+    {"enum State { IDLE, RUN = 2 }", plain, "kkkk       o     o     o n o", plain},
+    {"func _ready() -> void:", plain, "kkkk ffffffoo oo tttto", plain},
+    {"func hit(body: Area2D, power := 2) -> Player:", plain,
+     "kkkk fffo    o tttttto       oo no oo tttttto", plain},
+    {"static func create() -> Player:", plain, "kkkkkk kkkk ffffffoo oo tttttto", plain},
+    {"var d = {a: b, \"k\": 1}", plain, "kkk   o o o  o ssso no", plain},
+    {"    match state:", plain, "    kkkkk      o", plain},
+    {"        State.IDLE when hp > 0:", plain, "             o     kkkk    o no", plain},
+    {"    await get_tree().create_timer(1.5).timeout", plain,
+     "    kkkkk         ooo            onnnoo", plain},
+    {"    if a % b == 0 and not self.dead:", plain, "    kk   o   oo n kkk kkk kkkko    o", plain},
+    {"    return %Label", plain, "    kkkkkk vvvvvv", plain},
+    {"    get_node(%\"Unique Name\").show()", plain, "            ovvvvvvvvvvvvvvoo    oo", plain},
+    {"    $\"../Sibling\".hide()", plain, "    vvvvvvvvvvvvvo    oo", plain},
+    {"    $%Unique/Child.visible = true", plain, "    vvvvvvvvvvvvvvo        o vvvv", plain},
+    {"    print(\"%d\" %count)", plain, "         ossss o     o", plain},
+    {"    var name := &\"enemy\"", plain, "    kkk      oo ssssssss", plain},
+    {"    var path := ^\"Path/To:prop\"", plain, "    kkk      oo sssssssssssssss", plain},
+    {"    var flags = 0xFF_FF | 0b1010_0101", plain, "    kkk       o nnnnnnn o nnnnnnnnnnn",
+     plain},
+    {"    var big = 1_000_000 + 1e5 - .5", plain, "    kkk     o nnnnnnnnn o nnn o nn", plain},
+    {"    var x = PI * TAU / INF + NAN", plain, "    kkk   o vv o vvv o vvv o vvv", plain},
+    {"    for i in range(10):", plain, "    kkk   kk      onnoo", plain},
+    {"    while true: pass", plain, "    kkkkk vvvvo kkkk", plain},
+    {"    elif body is Node2D: break", plain, "    kkkk      kk       o kkkkk", plain},
+    {"    else: continue", plain, "    kkkko kkkkkkkk", plain},
+    {"    super._ready(); breakpoint", plain, "    kkkkko      ooo kkkkkkkkkk", plain},
+    {"    assert(hp > 0, \"hp\")", plain, "    kkkkkko   o no sssso", plain},
+    {"class Inner extends Node:", plain, "kkkkk       kkkkkkk tttto", plain},
+    {"    var doc := \"\"\"multi", plain, "    kkk     oo ssssssss", triple_dq},
+    {"line \"quoted\" inside", triple_dq, "ssssssssssssssssssss", triple_dq},
+    {"end\"\"\" # done", triple_dq, "ssssss cccccc", plain},
+    {"var q = '''", plain, "kkk   o sss", triple_sq},
+    {"x''' + 'y'", triple_sq, "ssss o sss", plain},
+    {"# コメント 日本語", plain, "cccccccccc", plain},
+    {"## doc comment", plain, "cccccccccccccc", plain},
+    {"var t = \"日本語\" # 注", plain, "kkk   o sssss ccc", plain},
+    {"var bad = \"open", plain, "kkk     o sssss", in_quote},
+    {"more\" # c", in_quote, "sssss ccc", plain},
+    {"var s = 'it", plain, "kkk   o sss", in_squote},
+    {"x' + 1", in_squote, "ss o n", plain},
+    {"var s = \"a\\", plain, "kkk   o sss", in_quote},
+    {"\"", plain, "s", in_quote},
+    {"\"\"\"", plain, "sss", triple_dq},
+    {"&\"", plain, "ss", in_quote},
+    {"^\"", plain, "ss", in_quote},
+    {"$", plain, "v", plain},
+    {"%", plain, "o", plain},
+    {"@", plain, "o", plain},
+    {"(", plain, "o", plain},
+    {"\"\"\"x\"\"\"", plain, "sssssss", plain},
+    {"a\\''' b'''", triple_sq, "ssssssssss", plain},
+    {"&\"\"\"", plain, "ssss", triple_dq},
+    {"$\"open", plain, "vvvvvv", in_node},
+    {"rest\" .x", in_node, "vvvvv o", plain},
+    {"x = %\"Unique", plain, "  o vvvvvvvv", in_node},
+    {"var re = r\"\\d+\"", plain, "kkk    o ssssss", plain},
+    {"r'x'", plain, "ssss", plain},
+    {"r\"\"\"raw", plain, "sssssss", triple_dq},
+    {"r\"\\\"", plain, "ssss", in_quote},
+    {"var esc = \"a\\\"b\" + 'it\\'s'", plain, "kkk     o ssssss o sssssss", plain},
+    {"    tween.tween_property(self, \"position\", Vector2(1, 2), 0.5)", plain,
+     "         o              okkkko sssssssssso tttttttono noo nnno", plain},
+    {"x @ y", plain, "  o", plain},
+    {"", plain, "", plain},
+    {"still /* x", block, "      oo", plain},
+    {"int x; xyz", raw_xyz, "ttt  o", plain},
+}};
+
+// Ini（#855・dosini）: 見出し・キーと値・`;` `#` の行頭のコメント・空白の入ったキー・値の数と
+// 文字列。値の中の `;` はコメントでなく（Vim と同じ）、行をまたがない。
+constexpr std::array<LexCase, 47> dosini_cases{{
+    {"[section]", plain, "kkkkkkkkk", plain},
+    {"  [Indented Section] trailing", plain, "  kkkkkkkkkkkkkkkkkk", plain},
+    {"[unclosed", plain, "kkkkkkkkk", plain},
+    {"[preset.0]", plain, "kkkkkkkkkk", plain},
+    {"key=value", plain, "ttto", plain},
+    {"key = value", plain, "ttt o", plain},
+    {"my key = some value", plain, "tttttt o", plain},
+    {"count = 42", plain, "ttttt o nn", plain},
+    {"ratio=0.75", plain, "tttttonnnn", plain},
+    {"half = .5", plain, "tttt o nn", plain},
+    {"exp = 1e10", plain, "ttt o nnnn", plain},
+    {"small = 2E-3", plain, "ttttt o nnnn", plain},
+    {"padded = 12  ", plain, "tttttt o nn", plain},
+    {"zero = 007", plain, "tttt o nnn", plain},
+    {"minus = -1", plain, "ttttt o", plain},
+    {"version = 1.2.3", plain, "ttttttt o", plain},
+    {"under = 1_000", plain, "ttttt o", plain},
+    {"dot = 1.", plain, "ttt o", plain},
+    {"name = \"quoted value\"", plain, "tttt o ssssssssssssss", plain},
+    {"mixed = a \"b\" c \"d", plain, "ttttt o   sss", plain},
+    {"empty_filter=\"\"", plain, "ttttttttttttoss", plain},
+    {"; comment", plain, "ccccccccc", plain},
+    {"# comment", plain, "ccccccccc", plain},
+    {"   ; indented comment", plain, "   cccccccccccccccccc", plain},
+    {"\t# tab comment", plain, " ccccccccccccc", plain},
+    {";;;;;;;;;;;;;;;;;;;", plain, "ccccccccccccccccccc", plain},
+    {"key = value ; not a comment", plain, "ttt o", plain},
+    {"path=C:\\Windows\\System32", plain, "tttto", plain},
+    {"url = http://x/?a=b", plain, "ttt o", plain},
+    {"= novalue", plain, "o", plain},
+    {"novalue", plain, "", plain},
+    {"empty =", plain, "ttttt o", plain},
+    {"日本語キー = 値", plain, "ttttt o", plain},
+    {"名前=\"値\"", plain, "ttosss", plain},
+    {"[PHP]", plain, "kkkkk", plain},
+    {"extension=php_mbstring.dll", plain, "ttttttttto", plain},
+    {"memory_limit = 128M", plain, "tttttttttttt o", plain},
+    {"error_reporting = E_ALL & ~E_DEPRECATED", plain, "ttttttttttttttt o", plain},
+    {"runnable=true", plain, "tttttttto", plain},
+    {"a.b-c d = 1", plain, "ttttttt o n", plain},
+    {"", plain, "", plain},
+    {"    ", plain, "", plain},
+    {"a = \"x", in_quote, "t o", plain},
+    {"[", plain, "k", plain},
+    {"=", plain, "o", plain},
+    {"k = \"", plain, "t o", plain},
+    {"int x; /* c", raw_xyz, "", plain},
+}};
+
+// Godot の設定（#855・gdresource）: project.godot と .tscn の形。見出しの名前と閉じは keyword・
+// 属性名とキーは type・呼び出しの名前は type・`"…"` は行をまたぐ・`;` から行末はコメント。
+// 限界（#856 で固定）: 見出しの属性の文字列が行をまたぐと次の行の `]` は閉じに取れず、複数行の
+// 配列の中で `[SubResource(` から始まる行は見出しとして塗る。
+constexpr std::array<LexCase, 60> gdresource_cases{{
+    {"; Engine configuration file.", plain, "cccccccccccccccccccccccccccc", plain},
+    {"config_version=5", plain, "tttttttttttttton", plain},
+    {"[application]", plain, "kkkkkkkkkkkkk", plain},
+    {"config/name=\"Super Game\"", plain, "tttttttttttossssssssssss", plain},
+    {"run/main_scene=\"res://main.tscn\"", plain, "ttttttttttttttosssssssssssssssss", plain},
+    {"config/features=PackedStringArray(\"4.3\", \"GL Compatibility\")", plain,
+     "tttttttttttttttottttttttttttttttt sssss  ssssssssssssssssss", plain},
+    {"[display]", plain, "kkkkkkkkk", plain},
+    {"window/size/viewport_width=320", plain, "ttttttttttttttttttttttttttonnn", plain},
+    {"[autoload]", plain, "kkkkkkkkkk", plain},
+    {"Game=\"*res://autoload/game.gd\"", plain, "ttttosssssssssssssssssssssssss", plain},
+    {"move_left={", plain, "ttttttttto", plain},
+    {"\"deadzone\": 0.5,", plain, "ssssssssss  nnn", plain},
+    {"\"events\": [Object(InputEventKey,\"pressed\":false,\"device\":-1)]", plain,
+     "ssssssss   tttttt               sssssssss vvvvv ssssssss  n", plain},
+    {"}", plain, "", plain},
+    {"2d_physics/layer_1=\"player\"", plain, "ttttttttttttttttttossssssss", plain},
+    {"[gd_scene load_steps=3 format=3 uid=\"uid://cvx1a2b3c4d5\"]", plain,
+     "kkkkkkkkk tttttttttton tttttton tttossssssssssssssssssssk", plain},
+    {"[ext_resource type=\"Script\" path=\"res://player.gd\" id=\"1_abcde\"]", plain,
+     "kkkkkkkkkkkkk ttttossssssss ttttosssssssssssssssss ttosssssssssk", plain},
+    {"[sub_resource type=\"RectangleShape2D\" id=\"Shape_x1\"]", plain,
+     "kkkkkkkkkkkkk ttttossssssssssssssssss ttossssssssssk", plain},
+    {"size = Vector2(32, 48)", plain, "tttt o ttttttt nn  nn", plain},
+    {"[node name=\"Player\" type=\"CharacterBody2D\"]", plain,
+     "kkkkk ttttossssssss ttttosssssssssssssssssk", plain},
+    {"script = ExtResource(\"1_abcde\")", plain, "tttttt o ttttttttttt sssssssss", plain},
+    {"speed = 120.5", plain, "ttttt o nnnnn", plain},
+    {"position = Vector2i(500, 350)", plain, "tttttttt o tttttttt nnn  nnn", plain},
+    {"modulate = Color(1, 1, 1, 0.5)", plain, "tttttttt o ttttt n  n  n  nnn", plain},
+    {"visible = false", plain, "ttttttt o vvvvv", plain},
+    {"metadata/_edit_lock_ = true", plain, "tttttttttttttttttttt o vvvv", plain},
+    {"resource = null", plain, "tttttttt o vvvv", plain},
+    {"[node name=\"Shape\" type=\"CollisionShape2D\" parent=\".\" groups=[\"solid\", \"wall\"]]",
+     plain, "kkkkk ttttosssssss ttttossssssssssssssssss ttttttosss tttttto sssssss  ssssss k",
+     plain},
+    {"[node name=\"Hud\" parent=\".\" instance=ExtResource(\"3\")] ; c", plain,
+     "kkkkk ttttosssss ttttttosss ttttttttottttttttttt sss k ccc", plain},
+    {"shape = SubResource(\"Shape_x1\")", plain, "ttttt o ttttttttttt ssssssssss", plain},
+    {"data = {", plain, "tttt o", plain},
+    {"\"key\": Vector3(0, 1.5, -2)", plain, "sssss  ttttttt n  nnn   n", plain},
+    {"script/source = \"extends Node", plain, "ttttttttttttt o sssssssssssss", in_quote},
+    {"func _ready():", in_quote, "ssssssssssssss", in_quote},
+    {"\tprint(\\\"hi\\\")", in_quote, "ssssssssssssss", in_quote},
+    {"\" ; after", in_quote, "s ccccccc", plain},
+    {"path = \"C:\\\\dir\\\\\"", plain, "tttt o sssssssssss", plain},
+    {"[connection signal=\"body_entered\" from=\"Area\" to=\".\" method=\"_on_body\"]", plain,
+     "kkkkkkkkkkk ttttttossssssssssssss ttttossssss ttosss ttttttossssssssssk", plain},
+    {"0:0/0 = 0", plain, "ttttt o n", plain},
+    {"0:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8)", plain,
+     "tttttttttttttttttttttttttttttttttttttt o tttttttttttttttttt  n   n  n   n", plain},
+    {"action = &\"jump\"", plain, "tttttt o sssssss", plain},
+    {"target = ^\"../Player\"", plain, "tttttt o ssssssssssss", plain},
+    {"flags = 0x1F", plain, "ttttt o nnnn", plain},
+    {"value = 1e+06", plain, "ttttt o nnnnn", plain},
+    {"ratio = .25", plain, "ttttt o nnn", plain},
+    {"a = b ; trailing comment", plain, "t o   cccccccccccccccccc", plain},
+    {"text = \"semi ; inside\"", plain, "tttt o sssssssssssssss", plain},
+    {"x == 1", plain, "  oO n", plain},
+    {"[1, 2]", plain, " n  n", plain},
+    {"[ node ]", plain, "", plain},
+    {"[node name=\"a]", plain, "kkkkk ttttosss", in_quote},
+    {"b\"]", in_quote, "ss", plain},
+    {"[gd_scene", plain, "kkkkkkkkk", plain},
+    {"a = \"x\\", plain, "t o sss", in_quote},
+    {"&\"", plain, "ss", in_quote},
+    {"[SubResource(\"1\"), SubResource(\"2\")]", plain, "kkkkkkkkkkkk sss   ttttttttttt sss k",
+     plain},
+    {"日本 = \"値\"", plain, "   o sss", plain},
+    {"[resource]", plain, "kkkkkkkkkk", plain},
+    {"", plain, "", plain},
+    {"int x; /* c", raw_xyz, "     cccccc", plain},
+}};
+
 void verify_table(std::span<const LexCase> cases)
 {
     for (const LexCase &sample : cases)
@@ -937,9 +1161,10 @@ void verify_other_languages()
     for (const Language language :
          {Language::c, Language::cpp, Language::json, Language::python, Language::markdown,
           Language::javascript, Language::typescript, Language::html, Language::xml, Language::css,
-          Language::yaml, Language::toml})
+          Language::yaml, Language::toml, Language::gdscript, Language::dosini,
+          Language::gdresource})
     {
-        expect(core::has_lexer(language), "the twelve languages with a lexer report one");
+        expect(core::has_lexer(language), "the fifteen languages with a lexer report one");
     }
     for (const Language language : others)
     {
@@ -1124,6 +1349,46 @@ void verify_batch2_worst_lines()
     expect(core::lex_line(Language::toml, plain, toml).out == plain,
            "a long toml line of unfinished keys reads in one pass");
 }
+
+// #855: GDScript の 3 連引用符と gdresource の `"…"` も値で次の行へ渡し、lex_state は lex_line と
+// 同じ状態を返す。dosini は行をまたがない。
+void verify_godot_threading()
+{
+    constexpr std::array<std::string_view, 4> gdscript{"var s := \"\"\"a", "b # not comment",
+                                                       "c\"\"\" # c", "func f():"};
+    constexpr std::array<LexKind, 4> gdscript_kinds{LexKind::raw_string, LexKind::raw_string,
+                                                    LexKind::plain, LexKind::plain};
+    verify_threading_of(Language::gdscript, gdscript, gdscript_kinds);
+    constexpr std::array<std::string_view, 5> resource{"[sub_resource type=\"GDScript\"]",
+                                                       "script/source = \"extends Node", "",
+                                                       "\tpass\"", "[node name=\"a\"]"};
+    constexpr std::array<LexKind, 5> resource_kinds{
+        LexKind::plain, LexKind::raw_string, LexKind::raw_string, LexKind::plain, LexKind::plain};
+    verify_threading_of(Language::gdresource, resource, resource_kinds);
+    constexpr std::array<std::string_view, 3> ini{"a = \"x", "[s]", "; c"};
+    constexpr std::array<LexKind, 3> ini_kinds{LexKind::plain, LexKind::plain, LexKind::plain};
+    verify_threading_of(Language::dosini, ini, ini_kinds);
+}
+
+// #855: 型の注釈・`%`・見出しの入れ子を何度も読み直しうる長い 1 行（決定 3）。どれも 1 回の走査で
+// 読み（二乗なら Debug で目に見えて遅くなる）、区間は昇順のまま。
+void verify_godot_worst_lines()
+{
+    const std::string spaces(20'000U, ' ');
+    const std::string params = "func f(" + repeated_text("a: b, ", 5'000U);
+    for (const std::string &line : {params, spaces + params, repeated_text("x %y (%z ", 5'000U)})
+    {
+        expect(well_formed(core::lex_line(Language::gdscript, plain, line).spans, line),
+               "a long gdscript line of annotations and percent signs reads in one pass");
+    }
+    const std::string header = "[node " + repeated_text("a=[b ", 5'000U);
+    const LexLine resource = core::lex_line(Language::gdresource, plain, header);
+    expect(well_formed(resource.spans, header) && resource.out == plain,
+           "a long gdresource header of nested brackets reads in one pass");
+    const std::string ini = repeated_text("a = \"b\" ", 5'000U);
+    expect(well_formed(core::lex_line(Language::dosini, plain, ini).spans, ini),
+           "a long ini line of quoted values reads in one pass");
+}
 } // namespace
 
 void verify_lexer_scope()
@@ -1148,12 +1413,17 @@ void verify_lexer_scope()
     verify_language_table(Language::css, css_cases);
     verify_language_table(Language::yaml, yaml_cases);
     verify_language_table(Language::toml, toml_cases);
+    verify_language_table(Language::gdscript, gdscript_cases);
+    verify_language_table(Language::dosini, dosini_cases);
+    verify_language_table(Language::gdresource, gdresource_cases);
     verify_other_languages();
     verify_columns();
     verify_state_threading();
     verify_markdown_and_script_threading();
     verify_batch2_threading();
     verify_batch2_worst_lines();
+    verify_godot_threading();
+    verify_godot_worst_lines();
     verify_markdown_worst_lines();
     verify_script_worst_line();
 }
