@@ -122,6 +122,7 @@ std::size_t syntax_backfill_lines(Language language) noexcept
     switch (language)
     {
     case Language::json:
+    case Language::dosini:
         return 1;
     case Language::c:
     case Language::cpp:
@@ -135,8 +136,6 @@ std::size_t syntax_backfill_lines(Language language) noexcept
     case Language::gdscript:
     case Language::gdresource:
         return 200;
-    case Language::dosini:
-        return 50;
     case Language::yaml:
         return 100;
     case Language::markdown:

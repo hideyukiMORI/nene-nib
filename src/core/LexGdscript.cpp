@@ -3,11 +3,13 @@
 #include "LexCursor.hpp"
 #include "LexKind.hpp"
 #include "LexScan.hpp"
+#include "LexState.hpp"
 #include "SyntaxRole.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <iterator>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -125,60 +127,60 @@ constexpr std::size_t triple = 3U;
            line[open + 2U] == line[open];
 }
 
-// from から 3 連引用符 delimiter の閉じを探し、その直後を返す。`\` は次の 1 バイトを飛ばす。
-[[nodiscard]] constexpr std::size_t triple_close(std::string_view line, std::size_t from,
-                                                 std::string_view delimiter) noexcept
+// from から閉じの close（引用符 1 つか 3 連）を探し、その直後を返す。`\` は次の 1 バイトを飛ばす
+// （生の文字列 `r"…"` も同じ結果: Godot 4 の tokenizer は生でも `\` の後の引用符と `\` を
+// 閉じにしない）。行末の `\` は閉じず次の行へ続く。
+[[nodiscard]] constexpr std::size_t quote_close(std::string_view line, std::size_t from,
+                                                std::string_view close) noexcept
 {
     for (std::size_t at = from; at < line.size(); ++at)
     {
-        if (line.substr(at).starts_with(delimiter))
+        if (line.substr(at).starts_with(close))
         {
-            return at + delimiter.size();
+            return at + close.size();
         }
         at += line[at] == '\\' ? 1U : 0U;
     }
     return lex_unclosed;
 }
 
-// begin（`&` `^` の接頭辞の先頭）から open の 3 連引用符。閉じていなければ行末まで string で
-// 次の行へ。
-std::size_t mark_triple(LexCursor &cursor, std::size_t begin, std::size_t open)
+// 閉じの引用符が GDScript の文字列の区切りか（引用符 1 つと 3 連）。
+[[nodiscard]] constexpr bool quotes_string(std::string_view close) noexcept
 {
-    const std::string_view line = cursor.line();
-    const std::string_view delimiter = line.substr(open, triple);
-    const std::size_t end = triple_close(line, open + triple, delimiter);
-    if (end == lex_unclosed)
-    {
-        cursor.mark(begin, line.size(), SyntaxRole::string);
-        cursor.leave(lex_entered(LexKind::raw_string, delimiter));
-        return line.size();
-    }
-    cursor.mark(begin, end, SyntaxRole::string);
-    return end;
+    return close == "\"" || close == "'" || close == "\"\"\"" || close == "'''";
 }
 
-// begin から open の引用符で始まる文字列。1 つの引用符の文字列は行をまたがず、閉じていなければ
-// 行末まで error。
-std::size_t mark_string(LexCursor &cursor, std::size_t begin, std::size_t open)
+// 次の行へ渡す状態。区切りは閉じの引用符で、ノードのパスは前に `$` を付ける（続きも constant）。
+[[nodiscard]] LexState quoted_state(std::string_view close, bool node) noexcept
+{
+    std::array<char, triple + 1U> text{'$'};
+    std::ranges::copy(close, std::next(text.begin()));
+    const std::string_view marked{text.data(), close.size() + 1U};
+    return lex_entered(LexKind::raw_string, marked.substr(node ? 0U : 1U));
+}
+
+// begin（`r` `&` `^` `$` `%` の接頭辞の先頭）から open の引用符（3 連ならその 3 文字）の文字列を
+// 塗る（ノードのパスは constant・ほかは string）。閉じていなければ行末まで同じ役割で、区切りを
+// raw_string として次の行へ（Godot 4 の tokenizer の string() は引用符 1 つの文字列も改行を含む）。
+std::size_t mark_quoted(LexCursor &cursor, std::size_t begin, std::size_t open, bool node)
 {
     const std::string_view line = cursor.line();
-    if (opens_triple(line, open))
-    {
-        return mark_triple(cursor, begin, open);
-    }
-    const std::size_t end = lex_closing_quote(line, open);
+    const std::string_view close = line.substr(open, opens_triple(line, open) ? triple : 1U);
+    const std::size_t end = quote_close(line, open + close.size(), close);
+    const SyntaxRole role = node ? SyntaxRole::constant : SyntaxRole::string;
     if (end == lex_unclosed)
     {
-        cursor.mark(begin, line.size(), SyntaxRole::error);
+        cursor.mark(begin, line.size(), role);
+        cursor.leave(quoted_state(close, node));
         return line.size();
     }
-    cursor.mark(begin, end, SyntaxRole::string);
+    cursor.mark(begin, end, role);
     return end;
 }
 
 std::size_t lex_string(LexCursor &cursor, std::size_t at, bool /*signature*/)
 {
-    return mark_string(cursor, at, at);
+    return mark_quoted(cursor, at, at, false);
 }
 
 // ---- ノードのパス ----
@@ -193,18 +195,14 @@ std::size_t lex_string(LexCursor &cursor, std::size_t at, bool /*signature*/)
     return at;
 }
 
-// at の印（`$` `%`）から、from の引用符の 1 区間か名前と `/` の並びまでが constant。引用符が
-// 閉じていなければ行末まで error。
+// at の印（`$` `%`）から、from の引用符の文字列か名前と `/` の並びまでが constant。引用符が
+// 閉じていなければ行末まで constant で次の行へ。
 std::size_t mark_node(LexCursor &cursor, std::size_t at, std::size_t from)
 {
     const std::string_view line = cursor.line();
     if (from < line.size() && is_quote(line[from]))
     {
-        const std::size_t end = lex_closing_quote(line, from);
-        const bool closed = end != lex_unclosed;
-        cursor.mark(at, closed ? end : line.size(),
-                    closed ? SyntaxRole::constant : SyntaxRole::error);
-        return closed ? end : line.size();
+        return mark_quoted(cursor, at, from, true);
     }
     const std::size_t end = path_end(line, from);
     cursor.mark(at, end, SyntaxRole::constant);
@@ -307,7 +305,8 @@ std::size_t lex_other(LexCursor &cursor, std::size_t at)
     {
         return mark_node(cursor, at, at + 1U);
     }
-    return line[at] == '.' ? lex_number(cursor, at, false) : mark_string(cursor, at, at + 1U);
+    return line[at] == '.' ? lex_number(cursor, at, false)
+                           : mark_quoted(cursor, at, at + 1U, false);
 }
 
 std::size_t lex_operators(LexCursor &cursor, std::size_t at, bool /*signature*/)
@@ -393,6 +392,10 @@ std::size_t lex_word(LexCursor &cursor, std::size_t at, bool signature)
 {
     const std::string_view line = cursor.line();
     const std::size_t end = lex_word_end(line, at);
+    if (end == at + 1U && line[at] == 'r' && end < line.size() && is_quote(line[end]))
+    {
+        return mark_quoted(cursor, at, end, false); // 生の文字列 `r"…"` `r'…'` `r"""…"""`
+    }
     const std::optional<SyntaxRole> role = word_role(
         line.substr(at, end - at), typed_position(line, at, signature), follows_func(line, at));
     if (role.has_value())
@@ -465,33 +468,37 @@ constexpr auto handlers = []
 
 // ---- 行をまたぐ状態の続き ----
 
-// 3 連引用符の中で始まる行。閉じの 3 文字までが string で、閉じなければ行全体が string のまま。
-std::size_t resume_triple(LexCursor &cursor, const LexState &in)
+// 文字列かノードのパスの中で始まる行。閉じの引用符までが同じ役割で、閉じなければ行全体がそのまま。
+std::size_t resume_quoted(LexCursor &cursor, const LexState &in, bool node)
 {
     const std::string_view line = cursor.line();
-    const std::size_t end = triple_close(line, 0U, lex_delimiter(in));
+    const std::string_view close = lex_delimiter(in).substr(node ? 1U : 0U);
+    const std::size_t end = quote_close(line, 0U, close);
+    const SyntaxRole role = node ? SyntaxRole::constant : SyntaxRole::string;
     if (end == lex_unclosed)
     {
-        cursor.mark(0U, line.size(), SyntaxRole::string);
+        cursor.mark(0U, line.size(), role);
         cursor.leave(in);
         return line.size();
     }
-    cursor.mark(0U, end, SyntaxRole::string);
+    cursor.mark(0U, end, role);
     return end;
 }
 
-// GDScript にブロックコメントは無く、3 連引用符でない区切りは GDScript の状態でないので行頭から
-// 読む。
+// GDScript にブロックコメントは無く、引用符（ノードのパスは `$` の付いた引用符）でない区切りは
+// GDScript の状態でないので行頭から読む。
 std::size_t resumed(LexCursor &cursor, const LexState &in)
 {
     const std::string_view delimiter = lex_delimiter(in);
+    const bool node = delimiter.starts_with('$');
     switch (in.kind)
     {
     case LexKind::plain:
     case LexKind::block_comment:
         return 0U;
     case LexKind::raw_string:
-        return delimiter == "\"\"\"" || delimiter == "'''" ? resume_triple(cursor, in) : 0U;
+        return quotes_string(delimiter.substr(node ? 1U : 0U)) ? resume_quoted(cursor, in, node)
+                                                               : 0U;
     }
     std::unreachable();
 }

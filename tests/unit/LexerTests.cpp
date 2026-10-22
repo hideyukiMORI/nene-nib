@@ -83,8 +83,11 @@ constexpr LexState block00 = raw("00");
 constexpr LexState block02 = raw("02");
 constexpr LexState block04 = raw("04");
 constexpr LexState block99 = raw("99");
-// #855: gdresource の行をまたぐ `"…"` の中（delimiter は `"`）。
+// #855: gdresource と GDScript の行をまたぐ `"…"` の中（delimiter は `"`）。
 constexpr LexState in_quote = raw("\"");
+// #856: GDScript の行をまたぐ `'…'` とノードのパス `$"…"` の中（delimiter は閉じの前に `$`）。
+constexpr LexState in_squote = raw("'");
+constexpr LexState in_node = raw("$\"");
 
 [[nodiscard]] std::optional<SyntaxRole> role_of(char letter)
 {
@@ -918,7 +921,9 @@ constexpr std::array<LexCase, 49> toml_cases{{
 
 // GDScript（#855）: 宣言・注釈・型の注釈・ノードのパス・StringName と NodePath・3 連引用符の
 // 行またぎ・数の形・UTF-8 のコメント。`%` は式の始まりでだけノード、`@` は行のどこでも注釈。
-constexpr std::array<LexCase, 53> gdscript_cases{{
+// #856: 引用符 1 つの文字列とノードのパスも行をまたぎ（Godot 4 の tokenizer）、生の文字列 `r"…"`
+// は `r` を含めて string（`\` は次の 1 バイトを飛ばすので `r"\"` は閉じない）。
+constexpr std::array<LexCase, 76> gdscript_cases{{
     {"extends CharacterBody2D", plain, "kkkkkkk", plain},
     {"class_name Player", plain, "kkkkkkkkkk", plain},
     {"@tool", plain, "kkkkk", plain},
@@ -969,7 +974,29 @@ constexpr std::array<LexCase, 53> gdscript_cases{{
     {"# コメント 日本語", plain, "cccccccccc", plain},
     {"## doc comment", plain, "cccccccccccccc", plain},
     {"var t = \"日本語\" # 注", plain, "kkk   o sssss ccc", plain},
-    {"var bad = \"open", plain, "kkk     o eeeee", plain},
+    {"var bad = \"open", plain, "kkk     o sssss", in_quote},
+    {"more\" # c", in_quote, "sssss ccc", plain},
+    {"var s = 'it", plain, "kkk   o sss", in_squote},
+    {"x' + 1", in_squote, "ss o n", plain},
+    {"var s = \"a\\", plain, "kkk   o sss", in_quote},
+    {"\"", plain, "s", in_quote},
+    {"\"\"\"", plain, "sss", triple_dq},
+    {"&\"", plain, "ss", in_quote},
+    {"^\"", plain, "ss", in_quote},
+    {"$", plain, "v", plain},
+    {"%", plain, "o", plain},
+    {"@", plain, "o", plain},
+    {"(", plain, "o", plain},
+    {"\"\"\"x\"\"\"", plain, "sssssss", plain},
+    {"a\\''' b'''", triple_sq, "ssssssssss", plain},
+    {"&\"\"\"", plain, "ssss", triple_dq},
+    {"$\"open", plain, "vvvvvv", in_node},
+    {"rest\" .x", in_node, "vvvvv o", plain},
+    {"x = %\"Unique", plain, "  o vvvvvvvv", in_node},
+    {"var re = r\"\\d+\"", plain, "kkk    o ssssss", plain},
+    {"r'x'", plain, "ssss", plain},
+    {"r\"\"\"raw", plain, "sssssss", triple_dq},
+    {"r\"\\\"", plain, "ssss", in_quote},
     {"var esc = \"a\\\"b\" + 'it\\'s'", plain, "kkk     o ssssss o sssssss", plain},
     {"    tween.tween_property(self, \"position\", Vector2(1, 2), 0.5)", plain,
      "         o              okkkko sssssssssso tttttttono noo nnno", plain},
@@ -981,7 +1008,7 @@ constexpr std::array<LexCase, 53> gdscript_cases{{
 
 // Ini（#855・dosini）: 見出し・キーと値・`;` `#` の行頭のコメント・空白の入ったキー・値の数と
 // 文字列。値の中の `;` はコメントでなく（Vim と同じ）、行をまたがない。
-constexpr std::array<LexCase, 44> dosini_cases{{
+constexpr std::array<LexCase, 47> dosini_cases{{
     {"[section]", plain, "kkkkkkkkk", plain},
     {"  [Indented Section] trailing", plain, "  kkkkkkkkkkkkkkkkkk", plain},
     {"[unclosed", plain, "kkkkkkkkk", plain},
@@ -1025,12 +1052,17 @@ constexpr std::array<LexCase, 44> dosini_cases{{
     {"", plain, "", plain},
     {"    ", plain, "", plain},
     {"a = \"x", in_quote, "t o", plain},
+    {"[", plain, "k", plain},
+    {"=", plain, "o", plain},
+    {"k = \"", plain, "t o", plain},
     {"int x; /* c", raw_xyz, "", plain},
 }};
 
 // Godot の設定（#855・gdresource）: project.godot と .tscn の形。見出しの名前と閉じは keyword・
 // 属性名とキーは type・呼び出しの名前は type・`"…"` は行をまたぐ・`;` から行末はコメント。
-constexpr std::array<LexCase, 55> gdresource_cases{{
+// 限界（#856 で固定）: 見出しの属性の文字列が行をまたぐと次の行の `]` は閉じに取れず、複数行の
+// 配列の中で `[SubResource(` から始まる行は見出しとして塗る。
+constexpr std::array<LexCase, 60> gdresource_cases{{
     {"; Engine configuration file.", plain, "cccccccccccccccccccccccccccc", plain},
     {"config_version=5", plain, "tttttttttttttton", plain},
     {"[application]", plain, "kkkkkkkkkkkkk", plain},
@@ -1093,6 +1125,12 @@ constexpr std::array<LexCase, 55> gdresource_cases{{
     {"[1, 2]", plain, " n  n", plain},
     {"[ node ]", plain, "", plain},
     {"[node name=\"a]", plain, "kkkkk ttttosss", in_quote},
+    {"b\"]", in_quote, "ss", plain},
+    {"[gd_scene", plain, "kkkkkkkkk", plain},
+    {"a = \"x\\", plain, "t o sss", in_quote},
+    {"&\"", plain, "ss", in_quote},
+    {"[SubResource(\"1\"), SubResource(\"2\")]", plain, "kkkkkkkkkkkk sss   ttttttttttt sss k",
+     plain},
     {"日本 = \"値\"", plain, "   o sss", plain},
     {"[resource]", plain, "kkkkkkkkkk", plain},
     {"", plain, "", plain},
