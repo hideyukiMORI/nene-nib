@@ -266,8 +266,9 @@ std::size_t lex_number(LexCursor &cursor, std::size_t at, RegexHorizon & /*horiz
     return operator_characters.contains(line[at]) && !starts_number(line, at);
 }
 
-// 演算子の連なりは 1 区間（`.5` で切る）。最後の文字が `)` `]` なら次の `/` は除算、ほかは
-// 正規表現。
+// 演算子の連なりは 1 区間（`.5` で切る）。最後の文字が `)` `]` `<` なら次の `/` は除算、ほかは
+// 正規表現（`<` は JSX の `</div>` を正規表現と読まないため・#864・`a < /re/` は稀なので
+// 受け入れる）。
 std::size_t lex_operators(LexCursor &cursor, std::size_t at, RegexHorizon &horizon)
 {
     const std::string_view line = cursor.line();
@@ -282,8 +283,8 @@ std::size_t lex_operators(LexCursor &cursor, std::size_t at, RegexHorizon &horiz
     }
     cursor.mark(at, end, SyntaxRole::operators);
     const char last = line[end - 1U];
-    cursor.follow(last == ')' || last == ']' ? LexPrecedent::operand
-                                             : LexPrecedent::expression_start);
+    cursor.follow(last == ')' || last == ']' || last == '<' ? LexPrecedent::operand
+                                                            : LexPrecedent::expression_start);
     return end;
 }
 

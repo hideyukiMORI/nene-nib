@@ -44,3 +44,7 @@
 ## 追補（2026-10-22・#860）
 
 - **言語を 4 つ足す（決定 1・2・3 の表の各 1 行）。** `Language` の末尾に `php` `sql` `lua` `dockerfile`（名前は Vim 9.1 の filetype 名）を足し、拡張子は Vim の `filetype.vim` に寄せて `php` `php0`〜`php9`（Vim の `*.php\d`）`phtml` `ctp` `phpt` `theme` → php・`sql` → sql（Vim は `g:filetype_sql` が無ければ sql）・`lua` `rockspec` → lua・`dockerfile`（`*.[dD]ockerfile`）→ dockerfile。名前の行（`CMakeLists.txt` と同じ道・大小を問わない）に `Dockerfile` `Containerfile` → dockerfile と `.luacheckrc` → lua を足し、Vim の最後の節の `Dockerfile.*` `Containerfile.*` は拡張子の表に当たらなかった名前だけ dockerfile にする（`Dockerfile.json` は json・`Dockerfile.txt` は plain・`Dockerfile.dev` は dockerfile）。`luau` は Vim では別の filetype なので plain のまま。名前の往復は 26 本。貼り付けの切り分け（`paste_kind_of`）では 4 つとも text。
+
+## 追補（2026-10-23・#864）
+
+- **字句器のある言語に拡張子と名前の行を足す（新しい `Language` は無し）。** 拡張子: `tsx` → typescript・`jsx` → javascript（Vim 9.1 は `typescriptreact` `javascriptreact` の別の filetype だが、JSX のタグの色は埋め込みの設計を待つ後続なので親の言語に畳む）・`pssc` → powershell（Vim と同じ ps1）・`import` → gdresource（Godot の `.import` は ConfigFile の書式・`godot` と同じく Vim に行は無い）。名前の行（`CMakeLists.txt` と同じ道）: `.bashrc` `.bash_profile` `.bash_logout` `.profile` `.zshrc` `.zprofile` → shell（Vim は bash / sh / zsh に分けるが、`zsh` の拡張子と同じく shell の 1 つに畳む）。名前の末尾の照合を 1 本足し、`*.cmake.in` → cmake（Vim と同じ・拡張子の表は 2 段にしない）。名前の往復は 26 本のまま。
