@@ -40,6 +40,10 @@ namespace
     case Language::cs:
     case Language::rust:
     case Language::go:
+    case Language::php:
+    case Language::sql:
+    case Language::lua:
+    case Language::dockerfile:
         return true;
     }
     return false;
@@ -58,10 +62,10 @@ namespace
 
 // 名前の表（決定 3）。i 行目が i 番目の値の Vim の filetype 名で、language_name と
 // language_of_name の 2 本が同じこの配列を読む。
-constexpr std::array<std::string_view, 22> language_names{
-    "text",       "markdown", "html",       "c",   "cpp",  "python", "json", "javascript",
-    "typescript", "yaml",     "toml",       "xml", "css",  "ps1",    "sh",   "cmake",
-    "gdscript",   "dosini",   "gdresource", "cs",  "rust", "go"};
+constexpr std::array<std::string_view, 26> language_names{
+    "text",       "markdown", "html", "c",   "cpp", "python", "json",  "javascript", "typescript",
+    "yaml",       "toml",     "xml",  "css", "ps1", "sh",     "cmake", "gdscript",   "dosini",
+    "gdresource", "cs",       "rust", "go",  "php", "sql",    "lua",   "dockerfile"};
 
 static_assert(language_names.size() == language_count(),
               "language_names has one row for every Language");
@@ -70,7 +74,7 @@ static_assert(language_names.size() == language_count(),
 // 表に無い拡張子と同じ plain だが、初版の表の 1 行として書いておく。
 using LanguageExtension = std::pair<std::string_view, Language>;
 
-constexpr std::array<LanguageExtension, 45> language_extensions{{
+constexpr std::array<LanguageExtension, 64> language_extensions{{
     {"md", Language::markdown},
     {"markdown", Language::markdown},
     {"html", Language::html},
@@ -115,11 +119,42 @@ constexpr std::array<LanguageExtension, 45> language_extensions{{
     {"cake", Language::cs},
     {"rs", Language::rust},
     {"go", Language::go},
+    {"php", Language::php},
+    {"php0", Language::php},
+    {"php1", Language::php},
+    {"php2", Language::php},
+    {"php3", Language::php},
+    {"php4", Language::php},
+    {"php5", Language::php},
+    {"php6", Language::php},
+    {"php7", Language::php},
+    {"php8", Language::php},
+    {"php9", Language::php},
+    {"phtml", Language::php},
+    {"ctp", Language::php},
+    {"phpt", Language::php},
+    {"theme", Language::php},
+    {"sql", Language::sql},
+    {"lua", Language::lua},
+    {"rockspec", Language::lua},
+    {"dockerfile", Language::dockerfile},
     {"txt", Language::plain},
 }};
 
 // 拡張子ではなく名前で決まる行（決定 2）。照合は拡張子と同じく ASCII の大文字小文字を畳む。
-constexpr std::string_view cmake_lists_name = "CMakeLists.txt";
+// Dockerfile と Containerfile（#860）と `.luacheckrc` は Vim の filetype.vim の名前の行。
+using LanguageName = std::pair<std::string_view, Language>;
+
+constexpr std::array<LanguageName, 4> language_file_names{{
+    {"CMakeLists.txt", Language::cmake},
+    {"Dockerfile", Language::dockerfile},
+    {"Containerfile", Language::dockerfile},
+    {".luacheckrc", Language::lua},
+}};
+
+// 拡張子の表に当たらなかった名前の頭（#860）。Vim の filetype.vim の最後の節
+// `Dockerfile.*` `Containerfile.*`（StarSetf）と同じく、拡張子の表が先に勝つ。
+constexpr std::array<std::string_view, 2> dockerfile_prefixes{"Dockerfile.", "Containerfile."};
 
 [[nodiscard]] constexpr bool same_ignoring_case(std::string_view left,
                                                 std::string_view right) noexcept
@@ -164,20 +199,25 @@ using BytePredicate = bool (*)(char) noexcept;
 Language language_of_path(std::string_view path) noexcept
 {
     const auto name = file_name_of(path);
-    if (same_ignoring_case(name, cmake_lists_name))
+    const auto named = std::ranges::find_if(language_file_names, [name](const LanguageName &row)
+                                            { return same_ignoring_case(name, row.first); });
+    if (named != language_file_names.end())
     {
-        return Language::cmake;
+        return named->second;
     }
     const auto dot = last_where(name, is_dot);
-    if (!dot.has_value())
-    {
-        return Language::plain;
-    }
-    const auto extension = name.substr(dot.value() + 1);
+    const auto extension = dot.has_value() ? name.substr(dot.value() + 1) : std::string_view{};
     const auto found =
         std::ranges::find_if(language_extensions, [extension](const LanguageExtension &row)
                              { return same_ignoring_case(extension, row.first); });
-    return found == language_extensions.end() ? Language::plain : found->second;
+    if (dot.has_value() && found != language_extensions.end())
+    {
+        return found->second;
+    }
+    const bool dockerfile =
+        std::ranges::any_of(dockerfile_prefixes, [name](std::string_view prefix)
+                            { return ascii_prefix_ignoring_case(name, prefix); });
+    return dockerfile ? Language::dockerfile : Language::plain;
 }
 
 std::string_view language_name(Language language) noexcept

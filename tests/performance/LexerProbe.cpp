@@ -172,73 +172,140 @@ constexpr std::array<std::string_view, template_count> go_templates{
     "func main() { xs := make([]int, 0, 10); xs = append(xs, len(xs), cap(xs)); fmt.Println(xs) }",
     "    var r rune = 'a'; const ( A = iota; B ); if err != nil { panic(err) }",
     "    for i := range 10 { go func() { ch <- true }(); defer close(ch) }"};
+// PHP（#860）: `<?php` で入る宣言・属性とブロックコメント（2 行目が開き 3 行目が閉じる）・
+// `$this->x`・3 種の文字列・数の形・`?>` の後の HTML と `<?=` と `<?php` で戻る行。
+constexpr std::array<std::string_view, template_count> php_templates{
+    "<?php namespace App\\Models; use App\\Contracts\\Shape; final class Circle extends Base {",
+    "    #[Pure] public function area(float $r = 1.5): float { /* block comment begins",
+    "   ends here */ return 3.14 * $this->radius ** 2; } private ?string $name = null;",
+    "    $s = 'single' . \"double {$x}\" . `cmd`; $a = TRUE || Null ?? false; echo __LINE__;",
+    "    $f = fn($y) => $y + 0x1F + 1_000 + .5; if (isset($list[0])) { return new static(); }",
+    "    echo 1; ?> <b>html</b> <?= $name ?> <?php $v = match($x) { 1 => 'a', default => 'b' };"};
+// SQL（#860）: 結合と集約・ブロックコメント（2 行目が開き 3 行目が閉じる）・`CREATE TABLE`
+// と型・`'it''s'` と `"quoted"`・`CASE` と関数。
+constexpr std::array<std::string_view, template_count> sql_templates{
+    "SELECT u.id, u.name, COUNT(*) AS n FROM users u LEFT JOIN orders o ON o.user_id = u.id",
+    "WHERE u.active = TRUE AND o.total > 10.5 /* block comment begins here and",
+    "   continues */ GROUP BY u.id, u.name HAVING SUM(o.total) >= 100 ORDER BY n DESC;",
+    "CREATE TABLE items (id INTEGER PRIMARY KEY, name VARCHAR(255) NOT NULL DEFAULT '');",
+    "INSERT INTO items VALUES (1, 'it''s', 3.5e-2), (2, \"quoted\", NULL); UPDATE t SET x = 1;",
+    "SELECT CASE WHEN x <> 0 THEN 'y' ELSE 'n' END, COALESCE(a, 0) FROM t WHERE b BETWEEN 1 AND "
+    "2;"};
+// Lua（#860）: `local function`・長いコメント `--[==[`（2 行目が開き 3 行目が閉じる）・
+// 長い文字列・`..`・数の形・`goto` とラベル・`function obj:method`。
+constexpr std::array<std::string_view, template_count> lua_templates{
+    "local function greet(name) return \"Hello, \" .. name .. '!' end local t = { 1, 2.5, 0x1p4 }",
+    "function M.helper(x, y) --[==[ long comment begins here and",
+    "   continues ]==] if x == nil then return false elseif x ~= y then return true end end",
+    "local s = [[long string]] .. \"esc \\\" quote\" for i = 1, 10 do t[i] = #t // 2 % 3 ^ 2 end",
+    "while not done and ok or fail do repeat n = n - 1 until n <= 0 goto skip end ::skip::",
+    "function obj:method(...) local a <const> = 5 return setmetatable({}, self), nil, 3e10 end"};
+// Dockerfile（#860）: パーサ指示・`FROM … AS`・行末の `\` の続き（3 行目が続き 4 行目で
+// 終わる・plain の種類のまま）・`$VAR` `${VAR}`・JSON の形の `CMD`。行をまたぐ種類に入る
+// 行が無いので、詰め物は空白（続きの `\` を行末に保つ）。
+constexpr std::array<std::string_view, template_count> dockerfile_templates{
+    "# syntax=docker/dockerfile:1",
+    "FROM golang:1.22 AS build",
+    "RUN apk add --no-cache git curl ca-certificates && \\",
+    "    go build -o /out/app ./cmd/app && echo \"built $VERSION\"",
+    "ENV PATH=$PATH:/opt/bin HOME=${HOME:-/root} LABEL=\"nene \\\"nib\\\"\"",
+    "CMD [\"./app\", \"--port\", \"8080\"]"};
 
-[[nodiscard]] constexpr core::Language language_of(LexerWorkload workload)
+// LexerWorkload の値か。値を足すとこの switch がコンパイルで落ち（CPP-002）、足した後は下の
+// 数え上げが 1 つ増えて、言語の表に行が無ければ static_assert が落ちる（LanguageTable.cpp と同じ
+// 形・#860 で分岐の関数が 60 行を越えたので表にした）。
+[[nodiscard]] consteval bool is_workload(LexerWorkload workload) noexcept
 {
     switch (workload)
     {
     case LexerWorkload::cpp_visible_60:
     case LexerWorkload::cpp_backfill_200:
-        return core::Language::cpp;
     case LexerWorkload::json_visible_60:
     case LexerWorkload::json_backfill_200:
-        return core::Language::json;
     case LexerWorkload::python_visible_60:
     case LexerWorkload::python_backfill_200:
-        return core::Language::python;
     case LexerWorkload::markdown_visible_60:
     case LexerWorkload::markdown_backfill_200:
-    case LexerWorkload::markdown_worst_line:
-        return core::Language::markdown;
     case LexerWorkload::javascript_visible_60:
     case LexerWorkload::javascript_backfill_200:
-        return core::Language::javascript;
+    case LexerWorkload::markdown_worst_line:
     case LexerWorkload::html_visible_60:
     case LexerWorkload::html_backfill_200:
-        return core::Language::html;
     case LexerWorkload::xml_visible_60:
-        return core::Language::xml;
     case LexerWorkload::css_visible_60:
-        return core::Language::css;
     case LexerWorkload::yaml_visible_60:
     case LexerWorkload::yaml_backfill_200:
-        return core::Language::yaml;
     case LexerWorkload::toml_visible_60:
     case LexerWorkload::toml_backfill_200:
-        return core::Language::toml;
     case LexerWorkload::gdscript_visible_60:
     case LexerWorkload::gdscript_backfill_200:
-        return core::Language::gdscript;
     case LexerWorkload::dosini_visible_60:
-        return core::Language::dosini;
     case LexerWorkload::gdresource_visible_60:
     case LexerWorkload::gdresource_backfill_200:
-        return core::Language::gdresource;
     case LexerWorkload::cs_visible_60:
     case LexerWorkload::cs_backfill_200:
-        return core::Language::cs;
     case LexerWorkload::rust_visible_60:
     case LexerWorkload::rust_backfill_200:
-        return core::Language::rust;
     case LexerWorkload::go_visible_60:
     case LexerWorkload::go_backfill_200:
-        return core::Language::go;
+    case LexerWorkload::php_visible_60:
+    case LexerWorkload::php_backfill_200:
+    case LexerWorkload::sql_visible_60:
+    case LexerWorkload::lua_visible_60:
+    case LexerWorkload::lua_backfill_200:
+    case LexerWorkload::dockerfile_visible_60:
+        return true;
     }
-    std::unreachable();
+    return false;
+}
+
+// 値は 0 から連続して並ぶので、最初に値でなくなる所までが値の数。
+[[nodiscard]] consteval std::size_t workload_count() noexcept
+{
+    std::size_t count = 0;
+    while (is_workload(static_cast<LexerWorkload>(count)))
+    {
+        ++count;
+    }
+    return count;
+}
+
+// i 行目が i 番目の LexerWorkload の言語。
+constexpr std::array<core::Language, 36> workload_languages{
+    core::Language::cpp,        core::Language::cpp,        core::Language::json,
+    core::Language::json,       core::Language::python,     core::Language::python,
+    core::Language::markdown,   core::Language::markdown,   core::Language::javascript,
+    core::Language::javascript, core::Language::markdown,   core::Language::html,
+    core::Language::html,       core::Language::xml,        core::Language::css,
+    core::Language::yaml,       core::Language::yaml,       core::Language::toml,
+    core::Language::toml,       core::Language::gdscript,   core::Language::gdscript,
+    core::Language::dosini,     core::Language::gdresource, core::Language::gdresource,
+    core::Language::cs,         core::Language::cs,         core::Language::rust,
+    core::Language::rust,       core::Language::go,         core::Language::go,
+    core::Language::php,        core::Language::php,        core::Language::sql,
+    core::Language::lua,        core::Language::lua,        core::Language::dockerfile};
+static_assert(workload_languages.size() == workload_count(),
+              "workload_languages has one row for every LexerWorkload");
+
+[[nodiscard]] constexpr core::Language language_of(LexerWorkload workload)
+{
+    return workload_languages.at(std::to_underlying(workload));
 }
 
 [[nodiscard]] constexpr bool is_visible(LexerWorkload workload)
 {
-    constexpr std::array<LexerWorkload, 17> visible{
-        LexerWorkload::cpp_visible_60,      LexerWorkload::json_visible_60,
-        LexerWorkload::python_visible_60,   LexerWorkload::markdown_visible_60,
-        LexerWorkload::markdown_worst_line, LexerWorkload::javascript_visible_60,
-        LexerWorkload::html_visible_60,     LexerWorkload::xml_visible_60,
-        LexerWorkload::css_visible_60,      LexerWorkload::yaml_visible_60,
-        LexerWorkload::toml_visible_60,     LexerWorkload::gdscript_visible_60,
-        LexerWorkload::dosini_visible_60,   LexerWorkload::gdresource_visible_60,
-        LexerWorkload::cs_visible_60,       LexerWorkload::rust_visible_60,
-        LexerWorkload::go_visible_60};
+    constexpr std::array<LexerWorkload, 21> visible{
+        LexerWorkload::cpp_visible_60,       LexerWorkload::json_visible_60,
+        LexerWorkload::python_visible_60,    LexerWorkload::markdown_visible_60,
+        LexerWorkload::markdown_worst_line,  LexerWorkload::javascript_visible_60,
+        LexerWorkload::html_visible_60,      LexerWorkload::xml_visible_60,
+        LexerWorkload::css_visible_60,       LexerWorkload::yaml_visible_60,
+        LexerWorkload::toml_visible_60,      LexerWorkload::gdscript_visible_60,
+        LexerWorkload::dosini_visible_60,    LexerWorkload::gdresource_visible_60,
+        LexerWorkload::cs_visible_60,        LexerWorkload::rust_visible_60,
+        LexerWorkload::go_visible_60,        LexerWorkload::php_visible_60,
+        LexerWorkload::sql_visible_60,       LexerWorkload::lua_visible_60,
+        LexerWorkload::dockerfile_visible_60};
     return std::ranges::find(visible, workload) != visible.end();
 }
 
@@ -249,7 +316,7 @@ constexpr std::array<std::string_view, template_count> go_templates{
 
 [[nodiscard]] constexpr std::span<const std::string_view> templates_of(LexerWorkload workload)
 {
-    constexpr std::array<std::pair<core::Language, std::span<const std::string_view>>, 15> tables{
+    constexpr std::array<std::pair<core::Language, std::span<const std::string_view>>, 19> tables{
         {{core::Language::json, json_templates},
          {core::Language::markdown, markdown_templates},
          {core::Language::javascript, javascript_templates},
@@ -264,7 +331,11 @@ constexpr std::array<std::string_view, template_count> go_templates{
          {core::Language::gdresource, gdresource_templates},
          {core::Language::cs, cs_templates},
          {core::Language::rust, rust_templates},
-         {core::Language::go, go_templates}}};
+         {core::Language::go, go_templates},
+         {core::Language::php, php_templates},
+         {core::Language::sql, sql_templates},
+         {core::Language::lua, lua_templates},
+         {core::Language::dockerfile, dockerfile_templates}}};
     const core::Language language = language_of(workload);
     for (const auto &[table_language, templates] : tables)
     {
@@ -276,9 +347,10 @@ constexpr std::array<std::string_view, template_count> go_templates{
     return cpp_templates;
 }
 
-// 各行は「型の行 + 言語の行末コメントの印（JSON・Markdown・HTML・XML・CSS・Ini は空白・
-// gdresource は ` ;`・C++・JavaScript・C#・Rust・Go は ` //`）+ 詰め物」で 100
-// バイトにそろえる。詰め物は `-` で、Markdown だけ空白 （フェンスの閉じの行を閉じのまま保つ）。
+// 各行は「型の行 + 言語の行末コメントの印（JSON・Markdown・HTML・XML・CSS・Ini・Dockerfile は
+// 空白・gdresource は ` ;`・C++・JavaScript・C#・Rust・Go・PHP は ` //`・SQL・Lua は ` --`）+
+// 詰め物」で 100 バイトにそろえる。詰め物は `-` で、Markdown（フェンスの閉じの行を閉じのまま
+// 保つ）と Dockerfile（行末の `\` の続きを保つ・#860）だけ空白。
 [[nodiscard]] constexpr std::string_view suffix_of(LexerWorkload workload)
 {
     const core::Language language = language_of(workload);
@@ -286,10 +358,16 @@ constexpr std::array<std::string_view, template_count> go_templates{
                         language == core::Language::toml || language == core::Language::gdscript;
     const bool slashed = language == core::Language::cpp ||
                          language == core::Language::javascript || language == core::Language::cs ||
-                         language == core::Language::rust || language == core::Language::go;
+                         language == core::Language::rust || language == core::Language::go ||
+                         language == core::Language::php;
+    const bool dashed = language == core::Language::sql || language == core::Language::lua;
     if (language == core::Language::gdresource)
     {
         return " ;";
+    }
+    if (dashed)
+    {
+        return " --";
     }
     if (hashed)
     {
@@ -300,17 +378,22 @@ constexpr std::array<std::string_view, template_count> go_templates{
 
 [[nodiscard]] constexpr char padding_of(LexerWorkload workload)
 {
-    return language_of(workload) == core::Language::markdown ? ' ' : '-';
+    const core::Language language = language_of(workload);
+    return language == core::Language::markdown || language == core::Language::dockerfile ? ' '
+                                                                                          : '-';
 }
 
 // 2 行目の型の後ろで行をまたぐ状態に入るか（C++ と JavaScript と CSS のブロックコメント・Python と
 // TOML の 3 連引用符・Markdown のフェンス・HTML のコメント・XML の CDATA・YAML
 // のブロックスカラー）。 YAML だけは 3 行目（深い字下げの中身）でもまだ中にいて、4 行目で戻る。
+// JSON・Ini・Dockerfile（行の続きは plain の種類のまま）は行をまたぐ種類に入らない。
 [[nodiscard]] constexpr bool opened_after(LexerWorkload workload, std::size_t index)
 {
     const core::Language language = language_of(workload);
     const std::size_t row = index % template_count;
-    const bool single_line = language == core::Language::json || language == core::Language::dosini;
+    const bool single_line = language == core::Language::json ||
+                             language == core::Language::dosini ||
+                             language == core::Language::dockerfile;
     return !single_line && (row == 1U || (language == core::Language::yaml && row == 2U));
 }
 

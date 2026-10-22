@@ -40,3 +40,7 @@
 ## 追補（2026-10-22・#857）
 
 - **言語を 3 つ足す（決定 1・2・3 の表の各 1 行）。** `Language` の末尾に `cs` `rust` `go`（名前は Vim 9.1 の filetype 名）を足し、拡張子は Vim の `filetype.vim`（`dist/ft.vim` の拡張子の表）に寄せて `cs` `csx` `cake` → cs・`rs` → rust・`go` → go（`csx` `cake` は Issue #857 の初めの案に無く Vim に寄せて足した所・`go.mod` は Vim では別の filetype なので plain のまま）。名前の往復は 22 本。貼り付けの切り分け（`paste_kind_of`）では 3 つとも text。`:set ft=` の名前の外の例（試験）は `rust` から `zig` に替えた。
+
+## 追補（2026-10-22・#860）
+
+- **言語を 4 つ足す（決定 1・2・3 の表の各 1 行）。** `Language` の末尾に `php` `sql` `lua` `dockerfile`（名前は Vim 9.1 の filetype 名）を足し、拡張子は Vim の `filetype.vim` に寄せて `php` `php0`〜`php9`（Vim の `*.php\d`）`phtml` `ctp` `phpt` `theme` → php・`sql` → sql（Vim は `g:filetype_sql` が無ければ sql）・`lua` `rockspec` → lua・`dockerfile`（`*.[dD]ockerfile`）→ dockerfile。名前の行（`CMakeLists.txt` と同じ道・大小を問わない）に `Dockerfile` `Containerfile` → dockerfile と `.luacheckrc` → lua を足し、Vim の最後の節の `Dockerfile.*` `Containerfile.*` は拡張子の表に当たらなかった名前だけ dockerfile にする（`Dockerfile.json` は json・`Dockerfile.txt` は plain・`Dockerfile.dev` は dockerfile）。`luau` は Vim では別の filetype なので plain のまま。名前の往復は 26 本。貼り付けの切り分け（`paste_kind_of`）では 4 つとも text。

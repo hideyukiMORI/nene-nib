@@ -30,6 +30,10 @@ enum class Language : std::uint8_t
     gdresource,
     cs,
     rust,
-    go
+    go,
+    php,
+    sql,
+    lua,
+    dockerfile
 };
 } // namespace nenenib::core

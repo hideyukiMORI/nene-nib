@@ -68,7 +68,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/Lexer.cpp src/core/LexCpp.cpp src/core/LexCursor.cpp
     src/core/MarkdownParse.cpp src/core/MarkdownBuilder.cpp src/core/MarkdownEntity.cpp
     src/core/HtmlAttribute.cpp src/core/HtmlMarkdownWriter.cpp src/core/HtmlToMarkdown.cpp
-    src/core/Lexer.cpp src/core/LexCpp.cpp src/core/LexCursor.cpp src/core/LexJson.cpp src/core/LexPython.cpp src/core/LexMarkdown.cpp src/core/LexJavaScript.cpp src/core/LexHtml.cpp src/core/LexCss.cpp src/core/LexYaml.cpp src/core/LexToml.cpp src/core/LexGdscript.cpp src/core/LexIni.cpp src/core/LexCsharp.cpp src/core/LexRust.cpp src/core/LexGo.cpp src/core/SyntaxColor.cpp)
+    src/core/Lexer.cpp src/core/LexCpp.cpp src/core/LexCursor.cpp src/core/LexJson.cpp src/core/LexPython.cpp src/core/LexMarkdown.cpp src/core/LexJavaScript.cpp src/core/LexHtml.cpp src/core/LexCss.cpp src/core/LexYaml.cpp src/core/LexToml.cpp src/core/LexGdscript.cpp src/core/LexIni.cpp src/core/LexCsharp.cpp src/core/LexRust.cpp src/core/LexGo.cpp src/core/LexPhp.cpp src/core/LexSql.cpp src/core/LexLua.cpp src/core/LexDockerfile.cpp src/core/SyntaxColor.cpp)
 # core の parse_markdown（#765）だけが md4c を呼ぶ。md4c.h を include するのは src/core/MarkdownParse.cpp の 1 か所（CNF-009）。
 nenenib_link(nenenib_core nenenib_md4c)
 

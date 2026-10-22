@@ -407,6 +407,10 @@ void verify_backfill_per_language()
                core::syntax_backfill_lines(Language::cs) == 200 &&
                core::syntax_backfill_lines(Language::rust) == 200 &&
                core::syntax_backfill_lines(Language::go) == 200 &&
+               core::syntax_backfill_lines(Language::php) == 200 &&
+               core::syntax_backfill_lines(Language::sql) == 200 &&
+               core::syntax_backfill_lines(Language::lua) == 200 &&
+               core::syntax_backfill_lines(Language::dockerfile) == 50 &&
                core::syntax_backfill_lines(Language::cmake) == 0,
            "the backfill table has one value per language");
     Editing editing;

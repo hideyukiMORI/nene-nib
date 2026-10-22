@@ -895,6 +895,12 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     case LexerWorkload::rust_backfill_200:
     case LexerWorkload::go_visible_60:
     case LexerWorkload::go_backfill_200:
+    case LexerWorkload::php_visible_60:
+    case LexerWorkload::php_backfill_200:
+    case LexerWorkload::sql_visible_60:
+    case LexerWorkload::lua_visible_60:
+    case LexerWorkload::lua_backfill_200:
+    case LexerWorkload::dockerfile_visible_60:
         return 159U + static_cast<std::size_t>(workload);
     }
     std::unreachable();
@@ -915,7 +921,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 189> dispatches{{
+constexpr std::array<ProbeDispatch, 195> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1300,6 +1306,18 @@ constexpr std::array<ProbeDispatch, 189> dispatches{{
     ProbeDispatchRow{LexerWorkload::go_visible_60, "lexer-go-visible-60", lexer_input, lexed_lines},
     ProbeDispatchRow{LexerWorkload::go_backfill_200, "lexer-go-backfill-200", lexer_input,
                      lexed_lines},
+    ProbeDispatchRow{LexerWorkload::php_visible_60, "lexer-php-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::php_backfill_200, "lexer-php-backfill-200", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::sql_visible_60, "lexer-sql-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::lua_visible_60, "lexer-lua-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::lua_backfill_200, "lexer-lua-backfill-200", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::dockerfile_visible_60, "lexer-dockerfile-visible-60",
+                     lexer_input, lexed_lines},
 }};
 
 constexpr auto dispatch_names = []
@@ -1342,7 +1360,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 189U);
+static_assert(dispatches.size() == 195U);
 static_assert(dispatch_is_complete());
 
 } // namespace

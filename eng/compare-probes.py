@@ -185,7 +185,13 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              'lexer-rust-visible-60',
              'lexer-rust-backfill-200',
              'lexer-go-visible-60',
-             'lexer-go-backfill-200')
+             'lexer-go-backfill-200',
+             'lexer-php-visible-60',
+             'lexer-php-backfill-200',
+             'lexer-sql-visible-60',
+             'lexer-lua-visible-60',
+             'lexer-lua-backfill-200',
+             'lexer-dockerfile-visible-60')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -346,21 +352,52 @@ LEXER_TEMPLATES = {
         "func main() { xs := make([]int, 0, 10); xs = append(xs, len(xs), cap(xs)); fmt.Println(xs) }",
         "    var r rune = 'a'; const ( A = iota; B ); if err != nil { panic(err) }",
         "    for i := range 10 { go func() { ch <- true }(); defer close(ch) }"),
+    "php": (
+        '<?php namespace App\\Models; use App\\Contracts\\Shape; final class Circle extends Base {',
+        '    #[Pure] public function area(float $r = 1.5): float { /* block comment begins',
+        '   ends here */ return 3.14 * $this->radius ** 2; } private ?string $name = null;',
+        '    $s = \'single\' . "double {$x}" . `cmd`; $a = TRUE || Null ?? false; echo __LINE__;',
+        '    $f = fn($y) => $y + 0x1F + 1_000 + .5; if (isset($list[0])) { return new static(); }',
+        "    echo 1; ?> <b>html</b> <?= $name ?> <?php $v = match($x) { 1 => 'a', default => 'b' };"),
+    "sql": (
+        'SELECT u.id, u.name, COUNT(*) AS n FROM users u LEFT JOIN orders o ON o.user_id = u.id',
+        'WHERE u.active = TRUE AND o.total > 10.5 /* block comment begins here and',
+        '   continues */ GROUP BY u.id, u.name HAVING SUM(o.total) >= 100 ORDER BY n DESC;',
+        "CREATE TABLE items (id INTEGER PRIMARY KEY, name VARCHAR(255) NOT NULL DEFAULT '');",
+        'INSERT INTO items VALUES (1, \'it\'\'s\', 3.5e-2), (2, "quoted", NULL); UPDATE t SET x = 1;',
+        "SELECT CASE WHEN x <> 0 THEN 'y' ELSE 'n' END, COALESCE(a, 0) FROM t WHERE b BETWEEN 1 AND 2;"),
+    "lua": (
+        'local function greet(name) return "Hello, " .. name .. \'!\' end local t = { 1, 2.5, 0x1p4 }',
+        'function M.helper(x, y) --[==[ long comment begins here and',
+        '   continues ]==] if x == nil then return false elseif x ~= y then return true end end',
+        'local s = [[long string]] .. "esc \\" quote" for i = 1, 10 do t[i] = #t // 2 % 3 ^ 2 end',
+        'while not done and ok or fail do repeat n = n - 1 until n <= 0 goto skip end ::skip::',
+        'function obj:method(...) local a <const> = 5 return setmetatable({}, self), nil, 3e10 end'),
+    "dockerfile": (
+        '# syntax=docker/dockerfile:1',
+        'FROM golang:1.22 AS build',
+        'RUN apk add --no-cache git curl ca-certificates && \\',
+        '    go build -o /out/app ./cmd/app && echo "built $VERSION"',
+        'ENV PATH=$PATH:/opt/bin HOME=${HOME:-/root} LABEL="nene \\"nib\\""',
+        'CMD ["./app", "--port", "8080"]'),
 }
-# 行末の印（JSON・Markdown・HTML・XML・CSS・Ini は空白・gdresource は ` ;`・C#・Rust・Go は ` //`）。続けて詰め物で
-# 100 バイトにそろえる。詰め物は `-` で、Markdown だけ空白（フェンスの閉じの行を閉じのまま保つ・#833）。
+# 行末の印（JSON・Markdown・HTML・XML・CSS・Ini・Dockerfile は空白・gdresource は ` ;`・C#・Rust・Go・PHP は
+# ` //`・SQL・Lua は ` --`）。続けて詰め物で 100 バイトにそろえる。詰め物は `-` で、Markdown（フェンスの閉じの
+# 行を閉じのまま保つ・#833）と Dockerfile（行末の `\` の続きを保つ・#860）だけ空白。
 LEXER_SUFFIXES = {"cpp": " //", "json": " ", "python": " #", "markdown": " ", "javascript": " //",
                   "html": " ", "xml": " ", "css": " ", "yaml": " #", "toml": " #",
                   "gdscript": " #", "dosini": " ", "gdresource": " ;",
-                  "cs": " //", "rust": " //", "go": " //"}
-LEXER_PADDING = {"markdown": " "}
+                  "cs": " //", "rust": " //", "go": " //",
+                  "php": " //", "sql": " --", "lua": " --", "dockerfile": " "}
+LEXER_PADDING = {"markdown": " ", "dockerfile": " "}
 # 閉じの無い `[` を並べた 1 行（#836 のレビュー R1）。LexerProbe.cpp の worst_line_bytes と同じ。
 LEXER_WORST_LINE_BYTES = 16384
 
 
 def lexer_input(workload: str) -> bytes:
-    """行の字句器の 29 本（#815 の C++・#830 の JSON と Python・#833 の Markdown と JavaScript・
-    #838 の HTML / XML・CSS・YAML・TOML・#855 の GDScript・Ini・gdresource・#857 の C#・Rust・Go）。
+    """行の字句器の 35 本（#815 の C++・#830 の JSON と Python・#833 の Markdown と JavaScript・
+    #838 の HTML / XML・CSS・YAML・TOML・#855 の GDScript・Ini・gdresource・#857 の C#・Rust・Go・
+    #860 の PHP・SQL・Lua・Dockerfile）。
     tests/performance/LexerProbe.cpp と同じ 100 バイトの行。"""
     if workload == "lexer-markdown-worst-line":
         return b"[" * LEXER_WORST_LINE_BYTES + b"\n"
@@ -373,7 +410,7 @@ def lexer_input(workload: str) -> bytes:
 
 
 def fixed_input(workload: str) -> bytes:
-    if workload in WORKLOADS[152:182]:
+    if workload in WORKLOADS[152:188]:
         return lexer_input(workload)
     if workload in WORKLOADS[148:152]:
         return text_object_input(workload)

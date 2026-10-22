@@ -4,16 +4,20 @@
 #include "LexCsharp.hpp"
 #include "LexCss.hpp"
 #include "LexCursor.hpp"
+#include "LexDockerfile.hpp"
 #include "LexGdscript.hpp"
 #include "LexGo.hpp"
 #include "LexHtml.hpp"
 #include "LexIni.hpp"
 #include "LexJavaScript.hpp"
 #include "LexJson.hpp"
+#include "LexLua.hpp"
 #include "LexMarkdown.hpp"
 #include "LexOutput.hpp"
+#include "LexPhp.hpp"
 #include "LexPython.hpp"
 #include "LexRust.hpp"
+#include "LexSql.hpp"
 #include "LexToml.hpp"
 #include "LexYaml.hpp"
 
@@ -24,57 +28,52 @@ namespace nenenib::core
 namespace
 {
 // 言語を足すと switch が落ちる（CPP-002）。字句器を持たない言語は区間なしで状態をそのまま残す。
-// lex_line と lex_state はここを共有し、違うのは cursor が区間を残すかだけ。
+// lex_line と lex_state はここを共有し、違うのは cursor が区間を残すかだけ。字句器は void を返し、
+// 分岐を 1 行ずつにするため `return lex_…(…);` で書く（関数長 60 行・#860）。
 void lex_language(Language language, LexCursor &cursor, const LexState &in)
 {
     switch (language)
     {
     case Language::c:
     case Language::cpp:
-        lex_cpp(cursor, in);
-        return;
+        return lex_cpp(cursor, in);
     case Language::json:
-        lex_json(cursor, in);
-        return;
+        return lex_json(cursor, in);
     case Language::python:
-        lex_python(cursor, in);
-        return;
+        return lex_python(cursor, in);
     case Language::markdown:
-        lex_markdown(cursor, in);
-        return;
+        return lex_markdown(cursor, in);
     case Language::javascript:
     case Language::typescript:
-        lex_javascript(cursor, in, language);
-        return;
+        return lex_javascript(cursor, in, language);
     case Language::html:
     case Language::xml:
-        lex_html(cursor, in, language);
-        return;
+        return lex_html(cursor, in, language);
     case Language::css:
-        lex_css(cursor, in);
-        return;
+        return lex_css(cursor, in);
     case Language::yaml:
-        lex_yaml(cursor, in);
-        return;
+        return lex_yaml(cursor, in);
     case Language::toml:
-        lex_toml(cursor, in);
-        return;
+        return lex_toml(cursor, in);
     case Language::gdscript:
-        lex_gdscript(cursor, in);
-        return;
+        return lex_gdscript(cursor, in);
     case Language::dosini:
     case Language::gdresource:
-        lex_ini(cursor, in, language);
-        return;
+        return lex_ini(cursor, in, language);
     case Language::cs:
-        lex_csharp(cursor, in);
-        return;
+        return lex_csharp(cursor, in);
     case Language::rust:
-        lex_rust(cursor, in);
-        return;
+        return lex_rust(cursor, in);
     case Language::go:
-        lex_go(cursor, in);
-        return;
+        return lex_go(cursor, in);
+    case Language::php:
+        return lex_php(cursor, in);
+    case Language::sql:
+        return lex_sql(cursor, in);
+    case Language::lua:
+        return lex_lua(cursor, in);
+    case Language::dockerfile:
+        return lex_dockerfile(cursor, in);
     case Language::plain:
     case Language::powershell:
     case Language::shell:
@@ -122,6 +121,10 @@ bool has_lexer(Language language) noexcept
     case Language::cs:
     case Language::rust:
     case Language::go:
+    case Language::php:
+    case Language::sql:
+    case Language::lua:
+    case Language::dockerfile:
         return true;
     case Language::plain:
     case Language::powershell:
@@ -153,7 +156,12 @@ std::size_t syntax_backfill_lines(Language language) noexcept
     case Language::cs:
     case Language::rust:
     case Language::go:
+    case Language::php:
+    case Language::sql:
+    case Language::lua:
         return 200;
+    case Language::dockerfile:
+        return 50;
     case Language::yaml:
         return 100;
     case Language::markdown:

@@ -202,10 +202,46 @@ void verify_c_family_extensions()
     }
 }
 
-// 名前の表と逆引き（決定 3）。22 本の往復と、小文字だけを受けること。
+// #860: PHP・SQL・Lua の拡張子と Dockerfile の名前（Vim の filetype.vim に寄せる）。名前の行は
+// CMakeLists.txt と同じく大小を問わず、`Dockerfile.*` `Containerfile.*` は拡張子の表に当たらない
+// ときだけ dockerfile（`Dockerfile.json` は json・`Dockerfile.txt` は plain）。
+void verify_batch4_extensions()
+{
+    using Row = std::pair<std::string_view, Language>;
+    constexpr std::array<Row, 21> rows{{
+        {"index.php", Language::php},
+        {"legacy.php5", Language::php},
+        {"view.PHTML", Language::php},
+        {"test.phpt", Language::php},
+        {"schema.sql", Language::sql},
+        {"init.lua", Language::lua},
+        {"pkg-1.0.rockspec", Language::lua},
+        {".luacheckrc", Language::lua},
+        {"Dockerfile", Language::dockerfile},
+        {"src\\dockerfile", Language::dockerfile},
+        {"Containerfile", Language::dockerfile},
+        {"app.Dockerfile", Language::dockerfile},
+        {"build.dockerfile", Language::dockerfile},
+        {"Dockerfile.dev", Language::dockerfile},
+        {"Containerfile.prod", Language::dockerfile},
+        {"Dockerfile.json", Language::json},
+        {"Dockerfile.txt", Language::plain},
+        {"MyDockerfile", Language::plain},
+        {"php", Language::plain},
+        {"x.luau", Language::plain},
+        {"Dockerfile.", Language::dockerfile},
+    }};
+    for (const auto &[path, language] : rows)
+    {
+        expect(core::language_of_path(path) == language,
+               "language_of_path maps the PHP, SQL and Lua extensions and the Dockerfile names");
+    }
+}
+
+// 名前の表と逆引き（決定 3）。26 本の往復と、小文字だけを受けること。
 void verify_names()
 {
-    constexpr std::array<std::pair<Language, std::string_view>, 22> names{{
+    constexpr std::array<std::pair<Language, std::string_view>, 26> names{{
         {Language::plain, "text"},
         {Language::markdown, "markdown"},
         {Language::html, "html"},
@@ -228,6 +264,10 @@ void verify_names()
         {Language::cs, "cs"},
         {Language::rust, "rust"},
         {Language::go, "go"},
+        {Language::php, "php"},
+        {Language::sql, "sql"},
+        {Language::lua, "lua"},
+        {Language::dockerfile, "dockerfile"},
     }};
     for (const auto &[language, name] : names)
     {
@@ -473,6 +513,7 @@ void verify_language_scope()
     verify_extension_table();
     verify_godot_extensions();
     verify_c_family_extensions();
+    verify_batch4_extensions();
     verify_names();
     verify_ex_evaluation();
     verify_completion();
