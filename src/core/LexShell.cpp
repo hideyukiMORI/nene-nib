@@ -361,8 +361,9 @@ std::size_t mark_function_name(LexCursor &cursor, std::size_t from)
     {
         return SyntaxRole::operators;
     }
-    const bool defined = is_name(word) && line.substr(skip_spaces(line, end)).starts_with("()");
-    if (defined || std::ranges::binary_search(shell_builtins, word))
+    // 表を先に引き、語の文字の走査（is_name）と `()` の先読みは表に無い語だけ。
+    if (std::ranges::binary_search(shell_builtins, word) ||
+        (is_name(word) && line.substr(skip_spaces(line, end)).starts_with("()")))
     {
         return SyntaxRole::function;
     }

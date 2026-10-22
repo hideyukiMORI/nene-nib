@@ -22,13 +22,14 @@ using LexHandler = std::size_t (*)(LexCursor &, std::size_t);
 
 // 表は小文字で ASCII の順に並べ、大小を畳んで binary_search で引く（決定 3）。制御のコマンドは
 // cmake-commands(7) の Scripting Commands の制御の 17 語（Vim の cmakeCommandConditional と
-// cmakeCommandRepeat を含む）。定数は cmake-language(7) と `if()` の真偽の定数。
+// cmakeCommandRepeat を含む）。定数は `if()` の真偽の定数のうち `Y` `N` `IGNORE` を除いたもの
+// （1 文字の変数名や引数と衝突するため）。
 constexpr std::array<std::string_view, 17> cmake_control_commands{
     "block",      "break",       "continue", "else",     "elseif",   "endblock",
     "endforeach", "endfunction", "endif",    "endmacro", "endwhile", "foreach",
     "function",   "if",          "macro",    "return",   "while"};
-constexpr std::array<std::string_view, 10> cmake_constants{
-    "false", "ignore", "n", "no", "notfound", "off", "on", "true", "y", "yes"};
+constexpr std::array<std::string_view, 7> cmake_constants{"false", "no",   "notfound", "off",
+                                                          "on",    "true", "yes"};
 static_assert(std::ranges::is_sorted(cmake_control_commands));
 static_assert(std::ranges::is_sorted(cmake_constants));
 
@@ -104,10 +105,13 @@ std::size_t lex_hash(LexCursor &cursor, std::size_t at)
     return line.size();
 }
 
-// `[=*[` は括弧の引数。ほかの `[` は区間なし。
+// 引数の頭（行頭・空白・`(` の直後）の `[=*[` は括弧の引数。ほかの `[`（`foo[[x`）は区間なし。
 std::size_t lex_bracket(LexCursor &cursor, std::size_t at)
 {
-    const std::optional<std::size_t> level = lex_long_open(cursor.line(), at);
+    const std::string_view line = cursor.line();
+    const bool head = at == 0U || lex_is_space(line[at - 1U]) || line[at - 1U] == '(';
+    const std::optional<std::size_t> level =
+        head ? lex_long_open(line, at) : std::optional<std::size_t>{};
     if (!level.has_value())
     {
         return at + 1U;

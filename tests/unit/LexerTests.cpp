@@ -1733,7 +1733,7 @@ constexpr std::array<LexCase, 63> dockerfile_cases{{
 // の行またぎ（行頭でない `"@` は閉じない）・`'it''s'`・`` "a`"b" ``・`[string]$x`・`-eq`
 // `-NotLike`・
 // `$true`・`0x1F` `1kb`・大小の混ざったキーワード・閉じない形。
-constexpr std::array<LexCase, 50> powershell_cases{{
+constexpr std::array<LexCase, 61> powershell_cases{{
     {"param(", plain, "KkkkkO", plain},
     {"    [Parameter(Mandatory = $true)]", plain, "    OTttttttttO          O VvvvvOo", plain},
     {"    [string]$Path,", plain, "    OTtttttOVvvvvO", plain},
@@ -1785,6 +1785,21 @@ constexpr std::array<LexCase, 50> powershell_cases{{
     {"<#", plain, "Cc", block},
     {"#>", block, "Cc", plain},
     {"\"é\" -join ','", plain, "Sss Ooooo Sss", plain},
+    // I3: `"…"` の中の `$(…)` は対応する `)` まで飛ばす（中の `"` で閉じない・全体が string）。
+    {"\"$(Get-Date -f \"yyyy\")\" + 'x'", plain, "Sssssssssssssssssssssss O Sss", plain},
+    {"\"a $(b (c) \")\"", plain, "Ssssssssssssss", plain},
+    // 行末までに `)` が無ければ残りは string で、次の行は外の `"…"` の中から（深さは持たない）。
+    {"$d = \"a $(b \"c\"", plain, "Vv O Ssssssssss", in_quote},
+    {"x) y\" | Out-Null", in_quote, "Sssss O Ffffffff", plain},
+    {"'$(' + 'x'", plain, "Ssss O Sss", plain},
+    // Q1: `-f` `-in` `-is` `-as` は引数名と同じ綴りでも演算子。
+    {"Get-Thing -f x -In y -is z -AS w", plain, "Fffffffff Oo   Ooo   Ooo   Ooo", plain},
+    // I7: 抜けていた形。
+    {"<#>", plain, "Ccc", block},
+    {"Get-Thing -Path x `", plain, "Fffffffff", plain},
+    {"${", plain, "Vv", plain},
+    {"@\"abc\"", plain, "OSssss", plain},
+    {"@'x", plain, "OSs", in_squote},
     {"$x = 1", raw_xyz, "Vv O N", plain},
     {"-split $s", plain, "Oooooo Vv", plain},
     {"$y = [ordered]@{}", plain, "Vv O OTttttttOOOo", plain},
@@ -1796,7 +1811,7 @@ constexpr std::array<LexCase, 50> powershell_cases{{
 // `${x:-y}`・`"$@"`・`'…'` `"…"` `$'…'` の行またぎ・`<<EOF` `<<-EOF` `<<'END'` `<< "X"`
 // の行またぎ・
 // `<<<`・算術の `<<`・1 行の 2 つ目のヒアドキュメント・16 バイトの語・閉じない形。
-constexpr std::array<LexCase, 54> shell_cases{{
+constexpr std::array<LexCase, 65> shell_cases{{
     {"#!/bin/bash", plain, "Ccccccccccc", plain},
     {"set -euo pipefail", plain, "Fff", plain},
     {"echo a#b # comment", plain, "Ffff     Ccccccccc", plain},
@@ -1849,6 +1864,19 @@ constexpr std::array<LexCase, 54> shell_cases{{
     {"! true", plain, "O Ffff", plain},
     {"EOF ", here_eof_sh, "Ssss", here_eof_sh},
     {"echo ${x}#not", plain, "Ffff Vvvv", plain},
+    // I6: `function` の後ろの名前は位置を見ない（`echo if` と同じ限界）。
+    {"echo function x", plain, "Ffff Kkkkkkkk F", plain},
+    // I4: 組み込みの表を先に引き、表に無い `name()` は function。
+    {"echo() { :; }", plain, "FfffOO O  O O", plain},
+    {"my-fn () {", plain, "Fffff OO O", plain},
+    // I7: 抜けていた形。
+    {"$(", plain, "OO", plain},
+    {"${", plain, "Vv", plain},
+    {"<<", plain, "Oo", plain},
+    {"<<-", plain, "Oo", plain},
+    {"<<'", plain, "OoS", in_squote},
+    {"echo \\é x", plain, "Ffff", plain},
+    {"echo a\\éb \"é\"", plain, "Ffff      Sss", plain},
     {"x=1", raw_xyz, "", plain},
     {"", in_quote, "", in_quote},
 }};
@@ -1856,7 +1884,7 @@ constexpr std::array<LexCase, 54> shell_cases{{
 // CMake（#862）: `cmake_minimum_required(VERSION 3.28)`・`if(WIN32) … endif()`・`${VAR}` `$ENV{X}`
 // `$CACHE{X}` `$<TARGET_FILE:x>`・`#[[ ]]` `#[==[ ]==]` の行またぎ・括弧の引数・`"…"` の行またぎ・
 // `ON` `off`・`*-NOTFOUND`・大文字の引数の語は区間なし・大小を問わないコマンド。
-constexpr std::array<LexCase, 51> cmake_cases{{
+constexpr std::array<LexCase, 62> cmake_cases{{
     {"cmake_minimum_required(VERSION 3.28)", plain, "Ffffffffffffffffffffff         Nnnn", plain},
     {"project(nenenib LANGUAGES CXX)", plain, "Fffffff", plain},
     {"add_executable(nib src/main.cpp)", plain, "Ffffffffffffff", plain},
@@ -1905,9 +1933,23 @@ constexpr std::array<LexCase, 51> cmake_cases{{
     {"set(E \"a\\\\\" b)", plain, "Fff   Sssss", plain},
     {"#[=================[ seventeen", plain, "Cccccccccccccccccccccccccccccc", plain},
     {"include (GNUInstallDirs)", plain, "Fffffff", plain},
-    {"set(Y y yes TRUE)", plain, "Fff V V Vvv Vvvv", plain},
+    {"set(Y y yes TRUE)", plain, "Fff     Vvv Vvvv", plain},
     {"\"", plain, "S", in_quote},
     {"add_test(NAME t COMMAND nib --lexer)", plain, "Ffffffff", plain},
+    // I1: `Y` `N` `IGNORE` は定数にしない（1 文字の変数名や引数と衝突する）。
+    {"if(x STREQUAL n OR y AND IGNORE)", plain, "Kk", plain},
+    {"set(F Yes NO-NOTFOUND notfound)", plain, "Fff   Vvv Vvvvvvvvvvv Vvvvvvvv", plain},
+    // I2: 括弧の引数は引数の頭（行頭・空白・`(` の直後）だけ。`foo[[x` は開かない。
+    {"set(A foo[[x]] b)", plain, "Fff", plain},
+    {"set(B ([[x]]))", plain, "Fff    Sssss", plain},
+    {"set(C\t[=[y]=])", plain, "Fff   Sssssss", plain},
+    {"[[", plain, "Ss", raw_empty},
+    // I5: 続きの行の最初の語の後ろに `(` が続けばコマンドとして塗る（括弧の深さを持たない限界）。
+    {"  AND (A OR B)", plain, "  Fff", plain},
+    // I7: 抜けていた形。
+    {"$<", plain, "Vv", plain},
+    {"#[==", plain, "Cccc", plain},
+    {"set(N é ${x} \"é\")", plain, "Fff     Vvvv Sss", plain},
     {"set(x 1)", raw_xyz, "Fff   N", plain},
     {"", block, "", block},
 }};

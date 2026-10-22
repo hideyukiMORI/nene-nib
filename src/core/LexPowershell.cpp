@@ -89,19 +89,50 @@ std::size_t mark_block(LexCursor &cursor, std::size_t at, std::size_t from)
     return close + 2U;
 }
 
-// from から quote の閉じを探し、閉じの直後を返す。引用符 2 つの続き（`''` `""`）は閉じない。
-// `"…"` の中の `` ` `` は次の 1 バイトを飛ばす（`'…'` は飛ばさない）。閉じなければ lex_unclosed。
-[[nodiscard]] constexpr std::size_t quote_close(std::string_view line, std::size_t from,
-                                                char quote) noexcept
+// `$(` の後ろ from から括弧の数を数え、対応する `)` の直後を返す（中の引用符は見ない）。同じ行で
+// 閉じなければ lex_unclosed（入れ子の深さは次の行へ持たない）。
+[[nodiscard]] constexpr std::size_t subexpression_end(std::string_view line,
+                                                      std::size_t from) noexcept
 {
+    std::size_t depth = 1U;
     for (std::size_t at = from; at < line.size(); ++at)
     {
-        const char value = line[at];
-        if (value == quote && lex_next_of(line, at) != quote)
+        depth += line[at] == '(' ? 1U : 0U;
+        depth -= line[at] == ')' ? 1U : 0U;
+        if (depth == 0U)
         {
             return at + 1U;
         }
-        at += value == quote || (value == '`' && quote == '"') ? 1U : 0U;
+    }
+    return lex_unclosed;
+}
+
+// 文字列の中の at の 1 つぶんの直後。引用符 2 つの続き（`''` `""`）と `"…"` の中の `` ` `` は
+// 2 バイト（`'…'` の `` ` `` は 1 バイト）、`"…"` の中の `$(…)` は対応する `)` の直後（中の `"`
+// で閉じない・同じ行で閉じなければ lex_unclosed）。
+[[nodiscard]] constexpr std::size_t quoted_skip(std::string_view line, std::size_t at,
+                                                char quote) noexcept
+{
+    const char value = line[at];
+    if (quote == '"' && value == '$' && lex_next_of(line, at) == '(')
+    {
+        return subexpression_end(line, at + 2U);
+    }
+    const bool paired = value == quote || (value == '`' && quote == '"');
+    return at + (paired ? 2U : 1U);
+}
+
+// from から quote の閉じを探し、閉じの直後を返す（飛ばし方は quoted_skip）。閉じなければ
+// lex_unclosed。
+[[nodiscard]] constexpr std::size_t quote_close(std::string_view line, std::size_t from,
+                                                char quote) noexcept
+{
+    for (std::size_t at = from; at < line.size(); at = quoted_skip(line, at, quote))
+    {
+        if (line[at] == quote && lex_next_of(line, at) != quote)
+        {
+            return at + 1U;
+        }
     }
     return lex_unclosed;
 }
