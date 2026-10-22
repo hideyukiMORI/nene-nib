@@ -31,54 +31,6 @@ static_assert(std::ranges::is_sorted(lua_constants));
 
 constexpr std::string_view operator_characters = "+-*/%^#&~|<>=(){}[];:,.";
 
-// ---- 長い括弧 ----
-
-// at の `[` から始まる長い括弧の開き `[=*[` の `=` の数。開きでないか、`=` が delimiter に
-// 入りきらない（raw_delimiter_limit を越える）ときは nullopt。
-[[nodiscard]] constexpr std::optional<std::size_t> long_open(std::string_view line,
-                                                             std::size_t at) noexcept
-{
-    if (at >= line.size() || line[at] != '[')
-    {
-        return std::nullopt;
-    }
-    std::size_t end = at + 1U;
-    while (end < line.size() && line[end] == '=')
-    {
-        ++end;
-    }
-    const std::size_t level = end - at - 1U;
-    return end < line.size() && line[end] == '[' && level <= raw_delimiter_limit
-               ? std::optional{level}
-               : std::nullopt;
-}
-
-// from から同じ数の `=` の閉じ `]=*]` を探し、閉じの直後を返す。無ければ lex_unclosed。
-[[nodiscard]] constexpr std::size_t long_close(std::string_view line, std::size_t from,
-                                               std::size_t level) noexcept
-{
-    for (std::size_t at = line.find(']', from); at != lex_unclosed; at = line.find(']', at + 1U))
-    {
-        const std::size_t end = at + 1U + level;
-        const bool equals = end < line.size() && std::ranges::all_of(
-                                                     line.substr(at + 1U, level),
-                                                     [](char value) { return value == '='; });
-        if (equals && line[end] == ']')
-        {
-            return end + 1U;
-        }
-    }
-    return lex_unclosed;
-}
-
-// 長い括弧の中（kind）で、delimiter に開きの `=` の列を持つ状態。
-[[nodiscard]] constexpr LexState long_state(LexKind kind, std::size_t level) noexcept
-{
-    constexpr std::string_view equals = "================";
-    static_assert(equals.size() == raw_delimiter_limit);
-    return lex_entered(kind, equals.substr(0U, level));
-}
-
 // [at, …) を長い括弧の中身として from から閉じまで塗る（長いコメントは comment・長い文字列は
 // string）。閉じなければ行末まで塗り、inside の状態で次の行へ。
 std::size_t mark_long(LexCursor &cursor, std::size_t at, std::size_t from, const LexState &inside)
@@ -86,7 +38,7 @@ std::size_t mark_long(LexCursor &cursor, std::size_t at, std::size_t from, const
     const std::string_view line = cursor.line();
     const SyntaxRole role =
         inside.kind == LexKind::block_comment ? SyntaxRole::comment : SyntaxRole::string;
-    const std::size_t end = long_close(line, from, inside.delimiter_length);
+    const std::size_t end = lex_long_close(line, from, inside.delimiter_length);
     if (end == lex_unclosed)
     {
         cursor.mark(at, line.size(), role);
@@ -117,11 +69,11 @@ std::size_t lex_quoted(LexCursor &cursor, std::size_t at)
 std::size_t lex_comment(LexCursor &cursor, std::size_t at)
 {
     const std::string_view line = cursor.line();
-    const std::optional<std::size_t> level = long_open(line, at + 2U);
+    const std::optional<std::size_t> level = lex_long_open(line, at + 2U);
     if (level.has_value())
     {
         return mark_long(cursor, at, at + 4U + level.value(),
-                         long_state(LexKind::block_comment, level.value()));
+                         lex_long_state(LexKind::block_comment, level.value()));
     }
     cursor.mark(at, line.size(), SyntaxRole::comment);
     return line.size();
@@ -140,7 +92,7 @@ std::size_t lex_comment(LexCursor &cursor, std::size_t at)
 [[nodiscard]] constexpr bool breaks_operator(std::string_view line, std::size_t at) noexcept
 {
     const bool comment = line[at] == '-' && lex_next_of(line, at) == '-';
-    return comment || long_open(line, at).has_value() || starts_number(line, at);
+    return comment || lex_long_open(line, at).has_value() || starts_number(line, at);
 }
 
 [[nodiscard]] constexpr bool is_hex_digit(char value) noexcept
@@ -192,11 +144,11 @@ std::size_t lex_operators(LexCursor &cursor, std::size_t at)
     {
         return lex_comment(cursor, at);
     }
-    const std::optional<std::size_t> level = long_open(line, at);
+    const std::optional<std::size_t> level = lex_long_open(line, at);
     if (level.has_value())
     {
         return mark_long(cursor, at, at + 2U + level.value(),
-                         long_state(LexKind::raw_string, level.value()));
+                         lex_long_state(LexKind::raw_string, level.value()));
     }
     std::size_t end = at + 1U;
     while (end < line.size() && operator_characters.contains(line[end]) &&
@@ -297,8 +249,7 @@ constexpr auto handlers = []
 // 長い括弧の中で始まる行。delimiter が `=` だけの列でなければ Lua の状態でないので行頭から読む。
 std::size_t resume_long(LexCursor &cursor, const LexState &in)
 {
-    const std::string_view equals = lex_delimiter(in);
-    if (!std::ranges::all_of(equals, [](char value) { return value == '='; }))
+    if (!lex_long_level(lex_delimiter(in)))
     {
         return 0U;
     }

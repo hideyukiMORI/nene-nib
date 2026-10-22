@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 namespace nenenib::core
@@ -108,6 +109,12 @@ template <std::size_t count>
     return std::ranges::binary_search(table, word, lex_folded_less);
 }
 
+// word が name（小文字）と大小を問わずに同じか（#862・Dockerfile の命令の名前と共用）。
+[[nodiscard]] constexpr bool lex_folded_equal(std::string_view word, std::string_view name) noexcept
+{
+    return word.size() == name.size() && ascii_prefix_ignoring_case(word, name);
+}
+
 // kind に入って次の行へ渡す状態（delimiter は raw_delimiter_limit 文字まで）。
 [[nodiscard]] constexpr LexState lex_entered(LexKind kind, std::string_view delimiter) noexcept
 {
@@ -116,5 +123,58 @@ template <std::size_t count>
                    .delimiter_length = static_cast<std::uint8_t>(delimiter.size())};
     std::ranges::copy(delimiter, state.delimiter.begin());
     return state;
+}
+// ---- 長い括弧（#860 の Lua・#862 の CMake） ----
+
+// at の `[` から始まる長い括弧の開き `[=*[` の `=` の数。開きでないか、`=` が delimiter に
+// 入りきらない（raw_delimiter_limit を越える）ときは nullopt。
+[[nodiscard]] constexpr std::optional<std::size_t> lex_long_open(std::string_view line,
+                                                                 std::size_t at) noexcept
+{
+    if (at >= line.size() || line[at] != '[')
+    {
+        return std::nullopt;
+    }
+    std::size_t end = at + 1U;
+    while (end < line.size() && line[end] == '=')
+    {
+        ++end;
+    }
+    const std::size_t level = end - at - 1U;
+    return end < line.size() && line[end] == '[' && level <= raw_delimiter_limit
+               ? std::optional{level}
+               : std::nullopt;
+}
+
+// from から同じ数の `=` の閉じ `]=*]` を探し、閉じの直後を返す。無ければ lex_unclosed。
+[[nodiscard]] constexpr std::size_t lex_long_close(std::string_view line, std::size_t from,
+                                                   std::size_t level) noexcept
+{
+    for (std::size_t at = line.find(']', from); at != lex_unclosed; at = line.find(']', at + 1U))
+    {
+        const std::size_t end = at + 1U + level;
+        const bool equals = end < line.size() && std::ranges::all_of(
+                                                     line.substr(at + 1U, level),
+                                                     [](char value) { return value == '='; });
+        if (equals && line[end] == ']')
+        {
+            return end + 1U;
+        }
+    }
+    return lex_unclosed;
+}
+
+// 長い括弧の中（kind）で、delimiter に開きの `=` の列を持つ状態。
+[[nodiscard]] constexpr LexState lex_long_state(LexKind kind, std::size_t level) noexcept
+{
+    constexpr std::string_view equals = "================";
+    static_assert(equals.size() == raw_delimiter_limit);
+    return lex_entered(kind, equals.substr(0U, level));
+}
+
+// delimiter が `=` だけの列（空も）か。長い括弧の中の状態かを見分ける。
+[[nodiscard]] constexpr bool lex_long_level(std::string_view delimiter) noexcept
+{
+    return std::ranges::all_of(delimiter, [](char value) { return value == '='; });
 }
 } // namespace nenenib::core

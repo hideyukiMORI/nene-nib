@@ -12,7 +12,8 @@ namespace nenenib::tests::performance
 // TOML は visible_60 を 5 つ、backfill_200 を HTML と YAML と TOML の 3 つ。#855 の GDScript・Ini
 // （dosini）・Godot の設定（gdresource）は visible_60 を 3 つ、backfill_200 を GDScript と
 // gdresource の 2 つ。#857 の C#・Rust・Go は visible_60 と backfill_200 を 3 つずつ。#860 の
-// PHP・SQL・Lua・Dockerfile は visible_60 を 4 つ、backfill_200 を PHP と Lua の 2 つ。
+// PHP・SQL・Lua・Dockerfile は visible_60 を 4 つ、backfill_200 を PHP と Lua の 2 つ。#862 の
+// PowerShell・shell・CMake は visible_60 と backfill_200 を 3 つずつ。
 enum class LexerWorkload : std::uint8_t
 {
     cpp_visible_60,
@@ -50,6 +51,12 @@ enum class LexerWorkload : std::uint8_t
     sql_visible_60,
     lua_visible_60,
     lua_backfill_200,
-    dockerfile_visible_60
+    dockerfile_visible_60,
+    powershell_visible_60,
+    powershell_backfill_200,
+    shell_visible_60,
+    shell_backfill_200,
+    cmake_visible_60,
+    cmake_backfill_200
 };
 } // namespace nenenib::tests::performance

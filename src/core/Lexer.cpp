@@ -1,5 +1,6 @@
 #include "Lexer.hpp"
 
+#include "LexCmake.hpp"
 #include "LexCpp.hpp"
 #include "LexCsharp.hpp"
 #include "LexCss.hpp"
@@ -15,8 +16,10 @@
 #include "LexMarkdown.hpp"
 #include "LexOutput.hpp"
 #include "LexPhp.hpp"
+#include "LexPowershell.hpp"
 #include "LexPython.hpp"
 #include "LexRust.hpp"
+#include "LexShell.hpp"
 #include "LexSql.hpp"
 #include "LexToml.hpp"
 #include "LexYaml.hpp"
@@ -74,10 +77,13 @@ void lex_language(Language language, LexCursor &cursor, const LexState &in)
         return lex_lua(cursor, in);
     case Language::dockerfile:
         return lex_dockerfile(cursor, in);
-    case Language::plain:
     case Language::powershell:
+        return lex_powershell(cursor, in);
     case Language::shell:
+        return lex_shell(cursor, in);
     case Language::cmake:
+        return lex_cmake(cursor, in);
+    case Language::plain:
         cursor.leave(in);
         return;
     }
@@ -125,11 +131,11 @@ bool has_lexer(Language language) noexcept
     case Language::sql:
     case Language::lua:
     case Language::dockerfile:
-        return true;
-    case Language::plain:
     case Language::powershell:
     case Language::shell:
     case Language::cmake:
+        return true;
+    case Language::plain:
         return false;
     }
     std::unreachable();
@@ -195,6 +201,9 @@ std::size_t syntax_backfill_lines(Language language) noexcept
     case Language::php:
     case Language::sql:
     case Language::lua:
+    case Language::powershell:
+    case Language::shell:
+    case Language::cmake:
         return 200;
     case Language::dockerfile:
         return 50;
@@ -203,9 +212,6 @@ std::size_t syntax_backfill_lines(Language language) noexcept
     case Language::markdown:
         return 500;
     case Language::plain:
-    case Language::powershell:
-    case Language::shell:
-    case Language::cmake:
         return 0;
     }
     std::unreachable();
