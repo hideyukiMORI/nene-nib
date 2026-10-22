@@ -889,6 +889,12 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     case LexerWorkload::dosini_visible_60:
     case LexerWorkload::gdresource_visible_60:
     case LexerWorkload::gdresource_backfill_200:
+    case LexerWorkload::cs_visible_60:
+    case LexerWorkload::cs_backfill_200:
+    case LexerWorkload::rust_visible_60:
+    case LexerWorkload::rust_backfill_200:
+    case LexerWorkload::go_visible_60:
+    case LexerWorkload::go_backfill_200:
         return 159U + static_cast<std::size_t>(workload);
     }
     std::unreachable();
@@ -909,7 +915,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 183> dispatches{{
+constexpr std::array<ProbeDispatch, 189> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1284,6 +1290,16 @@ constexpr std::array<ProbeDispatch, 183> dispatches{{
                      lexer_input, lexed_lines},
     ProbeDispatchRow{LexerWorkload::gdresource_backfill_200, "lexer-gdresource-backfill-200",
                      lexer_input, lexed_lines},
+    ProbeDispatchRow{LexerWorkload::cs_visible_60, "lexer-cs-visible-60", lexer_input, lexed_lines},
+    ProbeDispatchRow{LexerWorkload::cs_backfill_200, "lexer-cs-backfill-200", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::rust_visible_60, "lexer-rust-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::rust_backfill_200, "lexer-rust-backfill-200", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::go_visible_60, "lexer-go-visible-60", lexer_input, lexed_lines},
+    ProbeDispatchRow{LexerWorkload::go_backfill_200, "lexer-go-backfill-200", lexer_input,
+                     lexed_lines},
 }};
 
 constexpr auto dispatch_names = []
@@ -1326,7 +1342,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 183U);
+static_assert(dispatches.size() == 189U);
 static_assert(dispatch_is_complete());
 
 } // namespace

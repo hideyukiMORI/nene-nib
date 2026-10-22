@@ -37,6 +37,9 @@ namespace
     case Language::gdscript:
     case Language::dosini:
     case Language::gdresource:
+    case Language::cs:
+    case Language::rust:
+    case Language::go:
         return true;
     }
     return false;
@@ -55,10 +58,10 @@ namespace
 
 // 名前の表（決定 3）。i 行目が i 番目の値の Vim の filetype 名で、language_name と
 // language_of_name の 2 本が同じこの配列を読む。
-constexpr std::array<std::string_view, 19> language_names{
-    "text",       "markdown",   "html",     "c",      "cpp",       "python", "json",
-    "javascript", "typescript", "yaml",     "toml",   "xml",       "css",    "ps1",
-    "sh",         "cmake",      "gdscript", "dosini", "gdresource"};
+constexpr std::array<std::string_view, 22> language_names{
+    "text",       "markdown", "html",       "c",   "cpp",  "python", "json", "javascript",
+    "typescript", "yaml",     "toml",       "xml", "css",  "ps1",    "sh",   "cmake",
+    "gdscript",   "dosini",   "gdresource", "cs",  "rust", "go"};
 
 static_assert(language_names.size() == language_count(),
               "language_names has one row for every Language");
@@ -67,7 +70,7 @@ static_assert(language_names.size() == language_count(),
 // 表に無い拡張子と同じ plain だが、初版の表の 1 行として書いておく。
 using LanguageExtension = std::pair<std::string_view, Language>;
 
-constexpr std::array<LanguageExtension, 40> language_extensions{{
+constexpr std::array<LanguageExtension, 45> language_extensions{{
     {"md", Language::markdown},
     {"markdown", Language::markdown},
     {"html", Language::html},
@@ -107,6 +110,11 @@ constexpr std::array<LanguageExtension, 40> language_extensions{{
     {"tscn", Language::gdresource},
     {"tres", Language::gdresource},
     {"godot", Language::gdresource},
+    {"cs", Language::cs},
+    {"csx", Language::cs},
+    {"cake", Language::cs},
+    {"rs", Language::rust},
+    {"go", Language::go},
     {"txt", Language::plain},
 }};
 

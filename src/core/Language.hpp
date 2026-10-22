@@ -27,6 +27,9 @@ enum class Language : std::uint8_t
     cmake,
     gdscript,
     dosini,
-    gdresource
+    gdresource,
+    cs,
+    rust,
+    go
 };
 } // namespace nenenib::core

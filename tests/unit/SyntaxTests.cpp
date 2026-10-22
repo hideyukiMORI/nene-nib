@@ -404,6 +404,9 @@ void verify_backfill_per_language()
                core::syntax_backfill_lines(Language::gdscript) == 200 &&
                core::syntax_backfill_lines(Language::gdresource) == 200 &&
                core::syntax_backfill_lines(Language::dosini) == 1 &&
+               core::syntax_backfill_lines(Language::cs) == 200 &&
+               core::syntax_backfill_lines(Language::rust) == 200 &&
+               core::syntax_backfill_lines(Language::go) == 200 &&
                core::syntax_backfill_lines(Language::cmake) == 0,
            "the backfill table has one value per language");
     Editing editing;
