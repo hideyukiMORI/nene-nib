@@ -2762,10 +2762,12 @@ std::expected<void, RenderFailure> EditorWindow::draw_frame()
 {
     text_layouts_.begin_frame();
     const auto frame = controller_.frame();
+    // 打鍵の道の段（#844）。frame を作り終えた直後・描く前。
+    timing_.mark(core::Milestone::frame_built);
     const auto drawn =
         frame.layout_failure.has_value()
             ? std::expected<void, RenderFailure>{std::unexpected(RenderFailure::directwrite)}
-            : renderer_->render(frame);
+            : renderer_->render(frame, timing_);
     text_layouts_.end_frame();
     if (drawn)
     {
