@@ -1,0 +1,718 @@
+// scope `--lexer-property` の単体テスト（#868・ADR 0156 の決定 1〜6・14）。字句器を持つ全言語に
+// 想定外の入力（不正な UTF-8・NUL・CR・Tab・区切りの断片・fixture の見本の行の変異・長い行）を
+// 文書のように続けて通し、次の不変量を守る。塗りの中身は問わない（それは `--lexer` の fixture）。
+//   1. 区間は begin < end・begin の順・重ならない・行の code point の数（継続バイト以外のバイト・
+//      不正な UTF-8 でも同じ数え方）を超えない・役割は閉じた enum の値で warning を出さない。
+//      不正な UTF-8 の行だけは begin == end を許す（span_sound の注釈）。
+//   2. lex_state(言語, in, 行) == lex_line(言語, in, 行).out。
+//   3. 同じ入力を 2 回通して同じ結果。
+//   4. 状態は字句器自身が出した値だけを次の行へ渡し（ランダムな状態は作らない）、どの状態も
+//      種類が閉じた enum の値で delimiter の長さが raw_delimiter_limit 以内。
+// 生成器は固定 seed の std::mt19937_64 で、分布の型は使わず剰余で範囲に畳む。時刻と環境は
+// 読まない（ARC-007）。回数は Debug（ASan / UBSan）で 1 秒以内に収まるように決めた
+// （property_scale を 50 にした走りを一度だけ手元で回し、commit しない）。
+#include "ColorSpan.hpp"
+#include "Column.hpp"
+#include "Language.hpp"
+#include "LexKind.hpp"
+#include "LexLine.hpp"
+#include "LexState.hpp"
+#include "Lexer.hpp"
+#include "Scopes.hpp"
+#include "SyntaxRole.hpp"
+#include "TestSupport.hpp"
+#include "Utf8.hpp"
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <random>
+#include <span>
+#include <string>
+#include <string_view>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
+namespace nenenib::tests
+{
+namespace
+{
+using core::ColorSpan;
+using core::Language;
+using core::LexKind;
+using core::LexLine;
+using core::LexState;
+using core::SyntaxRole;
+using Random = std::mt19937_64;
+using Lines = std::span<const std::string_view>;
+
+// 回数の倍率。手元の 50 倍の走りだけで変え、commit は 1 のまま。
+constexpr std::size_t property_scale = 1U;
+constexpr std::uint64_t property_seed = 0x0868'1e8e'5eedULL;
+constexpr std::size_t random_lines = 24U * property_scale;
+constexpr std::size_t fragment_lines = 48U * property_scale;
+constexpr std::size_t mutated_rounds = 6U * property_scale;
+constexpr std::size_t long_lines = property_scale;
+constexpr std::size_t short_long_line = 4096U;
+constexpr std::size_t long_long_line = 65536U;
+// 破れを書き出す上限（1 つの破れが全言語・全行に広がって出力を埋めないため）。
+constexpr std::size_t printed_faults = 8U;
+constexpr std::size_t printed_bytes = 96U;
+
+// 区切りの断片（Issue の 5 の族）。言語ごとに分けず、全言語に同じ断片の全部を通す（ほかの言語の
+// 断片も、その言語にとっては想定外の入力として意味がある）。
+constexpr std::array<std::string_view, 96> fragments{{
+    "\"",
+    "'",
+    "`",
+    "\"\"\"",
+    "'''",
+    "/*",
+    "*/",
+    "//",
+    "#",
+    "<",
+    ">",
+    "$(",
+    ")",
+    "(",
+    "<<EOF",
+    "<<-EOF",
+    "<<'EOF'",
+    "EOF",
+    "[[",
+    "]]",
+    "[=[",
+    "]=]",
+    "[==[",
+    "]==]",
+    "r#\"",
+    "\"#",
+    "r##\"",
+    "\"##",
+    "@\"",
+    "$\"",
+    "$@\"",
+    "\"@",
+    "@'",
+    "'@",
+    "<#",
+    "#>",
+    "#[",
+    "#![",
+    "]",
+    "[",
+    "{",
+    "}",
+    "${",
+    "$",
+    "\\",
+    " ",
+    "\t",
+    "\r",
+    std::string_view{"\0", 1U},
+    "R\"x(",
+    ")x\"",
+    "R\"(",
+    ")\"",
+    "<!--",
+    "-->",
+    "<script>",
+    "</script>",
+    "<style>",
+    "</style",
+    "<![CDATA[",
+    "]]>",
+    "```",
+    "~~~",
+    "--",
+    "--[[",
+    "--[==[",
+    "<?php",
+    "<?=",
+    "?>",
+    "<<<EOT",
+    "<<<'EOT'",
+    "EOT",
+    "$'",
+    "((",
+    "))",
+    ";",
+    "|",
+    ": ",
+    "- ",
+    "0x",
+    "1e",
+    ".5",
+    "b'",
+    "'a'",
+    "=",
+    "/",
+    "func ",
+    "fn ",
+    "function ",
+    "RUN ",
+    "set(",
+    "x",
+    "\xe3\x81\x82",
+    "\xc3\xa9",
+}};
+
+// fixture の行に似た見本（1 言語 10 行まで・LexerTests.cpp の case の行の形）。変異の元になる。
+constexpr std::array<std::string_view, 8> c_samples{{
+    "int main(void) { return 0; } // done",
+    "auto s = R\"xyz(raw text",
+    "still raw )xyz\" + 1;",
+    "/* open comment",
+    "close */ x = 0x1F + 1.5e-3f;",
+    "#include <vector>",
+    "const char *c = \"a\\\"b\";",
+    "std::string name = 'q';",
+}};
+constexpr std::array<std::string_view, 7> python_samples{{
+    "def f(x): return x  # note",
+    "s = \"\"\"open triple",
+    "close\"\"\" + 'x'",
+    "r'raw\\d' b\"bytes\" f\"{x}\"",
+    "class A(B): pass",
+    "x = 0x1f + 1_000 + 1e5j",
+    "'''single",
+}};
+constexpr std::array<std::string_view, 6> json_samples{{
+    "{\"key\": [1, -2.5e3, true, null]}",
+    "  \"open string",
+    "\"a\\u00e9\": false,",
+    "]",
+    "// comment",
+    "{\"x\": {\"y\": \"z\"}}",
+}};
+constexpr std::array<std::string_view, 9> markdown_samples{{
+    "# Heading",
+    "```cpp",
+    "int x = 0;",
+    "```",
+    "~~~~",
+    "- item with `code` and **bold**",
+    "> quote [link](http://x)",
+    "    indented",
+    "<div>html</div>",
+}};
+constexpr std::array<std::string_view, 9> javascript_samples{{
+    "const s = `template ${x}",
+    "still ${a + `inner`} end`;",
+    "let r = /ab+c/g; let d = a / b;",
+    "function f(a) { return a; }",
+    "/* block",
+    "*/ class C extends D {}",
+    "const t: number = 1;",
+    "<div className=\"x\">{y}</div>",
+    "a </ b",
+}};
+constexpr std::array<std::string_view, 9> html_samples{{
+    "<html lang=\"ja\"><!-- comment",
+    "still -->",
+    "<script>",
+    "let x = '</div>';",
+    "</script>",
+    "<style>p { color: red; }</style>",
+    "<![CDATA[ data",
+    "]]>",
+    "<?xml version=\"1.0\"?>",
+}};
+constexpr std::array<std::string_view, 7> css_samples{{
+    "body { color: #fff; margin: 0 auto; }",
+    "/* open",
+    "*/ .a > .b::before { content: \"x\"; }",
+    "@media (max-width: 600px) {",
+    "  width: calc(100% - 2em);",
+    "}",
+    "a[href^='http'] { }",
+}};
+constexpr std::array<std::string_view, 8> yaml_samples{{
+    "key: value # comment",
+    "list:",
+    "  - item",
+    "block: |",
+    "  text in block",
+    "other: >-",
+    "\"quoted\": 'single'",
+    "anchor: &a *b",
+}};
+constexpr std::array<std::string_view, 7> toml_samples{{
+    "[table]",
+    "key = \"value\" # c",
+    "s = \"\"\"multi",
+    "line\"\"\"",
+    "l = '''lit",
+    "[[array]]",
+    "d = 1979-05-27T07:32:00Z",
+}};
+constexpr std::array<std::string_view, 8> powershell_samples{{
+    "function Get-Thing { param([int]$x) }",
+    "<# block comment",
+    "still inside #> $a = 1",
+    "$s = @\"",
+    "\"@ + 'x'",
+    "$t = @'  ",
+    "'@",
+    "if ($a -eq 1) { Write-Host \"hi $(1 + 2)\" }",
+}};
+constexpr std::array<std::string_view, 9> shell_samples{{
+    "f() {",
+    "  local x=${1:-default}",
+    "cat <<EOF",
+    "body $x",
+    "EOF",
+    "out=$(ls -la | grep foo)",
+    "echo 'open \\",
+    "for i in 1 2 3; do echo $i; done",
+    "(( a << 2 ))",
+}};
+constexpr std::array<std::string_view, 7> cmake_samples{{
+    "cmake_minimum_required(VERSION 3.28)",
+    "set(x \"a ${b} c\")",
+    "#[[ block",
+    "]] message(STATUS [=[ raw",
+    "]=])",
+    "if(ON AND NOT x-NOTFOUND)",
+    "target_link_libraries(a PRIVATE $<TARGET_FILE:b>)",
+}};
+constexpr std::array<std::string_view, 8> gdscript_samples{{
+    "func _ready() -> void:",
+    "\tvar x: int = 0x1F",
+    "\t$Path/To.show()",
+    "@export var s = \"\"\"open",
+    "close\"\"\"",
+    "\"line one",
+    "line two\"",
+    "%Name & ^\"node\" &\"name\"",
+}};
+constexpr std::array<std::string_view, 6> dosini_samples{{
+    "[section]",
+    "; comment",
+    "key = 10",
+    "name = \"quoted\" value",
+    "# hash",
+    "x=1e5",
+}};
+constexpr std::array<std::string_view, 7> gdresource_samples{{
+    "[gd_scene load_steps=3 format=3]",
+    "[ext_resource type=\"Script\" path=\"res://a.gd\"]",
+    "text = \"open",
+    "close\"",
+    "position = Vector2(1, -2)",
+    "; comment",
+    "visible = true",
+}};
+constexpr std::array<std::string_view, 8> cs_samples{{
+    "public class A { void F() { } }",
+    "var s = @\"verbatim",
+    "still\"\"inside\";",
+    "var r = \"\"\"",
+    "raw\"\"\";",
+    "var i = $\"{x} {\"y\"}\";",
+    "#region Name",
+    "/* block",
+}};
+constexpr std::array<std::string_view, 9> rust_samples{{
+    "fn main() { println!(\"hi\"); }",
+    "/* outer /* inner",
+    "*/ still */",
+    "let s = r##\"raw",
+    "end\"##;",
+    "let c = 'a'; let l: &'static str = \"x\";",
+    "#[derive(Debug)]",
+    "let b = b\"bytes\\\" open",
+    "let n = 1_000u32 + 0b1010 + 1.5e-3f64;",
+}};
+constexpr std::array<std::string_view, 7> go_samples{{
+    "func (r *T) Name() int { return 0 }",
+    "s := `raw",
+    "end`",
+    "/* block",
+    "*/ x := 'a' + 0x1p-2",
+    "var m map[string]chan int",
+    "\"open",
+}};
+constexpr std::array<std::string_view, 9> php_samples{{
+    "<?php echo $x; ?>",
+    "<p>Hello <?= $name ?></p>",
+    "<?php $s = <<<EOT",
+    "  body",
+    "  EOT;",
+    "/* start",
+    "still */ echo 1;",
+    "#[Attr(\"x\")] function f() {}",
+    "$a->b::class; // c ?> after",
+}};
+constexpr std::array<std::string_view, 6> sql_samples{{
+    "SELECT a, COUNT(*) FROM t WHERE b = 'x' -- c",
+    "/* block",
+    "*/ INSERT INTO \"t\" VALUES (1, NULL);",
+    "'open",
+    "close'",
+    "CREATE TABLE `t` (id INT);",
+}};
+constexpr std::array<std::string_view, 7> lua_samples{{
+    "local function f(a) return a end",
+    "--[==[ long",
+    "comment ]==]",
+    "s = [[long",
+    "string]]",
+    "x = 0xA.8p-1 .. \"s\"",
+    "function a.b:c() end",
+}};
+constexpr std::array<std::string_view, 8> dockerfile_samples{{
+    "FROM ubuntu:24.04 AS build",
+    "RUN apt-get update && \\",
+    "    apt-get install -y x",
+    "RUN <<EOF",
+    "echo $HOME",
+    "EOF",
+    "# syntax=docker/dockerfile:1",
+    "ENV A=\"b\" C=${D}",
+}};
+
+// 見本の行の供給元。新しい言語の値で switch が落ちる（CPP-002）。plain は見本を持たない。
+[[nodiscard]] Lines samples_of(Language language)
+{
+    switch (language)
+    {
+    case Language::plain:
+        return {};
+    case Language::markdown:
+        return markdown_samples;
+    case Language::html:
+    case Language::xml:
+        return html_samples;
+    case Language::c:
+    case Language::cpp:
+        return c_samples;
+    case Language::python:
+        return python_samples;
+    case Language::json:
+        return json_samples;
+    case Language::javascript:
+    case Language::typescript:
+        return javascript_samples;
+    case Language::yaml:
+        return yaml_samples;
+    case Language::toml:
+        return toml_samples;
+    case Language::css:
+        return css_samples;
+    case Language::powershell:
+        return powershell_samples;
+    case Language::shell:
+        return shell_samples;
+    case Language::cmake:
+        return cmake_samples;
+    case Language::gdscript:
+        return gdscript_samples;
+    case Language::dosini:
+        return dosini_samples;
+    case Language::gdresource:
+        return gdresource_samples;
+    case Language::cs:
+        return cs_samples;
+    case Language::rust:
+        return rust_samples;
+    case Language::go:
+        return go_samples;
+    case Language::php:
+        return php_samples;
+    case Language::sql:
+        return sql_samples;
+    case Language::lua:
+        return lua_samples;
+    case Language::dockerfile:
+        return dockerfile_samples;
+    }
+    return {};
+}
+
+[[nodiscard]] std::size_t below(Random &random, std::size_t bound)
+{
+    return static_cast<std::size_t>(random() % bound);
+}
+
+// 不正な UTF-8・NUL・CR・Tab を含むバイト。半分は打てる ASCII にして字句器の状態へ届かせる。
+[[nodiscard]] char random_byte(Random &random)
+{
+    constexpr std::string_view printable = " \t\r\"'`#/*\\<>$(){}[]@;:=-+.,0123456789abcxyzEOF";
+    if (below(random, 2U) == 0U)
+    {
+        return printable[below(random, printable.size())];
+    }
+    return static_cast<char>(below(random, 256U));
+}
+
+[[nodiscard]] std::string random_line(Random &random, std::size_t length)
+{
+    std::string line;
+    line.reserve(length);
+    while (line.size() < length)
+    {
+        line.push_back(random_byte(random));
+    }
+    return line;
+}
+
+[[nodiscard]] std::string fragment_line(Random &random, std::size_t at_least)
+{
+    std::string line;
+    while (line.size() < at_least)
+    {
+        line.append(fragments[below(random, fragments.size())]);
+    }
+    return line;
+}
+
+// 1 バイトの置換・削除・挿入・切り詰めのどれか 1 つ（剰余の 0〜3）。
+[[nodiscard]] std::string mutated(Random &random, std::string_view sample)
+{
+    std::string line{sample};
+    const std::size_t at = below(random, line.size() + 1U);
+    const std::size_t kind = below(random, 4U);
+    const bool inside = at < line.size();
+    if (kind == 0U && inside)
+    {
+        line[at] = random_byte(random);
+    }
+    else if (kind == 1U && inside)
+    {
+        line.erase(at, 1U);
+    }
+    else if (kind == 2U)
+    {
+        line.insert(at, 1U, random_byte(random));
+    }
+    else if (kind == 3U)
+    {
+        line.resize(at);
+    }
+    return line;
+}
+
+void print_line(std::string_view line)
+{
+    std::fprintf(stderr, "  bytes(%zu):", line.size());
+    for (std::size_t at = 0U; at < line.size() && at < printed_bytes; ++at)
+    {
+        std::fprintf(stderr, " %02x", static_cast<unsigned>(static_cast<unsigned char>(line[at])));
+    }
+    std::fprintf(stderr, "%s\n", line.size() > printed_bytes ? " ..." : "");
+}
+
+[[nodiscard]] bool state_closed(const LexState &state)
+{
+    return std::to_underlying(state.kind) <= std::to_underlying(LexKind::raw_string) &&
+           state.delimiter_length <= core::raw_delimiter_limit;
+}
+
+// width は区間の最小の幅。正しい UTF-8 の行では 1 桁以上。不正な UTF-8 の行（文書には来ない・
+// TextBuffer が検証する）では継続バイトだけを塗った区間が 0 桁になり得るので 0 を許し、
+// 「落ちない・区間が行の内で順に並ぶ」だけを守る（ADR 0156 の決定 4 の前提の外）。
+[[nodiscard]] bool span_sound(const ColorSpan &span, std::size_t floor, std::size_t ceiling,
+                              std::size_t width)
+{
+    return span.begin.value >= floor && span.begin.value + width <= span.end.value &&
+           span.end.value <= ceiling &&
+           std::to_underlying(span.role) < std::to_underlying(SyntaxRole::warning);
+}
+
+// 不変量 1。桁は code point の序数で行頭が 1 なので、end は数 + 1 まで。
+[[nodiscard]] bool spans_sound(const std::vector<ColorSpan> &spans, std::string_view line)
+{
+    const std::size_t ceiling = core::code_point_count(line) + 1U;
+    const std::size_t width = core::validate_utf8(line).has_value() ? 1U : 0U;
+    std::size_t floor = 1U;
+    for (const ColorSpan &span : spans)
+    {
+        if (!span_sound(span, floor, ceiling, width))
+        {
+            return false;
+        }
+        floor = span.end.value;
+    }
+    return true;
+}
+
+[[nodiscard]] const char *violation(Language language, const LexState &in, std::string_view line,
+                                    const LexLine &lexed)
+{
+    if (!spans_sound(lexed.spans, line))
+    {
+        return "spans (invariant 1)";
+    }
+    if (core::lex_state(language, in, line) != lexed.out)
+    {
+        return "lex_state != lex_line.out (invariant 2)";
+    }
+    const LexLine again = core::lex_line(language, in, line);
+    if (again.spans != lexed.spans || again.out != lexed.out)
+    {
+        return "not deterministic (invariant 3)";
+    }
+    if (!state_closed(lexed.out))
+    {
+        return "state out of the closed values (invariant 4)";
+    }
+    return nullptr;
+}
+
+// 1 行を検査して次の行へ渡す状態を返す。破れは faults に数え、最初の数件だけ書き出す。
+[[nodiscard]] LexState checked_line(Language language, const LexState &in, std::string_view line,
+                                    std::size_t &faults)
+{
+    const LexLine lexed = core::lex_line(language, in, line);
+    const char *broken = violation(language, in, line, lexed);
+    if (broken != nullptr)
+    {
+        if (faults < printed_faults)
+        {
+            std::fprintf(stderr, "lexer property: language %u, in kind %u delimiter %u: %s\n",
+                         static_cast<unsigned>(std::to_underlying(language)),
+                         static_cast<unsigned>(std::to_underlying(in.kind)),
+                         static_cast<unsigned>(in.delimiter_length), broken);
+            print_line(line);
+        }
+        ++faults;
+    }
+    return lexed.out;
+}
+
+// 50 倍の走りで最小化した入力（#868）。どれも不正な UTF-8 で、継続バイトだけの区間が 0 桁になる
+// （正しい UTF-8 の行では 0 件）。落ちず、区間が行の内で順に並ぶことを決定的に残す。状態は字句器
+// 自身に作らせる（C++ の `/*`・JS のテンプレートの `` ` ``）。
+void verify_minimized_lines()
+{
+    std::size_t faults = 0U;
+    const LexState cpp_block = core::lex_state(Language::cpp, LexState{}, "/*");
+    const LexState template_open = core::lex_state(Language::javascript, LexState{}, "`");
+    const LexState gd_string = core::lex_state(Language::gdscript, LexState{}, "\"");
+    expect(cpp_block.kind == LexKind::block_comment && template_open.kind == LexKind::raw_string &&
+               gd_string.kind == LexKind::raw_string,
+           "lexer property: the minimized cases start inside a comment or a string");
+    std::ignore = checked_line(Language::cpp, cpp_block, "\xa2", faults);
+    std::ignore = checked_line(Language::javascript, template_open, "\x9a", faults);
+    std::ignore = checked_line(Language::gdscript, gd_string, "\xbc\x8b", faults);
+    std::ignore = checked_line(Language::html, LexState{}, "<b \xad", faults);
+    std::ignore = checked_line(Language::xml, LexState{}, "<a\t\xb4", faults);
+    std::ignore = checked_line(Language::css, LexState{}, "\x89:", faults);
+    expect(faults == 0U, "lexer property: the minimized invalid UTF-8 lines stay inside the line");
+}
+
+// 文書のように続けて通す（不変量 4: in は字句器が前の行に出した値だけ）。
+void run_document(Language language, std::span<const std::string> lines, bool from_first_line,
+                  std::size_t &faults)
+{
+    LexState state = core::lex_start_state(language, from_first_line);
+    for (const std::string &line : lines)
+    {
+        state = checked_line(language, state, line, faults);
+    }
+}
+
+[[nodiscard]] std::vector<std::string> random_document(Random &random)
+{
+    std::vector<std::string> lines;
+    for (std::size_t index = 0U; index < random_lines; ++index)
+    {
+        lines.push_back(random_line(random, below(random, 80U)));
+    }
+    return lines;
+}
+
+[[nodiscard]] std::vector<std::string> fragment_document(Random &random)
+{
+    std::vector<std::string> lines;
+    for (std::size_t index = 0U; index < fragment_lines; ++index)
+    {
+        lines.push_back(fragment_line(random, below(random, 48U)));
+    }
+    return lines;
+}
+
+// 見本の行を順に並べ、各行を 1 か所だけ変えた文書（変えない行も混ぜて状態を渡す）。
+[[nodiscard]] std::vector<std::string> mutated_document(Random &random, Lines samples)
+{
+    std::vector<std::string> lines;
+    for (std::size_t round = 0U; round < mutated_rounds; ++round)
+    {
+        for (const std::string_view sample : samples)
+        {
+            lines.push_back(below(random, 4U) == 0U ? std::string{sample}
+                                                    : mutated(random, sample));
+        }
+    }
+    return lines;
+}
+
+[[nodiscard]] std::vector<std::string> long_document(Random &random, std::size_t length)
+{
+    std::vector<std::string> lines;
+    for (std::size_t index = 0U; index < long_lines; ++index)
+    {
+        lines.push_back(fragment_line(random, length));
+        lines.push_back(random_line(random, length));
+    }
+    return lines;
+}
+
+void verify_language(Language language, Random &random)
+{
+    std::size_t faults = 0U;
+    run_document(language, random_document(random), true, faults);
+    run_document(language, random_document(random), false, faults);
+    run_document(language, fragment_document(random), true, faults);
+    run_document(language, fragment_document(random), false, faults);
+    run_document(language, mutated_document(random, samples_of(language)), true, faults);
+    run_document(language, long_document(random, short_long_line), true, faults);
+    expect(faults == 0U, "lexer property: every generated line keeps invariants 1-4");
+}
+
+// 字句器を持たない言語は区間を出さず状態を素通しする（ADR 0156 の決定 14）。1 本だけ見る。
+void verify_language_without_lexer()
+{
+    constexpr std::string_view line{"/* \"x\" <<EOF \xff\0 [[", 18U};
+    const LexState in = core::lex_start_state(Language::plain, true);
+    const LexLine lexed = core::lex_line(Language::plain, in, line);
+    expect(!core::has_lexer(Language::plain), "lexer property: plain has no lexer");
+    expect(lexed.spans.empty() && lexed.out == in &&
+               core::lex_state(Language::plain, in, line) == in,
+           "lexer property: plain passes the state through without spans");
+}
+
+// 64 KiB の行は重いので言語ごとに 1 本（巨大な行の 16,384 code point を超える所は application
+// が区間を付けないが、字句器は落ちず区間が行の内にあること）。
+void verify_long_line(Language language, Random &random)
+{
+    std::size_t faults = 0U;
+    const std::array<std::string, 1> lines{fragment_line(random, long_long_line)};
+    run_document(language, lines, true, faults);
+    expect(faults == 0U, "lexer property: a 64 KiB line keeps invariants 1-4");
+}
+} // namespace
+
+void verify_lexer_property_scope()
+{
+    verify_minimized_lines();
+    verify_language_without_lexer();
+    Random random{property_seed};
+    // Language の最後の値は dockerfile。値を足すと samples_of の switch が落ちるので、ここも直す。
+    for (std::underlying_type_t<Language> value = 0U;
+         value <= std::to_underlying(Language::dockerfile); ++value)
+    {
+        const auto language = static_cast<Language>(value);
+        if (core::has_lexer(language))
+        {
+            verify_language(language, random);
+            verify_long_line(language, random);
+        }
+    }
+}
+} // namespace nenenib::tests
