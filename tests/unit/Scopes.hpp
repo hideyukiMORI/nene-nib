@@ -81,6 +81,8 @@ void verify_lexer_scope();
 
 // LexerPropertyTests.cpp（#868・ADR 0156 の決定 1〜6・14・字句器の不変量と生成した入力）
 void verify_lexer_property_scope();
+// TextBufferPropertyTests.cpp（#869・TextBuffer と EditHistory の std::string の模型との照合）
+void verify_text_buffer_property_scope();
 
 // SyntaxTests.cpp（#816・ADR 0156 の決定 7〜10・14・見えている行の色の区間）
 void verify_syntax_scope();
