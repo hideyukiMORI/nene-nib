@@ -74,3 +74,7 @@
 - **IME の差し込み行。** `colored_line` は差し込み行も `lex_line` に通し、差し込みの手前の区間はそのまま、後ろの区間は差し込んだ code point の数だけずらし、差し込みをまたぐ区間は手前と後ろの 2 つに割る（差し込みの範囲は色なし）。差し込んだ位置の本文の桁は `composed_source_column` の 1 本で引く。renderer の `draw_composed_line` は本文と同じ `draw_line_text` を通り、`colored_runs` が後ろの区間を本文の桁へ戻して写してから差し込んだ UTF-16 の数だけずらす。差し込んだ文字列は区間の外なので `text` の色で、下線・文節の面は今のまま。格子の差し込みは `shift_spans` が同じ理屈で升を割ってずらす。
 - **描画は同じ painter。** `GridRowPainter` は区間があれば `BodyTextPainter::draw_colored_body_text` を格子の行の layout で呼ぶ（升の範囲 → 画面行の文字列の code point → UTF-16。幅 0 の結合文字は前の字の側）。区間が無ければ今までどおり `text` の色で 1 回。`SetDrawingEffect` は使わず brush は 1 本。色は `GridRowCanvas.body`（frame の `SyntaxPalette`）。
 - 契約: `--syntax` の `verify_composed_colors`（差し込み行の区間のずれと割れ）・`verify_grid_colors`（格子の画面行の升・折り返した行の 2 行目・格子の差し込みの 6 升）・`verify_composed_surrogate_colors`（サロゲート対の差し込みは 1 桁ずらす）・`verify_grid_wide_tab_colors`（Tab と全角の送りを含む折り返しの 2・3 行目の升）・`verify_grid_giant_uncolored`（格子の巨大な行は色なし）。`nib_window_tests --syntax` の `verify_grid_color_ranges`（升 → UTF-16）と `verify_grid_colored_row`（WIC の描画先で text の色で切った画素が切らない画素と同じ・区間の境の升で色が替わる）。`eng/verify-window.py --syntax` は同じ実行の中で `:set display=grid` の格子を撮る（`syntax-grid-<scheme>.png`）。
+
+## 追補（2026-10-23・#864）
+
+- **JS / TS の `<` の直後の `/` は除算。** 演算子の連なりの最後の文字が `<` なら、次の `/` を正規表現の始まりにしない（`)` `]` と同じ `LexPrecedent::operand`）。JSX の `</div>` `</>` を正規表現と読まない。`a < /re/` の稀な形は除算として読む（受け入れる）。`.tsx` の典型の行は行末まで string / error に崩れない（`LexerTests` の fixture）。

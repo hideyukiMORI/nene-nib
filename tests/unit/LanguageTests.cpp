@@ -238,6 +238,40 @@ void verify_batch4_extensions()
     }
 }
 
+// #864: 字句器のある言語の拡張子と名前の行（Vim の filetype.vim に寄せ、Vim の typescriptreact
+// javascriptreact bash zsh は親の言語に畳む）。`*.cmake.in` は名前の末尾の照合で、拡張子の
+// `in` は表に無いので plain。
+void verify_extension_additions()
+{
+    using Row = std::pair<std::string_view, Language>;
+    constexpr std::array<Row, 19> rows{{
+        {"App.tsx", Language::typescript},
+        {"VIEW.TSX", Language::typescript},
+        {"button.jsx", Language::javascript},
+        {"session.pssc", Language::powershell},
+        {"icon.png.import", Language::gdresource},
+        {".bashrc", Language::shell},
+        {"C:\\Users\\a\\.bash_profile", Language::shell},
+        {".bash_logout", Language::shell},
+        {".profile", Language::shell},
+        {"/home/a/.zshrc", Language::shell},
+        {".ZPROFILE", Language::shell},
+        {"config.cmake.in", Language::cmake},
+        {"src\\FooConfig.CMAKE.IN", Language::cmake},
+        {".cmake.in", Language::cmake},
+        {"config.in", Language::plain},
+        {"config.cmake.in.bak", Language::plain},
+        {".bashrc.bak", Language::plain},
+        {"x.bashrc", Language::plain},
+        {"cmake.in", Language::plain},
+    }};
+    for (const auto &[path, language] : rows)
+    {
+        expect(core::language_of_path(path) == language,
+               "language_of_path maps the #864 extensions, the shell names and *.cmake.in");
+    }
+}
+
 // 名前の表と逆引き（決定 3）。26 本の往復と、小文字だけを受けること。
 void verify_names()
 {
@@ -514,6 +548,7 @@ void verify_language_scope()
     verify_godot_extensions();
     verify_c_family_extensions();
     verify_batch4_extensions();
+    verify_extension_additions();
     verify_names();
     verify_ex_evaluation();
     verify_completion();

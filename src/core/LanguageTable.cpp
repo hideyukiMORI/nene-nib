@@ -74,7 +74,7 @@ static_assert(language_names.size() == language_count(),
 // 表に無い拡張子と同じ plain だが、初版の表の 1 行として書いておく。
 using LanguageExtension = std::pair<std::string_view, Language>;
 
-constexpr std::array<LanguageExtension, 64> language_extensions{{
+constexpr std::array<LanguageExtension, 68> language_extensions{{
     {"md", Language::markdown},
     {"markdown", Language::markdown},
     {"html", Language::html},
@@ -94,9 +94,11 @@ constexpr std::array<LanguageExtension, 64> language_extensions{{
     {"js", Language::javascript},
     {"mjs", Language::javascript},
     {"cjs", Language::javascript},
+    {"jsx", Language::javascript},
     {"ts", Language::typescript},
     {"mts", Language::typescript},
     {"cts", Language::typescript},
+    {"tsx", Language::typescript},
     {"yml", Language::yaml},
     {"yaml", Language::yaml},
     {"toml", Language::toml},
@@ -105,6 +107,7 @@ constexpr std::array<LanguageExtension, 64> language_extensions{{
     {"ps1", Language::powershell},
     {"psm1", Language::powershell},
     {"psd1", Language::powershell},
+    {"pssc", Language::powershell},
     {"sh", Language::shell},
     {"bash", Language::shell},
     {"zsh", Language::shell},
@@ -114,6 +117,7 @@ constexpr std::array<LanguageExtension, 64> language_extensions{{
     {"tscn", Language::gdresource},
     {"tres", Language::gdresource},
     {"godot", Language::gdresource},
+    {"import", Language::gdresource},
     {"cs", Language::cs},
     {"csx", Language::cs},
     {"cake", Language::cs},
@@ -142,15 +146,27 @@ constexpr std::array<LanguageExtension, 64> language_extensions{{
 }};
 
 // 拡張子ではなく名前で決まる行（決定 2）。照合は拡張子と同じく ASCII の大文字小文字を畳む。
-// Dockerfile と Containerfile（#860）と `.luacheckrc` は Vim の filetype.vim の名前の行。
+// Dockerfile と Containerfile（#860）と `.luacheckrc` と shell の設定の 6 つ（#864）は Vim の
+// filetype.vim の名前の行（Vim は `.bashrc` などを bash・`.zshrc` `.zprofile` を zsh にするが、
+// Nib は `.zsh` と同じく shell の 1 つに畳む）。
 using LanguageName = std::pair<std::string_view, Language>;
 
-constexpr std::array<LanguageName, 4> language_file_names{{
+constexpr std::array<LanguageName, 10> language_file_names{{
     {"CMakeLists.txt", Language::cmake},
     {"Dockerfile", Language::dockerfile},
     {"Containerfile", Language::dockerfile},
     {".luacheckrc", Language::lua},
+    {".bashrc", Language::shell},
+    {".bash_profile", Language::shell},
+    {".bash_logout", Language::shell},
+    {".profile", Language::shell},
+    {".zshrc", Language::shell},
+    {".zprofile", Language::shell},
 }};
+
+// 名前の末尾で決まる行（#864）。Vim の filetype.vim の `*.cmake.in`。拡張子の表を 2 段にせず、
+// 名前の行の次に 1 本だけ照合する（照合は ASCII の大文字小文字を畳む）。
+constexpr std::string_view cmake_template_suffix = ".cmake.in";
 
 // 拡張子の表に当たらなかった名前の頭（#860）。Vim の filetype.vim の最後の節
 // `Dockerfile.*` `Containerfile.*`（StarSetf）と同じく、拡張子の表が先に勝つ。
@@ -204,6 +220,12 @@ Language language_of_path(std::string_view path) noexcept
     if (named != language_file_names.end())
     {
         return named->second;
+    }
+    if (name.size() >= cmake_template_suffix.size() &&
+        same_ignoring_case(name.substr(name.size() - cmake_template_suffix.size()),
+                           cmake_template_suffix))
+    {
+        return Language::cmake;
     }
     const auto dot = last_where(name, is_dot);
     const auto extension = dot.has_value() ? name.substr(dot.value() + 1) : std::string_view{};
