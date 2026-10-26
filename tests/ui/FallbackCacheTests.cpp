@@ -1,6 +1,6 @@
 // 字体選択の保持の段（ADR 0071 の決定 3・4）を、OS の役の替え玉で確かめる。
 // 保持するのは鍵を作れた要求への OS の S_OK の答えだけで、E_FAIL と S_FALSE はそのまま返して
-// 覚えない。保持は 128 件で、超えたら古いものから FIFO で入れ替わる。
+// 覚えない。保持は 512 件で、超えたら古いものから FIFO で入れ替わる。
 #include "FontFallbackCache.hpp"
 #include "ScriptedFontFallback.hpp"
 #include "ScriptedTextSource.hpp"
@@ -18,7 +18,7 @@ using Cache = Microsoft::WRL::ComPtr<win32::FontFallbackCache>;
 using Fallback = Microsoft::WRL::ComPtr<ScriptedFontFallback>;
 using Source = Microsoft::WRL::ComPtr<ScriptedTextSource>;
 
-constexpr UINT32 retained_entries = 128;
+constexpr UINT32 retained_entries = 512;
 
 win32::FontFallbackRequest request_of(ScriptedTextSource *source)
 {
@@ -156,10 +156,10 @@ void verify_first_in_first_out()
     expect_retained(*cache.Get(), *fallback.Get(), request_of(source.Get()),
                     "the oldest text is retained");
     fill_numbered(*cache.Get(), *fallback.Get(), *source.Get());
-    // 129 件目（"127"）が最も古い "oldest" と入れ替わった。
+    // 513 件目（"511"）が最も古い "oldest" と入れ替わった。
     source->set_text(L"oldest");
     expect_retained(*cache.Get(), *fallback.Get(), request_of(source.Get()),
-                    "the oldest text was replaced by the 129th");
+                    "the oldest text was replaced by the 513th");
     // "oldest" を戻したので、次に古い "0" が入れ替わり、"1" はまだ残る。
     const UINT32 before = fallback->calls();
     source->set_text(L"1");

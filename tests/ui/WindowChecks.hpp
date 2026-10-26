@@ -15,6 +15,7 @@ void unmeasured(const char *what);
 // 試験の組（ADR 0077）。
 void verify_fallback_keys();
 void verify_fallback_cache();
+void verify_fallback_pieces();
 void verify_glyph_collector();
 void verify_glyph_pixels();
 void verify_fallback_ranges();

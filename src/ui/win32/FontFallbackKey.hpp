@@ -8,6 +8,9 @@ namespace nenenib::ui::win32
 // 保持の鍵にする本文の長さの上限（UTF-16 単位・ADR 0071）。字体選択へ渡す区切りの長さも同じ上限で
 // 切る（ADR 0142 の決定 3）。
 inline constexpr UINT32 fallback_key_text_limit = 256;
+// 字体選択へ渡す片の最小の長さ（UTF-16 単位・ADR 0142 の決定 3
+// の追補・#875）。区切りの残りがこれ以下 なら残りの全部を 1 片にする。
+inline constexpr UINT32 fallback_piece_minimum = 16;
 struct FontFallbackKey
 {
     std::wstring text;

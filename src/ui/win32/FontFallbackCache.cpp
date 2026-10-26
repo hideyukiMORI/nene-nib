@@ -5,7 +5,7 @@ namespace nenenib::ui::win32
 {
 namespace
 {
-constexpr std::size_t maximum_entries = 128;
+constexpr std::size_t maximum_entries = 512;
 }
 
 FontFallbackCache::FontFallbackCache(Microsoft::WRL::ComPtr<IDWriteFontFallback> system)
