@@ -43,7 +43,11 @@ enum class Milestone : std::uint8_t
     layout_created,
     // 診断の節目 2 回目: 格子の問い（ADR 0140 決定 2）の MessageBoxW の直前と返った直後。
     question_shown,
-    question_answered
+    question_answered,
+    // 診断の節目 3 回目: make_layout の中。CreateTextLayout が返った直後と字体の写像の直後。
+    // cell 揃えの直後は既存の layout_created と同じ点なので足さない。
+    text_layout_created,
+    fallback_mapped
 };
 
 // 計測 JSON に出る名前。閉じた選択肢なので既定分岐は書かない（CPP-002）。
@@ -99,6 +103,10 @@ enum class Milestone : std::uint8_t
         return "question_shown";
     case Milestone::question_answered:
         return "question_answered";
+    case Milestone::text_layout_created:
+        return "text_layout_created";
+    case Milestone::fallback_mapped:
+        return "fallback_mapped";
     }
     std::unreachable();
 }

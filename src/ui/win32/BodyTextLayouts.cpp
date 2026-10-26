@@ -330,16 +330,19 @@ BodyTextLayouts::make_layout(const application::TextLayoutRequest &request)
     if (format == nullptr ||
         FAILED(factory_->CreateTextLayout(
             wide.value().c_str(), static_cast<UINT32>(wide.value().size()), format,
-            static_cast<float>(area.right), static_cast<float>(area.bottom), &made)) ||
-        FAILED(assign_fallback(made.Get(), wide.value(), request)) ||
-        FAILED(align_cells(made.Get(), wide.value(), request)))
+            static_cast<float>(area.right), static_cast<float>(area.bottom), &made)))
     {
         return std::unexpected(unavailable);
     }
-    if (timing_ != nullptr)
+    // 診断の節目: 作る・字体の写像・cell 揃えの 3 段を割る。cell 揃えの直後は layout_created。
+    mark(core::Milestone::text_layout_created);
+    const auto mapped = assign_fallback(made.Get(), wide.value(), request);
+    mark(core::Milestone::fallback_mapped);
+    if (FAILED(mapped) || FAILED(align_cells(made.Get(), wide.value(), request)))
     {
-        timing_->mark(core::Milestone::layout_created);
+        return std::unexpected(unavailable);
     }
+    mark(core::Milestone::layout_created);
     // 巨大な行の窓は設定の折り返しにかかわらず折り返さない（ADR 0139 の決定 2）。
     if (request.window.active && FAILED(made->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)))
     {

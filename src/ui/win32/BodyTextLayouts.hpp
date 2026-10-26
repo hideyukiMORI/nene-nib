@@ -53,6 +53,13 @@ class BodyTextLayouts final : public application::TextLayoutPort
     }
 
   private:
+    void mark(core::Milestone milestone) const noexcept
+    {
+        if (timing_ != nullptr)
+        {
+            timing_->mark(milestone);
+        }
+    }
     using TextFormat = Microsoft::WRL::ComPtr<IDWriteTextFormat>;
     [[nodiscard]] std::expected<void, application::TextLayoutFailure>
     prepare(const application::TextLayoutRequest &request);
