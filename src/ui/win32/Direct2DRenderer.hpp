@@ -44,6 +44,9 @@
 #include <dwrite_3.h>
 #include <dxgi1_6.h>
 #include <expected>
+#include <fstream>
+#include <string>
+#include <tuple>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -80,6 +83,11 @@ class Direct2DRenderer final
     [[nodiscard]] RECT caret_rectangle() const noexcept;
     // create_provisional で作った（WARP で子窓に描いている）とき真。
     [[nodiscard]] bool provisional() const noexcept;
+    // 実験 #873（main に入れない）: 打鍵の QPC を覚え、Present の後の統計から画面に出た時刻を
+    // 引いて D:/NeNeNib/outputs/20261027/present-latency/<変種>-<n>.tsv に 1 行ずつ書く。
+    void note_input() noexcept;
+    // 待っている行を統計で解く。Present から 50 ms 以内の行がまだ待っていれば真（timer を続ける）。
+    [[nodiscard]] bool poll_latency();
     // 最後の Commit が DWM に取り込まれるまで待つ。差し替えで子窓を壊す前の 1 か所だけが呼ぶ
     // （ADR 0132 の決定 3）。
     [[nodiscard]] HRESULT wait_for_commit() const;
@@ -91,6 +99,16 @@ class Direct2DRenderer final
     using TextLayout = Microsoft::WRL::ComPtr<IDWriteTextLayout>;
 
     explicit Direct2DRenderer(BodyTextLayouts &text_layouts);
+
+  public:
+    // 実験 #873: 解けずに残った行を空欄で書いてから壊れる。
+    ~Direct2DRenderer();
+    Direct2DRenderer(Direct2DRenderer &&) = default;
+    Direct2DRenderer &operator=(Direct2DRenderer &&) = delete;
+    Direct2DRenderer(const Direct2DRenderer &) = delete;
+    Direct2DRenderer &operator=(const Direct2DRenderer &) = delete;
+
+  private:
     [[nodiscard]] static std::expected<Direct2DRenderer, RenderFailure>
     started(Direct2DRenderer renderer, HWND window, application::TimingPort &timing,
             DeviceWarmup &warmup);
@@ -322,6 +340,18 @@ class Direct2DRenderer final
     std::array<StatusTextLayout, status_layout_capacity> status_layouts_{};
     std::size_t status_layout_cursor_ = 0;
     WaitableHandle latency_{nullptr, &::CloseHandle};
+    // 実験 #873: 打鍵の QPC・Present が返った QPC・present の番号。
+    using LatencyPending = std::array<std::int64_t, 3>;
+    // 実験 #873: 統計の API・HRESULT・PresentCount・PresentRefreshCount・SyncRefreshCount・画面の QPC。
+    using LatencyStats =
+        std::tuple<std::string_view, HRESULT, std::int64_t, std::int64_t, std::int64_t, std::int64_t>;
+    void record_present(std::int64_t returned);
+    [[nodiscard]] LatencyStats latency_stats(std::int64_t present_id, std::int64_t returned) const;
+    void write_latency_row(const LatencyPending &row, const LatencyStats &stats);
+    [[nodiscard]] double composition_rate() const;
+    std::ofstream latency_log_;
+    std::int64_t latency_input_ = 0;
+    std::vector<LatencyPending> latency_pending_;
     RECT caret_rectangle_{};
     std::int32_t caret_width_ = 2;
     std::int32_t body_line_height_ = 1;

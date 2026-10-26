@@ -28,6 +28,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <format>
 #include <limits>
 #include <span>
 #include <string>
@@ -62,6 +64,58 @@ constexpr float palette_key_padding_dips = 9.0F;
 constexpr float palette_key_height_dips = 20.0F;
 constexpr float palette_key_radius_dips = 5.0F;
 constexpr DWORD latency_timeout_milliseconds = 1000;
+
+// 実験 #873: 変種の名前（a = base）と、統計を待つ上限。
+constexpr std::string_view latency_variant = "a";
+constexpr std::int64_t latency_timer_milliseconds = 50;
+constexpr std::int64_t latency_expiry_milliseconds = 5000;
+
+[[nodiscard]] std::int64_t qpc_now() noexcept
+{
+    LARGE_INTEGER value{};
+    QueryPerformanceCounter(&value);
+    return value.QuadPart;
+}
+
+[[nodiscard]] std::int64_t qpc_frequency() noexcept
+{
+    LARGE_INTEGER value{};
+    QueryPerformanceFrequency(&value);
+    return value.QuadPart;
+}
+
+[[nodiscard]] std::uint32_t refresh_hz() noexcept
+{
+    DEVMODEW mode{};
+    mode.dmSize = sizeof(mode);
+    return EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &mode) != 0 ? mode.dmDisplayFrequency
+                                                                            : 0U;
+}
+
+[[nodiscard]] double qpc_milliseconds(std::int64_t ticks) noexcept
+{
+    return static_cast<double>(ticks) * 1000.0 / static_cast<double>(qpc_frequency());
+}
+
+[[nodiscard]] std::string screen_span(std::int64_t screen, std::int64_t from)
+{
+    return screen == 0 ? std::string{} : std::format("{:.3f}", qpc_milliseconds(screen - from));
+}
+
+[[nodiscard]] std::filesystem::path latency_path()
+{
+    const std::filesystem::path directory{L"D:\\NeNeNib\\outputs\\20261027\\present-latency"};
+    std::error_code ignored;
+    std::filesystem::create_directories(directory, ignored);
+    for (int number = 1;; ++number)
+    {
+        auto path = directory / std::format("{}-{}.tsv", latency_variant, number);
+        if (!std::filesystem::exists(path, ignored))
+        {
+            return path;
+        }
+    }
+}
 constexpr float full_channel = 255.0F;
 
 // 「塗らない」を表す唯一の値。ui/win32 はこれ以外の色を Palette の外から持たない（ADR 0008）。
@@ -2114,6 +2168,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::acquire_surface()
 
 std::expected<void, RenderFailure> Direct2DRenderer::render(const application::EditorFrame &frame)
 {
+    static_cast<void>(poll_latency());
     const auto formatted = set_font(frame.settings);
     if (!formatted)
     {
@@ -2135,11 +2190,124 @@ std::expected<void, RenderFailure> Direct2DRenderer::render(const application::E
         return std::unexpected(RenderFailure::swap_chain);
     }
     const auto presented = swap_chain_->Present(1, 0);
+    const auto returned = qpc_now();
     if (FAILED(presented))
     {
         return std::unexpected(classify(presented));
     }
+    record_present(returned);
     return {};
+}
+
+void Direct2DRenderer::note_input() noexcept
+{
+    if (latency_input_ == 0)
+    {
+        latency_input_ = qpc_now();
+    }
+}
+
+void Direct2DRenderer::record_present(std::int64_t returned)
+{
+    if (latency_input_ == 0)
+    {
+        return;
+    }
+    UINT present_id = 0;
+    if (FAILED(swap_chain_->GetLastPresentCount(&present_id)))
+    {
+        present_id = 0;
+    }
+    latency_pending_.push_back({latency_input_, returned, static_cast<std::int64_t>(present_id)});
+    latency_input_ = 0;
+}
+
+// DXGI の統計が読めれば PresentCount が自分の番号に届いた SyncQPCTime を、読めなければ DComp の
+// lastFrameTime が Present の後へ進んだ値を画面の時刻にする（後者は近似）。0 はまだ。
+Direct2DRenderer::LatencyStats Direct2DRenderer::latency_stats(std::int64_t present_id,
+                                                               std::int64_t returned) const
+{
+    DXGI_FRAME_STATISTICS stats{};
+    const auto read = swap_chain_->GetFrameStatistics(&stats);
+    if (SUCCEEDED(read))
+    {
+        const bool shown = static_cast<std::int64_t>(stats.PresentCount) >= present_id;
+        return {"dxgi", read, stats.PresentCount, stats.PresentRefreshCount, stats.SyncRefreshCount,
+                shown ? stats.SyncQPCTime.QuadPart : 0};
+    }
+    DCOMPOSITION_FRAME_STATISTICS composed{};
+    if (composition_ == nullptr || FAILED(composition_->GetFrameStatistics(&composed)) ||
+        composed.timeFrequency.QuadPart == 0)
+    {
+        return {"none", read, 0, 0, 0, 0};
+    }
+    const auto last = static_cast<std::int64_t>(static_cast<double>(composed.lastFrameTime.QuadPart) *
+                                                static_cast<double>(qpc_frequency()) /
+                                                static_cast<double>(composed.timeFrequency.QuadPart));
+    return {"dcomp", read, 0, 0, 0, last > returned ? last : 0};
+}
+
+Direct2DRenderer::~Direct2DRenderer()
+{
+    for (const auto &row : latency_pending_)
+    {
+        write_latency_row(row, latency_stats(row.at(2), row.at(1)));
+    }
+}
+
+bool Direct2DRenderer::poll_latency()
+{
+    const auto now = qpc_now();
+    const auto expiry = qpc_frequency() * latency_expiry_milliseconds / 1000;
+    std::erase_if(latency_pending_, [&](const LatencyPending &row) {
+        const auto stats = latency_stats(row.at(2), row.at(1));
+        if (std::get<5>(stats) == 0 && now - row.at(1) < expiry)
+        {
+            return false;
+        }
+        write_latency_row(row, stats);
+        return true;
+    });
+    const auto window = qpc_frequency() * latency_timer_milliseconds / 1000;
+    return std::ranges::any_of(latency_pending_,
+                               [&](const LatencyPending &row) { return now - row.at(1) < window; });
+}
+
+double Direct2DRenderer::composition_rate() const
+{
+    DCOMPOSITION_FRAME_STATISTICS composed{};
+    if (composition_ == nullptr || FAILED(composition_->GetFrameStatistics(&composed)) ||
+        composed.currentCompositionRate.Denominator == 0)
+    {
+        return 0;
+    }
+    return static_cast<double>(composed.currentCompositionRate.Numerator) /
+           static_cast<double>(composed.currentCompositionRate.Denominator);
+}
+
+void Direct2DRenderer::write_latency_row(const LatencyPending &row, const LatencyStats &stats)
+{
+    if (!latency_log_.is_open())
+    {
+        latency_log_.open(latency_path());
+        latency_log_ << "variant\tinput_qpc\tpresent_qpc\tpresent_id\tqpc_frequency\trefresh_hz\t"
+                        "stats_api\tstats_hresult\tstats_present_count\tstats_present_refresh_count\t"
+                        "stats_sync_refresh_count\tscreen_qpc\tinput_to_present_ms\t"
+                        "input_to_screen_ms\tpresent_to_screen_ms\texact\tcomposition_hz\n";
+    }
+    const std::string_view api = std::get<0>(stats);
+    const std::int64_t count = std::get<2>(stats);
+    const std::int64_t screen = std::get<5>(stats);
+    const int exact = api == "dxgi" && count == row.at(2) ? 1 : 0;
+    latency_log_ << std::format("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:08X}\t{}\t{}\t{}\t{}\t{:.3f}\t{}\t{}\t{}\t{:.3f}\n",
+                                latency_variant, row.at(0), row.at(1), row.at(2), qpc_frequency(),
+                                refresh_hz(), api, static_cast<std::uint32_t>(std::get<1>(stats)),
+                                count, std::get<3>(stats), std::get<4>(stats),
+                                screen == 0 ? std::string{} : std::to_string(screen),
+                                qpc_milliseconds(row.at(1) - row.at(0)),
+                                screen_span(screen, row.at(0)), screen_span(screen, row.at(1)), exact,
+                                composition_rate());
+    latency_log_.flush();
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::resize(UINT width, UINT height)

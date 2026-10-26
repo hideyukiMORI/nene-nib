@@ -166,6 +166,10 @@ class EditorWindow final
     // WM_TIMER を窓のタイマーへ写す。自動退避の合図は AutosaveTick を 1 回送る（ADR 0137
     // の決定 1）。
     void receive_timer(WPARAM word);
+    // 実験 #873: 打鍵を renderer に知らせ、統計を待つ 1 ms のタイマーを回す。
+    void note_input() noexcept;
+    void poll_present_latency();
+    static constexpr UINT_PTR present_latency_timer = 0x873;
     void follow_preview_timer();
     void stop_preview_timer();
     [[nodiscard]] bool previewing() const;

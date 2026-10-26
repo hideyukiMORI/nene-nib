@@ -850,6 +850,7 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
     case WM_KEYDOWN:
         end_selection_drag();
         timing_.mark(core::Milestone::input_received);
+        note_input();
         if (!press_bookmark_key(word, data) && !press_help_key(word, data) &&
             !press_mode_key(word, data))
         {
@@ -859,6 +860,7 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
     case WM_CHAR:
         end_selection_drag();
         timing_.mark(core::Milestone::input_received);
+        note_input();
         type_character(word);
         return 0;
     case WM_KEYUP:
@@ -1472,8 +1474,29 @@ void EditorWindow::receive_work()
     send(application::WorkCompleted{});
 }
 
+void EditorWindow::note_input() noexcept
+{
+    if (renderer_ != nullptr)
+    {
+        renderer_->note_input();
+    }
+}
+
+void EditorWindow::poll_present_latency()
+{
+    if (renderer_ == nullptr || !renderer_->poll_latency())
+    {
+        KillTimer(window_, present_latency_timer);
+    }
+}
+
 void EditorWindow::receive_timer(WPARAM word)
 {
+    if (word == present_latency_timer)
+    {
+        poll_present_latency();
+        return;
+    }
     const auto timer = window_timer_of(word);
     if (!timer.has_value())
     {
@@ -2770,6 +2793,10 @@ std::expected<void, RenderFailure> EditorWindow::draw_frame()
     if (drawn)
     {
         presented_.presented(frame.display_pending, timing_);
+        if (renderer_->poll_latency())
+        {
+            static_cast<void>(SetTimer(window_, present_latency_timer, 1, nullptr));
+        }
         if (application::composing(frame))
         {
             place_candidate_window();
