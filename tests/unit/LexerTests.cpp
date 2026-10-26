@@ -2401,11 +2401,15 @@ void verify_word_gates()
            "an exact gate keeps the case of the first byte");
     expect(core::lex_folded_in<gate_folded_words>("SELECT") &&
                core::lex_folded_in<gate_folded_words>("Where") &&
-               core::lex_gate_admits(folded_gate, "FrÃ©"),
+               core::lex_gate_admits(folded_gate, "Fré"),
            "a folded gate folds the first byte before looking");
     expect(!core::lex_gate_admits(folded_gate, "Update") &&
                !core::lex_folded_in<gate_folded_words>("FROMS"),
            "a folded gate still drops by the first byte and the length");
+    expect(!core::lex_gate_admits(exact_gate, "é") && !core::lex_in<gate_words>("é") &&
+               !core::lex_gate_admits(folded_gate, "日本") &&
+               !core::lex_folded_in<gate_folded_words>("日本"),
+           "a word whose first byte is 0x80 or above does not pass the gate");
 }
 } // namespace
 
