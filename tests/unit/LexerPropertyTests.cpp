@@ -64,7 +64,7 @@ constexpr std::size_t printed_bytes = 96U;
 
 // 区切りの断片（Issue の 5 の族）。言語ごとに分けず、全言語に同じ断片の全部を通す（ほかの言語の
 // 断片も、その言語にとっては想定外の入力として意味がある）。
-constexpr std::array<std::string_view, 96> fragments{{
+constexpr auto fragments = std::to_array<std::string_view>({
     "\"",
     "'",
     "`",
@@ -159,10 +159,10 @@ constexpr std::array<std::string_view, 96> fragments{{
     "x",
     "\xe3\x81\x82",
     "\xc3\xa9",
-}};
+});
 
 // fixture の行に似た見本（1 言語 10 行まで・LexerTests.cpp の case の行の形）。変異の元になる。
-constexpr std::array<std::string_view, 8> c_samples{{
+constexpr auto c_samples = std::to_array<std::string_view>({
     "int main(void) { return 0; } // done",
     "auto s = R\"xyz(raw text",
     "still raw )xyz\" + 1;",
@@ -171,8 +171,8 @@ constexpr std::array<std::string_view, 8> c_samples{{
     "#include <vector>",
     "const char *c = \"a\\\"b\";",
     "std::string name = 'q';",
-}};
-constexpr std::array<std::string_view, 7> python_samples{{
+});
+constexpr auto python_samples = std::to_array<std::string_view>({
     "def f(x): return x  # note",
     "s = \"\"\"open triple",
     "close\"\"\" + 'x'",
@@ -180,16 +180,16 @@ constexpr std::array<std::string_view, 7> python_samples{{
     "class A(B): pass",
     "x = 0x1f + 1_000 + 1e5j",
     "'''single",
-}};
-constexpr std::array<std::string_view, 6> json_samples{{
+});
+constexpr auto json_samples = std::to_array<std::string_view>({
     "{\"key\": [1, -2.5e3, true, null]}",
     "  \"open string",
     "\"a\\u00e9\": false,",
     "]",
     "// comment",
     "{\"x\": {\"y\": \"z\"}}",
-}};
-constexpr std::array<std::string_view, 9> markdown_samples{{
+});
+constexpr auto markdown_samples = std::to_array<std::string_view>({
     "# Heading",
     "```cpp",
     "int x = 0;",
@@ -199,8 +199,8 @@ constexpr std::array<std::string_view, 9> markdown_samples{{
     "> quote [link](http://x)",
     "    indented",
     "<div>html</div>",
-}};
-constexpr std::array<std::string_view, 9> javascript_samples{{
+});
+constexpr auto javascript_samples = std::to_array<std::string_view>({
     "const s = `template ${x}",
     "still ${a + `inner`} end`;",
     "let r = /ab+c/g; let d = a / b;",
@@ -210,8 +210,8 @@ constexpr std::array<std::string_view, 9> javascript_samples{{
     "const t: number = 1;",
     "<div className=\"x\">{y}</div>",
     "a </ b",
-}};
-constexpr std::array<std::string_view, 9> html_samples{{
+});
+constexpr auto html_samples = std::to_array<std::string_view>({
     "<html lang=\"ja\"><!-- comment",
     "still -->",
     "<script>",
@@ -221,8 +221,8 @@ constexpr std::array<std::string_view, 9> html_samples{{
     "<![CDATA[ data",
     "]]>",
     "<?xml version=\"1.0\"?>",
-}};
-constexpr std::array<std::string_view, 7> css_samples{{
+});
+constexpr auto css_samples = std::to_array<std::string_view>({
     "body { color: #fff; margin: 0 auto; }",
     "/* open",
     "*/ .a > .b::before { content: \"x\"; }",
@@ -230,8 +230,8 @@ constexpr std::array<std::string_view, 7> css_samples{{
     "  width: calc(100% - 2em);",
     "}",
     "a[href^='http'] { }",
-}};
-constexpr std::array<std::string_view, 8> yaml_samples{{
+});
+constexpr auto yaml_samples = std::to_array<std::string_view>({
     "key: value # comment",
     "list:",
     "  - item",
@@ -240,8 +240,8 @@ constexpr std::array<std::string_view, 8> yaml_samples{{
     "other: >-",
     "\"quoted\": 'single'",
     "anchor: &a *b",
-}};
-constexpr std::array<std::string_view, 7> toml_samples{{
+});
+constexpr auto toml_samples = std::to_array<std::string_view>({
     "[table]",
     "key = \"value\" # c",
     "s = \"\"\"multi",
@@ -249,8 +249,8 @@ constexpr std::array<std::string_view, 7> toml_samples{{
     "l = '''lit",
     "[[array]]",
     "d = 1979-05-27T07:32:00Z",
-}};
-constexpr std::array<std::string_view, 8> powershell_samples{{
+});
+constexpr auto powershell_samples = std::to_array<std::string_view>({
     "function Get-Thing { param([int]$x) }",
     "<# block comment",
     "still inside #> $a = 1",
@@ -259,8 +259,8 @@ constexpr std::array<std::string_view, 8> powershell_samples{{
     "$t = @'  ",
     "'@",
     "if ($a -eq 1) { Write-Host \"hi $(1 + 2)\" }",
-}};
-constexpr std::array<std::string_view, 9> shell_samples{{
+});
+constexpr auto shell_samples = std::to_array<std::string_view>({
     "f() {",
     "  local x=${1:-default}",
     "cat <<EOF",
@@ -270,8 +270,8 @@ constexpr std::array<std::string_view, 9> shell_samples{{
     "echo 'open \\",
     "for i in 1 2 3; do echo $i; done",
     "(( a << 2 ))",
-}};
-constexpr std::array<std::string_view, 7> cmake_samples{{
+});
+constexpr auto cmake_samples = std::to_array<std::string_view>({
     "cmake_minimum_required(VERSION 3.28)",
     "set(x \"a ${b} c\")",
     "#[[ block",
@@ -279,8 +279,8 @@ constexpr std::array<std::string_view, 7> cmake_samples{{
     "]=])",
     "if(ON AND NOT x-NOTFOUND)",
     "target_link_libraries(a PRIVATE $<TARGET_FILE:b>)",
-}};
-constexpr std::array<std::string_view, 8> gdscript_samples{{
+});
+constexpr auto gdscript_samples = std::to_array<std::string_view>({
     "func _ready() -> void:",
     "\tvar x: int = 0x1F",
     "\t$Path/To.show()",
@@ -289,16 +289,16 @@ constexpr std::array<std::string_view, 8> gdscript_samples{{
     "\"line one",
     "line two\"",
     "%Name & ^\"node\" &\"name\"",
-}};
-constexpr std::array<std::string_view, 6> dosini_samples{{
+});
+constexpr auto dosini_samples = std::to_array<std::string_view>({
     "[section]",
     "; comment",
     "key = 10",
     "name = \"quoted\" value",
     "# hash",
     "x=1e5",
-}};
-constexpr std::array<std::string_view, 7> gdresource_samples{{
+});
+constexpr auto gdresource_samples = std::to_array<std::string_view>({
     "[gd_scene load_steps=3 format=3]",
     "[ext_resource type=\"Script\" path=\"res://a.gd\"]",
     "text = \"open",
@@ -306,8 +306,8 @@ constexpr std::array<std::string_view, 7> gdresource_samples{{
     "position = Vector2(1, -2)",
     "; comment",
     "visible = true",
-}};
-constexpr std::array<std::string_view, 8> cs_samples{{
+});
+constexpr auto cs_samples = std::to_array<std::string_view>({
     "public class A { void F() { } }",
     "var s = @\"verbatim",
     "still\"\"inside\";",
@@ -316,8 +316,8 @@ constexpr std::array<std::string_view, 8> cs_samples{{
     "var i = $\"{x} {\"y\"}\";",
     "#region Name",
     "/* block",
-}};
-constexpr std::array<std::string_view, 9> rust_samples{{
+});
+constexpr auto rust_samples = std::to_array<std::string_view>({
     "fn main() { println!(\"hi\"); }",
     "/* outer /* inner",
     "*/ still */",
@@ -327,8 +327,8 @@ constexpr std::array<std::string_view, 9> rust_samples{{
     "#[derive(Debug)]",
     "let b = b\"bytes\\\" open",
     "let n = 1_000u32 + 0b1010 + 1.5e-3f64;",
-}};
-constexpr std::array<std::string_view, 7> go_samples{{
+});
+constexpr auto go_samples = std::to_array<std::string_view>({
     "func (r *T) Name() int { return 0 }",
     "s := `raw",
     "end`",
@@ -336,8 +336,8 @@ constexpr std::array<std::string_view, 7> go_samples{{
     "*/ x := 'a' + 0x1p-2",
     "var m map[string]chan int",
     "\"open",
-}};
-constexpr std::array<std::string_view, 9> php_samples{{
+});
+constexpr auto php_samples = std::to_array<std::string_view>({
     "<?php echo $x; ?>",
     "<p>Hello <?= $name ?></p>",
     "<?php $s = <<<EOT",
@@ -347,16 +347,16 @@ constexpr std::array<std::string_view, 9> php_samples{{
     "still */ echo 1;",
     "#[Attr(\"x\")] function f() {}",
     "$a->b::class; // c ?> after",
-}};
-constexpr std::array<std::string_view, 6> sql_samples{{
+});
+constexpr auto sql_samples = std::to_array<std::string_view>({
     "SELECT a, COUNT(*) FROM t WHERE b = 'x' -- c",
     "/* block",
     "*/ INSERT INTO \"t\" VALUES (1, NULL);",
     "'open",
     "close'",
     "CREATE TABLE `t` (id INT);",
-}};
-constexpr std::array<std::string_view, 7> lua_samples{{
+});
+constexpr auto lua_samples = std::to_array<std::string_view>({
     "local function f(a) return a end",
     "--[==[ long",
     "comment ]==]",
@@ -364,8 +364,8 @@ constexpr std::array<std::string_view, 7> lua_samples{{
     "string]]",
     "x = 0xA.8p-1 .. \"s\"",
     "function a.b:c() end",
-}};
-constexpr std::array<std::string_view, 8> dockerfile_samples{{
+});
+constexpr auto dockerfile_samples = std::to_array<std::string_view>({
     "FROM ubuntu:24.04 AS build",
     "RUN apt-get update && \\",
     "    apt-get install -y x",
@@ -374,7 +374,60 @@ constexpr std::array<std::string_view, 8> dockerfile_samples{{
     "EOF",
     "# syntax=docker/dockerfile:1",
     "ENV A=\"b\" C=${D}",
-}};
+});
+
+// Language の値か（LanguageTable.cpp の is_language と同じ形）。値を足すとこの switch
+// が落ち、足した後は 下の数え上げが 1 つ増えて last_language の static_assert が落ちる。
+[[nodiscard]] consteval bool is_language(Language language) noexcept
+{
+    switch (language)
+    {
+    case Language::plain:
+    case Language::markdown:
+    case Language::html:
+    case Language::c:
+    case Language::cpp:
+    case Language::python:
+    case Language::json:
+    case Language::javascript:
+    case Language::typescript:
+    case Language::yaml:
+    case Language::toml:
+    case Language::xml:
+    case Language::css:
+    case Language::powershell:
+    case Language::shell:
+    case Language::cmake:
+    case Language::gdscript:
+    case Language::dosini:
+    case Language::gdresource:
+    case Language::cs:
+    case Language::rust:
+    case Language::go:
+    case Language::php:
+    case Language::sql:
+    case Language::lua:
+    case Language::dockerfile:
+        return true;
+    }
+    return false;
+}
+
+// 値は 0 から連続して並ぶので、最初に値でなくなる所までが値の数。
+[[nodiscard]] consteval std::size_t language_count() noexcept
+{
+    std::size_t count = 0;
+    while (is_language(static_cast<Language>(count)))
+    {
+        ++count;
+    }
+    return count;
+}
+
+// 言語のループの上限。Language の最後の値でなくなったらコンパイルが落ちる。
+constexpr Language last_language = Language::dockerfile;
+static_assert(std::to_underlying(last_language) + 1U == language_count(),
+              "last_language is the last value of Language");
 
 // 見本の行の供給元。新しい言語の値で switch が落ちる（CPP-002）。plain は見本を持たない。
 [[nodiscard]] Lines samples_of(Language language)
@@ -440,6 +493,8 @@ constexpr std::array<std::string_view, 8> dockerfile_samples{{
 }
 
 // 不正な UTF-8・NUL・CR・Tab を含むバイト。半分は打てる ASCII にして字句器の状態へ届かせる。
+// LF は出さない: 字句器の行は改行を含まない（行の契約）。CR は LF 文書の literal CR
+// として来るので残す。
 [[nodiscard]] char random_byte(Random &random)
 {
     constexpr std::string_view printable = " \t\r\"'`#/*\\<>$(){}[]@;:=-+.,0123456789abcxyzEOF";
@@ -447,7 +502,9 @@ constexpr std::array<std::string_view, 8> dockerfile_samples{{
     {
         return printable[below(random, printable.size())];
     }
-    return static_cast<char>(below(random, 256U));
+    // 0x00〜0xfe の 255 通りを引き、0x0a 以上を 1 つ上へずらして LF だけを飛ばす。
+    const std::size_t byte = below(random, 255U);
+    return static_cast<char>(byte < 0x0aU ? byte : byte + 1U);
 }
 
 [[nodiscard]] std::string random_line(Random &random, std::size_t length)
@@ -703,9 +760,9 @@ void verify_lexer_property_scope()
     verify_minimized_lines();
     verify_language_without_lexer();
     Random random{property_seed};
-    // Language の最後の値は dockerfile。値を足すと samples_of の switch が落ちるので、ここも直す。
-    for (std::underlying_type_t<Language> value = 0U;
-         value <= std::to_underlying(Language::dockerfile); ++value)
+    // 上限の last_language は static_assert が Language の最後の値に縛る。
+    for (std::underlying_type_t<Language> value = 0U; value <= std::to_underlying(last_language);
+         ++value)
     {
         const auto language = static_cast<Language>(value);
         if (core::has_lexer(language))
