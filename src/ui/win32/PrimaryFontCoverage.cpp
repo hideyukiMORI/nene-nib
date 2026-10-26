@@ -94,8 +94,9 @@ constexpr std::size_t name_capacity = 128;
 PrimaryFontCoverage::PrimaryFontCoverage(IDWriteTextFormat &format,
                                          Microsoft::WRL::ComPtr<IDWriteFont> font,
                                          Microsoft::WRL::ComPtr<IDWriteFontFallback> fallback,
-                                         Microsoft::WRL::ComPtr<IDWriteTextAnalyzer> analyzer)
-    : font_(std::move(font)), fallback_(std::move(fallback)), analyzer_(std::move(analyzer)),
+                                         Microsoft::WRL::ComPtr<IDWriteTextAnalyzer> analyzer,
+                                         application::TimingPort *timing)
+    : timing_(timing), font_(std::move(font)), fallback_(std::move(fallback)), analyzer_(std::move(analyzer)),
       source_(
           Microsoft::WRL::Make<FallbackRunSource>(locale_of(format), format.GetReadingDirection())),
       sink_(Microsoft::WRL::Make<ScriptRunSink>()), family_(family_name_of(format)),
@@ -113,7 +114,8 @@ PrimaryFontCoverage::PrimaryFontCoverage(IDWriteTextFormat &format,
 }
 
 std::optional<PrimaryFontCoverage> PrimaryFontCoverage::of(IDWriteFactory &factory,
-                                                           IDWriteTextFormat &format)
+                                                           IDWriteTextFormat &format,
+                                                           application::TimingPort *timing)
 {
     auto font = primary_font(format);
     auto fallback = fallback_of(format);
@@ -122,7 +124,16 @@ std::optional<PrimaryFontCoverage> PrimaryFontCoverage::of(IDWriteFactory &facto
     {
         return std::nullopt;
     }
-    return PrimaryFontCoverage(format, std::move(font), std::move(fallback), std::move(analyzer));
+    return PrimaryFontCoverage(format, std::move(font), std::move(fallback), std::move(analyzer),
+                               timing);
+}
+
+void PrimaryFontCoverage::mark(core::Milestone milestone) const noexcept
+{
+    if (timing_ != nullptr)
+    {
+        timing_->mark(milestone);
+    }
 }
 
 bool PrimaryFontCoverage::query(char32_t value) const
@@ -181,11 +192,22 @@ bool PrimaryFontCoverage::has_missing(std::wstring_view wide, DWRITE_TEXT_RANGE 
 
 HRESULT PrimaryFontCoverage::assign(IDWriteTextLayout &layout, std::wstring_view wide)
 {
+    mark(core::Milestone::fallback_begun);
+    const auto assigned = assign_analyzed(layout, wide);
+    mark(core::Milestone::fallback_assigned);
+    return assigned;
+}
+
+HRESULT PrimaryFontCoverage::assign_analyzed(IDWriteTextLayout &layout, std::wstring_view wide)
+{
     applied_ = 0;
     pending_font_.Reset();
     source_->reset(wide);
     // 文字種の解析に失敗すれば当てない（DirectWrite の代替のまま・決定 5）。
-    if (FAILED(analyzer_->AnalyzeScript(source_.Get(), 0, source_->length(), sink_.Get())))
+    const auto analyzed =
+        analyzer_->AnalyzeScript(source_.Get(), 0, source_->length(), sink_.Get());
+    mark(core::Milestone::script_analyzed);
+    if (FAILED(analyzed))
     {
         static_cast<void>(sink_->take());
         return S_OK;

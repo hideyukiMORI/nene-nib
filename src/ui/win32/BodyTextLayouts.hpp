@@ -4,6 +4,7 @@
 #include "BodyTextStyle.hpp"
 #include "PrimaryFontCoverage.hpp"
 #include "TextLayoutPort.hpp"
+#include "TimingPort.hpp"
 
 #include <array>
 #include <dwrite_3.h>
@@ -45,6 +46,11 @@ class BodyTextLayouts final : public application::TextLayoutPort
                                                   float bottom = std::numeric_limits<float>::max());
     void begin_frame();
     void end_frame();
+    // 診断の節目の口（experiment/875-diag）。書式を作る前に呼ぶ（EditorWindow の構築）。
+    void observe(application::TimingPort &timing) noexcept
+    {
+        timing_ = &timing;
+    }
 
   private:
     using TextFormat = Microsoft::WRL::ComPtr<IDWriteTextFormat>;
@@ -75,6 +81,7 @@ class BodyTextLayouts final : public application::TextLayoutPort
     [[nodiscard]] TextLayout retain(BodyTextLayout entry);
     [[nodiscard]] BodyTextLayout *find(IDWriteTextLayout *layout);
 
+    application::TimingPort *timing_ = nullptr;
     Microsoft::WRL::ComPtr<IDWriteFactory7> factory_;
     TextFormat format_;
     // 格子の等幅の書式。格子の文書を最初に描くときだけ作り、書式が変われば prepare が消す。

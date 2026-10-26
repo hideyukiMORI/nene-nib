@@ -22,6 +22,10 @@ namespace nenenib::core
 // frame_built は窓が controller の frame を作り終えた直後（描く前）、frame_drawn は
 // renderer の EndDraw が返った直後（latency の待ちと Present の前）。どちらも frame ごとに
 // 打ち、起動の正典順の外。
+// fallback_* と script_analyzed は字体選択の中を割る診断（experiment/875-diag・製品に入れない）。
+// fallback_begun / fallback_assigned は PrimaryFontCoverage::assign の入口と出口、
+// script_analyzed は AnalyzeScript が返った直後、fallback_piece_hit / fallback_piece_missed は
+// FontFallbackCache::map が保持に当たった 1 回・OS の MapCharacters を呼んだ 1 回。
 enum class Milestone : std::uint8_t
 {
     document_opened,
@@ -42,7 +46,12 @@ enum class Milestone : std::uint8_t
     probe_started,
     probe_finished,
     frame_built,
-    frame_drawn
+    frame_drawn,
+    fallback_begun,
+    script_analyzed,
+    fallback_piece_hit,
+    fallback_piece_missed,
+    fallback_assigned
 };
 
 // 計測 JSON に出る名前。閉じた選択肢なので既定分岐は書かない（CPP-002）。
@@ -88,6 +97,16 @@ enum class Milestone : std::uint8_t
         return "frame_built";
     case Milestone::frame_drawn:
         return "frame_drawn";
+    case Milestone::fallback_begun:
+        return "fallback_begun";
+    case Milestone::script_analyzed:
+        return "script_analyzed";
+    case Milestone::fallback_piece_hit:
+        return "fallback_piece_hit";
+    case Milestone::fallback_piece_missed:
+        return "fallback_piece_missed";
+    case Milestone::fallback_assigned:
+        return "fallback_assigned";
     }
     std::unreachable();
 }

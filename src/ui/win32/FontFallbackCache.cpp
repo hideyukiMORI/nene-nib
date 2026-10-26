@@ -8,8 +8,9 @@ namespace
 constexpr std::size_t maximum_entries = 512;
 }
 
-FontFallbackCache::FontFallbackCache(Microsoft::WRL::ComPtr<IDWriteFontFallback> system)
-    : system_(std::move(system))
+FontFallbackCache::FontFallbackCache(Microsoft::WRL::ComPtr<IDWriteFontFallback> system,
+                                     application::TimingPort *timing)
+    : timing_(timing), system_(std::move(system))
 {
     entries_.reserve(maximum_entries);
 }
@@ -54,10 +55,18 @@ HRESULT FontFallbackCache::map(const FontFallbackRequest &request, UINT32 *mappe
         const auto *entry = find(key.value());
         if (entry != nullptr)
         {
+            if (timing_ != nullptr)
+            {
+                timing_->mark(core::Milestone::fallback_piece_hit);
+            }
             *mapped_length = entry->length;
             *scale = entry->scale;
             return entry->font.CopyTo(mapped_font);
         }
+    }
+    if (timing_ != nullptr)
+    {
+        timing_->mark(core::Milestone::fallback_piece_missed);
     }
     const HRESULT result = system_->MapCharacters(
         request.source, request.position, request.length, request.collection, request.family,

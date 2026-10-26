@@ -219,7 +219,7 @@ HRESULT BodyTextLayouts::make_format(const application::TextLayoutRequest &reque
                                                             : DWRITE_WORD_WRAPPING_NO_WRAP);
     if (SUCCEEDED(wrapped))
     {
-        coverage_ = PrimaryFontCoverage::of(*factory_.Get(), *format_.Get());
+        coverage_ = PrimaryFontCoverage::of(*factory_.Get(), *format_.Get(), timing_);
     }
     return wrapped;
 }
@@ -245,7 +245,7 @@ HRESULT BodyTextLayouts::make_grid_format(const application::TextLayoutRequest &
     }
     if (SUCCEEDED(result))
     {
-        grid_coverage_ = PrimaryFontCoverage::of(*factory_.Get(), *made.Get());
+        grid_coverage_ = PrimaryFontCoverage::of(*factory_.Get(), *made.Get(), timing_);
         grid_format_ = std::move(made);
     }
     return result;
@@ -285,7 +285,7 @@ void BodyTextLayouts::attach_fallback(IDWriteTextFormat *format)
     }
     // ADR 0077: 保持を付けられなければOSの同じ字体選択で描ける。
     static_cast<void>(
-        version->SetFontFallback(Microsoft::WRL::Make<FontFallbackCache>(system).Get()));
+        version->SetFontFallback(Microsoft::WRL::Make<FontFallbackCache>(system, timing_).Get()));
 }
 
 HRESULT BodyTextLayouts::set_spacing(IDWriteTextFormat *format,

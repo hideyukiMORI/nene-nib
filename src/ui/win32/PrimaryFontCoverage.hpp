@@ -1,6 +1,7 @@
 #pragma once
 #include "FallbackRunSource.hpp"
 #include "ScriptRunSink.hpp"
+#include "TimingPort.hpp"
 
 #include <bitset>
 #include <cstddef>
@@ -28,8 +29,10 @@ class PrimaryFontCoverage final
 {
   public:
     // 書式の family が collection に無いか、書式に字体選択が付いていなければ nullopt（当てない）。
-    [[nodiscard]] static std::optional<PrimaryFontCoverage> of(IDWriteFactory &factory,
-                                                               IDWriteTextFormat &format);
+    // timing は診断の節目の口（experiment/875-diag）。null なら打たない。
+    [[nodiscard]] static std::optional<PrimaryFontCoverage>
+    of(IDWriteFactory &factory, IDWriteTextFormat &format,
+       application::TimingPort *timing = nullptr);
     [[nodiscard]] bool has(char32_t value);
     // layout は format から作ったもので、最初の問い合わせの前に呼ぶ。wide は layout の本文。
     [[nodiscard]] HRESULT assign(IDWriteTextLayout &layout, std::wstring_view wide);
@@ -37,7 +40,10 @@ class PrimaryFontCoverage final
   private:
     PrimaryFontCoverage(IDWriteTextFormat &format, Microsoft::WRL::ComPtr<IDWriteFont> font,
                         Microsoft::WRL::ComPtr<IDWriteFontFallback> fallback,
-                        Microsoft::WRL::ComPtr<IDWriteTextAnalyzer> analyzer);
+                        Microsoft::WRL::ComPtr<IDWriteTextAnalyzer> analyzer,
+                        application::TimingPort *timing);
+    void mark(core::Milestone milestone) const noexcept;
+    [[nodiscard]] HRESULT assign_analyzed(IDWriteTextLayout &layout, std::wstring_view wide);
     [[nodiscard]] bool query(char32_t value) const;
     [[nodiscard]] bool missing_at(char32_t value, bool joins, bool previous);
     [[nodiscard]] bool has_missing(std::wstring_view wide, DWRITE_TEXT_RANGE segment);
@@ -52,6 +58,7 @@ class PrimaryFontCoverage final
     [[nodiscard]] const std::wstring &family_of(IDWriteFont &font);
 
     static constexpr std::size_t basic_plane = 0x10000;
+    application::TimingPort *timing_;
     Microsoft::WRL::ComPtr<IDWriteFont> font_;
     Microsoft::WRL::ComPtr<IDWriteFontFace3> face_;
     Microsoft::WRL::ComPtr<IDWriteFontFallback> fallback_;

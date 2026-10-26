@@ -1,5 +1,6 @@
 #pragma once
 #include "FontFallbackEntry.hpp"
+#include "TimingPort.hpp"
 #include <cstddef>
 #include <vector>
 #include <wrl/implements.h>
@@ -11,7 +12,9 @@ class FontFallbackCache final
           Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>, IDWriteFontFallback>
 {
   public:
-    explicit FontFallbackCache(Microsoft::WRL::ComPtr<IDWriteFontFallback> system);
+    // timing は診断の節目の口（experiment/875-diag）。null なら打たない。
+    explicit FontFallbackCache(Microsoft::WRL::ComPtr<IDWriteFontFallback> system,
+                               application::TimingPort *timing = nullptr);
     HRESULT STDMETHODCALLTYPE MapCharacters(IDWriteTextAnalysisSource *source, UINT32 position,
                                             UINT32 length, IDWriteFontCollection *collection,
                                             const WCHAR *family, DWRITE_FONT_WEIGHT weight,
@@ -24,6 +27,7 @@ class FontFallbackCache final
                               IDWriteFont **mapped_font, FLOAT *scale);
     [[nodiscard]] const FontFallbackEntry *find(const FontFallbackKey &key) const;
     void retain(FontFallbackEntry entry);
+    application::TimingPort *timing_;
     Microsoft::WRL::ComPtr<IDWriteFontFallback> system_;
     std::vector<FontFallbackEntry> entries_;
     std::size_t next_ = 0;

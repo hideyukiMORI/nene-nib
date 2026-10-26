@@ -489,6 +489,7 @@ EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &co
     : instance_(instance), controller_(controller), timing_(timing),
       text_layouts_(sources.text_layouts), warmup_(sources.warmup)
 {
+    text_layouts_.observe(timing_);
 }
 
 EditorWindow::~EditorWindow()
