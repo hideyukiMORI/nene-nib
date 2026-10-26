@@ -40,8 +40,7 @@ class PrimaryFontCoverage final
   private:
     PrimaryFontCoverage(IDWriteTextFormat &format, Microsoft::WRL::ComPtr<IDWriteFont> font,
                         Microsoft::WRL::ComPtr<IDWriteFontFallback> fallback,
-                        Microsoft::WRL::ComPtr<IDWriteTextAnalyzer> analyzer,
-                        application::TimingPort *timing);
+                        Microsoft::WRL::ComPtr<IDWriteTextAnalyzer> analyzer);
     void mark(core::Milestone milestone) const noexcept;
     [[nodiscard]] HRESULT assign_analyzed(IDWriteTextLayout &layout, std::wstring_view wide);
     [[nodiscard]] bool query(char32_t value) const;
@@ -58,7 +57,7 @@ class PrimaryFontCoverage final
     [[nodiscard]] const std::wstring &family_of(IDWriteFont &font);
 
     static constexpr std::size_t basic_plane = 0x10000;
-    application::TimingPort *timing_;
+    application::TimingPort *timing_ = nullptr;
     Microsoft::WRL::ComPtr<IDWriteFont> font_;
     Microsoft::WRL::ComPtr<IDWriteFontFace3> face_;
     Microsoft::WRL::ComPtr<IDWriteFontFallback> fallback_;

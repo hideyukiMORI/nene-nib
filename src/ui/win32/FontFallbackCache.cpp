@@ -33,6 +33,14 @@ void FontFallbackCache::retain(FontFallbackEntry entry)
     next_ = (next_ + 1) % maximum_entries;
 }
 
+void FontFallbackCache::mark(core::Milestone milestone) const noexcept
+{
+    if (timing_ != nullptr)
+    {
+        timing_->mark(milestone);
+    }
+}
+
 // SDK-ABI: IDWriteFontFallback::MapCharacters
 // NOLINTNEXTLINE(readability-function-size)
 HRESULT STDMETHODCALLTYPE FontFallbackCache::MapCharacters(
@@ -55,19 +63,13 @@ HRESULT FontFallbackCache::map(const FontFallbackRequest &request, UINT32 *mappe
         const auto *entry = find(key.value());
         if (entry != nullptr)
         {
-            if (timing_ != nullptr)
-            {
-                timing_->mark(core::Milestone::fallback_piece_hit);
-            }
+            mark(core::Milestone::fallback_piece_hit);
             *mapped_length = entry->length;
             *scale = entry->scale;
             return entry->font.CopyTo(mapped_font);
         }
     }
-    if (timing_ != nullptr)
-    {
-        timing_->mark(core::Milestone::fallback_piece_missed);
-    }
+    mark(core::Milestone::fallback_piece_missed);
     const HRESULT result = system_->MapCharacters(
         request.source, request.position, request.length, request.collection, request.family,
         request.weight, request.style, request.stretch, mapped_length, mapped_font, scale);

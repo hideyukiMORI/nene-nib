@@ -27,6 +27,7 @@ class FontFallbackCache final
                               IDWriteFont **mapped_font, FLOAT *scale);
     [[nodiscard]] const FontFallbackEntry *find(const FontFallbackKey &key) const;
     void retain(FontFallbackEntry entry);
+    void mark(core::Milestone milestone) const noexcept;
     application::TimingPort *timing_;
     Microsoft::WRL::ComPtr<IDWriteFontFallback> system_;
     std::vector<FontFallbackEntry> entries_;

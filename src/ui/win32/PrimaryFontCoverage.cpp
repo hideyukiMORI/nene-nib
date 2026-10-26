@@ -94,9 +94,8 @@ constexpr std::size_t name_capacity = 128;
 PrimaryFontCoverage::PrimaryFontCoverage(IDWriteTextFormat &format,
                                          Microsoft::WRL::ComPtr<IDWriteFont> font,
                                          Microsoft::WRL::ComPtr<IDWriteFontFallback> fallback,
-                                         Microsoft::WRL::ComPtr<IDWriteTextAnalyzer> analyzer,
-                                         application::TimingPort *timing)
-    : timing_(timing), font_(std::move(font)), fallback_(std::move(fallback)), analyzer_(std::move(analyzer)),
+                                         Microsoft::WRL::ComPtr<IDWriteTextAnalyzer> analyzer)
+    : font_(std::move(font)), fallback_(std::move(fallback)), analyzer_(std::move(analyzer)),
       source_(
           Microsoft::WRL::Make<FallbackRunSource>(locale_of(format), format.GetReadingDirection())),
       sink_(Microsoft::WRL::Make<ScriptRunSink>()), family_(family_name_of(format)),
@@ -124,8 +123,9 @@ std::optional<PrimaryFontCoverage> PrimaryFontCoverage::of(IDWriteFactory &facto
     {
         return std::nullopt;
     }
-    return PrimaryFontCoverage(format, std::move(font), std::move(fallback), std::move(analyzer),
-                               timing);
+    PrimaryFontCoverage made(format, std::move(font), std::move(fallback), std::move(analyzer));
+    made.timing_ = timing;
+    return made;
 }
 
 void PrimaryFontCoverage::mark(core::Milestone milestone) const noexcept
