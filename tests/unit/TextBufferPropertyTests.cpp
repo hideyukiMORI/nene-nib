@@ -97,6 +97,23 @@ constexpr std::array<std::string_view, 15> fragments{{
     "",
 }};
 
+[[nodiscard]] constexpr std::size_t longest_fragment_bytes()
+{
+    std::size_t longest = 0;
+    for (const auto fragment : fragments)
+    {
+        longest = std::max(longest, fragment.size());
+    }
+    return longest;
+}
+
+// 塊をまたぐ case の挿入 1 回の上限。仮想桁の索引の塊（約 64 KiB）より小さく保ち、
+// 1 回の編集が触れる塊を隣り合う 2 つまでにする（verify_columns の 3 塊までの根拠）。
+// 上限は断片の数で決める（最長の断片 × 数 ≤ 上限）。
+constexpr std::size_t crossing_insert_bytes = 32U * 1024U;
+constexpr std::size_t crossing_fragments = crossing_insert_bytes / longest_fragment_bytes();
+static_assert(crossing_fragments * longest_fragment_bytes() <= crossing_insert_bytes);
+
 [[nodiscard]] std::size_t below(Random &random, std::size_t bound)
 {
     return bound == 0 ? 0 : static_cast<std::size_t>(random() % bound);
@@ -202,6 +219,16 @@ void verify_lines(const TextBuffer &text, std::string_view model,
                   const std::vector<ModelLine> &lines)
 {
     expect(text.line_count() == lines.size(), "line_count matches the model's lines");
+    // 最長の行は LF を含まず CR は数える（TextBuffer.hpp の注釈）。LF で終わる行は 1 を引く。
+    std::size_t longest = 0;
+    for (std::size_t index = 0; index < lines.size(); ++index)
+    {
+        const auto &expected = lines.at(index);
+        const std::size_t newline = index + 1 < lines.size() ? 1 : 0;
+        longest = std::max(longest, expected.at(line_next) - expected.at(line_begin) - newline);
+    }
+    expect(text.longest_line_bytes() == longest,
+           "longest_line_bytes matches the model's longest line without its LF");
     bool ends = true;
     bool columns = true;
     const auto stride = stride_of(lines.size(), 128);
@@ -532,6 +559,7 @@ void verify_small_cases(Random &random)
 }
 
 // 64 KiB を越える本文（plain の ASCII の行と混ぜた尻尾）に、合わせて 64 KiB を越える挿入を施す。
+// 挿入 1 回は crossing_insert_bytes まで（局所の編集）で、合計が 64 KiB を越えるまで段を足す。
 // 仮想桁の索引は複数の塊になり、add の chunk の境目も 1 度跨ぐ（ADR 0044 / 0140）。
 void verify_chunk_crossing_case(Random &random)
 {
@@ -542,8 +570,8 @@ void verify_chunk_crossing_case(Random &random)
         initial += '\n';
     }
     initial += generated(random, 1024);
-    const auto inserted =
-        run_case(random, initial, crossing_steps, EditShape{48, 24000, (64U * 1024U) + 1U});
+    const auto inserted = run_case(random, initial, crossing_steps,
+                                   EditShape{48, crossing_fragments, (64U * 1024U) + 1U});
     expect(inserted > 64U * 1024U, "the crossing case inserts more than one add chunk");
 }
 } // namespace
