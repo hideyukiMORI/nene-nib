@@ -114,6 +114,8 @@ void verify_vim_dot_scope();
 void verify_vim_register_snapshot_contracts();
 void verify_vim_macro_contracts();
 void verify_vim_macro_scope();
+// VimRandomKeyTests.cpp（Issue #870・ランダムな鍵列の堅牢性）
+void verify_vim_random_scope();
 
 // VimWindowTests.cpp（ADR 0148 の決定 7）
 void verify_vim_window_contracts();
