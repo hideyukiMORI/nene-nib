@@ -14,7 +14,9 @@
 #include "Language.hpp"
 #include "LexKind.hpp"
 #include "LexLine.hpp"
+#include "LexScan.hpp"
 #include "LexState.hpp"
+#include "LexWordGate.hpp"
 #include "Lexer.hpp"
 #include "Scopes.hpp"
 #include "SyntaxRole.hpp"
@@ -2374,10 +2376,46 @@ void verify_batch5_worst_lines()
     expect(genexes.spans.size() == 2U && genexes.out == plain,
            "a long cmake line of unclosed references reads in one pass");
 }
+
+// 表の門（#859）: 表の語は全部通り、先頭バイトか長さで当たる見込みの無い語は表を引かずに落ちる。
+// 大小を問わない表の門は先頭バイトを小文字に畳んで見る。
+constexpr std::array<std::string_view, 4> gate_words{"do", "for", "return", "while"};
+constexpr std::array<std::string_view, 3> gate_folded_words{"from", "select", "where"};
+constexpr core::LexWordGate exact_gate = core::lex_gate_of<gate_words, false>;
+constexpr core::LexWordGate folded_gate = core::lex_gate_of<gate_folded_words, true>;
+static_assert(exact_gate.shortest == 2U && exact_gate.longest == 6U);
+static_assert(core::lex_gate_holds(gate_words, exact_gate));
+static_assert(core::lex_gate_holds(gate_folded_words, folded_gate));
+
+void verify_word_gates()
+{
+    expect(std::ranges::all_of(gate_words, core::lex_in<gate_words>),
+           "every word of a table passes its gate and is found");
+    expect(!core::lex_gate_admits(exact_gate, "x") && !core::lex_gate_admits(exact_gate, "returns"),
+           "a word shorter or longer than every table word does not pass the gate");
+    expect(!core::lex_gate_admits(exact_gate, "value") && !core::lex_gate_admits(exact_gate, ""),
+           "a word whose first byte starts no table word does not pass the gate");
+    expect(core::lex_gate_admits(exact_gate, "done") && !core::lex_in<gate_words>("done"),
+           "a word through the gate that is not in the table is still not found");
+    expect(!core::lex_gate_admits(exact_gate, "Do") && !core::lex_in<gate_words>("Do"),
+           "an exact gate keeps the case of the first byte");
+    expect(core::lex_folded_in<gate_folded_words>("SELECT") &&
+               core::lex_folded_in<gate_folded_words>("Where") &&
+               core::lex_gate_admits(folded_gate, "Fré"),
+           "a folded gate folds the first byte before looking");
+    expect(!core::lex_gate_admits(folded_gate, "Update") &&
+               !core::lex_folded_in<gate_folded_words>("FROMS"),
+           "a folded gate still drops by the first byte and the length");
+    expect(!core::lex_gate_admits(exact_gate, "é") && !core::lex_in<gate_words>("é") &&
+               !core::lex_gate_admits(folded_gate, "日本") &&
+               !core::lex_folded_in<gate_folded_words>("日本"),
+           "a word whose first byte is 0x80 or above does not pass the gate");
+}
 } // namespace
 
 void verify_lexer_scope()
 {
+    verify_word_gates();
     verify_table(comment_and_string_cases);
     verify_table(number_and_keyword_cases);
     verify_table(type_and_operator_cases);

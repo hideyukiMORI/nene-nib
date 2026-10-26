@@ -391,15 +391,15 @@ std::size_t lex_slash(LexCursor &cursor, std::size_t at)
 // 予約語・型・定数の表の順に引き、どれでもなく直後が `(` なら関数（C / C++ と同じ）。
 [[nodiscard]] std::optional<SyntaxRole> word_role(std::string_view word, bool called) noexcept
 {
-    if (std::ranges::binary_search(csharp_keywords, word))
+    if (lex_in<csharp_keywords>(word))
     {
         return SyntaxRole::keyword;
     }
-    if (std::ranges::binary_search(csharp_types, word))
+    if (lex_in<csharp_types>(word))
     {
         return SyntaxRole::type;
     }
-    if (std::ranges::binary_search(csharp_constants, word))
+    if (lex_in<csharp_constants>(word))
     {
         return SyntaxRole::constant;
     }
@@ -482,7 +482,7 @@ void lex_directive(LexCursor &cursor, std::size_t hash)
     const std::size_t name = lex_first_visible(line.substr(hash + 1U)) + hash + 1U;
     const std::string_view word = line.substr(name, lex_word_end(line, name) - name);
     const std::size_t comment = lex_find(line, hash, "//");
-    if (std::ranges::binary_search(whole_directives, word) || comment == lex_unclosed)
+    if (lex_in<whole_directives>(word) || comment == lex_unclosed)
     {
         mark_directive(cursor, hash, line.size());
         return;

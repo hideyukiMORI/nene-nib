@@ -3,6 +3,7 @@
 #include "AsciiCase.hpp"
 #include "LexKind.hpp"
 #include "LexState.hpp"
+#include "LexWordGate.hpp"
 
 #include <algorithm>
 #include <array>
@@ -101,12 +102,66 @@ inline constexpr std::size_t lex_unclosed = std::string_view::npos;
     return std::ranges::lexicographical_compare(left, right, {}, ascii_folded, ascii_folded);
 }
 
-// 小文字の表に word が大小を問わずにあるか。
-template <std::size_t count>
-[[nodiscard]] constexpr bool lex_folded_in(const std::array<std::string_view, count> &table,
-                                           std::string_view word) noexcept
+// ---- 表の門（#859） ----
+
+// word の先頭バイト（gate.folded なら ASCII の小文字に畳む）と長さが門を通るか。
+[[nodiscard]] constexpr bool lex_gate_admits(const LexWordGate &gate,
+                                             std::string_view word) noexcept
 {
-    return std::ranges::binary_search(table, word, lex_folded_less);
+    if (word.size() < gate.shortest || word.size() > gate.longest)
+    {
+        return false;
+    }
+    const unsigned char first =
+        gate.folded ? ascii_folded(word.front()) : static_cast<unsigned char>(word.front());
+    return ((gate.first.at(first / 64U) >> (first % 64U)) & 1U) != 0U;
+}
+
+// 表の全語から門を作る。表に空の語があればコンパイルが落ちる（front を読む）。
+template <std::size_t count>
+[[nodiscard]] consteval LexWordGate lex_gate_from(const std::array<std::string_view, count> &table,
+                                                  bool folded)
+{
+    LexWordGate gate{.first = {}, .shortest = table.front().size(), .longest = 0, .folded = folded};
+    for (const std::string_view word : table)
+    {
+        const unsigned char first =
+            folded ? ascii_folded(word.front()) : static_cast<unsigned char>(word.front());
+        gate.first.at(first / 64U) |= std::uint64_t{1} << (first % 64U);
+        gate.shortest = std::min(gate.shortest, word.size());
+        gate.longest = std::max(gate.longest, word.size());
+    }
+    return gate;
+}
+
+// 表の全語が門を通るか（偽陰性が無いことの確かめ）。
+template <std::size_t count>
+[[nodiscard]] consteval bool lex_gate_holds(const std::array<std::string_view, count> &table,
+                                            const LexWordGate &gate)
+{
+    return std::ranges::all_of(table, [&gate](std::string_view word)
+                               { return lex_gate_admits(gate, word); });
+}
+
+// 表ごとの門（表の参照ごとに 1 つ・コンパイル時に作る）。
+template <const auto &table, bool folded>
+inline constexpr LexWordGate lex_gate_of = lex_gate_from(table, folded);
+
+// ASCII の順の表に word があるか。門で落ちる語は表を引かない。
+template <const auto &table> [[nodiscard]] constexpr bool lex_in(std::string_view word) noexcept
+{
+    static_assert(lex_gate_holds(table, lex_gate_of<table, false>));
+    return lex_gate_admits(lex_gate_of<table, false>, word) &&
+           std::ranges::binary_search(table, word);
+}
+
+// 小文字の表に word が大小を問わずにあるか。門は先頭バイトを小文字に畳んで見る。
+template <const auto &table>
+[[nodiscard]] constexpr bool lex_folded_in(std::string_view word) noexcept
+{
+    static_assert(lex_gate_holds(table, lex_gate_of<table, true>));
+    return lex_gate_admits(lex_gate_of<table, true>, word) &&
+           std::ranges::binary_search(table, word, lex_folded_less);
 }
 
 // word が name（小文字）と大小を問わずに同じか（#862・Dockerfile の命令の名前と共用）。

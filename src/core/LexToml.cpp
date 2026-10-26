@@ -261,11 +261,11 @@ std::size_t lex_word(LexCursor &cursor, std::size_t at)
     const std::string_view line = cursor.line();
     const std::size_t end = bare_end(line, at);
     const std::string_view word = line.substr(at, end - at);
-    if (std::ranges::binary_search(toml_constants, word))
+    if (lex_in<toml_constants>(word))
     {
         cursor.mark(at, end, SyntaxRole::constant);
     }
-    else if (std::ranges::binary_search(toml_specials, word))
+    else if (lex_in<toml_specials>(word))
     {
         cursor.mark(at, end, SyntaxRole::number);
     }
@@ -284,7 +284,7 @@ std::size_t lex_sign(LexCursor &cursor, std::size_t at)
     const char next = lex_next_of(line, at);
     // `+inf` `-nan` は名前の全体で引く（`+infx` は数でない・#842 のレビュー 6）。
     const std::size_t word = bare_end(line, at + 1U);
-    const bool special = std::ranges::binary_search(toml_specials, line.substr(at, word - at));
+    const bool special = lex_in<toml_specials>(line.substr(at, word - at));
     return lex_is_digit(next) || special ? mark_number(cursor, at) : at + 1U;
 }
 

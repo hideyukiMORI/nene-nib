@@ -235,7 +235,7 @@ std::size_t lex_dollar(LexCursor &cursor, std::size_t at, bool /*signature*/)
         return true;
     }
     const std::string_view word = previous_word(line, end);
-    return word != "self" && word != "super" && std::ranges::binary_search(gdscript_keywords, word);
+    return word != "self" && word != "super" && lex_in<gdscript_keywords>(word);
 }
 
 // at の `%` が一意な名前のノード `%Name` `%"x"` の始まりか。
@@ -373,15 +373,15 @@ std::size_t lex_annotation(LexCursor &cursor, std::size_t at, bool /*signature*/
 [[nodiscard]] std::optional<SyntaxRole> word_role(std::string_view word, bool typed,
                                                   bool named) noexcept
 {
-    if (std::ranges::binary_search(gdscript_constants, word))
+    if (lex_in<gdscript_constants>(word))
     {
         return SyntaxRole::constant;
     }
-    if (std::ranges::binary_search(gdscript_keywords, word))
+    if (lex_in<gdscript_keywords>(word))
     {
         return SyntaxRole::keyword;
     }
-    if (typed || std::ranges::binary_search(gdscript_types, word))
+    if (typed || lex_in<gdscript_types>(word))
     {
         return SyntaxRole::type;
     }

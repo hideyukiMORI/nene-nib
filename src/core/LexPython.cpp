@@ -219,8 +219,7 @@ std::size_t lex_at_sign(LexCursor &cursor, std::size_t at)
     }
     std::ranges::transform(word, lowered.begin(),
                            [](char value) { return static_cast<char>(value | '\x20'); });
-    return std::ranges::binary_search(string_prefixes,
-                                      std::string_view{lowered.data(), word.size()});
+    return lex_in<string_prefixes>(std::string_view{lowered.data(), word.size()});
 }
 
 // at の識別子の前が空白をはさんだ `def` か `class` か（その名前は function）。
@@ -243,15 +242,15 @@ std::size_t lex_at_sign(LexCursor &cursor, std::size_t at)
 // 定数・予約語・型の表の順に引き、どれでもなく直後が `(` か def / class の名前なら関数。
 [[nodiscard]] std::optional<SyntaxRole> word_role(std::string_view word, bool named) noexcept
 {
-    if (std::ranges::binary_search(python_constants, word))
+    if (lex_in<python_constants>(word))
     {
         return SyntaxRole::constant;
     }
-    if (std::ranges::binary_search(python_keywords, word))
+    if (lex_in<python_keywords>(word))
     {
         return SyntaxRole::keyword;
     }
-    if (std::ranges::binary_search(python_types, word))
+    if (lex_in<python_types>(word))
     {
         return SyntaxRole::type;
     }

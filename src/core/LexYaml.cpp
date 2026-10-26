@@ -150,8 +150,7 @@ constexpr std::size_t decimal = 10U;
 {
     const bool signed_text = text.starts_with('-') || text.starts_with('+');
     const std::string_view magnitude = signed_text ? text.substr(1U) : text;
-    return is_prefixed(text) || std::ranges::binary_search(yaml_specials, magnitude) ||
-           is_decimal(magnitude);
+    return is_prefixed(text) || lex_in<yaml_specials>(magnitude) || is_decimal(magnitude);
 }
 
 [[nodiscard]] std::optional<SyntaxRole> scalar_role(std::string_view text, bool key) noexcept
@@ -160,7 +159,7 @@ constexpr std::size_t decimal = 10U;
     {
         return SyntaxRole::type;
     }
-    if (std::ranges::binary_search(yaml_constants, text))
+    if (lex_in<yaml_constants>(text))
     {
         return SyntaxRole::constant;
     }

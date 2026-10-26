@@ -167,7 +167,7 @@ void lex_heredoc_body(LexCursor &cursor, const LexState &in)
     const std::string_view line = cursor.line();
     std::size_t end = lex_word_end(line, at);
     std::string_view word = line.substr(at, end - at);
-    if (!lex_folded_in(dockerfile_instructions, word))
+    if (!lex_folded_in<dockerfile_instructions>(word))
     {
         return {end, ArgumentRules{false, false}};
     }
@@ -177,7 +177,7 @@ void lex_heredoc_body(LexCursor &cursor, const LexState &in)
         const std::size_t next = skip_spaces(line, end);
         const std::size_t after = lex_word_end(line, next);
         word = line.substr(next, after - next);
-        if (lex_folded_in(dockerfile_instructions, word))
+        if (lex_folded_in<dockerfile_instructions>(word))
         {
             cursor.mark(next, after, SyntaxRole::keyword);
             end = after;

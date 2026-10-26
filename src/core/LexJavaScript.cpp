@@ -301,16 +301,15 @@ std::size_t lex_operators(LexCursor &cursor, std::size_t at, RegexHorizon &horiz
 [[nodiscard]] std::optional<SyntaxRole> word_role(std::string_view word, bool typescript,
                                                   bool called) noexcept
 {
-    if (std::ranges::binary_search(javascript_constants, word))
+    if (lex_in<javascript_constants>(word))
     {
         return SyntaxRole::constant;
     }
-    if (std::ranges::binary_search(javascript_keywords, word) ||
-        (typescript && std::ranges::binary_search(typescript_keywords, word)))
+    if (lex_in<javascript_keywords>(word) || (typescript && lex_in<typescript_keywords>(word)))
     {
         return SyntaxRole::keyword;
     }
-    if (typescript && std::ranges::binary_search(typescript_types, word))
+    if (typescript && lex_in<typescript_types>(word))
     {
         return SyntaxRole::type;
     }

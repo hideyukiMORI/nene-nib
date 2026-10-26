@@ -294,7 +294,7 @@ std::size_t lex_dash(LexCursor &cursor, std::size_t at)
 {
     const std::string_view line = cursor.line();
     const std::size_t end = lex_word_end(line, at + 1U);
-    if (lex_folded_in(powershell_operators, line.substr(at + 1U, end - at - 1U)))
+    if (lex_folded_in<powershell_operators>(line.substr(at + 1U, end - at - 1U)))
     {
         cursor.mark(at, end, SyntaxRole::operators);
     }
@@ -374,7 +374,7 @@ std::size_t lex_word(LexCursor &cursor, std::size_t at)
     }
     const std::string_view word = line.substr(at, end - at);
     const bool member = at > 0U && (line[at - 1U] == '.' || line[at - 1U] == ':');
-    if (member || !lex_folded_in(powershell_keywords, word))
+    if (member || !lex_folded_in<powershell_keywords>(word))
     {
         return end;
     }

@@ -88,7 +88,7 @@ std::size_t lex_word(LexCursor &cursor, std::size_t at)
 {
     const std::string_view line = cursor.line();
     const std::size_t end = lex_word_end(line, at);
-    if (std::ranges::binary_search(json_constants, line.substr(at, end - at)))
+    if (lex_in<json_constants>(line.substr(at, end - at)))
     {
         cursor.mark(at, end, SyntaxRole::constant);
     }

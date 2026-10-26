@@ -527,7 +527,7 @@ std::size_t prefixed_literal(LexCursor &cursor, std::size_t at, std::size_t end)
         return lex_unclosed;
     }
     const std::string_view word = line.substr(at, end - at);
-    if (std::ranges::binary_search(raw_prefixes, word) && opens_raw(line, end))
+    if (lex_in<raw_prefixes>(word) && opens_raw(line, end))
     {
         return mark_raw(cursor, at, end);
     }
@@ -535,22 +535,22 @@ std::size_t prefixed_literal(LexCursor &cursor, std::size_t at, std::size_t end)
     {
         return mark_apostrophe(cursor, at, end);
     }
-    const bool quoted = line[end] == '"' && std::ranges::binary_search(string_prefixes, word);
+    const bool quoted = line[end] == '"' && lex_in<string_prefixes>(word);
     return quoted ? mark_quoted(cursor, at, end) : lex_unclosed;
 }
 
 // 予約語・型・定数の表の順に引く。どれでもなければ nullopt。
 [[nodiscard]] std::optional<SyntaxRole> word_role(std::string_view word) noexcept
 {
-    if (std::ranges::binary_search(rust_keywords, word))
+    if (lex_in<rust_keywords>(word))
     {
         return SyntaxRole::keyword;
     }
-    if (std::ranges::binary_search(rust_types, word))
+    if (lex_in<rust_types>(word))
     {
         return SyntaxRole::type;
     }
-    if (std::ranges::binary_search(rust_constants, word))
+    if (lex_in<rust_constants>(word))
     {
         return SyntaxRole::constant;
     }
