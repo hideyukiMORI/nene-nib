@@ -375,6 +375,32 @@ void verify_html_and_line_endings()
     expect_blocks("\n\n  \n", {}, "blank lines have no blocks");
 }
 
+// CR だけの改行も md4c と同じく行の終わりで、位置を持たない要素の行頭はその次の行から探す。
+// CRLF は 1 つの改行（#887）。後ろの 2 本は #871 の性質の試験が縮めた入力。
+void verify_carriage_returns()
+{
+    expect_blocks("- foo\r-\r- bar",
+                  {listed(leaf(list_item, "foo", 2U), 1U, bullet),
+                   listed(leaf(list_item, "", 6U), 1U, bullet),
+                   listed(leaf(list_item, "bar", 10U), 1U, bullet)},
+                  "an empty item after a CR line ending begins on the next line");
+    expect_blocks("Foo\r***\rbar",
+                  {leaf(paragraph, "Foo", 0U), leaf(rule, "", 4U), leaf(paragraph, "bar", 8U)},
+                  "a thematic break after a CR line ending begins on its own line");
+    expect_blocks("a\r\r---", {leaf(paragraph, "a", 0U), leaf(rule, "", 3U)},
+                  "a blank line ended by CR is skipped");
+    expect_blocks("a\r\n\r\n---", {leaf(paragraph, "a", 0U), leaf(rule, "", 5U)},
+                  "CRLF counts as one line ending when skipping blank lines");
+    expect_blocks(">[\r+\r\\",
+                  {quoted(leaf(paragraph, "[", 1U), 1U),
+                   listed(leaf(list_item, "", 3U), 1U, bullet), leaf(paragraph, "\\", 5U)},
+                  "an empty item after a quote and a CR begins before the next paragraph");
+    expect_blocks("`\r1. 1. \\",
+                  {leaf(paragraph, "`", 0U), listed(leaf(list_item, "", 2U), 1U, "1."),
+                   listed(leaf(list_item, "\\", 8U), 2U, "1.")},
+                  "an empty outer item after a CR begins before its nested item");
+}
+
 void verify_stop_and_size()
 {
     std::size_t asked = 0;
@@ -468,6 +494,7 @@ void verify_markdown_scope()
     verify_rules();
     verify_entities();
     verify_html_and_line_endings();
+    verify_carriage_returns();
     verify_stop_and_size();
     verify_insufficient_memory();
 }

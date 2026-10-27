@@ -26,23 +26,36 @@ constexpr std::string_view image_closing = "]";
     return static_cast<std::uint8_t>(depth < depth_limit ? depth : depth_limit);
 }
 
+// md4c と同じく CR と LF のどちらも改行（ISNEWLINE_・#887）。
+[[nodiscard]] bool newline(char value) noexcept
+{
+    return value == '\r' || value == '\n';
+}
+
 // from から次の改行の位置（無ければ input.size()）。1 バイトずつ歩く（STL の検索は Debug で
 // memchr を core の外へ出す・ARC-003・#784）。
 [[nodiscard]] std::size_t line_end(std::string_view input, std::size_t from) noexcept
 {
-    while (from < input.size() && input[from] != '\n')
+    while (from < input.size() && !newline(input[from]))
     {
         ++from;
     }
     return from;
 }
 
-[[nodiscard]] bool blank(char value) noexcept
+// 改行の位置 end の次の行の行頭。CRLF は 1 つの改行（#887）。
+[[nodiscard]] std::size_t next_line(std::string_view input, std::size_t end) noexcept
 {
-    return value == ' ' || value == '\t' || value == '\r';
+    const bool crlf = input[end] == '\r' && end + 1U < input.size() && input[end + 1U] == '\n';
+    return end + (crlf ? 2U : 1U);
 }
 
-// [from, to) が空白（空白・Tab・CR）だけか。
+[[nodiscard]] bool blank(char value) noexcept
+{
+    return value == ' ' || value == '\t';
+}
+
+// [from, to) が空白（空白・Tab）だけか。
 [[nodiscard]] bool blank_between(std::string_view input, std::size_t from, std::size_t to) noexcept
 {
     for (; from < to; ++from)
@@ -55,7 +68,7 @@ constexpr std::string_view image_closing = "]";
     return true;
 }
 
-// line から始めて、空白（空白・Tab・CR）だけの行を飛ばした最初の行の行頭。
+// line から始めて、空白（空白・Tab）だけの行を飛ばした最初の行の行頭。
 [[nodiscard]] std::size_t first_filled_line(std::string_view input, std::size_t line) noexcept
 {
     while (line < input.size())
@@ -65,7 +78,7 @@ constexpr std::string_view image_closing = "]";
         {
             return line;
         }
-        line = end + 1U;
+        line = next_line(input, end);
     }
     return line;
 }
@@ -262,8 +275,8 @@ std::size_t MarkdownBuilder::unlocated_begin() const noexcept
     std::size_t line = 0U;
     if (last_end_.has_value())
     {
-        const auto newline = line_end(input_, last_end_.value());
-        line = newline == input_.size() ? input_.size() : newline + 1U;
+        const auto end = line_end(input_, last_end_.value());
+        line = end == input_.size() ? input_.size() : next_line(input_, end);
     }
     return first_filled_line(input_, line);
 }
