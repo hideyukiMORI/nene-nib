@@ -153,6 +153,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/DetectedTextPropertyTests.cpp
     tests/unit/RichPasteTests.cpp
     tests/unit/SyntaxTests.cpp
+    tests/unit/SyntaxCachePropertyTests.cpp
     tests/unit/TextBufferPropertyTests.cpp
     tests/unit/VimPatternPropertyTests.cpp)
 nenenib_link(nib_tests nenenib_core)
