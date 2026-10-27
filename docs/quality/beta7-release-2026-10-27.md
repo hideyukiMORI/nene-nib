@@ -28,4 +28,9 @@
 
 ## 公開の結果（公開の後に埋める）
 
-（未）
+2026-10-27 の時点で手順 1〜2 まで済み。手順 3〜4（tag と pre-release）は設計席の自動の権限（Create Public Surface）で止まったので hide の手で行い、その後にこの節を埋める。
+
+- 梱包: `pwsh -NoProfile -File eng/package-release.ps1 -Beta 7 -OutputDirectory D:/NeNeNib/releases/v0.1.0-beta.7 -Verification docs/quality/beta7-release-2026-10-27.md` が `D:/NeNeNib/worktrees/beta7`（detached・origin/main `c5e72857`）で成功。記録 `D:/NeNeNib/releases/v0.1.0-beta.7/package.json`。exe の SHA-256 `9cba0f717b028bc85389506e1cb63d8084100e500875ec5eeaf029e8a61f1cbb`（2,344,448 bytes）。
+- 起動・描画: `python D:/NeNeNib/evidence/beta7-release/release-smoke.py` が成功（隔離 profile・DPI 120・正常終了 0・本文不変・PNG を設計席が見た）。
+- 速さ: `python eng/measure-speed.py --check --repetitions 5 --executable D:/NeNeNib/releases/v0.1.0-beta.7/extracted/NeNeNib.exe` → **8 benches checked, 0 regression(s), 0 unmeasurable**（負荷 32/25/19%・中央値 ms: 起動 49.5・窓 35.4・単打 0.540・連打 2.302・16 MiB open 57.7・16 MiB 連打 2.122・面 1.919・長い行 1.558）。記録 `D:/NeNeNib/evidence/beta7-release/gate-beta7.log`。
+- 公開物の取違え: 未（公開の後に `verify-publication.py`）。公開の文は `D:/NeNeNib/evidence/beta7-release/release-notes.md`。
