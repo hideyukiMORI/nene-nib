@@ -4,13 +4,11 @@
 #include "CommandMatch.hpp"
 #include "ExResult.hpp"
 #include "KeyChord.hpp"
-#include "Offset.hpp"
-#include "OffsetRange.hpp"
 #include "OperationBindings.hpp"
 #include "OperationText.hpp"
 #include "OperationTexts.hpp"
+#include "SubsequenceScore.hpp"
 #include "ThemeCatalog.hpp"
-#include "Utf8.hpp"
 
 #include <algorithm>
 #include <array>
@@ -27,75 +25,11 @@ namespace nenenib::core
 {
 namespace
 {
-[[nodiscard]] char32_t lower_code_point(char32_t value) noexcept
+// 照合の核は SubsequenceScore の 1 つ（ADR 0091 の決定 2・#912 の速道もその中）。
+[[nodiscard]] std::optional<std::size_t> match_score(std::string_view query,
+                                                     std::span<const std::string_view> command)
 {
-    return value >= U'A' && value <= U'Z' ? value + (U'a' - U'A') : value;
-}
-
-// from から先で wanted のコードポイントが始まる境目（ADR 0061 の決定 6）。境目ごとに進むので、
-// 別の文字の継続バイトの並びには当たらない。
-[[nodiscard]] std::optional<Offset> code_point_from(std::string_view command, Offset from,
-                                                    char32_t wanted) noexcept
-{
-    for (Offset at = from; at.value < command.size(); at = next_code_point(command, at))
-    {
-        if (lower_code_point(code_point_at(command, at)) == wanted)
-        {
-            return at;
-        }
-    }
-    return std::nullopt;
-}
-
-// 完結した UTF-8 の区間を借り、既存の scalar 走査の始点と終点を全体のバイト位置へ戻す。
-template <std::size_t Count>
-[[nodiscard]] std::optional<OffsetRange>
-code_point_from(std::span<const std::string_view, Count> command, Offset from,
-                char32_t wanted) noexcept
-{
-    std::size_t prefix = 0;
-    for (const std::string_view part : command)
-    {
-        const Offset local{from.value > prefix ? from.value - prefix : 0};
-        const auto found = code_point_from(part, local, wanted);
-        if (found.has_value())
-        {
-            return OffsetRange{Offset{prefix + found.value().value},
-                               Offset{prefix + next_code_point(part, found.value()).value}};
-        }
-        prefix += part.size();
-    }
-    return std::nullopt;
-}
-
-// query のコードポイントを順に候補の中から探す部分列の照合。空白は飛ばし、ASCII は大文字と
-// 小文字を区別しない。点は候補の長さと飛ばした量の和で、最初の文字までは 4 倍（単位はバイト）。
-template <std::size_t Count>
-[[nodiscard]] std::optional<std::size_t>
-match_score(std::string_view query, std::span<const std::string_view, Count> command)
-{
-    Offset at{0};
-    std::size_t score = 0;
-    for (const std::string_view part : command)
-    {
-        score += part.size();
-    }
-    for (Offset letter{0}; letter.value < query.size(); letter = next_code_point(query, letter))
-    {
-        const char32_t wanted = lower_code_point(code_point_at(query, letter));
-        if (wanted == U' ')
-        {
-            continue;
-        }
-        const auto found = code_point_from(command, at, wanted);
-        if (!found.has_value())
-        {
-            return std::nullopt;
-        }
-        score += (found.value().begin.value - at.value) * (at.value == 0 ? 4 : 1);
-        at = found.value().end;
-    }
-    return score;
+    return subsequence_score(query, command);
 }
 
 [[nodiscard]] std::optional<std::size_t> match_score(std::string_view query,
@@ -242,12 +176,13 @@ using ScoredPosition = std::pair<std::size_t, std::size_t>;
 }
 
 // 全件と前の結果は対象位置だけが違い、出どころ・採点・同点の順はこの一つで決める（ADR 0091）。
-template <std::ranges::input_range Positions>
+template <std::ranges::sized_range Positions>
 [[nodiscard]] std::vector<std::size_t> scored_positions(const std::vector<CommandChoice> &entries,
                                                         PaletteScope scope, std::string_view query,
                                                         const Positions &positions)
 {
     std::vector<ScoredPosition> scored;
+    scored.reserve(std::ranges::size(positions));
     for (const std::size_t position : positions)
     {
         const CommandChoice &entry = entries.at(position);
