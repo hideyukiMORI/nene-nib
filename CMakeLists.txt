@@ -157,7 +157,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/SyntaxCachePropertyTests.cpp
     tests/unit/TextBufferPropertyTests.cpp
     tests/unit/VimPatternPropertyTests.cpp
-    tests/unit/TitleBarLayoutPropertyTests.cpp)
+    tests/unit/TitleBarLayoutPropertyTests.cpp
+    tests/unit/GridCellsPropertyTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)
