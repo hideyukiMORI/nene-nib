@@ -27,6 +27,33 @@ constexpr std::uint64_t byte_mask = 0xFF;
     }
     return hash;
 }
+
+// 字体の family の名前（en-us、無ければ最初の名前）。読めなければ空。
+[[nodiscard]] std::wstring english_family(IDWriteFont &font)
+{
+    Microsoft::WRL::ComPtr<IDWriteFontFamily> family;
+    Microsoft::WRL::ComPtr<IDWriteLocalizedStrings> names;
+    UINT32 index = 0;
+    BOOL exists = FALSE;
+    UINT32 length = 0;
+    if (FAILED(font.GetFontFamily(&family)) || FAILED(family->GetFamilyNames(&names)) ||
+        FAILED(names->FindLocaleName(L"en-us", &index, &exists)))
+    {
+        return {};
+    }
+    index = exists != FALSE ? index : 0;
+    if (FAILED(names->GetStringLength(index, &length)))
+    {
+        return {};
+    }
+    std::wstring name(length + 1, L'\0');
+    if (FAILED(names->GetString(index, name.data(), length + 1)))
+    {
+        return {};
+    }
+    name.resize(length);
+    return name;
+}
 } // namespace
 
 FallbackSegmentMemo::FallbackSegmentMemo() : slots_(slot_count, 0U)
@@ -60,7 +87,7 @@ std::optional<std::size_t> FallbackSegmentMemo::find(std::wstring_view text) con
     return static_cast<std::size_t>(entry - 1U);
 }
 
-const Microsoft::WRL::ComPtr<IDWriteFont> &FallbackSegmentMemo::font(std::size_t entry) const
+std::optional<std::size_t> FallbackSegmentMemo::font(std::size_t entry) const
 {
     return fonts_.at(entry);
 }
@@ -80,7 +107,7 @@ std::size_t FallbackSegmentMemo::size() const noexcept
     return texts_.size();
 }
 
-void FallbackSegmentMemo::remember(std::wstring_view text, Microsoft::WRL::ComPtr<IDWriteFont> font,
+void FallbackSegmentMemo::remember(std::wstring_view text, std::optional<std::size_t> font,
                                    FLOAT scale, UINT32 mapped)
 {
     if (text.empty() || text.size() > fallback_key_text_limit || find(text).has_value())
@@ -93,12 +120,93 @@ void FallbackSegmentMemo::remember(std::wstring_view text, Microsoft::WRL::ComPt
     }
     slots_.at(slot_of(text)) = static_cast<std::uint32_t>(texts_.size() + 1);
     texts_.emplace_back(text);
-    fonts_.push_back(std::move(font));
+    fonts_.push_back(font);
     scales_.push_back(scale);
     mapped_.push_back(mapped);
 }
 
-// 上限に達したら全部捨てる（単純で決定的・ADR 0142 の追補）。
+std::optional<std::size_t>
+FallbackSegmentMemo::normalized(const Microsoft::WRL::ComPtr<IDWriteFont> &font)
+{
+    if (font == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto same = std::ranges::find(row_fonts_, font);
+    if (same != row_fonts_.end())
+    {
+        return static_cast<std::size_t>(same - row_fonts_.begin());
+    }
+    auto family = english_family(*font.Get());
+    // 読み取りの一時失敗も null として覚えに残る（次の coverage_ の作り直しで消える・#889）。
+    if (family.empty())
+    {
+        return std::nullopt;
+    }
+    const auto weight = font->GetWeight();
+    const auto style = font->GetStyle();
+    const auto stretch = font->GetStretch();
+    const auto found = row_of(family, weight, style, stretch);
+    if (found.has_value())
+    {
+        return found;
+    }
+    row_fonts_.push_back(font);
+    row_families_.push_back(std::move(family));
+    row_weights_.push_back(weight);
+    row_styles_.push_back(style);
+    row_stretches_.push_back(stretch);
+    return row_fonts_.size() - 1;
+}
+
+std::optional<std::size_t> FallbackSegmentMemo::row_of(const std::wstring &family,
+                                                       DWRITE_FONT_WEIGHT weight,
+                                                       DWRITE_FONT_STYLE style,
+                                                       DWRITE_FONT_STRETCH stretch) const
+{
+    for (std::size_t row = 0; row < row_fonts_.size(); ++row)
+    {
+        if (row_weights_.at(row) == weight && row_styles_.at(row) == style &&
+            row_stretches_.at(row) == stretch && row_families_.at(row) == family)
+        {
+            return row;
+        }
+    }
+    return std::nullopt;
+}
+
+const Microsoft::WRL::ComPtr<IDWriteFont> &FallbackSegmentMemo::row_font(std::size_t row) const
+{
+    return row_fonts_.at(row);
+}
+
+const std::wstring &FallbackSegmentMemo::row_family(std::size_t row) const
+{
+    return row_families_.at(row);
+}
+
+DWRITE_FONT_WEIGHT FallbackSegmentMemo::row_weight(std::size_t row) const
+{
+    return row_weights_.at(row);
+}
+
+DWRITE_FONT_STYLE FallbackSegmentMemo::row_style(std::size_t row) const
+{
+    return row_styles_.at(row);
+}
+
+DWRITE_FONT_STRETCH FallbackSegmentMemo::row_stretch(std::size_t row) const
+{
+    return row_stretches_.at(row);
+}
+
+std::size_t FallbackSegmentMemo::rows() const noexcept
+{
+    return row_fonts_.size();
+}
+
+// 上限に達したら全部捨てる（単純で決定的・ADR 0142 の追補）。正規の字体の表は残す（行の番号を
+// 持つのは覚えの entry と PrimaryFontCoverage の当てる前の範囲だけで、表は縮まない）。
 void FallbackSegmentMemo::forget()
 {
     std::ranges::fill(slots_, 0U);

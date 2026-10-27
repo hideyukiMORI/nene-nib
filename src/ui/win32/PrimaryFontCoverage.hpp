@@ -45,14 +45,14 @@ class PrimaryFontCoverage final
     [[nodiscard]] HRESULT assign_segment(IDWriteTextLayout &layout, std::wstring_view wide,
                                          DWRITE_TEXT_RANGE segment);
     [[nodiscard]] HRESULT map_piece(std::wstring_view piece, UINT32 &mapped,
-                                    Microsoft::WRL::ComPtr<IDWriteFont> &font, FLOAT &scale);
-    [[nodiscard]] HRESULT hold(IDWriteTextLayout &layout, IDWriteFont &font, FLOAT scale,
+                                    std::optional<std::size_t> &font, FLOAT &scale);
+    [[nodiscard]] HRESULT hold(IDWriteTextLayout &layout, std::size_t font, FLOAT scale,
                                DWRITE_TEXT_RANGE range);
-    [[nodiscard]] bool joins(IDWriteFont &font, FLOAT scale, DWRITE_TEXT_RANGE range);
+    [[nodiscard]] bool joins(std::size_t font, FLOAT scale, DWRITE_TEXT_RANGE range) const;
+    [[nodiscard]] bool primary(std::size_t font, FLOAT scale) const;
     [[nodiscard]] HRESULT flush(IDWriteTextLayout &layout);
-    [[nodiscard]] HRESULT apply(IDWriteTextLayout &layout, IDWriteFont &font, FLOAT scale,
-                                DWRITE_TEXT_RANGE range);
-    [[nodiscard]] const std::wstring &family_of(IDWriteFont &font);
+    [[nodiscard]] HRESULT apply(IDWriteTextLayout &layout, std::size_t font, FLOAT scale,
+                                DWRITE_TEXT_RANGE range) const;
 
     static constexpr std::size_t basic_plane = 0x10000;
     Microsoft::WRL::ComPtr<IDWriteFont> font_;
@@ -71,14 +71,11 @@ class PrimaryFontCoverage final
     std::unique_ptr<std::bitset<basic_plane>> known_;
     std::unique_ptr<std::bitset<basic_plane>> present_;
     std::unordered_map<char32_t, bool> astral_;
-    // 区切りの片の文字列ごとの字体選択の答え（ADR 0142 の追補）。当たりは MapCharacters を飛ばす。
+    // 区切りの片の文字列ごとの字体選択の答えと正規の字体の表（ADR 0142 の追補・#884 / #889）。
+    // 当たりは MapCharacters を飛ばし、字体は表の行の番号で比べて当てる。
     std::unique_ptr<FallbackSegmentMemo> memo_;
-    // 直前に当てた字体と family 名（同じ字体が続くので名前を読み直さない）。
-    Microsoft::WRL::ComPtr<IDWriteFont> named_;
-    std::wstring named_family_;
-    // まだ当てていない範囲（隣の区切りが同じ字体ならここへ伸ばす）と、当てた範囲の数。
-    Microsoft::WRL::ComPtr<IDWriteFont> pending_font_;
-    std::wstring pending_family_;
+    // まだ当てていない範囲（隣の区切りが同じ字体の行ならここへ伸ばす）と、当てた範囲の数。
+    std::optional<std::size_t> pending_font_;
     DWRITE_TEXT_RANGE pending_range_{};
     FLOAT pending_scale_ = 1;
     std::size_t applied_ = 0;
