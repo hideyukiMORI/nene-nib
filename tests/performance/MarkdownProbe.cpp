@@ -10,12 +10,27 @@
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace nenenib::tests::performance
 {
 namespace
 {
-constexpr std::size_t markdown_bytes = std::size_t{16U} << 20U;
+[[nodiscard]] constexpr std::size_t markdown_bytes(MarkdownWorkload workload)
+{
+    switch (workload)
+    {
+    case MarkdownWorkload::mixed_16mib:
+        return std::size_t{16U} << 20U;
+    case MarkdownWorkload::mixed_16kib:
+        return std::size_t{16U} << 10U;
+    case MarkdownWorkload::mixed_256kib:
+        return std::size_t{256U} << 10U;
+    case MarkdownWorkload::mixed_4mib:
+        return std::size_t{4U} << 20U;
+    }
+    std::unreachable();
+}
 constexpr std::size_t subsections = 4U;
 constexpr std::size_t paragraphs = 3U;
 // 1 節の leaf は見出し 1 と、小節ごとに見出し 1・段落 3・項目 4・番号 3・引用 1・コード 2・線 1。
@@ -44,13 +59,13 @@ void append_subsection(std::string &text, std::size_t section, std::size_t subse
 }
 } // namespace
 
-// md4c の probe の gen.py の (i) と同じ: 節を 16 MiB まで繰り返し、16 MiB で切って最後の改行まで。
+// md4c の probe の gen.py の (i) と同じ: 節を段の大きさまで繰り返し、そこで切って最後の改行まで。
 std::string markdown_input(MarkdownWorkload workload)
 {
-    static_cast<void>(workload);
+    const std::size_t bytes = markdown_bytes(workload);
     std::string text;
-    text.reserve(markdown_bytes + 4096U);
-    for (std::size_t section = 0; text.size() < markdown_bytes; ++section)
+    text.reserve(bytes + 4096U);
+    for (std::size_t section = 0; text.size() < bytes; ++section)
     {
         text += std::format("# Section {}\n\n", section);
         for (std::size_t subsection = 0; subsection < subsections; ++subsection)
@@ -58,7 +73,7 @@ std::string markdown_input(MarkdownWorkload workload)
             append_subsection(text, section, subsection);
         }
     }
-    text.resize(markdown_bytes);
+    text.resize(bytes);
     text.resize(text.rfind('\n') + 1U);
     return text;
 }

@@ -21,7 +21,7 @@ namespace
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 void verify_vim_scope_contracts()
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 48> contracts{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 49> contracts{{
         {"--vim-wrapped", verify_vim_wrapped_contracts},
         {"--wrapped-view", verify_wrapped_view_scope},
         {"--vim-dot", verify_vim_dot_contracts},
@@ -67,6 +67,7 @@ void verify_vim_scope_contracts()
         {"--lexer", verify_lexer_scope},
         {"--lexer-property", verify_lexer_property_scope},
         {"--html-markdown", verify_html_markdown_scope},
+        {"--markdown-property", verify_markdown_property_scope},
         {"--rich-paste", verify_rich_paste_contracts},
         {"--syntax", verify_syntax_scope},
         {"--text-buffer-property", verify_text_buffer_property_scope},
@@ -84,7 +85,7 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 71> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 72> scopes{{
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
@@ -153,6 +154,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 71> scopes{{
     {"--lexer", verify_lexer_scope},
     {"--lexer-property", verify_lexer_property_scope},
     {"--html-markdown", verify_html_markdown_scope},
+    {"--markdown-property", verify_markdown_property_scope},
     {"--rich-paste", verify_rich_paste_contracts},
     {"--syntax", verify_syntax_scope},
     {"--text-buffer-property", verify_text_buffer_property_scope},
