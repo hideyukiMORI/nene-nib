@@ -21,7 +21,7 @@ namespace
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 void verify_vim_scope_contracts()
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 49> contracts{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 50> contracts{{
         {"--vim-wrapped", verify_vim_wrapped_contracts},
         {"--wrapped-view", verify_wrapped_view_scope},
         {"--vim-dot", verify_vim_dot_contracts},
@@ -71,6 +71,7 @@ void verify_vim_scope_contracts()
         {"--rich-paste", verify_rich_paste_contracts},
         {"--syntax", verify_syntax_scope},
         {"--text-buffer-property", verify_text_buffer_property_scope},
+        {"--vim-pattern-property", verify_vim_pattern_property_scope},
     }};
     for (const auto &scope : contracts)
     {
@@ -85,7 +86,7 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 72> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 73> scopes{{
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
@@ -158,6 +159,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 72> scopes{{
     {"--rich-paste", verify_rich_paste_contracts},
     {"--syntax", verify_syntax_scope},
     {"--text-buffer-property", verify_text_buffer_property_scope},
+    {"--vim-pattern-property", verify_vim_pattern_property_scope},
 }};
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
