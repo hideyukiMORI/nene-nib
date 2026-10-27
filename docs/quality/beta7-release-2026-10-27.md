@@ -26,9 +26,17 @@
 3. 同じ commit に annotated tag `v0.1.0-beta.7` と GitHub pre-release（zip と SHA256SUMS・本文は上の「主な変更」）。
 4. `gh release download` で再取得し、tag の commit・bytes・digest を照合（`verify-publication.py`）。
 
-## 公開の結果（公開の後に埋める）
+## 公開の結果
 
-2026-10-27 の時点で手順 1〜2 まで済み。手順 3〜4（tag と pre-release）は設計席の自動の権限（Create Public Surface）で止まったので hide の手で行い、その後にこの節を埋める。
+2026-10-27 20:19（JST）に公開した。手順 1〜2 は設計席、手順 3（tag と pre-release）は自動の権限（Create Public Surface）で止まったので hide が `!` で実行し（tag の注釈は折り返しで切れたので `v0.1.0-beta.7 (main c5e72857)` に作り直してから push・pre-release は `D:/NeNeNib/scripts/beta7-release-create.ps1`）、手順 4 の照合は設計席が行った。
+
+- URL: https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.7（pre-release・release id 425358068・published 2026-10-27T11:19:17Z）
+- tag `v0.1.0-beta.7` → `c5e72857a4abbf32ed27c16326f8bf302176656b`（main・梱包の commit と同じ）
+- 添付: `NeNeNib-0.1.0-beta.7-windows-x64.zip` 972,437 bytes・SHA-256 `c55d797b6a402053676617c020c9e765733ce03789b62f33be36f7a500e393ed`、`SHA256SUMS` 104 bytes
+- 照合（`verify-publication.py`・`gh release download` で再取得）: bytes 一致・zip の中身一致・展開した exe の起動 pass（release-smoke-01）→ `result: pass`。写しは `D:/NeNeNib/evidence/beta7-release/github-release.json`
+- hide の確認（公開の前・2026-10-27 夜）: 展開した exe で `samples/07-save-check.txt` を開いて 1 行足して保存して閉じる・見た目が beta.6 と同じ → OK（試用の表 `D:/NeNeNib/evidence/20261027-trial/README.md` の手順 B）
+
+教訓: `!` で長い命令を打つと画面の折り返しで改行が入り、引数が切れる（tag の注釈に改行・commit の指定が別の命令に）。hide に頼む命令は 1 行の短いものにし、長いものはスクリプトにして `pwsh -File` で呼ぶ。
 
 - 梱包: `pwsh -NoProfile -File eng/package-release.ps1 -Beta 7 -OutputDirectory D:/NeNeNib/releases/v0.1.0-beta.7 -Verification docs/quality/beta7-release-2026-10-27.md` が `D:/NeNeNib/worktrees/beta7`（detached・origin/main `c5e72857`）で成功。記録 `D:/NeNeNib/releases/v0.1.0-beta.7/package.json`。exe の SHA-256 `9cba0f717b028bc85389506e1cb63d8084100e500875ec5eeaf029e8a61f1cbb`（2,344,448 bytes）。
 - 起動・描画: `python D:/NeNeNib/evidence/beta7-release/release-smoke.py` が成功（隔離 profile・DPI 120・正常終了 0・本文不変・PNG を設計席が見た）。
