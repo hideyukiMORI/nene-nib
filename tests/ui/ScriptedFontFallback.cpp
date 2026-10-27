@@ -39,7 +39,6 @@ UINT32 ScriptedFontFallback::longest() const noexcept
 HRESULT ScriptedFontFallback::answer(UINT32 length, UINT32 *mapped_length,
                                      IDWriteFont **mapped_font, FLOAT *scale)
 {
-    ++calls_;
     *mapped_length = length;
     *mapped_font = nullptr;
     *scale = static_cast<FLOAT>(calls_);
@@ -54,6 +53,7 @@ HRESULT STDMETHODCALLTYPE ScriptedFontFallback::MapCharacters(
     DWRITE_FONT_STYLE style, DWRITE_FONT_STRETCH stretch, UINT32 *mapped_length,
     IDWriteFont **mapped_font, FLOAT *scale) noexcept
 {
+    ++calls_;
     longest_ = std::max(longest_, length);
     return delegate_ == nullptr
                ? answer(length, mapped_length, mapped_font, scale)

@@ -141,7 +141,8 @@ PrimaryFontCoverage::PrimaryFontCoverage(IDWriteTextFormat &format,
       weight_(format.GetFontWeight()), style_(format.GetFontStyle()),
       stretch_(format.GetFontStretch()), size_(format.GetFontSize()),
       known_(std::make_unique<std::bitset<basic_plane>>()),
-      present_(std::make_unique<std::bitset<basic_plane>>())
+      present_(std::make_unique<std::bitset<basic_plane>>()),
+      memo_(std::make_unique<FallbackSegmentMemo>())
 {
     static_cast<void>(format.GetFontCollection(&collection_));
     Microsoft::WRL::ComPtr<IDWriteFontFace> face;
@@ -253,21 +254,17 @@ HRESULT PrimaryFontCoverage::assign_segment(IDWriteTextLayout &layout, std::wstr
 {
     for (UINT32 done = 0; done < segment.length;)
     {
-        source_->reset(
-            wide.substr(segment.startPosition + done,
-                        piece_length(wide, segment.startPosition + done, segment.length - done)));
+        const auto start = segment.startPosition + done;
+        const auto piece = wide.substr(start, piece_length(wide, start, segment.length - done));
         UINT32 mapped = 0;
         Microsoft::WRL::ComPtr<IDWriteFont> font;
         FLOAT scale = 1;
-        if (FAILED(fallback_->MapCharacters(source_.Get(), 0, source_->length(), collection_.Get(),
-                                            family_.c_str(), weight_, style_, stretch_, &mapped,
-                                            &font, &scale)) ||
-            mapped == 0)
+        if (FAILED(map_piece(piece, mapped, font, scale)) || mapped == 0)
         {
             return flush(layout);
         }
-        mapped = std::min(mapped, source_->length());
-        const DWRITE_TEXT_RANGE range{segment.startPosition + done, mapped};
+        mapped = std::min(mapped, static_cast<UINT32>(piece.size()));
+        const DWRITE_TEXT_RANGE range{start, mapped};
         const auto held = font != nullptr ? hold(layout, *font.Get(), scale, range) : flush(layout);
         if (FAILED(held))
         {
@@ -276,6 +273,31 @@ HRESULT PrimaryFontCoverage::assign_segment(IDWriteTextLayout &layout, std::wstr
         done += mapped;
     }
     return S_OK;
+}
+
+// 片の字体選択の答え。同じ片の文字列を覚えていれば OS の字体選択を呼ばずにその答えを返し、
+// 覚えていなければ呼んで S_OK で進んだ答えだけを覚える（失敗と mappedLength 0 は覚えない・
+// ADR 0142 の追補）。
+HRESULT PrimaryFontCoverage::map_piece(std::wstring_view piece, UINT32 &mapped,
+                                       Microsoft::WRL::ComPtr<IDWriteFont> &font, FLOAT &scale)
+{
+    const auto remembered = memo_->find(piece);
+    if (remembered.has_value())
+    {
+        mapped = memo_->mapped(remembered.value());
+        font = memo_->font(remembered.value());
+        scale = memo_->scale(remembered.value());
+        return S_OK;
+    }
+    source_->reset(piece);
+    const auto result = fallback_->MapCharacters(source_.Get(), 0, source_->length(),
+                                                 collection_.Get(), family_.c_str(), weight_,
+                                                 style_, stretch_, &mapped, &font, &scale);
+    if (result == S_OK && mapped != 0)
+    {
+        memo_->remember(piece, font, scale, mapped);
+    }
+    return result;
 }
 
 // 直前の範囲と同じ字体で隣り合う。

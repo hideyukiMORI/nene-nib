@@ -8,7 +8,7 @@ namespace nenenib::tests::ui
 // OS の字体選択の役の替え玉。呼ばれた回数を数え、試験が決めた HRESULT を返す。
 // scale には何回目の呼び出しかを入れるので、保持から返った答えかどうかを値で見分けられる
 // （ADR 0077 の決定 3）。字体は返さない（nullptr）。委ね先を置くと、答えは委ね先のものになり、
-// 渡された長さの最大だけを数える（ADR 0142 の決定 3）。
+// 渡された長さの最大と呼ばれた回数だけを数える（ADR 0142 の決定 3 と追補）。
 class ScriptedFontFallback final
     : public Microsoft::WRL::RuntimeClass<
           Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>, IDWriteFontFallback>

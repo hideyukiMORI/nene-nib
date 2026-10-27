@@ -1,5 +1,6 @@
 #pragma once
 #include "FallbackRunSource.hpp"
+#include "FallbackSegmentMemo.hpp"
 #include "ScriptRunSink.hpp"
 
 #include <bitset>
@@ -43,6 +44,8 @@ class PrimaryFontCoverage final
     [[nodiscard]] bool has_missing(std::wstring_view wide, DWRITE_TEXT_RANGE segment);
     [[nodiscard]] HRESULT assign_segment(IDWriteTextLayout &layout, std::wstring_view wide,
                                          DWRITE_TEXT_RANGE segment);
+    [[nodiscard]] HRESULT map_piece(std::wstring_view piece, UINT32 &mapped,
+                                    Microsoft::WRL::ComPtr<IDWriteFont> &font, FLOAT &scale);
     [[nodiscard]] HRESULT hold(IDWriteTextLayout &layout, IDWriteFont &font, FLOAT scale,
                                DWRITE_TEXT_RANGE range);
     [[nodiscard]] bool joins(IDWriteFont &font, FLOAT scale, DWRITE_TEXT_RANGE range);
@@ -68,6 +71,8 @@ class PrimaryFontCoverage final
     std::unique_ptr<std::bitset<basic_plane>> known_;
     std::unique_ptr<std::bitset<basic_plane>> present_;
     std::unordered_map<char32_t, bool> astral_;
+    // 区切りの片の文字列ごとの字体選択の答え（ADR 0142 の追補）。当たりは MapCharacters を飛ばす。
+    std::unique_ptr<FallbackSegmentMemo> memo_;
     // 直前に当てた字体と family 名（同じ字体が続くので名前を読み直さない）。
     Microsoft::WRL::ComPtr<IDWriteFont> named_;
     std::wstring named_family_;

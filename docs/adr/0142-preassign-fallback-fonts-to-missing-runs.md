@@ -39,3 +39,7 @@ ADR 0071 は字体の選択を OS の `MapCharacters` だけに固定し、同�
 - 折り返さない行の遠い位置（約 8,000 px 先）では、run の区切りが違うので位置の累積の丸めが float の 1 ulp（約 0.001 px）違うことがある（#586 の実測）。
 - 折り返さない行では隣の run がつながるので、ADR 0073 の「完全に画面外の run を除く」が効きにくくなる（ベンチの行で 2 run / 1,007 字形・画面外の約 960 字形を描画に渡す）。工程 2 で run の中の画面外の字形を描く窓から外す（ADR 0073 の 2026-10-16 の補足）。
 - 絵文字の色の字形（COLR）や縦書きは今日の製品に無く、契約の見本にも入れない。
+
+## 追補（2026-10-27・#884）: 区切りの片の文字列の覚え
+
+区切りの数が多い文（漢字とかなの交互）では、決定 3 の区切りごとの `MapCharacters` が 1 行に 1,000 回を超え（診断 #875 の大きな文書で 1 回の当てに 1,080 片・`FontFallbackCache` の当たり 1,080 / 外れ 1）、当たりでも 1 回約 0.85 µs（鍵の文字列と locale の写し・保持の線形の照合）が積もって `analyzed → assigned` が約 0.93 ms になる。`PrimaryFontCoverage` に区切りの片の文字列の覚え `FallbackSegmentMemo` を 1 つ持たせ、片ごとにまず覚えを引き、当たればその字体・`scale`・`mappedLength` で決定 3 と同じ `hold` へ進み、外れたときだけ今までどおり `FontFallbackCache` 経由の `MapCharacters` を呼んで、`S_OK` で進んだ（`mappedLength` が 0 でない）答えだけを覚える（失敗は覚えない）。鍵は片の文字列だけで、書式の family・weight / style / stretch・locale・向きは覚えを持つ `PrimaryFontCoverage` の中で一定なので鍵に入れない。字体が null（どの字体にも無い）の答えも覚える。探索は FNV-1a（64 ビット）の開番地法（番地は上限の 2 倍）で、引くときは文字列を確保せず単位ごとに比べ、入れるときだけ写す。上限は 4,096 件（`fallback_segment_memo_limit`）で、超えたら全部捨てて覚え直す（単純で決定的）。寿命は `PrimaryFontCoverage` と同じ（書式の作り直し・device lost で `BodyTextLayouts` が作り直す）。字体を選ぶのは今までどおり OS の `MapCharacters` だけで、区切りの作り方・`hold` / `flush` / `apply`・ADR 0071 の `FontFallbackCache`（DirectWrite が layout の中で呼ぶ道）は変えない。契約は `nib_window_tests --fallback-memo`（同じ片の 2 回目は字体選択を呼ばない・違う片は呼ぶ・null の答えも覚える・失敗は覚えない・4,096 件を超えると捨てて呼び直す）。限界の 1 行目の「区切りの数だけ保持の照合が残る」は、2 回目以降の同じ片では覚えの 1 回の hash に置き換わる。
