@@ -20,6 +20,13 @@ namespace nenenib::core
 // 検証済みの本文の code point の数。継続バイト以外を数えるだけなので分岐を持たない。
 [[nodiscard]] std::size_t code_point_count(std::string_view text) noexcept;
 
+// 検証していないバイト列の [begin, end) を数える（#878・字句器の桁）。正しい UTF-8 では
+// code_point_count と同じ数。どの先頭バイトの列にも入らない継続バイトは 1 つで 1 と数えるので、
+// 不正なバイトは 1 つずつ 1 桁になり、先頭バイトの列の途中で切らない区間は空でなければ 1 以上。
+// 列の内かは text の begin より前も見て決めるので、区間を分けて数えた和は全体を数えた値と同じ。
+[[nodiscard]] std::size_t lenient_code_point_count(std::string_view text, Offset begin,
+                                                   Offset end) noexcept;
+
 // 制御文字（U+0000〜U+001F と U+007F）を含むか。これらは UTF-8 では必ず 1 バイトなので、
 // 検証済みの本文では生バイトを見るだけで足りる。
 [[nodiscard]] bool has_control_character(std::string_view text) noexcept;

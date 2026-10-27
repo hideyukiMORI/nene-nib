@@ -14,7 +14,8 @@
 namespace nenenib::core
 {
 // 字句器が 1 行を読む間の書き手（#815）。区間はバイトの位置で受けて、その場で code point の桁
-// （行頭が Column{1}）へ写す。区間は昇順に来るので、数えた所から先だけを数える。state_only では
+// （行頭が Column{1}）へ写す。区間は昇順に来るので、数えた所から先だけを数える。桁の数え方は
+// lenient_code_point_count の 1 本で、不正な UTF-8 のバイトも 1 つで 1 桁（#878）。state_only では
 // 区間を捨て（桁も数えない）、状態だけを残す。
 class LexCursor
 {

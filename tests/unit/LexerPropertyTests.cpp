@@ -1,9 +1,9 @@
 // scope `--lexer-property` の単体テスト（#868・ADR 0156 の決定 1〜6・14）。字句器を持つ全言語に
 // 想定外の入力（不正な UTF-8・NUL・CR・Tab・区切りの断片・fixture の見本の行の変異・長い行）を
 // 文書のように続けて通し、次の不変量を守る。塗りの中身は問わない（それは `--lexer` の fixture）。
-//   1. 区間は begin < end・begin の順・重ならない・行の code point の数（継続バイト以外のバイト・
-//      不正な UTF-8 でも同じ数え方）を超えない・役割は閉じた enum の値で warning を出さない。
-//      不正な UTF-8 の行だけは begin == end を許す（span_sound の注釈）。
+//   1. 区間は begin < end・begin の順・重ならない・行の桁の数（`lenient_code_point_count`・
+//      不正な UTF-8 のバイトは 1 つで 1 桁・#878）を超えない・役割は閉じた enum の値で warning を
+//      出さない。不正な UTF-8 の行でも begin < end を求める。
 //   2. lex_state(言語, in, 行) == lex_line(言語, in, 行).out。
 //   3. 同じ入力を 2 回通して同じ結果。
 //   4. 状態は字句器自身が出した値だけを次の行へ渡し（ランダムな状態は作らない）、どの状態も
@@ -18,6 +18,7 @@
 #include "LexLine.hpp"
 #include "LexState.hpp"
 #include "Lexer.hpp"
+#include "Offset.hpp"
 #include "Scopes.hpp"
 #include "SyntaxRole.hpp"
 #include "TestSupport.hpp"
@@ -570,13 +571,11 @@ void print_line(std::string_view line)
            state.delimiter_length <= core::raw_delimiter_limit;
 }
 
-// width は区間の最小の幅。正しい UTF-8 の行では 1 桁以上。不正な UTF-8 の行（文書には来ない・
-// TextBuffer が検証する）では継続バイトだけを塗った区間が 0 桁になり得るので 0 を許し、
-// 「落ちない・区間が行の内で順に並ぶ」だけを守る（ADR 0156 の決定 4 の前提の外）。
-[[nodiscard]] bool span_sound(const ColorSpan &span, std::size_t floor, std::size_t ceiling,
-                              std::size_t width)
+// 区間は 1 桁以上。不正な UTF-8 の行（文書には来ない・TextBuffer が検証する）でも、字句器の桁は
+// 不正なバイトを 1 つで 1 桁と数えるので 0 桁の区間は出ない（#878）。
+[[nodiscard]] bool span_sound(const ColorSpan &span, std::size_t floor, std::size_t ceiling)
 {
-    return span.begin.value >= floor && span.begin.value + width <= span.end.value &&
+    return span.begin.value >= floor && span.begin.value < span.end.value &&
            span.end.value <= ceiling &&
            std::to_underlying(span.role) < std::to_underlying(SyntaxRole::warning);
 }
@@ -584,12 +583,12 @@ void print_line(std::string_view line)
 // 不変量 1。桁は code point の序数で行頭が 1 なので、end は数 + 1 まで。
 [[nodiscard]] bool spans_sound(const std::vector<ColorSpan> &spans, std::string_view line)
 {
-    const std::size_t ceiling = core::code_point_count(line) + 1U;
-    const std::size_t width = core::validate_utf8(line).has_value() ? 1U : 0U;
+    const std::size_t ceiling =
+        core::lenient_code_point_count(line, core::Offset{0U}, core::Offset{line.size()}) + 1U;
     std::size_t floor = 1U;
     for (const ColorSpan &span : spans)
     {
-        if (!span_sound(span, floor, ceiling, width))
+        if (!span_sound(span, floor, ceiling))
         {
             return false;
         }
@@ -642,20 +641,48 @@ void print_line(std::string_view line)
     return lexed.out;
 }
 
-// 50 倍の走りで最小化した入力（#868）。どれも不正な UTF-8 で、継続バイトだけの区間が 0 桁になる
-// （正しい UTF-8 の行では 0 件）。落ちず、区間が行の内で順に並ぶことを決定的に残す。状態は字句器
-// 自身に作らせる（C++ の `/*`・JS のテンプレートの `` ` ``）。
+// 字句器の桁の数え方（#878）。正しい UTF-8 では code_point_count と同じ。どの列にも入らない
+// 継続バイト・先頭になれないバイトは 1 つで 1。区間を分けて数えた和は全体と同じ。
+[[nodiscard]] std::size_t lenient(std::string_view text, std::size_t begin, std::size_t end)
+{
+    return core::lenient_code_point_count(text, core::Offset{begin}, core::Offset{end});
+}
+
+void verify_lenient_count()
+{
+    constexpr std::string_view valid = "a\xc3\xa9\xe3\x81\x82\xf0\x9f\x98\x80";
+    constexpr std::string_view invalid = "\xa2\xc3\xa9\xa9\xc0\x80\xe3\x81";
+    expect(lenient(valid, 0U, valid.size()) == core::code_point_count(valid) &&
+               lenient(valid, 1U, 3U) == 1U && lenient(valid, 3U, 6U) == 1U,
+           "lexer property: the lenient count equals the code point count on valid UTF-8");
+    expect(lenient(invalid, 0U, invalid.size()) == 6U && lenient(invalid, 0U, 1U) == 1U &&
+               lenient(invalid, 3U, 4U) == 1U && lenient(invalid, 5U, 6U) == 1U,
+           "lexer property: every stray byte counts as one column");
+    bool additive = true;
+    for (std::size_t cut = 0U; cut <= invalid.size(); ++cut)
+    {
+        additive = additive && lenient(invalid, 0U, cut) + lenient(invalid, cut, invalid.size()) ==
+                                   lenient(invalid, 0U, invalid.size());
+    }
+    expect(additive, "lexer property: the lenient count adds up across a cut");
+}
+
+// 50 倍の走りで最小化した入力（#868）。どれも不正な UTF-8 で、継続バイトだけの区間が 0 桁に
+// なっていた（#878 の前）。不正なバイトも 1 桁と数え、区間が 1 桁以上で行の内に順に並ぶことを
+// 決定的に残す。状態は字句器自身に作らせる（C++ の `/*`・JS と TS のテンプレートの `` ` ``）。
 void verify_minimized_lines()
 {
     std::size_t faults = 0U;
     const LexState cpp_block = core::lex_state(Language::cpp, LexState{}, "/*");
     const LexState template_open = core::lex_state(Language::javascript, LexState{}, "`");
+    const LexState ts_template = core::lex_state(Language::typescript, LexState{}, "`");
     const LexState gd_string = core::lex_state(Language::gdscript, LexState{}, "\"");
     expect(cpp_block.kind == LexKind::block_comment && template_open.kind == LexKind::raw_string &&
-               gd_string.kind == LexKind::raw_string,
+               ts_template.kind == LexKind::raw_string && gd_string.kind == LexKind::raw_string,
            "lexer property: the minimized cases start inside a comment or a string");
     std::ignore = checked_line(Language::cpp, cpp_block, "\xa2", faults);
     std::ignore = checked_line(Language::javascript, template_open, "\x9a", faults);
+    std::ignore = checked_line(Language::typescript, ts_template, "\x9a", faults);
     std::ignore = checked_line(Language::gdscript, gd_string, "\xbc\x8b", faults);
     std::ignore = checked_line(Language::html, LexState{}, "<b \xad", faults);
     std::ignore = checked_line(Language::xml, LexState{}, "<a\t\xb4", faults);
@@ -757,6 +784,7 @@ void verify_long_line(Language language, Random &random)
 
 void verify_lexer_property_scope()
 {
+    verify_lenient_count();
     verify_minimized_lines();
     verify_language_without_lexer();
     Random random{property_seed};
