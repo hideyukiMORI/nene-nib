@@ -5,9 +5,9 @@
 // 見るのは次の 5 つだけ（Issue #911 の受け入れ条件）。
 //   1. 落ちない・止まらない（ASan / UBSan と CTest の TIMEOUT）
 //   2. 結果は成功か閉じた失敗で、報せの文字列は空でない妥当な UTF-8（例外は出ない）
-//   3. ファイルの替え玉への書き込みは、確定した行の名前が `write` `wq` `xit` `exit` `saveas`
-//      の前方一致のときだけ 1 回まで。設定の替え玉への書き込みは名前が `colorscheme` か `set`
-//      のときだけ 1 回まで。検索の行と取消はどちらも 0 回
+//   3. ファイルの替え玉への書き込みは、確定した行の名前が core の Ex の名前の表の `write` `wq`
+//      `xit` `exit` `saveas`（最短の略称以上・範囲の前置きなし）のときだけ 1 回まで。設定の替え玉
+//      への書き込みは名前が `colorscheme` か `set` のときだけ 1 回まで。検索の行と取消は 0 回
 //   4. 補完（Tab / Shift+Tab）と履歴の歩きをランダムな位置で押しても、入力行は妥当な UTF-8 で、
 //      キャレットはコードポイントの境目、選んでいる候補は候補の列の中
 //   5. 同じ入力で同じ結果（同じ試行を 2 回流して、本文・報せ・タブ・書き込みの数が一致）
@@ -415,34 +415,49 @@ constexpr std::array<std::string_view, 5> documents{
                                     core::validate_utf8(message.value().text()).has_value());
 }
 
-// 名前（先頭の空白と `:` を除いた英字の並び）が name の前方一致か。
-[[nodiscard]] std::string leading_name(std::string_view text)
+// 不変量 3 の許しは core の Ex の名前の表（`src/core/ExResult.cpp` の `document_names` と
+// `evaluate_ex` の入口）に寄せる。表は core の無名名前空間にあるので、名前と最短の長さを写す。
+// 表が変わったらここも直す（`:e` は edit で、`exit` の前方一致として許さない）。
+constexpr std::array<std::pair<std::string_view, std::size_t>, 5> file_writers{{
+    {"write", 1},
+    {"wq", 2},
+    {"xit", 1},
+    {"exit", 3},
+    {"saveas", 3},
+}};
+
+// core と同じく両端の空白だけを外す（`:` は外さない。`::w` は core でも名前にならない）。
+[[nodiscard]] std::string_view trimmed_line(std::string_view text)
 {
-    const std::size_t start = text.find_first_not_of(" :");
-    if (start == std::string_view::npos)
+    const std::size_t first = text.find_first_not_of(' ');
+    if (first == std::string_view::npos)
     {
         return {};
     }
-    std::string name;
-    for (const char letter : text.substr(start))
-    {
-        if ((letter < 'a' || letter > 'z') && (letter < 'A' || letter > 'Z'))
-        {
-            break;
-        }
-        name += letter;
-    }
-    return name;
+    return text.substr(first, text.find_last_not_of(' ') - first + 1);
 }
 
-// 不変量 3 の分類。過大に数える側（書いてよい行を広く取る）で、書いてはいけない行は 0 回。
+// 先頭の ASCII の英字の並び（core の `is_letter` と同じ）。
+[[nodiscard]] std::string_view leading_letters(std::string_view line)
+{
+    const std::size_t end =
+        line.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    return line.substr(0, end);
+}
+
+// 書いてよいのは、範囲の前置き（数字）が無く、英字の名前が表の名前の最短以上の前方一致のとき
+// だけ（`!` と引数の有無は問わない。過大に許す側で、書いてはいけない行は 0 回）。
 [[nodiscard]] bool may_write_file(std::string_view text)
 {
-    const std::string name = leading_name(text);
-    constexpr std::array<std::string_view, 5> writers{"write", "wq", "xit", "exit", "saveas"};
-    for (const std::string_view writer : writers)
+    const std::string_view line = trimmed_line(text);
+    if (!line.empty() && line.front() >= '0' && line.front() <= '9')
     {
-        if (!name.empty() && writer.starts_with(name))
+        return false;
+    }
+    const std::string_view name = leading_letters(line);
+    for (const auto &[writer, shortest] : file_writers)
+    {
+        if (name.size() >= shortest && writer.starts_with(name))
         {
             return true;
         }
@@ -450,9 +465,12 @@ constexpr std::array<std::string_view, 5> documents{
     return false;
 }
 
+// 設定を書くのは `evaluate_ex` の入口と同じく、最初の空白までの名前が `colorscheme` か `set` に
+// 完全一致するときだけ（core に略称の `colo` `se` は無い。略称を足したらここも足す）。
 [[nodiscard]] bool may_write_settings(std::string_view text)
 {
-    const std::string name = leading_name(text);
+    const std::string_view line = trimmed_line(text);
+    const std::string_view name = line.substr(0, line.find(' '));
     return name == "colorscheme" || name == "set";
 }
 
@@ -677,6 +695,26 @@ void typed_steps(EditorController &controller, const std::vector<Step> &steps)
     return text + (std::get<2>(line) ? "<CR>" : "<Esc>");
 }
 
+// 文書は印字できる ASCII をそのまま、ほかのバイト（改行・Tab・UTF-8 の続き・`"` `\`）は `\xHH`。
+[[nodiscard]] std::string quoted_document(std::string_view text)
+{
+    constexpr std::string_view digits = "0123456789ABCDEF";
+    std::string quoted = "\"";
+    for (const char letter : text)
+    {
+        const auto byte = static_cast<unsigned char>(letter);
+        if (byte >= 0x20U && byte < 0x7FU && letter != '"' && letter != '\\')
+        {
+            quoted += letter;
+            continue;
+        }
+        quoted += "\\x";
+        quoted += digits.at(byte >> 4U);
+        quoted += digits.at(byte & 0x0FU);
+    }
+    return quoted + "\"";
+}
+
 [[nodiscard]] std::string described(std::string_view label, const Trial &trial,
                                     std::string_view invariant)
 {
@@ -685,7 +723,8 @@ void typed_steps(EditorController &controller, const std::vector<Step> &steps)
     {
         lines += described_line(line) + " ";
     }
-    return std::string(label) + ": " + std::string(invariant) + " / lines " + lines;
+    return std::string(label) + ": " + std::string(invariant) + " / document " +
+           quoted_document(trial.first) + " / lines " + lines;
 }
 
 void verify_core_lines()
@@ -728,9 +767,7 @@ void verify_closing_commands_only_mark()
     {
         Editing editing;
         open_vim_document(editing, "abc");
-        const auto delivery =
-            editing.controller().apply(app::VimKeyPress{core::VimCharacter{U':'}});
-        static_cast<void>(delivery);
+        static_cast<void>(editing.controller().apply(app::VimKeyPress{core::VimCharacter{U':'}}));
         static_cast<void>(editing.controller().apply(app::CommandText{std::string(command)}));
         const auto submitted = editing.controller().apply(app::SubmitCommand{});
         const auto frame = editing.controller().frame();
