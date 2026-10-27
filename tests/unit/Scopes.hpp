@@ -94,6 +94,8 @@ void verify_title_bar_layout_property_scope();
 
 // GridCellsPropertyTests.cpp（#936・格子の升と GridCells の素朴な歩きとの照合の性質の試験）
 void verify_grid_cells_property_scope();
+// TabsPropertyTests.cpp（#935・複数タブの状態と使った順と行き先の性質の試験）
+void verify_tabs_property_scope();
 
 // SyntaxTests.cpp（#816・ADR 0156 の決定 7〜10・14・見えている行の色の区間）
 void verify_syntax_scope();
