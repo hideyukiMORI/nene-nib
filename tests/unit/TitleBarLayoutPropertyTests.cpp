@@ -497,6 +497,7 @@ void add_grid_points(const TitleBarLayout &layout, std::int32_t step_x, std::int
 
 // --- 不変量 4: 決定性と押した要素 ---
 
+// TitleBarLayout は operator== を持たないので欄を並べる。欄が増えたらここも足す。
 [[nodiscard]] bool same_layout(const TitleBarLayout &left, const TitleBarLayout &right)
 {
     const bool rectangles = left.band == right.band && left.tabs == right.tabs &&
@@ -545,7 +546,7 @@ void add_grid_points(const TitleBarLayout &layout, std::int32_t step_x, std::int
     case TitleBarHit::none:
         return false;
     }
-    return false;
+    std::unreachable();
 }
 
 // 押して帯が送られた後に同じ点で離す（決定 9）。離した要素が押した要素と違えば値なし、
@@ -627,6 +628,25 @@ void print_input(const char *family, std::string_view reason, const TitleBarInpu
     return broken;
 }
 
+// 全点走査の固定の入力: 狭い帯であふれる（タブ 8 本・3 本以上が見えない）・送った途中・
+// アクティブと別のタブに載せている。あふれていることも確かめる。
+void verify_exhaustive_overflow()
+{
+    constexpr TitleBarInput overflowing{720, 144U, 8U,
+                                        4U,  300,  TitleBarTarget{TitleBarHit::tab, 5U}};
+    const TitleBarLayout layout = core::title_bar_layout(overflowing);
+    const std::size_t hidden = layout.tab_count - visible_tabs(layout).size();
+    expect(layout.overflowing && hidden >= 3U,
+           "the fixed exhaustive input overflows with at least three hidden tabs");
+    const std::string_view reason = exhaustive_hit_violation(overflowing);
+    if (!reason.empty())
+    {
+        print_input("exhaustive overflow", reason, overflowing);
+    }
+    expect(reason.empty(),
+           "the hit test follows the rectangles at every pixel of an overflowing band");
+}
+
 void verify_family(const char *description, std::uint64_t seed, Check check)
 {
     expect(broken_inputs(description, seed, check, false) == 0U, description);
@@ -696,6 +716,7 @@ void verify_title_bar_layout_property_scope()
     expect(broken_inputs("the hit test follows the rectangles at every pixel", 9203U,
                          exhaustive_hit_violation, true) == 0U,
            "the hit test follows the rectangles at every pixel of a narrow band");
+    verify_exhaustive_overflow();
     verify_family("the scroll stays in range and keeps the tab width", 9204U, scroll_violation);
     verify_family("the corrected scroll shows the active tab", 9205U, into_view_violation);
     verify_family("the same input gives the same layout", 9206U, determinism_violation);
