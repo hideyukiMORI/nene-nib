@@ -30,6 +30,7 @@ import zlib
 user = c.WinDLL("user32", use_last_error=True)
 kernel = c.WinDLL("kernel32", use_last_error=True)
 gdi = c.WinDLL("gdi32", use_last_error=True)
+dwm = c.WinDLL("dwmapi", use_last_error=True)
 
 
 def api(dll, name, result, *arguments):
@@ -76,6 +77,7 @@ api(user, "GetClientRect", w.BOOL, w.HWND, c.POINTER(w.RECT))
 # 窓の面が本当に見えているかを確かめる（別の窓が覆っていたら、測るのはその窓の面になる）。
 api(user, "WindowFromPoint", w.HWND, w.POINT)
 api(user, "GetAncestor", w.HWND, w.HWND, w.UINT)
+api(user, "GetWindow", w.HWND, w.HWND, w.UINT)
 api(user, "GetClassNameW", c.c_int, w.HWND, w.LPWSTR, c.c_int)
 api(user, "GetWindowLongPtrW", c.c_ssize_t, w.HWND, c.c_int)
 api(user, "GetDpiForWindow", w.UINT, w.HWND)
@@ -100,6 +102,7 @@ api(gdi, "DeleteDC", w.BOOL, w.HDC)
 api(gdi, "BitBlt", w.BOOL, w.HDC, c.c_int, c.c_int, c.c_int, c.c_int, w.HDC, c.c_int, c.c_int, w.DWORD)
 api(gdi, "GetDIBits", c.c_int, w.HDC, w.HBITMAP, w.UINT, w.UINT, w.LPVOID, c.POINTER(BITMAPINFO), w.UINT)
 api(gdi, "GdiFlush", w.BOOL)
+api(dwm, "DwmGetWindowAttribute", c.c_long, w.HWND, w.DWORD, w.LPVOID, w.DWORD)
 api(kernel, "GetCurrentThreadId", w.DWORD)
 api(kernel, "OpenThread", w.HANDLE, w.DWORD, w.BOOL, w.DWORD)
 api(kernel, "SuspendThread", w.DWORD, w.HANDLE)
@@ -163,6 +166,8 @@ DPI_AWARENESS_PER_MONITOR_V2 = c.c_void_p(-4)
 THREAD_SUSPEND_RESUME = 0x0002
 SUSPEND_FAILED = 0xFFFFFFFF
 GA_ROOT = 2
+GW_HWNDNEXT = 2
+DWMWA_CLOAKED = 14
 # 撮る前に覆われていないかを見る点の、クライアント領域の角からの内側への距離（物理画素・Issue #140）。
 COVER_INSET = 8
 # 前景を取り損ねるのは珍しくない（他のプロセスが入力を握っている間は OS が断る）ので数回試す。
@@ -380,7 +385,33 @@ def root_at(window, x: int, y: int) -> int:
     point = w.POINT(x, y)
     assert user.ClientToScreen(window, c.byref(point))
     hit = user.WindowFromPoint(point)
-    return int(user.GetAncestor(hit, GA_ROOT) or 0) if hit else 0
+    root = int(user.GetAncestor(hit, GA_ROOT) or 0) if hit else 0
+    return visible_root(root, point) if root and cloaked(root) else root
+
+
+def cloaked(window: int) -> bool:
+    """Whether the shell hides this window from the screen (DWMWA_CLOAKED is set, Issue #938)."""
+    value = w.DWORD()
+    result = dwm.DwmGetWindowAttribute(window, DWMWA_CLOAKED, c.byref(value), c.sizeof(value))
+    return result == 0 and value.value != 0
+
+
+def visible_root(cloaked_root: int, point: w.POINT) -> int:
+    """The first window below a cloaked root in Z order that is shown at this screen point (0 if none).
+
+    WindowFromPoint can answer with a window the shell has cloaked (an explorer
+    ApplicationFrameWindow, Issue #938): it draws no pixels, so the window that the screen
+    read-back pictures is the next visible, uncloaked one whose rectangle holds the point.
+    """
+    candidate = user.GetWindow(cloaked_root, GW_HWNDNEXT)
+    while candidate:
+        rect = w.RECT()
+        if (user.IsWindowVisible(candidate) and not cloaked(int(candidate))
+                and user.GetWindowRect(candidate, c.byref(rect))
+                and rect.left <= point.x < rect.right and rect.top <= point.y < rect.bottom):
+            return int(candidate)
+        candidate = user.GetWindow(candidate, GW_HWNDNEXT)
+    return 0
 
 
 def assert_uncovered(window) -> None:
