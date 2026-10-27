@@ -148,6 +148,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/LexerPropertyTests.cpp
     tests/unit/PreviewTests.cpp
     tests/unit/HtmlToMarkdownTests.cpp
+    tests/unit/MarkdownPropertyTests.cpp
     tests/unit/RichPasteTests.cpp
     tests/unit/SyntaxTests.cpp
     tests/unit/TextBufferPropertyTests.cpp)

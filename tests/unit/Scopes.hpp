@@ -93,6 +93,9 @@ void verify_markdown_scope();
 // HtmlToMarkdownTests.cpp（ADR 0157 の決定 5〜7・markdown_from_html）
 void verify_html_markdown_scope();
 
+// MarkdownPropertyTests.cpp（#871・parse_markdown と markdown_from_html の性質の試験）
+void verify_markdown_property_scope();
+
 // RichPasteTests.cpp（ADR 0157・貼り方は文書の言語とクリップボードの HTML で決まる）
 void verify_rich_paste_contracts();
 
