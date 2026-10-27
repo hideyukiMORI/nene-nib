@@ -2659,14 +2659,17 @@ def drive_palette(window, appearance: str, frames: Path | None) -> dict:
     steps["wrapped"] = palette_look(window, frames, "paletteWrapped")
     assert steps["wrapped"]["selected"] == rows - 1, f"Up on the first row: {steps['wrapped']}"
     # 最後の行は名前の無い `colorscheme` なので、保存した配色に戻る。
-    assert steps["wrapped"]["ground"] == saved,         f"the bare command on the last row changed the body ground: {steps['wrapped']}"
+    assert steps["wrapped"]["ground"] == saved,
+        f"the bare command on the last row changed the body ground: {steps['wrapped']}"
     press(window, VK_UP, 3)
     steps["upThree"] = palette_look(window, frames, "paletteUpThree")
     assert steps["upThree"]["selected"] == rows - 4, f"three more Ups: {steps['upThree']}"
-    assert steps["upThree"]["ground"] not in (saved, first),         f"the focused scheme is not previewed on the body: {steps['upThree']}"
+    assert steps["upThree"]["ground"] not in (saved, first),
+        f"the focused scheme is not previewed on the body: {steps['upThree']}"
     press(window, VK_ESCAPE)
     steps["cancelled"] = palette_look(window, frames, "paletteCancelled")
-    assert steps["cancelled"]["ground"] == saved,         f"Esc did not return to the scheme before the input: {steps['cancelled']}"
+    assert steps["cancelled"]["ground"] == saved,
+        f"Esc did not return to the scheme before the input: {steps['cancelled']}"
     open_schemes(window)
     time.sleep(PALETTE_SETTLE_SECONDS)
     if not press_chord(window, VK_CONTROL, VK_P):
@@ -2675,12 +2678,14 @@ def drive_palette(window, appearance: str, frames: Path | None) -> dict:
     assert steps["controlP"]["selected"] == rows - 1, f"Ctrl+P in the palette: {steps['controlP']}"
     press(window, VK_ESCAPE)
     steps["closed"] = palette_look(window, frames, "paletteClosed")
-    assert steps["closed"]["ground"] == saved,         f"Esc did not return to the scheme before the input: {steps['closed']}"
+    assert steps["closed"]["ground"] == saved,
+        f"Esc did not return to the scheme before the input: {steps['closed']}"
     # Enter で確定すると面が閉じ、選んだ配色（開いた時点でプレビューされた最初の配色）が残る。
     open_schemes(window)
     press(window, VK_RETURN)
     steps["confirmed"] = palette_look(window, frames, "paletteConfirmed")
-    assert steps["confirmed"]["ground"] == first,         f"Enter did not keep the chosen scheme: {steps['confirmed']} (chosen {first})"
+    assert steps["confirmed"]["ground"] == first,
+        f"Enter did not keep the chosen scheme: {steps['confirmed']} (chosen {first})"
     return steps
 
 
