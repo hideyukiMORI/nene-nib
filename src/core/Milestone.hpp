@@ -47,7 +47,15 @@ enum class Milestone : std::uint8_t
     // 診断の節目 3 回目: make_layout の中。CreateTextLayout が返った直後と字体の写像の直後。
     // cell 揃えの直後は既存の layout_created と同じ点なので足さない。
     text_layout_created,
-    fallback_mapped
+    fallback_mapped,
+    // 診断の節目 4 回目: Direct2DRenderer::draw の中。Clear の後・帯・本文（と本文の案内）・
+    // ステータスバー・残り（ステータスの案内と面）・EndDraw の後。
+    render_cleared,
+    render_title_done,
+    render_body_done,
+    render_status_done,
+    render_other_done,
+    render_draw_ended
 };
 
 // 計測 JSON に出る名前。閉じた選択肢なので既定分岐は書かない（CPP-002）。
@@ -107,6 +115,18 @@ enum class Milestone : std::uint8_t
         return "text_layout_created";
     case Milestone::fallback_mapped:
         return "fallback_mapped";
+    case Milestone::render_cleared:
+        return "render_cleared";
+    case Milestone::render_title_done:
+        return "render_title_done";
+    case Milestone::render_body_done:
+        return "render_body_done";
+    case Milestone::render_status_done:
+        return "render_status_done";
+    case Milestone::render_other_done:
+        return "render_other_done";
+    case Milestone::render_draw_ended:
+        return "render_draw_ended";
     }
     std::unreachable();
 }

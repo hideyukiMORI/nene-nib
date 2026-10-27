@@ -1783,6 +1783,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     context_->SetTarget(surface);
     context_->BeginDraw();
     context_->Clear(unpainted());
+    mark(core::Milestone::render_cleared);
     const auto size = context_->GetSize();
     const auto width = static_cast<std::int32_t>(size.width);
     const auto height = static_cast<std::int32_t>(size.height);
@@ -1791,18 +1792,23 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     const auto body = core::body_layout(width, height, dpi_, frame.settings.font_size);
     const auto guide = core::operation_guide_layout(frame.guide.context, body, status, dpi_);
     draw_title_bar(frame, title);
+    mark(core::Milestone::render_title_done);
     draw_body(frame, body);
     draw_body_guide(frame, guide);
+    mark(core::Milestone::render_body_done);
     draw_status_bar(frame, status);
+    mark(core::Milestone::render_status_done);
     draw_status_guide(frame, guide);
     if (frame.command_palette.has_value())
     {
         draw_palette(
             frame, core::palette_layout(width, height, dpi_, frame.command_palette.value().total));
     }
+    mark(core::Milestone::render_other_done);
     gutter_layouts_.end();
     const auto ended = context_->EndDraw();
     mark(core::Milestone::draw_ended);
+    mark(core::Milestone::render_draw_ended);
     context_->SetTarget(nullptr);
     if (text_failure_.has_value())
     {
