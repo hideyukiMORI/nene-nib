@@ -47,3 +47,7 @@ ADR 0071 は字体の選択を OS の `MapCharacters` だけに固定し、同�
 ## 追補（2026-10-27・#889）: 覚えの字体の正規化と `joins` の比べ方
 
 OS の `MapCharacters` は同じ family でも呼ぶたびに別の `IDWriteFont` を返すので、覚えに入る区切りの字体はすべて別のポインタになり、直前に名前を引いた字体の再利用（`named_`）が効かず、`joins` と主字体の判定のたびに `english_family`（COM 4 往復と `std::wstring` の確保）が走っていた（1 行に約 1,080 回）。`FallbackSegmentMemo` に正規の字体の表（行ごとに english family 名・weight・style・stretch・`ComPtr<IDWriteFont>` の平行な列）を持たせ、`MapCharacters` の答えの字体は覚えに入れる前に必ず正規の行にする: 表にある物はその行、新しい物は family 名を 1 回だけ読んで同じ組の行を探し、無ければ足す。覚えの entry と `PrimaryFontCoverage` の当てる前の範囲は字体を行の番号で持ち、行の番号が等しいことは組が等しいことと同じなので、`joins` は行の番号・隣り合い・`scale` で、主字体の判定と `apply` は行の family 名と weight / style / stretch で比べ・当て、どちらも COM を呼ばない（`family_of` と `named_` は無くした）。null の字体と family 名の読めない字体は行にせず null と同じに扱う（今までも名前が空なら `apply` は何も当てなかった・DirectWrite の代替のまま）。表は覚えと同じ寿命で、覚えを 4,096 件で捨てるときも残す（組の数は collection の字体の数を超えない）。字体を選ぶ規則・区切りの作り方・`hold` / `flush` の範囲のまとめ方・`apply` が当てる値は変えない。契約は `nib_window_tests --fallback-memo` に足した 2 つ（同じ組の別の物は同じ行と同じ `ComPtr`・family 名は新しい物のときだけ読む・違う weight は別の行／委ね先の答えを片ごとに別の物へ包んでも長い区切りは 1 つの範囲になり、family 名を読むのは字体選択の答えの数まで・同じ行の 2 回目は 0 回）。
+
+## 追補（2026-10-27・#894）: 主字体に無い文字が無い行
+
+主字体に無い文字が無い行は区切りを作らずに返す: `assign` は `AnalyzeScript` の前に行全体を決定 2 と同じ規則（`has_missing`・幅 0 の code point は直前に従う）で 1 回走査し、無い文字が 1 つも無ければ当てる範囲の無いまま `S_OK` を返し、1 つでもあれば今までどおり区切りごとに当てる（区切り・覚え・字体を選ぶ規則は変えない・契約は `nib_window_tests --fallback-ranges` の 2 つ）。

@@ -197,6 +197,12 @@ HRESULT PrimaryFontCoverage::assign(IDWriteTextLayout &layout, std::wstring_view
     applied_ = 0;
     pending_font_.reset();
     source_->reset(wide);
+    // 主字体に無い文字が 1 つも無い行は区切りを作らずに返す（当てる範囲が無い・ADR 0142 の追補・
+    // #894）。区切りと同じ規則（幅 0 の code point は直前に従う）で行全体を 1 回走査する。
+    if (!has_missing(wide, {0, static_cast<UINT32>(wide.size())}))
+    {
+        return S_OK;
+    }
     // 文字種の解析に失敗すれば当てない（DirectWrite の代替のまま・決定 5）。
     if (FAILED(analyzer_->AnalyzeScript(source_.Get(), 0, source_->length(), sink_.Get())))
     {

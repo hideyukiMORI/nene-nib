@@ -43,6 +43,7 @@ using win32::BodyTextLayouts;
 constexpr std::size_t name_capacity = 128;
 constexpr std::size_t bench_repeats = 40;
 constexpr std::size_t scattered_units = 2000;
+constexpr std::size_t ascii_units = 600;
 constexpr FLOAT unbounded_width = 1.0e6F;
 constexpr FLOAT counted_font_size = 14.0F;
 
@@ -456,6 +457,48 @@ void check_long_segment(IDWriteFactory2 &factory)
                !first_hit_difference(*applied.Get(), *plain.Get(), length).has_value(),
            "the long segment keeps the glyph sequence and every hit position");
 }
+
+// 1 行を新しい書式と範囲の字体の処理で当て、字体選択の替え玉が呼ばれた回数を返す。失敗は nullopt。
+std::optional<UINT32> fallback_calls(IDWriteFactory2 &factory, const std::wstring &wide)
+{
+    const auto counter = Microsoft::WRL::Make<ScriptedFontFallback>();
+    const auto format = counted_format(factory, *counter.Get());
+    Layout layout;
+    if (format == nullptr || FAILED(factory.CreateTextLayout(
+                                 wide.c_str(), static_cast<UINT32>(wide.size()), format.Get(),
+                                 unbounded_width, unbounded_width, layout.GetAddressOf())))
+    {
+        return std::nullopt;
+    }
+    auto coverage = win32::PrimaryFontCoverage::of(factory, *format.Get());
+    if (!coverage.has_value() || FAILED(coverage.value().assign(*layout.Get(), wide)))
+    {
+        return std::nullopt;
+    }
+    return counter->calls();
+}
+
+// 主字体に無い文字が無い行は区切りを作らずに返し、1 文字でもあれば今までどおり当てる（ADR 0142
+// の追補・#894）。AnalyzeScript は本物の IDWriteTextAnalyzer なので呼び出しを直接は数えられず、
+// 字体選択の替え玉の回数で見る（ASCII の行は飛ばす前から 0 回で、飛ばしたことの直接の証拠ではない。
+// 無い文字を混ぜた行が 1 回以上になることで、走査が無い文字を見落とさないことを守る）。
+void check_skips_covered_line(IDWriteFactory2 &factory)
+{
+    std::wstring ascii;
+    while (ascii.size() < ascii_units)
+    {
+        ascii += L"int value = 42; ";
+    }
+    ascii.resize(ascii_units);
+    auto mixed = ascii;
+    mixed.at(ascii_units / 2) = L'漢';
+    const auto covered = fallback_calls(factory, ascii);
+    const auto missing = fallback_calls(factory, mixed);
+    expect(covered.has_value() && covered.value() == 0,
+           "a line the primary font covers does not reach the font fallback");
+    expect(missing.has_value() && missing.value() >= 1,
+           "one character the primary font lacks still reaches the font fallback");
+}
 } // namespace
 
 void verify_fallback_ranges()
@@ -475,5 +518,6 @@ void verify_fallback_ranges()
     check_geometries(layouts, bench, samples.size());
     check_assigned(layouts);
     check_long_segment(*factory.Get());
+    check_skips_covered_line(*factory.Get());
 }
 } // namespace nenenib::tests::ui
