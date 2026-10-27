@@ -414,14 +414,20 @@ def visible_root(cloaked_root: int, point: w.POINT) -> int:
     return 0
 
 
-def assert_uncovered(window) -> None:
+def assert_uncovered(window, region: tuple[int, int, int, int] | None = None) -> None:
     """Raise WindowCovered unless this window owns the centre and the four corners of its client.
 
     Every capture goes through here first (Issue #140), so a picture of someone else's window is
-    never saved as ours; the caller turns the exception into its own failure report.
+    never saved as ours; the caller turns the exception into its own failure report. A region
+    (client [left, top, right, bottom]) asks about the part of the picture the caller reads
+    instead of the whole client (Issue #938: the IME's candidate surface sits below the caret).
     """
-    client = rectangle(window, user.GetClientRect)
-    points = cover_points(client[2] - client[0], client[3] - client[1])
+    if region is None:
+        client = rectangle(window, user.GetClientRect)
+        points = cover_points(client[2] - client[0], client[3] - client[1])
+    else:
+        left, top, right, bottom = region
+        points = [(left + x, top + y) for x, y in cover_points(right - left, bottom - top)]
     occupants = [root_at(window, x, y) for x, y in points]
     index = first_cover(int(window), occupants)
     if index is None:
@@ -590,13 +596,14 @@ def press_held_repeat(window, modifiers: list[int], key: int, times: int) -> boo
     return user.SendInput(len(records), c.byref(records), c.sizeof(INPUT)) == len(records)
 
 
-def capture(window) -> tuple[int, int, bytes]:
+def capture(window, region: tuple[int, int, int, int] | None = None) -> tuple[int, int, bytes]:
     """Read the composed client area back from the screen device context (top-down BGRA).
 
     It copies what the compositor shows, so another window over the editor would end up in the
     picture; callers raise the window first, and assert_uncovered refuses the capture otherwise.
+    The region, when given, is the client part the caller reads and the only part checked.
     """
-    assert_uncovered(window)
+    assert_uncovered(window, region)
     client = rectangle(window, user.GetClientRect)
     width, height = client[2] - client[0], client[3] - client[1]
     origin = w.POINT(0, 0)
