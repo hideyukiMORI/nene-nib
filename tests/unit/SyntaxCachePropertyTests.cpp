@@ -12,8 +12,14 @@
 //      （遡りの限界より前で開いた構文が続きでだけ見えるのは仕様の差で、破れではない）。
 //   2. 覚えの行は L の手前 4,096 行以内か無い（字句器へ通した行の数が、遡りか続きの歩数と見えて
 //      いる行の数の和に等しいことで見る）。
-//   3. syntax_lexed が「見えている行の数 + 一致した基準の遡りか続きの行数」に等しい（超えない）。
+//   3. syntax_lexed が「見えている行の数 + 一致した基準の遡りか続きの行数」に一致する（厳密な等式・
+//      checked_frame の上限の式は破れの名前を選ぶだけで判定に効かない）。
 //   4. 同じ入力で同じ結果（同じ trial を 2 回流して frame の要約と数を比べる）。
+//   5. 固定 seed の全 trial で、続きだけで一致した frame と遡りだけで一致した frame がどちらも 1 つ
+//      以上ある（覚えを使わない退行と、模型の続きの空振りを落とす）。
+// 変異の確認（手元・#923）: 捨て方を緩める（行 + 50 < 覚えの行）は命題 1 で落ち、続きを使わない
+// （SyntaxLines の continues を常に偽）は命題 5 で落ちる。編集のたびに過剰に捨てるのは移動だけの
+// 段で続きが残るので通る（色は正しく、性能だけの差）。
 // 模型の undo の単位は EditHistory の規則（削除を伴わない挿入が直前の挿入の直後に続けば畳む・
 // undo / redo で単位を閉じる）をなぞり、undo / redo の編集の始まりは単位の最初の位置。
 // 生成器は std::mt19937_64 の固定 seed で、分布の型は使わず剰余で範囲に畳む（決定的）。
@@ -47,7 +53,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <optional>
 #include <random>
 #include <string>
@@ -792,8 +797,9 @@ void verify_syntax_cache_property_scope()
         verify_trial(trial_label(round, language, long_text),
                      random_trial(random, language, long_text), total, trial == 0);
     }
-    std::printf("syntax cache property: %zu frames matched the backfill, %zu the kept cache, %zu "
-                "both\n",
-                total.at(tally_backfill), total.at(tally_cache), total.at(tally_both));
+    // 「両方」は覚えの距離が遡りの行数と同じ frame で、覚えを使わない製品でも数えられるので、
+    // 続きだけ・遡りだけをそれぞれ 1 つ以上求める（続きを使わない変異は「両方」だけでは落ちない）。
+    expect(total.at(tally_cache) > 0, "some frames continue only from the kept syntax cache");
+    expect(total.at(tally_backfill) > 0, "some frames match only the backfill");
 }
 } // namespace nenenib::tests
