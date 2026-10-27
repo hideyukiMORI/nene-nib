@@ -1,5 +1,5 @@
-// #900: Ctrl+P の面の行の文字組みの保持の契約。生成の数は替え玉の make が数える。
-// layout は本物の DirectWrite で作る（窓・device は作らない）。
+// #900: Ctrl+P の面の行の文字組みの保持の契約（#924 のタブの題名も同じ型）。生成の数は替え玉の make
+// が数える。 layout は本物の DirectWrite で作る（窓・device は作らない）。
 #include "DirectWriteFactory.hpp"
 #include "PaletteRowLayouts.hpp"
 #include "WindowChecks.hpp"
@@ -159,6 +159,42 @@ void verify_capacity(CountingMake &counting, IDWriteTextFormat *format)
     expect(counting.take() == 1, "the least recently used field is evicted first");
 }
 
+// タブの題名（#924）。欄は帯のタブの中で、× のあるタブは題名が狭い。色（hover）は鍵ではない。
+[[nodiscard]] PaletteRowKey title_key(IDWriteTextFormat *format, std::string_view title,
+                                      std::size_t index, std::size_t active)
+{
+    const auto left = 8 + (static_cast<std::int32_t>(index) * 160);
+    const auto right = left + (index == active ? 120 : 144);
+    return {format, PaletteTextRole::plain, title, core::LayoutRect{left, 0, right, 36}, dpi};
+}
+
+void verify_tab_titles(CountingMake &counting, IDWriteTextFormat *format)
+{
+    PaletteRowLayouts layouts;
+    const auto make = [&] { return counting.make(); };
+    const auto draw = [&](const std::array<std::string_view, 8> &titles, std::size_t active)
+    {
+        for (std::size_t index = 0; index < titles.size(); ++index)
+        {
+            const auto key = title_key(format, titles.at(index), index, active);
+            expect(layouts.obtain(key, make) != nullptr, "a tab title gets its layout");
+        }
+    };
+    expect(names.size() <= PaletteRowLayouts::capacity, "the visible tabs fit the bound");
+    draw(names, 0);
+    expect(counting.take() == names.size(), "the first frame creates every tab title");
+    draw(names, 0);
+    expect(counting.take() == 0, "the same titles in the next frame create nothing");
+    auto changed = names;
+    changed.at(2) = "● gamma.cpp";
+    draw(changed, 0);
+    expect(counting.take() == 1, "a changed title (the unsaved mark) creates only its own");
+    draw(changed, 5);
+    expect(counting.take() == 2, "switching tabs creates only the two titles whose width changed");
+    draw(changed, 5);
+    expect(counting.take() == 0, "the switched titles are then reused");
+}
+
 [[nodiscard]] Format make_format(IDWriteFactory2 &factory, float size)
 {
     Format format;
@@ -195,5 +231,6 @@ void verify_palette_layouts()
     verify_frames(counting, format.Get());
     verify_keys(counting, format.Get(), other.Get());
     verify_capacity(counting, format.Get());
+    verify_tab_titles(counting, format.Get());
 }
 } // namespace nenenib::tests::ui

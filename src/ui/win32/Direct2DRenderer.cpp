@@ -440,6 +440,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     // 書式を解放する前に比較用の借用ポインタも消す（ADR 0070）。
     status_layouts_ = {};
     palette_layouts_.clear();
+    tab_layouts_.clear();
     Microsoft::WRL::ComPtr<IUnknown> unknown;
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory7),
                                    unknown.GetAddressOf())) ||
@@ -507,6 +508,7 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     // 書式の寿命をキーに含める。生成が失敗しても古い行番号資源は持ち越さない。
     gutter_layouts_.clear();
     palette_layouts_.clear();
+    tab_layouts_.clear();
     const std::wstring requested = core::to_utf16(settings.font_family.text()).value();
     const wchar_t *face = family(requested.c_str(), L"Consolas");
     const float ratio = core::font_size_ratio(settings.font_size);
@@ -719,10 +721,8 @@ void Direct2DRenderer::draw_tab(const application::EditorFrame &frame,
     const auto close = core::tab_close_rect(layout, index);
     const auto right = close.has_value() ? close.value().left : tab.right - layout.tab_padding;
     const core::LayoutRect title{tab.left + layout.tab_padding, tab.top, right, tab.bottom};
-    context_->PushAxisAlignedClip(to_rect(title), D2D1_ANTIALIAS_MODE_ALIASED);
-    write(frame.tabs.at(index).title.text(), tab_format_.Get(), title,
-          lit ? frame.palette.text : frame.palette.muted);
-    context_->PopAxisAlignedClip();
+    write_tab_title(frame.tabs.at(index).title.text(), title,
+                    lit ? frame.palette.text : frame.palette.muted);
     if (!close.has_value())
     {
         return;
@@ -731,6 +731,26 @@ void Direct2DRenderer::draw_tab(const application::EditorFrame &frame,
                      core::TitleBarTarget{core::TitleBarHit::tab_close, index});
     brush_->SetColor(to_color(frame.palette.muted));
     draw_cross(close.value(), static_cast<float>(layout.glyph) / 2.0F, scaled(1.0F));
+}
+
+void Direct2DRenderer::write_tab_title(std::string_view text, const core::LayoutRect &title,
+                                       core::RgbColor color)
+{
+    // 題名の文字組みは帯の保持から引く（#924）。書式に焼いた文字単位の省略記号ごと保持し、
+    // DrawTextW と同じ画素（tests/ui の GutterLayoutTests）。
+    const auto shown = tab_layouts_.obtain(
+        PaletteRowKey{tab_format_.Get(), PaletteTextRole::plain, text, title, dpi_},
+        [&] { return text_layout(text, tab_format_.Get(), title); });
+    if (!shown)
+    {
+        return;
+    }
+    brush_->SetColor(to_color(color));
+    context_->PushAxisAlignedClip(to_rect(title), D2D1_ANTIALIAS_MODE_ALIASED);
+    context_->DrawTextLayout(
+        D2D1::Point2F(static_cast<float>(title.left), static_cast<float>(title.top)), shown.Get(),
+        brush_.Get());
+    context_->PopAxisAlignedClip();
 }
 
 void Direct2DRenderer::draw_tabs(const application::EditorFrame &frame,

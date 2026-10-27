@@ -68,6 +68,31 @@ void verify_keys(const Layout &first, const Layout &second)
            "a failed creation or invalidation can be retried");
 }
 
+void verify_trimmed_pixels(IDWriteFactory2 &factory, IDWriteTextFormat *format,
+                           SoftwareTarget &target)
+{
+    // タブの題名は書式に文字単位の省略記号を焼く（#924）。保持した layout も同じ画素。
+    Microsoft::WRL::ComPtr<IDWriteInlineObject> ellipsis;
+    expect(SUCCEEDED(factory.CreateEllipsisTrimmingSign(format, ellipsis.GetAddressOf())),
+           "the tab title ellipsis is created");
+    const DWRITE_TRIMMING trimming{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+    expect(SUCCEEDED(format->SetTrimming(&trimming, ellipsis.Get())),
+           "the tab title format trims by character");
+    constexpr std::array<std::wstring_view, 3> titles{
+        L"untitled", L"● 日本語.txt", L"とても長いファイルの名前が欄からはみ出して省略される.md"};
+    for (const auto text : titles)
+    {
+        const auto layout = make_layout(factory, format, text, area);
+        if (!layout)
+        {
+            return;
+        }
+        const auto expected = target.text_w(text, format, area);
+        expect(!expected.empty() && expected == target.plain_layout(layout.Get(), area),
+               "the trimmed tab title layout matches DrawTextW byte for byte");
+    }
+}
+
 void verify_pixels(IDWriteFactory2 &factory, IDWriteTextFormat *format)
 {
     SoftwareTarget target;
@@ -108,6 +133,7 @@ void verify_pixels(IDWriteFactory2 &factory, IDWriteTextFormat *format)
         expect(!expected.empty() && expected == target.plain_layout(layout.Get(), area),
                "the measured palette title matches DrawTextW byte for byte");
     }
+    verify_trimmed_pixels(factory, format, target);
 }
 } // namespace
 

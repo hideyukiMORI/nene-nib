@@ -21,6 +21,8 @@ namespace nenenib::ui::win32
 // 使ったものから捨てる。書式・DPI の作り直しと面を閉じたときに全部捨てる（device lost は
 // renderer ごと作り直すので保持も消える）。生成は呼び出し元の make が受け持ち、作れなかった
 // （null の）layout は覚えない。構築では OS 資源を作らない。
+// タブの題名も同じ型の別の実体で保持する（#924）。帯に見える数は上限に収まり、面を閉じても
+// 捨てない。
 class PaletteRowLayouts final
 {
   public:

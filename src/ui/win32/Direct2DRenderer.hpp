@@ -143,6 +143,8 @@ class Direct2DRenderer final
                        core::RgbColor color);
     void draw_button_face(const application::EditorFrame &frame, const core::TitleBarLayout &layout,
                           const core::LayoutRect &box, core::TitleBarTarget target);
+    void write_tab_title(std::string_view text, const core::LayoutRect &title,
+                         core::RgbColor color);
     void draw_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout,
                   std::size_t index);
     void draw_tabs(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
@@ -331,6 +333,8 @@ class Direct2DRenderer final
     GutterTextLayouts gutter_layouts_;
     // Ctrl+P の面の見えている行の文字組み。書式の作り直しと面を閉じたときに捨てる（#900）。
     PaletteRowLayouts palette_layouts_;
+    // タブの題名の文字組み。同じ型で、書式・DPI の作り直しでだけ捨てる（#924）。
+    PaletteRowLayouts tab_layouts_;
     // other の枠のプレビュー。要素の layout の保持は frame をまたいで再利用する（ADR 0155）。
     PreviewPane preview_;
     // 通常7枠と案内4枠。録画時は案内が無く8枠（ADR 0079・言語の項目で 11・ADR 0154 の決定 6）。
