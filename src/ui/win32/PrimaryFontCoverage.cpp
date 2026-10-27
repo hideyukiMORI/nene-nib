@@ -101,33 +101,6 @@ constexpr unsigned surrogate_shift = 10;
     return SUCCEEDED(format.GetFontFamilyName(name.data(), name_capacity)) ? name.data()
                                                                            : std::wstring{};
 }
-
-// 字体の family の名前（en-us、無ければ最初の名前）。読めなければ空。
-[[nodiscard]] std::wstring english_family(IDWriteFont &font)
-{
-    Microsoft::WRL::ComPtr<IDWriteFontFamily> family;
-    Microsoft::WRL::ComPtr<IDWriteLocalizedStrings> names;
-    UINT32 index = 0;
-    BOOL exists = FALSE;
-    UINT32 length = 0;
-    if (FAILED(font.GetFontFamily(&family)) || FAILED(family->GetFamilyNames(&names)) ||
-        FAILED(names->FindLocaleName(L"en-us", &index, &exists)))
-    {
-        return {};
-    }
-    index = exists != FALSE ? index : 0;
-    if (FAILED(names->GetStringLength(index, &length)))
-    {
-        return {};
-    }
-    std::wstring name(length + 1, L'\0');
-    if (FAILED(names->GetString(index, name.data(), length + 1)))
-    {
-        return {};
-    }
-    name.resize(length);
-    return name;
-}
 } // namespace
 
 PrimaryFontCoverage::PrimaryFontCoverage(IDWriteTextFormat &format,
@@ -222,7 +195,7 @@ bool PrimaryFontCoverage::has_missing(std::wstring_view wide, DWRITE_TEXT_RANGE 
 HRESULT PrimaryFontCoverage::assign(IDWriteTextLayout &layout, std::wstring_view wide)
 {
     applied_ = 0;
-    pending_font_.Reset();
+    pending_font_.reset();
     source_->reset(wide);
     // 文字種の解析に失敗すれば当てない（DirectWrite の代替のまま・決定 5）。
     if (FAILED(analyzer_->AnalyzeScript(source_.Get(), 0, source_->length(), sink_.Get())))
@@ -257,7 +230,7 @@ HRESULT PrimaryFontCoverage::assign_segment(IDWriteTextLayout &layout, std::wstr
         const auto start = segment.startPosition + done;
         const auto piece = wide.substr(start, piece_length(wide, start, segment.length - done));
         UINT32 mapped = 0;
-        Microsoft::WRL::ComPtr<IDWriteFont> font;
+        std::optional<std::size_t> font;
         FLOAT scale = 1;
         if (FAILED(map_piece(piece, mapped, font, scale)) || mapped == 0)
         {
@@ -265,7 +238,8 @@ HRESULT PrimaryFontCoverage::assign_segment(IDWriteTextLayout &layout, std::wstr
         }
         mapped = std::min(mapped, static_cast<UINT32>(piece.size()));
         const DWRITE_TEXT_RANGE range{start, mapped};
-        const auto held = font != nullptr ? hold(layout, *font.Get(), scale, range) : flush(layout);
+        const auto held =
+            font.has_value() ? hold(layout, font.value(), scale, range) : flush(layout);
         if (FAILED(held))
         {
             return held;
@@ -277,9 +251,9 @@ HRESULT PrimaryFontCoverage::assign_segment(IDWriteTextLayout &layout, std::wstr
 
 // 片の字体選択の答え。同じ片の文字列を覚えていれば OS の字体選択を呼ばずにその答えを返し、
 // 覚えていなければ呼んで S_OK で進んだ答えだけを覚える（失敗と mappedLength 0 は覚えない・
-// ADR 0142 の追補）。
+// ADR 0142 の追補）。字体は正規の字体の表の行にしてから覚え・返す（#889）。
 HRESULT PrimaryFontCoverage::map_piece(std::wstring_view piece, UINT32 &mapped,
-                                       Microsoft::WRL::ComPtr<IDWriteFont> &font, FLOAT &scale)
+                                       std::optional<std::size_t> &font, FLOAT &scale)
 {
     const auto remembered = memo_->find(piece);
     if (remembered.has_value())
@@ -290,9 +264,15 @@ HRESULT PrimaryFontCoverage::map_piece(std::wstring_view piece, UINT32 &mapped,
         return S_OK;
     }
     source_->reset(piece);
+    Microsoft::WRL::ComPtr<IDWriteFont> chosen;
     const auto result = fallback_->MapCharacters(source_.Get(), 0, source_->length(),
                                                  collection_.Get(), family_.c_str(), weight_,
-                                                 style_, stretch_, &mapped, &font, &scale);
+                                                 style_, stretch_, &mapped, &chosen, &scale);
+    if (FAILED(result))
+    {
+        return result;
+    }
+    font = memo_->normalized(chosen);
     if (result == S_OK && mapped != 0)
     {
         memo_->remember(piece, font, scale, mapped);
@@ -300,19 +280,26 @@ HRESULT PrimaryFontCoverage::map_piece(std::wstring_view piece, UINT32 &mapped,
     return result;
 }
 
-// 直前の範囲と同じ字体で隣り合う。
-bool PrimaryFontCoverage::joins(IDWriteFont &font, FLOAT scale, DWRITE_TEXT_RANGE range)
+// 直前の範囲と同じ字体（正規の表の同じ行・同じ scale）で隣り合う。行が同じことは family 名・
+// weight・style・stretch が同じことなので、COM を呼ばずに比べる（#889）。
+bool PrimaryFontCoverage::joins(std::size_t font, FLOAT scale, DWRITE_TEXT_RANGE range) const
 {
-    return pending_font_ != nullptr &&
+    return pending_font_.has_value() && pending_font_.value() == font &&
            pending_range_.startPosition + pending_range_.length == range.startPosition &&
-           pending_scale_ == scale && pending_font_->GetWeight() == font.GetWeight() &&
-           pending_font_->GetStyle() == font.GetStyle() &&
-           pending_font_->GetStretch() == font.GetStretch() && family_of(font) == pending_family_;
+           pending_scale_ == scale;
+}
+
+// 書式の主字体と同じ字体（DirectWrite が同じ字体を選ぶので当てない）。
+bool PrimaryFontCoverage::primary(std::size_t font, FLOAT scale) const
+{
+    return scale == 1.0F && memo_->row_weight(font) == weight_ &&
+           memo_->row_style(font) == style_ && memo_->row_stretch(font) == stretch_ &&
+           memo_->row_family(font) == family_;
 }
 
 // 選ばれた字体の範囲を持つ。同じ字体の隣なら伸ばし、違えば前を当ててから持ち直す。主字体と
 // 同じ字体なら当てない（DirectWrite が同じ字体を選ぶ）。
-HRESULT PrimaryFontCoverage::hold(IDWriteTextLayout &layout, IDWriteFont &font, FLOAT scale,
+HRESULT PrimaryFontCoverage::hold(IDWriteTextLayout &layout, std::size_t font, FLOAT scale,
                                   DWRITE_TEXT_RANGE range)
 {
     if (joins(font, scale, range))
@@ -321,15 +308,11 @@ HRESULT PrimaryFontCoverage::hold(IDWriteTextLayout &layout, IDWriteFont &font, 
         return S_OK;
     }
     const auto flushed = flush(layout);
-    const bool primary = family_of(font) == family_ && font.GetWeight() == weight_ &&
-                         font.GetStyle() == style_ && font.GetStretch() == stretch_ &&
-                         scale == 1.0F;
-    if (FAILED(flushed) || primary || applied_ >= fallback_range_limit)
+    if (FAILED(flushed) || primary(font, scale) || applied_ >= fallback_range_limit)
     {
         return flushed;
     }
-    pending_font_ = &font;
-    pending_family_ = family_of(font);
+    pending_font_ = font;
     pending_range_ = range;
     pending_scale_ = scale;
     return S_OK;
@@ -337,52 +320,41 @@ HRESULT PrimaryFontCoverage::hold(IDWriteTextLayout &layout, IDWriteFont &font, 
 
 HRESULT PrimaryFontCoverage::flush(IDWriteTextLayout &layout)
 {
-    if (pending_font_ == nullptr)
+    if (!pending_font_.has_value())
     {
         return S_OK;
     }
     ++applied_;
-    const auto applied = apply(layout, *pending_font_.Get(), pending_scale_, pending_range_);
-    pending_font_.Reset();
+    const auto applied = apply(layout, pending_font_.value(), pending_scale_, pending_range_);
+    pending_font_.reset();
     return applied;
 }
 
-// 選ばれた字体の family 名を範囲に当て、書式と違う weight / style / stretch と scale も当てる。
-HRESULT PrimaryFontCoverage::apply(IDWriteTextLayout &layout, IDWriteFont &font, FLOAT scale,
-                                   DWRITE_TEXT_RANGE range)
+// 選ばれた字体（正規の表の行）の family 名を範囲に当て、書式と違う weight / style / stretch と
+// scale も当てる。行の family 名は空でない（読めない字体は行にしない）。
+HRESULT PrimaryFontCoverage::apply(IDWriteTextLayout &layout, std::size_t font, FLOAT scale,
+                                   DWRITE_TEXT_RANGE range) const
 {
-    const auto &family = family_of(font);
-    if (family.empty())
+    const auto weight = memo_->row_weight(font);
+    const auto style = memo_->row_style(font);
+    const auto stretch = memo_->row_stretch(font);
+    auto result = layout.SetFontFamilyName(memo_->row_family(font).c_str(), range);
+    if (SUCCEEDED(result) && weight != weight_)
     {
-        return S_OK;
+        result = layout.SetFontWeight(weight, range);
     }
-    auto result = layout.SetFontFamilyName(family.c_str(), range);
-    if (SUCCEEDED(result) && font.GetWeight() != weight_)
+    if (SUCCEEDED(result) && style != style_)
     {
-        result = layout.SetFontWeight(font.GetWeight(), range);
+        result = layout.SetFontStyle(style, range);
     }
-    if (SUCCEEDED(result) && font.GetStyle() != style_)
+    if (SUCCEEDED(result) && stretch != stretch_)
     {
-        result = layout.SetFontStyle(font.GetStyle(), range);
-    }
-    if (SUCCEEDED(result) && font.GetStretch() != stretch_)
-    {
-        result = layout.SetFontStretch(font.GetStretch(), range);
+        result = layout.SetFontStretch(stretch, range);
     }
     if (SUCCEEDED(result) && scale != 1.0F)
     {
         result = layout.SetFontSize(size_ * scale, range);
     }
     return result;
-}
-
-const std::wstring &PrimaryFontCoverage::family_of(IDWriteFont &font)
-{
-    if (named_.Get() != &font)
-    {
-        named_ = &font;
-        named_family_ = english_family(font);
-    }
-    return named_family_;
 }
 } // namespace nenenib::ui::win32
