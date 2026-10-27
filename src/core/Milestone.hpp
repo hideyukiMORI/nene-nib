@@ -59,75 +59,46 @@ enum class Milestone : std::uint8_t
 };
 
 // 計測 JSON に出る名前。閉じた選択肢なので既定分岐は書かない（CPP-002）。
+// 診断の節目で関数長（60 行）に当たるので、case と return を 1 行に書く（experiment だけ）。
+// clang-format off
 [[nodiscard]] constexpr std::string_view milestone_name(Milestone milestone) noexcept
 {
     switch (milestone)
     {
-    case Milestone::document_opened:
-        return "document_opened";
-    case Milestone::window_created:
-        return "window_created";
-    case Milestone::backdrop_applied:
-        return "backdrop_applied";
-    case Milestone::window_shown:
-        return "window_shown";
-    case Milestone::device_created:
-        return "device_created";
-    case Milestone::swap_chain_created:
-        return "swap_chain_created";
-    case Milestone::composition_bound:
-        return "composition_bound";
-    case Milestone::context_created:
-        return "context_created";
-    case Milestone::text_formats_created:
-        return "text_formats_created";
-    case Milestone::input_received:
-        return "input_received";
-    case Milestone::frame_presented:
-        return "frame_presented";
-    case Milestone::body_presented:
-        return "body_presented";
-    case Milestone::device_adopted:
-        return "device_adopted";
-    case Milestone::probe_started:
-        return "probe_started";
-    case Milestone::probe_finished:
-        return "probe_finished";
-    case Milestone::key_delivered:
-        return "key_delivered";
-    case Milestone::paint_entered:
-        return "paint_entered";
-    case Milestone::frame_built:
-        return "frame_built";
-    case Milestone::draw_ended:
-        return "draw_ended";
-    case Milestone::latency_waited:
-        return "latency_waited";
-    case Milestone::presented:
-        return "presented";
-    case Milestone::layout_created:
-        return "layout_created";
-    case Milestone::question_shown:
-        return "question_shown";
-    case Milestone::question_answered:
-        return "question_answered";
-    case Milestone::text_layout_created:
-        return "text_layout_created";
-    case Milestone::fallback_mapped:
-        return "fallback_mapped";
-    case Milestone::render_cleared:
-        return "render_cleared";
-    case Milestone::render_title_done:
-        return "render_title_done";
-    case Milestone::render_body_done:
-        return "render_body_done";
-    case Milestone::render_status_done:
-        return "render_status_done";
-    case Milestone::render_other_done:
-        return "render_other_done";
-    case Milestone::render_draw_ended:
-        return "render_draw_ended";
+    case Milestone::document_opened: return "document_opened";
+    case Milestone::window_created: return "window_created";
+    case Milestone::backdrop_applied: return "backdrop_applied";
+    case Milestone::window_shown: return "window_shown";
+    case Milestone::device_created: return "device_created";
+    case Milestone::swap_chain_created: return "swap_chain_created";
+    case Milestone::composition_bound: return "composition_bound";
+    case Milestone::context_created: return "context_created";
+    case Milestone::text_formats_created: return "text_formats_created";
+    case Milestone::input_received: return "input_received";
+    case Milestone::frame_presented: return "frame_presented";
+    case Milestone::body_presented: return "body_presented";
+    case Milestone::device_adopted: return "device_adopted";
+    case Milestone::probe_started: return "probe_started";
+    case Milestone::probe_finished: return "probe_finished";
+    case Milestone::key_delivered: return "key_delivered";
+    case Milestone::paint_entered: return "paint_entered";
+    case Milestone::frame_built: return "frame_built";
+    case Milestone::draw_ended: return "draw_ended";
+    case Milestone::latency_waited: return "latency_waited";
+    case Milestone::presented: return "presented";
+    case Milestone::layout_created: return "layout_created";
+    case Milestone::question_shown: return "question_shown";
+    case Milestone::question_answered: return "question_answered";
+    case Milestone::text_layout_created: return "text_layout_created";
+    case Milestone::fallback_mapped: return "fallback_mapped";
+    case Milestone::render_cleared: return "render_cleared";
+    case Milestone::render_title_done: return "render_title_done";
+    case Milestone::render_body_done: return "render_body_done";
+    case Milestone::render_status_done: return "render_status_done";
+    case Milestone::render_other_done: return "render_other_done";
+    case Milestone::render_draw_ended: return "render_draw_ended";
     }
     std::unreachable();
 }
+// clang-format on
 } // namespace nenenib::core
