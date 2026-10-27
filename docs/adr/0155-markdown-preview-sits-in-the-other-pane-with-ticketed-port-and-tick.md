@@ -71,3 +71,7 @@
 - tick は変わったときだけ描く: `EditorDelivery.repaint` は `PreviewTick` が要求を出さなかったとき（見た改訂番号を進めただけを含む）と `AutosaveTick` が退避を頼まなかったときだけ false で、ui の `deliver` はそのとき `invalidate()` しない。結果を採るのは `WorkCompleted`（true）。契約は `--preview` の静かな tick 10 回と `--autosave`。
 - リストの区切りは測る範囲だけ: `PreviewBlockTops::measure` はリストの区切りを錨の 1 つ前から前へ決め（錨より前の項目は読まない）、記号の列は測る範囲に入ったリストを範囲の中の最初の項目からリストの終わりまで（上限 10,000 項目・超えたら番号を 5 桁として）測って決める。番号は前へ増えるので最大の番号の桁数が入り、送っても字下げは動かない。読む要素は測る範囲＋1＋リストの残り（上限）以内で、文書の長さに依らない（`nib_window_tests --preview` の 10 万項目）。後の項目で列が広がれば錨から置き直す。
 - tick は狙いの横位置を捨てない: `PreviewTick` は `keeps_wanted_x` に載り、プレビューが開いている間も `j` `k` と下向きの移動の狙いの横位置が残る（契約 `--preview`）。
+
+## 追補 2026-10-27（#876）
+
+- 保持の探索と描画の効果の保持: `PreviewTextLayouts` の entry は鍵（種類・段・幅・文字・装飾・字体の設定）の FNV-1a（自前・64 bit・`std::hash` は実装に依るので使わない）を持ち、探索は hash を先に比べて一致した候補だけ鍵の全体を比べる。最近使った順は entry を動かさず「最後に引いた通し番号」で持ち、満杯のときは番号の最小の entry をその場で置き換える（件数 256 と LRU の規則は変えない・`measure` は順を動かさない）。装飾の drawing effect と行内コードの範囲の hit test（原点 0,0・描くときに原点へずらす）は `PreviewPainter` が最初に描くときに entry に 1 回だけ置き、entry の印（効果をかけたときの foreground の brush を参照で持つ）が今の `PreviewBrushes` の brush と違うとき（テーマか描画先の変更・device lost の後の作り直し）だけかけ直す。全 entry は捨てない（layout は字体と幅だけに依る）。印は brush を参照で持つので、同じ番地に別の brush が作られて取り違えない。契約は `nib_window_tests --preview`（装飾だけ違う要素は別の entry・引き直した最古は残る・外から消した効果を同じ brush の組はかけ直さず作り直した組はかけ直す・行内コードの面は毎回同じ矩形）。オフスクリーンの絵の使い回しは段 2（別 Issue）。

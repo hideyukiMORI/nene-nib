@@ -27,6 +27,7 @@
 #include "ThemeCatalog.hpp"
 #include "ThemeName.hpp"
 
+#include <algorithm>
 #include <array>
 #include <combaseapi.h>
 #include <cstddef>
@@ -428,6 +429,144 @@ void check_list_scanned_in_range()
                top.value().indent(1) == scrolled.value().indent(1) && top.value().indent(1) > 40.0F,
            "scrolling a list whose 10. is below the frame keeps its marker column");
 }
+// 鍵の hash（#876）: 文字が同じで装飾だけ違う要素は別の entry、同じ鍵は同じ entry。最近使った順は
+// 引いた通し番号で、満杯のときに引き直した最も古い要素は残り、次に古いものが捨てられる。
+void check_hashed_lookup()
+{
+    PreviewTextLayouts layouts;
+    const auto plain = block_of(core::PreviewBlockKind::paragraph, "same text");
+    const auto styled = block_of(core::PreviewBlockKind::paragraph, "same text",
+                                 {{core::Offset{0}, core::Offset{4}, core::PreviewStyle::strong}});
+    const auto first = layouts.get(plain, width, style_of());
+    const auto other = layouts.get(styled, width, style_of());
+    const auto again = layouts.get(plain, width, style_of());
+    expect(first.has_value() && other.has_value() && again.has_value() &&
+               first.value() == again.value() && first.value() != other.value() &&
+               layouts.created() == 2,
+           "a different span list is a different preview layout and the same key is reused");
+    PreviewTextLayouts full;
+    for (std::size_t index = 0; index < PreviewTextLayouts::capacity; ++index)
+    {
+        const auto made = full.get(
+            block_of(core::PreviewBlockKind::paragraph, std::to_string(index)), width, style_of());
+        expect(made.has_value(), "each distinct preview block gets a layout");
+    }
+    const auto touched =
+        full.get(block_of(core::PreviewBlockKind::paragraph, "0"), width, style_of());
+    const auto pushed =
+        full.get(block_of(core::PreviewBlockKind::paragraph, "new"), width, style_of());
+    const auto kept = full.get(block_of(core::PreviewBlockKind::paragraph, "0"), width, style_of());
+    expect(touched.has_value() && pushed.has_value() && kept.has_value() &&
+               full.created() == PreviewTextLayouts::capacity + 1 &&
+               full.held() == PreviewTextLayouts::capacity,
+           "a preview layout used again is kept when the capacity is reached");
+    const auto dropped =
+        full.get(block_of(core::PreviewBlockKind::paragraph, "1"), width, style_of());
+    expect(dropped.has_value() && full.created() == PreviewTextLayouts::capacity + 2,
+           "the least recently used preview layout is dropped first");
+}
+
+// "see `code` and link": 行内コードは 4〜10 バイト、リンクは 15〜19 バイト（ASCII なので UTF-16
+// も同じ）。
+[[nodiscard]] core::MarkdownDocument decorated_document()
+{
+    core::MarkdownDocument document;
+    document.blocks.push_back(
+        block_of(core::PreviewBlockKind::paragraph, "see `code` and link",
+                 {{core::Offset{4}, core::Offset{10}, core::PreviewStyle::code},
+                  {core::Offset{15}, core::Offset{19}, core::PreviewStyle::link}}));
+    return document;
+}
+
+[[nodiscard]] bool painted(ID2D1RenderTarget &target, PreviewTextLayouts &layouts,
+                           const win32::PreviewBrushes &brushes, const win32::PreviewScene &scene)
+{
+    std::optional<win32::RenderFailure> failure;
+    win32::PreviewPainter<ID2D1RenderTarget> painter(target, layouts, brushes, failure);
+    target.BeginDraw();
+    painter.paint(scene);
+    return SUCCEEDED(target.EndDraw()) && !failure.has_value();
+}
+
+// 装飾の効果は保持の entry に 1 回だけ置く（#876・ADR 0155 の追補）。1 回目の描画の後に効果を
+// 外から消すと、同じ brush の組の 2 回目の描画はかけ直さない。brush の組が作り直されれば
+// （テーマか描画先の変更）かけ直す。
+void check_effects_held()
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    win32::PreviewBrushes brushes;
+    win32::PreviewBrushes remade;
+    expect(target != nullptr && theme.has_value() &&
+               SUCCEEDED(brushes.prepare(*target.Get(), theme.value().view())) &&
+               SUCCEEDED(remade.prepare(*target.Get(), theme.value().view())),
+           "two preview brush sets are made on a software target");
+    const auto document = decorated_document();
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto tops = win32::PreviewBlockTops::measure(document, layouts, style, whole);
+    if (target == nullptr || !theme || !tops)
+    {
+        expect(false, "the decorated preview block is measured");
+        return;
+    }
+    const win32::PreviewScene scene{document, tops.value(), style, core::LayoutRect{0, 0, 400, 200},
+                                    0.0F};
+    const auto first = painted(*target.Get(), layouts, brushes, scene);
+    const auto layout = layouts.get(document.blocks.front(), width - 32.0F, style);
+    expect(first && layout.has_value() && layouts.created() == 2 &&
+               effect_is(*layout.value().Get(), 16, brushes.of(win32::PreviewInk::function)),
+           "the link effect is put on the held layout by the first paint");
+    if (!layout)
+    {
+        return;
+    }
+    expect(SUCCEEDED(layout.value()->SetDrawingEffect(nullptr, DWRITE_TEXT_RANGE{0, 19})),
+           "the held effects are cleared from outside");
+    expect(painted(*target.Get(), layouts, brushes, scene) &&
+               !effect_is(*layout.value().Get(), 16, brushes.of(win32::PreviewInk::function)),
+           "the same brush set does not put the effects again");
+    expect(painted(*target.Get(), layouts, remade, scene) &&
+               effect_is(*layout.value().Get(), 16, remade.of(win32::PreviewInk::function)) &&
+               effect_is(*layout.value().Get(), 5, remade.of(win32::PreviewInk::string)),
+           "a remade brush set puts the effects again");
+}
+
+[[nodiscard]] bool same_rect(const D2D1_RECT_F &left, const D2D1_RECT_F &right) noexcept
+{
+    return left.left == right.left && left.top == right.top && left.right == right.right &&
+           left.bottom == right.bottom;
+}
+
+// 行内コードの面の矩形は entry に保持し（原点 0,0 の hit test）、描くたびに同じ矩形で塗る（#876）。
+void check_inline_code_held()
+{
+    const auto document = decorated_document();
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto tops = win32::PreviewBlockTops::measure(document, layouts, style, whole);
+    if (!tops)
+    {
+        expect(false, "the decorated preview block is measured");
+        return;
+    }
+    const win32::PreviewScene scene{document, tops.value(), style, core::LayoutRect{0, 0, 400, 200},
+                                    0.0F};
+    const win32::PreviewBrushes unprepared;
+    CountingTarget counted;
+    std::optional<win32::RenderFailure> failure;
+    win32::PreviewPainter<CountingTarget> painter(counted, layouts, unprepared, failure);
+    painter.paint(scene);
+    const auto once = counted.fills();
+    painter.paint(scene);
+    const auto &twice = counted.fills();
+    expect(!failure.has_value() && once.size() >= 2 && twice.size() == once.size() * 2 &&
+               std::equal(once.begin(), once.end(),
+                          twice.begin() + static_cast<std::ptrdiff_t>(once.size()), same_rect),
+           "the inline code panel is filled with the same held rectangles on every paint");
+}
 } // namespace
 
 void verify_preview_layouts()
@@ -449,5 +588,8 @@ void verify_preview_layouts()
     check_pane_reuse();
     check_measured_from_anchor();
     check_list_scanned_in_range();
+    check_hashed_lookup();
+    check_effects_held();
+    check_inline_code_held();
 }
 } // namespace nenenib::tests::ui

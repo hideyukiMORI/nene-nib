@@ -7,6 +7,7 @@
 #include "PreviewPlacement.hpp"
 #include "PreviewScene.hpp"
 #include "PreviewStyle.hpp"
+#include "PreviewTextLayout.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "RenderFailure.hpp"
 
@@ -17,6 +18,7 @@
 #include <dwrite.h>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -191,14 +193,16 @@ template <typename Target> class PreviewPainter final
         const auto width =
             preview_text_width(block, static_cast<float>(core::width_of(scene.frame)),
                                scene.tops.indent(index), scene.style.dpi);
-        const auto layout = layouts_.get(block, width, scene.style);
-        if (!layout)
+        const auto entry = layouts_.entry(block, width, scene.style);
+        if (!entry)
         {
-            failure_ = layout.error();
+            failure_ = entry.error();
             return;
         }
-        paint_spans(scene, block, *layout.value().Get(), origin);
-        target_.DrawTextLayout(origin, layout.value().Get(), brushes_.of(ink_of(block)),
+        auto &held = *entry.value();
+        ink_spans(block, held);
+        fill_inline_code(scene, held, origin);
+        target_.DrawTextLayout(origin, held.layout.Get(), brushes_.of(ink_of(block)),
                                D2D1_DRAW_TEXT_OPTIONS_NONE);
     }
 
@@ -222,60 +226,85 @@ template <typename Target> class PreviewPainter final
     }
 
     // 行の中の装飾の色（行内コードは string と panel の面・リンクは function・画像は
-    // comment）。layout の drawing effect は描くたびに置き直す（保持の鍵にテーマを入れない）。
-    void paint_spans(const PreviewScene &scene, const core::PreviewBlock &block,
-                     IDWriteTextLayout &layout, D2D1_POINT_2F origin)
+    // comment）。drawing effect と行内コードの範囲の hit test は保持の entry に 1 回だけ置き、
+    // entry の印（効果をかけたときの foreground の brush）が今の brush の組と違うときだけ
+    // かけ直す（テーマか描画先が変わって brush が作り直されたとき・ADR 0155 の追補・#876）。
+    // 印は brush を参照で持つので、同じ番地に別の brush が作られて取り違えることはない。
+    void ink_spans(const core::PreviewBlock &block, PreviewTextLayout &held)
     {
+        auto *const stamp = brushes_.of(PreviewInk::foreground);
+        if (held.inked.has_value() && held.inked.value().Get() == stamp)
+        {
+            return;
+        }
+        held.inked.reset();
+        held.code_runs.clear();
         const auto shown = preview_shown_text(block);
+        std::vector<DWRITE_HIT_TEST_METRICS> code_runs;
         for (const auto &span : block.spans)
         {
-            const auto begin = preview_units(shown, span.begin.value);
-            const auto end = preview_units(shown, span.end.value);
-            const DWRITE_TEXT_RANGE range{begin, end > begin ? end - begin : 0};
-            if (span.style == core::PreviewStyle::code)
-            {
-                fill_inline_code(scene, layout, range, origin);
-            }
-            const auto ink = span_ink(span.style);
-            if (ink.has_value() && FAILED(layout.SetDrawingEffect(brushes_.of(ink.value()), range)))
+            if (!ink_span(held, shown, span, code_runs))
             {
                 failure_ = RenderFailure::directwrite;
                 return;
             }
         }
+        held.code_runs = std::move(code_runs);
+        held.inked = Microsoft::WRL::ComPtr<ID2D1SolidColorBrush>(stamp);
     }
 
-    // 行内コードの面（panel・角丸 3・左右 4 DIP）。折り返した範囲は画面行ごとの矩形。
-    void fill_inline_code(const PreviewScene &scene, IDWriteTextLayout &layout,
-                          DWRITE_TEXT_RANGE range, D2D1_POINT_2F origin)
+    // 1 つの装飾の効果をかけ、行内コードなら範囲の hit test を code_runs に足す。
+    [[nodiscard]] bool ink_span(PreviewTextLayout &held, std::string_view shown,
+                                const core::PreviewSpan &span,
+                                std::vector<DWRITE_HIT_TEST_METRICS> &code_runs)
+    {
+        const auto begin = preview_units(shown, span.begin.value);
+        const auto end = preview_units(shown, span.end.value);
+        const DWRITE_TEXT_RANGE range{begin, end > begin ? end - begin : 0};
+        if (span.style == core::PreviewStyle::code)
+        {
+            const auto runs = runs_of(*held.layout.Get(), range);
+            code_runs.insert(code_runs.end(), runs.begin(), runs.end());
+        }
+        const auto colour = span_ink(span.style);
+        return !failure_.has_value() &&
+               (!colour.has_value() ||
+                SUCCEEDED(held.layout->SetDrawingEffect(brushes_.of(colour.value()), range)));
+    }
+
+    // 行内コードの面（panel・角丸 3・左右 4 DIP）。折り返した範囲は画面行ごとの矩形で、
+    // entry の hit test（原点 0,0）を描く原点へずらす。
+    void fill_inline_code(const PreviewScene &scene, const PreviewTextLayout &held,
+                          D2D1_POINT_2F origin)
     {
         const auto dpi = scene.style.dpi;
         const auto padding = preview_pixels(inline_padding_dips, dpi);
         const auto radius = preview_pixels(inline_radius_dips, dpi);
-        for (const auto &run : runs_of(layout, range, origin))
+        for (const auto &run : held.code_runs)
         {
+            const auto left = run.left + origin.x;
+            const auto top = run.top + origin.y;
             const auto inset = run.height * inline_inset_ratio;
-            const auto rect =
-                D2D1::RectF(run.left - padding, run.top + inset, run.left + run.width + padding,
-                            run.top + run.height - inset);
+            const auto rect = D2D1::RectF(left - padding, top + inset, left + run.width + padding,
+                                          top + run.height - inset);
             target_.FillRoundedRectangle(D2D1::RoundedRect(rect, radius, radius),
                                          brushes_.of(PreviewInk::panel));
         }
     }
 
-    [[nodiscard]] std::vector<DWRITE_HIT_TEST_METRICS>
-    runs_of(IDWriteTextLayout &layout, DWRITE_TEXT_RANGE range, D2D1_POINT_2F origin)
+    [[nodiscard]] std::vector<DWRITE_HIT_TEST_METRICS> runs_of(IDWriteTextLayout &layout,
+                                                               DWRITE_TEXT_RANGE range)
     {
         if (range.length == 0)
         {
             return {};
         }
         UINT32 count = 0;
-        const auto counted = layout.HitTestTextRange(range.startPosition, range.length, origin.x,
-                                                     origin.y, nullptr, 0, &count);
+        const auto counted = layout.HitTestTextRange(range.startPosition, range.length, 0.0F, 0.0F,
+                                                     nullptr, 0, &count);
         std::vector<DWRITE_HIT_TEST_METRICS> runs(count);
         if ((FAILED(counted) && counted != E_NOT_SUFFICIENT_BUFFER) ||
-            FAILED(layout.HitTestTextRange(range.startPosition, range.length, origin.x, origin.y,
+            FAILED(layout.HitTestTextRange(range.startPosition, range.length, 0.0F, 0.0F,
                                            runs.data(), count, &count)))
         {
             failure_ = RenderFailure::directwrite;

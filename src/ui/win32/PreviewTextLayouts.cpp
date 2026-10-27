@@ -5,7 +5,10 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
+#include <cstdint>
 #include <dwrite_1.h>
+#include <string_view>
 #include <utility>
 
 namespace nenenib::ui::win32
@@ -23,6 +26,49 @@ constexpr float unbounded_height = 1.0e7F;
 {
     return entry.kind == block.kind && entry.level == block.level && entry.width == width &&
            entry.text == block.text && entry.spans == block.spans && entry.style == style;
+}
+
+// 鍵の FNV-1a（64 bit・#876）。std::hash は実装に依るので使わない。
+constexpr std::uint64_t fnv_offset = 14'695'981'039'346'656'037ULL;
+constexpr std::uint64_t fnv_prime = 1'099'511'628'211ULL;
+constexpr unsigned byte_bits = 8U;
+constexpr std::uint64_t byte_mask = 0xFFU;
+
+[[nodiscard]] std::uint64_t mixed(std::uint64_t hash, std::string_view bytes) noexcept
+{
+    for (const char byte : bytes)
+    {
+        hash = (hash ^ static_cast<unsigned char>(byte)) * fnv_prime;
+    }
+    return hash;
+}
+
+[[nodiscard]] std::uint64_t mixed(std::uint64_t hash, std::uint64_t value) noexcept
+{
+    for (unsigned shift = 0; shift < sizeof(value) * byte_bits; shift += byte_bits)
+    {
+        hash = (hash ^ ((value >> shift) & byte_mask)) * fnv_prime;
+    }
+    return hash;
+}
+
+[[nodiscard]] std::size_t key_hash(const core::PreviewBlock &block, float width,
+                                   const PreviewTextStyle &style) noexcept
+{
+    auto hash = mixed(fnv_offset, static_cast<std::uint64_t>(block.kind));
+    hash = mixed(hash, block.level);
+    hash = mixed(hash, std::bit_cast<std::uint32_t>(width));
+    hash = mixed(hash, block.text.size());
+    hash = mixed(hash, block.text);
+    for (const auto &span : block.spans)
+    {
+        hash = mixed(hash, span.begin.value);
+        hash = mixed(hash, span.end.value);
+        hash = mixed(hash, static_cast<std::uint64_t>(span.style));
+    }
+    hash = mixed(hash, style.family);
+    hash = mixed(hash, std::bit_cast<std::uint32_t>(style.points));
+    return static_cast<std::size_t>(mixed(hash, style.dpi));
 }
 
 [[nodiscard]] HRESULT styled(IDWriteTextLayout &layout, core::PreviewStyle style,
@@ -190,7 +236,7 @@ HRESULT PreviewTextLayouts::decorate(IDWriteTextLayout &layout, const core::Prev
 
 std::expected<PreviewTextLayout, RenderFailure>
 PreviewTextLayouts::make(const core::PreviewBlock &block, float width,
-                         const PreviewTextStyle &style)
+                         const PreviewTextStyle &style, std::size_t hash)
 {
     const auto shown = preview_shown_text(block);
     const auto wide = core::to_utf16(shown);
@@ -217,43 +263,62 @@ PreviewTextLayouts::make(const core::PreviewBlock &block, float width,
         return std::unexpected(directwrite);
     }
     ++created_;
-    return PreviewTextLayout{block.text, block.spans, block.kind,      block.level,
-                             width,      style,       std::move(made), metrics.height};
+    return PreviewTextLayout{block.text,      block.spans,    block.kind,   block.level,
+                             width,           style,          hash,         0,
+                             std::move(made), metrics.height, std::nullopt, {}};
 }
 
 std::vector<PreviewTextLayout>::iterator PreviewTextLayouts::find(const core::PreviewBlock &block,
                                                                   float width,
-                                                                  const PreviewTextStyle &style)
+                                                                  const PreviewTextStyle &style,
+                                                                  std::size_t hash)
 {
-    return std::ranges::find_if(held_, [&](const PreviewTextLayout &entry)
-                                { return same_key(entry, block, width, style); });
+    return std::ranges::find_if(
+        held_, [&](const PreviewTextLayout &entry)
+        { return entry.hash == hash && same_key(entry, block, width, style); });
 }
 
-std::expected<PreviewTextLayouts::TextLayout, RenderFailure>
-PreviewTextLayouts::get(const core::PreviewBlock &block, float width, const PreviewTextStyle &style)
+std::expected<PreviewTextLayout *, RenderFailure>
+PreviewTextLayouts::entry(const core::PreviewBlock &block, float width,
+                          const PreviewTextStyle &style)
 {
     if (FAILED(prepare(style)))
     {
         return std::unexpected(directwrite);
     }
-    const auto found = find(block, width, style);
+    const auto hash = key_hash(block, width, style);
+    const auto found = find(block, width, style, hash);
     if (found != held_.end())
     {
-        // 最近使った順の末尾へ回す（捨てるのは先頭から）。
-        std::rotate(found, found + 1, held_.end());
-        return held_.back().layout;
+        // 最近使った順は通し番号で持つ（捨てるのは最小から・entry を動かさない）。
+        found->used = ++clock_;
+        return &*found;
     }
-    auto made = make(block, width, style);
+    auto made = make(block, width, style, hash);
     if (!made)
     {
         return std::unexpected(made.error());
     }
-    if (held_.size() >= capacity)
+    made.value().used = ++clock_;
+    if (held_.size() < capacity)
     {
-        held_.erase(held_.begin());
+        held_.push_back(std::move(made.value()));
+        return &held_.back();
     }
-    held_.push_back(std::move(made.value()));
-    return held_.back().layout;
+    const auto oldest = std::ranges::min_element(held_, {}, &PreviewTextLayout::used);
+    *oldest = std::move(made.value());
+    return &*oldest;
+}
+
+std::expected<PreviewTextLayouts::TextLayout, RenderFailure>
+PreviewTextLayouts::get(const core::PreviewBlock &block, float width, const PreviewTextStyle &style)
+{
+    const auto held = entry(block, width, style);
+    if (!held)
+    {
+        return std::unexpected(held.error());
+    }
+    return held.value()->layout;
 }
 
 std::expected<float, RenderFailure> PreviewTextLayouts::measure(const core::PreviewBlock &block,
@@ -264,12 +329,13 @@ std::expected<float, RenderFailure> PreviewTextLayouts::measure(const core::Prev
     {
         return std::unexpected(directwrite);
     }
-    const auto found = find(block, width, style);
+    const auto hash = key_hash(block, width, style);
+    const auto found = find(block, width, style, hash);
     if (found != held_.end())
     {
         return found->height;
     }
-    const auto made = make(block, width, style);
+    const auto made = make(block, width, style, hash);
     if (!made)
     {
         return std::unexpected(made.error());
