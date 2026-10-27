@@ -94,6 +94,23 @@ constexpr char32_t continuation_mask = 0x3F;
     return (byte & 0xC0U) == 0x80U;
 }
 
+// index の継続バイトが、前の 3 バイトの内の先頭バイトの列に入らないか（#878）。前を辿って最初に
+// 当たる継続バイトでないバイトが、index までの長さを持つ先頭バイトでなければ列の外。3 つ前まで
+// 継続バイトだけなら、どの先頭バイトの列にも入らない。
+[[nodiscard]] constexpr bool stray_continuation(std::string_view text, std::size_t index) noexcept
+{
+    constexpr std::size_t longest_tail = 3U;
+    for (std::size_t back = 1U; back <= longest_tail && back <= index; ++back)
+    {
+        const unsigned char byte = byte_at(text, index - back);
+        if (!continuation(byte))
+        {
+            return sequence_length(byte) <= back;
+        }
+    }
+    return true;
+}
+
 // 過長符号化・サロゲート範囲・U+10FFFF 超をまとめて拒否する。
 [[nodiscard]] constexpr bool encodable(char32_t value, std::size_t length) noexcept
 {
@@ -268,6 +285,20 @@ std::size_t code_point_count(std::string_view text) noexcept
 {
     return static_cast<std::size_t>(std::ranges::count_if(
         text, [](char value) { return !continuation(static_cast<unsigned char>(value)); }));
+}
+
+std::size_t lenient_code_point_count(std::string_view text, Offset begin, Offset end) noexcept
+{
+    const std::size_t last = std::min(end.value, text.size());
+    std::size_t count = 0U;
+    for (std::size_t index = begin.value; index < last; ++index)
+    {
+        if (!continuation(byte_at(text, index)) || stray_continuation(text, index))
+        {
+            ++count;
+        }
+    }
+    return count;
 }
 
 bool has_control_character(std::string_view text) noexcept

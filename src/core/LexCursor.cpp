@@ -1,5 +1,6 @@
 #include "LexCursor.hpp"
 
+#include "Offset.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
@@ -60,7 +61,7 @@ LexLine LexCursor::finish() &&
 
 Column LexCursor::column_at(std::size_t at) noexcept
 {
-    column_.value += code_point_count(line_.substr(counted_, at - counted_));
+    column_.value += lenient_code_point_count(line_, Offset{counted_}, Offset{at});
     counted_ = at;
     return column_;
 }
