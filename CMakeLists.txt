@@ -251,6 +251,7 @@ nenenib_link(nib_persisted_property_tests nenenib_core)
 nenenib_link(nib_persisted_property_tests nenenib_application)
 nenenib_link(nib_persisted_property_tests nenenib_adapters)
 add_test(NAME nib_adapters_persisted_property COMMAND nib_persisted_property_tests --persisted-property WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_adapters_persisted_property PROPERTIES TIMEOUT 60)
 
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp

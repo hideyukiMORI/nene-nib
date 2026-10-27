@@ -804,6 +804,34 @@ void verify_limits()
            "an autosave list holds 256 entries and refuses 257");
 }
 
+// 頭と尾の間をパスの文字で詰め、全体を total バイトにする（長いパスの 1 行）。
+[[nodiscard]] std::string padded(std::string_view head, std::string_view tail, std::size_t total)
+{
+    std::string text{head};
+    text.append(total - head.size() - tail.size(), 'a');
+    text += tail;
+    return text;
+}
+
+// 復号の前段のバイト数の上限（各 codec の maximum_*_bytes）。ちょうどは値、1 バイト超えは閉じた
+// 失敗。前回のタブと履歴の復号はバイト数を見ない（読む側の files.read が上限を持つ）ので対象外。
+void verify_byte_limits()
+{
+    constexpr std::string_view mark_head = "version=1\nC:/";
+    const auto marks = adapters::maximum_bookmark_bytes;
+    expect(adapters::decode_bookmarks(padded(mark_head, "\n", marks)).has_value() &&
+               refused(adapters::decode_bookmarks(padded(mark_head, "\n", marks + 1U)),
+                       application::FileBookmarksFailure::too_large),
+           "bookmarks hold 1 MiB and refuse one byte more");
+    constexpr std::string_view entry_head = "version=1\nentry=0,1,1,0.body,C:/";
+    constexpr std::string_view entry_tail = "\ntitle=t\n";
+    const auto list = adapters::maximum_autosave_list_bytes;
+    expect(adapters::decode_autosave_entries(padded(entry_head, entry_tail, list)).has_value() &&
+               refused(adapters::decode_autosave_entries(padded(entry_head, entry_tail, list + 1U)),
+                       application::AutosaveFailure::unreadable),
+           "an autosave list holds 1 MiB and refuses one byte more");
+}
+
 void verify_generators_are_deterministic()
 {
     Random left{8971U};
@@ -857,6 +885,7 @@ int main(int argc, char **argv)
     verify_generators_are_deterministic();
     verify_all_samples();
     verify_limits();
+    verify_byte_limits();
     verify_mutated_families();
     verify_composed_families();
     std::printf("Persisted format properties: %zu checks, %zu failures\n", checks(), failures());
