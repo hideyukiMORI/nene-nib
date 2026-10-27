@@ -1,8 +1,8 @@
 #include "Grid.hpp"
 
 #include "DisplayWidth.hpp"
-#include "LineEnding.hpp"
 #include "TextBuffer.hpp"
+#include "TextPosition.hpp"
 #include "Utf8.hpp"
 #include "VirtualColumn.hpp"
 #include "VirtualColumnIndex.hpp"
@@ -16,8 +16,7 @@ namespace nenenib::core
 {
 namespace
 {
-// 1 文字と、その後ろの 1 バイト（CRLF の判定）を読むのに足りる長さ。
-constexpr std::size_t peek_bytes = 5;
+// UTF-8 の 1 文字の最長のバイト数。
 constexpr std::size_t longest_sequence = 4;
 constexpr char32_t tab_character = U'\t';
 
@@ -26,15 +25,11 @@ constexpr char32_t tab_character = U'\t';
     return GridPoint{cell / columns, cell % columns};
 }
 
-// at が行の内容の終わり（本文の末尾・'\n'・CRLF の '\r'）か。
-[[nodiscard]] bool at_line_end(const TextBuffer &text, std::string_view peeked) noexcept
+// at が行の内容の終わり以降か。正本は TextBuffer::line_end（CRLF の '\r' と、CRLF の文書の最終行の
+// 末尾に残る '\n' の続かない '\r' を内容の外に置く）で、バイトを覗いて改行の形を決めない（#942）。
+[[nodiscard]] bool at_line_end(const TextBuffer &text, Offset at)
 {
-    if (peeked.empty() || peeked.front() == '\n')
-    {
-        return true;
-    }
-    return peeked.front() == '\r' && peeked.size() > 1 && peeked.at(1) == '\n' &&
-           text.line_ending() == LineEnding::crlf;
+    return at.value >= text.line_end(text.position_of(at).line).value;
 }
 
 // at の直前の code point の先頭。at が行頭なら at。
@@ -69,9 +64,9 @@ std::size_t grid_placed_cell(std::size_t cell, std::size_t cells, std::size_t co
 GridPoint grid_cell_of(const VirtualColumnIndex &index, const TextBuffer &text, Offset at)
 {
     const auto columns = std::max<std::size_t>(index.columns(), 1);
-    const auto peeked = text.text_range(at, Offset{at.value + peek_bytes});
+    const auto peeked = text.text_range(at, Offset{at.value + longest_sequence});
     const auto cursor = index.cursor_at(text, at);
-    if (at_line_end(text, peeked))
+    if (at_line_end(text, at))
     {
         const auto cell = cursor.cell;
         return cell > 0 && cell % columns == 0 ? GridPoint{(cell / columns) - 1, columns}

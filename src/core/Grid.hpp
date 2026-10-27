@@ -23,7 +23,8 @@ class VirtualColumnIndex;
                                            std::size_t columns) noexcept;
 
 // at（code point の先頭）の文字が始まる画面行と升。幅 0 の文字は直前の文字の升。行の終わりが
-// 画面行の右端にちょうど達したときは、その画面行の右端（cell == columns）。
+// 画面行の右端にちょうど達したときは、その画面行の右端（cell == columns）。行の内容の終わりは
+// TextBuffer::line_end。製品の経路は application の GridCells で、これは試験の参照（#942）。
 [[nodiscard]] GridPoint grid_cell_of(const VirtualColumnIndex &index, const TextBuffer &text,
                                      Offset at);
 
