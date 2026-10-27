@@ -34,6 +34,8 @@ constexpr std::string_view not_found_alone = "E486: Pattern not found";
         return "Unsupported pattern item: ~";
     case VimPatternFailure::offset:
         return "Search offset is not supported";
+    case VimPatternFailure::invalid_utf8:
+        return "Unsupported pattern: invalid UTF-8";
     }
     std::unreachable();
 }

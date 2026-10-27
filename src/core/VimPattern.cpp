@@ -377,6 +377,11 @@ bool VimPattern::anchored(std::string_view line, const VimPatternAtom &atom, std
 std::expected<VimPattern, VimPatternFailure> VimPattern::parse(std::string_view pattern,
                                                                VimSearchDirection separator)
 {
+    // 歩き（code_point_at）は検証済みの UTF-8 が前提なので、入口で確かめる（#906）。
+    if (!validate_utf8(pattern).has_value())
+    {
+        return std::unexpected(VimPatternFailure::invalid_utf8);
+    }
     std::vector<VimPatternAtom> atoms;
     std::vector<VimPatternRange> ranges;
     std::size_t at = 0;

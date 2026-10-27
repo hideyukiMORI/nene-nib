@@ -22,11 +22,13 @@ class VimPattern final
 {
   public:
     // separator は打たれた向き。前向きの `/` と後ろ向きの `?` の区切りがパターンの中に
-    // 現れたら offset として拒否する（offset は未対応）。
+    // 現れたら offset として拒否する（offset は未対応）。正しい UTF-8 でない pattern は
+    // invalid_utf8 で拒否する（#906）。
     [[nodiscard]] static std::expected<VimPattern, VimPatternFailure>
     parse(std::string_view pattern, VimSearchDirection separator);
 
     // line の from バイト以降で最も左の一致（ADR 0032 の決定 4 の追記）。長さ 0 の一致も返す。
+    // line（matched_sequence も）は検証済みの UTF-8 が前提で、行ごとには確かめない（#906）。
     [[nodiscard]] std::optional<VimPatternMatch> matched(std::string_view line,
                                                          std::size_t from) const;
 
