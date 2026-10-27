@@ -45,7 +45,7 @@ md4c は SAX 型（`enter_block / leave_block / enter_span / leave_span / text` 
 - 打ち切りの値は **負**（`-2`）。md4c の内側の関数は `MD_CHECK` で負の値だけを上へ返し、正の値は捨てて読み続ける（text のコールバックの非 0 が `md_parse` まで届かなかった・単体テストで実測）。md4c 自身の負の値は `-1` だけ。打ち切りは builder が覚え（一度 true を聞いたら以後は問わない）、`md_parse` の戻り値でなく覚えた値で `stopped` を返す。
 - 止める述語 `MarkdownStop` は関数ポインタと借りた文脈の対（core は `<functional>` の `std::function` を使っていない）。`MarkdownStop::asking(呼び出し可能な値)` と `MarkdownStop::never()`。
 - md4c の enter / leave を畳む型は `MarkdownBuilder`（md4c の型を知らない・1 ファイル 1 型）。実体参照の表は `MarkdownEntity`（名前つきは CommonMark の例の 15 個・数値は 0・サロゲート・U+10FFFF 超を U+FFFD）。`marker` は決定 7 のまま `std::string`（番号つきは区切りが `)` でも `"N."`・箇条書きは `"•"`）。記号だけの項目（`- - a` の外側・`-` だけの行）は空の `list_item` を 1 つ出す。
-- `source_begin` は NORMAL / ENTITY と、本文の中を指す CODE / HTML の text から引く（コードブロックの本体の行は本文の中・行末と字下げは外）。中かどうかは `std::less_equal` の全順序で比べる。文字の無い要素の補いは「直前の位置つきの text の終わりの次の行から空行を飛ばした最初の行の行頭」・前に何も無ければ本文の先頭から空行を飛ばす（決定 8 の追記）。行の探索は位置を持たない要素のときだけ走る。
+- `source_begin` は NORMAL / ENTITY と、本文の中を指す CODE / HTML の text から引く（コードブロックの本体の行は本文の中・行末と字下げは外）。中かどうかは `std::less_equal` の全順序で比べる。文字の無い要素の補いは「直前の位置つきの text の終わりの次の行から空行を飛ばした最初の行の行頭」・前に何も無ければ本文の先頭から空行を飛ばす（決定 8 の追記）。行の探索は位置を持たない要素のときだけ走る。行の終わりは md4c と同じく CR・LF・CRLF のどれでもよい（CRLF は 1 つ・2026-10-27・#887。LF だけを行の終わりとみなしていて、CR だけの改行の後ろの空の項目の `source_begin` が本文の末尾を指していた）。
 - `eng/symbols.py` は core の未定義 `md_parse` を閉包の `nenenib_md4c.lib` の定義で解決し、`eng/symbol-allowlist.json` は変えずに 0 violation（#772 の名指しの import は不要だった）。
 - 16 MiB の parse（組み立て込み）の probe は `markdown-parse-mixed-16mib`（入力は probe の (i) と同じ 16,777,183 バイト・209,263 要素）。Release（`77f391d`・負荷 1〜5%）の 10 回で中央値 143.2 ms・最小 141.4 ms（md4c だけの 63.8 ms に、組み立てが約 80 ms 足される）。正式な速さのゲートではない。
 
