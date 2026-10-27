@@ -409,17 +409,24 @@ Case large_case(Random &random)
 }
 
 // parse と matched は検証済みの UTF-8 を受ける（code_point_at の前提・Utf8.hpp）。壊れた列は
-// 生成するが、ここで外す（末尾で切れた列は終端の先を読む・known_out_of_contract）。
+// 生成するが、ここで外す（末尾で切れた列は終端の先を読む・known_out_of_contract・直しは #906）。
+// 前提は段に分ける。parse と longest_bytes・literal_bytes は pattern だけを読むので
+// pattern が妥当なら問い、matched は pattern と行の両方が妥当なときに問う。
+[[nodiscard]] bool pattern_within_contract(const Case &input)
+{
+    return valid_utf8(input.first);
+}
+
 [[nodiscard]] bool within_contract(const Case &input)
 {
-    return valid_utf8(input.first) && valid_utf8(input.second);
+    return pattern_within_contract(input) && valid_utf8(input.second);
 }
 
 // 1 組の性質。空なら守られている。
 [[nodiscard]] std::string_view case_violation(const Case &input)
 {
     const auto &[pattern_text, line] = input;
-    if (!within_contract(input))
+    if (!pattern_within_contract(input))
     {
         return {};
     }
@@ -437,6 +444,10 @@ Case large_case(Random &random)
         first.value().literal_bytes() != second.value().literal_bytes())
     {
         return "the same pattern reports different bounds";
+    }
+    if (!within_contract(input))
+    {
+        return {};
     }
     for (const std::size_t from : froms_of(line))
     {
@@ -543,6 +554,30 @@ void verify_family(const char *description, std::uint64_t seed, Make make, Check
     expect(broken_cases(description, seed, make, check) == 0U, description);
 }
 
+using Contract = bool (*)(const Case &);
+
+// 生成した組のうち前提の内に入った数（broken_cases と同じ seed で同じ列・空振りの量を見る）。
+[[nodiscard]] std::size_t contract_cases(std::uint64_t seed, Make make, Contract contract)
+{
+    Random random{seed};
+    std::size_t inside = 0;
+    for (std::size_t index = 0; index < family_cases; ++index)
+    {
+        inside += contract(make(random)) ? 1U : 0U;
+    }
+    return inside;
+}
+
+// 生バイトの族は壊れた UTF-8 を混ぜるので、前提の内に入る組が残ることを見る（既定の回数の実測は
+// 200 組のうち pattern の段が 81・matched の段が 22。下限は族の 1/4 と 1/16）。
+void verify_byte_cases_reach_the_contract()
+{
+    expect(contract_cases(8983U, byte_case, pattern_within_contract) >= family_cases / 4U,
+           "random pattern bytes leave valid patterns to parse");
+    expect(contract_cases(8983U, byte_case, within_contract) >= family_cases / 16U,
+           "random pattern bytes leave valid pairs to match");
+}
+
 // 受けない断片を受ける断片の列の末尾に置くと、その断片の閉じた失敗になる。
 void verify_unsupported_suffixes()
 {
@@ -593,7 +628,7 @@ void verify_backtracking_is_bounded()
            "a run of stars takes the whole 4 KiB line");
 }
 
-// 既定の回数で見つかった破れを縮めた組（#899・直しは別の Issue）。末尾で切れた多バイトの列を
+// 既定の回数で見つかった破れを縮めた組（#899・直しは #906）。末尾で切れた多バイトの列を
 // 含む pattern か行を渡すと、parse と matched は断らずに code_point_at で終端の先を読む
 // （Debug の ASan で heap-buffer-overflow と container-overflow。文字列が heap にあるとき・例えば
 // 前に `b` を 32 個置いた形で見える。SSO の短い文字列では見えない）。前提の外なので生成器の組
@@ -650,6 +685,7 @@ void verify_vim_pattern_property_scope()
                   case_violation);
     verify_family("patterns on 4 KiB lines match inside the line", 8985U, large_case,
                   case_violation);
+    verify_byte_cases_reach_the_contract();
     verify_unsupported_suffixes();
     verify_backtracking_is_bounded();
     verify_known_cases();
