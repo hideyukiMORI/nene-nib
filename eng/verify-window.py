@@ -99,9 +99,10 @@ window is closed and the unsaved question answered no. Posted messages only.
 Issue #706 adds the palette list (ADR 0150 decisions 2, 5 and 6), which `--palette` also runs alone:
 Ctrl+P (real input) opens the palette and `:colorscheme ` lists the built-in schemes; the first row
 is already the first scheme, so it is previewed on the body ground right of the panel as soon as the
-palette opens (paletteOpen.png); Up on the first row wraps to the last row at the bottom of the window
-and that scheme is previewed instead (paletteWrapped.png), and three more Ups move the
-selection three rows up without scrolling the window (paletteUpThree.png); Esc closes the palette
+palette opens (paletteOpen.png); Up on the first row wraps to the last row at the bottom of the window,
+the bare command, which shows the saved scheme again (paletteWrapped.png), and three more Ups move the
+selection three rows up without scrolling the window onto a scheme that is previewed in turn
+(paletteUpThree.png); Esc closes the palette
 and the body ground is the saved scheme again (paletteCancelled.png). Opened again, Ctrl+P on the
 first row is the previous choice and keeps the palette open (paletteControlP.png), and Esc again
 returns to the saved scheme (paletteClosed.png). Opened a third time, Enter on the first row
@@ -2657,10 +2658,12 @@ def drive_palette(window, appearance: str, frames: Path | None) -> dict:
     press(window, VK_UP)
     steps["wrapped"] = palette_look(window, frames, "paletteWrapped")
     assert steps["wrapped"]["selected"] == rows - 1, f"Up on the first row: {steps['wrapped']}"
-    assert steps["wrapped"]["ground"] not in (saved, first),         f"the focused last scheme is not previewed on the body: {steps['wrapped']}"
+    # 最後の行は名前の無い `colorscheme` なので、保存した配色に戻る。
+    assert steps["wrapped"]["ground"] == saved,         f"the bare command on the last row changed the body ground: {steps['wrapped']}"
     press(window, VK_UP, 3)
     steps["upThree"] = palette_look(window, frames, "paletteUpThree")
     assert steps["upThree"]["selected"] == rows - 4, f"three more Ups: {steps['upThree']}"
+    assert steps["upThree"]["ground"] not in (saved, first),         f"the focused scheme is not previewed on the body: {steps['upThree']}"
     press(window, VK_ESCAPE)
     steps["cancelled"] = palette_look(window, frames, "paletteCancelled")
     assert steps["cancelled"]["ground"] == saved,         f"Esc did not return to the scheme before the input: {steps['cancelled']}"
