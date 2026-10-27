@@ -6,7 +6,7 @@
 //      grid_placed_cell だけで素朴に歩いた値と一致する（各行の各コードポイントの先頭と終わり）。
 //   2. GridCells の cursor_at・point_of・byte_of・rows が同じ素朴な歩きと一致し、幅のある文字では
 //      point_of と byte_of が往復する。core の grid_cell_of も同じ点を答える（CRLF の文書の終端の
-//      '\r' の 1 点を除く・terminal_carriage_return の注釈）。
+//      '\r' の前も含む・#942・verify_terminal_carriage_return）。
 //   3. 1 回の問い合わせの GridCells::scanned() は、その行に掛かる plain でない塊の数を超えない。
 //   4. ランダムな replaced（挿入・削除・置換・改行と塊の境目をまたぐ・大きな挿入と削除）の後、
 //      replaced で写した索引の塊が本文を覆い、各塊の始まりの累積が素朴な歩きと一致し、1〜3 の答えも
@@ -363,18 +363,6 @@ constexpr std::string_view plain_letters = "abcxyzQ ~0";
     return same;
 }
 
-// CRLF の文書で '\n' の続かない最終行の末尾の '\r' は、TextBuffer が内容の終わりの外に置く
-// （--text-buffer-property の模型と同じ規則）。GridCells は line_end に従ってそこを行の終わりとして
-// 答えるが、core の grid_cell_of は '\n' が続くときだけ '\r' を終わりと見て、文字 `^M` として置く
-// （#936 の報告・最小の入力は verify_terminal_carriage_return）。直しは別 Issue なので、その 1
-// 点だけ grid_cell_of の照合から外す。
-[[nodiscard]] bool terminal_carriage_return(const TextBuffer &text, const LineSpan &span,
-                                            std::size_t at)
-{
-    return at == span.at(span_end) && span.at(span_end) < span.at(span_stop) &&
-           span.at(span_stop) == text.size_bytes();
-}
-
 // 2. GridCells の累積・点・往復と core の grid_cell_of が素朴な歩きと一致する（内容の終わりまで）。
 [[nodiscard]] bool grid_points_match(const TextBuffer &text, const VirtualColumnIndex &grid,
                                      const LineModel &line, Random &random)
@@ -394,8 +382,7 @@ constexpr std::string_view plain_letters = "abcxyzQ ~0";
         same = same && cursor.column == placed.at(placed_column) &&
                cursor.cell == placed.at(placed_cell) &&
                cursor.code_point == placed.at(placed_ordinal) && point == points.at(pick) &&
-               (terminal_carriage_return(text, line.first, at.value) ||
-                grid_cell_of(grid, text, at) == points.at(pick)) &&
+               grid_cell_of(grid, text, at) == points.at(pick) &&
                (!wide || cells.byte_of(number, point) == at);
     }
     return same;
@@ -732,8 +719,8 @@ void verify_crossing_cases(Random &random)
 
 // #936 の走りで見つけた差の最小の入力（回帰 case）。CRLF の文書 "\r\nb\r" の 2 行目は "b" で、
 // '\n' の続かない末尾の '\r' は内容の外。幅 1 では "b" が升 0 を埋めて画面行の右端にちょうど
-// 達するので、GridCells は行の終わりを {0, 1} と答える（core の grid_cell_of は '\r' を `^M` として
-// 置いて {1, 0} を答える。terminal_carriage_return の注釈）。
+// 達するので、GridCells は行の終わりを {0, 1} と答える。core の grid_cell_of も line_end で終わりを
+// 決めて同じ点を答える（#942 の前は '\r' を `^M` として置いて {1, 0} を答えていた）。
 void verify_terminal_carriage_return()
 {
     const auto text = buffer_of("\r\nb\r").with_virtual_columns();
@@ -744,6 +731,8 @@ void verify_terminal_carriage_return()
     expect(cells.point_of(line, Offset{3}) == GridPoint{0, 1} && cells.rows(line) == 1 &&
                cells.byte_of(line, GridPoint{0, 1}).value == 3,
            "GridCells puts the end before a terminal CR on the right edge of its row");
+    expect(grid_cell_of(VirtualColumnIndex::for_grid(text, 1), text, Offset{3}) == GridPoint{0, 1},
+           "grid_cell_of puts the end before a terminal CR where GridCells does");
 }
 } // namespace
 
