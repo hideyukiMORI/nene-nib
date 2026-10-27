@@ -266,6 +266,9 @@ void verify_ex_document_scope();
 // ExWritePathTests.cpp
 void verify_ex_write_path_contracts();
 
+// ExRandomInputTests.cpp（Issue #911・Ex と検索の入力行のランダムな文字列の堅牢性）
+void verify_ex_random_scope();
+
 // BellTests.cpp
 void verify_bell_contracts();
 
