@@ -90,6 +90,9 @@ void verify_vim_pattern_property_scope();
 // SyntaxTests.cpp（#816・ADR 0156 の決定 7〜10・14・見えている行の色の区間）
 void verify_syntax_scope();
 
+// SyntaxCachePropertyTests.cpp（#923・構文の色の覚えがランダムな編集と移動の後も基準と一致する）
+void verify_syntax_cache_property_scope();
+
 // MarkdownTests.cpp（ADR 0151 の決定 5〜8・parse_markdown）
 void verify_markdown_scope();
 
