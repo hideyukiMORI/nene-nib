@@ -33,13 +33,13 @@ hide の指示「止めるまで速度向上・安定性向上の実験を続け
 | Issue | PR | 内容 | 効果（静かな回・中央値 ms） | 状態 |
 |---|---|---|---|---|
 | #859 | #874 | 字句器の表引きの門（表から `consteval` で作る先頭バイトと長さの門） | probe で表の大きい言語 0.69〜0.86 倍 | **main** `215162b` |
-| #884 | #885 | 字体選択: 区切りの文字列 → 字体の覚え（`FallbackSegmentMemo`・FNV-1a・開番地法・4096 件） | 長い行 1.5〜1.9 → 1.37〜1.50 | Ready・レビュー済み・試用待ち |
-| #889 | #891 | 字体選択: 覚えの字体を family・weight・style・stretch で正規化し `joins` を値で比べる（#885 の上） | 長い行 → **0.84〜1.18**（ゲート 0.837・基準 1.574 の 53%） | Ready・レビュー済み・ゲート 0 regression・試用待ち |
-| #888 | #892 | 描く前に待機可能オブジェクトを待つ・`SetMaximumFrameLatency(1)`・`Present(0, 0)`（ADR 0007 の追補） | 画面に出るまで 37.2 → 14.5 ms（実験の同じ形）・ゲート 0 regression・PNG 差 0 | Ready・レビュー済み・試用待ち |
-| #900 | #904 | Ctrl+P の面の行の text layout の保持（`PaletteRowLayouts`・32 件・LRU） | 面 1.78〜1.85 → 1.46〜1.57（ゲート 1.548・基準 1.729） | Ready・レビュー済み・ゲート 0 regression・試用待ち |
-| #903 | #907 | プレビューの枠をオフスクリーンの `ID2D1Bitmap1` に描き、鍵が同じ frame は `DrawBitmap` 1 回（ADR 0155 の追補） | プレビューを開いた 1 打鍵 2.5 → **1.5**（描く段 1.4 → 0.36）・PNG 3 枚とも差 0 | Ready・レビュー済み・ゲート 0 regression・試用待ち |
-| #912 | #914 | Ctrl+P の照合に ASCII だけの query のバイト列の速道（核は `SubsequenceScore` の 1 つ・同値は性質の試験 10000 件 × 2）と `reserve`（ADR 0091 の追補） | 面 1.81〜2.12 → 1.42〜1.52（−20%・PNG 差 0） | Ready・レビュー済み・試用待ち |
-| #924 | #925 | タブの題名の text layout を `PaletteRowLayouts` と同じ保持から引く（毎 frame 作っていた唯一の layout・ADR 0056 の追補・#904 の上） | 空の文書の 1 打鍵 0.57 → 0.48〜0.52（−12%・描く段 0.36 → 0.29〜0.31・PNG 4 枚差 0） | Ready・レビュー済み・試用待ち |
+| #884 | #885 | 字体選択: 区切りの文字列 → 字体の覚え（`FallbackSegmentMemo`・FNV-1a・開番地法・4096 件） | 長い行 1.5〜1.9 → 1.37〜1.50 | **main** `43137b0f`（hide の試用 OK・2026-10-27 夜） |
+| #889 | #891 | 字体選択: 覚えの字体を family・weight・style・stretch で正規化し `joins` を値で比べる（#885 の上） | 長い行 → **0.84〜1.18**（ゲート 0.837・基準 1.574 の 53%） | **main** `d240ef0f`（hide の試用 OK・2026-10-27 夜・ゲート 0 regression） |
+| #888 | #892 | 描く前に待機可能オブジェクトを待つ・`SetMaximumFrameLatency(1)`・`Present(0, 0)`（ADR 0007 の追補） | 画面に出るまで 37.2 → 14.5 ms（実験の同じ形）・ゲート 0 regression・PNG 差 0 | **main** `98fac681`（hide の試用 OK・2026-10-27 夜） |
+| #900 | #904 | Ctrl+P の面の行の text layout の保持（`PaletteRowLayouts`・32 件・LRU） | 面 1.78〜1.85 → 1.46〜1.57（ゲート 1.548・基準 1.729） | **main** `00253efc`（hide の試用 OK・2026-10-27 夜・ゲート 0 regression） |
+| #903 | #907 | プレビューの枠をオフスクリーンの `ID2D1Bitmap1` に描き、鍵が同じ frame は `DrawBitmap` 1 回（ADR 0155 の追補） | プレビューを開いた 1 打鍵 2.5 → **1.5**（描く段 1.4 → 0.36）・PNG 3 枚とも差 0 | **main** `f7344618`（hide の試用 OK・2026-10-27 夜・ゲート 0 regression） |
+| #912 | #914 | Ctrl+P の照合に ASCII だけの query のバイト列の速道（核は `SubsequenceScore` の 1 つ・同値は性質の試験 10000 件 × 2）と `reserve`（ADR 0091 の追補） | 面 1.81〜2.12 → 1.42〜1.52（−20%・PNG 差 0） | **main** `df765db7`（hide の試用 OK・2026-10-27 夜） |
+| #924 | #925 | タブの題名の text layout を `PaletteRowLayouts` と同じ保持から引く（毎 frame 作っていた唯一の layout・ADR 0056 の追補・#904 の上） | 空の文書の 1 打鍵 0.57 → 0.48〜0.52（−12%・描く段 0.36 → 0.29〜0.31・PNG 4 枚差 0） | **main** `cd697516`（hide の試用 OK・2026-10-27 夜） |
 | #887 | #890 | `parse_markdown` が CR だけの改行の後ろの空の項目に本文の末尾の位置を置く（性質の試験で検出） | 製品の破れの直し | **main** `a250e4f` |
 | #875 | #880 | 片の切り目を内容で決める | 差 0（原因が違った） | 閉じた |
 | #894 | #896 | ASCII の行で `AnalyzeScript` を省く | 差が測れず（数 µs の桁） | 閉じた |
@@ -71,6 +71,10 @@ hide の指示「止めるまで速度向上・安定性向上の実験を続け
 ほかに道具の直し: `eng/verify-window.py` の typing の節が main でも落ちていたのは、ステータスバーの右の項目を 3 つ（言語の欄 #776 の前）として数えていたため → 4 項目の正本に合わせた（#893・PR #918・main）。palette の節は ADR 0150（面の最初の候補の配色のプレビュー）の後の振る舞いと合わず落ちていた → 期待を直した（#919・PR #937・main。開いた時点で最初の配色 abyss がプレビュー・最後の行の名前の無い `colorscheme` で保存した配色に戻る・Esc で戻る・Enter の確定が残る `paletteConfirmed.png`）。既定実行は IME の節で `WindowCovered` で落ちていた。真因は Windows 11 の IME の候補の面（`ApplicationFrameWindow`・NOACTIVATE | NOREDIRECTIONBITMAP | TOPMOST）がキャレットの直下 300 × 294 px に出て client の中心を覆うこと（編集器が無いときは cloak 2 で隠れている）→ 覆いの検査は読む領域の点で行い（IME の節は最初の文字行の箱）、cloak された窓は Z 順で飛ばす（#938・PR #940・main）。#937 と #940 を重ねた既定実行は全節 pass（`D:/NeNeNib/evidence/20261027-verify-window/default-937-940.log`）。
 
 製品の直し: 字句器の桁が不正な UTF-8 の継続バイトを数えず 0 桁の区間を出していた（#878・7 言語に共通の 1 か所 `LexCursor::column_at`）→ `Utf8.cpp` の `lenient_code_point_count`（どの先頭バイトの列にも入らない継続バイトと先頭になれないバイトは 1 つで 1 桁・位置だけで決まるので区間を分けた和は全体と同じ）を `LexCursor` が呼ぶだけに（PR #939・main・ADR 0156 の限界に 1 行・性質の試験の許しを外した）。
+
+### 試用と merge（2026-10-27 夜）
+
+hide の試用（表 `D:/NeNeNib/evidence/20261027-trial/README.md`・サンプル `samples/`・手順 1〜8）はすべて OK（国旗が地域記号の 2 文字になるのと ZWJ が `<200d>` で描かれるのは Windows と ADR 0040 / 0053 の設計のとおり）。#885 → #891 → #892 → #904 → #907 → #914 → #925 の順に rebase して CI つきで squash merge（1 本ごとに main を進めてから次を乗せ替える）。rebase で解いた衝突は、#914 の `NibTests.cpp` の表（#931 で関数の外へ動いていた・契約 58・scope 81）と、#904 の `CMakeLists.txt` の試験の一覧（#885 の `FallbackSegmentMemoTests` と #891 の `ForwardingFont` との和）・`NibWindowTests` の組の表の大きさ（#885 の行を含めて 19）。乗せ替えた枝は Debug でビルドして該当の scope と既定実行を通してから merge した（#914: 性質 10・面 825・既定 2,315,322、#904: 窓 4,128・面 825）。
 
 ## 5. beta.7
 
