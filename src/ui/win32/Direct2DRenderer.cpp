@@ -439,6 +439,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
 {
     // 書式を解放する前に比較用の借用ポインタも消す（ADR 0070）。
     status_layouts_ = {};
+    palette_layouts_.clear();
     Microsoft::WRL::ComPtr<IUnknown> unknown;
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory7),
                                    unknown.GetAddressOf())) ||
@@ -505,6 +506,7 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
 {
     // 書式の寿命をキーに含める。生成が失敗しても古い行番号資源は持ち越さない。
     gutter_layouts_.clear();
+    palette_layouts_.clear();
     const std::wstring requested = core::to_utf16(settings.font_family.text()).value();
     const wchar_t *face = family(requested.c_str(), L"Consolas");
     const float ratio = core::font_size_ratio(settings.font_size);
@@ -1859,8 +1861,8 @@ void Direct2DRenderer::draw_palette_choice(const application::EditorFrame &frame
     context_->PopAxisAlignedClip();
     if (choice.origin.has_value())
     {
-        write_right(core::palette_origin_label(choice.origin.value()), status_format_.Get(),
-                    core::palette_row_note(row, dpi_), frame.palette.muted);
+        write_palette_note(core::palette_origin_label(choice.origin.value()),
+                           core::palette_row_note(row, dpi_), frame.palette.muted);
     }
     if (!choice.key.empty())
     {
@@ -1871,10 +1873,63 @@ void Direct2DRenderer::draw_palette_choice(const application::EditorFrame &frame
 void Direct2DRenderer::draw_palette_key(const application::EditorFrame &frame, std::string_view key,
                                         const core::LayoutRect &note)
 {
-    draw_keycap(key, key_format_.Get(), note,
-                KeycapStyle{palette_key_padding_dips, palette_key_height_dips,
-                            palette_key_radius_dips, frame.palette.background,
-                            frame.palette.panel_border, frame.palette.text});
+    const auto shown = palette_text(key, key_format_.Get(), PaletteTextRole::plain, note);
+    draw_keycap_layout(shown.Get(), note,
+                       KeycapStyle{palette_key_padding_dips, palette_key_height_dips,
+                                   palette_key_radius_dips, frame.palette.background,
+                                   frame.palette.panel_border, frame.palette.text});
+}
+
+void Direct2DRenderer::write_palette_note(std::string_view text, const core::LayoutRect &area,
+                                          core::RgbColor color)
+{
+    // write_right と同じ描き方で、文字組みだけを面の保持から引く（#900）。
+    if (core::width_of(area) <= 0 || core::height_of(area) <= 0)
+    {
+        return;
+    }
+    const auto shown = palette_text(text, status_format_.Get(), PaletteTextRole::trailing, area);
+    if (!shown)
+    {
+        return;
+    }
+    brush_->SetColor(to_color(color));
+    context_->PushAxisAlignedClip(to_rect(area), D2D1_ANTIALIAS_MODE_ALIASED);
+    context_->DrawTextLayout(
+        D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top)), shown.Get(),
+        brush_.Get());
+    context_->PopAxisAlignedClip();
+}
+
+Direct2DRenderer::TextLayout Direct2DRenderer::palette_text(std::string_view text,
+                                                            IDWriteTextFormat *format,
+                                                            PaletteTextRole role,
+                                                            const core::LayoutRect &area)
+{
+    return palette_layouts_.obtain(PaletteRowKey{format, role, text, area, dpi_},
+                                   [&] { return made_palette_text(text, format, role, area); });
+}
+
+Direct2DRenderer::TextLayout Direct2DRenderer::made_palette_text(std::string_view text,
+                                                                 IDWriteTextFormat *format,
+                                                                 PaletteTextRole role,
+                                                                 const core::LayoutRect &area)
+{
+    auto made = text_layout(text, format, area);
+    if (!made)
+    {
+        return made;
+    }
+    switch (role)
+    {
+    case PaletteTextRole::plain:
+        return made;
+    case PaletteTextRole::trimmed:
+        return SUCCEEDED(trim_by_character(made.Get())) ? made : nullptr;
+    case PaletteTextRole::trailing:
+        return SUCCEEDED(made->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING)) ? made : nullptr;
+    }
+    std::unreachable();
 }
 
 void Direct2DRenderer::draw_keycap(std::string_view key, IDWriteTextFormat *format,
@@ -1888,8 +1943,15 @@ void Direct2DRenderer::draw_keycap(std::string_view key, IDWriteTextFormat *form
         return;
     }
     const auto shown = text_layout(key, format, note);
+    draw_keycap_layout(shown.Get(), note, style);
+}
+
+void Direct2DRenderer::draw_keycap_layout(IDWriteTextLayout *shown, const core::LayoutRect &note,
+                                          const KeycapStyle &style)
+{
     DWRITE_TEXT_METRICS metrics{};
-    if (!shown || FAILED(shown->GetMetrics(&metrics)))
+    if (core::width_of(note) <= 0 || core::height_of(note) <= 0 || shown == nullptr ||
+        FAILED(shown->GetMetrics(&metrics)))
     {
         return;
     }
@@ -1910,7 +1972,7 @@ void Direct2DRenderer::draw_keycap(std::string_view key, IDWriteTextFormat *form
     brush_->SetColor(to_color(style.text));
     context_->PushAxisAlignedClip(box, D2D1_ANTIALIAS_MODE_ALIASED);
     context_->DrawTextLayout(D2D1::Point2F(right - width + padding, static_cast<float>(note.top)),
-                             shown.Get(), brush_.Get());
+                             shown, brush_.Get());
     context_->PopAxisAlignedClip();
 }
 
@@ -1918,12 +1980,10 @@ void Direct2DRenderer::draw_palette_label(const application::EditorFrame &frame,
                                           const core::CommandChoice &choice,
                                           const core::LayoutRect &label)
 {
-    if (!choice.detail.has_value())
-    {
-        write(choice.label.text(), command_format_.Get(), label, frame.palette.text);
-        return;
-    }
-    const auto title = text_layout(choice.label.text(), command_format_.Get(), label);
+    // 名前は場所の有無によらず同じ文字組みで、面の保持から引く（#900）。DrawTextW と同じ画素
+    // （tests/ui の GutterLayoutTests）。
+    const auto title =
+        palette_text(choice.label.text(), command_format_.Get(), PaletteTextRole::plain, label);
     if (!title)
     {
         return;
@@ -1958,8 +2018,9 @@ void Direct2DRenderer::draw_palette_detail(const application::EditorFrame &frame
     {
         return;
     }
-    const auto detail = text_layout(choice.detail.value().text(), command_format_.Get(), place);
-    if (!detail || FAILED(trim_by_character(detail.Get())))
+    const auto detail = palette_text(choice.detail.value().text(), command_format_.Get(),
+                                     PaletteTextRole::trimmed, place);
+    if (!detail)
     {
         return;
     }
@@ -2075,6 +2136,11 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     {
         draw_palette(
             frame, core::palette_layout(width, height, dpi_, frame.command_palette.value().total));
+    }
+    else
+    {
+        // 面を閉じたら行の文字組みを捨てる。開くたびに作り直す（#900）。
+        palette_layouts_.clear();
     }
     gutter_layouts_.end();
     const auto ended = context_->EndDraw();
