@@ -69,6 +69,8 @@ void verify_background_work_scope();
 // AutosaveTests.cpp
 void verify_autosave_contracts();
 void verify_autosave_scope();
+// AutosavePlanPropertyTests.cpp（#930・autosave_plan と clears_autosave の性質の試験）
+void verify_autosave_plan_property_scope();
 
 // OperationsTests.cpp
 void verify_operations_scope();
