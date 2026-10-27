@@ -26,6 +26,7 @@
 #include "PreviewTextStyle.hpp"
 #include "PreviewViewport.hpp"
 #include "RenderFailure.hpp"
+#include "Theme.hpp"
 #include "ThemeCatalog.hpp"
 #include "ThemeName.hpp"
 
@@ -359,6 +360,119 @@ void check_pane_reuse()
            "the anchor picks the block that holds it");
 }
 
+// 枠の絵の使い回し（#903・ADR 0155 の追補）の文書: 見出し・段落（行内コードとリンク）・コード・
+// 項目を繰り返す。source_begin は 16 バイトずつ。
+[[nodiscard]] std::shared_ptr<const core::MarkdownDocument> picture_document()
+{
+    auto document = std::make_shared<core::MarkdownDocument>();
+    for (std::size_t index = 0; index < 60; ++index)
+    {
+        const auto number = std::to_string(index);
+        const auto kind = index % 4;
+        auto block =
+            kind == 0   ? block_of(core::PreviewBlockKind::heading, "Heading " + number)
+            : kind == 1 ? block_of(core::PreviewBlockKind::paragraph, "code x and link " + number,
+                                   {{core::Offset{5}, core::Offset{6}, core::PreviewStyle::code},
+                                    {core::Offset{11}, core::Offset{15}, core::PreviewStyle::link}})
+            : kind == 2 ? block_of(core::PreviewBlockKind::code, "int x = " + number + ";\n")
+                        : item_of("\xE2\x80\xA2", "item " + number);
+        block.source_begin = core::Offset{index * 16};
+        document->blocks.push_back(std::move(block));
+    }
+    return document;
+}
+
+[[nodiscard]] std::vector<std::uint8_t> pixels_of(IWICBitmap &bitmap)
+{
+    constexpr UINT stride = 400 * 4;
+    std::vector<std::uint8_t> pixels(static_cast<std::size_t>(stride) * 200);
+    if (FAILED(bitmap.CopyPixels(nullptr, stride, static_cast<UINT>(pixels.size()), pixels.data())))
+    {
+        return {};
+    }
+    return pixels;
+}
+
+// 同じ文書・錨 4・枠を PreviewPainter で別の WIC の描画先に直接描いた画素（比べる相手）。
+[[nodiscard]] std::vector<std::uint8_t> directly_painted(const core::MarkdownDocument &document,
+                                                         const core::Theme &theme,
+                                                         const core::LayoutRect &area)
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    PreviewTextLayouts layouts;
+    win32::PreviewBrushes brushes;
+    const auto style = style_of();
+    const auto tops = win32::PreviewBlockTops::measure(
+        document, layouts, style,
+        win32::PreviewViewport{4, static_cast<float>(core::width_of(area)),
+                               static_cast<float>(core::height_of(area))});
+    if (target == nullptr || !tops || FAILED(brushes.prepare(*target.Get(), theme)))
+    {
+        return {};
+    }
+    std::optional<win32::RenderFailure> failure;
+    target->BeginDraw();
+    target->Clear(D2D1::ColorF(0.0F, 0.0F, 0.0F, 0.0F));
+    win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
+    painter.paint(win32::PreviewScene{document, tops.value(), style, area, 0.0F});
+    if (FAILED(target->EndDraw()) || failure.has_value())
+    {
+        return {};
+    }
+    return pixels_of(*bitmap.Get());
+}
+
+// 鍵が同じ 2 frame 目は要素を描かず DrawBitmap 1 回・錨が変われば描き直す（bitmap はそのまま）・
+// 枠の大きさが変われば bitmap を作り直す・テーマが変われば描き直す。bitmap を経た画素は同じ文書を
+// 直接描いた画素と 1 画素も違わない（枠の位置は整数の画素で、文字の AA も同じ）。
+void check_pane_picture()
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> held_bitmap;
+    const auto held = wic_target(held_bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    const auto other = catalog.find(core::ThemeName::parse("solarized-light").value());
+    win32::PreviewPane pane;
+    if (held == nullptr || !theme || !other ||
+        !pane.prepare(*held.Get(), theme.value().view()).has_value())
+    {
+        expect(false, "the preview pane prepares its brushes for the picture checks");
+        return;
+    }
+    const auto document = picture_document();
+    const auto style = style_of();
+    const core::LayoutRect area{10, 20, 390, 180};
+    const application::PreviewFrame at_four{document, core::Offset{4 * 16}, {}};
+    held->BeginDraw();
+    held->Clear(D2D1::ColorF(0.0F, 0.0F, 0.0F, 0.0F));
+    const auto first = pane.paint(*held.Get(), at_four, style, area);
+    const auto second = pane.paint(*held.Get(), at_four, style, area);
+    expect(SUCCEEDED(held->EndDraw()) && first.has_value() && second.has_value(),
+           "the held preview picture paints without failure");
+    expect(pane.pictures() == 1 && pane.painted() == 1 && pane.reused() == 1,
+           "the same key draws no blocks and copies the held picture once");
+    const auto through = pixels_of(*held_bitmap.Get());
+    expect(!through.empty() && through == directly_painted(*document, theme.value().view(), area),
+           "the held preview picture has the same pixels as painting directly");
+    held->BeginDraw();
+    const auto moved = pane.paint(
+        *held.Get(), application::PreviewFrame{document, core::Offset{8 * 16}, {}}, style, area);
+    expect(moved.has_value() && pane.painted() == 2 && pane.pictures() == 1,
+           "another anchor draws the blocks again into the same bitmap");
+    const auto resized =
+        pane.paint(*held.Get(), at_four, style, core::LayoutRect{10, 20, 390, 150});
+    expect(resized.has_value() && pane.painted() == 3 && pane.pictures() == 2,
+           "another frame size makes a new bitmap");
+    const auto themed = pane.prepare(*held.Get(), other.value().view());
+    const auto recoloured =
+        themed ? pane.paint(*held.Get(), at_four, style, core::LayoutRect{10, 20, 390, 150})
+               : themed;
+    expect(SUCCEEDED(held->EndDraw()) && recoloured.has_value() && pane.painted() == 4 &&
+               pane.pictures() == 2 && pane.reused() == 1,
+           "another theme draws the blocks again");
+}
+
 // 測るのは錨の要素から枠の高さまでだけ（#811 のレビュー R1）。10 万要素の文書で錨が末尾の近くでも、
 // 作る layout は枠の高さ ÷ 最小の行高 + 1 以下で、錨の要素の上端が枠の上端。
 void check_measured_from_anchor()
@@ -460,6 +574,7 @@ void verify_preview_layouts()
     check_html_and_style();
     check_markers();
     check_pane_reuse();
+    check_pane_picture();
     check_measured_from_anchor();
     check_list_scanned_in_range();
     check_anchor_after_carriage_returns();
