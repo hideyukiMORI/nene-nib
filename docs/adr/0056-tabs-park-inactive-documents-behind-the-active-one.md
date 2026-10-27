@@ -61,6 +61,7 @@ Nib は 1 つの窓に 1 つの文書で、タブの帯にはタブが 1 本と�
 - 1 打鍵の重さがタブの数に依らないこと: **planned**（1 本目の Issue で、タブを 50 本開いた状態の打鍵のベンチを `eng/measure-speed.py` に足すかを実測して決める。足すまでは設計席が merge の前に手で測る・QLT-014）。
 - 実機の確認（クリック・hover・鍵・閉じる流れ）: **planned のまま**（機械の必須 check ではない）。道具は入った: 鍵と閉じる流れは `eng/verify-window.py --tabs`（#239 / #248）。本物のキー入力を送るので CI では回さず、施主に確かめてから設計席が回す。クリックと hover とホイールと一覧は、設計席が 1 回限りの撮影で確かめた（gate-proofs の #238 と #240 の節・QLT-013）。
 - core が OS に触れないこと・ui に色のリテラルが無いこと: **active**（既存の `eng/symbols.py` と conformance）。
+- #924 の追補（帯の文字の layout の保持）: renderer はタブの題名を `DrawTextW` で毎 frame 作らず、Ctrl+P の面と同じ型 `PaletteRowLayouts` の別の実体 `tab_layouts_` に DirectWrite の layout を保持して `DrawTextLayout` で描く。鍵は書式の同一性（文字単位の省略記号を焼いた `tab_format_`）・焼き方 `plain`・題名・欄の幅と高さ・DPI で、原点・色（hover と未保存の印の色）は鍵に入れない。上限は `palette_row_limit` の 4 倍。書式と DPI の作り直しでだけ捨て、テーマと面を閉じたときは捨てない。「＋」「∨」と窓の操作は線なので対象外。画素は `DrawTextW` と同じ（`tests/ui` の `GutterLayoutTests` の省略記号つきの題名）、生成の数は `nib_window_tests --palette` の `verify_tab_titles` が守る（**active**）。
 
 ## 結果
 
