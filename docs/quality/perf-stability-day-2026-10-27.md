@@ -60,6 +60,9 @@ hide の指示「止めるまで速度向上・安定性向上の実験を続け
 | #898 | #908 **main** | DetectedText の判定と復号（9 族・往復・替え玉の CP932） | 142 / 0.5 s | 0（先頭が NUL の UTF-16 LE は UTF-32 の BOM として断られる・#734 の決め方どおり） |
 | #899 | #905 **main** | 検索の pattern の parse と matched（断片 24 種の閉じた失敗・範囲・決定性・後戻り） | 15 / 0.45 s | **末尾で切れた多バイトで終端の先を読む（#906・PR #909・main）** |
 | #911 | #913 **main** | Ex と検索の入力行のランダムな文字列（核 300 行 + controller 4 試行・補完と履歴の鍵・替え玉への書き込みは Ex の名前の正本の形だけ） | 338 / 0.3〜0.6 s | 0（50 倍 = 核 15000 行・controller 200 試行・seed 2 つ） |
+| #917 | #920 **main** | `CF_HTML` の見出しと断片の切り出し（`html_fragment_of`・位置の外・逆順・欠け・巨大・BOM・切り詰め・見出しから素朴に計算した期待 2 本と照合） | 12 / 0.5 s（別 target） | 0（50 倍 = 225,000 入力。19 桁以上のゼロ埋めの数は先頭 18 桁で読む・範囲は入力の内・直さない） |
+
+ほかに道具の直し: `eng/verify-window.py` の typing の節が main でも落ちていたのは、ステータスバーの右の項目を 3 つ（言語の欄 #776 の前）として数えていたため → 4 項目の正本に合わせた（#893・PR #918・main）。palette の節は ADR 0150（面の最初の候補の配色のプレビュー）の後の振る舞いと合わず落ちる → #919。
 
 ## 5. beta.7
 
@@ -70,7 +73,9 @@ main `c5e7285`（#859 まで・記録 [beta7-release-2026-10-27.md](beta7-releas
 - 片の切り目を内容で決める（#880）・ASCII 行の `AnalyzeScript` 省略（#896）・プレビューの保持の 3 点（#901）: 測って差が無かったので入れない。
 - 起動の origin: 床が 9.9 ms で縮める余地は 1〜2 ms。`DEPENDENTLOADFLAG`・DELAYLOAD の追加・msctf の先読みは効かない。
 - `SW_SHOWNOACTIVATE`（#895）: 数字は出たが振る舞いの変更なので hide の判断。
-- `eng/verify-window.py` の既定の節の `verify_typing` は main でも落ちる（#893・言語の欄で枠がずれた疑い）。
+- `eng/verify-window.py` の既定の節の `verify_typing` は main でも落ちていた（#893・右の項目の数が 3 のまま）→ 直した（PR #918）。palette の節は #919。
+- 描く段の EndDraw 0.18〜0.20 ms: 1 frame の命令は約 34（Fill 12・Line 7・Rect 1・DrawTextLayout 12・DrawTextW 1・GlyphRun 1）と clip 8 組・SetColor 約 26 で、命令の数に比例するか未検証（一定の提出費なら削っても効かない）。毎 frame 作る layout はタブの題名の `DrawTextW` だけ（調査 `D:/NeNeNib/outputs/20261027/probe-draw-primitives.md`）→ 今日は追わない。
+- Ctrl+P の絞り込みを前の結果から続ける（#910）は ADR 0091 で実装済みだった → 閉じ、残りの費用（名前で外れた候補の場所の再照合）は #912 / PR #914 で縮めた。
 
 ## 7. 記録の所在
 
