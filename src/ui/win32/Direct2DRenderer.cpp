@@ -329,6 +329,11 @@ Direct2DRenderer::create_swap_chain(HWND window, Microsoft::WRL::ComPtr<IDXGIFac
     {
         return std::unexpected(RenderFailure::swap_chain);
     }
+    // 待てる frame を 1 つに固定する（ADR 0007 の追補・#888）。ResizeBuffers の後も保たれる。
+    if (FAILED(swap_chain_->SetMaximumFrameLatency(1)))
+    {
+        return std::unexpected(RenderFailure::swap_chain);
+    }
     latency_.reset(swap_chain_->GetFrameLatencyWaitableObject());
     if (!latency_)
     {
@@ -2120,6 +2125,11 @@ std::expected<void, RenderFailure> Direct2DRenderer::render(const application::E
     {
         return formatted;
     }
+    // flip model の待機可能オブジェクトで、描く前に 1 frame ぶんだけ待つ（ADR 0007 の追補・#888）。
+    if (WaitForSingleObjectEx(latency_.get(), latency_timeout_milliseconds, TRUE) != WAIT_OBJECT_0)
+    {
+        return std::unexpected(RenderFailure::swap_chain);
+    }
     const auto acquired = acquire_surface();
     if (!acquired)
     {
@@ -2132,12 +2142,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::render(const application::E
     }
     // draw は EndDraw で終わる。ここが EndDraw の直後（#844）。
     timing.mark(core::Milestone::frame_drawn);
-    // flip model の待機可能オブジェクトで 1 フレーム分だけ待ってから提示する（Phase 0 D1）。
-    if (WaitForSingleObjectEx(latency_.get(), latency_timeout_milliseconds, TRUE) != WAIT_OBJECT_0)
-    {
-        return std::unexpected(RenderFailure::swap_chain);
-    }
-    const auto presented = swap_chain_->Present(1, 0);
+    // 待ちは描く前に済んでいる。垂直同期を待たずに合成へ渡す（ADR 0007 の追補・#888）。
+    const auto presented = swap_chain_->Present(0, 0);
     if (FAILED(presented))
     {
         return std::unexpected(classify(presented));
