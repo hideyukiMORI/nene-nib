@@ -97,13 +97,16 @@ change the row (giantRight / giantTyped.png), then the Vim toggle, `$`, `0` and 
 window is closed and the unsaved question answered no. Posted messages only.
 
 Issue #706 adds the palette list (ADR 0150 decisions 2, 5 and 6), which `--palette` also runs alone:
-Ctrl+P (real input) opens the palette and `:colorscheme ` lists the built-in schemes after the bare
-command, which keeps the saved scheme (paletteOpen.png); Up on the first row wraps to the last row at
-the bottom of the window and the focused scheme is previewed on the body ground right of the panel
-(paletteWrapped.png), and three more Ups move the
+Ctrl+P (real input) opens the palette and `:colorscheme ` lists the built-in schemes; the first row
+is already the first scheme, so it is previewed on the body ground right of the panel as soon as the
+palette opens (paletteOpen.png); Up on the first row wraps to the last row at the bottom of the window
+and that scheme is previewed instead (paletteWrapped.png), and three more Ups move the
 selection three rows up without scrolling the window (paletteUpThree.png); Esc closes the palette
 and the body ground is the saved scheme again (paletteCancelled.png). Opened again, Ctrl+P on the
-first row is the previous choice and keeps the palette open (paletteControlP.png). The selected row
+first row is the previous choice and keeps the palette open (paletteControlP.png), and Esc again
+returns to the saved scheme (paletteClosed.png). Opened a third time, Enter on the first row
+confirms it: the palette closes and the body ground stays the scheme previewed on opening
+(paletteConfirmed.png). The selected row
 is read from the selection face at the left of each row (core::palette_layout in DIPs).
 Issue #683 adds the split (ADR 0148 decisions 6, 8 and 11), which `--split` also runs alone: three
 lines are typed, Ctrl+backslash (sent as VK_OEM_5, the ¥ key) splits left and right (splitVertical.png: the
@@ -2641,24 +2644,26 @@ def enlarge_for_palette(window) -> None:
 
 
 def drive_palette(window, appearance: str, frames: Path | None) -> dict:
-    """Ctrl+P, `:colorscheme `, Up (wraps), Up x3, Esc, then Ctrl+P twice (ADR 0150 decision 2)."""
+    """Ctrl+P, `:colorscheme `, Up (wraps), Up x3, Esc, Ctrl+P twice, then Enter (ADR 0150)."""
     saved = list(PALETTE[appearance])
     open_schemes(window)
     steps = {"open": palette_look(window, frames, "paletteOpen")}
     rows = steps["open"]["rows"]
     assert rows == PALETTE_ROW_LIMIT and steps["open"]["selected"] == 0, steps["open"]
-    # 最初の行は名前の無い `colorscheme` なので、まだ保存した配色のまま。
-    assert steps["open"]["ground"] == saved, "the bare command changed the body ground"
+    # 最初の行は最初の配色（名前の無い `colorscheme` ではない）なので、開いた時点でプレビューされる
+    # （ADR 0150 決定 4）。
+    first = steps["open"]["ground"]
+    assert first != saved, f"the first scheme is not previewed on opening: {steps['open']}"
     press(window, VK_UP)
     steps["wrapped"] = palette_look(window, frames, "paletteWrapped")
     assert steps["wrapped"]["selected"] == rows - 1, f"Up on the first row: {steps['wrapped']}"
-    assert steps["wrapped"]["ground"] != saved, "the focused scheme is not previewed on the body"
+    assert steps["wrapped"]["ground"] not in (saved, first),         f"the focused last scheme is not previewed on the body: {steps['wrapped']}"
     press(window, VK_UP, 3)
     steps["upThree"] = palette_look(window, frames, "paletteUpThree")
     assert steps["upThree"]["selected"] == rows - 4, f"three more Ups: {steps['upThree']}"
     press(window, VK_ESCAPE)
     steps["cancelled"] = palette_look(window, frames, "paletteCancelled")
-    assert steps["cancelled"]["ground"] == saved, f"Esc left the preview: {steps['cancelled']}"
+    assert steps["cancelled"]["ground"] == saved,         f"Esc did not return to the scheme before the input: {steps['cancelled']}"
     open_schemes(window)
     time.sleep(PALETTE_SETTLE_SECONDS)
     if not press_chord(window, VK_CONTROL, VK_P):
@@ -2667,7 +2672,12 @@ def drive_palette(window, appearance: str, frames: Path | None) -> dict:
     assert steps["controlP"]["selected"] == rows - 1, f"Ctrl+P in the palette: {steps['controlP']}"
     press(window, VK_ESCAPE)
     steps["closed"] = palette_look(window, frames, "paletteClosed")
-    assert steps["closed"]["ground"] == saved, f"Esc left the preview: {steps['closed']}"
+    assert steps["closed"]["ground"] == saved,         f"Esc did not return to the scheme before the input: {steps['closed']}"
+    # Enter で確定すると面が閉じ、選んだ配色（開いた時点でプレビューされた最初の配色）が残る。
+    open_schemes(window)
+    press(window, VK_RETURN)
+    steps["confirmed"] = palette_look(window, frames, "paletteConfirmed")
+    assert steps["confirmed"]["ground"] == first,         f"Enter did not keep the chosen scheme: {steps['confirmed']} (chosen {first})"
     return steps
 
 
