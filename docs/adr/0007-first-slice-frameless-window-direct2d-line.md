@@ -55,6 +55,27 @@ Nib でその最小形は「枠なし窓に Direct2D で 1 行描き、OS のラ
 | adapters を作らず ui でレジストリを読む | ARC-003 / ARC-007 の例外区画が増える。テーマは application が所有する状態で、UI は写すだけ |
 | 単体テストの枠組みに Catch2 / GoogleTest | 依存が増える（DEVELOPMENT_WORKFLOW 第 6 節）。Loupe と同じ自前の最小ハーネス（`main` と `expect`）で足りる |
 
+## 追補（2026-10-27・#888）提示は描く前に待ち、最大 frame latency 1、sync interval 0
+
+Phase 0 D1 の「待機可能オブジェクトで 1 フレーム分だけ待ってから提示する」を次の 3 点に改める。
+
+1. `create_swap_chain` で `IDXGISwapChain2` を得た直後に `SetMaximumFrameLatency(1)`（失敗は `RenderFailure::swap_chain`）。swap chain の属性なので `ResizeBuffers` の後も保たれる
+2. `render` は `set_font` の後・`acquire_surface` の前で待機可能オブジェクトを待つ（上限 1 秒・`WAIT_OBJECT_0` 以外は `RenderFailure::swap_chain`）。`draw` の後は待たない
+3. `Present(0, 0)`。待ちは描く前に済んでいるので垂直同期を待たない。composition の swap chain なので引き裂きは起きない。失敗の分類（`classify`）は変えない
+
+WARP の仮の renderer（ADR 0132）も同じ `render` を通るので同じ形になる。差し替え（`adopt_device`）の `wait_for_commit` と ADR 0133 の道は変えない。
+
+理由は打鍵が画面に出るまでの時刻（#873 の実験・DXGI の frame statistics・各 20 試行 × 3 打鍵・合成 60 Hz・中央値）:
+
+| 変種 | input → Present が返る | input → 画面 |
+| --- | ---: | ---: |
+| 改める前 `Present(1, 0)`・描いた後に待つ | 1.32 ms | 37.2 ms |
+| `Present(0, 0)` | 1.24 ms | 25.0 ms |
+| ＋ `SetMaximumFrameLatency(1)` | 1.60 ms | 18.5 ms |
+| ＋ 待ちを描く前へ（採る形） | 1.53 ms | 14.5 ms |
+
+速さのベンチ（`input_received → frame_presented`）はこの差を測らない（画面への合成は Present が返った後）。待ちが描く前に来るので、#844 の段では待ちが `frame_built → frame_drawn` の間に入る。連打の frame の畳み方が変わり得るので、退行は 8 本のゲート（特に `key-to-frame-burst-200` と `-16mib`）で見る。
+
 ## 関連
 
 - [ADR 0002](0002-plain-win32-with-direct2d.md)・[ADR 0003](0003-cpp23-clang-cl-foundation-and-measured-limits.md)

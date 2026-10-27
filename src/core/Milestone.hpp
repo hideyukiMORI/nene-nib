@@ -20,7 +20,8 @@ namespace nenenib::core
 // 直前と返った直後。計測器は開くの値からこの間（答えを待つ時間）を引く（#689）。
 // frame_built と frame_drawn は打鍵の道の input_received -> frame_presented の間の段（#844）。
 // frame_built は窓が controller の frame を作り終えた直後（描く前）、frame_drawn は
-// renderer の EndDraw が返った直後（latency の待ちと Present の前）。どちらも frame ごとに
+// renderer の EndDraw が返った直後（Present の前。latency の待ちは描く前で、この間に入る・
+// ADR 0007 の追補）。どちらも frame ごとに
 // 打ち、起動の正典順の外。
 enum class Milestone : std::uint8_t
 {
