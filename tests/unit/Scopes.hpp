@@ -99,6 +99,9 @@ void verify_html_markdown_scope();
 // MarkdownPropertyTests.cpp（#871・parse_markdown と markdown_from_html の性質の試験）
 void verify_markdown_property_scope();
 
+// DetectedTextPropertyTests.cpp（#898・DetectedText の判定と復号・保存の往復の性質の試験）
+void verify_detected_text_property_scope();
+
 // RichPasteTests.cpp（ADR 0157・貼り方は文書の言語とクリップボードの HTML で決まる）
 void verify_rich_paste_contracts();
 
