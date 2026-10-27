@@ -226,8 +226,13 @@ TOGGLE_PADDING_DIPS = 2
 SEGMENT_WIDTH_DIPS = 44
 SEGMENT_HEIGHT_DIPS = 20
 STATUS_ITEM_GAP_DIPS = 16
-# 文字コードの項目は「UTF-8 BOM」「Shift_JIS」が入る 72 DIP（ADR 0010 の決定 14）。
-STATUS_ITEM_WIDTH_DIPS = (96, 72, 36)
+# 右の 4 項目（行と桁・文字コード・改行・言語）の幅。src/core/StatusBarLayout.cpp の
+# item_width_dips と同じ並び。文字コードは「UTF-8 BOM」「Shift_JIS」が入る 72 DIP（ADR 0010 の
+# 決定 14）、言語は「javascript」「typescript」が入る 72 DIP（ADR 0154 の決定 6・#893）。
+STATUS_ITEM_WIDTH_DIPS = (96, 72, 36, 72)
+# 4 項目で `:` の入力欄の右端がこれに届かなければ言語の欄を畳む（CommandLayout.hpp の
+# command_input_minimum_dip・StatusBarLayout.cpp の fitted_item_rects）。
+COMMAND_INPUT_MINIMUM_DIPS = 96
 # トグルの幅と、その右のモード名（通常 / NORMAL / INSERT）の幅。core::status_bar_layout と同じ。
 TOGGLE_WIDTH_DIPS = TOGGLE_PADDING_DIPS * 3 + SEGMENT_WIDTH_DIPS * 2
 MODE_LABEL_WIDTH_DIPS = 72
@@ -965,16 +970,39 @@ def first_cell_box(body: dict, index: int, dpi: int) -> tuple:
     return (body["contentLeft"], top, body["contentLeft"] + to_pixels(10, dpi), top + body["lineHeight"])
 
 
-def status_item_box(width: int, height: int, dpi: int, index: int) -> tuple:
-    """The first status item (行 X, 桁 Y), mirroring core::status_bar_layout."""
+def status_item_boxes(width: int, height: int, dpi: int, folded: bool) -> list:
+    """The four right items from the right edge, mirroring core::item_rects (folded: no language)."""
     band_top = max(height - to_pixels(STATUS_BAR_DIPS, dpi), 0)
     right = width - to_pixels(STATUS_PADDING_DIPS, dpi)
-    boxes = [None, None, None]
+    language = len(STATUS_ITEM_WIDTH_DIPS) - 1
+    boxes = [None] * len(STATUS_ITEM_WIDTH_DIPS)
     for step in reversed(range(len(STATUS_ITEM_WIDTH_DIPS))):
+        if folded and step == language:
+            boxes[step] = (right, band_top, right, height)
+            continue
         item = to_pixels(STATUS_ITEM_WIDTH_DIPS[step], dpi)
         boxes[step] = (right - item, band_top, right, height)
         right -= item + to_pixels(STATUS_ITEM_GAP_DIPS, dpi)
-    return boxes[index]
+    return boxes
+
+
+def status_item_box(width: int, height: int, dpi: int, index: int) -> tuple:
+    """A right status item (0 = 行 X, 桁 Y, 1 = 文字コード, 2 = 改行, 3 = 言語).
+
+    Mirrors core::status_bar_layout: the language item folds to zero width when the command input
+    would end left of COMMAND_INPUT_MINIMUM_DIPS (fitted_item_rects・ADR 0154 の決定 6・#893).
+    """
+    boxes = status_item_boxes(width, height, dpi, False)
+    fits = (boxes[0][0] - to_pixels(STATUS_ITEM_GAP_DIPS, dpi)
+            >= to_pixels(COMMAND_INPUT_MINIMUM_DIPS, dpi))
+    return (boxes if fits else status_item_boxes(width, height, dpi, True))[index]
+
+
+def write_box_png(path: Path, pixels: bytes, width: int, box: tuple) -> None:
+    """Save one box of a top-down BGRA capture as a PNG, so a failed status check can be seen."""
+    left, top, right, bottom = box
+    rows = [pixels[(y * width + left) * 4:(y * width + right) * 4] for y in range(top, bottom)]
+    write_png(path, right - left, bottom - top, b"".join(rows))
 
 
 def body_ground_point(width: int, height: int, dpi: int) -> tuple:
@@ -1084,8 +1112,8 @@ def verify_typing(window, ground: dict, output: Path) -> dict:
     width, height, dpi, body = ground["size"]
     grounds = [ground["background"], ground["current"], list(ACCENT)]
     before = capture(window, width, height)
-    status_before = ink(before, width, status_item_box(width, height, dpi, 0),
-                        [ground["status"]])
+    position_box = status_item_box(width, height, dpi, 0)
+    status_before = ink(before, width, position_box, [ground["status"]])
     resting_caret = caret_pixel(before, width, body, 0)
     write_text(window, "abc")
     press(window, VK_RETURN)
@@ -1101,10 +1129,13 @@ def verify_typing(window, ground: dict, output: Path) -> dict:
         "gutterInkRowTwo": ink(after, width, gutter_box(body, 1, dpi),
                                gutter_grounds(before, width, body, grounds)),
         "statusInkBefore": status_before,
-        "statusInkAfter": ink(after, width, status_item_box(width, height, dpi, 0),
-                              [ground["status"]]),
+        "statusInkAfter": ink(after, width, position_box, [ground["status"]]),
+        "statusBox": list(position_box),
         "capture": "editing-slice.bmp",
     }
+    if typed["statusInkAfter"] == status_before:
+        write_box_png(output / "typing-status-before.png", before, width, position_box)
+        write_box_png(output / "typing-status-after.png", after, width, position_box)
     assert resting_caret == list(ACCENT), f"the resting caret is not the accent: {resting_caret}"
     assert typed["caretPixelRowTwo"] == list(ACCENT), "Enter did not put the caret on row two"
     assert typed["rowTwoGround"] == ground["current"], "the current line did not move to row two"
