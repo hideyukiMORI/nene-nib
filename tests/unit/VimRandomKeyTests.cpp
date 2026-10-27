@@ -333,7 +333,9 @@ constexpr std::array<WordMaker, 16> word_makers{
     return trial;
 }
 
-// 不変量 2: キャレットと選択の桁が行のコードポイントの数 + 1 を超えない。
+// 不変量 2: キャレットの桁が行のコードポイントの数 + 1 を、選択の終わりの桁が + 2 を超えない。
+// 選択だけ 1 つ多いのは、行単位の選択（と行末を越える `$` や矩形の VISUAL）が
+// 改行の分の 1 桁を塗るため。
 [[nodiscard]] bool within_text(const EditorFrame &frame, const TextBuffer &text)
 {
     const auto caret = frame.caret.position;
@@ -419,6 +421,8 @@ constexpr std::array<WordMaker, 16> word_makers{
 
 // 鍵列の後に `<Esc>` で INSERT を閉じ、打った鍵の数より 1 つ多い `u` を :normal! の意味で流す
 // （戻すものが無くなった `u` の失敗で残りを打ち切る・1 鍵ごとに frame を作らない）。
+// 見るのは「戻せたところまでで最初の本文に戻る」ことだけ。`<C-r>` や `.` を含む列で 1 鍵の
+// undo が 2 単位に割れる破れは、余分な `u` が吸収するのでこの検査では見逃す。
 [[nodiscard]] bool undone_to_start(EditorController &controller, const std::string &start,
                                    std::size_t keys)
 {
