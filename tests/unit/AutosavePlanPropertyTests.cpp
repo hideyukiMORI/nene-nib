@@ -4,7 +4,12 @@
 // 無い・違う改訂・閉じた番号の残骸）を添えて、autosave_plan と clears_autosave の性質を見る。
 // 帳面を計画どおりに直す規則は EditorController::autosave_now と store_planned から写した:
 // store はそのタブの今の改訂番号を覚え、discard は番号を外し、keep は何もしない。
-// 未保存かどうかは Document.hpp の save_state_of の注釈（ADR 0010 の決定 7）の「保存時点の位置と
+// store_autosave の失敗（ADR 0137 の決定 4: 失敗した番号を帳面から外し次の合図で書き直す）は
+// 写していない。この試験の帳面は書き込みが全部成功した後の形だけを見る。
+// 製品の step_of と autosave_plan を使い捨てに壊して落ちることを手元で確かめた（#930 の R2・commit
+// しない）: store と keep の入れ替え・改訂番号を履歴の位置に替える・残骸の discard を keep
+// にする、の 3 本とも 落ちる（位置の変異は branched の組と不変量 3 で落ちる）。 未保存かどうかは
+// Document.hpp の save_state_of の注釈（ADR 0010 の決定 7）の「保存時点の位置と
 // 履歴の位置が一致すれば保存済み」を、タブの束から素朴に読む。
 #include "Appearance.hpp"
 #include "AutosaveId.hpp"
@@ -514,30 +519,71 @@ void report(const char *family, Case input, Check check)
     return broken;
 }
 
-// 生成器が性質の前提を覆っている（読んでいないタブ・閉じた残骸・store・discard・keep が出る）。
+// 計画の 1 行が決定 2 の表のどの枝か。添字は branch_* の順で、clears_autosave の真偽が続く。
+constexpr std::size_t branch_store = 0U;
+constexpr std::size_t branch_unchanged = 1U;
+constexpr std::size_t branch_untouched = 2U;
+constexpr std::size_t branch_unread = 3U;
+constexpr std::size_t branch_remnant = 4U;
+constexpr std::size_t branch_saved = 5U;
+constexpr std::size_t branch_clears = 6U;
+constexpr std::size_t branch_keeps = 7U;
+using Branches = std::array<std::size_t, 8>;
+
+[[nodiscard]] std::size_t branch_of(const std::optional<std::size_t> &position,
+                                    const TabValue &value, AutosaveStep step)
+{
+    const bool unsaved = value.has_value() && value.value().first;
+    std::size_t branch = branch_store;
+    switch (step)
+    {
+    case AutosaveStep::store:
+        branch = branch_store;
+        break;
+    case AutosaveStep::keep:
+        branch = unsaved ? branch_unchanged : branch_untouched;
+        break;
+    case AutosaveStep::discard:
+        branch = !position.has_value() ? branch_remnant
+                                       : (value.has_value() ? branch_saved : branch_unread);
+        break;
+    }
+    return branch;
+}
+
+void count_branches(const Case &input, Branches &branches)
+{
+    const EditorState state = built_of(input.first).first;
+    const std::vector<TabValue> values = tab_values(state);
+    for (const auto &[id, step] : app::autosave_plan(state, ledger_of(state, input.second)))
+    {
+        const auto position = position_of(state, id);
+        const TabValue value = position.has_value() ? values.at(position.value()) : TabValue{};
+        ++branches.at(branch_of(position, value, step));
+    }
+    const bool clears =
+        app::clears_autosave(state, app::EndSession{app::SessionEnd::window_closed});
+    ++branches.at(clears ? branch_clears : branch_keeps);
+}
+
+// 生成器が決定 2 の表の枝を全部覆う（store・未保存で変わっていない keep・帳面に無い keep・
+// 読んでいないタブの行の discard・閉じた残骸の discard・保存済みの行の discard）と、
+// clears_autosave の真偽の両方が出る。どれかが 0 なら性質の試験はその枝を見ていない（#930 の R1）。
 void verify_generator_reaches_the_table()
 {
     Random random{9301U};
-    std::array<std::size_t, 3> steps{};
-    std::size_t unloaded_tabs = 0;
+    Branches branches{};
     std::size_t largest = 0;
     for (std::size_t index = 0; index < family_cases; ++index)
     {
         const Case input = random_case(random);
-        const EditorState state = built_of(input.first).first;
-        largest = std::max(largest, state.tab_count());
-        for (const TabValue &value : tab_values(state))
-        {
-            unloaded_tabs += value.has_value() ? 0U : 1U;
-        }
-        for (const auto &entry : app::autosave_plan(state, ledger_of(state, input.second)))
-        {
-            ++steps.at(static_cast<std::size_t>(entry.second));
-        }
+        largest = std::max(largest, built_of(input.first).first.tab_count());
+        count_branches(input, branches);
     }
-    expect(steps.at(0) > 0U && steps.at(1) > 0U && steps.at(2) > 0U && unloaded_tabs > 0U &&
+    expect(std::ranges::all_of(branches, [](std::size_t count) { return count > 0U; }) &&
                largest >= tab_limit / 2U,
-           "the generated states reach store, discard, keep, unread tabs and many tabs");
+           "the generated states reach every row of the table, both answers of clears_autosave "
+           "and many tabs");
 }
 
 void verify_generator_is_deterministic()
