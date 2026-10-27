@@ -63,6 +63,8 @@ hide の指示「止めるまで速度向上・安定性向上の実験を続け
 | #911 | #913 **main** | Ex と検索の入力行のランダムな文字列（核 300 行 + controller 4 試行・補完と履歴の鍵・替え玉への書き込みは Ex の名前の正本の形だけ） | 338 / 0.3〜0.6 s | 0（50 倍 = 核 15000 行・controller 200 試行・seed 2 つ） |
 | #917 | #920 **main** | `CF_HTML` の見出しと断片の切り出し（`html_fragment_of`・位置の外・逆順・欠け・巨大・BOM・切り詰め・見出しから素朴に計算した期待 2 本と照合） | 12 / 0.5 s（別 target） | 0（50 倍 = 225,000 入力。19 桁以上のゼロ埋めの数は先頭 18 桁で読む・範囲は入力の内・直さない） |
 | #923 | #926 | 構文の色の覚え `SyntaxStateCache`: 5 言語 × ランダムな編集・undo / redo・移動（4096 行超を含む）の後の見えている行の色が、遡りの基準か模型の覚えから続けた基準と一致し `syntax_lexed` も等しい（覚えと遡りの両方の道を通ることも expect） | 8 / 0.7 s | 0（50 倍 = 250 trial・7,817 frame。変異: 捨て方を緩める → 落ちる・続きを使わない → 落ちる・過剰に捨てる → 色は正しく性能だけの差なので通る） |
+| #929 | #932 **main** | タブの帯の配置 `title_bar_layout` と hit test の一致（幅 360〜4000 DIP・DPI 4 種・タブ 0〜64・送り量・載せた要素。矩形の重なり・順・帯の内・× は自分のタブの内・見えていないタブに当たらない・全点走査） | 11 / 0.35 s | 0（50 倍 = 約 17 s・境目の見本 6 件を固定） |
+| #930 | #931 **main** | `autosave_plan` / `clears_autosave`（12 種の操作・タブ 16 本・帳面の改訂と残骸。変わっていないタブを書かない・読んでいないタブを書かない・固定点・決定性・枝ごとの覆いを expect） | 1403 / 0.66 s | 0（50 倍 = 4,800 組。変異 3 本（store と keep の入れ替え・改訂を位置に・残骸の discard を keep）はどれも落ちる） |
 
 ほかに道具の直し: `eng/verify-window.py` の typing の節が main でも落ちていたのは、ステータスバーの右の項目を 3 つ（言語の欄 #776 の前）として数えていたため → 4 項目の正本に合わせた（#893・PR #918・main）。palette の節は ADR 0150（面の最初の候補の配色のプレビュー）の後の振る舞いと合わず落ちる → #919。
 
@@ -78,6 +80,8 @@ main `c5e7285`（#859 まで・記録 [beta7-release-2026-10-27.md](beta7-releas
 - `eng/verify-window.py` の既定の節の `verify_typing` は main でも落ちていた（#893・右の項目の数が 3 のまま）→ 直した（PR #918）。palette の節は #919。
 - 描く段の EndDraw 0.18〜0.20 ms: 1 frame の命令は約 34（Fill 12・Line 7・Rect 1・DrawTextLayout 12・DrawTextW 1・GlyphRun 1）と clip 8 組・SetColor 約 26 で、命令の数に比例するか未検証（一定の提出費なら削っても効かない）。毎 frame 作る layout はタブの題名の `DrawTextW` だけ（調査 `D:/NeNeNib/outputs/20261027/probe-draw-primitives.md`）→ 今日は追わない。
 - Ctrl+P の絞り込みを前の結果から続ける（#910）は ADR 0091 で実装済みだった → 閉じ、残りの費用（名前で外れた候補の場所の再照合）は #912 / PR #914 で縮めた。
+
+- `tests/unit/NibTests.cpp` の契約の表は 54 行で `verify_vim_scope_contracts()` の関数長の上限（clang-tidy・QLT-010 で閾値は触らない）に当たった → 表を関数の外の `constexpr` の配列に出した（PR #931・CPP-012）。席のビルドの確かめで PowerShell の `$LASTEXITCODE` が pipeline の後ろの値になり「build exit=0」と出ていたのに `.obj` は FAILED だった → ビルドのログを `FAILED|error:` で grep する。
 
 ## 7. 記録の所在
 
