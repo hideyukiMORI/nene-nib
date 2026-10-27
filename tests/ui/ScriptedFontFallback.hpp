@@ -8,7 +8,9 @@ namespace nenenib::tests::ui
 {
 // OS の字体選択の役の替え玉。呼ばれた回数を数え、試験が決めた HRESULT を返す。
 // scale には何回目の呼び出しかを入れるので、保持から返った答えかどうかを値で見分けられる
-// （ADR 0077 の決定 3）。字体は返さない（nullptr）。委ね先を置くと、答えは委ね先のものになり、
+// （ADR 0077 の決定 3）。字体は既定で返さない（nullptr）。
+// 答えの字体を置くと、その字体を scale 1 で返す（OS
+// の字体選択に依らない検査のため・#889）。委ね先を置くと、答えは委ね先のものになり、
 // 渡された長さの最大と呼ばれた回数だけを数える（ADR 0142 の決定 3 と追補）。包むと、委ね先が返した
 // 字体を呼ぶたびに別の物（ForwardingFont）に包み、family を読んだ回数を数える（#889）。
 class ScriptedFontFallback final
@@ -22,6 +24,7 @@ class ScriptedFontFallback final
     void delegate_to(Microsoft::WRL::ComPtr<IDWriteFontFallback> delegate) noexcept;
     void forget_longest() noexcept;
     [[nodiscard]] UINT32 longest() const noexcept;
+    void answer_with(Microsoft::WRL::ComPtr<IDWriteFont> font) noexcept;
     void wrap_fonts() noexcept;
     [[nodiscard]] UINT32 family_reads() const noexcept;
     HRESULT STDMETHODCALLTYPE MapCharacters(IDWriteTextAnalysisSource *source, UINT32 position,
@@ -39,6 +42,7 @@ class ScriptedFontFallback final
     UINT32 calls_ = 0;
     UINT32 longest_ = 0;
     Microsoft::WRL::ComPtr<IDWriteFontFallback> delegate_;
+    Microsoft::WRL::ComPtr<IDWriteFont> answer_font_;
     bool wraps_ = false;
     std::shared_ptr<UINT32> family_reads_ = std::make_shared<UINT32>(0U);
 };

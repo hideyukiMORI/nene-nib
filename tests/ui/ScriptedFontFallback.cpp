@@ -38,6 +38,11 @@ UINT32 ScriptedFontFallback::longest() const noexcept
     return longest_;
 }
 
+void ScriptedFontFallback::answer_with(Microsoft::WRL::ComPtr<IDWriteFont> font) noexcept
+{
+    answer_font_ = std::move(font);
+}
+
 void ScriptedFontFallback::wrap_fonts() noexcept
 {
     wraps_ = true;
@@ -55,11 +60,11 @@ void ScriptedFontFallback::counted(UINT32 length) noexcept
     longest_ = std::max(longest_, length);
 }
 
-// 包むなら、委ね先が返した字体を新しい ForwardingFont に包み替える（所有は呼び出し元へ渡す）。
+// 包むなら、委ね先か替え玉が返した字体を新しい ForwardingFont
+// に包み替える（所有は呼び出し元へ渡す）。
 HRESULT ScriptedFontFallback::wrapped(HRESULT result, IDWriteFont **mapped_font) noexcept
 {
-    if (!wraps_ || delegate_ == nullptr || FAILED(result) || mapped_font == nullptr ||
-        *mapped_font == nullptr)
+    if (!wraps_ || FAILED(result) || mapped_font == nullptr || *mapped_font == nullptr)
     {
         return result;
     }
@@ -75,8 +80,12 @@ HRESULT ScriptedFontFallback::answer(UINT32 length, UINT32 *mapped_length,
                                      IDWriteFont **mapped_font, FLOAT *scale)
 {
     *mapped_length = length;
-    *mapped_font = nullptr;
-    *scale = static_cast<FLOAT>(calls_);
+    *mapped_font = answer_font_.Get();
+    if (answer_font_ != nullptr)
+    {
+        answer_font_->AddRef();
+    }
+    *scale = answer_font_ != nullptr ? 1.0F : static_cast<FLOAT>(calls_);
     return result_;
 }
 
