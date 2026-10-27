@@ -3,7 +3,7 @@
 // 4096 件を超えると捨てて呼び直す。覚えの型の検査は字体に依らない。Issue #889: 覚えの字体は
 // (family 名・weight・style・stretch) の組で正規化し、同じ組の別の物は同じ行（同じ ComPtr）になり、
 // family 名を読むのは新しい物のときだけで、隣り合う片は 1 つの範囲にまとまる。PrimaryFontCoverage
-// を通す 検査は主字体（Cascadia Code）に依るので、無い機械では測れない（環境依存・QLT-013）。
+// を通す検査は主字体（Cascadia Code）に依るので、無い機械では測れない（環境依存・QLT-013）。
 #include "DirectWriteFactory.hpp"
 #include "FallbackSegmentMemo.hpp"
 #include "FontFallbackKey.hpp"
@@ -249,6 +249,35 @@ Font system_font(IDWriteFactory2 &factory, const wchar_t *name, DWRITE_FONT_WEIG
     return font;
 }
 
+// 覚えを 4,096 件で捨てた後も正規の字体の表と行番号は残り、同じ組の別の物は同じ行になる。
+void check_rows_survive_forget(IDWriteFactory2 &factory)
+{
+    const auto regular = system_font(factory, L"Cascadia Code", DWRITE_FONT_WEIGHT_NORMAL);
+    if (regular == nullptr)
+    {
+        expect(false, "Cascadia Code has a regular font");
+        return;
+    }
+    const auto reads = std::make_shared<UINT32>(0U);
+    const Font one = Microsoft::WRL::Make<ForwardingFont>(regular, reads);
+    const Font two = Microsoft::WRL::Make<ForwardingFont>(regular, reads);
+    win32::FallbackSegmentMemo memo;
+    const auto row = memo.normalized(one);
+    memo.remember(L"日本", row, 1, 2);
+    for (std::size_t index = 0; index < win32::fallback_segment_memo_limit; ++index)
+    {
+        memo.remember(han(index), std::nullopt, 1, 1);
+    }
+    const bool forgot = memo.size() == 1 && !memo.find(L"日本").has_value();
+    const auto again = memo.normalized(one);
+    const auto other = memo.normalized(two);
+    expect(forgot && row.has_value() && memo.rows() == 1 && again == row && other == row &&
+               memo.row_font(row.value_or(0)) == one &&
+               memo.row_family(row.value_or(0)) == L"Cascadia Code",
+           "after the memo forgets beyond its limit the font rows and their numbers remain, and "
+           "another object of the same family, weight, style and stretch maps to the same row");
+}
+
 // 正規の字体の表: 同じ組の別の物は同じ行で、行の字体は最初の物。family 名は新しい物のときだけ
 // 読み、表にある物は読まない。違う weight は別の行。null は行にしない。
 void check_normalized_rows(IDWriteFactory2 &factory)
@@ -287,43 +316,41 @@ void check_normalized_rows(IDWriteFactory2 &factory)
            "another weight is another row and a null font has no row");
 }
 
-// coverage 経由: 委ね先の答えを片ごとに別の物に包んでも、よく使う漢字 6 字を繰り返した 600 単位の
-// 1 区切り（片は 256・256・88 で、文字列は全部違う）は 1 つの範囲の字体になり、family
-// 名を読むのは字体選択の答えの数まで。同じ行の 2 回目は 字体選択も family 名の読みも 0 回。
+// coverage 経由: 替え玉が答える字体（Segoe UI・scale 1）を片ごとに別の物に包んでも、よく使う
+// 漢字 6 字を繰り返した 600 単位の本文（片は 256・256・88 で、文字列は全部違う）は 1 つの範囲の
+// 字体になり、family 名を読むのは字体選択の答えの数まで。同じ行の 2 回目は字体選択も family 名の
+// 読みも 0 回。OS の字体選択に依らない（答えの字体は替え玉が決め、本文に空白を含めない）。
 void check_normalized_coverage(IDWriteFactory2 &factory)
 {
     const auto fallback = Microsoft::WRL::Make<ScriptedFontFallback>();
-    Microsoft::WRL::ComPtr<IDWriteFontFallback> system;
+    const auto answer = system_font(factory, L"Segoe UI", DWRITE_FONT_WEIGHT_NORMAL);
     const auto format = scripted_format(factory, *fallback.Get());
     auto coverage =
         format != nullptr ? win32::PrimaryFontCoverage::of(factory, *format.Get()) : std::nullopt;
-    if (!coverage.has_value() || FAILED(factory.GetSystemFontFallback(&system)))
+    if (!coverage.has_value() || answer == nullptr)
     {
-        expect(false, "the wrapping format has a primary font coverage");
+        expect(false, "the wrapping format has a primary font coverage and Segoe UI");
         return;
     }
-    fallback->delegate_to(system);
+    fallback->answer_with(answer);
     fallback->wrap_fonts();
-    std::wstring wide = L"abc ";
+    std::wstring wide;
     const std::wstring_view common = L"日本語文字列";
     for (std::size_t index = 0; index < long_segment; ++index)
     {
         wide += common[index % common.size()];
     }
-    wide += L" def";
     const auto one = layout_of(factory, *format.Get(), wide);
     const auto first = assigned_calls(coverage.value(), *fallback.Get(), one, wide);
     const auto reads = fallback->family_reads();
     const auto second = assigned_calls(coverage.value(), *fallback.Get(),
                                        layout_of(factory, *format.Get(), wide), wide);
-    constexpr UINT32 han_start = 4;
     std::array<wchar_t, name_capacity> name{};
     DWRITE_TEXT_RANGE range{};
-    const bool joined =
-        one != nullptr &&
-        SUCCEEDED(one->GetFontFamilyName(han_start, name.data(), name_capacity, &range)) &&
-        std::wstring{name.data()} != L"Cascadia Code" && range.startPosition == han_start &&
-        range.length == long_segment;
+    const bool joined = one != nullptr &&
+                        SUCCEEDED(one->GetFontFamilyName(0, name.data(), name_capacity, &range)) &&
+                        std::wstring{name.data()} == L"Segoe UI" && range.startPosition == 0 &&
+                        range.length == wide.size();
     expect(first.value_or(0) > 0 && reads > 0 && reads <= first.value_or(0),
            "the family name is read at most once per font fallback answer, not per range");
     expect(joined, "adjacent pieces of one segment with distinct font objects make one range");
@@ -346,6 +373,7 @@ void verify_fallback_segment_memo()
     check_system_answers(*factory.Get());
     check_overflow(*factory.Get());
     check_normalized_rows(*factory.Get());
+    check_rows_survive_forget(*factory.Get());
     check_normalized_coverage(*factory.Get());
 }
 } // namespace nenenib::tests::ui

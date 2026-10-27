@@ -138,6 +138,7 @@ FallbackSegmentMemo::normalized(const Microsoft::WRL::ComPtr<IDWriteFont> &font)
         return static_cast<std::size_t>(same - row_fonts_.begin());
     }
     auto family = english_family(*font.Get());
+    // 読み取りの一時失敗も null として覚えに残る（次の coverage_ の作り直しで消える・#889）。
     if (family.empty())
     {
         return std::nullopt;
