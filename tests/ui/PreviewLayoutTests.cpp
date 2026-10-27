@@ -11,6 +11,8 @@
 #include "WindowChecks.hpp"
 
 #include "MarkdownDocument.hpp"
+#include "MarkdownParse.hpp"
+#include "MarkdownStop.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockTops.hpp"
 #include "PreviewBrushes.hpp"
@@ -428,6 +430,17 @@ void check_list_scanned_in_range()
                top.value().indent(1) == scrolled.value().indent(1) && top.value().indent(1) > 40.0F,
            "scrolling a list whose 10. is below the frame keeps its marker column");
 }
+
+// CR だけの改行の文書でも錨は本文の順に並んだ要素から引く（空の項目が末尾を指さない・#887）。
+void check_anchor_after_carriage_returns()
+{
+    const auto parsed = core::parse_markdown("- foo\r-\r- bar", core::MarkdownStop::never());
+    expect(parsed.has_value() && parsed.value().blocks.size() == 3 &&
+               win32::preview_anchor_block(parsed.value(), core::Offset{3}) == 0 &&
+               win32::preview_anchor_block(parsed.value(), core::Offset{6}) == 1 &&
+               win32::preview_anchor_block(parsed.value(), core::Offset{11}) == 2,
+           "the anchor follows the caret through a document with CR line endings");
+}
 } // namespace
 
 void verify_preview_layouts()
@@ -449,5 +462,6 @@ void verify_preview_layouts()
     check_pane_reuse();
     check_measured_from_anchor();
     check_list_scanned_in_range();
+    check_anchor_after_carriage_returns();
 }
 } // namespace nenenib::tests::ui

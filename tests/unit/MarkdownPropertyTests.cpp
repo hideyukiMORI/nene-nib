@@ -54,15 +54,6 @@ constexpr std::size_t saturated = 255U;
 constexpr std::string_view bullet = "•";
 constexpr std::string_view hidden = "ZQXJ";
 
-// 50 倍の走りまでに見つかった破れを縮めた回帰 case（#871・直しは別の Issue）。今の答えを固定し、
-// 直ったら落ちるので、そのとき表から外して性質の例外（has_lone_carriage_return）も消す。
-// 1・2: 位置を持たない要素（空の項目）の行頭を LF だけで探すので、CR だけの改行の後ろの要素が
-// 本文の末尾を指し、続く要素より後ろになる。
-constexpr std::array<std::string_view, 2> known_breaks{{
-    ">[\r+\r\\",
-    "`\r1. 1. \\",
-}};
-
 // Markdown の構文の断片（見出し・フェンス・箇条書き・引用・表・HTML ブロック・実体参照・
 // リンクの参照・バックスラッシュ・改行の形・多バイトと壊れた UTF-8）。
 constexpr std::array<std::string_view, 48> markdown_fragments{{
@@ -458,22 +449,7 @@ void verify_family(const char *description, std::uint64_t seed, Make make, Check
     return spans_hold(block) ? std::string_view{} : "a span outside the text or out of order";
 }
 
-// 後ろに LF の無い CR（CommonMark では行の終わり）。位置を持たない要素の行頭の探索は LF だけを
-// 行の終わりとみなすので、これを含む本文では順の性質を問わない（known_breaks の 1・2・#871）。
-[[nodiscard]] bool has_lone_carriage_return(std::string_view input)
-{
-    for (std::size_t at = input.find('\r'); at != std::string_view::npos;
-         at = input.find('\r', at + 1U))
-    {
-        if (at + 1U == input.size() || input[at + 1U] != '\n')
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-// 要素は本文の順に並ぶ（source_begin は減らない）。
+// 要素は本文の順に並ぶ（source_begin は減らない・CR だけの改行を含む本文でも・#887）。
 [[nodiscard]] std::string_view document_violation(std::string_view input,
                                                   const core::MarkdownDocument &document)
 {
@@ -485,7 +461,7 @@ void verify_family(const char *description, std::uint64_t seed, Make make, Check
         {
             return broken;
         }
-        if (block.source_begin.value < previous && !has_lone_carriage_return(input))
+        if (block.source_begin.value < previous)
         {
             return "blocks out of source order";
         }
@@ -511,13 +487,19 @@ void verify_family(const char *description, std::uint64_t seed, Make make, Check
     return document_violation(input, first.value());
 }
 
-// 途中で打ち切る述語は stopped か、打ち切らなかったときと同じ文書。
-[[nodiscard]] std::string_view stop_violation(std::string_view input)
+// 入力の大きさ % 97 回目の問いまでは続け、その次から打ち切る述語で読む。
+[[nodiscard]] Parsed parsed_with_stop(std::string_view input)
 {
     std::size_t asked = 0U;
     const std::size_t limit = input.size() % 97U;
     const auto ask = [&asked, limit] { return ++asked > limit; };
-    const Parsed stopped = core::parse_markdown(input, MarkdownStop::asking(ask));
+    return core::parse_markdown(input, MarkdownStop::asking(ask));
+}
+
+// 途中で打ち切る述語は stopped か、打ち切らなかったときと同じ文書。
+[[nodiscard]] std::string_view stop_violation(std::string_view input)
+{
+    const Parsed stopped = parsed_with_stop(input);
     if (!stopped.has_value())
     {
         return stopped.error() == MarkdownFailure::stopped ? std::string_view{}
@@ -537,6 +519,26 @@ void verify_family(const char *description, std::uint64_t seed, Make make, Check
         text.append(piece);
     }
     return text;
+}
+
+// 打ち切りの性質が打ち切られない入力だけで通らないこと（#886 のレビュー R1）。stop_violation と
+// 同じ seed と生成器の列で、少なくとも 1 本は stopped で終わる。64 KiB の 1 本は最初の問いで
+// 打ち切る述語に stopped を返す。
+void verify_stops_happen()
+{
+    Random random{8715U};
+    std::size_t stopped = 0U;
+    for (std::size_t index = 0; index < family_inputs; ++index)
+    {
+        const Parsed parsed = parsed_with_stop(markdown_composed(random));
+        stopped += !parsed.has_value() && parsed.error() == MarkdownFailure::stopped ? 1U : 0U;
+    }
+    expect(stopped > 0U, "the stopping predicate stops at least one composed input");
+    Random large{8716U};
+    const auto always = [] { return true; };
+    const Parsed first = core::parse_markdown(markdown_large(large), MarkdownStop::asking(always));
+    expect(!first.has_value() && first.error() == MarkdownFailure::stopped,
+           "a predicate that stops at the first question stops 64 KiB of fragments");
 }
 
 // 引用と箇条書きの深さは 255 で飽和する（PreviewBlock の深さは数で持つ）。
@@ -569,39 +571,8 @@ void verify_markdown_size_boundary()
            "markdown_size_fits takes the md4c size type exactly and refuses one byte more");
 }
 
-[[nodiscard]] std::string_view order_violation(std::string_view input)
-{
-    const Parsed parsed = core::parse_markdown(input, MarkdownStop::never());
-    if (!parsed.has_value())
-    {
-        return "no document without a stop";
-    }
-    std::size_t previous = 0U;
-    for (const auto &block : parsed.value().blocks)
-    {
-        if (block.source_begin.value < previous)
-        {
-            return "blocks out of source order";
-        }
-        previous = block.source_begin.value;
-    }
-    return {};
-}
-
-void verify_known_breaks()
-{
-    bool still = true;
-    for (const std::string_view input : known_breaks)
-    {
-        still = still && order_violation(input) == "blocks out of source order" &&
-                markdown_violation(input).empty();
-    }
-    expect(still, "the known breaks still put an unlocated block after its successor (#871)");
-}
-
 void verify_markdown_properties()
 {
-    verify_known_breaks();
     verify_family("parse_markdown holds on random bytes", 8711U, markdown_bytes,
                   markdown_violation);
     verify_family("parse_markdown holds on composed fragments", 8712U, markdown_composed,
@@ -612,6 +583,7 @@ void verify_markdown_properties()
                   markdown_violation);
     verify_family("a stopping predicate is stopped or the whole document", 8715U, markdown_composed,
                   stop_violation);
+    verify_stops_happen();
     verify_markdown_depths();
     verify_markdown_size_boundary();
 }
