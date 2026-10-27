@@ -295,6 +295,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/GridRenderTests.cpp tests/ui/PresentedMilestoneTests.cpp
     tests/ui/ReplacedTintTests.cpp tests/ui/FallbackRangeTests.cpp tests/ui/PreviewLayoutTests.cpp
     tests/ui/FallbackSegmentMemoTests.cpp
+    tests/ui/ForwardingFont.cpp
     tests/ui/StatusDemandTests.cpp tests/ui/SyntaxRenderTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
