@@ -362,7 +362,10 @@ void closed(Order &order, std::size_t tab)
 }
 
 // 帯の右端へ count 本を足し、振った番号を返す（復元と自動退避から戻した文書の共通）。使った順は
-// 足したものを順に先頭へ置き、最後にアクティブを先頭へ戻す。
+// 足したものを順に先頭へ置き、最後にアクティブを先頭へ戻す。歩いている間でもアクティブを先頭へ
+// 戻す（印は立ったまま）のは製品のとおり。どちらも起動と自動退避から戻すときだけ呼ばれ、
+// controller の道で歩きの途中に呼ばれることは無い。ADR 0058 の「歩きの途中は列を入れ替えない」は
+// with_walked の規則で、ここには掛からない（#935 の設計の答え）。
 [[nodiscard]] std::vector<std::uint64_t> appended_ids(Model &model, std::size_t count, bool loaded)
 {
     std::vector<std::uint64_t> ids;
