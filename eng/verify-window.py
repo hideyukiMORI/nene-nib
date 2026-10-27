@@ -271,9 +271,12 @@ def expected_appearance() -> str:
     return "dark" if value == 0 else "light"
 
 
-def capture(window, width: int, height: int) -> bytes:
-    """window_driver.capture (the one read-back path), checked against the size the caller measured."""
-    captured_width, captured_height, pixels = capture_client(window)
+def capture(window, width: int, height: int, region: tuple | None = None) -> bytes:
+    """window_driver.capture (the one read-back path), checked against the size the caller measured.
+
+    region: the client box the caller reads; only its points are checked for a cover (Issue #938).
+    """
+    captured_width, captured_height, pixels = capture_client(window, region)
     assert (captured_width, captured_height) == (width, height), "the client area changed size"
     return pixels
 
@@ -729,7 +732,7 @@ def drive_composition(window, ime: int, ground: dict, output: Path) -> dict:
     if not send_keys(window, VK_NIHONGO):
         return {"foreground": False, "reason": "the session refused the foreground"}
     time.sleep(IME_SETTLE_SECONDS)
-    composing = capture(window, width, height)
+    composing = capture(window, width, height, box)
     write_bitmap(output / "ime-slice.bmp", composing, width, height)
     result = {
         "foreground": True,
@@ -740,14 +743,14 @@ def drive_composition(window, ime: int, ground: dict, output: Path) -> dict:
     }
     send_keys(window, [VK_SPACE])
     time.sleep(IME_SETTLE_SECONDS)
-    converted = capture(window, width, height)
+    converted = capture(window, width, height, box)
     write_bitmap(output / "ime-slice-converted.bmp", converted, width, height)
     result["inkAfterSpace"] = ink(converted, width, box, grounds)
     result["accentPixelsAfterSpace"] = accent_count(converted, width, box)
     result["captureAfterSpace"] = "ime-slice-converted.bmp"
     send_keys(window, [VK_RETURN])
     time.sleep(IME_SETTLE_SECONDS)
-    committed = capture(window, width, height)
+    committed = capture(window, width, height, box)
     write_bitmap(output / "ime-slice-committed.bmp", committed, width, height)
     result["inkAfterEnter"] = ink(committed, width, box, grounds)
     result["imeUnderlinePixelsAfterEnter"] = colour_count(committed, width, box, ground["ime"])
