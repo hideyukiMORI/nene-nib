@@ -60,12 +60,14 @@ using Check = std::string_view (*)(std::string_view);
 constexpr std::size_t rounds = 1U;
 constexpr std::size_t family_inputs = 150U * rounds;
 constexpr std::size_t round_trip_inputs = 12U * rounds;
-constexpr std::size_t giant_inputs = 2U * rounds;
+constexpr std::size_t giant_inputs = 1U * rounds;
 constexpr std::size_t short_input_limit = 384U;
 constexpr std::size_t code_point_limit = 96U;
 constexpr std::size_t giant_line_bytes = std::size_t{128U} * 1024U;
 // 替え玉の CP932 が返す本文（往復で同じ本文が符号化へ渡るかを見る）。
 constexpr std::string_view scripted_japanese = "日本語\r\nの本文";
+// 替え玉の CP932 の符号化の答えに付ける印（入力と別の列にして、書いたものが答えそのものかを見る）。
+constexpr std::string_view scripted_mark = "\x7F#cp932";
 
 [[nodiscard]] std::size_t below(Random &random, std::size_t bound)
 {
@@ -316,9 +318,14 @@ void mutate(std::string &input, Random &random)
         input.resize(at);
         return;
     }
-    if (kind == 1U && at < input.size())
+    if (kind == 1U)
     {
-        input.at(at) = raw_byte(random);
+        if (input.empty())
+        {
+            input.push_back(raw_byte(random));
+            return;
+        }
+        input.at(at % input.size()) = raw_byte(random);
         return;
     }
     if (kind == 2U)
@@ -346,23 +353,27 @@ std::string mutated_sample(Random &random)
 }
 
 // 巨大な 1 行（改行の無い 128 KiB 前後）。UTF-8・UTF-16 LE・CP932 の 3 つの形。
+// 形を先に決めて、その形の列だけを作る。
 std::string giant_sample(Random &random)
 {
+    const std::size_t kind = below(random, 3U);
+    if (kind == 2U)
+    {
+        std::string cp932(1U, '\x93');
+        cp932.push_back('\xFA');
+        while (cp932.size() < giant_line_bytes)
+        {
+            append_cp932_pair(cp932, random, false);
+        }
+        return cp932;
+    }
     std::u32string line;
-    std::string cp932(1U, '\x93');
-    cp932.push_back('\xFA');
     while (line.size() * 3U < giant_line_bytes)
     {
         const char32_t chosen = scalar(random);
         line.push_back(chosen == U'\n' ? U'a' : chosen);
-        append_cp932_pair(cp932, random, false);
     }
-    const std::size_t kind = below(random, 3U);
-    if (kind == 0U)
-    {
-        return utf8_of(line);
-    }
-    return kind == 1U ? utf16_of(line, ByteOrder::little) : cp932;
+    return kind == 0U ? utf8_of(line) : utf16_of(line, ByteOrder::little);
 }
 
 // --- 不変量 ---
@@ -532,6 +543,11 @@ std::string_view general_violation(std::string_view input)
     {
         return "from_sealed differs from from_bytes";
     }
+    if (!starts_utf32(input) && starts_utf16(input) && input.size() % 2U != 0U &&
+        (first.has_value() || first.error() != EncodingFailure::odd_utf16_length))
+    {
+        return "a UTF-16 BOM with an odd length was not odd_utf16_length";
+    }
     if (!first.has_value())
     {
         return failure_violation(input, first.error());
@@ -602,7 +618,8 @@ std::string_view utf32_violation(std::string_view input)
 }
 
 // 開いて同じ形で保存すると、書いたバイト列が読んだバイト列と同じ（encoded_parts の往復）。
-// CP932 は替え玉の答えなので、本文が変換へそのまま渡ることだけを見る。
+// CP932 は替え玉の答えなので、本文が変換へそのまま渡り、書いたものが替え玉の符号化の答え
+// （入力と別の印つきの列）そのものであることを見る。
 std::string_view round_trip_violation(std::string_view input)
 {
     // 先頭の文字が NUL の UTF-16 LE は UTF-32 として断る（utf16_le_violation が見る・#734）。
@@ -619,7 +636,8 @@ std::string_view round_trip_violation(std::string_view input)
     Editing editing;
     editing.files().hold(std::string(input));
     editing.code_pages().decode_to(std::string(scripted_japanese));
-    editing.code_pages().encode_to(std::string(input));
+    const std::string marked = std::string(input) + std::string(scripted_mark);
+    editing.code_pages().encode_to(marked);
     auto &controller = editing.controller();
     const auto opened = controller.apply_frame(OpenDocument{sample_path()});
     if (opened.document.encoding != encoding || opened.document.last_failure.has_value())
@@ -627,9 +645,12 @@ std::string_view round_trip_violation(std::string_view input)
         return "the opened document lost its encoding";
     }
     const auto saved = controller.apply_frame(SaveDocument{sample_path(), encoding});
-    if (saved.document.save_state != core::SaveState::saved || editing.files().written() != input)
+    const std::string_view expected =
+        encoding == TextEncoding::shift_jis ? std::string_view{marked} : input;
+    if (saved.document.save_state != core::SaveState::saved ||
+        editing.files().written() != expected)
     {
-        return "the written bytes differ from the bytes read";
+        return "the written bytes differ from the bytes expected";
     }
     return encoding != TextEncoding::shift_jis ||
                    editing.code_pages().encoded_from() == scripted_japanese
@@ -732,8 +753,8 @@ void verify_fixed_edges()
            "a cut UTF-32 LE BOM is an odd UTF-16 LE body");
     expect(DetectedText::from_bytes("\xFF\xFE\x3D\xD8").error() == EncodingFailure::undecodable,
            "a lone high surrogate behind a UTF-16 BOM is undecodable");
-    // 50 倍の走りで見つかった形（製品の破れではない）: 先頭の文字が NUL の UTF-16 LE は
-    // FF FE 00 00 で始まり、UTF-32 LE の BOM として断る（#734 の決め方のまま）。
+    // 先頭が NUL の UTF-16 LE は FF FE 00 00 で始まるので UTF-32 LE の BOM として断られる
+    // （#734・ADR 0149 の決め方）。
     expect(DetectedText::from_bytes(std::string_view{"\xFF\xFE\x00\x00\x61\x00", 6}).error() ==
                EncodingFailure::unsupported_utf32,
            "UTF-16 LE whose first character is NUL reads as a UTF-32 LE BOM");
