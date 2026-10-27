@@ -30,4 +30,5 @@ void verify_wheel_turns();
 void verify_preview_layouts();
 void verify_status_demand();
 void verify_syntax_render();
+void verify_palette_layouts();
 } // namespace nenenib::tests::ui

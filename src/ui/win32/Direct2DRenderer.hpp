@@ -21,6 +21,8 @@
 #include "LineView.hpp"
 #include "OperationGuideLayout.hpp"
 #include "PaletteLayout.hpp"
+#include "PaletteRowLayouts.hpp"
+#include "PaletteTextRole.hpp"
 #include "PaneLayouts.hpp"
 #include "PreviewPane.hpp"
 #include "RenderFailure.hpp"
@@ -281,11 +283,20 @@ class Direct2DRenderer final
     void draw_palette_detail(const application::EditorFrame &frame,
                              const core::CommandChoice &choice, const core::LayoutRect &label,
                              IDWriteTextLayout *title);
-    // 行の右端の欄に操作の鍵を枠つきで描く（ADR 0078 の決定 12）。保持しない。
+    // 行の右端の欄に操作の鍵を枠つきで描く（ADR 0078 の決定 12）。文字組みは面の保持から引く。
     void draw_palette_key(const application::EditorFrame &frame, std::string_view key,
                           const core::LayoutRect &note);
+    void write_palette_note(std::string_view text, const core::LayoutRect &area,
+                            core::RgbColor color);
+    // 面の行の欄の文字組み。鍵が同じなら作り直さない（#900）。
+    [[nodiscard]] TextLayout palette_text(std::string_view text, IDWriteTextFormat *format,
+                                          PaletteTextRole role, const core::LayoutRect &area);
+    [[nodiscard]] TextLayout made_palette_text(std::string_view text, IDWriteTextFormat *format,
+                                               PaletteTextRole role, const core::LayoutRect &area);
     void draw_keycap(std::string_view key, IDWriteTextFormat *format, const core::LayoutRect &area,
                      const KeycapStyle &style);
+    void draw_keycap_layout(IDWriteTextLayout *shown, const core::LayoutRect &note,
+                            const KeycapStyle &style);
     void draw_palette_footer(const application::EditorFrame &frame, const core::LayoutRect &area);
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);
@@ -318,6 +329,8 @@ class Direct2DRenderer final
     BodyTextLayouts &body_text_;
     std::optional<RenderFailure> text_failure_;
     GutterTextLayouts gutter_layouts_;
+    // Ctrl+P の面の見えている行の文字組み。書式の作り直しと面を閉じたときに捨てる（#900）。
+    PaletteRowLayouts palette_layouts_;
     // other の枠のプレビュー。要素の layout の保持は frame をまたいで再利用する（ADR 0155）。
     PreviewPane preview_;
     // 通常7枠と案内4枠。録画時は案内が無く8枠（ADR 0079・言語の項目で 11・ADR 0154 の決定 6）。

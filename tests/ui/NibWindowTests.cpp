@@ -36,6 +36,7 @@ bool verify_selected(std::string_view selector)
         {"--preview", ui::verify_preview_layouts},
         {"--status", ui::verify_status_demand},
         {"--syntax", ui::verify_syntax_render},
+        {"--palette", ui::verify_palette_layouts},
     }};
     bool known = false;
     for (const auto &[name, verify] : groups)
