@@ -289,6 +289,8 @@ void verify_vim_pattern_rejections()
     expect(rejects("~", VimPatternFailure::previous_substitute),
            "the previous substitute is refused");
     expect(rejects("foo/e", VimPatternFailure::offset), "a forward offset is refused");
+    expect(rejects("foo\xE3", VimPatternFailure::invalid_utf8),
+           "a pattern cut inside a multibyte sequence is refused");
     const auto backward = VimPattern::parse("foo?e", VimSearchDirection::backward);
     expect(!backward.has_value() && backward.error() == VimPatternFailure::offset,
            "a backward offset is refused at its own separator");

@@ -24,6 +24,9 @@ enum class VimPatternFailure : std::uint8_t
     // `~`（直前の置換の文字列）
     previous_substitute,
     // 区切りの後ろの offset（`/foo/e`）
-    offset
+    offset,
+    // 正しい UTF-8 でない pattern（末尾で切れた多バイトの列など・#906）。製品の pattern は
+    // 入力行の UTF-16 から作るので来ないが、照合器の歩きの前提を入口で守る。
+    invalid_utf8
 };
 } // namespace nenenib::core

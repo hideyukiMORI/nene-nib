@@ -3,8 +3,8 @@
 // 決定的な生成器（magic の構文の断片の列・ランダムなバイト列・断片を含む行・多バイト・4 KiB）で
 // 作った入力を渡し、落ちない・値か閉じた失敗・一致は行の内で code point の境目・同じ入力で同じ
 // 結果・literal_bytes は find と同じ位置・longest_bytes を超えない、を確かめる。
-// 壊れた UTF-8 も生成するが、parse と matched の前提（検証済みの UTF-8）の外なので外す
-// （known_out_of_contract）。
+// 壊れた UTF-8 も生成する。壊れた pattern は parse が invalid_utf8 で断る（#906）。壊れた行は
+// matched の前提（検証済みの UTF-8）の外なので外す（known_out_of_contract）。
 // 後戻りの爆発は、照合器に歩数の数え口が無いので、星を並べた pattern が `a` の列（64 文字と
 // 4 KiB）に答えを返すことだけを見る。時間は Release の probe の pattern-star-miss-1024 / 2048 /
 // 4096 と pattern-multistar-miss-32 が測る（ADR 0093）。Vim との一致は oracle の領分で問わない。
@@ -408,46 +408,46 @@ Case large_case(Random &random)
     return violation.empty() ? literal_violation(input, first, from, found) : violation;
 }
 
-// parse と matched は検証済みの UTF-8 を受ける（code_point_at の前提・Utf8.hpp）。壊れた列は
-// 生成するが、ここで外す（末尾で切れた列は終端の先を読む・known_out_of_contract・直しは #906）。
-// 前提は段に分ける。parse と longest_bytes・literal_bytes は pattern だけを読むので
-// pattern が妥当なら問い、matched は pattern と行の両方が妥当なときに問う。
-[[nodiscard]] bool pattern_within_contract(const Case &input)
-{
-    return valid_utf8(input.first);
-}
-
+// matched は検証済みの UTF-8 の行を受ける（code_point_at の前提・Utf8.hpp）。壊れた行は
+// 生成するが、ここで外す（末尾で切れた列は終端の先を読む・known_out_of_contract）。pattern は
+// parse が確かめるので前提にしない（#906）。
 [[nodiscard]] bool within_contract(const Case &input)
 {
-    return pattern_within_contract(input) && valid_utf8(input.second);
+    return valid_utf8(input.second);
+}
+
+// 同じ pattern は同じ結果になり、正しい UTF-8 でない pattern は invalid_utf8 で断られる（#906）。
+[[nodiscard]] std::string_view parse_violation(std::string_view pattern_text, const Parsed &first,
+                                               const Parsed &second)
+{
+    if (!same_parse(first, second))
+    {
+        return "the same pattern parses differently";
+    }
+    if (valid_utf8(pattern_text))
+    {
+        return {};
+    }
+    return !first.has_value() && first.error() == VimPatternFailure::invalid_utf8
+               ? std::string_view{}
+               : "a pattern of invalid UTF-8 is not refused as invalid_utf8";
 }
 
 // 1 組の性質。空なら守られている。
 [[nodiscard]] std::string_view case_violation(const Case &input)
 {
     const auto &[pattern_text, line] = input;
-    if (!pattern_within_contract(input))
-    {
-        return {};
-    }
     const Parsed first = VimPattern::parse(pattern_text, VimSearchDirection::forward);
     const Parsed second = VimPattern::parse(pattern_text, VimSearchDirection::forward);
-    if (!same_parse(first, second))
+    const std::string_view parsed_violation = parse_violation(pattern_text, first, second);
+    if (!parsed_violation.empty() || !first.has_value() || !within_contract(input))
     {
-        return "the same pattern parses differently";
-    }
-    if (!first.has_value())
-    {
-        return {};
+        return parsed_violation;
     }
     if (first.value().longest_bytes() != second.value().longest_bytes() ||
         first.value().literal_bytes() != second.value().literal_bytes())
     {
         return "the same pattern reports different bounds";
-    }
-    if (!within_contract(input))
-    {
-        return {};
     }
     for (const std::size_t from : froms_of(line))
     {
@@ -568,14 +568,13 @@ using Contract = bool (*)(const Case &);
     return inside;
 }
 
-// 生バイトの族は壊れた UTF-8 を混ぜるので、前提の内に入る組が残ることを見る（既定の回数の実測は
-// 200 組のうち pattern の段が 81・matched の段が 22。下限は族の 1/4 と 1/16）。
+// 生バイトの族は壊れた UTF-8 を混ぜるので、matched の前提（行が妥当）の内に入る組が残ることを
+// 見る（下限は族の 1/16）。parse の性質は値か invalid_utf8 を含む閉じた失敗を全件に問うので、
+// pattern の側に下限は要らない（#906）。
 void verify_byte_cases_reach_the_contract()
 {
-    expect(contract_cases(8983U, byte_case, pattern_within_contract) >= family_cases / 4U,
-           "random pattern bytes leave valid patterns to parse");
     expect(contract_cases(8983U, byte_case, within_contract) >= family_cases / 16U,
-           "random pattern bytes leave valid pairs to match");
+           "random pattern bytes leave valid lines to match");
 }
 
 // 受けない断片を受ける断片の列の末尾に置くと、その断片の閉じた失敗になる。
@@ -628,15 +627,13 @@ void verify_backtracking_is_bounded()
            "a run of stars takes the whole 4 KiB line");
 }
 
-// 既定の回数で見つかった破れを縮めた組（#899・直しは #906）。末尾で切れた多バイトの列を
-// 含む pattern か行を渡すと、parse と matched は断らずに code_point_at で終端の先を読む
-// （Debug の ASan で heap-buffer-overflow と container-overflow。文字列が heap にあるとき・例えば
-// 前に `b` を 32 個置いた形で見える。SSO の短い文字列では見えない）。前提の外なので生成器の組
-// からは within_contract で外し、ここでは前提の外として外されることだけを固定する。直ったら
-// （parse が断る・読みが終端で止まる）within_contract ごと外す。
-constexpr std::array<std::pair<std::string_view, std::string_view>, 3> known_out_of_contract{{
+// 既定の回数で見つかった破れを縮めた組（#899）。末尾で切れた多バイトの列を含む行を渡すと、
+// matched は断らずに code_point_at で終端の先を読む（Debug の ASan で heap-buffer-overflow と
+// container-overflow。文字列が heap にあるとき・例えば前に `b` を 32 個置いた形で見える。SSO の
+// 短い文字列では見えない）。行は前提の外なので生成器の組からは within_contract で外し、ここでは
+// 前提の外として外されることだけを固定する。pattern 側の組は parse が invalid_utf8 で断る（#906）。
+constexpr std::array<std::pair<std::string_view, std::string_view>, 2> known_out_of_contract{{
     {".", "\xE3"},
-    {"\xE3", ""},
     {"a*", "a\xC3"},
 }};
 
@@ -647,7 +644,11 @@ void verify_known_cases()
     {
         outside = outside && !within_contract({std::string{pattern}, std::string{line}});
     }
-    expect(outside, "patterns or lines cut inside a multibyte sequence are outside the contract");
+    expect(outside, "lines cut inside a multibyte sequence are outside the contract");
+    const Parsed cut = VimPattern::parse("\xE3", VimSearchDirection::forward);
+    expect(!cut.has_value() && cut.error() == VimPatternFailure::invalid_utf8 &&
+               case_violation({"\xE3", ""}).empty() && case_violation({"a\xC3", "a"}).empty(),
+           "patterns cut inside a multibyte sequence are refused as invalid_utf8");
     expect(case_violation({"\xC3\xA9*", "\xC3\xA9\xCC\x81\xC3\xA9"}).empty() &&
                case_violation({"[\xE3\x81\x81-\xE3\x82\x93]", "\xE3\x81\x82"}).empty() &&
                case_violation({"\\\xE6\x97\xA5", "\xE6\x97\xA5"}).empty(),
