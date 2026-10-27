@@ -244,6 +244,14 @@ nenenib_link(nib_long_path_tests nenenib_adapters)
 add_test(NAME nib_adapters_long_paths COMMAND nib_long_path_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(nib_adapters_long_paths PROPERTIES TIMEOUT 60)
 
+# Issue #897: 設定・前回のタブ・履歴・ブックマーク・自動退避の台帳の復号に、固定 seed で壊した
+# バイト列を通す性質の試験。ファイルには触れない。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
+nenenib_target(nib_persisted_property_tests adapter_tests EXECUTABLE tests/adapters/PersistedFormatPropertyTests.cpp)
+nenenib_link(nib_persisted_property_tests nenenib_core)
+nenenib_link(nib_persisted_property_tests nenenib_application)
+nenenib_link(nib_persisted_property_tests nenenib_adapters)
+add_test(NAME nib_adapters_persisted_property COMMAND nib_persisted_property_tests --persisted-property WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
