@@ -1873,6 +1873,11 @@ void Direct2DRenderer::draw_palette_choice(const application::EditorFrame &frame
 void Direct2DRenderer::draw_palette_key(const application::EditorFrame &frame, std::string_view key,
                                         const core::LayoutRect &note)
 {
+    // draw_keycap と同じく、寸法を確かめてから layout を引く（0 以下の欄で作らない・#900）。
+    if (core::width_of(note) <= 0 || core::height_of(note) <= 0)
+    {
+        return;
+    }
     const auto shown = palette_text(key, key_format_.Get(), PaletteTextRole::plain, note);
     draw_keycap_layout(shown.Get(), note,
                        KeycapStyle{palette_key_padding_dips, palette_key_height_dips,

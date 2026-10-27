@@ -1,5 +1,6 @@
 #pragma once
 
+#include "LayoutRect.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteRowKey.hpp"
 #include "PaletteRowLayout.hpp"
@@ -26,11 +27,16 @@ class PaletteRowLayouts final
     using TextLayout = Microsoft::WRL::ComPtr<IDWriteTextLayout>;
     static constexpr std::size_t capacity = core::palette_row_limit * 4;
 
-    // 鍵の layout を返す。無ければ make() で作って覚える。
+    // 鍵の layout を返す。無ければ make() で作って覚える。幅か高さが 0 以下の欄は make() を
+    // 呼ばずに null を返す（描く物が無い欄で layout を作らない）。
     template <typename Make>
         requires std::convertible_to<std::invoke_result_t<Make &>, TextLayout>
     [[nodiscard]] TextLayout obtain(const PaletteRowKey &key, Make &&make)
     {
+        if (core::width_of(key.area) <= 0 || core::height_of(key.area) <= 0)
+        {
+            return {};
+        }
         auto found = lookup(key);
         if (found)
         {

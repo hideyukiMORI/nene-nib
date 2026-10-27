@@ -122,6 +122,15 @@ void verify_keys(CountingMake &counting, IDWriteTextFormat *format, IDWriteTextF
     expect(failed == nullptr, "a failed creation is returned as null");
     (void)layouts.obtain(key_of(format, "failed", 0), make);
     expect(counting.take() == 1, "a failed creation is not retained and is retried");
+    const auto before = layouts.size();
+    key = key_of(format, "empty", 0);
+    key.area.right = key.area.left;
+    expect(layouts.obtain(key, make) == nullptr, "a zero-width field gets no layout");
+    key = key_of(format, "empty", 0);
+    key.area.bottom = key.area.top - 1;
+    expect(layouts.obtain(key, make) == nullptr, "a negative-height field gets no layout");
+    expect(counting.take() == 0, "a field without room creates no layout");
+    expect(layouts.size() == before, "a field without room is not retained");
 }
 
 void verify_capacity(CountingMake &counting, IDWriteTextFormat *format)
