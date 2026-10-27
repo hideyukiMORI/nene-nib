@@ -71,7 +71,8 @@ class Direct2DRenderer final
     [[nodiscard]] static std::expected<Direct2DRenderer, RenderFailure>
     create_provisional(HWND cover, std::uint32_t dpi, application::TimingPort &timing,
                        RendererSources sources);
-    // EndDraw が返った直後に frame_drawn を打つ（latency の待ちと Present の前・#844）。
+    // 描く前に latency の待ちを済ませ、EndDraw が返った直後に frame_drawn を打ち（#844）、
+    // Present(0, 0) で渡す（ADR 0007 の追補・#888）。
     [[nodiscard]] std::expected<void, RenderFailure> render(const application::EditorFrame &frame,
                                                             application::TimingPort &timing);
     [[nodiscard]] std::expected<void, RenderFailure> resize(UINT width, UINT height);
