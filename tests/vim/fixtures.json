@@ -2406,5 +2406,21 @@
   {"name":"visual-block-object-fuzz-0016","text":"gamma {br} foo_bar ?\nです。 end.\t!\t:\tHello ","keys":"vGaBat>"},
   {"name":"visual-block-object-ve-no-block-fails","text":"alpha beta\ngamma","keys":"veaBx"},
   {"name":"visual-block-object-ve-inside-grows","text":"{br} alpha beta","keys":"wveaBx"},
-  {"name":"visual-block-object-ve-after-block-fails","text":"{br} alpha beta","keys":"5lveaBx"}
+  {"name":"visual-block-object-ve-after-block-fails","text":"{br} alpha beta","keys":"5lveaBx"},
+  {"name":"underscore-goes-to-the-first-non-blank","text":"  abc def","keys":"$_"},
+  {"name":"underscore-count-three","text":"a\n  b\n c\n   d\ne","keys":"3_"},
+  {"name":"underscore-count-clamps-to-the-last-line","text":"ab\n  cd\n ef","keys":"5_"},
+  {"name":"underscore-count-on-the-last-line-fails","text":"ab\n  cd","keys":"j$5_x"},
+  {"name":"underscore-one-on-the-last-line","text":"ab\n  cd","keys":"j$_x"},
+  {"name":"underscore-delete","text":"ab\n  cd\nef","keys":"jd_"},
+  {"name":"underscore-delete-two","text":"ab\n  cd\nef\ngh","keys":"j2d_"},
+  {"name":"underscore-delete-count-on-the-last-line-fails","text":"ab\ncd","keys":"j2d_"},
+  {"name":"underscore-delete-dot","text":"ab\ncd\nef\ngh\nij","keys":"2d_."},
+  {"name":"underscore-yank","text":"ab\n  cd\nef","keys":"j$y_"},
+  {"name":"underscore-yank-from-the-line-end","text":"abc\n  def","keys":"j$y_"},
+  {"name":"underscore-yank-two-keeps-the-caret","text":"abc\n  def","keys":"l2y_"},
+  {"name":"underscore-change","text":"ab\n  cd\nef","keys":"j$c_x<Esc>"},
+  {"name":"underscore-shift-right","text":"  ab\ncd","keys":">_"},
+  {"name":"underscore-visual","text":"ab\n  cd\nef","keys":"lv2_d"},
+  {"name":"underscore-visual-line","text":"ab\n  cd\nef","keys":"V2_d"}
 ]

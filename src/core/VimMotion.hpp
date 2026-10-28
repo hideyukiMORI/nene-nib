@@ -58,6 +58,9 @@ enum class VimMotion : std::uint8_t
     // `g_`。回数 − 1 行下の行の最後の非空白（空白だけの行と空行は行頭）。inclusive（Issue #721・
     // ADR 0147 の決定 8）。
     last_non_blank,
+    // `_`。回数 − 1 行下の行の最初の非空白（`1_` は今の行）。行単位で `d_` は `dd` と同じ
+    // 範囲。最終行で回数が 2 以上なら失敗する（Vim の nv_lineop の cursor_down・#976）。
+    first_non_blank_below,
     // `%`。対応する括弧（inclusive の文字単位）、回数つきは本文の回数 % の行（行単位・Issue
     // #767）。
     matching_pair,

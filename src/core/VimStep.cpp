@@ -618,18 +618,22 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return rested_in(text, offset_at_virtual_column(text, line, VirtualColumn{count}), mode);
 }
 
-// g_ の着地（Issue #721・ADR 0147 の決定 8）。回数 − 1 行下（本文の末尾で止まる）の最後の非空白。
-// 最終行で回数が 2 以上なら Vim の cursor_down が失敗し、動かずにオペレータを打ち消す。VISUAL でも
-// 行の内容の終わりには載らない（Vim の nv_g_cmd が NUL から 1 つ戻す）。
-[[nodiscard]] VimMotionLanding last_non_blank_landing(const TextBuffer &text, Offset caret,
-                                                      std::size_t count)
+// g_ と _ の着地（Issue #721・ADR 0147 の決定 8・#976）。回数 − 1 行下（本文の末尾で
+// 止まる）の行の最後の非空白（g_）と最初の非空白（_）。最終行で回数が 2 以上なら Vim の
+// cursor_down が失敗し、動かずにオペレータを打ち消す。g_ は VISUAL でも行の内容の終わりには
+// 載らない（Vim の nv_g_cmd が NUL から 1 つ戻す）。
+[[nodiscard]] VimMotionLanding counted_line_landing(const TextBuffer &text, Offset caret,
+                                                    std::size_t count, VimMotion motion)
 {
     const LineNumber line = line_of(text, caret);
     if (count > single_step && line.value >= text.line_count())
     {
         return VimMotionLanding{caret, VimRepeatFailure::not_moved};
     }
-    return VimMotionLanding{vim_last_non_blank(text, line_below(text, line, count - single_step))};
+    const LineNumber target = line_below(text, line, count - single_step);
+    return VimMotionLanding{motion == VimMotion::last_non_blank
+                                ? vim_last_non_blank(text, target)
+                                : vim_first_non_blank(text, text.line_start(target))};
 }
 
 // `{N}%` の行（Vim の nv_percent）。本文の N % の行（切り上げ）で、1〜100 の外は無い。
@@ -775,6 +779,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::display_line_first_non_blank:
     case VimMotion::line_end:
     case VimMotion::last_non_blank:
+    case VimMotion::first_non_blank_below:
     case VimMotion::matching_pair:
     case VimMotion::mark_line:
     case VimMotion::mark_exact:
@@ -852,8 +857,9 @@ character_search_position(const VimEditorView &view, const VimState &state,
         return line_end_landing(view.text, view.selection.caret,
                                 resolved_motion_count(state, view.text, motion), state.mode);
     case VimMotion::last_non_blank:
-        return last_non_blank_landing(view.text, view.selection.caret,
-                                      resolved_motion_count(state, view.text, motion));
+    case VimMotion::first_non_blank_below:
+        return counted_line_landing(view.text, view.selection.caret,
+                                    resolved_motion_count(state, view.text, motion), motion);
     case VimMotion::up:
     case VimMotion::down:
         return vertical_landing(view, state, motion);
@@ -931,6 +937,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::line_middle:
     case VimMotion::display_line_first_non_blank:
     case VimMotion::last_non_blank:
+    case VimMotion::first_non_blank_below:
     case VimMotion::matching_pair:
     case VimMotion::mark_line:
     case VimMotion::mark_exact:
@@ -1013,6 +1020,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::line_middle:
     case VimMotion::display_line_first_non_blank:
     case VimMotion::last_non_blank:
+    case VimMotion::first_non_blank_below:
     case VimMotion::matching_pair:
     case VimMotion::mark_line:
     case VimMotion::mark_exact:
@@ -1373,6 +1381,8 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     case VimMotion::down:
     case VimMotion::next_line:
         return lines_below(text, line, count);
+    case VimMotion::first_non_blank_below:
+        return lines_below(text, line, count - single_step);
     case VimMotion::up:
     case VimMotion::previous_line:
         return lines_above(text, line, count);
