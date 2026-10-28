@@ -10,11 +10,12 @@
 
 namespace nenenib::application
 {
-// 言語サーバーと話す口（ADR 0160 の決定 1）。プロセス・パイプ・待ちの handle は adapters に閉じ、
-// ここには出さない（ARC-007）。UI スレッドだけが呼ぶ。start
+// 言語サーバーと話す口（ADR 0160 の決定 1・追補）。プロセス・パイプ・待ちの handle は adapters
+// に閉じ、ここには出さない（ARC-007）。UI スレッドだけが呼ぶ。start
 // は子を起こしてすぐ戻る（前に起きていた子は先に stop する）。起こせなければ失敗の値。send は
 // JSON-RPC の本文 1 通を送る（見出しは adapter が付ける・送れなければ ServerFailed）。stop は
-// shutdown を送らずにパイプを閉じて子を終わらせる（shutdown と exit は呼ぶ側の役）。collect
+// shutdown も exit も送らず（呼ぶ側の役）、パイプを閉じて子を待たずに戻る。まだ collect
+// していない出来事も捨てる（古い子の本文を次の子の前に混ぜない）。collect
 // はたまった出来事を全部受け取る（無ければ空）。届いた合図は既存の work_message の道。
 class LanguageServerPort
 {

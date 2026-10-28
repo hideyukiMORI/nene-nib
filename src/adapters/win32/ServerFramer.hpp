@@ -15,10 +15,10 @@ inline constexpr std::size_t server_message_limit = std::size_t{16} * 1024 * 102
 inline constexpr std::size_t server_header_limit = std::size_t{8} * 1024;
 
 // 言語サーバーから受けたバイト列を繋ぎ、`Content-Length` の枠で本文に切る（ADR 0160 の決定 3）。
-// core の lsp_frames（#1009）が main に入るまでの、adapter の中の最小の切り出し。Content-Length
-// だけを読み、ほかの見出しは無視する。見出しの誤り・見出しの長さの超えは read_failed、
-// 本文の長さの超えは message_too_long で、一度失敗したら以後は何も切り出さない（流れの区切りを失
-// ったので）。
+// core の lsp_frames（#1009）が main に入るまでの、adapter の中の最小の切り出し（2 本目の経路・
+// #1022 で置き換える）。Content-Length だけを読み、ほかの見出しは無視する。見出しの誤り・
+// 見出しの長さの超えは read_failed、本文の長さの超えは message_too_long で、
+// 一度失敗したら以後は何も切り出さない（流れの区切りを失ったので）。
 class ServerFramer final
 {
   public:

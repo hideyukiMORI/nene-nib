@@ -43,9 +43,21 @@ std::wstring pipe_name()
            std::to_wstring(next_pipe_sequence());
 }
 
+// ドライブ文字（`C:` の後に区切り）か UNC（区切り 2 つ）で始まる経路だけ（ADR 0160 の追補）。
+// 作業フォルダからの相対の解決で、設定に書いていない実行ファイルを起こさない。
+bool absolute(std::wstring_view path) noexcept
+{
+    const auto separator = [](wchar_t letter) { return letter == L'\\' || letter == L'/'; };
+    const bool drive =
+        path.size() >= 3 &&
+        ((path[0] >= L'A' && path[0] <= L'Z') || (path[0] >= L'a' && path[0] <= L'z')) &&
+        path[1] == L':' && separator(path[2]);
+    return drive || (path.size() >= 2 && separator(path[0]) && separator(path[1]));
+}
+
 bool runnable(const std::wstring &executable)
 {
-    if (executable.empty())
+    if (!absolute(executable))
     {
         return false;
     }
@@ -112,9 +124,12 @@ ServerFailure start_failure(DWORD error) noexcept
 
 ServerChild::ServerChild(std::size_t read_bytes) : read_bytes_(read_bytes) {}
 
+// 待たない。job を閉じると KILL_ON_JOB_CLOSE が残っている子と子孫を殺す。
 ServerChild::~ServerChild()
 {
-    end();
+    close_pipes();
+    process_.close();
+    job_.close();
 }
 
 std::expected<void, ServerFailure> ServerChild::spawn(const application::ServerLaunch &launch)
@@ -148,20 +163,20 @@ PipeWrite &ServerChild::writer() noexcept
     return *writer_;
 }
 
-void ServerChild::end() noexcept
+void ServerChild::close_pipes() noexcept
 {
     writer_.reset();
     input_.close();
     reader_.reset();
     output_.close();
-    if (process_.valid() &&
-        WaitForSingleObject(process_.get(), server_stop_wait_milliseconds) != WAIT_OBJECT_0)
+}
+
+void ServerChild::terminate() noexcept
+{
+    if (job_.valid())
     {
         TerminateJobObject(job_.get(), killed_exit_code);
-        WaitForSingleObject(process_.get(), INFINITE);
     }
-    process_.close();
-    job_.close();
 }
 
 // 入力（子が読む）と出力（子が書く）のパイプを作り、子の端を開いて繋ぐ。
@@ -206,10 +221,14 @@ std::expected<void, ServerFailure> ServerChild::create(const std::wstring &execu
     startup.StartupInfo.hStdOutput = child_output.get();
     startup.StartupInfo.hStdError = child_error.get();
     startup.lpAttributeList = inherited.get();
-    std::wstring command = server_command_line(executable, launch.arguments);
+    auto command = server_command_line(executable, launch.arguments);
+    if (!command.has_value())
+    {
+        return std::unexpected(ServerFailure::cannot_start);
+    }
     const std::wstring root = widen(launch.root.text());
     PROCESS_INFORMATION information{};
-    if (CreateProcessW(executable.c_str(), command.data(), nullptr, nullptr, TRUE,
+    if (CreateProcessW(executable.c_str(), command.value().data(), nullptr, nullptr, TRUE,
                        CREATE_SUSPENDED | CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT |
                            EXTENDED_STARTUPINFO_PRESENT,
                        nullptr, root.empty() ? nullptr : root.c_str(), &startup.StartupInfo,
@@ -224,7 +243,11 @@ std::expected<void, ServerFailure> ServerChild::create(const std::wstring &execu
         TerminateProcess(process_.get(), killed_exit_code);
         return std::unexpected(ServerFailure::cannot_start);
     }
-    ResumeThread(thread.get());
+    if (ResumeThread(thread.get()) == static_cast<DWORD>(-1))
+    {
+        TerminateJobObject(job_.get(), killed_exit_code);
+        return std::unexpected(ServerFailure::cannot_start);
+    }
     return {};
 }
 } // namespace nenenib::adapters::win32

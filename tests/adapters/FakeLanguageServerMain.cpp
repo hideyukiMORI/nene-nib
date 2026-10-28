@@ -5,7 +5,7 @@
 // 時計を読まない。引数: --echo（受けた本文をそのまま返す）・--double（--echo の答えを 2
 // 通まとめて 1 回で書く）・--die-after <N>（N 通目を受けて答えた後に 3 で終わる）・--big
 // <bytes>（起きてすぐ bytes の本文を 1 通書く）・--hang（標準入力が閉じても終わらない。stop が
-// Job Object で殺すことの試験）。
+// Job Object で殺すことの試験）・--deaf（標準入力を読まずに止まる。出ている書きの取消の試験）。
 #include <windows.h>
 
 #include <algorithm>
@@ -208,8 +208,9 @@ int main(int argc, char **argv)
     {
         write_all(frame(std::string(big.value(), 'x')));
     }
-    const int code = serve(arguments);
-    if (has(arguments, "--hang"))
+    const bool deaf = has(arguments, "--deaf");
+    const int code = deaf ? 0 : serve(arguments);
+    if (deaf || has(arguments, "--hang"))
     {
         WaitForSingleObject(GetCurrentProcess(), INFINITE);
     }

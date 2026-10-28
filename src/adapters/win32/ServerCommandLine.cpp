@@ -51,14 +51,19 @@ void append_argument(std::wstring &line, std::wstring_view argument)
 }
 } // namespace
 
-std::wstring server_command_line(const std::wstring &executable,
-                                 const std::vector<std::string> &arguments)
+std::expected<std::wstring, application::ServerFailure>
+server_command_line(const std::wstring &executable, const std::vector<std::string> &arguments)
 {
     std::wstring line;
     append_argument(line, executable);
     for (const auto &argument : arguments)
     {
-        append_argument(line, core::to_utf16(argument).value_or(std::wstring{}));
+        const auto wide = core::to_utf16(argument);
+        if (!wide.has_value())
+        {
+            return std::unexpected(application::ServerFailure::cannot_start);
+        }
+        append_argument(line, wide.value());
     }
     return line;
 }

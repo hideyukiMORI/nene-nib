@@ -166,6 +166,27 @@ Events pump_until(adapters::Win32LanguageServer &server, const Finished &finishe
     return events;
 }
 
+// 退く子を含めて待つものが無くなるまで pump を回し、出来事は捨てる。
+void pump_all(adapters::Win32LanguageServer &server)
+{
+    while (pump_once(server))
+    {
+        static_cast<void>(server.collect());
+    }
+}
+
+// 子が終わっている（終わるまで待つ。止まらなければ CTest の制限時間で落ちる）。
+bool ended(HANDLE child)
+{
+    return child != nullptr && WaitForSingleObject(child, INFINITE) == WAIT_OBJECT_0;
+}
+
+// 子がまだ走っている（待たずに見る）。
+bool running(HANDLE child)
+{
+    return child != nullptr && WaitForSingleObject(child, 0) == WAIT_TIMEOUT;
+}
+
 Finished messages(std::size_t count)
 {
     return [count](const Events &events) { return bodies(events).size() >= count; };
@@ -290,14 +311,25 @@ void verify_not_found()
     std::size_t arrivals = 0;
     adapters::Win32LanguageServer server([&arrivals] { ++arrivals; });
     const auto started =
-        server.start(ServerLaunch{path_of("nib-no-such-language-server.exe"), {}, path_of(".")});
+        server.start(ServerLaunch{path_of(fake_server() + ".missing.exe"), {}, path_of(".")});
     expect(!started.has_value() && started.error() == ServerFailure::not_found,
-           "a missing executable is not_found");
+           "a missing absolute executable is not_found");
     expect(arrivals == 0 && server.collect().empty(), "a failed start has no events");
     expect(server.waitable_handles().empty(), "a failed start has nothing to wait on");
     server.send("{}");
     expect(failed_with(server.collect(), ServerFailure::write_failed),
            "a send without a server is write_failed");
+}
+
+// 作業フォルダ（ビルドの置き場）には替え玉があるが、相対の経路は解決しない（ADR 0160 の追補）。
+void verify_relative_is_not_found()
+{
+    adapters::Win32LanguageServer server([] {});
+    const auto started =
+        server.start(ServerLaunch{path_of("nib_fake_language_server.exe"), {}, path_of(".")});
+    expect(!started.has_value() && started.error() == ServerFailure::not_found,
+           "a relative executable is not_found even when it exists in the working folder");
+    expect(server.waitable_handles().empty(), "a relative start has nothing to wait on");
 }
 
 void verify_too_long()
@@ -309,26 +341,43 @@ void verify_too_long()
            "a 17 MB body is message_too_long");
     expect(bodies(events).empty(), "the too long body is not delivered");
     const HANDLE child = open_fake_child();
-    expect(child != nullptr, "the blocked fake server is still running");
+    expect(running(child), "the blocked fake server is still running");
     server.stop();
-    expect(child != nullptr && WaitForSingleObject(child, 0) == WAIT_OBJECT_0,
-           "stop ends a blocked writer");
+    pump_all(server);
+    expect(ended(child),
+           "closing the pipes ends a blocked writer and the retired child is collected");
     CloseHandle(child);
 }
 
-void verify_stop_kills_a_lingering_child()
+// stop は止まらない子を待たずに戻り、expire_retired が Job Object ごと殺す（ADR 0160 の追補）。
+void verify_stop_does_not_wait()
 {
     adapters::Win32LanguageServer server([] {});
     expect(server.start(launch_of({"--hang"})).has_value(), "the lingering server starts");
     const HANDLE child = open_fake_child();
-    expect(child != nullptr, "the lingering server is running");
+    expect(running(child), "the lingering server is running");
     server.stop();
-    expect(child != nullptr && WaitForSingleObject(child, 0) == WAIT_OBJECT_0,
-           "stop kills a child that does not end on its own");
-    const auto events = server.collect();
-    expect(server.waitable_handles().empty() && events.size() == 1 &&
-               count_of<ServerStarted>(events) == 1,
-           "stop adds no event after the start");
+    expect(running(child) && server.waitable_handles().size() == 1,
+           "stop returns at once and the retired child stays on the wait list");
+    expect(server.collect().empty(), "stop discards the events collected so far");
+    server.expire_retired();
+    expect(ended(child), "expire_retired leaves no child behind");
+    expect(server.waitable_handles().empty(), "nothing is left to wait on after expire_retired");
+    CloseHandle(child);
+}
+
+// 標準入力を読まない子へ 1 MiB を送り、書きが出ている間に stop しても止まらない。
+void verify_stop_cancels_a_pending_write()
+{
+    adapters::Win32LanguageServer server([] {});
+    expect(server.start(launch_of({"--deaf"})).has_value(), "the deaf server starts");
+    const HANDLE child = open_fake_child();
+    server.send(std::string(std::size_t{1} << 20U, 'w'));
+    expect(server.waitable_handles().size() == 3, "the large write is pending");
+    server.stop();
+    expect(running(child), "stop returns with the pending write cancelled");
+    server.expire_retired();
+    expect(ended(child), "the deaf child is not left behind");
     CloseHandle(child);
 }
 
@@ -336,12 +385,15 @@ void verify_restart()
 {
     adapters::Win32LanguageServer server([] {});
     expect(server.start(launch_of({"--echo"})).has_value(), "the first server starts");
+    const HANDLE first = open_fake_child();
     expect(server.start(launch_of({"--echo"})).has_value(), "a second start replaces the first");
     server.send("again");
     const auto events = pump_until(server, messages(1));
-    expect(count_of<ServerStarted>(events) == 2 &&
+    expect(count_of<ServerStarted>(events) == 1 &&
                bodies(events) == std::vector<std::string>{"again"},
-           "the replaced server answers once");
+           "the replaced server answers once and the first start event is discarded");
+    expect(ended(first), "the first server ends on its own after its pipes close");
+    CloseHandle(first);
 }
 
 std::string framed(std::string_view header, std::string_view body)
@@ -392,6 +444,9 @@ void verify_command_line()
                                                              R"(dir\)", R"(end dir\)", ""}) ==
                LR"("C:\a b\s.exe" --x "two words" "q\"uote" dir\ "end dir\\" "")",
            "arguments are quoted the way CommandLineToArgvW reads them back");
+    const auto broken = adapters::server_command_line(L"C:\\s.exe", {"ok", "\xff"});
+    expect(!broken.has_value() && broken.error() == ServerFailure::cannot_start,
+           "an argument that is not UTF-8 is cannot_start");
 }
 } // namespace
 
@@ -410,8 +465,10 @@ int main(int argc, char **argv)
     verify_two_messages_in_one_write();
     verify_crash();
     verify_not_found();
+    verify_relative_is_not_found();
     verify_too_long();
-    verify_stop_kills_a_lingering_child();
+    verify_stop_does_not_wait();
+    verify_stop_cancels_a_pending_write();
     verify_restart();
     std::printf("Language server adapter: %zu checks, %zu failures\n", checks(), failures());
     return failures() == 0 ? 0 : 1;
