@@ -93,7 +93,15 @@ struct VimStep
 // 無ければ viewport_request を立てて返るので、読む所へ来るときは値がある。無い値は読まれない。
 [[nodiscard]] VimViewport vim_viewport_of(const VimEditorView &view) noexcept;
 
-// Vim エンジンの唯一の入口（ARC-001）。純関数で、時刻・OS・スレッドを持たない（ARC-007）。
+// Ex の行番号だけの命令 `:N` `:$` の着地（ADR 0022 の追補・Issue #847）。鍵の `{N}G` と同じ
+// 着地の 1 本（document_last）を通るので、最後の行への切り詰め・最初の非空白・欲しい列は `G` と
+// 同じに決まる。Vim 9.1 の `:N` は jump ではないので、`G` と違って `''` に前の位置を置かない。
+// line が空なら最後の行（回数なしの `G`）、0 は 1 行目。
+// 鍵ではないので `.` とマクロの記録には積まない。controller は鍵と同じ写しの道で結果を写す。
+[[nodiscard]] VimStep vim_line_jumped(const VimState &state, const VimEditorView &view,
+                                      std::optional<std::size_t> line);
+
+// Vim エンジンの鍵の唯一の入口（ARC-001）。純関数で、時刻・OS・スレッドを持たない（ARC-007）。
 // 本文・選択・表示領域を 1 回だけ借用する（ADR 0019 の決定 1）。NORMAL / INSERT は
 // selection の caret だけを読み、VISUAL は anchor も範囲の片端として読む。
 [[nodiscard]] VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key);

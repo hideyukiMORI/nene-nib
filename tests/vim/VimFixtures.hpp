@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 fed173893aac143c50373365367063331fbd908a555aa1ed72e7fbb3d5ff6f46 / 2434 fixtures
+// fixtures.json: sha256 43d7d43a48f0b76cf7b843f6e1bb3ebf9e8312106f41118c9f966a4e5fc60fcd / 2440 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2434> vim_fixtures{{
+constexpr std::array<VimFixture, 2440> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2446,6 +2446,12 @@ constexpr std::array<VimFixture, 2434> vim_fixtures{{
     {"underscore-shift-right", "  ab\ncd", ">_", "\t  ab\ncd", 1, 4, "", "", std::nullopt},
     {"underscore-visual", "ab\n  cd\nef", "lv2_d", "ad\nef", 1, 2, "b\n  c", "v", std::nullopt},
     {"underscore-visual-line", "ab\n  cd\nef", "V2_d", "ef", 1, 1, "ab\n  cd\n", "V", std::nullopt},
+    {"ex-line-number", "one\n  two\nthree\n    four\nfive", ":3<CR>", "one\n  two\nthree\n    four\nfive", 3, 1, "", "", std::nullopt},
+    {"ex-line-zero", "one\n  two\nthree\n    four\nfive", "G:0<CR>", "one\n  two\nthree\n    four\nfive", 1, 1, "", "", std::nullopt},
+    {"ex-line-last", "one\n  two\nthree\n    four\nfive", ":$<CR>", "one\n  two\nthree\n    four\nfive", 5, 1, "", "", std::nullopt},
+    {"ex-line-beyond", "one\n  two\nthree\n    four\nfive", ":8000<CR>", "one\n  two\nthree\n    four\nfive", 5, 1, "", "", std::nullopt},
+    {"ex-line-context-mark", "one\n  two\nthree\n    four\nfive", "jllG:3<CR>''", "one\n  two\nthree\n    four\nfive", 2, 3, "", "", std::nullopt},
+    {"ex-line-indented", "one\n  two\nthree\n    four\nfive", ":4<CR>", "one\n  two\nthree\n    four\nfive", 4, 5, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

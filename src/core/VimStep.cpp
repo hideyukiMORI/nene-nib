@@ -1064,7 +1064,9 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return context_marked(std::move(step), view);
 }
 
-[[nodiscard]] VimStep motion_step(const VimState &state, const VimEditorView &view,
+// 移動の着地・欲しい列・失敗の印（前の位置は置かない）。鍵の移動は motion_step が前の位置を
+// 足し、Ex の `:N` は jump ではないのでこのまま使う（Issue #847）。
+[[nodiscard]] VimStep landed_step(const VimState &state, const VimEditorView &view,
                                   VimMotion motion)
 {
     const VimWantedColumn wanted = wanted_for(view, state, motion);
@@ -1072,9 +1074,14 @@ character_search_position(const VimEditorView &view, const VimState &state,
     const Offset moved = landing.offset;
     VimState next = vim_resting_from(state, state.unnamed_register);
     next.wanted_column = wanted_after(view.text, wanted, moved, motion);
-    return jumped_by(moved_or_failed(VimStep{std::move(next), VimMoveTo{moved}}, motion,
-                                     view.selection.caret, landing),
-                     view, motion);
+    return moved_or_failed(VimStep{std::move(next), VimMoveTo{moved}}, motion, view.selection.caret,
+                           landing);
+}
+
+[[nodiscard]] VimStep motion_step(const VimState &state, const VimEditorView &view,
+                                  VimMotion motion)
+{
+    return jumped_by(landed_step(state, view, motion), view, motion);
 }
 
 // ---------------------------------------------------------------- 範囲（ADR 0015 の決定 2）
@@ -6047,6 +6054,18 @@ std::size_t vim_search_count(const VimState &state) noexcept
 VimViewport vim_viewport_of(const VimEditorView &view) noexcept
 {
     return view.viewport.value_or(VimViewport{LineNumber{1}, 1, 0});
+}
+
+VimStep vim_line_jumped(const VimState &state, const VimEditorView &view,
+                        std::optional<std::size_t> line)
+{
+    // 行番号は `{N}G` の回数と同じ値として渡す（回数なしは最後の行・回数 0 は無いので 1 行目）。
+    // Vim 9.1 の `:N` は jump ではない（`:help jump-motions` に無い）ので `''` は置かない。
+    VimState counted = state;
+    counted.pending = std::nullopt;
+    counted.count = line.has_value() ? std::optional{VimCount{std::max(line.value(), single_step)}}
+                                     : std::nullopt;
+    return landed_step(counted, view, VimMotion::document_last);
 }
 
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)

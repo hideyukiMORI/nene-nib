@@ -29,6 +29,7 @@
 #include "EncodingFailure.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExLanguageRequest.hpp"
+#include "ExLineRequest.hpp"
 #include "ExResult.hpp"
 #include "ExSyntaxRequest.hpp"
 #include "ExTabRequest.hpp"
@@ -126,6 +127,7 @@
 #include <cstdint>
 #include <deque>
 #include <expected>
+#include <functional>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -2173,9 +2175,16 @@ void EditorController::send_vim_clipboard(const std::optional<core::VimRegister>
 
 std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::VimKey &key)
 {
+    return stepped_vim([this, &key](const core::VimEditorView &view)
+                       { return core::vim_step(state_.vim(), view, key); });
+}
+
+std::optional<core::VimRepeatFailure> EditorController::stepped_vim(
+    const std::function<core::VimStep(const core::VimEditorView &)> &step_of)
+{
     load_vim_clipboard();
     const core::VimMode before = state_.vim().mode;
-    const auto measured = measured_vim_step(key);
+    const auto measured = measured_vim_step(step_of);
     if (!measured)
     {
         layout_failure_ = measured.error();
@@ -2941,40 +2950,8 @@ void EditorController::evaluate_command(std::string_view text)
         reject(core::ex_failure_message(result.error(), text));
         return;
     }
-    const auto &tab = result.value().tab;
-    if (tab.has_value())
+    if (ran_ex_request(result.value()))
     {
-        run_tab_request(tab.value());
-        return;
-    }
-    const auto &window = result.value().window;
-    if (window.has_value())
-    {
-        run_window_command(window.value());
-        return;
-    }
-    const auto &palette = result.value().palette;
-    if (palette.has_value())
-    {
-        run_palette_request(palette.value());
-        return;
-    }
-    const auto &document = result.value().document;
-    if (document.has_value())
-    {
-        run_document_request(document.value());
-        return;
-    }
-    const auto &language = result.value().language;
-    if (language.has_value())
-    {
-        answer_language(language.value());
-        return;
-    }
-    const auto &syntax = result.value().syntax;
-    if (syntax.has_value())
-    {
-        answer_syntax(syntax.value());
         return;
     }
     const auto &settings = result.value().settings;
@@ -2985,6 +2962,48 @@ void EditorController::evaluate_command(std::string_view text)
     }
     apply_unsaved_ex(result.value());
     state_ = state_.with_command_message(result.value().message);
+}
+
+// Ex の答えのうち命令の要求（タブ・行番号・窓・面・文書・言語・構文）を 1 つ実行したら真。どれも
+// 設定を保存せず、知らせは写し先が決める。
+bool EditorController::ran_ex_request(const core::ExResult &result)
+{
+    if (result.tab.has_value())
+    {
+        run_tab_request(result.tab.value());
+        return true;
+    }
+    if (result.line.has_value())
+    {
+        jump_to_line(result.line.value());
+        return true;
+    }
+    if (result.window.has_value())
+    {
+        run_window_command(result.window.value());
+        return true;
+    }
+    if (result.palette.has_value())
+    {
+        run_palette_request(result.palette.value());
+        return true;
+    }
+    if (result.document.has_value())
+    {
+        run_document_request(result.document.value());
+        return true;
+    }
+    if (result.language.has_value())
+    {
+        answer_language(result.language.value());
+        return true;
+    }
+    if (!result.syntax.has_value())
+    {
+        return false;
+    }
+    answer_syntax(result.syntax.value());
+    return true;
 }
 
 // Ex の答えのうち保存しない値（表示形式・検索の強調・incsearch）を写す。
@@ -3163,6 +3182,15 @@ void EditorController::run_window_command(core::ExWindowCommand command)
         return;
     }
     std::unreachable();
+}
+
+// `:N` は鍵の `{N}G` と同じ engine の着地を同じ写しの道で写す（2 本にしない）。着地は必ず本文の中で
+// 失敗しないので、断りの知らせも警告音も無い（Vim も `:8000` は黙って最後の行へ）。
+void EditorController::jump_to_line(const core::ExLineRequest &request)
+{
+    static_cast<void>(
+        stepped_vim([this, &request](const core::VimEditorView &view)
+                    { return core::vim_line_jumped(state_.vim(), view, request.line); }));
 }
 
 // 行き先は gt / gT と同じ tab_destination の 1 本。範囲の外の数は Vim の実測の文言（決定 4・5）。
