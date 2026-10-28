@@ -163,22 +163,26 @@ namespace
     }
 }
 
-// 無名と OS の同期も設定に載せず、表示名は Vim の `:set clipboard?` と同じ形（決定 A）。
-[[nodiscard]] ExResult clipboard_result(bool unnamed)
+// 無名と OS の同期も設定に載せない（決定 A）。報せは今の値を知る controller が
+// `clipboard=unnamed` / `clipboard=` に書き換えるので、ここでは名前だけ。
+[[nodiscard]] ExResult clipboard_result(ExClipboardRequest request)
 {
     return ExResult{.settings = std::nullopt,
                     .highlight = std::nullopt,
                     .incsearch = std::nullopt,
-                    .message =
-                        DisplayText::parse(unnamed ? "clipboard=unnamed" : "clipboard=").value(),
-                    .clipboard_unnamed = unnamed};
+                    .message = DisplayText::parse("clipboard").value(),
+                    .clipboard = request};
 }
 
-// `clipboard=<値>`（決定 A）。`clipboard=` は外す。ほかの値は unsupported_argument。clipboard の
-// option でなければ空。
+// `clipboard=<値>` と `clipboard?`（決定 A）。`clipboard=` は外す。ほかの値は
+// unsupported_argument。clipboard の option でなければ空。
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
 clipboard_option(std::string_view option)
 {
+    if (option == "clipboard?")
+    {
+        return clipboard_result(ExClipboardRequest::show);
+    }
     constexpr std::string_view name = "clipboard=";
     if (!option.starts_with(name))
     {
@@ -187,13 +191,13 @@ clipboard_option(std::string_view option)
     const std::string_view value = option.substr(name.size());
     if (value.empty())
     {
-        return clipboard_result(false);
+        return clipboard_result(ExClipboardRequest::disable);
     }
     if (!unnamed_clipboard_value(value))
     {
         return std::unexpected(ExFailure::unsupported_argument);
     }
-    return clipboard_result(true);
+    return clipboard_result(ExClipboardRequest::enable);
 }
 
 [[nodiscard]] ExResult guide_result(EditorSettings settings, GuideVisibility guide)

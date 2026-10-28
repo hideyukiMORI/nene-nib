@@ -653,7 +653,7 @@ void verify_ex_tab_arguments()
 
 // `:set clipboard=` の値（ADR 0051 の追補（#848）の決定 A）。`unnamed` と `unnamedplus` の `,`
 // 区切りの組はオン、空はオフ。設定には載せず、表示は Vim の `:set clipboard?` と同じ形。
-[[nodiscard]] bool clipboard_set_to(std::string_view text, bool unnamed)
+[[nodiscard]] bool clipboard_set_to(std::string_view text, core::ExClipboardRequest request)
 {
     const auto result = core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark);
     if (!result.has_value())
@@ -661,9 +661,9 @@ void verify_ex_tab_arguments()
         return false;
     }
     const auto &value = result.value();
-    return value.clipboard_unnamed == std::optional<bool>{unnamed} && !value.settings.has_value() &&
-           !value.highlight.has_value() && !value.incsearch.has_value() &&
-           value.message.text() == (unnamed ? "clipboard=unnamed" : "clipboard=");
+    return value.clipboard == std::optional<core::ExClipboardRequest>{request} &&
+           !value.settings.has_value() && !value.highlight.has_value() &&
+           !value.incsearch.has_value();
 }
 
 void verify_ex_clipboard_option()
@@ -672,9 +672,13 @@ void verify_ex_clipboard_option()
          {"set clipboard=unnamed", "set clipboard=unnamedplus", "set clipboard=unnamed,unnamedplus",
           "set clipboard=unnamedplus,unnamed"})
     {
-        expect(clipboard_set_to(text, true), "unnamed and unnamedplus turn the sync on");
+        expect(clipboard_set_to(text, core::ExClipboardRequest::enable),
+               "unnamed and unnamedplus turn the sync on");
     }
-    expect(clipboard_set_to("set clipboard=", false), "an empty clipboard= turns the sync off");
+    expect(clipboard_set_to("set clipboard=", core::ExClipboardRequest::disable),
+           "an empty clipboard= turns the sync off");
+    expect(clipboard_set_to("set clipboard?", core::ExClipboardRequest::show),
+           "clipboard? asks for the current value");
     for (const std::string_view text :
          {"set clipboard=foo", "set clipboard=exclude:cons", "set clipboard=unnamed,",
           "set clipboard=,unnamed", "set clipboard=unnamed,html", "set noclipboard"})
@@ -684,7 +688,7 @@ void verify_ex_clipboard_option()
     }
     const auto other =
         core::evaluate_ex("set hlsearch", core::default_editor_settings(), Appearance::dark);
-    expect(other.has_value() && !other.value().clipboard_unnamed.has_value(),
+    expect(other.has_value() && !other.value().clipboard.has_value(),
            "other options leave the clipboard sync alone");
 }
 

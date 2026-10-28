@@ -514,6 +514,14 @@ void verify_unnamed_sync_quiet_keys()
            "the sync is off by default");
 }
 
+// Ex の 1 行の答え（報せ）。無ければ空。
+[[nodiscard]] std::string clipboard_answer(Editing &editing, std::string text)
+{
+    const auto frame = run_ex(editing.controller(), std::move(text));
+    return frame.command_message.has_value() ? std::string(frame.command_message.value().text())
+                                             : std::string{};
+}
+
 // `:set clipboard=` の Ex（決定 A・B）。窓の Vim の状態に置き、`:set clipboard=` で外す。
 void verify_unnamed_sync_option()
 {
@@ -535,6 +543,12 @@ void verify_unnamed_sync_option()
            "an unsupported value changes nothing");
     vim_replay(editing.controller(), "yy");
     expect(editing.controller().vim_state().clipboard_unnamed, "the sync outlives a command");
+    expect(clipboard_answer(editing, "set clipboard?") == "clipboard=unnamed",
+           ":set clipboard? shows the sync when on");
+    static_cast<void>(run_ex(editing.controller(), "set clipboard="));
+    expect(clipboard_answer(editing, "set clipboard?") == "clipboard=",
+           ":set clipboard? shows an empty value when off");
+    expect(!editing.controller().vim_state().clipboard_unnamed, ":set clipboard? changes nothing");
 }
 } // namespace
 

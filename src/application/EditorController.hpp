@@ -19,6 +19,7 @@
 #include "EditorIntent.hpp"
 #include "EditorPorts.hpp"
 #include "EditorState.hpp"
+#include "ExClipboardRequest.hpp"
 #include "ExDocumentRequest.hpp"
 #include "ExLanguageRequest.hpp"
 #include "ExLineRequest.hpp"
@@ -363,7 +364,9 @@ class EditorController final
     // `:set filetype=` と `:set filetype?` の写し先（ADR 0154 の決定 4）。どちらも今の言語を
     // `filetype=<名前>` の 1 行で知らせる。
     void answer_language(const core::ExLanguageRequest &request);
+    [[nodiscard]] bool answer_current_value(const core::ExResult &result);
     void answer_syntax(const core::ExSyntaxRequest &request);
+    void answer_clipboard(core::ExClipboardRequest request);
     // Ex のタブの命令の写し先（ADR 0057 の決定 5・6）。命令が増えたら switch が落ちる（CPP-002）。
     void run_tab_request(const core::ExTabRequest &request);
     // Ex の `:N` `:$` の写し先（ADR 0022 の追補・Issue #847）。engine の `{N}G` と同じ着地。
