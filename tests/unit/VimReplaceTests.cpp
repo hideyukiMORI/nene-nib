@@ -237,7 +237,7 @@ void verify_vim_join_document_newlines()
 }
 
 // 大小文字のオペレータは CRLF の改行を保ち、1 回の変更が undo 1 単位（ADR 0015 の決定 10）。
-// 矩形 VISUAL の `~` `u` `U` `>` `<` は鍵を拒んで矩形のまま残る（#770）。
+// 矩形 VISUAL の `>` `<` は鍵を拒んで矩形のまま残り（#770）、`~` `u` `U` は行ごとに効く（#959）。
 void verify_vim_case_document_newlines()
 {
     Editing editing;
@@ -259,16 +259,26 @@ void verify_vim_case_document_newlines()
     vim_replay(controller, "u");
     applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
     expect(editing.files().written() == original, "the second undo restores the original case");
-    for (const std::string_view keys : {"~", "u", "U", ">", "<"})
+    for (const std::string_view keys : {">", "<"})
     {
         vim_replay(controller, "gg<C-v>j");
         vim_replay(controller, keys);
         expect(controller.vim_state().mode == VimMode::visual_block,
-               "a blockwise case or shift key is refused and the block stays");
+               "a blockwise shift key is refused and the block stays");
         vim_replay(controller, "<Esc>");
         applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
         expect(editing.files().written() == original, "a refused blockwise key changes nothing");
     }
+    // 矩形の `~` `u` `U` は行ごとに効き、CRLF を保って undo 1 単位（ADR 0035 の追補 #959）。
+    vim_replay(controller, "gg<C-v>jlU");
+    expect(controller.vim_state().mode == VimMode::normal, "a blockwise case key ends VISUAL");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "AB\r\nCD\r\nx", "blockwise U uppers each CRLF line");
+    expect(controller.vim_state().unnamed_register.value().kind == VimRegisterKind::uninitialized,
+           "blockwise U writes no register");
+    vim_replay(controller, "u");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == original, "one undo restores every blockwise line");
 }
 
 // `>` `<` は CRLF の改行を保ち、`.` の 2 回目は別の undo 単位（ADR 0015 の決定 11）。VISUAL

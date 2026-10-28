@@ -2605,8 +2605,8 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
         return with_clipboard(VimStep{std::move(next), VimMoveTo{block_caret(block, 0)}},
                               std::move(clipboard));
     case VimOperator::change:
-    // `c` は範囲外（決定 5）。大小文字と字下げの矩形は #770（ADR 0015 の決定 10・11）。
-    // visual_selection_action が先に取り消す。
+    // `c` は範囲外（決定 5）。大小文字の矩形は cased_block（追補 #959）、字下げの矩形は #770
+    // （ADR 0015 の決定 11）。visual_selection_action が先に振り分ける。
     case VimOperator::toggle_case:
     case VimOperator::lower_case:
     case VimOperator::upper_case:
@@ -2625,6 +2625,36 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
                                VimReplaceBlock{replaced_block_edits(view.text, block, target),
                                                block_caret(block, block.lines.front().keep_lead)}},
+                       block_caret(block, 0));
+}
+
+// 矩形の `~` `u` `U`（ADR 0035 の追補 #959・ADR 0015 の決定 10）。行ごとに `r` と同じ本文
+// （端で切れた文字も含む）の ASCII の英字だけを変える。切れた文字は Tab か全角で大小が無い
+// ので、空白に割らずそのまま残る（実測）。矩形に届かない行と幅 0 の行は飛ばす。
+[[nodiscard]] std::vector<VimBlockEdit>
+cased_block_edits(const TextBuffer &text, const VimBlockRange &block, VimOperator operation)
+{
+    std::vector<VimBlockEdit> edits;
+    for (const VimBlockLine &line : block.lines)
+    {
+        if (is_empty(line.range))
+        {
+            continue;
+        }
+        edits.push_back(VimBlockEdit{
+            line.range, cased_text(text.text_range(line.range.begin, line.range.end), operation)});
+    }
+    return edits;
+}
+
+// キャレットも u の戻り先も矩形の左上（切れた Tab の上なら Tab の先頭・実測）。レジスタは書かない。
+[[nodiscard]] VimStep cased_block(const VimState &state, const VimEditorView &view,
+                                  VimOperator operation)
+{
+    const VimBlockRange block = block_of(state, view);
+    return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
+                               VimReplaceBlock{cased_block_edits(view.text, block, operation),
+                                               block_caret(block, 0)}},
                        block_caret(block, 0));
 }
 
@@ -4771,16 +4801,29 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     std::unreachable();
 }
 
-// VISUAL の `~` `u` `U` `>` `<` と `g~` `gu` `gU`（決定 10・11）。矩形は #770 の範囲で、いまは
-// 鍵を拒んで矩形のまま残る（Vim は矩形の行ごとに効く）。
+// VISUAL の `~` `u` `U` `>` `<` と `g~` `gu` `gU`（決定 10・11）。矩形の大小文字は行ごとに効き
+// （ADR 0035 の追補 #959）、矩形の `>` `<` は #770 の範囲で、いまは鍵を拒んで矩形のまま残る。
 [[nodiscard]] VimStep visual_rewritten(const VimState &state, const VimEditorView &view,
                                        VimOperator operation)
 {
-    if (state.mode == VimMode::visual_block)
+    if (state.mode != VimMode::visual_block)
     {
+        return visual_operated(state, view, operation);
+    }
+    switch (operation)
+    {
+    case VimOperator::toggle_case:
+    case VimOperator::lower_case:
+    case VimOperator::upper_case:
+        return cased_block(state, view, operation);
+    case VimOperator::remove:
+    case VimOperator::change:
+    case VimOperator::yank:
+    case VimOperator::shift_right:
+    case VimOperator::shift_left:
         return failed(visual_unchanged(state), VimRepeatFailure::refused);
     }
-    return visual_operated(state, view, operation);
+    std::unreachable();
 }
 
 // VISUAL の `c`。矩形は範囲外なので鍵を捨てて矩形のまま残る（ADR 0035 の決定 5）。

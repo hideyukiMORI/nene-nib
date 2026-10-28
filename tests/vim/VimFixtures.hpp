@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 94d8491f64637290d95737e755463930a15cf30a56ff76e52d828ab2802b7e04 / 2358 fixtures
+// fixtures.json: sha256 4a0f61b66a2db7364062cf6c5105c641ae311a583013d82273e6eb23c501de96 / 2368 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2358> vim_fixtures{{
+constexpr std::array<VimFixture, 2368> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1439,6 +1439,16 @@ constexpr std::array<VimFixture, 2358> vim_fixtures{{
     {"block-undo-d-twice", "abcdef\nghijkl\nmnopqr", "<C-v>jjllduu", "abcdef\nghijkl\nmnopqr", 1, 1, "abc\nghi\nmno", "\0263", std::nullopt},
     {"block-undo-r", "abcdef\nghijkl\nmnopqr", "<C-v>jlrZu", "abcdef\nghijkl\nmnopqr", 1, 1, "", "", std::nullopt},
     {"block-undo-cut-tab", "abcd\n\tzz\n\tyy", "2l<C-v>jjldu", "abcd\n\tzz\n\tyy", 1, 3, "cd\n      z\n      y", "\0267", std::nullopt},
+    {"block-case-upper-2x2", "abcdef\nghijkl\nmnopqr", "l<C-v>jlU", "aBCdef\ngHIjkl\nmnopqr", 1, 2, "", "", std::nullopt},
+    {"block-case-upper-dollar", "(paren) <b>tag</b> <b>tag</b>", "<C-v>$U", "(PAREN) <B>TAG</B> <B>TAG</B>", 1, 1, "", "", std::nullopt},
+    {"block-case-upper-dollar-lines", "abc def\nxy\n\nlong line here", "l<C-v>jjj$U", "aBC DEF\nxY\n\nlONG LINE HERE", 1, 2, "", "", std::nullopt},
+    {"block-case-toggle-3", "aBcDeF\nGhIjKl\nmNoPqR", "l<C-v>jj~", "abcDeF\nGHIjKl\nmnoPqR", 1, 2, "", "", std::nullopt},
+    {"block-case-lower", "ABCDEF\nGHIJKL", "l<C-v>lu", "AbcDEF\nGHIJKL", 1, 2, "", "", std::nullopt},
+    {"block-case-short", "abcdef\ngh\n\nmnopqr", "ll<C-v>jjjlU", "abCDef\ngh\n\nmnOPqr", 1, 3, "", "", std::nullopt},
+    {"block-case-wide", "aあbいc\nxうyえz", "<C-v>j$~", "AあBいC\nXうYえZ", 1, 1, "", "", std::nullopt},
+    {"block-case-tab", "xyzwvutsrq\n\tabc", "3l<C-v>jlU", "xyzWVUTSRq\n\tAbc", 1, 4, "", "", std::nullopt},
+    {"block-case-tab-top", "x\tabc\nxyzwvutsrq", "j3l<C-v>klU", "x\tAbc\nxyzWVUTSRq", 1, 2, "", "", std::nullopt},
+    {"block-case-dot", "abcdef\nghijkl\nmnopqr\nstuvwx", "<C-v>jlUjj.", "ABcdef\nGHijkl\nMNopqr\nSTuvwx", 3, 1, "", "", std::nullopt},
     {"literal-cr-visual-enter", "abcd\nefgh\nijkl", "lvjr<CR>", "a\r\r\r\n\r\rgh\nijkl", 1, 2, "", "", std::nullopt},
     {"literal-cr-visual-line-enter", "abcd\nefgh\nijkl", "Vjr<CR>", "\r\r\r\r\n\r\r\r\r\nijkl", 1, 1, "", "", std::nullopt},
     {"literal-cr-visual-one-line", "abcd\nefgh\nijkl", "vlr<CR>", "\r\rcd\nefgh\nijkl", 1, 1, "", "", std::nullopt},
