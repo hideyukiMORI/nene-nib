@@ -3,6 +3,8 @@
 #include "LineNumber.hpp"
 #include "VimCaret.hpp"
 #include "VimLastVisual.hpp"
+#include "VimJumpList.hpp"
+#include "VimJumpLists.hpp"
 #include "VimMarkShift.hpp"
 
 #include <cstddef>
@@ -174,9 +176,11 @@ std::expected<VimMarks, VimRepeatFailure> vim_mark_set(const VimMarks &marks, ch
     }
     if (is_context(name))
     {
-        // `m'` は動かなくても残す（Vim の setmark_pos が w_prev_pcmark も同じ値にする）。
+        // `m'` は動かなくても残す（Vim の setmark_pos が w_prev_pcmark も同じ値にする）。ジャンプの
+        // 列にも積む（setmark_pos は setpcmark を呼ぶ・#1037）。
         next.previous_context = at;
         next.prior_context = std::nullopt;
+        next.jumps = vim_jump_appended(marks.jumps, at);
         return next;
     }
     if (kept_unset(name))
@@ -191,6 +195,7 @@ VimMarks vim_marks_jumped(const VimMarks &marks, const VimMarkPosition &from)
     VimMarks next = marks;
     next.prior_context = marks.previous_context;
     next.previous_context = from;
+    next.jumps = vim_jump_appended(marks.jumps, from);
     return next;
 }
 
@@ -350,6 +355,17 @@ namespace
     next.caret = kept_end(next.caret, shift);
     return next;
 }
+
+// ジャンプの列と変更の列の位置（#1037）。前の選択の端と同じ kept_end で直す（Vim の
+// one_adjust_nodel）。
+[[nodiscard]] VimJumpList kept_list(VimJumpList list, const VimMarkShift &shift)
+{
+    for (std::size_t at = 0; at < list.count; ++at)
+    {
+        list.entries.at(at) = kept_end(list.entries.at(at), shift);
+    }
+    return list;
+}
 } // namespace
 
 // 挿入した行は、行の先頭へ改行で終わる本文を入れたら（P O）その行から下、ほかは下の行だけを
@@ -382,6 +398,8 @@ VimMarks marks_adjusted(const VimMarks &marks, const TextBuffer &before, const E
     next.last_change = shifted(marks.last_change, shift);
     next.last_insert = shifted(marks.last_insert, shift);
     next.last_visual = kept_visual(marks.last_visual, shift);
+    next.jumps = kept_list(marks.jumps, shift);
+    next.changes = kept_list(marks.changes, shift);
     return next;
 }
 

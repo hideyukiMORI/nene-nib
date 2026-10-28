@@ -41,6 +41,9 @@ enum class VimActionGroup : std::uint8_t
     screen_alignment,
     // `Ctrl-a` `Ctrl-x` と `g Ctrl-a` `g Ctrl-x`（ADR 0015 の決定 14）。オペレータの後ろでは
     // 失敗にせず打ち消す（Vim の nv_addsub の clearop）。
-    number
+    number,
+    // `Ctrl-o` `Ctrl-i` `g;` `g,`（ADR 0152 の追補 #1037）。NORMAL でだけ動き、VISUAL
+    // とオペレータの 後ろでは失敗する（Vim の nv_pcmark の checkclearopq）。
+    jump_list
 };
 } // namespace nenenib::core

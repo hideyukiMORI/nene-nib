@@ -2,6 +2,7 @@
 
 #include "LineNumber.hpp"
 #include "VimLastVisual.hpp"
+#include "VimJumpList.hpp"
 #include "VimMarkPosition.hpp"
 
 #include <array>
@@ -24,6 +25,9 @@ inline constexpr std::size_t vim_mark_count = 26;
 // last_insert は最後に INSERT を抜けた位置（`'^`・`gi` の行き先）、last_visual は前の選択
 // （`gv`）で、どちらも Vim の b_last_insert と b_visual と同じく文書の値（ADR 0152 と ADR 0018 の
 // 追補・#1039）。
+// jumps はジャンプの列、changes は変更の列、change_started は「新しい undo の単位が始まってから
+// まだ変更の列に位置を足していない」印（Vim の b_new_change・ADR 0152 の追補 #1037）。列は窓では
+// なく文書ごとに 1 つ（Vim は窓ごとの列だが、タブをまたがない Nib ではタブ＝文書で足りる）。
 struct VimMarks
 {
     std::array<std::optional<VimMarkPosition>, vim_mark_count> named{};
@@ -32,13 +36,18 @@ struct VimMarks
     std::optional<VimMarkPosition> last_change = std::nullopt;
     std::optional<VimMarkPosition> last_insert = std::nullopt;
     std::optional<VimLastVisual> last_visual = std::nullopt;
+    VimJumpList jumps{};
+    VimJumpList changes{};
+    bool change_started = false;
 };
 
 [[nodiscard]] constexpr bool operator==(const VimMarks &left, const VimMarks &right) noexcept
 {
     return left.named == right.named && left.previous_context == right.previous_context &&
            left.prior_context == right.prior_context && left.last_change == right.last_change &&
-           left.last_insert == right.last_insert && left.last_visual == right.last_visual;
+           left.last_insert == right.last_insert && left.last_visual == right.last_visual &&
+           left.jumps == right.jumps && left.changes == right.changes &&
+           left.change_started == right.change_started;
 }
 
 // 開いた時点のマーク（名前つきと最後の変更は無く、前の位置は 1 行目）。VimEditorView が既定で

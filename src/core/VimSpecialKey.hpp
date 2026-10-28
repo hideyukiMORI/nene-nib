@@ -30,6 +30,8 @@ enum class VimSpecialKey : std::uint8_t
     // 数の増減 `Ctrl-a` `Ctrl-x`（ADR 0015 の決定 14）。窓は Vim の NORMAL / VISUAL でだけ写す。
     // INSERT では何もしない。
     control_a,
-    control_x
+    control_x,
+    // `Ctrl-o`（ジャンプの列を古い方へ・ADR 0152 の追補 #1037）。NORMAL でだけ効く。
+    control_o
 };
 } // namespace nenenib::core

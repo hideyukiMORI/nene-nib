@@ -63,6 +63,7 @@ using detail::insert_register_step;
 using detail::insert_special;
 using detail::insert_started;
 using detail::joined;
+using detail::jump_list_action;
 using detail::laid_out_motion;
 using detail::landed_column;
 using detail::landed_step;
@@ -1021,6 +1022,8 @@ namespace
         return aligned_screen(state, view, action);
     case VimActionGroup::number:
         return numbered(state, view, action);
+    case VimActionGroup::jump_list:
+        return jump_list_action(state, view, action);
     }
     std::unreachable();
 }
@@ -1320,6 +1323,8 @@ namespace
         return acted(state, view, VimAction::increment_number);
     case VimSpecialKey::control_x:
         return acted(state, view, VimAction::decrement_number);
+    case VimSpecialKey::control_o:
+        return acted(state, view, VimAction::jump_older);
     }
     std::unreachable();
 }
@@ -1356,6 +1361,7 @@ namespace
     case VimSpecialKey::page_up:
     case VimSpecialKey::page_down:
     case VimSpecialKey::control_v:
+    case VimSpecialKey::control_o:
         return std::nullopt;
     }
     std::unreachable();

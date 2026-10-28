@@ -18,6 +18,7 @@
 #include "VimCharacter.hpp"
 #include "VimClipboardText.hpp"
 #include "VimInsertBlock.hpp"
+#include "VimJumpLists.hpp"
 #include "VimKey.hpp"
 #include "VimKeySource.hpp"
 #include "VimMarkEdits.hpp"
@@ -295,6 +296,9 @@ void EditorController::undone_marks(const core::Edit &edit)
 {
     auto marks = core::marks_adjusted(state_.vim_marks(), state_.text(), edit);
     marks.last_change = core::VimMarkPosition{state_.text().position_of(edit.at).line, 0};
+    // undo と Ctrl-r は新しい単位を始めない（Vim の u_undoredo は b_new_change
+    // を立てない・#1037）。
+    marks = core::vim_change_recorded(marks, marks.last_change.value(), false);
     state_ = state_.with_vim_marks(std::move(marks));
 }
 
@@ -372,6 +376,7 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpe
     case core::VimSpecialKey::control_w:
     case core::VimSpecialKey::control_a:
     case core::VimSpecialKey::control_x:
+    case core::VimSpecialKey::control_o:
         return std::nullopt;
     }
     std::unreachable();
