@@ -1,6 +1,6 @@
 # 利用者テーマファイル v1
 
-Issue #68 / #70 / #419、ADR 0024 / 0025 / 0117。起動時に読み込み、NORMALの `:colorscheme <name>` またはCtrl+Pのテーマ名検索から選べる。選択はsettings.v3へ保存され、次回起動時にも同じ配色を復元する。
+Issue #68 / #70 / #419、ADR 0024 / 0025 / 0117。起動時に読み込み、NORMALの `:colorscheme <name>` またはCtrl+Pのテーマ名検索から選べる。選択はsettings.v4（2026-10-28・#1044。v3 は旧版）へ保存され、次回起動時にも同じ配色を復元する。
 
 配置は `%LOCALAPPDATA%/NeNeNib/themes/<name>.v1.theme`。nameは小文字で始まるASCII小文字・数字・ハイフン、64 bytesまで。underscore入力はハイフンに正規化する。ファイル名と中のnameを一致させ、`system` と組み込みテーマ名は使わない。
 
