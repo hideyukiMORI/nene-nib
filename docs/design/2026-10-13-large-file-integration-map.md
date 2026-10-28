@@ -9,7 +9,7 @@
 | 役割 | 現行のファイル・関数 | 取得/所有と必要な移行 |
 | --- | --- | --- |
 | 本文の正本 | [TextBuffer](../../src/core/TextBuffer.cpp) `segments/text/text_range/line_text/line_end/offset_of/position_of`（288〜423行） | 全piece借用/全文copy/全論理行copy、CR byte、行頭からのUTF-8走査。`line_start/line_terminator_end`の索引だけの答えと分離し、byteが足りなければneedを返す |
-| 表示・wrap・hit test | [VisualTextView](../../src/application/VisualTextView.cpp) 52/56/115/134行、[EditorView](../../src/application/EditorView.cpp) 56/78/114行、[EditorController](../../src/application/EditorController.cpp) 3264/3301/3391行 | raw行と表示行の二重所有、折り返しの複数行走査。UIはTextBufferを直接読まず所有LineView等を受ける現在の境界を維持 |
+| 表示・wrap・hit test | [VisualTextView](../../src/application/VisualTextView.cpp) 52/56/115/134行、[EditorControllerView](../../src/application/EditorControllerView.cpp) 56/78/114行、[EditorController](../../src/application/EditorController.cpp) 3264/3301/3391行 | raw行と表示行の二重所有、折り返しの複数行走査。UIはTextBufferを直接読まず所有LineView等を受ける現在の境界を維持 |
 | status/session | `EditorController` 514/530/649/1612/3391行 | caretの行内文字数/offset変換にbyte取得が必要。session記録を隠れた同期readにしない |
 | 通常移動 | [CaretMove](../../src/core/CaretMove.cpp) 59〜141行、[OrdinaryCharacterBoundary](../../src/core/OrdinaryCharacterBoundary.cpp) 19/25/32行、`EditorController` 1113/1128/1147行 | 文字の小窓と全行のword/column走査。結合列は複数窓へ跨ぐため固定4bytesで常に完了とはしない |
 | 通常編集/undo | `EditorController::replace/undo_edit/redo_edit` 1049/1156/1283/1304/1320行 | removed全範囲、履歴と本文の候補、確定後のcaret追従。必要な旧本文を準備してから一度commit |
