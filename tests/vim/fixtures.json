@@ -2324,5 +2324,14 @@
   {"name":"empty-delete-register-numbered-kept","text":"abc\n\ndef","keys":"ddD\"1p"},
   {"name":"empty-delete-register-c-zero-kept","text":"abc","keys":"ylc0<Esc>"},
   {"name":"empty-delete-register-c-g-underscore","text":"\nabc","keys":"yycg_<Esc>"},
-  {"name":"empty-delete-register-d-g-underscore-kept","text":"\nabc","keys":"yydg_"}
+  {"name":"empty-delete-register-d-g-underscore-kept","text":"\nabc","keys":"yydg_"},
+  {"name":"black-hole-put-p-then-x","text":"abc","keys":"\"_px"},
+  {"name":"black-hole-put-P-then-x","text":"abc","keys":"l\"_Px"},
+  {"name":"black-hole-put-count-P-then-o","text":"abc\ndef","keys":"3\"_Po(<Esc>"},
+  {"name":"black-hole-put-unnamed-kept","text":"abc\ndef","keys":"yy\"_pp"},
+  {"name":"black-hole-put-dot","text":"abcdef","keys":"x\"_p."},
+  {"name":"black-hole-put-count-p-then-a","text":"abc","keys":"2\"_pax<Esc>"},
+  {"name":"black-hole-put-after-yank-dot","text":"abc\ndef","keys":"yyp\"_p."},
+  {"name":"black-hole-put-then-undo","text":"abcdef","keys":"x\"_pu"},
+  {"name":"black-hole-put-dot-then-undo","text":"abcdef","keys":"x\"_p.u"}
 ]

@@ -2818,9 +2818,20 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
                                VimPutSide side)
 {
     const VimRegister source = register_read(state, state.selected_register);
-    if (refuses_put(state, source))
+    const bool black_hole = state.selected_register.has_value() &&
+                            state.selected_register.value().target == VimRegisterTarget::black_hole;
+    if (!black_hole && refuses_put(state, source))
     {
         return failed(cancelled(state), VimRepeatFailure::refused);
+    }
+    if (black_hole)
+    {
+        // `"_` からの貼り付けは拒まずに何もしない（Vim の do_put はブラックホールなら黙って返る）。
+        // それでも直前の変更になり `.` は `"_p` を繰り返す（nv_put は do_put の前に redo を置く・
+        // 実測）。記録に載る「何も入れない貼付」は行の無い矩形の貼付で表す（本文・履歴・キャレット
+        // を変えない・#988・ADR 0050 の決定 5 の追補）。
+        return VimStep{vim_resting_from(state, state.unnamed_register),
+                       VimInsertBlock{std::vector<VimBlockEdit>{}, caret}};
     }
     if (source.text.empty())
     {
