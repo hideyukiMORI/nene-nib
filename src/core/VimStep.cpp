@@ -2386,14 +2386,10 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
         return cancelled_at_landing(state, view, wanted);
     }
     VimState performed_from = state;
-    // gg G と H M L は着地が最初の非空白（Vim の beginline）。上へ動いた行単位の y はそこへ着く
-    // （Vim の op_yank は範囲の始まり＝着地へキャレットを置く・Issue #411）。
-    const bool landing_yank =
-        operation == VimOperator::yank &&
-        (wanted == VimMotion::document_first || wanted == VimMotion::document_last ||
-         wanted == VimMotion::screen_top || wanted == VimMotion::screen_middle ||
-         wanted == VimMotion::screen_bottom || wanted == VimMotion::mark_line);
-    if (landing_yank)
+    // 上へ動いた行単位の y は移動の着地へ着く（Vim の op_yank は範囲の始まり＝着地へキャレットを
+    // 置く）。着地の桁は移動が決める: `-` gg G H M L は最初の非空白、`k` は欲しい列を保つ
+    // （Issue #411 / #965・ADR 0015 の追補）。下へ動いた y は範囲の始まり＝キャレットのまま。
+    if (operation == VimOperator::yank && range.value().kind == VimRegisterKind::lines)
     {
         const Offset destination = moved_by(view, state, wanted);
         if (line_of(view.text, destination).value < line_of(view.text, view.selection.caret).value)

@@ -2344,5 +2344,17 @@
   {"name":"count-dollar-delete-clamps-to-the-last-line","text":"abc\ndef\nghi","keys":"ld5$"},
   {"name":"count-dollar-visual-on-the-last-line-fails","text":"abc def","keys":"lvl2$d"},
   {"name":"count-dollar-visual-goes-down","text":"abc\ndef\nghi","keys":"lv2$d"},
-  {"name":"count-dollar-five-j-on-the-last-line-fails","text":"abc\ndef","keys":"j5jx"}
+  {"name":"count-dollar-five-j-on-the-last-line-fails","text":"abc\ndef","keys":"j5jx"},
+  {"name":"yank-line-cursor-yj-stays","text":"abc\n  def","keys":"$yj"},
+  {"name":"yank-line-cursor-yk-keeps-column","text":"abc\n  def","keys":"j$yk"},
+  {"name":"yank-line-cursor-yk-from-line-start","text":"word\n    <w> :  Hello","keys":"jyk"},
+  {"name":"yank-line-cursor-y-minus","text":"word\n    <w> :  Hello","keys":"jy-"},
+  {"name":"yank-line-cursor-count-y-minus-past-top","text":"word\n    <w> :  Hello","keys":"j3y-"},
+  {"name":"yank-line-cursor-y-minus-from-line-end","text":"word\n    <w> :  Hello","keys":"j$y-"},
+  {"name":"yank-line-cursor-y-plus-stays","text":"abc\n  def","keys":"$y+"},
+  {"name":"yank-line-cursor-yk-then-put","text":"word\n    <w> :  Hello","keys":"jykp"},
+  {"name":"yank-line-cursor-yk-then-j-drops-dollar","text":"abc\n  def\nxxxxxxxx","keys":"j$ykj"},
+  {"name":"yank-line-cursor-y-minus-then-j","text":"  abc\nlonger line","keys":"j$y-j"},
+  {"name":"yank-line-cursor-yj-then-j-drops-dollar","text":"abc\n  def\nxxxxxxxx","keys":"$yjj"},
+  {"name":"yank-line-cursor-characterwise-y-dollar-then-j","text":"abcdef\nabcdefgh","keys":"$hy$j"}
 ]

@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 f941555f2e27d329fd75b2e162abfce9c03d0abba91b386e8b3ef71ba39c3dae / 2346 fixtures
+// fixtures.json: sha256 94d8491f64637290d95737e755463930a15cf30a56ff76e52d828ab2802b7e04 / 2358 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2346> vim_fixtures{{
+constexpr std::array<VimFixture, 2358> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2358,6 +2358,18 @@ constexpr std::array<VimFixture, 2346> vim_fixtures{{
     {"count-dollar-visual-on-the-last-line-fails", "abc def", "lvl2$d", "abc def", 1, 3, "", "", std::nullopt},
     {"count-dollar-visual-goes-down", "abc\ndef\nghi", "lv2$d", "aghi", 1, 2, "bc\ndef\n", "v", std::nullopt},
     {"count-dollar-five-j-on-the-last-line-fails", "abc\ndef", "j5jx", "abc\ndef", 2, 1, "", "", std::nullopt},
+    {"yank-line-cursor-yj-stays", "abc\n  def", "$yj", "abc\n  def", 1, 3, "abc\n  def\n", "V", std::nullopt},
+    {"yank-line-cursor-yk-keeps-column", "abc\n  def", "j$yk", "abc\n  def", 1, 3, "abc\n  def\n", "V", std::nullopt},
+    {"yank-line-cursor-yk-from-line-start", "word\n    <w> :  Hello", "jyk", "word\n    <w> :  Hello", 1, 1, "word\n    <w> :  Hello\n", "V", std::nullopt},
+    {"yank-line-cursor-y-minus", "word\n    <w> :  Hello", "jy-", "word\n    <w> :  Hello", 1, 1, "word\n    <w> :  Hello\n", "V", std::nullopt},
+    {"yank-line-cursor-count-y-minus-past-top", "word\n    <w> :  Hello", "j3y-", "word\n    <w> :  Hello", 1, 1, "word\n    <w> :  Hello\n", "V", std::nullopt},
+    {"yank-line-cursor-y-minus-from-line-end", "word\n    <w> :  Hello", "j$y-", "word\n    <w> :  Hello", 1, 1, "word\n    <w> :  Hello\n", "V", std::nullopt},
+    {"yank-line-cursor-y-plus-stays", "abc\n  def", "$y+", "abc\n  def", 1, 3, "abc\n  def\n", "V", std::nullopt},
+    {"yank-line-cursor-yk-then-put", "word\n    <w> :  Hello", "jykp", "word\nword\n    <w> :  Hello\n    <w> :  Hello", 2, 1, "word\n    <w> :  Hello\n", "V", std::nullopt},
+    {"yank-line-cursor-yk-then-j-drops-dollar", "abc\n  def\nxxxxxxxx", "j$ykj", "abc\n  def\nxxxxxxxx", 2, 3, "abc\n  def\n", "V", std::nullopt},
+    {"yank-line-cursor-y-minus-then-j", "  abc\nlonger line", "j$y-j", "  abc\nlonger line", 2, 3, "  abc\nlonger line\n", "V", std::nullopt},
+    {"yank-line-cursor-yj-then-j-drops-dollar", "abc\n  def\nxxxxxxxx", "$yjj", "abc\n  def\nxxxxxxxx", 2, 3, "abc\n  def\n", "V", std::nullopt},
+    {"yank-line-cursor-characterwise-y-dollar-then-j", "abcdef\nabcdefgh", "$hy$j", "abcdef\nabcdefgh", 2, 5, "ef", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
