@@ -56,6 +56,10 @@ INSERT にいる間の編集は `EditBoundary::absorb` で直前の `Edit` に�
 決定 9〜11 の共通: `J` と大小文字と字下げは**レジスタを書かない**（ADR 0050 の書き手 `registers_written` を通らない・`"a` を前に付けても無名もそのまま）。`.` の記録は既存の鍵の列で足りる。
 矩形 VISUAL（`Ctrl-v`）の `~` `u` `U` `>` `<` は #770 で、いまは鍵を拒んで矩形のまま残る（Vim は行ごとに効く）。VISUAL の `J`・Unicode の大小の写し・`:set shiftwidth=` `expandtab`・`gq` `=` は後続。
 
+### 決定 12（2026-10-28 追記・#966）
+
+12. **`{N}$`（N ≥ 2）は最終行では失敗する**（Vim の `nv_dollar` の `cursor_down(N − 1)`・`g_` と同じ規則・ADR 0147 の決定 8）。最終行にいるときは動かず（`VimRepeatFailure::not_moved`・残りの鍵は #230 で打ち切る）、オペレータ（`d2$`）は打ち消して本文を変えず、VISUAL（`v2$`）も選択を動かさない。最終行でなければ本文の末尾の行に切り詰めて行末へ（`5$` `d5$` `v2$`）。着地は `landing_of` の `line_end_landing` の 1 本で、裸の移動と VISUAL が同じ値を読み、オペレータの範囲は前から同じ規則の `to_line_end`。欲しい列は失敗でも「行末」（`nv_dollar` は `cursor_down` の前に `curswant` を貼る）。fixture `count-dollar-`（11 件・Vim 9.1 の実測: 1 行の `2$` は (1, 1)・`$2$` は (1, 11)・2 行の `3$` は (2, 3)・3 行の `2$` は (2, 3)・`5j` の最終行の失敗も 1 件）。
+
 ## 強制
 
 - fixture の再生（ADR 0005 / 0012）— **active**（`nib_unit` が `VimFixtures.hpp` の全項目を再生し、レジスタの種類も突き合わせる）

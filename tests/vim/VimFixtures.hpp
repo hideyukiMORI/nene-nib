@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 375d89a9d194bb0aca3dbd53ed5cf48480fe5b264874efd0ff0109a26d38d0fa / 2335 fixtures
+// fixtures.json: sha256 f941555f2e27d329fd75b2e162abfce9c03d0abba91b386e8b3ef71ba39c3dae / 2346 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2335> vim_fixtures{{
+constexpr std::array<VimFixture, 2346> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2347,6 +2347,17 @@ constexpr std::array<VimFixture, 2335> vim_fixtures{{
     {"black-hole-put-after-yank-dot", "abc\ndef", "yyp\"_p.", "abc\nabc\ndef", 2, 1, "abc\n", "V", std::nullopt},
     {"black-hole-put-then-undo", "abcdef", "x\"_pu", "abcdef", 1, 1, "a", "v", std::nullopt},
     {"black-hole-put-dot-then-undo", "abcdef", "x\"_p.u", "abcdef", 1, 1, "a", "v", std::nullopt},
+    {"count-dollar-on-the-last-line-fails", "    12 A 12", "2$x", "    12 A 12", 1, 1, "", "", std::nullopt},
+    {"count-dollar-after-dollar-on-the-last-line-fails", "    12 A 12", "$2$x", "    12 A 12", 1, 11, "", "", std::nullopt},
+    {"count-dollar-wide-on-the-last-line-fails", "    １２ Ａ １２", "2$", "    １２ Ａ １２", 1, 1, "", "", std::nullopt},
+    {"count-dollar-clamps-to-the-last-line", "abc\ndef", "3$", "abc\ndef", 2, 3, "", "", std::nullopt},
+    {"count-dollar-goes-down", "abc\ndef\nghi", "2$", "abc\ndef\nghi", 2, 3, "", "", std::nullopt},
+    {"count-dollar-clamps-from-the-first-line", "abc\ndef\nghi", "l5$", "abc\ndef\nghi", 3, 3, "", "", std::nullopt},
+    {"count-dollar-delete-on-the-last-line-fails", "abc def", "ld2$x", "abc def", 1, 2, "", "", std::nullopt},
+    {"count-dollar-delete-clamps-to-the-last-line", "abc\ndef\nghi", "ld5$", "a", 1, 1, "bc\ndef\nghi", "v", std::nullopt},
+    {"count-dollar-visual-on-the-last-line-fails", "abc def", "lvl2$d", "abc def", 1, 3, "", "", std::nullopt},
+    {"count-dollar-visual-goes-down", "abc\ndef\nghi", "lv2$d", "aghi", 1, 2, "bc\ndef\n", "v", std::nullopt},
+    {"count-dollar-five-j-on-the-last-line-fails", "abc\ndef", "j5jx", "abc\ndef", 2, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

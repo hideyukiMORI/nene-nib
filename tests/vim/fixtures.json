@@ -2333,5 +2333,16 @@
   {"name":"black-hole-put-count-p-then-a","text":"abc","keys":"2\"_pax<Esc>"},
   {"name":"black-hole-put-after-yank-dot","text":"abc\ndef","keys":"yyp\"_p."},
   {"name":"black-hole-put-then-undo","text":"abcdef","keys":"x\"_pu"},
-  {"name":"black-hole-put-dot-then-undo","text":"abcdef","keys":"x\"_p.u"}
+  {"name":"black-hole-put-dot-then-undo","text":"abcdef","keys":"x\"_p.u"},
+  {"name":"count-dollar-on-the-last-line-fails","text":"    12 A 12","keys":"2$x"},
+  {"name":"count-dollar-after-dollar-on-the-last-line-fails","text":"    12 A 12","keys":"$2$x"},
+  {"name":"count-dollar-wide-on-the-last-line-fails","text":"    １２ Ａ １２","keys":"2$"},
+  {"name":"count-dollar-clamps-to-the-last-line","text":"abc\ndef","keys":"3$"},
+  {"name":"count-dollar-goes-down","text":"abc\ndef\nghi","keys":"2$"},
+  {"name":"count-dollar-clamps-from-the-first-line","text":"abc\ndef\nghi","keys":"l5$"},
+  {"name":"count-dollar-delete-on-the-last-line-fails","text":"abc def","keys":"ld2$x"},
+  {"name":"count-dollar-delete-clamps-to-the-last-line","text":"abc\ndef\nghi","keys":"ld5$"},
+  {"name":"count-dollar-visual-on-the-last-line-fails","text":"abc def","keys":"lvl2$d"},
+  {"name":"count-dollar-visual-goes-down","text":"abc\ndef\nghi","keys":"lv2$d"},
+  {"name":"count-dollar-five-j-on-the-last-line-fails","text":"abc\ndef","keys":"j5jx"}
 ]
