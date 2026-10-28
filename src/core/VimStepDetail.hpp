@@ -188,6 +188,10 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
                                    VimAction action);
 [[nodiscard]] VimStep visual_character(const VimState &state, const VimEditorView &view,
                                        VimCharacter key);
+// 数の増減（VimStepNumbers.cpp・ADR 0015 の決定 14）。
+[[nodiscard]] VimStep numbered(const VimState &state, const VimEditorView &view, VimAction action);
+[[nodiscard]] VimStep visual_numbered(const VimState &state, const VimEditorView &view,
+                                      VimAction action);
 [[nodiscard]] VimStep visual_special(const VimState &state, const VimEditorView &view,
                                      VimSpecialKey key);
 [[nodiscard]] VimStep insert_special(const VimState &state, const VimEditorView &view,

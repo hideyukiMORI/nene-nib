@@ -14,7 +14,7 @@ leaves Vim in NORMAL mode (an insert ends with `<Esc>`, a VISUAL selection with 
 oracle can observe: no `"+ "*` (the real clipboard), no `q` / `@` (recording does not work inside
 `:normal`), no `u` / `<C-r>` (the oracle's `:normal!` is one undo unit), no viewport keys
 (`H M L <C-d> <C-u> <C-f> <C-b> <C-e> <C-y> z… gj gk g0 g$ gm gM <PageUp> <PageDown>`), no tabs,
-windows, Ex or Ctrl+P, no keys Nib does not take yet (`R s S gv <C-a> <C-x>`, block `I A c C > <`)
+windows, Ex or Ctrl+P, no keys Nib does not take yet (`R s S gv`, VISUAL `<C-a> <C-x>`, block `I A c C > <`)
 and no INSERT `<BS>`.
 
 The buffer has 1 to 12 lines mixing ASCII words, spaces, tabs, bracket and quote pairs, punctuation,
@@ -93,6 +93,8 @@ WORDS = (
     ("x", 3, "{r}{n}x"), ("X", 2, "{r}{n}X"), ("r", 2, "{n}r{c}"), ("J", 2, "{n}J"),
     ("gJ", 1, "{n}gJ"), ("~", 2, "{n}~"), ("g~", 1, "g~{m}"), ("gu", 1, "gu{m}"),
     ("gU", 1, "gU{m}"), (">>", 1, "{n}>>"), ("<<", 1, "{n}<<"),
+    ("<C-a>", 1, "{n}<C-a>"),
+    ("<C-x>", 1, "{n}<C-x>"),
     ("p", 3, "{r}{n}p"), ("P", 3, "{r}{n}P"),
     ("i", 3, "{n}i{i}<Esc>"), ("a", 3, "{n}a{i}<Esc>"), ("I", 2, "{n}I{i}<Esc>"),
     ("A", 2, "{n}A{i}<Esc>"), ("o", 2, "{n}o{i}<Esc>"), ("O", 2, "{n}O{i}<Esc>"),
@@ -130,6 +132,9 @@ TEXT_PIECES = ("alpha", "beta", "gamma", "foo_bar", "x1", "a.b", "word", "Hello"
                "?", ":", "-", "日本語", "かな", "漢字", "ＡＢＣ", "１２", "です。", "、")
 # 語の依存（Issue #963）。生成器の版は summary.md に書く（固定 seed の順が変わったら上げる）。
 GENERATOR_VERSION = 3
+# Vim に置く設定。Nib の `nrformats` は `bin,hex` の固定で、`-u NONE` の Vim の既定 `bin,octal,hex` の
+# ままだと `07<C-a>` が 8 進で測られる（ADR 0015 の決定 14）。fixture へ写すときも同じ設定を書く。
+ORACLE_SETTINGS = ["set nrformats=bin,hex"]
 WORD_NAMES = tuple(kind for kind, _, _ in WORDS)
 JUMP_WORDS = frozenset(("G", "gg", "NG", "Ngg", "N%", "/", "?", "*", "#", "%", "n", "N", "'", "`",
                         "''", "``"))
@@ -367,7 +372,8 @@ def replay(replayer: Path, work: Path, measured: list[dict]) -> dict[str, dict]:
 def measure(work: Path, name: str, text: str, keys: str) -> tuple[dict | None, str]:
     """The oracle's answer, or None and the reason it refused."""
     try:
-        return ORACLE.measure(work, {"name": name, "text": text, "keys": keys}), ""
+        return ORACLE.measure(work, {"name": name, "text": text, "keys": keys,
+                                     "settings": ORACLE_SETTINGS}), ""
     except ValueError as error:
         return None, f"ValueError: {error}"
     except RuntimeError as error:

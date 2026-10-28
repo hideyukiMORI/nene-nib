@@ -72,6 +72,7 @@ using detail::macro_record_action;
 using detail::macro_recorded;
 using detail::motion_range;
 using detail::motion_step;
+using detail::numbered;
 using detail::operated;
 using detail::operated_on_lines;
 using detail::operated_to_line_end;
@@ -1014,6 +1015,8 @@ namespace
         return horizontal_action(state, view, action);
     case VimActionGroup::screen_alignment:
         return aligned_screen(state, view, action);
+    case VimActionGroup::number:
+        return numbered(state, view, action);
     }
     std::unreachable();
 }
@@ -1034,6 +1037,12 @@ namespace
     if (action == VimAction::insert_before || action == VimAction::insert_after)
     {
         return text_object_action(state, action);
+    }
+    // `d<C-a>` はオペレータを打ち消すだけで失敗にしない（Vim の nv_addsub の clearop・ADR 0015 の
+    // 決定 14）。
+    if (vim_group_for(action) == VimActionGroup::number)
+    {
+        return cancelled(state);
     }
     // 同じオペレータの鍵をもう一度押すと行単位（dd cc yy g~~ guu gUU >> <<・表は VimKeyTable）。
     if (vim_operator_doubles(operation, action))
@@ -1303,6 +1312,10 @@ namespace
         return entered_visual(state, view.text, view.selection.caret, VimMode::visual_block);
     case VimSpecialKey::control_w:
         return window_started(state);
+    case VimSpecialKey::control_a:
+        return acted(state, view, VimAction::increment_number);
+    case VimSpecialKey::control_x:
+        return acted(state, view, VimAction::decrement_number);
     }
     std::unreachable();
 }
@@ -1325,6 +1338,9 @@ namespace
         return control_b_character;
     case VimSpecialKey::control_w:
         return vim_window_control_character(key);
+    case VimSpecialKey::control_a:
+    case VimSpecialKey::control_x:
+        return vim_number_control_character(key);
     case VimSpecialKey::escape:
     case VimSpecialKey::backspace:
     case VimSpecialKey::arrow_left:
@@ -1414,12 +1430,23 @@ namespace
     std::unreachable();
 }
 
+// g の後ろの鍵を表の文字へ。Ctrl-a と Ctrl-x は 0x01 と 0x18（`g Ctrl-a`・ADR 0015 の決定 14）。
+// ほかの特別な鍵と検索の文字列は表に無い。
+[[nodiscard]] std::optional<char32_t> g_key_code(const VimKey &key) noexcept
+{
+    if (const auto *const character = std::get_if<VimCharacter>(&key); character != nullptr)
+    {
+        return character->code;
+    }
+    const auto *const special = std::get_if<VimSpecialKey>(&key);
+    return special != nullptr ? vim_number_control_character(*special) : std::nullopt;
+}
+
 // g の後ろの鍵（gg ge gE）。表に無い鍵は g を打ち消す（Issue #222）。
 [[nodiscard]] VimStep g_prefix_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
-    const std::optional<VimAction> action = std::holds_alternative<VimCharacter>(key)
-                                                ? vim_g_action_for(std::get<VimCharacter>(key).code)
-                                                : std::nullopt;
+    const std::optional<VimAction> action =
+        g_key_code(key).and_then([](char32_t code) { return vim_g_action_for(code); });
     if (action.has_value())
     {
         return completed_prefix(state, view, action.value());

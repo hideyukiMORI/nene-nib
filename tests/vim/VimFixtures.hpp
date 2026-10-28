@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 6af2046674938696d6848260372956559ee8c90360efe37caeb54056de970587 / 2692 fixtures
+// fixtures.json: sha256 da49d07e92ab3f94b8d73f52a0eb85326df325494141ed6ce2d1d8794942add5 / 2693 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2692> vim_fixtures{{
+constexpr std::array<VimFixture, 2693> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2704,6 +2704,7 @@ constexpr std::array<VimFixture, 2692> vim_fixtures{{
     {"increment-block-sequence", "a1 b1\na2 b2\na3 b3", "3l<C-v>jjg<C-a>", "a1 b1\na2 b2\na3 b3", 1, 4, "", "", std::nullopt},
     {"increment-operator-is-cancelled", "ab 5", "d<C-a>x", "b 5", 1, 1, "a", "v", std::nullopt},
     {"increment-empty-line-is-not-a-failure", "\nab", "<C-a>jx", "\nb", 2, 1, "a", "v", std::nullopt},
+    {"increment-count-is-capped", "0", "1000000000<C-a>", "999999999", 1, 9, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

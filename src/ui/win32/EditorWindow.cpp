@@ -445,20 +445,21 @@ clauses_of(const std::vector<std::size_t> &boundaries, const std::vector<std::ui
 }
 
 // Vim モードで Ctrl と一緒に押された鍵（ADR 0019 / ADR 0035 の決定 9）。表に無い鍵と、
-// 矩形の入口にならない Ctrl+V は空を返し、呼ぶ側の通常モードの表へ落ちる。
+// INSERT の Ctrl+V（OS の貼付）・Ctrl+A・Ctrl+X は空を返し、呼ぶ側の通常モードの表へ落ちる。
+// Ctrl+A / Ctrl+X は NORMAL と VISUAL で数の増減（ADR 0015 の決定 14）。
 [[nodiscard]] std::optional<core::VimSpecialKey> vim_control_key(WPARAM word,
                                                                  core::VimMode vim) noexcept
 {
+    constexpr std::array<KeyVimSpecial, 3> command_keys{{{'V', core::VimSpecialKey::control_v},
+                                                         {'A', core::VimSpecialKey::control_a},
+                                                         {'X', core::VimSpecialKey::control_x}}};
     const auto special = vim_control_special_for(word);
-    if (special.has_value())
+    if (special.has_value() || !vim_block_key(vim))
     {
         return special;
     }
-    if (word == 'V' && vim_block_key(vim))
-    {
-        return core::VimSpecialKey::control_v;
-    }
-    return std::nullopt;
+    const auto command = std::ranges::find(command_keys, word, &KeyVimSpecial::key);
+    return command == command_keys.end() ? std::nullopt : std::optional{command->special};
 }
 
 [[nodiscard]] LRESULT caption_code(core::TitleBarHit hit) noexcept

@@ -2690,5 +2690,6 @@
   {"name":"increment-block-inside-a-number","text":"a12\na34","keys":"ll<C-v>j<C-a>","settings":["set nrformats=bin,hex"]},
   {"name":"increment-block-sequence","text":"a1 b1\na2 b2\na3 b3","keys":"3l<C-v>jjg<C-a>","settings":["set nrformats=bin,hex"]},
   {"name":"increment-operator-is-cancelled","text":"ab 5","keys":"d<C-a>x","settings":["set nrformats=bin,hex"]},
-  {"name":"increment-empty-line-is-not-a-failure","text":"\nab","keys":"<C-a>jx","settings":["set nrformats=bin,hex"]}
+  {"name":"increment-empty-line-is-not-a-failure","text":"\nab","keys":"<C-a>jx","settings":["set nrformats=bin,hex"]},
+  {"name":"increment-count-is-capped","text":"0","keys":"1000000000<C-a>","settings":["set nrformats=bin,hex"]}
 ]

@@ -38,6 +38,9 @@ enum class VimActionGroup : std::uint8_t
     horizontal_scroll,
     // `zt` `zz` `zb` `z<CR>` `z.` `z-`（ADR 0145 の限界）。NORMAL と VISUAL で何もせず失敗にも
     // しない。オペレータの後ろでは範囲にならず打ち消す（Vim の checkclearop）。
-    screen_alignment
+    screen_alignment,
+    // `Ctrl-a` `Ctrl-x` と `g Ctrl-a` `g Ctrl-x`（ADR 0015 の決定 14）。オペレータの後ろでは
+    // 失敗にせず打ち消す（Vim の nv_addsub の clearop）。
+    number
 };
 } // namespace nenenib::core

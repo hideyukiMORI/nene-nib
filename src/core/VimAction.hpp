@@ -153,11 +153,19 @@ enum class VimAction : std::uint8_t
     // `gv`。前の選択を選び直す。VISUAL の中では今の選択と入れ替える（ADR 0018 の追補・#1039）。
     reselect_visual,
     // `gi`。最後に INSERT を抜けた位置（`'^`）で `i` を始める（ADR 0152 の追補・#1039）。
-    insert_at_last_insert
+    insert_at_last_insert,
+    // `Ctrl-a` `Ctrl-x`。キャレットの上か右の数を回数だけ増減する（ADR 0015 の決定 14）。VISUAL
+    // では 各行の最初の数。
+    increment_number,
+    decrement_number,
+    // VISUAL の `g Ctrl-a` `g Ctrl-x`。行ごとに回数 × 何番目の数かだけ増減する（連番）。NORMAL では
+    // Vim と同じく失敗する。
+    increment_sequence,
+    decrement_sequence
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
 constexpr std::size_t vim_action_count =
-    static_cast<std::size_t>(VimAction::insert_at_last_insert) + 1;
+    static_cast<std::size_t>(VimAction::decrement_sequence) + 1;
 } // namespace nenenib::core

@@ -41,6 +41,10 @@ namespace nenenib::core
 // Ctrl-v と Ctrl-w の文字（0x16 と 0x17・表の鍵と同じ値）。ほかの特別な鍵は nullopt。
 [[nodiscard]] std::optional<char32_t> vim_window_control_character(VimSpecialKey key) noexcept;
 
+// Ctrl-a と Ctrl-x の文字（0x01 と 0x18・`g` の表の鍵と同じ値・ADR 0015 の決定 14）。ほかの
+// 特別な鍵は nullopt。
+[[nodiscard]] std::optional<char32_t> vim_number_control_character(VimSpecialKey key) noexcept;
+
 // 縦の位置合わせの動作 → 置く所と最初の非空白へ動かすか（ADR 0146 の決定 2）。ほかの動作は
 // nullopt。
 [[nodiscard]] std::optional<VimScreenAlignment> vim_screen_alignment_for(VimAction action) noexcept;

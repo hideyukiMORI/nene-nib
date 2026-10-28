@@ -44,6 +44,7 @@ using detail::tab_action;
 using detail::visual_acted;
 using detail::visual_character;
 using detail::visual_left;
+using detail::visual_numbered;
 using detail::visual_resting;
 using detail::visual_restore;
 using detail::visual_special;
@@ -358,6 +359,8 @@ namespace detail
         return aligned_screen(state, view, action);
     case VimActionGroup::history:
         return visual_history(state, view, action);
+    case VimActionGroup::number:
+        return visual_numbered(state, view, action);
     case VimActionGroup::insert_line:
         // `gi` は VISUAL では失敗する（実測・#1039）。
         return action == VimAction::insert_at_last_insert
@@ -426,6 +429,10 @@ namespace detail
         return visual_switched(state, view.selection, VimMode::visual_block);
     case VimSpecialKey::control_w:
         return window_started(state);
+    case VimSpecialKey::control_a:
+        return visual_acted(state, view, VimAction::increment_number);
+    case VimSpecialKey::control_x:
+        return visual_acted(state, view, VimAction::decrement_number);
     }
     std::unreachable();
 }

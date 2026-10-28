@@ -293,6 +293,10 @@ namespace detail
     case VimSpecialKey::control_b:
     // INSERT の Ctrl+V は窓が OS の貼付のまま扱うのでここへ来ない（ADR 0035 の決定 9）。
     case VimSpecialKey::control_v:
+    // INSERT の Ctrl-a（直前の挿入）と Ctrl-x（補完のモード）は未対応で、何もしない（ADR 0015 の
+    // 決定 14）。窓は INSERT では写さない。
+    case VimSpecialKey::control_a:
+    case VimSpecialKey::control_x:
         return VimStep{state, VimNoEffect{}};
     case VimSpecialKey::page_up:
         return insert_page_moved(state, view, VimScrollDirection::up);
@@ -368,6 +372,8 @@ namespace detail
     case VimSpecialKey::control_b:
     case VimSpecialKey::control_v:
     case VimSpecialKey::control_w:
+    case VimSpecialKey::control_a:
+    case VimSpecialKey::control_x:
         return false;
     }
     std::unreachable();
