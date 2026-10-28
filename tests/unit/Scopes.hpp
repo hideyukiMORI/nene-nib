@@ -98,6 +98,9 @@ void verify_json_property_scope();
 // の対応と位置）
 void verify_lsp_frames_scope();
 void verify_lsp_messages_scope();
+// LanguageServerTests.cpp（#994・controller の配線と寿命・`:set lsp`・替え玉のサーバー）
+void verify_language_server_contracts();
+void verify_language_server_scope();
 
 // TitleBarLayoutPropertyTests.cpp（#929・タブの帯の配置と hit test の一致の性質の試験）
 void verify_title_bar_layout_property_scope();

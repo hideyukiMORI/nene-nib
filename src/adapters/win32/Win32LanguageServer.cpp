@@ -75,6 +75,11 @@ std::vector<application::ServerEvent> Win32LanguageServer::collect()
     return std::exchange(events_, {});
 }
 
+void Win32LanguageServer::bind(std::function<void()> arrived)
+{
+    arrived_ = std::move(arrived);
+}
+
 std::span<const HANDLE> Win32LanguageServer::waitable_handles() const noexcept
 {
     return waitable_;

@@ -23,8 +23,16 @@ void verify_window_timers()
     expect(preview != autosave && preview != selection, "the preview timer has its own number");
     expect(window_timer_of(preview) == WindowTimer::preview,
            "WM_TIMER with the preview number is the preview tick");
-    expect(!window_timer_of(0).has_value() && !window_timer_of(4).has_value(),
+    constexpr WPARAM language_server = std::to_underlying(WindowTimer::language_server);
+    expect(language_server != autosave && language_server != selection &&
+               language_server != preview,
+           "the language server timer has its own number");
+    expect(window_timer_of(language_server) == WindowTimer::language_server,
+           "WM_TIMER with the language server number is the language server tick");
+    expect(!window_timer_of(0).has_value() && !window_timer_of(5).has_value(),
            "a number the window never set is ignored");
+    expect(nenenib::ui::win32::language_server_interval_milliseconds == 30'000,
+           "the language server tick comes every 30 seconds (ADR 0160)");
     expect(nenenib::ui::win32::preview_interval_milliseconds == 200,
            "the preview tick comes every 200 ms (ADR 0155)");
     expect(nenenib::ui::win32::autosave_interval_milliseconds == 30'000,

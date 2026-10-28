@@ -166,6 +166,7 @@ class EditorWindow final
     // WM_TIMER を窓のタイマーへ写す。自動退避の合図は AutosaveTick を 1 回送る（ADR 0137
     // の決定 1）。
     void receive_timer(WPARAM word);
+    void start_signal_timers();
     void follow_preview_timer();
     void stop_preview_timer();
     [[nodiscard]] bool previewing() const;
@@ -295,6 +296,8 @@ class EditorWindow final
     static constexpr UINT_PTR selection_timer = std::to_underlying(WindowTimer::selection);
     static constexpr UINT_PTR autosave_timer = std::to_underlying(WindowTimer::autosave);
     static constexpr UINT_PTR preview_timer = std::to_underlying(WindowTimer::preview);
+    static constexpr UINT_PTR language_server_timer =
+        std::to_underlying(WindowTimer::language_server);
     // プレビューの合図のタイマーを張っているか。開いているかの正本は application の枠の状態。
     bool preview_ticking_ = false;
     // いまの編集モード。鍵をどちらの表で引くかを決めるだけで、正本は EditorState（ARC-004）。
