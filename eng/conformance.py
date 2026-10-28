@@ -607,7 +607,8 @@ def architecture_checks(root: Path, paths: list[Path], build_dir: Path | None) -
             allowed = declared_closure(module, modules)
             for dependency in target.get("dependencies", []):
                 destination = targets.get(dependency["id"], ({}, None))[1]
-                if destination not in allowed:
+                # 同じ module の別の target（試験の exe が替え玉の exe を要る・#1033）は include と同じく境界の内側。
+                if destination != module and destination not in allowed:
                     findings.append(Finding("ARC-002", target["name"], f"forbidden target dependency {destination}"))
     for source in source_paths:
         if source.startswith(("src/", "tests/build/", "tests/unit/")) and Path(source).suffix in {".cpp", ".cc", ".cxx"} and source not in compiled:
