@@ -279,11 +279,11 @@ C++ のソースの `// SDK-ABI:` を含む行ごとに次を確かめ、1 つ�
 🔴 **テストソースは検査対象から外す**（テストは意図的な違反を書く場所）。
 
 
-### CNF-014 — 翻訳単位の大きさ（planned・ADR 0158）
+### CNF-014 — 翻訳単位の大きさ（ADR 0158）
 
-機械強制: **planned**（分割の PR で active にする）。
+`src/**/*.cpp` と `tests/**/*.cpp` は 3,000 行以下に保つ（[ADR 0158](adr/0158-split-editor-controller-and-vim-step-by-meaning-without-behavior-change.md)・Issue #992）。超えたファイルを直す道は ADR 0158 の群の表に 1 行足して分けること。`eng/conformance.py` の `translation_unit_size_checks` が git の一覧（追跡と、無視されない未追跡）の `src/` と `tests/` の `.cpp` の行数を数え、3,000 を超えたら `CNF-014: <path>: <行数> lines > 3000`。`third_party/` と header は数えない。
 
-`src/**/*.cpp` と `tests/**/*.cpp` は 3,000 行以下に保つ（[ADR 0158](adr/0158-split-editor-controller-and-vim-step-by-meaning-without-behavior-change.md)・Issue #992）。超えたファイルを直す道は ADR 0158 の群の表に 1 行足して分けること。`eng/conformance.py` の検査は分割の PR で足し、そのとき状態を active にする。
+- 機械強制: **active**（正例・反例は `tests/conformance` の `TranslationUnitSizeChecks` がゲートで回る。2026-10-28・Issue #992・PR #1053。分けた直後の最大は `EditorWindow.cpp` の 2,906 行）
 
 ### CNF-015 — 機能の表のベンチの実在（planned・ADR 0170）
 
@@ -368,7 +368,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CNF-011 | active | eng/conformance.py / tests/conformance（整形の正本は eng/vim-oracle.py の `canonical_fixtures_json` 1 か所） |
 | CNF-012 | active | eng/conformance.py / tests/conformance（表は eng/sdk-abi-signatures.json の 1 つ・引数の数は照合しない） |
 | CNF-013 | active | eng/conformance.py / tests/conformance（表は eng/conformance-rules.json の `thirdPartyDigests` の 1 つ・照合は git の index の blob） |
-| CNF-014 | planned | eng/conformance.py（ADR 0158・分割の PR で active） |
+| CNF-014 | active | eng/conformance.py / tests/conformance（ADR 0158・3,000 行・PR #1053） |
 | CNF-015 | planned | eng/conformance.py（ADR 0170・設定モーダルの S2 の PR で active） |
 | CNF-016 | planned | eng/conformance.py（ADR 0123 の改訂・表示言語の T1 の PR で active） |
 

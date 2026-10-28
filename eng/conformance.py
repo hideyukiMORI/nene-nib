@@ -532,6 +532,27 @@ def third_party_digest_checks(root: Path, paths: list[Path], rules: dict) -> lis
     return findings
 
 
+# 1 つの翻訳単位の行数の上限（ADR 0158 の決定 6）。超えたファイルは ADR の群の表に群を足して分ける。
+MAXIMUM_TRANSLATION_UNIT_LINES = 3000
+
+
+def translation_unit_size_checks(root: Path, paths: list[Path]) -> list[Finding]:
+    """CNF-014: every .cpp under src/ and tests/ has at most 3,000 lines (ADR 0158).
+
+    third_party/ is upstream bytes (CNF-013) and is not counted. Lines are counted as the file's
+    text lines, so a final newline does not add one.
+    """
+    findings = []
+    for path in paths:
+        name = path.as_posix()
+        if path.suffix != ".cpp" or not name.startswith(("src/", "tests/")):
+            continue
+        count = len((root / path).read_text(encoding="utf-8").splitlines())
+        if count > MAXIMUM_TRANSLATION_UNIT_LINES:
+            findings.append(Finding("CNF-014", name, f"{count} lines > {MAXIMUM_TRANSLATION_UNIT_LINES}"))
+    return findings
+
+
 def declared_closure(module: str, modules: dict) -> set[str]:
     """Modules reachable through declared dependencies (the meaning eng/symbols.py's dependency_closure has)."""
     closure, pending = set(), list(modules[module]["dependencies"])
@@ -628,6 +649,7 @@ def check(root: Path, today: datetime.date, build_dir: Path | None = None) -> li
     findings.extend(case_mapping_checks(root))
     findings.extend(fixture_format_checks(root))
     findings.extend(third_party_digest_checks(root, paths, rules))
+    findings.extend(translation_unit_size_checks(root, paths))
     findings.extend(architecture_checks(root, paths, build_dir))
     signatures = sdk_abi_signatures(root)
     for path in paths:
