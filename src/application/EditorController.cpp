@@ -2171,8 +2171,8 @@ void EditorController::send_vim_clipboard(const std::optional<core::VimRegister>
     {
         return;
     }
-    static_cast<void>(clipboard_written(
-        with_document_newlines(written.value().text, core::newline_of(state_.line_ending()))));
+    static_cast<void>(clipboard_written(with_document_newlines(
+        core::vim_clipboard_text_of(written.value()), core::newline_of(state_.line_ending()))));
 }
 
 std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::VimKey &key)

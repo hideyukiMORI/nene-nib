@@ -479,6 +479,38 @@ void verify_unnamed_sync_put_refused()
     }
 }
 
+// 自分が書いた本文を読み戻すと種類を保ち、他所が書いた本文は読みの規則で置き換える（決定 G）。
+void verify_unnamed_sync_own_text()
+{
+    Editing block;
+    open_vim_document(block, "abcd\nefgh");
+    sync_unnamed(block);
+    vim_replay(block.controller(), "<C-v>jly");
+    block.clipboard().hold(held(written_text(block)));
+    vim_replay(block.controller(), "p");
+    expect(block.controller().vim_state().unnamed_register.value().kind == VimRegisterKind::block,
+           "p of the own block text keeps the block");
+    expect(whole_vim_body(block.controller()) == "aabbcd\neeffgh", "p pastes the own block");
+    Editing line_end;
+    open_vim_document(line_end, "ab\ncd");
+    sync_unnamed(line_end);
+    vim_replay(line_end.controller(), "v$y");
+    line_end.clipboard().hold(held(written_text(line_end)));
+    vim_replay(line_end.controller(), "p");
+    expect(line_end.controller().vim_state().unnamed_register.value().kind ==
+               VimRegisterKind::characters,
+           "p of the own v$y text stays characterwise");
+    Editing other;
+    open_vim_document(other, "abcd\nefgh");
+    sync_unnamed(other);
+    vim_replay(other.controller(), "<C-v>jly");
+    other.clipboard().hold(held("XY"));
+    vim_replay(other.controller(), "p");
+    const VimRegister &unnamed = other.controller().vim_state().unnamed_register.value();
+    expect(unnamed.text == "XY" && unnamed.kind == VimRegisterKind::characters,
+           "p of a text written elsewhere replaces the unnamed register");
+}
+
 // `.` とマクロの中の `p` も再生の時点で読み直す（決定 E）。
 void verify_unnamed_sync_replay()
 {
@@ -572,6 +604,7 @@ void verify_vim_clipboard_contracts()
     verify_unnamed_sync_puts();
     verify_unnamed_sync_put_refused();
     verify_unnamed_sync_replay();
+    verify_unnamed_sync_own_text();
     verify_unnamed_sync_quiet_keys();
 }
 

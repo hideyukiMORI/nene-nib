@@ -77,7 +77,7 @@ struct VimState
     std::optional<char> last_macro;
     // `:set clipboard=unnamed` の有無（ADR 0051 の追補（#848）の決定 B）。既定は false で、Ex の
     // `:set clipboard=` だけが変える。真なら無名への書きを OS へも出し、`p` `P` の直前に OS
-    // の本文を 無名へ読む。incsearch と同じく窓に 1 つで、設定ファイルにもセッションにも入れない。
+    // の本文を無名へ読む。incsearch と同じく窓に 1 つで、設定ファイルにもセッションにも入れない。
     bool clipboard_unnamed = false;
 };
 

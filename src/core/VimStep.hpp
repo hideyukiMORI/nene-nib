@@ -29,7 +29,8 @@ struct VimStep
     // 鍵が閉じた失敗（ビープ）で終わったか（ADR 0046 の決定 3）。再生（`.` と `@`）の中なら
     // controller が残りの鍵を捨てる。打った鍵では何もしない（本文も状態も効果のとおり）。
     std::optional<VimRepeatFailure> failure = std::nullopt;
-    // `"+` `"*` へ書いた本文（ADR 0051 の決定 6）。engine の値のまま（本文は LF・種類つき）で、
+    // `"+` `"*` へ書いた本文と、`:set clipboard=unnamed` でレジスタを選ばずに無名へ書いた本文
+    // （ADR 0051 の決定 6・追補（#848）の決定 C）。engine の値のまま（本文は LF・種類つき）で、
     // controller が文書の改行に直して ClipboardPort へ出す。状態の欄には置かない。
     std::optional<VimRegister> clipboard = std::nullopt;
     // u と Ctrl-r の戻り先（ADR 0052 の決定 7）。Vim のオペレータが範囲の先頭へ動いてから保存する
@@ -81,7 +82,7 @@ struct VimStep
 [[nodiscard]] bool vim_reads_clipboard(const VimState &state, const VimKey &key) noexcept;
 
 // 読んだ本文を無名へ置く側か（追補（#848）の決定 D）。`:set clipboard=unnamed` で、レジスタを
-// 選ばず・オペレータも次の鍵の待ちも無い NORMAL / VISUAL の `p` `P`（回数の後でも）のとき真。
+// 選ばず・オペレータも次の鍵の待ちも無い NORMAL の `p` `P`（回数の後でも）のとき真。
 // 真なら controller は vim_unnamed_loaded、偽なら vim_clipboard_loaded で置く（2
 // つの側は重ならない）。
 [[nodiscard]] bool vim_reads_unnamed_clipboard(const VimState &state, const VimKey &key) noexcept;
@@ -90,8 +91,10 @@ struct VimStep
 // 写しを置く口はこの 1 本（vim_register_stored は `+` `*` を受けない）。
 [[nodiscard]] VimState vim_clipboard_loaded(const VimState &state, VimRegister value);
 
-// OS の本文で無名レジスタの写しを置き換えたあとの状態（追補（#848）の決定 D）。`"0`〜`"9` `"-`
-// 名前つき・`last_macro` は変えない。読めなかった・空の本文は空のレジスタとして置く。
+// OS の本文で無名レジスタの写しを置き換えたあとの状態（追補（#848）の決定 D・G）。読んだ本文が
+// 今の無名の OS
+// の形（vim_clipboard_text_of）と同じなら、自分が書いた本文として無名を種類ごと残す。`"0`〜`"9`
+// `"-` 名前つき・`last_macro` は変えない。読めなかった・空の本文は空のレジスタとして置く。
 [[nodiscard]] VimState vim_unnamed_loaded(const VimState &state, VimRegister value);
 
 // 検索の入力行が開いているあいだの回数（`2/be` の 2・`d2/` なら積）。確定の鍵が engine の中で
