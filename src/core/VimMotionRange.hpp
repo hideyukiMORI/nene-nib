@@ -18,7 +18,8 @@ namespace nenenib::core
 // 既定の by_extent（レジスタの値で決まる）。
 // restore は u と Ctrl-r の戻り先（ADR 0052 の決定 8）。空は範囲の先頭。書くのは行単位の範囲を
 // 作る所（キャレットと着地を知っている所）だけで、範囲を作り直す所は numbered と同じく引き継ぐ。
-// empty_change は空の文字単位の範囲を `c` がレジスタへ書くか（#960）。立てるのは行末への移動だけ。
+// empty_change は空の文字単位の範囲を `c` がレジスタへ書くか（#960）。立てるのは行末への移動と
+// 語のテキストオブジェクト（#979）だけ。
 struct VimMotionRange
 {
     OffsetRange range;

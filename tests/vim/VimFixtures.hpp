@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 0a3d96159b38ea47ad40cd149ece338cb7192e6f8950aae6fad078a541d79c30 / 2455 fixtures
+// fixtures.json: sha256 e27fe64bcf9c9921ac8c053af0942fddcabd5a685a8bbc76e80fa0568fe44782 / 2463 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2455> vim_fixtures{{
+constexpr std::array<VimFixture, 2463> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2467,6 +2467,14 @@ constexpr std::array<VimFixture, 2455> vim_fixtures{{
     {"ex-line-beyond", "one\n  two\nthree\n    four\nfive", ":8000<CR>", "one\n  two\nthree\n    four\nfive", 5, 1, "", "", std::nullopt},
     {"ex-line-context-mark", "one\n  two\nthree\n    four\nfive", "jllG:3<CR>''", "one\n  two\nthree\n    four\nfive", 2, 3, "", "", std::nullopt},
     {"ex-line-indented", "one\n  two\nthree\n    four\nfive", ":4<CR>", "one\n  two\nthree\n    four\nfive", 4, 5, "", "", std::nullopt},
+    {"empty-change-object-ciw", "\nabc", "yyciw<Esc>", "\nabc", 1, 1, "", "v", std::nullopt},
+    {"empty-change-object-ciw-then-put", "\nabc", "yyciw<Esc>pix<Esc>", "x\nabc", 1, 1, "", "v", std::nullopt},
+    {"empty-change-object-ciw-capital", "\nabc", "yyciW<Esc>", "\nabc", 1, 1, "", "v", std::nullopt},
+    {"empty-change-object-caw", "\nabc", "yycaw<Esc>", "", 1, 1, "\nabc", "v", std::nullopt},
+    {"empty-change-object-diw-kept", "\nabc", "yydiw", "\nabc", 1, 1, "\n", "V", std::nullopt},
+    {"empty-change-object-yiw", "\nabc", "yyyiw", "\nabc", 1, 1, "", "v", std::nullopt},
+    {"empty-change-object-ciw-blank-line", "  \nabc", "yyciw<Esc>", "\nabc", 1, 1, "  ", "v", std::nullopt},
+    {"empty-change-object-ci-paren-empty", "()\nabc", "yyci(x<Esc>", "(x)\nabc", 1, 2, "()\n", "V", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
