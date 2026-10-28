@@ -154,6 +154,32 @@ void verify_writer_sharing()
     expect(&state.unnamed_register.value() == &state.small_delete.value(),
            "small delete and unnamed share one frozen edit");
 }
+// 空行の `C` は空の本文を書き、`D` は書かない（#960・ADR 0050 の決定 3 の追補）。oracle は無名
+// しか測れないので `"-` `"1` `"a` はここで守る。空の本文は 1 行の中の削除なので `"-` へ行き `"1`
+// へは 行かない（Vim の op_delete は名前なしで 1 行の文字単位なら `"-` を書く・`:help quote_-`）。
+void verify_empty_change_registers()
+{
+    Editing editing;
+    open_vim_document(editing, "one\n\nthree");
+    vim_replay(editing.controller(), "xjD");
+    const auto &kept = editing.controller().vim_state();
+    expect(kept.small_delete.value().text == "o" && kept.unnamed_register.value().text == "o",
+           "D on an empty line keeps every register");
+    vim_replay(editing.controller(), "C<Esc>");
+    const auto &written = editing.controller().vim_state();
+    const VimRegister empty{"", VimRegisterKind::characters};
+    expect_register(written.unnamed_register.value(), empty);
+    expect_register(written.small_delete.value(), empty);
+    expect(written.numbered.registers.at(1).value().kind == VimRegisterKind::uninitialized,
+           "the empty change does not shift into \"1");
+    vim_replay(editing.controller(), "\"aC<Esc>");
+    expect_register(editing.controller().vim_state().registers.registers.at(0).value(), empty);
+    Editing black;
+    open_vim_document(black, "abc\n");
+    vim_replay(black.controller(), "xj\"_C<Esc>");
+    expect(black.controller().vim_state().unnamed_register.value().text == "a",
+           "\"_C on an empty line keeps the unnamed register");
+}
 } // namespace
 
 void verify_vim_register_snapshot_contracts()
@@ -163,5 +189,6 @@ void verify_vim_register_snapshot_contracts()
     verify_snapshot_rvalues();
     verify_state_branches();
     verify_writer_sharing();
+    verify_empty_change_registers();
 }
 } // namespace nenenib::tests

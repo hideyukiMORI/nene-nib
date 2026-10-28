@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 8736fca7f89e728094749d286282ec989d0f3a278a3478c3d5ed7387a4b15f50 / 2315 fixtures
+// fixtures.json: sha256 4e3486bc64ebe0e1fdb8c65e06dbb470b89c2d70aee78882639d498938a1d170 / 2326 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2315> vim_fixtures{{
+constexpr std::array<VimFixture, 2326> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2327,6 +2327,17 @@ constexpr std::array<VimFixture, 2315> vim_fixtures{{
     {"change-mark-visual-lines", "ab\ncd\nef", "Vjdgg`.x", "f", 1, 1, "e", "v", std::nullopt},
     {"mark-adjust-visual-delete-lines", "abc\ndef", "lmavG$d`aix<Esc>", "xa", 1, 1, "bc\ndef", "v", std::nullopt},
     {"mark-adjust-visual-delete-across", "abc\ndef\nghi", "lmavjd`aix<Esc>", "axf\nghi", 1, 2, "bc\nde", "v", std::nullopt},
+    {"empty-delete-register-c-twice", "abc", "C<Esc>C<Esc>", "", 1, 1, "", "v", std::nullopt},
+    {"empty-delete-register-c-twice-then-put", "abc", "C<Esc>C<Esc>pix<Esc>", "x", 1, 1, "", "v", std::nullopt},
+    {"empty-delete-register-put-keeps-the-caret", "abc\n\ndef", "jC<Esc>kll3pix<Esc>", "abxc\n\ndef", 1, 3, "", "v", std::nullopt},
+    {"empty-delete-register-d-twice-at-line-end", "a", "$D$D", "", 1, 1, "a", "v", std::nullopt},
+    {"empty-delete-register-yank-then-d-dollar-put", "\nabc", "yyd$p", "\n\nabc", 2, 1, "\n", "V", std::nullopt},
+    {"empty-delete-register-named-kept", "\nabc", "\"ayyD\"ap", "\n\nabc", 2, 1, "\n", "V", std::nullopt},
+    {"empty-delete-register-x-on-empty-line-kept", "abc\n\ndef", "yyjxp", "abc\n\nabc\ndef", 3, 1, "abc\n", "V", std::nullopt},
+    {"empty-delete-register-numbered-kept", "abc\n\ndef", "ddD\"1p", "\nabc\ndef", 2, 1, "abc\n", "V", std::nullopt},
+    {"empty-delete-register-c-zero-kept", "abc", "ylc0<Esc>", "abc", 1, 1, "a", "v", std::nullopt},
+    {"empty-delete-register-c-g-underscore", "\nabc", "yycg_<Esc>", "\nabc", 1, 1, "", "v", std::nullopt},
+    {"empty-delete-register-d-g-underscore-kept", "\nabc", "yydg_", "\nabc", 1, 1, "\n", "V", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

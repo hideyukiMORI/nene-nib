@@ -1104,6 +1104,13 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return forward_characters(text, at, single_step);
 }
 
+// inclusive な行末への移動の範囲。空行で空でも `c` は空の本文を書く（#960・VimEmptyChange）。
+[[nodiscard]] VimMotionRange writing_empty(VimMotionRange range)
+{
+    range.empty_change = VimEmptyChange::writes_empty;
+    return range;
+}
+
 // $ と g_ は inclusive で、回数があると count-1 行下の行末・最後の非空白まで（Vim の nv_dollar と
 // nv_g_cmd の cursor_down・最終行で回数が 2 以上なら範囲が無い）。後ろへ動いた g_ はキャレットの
 // 文字まで含む（inclusive な後ろ向きの移動・ge と同じ・Issue #721）。
@@ -1118,11 +1125,12 @@ character_search_position(const VimEditorView &view, const VimState &state,
     const LineNumber target = line_below(text, line, count - single_step);
     if (motion == VimMotion::line_end)
     {
-        return characters_between(caret, text.line_end(target));
+        return writing_empty(characters_between(caret, text.line_end(target)));
     }
     const Offset landed = vim_last_non_blank(text, target);
-    return landed.value < caret.value ? characters_between(landed, inclusive_end(text, caret))
-                                      : characters_between(caret, inclusive_end(text, landed));
+    return writing_empty(landed.value < caret.value
+                             ? characters_between(landed, inclusive_end(text, caret))
+                             : characters_between(caret, inclusive_end(text, landed)));
 }
 
 [[nodiscard]] VimMotionRange screen_range(const VimEditorView &view, VimScreenPosition position,
@@ -1532,12 +1540,18 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     std::unreachable();
 }
 
-// 空の文字単位の範囲はレジスタを書き換えない（空行の D が実測でそう振る舞う）。
-[[nodiscard]] std::optional<VimRegister> register_after(const TextBuffer &text,
-                                                        const VimMotionRange &range)
+// 空の文字単位の範囲はレジスタを書き換えない（空行の D が実測でそう振る舞う）。ただし行末への
+// 移動の範囲を `c` が消すときは空の本文を書く（Vim の op_delete は OP_DELETE だけ空行で先に返り、
+// op_change は空を yank する・#960・ADR 0050 の決定 3 の追補）。
+[[nodiscard]] std::optional<VimRegister>
+register_after(const TextBuffer &text, const VimMotionRange &range, VimOperator operation)
 {
     if (range.kind == VimRegisterKind::characters && is_empty(range.range))
     {
+        if (operation == VimOperator::change && range.empty_change == VimEmptyChange::writes_empty)
+        {
+            return VimRegister{std::string{}, VimRegisterKind::characters};
+        }
         return std::nullopt;
     }
     return register_of(text, range);
@@ -1817,8 +1831,8 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 [[nodiscard]] VimStep removed_exactly(const VimState &state, const TextBuffer &text,
                                       const VimMotionRange &range)
 {
-    auto written =
-        registers_written(state, register_after(text, range), VimOperator::remove, range.numbered);
+    auto written = registers_written(state, register_after(text, range, VimOperator::remove),
+                                     VimOperator::remove, range.numbered);
     if (!written.has_value())
     {
         return refused_register(state);
@@ -1853,8 +1867,8 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 [[nodiscard]] VimStep changed(const VimState &state, const TextBuffer &text,
                               const VimMotionRange &range)
 {
-    auto written =
-        registers_written(state, register_after(text, range), VimOperator::change, range.numbered);
+    auto written = registers_written(state, register_after(text, range, VimOperator::change),
+                                     VimOperator::change, range.numbered);
     if (!written.has_value())
     {
         return refused_register(state);
@@ -2791,13 +2805,27 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     return VimInsertBlock{std::move(edits), at};
 }
 
+// 貼れないレジスタ（E353）。未使用と空のクリップボードだけ（ADR 0051 の B6）。空の本文で書かれた
+// レジスタ（空行の `C`・#960）は Vim の do_put の y_size が 1 なので拒まない（実測）。
+[[nodiscard]] bool refuses_put(const VimState &state, const VimRegister &source)
+{
+    const bool clipboard = state.selected_register.has_value() &&
+                           state.selected_register.value().target == VimRegisterTarget::clipboard;
+    return source.kind == VimRegisterKind::uninitialized || (source.text.empty() && clipboard);
+}
+
 [[nodiscard]] VimStep put_step(const VimState &state, const TextBuffer &text, Offset caret,
                                VimPutSide side)
 {
     const VimRegister source = register_read(state, state.selected_register);
-    if (source.text.empty())
+    if (refuses_put(state, source))
     {
         return failed(cancelled(state), VimRepeatFailure::refused);
+    }
+    if (source.text.empty())
+    {
+        // 空の本文は何も貼らず、キャレットも動かさない（Vim は yanklen が 0 なら列を進めない）。
+        return VimStep{vim_resting_from(state, state.unnamed_register), VimNoEffect{}};
     }
     if (source.kind == VimRegisterKind::block)
     {
@@ -2813,7 +2841,7 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     switch (source.kind)
     {
     case VimRegisterKind::uninitialized:
-        // An uninitialized register is empty and returned above before put dispatch.
+        // An uninitialized register is refused above before put dispatch.
     case VimRegisterKind::block:
         // A block register is handled above, before the characterwise / linewise dispatch.
         std::unreachable();

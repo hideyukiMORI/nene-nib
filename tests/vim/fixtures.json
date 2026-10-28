@@ -2313,5 +2313,16 @@
   {"name":"change-mark-operator","text":"abc\ndef\nghi","keys":"jlxggd'."},
   {"name":"change-mark-visual-lines","text":"ab\ncd\nef","keys":"Vjdgg`.x"},
   {"name":"mark-adjust-visual-delete-lines","text":"abc\ndef","keys":"lmavG$d`aix<Esc>"},
-  {"name":"mark-adjust-visual-delete-across","text":"abc\ndef\nghi","keys":"lmavjd`aix<Esc>"}
+  {"name":"mark-adjust-visual-delete-across","text":"abc\ndef\nghi","keys":"lmavjd`aix<Esc>"},
+  {"name":"empty-delete-register-c-twice","text":"abc","keys":"C<Esc>C<Esc>"},
+  {"name":"empty-delete-register-c-twice-then-put","text":"abc","keys":"C<Esc>C<Esc>pix<Esc>"},
+  {"name":"empty-delete-register-put-keeps-the-caret","text":"abc\n\ndef","keys":"jC<Esc>kll3pix<Esc>"},
+  {"name":"empty-delete-register-d-twice-at-line-end","text":"a","keys":"$D$D"},
+  {"name":"empty-delete-register-yank-then-d-dollar-put","text":"\nabc","keys":"yyd$p"},
+  {"name":"empty-delete-register-named-kept","text":"\nabc","keys":"\"ayyD\"ap"},
+  {"name":"empty-delete-register-x-on-empty-line-kept","text":"abc\n\ndef","keys":"yyjxp"},
+  {"name":"empty-delete-register-numbered-kept","text":"abc\n\ndef","keys":"ddD\"1p"},
+  {"name":"empty-delete-register-c-zero-kept","text":"abc","keys":"ylc0<Esc>"},
+  {"name":"empty-delete-register-c-g-underscore","text":"\nabc","keys":"yycg_<Esc>"},
+  {"name":"empty-delete-register-d-g-underscore-kept","text":"\nabc","keys":"yydg_"}
 ]
