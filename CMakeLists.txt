@@ -202,7 +202,11 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/MarkdownShelf.cpp src/adapters/win32/Win32MarkdownAdapter.cpp
     src/adapters/win32/AutosaveCodec.cpp src/adapters/win32/AutosaveFolder.cpp
     src/adapters/win32/AutosaveShelf.cpp
-    src/adapters/win32/Win32AutosaveAdapter.cpp)
+    src/adapters/win32/Win32AutosaveAdapter.cpp
+    src/adapters/win32/OverlappedDrain.cpp src/adapters/win32/PipeRead.cpp src/adapters/win32/PipeWrite.cpp
+    src/adapters/win32/ServerFramer.cpp src/adapters/win32/ServerCommandLine.cpp
+    src/adapters/win32/InheritedHandles.cpp src/adapters/win32/ServerChild.cpp
+    src/adapters/win32/Win32LanguageServer.cpp)
 nenenib_link(nenenib_adapters nenenib_core)
 nenenib_link(nenenib_adapters nenenib_application)
 # RegGetValueW（OS のテーマ読み取り）だけ。ここが advapi32 を結ぶ唯一のモジュール。
@@ -283,6 +287,19 @@ nenenib_link(nib_cfhtml_property_tests nenenib_application)
 nenenib_link(nib_cfhtml_property_tests nenenib_adapters)
 add_test(NAME nib_adapters_cfhtml_property COMMAND nib_cfhtml_property_tests --cfhtml-property WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(nib_adapters_cfhtml_property PROPERTIES TIMEOUT 60)
+
+# Issue #1020（親 #994）: 言語サーバーの adapter を本物の子プロセス・名前つきパイプ・Job Object で通す
+# （ADR 0160 の決定 9・ADR 0126）。替え玉のサーバー nib_fake_language_server は CTest に登録せず、試験の exe が
+# 第 1 引数の経路から起こす。時刻は読まず handle の立ちだけを待つので、止まらないときはこの制限時間で落ちる。
+nenenib_target(nib_fake_language_server adapter_tests EXECUTABLE tests/adapters/FakeLanguageServerMain.cpp)
+nenenib_target(nib_language_server_tests adapter_tests EXECUTABLE tests/adapters/LanguageServerTests.cpp)
+nenenib_link(nib_language_server_tests nenenib_core)
+nenenib_link(nib_language_server_tests nenenib_application)
+nenenib_link(nib_language_server_tests nenenib_adapters)
+add_dependencies(nib_language_server_tests nib_fake_language_server)
+add_test(NAME nib_language_server COMMAND nib_language_server_tests $<TARGET_FILE:nib_fake_language_server>
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_language_server PROPERTIES TIMEOUT 60)
 
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
