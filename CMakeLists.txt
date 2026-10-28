@@ -134,6 +134,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimVisualBlockTests.cpp
     tests/unit/TabsTests.cpp
     tests/unit/TabsPropertyTests.cpp
+    tests/unit/EditingPropertyTests.cpp
     tests/unit/SplitTests.cpp
     tests/unit/SessionTests.cpp
     tests/unit/BookmarkTests.cpp
