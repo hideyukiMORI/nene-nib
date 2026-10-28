@@ -281,6 +281,8 @@ class EditorWindow final
     // 本文のホイールの余り（「delta × 1 刻みの行数」の単位・WheelTurn）と、OS の
     // SPI_GETWHEELSCROLLLINES の値（起動と WM_SETTINGCHANGE で読む・#499）。
     std::int32_t body_wheel_remainder_ = 0;
+    // 面の一覧のホイールの余り（単位は本文と同じ・#737）。本文の余りとは別の対象なので共有しない。
+    std::int32_t palette_wheel_remainder_ = 0;
     UINT wheel_setting_ = default_wheel_scroll_lines;
     // 帯で押した要素（左ボタンと中ボタンで 1 つずつ）。離した要素と同じときだけ動かし、離したら
     // 消す（ADR 0056 の決定 9）。

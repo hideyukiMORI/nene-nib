@@ -39,3 +39,7 @@
 - #706 の注: 面で Ctrl+P を押したときに閉じる動きはやめた（ui の鍵の表が「前」に写し、application の `OpenCommandPalette` も開いている面では前の候補）。`:` と検索の行の Ctrl+P は今までどおり面を開く。
 - `:` の行の Up / Down は履歴を歩く（ADR 0022 決定 2 の追補・#725）。履歴の永続化と面の履歴は後続。
 - 面の一覧の `scrolloff`（端の手前で送る余白）は置かない（VS Code / Neovim と同じ 0）。
+
+## 追補（2026-10-28・#737）: 面の一覧のホイールも delta を累積する
+
+決定 2 の「ホイールは一覧だけを送る」の 1 刻みは、本文のホイール（#499）と同じ純関数 `wheel_turned` / `wheel_lines_per_notch`（`src/ui/win32/WheelTurn.hpp`）を通す。ui の `scroll_palette` は面の余り `palette_wheel_remainder_`（本文の余りとは別の欄・単位は同じ「delta × 1 刻みの行数」）に delta を足し、行数が 0 でないときだけ `ScrollPaletteList{lines}`（正が下・今と同じ向き）を送る。1 刻みの行数は OS の設定（1 画面の設定なら `core::palette_window_rows`）。向きが反転したら余りを捨てる（`wheel_turned` の中）。面が閉じている間のホイールと、OS の設定の値が変わったときに余りを 0 に戻す。application の `ScrollPaletteList` の意味は変えない。契約は `nib_window_tests --wheel`（小さな delta 40 の 3 回で 1 行・反転で余りを捨てる・`WHEEL_DELTA` 1 回で設定の行数）。
