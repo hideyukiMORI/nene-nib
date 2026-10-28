@@ -154,6 +154,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/MarkdownPropertyTests.cpp
     tests/unit/DetectedTextPropertyTests.cpp
     tests/unit/PaletteMatchPropertyTests.cpp
+    tests/unit/CommandMatchPropertyTests.cpp
     tests/unit/RichPasteTests.cpp
     tests/unit/SyntaxTests.cpp
     tests/unit/SyntaxCachePropertyTests.cpp
