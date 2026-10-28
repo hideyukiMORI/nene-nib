@@ -18,7 +18,7 @@ namespace nenenib::ui::win32
     case Failure::unreadable:
         return L"設定ファイルを読めませんでした。元の設定は保持します。";
     case Failure::too_large:
-        return L"設定ファイルが上限の 4096 バイトを超えています。元の設定は保持します。";
+        return L"設定ファイルが上限の 16 KiB（16384 バイト）を超えています。元の設定は保持します。";
     case Failure::malformed:
         return L"設定ファイルの形式が正しくありません。元の設定は保持します。";
     case Failure::unsupported_version:

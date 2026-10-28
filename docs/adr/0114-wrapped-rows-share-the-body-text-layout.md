@@ -34,7 +34,7 @@ ADR 0009の最初の編集実装は長行を切り、折り返しを別の描画
 
 移行中はv3から読込元までの全ての版について、不在または読込元のbytesを検証する。lockはv3→v2→v1の固定順で読込元まで取り、上位版の作成・旧版の変更/削除を競合として拒否する。v3への保存後はv3だけを検証・lockする。壊れた/読めない上位版から旧版へ戻らない。この変更はADR 0079の移行経路を3版へ拡張する。
 
-追補（2026-10-28・#1044・#997 の E2）: 正本は `settings.v4`（`version=4`）へ移る。鍵の集合は [ADR 0170](0170-settings-modal-lists-features-with-measured-speed-cost-tiers.md) の決定 3（既存5鍵と `wrap`・`ui_language`・`lsp`・`explorer`・`root`・`features`。どれも必須で 1 回だけ。`lsp.<language>.command` はまだ 0 行で、ある行は未知鍵として拒否する）。v4 が無いときだけ v3 → v2 → v1 を読み、旧版は `ui_language=ja`（ADR 0123 の決定 3）と `lsp=off` `explorer=off` `root=`（無し）`features=`（空）を補い、旧版にこれらの鍵があれば未知鍵として拒否する。lock と bytes の照合は同じ形のまま v4 → v3 → v2 → v1 の固定順で読込元まで行い、保存は v4 だけで旧版の bytes を残す。4096 バイトを超える設定（長いルートの経路）は書かずに `too_large` で断る（次の読込が止まらないように）。
+追補（2026-10-28・#1044・#997 の E2）: 正本は `settings.v4`（`version=4`）へ移る。鍵の集合は [ADR 0170](0170-settings-modal-lists-features-with-measured-speed-cost-tiers.md) の決定 3（既存5鍵と `wrap`・`ui_language`・`lsp`・`explorer`・`root`・`features`。どれも必須で 1 回だけ。`lsp.<language>.command=<値>` は 0 行以上の任意の行で、`<language>` は `LanguageTable` の名前・同じ language の 2 行目は重複として拒否・値は空でないことだけを見る。書くときは `features=` の後ろに language の名前の順で出す）。v4 が無いときだけ v3 → v2 → v1 を読み、旧版は `ui_language=ja`（ADR 0123 の決定 3）と `lsp=off` `explorer=off` `root=`（無し）`features=`（空）を補い、旧版にこれらの鍵があれば未知鍵として拒否する。lock と bytes の照合は同じ形のまま v4 → v3 → v2 → v1 の固定順で読込元まで行い、保存は v4 だけで旧版の bytes を残す。上限は 16 KiB（16384 バイト・`lsp.<language>.command` の行が増えるため 4096 から上げた。ADR 0123 改訂の「最大 4096」はこの値に読み替える）で、超える設定（長いルートの経路・多い命令の行）は書かずに `too_large` で断る（次の読込が止まらないように）。
 
 ### セッションの版
 
