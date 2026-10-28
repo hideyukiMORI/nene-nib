@@ -165,8 +165,8 @@ class EditorController final
     // 1 鍵を engine へ流して効果を写す唯一の経路（ADR 0030 の決定 7）。打った鍵も再生の鍵も
     // ここを通り、鍵が閉じた失敗で終わったら理由を返す（ADR 0046 の決定 3）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> step_vim(const core::VimKey &key);
-    // engine の 1 歩（鍵の vim_step か Ex の行番号の vim_line_jumped）を測って写す 1
-    // 本。要求の往復・ マーク・効果・キャレットの寄せは鍵と同じ（Issue #847）。
+    // engine の 1 歩（鍵の vim_step か `:N` の vim_line_jumped）を測って写す 1 本。
+    // 要求の往復・マーク・効果・キャレットの寄せは鍵と同じ（Issue #847）。
     [[nodiscard]] std::optional<core::VimRepeatFailure>
     stepped_vim(const std::function<core::VimStep(const core::VimEditorView &)> &step_of);
     [[nodiscard]] std::expected<core::VimStep, TextLayoutFailure>

@@ -3184,8 +3184,6 @@ void EditorController::run_window_command(core::ExWindowCommand command)
     std::unreachable();
 }
 
-// 行き先は gt / gT と同じ tab_destination の 1 本。範囲の外の数は Vim の実測の文言（決定 4・5）。
-// `:tabclose` は状態を変えず、閉じたいタブの位置だけを載せる（決定 6）。
 // `:N` は鍵の `{N}G` と同じ engine の着地を同じ写しの道で写す（2 本にしない）。着地は必ず本文の中で
 // 失敗しないので、断りの知らせも警告音も無い（Vim も `:8000` は黙って最後の行へ）。
 void EditorController::jump_to_line(const core::ExLineRequest &request)
@@ -3195,6 +3193,8 @@ void EditorController::jump_to_line(const core::ExLineRequest &request)
                     { return core::vim_line_jumped(state_.vim(), view, request.line); }));
 }
 
+// 行き先は gt / gT と同じ tab_destination の 1 本。範囲の外の数は Vim の実測の文言（決定 4・5）。
+// `:tabclose` は状態を変えず、閉じたいタブの位置だけを載せる（決定 6）。
 void EditorController::run_tab_request(const core::ExTabRequest &request)
 {
     switch (request.verb)

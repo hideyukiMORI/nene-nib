@@ -234,10 +234,9 @@ std::expected<core::VimStep, TextLayoutFailure> EditorController::measured_vim_s
     // 文書のマークを貸す（ADR 0152 の決定 2）。この関数の中では状態を変えないので参照は保たれる。
     view.marks = &state_.vim_marks();
     auto step = step_of(view);
-    // どの要求も同じ鍵（同じ行番号）をもう一度流す。viewport は 1
-    // 度渡したら以後の往復でも渡したまま。 回数の上限は持たない。同じ問いの立て直しと viewport
-    // の二重要求は inconsistent で止まり、 新しい答えは行数 + 画面行の総数 + 1 で尽きる（ADR
-    // 0129・ADR 0133 の追補 2026-10-18）。
+    // どの要求も同じ 1 歩（鍵か行番号）をもう一度流す。viewport は 1 度渡したら以後も渡したまま。
+    // 回数の上限は持たない。同じ問いの立て直しと viewport の二重要求は inconsistent で止まり、
+    // 新しい答えは行数 + 画面行の総数 + 1 で尽きる（ADR 0129・ADR 0133 の追補 2026-10-18）。
     while (step.viewport_request || step.layout_request.has_value() || step.row_request.has_value())
     {
         const auto answered = answered_vim_request(step, view, rows, spans);

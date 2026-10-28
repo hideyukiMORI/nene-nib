@@ -370,8 +370,8 @@ void verify_line_jump()
 {
     constexpr std::string_view body = "one\n  two\nthree\n    four\nfive";
     using Case = std::pair<std::string_view, std::string_view>;
-    constexpr std::array<Case, 4> cases{
-        {Case{"3", "3G"}, Case{"0", "1G"}, Case{"$", "G"}, Case{"8000", "G"}}};
+    constexpr std::array<Case, 5> cases{
+        {Case{"3", "3G"}, Case{"4", "4G"}, Case{"0", "1G"}, Case{"$", "G"}, Case{"8000", "G"}}};
     for (const auto &[command, keys] : cases)
     {
         Editing by_ex;

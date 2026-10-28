@@ -2437,5 +2437,6 @@
   {"name":"ex-line-zero","text":"one\n  two\nthree\n    four\nfive","keys":"G:0<CR>"},
   {"name":"ex-line-last","text":"one\n  two\nthree\n    four\nfive","keys":":$<CR>"},
   {"name":"ex-line-beyond","text":"one\n  two\nthree\n    four\nfive","keys":":8000<CR>"},
-  {"name":"ex-line-context-mark","text":"one\n  two\nthree\n    four\nfive","keys":"jllG:3<CR>''"}
+  {"name":"ex-line-context-mark","text":"one\n  two\nthree\n    four\nfive","keys":"jllG:3<CR>''"},
+  {"name":"ex-line-indented","text":"one\n  two\nthree\n    four\nfive","keys":":4<CR>"}
 ]
