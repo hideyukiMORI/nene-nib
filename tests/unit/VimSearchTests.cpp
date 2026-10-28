@@ -14,6 +14,7 @@
 #include "InputLineView.hpp"
 #include "LineNumber.hpp"
 #include "Offset.hpp"
+#include "OffsetRange.hpp"
 #include "Scopes.hpp"
 #include "StoreVimRegister.hpp"
 #include "TestSupport.hpp"
@@ -53,9 +54,11 @@ using nenenib::application::EditorFrame;
 using nenenib::core::Column;
 using nenenib::core::LineNumber;
 using nenenib::core::Offset;
+using nenenib::core::OffsetRange;
 using nenenib::core::TextBuffer;
 using nenenib::core::TextPosition;
 using nenenib::core::vim_find_match;
+using nenenib::core::vim_string_at;
 using nenenib::core::vim_word_at;
 using nenenib::core::VimMatchRequest;
 using nenenib::core::VimMode;
@@ -297,6 +300,11 @@ void verify_vim_pattern_rejections()
     const auto question = VimPattern::parse("a?b", VimSearchDirection::forward);
     expect(question.has_value() && question.value().matched("a?b c", 0).has_value(),
            "a question mark is a plain character in a forward search");
+    // `\` の付いた区切りは文字そのもの（Vim の skip_regexp・#961）。
+    const auto escaped = VimPattern::parse("a\\?b", VimSearchDirection::backward);
+    expect(escaped.has_value() && escaped.value().matched("a?b", 0).has_value() &&
+               !escaped.value().matched("ab", 0).has_value(),
+           "an escaped question mark is the character itself in a backward search");
 }
 
 // 走査の規則（決定 4 の追記）。必要な桁に足りない一致は終端まで飛ばし、行の長さで打ち切る。
@@ -367,7 +375,9 @@ void verify_vim_search_encoding()
            "the dollar sits before the carriage return");
 }
 
-[[nodiscard]] std::string word_under(std::string_view text, std::size_t at)
+using RangeFinder = std::optional<OffsetRange> (*)(const TextBuffer &, Offset);
+
+[[nodiscard]] std::string range_under(std::string_view text, std::size_t at, RangeFinder finder)
 {
     const auto buffer = TextBuffer::from_utf8(text);
     expect(buffer.has_value(), "the word body is valid UTF-8");
@@ -375,12 +385,33 @@ void verify_vim_search_encoding()
     {
         return {};
     }
-    const auto range = vim_word_at(buffer.value(), Offset{at});
+    const auto range = finder(buffer.value(), Offset{at});
     if (!range.has_value())
     {
         return {};
     }
     return buffer.value().text_range(range.value().begin, range.value().end);
+}
+
+[[nodiscard]] std::string word_under(std::string_view text, std::size_t at)
+{
+    return range_under(text, at, &vim_word_at);
+}
+
+// 語が無いときの `*` / `#` の文字列（Issue #961・Vim の FIND_STRING）。
+// 空白でない文字の上か後ろから、同じ種類の連なりの先頭まで戻り、空白の手前まで。
+void verify_vim_search_string()
+{
+    expect(range_under("bar,)", 4, &vim_string_at) == ",)",
+           "the string backs up over the run of its own class");
+    expect(range_under("a  ;; b", 1, &vim_string_at) == ";;",
+           "a blank takes the next non-blank run");
+    expect(range_under("x ;:b y", 2, &vim_string_at) == ";:b",
+           "the string runs on to the next blank");
+    expect(range_under("a   \nb", 1, &vim_string_at).empty(),
+           "trailing blanks have no string after them (it does not cross lines)");
+    expect(word_under("\xef\xbc\x91\xef\xbc\x92 end", 0) == "\xef\xbc\x91\xef\xbc\x92",
+           "full-width digits are a word, as in Vim's class table");
 }
 
 // `*` / `#` が使う語（決定 3）。空白と記号の上では同じ行の次の語で、行に語が無ければ無い。
@@ -1039,6 +1070,7 @@ void verify_vim_search_contracts()
     verify_vim_search_wrap();
     verify_vim_search_encoding();
     verify_vim_search_word();
+    verify_vim_search_string();
     verify_vim_search_keys();
     verify_vim_search_operators();
     verify_vim_search_word_keys();

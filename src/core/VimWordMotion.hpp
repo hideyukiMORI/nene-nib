@@ -51,6 +51,11 @@ namespace nenenib::core
 // 文字の連なりで、空白と記号の上では同じ行の次の語を探し、行の中に語が無ければ nullopt。
 [[nodiscard]] std::optional<OffsetRange> vim_word_at(const TextBuffer &text, Offset caret);
 
+// 語が行の後ろに無いときの `*` / `#` の文字列（Vim の find_ident_under_cursor の FIND_STRING の周・
+// Issue #961）。キャレットの下か後ろの最初の空白でない文字から、同じ種類の文字の連なりの先頭まで
+// 戻り、空白の手前までを返す。行の後ろが空白だけなら nullopt（E348）。
+[[nodiscard]] std::optional<OffsetRange> vim_string_at(const TextBuffer &text, Offset caret);
+
 // テキストオブジェクトが使う語の走査（ADR 0031 の決定 2）。どちらも 1 語ぶんだけ動く。
 // vim_word_stop_forward は Vim の fwd_word(1, kind, eol=TRUE)。次の語の頭へ進み、行の終わりで
 // 止まる（止まった位置をそのまま返す）。

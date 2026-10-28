@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 f9465aa49de71448efd52eb519f420010ef93813e7d980434d4468333b1cb4a1 / 2391 fixtures
+// fixtures.json: sha256 d572e62cec6736e300b98480d4b05fed87d6f4d090a2207a6897a56e3f8f6443 / 2408 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2391> vim_fixtures{{
+constexpr std::array<VimFixture, 2408> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1009,6 +1009,23 @@ constexpr std::array<VimFixture, 2391> vim_fixtures{{
     {"search-operator-d-star", "aaa bbb\nccc aaa\nddd aaa eee", "d*", "aaa\nddd aaa eee", 1, 1, "aaa bbb\nccc ", "v", std::nullopt},
     {"search-operator-d-hash", "aaa bbb\nccc aaa\nddd aaa eee", "G$d#", "aaa bbb\nccc aaa\nddd aaa e", 3, 9, "ee", "v", std::nullopt},
     {"search-visual-star", "aaa bbb\nccc aaa\nddd aaa eee", "v*y", "aaa bbb\nccc aaa\nddd aaa eee", 1, 1, "aaa bbb\nccc a", "v", std::nullopt},
+    {"star-multibyte-fullwidth-digit", "１２ end. １２ x", "*", "１２ end. １２ x", 1, 13, "", "", std::nullopt},
+    {"star-multibyte-fuzz-daw", "→beta １２ end. ?   \nend １２", "daW3*", "１２ end. ?   \nend １２", 2, 5, "→beta ", "v", std::nullopt},
+    {"star-multibyte-kana", "かきく かきくけ x かきく", "*", "かきく かきくけ x かきく", 1, 26, "", "", std::nullopt},
+    {"star-multibyte-kanji", "漢字 漢字かな 漢字字", "*", "漢字 漢字かな 漢字字", 1, 8, "", "", std::nullopt},
+    {"star-multibyte-blank-before", "a   １２ b １２", "l*", "a   １２ b １２", 1, 14, "", "", std::nullopt},
+    {"star-multibyte-hash", "１２ x  １２ y", "5l#", "１２ x  １２ y", 1, 1, "", "", std::nullopt},
+    {"star-multibyte-hash-kana", "かな x かな", "$#", "かな x かな", 1, 1, "", "", std::nullopt},
+    {"star-multibyte-string-paren", ")\nfoo )", "*x", ")\nfoo ", 2, 4, ")", "v", std::nullopt},
+    {"star-multibyte-string-wrap-self", "bar,)", "$*x", "bar)", 1, 4, ",", "v", std::nullopt},
+    {"star-multibyte-keyword-over-string", "),) foo x foo", "*", "),) foo x foo", 1, 11, "", "", std::nullopt},
+    {"star-multibyte-underscore", "_a1 x _a1b _a1", "*", "_a1 x _a1b _a1", 1, 12, "", "", std::nullopt},
+    {"star-multibyte-underscore-fullwidth", "foo_１２ x foo_１２", "*", "foo_１２ x foo_１２", 1, 14, "", "", std::nullopt},
+    {"star-multibyte-string-escaped", ".*~[\n.x .*~[", "*", ".*~[\n.x .*~[", 2, 4, "", "", std::nullopt},
+    {"star-multibyte-hash-string", "x ;; y\n;;", "G#", "x ;; y\n;;", 1, 3, "", "", std::nullopt},
+    {"star-multibyte-w-fullwidth-digit", "１２x y", "w", "１２x y", 1, 9, "", "", std::nullopt},
+    {"star-multibyte-w-fullwidth-bracket", "ａ［ｂ y", "w", "ａ［ｂ y", 1, 4, "", "", std::nullopt},
+    {"star-multibyte-hash-question", "x ?? y\n??", "G#", "x ?? y\n??", 1, 3, "", "", std::nullopt},
     {"search-dot-operator", "aaa bbb\nccc aaa\nddd aaa eee", "d/bbb<CR>j0.", "ccc aaa\nddd aaa eee", 1, 1, "bbb\n", "V", std::nullopt},
     {"search-dot-change", "aaa bbb\nccc aaa\nddd aaa eee", "c/bbb<CR>ZZ<Esc>j0.", "ZZZZ\nccc aaa\nddd aaa eee", 1, 4, "bbb", "v", std::nullopt},
     {"search-dot-star-then-n", "aaa bbb\nccc aaa\nddd aaa eee", "*dn.", "aaa eee", 1, 1, "aaa bbb\nccc ", "v", std::nullopt},
