@@ -645,6 +645,7 @@ void EditorController::adopt_read(DocumentReadOutcome outcome)
             }
             else
             {
+                static_assert(std::is_same_v<Part, DocumentReadFinished>);
                 adopt_finished(std::move(part));
             }
         },
