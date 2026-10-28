@@ -84,6 +84,7 @@ using detail::replacement_key;
 using detail::replayed_macro;
 using detail::requested_layout;
 using detail::requested_viewport;
+using detail::reselected_visual;
 using detail::resolved_count;
 using detail::rested_in;
 using detail::rested_mode;
@@ -103,6 +104,7 @@ using detail::text_object_action;
 using detail::vim_recorded;
 using detail::visual_acted;
 using detail::visual_character;
+using detail::visual_left;
 using detail::visual_special;
 using detail::wanted_after;
 using detail::wanted_column_of;
@@ -617,6 +619,13 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return visual_action(state, view, action);
     }
+    if (action == VimAction::reselect_visual)
+    {
+        // `gv`（#1039）。前の選択が無ければ失敗する（Vim の nv_gv のビープ・実測）。
+        auto step = reselected_visual(state, view);
+        return step.has_value() ? std::move(step).value()
+                                : failed(cancelled(state), VimRepeatFailure::not_found);
+    }
     const LineNumber line = line_of(view.text, view.selection.caret);
     const bool below = action == VimAction::open_line_below;
     const Offset at = below ? view.text.line_end(line) : view.text.line_start(line);
@@ -646,12 +655,30 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return first == " " || first == "\t" ? end : landing;
 }
 
+// `gi` の入る位置（#1039）。`'^` の行（本文の外なら最後の行）の桁で、桁は行の内容の終わりまで
+// 寄せる（Vim の nv_g_cmd の check_cursor_lnum と行の長さへの切り詰め）。`'^` が無ければ
+// キャレットの所（`i` と同じ・実測）。
+[[nodiscard]] Offset last_insert_landing(const VimEditorView &view)
+{
+    const std::optional<VimMarkPosition> &mark = view.marks->last_insert;
+    if (!mark.has_value())
+    {
+        return view.selection.caret;
+    }
+    const LineNumber line{std::min(mark.value().line.value, view.text.line_count())};
+    return vim_line_and_column(view.text, line, mark.value().byte);
+}
+
 [[nodiscard]] VimStep insert_action(const VimState &state, const VimEditorView &view,
                                     VimAction action)
 {
     if (action == VimAction::insert_before)
     {
         return entered_insert(state, view.selection.caret);
+    }
+    if (action == VimAction::insert_at_last_insert)
+    {
+        return entered_insert(state, last_insert_landing(view));
     }
     if (action == VimAction::insert_after)
     {
@@ -1763,6 +1790,51 @@ VimStep vim_line_jumped(const VimState &state, const VimEditorView &view,
     return landed_step(counted, view, VimMotion::document_last);
 }
 
+namespace
+{
+[[nodiscard]] bool in_visual(VimMode mode) noexcept
+{
+    switch (mode)
+    {
+    case VimMode::normal:
+    case VimMode::insert:
+        return false;
+    case VimMode::visual:
+    case VimMode::visual_line:
+    case VimMode::visual_block:
+        return true;
+    }
+    std::unreachable();
+}
+
+// VISUAL を抜けた鍵が前の選択を置く 1 か所（ADR 0018 の追補・#1039）。Esc・オペレータ・`c` で
+// INSERT へ入る道を区別せず、鍵の前が VISUAL で後が VISUAL でなければ鍵の前の選択を覚える
+// （Vim の end_visual_mode と do_pending_operator）。`.` の VISUAL の再生は置かず、再生の鍵が
+// VISUAL にいるあいだ印を持ち越す（Vim の redo_VIsual_busy・実測）。
+[[nodiscard]] VimStep visual_remembered(const VimState &state, const VimEditorView &view,
+                                        VimStep step)
+{
+    if (!in_visual(state.mode))
+    {
+        return step;
+    }
+    const bool redoing = state.redoing_visual && view.source == VimKeySource::replayed;
+    if (in_visual(step.next.mode))
+    {
+        step.next.redoing_visual = redoing;
+        return step;
+    }
+    if (redoing)
+    {
+        return step;
+    }
+    VimMarks marks = step.marks.value_or(*view.marks);
+    marks.last_visual = visual_left(state, view);
+    step.marks = std::move(marks);
+    return step;
+}
+} // namespace
+
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
     auto step = stepped(state, view, key);
@@ -1770,6 +1842,7 @@ VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
     {
         return step;
     }
+    step = visual_remembered(state, view, std::move(step));
     return macro_recorded(state, view, vim_recorded(state, view, std::move(step), key), key);
 }
 } // namespace nenenib::core

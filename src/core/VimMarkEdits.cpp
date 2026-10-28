@@ -2,6 +2,7 @@
 
 #include "LineNumber.hpp"
 #include "VimCaret.hpp"
+#include "VimLastVisual.hpp"
 #include "VimMarkShift.hpp"
 
 #include <cstddef>
@@ -292,18 +293,9 @@ namespace
     return at;
 }
 
-[[nodiscard]] std::optional<VimMarkPosition> shifted(const std::optional<VimMarkPosition> &mark,
-                                                     const VimMarkShift &shift)
+// 挿入した行の下になるマークを押し下げる。
+[[nodiscard]] VimMarkPosition pushed_down(VimMarkPosition at, const VimMarkShift &shift)
 {
-    if (!mark.has_value())
-    {
-        return std::nullopt;
-    }
-    if (shift.removed_lines > 0 && within(mark.value().line, shift.gone_first, shift.gone_last))
-    {
-        return std::nullopt;
-    }
-    VimMarkPosition at = lifted(mark.value(), shift);
     const bool pushed =
         at.line.value > shift.first.value || (shift.pushes_first && at.line == shift.first);
     if (shift.inserted_lines > 0 && pushed)
@@ -311,6 +303,52 @@ namespace
         at.line = line_after(at.line, shift.inserted_lines);
     }
     return at;
+}
+
+[[nodiscard]] bool gone(const VimMarkPosition &mark, const VimMarkShift &shift) noexcept
+{
+    return shift.removed_lines > 0 && within(mark.line, shift.gone_first, shift.gone_last);
+}
+
+[[nodiscard]] std::optional<VimMarkPosition> shifted(const std::optional<VimMarkPosition> &mark,
+                                                     const VimMarkShift &shift)
+{
+    if (!mark.has_value() || gone(mark.value(), shift))
+    {
+        return std::nullopt;
+    }
+    return pushed_down(lifted(mark.value(), shift), shift);
+}
+
+// 前の選択の端（ADR 0018 の追補・#1039・Vim の one_adjust_nodel）。消えた行の端は消さずに消えた
+// 範囲の最初の行へ寄せ、桁はそのまま。文字単位の削除の中の行は、Vim が残りの行とつなぐのと同じに
+// 最後の行の端として最初の行へつなぐ。最終行を消すと端が本文の外に残り、`gv` が失敗する（実測）。
+[[nodiscard]] VimMarkPosition kept_end(VimMarkPosition mark, const VimMarkShift &shift)
+{
+    if (!gone(mark, shift))
+    {
+        return pushed_down(lifted(mark, shift), shift);
+    }
+    if (shift.merges)
+    {
+        mark.line = shift.last;
+        return pushed_down(lifted(mark, shift), shift);
+    }
+    mark.line = shift.gone_first;
+    return pushed_down(mark, shift);
+}
+
+[[nodiscard]] std::optional<VimLastVisual> kept_visual(const std::optional<VimLastVisual> &visual,
+                                                       const VimMarkShift &shift)
+{
+    if (!visual.has_value())
+    {
+        return std::nullopt;
+    }
+    VimLastVisual next = visual.value();
+    next.anchor = kept_end(next.anchor, shift);
+    next.caret = kept_end(next.caret, shift);
+    return next;
 }
 } // namespace
 
@@ -342,6 +380,8 @@ VimMarks marks_adjusted(const VimMarks &marks, const TextBuffer &before, const E
     next.previous_context = shifted(marks.previous_context, shift);
     next.prior_context = shifted(marks.prior_context, shift);
     next.last_change = shifted(marks.last_change, shift);
+    next.last_insert = shifted(marks.last_insert, shift);
+    next.last_visual = kept_visual(marks.last_visual, shift);
     return next;
 }
 

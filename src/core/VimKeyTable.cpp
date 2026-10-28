@@ -225,7 +225,9 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::prefix_mark_line, VimActionGroup::input_wait},
      {VimAction::prefix_mark_exact, VimActionGroup::input_wait},
      {VimAction::move_mark_line, VimActionGroup::motion},
-     {VimAction::move_mark_exact, VimActionGroup::motion}}};
+     {VimAction::move_mark_exact, VimActionGroup::motion},
+     {VimAction::reselect_visual, VimActionGroup::enter_visual},
+     {VimAction::insert_at_last_insert, VimActionGroup::insert_line}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 37> motion_bindings{
@@ -268,8 +270,8 @@ constexpr std::array<VimMotionBinding, 37> motion_bindings{
      {VimAction::move_mark_exact, VimMotion::mark_exact}}};
 
 // g の後ろの鍵 → 動作（ADR 0027 / Issue #222 / ADR 0057 の決定 2 / ADR 0144 の決定 4 /
-// ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10）。ここに無い鍵は g を打ち消す。
-constexpr std::array<VimBinding, 17> g_bindings{
+// ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10 / #1039 の gv gi）。ここに無い鍵は g を打ち消す。
+constexpr std::array<VimBinding, 19> g_bindings{
     {{U'g', VimAction::move_document_first},
      {U'e', VimAction::move_previous_word_end},
      {U'E', VimAction::move_previous_big_word_end},
@@ -286,7 +288,9 @@ constexpr std::array<VimBinding, 17> g_bindings{
      {U'J', VimAction::join_lines_raw},
      {U'~', VimAction::toggle_case_operator},
      {U'u', VimAction::lower_case_operator},
-     {U'U', VimAction::upper_case_operator}}};
+     {U'U', VimAction::upper_case_operator},
+     {U'v', VimAction::reselect_visual},
+     {U'i', VimAction::insert_at_last_insert}}};
 
 // 保留を立てる鍵 → オペレータ（ADR 0015 の決定 1・10・11）。同じ行の鍵を保留の後ろで押すと
 // 行単位（dd g~g~ >>）。

@@ -79,6 +79,10 @@ struct VimState
     // `:set clipboard=` だけが変える。真なら無名への書きを OS へも出し、`p` `P` の直前に OS
     // の本文を無名へ読む。incsearch と同じく窓に 1 つで、設定ファイルにもセッションにも入れない。
     bool clipboard_unnamed = false;
+    // `.` が VISUAL の変更を再生しているあいだ真（Vim の redo_VIsual_busy・#1039）。再生の VISUAL
+    // を 抜けても前の選択（`gv`）を置き換えない（実測）。立てるのは `.` の 1 か所、持ち越すのは
+    // vim_step の 1 か所で、再生の鍵が VISUAL にいるあいだだけ続く。
+    bool redoing_visual = false;
 };
 
 // 鍵を 1 つ食べ終わったあとの NORMAL。回数・オペレータ・欲しい列は空で、無名レジスタだけ残る。

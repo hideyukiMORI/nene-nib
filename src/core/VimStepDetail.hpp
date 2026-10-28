@@ -4,6 +4,7 @@
 #include "VimBlockRange.hpp"
 #include "VimCharacterSearchInvocation.hpp"
 #include "VimKeyTable.hpp"
+#include "VimLastVisual.hpp"
 #include "VimLayoutNeed.hpp"
 #include "VimLineEndStop.hpp"
 #include "VimMotionRange.hpp"
@@ -180,6 +181,9 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
 [[nodiscard]] VimStep search_action(const VimState &state, const VimEditorView &view,
                                     VimAction action);
 [[nodiscard]] VimState visual_resting(const VimState &state, VimMode mode);
+[[nodiscard]] VimLastVisual visual_left(const VimState &state, const VimEditorView &view);
+[[nodiscard]] std::optional<VimStep> reselected_visual(const VimState &state,
+                                                       const VimEditorView &view);
 [[nodiscard]] VimStep visual_acted(const VimState &state, const VimEditorView &input,
                                    VimAction action);
 [[nodiscard]] VimStep visual_character(const VimState &state, const VimEditorView &view,

@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 deac5626906c2bc1869f583c7e2c08c6be5c48e53f438af9bef05c0671a5a95e / 2489 fixtures
+// fixtures.json: sha256 1a0a88a9febbcd955439afee7ba0179d7b71017fa1fed532f1a0b336fe5607e4 / 2521 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2489> vim_fixtures{{
+constexpr std::array<VimFixture, 2521> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2501,6 +2501,38 @@ constexpr std::array<VimFixture, 2489> vim_fixtures{{
     {"star-count-mark-two-hits-3hash", "ab cd ab\nef ab gh\nxy zz", "jm'k3#''", "ab cd ab\nef ab gh\nxy zz", 2, 1, "", "", std::nullopt},
     {"star-count-mark-two-hits-star-n", "ab cd ab\nef ab gh\nxy zz", "jm'k*n``", "ab cd ab\nef ab gh\nxy zz", 1, 7, "", "", std::nullopt},
     {"star-count-mark-two-hits-slash", "ab cd ab\nef ab gh\nxy zz", "jm'k/cd<CR>``", "ab cd ab\nef ab gh\nxy zz", 1, 1, "", "", std::nullopt},
+    {"gv-gi-char-yank", "abcd\nefgh\nijkl", "lvjl<Esc>gggvy", "abcd\nefgh\nijkl", 1, 2, "bcd\nefg", "v", std::nullopt},
+    {"gv-gi-line-yank", "abcd\nefgh\nijkl", "jV<Esc>gggvy", "abcd\nefgh\nijkl", 2, 1, "efgh\n", "V", std::nullopt},
+    {"gv-gi-block-delete", "abcd\nefgh\nijkl", "l<C-v>jl<Esc>gggvd", "ad\neh\nijkl", 1, 2, "bc\nfg", "\0262", std::nullopt},
+    {"gv-gi-block-dollar-delete", "ab\nefgh\nijkl", "l<C-v>j$<Esc>Ggvd", "a\ne\nijkl", 1, 1, "b\nfgh", "\0263", std::nullopt},
+    {"gv-gi-exchange", "abcd\nefgh\nijkl\nmnop", "vl<Esc>jjvjgvd", "cd\nefgh\nijkl\nmnop", 1, 1, "ab", "v", std::nullopt},
+    {"gv-gi-exchange-twice", "abcd\nefgh\nijkl\nmnop", "vl<Esc>jjvjgvgvd", "abcd\nefgh\niop", 3, 2, "jkl\nmn", "v", std::nullopt},
+    {"gv-gi-exchange-line", "abcd\nefgh\nijkl", "jVj<Esc>ggVgvd", "abcd", 1, 1, "efgh\nijkl\n", "V", std::nullopt},
+    {"gv-gi-exchange-none-fails", "abcd\nefgh", "Vgvd", "abcd\nefgh", 1, 1, "", "", std::nullopt},
+    {"gv-gi-after-delete-joins", "abcdef\nghijkl\nmnop", "lvjld0gvy", "ajkl\nmnop", 1, 2, "jkl", "v", std::nullopt},
+    {"gv-gi-after-dd-above", "abcd\nefgh\nijkl", "jvl<Esc>ggddgvy", "efgh\nijkl", 1, 1, "ef", "v", std::nullopt},
+    {"gv-gi-after-dd-same-line", "abcd\nefgh\nijkl", "vl<Esc>ddgvy", "efgh\nijkl", 1, 1, "ef", "v", std::nullopt},
+    {"gv-gi-after-dd-last-fails", "abcd\nefgh\nijkl", "jjvl<Esc>ddgvy", "abcd\nefgh", 2, 1, "ijkl\n", "V", std::nullopt},
+    {"gv-gi-none-fails", "abcd\nefgh", "lgvx", "abcd\nefgh", 1, 2, "", "", std::nullopt},
+    {"gv-gi-after-yank", "abcd\nefgh\nijkl", "vly0jgvd", "cd\nefgh\nijkl", 1, 1, "ab", "v", std::nullopt},
+    {"gv-gi-after-change", "abcd\nefgh\nijkl", "vlcX<Esc>jgvd", "d\nefgh\nijkl", 1, 1, "Xc", "v", std::nullopt},
+    {"gv-gi-dot-keeps-previous", "abcd\nefgh\nijkl", "vlxj0.gggvy", "cd\ngh\nijkl", 1, 1, "cd", "v", std::nullopt},
+    {"gv-gi-wanted-column", "abcdef\nab\nabcdef", "llllvj<Esc>gggvjd", "abcdf", 1, 5, "ef\nab\nabcde", "v", std::nullopt},
+    {"gv-gi-dollar-character", "abcd\nefgh\nijkl", "lv$<Esc>0gvjd", "aijkl", 1, 2, "bcd\nefgh\n", "v", std::nullopt},
+    {"gv-gi-operator-fails", "abcd\nefgh", "vl<Esc>jdgvx", "abcd\nefgh", 2, 2, "", "", std::nullopt},
+    {"gv-gi-gi-insert", "abcd\nefgh\nijkl", "iabc<Esc>jjgiX<Esc>", "abcXabcd\nefgh\nijkl", 1, 4, "", "", std::nullopt},
+    {"gv-gi-gi-line-end", "abcd\nefgh\nijkl", "A<Esc>jjgiX<Esc>", "abcdX\nefgh\nijkl", 1, 5, "", "", std::nullopt},
+    {"gv-gi-gi-count", "abcd\nefgh\nijkl", "lix<Esc>j3giY<Esc>", "axYYYbcd\nefgh\nijkl", 1, 5, "", "", std::nullopt},
+    {"gv-gi-gi-dot-is-i", "abcd\nefgh\nijkl", "lix<Esc>jgiY<Esc>j.", "axYbcd\nefYgh\nijkl", 2, 3, "", "", std::nullopt},
+    {"gv-gi-gi-open-line", "abcd\nefgh", "o<Esc>gggiZ<Esc>", "abcd\nZ\nefgh", 2, 1, "", "", std::nullopt},
+    {"gv-gi-gi-no-mark", "abcd\nefgh", "lgiQ<Esc>", "aQbcd\nefgh", 1, 2, "", "", std::nullopt},
+    {"gv-gi-gi-esc-updates", "abcd\nefgh\nijkl", "ix<Esc>jgiyy<Esc>ggjjgiZ<Esc>", "xyyZabcd\nefgh\nijkl", 1, 4, "", "", std::nullopt},
+    {"gv-gi-gi-after-dd-above", "abcd\nefgh\nijkl", "jix<Esc>ggddgiQ<Esc>", "xQefgh\nijkl", 1, 2, "abcd\n", "V", std::nullopt},
+    {"gv-gi-gi-line-gone", "abcd\nefgh\nijkl", "ix<Esc>ddjgiQ<Esc>", "efgh\nQijkl", 2, 1, "xabcd\n", "V", std::nullopt},
+    {"gv-gi-gi-clamped", "abcd\nefgh", "lliQ<Esc>0xxgiR<Esc>", "QcdR\nefgh", 1, 4, "b", "v", std::nullopt},
+    {"gv-gi-gi-count-newline", "abcd\nefgh", "l3ia<CR>b<Esc>gggiZ<Esc>", "aa\nba\nba\nbZbcd\nefgh", 4, 2, "", "", std::nullopt},
+    {"gv-gi-gi-visual-fails", "abc def\nefgh", "vgiwd", "abc def\nefgh", 1, 1, "", "", std::nullopt},
+    {"gv-gi-gi-operator-fails", "abc def\nefgh", "dgiw", "abc def\nefgh", 1, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
