@@ -15,13 +15,15 @@ namespace nenenib::core
 // 操作の割り当ての表（ADR 0078 の決定 3）。鍵 → 操作と、一覧に見せる鍵の正本はこの 1 つ。
 // 上から見て最初に当たる行が勝つ。Ctrl+W は通常モードでだけ閉じる（ADR 0056 の決定 10）。
 // ブックマークは通常 Ctrl+D / Vim Ctrl+Shift+D（ADR 0063）。元に戻す・やり直すは通常モードだけ
-// （Vim は u と Ctrl-r）。通常 / Vim の切り替えは Ctrl+Shift+Space で両モード（D61）。Ctrl+Space
-// （Shift なし）は Vim INSERT の Ctrl-@ に残すので行を置かない。
+// （Vim は u と Ctrl-r）。開くの Ctrl+O は通常モードだけで、Vim では Ctrl+Shift+O（Vim の Ctrl-o は
+// ジャンプの戻り・D71・ADR 0152 の追補 #1037）。通常 / Vim の切り替えは Ctrl+Shift+Space
+// で両モード（D61）。Ctrl+Space（Shift なし）は Vim INSERT の Ctrl-@ に残すので行を置かない。
 // 「Shift を見ていなかった今の振る舞いを保つ行」は Shift なしの行のすぐ後ろに置く。見せる鍵は
-// 最初の行なので、一覧に見える鍵は Shift なしのまま。
+// そのモードで最初に当たる行なので、一覧に見える鍵は Shift なしのまま（Vim の開くは
+// Ctrl+Shift+O）。
 inline constexpr std::array<OperationBinding, 35> operation_bindings{{
-    {EditorOperation::open_file, OperationModes::both, KeyChord{true, false, OperationKey::o}},
-    // Shift を見ていなかった今の振る舞いを保つ行。
+    {EditorOperation::open_file, OperationModes::ordinary, KeyChord{true, false, OperationKey::o}},
+    // 通常モードでは Shift を見ていなかった今の振る舞いを保つ行で、Vim では開くの鍵（D71）。
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, true, OperationKey::o}},
     {EditorOperation::save, OperationModes::both, KeyChord{true, false, OperationKey::s}},
     {EditorOperation::save_as, OperationModes::both, KeyChord{true, true, OperationKey::s}},
