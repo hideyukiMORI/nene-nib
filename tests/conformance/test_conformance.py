@@ -677,6 +677,18 @@ class RepositoryChecks(unittest.TestCase):
         findings = cnf.architecture_checks(self.root, self.paths(), self.root / "build")
         self.assertEqual(["ARC-002: top: forbidden target dependency aside"], [str(f) for f in findings])
 
+    # #1033: 同じ module の別の target への依存（試験の exe → 替え玉の exe）は境界の内側なので通す。
+    def test_arc002_dependency_on_same_module_target_passes(self):
+        self.seed_closure_graph(["middle", "helper"])
+        reply = "build/.cmake/api/v1/reply/"
+        model = json.loads((self.root / reply / "model.json").read_text(encoding="utf-8"))
+        model["configurations"][0]["targets"].append({"id": "helper", "name": "helper", "jsonFile": "helper.json"})
+        self.write(reply + "model.json", json.dumps(model))
+        self.write("src/top/Helper.cpp", "int helper() { return 0; }")
+        self.write(reply + "helper.json", json.dumps({"name": "helper", "sources": [{"path": "src/top/Helper.cpp"}],
+                                                      "dependencies": []}))
+        self.assertFalse(cnf.architecture_checks(self.root, self.paths(), self.root / "build"))
+
 
 class ThirdPartyDigestChecks(unittest.TestCase):
     """CNF-013 — third_party/ の各ファイルは表の SHA-256 の上流のバイト列（ADR 0151）。
