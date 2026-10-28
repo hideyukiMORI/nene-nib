@@ -16,8 +16,8 @@ namespace
 {
 using Failure = application::SettingsFailure;
 constexpr std::size_t maximum_settings_bytes = 4096;
-constexpr std::array<SettingsVersion, 3> reading_order{SettingsVersion::v3, SettingsVersion::v2,
-                                                       SettingsVersion::v1};
+constexpr std::array<SettingsVersion, 4> reading_order{SettingsVersion::v4, SettingsVersion::v3,
+                                                       SettingsVersion::v2, SettingsVersion::v1};
 
 [[nodiscard]] std::expected<std::wstring, Failure> lock_name(const core::FilePath &path)
 {
@@ -132,13 +132,18 @@ Win32SettingsAdapter::write_locked(const core::EditorSettings &settings)
         return std::unexpected(checked.error());
     }
     const std::string bytes = encode_settings(settings);
+    // 長いルートの経路で上限を超えると次の読込が too_large で止まるので、書く前に断る。
+    if (bytes.size() > maximum_settings_bytes)
+    {
+        return std::unexpected(Failure::too_large);
+    }
     const auto written = files_.write(paths_.value().current, bytes);
     if (!written)
     {
         return std::unexpected(Failure::unwritable);
     }
     original_ = bytes;
-    source_ = SettingsVersion::v3;
+    source_ = SettingsVersion::v4;
     return {};
 }
 

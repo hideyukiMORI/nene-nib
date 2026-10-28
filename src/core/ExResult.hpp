@@ -10,6 +10,7 @@
 #include "ExLanguageRequest.hpp"
 #include "ExLineRequest.hpp"
 #include "ExPaletteRequest.hpp"
+#include "ExRootRequest.hpp"
 #include "ExSyntaxRequest.hpp"
 #include "ExTabRequest.hpp"
 #include "ExWindowCommand.hpp"
@@ -40,7 +41,8 @@ inline constexpr std::string_view guifont_command = "set guifont=";
 // 設定にもセッションにも保存しない）。line は行番号だけの命令 `:N` `:$`（ADR 0022 の追補・
 // Issue #847）で、controller が engine の `{N}G` と同じ着地へ渡す。clipboard は
 // `:set clipboard=` の切り替えか問い（ADR 0051 の追補（#848）の決定 A・設定にもセッションにも
-// 保存しない）。
+// 保存しない）。root は `:set root=.` の「アクティブな文書のフォルダをルートにする」
+// 要求（ADR 0162 の決定 7）で、経路を解いて設定に載せるのは controller。
 struct ExResult
 {
     std::optional<EditorSettings> settings;
@@ -56,6 +58,7 @@ struct ExResult
     std::optional<ExSyntaxRequest> syntax = std::nullopt;
     std::optional<ExLineRequest> line = std::nullopt;
     std::optional<ExClipboardRequest> clipboard = std::nullopt;
+    std::optional<ExRootRequest> root = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>

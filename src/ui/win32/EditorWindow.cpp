@@ -105,8 +105,7 @@ constexpr wchar_t class_name[] = L"NeNeNib.Editor";
 {
     constexpr unsigned green_shift = 8U;
     constexpr unsigned blue_shift = 16U;
-    return static_cast<COLORREF>(color.red) |
-           (static_cast<COLORREF>(color.green) << green_shift) |
+    return static_cast<COLORREF>(color.red) | (static_cast<COLORREF>(color.green) << green_shift) |
            (static_cast<COLORREF>(color.blue) << blue_shift);
 }
 constexpr wchar_t product_name[] = L"NeNe Nib";
@@ -594,8 +593,7 @@ void EditorWindow::apply_backdrop(const application::EditorDelivery &delivery)
     // Windows 10 には属性が無く失敗を返すだけなので、Mica と同じく戻り値は見ない。
     shown_border_ = core::selected_theme(delivery.settings, delivery.appearance).ui.title_bar;
     const COLORREF border = colorref_of(shown_border_);
-    DwmSetWindowAttribute(window_, DWMWA_BORDER_COLOR, &border,
-                          static_cast<DWORD>(sizeof(border)));
+    DwmSetWindowAttribute(window_, DWMWA_BORDER_COLOR, &border, static_cast<DWORD>(sizeof(border)));
     // Mica は Windows 11 22H2 以降。掛からない環境でも帯は不透明の title_bar で塗るので（D16）、
     // 掛かったかどうかは誰も読まない。2 属性は最初のフレームまでの面（ADR 0013）と
     // 非クライアントの明暗（ADR 0008 の決定 9）のために掛け続ける。
@@ -2403,16 +2401,10 @@ void EditorWindow::run_operation(core::EditorOperation operation)
         save_document_as();
         return;
     case core::EditorOperation::new_tab:
-        run_tab_command(core::TabCommand::open);
-        return;
     case core::EditorOperation::close_tab:
-        run_tab_command(core::TabCommand::close);
-        return;
     case core::EditorOperation::recent_tab:
-        walk_recent_tab(core::TabCommand::next);
-        return;
     case core::EditorOperation::recent_tab_back:
-        walk_recent_tab(core::TabCommand::previous);
+        run_tab_operation(operation);
         return;
     case core::EditorOperation::list_files:
         send(application::OpenCommandPalette{});
@@ -2446,7 +2438,53 @@ void EditorWindow::run_operation(core::EditorOperation operation)
     case core::EditorOperation::next_pane:
     case core::EditorOperation::close_pane:
     case core::EditorOperation::toggle_preview:
+    case core::EditorOperation::toggle_explorer:
+    case core::EditorOperation::choose_explorer_root:
         run_pane_operation(operation);
+        return;
+    }
+    std::unreachable();
+}
+
+// タブの操作（ADR 0056 / 0058 / 0078）。タブの操作でない値は run_operation が先に扱うので、ここへは
+// 来ない。
+void EditorWindow::run_tab_operation(core::EditorOperation operation)
+{
+    switch (operation)
+    {
+    case core::EditorOperation::new_tab:
+        run_tab_command(core::TabCommand::open);
+        return;
+    case core::EditorOperation::close_tab:
+        run_tab_command(core::TabCommand::close);
+        return;
+    case core::EditorOperation::recent_tab:
+        walk_recent_tab(core::TabCommand::next);
+        return;
+    case core::EditorOperation::recent_tab_back:
+        walk_recent_tab(core::TabCommand::previous);
+        return;
+    case core::EditorOperation::open_file:
+    case core::EditorOperation::save:
+    case core::EditorOperation::save_as:
+    case core::EditorOperation::list_files:
+    case core::EditorOperation::list_operations:
+    case core::EditorOperation::toggle_bookmark:
+    case core::EditorOperation::undo:
+    case core::EditorOperation::redo:
+    case core::EditorOperation::font_larger:
+    case core::EditorOperation::font_smaller:
+    case core::EditorOperation::font_reset:
+    case core::EditorOperation::toggle_mode:
+    case core::EditorOperation::split_vertical:
+    case core::EditorOperation::split_horizontal:
+    case core::EditorOperation::next_pane:
+    case core::EditorOperation::close_pane:
+    case core::EditorOperation::toggle_preview:
+    case core::EditorOperation::paste_plain:
+    case core::EditorOperation::paste_html:
+    case core::EditorOperation::toggle_explorer:
+    case core::EditorOperation::choose_explorer_root:
         return;
     }
     std::unreachable();
@@ -2479,6 +2517,12 @@ void EditorWindow::run_pane_operation(core::EditorOperation operation)
     case core::EditorOperation::toggle_preview:
         // Markdown のプレビューは枠に置くので、枠の操作の 1 本に並べる（ADR 0155 の決定 3）。
         send(application::TogglePreview{});
+        return;
+    case core::EditorOperation::toggle_explorer:
+    case core::EditorOperation::choose_explorer_root:
+        // 本文の枠を縮める左の面（ADR
+        // 0162）。面の状態と意図（E3）とフォルダ選びのダイアログ（E4）が
+        // まだ無いので何もしない。鍵の Ctrl+Shift+E も ui の写し（operation_chord）にはまだ無い。
         return;
     case core::EditorOperation::open_file:
     case core::EditorOperation::save:
@@ -2541,6 +2585,8 @@ void EditorWindow::run_edit_operation(core::EditorOperation operation)
     case core::EditorOperation::next_pane:
     case core::EditorOperation::close_pane:
     case core::EditorOperation::toggle_preview:
+    case core::EditorOperation::toggle_explorer:
+    case core::EditorOperation::choose_explorer_root:
         return;
     }
     std::unreachable();

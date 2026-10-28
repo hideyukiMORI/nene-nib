@@ -247,6 +247,7 @@ class EditorWindow final
     [[nodiscard]] bool over_title_bar(LPARAM data) const;
     [[nodiscard]] bool over_other_pane(LPARAM data) const;
     void follow_split(core::SplitLayout previous, application::EditorDelivery &delivery);
+    void run_tab_operation(core::EditorOperation operation);
     void run_pane_operation(core::EditorOperation operation);
     void run_edit_operation(core::EditorOperation operation);
     [[nodiscard]] bool keeps_block_key(core::EditorOperation operation) const noexcept;

@@ -8,6 +8,7 @@
 #include "CommandLayout.hpp"
 #include "CommandLine.hpp"
 #include "CommandText.hpp"
+#include "DisplayText.hpp"
 #include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -15,8 +16,10 @@
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
 #include "ExResult.hpp"
+#include "ExRootRequest.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
+#include "FilePath.hpp"
 #include "FontSize.hpp"
 #include "FontSizeAdjustment.hpp"
 #include "HistoryAction.hpp"
@@ -692,6 +695,89 @@ void verify_ex_clipboard_option()
            "other options leave the clipboard sync alone");
 }
 
+// Ex の答えの settings（無ければ既定）と文言。
+core::EditorSettings
+settings_of(const std::expected<core::ExResult, core::ExEvaluationFailure> &result)
+{
+    return result.has_value() ? result.value().settings.value_or(core::default_editor_settings())
+                              : core::default_editor_settings();
+}
+
+bool carries_settings(const std::expected<core::ExResult, core::ExEvaluationFailure> &result)
+{
+    return result.has_value() && result.value().settings.has_value();
+}
+
+std::string_view message_of(const std::expected<core::ExResult, core::ExEvaluationFailure> &result)
+{
+    return result.has_value() ? result.value().message.text() : std::string_view{};
+}
+
+// エクスプローラーの表示（ADR 0162 の決定 7）。`explorer` は保存する設定で settings に載り、問いは
+// settings を空のまま返す。
+void verify_ex_explorer_switch()
+{
+    const auto defaults = core::default_editor_settings();
+    const auto shown = core::evaluate_ex("set explorer", defaults, Appearance::dark);
+    expect(carries_settings(shown) && settings_of(shown).explorer &&
+               message_of(shown) == "explorer=on",
+           "set explorer shows the panel through the saved settings");
+    auto on = defaults;
+    on.explorer = true;
+    const auto hidden = core::evaluate_ex("set noexplorer", on, Appearance::dark);
+    expect(carries_settings(hidden) && !settings_of(hidden).explorer &&
+               message_of(hidden) == "explorer=off",
+           "set noexplorer hides the panel");
+    const auto asked = core::evaluate_ex("set explorer?", on, Appearance::dark);
+    expect(asked.has_value() && !carries_settings(asked) && message_of(asked) == "explorer=on",
+           "explorer? tells the current value without changing settings");
+    const auto other = core::evaluate_ex("set wrap", defaults, Appearance::dark);
+    expect(other.has_value() && !other.value().root.has_value(),
+           "other options carry no root request");
+}
+
+// ルート（ADR 0162 の決定 7）。`root=<経路>` と `root=` は settings に載り、`root?` と `root=.` は
+// settings を空のまま返す。`root=.` は controller が解く要求。
+void verify_ex_explorer_root()
+{
+    const auto defaults = core::default_editor_settings();
+    const auto rooted =
+        core::evaluate_ex("set root=C:\\work\\my\\ dir", defaults, Appearance::dark);
+    expect(carries_settings(rooted) &&
+               settings_of(rooted).root == core::FilePath::parse("C:\\work\\my dir").value() &&
+               message_of(rooted) == "root=C:\\work\\my dir",
+           "set root= saves the path with the escaped space unescaped");
+    auto with_root = defaults;
+    with_root.root = core::FilePath::parse("D:\\src").value();
+    const auto cleared = core::evaluate_ex("set root=", with_root, Appearance::dark);
+    expect(carries_settings(cleared) && !settings_of(cleared).root.has_value() &&
+               message_of(cleared) == "root=",
+           "an empty root= forgets the root");
+    const auto root_query = core::evaluate_ex("set root?", with_root, Appearance::dark);
+    expect(root_query.has_value() && !carries_settings(root_query) &&
+               message_of(root_query) == "root=D:\\src",
+           "root? tells the saved root");
+    const auto none = core::evaluate_ex("set root?", defaults, Appearance::dark);
+    expect(message_of(none) == "root=", "root? without a root shows an empty value");
+    const auto here = core::evaluate_ex("set root=.", defaults, Appearance::dark);
+    expect(here.has_value() && !carries_settings(here) &&
+               here.value().root == core::ExRootRequest::active_document_folder,
+           "root=. asks the controller for the folder of the active document");
+    expect(ex_fails_with("set root=C:\\%temp%", core::ExFailure::unsupported_argument) &&
+               ex_fails_with("set root=~\\w", core::ExFailure::unsupported_argument),
+           "root= does not expand names");
+    auto long_root = defaults;
+    long_root.root = core::FilePath::parse("C:\\" + std::string(300, 'a')).value();
+    const auto long_query = core::evaluate_ex("set root?", long_root, Appearance::dark);
+    const auto long_message = message_of(long_query);
+    expect(long_message.size() <= core::DisplayText::maximum_bytes &&
+               long_message.starts_with("root=C:\\aaa") && long_message.ends_with("…"),
+           "a long root is cut with an ellipsis");
+    expect(core::command_completions("set r") ==
+               std::vector<std::string>{"set root=", "set root=."},
+           "completion lists the two root rows");
+}
+
 const auto completion_ordinary = std::vector<std::string>{"colorscheme",
                                                           "set fontsize=",
                                                           "set guifont=",
@@ -718,6 +804,10 @@ const auto completion_ordinary = std::vector<std::string>{"colorscheme",
                                                           "syntax off",
                                                           "set clipboard=unnamed",
                                                           "set clipboard=",
+                                                          "set explorer",
+                                                          "set noexplorer",
+                                                          "set root=",
+                                                          "set root=.",
                                                           "edit",
                                                           "buffer",
                                                           "ls",
@@ -985,5 +1075,7 @@ void verify_ex_settings()
     verify_ex_tab_names();
     verify_ex_tab_arguments();
     verify_ex_clipboard_option();
+    verify_ex_explorer_switch();
+    verify_ex_explorer_root();
 }
 } // namespace nenenib::tests

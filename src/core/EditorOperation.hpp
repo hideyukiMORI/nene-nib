@@ -32,6 +32,9 @@ enum class EditorOperation : std::uint8_t
     toggle_preview,
     // 貼り付けの 2 つ（ADR 0157 の決定 2・3）。
     paste_plain,
-    paste_html
+    paste_html,
+    // エクスプローラーの 2 つ（ADR 0162 の決定 7）。
+    toggle_explorer,
+    choose_explorer_root
 };
 } // namespace nenenib::core

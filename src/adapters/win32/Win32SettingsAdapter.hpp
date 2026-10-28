@@ -34,7 +34,7 @@ class Win32SettingsAdapter final : public application::SettingsPort
 
     application::FilePort &files_;
     std::expected<SettingsPaths, application::SettingsFailure> paths_;
-    SettingsVersion source_{SettingsVersion::v3};
+    SettingsVersion source_{SettingsVersion::v4};
     std::optional<std::string> original_;
     std::optional<application::SettingsIssue> blocked_{application::SettingsFailure::not_loaded};
 };

@@ -1,7 +1,9 @@
 #pragma once
 
 #include "Appearance.hpp"
+#include "DisplayLanguageChoice.hpp"
 #include "DisplayText.hpp"
+#include "FilePath.hpp"
 #include "FontSize.hpp"
 #include "GuideVisibility.hpp"
 #include "LineWrapping.hpp"
@@ -9,9 +11,17 @@
 #include "ThemeChoice.hpp"
 
 #include <optional>
+#include <string>
+#include <vector>
 
 namespace nenenib::core
 {
+// 保存する設定（設定 v4 の鍵の集合・ADR 0170 の決定 3）。
+// ui_language・lsp・features はいまは読み書きするだけで、使う所は後の PR
+// （ADR 0123 の改訂・ADR 0160・ADR 0170）。explorer は左の面の表示、root は
+// エクスプローラーのルートで、無しは「決めていない」（ADR 0162 の決定 3）。
+// features はオンの機能の名前（ASCII）の列で、空は「表の既定」。中身はここでは
+// 解釈しない。
 struct EditorSettings
 {
     FontSize font_size;
@@ -20,6 +30,11 @@ struct EditorSettings
     std::optional<ThemeChoice> theme;
     GuideVisibility guide;
     LineWrapping wrapping = LineWrapping::wrap;
+    DisplayLanguageChoice ui_language = DisplayLanguageChoice::system;
+    bool lsp = false;
+    bool explorer = false;
+    std::optional<FilePath> root = std::nullopt;
+    std::vector<std::string> features = {};
 };
 
 [[nodiscard]] EditorSettings default_editor_settings();

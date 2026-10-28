@@ -106,6 +106,9 @@ void verify_title_bar_layout_property_scope();
 void verify_grid_cells_property_scope();
 // TabsPropertyTests.cpp（#935・複数タブの状態と使った順と行き先の性質の試験）
 void verify_tabs_property_scope();
+// ExplorerTreeTests.cpp / ExplorerLayoutTests.cpp（ADR 0162 の決定 1・2・9）。
+void verify_explorer_tree_scope();
+void verify_explorer_layout_scope();
 // EditingPropertyTests.cpp（#955・通常モードの編集の意図の列の性質の試験）
 void verify_editing_property_scope();
 

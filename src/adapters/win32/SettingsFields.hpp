@@ -14,5 +14,11 @@ struct SettingsFields
     std::optional<std::string_view> font_size;
     std::optional<std::string_view> guide;
     std::optional<std::string_view> wrap;
+    // v4 だけの鍵（ADR 0170 の決定 3）。
+    std::optional<std::string_view> ui_language;
+    std::optional<std::string_view> lsp;
+    std::optional<std::string_view> explorer;
+    std::optional<std::string_view> root;
+    std::optional<std::string_view> features;
 };
 } // namespace nenenib::adapters::win32
