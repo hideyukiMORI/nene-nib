@@ -226,6 +226,7 @@ fixture の鍵の記法の表（`<Esc>` `<NL>` `<Space>` など）は `eng/vim-o
 保存されている `tests/vim/VimKeyNames.hpp` のバイト列が oracle の `key_names_header()` の出力と一致することも CNF-010 で見る。無い・違う、のいずれも CNF-010（最初に違う行を示す）。
 Vim を要らずに全文を作り直せるので、SHA の 1 行ではなく全文の一致を見る。直すのは `python eng/vim-oracle.py --key-names` だけ。
 表の検査（名前の重複・`<` で始まり `>` で終わる形・ある名前が別の名前の接頭辞にならない）は oracle が読み込むときに例外で止め、表に無い列挙子の名前は生成物のコンパイルが落とす。
+Vim の大小の写像の表 `src/core/CaseMappingTable.hpp` も同じ形の生成物で、`eng/case-mapping.py` の `case_mapping_header()`（固定の Python の `unicodedata`）の出力との全文の一致を CNF-010 で見る（Issue #781・ADR 0015 決定 10 の追記）。直すのは `python eng/case-mapping.py --write` だけ。
 
 - 対応する規則: QLT-013 / ARC-012
 - 機械強制: **active**（`eng/conformance.py`。正例・反例は `tests/conformance` がゲートで回る。正例は oracle の `header()` が書いた行と `key_names_header()` の出力をそのまま読ませる）

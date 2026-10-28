@@ -226,6 +226,10 @@ void verify_vim_line_jump_recovery();
 void verify_vim_character_contracts();
 void verify_vim_character_scope();
 
+// VimCaseTests.cpp
+void verify_vim_case_contracts();
+void verify_vim_case_scope();
+
 // VimVirtualColumnTests.cpp
 void verify_vim_virtual_column_contracts();
 void verify_vim_virtual_column_scope();

@@ -20,6 +20,7 @@ spec.loader.exec_module(git_conventions)
 spec = importlib.util.spec_from_file_location("vim_oracle", ROOT / "eng/vim-oracle.py")
 vim_oracle = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(vim_oracle)
+CASE_MAPPING = cnf.case_mapping.case_mapping_header().encode("utf-8")
 RULES = json.loads((ROOT / "eng/conformance-rules.json").read_text(encoding="utf-8"))
 TODAY = datetime.date(2026, 9, 15)
 
@@ -465,6 +466,40 @@ class RepositoryChecks(unittest.TestCase):
 
     def test_cnf010_key_names_missing_negative(self):
         self.assertTrue(any("CNF-010" in detail and "missing" in detail for detail in self.key_names_details()))
+
+    # CNF-010 — 生成物 CaseMappingTable.hpp は eng/case-mapping.py の case_mapping_header() が作る全文と
+    # バイト一致する（Issue #781）。正例は同じ関数の出力と保存されているファイルをそのまま読ませる。
+    def case_mapping_details(self):
+        return [f"{f.rule}: {f.detail}" for f in cnf.case_mapping_checks(self.root)]
+
+    def seed_case_mapping(self, content):
+        path = self.root / "src/core/CaseMappingTable.hpp"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+    def test_cnf010_case_mapping_positive(self):
+        self.seed_case_mapping(CASE_MAPPING)
+        self.assertEqual([], self.case_mapping_details())
+        self.seed_case_mapping((ROOT / "src/core/CaseMappingTable.hpp").read_bytes())
+        self.assertEqual([], self.case_mapping_details())
+
+    def test_cnf010_case_mapping_edited_negative(self):
+        cases = {
+            "wrong delta": CASE_MAPPING.replace(b"{U'\\x61', U'\\x7A', 1, -32},", b"{U'\\x61', U'\\x7A', 1, -31},", 1),
+            "dropped row": CASE_MAPPING.replace(b"    {U'\\xB5', U'\\xB5', 1, 743},\n", b"", 1),
+            "other version": CASE_MAPPING.replace(b"// Unicode ", b"// Unicode 9", 1),
+            "CRLF": CASE_MAPPING.replace(b"\n", b"\r\n"),
+        }
+        for name, content in cases.items():
+            with self.subTest(case=name):
+                self.assertNotEqual(CASE_MAPPING, content)
+                self.seed_case_mapping(content)
+                details = self.case_mapping_details()
+                self.assertTrue(details)
+                self.assertTrue(all(detail.startswith("CNF-010") and "--write" in detail for detail in details))
+
+    def test_cnf010_case_mapping_missing_negative(self):
+        self.assertTrue(any("CNF-010" in detail and "missing" in detail for detail in self.case_mapping_details()))
 
     # CNF-011 — fixtures.json は生成器が書く 1 つの形（1 行 1 件）だけを許す（Issue #98）。
     # 正例は oracle の canonical_fixtures_json が書いたバイト列そのままを読ませる。

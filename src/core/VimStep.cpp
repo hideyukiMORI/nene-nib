@@ -19,6 +19,7 @@
 #include "VimBlockRange.hpp"
 #include "VimBlockWidth.hpp"
 #include "VimCaret.hpp"
+#include "VimCase.hpp"
 #include "VimCharacterBoundary.hpp"
 #include "VimCharacterExtent.hpp"
 #include "VimCharacterSearch.hpp"
@@ -1962,28 +1963,18 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
     return at_next_line_start ? LineNumber{last.value - single_step} : last;
 }
 
-// 1 バイトの大小の写し（決定 10）。変えるのは ASCII の英字だけで、UTF-8 の多バイト列のバイトは
-// どれも 0x80 以上なので触れない（結合文字つきの a は A ＋結合文字になる・Vim と同じ）。
-[[nodiscard]] char lowered(char value) noexcept
-{
-    return value >= 'A' && value <= 'Z' ? static_cast<char>(value - 'A' + 'a') : value;
-}
-
-[[nodiscard]] char uppered(char value) noexcept
-{
-    return value >= 'a' && value <= 'z' ? static_cast<char>(value - 'a' + 'A') : value;
-}
-
-[[nodiscard]] char cased(char value, VimOperator operation) noexcept
+// 1 code point の大小の写し（決定 10・Issue #781）。写像は Unicode の簡単な写像の表の 1 つ
+// （VimCase）で、写像の無い code point はそのまま。
+[[nodiscard]] char32_t cased(char32_t value, VimOperator operation) noexcept
 {
     switch (operation)
     {
     case VimOperator::toggle_case:
-        return value >= 'a' && value <= 'z' ? uppered(value) : lowered(value);
+        return vim_toggled(value);
     case VimOperator::lower_case:
-        return lowered(value);
+        return vim_to_lower(value);
     case VimOperator::upper_case:
-        return uppered(value);
+        return vim_to_upper(value);
     case VimOperator::remove:
     case VimOperator::change:
     case VimOperator::yank:
@@ -1994,13 +1985,22 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
     std::unreachable();
 }
 
-[[nodiscard]] std::string cased_text(std::string text, VimOperator operation)
+// Vim の 1 文字（ADR 0053）ごとに基底の code point だけを写し、続く結合文字はバイト列のまま残す
+// （Vim の swapchar が見るのは基底の文字だけ・結合文字つきの é は É ＋結合文字になる）。
+[[nodiscard]] std::string cased_text(std::string_view text, VimOperator operation)
 {
-    for (char &value : text)
+    std::string result;
+    result.reserve(text.size());
+    Offset at{0};
+    while (at.value < text.size())
     {
-        value = cased(value, operation);
+        const Offset end = vim_character_end(text, at);
+        const Offset marks = next_code_point(text, at);
+        append_utf8(result, cased(code_point_at(text, at), operation));
+        result.append(text.substr(marks.value, end.value - marks.value));
+        at = end;
     }
-    return text;
+    return result;
 }
 
 // 大小文字の置き換え（決定 10）。行単位は覆う行の内容の全体、文字単位は範囲そのもの。本文は LF
