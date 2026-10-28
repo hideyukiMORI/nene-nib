@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 fac66680bfdc2f2164ceb3efa0793b542c28c3b212db803778a68c17763d1cc2 / 2480 fixtures
+// fixtures.json: sha256 deac5626906c2bc1869f583c7e2c08c6be5c48e53f438af9bef05c0671a5a95e / 2489 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2480> vim_fixtures{{
+constexpr std::array<VimFixture, 2489> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -98,6 +98,15 @@ constexpr std::array<VimFixture, 2480> vim_fixtures{{
     {"dw-with-a-count-over-punctuation", "a.b c", "3dw", "c", 1, 1, "a.b ", "v", std::nullopt},
     {"capital-a-on-an-empty-line", "\nabc", "A0<Esc>", "0\nabc", 1, 1, "", "", std::nullopt},
     {"capital-i-on-an-empty-line", "\nabc", "I0<Esc>", "0\nabc", 1, 1, "", "", std::nullopt},
+    {"insert-first-nonblank-one-space-line", " ", "Ix<Esc>", " x", 1, 2, "", "", std::nullopt},
+    {"insert-first-nonblank-three-spaces-line", "   ", "Ix<Esc>", "   x", 1, 4, "", "", std::nullopt},
+    {"insert-first-nonblank-tab-only-line", "\t", "Ix<Esc>", "\tx", 1, 2, "", "", std::nullopt},
+    {"insert-first-nonblank-tab-and-spaces-line", "\t  \t ", "Ix<Esc>", "\t  \t x", 1, 6, "", "", std::nullopt},
+    {"insert-first-nonblank-empty-line", "\nabc", "Ix<Esc>", "x\nabc", 1, 1, "", "", std::nullopt},
+    {"insert-first-nonblank-indented-line", "  \tab c", "Ix<Esc>", "  \txab c", 1, 4, "", "", std::nullopt},
+    {"insert-first-nonblank-count-on-a-blank-line", "  ", "3Ix<Esc>", "  xxx", 1, 5, "", "", std::nullopt},
+    {"insert-first-nonblank-dot-on-a-blank-line", " \n   ", "Ix<Esc>j.", " x\n   x", 2, 4, "", "", std::nullopt},
+    {"insert-first-nonblank-after-x-on-a-blank-line", "  , ", "3x3I(<Esc>", " (((", 1, 4, "  ,", "v", std::nullopt},
     {"b-with-a-count-over-an-empty-line", "abc\n\ndef", "jj2b", "abc\n\ndef", 1, 1, "", "", std::nullopt},
     {"d-with-a-count-on-both-sides", "alpha beta gamma delta", "2d3w", "", 1, 1, "alpha beta gamma delta", "v", std::nullopt},
     {"dd-with-a-count-on-both-sides", "a\nb\nc\nd\ne\nf\ng", "2d3d", "g", 1, 1, "a\nb\nc\nd\ne\nf\n", "V", std::nullopt},

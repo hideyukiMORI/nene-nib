@@ -3578,6 +3578,20 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         VimInsertAt{at, "\n", Offset{at.value + (below ? single_step : 0)}, EditBoundary::absorb}};
 }
 
+// `I` の入る位置。最初の非空白、空白だけの行なら行末（空白の後ろ）。Vim の
+// beginline(BL_WHITE | BL_FIX) で、`^` が空白だけの行で最後の文字に止まるのとは違う（#1027）。
+[[nodiscard]] Offset insert_line_start_landing(const TextBuffer &text, Offset caret)
+{
+    const Offset landing = vim_first_non_blank(text, caret);
+    const Offset end = text.line_end(line_of(text, caret));
+    if (landing == end)
+    {
+        return landing;
+    }
+    const std::string first = text.text_range(landing, Offset{landing.value + 1});
+    return first == " " || first == "\t" ? end : landing;
+}
+
 [[nodiscard]] VimStep insert_action(const VimState &state, const VimEditorView &view,
                                     VimAction action)
 {
@@ -3591,7 +3605,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     }
     if (action == VimAction::insert_at_line_start)
     {
-        return entered_insert(state, vim_first_non_blank(view.text, view.selection.caret));
+        return entered_insert(state, insert_line_start_landing(view.text, view.selection.caret));
     }
     return entered_insert(state, view.text.line_end(line_of(view.text, view.selection.caret)));
 }
