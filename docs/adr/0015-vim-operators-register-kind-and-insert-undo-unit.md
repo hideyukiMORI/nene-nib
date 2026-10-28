@@ -74,6 +74,22 @@ VISUAL の `y` は触らない。`d` `c` の後のキャレットは別の規則
     着地は `g_` と同じ `counted_line_landing` の 1 本（回数 − 1 行下・本文の末尾で止まり、最終行で回数が 2 以上なら Vim の `nv_lineop` の `cursor_down` が失敗してオペレータを打ち消す・`j$5_x` は動かず `x` も打ち切る）。最終行の `1_` は失敗しない。
     `y_` の後のキャレットは動かない（`j$y_` は `$` の位置のまま・`l2y_` も同じ）。`c_` は行の本文を消して空の行で INSERT（`autoindent` 無しの既定）、`>_` は `>>` と同じ。fixture は `underscore-` の 16 件（Vim 9.1 の実測）。
 
+### 決定 10 の追記（2026-10-28・#781）: 非 ASCII は Unicode の簡単な大小の写像
+
+- 決定 10 の「変換は ASCII の英字だけ」を置き換える。写像は **Unicode の簡単な（1 対 1 の）写像の表 1 つ**で、生成物 `src/core/CaseMappingTable.hpp`（`case_to_upper` 194 行・`case_to_lower` 181 行の「first・last・step・delta」の範囲）を、
+  生成器 `eng/case-mapping.py --write` が固定の Python（3.12・`unicodedata` は Unicode 15.0.0・版は見出しに書く）の `str.upper` / `str.lower` の結果が 1 code point のものだけから作る。Vim のソースの表は写さない。
+  一致は CNF-010（`eng/conformance.py` の `case_mapping_checks` が全文を比べる・`VimKeyNames.hpp` と同じ形）。引くのは `VimCase.hpp` の純関数 `vim_to_upper` `vim_to_lower` `vim_toggled`（二分探索・実行時の初期化なし・ADR 0074 の形）。
+- **Vim の 1 文字（ADR 0053）の基底だけを写し、続く結合文字はそのまま**（`e`＋U+0301 の `~` は `E`＋U+0301・`α`＋U+0345 の `gUU` は `Α`＋U+0345・固定 Vim 9.1 の実測）。
+- **大文字の写像を持つ字が「小文字」、小文字の写像を持つ字が「大文字」で、小文字の判定が先**（Vim の `swapchar`）。だからタイトルケースの `ǅ` は小文字で、`~` と `gU` は `Ǆ` にし、`gu` と VISUAL の `u` は変えない（実測 `ǄǅǆΣ` の `v$u` → `ǆǅǆσ`）。
+- fixture は `unicode-case-` の 15 件（全角・`é É`・ギリシャ・キリル・結合文字 2・混在の `g~G`・`Vj~`・`v$u`・タイトルケース・`.`・トルコ語 2・BMP の外）。
+
+限界（実測・Vim 9.1 の `toupper()` `tolower()` を U+0080〜U+10FFFF で全数比べた結果、違うのは次の 28 字だけ）:
+
+- Python の `str.upper` / `str.lower` は SpecialCasing の 1 対多を返すので、そこに載る字の簡単な写像は表に入らない。Vim は UnicodeData の簡単な写像を使うので、
+  `İ`（U+0130）の小文字化（Vim は `i`）と、ypogegrammeni つきのギリシャ小文字 27 字（U+1F80〜U+1FA7 の 24 字・U+1FB3・U+1FC3・U+1FF3）の大文字化（Vim は U+1F88 などのタイトルケース）が Vim と違い、Nib は変えない。fixture は Vim と合う `İ` の `gUU` だけを置いた。
+- **`ß` の `gU` は Vim では `SS`**（1 対多・実測 `straße` → `STRASSE`）。1 対多はこの追記の範囲の外で、Nib は `ß` を変えない。fixture は Vim でも変わらない `g~~` だけを置いた。
+- 矩形 VISUAL の `~` `u` `U` は #959（PR #981）で、同じ `cased_text` を通る。
+
 ## 強制
 
 - fixture の再生（ADR 0005 / 0012）— **active**（`nib_unit` が `VimFixtures.hpp` の全項目を再生し、レジスタの種類も突き合わせる）

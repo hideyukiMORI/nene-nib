@@ -20,6 +20,10 @@ _ORACLE = importlib.util.spec_from_file_location("vim_oracle",
                                                  Path(__file__).resolve().parent / "vim-oracle.py")
 vim_oracle = importlib.util.module_from_spec(_ORACLE)
 _ORACLE.loader.exec_module(vim_oracle)
+_CASE_MAPPING = importlib.util.spec_from_file_location("case_mapping",
+                                                       Path(__file__).resolve().parent / "case-mapping.py")
+case_mapping = importlib.util.module_from_spec(_CASE_MAPPING)
+_CASE_MAPPING.loader.exec_module(case_mapping)
 
 
 @dataclass(frozen=True)
@@ -427,6 +431,29 @@ def key_names_checks(root: Path) -> list[Finding]:
     return [Finding("CNF-010", name, "differs from the generated key names; run eng/vim-oracle.py --key-names")]
 
 
+def case_mapping_checks(root: Path) -> list[Finding]:
+    """CNF-010: src/core/CaseMappingTable.hpp is exactly what eng/case-mapping.py writes (Issue #781).
+
+    The Vim case operators read one table, generated from the Unicode data of the pinned Python
+    (eng/tool-versions.json); like VimKeyNames.hpp it needs no Vim, so the whole file is compared.
+    Missing and different are both findings; `eng/case-mapping.py --write` writes it.
+    """
+    name = case_mapping.TARGET
+    path = root / name
+    if not path.is_file():
+        return [Finding("CNF-010", name, "the generated case mapping is missing; run eng/case-mapping.py --write")]
+    content = path.read_bytes()
+    expected = case_mapping.case_mapping_header().encode("utf-8")
+    if content == expected:
+        return []
+    for number, (stored, wanted) in enumerate(
+            itertools.zip_longest(content.split(b"\n"), expected.split(b"\n")), 1):
+        if stored != wanted:
+            return [Finding("CNF-010", name, f"line {number}: {excerpt(stored)} is not the generated "
+                            f"{excerpt(wanted)}; run eng/case-mapping.py --write")]
+    return [Finding("CNF-010", name, "differs from the generated case mapping; run eng/case-mapping.py --write")]
+
+
 def excerpt(line: bytes | None, limit: int = 60) -> str:
     if line is None:
         return "(nothing)"
@@ -597,6 +624,7 @@ def check(root: Path, today: datetime.date, build_dir: Path | None = None) -> li
     findings.extend(version_metadata_checks(root))
     findings.extend(fixture_digest_checks(root, rules))
     findings.extend(key_names_checks(root))
+    findings.extend(case_mapping_checks(root))
     findings.extend(fixture_format_checks(root))
     findings.extend(third_party_digest_checks(root, paths, rules))
     findings.extend(architecture_checks(root, paths, build_dir))

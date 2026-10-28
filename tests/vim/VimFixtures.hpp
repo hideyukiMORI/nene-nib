@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 43d7d43a48f0b76cf7b843f6e1bb3ebf9e8312106f41118c9f966a4e5fc60fcd / 2440 fixtures
+// fixtures.json: sha256 0a3d96159b38ea47ad40cd149ece338cb7192e6f8950aae6fad078a541d79c30 / 2455 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2440> vim_fixtures{{
+constexpr std::array<VimFixture, 2455> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2234,6 +2234,21 @@ constexpr std::array<VimFixture, 2440> vim_fixtures{{
     {"gtilde-linewise-then-u", "abc def", "wg~~u", "abc def", 1, 1, "", "", std::nullopt},
     {"gU-visual-line-upward-then-u", "abc\ndef", "jlVkUu", "abc\ndef", 1, 2, "", "", std::nullopt},
     {"gu-visual-then-u", "ABCDEF", "$vhhuu", "ABCDEF", 1, 4, "", "", std::nullopt},
+    {"unicode-case-fullwidth-gtilde-line", "ＡＢＣａｂｃ", "g~~", "ａｂｃＡＢＣ", 1, 1, "", "", std::nullopt},
+    {"unicode-case-latin-acute-tilde", "é É", "~~~", "É é", 1, 4, "", "", std::nullopt},
+    {"unicode-case-greek-gUU", "αβγ ΔΕ", "gUU", "ΑΒΓ ΔΕ", 1, 1, "", "", std::nullopt},
+    {"unicode-case-cyrillic-guu", "Привет МИР", "guu", "привет мир", 1, 1, "", "", std::nullopt},
+    {"unicode-case-sharp-s-tilde-unchanged", "ßa", "g~~", "ßA", 1, 1, "", "", std::nullopt},
+    {"unicode-case-combining-tilde-base-only", "éa", "~", "Éa", 1, 4, "", "", std::nullopt},
+    {"unicode-case-combining-ypogegrammeni-stays", "ᾳβ", "gUU", "ᾼΒ", 1, 1, "", "", std::nullopt},
+    {"unicode-case-mixed-gtilde-G", "Ａb é\nΩмß", "g~G", "ａB É\nωМß", 1, 1, "", "", std::nullopt},
+    {"unicode-case-visual-line-tilde", "ÀÉ ìõ\nÿz", "Vj~", "àé ÌÕ\nŸZ", 1, 1, "", "", std::nullopt},
+    {"unicode-case-visual-lower-u", "ǄǅǆΣ", "v$u", "ǆǅǆσ", 1, 1, "", "", std::nullopt},
+    {"unicode-case-titlecase-tilde", "ǅx", "~", "Ǆx", 1, 3, "", "", std::nullopt},
+    {"unicode-case-dot-repeat", "αβγδ", "~..", "ΑΒΓδ", 1, 7, "", "", std::nullopt},
+    {"unicode-case-turkish-dotless-i-upper", "ıi", "gUU", "II", 1, 1, "", "", std::nullopt},
+    {"unicode-case-turkish-dotted-I-upper", "İi", "gUU", "İI", 1, 1, "", "", std::nullopt},
+    {"unicode-case-astral-adlam-gUU", "𞤢𞤣", "gUU", "𞤀𞤁", 1, 1, "", "", std::nullopt},
     {"shift-right-up-then-u", "ab\ncd", "j$>ku", "ab\ncd", 1, 2, "", "", std::nullopt},
     {"shift-left-visual-then-u", "\ta\n\tb", "jlVk<u", "\ta\n\tb", 1, 2, "", "", std::nullopt},
     {"J-after-an-exclamation-mark-adds-two-spaces", "abc!\ndef", "J", "abc!  def", 1, 5, "", "", std::nullopt},
