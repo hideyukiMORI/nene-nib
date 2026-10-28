@@ -19,7 +19,7 @@ namespace nenenib::core
 // （Shift なし）は Vim INSERT の Ctrl-@ に残すので行を置かない。
 // 「Shift を見ていなかった今の振る舞いを保つ行」は Shift なしの行のすぐ後ろに置く。見せる鍵は
 // 最初の行なので、一覧に見える鍵は Shift なしのまま。
-inline constexpr std::array<OperationBinding, 33> operation_bindings{{
+inline constexpr std::array<OperationBinding, 35> operation_bindings{{
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, false, OperationKey::o}},
     // Shift を見ていなかった今の振る舞いを保つ行。
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, true, OperationKey::o}},
@@ -74,6 +74,9 @@ inline constexpr std::array<OperationBinding, 33> operation_bindings{{
     // 「HTML のまま貼り付け」は KeyChord に Alt が無いので鍵なしで、F1 の一覧からだけ。
     {EditorOperation::paste_plain, OperationModes::both, KeyChord{true, true, OperationKey::v}},
     {EditorOperation::paste_html, OperationModes::both, std::nullopt},
+    // エクスプローラー（ADR 0162 の決定 7）。ルートのフォルダを選ぶのは鍵なしで F1 の一覧から。
+    {EditorOperation::toggle_explorer, OperationModes::both, KeyChord{true, true, OperationKey::e}},
+    {EditorOperation::choose_explorer_root, OperationModes::both, std::nullopt},
 }};
 
 // 鍵とモード → 操作。表を上から見て、鍵が同じでモードに効く最初の行。値なしは「割り当てが無い」。

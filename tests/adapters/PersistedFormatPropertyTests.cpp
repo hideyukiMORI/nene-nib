@@ -1,5 +1,5 @@
 // scope `--persisted-property` の性質の試験（#897・ADR 0020 / 0059 / 0060 / 0063 / 0114 / 0137・ADR
-// 0042）。 ディスクから読む 5 つの形式（settings.v1〜v3・session.v1 /
+// 0042）。 ディスクから読む 5 つの形式（settings.v1〜v4・session.v1 /
 // v2・history.v1・bookmarks.v1・自動退避の
 // 台帳）の復号の関数は、バイト列を受ける純粋な口（*Codec.hpp）なので、ファイルに触れずに呼ぶ。
 // 固定 seed の決定的な生成器で、正しい見本に変異（1
@@ -94,7 +94,12 @@ void expect(bool condition, const char *message)
 
 // --- 見本（既存の試験の見本と同じ形）---
 
-constexpr std::array<std::string_view, 4> settings_samples{{
+constexpr std::array<std::string_view, 6> settings_samples{{
+    "version=4\ncolorscheme=system\nfont_family=Consolas\nfont_size=13.5\nguide=on\nwrap=on\n"
+    "ui_language=system\nlsp=off\nexplorer=off\nroot=\nfeatures=\n",
+    "version=4\ncolorscheme=neutral-light\nfont_family=Consolas\nfont_size=8\nguide=off\n"
+    "wrap=off\nui_language=zh-hans\nlsp=on\nexplorer=on\nroot=C:\\work dir\n"
+    "features=matchparen,change_marks\n",
     "version=3\ncolorscheme=system\nfont_family=Consolas\nfont_size=13.5\nguide=on\nwrap=on\n",
     "\xEF\xBB\xBF\r\nversion = 1\r\n colorscheme = neutral-light \r\n"
     "\vfont_family = 日本語 Font=Test\r\nfont_size=21.25\f",
@@ -417,7 +422,7 @@ void verify_family(const char *description, std::uint64_t seed, Make make,
     return position.line.value >= 1U && position.column.value >= 1U;
 }
 
-// --- settings.v1〜v3（ADR 0020 / 0114）---
+// --- settings.v1〜v4（ADR 0020 / 0114 / 0170）---
 
 [[nodiscard]] bool settings_failure_expected(application::SettingsFailure failure) noexcept
 {
@@ -470,10 +475,10 @@ void verify_family(const char *description, std::uint64_t seed, Make make,
         return "decoded settings break their invariants";
     }
     const auto again =
-        adapters::decode_settings(adapters::encode_settings(decoded.value()), SettingsVersion::v3);
+        adapters::decode_settings(adapters::encode_settings(decoded.value()), SettingsVersion::v4);
     if (!again || !core::same_settings(again.value(), decoded.value()))
     {
-        return "decoded settings do not round trip through v3";
+        return "decoded settings do not round trip through v4";
     }
     return holds;
 }
@@ -481,7 +486,7 @@ void verify_family(const char *description, std::uint64_t seed, Make make,
 std::string_view settings_break(std::string_view bytes)
 {
     for (const SettingsVersion version :
-         {SettingsVersion::v1, SettingsVersion::v2, SettingsVersion::v3})
+         {SettingsVersion::v1, SettingsVersion::v2, SettingsVersion::v3, SettingsVersion::v4})
     {
         const std::string_view reason = settings_version_break(bytes, version);
         if (!reason.empty())
@@ -699,7 +704,7 @@ void verify_samples(Samples samples, Check check, bool (*decodes)(std::string_vi
 bool settings_decodes(std::string_view bytes)
 {
     for (const SettingsVersion version :
-         {SettingsVersion::v1, SettingsVersion::v2, SettingsVersion::v3})
+         {SettingsVersion::v1, SettingsVersion::v2, SettingsVersion::v3, SettingsVersion::v4})
     {
         if (adapters::decode_settings(bytes, version).has_value())
         {

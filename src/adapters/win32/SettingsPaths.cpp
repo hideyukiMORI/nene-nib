@@ -13,6 +13,8 @@ const core::FilePath &settings_path(const SettingsPaths &paths, SettingsVersion 
     case SettingsVersion::v2:
         return paths.previous;
     case SettingsVersion::v3:
+        return paths.prior;
+    case SettingsVersion::v4:
         return paths.current;
     }
     std::unreachable();

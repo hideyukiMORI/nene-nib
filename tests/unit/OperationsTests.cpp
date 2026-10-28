@@ -44,7 +44,7 @@ constexpr KeyChord ctrl_shift(OperationKey key)
 
 // 鍵 → 通常モードの操作・Vim の操作。表の全行の鍵と、表に無い鍵の組み合わせ。
 using ChordRow = std::tuple<KeyChord, Operation, Operation>;
-constexpr std::array<ChordRow, 41> chord_rows{{
+constexpr std::array<ChordRow, 43> chord_rows{{
     {ctrl(OperationKey::o), EditorOperation::open_file, EditorOperation::open_file},
     {ctrl(OperationKey::s), EditorOperation::save, EditorOperation::save},
     {ctrl_shift(OperationKey::s), EditorOperation::save_as, EditorOperation::save_as},
@@ -97,12 +97,16 @@ constexpr std::array<ChordRow, 41> chord_rows{{
     // 文字だけの貼り付け（ADR 0157 の決定 2）。Ctrl+V（Shift なし）は表の外（ui の貼り付けの道）。
     {ctrl_shift(OperationKey::v), EditorOperation::paste_plain, EditorOperation::paste_plain},
     {ctrl(OperationKey::v), std::nullopt, std::nullopt},
+    // エクスプローラー（ADR 0162 の決定 7）。Ctrl+E（Shift なし）は割り当てない。
+    {ctrl_shift(OperationKey::e), EditorOperation::toggle_explorer,
+     EditorOperation::toggle_explorer},
+    {ctrl(OperationKey::e), std::nullopt, std::nullopt},
 }};
 
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
-constexpr std::array<ShownRow, 23> shown_rows{{
+constexpr std::array<ShownRow, 25> shown_rows{{
     {EditorOperation::open_file, "Ctrl+O", "Ctrl+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
@@ -127,11 +131,14 @@ constexpr std::array<ShownRow, 23> shown_rows{{
     {EditorOperation::paste_plain, "Ctrl+Shift+V", "Ctrl+Shift+V", true, true},
     // 鍵なし（KeyChord に Alt が無い・ADR 0157 の決定 3）。一覧からだけ。
     {EditorOperation::paste_html, "", "", true, true},
+    {EditorOperation::toggle_explorer, "Ctrl+Shift+E", "Ctrl+Shift+E", true, true},
+    // 鍵なし。F1 の一覧からだけ（ADR 0162 の決定 7）。
+    {EditorOperation::choose_explorer_root, "", "", true, true},
 }};
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
 using LabelRow = std::pair<KeyChord, std::string_view>;
-constexpr std::array<LabelRow, 25> label_rows{{
+constexpr std::array<LabelRow, 26> label_rows{{
     {ctrl(OperationKey::o), "Ctrl+O"},
     {ctrl(OperationKey::s), "Ctrl+S"},
     {ctrl(OperationKey::t), "Ctrl+T"},
@@ -157,6 +164,7 @@ constexpr std::array<LabelRow, 25> label_rows{{
     {ctrl_shift(OperationKey::f4), "Ctrl+Shift+F4"},
     {ctrl_shift(OperationKey::m), "Ctrl+Shift+M"},
     {ctrl_shift(OperationKey::v), "Ctrl+Shift+V"},
+    {ctrl_shift(OperationKey::e), "Ctrl+Shift+E"},
 }};
 
 std::string shown_label(EditorOperation operation, EditMode mode)
@@ -289,7 +297,7 @@ void verify_operation_choices()
 {
     const auto ordinary = nenenib::core::operation_choices("", EditMode::ordinary);
     const auto vim = nenenib::core::operation_choices("", EditMode::vim);
-    expect(ordinary.size() == 23 && vim.size() == 21,
+    expect(ordinary.size() == 25 && vim.size() == 23,
            "an empty query lists every operation available in the mode");
     std::vector<Operation> in_order;
     for (const auto &text : nenenib::core::operation_texts)

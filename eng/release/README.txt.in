@@ -46,11 +46,11 @@ ZIPを展開し、NeNeNib.exeを起動してください。追加ランタイム
   UTF-8、UTF-8 BOM、Shift_JIS、UTF-16 LE / BE（BOMつき）と、読み込んだCRLF/LFを扱います。
 
 保存先
-  設定: %LOCALAPPDATA%\NeNeNib\settings.v3
+  設定: %LOCALAPPDATA%\NeNeNib\settings.v4
   タブと表示位置: 同フォルダのsession.v2。保存済みファイルだけ復元します。
   ブックマーク: bookmarks.v1、閉じたファイルの履歴: history.v1
   利用者の配色: themes\<name>.v1.theme、自動退避: autosave\<プロセスID>\
-  新形式が無い場合だけ旧settings.v2/v1、session.v1を読みます。
+  新形式が無い場合だけ旧settings.v3/v2/v1、session.v1を読みます。
   読み込むだけでは旧ファイルを変更せず、新形式の保存後も旧版を残します。
   引数なしの起動で前回のタブを復元します。窓位置・サイズの復元は未対応です。
 

@@ -10,6 +10,7 @@
 #include "ExTabVerb.hpp"
 #include "ExWindowName.hpp"
 #include "LanguageTable.hpp"
+#include "Offset.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
@@ -342,6 +343,104 @@ language_option(std::string_view option)
     return std::unexpected(ExFailure::unknown_option);
 }
 
+[[nodiscard]] std::expected<FilePath, ExFailure> document_path(std::string_view text);
+
+constexpr std::string_view ellipsis = "…";
+
+// `explorer=on` `explorer=off`（ADR 0162 の決定 7）。`set wrap` と同じ形の文言。
+[[nodiscard]] DisplayText explorer_message(bool shown)
+{
+    return DisplayText::parse(shown ? "explorer=on" : "explorer=off").value();
+}
+
+[[nodiscard]] ExResult explorer_result(EditorSettings settings, bool shown)
+{
+    settings.explorer = shown;
+    return ExResult{std::move(settings), std::nullopt, std::nullopt, explorer_message(shown)};
+}
+
+// `root=<経路>`。無ければ `root=`。256 バイトを超える経路は末尾を code point 境界で落として「…」。
+[[nodiscard]] DisplayText root_message(const std::optional<FilePath> &root)
+{
+    std::string text = "root=";
+    if (root.has_value())
+    {
+        text += root.value().text();
+    }
+    if (text.size() > DisplayText::maximum_bytes)
+    {
+        Offset cut{DisplayText::maximum_bytes - ellipsis.size()};
+        while (!is_boundary(text, cut))
+        {
+            cut = previous_code_point(text, cut);
+        }
+        text.resize(cut.value);
+        text += ellipsis;
+    }
+    auto parsed = DisplayText::parse(text);
+    if (!parsed)
+    {
+        return DisplayText::parse("root").value();
+    }
+    return std::move(parsed).value();
+}
+
+// `set root=<経路>` と `set root=`（ルートを決めていない状態へ戻す）。経路の読みは `:w <file>` と
+// 同じ document_path の 1 本（展開しない・`\ ` だけ外す）。
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure> root_result(std::string_view value,
+                                                                       EditorSettings settings)
+{
+    if (value.empty())
+    {
+        settings.root = std::nullopt;
+    }
+    else
+    {
+        auto path = document_path(value);
+        if (!path)
+        {
+            return std::unexpected(path.error());
+        }
+        settings.root = std::move(path).value();
+    }
+    const DisplayText message = root_message(settings.root);
+    return ExResult{std::move(settings), std::nullopt, std::nullopt, message};
+}
+
+// エクスプローラーの option（ADR 0162 の決定 7）。`explorer` `root` は保存する設定で
+// settings に載る。問い（`?`）は今の値を文言にするだけで settings は空。
+// `root=.` は controller が解く要求。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+explorer_option(std::string_view option, const EditorSettings &settings)
+{
+    if (option == "explorer" || option == "noexplorer")
+    {
+        return explorer_result(settings, option == "explorer");
+    }
+    if (option == "explorer?")
+    {
+        return ExResult{std::nullopt, std::nullopt, std::nullopt,
+                        explorer_message(settings.explorer)};
+    }
+    if (option == "root?")
+    {
+        return ExResult{std::nullopt, std::nullopt, std::nullopt, root_message(settings.root)};
+    }
+    if (option == "root=.")
+    {
+        return ExResult{.settings = std::nullopt,
+                        .highlight = std::nullopt,
+                        .incsearch = std::nullopt,
+                        .message = DisplayText::parse("root=.").value(),
+                        .root = ExRootRequest::active_document_folder};
+    }
+    if (!option.starts_with("root="))
+    {
+        return std::nullopt;
+    }
+    return root_result(option.substr(5), settings);
+}
+
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 set_option(std::string_view option, const EditorSettings &settings)
 {
@@ -368,6 +467,11 @@ set_option(std::string_view option, const EditorSettings &settings)
     if (option.starts_with("guifont="))
     {
         return set_gui_font(option.substr(8), settings);
+    }
+    auto explorer = explorer_option(option, settings);
+    if (explorer.has_value())
+    {
+        return std::move(explorer).value();
     }
     return unsaved_option(option);
 }
@@ -764,7 +868,9 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     return std::unexpected(ExFailure::unknown_command);
 }
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
-constexpr std::array<std::string_view, 26> fixed_candidates{"colorscheme",
+// 問いの形（`set clipboard?` `set explorer?` `set root?`）は並べない（`?`
+// は操作の一覧の印と重なる）。
+constexpr std::array<std::string_view, 30> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -789,7 +895,11 @@ constexpr std::array<std::string_view, 26> fixed_candidates{"colorscheme",
                                                             "syntax on",
                                                             "syntax off",
                                                             "set clipboard=unnamed",
-                                                            "set clipboard="};
+                                                            "set clipboard=",
+                                                            "set explorer",
+                                                            "set noexplorer",
+                                                            "set root=",
+                                                            "set root=."};
 
 [[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
                                   std::string_view suffix = {})

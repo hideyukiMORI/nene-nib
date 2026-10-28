@@ -2,52 +2,68 @@
 
 #include "BuiltinThemes.hpp"
 #include "KeyValueFields.hpp"
+#include "LanguageTable.hpp"
 #include "SettingsFields.hpp"
 
+#include <algorithm>
+#include <array>
+#include <cstddef>
 #include <format>
 #include <optional>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace nenenib::adapters::win32
 {
 namespace
 {
 using Failure = application::SettingsFailure;
+using Field = std::optional<std::string_view> SettingsFields::*;
 
-[[nodiscard]] std::expected<void, Failure>
-assign_field(SettingsFields &fields, std::string_view key, std::string_view value)
+// 鍵の名前と DTO の欄の対（同じ位置）。v4 だけの鍵も読むが、旧版にあれば apply_v4_fields
+// が拒否する。
+constexpr std::array<std::string_view, 11> field_names{
+    "version",     "colorscheme", "font_family", "font_size", "guide",   "wrap",
+    "ui_language", "lsp",         "explorer",    "root",      "features"};
+constexpr std::array<Field, 11> field_members{
+    &SettingsFields::version,     &SettingsFields::colorscheme, &SettingsFields::font_family,
+    &SettingsFields::font_size,   &SettingsFields::guide,       &SettingsFields::wrap,
+    &SettingsFields::ui_language, &SettingsFields::lsp,         &SettingsFields::explorer,
+    &SettingsFields::root,        &SettingsFields::features};
+
+// 言語ごとのサーバーの命令の鍵 `lsp.<language>.command`（ADR 0160・ADR 0170 の決定 3）。
+constexpr std::string_view lsp_prefix = "lsp.";
+constexpr std::string_view lsp_suffix = ".command";
+
+// 表示言語の希望値の全値（ADR 0123 の改訂の決定 1）。値を足したら language_text の switch
+// が落ちる。
+constexpr std::array<core::DisplayLanguageChoice, 7> language_choices{
+    core::DisplayLanguageChoice::system,  core::DisplayLanguageChoice::japanese,
+    core::DisplayLanguageChoice::english, core::DisplayLanguageChoice::simplified_chinese,
+    core::DisplayLanguageChoice::korean,  core::DisplayLanguageChoice::spanish,
+    core::DisplayLanguageChoice::german};
+
+[[nodiscard]] std::string_view language_text(core::DisplayLanguageChoice choice) noexcept
 {
-    if (key == "version")
+    switch (choice)
     {
-        fields.version = value;
-        return {};
+    case core::DisplayLanguageChoice::system:
+        return "system";
+    case core::DisplayLanguageChoice::japanese:
+        return "ja";
+    case core::DisplayLanguageChoice::english:
+        return "en";
+    case core::DisplayLanguageChoice::simplified_chinese:
+        return "zh-hans";
+    case core::DisplayLanguageChoice::korean:
+        return "ko";
+    case core::DisplayLanguageChoice::spanish:
+        return "es";
+    case core::DisplayLanguageChoice::german:
+        return "de";
     }
-    if (key == "colorscheme")
-    {
-        fields.colorscheme = value;
-        return {};
-    }
-    if (key == "font_family")
-    {
-        fields.font_family = value;
-        return {};
-    }
-    if (key == "font_size")
-    {
-        fields.font_size = value;
-        return {};
-    }
-    if (key == "wrap")
-    {
-        fields.wrap = value;
-        return {};
-    }
-    if (key == "guide")
-    {
-        fields.guide = value;
-        return {};
-    }
-    return std::unexpected(Failure::malformed);
+    std::unreachable();
 }
 
 [[nodiscard]] std::expected<SettingsFields, Failure> read_fields(std::string_view bytes)
@@ -60,11 +76,21 @@ assign_field(SettingsFields &fields, std::string_view key, std::string_view valu
     SettingsFields fields;
     for (const auto &[key, value] : parsed.value())
     {
-        const auto assigned = assign_field(fields, key, value);
-        if (!assigned)
+        if (key.starts_with(lsp_prefix) && key.ends_with(lsp_suffix) &&
+            key.size() > lsp_prefix.size() + lsp_suffix.size())
         {
-            return std::unexpected(assigned.error());
+            fields.lsp_commands.emplace_back(
+                key.substr(lsp_prefix.size(), key.size() - lsp_prefix.size() - lsp_suffix.size()),
+                value);
+            continue;
         }
+        const auto found = std::ranges::find(field_names, key);
+        if (found == field_names.end())
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        const auto index = static_cast<std::size_t>(found - field_names.begin());
+        fields.*field_members.at(index) = value;
     }
     return fields;
 }
@@ -99,6 +125,30 @@ theme_from(std::string_view name, const core::ThemeCatalog &themes)
     return size.value();
 }
 
+// `on` か `off` だけを受ける（大文字・空・ほかの語は拒否）。
+[[nodiscard]] std::expected<bool, Failure> switch_from(const std::optional<std::string_view> &value)
+{
+    if (value == "on")
+    {
+        return true;
+    }
+    if (value == "off")
+    {
+        return false;
+    }
+    return std::unexpected(Failure::malformed);
+}
+
+[[nodiscard]] core::GuideVisibility guide_of(bool shown) noexcept
+{
+    return shown ? core::GuideVisibility::shown : core::GuideVisibility::hidden;
+}
+
+[[nodiscard]] core::LineWrapping wrapping_of(bool wrap) noexcept
+{
+    return wrap ? core::LineWrapping::wrap : core::LineWrapping::no_wrap;
+}
+
 [[nodiscard]] std::expected<core::GuideVisibility, Failure> guide_from(const SettingsFields &fields,
                                                                        SettingsVersion version)
 {
@@ -112,15 +162,8 @@ theme_from(std::string_view name, const core::ThemeCatalog &themes)
         return core::GuideVisibility::shown;
     case SettingsVersion::v2:
     case SettingsVersion::v3:
-        if (fields.guide == "on")
-        {
-            return core::GuideVisibility::shown;
-        }
-        if (fields.guide == "off")
-        {
-            return core::GuideVisibility::hidden;
-        }
-        return std::unexpected(Failure::malformed);
+    case SettingsVersion::v4:
+        return switch_from(fields.guide).transform(guide_of);
     }
     std::unreachable();
 }
@@ -138,17 +181,138 @@ theme_from(std::string_view name, const core::ThemeCatalog &themes)
         }
         return core::LineWrapping::wrap;
     case SettingsVersion::v3:
-        if (fields.wrap == "on")
-        {
-            return core::LineWrapping::wrap;
-        }
-        if (fields.wrap == "off")
-        {
-            return core::LineWrapping::no_wrap;
-        }
-        return std::unexpected(Failure::malformed);
+    case SettingsVersion::v4:
+        return switch_from(fields.wrap).transform(wrapping_of);
     }
     std::unreachable();
+}
+
+[[nodiscard]] std::expected<core::DisplayLanguageChoice, Failure>
+language_from(std::string_view text)
+{
+    const auto found = std::ranges::find(language_choices, text, language_text);
+    if (found == language_choices.end())
+    {
+        return std::unexpected(Failure::malformed);
+    }
+    return *found;
+}
+
+// `root=` は「決めていない」、ほかは検証済みの経路（展開も絶対化もしない・ARC-007）。
+[[nodiscard]] std::expected<std::optional<core::FilePath>, Failure> root_from(std::string_view text)
+{
+    if (text.empty())
+    {
+        return std::nullopt;
+    }
+    auto path = core::FilePath::parse(text);
+    if (!path)
+    {
+        return std::unexpected(Failure::malformed);
+    }
+    return std::optional<core::FilePath>{std::move(path).value()};
+}
+
+[[nodiscard]] bool feature_character(char letter) noexcept
+{
+    return (letter >= 'a' && letter <= 'z') || (letter >= '0' && letter <= '9') || letter == '_';
+}
+
+// `features=a,b,c`。名前は ASCII の小文字・数字・`_` で、空の名前と重複は拒否する。中身の意味は
+// 解釈しない（ADR 0170 の決定 3・機能の表は後の PR）。
+[[nodiscard]] std::expected<std::vector<std::string>, Failure> features_from(std::string_view text)
+{
+    std::vector<std::string> names;
+    if (text.empty())
+    {
+        return names;
+    }
+    while (true)
+    {
+        const auto comma = text.find(',');
+        const auto name = text.substr(0, comma);
+        if (name.empty() || !std::ranges::all_of(name, feature_character) ||
+            std::ranges::find(names, name) != names.end())
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        names.emplace_back(name);
+        if (comma == std::string_view::npos)
+        {
+            return names;
+        }
+        text.remove_prefix(comma + 1);
+    }
+}
+
+[[nodiscard]] bool has_v4_fields(const SettingsFields &fields) noexcept
+{
+    return fields.ui_language.has_value() || fields.lsp.has_value() ||
+           fields.explorer.has_value() || fields.root.has_value() || fields.features.has_value() ||
+           !fields.lsp_commands.empty();
+}
+
+// `lsp.<language>.command=<値>` の行。言語は LanguageTable の名前だけ、同じ言語の 2 行目は
+// 重複、値は空でないことだけを見る（絶対パスかは使う所が見る）。並びは言語の名前の順。
+[[nodiscard]] std::expected<std::vector<std::pair<std::string, std::string>>, Failure>
+lsp_commands_from(const SettingsFields &fields)
+{
+    std::vector<std::pair<std::string, std::string>> commands;
+    for (const auto &[name, value] : fields.lsp_commands)
+    {
+        const auto language = core::language_of_name(name);
+        if (!language.has_value() || value.empty())
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        const std::string canonical(core::language_name(language.value_or(core::Language{})));
+        if (std::ranges::any_of(commands, [&](const auto &row) { return row.first == canonical; }))
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        commands.emplace_back(canonical, value);
+    }
+    std::ranges::sort(commands, {},
+                      [](const auto &row) -> const std::string & { return row.first; });
+    return commands;
+}
+
+// v4 だけの欄。旧版はどれも持たず（あれば未知の鍵として拒否）、表示言語は日本語（更新で今の表示を
+// 変えない・ADR 0123 の決定 3）、ほかは既定。v4 はどれも必須で厳密に読む。
+[[nodiscard]] std::expected<void, Failure> apply_v4_fields(core::EditorSettings &settings,
+                                                           const SettingsFields &fields,
+                                                           SettingsVersion version)
+{
+    if (version != SettingsVersion::v4)
+    {
+        if (has_v4_fields(fields))
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        settings.ui_language = core::DisplayLanguageChoice::japanese;
+        return {};
+    }
+    if (!fields.ui_language.has_value() || !fields.root.has_value() || !fields.features.has_value())
+    {
+        return std::unexpected(Failure::malformed);
+    }
+    const auto language = language_from(fields.ui_language.value());
+    const auto lsp = switch_from(fields.lsp);
+    const auto explorer = switch_from(fields.explorer);
+    auto root = root_from(fields.root.value());
+    auto features = features_from(fields.features.value());
+    auto commands = lsp_commands_from(fields);
+    if (!language || !lsp || !explorer || !root || !features || !commands)
+    {
+        return std::unexpected(Failure::malformed);
+    }
+    settings.ui_language = language.value();
+    settings.lsp = lsp.value();
+    settings.explorer = explorer.value();
+    settings.root = std::move(root).value();
+    settings.features = std::move(features).value();
+    settings.lsp_commands = std::move(commands).value();
+    return {};
 }
 
 [[nodiscard]] std::string_view version_text(SettingsVersion version)
@@ -161,6 +325,8 @@ theme_from(std::string_view name, const core::ThemeCatalog &themes)
         return "2";
     case SettingsVersion::v3:
         return "3";
+    case SettingsVersion::v4:
+        return "4";
     }
     std::unreachable();
 }
@@ -202,8 +368,47 @@ validated(const SettingsFields &fields, SettingsVersion version, const core::The
     {
         return std::unexpected(size.error());
     }
-    return core::EditorSettings{size.value(), family.value(), theme.value(), guide.value(),
-                                wrap.value()};
+    core::EditorSettings settings{size.value(), family.value(), theme.value(), guide.value(),
+                                  wrap.value()};
+    const auto extended = apply_v4_fields(settings, fields, version);
+    if (!extended)
+    {
+        return std::unexpected(extended.error());
+    }
+    return settings;
+}
+
+[[nodiscard]] std::string_view switch_text(bool on) noexcept
+{
+    return on ? "on" : "off";
+}
+
+[[nodiscard]] std::string features_text(const std::vector<std::string> &features)
+{
+    std::string text;
+    for (const auto &name : features)
+    {
+        if (!text.empty())
+        {
+            text += ',';
+        }
+        text += name;
+    }
+    return text;
+}
+
+// `lsp.<language>.command=<値>` の行を言語の名前の順に（features の後ろ）。
+[[nodiscard]] std::string
+lsp_commands_text(const std::vector<std::pair<std::string, std::string>> &commands)
+{
+    auto sorted = commands;
+    std::ranges::sort(sorted, {}, [](const auto &row) -> const std::string & { return row.first; });
+    std::string text;
+    for (const auto &[language, command] : sorted)
+    {
+        text += std::format("{}{}{}={}\n", lsp_prefix, language, lsp_suffix, command);
+    }
+    return text;
 }
 } // namespace
 
@@ -242,8 +447,12 @@ std::string encode_settings(const core::EditorSettings &settings)
         wrap = "off";
         break;
     }
-    return std::format(
-        "version=3\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\nwrap={}\n", theme,
-        settings.font_family.text(), settings.font_size.points(), guide, wrap);
+    const auto root = settings.root.has_value() ? settings.root.value().text() : std::string_view{};
+    return std::format("version=4\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
+                       "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n{}",
+                       theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
+                       language_text(settings.ui_language), switch_text(settings.lsp),
+                       switch_text(settings.explorer), root, features_text(settings.features),
+                       lsp_commands_text(settings.lsp_commands));
 }
 } // namespace nenenib::adapters::win32

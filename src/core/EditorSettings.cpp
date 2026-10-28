@@ -8,7 +8,10 @@ bool same_settings(const EditorSettings &left, const EditorSettings &right) noex
 {
     return left.font_size.points() == right.font_size.points() &&
            left.font_family.text() == right.font_family.text() && left.theme == right.theme &&
-           left.guide == right.guide && left.wrapping == right.wrapping;
+           left.guide == right.guide && left.wrapping == right.wrapping &&
+           left.ui_language == right.ui_language && left.lsp == right.lsp &&
+           left.explorer == right.explorer && left.root == right.root &&
+           left.features == right.features && left.lsp_commands == right.lsp_commands;
 }
 
 bool affects_line_height(const EditorSettings &before, const EditorSettings &after) noexcept

@@ -29,6 +29,9 @@ enum class OperationKey : std::uint8_t
     m,
     // Ctrl+Shift+V の文字だけの貼り付け（ADR 0157 の決定 2）。
     // Shift なしの Ctrl+V は表に行を置かない（ui の今の貼り付けの道のまま）。
-    v
+    v,
+    // Ctrl+Shift+E のエクスプローラー（ADR 0162 の決定 7）。Shift なしの Ctrl+E
+    // は表に行を置かない。
+    e
 };
 } // namespace nenenib::core

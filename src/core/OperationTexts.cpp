@@ -36,6 +36,8 @@ namespace
     case EditorOperation::toggle_preview:
     case EditorOperation::paste_plain:
     case EditorOperation::paste_html:
+    case EditorOperation::toggle_explorer:
+    case EditorOperation::choose_explorer_root:
         return true;
     }
     return false;

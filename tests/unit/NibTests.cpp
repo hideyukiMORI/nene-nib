@@ -20,7 +20,7 @@ namespace
 // 契約を持たない scope（--vim-visual-yank）と、既に載っている契約を別の切り口で束ねただけの scope
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 // 表は関数の外に置く（CPP-012・関数長の上限は表の行を数えない形で守る）。
-constexpr std::array<std::pair<std::string_view, void (*)()>, 66> contracts{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 68> contracts{{
     {"--vim-wrapped", verify_vim_wrapped_contracts},
     {"--wrapped-view", verify_wrapped_view_scope},
     {"--vim-dot", verify_vim_dot_contracts},
@@ -80,6 +80,8 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 66> contracts{{
     {"--title-bar-layout-property", verify_title_bar_layout_property_scope},
     {"--grid-cells-property", verify_grid_cells_property_scope},
     {"--tabs-property", verify_tabs_property_scope},
+    {"--explorer-tree", verify_explorer_tree_scope},
+    {"--explorer-layout", verify_explorer_layout_scope},
     {"--palette-match-property", verify_palette_match_property_scope},
     {"--command-match-property", verify_command_match_property_scope},
     {"--editing-property", verify_editing_property_scope},
@@ -104,7 +106,7 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 89> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 91> scopes{{
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
@@ -189,6 +191,8 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 89> scopes{{
     {"--title-bar-layout-property", verify_title_bar_layout_property_scope},
     {"--grid-cells-property", verify_grid_cells_property_scope},
     {"--tabs-property", verify_tabs_property_scope},
+    {"--explorer-tree", verify_explorer_tree_scope},
+    {"--explorer-layout", verify_explorer_layout_scope},
     {"--editing-property", verify_editing_property_scope},
     {"--json", verify_json_scope},
     {"--json-property", verify_json_property_scope},
