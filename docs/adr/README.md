@@ -185,3 +185,7 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0171](0171-minimap-is-a-retained-bitmap-redrawn-only-for-edited-lines.md) | ミニマップは文書ごとの bitmap に 1 回描いて持ち、編集した行の帯だけ描き直す | 受理（D70・2026-10-28）・#1017 |
 | [0172](0172-start-screen-shows-recent-files-and-entry-actions-on-the-untouched-untitled-document.md) | 起動画面は、何も書いていない無題の文書の本文の面に最近のファイルと入口の操作を出す | 受理（D70・2026-10-28）・#1018 |
 | [0173](0173-small-editor-niceties-trailing-space-todo-marks-color-swatches-file-operations-and-line-search.md) | 末尾の空白・TODO の強調・色の見本・ファイル操作・行のファジー検索は、既存の道に 1 行ずつ足す | 受理（D70・2026-10-28）・#1011〜#1015 |
+| [0174](0174-ordinary-mode-find-replace-and-go-to-line-share-the-input-line-and-the-vim-matcher.md) | 通常モードの検索・置換・行へ移動は、Ex の入力行と Vim の照合器を共用する | 受理（D71・2026-10-29）・#1046 |
+| [0175](0175-the-clock-is-one-port-read-only-when-f5-inserts-the-date-and-time.md) | 現在時刻は `ClockPort` の 1 本で、読むのは F5 で日時を挿入するときだけ | 受理（D71・2026-10-29）・#1050 |
+| [0176](0176-vim-map-is-a-settings-row-applied-by-one-key-table-at-the-window-entry.md) | Vim の `map` は設定 v4 の行で、置き換えは窓の入口の鍵の表 1 つが行い、engine は知らない | 受理（D72・2026-10-29）・#1058 |
+| [0177](0177-printing-is-one-port-that-draws-the-body-layout-into-an-xps-print-control.md) | 印刷は port 1 本で、本文と同じ DirectWrite の layout を XPS の print control に描く | 受理（D71・2026-10-29）・#1047 |

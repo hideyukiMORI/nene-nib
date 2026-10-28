@@ -65,3 +65,10 @@
 | ui の全部の鍵をこの Issue で表に移す | Vim の鍵・矢印・コピーの経路まで動かすと、確かめる範囲が一覧の範囲を越える。一覧に載せる分から移す |
 | 読みを持たず、確定した漢字だけで絞る | 「保存」を探すのに変換が要る。操作は十数個で、読みの欄は安い |
 | 早見表の 1 枚・ヘルプの文書をタブで開く | 施主が採らなかった（D43） |
+
+## 追補（2026-10-29・#1051・D71）: 右クリックのメニューは操作の表の列
+
+1. 本文の右クリック（`WM_CONTEXTMENU`・Shift+F10・メニューキー）で、OS の `TrackPopupMenu` ではなく **Ctrl+P の面の部品**を本文の上に小さく出す（配色は `panel` / `panel_border` / `current_line`・行の layout は `PaletteRowLayouts` の保持・ADR 0150）。項目は操作の表の行から: `operation_texts` の表に列 `context_menu`（`std::optional<std::uint8_t>`・載る順）を足し、初版は 切り取り・コピー・貼り付け・削除・すべて選択・検索・置換・行へ移動（ADR 0174）・Markdown プレビュー。コピーと貼り付けと削除と全選択はこの追補で `EditorOperation` に値を足して表に移す（決定 13 の「後続」の一部を前倒し・ui の既存の分岐は `run_operation` に畳む）。
+2. 行の右端の鍵の表示は `key_chord_label`（通常モード）。Vim モードでは同じ項目で、鍵の表示を Vim の鍵の列（`y` `d` `p` `ggVG` `/`）に替える: 表に `vim_hint`（`std::string_view`・無ければ空）の列を足す。文字列を別に書かない。
+3. 選ぶと `run_operation` の 1 本。Esc・外のクリック・ホイールで閉じる。面が出ている間の鍵は面へ（Ctrl+P と同じ奪い方・IME は閉じる）。意図は `OpenContextMenu{point}` と既存の面の選択の意図。
+4. 契約 `--context-menu`（開く・項目の列と順が表のとおり・通常 / Vim で鍵の表示が違う・選ぶと操作が 1 回・Esc と外のクリックで閉じる）。`nib_window_tests` の画素（位置と 1 行目）。速さ: 打鍵の道に載らない。
