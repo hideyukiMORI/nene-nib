@@ -5,8 +5,10 @@
 
 namespace nenenib::adapters::win32
 {
-FolderShelf::FolderShelf(std::size_t batch_files, std::size_t file_limit) noexcept
-    : batch_files_(std::max<std::size_t>(batch_files, 1)), file_limit_(file_limit)
+FolderShelf::FolderShelf(std::size_t batch_files, std::size_t file_limit,
+                         std::size_t entry_limit) noexcept
+    : batch_files_(std::max<std::size_t>(batch_files, 1)), file_limit_(file_limit),
+      entry_limit_(entry_limit)
 {
 }
 
@@ -18,6 +20,11 @@ std::size_t FolderShelf::batch_files() const noexcept
 std::size_t FolderShelf::file_limit() const noexcept
 {
     return file_limit_;
+}
+
+std::size_t FolderShelf::entry_limit() const noexcept
+{
+    return entry_limit_;
 }
 
 void FolderShelf::bind(std::function<void()> arrived)

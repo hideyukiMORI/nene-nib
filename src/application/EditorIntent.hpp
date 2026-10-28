@@ -16,6 +16,8 @@
 #include "DiscardAutosave.hpp"
 #include "EditCommand.hpp"
 #include "EndSession.hpp"
+#include "ExplorerKey.hpp"
+#include "ExplorerRootChosen.hpp"
 #include "HistoryAction.hpp"
 #include "InsertText.hpp"
 #include "MoveCaret.hpp"
@@ -27,12 +29,14 @@
 #include "OpenTabList.hpp"
 #include "PasteCommand.hpp"
 #include "PlaceCaret.hpp"
+#include "PointExplorer.hpp"
 #include "PointText.hpp"
 #include "PointTitleBar.hpp"
 #include "PreviewTick.hpp"
 #include "RefreshAppearance.hpp"
 #include "RestoreAutosave.hpp"
 #include "SaveDocument.hpp"
+#include "ScrollExplorer.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollPaletteList.hpp"
 #include "ScrollPane.hpp"
@@ -51,6 +55,7 @@
 #include "SwitchTab.hpp"
 #include "TitleBarWidth.hpp"
 #include "ToggleBookmark.hpp"
+#include "ToggleExplorer.hpp"
 #include "TogglePreview.hpp"
 #include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
@@ -73,5 +78,6 @@ using EditorIntent = std::variant<
     WalkRecentTab, SettleRecentTab, CloseTab, PointTitleBar, ScrollTabs, TitleBarWidth, OpenTabList,
     EndSession, WorkCompleted, AutosaveTick, RestoreAutosave, DiscardAutosave, ToggleBookmark,
     OpenOperationList, PointText, SelectDisplay, SelectLanguage, SelectSyntax, ScrollPaletteList,
-    SplitPane, SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick>;
+    SplitPane, SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick, ToggleExplorer,
+    ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen>;
 } // namespace nenenib::application

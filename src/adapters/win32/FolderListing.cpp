@@ -2,6 +2,8 @@
 
 #include "FindHandle.hpp"
 #include "FolderBatch.hpp"
+#include "FolderEntry.hpp"
+#include "FolderListingKind.hpp"
 #include "NativePath.hpp"
 #include "Utf16.hpp"
 
@@ -59,6 +61,31 @@ constexpr DWORD skipped_attributes =
     return std::move(path).value();
 }
 
+// エクスプローラーの 1 項目（ADR 0162 の決定 5）。`.` `..` だけを除き、フォルダも隠しも返す。
+// UTF-8 にできない名前・FilePath にできない名前は飛ばす。
+[[nodiscard]] std::optional<application::FolderEntry> listed_entry(const core::FilePath &folder,
+                                                                   const WIN32_FIND_DATAW &data)
+{
+    const std::wstring_view wide(static_cast<const wchar_t *>(data.cFileName));
+    if (wide == L"." || wide == L"..")
+    {
+        return std::nullopt;
+    }
+    const auto name = core::to_utf8(wide);
+    if (!name)
+    {
+        return std::nullopt;
+    }
+    auto path = core::FilePath::parse(joined(folder.text(), name.value()));
+    if (!path)
+    {
+        return std::nullopt;
+    }
+    return application::FolderEntry{std::move(path).value(),
+                                    (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0,
+                                    (data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0};
+}
+
 // 空のルート（C:\ など）には "." も ".." も無く、
 // FindFirstFileExW は ERROR_FILE_NOT_FOUND で返る。
 [[nodiscard]] FolderProgress unopened(DWORD error) noexcept
@@ -106,8 +133,7 @@ void FolderListing::run(const std::stop_token &stop)
         {
             return;
         }
-        auto file = listed_file(request_.folder, data);
-        if (file.has_value() && !take(std::move(file).value()))
+        if (!listed(data))
         {
             return;
         }
@@ -120,16 +146,40 @@ bool FolderListing::live(const std::stop_token &stop) const
     return !stop.stop_requested() && shelf_->current(generation_);
 }
 
+// 要求の種類で 1 件を写して足す（ADR 0162 の決定 5）。飛ばした項目では続ける。
+bool FolderListing::listed(const WIN32_FIND_DATAW &data)
+{
+    switch (request_.listing)
+    {
+    case application::FolderListingKind::files:
+    {
+        auto file = listed_file(request_.folder, data);
+        return !file.has_value() || take(std::move(file).value());
+    }
+    case application::FolderListingKind::entries:
+    {
+        auto entry = listed_entry(request_.folder, data);
+        return !entry.has_value() || take(std::move(entry).value());
+    }
+    }
+    return false;
+}
+
+std::size_t FolderListing::limit() const noexcept
+{
+    switch (request_.listing)
+    {
+    case application::FolderListingKind::files:
+        return shelf_->file_limit();
+    case application::FolderListingKind::entries:
+        return shelf_->entry_limit();
+    }
+    return 0;
+}
+
 bool FolderListing::take(core::FilePath file)
 {
-    if (total_ == shelf_->file_limit())
-    {
-        // 上限を超える 1 件が見えたので、上限までを出して打ち切る。
-        static_cast<void>(send(FolderProgress::truncated));
-        return false;
-    }
-    // 満ちた batch は、次の 1 件が見えてから出す（最後の batch だけが complete になる）。
-    if (files_.size() == shelf_->batch_files() && !send(FolderProgress::more))
+    if (!room())
     {
         return false;
     }
@@ -138,9 +188,33 @@ bool FolderListing::take(core::FilePath file)
     return true;
 }
 
+bool FolderListing::take(application::FolderEntry entry)
+{
+    if (!room())
+    {
+        return false;
+    }
+    entries_.push_back(std::move(entry));
+    ++total_;
+    return true;
+}
+
+bool FolderListing::room()
+{
+    if (total_ == limit())
+    {
+        // 上限を超える 1 件が見えたので、上限までを出して打ち切る。
+        static_cast<void>(send(FolderProgress::truncated));
+        return false;
+    }
+    // 満ちた batch は、次の 1 件が見えてから出す（最後の batch だけが complete になる）。
+    return files_.size() + entries_.size() != shelf_->batch_files() || send(FolderProgress::more);
+}
+
 bool FolderListing::send(FolderProgress progress)
 {
-    return shelf_->deliver(generation_, {request_.ticket, std::exchange(files_, {}), progress});
+    return shelf_->deliver(generation_, {request_.ticket, std::exchange(files_, {}), progress,
+                                         std::exchange(entries_, {})});
 }
 
 // 最後の batch を出す。止める合図か新しい世代が来ていたら出さない

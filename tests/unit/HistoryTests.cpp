@@ -10,11 +10,14 @@
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "EditorPorts.hpp"
+#include "EditorSettings.hpp"
 #include "EndSession.hpp"
 #include "FileHistory.hpp"
 #include "FileHistoryEdit.hpp"
 #include "FileHistoryFailure.hpp"
 #include "FilePath.hpp"
+#include "FolderBatch.hpp"
+#include "FolderProgress.hpp"
 #include "InsertText.hpp"
 #include "LineNumber.hpp"
 #include "NewTab.hpp"
@@ -46,6 +49,7 @@
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "VisibleLines.hpp"
+#include "WorkCompleted.hpp"
 
 #include <cstddef>
 #include <expected>
@@ -391,6 +395,32 @@ void verify_quiet_start_with_files()
 }
 
 // 起動・開く・切り替え・新しいタブ・保存・打鍵の道では、履歴を読まない・書かない（D24・決定 8）。
+// 面が出ていても、開く・切り替え・新しいタブ・打鍵・保存はフォルダの entries を頼まない
+// （ADR 0162 の決定 5）。頼むのは起動のルートの 1 回だけ。
+void verify_quiet_explorer()
+{
+    auto settings = nenenib::core::default_editor_settings();
+    settings.explorer = true;
+    settings.root = path_of("C:\\work");
+    Editing editing(settings);
+    hold_work(editing.files());
+    auto &controller = editing.controller();
+    applied(controller, VisibleLines{3});
+    editing.folders().serve(
+        nenenib::application::FolderBatch{editing.folders().requests().back().ticket,
+                                          {},
+                                          nenenib::application::FolderProgress::complete});
+    applied(controller, nenenib::application::WorkCompleted{});
+    open_work(editing, "ab");
+    applied(controller, SwitchTab{0});
+    applied(controller, NewTab{});
+    applied(controller, InsertText{"typed"});
+    applied(controller,
+            SaveDocument{path_of("C:\\work\\new.txt"), nenenib::core::TextEncoding::utf8});
+    expect(editing.folders().entry_requests() == 1,
+           "with the panel shown, typing, switching and saving never list the folder's entries");
+}
+
 void verify_quiet_paths()
 {
     verify_quiet_start_with_files();
@@ -433,6 +463,7 @@ void verify_quiet_paths()
                read_requests == 2 && editing.reads().requests().size() == read_requests,
            "opening, switching, new tabs, saving and typing never touch the history, the folder, "
            "autosave, the bell nor the clipboard, and only opening asks the read port");
+    verify_quiet_explorer();
 }
 } // namespace
 

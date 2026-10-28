@@ -119,9 +119,12 @@ void EditorController::accept(const OpenOperationList &)
 
 // 面を開く（ADR 0062 の決定 14）。前の面のときに届いて残った分は collect で捨てる（たまりが空で
 // ないと次の列挙の合図が来ない）。券を進めてから頼むので、前の面の分は券で見分けて捨てられる。
+// エクスプローラーの分は捨てずに木へ写し、面は 1 つずつなので焦点は本文へ戻す（ADR 0162 の決定
+// 4・5）。
 void EditorController::open_palette(std::string_view input, std::size_t selected)
 {
-    static_cast<void>(ports_.folders.collect());
+    static_cast<void>(receive_folders());
+    focus_explorer(false);
     const auto bookmarks = ports_.bookmarks.read();
     auto entries = palette_entries(bookmarks.value_or(FileBookmarks{}));
     request_folder(entries);
@@ -139,7 +142,7 @@ void EditorController::open_palette(std::string_view input, std::size_t selected
 
 void EditorController::request_folder(const std::vector<core::CommandChoice> &entries)
 {
-    palette_folder_ = PaletteFolder{palette_folder_.ticket + 1, {}, 0, false};
+    palette_folder_ = PaletteFolder{++folder_tickets_, {}, 0, false};
     const auto &path = state_.document().path;
     if (!path.has_value())
     {
@@ -152,6 +155,10 @@ void EditorController::request_folder(const std::vector<core::CommandChoice> &en
     }
     palette_folder_.listed = listed_in_folder(folder.value(), entries);
     ports_.folders.list(FolderRequest{folder.value(), palette_folder_.ticket});
+    // port は前の要求をやめるので、読みかけのエクスプローラーの控えは捨てる（開いたまま読んでいない
+    // フォルダは、面の仕事が終わった後に request_explorer_folder が頼み直す・ADR 0162 の決定 5）。
+    folder_live_ = palette_folder_.ticket;
+    explorer_folder_.reset();
 }
 
 // 面を開いている間はタブも履歴も変わらないので、開くときに 1 回だけ作る（ADR 0062 の決定 15）。

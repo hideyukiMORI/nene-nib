@@ -14,6 +14,7 @@
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
 #include "EditorSettings.hpp"
+#include "ExplorerState.hpp"
 #include "FileFailure.hpp"
 #include "InputHistory.hpp"
 #include "Language.hpp"
@@ -77,6 +78,11 @@ class EditorState final
     [[nodiscard]] const core::InputHistory &search_history() const noexcept;
     [[nodiscard]] EditorState with_ex_history(core::InputHistory history) const;
     [[nodiscard]] EditorState with_search_history(core::InputHistory history) const;
+    // エクスプローラー（ADR 0162 の決定 3）。窓に 1 つで、タブの切り替え・閉じる・開くでは
+    // 変わらない。置くのは controller の explorer の群（EditorControllerExplorer.cpp）と、
+    // Ctrl+P の面を開くときに焦点を本文へ戻す 1 か所だけ。
+    [[nodiscard]] const ExplorerState &explorer() const noexcept;
+    [[nodiscard]] EditorState with_explorer(ExplorerState explorer) const;
     // 検索の入力行が開いているあいだだけ値を持つ（ADR 0041 の決定 2）。
     [[nodiscard]] const std::optional<SearchPreview> &search_preview() const noexcept;
 
@@ -309,6 +315,9 @@ class EditorState final
     std::optional<SearchPreview> search_preview_;
     core::InputHistory ex_history_ = core::InputHistory::empty();
     core::InputHistory search_history_ = core::InputHistory::empty();
+    // 木は大きくなり得るので、状態の写し（with_* のたび）で複製しない不変の束で持つ（ADR 0056 の
+    // 脇のタブと同じ形）。
+    std::shared_ptr<const ExplorerState> explorer_ = std::make_shared<const ExplorerState>();
     std::vector<ParkedTab> parked_;
     std::size_t active_ = 0;
     std::vector<AutosaveId> autosave_ids_{AutosaveId{0}};

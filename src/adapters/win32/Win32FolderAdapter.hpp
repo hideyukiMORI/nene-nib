@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ExplorerTree.hpp"
 #include "FolderBatch.hpp"
 #include "FolderPort.hpp"
 #include "FolderRequest.hpp"
@@ -17,6 +18,9 @@ namespace nenenib::adapters::win32
 // #272 の実測で見直す。
 inline constexpr std::size_t folder_batch_files = 1024;
 inline constexpr std::size_t folder_file_limit = 8192;
+// エクスプローラーの 1 つのフォルダで出す項目の上限（ADR 0162 の決定 1・5）。木が 2,000 件を超えた
+// ことを知って末尾を捨て truncated にできるよう、木の上限より 1 件多く出す。
+inline constexpr std::size_t folder_entry_limit = core::ExplorerTree::entry_limit + 1;
 
 // 同じフォルダを裏で読む（ADR 0062 の決定 5〜9）。
 // 列挙はワーカーを借りて走り、読めた分は棚にたまる。
@@ -26,7 +30,8 @@ class Win32FolderAdapter final : public application::FolderPort
 {
   public:
     explicit Win32FolderAdapter(Win32Worker &worker, std::size_t batch_files = folder_batch_files,
-                                std::size_t file_limit = folder_file_limit);
+                                std::size_t file_limit = folder_file_limit,
+                                std::size_t entry_limit = folder_entry_limit);
     ~Win32FolderAdapter() override;
     Win32FolderAdapter(const Win32FolderAdapter &) = delete;
     Win32FolderAdapter(Win32FolderAdapter &&) = delete;

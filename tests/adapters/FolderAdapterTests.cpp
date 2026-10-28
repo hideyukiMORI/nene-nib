@@ -3,9 +3,12 @@
 // 一時フォルダはビルドディレクトリの直下に固定の名前で作り、冒頭で前回の残りを消して終わりに消す。
 // 時刻は読まない（Sleep・時計・タイムアウトの待ちを書かない）。
 // 待つのは合図の受け皿（セマフォ）だけで、止まらないときは CTest の制限時間で落ちる。
+#include "ExplorerTree.hpp"
 #include "FilePath.hpp"
 #include "FindHandle.hpp"
 #include "FolderBatch.hpp"
+#include "FolderEntry.hpp"
+#include "FolderListingKind.hpp"
 #include "FolderProgress.hpp"
 #include "FolderRequest.hpp"
 #include "Win32FolderAdapter.hpp"
@@ -19,6 +22,7 @@
 #include <cstdio>
 #include <format>
 #include <memory>
+#include <optional>
 #include <semaphore>
 #include <string>
 #include <string_view>
@@ -30,6 +34,8 @@ namespace
 namespace core = nenenib::core;
 namespace adapters = nenenib::adapters::win32;
 using nenenib::application::FolderBatch;
+using nenenib::application::FolderEntry;
+using nenenib::application::FolderListingKind;
 using nenenib::application::FolderProgress;
 using nenenib::application::FolderRequest;
 using Batches = std::vector<FolderBatch>;
@@ -276,6 +282,73 @@ void verify_skipped()
            "a folder ending in a separator does not double it");
 }
 
+// エクスプローラーの要求（ADR 0162 の決定 5）。`.` `..` を除く直下の項目を、フォルダか・隠しかと
+// 一緒に返す（ファイルの列は空）。上限は entries の上限で、ファイルの上限ではない。
+Batches listed_entries(const core::FilePath &folder, std::size_t file_limit,
+                       std::size_t entry_limit)
+{
+    Arrivals arrived{0};
+    adapters::Win32Worker worker;
+    adapters::Win32FolderAdapter folders(worker, small_batch, file_limit, entry_limit);
+    folders.bind([&arrived] { arrived.release(); });
+    folders.list(FolderRequest{folder, 1, FolderListingKind::entries});
+    return until_final(folders, arrived, 1);
+}
+
+[[nodiscard]] std::vector<FolderEntry> entries_of(const Batches &batches)
+{
+    std::vector<FolderEntry> entries;
+    for (const auto &batch : batches)
+    {
+        entries.insert(entries.end(), batch.entries.begin(), batch.entries.end());
+    }
+    return entries;
+}
+
+[[nodiscard]] std::optional<FolderEntry> entry_named(const Batches &batches, std::string_view name)
+{
+    const auto entries = entries_of(batches);
+    const auto found = std::ranges::find_if(entries, [name](const FolderEntry &entry)
+                                            { return entry.path.file_name() == name; });
+    return found == entries.end() ? std::nullopt : std::optional{*found};
+}
+
+void verify_entries()
+{
+    const auto batches = listed_entries(folder_path("mixed"), no_limit, no_limit);
+    std::size_t total = 0;
+    bool files_empty = true;
+    for (const auto &batch : batches)
+    {
+        total += batch.entries.size();
+        files_empty = files_empty && batch.files.empty();
+    }
+    expect(total == 5 && files_empty && batches.back().progress == FolderProgress::complete,
+           "entries list every item but . and .. and no files");
+    const auto below = entry_named(batches, "below");
+    const auto hidden = entry_named(batches, "hidden.txt");
+    const auto plain = entry_named(batches, "plain.txt");
+    expect(below.has_value() && below.value().folder && !below.value().hidden,
+           "a folder entry is marked as a folder");
+    expect(hidden.has_value() && hidden.value().hidden && !hidden.value().folder,
+           "a hidden file is listed and marked hidden");
+    expect(plain.has_value() && plain.value().path == path_of("nib-folder-files\\mixed\\plain.txt"),
+           "an entry carries the full path");
+    expect(entry_named(batches, "system.txt").has_value() &&
+               entry_named(batches, "日本語の名前.txt").has_value(),
+           "system files and Japanese names are entries too");
+    const auto limited = listed_entries(folder_path("odd"), 2, 4);
+    std::size_t kept = 0;
+    for (const auto &batch : limited)
+    {
+        kept += batch.entries.size();
+    }
+    expect(kept == 4 && limited.back().progress == FolderProgress::truncated,
+           "entries stop at the entry limit, not the file limit");
+    expect(adapters::folder_entry_limit == core::ExplorerTree::entry_limit + 1,
+           "the default entry limit is one over the tree's limit so the tree can tell");
+}
+
 void verify_failed()
 {
     expect_shape(listed(folder_path("missing"), small_batch, no_limit), {0},
@@ -390,6 +463,7 @@ int main()
     verify_batches();
     verify_limits();
     verify_skipped();
+    verify_entries();
     verify_failed();
     verify_new_ticket_stops_previous();
     verify_stops_during_listing();

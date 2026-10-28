@@ -331,8 +331,9 @@ void EditorController::evaluate_command(std::string_view text)
     state_ = state_.with_command_message(result.value().message);
 }
 
-// Ex の答えのうち命令の要求（タブ・行番号・窓・面・文書・言語・構文・クリップボード）を 1 つ実行
-// したら真。どれも設定を保存せず、知らせは写し先が決める。
+// Ex の答えのうち命令の要求（タブ・行番号・窓・面・文書・ルート・言語・構文・クリップボード）を
+// 1 つ実行したら真。ルート（`:set root=.`）だけは解いた値を設定へ書き、ほかは設定を保存しない。
+// 知らせは写し先が決める。
 bool EditorController::ran_ex_request(const core::ExResult &result)
 {
     if (result.tab.has_value())
@@ -358,6 +359,12 @@ bool EditorController::ran_ex_request(const core::ExResult &result)
     if (result.document.has_value())
     {
         run_document_request(result.document.value());
+        return true;
+    }
+    // `:set root=.` は文書のフォルダを解いて設定へ書く（ADR 0162 の決定 7）。
+    if (result.root.has_value())
+    {
+        run_root_request(result.root.value());
         return true;
     }
     return answer_current_value(result);

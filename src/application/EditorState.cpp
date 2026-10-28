@@ -357,6 +357,18 @@ EditorState EditorState::with_search_history(core::InputHistory history) const
     return next;
 }
 
+const ExplorerState &EditorState::explorer() const noexcept
+{
+    return *explorer_;
+}
+
+EditorState EditorState::with_explorer(ExplorerState explorer) const
+{
+    EditorState next(*this);
+    next.explorer_ = std::make_shared<const ExplorerState>(std::move(explorer));
+    return next;
+}
+
 EditorState EditorState::with_command_message(std::optional<core::DisplayText> message) const
 {
     EditorState next(*this);
