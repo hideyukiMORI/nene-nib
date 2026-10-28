@@ -40,7 +40,7 @@ constexpr char32_t control_w_character = 0x17;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 71> normal_bindings{
+constexpr std::array<VimBinding, 72> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {line_feed, VimAction::move_down},
@@ -58,6 +58,7 @@ constexpr std::array<VimBinding, 71> normal_bindings{
      {U'|', VimAction::move_to_column},
      {U'+', VimAction::move_next_line},
      {U'-', VimAction::move_previous_line},
+     {U'_', VimAction::move_first_non_blank_below},
      {U'H', VimAction::move_screen_top},
      {U'M', VimAction::move_screen_middle},
      {U'L', VimAction::move_screen_bottom},
@@ -209,6 +210,7 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::move_line_middle, VimActionGroup::motion},
      {VimAction::move_display_line_first_non_blank, VimActionGroup::motion},
      {VimAction::move_last_non_blank, VimActionGroup::motion},
+     {VimAction::move_first_non_blank_below, VimActionGroup::motion},
      {VimAction::join_lines, VimActionGroup::edit_line},
      {VimAction::join_lines_raw, VimActionGroup::edit_line},
      {VimAction::toggle_case_character, VimActionGroup::edit_range},
@@ -226,7 +228,7 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::move_mark_exact, VimActionGroup::motion}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
-constexpr std::array<VimMotionBinding, 36> motion_bindings{
+constexpr std::array<VimMotionBinding, 37> motion_bindings{
     {{VimAction::move_left, VimMotion::left},
      {VimAction::move_down, VimMotion::down},
      {VimAction::move_up, VimMotion::up},
@@ -260,6 +262,7 @@ constexpr std::array<VimMotionBinding, 36> motion_bindings{
      {VimAction::move_line_middle, VimMotion::line_middle},
      {VimAction::move_display_line_first_non_blank, VimMotion::display_line_first_non_blank},
      {VimAction::move_last_non_blank, VimMotion::last_non_blank},
+     {VimAction::move_first_non_blank_below, VimMotion::first_non_blank_below},
      {VimAction::move_matching_pair, VimMotion::matching_pair},
      {VimAction::move_mark_line, VimMotion::mark_line},
      {VimAction::move_mark_exact, VimMotion::mark_exact}}};

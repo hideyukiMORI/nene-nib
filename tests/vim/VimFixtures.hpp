@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 d572e62cec6736e300b98480d4b05fed87d6f4d090a2207a6897a56e3f8f6443 / 2408 fixtures
+// fixtures.json: sha256 8481cd2aef0147e2c8b507c8a7e8ae83af341c23dd55930ffac1f00f8d79cd86 / 2424 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2408> vim_fixtures{{
+constexpr std::array<VimFixture, 2424> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2420,6 +2420,22 @@ constexpr std::array<VimFixture, 2408> vim_fixtures{{
     {"visual-block-object-ve-no-block-fails", "alpha beta\ngamma", "veaBx", "alpha beta\ngamma", 1, 5, "", "", std::nullopt},
     {"visual-block-object-ve-inside-grows", "{br} alpha beta", "wveaBx", " alpha beta", 1, 1, "{br}", "v", std::nullopt},
     {"visual-block-object-ve-after-block-fails", "{br} alpha beta", "5lveaBx", "{br} alpha beta", 1, 10, "", "", std::nullopt},
+    {"underscore-goes-to-the-first-non-blank", "  abc def", "$_", "  abc def", 1, 3, "", "", std::nullopt},
+    {"underscore-count-three", "a\n  b\n c\n   d\ne", "3_", "a\n  b\n c\n   d\ne", 3, 2, "", "", std::nullopt},
+    {"underscore-count-clamps-to-the-last-line", "ab\n  cd\n ef", "5_", "ab\n  cd\n ef", 3, 2, "", "", std::nullopt},
+    {"underscore-count-on-the-last-line-fails", "ab\n  cd", "j$5_x", "ab\n  cd", 2, 4, "", "", std::nullopt},
+    {"underscore-one-on-the-last-line", "ab\n  cd", "j$_x", "ab\n  d", 2, 3, "c", "v", std::nullopt},
+    {"underscore-delete", "ab\n  cd\nef", "jd_", "ab\nef", 2, 1, "  cd\n", "V", std::nullopt},
+    {"underscore-delete-two", "ab\n  cd\nef\ngh", "j2d_", "ab\ngh", 2, 1, "  cd\nef\n", "V", std::nullopt},
+    {"underscore-delete-count-on-the-last-line-fails", "ab\ncd", "j2d_", "ab\ncd", 2, 1, "", "", std::nullopt},
+    {"underscore-delete-dot", "ab\ncd\nef\ngh\nij", "2d_.", "ij", 1, 1, "ef\ngh\n", "V", std::nullopt},
+    {"underscore-yank", "ab\n  cd\nef", "j$y_", "ab\n  cd\nef", 2, 4, "  cd\n", "V", std::nullopt},
+    {"underscore-yank-from-the-line-end", "abc\n  def", "j$y_", "abc\n  def", 2, 5, "  def\n", "V", std::nullopt},
+    {"underscore-yank-two-keeps-the-caret", "abc\n  def", "l2y_", "abc\n  def", 1, 2, "abc\n  def\n", "V", std::nullopt},
+    {"underscore-change", "ab\n  cd\nef", "j$c_x<Esc>", "ab\nx\nef", 2, 1, "  cd\n", "V", std::nullopt},
+    {"underscore-shift-right", "  ab\ncd", ">_", "\t  ab\ncd", 1, 4, "", "", std::nullopt},
+    {"underscore-visual", "ab\n  cd\nef", "lv2_d", "ad\nef", 1, 2, "b\n  c", "v", std::nullopt},
+    {"underscore-visual-line", "ab\n  cd\nef", "V2_d", "ef", 1, 1, "ab\n  cd\n", "V", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

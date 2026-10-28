@@ -68,6 +68,12 @@ NORMAL の `y{motion}` の後のキャレットは Vim の `oap->start`（範囲
 決めるのは `operated` の 1 か所で、上へ動いた行単位の着地の桁を欲しい列に写して `yanked_caret` に渡す（#411 の `gg` `G` `H` `M` `L` `'a` の特例を全ての行単位の移動へ広げた）。
 VISUAL の `y` は触らない。`d` `c` の後のキャレットは別の規則で変えない。移動 `_` は Nib に未実装なので `y_` は後続。fixture `yank-line-cursor-*` 12 件（Vim 9.1 の oracle で実測）。
 
+### 決定 13（2026-10-28 追記・#976）
+
+13. **移動 `_` は回数 − 1 行下の行の最初の非空白へ行く行単位の移動**（`VimMotion::first_non_blank_below`・鍵は `VimKeyTable` の NORMAL の表の 1 行）。`1_` は今の行。範囲は `+` `j` と同じ `lines_below` に回数 − 1 を渡す 1 本で、`d_` は `dd`・`2d_` は `2dd`・`y_` は `yy` と同じ範囲とレジスタ（行単位・`"1` は `registers_written` が決める）。
+    着地は `g_` と同じ `counted_line_landing` の 1 本（回数 − 1 行下・本文の末尾で止まり、最終行で回数が 2 以上なら Vim の `nv_lineop` の `cursor_down` が失敗してオペレータを打ち消す・`j$5_x` は動かず `x` も打ち切る）。最終行の `1_` は失敗しない。
+    `y_` の後のキャレットは動かない（`j$y_` は `$` の位置のまま・`l2y_` も同じ）。`c_` は行の本文を消して空の行で INSERT（`autoindent` 無しの既定）、`>_` は `>>` と同じ。fixture は `underscore-` の 16 件（Vim 9.1 の実測）。
+
 ## 強制
 
 - fixture の再生（ADR 0005 / 0012）— **active**（`nib_unit` が `VimFixtures.hpp` の全項目を再生し、レジスタの種類も突き合わせる）
