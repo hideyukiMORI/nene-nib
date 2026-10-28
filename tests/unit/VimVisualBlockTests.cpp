@@ -160,13 +160,14 @@ void verify_vim_block_line_endings()
            "and the line the block paste added came back as CRLF");
 }
 
-// 矩形では範囲外の鍵（決定 5）。どれも本文を変えず、矩形のまま残る。
+// 矩形では範囲外の鍵（決定 5）。どれも本文を変えず、矩形のまま残る。`~` `u` `U` は追補
+// （#959）で効くので block-case- の fixture が測る。
 void verify_vim_block_unsupported_keys()
 {
     Editing editing;
     EditorController &controller = vim_block_editor(editing, "abcdef\nghijkl\nmnopqr");
     vim_replay(controller, "yy<C-v>jl");
-    constexpr std::array<std::string_view, 8> keys{"c", "I", "A", "C", ">", "J", "~", "p"};
+    constexpr std::array<std::string_view, 7> keys{"c", "I", "A", "C", ">", "J", "p"};
     for (const std::string_view key : keys)
     {
         vim_replay(controller, key);
@@ -235,7 +236,7 @@ void verify_vim_block_fixtures()
             ++selected;
         }
     }
-    expect(selected == 144, "the scope replays its 144 blockwise oracle fixtures");
+    expect(selected == 154, "the scope replays its 154 blockwise oracle fixtures");
 }
 } // namespace
 
