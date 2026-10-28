@@ -10,10 +10,14 @@
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorState.hpp"
+#include "FilePath.hpp"
 #include "LineNumber.hpp"
+#include "NewTab.hpp"
 #include "Offset.hpp"
+#include "OpenDocument.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
+#include "ScriptedFiles.hpp"
 #include "Selection.hpp"
 #include "TabTitle.hpp"
 #include "TestSupport.hpp"
@@ -222,18 +226,57 @@ void verify_mark_approximations()
            "a charwise delete of the whole text removes the marks (Vim keeps them: x)");
 }
 
+// 開いた時点の前の位置は 1 行目の桁 0（ADR 0152 の追補・#962）。本物の Vim 9.1（非 Ex）は開いた
+// 直後の `''` を 1 行目へ跳ばす（`getpos("''")` は [0, 1, 1, 0]）。oracle の -es は最終行で開くので
+// fixture にしない。新しいタブで開いた文書も同じ値で始まる。
+void verify_marks_from_opening()
+{
+    const auto after = [](bool new_tab, std::string_view keys)
+    {
+        Editing editing;
+        nenenib::application::EditorController &controller = editing.controller();
+        open_vim_document(editing, "x\ny\nz");
+        if (new_tab)
+        {
+            applied(controller, nenenib::application::NewTab{});
+        }
+        editing.files().hold_at("C:\\work\\other.txt", Bytes{"  abc\ndef\nghi"});
+        applied(controller, nenenib::application::OpenDocument{
+                                nenenib::core::FilePath::parse("C:\\work\\other.txt").value()});
+        vim_normal(controller, keys);
+        return std::pair{controller.frame(), whole_vim_body(controller)};
+    };
+    for (const bool new_tab : {false, true})
+    {
+        expect(caret_at(after(new_tab, "jj''").first, 1, 3),
+               "'' with no jump goes to the first non-blank of line 1");
+        expect(caret_at(after(new_tab, "jj``").first, 1, 1),
+               "`` with no jump goes to line 1 column 1");
+        expect(caret_at(after(new_tab, "''").first, 1, 3),
+               "'' right after opening stays on line 1");
+        expect(caret_at(after(new_tab, "jj''''").first, 3, 1),
+               "the next '' goes back to where it was");
+        expect(caret_at(after(new_tab, "''``").first, 1, 1),
+               "`` after '' on line 1 goes back to column 1");
+        expect(after(new_tab, "jj''x").second == "  bc\ndef\nghi",
+               "the keys after '' are not dropped");
+    }
+}
+
 // マークは文書の値で、タブを切り替えると文書に付いていく（決定 2）。まだ読んでいない文書と
-// 新しいタブは空。
+// 新しいタブは開いた時点の値（前の位置だけ 1 行目・#962）。
 void verify_marks_follow_documents()
 {
     const VimMarks set = marked({LineNumber{1}, 0});
     const auto state = EditorState::create(Appearance::dark, EditMode::vim).with_vim_marks(set);
     const auto added = state.with_new_tab();
-    expect(added.vim_marks() == VimMarks{}, "a new tab has no marks");
+    expect(VimMarks{}.previous_context == VimMarkPosition{LineNumber{1}, 0},
+           "the opening marks put the previous context on line 1 column 0");
+    expect(added.vim_marks() == VimMarks{}, "a new tab starts with the opening marks");
     const auto back = added.with_switched(0);
     expect(back.vim_marks() == set, "switching back brings the document's marks");
     const auto reopened = state.with_opened(text_of("x"), state.document());
-    expect(reopened.vim_marks() == VimMarks{}, "an opened document has no marks");
+    expect(reopened.vim_marks() == VimMarks{}, "an opened document starts with the opening marks");
     const nenenib::application::Document document{std::nullopt, nenenib::core::TextEncoding::utf8,
                                                   std::size_t{0}};
     const nenenib::application::DocumentState bundle{
@@ -249,7 +292,7 @@ void verify_marks_follow_documents()
             std::nullopt, document.encoding, nenenib::core::SaveState::saved, std::nullopt}};
     const auto appended = state.with_appended({bundle}).with_switched(1);
     expect(appended.vim_marks() == VimMarks{} && appended.with_switched(0).vim_marks() == set,
-           "a bundle read later starts without marks and the first keeps its own");
+           "a bundle read later starts with the opening marks and the first keeps its own");
 }
 } // namespace
 
@@ -261,6 +304,7 @@ void verify_vim_mark_contracts()
     verify_mark_failures();
     verify_operator_cancels();
     verify_mark_approximations();
+    verify_marks_from_opening();
     verify_marks_follow_documents();
 }
 
