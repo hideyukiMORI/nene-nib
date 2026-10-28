@@ -294,6 +294,54 @@ void verify_marks_from_opening()
     }
 }
 
+// 変更の列の失敗と、undo の単位をまたぐ列（ADR 0152 の追補 #1037）。oracle は鍵を 1 本の
+// `:normal!` に流すので undo の単位が 1 つしか無く（変更の列は 1 件）、E662 E663 E664 E19 は -es の
+// Vim がエラーで終わる。値は Vim 9.1 で単位ごとに `:normal!` を分けて `let &ul = &ul` で区切った
+// 測定（#1037 の PR に表）。
+void verify_change_list()
+{
+    const auto body_after = [](std::string text, std::string_view keys)
+    {
+        Editing editing;
+        open_vim_document(editing, std::move(text));
+        vim_normal(editing.controller(), keys);
+        return whole_vim_body(editing.controller());
+    };
+    const std::string lines = "abc\ndef\nghi\njkl";
+    expect(body_after("abc\ndef", "jg;x") == "abc\ndef", "g; with no change fails (E664)");
+    expect(body_after(lines, "jjxggg;g;x") == "abc\ndef\nhi\njkl",
+           "g; at the oldest change fails (E662)");
+    expect(body_after(lines, "jjxggg;g,x") == "abc\ndef\nhi\njkl",
+           "g, at the newest change fails (E663)");
+    expect(body_after("abc\ndef\nghi", "Gddggg;x") == "abc\ndef",
+           "g; to a change below the text fails (E19)");
+    expect(body_after(lines, "xjxjxg;g;g;x") == "c\nef\nhi\njkl",
+           "three changes in three undo units are three positions");
+    expect(body_after(lines, "xjxjxg;g;g;g;x") == "bc\nef\nhi\njkl",
+           "the fourth g; is past the oldest");
+    expect(body_after(lines, "xjxjxg;g;g;g,x") == "bc\nf\nhi\njkl", "g, walks back newer");
+    expect(body_after(lines, "xjxjxg;g;g,g,x") == "bc\nef\nhi\njkl", "g, past the newest fails");
+    expect(body_after(lines, "xjxjx2g;x") == "bc\nf\nhi\njkl", "2g; skips one change");
+    expect(body_after(lines, "xjxjx5g;x") == "c\nef\nhi\njkl", "5g; stops at the oldest");
+    expect(body_after("abcdef\nx", "xllxg;g;x") == "bcef\nx",
+           "a near change on the same line moves the last position");
+    const std::string as(200, 'a');
+    expect(body_after(as + "\nx", "x80lxg;g;x") == std::string(197, 'a') + "\nx",
+           "a change 80 columns away is a new position");
+    expect(body_after(as + "\nx", "x79lxg;g;x") == std::string(198, 'a') + "\nx",
+           "a change 79 columns away is the same position");
+    expect(body_after(lines, "jjxggOnew<Esc>Gg;g;x") == "new\nabc\ndef\ni\njkl",
+           "an inserted line pushes the older position down");
+    expect(body_after(lines, "jjxggddGg;g;x") == "def\ni\njkl",
+           "a deleted line lifts the older position");
+    expect(body_after(lines, "jjxddGg;g;x") == "abc\ndef\njkl",
+           "a position on a deleted line stays and merges with the next change");
+    expect(body_after("abc\ndef\nghi", "xGxxuuug;g;x") == "abc\ndef\nhi",
+           "u after a unit that added nothing adds a position");
+    expect(body_after("abc\ndef\nghi", "xGxuug;g;x") == "bc\ndef\nghi",
+           "u after a unit that added a position only moves the last one");
+}
+
 // マークは文書の値で、タブを切り替えると文書に付いていく（決定 2）。まだ読んでいない文書と
 // 新しいタブは開いた時点の値（前の位置だけ 1 行目・#962）。
 void verify_marks_follow_documents()
@@ -339,6 +387,7 @@ void verify_vim_mark_contracts()
     verify_marks_follow_documents();
     verify_reselect_and_last_insert_crlf();
     verify_g_records_kept();
+    verify_change_list();
 }
 
 void verify_vim_mark_scope()
@@ -348,13 +397,15 @@ void verify_vim_mark_scope()
     {
         const std::string_view name = fixture.name;
         if (name.starts_with("percent-") || name.starts_with("mark-") ||
-            name.starts_with("jump-mark-") || name.starts_with("change-mark-"))
+            name.starts_with("jump-mark-") || name.starts_with("change-mark-") ||
+            name.starts_with("jumplist-") || name.starts_with("changelist-"))
         {
             verify_vim_fixture(fixture);
             ++selected;
         }
     }
-    expect(selected == 112, "the scope replays the 112 oracle fixtures of % and the marks");
+    expect(selected == 149,
+           "the scope replays the 149 oracle fixtures of %, the marks and the jump lists");
     verify_vim_mark_contracts();
 }
 } // namespace nenenib::tests

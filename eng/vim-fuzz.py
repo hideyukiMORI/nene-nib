@@ -114,6 +114,10 @@ WORDS = (
     # 前の選択の種類は矩形もあり得るので、閉じる鍵は矩形の側（#1039）。
     ("gv", 1, "gv{X}"),
     ("gi", 1, "{n}gi{i}<Esc>"),
+    ("<C-o>", 1, "{n}<C-o>"),
+    ("<C-i>", 1, "{n}<C-i>"),
+    ("g;", 1, "{n}g;"),
+    ("g,", 1, "{n}g,"),
 )
 # 鍵の型の中の {m}（オペレータの移動）。回数つきの移動と f/t の 1 文字を含む。
 OPERATOR_MOTIONS = ("{n}h", "{n}l", "{n}j", "{n}k", "{n}w", "{n}b", "{n}e", "{n}W", "{n}B", "{n}E",
@@ -258,7 +262,8 @@ def initial_state() -> dict:
 
 def available(kind: str, state: dict) -> bool:
     """Whether the state allows the word kind at all (Issue #963)."""
-    if kind in ("''", "``"):
+    # `Ctrl-o` `Ctrl-i` も跳びの後だけ（-es の Vim は開いた最終行をジャンプの列に持つ・#1037）。
+    if kind in ("''", "``", "<C-o>", "<C-i>"):
         return state["jumped"]
     if kind in ("n", "N"):
         return state["searched"]
