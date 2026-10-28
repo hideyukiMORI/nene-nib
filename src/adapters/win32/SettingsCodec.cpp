@@ -2,6 +2,7 @@
 
 #include "BuiltinThemes.hpp"
 #include "KeyValueFields.hpp"
+#include "LanguageTable.hpp"
 #include "SettingsFields.hpp"
 
 #include <algorithm>
@@ -30,6 +31,10 @@ constexpr std::array<Field, 11> field_members{
     &SettingsFields::font_size,   &SettingsFields::guide,       &SettingsFields::wrap,
     &SettingsFields::ui_language, &SettingsFields::lsp,         &SettingsFields::explorer,
     &SettingsFields::root,        &SettingsFields::features};
+
+// 言語ごとのサーバーの命令の鍵 `lsp.<language>.command`（ADR 0160・ADR 0170 の決定 3）。
+constexpr std::string_view lsp_prefix = "lsp.";
+constexpr std::string_view lsp_suffix = ".command";
 
 // 表示言語の希望値の全値（ADR 0123 の改訂の決定 1）。値を足したら language_text の switch
 // が落ちる。
@@ -71,6 +76,14 @@ constexpr std::array<core::DisplayLanguageChoice, 7> language_choices{
     SettingsFields fields;
     for (const auto &[key, value] : parsed.value())
     {
+        if (key.starts_with(lsp_prefix) && key.ends_with(lsp_suffix) &&
+            key.size() > lsp_prefix.size() + lsp_suffix.size())
+        {
+            fields.lsp_commands.emplace_back(
+                key.substr(lsp_prefix.size(), key.size() - lsp_prefix.size() - lsp_suffix.size()),
+                value);
+            continue;
+        }
         const auto found = std::ranges::find(field_names, key);
         if (found == field_names.end())
         {
@@ -235,7 +248,33 @@ language_from(std::string_view text)
 [[nodiscard]] bool has_v4_fields(const SettingsFields &fields) noexcept
 {
     return fields.ui_language.has_value() || fields.lsp.has_value() ||
-           fields.explorer.has_value() || fields.root.has_value() || fields.features.has_value();
+           fields.explorer.has_value() || fields.root.has_value() || fields.features.has_value() ||
+           !fields.lsp_commands.empty();
+}
+
+// `lsp.<language>.command=<値>` の行。言語は LanguageTable の名前だけ、同じ言語の 2 行目は
+// 重複、値は空でないことだけを見る（絶対パスかは使う所が見る）。並びは言語の名前の順。
+[[nodiscard]] std::expected<std::vector<std::pair<std::string, std::string>>, Failure>
+lsp_commands_from(const SettingsFields &fields)
+{
+    std::vector<std::pair<std::string, std::string>> commands;
+    for (const auto &[name, value] : fields.lsp_commands)
+    {
+        const auto language = core::language_of_name(name);
+        if (!language.has_value() || value.empty())
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        const std::string canonical(core::language_name(language.value_or(core::Language{})));
+        if (std::ranges::any_of(commands, [&](const auto &row) { return row.first == canonical; }))
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        commands.emplace_back(canonical, value);
+    }
+    std::ranges::sort(commands, {},
+                      [](const auto &row) -> const std::string & { return row.first; });
+    return commands;
 }
 
 // v4 だけの欄。旧版はどれも持たず（あれば未知の鍵として拒否）、表示言語は日本語（更新で今の表示を
@@ -262,7 +301,8 @@ language_from(std::string_view text)
     const auto explorer = switch_from(fields.explorer);
     auto root = root_from(fields.root.value());
     auto features = features_from(fields.features.value());
-    if (!language || !lsp || !explorer || !root || !features)
+    auto commands = lsp_commands_from(fields);
+    if (!language || !lsp || !explorer || !root || !features || !commands)
     {
         return std::unexpected(Failure::malformed);
     }
@@ -271,6 +311,7 @@ language_from(std::string_view text)
     settings.explorer = explorer.value();
     settings.root = std::move(root).value();
     settings.features = std::move(features).value();
+    settings.lsp_commands = std::move(commands).value();
     return {};
 }
 
@@ -355,6 +396,20 @@ validated(const SettingsFields &fields, SettingsVersion version, const core::The
     }
     return text;
 }
+
+// `lsp.<language>.command=<値>` の行を言語の名前の順に（features の後ろ）。
+[[nodiscard]] std::string
+lsp_commands_text(const std::vector<std::pair<std::string, std::string>> &commands)
+{
+    auto sorted = commands;
+    std::ranges::sort(sorted, {}, [](const auto &row) -> const std::string & { return row.first; });
+    std::string text;
+    for (const auto &[language, command] : sorted)
+    {
+        text += std::format("{}{}{}={}\n", lsp_prefix, language, lsp_suffix, command);
+    }
+    return text;
+}
 } // namespace
 
 std::expected<core::EditorSettings, application::SettingsIssue>
@@ -394,9 +449,10 @@ std::string encode_settings(const core::EditorSettings &settings)
     }
     const auto root = settings.root.has_value() ? settings.root.value().text() : std::string_view{};
     return std::format("version=4\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
-                       "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n",
+                       "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n{}",
                        theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
                        language_text(settings.ui_language), switch_text(settings.lsp),
-                       switch_text(settings.explorer), root, features_text(settings.features));
+                       switch_text(settings.explorer), root, features_text(settings.features),
+                       lsp_commands_text(settings.lsp_commands));
 }
 } // namespace nenenib::adapters::win32

@@ -2,6 +2,8 @@
 
 #include <optional>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace nenenib::adapters::win32
 {
@@ -20,5 +22,7 @@ struct SettingsFields
     std::optional<std::string_view> explorer;
     std::optional<std::string_view> root;
     std::optional<std::string_view> features;
+    // `lsp.<language>.command` の行（鍵の中の言語の名前と値・読んだ順）。
+    std::vector<std::pair<std::string_view, std::string_view>> lsp_commands;
 };
 } // namespace nenenib::adapters::win32

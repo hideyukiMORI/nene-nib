@@ -15,7 +15,8 @@ namespace nenenib::adapters::win32
 namespace
 {
 using Failure = application::SettingsFailure;
-constexpr std::size_t maximum_settings_bytes = 4096;
+// command の行が増えるので 16 KiB（ADR 0170 の決定 3・#1044）。
+constexpr std::size_t maximum_settings_bytes = 16384;
 constexpr std::array<SettingsVersion, 4> reading_order{SettingsVersion::v4, SettingsVersion::v3,
                                                        SettingsVersion::v2, SettingsVersion::v1};
 
@@ -132,7 +133,7 @@ Win32SettingsAdapter::write_locked(const core::EditorSettings &settings)
         return std::unexpected(checked.error());
     }
     const std::string bytes = encode_settings(settings);
-    // 長いルートの経路で上限を超えると次の読込が too_large で止まるので、書く前に断る。
+    // 長いルートや命令で上限を超えると次の読込が too_large で止まるので、書く前に断る。
     if (bytes.size() > maximum_settings_bytes)
     {
         return std::unexpected(Failure::too_large);

@@ -606,7 +606,7 @@ void verify_settings_codec()
 void verify_bad_settings_fields()
 {
     const std::string valid = encode_settings(default_editor_settings());
-    for (const auto suffix : {"version=1\n", "unknown=yes\n", "broken\n", "lsp.cpp.command=x\n"})
+    for (const auto suffix : {"version=1\n", "unknown=yes\n", "broken\n", "lsp.nosuch.command=x\n"})
     {
         const auto result = decode_settings(valid + suffix, SettingsVersion::v4);
         expect(!result && result.error() == SettingsFailure::malformed,
@@ -718,6 +718,43 @@ void verify_older_settings_versions()
     const auto wrong_old = decode_settings(v1, SettingsVersion::v4);
     expect(!wrong_old && wrong_old.error() == SettingsFailure::unsupported_version,
            "a v1 document is not read as v4");
+}
+
+// `lsp.<language>.command` の行（ADR 0170 の決定 3・#1044）。0
+// 行以上・言語は表の名前だけ・同じ言語は 1 行・値は空でない。書くときは features
+// の後ろに言語の名前の順。
+void verify_settings_lsp_commands()
+{
+    auto settings = default_editor_settings();
+    settings.lsp_commands = {{"python", "C:\\py\\pylsp.exe"},
+                             {"cpp", "C:\\llvm\\clangd.exe --log=error"}};
+    const auto bytes = encode_settings(settings);
+    expect(bytes.ends_with("features=\nlsp.cpp.command=C:\\llvm\\clangd.exe --log=error\n"
+                           "lsp.python.command=C:\\py\\pylsp.exe\n"),
+           "commands follow features in language name order");
+    const auto decoded = decode_settings(bytes, SettingsVersion::v4);
+    expect(decoded && decoded.value().lsp_commands.size() == 2 &&
+               decoded.value().lsp_commands.front().first == "cpp" &&
+               encode_settings(decoded.value()) == bytes,
+           "commands round trip in language name order");
+    const auto plain = encode_settings(default_editor_settings());
+    const auto none = decode_settings(plain, SettingsVersion::v4);
+    expect(none && none.value().lsp_commands.empty(), "zero command lines are accepted");
+    for (const auto line : {"lsp.nosuch.command=x\n", "lsp.cpp.command=\n", "lsp..command=x\n",
+                            "lsp.CPP.command=x\n", "lsp.cpp.args=x\n"})
+    {
+        const auto result = decode_settings(plain + line, SettingsVersion::v4);
+        expect(!result && result.error() == SettingsFailure::malformed,
+               "unknown languages, empty values and other lsp keys are refused");
+    }
+    expect(!decode_settings(plain + "lsp.cpp.command=a\nlsp.cpp.command=b\n", SettingsVersion::v4),
+           "a second line for the same language is refused");
+    const auto old =
+        decode_settings(std::string(v3_settings) + "lsp.cpp.command=x\n", SettingsVersion::v3);
+    expect(!old && old.error() == SettingsFailure::malformed, "v3 rejects command lines");
+    auto other = settings;
+    other.lsp_commands.pop_back();
+    expect(!same_settings(other, settings), "commands take part in the settings comparison");
 }
 
 // 設定 v4 の 1 行を value に替えた bytes（key の行が無ければ bytes のまま）。
@@ -880,7 +917,7 @@ void verify_settings_failures(Win32FileAdapter &files)
     verify_rejected_settings(files,
                              "version=1\ncolorscheme=system\nfont_family=Consolas\nfont_size=13.5",
                              SettingsFailure::unsupported_version);
-    verify_rejected_settings(files, std::string(4097, 'x'), SettingsFailure::too_large);
+    verify_rejected_settings(files, std::string(16385, 'x'), SettingsFailure::too_large);
     Win32SettingsAdapter unavailable(files, std::unexpected(SettingsFailure::location_unavailable));
     const auto failed = unavailable.read();
     expect(!failed && failed.error() == SettingsFailure::location_unavailable,
@@ -1211,20 +1248,20 @@ void verify_v3_conflicts(Win32FileAdapter &files)
            "a refused v4 load leaves both files untouched");
 }
 
-// 長いルートの経路で 4096 バイトを超える設定は書かない（次の読込が too_large で止まるため）。
+// 長いルートの経路で 16 KiB を超える設定は書かない（次の読込が too_large で止まるため）。
 void verify_oversized_settings(Win32FileAdapter &files)
 {
     reset_settings(files, std::nullopt);
     Win32SettingsAdapter store(files, settings_paths());
     expect(store.read().has_value() && store.write(default_editor_settings()).has_value(),
            "save the defaults before the oversized write");
-    const auto before = read_text(files, settings_paths().current, 4096).value_or("");
+    const auto before = read_text(files, settings_paths().current, 16384).value_or("");
     auto huge = default_editor_settings();
-    huge.root = nenenib::core::FilePath::parse("C:\\" + std::string(4096, 'a')).value();
+    huge.root = nenenib::core::FilePath::parse("C:\\" + std::string(16384, 'a')).value();
     const auto refused = store.write(huge);
     expect(!refused && refused.error() == SettingsFailure::too_large &&
-               read_text(files, settings_paths().current, 4096).value_or("") == before,
-           "settings over 4096 bytes are refused and the saved bytes stay");
+               read_text(files, settings_paths().current, 16384).value_or("") == before,
+           "settings over 16 KiB are refused and the saved bytes stay");
     expect(store.write(default_editor_settings()).has_value(),
            "a refused oversized write keeps the snapshot for the next save");
 }
@@ -1251,7 +1288,7 @@ void verify_settings_migration(Win32FileAdapter &files)
                               SettingsFailure::unsupported_version);
     verify_previous_rejection(files, std::string(previous_bytes) + "guide=on\n",
                               SettingsFailure::malformed);
-    verify_previous_rejection(files, std::string(4097, 'x'), SettingsFailure::too_large);
+    verify_previous_rejection(files, std::string(16385, 'x'), SettingsFailure::too_large);
     reset_settings(files, previous_bytes);
     verify_rejected_settings(files, "invalid", SettingsFailure::malformed);
     // Valid v1 must not conceal an unreadable current path.
@@ -1909,6 +1946,7 @@ int run_memory_tests(std::string_view scope)
     verify_settings_versions();
     verify_older_settings_versions();
     verify_settings_v4_fields();
+    verify_settings_lsp_commands();
     std::printf("Settings codec: %zu checks, %zu failures\n", check_count(), failure_count());
     return test_result();
 }
@@ -1959,6 +1997,7 @@ int main(int argc, char **argv)
     verify_settings_versions();
     verify_older_settings_versions();
     verify_settings_v4_fields();
+    verify_settings_lsp_commands();
     verify_settings_restart(files);
     verify_settings_lock(files);
     verify_settings_failures(files);
