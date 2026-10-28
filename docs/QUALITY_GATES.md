@@ -278,6 +278,25 @@ C++ のソースの `// SDK-ABI:` を含む行ごとに次を確かめ、1 つ�
 🔴 **検出語は検査器のソースに直書きしない**（検査器が自分自身を違反として報告する。前例: xi-tools 初版で 7 件の自己検出）。
 🔴 **テストソースは検査対象から外す**（テストは意図的な違反を書く場所）。
 
+
+### CNF-014 — 翻訳単位の大きさ（planned・ADR 0158）
+
+機械強制: **planned**（分割の PR で active にする）。
+
+`src/**/*.cpp` と `tests/**/*.cpp` は 3,000 行以下に保つ（[ADR 0158](adr/0158-split-editor-controller-and-vim-step-by-meaning-without-behavior-change.md)・Issue #992）。超えたファイルを直す道は ADR 0158 の群の表に 1 行足して分けること。`eng/conformance.py` の検査は分割の PR で足し、そのとき状態を active にする。
+
+### CNF-015 — 機能の表のベンチの実在（planned・ADR 0170）
+
+機械強制: **planned**（設定モーダルの S2 の PR で active にする）。
+
+core の `feature_costs` の表の各行が名指す任意のベンチ（`bench`）が `eng/measure-speed.py` の `OPTIONAL_BENCHES` に在り、`docs/quality/feature-costs.md` の行と表の数字が一致する（[ADR 0170](adr/0170-settings-modal-lists-features-with-measured-speed-cost-tiers.md)・Issue #1016）。検査は設定モーダルの S2 の PR で足し、そのとき状態を active にする。
+
+### CNF-016 — 画面の文のリテラルは文の表の外に書かない（planned・ADR 0123 の改訂）
+
+機械強制: **planned**（表示言語の T1 の PR で active にする）。
+
+`src/**/*.cpp` `*.hpp` の文字列リテラル（`"…"` `u8"…"` `L"…"`・コメントは除く）の中の日本語（ひらがな・カタカナ・CJK 統合漢字・全角の記号）は `src/core/UiTexts.cpp` と `tests/` の外で 0 とする（[ADR 0123](adr/0123-ui-language-is-a-versioned-setting.md) の改訂・Issue #1019）。検査は表示言語の T1 の PR で足し、そのとき状態を active にする。
+
 ---
 
 ## 3. 強制マトリクス
@@ -349,6 +368,9 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CNF-011 | active | eng/conformance.py / tests/conformance（整形の正本は eng/vim-oracle.py の `canonical_fixtures_json` 1 か所） |
 | CNF-012 | active | eng/conformance.py / tests/conformance（表は eng/sdk-abi-signatures.json の 1 つ・引数の数は照合しない） |
 | CNF-013 | active | eng/conformance.py / tests/conformance（表は eng/conformance-rules.json の `thirdPartyDigests` の 1 つ・照合は git の index の blob） |
+| CNF-014 | planned | eng/conformance.py（ADR 0158・分割の PR で active） |
+| CNF-015 | planned | eng/conformance.py（ADR 0170・設定モーダルの S2 の PR で active） |
+| CNF-016 | planned | eng/conformance.py（ADR 0123 の改訂・表示言語の T1 の PR で active） |
 
 ---
 

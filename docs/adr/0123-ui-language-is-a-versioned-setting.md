@@ -1,6 +1,6 @@
 # ADR 0123 — 表示言語は版付き設定に持ち、OSの観測値から明示操作時に解決する
 
-- 状態: **提案（未実装・技術受理前）**
+- 状態: **受理（2026-10-28・施主決定 D69「言語は 6 言語目標」。下の改訂の節が 2 言語の案を 6 言語に広げる。実装は #1019 の T1〜T3）**
 - 日付: 2026-10-12
 - Issue: #456
 - 影響する規則: ARC-001/003/004/007/008/009/010/011/012、CPP-002/003/011/013、QLT-001/012/013、FR-016/017/018/019
@@ -128,3 +128,17 @@ OS観測値は、確定表示で使用する値とモーダル候補の値を所
 ## 関連
 
 [操作設計案](../design/2026-10-12-settings-dialog-and-language.md)、[画面案](../design/2026-10-12-settings-dialog-boards.md)、ADR 0020/0078/0079/0114、[EditorSettings](../../src/core/EditorSettings.hpp)、[SettingsCodec](../../src/adapters/win32/SettingsCodec.cpp)、[Win32SettingsAdapter](../../src/adapters/win32/Win32SettingsAdapter.cpp)、[LocalSettingsPath](../../src/adapters/win32/LocalSettingsPath.cpp)。
+
+## 改訂（2026-10-28・D69・#1019）: 6 言語と文の表
+
+上の決定案 1〜5 は形（希望値と表示値を分ける・保存は v4・旧版は不在のときだけ・lock と比較は読込元まで・OS の観測は adapter の 1 か所）をそのまま保ち、次を改める。
+
+1. **言語は 6 つ。** `DisplayLanguage`（解決済み・閉じた enum）は `japanese` `english` `simplified_chinese` `korean` `spanish` `german`。希望値 `DisplayLanguageChoice` は `system` ＋ 6 値。保存の ASCII 値は `system` `ja` `en` `zh-hans` `ko` `es` `de`（これ以外は閉じた設定失敗）。
+2. **OS の観測の写し。** `GetUserDefaultUILanguage` の `PRIMARYLANGID` が `LANG_JAPANESE` → japanese・`LANG_CHINESE` で `SUBLANGID` が簡体字（`SUBLANG_CHINESE_SIMPLIFIED` / `SUBLANG_CHINESE_SINGAPORE`）→ simplified_chinese（繁体字は english・限界）・`LANG_KOREAN` → korean・`LANG_SPANISH` → spanish・`LANG_GERMAN` → german・ほかは english。adapter は `std::optional<DisplayLanguage>` の観測値を注入し、`system` の解決は core の純関数 1 本（観測値が無ければ english）。
+3. **文の表は core の 1 つ。** `UiMessage`（画面の文の名前・閉じた enum・1 ファイル 1 型）× `DisplayLanguage` の `constexpr` の 2 次元の表 `ui_texts`。行が欠けていればコンパイルが落ちる（`std::array` の大きさ）。読む口は `ui_text(UiMessage, DisplayLanguage) -> std::string_view` の 1 本。操作の名前と説明（`operation_texts`・ADR 0078）は同じ表に畳む（表を 2 本にしない）。鍵の表示名（`key_chord_label`）と Vim の文（鍵・Ex の命令名・`E486` などのエラー）は訳さない（英語のまま・学習の連続性）。
+4. **引く所の規則（CNF-016・planned → T1 で active）。** `src/**` の描画の道（ui / application / core の frame と知らせ）に画面の文のリテラルを書かない。`eng/conformance.py` が `src/**/*.cpp` `*.hpp` の日本語（ひらがな・カタカナ・漢字）を含む文字列リテラルを数え、`ui_texts` の表のファイルと試験の外では 0 であることを守る。例外は表のファイル・`docs`・コメント（リテラルでない）。
+5. **幅。** ステータスバーの枠とタブの帯と面の文は言語で幅が変わる。`nib_window_tests` に「全言語の全文を DirectWrite で測り、各枠の幅に収まる」試験を足す（収まらない文は短い言い回しに直す・枠の幅は変えない・ドイツ語が要注意）。
+6. **訳の責任。** 日本語と英語は設計席が書き hide が見る。残り 4 言語は設計席の機械の訳で、`ui_texts` の見出しと `docs/i18n/REVIEW.md`（未レビューの一覧・言語ごと）に「機械の訳・レビュー歓迎」と明示する。
+7. **v4 の鍵の集合。** 決定案 2 の 7 個の鍵は例で、v4 の鍵の集合は設定モーダルの ADR（D68・#1016）が **1 回で**決める（`ui_language` はその 1 つ・LSP の `lsp`・エクスプローラーの `explorer` `root`・機能のオン・オフの `features`）。v4 を最初に要る PR が定義し、後の PR は欄を使う。
+8. **切り替え。** `:set language=ja|en|zh-hans|ko|es|de|system`・`:set language?`・設定モーダル。切り替えは即時（frame を作り直し・layout の保持は書式の鍵に言語を含めて捨てる・打鍵の道は変えない）。
+9. **限界。** 繁体字中国語・フランス語などの追加は表に列を足すだけ（`DisplayLanguage` に 1 値・`std::array` が落ちる所を埋める）。OS 所有のダイアログ（ファイルの選択）の文は OS の言語のまま。Markdown プレビューの本文・Vim のエラー・鍵の名前は訳さない。
