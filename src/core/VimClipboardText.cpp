@@ -18,4 +18,9 @@ VimRegister vim_register_of_clipboard(std::string_view text)
         folded.ends_with('\n') ? VimRegisterKind::lines : VimRegisterKind::characters;
     return VimRegister{std::move(folded), kind};
 }
+
+std::string_view vim_clipboard_text_of(const VimRegister &value) noexcept
+{
+    return value.text;
+}
 } // namespace nenenib::core

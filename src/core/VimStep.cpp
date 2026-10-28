@@ -11,6 +11,7 @@
 #include "TabJump.hpp"
 #include "TabJumpDirection.hpp"
 #include "Utf8.hpp"
+#include "VimAction.hpp"
 #include "VimActionGroup.hpp"
 #include "VimAlignedLine.hpp"
 #include "VimBlockEdit.hpp"
@@ -27,6 +28,7 @@
 #include "VimCharacterSearchKind.hpp"
 #include "VimCharacterSearchRequest.hpp"
 #include "VimCharacterSearchScan.hpp"
+#include "VimClipboardText.hpp"
 #include "VimColumnWish.hpp"
 #include "VimDisplayLineEdge.hpp"
 #include "VimHorizontalScroll.hpp"
@@ -1736,16 +1738,22 @@ named_written(VimState state, const VimRegisterSnapshot &value, VimOperator oper
         vim_register_index(static_cast<char32_t>(selection.name)).value_or(0));
 }
 
-// 書き手の結果（ADR 0051 の決定 6）。first は命令が完了した状態、second は `"+` `"*` へ書いた
-// ときだけ持つ「OS へ出す本文」。呼び出し元が second を VimStep.clipboard へ写す。
+// 書き手の結果（ADR 0051 の決定 6・追補（#848）の決定 C）。first は命令が完了した状態、second は
+// `"+` `"*` へ書いたときと、`:set clipboard=unnamed` でレジスタを選ばずに無名へ書いたときだけ持つ
+// 「OS へ出す本文」。呼び出し元が second を VimStep.clipboard へ写す。
 using WrittenRegisters = std::pair<VimState, std::optional<VimRegister>>;
 
-// 名指しの書き込みの書き先が OS のクリップボードなら、その本文（決定 6）。
+// OS へ出す本文（決定 6・追補（#848）の決定 C）。名指しの書き込みの書き先が OS のクリップボード
+// のときと、`:set clipboard=unnamed` でレジスタを選ばずに無名へ書くとき（`"a` の名指しは Vim と
+// 同じく出さない）。どちらでも 1 回だけ。
 [[nodiscard]] std::optional<VimRegister> clipboard_written(const VimState &state,
                                                            const VimRegister &value)
 {
-    if (!state.selected_register.has_value() ||
-        state.selected_register.value().target != VimRegisterTarget::clipboard)
+    if (!state.selected_register.has_value())
+    {
+        return state.clipboard_unnamed ? std::optional<VimRegister>{value} : std::nullopt;
+    }
+    if (state.selected_register.value().target != VimRegisterTarget::clipboard)
     {
         return std::nullopt;
     }
@@ -1756,7 +1764,8 @@ using WrittenRegisters = std::pair<VimState, std::optional<VimRegister>>;
 // ここを通る（ARC-001）。`"_` と値が無い（空の文字単位の範囲）ときはどのレジスタも変えず、
 // ほかは「名指しの書き込み → `"1` の規則 → `"-` の規則 → 無名」の順に埋める。`"+` `"*` の
 // 名指しの書き込みは状態へ置かず、OS へ出す本文として組の second に返す（ADR 0051 の決定 6）。
-// 命令が完了した状態を返すので、選んだレジスタと写しはここで消える。
+// `:set clipboard=unnamed` でレジスタを選ばない書きも、無名と同じ本文を second に返す（追補の決定
+// C）。 命令が完了した状態を返すので、選んだレジスタと写しはここで消える。
 [[nodiscard]] std::expected<WrittenRegisters, VimRepeatFailure>
 registers_written(const VimState &state, const std::optional<VimRegister> &value,
                   VimOperator operation, VimNumberedRule rule)
@@ -6041,8 +6050,29 @@ VimState vim_register_stored(const VimState &state, char name, const VimRegister
     return next;
 }
 
-bool vim_reads_clipboard(const VimState &state) noexcept
+bool vim_reads_unnamed_clipboard(const VimState &state, const VimKey &key) noexcept
 {
+    if (!state.clipboard_unnamed || state.selected_register.has_value() ||
+        state.pending.has_value() || state.input_wait.has_value() || state.mode != VimMode::normal)
+    {
+        return false;
+    }
+    // 鍵 → 動作は表の 1 本（CPP-012）。`p` `P` の文字を比べない。
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    if (character == nullptr)
+    {
+        return false;
+    }
+    const auto action = vim_action_for(character->code);
+    return action == VimAction::put_after || action == VimAction::put_before;
+}
+
+bool vim_reads_clipboard(const VimState &state, const VimKey &key) noexcept
+{
+    if (vim_reads_unnamed_clipboard(state, key))
+    {
+        return true;
+    }
     if (state.selected_register.has_value() &&
         state.selected_register.value().target == VimRegisterTarget::clipboard)
     {
@@ -6060,6 +6090,18 @@ VimState vim_clipboard_loaded(const VimState &state, VimRegister value)
 {
     VimState next = state;
     next.clipboard = VimRegisterSnapshot::from(value);
+    return next;
+}
+
+VimState vim_unnamed_loaded(const VimState &state, VimRegister value)
+{
+    // 自分が書いた本文なら種類（矩形・末尾が改行の文字単位）を保つ（追補（#848）の決定 G）。
+    if (value.text == vim_clipboard_text_of(state.unnamed_register.value()))
+    {
+        return state;
+    }
+    VimState next = state;
+    next.unnamed_register = VimRegisterSnapshot::from(value);
     return next;
 }
 

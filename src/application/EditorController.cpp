@@ -2145,19 +2145,21 @@ EditorController::command_key(const core::VimSearchPattern &key)
     return step_vim(core::VimKey{key});
 }
 
-// 写しを読みうる状態なら、鍵を流す直前に OS の本文を読んで engine に置く（ADR 0051 の決定 3）。
+// 写しを読みうる状態と鍵なら、鍵を流す直前に OS の本文を読んで engine に置く（ADR 0051 の決定 3）。
+// `:set clipboard=unnamed` の `p` `P` は無名へ、ほかは `"+` の写しへ置く（追補（#848）の決定 D）。
 // 読めなければ空のレジスタを置き、engine が空のレジスタと同じに拒む。
-void EditorController::load_vim_clipboard()
+void EditorController::load_vim_clipboard(const core::VimKey &key)
 {
-    if (!core::vim_reads_clipboard(state_.vim()))
+    if (!core::vim_reads_clipboard(state_.vim(), key))
     {
         return;
     }
     const auto pasted = ports_.clipboard.read();
-    state_ = state_.with_vim(core::vim_clipboard_loaded(
-        state_.vim(),
-        pasted ? core::vim_register_of_clipboard(pasted.value())
-               : core::VimRegister{std::string{}, core::VimRegisterKind::uninitialized}));
+    auto value = pasted ? core::vim_register_of_clipboard(pasted.value())
+                        : core::VimRegister{std::string{}, core::VimRegisterKind::uninitialized};
+    state_ = state_.with_vim(core::vim_reads_unnamed_clipboard(state_.vim(), key)
+                                 ? core::vim_unnamed_loaded(state_.vim(), std::move(value))
+                                 : core::vim_clipboard_loaded(state_.vim(), std::move(value)));
 }
 
 // `"+` へ書いた本文は文書の改行で OS へ出す（ADR 0051 の決定 7・Ctrl+C と同じ形）。書けなくても
@@ -2169,12 +2171,13 @@ void EditorController::send_vim_clipboard(const std::optional<core::VimRegister>
     {
         return;
     }
-    static_cast<void>(clipboard_written(
-        with_document_newlines(written.value().text, core::newline_of(state_.line_ending()))));
+    static_cast<void>(clipboard_written(with_document_newlines(
+        core::vim_clipboard_text_of(written.value()), core::newline_of(state_.line_ending()))));
 }
 
 std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::VimKey &key)
 {
+    load_vim_clipboard(key);
     return stepped_vim([this, &key](const core::VimEditorView &view)
                        { return core::vim_step(state_.vim(), view, key); });
 }
@@ -2182,7 +2185,6 @@ std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::Vim
 std::optional<core::VimRepeatFailure> EditorController::stepped_vim(
     const std::function<core::VimStep(const core::VimEditorView &)> &step_of)
 {
-    load_vim_clipboard();
     const core::VimMode before = state_.vim().mode;
     const auto measured = measured_vim_step(step_of);
     if (!measured)
@@ -2964,8 +2966,8 @@ void EditorController::evaluate_command(std::string_view text)
     state_ = state_.with_command_message(result.value().message);
 }
 
-// Ex の答えのうち命令の要求（タブ・行番号・窓・面・文書・言語・構文）を 1 つ実行したら真。どれも
-// 設定を保存せず、知らせは写し先が決める。
+// Ex の答えのうち命令の要求（タブ・行番号・窓・面・文書・言語・構文・クリップボード）を 1 つ実行
+// したら真。どれも設定を保存せず、知らせは写し先が決める。
 bool EditorController::ran_ex_request(const core::ExResult &result)
 {
     if (result.tab.has_value())
@@ -2993,17 +2995,29 @@ bool EditorController::ran_ex_request(const core::ExResult &result)
         run_document_request(result.document.value());
         return true;
     }
+    return answer_current_value(result);
+}
+
+// 今の値を controller が答える Ex（言語・構文の色・クリップボードの同期）。どれかなら置いて今の値を
+// 1 行知らせ、真を返す。
+bool EditorController::answer_current_value(const core::ExResult &result)
+{
     if (result.language.has_value())
     {
         answer_language(result.language.value());
         return true;
     }
-    if (!result.syntax.has_value())
+    if (result.syntax.has_value())
     {
-        return false;
+        answer_syntax(result.syntax.value());
+        return true;
     }
-    answer_syntax(result.syntax.value());
-    return true;
+    if (result.clipboard.has_value())
+    {
+        answer_clipboard(result.clipboard.value());
+        return true;
+    }
+    return false;
 }
 
 // Ex の答えのうち保存しない値（表示形式・検索の強調・incsearch）を写す。
@@ -3053,6 +3067,28 @@ void EditorController::answer_syntax(const core::ExSyntaxRequest &request)
     }
     state_ = state_.with_command_message(
         core::DisplayText::parse(state_.syntax_enabled() ? "syntax=on" : "syntax=off").value());
+}
+
+// `:set clipboard=` は無名と OS の同期を Vim の状態に置き（保存しない）、どの形も今の値を 1 行で
+// 知らせる（ADR 0051 の追補（#848）の決定 A・B）。
+void EditorController::answer_clipboard(core::ExClipboardRequest request)
+{
+    core::VimState vim = state_.vim();
+    switch (request)
+    {
+    case core::ExClipboardRequest::enable:
+        vim.clipboard_unnamed = true;
+        break;
+    case core::ExClipboardRequest::disable:
+        vim.clipboard_unnamed = false;
+        break;
+    case core::ExClipboardRequest::show:
+        break;
+    }
+    const bool unnamed = vim.clipboard_unnamed;
+    state_ = state_.with_vim(std::move(vim));
+    state_ = state_.with_command_message(
+        core::DisplayText::parse(unnamed ? "clipboard=unnamed" : "clipboard=").value());
 }
 
 void EditorController::run_palette_request(const core::ExPaletteRequest &request)

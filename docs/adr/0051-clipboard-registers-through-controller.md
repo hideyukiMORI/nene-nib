@@ -61,3 +61,17 @@ Nib の今の形（同じ probe の A 節）: core の engine は OS を知ら�
 | 書きの合図を `VimState` の欄に置き、controller が出してから消す | 状態が外向きの箱になり、「`step_vim` の後は必ず空」という不変条件を型が守れない。`VimStep` は 1 打鍵で消える |
 | `"+p` を読んだ後に同じ本文を OS へ書き戻す（読み書きを区別しない） | 文字以外の形式（画像・来歴のタグ）を消す。読みは OS を変えてはならない |
 | OS へ出す改行を必ず CRLF にする | Ctrl+C と規則が 2 つになる（ARC-001）。揃えるなら Ctrl+C ごと変える別の判断 |
+
+## 追補（2026-10-28・#848）: `:set clipboard=unnamed` で無名レジスタと OS のクリップボードを同期する
+
+hide の指示（2026-10-22 夜の試用・「`p` で Windows のクリップボードを貼れない」）。決定 10 の後続の 2 番目を、決定 3・6・7 と同じ道で足す。engine は OS に触れないまま（ARC-003 / ARC-007）。
+
+- A. **Ex**: `:set clipboard=unnamed`・`:set clipboard=unnamedplus`・`:set clipboard=unnamed,unnamedplus`（`unnamed` と `unnamedplus` の `,` 区切りの任意の組・Windows では `"*` と `"+` が同じなのでどれも同じ意味）でオン、`:set clipboard=` でオフ、`:set clipboard?` は問い。ほかの値（`exclude:` など・空の項）と `:set noclipboard` は `unsupported_argument`。`ExResult.clipboard`（`std::optional<ExClipboardRequest>`・閉じた enum `enable` / `disable` / `show`・`ExSyntaxRequest` / `ExLanguageRequest` と同じ「今の値を知る controller が答える」request の形。`std::optional<bool>` の 1 欄では「変えない」と問いを区別できない）。controller の `answer_clipboard` が 3 値を `switch` で写し、どの形も今の値を報せ `clipboard=unnamed`（オン）/ `clipboard=`（オフ）で 1 行知らせる。補完の候補に `set clipboard=unnamed` と `set clipboard=` の 2 行。
+- B. **状態**: `VimState.clipboard_unnamed`（`bool`・既定 false）。`incsearch` と同じく窓に 1 つで `vim_resting_from` が持ち越す。controller の `answer_clipboard` の 1 か所だけが置く。設定ファイルにもセッションにも入れない。
+- C. **書き**: `registers_written`（ADR 0050 の書き手の 1 本）の「OS へ出す本文」に、オンで**レジスタを選ばずに**無名へ書くときを足す（`y d c x X D C Y dd cc yy` と VISUAL / 矩形の `d x y c`）。`"_` は値を書かないので出さず、`"a` の名指しは Vim と同じく出さない。`"+yy` は名指しの側の 1 回だけ。出し方は決定 7 のまま（文書の改行の形・矩形は行を改行で繋ぐ）。
+- D. **読み**: 述語を `vim_reads_clipboard(const VimState &, const VimKey &)` にし、今の条件か、`vim_reads_unnamed_clipboard(state, key)`（オン・レジスタを選んでいない・オペレータも次の鍵の待ちも無い NORMAL の鍵で、鍵の表 `vim_action_for` が `put_after` / `put_before` を返すとき・回数の後でも）で真。controller の `step_vim` は真なら `ClipboardPort::read()` を 1 回呼び、unnamed の側なら `vim_unnamed_loaded`（読んだ本文が今の無名の OS の形と同じなら無名を種類ごと残し、違えば OS の本文で置き換える・決定 G・`"0`〜`"9` `"-` と名前つきと `last_macro` は変えない）、そうでなければ今までどおり `vim_clipboard_loaded` で置いてから鍵を流す。2 つの側は重ならない（unnamed の側はレジスタの選択も `@` の待ちも無い）。読みの失敗と空は無名を空にし、`p` は空のレジスタと同じ `refused`。`p` `P` 以外の鍵では読まない（打鍵の道で OS に触れない）。
+- E. **`.` とマクロ**: 再生の鍵も `step_vim` を通るので、再生の時点の `p` で読み直す（決定 3 と同じ）。
+- F. **契約**: `--vim-clipboard`（`tests/unit/VimClipboardTests.cpp`）に替え玉 `ScriptedClipboard` だけで足す。Ex の parse は `--ex-settings`、述語は `--vim-macro`（`verify_clipboard_read_predicate`）。
+- G. **限界**: 設定に保存しない（起動で既定のオフ）。種類は、読んだ本文（CRLF を畳んだ後）が自分の書いた本文（今の無名の OS の形・`vim_clipboard_text_of` の 1 本で作り、OS へ出す本文と同じ関数）と同じなら保つ（矩形・末尾が改行の文字単位も化けない）。他所が書いた本文は決定 4 の `vim_register_of_clipboard` の規則（矩形にはならない）。`@"` は読まない。`gp` `gP` と INSERT の Ctrl-R は読まない。Nib の VISUAL にはまだ `p` が無いので、VISUAL では読まない（VISUAL の `p` を足すときに述語へ VISUAL を足す）。OS 側の空・読めないは無名を空にして E353 相当（無名の前の中身は戻らない）。
+
+強制: 契約 `--vim-clipboard` の追加分は **active**（CTest の既定の `nib_tests`）。OS に触れるのが controller の `load_vim_clipboard` と `send_vim_clipboard` の 2 か所であることは決定の強制の節と同じく **planned**（レビュー事項）。

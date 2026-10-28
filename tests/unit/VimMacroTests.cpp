@@ -694,6 +694,36 @@ void verify_clipboard_text_table()
     }
 }
 
+// `:set clipboard=unnamed` の読む述語（ADR 0051 の追補（#848）の決定 D）。レジスタを選ばず、
+// オペレータも次の鍵の待ちも無い NORMAL / VISUAL の `p` `P` だけが無名へ読む側。
+void verify_unnamed_clipboard_predicate(const VimState &empty, const TextBuffer &text,
+                                        const Selection &caret)
+{
+    VimState on = empty;
+    on.clipboard_unnamed = true;
+    const VimKey put{nenenib::core::VimCharacter{U'p'}};
+    const VimKey put_before{nenenib::core::VimCharacter{U'P'}};
+    const VimKey down{nenenib::core::VimCharacter{U'j'}};
+    expect(!nenenib::core::vim_reads_unnamed_clipboard(empty, put), "the sync is off by default");
+    expect(nenenib::core::vim_reads_unnamed_clipboard(on, put) && vim_reads_clipboard(on, put) &&
+               nenenib::core::vim_reads_unnamed_clipboard(on, put_before),
+           "p and P read the clipboard into the unnamed register");
+    expect(!vim_reads_clipboard(on, down), "other keys never read the clipboard");
+    expect(nenenib::core::vim_reads_unnamed_clipboard(core_steps(on, text, caret, "3").next, put),
+           "p after a count reads it");
+    expect(!nenenib::core::vim_reads_unnamed_clipboard(core_steps(on, text, caret, "v").next, put),
+           "VISUAL p does not read it (Nib has no VISUAL put)");
+    for (const std::string_view keys :
+         {"d", "i", "\"a", "\"+", "f", "m", "@", "r", "g", "z", "'", "`", "q"})
+    {
+        expect(!nenenib::core::vim_reads_unnamed_clipboard(core_steps(on, text, caret, keys).next,
+                                                           put),
+               "p as an operand, an INSERT letter or after a register name is not a put");
+    }
+    expect(vim_reads_clipboard(core_steps(on, text, caret, "\"+").next, put),
+           "\"+p still reads into the \"+ copy");
+}
+
 // 読む時機の述語（決定 3）。`"+` `"*` を選んでいるか `@` の名前を待っているときだけ真。`q` の
 // 待ちと、後勝ちで別の名前へ選び直した `"+"a` は読まない。
 void verify_clipboard_read_predicate()
@@ -701,19 +731,21 @@ void verify_clipboard_read_predicate()
     const TextBuffer text = buffer_of("one");
     const Selection caret = collapsed_at(Offset{0});
     const VimState empty = empty_vim_state();
-    expect(!vim_reads_clipboard(empty), "a resting state does not read the clipboard");
-    expect(vim_reads_clipboard(core_steps(empty, text, caret, "\"+").next), "\"+ reads it");
-    expect(vim_reads_clipboard(core_steps(empty, text, caret, "\"*").next), "\"* reads it");
-    expect(vim_reads_clipboard(core_steps(empty, text, caret, "3\"+2").next),
+    const VimKey put{nenenib::core::VimCharacter{U'p'}};
+    expect(!vim_reads_clipboard(empty, put), "a resting state does not read the clipboard");
+    expect(vim_reads_clipboard(core_steps(empty, text, caret, "\"+").next, put), "\"+ reads it");
+    expect(vim_reads_clipboard(core_steps(empty, text, caret, "\"*").next, put), "\"* reads it");
+    expect(vim_reads_clipboard(core_steps(empty, text, caret, "3\"+2").next, put),
            "the count digits after \"+ keep reading it");
-    expect(vim_reads_clipboard(core_steps(empty, text, caret, "@").next),
+    expect(vim_reads_clipboard(core_steps(empty, text, caret, "@").next, put),
            "waiting for the @ name reads it");
-    expect(!vim_reads_clipboard(core_steps(empty, text, caret, "q").next),
+    expect(!vim_reads_clipboard(core_steps(empty, text, caret, "q").next, put),
            "waiting for the q name does not read it");
-    expect(!vim_reads_clipboard(core_steps(empty, text, caret, "\"a").next),
+    expect(!vim_reads_clipboard(core_steps(empty, text, caret, "\"a").next, put),
            "\"a does not read it");
-    expect(!vim_reads_clipboard(core_steps(empty, text, caret, "\"+\"a").next),
+    expect(!vim_reads_clipboard(core_steps(empty, text, caret, "\"+\"a").next, put),
            "the later \"a replaces \"+");
+    verify_unnamed_clipboard_predicate(empty, text, caret);
     const VimStep refused = core_steps(empty, text, caret, "q+");
     expect(refused.failure.has_value() && !refused.next.macro_recording.has_value(),
            "q+ is not a recording name");
