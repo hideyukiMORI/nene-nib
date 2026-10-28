@@ -75,3 +75,16 @@
 | class を分ける（`EditorController` を `DocumentController` `VimController` … に） | 状態（`EditorState`・port・券）を共有する設計の変更で、D48 の「分割」を越える。意図の写しの 1 本（ARC-004）を保つには 1 class が自然 |
 | 行数で機械的に切る | 意味の無い境目は乗せ替えの衝突を減らさない |
 | 分けないまま 段 2 へ | 段 2 の PR が 5,000 行のファイルの中で 300 行を動かし、並行する PR と衝突し続ける（今日の 6 本で実測） |
+
+## 追補（2026-10-28・PR #1053・2 本目の分割の実測）
+
+**追補（2026-10-28・PR #1053）。** 分けた結果、表の行を次のとおり読む。節の見出しと中身が違った所は意味で群を決めた（「鍵の表の単位」は保つ）。
+
+- `VimStep.cpp`: 公開の関数・鍵から動作へ（動作の種類ごとの配り `history_action` `normal_range_action` `normal_line_action` `prefix_of` `input_action`、画面と横送りと回数の動作 `tab_action` `horizontal_action` `aligned_screen` `display_view` `requested_viewport` `counted` ほか。元は検索と `.` の節の後ろにあった）・NORMAL の特別な鍵・次の 1 鍵の待ち（`awaited_step` `awaiting_step`・文字の待ち `awaited_character`）・接頭辞 `g` `z` Ctrl-w・**マークの設定と跳び（ADR 0152）**・鍵の入口 `pressed` `stepped`・組み立て中の入力を捨てる。
+- `VimStepInsert.cpp`: INSERT（元は VISUAL の節の後ろにあった `insert_*`）。
+- `VimStepMotions.cpp`: 着地と移動（最初の節の前にあった補助の大半を含む）。
+- `VimStepDetail.hpp` / `.cpp`: 2 つ以上の群が呼ぶ補助 12 本（`count_of` `combined_count` `resolved_count` `resolved_motion_count` `line_of` `forward_characters` `backward_characters` `wanted_column_of` `rested_in` `caret_on_line` `line_below` `line_above`）・2 つ以上の群が使う定数 4 つ（`inline constexpr`）と別名 2 つ（`WrittenRegisters` `ShiftBy`）・群をまたいで呼ばれる関数の宣言（定義は群のファイル）。
+- 1 つの群だけが使う補助と定数はその群の無名名前空間に置く。overload の組は同じ置き場（全部 `detail` か、全部同じファイルの無名）に揃える。
+- 背景と決定 6 の「`VimStep.cpp` は 5,941 行」は ADR を書いた時の数で、分けた時は 6,153 行（関数 367）だった。分けた後の最大は `VimStep.cpp` の 1,775 行。
+
+1 本目（PR #1034・#1035）では、表に無かった `frame()` の下請け 19 本は呼び手が `frame()` だけなので入口 `EditorController.cpp` に置いた。CNF-014 は 1 本目では active にせず（`VimStep.cpp` 6,153 行が残るため）、この 2 本目で active にした。
