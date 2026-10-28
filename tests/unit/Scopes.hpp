@@ -89,6 +89,14 @@ void verify_text_buffer_property_scope();
 // VimPatternPropertyTests.cpp（#899・検索の pattern の parse と matched の性質の試験）
 void verify_vim_pattern_property_scope();
 
+// JsonTests.cpp / JsonPropertyTests.cpp（#994・ADR 0160 の決定 4・core の JSON の契約と性質）
+void verify_json_scope();
+void verify_json_property_scope();
+// LspFramesTests.cpp / LspMessagesTests.cpp（#994・ADR 0160 の決定 3・5・枠と JSON-RPC
+// の対応と位置）
+void verify_lsp_frames_scope();
+void verify_lsp_messages_scope();
+
 // TitleBarLayoutPropertyTests.cpp（#929・タブの帯の配置と hit test の一致の性質の試験）
 void verify_title_bar_layout_property_scope();
 
