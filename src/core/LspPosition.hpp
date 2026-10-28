@@ -30,7 +30,7 @@ struct LspPosition
                                                   LspPositionEncoding encoding);
 
 // 本文のバイト位置 → Position（lsp_offset_of の逆）。本文の外は末尾に、行の改行の中（CRLF の
-// `\r` の後ろ）は行末に切り詰める。at はコードポイントの境目でなければならない。
+// `\r` の後ろ）は行末に切り詰め、コードポイントの途中は後ろの境目へ寄せる。
 [[nodiscard]] LspPosition lsp_position_of(const TextBuffer &buffer, Offset at,
                                           LspPositionEncoding encoding);
 } // namespace nenenib::core

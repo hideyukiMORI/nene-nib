@@ -54,7 +54,11 @@ constexpr auto utf8 = LspPositionEncoding::utf8;
 constexpr auto utf16 = LspPositionEncoding::utf16;
 
 // 断る 1 通と閉じた失敗（LspMessageFailure.hpp の一覧のどれにも 1 つ以上）。
-constexpr std::array<Refused, 10> refused{{
+constexpr std::array<Refused, 13> refused{{
+    {R"({"jsonrpc":"2.0","id":null,"method":"x"})", LspMessageFailure::invalid_id},
+    {R"({"jsonrpc":"2.0","id":3,"error":{"code":1.5,"message":"x"}})",
+     LspMessageFailure::invalid_error},
+    {R"({"jsonrpc":2.0,"id":1,"result":null})", LspMessageFailure::not_json_rpc},
     {R"([{"jsonrpc":"2.0","id":1,"result":null}])", LspMessageFailure::not_object},
     {R"("text")", LspMessageFailure::not_object},
     {R"({"id":1,"result":null})", LspMessageFailure::not_json_rpc},
@@ -116,6 +120,18 @@ void verify_responses()
     expect(error != nullptr && !error->result.has_value() && error->result.error().code == -32600 &&
                error->result.error().message == "bad",
            "an error response keeps its code and message");
+}
+
+// result と error の両方を持つ答えは error を読む（JSON-RPC
+// では片方だけ・壊れた答えを成功にしない）。
+void verify_result_and_error()
+{
+    const Incoming both = incoming_of(
+        R"({"jsonrpc":"2.0","id":4,"result":1,"error":{"code":-32603,"message":"internal"}})");
+    const auto *answer = both.has_value() ? std::get_if<core::LspResponse>(&both.value()) : nullptr;
+    expect(answer != nullptr && !answer->result.has_value() &&
+               answer->result.error().code == -32603,
+           "a response with both result and error reads the error");
 }
 
 void verify_calls()
@@ -231,6 +247,10 @@ void verify_round_trips()
     expect(all, "every boundary maps to a position and back to itself");
     const LspPosition emoji = core::lsp_position_of(buffer_of("a😀b"), Offset{5}, utf16);
     expect(emoji == LspPosition{0, 3}, "UTF-16 counts the emoji as two units");
+    const LspPosition inside = core::lsp_position_of(buffer_of("a😀b"), Offset{2}, utf16);
+    expect(inside == LspPosition{0, 3}, "an offset inside a code point moves to the next boundary");
+    const LspPosition inside_utf8 = core::lsp_position_of(buffer_of("a😀b"), Offset{3}, utf8);
+    expect(inside_utf8 == LspPosition{0, 5}, "UTF-8 counts up to the next boundary as well");
     const LspPosition crlf = core::lsp_position_of(buffer_of("ab\r\ncd"), Offset{3}, utf16);
     expect(crlf == LspPosition{0, 2}, "an offset inside CRLF maps to the end of its line");
     const LspPosition past = core::lsp_position_of(buffer_of("ab\ncd"), Offset{99}, utf8);
@@ -241,6 +261,7 @@ void verify_round_trips()
 void verify_lsp_messages_scope()
 {
     verify_responses();
+    verify_result_and_error();
     verify_calls();
     verify_bodies();
     verify_positions();

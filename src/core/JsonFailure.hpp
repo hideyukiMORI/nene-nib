@@ -19,7 +19,7 @@ enum class JsonFailure : std::uint8_t
     // 数の文法の誤り（`01` `1.` `-` `-a` `1e`）。`+1` と `.5` は値の始まりでないので
     // unexpected_character
     invalid_number,
-    // double の範囲を外れる数（`1e400`）
+    // double の範囲を超える数（`1e400`）。0 に丸まる数（`1e-400`）は受ける
     number_out_of_range,
     // 文字列の中の未知の `\` の列
     invalid_escape,

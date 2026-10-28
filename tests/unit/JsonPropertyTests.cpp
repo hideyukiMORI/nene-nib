@@ -44,9 +44,9 @@ constexpr std::size_t value_cases = 300U * rounds;
 constexpr std::size_t byte_cases = 400U * rounds;
 constexpr std::size_t mutation_cases = 400U * rounds;
 constexpr std::size_t utf8_cases = 150U * rounds;
-constexpr std::size_t deepest = 4U;
+constexpr std::size_t deepest = 8U;
 constexpr std::size_t widest = 5U;
-constexpr std::int64_t exact_limit = std::int64_t{1} << 53;
+constexpr std::int64_t exact_limit = (std::int64_t{1} << 53) - 1;
 
 // 文字列に入れるコードポイント（制御文字・escape の要る文字・非 ASCII・代理対になる文字）。
 constexpr std::array<char32_t, 20> code_points{{

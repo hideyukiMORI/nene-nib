@@ -8,7 +8,9 @@
 #include <algorithm>
 #include <charconv>
 #include <cstddef>
+#include <cstdint>
 #include <expected>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -106,6 +108,61 @@ void skip_space(std::string_view text, std::size_t &at) noexcept
     return digits(text, at);
 }
 
+// 仮数の最初の 0 でない数字の桁（1 の位が 0・0.1 の位が -1）。数字が全部 0 なら値なし。
+[[nodiscard]] std::optional<std::int64_t> leading_order(std::string_view mantissa) noexcept
+{
+    if (!mantissa.empty() && mantissa.front() == '-')
+    {
+        mantissa.remove_prefix(1);
+    }
+    const auto point =
+        static_cast<std::int64_t>(std::ranges::find(mantissa, '.') - mantissa.begin());
+    std::int64_t place = 0;
+    for (const char byte : mantissa)
+    {
+        if (byte == '.')
+        {
+            continue;
+        }
+        if (byte != '0')
+        {
+            return point - 1 - place;
+        }
+        ++place;
+    }
+    return std::nullopt;
+}
+
+// 指数の値（`e` の後ろ）。int64 を外れる指数は符号の側の端に寄せる。
+[[nodiscard]] std::int64_t exponent_of(std::string_view digits) noexcept
+{
+    const bool negative = !digits.empty() && digits.front() == '-';
+    if (!digits.empty() && (digits.front() == '-' || digits.front() == '+'))
+    {
+        digits.remove_prefix(1);
+    }
+    std::int64_t exponent = 0;
+    const auto result = std::from_chars(digits.data(), digits.data() + digits.size(), exponent);
+    if (result.ec == std::errc::result_out_of_range)
+    {
+        exponent = std::numeric_limits<std::int64_t>::max();
+    }
+    return negative ? -exponent : exponent;
+}
+
+// double の範囲を外れた数が 0 の側へ外れた（桁落ち）か。大きさの桁（最初の 0 でない数字の桁と
+// 指数の和）が負なら桁落ちで、正なら桁あふれ。from_chars はどちらも result_out_of_range を返す。
+[[nodiscard]] bool underflows(std::string_view written) noexcept
+{
+    const auto mark =
+        std::ranges::find_if(written, [](char byte) { return byte == 'e' || byte == 'E'; });
+    const auto split = static_cast<std::size_t>(mark - written.begin());
+    const std::int64_t exponent =
+        split < written.size() ? exponent_of(written.substr(split + 1)) : 0;
+    const std::optional<std::int64_t> order = leading_order(written.substr(0, split));
+    return order.has_value() && order.value() < -exponent;
+}
+
 // 数の文法を先に確かめ、値は std::from_chars で読む（ロケールに依らない・ARC-007）。
 [[nodiscard]] Parsed parse_number(std::string_view text, std::size_t &at)
 {
@@ -122,6 +179,11 @@ void skip_space(std::string_view text, std::size_t &at) noexcept
     const char *const last = written.data() + written.size();
     double value = 0.0;
     const auto result = std::from_chars(written.data(), last, value);
+    if (result.ec == std::errc::result_out_of_range && underflows(written))
+    {
+        // RFC 8259 の正しい数で、double では 0 に丸まる。符号つきの 0 として受ける。
+        return JsonValue{json_number(written.front() == '-' ? -0.0 : 0.0)};
+    }
     if (result.ec == std::errc::result_out_of_range)
     {
         return std::unexpected(JsonFailure::number_out_of_range);

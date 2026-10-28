@@ -91,7 +91,10 @@ LspPosition lsp_position_of(const TextBuffer &buffer, Offset at, LspPositionEnco
     const LineNumber line = buffer.position_of(bounded).line;
     const Offset start = buffer.line_start(line);
     const Offset end{std::min(bounded.value, buffer.line_end(line).value)};
-    const std::string before = buffer.text_range(start, end);
+    // コードポイントの途中の at は、lsp_offset_of と同じく後ろの境目へ寄せてから数える。
+    const std::string text = buffer.line_text(line);
+    const std::string_view before =
+        std::string_view{text}.substr(0, utf8_bytes(text, end.value - start.value));
     return LspPosition{.line = line.value - 1, .character = units_of(before, encoding)};
 }
 } // namespace nenenib::core

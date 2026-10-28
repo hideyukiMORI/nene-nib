@@ -10,6 +10,7 @@
 #include "TestSupport.hpp"
 
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -82,7 +83,7 @@ constexpr std::array<Rewritten, 26> rewritten{{
     {"true", "true"},
     {" false ", "false"},
     {"\t\r\n null \n", "null"},
-    {"-0", "0"},
+    {"-0", "-0"},
     {"-17", "-17"},
     {"1.5", "1.5"},
     {"1.5e3", "1500"},
@@ -139,9 +140,28 @@ constexpr std::array<Refused, 30> refused{{
     {"\"\xFF\"", JsonFailure::invalid_utf8},
 }};
 
-// 上の表に入れない残りの失敗（桁落ち・代理対の 2 つ目の誤り・UTF-8 で書いた代理）。
-constexpr std::array<Refused, 5> refused_more{{
-    {"1e-400", JsonFailure::number_out_of_range},
+// 上の表に入れない残りの失敗（BOM・JSON に無い数と空白・数の文法・桁あふれ・代理対の 2
+// つ目の誤り・UTF-8 で書いた代理）。
+constexpr std::array<Refused, 19> refused_more{{
+    {"\xEF\xBB\xBF"
+     "1",
+     JsonFailure::unexpected_character},
+    {"NaN", JsonFailure::unexpected_character},
+    {"Infinity", JsonFailure::unexpected_character},
+    {"-Infinity", JsonFailure::invalid_number},
+    {"\f1", JsonFailure::unexpected_character},
+    {"\v1", JsonFailure::unexpected_character},
+    {"\xC2\xA0"
+     "1",
+     JsonFailure::unexpected_character},
+    {"-01", JsonFailure::invalid_number},
+    {"1.e3", JsonFailure::invalid_number},
+    {"-a", JsonFailure::invalid_number},
+    {"1e+", JsonFailure::invalid_number},
+    {"-1e400", JsonFailure::number_out_of_range},
+    {"1e99999999999999999999", JsonFailure::number_out_of_range},
+    {R"("\ud800\ud800")", JsonFailure::unpaired_surrogate},
+    {"[{\"a\":1]", JsonFailure::unexpected_character},
     {R"("\ud800A")", JsonFailure::unpaired_surrogate},
     {R"("\ud800x")", JsonFailure::unpaired_surrogate},
     {"\"\xED\xA0\x80\"", JsonFailure::invalid_utf8},
@@ -222,12 +242,53 @@ void verify_refused()
     }
 }
 
+void verify_signed_zero()
+{
+    const core::JsonNumber negative = core::json_number(-0.0);
+    expect(!negative.integer.has_value(), "-0.0 carries no integer");
+    expect(core::write_json(JsonValue{negative}) == "-0", "-0.0 is written with its sign");
+    const JsonValue zero = core::parse_json("-0").value_or(JsonValue{JsonNull{}});
+    const auto *read = std::get_if<JsonNumber>(&zero.value);
+    expect(read != nullptr && std::bit_cast<std::uint64_t>(read->value) == (std::uint64_t{1} << 63),
+           "-0 reads back as negative zero");
+    for (const auto &[text, written] : {Rewritten{"1e-400", "0"}, Rewritten{"-1e-400", "-0"},
+                                        Rewritten{"0.0e-99999999999999999999", "0"},
+                                        Rewritten{"-12.5e-99999999999999999999", "-0"}})
+    {
+        const Parsed tiny = core::parse_json(text);
+        expect(tiny.has_value() && core::write_json(tiny.value()) == written,
+               "a number below the double range is a signed zero");
+    }
+}
+
+void verify_long_numbers()
+{
+    const Parsed thousand = core::parse_json(std::string(1000, '9'));
+    expect(!thousand.has_value() && thousand.error() == JsonFailure::number_out_of_range,
+           "a thousand-digit integer is out of range");
+    const Parsed tiny = core::parse_json("0." + std::string(1000, '0') + "1");
+    expect(tiny.has_value() && core::write_json(tiny.value()) == "0",
+           "a thousand leading zeros in the fraction round to zero");
+    const Parsed long_fraction = core::parse_json("1." + std::string(1000, '0') + "1e2");
+    expect(long_fraction.has_value() && core::write_json(long_fraction.value()) == "100",
+           "a thousand-digit fraction rounds to the nearest double");
+}
+
 void verify_numbers()
 {
-    const Parsed big = core::parse_json("9007199254740992");
+    const Parsed big = core::parse_json("9007199254740991");
     expect(big.has_value() &&
-               integer_of(big.value()) == std::optional<std::int64_t>{9007199254740992},
-           "2^53 still carries the integer");
+               integer_of(big.value()) == std::optional<std::int64_t>{9007199254740991},
+           "2^53 - 1 still carries the integer");
+    for (const std::string_view edge :
+         {"9007199254740992", "9007199254740993", "-9007199254740992"})
+    {
+        const Parsed rounded = core::parse_json(edge);
+        expect(rounded.has_value() && !integer_of(rounded.value()).has_value(),
+               "2^53 and 2^53 + 1 keep only the double, so they cannot alias another integer");
+    }
+    verify_signed_zero();
+    verify_long_numbers();
     const Parsed beyond = core::parse_json("18014398509481984");
     expect(beyond.has_value() && !integer_of(beyond.value()).has_value(),
            "integers beyond 2^53 keep only the double");
@@ -300,6 +361,21 @@ void verify_depth()
     const Parsed objects = core::parse_json(nested(limit + 1, R"({"a":)", "}"));
     expect(!objects.has_value() && objects.error() == JsonFailure::too_deep,
            "objects nested past the limit are too deep");
+    std::string alternating;
+    for (std::size_t level = 0; level < limit; ++level)
+    {
+        alternating.append(level % 2 == 0 ? "[" : R"({"a":)");
+    }
+    alternating.append("0");
+    for (std::size_t level = limit; level > 0; --level)
+    {
+        alternating.append((level - 1) % 2 == 0 ? "]" : "}");
+    }
+    expect(core::parse_json(alternating).has_value(),
+           "arrays and objects alternating to the limit parse");
+    const Parsed past = core::parse_json("[" + alternating + "]");
+    expect(!past.has_value() && past.error() == JsonFailure::too_deep,
+           "alternating nesting past the limit is too deep");
     const Parsed unclosed = core::parse_json(std::string(10000, '['));
     expect(!unclosed.has_value() && unclosed.error() == JsonFailure::too_deep,
            "10000 open brackets stop at the depth limit");

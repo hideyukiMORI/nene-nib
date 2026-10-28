@@ -29,7 +29,9 @@ constexpr std::string_view two = "Content-Length: 2\r\n\r\n{}"
                                  "charset=utf-8\r\n\r\n[1]";
 
 // 断る見出しと閉じた失敗（LspFrameFailure.hpp の一覧のどれにも 1 つ以上）。
-constexpr std::array<Refused, 10> refused{{
+constexpr std::array<Refused, 12> refused{{
+    {"Content-Length : 5\r\n\r\nhello", LspFrameFailure::missing_content_length},
+    {"Content-Length: +5\r\n\r\nhello", LspFrameFailure::invalid_content_length},
     {"hello\r\n\r\n", LspFrameFailure::malformed_header},
     {"\r\n\r\n", LspFrameFailure::malformed_header},
     {": 5\r\n\r\nhello", LspFrameFailure::malformed_header},
@@ -103,6 +105,14 @@ void verify_limits()
     const Framed garbage = core::lsp_frames(endless);
     expect(!garbage.has_value() && garbage.error() == LspFrameFailure::header_too_long,
            "a header without its blank line past 8 KiB is refused");
+    const Framed bare_lf = core::lsp_frames("Content-Length: 5\n\nhello");
+    expect(bare_lf.has_value() && bare_lf.value().bodies.empty() && bare_lf.value().consumed == 0,
+           "a header ended by LF alone is not a frame and waits for CRLF");
+    const std::string lf_garbage =
+        "Content-Length: 5\n\n" + std::string(core::lsp_header_limit, 'x');
+    const Framed lf_refused = core::lsp_frames(lf_garbage);
+    expect(!lf_refused.has_value() && lf_refused.error() == LspFrameFailure::header_too_long,
+           "LF-only headers are refused once they pass 8 KiB");
     const std::string waiting(core::lsp_header_limit, 'x');
     expect(core::lsp_frames(waiting).has_value(), "a header within 8 KiB still waits");
     for (const auto &[bytes, failure] : refused)
