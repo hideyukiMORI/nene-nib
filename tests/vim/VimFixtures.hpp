@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 8481cd2aef0147e2c8b507c8a7e8ae83af341c23dd55930ffac1f00f8d79cd86 / 2424 fixtures
+// fixtures.json: sha256 fed173893aac143c50373365367063331fbd908a555aa1ed72e7fbb3d5ff6f46 / 2434 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2424> vim_fixtures{{
+constexpr std::array<VimFixture, 2434> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2271,6 +2271,16 @@ constexpr std::array<VimFixture, 2424> vim_fixtures{{
     {"percent-delete-backward", "x(a b)y", "fbd%", "x)y", 1, 2, "(a b", "v", std::nullopt},
     {"percent-yank", "a (b) c", "y%", "a (b) c", 1, 1, "a (b)", "v", std::nullopt},
     {"percent-change", "a (b) c", "c%x<Esc>", "x c", 1, 1, "a (b)", "v", std::nullopt},
+    {"dot-percent-no-bracket-fails", "ab cd", "%x", "ab cd", 1, 1, "", "", std::nullopt},
+    {"dot-percent-issue-minimal", "    gamma {br}  ;  beta\n  gamma {br}; 'sq' -", "c%  (日本<Esc>.x", "  (日本  ;  beta\n  gamma {br}; 'sq' -", 1, 7, "    gamma {br}", "v", std::nullopt},
+    {"dot-percent-bracket-after-replay", "(a) b (c) d", "c%X<Esc>.x", " d", 1, 1, "X", "v", std::nullopt},
+    {"dot-percent-next-line-only-fails", "ab\n(c)", "%x", "ab\n(c)", 1, 1, "", "", std::nullopt},
+    {"dot-percent-delete-no-bracket-fails", "a b c", "d%x", "a b c", 1, 1, "", "", std::nullopt},
+    {"dot-percent-delete-dot-fails", "(a) b\n(c)", "d%.x", " b\n(c)", 1, 1, "(a)", "v", std::nullopt},
+    {"dot-percent-change-succeeds", "(a) (b)", "c%X<Esc>w.x", "X ", 1, 2, "X", "v", std::nullopt},
+    {"dot-percent-on-close", "(a) (b)", "$c%Y<Esc>0.x", " Y", 1, 1, "Y", "v", std::nullopt},
+    {"dot-percent-after-yank", "(a) b (c)", "c%X<Esc>wy%.x", "X ", 1, 2, "X", "v", std::nullopt},
+    {"dot-percent-change-dot-fails-insert-dropped", "(a) b\nc", "c%X<Esc>.ix<Esc>", "X b\nc", 1, 1, "(a)", "v", std::nullopt},
     {"percent-visual", "a (b) c", "v%d", " c", 1, 1, "a (b)", "v", std::nullopt},
     {"percent-count-delete", "1\n2\n3\n4\n5\n6\n7\n8\n9\n10", "d30%", "4\n5\n6\n7\n8\n9\n10", 1, 1, "1\n2\n3\n", "V", std::nullopt},
     {"percent-delete-lines-rule", "  (a\n  b)", "d%", "", 1, 1, "  (a\n  b)\n", "V", std::nullopt},

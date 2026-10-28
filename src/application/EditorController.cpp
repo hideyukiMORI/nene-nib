@@ -158,6 +158,15 @@ constexpr std::size_t maximum_file_bytes = core::maximum_document_bytes;
     std::unreachable();
 }
 
+// 1 鍵の失敗（Issue #983）。鍵が自分で失敗しなければ、その鍵が返した再生（`.` `@`）を打ち切った
+// 失敗を受け取って消す。Vim の :normal! は再生の中の失敗で `.` の後ろの鍵も捨てる（実測）。
+[[nodiscard]] std::optional<core::VimRepeatFailure>
+step_failure(std::optional<core::VimRepeatFailure> own,
+             std::optional<core::VimRepeatFailure> &replayed) noexcept
+{
+    return own.has_value() ? own : std::exchange(replayed, std::nullopt);
+}
+
 // 入力行の編集のうち履歴を歩く 2 つ（#725）。写し先が足りなければコンパイルが落ちる（CPP-002）。
 [[nodiscard]] constexpr bool recalls_history(core::CommandEdit edit) noexcept
 {
@@ -2218,7 +2227,8 @@ std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::Vim
     }
     // 鍵の終わりに、動かなかった・消えた前の位置を戻す（決定 5・Vim の checkpcmark）。
     check_vim_marks();
-    return step.failure;
+    // 再生（`.` `@`）の中の鍵が失敗したら、再生を返した鍵の失敗にする（Issue #983）。
+    return step_failure(step.failure, replay_failure_);
 }
 
 // 飛ぶ鍵の後だけ前の位置を確かめる（決定 5）。飛ばなかった鍵は位置を引かない。
@@ -3362,8 +3372,10 @@ void EditorController::perform(const core::VimReplay &effect)
         replay_depth_ = replay_depths_.front();
         replay_queue_.pop_front();
         replay_depths_.pop_front();
-        if (deliver_vim_key(key).has_value())
+        const auto failure = deliver_vim_key(key);
+        if (failure.has_value())
         {
+            replay_failure_ = failure;
             replay_queue_.clear();
             replay_depths_.clear();
         }
