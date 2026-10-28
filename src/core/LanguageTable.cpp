@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <iterator>
+#include <string>
 #include <utility>
 
 namespace nenenib::core
@@ -145,6 +146,27 @@ constexpr std::array<LanguageExtension, 68> language_extensions{{
     {"txt", Language::plain},
 }};
 
+// 拡張子の列だけを写した表（ADR 0154 の追補 2026-10-28・#849）。ダイアログの絞り込みが読む。
+constexpr auto listed_extensions = []
+{
+    std::array<std::string_view, language_extensions.size()> listed{};
+    std::ranges::transform(language_extensions, listed.begin(),
+                           [](const LanguageExtension &row) { return row.first; });
+    return listed;
+}();
+
+[[nodiscard]] consteval bool extensions_are_distinct() noexcept
+{
+    auto sorted = listed_extensions;
+    std::ranges::sort(sorted);
+    return std::ranges::adjacent_find(sorted) == sorted.end();
+}
+
+static_assert(extensions_are_distinct(), "language_extensions has no duplicate extension");
+static_assert(std::ranges::find(listed_extensions, std::string_view{"txt"}) !=
+                  listed_extensions.end(),
+              "the dialog filter lists the plain txt extension");
+
 // 拡張子ではなく名前で決まる行（決定 2）。照合は拡張子と同じく ASCII の大文字小文字を畳む。
 // Dockerfile と Containerfile（#860）と `.luacheckrc` と shell の設定の 6 つ（#864）は Vim の
 // filetype.vim の名前の行（Vim は `.bashrc` などを bash・`.zshrc` `.zprofile` を zsh にするが、
@@ -260,5 +282,25 @@ std::optional<Language> language_of_name(std::string_view name) noexcept
 std::span<const std::string_view> all_language_names() noexcept
 {
     return language_names;
+}
+
+std::span<const std::string_view> listed_language_extensions() noexcept
+{
+    return listed_extensions;
+}
+
+std::string file_dialog_pattern()
+{
+    std::string pattern;
+    for (const auto extension : listed_extensions)
+    {
+        if (!pattern.empty())
+        {
+            pattern += ';';
+        }
+        pattern += "*.";
+        pattern += extension;
+    }
+    return pattern;
 }
 } // namespace nenenib::core

@@ -4,6 +4,7 @@
 
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 
 namespace nenenib::core
@@ -20,4 +21,12 @@ namespace nenenib::core
 [[nodiscard]] std::optional<Language> language_of_name(std::string_view name) noexcept;
 // 名前の表そのもの（Language の宣言の順）。補完の候補が並べる。
 [[nodiscard]] std::span<const std::string_view> all_language_names() noexcept;
+// 拡張子の表の拡張子だけ（ADR 0154 の追補 2026-10-28・#849）。表の順に、先頭の '.' を除いた小文字の
+// 拡張子を重複なく並べる。`CMakeLists.txt` などの名前の行と `.cmake.in` の末尾の照合は含めない。
+[[nodiscard]] std::span<const std::string_view> listed_language_extensions() noexcept;
+// ファイルを選ぶ窓の「対応するファイル」の絞り込み（同じ追補）。listed_language_extensions
+// を表の順に
+// `*.md;*.markdown;…;*.txt` の形でつなぐ。plain の `txt` は表の行にあることを static_assert
+// が守る。
+[[nodiscard]] std::string file_dialog_pattern();
 } // namespace nenenib::core
