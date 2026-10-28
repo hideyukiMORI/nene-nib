@@ -4,6 +4,7 @@
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "TextPosition.hpp"
 #include "VimCharacter.hpp"
 #include "VimCharacterSearchKind.hpp"
 #include "VimCount.hpp"
@@ -56,6 +57,9 @@ void store_vim_fixture_macro(nenenib::application::EditorController &controller,
                              const VimFixture &fixture);
 [[nodiscard]] std::string whole_vim_body(nenenib::application::EditorController &controller);
 [[nodiscard]] std::string vim_register_kind(const nenenib::core::VimRegister &value);
+// Vim の col('.') の値（バイト位置で 1 始まり）。本文は oracle と同じ LF の 1 本。
+[[nodiscard]] std::size_t vim_byte_column(const std::string &body,
+                                          const nenenib::core::TextPosition &caret);
 void open_vim_document(Editing &editing, std::string text);
 [[nodiscard]] bool dot_record_is(const nenenib::core::VimState &state,
                                  const std::optional<nenenib::core::VimCount> &count,
