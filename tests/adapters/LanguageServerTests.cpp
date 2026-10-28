@@ -1,0 +1,418 @@
+// Issue #1020（親 #994）: 言語サーバーの adapter（Win32LanguageServer）を、本物の子プロセス・
+// 名前つきパイプ・Job Object と替え玉のサーバー nib_fake_language_server で通す（ADR 0160 の決定
+// 2・6・9・ADR 0126）。替え玉の経路は CTest が第 1 引数で渡す。時刻は読まない（Sleep・時計・
+// 制限時間つきの待ちを書かない）。試験のスレッドが pump の代わりに waitable_handles を
+// WaitForMultipleObjects で待ち、立った handle を completed に返して collect する。
+// 止まらないときは CTest の制限時間で落ちる。
+#include "FilePath.hpp"
+#include "ServerCommandLine.hpp"
+#include "ServerEvent.hpp"
+#include "ServerFailure.hpp"
+#include "ServerFramer.hpp"
+#include "ServerLaunch.hpp"
+#include "Win32LanguageServer.hpp"
+
+#include <windows.h>
+
+#include <tlhelp32.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <functional>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <variant>
+#include <vector>
+
+namespace
+{
+namespace core = nenenib::core;
+namespace adapters = nenenib::adapters::win32;
+using nenenib::application::ServerEvent;
+using nenenib::application::ServerExited;
+using nenenib::application::ServerFailed;
+using nenenib::application::ServerFailure;
+using nenenib::application::ServerLaunch;
+using nenenib::application::ServerMessage;
+using nenenib::application::ServerStarted;
+using Events = std::vector<ServerEvent>;
+using Arguments = std::vector<std::string>;
+using Finished = std::function<bool(const Events &)>;
+
+constexpr std::size_t small_read = 4096;
+constexpr std::size_t echoed_bytes = 70000;
+
+std::size_t &failures()
+{
+    static std::size_t count = 0;
+    return count;
+}
+
+std::size_t &checks()
+{
+    static std::size_t count = 0;
+    return count;
+}
+
+void expect(bool condition, const char *message)
+{
+    ++checks();
+    if (!condition)
+    {
+        ++failures();
+        std::fprintf(stderr, "FAIL: %s\n", message);
+    }
+}
+
+std::string &fake_server()
+{
+    static std::string path;
+    return path;
+}
+
+core::FilePath path_of(std::string_view text)
+{
+    return core::FilePath::parse(text).value();
+}
+
+ServerLaunch launch_of(Arguments arguments)
+{
+    return ServerLaunch{path_of(fake_server()), std::move(arguments), path_of(".")};
+}
+
+template <typename Event> std::size_t count_of(const Events &events)
+{
+    std::size_t count = 0;
+    for (const auto &event : events)
+    {
+        count += std::holds_alternative<Event>(event) ? 1 : 0;
+    }
+    return count;
+}
+
+std::vector<std::string> bodies(const Events &events)
+{
+    std::vector<std::string> found;
+    for (const auto &event : events)
+    {
+        if (std::holds_alternative<ServerMessage>(event))
+        {
+            found.push_back(std::get<ServerMessage>(event).body);
+        }
+    }
+    return found;
+}
+
+std::optional<std::int32_t> exit_code(const Events &events)
+{
+    for (const auto &event : events)
+    {
+        if (std::holds_alternative<ServerExited>(event))
+        {
+            return std::get<ServerExited>(event).code;
+        }
+    }
+    return std::nullopt;
+}
+
+bool failed_with(const Events &events, ServerFailure failure)
+{
+    for (const auto &event : events)
+    {
+        if (std::holds_alternative<ServerFailed>(event) &&
+            std::get<ServerFailed>(event).failure == failure)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 1 つの handle が立つまで待って adapter に返す。待つものが無ければ false。
+bool pump_once(adapters::Win32LanguageServer &server)
+{
+    const auto span = server.waitable_handles();
+    const std::vector<HANDLE> handles(span.begin(), span.end());
+    if (handles.empty())
+    {
+        return false;
+    }
+    const DWORD signaled =
+        WaitForMultipleObjects(static_cast<DWORD>(handles.size()), handles.data(), FALSE, INFINITE);
+    const DWORD index = signaled - WAIT_OBJECT_0;
+    if (index >= handles.size())
+    {
+        expect(false, "the waitable handles can be waited on");
+        return false;
+    }
+    server.completed(handles[index]);
+    return true;
+}
+
+// 出来事を集めながら、finished が満たされるか待つものが無くなるまで pump を回す。
+Events pump_until(adapters::Win32LanguageServer &server, const Finished &finished)
+{
+    Events events = server.collect();
+    while (!finished(events) && pump_once(server))
+    {
+        for (auto &event : server.collect())
+        {
+            events.push_back(std::move(event));
+        }
+    }
+    return events;
+}
+
+Finished messages(std::size_t count)
+{
+    return [count](const Events &events) { return bodies(events).size() >= count; };
+}
+
+bool exited(const Events &events)
+{
+    return exit_code(events).has_value();
+}
+
+bool any_failure(const Events &events)
+{
+    return count_of<ServerFailed>(events) > 0;
+}
+
+bool fake_child(const PROCESSENTRY32W &entry)
+{
+    return entry.th32ParentProcessID == GetCurrentProcessId() &&
+           CompareStringOrdinal(static_cast<const wchar_t *>(entry.szExeFile), -1,
+                                L"nib_fake_language_server.exe", -1, TRUE) == CSTR_EQUAL;
+}
+
+// まだ走っている子なら、終わりを待てる handle。終わった子と開けない子は nullptr。
+HANDLE open_running(DWORD process_id)
+{
+    const HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, process_id);
+    if (process != nullptr && WaitForSingleObject(process, 0) == WAIT_OBJECT_0)
+    {
+        CloseHandle(process);
+        return nullptr;
+    }
+    return process;
+}
+
+// 試験のプロセスが起こした替え玉の子のうち走っているものを 1 つ、終わりを待てる形で開く。
+HANDLE open_fake_child()
+{
+    const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    PROCESSENTRY32W entry{};
+    entry.dwSize = sizeof(entry);
+    HANDLE found = nullptr;
+    for (BOOL more = Process32FirstW(snapshot, &entry); more != 0 && found == nullptr;
+         more = Process32NextW(snapshot, &entry))
+    {
+        found = fake_child(entry) ? open_running(entry.th32ProcessID) : nullptr;
+    }
+    CloseHandle(snapshot);
+    return found;
+}
+
+void verify_lifecycle()
+{
+    std::size_t arrivals = 0;
+    adapters::Win32LanguageServer server([&arrivals] { ++arrivals; });
+    expect(server.start(launch_of({})).has_value(), "the fake server starts");
+    expect(arrivals == 1, "the start is signalled once");
+    auto events = server.collect();
+    expect(count_of<ServerStarted>(events) == 1, "the start is one ServerStarted");
+    expect(!server.waitable_handles().empty(),
+           "a started server has a read and the process to wait on");
+    server.send(R"({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}})");
+    events = pump_until(server, messages(1));
+    const auto answer = bodies(events);
+    expect(answer.size() == 1 && answer.front().find(R"("id":1,)") != std::string::npos &&
+               answer.front().find(R"("positionEncoding":"utf-8")") != std::string::npos,
+           "initialize is answered with the same id and the capabilities");
+    server.send(R"({"jsonrpc":"2.0","method":"initialized","params":{}})");
+    server.send(R"({"jsonrpc":"2.0","id":2,"method":"shutdown"})");
+    events = pump_until(server, messages(1));
+    expect(bodies(events).size() == 1 &&
+               bodies(events).front() == R"({"jsonrpc":"2.0","id":2,"result":null})",
+           "initialized is silent and shutdown is answered with result null");
+    server.send(R"({"jsonrpc":"2.0","method":"exit"})");
+    events = pump_until(server, exited);
+    expect(exit_code(events) == std::optional<std::int32_t>{0}, "exit ends the server with code 0");
+    expect(server.waitable_handles().empty(), "an exited server has nothing to wait on");
+    expect(arrivals >= 4, "each batch of events is signalled");
+}
+
+void verify_echo_across_reads()
+{
+    adapters::Win32LanguageServer server([] {}, small_read);
+    expect(server.start(launch_of({"--echo"})).has_value(), "the echo server starts");
+    const std::string body = R"({"text":")" + std::string(echoed_bytes, 'a') + R"("})";
+    server.send(body);
+    const auto events = pump_until(server, messages(1));
+    expect(bodies(events) == std::vector<std::string>{body},
+           "a body larger than one read and the pipe buffer comes back as one message");
+    server.stop();
+}
+
+void verify_two_messages_in_one_write()
+{
+    adapters::Win32LanguageServer server([] {});
+    expect(server.start(launch_of({"--echo", "--double"})).has_value(),
+           "the doubling echo server starts");
+    server.send("first");
+    const auto events = pump_until(server, messages(2));
+    expect(bodies(events) == std::vector<std::string>{"first", "first"},
+           "two frames in one write are two messages");
+    server.stop();
+}
+
+void verify_crash()
+{
+    adapters::Win32LanguageServer server([] {});
+    expect(server.start(launch_of({"--die-after", "2"})).has_value(), "the dying server starts");
+    server.send(R"({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}})");
+    server.send(R"({"jsonrpc":"2.0","method":"initialized","params":{}})");
+    const auto events = pump_until(server, exited);
+    expect(bodies(events).size() == 1, "the answer before the crash is delivered");
+    expect(exit_code(events) == std::optional<std::int32_t>{3},
+           "the crash is ServerExited with the code 3");
+    server.send(R"({"jsonrpc":"2.0","method":"exit"})");
+    expect(failed_with(server.collect(), ServerFailure::write_failed),
+           "a send after the exit is write_failed");
+    expect(server.waitable_handles().empty(), "the crashed server has nothing to wait on");
+}
+
+void verify_not_found()
+{
+    std::size_t arrivals = 0;
+    adapters::Win32LanguageServer server([&arrivals] { ++arrivals; });
+    const auto started =
+        server.start(ServerLaunch{path_of("nib-no-such-language-server.exe"), {}, path_of(".")});
+    expect(!started.has_value() && started.error() == ServerFailure::not_found,
+           "a missing executable is not_found");
+    expect(arrivals == 0 && server.collect().empty(), "a failed start has no events");
+    expect(server.waitable_handles().empty(), "a failed start has nothing to wait on");
+    server.send("{}");
+    expect(failed_with(server.collect(), ServerFailure::write_failed),
+           "a send without a server is write_failed");
+}
+
+void verify_too_long()
+{
+    adapters::Win32LanguageServer server([] {});
+    expect(server.start(launch_of({"--big", "17000000"})).has_value(), "the big server starts");
+    const auto events = pump_until(server, any_failure);
+    expect(failed_with(events, ServerFailure::message_too_long),
+           "a 17 MB body is message_too_long");
+    expect(bodies(events).empty(), "the too long body is not delivered");
+    const HANDLE child = open_fake_child();
+    expect(child != nullptr, "the blocked fake server is still running");
+    server.stop();
+    expect(child != nullptr && WaitForSingleObject(child, 0) == WAIT_OBJECT_0,
+           "stop ends a blocked writer");
+    CloseHandle(child);
+}
+
+void verify_stop_kills_a_lingering_child()
+{
+    adapters::Win32LanguageServer server([] {});
+    expect(server.start(launch_of({"--hang"})).has_value(), "the lingering server starts");
+    const HANDLE child = open_fake_child();
+    expect(child != nullptr, "the lingering server is running");
+    server.stop();
+    expect(child != nullptr && WaitForSingleObject(child, 0) == WAIT_OBJECT_0,
+           "stop kills a child that does not end on its own");
+    const auto events = server.collect();
+    expect(server.waitable_handles().empty() && events.size() == 1 &&
+               count_of<ServerStarted>(events) == 1,
+           "stop adds no event after the start");
+    CloseHandle(child);
+}
+
+void verify_restart()
+{
+    adapters::Win32LanguageServer server([] {});
+    expect(server.start(launch_of({"--echo"})).has_value(), "the first server starts");
+    expect(server.start(launch_of({"--echo"})).has_value(), "a second start replaces the first");
+    server.send("again");
+    const auto events = pump_until(server, messages(1));
+    expect(count_of<ServerStarted>(events) == 2 &&
+               bodies(events) == std::vector<std::string>{"again"},
+           "the replaced server answers once");
+}
+
+std::string framed(std::string_view header, std::string_view body)
+{
+    return std::string(header) + "\r\n\r\n" + std::string(body);
+}
+
+void verify_framer()
+{
+    const std::string two = adapters::framed_message("{}") + adapters::framed_message("[1]");
+    adapters::ServerFramer whole;
+    expect(whole.feed(two) == std::vector<std::string>{"{}", "[1]"},
+           "two frames in one feed are two bodies");
+    adapters::ServerFramer split;
+    std::vector<std::string> found;
+    for (const char letter : two)
+    {
+        for (auto &body : split.feed(std::string_view(&letter, 1)))
+        {
+            found.push_back(std::move(body));
+        }
+    }
+    expect(found == std::vector<std::string>{"{}", "[1]"} && !split.failure().has_value(),
+           "frames fed one byte at a time come out whole");
+    adapters::ServerFramer headers;
+    expect(headers.feed(framed("content-length: 2\r\nContent-Type: application/vscode-jsonrpc",
+                               "ok")) == std::vector<std::string>{"ok"},
+           "the length header is read regardless of case and other headers are ignored");
+    adapters::ServerFramer missing;
+    expect(missing.feed(framed("Content-Type: x", "ok")).empty() &&
+               missing.failure() == std::optional<ServerFailure>{ServerFailure::read_failed},
+           "a frame without Content-Length is read_failed");
+    adapters::ServerFramer huge;
+    expect(huge.feed("Content-Length: 16777217\r\n\r\n").empty() &&
+               huge.failure() == std::optional<ServerFailure>{ServerFailure::message_too_long},
+           "a body over 16 MiB is message_too_long before it arrives");
+    adapters::ServerFramer endless;
+    expect(endless.feed(std::string(adapters::server_header_limit + 8, 'h')).empty() &&
+               endless.failure() == std::optional<ServerFailure>{ServerFailure::read_failed},
+           "a header over 8 KiB is read_failed");
+    expect(endless.feed(adapters::framed_message("{}")).empty(),
+           "a failed framer cuts nothing more");
+}
+
+void verify_command_line()
+{
+    expect(adapters::server_command_line(L"C:\\a b\\s.exe", {"--x", "two words", R"(q"uote)",
+                                                             R"(dir\)", R"(end dir\)", ""}) ==
+               LR"("C:\a b\s.exe" --x "two words" "q\"uote" dir\ "end dir\\" "")",
+           "arguments are quoted the way CommandLineToArgvW reads them back");
+}
+} // namespace
+
+int main(int argc, char **argv)
+{
+    if (argc < 2)
+    {
+        std::fprintf(stderr, "usage: nib_language_server_tests <nib_fake_language_server.exe>\n");
+        return 2;
+    }
+    fake_server() = std::span<char *const>(argv, static_cast<std::size_t>(argc))[1];
+    verify_framer();
+    verify_command_line();
+    verify_lifecycle();
+    verify_echo_across_reads();
+    verify_two_messages_in_one_write();
+    verify_crash();
+    verify_not_found();
+    verify_too_long();
+    verify_stop_kills_a_lingering_child();
+    verify_restart();
+    std::printf("Language server adapter: %zu checks, %zu failures\n", checks(), failures());
+    return failures() == 0 ? 0 : 1;
+}
