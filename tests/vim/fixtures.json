@@ -2461,5 +2461,22 @@
   {"name":"empty-change-object-diw-kept","text":"\nabc","keys":"yydiw"},
   {"name":"empty-change-object-yiw","text":"\nabc","keys":"yyyiw"},
   {"name":"empty-change-object-ciw-blank-line","text":"  \nabc","keys":"yyciw<Esc>"},
-  {"name":"empty-change-object-ci-paren-empty","text":"()\nabc","keys":"yyci(x<Esc>"}
+  {"name":"empty-change-object-ci-paren-empty","text":"()\nabc","keys":"yyci(x<Esc>"},
+  {"name":"star-count-mark-one-hit-star","text":"ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z","keys":"jm'k*''"},
+  {"name":"star-count-mark-one-hit-2star","text":"ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z","keys":"jm'k2*''"},
+  {"name":"star-count-mark-one-hit-4star","text":"ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z","keys":"jm'k4*''"},
+  {"name":"star-count-mark-one-hit-4star-backtick","text":"ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z","keys":"jm'k4*``"},
+  {"name":"star-count-mark-one-hit-hash","text":"ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z","keys":"jm'k#''"},
+  {"name":"star-count-mark-one-hit-3hash","text":"ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z","keys":"jm'k3#''"},
+  {"name":"star-count-mark-one-hit-star-n","text":"ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z","keys":"jm'k*n''"},
+  {"name":"star-count-mark-one-hit-other-word-4star","text":"ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z","keys":"jm'kw4*''"},
+  {"name":"star-count-mark-one-hit-slash","text":"ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z","keys":"jm'k/ＡＢＣ<CR>''"},
+  {"name":"star-count-mark-two-hits-star","text":"ab cd ab\nef ab gh\nxy zz","keys":"jm'k*''"},
+  {"name":"star-count-mark-two-hits-2star","text":"ab cd ab\nef ab gh\nxy zz","keys":"jm'k2*``"},
+  {"name":"star-count-mark-two-hits-3star","text":"ab cd ab\nef ab gh\nxy zz","keys":"jm'k3*''"},
+  {"name":"star-count-mark-two-hits-3star-backtick","text":"ab cd ab\nef ab gh\nxy zz","keys":"jm'k3*``"},
+  {"name":"star-count-mark-two-hits-4star","text":"ab cd ab\nef ab gh\nxy zz","keys":"jm'k4*``"},
+  {"name":"star-count-mark-two-hits-3hash","text":"ab cd ab\nef ab gh\nxy zz","keys":"jm'k3#''"},
+  {"name":"star-count-mark-two-hits-star-n","text":"ab cd ab\nef ab gh\nxy zz","keys":"jm'k*n``"},
+  {"name":"star-count-mark-two-hits-slash","text":"ab cd ab\nef ab gh\nxy zz","keys":"jm'k/cd<CR>``"}
 ]

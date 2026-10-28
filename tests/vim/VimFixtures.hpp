@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 e27fe64bcf9c9921ac8c053af0942fddcabd5a685a8bbc76e80fa0568fe44782 / 2463 fixtures
+// fixtures.json: sha256 fac66680bfdc2f2164ceb3efa0793b542c28c3b212db803778a68c17763d1cc2 / 2480 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2463> vim_fixtures{{
+constexpr std::array<VimFixture, 2480> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2475,6 +2475,23 @@ constexpr std::array<VimFixture, 2463> vim_fixtures{{
     {"empty-change-object-yiw", "\nabc", "yyyiw", "\nabc", 1, 1, "", "v", std::nullopt},
     {"empty-change-object-ciw-blank-line", "  \nabc", "yyciw<Esc>", "\nabc", 1, 1, "  ", "v", std::nullopt},
     {"empty-change-object-ci-paren-empty", "()\nabc", "yyci(x<Esc>", "(x)\nabc", 1, 2, "()\n", "V", std::nullopt},
+    {"star-count-mark-one-hit-star", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", "jm'k*''", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", 2, 2, "", "", std::nullopt},
+    {"star-count-mark-one-hit-2star", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", "jm'k2*''", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", 2, 2, "", "", std::nullopt},
+    {"star-count-mark-one-hit-4star", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", "jm'k4*''", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", 2, 2, "", "", std::nullopt},
+    {"star-count-mark-one-hit-4star-backtick", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", "jm'k4*``", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", 2, 1, "", "", std::nullopt},
+    {"star-count-mark-one-hit-hash", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", "jm'k#''", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", 2, 2, "", "", std::nullopt},
+    {"star-count-mark-one-hit-3hash", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", "jm'k3#''", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", 2, 2, "", "", std::nullopt},
+    {"star-count-mark-one-hit-star-n", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", "jm'k*n''", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", 2, 2, "", "", std::nullopt},
+    {"star-count-mark-one-hit-other-word-4star", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", "jm'kw4*''", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", 2, 2, "", "", std::nullopt},
+    {"star-count-mark-one-hit-slash", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", "jm'k/ＡＢＣ<CR>''", "ＡＢＣ beta \"dq s\"\n\tx1  a.b\t\"dq s\" word\nend z", 2, 2, "", "", std::nullopt},
+    {"star-count-mark-two-hits-star", "ab cd ab\nef ab gh\nxy zz", "jm'k*''", "ab cd ab\nef ab gh\nxy zz", 1, 1, "", "", std::nullopt},
+    {"star-count-mark-two-hits-2star", "ab cd ab\nef ab gh\nxy zz", "jm'k2*``", "ab cd ab\nef ab gh\nxy zz", 1, 1, "", "", std::nullopt},
+    {"star-count-mark-two-hits-3star", "ab cd ab\nef ab gh\nxy zz", "jm'k3*''", "ab cd ab\nef ab gh\nxy zz", 2, 1, "", "", std::nullopt},
+    {"star-count-mark-two-hits-3star-backtick", "ab cd ab\nef ab gh\nxy zz", "jm'k3*``", "ab cd ab\nef ab gh\nxy zz", 2, 1, "", "", std::nullopt},
+    {"star-count-mark-two-hits-4star", "ab cd ab\nef ab gh\nxy zz", "jm'k4*``", "ab cd ab\nef ab gh\nxy zz", 1, 1, "", "", std::nullopt},
+    {"star-count-mark-two-hits-3hash", "ab cd ab\nef ab gh\nxy zz", "jm'k3#''", "ab cd ab\nef ab gh\nxy zz", 2, 1, "", "", std::nullopt},
+    {"star-count-mark-two-hits-star-n", "ab cd ab\nef ab gh\nxy zz", "jm'k*n``", "ab cd ab\nef ab gh\nxy zz", 1, 7, "", "", std::nullopt},
+    {"star-count-mark-two-hits-slash", "ab cd ab\nef ab gh\nxy zz", "jm'k/cd<CR>``", "ab cd ab\nef ab gh\nxy zz", 1, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
