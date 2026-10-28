@@ -310,6 +310,15 @@ parsed_item(std::string_view pattern, std::size_t at, std::vector<VimPatternAtom
 {
     return direction == VimSearchDirection::forward ? U'/' : U'?';
 }
+
+// `\` の付いた区切り（Vim の skip_regexp が文字そのものにする・`?` の検索の `\?` も・Issue #961）。
+[[nodiscard]] bool escaped_separator(std::string_view pattern, std::size_t at,
+                                     VimSearchDirection separator)
+{
+    const std::size_t next = next_code_point(pattern, Offset{at}).value;
+    return code_point_at(pattern, Offset{at}) == U'\\' && next < pattern.size() &&
+           code_point_at(pattern, Offset{next}) == separator_of(separator);
+}
 } // namespace
 
 VimPattern::VimPattern(std::vector<VimPatternAtom> atoms, std::vector<VimPatternRange> ranges)
@@ -390,6 +399,12 @@ std::expected<VimPattern, VimPatternFailure> VimPattern::parse(std::string_view 
         if (code_point_at(pattern, Offset{at}) == separator_of(separator))
         {
             return std::unexpected(VimPatternFailure::offset);
+        }
+        if (escaped_separator(pattern, at, separator))
+        {
+            atoms.push_back(literal_atom(separator_of(separator)));
+            at += 2;
+            continue;
         }
         const auto next = parsed_item(pattern, at, atoms, ranges);
         if (!next)

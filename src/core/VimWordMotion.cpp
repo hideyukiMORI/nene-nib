@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace nenenib::core
@@ -43,7 +44,9 @@ constexpr int end_continues = 2;
 
 // Vim の utf_class_tab のうち、この縦切りが扱う範囲（Issue #22 で本物の Vim と突き合わせた）。
 // 表に無い非 ASCII は語の文字（2）に落ちる。全角の英数字もそちら（'ＡＢabc' が 1 語＝実測）。
-constexpr std::array<VimCharacterRange, 12> character_ranges{{{0x00A0, 0x00A0, blank_group},
+// 全角の記号は Vim の utf_class_tab と同じ 4 行で、全角の数字（U+FF10〜FF19）は語の文字
+// （'１２x' が 1 語・'［' は記号＝実測・Issue #961）。
+constexpr std::array<VimCharacterRange, 14> character_ranges{{{0x00A0, 0x00A0, blank_group},
                                                               {0x00A1, 0x00BF, symbol_group},
                                                               {0x2000, 0x206F, symbol_group},
                                                               {0x3000, 0x3000, blank_group},
@@ -53,7 +56,9 @@ constexpr std::array<VimCharacterRange, 12> character_ranges{{{0x00A0, 0x00A0, b
                                                               {0x3400, 0x4DBF, 0x4E00},
                                                               {0x4E00, 0x9FFF, 0x4E00},
                                                               {0xF900, 0xFAFF, 0x4E00},
-                                                              {0xFF01, 0xFF20, symbol_group},
+                                                              {0xFF01, 0xFF0F, symbol_group},
+                                                              {0xFF1A, 0xFF20, symbol_group},
+                                                              {0xFF3B, 0xFF40, symbol_group},
                                                               {0xFF5B, 0xFF65, symbol_group}}};
 
 [[nodiscard]] bool ascii_word_byte(char32_t code) noexcept
@@ -109,6 +114,29 @@ constexpr std::array<VimCharacterRange, 12> character_ranges{{{0x00A0, 0x00A0, b
         return blank_group;
     }
     return vim_character_class(code_point_at(point.content, Offset{point.index}), point.kind);
+}
+
+[[nodiscard]] std::uint32_t word_class_at(std::string_view content, std::size_t at)
+{
+    return vim_character_class(code_point_at(content, Offset{at}), VimWordClass::word);
+}
+
+// `*` / `#` の連なりの先頭（Vim の find_ident_at_pos の 2.）。前の文字が同じ種類の間だけ戻る。
+[[nodiscard]] std::size_t run_begin(std::string_view content, std::size_t at, std::uint32_t group)
+{
+    while (at > 0 &&
+           word_class_at(content, previous_code_point(content, Offset{at}).value) == group)
+    {
+        at = previous_code_point(content, Offset{at}).value;
+    }
+    return at;
+}
+
+[[nodiscard]] OffsetRange line_range(const TextBuffer &text, LineNumber line, std::size_t begin,
+                                     std::size_t end)
+{
+    const Offset start = text.line_start(line);
+    return OffsetRange{Offset{start.value + begin}, Offset{start.value + end}};
 }
 
 [[nodiscard]] bool at_empty_line(const VimScanPoint &point) noexcept
@@ -543,23 +571,34 @@ std::optional<OffsetRange> vim_word_at(const TextBuffer &text, Offset caret)
         point.index = next_code_point(point.content, Offset{point.index}).value;
     }
     const std::uint32_t group = class_at(point);
-    std::size_t begin = point.index;
-    while (begin > 0 &&
-           vim_character_class(
-               code_point_at(point.content, previous_code_point(point.content, Offset{begin})),
-               VimWordClass::word) == group)
-    {
-        begin = previous_code_point(point.content, Offset{begin}).value;
-    }
+    const std::size_t begin = run_begin(point.content, point.index, group);
     std::size_t end = point.index;
-    while (end < point.content.size() &&
-           vim_character_class(code_point_at(point.content, Offset{end}), VimWordClass::word) ==
-               group)
+    while (end < point.content.size() && word_class_at(point.content, end) == group)
     {
         end = next_code_point(point.content, Offset{end}).value;
     }
-    const Offset start = text.line_start(point.line);
-    return OffsetRange{Offset{start.value + begin}, Offset{start.value + end}};
+    return line_range(text, point.line, begin, end);
+}
+
+std::optional<OffsetRange> vim_string_at(const TextBuffer &text, Offset caret)
+{
+    VimScanPoint point = scan_point(text, caret, VimWordClass::word);
+    // 空白の上では同じ行の後ろの最初の空白でない文字まで進む（行はまたがない）。
+    while (class_at(point) == blank_group)
+    {
+        if (point.index >= point.content.size())
+        {
+            return std::nullopt;
+        }
+        point.index = next_code_point(point.content, Offset{point.index}).value;
+    }
+    const std::size_t begin = run_begin(point.content, point.index, class_at(point));
+    std::size_t end = point.index;
+    while (end < point.content.size() && word_class_at(point.content, end) != blank_group)
+    {
+        end = next_code_point(point.content, Offset{end}).value;
+    }
+    return line_range(text, point.line, begin, end);
 }
 
 VimMotionLanding vim_previous_word(const TextBuffer &text, Offset caret, VimWordWalk walk)

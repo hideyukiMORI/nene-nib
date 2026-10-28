@@ -4178,25 +4178,46 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return search_from(state, view, VimSearchRequest{caret, caret, direction});
 }
 
-// `*` / `#`（決定 3）。語を \<…\> のパターンにして同じ経路へ。語が無ければ E348。
+// `*` / `#` が拾った本文の magic の特殊文字を `\` で escape する（Vim の nv_ident の aux_ptr・
+// Issue #961）。`#` は区切りの `?` も escape する。多バイト文字のバイトは ASCII と重ならない。
+[[nodiscard]] std::string escaped_search_text(std::string_view text, VimSearchDirection direction)
+{
+    constexpr std::string_view special = "/.*~[^$\\";
+    std::string escaped;
+    for (const char byte : text)
+    {
+        if (special.contains(byte) || (byte == '?' && direction == VimSearchDirection::backward))
+        {
+            escaped.push_back('\\');
+        }
+        escaped.push_back(byte);
+    }
+    return escaped;
+}
+
+// `*` / `#`（決定 3 と Issue #961 の追補）。キャレットの下か後ろの語を \<…\> のパターンにし、
+// 語が無ければ空白でない文字列を \< \> なしで、同じ経路へ。どちらも無ければ E348。
 [[nodiscard]] VimStep word_search(const VimState &original, const VimEditorView &view,
                                   VimAction action)
 {
     const VimState state = search_highlighted(original);
     const auto word = vim_word_at(view.text, view.selection.caret);
-    if (!word.has_value())
+    const auto found = word.has_value() ? word : vim_string_at(view.text, view.selection.caret);
+    if (!found.has_value())
     {
         return search_noticed(state, notice_of(VimSearchNoticeKind::no_word_under_cursor));
     }
     const VimSearchDirection direction = action == VimAction::search_word_forward
                                              ? VimSearchDirection::forward
                                              : VimSearchDirection::backward;
+    const std::string text = escaped_search_text(
+        view.text.text_range(found.value().begin, found.value().end), direction);
     VimState remembered = state;
-    remembered.last_search = VimSearchSnapshot::from(
-        "\\<" + view.text.text_range(word.value().begin, word.value().end) + "\\>", direction);
+    remembered.last_search =
+        VimSearchSnapshot::from(word.has_value() ? "\\<" + text + "\\>" : text, direction);
     // 探し始めるのは語の先頭だが、範囲の端は元のキャレットである（実測）。
     return search_from(remembered, view,
-                       VimSearchRequest{word.value().begin, view.selection.caret, direction});
+                       VimSearchRequest{found.value().begin, view.selection.caret, direction});
 }
 
 // 検索の入力行を開く（決定 2）。VimState は変えないので保留・回数・記録はそのまま残る。
