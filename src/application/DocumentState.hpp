@@ -39,7 +39,8 @@ struct DocumentState
     core::DisplayForm display = core::DisplayForm::text;
     // 開いたときの問いの段階（決定 2）。文書ごとに 1 回だけ判定する。
     DisplayInquiry inquiry = DisplayInquiry::unjudged;
-    // Vim のマーク（ADR 0152 の決定 2）。文書の値で、まだ読んでいない文書・新しいタブは空。
+    // Vim のマーク（ADR 0152 の決定 2）。文書の値で、まだ読んでいない文書・新しいタブは開いた時点
+    // の値（前の位置だけ 1 行目・#962）。
     core::VimMarks marks{};
     // 文書の言語（ADR 0154 の決定 1）。表示形式と同じく文書ごとの値で、設定にもタブの一覧にも
     // 入れない。束を作る所がパスから引き（language_of）、`:set filetype=` の上書きは束に乗って
