@@ -138,7 +138,7 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0120](0120-split-acceptance-is-relative-and-tail-bounded.md) | splitは単画面との差とp95を分けて採用判断する | 採用条件受理・#443、製品採用/測定は未了 |
 | [0121](0121-newline-index-is-bounded-by-source-bytes.md) | 改行索引の容量は本文のバイト数で制限する | 技術受理・#446、既存の速度基準超過は#460へ分離 |
 | [0122](0122-utf8-validation-retains-only-the-unfinished-sequence.md) | 分割UTF-8検証は未完の符号列だけを保持する | 限定実装・#452、試験/技術受理は保留 |
-| [0123](0123-ui-language-is-a-versioned-setting.md) | 表示言語は版付き設定に持ち、OSの観測値から明示操作時に解決する | 提案・#456、未実装/技術受理前 |
+| [0123](0123-ui-language-is-a-versioned-setting.md) | 表示言語は版付き設定に持ち、OSの観測値から明示操作時に解決する | 受理（D69・2026-10-28 の改訂で 6 言語と文の表）・#456 #1019 |
 | [0124](0124-file-read-completes-the-declared-size.md) | 宣言サイズを取得し終えるまで読込を成功にしない | 受理・#463、対象139契約と境界検査成功 |
 | [0125](0125-source-resource-lifetime-is-probed-before-product-ports.md) | 退避資源の寿命を製品portへ入れる前に小さく確かめる | 限定実験受理・#465、同期228契約成功/製品API採用前 |
 | [0126](0126-overlapped-cancellation-drains-before-release.md) | OVERLAPPEDの取消要求と最終完了を分けて資源を回収する | 受理（隔離実験の寿命・取消契約。製品採用とASanの全検査範囲は未受理） |
@@ -169,3 +169,19 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0155](0155-markdown-preview-sits-in-the-other-pane-with-ticketed-port-and-tick.md) | Markdown プレビューは split の other の枠に置き、更新は券つきの `MarkdownPort` と 200 ms の tick の間引きで行う | 提案（段 5 の ui と hide の試用の後に受理）・#800 #801 |
 | [0156](0156-syntax-colors-are-column-spans-lexed-from-200-lines-above-and-drawn-by-cutting-glyph-runs.md) | 構文の色は本文の桁の区間で、見えている行の 200 行前から走らせ、保持した字形 run を cluster で切って描く | 提案（hide の試用の後に受理）・#815 #816 |
 | [0157](0157-clipboard-html-pastes-by-document-language-through-one-core-converter.md) | クリップボードの HTML は文書の言語で貼り方が決まり、変換は core の純関数 1 本 | 提案（hide の試用の後に受理）・#774 |
+| [0158](0158-split-editor-controller-and-vim-step-by-meaning-without-behavior-change.md) | `EditorController.cpp` と `VimStep.cpp` を意味の単位で複数の翻訳単位に分ける（振る舞いを変えない） | 受理（D48・2026-10-28）・#992 |
+| [0159](0159-documents-open-through-one-read-port-that-completes-on-the-worker.md) | 文書を開く道は 1 本の読みの port を通り、大きなファイルは worker で読んで揃ってから採用する | 受理（D63・2026-10-28）・#993 |
+| [0160](0160-language-server-io-is-one-port-with-overlapped-pipes-and-a-core-json-rpc-framer.md) | 言語サーバーの入出力は 1 本の port（OVERLAPPED のパイプと子プロセス）で、JSON-RPC の枠と JSON は core の純関数 | 受理（D60 / D65・2026-10-28）・#994 |
+| [0161](0161-language-server-diagnostics-are-document-values-drawn-as-underlines.md) | 言語サーバーの診断は文書の値で、区間の下線と右端の件数で見せる | 受理（D65・2026-10-28）・#995 |
+| [0162](0162-file-explorer-is-a-side-panel-fed-by-the-folder-port.md) | ファイルエクスプローラーは本文の左の面で、ツリーは core の値、フォルダは `FolderPort` の worker が読む | 受理（D66・2026-10-28）・#997 |
+| [0163](0163-easymotion-labels-visible-jump-targets-through-the-engine.md) | イージーモーションは engine の状態機械で、見えている跳び先に印を出し、印の鍵で跳ぶ | 受理（D67・2026-10-28）・#998 |
+| [0164](0164-matchparen-highlights-the-partner-bracket-within-the-visible-range.md) | matchparen はキャレットの下の括弧の相手を、見えている範囲（と前後 1 画面）で探して枠で見せる | 受理（D67・2026-10-28）・#999 |
+| [0165](0165-commentary-surround-and-autopairs-are-engine-operations-over-one-pair-table.md) | commentary・surround・autopairs は engine の操作で、囲みと記号の表は core の 1 つずつ | 受理（D67・2026-10-28）・#1000 #1001 #1004 |
+| [0166](0166-change-marks-indent-guides-and-yank-flash-are-frame-values-over-visible-lines.md) | 変更のある行の印・indent guides・yank の光りは、見えている行だけから作る frame の値 | 受理（D67・2026-10-28）・#1002 #1005 #1006 |
+| [0167](0167-project-search-runs-on-the-worker-and-streams-hits-into-the-palette.md) | プロジェクトの全文検索は worker が塊ごとに読んで当たりを Ctrl+P の面に流し込む | 受理（D67・2026-10-28）・#1003 |
+| [0168](0168-ex-substitute-family-is-one-edit-with-visible-preview.md) | Ex の `:s` の族は 1 回の `Edit` で、入力中の当たりは見えている行だけの preview | 受理（D67・2026-10-28）・#1007 |
+| [0169](0169-insert-completion-is-a-per-document-word-table-shown-in-the-palette-face.md) | INSERT の補完は文書ごとの語の表から、面は Ctrl+P の部品で、LSP の候補も同じ面に載る | 受理（D67・2026-10-28）・#1008 |
+| [0170](0170-settings-modal-lists-features-with-measured-speed-cost-tiers.md) | 設定モーダルは機能のオン・オフを一覧にし、速さへの影響の段は測った数字から機械で決める | 受理（D68・2026-10-28）・#1016 |
+| [0171](0171-minimap-is-a-retained-bitmap-redrawn-only-for-edited-lines.md) | ミニマップは文書ごとの bitmap に 1 回描いて持ち、編集した行の帯だけ描き直す | 受理（D70・2026-10-28）・#1017 |
+| [0172](0172-start-screen-shows-recent-files-and-entry-actions-on-the-untouched-untitled-document.md) | 起動画面は、何も書いていない無題の文書の本文の面に最近のファイルと入口の操作を出す | 受理（D70・2026-10-28）・#1018 |
+| [0173](0173-small-editor-niceties-trailing-space-todo-marks-color-swatches-file-operations-and-line-search.md) | 末尾の空白・TODO の強調・色の見本・ファイル操作・行のファジー検索は、既存の道に 1 行ずつ足す | 受理（D70・2026-10-28）・#1011〜#1015 |

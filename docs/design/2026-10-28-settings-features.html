@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NeNe Nib — 設定画面の「機能」の節（案・D68・ADR 0170）</title>
+<style>
+/* Design reference only (static). Tokens mirror core::Palette; names are the token names. ?scene=light for the light theme, ?scene=speed for the「速さ優先」の組. */
+:root{color-scheme:dark;--background:#300a24;--text:#eeeeec;--muted:#b8a9b3;--gutter:#7a6675;--current_line:#3e1a32;--title_bar:#1e0516;--status:#26071d;--accent:#e95420;--on_accent:#ffffff;--toggle:#4a1e3d;--panel:#3b1430;--panel_border:#5a2a4c;--error:#ff6b6b;--shade:rgba(13,3,10,.52)}
+:root.light{color-scheme:light;--background:#f4f5f7;--text:#1b1f24;--muted:#5c6570;--gutter:#9aa3ad;--current_line:#e6e8ec;--title_bar:#e1e4e9;--status:#e9ebef;--accent:#e95420;--on_accent:#ffffff;--toggle:#dfe3e8;--panel:#ffffff;--panel_border:#d5d9e0;--error:#c62828;--shade:rgba(27,31,36,.24)}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}
+body{font-family:'Segoe UI Variable Text','Segoe UI','Yu Gothic UI',sans-serif;font-size:13px;color:var(--text);background:var(--background)}
+.app{width:100%;height:100%;position:relative;display:grid;grid-template-rows:40px 1fr 28px}
+.caption{display:flex;align-items:end;gap:2px;padding-left:8px;background:var(--title_bar)}
+.tab{display:flex;gap:10px;align-items:center;padding:0 14px;height:32px;background:var(--background);border-radius:6px 6px 0 0;font-size:12px}
+.document{padding:12px 16px;font-family:'Cascadia Code','Yu Gothic UI',monospace;font-size:16px;line-height:26px;color:var(--muted)}
+.status{display:flex;gap:18px;align-items:center;padding:0 12px;background:var(--status);font-size:12px;color:var(--muted)}
+.veil{position:absolute;inset:0;display:grid;place-items:center;padding:24px;background:var(--shade)}
+.dialog{width:640px;max-width:100%;max-height:100%;display:flex;flex-direction:column;border:1px solid var(--panel_border);border-radius:12px;background:var(--panel);box-shadow:0 18px 64px #0005;overflow:hidden}
+.dialog-head{display:flex;align-items:center;gap:12px;padding:16px 20px 10px}
+h1{margin:0;font-size:18px;font-weight:600}.subtitle{margin:2px 0 0;color:var(--muted);font-size:12px}
+.close{margin-left:auto;width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:var(--muted);font-size:14px}
+.fields{padding:0 24px 18px;overflow-y:auto;min-height:0;scrollbar-color:var(--panel_border) transparent;scrollbar-width:thin}
+.section-label{font-size:11.5px;color:var(--muted);letter-spacing:.06em;margin:14px 0 4px}
+.summary{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:10px 12px;margin:6px 0 10px;border:1px solid var(--panel_border);border-radius:8px;background:var(--background)}
+.summary .estimate{font-size:13px}.summary .estimate b{font-weight:600}.summary .heavy{font-size:11.5px;color:var(--muted);margin-top:2px}
+.presets{display:flex;gap:6px}.preset{padding:6px 11px;border:1px solid var(--panel_border);border-radius:5px;background:var(--panel);font-size:12px;font-weight:600;color:var(--text)}
+.preset.active{background:var(--accent);color:var(--on_accent);border-color:var(--accent)}
+.feature{display:grid;grid-template-columns:40px 1fr 72px;align-items:center;gap:14px;min-height:46px;padding:6px 0;border-bottom:1px solid var(--panel_border)}
+.feature:last-child{border-bottom:0}
+.label{font-weight:600;font-size:13px;line-height:20px}.hint{font-size:11.5px;line-height:17px;color:var(--muted);margin-top:1px;font-weight:400}
+.switch{height:22px;width:40px;border-radius:12px;background:var(--toggle);padding:3px;display:flex;justify-content:flex-start}
+.switch.on{background:var(--accent);justify-content:flex-end}.switch i{display:block;width:16px;height:16px;border-radius:50%;background:#fff}
+.tier{display:flex;gap:3px;align-items:center;justify-content:flex-end;font-size:11px;color:var(--muted)}
+.tier i{width:7px;height:7px;border-radius:50%;display:inline-block}
+.tier.low i{background:var(--muted)}.tier.medium i{background:var(--accent)}.tier.high i{background:var(--error)}
+.tier.none span{color:var(--gutter)}
+.dialog-foot{display:flex;align-items:center;gap:10px;padding:12px 20px;border-top:1px solid var(--panel_border);background:var(--panel)}
+.foot-note{margin-right:auto;font-size:11.5px;color:var(--muted)}
+.action{min-width:84px;padding:8px 17px;line-height:18px;border:1px solid var(--panel_border);border-radius:5px;background:var(--background);font-weight:600;font-size:12px;color:var(--text)}
+.primary{background:var(--accent);color:var(--on_accent);border-color:var(--accent)}
+.above{opacity:.55;font-size:12px;color:var(--muted);padding:8px 0 0}
+</style>
+</head>
+<body>
+<main class="app" id="app" aria-label="設定画面の「機能」の節（静的な設計案）"></main>
+<script>
+// 静的な見た目の案。製品の振る舞いや設定の I/O は無い。段は ADR 0170 の決定 2（測った数字から機械で決める）の例の値。
+const scene = new URLSearchParams(location.search).get('scene') || 'dark';
+document.documentElement.classList.toggle('light', scene === 'light');
+const speedFirst = scene === 'speed';
+// 段: none / low / medium / high。delta は 1 打鍵の増分（µs・ADR 0170 の決定 2・値は仮置き・PR の実測で更新）。
+const features = [
+ {name:'括弧の相手の強調（matchparen）', hint:'キャレットの下の括弧の相手を枠で示す。見えている範囲だけ探す', tier:'none', delta:2, on:true},
+ {name:'変更のある行の印', hint:'保存してから触った行を行番号の列に示す。保存で消える', tier:'none', delta:3, on:true},
+ {name:'末尾の空白の強調', hint:'行末の空白を薄く示す', tier:'none', delta:1, on:true},
+ {name:'TODO の強調', hint:'コメントの中の TODO / FIXME を色で示す', tier:'none', delta:1, on:true},
+ {name:'色の見本', hint:'#RRGGBB や rgb() の横に色の四角を出す', tier:'none', delta:2, on:true},
+ {name:'yank の光り', hint:'y した範囲を 150 ms 光らせる', tier:'none', delta:0, on:true},
+ {name:'INSERT の補完（Ctrl-n / Ctrl-p）', hint:'本文の語から補完する。語の表は編集した行だけ更新', tier:'low', delta:9, on:true},
+ {name:'autopairs', hint:'INSERT で括弧と引用符の閉じを補う', tier:'low', delta:7, on:false},
+ {name:'indent guides', hint:'字下げの段ごとに縦の線を描く', tier:'low', delta:8, on:false},
+ {name:'エクスプローラー', hint:'左の面にルートからのツリー。フォルダは裏で読む', tier:'low', delta:12, on:false},
+ {name:'ミニマップ', hint:'右端に本文の縮図。縮図は bitmap に持ち、編集した行だけ描き直す', tier:'medium', delta:45, on:false},
+ {name:'言語サーバー（LSP）', hint:'clangd などを子プロセスで起こし、診断を波線で示す。裏で CPU とメモリを使う', tier:'high', delta:60, background:true, on:false},
+];
+const tierLabel = {none:'なし', low:'小', medium:'中', high:'大'};
+const dots = t => t==='none' ? '' : '<i></i>'.repeat(t==='low'?1:t==='medium'?2:3);
+const preset = speedFirst ? 'speed' : 'recommended';
+const effective = f => speedFirst ? f.tier==='none' : f.on;
+const base = 640; // µs: eng/perf-reference.json の key-to-frame-single の採用値（見込みの基準・機械の実測ではない）
+const onFeatures = features.filter(effective);
+const sum = onFeatures.reduce((a,f)=>a+f.delta,0);
+const counts = ['low','medium','high'].map(t=>[t,onFeatures.filter(f=>f.tier===t).length]).filter(([,n])=>n>0).map(([t,n])=>`${tierLabel[t]} × ${n}`).join(' ＋ ');
+const heavy = onFeatures.filter(f=>f.tier==='medium'||f.tier==='high').map(f=>f.name.replace(/（.*?）/,'')).join('・');
+document.getElementById('app').innerHTML = `
+ <div class="caption"><div class="tab"><span>日々のメモ.txt</span><span>×</span></div></div>
+ <div class="document">1  # 考えごとの部屋<br>2<br>3  道具は簡単に。</div>
+ <div class="status"><span>通常</span><span>Vim</span><span style="margin-left:auto">行 1, 桁 1</span><span>UTF-8</span><span>LF</span><span>text</span></div>
+ <div class="veil"><section class="dialog" aria-label="設定">
+  <header class="dialog-head"><div><h1>設定</h1><p class="subtitle">いつもの編集を、使いやすく。</p></div><button class="close" aria-label="閉じる">×</button></header>
+  <div class="fields">
+   <div class="above">表示言語 ／ 外観（テーマ・本文フォント・文字サイズ）／ 編集（行の折り返し・操作の案内）… ← 既存の案（settings-proposal.html）の節がここに並ぶ</div>
+   <div class="section-label">機能</div>
+   <div class="summary">
+    <div><div class="estimate">いまの設定での 1 打鍵の見込み: <b>${(base/1000).toFixed(2)} ms</b> ＋ ${counts||'追加なし'}（約 ${((base+sum)/1000).toFixed(2)} ms）</div>
+     <div class="heavy">${heavy ? '速さに影響するのは: ' + heavy : '速さに影響する機能はオンになっていません'}。基準は採用した基準値で、この機械の実測ではありません。</div></div>
+    <div class="presets"><button class="preset ${preset==='speed'?'active':''}">速さ優先</button><button class="preset ${preset==='recommended'?'active':''}">おすすめ</button><button class="preset">全部オン</button></div>
+   </div>
+   ${features.map(f=>`<div class="feature"><div class="switch ${effective(f)?'on':''}"><i></i></div><div><div class="label">${f.name}</div><div class="hint">${f.hint}</div></div><div class="tier ${f.tier}">${dots(f.tier)}<span>${tierLabel[f.tier]}${f.background?'・裏':''}</span></div></div>`).join('')}
+  </div>
+  <footer class="dialog-foot"><span class="foot-note">閉じると保存されます。段は機械で測った数字から決めています。</span><button class="action">元に戻す</button><button class="action primary">閉じる</button></footer>
+ </section></div>`;
+</script>
+</body>
+</html>
