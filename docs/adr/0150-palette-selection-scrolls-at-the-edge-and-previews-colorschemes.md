@@ -43,3 +43,7 @@
 ## 追補（2026-10-28・#737）: 面の一覧のホイールも delta を累積する
 
 決定 2 の「ホイールは一覧だけを送る」の 1 刻みは、本文のホイール（#499）と同じ純関数 `wheel_turned` / `wheel_lines_per_notch`（`src/ui/win32/WheelTurn.hpp`）を通す。ui の `scroll_palette` は面の余り `palette_wheel_remainder_`（本文の余りとは別の欄・単位は同じ「delta × 1 刻みの行数」）に delta を足し、行数が 0 でないときだけ `ScrollPaletteList{lines}`（正が下・今と同じ向き）を送る。1 刻みの行数は OS の設定（1 画面の設定なら `core::palette_window_rows`）。向きが反転したら余りを捨てる（`wheel_turned` の中）。面が閉じている間のホイールと、OS の設定の値が変わったときに余りを 0 に戻す。application の `ScrollPaletteList` の意味は変えない。契約は `nib_window_tests --wheel`（小さな delta 40 の 3 回で 1 行・反転で余りを捨てる・`WHEEL_DELTA` 1 回で設定の行数）。
+
+## 追補（2026-10-29・#1048・D71）: Ctrl を押したホイールは字の大きさ
+
+Ctrl を押したままのホイールは、`wheel_turned` の累積（#499 / #737 の形・1 刻み = `WHEEL_DELTA`）を操作 `font_larger` / `font_smaller` に写し、`EditorWindow::run_operation` の 1 本で実行する（1 刻みで 1 段・通常 / Vim の全モード・面（Ctrl+P）とプレビューと帯の上でも同じ）。Ctrl の無いホイールの意味（本文・面・帯・プレビューの送り）は変えない。Vim の鍵の表は通らない（ホイールは鍵ではない）。累積の変数は Ctrl の有無で 1 つのまま（Ctrl を離した瞬間に残りは捨てる）。契約 `--wheel` に Ctrl つきの 2 checks（上で 1 段大きく・下で 1 段小さく・刻みの途中では変わらない）。見た目の判断は要らない（段は Ctrl+＋ / − と同じ）。

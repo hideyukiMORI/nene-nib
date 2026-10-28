@@ -33,3 +33,17 @@ ADR 0127 §1 は「防御コピーは同じ bytes でも別割当てであり、
 - ADR 0127 §1 の予算の台帳（予約の勘定）はこの ADR では実装しない。`SealedBytes` は「可変の口を持たない所有の列」の形だけを定め、容量の勘定は台帳が入るときに `filled` の前で行う。
 - 64 MiB の上限・snapshot でないこと・取消・2 GiB は ADR 0124 / 0127 のまま。
 - `ScriptedFiles` の複写は替え玉の都合で、probe の数字に 1 回ぶん（約 3.3 ms）が残る。実機の読みには無い。
+
+## 追補（2026-10-29・PR 前の L2b の席が見つけた穴・設計席の決定・ADR 0159 の決定 2・3 のための型）
+
+ADR 0159 は「大きなファイルは worker の 64 MiB ごとの塊の仕事で読み（FIFO を塞がない）、写しを増やさない」と決めたが、`SealedBytes::filled` は 1 回の同期の `fill` で封印するので、予約を複数の仕事にまたがって持ち回れない。次の形で埋める。
+
+8. **予約を持ち回る型 `core::BytesReservation`。** move だけできる型。作るのは `BytesReservation::reserve(std::size_t declared) -> BytesReservation`（確保だけ・零で埋めない・`resize_and_overwrite` で長さを宣言）。書く口は `[[nodiscard]] std::span<char> window(std::size_t length) noexcept`（まだ埋めていない先頭から `length` だけの可変の窓・`declared − filled` を超えない）と `void commit(std::size_t written) noexcept`（窓に書いた長さを確定・超えた値は切り詰める）の 1 対で、窓は次の `commit` か `seal` まで有効（呼ぶのは同じスレッドの同じ仕事で、仕事の間は窓を持たない）。読む口は無い（`view()` も `data()` も出さない・封印の前の列は誰にも見えない）。封印は `[[nodiscard]] SealedBytes seal() &&`（`filled` の長さに切り詰めて `SealedBytes` にする・決定 1 の約束はそのまま）。`SealedBytes` の private の constructor は `BytesReservation` も friend で呼ぶ（friend は `DetectedText` と `BytesReservation` の 2 つ）。`filled` はこの型の `reserve → window → commit → seal` の薄い入口に置き換え、同期の道と worker の道で型を 2 本にしない。
+
+9. **塊ごとの UTF-8 の検証は予約が抱える。** `commit` は確定した窓の分を `Utf8Validation::with_bytes`（ADR 0122）に流し、進捗を予約が持つ（検証するのは予約自身が受けたバイトだけなので、ADR 0122 決定 7 の「進捗は本文の証明書ではない」に反しない: 進捗と列は同じ型の中で生まれ、外から添えることはできない）。`seal()` は `finish()` の結果（受理なら code point の数・拒否なら値なし）を `SealedBytes` の非公開の欄に添える。`DetectedText::from_sealed` は、その欄が受理なら `detect_encoding` の UTF-8 の走査を飛ばし（BOM の先頭は今までどおり先に見る・`utf8_bom` か `utf8`）、拒否か欄が無ければ（`filled` 以外の道が無いので欄は常にあるが、拒否のとき）今までどおり判定する（Shift_JIS 等）。全文の検証は 1 回になる。`from_bytes`（外の可変データ）は今までどおり自分で検証する。
+
+10. **塊の仕事。** `Win32DocumentReader` は `reserve` を UI スレッドで 1 回（`bad_alloc` はここで受けて `insufficient_memory`）、塊の仕事ごとに worker で `window(64 MiB) → ReadFile → commit → Progress`、最後の仕事で `seal → from_sealed → from_utf8 → Finished`。cancel は次の塊を積まず予約を捨てる（破棄で解放）。同期の道（64 MiB 以下）は同じ 4 つを 1 つの仕事で呼ぶ。
+
+11. **契約。** `--file-text` に: (e) `BytesReservation` が copy できず読む口が無いこと（`requires` の `static_assert`）、(f) `window` が `declared − filled` を超えないこと・`commit` の超過が切り詰められること・`seal` の長さが `filled` の合計と一致すること、(g) 塊の切り方（1 バイトずつ・3 バイトの文字の途中・64 KiB）を変えても `from_sealed` の判定と code point の数が `from_bytes` と一致すること（UTF-8 / BOM / Shift_JIS / 不正）、(h) `filled` が `reserve → seal` と同じ `SealedBytes` を作ること。
+
+却下: B（1 つの仕事の `fill` の中で塊を読む）は 1 GiB で worker を数秒塞ぎ、ADR 0159 決定 3 と ADR 0062 の「FIFO を塞がない」に反する（L2c で結局 A が要る）。C（adapter の `std::string` に書いて最後に 1 回写す）は山が 2 倍で、ADR 0159 の「写しを増やさない」と D63 の勘定（1.05〜1.3 倍）に反する。
