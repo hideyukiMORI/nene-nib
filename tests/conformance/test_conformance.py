@@ -749,6 +749,44 @@ class ThirdPartyDigestChecks(unittest.TestCase):
         self.assertEqual([], [str(f) for f in cnf.third_party_digest_checks(ROOT, cnf.inventory(ROOT), RULES)])
 
 
+class TranslationUnitSizeChecks(unittest.TestCase):
+    """CNF-014 — src/ と tests/ の .cpp は 3,000 行以下（ADR 0158 の決定 6）。third_party/ は見ない。"""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+
+    def write(self, path, count):
+        file = self.root / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text("int x;\n" * count, encoding="utf-8")
+        return Path(path)
+
+    def details(self, *paths):
+        return [str(f) for f in cnf.translation_unit_size_checks(self.root, list(paths))]
+
+    def test_cnf014_positive_at_the_limit(self):
+        self.assertEqual([], self.details(self.write("src/core/Big.cpp", 3000),
+                                          self.write("tests/unit/Big.cpp", 3000)))
+
+    def test_cnf014_negative_in_src(self):
+        self.assertEqual(["CNF-014: src/core/Big.cpp: 3001 lines > 3000"],
+                         self.details(self.write("src/core/Big.cpp", 3001)))
+
+    def test_cnf014_negative_in_tests(self):
+        self.assertEqual(["CNF-014: tests/unit/Big.cpp: 4000 lines > 3000"],
+                         self.details(self.write("tests/unit/Big.cpp", 4000)))
+
+    def test_cnf014_third_party_and_headers_are_not_counted(self):
+        self.assertEqual([], self.details(self.write("third_party/md4c/src/md4c.cpp", 7000),
+                                          self.write("src/core/Big.hpp", 7000),
+                                          self.write("eng/probes/Big.cpp", 7000)))
+
+    def test_cnf014_repository_passes(self):
+        self.assertEqual([], [str(f) for f in cnf.translation_unit_size_checks(ROOT, cnf.inventory(ROOT))])
+
+
 class GitChecks(unittest.TestCase):
     def test_valid(self):
         self.assertEqual([], git_conventions.validate("build: 検査を固定する (#1)"))
