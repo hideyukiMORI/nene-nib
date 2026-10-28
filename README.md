@@ -113,7 +113,7 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   [Interactive color study](docs/design/colorschemes.html) (open the downloaded HTML locally).
   Syntax colors are prepared for future language highlighting; parsing is not implemented yet.
 - **FR-017 font size** — `Ctrl` + `+` / `-` / `0`, Ctrl + wheel (8–40 pt), `:set fontsize=` and `:set guifont=`,
-  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v3`. The previous v2/v1 files are read only when newer versions are absent and are preserved. Done.
+  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v4` (v4 adds `ui_language`, `lsp`, `explorer`, `root`, `features` and optional `lsp.<language>.command` lines; limit 16 KiB). The previous v3/v2/v1 files are read only when newer versions are absent and are preserved. Done.
 - **FR-018 operation list and hints** — F1 (or `?` in Ctrl+P) lists available operations with their names,
   descriptions and shortcuts; type to filter, then press Enter to run one. An untouched untitled document
   shows three shortcut hints. Otherwise, the status bar shows compact hints when space permits.
@@ -130,7 +130,7 @@ Use `set fontsize=18` or `set guifont=Cascadia Code:h18` for the body font. `Ent
 Press `Ctrl+P` in either editing mode to choose the same commands from a filtered list.
 Use `set noguide` to hide shortcut hints and `set guide` to show them again (the default).
 
-Settings are saved in `settings.v3`. If it is absent, the editor reads `settings.v2`, then `settings.v1`
+Settings are saved in `settings.v4`. If it is absent, the editor reads `settings.v3`, then `settings.v2`, then `settings.v1`
 only when v2 is also absent; older versions enable wrapping. The first actual settings change writes the new file; the older files are left intact for older
 versions. A broken new file is reported and blocks settings writes until repaired and restarted.
 
