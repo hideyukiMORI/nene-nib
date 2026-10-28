@@ -105,7 +105,8 @@ KEY_TABLE = (("<Esc>", "\\<Esc>", "escape"), ("<CR>", "\\<CR>", "enter"),
              ("<PageUp>", "\\<PageUp>", "page_up"), ("<PageDown>", "\\<PageDown>", "page_down"),
              ("<Space>", " ", 0x20), ("<Left>", "\\<Left>", "arrow_left"),
              ("<Right>", "\\<Right>", "arrow_right"), ("<Up>", "\\<Up>", "arrow_up"),
-             ("<Down>", "\\<Down>", "arrow_down"), ("<C-w>", "\\<C-w>", "control_w"))
+             ("<Down>", "\<Down>", "arrow_down"), ("<C-w>", "\<C-w>", "control_w"),
+             ("<C-a>", "\<C-a>", "control_a"), ("<C-x>", "\<C-x>", "control_x"))
 
 
 def key_names_of(table: tuple) -> dict[str, str]:
