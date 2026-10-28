@@ -10,6 +10,9 @@
 #include "CompositionView.hpp"
 #include "DetectedText.hpp"
 #include "Document.hpp"
+#include "DocumentReadFinished.hpp"
+#include "DocumentReadOutcome.hpp"
+#include "DocumentReadProgress.hpp"
 #include "DocumentState.hpp"
 #include "DocumentView.hpp"
 #include "Edit.hpp"
@@ -40,6 +43,8 @@
 #include "LineView.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
+#include "OpenFailureReply.hpp"
+#include "OpenedDocument.hpp"
 #include "PaletteFolder.hpp"
 #include "PaletteOrigin.hpp"
 #include "PaneSide.hpp"
@@ -189,9 +194,28 @@ class EditorController final
     // 再生の中の再生の鍵を列の先頭へ差し込む。深さが上限を超えたら残りを捨てる（決定 4）。
     void queue_nested_replay(const std::vector<core::VimKey> &keys, std::size_t depth);
     void accept(const RefreshAppearance &);
-    // 開く道の 1 本（ADR 0056 の決定 5・ADR 0060 の決定 7）。同じファイルのタブへ切り替える →
-    // 何も書いていない無題に開く → 新しいタブ。開けなければタブを足さず失敗を返す。
-    [[nodiscard]] std::expected<void, FileFailure> open_document(const core::FilePath &path);
+    // 開く道の 1 本（ADR 0056 の決定 5・ADR 0060 の決定 7・ADR 0159 の決定
+    // 1・3〜5）。同じファイルの タブへ切り替える → 読みの port に頼む。同期に揃えば adopt_read
+    // で続け、裏へ回れば読み込み中の 要求を置いて戻る。同じファイルを読み込み中なら 2
+    // 本目を頼まない。ほかの読み込み中の要求は 取り消す。開けなければタブを足さず、reply
+    // の告げ方で告げる。
+    void open_document(const core::FilePath &path, OpenFailureReply reply);
+    // 読みの結果を採る 1 本（決定 3・5）。今の要求の券のものだけを使う。進み具合は要求に置き、
+    // 終わりは要求を消して open_read（成功）か answer_unopened（失敗）へ渡す。
+    void adopt_read(DocumentReadOutcome outcome);
+    void adopt_progress(const DocumentReadProgress &progress);
+    void adopt_finished(DocumentReadFinished finished);
+    // 揃った文書を開く（決定 4）。待っている間に同じファイルのタブができていればそこへ切り替え、
+    // 何も書いていない無題ならそこに開き、ほかは新しいタブを足す。
+    void open_read(const core::FilePath &path, OpenedDocument opened);
+    // 開けなかったことを呼び手ごとの今の規則で告げる（ADR 0060 の決定 7・ADR 0159 の決定 6）。
+    void answer_unopened(const core::FilePath &path, FileFailure failure, OpenFailureReply reply);
+    // 読み込み中の要求を取り消す（券の仕事をやめさせて要求を消す・決定 5）。無ければ何もしない。
+    void cancel_reading();
+    // WorkCompleted の道で読みの結果を全部引いて採る（決定 9）。
+    void collect_reads();
+    // 読み込み中の 1 行（決定 4）。「読み込み中: <題名> 37%」。要求が無ければ値なし。
+    [[nodiscard]] std::optional<core::DisplayText> reading_message() const;
     void accept(const OpenDocument &intent);
     // 一覧から選んだファイルを開く。失敗は 1 行の知らせで、not_found で出どころが履歴の候補の
     // ときだけ履歴から外す（ADR 0062 の決定 18）。
@@ -324,12 +348,12 @@ class EditorController final
     // 1 本（切り替え・新しいタブ・閉じる・開く・帯の幅のたび）。帯の幅がまだ 0 なら送り量は 0。
     [[nodiscard]] core::TitleBarInput title_bar_input() const;
     void reveal_active_tab();
-    // 開く（決定 5）の 3 つの枝の材料。同じファイルを開いているタブの帯の位置・何も書いていない
-    // 無題か・読んで復号した本文と文書。
+    // 開く（決定 5）の枝の材料。同じファイルを開いているタブの帯の位置・何も書いていない無題か。
     [[nodiscard]] std::optional<std::size_t> open_tab_of(const core::FilePath &path) const;
     [[nodiscard]] bool blank_untitled() const;
-    [[nodiscard]] std::expected<std::pair<core::TextBuffer, Document>, FileFailure>
-    read_document(const core::FilePath &path);
+    // まだ読んでいないタブを読みの port で読む（ADR 0159 の決定 1）。読み込み中の開く要求とは別の
+    // 券で、同期に揃った結果だけを使う。
+    [[nodiscard]] std::expected<OpenedDocument, FileFailure> read_now(const core::FilePath &path);
     // 出ていく前に文書の上の一時の値を閉じる（入力行・検索の preview・IME の変換中の文字列）。
     void leave_document();
     // 入ってきた文書のスクロールを今の窓の行数で収め、NORMAL のキャレットを文字の上へ寄せる。
@@ -591,6 +615,8 @@ class EditorController final
     // プレビューの券（ADR 0155 の決定 6）。要求ごとに 1 つ進み、閉じて開き直しても戻さない
     // （閉じる前の要求の結果を開き直した後の券と取り違えない）。
     std::uint64_t preview_tickets_ = 0;
+    // 読みの port の券（ADR 0159 の決定 5）。プロセスで 1 つの通し番号で、頼むたびに進む。
+    std::uint64_t read_tickets_ = 0;
     // 前の frame の本文の先頭行（決定 7）。frame だけが読み書きする。
     std::optional<core::LineNumber> preview_body_top_;
     // 自動退避の帳面（ADR 0137 の決定 2）。AutosaveTick の道だけが読み書きする。

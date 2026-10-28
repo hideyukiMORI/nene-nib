@@ -440,6 +440,12 @@ std::optional<core::DisplayText> EditorController::command_message() const
     {
         return state_.command_message();
     }
+    // 読み込み中の 1 行も今の状態の知らせで、要求が消えれば出ない（ADR 0159 の決定 4）。
+    auto reading = reading_message();
+    if (reading.has_value())
+    {
+        return reading;
+    }
     if (!command_palette_active() || !palette_folder_.truncated)
     {
         return std::nullopt;
@@ -509,6 +515,8 @@ void EditorController::accept(const RefreshAppearance &)
 void EditorController::accept(const WorkCompleted &)
 {
     collect_autosave();
+    // 開く道の読み（ADR 0159 の決定 9）。今の券の結果だけを採る。
+    collect_reads();
     const auto batches = ports_.folders.collect();
     // 退避 → フォルダ → Markdown の順（ADR 0155 の決定 6）。プレビューが閉じていれば呼ばない。
     collect_preview();

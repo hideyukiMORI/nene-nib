@@ -85,7 +85,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/EditorControllerAutosave.cpp src/application/EditorControllerPreview.cpp src/application/EditorControllerDetail.cpp
     src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
     src/application/AutosavePlan.cpp src/application/PasteKind.cpp
-    src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp)
+    src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp src/application/DocumentDecoding.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
 nenenib_target(nib_tests unit_tests EXECUTABLE
@@ -148,6 +148,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/BookmarkTests.cpp
     tests/unit/HistoryTests.cpp
     tests/unit/BackgroundWorkTests.cpp
+    tests/unit/OpenAsyncTests.cpp
     tests/unit/AutosaveTests.cpp
     tests/unit/AutosavePlanPropertyTests.cpp
     tests/unit/OperationsTests.cpp
@@ -196,6 +197,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/SessionCodec.cpp
     src/adapters/win32/Win32SessionAdapter.cpp src/adapters/win32/TextLines.cpp
     src/adapters/win32/BookmarkCodec.cpp src/adapters/win32/Win32BookmarkAdapter.cpp
+    src/adapters/win32/SynchronousDocumentReader.cpp
     src/adapters/win32/HistoryCodec.cpp src/adapters/win32/Win32HistoryAdapter.cpp
     src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32Bell.cpp
     src/adapters/win32/ClipboardCalls.cpp src/adapters/win32/HtmlClipboardFormat.cpp src/adapters/win32/Win32ClipboardAdapter.cpp

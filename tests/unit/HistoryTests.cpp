@@ -1,3 +1,4 @@
+#include "ScriptedDocumentReads.hpp"
 #include "ScriptedTextLayouts.hpp"
 // scope `--history` の単体テスト（ADR 0042 決定 2・ADR 0060 の決定 8）。閉じたファイルの履歴を
 // 書き換える純関数 history_recorded / history_forgotten と、履歴の替え玉の往復。
@@ -376,9 +377,10 @@ void verify_quiet_start_with_files()
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
+    ScriptedDocumentReads reads{files, code_pages};
     EditorController controller(EditorPorts{appearance, clipboard, files, code_pages, settings,
                                             themes, session, history, folders, bookmarks,
-                                            text_layouts, autosave, fonts, bell, markdown},
+                                            text_layouts, autosave, fonts, bell, markdown, reads},
                                 {work_open('a'), work_open('b')});
     expect(controller.frame().tabs.size() == 2 && history.reads() == 0 && history.writes() == 0 &&
                folders.requests().empty() && folders.collects() == 0 && autosave.touches() == 0 &&
@@ -409,6 +411,9 @@ void verify_quiet_paths()
     applied(controller, VisibleLines{3});
     open_work(editing, "ab");
     applied(controller, work_open('a'));
+    // 開く道だけが読みの port を頼む（ADR 0159 の決定 10）。切り替え・新しいタブ・打鍵・保存・枠は
+    // 頼まない。
+    const std::size_t read_requests = editing.reads().requests().size();
     applied(controller, SwitchTab{1});
     applied(controller, NewTab{});
     applied(controller, InsertText{"typed"});
@@ -424,9 +429,10 @@ void verify_quiet_paths()
                editing.autosave().touches() == 1 && editing.autosave().collects() == 0 &&
                editing.fonts().lists() == 0 && editing.bell().rings() == 0 &&
                editing.markdown().requests().empty() && editing.markdown().collects() == 0 &&
-               editing.clipboard().html_reads() == 0 && editing.clipboard().reads() == 0,
+               editing.clipboard().html_reads() == 0 && editing.clipboard().reads() == 0 &&
+               read_requests == 2 && editing.reads().requests().size() == read_requests,
            "opening, switching, new tabs, saving and typing never touch the history, the folder, "
-           "autosave, the bell nor the clipboard");
+           "autosave, the bell nor the clipboard, and only opening asks the read port");
 }
 } // namespace
 

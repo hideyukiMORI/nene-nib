@@ -42,6 +42,10 @@ parked_path(const std::shared_ptr<const DocumentState> &tab);
 parked_path(const std::shared_ptr<const UnloadedDocument> &tab);
 [[nodiscard]] core::LineNumber line_within(const core::TextBuffer &text, core::LineNumber line);
 inline constexpr std::string_view clipped_mark = "…";
+// 名前を 1 つ載せる 1 行。名前は prefix と suffix の残りに収まるよう末尾をコードポイントの境目で
+// 落とす（題名と同じ「…」・DisplayText の 256 バイト）。named_notice と読み込み中の 1 行の共通。
+[[nodiscard]] core::DisplayText named_line(std::string_view prefix, std::string name,
+                                           std::string_view suffix);
 [[nodiscard]] core::DisplayText named_notice(std::string_view prefix, std::string name,
                                              std::size_t others);
 // 面と `:` の補完の面の見えている行数を決める窓の寸法（ADR 0150 の決定 1）。幅か高さが 0 なら

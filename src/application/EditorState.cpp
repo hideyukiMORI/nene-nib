@@ -364,6 +364,18 @@ EditorState EditorState::with_command_message(std::optional<core::DisplayText> m
     return next;
 }
 
+const std::optional<DocumentReading> &EditorState::reading() const noexcept
+{
+    return reading_;
+}
+
+EditorState EditorState::with_reading(std::optional<DocumentReading> reading) const
+{
+    EditorState next(*this);
+    next.reading_ = std::move(reading);
+    return next;
+}
+
 EditorState EditorState::with_vim(core::VimState vim) const &
 {
     return EditorState(*this).with_vim(std::move(vim));

@@ -1,3 +1,4 @@
+#include "ScriptedDocumentReads.hpp"
 #include "ScriptedTextLayouts.hpp"
 // scope `--session` の単体テスト（ADR 0042 決定 2・ADR 0059 の決定 1〜6）。状態から前回のタブの
 // 一覧を作る読み取りと、窓が閉じていくときの意図 EndSession。まだ読んでいない文書の状態の関数と、
@@ -529,9 +530,10 @@ void verify_recency_ranked()
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
+    ScriptedDocumentReads reads{files, code_pages};
     EditorController controller(EditorPorts{appearance, clipboard, files, code_pages, settings,
                                             themes, session, history, folders, bookmarks,
-                                            text_layouts, autosave, fonts, bell, markdown},
+                                            text_layouts, autosave, fonts, bell, markdown, reads},
                                 initial);
     return controller.frame();
 }

@@ -7,8 +7,10 @@
 #include "DisplayQuestion.hpp"
 #include "DisplayText.hpp"
 #include "DocumentByteLimit.hpp"
+#include "DocumentDecoding.hpp"
+#include "DocumentReadRequest.hpp"
+#include "DocumentReading.hpp"
 #include "DocumentState.hpp"
-#include "EncodingFailure.hpp"
 #include "ExLanguageRequest.hpp"
 #include "ExResult.hpp"
 #include "ExSyntaxRequest.hpp"
@@ -32,12 +34,14 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -45,6 +49,7 @@
 namespace nenenib::application
 {
 using detail::line_within;
+using detail::named_line;
 using detail::named_notice;
 using detail::parked_path;
 
@@ -69,33 +74,8 @@ constexpr std::size_t maximum_file_bytes = core::maximum_document_bytes;
     case FileFailure::too_large:
     case FileFailure::undecodable:
     case FileFailure::unsupported_utf32:
+    case FileFailure::insufficient_memory:
         return "Could not write file";
-    }
-    std::unreachable();
-}
-
-// 判定の失敗のうち UTF-32 だけは名指しで断る。ほかは判別できなかった、のまま（#787）。
-[[nodiscard]] FileFailure file_failure_of(core::EncodingFailure failure) noexcept
-{
-    switch (failure)
-    {
-    case core::EncodingFailure::unsupported_utf32:
-        return FileFailure::unsupported_utf32;
-    case core::EncodingFailure::undecodable:
-    case core::EncodingFailure::odd_utf16_length:
-        return FileFailure::undecodable;
-    }
-    std::unreachable();
-}
-
-[[nodiscard]] FileFailure file_failure_of(CodePageFailure failure) noexcept
-{
-    switch (failure)
-    {
-    case CodePageFailure::undecodable:
-        return FileFailure::undecodable;
-    case CodePageFailure::unencodable:
-        return FileFailure::unencodable;
     }
     std::unreachable();
 }
@@ -286,6 +266,7 @@ utf16_parts(const core::TextBuffer &text, std::string_view mark, core::ByteOrder
 }
 
 constexpr std::string_view unreached_prefix = "開けませんでした: ";
+constexpr std::string_view reading_prefix = "読み込み中: ";
 
 [[nodiscard]] core::DisplayText unreached_message(const core::FilePath &path, std::size_t others)
 {
@@ -554,24 +535,7 @@ void EditorController::run_document_request(const core::ExDocumentRequest &reque
 
 std::expected<core::TextBuffer, FileFailure> EditorController::decoded(core::DetectedText text)
 {
-    switch (text.encoding())
-    {
-    case core::TextEncoding::utf8:
-    case core::TextEncoding::utf8_bom:
-    case core::TextEncoding::utf16_le:
-    case core::TextEncoding::utf16_be:
-        return core::TextBuffer::from_utf8(std::move(text))
-            .transform_error([](core::TextFailure) { return FileFailure::undecodable; });
-    case core::TextEncoding::shift_jis:
-        break;
-    }
-    auto converted = ports_.code_pages.to_utf8(text.bytes());
-    if (!converted)
-    {
-        return std::unexpected(file_failure_of(converted.error()));
-    }
-    return core::TextBuffer::from_utf8(converted.value())
-        .transform_error([](core::TextFailure) { return FileFailure::undecodable; });
+    return decoded_text(ports_.code_pages, std::move(text));
 }
 
 std::expected<std::vector<std::string_view>, FileFailure>
@@ -610,31 +574,6 @@ std::expected<void, FileFailure> EditorController::write_document(const SaveDocu
     return ports_.files.write(intent.path, parts.value(), intent.mode);
 }
 
-// 読んで復号した本文と文書。上限はここが正本で、ポートへ引数で渡す。読んでから断るのでは
-// 大きいファイルを先に抱える。
-std::expected<std::pair<core::TextBuffer, Document>, FileFailure>
-EditorController::read_document(const core::FilePath &path)
-{
-    auto bytes = ports_.files.read(path, maximum_file_bytes);
-    if (!bytes)
-    {
-        return std::unexpected(bytes.error());
-    }
-    // 封印済みの列をそのまま判定へ移す。複写はしない（ADR 0141 決定 4）。
-    auto detected = core::DetectedText::from_sealed(std::move(bytes).value());
-    if (!detected)
-    {
-        return std::unexpected(file_failure_of(detected.error()));
-    }
-    const core::TextEncoding encoding = detected.value().encoding();
-    auto text = decoded(std::move(detected).value());
-    if (!text)
-    {
-        return std::unexpected(text.error());
-    }
-    return std::pair{std::move(text).value(), Document{path, encoding, std::size_t{0}}};
-}
-
 // 同じファイルを開いているタブの帯の位置（決定 5 の (a)）。比べ方は FilePort が OS の規則で決める。
 std::optional<std::size_t> EditorController::open_tab_of(const core::FilePath &path) const
 {
@@ -664,31 +603,101 @@ bool EditorController::blank_untitled() const
            state_.history().size() == 0;
 }
 
-// 開く（ADR 0056 の決定 5）。(a) 同じファイルのタブへ切り替える（読み直さない）→ (b) 何も
-// 書いていない無題ならそこに開く → (c) アクティブの右に新しいタブを足して開く。開けなかったら
-// タブを足さず失敗を告げる。
-// タブを足さず失敗を返す。失敗の告げ方は呼び出し元が決める（ADR 0060 の決定 7）。
-std::expected<void, FileFailure> EditorController::open_document(const core::FilePath &path)
+// 開く（ADR 0056 の決定 5・ADR 0159 の決定 1・3〜5）。(a) 同じファイルのタブへ切り替える（読み
+// 直さない）→ 読みの port に頼む。同じファイルを読み込み中なら 2 本目を頼まず今の要求を続け、
+// ほかの読み込み中の要求は取り消す。揃ったら (b) 何も書いていない無題に開く → (c) アクティブの
+// 右に新しいタブを足して開く（open_read）。開けなかったらタブを足さず、呼び手の告げ方で告げる。
+void EditorController::open_document(const core::FilePath &path, OpenFailureReply reply)
+{
+    const auto &reading = state_.reading();
+    if (reading.has_value() && ports_.files.same_file(reading.value().path, path))
+    {
+        return;
+    }
+    cancel_reading();
+    const auto open = open_tab_of(path);
+    if (open.has_value())
+    {
+        accept(SwitchTab{open.value()});
+        return;
+    }
+    // ファイルが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
+    state_ = state_.with_composition(std::nullopt);
+    const std::uint64_t ticket = ++read_tickets_;
+    // 要求を先に置き、同期に揃った結果も裏で揃った結果と同じ adopt_read の 1 本で採る（決定 3）。
+    state_ = state_.with_reading(DocumentReading{path, ticket, 0, 0, reply});
+    auto outcome = ports_.reads.request(DocumentReadRequest{path, ticket, maximum_file_bytes});
+    if (outcome.has_value())
+    {
+        adopt_read(std::move(outcome).value());
+    }
+}
+
+void EditorController::adopt_read(DocumentReadOutcome outcome)
+{
+    std::visit(
+        [this](auto &part)
+        {
+            using Part = std::remove_cvref_t<decltype(part)>;
+            if constexpr (std::is_same_v<Part, DocumentReadProgress>)
+            {
+                adopt_progress(part);
+            }
+            else
+            {
+                static_assert(std::is_same_v<Part, DocumentReadFinished>);
+                adopt_finished(std::move(part));
+            }
+        },
+        outcome);
+}
+
+void EditorController::adopt_progress(const DocumentReadProgress &progress)
+{
+    const auto &reading = state_.reading();
+    if (!reading.has_value() || reading.value().ticket != progress.ticket)
+    {
+        return;
+    }
+    DocumentReading next = reading.value();
+    next.read_bytes = progress.read_bytes;
+    next.total_bytes = progress.total_bytes;
+    state_ = state_.with_reading(std::move(next));
+}
+
+// 券が今の要求と違う結果は捨てる（ADR 0127 §3 の一回確定・決定 5）。
+void EditorController::adopt_finished(DocumentReadFinished finished)
+{
+    const auto &reading = state_.reading();
+    if (!reading.has_value() || reading.value().ticket != finished.ticket)
+    {
+        return;
+    }
+    const DocumentReading done = reading.value();
+    state_ = state_.with_reading(std::nullopt);
+    if (!finished.document)
+    {
+        answer_unopened(done.path, finished.document.error(), done.reply);
+        return;
+    }
+    open_read(done.path, std::move(finished.document).value());
+}
+
+void EditorController::open_read(const core::FilePath &path, OpenedDocument opened)
 {
     const auto open = open_tab_of(path);
     if (open.has_value())
     {
         accept(SwitchTab{open.value()});
-        return {};
+        return;
     }
-    // ファイルが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
     state_ = state_.with_composition(std::nullopt);
-    auto document = read_document(path);
-    if (!document)
-    {
-        return std::unexpected(document.error());
-    }
-    auto [text, opened] = std::move(document).value();
+    Document document{path, opened.encoding, std::size_t{0}};
     if (blank_untitled())
     {
         drop_pending_follow();
         settle_follow();
-        state_ = state_.with_opened(std::move(text), std::move(opened));
+        state_ = state_.with_opened(std::move(opened.text), std::move(document));
         // 同じ退避番号で改訂番号 0 のまま本文が丸ごと替わるので、構文の覚えを両方捨てる
         // （ADR 0156 の決定 9）。
         first_syntax_.reset();
@@ -696,41 +705,90 @@ std::expected<void, FileFailure> EditorController::open_document(const core::Fil
         ask_display();
         // 本文が丸ごと替わるので、プレビューも頼み直す（ADR 0155 の決定 9）。
         request_preview(true);
-        return {};
+        return;
     }
     leave_document();
-    state_ = state_.with_new_tab().with_opened(std::move(text), std::move(opened));
+    state_ = state_.with_new_tab().with_opened(std::move(opened.text), std::move(document));
     enter_document();
-    return {};
+}
+
+// Ctrl+O と起動引数は失敗をダイアログで（ADR 0010 の決定 9）。一覧から選んだファイルは 1 行の
+// 知らせで、無くなっていたファイル（not_found）だけ出どころが履歴の候補なら履歴から外す（D30・
+// ADR 0062 の決定 18）。ほかの失敗は履歴に残す。
+void EditorController::answer_unopened(const core::FilePath &path, FileFailure failure,
+                                       OpenFailureReply reply)
+{
+    switch (reply)
+    {
+    case OpenFailureReply::dialog:
+        fail(failure);
+        return;
+    case OpenFailureReply::notice:
+        reject(unreached_message(path, 0));
+        return;
+    case OpenFailureReply::notice_forgetting:
+        reject(unreached_message(path, 0));
+        if (failure == FileFailure::not_found)
+        {
+            forget(path);
+        }
+        return;
+    }
+    std::unreachable();
+}
+
+void EditorController::cancel_reading()
+{
+    const auto &reading = state_.reading();
+    if (!reading.has_value())
+    {
+        return;
+    }
+    ports_.reads.cancel(reading.value().ticket);
+    state_ = state_.with_reading(std::nullopt);
+}
+
+void EditorController::collect_reads()
+{
+    for (DocumentReadOutcome &outcome : ports_.reads.collect())
+    {
+        adopt_read(std::move(outcome));
+    }
+}
+
+std::optional<core::DisplayText> EditorController::reading_message() const
+{
+    const auto &reading = state_.reading();
+    if (!reading.has_value())
+    {
+        return std::nullopt;
+    }
+    const DocumentReading &value = reading.value();
+    const std::string name(value.path.file_name().empty() ? value.path.text()
+                                                          : value.path.file_name());
+    if (value.total_bytes == 0)
+    {
+        return named_line(reading_prefix, name, {});
+    }
+    const std::uint64_t percent =
+        std::min<std::uint64_t>(100, value.read_bytes * 100 / value.total_bytes);
+    return named_line(reading_prefix, name, " " + std::to_string(percent) + "%");
 }
 
 // Ctrl+O と起動引数の開く。失敗はダイアログ（ADR 0010 の決定 9）。
 void EditorController::accept(const OpenDocument &intent)
 {
-    const auto opened = open_document(intent.path);
-    if (!opened)
-    {
-        fail(opened.error());
-    }
+    open_document(intent.path, OpenFailureReply::dialog);
 }
 
-// 一覧から選んだファイルを開く（ADR 0060 の決定 7）。失敗はダイアログではなく 1 行の知らせで、
-// 無くなっていたファイル（not_found）だけ履歴から外す（D30）。ほかの失敗は履歴に残す。
-// 外すのは出どころが履歴の候補のときだけで、同じフォルダの候補では履歴を読み書きしない
-// （ADR 0062 の決定 18）。
+// 一覧から選んだファイルを開く（ADR 0060 の決定 7）。失敗はダイアログではなく 1 行の知らせ
+// （answer_unopened）。履歴から外すのは出どころが履歴の候補のときだけで、同じフォルダの候補では
+// 履歴を読み書きしない（ADR 0062 の決定 18）。
 void EditorController::open_listed(const core::FilePath &path,
                                    std::optional<core::PaletteOrigin> origin)
 {
-    const auto opened = open_document(path);
-    if (opened)
-    {
-        return;
-    }
-    reject(unreached_message(path, 0));
-    if (opened.error() == FileFailure::not_found && origin == core::PaletteOrigin::history)
-    {
-        forget(path);
-    }
+    open_document(path, origin == core::PaletteOrigin::history ? OpenFailureReply::notice_forgetting
+                                                               : OpenFailureReply::notice);
 }
 
 // 履歴に記録する 1 本（ADR 0060 の決定 8）。書くたびに読んで足す（ほかの窓の分を失わない）。
@@ -830,7 +888,7 @@ bool EditorController::reach_tab(std::size_t position)
         return position < state_.tab_count();
     }
     const UnloadedDocument &tab = unloaded.value();
-    auto document = read_document(tab.path);
+    auto document = read_now(tab.path);
     if (!document)
     {
         // 読めなかったタブは帯と使った順から外し、1 行知らせる。ダイアログの経路（last_failure）
@@ -840,9 +898,28 @@ bool EditorController::reach_tab(std::size_t position)
         reveal_active_tab();
         return false;
     }
-    auto [text, opened] = std::move(document).value();
-    state_ = state_.with_loaded(position, reached_bundle(std::move(text), std::move(opened), tab));
+    OpenedDocument opened = std::move(document).value();
+    state_ = state_.with_loaded(
+        position, reached_bundle(std::move(opened.text),
+                                 Document{tab.path, opened.encoding, std::size_t{0}}, tab));
     return true;
+}
+
+// 裏へ回された（同期の上限を超える）ときは頼みを取り消し、今の上限を超えたときと同じ too_large
+// として扱う。まだ読んでいないタブを裏で読む形は ADR 0159 に無く、合成ルートの上限（L2c）までの
+// 暫定（今の同期の上限と同じ振る舞い）。
+std::expected<OpenedDocument, FileFailure> EditorController::read_now(const core::FilePath &path)
+{
+    const std::uint64_t ticket = ++read_tickets_;
+    auto outcome = ports_.reads.request(DocumentReadRequest{path, ticket, maximum_file_bytes});
+    auto *finished =
+        outcome.has_value() ? std::get_if<DocumentReadFinished>(&outcome.value()) : nullptr;
+    if (finished == nullptr)
+    {
+        ports_.reads.cancel(ticket);
+        return std::unexpected(FileFailure::too_large);
+    }
+    return std::move(finished->document);
 }
 
 void EditorController::report_unreached(const core::FilePath &path)
@@ -855,6 +932,8 @@ void EditorController::report_unreached(const core::FilePath &path)
 // 窓は閉じていく途中なので、状態を変えず何も出さない。
 void EditorController::accept(const EndSession &intent)
 {
+    // 読み込み中の要求は取消で、ファイルは開かれない（ADR 0159 の決定 5・11）。
+    cancel_reading();
     settle_follow();
     // 確かめずに未保存が残る終わり方（OS の終了の強行・描画を失った終わり）は、一覧より先に
     // 退避を 1 回頼み、worker が書き終えるまで上限つきで待つ。書けなければ前回の退避のまま

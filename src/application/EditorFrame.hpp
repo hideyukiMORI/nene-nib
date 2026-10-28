@@ -72,6 +72,7 @@ struct EditorFrame
     std::optional<SettingsIssue> settings_failure;
     // 開いている入力行の見え方（Ex・設定一覧・検索の 1 本・ADR 0032 の決定 1）。
     std::optional<core::InputLineView> command_line;
+    // 知らせの 1 行。裏で読み込み中の文書があれば「読み込み中: <題名> 37%」（ADR 0159 の決定 4）。
     std::optional<core::DisplayText> command_message;
     std::optional<CommandPaletteView> command_palette;
     // 帯の順のタブの表示値（ADR 0056 の決定 7）。アクティブの分は document と同じ値で、ほかは

@@ -30,6 +30,7 @@
 #include "FilePort.hpp"
 #include "OpenDocument.hpp"
 #include "Scopes.hpp"
+#include "ScriptedDocumentReads.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScriptedThemes.hpp"
 #include "SelectEditMode.hpp"
@@ -634,11 +635,12 @@ void typed_steps(EditorController &controller, const std::vector<Step> &steps)
     Editing editing;
     CountedFiles files{editing.files()};
     ScriptedThemes themes;
-    EditorController controller{
-        app::EditorPorts{editing.appearance(), editing.clipboard(), files, editing.code_pages(),
-                         editing.settings(), themes, editing.session(), editing.history(),
-                         editing.folders(), editing.bookmarks(), editing.text_layouts(),
-                         editing.autosave(), editing.fonts(), editing.bell(), editing.markdown()}};
+    ScriptedDocumentReads reads{files, editing.code_pages()};
+    EditorController controller{app::EditorPorts{
+        editing.appearance(), editing.clipboard(), files, editing.code_pages(), editing.settings(),
+        themes, editing.session(), editing.history(), editing.folders(), editing.bookmarks(),
+        editing.text_layouts(), editing.autosave(), editing.fonts(), editing.bell(),
+        editing.markdown(), reads}};
     open_document(controller, editing.files(), trial.first);
     for (std::size_t index = 0; index < trial.second.size(); ++index)
     {
