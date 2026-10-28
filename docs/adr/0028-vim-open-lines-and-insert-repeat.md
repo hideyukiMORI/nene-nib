@@ -42,3 +42,7 @@ FR-003のNORMAL `o` / `O`を実装する。既存のINSERT、行索引、改行�
 決定 3 の「一般の i/a の回数には広げない」と、範囲外に挙げた「一般の i/a 回数」「dot」は [ADR 0030](0030-vim-dot-repeat-as-key-replay.md) が置換した。`.` の回数付き再生（`2.` が `2ifoo<Esc>` を流す）が成り立つには回数付きの `i a I A` も入力を反復する必要があり、固定 Vim 9.1 でも `3ifoo<Esc>` は `foofoofoo` になる。
 
 そこで `VimInsertRepeat` は o/O だけでなく `i a I A` の入りでも立つ。形も破棄の境界（移動・記録を越える削除・外部編集）も決定 2・3 のままで、`counted-insert-*` の 5 fixture が固定 Vim との一致を守る。o/O 以外の INSERT 制御キー・矩形選択は引き続き範囲外。
+
+## 追補（2026-10-28・Issue #1027）
+
+`I` の入る位置は最初の非空白で、空白だけの行では行末（空白の後ろ）にする（Vim の `beginline(BL_WHITE | BL_FIX)`・`VimStep.cpp` の `insert_line_start_landing` の 1 本）。`^` が空白だけの行で最後の文字に止まる規則（`vim_first_non_blank`）は変えない（`gI` は Nib にまだ無く範囲外）。`insert-first-nonblank-*` の 9 fixture が固定 Vim との一致を守る。
