@@ -74,15 +74,25 @@ struct VimStep
 [[nodiscard]] VimState vim_register_stored(const VimState &state, char name,
                                            const VimRegister &value);
 
-// OS のクリップボードを読む状態か（ADR 0051 の決定 3）。`"+` `"*` を選んでいるか、`@` の次の
-// 名前を待っている（`q` の待ちは含めない）とき真。controller は vim_step の結果を写した直後に
-// これを見て、真なら 1 回読んで vim_clipboard_loaded で写しを置く。何が読む状態かを決めるのは
-// engine の側である（ARC-004）。
-[[nodiscard]] bool vim_reads_clipboard(const VimState &state) noexcept;
+// 鍵 key を流す直前に OS のクリップボードを読むか（ADR 0051 の決定 3 と追補（#848）の決定 D）。
+// `"+` `"*` を選んでいるか、`@` の次の名前を待っている（`q` の待ちは含めない）とき真で、
+// vim_reads_unnamed_clipboard が真のときも真。controller は vim_step を呼ぶ直前にこれを見て、
+// 真なら 1 回読んで写しを置く。何が読む状態かを決めるのは engine の側である（ARC-004）。
+[[nodiscard]] bool vim_reads_clipboard(const VimState &state, const VimKey &key) noexcept;
+
+// 読んだ本文を無名へ置く側か（追補（#848）の決定 D）。`:set clipboard=unnamed` で、レジスタを
+// 選ばず・オペレータも次の鍵の待ちも無い NORMAL / VISUAL の `p` `P`（回数の後でも）のとき真。
+// 真なら controller は vim_unnamed_loaded、偽なら vim_clipboard_loaded で置く（2
+// つの側は重ならない）。
+[[nodiscard]] bool vim_reads_unnamed_clipboard(const VimState &state, const VimKey &key) noexcept;
 
 // `"+` `"*` の写しを置いたあとの状態（ADR 0051 の決定 3）。写しを置くだけで、ほかは変えない。
 // 写しを置く口はこの 1 本（vim_register_stored は `+` `*` を受けない）。
 [[nodiscard]] VimState vim_clipboard_loaded(const VimState &state, VimRegister value);
+
+// OS の本文で無名レジスタの写しを置き換えたあとの状態（追補（#848）の決定 D）。`"0`〜`"9` `"-`
+// 名前つき・`last_macro` は変えない。読めなかった・空の本文は空のレジスタとして置く。
+[[nodiscard]] VimState vim_unnamed_loaded(const VimState &state, VimRegister value);
 
 // 検索の入力行が開いているあいだの回数（`2/be` の 2・`d2/` なら積）。確定の鍵が engine の中で
 // 使う回数と同じ値で、incsearch の preview と Ctrl-G / Ctrl-T が同じ回数で探すために読む

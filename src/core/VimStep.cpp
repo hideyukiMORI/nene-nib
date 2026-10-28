@@ -1740,12 +1740,17 @@ named_written(VimState state, const VimRegisterSnapshot &value, VimOperator oper
 // ときだけ持つ「OS へ出す本文」。呼び出し元が second を VimStep.clipboard へ写す。
 using WrittenRegisters = std::pair<VimState, std::optional<VimRegister>>;
 
-// 名指しの書き込みの書き先が OS のクリップボードなら、その本文（決定 6）。
+// OS へ出す本文（決定 6・追補（#848）の決定 C）。名指しの書き込みの書き先が OS のクリップボード
+// のときと、`:set clipboard=unnamed` でレジスタを選ばずに無名へ書くとき（`"a` の名指しは Vim と
+// 同じく出さない）。どちらでも 1 回だけ。
 [[nodiscard]] std::optional<VimRegister> clipboard_written(const VimState &state,
                                                            const VimRegister &value)
 {
-    if (!state.selected_register.has_value() ||
-        state.selected_register.value().target != VimRegisterTarget::clipboard)
+    if (!state.selected_register.has_value())
+    {
+        return state.clipboard_unnamed ? std::optional<VimRegister>{value} : std::nullopt;
+    }
+    if (state.selected_register.value().target != VimRegisterTarget::clipboard)
     {
         return std::nullopt;
     }
@@ -6041,8 +6046,24 @@ VimState vim_register_stored(const VimState &state, char name, const VimRegister
     return next;
 }
 
-bool vim_reads_clipboard(const VimState &state) noexcept
+bool vim_reads_unnamed_clipboard(const VimState &state, const VimKey &key) noexcept
 {
+    if (!state.clipboard_unnamed || state.selected_register.has_value() ||
+        state.pending.has_value() || state.input_wait.has_value() ||
+        (state.mode != VimMode::normal && !is_visual_mode(state.mode)))
+    {
+        return false;
+    }
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    return character != nullptr && (character->code == U'p' || character->code == U'P');
+}
+
+bool vim_reads_clipboard(const VimState &state, const VimKey &key) noexcept
+{
+    if (vim_reads_unnamed_clipboard(state, key))
+    {
+        return true;
+    }
     if (state.selected_register.has_value() &&
         state.selected_register.value().target == VimRegisterTarget::clipboard)
     {
@@ -6060,6 +6081,13 @@ VimState vim_clipboard_loaded(const VimState &state, VimRegister value)
 {
     VimState next = state;
     next.clipboard = VimRegisterSnapshot::from(value);
+    return next;
+}
+
+VimState vim_unnamed_loaded(const VimState &state, VimRegister value)
+{
+    VimState next = state;
+    next.unnamed_register = VimRegisterSnapshot::from(value);
     return next;
 }
 

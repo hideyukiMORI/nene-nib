@@ -177,7 +177,7 @@ class EditorController final
     answered_vim_request(const core::VimStep &step, core::VimEditorView &view,
                          std::vector<core::VimLineRows> &rows,
                          std::vector<core::VimRowSpan> &spans);
-    void load_vim_clipboard();
+    void load_vim_clipboard(const core::VimKey &key);
     void send_vim_clipboard(const std::optional<core::VimRegister> &written);
     // 再生のあいだに積んだ編集を 1 つの undo 単位に畳む（ADR 0046 の決定 3）。
     void merge_replayed_edits(const core::EditHistory &before, const core::TextBuffer &text);

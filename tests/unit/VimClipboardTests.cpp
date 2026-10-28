@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <utility>
 
 namespace nenenib::tests
 {
@@ -356,6 +357,185 @@ void verify_clipboard_block()
     vim_replay(windows_like.controller(), "<C-v>jl\"+y");
     expect(written_text(windows_like) == "ab\r\nef", "a block joins its rows with CRLF");
 }
+
+// `:set clipboard=unnamed` を置く（ADR 0051 の追補（#848）の決定 A・B）。
+void sync_unnamed(Editing &editing)
+{
+    static_cast<void>(run_ex(editing.controller(), "set clipboard=unnamed"));
+}
+
+// 鍵・文書（LF）・OS の本文（LF 文書）（追補の決定 C・F）。オンでレジスタを選ばずに無名へ書く
+// 鍵は OS へ 1 回だけ出す。矩形は行を改行で繋いだ本文。
+using UnnamedWrite = std::tuple<std::string_view, std::string_view, std::string_view>;
+
+constexpr std::array<UnnamedWrite, 9> unnamed_writes{{
+    {"yy", "one\ntwo", "one\n"},
+    {"dd", "one\ntwo", "one\n"},
+    {"x", "one\ntwo", "o"},
+    {"lX", "one\ntwo", "o"},
+    {"cw<Esc>", "one two", "one"},
+    {"D", "one two", "one two"},
+    {"Y", "one\ntwo", "one\n"},
+    {"vjd", "one\ntwo", "one\nt"},
+    {"<C-v>jly", "abcd\nefgh", "ab\nef"},
+}};
+
+// オンの書き（決定 C）。無名と同じ本文を文書の改行の形で 1 回出す。
+void verify_unnamed_sync_writes()
+{
+    for (const auto &[keys, text, lf] : unnamed_writes)
+    {
+        Editing editing;
+        open_vim_document(editing, std::string(text));
+        sync_unnamed(editing);
+        vim_replay(editing.controller(), keys);
+        expect(editing.clipboard().writes() == 1, "an unnamed write goes to the clipboard once");
+        expect(written_text(editing) == lf, "the clipboard takes what the unnamed register takes");
+    }
+    Editing windows_like;
+    open_vim_document(windows_like, "one\r\ntwo");
+    sync_unnamed(windows_like);
+    vim_replay(windows_like.controller(), "yy");
+    expect(written_text(windows_like) == "one\r\n", "a CRLF document puts CRLF on the clipboard");
+    Editing block;
+    open_vim_document(block, "abcd\r\nefgh");
+    sync_unnamed(block);
+    vim_replay(block.controller(), "<C-v>jly");
+    expect(written_text(block) == "ab\r\nef", "a block joins its rows with the document newline");
+}
+
+// 名指しは OS へ出さず、`"+` と重なっても 1 回だけ（決定 C）。
+void verify_unnamed_sync_named()
+{
+    constexpr std::array<std::pair<std::string_view, std::size_t>, 4> writers{{
+        {"\"ayy", 0},
+        {"\"_dd", 0},
+        {"\"+yy", 1},
+        {"\"*dd", 1},
+    }};
+    for (const auto &[keys, writes] : writers)
+    {
+        Editing editing;
+        open_vim_document(editing, "one\ntwo");
+        sync_unnamed(editing);
+        vim_replay(editing.controller(), keys);
+        expect(editing.clipboard().writes() == writes,
+               "a named register stays off the clipboard and \"+ writes once");
+    }
+}
+
+// オンの読み（決定 D）。`p` `P` の直前に 1 回読んで無名へ置き、`"0` は変えず OS へは書かない。
+void verify_unnamed_sync_puts()
+{
+    Editing editing;
+    open_vim_document(editing, "X1\nX2");
+    sync_unnamed(editing);
+    vim_replay(editing.controller(), "yy");
+    editing.clipboard().hold(held("abc\r\n"));
+    vim_replay(editing.controller(), "p");
+    expect(whole_vim_body(editing.controller()) == "X1\nabc\nX2",
+           "p pastes the clipboard text linewise");
+    expect(editing.clipboard().reads() == 1 && editing.clipboard().writes() == 1,
+           "p reads once and writes nothing (the one write is the yy)");
+    const VimState &state = editing.controller().vim_state();
+    expect(numbered(state, 0).text == "X1\n", "p leaves \"0 alone");
+    expect(state.unnamed_register.value().text == "abc\n" &&
+               state.unnamed_register.value().kind == VimRegisterKind::lines,
+           "p puts the read text in the unnamed register");
+    constexpr std::array<std::pair<std::string_view, std::string_view>, 2> puts{{
+        {"3p", "Xabcabcabc1\nX2"},
+        {"P", "abcX1\nX2"},
+    }};
+    for (const auto &[keys, expected] : puts)
+    {
+        Editing put;
+        open_vim_document(put, "X1\nX2");
+        sync_unnamed(put);
+        put.clipboard().hold(held("abc"));
+        vim_replay(put.controller(), keys);
+        expect(whole_vim_body(put.controller()) == expected, "3p and P read the clipboard");
+        expect(put.clipboard().reads() == 1, "a put reads the clipboard once");
+    }
+}
+
+// 読めない・空の OS は無名を空にし、`p` は本文を変えない（決定 D・G）。
+void verify_unnamed_sync_put_refused()
+{
+    const std::array<Content, 3> contents{
+        Content{std::unexpected(ClipboardFailure::empty)},
+        Content{std::unexpected(ClipboardFailure::unsupported_format)},
+        held(""),
+    };
+    for (const Content &content : contents)
+    {
+        Editing editing;
+        open_vim_document(editing, "X1\nX2");
+        sync_unnamed(editing);
+        vim_replay(editing.controller(), "yy");
+        editing.clipboard().hold(content);
+        vim_replay(editing.controller(), "p");
+        expect(whole_vim_body(editing.controller()) == "X1\nX2",
+               "p of an unreadable or empty clipboard changes nothing");
+    }
+}
+
+// `.` とマクロの中の `p` も再生の時点で読み直す（決定 E）。
+void verify_unnamed_sync_replay()
+{
+    Editing dot;
+    open_vim_document(dot, "X1");
+    sync_unnamed(dot);
+    dot.clipboard().hold(held("OLD"));
+    vim_replay(dot.controller(), "p");
+    dot.clipboard().hold(held("NEW"));
+    vim_replay(dot.controller(), ".");
+    expect(whole_vim_body(dot.controller()) == "XOLDNEW1", ". after p reads the clipboard again");
+    Editing macro;
+    open_vim_document(macro, "p\nsecond");
+    sync_unnamed(macro);
+    macro.clipboard().hold(held("Z"));
+    vim_replay(macro.controller(), "\"ayy@a");
+    expect(whole_vim_body(macro.controller()) == "pZ\nsecond", "p inside @a reads the clipboard");
+}
+
+// オンでも移動の鍵は読まない（決定 D）。オフ（既定）は今までどおり触れない。
+void verify_unnamed_sync_quiet_keys()
+{
+    Editing editing;
+    open_vim_document(editing, "one two\nthree");
+    sync_unnamed(editing);
+    vim_replay(editing.controller(), "hjwlk0$ggGv<Esc>");
+    expect(editing.clipboard().reads() == 0 && editing.clipboard().writes() == 0,
+           "motions never touch the clipboard");
+    Editing off;
+    open_vim_document(off, "one\ntwo");
+    vim_replay(off.controller(), "yyjpddx");
+    expect(off.clipboard().reads() == 0 && off.clipboard().writes() == 0,
+           "the sync is off by default");
+}
+
+// `:set clipboard=` の Ex（決定 A・B）。窓の Vim の状態に置き、`:set clipboard=` で外す。
+void verify_unnamed_sync_option()
+{
+    Editing editing;
+    open_vim_document(editing, "one");
+    expect(!editing.controller().vim_state().clipboard_unnamed, "the sync is off by default");
+    sync_unnamed(editing);
+    expect(editing.controller().vim_state().clipboard_unnamed,
+           ":set clipboard=unnamed turns it on");
+    static_cast<void>(run_ex(editing.controller(), "set clipboard="));
+    expect(!editing.controller().vim_state().clipboard_unnamed, ":set clipboard= turns it off");
+    static_cast<void>(run_ex(editing.controller(), "set clipboard=unnamedplus"));
+    expect(editing.controller().vim_state().clipboard_unnamed, "unnamedplus turns it on");
+    static_cast<void>(run_ex(editing.controller(), "set clipboard="));
+    static_cast<void>(run_ex(editing.controller(), "set clipboard=unnamed,unnamedplus"));
+    expect(editing.controller().vim_state().clipboard_unnamed, "unnamed,unnamedplus turns it on");
+    static_cast<void>(run_ex(editing.controller(), "set clipboard=foo"));
+    expect(editing.controller().vim_state().clipboard_unnamed,
+           "an unsupported value changes nothing");
+    vim_replay(editing.controller(), "yy");
+    expect(editing.controller().vim_state().clipboard_unnamed, "the sync outlives a command");
+}
 } // namespace
 
 void verify_vim_clipboard_contracts()
@@ -372,6 +552,13 @@ void verify_vim_clipboard_contracts()
     verify_clipboard_macro_replay();
     verify_clipboard_inside_macro();
     verify_clipboard_block();
+    verify_unnamed_sync_option();
+    verify_unnamed_sync_writes();
+    verify_unnamed_sync_named();
+    verify_unnamed_sync_puts();
+    verify_unnamed_sync_put_refused();
+    verify_unnamed_sync_replay();
+    verify_unnamed_sync_quiet_keys();
 }
 
 void verify_vim_clipboard_scope()

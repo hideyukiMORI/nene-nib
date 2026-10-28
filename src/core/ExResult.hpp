@@ -37,7 +37,8 @@ inline constexpr std::string_view guifont_command = "set guifont=";
 // 決定 3・設定に保存しない）。language は現在の文書の言語の選択か問い（ADR 0154 の決定 4・設定にも
 // セッションにも保存しない）。syntax は現在の文書の構文の色の切り替えか問い（ADR 0156 の追補・
 // 設定にもセッションにも保存しない）。line は行番号だけの命令 `:N` `:$`（ADR 0022 の追補・
-// Issue #847）で、controller が engine の `{N}G` と同じ着地へ渡す。
+// Issue #847）で、controller が engine の `{N}G` と同じ着地へ渡す。clipboard_unnamed は
+// `:set clipboard=unnamed` の有無（ADR 0051 の 追補（#848）の決定 A・設定にもセッションにも保存しない）。
 struct ExResult
 {
     std::optional<EditorSettings> settings;
@@ -52,6 +53,7 @@ struct ExResult
     std::optional<ExLanguageRequest> language = std::nullopt;
     std::optional<ExSyntaxRequest> syntax = std::nullopt;
     std::optional<ExLineRequest> line = std::nullopt;
+    std::optional<bool> clipboard_unnamed = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>

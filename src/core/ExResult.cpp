@@ -142,6 +142,60 @@ namespace
                     DisplayText::parse(incsearch ? "incsearch=on" : "incsearch=off").value()};
 }
 
+// `:set clipboard=` の値（ADR 0051 の追補（#848）の決定 A）。`unnamed` と `unnamedplus` の `,`
+// 区切りの任意の組（1 つ以上）だけを受ける。Windows では `"*` と `"+` が同じ OS のクリップボード
+// なので、どちらも同じ「無名と OS を同期する」になる。
+[[nodiscard]] bool unnamed_clipboard_value(std::string_view value) noexcept
+{
+    while (true)
+    {
+        const std::size_t comma = value.find(',');
+        const std::string_view item = value.substr(0, comma);
+        if (item != "unnamed" && item != "unnamedplus")
+        {
+            return false;
+        }
+        if (comma == std::string_view::npos)
+        {
+            return true;
+        }
+        value.remove_prefix(comma + 1);
+    }
+}
+
+// 無名と OS の同期も設定に載せず、表示名は Vim の `:set clipboard?` と同じ形（決定 A）。
+[[nodiscard]] ExResult clipboard_result(bool unnamed)
+{
+    return ExResult{.settings = std::nullopt,
+                    .highlight = std::nullopt,
+                    .incsearch = std::nullopt,
+                    .message =
+                        DisplayText::parse(unnamed ? "clipboard=unnamed" : "clipboard=").value(),
+                    .clipboard_unnamed = unnamed};
+}
+
+// `clipboard=<値>`（決定 A）。`clipboard=` は外す。ほかの値は unsupported_argument。clipboard の
+// option でなければ空。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+clipboard_option(std::string_view option)
+{
+    constexpr std::string_view name = "clipboard=";
+    if (!option.starts_with(name))
+    {
+        return std::nullopt;
+    }
+    const std::string_view value = option.substr(name.size());
+    if (value.empty())
+    {
+        return clipboard_result(false);
+    }
+    if (!unnamed_clipboard_value(value))
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    return clipboard_result(true);
+}
+
 [[nodiscard]] ExResult guide_result(EditorSettings settings, GuideVisibility guide)
 {
     settings.guide = guide;
@@ -240,7 +294,7 @@ language_option(std::string_view option)
     return std::nullopt;
 }
 
-// 設定に載せない名前の option（検索の強調・incsearch・表示形式・言語）。
+// 設定に載せない名前の option（検索の強調・incsearch・表示形式・言語・クリップボード）。
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure> unsaved_option(std::string_view option)
 {
     if (option == "hlsearch")
@@ -271,6 +325,15 @@ language_option(std::string_view option)
     if (language.has_value())
     {
         return std::move(language).value();
+    }
+    auto clipboard = clipboard_option(option);
+    if (clipboard.has_value())
+    {
+        return std::move(clipboard).value();
+    }
+    if (option == "noclipboard")
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
     }
     return std::unexpected(ExFailure::unknown_option);
 }
@@ -697,12 +760,32 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     return std::unexpected(ExFailure::unknown_command);
 }
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
-constexpr std::array<std::string_view, 24> fixed_candidates{
-    "colorscheme",   "set fontsize=",    guifont_command,    "set incsearch", "set noincsearch",
-    "set hlsearch",  "set nohlsearch",   "set guide",        "set noguide",   "tabs",
-    "tabnew",        "tabnext",          "tabprevious",      "tabclose",      "set wrap",
-    "set nowrap",    "set display=grid", "set display=text", nohlsearch_name, "only",
-    "set filetype=", "set ft=",          "syntax on",        "syntax off"};
+constexpr std::array<std::string_view, 26> fixed_candidates{"colorscheme",
+                                                            "set fontsize=",
+                                                            guifont_command,
+                                                            "set incsearch",
+                                                            "set noincsearch",
+                                                            "set hlsearch",
+                                                            "set nohlsearch",
+                                                            "set guide",
+                                                            "set noguide",
+                                                            "tabs",
+                                                            "tabnew",
+                                                            "tabnext",
+                                                            "tabprevious",
+                                                            "tabclose",
+                                                            "set wrap",
+                                                            "set nowrap",
+                                                            "set display=grid",
+                                                            "set display=text",
+                                                            nohlsearch_name,
+                                                            "only",
+                                                            "set filetype=",
+                                                            "set ft=",
+                                                            "syntax on",
+                                                            "syntax off",
+                                                            "set clipboard=unnamed",
+                                                            "set clipboard="};
 
 [[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
                                   std::string_view suffix = {})
