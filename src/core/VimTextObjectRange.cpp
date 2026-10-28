@@ -926,12 +926,25 @@ constexpr char32_t escape_character = U'\\';
     }
 }
 
+// 探索の起点（Vim の current_block の冒頭）。NORMAL と 1 文字の VISUAL は開きの上なら次の文字から、
+// 2 文字以上の VISUAL は選択の前の端のままで、そこの開きは数えない（`{b` を選んだ `aB` は取消・
+// 選択の向きは問わない・Issue #967 で実測）。起点の文字そのものは後ろ向きの走査に入らない。
+[[nodiscard]] Offset block_search_start(const TextBuffer &text, const Selection &selection,
+                                        VimBracketPair pair)
+{
+    const Offset low = selection_range(selection).begin;
+    if (has_selection(selection))
+    {
+        return low;
+    }
+    return code_at(text, low) == pair.open ? next_in_line(text, low) : low;
+}
+
 // 段の数だけ開きをたどる。中に居れば 1 段ずつ外へ、居なければ前にある塊へ同じ数だけ入る。
 // 向きは最初の 1 回で決まり、外へ向かった走査は途中で前へ折り返さない（Vim 9.1 で実測）。
-[[nodiscard]] std::optional<Offset> block_open_for(const TextBuffer &text, Offset caret,
+[[nodiscard]] std::optional<Offset> block_open_for(const TextBuffer &text, Offset start,
                                                    VimBracketPair pair, std::size_t count)
 {
-    const Offset start = code_at(text, caret) == pair.open ? next_in_line(text, caret) : caret;
     const auto behind = unmatched_open_backward(text, start, pair);
     const bool outward = behind.has_value();
     std::optional<Offset> open = outward ? behind : next_open_forward(text, start, pair);
@@ -991,12 +1004,12 @@ constexpr char32_t escape_character = U'\\';
     return characters_through(text, begin, last);
 }
 
-[[nodiscard]] std::optional<VimMotionRange> block_range_at(const TextBuffer &text, Offset caret,
+[[nodiscard]] std::optional<VimMotionRange> block_range_at(const TextBuffer &text, Offset start,
                                                            VimTextObjectRequest request,
                                                            std::size_t count)
 {
     const VimBracketPair pair = bracket_pair_of(request.object);
-    const auto open = block_open_for(text, caret, pair, count);
+    const auto open = block_open_for(text, start, pair, count);
     if (!open.has_value())
     {
         return std::nullopt;
@@ -1025,20 +1038,24 @@ constexpr char32_t escape_character = U'\\';
            object_caret(text, range).value <= ordered.end.value;
 }
 
-// 括弧は選択より広くならなければもう 1 段外へ（`vi(i(` の実測。引用符は quote_outcome）。
+// 囲む塊が選択より広くならなければもう 1 段外へ（`vi(i(` の実測。引用符は quote_outcome）。
+// 囲む塊が無く前にある塊を使ったときは、選択より狭くてもそのまま選ぶ（`v$a(` が `(ab)` を
+// 選ぶ・Issue #967 で実測）。
 [[nodiscard]] std::optional<VimMotionRange> paired_range(const TextBuffer &text,
                                                          const Selection &selection,
                                                          VimTextObjectRequest request,
                                                          std::size_t count)
 {
-    const Offset from = selection_range(selection).begin;
-    const auto first = block_range_at(text, from, request, count);
+    const VimBracketPair pair = bracket_pair_of(request.object);
+    const Offset start = block_search_start(text, selection, pair);
+    const auto first = block_range_at(text, start, request, count);
     if (!has_selection(selection) || !first.has_value() ||
-        !within_selection(text, selection, first.value()))
+        !within_selection(text, selection, first.value()) ||
+        !unmatched_open_backward(text, start, pair).has_value())
     {
         return first;
     }
-    return block_range_at(text, from, request, count + 1);
+    return block_range_at(text, start, request, count + 1);
 }
 
 // 塊が見つからなければ取消で、キャレットも選択も動かない（Vim 9.1 で実測）。

@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 4a0f61b66a2db7364062cf6c5105c641ae311a583013d82273e6eb23c501de96 / 2368 fixtures
+// fixtures.json: sha256 f9465aa49de71448efd52eb519f420010ef93813e7d980434d4468333b1cb4a1 / 2391 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2368> vim_fixtures{{
+constexpr std::array<VimFixture, 2391> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2380,6 +2380,29 @@ constexpr std::array<VimFixture, 2368> vim_fixtures{{
     {"yank-line-cursor-y-minus-then-j", "  abc\nlonger line", "j$y-j", "  abc\nlonger line", 2, 3, "  abc\nlonger line\n", "V", std::nullopt},
     {"yank-line-cursor-yj-then-j-drops-dollar", "abc\n  def\nxxxxxxxx", "$yjj", "abc\n  def\nxxxxxxxx", 2, 3, "abc\n  def\n", "V", std::nullopt},
     {"yank-line-cursor-characterwise-y-dollar-then-j", "abcdef\nabcdefgh", "$hy$j", "abcdef\nabcdefgh", 2, 5, "ef", "v", std::nullopt},
+    {"visual-block-object-vG-brace-mid-line", "x {br} y\nz", "vGaBy", "x {br} y\nz", 1, 3, "{br}", "v", std::nullopt},
+    {"visual-block-object-vG-brace-line-start", "{br} x\nz", "vGaBy", "{br} x\nz", 2, 1, "", "", std::nullopt},
+    {"visual-block-object-vG-brace-then-x", "gamma {br} foo\nend", "vGaBx", "gamma  foo\nend", 1, 7, "{br}", "v", std::nullopt},
+    {"visual-block-object-ve-forward-next-line", "a {br} b\n  gamma {br}; c", "jwveaBx", "a {br} b\n  gamma ; c", 2, 9, "{br}", "v", std::nullopt},
+    {"visual-block-object-ve-before-brace", "gamma {br} c", "veaBy", "gamma {br} c", 1, 7, "{br}", "v", std::nullopt},
+    {"visual-block-object-vl-inside-brace", "f{abc} x", "2lvlaBy", "f{abc} x", 1, 2, "{abc}", "v", std::nullopt},
+    {"visual-block-object-vl-on-open-brace", "x {br} y", "2lvlaBy", "x {br} y", 1, 4, "", "", std::nullopt},
+    {"visual-block-object-inner-whole-goes-out", "{a {bcd} e}", "4lvlliBy", "{a {bcd} e}", 1, 2, "a {bcd} e", "v", std::nullopt},
+    {"visual-block-object-around-whole-goes-out", "{a {bcd} e}", "3lv4laBy", "{a {bcd} e}", 1, 1, "{a {bcd} e}", "v", std::nullopt},
+    {"visual-block-object-straddle-outer", "(x (ab) y)", "lv7la(y", "(x (ab) y)", 1, 1, "(x (ab) y)", "v", std::nullopt},
+    {"visual-block-object-straddle-no-outer", "x (ab) y", "v$a(y", "x (ab) y", 1, 3, "(ab)", "v", std::nullopt},
+    {"visual-block-object-backward-selection", "f(abc) x", "4lvhha(y", "f(abc) x", 1, 2, "(abc)", "v", std::nullopt},
+    {"visual-block-object-two-lines", "f(a\nb c) x", "2lvja(y", "f(a\nb c) x", 1, 2, "(a\nb c)", "v", std::nullopt},
+    {"visual-block-object-normal-daB-before", "x {br} y", "daB", "x  y", 1, 3, "{br}", "v", std::nullopt},
+    {"visual-block-object-va-paren-a-paren", "f(a(bc)d)e", "4lva(a(y", "f(a(bc)d)e", 1, 2, "(a(bc)d)", "v", std::nullopt},
+    {"visual-block-object-forward-inside-selection", "x (ab) y", "v5la(y", "x (ab) y", 1, 3, "(ab)", "v", std::nullopt},
+    {"visual-block-object-forward-two-blocks", "x (ab) (cd)", "v5la(y", "x (ab) (cd)", 1, 3, "(ab)", "v", std::nullopt},
+    {"visual-block-object-backward-overlap", "{a {bcd} e}", "5lv4laBy", "{a {bcd} e}", 1, 4, "{bcd}", "v", std::nullopt},
+    {"visual-block-object-inner-whole-no-outer", "x {bcd} y", "3lvlliBy", "x {bcd} y", 1, 6, "", "", std::nullopt},
+    {"visual-block-object-fuzz-0016", "gamma {br} foo_bar ?\nです。 end.\t!\t:\tHello ", "vGaBat>", "gamma {br} foo_bar ?\nです。 end.\t!\t:\tHello ", 1, 10, "", "", std::nullopt},
+    {"visual-block-object-ve-no-block-fails", "alpha beta\ngamma", "veaBx", "alpha beta\ngamma", 1, 5, "", "", std::nullopt},
+    {"visual-block-object-ve-inside-grows", "{br} alpha beta", "wveaBx", " alpha beta", 1, 1, "{br}", "v", std::nullopt},
+    {"visual-block-object-ve-after-block-fails", "{br} alpha beta", "5lveaBx", "{br} alpha beta", 1, 10, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
