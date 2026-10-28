@@ -2178,15 +2178,13 @@ void EditorController::send_vim_clipboard(const std::optional<core::VimRegister>
 std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::VimKey &key)
 {
     load_vim_clipboard(key);
-    return stepped_vim([this, &key](const core::VimEditorView &view)
-                       { return core::vim_step(state_.vim(), view, key); });
+    return stepped_vim(VimStepSource{key});
 }
 
-std::optional<core::VimRepeatFailure> EditorController::stepped_vim(
-    const std::function<core::VimStep(const core::VimEditorView &)> &step_of)
+std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimStepSource &source)
 {
     const core::VimMode before = state_.vim().mode;
-    const auto measured = measured_vim_step(step_of);
+    const auto measured = measured_vim_step(source);
     if (!measured)
     {
         layout_failure_ = measured.error();
@@ -3224,9 +3222,7 @@ void EditorController::run_window_command(core::ExWindowCommand command)
 // 失敗しないので、断りの知らせも警告音も無い（Vim も `:8000` は黙って最後の行へ）。
 void EditorController::jump_to_line(const core::ExLineRequest &request)
 {
-    static_cast<void>(
-        stepped_vim([this, &request](const core::VimEditorView &view)
-                    { return core::vim_line_jumped(state_.vim(), view, request.line); }));
+    static_cast<void>(stepped_vim(VimStepSource{request}));
 }
 
 // 行き先は gt / gT と同じ tab_destination の 1 本。範囲の外の数は Vim の実測の文言（決定 4・5）。

@@ -70,13 +70,13 @@
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
 #include "VimStep.hpp"
+#include "VimStepSource.hpp"
 #include "VisualTextView.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <expected>
-#include <functional>
 #include <optional>
 #include <span>
 #include <string>
@@ -168,10 +168,9 @@ class EditorController final
     [[nodiscard]] std::optional<core::VimRepeatFailure> step_vim(const core::VimKey &key);
     // engine の 1 歩（鍵の vim_step か `:N` の vim_line_jumped）を測って写す 1 本。
     // 要求の往復・マーク・効果・キャレットの寄せは鍵と同じ（Issue #847）。
-    [[nodiscard]] std::optional<core::VimRepeatFailure>
-    stepped_vim(const std::function<core::VimStep(const core::VimEditorView &)> &step_of);
+    [[nodiscard]] std::optional<core::VimRepeatFailure> stepped_vim(const VimStepSource &source);
     [[nodiscard]] std::expected<core::VimStep, TextLayoutFailure>
-    measured_vim_step(const std::function<core::VimStep(const core::VimEditorView &)> &step_of);
+    measured_vim_step(const VimStepSource &source);
     // engine の要求（表示領域・行の画面行数・行の中の画面行）に 1 つ応えて view へ置く（ADR 0129 の
     // 決定 2・ADR 0144 の決定 2）。
     [[nodiscard]] std::expected<void, TextLayoutFailure>

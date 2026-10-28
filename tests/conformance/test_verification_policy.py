@@ -126,8 +126,13 @@ class VerificationPolicy(unittest.TestCase):
         self.assertLess(check_job.index("python eng/test-conformance.py"),
                         check_job.index("./eng/validate-git.ps1"))
         for command in ("cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release",
-                        "cmake --build build-release", "ctest --test-dir build-release"):
+                        "cmake --build build-release", "ctest --test-dir build-release",
+                        "build-release/.cmake/api/v1/query/codemodel-v2",
+                        "python eng/symbols.py --build-dir build-release --require core application"):
             self.assertIn(command, build_job)
+        # #1024: リンカのシンボルの検査（ARC-003）は Release のビルドの後に回す（ADR 0136 の決定 7）。
+        self.assertLess(build_job.index("cmake --build build-release"),
+                        build_job.index("python eng/symbols.py --build-dir build-release"))
         for command in ("check.ps1", "measure-speed", "coverage.py", "-DCMAKE_BUILD_TYPE=Debug"):
             self.assertNotIn(command, build_job)
         self.assertEqual((ROOT / ".githooks/pre-commit").read_text(encoding="utf-8").strip(),

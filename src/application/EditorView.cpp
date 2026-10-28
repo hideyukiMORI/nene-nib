@@ -4,19 +4,42 @@
 #include "ScreenMotion.hpp"
 #include "TextCaret.hpp"
 #include "VimRoundTrip.hpp"
+#include "VimStepSource.hpp"
 #include "VisualPosition.hpp"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
-#include <functional>
 #include <limits>
+#include <variant>
 
 namespace nenenib::application
 {
 namespace
 {
+// engine を呼ぶ 1 か所の写し（Issue #1023）。鍵は vim_step・`:N` の行は vim_line_jumped。
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view, const core::VimKey &key)
+{
+    return core::vim_step(state, view, key);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
+                                        const core::ExLineRequest &request)
+{
+    return core::vim_line_jumped(state, view, request.line);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
+                                        const VimStepSource &source)
+{
+    return std::visit([&state, &view](const auto &chosen)
+                      { return engine_step(state, view, chosen); }, source);
+}
+
 [[nodiscard]] std::optional<ScreenMotion> screen_motion(core::CaretMotion motion,
                                                         std::size_t height)
 {
@@ -210,8 +233,8 @@ void EditorController::accept(const PointText &intent)
     accept(PlaceCaret{caret.value().position, intent.anchoring, caret.value().affinity});
 }
 
-std::expected<core::VimStep, TextLayoutFailure> EditorController::measured_vim_step(
-    const std::function<core::VimStep(const core::VimEditorView &)> &step_of)
+std::expected<core::VimStep, TextLayoutFailure>
+EditorController::measured_vim_step(const VimStepSource &source)
 {
     std::vector<core::VimLineRows> rows;
     std::vector<core::VimRowSpan> spans;
@@ -233,7 +256,7 @@ std::expected<core::VimStep, TextLayoutFailure> EditorController::measured_vim_s
                             spans}};
     // 文書のマークを貸す（ADR 0152 の決定 2）。この関数の中では状態を変えないので参照は保たれる。
     view.marks = &state_.vim_marks();
-    auto step = step_of(view);
+    auto step = engine_step(state_.vim(), view, source);
     // どの要求も同じ 1 歩（鍵か行番号）をもう一度流す。viewport は 1 度渡したら以後も渡したまま。
     // 回数の上限は持たない。同じ問いの立て直しと viewport の二重要求は inconsistent で止まり、
     // 新しい答えは行数 + 画面行の総数 + 1 で尽きる（ADR 0129・ADR 0133 の追補 2026-10-18）。
@@ -244,7 +267,7 @@ std::expected<core::VimStep, TextLayoutFailure> EditorController::measured_vim_s
         {
             return std::unexpected(answered.error());
         }
-        step = step_of(view);
+        step = engine_step(state_.vim(), view, source);
     }
     return step;
 }

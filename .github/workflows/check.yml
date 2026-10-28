@@ -94,6 +94,9 @@ jobs:
         shell: pwsh
         run: |
           . ./eng/toolchain.ps1
+          # eng/symbols.py reads the static libraries from the CMake File API reply (ADR 0136 addendum, #1024).
+          New-Item -ItemType Directory -Force -Path build-release/.cmake/api/v1/query | Out-Null
+          New-Item -ItemType File -Force -Path build-release/.cmake/api/v1/query/codemodel-v2 | Out-Null
           cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
           exit $LASTEXITCODE
       - name: Build all Release targets
@@ -101,6 +104,12 @@ jobs:
         run: |
           . ./eng/toolchain.ps1
           cmake --build build-release
+          exit $LASTEXITCODE
+      - name: Linker symbols (ARC-003 / ARC-007 / CPP-013)
+        shell: pwsh
+        run: |
+          . ./eng/toolchain.ps1
+          python eng/symbols.py --build-dir build-release --require core application
           exit $LASTEXITCODE
       - name: Run unit tests
         shell: pwsh

@@ -18,6 +18,8 @@ CI の中身は Git 規約・検証記録・差分空白の確認だけで（ADR
 5. **道具の版は今日の経路で照合する。** `eng/tool-versions.json` の Python と、`toolchain.ps1` が固定する clang-cl（`measure-speed.yml` と同じ）。runner の道具が版と違えば configure で落ちる。
 6. **規則の表記は証明を足してから直す。** QLT-007 / QLT-012 の「機械強制」の行は、初回の run（run ID・所要時間）を gate-proofs に引用した commit で active に直す（D49・ADR 0001）。
 
+7. **追補（2026-10-28・#1024）: リンカのシンボルの検査も `build-and-test` で回す。** Release のビルドの直後の step「Linker symbols」で `python eng/symbols.py --build-dir build-release --require core application` を回し、許可の外の未定義シンボルで job を落とす。`symbols.py` は CMake File API の返答から .lib を探すので、configure の step が先に `build-release/.cmake/api/v1/query/codemodel-v2` を置く（`check.ps1` と同じ形）。Release の .lib でも Debug と同じ違反が出ることを手元で確かめた（直す前の main `cb612530` で両方とも `?_Xbad_function_call@std@@YAXXZ` の 1 件・直した後は両方 0）。経緯: #972 が application に `std::function` を持ち込み ARC-003 の違反になったのに、検査が `check.ps1` の中だけで CI は緑のまま main に入った（#1023）。
+
 ## 却下した選択肢
 
 - Debug 構成を CI で回す: ASan / UBSan ＋ clang-tidy の全件は 4 core の runner で長く、合図の 45 分に収まる保証が無い。Debug は実機の gate が守る。
