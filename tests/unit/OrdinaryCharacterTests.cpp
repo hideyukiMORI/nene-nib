@@ -154,6 +154,48 @@ void verify_landing_and_long_runs()
            "left finds the base of the same long fragmented run");
 }
 
+Offset placed(std::string_view input, std::size_t line, std::size_t column, core::CaretUnit unit)
+{
+    return core::placed_caret(
+        buffer_of(input), core::TextPosition{core::LineNumber{line}, core::Column{column}}, unit);
+}
+
+// Issue #971。範囲の外の行と桁を切り詰め、通常モードでは 1 文字の途中を先頭へ寄せる。
+void verify_placed_caret()
+{
+    constexpr auto ordinary = core::CaretUnit::ordinary;
+    constexpr auto code_point = core::CaretUnit::code_point;
+    expect(placed("か\u3099", 1, 2, ordinary) == Offset{0},
+           "placing inside a combined character snaps to its base");
+    expect(placed("か\u3099", 1, 2, code_point) == Offset{3},
+           "the code-point unit keeps the mark boundary");
+    expect(placed("e\uFE0F\u0301", 1, 3, ordinary) == Offset{4},
+           "a mark after a selector is its own start and stays");
+    expect(placed("a\r\nb", 0, 3, ordinary) == Offset{1},
+           "line 0 is line 1 and the column stops before the CR");
+    expect(placed("a\r\nb", 0, 3, code_point) == Offset{1}, "line 0 also clamps for code points");
+    expect(placed("a\r\nb", 7, 1, ordinary) == Offset{3},
+           "a line past the end clamps to the last line");
+    expect(placed("a\r\nb", 7, 9, ordinary) == Offset{4},
+           "the last line of a CRLF text clamps its column to the end");
+    expect(placed("a\r\nb\r\n", 2, 9, ordinary) == Offset{4},
+           "a CRLF line clamps its column before the CR");
+    expect(placed("x\r\n", 9, 9, ordinary) == Offset{3}, "the empty last line after a CRLF");
+    expect(placed("ab\nc", 1, 99, ordinary) == Offset{2}, "a column past the line end clamps");
+    for (const auto unit : {ordinary, code_point})
+    {
+        expect(placed("", 0, 0, unit) == Offset{0}, "empty text places at 0 from line 0");
+        expect(placed("", 5, 5, unit) == Offset{0}, "empty text places at 0 from beyond");
+    }
+    const auto crlf = buffer_of("a\r\nb");
+    expect(crlf.line_end(core::LineNumber{0}) == Offset{1}, "line_end reads line 0 as line 1");
+    expect(crlf.line_terminator_end(core::LineNumber{0}) == Offset{3},
+           "line_terminator_end reads line 0 as line 1");
+    expect(crlf.with_virtual_columns().offset_of(
+               core::TextPosition{core::LineNumber{0}, core::Column{3}}) == Offset{1},
+           "the virtual-column index path also stops line 0 before the CR");
+}
+
 void open_ordinary(Editing &editing, std::string text)
 {
     editing.files().hold(Bytes{std::move(text)});
@@ -195,6 +237,26 @@ void verify_controller_deletion()
            "undo restores the selected group");
 }
 
+void verify_controller_place()
+{
+    Editing combined;
+    open_ordinary(combined, "か\u3099");
+    applied(combined.controller(),
+            app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{2}},
+                            core::SelectionAnchoring::collapse});
+    expect(combined.controller().frame().caret.position ==
+               core::TextPosition{core::LineNumber{1}, core::Column{1}},
+           "PlaceCaret inside a combined character rests at its base");
+    Editing pair;
+    open_ordinary(pair, "a\r\nb");
+    applied(pair.controller(),
+            app::PlaceCaret{core::TextPosition{core::LineNumber{0}, core::Column{3}},
+                            core::SelectionAnchoring::collapse});
+    expect(pair.controller().frame().caret.position ==
+               core::TextPosition{core::LineNumber{1}, core::Column{2}},
+           "PlaceCaret on line 0 rests before the CRLF of line 1");
+}
+
 void verify_vim_insert_boundary()
 {
     Editing editing;
@@ -224,7 +286,9 @@ void verify_ordinary_character_contracts()
     verify_selector_edges();
     verify_plain_and_line_boundaries();
     verify_landing_and_long_runs();
+    verify_placed_caret();
     verify_controller_deletion();
+    verify_controller_place();
     verify_vim_insert_boundary();
 }
 

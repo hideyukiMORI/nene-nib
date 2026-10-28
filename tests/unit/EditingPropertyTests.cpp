@@ -730,34 +730,11 @@ selection_ends(std::string_view text, const Lines &lines, const app::EditorFrame
                : Reason{};
 }
 
-// 既知の破れ（verify_known_cases の最初の 2 組）: (A) PlaceCaret の桁が 1 文字の途中（結合文字・VS
-// の手前）を指すと、製品はそこへ置き、境目へ寄せない。(B) 行 0 の PlaceCaret は行 1 へ切り詰めず、
-// 桁を本文の先頭から行の終わりを越えて数える（TextBuffer::line_end(0) が本文の終わりを返す）ので、
-// CRLF の対の間や 1 文字の途中にも置く。50 倍の走りでほかの破れを探せるように、乱数の列ではこの
-// 2 つの PlaceCaret だけを送らない（窓の hit test は行 1 以上と字形の cluster
-// の境目しか返さない）。
-[[nodiscard]] bool places_inside_character(const Run &run, const app::EditorIntent &intent)
-{
-    const auto *place = std::get_if<app::PlaceCaret>(&intent);
-    if (place == nullptr)
-    {
-        return false;
-    }
-    if (place->position.line.value == 0U)
-    {
-        return true;
-    }
-    const std::string &text = seen_of(run).first;
-    const Lines lines = lines_of(text, crlf_of(run));
-    const auto at = offset_at(text, lines, place->position, false);
-    return at.has_value() && !on_boundary(text, at.value());
-}
-
 [[nodiscard]] Reason stepped(Editing &editing, Run &run, const Action &action)
 {
     if (const auto *intent = std::get_if<app::EditorIntent>(&action))
     {
-        return places_inside_character(run, *intent) ? Reason{} : intended(editing, run, *intent);
+        return intended(editing, run, *intent);
     }
     if (const auto *hold = std::get_if<Hold>(&action))
     {
@@ -841,7 +818,7 @@ void press(Editing &editing, core::HistoryDirection direction, std::size_t times
     return Outcome{history_violation(editing, input), last};
 }
 
-// 乱数の列では送らない PlaceCaret（places_inside_character）を直に送って読んだ破れ。
+// 範囲の外や 1 文字の途中を指す PlaceCaret を直に送って読んだ破れ（#971 の回帰の組）。
 [[nodiscard]] Reason placed_violation(const std::string &body, core::TextPosition position)
 {
     Editing editing;
@@ -1173,18 +1150,16 @@ void verify_determinism()
 // CRLF の対）。
 void verify_known_cases()
 {
-    // 既知の破れ（#955 の 1 倍の走りで最初に見つけ、最小化した組・製品は直していない）: 本文
-    // 「か + 結合濁点」で PlaceCaret 1:2 は 2 文字目の手前（1 文字の途中）にキャレットを置き、
-    // 不変条件 2 を破る。製品が境目へ寄せるように直ったら、この期待を「破れない」に反転する。
-    expect(placed_violation("か\u3099", core::TextPosition{core::LineNumber{1}, core::Column{2}}) ==
-               "2: the caret or the anchor is inside a character",
-           "known break: PlaceCaret inside a combined character leaves the caret inside it");
-    // 既知の破れ（50 倍の走りで見つけ、最小化した組・製品は直していない）: CRLF の本文「a\r\nb」で
-    // 行 0 の PlaceCaret 0:3 は行 1 へ切り詰めず、桁を行の終わりを越えて数えて CR と LF
-    // の間に置く。
-    expect(placed_violation("a\r\nb", core::TextPosition{core::LineNumber{0}, core::Column{3}}) ==
-               "2: the caret is outside a line or inside a CRLF pair",
-           "known break: PlaceCaret on line 0 counts past the line end into a CRLF pair");
+    // #955 の 1 倍の走りで見つけて最小化した組（#971 で直した）: 本文「か + 結合濁点」で
+    // PlaceCaret 1:2 は 1 文字の途中を指すが、キャレットはその文字の先頭に置かれる。
+    expect(placed_violation("か\u3099", core::TextPosition{core::LineNumber{1}, core::Column{2}})
+               .empty(),
+           "PlaceCaret inside a combined character rests at its base");
+    // 50 倍の走りで見つけて最小化した組（#971 で直した）: CRLF の本文「a\r\nb」で行 0 の
+    // PlaceCaret 0:3 は行 1 へ切り詰め、桁を行の終わり（CR の前）で止める。
+    expect(placed_violation("a\r\nb", core::TextPosition{core::LineNumber{0}, core::Column{3}})
+               .empty(),
+           "PlaceCaret on line 0 clamps to line 1 and stops before the CRLF pair");
     expect(last_text(Case{"a\nb", {held("x\r\ny\rz"), pasted()}}) == "x\ny\rza\nb",
            "pasting CRLF into an LF document folds the pair and keeps a lone CR");
     expect(last_text(Case{"a\r\nb", {held("p\nq"), pasted()}}) == "p\r\nqa\r\nb",

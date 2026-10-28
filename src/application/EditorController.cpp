@@ -1613,7 +1613,7 @@ void EditorController::accept(const MoveCaret &intent)
 void EditorController::accept(const PlaceCaret &intent)
 {
     interrupt_vim_insert();
-    move_caret_to(state_.text().offset_of(intent.position),
+    move_caret_to(core::placed_caret(state_.text(), intent.position, caret_unit(state_.mode())),
                   anchoring_in(state_.mode(), intent.anchoring), intent.affinity);
     settle_vim_caret();
 }

@@ -190,4 +190,18 @@ Offset moved_caret(const TextBuffer &text, Offset caret, CaretMoveRequest reques
     }
     std::unreachable();
 }
+
+Offset placed_caret(const TextBuffer &text, const TextPosition &position, CaretUnit unit)
+{
+    const LineNumber line{std::clamp<std::size_t>(position.line.value, 1, text.line_count())};
+    const Offset at = text.offset_of(TextPosition{line, position.column});
+    switch (unit)
+    {
+    case CaretUnit::code_point:
+        return at;
+    case CaretUnit::ordinary:
+        return ordinary_character_boundary(text, at, OrdinaryCharacterAction::containing);
+    }
+    std::unreachable();
+}
 } // namespace nenenib::core
