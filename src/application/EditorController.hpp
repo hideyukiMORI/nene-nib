@@ -561,6 +561,9 @@ class EditorController final
     std::deque<core::VimKey> replay_queue_;
     std::deque<std::size_t> replay_depths_;
     std::optional<std::size_t> replay_depth_;
+    // 再生を打ち切った鍵の失敗（Issue #983）。perform(VimReplay) が置き、`.` や `@` を打った鍵の
+    // deliver_vim_key が自分の失敗として返して消す（Vim の :normal! は残りの鍵を捨てる）。
+    std::optional<core::VimRepeatFailure> replay_failure_;
     // 再生の編集を畳む起点（ADR 0046 の決定 3）。再生の外では空。perform(VimReplay) が置いて
     // 消し、再生の中で文書が替わったら reopen_replayed_unit が入った文書の値へ置き直す。
     std::optional<core::EditHistory> replay_history_;
