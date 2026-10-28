@@ -308,7 +308,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | --- | --- | --- |
 | ARC-001 | planned | レビュー事項（CNF-001 が温床を減らす） |
 | ARC-002 | active | eng/targets.cmake（configure で宣言外の依存と OS ライブラリを拒否）＋ eng/conformance.py --build-dir（File API の実グラフ・include）。実ターゲット 6 つ |
-| ARC-003 | active | eng/symbols.py --require core application（llvm-nm ＋ eng/symbol-allowlist.json）＋ 字句検査 |
+| ARC-003 | active | eng/symbols.py --require core application（llvm-nm ＋ eng/symbol-allowlist.json）＋ 字句検査。CI の `build-and-test` でも active（Release の .lib・ADR 0136 の決定 7） |
 | ARC-004 | planned | |
 | ARC-005 | active | clang-tidy cppcoreguidelines-avoid-non-const-global-variables（可変グローバルのみ・eng/prove-gates.py の反例）。区画の意味はレビュー |
 | ARC-006 | planned | |
