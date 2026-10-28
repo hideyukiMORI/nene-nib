@@ -13,6 +13,7 @@
 #include "DocumentReadFinished.hpp"
 #include "DocumentReadOutcome.hpp"
 #include "DocumentReadProgress.hpp"
+#include "DocumentReading.hpp"
 #include "DocumentState.hpp"
 #include "DocumentView.hpp"
 #include "Edit.hpp"
@@ -73,6 +74,7 @@
 #include "Session.hpp"
 #include "SplitState.hpp"
 #include "SyntaxStateCache.hpp"
+#include "TabReach.hpp"
 #include "TextBuffer.hpp"
 #include "TextCaret.hpp"
 #include "TextEncoding.hpp"
@@ -219,18 +221,36 @@ class EditorController final
     // 本目を頼まない。ほかの読み込み中の要求は 取り消す。開けなければタブを足さず、reply
     // の告げ方で告げる。
     void open_document(const core::FilePath &path, OpenFailureReply reply);
-    // 読みの結果を採る 1 本（決定 3・5）。今の要求の券のものだけを使う。進み具合は要求に置き、
-    // 終わりは要求を消して open_read（成功）か answer_unopened（失敗）へ渡す。
+    // 読みの結果を受ける 1 本（決定 3・5）。読み込み中の要求の券のものだけを使う。進み具合は要求に
+    // 置き、終わりは採る瞬間まで留める（追補 2）。採るのは settle_reads。
     void adopt_read(DocumentReadOutcome outcome);
     void adopt_progress(const DocumentReadProgress &progress);
     void adopt_finished(DocumentReadFinished finished);
+    [[nodiscard]] std::optional<DocumentReadFinished> take_arrived(std::uint64_t ticket);
+    // 歩き・入力行・面の最中か（揃った結果を採らない・追補 2）。
+    [[nodiscard]] bool reads_held() const noexcept;
+    // 留めた結果を頼んだ順に採る（追補 2・4）。開く要求は open_read か answer_unopened へ、タブの
+    // 読みは finish_tab_read へ渡す。
+    void settle_reads();
+    [[nodiscard]] bool settle_read(std::uint64_t ticket, bool open_waiting);
+    void finish_reading(const core::FilePath &path, OpenFailureReply reply,
+                        std::expected<OpenedDocument, FileFailure> document);
+    void finish_reading(const core::FilePath &path, AutosaveId tab,
+                        std::expected<OpenedDocument, FileFailure> document);
+    void finish_tab_read(AutosaveId tab, std::expected<OpenedDocument, FileFailure> document);
+    [[nodiscard]] std::optional<std::size_t> tab_position_of(AutosaveId tab) const;
     // 揃った文書を開く（決定 4）。待っている間に同じファイルのタブができていればそこへ切り替え、
     // 何も書いていない無題ならそこに開き、ほかは新しいタブを足す。
     void open_read(const core::FilePath &path, OpenedDocument opened);
     // 開けなかったことを呼び手ごとの今の規則で告げる（ADR 0060 の決定 7・ADR 0159 の決定 6）。
     void answer_unopened(const core::FilePath &path, FileFailure failure, OpenFailureReply reply);
-    // 読み込み中の要求を取り消す（券の仕事をやめさせて要求を消す・決定 5）。無ければ何もしない。
-    void cancel_reading();
+    // 読み込み中の要求を取り消す（券の仕事をやめさせて要求と留めた結果を消す・決定 5）。
+    // only_opens なら開く要求だけ、そうでなければタブの読みも。
+    void cancel_readings(bool only_opens);
+    // 揃う前に閉じたタブの読みを取り消す（追補 1）。
+    void cancel_closed_tab_reads();
+    // apply の終わりの後始末（閉じたタブの読みの取消と、留めた結果の採用・追補 1・2）。
+    void follow_reads();
     // WorkCompleted の道で読みの結果を全部引いて採る（決定 9）。
     void collect_reads();
     // 読み込み中の 1 行（決定 4）。「読み込み中: <題名> 37%」。要求が無ければ値なし。
@@ -427,18 +447,20 @@ class EditorController final
     // 開く（決定 5）の枝の材料。同じファイルを開いているタブの帯の位置・何も書いていない無題か。
     [[nodiscard]] std::optional<std::size_t> open_tab_of(const core::FilePath &path) const;
     [[nodiscard]] bool blank_untitled() const;
-    // まだ読んでいないタブを読みの port で読む（ADR 0159 の決定 1）。読み込み中の開く要求とは別の
-    // 券で、同期に揃った結果だけを使う。
-    [[nodiscard]] std::expected<OpenedDocument, FileFailure> read_now(const core::FilePath &path);
+    // 揃った本文でまだ読んでいないタブを束に置き換える。読めなければ帯から外して 1 行知らせる。
+    [[nodiscard]] TabReach loaded_tab(std::size_t position,
+                                      std::expected<OpenedDocument, FileFailure> document);
     // 出ていく前に文書の上の一時の値を閉じる（入力行・検索の preview・IME の変換中の文字列）。
     void leave_document();
     // 入ってきた文書のスクロールを今の窓の行数で収め、NORMAL のキャレットを文字の上へ寄せる。
     void enter_document();
-    // まだ読んでいない文書を読む 1 本（ADR 0059 の決定 5）。帯の位置 position が読み込み済みか
-    // アクティブなら真。まだ読んでいない文書なら読んで束に置き換えて真、読めなければ帯から外して
-    // 1 行知らせて偽。範囲の外は偽（何もしない）。タブが切り替わる入口（SwitchTab・WalkRecentTab・
-    // CloseTab の後の隣・起動）は状態を動かす前にこれを呼ぶ。
-    [[nodiscard]] bool reach_tab(std::size_t position);
+    // まだ読んでいない文書を読む 1 本（ADR 0059 の決定 5・ADR 0159 の追補 1）。帯の位置 position が
+    // 読み込み済みかアクティブなら reached。まだ読んでいない文書は読みの port に頼み、同期に揃えば
+    // 束に置き換えて reached、読めなければ帯から外して 1 行知らせて dropped、裏へ回れば reading
+    // （タブは帯に残り、揃ったらそのタブへ切り替える）。範囲の外は dropped（何もしない）。タブが
+    // 切り替わる入口（SwitchTab・WalkRecentTab・CloseTab の後の隣・起動）は状態を動かす前に
+    // これを呼ぶ。
+    [[nodiscard]] TabReach reach_tab(std::size_t position);
     // アクティブを閉じて隣へ移る（隣を reach_tab で読む・1 本も残らなければ空の無題）。
     void close_active_tab();
     // 読めなかったタブの知らせ（ADR 0059 の「知らせの文言」）。同じ意図の中の件数を数える。
@@ -704,6 +726,13 @@ class EditorController final
     std::uint64_t preview_tickets_ = 0;
     // 読みの port の券（ADR 0159 の決定 5）。プロセスで 1 つの通し番号で、頼むたびに進む。
     std::uint64_t read_tickets_ = 0;
+    // 揃ったがまだ採っていない読みの結果（ADR 0159 の追補 2）。歩き・入力行・面の最中は留め、
+    // 終わりの意図で頼んだ順に採る。
+    std::vector<DocumentReadFinished> arrived_reads_;
+    // 起動の復元で見ていたタブが裏の読みになったとき仮に残した無題と、使った順の順位（追補 1）。
+    // そのタブへ切り替えたときに無題を外して順位を当てる。
+    std::optional<AutosaveId> restore_untitled_;
+    std::vector<std::size_t> restore_ranks_;
     // 前の frame の本文の先頭行（決定 7）。frame だけが読み書きする。
     std::optional<core::LineNumber> preview_body_top_;
     // 自動退避の帳面（ADR 0137 の決定 2）。AutosaveTick の道だけが読み書きする。

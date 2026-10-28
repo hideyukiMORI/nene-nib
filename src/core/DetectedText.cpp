@@ -69,8 +69,18 @@ std::expected<DetectedText, EncodingFailure> DetectedText::from_detected(std::st
     return DetectedText(std::move(utf8).value().value(), encoding);
 }
 
+// 予約が列の全体を正しい UTF-8 と確かめてあれば、UTF-8 の走査をもう一度しない（ADR 0141 の追補
+// 9）。 正しい UTF-8 は UTF-32 / UTF-16 の BOM（0xFF / 0xFE で始まる）を含めないので、残る問いは
+// UTF-8 の BOM の有無だけ。確かめていない列は今までどおり判定する（Shift_JIS ほか）。
 std::expected<DetectedText, EncodingFailure> DetectedText::from_sealed(SealedBytes &&bytes)
 {
+    if (bytes.utf8_code_points().has_value())
+    {
+        const TextEncoding validated = bytes.view().starts_with(byte_order_mark())
+                                           ? TextEncoding::utf8_bom
+                                           : TextEncoding::utf8;
+        return DetectedText(std::move(bytes).release(), validated);
+    }
     const auto encoding = detect_encoding(bytes.view());
     if (!encoding)
     {

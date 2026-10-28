@@ -8,6 +8,7 @@
 #include "FilePath.hpp"
 #include "FilePort.hpp"
 #include "OpenedDocument.hpp"
+#include "SealedBytes.hpp"
 #include "TextBuffer.hpp"
 
 #include <cstddef>
@@ -22,6 +23,10 @@ namespace nenenib::application
 // 自動退避の読み戻しが共用する。
 [[nodiscard]] std::expected<core::TextBuffer, FileFailure> decoded_text(CodePagePort &code_pages,
                                                                         core::DetectedText text);
+// 封印済みの列を判定して復号した文書（ADR 0159 の決定 2・ADR 0141 の追補 10）。worker の上で
+// 塊ごとに読み終えた adapter と、下の read_opened_document が共用する 1 本。
+[[nodiscard]] std::expected<OpenedDocument, FileFailure>
+opened_document_of(CodePagePort &code_pages, core::SealedBytes &&bytes);
 // 読んで判定して復号した文書（ADR 0159 の決定 2）。読みの port の実装（同期に揃える adapter と
 // 試験の替え玉）が呼ぶ 1 本で、application の controller は呼ばない。スレッドも時刻も持たない。
 [[nodiscard]] std::expected<OpenedDocument, FileFailure>

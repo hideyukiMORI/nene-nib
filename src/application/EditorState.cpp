@@ -376,15 +376,15 @@ EditorState EditorState::with_command_message(std::optional<core::DisplayText> m
     return next;
 }
 
-const std::optional<DocumentReading> &EditorState::reading() const noexcept
+const std::vector<DocumentReading> &EditorState::readings() const noexcept
 {
-    return reading_;
+    return readings_;
 }
 
-EditorState EditorState::with_reading(std::optional<DocumentReading> reading) const
+EditorState EditorState::with_readings(std::vector<DocumentReading> readings) const
 {
     EditorState next(*this);
-    next.reading_ = std::move(reading);
+    next.readings_ = std::move(readings);
     return next;
 }
 
