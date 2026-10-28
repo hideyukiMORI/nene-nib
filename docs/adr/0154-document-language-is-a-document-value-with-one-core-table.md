@@ -48,3 +48,7 @@
 ## 追補（2026-10-23・#864）
 
 - **字句器のある言語に拡張子と名前の行を足す（新しい `Language` は無し）。** 拡張子: `tsx` → typescript・`jsx` → javascript（Vim 9.1 は `typescriptreact` `javascriptreact` の別の filetype だが、JSX のタグの色は埋め込みの設計を待つ後続なので親の言語に畳む）・`pssc` → powershell（Vim と同じ ps1）・`import` → gdresource（Godot の `.import` は ConfigFile の書式・`godot` と同じく Vim に行は無い）。名前の行（`CMakeLists.txt` と同じ道）: `.bashrc` `.bash_profile` `.bash_logout` `.profile` `.zshrc` `.zprofile` → shell（Vim は bash / sh / zsh に分けるが、`zsh` の拡張子と同じく shell の 1 つに畳む）。名前の末尾の照合を 1 本足し、`*.cmake.in` → cmake（Vim と同じ・拡張子の表は 2 段にしない）。名前の往復は 26 本のまま。
+
+## 追補（2026-10-28・#849）
+
+- **ファイルを選ぶ窓の絞り込みも同じ表から作る（決定 2・3）。** core の `listed_language_extensions()` が拡張子の表の拡張子だけを表の順に重複なく並べ（`CMakeLists.txt` などの名前の行と `*.cmake.in` の末尾の照合は含めない）、`file_dialog_pattern()` がそれを `*.md;*.markdown;…;*.txt` の形でつなぐ。plain の `txt` は表の行にあり、無くなれば `static_assert` が落ちる（拡張子の重複も `static_assert` が落とす）。ui の `FileDialog.cpp` は拡張子を書かず、開くと保存の 2 つのダイアログに「対応するファイル」（core の pattern を `to_utf16`）と「すべてのファイル」（`*.*`）を渡し、既定は「すべてのファイル」（`SetFileTypeIndex(2)`）。保存の既定の拡張子 `txt` は変えない。表に拡張子を足すと絞り込みにも載る。契約は scope `--language` の core の関数の試験で、実機のダイアログは出さない。

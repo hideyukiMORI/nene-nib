@@ -37,6 +37,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -518,6 +519,46 @@ void verify_restored_autosave()
            "the untitled restored tab is plain");
 }
 
+// ダイアログの絞り込みは拡張子の表から作る（ADR 0154 の追補 2026-10-28・#849）。列挙は表の
+// 拡張子だけで重複が無く、pattern は列挙と同じ数の `*.` の項を `;` でつないだもの。
+void verify_dialog_pattern()
+{
+    const auto listed = core::listed_language_extensions();
+    std::vector<std::string_view> sorted(listed.begin(), listed.end());
+    std::ranges::sort(sorted);
+    expect(std::ranges::adjacent_find(sorted) == sorted.end(),
+           "the listed extensions are distinct");
+    expect(std::ranges::all_of(listed,
+                               [](std::string_view extension)
+                               {
+                                   return !extension.empty() && extension.front() != '.' &&
+                                          (extension == "txt" ||
+                                           core::language_of_path("a." + std::string(extension)) !=
+                                               Language::plain);
+                               }),
+           "every listed extension is a row of the extension table");
+    for (const std::string_view wanted : {"cpp", "yaml", "md", "txt"})
+    {
+        expect(std::ranges::find(listed, wanted) != listed.end(),
+               "the listed extensions include cpp, yaml, md and txt");
+    }
+    const auto pattern = core::file_dialog_pattern();
+    std::vector<std::string_view> items;
+    for (const auto item : std::views::split(std::string_view(pattern), ';'))
+    {
+        items.emplace_back(item.begin(), item.end());
+    }
+    expect(items.size() == listed.size() &&
+               std::ranges::all_of(items, [](std::string_view item)
+                                   { return item.starts_with("*.") && item.size() > 2; }),
+           "the pattern joins one *. item per listed extension with ;");
+    expect(std::ranges::equal(items, listed, [](std::string_view item, std::string_view extension)
+                              { return item.substr(2) == extension; }),
+           "the pattern keeps the table order");
+    expect(pattern.find("CMakeLists") == std::string::npos && items.front() == "*.md",
+           "the pattern lists extensions only, not the named rows");
+}
+
 // まだ読んでいない文書（決定 5）。一覧に言語は無く、読んだときにパスから決める。
 void verify_unloaded_document()
 {
@@ -550,6 +591,7 @@ void verify_language_scope()
     verify_batch4_extensions();
     verify_extension_additions();
     verify_names();
+    verify_dialog_pattern();
     verify_ex_evaluation();
     verify_completion();
     verify_document_value();
