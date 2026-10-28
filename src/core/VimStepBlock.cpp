@@ -76,7 +76,23 @@ namespace
     return block.left.value + block.width.columns - single_step;
 }
 
-// r（決定 4）。行ごとに「矩形が覆った桁の数」だけ同じ文字を書く＝ Tab の上では桁の数ぶん並ぶ
+// 矩形の 1 行が覆った桁の数を埋める本文（ADR 0035 の追補 #1067）。幅 2 の文字は桁の数の半分だけ
+// 並べ、奇数なら空白 1 つで埋める（Vim の op_replace の `numc / 2` と endspaces・実測）。ほかの
+// 文字は桁の数だけ並ぶ（Tab も 1 桁ずつ・実測）。
+[[nodiscard]] std::string replaced_block_fill(std::size_t covered, char32_t target)
+{
+    const bool wide = display_width(target) == DisplayWidth::wide;
+    const std::size_t copies = wide ? covered / 2 : covered;
+    std::string fill;
+    for (std::size_t step = 0; step < copies; ++step)
+    {
+        append_utf8(fill, target);
+    }
+    fill.append(wide ? covered % 2 : 0, ' ');
+    return fill;
+}
+
+// r（決定 4）。行ごとに「矩形が覆った桁の数」を同じ文字で埋める＝ Tab の上では桁の数ぶん並ぶ
 // （Issue #112 で実測）。矩形より手前で終わる行には何も書かない。
 [[nodiscard]] std::vector<VimBlockEdit>
 replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_t target)
@@ -95,10 +111,7 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
         }
         std::string body(line.keep_lead, ' ');
         const std::size_t covered = std::min(right, columns) - left + single_step;
-        for (std::size_t step = 0; step < covered; ++step)
-        {
-            append_utf8(body, target);
-        }
+        body.append(replaced_block_fill(covered, target));
         body.append(line.keep_tail, ' ');
         edits.push_back(VimBlockEdit{line.range, std::move(body)});
     }
@@ -145,10 +158,11 @@ namespace detail
                                      char32_t target)
 {
     const VimBlockRange block = block_of(state, view);
-    // 戻り先は矩形の左上（ADR 0052 の決定 10）。
+    // キャレットも戻り先も矩形の左上（ADR 0052 の決定 10）。左上が切れた Tab や全角なら、その
+    // 文字のあった所＝埋めた空白の先頭（Vim の op_replace は oap->start へ戻す・#1067 で実測）。
     return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
                                VimReplaceBlock{replaced_block_edits(view.text, block, target),
-                                               block_caret(block, block.lines.front().keep_lead)}},
+                                               block_caret(block, 0)}},
                        block_caret(block, 0));
 }
 } // namespace detail

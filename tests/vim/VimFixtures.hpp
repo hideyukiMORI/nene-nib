@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 00177104021e00a744ec09d89d3be677fe5d9b7cf5cb50a19c5808789a8b0101 / 2717 fixtures
+// fixtures.json: sha256 891e3609fc20a4ec74bb540344c77acf2193b0d07c5d5211a758401b3e82ded6 / 2737 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2717> vim_fixtures{{
+constexpr std::array<VimFixture, 2737> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2729,6 +2729,26 @@ constexpr std::array<VimFixture, 2717> vim_fixtures{{
     {"increment-operator-is-cancelled", "ab 5", "d<C-a>x", "b 5", 1, 1, "a", "v", std::nullopt},
     {"increment-empty-line-is-not-a-failure", "\nab", "<C-a>jx", "\nb", 2, 1, "a", "v", std::nullopt},
     {"increment-count-is-capped", "0", "1000000000<C-a>", "999999999", 1, 9, "", "", std::nullopt},
+    {"block-replace-wide-1col", "abcd", "<C-v>r語", " bcd", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-2col", "abcd", "<C-v>lr語", "語cd", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-3col", "abcd", "<C-v>llr語", "語 d", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-4col", "abcd", "<C-v>lllr語", "語語", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-dollar", "abcd", "<C-v>$r語", "語語", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-dollar-two-lines", "ab\nabcd", "<C-v>j$r語", "語\n語語", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-fuzz-23-0179", "<w> ", "<C-v>$2hr語", "語  ", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-tab", "ab\tcd\nefghijkl", "l<C-v>jlllr語", "a語語   cd\ne語語jkl", 1, 2, "", "", std::nullopt},
+    {"block-replace-wide-tab-inside", "ab\tcd\nefghijklmn", "3l<C-v>jhhr語", "ab    語 d\nefghij語 n", 1, 3, "", "", std::nullopt},
+    {"block-replace-wide-text-wide", "日本語", "<C-v>lr字", "字字語", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-text-wide-split", "abcdef\n日本語", "l<C-v>jlr語", "a語 ef\n 語 語", 1, 2, "", "", std::nullopt},
+    {"block-replace-wide-text-wide-split-odd", "abcdef\n日本語", "l<C-v>jllr語", "a語語 \n 語語 ", 1, 2, "", "", std::nullopt},
+    {"block-replace-wide-half-dollar", "abcd", "<C-v>$hhrx", "xxxd", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-text-wide-half", "日本語", "<C-v>lrx", "xxxx語", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-charwise", "abcd", "vlr語", "語語cd", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-dot", "abcd\nabcd", "<C-v>lr語j.", "語cd\n語cd", 2, 1, "", "", std::nullopt},
+    {"block-replace-wide-dot-odd", "abcde\nabcde", "<C-v>llr語j0.", "語 de\n語 de", 2, 1, "", "", std::nullopt},
+    {"block-replace-wide-undo", "abcd", "<C-v>lr語u", "abcd", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-three-lines", "abcde\nab\nabcdefg", "<C-v>jjllr語", "語 de\n語\n語 defg", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-tab-inside-narrow", "ab\tcd\nefghijklmn", "3l<C-v>jhhrZ", "ab    ZZZd\nefghijZZZn", 1, 3, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
