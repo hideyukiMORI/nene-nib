@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 5abe89dbc4ae78cbd8f9b2825ba29b7b9d22e4cf783e1a115852d0ca21b993d2 / 2621 fixtures
+// fixtures.json: sha256 6af2046674938696d6848260372956559ee8c90360efe37caeb54056de970587 / 2692 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2621> vim_fixtures{{
+constexpr std::array<VimFixture, 2692> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2633,6 +2633,77 @@ constexpr std::array<VimFixture, 2621> vim_fixtures{{
     {"empty-case-visual-U-empty-line-dot", "ab\n\ncd", "jvUk.", "Ab\n\ncd", 1, 1, "", "", std::nullopt},
     {"empty-case-visual-U-first-empty-line-dot", "\nab", "vUj.", "\nAb", 2, 1, "", "", std::nullopt},
     {"empty-case-tilde-l-at-line-end", "ab", "$g~l", "aB", 1, 2, "", "", std::nullopt},
+    {"increment-count-adds-to-the-number", "x 5 y", "5<C-a>", "x 10 y", 1, 4, "", "", std::nullopt},
+    {"increment-subtract-crosses-zero", "3", "5<C-x>", "-2", 1, 2, "", "", std::nullopt},
+    {"increment-minus-one-becomes-zero", "-1", "<C-a>", "0", 1, 1, "", "", std::nullopt},
+    {"increment-zero-padded-keeps-the-width", "007", "<C-a>", "008", 1, 3, "", "", std::nullopt},
+    {"increment-zero-padded-carries", "009", "<C-a>", "010", 1, 3, "", "", std::nullopt},
+    {"increment-zero-padded-decrement", "0100", "<C-x>", "0099", 1, 4, "", "", std::nullopt},
+    {"increment-zero-padded-negative", "-001", "2<C-a>", "001", 1, 3, "", "", std::nullopt},
+    {"increment-zero-padded-goes-negative", "00", "<C-x>", "-01", 1, 3, "", "", std::nullopt},
+    {"increment-hex-carries", "0x0f", "<C-a>", "0x10", 1, 4, "", "", std::nullopt},
+    {"increment-hex-keeps-upper-case", "0xFF", "<C-a>", "0x100", 1, 5, "", "", std::nullopt},
+    {"increment-hex-case-from-the-last-letter", "0xaF", "<C-a>", "0xB0", 1, 4, "", "", std::nullopt},
+    {"increment-hex-keeps-the-width", "0x00ff", "<C-a>", "0x0100", 1, 6, "", "", std::nullopt},
+    {"increment-hex-wraps-below-zero", "0x0", "<C-x>", "0xffffffffffffffff", 1, 18, "", "", std::nullopt},
+    {"increment-hex-ignores-the-minus", "-0x10", "<C-a>", "-0x11", 1, 5, "", "", std::nullopt},
+    {"increment-hex-caret-on-the-prefix", "0x1f", "l<C-a>", "0x20", 1, 4, "", "", std::nullopt},
+    {"increment-hex-without-digits-is-decimal", "0xg", "<C-a>", "1xg", 1, 1, "", "", std::nullopt},
+    {"increment-binary", "0b101", "<C-a>", "0b110", 1, 5, "", "", std::nullopt},
+    {"increment-binary-keeps-the-width", "0b1000", "<C-x>", "0b0111", 1, 6, "", "", std::nullopt},
+    {"increment-binary-wraps-below-zero", "0b0", "<C-x>", "0b1111111111111111111111111111111111111111111111111111111111111111", 1, 66, "", "", std::nullopt},
+    {"increment-binary-digits-before-the-caret", "0b1012", "$<C-a>", "0b1102", 1, 5, "", "", std::nullopt},
+    {"increment-number-inside-a-word", "abc123", "<C-a>", "abc124", 1, 6, "", "", std::nullopt},
+    {"increment-number-right-of-the-caret", "foo 42 bar", "<C-a>", "foo 43 bar", 1, 6, "", "", std::nullopt},
+    {"increment-caret-inside-the-number", "123", "l<C-a>", "124", 1, 3, "", "", std::nullopt},
+    {"increment-number-at-the-line-end", "abc 9", "$<C-a>", "abc 10", 1, 6, "", "", std::nullopt},
+    {"increment-second-number-under-the-caret", "12 34", "$<C-a>", "12 35", 1, 5, "", "", std::nullopt},
+    {"increment-no-number-fails", "abc", "<C-a>", "abc", 1, 1, "", "", std::nullopt},
+    {"increment-number-left-of-the-caret-fails", "12 ab", "3l<C-a>", "12 ab", 1, 4, "", "", std::nullopt},
+    {"increment-trailing-x-fails", "0x12x", "$<C-a>", "0x12x", 1, 5, "", "", std::nullopt},
+    {"increment-full-width-digits-are-not-numbers", "１２３", "<C-a>", "１２３", 1, 1, "", "", std::nullopt},
+    {"increment-full-width-then-ascii", "１２3", "<C-a>", "１２4", 1, 7, "", "", std::nullopt},
+    {"increment-after-multibyte", "あい12", "<C-a>", "あい13", 1, 8, "", "", std::nullopt},
+    {"increment-dash-after-a-letter-is-negative", "a-5", "<C-a>", "a-4", 1, 3, "", "", std::nullopt},
+    {"increment-caret-on-the-minus", "a -2", "ll<C-a>", "a -1", 1, 4, "", "", std::nullopt},
+    {"increment-dash-between-numbers", "1-2", "ll<C-a>", "1-1", 1, 3, "", "", std::nullopt},
+    {"increment-decimal-overflow-sticks", "99999999999999999999", "<C-a>", "18446744073709551615", 1, 20, "", "", std::nullopt},
+    {"increment-decimal-wraps-to-negative", "18446744073709551615", "<C-a>", "-18446744073709551615", 1, 21, "", "", std::nullopt},
+    {"increment-past-the-signed-range", "9223372036854775807", "<C-a>", "9223372036854775808", 1, 19, "", "", std::nullopt},
+    {"increment-hex-overflow-sticks", "0x1ffffffffffffffff", "<C-a>", "0x0ffffffffffffffff", 1, 19, "", "", std::nullopt},
+    {"increment-second-line", "a\nb 7", "j<C-a>", "a\nb 8", 2, 3, "", "", std::nullopt},
+    {"increment-dot-repeats-the-count", "5", "3<C-a>..", "14", 1, 2, "", "", std::nullopt},
+    {"increment-dot-count-replaces", "5", "3<C-a>2.", "10", 1, 2, "", "", std::nullopt},
+    {"increment-undo-restores-the-caret", "x 5 y", "$<C-a>u", "x 5 y", 1, 5, "", "", std::nullopt},
+    {"increment-keeps-the-registers", "5", "yl<C-a>", "6", 1, 1, "5", "v", std::nullopt},
+    {"increment-g-in-normal-fails", "ab", "g<C-a>x", "ab", 1, 1, "", "", std::nullopt},
+    {"increment-visual-lines", "a1\nb2\nc3", "Vjj<C-a>", "a2\nb3\nc4", 1, 1, "", "", std::nullopt},
+    {"increment-visual-count", "a1 b1\nb2\nc3", "Vj3<C-a>", "a4 b1\nb5\nc3", 1, 1, "", "", std::nullopt},
+    {"increment-visual-first-number-per-line", "ab 1 2\nab 3 4", "lllvj<C-a>", "ab 2 2\nab 4 4", 1, 4, "", "", std::nullopt},
+    {"increment-visual-part-of-a-number", "12345", "llvl<C-a>", "12355", 1, 3, "", "", std::nullopt},
+    {"increment-visual-charwise-middle-lines", "ab 1\ncd 2\nef 3", "llvjj<C-a>", "ab 2\ncd 3\nef 3", 1, 3, "", "", std::nullopt},
+    {"increment-visual-sequence", "a0\nb0\nc0", "Vjjg<C-a>", "a1\nb2\nc3", 1, 1, "", "", std::nullopt},
+    {"increment-visual-sequence-count", "a0\nb0\nc0", "Vjj2g<C-a>", "a2\nb4\nc6", 1, 1, "", "", std::nullopt},
+    {"increment-visual-sequence-decrement", "a9\nb9\nc9", "Vjjg<C-x>", "a8\nb7\nc6", 1, 1, "", "", std::nullopt},
+    {"increment-visual-sequence-skips-lines-without-numbers", "a0\nbb\nc0", "Vjjg<C-x>", "a-1\nbb\nc-2", 1, 1, "", "", std::nullopt},
+    {"increment-visual-minus-inside-the-selection", "x -1", "v$<C-a>", "x 0", 1, 1, "", "", std::nullopt},
+    {"increment-visual-minus-outside-the-selection", "x -1", "lllv$<C-a>", "x -2", 1, 4, "", "", std::nullopt},
+    {"increment-visual-hex-keeps-the-minus", "-0x10", "V<C-a>", "-0x11", 1, 1, "", "", std::nullopt},
+    {"increment-visual-zero-to-negative", "x 0", "V<C-x>", "x -1", 1, 1, "", "", std::nullopt},
+    {"increment-visual-caret-at-the-line-start", "ab1\nab2\nab3", "llVj<C-a>", "ab2\nab3\nab3", 1, 1, "", "", std::nullopt},
+    {"increment-visual-upward", "ab1\nab2\nab3", "jjllVk<C-a>", "ab1\nab3\nab4", 2, 1, "", "", std::nullopt},
+    {"increment-visual-undo", "ab1\nab2\nab3", "jjllvkh<C-a>u", "ab1\nab2\nab3", 2, 2, "", "", std::nullopt},
+    {"increment-visual-dot", "a1\nb2\nc3", "Vj<C-a>j.", "a2\nb4\nc4", 2, 1, "", "", std::nullopt},
+    {"increment-visual-sequence-dot", "a0\nb0\nc0", "Vjj3g<C-a>.", "a6\nb12\nc18", 1, 1, "", "", std::nullopt},
+    {"increment-visual-empty-line", "1\n\n2", "Vjj<C-a>", "2\n\n3", 1, 1, "", "", std::nullopt},
+    {"increment-visual-no-number-is-not-a-failure", "aa\nbb", "Vj<C-a>x", "a\nbb", 1, 1, "a", "v", std::nullopt},
+    {"increment-visual-multibyte-only", "あ1", "v<C-a>", "あ1", 1, 1, "", "", std::nullopt},
+    {"increment-block", "a1 b1\na2 b2", "3l<C-v>j<C-a>", "a1 b1\na2 b2", 1, 4, "", "", std::nullopt},
+    {"increment-block-to-the-line-end", "a1 b1\na2 b2", "3l<C-v>j$<C-a>", "a1 b2\na2 b3", 1, 4, "", "", std::nullopt},
+    {"increment-block-inside-a-number", "a12\na34", "ll<C-v>j<C-a>", "a13\na35", 1, 3, "", "", std::nullopt},
+    {"increment-block-sequence", "a1 b1\na2 b2\na3 b3", "3l<C-v>jjg<C-a>", "a1 b1\na2 b2\na3 b3", 1, 4, "", "", std::nullopt},
+    {"increment-operator-is-cancelled", "ab 5", "d<C-a>x", "b 5", 1, 1, "a", "v", std::nullopt},
+    {"increment-empty-line-is-not-a-failure", "\nab", "<C-a>jx", "\nb", 2, 1, "a", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
