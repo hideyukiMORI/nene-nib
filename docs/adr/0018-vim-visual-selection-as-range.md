@@ -99,6 +99,7 @@ ADR 0009（選択と undo）・ADR 0012（engine の形）・ADR 0014（IME と 
 
 - **前の選択は文書の値。** `VimLastVisual{mode, anchor, caret, wanted}`（種類・始めの端・キャレットの端・欲しい列）を `VimMarks.last_visual` に持つ（Vim の `b_visual` と同じく文書ごとに 1 つ・ADR 0152 の形）。端は行と桁（`VimMarkPosition`）で、矩形の `$` と文字単位の `$` は欲しい列の「行末」で残る（`l<C-v>j$<Esc>Ggvd` と `lv$<Esc>0gvjd` を実測）。
 - **置くのは 1 か所。** `vim_step` の `visual_remembered` が、鍵の前が VISUAL で後が VISUAL でない（Esc・オペレータ・`c` で INSERT へ・`p` など）すべての鍵で、鍵の前の選択と種類と欲しい列を `VimStep.marks` に添える。抜け方ごとの関数には書かない。
+- **VISUAL の中の `gv` も前の選択を書く。** 入れ替え（`visual_exchanged`）は VISUAL を抜けないので `visual_remembered` を通らず、今の選択を前の選択として `VimStep.marks` に添える。前の選択を書くのはこの 2 か所だけ。
 - **`.` の VISUAL の再生は置かない。** Vim の `redo_VIsual_busy` と同じく、`.` が選び直した選択は前の選択を置き換えない（`vlxj0.gggvy` は 1 行目の 2 文字を選ぶ・実測）。`.` の 1 か所が `VimState.redoing_visual` を立て、`visual_remembered` が再生の鍵（`VimKeySource::replayed`）が VISUAL にいるあいだだけ持ち越す。マクロ（`@`）の中の VISUAL は打った鍵と同じく置く。
 - **`gv`。** NORMAL では前の選択を種類・両端・欲しい列ごと選び直す。VISUAL では今の選択と前の選択を入れ替え（`vl<Esc>jjvjgvd` は前の選択を消し、`gv` を 2 度で元へ戻る・`V` の中の `gv` は前の種類になる）、前の選択が無ければ失敗して今の選択のまま残る。前の選択が無い・始めの端の行が本文の外（最終行の `dd` の後）なら失敗（Vim の `nv_gv`）。キャレットの端の行は最後の行へ寄せ、桁はどちらも行の内容の終わりまで寄せる。オペレータの後ろの `gv`（`dgv`）は失敗。回数は使わない。
 - **編集の行のずれ。** `marks_adjusted` が両端を Vim の `one_adjust_nodel` と同じに動かす。消えた行の端は消さずに消えた範囲の最初の行へ寄せ（`vl<Esc>ddgvy` は新しい 1 行目を選ぶ）、文字単位の削除でつながった行の端は最初の行へ桁を足してつなぐ（`lvjld0gvy` は `jkl` を選ぶ）。近似の限界は ADR 0152 の決定 6 と同じ。

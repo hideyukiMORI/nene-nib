@@ -1792,21 +1792,6 @@ VimStep vim_line_jumped(const VimState &state, const VimEditorView &view,
 
 namespace
 {
-[[nodiscard]] bool in_visual(VimMode mode) noexcept
-{
-    switch (mode)
-    {
-    case VimMode::normal:
-    case VimMode::insert:
-        return false;
-    case VimMode::visual:
-    case VimMode::visual_line:
-    case VimMode::visual_block:
-        return true;
-    }
-    std::unreachable();
-}
-
 // VISUAL を抜けた鍵が前の選択を置く 1 か所（ADR 0018 の追補・#1039）。Esc・オペレータ・`c` で
 // INSERT へ入る道を区別せず、鍵の前が VISUAL で後が VISUAL でなければ鍵の前の選択を覚える
 // （Vim の end_visual_mode と do_pending_operator）。`.` の VISUAL の再生は置かず、再生の鍵が
@@ -1814,12 +1799,12 @@ namespace
 [[nodiscard]] VimStep visual_remembered(const VimState &state, const VimEditorView &view,
                                         VimStep step)
 {
-    if (!in_visual(state.mode))
+    if (!is_visual_mode(state.mode))
     {
         return step;
     }
     const bool redoing = state.redoing_visual && view.source == VimKeySource::replayed;
-    if (in_visual(step.next.mode))
+    if (is_visual_mode(step.next.mode))
     {
         step.next.redoing_visual = redoing;
         return step;

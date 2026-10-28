@@ -72,19 +72,19 @@ step_failure(std::optional<core::VimRepeatFailure> own,
     return own.has_value() ? own : std::exchange(replayed, std::nullopt);
 }
 
-// INSERT を抜けた位置を `'^` に置いた状態（ADR 0152 の追補・#1039）。engine は効果を写した後の
+// INSERT を抜けた位置を `'^` に置く（ADR 0152 の追補・#1039）。engine は効果を写した後の
 // キャレットからの右への差で返すので、効果を写した後に置き、写した編集の行のずれは掛けない。
-[[nodiscard]] EditorState with_insert_left(const EditorState &state,
-                                           std::optional<std::size_t> left)
+// 差が無い鍵（大半の鍵）では状態を写さない。
+void place_insert_left(EditorState &state, std::optional<std::size_t> left)
 {
     if (!left.has_value())
     {
-        return state;
+        return;
     }
     core::VimMarks marks = state.vim_marks();
     marks.last_insert = core::vim_mark_position_of(
         state.text(), core::Offset{state.selection().caret.value + left.value()});
-    return state.with_vim_marks(std::move(marks));
+    state = state.with_vim_marks(std::move(marks));
 }
 
 // engine のキャレットは LF で数えた位置なので、直したあとの本文の上へずらす
@@ -455,7 +455,7 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     adopt_vim_marks(step.marks);
     // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->perform(value); }, step.effect);
-    state_ = with_insert_left(state_, step.insert_left);
+    place_insert_left(state_, step.insert_left);
     // 検索の報せは Ex の結果と同じ 1 本に出し、次の入力で消える（ADR 0032 の決定 5）。
     if (step.notice.has_value())
     {

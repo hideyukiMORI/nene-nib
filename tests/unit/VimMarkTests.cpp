@@ -246,6 +246,17 @@ void verify_reselect_and_last_insert_crlf()
            "gv after dd above the selection in a CRLF text");
 }
 
+// `gi` だけが記録を `i` に書き換え、`g` の後のほかの命令の記録は変えない（#1039 のレビュー R1-2）。
+// `gJ` の後の `.` は `gJ`（字下げを残す）として繰り返し、`J` にも `i` にもならない。
+void verify_g_records_kept()
+{
+    Editing editing;
+    open_vim_document(editing, "a\n  b\nc\n  d");
+    vim_normal(editing.controller(), "gJj.");
+    expect(whole_vim_body(editing.controller()) == "a  b\nc  d",
+           "the record of gJ keeps its g and . repeats gJ");
+}
+
 // 開いた時点の前の位置は 1 行目の桁 0（ADR 0152 の追補・#962）。本物の Vim 9.1（非 Ex）は開いた
 // 直後の `''` を 1 行目へ跳ばす（`getpos("''")` は [0, 1, 1, 0]）。oracle の -es は最終行で開くので
 // fixture にしない。新しいタブで開いた文書も同じ値で始まる。
@@ -327,6 +338,7 @@ void verify_vim_mark_contracts()
     verify_marks_from_opening();
     verify_marks_follow_documents();
     verify_reselect_and_last_insert_crlf();
+    verify_g_records_kept();
 }
 
 void verify_vim_mark_scope()

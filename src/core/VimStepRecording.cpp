@@ -554,15 +554,17 @@ namespace
     return next;
 }
 
-// `g` の次の鍵を待っていたか。
-[[nodiscard]] bool after_g(const VimState &state) noexcept
+// `g` の次の鍵 `i`（`gi`）か。`g` の後に INSERT へ入るほかの命令（`gI` など）は記録を変えない。
+[[nodiscard]] bool is_gi(const VimState &state, const VimKey &key) noexcept
 {
     if (!state.input_wait.has_value())
     {
         return false;
     }
     const auto *const prefix = std::get_if<VimPrefix>(&state.input_wait.value());
-    return prefix != nullptr && *prefix == VimPrefix::g;
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    return prefix != nullptr && *prefix == VimPrefix::g && character != nullptr &&
+           vim_g_action_for(character->code) == VimAction::insert_at_last_insert;
 }
 
 // `gi` の記録は `i`（#1039）。Vim の nv_g_cmd は命令を `i` に変えてから挿入を始めるので、`.` は
@@ -589,8 +591,8 @@ namespace
         // VISUAL への遷移は記録を捨てる（決定 5）。INSERT へ入る命令は Esc まで続ける。
         if (next.mode == VimMode::insert)
         {
-            next.recording = after_g(before) ? insert_recorded_as_i(before, std::move(record))
-                                             : std::move(record);
+            next.recording = is_gi(before, key) ? insert_recorded_as_i(before, std::move(record))
+                                                : std::move(record);
         }
         return next;
     }
