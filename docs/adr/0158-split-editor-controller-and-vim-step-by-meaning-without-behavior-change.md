@@ -60,7 +60,7 @@
 ## 強制
 
 - 振る舞いの不変: **active**（`protected-diff` 0・全件の checks 数の一致・CI）。
-- ファイルの大きさ（CNF-014・3,000 行）: **planned**（分割の PR で active にする）。
+- ファイルの大きさ（CNF-014・3,000 行）: **active**（PR #1053・2 本目。`eng/conformance.py` の `translation_unit_size_checks`）。
 - 群の表と実際のファイルの一致: レビュー事項（PR 本文の表）。
 
 ## 結果
