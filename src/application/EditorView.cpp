@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <functional>
 #include <limits>
 
 namespace nenenib::application
@@ -209,8 +210,8 @@ void EditorController::accept(const PointText &intent)
     accept(PlaceCaret{caret.value().position, intent.anchoring, caret.value().affinity});
 }
 
-std::expected<core::VimStep, TextLayoutFailure>
-EditorController::measured_vim_step(const core::VimKey &key)
+std::expected<core::VimStep, TextLayoutFailure> EditorController::measured_vim_step(
+    const std::function<core::VimStep(const core::VimEditorView &)> &step_of)
 {
     std::vector<core::VimLineRows> rows;
     std::vector<core::VimRowSpan> spans;
@@ -232,10 +233,11 @@ EditorController::measured_vim_step(const core::VimKey &key)
                             spans}};
     // 文書のマークを貸す（ADR 0152 の決定 2）。この関数の中では状態を変えないので参照は保たれる。
     view.marks = &state_.vim_marks();
-    auto step = core::vim_step(state_.vim(), view, key);
-    // どの要求も同じ鍵をもう一度流す。viewport は 1 度渡したら以後の往復でも渡したまま。
-    // 回数の上限は持たない。同じ問いの立て直しと viewport の二重要求は inconsistent で止まり、
-    // 新しい答えは行数 + 画面行の総数 + 1 で尽きる（ADR 0129・ADR 0133 の追補 2026-10-18）。
+    auto step = step_of(view);
+    // どの要求も同じ鍵（同じ行番号）をもう一度流す。viewport は 1
+    // 度渡したら以後の往復でも渡したまま。 回数の上限は持たない。同じ問いの立て直しと viewport
+    // の二重要求は inconsistent で止まり、 新しい答えは行数 + 画面行の総数 + 1 で尽きる（ADR
+    // 0129・ADR 0133 の追補 2026-10-18）。
     while (step.viewport_request || step.layout_request.has_value() || step.row_request.has_value())
     {
         const auto answered = answered_vim_request(step, view, rows, spans);
@@ -243,7 +245,7 @@ EditorController::measured_vim_step(const core::VimKey &key)
         {
             return std::unexpected(answered.error());
         }
-        step = core::vim_step(state_.vim(), view, key);
+        step = step_of(view);
     }
     return step;
 }

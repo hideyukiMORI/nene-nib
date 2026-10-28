@@ -3,6 +3,7 @@
 
 #include "AsciiCase.hpp"
 #include "BuiltinThemes.hpp"
+#include "ExLineRequest.hpp"
 #include "ExPaletteName.hpp"
 #include "ExTabName.hpp"
 #include "ExTabRequest.hpp"
@@ -15,6 +16,7 @@
 #include <array>
 #include <charconv>
 #include <cstddef>
+#include <limits>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -630,11 +632,38 @@ document_command(std::string_view text)
                     std::move(request).value()};
 }
 
+// 行番号だけの命令（ADR 0022 の追補・Issue #847）。全体が 10 進の数字だけか `$` だけのときに
+// 当たり、ほかの形（`:3,5` `:+3` `:'a` `:3d`）は値なし（今までどおりほかの命令として扱う）。
+// 数字は先頭の 0 を許し（`:007`）、size_t に収まらなければ最大に飽和する（Vim も最後の行）。
+[[nodiscard]] std::optional<ExResult> line_command(std::string_view text)
+{
+    const bool last = text == "$";
+    if (!last && (text.empty() || leading(text, is_digit) != text.size()))
+    {
+        return std::nullopt;
+    }
+    std::optional<std::size_t> line;
+    if (!last)
+    {
+        std::size_t number = 0;
+        const auto parsed = std::from_chars(text.data(), text.data() + text.size(), number);
+        line = parsed.ec == std::errc{} ? number : std::numeric_limits<std::size_t>::max();
+    }
+    ExResult result{std::nullopt, std::nullopt, std::nullopt, DisplayText::parse(text).value()};
+    result.line = ExLineRequest{line};
+    return result;
+}
+
 // colorscheme と set のほか（Vim の強調の止め方とタブ・ファイルの命令）。どれにも当たらなければ
 // unknown_command。
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 remaining_command(std::string_view text, std::string_view name, std::string_view argument)
 {
+    auto line = line_command(text);
+    if (line.has_value())
+    {
+        return std::move(line).value();
+    }
     // `:nohlsearch` と短縮形の `:noh` `:nohl` … は次の検索まで強調を止めるだけで、設定は変えない。
     if (abbreviates(name, nohlsearch_name, nohlsearch_shortest) && argument.empty())
     {

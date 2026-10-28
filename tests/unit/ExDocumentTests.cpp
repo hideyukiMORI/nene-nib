@@ -16,6 +16,8 @@
 #include "VisibleLines.hpp"
 
 #include <array>
+#include <cstddef>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -319,6 +321,85 @@ void verify_palette_write()
                !frame.closing,
            "the shared command palette executes the same write operation");
 }
+// 行番号だけの命令の答え（ADR 0022 の追補・Issue #847）。値が無いのは「当たらなかった」。
+std::optional<std::optional<std::size_t>> line_request(std::string_view text)
+{
+    const auto result =
+        core::evaluate_ex(text, core::default_editor_settings(), core::Appearance::dark);
+    if (!result)
+    {
+        return std::nullopt;
+    }
+    const auto &line = result.value().line;
+    if (!line.has_value())
+    {
+        return std::nullopt;
+    }
+    return line.value().line;
+}
+
+void verify_line_numbers()
+{
+    expect(line_request("3") == std::optional{std::optional<std::size_t>{3}},
+           ":3 is a line request for line 3");
+    expect(line_request("0") == std::optional{std::optional<std::size_t>{0}},
+           ":0 keeps the written 0 (the engine lands on line 1)");
+    expect(line_request("$") ==
+               std::optional<std::optional<std::size_t>>{std::optional<std::size_t>{}},
+           ":$ is a line request without a number (the last line)");
+    expect(line_request("007") == std::optional{std::optional<std::size_t>{7}},
+           "leading zeros are read as decimal");
+    expect(line_request(" 12 ") == std::optional{std::optional<std::size_t>{12}},
+           "surrounding blanks are trimmed like every other command");
+    expect(line_request("99999999999999999999999") ==
+               std::optional{std::optional<std::size_t>{std::numeric_limits<std::size_t>::max()}},
+           "a number beyond size_t saturates (the engine clamps to the last line)");
+    for (const std::string_view input :
+         {"3,5", "+3", "-3", "'a", "3d", "3 4", "$$", "3$", ".", "%"})
+    {
+        const auto before =
+            core::evaluate_ex(input, core::default_editor_settings(), core::Appearance::dark);
+        expect(!before.has_value(), "ranges, offsets, marks and line commands stay unsupported");
+    }
+    expect(!line_request("tabnext 3").has_value() && !line_request("set fontsize=12").has_value(),
+           "other commands never carry a line request");
+}
+
+// `:N` は鍵の `{N}G` と同じ着地で、知らせも警告音も無い。
+void verify_line_jump()
+{
+    constexpr std::string_view body = "one\n  two\nthree\n    four\nfive";
+    using Case = std::pair<std::string_view, std::string_view>;
+    constexpr std::array<Case, 4> cases{
+        {Case{"3", "3G"}, Case{"0", "1G"}, Case{"$", "G"}, Case{"8000", "G"}}};
+    for (const auto &[command, keys] : cases)
+    {
+        Editing by_ex;
+        open_named(by_ex, std::string(body));
+        vim_replay(by_ex.controller(), "jll");
+        const auto jumped = run_ex(by_ex.controller(), std::string(command));
+        Editing by_key;
+        open_named(by_key, std::string(body));
+        vim_replay(by_key.controller(), "jll");
+        vim_replay(by_key.controller(), keys);
+        const auto pressed = by_key.controller().frame();
+        expect(jumped.caret == pressed.caret, "a line command lands where {N}G lands");
+        expect(message(jumped).empty() && by_ex.bell().rings() == 0,
+               "a line command is silent and never rings");
+    }
+    // Vim 9.1 の `:N` は jump ではなく `''` を置かない（`:help jump-motions`・oracle の
+    // ex-line-context-mark）。`''` は直前の跳び（ここでは `G`）の前の位置のまま。
+    Editing editing;
+    open_named(editing, std::string(body));
+    vim_replay(editing.controller(), "jllG");
+    static_cast<void>(run_ex(editing.controller(), "2"));
+    vim_replay(editing.controller(), "''");
+    Editing jumped_only;
+    open_named(jumped_only, std::string(body));
+    vim_replay(jumped_only.controller(), "jllG''");
+    expect(editing.controller().frame().caret == jumped_only.controller().frame().caret,
+           "a line command is not a jump and leaves the context mark of the last jump");
+}
 } // namespace
 
 void verify_ex_document_contracts()
@@ -333,6 +414,8 @@ void verify_ex_document_contracts()
     verify_encodings();
     verify_only_current_tab();
     verify_palette_write();
+    verify_line_numbers();
+    verify_line_jump();
 }
 
 void verify_ex_document_scope()

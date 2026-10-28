@@ -7,6 +7,7 @@
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
 #include "ExLanguageRequest.hpp"
+#include "ExLineRequest.hpp"
 #include "ExPaletteRequest.hpp"
 #include "ExSyntaxRequest.hpp"
 #include "ExTabRequest.hpp"
@@ -35,7 +36,8 @@ inline constexpr std::string_view guifont_command = "set guifont=";
 // document は現在の文書への保存・終了（ADR 0066）。display は現在の文書の表示形式（ADR 0140 の
 // 決定 3・設定に保存しない）。language は現在の文書の言語の選択か問い（ADR 0154 の決定 4・設定にも
 // セッションにも保存しない）。syntax は現在の文書の構文の色の切り替えか問い（ADR 0156 の追補・
-// 設定にもセッションにも保存しない）。
+// 設定にもセッションにも保存しない）。line は行番号だけの命令 `:N` `:$`（ADR 0022 の追補・
+// Issue #847）で、controller が engine の `{N}G` と同じ着地へ渡す。
 struct ExResult
 {
     std::optional<EditorSettings> settings;
@@ -49,6 +51,7 @@ struct ExResult
     std::optional<ExWindowCommand> window = std::nullopt;
     std::optional<ExLanguageRequest> language = std::nullopt;
     std::optional<ExSyntaxRequest> syntax = std::nullopt;
+    std::optional<ExLineRequest> line = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>

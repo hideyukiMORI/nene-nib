@@ -21,6 +21,7 @@
 #include "EditorState.hpp"
 #include "ExDocumentRequest.hpp"
 #include "ExLanguageRequest.hpp"
+#include "ExLineRequest.hpp"
 #include "ExPaletteRequest.hpp"
 #include "ExResult.hpp"
 #include "ExSyntaxRequest.hpp"
@@ -56,6 +57,7 @@
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
 #include "VimCharacter.hpp"
+#include "VimEditorView.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
 #include "VimMarks.hpp"
@@ -163,8 +165,12 @@ class EditorController final
     // 1 鍵を engine へ流して効果を写す唯一の経路（ADR 0030 の決定 7）。打った鍵も再生の鍵も
     // ここを通り、鍵が閉じた失敗で終わったら理由を返す（ADR 0046 の決定 3）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> step_vim(const core::VimKey &key);
+    // engine の 1 歩（鍵の vim_step か Ex の行番号の vim_line_jumped）を測って写す 1
+    // 本。要求の往復・ マーク・効果・キャレットの寄せは鍵と同じ（Issue #847）。
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    stepped_vim(const std::function<core::VimStep(const core::VimEditorView &)> &step_of);
     [[nodiscard]] std::expected<core::VimStep, TextLayoutFailure>
-    measured_vim_step(const core::VimKey &key);
+    measured_vim_step(const std::function<core::VimStep(const core::VimEditorView &)> &step_of);
     // engine の要求（表示領域・行の画面行数・行の中の画面行）に 1 つ応えて view へ置く（ADR 0129 の
     // 決定 2・ADR 0144 の決定 2）。
     [[nodiscard]] std::expected<void, TextLayoutFailure>
@@ -352,6 +358,7 @@ class EditorController final
     void remember(const core::CommandPalette &palette);
     void submit_palette(const core::CommandPalette &palette);
     void evaluate_command(std::string_view text);
+    [[nodiscard]] bool ran_ex_request(const core::ExResult &result);
     void apply_unsaved_ex(const core::ExResult &result);
     // `:set filetype=` と `:set filetype?` の写し先（ADR 0154 の決定 4）。どちらも今の言語を
     // `filetype=<名前>` の 1 行で知らせる。
@@ -359,6 +366,8 @@ class EditorController final
     void answer_syntax(const core::ExSyntaxRequest &request);
     // Ex のタブの命令の写し先（ADR 0057 の決定 5・6）。命令が増えたら switch が落ちる（CPP-002）。
     void run_tab_request(const core::ExTabRequest &request);
+    // Ex の `:N` `:$` の写し先（ADR 0022 の追補・Issue #847）。engine の `{N}G` と同じ着地。
+    void jump_to_line(const core::ExLineRequest &request);
     void run_window_command(core::ExWindowCommand command);
     // Ex のファイル命令も Ctrl+P と同じ面へ渡す（ADR 0064）。
     // 断りの知らせを立てて OS の警告音を 1 回鳴らす。鳴らすかを決める唯一の口で、呼ぶのは入力行の
