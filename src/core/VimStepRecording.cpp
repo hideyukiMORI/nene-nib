@@ -1,5 +1,6 @@
 #include "VimStepDetail.hpp"
 
+#include "Utf8.hpp"
 #include "VimRegisterText.hpp"
 
 #include <cstddef>
@@ -528,12 +529,47 @@ namespace
     return appended(std::move(record), key);
 }
 
+// `Ctrl-r {name}` が入れた本文を、打った文字の鍵の列にする（#1040）。改行は `<NL>` の文字で、
+// INSERT では `<CR>` と同じ改行になる。ほかの制御文字も文字として入る。
+[[nodiscard]] std::vector<VimKey> typed_keys_of(const VimEffect &effect)
+{
+    const auto *const inserted = std::get_if<VimInsertAt>(&effect);
+    if (inserted == nullptr)
+    {
+        return {};
+    }
+    const std::string_view body = inserted->utf8;
+    std::vector<VimKey> keys;
+    for (Offset at{0}; at.value < body.size(); at = next_code_point(body, at))
+    {
+        keys.emplace_back(VimCharacter{code_point_at(body, at)});
+    }
+    return keys;
+}
+
 // INSERT の記録（決定 4）。Esc で 1 つの変更として確定し、移動の鍵は `i` から取り直す。
 // VISUAL から入った挿入は記録を持たないので、確定もしない（決定 5）。
-[[nodiscard]] VimState insert_recording(const VimState &before, VimState next, VimKey key)
+// `Ctrl-r {name}` は鍵ではなく入れた本文を記録する（Vim の redo も本文・oracle で実測・#1040）。
+[[nodiscard]] VimState insert_recording(const VimState &before, VimState next,
+                                        const VimEffect &effect, VimKey key)
 {
     if (!before.recording.has_value())
     {
+        return next;
+    }
+    if (next.input_wait.has_value())
+    {
+        next.recording = before.recording;
+        return next;
+    }
+    if (before.input_wait.has_value())
+    {
+        VimRepeatRecord record = before.recording.value();
+        for (VimKey typed : typed_keys_of(effect))
+        {
+            record = appended(std::move(record), std::move(typed));
+        }
+        next.recording = std::move(record);
         return next;
     }
     if (next.mode == VimMode::normal)
@@ -708,7 +744,7 @@ namespace detail
     case VimMode::visual_block:
         return visual_recorded(before, view, std::move(step), key);
     case VimMode::insert:
-        step.next = insert_recording(before, std::move(step.next), key);
+        step.next = insert_recording(before, std::move(step.next), step.effect, key);
         return step;
     case VimMode::normal:
         step.next = normal_recorded(before, std::move(step.next), step.effect, key);

@@ -20,6 +20,8 @@ enum class VimPrefix : std::uint8_t
     // `m` `'` `` ` ``。次の鍵がマークの名前（ADR 0152 の決定 3）。
     mark,
     mark_line,
-    mark_exact
+    mark_exact,
+    // INSERT の `Ctrl-r`。次の鍵が挿し込むレジスタの名前（#1040）。
+    insert_register
 };
 } // namespace nenenib::core

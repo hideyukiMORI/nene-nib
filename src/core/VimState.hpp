@@ -5,6 +5,7 @@
 #include "VimCount.hpp"
 #include "VimInputWait.hpp"
 #include "VimInsertRepeat.hpp"
+#include "VimInsertStart.hpp"
 #include "VimMacroRecording.hpp"
 #include "VimMode.hpp"
 #include "VimNamedRegisters.hpp"
@@ -83,6 +84,9 @@ struct VimState
     // を 抜けても前の選択（`gv`）を置き換えない（実測）。立てるのは `.` の 1 か所、持ち越すのは
     // vim_step の 1 か所で、再生の鍵が VISUAL にいるあいだだけ続く。
     bool redoing_visual = false;
+    // INSERT を始めた位置（#1040）。INSERT の最初の鍵が vim_step の入口でキャレットから置き、
+    // INSERT を離れる（vim_resting_from）か入力を捨てる（input_discarded）と消える。
+    std::optional<VimInsertStart> insert_start = std::nullopt;
 };
 
 // 鍵を 1 つ食べ終わったあとの NORMAL。回数・オペレータ・欲しい列は空で、無名レジスタだけ残る。

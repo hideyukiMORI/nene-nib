@@ -59,7 +59,9 @@ using detail::forward_characters;
 using detail::horizontal_action;
 using detail::input_action;
 using detail::insert_character;
+using detail::insert_register_step;
 using detail::insert_special;
+using detail::insert_started;
 using detail::joined;
 using detail::laid_out_motion;
 using detail::landed_step;
@@ -1571,6 +1573,8 @@ namespace
     case VimPrefix::mark_line:
     case VimPrefix::mark_exact:
         return mark_jump_step(state, view, prefix, key);
+    case VimPrefix::insert_register:
+        return insert_register_step(state, view, key);
     }
     std::unreachable();
 }
@@ -1660,6 +1664,7 @@ namespace
     next.selected_register = std::nullopt;
     next.insert_repeat = std::nullopt;
     next.recording = std::nullopt;
+    next.insert_start = std::nullopt;
     return next;
 }
 } // namespace
@@ -1746,7 +1751,7 @@ bool vim_reads_clipboard(const VimState &state, const VimKey &key) noexcept
         return false;
     }
     const auto *const prefix = std::get_if<VimPrefix>(&state.input_wait.value());
-    return prefix != nullptr && *prefix == VimPrefix::at;
+    return prefix != nullptr && (*prefix == VimPrefix::at || *prefix == VimPrefix::insert_register);
 }
 
 VimState vim_clipboard_loaded(const VimState &state, VimRegister value)
@@ -1822,7 +1827,7 @@ namespace
 
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
-    auto step = stepped(state, view, key);
+    auto step = stepped(insert_started(state, view), view, key);
     if (step.layout_request.has_value() || step.row_request.has_value() || step.viewport_request)
     {
         return step;

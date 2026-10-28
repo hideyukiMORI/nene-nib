@@ -305,6 +305,36 @@ void verify_clipboard_dot()
     expect(lines.clipboard().writes() == 0, ". of \"+p writes nothing");
 }
 
+// INSERT の `Ctrl-r +` `Ctrl-r *`（#1040）。名前の鍵の直前に 1 回だけ読み、OS へは書かない。
+// `.` は入れた本文を繰り返し、OS を読み直さない（Vim の redo は本文・`"a` の oracle で実測）。
+void verify_clipboard_insert_register()
+{
+    Editing editing;
+    open_vim_document(editing, "X1\nX2");
+    editing.clipboard().hold(held("abc"));
+    vim_replay(editing.controller(), "A<C-r>+<Esc>");
+    expect(whole_vim_body(editing.controller()) == "X1abc\nX2",
+           "Ctrl-r + in INSERT inserts the clipboard text");
+    expect(editing.clipboard().reads() == 1 && editing.clipboard().writes() == 0,
+           "Ctrl-r + reads once, right before +, and writes nothing");
+    editing.clipboard().hold(held("NEW"));
+    vim_replay(editing.controller(), "j.");
+    expect(whole_vim_body(editing.controller()) == "X1abc\nX2abc",
+           ". after Ctrl-r + repeats the inserted text without reading the clipboard");
+    expect(editing.clipboard().reads() == 1, ". of Ctrl-r + does not read the clipboard");
+}
+
+// `Ctrl-r *` は `"*` と同じ写しで、行の本文は改行ごと入る（#1040）。
+void verify_clipboard_insert_lines()
+{
+    Editing editing;
+    open_vim_document(editing, "X1\nX2");
+    editing.clipboard().hold(held("abc\r\n"));
+    vim_replay(editing.controller(), "A<C-r>*<Esc>");
+    expect(whole_vim_body(editing.controller()) == "X1abc\n\nX2",
+           "Ctrl-r * inserts the folded text with its line feed");
+}
+
 // `@+` `@*` と `@@`（決定 5・B8）。`@@` も再生の時点で読み直す。
 void verify_clipboard_macro_replay()
 {
@@ -595,6 +625,8 @@ void verify_vim_clipboard_contracts()
     verify_clipboard_write_notice();
     verify_clipboard_put_refused();
     verify_clipboard_dot();
+    verify_clipboard_insert_register();
+    verify_clipboard_insert_lines();
     verify_clipboard_macro_replay();
     verify_clipboard_inside_macro();
     verify_clipboard_block();

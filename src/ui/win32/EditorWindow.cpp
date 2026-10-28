@@ -154,7 +154,7 @@ constexpr std::array<KeyVimSpecial, 11> vim_specials{{{VK_ESCAPE, core::VimSpeci
                                                       {VK_PRIOR, core::VimSpecialKey::page_up},
                                                       {VK_NEXT, core::VimSpecialKey::page_down}}};
 // Ctrl+W は Vim の窓の命令の入口（ADR 0148 の決定 7）。INSERT でも engine へ流し、engine
-// が無視する。
+// が語を消す（#1040）。
 constexpr std::array<KeyVimSpecial, 5> vim_control_specials{
     {{'D', core::VimSpecialKey::control_d},
      {'U', core::VimSpecialKey::control_u},
