@@ -2453,5 +2453,13 @@
   {"name":"ex-line-last","text":"one\n  two\nthree\n    four\nfive","keys":":$<CR>"},
   {"name":"ex-line-beyond","text":"one\n  two\nthree\n    four\nfive","keys":":8000<CR>"},
   {"name":"ex-line-context-mark","text":"one\n  two\nthree\n    four\nfive","keys":"jllG:3<CR>''"},
-  {"name":"ex-line-indented","text":"one\n  two\nthree\n    four\nfive","keys":":4<CR>"}
+  {"name":"ex-line-indented","text":"one\n  two\nthree\n    four\nfive","keys":":4<CR>"},
+  {"name":"empty-change-object-ciw","text":"\nabc","keys":"yyciw<Esc>"},
+  {"name":"empty-change-object-ciw-then-put","text":"\nabc","keys":"yyciw<Esc>pix<Esc>"},
+  {"name":"empty-change-object-ciw-capital","text":"\nabc","keys":"yyciW<Esc>"},
+  {"name":"empty-change-object-caw","text":"\nabc","keys":"yycaw<Esc>"},
+  {"name":"empty-change-object-diw-kept","text":"\nabc","keys":"yydiw"},
+  {"name":"empty-change-object-yiw","text":"\nabc","keys":"yyyiw"},
+  {"name":"empty-change-object-ciw-blank-line","text":"  \nabc","keys":"yyciw<Esc>"},
+  {"name":"empty-change-object-ci-paren-empty","text":"()\nabc","keys":"yyci(x<Esc>"}
 ]

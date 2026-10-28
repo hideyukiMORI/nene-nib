@@ -1570,8 +1570,8 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
 }
 
 // 空の文字単位の範囲はレジスタを書き換えない（空行の D が実測でそう振る舞う）。ただし行末への
-// 移動の範囲を `c` が消すときは空の本文を書く（Vim の op_delete は OP_DELETE だけ空行で先に返り、
-// op_change は空を yank する・#960・ADR 0050 の決定 3 の追補）。
+// 移動と語のテキストオブジェクトの範囲を `c` が消すときは空の本文を書く（Vim の op_delete は
+// OP_DELETE だけ空行で先に返り、op_change は空を yank する・#960・#979・ADR 0050 の追補）。
 [[nodiscard]] std::optional<VimRegister>
 register_after(const TextBuffer &text, const VimMotionRange &range, VimOperator operation)
 {
@@ -5325,6 +5325,21 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     return VimStep{std::move(next), VimMoveTo{caret}};
 }
 
+// 語の範囲（`iw` `iW` `aw` `aW`）。空行で空でも `c` は空の本文を書く（#979・VimEmptyChange）。
+// Vim の current_word は空行の NUL を inclusive に選ぶので oap->empty にならず、op_change は空を
+// yank する（実測）。括弧などのほかの空の範囲（`ci(` の `()`）は書かないので印を立てない。
+[[nodiscard]] VimTextObjectOutcome word_writing_empty(VimTextObjectOutcome outcome,
+                                                      VimTextObject object)
+{
+    if ((object == VimTextObject::word || object == VimTextObject::big_word) &&
+        std::holds_alternative<VimTextObjectSpan>(outcome))
+    {
+        auto &span = std::get<VimTextObjectSpan>(outcome);
+        span.range = writing_empty(span.range);
+    }
+    return outcome;
+}
+
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,
                                    VimTextObjectScope scope, VimKey key)
 {
@@ -5338,9 +5353,11 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
         return failed(VimStep{finished_input_wait(state), VimNoEffect{}},
                       VimRepeatFailure::refused);
     }
-    const VimTextObjectOutcome outcome = vim_text_object_range(
-        view.text, view.selection, VimTextObjectRequest{scope, object.value(), state.mode},
-        resolved_count(state));
+    const VimTextObjectOutcome outcome = word_writing_empty(
+        vim_text_object_range(view.text, view.selection,
+                              VimTextObjectRequest{scope, object.value(), state.mode},
+                              resolved_count(state)),
+        object.value());
     // 答えの種類が増えたら写し先が足りずコンパイルが落ちる（CPP-002）。範囲にならなかったときは
     // キャレットが動いても Vim はビープする（ADR 0046 の決定 3）。
     VimStep step = std::visit([&](const auto &value)
