@@ -198,6 +198,10 @@ PE の `TimeDateStamp` だけは link した時刻なので、同じ commit を�
 
 computer-use 無しで見た目を確かめるときは `python eng/verify-window.py --capture <dir>`（各節の後の `<dir>/<節名>.png`）か `--capture <dir> --keys "ihello<Esc>"`（`before.png` / `after.png` / 本文の矩形の `frames.json`）で撮り、`python eng/compare-frames.py before.png after.png --inside x,y,w,h` が差分の画素数と外接矩形を JSON で返す（Issue #131・閾値は持たない完全一致・PNG は `eng/window_driver.py` が `zlib` だけで読み書きする）。撮るのは画面の合成なので画面中央を空けて 1 回ずつ走らせ、ゲートには載せない（QLT-013）。
 
+### Vim の差分 fuzz
+
+`python eng/vim-fuzz.py --count 300 --seed 1 --out D:/NeNeNib/outputs/<日付>/vim-fuzz-seed1 --shrink` が固定 seed のランダムな本文と鍵列を本物の Vim 9.1（`eng/vim-oracle.py` の `measure` を import）で測り、再生器 `nib_vim_replay`（`tests/unit/VimReplayMain.cpp`・Debug の `build/` で `cmake --build build --target nib_vim_replay`・CTest に載せない）で Nib に流して本文・`line`・`column`・無名レジスタの本文と種類を比べ、`mismatches.json` と `summary.md` を書く（Issue #954）。`--from-fixtures 50` は再生器の自己検査。Vim が要るので CI とゲートには載せず、見つけた違いは Issue に起こして直す。
+
 製品の版入力は **`CMakeLists.txt` の `project(... VERSION)`** だけとする。設定画面・manifest・VERSIONINFO・配布物名はビルドがそこから導出し、
 2 か所目に手で書かない。配布物の正規生成経路は次の 1 本である。
 

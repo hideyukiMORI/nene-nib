@@ -109,7 +109,6 @@ using nenenib::core::EditMode;
 using nenenib::core::is_empty;
 using nenenib::core::LineNumber;
 using nenenib::core::mode_label;
-using nenenib::core::next_code_point;
 using nenenib::core::Offset;
 using nenenib::core::OffsetRange;
 using nenenib::core::Selection;
@@ -155,32 +154,6 @@ using nenenib::core::VimWordClass;
 using nenenib::core::VimWordEndStop;
 using nenenib::core::VimWordStop;
 using nenenib::core::VimWordWalk;
-
-// キャレットの桁をバイトで測り直す。Vim の col('.') はバイト位置で、表示値の桁は code point。
-// oracle の本文は LF で区切られ、行の中の '\r' は文字である（ADR 0036 の決定 4）。TextBuffer へ
-// 入れ直すと先頭の行の末尾の '\r' を改行の形の判別が CRLF と読むので、ここは '\n' だけで数える。
-[[nodiscard]] std::size_t vim_byte_column(const std::string &body, const TextPosition &caret)
-{
-    std::size_t start = 0;
-    for (std::size_t line = 1; line < caret.line.value; ++line)
-    {
-        const std::size_t found = body.find('\n', start);
-        expect(found != std::string::npos, "the replayed body holds the caret's line");
-        if (found == std::string::npos)
-        {
-            return 0;
-        }
-        start = found + 1;
-    }
-    const std::size_t stop = std::min(body.find('\n', start), body.size());
-    const std::string_view content = std::string_view(body).substr(start, stop - start);
-    std::size_t byte = 0;
-    for (std::size_t step = 1; step < caret.column.value && byte < content.size(); ++step)
-    {
-        byte = next_code_point(content, Offset{byte}).value;
-    }
-    return byte + 1;
-}
 
 void verify_vim_fixtures()
 {

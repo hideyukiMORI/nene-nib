@@ -165,6 +165,13 @@ nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)
 
+# #954: Vim の差分 fuzz の再生器。eng/vim-fuzz.py が本物の Vim で測った件を fixture と同じ道で流す。
+# nib_tests と同じ足場（Editing / VimTestSupport）を結ぶ設計席の道具で、CTest に登録しない。
+nenenib_target(nib_vim_replay unit_tests EXECUTABLE
+    tests/unit/VimReplayMain.cpp tests/unit/TestSupport.cpp tests/unit/VimTestSupport.cpp)
+nenenib_link(nib_vim_replay nenenib_core)
+nenenib_link(nib_vim_replay nenenib_application)
+
 nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/KeyValueFields.cpp src/adapters/win32/ColorCodec.cpp
     src/adapters/win32/ThemeCodec.cpp src/adapters/win32/ThemeContrast.cpp
