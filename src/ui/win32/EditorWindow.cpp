@@ -2618,6 +2618,8 @@ void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
         scroll_palette(delta);
         return;
     }
+    // 面を閉じた後のホイールは面の余りを持ち越さない（#737）。
+    palette_wheel_remainder_ = 0;
     if (over_title_bar(data))
     {
         scroll_tabs(delta);
@@ -2634,11 +2636,7 @@ void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
 
 void EditorWindow::scroll_palette(std::int32_t delta)
 {
-    if (delta == 0)
-    {
-        return;
-    }
-    // 1 通知 = 1 刻み。行数は本文と同じく OS の設定から
+    // 本文と同じく delta を累積して行に変える（#737）。1 刻みの行数は OS の設定から
     // （1 画面の設定なら面の見えている行数・#499）。
     std::size_t visible = 0;
     if (wheel_setting_ == WHEEL_PAGESCROLL)
@@ -2647,8 +2645,14 @@ void EditorWindow::scroll_palette(std::int32_t delta)
         GetClientRect(window_, &client);
         visible = core::palette_window_rows(client.right, client.bottom, dpi_);
     }
-    const auto lines = wheel_lines_per_notch(wheel_setting_, visible);
-    send(application::ScrollPaletteList{delta > 0 ? -lines : lines});
+    const auto turn = wheel_turned(palette_wheel_remainder_, delta,
+                                   wheel_lines_per_notch(wheel_setting_, visible));
+    palette_wheel_remainder_ = turn.remainder;
+    if (turn.lines == 0)
+    {
+        return;
+    }
+    send(application::ScrollPaletteList{turn.lines});
 }
 
 void EditorWindow::scroll_body(std::int32_t delta, LPARAM data)
@@ -2691,6 +2695,7 @@ void EditorWindow::read_wheel_setting()
     if (lines != wheel_setting_)
     {
         body_wheel_remainder_ = 0;
+        palette_wheel_remainder_ = 0;
     }
     wheel_setting_ = lines;
 }
