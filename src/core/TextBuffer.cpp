@@ -453,13 +453,16 @@ Offset TextBuffer::line_terminator_end(LineNumber line) const noexcept
     {
         return Offset{size_bytes_};
     }
-    return Offset{newline_offset(line.value - 1) + 1};
+    // 行は 1 始まり。0 は line_start と同じく行 1 として読む（#971）。
+    return Offset{newline_offset(std::max<std::size_t>(line.value, 1) - 1) + 1};
 }
 
 Offset TextBuffer::line_end(LineNumber line) const noexcept
 {
     const std::size_t start = line_start(line).value;
-    std::size_t stop = line.value > newline_count_ ? size_bytes_ : newline_offset(line.value - 1);
+    // 行は 1 始まり。0 は line_start と同じく行 1 として読む（本文の終わりを返さない・#971）。
+    const std::size_t number = std::max<std::size_t>(line.value, 1);
+    std::size_t stop = number > newline_count_ ? size_bytes_ : newline_offset(number - 1);
     // CRLF の '\r' は行の内容ではない。表示もキャレットもここで止める（ADR 0009 の決定 8）。
     // LF の本文では '\r' は 1 文字なので外さない。この 1 つの分岐が改行の模型の正本で、
     // line_terminator_end / line_text / position_of / offset_of はこれに従う（ADR 0036 の決定 2）。
