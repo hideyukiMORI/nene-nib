@@ -259,6 +259,8 @@ using FontKey = std::pair<float, std::string>;
         return L"UTF-32 のファイルは扱えません。UTF-8 か UTF-16 で保存し直してください。";
     case application::FileFailure::unencodable:
         return L"この文字コードでは保存できない文字があります。";
+    case application::FileFailure::insufficient_memory:
+        return L"メモリが足りず、ファイルを開けませんでした。";
     }
     std::unreachable();
 }

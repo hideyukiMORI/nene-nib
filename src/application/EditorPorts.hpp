@@ -6,6 +6,7 @@
 #include "BookmarkPort.hpp"
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
+#include "DocumentReadPort.hpp"
 #include "FilePort.hpp"
 #include "FolderPort.hpp"
 #include "FontFamilyPort.hpp"
@@ -41,5 +42,7 @@ struct EditorPorts
     BellPort &bell;
     // Markdown のプレビューを裏で解析する（ADR 0155 の決定 5）。
     MarkdownPort &markdown;
+    // 文書を開く道の読み（ADR 0159 の決定 1）。開く道だけが呼び、ほかの読みは files のまま。
+    DocumentReadPort &reads;
 };
 } // namespace nenenib::application

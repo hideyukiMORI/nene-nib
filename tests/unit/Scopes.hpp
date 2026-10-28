@@ -65,6 +65,8 @@ void verify_display_scope();
 // BackgroundWorkTests.cpp
 void verify_background_work_contracts();
 void verify_background_work_scope();
+void verify_open_async_contracts();
+void verify_open_async_scope();
 
 // AutosaveTests.cpp
 void verify_autosave_contracts();

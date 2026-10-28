@@ -115,6 +115,12 @@ parked_path(const std::shared_ptr<const UnloadedDocument> &tab)
 {
     const std::string suffix =
         others == 0 ? std::string{} : "（ほか " + std::to_string(others) + " 件）";
+    return named_line(prefix, std::move(name), suffix);
+}
+
+[[nodiscard]] core::DisplayText named_line(std::string_view prefix, std::string name,
+                                           std::string_view suffix)
+{
     const std::size_t room = core::DisplayText::maximum_bytes - prefix.size() - suffix.size();
     if (name.size() > room)
     {
@@ -127,7 +133,7 @@ parked_path(const std::shared_ptr<const UnloadedDocument> &tab)
         name += clipped_mark;
     }
     // 材料は検証済みの経路・題名と固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
-    return core::DisplayText::parse(std::string(prefix) + name + suffix).value();
+    return core::DisplayText::parse(std::string(prefix) + name + std::string(suffix)).value();
 }
 
 [[nodiscard]] bool measured(CommandWindow window) noexcept
