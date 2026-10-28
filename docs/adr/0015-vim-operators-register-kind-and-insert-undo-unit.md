@@ -68,6 +68,10 @@ NORMAL の `y{motion}` の後のキャレットは Vim の `oap->start`（範囲
 決めるのは `operated` の 1 か所で、上へ動いた行単位の着地の桁を欲しい列に写して `yanked_caret` に渡す（#411 の `gg` `G` `H` `M` `L` `'a` の特例を全ての行単位の移動へ広げた）。
 VISUAL の `y` は触らない。`d` `c` の後のキャレットは別の規則で変えない。移動 `_` は Nib に未実装なので `y_` は後続。fixture `yank-line-cursor-*` 12 件（Vim 9.1 の oracle で実測）。
 
+**広げ（2026-10-29・#1065）: 同じ行に着く行単位の移動**。Vim の `do_pending_operator` は範囲の始まりを `LT_POS`（行と桁）で比べるので、行単位の移動でも移動の前と着地が同じ行なら桁の早い方がキャレットになる。
+`operated` の比べ方を「着地の行がキャレットの行より上」から「着地の位置がキャレットの位置より前」（本文の位置の順＝(行, 桁) の順・`landed` の戻り先と同じ比べ方）に替えた。
+`foofoo? a` の `$ygg` は (1, 1)・`  abc` の `$ygg` は (1, 3)・`abc⏎xyz` の `j$yG` は (2, 1)・`ma$y'a` は最初の非空白・`$yggj` の欲しい列は置いた桁（(2, 3)）。行が違うとき（`j$ygg` `$yG` `$yj` `j$yk` `$yy` `j$y1G`）と後ろに着くとき（`0yG`）は前のまま。移動 `_` は y の下でカーソルを動かさない（Vim の `nv_lineop` は `OP_YANK` で `beginline` を呼ばない・決定 13 の `j$y_`）ので比べない。文字単位の `` y`a `` は前から範囲の先頭。fixture `yank-same-line-*` 15 件（Vim 9.1 の oracle で実測・fuzz #954 seed 21 の fuzz-21-0006 の原因）。
+
 ### 決定 13（2026-10-28 追記・#976）
 
 13. **移動 `_` は回数 − 1 行下の行の最初の非空白へ行く行単位の移動**（`VimMotion::first_non_blank_below`・鍵は `VimKeyTable` の NORMAL の表の 1 行）。`1_` は今の行。範囲は `+` `j` と同じ `lines_below` に回数 − 1 を渡す 1 本で、`d_` は `dd`・`2d_` は `2dd`・`y_` は `yy` と同じ範囲とレジスタ（行単位・`"1` は `registers_written` が決める）。
