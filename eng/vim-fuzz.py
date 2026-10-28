@@ -21,19 +21,34 @@ The buffer has 1 to 12 lines mixing ASCII words, spaces, tabs, bracket and quote
 Japanese (kana, kanji, full-width letters), empty lines and trailing spaces. It never ends with a
 newline and never holds a CR or a combining character (v1).
 
+Some words depend on what came before them (Issue #963, generator 2): `''` and `` ` ` `` only after
+a jump (the oracle's `-es` Vim starts on the last line, the user's Vim on line 1, #962), `n` `N` only
+after `/ ? * #`, a read of `"1`..`"9` (`p` `P`) only after an unnamed `dd` or `cc`, and `'a` `` `a ``
+only after `ma`. The generator picks each word from the words the state so far allows, and the
+shrinker keeps only candidates whose words still hold. `--exclude WORD...` drops words from the
+table by name; `--known ISSUE:WORD,WORD` (repeatable) counts a difference whose words (the minimal
+ones with `--shrink`) include one of those words as known under that Issue instead of new. A known
+name may also be a text object (`aB` `i(`), which matches a `dobj` `cobj` `yobj` `v` word holding it.
+
 A case the oracle refuses (`ValueError`: not NORMAL at the end, or `RuntimeError`: Vim failed or
-timed out) is counted as rejected and dropped. Every difference is written to `<out>/mismatches.json`
+timed out) is counted as rejected and dropped. `rejected.json` keeps its keys, the word whose prefix
+first makes the oracle refuse, and Vim's error lines (a second run of the same probe with `-V1`,
+because the `-es` run writes nothing to stderr); `summary.md` counts the refusals by that word. Every difference is written to `<out>/mismatches.json`
 with `name` / `text` / `keys` first, so those three keys copy into tests/vim/fixtures.json as they
 are, followed by the oracle's and Nib's values. `--shrink` deletes words from the keys and lines from
 the buffer while both Vim and the replayer still disagree on one of the same fields, and records the
 smallest case under `minimal`. `<out>/summary.md` holds the counts (generated, rejected, matched,
 mismatched) and the differences by word kind.
 
+`--seeds A-B` runs the seeds A..B one after another, each into `<out>/seed-N/` as `--seed` would,
+and writes the totals and every new difference to `<out>/summary.md`.
+
 `--from-fixtures N` is the replayer's self-check: it measures the first N tests/vim/fixtures.json
 cases without settings, viewport or register through the same oracle and expects every one `ok`.
 
 Usage:
     python eng/vim-fuzz.py --count 300 --seed 1 --out D:/NeNeNib/outputs/<date>/vim-fuzz-seed1 --shrink
+    python eng/vim-fuzz.py --seeds 1-5 --count 300 --shrink --known 781:~,g~ --out D:/NeNeNib/outputs/<date>/vim-fuzz-seeds
     python eng/vim-fuzz.py --from-fixtures 50 --out D:/NeNeNib/outputs/<date>/vim-fuzz-fixtures
 
 Python standard library only. Nothing here reads the clock or the environment; the order of the
@@ -107,6 +122,16 @@ INSERT_PIECES = ("foo", "bar", "x", " ", "  ", "\t", "日本", "かな", "ＡＢ
 TEXT_PIECES = ("alpha", "beta", "gamma", "foo_bar", "x1", "a.b", "word", "Hello", "end.",
                "(paren)", "[sq]", "{br}", "<w>", '"dq s"', "'sq'", "<b>tag</b>", ",", ";", "!",
                "?", ":", "-", "日本語", "かな", "漢字", "ＡＢＣ", "１２", "です。", "、")
+# 語の依存（Issue #963）。生成器の版は summary.md に書く（固定 seed の順が変わったら上げる）。
+GENERATOR_VERSION = 2
+WORD_NAMES = tuple(kind for kind, _, _ in WORDS)
+JUMP_WORDS = frozenset(("G", "gg", "NG", "Ngg", "N%", "/", "?", "*", "#", "%", "n", "N", "'", "`",
+                        "''", "``"))
+SEARCH_WORDS = frozenset(("/", "?", "*", "#"))
+NUMBERED_WRITERS = frozenset(("dd", "cc"))
+NUMBERED_READS = tuple('"' + digit for digit in "123456789")
+READERS = frozenset(("p", "P"))
+OBJECT_CARRIERS = frozenset(("dobj", "cobj", "yobj", "v"))
 CHARACTERS = ("a", "z", ".", "(", ")", "e", " ", "日", "x")
 COUNT_LIMIT = 4
 WORDS_LIMIT = 6
@@ -162,7 +187,8 @@ def patterns_of(text: str) -> list[str]:
     return sorted(set(re.findall(r"[A-Za-z0-9]+|[\u3040-\u30ff\u4e00-\u9fff]+", text)))
 
 
-def expand_word(rng: random.Random, template: str, text: str) -> str:
+def expand_word(rng: random.Random, template: str, text: str, marks: tuple[str, ...] = MARKS,
+                registers: tuple[str, ...] = REGISTERS) -> str:
     def count() -> str:
         return "" if rng.random() < 0.6 else str(rng.randint(1, COUNT_LIMIT))
 
@@ -184,8 +210,8 @@ def expand_word(rng: random.Random, template: str, text: str) -> str:
     fill = {
         "{n}": count, "{N}": lambda: str(rng.randint(1, LINES_LIMIT)),
         "{P}": lambda: str(rng.randint(1, 100)), "{B}": lambda: str(rng.randint(1, 20)),
-        "{c}": character, "{i}": insert, "{p}": pattern, "{k}": lambda: rng.choice(MARKS),
-        "{r}": lambda: "" if rng.random() < 0.7 else rng.choice(REGISTERS),
+        "{c}": character, "{i}": insert, "{p}": pattern, "{k}": lambda: rng.choice(marks),
+        "{r}": lambda: "" if rng.random() < 0.7 else rng.choice(registers),
         "{m}": lambda: expand_word(rng, rng.choice(OPERATOR_MOTIONS), text),
         "{o}": lambda: rng.choice(TEXT_OBJECTS),
         "{v}": lambda: "".join(expand_word(rng, rng.choice(VISUAL_MOTIONS), text)
@@ -209,22 +235,70 @@ def expand_word(rng: random.Random, template: str, text: str) -> str:
     return "".join(result)
 
 
-def generate_case(rng: random.Random) -> tuple[str, list[tuple[str, str]]]:
-    """A buffer and its words, each word a (kind, keys) pair."""
+def initial_state() -> dict:
+    """What the words so far did: jumped, searched, wrote "1 (unnamed dd/cc), set which marks."""
+    return {"jumped": False, "searched": False, "numbered": False, "marks": frozenset()}
+
+
+def available(kind: str, state: dict) -> bool:
+    """Whether the state allows the word kind at all (Issue #963)."""
+    if kind in ("''", "``"):
+        return state["jumped"]
+    if kind in ("n", "N"):
+        return state["searched"]
+    if kind in ("'", "`"):
+        return bool(state["marks"])
+    return True
+
+
+def word_holds(state: dict, kind: str, keys: str) -> bool:
+    """Whether a generated word's dependencies hold in the state (the shrinker re-checks them)."""
+    if not available(kind, state):
+        return False
+    if kind in ("'", "`") and keys[1:2] not in state["marks"]:
+        return False
+    return not (kind in READERS and keys.startswith(NUMBERED_READS) and not state["numbered"])
+
+
+def advanced(state: dict, kind: str, keys: str) -> dict:
+    return {"jumped": state["jumped"] or kind in JUMP_WORDS,
+            "searched": state["searched"] or kind in SEARCH_WORDS,
+            "numbered": state["numbered"] or (kind in NUMBERED_WRITERS and not keys.startswith('"')),
+            "marks": state["marks"] | ({keys[1]} if kind == "m" else set())}
+
+
+def dependencies_hold(words: list[tuple[str, str]]) -> bool:
+    state = initial_state()
+    for kind, keys in words:
+        if not word_holds(state, kind, keys):
+            return False
+        state = advanced(state, kind, keys)
+    return True
+
+
+def generate_case(rng: random.Random,
+                  excluded: frozenset[str]) -> tuple[str, list[tuple[str, str]]]:
+    """A buffer and its words, each word a (kind, keys) pair the words before it allow."""
     text = generate_text(rng)
-    kinds = [kind for kind, _, _ in WORDS]
-    weights = [weight for _, weight, _ in WORDS]
-    templates = {kind: template for kind, _, template in WORDS}
+    pool = [word for word in WORDS if word[0] not in excluded]
+    unnumbered = tuple(name for name in REGISTERS if name not in NUMBERED_READS)
     words: list[tuple[str, str]] = []
+    state = initial_state()
     target = rng.randint(1, WORDS_LIMIT)
     attempts = 0
     while len(words) < target and attempts < 50:
         attempts += 1
-        kind = rng.choices(kinds, weights)[0]
-        keys = expand_word(rng, templates[kind], text)
+        choices = [word for word in pool if available(word[0], state)]
+        if not choices:
+            break
+        kind, _, template = rng.choices(choices, [weight for _, weight, _ in choices])[0]
+        marks = tuple(sorted(state["marks"])) if kind in ("'", "`") else MARKS
+        registers = unnumbered if kind in READERS and not state["numbered"] else REGISTERS
+        keys = expand_word(rng, template, text, marks, registers)
         joined = "".join(keys for _, keys in words) + keys
         if unknown_key_name(joined) is None:
             words.append((kind, keys))
+            state = advanced(state, kind, keys)
     return text, words
 
 
@@ -319,6 +393,8 @@ def shrink(replayer: Path, work: Path, text: str, words: list[tuple[str, str]],
             if len(current) == 1:
                 break
             candidate = current[:index] + current[index + 1:]
+            if not dependencies_hold(candidate):
+                continue
             found = still_differs(replayer, work, "\n".join(lines),
                                   "".join(k for _, k in candidate), fields)
             if found is not None:
@@ -337,7 +413,7 @@ def shrink(replayer: Path, work: Path, text: str, words: list[tuple[str, str]],
     if last is None:
         last = still_differs(replayer, work, "\n".join(lines), keys, fields)
     minimal = {"name": "", "text": "\n".join(lines), "keys": keys,
-               "words": [kind for kind, _ in current]}
+               "words": [kind for kind, _ in current], "word_keys": [k for _, k in current]}
     if last is not None:
         minimal["oracle"] = oracle_values(last["measured"])
         minimal["nib"] = {field: actual for field, (_, actual) in last["result"]["fields"].items()}
@@ -358,22 +434,82 @@ def covered_by(kinds: list[str], representative: list[str]) -> bool:
     return position == len(representative)
 
 
-def fuzz(args: argparse.Namespace) -> int:
-    out: Path = args.out
+def vim_errors(work: Path, text: str, keys: str) -> str:
+    """Vim's error lines for a refused case: the oracle's probe again under `-V1` (Issue #963).
+
+    The oracle's `-es` run writes nothing to stderr, so this second run (same probe, same buffer)
+    exists only to show which E-number refused; it never feeds a measurement.
+    """
+    diagnose = work / "diagnose"
+    diagnose.mkdir(parents=True, exist_ok=True)
+    (diagnose / "input.txt").write_bytes(text.encode("utf-8"))
+    (diagnose / "probe.vim").write_text(ORACLE.probe_script([], keys), encoding="utf-8")
+    command = [str(ORACLE.VIM), "-u", "NONE", "-i", "NONE", "-N", "-n", "-es", "-V1",
+               "--cmd", "lang mes C", "-S", "probe.vim", "input.txt"]
+    try:
+        finished = subprocess.run(command, cwd=diagnose, capture_output=True,
+                                  timeout=ORACLE.ORACLE_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        return "timed out"
+    lines = finished.stderr.decode("utf-8", errors="replace").splitlines()
+    return "\n".join(line.strip() for line in lines if re.match(r"\s*E\d+:", line))
+
+
+def rejecting_word(work: Path, text: str, words: list[tuple[str, str]]) -> str:
+    """The word whose prefix first makes the oracle refuse (the last word when only all of it does)."""
+    for size in range(1, len(words)):
+        answer, _ = measure(work, "diagnose", text, "".join(k for _, k in words[:size]))
+        if answer is None:
+            return words[size - 1][0]
+    return words[-1][0] if words else "?"
+
+
+def object_name(name: str) -> bool:
+    return name in TEXT_OBJECTS and name not in WORD_NAMES
+
+
+def known_issue(words: list[tuple[str, str]], known: list[tuple[str, tuple[str, ...]]]) -> str | None:
+    """The first `--known` Issue one of whose names the words hold, or None for a new difference."""
+    for issue, names in known:
+        for name in names:
+            if object_name(name):
+                hit = any(kind in OBJECT_CARRIERS and name in keys for kind, keys in words)
+            else:
+                hit = any(kind == name for kind, _ in words)
+            if hit:
+                return issue
+    return None
+
+
+def judged_words(entry: dict, by_name: dict, mismatches: list[dict]) -> list[tuple[str, str]]:
+    """The words the known check reads: the minimal ones, the representative's, or all of them."""
+    if "minimal" in entry:
+        return list(zip(entry["minimal"]["words"], entry["minimal"]["word_keys"]))
+    if "represented_by" in entry:
+        representative = next(e for e in mismatches if e["name"] == entry["represented_by"])
+        return judged_words(representative, by_name, mismatches)
+    return list(by_name[entry["name"]]["words"])
+
+
+def fuzz(args: argparse.Namespace, seed: int, out: Path) -> dict:
     work = out / "work"
     work.mkdir(parents=True, exist_ok=True)
-    rng = random.Random(args.seed)
+    rng = random.Random(seed)
+    excluded = frozenset(args.exclude)
     cases = []
     for number in range(1, args.count + 1):
-        text, words = generate_case(rng)
-        cases.append({"name": f"fuzz-{args.seed}-{number:04d}", "text": text, "words": words})
+        text, words = generate_case(rng, excluded)
+        cases.append({"name": f"fuzz-{seed}-{number:04d}", "text": text, "words": words})
     measured, rejected = [], []
     for case in cases:
         keys = "".join(k for _, k in case["words"])
         answer, reason = measure(work, case["name"], case["text"], keys)
         if answer is None:
             rejected.append({"name": case["name"], "text": case["text"], "keys": keys,
-                             "reason": reason})
+                             "words": [kind for kind, _ in case["words"]],
+                             "word": rejecting_word(work, case["text"], case["words"]),
+                             "reason": reason,
+                             "stderr": vim_errors(work, case["text"], keys)})
         else:
             measured.append(answer)
     results = replay(args.replay, work, measured) if measured else {}
@@ -409,31 +545,83 @@ def fuzz(args: argparse.Namespace) -> int:
                                       set(entry["fields"]))
             entry["minimal"]["name"] = entry["name"] + "-min"
             representatives.append(entry)
+    for entry in mismatches:
+        entry["known"] = known_issue(judged_words(entry, by_name, mismatches), args.known)
     (out / "mismatches.json").write_text(
         json.dumps(mismatches, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
     (out / "rejected.json").write_text(
         json.dumps(rejected, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
-    summary = summary_text(args, len(cases), rejected, skipped, matched, mismatches)
+    tally = {"seed": seed, "generated": len(cases), "rejected": len(rejected),
+             "skipped": len(skipped), "matched": matched, "mismatched": len(mismatches),
+             "known": sum(1 for e in mismatches if e["known"] is not None),
+             "new": sum(1 for e in mismatches if e["known"] is None)}
+    summary = summary_text(args, tally, rejected, skipped, mismatches)
     (out / "summary.md").write_text(summary, encoding="utf-8", newline="\n")
-    print(f"generated {len(cases)}  rejected {len(rejected)}  skipped {len(skipped)}  "
-          f"matched {matched}  mismatched {len(mismatches)}  -> {out / 'summary.md'}")
-    return 0
+    print(f"seed {seed}: generated {len(cases)}  rejected {len(rejected)}  skipped {len(skipped)}  "
+          f"matched {matched}  mismatched {len(mismatches)} (known {tally['known']}  "
+          f"new {tally['new']})  -> {out / 'summary.md'}")
+    return {"tally": tally, "mismatches": mismatches}
 
 
 def fenced(value: str) -> str:
     return "`` " + value.replace("\n", "⏎").replace("\t", "→") + " ``"
 
 
-def summary_text(args, generated, rejected, skipped, matched, mismatches) -> str:
-    lines = [f"# Vim の差分 fuzz（seed {args.seed}・{generated} 件）", "",
-             f"- Vim: {ORACLE.vim_version()}", f"- replayer: `{args.replay}`",
-             f"- shrink: {'on' if args.shrink else 'off'}", "",
-             "| 生成 | 拒否 | skip | 一致 | 不一致 |", "|---:|---:|---:|---:|---:|",
-             f"| {generated} | {len(rejected)} | {len(skipped)} | {matched} | {len(mismatches)} |",
-             ""]
+def settings_lines(args: argparse.Namespace) -> list[str]:
+    known = "; ".join(f"#{issue}: {' '.join(fenced(name) for name in names)}"
+                      for issue, names in args.known)
+    return [f"- generator={GENERATOR_VERSION}（語の依存・Issue #963）",
+            f"- Vim: {ORACLE.vim_version()}", f"- replayer: `{args.replay}`",
+            f"- shrink: {'on' if args.shrink else 'off'}",
+            "- exclude: " + (" ".join(fenced(name) for name in args.exclude) or "なし"),
+            "- known: " + (known or "なし"), ""]
+
+
+def mismatch_lines(entry: dict, mismatches: list[dict], heading: str) -> list[str]:
+    shown = entry.get("minimal", entry)
+    oracle = shown.get("oracle", entry["oracle"])
+    nib = shown.get("nib", entry["nib"])
+    lines = [f"{heading} {entry['name']}（欄: {', '.join(sorted(nib)) or '?'}）", "",
+             f"- text: {fenced(shown['text'])}", f"- keys: {fenced(shown['keys'])}"]
+    for field in sorted(nib):
+        lines.append(f"- {field}: Vim {fenced(str(oracle[field]))} / Nib {fenced(nib[field])}")
+    represented = [e["name"] for e in mismatches if e.get("represented_by") == entry["name"]]
+    if represented:
+        lines.append(f"- 同じ原因と見た件: {len(represented)}")
+    lines.append("")
+    return lines
+
+
+def summary_text(args, tally, rejected, skipped, mismatches) -> str:
+    lines = [f"# Vim の差分 fuzz（seed {tally['seed']}・{tally['generated']} 件）", "",
+             *settings_lines(args),
+             "| 生成 | 拒否 | skip | 一致 | 不一致 | 既知 | 新規 |",
+             "|---:|---:|---:|---:|---:|---:|---:|",
+             f"| {tally['generated']} | {tally['rejected']} | {tally['skipped']} | "
+             f"{tally['matched']} | {tally['mismatched']} | {tally['known']} | {tally['new']} |", ""]
+    by_issue = Counter(entry["known"] for entry in mismatches if entry["known"] is not None)
+    lines.append("## 既知（Issue ごと）")
+    lines.append("")
+    lines.extend(f"- #{issue}: {count}" for issue, count in sorted(by_issue.items()))
+    if not by_issue:
+        lines.append("- 0")
+    lines.append("")
     reasons = Counter(entry["reason"].split(":")[0] for entry in rejected)
-    lines.append("拒否の内訳: " + (", ".join(f"{k} {v}" for k, v in sorted(reasons.items()))
-                                 or "0"))
+    lines.append("## 拒否の内訳")
+    lines.append("")
+    lines.append("理由: " + (", ".join(f"{k} {v}" for k, v in sorted(reasons.items())) or "0"))
+    lines.append("")
+    lines.append("拒否を出した語（前から測って最初に拒まれた語）:")
+    lines.append("")
+    culprits = Counter(entry["word"] for entry in rejected)
+    lines.extend(f"- `{kind}`: {count}" for kind, count in culprits.most_common())
+    if not culprits:
+        lines.append("- 0")
+    lines.append("")
+    errors = Counter((entry["stderr"].split(":")[0] if entry["stderr"] else "(なし)")
+                     for entry in rejected)
+    lines.append("Vim のエラー番号: " + (", ".join(f"{k} {v}" for k, v in sorted(errors.items()))
+                                        or "0"))
     lines.append("")
     fields = Counter(field for entry in mismatches for field in entry["fields"])
     lines.append("不一致の欄（1 件に複数の欄がありうる）: "
@@ -441,37 +629,69 @@ def summary_text(args, generated, rejected, skipped, matched, mismatches) -> str
     lines.append("")
     kinds = Counter()
     for entry in mismatches:
-        words = entry["minimal"]["words"] if "minimal" in entry else entry["words"]
-        kinds.update(set(words))
-    lines.append("## 鍵の種類ごとの不一致の数（最小化した件はその語・ほかは全部の語）")
+        if entry["known"] is None:
+            words = entry["minimal"]["words"] if "minimal" in entry else entry["words"]
+            kinds.update(set(words))
+    lines.append("## 新規の不一致の鍵の種類（最小化した件はその語・ほかは全部の語）")
     lines.append("")
     lines.extend(f"- `{kind}`: {count}" for kind, count in kinds.most_common())
     if not kinds:
         lines.append("- 0")
     lines.append("")
-    lines.append("## 不一致（最小化した件）")
+    lines.append("## 新規の不一致（最小化した件）")
     lines.append("")
-    if not mismatches:
-        lines.append("不一致は 0。")
-    for entry in mismatches:
-        if "represented_by" in entry:
-            continue
-        shown = entry.get("minimal", entry)
-        oracle = shown.get("oracle", entry["oracle"])
-        nib = shown.get("nib", entry["nib"])
-        lines.append(f"### {entry['name']}（欄: {', '.join(sorted(nib)) or '?'}）")
+    new = [e for e in mismatches if e["known"] is None and "represented_by" not in e]
+    if not new:
+        lines.append("新規の不一致は 0。")
         lines.append("")
-        lines.append(f"- text: {fenced(shown['text'])}")
-        lines.append(f"- keys: {fenced(shown['keys'])}")
-        for field in sorted(nib):
-            lines.append(f"- {field}: Vim {fenced(str(oracle[field]))} / Nib {fenced(nib[field])}")
-        represented = [e["name"] for e in mismatches if e.get("represented_by") == entry["name"]]
-        if represented:
-            lines.append(f"- 同じ原因と見た件: {len(represented)}")
-        lines.append("")
+    for entry in new:
+        lines.extend(mismatch_lines(entry, mismatches, "###"))
+    lines.append("## 既知の不一致")
+    lines.append("")
+    known = [e for e in mismatches if e["known"] is not None]
+    lines.extend(f"- {e['name']} → #{e['known']}: {fenced(e.get('minimal', e)['keys'])}"
+                 for e in known)
+    if not known:
+        lines.append("- 0")
+    lines.append("")
     if skipped:
         lines.append(f"skip: {len(skipped)}（{skipped[0]['reason']} ほか）")
     return "\n".join(lines) + "\n"
+
+
+def fuzz_seeds(args: argparse.Namespace) -> int:
+    """`--seeds A-B`: each seed as `--seed` would into `<out>/seed-N/`, then the totals."""
+    runs = [fuzz(args, seed, args.out / f"seed-{seed}") for seed in args.seeds]
+    columns = ("generated", "rejected", "skipped", "matched", "mismatched", "known", "new")
+    lines = [f"# Vim の差分 fuzz（seeds {args.seeds[0]}〜{args.seeds[-1]}・各 {args.count} 件）", "",
+             *settings_lines(args),
+             "| seed | 生成 | 拒否 | skip | 一致 | 不一致 | 既知 | 新規 |",
+             "|---:|---:|---:|---:|---:|---:|---:|---:|"]
+    for run in runs:
+        tally = run["tally"]
+        lines.append(f"| {tally['seed']} | " + " | ".join(str(tally[c]) for c in columns) + " |")
+    lines.append("| 計 | " + " | ".join(str(sum(r["tally"][c] for r in runs)) for c in columns)
+                 + " |")
+    lines.append("")
+    by_issue = Counter(e["known"] for r in runs for e in r["mismatches"] if e["known"] is not None)
+    lines.append("既知（Issue ごと）: " + (", ".join(f"#{k} {v}" for k, v in sorted(by_issue.items()))
+                                         or "0"))
+    lines.append("")
+    lines.append("## 新規の不一致（全 seed・最小化した件）")
+    lines.append("")
+    count = 0
+    for run in runs:
+        for entry in run["mismatches"]:
+            if entry["known"] is None and "represented_by" not in entry:
+                lines.extend(mismatch_lines(entry, run["mismatches"], "###"))
+                count += 1
+    if count == 0:
+        lines.append("新規の不一致は 0。")
+        lines.append("")
+    args.out.mkdir(parents=True, exist_ok=True)
+    (args.out / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    print(f"seeds {args.seeds[0]}-{args.seeds[-1]} -> {args.out / 'summary.md'}")
+    return 0
 
 
 def from_fixtures(args: argparse.Namespace) -> int:
@@ -490,20 +710,64 @@ def from_fixtures(args: argparse.Namespace) -> int:
     return 0 if counts.get("ok", 0) == len(plain) else 1
 
 
+def word_name(value: str) -> str:
+    if value not in WORD_NAMES:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a word of the table "
+                                         f"({' '.join(WORD_NAMES)})")
+    return value
+
+
+def known_names(value: str) -> list[str]:
+    """`a,b,c` into names; a name is the longest word (or text object) that a comma or the end
+    follows, so the words `,` and `;` read as they are (`;,,` is `;` and `,`)."""
+    candidates = sorted(set(WORD_NAMES) | set(TEXT_OBJECTS), key=len, reverse=True)
+    names, index = [], 0
+    while index < len(value):
+        name = next((c for c in candidates if value.startswith(c, index)
+                     and (index + len(c) == len(value) or value[index + len(c)] == ",")), None)
+        if name is None:
+            raise argparse.ArgumentTypeError(f"no word of the table at {value[index:]!r}")
+        names.append(name)
+        index += len(name) + 1
+    return names
+
+
+def known_spec(value: str) -> tuple[str, tuple[str, ...]]:
+    issue, separator, rest = value.partition(":")
+    if not separator or not issue.isdigit() or not rest:
+        raise argparse.ArgumentTypeError(f"{value!r} is not ISSUE:WORD,WORD")
+    return issue, tuple(known_names(rest))
+
+
+def seed_range(value: str) -> list[int]:
+    match = re.fullmatch(r"(\d+)(?:-(\d+))?", value)
+    if match is None or int(match.group(2) or match.group(1)) < int(match.group(1)):
+        raise argparse.ArgumentTypeError(f"{value!r} is not A-B")
+    return list(range(int(match.group(1)), int(match.group(2) or match.group(1)) + 1))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--count", type=int, default=100)
     parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--seeds", type=seed_range, metavar="A-B")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--replay", type=Path, default=DEFAULT_REPLAY)
     parser.add_argument("--shrink", action="store_true")
+    parser.add_argument("--exclude", type=word_name, nargs="+", action="extend", default=[],
+                        metavar="WORD")
+    parser.add_argument("--known", type=known_spec, action="append", default=[],
+                        metavar="ISSUE:WORD,WORD")
     parser.add_argument("--from-fixtures", type=int, metavar="N")
     args = parser.parse_args()
     if not args.replay.is_file():
         parser.error(f"no replayer at {args.replay}; build the nib_vim_replay target first")
     if args.from_fixtures is not None:
         return from_fixtures(args)
-    return fuzz(args)
+    if args.seeds is not None:
+        return fuzz_seeds(args)
+    fuzz(args, args.seed, args.out)
+    return 0
 
 
 if __name__ == "__main__":
