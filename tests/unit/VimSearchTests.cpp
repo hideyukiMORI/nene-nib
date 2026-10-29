@@ -745,7 +745,7 @@ void verify_vim_search_dot()
 
 void verify_vim_search_fixtures()
 {
-    // 検索の 177 件（大小の 30 件・#1041 と結合文字の 12 件・#1138
+    // 検索の 181 件（大小の 30 件・#1041 と結合文字の 16 件・#1138
     // を含む）と、鍵の分類の表・次キー待ちを共有する境界の代表（`.`・r・f/t・gg）。
     constexpr std::array<std::string_view, 6> boundaries{
         "replace-char-one",    "replace-char-count", "char-search-f-count",
@@ -760,7 +760,7 @@ void verify_vim_search_fixtures()
             ++selected;
         }
     }
-    expect(selected == 183, "the scope replays 177 search fixtures and 6 shared boundaries");
+    expect(selected == 187, "the scope replays 181 search fixtures and 6 shared boundaries");
 }
 
 // 次の一致を求める 1 本の経路（ADR 0041 の決定 1）。確定の検索の鍵と incsearch の preview が

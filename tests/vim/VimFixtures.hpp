@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 be7cc98dcb23b4c7f156484f1941f61f1451e2d2e395b1b92116e3c0a2935d04 / 3119 fixtures
+// fixtures.json: sha256 049b0f687129db68a6889cbe5c7f7978c3a698aa4409dc5d6776fd55528545e6 / 3123 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3119> vim_fixtures{{
+constexpr std::array<VimFixture, 3123> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3060,6 +3060,10 @@ constexpr std::array<VimFixture, 3119> vim_fixtures{{
     {"search-composing-literal-then-dot", "x éy ez", "/e.<CR>", "x éy ez", 1, 3, "", "", std::nullopt},
     {"search-composing-literal-then-literal", "x éy ey", "/ey<CR>", "x éy ey", 1, 8, "", "", std::nullopt},
     {"search-composing-star-repeat", "x é ee", "/ee*<CR>", "x é ee", 1, 7, "", "", std::nullopt},
+    {"search-composing-star-alone-marked-y", "x éy", "/e*<CR>", "x éy", 1, 2, "", "", std::nullopt},
+    {"search-composing-star-alone-e-marked", "e é", "/e*<CR>", "e é", 1, 2, "", "", std::nullopt},
+    {"search-composing-star-alone-from-marked", "x éy", "ll/e*<CR>", "x éy", 1, 6, "", "", std::nullopt},
+    {"search-composing-plus-like-e-marked", "e é", "/ee*<CR>", "e é", 1, 1, "", "", std::nullopt},
     {"search-case-N", "abc ABC Abc", ":set ic<CR>/abc<CR>NN", "abc ABC Abc", 1, 9, "", "", std::nullopt},
     {"search-case-backward", "ABC xyz abc", "$:set ic<CR>?abc<CR>?<CR>", "ABC xyz abc", 1, 1, "", "", std::nullopt},
     {"search-case-star-ic-scs", "Abc abc ABC", ":set ic<CR>:set scs<CR>*", "Abc abc ABC", 1, 5, "", "", std::nullopt},
