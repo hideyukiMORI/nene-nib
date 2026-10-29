@@ -74,7 +74,7 @@ void verify_vim_visual_wanted_fixtures()
             ++selected;
         }
     }
-    expect(selected == 17, "the scope replays all 17 adopted visual-column fixtures");
+    expect(selected == 22, "the scope replays all 22 adopted visual-column fixtures");
 }
 
 void verify_vim_visual_wanted_continuations()

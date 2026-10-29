@@ -117,8 +117,8 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 [[nodiscard]] VimStep with_clipboard(VimStep step, std::optional<VimRegister> clipboard);
 [[nodiscard]] VimStep refused_register(const VimState &state);
 [[nodiscard]] VimStep restored_at(VimStep step, Offset restore);
-[[nodiscard]] Offset visual_restore(const TextBuffer &text, const Selection &selection,
-                                    VimMode mode);
+[[nodiscard]] Offset visual_restore(const VimState &state, const TextBuffer &text,
+                                    const Selection &selection);
 [[nodiscard]] VimStep removed_exactly(const VimState &state, const TextBuffer &text,
                                       const VimMotionRange &range);
 [[nodiscard]] VimStep changed(const VimState &state, const TextBuffer &text,

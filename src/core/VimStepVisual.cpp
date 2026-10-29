@@ -38,7 +38,6 @@ using detail::removed_exactly;
 using detail::requested_layout;
 using detail::requested_viewport;
 using detail::reselected_visual;
-using detail::restored_at;
 using detail::scroll_action;
 using detail::search_action;
 using detail::ShiftBy;
@@ -173,16 +172,6 @@ namespace
                      view, motion.value());
 }
 
-// VISUAL の大小文字（決定 10）。キャレットは行単位なら最初の行の行頭、文字単位なら選択の先頭
-// （Vim の oap->start）。u の戻り先は d と同じ visual_restore。
-[[nodiscard]] VimStep visual_case_changed(const VimState &state, const TextBuffer &text,
-                                          VimMotionRange range, VimOperator operation)
-{
-    const Offset restore = range.restore.value_or(range.range.begin);
-    range.restore = range.range.begin;
-    return restored_at(case_changed(state, text, range, operation), restore);
-}
-
 // `d x y c`。選択を範囲に変えて #43 と同じ経路へ流す（決定 5）。オペレータは VISUAL を終わらせる。
 [[nodiscard]] VimStep visual_operated(const VimState &state, const VimEditorView &view,
                                       VimOperator operation)
@@ -192,7 +181,7 @@ namespace
         return block_operated(state, view, operation);
     }
     VimMotionRange range = vim_visual_range(view.text, view.selection, state.mode);
-    range.restore = visual_restore(view.text, view.selection, state.mode);
+    range.restore = visual_restore(state, view.text, view.selection);
     switch (operation)
     {
     case VimOperator::remove:
@@ -204,7 +193,8 @@ namespace
     case VimOperator::toggle_case:
     case VimOperator::lower_case:
     case VimOperator::upper_case:
-        return visual_case_changed(state, view.text, range, operation);
+        // キャレットも u の戻り先も range.restore（Vim の oap->start・#1109）。
+        return case_changed(state, view.text, range, operation);
     case VimOperator::shift_right:
     case VimOperator::shift_left:
         // VISUAL の回数は字下げを動かす回数（Vim の op_shift の amount）。

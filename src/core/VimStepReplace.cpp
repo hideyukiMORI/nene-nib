@@ -157,7 +157,7 @@ namespace
     // NORMAL の r は engine が書かない（ADR 0052 の決定 11）。VISUAL は決定 10。
     if (state.mode != VimMode::normal)
     {
-        step.restore = visual_restore(view.text, view.selection, state.mode);
+        step.restore = visual_restore(state, view.text, view.selection);
     }
     return step;
 }

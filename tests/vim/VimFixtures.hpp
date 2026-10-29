@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 1bb1083851cdd8c8504eb78cdd81cd9c04cd681f4ce719d762c150cc00bbc28e / 3027 fixtures
+// fixtures.json: sha256 3537e29c75cce66af9ddfdefc84ff2a20d3d5bdd472f0cd15c455da4f211194d / 3046 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3027> vim_fixtures{{
+constexpr std::array<VimFixture, 3046> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3039,6 +3039,25 @@ constexpr std::array<VimFixture, 3027> vim_fixtures{{
     {"search-case-non-ascii-scs", "x é É", ":set ic<CR>:set scs<CR>/É<CR>", "x é É", 1, 6, "", "", std::nullopt},
     {"search-case-greek", "x Σ σ", ":set ic<CR>/σ<CR>", "x Σ σ", 1, 3, "", "", std::nullopt},
     {"search-case-word-escape", "xyz ABC abc", ":set ic<CR>/\\<abc\\><CR>", "xyz ABC abc", 1, 5, "", "", std::nullopt},
+    {"visual-line-case-gg-tilde", "  x1 \nab", "jVgg~", "  X1 \nAB", 1, 3, "", "", std::nullopt},
+    {"visual-line-case-gg-tilde-then-c", "  x1 \nab", "jVgg~c$ <Esc>", "   \nAB", 1, 3, "X1 ", "v", std::nullopt},
+    {"visual-line-case-tilde-mid", "abc def", "wV~", "ABC DEF", 1, 1, "", "", std::nullopt},
+    {"visual-line-case-tilde-mid-down", "abc def\nxyz", "wVj~", "ABC DEF\nXYZ", 1, 1, "", "", std::nullopt},
+    {"visual-line-case-charwise-down", "abc def\nxyz", "wvj~", "abc DEF\nXYZ", 1, 5, "", "", std::nullopt},
+    {"visual-line-case-u-mid", "ABC DEF", "wVu", "abc def", 1, 1, "", "", std::nullopt},
+    {"visual-line-case-U-mid", "abc def", "wVU", "ABC DEF", 1, 1, "", "", std::nullopt},
+    {"visual-line-case-tilde-up-k", "ab cd\nef gh", "jwVk~", "AB CD\nEF GH", 1, 4, "", "", std::nullopt},
+    {"visual-line-case-U-up-k-then-x", "ab cd\nef gh", "jwVkUx", "AB D\nEF GH", 1, 4, "C", "v", std::nullopt},
+    {"visual-line-case-tilde-dot", "abc def\nghi jkl", "wV~j.", "ABC DEF\nGHI JKL", 2, 1, "", "", std::nullopt},
+    {"visual-line-case-tilde-dot-col", "abc def\nghi jkl", "wV~jl.", "ABC DEF\nGHI JKL", 2, 2, "", "", std::nullopt},
+    {"visual-line-case-tilde-undo", "abc def", "wV~u", "abc def", 1, 1, "", "", std::nullopt},
+    {"visual-line-case-tilde-up-from-end", "abc\nxyz uvw", "j$Vk~", "ABC\nXYZ UVW", 1, 3, "", "", std::nullopt},
+    {"visual-line-case-gtilde-line-compare", "abc def", "wg~~", "ABC DEF", 1, 1, "", "", std::nullopt},
+    {"visual-line-case-gU-line-compare", "ab cd\nef gh", "jwgUk", "AB CD\nEF GH", 1, 4, "", "", std::nullopt},
+    {"visual-line-case-tilde-back-same-line", "abc def ghi", "wwVb~", "ABC DEF GHI", 1, 1, "", "", std::nullopt},
+    {"visual-line-case-tilde-forward-same-line", "abc def ghi", "wVw~", "ABC DEF GHI", 1, 1, "", "", std::nullopt},
+    {"visual-line-case-tilde-dot-two-lines", "abc def\nghi jkl\nmno pqr", "wVj~jl.", "ABC DEF\nghi jkl\nMNO PQR", 2, 2, "", "", std::nullopt},
+    {"visual-line-case-U-dot-up-k", "ab cd\nef gh\nij kl", "jjwVkUl.", "ab cd\nEF GH\nIJ KL", 2, 5, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
