@@ -541,10 +541,31 @@ namespace
     return 0;
 }
 
+// Vim の do_put が 1 文字の先頭のバイトに数える桁（#1117）。Tab はここに来ない。固定 Vim 9.1 の
+// oracle で測ったのは、全角（2）・幅 0 の結合文字 U+0301（1）・書式用文字 U+200B（6）・C1 制御
+// 文字 U+0085（1。表示の `<85>` の 4 ではない）・4 バイトの絵文字 U+1F600（2）と ASCII の 1 桁の
+// 文字（fixture `block-put-wide-`）。ASCII の制御文字（`^X` の 2）と、同じ分類のほかの文字が
+// 測った代表と同じ値になることは Vim のソース（ptr2cells）の読みで、測っていない。
+[[nodiscard]] std::size_t put_lead_cells(DisplayWidth width) noexcept
+{
+    switch (width)
+    {
+    case DisplayWidth::zero:
+    case DisplayWidth::single:
+    case DisplayWidth::hex:
+        return 1;
+    case DisplayWidth::wide:
+        return 2;
+    case DisplayWidth::unprintable:
+        return 6;
+    }
+    std::unreachable();
+}
+
 // 右の埋めのために Vim の do_put が数えるレジスタの 1 行の幅（#1117）。Vim は桁を 0 に戻しながら
-// 1 バイトずつ数えるので、Tab はどこにあっても tabstop ぶん、2 バイト目からの続きのバイトは
-// 1 つにつき 4 桁（不正なバイトの `<xx>`）、先頭のバイトはその文字の幅で、幅 0 の文字も 1 桁に
-// 数える（固定 Vim 9.1 の実測・fixture `block-put-wide-`）。表示の幅とは違う、埋めのためだけの数。
+// 1 バイトずつ数えるので、Tab はどこにあっても tabstop ぶん（Tab の後ろの本文で実測）、先頭の
+// バイトは `put_lead_cells`、2 バイト目からの続きのバイトは 1 つにつき 4 桁（不正なバイトの
+// `<xx>`。2〜4 バイトの文字で実測）。表示の幅とは違う、埋めのためだけの数。
 [[nodiscard]] std::size_t put_block_cells(std::string_view line) noexcept
 {
     constexpr std::size_t continuation_cells = 4;
@@ -554,8 +575,7 @@ namespace
     {
         const char32_t value = code_point_at(line, Offset{byte});
         const std::size_t next = next_code_point(line, Offset{byte}).value;
-        cells +=
-            value == tab_character ? vim_tab_stop : std::max(single_step, column_advance(value, 0));
+        cells += value == tab_character ? vim_tab_stop : put_lead_cells(display_width(value));
         cells += (next - byte - single_step) * continuation_cells;
         byte = next;
     }

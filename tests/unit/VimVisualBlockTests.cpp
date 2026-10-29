@@ -280,7 +280,7 @@ void verify_vim_block_fixtures()
             ++selected;
         }
     }
-    expect(selected == 366, "the scope replays its 366 blockwise oracle fixtures");
+    expect(selected == 370, "the scope replays its 370 blockwise oracle fixtures");
 }
 } // namespace
 

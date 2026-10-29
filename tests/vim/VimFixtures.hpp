@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 8f2e09810784576e23dec815be1fdd117413a9f503734bd8074192ebc13b7a68 / 3058 fixtures
+// fixtures.json: sha256 8ff8a87ded2524bede6d7371370fccaef760352bd38ee0903a815b6466355af5 / 3062 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3058> vim_fixtures{{
+constexpr std::array<VimFixture, 3062> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3021,6 +3021,10 @@ constexpr std::array<VimFixture, 3058> vim_fixtures{{
     {"block-put-wide-target-tab", "aＡb\nabc\nx\ty\nx\ty", "l<C-v>jyjjp", "aＡb\nabc\nx\tＡy\nx\tbcy", 3, 3, "Ａ\nbc", "\0262", std::nullopt},
     {"block-put-wide-count", "\tb\nａb\nmnop\nmnop", "<C-v>jyjj2p", "\tb\nａb\nmnop\t\t\nmnopａbａb", 3, 5, "\t\nａb", "\0268", std::nullopt},
     {"block-put-wide-tab-only", "\tb\nab\nmnop\nmnop", "<C-v>jyjjp", "\tb\nab\nmnop\t\nmnopab", 3, 5, "\t\nab", "\0268", std::nullopt},
+    {"block-put-wide-combining", "é\nabcdefghijklmnopqrst\nmnop\nmnop", "<C-v>j19lyjjp", "é\nabcdefghijklmnopqrst\nmé              nop\nmabcdefghijklmnopqrstnop", 3, 2, "é\nabcdefghijklmnopqrst", "\02620", std::nullopt},
+    {"block-put-wide-zero-width-space", "a​b\nabcdefghijklmnopqrst\nmnop\nmnop", "<C-v>j19lyjjp", "a​b\nabcdefghijklmnopqrst\nma​b    nop\nmabcdefghijklmnopqrstnop", 3, 2, "a​b\nabcdefghijklmnopqrst", "\02620", std::nullopt},
+    {"block-put-wide-c1-control", "ab\nabcdefghijklmnopqrst\nmnop\nmnop", "<C-v>j19lyjjp", "ab\nabcdefghijklmnopqrst\nmab             nop\nmabcdefghijklmnopqrstnop", 3, 2, "ab\nabcdefghijklmnopqrst", "\02620", std::nullopt},
+    {"block-put-wide-emoji", "a😀b\nabcdefghijklmnopqrst\nmnop\nmnop", "<C-v>j19lyjjp", "a😀b\nabcdefghijklmnopqrst\nma😀b    nop\nmabcdefghijklmnopqrstnop", 3, 2, "a😀b\nabcdefghijklmnopqrst", "\02620", std::nullopt},
     {"search-case-ic-lower", "abc ABC abc", ":set ic<CR>/abc<CR>", "abc ABC abc", 1, 5, "", "", std::nullopt},
     {"search-case-noic-default", "abc ABC abc", "/abc<CR>", "abc ABC abc", 1, 9, "", "", std::nullopt},
     {"search-case-noic-explicit", "abc ABC abc", ":set ic<CR>:set noic<CR>/abc<CR>", "abc ABC abc", 1, 9, "", "", std::nullopt},
