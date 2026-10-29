@@ -8,6 +8,7 @@
 #include "DevicePixels.hpp"
 #include "EditorSettings.hpp"
 #include "GuideContext.hpp"
+#include "GuideRequest.hpp"
 #include "OperationGuideLayout.hpp"
 #include "StatusBarLayout.hpp"
 #include "StatusGuideLayout.hpp"
@@ -34,7 +35,8 @@ using win32::StatusLeftState;
     const auto status = core::status_bar_layout(width, height, dpi);
     const auto body =
         core::body_layout(width, height, dpi, core::default_editor_settings().font_size);
-    const auto guide = core::operation_guide_layout(context, body, status, dpi);
+    const auto guide =
+        core::operation_guide_layout(core::GuideRequest{context, 0}, body, status, dpi);
     return win32::status_layout_demand(left, status, guide);
 }
 } // namespace

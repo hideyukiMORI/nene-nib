@@ -260,6 +260,7 @@ class Direct2DRenderer final
     void draw_grid_row(GridPainter &painter, const application::EditorFrame &frame,
                        const BodyPane &pane, const application::GridRowView &row);
     [[nodiscard]] std::int32_t gutter_padding(const core::EditorSettings &settings) const;
+    [[nodiscard]] std::int32_t body_guide_key_width(const application::EditorFrame &frame);
     void draw_body_guide(const application::EditorFrame &frame,
                          const core::OperationGuideLayout &guide);
     void draw_status_guide(const application::EditorFrame &frame,
