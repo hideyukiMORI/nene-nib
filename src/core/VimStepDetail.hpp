@@ -232,8 +232,8 @@ inline constexpr char32_t carriage_return_character = 0x0D;
 [[nodiscard]] Offset backward_characters(const TextBuffer &text, Offset caret, std::size_t count);
 [[nodiscard]] VimWantedColumn wanted_column_of(const TextBuffer &text, const VimState &state,
                                                Offset caret);
-[[nodiscard]] VirtualColumn visual_landed_column(const TextBuffer &text, Offset anchor,
-                                                 Offset moved);
+[[nodiscard]] VirtualColumn landed_column(const TextBuffer &text, VimMode mode, Offset anchor,
+                                          Offset moved);
 [[nodiscard]] Offset rested_in(const TextBuffer &text, Offset caret, VimMode mode);
 [[nodiscard]] Offset caret_on_line(const TextBuffer &text, const VimWantedColumn &wanted,
                                    LineNumber line, VimMode mode);

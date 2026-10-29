@@ -113,14 +113,24 @@ namespace detail
     return VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, caret)};
 }
 
-// VISUAL で動いた先のキャレットが欲しい列に覚える桁。Tab の上は最後の桁だが、キャレットが錨より
-// 手前か同じ所なら最初の桁（Vim の getvvcol の cursor・`4l<C-v>0j` は 0 桁目へ落ちる・ADR 0035 の
-// 追補・Issue #1089 で実測）。
-[[nodiscard]] VirtualColumn visual_landed_column(const TextBuffer &text, Offset anchor,
-                                                 Offset moved)
+// 動いた先のキャレットが欲しい列に覚える桁。欲しい列を着地から書く所はすべてこの 1 本を通る。
+// Tab の上は最後の桁だが、VISUAL でキャレットが錨より手前か同じ所なら最初の桁（Vim の getvcol の
+// cursor の条件・`4l<C-v>0j` は 1 桁目へ落ちる・ADR 0035 の追補・Issue #1089 で実測）。
+[[nodiscard]] VirtualColumn landed_column(const TextBuffer &text, VimMode mode, Offset anchor,
+                                          Offset moved)
 {
-    return moved.value <= anchor.value ? virtual_column(text, moved)
-                                       : caret_virtual_column(text, moved);
+    switch (mode)
+    {
+    case VimMode::normal:
+    case VimMode::insert:
+        return caret_virtual_column(text, moved);
+    case VimMode::visual:
+    case VimMode::visual_line:
+    case VimMode::visual_block:
+        return moved.value <= anchor.value ? virtual_column(text, moved)
+                                           : caret_virtual_column(text, moved);
+    }
+    std::unreachable();
 }
 
 // 動いた先のキャレットの置き所。NORMAL / INSERT は文字の上に寄せ、VISUAL は行の内容の終わり

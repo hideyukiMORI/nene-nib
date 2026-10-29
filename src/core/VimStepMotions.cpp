@@ -947,7 +947,8 @@ namespace detail
     const VimMotionLanding landing = landing_of(view, state, motion);
     const Offset moved = landing.offset;
     VimState next = vim_resting_from(state, state.unnamed_register);
-    next.wanted_column = wanted_after(wanted, caret_virtual_column(view.text, moved), motion);
+    next.wanted_column = wanted_after(
+        wanted, landed_column(view.text, state.mode, view.selection.anchor, moved), motion);
     return moved_or_failed(VimStep{std::move(next), VimMoveTo{moved}}, motion, view.selection.caret,
                            landing);
 }

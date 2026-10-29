@@ -64,4 +64,4 @@ C1 制御文字（`U+0080`〜`U+009F`）を 1 桁の `single` から、4 桁の�
 
 ## 追補（2026-10-29・Issue #1089）
 
-決定 2 の `caret_virtual_column`（Tab の上は最後の桁）には VISUAL の例外がある。VISUAL でキャレットが錨より手前か同じ所にあるとき、Vim の `getvvcol` の cursor は Tab の**最初の**桁で、移動が欲しい列に覚えるのもその桁である（`4l<C-v>0j` は次の行の 1 桁目へ）。判定は core の `visual_landed_column` の 1 本（ADR 0035 の追補・fixture `block-tab-zero-`）。NORMAL と錨より後ろのキャレットは決定 2 のまま。
+決定 2 の `caret_virtual_column`（Tab の上は最後の桁）には VISUAL の例外がある。VISUAL でキャレットが錨より手前か同じ所にあるとき、Vim の `getvvcol` の cursor は Tab の**最初の**桁で、移動が欲しい列に覚えるのもその桁である（`4l<C-v>0j` は次の行の 1 桁目へ）。判定は core の `landed_column` の 1 本で、着地から欲しい列を書く所はすべてこれを通す（ADR 0035 の追補・fixture `block-tab-zero-` と `visual-wanted-`）。NORMAL と錨より後ろのキャレットは決定 2 のまま。

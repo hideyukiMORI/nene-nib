@@ -43,8 +43,9 @@ namespace
 {
     const Selection &selected = span.selection;
     VimState next = visual_resting(state, span.mode);
-    next.wanted_column =
-        VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(view.text, selected.caret)};
+    next.wanted_column = VimWantedColumn{
+        VimColumnWish::at_column,
+        detail::landed_column(view.text, span.mode, selected.anchor, selected.caret)};
     return VimStep{std::move(next), VimSelect{selected}};
 }
 } // namespace
@@ -74,8 +75,10 @@ namespace detail
         {
             return VimStep{std::move(next), VimNoEffect{}};
         }
-        next.wanted_column = VimWantedColumn{
-            VimColumnWish::at_column, caret_virtual_column(view.text, cancel.selection.caret)};
+        next.wanted_column =
+            VimWantedColumn{VimColumnWish::at_column,
+                            detail::landed_column(view.text, state.mode, cancel.selection.anchor,
+                                                  cancel.selection.caret)};
         return VimStep{std::move(next), VimSelect{cancel.selection}};
     }
     const Offset caret = rested_in(view.text, cancel.selection.caret, VimMode::normal);
