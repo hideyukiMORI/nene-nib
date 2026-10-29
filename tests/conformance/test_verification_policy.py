@@ -133,7 +133,14 @@ class VerificationPolicy(unittest.TestCase):
         # #1024: リンカのシンボルの検査（ARC-003）は Release のビルドの後に回す（ADR 0136 の決定 7）。
         self.assertLess(build_job.index("cmake --build build-release"),
                         build_job.index("python eng/symbols.py --build-dir build-release"))
-        for command in ("check.ps1", "measure-speed", "coverage.py", "-DCMAKE_BUILD_TYPE=Debug"):
+        # #1057: 整形の検査は eng/format-check.ps1 の 1 本を configure より先に呼ぶ（全件ゲートの check.ps1 は呼ばない）。
+        self.assertIn("pwsh -NoProfile -File ./eng/format-check.ps1", build_job)
+        self.assertNotIn("format-check.ps1", check_job)
+        self.assertLess(build_job.index("eng/format-check.ps1"),
+                        build_job.index("cmake -S . -B build-release"))
+        self.assertIn("& pwsh -NoProfile -File eng/format-check.ps1",
+                      (ROOT / "eng/check.ps1").read_text(encoding="utf-8"))
+        for command in ("eng/check.ps1", "measure-speed", "coverage.py", "-DCMAKE_BUILD_TYPE=Debug"):
             self.assertNotIn(command, build_job)
         self.assertEqual((ROOT / ".githooks/pre-commit").read_text(encoding="utf-8").strip(),
                          "#!/bin/sh\nexec git diff --cached --check")

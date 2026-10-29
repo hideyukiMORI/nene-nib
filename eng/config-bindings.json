@@ -1,5 +1,5 @@
 {
-  ".clang-format": ["eng/check.ps1", "eng/prove-gates.py"],
+  ".clang-format": ["eng/format-check.ps1", "eng/prove-gates.py"],
   ".clang-tidy": ["CMakeLists.txt", "eng/prove-gates.py"],
   "eng/tool-versions.json": ["eng/toolchain.ps1"],
   "eng/probes/language.json": ["eng/measure-language.ps1"],

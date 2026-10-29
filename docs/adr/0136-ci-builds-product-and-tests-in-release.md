@@ -20,6 +20,8 @@ CI の中身は Git 規約・検証記録・差分空白の確認だけで（ADR
 
 7. **追補（2026-10-28・#1024）: リンカのシンボルの検査も `build-and-test` で回す。** Release のビルドの直後の step「Linker symbols」で `python eng/symbols.py --build-dir build-release --require core application` を回し、許可の外の未定義シンボルで job を落とす。`symbols.py` は CMake File API の返答から .lib を探すので、configure の step が先に `build-release/.cmake/api/v1/query/codemodel-v2` を置く（`check.ps1` と同じ形）。Release の .lib でも Debug と同じ違反が出ることを手元で確かめた（直す前の main `cb612530` で両方とも `?_Xbad_function_call@std@@YAXXZ` の 1 件・直した後は両方 0）。経緯: #972 が application に `std::function` を持ち込み ARC-003 の違反になったのに、検査が `check.ps1` の中だけで CI は緑のまま main に入った（#1023）。
 
+8. **追補（2026-10-30・#1057）: 整形の検査（QLT-004）も `build-and-test` で回す。** 検査の本体を `eng/format-check.ps1` の 1 本に移し（`git ls-files` の C++ を `third_party/` を除いて `clang-format --dry-run --Werror --style=file:` で照らし、落ちたファイル名を出して非 0）、`eng/check.ps1` と `build-and-test` の step「Formatting (QLT-004)」（configure の前）の両方から呼ぶ。clang-format は clang-cl と同じ VS の LLVM（19.1.5）から来て、版は `toolchain.ps1` が照合する（runner でも照合が通っていることは run 40904129822 の configure の step で確かめた）。`check` job は 5 分の上限で toolchain を読まないので足さない。経緯: #1073 の分割の前の `EditorWindow.cpp` に整形の差分が 2 か所あったまま main にあった。検査が `check.ps1` の手元だけで、merge の直前の CI が見ていなかった。
+
 ## 却下した選択肢
 
 - Debug 構成を CI で回す: ASan / UBSan ＋ clang-tidy の全件は 4 core の runner で長く、合図の 45 分に収まる保証が無い。Debug は実機の gate が守る。
