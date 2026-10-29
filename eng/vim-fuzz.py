@@ -18,7 +18,7 @@ windows, Ex or Ctrl+P and no keys Nib does not take yet (`R s S`). The generator
 VISUAL `<C-a> <C-x> g<C-a> g<C-x>` yet, only the NORMAL `{n}<C-a>` `{n}<C-x>`, and no INSERT `<Up>`
 `<Down>` or `<Del>`.
 
-Generator 4 adds keys inside INSERT: `<Left>` `<Right>` `<Home>` `<End>` between two inserted texts
+Generator 4 (Issue #1135) adds keys inside INSERT: `<Left>` `<Right>` `<Home>` `<End>` between two inserted texts
 (Vim's `stop_arrow` starts a new insert, so `.` repeats only the part after the arrow) and `<BS>`
 (the oracle's `backspace=indent,eol,start` deletes before the insert's start, and `0i<BS>` at a line
 start joins the line with the one above). After one of these words `.` is picked with sixteen times
@@ -132,7 +132,7 @@ WORDS = (
     ("<C-o>", 1, "{n}<C-o>"),
     ("<Tab>", 1, "{n}<Tab>"),
 )
-# 生成器 4 の語（Issue #954 の FZ4）。INSERT の中の矢印・Home / End・<BS>。`--generator 3` は外す。
+# 生成器 4 の語（Issue #1135）。INSERT の中の矢印・Home / End・<BS>。`--generator 3` は外す。
 WORDS_4 = (
     ("i<Left>", 2, "i{i}<Left>{i}<Esc>"), ("a<Right>", 2, "a{i}<Right>{i}<Esc>"),
     ("A<Home>", 1, "A{i}<Home>{i}<Esc>"), ("i<End>", 1, "i{i}<End>{i}<Esc>"),
