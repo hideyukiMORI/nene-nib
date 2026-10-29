@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 77a030e5f8128a02bd7ffb98f987b16f204d896f0af8d2643753d23de3cd7d54 / 3007 fixtures
+// fixtures.json: sha256 1bb1083851cdd8c8504eb78cdd81cd9c04cd681f4ce719d762c150cc00bbc28e / 3027 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3007> vim_fixtures{{
+constexpr std::array<VimFixture, 3027> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2852,6 +2852,26 @@ constexpr std::array<VimFixture, 3007> vim_fixtures{{
     {"block-insert-C", "abcdef\nghijkl\nmnopqr", "ll<C-v>jjCab<Esc>", "abab\nghab\nmnab", 1, 4, "cdef\nijkl\nopqr", "\0264", std::nullopt},
     {"block-insert-C-short", "abcdef\nab\nmnopqr", "lll<C-v>jjCX<Esc>", "abcX\nab\nmnoX", 1, 4, "def\n    \npqr", "\0263", std::nullopt},
     {"block-insert-C-register", "abcdef\nghijkl", "ll<C-v>jCZ<Esc>0P", "cdefabZ\nijklghZ", 1, 1, "cdef\nijkl", "\0264", std::nullopt},
+    {"block-change-edge-issue-C", "\tend. １２?\n    x1", "?n<CR><C-v>jCx<Esc>", "     x \n    x1x", 1, 6, "  end. １２?\n", "\02612", std::nullopt},
+    {"block-change-edge-issue-c", "\tend. １２?\n    x1", "?n<CR><C-v>jcx<Esc>", "      xd. １２?\n    x1x", 1, 7, "  en\n", "\0264", std::nullopt},
+    {"block-change-edge-tab-left-c", "abcdefghij\n\tabc\nabcdefghij", "3l<C-v>jjcx<Esc>", "abcxefghij\n   x    abc\nabcxefghij", 1, 4, "d\n \nd", "\0261", std::nullopt},
+    {"block-change-edge-tab-left-C", "abcdefghij\n\tabc\nabcdefghij", "3l<C-v>jjCx<Esc>", "abcx\n   x\nabcx", 1, 4, "defghij\n     abc\ndefghij", "\0268", std::nullopt},
+    {"block-change-edge-tab-right-c", "abcdefghij\nab\tcd\nabcdefghij", "l<C-v>jj3lcx<Esc>", "axfghij\nax   cd\naxfghij", 1, 2, "bcde\nb   \nbcde", "\0264", std::nullopt},
+    {"block-change-edge-short-C", "abcdefgh\nab\nabcdefgh", "4l<C-v>jjCx<Esc>", "abcdx\nab\nabcdx", 1, 5, "efgh\n     \nefgh", "\0264", std::nullopt},
+    {"block-change-edge-short-c", "abcdefgh\nab\nabcdefgh", "4l<C-v>jjlcx<Esc>", "abcdxgh\nab\nabcdxgh", 1, 5, "ef\n  \nef", "\0262", std::nullopt},
+    {"block-change-edge-short-A", "abcdefgh\nab\nabcdefgh", "4l<C-v>jjlAx<Esc>", "abcdefxgh\nab    x\nabcdefxgh", 1, 5, "", "", std::nullopt},
+    {"block-change-edge-first-short-C", "ab\nabcdefgh\nabcdefgh", "jj4l<C-v>kkCx<Esc>", "abx\nabx\nabx", 1, 3, "\ncdefgh\ncdefgh", "\0266", std::nullopt},
+    {"block-change-edge-wide-left-c", "abcdef\nａｂｃ\nabcdef", "3l<C-v>jjcx<Esc>", "abcxef\nａ xｃ\nabcxef", 1, 4, "d\n \nd", "\0261", std::nullopt},
+    {"block-change-edge-wide-left-C", "abcdef\nａｂｃ\nabcdef", "3l<C-v>jjCx<Esc>", "abcx\nａ x\nabcx", 1, 4, "def\n ｃ\ndef", "\0263", std::nullopt},
+    {"block-change-edge-dollar-c", "abc\nabcdefg\nab", "l<C-v>jj$cx<Esc>", "ax\nax\nax", 1, 2, "bc\nbcdefg\nb", "\0266", std::nullopt},
+    {"block-change-edge-count-2C", "abcdef\n\tabc\nabcdef", "3l<C-v>j2Cx<Esc>", "x\nx\nabcdef", 1, 1, "abcdef\n\tabc", "\02611", std::nullopt},
+    {"block-change-edge-tab-left-C-short", "abcdefghij\n\tabc\nab", "3l<C-v>jjCx<Esc>", "abx\n  x\nabx", 1, 3, "cdefghij\n      abc\n", "\0269", std::nullopt},
+    {"block-change-edge-tab-left-c-short", "abcdefghij\n\tabc\nab", "3l<C-v>jjcx<Esc>", "abxefghij\n  x    abc\nabx", 1, 3, "cd\n  \n", "\0262", std::nullopt},
+    {"block-change-edge-tab-left-c-caret", "abcdefghij\n\tabc\nabcdefghij", "3l<C-v>jjcxy<Esc>u", "abcdefghij\n\tabc\nabcdefghij", 1, 4, "d\n \nd", "\0261", std::nullopt},
+    {"block-change-edge-wide-first-C", "ａｂｃｄ\nabcdef", "ll<C-v>jhCx<Esc>", "ａx \nabcx", 1, 4, " ｃｄ\ndef", "\0265", std::nullopt},
+    {"block-change-edge-tab-first-c-past-end", "\tab\nabcd", "$<C-v>jcx<Esc>", "   x \nabcdx", 1, 4, "    ab\n", "\0266", std::nullopt},
+    {"block-change-edge-tab-first-C-undo", "\tab\nabcd", "$<C-v>jCxy<Esc>u", "\tab\nabcd", 1, 1, "    ab\n", "\0266", std::nullopt},
+    {"block-change-edge-tab-first-c-dot", "\tab\nabcd\n\tab\nabcd", "$<C-v>jcx<Esc>jj$.", "   x \nabcdx\n\tax\nabcd", 3, 3, "b\n  ", "\0261", std::nullopt},
     {"block-insert-shift-right", "abcdef\nghijkl\nmnopqr", "l<C-v>jj>", "a\t bcdef\ng\t hijkl\nm\t nopqr", 1, 2, "", "", std::nullopt},
     {"block-insert-shift-right-short", "abcdef\nab\nmnopqr", "lll<C-v>jj>", "abc\t   def\nab\nmno\t   pqr", 1, 4, "", "", std::nullopt},
     {"block-insert-shift-right-count", "abcdef\nghijkl\nmnopqr", "l<C-v>jj2>", "a\t\t bcdef\ng\t\t hijkl\nm\t\t nopqr", 1, 2, "", "", std::nullopt},

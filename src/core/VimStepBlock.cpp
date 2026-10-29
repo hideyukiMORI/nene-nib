@@ -400,6 +400,24 @@ after_straddled(const TextBuffer &text, const VimBlockInsert &insert, std::strin
     }
     return at_line_end(state) ? VimBlockInsertSide::line_end : VimBlockInsertSide::after;
 }
+
+// 矩形の `c` `C` が 1 行目に打ち始める所（ADR 0035 の追補 #1108）。ふつうは消したあとの左の桁
+// （切れた文字の外側の空白の後ろ）。ただし左の端が文字（Tab か全角）の途中に掛かって外側を空白で
+// 残し、その後ろに何も残らないときは、残した最後の空白の手前から打つ（固定 Vim の op_delete が
+// カーソルを `textcol + startspaces` へ置いて check_cursor_col が行末の 1 つ手前へ戻し、op_change
+// の inc_cursor は矩形の左上の文字が手前なので戻さない・実測 `block-change-edge-issue-C`）。
+[[nodiscard]] Offset change_entry(const TextBuffer &text, const VimBlockRange &block,
+                                  const VimRemoveBlock &removal)
+{
+    const VimBlockLine &top = block.lines.front();
+    const bool nothing_after =
+        top.keep_tail == 0 && top.range.end.value == text.line_end(block.first).value;
+    if (top.keep_lead > 0 && nothing_after)
+    {
+        return Offset{removal.caret.value - single_step};
+    }
+    return removal.caret;
+}
 } // namespace
 
 namespace detail
@@ -457,6 +475,7 @@ namespace detail
     }
     auto [next, clipboard] = std::move(written).value();
     VimRemoveBlock removal = vim_remove_block(block);
+    removal.caret = change_entry(view.text, block, removal);
     const VimBlockLine &top = block.lines.front();
     const std::size_t line_bytes = view.text.line_text(block.first).size() -
                                    (top.range.end.value - top.range.begin.value) + top.keep_lead +
