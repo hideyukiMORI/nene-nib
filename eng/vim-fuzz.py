@@ -131,8 +131,6 @@ WORDS = (
     ("gi", 1, "{n}gi{i}<Esc>"),
     ("<C-o>", 1, "{n}<C-o>"),
     ("<Tab>", 1, "{n}<Tab>"),
-    # 行の 1 桁目に入る `gI`（#1032）。
-    ("gI", 1, "{n}gI{i}<Esc>"),
 )
 # 生成器 4 の語（Issue #1135）。INSERT の中の矢印・Home / End・<BS>。`--generator 3` は外す。
 WORDS_4 = (
