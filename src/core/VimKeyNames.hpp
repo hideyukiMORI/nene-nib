@@ -8,7 +8,7 @@
 
 namespace nenenib::core
 {
-inline constexpr std::array<VimKeyName, 25> vim_key_names{{
+inline constexpr std::array<VimKeyName, 24> vim_key_names{{
     {"<Esc>", nenenib::core::VimSpecialKey::escape},
     {"<CR>", nenenib::core::VimSpecialKey::enter},
     {"<BS>", nenenib::core::VimSpecialKey::backspace},
@@ -32,7 +32,6 @@ inline constexpr std::array<VimKeyName, 25> vim_key_names{{
     {"<C-a>", nenenib::core::VimSpecialKey::control_a},
     {"<C-x>", nenenib::core::VimSpecialKey::control_x},
     {"<C-o>", nenenib::core::VimSpecialKey::control_o},
-    {"<C-i>", nenenib::core::VimCharacter{U'\x09'}},
     {"<Tab>", nenenib::core::VimCharacter{U'\x09'}},
 }};
 } // namespace nenenib::core
