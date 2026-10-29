@@ -2368,6 +2368,14 @@ void verify_history_absorbing()
     expect(absorbed_edit(Edit{Offset{5}, "", "", Offset{5}}, Edit{Offset{4}, "x", "", Offset{4}}) ==
                Edit{Offset{4}, "x", "", Offset{5}},
            "a backspace before the insert moves the head of the unit back");
+    expect(absorbed_edit(typed, Edit{Offset{3}, "xyab", "Z", Offset{3}}) ==
+               Edit{Offset{3}, "xy", "Z", Offset{5}},
+           "a replacement from before the insert into its text moves the head back (#1093)");
+    expect(absorbed_edit(typed, Edit{Offset{4}, "ya", "Z", Offset{4}}) ==
+               Edit{Offset{4}, "y", "Zb", Offset{5}},
+           "the untouched tail of the inserted text stays after the replacement");
+    expect(!absorbed(typed, Edit{Offset{4}, "yabq", "Z", Offset{4}}).has_value(),
+           "a replacement past the end of the inserted text does not join");
     expect(!absorbed(typed, Edit{Offset{9}, "", "c", Offset{9}}).has_value(),
            "an insert somewhere else does not join");
     expect(!absorbed(typed, Edit{Offset{0}, "x", "", Offset{0}}).has_value(),

@@ -1160,7 +1160,7 @@ template <typename Value, typename Same>
            same_optional(
                left.insert_repeat, right.insert_repeat,
                [](const VimInsertRepeat &before, const VimInsertRepeat &after)
-               { return before.remaining == after.remaining && before.text == after.text; }) &&
+               { return before.remaining == after.remaining && before.keys == after.keys; }) &&
            left.input_wait.has_value() == right.input_wait.has_value();
 }
 
@@ -1900,6 +1900,33 @@ void verify_vim_viewport_request()
     verify_indexed_columns_across_chunks();
 }
 
+// 回数付き INSERT の流し直し（#1093）が CRLF の文書でも行をつなぎ、undo 1 回で戻ること。engine は
+// LF で数えた置き換えを返し、controller が文書の改行へ直す。
+void verify_vim_count_insert_replay_crlf()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string("foo bar\r\nbaz\r\nqux")});
+    static_cast<void>(controller.apply_frame(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
+    vim_replay(controller, "j$2i<C-u><Esc>");
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(editing.files().written() == "foo barz\r\nqux",
+           "the replayed Ctrl-u joins the CRLF line above");
+    expect(controller.frame().caret.position == TextPosition{LineNumber{1}, Column{7}},
+           "Esc rests one character left of the join");
+    vim_replay(controller, "u");
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(editing.files().written() == "foo bar\r\nbaz\r\nqux",
+           "one undo takes back the first round and the replay");
+    vim_replay(controller, "G3A<C-u><Esc>");
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(editing.files().written() == "foo bar\r\n",
+           "each round of Ctrl-u erases the line or joins it to the one above");
+    expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{1}},
+           "the caret rests on the emptied line");
+}
 } // namespace
 
 // scope 専用の契約は verify_vim_scope_contracts の表が回す（Issue #97）。ここは scope を持たない
@@ -1931,6 +1958,7 @@ void verify_vim_engine()
     verify_vim_change_undo_unit();
     verify_vim_insert_motion_breaks_the_unit();
     verify_vim_put_line_endings();
+    verify_vim_count_insert_replay_crlf();
     verify_vim_crlf();
     verify_vim_other_keys();
     verify_vim_normal_stops_at_failure();

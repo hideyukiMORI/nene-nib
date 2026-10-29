@@ -514,6 +514,19 @@ namespace
     return keys;
 }
 
+// 何も消せずに止まった消す鍵（本文の先頭の Backspace・Ctrl-w・Ctrl-u）か（#1093）。Vim の ins_bs
+// はビープで返る鍵を redo に足さないので、`.` の記録にも残さない（`i<C-w>x<Esc>j0.` は x だけ）。
+[[nodiscard]] bool erased_nothing(const VimKey &key, const VimEffect &effect) noexcept
+{
+    const auto *const special = std::get_if<VimSpecialKey>(&key);
+    if (special == nullptr || !std::holds_alternative<VimNoEffect>(effect))
+    {
+        return false;
+    }
+    return *special == VimSpecialKey::backspace || *special == VimSpecialKey::control_w ||
+           *special == VimSpecialKey::control_u;
+}
+
 // INSERT の記録（決定 4）。Esc で 1 つの変更として確定し、移動の鍵は `i` から取り直す。
 // VISUAL から入った挿入は記録を持たないので、確定もしない（決定 5）。
 // `Ctrl-r {name}` は鍵ではなく入れた本文を記録する（Vim の redo も本文・oracle で実測・#1040）。
@@ -537,6 +550,11 @@ namespace
             record = appended(std::move(record), std::move(typed));
         }
         next.recording = std::move(record);
+        return next;
+    }
+    if (erased_nothing(key, effect))
+    {
+        next.recording = before.recording;
         return next;
     }
     if (next.mode == VimMode::normal)

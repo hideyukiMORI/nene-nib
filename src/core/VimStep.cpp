@@ -36,6 +36,7 @@
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::core
 {
@@ -141,7 +142,7 @@ constexpr char32_t control_u_character = 0x15;
     const std::size_t count = count_of(state.count);
     if (count > single_step)
     {
-        next.insert_repeat = VimInsertRepeat{count - single_step, std::string{}};
+        next.insert_repeat = VimInsertRepeat{count - single_step, std::vector<VimKey>{}};
     }
     return VimStep{std::move(next), VimMoveTo{caret}};
 }
@@ -642,7 +643,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     const std::size_t count = count_of(state.count);
     if (count > single_step)
     {
-        next.insert_repeat = VimInsertRepeat{count - single_step, "\n"};
+        next.insert_repeat =
+            VimInsertRepeat{count - single_step, std::vector<VimKey>{VimKey{VimSpecialKey::enter}}};
     }
     return VimStep{
         std::move(next),
