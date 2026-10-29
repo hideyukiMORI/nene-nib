@@ -247,6 +247,34 @@ void verify_restart_limit()
     expect(server.launches().size() == 5, "set lsp starts it again by hand");
 }
 
+// 最後に送った要求に result で答える（`"id":N` の N を本文から読む）。
+void answered(Editing &editing)
+{
+    const std::string &sent = last_sent(editing);
+    constexpr std::string_view key = R"("id":)";
+    const std::size_t begin = sent.find(key) + key.size();
+    const std::string id = sent.substr(begin, sent.find_first_of(",}", begin) - begin);
+    static_cast<void>(delivered(
+        editing, app::ServerMessage{R"({"jsonrpc":"2.0","id":)" + id + R"(,"result":{}})"}));
+}
+
+// 失敗の数は続けて失敗した回数で、`initialized` まで届いたら 0 に戻る（決定 6・R1-4）。
+void verify_failures_reset()
+{
+    Editing editing(lsp_settings(true));
+    started(editing);
+    auto &server = editing.language_server();
+    for (std::size_t round = 0; round < 5; ++round)
+    {
+        static_cast<void>(delivered(editing, app::ServerExited{1}));
+        static_cast<void>(delivered(editing, app::ServerStarted{}));
+        answered(editing);
+    }
+    expect(server.launches().size() == 6 &&
+               contains(last_sent(editing), R"("method":"initialized")"),
+           "a server that initializes again is restarted after every single failure");
+}
+
 // 起こせない命令は 1 行知らせて止まる（自動では起こし直さない）。
 void verify_start_refused()
 {
@@ -333,6 +361,7 @@ void verify_language_server_contracts()
     verify_switch();
     verify_language_follow();
     verify_restart_limit();
+    verify_failures_reset();
     verify_start_refused();
     verify_staleness();
     verify_tick_is_not_an_operation();

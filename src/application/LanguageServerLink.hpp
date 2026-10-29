@@ -21,9 +21,10 @@ inline constexpr std::size_t language_server_stale_ticks = 2;
 
 // controller が持つ言語サーバーとのつながりの控え（ADR 0160 の決定 5・6）。同時に起きているのは
 // 1 本で、language はその子の言語（idle なら空）。next_id は要求の通し番号、pending は答えを
-// 待っている要求、encoding はサーバーが選んだ位置の単位、failures は続けて失敗した回数（`:set
-// lsp` が 0 に戻す）、given_up は上限を超えて止まったこと、retired は stop した子が adapter に
-// 残っているかもしれないこと（次の tick で expire_retired を呼ぶ）。considered は子が居ない
+// 待っている要求、encoding はサーバーが選んだ位置の単位、failures
+// は続けて失敗した回数（`initialized` まで届くか `:set lsp` で 0 に戻る）、given_up
+// は上限を超えて止まったこと、retired は stop した子が adapter に 残っているかもしれないこと（次の
+// tick で expire_retired を呼ぶ）。considered は子が居ない
 // ときに起こすかを決めた言語（同じ言語では打鍵ごとに設定を引き直さない・止めると空に戻る）、
 // generation は stop のたびに進む数（止めた後の同じ集めの残りを読まない）。公開 aggregate
 // （CPP-003）。

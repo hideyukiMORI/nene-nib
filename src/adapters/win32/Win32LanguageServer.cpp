@@ -78,6 +78,12 @@ std::vector<application::ServerEvent> Win32LanguageServer::collect()
 void Win32LanguageServer::bind(std::function<void()> arrived)
 {
     arrived_ = std::move(arrived);
+    // 結ぶ前（窓の前・controller の構築の中の start）に溜まった出来事は合図が出ていないので、
+    // ここで 1 回知らせる（post は列が空から増えたときしか知らせない）。
+    if (!events_.empty() && arrived_)
+    {
+        arrived_();
+    }
 }
 
 std::span<const HANDLE> Win32LanguageServer::waitable_handles() const noexcept

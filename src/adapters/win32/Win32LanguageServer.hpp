@@ -52,7 +52,7 @@ class Win32LanguageServer final : public application::LanguageServerPort
     // stop / completed / expire_retired を呼ぶまで有効。
     [[nodiscard]] std::span<const HANDLE> waitable_handles() const noexcept;
     // 届いたの合図を結び直す（合成ルートが窓を作った後に 1 回・Win32FolderAdapter の bind と
-    // 同じ形）。空の合図は呼ばない。
+    // 同じ形）。空の合図は呼ばない。結ぶ前に溜まった出来事があれば、結んだ合図を 1 回呼ぶ。
     void bind(std::function<void()> arrived);
     // waitable_handles の 1 つが立ったときに呼ぶ。知らない handle は何もしない。
     void completed(HANDLE handle);

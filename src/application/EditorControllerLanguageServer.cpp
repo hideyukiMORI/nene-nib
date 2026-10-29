@@ -349,6 +349,8 @@ void EditorController::receive_lsp(const core::LspResponse &response)
         ports_.language_server.send(
             core::lsp_notification_body("initialized", core::JsonValue{core::JsonObject{}}));
         link.phase = LanguageServerPhase::running;
+        // 続けて失敗した回数なので、initialized まで届いたら 0 に戻す（決定 6）。
+        link.failures = 0;
         return;
     case LspRequestKind::shutdown:
         ports_.language_server.send(

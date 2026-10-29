@@ -59,7 +59,7 @@ LSP 3.17 は子プロセスと stdio で JSON-RPC 2.0 を話す（`Content-Lengt
 
 ## 追補（2026-10-28・PR #1021 の独立レビュー）: `stop` は待たず、`shutdown` / `exit` は controller が送る
 
-- **決定 1 の `stop`**: adapter の `stop()` は `shutdown` も `exit` も送らない（それは controller の役・L1 で `shutdown` の答えを待って `exit` を送る）。`stop()` は書きの待ち行列を drain し、入力のパイプを閉じ、読みを drain し、出力のパイプを閉じ、子の process と job を「退く子」の枠に移して**即座に戻る**（UI スレッドで待たない）。退く子の process の handle は `waitable_handles()` に含め、pump が立ちを見たら `completed(handle)` で片付ける。2 秒の期限は `LanguageServerTick`（決定 6）で controller が `expire_retired()` を呼び、残っていれば `TerminateJobObject`。窓を閉じるときは job を閉じるだけ（`KILL_ON_JOB_CLOSE` が子を殺す・待たない）。
+- **決定 1 の `stop`**: adapter の `stop()` は `shutdown` も `exit` も送らない（それは controller の役・L1 で `shutdown` の答えを待って `exit` を送る）。`stop()` は書きの待ち行列を drain し、入力のパイプを閉じ、読みを drain し、出力のパイプを閉じ、子の process と job を「退く子」の枠に移して**即座に戻る**（UI スレッドで待たない）。退く子の process の handle は `waitable_handles()` に含め、pump が立ちを見たら `completed(handle)` で片付ける。退く子の期限は `LanguageServerTick`（決定 6・30 秒ごと）で、controller が stop の後の最初の tick で `expire_retired()` を呼び、残っていれば `TerminateJobObject`（#994 で 2 秒から tick の間隔に揃えた）。窓を閉じるときは job を閉じるだけ（`KILL_ON_JOB_CLOSE` が子を殺す・待たない）。
 - **絶対パスだけ**: `ServerLaunch.executable` が絶対パスでなければ `ServerFailure::not_found`（決定 7 の「設定に書いたパスだけを起こす」を作業フォルダの相対の解決で崩さない）。
 - **孫の継承**: 子の process が終わったら `TerminateJobObject` で子孫を片付け、出力の EOF を待たずに `ServerExited` へ進める。
 - **枠の切り出し**: #1009 の `lsp_frames` が main に入るまで adapter の `ServerFramer` が自前で切る（2 本目の経路・#1022 で置き換える）。
