@@ -11,6 +11,8 @@
 #include "DocumentReadRequest.hpp"
 #include "DocumentReading.hpp"
 #include "DocumentState.hpp"
+#include "EditMode.hpp"
+#include "EditorState.hpp"
 #include "ExLanguageRequest.hpp"
 #include "ExResult.hpp"
 #include "ExSyntaxRequest.hpp"
@@ -33,6 +35,7 @@
 #include "TextPosition.hpp"
 #include "UnloadedDocument.hpp"
 #include "Utf16.hpp"
+#include "VimState.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -57,8 +60,7 @@ using detail::parked_path;
 
 namespace
 {
-// 同期で読むのはここまで（ADR 0010 の決定 12）。値の正本は core の 1 か所で、退避の読み戻しも同じ
-// 値を読む（#792・ADR 0121 の追補の決定 8）。
+// 開く本文の上限（ADR 0159 の決定 7）。値の正本は core の 1 か所。
 constexpr std::size_t maximum_file_bytes = core::maximum_document_bytes;
 
 [[nodiscard]] std::string_view ex_write_failure(FileFailure failure) noexcept
@@ -74,6 +76,7 @@ constexpr std::size_t maximum_file_bytes = core::maximum_document_bytes;
     case FileFailure::unreadable:
     case FileFailure::unwritable:
     case FileFailure::too_large:
+    case FileFailure::too_large_to_decode:
     case FileFailure::undecodable:
     case FileFailure::unsupported_utf32:
     case FileFailure::insufficient_memory:
@@ -298,6 +301,16 @@ constexpr std::string_view reading_prefix = "読み込み中: ";
 }
 
 // 開く要求か（まだ読んでいないタブの読みでないか・追補 1）。
+// Vim の待ち（回数・オペレータ・次の 1 鍵・選んだレジスタ）の最中か（ADR 0159 の追補 5）。待ちを
+// 終える鍵の意図の終わりで留めた結果を採る。
+[[nodiscard]] bool vim_waiting(const EditorState &state) noexcept
+{
+    const core::VimState &vim = state.vim();
+    return state.mode() == core::EditMode::vim &&
+           (vim.count.has_value() || vim.pending.has_value() || vim.input_wait.has_value() ||
+            vim.selected_register.has_value());
+}
+
 [[nodiscard]] bool opens(const DocumentReading &reading) noexcept
 {
     return std::holds_alternative<OpenFailureReply>(reading.target);
@@ -397,6 +410,7 @@ void EditorController::restore_tabs(const Session &session)
             // 裏で読んでいる間は無題を仮に残し、揃ってそのタブへ切り替えたときに外す（追補 1）。
             restore_untitled_ = state_.autosave_ids().at(0);
             restore_ranks_ = std::move(ranks);
+            reach_wanted_ = state_.autosave_ids().at(position);
             return;
         case TabReach::dropped:
             break;
@@ -745,10 +759,12 @@ std::optional<DocumentReadFinished> EditorController::take_arrived(std::uint64_t
     return finished;
 }
 
-// Ctrl+Tab の歩き・入力行（`:` と検索）・Ctrl+P の面の最中は揃った結果を採らない（追補 2）。
+// Ctrl+Tab の歩き・入力行（`:` と検索）・Ctrl+P の面・IME の変換中・Vim の待ちの最中は揃った結果を
+// 採らない（追補 2・5）。録画（`q`）は窓の値で文書に依らないので留めない。
 bool EditorController::reads_held() const noexcept
 {
-    return state_.tab_walking() || state_.command_input().has_value();
+    return state_.tab_walking() || state_.command_input().has_value() ||
+           state_.composition().has_value() || vim_waiting(state_);
 }
 
 // 留めた結果を頼んだ順に採る（追補 2・4）。開く要求は先に頼んだ開く要求が揃うまで待ち、
@@ -815,8 +831,9 @@ void EditorController::finish_reading(const core::FilePath &, AutosaveId tab,
     finish_tab_read(tab, std::move(document));
 }
 
-// まだ読んでいないタブの裏の読みが揃った（追補 1）。読めたらそのタブへ切り替え、読めなければ
-// 帯から外して 1 行知らせる。起動の復元で無題が仮に残っていれば、切り替えた後に外す。
+// まだ読んでいないタブの裏の読みが揃った（追補 1・6）。読めたら束に置き換え、そのタブが待っている
+// 切り替え先（最後に指されたタブ）のときだけ切り替える。歩きで飛ばしたタブは置き換えるだけ。読め
+// なければ帯から外して 1 行知らせる。起動の復元で無題が仮に残っていれば、切り替えた後に外す。
 void EditorController::finish_tab_read(AutosaveId tab,
                                        std::expected<OpenedDocument, FileFailure> document)
 {
@@ -825,11 +842,12 @@ void EditorController::finish_tab_read(AutosaveId tab,
     {
         return;
     }
+    const bool wanted = reach_wanted_.has_value() && reach_wanted_.value() == tab;
     const std::optional<AutosaveId> placeholder = std::exchange(restore_untitled_, std::nullopt);
     const bool replaces = placeholder.has_value() &&
                           state_.autosave_ids().at(state_.active_tab()) == placeholder.value() &&
                           blank_untitled();
-    if (loaded_tab(position.value(), std::move(document)) != TabReach::reached)
+    if (loaded_tab(position.value(), std::move(document)) != TabReach::reached || !wanted)
     {
         return;
     }
@@ -1070,6 +1088,8 @@ std::expected<void, FileFailure> EditorController::save_document(const SaveDocum
 
 void EditorController::leave_document()
 {
+    // 文書が替わったら、裏の読みが揃っても前に指したタブへは切り替えない（ADR 0159 の追補 6）。
+    reach_wanted_.reset();
     // 出ていく文書の追従を今の文書で解決してから置く（ADR 0128）。問いの間は解決できないので
     // 保留を捨て、次の文書へ持ち越さない（ADR 0128 の決定 7）。
     drop_pending_follow();
@@ -1176,6 +1196,7 @@ void EditorController::accept(const EndSession &intent)
     // 読み込み中の要求は取消で、ファイルは開かれない（ADR 0159 の決定 5・11・追補 1）。
     cancel_readings(false);
     restore_untitled_.reset();
+    reach_wanted_.reset();
     // 言語サーバーは待たずに止める（ADR 0160 の追補）。子が居なければ呼ばない。
     end_language_server_session();
     settle_follow();
@@ -1268,6 +1289,16 @@ void EditorController::ask_display()
     }
 }
 
+// 隣を裏で読んでいる間は空の無題に移り、揃ったら隣へ切り替える（追補 1・6）。
+void EditorController::close_toward_reading(std::size_t active, std::size_t neighbour)
+{
+    const AutosaveId wanted = state_.autosave_ids().at(neighbour);
+    leave_document();
+    state_ = state_.with_new_tab().with_closed(active);
+    enter_document();
+    reach_wanted_ = wanted;
+}
+
 // アクティブを閉じる。次にアクティブになる隣（右隣・無ければ左隣）を先に読み、読めなければ外して
 // 次の隣を試す。隣が 1 本も残らなければ空の無題を 1 本置く。窓は閉じない。使う人が閉じたのは
 // 1 本だけで、ほかのタブが読めなかったのは使う人の操作ではない（ADR 0059 の決定 5）。
@@ -1285,10 +1316,7 @@ void EditorController::close_active_tab()
             enter_document();
             return;
         case TabReach::reading:
-            // 隣を裏で読んでいる間は空の無題に移り、揃ったら隣へ切り替える（追補 1）。
-            leave_document();
-            state_ = state_.with_new_tab().with_closed(active);
-            enter_document();
+            close_toward_reading(active, neighbour);
             return;
         case TabReach::dropped:
             break;

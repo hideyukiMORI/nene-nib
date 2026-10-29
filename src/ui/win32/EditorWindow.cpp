@@ -253,7 +253,9 @@ using FontKey = std::pair<float, std::string>;
     case application::FileFailure::already_exists:
         return L"ファイルは既に存在します。";
     case application::FileFailure::too_large:
-        return L"64 MiB を超えるファイルはまだ開けません。";
+        return L"1 GB を超えるファイルは開けません。";
+    case application::FileFailure::too_large_to_decode:
+        return L"64 MiB を超える Shift_JIS / UTF-16 は開けません。";
     case application::FileFailure::undecodable:
         return L"文字コードを判別できませんでした。";
     case application::FileFailure::unsupported_utf32:

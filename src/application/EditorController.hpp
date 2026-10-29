@@ -227,7 +227,7 @@ class EditorController final
     void adopt_progress(const DocumentReadProgress &progress);
     void adopt_finished(DocumentReadFinished finished);
     [[nodiscard]] std::optional<DocumentReadFinished> take_arrived(std::uint64_t ticket);
-    // 歩き・入力行・面の最中か（揃った結果を採らない・追補 2）。
+    // 歩き・入力行・面・IME の変換中・Vim の待ちの最中か（揃った結果を採らない・追補 2・5）。
     [[nodiscard]] bool reads_held() const noexcept;
     // 留めた結果を頼んだ順に採る（追補 2・4）。開く要求は open_read か answer_unopened へ、タブの
     // 読みは finish_tab_read へ渡す。
@@ -436,6 +436,7 @@ class EditorController final
     // worker の失敗を引き、成功するまで 1 回だけ知らせる（決定 4）。
     void collect_autosave();
     void notify_autosave_failure();
+    void notify_autosave_oversized(AutosaveId id);
     // 帯（ADR 0056 の決定 2・3・8）。帯の幅・ホイール・マウスを載せた要素。
     void accept(const TitleBarWidth &intent);
     void accept(const ScrollTabs &intent);
@@ -463,6 +464,7 @@ class EditorController final
     [[nodiscard]] TabReach reach_tab(std::size_t position);
     // アクティブを閉じて隣へ移る（隣を reach_tab で読む・1 本も残らなければ空の無題）。
     void close_active_tab();
+    void close_toward_reading(std::size_t active, std::size_t neighbour);
     // 読めなかったタブの知らせ（ADR 0059 の「知らせの文言」）。同じ意図の中の件数を数える。
     void report_unreached(const core::FilePath &path);
     // 起動で前回のタブを戻す（ADR 0059 の決定 6 と「手順」）。ファイルの引数が無いときだけ。
@@ -735,6 +737,10 @@ class EditorController final
     // 起動の復元で見ていたタブが裏の読みになったとき仮に残した無題と、使った順の順位（追補 1）。
     // そのタブへ切り替えたときに無題を外して順位を当てる。
     std::optional<AutosaveId> restore_untitled_;
+    // 裏の読みが揃ったときに切り替える先（ADR 0159 の追補 1・6）。最後に SwitchTab・起動の復元・
+    // 閉じた後の隣・枠の移りで指されて裏の読みになったタブ。文書が替わると（leave_document）消え、
+    // 歩きで飛ばしたタブは入らない。
+    std::optional<AutosaveId> reach_wanted_;
     std::vector<std::size_t> restore_ranks_;
     // 前の frame の本文の先頭行（決定 7）。frame だけが読み書きする。
     std::optional<core::LineNumber> preview_body_top_;
@@ -742,6 +748,9 @@ class EditorController final
     AutosaveLedger autosave_ledger_;
     // 「自動退避できませんでした」を出したか。次に成功するまで 2 回目を出さない（決定 4）。
     bool autosave_notified_ = false;
+    // 上限を超えて退避しない知らせを出した文書の退避番号（ADR 0159 の決定 7・L-4）。番号は再利用
+    // されないので文書ごとに 1 回。
+    std::vector<AutosaveId> autosave_oversized_;
     // 起動の問いの間だけ持つ残骸の列（決定 6）。autosave_remnants() が置き、答えの意図が空にする。
     std::vector<AutosaveRemnant> autosave_remnants_;
     // 枠の側ごとの構文の状態の覚え（ADR 0156 の決定 9・first と second の 2 つ）。frame だけが

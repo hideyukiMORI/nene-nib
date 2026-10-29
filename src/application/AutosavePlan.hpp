@@ -15,6 +15,8 @@ namespace nenenib::application
 // 残っていて状態に無い（閉じた）タブの discard を返す。
 // store: 読み込み済み・未保存・改訂番号が帳面と違う（帳面に無いも含む）。
 // discard: 帳面にあって、保存済み・まだ読んでいない・閉じた。
+// oversized: store に当たるが本文が core::maximum_decoded_document_bytes を超える（ADR 0159 の
+// 決定 7・L-4）。書かず、前の退避も消さない。
 // keep: それ以外（未保存で変わっていない・保存済みで帳面に無い・まだ読んでいなくて帳面に無い）。
 [[nodiscard]] std::vector<std::pair<AutosaveId, AutosaveStep>>
 autosave_plan(const EditorState &state, const AutosaveLedger &ledger);

@@ -12,5 +12,8 @@ enum class AutosaveStep
     discard,
     // 何もしない。
     keep,
+    // 未保存で変わったが、本文が core::maximum_decoded_document_bytes を超えるので書かない（ADR
+    // 0159 の決定 7・L-4）。知らせは文書ごとに 1 回。
+    oversized,
 };
 } // namespace nenenib::application

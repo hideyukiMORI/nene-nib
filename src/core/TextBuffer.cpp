@@ -165,8 +165,9 @@ std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(DetectedText text)
     case TextEncoding::utf8:
         break;
     case TextEncoding::utf8_bom:
-        text.bytes_.erase(0, byte_order_mark().size());
-        break;
+        // BOM は列から消さず、最初の piece の開始を BOM の後ろへずらす（1 GiB の memmove をしない・
+        // ADR 0159 の決定 8）。
+        return from_validated_utf8(std::move(text.bytes_), byte_order_mark().size());
     case TextEncoding::utf16_le:
     case TextEncoding::utf16_be:
         // DetectedText が判定のときに UTF-8 へ写して BOM を外してある（ADR 0149 の決定 2）。
@@ -177,20 +178,22 @@ std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(DetectedText text)
     return from_validated_utf8(std::move(text.bytes_));
 }
 
-TextBuffer TextBuffer::from_validated_utf8(std::string text)
+TextBuffer TextBuffer::from_validated_utf8(std::string text, std::size_t skip)
 {
     auto original = std::make_shared<const std::string>(std::move(text));
-    // original の索引はここでだけ作り、以後の値はこれを共有する（ADR 0047 / 0080）。
+    // original の索引はここでだけ作り、以後の値はこれを共有する（ADR 0047 / 0080）。索引は skip
+    // を含む original の全体の bit のまま（ADR 0121）。
     auto newlines = std::make_shared<const NewlineIndex>(NewlineIndex::from_text(*original));
+    const std::size_t start = std::min(skip, original->size());
     std::vector<Piece> pieces;
-    if (!original->empty())
+    if (original->size() > start)
     {
-        pieces.push_back(
-            Piece{PieceSource::original, 0, Offset{0}, original->size(), 0, newlines->size()});
+        pieces.push_back(Piece{PieceSource::original, 0, Offset{start}, original->size() - start,
+                               newlines->count_before(start), newlines->size()});
     }
     // 改行の形はここで 1 度だけ判別する。以後は本文が持ち回り、開く経路は自分で判別しない
     // （ADR 0036 の決定 1 / ADR 0010 の決定 4）。
-    const LineEnding ending = detect_line_ending(*original);
+    const LineEnding ending = detect_line_ending(std::string_view(*original).substr(start));
     // 仮想桁の索引は要る文書だけが with_virtual_columns で持つ（ADR 0140 の決定 4）。
     return TextBuffer(std::move(original), std::move(newlines), nullptr, std::move(pieces), ending);
 }

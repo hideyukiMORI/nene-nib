@@ -6,10 +6,13 @@
 #include "CancelCommand.hpp"
 #include "CloseTab.hpp"
 #include "CommandText.hpp"
+#include "CommitText.hpp"
+#include "ComposeText.hpp"
 #include "DocumentByteLimit.hpp"
 #include "DocumentReadFinished.hpp"
 #include "DocumentReadProgress.hpp"
 #include "DocumentReadRequest.hpp"
+#include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
@@ -25,6 +28,7 @@
 #include "ScriptedDocumentReads.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScriptedSession.hpp"
+#include "SelectEditMode.hpp"
 #include "Session.hpp"
 #include "SessionEnd.hpp"
 #include "SessionTab.hpp"
@@ -34,6 +38,9 @@
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
+#include "VimCharacter.hpp"
+#include "VimKey.hpp"
+#include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
 #include "WalkRecentTab.hpp"
 #include "WorkCompleted.hpp"
@@ -430,6 +437,108 @@ void verify_open_listed()
                opened.tabs.size() == 2 && first_line(opened) == "history",
            "a listed file opens through the port");
 }
+
+// IME の変換中は揃った結果を採らず、確定の意図の終わりで採る（追補 5・7）。確定の文字は開く前の
+// 文書に入り、揃った文書には入らない。
+void verify_open_held_while_composing()
+{
+    Editing editing;
+    open_small_then_defer(editing);
+    auto &controller = editing.controller();
+    applied(controller, app::OpenDocument{path_of("C:\\work\\big.txt")});
+    const std::uint64_t ticket = last_ticket(editing);
+    applied(controller, app::ComposeText{composed_of("あ", {}, 0)});
+    editing.reads().finish(ticket);
+    const auto composing = controller.apply_frame(app::WorkCompleted{});
+    expect(composing.tabs.size() == 1 && composing.composition.has_value(),
+           "a finished read is held while a composition is open");
+    const auto committed = controller.apply_frame(app::CommitText{"あ"});
+    expect(committed.tabs.size() == 2 && committed.document.title.text() == "big.txt" &&
+               first_line(committed) == "large body" && !committed.composition.has_value(),
+           "the held read opens after the commit");
+    const auto first = controller.apply_frame(app::SwitchTab{0});
+    expect(first_line(first) == "あa", "the committed text went into the earlier document");
+}
+
+// Vim のオペレータ待ちの最中は揃った結果を採らず、待ちを終える鍵の意図の終わりで採る（追補 5・7）。
+// 待ちを終える鍵は開く前の文書に効く。
+void verify_open_held_while_vim_waits()
+{
+    Editing editing;
+    open_small_then_defer(editing);
+    auto &controller = editing.controller();
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    applied(controller, app::OpenDocument{path_of("C:\\work\\big.txt")});
+    const std::uint64_t ticket = last_ticket(editing);
+    const core::VimKey delete_key{core::VimCharacter{U'd'}};
+    applied(controller, app::VimKeyPress{delete_key});
+    editing.reads().finish(ticket);
+    const auto waiting = controller.apply_frame(app::WorkCompleted{});
+    expect(waiting.tabs.size() == 1 && first_line(waiting) == "a",
+           "a finished read is held while an operator waits");
+    const auto deleted = controller.apply_frame(app::VimKeyPress{delete_key});
+    expect(deleted.tabs.size() == 2 && deleted.document.title.text() == "big.txt" &&
+               first_line(deleted) == "large body",
+           "the held read opens after the key that ends the wait");
+    const auto first = controller.apply_frame(app::SwitchTab{0});
+    expect(first_line(first).empty(), "the key that ended the wait went to the earlier document");
+}
+
+// a.txt（裏へ回る）・c.txt・b.txt（見ていた）の 3 本の一覧。使った順は b → a → c。
+[[nodiscard]] SessionReading three_listed()
+{
+    const auto tab = [](std::string_view path, std::size_t rank)
+    {
+        return app::SessionTab{path_of(path),
+                               core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                               core::LineNumber{1}, rank};
+    };
+    return SessionReading{std::optional<app::Session>{app::Session{
+        {tab("C:\\work\\a.txt", 1), tab("C:\\work\\c.txt", 2), tab("C:\\work\\b.txt", 0)}, 2}}};
+}
+
+// Ctrl+Tab の歩きは裏で読んでいるタブを帯に残したまま飛ばす。飛ばしたタブが揃っても、ほかの
+// タブで確定した後なら切り替えず、束に置き換えるだけ。候補が全部読みの途中なら動かない（追補
+// 6・7）。
+void verify_walk_skips_reading_tabs()
+{
+    Editing editing(three_listed(), {},
+                    [](ScriptedFiles &files, ScriptedDocumentReads &reads)
+                    {
+                        files.hold_at("C:\\work\\a.txt", Bytes{"large body"});
+                        files.hold_at("C:\\work\\b.txt", Bytes{"b"});
+                        files.hold_at("C:\\work\\c.txt", Bytes{"c"});
+                        reads.defer_above(deferred_bytes);
+                    });
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    applied(controller, app::SwitchTab{0});
+    const std::uint64_t skipped = last_ticket(editing);
+    const auto walked = controller.apply_frame(app::WalkRecentTab{core::TabStep::next});
+    expect(walked.tabs.size() == 3 && walked.document.title.text() == "c.txt" &&
+               first_line(walked) == "c" && controller.tab_walking(),
+           "the walk skips the tab being read and goes to the next one");
+    applied(controller, app::SettleRecentTab{});
+    editing.reads().finish(skipped);
+    const auto settled = controller.apply_frame(app::WorkCompleted{});
+    expect(settled.tabs.size() == 3 && settled.document.title.text() == "c.txt",
+           "a skipped tab that finishes after the walk settled elsewhere does not switch");
+    const std::size_t asked = editing.reads().requests().size();
+    const auto shown = controller.apply_frame(app::SwitchTab{0});
+    expect(shown.document.title.text() == "a.txt" && first_line(shown) == "large body" &&
+               editing.reads().requests().size() == asked,
+           "the finished skipped tab is in the band, read, when it is shown");
+    Editing alone(two_listed(), hold_listed);
+    alone.reads().defer_above(0);
+    auto &only = alone.controller();
+    applied(only, app::VisibleLines{10});
+    applied(only, app::SwitchTab{0});
+    const std::size_t requests = alone.reads().requests().size();
+    const auto stayed = only.apply_frame(app::WalkRecentTab{core::TabStep::next});
+    expect(stayed.tabs.size() == 2 && stayed.document.title.text() == "b.txt" &&
+               alone.reads().requests().size() == requests,
+           "the walk does not move when every other tab is being read");
+}
 } // namespace
 
 void verify_open_async_contracts()
@@ -446,6 +555,9 @@ void verify_open_async_contracts()
     verify_open_held_while_palette();
     verify_open_arguments_in_order();
     verify_open_listed();
+    verify_open_held_while_composing();
+    verify_open_held_while_vim_waits();
+    verify_walk_skips_reading_tabs();
 }
 
 void verify_open_async_scope()

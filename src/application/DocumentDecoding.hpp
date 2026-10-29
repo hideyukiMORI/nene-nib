@@ -10,6 +10,7 @@
 #include "OpenedDocument.hpp"
 #include "SealedBytes.hpp"
 #include "TextBuffer.hpp"
+#include "TextEncoding.hpp"
 
 #include <cstddef>
 #include <expected>
@@ -19,6 +20,11 @@ namespace nenenib::application
 // 判定の失敗のうち UTF-32 だけは名指しで断る。ほかは判別できなかった、のまま（#787）。
 [[nodiscard]] FileFailure file_failure_of(core::EncodingFailure failure) noexcept;
 [[nodiscard]] FileFailure file_failure_of(CodePageFailure failure) noexcept;
+// 復号の要る本文（Shift_JIS / UTF-16）が入力のバイト数で core::maximum_decoded_document_bytes を
+// 超えるか（ADR 0159 の決定 7・L-3）。UTF-8 / UTF-8 BOM はいつも偽（上限は開く道の
+// core::maximum_document_bytes の 1 つ）。超えたら開く道は FileFailure::too_large_to_decode。
+[[nodiscard]] bool exceeds_decoded_limit(core::TextEncoding encoding,
+                                         std::size_t input_bytes) noexcept;
 // 判定済みの列を本文へ渡す 1 本。CP932 の変換だけはポートの向こう（ADR 0080）。開く道と
 // 自動退避の読み戻しが共用する。
 [[nodiscard]] std::expected<core::TextBuffer, FileFailure> decoded_text(CodePagePort &code_pages,
