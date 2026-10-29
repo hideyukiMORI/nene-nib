@@ -45,7 +45,8 @@ constexpr KeyChord ctrl_shift(OperationKey key)
 // 鍵 → 通常モードの操作・Vim の操作。表の全行の鍵と、表に無い鍵の組み合わせ。
 using ChordRow = std::tuple<KeyChord, Operation, Operation>;
 constexpr std::array<ChordRow, 43> chord_rows{{
-    {ctrl(OperationKey::o), EditorOperation::open_file, EditorOperation::open_file},
+    // Vim の Ctrl+O はジャンプの戻り（D71・#1037）。Vim の開くは Ctrl+Shift+O。
+    {ctrl(OperationKey::o), EditorOperation::open_file, std::nullopt},
     {ctrl(OperationKey::s), EditorOperation::save, EditorOperation::save},
     {ctrl_shift(OperationKey::s), EditorOperation::save_as, EditorOperation::save_as},
     {ctrl(OperationKey::t), EditorOperation::new_tab, EditorOperation::new_tab},
@@ -107,7 +108,7 @@ constexpr std::array<ChordRow, 43> chord_rows{{
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
 constexpr std::array<ShownRow, 25> shown_rows{{
-    {EditorOperation::open_file, "Ctrl+O", "Ctrl+O", true, true},
+    {EditorOperation::open_file, "Ctrl+O", "Ctrl+Shift+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
     {EditorOperation::new_tab, "Ctrl+T", "Ctrl+T", true, true},

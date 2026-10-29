@@ -16,6 +16,7 @@
 #include "VimBlockRange.hpp"
 #include "VimCaret.hpp"
 #include "VimCharacter.hpp"
+#include "VimJumpLists.hpp"
 #include "VimKey.hpp"
 #include "VimMarkEdits.hpp"
 #include "VimMode.hpp"
@@ -147,13 +148,20 @@ void EditorController::replace(const core::OffsetRange &range, std::string_view 
     }
     auto next = state_.text().replaced(range.begin, range.end, text);
     const core::Edit edit{range.begin, std::move(removed), std::string(text), restore};
-    // 行がずれたマークを直し、最後の変更の位置を置く（ADR 0152 の決定 6・7）。
-    auto marks = core::marks_adjusted(state_.vim_marks(), state_.text(), edit);
-    marks.last_change = core::vim_last_change_of(state_.text(), edit);
-    state_ = state_.with_vim_marks(std::move(marks));
     const core::Offset caret{range.begin.value + text.size()};
     const std::size_t before = state_.history().position();
     auto history = state_.history().pushed(edit, boundary);
+    // 行がずれたマークを直し、最後の変更の位置を置く（ADR 0152 の決定 6・7）。変更の列には、
+    // 新しい undo の単位を始めた編集かを添えて置く（追補 #1037・Vim の b_new_change）。`.` と `@`
+    // の 再生は命令ごとに積んでから 1 単位に畳むので、再生の中は最初の編集だけが新しい単位 （Vim
+    // は再生の全体が 1 単位）。
+    const bool started =
+        history.position() != before &&
+        (!replay_history_.has_value() || before == replay_history_.value().position());
+    auto marks = core::marks_adjusted(state_.vim_marks(), state_.text(), edit);
+    marks.last_change = core::vim_last_change_of(state_.text(), edit);
+    marks = core::vim_change_recorded(marks, marks.last_change.value(), started);
+    state_ = state_.with_vim_marks(std::move(marks));
     auto document = after_edit_at(state_.document(), before);
     forget_syntax_before(edit);
     adjust_other(edit, next);

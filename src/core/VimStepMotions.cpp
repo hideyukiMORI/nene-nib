@@ -6,6 +6,8 @@
 #include "VimCharacterSearchInvocation.hpp"
 #include "VimCharacterSearchRequest.hpp"
 #include "VimCharacterSearchScan.hpp"
+#include "VimJumpLists.hpp"
+#include "VimJumpMove.hpp"
 #include "VimKeyTable.hpp"
 #include "VimLineEndStop.hpp"
 #include "VimMarkEdits.hpp"
@@ -957,6 +959,34 @@ namespace detail
                                   VimMotion motion)
 {
     return jumped_by(landed_step(state, view, motion), view, motion);
+}
+
+// `Ctrl-o` `Ctrl-i` `g;` `g,`（ADR 0152 の追補 #1037）。列を歩いた値を添え、着いた位置へ
+// `` `a `` と同じ着地（NORMAL の寄せ・欲しい列は着地の桁）で動く。列の端と本文の外の行（E19）は
+// 鳴らす失敗で、失敗でも歩いた値（片付けと今の位置の積み）は残す（Vim の movemark）。
+[[nodiscard]] VimStep jump_list_action(const VimState &state, const VimEditorView &view,
+                                       VimAction action)
+{
+    const std::size_t count = resolved_count(state);
+    const bool older = action == VimAction::jump_older || action == VimAction::change_older;
+    const bool changes = action == VimAction::change_older || action == VimAction::change_newer;
+    VimJumpMove move =
+        changes ? vim_change_moved(*view.marks, older, count)
+                : vim_jump_moved(*view.marks, vim_mark_position_of(view.text, view.selection.caret),
+                                 older, count);
+    const std::optional<Offset> landing =
+        move.target.has_value() ? vim_mark_offset(view.text, move.target.value()) : std::nullopt;
+    if (!landing.has_value())
+    {
+        VimStep unmoved{vim_resting_from(state, state.unnamed_register), VimNoEffect{}};
+        unmoved.marks = std::move(move.marks);
+        return failed(std::move(unmoved), VimRepeatFailure::not_found);
+    }
+    VimEditorView marked = view;
+    marked.mark_landing = landing.value();
+    VimStep step = landed_step(state, marked, VimMotion::mark_exact);
+    step.marks = std::move(move.marks);
+    return step;
 }
 } // namespace detail
 } // namespace nenenib::core

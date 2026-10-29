@@ -40,11 +40,13 @@ constexpr char32_t control_w_character = 0x17;
 // 本文 → 鍵の写しはこの値を引く。
 constexpr char32_t control_a_character = 0x01;
 constexpr char32_t control_x_character = 0x18;
+// `Ctrl-i` と `<Tab>` は同じ文字（窓は Tab を文字の鍵で渡す・ADR 0152 の追補 #1037）。
+constexpr char32_t tab_character = 0x09;
 
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 72> normal_bindings{
+constexpr std::array<VimBinding, 73> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {line_feed, VimAction::move_down},
@@ -116,7 +118,8 @@ constexpr std::array<VimBinding, 72> normal_bindings{
      {U'%', VimAction::move_matching_pair},
      {U'm', VimAction::set_mark},
      {U'\'', VimAction::prefix_mark_line},
-     {U'`', VimAction::prefix_mark_exact}}};
+     {U'`', VimAction::prefix_mark_exact},
+     {tab_character, VimAction::jump_newer}}};
 
 // 動作 → 大分類の表（CPP-012 / ADR 0006）。NORMAL と VISUAL の写し先はこの分類で分かれる。
 // 行の欠落と重複は下の static_assert で落ちる（動作を足したら、この表に行を足すまで通らない）。
@@ -235,7 +238,11 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::increment_number, VimActionGroup::number},
      {VimAction::decrement_number, VimActionGroup::number},
      {VimAction::increment_sequence, VimActionGroup::number},
-     {VimAction::decrement_sequence, VimActionGroup::number}}};
+     {VimAction::decrement_sequence, VimActionGroup::number},
+     {VimAction::jump_older, VimActionGroup::jump_list},
+     {VimAction::jump_newer, VimActionGroup::jump_list},
+     {VimAction::change_older, VimActionGroup::jump_list},
+     {VimAction::change_newer, VimActionGroup::jump_list}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 37> motion_bindings{
@@ -278,8 +285,9 @@ constexpr std::array<VimMotionBinding, 37> motion_bindings{
      {VimAction::move_mark_exact, VimMotion::mark_exact}}};
 
 // g の後ろの鍵 → 動作（ADR 0027 / Issue #222 / ADR 0057 の決定 2 / ADR 0144 の決定 4 /
-// ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10・14 / #1039 の gv gi）。ここに無い鍵は g を打ち消す。
-constexpr std::array<VimBinding, 21> g_bindings{
+// ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10・14 / #1039 の gv gi / ADR 0152 の追補 #1037）。
+// ここに無い鍵は g を打ち消す。
+constexpr std::array<VimBinding, 23> g_bindings{
     {{U'g', VimAction::move_document_first},
      {U'e', VimAction::move_previous_word_end},
      {U'E', VimAction::move_previous_big_word_end},
@@ -300,7 +308,9 @@ constexpr std::array<VimBinding, 21> g_bindings{
      {U'v', VimAction::reselect_visual},
      {U'i', VimAction::insert_at_last_insert},
      {control_a_character, VimAction::increment_sequence},
-     {control_x_character, VimAction::decrement_sequence}}};
+     {control_x_character, VimAction::decrement_sequence},
+     {U';', VimAction::change_older},
+     {U',', VimAction::change_newer}}};
 
 // 保留を立てる鍵 → オペレータ（ADR 0015 の決定 1・10・11）。同じ行の鍵を保留の後ろで押すと
 // 行単位（dd g~g~ >>）。
@@ -546,6 +556,7 @@ static_assert(every_alignment_has_one_row(),
     case VimSpecialKey::control_b:
     case VimSpecialKey::control_a:
     case VimSpecialKey::control_x:
+    case VimSpecialKey::control_o:
         return std::nullopt;
     }
     std::unreachable();
@@ -577,6 +588,7 @@ static_assert(every_alignment_has_one_row(),
     case VimSpecialKey::control_b:
     case VimSpecialKey::control_v:
     case VimSpecialKey::control_w:
+    case VimSpecialKey::control_o:
         return std::nullopt;
     }
     std::unreachable();

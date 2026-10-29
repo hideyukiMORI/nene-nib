@@ -401,6 +401,9 @@ namespace detail
         return horizontal_action(state, view, action);
     case VimActionGroup::screen_alignment:
         return aligned_screen(state, view, action);
+    // `Ctrl-o` `Ctrl-i` `g;` `g,` は VISUAL では鳴らすだけ（Vim の checkclearopq・#1037）。
+    case VimActionGroup::jump_list:
+        return failed(visual_unchanged(state), VimRepeatFailure::refused);
     case VimActionGroup::history:
         return visual_history(state, view, action);
     case VimActionGroup::number:
@@ -474,6 +477,9 @@ namespace detail
         return visual_acted(state, view, VimAction::increment_number);
     case VimSpecialKey::control_x:
         return visual_acted(state, view, VimAction::decrement_number);
+    // VISUAL の Ctrl-o は Vim の nv_pcmark が checkclearopq で失敗する（#1037）。
+    case VimSpecialKey::control_o:
+        return failed(visual_unchanged(state), VimRepeatFailure::refused);
     }
     std::unreachable();
 }

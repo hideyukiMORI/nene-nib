@@ -161,11 +161,16 @@ enum class VimAction : std::uint8_t
     // VISUAL の `g Ctrl-a` `g Ctrl-x`。行ごとに回数 × 何番目の数かだけ増減する（連番）。NORMAL では
     // Vim と同じく失敗する。
     increment_sequence,
-    decrement_sequence
+    decrement_sequence,
+    // ジャンプの列と変更の列を歩く（`Ctrl-o` `Ctrl-i`（`<Tab>`）と `g;` `g,`・ADR 0152 の追補
+    // #1037）。NORMAL でだけ動き、オペレータの後ろと VISUAL では失敗する（Vim の checkclearopq）。
+    jump_older,
+    jump_newer,
+    change_older,
+    change_newer
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count =
-    static_cast<std::size_t>(VimAction::decrement_sequence) + 1;
+constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::change_newer) + 1;
 } // namespace nenenib::core

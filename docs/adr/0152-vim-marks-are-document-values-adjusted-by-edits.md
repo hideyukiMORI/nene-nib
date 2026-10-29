@@ -76,3 +76,17 @@ ADR 0012（移動の表・oracle）・ADR 0032（`last_search`）・ADR 0056（�
 - **`gi`。** `'^` の行（本文の外なら最後の行）の桁で `i` を始める。桁は行の内容の終わりまで寄せる（`lliQ<Esc>0xxgiR<Esc>` は行末に入る・Vim の `nv_g_cmd`）。`'^` が無ければキャレットの所の `i`。回数は `i` と同じ繰り返し。VISUAL の中とオペレータの後ろ（`dgiw`）は失敗（実測）。
 - **`.` の記録は `i`。** Vim の `nv_g_cmd` は命令を `i` に変えてから挿入を始めるので、`gi` の後の `.` は `'^` へ行かずキャレットの所で同じ本文を入れる（`lix<Esc>jgiY<Esc>j.` は 2 行目のキャレットの所・実測。Issue の見込みの「鍵 `gi` と打った本文」と違い、実測を正本にした）。記録の更新の 1 か所（`normal_recorded`）が、`g` の次の鍵で INSERT へ入った記録の末尾の `g` を `i` に置き換える。マクロの録画は打った鍵のまま。
 - fixture は `gv-gi-gi-` の 13 件（`gi` の側）。
+
+## 追補（2026-10-29・#1037）: ジャンプの列と変更の列
+
+`Ctrl-o` `Ctrl-i`（`<Tab>`）のジャンプの列と、`g;` `g,` の変更の列を足す。どちらも決定 2 と同じ文書の値で、`VimMarks` の `jumps` と `changes`（型 `VimJumpList`・位置の固定長の配列と件数と今の番号）に持ち、engine は `VimEditorView` で借りて読み `VimStep.marks` に添えて返す。列の意味は `VimJumpLists.cpp` の純関数の 1 か所（`vim_jump_appended` `vim_jumps_cleaned` `vim_jump_moved` `vim_change_moved` `vim_change_recorded`）。値は Vim 9.1 の実測（`getjumplist()` `getchangelist()`）で決めた。
+
+- 積む所は飛ぶ鍵の前の位置を置く `vim_marks_jumped`（Vim の setpcmark）の 1 か所で、`''` を置く鍵がそのまま列にも積む。`m'` `` m` `` も積む（setmark_pos は setpcmark を呼ぶ）。積むときは同じ行を消さず、上限 100 を越えたら最も古い位置を捨てる。
+- 同じ行の位置は歩く前に後ろの 1 つだけ残して消す（cleanup_jumplist・`jumpoptions` は空）。`Ctrl-o` の後に別の所へ跳んでも先の位置は切らない（stack ではない。Issue の見込みは「切れる」だったが、実測は切らない）。
+- `Ctrl-o` は末尾の後ろにいれば今の位置を飛ぶ鍵と同じに積んで（`''` も置く）から戻る。列の端を越える回数は鳴らす失敗で動かない。着地は `` `a `` と同じ（NORMAL の寄せ・欲しい列は着地の桁）。オペレータの後ろと VISUAL では失敗する（checkclearopq）。
+- 変更の列は controller の `replace` が `'.` と同じ位置で置く（`vim_change_recorded`）。新しい undo の単位を始めた編集（履歴の位置が進んだ。`.` と `@` の再生の中は最初の編集だけ＝Vim では再生の全体が 1 単位）で印 `change_started` を立て、印があって最後の位置と違う行か 79 桁より離れていれば足して印を下ろす。どちらでも最後の位置を今の変更にし、今の番号を末尾の後ろにする（Vim の changed_common と b_new_change）。undo と Ctrl-r は印を立てない。
+- `g;` `g,` の回数は列の端で止まり、すでに端にいるときだけ失敗する（E662 E663・空の列は E664・本文の外の行は E19）。
+- 編集の行のずれは `marks_adjusted` が名前つきと同じ形で直し、消えた行の位置は消さずに消えた最初の行へ置く（one_adjust_nodel。文字単位の削除の中の行は最初の行へつなぐ）。
+- 鍵: NORMAL の表に `<Tab>`（文字 0x09＝`Ctrl-i`）、`g` の表に `;` `,`、特別な鍵 `control_o`。fixture の記法 `<C-o>` と `<Tab>` を `KEY_TABLE` に足した（`<C-i>` は同じ鍵 0x09 なので別の名前にしない。表の名前は鍵と 1 対 1 に往復する・#1081 の契約。Vim の表示名も `<Tab>`）。
+
+限界: oracle は鍵を 1 本の `:normal!` に流すので undo の単位が 1 つしか無く、変更の列は fixture では 1 件になる。また打った INSERT の文字を先読みでまとめて入れるので、`'.` と変更の列の位置が打鍵ごとの Vim と違う。複数の単位の列・E662〜E664・E19 は契約 `--vim-marks` の `verify_change_list` が、単位ごとに `:normal!` を分けた Vim の測定値で固定する。INSERT の `<BS>` が挿入の始まりより前を消すと Nib の履歴は新しい単位になるが Vim は同じ単位のままで、行をまたいだときだけ変更の列が違う。fuzz（`eng/vim-fuzz.py`）は `g;` `g,` を語にしない（1 本の `:normal!` は 1 単位）。`-es` の Vim は開いた最終行をジャンプの列に持つので、fixture は `Ggg` で始めて両方の列を揃える。`<Tab>` は窓から文字 0x09 で届く。窓の Ctrl+O は Vim モードではジャンプの戻り（`control_o`・INSERT は engine が何もしない）で、開くは Vim では Ctrl+Shift+O・F1 の一覧・Ctrl+P（`operation_bindings` の Ctrl+O の行は通常モードだけ・D71）。窓の Ctrl+I は `WM_CHAR` が Ctrl を押した鍵を捨てるので届かない（後続）。session への保存・`:jumps` `:changes`・タブをまたぐ跳びは後続。

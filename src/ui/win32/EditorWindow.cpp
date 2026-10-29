@@ -155,13 +155,14 @@ constexpr std::array<KeyVimSpecial, 11> vim_specials{{{VK_ESCAPE, core::VimSpeci
                                                       {VK_PRIOR, core::VimSpecialKey::page_up},
                                                       {VK_NEXT, core::VimSpecialKey::page_down}}};
 // Ctrl+W は Vim の窓の命令の入口（ADR 0148 の決定 7）。INSERT でも engine へ流し、engine
-// が語を消す（#1040）。
-constexpr std::array<KeyVimSpecial, 5> vim_control_specials{
+// が語を消す（#1040）。Ctrl+O はジャンプの戻り（#1037・D71）で、INSERT では engine が無視する。
+constexpr std::array<KeyVimSpecial, 6> vim_control_specials{
     {{'D', core::VimSpecialKey::control_d},
      {'U', core::VimSpecialKey::control_u},
      {'F', core::VimSpecialKey::control_f},
      {'B', core::VimSpecialKey::control_b},
-     {'W', core::VimSpecialKey::control_w}}};
+     {'W', core::VimSpecialKey::control_w},
+     {'O', core::VimSpecialKey::control_o}}};
 constexpr char32_t tab_character = U'\t';
 
 // 本文の行数と字幅（巨大な行の窓の見積もり・ADR 0139）を決める字の大きさと字体。

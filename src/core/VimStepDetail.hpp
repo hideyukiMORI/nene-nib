@@ -89,6 +89,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
                                   VimMotion motion);
 [[nodiscard]] VimStep motion_step(const VimState &state, const VimEditorView &view,
                                   VimMotion motion);
+[[nodiscard]] VimStep jump_list_action(const VimState &state, const VimEditorView &view,
+                                       VimAction action);
 [[nodiscard]] VimMotionRange characters_between(Offset first, Offset second);
 [[nodiscard]] std::optional<VimMotionRange> lines_below(const TextBuffer &text, LineNumber line,
                                                         std::size_t steps);

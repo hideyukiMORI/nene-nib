@@ -23,6 +23,9 @@
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
+#include "VimJumpList.hpp"
+#include "VimJumpLists.hpp"
+#include "VimJumpMove.hpp"
 #include "VimMarkEdits.hpp"
 #include "VimMarkPosition.hpp"
 #include "VimMarks.hpp"
@@ -34,6 +37,7 @@
 #include "../vim/VimFixtures.hpp"
 
 #include <cstddef>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -294,6 +298,110 @@ void verify_marks_from_opening()
     }
 }
 
+// 変更の列の失敗と、undo の単位をまたぐ列（ADR 0152 の追補 #1037）。oracle は鍵を 1 本の
+// `:normal!` に流すので undo の単位が 1 つしか無く（変更の列は 1 件）、E662 E663 E664 E19 は -es の
+// Vim がエラーで終わる。値は Vim 9.1 で単位ごとに `:normal!` を分けて `let &ul = &ul` で区切った
+// 測定（#1037 の PR に表）。
+void verify_change_list()
+{
+    const auto body_after = [](std::string text, std::string_view keys)
+    {
+        Editing editing;
+        open_vim_document(editing, std::move(text));
+        vim_normal(editing.controller(), keys);
+        return whole_vim_body(editing.controller());
+    };
+    const std::string lines = "abc\ndef\nghi\njkl";
+    expect(body_after("abc\ndef", "jg;x") == "abc\ndef", "g; with no change fails (E664)");
+    expect(body_after(lines, "jjxggg;g;x") == "abc\ndef\nhi\njkl",
+           "g; at the oldest change fails (E662)");
+    expect(body_after(lines, "jjxggg;g,x") == "abc\ndef\nhi\njkl",
+           "g, at the newest change fails (E663)");
+    expect(body_after("abc\ndef\nghi", "Gddggg;x") == "abc\ndef",
+           "g; to a change below the text fails (E19)");
+    expect(body_after(lines, "xjxjxg;g;g;x") == "c\nef\nhi\njkl",
+           "three changes in three undo units are three positions");
+    expect(body_after(lines, "xjxjxg;g;g;g;x") == "bc\nef\nhi\njkl",
+           "the fourth g; is past the oldest");
+    expect(body_after(lines, "xjxjxg;g;g;g,x") == "bc\nf\nhi\njkl", "g, walks back newer");
+    expect(body_after(lines, "xjxjxg;g;g,g,x") == "bc\nef\nhi\njkl", "g, past the newest fails");
+    expect(body_after(lines, "xjxjx2g;x") == "bc\nf\nhi\njkl", "2g; skips one change");
+    expect(body_after(lines, "xjxjx5g;x") == "c\nef\nhi\njkl", "5g; stops at the oldest");
+    expect(body_after("abcdef\nx", "xllxg;g;x") == "bcef\nx",
+           "a near change on the same line moves the last position");
+    const std::string as(200, 'a');
+    expect(body_after(as + "\nx", "x80lxg;g;x") == std::string(197, 'a') + "\nx",
+           "a change 80 columns away is a new position");
+    expect(body_after(as + "\nx", "x79lxg;g;x") == std::string(198, 'a') + "\nx",
+           "a change 79 columns away is the same position");
+    expect(body_after(lines, "jjxggOnew<Esc>Gg;g;x") == "new\nabc\ndef\ni\njkl",
+           "an inserted line pushes the older position down");
+    expect(body_after(lines, "jjxggddGg;g;x") == "def\ni\njkl",
+           "a deleted line lifts the older position");
+    expect(body_after(lines, "jjxddGg;g;x") == "abc\ndef\njkl",
+           "a position on a deleted line stays and merges with the next change");
+    expect(body_after("abc\ndef\nghi", "xGxxuuug;g;x") == "abc\ndef\nhi",
+           "u after a unit that added nothing adds a position");
+    expect(body_after("abc\ndef\nghi", "xGxuug;g;x") == "bc\ndef\nghi",
+           "u after a unit that added a position only moves the last one");
+    // 再生（`@a`）の全体は 1 単位で、変更の列に足すのは最初の 1 回だけ（Vim の測定: [1,0] [4,0]）。
+    const std::string five = "abc\ndef\nghi\njkl\nmno";
+    expect(body_after(five, "qaxjq3@ag;g;x") == "c\nef\nhi\nkl\nmno",
+           "3@a adds one position and moves it to the last line it changed");
+    expect(body_after(five, "qaxjq3@ag;g;g;x") == "bc\nef\nhi\nkl\nmno",
+           "the third g; after 3@a is past the oldest");
+    // 20 桁の回数は SIZE_MAX で止まり、足しても回り込まない（#1072 R2-1）。
+    expect(body_after("a\nb\nc\nd\ne", "Ggg3G<C-o><C-o>99999999999999999999<Tab>x") ==
+               "a\nb\nc\nd\ne",
+           "a huge count of <Tab> fails");
+}
+
+// 列の上限 100（Vim の JUMPLISTSIZE）と巨大な回数（#1072 R2-1・R5-1）。純関数の契約。
+void verify_jump_list_limits()
+{
+    using nenenib::core::vim_jump_list_limit;
+    const auto at_line = [](std::size_t line) { return VimMarkPosition{LineNumber{line}, 0}; };
+    VimMarks marks{};
+    for (std::size_t line = 1; line <= vim_jump_list_limit + 1; ++line)
+    {
+        marks.jumps = nenenib::core::vim_jump_appended(marks.jumps, at_line(line));
+    }
+    expect(marks.jumps.count == vim_jump_list_limit && marks.jumps.index == vim_jump_list_limit &&
+               marks.jumps.entries.at(0).line.value == 2,
+           "the 101st jump drops the oldest");
+    const auto past = nenenib::core::vim_jump_moved(marks, at_line(200), true, 100);
+    expect(!past.target.has_value() && past.marks.jumps.count == vim_jump_list_limit &&
+               past.marks.jumps.entries.at(0).line.value == 3,
+           "100 Ctrl-o on a full list pushes the caret, drops the oldest and fails");
+    const auto oldest = nenenib::core::vim_jump_moved(marks, at_line(200), true, 99);
+    expect(oldest.target.has_value() && oldest.target.value().line.value == 3,
+           "99 Ctrl-o on a full list reaches the second of the old entries");
+    VimMarks changes{};
+    for (std::size_t line = 1; line <= vim_jump_list_limit + 1; ++line)
+    {
+        changes = nenenib::core::vim_change_recorded(changes, at_line(line), true);
+    }
+    expect(changes.changes.count == vim_jump_list_limit &&
+               changes.changes.index == vim_jump_list_limit &&
+               changes.changes.entries.at(0).line.value == 2 &&
+               changes.changes.entries.at(vim_jump_list_limit - 1).line.value == 101,
+           "the 101st change drops the oldest");
+    VimMarks five{};
+    for (std::size_t line = 1; line <= 5; ++line)
+    {
+        five.jumps = nenenib::core::vim_jump_appended(five.jumps, at_line(line));
+        five = nenenib::core::vim_change_recorded(five, at_line(line), true);
+    }
+    five.jumps.index = 2;
+    five.changes.index = 2;
+    constexpr std::size_t huge = std::numeric_limits<std::size_t>::max();
+    expect(!nenenib::core::vim_jump_moved(five, at_line(9), false, huge).target.has_value(),
+           "Ctrl-i with a huge count fails");
+    const auto newest = nenenib::core::vim_change_moved(five, false, huge);
+    expect(newest.target.has_value() && newest.marks.changes.index == 4,
+           "g, with a huge count stops at the newest");
+}
+
 // マークは文書の値で、タブを切り替えると文書に付いていく（決定 2）。まだ読んでいない文書と
 // 新しいタブは開いた時点の値（前の位置だけ 1 行目・#962）。
 void verify_marks_follow_documents()
@@ -339,6 +447,8 @@ void verify_vim_mark_contracts()
     verify_marks_follow_documents();
     verify_reselect_and_last_insert_crlf();
     verify_g_records_kept();
+    verify_change_list();
+    verify_jump_list_limits();
 }
 
 void verify_vim_mark_scope()
@@ -348,13 +458,15 @@ void verify_vim_mark_scope()
     {
         const std::string_view name = fixture.name;
         if (name.starts_with("percent-") || name.starts_with("mark-") ||
-            name.starts_with("jump-mark-") || name.starts_with("change-mark-"))
+            name.starts_with("jump-mark-") || name.starts_with("change-mark-") ||
+            name.starts_with("jumplist-") || name.starts_with("changelist-"))
         {
             verify_vim_fixture(fixture);
             ++selected;
         }
     }
-    expect(selected == 112, "the scope replays the 112 oracle fixtures of % and the marks");
+    expect(selected == 149,
+           "the scope replays the 149 oracle fixtures of %, the marks and the jump lists");
     verify_vim_mark_contracts();
 }
 } // namespace nenenib::tests

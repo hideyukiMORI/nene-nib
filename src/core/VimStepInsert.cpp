@@ -361,6 +361,8 @@ namespace detail
     // 決定 14）。窓は INSERT では写さない。
     case VimSpecialKey::control_a:
     case VimSpecialKey::control_x:
+    // INSERT の Ctrl-o（Vim では NORMAL の命令を 1 つ）は未対応で、失敗にせず何もしない（#1037）。
+    case VimSpecialKey::control_o:
         return VimStep{state, VimNoEffect{}};
     case VimSpecialKey::page_up:
         return insert_page_moved(state, view, VimScrollDirection::up);
@@ -438,6 +440,7 @@ namespace detail
     case VimSpecialKey::control_w:
     case VimSpecialKey::control_a:
     case VimSpecialKey::control_x:
+    case VimSpecialKey::control_o:
         return false;
     }
     std::unreachable();
