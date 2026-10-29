@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 cf6b686820c930b2f168ef4a5ec712169e76c759ff7d0e5427b84b26d833fb99 / 3107 fixtures
+// fixtures.json: sha256 be7cc98dcb23b4c7f156484f1941f61f1451e2d2e395b1b92116e3c0a2935d04 / 3119 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3107> vim_fixtures{{
+constexpr std::array<VimFixture, 3119> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3048,6 +3048,18 @@ constexpr std::array<VimFixture, 3107> vim_fixtures{{
     {"search-case-scs-lower", "xyz ABC abc", ":set ic<CR>:set scs<CR>/abc<CR>", "xyz ABC abc", 1, 5, "", "", std::nullopt},
     {"search-case-scs-without-ic", "xyz ABC abc", ":set scs<CR>/abc<CR>", "xyz ABC abc", 1, 9, "", "", std::nullopt},
     {"search-case-n", "abc ABC Abc", ":set ic<CR>/abc<CR>n", "abc ABC Abc", 1, 9, "", "", std::nullopt},
+    {"search-composing-forward-skips-marked", "(é.x\nalphaend.", "/e<CR>", "(é.x\nalphaend.", 2, 6, "", "", std::nullopt},
+    {"search-composing-backward-skips-marked", "e é", "?e<CR>", "e é", 1, 1, "", "", std::nullopt},
+    {"search-composing-backward-previous-line", "Hello\né x", "?e<CR>", "Hello\né x", 1, 2, "", "", std::nullopt},
+    {"search-composing-backward-from-end", "Hello\né x", "G$?e<CR>", "Hello\né x", 1, 2, "", "", std::nullopt},
+    {"search-composing-pattern-has-mark", "é e", "/é<CR>", "é e", 1, 1, "", "", std::nullopt},
+    {"search-composing-star", "é x é", "*", "é x é", 1, 7, "", "", std::nullopt},
+    {"search-composing-n", "x é e é e", "/e<CR>n", "x é e é e", 1, 13, "", "", std::nullopt},
+    {"search-composing-N", "x é e é e", "/e<CR>N", "x é e é e", 1, 13, "", "", std::nullopt},
+    {"search-composing-ignorecase", "x É é E e", ":set ic<CR>/e<CR>", "x É é E e", 1, 11, "", "", std::nullopt},
+    {"search-composing-literal-then-dot", "x éy ez", "/e.<CR>", "x éy ez", 1, 3, "", "", std::nullopt},
+    {"search-composing-literal-then-literal", "x éy ey", "/ey<CR>", "x éy ey", 1, 8, "", "", std::nullopt},
+    {"search-composing-star-repeat", "x é ee", "/ee*<CR>", "x é ee", 1, 7, "", "", std::nullopt},
     {"search-case-N", "abc ABC Abc", ":set ic<CR>/abc<CR>NN", "abc ABC Abc", 1, 9, "", "", std::nullopt},
     {"search-case-backward", "ABC xyz abc", "$:set ic<CR>?abc<CR>?<CR>", "ABC xyz abc", 1, 1, "", "", std::nullopt},
     {"search-case-star-ic-scs", "Abc abc ABC", ":set ic<CR>:set scs<CR>*", "Abc abc ABC", 1, 5, "", "", std::nullopt},

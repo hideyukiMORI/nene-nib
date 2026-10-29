@@ -383,6 +383,41 @@ void verify_vim_search_encoding()
            "the dollar sits before the carriage return");
 }
 
+// 本文の側にだけ結合文字が続く当たりは一致にしない（#1138・Vim の NFA_MATCH の検査）。大小を
+// 畳んでも同じで、パターンが結合文字を含めば今のまま。終わりだけを見るので `e.` は当たる。
+[[nodiscard]] std::optional<std::size_t> composed_begin(std::string_view pattern,
+                                                        std::string_view line, VimPatternCase cased)
+{
+    const auto parsed = VimPattern::parse(pattern, VimSearchDirection::forward, cased);
+    expect(parsed.has_value(), "the composing pattern is inside the supported subset");
+    if (!parsed.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto match = parsed.value().matched(line, 0);
+    return match.has_value() ? std::optional<std::size_t>{match.value().begin} : std::nullopt;
+}
+
+void verify_vim_pattern_composing()
+{
+    constexpr auto sensitive = VimPatternCase::sensitive;
+    constexpr auto ignore = VimPatternCase::ignore;
+    expect(composed_begin("e", "e\xcc\x81 E", sensitive) == std::optional<std::size_t>{},
+           "a bare e does not stop on the base of an e with a mark");
+    expect(composed_begin("e", "e\xcc\x81 e", sensitive) == std::optional<std::size_t>{4},
+           "it stops on the bare e after it");
+    expect(composed_begin("e", "E\xcc\x81 e", ignore) == std::optional<std::size_t>{4},
+           "ignorecase still refuses the base of a marked capital");
+    expect(composed_begin("E", "e\xcc\x81 E", ignore) == std::optional<std::size_t>{4},
+           "and the folded pattern refuses the marked small letter");
+    expect(composed_begin("e\xcc\x81", "e e\xcc\x81", sensitive) == std::optional<std::size_t>{2},
+           "a pattern with the mark still matches the marked letter");
+    expect(composed_begin("e.", "e\xcc\x81y", sensitive) == std::optional<std::size_t>{0},
+           "the dot eats the mark, so the match ends on a character boundary");
+    expect(composed_begin("ee*", "e\xcc\x81 ee", sensitive) == std::optional<std::size_t>{4},
+           "the starred path refuses the end before the mark too");
+}
+
 using RangeFinder = std::optional<OffsetRange> (*)(const TextBuffer &, Offset);
 
 [[nodiscard]] std::string range_under(std::string_view text, std::size_t at, RangeFinder finder)
@@ -710,7 +745,7 @@ void verify_vim_search_dot()
 
 void verify_vim_search_fixtures()
 {
-    // 検索の 165 件（大小の 30 件・#1041
+    // 検索の 177 件（大小の 30 件・#1041 と結合文字の 12 件・#1138
     // を含む）と、鍵の分類の表・次キー待ちを共有する境界の代表（`.`・r・f/t・gg）。
     constexpr std::array<std::string_view, 6> boundaries{
         "replace-char-one",    "replace-char-count", "char-search-f-count",
@@ -725,7 +760,7 @@ void verify_vim_search_fixtures()
             ++selected;
         }
     }
-    expect(selected == 171, "the scope replays 165 search fixtures and 6 shared boundaries");
+    expect(selected == 183, "the scope replays 177 search fixtures and 6 shared boundaries");
 }
 
 // 次の一致を求める 1 本の経路（ADR 0041 の決定 1）。確定の検索の鍵と incsearch の preview が
@@ -1134,6 +1169,7 @@ void verify_vim_search_contracts()
     verify_vim_pattern_evaluation_bounds();
     verify_vim_pattern_word_boundaries();
     verify_vim_pattern_rejections();
+    verify_vim_pattern_composing();
     verify_vim_search_scan();
     verify_vim_search_wrap();
     verify_vim_search_encoding();

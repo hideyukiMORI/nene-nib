@@ -57,6 +57,8 @@ class VimPattern final
     [[nodiscard]] static bool is_zero_width(VimPatternAtomKind kind) noexcept;
     [[nodiscard]] static bool anchored(std::string_view line, const VimPatternAtom &atom,
                                        std::size_t at);
+    // 一致の終わりが Vim の 1 文字の境か（本文の側にだけ結合文字が続けば偽・#1138）。
+    [[nodiscard]] static bool ends_a_character(std::string_view line, std::size_t end) noexcept;
     [[nodiscard]] bool consumes(const VimPatternAtom &atom, char32_t code) const;
     // 1 文字を食べる原子。幅の無い原子は何も食べない。
     [[nodiscard]] std::optional<std::size_t>

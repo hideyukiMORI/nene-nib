@@ -17,4 +17,8 @@ namespace nenenib::core
 
 // at の手前で終わる文字の先頭。at が文字の途中ならその文字の先頭。先頭では動かない。
 [[nodiscard]] Offset vim_character_start(std::string_view utf8, Offset at) noexcept;
+
+// at の code point が手前の文字に含まれる（at が文字の途中）か。行頭（0）と末尾は偽。
+// 照合器は一致の終わりがここで真なら一致にしない（Vim の NFA_MATCH・#1138）。
+[[nodiscard]] bool vim_character_continues(std::string_view utf8, Offset at) noexcept;
 } // namespace nenenib::core

@@ -7,6 +7,20 @@
 
 namespace nenenib::core
 {
+namespace
+{
+// 終わりが文字の境（ends_a_character）の当たりだけを一致にする（#1138）。
+[[nodiscard]] std::optional<VimPatternMatch> finished_match(bool on_boundary, std::size_t begin,
+                                                            std::size_t end) noexcept
+{
+    if (!on_boundary)
+    {
+        return std::nullopt;
+    }
+    return VimPatternMatch{begin, end};
+}
+} // namespace
+
 VimPatternEvaluation::VimPatternEvaluation(const VimPattern &pattern, std::string_view line)
     : pattern_(pattern), line_(line), at_(0), current_begins_(pattern.atoms_.size() + 1),
       next_begins_(pattern.atoms_.size() + 1)
@@ -26,7 +40,7 @@ VimPatternEvaluation::expanded(std::vector<std::size_t> &order,
         begins.at(index) = begin;
         if (index == pattern_.atoms_.size())
         {
-            return VimPatternMatch{begin, at_};
+            return finished_match(VimPattern::ends_a_character(line_, at_), begin, at_);
         }
         const VimPatternAtom &atom = pattern_.atoms_.at(index);
         const bool zero_width = VimPattern::is_zero_width(atom.kind);

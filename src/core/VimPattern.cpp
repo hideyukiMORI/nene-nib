@@ -3,6 +3,7 @@
 #include "Offset.hpp"
 #include "Utf8.hpp"
 #include "VimCase.hpp"
+#include "VimCharacterBoundary.hpp"
 #include "VimPatternAtomKind.hpp"
 #include "VimPatternEvaluation.hpp"
 #include "VimWordClass.hpp"
@@ -489,6 +490,16 @@ std::expected<VimPattern, VimPatternFailure> VimPattern::parse(std::string_view 
                       ignores_case(letter_case, forced, pattern));
 }
 
+// 一致の終わりが文字の途中（本文の側にだけ結合文字が続く）なら一致にしない。Vim の NFA の
+// NFA_MATCH と同じく終わりだけを見るので、`/e.` は `.` が結合文字を食べて当たる（#1138）。
+bool VimPattern::ends_a_character(std::string_view line, std::size_t end) noexcept
+{
+    // ASCII のバイトは結合文字にならないので、表を引くのは ASCII の外の側だけ。
+    constexpr unsigned char ascii_limit = 0x80;
+    return end >= line.size() || static_cast<unsigned char>(line[end]) < ascii_limit ||
+           !vim_character_continues(line, Offset{end});
+}
+
 bool VimPattern::in_ranges(const VimPatternAtom &atom, char32_t code) const
 {
     bool found = false;
@@ -578,7 +589,7 @@ std::optional<VimPatternMatch> VimPattern::matched(std::string_view line, std::s
     while (at <= line.size())
     {
         const auto end = matched_sequence(line, at);
-        if (end.has_value())
+        if (end.has_value() && ends_a_character(line, end.value()))
         {
             return VimPatternMatch{at, end.value()};
         }
