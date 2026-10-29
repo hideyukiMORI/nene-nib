@@ -561,6 +561,27 @@ namespace
     return at_next_line_start ? LineNumber{last.value - single_step} : last;
 }
 
+// 大小文字が書き換える本文の範囲（決定 10）。行単位は覆う行の内容の全体、文字単位は範囲そのもの。
+// 文字単位の空の範囲（1 桁目の `h` `0`・最初の非空白での `^`）も Vim は実行する（cpo-E が既定で
+// 無い・op_tilde は oap->empty を見ない・#1064）。exclusive の終わりを 1 文字戻した位置までの
+// 個数なので、本文の先頭なら着地の 1 文字、2 行目以降の 1 桁目は前の行の末尾へ戻るので行の
+// 残り全体、それ以外の桁は 0 文字になる（Vim 9.1 の実測）。
+[[nodiscard]] OffsetRange case_span(const TextBuffer &text, const VimMotionRange &range)
+{
+    if (range.kind == VimRegisterKind::lines)
+    {
+        return OffsetRange{text.line_start(line_of(text, range.range.begin)),
+                           text.line_end(last_covered_line(text, range))};
+    }
+    const Offset at = range.range.begin;
+    if (!is_empty(range.range) || at != text.line_start(line_of(text, at)))
+    {
+        return range.range;
+    }
+    return OffsetRange{at, at.value == 0 ? forward_characters(text, at, single_step)
+                                         : text.line_end(line_of(text, at))};
+}
+
 // 1 code point の大小の写し（決定 10・Issue #781）。写像は Unicode の簡単な写像の表の 1 つ
 // （VimCase）で、写像の無い code point はそのまま。
 [[nodiscard]] char32_t cased(char32_t value, VimOperator operation) noexcept
@@ -604,21 +625,16 @@ namespace detail
     return result;
 }
 
-// 大小文字の置き換え（決定 10）。行単位は覆う行の内容の全体、文字単位は範囲そのもの。本文は LF
-// 換算で、controller が文書の改行へ直して 1 Edit にする。キャレットは範囲の戻り先（行単位は
-// キャレットと着地の小さい方・ないときは範囲の先頭・Vim の oap->start）で、u の戻り先も同じ。
+// 大小文字の置き換え（決定 10）。範囲は case_span の 1 本。本文は LF 換算で、controller が文書の
+// 改行へ直して 1 Edit にする。キャレットは範囲の戻り先（行単位はキャレットと着地の小さい方・
+// ないときは範囲の先頭・Vim の oap->start）で、u の戻り先も同じ。書き換える本文が空でも変更と
+// して返す（`.` の記録に残り、キャレットは範囲の先頭へ・空の置き換えは controller が履歴に積まない
+// ・#1064）。
 [[nodiscard]] VimStep case_changed(const VimState &state, const TextBuffer &text,
                                    const VimMotionRange &range, VimOperator operation)
 {
-    const OffsetRange span = range.kind == VimRegisterKind::lines
-                                 ? OffsetRange{text.line_start(line_of(text, range.range.begin)),
-                                               text.line_end(last_covered_line(text, range))}
-                                 : range.range;
+    const OffsetRange span = case_span(text, range);
     const Offset caret = range.restore.value_or(range.range.begin);
-    if (is_empty(span))
-    {
-        return cancelled(state);
-    }
     std::string body = cased_text(
         without_newline_carriage_returns(text.text_range(span.begin, span.end), text.line_ending()),
         operation);

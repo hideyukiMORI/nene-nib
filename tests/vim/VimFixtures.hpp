@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 b96e29b581eecd83265467b7ab5ef0cfa8542f3e62beb7e696bbc751a2ca206e / 2585 fixtures
+// fixtures.json: sha256 5abe89dbc4ae78cbd8f9b2825ba29b7b9d22e4cf783e1a115852d0ca21b993d2 / 2621 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2585> vim_fixtures{{
+constexpr std::array<VimFixture, 2621> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2597,6 +2597,42 @@ constexpr std::array<VimFixture, 2585> vim_fixtures{{
     {"insert-control-ctrl-u-arrow-back-right", "abc def", "Axy<Left><Left><Left>z<Right><Right><Right>w<C-u><Esc>", "abc de", 1, 6, "", "", std::nullopt},
     {"insert-control-ctrl-u-arrow-other-line", "abc def\nghi", "jAxy<Up>z<C-u><Esc>", "ef\nghixy", 1, 1, "", "", std::nullopt},
     {"insert-control-ctrl-u-arrow-then-backspace", "abc def", "Axy<Left><Left><Left><BS>z<C-u><Esc>", "fxy", 1, 1, "", "", std::nullopt},
+    {"empty-case-gU-h", "x1", "gUh", "X1", 1, 1, "", "", std::nullopt},
+    {"empty-case-gU-1h", "x1", "gU1h", "X1", 1, 1, "", "", std::nullopt},
+    {"empty-case-gU-0", "x1", "gU0", "X1", 1, 1, "", "", std::nullopt},
+    {"empty-case-tilde-h", "x1", "g~h", "X1", 1, 1, "", "", std::nullopt},
+    {"empty-case-tilde-caret", "x1", "g~^", "X1", 1, 1, "", "", std::nullopt},
+    {"empty-case-gu-0", "Hello", "gu0", "hello", 1, 1, "", "", std::nullopt},
+    {"empty-case-gU-3h", "ab", "3gUh", "Ab", 1, 1, "", "", std::nullopt},
+    {"empty-case-gU-h-then-l", "ab", "gUhl", "Ab", 1, 2, "", "", std::nullopt},
+    {"empty-case-tilde-caret-dot-w", "\nab", "g~^.w", "\nab", 2, 1, "", "", std::nullopt},
+    {"empty-case-tilde-caret-1dot-w", "\nab", "g~^1.w", "\nab", 2, 1, "", "", std::nullopt},
+    {"empty-case-tilde-caret-j-l-dot", "\nab", "g~^jl.", "\nAb", 2, 1, "", "", std::nullopt},
+    {"empty-case-gU-dollar-j-dot", "\nab", "gU$j.", "\nAB", 2, 1, "", "", std::nullopt},
+    {"empty-case-gU-iw-j-dot", "\nab", "gUiwj.", "\nAB", 2, 1, "", "", std::nullopt},
+    {"empty-case-gU-b-empty-line", "\nx1", "jgUb", "\nx1", 1, 1, "", "", std::nullopt},
+    {"empty-case-gu-b-empty-line", "\nx1", "jgub", "\nx1", 1, 1, "", "", std::nullopt},
+    {"empty-case-tilde-b-empty-line", "\nx1", "jg~b", "\nx1", 1, 1, "", "", std::nullopt},
+    {"empty-case-compare-d-h", "x1", "dh", "x1", 1, 1, "", "", std::nullopt},
+    {"empty-case-compare-d-0", "x1", "d0", "x1", 1, 1, "", "", std::nullopt},
+    {"empty-case-compare-y-h", "x1", "yh", "x1", 1, 1, "", "v", std::nullopt},
+    {"empty-case-compare-gU-b-word", "ab\nx1word", "jgUb", "AB\nx1word", 1, 1, "", "", std::nullopt},
+    {"empty-case-compare-d-b-word", "ab\nx1word", "jdb", "x1word", 1, 1, "ab\n", "V", std::nullopt},
+    {"empty-case-compare-y-b-word", "ab\nx1word", "jyb", "ab\nx1word", 1, 1, "ab\n", "V", std::nullopt},
+    {"empty-case-gU-h-second-line", "a\nx1y", "jgUh", "a\nX1Y", 2, 1, "", "", std::nullopt},
+    {"empty-case-gU-0-second-line", "a\nx1y", "jgU0", "a\nX1Y", 2, 1, "", "", std::nullopt},
+    {"empty-case-tilde-caret-second-line", "a\nx1y", "jg~^", "a\nX1Y", 2, 1, "", "", std::nullopt},
+    {"empty-case-gU-h-second-line-then-l", "a\nx1y", "jgUhl", "a\nX1Y", 2, 2, "", "", std::nullopt},
+    {"empty-case-tilde-caret-indented", "  ab", "llg~^", "  ab", 1, 3, "", "", std::nullopt},
+    {"empty-case-tilde-caret-indented-second-line", "a\n  xy", "jllg~^", "a\n  xy", 2, 3, "", "", std::nullopt},
+    {"empty-case-gU-h-combining", "éa", "gUh", "Éa", 1, 1, "", "", std::nullopt},
+    {"empty-case-gU-h-wide", "éあb", "gUh", "Éあb", 1, 1, "", "", std::nullopt},
+    {"empty-case-gU-h-dot-second-line", "x1\nab", "gUhj.", "X1\nAB", 2, 1, "", "", std::nullopt},
+    {"empty-case-gU-dollar-empty-line", "a\n\nb", "jgU$", "a\n\nb", 2, 1, "", "", std::nullopt},
+    {"empty-case-gU-h-empty-second-line", "a\n\nb", "jgUh", "a\n\nb", 2, 1, "", "", std::nullopt},
+    {"empty-case-visual-U-empty-line-dot", "ab\n\ncd", "jvUk.", "Ab\n\ncd", 1, 1, "", "", std::nullopt},
+    {"empty-case-visual-U-first-empty-line-dot", "\nab", "vUj.", "\nAb", 2, 1, "", "", std::nullopt},
+    {"empty-case-tilde-l-at-line-end", "ab", "$g~l", "aB", 1, 2, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
