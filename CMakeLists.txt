@@ -360,7 +360,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/FallbackSegmentMemoTests.cpp
     tests/ui/ForwardingFont.cpp
     tests/ui/StatusDemandTests.cpp tests/ui/SyntaxRenderTests.cpp
-    tests/ui/PaletteLayoutTests.cpp tests/ui/ExplorerPaintTests.cpp)
+    tests/ui/PaletteLayoutTests.cpp tests/ui/ExplorerPaintTests.cpp tests/ui/PointerPressTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)

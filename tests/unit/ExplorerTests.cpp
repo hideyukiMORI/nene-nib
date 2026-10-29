@@ -5,6 +5,9 @@
 #include "CommandInput.hpp"
 #include "CommandLine.hpp"
 #include "CommandText.hpp"
+#include "CommitText.hpp"
+#include "ComposeText.hpp"
+#include "Composition.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -23,6 +26,7 @@
 #include "FolderListingKind.hpp"
 #include "FolderProgress.hpp"
 #include "ImeStance.hpp"
+#include "Offset.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "PointExplorer.hpp"
@@ -408,6 +412,25 @@ void verify_ime_and_focus()
            "an open input line still decides the stance over the focused panel");
 }
 
+// 面に焦点がある間の IME の変換と確定は本文へ入れない（composition_ignored・E4 の追補）。焦点を
+// 本文へ戻せば今までどおり入る。
+void verify_composition_while_focused()
+{
+    Editing editing(shown_at(project));
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    const auto before = controller.text().size_bytes();
+    static_cast<void>(
+        controller.apply_frame(app::ComposeText{core::Composition{"あ", {}, core::Offset{0}}}));
+    expect(!controller.is_composing(), "the focused panel shows no composition in the body");
+    static_cast<void>(controller.apply_frame(app::CommitText{"あ"}));
+    expect(controller.text().size_bytes() == before,
+           "a commit while the panel has the focus is dropped");
+    static_cast<void>(key(editing, ExplorerKeyKind::esc));
+    static_cast<void>(controller.apply_frame(app::CommitText{"あ"}));
+    expect(controller.text().size_bytes() == before + 3, "after Esc the commit reaches the body");
+}
+
 void verify_one_listing_at_a_time()
 {
     Editing editing(shown_at(project));
@@ -564,6 +587,7 @@ void verify_explorer_contracts()
     verify_scroll();
     verify_panel_rows();
     verify_ime_and_focus();
+    verify_composition_while_focused();
     verify_one_listing_at_a_time();
     verify_stale_and_root();
     verify_unreadable();

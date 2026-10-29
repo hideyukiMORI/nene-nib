@@ -11,6 +11,7 @@
 #include "PaletteLayout.hpp"
 #include "PaneLayouts.hpp"
 #include "PointTitleBar.hpp"
+#include "PointerPress.hpp"
 #include "ScrollPaletteList.hpp"
 #include "ScrollPane.hpp"
 #include "ScrollTabs.hpp"
@@ -97,7 +98,7 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         // 面の上だけがダブルクリック。ほかは 2 回目の押しとして今までどおり（CS_DBLCLKS）。
         if (!double_click_explorer(data))
         {
-            click_client(data);
+            return pointer_message(single_press_of(message), word, data);
         }
         return 0;
     case WM_LBUTTONUP:
