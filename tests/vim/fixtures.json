@@ -3075,5 +3075,16 @@
   {"name":"visual-line-case-tilde-back-same-line","text":"abc def ghi","keys":"wwVb~"},
   {"name":"visual-line-case-tilde-forward-same-line","text":"abc def ghi","keys":"wVw~"},
   {"name":"visual-line-case-tilde-dot-two-lines","text":"abc def\nghi jkl\nmno pqr","keys":"wVj~jl."},
-  {"name":"visual-line-case-U-dot-up-k","text":"ab cd\nef gh\nij kl","keys":"jjwVkUl."}
+  {"name":"visual-line-case-U-dot-up-k","text":"ab cd\nef gh\nij kl","keys":"jjwVkUl."},
+  {"name":"control-del-j-wanted-column","text":"abcd\nabcdefgh","keys":"3lj"},
+  {"name":"control-del-k-wanted-column","text":"abcdefgh\nabcd","keys":"j3lk"},
+  {"name":"control-del-j-lands-on-the-del","text":"abcdefgh\nabcd","keys":"2ljx"},
+  {"name":"control-del-bar-counts-two-columns","text":"abcd","keys":"4|x"},
+  {"name":"control-del-bar-inside-the-del","text":"abcd","keys":"3|x"},
+  {"name":"control-del-dollar-then-j","text":"abcd\nabcdefgh","keys":"$j"},
+  {"name":"control-del-x-then-j-keeps-the-column","text":"abcd\nabcdefgh","keys":"$xj"},
+  {"name":"control-del-block-columns-delete","text":"abcdefgh\nabcdef","keys":"3l<C-v>jld"},
+  {"name":"control-del-block-yank-put","text":"abc\nxyzwvu\n123456","keys":"<C-v>j2lyGp"},
+  {"name":"control-del-block-yank-put-pads","text":"ab\nxy\n123456","keys":"<C-v>j2ly2jlp"},
+  {"name":"control-del-block-dollar-yank-put","text":"ab\nxyzw\n123456","keys":"<C-v>j$y2jp"}
 ]
