@@ -30,7 +30,7 @@
 ## 強制
 
 - 時刻を読む場所が adapters だけ: **active**（`eng/symbols.py`・ARC-007）。
-- `ClockPort` が F5 のときだけ呼ばれる: **planned**（`verify_quiet_paths` の欄・この PR で active）。
+- `ClockPort` が F5 のときだけ呼ばれる: **planned**（`verify_quiet_paths` の時計の回数・#1050 の PR #1120 の merge で active にする）。
 
 ## 結果
 
@@ -44,3 +44,10 @@
 | core が `std::chrono::system_clock::now()` を呼ぶ | ARC-007 / CPP-013。リンカの検査が落ちる |
 | ロケールの短い日付の形を OS から読む | 試験が決定的でなくなる。形は Nib が持ち、言語の表で変える |
 | NORMAL でも挿入（`i` を挟んで） | Vim の鍵の意味を黙って変える。D71 は Vim 優先 |
+
+## 追補（2026-10-30・#1050 の実装の結果）
+
+- `EditorPorts` の欄名は `clock` ではなく **`wall_clock`**。識別子 `clock` は ARC-007 の字句検査（`eng/conformance-rules.json` の nondeterministicNames）が adapters の外で拒む。型の名前 `ClockPort` はそのまま。
+- handler は `EditorControllerEditing.cpp` の 1 本（IME の確定の `type_as_vim_keys` と共用するため・決定 4 の「Vim INSERT は打鍵として」はこの道）。変換中は何もしない。入力行が開いていれば `CommandText` の道。
+- OPERATOR-PENDING（`d` や回数の待ち）の中の F5 は、Vim が知らない鍵を受けたときと同じく待ちを取り消してから 1 行知らせる（レビューの R3-1）。
+- 通常モードで打った直後の F5 は IME の確定と同じく前の打鍵と 1 つの undo 単位にまとまる（決定 4 のまま・別の単位にしたければ hide の判断）。
