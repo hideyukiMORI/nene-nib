@@ -131,6 +131,21 @@ void verify_scrolloff_center()
            "#1041 scrolloff=999 keeps the caret in the middle of the window");
 }
 
+// 上へ遠く跳ぶ（G の後の 30G）と、Vim の scroll_cursor_halfway と同じくキャレットを中央へ寄せる
+// （(10 - 1) / 2 = 4 行上が先頭）。仮の座標の 1 行目で切れて最上段に置かない（#1100）。
+void verify_far_jump_up_centers()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    prepared(controller, "0");
+    const auto bottom = pressed(controller, U"G");
+    expect(bottom.caret.position.line == LineNumber{document_lines},
+           "#1100 G goes to the last line");
+    const auto up = pressed(controller, U"30G");
+    expect(up.caret.position.line == LineNumber{30} && up.first_visible == LineNumber{26},
+           "#1100 a far jump up centers the caret like Vim's scroll_cursor_halfway");
+}
+
 // 行番号の欄の文字（ADR 0008 の追補）。relativenumber はキャレットの行を絶対の番号で左寄せ、
 // ほかの行を距離で右寄せにする。
 void verify_gutter_labels()
@@ -208,6 +223,7 @@ void verify_vim_view_scope()
     verify_scrolloff_follow();
     verify_scrolloff_alignment();
     verify_scrolloff_center();
+    verify_far_jump_up_centers();
     verify_gutter_labels();
     verify_scrolloff_wrapped_rows();
     verify_ordinary_mode_options();
