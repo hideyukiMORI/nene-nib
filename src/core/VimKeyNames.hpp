@@ -6,7 +6,7 @@
 
 #include <array>
 
-namespace nenenib::tests
+namespace nenenib::core
 {
 inline constexpr std::array<VimKeyName, 22> vim_key_names{{
     {"<Esc>", nenenib::core::VimSpecialKey::escape},
@@ -32,5 +32,5 @@ inline constexpr std::array<VimKeyName, 22> vim_key_names{{
     {"<C-a>", nenenib::core::VimSpecialKey::control_a},
     {"<C-x>", nenenib::core::VimSpecialKey::control_x},
 }};
-} // namespace nenenib::tests
+} // namespace nenenib::core
 // clang-format on

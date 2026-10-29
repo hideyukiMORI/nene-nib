@@ -15,7 +15,6 @@
 #include "VimState.hpp"
 
 #include "../vim/VimFixture.hpp"
-#include "../vim/VimKeyNames.hpp"
 
 #include <array>
 #include <cstddef>
@@ -30,8 +29,8 @@ namespace nenenib::tests
 {
 using nenenib::core::VimSpecialKey;
 using MatchSpan = std::pair<std::size_t, std::size_t>;
-// fixture の記法の表 vim_key_names は eng/vim-oracle.py の KEY_TABLE から作る生成物で、
-// 手で書かない（ADR 0054）。記法を足すのは oracle の表の 1 か所だけ。
+// fixture の記法の表 core::vim_key_names（src/core/VimKeyNames.hpp）は eng/vim-oracle.py の
+// KEY_TABLE から作る生成物で、 手で書かない（ADR 0054）。記法を足すのは oracle の表の 1 か所だけ。
 
 // fixture はどれも数行なので、全部の行が表示値に載る高さで再生する。
 inline constexpr std::size_t vim_visible_lines = 64;

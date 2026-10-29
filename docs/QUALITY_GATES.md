@@ -222,8 +222,8 @@ Interlocked 系の組み込みや `volatile` は見ない。tests/ は対象外�
 SHA はファイルのバイト列そのままで、改行は正規化しない（`.gitattributes` の `eol=lf` が正本）。Vim が要らないので CI でも回せる（いまの CI の必須 check は validate-git だけで、この検査はローカルの `check.ps1` が回す・ADR 0021）。
 **期待値そのものが本物の Vim の答えかは見ない**（それは Vim のある機械での `--regenerate` と QLT-013 の記録）。
 
-fixture の鍵の記法の表（`<Esc>` `<NL>` `<Space>` など）は `eng/vim-oracle.py` の `KEY_TABLE` の 1 つだけで、C++ の表 `tests/vim/VimKeyNames.hpp` はその生成物である（[ADR 0054](adr/0054-fixture-key-notation-has-one-table.md)）。
-保存されている `tests/vim/VimKeyNames.hpp` のバイト列が oracle の `key_names_header()` の出力と一致することも CNF-010 で見る。無い・違う、のいずれも CNF-010（最初に違う行を示す）。
+fixture の鍵の記法の表（`<Esc>` `<NL>` `<Space>` など）は `eng/vim-oracle.py` の `KEY_TABLE` の 1 つだけで、C++ の表 `src/core/VimKeyNames.hpp` はその生成物である（core に置き、fixture の再生と設定の `map` の行が同じ表を読む・ADR 0176）（[ADR 0054](adr/0054-fixture-key-notation-has-one-table.md)）。
+保存されている `src/core/VimKeyNames.hpp` のバイト列が oracle の `key_names_header()` の出力と一致することも CNF-010 で見る。無い・違う、のいずれも CNF-010（最初に違う行を示す）。
 Vim を要らずに全文を作り直せるので、SHA の 1 行ではなく全文の一致を見る。直すのは `python eng/vim-oracle.py --key-names` だけ。
 表の検査（名前の重複・`<` で始まり `>` で終わる形・ある名前が別の名前の接頭辞にならない）は oracle が読み込むときに例外で止め、表に無い列挙子の名前は生成物のコンパイルが落とす。
 Vim の大小の写像の表 `src/core/CaseMappingTable.hpp` も同じ形の生成物で、`eng/case-mapping.py` の `case_mapping_header()`（固定の Python の `unicodedata`）の出力との全文の一致を CNF-010 で見る（Issue #781・ADR 0015 決定 10 の追記）。直すのは `python eng/case-mapping.py --write` だけ。
@@ -364,7 +364,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CNF-007 | active | eng/conformance.py / tests/conformance |
 | CNF-008 | active | eng/conformance.py / tests/conformance |
 | CNF-009 | active | eng/conformance.py / tests/conformance |
-| CNF-010 | active | eng/conformance.py / tests/conformance（鍵の記法の生成物 `tests/vim/VimKeyNames.hpp` は eng/vim-oracle.py の `key_names_header` と全文一致・ADR 0054） |
+| CNF-010 | active | eng/conformance.py / tests/conformance（鍵の記法の生成物 `src/core/VimKeyNames.hpp` は eng/vim-oracle.py の `key_names_header` と全文一致・ADR 0054） |
 | CNF-011 | active | eng/conformance.py / tests/conformance（整形の正本は eng/vim-oracle.py の `canonical_fixtures_json` 1 か所） |
 | CNF-012 | active | eng/conformance.py / tests/conformance（表は eng/sdk-abi-signatures.json の 1 つ・引数の数は照合しない） |
 | CNF-013 | active | eng/conformance.py / tests/conformance（表は eng/conformance-rules.json の `thirdPartyDigests` の 1 つ・照合は git の index の blob） |

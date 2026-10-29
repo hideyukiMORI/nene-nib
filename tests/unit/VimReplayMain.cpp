@@ -9,7 +9,7 @@
 // 出力（UTF-8・改行は `\n`）: 1 件ごとに `ok <name>`、違えば違った欄ごとに 1 行の
 // `mismatch <name> <欄> expected=<値> actual=<値>`（値は入力と同じエスケープ）。本文が違う件は
 // line / column の比較が意味を持たないので `text` の 1 行だけを書く。鍵の記法の表
-// （tests/vim/VimKeyNames.hpp）に無い `<…>` を含む件と、欄の数が違う行は `skip <name> <理由>`。
+// （src/core/VimKeyNames.hpp）に無い `<…>` を含む件と、欄の数が違う行は `skip <name> <理由>`。
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -18,11 +18,10 @@
 #include "SelectEditMode.hpp"
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
+#include "VimKeyName.hpp"
+#include "VimKeyNames.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
-
-#include "../vim/VimKeyName.hpp"
-#include "../vim/VimKeyNames.hpp"
 
 #include <fcntl.h>
 #include <io.h>
@@ -42,10 +41,10 @@ using nenenib::application::SelectEditMode;
 using nenenib::application::VisibleLines;
 using nenenib::core::EditMode;
 using nenenib::core::TextPosition;
+using nenenib::core::vim_key_names;
+using nenenib::core::VimKeyName;
 using nenenib::tests::Bytes;
 using nenenib::tests::Editing;
-using nenenib::tests::vim_key_names;
-using nenenib::tests::VimKeyName;
 using Fields = std::vector<std::string>;
 
 // 1 件の欄の数（name text keys expected line column register register_kind）。
@@ -171,7 +170,7 @@ constexpr std::size_t read_chunk = 65536;
     return std::string(keys.substr(index, stop - index + 1));
 }
 
-// 記法の表（tests/vim/VimKeyNames.hpp）に無い `<名前>`。
+// 記法の表（src/core/VimKeyNames.hpp）に無い `<名前>`。
 [[nodiscard]] std::optional<std::string> unknown_key_name(std::string_view keys)
 {
     for (std::size_t index = 0; index < keys.size(); ++index)

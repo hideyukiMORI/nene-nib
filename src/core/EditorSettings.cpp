@@ -11,7 +11,8 @@ bool same_settings(const EditorSettings &left, const EditorSettings &right) noex
            left.guide == right.guide && left.wrapping == right.wrapping &&
            left.ui_language == right.ui_language && left.lsp == right.lsp &&
            left.explorer == right.explorer && left.root == right.root &&
-           left.features == right.features && left.lsp_commands == right.lsp_commands;
+           left.features == right.features && left.lsp_commands == right.lsp_commands &&
+           left.maps == right.maps && left.mapleader == right.mapleader;
 }
 
 bool affects_line_height(const EditorSettings &before, const EditorSettings &after) noexcept
