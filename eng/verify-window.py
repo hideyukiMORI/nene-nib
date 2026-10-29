@@ -2979,6 +2979,10 @@ def verify_syntax(executable: Path, environment: dict, scheme: str, frames: Path
     return record
 
 
+GUTTER_POLLS = 30
+GUTTER_POLL_SECONDS = 0.1
+
+
 def gutter_ink_left(pixels: bytes, width: int, body: dict, index: int) -> int | None:
     """The leftmost x in the gutter of row `index` whose colour is not the gutter ground."""
     top = body["firstRowTop"] + body["lineHeight"] * index
@@ -3009,10 +3013,19 @@ def verify_gutter(executable: Path, environment: dict, frames: Path | None) -> d
         width, height = client[2] - client[0], client[3] - client[1]
         body = body_points(width, height, dpi)
         before = capture(window, width, height)
+        snapshot(frames, window, "gutter-before")
         try:
             palette_command(window, ":set rnu")
         except ForegroundRefused as refused:
             return {"driven": False, "note": f"{refused}; the gutter stays in nib_window_tests"}
+        # 面が閉じて行番号が描き直されるまで待つ（Enter の後の 1 frame は面が残る・#1098 の 1 回目）。
+        after = capture(window, width, height)
+        for _ in range(GUTTER_POLLS):
+            if gutter_ink_left(after, width, body, 0) != gutter_ink_left(before, width, body, 0):
+                break
+            time.sleep(GUTTER_POLL_SECONDS)
+            after = capture(window, width, height)
+        time.sleep(GUTTER_POLL_SECONDS)
         after = capture(window, width, height)
         snapshot(frames, window, "gutter-relativenumber")
         rows = min(body["visibleLines"], 8)
@@ -3024,12 +3037,20 @@ def verify_gutter(executable: Path, environment: dict, frames: Path | None) -> d
 
         gutter_changed = strip(before, body["bandLeft"], body["gutter"]) != strip(
             after, body["bandLeft"], body["gutter"])
-        body_kept = strip(before, body["contentLeft"], width - 4) == strip(
-            after, body["contentLeft"], width - 4)
+        # キャレットの升（行頭の 1 升ぶん）は点滅するので比べない。
+        text_left = body["contentLeft"] + body["lineHeight"]
+        body_kept = strip(before, text_left, width - 4) == strip(after, text_left, width - 4)
         left_before = gutter_ink_left(before, width, body, 0)
         left_after = gutter_ink_left(after, width, body, 0)
+        changed = [(x, y) for y in range(body["firstRowTop"], bottom)
+                   for x in range(text_left, width - 4)
+                   if pixel(before, width, x, y) != pixel(after, width, x, y)]
+        box = ([min(p[0] for p in changed), min(p[1] for p in changed),
+                max(p[0] for p in changed), max(p[1] for p in changed)] if changed else None)
         record = {"driven": True, "dpi": dpi, "rows": rows, "gutterChanged": gutter_changed,
-                  "bodyKept": body_kept, "row0InkLeft": [left_before, left_after]}
+                  "bodyKept": body_kept, "row0InkLeft": [left_before, left_after],
+                  "body": body, "bodyChangedPixels": len(changed), "bodyChangedBox": box}
+        print(json.dumps(record, ensure_ascii=False), file=sys.stderr)
         assert gutter_changed, "`:set rnu` left the gutter as it was"
         assert body_kept, "`:set rnu` changed the body text"
         moved = left_before is not None and left_after is not None and left_after < left_before
