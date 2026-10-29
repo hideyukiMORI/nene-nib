@@ -1,4 +1,5 @@
-// adapters/win32 のファイルと文字コードの往復を、ビルドディレクトリ配下の一時フォルダで測る
+// adapters/win32
+// のファイルと文字コードの往復を、temporary_test_directory（#1103）の中の一時フォルダで測る
 // （QLT-013 / ADR 0010）。中核の分岐カバレッジ（QLT-009）の対象ではない。
 // 一時フォルダの名前は固定で、冒頭で消して作り直す。時刻も乱数も使わない（ARC-007）。
 #include "AbsolutePath.hpp"
@@ -18,6 +19,7 @@
 #include "Milestone.hpp"
 #include "SettingsCodec.hpp"
 #include "TemporaryFiles.hpp"
+#include "TemporaryTestDirectory.hpp"
 #include "TextEncoding.hpp"
 #include "VimModeSet.hpp"
 #include "Win32ClipboardAdapter.hpp"
@@ -2048,9 +2050,7 @@ int run_memory_tests(std::string_view scope)
     std::printf("Settings codec: %zu checks, %zu failures\n", check_count(), failure_count());
     return test_result();
 }
-} // namespace
-
-int main(int argc, char **argv)
+int run_tests(int argc, char **argv)
 {
     const std::string_view scope = argc == 2 ? argv[1] : "";
     if (argc > 2 || (argc == 2 && !known_scope(scope)))
@@ -2111,4 +2111,18 @@ int main(int argc, char **argv)
     std::printf("Nib adapter tests passed: %zu checks over files, code pages and paths\n",
                 check_count());
     return 0;
+}
+} // namespace
+
+int main(int argc, char **argv)
+{
+    const auto directory = nenenib::tests::temporary_test_directory(L"adapter");
+    if (!directory.has_value())
+    {
+        std::fprintf(stderr, "FAIL: the temporary test folder is not made\n");
+        return 1;
+    }
+    const int result = run_tests(argc, argv);
+    nenenib::tests::remove_temporary_test_directory(directory.value());
+    return result;
 }

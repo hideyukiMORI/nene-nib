@@ -1,7 +1,8 @@
 // Issue #993（ADR 0159 の決定 2・3・5・6・ADR 0141 の追補 10）: 開く道の読みの本物
 // （Win32DocumentReader）を本物のファイルと worker 1 本で測る。64 MiB を超える見本は worker の塊の
 // 仕事で読まれ、進み具合が塊ごとに届き、揃った本文の長さと行数が見本と一致する。取消の後は終わりが
-// 届かない。64 MiB 以下は呼んだスレッドで揃う。見本はビルドディレクトリの直下に固定の名前で書き、
+// 届かない。64 MiB 以下は呼んだスレッドで揃う。見本は
+// temporary_test_directory（#1103）の中に固定の名前で書き、
 // 冒頭で前回の残りを消して終わりに消す。上限（1 GiB と復号の 64 MiB）を超える見本は読む前・写す前に
 // 断る（ADR 0159 の決定 7）。時刻は読まない（Sleep・時計・タイムアウトの待ちを書かない）。
 // 待つのは合図の受け皿（セマフォ）だけで、止まらないときは CTest の制限時間で落ちる。
@@ -12,6 +13,7 @@
 #include "DocumentReadRequest.hpp"
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
+#include "TemporaryTestDirectory.hpp"
 #include "TextEncoding.hpp"
 #include "Win32CodePageAdapter.hpp"
 #include "Win32DocumentReader.hpp"
@@ -301,9 +303,7 @@ void verify_utf16_past_decoded_limit()
     expect(refused, "a UTF-16 file over 64 MiB is too_large_to_decode");
     expect(DeleteFileW(utf16_name) != 0, "the UTF-16 sample is removed");
 }
-} // namespace
-
-int main()
+int run_tests()
 {
     DeleteFileW(large_name);
     DeleteFileW(small_name);
@@ -320,4 +320,18 @@ int main()
            "the sample files are removed");
     std::printf("Document reader adapter: %zu checks, %zu failures\n", checks(), failures());
     return failures() == 0 ? 0 : 1;
+}
+} // namespace
+
+int main()
+{
+    const auto directory = nenenib::tests::temporary_test_directory(L"document-reader");
+    if (!directory.has_value())
+    {
+        std::fprintf(stderr, "FAIL: the temporary test folder is not made\n");
+        return 1;
+    }
+    const int result = run_tests();
+    nenenib::tests::remove_temporary_test_directory(directory.value());
+    return result;
 }

@@ -3,6 +3,7 @@
 #include "ColorCodec.hpp"
 #include "KeyValueFields.hpp"
 #include "SettingsCodec.hpp"
+#include "TemporaryTestDirectory.hpp"
 #include "ThemeCodec.hpp"
 #include "ThemeContrast.hpp"
 #include "ThemeDerivation.hpp"
@@ -501,9 +502,7 @@ void verify_catalog_loading()
     verify_catalog_limit(files, adapter);
     expect(RemoveDirectoryW(L"nib-theme-catalog") != 0, "catalog directory removed");
 }
-} // namespace
-
-int main(int argc, char **argv)
+int run_tests(int argc, char **argv)
 {
     if (argc == 2 && std::string_view(argv[1]) == "--catalog")
     {
@@ -530,4 +529,18 @@ int main(int argc, char **argv)
     verify_file_loading();
     std::printf("Theme codec: %zu checks, %zu failures\n", checks(), failures());
     return failures() == 0 ? 0 : 1;
+}
+} // namespace
+
+int main(int argc, char **argv)
+{
+    const auto directory = nenenib::tests::temporary_test_directory(L"theme");
+    if (!directory.has_value())
+    {
+        std::fprintf(stderr, "FAIL: the temporary test folder is not made\n");
+        return 1;
+    }
+    const int result = run_tests(argc, argv);
+    nenenib::tests::remove_temporary_test_directory(directory.value());
+    return result;
 }

@@ -1,11 +1,13 @@
-// Issue #252: 前回のタブの一覧（session.v1）のコーデックと adapter を、ビルドディレクトリ配下の
-// 一時フォルダで測る（QLT-013 / ADR 0059 の決定 2）。使う人の %LOCALAPPDATA% には触れない。
+// Issue #252: 前回のタブの一覧（session.v1）のコーデックと adapter を、
+// temporary_test_directory（#1103）の中の一時フォルダで測る（QLT-013 / ADR 0059 の決定
+// 2）。使う人の %LOCALAPPDATA% には触れない。
 // 一時フォルダの名前は固定で、冒頭で消して作り直す。時刻も乱数も使わない（ARC-007）。
 #include "FilePath.hpp"
 #include "Session.hpp"
 #include "SessionCodec.hpp"
 #include "SessionFailure.hpp"
 #include "SessionTab.hpp"
+#include "TemporaryTestDirectory.hpp"
 #include "Win32FileAdapter.hpp"
 #include "Win32SessionAdapter.hpp"
 
@@ -341,9 +343,7 @@ void verify_adapter_failures(adapters::Win32FileAdapter &files)
     expect(!unsaved && unsaved.error() == Failure::location_unavailable,
            "an unavailable location cannot be written");
 }
-} // namespace
-
-int main()
+int run_tests()
 {
     verify_round_trips();
     verify_wrapped_round_trip();
@@ -359,4 +359,18 @@ int main()
     clean_folder();
     std::printf("Session adapter: %zu checks, %zu failures\n", checks(), failures());
     return failures() == 0 ? 0 : 1;
+}
+} // namespace
+
+int main()
+{
+    const auto directory = nenenib::tests::temporary_test_directory(L"session");
+    if (!directory.has_value())
+    {
+        std::fprintf(stderr, "FAIL: the temporary test folder is not made\n");
+        return 1;
+    }
+    const int result = run_tests();
+    nenenib::tests::remove_temporary_test_directory(directory.value());
+    return result;
 }

@@ -1,6 +1,7 @@
 // Issue #271: 同じフォルダの列挙（Win32FolderAdapter）とワーカー 1 本（Win32Worker）を、
 // 本物のフォルダと本物のスレッドで測る（ADR 0062 の決定 5〜9）。
-// 一時フォルダはビルドディレクトリの直下に固定の名前で作り、冒頭で前回の残りを消して終わりに消す。
+// 一時フォルダは
+// temporary_test_directory（#1103）の中に固定の名前で作り、冒頭で前回の残りを消して終わりに消す。
 // 時刻は読まない（Sleep・時計・タイムアウトの待ちを書かない）。
 // 待つのは合図の受け皿（セマフォ）だけで、止まらないときは CTest の制限時間で落ちる。
 #include "ExplorerTree.hpp"
@@ -11,6 +12,7 @@
 #include "FolderListingKind.hpp"
 #include "FolderProgress.hpp"
 #include "FolderRequest.hpp"
+#include "TemporaryTestDirectory.hpp"
 #include "Win32FolderAdapter.hpp"
 #include "Win32Worker.hpp"
 
@@ -453,9 +455,7 @@ void verify_never_started()
     }
     expect(!worker.started(), "a worker without a request has no thread");
 }
-} // namespace
-
-int main()
+int run_tests()
 {
     remove_tree(root);
     make_folder(root);
@@ -472,4 +472,18 @@ int main()
     expect(GetFileAttributesW(root) == INVALID_FILE_ATTRIBUTES, "the temporary folder is removed");
     std::printf("Folder adapter: %zu checks, %zu failures\n", checks(), failures());
     return failures() == 0 ? 0 : 1;
+}
+} // namespace
+
+int main()
+{
+    const auto directory = nenenib::tests::temporary_test_directory(L"folder");
+    if (!directory.has_value())
+    {
+        std::fprintf(stderr, "FAIL: the temporary test folder is not made\n");
+        return 1;
+    }
+    const int result = run_tests();
+    nenenib::tests::remove_temporary_test_directory(directory.value());
+    return result;
 }
