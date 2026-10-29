@@ -464,6 +464,7 @@ class EditorController final
     [[nodiscard]] TabReach reach_tab(std::size_t position);
     // アクティブを閉じて隣へ移る（隣を reach_tab で読む・1 本も残らなければ空の無題）。
     void close_active_tab();
+    void close_toward_reading(std::size_t active, std::size_t neighbour);
     // 読めなかったタブの知らせ（ADR 0059 の「知らせの文言」）。同じ意図の中の件数を数える。
     void report_unreached(const core::FilePath &path);
     // 起動で前回のタブを戻す（ADR 0059 の決定 6 と「手順」）。ファイルの引数が無いときだけ。
@@ -736,6 +737,10 @@ class EditorController final
     // 起動の復元で見ていたタブが裏の読みになったとき仮に残した無題と、使った順の順位（追補 1）。
     // そのタブへ切り替えたときに無題を外して順位を当てる。
     std::optional<AutosaveId> restore_untitled_;
+    // 裏の読みが揃ったときに切り替える先（ADR 0159 の追補 1・6）。最後に SwitchTab・起動の復元・
+    // 閉じた後の隣・枠の移りで指されて裏の読みになったタブ。文書が替わると（leave_document）消え、
+    // 歩きで飛ばしたタブは入らない。
+    std::optional<AutosaveId> reach_wanted_;
     std::vector<std::size_t> restore_ranks_;
     // 前の frame の本文の先頭行（決定 7）。frame だけが読み書きする。
     std::optional<core::LineNumber> preview_body_top_;

@@ -497,8 +497,9 @@ void verify_open_held_while_vim_waits()
         {tab("C:\\work\\a.txt", 1), tab("C:\\work\\c.txt", 2), tab("C:\\work\\b.txt", 0)}, 2}}};
 }
 
-// Ctrl+Tab の歩きは裏で読んでいるタブを帯に残したまま飛ばす。候補が全部読みの途中なら動かない
-// （追補 6・7）。
+// Ctrl+Tab の歩きは裏で読んでいるタブを帯に残したまま飛ばす。飛ばしたタブが揃っても、ほかの
+// タブで確定した後なら切り替えず、束に置き換えるだけ。候補が全部読みの途中なら動かない（追補
+// 6・7）。
 void verify_walk_skips_reading_tabs()
 {
     Editing editing(three_listed(), {},
@@ -512,10 +513,21 @@ void verify_walk_skips_reading_tabs()
     auto &controller = editing.controller();
     applied(controller, app::VisibleLines{10});
     applied(controller, app::SwitchTab{0});
+    const std::uint64_t skipped = last_ticket(editing);
     const auto walked = controller.apply_frame(app::WalkRecentTab{core::TabStep::next});
     expect(walked.tabs.size() == 3 && walked.document.title.text() == "c.txt" &&
                first_line(walked) == "c" && controller.tab_walking(),
            "the walk skips the tab being read and goes to the next one");
+    applied(controller, app::SettleRecentTab{});
+    editing.reads().finish(skipped);
+    const auto settled = controller.apply_frame(app::WorkCompleted{});
+    expect(settled.tabs.size() == 3 && settled.document.title.text() == "c.txt",
+           "a skipped tab that finishes after the walk settled elsewhere does not switch");
+    const std::size_t asked = editing.reads().requests().size();
+    const auto shown = controller.apply_frame(app::SwitchTab{0});
+    expect(shown.document.title.text() == "a.txt" && first_line(shown) == "large body" &&
+               editing.reads().requests().size() == asked,
+           "the finished skipped tab is in the band, read, when it is shown");
     Editing alone(two_listed(), hold_listed);
     alone.reads().defer_above(0);
     auto &only = alone.controller();

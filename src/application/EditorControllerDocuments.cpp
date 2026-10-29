@@ -410,6 +410,7 @@ void EditorController::restore_tabs(const Session &session)
             // 裏で読んでいる間は無題を仮に残し、揃ってそのタブへ切り替えたときに外す（追補 1）。
             restore_untitled_ = state_.autosave_ids().at(0);
             restore_ranks_ = std::move(ranks);
+            reach_wanted_ = state_.autosave_ids().at(position);
             return;
         case TabReach::dropped:
             break;
@@ -830,8 +831,9 @@ void EditorController::finish_reading(const core::FilePath &, AutosaveId tab,
     finish_tab_read(tab, std::move(document));
 }
 
-// まだ読んでいないタブの裏の読みが揃った（追補 1）。読めたらそのタブへ切り替え、読めなければ
-// 帯から外して 1 行知らせる。起動の復元で無題が仮に残っていれば、切り替えた後に外す。
+// まだ読んでいないタブの裏の読みが揃った（追補 1・6）。読めたら束に置き換え、そのタブが待っている
+// 切り替え先（最後に指されたタブ）のときだけ切り替える。歩きで飛ばしたタブは置き換えるだけ。読め
+// なければ帯から外して 1 行知らせる。起動の復元で無題が仮に残っていれば、切り替えた後に外す。
 void EditorController::finish_tab_read(AutosaveId tab,
                                        std::expected<OpenedDocument, FileFailure> document)
 {
@@ -840,11 +842,12 @@ void EditorController::finish_tab_read(AutosaveId tab,
     {
         return;
     }
+    const bool wanted = reach_wanted_.has_value() && reach_wanted_.value() == tab;
     const std::optional<AutosaveId> placeholder = std::exchange(restore_untitled_, std::nullopt);
     const bool replaces = placeholder.has_value() &&
                           state_.autosave_ids().at(state_.active_tab()) == placeholder.value() &&
                           blank_untitled();
-    if (loaded_tab(position.value(), std::move(document)) != TabReach::reached)
+    if (loaded_tab(position.value(), std::move(document)) != TabReach::reached || !wanted)
     {
         return;
     }
@@ -1085,6 +1088,8 @@ std::expected<void, FileFailure> EditorController::save_document(const SaveDocum
 
 void EditorController::leave_document()
 {
+    // 文書が替わったら、裏の読みが揃っても前に指したタブへは切り替えない（ADR 0159 の追補 6）。
+    reach_wanted_.reset();
     // 出ていく文書の追従を今の文書で解決してから置く（ADR 0128）。問いの間は解決できないので
     // 保留を捨て、次の文書へ持ち越さない（ADR 0128 の決定 7）。
     drop_pending_follow();
@@ -1191,6 +1196,7 @@ void EditorController::accept(const EndSession &intent)
     // 読み込み中の要求は取消で、ファイルは開かれない（ADR 0159 の決定 5・11・追補 1）。
     cancel_readings(false);
     restore_untitled_.reset();
+    reach_wanted_.reset();
     // 言語サーバーは待たずに止める（ADR 0160 の追補）。子が居なければ呼ばない。
     end_language_server_session();
     settle_follow();
@@ -1283,6 +1289,16 @@ void EditorController::ask_display()
     }
 }
 
+// 隣を裏で読んでいる間は空の無題に移り、揃ったら隣へ切り替える（追補 1・6）。
+void EditorController::close_toward_reading(std::size_t active, std::size_t neighbour)
+{
+    const AutosaveId wanted = state_.autosave_ids().at(neighbour);
+    leave_document();
+    state_ = state_.with_new_tab().with_closed(active);
+    enter_document();
+    reach_wanted_ = wanted;
+}
+
 // アクティブを閉じる。次にアクティブになる隣（右隣・無ければ左隣）を先に読み、読めなければ外して
 // 次の隣を試す。隣が 1 本も残らなければ空の無題を 1 本置く。窓は閉じない。使う人が閉じたのは
 // 1 本だけで、ほかのタブが読めなかったのは使う人の操作ではない（ADR 0059 の決定 5）。
@@ -1300,10 +1316,7 @@ void EditorController::close_active_tab()
             enter_document();
             return;
         case TabReach::reading:
-            // 隣を裏で読んでいる間は空の無題に移り、揃ったら隣へ切り替える（追補 1）。
-            leave_document();
-            state_ = state_.with_new_tab().with_closed(active);
-            enter_document();
+            close_toward_reading(active, neighbour);
             return;
         case TabReach::dropped:
             break;

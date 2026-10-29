@@ -18,6 +18,7 @@
 #include "FileWriteMode.hpp"
 #include "FindHandle.hpp"
 #include "SealedBytes.hpp"
+#include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "Win32AutosaveAdapter.hpp"
 #include "Win32FileAdapter.hpp"
@@ -552,8 +553,35 @@ void verify_read_limit(adapters::Win32Worker &worker, adapters::Win32FileAdapter
     const auto seven = remnant_with(listed, 7);
     expect(seven.has_value() && limited.read(seven.value()).has_value(),
            "the remnant is read through the recording port");
-    expect(recording.limit() == core::maximum_decoded_document_bytes,
-           "reading a remnant back uses the autosave limit of 64 MiB");
+    expect(recording.limit() == core::maximum_encoded_autosave_bytes,
+           "reading a remnant back uses the largest encoded size of a 64 MiB body");
+}
+
+// (h) 計画が書ける最大の本文（UTF-8 で 64 MiB）を BOM つきで書いた退避は読み戻せる（ADR 0159 の
+// 決定 7・#1095 のレビュー R1-2）。deadbee5 は奇数なので pid にならない。
+void verify_read_back_at_limit(adapters::Win32FileAdapter &files,
+                               adapters::Win32AutosaveAdapter &autosave)
+{
+    static_assert(core::maximum_encoded_autosave_bytes ==
+                  core::maximum_decoded_document_bytes * 2U + 3U);
+    make_folder(L"deadbee5");
+    write_list(files, "deadbee5",
+               {{AutosaveId{9}, std::nullopt, title_of("無題"), caret_at(1, 1)}});
+    std::string body(core::byte_order_mark());
+    body.append(core::maximum_decoded_document_bytes, 'a');
+    write_body(files, "deadbee5", 9, body);
+    const auto listed = autosave.remnants().value_or(std::vector<AutosaveRemnant>{});
+    const auto nine = remnant_with(listed, 9);
+    if (!nine.has_value())
+    {
+        expect(false, "the remnant at the limit is listed");
+        return;
+    }
+    const auto read = autosave.read(nine.value());
+    expect(read.has_value() && read.value().size() == body.size(),
+           "a BOM body of exactly 64 MiB is read back whole");
+    autosave.forget(nine.value());
+    expect(!exists(std::wstring(root) + L"/deadbee5"), "the remnant at the limit is forgotten");
 }
 
 void verify_autosave()
@@ -577,6 +605,7 @@ void verify_autosave()
         verify_remnants(worker, files, autosave);
         verify_read_limit(worker, files);
         verify_read_and_forget(files, autosave);
+        verify_read_back_at_limit(files, autosave);
         autosave.clear();
         expect(!exists(own_folder()), "clear removes the own folder again");
     }

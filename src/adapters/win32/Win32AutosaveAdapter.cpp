@@ -135,7 +135,7 @@ Win32AutosaveAdapter::read(const application::AutosaveRemnant &remnant)
     {
         return std::unexpected(Failure::unreadable);
     }
-    const auto bytes = files_.read(body.value(), core::maximum_decoded_document_bytes);
+    const auto bytes = files_.read(body.value(), core::maximum_encoded_autosave_bytes);
     if (!bytes)
     {
         return std::unexpected(Failure::unreadable);

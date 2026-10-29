@@ -15,8 +15,8 @@ namespace nenenib::adapters::win32
 // 一覧の上限。越えた一覧は書かず、読むときも全体を拒む（session.v2 と同じ値）。
 inline constexpr std::size_t maximum_autosave_entries = 256;
 inline constexpr std::size_t maximum_autosave_list_bytes = 1024U * 1024U;
-// 本文を読む上限は退避の上限と同じ core::maximum_decoded_document_bytes（ADR 0137 の限界・ADR 0159
-// の決定 7。正本は core の 1 か所）。
+// 本文を読む上限は退避の上限から派生した core::maximum_encoded_autosave_bytes（符号化した後の最大・
+// ADR 0137 の限界・ADR 0159 の決定 7。正本は core の 1 か所）。
 
 // 本文のファイル名 `<番号>.body`。
 [[nodiscard]] std::string autosave_body_name(application::AutosaveId id);

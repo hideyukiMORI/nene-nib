@@ -90,6 +90,8 @@ void EditorController::accept(const SwitchTab &intent)
     {
         return;
     }
+    // 指されたタブが待っている切り替え先を置き換える（ADR 0159 の追補 6）。
+    reach_wanted_.reset();
     // アクティブ自身は文書を動かさず、歩きの途中なら着いた所で確定する（ADR 0058 の決定 2）。
     if (intent.index == state_.active_tab())
     {
@@ -97,9 +99,16 @@ void EditorController::accept(const SwitchTab &intent)
         return;
     }
     // 行き先がまだ読んでいない文書ならここで読む。読めなければそのタブは外れて知らせだけが残り、
-    // 今の文書の一時の値（入力行・変換中の文字列）は閉じない（ADR 0059 の決定 5）。
-    if (reach_tab(intent.index) != TabReach::reached)
+    // 今の文書の一時の値（入力行・変換中の文字列）は閉じない（ADR 0059 の決定 5）。裏で読んで
+    // いれば、揃ったときに切り替える先として覚える（追補 1・6）。
+    switch (reach_tab(intent.index))
     {
+    case TabReach::reached:
+        break;
+    case TabReach::reading:
+        reach_wanted_ = state_.autosave_ids().at(intent.index);
+        return;
+    case TabReach::dropped:
         return;
     }
     leave_document();
@@ -233,6 +242,7 @@ void EditorController::accept(const SwitchPane &)
         break;
     case TabReach::reading:
         // 裏で読んでいる間は枠をそのまま残す（揃ったらそのタブへ切り替わる・ADR 0159 の追補 1）。
+        reach_wanted_ = other->tab;
         return;
     case TabReach::dropped:
         // 読めなかった文書は reach_tab が帯から外して知らせる。もう 1 つの枠も外す。
