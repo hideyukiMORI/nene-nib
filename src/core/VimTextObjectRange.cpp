@@ -1004,6 +1004,23 @@ constexpr char32_t escape_character = U'\\';
     return characters_through(text, begin, last);
 }
 
+// 開きから対の閉じを探し、外側なら開きから閉じまで、内側なら中を返す。閉じが無ければ nullopt。
+[[nodiscard]] std::optional<VimMotionRange>
+block_range_from(const TextBuffer &text, Offset open, VimBracketPair pair, VimTextObjectScope scope)
+{
+    const auto close = matched_close_forward(text, open, pair);
+    if (!close.has_value())
+    {
+        return std::nullopt;
+    }
+    const OffsetRange block{open, close.value()};
+    if (scope == VimTextObjectScope::around)
+    {
+        return characters_through(text, block.begin, block.end);
+    }
+    return inner_block_range(text, block);
+}
+
 [[nodiscard]] std::optional<VimMotionRange> block_range_at(const TextBuffer &text, Offset start,
                                                            VimTextObjectRequest request,
                                                            std::size_t count)
@@ -1014,31 +1031,39 @@ constexpr char32_t escape_character = U'\\';
     {
         return std::nullopt;
     }
-    const auto close = matched_close_forward(text, open.value(), pair);
-    if (!close.has_value())
-    {
-        return std::nullopt;
-    }
-    const OffsetRange block{open.value(), close.value()};
-    if (request.scope == VimTextObjectScope::around)
-    {
-        return characters_through(text, block.begin, block.end);
-    }
-    return inner_block_range(text, block);
+    return block_range_from(text, open.value(), pair, request.scope);
 }
 
 // ------------------------------------------------------------------ VISUAL の広げ方（決定 4）
 
+// Vim が比べる中の最後の位置（current_block の `curwin->w_cursor`）。中が空なら開きの位置、
+// 閉じの前が空白だけで中が前の行で終わるなら（行単位も）、その行の最後の文字（Vim の decl は
+// 改行の位置に止まらない・空の行ならその行の先頭）。範囲そのものは変えない（Issue #1066）。
+[[nodiscard]] Offset inner_compared_last(const TextBuffer &text, const VimMotionRange &range)
+{
+    const Offset begin = range.range.begin;
+    if (is_empty(range.range))
+    {
+        return retreated_to_text(text, begin).value_or(begin);
+    }
+    const Offset caret = object_caret(text, range);
+    const LineNumber line = line_of(text, caret);
+    if (caret == text.line_end(line) && text.line_start(line) < caret)
+    {
+        return previous_in_line(text, caret);
+    }
+    return caret;
+}
+
 // 内側の範囲が今の選択より広くないか（Vim の current_block の `!LT_POS(start_pos, old_start) &&
-// !LT_POS(old_end, curwin->w_cursor) && !EQUAL_POS(start_pos, curwin->w_cursor)`）。最後の位置は
-// 中の最後の文字で、中が空なら開きの位置（Vim の decl）。中が 1 文字なら広げない（Issue #1066）。
+// !LT_POS(old_end, curwin->w_cursor) && !EQUAL_POS(start_pos, curwin->w_cursor)`）。中が 1 文字なら
+// 広げない（Issue #1066）。
 [[nodiscard]] bool inner_not_wider(const TextBuffer &text, const Selection &selection,
                                    const VimMotionRange &range)
 {
     const OffsetRange ordered = selection_range(selection);
     const Offset begin = range.range.begin;
-    const Offset last = is_empty(range.range) ? retreated_to_text(text, begin).value_or(begin)
-                                              : object_caret(text, range);
+    const Offset last = inner_compared_last(text, range);
     return begin.value >= ordered.begin.value && last.value <= ordered.end.value &&
            !(begin == last);
 }
@@ -1058,12 +1083,7 @@ inner_block_widened(const TextBuffer &text, const Selection &selection, VimBrack
     {
         return std::nullopt;
     }
-    const auto close = matched_close_forward(text, open.value(), pair);
-    if (!close.has_value())
-    {
-        return std::nullopt;
-    }
-    return inner_block_range(text, OffsetRange{open.value(), close.value()});
+    return block_range_from(text, open.value(), pair, VimTextObjectScope::inner);
 }
 
 // VISUAL で内側（i( 系）の範囲が選択より広くならなければ、選択の前の端の前から広げ直す

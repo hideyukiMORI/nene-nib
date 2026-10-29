@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 ddfcbe57d6e6a42d460a7adbf339319b342e031262f3983a67e71947bd03ccd9 / 2767 fixtures
+// fixtures.json: sha256 52fb4854e2e070597841845ec74b8bb7a9bea4a52b7246fc2a04ca42131ab0de / 2771 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2767> vim_fixtures{{
+constexpr std::array<VimFixture, 2771> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2514,6 +2514,10 @@ constexpr std::array<VimFixture, 2767> vim_fixtures{{
     {"visual-inner-block-after-close-paren-forward", "x(a)b (c) d", "4lv4li(d", "x(a)b () d", 1, 8, "c", "v", std::nullopt},
     {"visual-inner-block-backward-cursor-line-block", "b\ne [sq]", "jVki[d", "b\ne []", 2, 4, "sq", "v", std::nullopt},
     {"visual-inner-block-lower-line-block-v", "e x\nab [sq] c", "vjli[d", "e x\nab [] c", 2, 5, "sq", "v", std::nullopt},
+    {"visual-inner-block-blank-close-lines", "x{\nab\n}", "jvliB<Esc>", "x{\nab\n}", 2, 2, "", "", std::nullopt},
+    {"visual-inner-block-blank-close-lines-d", "x{\nab\n}", "jvliBd", "x{\nab\n}", 2, 2, "", "", std::nullopt},
+    {"visual-inner-block-blank-close-indent", "(a\nbc\n  )", "lvjli(<Esc>", "(a\nbc\n  )", 2, 3, "", "", std::nullopt},
+    {"visual-inner-block-blank-close-indent-d", "(a\nbc\n  )", "lvjli(d", "(a\nbc\n  )", 2, 3, "", "", std::nullopt},
     {"visual-inner-block-after-close-two-chars", "(a)b (cd)\nzz", "3lvji(d", "()b (cd)\nzz", 1, 2, "a", "v", std::nullopt},
     {"visual-inner-block-enclosing-single-char", "x(ab(c)d)", "5lvli(d", "x(ab()d)", 1, 6, "c", "v", std::nullopt},
     {"visual-inner-block-empty-forward", "e []\nb", "Vji[<Esc>", "e []\nb", 2, 1, "", "", std::nullopt},
