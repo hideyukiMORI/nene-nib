@@ -108,6 +108,7 @@ using detail::text_object_action;
 using detail::vim_recorded;
 using detail::visual_acted;
 using detail::visual_character;
+using detail::visual_landed_column;
 using detail::visual_left;
 using detail::visual_special;
 using detail::wanted_after;
@@ -495,7 +496,8 @@ namespace
     if ((mode == VimMode::visual || mode == VimMode::visual_block) && moved != caret)
     {
         next.wanted_column =
-            wanted_after(text, wanted_column_of(text, state, caret), moved, VimMotion::right);
+            wanted_after(wanted_column_of(text, state, caret),
+                         visual_landed_column(text, caret, moved), VimMotion::right);
     }
     return VimStep{std::move(next), VimSelect{Selection{caret, moved}}};
 }

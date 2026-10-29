@@ -759,8 +759,8 @@ namespace detail
 // 移動のあとの欲しい列。j / k は前の値を引き継ぎ、$ は「行末」を貼り、ほかは動いた先の桁。
 // gj gk と `{N}|` は wanted_for が motion と回数から決めた値を引き継ぐ（ADR 0144 の決定 3・
 // Issue #660）。
-[[nodiscard]] VimWantedColumn wanted_after(const TextBuffer &text, const VimWantedColumn &wanted,
-                                           Offset moved, VimMotion motion)
+[[nodiscard]] VimWantedColumn wanted_after(const VimWantedColumn &wanted, VirtualColumn landed,
+                                           VimMotion motion)
 {
     switch (motion)
     {
@@ -776,7 +776,7 @@ namespace detail
         // 回数 1 は着地の桁、折り返す文書の {N}g$ だけが行末の印（ADR 0147 の決定 4）。
         return wanted.wish == VimColumnWish::at_line_end
                    ? wanted
-                   : VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, moved)};
+                   : VimWantedColumn{VimColumnWish::at_column, landed};
     case VimMotion::left:
     case VimMotion::right:
     case VimMotion::line_start:
@@ -809,7 +809,7 @@ namespace detail
     case VimMotion::matching_pair:
     case VimMotion::mark_line:
     case VimMotion::mark_exact:
-        return VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, moved)};
+        return VimWantedColumn{VimColumnWish::at_column, landed};
     }
     std::unreachable();
 }
@@ -947,7 +947,7 @@ namespace detail
     const VimMotionLanding landing = landing_of(view, state, motion);
     const Offset moved = landing.offset;
     VimState next = vim_resting_from(state, state.unnamed_register);
-    next.wanted_column = wanted_after(view.text, wanted, moved, motion);
+    next.wanted_column = wanted_after(wanted, caret_virtual_column(view.text, moved), motion);
     return moved_or_failed(VimStep{std::move(next), VimMoveTo{moved}}, motion, view.selection.caret,
                            landing);
 }

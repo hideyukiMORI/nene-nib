@@ -43,6 +43,7 @@ using detail::shifted;
 using detail::tab_action;
 using detail::visual_acted;
 using detail::visual_character;
+using detail::visual_landed_column;
 using detail::visual_left;
 using detail::visual_numbered;
 using detail::visual_resting;
@@ -161,7 +162,8 @@ namespace
     const VimMotionLanding landing = landing_of(view, state, motion.value());
     const Offset moved = landing.offset;
     VimState next = visual_resting(state, state.mode);
-    next.wanted_column = wanted_after(view.text, wanted, moved, motion.value());
+    next.wanted_column = wanted_after(
+        wanted, visual_landed_column(view.text, view.selection.anchor, moved), motion.value());
     return jumped_by(moved_or_failed(VimStep{std::move(next),
                                              VimSelect{Selection{view.selection.anchor, moved}}},
                                      motion.value(), view.selection.caret, landing),

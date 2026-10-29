@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 52fb4854e2e070597841845ec74b8bb7a9bea4a52b7246fc2a04ca42131ab0de / 2771 fixtures
+// fixtures.json: sha256 7df0324aeef7e28637dfd93942043a0a32edf579363b350132aed60510f325b1 / 2786 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2771> vim_fixtures{{
+constexpr std::array<VimFixture, 2786> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1499,6 +1499,21 @@ constexpr std::array<VimFixture, 2771> vim_fixtures{{
     {"block-case-tab", "xyzwvutsrq\n\tabc", "3l<C-v>jlU", "xyzWVUTSRq\n\tAbc", 1, 4, "", "", std::nullopt},
     {"block-case-tab-top", "x\tabc\nxyzwvutsrq", "j3l<C-v>klU", "x\tAbc\nxyzWVUTSRq", 1, 2, "", "", std::nullopt},
     {"block-case-dot", "abcdef\nghijkl\nmnopqr\nstuvwx", "<C-v>jlUjj.", "ABcdef\nGHijkl\nMNopqr\nSTuvwx", 3, 1, "", "", std::nullopt},
+    {"block-tab-zero-0-j-y", "\t;  abc\nabcdefghijkl", "4l<C-v>0jy", "\t;  abc\nabcdefghijkl", 1, 1, "\t;  a\nabcdefghijkl", "\02612", std::nullopt},
+    {"block-tab-zero-0-j-d", "\t;  abc\nabcdefghijkl", "4l<C-v>0jd", "bc\n", 1, 1, "\t;  a\nabcdefghijkl", "\02612", std::nullopt},
+    {"block-tab-zero-0-j-r", "\t;  abc\nabcdefghijkl", "4l<C-v>0jrx", "xxxxxxxxxxxxbc\nxxxxxxxxxxxx", 1, 1, "", "", std::nullopt},
+    {"block-tab-zero-0-k-y", "abcdefghijkl\n\t;  abc", "j4l<C-v>0ky", "abcdefghijkl\n\t;  abc", 1, 1, "abcdefghijkl\n\t;  a", "\02612", std::nullopt},
+    {"block-tab-zero-0-tabs-d", "\tabc\n\tabc", "j2l<C-v>0kd", "c\nc", 1, 1, "\tab\n\tab", "\02610", std::nullopt},
+    {"block-tab-zero-0-one-line-y", "\t;  abc", "4l<C-v>0y", "\t;  abc", 1, 1, "\t;  a", "\02612", std::nullopt},
+    {"block-tab-zero-pipe-j-y", "\t;  abc\nabcdefghijkl", "4l<C-v>1|jy", "\t;  abc\nabcdefghijkl", 1, 1, "\t;  a\nabcdefghijkl", "\02612", std::nullopt},
+    {"block-tab-zero-h-j-y", "\t;  abc\nabcdefghijkl", "l<C-v>hjy", "\t;  abc\nabcdefghijkl", 1, 1, "\t;\nabcdefghi", "\0269", std::nullopt},
+    {"block-tab-zero-h-j-d", "\t;  abc\nabcdefghijkl", "l<C-v>hjd", "  abc\njkl", 1, 1, "\t;\nabcdefghi", "\0269", std::nullopt},
+    {"block-tab-zero-caret-j-y", "\t\nabcdefghijkl\nabcdefghijkl", "jj9l<C-v>kk^jy", "\t\nabcdefghijkl\nabcdefghijkl", 2, 1, "abcdefghijkl\nabcdefghijkl", "\02612", std::nullopt},
+    {"block-tab-zero-normal-0-j", "\t;  abc\nabcdefghijkl", "4l0jx", "\t;  abc\nabcdefgijkl", 2, 8, "h", "v", std::nullopt},
+    {"block-tab-zero-normal-start-j", "\t;  abc\nabcdefghijkl", "jx", "\t;  abc\nabcdefgijkl", 2, 8, "h", "v", std::nullopt},
+    {"block-tab-zero-after-anchor-j-y", "abcdefghijkl\nab\tcd\nabcdefghijkl", "<C-v>jlljy", "abcdefghijkl\nab\tcd\nabcdefghijkl", 1, 1, "abcdefgh\nab\t\nabcdefgh", "\0268", std::nullopt},
+    {"block-tab-zero-charwise-0-j-y", "\t;  abc\nabcdefghijkl", "4lv0jy", "\t;  abc\nabcdefghijkl", 1, 5, "abc\na", "v", std::nullopt},
+    {"block-tab-zero-0-j-x-tab-below", "\t;  abc\nab\tcdefghijkl", "4l<C-v>0jx", "bc\nghijkl", 1, 1, "\t;  a\nab\tcdef", "\02612", std::nullopt},
     {"literal-cr-visual-enter", "abcd\nefgh\nijkl", "lvjr<CR>", "a\r\r\r\n\r\rgh\nijkl", 1, 2, "", "", std::nullopt},
     {"literal-cr-visual-line-enter", "abcd\nefgh\nijkl", "Vjr<CR>", "\r\r\r\r\n\r\r\r\r\nijkl", 1, 1, "", "", std::nullopt},
     {"literal-cr-visual-one-line", "abcd\nefgh\nijkl", "vlr<CR>", "\r\rcd\nefgh\nijkl", 1, 1, "", "", std::nullopt},

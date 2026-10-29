@@ -62,6 +62,11 @@ FR-003 の T2 に残る VISUAL の 3 つめ、矩形（`Ctrl-v`）を入れる�
 ## 追補（2026-10-29・#1067 矩形の `r` に幅 2 の文字）
 
 決定 4 の `r` は、行ごとに矩形が覆った仮想桁の数 `w`（`$` の矩形と短い行はその行の本文の幅まで・端で切れた Tab や全角の残りは今のまま空白）を埋める。`{char}` の幅（`display_width` の表・ADR 0034）が `wide` なら `w / 2` 個の `{char}` と、`w` が奇数なら空白 1 つで埋める（Vim の `op_replace` の `numc / 2` と `endspaces`）。奇数の空白は矩形の右端に届いた行だけに足し、右端より手前で終わる短い行と `$` の矩形の行（どの行も Vim の `is_short`）には足さない。`$` かどうかは `VimBlockRange.wish` が運ぶ。ほかの幅の文字は今のまま `w` 個（Tab も 1 桁に 1 つ）。埋め方は `VimStepBlock.cpp` の `replaced_block_fill` の 1 か所。文字単位と行単位の `r` は文字ごとに 1 つのまま（Vim と一致）。`.` は変えない。キャレットと `u` の戻り先は矩形の左上で、左上が切れた Tab や全角ならその文字のあった所（埋めた空白の先頭・Vim は `oap->start` へ戻す）。半角の `r` も同じで、これまでの「空白のぶん右へ寄る」は Vim と違っていた（`block-replace-wide-tab-inside-narrow` で実測）。結合文字を `{char}` にする形は `:normal!` の Vim では結合文字が `r` に渡らず基底の文字だけで置き換わるので範囲外（実測）。根拠は固定 Vim 9.1 の oracle の `block-replace-wide-` の fixture 24 件（幅 1〜4 と `$`・`$` の 2 行・fuzz seed 23 の最小・Tab の上（左上が切れた Tab を全角と半角で）・全角の本文の上と途中で切れる形・3 行の短い行・奇数の幅の短い行と `$` の矩形と右端ちょうどで終わる行・`.`・`u`・比較の半角の `r` と文字単位の `vlr語`）。
+## 追補（2026-10-29・#1089 Tab の上の VISUAL のキャレットの欲しい列）
+
+矩形の左右の桁の決め方（両角の `virtual_column` の最小と `virtual_column_end` の最大＝ Vim の `getvvcol` の start / end）は正しく、`VimBlockRange.cpp` は変えない。違っていたのは矩形の角になるキャレットの位置で、VISUAL の移動が欲しい列に覚える桁だった。Vim の `getvvcol` の cursor は、Tab の上では最後の桁だが **VISUAL でキャレットが錨より手前か同じ所にあるときは最初の桁**になる（ADR 0034 の補足 3 の例外）。だから `	;  abc` の `4l<C-v>0j` は `0` の欲しい列が 1 桁目になり、次の行の 1 桁目へ落ちて矩形の左は 1 桁目（Nib は Tab の最後の 8 桁目へ落ちていた）。`h` `^`（空白だけの行で Tab に止まる）も同じで、`1|` は前から回数の桁。錨より後ろの Tab は最後の桁のまま（`<C-v>jll` で Tab に乗って `j` すると 8 桁目）、NORMAL の `0j` も最後の桁のまま（Vim は NORMAL では Tab の終わりから落ちる）。文字単位の VISUAL（`v0j`）も同じ規則に従う。
+
+決め方は core の `visual_landed_column(text, anchor, moved)` の 1 本で、VISUAL の移動（`visual_moved`）と VISUAL に入る `[count]v` の広げ（`entered_visual`）が `wanted_after` に渡す。`wanted_after` は着地の桁を引数に取り、NORMAL の移動は `caret_virtual_column` を渡す。根拠は固定 Vim 9.1 の oracle の `block-tab-zero-` の fixture 15 件（`0` `1|` `h` `^` の後の `j` `k` と `y` `d` `r` `x`・錨より後ろの Tab・1 行・文字単位・NORMAL の `0j` と最初の `j`）。矩形の `I` の fixture は矩形の `I A c C` の PR（#1042）の後に足す。
 
 ## 強制
 

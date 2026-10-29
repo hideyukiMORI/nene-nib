@@ -61,3 +61,7 @@ engine の桁は `Column`（code point・1 始まり）で一貫している（A
 ## 補足（Issue #147・2026-09-23）
 
 C1 制御文字（`U+0080`〜`U+009F`）を 1 桁の `single` から、4 桁の新しい種類 `hex` に移した。固定 Vim 9.1 は `strdisplaywidth("\x85") == 4` で、`<85>` の形で描く（設計席の実測）。表は `{0x0080, 0x009F, hex}` の 1 範囲を足して 492 行になった（clang-format が 2 件ずつに詰め直すので、差分は表の後半全体に出る）。決定 1 の「表 1 本・Vim の実測を出典にする」は変えない。fixture に C1 は無いので再生成していない。
+
+## 追補（2026-10-29・Issue #1089）
+
+決定 2 の `caret_virtual_column`（Tab の上は最後の桁）には VISUAL の例外がある。VISUAL でキャレットが錨より手前か同じ所にあるとき、Vim の `getvvcol` の cursor は Tab の**最初の**桁で、移動が欲しい列に覚えるのもその桁である（`4l<C-v>0j` は次の行の 1 桁目へ）。判定は core の `visual_landed_column` の 1 本（ADR 0035 の追補・fixture `block-tab-zero-`）。NORMAL と錨より後ろのキャレットは決定 2 のまま。
