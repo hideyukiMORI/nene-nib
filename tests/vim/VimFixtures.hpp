@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 9fb0bc55a7d000cafb77bb023b692b36428b12a926f03b69d03376c87dde6c76 / 2933 fixtures
+// fixtures.json: sha256 4adcaeab3ad4571da114db395b8329ba1272c4967639f4549802bd0a637177cd / 2933 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -2909,26 +2909,26 @@ constexpr std::array<VimFixture, 2933> vim_fixtures{{
     {"block-insert-I-ctrl-r", "abcdef\nghijkl\nmnopqr", "yyjl<C-v>jIa<C-r>\"b<Esc>", "abcdef\ngaabcdef\nbhijkl\nmnopqr", 3, 1, "abcdef\n", "V", std::nullopt},
     {"block-insert-I-ctrl-r-chars", "abcdef\nghijkl\nmnopqr", "yl<C-v>jjI<C-r>\"<Esc>", "aabcdef\naghijkl\namnopqr", 1, 1, "a", "v", std::nullopt},
     {"jumplist-back", "a\nb\nc\nd\ne", "Ggg3G<C-o>x", "\nb\nc\nd\ne", 1, 1, "a", "v", std::nullopt},
-    {"jumplist-forward", "a\nb\nc\nd\ne", "Ggg3G<C-o><C-i>x", "a\nb\n\nd\ne", 3, 1, "c", "v", std::nullopt},
+    {"jumplist-forward", "a\nb\nc\nd\ne", "Ggg3G<C-o><Tab>x", "a\nb\n\nd\ne", 3, 1, "c", "v", std::nullopt},
     {"jumplist-tab", "a\nb\nc\nd\ne", "Ggg3G<C-o><C-o><Tab>x", "\nb\nc\nd\ne", 1, 1, "a", "v", std::nullopt},
     {"jumplist-count", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg3G5G7G2<C-o>x", "1\n2\n\n4\n5\n6\n7\n8", 3, 1, "3", "v", std::nullopt},
     {"jumplist-same-line", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg3G5G3G7G<C-o><C-o><C-o>x", "\n2\n3\n4\n5\n6\n7\n8", 1, 1, "1", "v", std::nullopt},
     {"jumplist-search", "foo\nbar\nbaz\nfoo bar", "Ggg/baz<CR><C-o>x", "oo\nbar\nbaz\nfoo bar", 1, 1, "f", "v", std::nullopt},
     {"jumplist-n", "x\nfoo\ny\nfoo\nz", "Ggg/foo<CR>n<C-o>x", "x\noo\ny\nfoo\nz", 2, 1, "f", "v", std::nullopt},
     {"jumplist-mark", "aa\nbb\ncc\ndd", "Gggjjmagg'a<C-o>x", "a\nbb\ncc\ndd", 1, 1, "a", "v", std::nullopt},
-    {"jumplist-backtick", "abc\ndef\nghi", "Gggjllmagg`a<C-o><C-i>x", "abc\nde\nghi", 2, 2, "f", "v", std::nullopt},
+    {"jumplist-backtick", "abc\ndef\nghi", "Gggjllmagg`a<C-o><Tab>x", "abc\nde\nghi", 2, 2, "f", "v", std::nullopt},
     {"jumplist-percent", "if (a\nb\nc) x", "Gggf(%<C-o>x", "if a\nb\nc) x", 1, 4, "(", "v", std::nullopt},
     {"jumplist-screen-bottom", "a\nb\nc\nd\ne", "GggL<C-o>x", "\nb\nc\nd\ne", 1, 1, "a", "v", std::nullopt},
-    {"jumplist-end", "a\nb\nc\nd\ne", "Ggg<C-i>x", "a\nb\nc\nd\ne", 1, 1, "", "", std::nullopt},
+    {"jumplist-end", "a\nb\nc\nd\ne", "Ggg<Tab>x", "a\nb\nc\nd\ne", 1, 1, "", "", std::nullopt},
     {"jumplist-start", "a\nb\nc\nd\ne", "Ggg<C-o><C-o>x", "a\nb\nc\nd\ne", 5, 1, "", "", std::nullopt},
     {"jumplist-count-over", "a\nb\nc\nd\ne", "Ggg3G9<C-o>x", "a\nb\nc\nd\ne", 3, 1, "", "", std::nullopt},
-    {"jumplist-count-forward-over", "a\nb\nc\nd\ne", "Ggg3G<C-o><C-o>9<C-i>x", "a\nb\nc\nd\ne", 5, 1, "", "", std::nullopt},
+    {"jumplist-count-forward-over", "a\nb\nc\nd\ne", "Ggg3G<C-o><C-o>9<Tab>x", "a\nb\nc\nd\ne", 5, 1, "", "", std::nullopt},
     {"jumplist-new-jump", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg3G5G7G<C-o><C-o>8G<C-o>x", "1\n2\n\n4\n5\n6\n7\n8", 3, 1, "3", "v", std::nullopt},
     {"jumplist-new-jump-older", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg3G5G7G<C-o><C-o>8G<C-o><C-o><C-o>x", "1\n2\n3\n4\n\n6\n7\n8", 5, 1, "5", "v", std::nullopt},
     {"jumplist-dd", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg5G7Gggdd<C-o>x", "2\n3\n4\n5\n6\n\n8", 6, 1, "7", "v", std::nullopt},
     {"jumplist-dd-twice", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg5G7Gggdd<C-o><C-o>x", "2\n3\n4\n\n6\n7\n8", 4, 1, "5", "v", std::nullopt},
     {"jumplist-dd-gone", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg5G7G5Gdd<C-o><C-o>x", "\n2\n3\n4\n6\n7\n8", 1, 1, "1", "v", std::nullopt},
-    {"jumplist-column", "abc def\nb\nc def", "Gggw3G$<C-o><C-i>x", "abc def\nb\nc de", 3, 4, "f", "v", std::nullopt},
+    {"jumplist-column", "abc def\nb\nc def", "Gggw3G$<C-o><Tab>x", "abc def\nb\nc de", 3, 4, "f", "v", std::nullopt},
     {"jumplist-clamp", "abcdef\nb\nc", "$3GkkDj<C-o>x", "\nb\nc", 1, 1, "abcdef", "v", std::nullopt},
     {"jumplist-clean-fails", "abcdef\nx\nabcdef", "$Ggg<C-o><C-o>x", "abcdef\nx\nabcdef", 3, 1, "", "", std::nullopt},
     {"jumplist-pcmark", "1\n2\n3\n4\n5\n6", "Ggg3G5G<C-o><C-o>''x", "1\n2\n3\n4\n\n6", 5, 1, "5", "v", std::nullopt},
