@@ -117,3 +117,7 @@ SPECIFICATION の FR-008（D8: UTF-8 既定・Shift_JIS 自動判別・改行は
 2. 入口は 3 つで、意図は 1 つ `SelectDocumentFormat{std::variant<TextEncoding, LineFeed>}`。(a) ステータスバーの右端の文字コードと改行の項目のクリック（`status_bar_hit` に 2 値を足す・ADR 0154 の右端の 4 項目の表のまま）で Ctrl+P の面の部品に候補（閉じた enum の全部・今の値に印）を出し、選ぶと意図。(b) Vim の `:set fileencoding=utf-8|utf-8-bom|cp932|utf-16le|utf-16be`（`fenc`）と `:set fileformat=unix|dos`（`ff`）・`?` で表示（Vim と同じ名前・`ExDocumentRequest` の形）。(c) F1 の操作「文字コードを選ぶ」「改行を選ぶ」（鍵なし・両モード・通常モードの代替）。
 3. 保存は `encoded_parts` の 1 本（ADR 0137）に新しい値を渡すだけ。Shift_JIS に変えて表せない文字があれば保存は `undecodable` の失敗で止め 1 行知らせる（値は戻さない・使う人が選び直す）。自動退避は本文の値なので影響しない。
 4. 契約 `--document-format`（選ぶ → 印・保存のバイト列（BOM・CRLF）・`:set fenc?` `:set ff?`・表せない文字の失敗・undo に載らない）。`nib_window_tests` の面の画素は既存の面の形で足りる。
+
+## 追補 2026-10-30（#1103）: adapters の試験の置き場
+
+1. 上の QLT-013 と決定の「ビルドディレクトリ配下の固定名フォルダ」は #1103 で改め、adapters の試験の置き場は `%TEMP%\nib-tests-<pid>-<name>`（`GetTempPathW` の下・`tests/adapters/TemporaryTestDirectory` の `temporary_test_directory` の 1 本）とし、各試験の `main` が cwd をそこへ移して終わりに消す（消し損ねは次の走りが pid の生死で回収する・固定名のフォルダはその中に作る）。

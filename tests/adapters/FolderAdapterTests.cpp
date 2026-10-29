@@ -480,7 +480,8 @@ int main()
     const auto directory = nenenib::tests::temporary_test_directory(L"folder");
     if (!directory.has_value())
     {
-        std::fprintf(stderr, "FAIL: the temporary test folder is not made\n");
+        std::fprintf(stderr, "FAIL: the temporary test folder is not made (error %lu)\n",
+                     static_cast<unsigned long>(directory.error()));
         return 1;
     }
     const int result = run_tests();

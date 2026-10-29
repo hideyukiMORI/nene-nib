@@ -11,6 +11,7 @@
 
 #include <charconv>
 #include <cstdint>
+#include <expected>
 #include <format>
 #include <optional>
 #include <string>
@@ -138,20 +139,25 @@ void reclaim_stale(const std::wstring &root, std::wstring_view name, std::uint32
 
 namespace nenenib::tests
 {
-std::optional<std::wstring> temporary_test_directory(std::wstring_view name)
+std::expected<std::wstring, std::uint32_t> temporary_test_directory(std::wstring_view name)
 {
     const auto root = temporary_root();
     if (!root.has_value())
     {
-        return std::nullopt;
+        return std::unexpected(GetLastError());
     }
     const std::uint32_t self = GetCurrentProcessId();
     reclaim_stale(root.value(), name, self);
     const auto directory = root.value() + std::format(L"{}{}-{}", prefix, self, name);
-    if (CreateDirectoryW(directory.c_str(), nullptr) == 0 ||
-        SetCurrentDirectoryW(directory.c_str()) == 0)
+    if (CreateDirectoryW(directory.c_str(), nullptr) == 0)
     {
-        return std::nullopt;
+        return std::unexpected(GetLastError());
+    }
+    if (SetCurrentDirectoryW(directory.c_str()) == 0)
+    {
+        const std::uint32_t error = GetLastError();
+        RemoveDirectoryW(directory.c_str());
+        return std::unexpected(error);
     }
     return directory;
 }
