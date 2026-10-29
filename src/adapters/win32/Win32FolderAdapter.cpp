@@ -8,8 +8,8 @@
 namespace nenenib::adapters::win32
 {
 Win32FolderAdapter::Win32FolderAdapter(Win32Worker &worker, std::size_t batch_files,
-                                       std::size_t file_limit)
-    : worker_(worker), shelf_(std::make_shared<FolderShelf>(batch_files, file_limit))
+                                       std::size_t file_limit, std::size_t entry_limit)
+    : worker_(worker), shelf_(std::make_shared<FolderShelf>(batch_files, file_limit, entry_limit))
 {
 }
 

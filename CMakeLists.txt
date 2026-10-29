@@ -83,6 +83,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/EditorControllerEditing.cpp src/application/EditorControllerVim.cpp src/application/EditorControllerDocuments.cpp
     src/application/EditorControllerTabs.cpp src/application/EditorControllerCommand.cpp src/application/EditorControllerPalette.cpp
     src/application/EditorControllerAutosave.cpp src/application/EditorControllerPreview.cpp src/application/EditorControllerDetail.cpp
+    src/application/EditorControllerExplorer.cpp
     src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
     src/application/AutosavePlan.cpp src/application/PasteKind.cpp
     src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp src/application/DocumentDecoding.cpp)
@@ -144,6 +145,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/TabsPropertyTests.cpp
     tests/unit/ExplorerTreeTests.cpp
     tests/unit/ExplorerLayoutTests.cpp
+    tests/unit/ExplorerTests.cpp
     tests/unit/EditingPropertyTests.cpp
     tests/unit/SplitTests.cpp
     tests/unit/SessionTests.cpp

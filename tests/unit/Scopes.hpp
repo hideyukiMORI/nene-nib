@@ -109,6 +109,8 @@ void verify_tabs_property_scope();
 // ExplorerTreeTests.cpp / ExplorerLayoutTests.cpp（ADR 0162 の決定 1・2・9）。
 void verify_explorer_tree_scope();
 void verify_explorer_layout_scope();
+void verify_explorer_contracts();
+void verify_explorer_scope();
 // EditingPropertyTests.cpp（#955・通常モードの編集の意図の列の性質の試験）
 void verify_editing_property_scope();
 

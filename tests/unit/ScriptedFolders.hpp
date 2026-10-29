@@ -1,6 +1,7 @@
 #pragma once
 
 #include "FolderBatch.hpp"
+#include "FolderListingKind.hpp"
 #include "FolderPort.hpp"
 #include "FolderRequest.hpp"
 
@@ -12,7 +13,8 @@ namespace nenenib::tests
 {
 // 同じフォルダを裏で読む口の替え玉（ADR 0062 の決定 10）。スレッドは持たない。
 // list で受けた要求を順に覚え、collect の呼ばれた回数を数え、collect が返す batch を先に仕込める
-// （仕込んだ分は次の collect が全部を返し、その後は空）。
+// （仕込んだ分は次の collect が全部を返し、その後は空）。entries の要求（ADR 0162 の決定 5）も同じ
+// 口で覚え、batch の entries を仕込めば同じく返す。
 class ScriptedFolders final : public nenenib::application::FolderPort
 {
   public:
@@ -39,6 +41,16 @@ class ScriptedFolders final : public nenenib::application::FolderPort
     [[nodiscard]] std::size_t collects() const noexcept
     {
         return collects_;
+    }
+    // エクスプローラーの要求（FolderListingKind::entries）の数（ADR 0162 の決定 5）。
+    [[nodiscard]] std::size_t entry_requests() const noexcept
+    {
+        std::size_t count = 0;
+        for (const auto &request : requests_)
+        {
+            count += request.listing == nenenib::application::FolderListingKind::entries ? 1U : 0U;
+        }
+        return count;
     }
 
   private:

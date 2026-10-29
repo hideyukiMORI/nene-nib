@@ -10,6 +10,7 @@
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
 #include "EditorSettings.hpp"
+#include "ExplorerView.hpp"
 #include "GridRowView.hpp"
 #include "ImeStance.hpp"
 #include "InputLineView.hpp"
@@ -123,6 +124,8 @@ struct EditorFrame
     core::PaneSide active_side = core::PaneSide::first;
     // 本文の枠かプレビューの枠（ADR 0155 の決定 1・11）。
     std::optional<OtherFrame> other{};
+    // エクスプローラーの面（ADR 0162 の決定 3・8）。設定 explorer が on のときだけ値を持つ。
+    std::optional<ExplorerView> explorer{};
 };
 
 // 変換中か（本文と入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

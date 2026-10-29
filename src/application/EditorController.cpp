@@ -151,6 +151,8 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // （RestoreAutosave / DiscardAutosave）は使う人の操作なので、ここに書かず歩きを確定する（決定 6）。
 // プレビューの間引きの合図（PreviewTick）も使う人の操作ではないので歩きを続ける（ADR 0155 の
 // 決定 8）。開く・閉じる（TogglePreview）は使う人の操作なので、ここにも begin_intent にも書かない。
+// エクスプローラーの意図（ToggleExplorer・ExplorerKey・PointExplorer・ScrollExplorer・
+// ExplorerRootChosen）も使う人の操作なので、どちらにも書かない（ADR 0162 の決定 4）。
 [[nodiscard]] bool keeps_tab_walk(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<WalkRecentTab>(intent) ||
@@ -280,6 +282,8 @@ EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocu
     {
         state_ = state_.with_settings(loaded.value().value_or(state_.settings()));
     }
+    // 面が出ている設定ならルートの木を作って読み始める（ADR 0162 の決定 3・5）。
+    sync_explorer();
     // 起動引数のファイルは順にタブで開き、最後に開けたものがアクティブになる（ADR 0056 の決定
     // 13）。失敗は 1 意図だけの値なので、後の引数が消さないよう最後の失敗を控えて載せ直す。
     std::optional<FileFailure> failure;
@@ -328,6 +332,9 @@ bool EditorController::persist_settings(core::EditorSettings settings)
     }
     const bool reshaped = core::affects_line_height(state_.settings(), settings);
     state_ = state_.with_settings(std::move(settings)).with_settings_failure(std::nullopt);
+    // 面の表示とルートは設定の値（ADR 0162 の決定 3）。Ex・面の `:`・意図のどれから書いても同じ 1
+    // 本。
+    sync_explorer();
     if (view_geometry_.width <= 0)
     {
         return true;
@@ -517,7 +524,9 @@ void EditorController::accept(const WorkCompleted &)
     collect_autosave();
     // 開く道の読み（ADR 0159 の決定 9）。今の券の結果だけを採る。
     collect_reads();
-    const auto batches = ports_.folders.collect();
+    // エクスプローラーの分は木へ写し、port が空いたら次のフォルダを頼む（ADR 0162 の決定 5）。
+    const auto batches = receive_folders();
+    request_explorer_folder();
     // 退避 → フォルダ → Markdown の順（ADR 0155 の決定 6）。プレビューが閉じていれば呼ばない。
     collect_preview();
     const auto &input = state_.command_input();
@@ -992,6 +1001,7 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     }
     result.syntax_lexed = lexed;
     add_other_pane(result, source.pattern);
+    result.explorer = explorer_view();
 }
 
 std::optional<SyntaxStateCache> &EditorController::syntax_cache(core::PaneSide side) noexcept

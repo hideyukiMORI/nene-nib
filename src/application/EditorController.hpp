@@ -28,13 +28,18 @@
 #include "ExLineRequest.hpp"
 #include "ExPaletteRequest.hpp"
 #include "ExResult.hpp"
+#include "ExRootRequest.hpp"
 #include "ExSyntaxRequest.hpp"
 #include "ExTabRequest.hpp"
 #include "ExWindowCommand.hpp"
+#include "ExplorerEntry.hpp"
+#include "ExplorerFolder.hpp"
+#include "ExplorerView.hpp"
 #include "FileBookmarks.hpp"
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
 #include "FilePort.hpp"
+#include "FolderBatch.hpp"
 #include "FontFamilies.hpp"
 #include "GridLineMarks.hpp"
 #include "GridRowView.hpp"
@@ -283,6 +288,38 @@ class EditorController final
     void accept(const EndSession &intent);
     // 裏の仕事の合図（ADR 0062 の決定 7）。使う人の操作の途中の状態を動かさない。
     void accept(const WorkCompleted &);
+    // エクスプローラー（ADR 0162 の決定 3〜7・EditorControllerExplorer.cpp）。4 つの意図と
+    // ルートの選びの答えはどれも使う人の操作（歩きを確定し、知らせを消す）。
+    void accept(const ToggleExplorer &);
+    void accept(const ExplorerKey &intent);
+    void accept(const PointExplorer &intent);
+    void accept(const ScrollExplorer &intent);
+    void accept(const ExplorerRootChosen &intent);
+    // `:set root=.` の要求（決定 7）。
+    void run_root_request(core::ExRootRequest request);
+    // 設定 root へ書いて「root=<path>」を知らせる。書けなければ失敗の 1 行。
+    void set_explorer_root(const core::FilePath &folder);
+    void focus_explorer(bool focused);
+    // 面の行数（本文の見えている行数・行の高さは本文と同じ・決定 2）。
+    [[nodiscard]] std::size_t explorer_page() const noexcept;
+    void step_explorer(bool down);
+    void select_explorer_row(std::size_t row);
+    void release_explorer(const std::optional<core::FilePath> &released, std::size_t row);
+    void click_explorer_row(std::size_t row);
+    void open_explorer_folder(std::optional<std::size_t> row);
+    void enter_explorer_row(std::optional<std::size_t> row);
+    void collapse_explorer_row();
+    // 設定が変わった後（persist_settings）と起動の 1 か所。木をルートに揃え、読むものを頼む。
+    void sync_explorer();
+    // FolderPort が今の誰かの仕事を走らせているか（エクスプローラーは 1 つずつ頼む）。
+    [[nodiscard]] bool folder_busy() const noexcept;
+    void request_explorer_folder();
+    // FolderPort の collect の 1 本。エクスプローラーの分を木へ写し、全部を返す。
+    [[nodiscard]] std::vector<FolderBatch> receive_folders();
+    void adopt_explorer_batch(ExplorerFolder &pending, FolderBatch &batch);
+    void place_explorer_entries(const core::FilePath &folder,
+                                std::span<const core::ExplorerEntry> entries);
+    [[nodiscard]] std::optional<ExplorerView> explorer_view() const;
     // 表示形式（ADR 0140 の決定 2・3）。窓の問いの「はい」と Ex の `:set display=` が通る 1 本。
     void accept(const SelectDisplay &intent);
     // 言語（ADR 0154 の決定 4・5）。Ex の `:set filetype=` `:set ft=` が通る 1 本。
@@ -610,6 +647,17 @@ class EditorController final
     // 面が同じフォルダを頼んだ控え（ADR 0062 の決定 14・15）。券は面を開くたびに進み、ほかは
     // 面を開くときに置き直す。面が閉じている間は読まない。
     PaletteFolder palette_folder_;
+    // フォルダの券の通し番号（ADR 0162 の決定 5）。プロセスで 1 つで、Ctrl+P
+    // の面とエクスプローラーが 頼むたびに進める。
+    std::uint64_t folder_tickets_ = 0;
+    // FolderPort に最後に頼んで最後の batch がまだ届いていない券。port は新しい要求で前の要求を
+    // やめるので、仕事中の券は 1 つだけ。
+    std::optional<std::uint64_t> folder_live_;
+    // エクスプローラーが頼んで読み終えていないフォルダ（決定 5）。ルートを替えると捨てる。
+    std::optional<ExplorerFolder> explorer_folder_;
+    // 面の上で押した行の節の経路（決定 4・ADR 0056 の決定 9）。離したときに同じ節かを比べて消す。
+    // 「…」の行と行の外を押したときは値なし（離しても何もしない）。
+    std::optional<core::FilePath> explorer_pressed_;
     // 字体の一覧（#597・D58）。補完が求めた最初の 1 回だけ読み、読めなくても再読しない。
     std::optional<core::FontFamilies> font_families_;
     // プレビューの券（ADR 0155 の決定 6）。要求ごとに 1 つ進み、閉じて開き直しても戻さない

@@ -19,10 +19,12 @@ namespace nenenib::adapters::win32
 class FolderShelf final
 {
   public:
-    FolderShelf(std::size_t batch_files, std::size_t file_limit) noexcept;
+    FolderShelf(std::size_t batch_files, std::size_t file_limit, std::size_t entry_limit) noexcept;
 
     [[nodiscard]] std::size_t batch_files() const noexcept;
     [[nodiscard]] std::size_t file_limit() const noexcept;
+    // entries の要求の上限（ADR 0162 の決定 5）。
+    [[nodiscard]] std::size_t entry_limit() const noexcept;
     void bind(std::function<void()> arrived);
     // 新しい列挙の世代を返す。前の世代の列挙は以後 batch を出さない。
     [[nodiscard]] std::uint64_t renew();
@@ -36,6 +38,7 @@ class FolderShelf final
   private:
     std::size_t batch_files_;
     std::size_t file_limit_;
+    std::size_t entry_limit_;
     mutable std::mutex mutex_;
     std::vector<application::FolderBatch> batches_;
     std::uint64_t generation_ = 0;
