@@ -1029,18 +1029,47 @@ constexpr char32_t escape_character = U'\\';
 
 // ------------------------------------------------------------------ VISUAL の広げ方（決定 4）
 
-// 新しい範囲が今の選択より広くないか（Vim の current_block / current_quote の「もう 1 段外へ」）。
-[[nodiscard]] bool within_selection(const TextBuffer &text, const Selection &selection,
-                                    const VimMotionRange &range)
+// 内側の範囲が今の選択より広くないか（Vim の current_block の `!LT_POS(start_pos, old_start) &&
+// !LT_POS(old_end, curwin->w_cursor) && !EQUAL_POS(start_pos, curwin->w_cursor)`）。最後の位置は
+// 中の最後の文字で、中が空なら開きの位置（Vim の decl）。中が 1 文字なら広げない（Issue #1066）。
+[[nodiscard]] bool inner_not_wider(const TextBuffer &text, const Selection &selection,
+                                   const VimMotionRange &range)
 {
     const OffsetRange ordered = selection_range(selection);
-    return range.range.begin.value >= ordered.begin.value &&
-           object_caret(text, range).value <= ordered.end.value;
+    const Offset begin = range.range.begin;
+    const Offset last = is_empty(range.range) ? retreated_to_text(text, begin).value_or(begin)
+                                              : object_caret(text, range);
+    return begin.value >= ordered.begin.value && last.value <= ordered.end.value &&
+           !(begin == last);
 }
 
-// 囲む塊が選択より広くならなければもう 1 段外へ（`vi(i(` の実測。引用符は quote_outcome）。
-// 囲む塊が無く前にある塊を使ったときは、選択より狭くてもそのまま選ぶ（`v$a(` が `(ab)` を
-// 選ぶ・Issue #967 で実測）。
+// 広げ直しは選択の前の端の 1 つ前（Vim の decl）から囲む開きを 1 回だけ探す（回数は使わない）。
+// 前の端の 1 つ前の文字そのものは数えない。見つからなければ取消（Issue #1066）。
+[[nodiscard]] std::optional<VimMotionRange>
+inner_block_widened(const TextBuffer &text, const Selection &selection, VimBracketPair pair)
+{
+    const auto from = retreated_to_text(text, selection_range(selection).begin);
+    if (!from.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto open = unmatched_open_backward(text, from.value(), pair);
+    if (!open.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto close = matched_close_forward(text, open.value(), pair);
+    if (!close.has_value())
+    {
+        return std::nullopt;
+    }
+    return inner_block_range(text, OffsetRange{open.value(), close.value()});
+}
+
+// VISUAL で内側（i( 系）の範囲が選択より広くならなければ、選択の前の端の前から広げ直す
+// （`vi(i(` は 1 段外へ・前にある塊が選択の中に収まれば取消・Vim 9.1 の current_block・
+// Issue #1066）。外側（a( 系）は広げ直さず、囲む塊が無く前にある塊を使ったときは選択より
+// 狭くてもそのまま選ぶ（`v$a(` が `(ab)` を選ぶ・Issue #967 で実測）。
 [[nodiscard]] std::optional<VimMotionRange> paired_range(const TextBuffer &text,
                                                          const Selection &selection,
                                                          VimTextObjectRequest request,
@@ -1050,12 +1079,12 @@ constexpr char32_t escape_character = U'\\';
     const Offset start = block_search_start(text, selection, pair);
     const auto first = block_range_at(text, start, request, count);
     if (!has_selection(selection) || !first.has_value() ||
-        !within_selection(text, selection, first.value()) ||
-        !unmatched_open_backward(text, start, pair).has_value())
+        request.scope == VimTextObjectScope::around ||
+        !inner_not_wider(text, selection, first.value()))
     {
         return first;
     }
-    return block_range_at(text, start, request, count + 1);
+    return inner_block_widened(text, selection, pair);
 }
 
 // 塊が見つからなければ取消で、キャレットも選択も動かない（Vim 9.1 で実測）。
