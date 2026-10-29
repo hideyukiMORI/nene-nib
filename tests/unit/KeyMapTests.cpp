@@ -28,6 +28,7 @@
 #include "MapTimer.hpp"
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
+#include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
@@ -47,6 +48,7 @@
 #include "VimState.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
+#include "WalkRecentTab.hpp"
 #include "WorkCompleted.hpp"
 
 #include <algorithm>
@@ -621,7 +623,7 @@ void verify_records_and_replay()
            "press_vim_keys does not look up the table");
 }
 
-// 待ちの間の IME の確定は積んだ鍵を先に流し、WorkCompleted と窓の寸法は待ちを保つ（決定 4）。
+// 待ちの間の IME の確定は積んだ鍵を先に流し、WorkCompleted は待ちを保つ（決定 4）。
 void verify_flush_before_intents()
 {
     Editing ime(insert_escape());
@@ -640,6 +642,17 @@ void verify_flush_before_intents()
     expect(whole_vim_body(work.controller()) == "abc\n" &&
                work.controller().vim_state().mode == core::VimMode::normal,
            "the next key completes the wait after WorkCompleted");
+}
+
+// 使う人の操作の Ctrl+Tab の歩きは待ちを流し、窓の寸法は待ちを保つ（決定 4）。
+void verify_walk_and_size()
+{
+    Editing walk(insert_escape());
+    open_vim_document(walk, "abc\n");
+    vim_replay(walk.controller(), "ij");
+    const auto walked = walk.controller().apply(application::WalkRecentTab{core::TabStep::next});
+    expect(shown_body(walk.controller()) == "jabc\n" && walked.map_timer == MapTimer::stop,
+           "Ctrl+Tab flushes the waiting j");
     Editing sized(insert_escape());
     open_vim_document(sized, "abc\n");
     vim_replay(sized.controller(), "ij");
@@ -756,6 +769,7 @@ void verify_key_map_scope()
     verify_ordinary_mode();
     verify_records_and_replay();
     verify_flush_before_intents();
+    verify_walk_and_size();
     verify_ex_commands();
     verify_ex_parsing();
 }

@@ -171,13 +171,30 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
            std::holds_alternative<RefreshAppearance>(intent);
 }
 
+// 使う人の操作ではない意図（ADR 0176 の決定 4・ADR 0062 の決定 7・ADR 0137 の決定 1・ADR 0155 の
+// 決定 8・ADR 0160 の決定 6）。裏の仕事と合図（WorkCompleted・AutosaveTick・PreviewTick・
+// LanguageServerTick・MapTimeout）と、窓の
+// 寸法・外観・帯の hover。begin_intent が知らせを消さない側と、`map` の待ちを保つ側が共用する。
+[[nodiscard]] bool not_user_operation(const EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<WorkCompleted>(intent) ||
+           std::holds_alternative<AutosaveTick>(intent) ||
+           std::holds_alternative<PreviewTick>(intent) ||
+           std::holds_alternative<LanguageServerTick>(intent) ||
+           std::holds_alternative<MapTimeout>(intent) ||
+           std::holds_alternative<VisibleLines>(intent) ||
+           std::holds_alternative<TitleBarWidth>(intent) ||
+           std::holds_alternative<RefreshAppearance>(intent) ||
+           std::holds_alternative<PointTitleBar>(intent);
+}
+
 // Vim の `map` の待ちで積んだ鍵を、写す前に流さずに保つ意図（ADR 0176 の決定 4）。打った鍵
-// （VimKeyPress は入口の表が積み・流す）と、使う人の操作ではない意図（keeps_tab_walk の一覧の
-// 1 か所・WorkCompleted と合図と窓の寸法・外観・帯の hover・MapTimeout は自分で流す）。これ以外の
-// 使う人の操作（IME の確定・マウス・モードを変える意図…）は、受ける前に積んだ鍵を順に流す。
+// （VimKeyPress は入口の表が積み・流す）と使う人の操作ではない意図だけ。使う人の操作（IME の
+// 確定・マウス・Ctrl+Tab の歩きと確定・帯のホイール・モードを変える意図…）は、受ける前に積んだ
+// 鍵を順に流す。
 [[nodiscard]] bool keeps_key_map_pending(const EditorIntent &intent) noexcept
 {
-    return std::holds_alternative<VimKeyPress>(intent) || keeps_tab_walk(intent);
+    return std::holds_alternative<VimKeyPress>(intent) || not_user_operation(intent);
 }
 
 // 上下に動くときに狙う横位置を保つ意図。上下の移動そのものと、30 秒ごとに必ず来る自動退避の
@@ -386,19 +403,10 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 自動退避の合図とプレビューの間引きの合図も使う人の操作ではないので同じ（ADR 0137 の決定 1・
     // ADR 0155 の決定 8）。言語サーバーの古さの合図も同じ（ADR 0160 の決定 6）。起動の問いの
     // 答えは使う人の操作なので、ほかの意図と同じに 1 意図の知らせを消してから写す（決定 6）。
-    begin_intent(std::holds_alternative<VisibleLines>(intent) ||
-                 std::holds_alternative<RefreshAppearance>(intent) ||
-                 std::holds_alternative<CancelComposition>(intent) ||
-                 std::holds_alternative<TitleBarWidth>(intent) ||
+    begin_intent(not_user_operation(intent) || std::holds_alternative<CancelComposition>(intent) ||
                  std::holds_alternative<ScrollTabs>(intent) ||
-                 std::holds_alternative<PointTitleBar>(intent) ||
                  std::holds_alternative<SettleRecentTab>(intent) ||
-                 std::holds_alternative<EndSession>(intent) ||
-                 std::holds_alternative<WorkCompleted>(intent) ||
-                 std::holds_alternative<AutosaveTick>(intent) ||
-                 std::holds_alternative<PreviewTick>(intent) ||
-                 std::holds_alternative<LanguageServerTick>(intent) ||
-                 std::holds_alternative<MapTimeout>(intent));
+                 std::holds_alternative<EndSession>(intent));
     // `map` の待ちの鍵は、待ちを保つ意図のほかは受ける前に流す（ADR 0176 の決定 4）。
     map_timer_.reset();
     if (!keeps_key_map_pending(intent))
