@@ -3197,7 +3197,8 @@ def verify_find(executable: Path, environment: dict, output: Path, frames: Path 
         body = body_points(width, height, dpi)
         left = status_left_box(width, height, dpi)
         position = status_item_box(width, height, dpi, 0)
-        row = content_row_box(body, 2, width, dpi)
+        # F3 の後のキャレットは 3 行目（index 2）なので、キャレットの無い 4 行目で塗りを比べる。
+        row = content_row_box(body, 3, width, dpi)
         before = capture(window, width, height)
         snapshot(frames, window, "find-before")
         if not press_chord(window, VK_CONTROL, VK_F):

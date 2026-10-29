@@ -94,16 +94,22 @@ void open_ordinary_document(Editing &editing, std::string text)
 // （Vim の nv_ident）も同じ 1 本。
 void verify_literal_pattern()
 {
-    expect(nenenib::core::literal_pattern("a.b*c") == "a\\.b\\*c",
+    expect(nenenib::core::literal_pattern("a.b*c", VimSearchDirection::forward) == "a\\.b\\*c",
            "the dot and the star are escaped");
-    expect(nenenib::core::literal_pattern("\\/.*[~^$") == "\\\\\\/\\.\\*\\[\\~\\^\\$",
+    expect(nenenib::core::literal_pattern("\\/.*[~^$", VimSearchDirection::forward) ==
+               "\\\\\\/\\.\\*\\[\\~\\^\\$",
            "every magic character of the eight is escaped");
-    expect(nenenib::core::literal_pattern("日本 ?+(){}|") == "日本 ?+(){}|",
+    expect(nenenib::core::literal_pattern("日本 ?+(){}|", VimSearchDirection::forward) ==
+               "日本 ?+(){}|",
            "other bytes, the question mark and multibyte characters stay as typed");
-    expect(nenenib::core::literal_pattern("").empty(), "the empty word stays empty");
-    const auto pattern = nenenib::core::VimPattern::parse(nenenib::core::literal_pattern("a.c[1]"),
-                                                          VimSearchDirection::forward,
-                                                          nenenib::core::VimPatternCase::sensitive);
+    expect(nenenib::core::literal_pattern("a?b", VimSearchDirection::backward) == "a\\?b" &&
+               nenenib::core::literal_pattern("a?b", VimSearchDirection::forward) == "a?b",
+           "only the backward word escapes its separator, the question mark");
+    expect(nenenib::core::literal_pattern("", VimSearchDirection::forward).empty(),
+           "the empty word stays empty");
+    const auto pattern = nenenib::core::VimPattern::parse(
+        nenenib::core::literal_pattern("a.c[1]", VimSearchDirection::forward),
+        VimSearchDirection::forward, nenenib::core::VimPatternCase::sensitive);
     expect(pattern.has_value() &&
                pattern.value().literal_bytes() == std::optional<std::string>{"a.c[1]"},
            "the escaped word parses back to the literal bytes");
@@ -199,6 +205,9 @@ void verify_find_hops()
     const auto closed = controller.apply_frame(CancelCommand{});
     expect(!closed.command_line.has_value() && caret_at(closed, 3, 7),
            "Esc closes the prompt and the caret stays on the match");
+    expect(frame_matches(closed, 0) == std::vector<MatchSpan>{{7, 11}} &&
+               frame_matches(closed, 1) == std::vector<MatchSpan>{{1, 5}},
+           "after Esc the matches stay painted on the lines without the caret");
     const auto next = controller.apply_frame(SearchHop{VimSearchDirection::forward});
     expect(caret_at(next, 1, 7), "F3 without the prompt goes to the next match");
     expect(caret_at(controller.apply_frame(SearchHop{VimSearchDirection::backward}), 3, 7),
@@ -250,6 +259,24 @@ void verify_find_literal_and_failures()
     expect(caret_at(cancelled, 1, 1) && !cancelled.command_line.has_value() &&
                !empty.controller().vim_state().last_search.has_value(),
            "Esc before Enter leaves the caret and remembers nothing");
+}
+
+// `?` を含む語を後ろへ（Shift+F3）探す（決定 4 の追補・後ろ向きは `?` も逃がす）。
+void verify_find_backward_question()
+{
+    Editing session;
+    open_ordinary_document(session, "a?b one\nplain\na?b two");
+    EditorController &controller = session.controller();
+    static_cast<void>(controller.apply_frame(BeginFind{}));
+    static_cast<void>(typed(controller, "a?b"));
+    const auto back = controller.apply_frame(SearchHop{VimSearchDirection::backward});
+    expect(caret_at(back, 3, 1) && message_of(back) == wrapped_top &&
+               prompt_of(back) == InputLinePrompt::find,
+           "Shift+F3 finds a word with a question mark backward");
+    const auto again = controller.apply_frame(SearchHop{VimSearchDirection::backward});
+    expect(caret_at(again, 1, 1), "and goes on to the previous one");
+    const auto forward = controller.apply_frame(SearchHop{VimSearchDirection::forward});
+    expect(caret_at(forward, 3, 1), "and F3 finds it forward again");
 }
 
 // 行へ移動（決定 8）。`:N` と同じ着地・`行:桁`・範囲の外・数でない入力。
@@ -347,6 +374,7 @@ void verify_find_replace_scope()
     verify_current_match();
     verify_find_hops();
     verify_find_literal_and_failures();
+    verify_find_backward_question();
     verify_go_to_line();
     verify_vim_alternatives();
     verify_shared_last_search();

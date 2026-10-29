@@ -2,14 +2,15 @@
 
 namespace nenenib::core
 {
-std::string literal_pattern(std::string_view text)
+std::string literal_pattern(std::string_view text, VimSearchDirection direction)
 {
     constexpr std::string_view special = "\\/.*[~^$";
+    const bool backward = direction == VimSearchDirection::backward;
     std::string escaped;
     escaped.reserve(text.size());
     for (const char byte : text)
     {
-        if (special.contains(byte))
+        if (special.contains(byte) || (backward && byte == '?'))
         {
             escaped.push_back('\\');
         }

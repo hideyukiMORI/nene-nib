@@ -214,26 +214,11 @@ namespace
 }
 
 // `*` / `#` が拾った本文の magic の特殊文字を `\` で escape する（Vim の nv_ident の aux_ptr・
-// Issue #961）。逃がし方は通常モードの検索語と同じ literal_pattern の 1 本（ADR 0174 の決定 4）で、
-// `#` は区切りの `?` も escape する。多バイト文字のバイトは ASCII と重ならない。
+// Issue #961）。逃がし方は通常モードの検索語と同じ literal_pattern の 1 本で、`#` は区切りの
+// `?` も逃がす（ADR 0174 の決定 4 と追補）。
 [[nodiscard]] std::string escaped_search_text(std::string_view text, VimSearchDirection direction)
 {
-    const std::string literal = literal_pattern(text);
-    if (direction != VimSearchDirection::backward)
-    {
-        return literal;
-    }
-    std::string escaped;
-    escaped.reserve(literal.size());
-    for (const char byte : literal)
-    {
-        if (byte == '?')
-        {
-            escaped.push_back('\\');
-        }
-        escaped.push_back(byte);
-    }
-    return escaped;
+    return literal_pattern(text, direction);
 }
 
 // `*` / `#`（決定 3 と Issue #961 の追補）。キャレットの下か後ろの語を \<…\> のパターンにし、

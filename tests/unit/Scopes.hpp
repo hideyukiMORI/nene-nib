@@ -76,6 +76,7 @@ void verify_autosave_plan_property_scope();
 
 // OperationsTests.cpp
 void verify_operations_scope();
+// FindReplaceTests.cpp
 void verify_find_replace_scope();
 
 // GuideTests.cpp

@@ -630,8 +630,8 @@ std::optional<core::VimRepeatFailure> EditorController::hop_find(const core::Sea
     {
         restore_search_origin(preview.value().origin);
     }
-    const auto failure = step_vim(
-        core::VimKey{core::VimSearchPattern{core::literal_pattern(typed), relative, from}});
+    const auto failure = step_vim(core::VimKey{
+        core::VimSearchPattern{core::literal_pattern(typed, relative), relative, from}});
     // 鳴らすのは Enter の断りだけ（F3 は鍵・ADR 0153 の決定 1・2）。
     const auto &message = state_.command_message();
     if (confirmed && failure == core::VimRepeatFailure::not_found && message.has_value())

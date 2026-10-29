@@ -66,7 +66,7 @@ std::optional<std::string> searched_text(const core::SearchLine &line)
         return std::string(line.text());
     // 通常モードの語は magic を解釈せず、逃がしてから同じ照合器へ（ADR 0174 の決定 4）。
     case core::InputLinePrompt::find:
-        return core::literal_pattern(line.text());
+        return core::literal_pattern(line.text(), line.direction());
     case core::InputLinePrompt::go_to_line:
     case core::InputLinePrompt::ex:
     case core::InputLinePrompt::palette:
