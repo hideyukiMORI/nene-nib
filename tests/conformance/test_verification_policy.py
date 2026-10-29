@@ -140,7 +140,9 @@ class VerificationPolicy(unittest.TestCase):
                         build_job.index("cmake -S . -B build-release"))
         self.assertIn("& pwsh -NoProfile -File eng/format-check.ps1",
                       (ROOT / "eng/check.ps1").read_text(encoding="utf-8"))
-        for command in ("eng/check.ps1", "measure-speed", "coverage.py", "-DCMAKE_BUILD_TYPE=Debug"):
+        # 全件ゲートは eng/check.ps1・eng\check.ps1・-File check.ps1・.\check.ps1 のどれでも呼ばない（format-check.ps1 は通る）。
+        self.assertNotRegex(build_job, r"(?<![\w-])check\.ps1")
+        for command in ("measure-speed", "coverage.py", "-DCMAKE_BUILD_TYPE=Debug"):
             self.assertNotIn(command, build_job)
         self.assertEqual((ROOT / ".githooks/pre-commit").read_text(encoding="utf-8").strip(),
                          "#!/bin/sh\nexec git diff --cached --check")

@@ -95,7 +95,6 @@ jobs:
       - name: Formatting (QLT-004)
         shell: pwsh
         run: |
-          . ./eng/toolchain.ps1
           pwsh -NoProfile -File ./eng/format-check.ps1
           exit $LASTEXITCODE
       - name: Configure Release
