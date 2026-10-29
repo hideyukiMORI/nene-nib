@@ -48,7 +48,7 @@ void PaletteRowLayouts::retain(const PaletteRowKey &key, const TextLayout &layou
     {
         return;
     }
-    if (entries_.size() >= capacity)
+    if (!entries_.empty() && entries_.size() >= limit_)
     {
         entries_.erase(std::ranges::min_element(entries_, {}, &PaletteRowLayout::used));
     }

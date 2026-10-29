@@ -627,6 +627,11 @@ bool EditorController::composition_ignored() const noexcept
     {
         return false;
     }
+    // 面に焦点がある間の変換と確定は本文へ入れない（ADR 0162 の E4 の追補・IME は閉じている）。
+    if (explorer_focused())
+    {
+        return true;
+    }
     switch (state_.mode())
     {
     case core::EditMode::ordinary:

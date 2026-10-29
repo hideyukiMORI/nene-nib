@@ -97,4 +97,31 @@ std::optional<core::FilePath> choose_file_to_save(HWND owner, const std::wstring
     static_cast<void>(dialog->SetDefaultExtension(L"txt"));
     return shown(*dialog.Get(), owner);
 }
+
+std::optional<core::FilePath> choose_folder(HWND owner)
+{
+    ComPtr<IFileOpenDialog> dialog;
+    if (FAILED(CoCreateInstance(__uuidof(FileOpenDialog), nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(dialog.GetAddressOf()))))
+    {
+        return std::nullopt;
+    }
+    // フォルダだけを選ぶ。ファイルの種類の絞り込みは置かない（フォルダの窓では使わない）。
+    FILEOPENDIALOGOPTIONS options = 0;
+    if (FAILED(dialog->GetOptions(&options)) ||
+        FAILED(dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM)))
+    {
+        return std::nullopt;
+    }
+    if (FAILED(dialog->Show(owner)))
+    {
+        return std::nullopt;
+    }
+    ComPtr<IShellItem> item;
+    if (FAILED(dialog->GetResult(item.GetAddressOf())) || item.Get() == nullptr)
+    {
+        return std::nullopt;
+    }
+    return path_of(*item.Get());
+}
 } // namespace nenenib::ui::win32

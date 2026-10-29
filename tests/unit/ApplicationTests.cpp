@@ -2624,10 +2624,12 @@ void verify_ime_stance_table()
     {
         for (const VimMode vim_mode : vim_modes)
         {
-            expect(ime_stance_of(EditMode::ordinary, vim_mode, inputs.at(index)) == typed.at(index),
+            expect(ime_stance_of(EditMode::ordinary, vim_mode, inputs.at(index), false) ==
+                       typed.at(index),
                    "ordinary mode ignores the Vim mode");
             const auto &expected = vim_mode == VimMode::insert ? typed : blocked;
-            expect(ime_stance_of(EditMode::vim, vim_mode, inputs.at(index)) == expected.at(index),
+            expect(ime_stance_of(EditMode::vim, vim_mode, inputs.at(index), false) ==
+                       expected.at(index),
                    "Vim INSERT is as_left and NORMAL / VISUAL are closed without an input");
         }
     }

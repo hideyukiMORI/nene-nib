@@ -102,6 +102,14 @@ constexpr float full_channel = 255.0F;
                        static_cast<float>(area.right), static_cast<float>(area.bottom));
 }
 
+// 本文のキャレットを描かないとき。入力行が開いているか、エクスプローラーの面に焦点があるとき
+// （採用案の表「焦点」・Ctrl+P の面と同じ）。
+[[nodiscard]] bool body_caret_hidden(const application::EditorFrame &frame) noexcept
+{
+    return frame.command_line.has_value() ||
+           (frame.explorer.has_value() && frame.explorer.value().focused);
+}
+
 [[nodiscard]] D2D1_POINT_2F centre_of(const core::LayoutRect &area) noexcept
 {
     return D2D1::Point2F(static_cast<float>(area.left + area.right) / 2.0F,
@@ -456,6 +464,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     status_layouts_ = {};
     palette_layouts_.clear();
     tab_layouts_.clear();
+    explorer_layouts_.clear();
     Microsoft::WRL::ComPtr<IUnknown> unknown;
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory7),
                                    unknown.GetAddressOf())) ||
@@ -524,22 +533,30 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     gutter_layouts_.clear();
     palette_layouts_.clear();
     tab_layouts_.clear();
+    explorer_layouts_.clear();
     const std::wstring requested = core::to_utf16(settings.font_family.text()).value();
     const wchar_t *face = family(requested.c_str(), L"Consolas");
     const float ratio = core::font_size_ratio(settings.font_size);
     TextFormat gutter;
     TextFormat key;
+    TextFormat explorer;
 
     const auto made_gutter =
         make_format(face, ui_text_dips * ratio, DWRITE_FONT_WEIGHT_NORMAL, gutter);
+    // エクスプローラーの面の名前は UI の字体で、本文の大きさに追従する（行の高さが本文と同じ・
+    // ADR 0162 の決定 2）。長い名前は文字単位の省略記号で切る（タブの題名と同じ規則）。
+    const auto made_explorer =
+        make_format(family(L"Segoe UI Variable Text", L"Segoe UI"), ui_text_dips * ratio,
+                    DWRITE_FONT_WEIGHT_NORMAL, explorer);
     // 面の行の名前・説明（`command_format_`）と右端の欄（112 DIP）は本文の大きさに追従しないので、
     // 鍵も倍率を掛けない 12 DIP に固定する（ADR 0078 の決定 12・#312）。
     const auto made_key = make_format(face, ui_text_dips, DWRITE_FONT_WEIGHT_NORMAL, key);
-    if (FAILED(made_gutter) || FAILED(made_key))
+    if (FAILED(made_gutter) || FAILED(made_key) || FAILED(made_explorer) ||
+        FAILED(trim_by_character(explorer.Get())))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
-    const std::array<TextFormat, 2> every{gutter, key};
+    const std::array<TextFormat, 3> every{gutter, key, explorer};
     for (const auto &format : every)
     {
         format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -548,6 +565,7 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     gutter->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
     gutter_format_ = std::move(gutter);
     key_format_ = std::move(key);
+    explorer_format_ = std::move(explorer);
     formatted_size_ = settings.font_size;
     formatted_family_ = settings.font_family;
     return {};
@@ -1339,7 +1357,7 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame, co
     switch (pane.role)
     {
     case PaneRole::active:
-        if (!frame.command_line.has_value())
+        if (!body_caret_hidden(frame))
         {
             draw_caret(frame, text.Get(), area, line);
         }
@@ -1465,7 +1483,7 @@ void Direct2DRenderer::draw_grid_row(GridPainter &painter, const application::Ed
         frame.palette,
         frame.body,
         pane.caret.shape,
-        !active || !frame.command_line.has_value(),
+        !active || !body_caret_hidden(frame),
         active ? frame.composition : no_composition,
         caret_width_,
         core::to_pixels(caret_inset_dips, dpi_),
@@ -2174,13 +2192,19 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     const auto height = static_cast<std::int32_t>(size.height);
     const auto title = core::title_bar_layout(application::title_bar_input(frame, width, dpi_));
     const auto status = core::status_bar_layout(width, height, dpi_);
-    const auto panes = core::pane_layouts(core::LayoutRect{0, 0, width, height}, dpi_,
-                                          frame.settings.font_size, frame.layout);
+    // 面が出ていれば本文の枠は面の幅だけ右へ縮めた client から求める（ADR 0162 の決定 2・
+    // ADR 0148 の 1 本はそのまま）。面が消えていれば body は client のまま。
+    const auto explorer =
+        core::explorer_layout(core::LayoutRect{0, 0, width, height}, dpi_, frame.settings.font_size,
+                              frame.explorer.has_value());
+    const auto panes =
+        core::pane_layouts(explorer.body, dpi_, frame.settings.font_size, frame.layout);
     const auto body = core::active_pane_layout(panes, frame.active_side);
     const auto guide = core::operation_guide_layout(frame.guide.context, body, status, dpi_);
     draw_title_bar(frame, title);
     draw_body(frame, body);
     draw_other_body(frame, panes);
+    draw_explorer(frame, explorer);
     draw_body_guide(frame, guide);
     draw_status_bar(frame, status);
     draw_status_guide(frame, guide);
@@ -2206,6 +2230,21 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
         return std::unexpected(classify(ended));
     }
     return {};
+}
+
+void Direct2DRenderer::draw_explorer(const application::EditorFrame &frame,
+                                     const core::ExplorerLayout &layout)
+{
+    if (!frame.explorer.has_value())
+    {
+        // 面を消したら行の文字組みを捨てる。出すたびに作り直す（Ctrl+P の面と同じ・#900）。
+        explorer_layouts_.clear();
+        return;
+    }
+    ExplorerPainter painter(*context_.Get(), *brush_.Get(),
+                            ExplorerText{dwrite_.Get(), explorer_format_.Get(), dpi_},
+                            explorer_layouts_);
+    painter.paint(frame.explorer.value(), layout, frame.palette);
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::acquire_surface()

@@ -4,11 +4,14 @@
 #include "BodyLayout.hpp"
 #include "DevicePixels.hpp"
 #include "EditMode.hpp"
+#include "ExplorerKey.hpp"
+#include "ExplorerKeyKind.hpp"
 #include "FontSizeAdjustment.hpp"
 #include "NewTab.hpp"
 #include "PaletteLayout.hpp"
 #include "PaneLayouts.hpp"
 #include "PointTitleBar.hpp"
+#include "PointerPress.hpp"
 #include "ScrollPaletteList.hpp"
 #include "ScrollPane.hpp"
 #include "ScrollTabs.hpp"
@@ -30,6 +33,8 @@
 namespace nenenib::ui::win32
 {
 using detail::held;
+using detail::high_word_of;
+using detail::low_word_of;
 
 namespace
 {
@@ -39,16 +44,6 @@ constexpr std::int32_t resize_border_dips = 8;
 constexpr std::array<LRESULT, 9> border_codes{HTNOWHERE, HTLEFT,       HTRIGHT,
                                               HTTOP,     HTTOPLEFT,    HTTOPRIGHT,
                                               HTBOTTOM,  HTBOTTOMLEFT, HTBOTTOMRIGHT};
-
-[[nodiscard]] std::int32_t low_word_of(LPARAM data) noexcept
-{
-    return static_cast<std::int32_t>(static_cast<short>(LOWORD(data)));
-}
-
-[[nodiscard]] std::int32_t high_word_of(LPARAM data) noexcept
-{
-    return static_cast<std::int32_t>(static_cast<short>(HIWORD(data)));
-}
 
 [[nodiscard]] bool caption_button(WPARAM word) noexcept
 {
@@ -99,11 +94,19 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
     case WM_LBUTTONDOWN:
         click_client(data);
         return 0;
+    case WM_LBUTTONDBLCLK:
+        // 面の上だけがダブルクリック。ほかは 2 回目の押しとして今までどおり（CS_DBLCLKS）。
+        if (!double_click_explorer(data))
+        {
+            return pointer_message(single_press_of(message), word, data);
+        }
+        return 0;
     case WM_LBUTTONUP:
         drag_selection(data);
         end_selection_drag();
         release_preview_task(data);
         release_title_bar(data);
+        release_explorer(data);
         return 0;
     case WM_MBUTTONDOWN:
         press_middle(data);
@@ -328,6 +331,10 @@ void EditorWindow::click_client(LPARAM data)
         send(application::CancelCommand{});
         return;
     }
+    if (press_explorer(data))
+    {
+        return;
+    }
     switch (core::status_bar_hit(layout, low_word_of(data), high_word_of(data)))
     {
     // 意図は「どちらを選んだか」。同じ側を押しても controller が同じ表示値を返すだけ（ARC-011）。
@@ -348,9 +355,14 @@ void EditorWindow::click_client(LPARAM data)
 // 0155）。
 void EditorWindow::click_body(LPARAM data)
 {
-    const auto font_size = controller_.delivery().settings.font_size;
+    // 面に焦点がある間に本文を押したら焦点を本文へ戻す。面の Esc と同じ意図（ADR 0162 の追補）。
+    if (controller_.explorer_focused())
+    {
+        send(application::ExplorerKey{application::ExplorerKeyKind::esc});
+    }
+    const auto settings = controller_.delivery().settings;
     const auto other =
-        core::other_pane_layout(body_panes(font_size), controller_.split().active_side);
+        core::other_pane_layout(body_panes(settings), controller_.split().active_side);
     if (other.has_value() &&
         core::contains(other.value().band, low_word_of(data), high_word_of(data)))
     {
@@ -361,7 +373,7 @@ void EditorWindow::click_body(LPARAM data)
         }
         send(application::SwitchPane{});
     }
-    if (core::contains(active_body(font_size).band, low_word_of(data), high_word_of(data)))
+    if (core::contains(active_body(settings).band, low_word_of(data), high_word_of(data)))
     {
         place_caret(data);
         begin_selection_drag();
@@ -427,6 +439,13 @@ void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
         return;
     }
     zoom_wheel_remainder_ = 0;
+    // エクスプローラーの面の上は面の行だけを送る（ADR 0162 の決定 4・wheel_turned の累積）。
+    if (over_explorer(data))
+    {
+        scroll_explorer(delta);
+        return;
+    }
+    explorer_wheel_remainder_ = 0;
     scroll_body(delta, data);
 }
 
@@ -501,8 +520,8 @@ bool EditorWindow::over_other_pane(LPARAM data) const
     // WM_MOUSEWHEEL の位置は画面の座標なので、クライアントの座標に直してから見る。
     POINT point{low_word_of(data), high_word_of(data)};
     ScreenToClient(window_, &point);
-    const auto other = core::other_pane_layout(
-        body_panes(controller_.delivery().settings.font_size), controller_.split().active_side);
+    const auto other = core::other_pane_layout(body_panes(controller_.delivery().settings),
+                                               controller_.split().active_side);
     return other.has_value() && core::contains(other.value().band, point.x, point.y);
 }
 

@@ -16,7 +16,7 @@ namespace nenenib::ui::win32
 void EditorWindow::point_text(POINT point, core::SelectionAnchoring anchoring)
 {
     selection_point_ = point;
-    const auto body = active_body(controller_.delivery().settings.font_size);
+    const auto body = active_body(controller_.delivery().settings);
     const auto row =
         static_cast<std::int64_t>(std::max(point.y - body.content.top, 0L) / body.line_height);
     send(application::PointText{static_cast<float>(point.x - body.content.left), row, anchoring});
@@ -95,7 +95,7 @@ void EditorWindow::scroll_selection()
     }
     const auto point = selection_point_;
     // ドラッグの選択は操作中の枠だけ（ADR 0148 の決定 11）。
-    const auto body = active_body(controller_.delivery().settings.font_size);
+    const auto body = active_body(controller_.delivery().settings);
     const auto bottom =
         body.content.top + static_cast<std::int32_t>(body.visible_lines) * body.line_height;
     const std::int32_t direction = point.y < body.content.top ? -1 : (point.y >= bottom ? 1 : 0);

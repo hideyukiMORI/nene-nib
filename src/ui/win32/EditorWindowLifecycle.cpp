@@ -7,6 +7,7 @@
 #include "ExitCause.hpp"
 #include "ExitPlan.hpp"
 #include "Milestone.hpp"
+#include "PointerPress.hpp"
 #include "RgbColor.hpp"
 #include "TitleBarLayout.hpp"
 #include "TitleBarWidth.hpp"
@@ -93,6 +94,7 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     registration.lpfnWndProc = procedure;
     registration.lpszClassName = class_name;
     registration.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    registration.style = CS_DBLCLKS; // 面のダブルクリック（ADR 0162）。面の外は押しと同じ。
     class_ = RegisterClassExW(&registration);
     if (class_ == 0)
     {
@@ -250,7 +252,10 @@ LRESULT CALLBACK EditorWindow::procedure(HWND window, UINT message, WPARAM word,
     {
         return DefWindowProcW(window, message, word, data);
     }
-    const LRESULT result = self->dispatch(message, word, data);
+    // CS_DBLCLKS の 2 回目の押しは 1 回目と同じ押しへ写す。左だけは面のダブルクリックがあるので
+    // そのまま渡す（ADR 0162 の E4 の追補・中ボタンの続けてのタブを閉じる・ADR 0056 の決定 9）。
+    const UINT routed = message == WM_LBUTTONDBLCLK ? message : single_press_of(message);
+    const LRESULT result = self->dispatch(routed, word, data);
     if (message == WM_NCDESTROY)
     {
         SetWindowLongPtrW(window, GWLP_USERDATA, 0);
@@ -277,6 +282,7 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_NCLBUTTONUP:
         return press_caption(message, word, data);
     case WM_LBUTTONDOWN:
+    case WM_LBUTTONDBLCLK:
     case WM_LBUTTONUP:
     case WM_MBUTTONDOWN:
     case WM_MBUTTONUP:

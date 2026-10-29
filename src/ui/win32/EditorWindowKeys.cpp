@@ -221,7 +221,9 @@ void EditorWindow::settle_tab_walk()
 
 void EditorWindow::type_character(WPARAM word)
 {
-    if (held(VK_CONTROL) && !held(VK_MENU))
+    // 面に焦点がある間の文字は面の鍵（WM_KEYDOWN の表）だけで、本文へ入れない（ADR 0162 の決定
+    // 4）。
+    if ((held(VK_CONTROL) && !held(VK_MENU)) || controller_.explorer_focused())
     {
         return;
     }
@@ -354,6 +356,13 @@ void EditorWindow::press_key(WPARAM word)
     if (operation.has_value() && !keeps_block_key(operation.value()))
     {
         run_operation(operation.value());
+        return;
+    }
+    // 面に焦点があれば、操作の鍵のほかは面の鍵の表だけを通す（Vim の表と `map` の表を通さない・
+    // ADR 0162 の決定 4）。
+    if (controller_.explorer_focused())
+    {
+        press_explorer_key(word);
         return;
     }
     if (held(VK_CONTROL))

@@ -14,4 +14,7 @@ namespace nenenib::ui::win32
 [[nodiscard]] std::optional<core::FilePath> choose_file_to_open(HWND owner);
 [[nodiscard]] std::optional<core::FilePath> choose_file_to_save(HWND owner,
                                                                 const std::wstring &suggested);
+// エクスプローラーのルートのフォルダを選ぶ窓（ADR 0162 の決定
+// 7・FOS_PICKFOLDERS）。取り消しは値なし。
+[[nodiscard]] std::optional<core::FilePath> choose_folder(HWND owner);
 } // namespace nenenib::ui::win32

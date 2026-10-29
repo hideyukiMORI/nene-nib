@@ -5,7 +5,9 @@
 #include "ExplorerLayout.hpp"
 #include "FontSize.hpp"
 #include "LayoutRect.hpp"
+#include "PaneLayouts.hpp"
 #include "Scopes.hpp"
+#include "SplitLayout.hpp"
 #include "TestSupport.hpp"
 
 #include <cstdint>
@@ -85,6 +87,33 @@ void verify_steps_and_dpi()
     expect(core::explorer_layout(LayoutRect{0, 0, 1200, 800}, 48, font, true).border == 1,
            "the border is at least one pixel");
 }
+
+// 本文の枠は面の幅だけ右へ縮めた client から pane_layouts の 1 本で求める（決定 2・ADR 0148）。
+// 面が消えていれば今と同じ枠、出ていれば帯の左端が面の右端で縦は面と同じ。2 枠も同じ形。
+void verify_body_panes()
+{
+    const auto font = core::default_font_size();
+    const LayoutRect client{0, 0, 1200, 800};
+    const auto hidden = core::explorer_layout(client, 96, font, false);
+    const auto plain = core::pane_layouts(client, 96, font, core::SplitLayout::none);
+    expect(core::pane_layouts(hidden.body, 96, font, core::SplitLayout::none).first.content ==
+               plain.first.content,
+           "a hidden explorer leaves the body pane as it was");
+    const auto shown = core::explorer_layout(client, 96, font, true);
+    const auto single = core::pane_layouts(shown.body, 96, font, core::SplitLayout::none).first;
+    expect(single.band.left == panel_of(shown).right && single.band.right == 1200 &&
+               single.band.top == panel_of(shown).top &&
+               single.band.bottom == panel_of(shown).bottom,
+           "the body band starts at the right edge of the panel");
+    expect(single.gutter.left == single.band.left && single.content.left > single.gutter.right - 1,
+           "the gutter and the text follow the narrowed band");
+    expect(single.visible_lines == plain.first.visible_lines,
+           "the narrowed body keeps the same number of lines");
+    const auto split = core::pane_layouts(shown.body, 96, font, core::SplitLayout::vertical);
+    expect(split.first.band.left == panel_of(shown).right && split.second.has_value() &&
+               split.second.value().band.right == 1200,
+           "two panes share the narrowed band");
+}
 } // namespace
 
 void verify_explorer_layout_scope()
@@ -92,5 +121,6 @@ void verify_explorer_layout_scope()
     verify_width_rule();
     verify_hidden_and_origin();
     verify_steps_and_dpi();
+    verify_body_panes();
 }
 } // namespace nenenib::tests

@@ -303,7 +303,14 @@ void EditorController::focus_explorer(bool focused)
 
 std::size_t EditorController::explorer_page() const noexcept
 {
-    return std::max<std::size_t>(state_.scroll().visible_lines, 1);
+    // 面の先頭の行はルート名（採用案の表）。本文の行の上の余白（12 DIP）は行の高さより小さいので、
+    // 面の高さに入る行数は本文の見えている行数 − 1 を下回らない＝最後の行が切れない。
+    return std::max<std::size_t>(state_.scroll().visible_lines, 2) - 1;
+}
+
+bool EditorController::explorer_focused() const noexcept
+{
+    return state_.settings().explorer && state_.explorer().focused;
 }
 
 void EditorController::step_explorer(bool down)

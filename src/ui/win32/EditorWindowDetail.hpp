@@ -2,6 +2,10 @@
 
 #include "EditorSettings.hpp"
 
+#include <windows.h>
+
+#include <cstdint>
+
 #include <string>
 #include <string_view>
 #include <utility>
@@ -16,4 +20,7 @@ using FontKey = std::pair<float, std::string>;
 [[nodiscard]] FontKey font_of(const core::EditorSettings &settings);
 [[nodiscard]] bool held(int key) noexcept;
 [[nodiscard]] std::wstring widen(std::string_view utf8);
+// マウスのメッセージの LPARAM の符号つきの x と y（窓の外へ出たドラッグでは負になる）。
+[[nodiscard]] std::int32_t low_word_of(LPARAM data) noexcept;
+[[nodiscard]] std::int32_t high_word_of(LPARAM data) noexcept;
 } // namespace nenenib::ui::win32::detail

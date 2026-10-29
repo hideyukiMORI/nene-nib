@@ -50,11 +50,11 @@ namespace
 } // namespace
 
 ImeStance ime_stance_of(core::EditMode mode, core::VimMode vim_mode,
-                        const std::optional<CommandInput> &input)
+                        const std::optional<CommandInput> &input, bool explorer_focused)
 {
     if (!input.has_value())
     {
-        return stance_of(mode, vim_mode);
+        return explorer_focused ? ImeStance::closed : stance_of(mode, vim_mode);
     }
     return std::visit([](const auto &value) { return stance_of(value); }, input.value());
 }

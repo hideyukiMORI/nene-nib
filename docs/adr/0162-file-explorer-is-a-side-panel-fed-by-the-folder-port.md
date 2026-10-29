@@ -59,3 +59,16 @@ hide の指示（2026-10-28）: ルートを設定してそこからツリー状
 13. **細部。** 押した時点で面に焦点・ダブルは開く（フォルダは開いたまま）・読めないフォルダは子の無い読み終えた扱い（開き直しても頼み直さない・ルートの作り直しで読む）・面の行数は本文の `VisibleLines`・`EditorFrame` に載せる行は `first_visible` から画面の行数ぶんだけ（全体の数は `total`）・押した行と離した行は節の経路で比べる（間に子が届いても取り違えない）・「…」の行は押しても離しても何もしない。
 14. **`WorkCompleted` の中の知らせの例外。** 読めないフォルダの「（読めません）」は `WorkCompleted` の `collect` の中で置く 1 行で、ADR 0062 決定 7 の「`WorkCompleted` は知らせを動かさない」の唯一の例外（読めない結果は使う人の操作の結果として届く）。
 15. **強制の更新。** 決定 9 の「開く道が `open_listed` の 1 本・フォルダの読みが `FolderPort` の 1 本」は PR #1070 の契約 `--explorer`（59 checks）と `verify_quiet_paths` の欄で **active**。
+## 追補（2026-10-30・#997 の E4）E4 で足した口と凍結した値
+
+1. **E4 で足した口（application）。** 設計席の答え（E4 の止まった点）に従い、ui の PR で 5 点を足した。
+   - `EditorController::explorer_focused() const noexcept`（public）: 面に焦点があるか。窓は打鍵ごとにこれを読み（`command_palette_active()` と同じ安い読み・frame を作らない）、真なら操作の鍵（Ctrl+P・F1・Ctrl+Shift+E など表の鍵）のほかは `ExplorerKey` の表（j k h l Enter Esc 矢印）だけへ写す。表にない鍵と文字（WM_CHAR）は捨て、Vim の表と `map` の表を通さない。
+   - IME の構えは `ime_stance_of(mode, vim_mode, input, explorer_focused)` の 1 本のまま。入力行が無く面に焦点がある間は `closed`（NORMAL と同じ）、焦点が外れればモードの規則へ戻る。入力行があれば入力行の規則が勝つ（ADR 0061）。
+   - `explorer_view()` を public に（`command_palette_view()` と同じ・本文の行を作らない）。窓は押した点の面の行に `first_visible` を足して `PointExplorer.row` を送る。先頭の行（ルート名）と行の無い所は木の行の数（行の外）を送る。
+   - **本文の押しは面の Esc と同じ。** 面に焦点がある間に本文の枠を押したら、窓は押したとき（離したときではない）に `ExplorerKey{esc}` を送ってから今までの押しを続ける。新しい意図は足さない。
+   - 面の行数（`explorer_page`）は「本文の `visible_lines` − 1（先頭のルート名の行）・最小 1」を application の 1 か所で導く。本文の行の上の余白（12 DIP）は行の高さより小さいので、面の高さに入る行数はこれを下回らず、最後の行は切れない。窓が送る `VisibleLines` は今までどおり本文の値。
+   - （独立レビュー R2-2・6 つ目）`composition_ignored()` は入力行の判定の後で `explorer_focused()` を見て真を返す。面に焦点がある間の IME の変換（`ComposeText`）と確定（`CommitText`）は本文へ入れない。
+   - （独立レビュー R2-1）`CS_DBLCLKS` で 2 回目の押しが `*BUTTONDBLCLK` で届くので、窓は `single_press_of` で 1 回目と同じ押しへ写す（中ボタンの続けてのタブを閉じる・ADR 0056 の決定 9）。左は面の上だけダブルクリック。
+2. **ダブルクリック。** 窓の class に `CS_DBLCLKS` を立て、面の上の `WM_LBUTTONDBLCLK` だけを `PointExplorer{double_click}` にする。面の外の `WM_LBUTTONDBLCLK` は `WM_LBUTTONDOWN` と同じ道（本文と帯の押しは不変）。
+3. **本文の枠。** `pane_layouts` は client の原点（left / top）を使う（E2 では原点 0 に固定されていて、決定 2 の「縮めた client を渡す」が成り立たなかった）。原点 0 の呼び出しの結果は不変。
+4. **凍結した値（採用案の「実装で凍結する値」）。** 面の左右の余白 8 DIP・印の升の幅は `explorer_layout` の `marker`（2 つの印の桁の多い方 × 字の大きさ）・「…」は書式に焼いた文字単位の省略記号（タブの題名と同じ）。面の名前の字は UI の字体（Segoe UI Variable Text → Segoe UI）を本文の大きさの比で拡げた大きさ。行の文字組みは `PaletteRowLayouts` の別の実体（上限 512）で保持し、書式の作り直しと面を消したときに捨てる。
