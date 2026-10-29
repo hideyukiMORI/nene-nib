@@ -772,9 +772,9 @@ void verify_settings_maps()
         MapRow{VimModeSet{false, true, false, false, false}, "jj", "<Esc>", false},
         MapRow{VimModeSet{true, false, true, false, false}, "<leader>w", ":w<CR>", true}};
     const auto bytes = encode_settings(settings);
-    expect(
-        bytes.ends_with("features=\nmapleader=<Space>\nmap.i.jj=!<Esc>\nmap.nv.<leader>w=:w<CR>\n"),
-        "the leader and the map rows follow the other lines in order");
+    expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nmapleader=<Space>\n"
+                           "map.i.jj=!<Esc>\nmap.nv.<leader>w=:w<CR>\n"),
+           "the leader and the map rows follow the other lines in order");
     const auto decoded = decode_settings(bytes, SettingsVersion::v4);
     expect(decoded && same_settings(decoded.value(), settings) &&
                encode_settings(decoded.value()) == bytes,

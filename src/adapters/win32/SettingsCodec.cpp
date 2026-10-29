@@ -26,8 +26,8 @@ using Field = std::optional<std::string_view> SettingsFields::*;
 // 鍵の名前と DTO の欄の対（同じ位置）。v4 だけの鍵も読むが、旧版にあれば apply_v4_fields
 // が拒否する。
 constexpr std::array<std::string_view, 14> field_names{
-    "version",     "colorscheme", "font_family", "font_size", "guide",      "wrap",      "ui_language",
-    "lsp",         "explorer",    "root",        "features",  "mapleader",  "ignorecase", "smartcase"};
+    "version", "colorscheme", "font_family", "font_size", "guide",     "wrap",       "ui_language",
+    "lsp",     "explorer",    "root",        "features",  "mapleader", "ignorecase", "smartcase"};
 constexpr std::array<Field, 14> field_members{
     &SettingsFields::version,     &SettingsFields::colorscheme, &SettingsFields::font_family,
     &SettingsFields::font_size,   &SettingsFields::guide,       &SettingsFields::wrap,
