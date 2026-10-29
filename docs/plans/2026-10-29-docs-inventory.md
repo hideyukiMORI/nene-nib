@@ -21,7 +21,7 @@
 | `settings.md` | `src/adapters/win32/SettingsCodec.cpp`（v4 の鍵の表・接頭辞の族） | 鍵・既定・必須か後から足した鍵か |
 | `ports.md` | `src/application/EditorPorts.hpp` | port と実装（adapter / ui）と替え玉 |
 
-生成の道具は `eng/vim-oracle.py --key-names` と同じ置き方（`eng/inventory.py --write` が書き、`--check` が一致を見る・CNF-017 として `eng/conformance.py` に 1 行・`docs/QUALITY_GATES.md` に 1 行）。表の読み方は C++ の正規表現ではなく、表を `constexpr` の配列のまま小さな probe（`nib_inventory` の exe・`tests/` に置く開発用 target）で JSON に吐かせて Python が整形する（表の形が変わっても追従する）。
+生成の道具は `eng/vim-oracle.py --key-names` と同じ置き方（`eng/inventory.py --write` が書き、`--check` が一致を見る・新しい CNF の規則（番号は実装のときに採る） として `eng/conformance.py` に 1 行・`docs/QUALITY_GATES.md` に 1 行）。表の読み方は C++ の正規表現ではなく、表を `constexpr` の配列のまま小さな probe（`nib_inventory` の exe・`tests/` に置く開発用 target）で JSON に吐かせて Python が整形する（表の形が変わっても追従する）。
 
 ## 2. 経緯を現状から分ける
 
@@ -38,7 +38,7 @@
 
 | 段 | 中身 | 席 | 前提 |
 |---|---|---|---|
-| D1 | `eng/inventory.py` と `nib_inventory`・5 つの生成物・CNF-017 | 実装席 1（0.5〜1 日） | merge の列が空 |
+| D1 | `eng/inventory.py` と `nib_inventory`・5 つの生成物・新しい CNF の規則（番号は実装のときに採る） | 実装席 1（0.5〜1 日） | merge の列が空 |
 | D2 | CLAUDE.md §6 と `current.md` の分離・`docs/history/` | 設計席（半日） | D1 |
 | D3 | SPECIFICATION §5 / FR の棚卸 | 設計席（半日） | D1 |
 
