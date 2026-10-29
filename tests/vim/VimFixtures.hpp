@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 da49d07e92ab3f94b8d73f52a0eb85326df325494141ed6ce2d1d8794942add5 / 2693 fixtures
+// fixtures.json: sha256 00177104021e00a744ec09d89d3be677fe5d9b7cf5cb50a19c5808789a8b0101 / 2717 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2693> vim_fixtures{{
+constexpr std::array<VimFixture, 2717> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1387,6 +1387,30 @@ constexpr std::array<VimFixture, 2693> vim_fixtures{{
     {"block-swap-O", "abcdef\nghijkl\nmnopqr", "<C-v>jllOy", "abcdef\nghijkl\nmnopqr", 1, 1, "abc\nghi", "\0263", std::nullopt},
     {"block-swap-O-caret", "abcdef\nghijkl\nmnopqr", "<C-v>jllO<Esc>x", "abcdef\nhijkl\nmnopqr", 2, 1, "g", "v", std::nullopt},
     {"block-swap-both", "abcdef\nghijkl\nmnopqr", "<C-v>jlloOy", "abcdef\nghijkl\nmnopqr", 1, 1, "abc\nghi", "\0263", std::nullopt},
+    {"block-swap-corners-repro-y", "    x1 ＡＢＣ\nＡＢＣ gamma", "<C-v>jllOy", "    x1 ＡＢＣ\nＡＢＣ gamma", 1, 1, "    x1\nＡＢＣ", "\0266", std::nullopt},
+    {"block-swap-corners-repro-caret", "    x1 ＡＢＣ\nＡＢＣ gamma", "<C-v>jllO<Esc>", "    x1 ＡＢＣ\nＡＢＣ gamma", 2, 1, "", "", std::nullopt},
+    {"block-swap-corners-repro-anchor", "    x1 ＡＢＣ\nＡＢＣ gamma", "<C-v>jllOo<Esc>", "    x1 ＡＢＣ\nＡＢＣ gamma", 1, 6, "", "", std::nullopt},
+    {"block-swap-corners-left-wide-y", "ＡＢＣ def\nabcdefgh", "<C-v>jlOy", "ＡＢＣ def\nabcdefgh", 1, 1, "Ａ\nab", "\0262", std::nullopt},
+    {"block-swap-corners-left-wide-caret", "ＡＢＣ def\nabcdefgh", "<C-v>jlO<Esc>", "ＡＢＣ def\nabcdefgh", 2, 1, "", "", std::nullopt},
+    {"block-swap-corners-right-wide-y", "abcdefgh\nabＡＢcd", "<C-v>jllOy", "abcdefgh\nabＡＢcd", 1, 1, "abcd\nabＡ", "\0264", std::nullopt},
+    {"block-swap-corners-right-wide-caret", "abcdefgh\nabＡＢcd", "<C-v>jllO<Esc>", "abcdefgh\nabＡＢcd", 2, 1, "", "", std::nullopt},
+    {"block-swap-corners-right-wide-anchor", "abcdefgh\nabＡＢcd", "<C-v>jllOo<Esc>", "abcdefgh\nabＡＢcd", 1, 4, "", "", std::nullopt},
+    {"block-swap-corners-both-wide-y", "ＡＢＣＤ\nａｂｃｄ", "<C-v>jlOy", "ＡＢＣＤ\nａｂｃｄ", 1, 1, "ＡＢ\nａｂ", "\0264", std::nullopt},
+    {"block-swap-corners-both-wide-caret", "ＡＢＣＤ\nａｂｃｄ", "<C-v>jlO<Esc>", "ＡＢＣＤ\nａｂｃｄ", 2, 1, "", "", std::nullopt},
+    {"block-swap-corners-tab-y", "\tabc\nabcdefghijk", "<C-v>jlOy", "\tabc\nabcdefghijk", 1, 1, "\ta\nabcdefghi", "\0269", std::nullopt},
+    {"block-swap-corners-tab-caret", "\tabc\nabcdefghijk", "<C-v>jlO<Esc>", "\tabc\nabcdefghijk", 2, 1, "", "", std::nullopt},
+    {"block-swap-corners-dollar-y", "abc\nabcdefg\nab", "<C-v>j$Oy", "abc\nabcdefg\nab", 1, 1, "abc\nabcd", "\0264", std::nullopt},
+    {"block-swap-corners-dollar-caret", "abc\nabcdefg\nab", "<C-v>j$O<Esc>", "abc\nabcdefg\nab", 2, 1, "", "", std::nullopt},
+    {"block-swap-corners-dollar-down-y", "abc\nabcdefg\nab", "<C-v>j$Ojy", "abc\nabcdefg\nab", 1, 1, "abc\nabcd\nab", "\0264", std::nullopt},
+    {"block-swap-corners-twice-y", "    x1 ＡＢＣ\nＡＢＣ gamma", "<C-v>jllOOy", "    x1 ＡＢＣ\nＡＢＣ gamma", 1, 1, "    x1\nＡＢＣ", "\0266", std::nullopt},
+    {"block-swap-corners-twice-caret", "    x1 ＡＢＣ\nＡＢＣ gamma", "<C-v>jllOO<Esc>", "    x1 ＡＢＣ\nＡＢＣ gamma", 2, 7, "", "", std::nullopt},
+    {"block-swap-corners-one-line-y", "abＡＢcd", "<C-v>llOy", "abＡＢcd", 1, 1, "abＡ", "\0264", std::nullopt},
+    {"block-swap-corners-one-line-wide-caret", "abＡＢcd", "2l<C-v>lO<Esc>", "abＡＢcd", 1, 3, "", "", std::nullopt},
+    {"block-swap-corners-one-line-wide-y", "abＡＢcd", "2l<C-v>lOy", "abＡＢcd", 1, 3, "ＡＢ", "\0264", std::nullopt},
+    {"block-swap-corners-wanted-j", "abcdef\nabＡＢcd\nabcdefgh", "<C-v>jllOj<Esc>", "abcdef\nabＡＢcd\nabcdefgh", 3, 1, "", "", std::nullopt},
+    {"block-swap-corners-up-wide-y", "abcdefgh\nabＡＢcd", "j2l<C-v>kllOy", "abcdefgh\nabＡＢcd", 1, 3, "cdef\nＡＢ", "\0264", std::nullopt},
+    {"block-swap-corners-up-wide-caret", "abcdefgh\nabＡＢcd", "j2l<C-v>kllO<Esc>", "abcdefgh\nabＡＢcd", 1, 3, "", "", std::nullopt},
+    {"block-swap-corners-delete-repeat", "abＡＢcdef\nabcdefgh\nabＡＢcdef\nabcdefgh", "<C-v>jllOdjj.", "Ｂcdef\nefgh\nＢcdef\nefgh", 3, 1, "abＡ\nabcd", "\0264", std::nullopt},
     {"block-d-2x2", "abcdef\nghijkl\nmnopqr", "<C-v>jld", "cdef\nijkl\nmnopqr", 1, 1, "ab\ngh", "\0262", std::nullopt},
     {"block-d-3x3", "abcdef\nghijkl\nmnopqr", "<C-v>jjlld", "def\njkl\npqr", 1, 1, "abc\nghi\nmno", "\0263", std::nullopt},
     {"block-d-short", "abcdef\ngh\nmnopqr", "l<C-v>jjld", "adef\ng\nmpqr", 1, 2, "bc\nh\nno", "\0262", std::nullopt},
