@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 4386cb28effccf94026509412327256d15389455955a84e7b2aff2736314d983 / 3088 fixtures
+// fixtures.json: sha256 cfd577a69d932afbfa5f6deb263091dca5d0f1978de313dbe8983baf60d54814 / 3088 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -3092,8 +3092,8 @@ constexpr std::array<VimFixture, 3088> vim_fixtures{{
     {"control-del-j-wanted-column", "a\177bcd\nabcdefgh", "3lj", "a\177bcd\nabcdefgh", 2, 4, "", "", std::nullopt},
     {"control-del-k-wanted-column", "abcdefgh\na\177bcd", "j3lk", "abcdefgh\na\177bcd", 1, 4, "", "", std::nullopt},
     {"control-del-j-lands-on-the-del", "abcdefgh\na\177bcd", "2ljx", "abcdefgh\na\177cd", 2, 3, "b", "v", std::nullopt},
-    {"control-del-bar-counts-two-columns", "a\177bcd", "4|x", "a\177bd", 1, 4, "c", "v", std::nullopt},
-    {"control-del-bar-inside-the-del", "a\177bcd", "3|x", "a\177cd", 1, 3, "b", "v", std::nullopt},
+    {"control-del-bar-counts-one-column", "a\177bcd", "4|x", "a\177bd", 1, 4, "c", "v", std::nullopt},
+    {"control-del-bar-after-the-del", "a\177bcd", "3|x", "a\177cd", 1, 3, "b", "v", std::nullopt},
     {"control-del-dollar-then-j", "a\177bcd\nabcdefgh", "$j", "a\177bcd\nabcdefgh", 2, 8, "", "", std::nullopt},
     {"control-del-x-then-j-keeps-the-column", "a\177bcd\nabcdefgh", "$xj", "a\177bc\nabcdefgh", 2, 4, "d", "v", std::nullopt},
     {"control-del-block-columns-delete", "abcdefgh\na\177bcdef", "3l<C-v>jld", "abcfgh\na\177bef", 1, 4, "de\ncd", "\0262", std::nullopt},
