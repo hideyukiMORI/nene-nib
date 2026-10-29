@@ -1,6 +1,8 @@
 #include "VimScreenGeometry.hpp"
 
 #include "VimActionGroup.hpp"
+#include "VimCursorCorrect.hpp"
+#include "VimCursorWindow.hpp"
 #include "VimKeyTable.hpp"
 #include "VimRowRequest.hpp"
 #include "VimScreenKind.hpp"
@@ -127,7 +129,12 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
     {
         target = LineNumber{area.last.value - amount};
     }
-    return VimDisplayNavigation{area.first, target};
+    VimDisplayNavigation result{area.first, target};
+    result.settled = vim_cursor_corrected(VimCursorWindow{area.first, area.below,
+                                                          vim_viewport_of(view).visible_lines,
+                                                          view.scroll_margin},
+                                          target, view.text.line_count());
+    return result;
 }
 
 [[nodiscard]] bool at_bottom(const VimEditorView &view, const VimScreenWindow &area) noexcept
@@ -207,6 +214,22 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
     return target;
 }
 
+// 新しい窓でキャレットの行を余白の内側へ寄せる（Vim の onepage と halfpage の最後の
+// cursor_correct・ #1099・ADR 0019 の追補）。窓の下端は文字組みの値で数えた全部の入る最後の行の次。
+[[nodiscard]] Navigation corrected(const VimEditorView &view, VimDisplayNavigation target)
+{
+    const auto area = window_of(view, target.first);
+    if (!area)
+    {
+        return std::unexpected(area.error());
+    }
+    target.caret = vim_cursor_corrected(VimCursorWindow{target.first, area.value().below,
+                                                        vim_viewport_of(view).visible_lines,
+                                                        view.scroll_margin},
+                                        target.caret, view.text.line_count());
+    return target;
+}
+
 // 半画面の量（回数・'scroll'・既定は半分）。画面の高さを越えない（ADR 0019 の決定 6）。
 [[nodiscard]] std::size_t half_amount(const VimState &state, const VimEditorView &view) noexcept
 {
@@ -225,6 +248,11 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
         return target;
     }
     target = within_window(view, target.value());
+    if (!target)
+    {
+        return target;
+    }
+    target = corrected(view, target.value());
     if (!target)
     {
         return target;
@@ -343,6 +371,33 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
     return within_window(view, VimDisplayNavigation{above.value(), caret});
 }
 
+// 前へ 1 画面送れないか（Vim の onepage の FAIL・末尾まで見えていて、先頭が末尾から余白の行数の
+// 内側・#1099）。余白 0 では先頭が最終行のときだけで、今までと同じ。
+[[nodiscard]] std::expected<bool, LineNumber> forward_page_fails(const VimEditorView &view,
+                                                                 LineNumber first)
+{
+    if (first.value + view.scroll_margin < view.text.line_count() || view.scroll_margin == 0)
+    {
+        return first.value >= view.text.line_count();
+    }
+    const auto area = window_of(view, first);
+    if (!area)
+    {
+        return std::unexpected(area.error());
+    }
+    return area.value().below.value > view.text.line_count();
+}
+
+[[nodiscard]] std::expected<bool, LineNumber> page_fails(const VimEditorView &view,
+                                                         LineNumber first, bool down)
+{
+    if (down)
+    {
+        return forward_page_fails(view, first);
+    }
+    return first.value == 1;
+}
+
 [[nodiscard]] Navigation page_target(const VimState &state, const VimEditorView &view,
                                      VimScreenKind kind)
 {
@@ -352,7 +407,12 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
     const auto count = std::min(vim_search_count(state), view.text.line_count());
     for (std::size_t index = 0; index < count; ++index)
     {
-        if (down ? result.first.value == view.text.line_count() : result.first.value == 1)
+        const auto fails = page_fails(view, result.first, down);
+        if (!fails)
+        {
+            return std::unexpected(fails.error());
+        }
+        if (fails.value())
         {
             break;
         }
@@ -363,7 +423,8 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
         }
         result = next.value();
     }
-    return result;
+    // 1 画面も送れなかった周（端の Ctrl-f / Ctrl-b）はキャレットが余白の内側にいるので寄せない。
+    return result.preserve_column ? Navigation{result} : corrected(view, result);
 }
 
 [[nodiscard]] std::optional<VimScreenKind> screen_kind(VimAction action)

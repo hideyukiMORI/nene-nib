@@ -1149,6 +1149,7 @@ EditorController::measured_vim_step(const VimStepSource &source)
     // 文書のマークを貸す（ADR 0152 の決定 2）。この関数の中では状態を変えないので参照は保たれる。
     view.marks = &state_.vim_marks();
     view.search_case = core::search_case(state_.settings());
+    view.scroll_margin = state_.settings().scrolloff;
     auto step = engine_step(state_.vim(), view, source);
     // どの要求も同じ 1 歩（鍵か行番号）をもう一度流す。viewport は 1 度渡したら以後も渡したまま。
     // 回数の上限は持たない。同じ問いの立て直しと viewport の二重要求は inconsistent で止まり、
