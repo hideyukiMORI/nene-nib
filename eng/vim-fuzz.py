@@ -22,7 +22,7 @@ Generator 4 (Issue #1135) adds keys inside INSERT: `<Left>` `<Right>` `<Home>` `
 (Vim's `stop_arrow` starts a new insert, so `.` repeats only the part after the arrow) and `<BS>`
 (the oracle's `backspace=indent,eol,start` deletes before the insert's start, and `0i<BS>` at a line
 start joins the line with the one above). After one of these words `.` is picked with sixteen times
-its weight (`ARROW_WORDS`).
+its weight (`ARROW_WORDS`). It also adds `{n}gI` (#1032).
 
 The buffer has 1 to 12 lines mixing ASCII words, spaces, tabs, bracket and quote pairs, punctuation,
 Japanese (kana, kanji, full-width letters), empty lines and trailing spaces. It never ends with a
@@ -137,9 +137,11 @@ WORDS_4 = (
     ("i<Left>", 2, "i{i}<Left>{i}<Esc>"), ("a<Right>", 2, "a{i}<Right>{i}<Esc>"),
     ("A<Home>", 1, "A{i}<Home>{i}<Esc>"), ("i<End>", 1, "i{i}<End>{i}<Esc>"),
     ("i<BS>", 2, "i{i}<BS>{i}<Esc>"), ("0i<BS>", 1, "0i<BS>{i}<Esc>"),
+    # `gI`（#1032）: 行の 1 桁目に挿入・回数は反復。
+    ("gI", 1, "{n}gI{i}<Esc>"),
 )
 # この語の直後の `.` は重みを ARROW_DOT_FACTOR 倍にする（矢印の後の `.` と undo の単位を見る）。
-ARROW_WORDS = frozenset(kind for kind, _, _ in WORDS_4)
+ARROW_WORDS = frozenset(("i<Left>", "a<Right>", "A<Home>", "i<End>", "i<BS>", "0i<BS>"))
 ARROW_DOT_FACTOR = 16
 # `g;` `g,` は語にしない。fuzz も 1 本の `:normal!` なので Vim では全体が 1 つの undo の単位
 # （変更の列は 1 件）になり、命令ごとに単位を作る Nib といつも違う。契約 `--vim-marks` の
