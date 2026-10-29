@@ -87,3 +87,11 @@ hide の要望（2026-10-28 夜）「全面 md プレビューも欲しい。編
 19. **port と静かな道は不変。** 解析は同じ券つきの `MarkdownPort`（決定 5・6）。`full` の間も `PreviewTick` と即時の要求（決定 8・9）は同じ。`off` なら port を呼ばない（決定 10）。
 20. **契約。** application `--preview-full`（3 つの見せ方の遷移・Esc の戻り先・編集の拒否と知らせ・通る鍵の一覧・選択の範囲とコピーの本文（見出し・段落・リスト・コード）・錨の往復・`verify_quiet_paths`）。ui: `nib_window_tests` の画素（`full` で本文が描かれない・選択の面）と `eng/verify-window.py --preview-full`。速さ: `off` と `side` の打鍵の道は不変。`full` の間は本文を描かないので frame は軽い。
 21. **限界（後続）。** リンクを開く・プレビュー内の検索・ダブルクリックの語の選択・選択の Markdown のソースのコピー（`:preview` の選択を本文の範囲に写す）は後続。
+
+## 追補（2026-10-29・D74・#1101）: タスクリストのチェックボックスと閲覧からの切り替え
+
+22. **解析の旗。** `parse_markdown` の `flags` を `MD_DIALECT_COMMONMARK | MD_FLAG_TASKLISTS` にする（md4c の `MD_BLOCK_LI_DETAIL` の `is_task` `task_mark` `task_mark_offset`）。ほかの GitHub の拡張（表・取り消し線）はこの追補では足さない（描く側が要る・別の判断）。`MarkdownDocument` の箇条書きの項に `std::optional<MarkdownTask{bool checked; std::size_t mark_offset;}>`（`mark_offset` は本文のバイト位置・`[` の次の 1 バイト）。
+23. **描画。** タスクの項は点の代わりにチェックボックス（字の大きさの 9 割の正方形・押す範囲は 1 行の高さの正方形に左右 2 DIP・枠は `muted`・チェックは `accent` の 2 本の線・文字の字体に依らない Direct2D の図形）を描き、「[ ]」「[x]」の文字は描かない。`PreviewLayout` の block ごとの位置に「チェックボックスの矩形」を残す（hit test のため・ADR 0155 改訂の決定 18 の選択の位置と同じ保持）。
+24. **切り替えは本文の編集 1 回。** 側の枠でも全面プレビューでも、チェックボックスの矩形をクリック（押した位置と離した位置が同じ矩形・ADR 0056 の決定 9 の形）すると意図 `TogglePreviewTask{block}`（使う人の操作）。controller は block の `mark_offset` の 1 バイトを ` ` ↔ `x` に置き換える `Edit` 1 つ（`restore` はそのときのキャレット・undo 1 単位・未保存の印）。本文の改訂番号が進むので、プレビューは決定 8・9 の道で描き直す（新しい要求の道は足さない）。全面プレビューの「編集はできない」（改訂 17）の**唯一の例外**で、ほかの鍵と貼り付けは引き続き届かない。`mark_offset` の位置が本文で `[ ]` / `[x]` / `[X]` の形でなければ（解析の後に本文が変わった古い結果）何もせず 1 行知らせる。
+25. **鍵。** 全面プレビューで選択の無いとき、`Space` は「見えている最初の未チェックのタスク」ではなく、**キャレットの行のタスク**（本文のキャレットがそのタスクの行にあるとき）を切り替える。それ以外の `Space` は今までどおり（側の枠では本文へ）。Vim NORMAL では `Space` は移動なので変えない（切り替えはクリックだけ）。
+26. **契約。** core: `--markdown` にタスクの解析（`[ ]` `[x]` `[X]`・入れ子・番号つきの項・`mark_offset` の位置）。application: `--preview-task`（側と全面でクリック → `Edit` 1 回・undo で戻る・古い結果の 1 行・`Space` の規則・`verify_quiet_paths` 不変）。ui: `nib_window_tests` の画素（チェックボックスの枠と線）・`eng/verify-window.py --preview` の節に 1 クリック。速さ: 打鍵の道に載らない（プレビューの描画は bitmap の保持のまま・チェックボックスは block ごとの図形 1 つ）。

@@ -51,3 +51,11 @@ hide の指示（2026-10-28）: ルートを設定してそこからツリー状
 | Ctrl+B | Vim NORMAL の Ctrl-B（1 画面上）と衝突 |
 | OS の順（`CompareStringEx`）で並べる | core が OS に触れない（ARC-003）。ASCII の大小を畳んだバイト順で決定的に |
 | 起動時にルートを全部読む | 深い木で起動が遅れる。開いたフォルダだけ裏で読む |
+
+## 追補（2026-10-29・PR #1070 の E3 の席が見つけた点・設計席の決定）
+
+11. **フォルダの読みは 1 つずつ。** `FolderPort` は新しい要求で前の要求をやめる（ADR 0062 決定 6）ので、application は「port が今の仕事（自分の控えか Ctrl+P の面の券）を持たない間だけ、開いていて読んでいないフォルダを木の順に 1 つずつ頼む」。Ctrl+P の面が読み始めたら読みかけの控えは捨て、面の読みが終わった後に頼み直す。決定 5 の「node ごとに 1 つ」はこの形で読む。契約 `verify_one_listing_at_a_time` と `verify_palette_shares_port`。
+12. **5 つ目の意図 `ExplorerRootChosen{folder}`。** 操作 `choose_explorer_root` のダイアログの答えを受ける口。使う人の操作（`keeps_tab_walk` は偽）。
+13. **細部。** 押した時点で面に焦点・ダブルは開く（フォルダは開いたまま）・読めないフォルダは子の無い読み終えた扱い（開き直しても頼み直さない・ルートの作り直しで読む）・面の行数は本文の `VisibleLines`・`EditorFrame` に載せる行は `first_visible` から画面の行数ぶんだけ（全体の数は `total`）・押した行と離した行は節の経路で比べる（間に子が届いても取り違えない）・「…」の行は押しても離しても何もしない。
+14. **`WorkCompleted` の中の知らせの例外。** 読めないフォルダの「（読めません）」は `WorkCompleted` の `collect` の中で置く 1 行で、ADR 0062 決定 7 の「`WorkCompleted` は知らせを動かさない」の唯一の例外（読めない結果は使う人の操作の結果として届く）。
+15. **強制の更新。** 決定 9 の「開く道が `open_listed` の 1 本・フォルダの読みが `FolderPort` の 1 本」は PR #1070 の契約 `--explorer`（59 checks）と `verify_quiet_paths` の欄で **active**。
