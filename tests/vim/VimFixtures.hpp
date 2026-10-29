@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 1a0a88a9febbcd955439afee7ba0179d7b71017fa1fed532f1a0b336fe5607e4 / 2521 fixtures
+// fixtures.json: sha256 4210fed7235c6ef25d0b5acc4a168dca7ce53038eb0fb27083cb66100f0a0be8 / 2536 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2521> vim_fixtures{{
+constexpr std::array<VimFixture, 2536> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2431,6 +2431,21 @@ constexpr std::array<VimFixture, 2521> vim_fixtures{{
     {"yank-line-cursor-y-minus-then-j", "  abc\nlonger line", "j$y-j", "  abc\nlonger line", 2, 3, "  abc\nlonger line\n", "V", std::nullopt},
     {"yank-line-cursor-yj-then-j-drops-dollar", "abc\n  def\nxxxxxxxx", "$yjj", "abc\n  def\nxxxxxxxx", 2, 3, "abc\n  def\n", "V", std::nullopt},
     {"yank-line-cursor-characterwise-y-dollar-then-j", "abcdef\nabcdefgh", "$hy$j", "abcdef\nabcdefgh", 2, 5, "ef", "v", std::nullopt},
+    {"yank-same-line-dollar-ygg", "foofoo? a", "$ygg", "foofoo? a", 1, 1, "foofoo? a\n", "V", std::nullopt},
+    {"yank-same-line-dollar-ygg-indent", "  abc", "$ygg", "  abc", 1, 3, "  abc\n", "V", std::nullopt},
+    {"yank-same-line-j-dollar-yG", "abc\nxyz", "j$yG", "abc\nxyz", 2, 1, "xyz\n", "V", std::nullopt},
+    {"yank-same-line-mark-y-quote", "abc", "ma$y'a", "abc", 1, 1, "abc\n", "V", std::nullopt},
+    {"yank-same-line-mark-y-quote-indent", "  abc", "ma$y'a", "  abc", 1, 3, "  abc\n", "V", std::nullopt},
+    {"yank-same-line-dollar-y1G-indent", "  abc\nxyz", "$y1G", "  abc\nxyz", 1, 3, "  abc\n", "V", std::nullopt},
+    {"yank-same-line-dollar-ygg-then-j", "  abc\nxxxxxxxx", "$yggj", "  abc\nxxxxxxxx", 2, 3, "  abc\n", "V", std::nullopt},
+    {"yank-same-line-zero-yG-stays", "  abc", "0yG", "  abc", 1, 1, "  abc\n", "V", std::nullopt},
+    {"yank-same-line-compare-j-dollar-ygg", "abc\nxyz", "j$ygg", "abc\nxyz", 1, 1, "abc\nxyz\n", "V", std::nullopt},
+    {"yank-same-line-compare-dollar-yG", "abc\nxyz", "$yG", "abc\nxyz", 1, 3, "abc\nxyz\n", "V", std::nullopt},
+    {"yank-same-line-compare-dollar-yj", "abc\nxyz", "$yj", "abc\nxyz", 1, 3, "abc\nxyz\n", "V", std::nullopt},
+    {"yank-same-line-compare-j-dollar-yk", "abc\nxyz", "j$yk", "abc\nxyz", 1, 3, "abc\nxyz\n", "V", std::nullopt},
+    {"yank-same-line-compare-dollar-yy", "abc\nxyz", "$yy", "abc\nxyz", 1, 3, "abc\n", "V", std::nullopt},
+    {"yank-same-line-compare-j-dollar-y1G", "abc\nxyz", "j$y1G", "abc\nxyz", 1, 1, "abc\nxyz\n", "V", std::nullopt},
+    {"yank-same-line-characterwise-backtick", "abc", "ma$y`a", "abc", 1, 1, "ab", "v", std::nullopt},
     {"visual-block-object-vG-brace-mid-line", "x {br} y\nz", "vGaBy", "x {br} y\nz", 1, 3, "{br}", "v", std::nullopt},
     {"visual-block-object-vG-brace-line-start", "{br} x\nz", "vGaBy", "{br} x\nz", 2, 1, "", "", std::nullopt},
     {"visual-block-object-vG-brace-then-x", "gamma {br} foo\nend", "vGaBx", "gamma  foo\nend", 1, 7, "{br}", "v", std::nullopt},

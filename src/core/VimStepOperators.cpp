@@ -1036,13 +1036,18 @@ namespace detail
         return cancelled_at_landing(state, view, wanted);
     }
     VimState performed_from = state;
-    // 上へ動いた行単位の y は移動の着地へ着く（Vim の op_yank は範囲の始まり＝着地へキャレットを
-    // 置く）。着地の桁は移動が決める: `-` gg G H M L は最初の非空白、`k` は欲しい列を保つ
-    // （Issue #411 / #965・ADR 0015 の追補）。下へ動いた y は範囲の始まり＝キャレットのまま。
-    if (operation == VimOperator::yank && range.value().kind == VimRegisterKind::lines)
+    // 行単位の y は移動の前の位置と着地の (行, 桁) で早い方へ着く（Vim の op_yank は範囲の始まり
+    // oap->start へキャレットを置き、do_pending_operator は LT_POS で行と桁を比べる）。上へ動いた
+    // 移動と、同じ行の手前に着く移動（`$ygg` `j$yG` `$y'a`）は着地の桁: `-` gg G H M L 'a は最初の
+    // 非空白、`k` は欲しい列を保つ（Issue #411 / #965 / #1065・ADR 0015 の追補）。下へ動いた y と
+    // 同じ行の後ろに着く y は範囲の始まり＝キャレットのまま。本文の位置の順は (行, 桁) の順と同じ。
+    // `_` は y の下ではカーソルを動かさない（Vim の nv_lineop は OP_YANK で beginline を呼ばない・
+    // `j$y_` は `$` のまま）ので、同じ行の最初の非空白を着地として比べない（決定 13）。
+    if (operation == VimOperator::yank && range.value().kind == VimRegisterKind::lines &&
+        wanted != VimMotion::first_non_blank_below)
     {
         const Offset destination = moved_by(view, state, wanted);
-        if (line_of(view.text, destination).value < line_of(view.text, view.selection.caret).value)
+        if (destination.value < view.selection.caret.value)
         {
             performed_from.wanted_column = VimWantedColumn{
                 VimColumnWish::at_column, caret_virtual_column(view.text, destination)};
