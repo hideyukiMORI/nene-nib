@@ -31,8 +31,7 @@ void verify_window_timers()
            "WM_TIMER with the language server number is the language server tick");
     constexpr WPARAM key_map = std::to_underlying(WindowTimer::key_map);
     expect(key_map != preview && key_map != autosave && key_map != selection &&
-               key_map != language_server &&
-               window_timer_of(key_map) == WindowTimer::key_map,
+               key_map != language_server && window_timer_of(key_map) == WindowTimer::key_map,
            "WM_TIMER with the key map number is the map timeout");
     expect(nenenib::ui::win32::key_map_timeout_milliseconds == 1'000,
            "the map wait is one second (ADR 0176 decision 4)");

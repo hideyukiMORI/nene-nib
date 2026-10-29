@@ -81,6 +81,5 @@ using EditorIntent = std::variant<
     EndSession, WorkCompleted, AutosaveTick, RestoreAutosave, DiscardAutosave, ToggleBookmark,
     OpenOperationList, PointText, SelectDisplay, SelectLanguage, SelectSyntax, ScrollPaletteList,
     SplitPane, SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick, ToggleExplorer,
-    ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen, LanguageServerTick,
-    MapTimeout>;
+    ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen, LanguageServerTick, MapTimeout>;
 } // namespace nenenib::application
