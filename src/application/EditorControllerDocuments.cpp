@@ -218,7 +218,7 @@ void rank_session_tabs(std::vector<std::optional<SessionTab>> &band,
 
 // 読んだ本文と、まだ読んでいない文書が覚えていた位置から束を作る（決定 5）。カーソルは行を寄せて
 // から桁を行の中の文字の境目へ寄せる（offset_of は行の終わりで止まり、コードポイントの先頭にしか
-// 着かない）。履歴は空、Vim の文書ごとの値は無し。
+// 着かない）。履歴は空、Vim のマークは開いた位置の 1 項だけ（ADR 0152 の追補 #1116）。
 [[nodiscard]] DocumentState reached_bundle(core::TextBuffer text, Document document,
                                            const UnloadedDocument &tab)
 {

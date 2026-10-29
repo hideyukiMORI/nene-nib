@@ -38,6 +38,7 @@
 #include "SaveState.hpp"
 #include "Scopes.hpp"
 #include "ScriptedAutosave.hpp"
+#include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "SessionEnd.hpp"
 #include "SwitchTab.hpp"
@@ -499,6 +500,29 @@ void verify_restore_caret()
            "a caret past the body is brought to the end of the body");
 }
 
+// 自動退避から戻した文書のジャンプの列は開いた位置の 1 項で始まり、`<C-o>` はそこへ戻り
+// `<Tab>` は戻した位置へ戻る（ADR 0152 の追補 #1116）。
+void verify_restore_opened_jump()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    auto placed = remnant("4d/0", sample_path());
+    placed.caret = core::TextPosition{core::LineNumber{3}, core::Column{2}};
+    editing.autosave().remain(std::move(placed), "l1\nl2\nl3 x");
+    static_cast<void>(controller.autosave_remnants());
+    applied(controller, app::RestoreAutosave{});
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    vim_normal(controller, "<C-o>");
+    expect(controller.frame().caret.position ==
+               core::TextPosition{core::LineNumber{1}, core::Column{1}},
+           "<C-o> goes back to the opened place of the restored tab");
+    vim_normal(controller, "<Tab>");
+    expect(controller.frame().caret.position ==
+               core::TextPosition{core::LineNumber{3}, core::Column{2}},
+           "<Tab> comes back to the restored caret");
+}
+
 // 読めない残骸は 1 行の知らせで飛ばし、forget する（決定 6）。
 void verify_restore_unreadable()
 {
@@ -675,6 +699,7 @@ void verify_autosave_contracts()
     verify_restore_remnants();
     verify_restored_tabs_autosave();
     verify_restore_caret();
+    verify_restore_opened_jump();
     verify_restore_unreadable();
     verify_discard_remnants();
     verify_end_session_keeps_unsaved();
