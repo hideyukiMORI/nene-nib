@@ -20,18 +20,17 @@ namespace nenenib::adapters::win32
 {
 namespace
 {
-// 大きさを見られた普通のファイルの大きさ。見られない（無い・フォルダ・経路が変換できない）なら
-// 値なしで、同期の道が今の規則で断る。
-[[nodiscard]] std::optional<std::uint64_t> plain_file_size(const std::wstring &path)
+// 開いたハンドルの大きさ（同期の読みと同じく
+// GetFileSizeEx・見てから開くまでに伸びた末尾を欠かない）。
+// 見られなければ値なしで、同期の道が今の規則で断る。
+[[nodiscard]] std::optional<std::uint64_t> opened_size(const FileHandle &file)
 {
-    WIN32_FILE_ATTRIBUTE_DATA data{};
-    if (path.empty() ||
-        GetFileAttributesExW(native_path(path).c_str(), GetFileExInfoStandard, &data) == 0 ||
-        (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+    LARGE_INTEGER size{};
+    if (!file.valid() || GetFileSizeEx(file.get(), &size) == 0 || size.QuadPart < 0)
     {
         return std::nullopt;
     }
-    return (static_cast<std::uint64_t>(data.nFileSizeHigh) << 32U) | data.nFileSizeLow;
+    return static_cast<std::uint64_t>(size.QuadPart);
 }
 } // namespace
 
@@ -78,17 +77,20 @@ std::optional<application::DocumentReadOutcome>
 Win32DocumentReader::request(application::DocumentReadRequest request)
 {
     const std::wstring wide = core::to_utf16(request.path.text()).value_or(std::wstring{});
-    const auto size = plain_file_size(wide);
-    if (!size.has_value() || size.value() <= synchronous_bytes_ ||
-        size.value() > request.maximum_bytes)
+    if (wide.empty())
     {
         return synchronous(request);
     }
+    // 開いたハンドルの大きさで同期か裏かを決める。開けない（無い・フォルダ・拒否）・大きさを
+    // 見られない・小さい・上限を超えるファイルは、ハンドルを閉じて同期の道が今の規則で揃える。
     auto file = std::make_unique<FileHandle>(CreateFileW(native_path(wide).c_str(), GENERIC_READ,
                                                          FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                                                          FILE_ATTRIBUTE_NORMAL, nullptr));
-    if (!file->valid())
+    const auto size = opened_size(*file);
+    if (!size.has_value() || size.value() <= synchronous_bytes_ ||
+        size.value() > request.maximum_bytes)
     {
+        file.reset();
         return synchronous(request);
     }
     // 予約は UI スレッドで 1 回だけ（ADR 0141 の追補 10）。足りなければ頼まずに値で返す。

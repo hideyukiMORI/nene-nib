@@ -29,6 +29,7 @@ class DocumentChunkRead final
     void run(const std::stop_token &stop);
 
   private:
+    void release() noexcept;
     void finish();
 
     std::shared_ptr<DocumentReadShelf> shelf_;

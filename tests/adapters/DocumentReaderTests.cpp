@@ -189,6 +189,14 @@ void verify_cancelled_on_worker()
     drain(worker);
     drain(worker);
     expect(!finished_for(reads.collect(), 9), "a cancelled read never finishes");
+    // 取り消した読みはハンドルを手放しているので、同じファイルを書き込みで（共有なしで）開ける。
+    const HANDLE writer = CreateFileW(large_name, GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+                                      FILE_ATTRIBUTE_NORMAL, nullptr);
+    expect(writer != INVALID_HANDLE_VALUE, "a cancelled read releases the file for writing");
+    if (writer != INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(writer);
+    }
 }
 
 void verify_small_synchronous()

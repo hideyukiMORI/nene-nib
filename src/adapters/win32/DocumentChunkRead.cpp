@@ -28,6 +28,7 @@ void DocumentChunkRead::run(const std::stop_token &stop)
 {
     if (stop.stop_requested() || !shelf_->wanted(ticket_))
     {
+        release();
         return;
     }
     const std::span<char> target = reservation_.window(chunk_bytes_);
@@ -46,6 +47,7 @@ void DocumentChunkRead::run(const std::stop_token &stop)
     const auto read = complete_file_read_into(target, operation);
     if (!read)
     {
+        release();
         shelf_->finish(application::DocumentReadFinished{ticket_, std::unexpected(read.error())});
         return;
     }
@@ -60,6 +62,14 @@ void DocumentChunkRead::run(const std::stop_token &stop)
         return;
     }
     finish();
+}
+
+// 取消・止める合図・読みの失敗で戻る前に、ハンドルと予約をここで手放す（ADR 0141 の追補 10 の
+// 「捨てる」）。worker は次の仕事が来るまで終わった仕事を壊さないので、仕事の中で放す。
+void DocumentChunkRead::release() noexcept
+{
+    file_.reset();
+    reservation_ = core::BytesReservation::reserve(0);
 }
 
 // 確保の失敗は仕事の中で受けて値に変える（ADR 0159 の決定 6・#817 の形・core は投げない）。
