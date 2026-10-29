@@ -59,6 +59,7 @@
 #include "ToggleBookmark.hpp"
 #include "ToggleExplorer.hpp"
 #include "TogglePreview.hpp"
+#include "TogglePreviewTask.hpp"
 #include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
 #include "WalkRecentTab.hpp"
@@ -80,6 +81,7 @@ using EditorIntent = std::variant<
     WalkRecentTab, SettleRecentTab, CloseTab, PointTitleBar, ScrollTabs, TitleBarWidth, OpenTabList,
     EndSession, WorkCompleted, AutosaveTick, RestoreAutosave, DiscardAutosave, ToggleBookmark,
     OpenOperationList, PointText, SelectDisplay, SelectLanguage, SelectSyntax, ScrollPaletteList,
-    SplitPane, SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick, ToggleExplorer,
-    ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen, LanguageServerTick, MapTimeout>;
+    SplitPane, SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick, TogglePreviewTask,
+    ToggleExplorer, ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen,
+    LanguageServerTick, MapTimeout>;
 } // namespace nenenib::application

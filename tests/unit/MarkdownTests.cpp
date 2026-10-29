@@ -5,6 +5,7 @@
 #include "MarkdownFailure.hpp"
 #include "MarkdownParse.hpp"
 #include "MarkdownStop.hpp"
+#include "MarkdownTask.hpp"
 #include "Offset.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
@@ -64,7 +65,8 @@ static_assert(!LendsStop<decltype(never_stop)>);
                         .marker = {},
                         .source_begin = Offset{begin},
                         .text = std::move(text),
-                        .spans = {}};
+                        .spans = {},
+                        .task = std::nullopt};
 }
 
 [[nodiscard]] PreviewBlock titled(std::uint8_t level, std::string text, std::size_t begin)
@@ -87,6 +89,13 @@ static_assert(!LendsStop<decltype(never_stop)>);
     return block;
 }
 
+// タスクリストの項目（ADR 0155 の追補 22）。mark は `[` の次の 1 バイトの位置。
+[[nodiscard]] PreviewBlock tasked(PreviewBlock block, bool checked, std::size_t mark)
+{
+    block.task = core::MarkdownTask{.checked = checked, .mark_offset = mark};
+    return block;
+}
+
 [[nodiscard]] PreviewBlock quoted(PreviewBlock block, std::uint8_t depth)
 {
     block.quote_depth = depth;
@@ -105,6 +114,11 @@ void dump(const std::vector<PreviewBlock> &blocks)
         std::fprintf(stderr, "  kind=%d level=%d quote=%d list=%d marker=[%s] begin=%zu text=[%s]",
                      static_cast<int>(block.kind), block.level, block.quote_depth, block.list_depth,
                      block.marker.c_str(), block.source_begin.value, block.text.c_str());
+        if (block.task.has_value())
+        {
+            std::fprintf(stderr, " task(%d,%zu)", block.task.value().checked ? 1 : 0,
+                         block.task.value().mark_offset);
+        }
         for (const auto &shown : block.spans)
         {
             std::fprintf(stderr, " span(%zu,%zu,%d)", shown.begin.value, shown.end.value,
@@ -285,6 +299,40 @@ void verify_nested_items()
     const std::string deep = std::string(300U, '>') + " a";
     expect_blocks(deep, {quoted(leaf(paragraph, "a", 301U), 255U)},
                   "a quote depth past 255 saturates");
+}
+
+// タスクリスト（ADR 0155 の追補 22・26）。`[ ]` `[x]` `[X]`・入れ子・番号つき・CRLF・印の位置は
+// 本文のバイト位置。項目の頭でない `[ ]` と印でない文字はタスクにしない。
+void verify_tasks()
+{
+    expect_blocks("- [ ] a\n- [x] b\n- [X] c",
+                  {tasked(listed(leaf(list_item, "a", 6U), 1U, bullet), false, 3U),
+                   tasked(listed(leaf(list_item, "b", 14U), 1U, bullet), true, 11U),
+                   tasked(listed(leaf(list_item, "c", 22U), 1U, bullet), true, 19U)},
+                  "a task item drops its mark from the text and keeps whether it is checked");
+    expect_blocks("- [ ] a\n  - [x] b",
+                  {tasked(listed(leaf(list_item, "a", 6U), 1U, bullet), false, 3U),
+                   tasked(listed(leaf(list_item, "b", 16U), 2U, bullet), true, 13U)},
+                  "a nested task item keeps the mark position of its own line");
+    expect_blocks("1. [ ] a\n2. [x] b",
+                  {tasked(listed(leaf(list_item, "a", 7U), 1U, "1."), false, 4U),
+                   tasked(listed(leaf(list_item, "b", 16U), 1U, "2."), true, 13U)},
+                  "an ordered task item keeps its number and the mark position");
+    expect_blocks("- [ ] a\r\n- [x] b",
+                  {tasked(listed(leaf(list_item, "a", 6U), 1U, bullet), false, 3U),
+                   tasked(listed(leaf(list_item, "b", 15U), 1U, bullet), true, 12U)},
+                  "a CRLF body keeps the mark position in bytes");
+    expect_blocks("- a [ ] b", {listed(leaf(list_item, "a [ ] b", 2U), 1U, bullet)},
+                  "brackets in the middle of an item are text");
+    expect_blocks("a [ ] b\n\n[x] c",
+                  {leaf(paragraph, "a [ ] b", 0U), leaf(paragraph, "[x] c", 9U)},
+                  "brackets outside a list are text");
+    expect_blocks("- [y] a", {listed(leaf(list_item, "[y] a", 2U), 1U, bullet)},
+                  "a mark other than a space, x or X is text");
+    expect_blocks("- [x] a\n\n  b",
+                  {tasked(listed(leaf(list_item, "a", 6U), 1U, bullet), true, 3U),
+                   listed(leaf(paragraph, "b", 11U), 1U, "")},
+                  "only the first element of a task item holds the task");
 }
 
 void verify_quotes()
@@ -489,6 +537,7 @@ void verify_markdown_scope()
     verify_bullet_lists();
     verify_ordered_lists();
     verify_nested_items();
+    verify_tasks();
     verify_quotes();
     verify_code_blocks();
     verify_rules();

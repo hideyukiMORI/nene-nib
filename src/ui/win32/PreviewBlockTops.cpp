@@ -1,11 +1,16 @@
 #include "PreviewBlockTops.hpp"
 
+#include "PreviewBlockKind.hpp"
 #include "PreviewPlacement.hpp"
+#include "PreviewTaskBox.hpp"
+#include "RenderFailure.hpp"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <iterator>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -21,6 +26,8 @@ constexpr MarkerKind no_marker = 0;
 constexpr MarkerKind bullet_marker = 1;
 constexpr MarkerKind number_marker = 2;
 constexpr std::string_view bullet = "•";
+// チェックボックスの記号の組の長さ（記号の文字の長さと重ならない値・ADR 0155 の追補 23）。
+constexpr std::size_t task_marker_length = static_cast<std::size_t>(-1);
 // 上限で読みを止めたリストの番号の記号（5 桁）。
 constexpr std::string_view capped_number = "99999.";
 
@@ -99,6 +106,12 @@ void remember(std::vector<MarkerKind> &kinds, const core::PreviewBlock &block)
     return layouts.measure(block, width, style);
 }
 
+// タスクの項目（記号を描く項目のうちチェックボックスを持つもの）か。
+[[nodiscard]] bool task_item(const core::PreviewBlock &block) noexcept
+{
+    return block.kind == core::PreviewBlockKind::list_item && block.task.has_value();
+}
+
 // 錨の要素の上端（最初の要素のときだけ上の余白）。
 [[nodiscard]] float first_top(std::size_t first, const PreviewTextStyle &style)
 {
@@ -136,6 +149,7 @@ std::expected<bool, RenderFailure> PreviewBlockTops::place(const core::MarkdownD
     tops_.clear();
     bottoms_.clear();
     indents_.clear();
+    task_boxes_.clear();
     float y = first_top(first_, style);
     for (auto index = first_; index < document.blocks.size() && y < viewport.height; ++index)
     {
@@ -158,6 +172,8 @@ std::expected<bool, RenderFailure> PreviewBlockTops::place(const core::MarkdownD
             return std::unexpected(height.error());
         }
         indents_.push_back(indent);
+        task_boxes_.push_back(task_item(block) ? std::optional(preview_task_box(indent, y, style))
+                                               : std::nullopt);
         tops_.push_back(y);
         y += preview_extent(block.kind, height.value(), style.dpi);
         bottoms_.push_back(y);
@@ -303,14 +319,17 @@ std::expected<bool, RenderFailure> PreviewBlockTops::widen(ListColumns &list,
     auto &[columns, measured] = list;
     columns.resize(std::max<std::size_t>(columns.size(), block.list_depth),
                    preview_list_indent(style.dpi));
-    const MarkerKey key{block.list_depth, block.marker.size()};
+    // チェックボックスは記号の文字を測らず、一辺の幅を記号の幅とする（ADR 0155 の追補 23）。
+    const bool task = task_item(block);
+    const MarkerKey key{block.list_depth, task ? task_marker_length : block.marker.size()};
     if (block.marker.empty() || block.list_depth == 0 || std::ranges::contains(measured, key))
     {
         return false;
     }
     measured.push_back(key);
     const auto width =
-        layouts.advance(preview_marker_block(block), preview_marker_layout_width(), style);
+        task ? std::expected<float, RenderFailure>(preview_task_side(style))
+             : layouts.advance(preview_marker_block(block), preview_marker_layout_width(), style);
     if (!width)
     {
         return std::unexpected(width.error());
@@ -346,6 +365,11 @@ float PreviewBlockTops::bottom(std::size_t index) const
 float PreviewBlockTops::indent(std::size_t index) const
 {
     return indents_.at(index - first_);
+}
+
+const std::optional<PreviewTaskBox> &PreviewBlockTops::task_box(std::size_t index) const
+{
+    return task_boxes_.at(index - first_);
 }
 
 std::size_t PreviewBlockTops::size() const noexcept

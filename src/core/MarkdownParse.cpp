@@ -2,6 +2,7 @@
 
 #include "MarkdownBuilder.hpp"
 #include "MarkdownEntity.hpp"
+#include "MarkdownTask.hpp"
 #include "PreviewBlockKind.hpp"
 #include "PreviewStyle.hpp"
 
@@ -41,6 +42,19 @@ constexpr std::string_view replacement_character = "�";
     return static_cast<std::uint8_t>(static_cast<const MD_BLOCK_H_DETAIL *>(detail)->level);
 }
 
+// タスクリストの項目のチェックボックス（ADR 0155 の追補 22）。task_mark_offset は本文の
+// バイト位置で、`[` と `]` の間の 1 バイト（md4c.h の MD_BLOCK_LI_DETAIL）。
+[[nodiscard]] std::optional<MarkdownTask> item_task(const void *detail) noexcept
+{
+    const auto *item = static_cast<const MD_BLOCK_LI_DETAIL *>(detail);
+    if (item->is_task == 0)
+    {
+        return std::nullopt;
+    }
+    return MarkdownTask{.checked = item->task_mark != ' ',
+                        .mark_offset = static_cast<std::size_t>(item->task_mark_offset)};
+}
+
 [[nodiscard]] std::uint64_t list_start(const void *detail) noexcept
 {
     return static_cast<const MD_BLOCK_OL_DETAIL *>(detail)->start;
@@ -67,7 +81,7 @@ void entered_block(MarkdownBuilder &builder, MD_BLOCKTYPE type, const void *deta
         builder.enter_list(list_start(detail));
         return;
     case MD_BLOCK_LI:
-        builder.enter_item();
+        builder.enter_item(item_task(detail));
         return;
     case MD_BLOCK_HR:
         builder.rule();
@@ -249,7 +263,7 @@ std::expected<MarkdownDocument, MarkdownFailure> parse_markdown(std::string_view
     }
     const MD_PARSER parser{
         .abi_version = 0U,
-        .flags = MD_DIALECT_COMMONMARK,
+        .flags = MD_DIALECT_COMMONMARK | MD_FLAG_TASKLISTS,
         .enter_block = on_enter_block,
         .leave_block = on_leave_block,
         .enter_span = on_enter_span,

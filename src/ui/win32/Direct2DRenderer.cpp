@@ -29,6 +29,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -2276,5 +2277,10 @@ bool Direct2DRenderer::provisional() const noexcept
 HRESULT Direct2DRenderer::wait_for_commit() const
 {
     return composition_->WaitForCommitCompletion();
+}
+
+std::optional<std::size_t> Direct2DRenderer::preview_task_at(std::int32_t x, std::int32_t y) const
+{
+    return preview_.task_at(x, y);
 }
 } // namespace nenenib::ui::win32

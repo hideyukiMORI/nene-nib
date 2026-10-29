@@ -88,6 +88,9 @@ class Direct2DRenderer final
     // 最後の Commit が DWM に取り込まれるまで待つ。差し替えで子窓を壊す前の 1 か所だけが呼ぶ
     // （ADR 0132 の決定 3）。
     [[nodiscard]] HRESULT wait_for_commit() const;
+    // 最後に描いたプレビューの枠の点（クライアントの物理画素）の下のチェックボックスの要素の番号
+    // （ADR 0155 の追補 24）。窓が押した・離した点を引く。
+    [[nodiscard]] std::optional<std::size_t> preview_task_at(std::int32_t x, std::int32_t y) const;
 
   private:
     // 待機可能オブジェクトは HANDLE なので所有を型で閉じる（CPP-016）。

@@ -154,6 +154,9 @@ void verify_language_scope();
 void verify_preview_contracts();
 void verify_preview_scope();
 
+// PreviewTaskTests.cpp（ADR 0155 の追補 24〜26・タスクリストの切り替えの application の側）
+void verify_preview_task_scope();
+
 // ExitPlanTests.cpp（ADR 0133）
 void verify_exit_plan_scope();
 

@@ -26,6 +26,11 @@ class CountingTarget final
     {
         outlines_.push_back(rect);
     }
+    void DrawLine(D2D1_POINT_2F /*from*/, D2D1_POINT_2F /*to*/, ID2D1Brush * /*brush*/,
+                  FLOAT /*stroke*/) noexcept
+    {
+        ++lines_;
+    }
     void DrawGlyphRun(D2D1_POINT_2F origin, const DWRITE_GLYPH_RUN *run, ID2D1Brush * /*brush*/,
                       DWRITE_MEASURING_MODE /*measuring*/)
     {
@@ -67,6 +72,10 @@ class CountingTarget final
     {
         return glyph_lefts_;
     }
+    [[nodiscard]] std::size_t lines() const noexcept
+    {
+        return lines_;
+    }
     [[nodiscard]] std::size_t glyph_runs() const noexcept
     {
         return glyph_runs_;
@@ -89,6 +98,7 @@ class CountingTarget final
     std::vector<D2D1_RECT_F> fills_;
     std::vector<D2D1_RECT_F> outlines_;
     std::vector<float> glyph_lefts_;
+    std::size_t lines_ = 0;
     std::size_t glyph_runs_ = 0;
     std::size_t text_layouts_ = 0;
     std::size_t clips_ = 0;

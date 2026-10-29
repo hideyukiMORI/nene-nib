@@ -1,5 +1,6 @@
 #include "MarkdownBuilder.hpp"
 
+#include "MarkdownTask.hpp"
 #include "Offset.hpp"
 #include "PreviewSpan.hpp"
 
@@ -139,10 +140,11 @@ void MarkdownBuilder::leave_list()
     }
 }
 
-void MarkdownBuilder::enter_item()
+void MarkdownBuilder::enter_item(std::optional<MarkdownTask> task)
 {
     close_implicit();
     flush_marker();
+    task_ = task;
     const std::optional<std::uint64_t> number = lists_.empty() ? std::nullopt : lists_.back();
     if (!number.has_value())
     {
@@ -294,6 +296,7 @@ PreviewBlock MarkdownBuilder::started(PreviewBlockKind kind, std::uint8_t level)
         .source_begin = Offset{0U},
         .text = {},
         .spans = {},
+        .task = std::exchange(task_, std::nullopt),
     };
 }
 
