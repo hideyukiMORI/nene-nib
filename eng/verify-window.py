@@ -129,7 +129,8 @@ tests/preview/sample.md is opened, Ctrl+Shift+M (sent with SendInput) opens the 
 right pane (previewOpened-<scheme>.png: the divider is drawn and the right band is painted),
 `hello` is typed at the start of the text and the right band changes once the 200 ms tick has
 asked for a new parse (previewUpdated-<scheme>.png), a click in the preview leaves the caret
-where it was, and Ctrl+Shift+M closes it again (previewClosed-<scheme>.png: no divider).
+where it was, a click on the first task check box toggles it once the tick has asked for the
+edited body (previewTask-<scheme>.png, Issue #1101), and Ctrl+Shift+M closes it again (previewClosed-<scheme>.png: no divider).
 `--preview --scheme grid` opens one Markdown line of 20,000 characters, answers the grid question
 with yes and opens the preview (previewGrid.png) for the anchor to be checked by eye.
 Python standard library and ctypes only.
@@ -2736,6 +2737,73 @@ def preview_scheme(window, scheme: str) -> None:
     palette_command(window, f":colorscheme {PREVIEW_SCHEMES[scheme]}")
 
 
+# タスクリストのチェックボックス（Issue #1101・ADR 0155 の追補 23）の一辺の画素の範囲。
+PREVIEW_TASK_SIDE = (8, 64)
+
+
+def outlined(pixels: bytes, width: int, corner: tuple, side: int, colour: list) -> bool:
+    """Whether the square at corner (left, top) of side is the outline of a task check box: its
+    four edges are in one colour, the pixels just outside its top-left corner are not, and the
+    inside between the edges holds no pixel of that colour (not a filled panel nor
+    the strokes of a glyph)."""
+    left, top = corner
+    right, bottom = left + side - 1, top + side - 1
+    edges = ([(x, bottom) for x in range(left, right + 1)]
+             + [(x, y) for y in range(top, bottom + 1) for x in (left, right)])
+    middle = (top + bottom) // 2
+    # 枠の線の太さ（1 DIP を切り捨てた画素・150% までの DPI で 1）。
+    thick = 1
+    while thick < 3 and pixel(pixels, width, left + thick, middle) == colour:
+        thick += 1
+    outside = [(left - 1, top), (left, top - 1), (left - 1, middle), (right + 1, middle)]
+    return (all(pixel(pixels, width, x, y) == colour for x, y in edges)
+            and all(pixel(pixels, width, x, y) != colour for x, y in outside)
+            and all(pixel(pixels, width, x, y) != colour
+                    for y in range(top + thick, bottom - thick + 1)
+                    for x in range(left + thick, right - thick + 1)))
+
+
+def outline_squares(pixels: bytes, width: int, band: tuple) -> list:
+    """The task check boxes in band, top to bottom, as (left, top, side): a run of one colour across
+    a row whose length is a check box side and which closes into a square outline."""
+    left, top, right, bottom = band
+    found = []
+    for y in range(top, bottom):
+        row = [pixel(pixels, width, x, y) for x in range(left, right)]
+        start = 0
+        while start < len(row):
+            end = start
+            while end + 1 < len(row) and row[end + 1] == row[start]:
+                end += 1
+            side = end - start + 1
+            if (PREVIEW_TASK_SIDE[0] <= side <= PREVIEW_TASK_SIDE[1] and y + side <= bottom
+                    and outlined(pixels, width, (left + start, y), side, row[start])):
+                found.append((left + start, y, side))
+            start = end + 1
+    return found
+
+
+def toggle_preview_task(window, before: bytes, size: tuple, band: tuple) -> dict:
+    """Issue #1101: one click on the first check box of the preview edits the body once, and the
+    preview redrawn after the tick shows the box toggled (its inside changes)."""
+    width, _ = size
+    boxes = outline_squares(before, width, band)
+    record: dict = {"taskBoxes": len(boxes)}
+    assert boxes, "the preview shows no task check box"
+    left, top, side = boxes[0]
+    inside = (left + 2, top + 2, left + side - 2, top + side - 2)
+    record["taskBox"] = [left, top, side]
+    click(window, left + side // 2, top + side // 2)
+    deadline = time.monotonic() + PREVIEW_DOCUMENT_SECONDS
+    after = before
+    while time.monotonic() < deadline and not box_changed(before, after, width, inside):
+        time.sleep(0.1)
+        after = capture(window, *size)
+    record["taskToggled"] = box_changed(before, after, width, inside)
+    assert record["taskToggled"], "a click on the check box did not toggle the task"
+    return record
+
+
 def band_inked(pixels: bytes, width: int, band: tuple) -> bool:
     """Whether band holds more than its ground (the colour of its top-left pixel): text is drawn."""
     left, top, right, bottom = band
@@ -2799,6 +2867,9 @@ def drive_preview(window, scheme: str, frames: Path | None) -> dict:
         accent_count(clicked, width, pane_body_box(left, 3)) == record["caretBeforeClick"]
         and not box_changed(typed, clicked, width, bands[0]))
     assert record["clickKeptLeftPane"], "a click in the preview moved the caret or the pane"
+    record.update(toggle_preview_task(window, clicked, size, bands[1]))
+    snapshot(frames, window, f"previewTask-{scheme}")
+    clicked = capture(window, width, height)
     closed = split_chord(window, clicked, size, frames, f"previewClosed-{scheme}",
                          ([VK_CONTROL, VK_SHIFT], VK_M))
     record["closedDivider"] = divider_colours(closed, width, divider)

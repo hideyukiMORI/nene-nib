@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MarkdownDocument.hpp"
+#include "PreviewTaskBox.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "PreviewTextStyle.hpp"
 #include "PreviewViewport.hpp"
@@ -9,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <optional>
 #include <span>
 #include <utility>
 #include <vector>
@@ -42,6 +44,9 @@ class PreviewBlockTops final
     [[nodiscard]] float bottom(std::size_t index) const;
     // 文字の左端の枠の左端からの字下げ。
     [[nodiscard]] float indent(std::size_t index) const;
+    // タスクの項目のチェックボックスの矩形（ADR 0155 の追補 23・ほかの要素は nullopt）。描く所と
+    // hit test が同じ値を読む。
+    [[nodiscard]] const std::optional<PreviewTaskBox> &task_box(std::size_t index) const;
     // 測った最後の要素の次の番号。
     [[nodiscard]] std::size_t size() const noexcept;
     // measure が読んだ要素の数（錨の 1 つ前・置こうとした要素・測る範囲に入ったリストの残りの
@@ -101,5 +106,6 @@ class PreviewBlockTops final
     std::vector<float> tops_;
     std::vector<float> bottoms_;
     std::vector<float> indents_;
+    std::vector<std::optional<PreviewTaskBox>> task_boxes_;
 };
 } // namespace nenenib::ui::win32

@@ -36,6 +36,10 @@ constexpr float full_channel = 255.0F;
         return theme.body.operators;
     case PreviewInk::panel:
         return theme.ui.panel;
+    case PreviewInk::muted:
+        return theme.ui.muted;
+    case PreviewInk::accent:
+        return theme.ui.accent;
     }
     std::unreachable();
 }

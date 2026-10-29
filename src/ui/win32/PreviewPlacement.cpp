@@ -1,9 +1,13 @@
 #include "PreviewPlacement.hpp"
 
 #include "DevicePixels.hpp"
+#include "LayoutRect.hpp"
+#include "PreviewTaskBox.hpp"
 #include "Utf16.hpp"
 
 #include <algorithm>
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -17,6 +21,9 @@ constexpr float quote_indent_dips = 12.0F;
 constexpr float list_indent_dips = 24.0F;
 constexpr float code_padding_dips = 12.0F;
 constexpr float marker_gap_dips = 8.0F;
+// チェックボックスの一辺の字の大きさに対する比と、押す範囲の左右の余裕（ADR 0155 の追補 23・24）。
+constexpr float task_side_ratio = 0.9F;
+constexpr float task_margin_dips = 2.0F;
 // 記号の layout の幅。記号は数文字なので折り返さない。
 constexpr float marker_layout_width = 100000.0F;
 constexpr float rule_dips = 1.0F;
@@ -199,12 +206,35 @@ std::string_view preview_marker(const core::PreviewBlock &block) noexcept
 }
 core::PreviewBlock preview_marker_block(const core::PreviewBlock &item)
 {
-    return core::PreviewBlock{core::PreviewBlockKind::paragraph, 0, 0, 0, {}, item.source_begin,
-                              std::string(preview_marker(item)), {}};
+    return core::PreviewBlock{
+        core::PreviewBlockKind::paragraph, 0,  0,           0, {}, item.source_begin,
+        std::string(preview_marker(item)), {}, std::nullopt};
 }
 
 float preview_marker_layout_width() noexcept
 {
     return marker_layout_width;
+}
+
+float preview_task_side(const PreviewTextStyle &style) noexcept
+{
+    return static_cast<float>(
+        static_cast<std::int32_t>(preview_font_pixels(style) * task_side_ratio + 0.5F));
+}
+
+PreviewTaskBox preview_task_box(float indent, float top, const PreviewTextStyle &style) noexcept
+{
+    const auto side = static_cast<std::int32_t>(preview_task_side(style));
+    const auto line = static_cast<std::int32_t>(preview_line_pixels(style) + 0.5F);
+    const auto right = static_cast<std::int32_t>(indent - preview_marker_gap(style.dpi) + 0.5F);
+    const auto row = static_cast<std::int32_t>(top + 0.5F);
+    const core::LayoutRect square{right - side, row + (line - side) / 2, right,
+                                  row + (line - side) / 2 + side};
+    // 押す範囲は 1 行の高さの正方形を正方形と中心をそろえて置き、左右に余裕を足す。
+    const auto margin =
+        static_cast<std::int32_t>(preview_pixels(task_margin_dips, style.dpi) + 0.5F);
+    const auto left = square.left - (line - side) / 2 - margin;
+    return PreviewTaskBox{square,
+                          core::LayoutRect{left, row, left + line + 2 * margin, row + line}};
 }
 } // namespace nenenib::ui::win32

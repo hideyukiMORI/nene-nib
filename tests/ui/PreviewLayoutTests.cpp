@@ -10,9 +10,11 @@
 #include "DirectWriteFactory.hpp"
 #include "WindowChecks.hpp"
 
+#include "LayoutRect.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownParse.hpp"
 #include "MarkdownStop.hpp"
+#include "Palette.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockTops.hpp"
 #include "PreviewBrushes.hpp"
@@ -26,6 +28,7 @@
 #include "PreviewTextStyle.hpp"
 #include "PreviewViewport.hpp"
 #include "RenderFailure.hpp"
+#include "RgbColor.hpp"
 #include "Theme.hpp"
 #include "ThemeCatalog.hpp"
 #include "ThemeName.hpp"
@@ -67,7 +70,7 @@ constexpr win32::PreviewViewport whole{0, width, std::numeric_limits<float>::max
 {
     const std::uint8_t level = kind == core::PreviewBlockKind::heading ? 1 : 0;
     return core::PreviewBlock{
-        kind, level, 0, 0, {}, core::Offset{0}, std::move(text), std::move(spans)};
+        kind, level, 0, 0, {}, core::Offset{0}, std::move(text), std::move(spans), std::nullopt};
 }
 
 void check_reuse()
@@ -555,6 +558,175 @@ void check_anchor_after_carriage_returns()
                win32::preview_anchor_block(parsed.value(), core::Offset{11}) == 2,
            "the anchor follows the caret through a document with CR line endings");
 }
+
+// タスクリスト（ADR 0155 の追補 22〜24・#1101）の文書: 未チェック・チェック・点の項目。
+[[nodiscard]] std::shared_ptr<const core::MarkdownDocument> task_document()
+{
+    auto parsed =
+        core::parse_markdown("- [ ] open\n- [x] done\n- plain", core::MarkdownStop::never());
+    if (!parsed)
+    {
+        return nullptr;
+    }
+    return std::make_shared<const core::MarkdownDocument>(std::move(parsed).value());
+}
+
+// チェックボックスの矩形は記号の列の右端（文字の左端から記号と文字の間）に一辺の正方形で、押す
+// 範囲は 1 行の高さに左右 2 DIP。タスクでない項目は矩形を持たない。替え玉の描画先では、タスクの
+// 項目は枠を 1 つ・チェックは線を 2 本描き、記号の layout を作らない（点の項目だけが作る）。
+void check_task_boxes()
+{
+    const auto document = task_document();
+    if (document == nullptr || document->blocks.size() != 3)
+    {
+        expect(false, "the task document parses into three items");
+        return;
+    }
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto tops = win32::PreviewBlockTops::measure(*document, layouts, style, whole);
+    if (!tops.has_value())
+    {
+        expect(false, "the task document measures");
+        return;
+    }
+    const auto &measured = tops.value();
+    const auto side = static_cast<std::int32_t>(win32::preview_task_side(style));
+    const auto line = static_cast<std::int32_t>(win32::preview_line_pixels(style) + 0.5F);
+    const auto &open = measured.task_box(0);
+    expect(open.has_value() && measured.task_box(1).has_value() &&
+               !measured.task_box(2).has_value(),
+           "only the task items keep a check box");
+    if (!open.has_value())
+    {
+        return;
+    }
+    const auto right =
+        static_cast<std::int32_t>(measured.indent(0) - win32::preview_marker_gap(96) + 0.5F);
+    expect(core::width_of(open.value().square) == side &&
+               core::height_of(open.value().square) == side && open.value().square.right == right,
+           "the check box is a square of the side and ends at the marker gap");
+    expect(
+        core::height_of(open.value().target) == line &&
+            core::width_of(open.value().target) == line + 4 &&
+            core::contains(open.value().target, open.value().square.left, open.value().square.top),
+        "the press target is one line high with 2 DIP on each side around the square");
+    expect(measured.indent(0) == measured.indent(2) &&
+               measured.indent(0) >= static_cast<float>(side) + 8.0F,
+           "the marker column holds the check box and the bullet alike");
+    CountingTarget target;
+    win32::PreviewBrushes brushes;
+    std::optional<win32::RenderFailure> failure;
+    PreviewTextLayouts counted;
+    const auto painted = win32::PreviewBlockTops::measure(*document, counted, style, whole);
+    win32::PreviewPainter<CountingTarget> painter(target, counted, brushes, failure);
+    painter.paint(win32::PreviewScene{*document, painted.value(), style,
+                                      core::LayoutRect{0, 0, 400, 200}, 0.0F});
+    expect(!failure.has_value() && target.outlines().size() == 2 && target.lines() == 2 &&
+               target.text_layouts() == 4,
+           "two boxes, two lines of one check and the bullet without a bracket text");
+}
+
+// 画素と色の違いの大きさ（画素は BGRA）。
+[[nodiscard]] int distance_of(const std::vector<std::uint8_t> &pixels, std::int32_t x,
+                              std::int32_t y, core::RgbColor color)
+{
+    const auto at = (static_cast<std::size_t>(y) * 400U + static_cast<std::size_t>(x)) * 4U;
+    const auto channel = [](std::uint8_t value, std::uint8_t expected)
+    { return value > expected ? value - expected : expected - value; };
+    return channel(pixels.at(at), color.blue) + channel(pixels.at(at + 1), color.green) +
+           channel(pixels.at(at + 2), color.red);
+}
+
+// 正方形の内側（枠から 2 画素）に color に近い（差 60 以下）画素があるか。
+[[nodiscard]] bool tinted(const std::vector<std::uint8_t> &pixels, const core::LayoutRect &square,
+                          core::RgbColor color)
+{
+    const auto columns = core::width_of(square) - 4;
+    const auto rows = core::height_of(square) - 4;
+    for (std::int32_t at = 0; at < columns * rows; ++at)
+    {
+        if (distance_of(pixels, square.left + 2 + (at % columns), square.top + 2 + (at / columns),
+                        color) <= 60)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] core::LayoutRect shifted(const core::LayoutRect &rect, const core::LayoutRect &area)
+{
+    return core::LayoutRect{rect.left + area.left, rect.top + area.top, rect.right + area.left,
+                            rect.bottom + area.top};
+}
+
+// 枠は muted の 1 画素の線（左右の辺の縦の中央）、accent の線はチェックした正方形の中だけ。
+void expect_task_ink(const std::vector<std::uint8_t> &pixels, const core::LayoutRect &open,
+                     const core::LayoutRect &done, const core::Palette &ui)
+{
+    expect(distance_of(pixels, open.left, (open.top + open.bottom) / 2, ui.muted) <= 6 &&
+               distance_of(pixels, done.right - 1, (done.top + done.bottom) / 2, ui.muted) <= 6,
+           "the box outline is drawn in the muted ink");
+    expect(tinted(pixels, done, ui.accent) && !tinted(pixels, open, ui.accent),
+           "only the checked box holds the accent check");
+}
+
+// 画素: 枠は muted の 1 画素の線（左右の辺の縦の中央は muted）、チェックした項目の正方形の中には
+// accent の線があり、チェックしていない項目の中には無い（ADR 0155 の追補 23）。枠の hit test は
+// 描いた枠の原点からの点で要素の番号を返し、押す範囲の外は nullopt（追補 24）。
+void check_task_pixels()
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    const auto document = task_document();
+    win32::PreviewPane pane;
+    if (target == nullptr || !theme || document == nullptr ||
+        !pane.prepare(*target.Get(), theme.value().view()).has_value())
+    {
+        expect(false, "the preview pane prepares its brushes for the task checks");
+        return;
+    }
+    const auto style = style_of();
+    const core::LayoutRect area{10, 20, 390, 180};
+    target->BeginDraw();
+    target->Clear(D2D1::ColorF(0.0F, 0.0F, 0.0F, 0.0F));
+    const auto painted = pane.paint(
+        *target.Get(), application::PreviewFrame{document, core::Offset{0}, {}}, style, area);
+    expect(SUCCEEDED(target->EndDraw()) && painted.has_value(), "the task items paint");
+    PreviewTextLayouts layouts;
+    const auto tops = win32::PreviewBlockTops::measure(
+        *document, layouts, style,
+        win32::PreviewViewport{0, static_cast<float>(core::width_of(area)),
+                               static_cast<float>(core::height_of(area))});
+    const auto pixels = pixels_of(*bitmap.Get());
+    if (!tops || pixels.empty())
+    {
+        expect(false, "the task boxes are measured and the pixels are read");
+        return;
+    }
+    const auto &open_box = tops.value().task_box(0);
+    const auto &done_box = tops.value().task_box(1);
+    if (!open_box.has_value() || !done_box.has_value())
+    {
+        expect(false, "both task items keep a check box");
+        return;
+    }
+    expect_task_ink(pixels, shifted(open_box.value().square, area),
+                    shifted(done_box.value().square, area), theme.value().view().ui);
+    const auto press = shifted(done_box.value().target, area);
+    const auto first = shifted(open_box.value().target, area);
+    expect(pane.task_at((press.left + press.right) / 2, (press.top + press.bottom) / 2) == 1U &&
+               pane.task_at(press.left, press.top) == 1U &&
+               pane.task_at(first.left + 1, first.bottom - 1) == 0U,
+           "a point in the press target finds the block of the box");
+    expect(!pane.task_at(press.right, press.top).has_value() &&
+               !pane.task_at(area.right - 5, press.top).has_value() &&
+               !pane.task_at(area.left - 1, press.top).has_value(),
+           "a point outside the press targets finds nothing");
+}
 } // namespace
 
 void verify_preview_layouts()
@@ -578,5 +750,7 @@ void verify_preview_layouts()
     check_measured_from_anchor();
     check_list_scanned_in_range();
     check_anchor_after_carriage_returns();
+    check_task_boxes();
+    check_task_pixels();
 }
 } // namespace nenenib::tests::ui

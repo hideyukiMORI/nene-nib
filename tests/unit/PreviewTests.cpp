@@ -93,8 +93,15 @@ void window_command(app::EditorController &controller, std::string_view key)
 [[nodiscard]] app::MarkdownOutcome parsed(std::uint64_t ticket, std::string_view text)
 {
     core::MarkdownDocument document;
-    document.blocks.push_back(core::PreviewBlock{
-        core::PreviewBlockKind::paragraph, 0, 0, 0, {}, core::Offset{0}, std::string(text), {}});
+    document.blocks.push_back(core::PreviewBlock{core::PreviewBlockKind::paragraph,
+                                                 0,
+                                                 0,
+                                                 0,
+                                                 {},
+                                                 core::Offset{0},
+                                                 std::string(text),
+                                                 {},
+                                                 std::nullopt});
     return app::MarkdownOutcome{ticket, std::move(document)};
 }
 

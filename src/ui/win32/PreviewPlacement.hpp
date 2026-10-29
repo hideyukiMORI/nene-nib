@@ -2,6 +2,7 @@
 
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
+#include "PreviewTaskBox.hpp"
 #include "PreviewTextStyle.hpp"
 
 #include <cstddef>
@@ -55,4 +56,11 @@ namespace nenenib::ui::win32
 // 記号の layout も PreviewTextLayouts の保持に入る。
 [[nodiscard]] core::PreviewBlock preview_marker_block(const core::PreviewBlock &item);
 [[nodiscard]] float preview_marker_layout_width() noexcept;
+// タスクの項目のチェックボックスの一辺（本文の字の大きさの 9 割・物理画素の整数・ADR 0155 の
+// 追補 23）。記号の列はこれと記号と文字の間を足した幅より狭くならない。
+[[nodiscard]] float preview_task_side(const PreviewTextStyle &style) noexcept;
+// 文字の左端 indent・要素の上端 top（どちらも枠の左上から）の項目のチェックボックス。正方形は
+// 記号と同じく文字の左端から記号と文字の間だけ空けて右に揃え、1 行目の縦の中央に置く。
+[[nodiscard]] PreviewTaskBox preview_task_box(float indent, float top,
+                                              const PreviewTextStyle &style) noexcept;
 } // namespace nenenib::ui::win32

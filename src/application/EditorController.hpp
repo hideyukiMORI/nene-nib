@@ -396,6 +396,8 @@ class EditorController final
     // 合図で使う人の操作ではない（決定 8）。
     void accept(const TogglePreview &);
     void accept(const PreviewTick &);
+    // チェックボックスの切り替え（ADR 0155 の追補 24）。使う人の操作で、本文の編集 1 回。
+    void accept(const TogglePreviewTask &intent);
     // プレビューが開いていれば、今の本文の解析を頼む（決定 3・6・9）。fresh は操作中の文書が
     // 替わったときで、前の結果と知らせを捨てて追従に戻す。16 MiB を超える本文は頼まず知らせる。
     void request_preview(bool fresh);

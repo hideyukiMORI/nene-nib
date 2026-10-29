@@ -903,6 +903,7 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
     case WM_LBUTTONUP:
         drag_selection(data);
         end_selection_drag();
+        release_preview_task(data);
         release_title_bar(data);
         return 0;
     case WM_MBUTTONDOWN:
@@ -1178,6 +1179,7 @@ void EditorWindow::click_body(LPARAM data)
     {
         if (previewing())
         {
+            press_preview_task(data);
             return;
         }
         send(application::SwitchPane{});

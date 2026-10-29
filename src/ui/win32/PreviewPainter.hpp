@@ -7,10 +7,12 @@
 #include "PreviewPlacement.hpp"
 #include "PreviewScene.hpp"
 #include "PreviewStyle.hpp"
+#include "PreviewTaskBox.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "RenderFailure.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <d2d1.h>
@@ -57,6 +59,15 @@ template <typename Target> class PreviewPainter final
     static constexpr float inline_radius_dips = 3.0F;
     static constexpr float code_radius_dips = 5.0F;
     static constexpr float quote_rule_dips = 2.0F;
+    // チェックボックスの枠と線の太さ（DIP）と、チェックの 3 点（一辺に対する比）。
+    static constexpr float task_stroke_dips = 1.0F;
+    static constexpr float check_stroke_dips = 2.0F;
+    static constexpr float check_start_x = 0.22F;
+    static constexpr float check_start_y = 0.52F;
+    static constexpr float check_low_x = 0.42F;
+    static constexpr float check_low_y = 0.72F;
+    static constexpr float check_end_x = 0.78F;
+    static constexpr float check_end_y = 0.28F;
     // 行内コードの面は行高（本文の 1.6 倍）の上下を 1 割ずつ空ける。
     static constexpr float inline_inset_ratio = 0.1F;
 
@@ -102,7 +113,7 @@ template <typename Target> class PreviewPainter final
             draw_code(scene, index, origin);
             return;
         case core::PreviewBlockKind::list_item:
-            draw_marker(scene, block, origin);
+            draw_item_mark(scene, index, origin);
             draw_text(scene, index, origin);
             return;
         case core::PreviewBlockKind::paragraph:
@@ -183,6 +194,46 @@ template <typename Target> class PreviewPainter final
                           metrics.widthIncludingTrailingWhitespace;
         target_.DrawTextLayout(D2D1::Point2F(left, origin.y), layout.value().Get(),
                                brushes_.of(PreviewInk::operators), D2D1_DRAW_TEXT_OPTIONS_NONE);
+    }
+
+    // 項目の頭の印。タスクの項目はチェックボックス、ほかは記号と番号（ADR 0155 の追補 23）。
+    void draw_item_mark(const PreviewScene &scene, std::size_t index, D2D1_POINT_2F origin)
+    {
+        const auto &block = scene.document.blocks.at(index);
+        const auto &box = scene.tops.task_box(index);
+        if (!box.has_value() || !block.task.has_value())
+        {
+            draw_marker(scene, block, origin);
+            return;
+        }
+        draw_task(scene, box.value(), block.task.value().checked);
+    }
+
+    // タスクの項目のチェックボックス（ADR 0155 の追補 23）。字体に依らない Direct2D の図形で、枠は
+    // muted の 1 DIP、チェックは accent の 2 本の線。「[ ]」の文字は描かない。
+    void draw_task(const PreviewScene &scene, const PreviewTaskBox &box, bool checked)
+    {
+        const auto dpi = scene.style.dpi;
+        const auto left = static_cast<float>(scene.frame.left + box.square.left);
+        const auto top = static_cast<float>(scene.frame.top + box.square.top) - scene.scroll;
+        const auto side = static_cast<float>(core::width_of(box.square));
+        // 枠の線は整数の画素の太さ（1 DIP を切り捨て・最小 1）にし、線の中心を太さの半分だけ内へ
+        // 寄せて画素の境に合わせ、滲ませない。
+        const auto stroke = std::max(1.0F, std::floor(preview_pixels(task_stroke_dips, dpi)));
+        const auto half = stroke / 2.0F;
+        target_.DrawRectangle(
+            D2D1::RectF(left + half, top + half, left + side - half, top + side - half),
+            brushes_.of(PreviewInk::muted), stroke);
+        if (!checked)
+        {
+            return;
+        }
+        const auto mark = preview_pixels(check_stroke_dips, dpi);
+        const auto low = D2D1::Point2F(left + side * check_low_x, top + side * check_low_y);
+        target_.DrawLine(D2D1::Point2F(left + side * check_start_x, top + side * check_start_y),
+                         low, brushes_.of(PreviewInk::accent), mark);
+        target_.DrawLine(low, D2D1::Point2F(left + side * check_end_x, top + side * check_end_y),
+                         brushes_.of(PreviewInk::accent), mark);
     }
 
     void draw_text(const PreviewScene &scene, std::size_t index, D2D1_POINT_2F origin)

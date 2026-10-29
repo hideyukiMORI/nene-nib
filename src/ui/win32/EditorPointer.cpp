@@ -1,10 +1,14 @@
 #include "EditorWindow.hpp"
 
 #include "BodyLayout.hpp"
+#include "Direct2DRenderer.hpp"
 #include "PointText.hpp"
 #include "ScrollLines.hpp"
+#include "TogglePreviewTask.hpp"
 
 #include <algorithm>
+#include <optional>
+#include <utility>
 #include <windowsx.h>
 
 namespace nenenib::ui::win32
@@ -16,6 +20,28 @@ void EditorWindow::point_text(POINT point, core::SelectionAnchoring anchoring)
     const auto row =
         static_cast<std::int64_t>(std::max(point.y - body.content.top, 0L) / body.line_height);
     send(application::PointText{static_cast<float>(point.x - body.content.left), row, anchoring});
+}
+
+// プレビューの枠は移る先ではないので、押しても本文のキャレットは動かさない（ADR 0155）。押した点の
+// 下のチェックボックスだけを覚える（ADR 0155 の追補 24）。
+void EditorWindow::press_preview_task(LPARAM data)
+{
+    preview_task_pressed_ =
+        renderer_ == nullptr ? std::nullopt
+                             : renderer_->preview_task_at(GET_X_LPARAM(data), GET_Y_LPARAM(data));
+}
+
+void EditorWindow::release_preview_task(LPARAM data)
+{
+    const auto pressed = std::exchange(preview_task_pressed_, std::nullopt);
+    if (!pressed.has_value() || renderer_ == nullptr || !previewing())
+    {
+        return;
+    }
+    if (renderer_->preview_task_at(GET_X_LPARAM(data), GET_Y_LPARAM(data)) == pressed)
+    {
+        send(application::TogglePreviewTask{pressed.value()});
+    }
 }
 
 void EditorWindow::begin_selection_drag()

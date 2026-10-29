@@ -2,6 +2,7 @@
 
 #include "MarkdownDocument.hpp"
 #include "MarkdownStop.hpp"
+#include "MarkdownTask.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
 #include "PreviewStyle.hpp"
@@ -39,7 +40,9 @@ class MarkdownBuilder final
     // first は番号つきの最初の番号。箇条書きは nullopt。
     void enter_list(std::optional<std::uint64_t> first);
     void leave_list();
-    void enter_item();
+    // task はタスクリストの項目のチェックボックス（ADR 0155 の追補 22・ほかは nullopt）。項目の
+    // 記号と同じく、項目の最初の要素が持つ。
+    void enter_item(std::optional<MarkdownTask> task);
     void leave_item();
     void rule();
     void open_leaf(PreviewBlockKind kind, std::uint8_t level);
@@ -68,6 +71,7 @@ class MarkdownBuilder final
     std::optional<std::size_t> leaf_begin_;
     bool implicit_leaf_ = false;
     std::optional<std::string> marker_;
+    std::optional<MarkdownTask> task_;
     std::size_t quote_depth_ = 0;
     std::vector<std::optional<std::uint64_t>> lists_;
     std::vector<std::optional<std::size_t>> spans_;

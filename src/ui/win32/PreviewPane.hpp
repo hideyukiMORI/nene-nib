@@ -47,6 +47,11 @@ class PreviewPane final
                                                            const application::PreviewFrame &frame,
                                                            const PreviewTextStyle &style,
                                                            const core::LayoutRect &area);
+    // 最後に描いた枠の中の点 (x, y)（描画先の物理画素）を押す範囲に含むチェックボックスの要素の
+    // 番号（ADR 0155 の追補
+    // 24）。保持の縦の位置（PreviewBlockTops::task_box）を読むだけで測らない。
+    // 描いていない・文書が空・当たらなければ nullopt。
+    [[nodiscard]] std::optional<std::size_t> task_at(std::int32_t x, std::int32_t y) const;
     // 作った layout の数（試験が frame をまたいだ再利用を確かめる）。
     [[nodiscard]] std::size_t created() const noexcept;
     // 要素を描いた回数（直接か bitmap へ）・保持の絵を DrawBitmap だけで使い回した回数・作った
@@ -77,6 +82,8 @@ class PreviewPane final
     std::optional<PreviewTextStyle> measured_style_;
     PreviewViewport measured_viewport_{0, 0.0F, 0.0F};
     std::optional<PreviewBlockTops> tops_;
+    // 最後に文書を描いた枠（hit test の原点）。
+    std::optional<core::LayoutRect> area_;
     std::string theme_;
     Microsoft::WRL::ComPtr<ID2D1Bitmap1> picture_;
     std::optional<PreviewPictureKey> pictured_;

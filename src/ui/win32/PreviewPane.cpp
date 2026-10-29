@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <optional>
 #include <utility>
 
 namespace nenenib::ui::win32
@@ -134,6 +135,7 @@ std::expected<void, RenderFailure> PreviewPane::paint(ID2D1RenderTarget &target,
                                                       const core::LayoutRect &area)
 {
     const auto &document = frame.document;
+    area_.reset();
     if (document == nullptr)
     {
         target.FillRectangle(
@@ -142,6 +144,7 @@ std::expected<void, RenderFailure> PreviewPane::paint(ID2D1RenderTarget &target,
             brushes_.of(PreviewInk::background));
         return {};
     }
+    area_ = area;
     const auto width = core::width_of(area);
     const auto height = core::height_of(area);
     PreviewPictureKey key{&target, document, preview_anchor_block(*document, frame.anchor),
@@ -178,6 +181,25 @@ std::expected<void, RenderFailure> PreviewPane::paint(ID2D1RenderTarget &target,
     context->DrawBitmap(picture, destination, 1.0F, D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
                         nullptr, nullptr);
     return {};
+}
+
+std::optional<std::size_t> PreviewPane::task_at(std::int32_t x, std::int32_t y) const
+{
+    if (!area_.has_value() || !tops_.has_value() || !core::contains(area_.value(), x, y))
+    {
+        return std::nullopt;
+    }
+    const auto &area = area_.value();
+    const auto &tops = tops_.value();
+    for (auto index = tops.first(); index < tops.size(); ++index)
+    {
+        const auto &box = tops.task_box(index);
+        if (box.has_value() && core::contains(box.value().target, x - area.left, y - area.top))
+        {
+            return index;
+        }
+    }
+    return std::nullopt;
 }
 
 std::size_t PreviewPane::created() const noexcept

@@ -138,6 +138,10 @@ class EditorWindow final
     void end_selection_drag();
     void drag_selection(LPARAM data);
     void scroll_selection();
+    // プレビューの枠のチェックボックス（ADR 0155 の追補 24）。押した要素を覚え、離した要素が同じ
+    // ときだけ TogglePreviewTask を送る（ADR 0056 の決定 9 の形）。
+    void press_preview_task(LPARAM data);
+    void release_preview_task(LPARAM data);
     // 描く唯一の口。Present が返った直後に frame_presented を打ち、本文を描いた最初の frame では
     // body_presented も打つ（ADR 0011 の決定 1・ADR 0138 の決定 2）。
     [[nodiscard]] std::expected<void, RenderFailure> draw_frame();
@@ -290,6 +294,8 @@ class EditorWindow final
     // 消す（ADR 0056 の決定 9）。
     std::optional<core::TitleBarTarget> left_pressed_;
     std::optional<core::TitleBarTarget> middle_pressed_;
+    // プレビューの枠で押したチェックボックスの要素の番号（離したら消す）。
+    std::optional<std::size_t> preview_task_pressed_;
     // OSの捕捉の寿命だけ。選択のanchor/caretの正本はcontrollerにある。
     bool selecting_ = false;
     POINT selection_point_{};
