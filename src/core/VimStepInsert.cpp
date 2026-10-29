@@ -47,14 +47,71 @@ using detail::started_prefix;
 
 namespace
 {
-[[nodiscard]] VimStep insert_moved(const VimState &state, const TextBuffer &text, Offset caret,
-                                   CaretMotion motion)
+// INSERT の移動の鍵がキャレットを to へ動かす。挿入の反復はここで切れる（ADR 0028 の決定 3）。
+[[nodiscard]] VimStep insert_moved_to(const VimState &state, Offset to)
 {
     VimState next = state;
     next.insert_repeat = std::nullopt;
-    return VimStep{std::move(next),
-                   VimMoveTo{moved_caret(
-                       text, caret, CaretMoveRequest{motion, single_step, CaretUnit::code_point})}};
+    return VimStep{std::move(next), VimMoveTo{to}};
+}
+
+[[nodiscard]] VimStep insert_moved(const VimState &state, const TextBuffer &text, Offset caret,
+                                   CaretMotion motion)
+{
+    return insert_moved_to(
+        state,
+        moved_caret(text, caret, CaretMoveRequest{motion, single_step, CaretUnit::code_point}));
+}
+
+// INSERT の矢印が読む窓の初めの大きさ（行の全体は写さない・長い結合文字の列では倍に広げる）。
+constexpr std::size_t arrow_window_bytes = 64;
+constexpr std::size_t longest_code_point_bytes = 4;
+
+// INSERT の `<Left>`（Vim の ins_left と oneleft・#1136）。既定の whichwrap=b,s に `[` が無いので
+// 行頭では止まり、何も変えずに INSERT を続ける（回数もそのまま・ADR 0049 の追補）。ほかは Vim の
+// 1 文字ぶん戻る（ADR 0053 の追補）。
+[[nodiscard]] VimStep insert_left(const VimState &state, const TextBuffer &text, Offset caret)
+{
+    const Offset line_start = text.line_start(line_of(text, caret));
+    if (caret.value <= line_start.value)
+    {
+        return VimStep{state, VimNoEffect{}};
+    }
+    std::size_t window = arrow_window_bytes;
+    for (;;)
+    {
+        const Offset begin{caret.value - std::min(window, caret.value - line_start.value)};
+        const std::string content = text.text_range(begin, caret);
+        const Offset start = vim_character_start(content, Offset{content.size()});
+        if (start.value > 0 || begin == line_start)
+        {
+            return insert_moved_to(state, Offset{begin.value + start.value});
+        }
+        window *= 2;
+    }
+}
+
+// INSERT の `<Right>`（Vim の ins_right と mb_ptr2len・#1136）。`]` が無いので行の内容の終わり
+// （改行の手前）では止まり、何も変えない。ほかは Vim の 1 文字ぶん進む。
+[[nodiscard]] VimStep insert_right(const VimState &state, const TextBuffer &text, Offset caret)
+{
+    const Offset line_end = text.line_end(line_of(text, caret));
+    if (caret.value >= line_end.value)
+    {
+        return VimStep{state, VimNoEffect{}};
+    }
+    std::size_t window = arrow_window_bytes;
+    for (;;)
+    {
+        const Offset end{caret.value + std::min(window, line_end.value - caret.value)};
+        const std::string content = text.text_range(caret, end);
+        const Offset after = vim_character_end(content, Offset{0});
+        if (end == line_end || after.value + longest_code_point_bytes <= content.size())
+        {
+            return insert_moved_to(state, Offset{caret.value + after.value});
+        }
+        window *= 2;
+    }
 }
 
 // 回数の鍵の列に key を足す（#1093）。回数の無い INSERT では何もしない。
@@ -531,9 +588,9 @@ namespace detail
     case VimSpecialKey::backspace:
         return erase_recorded(insert_erased(state, text, caret), key);
     case VimSpecialKey::arrow_left:
-        return insert_moved(state, text, caret, CaretMotion::previous_character);
+        return insert_left(state, text, caret);
     case VimSpecialKey::arrow_right:
-        return insert_moved(state, text, caret, CaretMotion::next_character);
+        return insert_right(state, text, caret);
     case VimSpecialKey::arrow_up:
         return insert_moved(state, text, caret, CaretMotion::previous_line);
     case VimSpecialKey::arrow_down:
