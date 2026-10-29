@@ -13,6 +13,7 @@
 #include "SaveDocument.hpp"
 #include "Scopes.hpp"
 #include "ScriptedFiles.hpp"
+#include "SelectAll.hpp"
 #include "SelectEditMode.hpp"
 #include "Selection.hpp"
 #include "SelectionPresence.hpp"
@@ -45,6 +46,7 @@ using nenenib::application::ClipboardAction;
 using nenenib::application::ClipboardOperation;
 using nenenib::application::OpenDocument;
 using nenenib::application::SaveDocument;
+using nenenib::application::SelectAll;
 using nenenib::application::SelectEditMode;
 using nenenib::application::VisibleLines;
 using nenenib::core::CaretShape;
@@ -207,6 +209,22 @@ void verify_vim_block_insert_document_newlines()
     expect(editing.files().written() == original, "one undo takes back the block c");
 }
 
+// 矩形の INSERT の覚えは窓の割り込み（input_discarded）で消え、Esc はもう写さない（ARC-004・
+// insert_repeat と同じ）。
+void verify_vim_block_insert_interrupted()
+{
+    Editing editing;
+    EditorController &controller = vim_block_editor(editing, "abcdef\nghijkl\nmnopqr");
+    vim_replay(controller, "l<C-v>jjlcab");
+    expect(controller.vim_state().block_insert.has_value(), "the block c remembers the copy");
+    static_cast<void>(controller.apply_frame(SelectAll{}));
+    expect(!controller.vim_state().block_insert.has_value(),
+           "an interruption drops what the block INSERT would copy");
+    vim_replay(controller, "<Esc>");
+    expect(vim_body(controller.frame()) == "aabdef\ngjkl\nmpqr",
+           "Esc after the interruption copies nothing to the other lines");
+}
+
 // core の純関数を直に測る。行ごとの範囲・左の桁・幅が 1 本で決まること（決定 2）。
 void verify_vim_block_range()
 {
@@ -262,7 +280,7 @@ void verify_vim_block_fixtures()
             ++selected;
         }
     }
-    expect(selected == 218, "the scope replays its 218 blockwise oracle fixtures");
+    expect(selected == 322, "the scope replays its 322 blockwise oracle fixtures");
 }
 } // namespace
 
@@ -274,6 +292,7 @@ void verify_vim_block_contracts()
     verify_vim_block_line_endings();
     verify_vim_block_unsupported_keys();
     verify_vim_block_insert_document_newlines();
+    verify_vim_block_insert_interrupted();
     verify_vim_block_range();
     verify_vim_block_reselect();
 }

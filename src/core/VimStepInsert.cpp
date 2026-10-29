@@ -48,7 +48,6 @@ namespace
 {
     VimState next = state;
     next.insert_repeat = std::nullopt;
-    next.block_insert = std::nullopt;
     return VimStep{std::move(next),
                    VimMoveTo{moved_caret(
                        text, caret, CaretMoveRequest{motion, single_step, CaretUnit::code_point})}};
@@ -240,8 +239,8 @@ namespace
 // 読み（回数の繰り返しもその後ろに足す）、残りの行の同じ桁へ写して 1 行目の INSERT と 1 つの undo
 // 単位にする。何も打たなかったら写さない。`I` `A` は Esc の行が 1 行目でなければ（改行を打った）
 // 写さず（固定 Vim の op_insert）、`c` `C` は行を問わず今の行番号の行へ写す（op_change・どちらも
-// 実測）。キャレットは `I` `A` なら矩形の左上、`c` `C` なら Esc のふつうの位置で、`'^` は打ち終えた
-// 所のまま。
+// 実測）。キャレットは `I` `A` なら矩形の左上（Esc の位置が手前ならそこ）、`c` `C` なら Esc
+// のふつうの位置で、`'^` は打ち終えた 所のまま。
 [[nodiscard]] VimStep block_copied(const VimBlockInsert &insert, const VimEditorView &view,
                                    VimStep step)
 {
@@ -276,7 +275,9 @@ namespace
             edits.push_back(std::move(edit).value());
         }
     }
-    const Offset caret = insert.caret.value_or(resting);
+    // `I` `A` は矩形の左上へ戻る。打つ間に左上より前へ動いて打ったなら Esc の位置のまま（実測
+    // `<Home>`）。
+    const Offset caret{std::min(insert.caret.value_or(resting).value, resting.value)};
     const std::size_t inserted_end = resting.value + step.insert_left.value_or(0);
     step.insert_left = inserted_end > caret.value ? inserted_end - caret.value : 0;
     step.effect = VimInsertBlock{std::move(edits), caret, EditBoundary::absorb};
@@ -304,7 +305,6 @@ namespace
     }
     VimState next = state;
     next.insert_repeat = std::nullopt;
-    next.block_insert = std::nullopt;
     // 格子の画面行の単位は NORMAL と同じ解決を通す（ADR 0144 の決定 5）。論理行の道は今日のまま。
     if (view.layout.enabled && view.layout.unit == VimScrollUnit::row)
     {

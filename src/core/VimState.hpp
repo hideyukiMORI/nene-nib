@@ -90,7 +90,8 @@ struct VimState
     std::optional<VimInsertStart> insert_start = std::nullopt;
     // 矩形の `I` `A` `c` `C` で入った INSERT のあいだだけ値を持つ（ADR 0035 の追補 #1042）。Esc が
     // 1 行目に打った本文を残りの行へ写す。立てるのは矩形の入口、消えるのは
-    // vim_resting_from（Esc）と INSERT のキャレットの移動（打つ行を離れたら写さない）。
+    // vim_resting_from（Esc）と入力を捨てる input_discarded。INSERT の中の移動では消えない（Esc の
+    // 行が 1 行目なら写す・固定 Vim の op_insert・実測）。
     std::optional<VimBlockInsert> block_insert = std::nullopt;
 };
 

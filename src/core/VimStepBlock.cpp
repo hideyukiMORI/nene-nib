@@ -219,16 +219,21 @@ namespace
 [[nodiscard]] std::size_t insert_lead(std::string_view content, VimBlockInsertSide side,
                                       VirtualColumn column)
 {
-    if (side == VimBlockInsertSide::line_end)
-    {
-        return 0;
-    }
     const std::size_t columns = virtual_width(content);
-    if (column.value <= columns)
+    const std::size_t inside =
+        column.value <= columns
+            ? column.value - column_of(content, byte_at_column(content, column)).value
+            : 0;
+    switch (side)
     {
-        return column.value - column_of(content, byte_at_column(content, column)).value;
+    case VimBlockInsertSide::line_end:
+        return 0;
+    case VimBlockInsertSide::before:
+        return inside;
+    case VimBlockInsertSide::after:
+        break;
     }
-    return side == VimBlockInsertSide::after ? column.value - single_step - columns : 0;
+    return column.value <= columns ? inside : column.value - single_step - columns;
 }
 
 // `line` の行で INSERT の本文が入る所。桁が Tab の途中なら Tab ごと置き換える（Tab だけを割り、
@@ -236,10 +241,17 @@ namespace
 [[nodiscard]] OffsetRange insert_range(const TextBuffer &text, LineNumber line,
                                        std::string_view content, const VimBlockInsert &insert)
 {
-    const VimBlockInsertSide side = insert.side;
     const VirtualColumn column = insert.column;
     const Offset end = text.line_end(line);
-    if (side == VimBlockInsertSide::line_end || column.value > virtual_width(content))
+    switch (insert.side)
+    {
+    case VimBlockInsertSide::line_end:
+        return OffsetRange{end, end};
+    case VimBlockInsertSide::before:
+    case VimBlockInsertSide::after:
+        break;
+    }
+    if (column.value > virtual_width(content))
     {
         return OffsetRange{end, end};
     }
@@ -268,8 +280,15 @@ namespace
 [[nodiscard]] bool skips_line(std::string_view content, VimBlockInsertSide side,
                               VirtualColumn column)
 {
-    return side == VimBlockInsertSide::before &&
-           column.value > virtual_width(content) + single_step;
+    switch (side)
+    {
+    case VimBlockInsertSide::before:
+        return column.value > virtual_width(content) + single_step;
+    case VimBlockInsertSide::after:
+    case VimBlockInsertSide::line_end:
+        break;
+    }
+    return false;
 }
 } // namespace
 
@@ -336,7 +355,15 @@ namespace
 [[nodiscard]] std::optional<Offset>
 after_straddled(const TextBuffer &text, const VimBlockInsert &insert, std::string_view content)
 {
-    if (insert.side != VimBlockInsertSide::after || insert.column.value > virtual_width(content))
+    switch (insert.side)
+    {
+    case VimBlockInsertSide::before:
+    case VimBlockInsertSide::line_end:
+        return std::nullopt;
+    case VimBlockInsertSide::after:
+        break;
+    }
+    if (insert.column.value > virtual_width(content))
     {
         return std::nullopt;
     }
