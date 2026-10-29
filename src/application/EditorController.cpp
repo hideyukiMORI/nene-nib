@@ -163,10 +163,28 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
            std::holds_alternative<AutosaveTick>(intent) ||
            std::holds_alternative<PreviewTick>(intent) ||
            std::holds_alternative<LanguageServerTick>(intent) ||
+           std::holds_alternative<MapTimeout>(intent) ||
            std::holds_alternative<PointTitleBar>(intent) ||
            std::holds_alternative<ScrollTabs>(intent) ||
            std::holds_alternative<TitleBarWidth>(intent) ||
            std::holds_alternative<VisibleLines>(intent) ||
+           std::holds_alternative<RefreshAppearance>(intent);
+}
+
+// Vim の `map` の待ちで積んだ鍵を、写す前に流さずに保つ意図（ADR 0176 の決定 4）。打った鍵
+// （VimKeyPress は入口の表が積み・流す）と待ちの合図（MapTimeout は自分で流す）、それに文書にも
+// モードにも触れない合図（自動退避・プレビューの間引き）と窓の寸法・外観・帯の上の hover。
+// これ以外の意図（IME の確定・マウス・WorkCompleted・モードを変える意図…）は、受ける前に積んだ
+// 鍵を順に engine へ流す（積んだ鍵を失わない）。
+[[nodiscard]] bool keeps_key_map_pending(const EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<VimKeyPress>(intent) ||
+           std::holds_alternative<MapTimeout>(intent) ||
+           std::holds_alternative<AutosaveTick>(intent) ||
+           std::holds_alternative<PreviewTick>(intent) ||
+           std::holds_alternative<VisibleLines>(intent) ||
+           std::holds_alternative<TitleBarWidth>(intent) ||
+           std::holds_alternative<PointTitleBar>(intent) ||
            std::holds_alternative<RefreshAppearance>(intent);
 }
 
@@ -288,6 +306,7 @@ EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocu
     }
     // 面が出ている設定ならルートの木を作って読み始める（ADR 0162 の決定 3・5）。
     sync_explorer();
+    refresh_key_map();
     // 起動引数のファイルは順にタブで開き、最後に開けたものがアクティブになる（ADR 0056 の決定
     // 13）。失敗は 1 意図だけの値なので、後の引数が消さないよう最後の失敗を控えて載せ直す。
     std::optional<FileFailure> failure;
@@ -342,6 +361,7 @@ bool EditorController::persist_settings(core::EditorSettings settings)
     // 面の表示とルートは設定の値（ADR 0162 の決定 3）。Ex・面の `:`・意図のどれから書いても同じ 1
     // 本。
     sync_explorer();
+    refresh_key_map();
     if (view_geometry_.width <= 0)
     {
         return true;
@@ -385,7 +405,14 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<WorkCompleted>(intent) ||
                  std::holds_alternative<AutosaveTick>(intent) ||
                  std::holds_alternative<PreviewTick>(intent) ||
-                 std::holds_alternative<LanguageServerTick>(intent));
+                 std::holds_alternative<LanguageServerTick>(intent) ||
+                 std::holds_alternative<MapTimeout>(intent));
+    // `map` の待ちの鍵は、待ちを保つ意図のほかは受ける前に流す（ADR 0176 の決定 4）。
+    map_timer_.reset();
+    if (!keeps_key_map_pending(intent))
+    {
+        flush_key_map_pending();
+    }
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     // SelectLanguage も同じ（ADR 0154 の決定 4）。SelectSyntax も同じ（ADR 0156 の追補）。
@@ -399,6 +426,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     reconcile_language_server();
     auto delivered = delivery();
     delivered.repaint = repaint_;
+    delivered.map_timer = map_timer_;
     // 契約の破れは配達に 1 回だけ載せ、ここで消す（ADR 0133 の追補 2026-10-18）。次の apply の
     // 消去に頼らない。layout を作れない失敗は作り直しの apply で消えるまで frame に載る。
     layout_failure_ = drawing_failure(layout_failure_);
@@ -934,7 +962,8 @@ EditorDelivery EditorController::delivery() const
                           state_.operation_request(),
                           state_.display_question(),
                           layout_failure_,
-                          true};
+                          true,
+                          std::nullopt};
 }
 
 // 頼まれた追従を解決してから作る（ADR 0128 の決定 3）。解決の失敗は failure に載る。

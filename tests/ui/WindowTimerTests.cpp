@@ -29,7 +29,14 @@ void verify_window_timers()
            "the language server timer has its own number");
     expect(window_timer_of(language_server) == WindowTimer::language_server,
            "WM_TIMER with the language server number is the language server tick");
-    expect(!window_timer_of(0).has_value() && !window_timer_of(5).has_value(),
+    constexpr WPARAM key_map = std::to_underlying(WindowTimer::key_map);
+    expect(key_map != preview && key_map != autosave && key_map != selection &&
+               key_map != language_server &&
+               window_timer_of(key_map) == WindowTimer::key_map,
+           "WM_TIMER with the key map number is the map timeout");
+    expect(nenenib::ui::win32::key_map_timeout_milliseconds == 1'000,
+           "the map wait is one second (ADR 0176 decision 4)");
+    expect(!window_timer_of(0).has_value() && !window_timer_of(6).has_value(),
            "a number the window never set is ignored");
     expect(nenenib::ui::win32::language_server_interval_milliseconds == 30'000,
            "the language server tick comes every 30 seconds (ADR 0160)");

@@ -30,6 +30,7 @@
 #include "TextBuffer.hpp"
 #include "TitleBarTarget.hpp"
 #include "UnloadedDocument.hpp"
+#include "VimKey.hpp"
 #include "VimMarks.hpp"
 #include "VimState.hpp"
 
@@ -83,6 +84,11 @@ class EditorState final
     // Ctrl+P の面を開くときに焦点を本文へ戻す 1 か所だけ。
     [[nodiscard]] const ExplorerState &explorer() const noexcept;
     [[nodiscard]] EditorState with_explorer(ExplorerState explorer) const;
+    // Vim の `map` の左辺の途中で積んだ鍵（ADR 0176 の決定 3・4）。窓に 1 つで、engine にはまだ
+    // 渡していない。積むのと流して空にするのは controller の打った鍵の入口と MapTimeout と
+    // 「先に流す」意図の入口だけ。表が空なら常に空。
+    [[nodiscard]] const std::vector<core::VimKey> &key_map_pending() const noexcept;
+    [[nodiscard]] EditorState with_key_map_pending(std::vector<core::VimKey> pending) const;
     // 検索の入力行が開いているあいだだけ値を持つ（ADR 0041 の決定 2）。
     [[nodiscard]] const std::optional<SearchPreview> &search_preview() const noexcept;
 
@@ -319,6 +325,7 @@ class EditorState final
     // 木は大きくなり得るので、状態の写し（with_* のたび）で複製しない不変の束で持つ（ADR 0056 の
     // 脇のタブと同じ形）。
     std::shared_ptr<const ExplorerState> explorer_ = std::make_shared<const ExplorerState>();
+    std::vector<core::VimKey> key_map_pending_;
     std::vector<ParkedTab> parked_;
     std::size_t active_ = 0;
     std::vector<AutosaveId> autosave_ids_{AutosaveId{0}};
