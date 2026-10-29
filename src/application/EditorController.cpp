@@ -153,6 +153,8 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // 決定 8）。開く・閉じる（TogglePreview）は使う人の操作なので、ここにも begin_intent にも書かない。
 // エクスプローラーの意図（ToggleExplorer・ExplorerKey・PointExplorer・ScrollExplorer・
 // ExplorerRootChosen）も使う人の操作なので、どちらにも書かない（ADR 0162 の決定 4）。
+// 言語サーバーの古さの合図（LanguageServerTick）も使う人の操作ではないので歩きを続ける（ADR 0160
+// の決定 6）。
 [[nodiscard]] bool keeps_tab_walk(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<WalkRecentTab>(intent) ||
@@ -160,6 +162,7 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
            std::holds_alternative<WorkCompleted>(intent) ||
            std::holds_alternative<AutosaveTick>(intent) ||
            std::holds_alternative<PreviewTick>(intent) ||
+           std::holds_alternative<LanguageServerTick>(intent) ||
            std::holds_alternative<PointTitleBar>(intent) ||
            std::holds_alternative<ScrollTabs>(intent) ||
            std::holds_alternative<TitleBarWidth>(intent) ||
@@ -178,6 +181,7 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
     return std::holds_alternative<MoveCaret>(intent) ||
            std::holds_alternative<AutosaveTick>(intent) ||
            std::holds_alternative<PreviewTick>(intent) ||
+           std::holds_alternative<LanguageServerTick>(intent) ||
            std::holds_alternative<ScrollPane>(intent);
 }
 
@@ -302,6 +306,9 @@ EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocu
     // 次の引数の意図が消すので、判定は起動の終わりの 1 回だけ。ほかの文書は見るときに判定する。
     starting_ = false;
     ask_display();
+    // 前回のタブを戻した後のアクティブな文書で言語サーバーを合わせる（ADR 0160 の決定 6・オフなら
+    // port を呼ばない）。
+    reconcile_language_server();
     // 初期ファイルも通常の意図を通す。その後で起動時の診断を載せ、最初の描画まで保持する。
     // 前回のタブの知らせがあればそれを残す（ステータスバーは 1 行）。
     if (!state_.command_message().has_value())
@@ -365,8 +372,8 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // Ctrl を離したときの使った順の確定も同じ（ADR 0058 の決定 3）。窓が閉じていくときの一覧の
     // 書き出しも同じ（ADR 0059 の決定 3）。裏の仕事の合図も同じ（ADR 0062 の決定 7）。
     // 自動退避の合図とプレビューの間引きの合図も使う人の操作ではないので同じ（ADR 0137 の決定 1・
-    // ADR 0155 の決定 8）。起動の問いの答えは使う人の
-    // 操作なので、ほかの意図と同じに 1 意図の知らせを消してから写す（決定 6）。
+    // ADR 0155 の決定 8）。言語サーバーの古さの合図も同じ（ADR 0160 の決定 6）。起動の問いの
+    // 答えは使う人の操作なので、ほかの意図と同じに 1 意図の知らせを消してから写す（決定 6）。
     begin_intent(std::holds_alternative<VisibleLines>(intent) ||
                  std::holds_alternative<RefreshAppearance>(intent) ||
                  std::holds_alternative<CancelComposition>(intent) ||
@@ -377,7 +384,8 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<EndSession>(intent) ||
                  std::holds_alternative<WorkCompleted>(intent) ||
                  std::holds_alternative<AutosaveTick>(intent) ||
-                 std::holds_alternative<PreviewTick>(intent));
+                 std::holds_alternative<PreviewTick>(intent) ||
+                 std::holds_alternative<LanguageServerTick>(intent));
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     // SelectLanguage も同じ（ADR 0154 の決定 4）。SelectSyntax も同じ（ADR 0156 の追補）。
@@ -385,6 +393,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     std::visit([this](const auto &value) { this->accept(value); }, intent);
     fit_command_rows();
     ask_display();
+    reconcile_language_server();
     auto delivered = delivery();
     delivered.repaint = repaint_;
     // 契約の破れは配達に 1 回だけ載せ、ここで消す（ADR 0133 の追補 2026-10-18）。次の apply の
@@ -529,6 +538,8 @@ void EditorController::accept(const WorkCompleted &)
     request_explorer_folder();
     // 退避 → フォルダ → Markdown の順（ADR 0155 の決定 6）。プレビューが閉じていれば呼ばない。
     collect_preview();
+    // 言語サーバー（ADR 0160 の決定 1）。子が居なければ呼ばない。
+    collect_language_server();
     const auto &input = state_.command_input();
     const auto *palette =
         input.has_value() ? std::get_if<core::CommandPalette>(&input.value()) : nullptr;

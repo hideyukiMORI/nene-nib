@@ -1,4 +1,5 @@
 #include "ScriptedDocumentReads.hpp"
+#include "ScriptedLanguageServer.hpp"
 #include "ScriptedTextLayouts.hpp"
 // scope `--history` の単体テスト（ADR 0042 決定 2・ADR 0060 の決定 8）。閉じたファイルの履歴を
 // 書き換える純関数 history_recorded / history_forgotten と、履歴の替え玉の往復。
@@ -384,14 +385,16 @@ void verify_quiet_start_with_files()
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, code_pages};
+    ScriptedLanguageServer language_server;
     EditorController controller(EditorPorts{appearance, clipboard, files, code_pages, settings,
                                             themes, session, history, folders, bookmarks,
-                                            text_layouts, autosave, fonts, bell, markdown, reads},
+                                            text_layouts, autosave, fonts, bell, markdown, reads,
+                                            language_server},
                                 {work_open('a'), work_open('b')});
     expect(controller.frame().tabs.size() == 2 && history.reads() == 0 && history.writes() == 0 &&
                folders.requests().empty() && folders.collects() == 0 && autosave.touches() == 0 &&
                fonts.lists() == 0 && bell.rings() == 0 && markdown.requests().empty() &&
-               markdown.collects() == 0,
+               markdown.collects() == 0 && language_server.touches() == 0,
            "starting with file arguments never touches the history, the folder, autosave nor "
            "the bell");
 }
@@ -436,7 +439,8 @@ void verify_quiet_paths()
                restored.history().writes() == 0 && restored.folders().requests().empty() &&
                restored.folders().collects() == 0 && restored.autosave().touches() == 0 &&
                restored.fonts().lists() == 0 && restored.bell().rings() == 0 &&
-               restored.markdown().requests().empty() && restored.markdown().collects() == 0,
+               restored.markdown().requests().empty() && restored.markdown().collects() == 0 &&
+               restored.language_server().touches() == 0,
            "restoring the last tabs never touches the history, the folder, autosave nor the bell");
     Editing editing;
     hold_work(editing.files());
@@ -467,9 +471,11 @@ void verify_quiet_paths()
                editing.fonts().lists() == 0 && editing.bell().rings() == 0 &&
                editing.markdown().requests().empty() && editing.markdown().collects() == 0 &&
                editing.clipboard().html_reads() == 0 && editing.clipboard().reads() == 0 &&
-               read_requests == 2 && editing.reads().requests().size() == read_requests,
+               read_requests == 2 && editing.reads().requests().size() == read_requests &&
+               editing.language_server().touches() == 0,
            "opening, switching, new tabs, saving and typing never touch the history, the folder, "
-           "autosave, the bell nor the clipboard, and only opening asks the read port");
+           "autosave, the bell, the clipboard nor the language server (lsp off), and only opening "
+           "asks the read port");
     verify_quiet_explorer();
 }
 } // namespace

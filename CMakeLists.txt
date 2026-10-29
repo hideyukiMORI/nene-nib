@@ -86,7 +86,8 @@ nenenib_target(nenenib_application application STATIC
     src/application/EditorControllerExplorer.cpp
     src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
     src/application/AutosavePlan.cpp src/application/PasteKind.cpp
-    src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp src/application/DocumentDecoding.cpp)
+    src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp src/application/DocumentDecoding.cpp
+    src/application/EditorControllerLanguageServer.cpp src/application/ServerCommand.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
 nenenib_target(nib_tests unit_tests EXECUTABLE
@@ -179,6 +180,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/JsonPropertyTests.cpp
     tests/unit/LspFramesTests.cpp
     tests/unit/LspMessagesTests.cpp
+    tests/unit/LanguageServerTests.cpp
     tests/unit/TitleBarLayoutPropertyTests.cpp
     tests/unit/GridCellsPropertyTests.cpp)
 nenenib_link(nib_tests nenenib_core)

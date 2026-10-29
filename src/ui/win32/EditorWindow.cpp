@@ -27,6 +27,7 @@
 #include "KeyChord.hpp"
 #include "KeyMotion.hpp"
 #include "KeyVimSpecial.hpp"
+#include "LanguageServerTick.hpp"
 #include "Milestone.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
@@ -576,8 +577,7 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     // は本文の文字組みを作らずに出ている。印は最初の frame の意図が消すので、起動の delivery
     // で控えた値を読む。
     finish_display_question(opened.display_question);
-    // 自動退避の合図は窓が壊れるまで 30 秒ごと（ADR 0137 の決定 1）。張れなければ退避しないだけ。
-    static_cast<void>(SetTimer(window_, autosave_timer, autosave_interval_milliseconds, nullptr));
+    start_signal_timers();
     // 起動の問いは最初の frame の後、メッセージの配りが始まってから（決定 6）。
     static_cast<void>(PostMessageW(window_, autosave_question_message, 0, 0));
     return {};
@@ -780,6 +780,7 @@ LRESULT EditorWindow::lifetime_message(UINT message, WPARAM word, LPARAM data)
     case WM_DESTROY:
         end_selection_drag();
         KillTimer(window_, autosave_timer);
+        KillTimer(window_, language_server_timer);
         stop_preview_timer();
         PostQuitMessage(0);
         return 0;
@@ -1473,6 +1474,15 @@ void EditorWindow::receive_work()
     send(application::WorkCompleted{});
 }
 
+// 窓が壊れるまで張る 30 秒ごとの合図（張れなければ合図が来ないだけ）。自動退避（ADR 0137 の
+// 決定 1）と言語サーバーの古さ（ADR 0160 の決定 6）。
+void EditorWindow::start_signal_timers()
+{
+    static_cast<void>(SetTimer(window_, autosave_timer, autosave_interval_milliseconds, nullptr));
+    static_cast<void>(
+        SetTimer(window_, language_server_timer, language_server_interval_milliseconds, nullptr));
+}
+
 void EditorWindow::receive_timer(WPARAM word)
 {
     const auto timer = window_timer_of(word);
@@ -1490,6 +1500,9 @@ void EditorWindow::receive_timer(WPARAM word)
         return;
     case WindowTimer::preview:
         send(application::PreviewTick{});
+        return;
+    case WindowTimer::language_server:
+        send(application::LanguageServerTick{});
         return;
     }
 }

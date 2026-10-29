@@ -448,6 +448,21 @@ void verify_command_line()
     expect(!broken.has_value() && broken.error() == ServerFailure::cannot_start,
            "an argument that is not UTF-8 is cannot_start");
 }
+// 合図を結ぶ前（合成ルートでは窓の前・controller の構築の中の start）に溜まった出来事は、bind が
+// 1 回知らせる（#994 の独立レビュー R1-1）。溜まりが空なら bind は知らせない。
+void verify_bind_after_start()
+{
+    adapters::Win32LanguageServer server({});
+    expect(server.start(launch_of({})).has_value(), "the fake server starts before the signal");
+    std::size_t arrivals = 0;
+    server.bind([&arrivals] { ++arrivals; });
+    expect(arrivals == 1, "binding after a pending ServerStarted signals once");
+    expect(count_of<ServerStarted>(server.collect()) == 1, "the pending start is collected");
+    server.bind([&arrivals] { ++arrivals; });
+    expect(arrivals == 1, "binding with nothing pending does not signal");
+    server.stop();
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -461,6 +476,7 @@ int main(int argc, char **argv)
     verify_framer();
     verify_command_line();
     verify_lifecycle();
+    verify_bind_after_start();
     verify_echo_across_reads();
     verify_two_messages_in_one_write();
     verify_crash();

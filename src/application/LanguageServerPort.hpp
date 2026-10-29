@@ -17,6 +17,8 @@ namespace nenenib::application
 // shutdown も exit も送らず（呼ぶ側の役）、パイプを閉じて子を待たずに戻る。まだ collect
 // していない出来事も捨てる（古い子の本文を次の子の前に混ぜない）。collect
 // はたまった出来事を全部受け取る（無ければ空）。届いた合図は既存の work_message の道。
+// expire_retired は stop の後にまだ終わっていない退く子を片付ける（追補・controller が
+// LanguageServerTick で呼ぶ・待たない）。
 class LanguageServerPort
 {
   public:
@@ -30,6 +32,7 @@ class LanguageServerPort
     [[nodiscard]] virtual std::expected<void, ServerFailure> start(ServerLaunch launch) = 0;
     virtual void send(std::string body) = 0;
     virtual void stop() = 0;
+    virtual void expire_retired() = 0;
     [[nodiscard]] virtual std::vector<ServerEvent> collect() = 0;
 };
 } // namespace nenenib::application

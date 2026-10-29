@@ -21,6 +21,7 @@
 #include "Win32FolderAdapter.hpp"
 #include "Win32FontCollationAdapter.hpp"
 #include "Win32HistoryAdapter.hpp"
+#include "Win32LanguageServer.hpp"
 #include "Win32MarkdownAdapter.hpp"
 #include "Win32SessionAdapter.hpp"
 #include "Win32SettingsAdapter.hpp"
@@ -142,11 +143,35 @@ initial_documents(const std::vector<std::wstring> &given)
     return true;
 }
 
+// 言語サーバーの handle（出ている読み・書き・起きている子・退く子）をメッセージと一緒に待ち、
+// 立った 1 つを adapter に渡す（ADR 0160 の決定 2）。handle の列は次に adapter を呼ぶまでしか
+// 有効でないので、立った handle を写してから渡す。待てなければ（WAIT_FAILED）メッセージだけを
+// 待つ。WM_QUIT を取ったら偽。
+[[nodiscard]] bool pump_language_server(nenenib::adapters::win32::Win32LanguageServer &server)
+{
+    const auto handles = server.waitable_handles();
+    const auto count = static_cast<DWORD>(handles.size());
+    const DWORD woken = MsgWaitForMultipleObjectsEx(count, handles.data(), INFINITE, QS_ALLINPUT,
+                                                    MWMO_INPUTAVAILABLE);
+    if (woken < WAIT_OBJECT_0 + count)
+    {
+        const HANDLE raised = handles[woken - WAIT_OBJECT_0];
+        server.completed(raised);
+    }
+    if (woken == WAIT_FAILED)
+    {
+        static_cast<void>(WaitMessage());
+    }
+    return drain_messages();
+}
+
 // 最初の frame を WARP で描いている間だけ、device の箱の event B もメッセージと一緒に待ち、
 // 立てば本物の device へ差し替える（ADR 0132 の決定 4）。スレッド・タイマー・窓メッセージの
-// 番号は足さない。仮でなくなれば今日の GetMessageW のループに戻り、二度と入らない。
+// 番号は足さない。仮でなくなれば言語サーバーの handle とメッセージを待つループに移り、二度と
+// 入らない（言語サーバーの handle が無ければ今日の GetMessageW のループと同じ待ち）。
 void pump_messages(nenenib::ui::win32::EditorWindow &window,
-                   nenenib::ui::win32::DeviceWarmup &warmup)
+                   nenenib::ui::win32::DeviceWarmup &warmup,
+                   nenenib::adapters::win32::Win32LanguageServer &server)
 {
     while (window.provisional())
     {
@@ -164,11 +189,8 @@ void pump_messages(nenenib::ui::win32::EditorWindow &window,
             return;
         }
     }
-    MSG message{};
-    while (GetMessageW(&message, nullptr, 0, 0) > 0)
+    while (pump_language_server(server))
     {
-        TranslateMessage(&message);
-        DispatchMessageW(&message);
     }
 }
 
@@ -194,6 +216,17 @@ void bind_measure(nenenib::adapters::win32::Win32TimingAdapter &timing,
     {
         timing.bind(measure);
     }
+}
+
+// OpenClipboard に要る HWND は窓ができてから渡す（ADR 0009 の決定 5）。言語サーバーの子と
+// パイプ（ADR 0160 の決定 2）の「届いた」の合図も窓ができてから結ぶ（それまでは pump が回らない
+// ので handle の立ちも来ない・番号は下の work_signal と同じ・設定の lsp がオフなら子は起きない）。
+void bind_window_handle(const nenenib::ui::win32::EditorWindow &window,
+                        nenenib::adapters::win32::Win32ClipboardAdapter &clipboard,
+                        nenenib::adapters::win32::Win32LanguageServer &language_server)
+{
+    clipboard.bind(window.handle());
+    language_server.bind(window.work_signal());
 }
 
 // 「届いた」の合図は窓ができてから渡す。番号と HWND は ui が持ち、adapters は知らない（ADR 0062
@@ -250,10 +283,11 @@ int run(HINSTANCE instance)
         worker, files, nenenib::adapters::win32::local_autosave_root());
     nenenib::adapters::win32::Win32Bell bell;
     nenenib::adapters::win32::SynchronousDocumentReader reads(files, code_pages);
+    nenenib::adapters::win32::Win32LanguageServer language_server({});
     nenenib::application::EditorController controller(
-        nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
-                                          themes, session, history, folders, bookmarks,
-                                          text_layouts, autosave, fonts, bell, markdown, reads},
+        nenenib::application::EditorPorts{
+            appearance, clipboard, files, code_pages, settings, themes, session, history, folders,
+            bookmarks, text_layouts, autosave, fonts, bell, markdown, reads, language_server},
         initial_documents(given));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。
@@ -264,10 +298,9 @@ int run(HINSTANCE instance)
     {
         return report(reason_of(window.error()));
     }
-    // OpenClipboard に要る HWND は窓ができてから渡す（ADR 0009 の決定 5）。
-    clipboard.bind(window.value()->handle());
+    bind_window_handle(*window.value(), clipboard, language_server);
     bind_work_signal(*window.value(), folders, autosave, markdown);
-    pump_messages(*window.value(), warmup);
+    pump_messages(*window.value(), warmup, language_server);
     return window.value()->rendering_failed() ? 1 : 0;
 }
 } // namespace

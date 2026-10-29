@@ -441,6 +441,35 @@ explorer_option(std::string_view option, const EditorSettings &settings)
     return root_result(option.substr(5), settings);
 }
 
+// `lsp` `nolsp` `lsp?`（ADR 0160 の決定 7）。保存と起動・停止は今の値を知る controller が行い、
+// 報せも controller が `lsp=on` / `lsp=off` に書き換えるので、ここでは名前だけ。lsp の option で
+// なければ空。
+[[nodiscard]] std::optional<ExResult> lsp_option(std::string_view option)
+{
+    std::optional<ExLspRequest> request;
+    if (option == "lsp")
+    {
+        request = ExLspRequest::enable;
+    }
+    if (option == "nolsp")
+    {
+        request = ExLspRequest::disable;
+    }
+    if (option == "lsp?")
+    {
+        request = ExLspRequest::show;
+    }
+    if (!request.has_value())
+    {
+        return std::nullopt;
+    }
+    return ExResult{.settings = std::nullopt,
+                    .highlight = std::nullopt,
+                    .incsearch = std::nullopt,
+                    .message = DisplayText::parse("lsp").value(),
+                    .lsp = request};
+}
+
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 set_option(std::string_view option, const EditorSettings &settings)
 {
@@ -472,6 +501,11 @@ set_option(std::string_view option, const EditorSettings &settings)
     if (explorer.has_value())
     {
         return std::move(explorer).value();
+    }
+    auto lsp = lsp_option(option);
+    if (lsp.has_value())
+    {
+        return std::move(lsp).value();
     }
     return unsaved_option(option);
 }
@@ -868,9 +902,9 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     return std::unexpected(ExFailure::unknown_command);
 }
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
-// 問いの形（`set clipboard?` `set explorer?` `set root?`）は並べない（`?`
+// 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
-constexpr std::array<std::string_view, 30> fixed_candidates{"colorscheme",
+constexpr std::array<std::string_view, 32> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -899,7 +933,9 @@ constexpr std::array<std::string_view, 30> fixed_candidates{"colorscheme",
                                                             "set explorer",
                                                             "set noexplorer",
                                                             "set root=",
-                                                            "set root=."};
+                                                            "set root=.",
+                                                            "set lsp",
+                                                            "set nolsp"};
 
 [[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
                                   std::string_view suffix = {})

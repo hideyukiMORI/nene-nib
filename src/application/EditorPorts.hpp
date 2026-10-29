@@ -11,6 +11,7 @@
 #include "FolderPort.hpp"
 #include "FontFamilyPort.hpp"
 #include "HistoryPort.hpp"
+#include "LanguageServerPort.hpp"
 #include "MarkdownPort.hpp"
 #include "SessionPort.hpp"
 #include "SettingsPort.hpp"
@@ -44,5 +45,7 @@ struct EditorPorts
     MarkdownPort &markdown;
     // 文書を開く道の読み（ADR 0159 の決定 1）。開く道だけが呼び、ほかの読みは files のまま。
     DocumentReadPort &reads;
+    // 言語サーバーと話す口（ADR 0160 の決定 1）。設定の lsp がオフなら呼ばない（決定 9）。
+    LanguageServerPort &language_server;
 };
 } // namespace nenenib::application

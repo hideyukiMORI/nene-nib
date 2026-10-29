@@ -26,6 +26,7 @@
 #include "ExDocumentRequest.hpp"
 #include "ExLanguageRequest.hpp"
 #include "ExLineRequest.hpp"
+#include "ExLspRequest.hpp"
 #include "ExPaletteRequest.hpp"
 #include "ExResult.hpp"
 #include "ExRootRequest.hpp"
@@ -44,8 +45,14 @@
 #include "GridLineMarks.hpp"
 #include "GridRowView.hpp"
 #include "GridTally.hpp"
+#include "JsonValue.hpp"
+#include "LanguageServerLink.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
+#include "LspNotification.hpp"
+#include "LspRequest.hpp"
+#include "LspRequestKind.hpp"
+#include "LspResponse.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "OpenFailureReply.hpp"
@@ -54,8 +61,15 @@
 #include "PaletteOrigin.hpp"
 #include "PaneSide.hpp"
 #include "PaneSource.hpp"
+#include "PendingLspRequest.hpp"
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
+#include "ServerEvent.hpp"
+#include "ServerExited.hpp"
+#include "ServerFailed.hpp"
+#include "ServerLaunch.hpp"
+#include "ServerMessage.hpp"
+#include "ServerStarted.hpp"
 #include "Session.hpp"
 #include "SplitState.hpp"
 #include "SyntaxStateCache.hpp"
@@ -355,6 +369,31 @@ class EditorController final
     // アクティブになった直後（開く・enter_document）と apply の終わりと起動の終わりから呼ぶ。
     // Ctrl+Tab で歩いている間は判定だけして聞かない（確定で聞く）。
     void ask_display();
+    // 言語サーバー（ADR 0160 の決定 1・5〜7・9・追補）。本体は EditorControllerLanguageServer.cpp。
+    // reconcile は apply と起動の終わりで、設定とアクティブな文書の言語から起きているべき子に
+    // 合わせる（オフで子が居なければ分岐 1 つ）。tick は古さの合図で使う人の操作ではない。
+    void reconcile_language_server();
+    void consider_language_server(core::Language language);
+    [[nodiscard]] std::optional<ServerLaunch> wanted_language_server(core::Language language) const;
+    void start_language_server(core::Language language, ServerLaunch launch);
+    void stop_language_server();
+    void shut_language_server();
+    void send_lsp_request(LspRequestKind kind, std::string_view method,
+                          const core::JsonValue &params);
+    void language_server_failed(std::string_view head);
+    void collect_language_server();
+    void receive_server(const ServerStarted &started);
+    void receive_server(const ServerMessage &message);
+    void receive_server(const ServerExited &exited);
+    void receive_server(const ServerFailed &failed);
+    void end_language_server();
+    void receive_lsp(const core::LspResponse &response);
+    void receive_lsp(const core::LspNotification &notification);
+    void receive_lsp(const core::LspRequest &request);
+    void accept(const LanguageServerTick &);
+    void expire_lsp_request(const PendingLspRequest &request);
+    void answer_lsp(core::ExLspRequest request);
+    void end_language_server_session();
     // 自動退避の合図（ADR 0137 の決定 1・2）。WorkCompleted と同じく使う人の操作の途中の状態を
     // 動かさない。
     void accept(const AutosaveTick &);
@@ -677,5 +716,8 @@ class EditorController final
     // 読み書きする。
     std::optional<SyntaxStateCache> first_syntax_;
     std::optional<SyntaxStateCache> second_syntax_;
+    // 言語サーバーとのつながり（ADR 0160 の決定 5・6）。EditorControllerLanguageServer.cpp の群
+    // だけが読み書きする。
+    LanguageServerLink language_server_;
 };
 } // namespace nenenib::application

@@ -387,6 +387,11 @@ bool EditorController::answer_current_value(const core::ExResult &result)
         answer_clipboard(result.clipboard.value());
         return true;
     }
+    if (result.lsp.has_value())
+    {
+        answer_lsp(result.lsp.value());
+        return true;
+    }
     return false;
 }
 
@@ -934,6 +939,8 @@ void EditorController::accept(const EndSession &intent)
 {
     // 読み込み中の要求は取消で、ファイルは開かれない（ADR 0159 の決定 5・11）。
     cancel_reading();
+    // 言語サーバーは待たずに止める（ADR 0160 の追補）。子が居なければ呼ばない。
+    end_language_server_session();
     settle_follow();
     // 確かめずに未保存が残る終わり方（OS の終了の強行・描画を失った終わり）は、一覧より先に
     // 退避を 1 回頼み、worker が書き終えるまで上限つきで待つ。書けなければ前回の退避のまま
