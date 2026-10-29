@@ -12,7 +12,9 @@ namespace
 {
 using Format = Microsoft::WRL::ComPtr<IDWriteTextFormat>;
 using Layout = Microsoft::WRL::ComPtr<IDWriteTextLayout>;
+using nenenib::core::GutterAlignment;
 using nenenib::ui::win32::GutterTextLayouts;
+constexpr auto trailing = GutterAlignment::trailing;
 constexpr core::LayoutRect area{7, 9, 136, 57};
 
 Layout make_layout(IDWriteFactory2 &factory, IDWriteTextFormat *format, std::wstring_view text,
@@ -30,7 +32,7 @@ Layout make_layout(IDWriteFactory2 &factory, IDWriteTextFormat *format, std::wst
 bool has_layout(GutterTextLayouts &cache, std::string_view text, const core::LayoutRect &bounds,
                 const Layout &expected)
 {
-    const auto found = cache.lookup(text, bounds);
+    const auto found = cache.lookup(text, bounds, trailing);
     return found.has_value() && found.value().Get() == expected.Get();
 }
 
@@ -38,32 +40,37 @@ void verify_keys(const Layout &first, const Layout &second)
 {
     GutterTextLayouts cache;
     cache.begin();
-    expect(!cache.lookup("1", area).has_value(), "an absent key is optional absence");
-    cache.retain("1", area, nullptr);
-    expect(!cache.lookup("1", area).has_value(), "a failed or null creation is not retained");
+    expect(!cache.lookup("1", area, trailing).has_value(), "an absent key is optional absence");
+    cache.retain("1", area, trailing, nullptr);
+    expect(!cache.lookup("1", area, trailing).has_value(),
+           "a failed or null creation is not retained");
     std::string number = "1";
-    cache.retain(number, area, first);
+    cache.retain(number, area, trailing, first);
     number = "different";
     expect(has_layout(cache, "1", area, first), "the key owns the whole text");
-    cache.retain("1", area, second);
+    cache.retain("1", area, trailing, second);
     expect(has_layout(cache, "1", area, first), "same-frame duplicate keeps the original resource");
-    expect(!cache.lookup("2", area).has_value(), "different text misses");
-    expect(!cache.lookup("1", {7, 9, 137, 57}).has_value(), "different width misses");
-    expect(!cache.lookup("1", {7, 9, 136, 58}).has_value(), "different height misses");
+    expect(!cache.lookup("2", area, trailing).has_value(), "different text misses");
+    expect(!cache.lookup("1", {7, 9, 137, 57}, trailing).has_value(), "different width misses");
+    expect(!cache.lookup("1", {7, 9, 136, 58}, trailing).has_value(), "different height misses");
+    expect(!cache.lookup("1", area, GutterAlignment::leading).has_value(),
+           "different alignment misses (#1041)");
     expect(has_layout(cache, "1", {40, 20, 169, 68}, first),
            "origin is not a key and color is not stored");
-    cache.retain("2", area, second);
+    cache.retain("2", area, trailing, second);
     cache.end();
     cache.begin();
     expect(has_layout(cache, "1", area, first), "previous frame moves to current");
     cache.end();
-    expect(!cache.lookup("2", area).has_value(), "unused previous-frame resources are discarded");
+    expect(!cache.lookup("2", area, trailing).has_value(),
+           "unused previous-frame resources are discarded");
     cache.begin();
-    cache.retain("2", area, second);
+    cache.retain("2", area, trailing, second);
     cache.clear();
-    expect(!cache.lookup("1", area).has_value() && !cache.lookup("2", area).has_value(),
+    expect(!cache.lookup("1", area, trailing).has_value() &&
+               !cache.lookup("2", area, trailing).has_value(),
            "font or DPI invalidation clears both columns");
-    cache.retain("1", area, second);
+    cache.retain("1", area, trailing, second);
     expect(has_layout(cache, "1", area, second),
            "a failed creation or invalidation can be retried");
 }
@@ -93,6 +100,31 @@ void verify_trimmed_pixels(IDWriteFactory2 &factory, IDWriteTextFormat *format,
     }
 }
 
+// relativenumber のキャレットの行（#1041）: 右寄せの書式で作った layout を左寄せに直すと、
+// 左寄せの書式の DrawTextW と同じ画素で、右寄せの画素とは違う。
+void verify_leading_number(IDWriteFactory2 &factory, IDWriteTextFormat *format,
+                           SoftwareTarget &target)
+{
+    constexpr std::wstring_view number = L"12";
+    const auto trailing_pixels = target.text_w(number, format, area);
+    const auto layout = make_layout(factory, format, number, area);
+    if (!layout)
+    {
+        return;
+    }
+    expect(SUCCEEDED(layout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING)),
+           "the caret line number is aligned to the left on its own layout");
+    expect(SUCCEEDED(format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING)),
+           "the comparison format is left aligned");
+    const auto expected = target.text_w(number, format, area);
+    expect(SUCCEEDED(format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING)),
+           "the gutter format returns to the one trailing alignment");
+    const auto drawn = target.plain_layout(layout.Get(), area);
+    expect(!expected.empty() && expected == drawn,
+           "a left-aligned gutter number matches DrawTextW byte for byte");
+    expect(drawn != trailing_pixels, "the left-aligned number differs from the right-aligned one");
+}
+
 void verify_pixels(IDWriteFactory2 &factory, IDWriteTextFormat *format)
 {
     SoftwareTarget target;
@@ -115,6 +147,7 @@ void verify_pixels(IDWriteFactory2 &factory, IDWriteTextFormat *format)
         expect(!expected.empty() && expected == target.plain_layout(layout.Get(), area),
                "right-aligned gutter layouts match DrawTextW byte for byte");
     }
+    verify_leading_number(factory, format, target);
     expect(SUCCEEDED(format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING)),
            "palette title uses leading alignment");
     constexpr std::array<std::wstring_view, 4> titles{

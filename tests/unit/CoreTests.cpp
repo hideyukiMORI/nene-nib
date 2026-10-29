@@ -102,6 +102,7 @@ using nenenib::core::encoding_label;
 using nenenib::core::EncodingFailure;
 using nenenib::core::FilePath;
 using nenenib::core::first_visible_for_caret;
+using nenenib::core::first_visible_with_margin;
 using nenenib::core::first_visible_within;
 using nenenib::core::has_control_character;
 using nenenib::core::has_selection;
@@ -1268,6 +1269,40 @@ void verify_history_empty_entries()
 
 // ---------------------------------------------------------------- スクロール
 
+void verify_scroll_margin()
+{
+    // scrolloff の余白（#1041）: 余白の中のキャレットは余白の端まで寄せ、文書の先頭では 1 で
+    // 止まり、画面の半分を超える余白は (行数 - 1) / 2 に切り詰める。
+    expect(first_visible_with_margin(LineNumber{5}, LineNumber{7},
+                                     nenenib::core::ViewportRows{10, 3},
+                                     nenenib::core::ScrollFollow::minimal) == LineNumber{4},
+           "a caret inside the upper margin pulls the window up to keep the margin");
+    expect(first_visible_with_margin(LineNumber{5}, LineNumber{12},
+                                     nenenib::core::ViewportRows{10, 3},
+                                     nenenib::core::ScrollFollow::minimal) == LineNumber{6},
+           "a caret inside the lower margin pulls the window down to keep the margin");
+    expect(first_visible_with_margin(LineNumber{5}, LineNumber{8},
+                                     nenenib::core::ViewportRows{10, 3},
+                                     nenenib::core::ScrollFollow::minimal) == LineNumber{5},
+           "a caret between the margins does not scroll");
+    expect(first_visible_with_margin(LineNumber{5}, LineNumber{2},
+                                     nenenib::core::ViewportRows{10, 3},
+                                     nenenib::core::ScrollFollow::minimal) == LineNumber{1},
+           "the margin stops at the first line");
+    expect(first_visible_with_margin(LineNumber{1}, LineNumber{30},
+                                     nenenib::core::ViewportRows{10, 999},
+                                     nenenib::core::ScrollFollow::minimal) == LineNumber{25},
+           "a margin beyond half the window keeps the caret in the middle");
+    expect(first_visible_with_margin(LineNumber{25}, LineNumber{31},
+                                     nenenib::core::ViewportRows{10, 999},
+                                     nenenib::core::ScrollFollow::minimal) == LineNumber{26},
+           "a caret one line below the middle scrolls by one line");
+    expect(first_visible_with_margin(LineNumber{20}, LineNumber{50},
+                                     nenenib::core::ViewportRows{10, 3},
+                                     nenenib::core::ScrollFollow::vim) == LineNumber{45},
+           "Vim still centers a far caret with a margin");
+}
+
 void verify_scroll_bounds()
 {
     expect(first_visible_within(LineNumber{1}, 100, 10,
@@ -1321,6 +1356,7 @@ void verify_scroll_bounds()
     expect(first_visible_for_caret(LineNumber{6}, LineNumber{10}, 10,
                                    nenenib::core::ScrollFollow::vim) == LineNumber{6},
            "Vim preserves an explicit scroll while the caret remains visible");
+    verify_scroll_margin();
 }
 
 void verify_vim_scroll_follow_thresholds()

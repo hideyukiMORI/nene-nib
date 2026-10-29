@@ -16,9 +16,9 @@ class GutterTextLayouts final
     void end();
     void clear();
     [[nodiscard]] std::optional<Microsoft::WRL::ComPtr<IDWriteTextLayout>>
-    lookup(std::string_view text, const core::LayoutRect &area);
+    lookup(std::string_view text, const core::LayoutRect &area, core::GutterAlignment alignment);
     void retain(std::string_view text, const core::LayoutRect &area,
-                Microsoft::WRL::ComPtr<IDWriteTextLayout> layout);
+                core::GutterAlignment alignment, Microsoft::WRL::ComPtr<IDWriteTextLayout> layout);
 
   private:
     std::vector<GutterTextLayout> current_;

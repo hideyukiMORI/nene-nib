@@ -3,6 +3,7 @@
 #include "LineNumber.hpp"
 #include "ScrollExtent.hpp"
 #include "ScrollFollow.hpp"
+#include "ViewportRows.hpp"
 
 #include <cstddef>
 
@@ -20,4 +21,10 @@ namespace nenenib::core
 [[nodiscard]] LineNumber first_visible_for_caret(LineNumber first_visible, LineNumber caret_line,
                                                  std::size_t visible_lines,
                                                  ScrollFollow follow) noexcept;
+
+// 同じ寄せを上下の余白（Vim の `scrolloff`）つきで（#1041・ADR 0019 の追補）。余白は画面の半分
+// （(行数 - 1) / 2）で切り詰め（Vim と同じ・999 は常に中央）、余白の内側を見える範囲とみなして
+// 寄せる。余白 0 は first_visible_for_caret と同じ。
+[[nodiscard]] LineNumber first_visible_with_margin(LineNumber first_visible, LineNumber caret_line,
+                                                   ViewportRows rows, ScrollFollow follow) noexcept;
 } // namespace nenenib::core

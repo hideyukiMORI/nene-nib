@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GutterAlignment.hpp"
 #include "LayoutRect.hpp"
 
 #include <dwrite.h>
@@ -13,6 +14,8 @@ struct GutterTextLayout final
 {
     std::string text;
     core::LayoutRect area;
+    // 寄せも鍵（#1041）。同じ文字と寸法でも左寄せと右寄せは別の layout。
+    core::GutterAlignment alignment;
     Microsoft::WRL::ComPtr<IDWriteTextLayout> layout;
 };
 } // namespace nenenib::ui::win32

@@ -12,8 +12,10 @@
 #include "ThemeChoice.hpp"
 #include "VimPatternCase.hpp"
 
+#include <cstddef>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -48,7 +50,17 @@ struct EditorSettings
     // `:set` だけが変え、設定の面には出さない。
     bool ignorecase = false;
     bool smartcase = false;
+    // 行番号の相対表示と追従の余白（Vim の `relativenumber` `scrolloff`・既定はオフと 0・
+    // #1041）。`:set` だけが変え、設定の面には出さない。scrolloff は 0〜999（scrolloff_limit）。
+    bool relativenumber = false;
+    std::size_t scrolloff = 0;
 };
+
+// `scrolloff` の上限（Vim の値は任意の非負だが、画面の半分で切り詰めるので 999 で足りる）。
+inline constexpr std::size_t scrolloff_limit = 999;
+// `scrolloff` の値の文字列（10 進・先頭の 0 なし・0〜scrolloff_limit）を読む 1 本。Ex と設定の
+// 読みが共用する（#1041）。
+[[nodiscard]] std::optional<std::size_t> scrolloff_of(std::string_view text) noexcept;
 
 [[nodiscard]] EditorSettings default_editor_settings();
 // 設定の `ignorecase` `smartcase` から照合器の旗へ（#1041）。smartcase は ignorecase が

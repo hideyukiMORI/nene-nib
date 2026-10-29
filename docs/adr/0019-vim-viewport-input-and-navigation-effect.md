@@ -80,3 +80,11 @@ ADR 0005（Vim を oracle にする）・ADR 0009（選択とスクロールの�
 
 上へ動いた行単位の `y` は `gg` `G` と同じく `H` `M` `L` でも着地（最初の非空白）へキャレットを置き（Vim の `op_yank` は範囲の始まりへ置く）、回数つきの Ctrl-f / Ctrl-b が途中の周で端に当たったときは Vim の `onepage` が FAIL を返して `beginline` を飛ばすので、キャレットは画面へ入る行の同じバイトの桁を保つ（回数を 1 つ減らしても先頭の行が同じなら端に当たった・`page_count_reached_the_end`。fixture `viewport-yank-H-*` `viewport-counted-page-*-past-*` ほか 8 件）。開始が端でなく回数の途中の周で初めて端に届く場合も、前向きは最後の周も画面の先頭を動かして端に当たらず最初の非空白へ、後ろ向きは最後の周が FAIL で同じバイトの桁を保つことを oracle で確かめた（fixture `viewport-counted-page-*-reaches-*-mid-count-indented`）。
 この列の保持は折り返さない画面の経路だけに効く。折り返し・格子の画面行の単位は `page_step` の先頭で `view.navigation` から `displayed_navigation` へ戻るので不変で、そこでの回数つきの端は未検証。
+
+## 追補（2026-10-29・#1041）: `scrolloff` の余白は追従の 1 本
+
+1. **余白の計算は core の `first_visible_with_margin(先頭, キャレット, ViewportRows{行数, 余白}, follow)` の 1 本。** 余白の内側（先頭 + 余白から、行数 − 2 × 余白の高さ）を見える範囲とみなして今の寄せ（ADR 0009 の決定 6・Vim の中央寄せの閾値）を当て、結果を余白の分だけ戻す。余白は画面の半分（(行数 − 1) / 2）で切り詰める（Vim と同じ・`so=999` は常に中央）。余白 0 は `first_visible_for_caret` と同じ値（`first_visible_for_caret` は余白 0 の呼び出し）。
+2. **呼ぶのは application の追従の 1 か所。** `VisualTextView::followed_first` が設定の `scrolloff` を渡す（画面行の単位なので、折り返し・格子・巨大な行の窓でも同じ）。仮の行の座標は余白の分だけ下げ、上へ寄せる余白が仮の 1 行目で切れないようにする（余白 0 なら今までと同じ）。文書の先頭と末尾では余白は効かない（先頭は 1 行目で止まり、末尾は `filled_viewport` の収めで切れる）。
+3. **engine が画面を決める鍵（`VimNavigate`）の後も、同じ追従の計算を縦だけに 1 回当てる**（`EditorController::perform(VimNavigate)`・余白が 0 なら何もしない）。`zt` `z<CR>` は余白の分だけ上を残し、`zb` `z-` は下を残し（Vim の scroll_cursor_top / bot と同じ値）、`zz` `z.` は変わらない。Ctrl-d / Ctrl-u は窓とキャレットを同じ量だけ動かすので、余白の外のキャレットは動かさない。
+4. **限界（後続）。** `H` `M` `L` と Ctrl-f / Ctrl-b は Vim では余白の分だけ**キャレットを**動かす（cursor_correct）が、Nib は engine が置いたキャレットを保って**窓を**余白の分だけ送る。キャレットの行が Vim と違い得る（`so=3` の `H` は Vim では先頭 + 3 行目・Nib は先頭の行で窓が 3 行上がる）。oracle は画面を測れないので fixture にはならない。engine に余白を渡して cursor_correct を足すかは設計席が決める。
+5. **契約。** `nib_tests --vim-view`（既定実行にも載る）が `j` `k` の余白・文書の先頭・`zt` `zb` `zz`・`so=999` の中央を controller で、既定実行の `verify_scroll_margin`（`CoreTests.cpp`）が純関数の値を確かめる。

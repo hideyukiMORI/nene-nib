@@ -136,7 +136,8 @@ class Direct2DRenderer final
                                                              const core::LayoutRect &area);
     void draw_status_text(const StatusTextLayout &entry, const core::LayoutRect &area,
                           core::RgbColor color);
-    void write_gutter(std::string_view text, const core::LayoutRect &area, core::RgbColor color);
+    void write_gutter(std::string_view text, core::GutterAlignment alignment,
+                      const core::LayoutRect &area, core::RgbColor color);
     // 欄の右端に寄せて書き、欄の外は切る。幅 0 の欄には何も書かない。
     void write_right(std::string_view text, IDWriteTextFormat *format, const core::LayoutRect &area,
                      core::RgbColor color);

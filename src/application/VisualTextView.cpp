@@ -802,10 +802,14 @@ VisualTextView::followed_first(core::VisualPosition caret, core::ScrollFollow fo
     {
         return std::unexpected(delta.error());
     }
-    const core::LineNumber virtual_first{limit + 1};
+    // 余白（scrolloff・#1041）の分だけ仮の先頭を下げ、上へ寄せる余白が仮の 1 行目で切れないように
+    // する。余白 0 なら今までと同じ仮の行。
+    const auto margin = std::min(state_.settings().scrolloff, height);
+    const core::LineNumber virtual_first{limit + 1 + margin};
     const core::LineNumber virtual_caret{above ? virtual_first.value - delta.value()
                                                : virtual_first.value + delta.value()};
-    const auto target = core::first_visible_for_caret(virtual_first, virtual_caret, height, follow);
+    const auto target = core::first_visible_with_margin(virtual_first, virtual_caret,
+                                                        core::ViewportRows{height, margin}, follow);
     if (target == virtual_first)
     {
         return first;

@@ -44,3 +44,7 @@ D67 で機能が 20 本近く増える。hide の要望は「どの機能がど�
 ## 追補（2026-10-29・#1041）: 決定 3 の鍵に `ignorecase` `smartcase`
 
 v4 の鍵の集合に `ignorecase=on|off` と `smartcase=on|off`（Vim の既定のオフ・`features` の後ろ・`lsp.<language>.command` の前）を足す。v4 は未公開なので版は上げず、v4 では必須（ほかの v4 の鍵と同じ厳密な読み）・旧版に在れば未知の鍵として拒否・旧版からはオフを補う。変えるのは `:set ic` `noic` `ic?` `scs` `noscs` `scs?`（長い名前も）だけで、`features` の表とモーダルの「機能」の節には出さない（ADR 0032 の追補）。
+
+## 追補（2026-10-29・#1041）: 決定 3 の鍵に `relativenumber` `scrolloff`
+
+v4 の鍵の集合に `relativenumber=on|off`（既定オフ）と `scrolloff=<0〜999 の 10 進・先頭の 0 なし>`（既定 0）を `smartcase` の後ろ・`lsp.<language>.command` の前に足す。`ignorecase` `smartcase` と同じく v4 の最初の定義の後に足した鍵なので、無い v4 は既定を補って読み、有れば厳密に読み（値の読みは core の `scrolloff_of` の 1 本で Ex と共用）、書くときは必ず書く。旧版に在れば拒否。変えるのは `:set rnu` `nornu` `rnu?` `so=N` `so?` `so`（長い名前も）だけで、`features` の表とモーダルの「機能」の節には出さない。

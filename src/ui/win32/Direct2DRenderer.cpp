@@ -9,6 +9,7 @@
 #include "DisplayLine.hpp"
 #include "EditMode.hpp"
 #include "EditorSettings.hpp"
+#include "GutterLabels.hpp"
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
 #include "PaletteLayout.hpp"
@@ -638,15 +639,22 @@ void Direct2DRenderer::write_right(std::string_view text, IDWriteTextFormat *for
     context_->PopAxisAlignedClip();
 }
 
-void Direct2DRenderer::write_gutter(std::string_view text, const core::LayoutRect &area,
-                                    core::RgbColor color)
+// 書式は右寄せ 1 つ。左寄せ（relativenumber のキャレットの行・#1041）は作った layout だけを
+// 寄せ直し、寄せも保持の鍵に入れる。
+void Direct2DRenderer::write_gutter(std::string_view text, core::GutterAlignment alignment,
+                                    const core::LayoutRect &area, core::RgbColor color)
 {
-    const auto retained = gutter_layouts_.lookup(text, area);
+    const auto retained = gutter_layouts_.lookup(text, area, alignment);
     auto layout = retained.value_or(nullptr);
     if (!layout)
     {
         layout = text_layout(text, gutter_format_.Get(), area);
-        gutter_layouts_.retain(text, area, layout);
+        if (layout && alignment == core::GutterAlignment::leading &&
+            FAILED(layout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING)))
+        {
+            layout = nullptr;
+        }
+        gutter_layouts_.retain(text, area, alignment, layout);
     }
     if (!layout)
     {
@@ -1347,14 +1355,16 @@ void Direct2DRenderer::draw_line(const application::EditorFrame &frame, const Bo
         fill(row, frame.palette.current_line);
     }
     const auto padding = gutter_padding(frame.settings);
-    write_gutter(std::to_string(line.number.value),
+    const auto label =
+        core::gutter_label(line.number, pane.caret.position.line, frame.settings.relativenumber);
+    write_gutter(label.text, label.alignment,
                  core::LayoutRect{body.gutter.left, top, body.gutter.right - padding,
                                   top + body.line_height},
                  current ? frame.palette.text : frame.palette.gutter);
     // 巨大な行の印は行番号の隣の 1 文字（ADR 0139 の決定 2）。行番号の右の余白に置く。
     if (line.window.active)
     {
-        write_gutter(giant_mark,
+        write_gutter(giant_mark, core::GutterAlignment::trailing,
                      core::LayoutRect{body.gutter.right - padding, top, body.gutter.right,
                                       top + body.line_height},
                      frame.palette.giant_mark);
@@ -1426,7 +1436,9 @@ void Direct2DRenderer::draw_grid_row(GridPainter &painter, const application::Ed
     }
     if (row.row == 0)
     {
-        write_gutter(std::to_string(row.number.value),
+        const auto label =
+            core::gutter_label(row.number, pane.caret.position.line, frame.settings.relativenumber);
+        write_gutter(label.text, label.alignment,
                      core::LayoutRect{body.gutter.left, top,
                                       body.gutter.right - gutter_padding(frame.settings), bottom},
                      current ? frame.palette.text : frame.palette.gutter);

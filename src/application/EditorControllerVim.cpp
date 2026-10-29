@@ -13,6 +13,7 @@
 #include "KeyMapPending.hpp"
 #include "MapTimeout.hpp"
 #include "MapTimer.hpp"
+#include "ScrollFollow.hpp"
 #include "SearchLine.hpp"
 #include "SearchPreview.hpp"
 #include "Selection.hpp"
@@ -791,9 +792,25 @@ void EditorController::perform(const core::VimNavigate &effect)
                  .with_scroll(ScrollState{effect.first_visible, before.visible_lines,
                                           effect.first_row, before.horizontal});
     state_ = state_.with_history(state_.history().sealed());
-    auto view = visual_view();
     const auto caret = core::TextCaret{state_.text().position_of(state_.selection().caret),
                                        state_.caret_affinity()};
+    // `scrolloff` の余白は追従と同じ 1 本の計算で縦だけに効かせる。`zt` `zb` は余白の分だけ
+    // 戻り、Ctrl-d / Ctrl-u は余白の外のキャレットを動かさない（#1041・ADR 0019 の追補）。
+    if (state_.settings().scrolloff > 0)
+    {
+        const auto kept = visual_view().followed(caret, core::ScrollFollow::minimal,
+                                                 detail::scroll_extent_for(state_.mode()));
+        if (!kept)
+        {
+            layout_failure_ = kept.error();
+            return;
+        }
+        auto margin = state_.scroll();
+        margin.first_visible = kept.value().first_visible;
+        margin.first_row = kept.value().first_row;
+        state_ = state_.with_scroll(margin);
+    }
+    auto view = visual_view();
     const auto horizontal =
         effect.first_column.has_value()
             ? view.horizontal_of_column(caret.position.line, effect.first_column.value())

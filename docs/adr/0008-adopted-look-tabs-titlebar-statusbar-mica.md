@@ -69,3 +69,7 @@ DWM が扱う top-level 窓の背景なので、枠を自分で消した `WS_OVE
 
 - [ADR 0002](0002-plain-win32-with-direct2d.md)・[ADR 0007](0007-first-slice-frameless-window-direct2d-line.md)
 - 施主決定 D6（タブはタイトルバー）・D10（トグル）・D11（茄子色）・SPECIFICATION FR-004 / FR-005 / FR-011
+
+## 追補（2026-10-29・#1041）: `relativenumber` の行番号
+
+行番号の欄の文字と寄せは core の `gutter_label(行, キャレットの行, relative)` の 1 本が決める。`relativenumber` がオフなら今までどおり絶対の番号を右寄せ。オンなら Nib は常に `number` を出しているので Vim の `number` と `relativenumber` の両方の形で、キャレットの行は絶対の番号を**左寄せ**、ほかの行はキャレットの行からの距離（本文の行の数・折り返しの画面行は数えない）を右寄せにする。欄の幅の規則は変えない（距離は行数より小さい）。2 つ目の枠（ADR 0148）はその枠のキャレットの行から数える。renderer は右寄せの書式 1 つのまま、左寄せの行だけ作った layout を `SetTextAlignment(LEADING)` で寄せ直し、寄せも行番号の layout の保持の鍵に入れる（`GutterTextLayouts`）。画素は `nib_window_tests` の `GutterLayoutTests`（左寄せの layout が左寄せの書式の DrawTextW と同じ画素）と `eng/verify-window.py --gutter`。
