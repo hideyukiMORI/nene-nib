@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 ca26362aedcd1dd1ec6f04105a1f098c0c34eedb024ed7f67540185009851d98 / 2741 fixtures
+// fixtures.json: sha256 52fb4854e2e070597841845ec74b8bb7a9bea4a52b7246fc2a04ca42131ab0de / 2771 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2741> vim_fixtures{{
+constexpr std::array<VimFixture, 2771> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2493,6 +2493,36 @@ constexpr std::array<VimFixture, 2741> vim_fixtures{{
     {"visual-block-object-ve-no-block-fails", "alpha beta\ngamma", "veaBx", "alpha beta\ngamma", 1, 5, "", "", std::nullopt},
     {"visual-block-object-ve-inside-grows", "{br} alpha beta", "wveaBx", " alpha beta", 1, 1, "{br}", "v", std::nullopt},
     {"visual-block-object-ve-after-block-fails", "{br} alpha beta", "5lveaBx", "{br} alpha beta", 1, 10, "", "", std::nullopt},
+    {"visual-inner-block-V-esc", "e [sq]\nb", "Vji[<Esc>", "e [sq]\nb", 2, 1, "", "", std::nullopt},
+    {"visual-inner-block-V-d", "e [sq]\nb", "Vji[d", "e [sq]\nb", 2, 1, "", "", std::nullopt},
+    {"visual-inner-block-v-esc", "e [sq]\nb", "vji[<Esc>", "e [sq]\nb", 2, 1, "", "", std::nullopt},
+    {"visual-inner-block-v-then-V", "e [sq]\nb", "vjVi[<Esc>", "e [sq]\nb", 2, 1, "", "", std::nullopt},
+    {"visual-inner-block-v-l", "e [sq]\nb", "vjli[<Esc>", "e [sq]\nb", 2, 2, "", "", std::nullopt},
+    {"visual-inner-block-vjib", "e (sq)\nb", "vjib<Esc>", "e (sq)\nb", 2, 1, "", "", std::nullopt},
+    {"visual-inner-block-vji-angle", "e <sq>\nb", "vji<<Esc>", "e <sq>\nb", 2, 1, "", "", std::nullopt},
+    {"visual-inner-block-VjiB", "e {sq}\nb", "VjiB<Esc>", "e {sq}\nb", 2, 1, "", "", std::nullopt},
+    {"visual-inner-block-backward-V", "e [sq]\nb", "jVki[<Esc>", "e [sq]\nb", 1, 1, "", "", std::nullopt},
+    {"visual-inner-block-backward-v-d", "e [sq]\nb", "jvki[d", "e [sq]\nb", 1, 1, "", "", std::nullopt},
+    {"visual-inner-block-cursor-line-block", "b\ne [sq]", "Vji[<Esc>", "b\ne [sq]", 2, 5, "", "", std::nullopt},
+    {"visual-inner-block-cursor-line-block-d", "b\ne [sq]", "Vji[d", "b\ne []", 2, 4, "sq", "v", std::nullopt},
+    {"visual-inner-block-both-lines", "[sq] e\n[sq] ,", "Vji[d", "[sq] e\n[sq] ,", 2, 1, "", "", std::nullopt},
+    {"visual-inner-block-fuzz-0193", "    end. {br} - [sq]end.\n[sq]\t,", "vapi[gg>", "    end. {br} - [sq]end.\n[sq]\t,", 2, 1, "", "", std::nullopt},
+    {"visual-inner-block-one-line", "e [sq] b", "vi[d", "e [] b", 1, 4, "sq", "v", std::nullopt},
+    {"visual-inner-block-one-line-forward", "e [sq] b", "vlli[d", "e [] b", 1, 4, "sq", "v", std::nullopt},
+    {"visual-inner-block-enclosing-multi", "[a\nb c]", "lvji[d", "[]", 1, 2, "a\nb c", "v", std::nullopt},
+    {"visual-inner-block-after-close", "(a)b (c)\nzz", "3lvji(d", "(a)b ()\nzz", 1, 7, "c", "v", std::nullopt},
+    {"visual-inner-block-after-close-paren-forward", "x(a)b (c) d", "4lv4li(d", "x(a)b () d", 1, 8, "c", "v", std::nullopt},
+    {"visual-inner-block-backward-cursor-line-block", "b\ne [sq]", "jVki[d", "b\ne []", 2, 4, "sq", "v", std::nullopt},
+    {"visual-inner-block-lower-line-block-v", "e x\nab [sq] c", "vjli[d", "e x\nab [] c", 2, 5, "sq", "v", std::nullopt},
+    {"visual-inner-block-blank-close-lines", "x{\nab\n}", "jvliB<Esc>", "x{\nab\n}", 2, 2, "", "", std::nullopt},
+    {"visual-inner-block-blank-close-lines-d", "x{\nab\n}", "jvliBd", "x{\nab\n}", 2, 2, "", "", std::nullopt},
+    {"visual-inner-block-blank-close-indent", "(a\nbc\n  )", "lvjli(<Esc>", "(a\nbc\n  )", 2, 3, "", "", std::nullopt},
+    {"visual-inner-block-blank-close-indent-d", "(a\nbc\n  )", "lvjli(d", "(a\nbc\n  )", 2, 3, "", "", std::nullopt},
+    {"visual-inner-block-after-close-two-chars", "(a)b (cd)\nzz", "3lvji(d", "()b (cd)\nzz", 1, 2, "a", "v", std::nullopt},
+    {"visual-inner-block-enclosing-single-char", "x(ab(c)d)", "5lvli(d", "x(ab()d)", 1, 6, "c", "v", std::nullopt},
+    {"visual-inner-block-empty-forward", "e []\nb", "Vji[<Esc>", "e []\nb", 2, 1, "", "", std::nullopt},
+    {"visual-inner-block-empty-ends-on-open", "ab[]\nc", "vlli[<Esc>", "ab[]\nc", 1, 3, "", "", std::nullopt},
+    {"visual-inner-block-count-two-forward", "e [s [q]]\nb", "Vj2i[<Esc>", "e [s [q]]\nb", 1, 7, "", "", std::nullopt},
     {"underscore-goes-to-the-first-non-blank", "  abc def", "$_", "  abc def", 1, 3, "", "", std::nullopt},
     {"underscore-count-three", "a\n  b\n c\n   d\ne", "3_", "a\n  b\n c\n   d\ne", 3, 2, "", "", std::nullopt},
     {"underscore-count-clamps-to-the-last-line", "ab\n  cd\n ef", "5_", "ab\n  cd\n ef", 3, 2, "", "", std::nullopt},
