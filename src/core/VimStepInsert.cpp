@@ -19,6 +19,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -28,6 +29,7 @@ namespace nenenib::core
 using detail::backward_characters;
 using detail::block_insert_edit;
 using detail::display_view;
+using detail::erased_nothing;
 using detail::finished_input_wait;
 using detail::insert_character;
 using detail::insert_special;
@@ -61,18 +63,21 @@ namespace
     VimState next = state;
     if (next.insert_repeat.has_value())
     {
-        next.insert_repeat.value().keys.push_back(std::move(key));
+        VimInsertRepeat &repeat = next.insert_repeat.value();
+        repeat.keys = repeat.keys.appended(key);
     }
     return next;
 }
 
 // 消す鍵（Backspace・Ctrl-w・Ctrl-u）を回数の鍵の列に足す（#1093）。何も消せずに止まった鍵
 // （本文の先頭・Vim のビープ）は Vim の redo にも載らないので足さない（`3i<C-u>x` は xxx）。
+// 判定は `.` の記録と同じ erased_nothing の 1 本。
 [[nodiscard]] VimStep erase_recorded(VimStep step, VimSpecialKey key)
 {
-    if (!std::holds_alternative<VimNoEffect>(step.effect))
+    const VimKey pressed{key};
+    if (!erased_nothing(pressed, step.effect))
     {
-        step.next = insert_recorded(step.next, VimKey{key});
+        step.next = insert_recorded(step.next, pressed);
     }
     return step;
 }
@@ -188,38 +193,61 @@ namespace
 
 // 鍵の列が打った本文だけ（文字と改行）なら、その本文（#1093）。消す鍵を含む列は前の周の本文
 // まで消すので、流し直さないと決まらない（空を返す）。
+// 鍵 1 つが打った本文（#1093）。文字はその文字、改行の鍵は改行で、ほかの鍵は本文にならない。
+// 鍵の種類が増えたら std::visit がここで落ちる（CPP-002）。
+[[nodiscard]] std::optional<std::string> typed_piece(VimCharacter key)
+{
+    std::string text;
+    append_utf8(text, key.code);
+    return text;
+}
+
+[[nodiscard]] std::optional<std::string> typed_piece(VimSpecialKey key)
+{
+    if (key == VimSpecialKey::enter)
+    {
+        return std::string{"\n"};
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<std::string> typed_piece(const VimSearchPattern &)
+{
+    return std::nullopt;
+}
+
 [[nodiscard]] std::optional<std::string> typed_text(const std::vector<VimKey> &keys)
 {
     std::string text;
     for (const VimKey &key : keys)
     {
-        if (const auto *const character = std::get_if<VimCharacter>(&key))
-        {
-            append_utf8(text, character->code);
-            continue;
-        }
-        const auto *const special = std::get_if<VimSpecialKey>(&key);
-        if (special == nullptr || *special != VimSpecialKey::enter)
+        auto piece = std::visit([](const auto &value) { return typed_piece(value); }, key);
+        if (!piece.has_value())
         {
             return std::nullopt;
         }
-        text.push_back('\n');
+        text += piece.value();
     }
     return text;
 }
 
-// 流し直す 1 鍵（#1093）。列に載るのは文字と特殊鍵だけで、打った鍵と同じ関数を通る。
-[[nodiscard]] VimStep replayed_key(const VimState &state, const VimEditorView &view,
-                                   const VimKey &key)
+// 流し直す 1 鍵（#1093）。打った鍵と同じ関数を通る。鍵の種類が増えたら std::visit がここで
+// 落ちる（CPP-002）。
+[[nodiscard]] VimStep replayed_key(const VimState &state, const VimEditorView &, VimCharacter key)
 {
-    if (const auto *const character = std::get_if<VimCharacter>(&key))
-    {
-        return insert_character(state, *character);
-    }
-    if (const auto *const special = std::get_if<VimSpecialKey>(&key))
-    {
-        return insert_special(state, view, *special);
-    }
+    return insert_character(state, key);
+}
+
+[[nodiscard]] VimStep replayed_key(const VimState &state, const VimEditorView &view,
+                                   VimSpecialKey key)
+{
+    return insert_special(state, view, key);
+}
+
+// 検索の型は INSERT の鍵の列に載らない（INSERT で受けても何もしない・searched_key と同じ）。
+[[nodiscard]] VimStep replayed_key(const VimState &state, const VimEditorView &,
+                                   const VimSearchPattern &)
+{
     return VimStep{state, VimNoEffect{}};
 }
 
@@ -263,26 +291,30 @@ namespace
     }
 }
 
-// 回数の残りの周で鍵の列を流し直す（#1093・Vim の start_redo_ins）。2 周目からの消す鍵は前の周
-// が入れた本文も、行頭なら前の行との改行（backspace の eol）も消すので、本文の写しの上で 1 鍵
-// ずつ打った鍵と同じ insert_character / insert_special を通す。始めの位置（insert_start）は周を
-// またいで持ち越す（Vim の Insstart_orig も同じ INSERT のまま）。効果は、消した手前の端から Esc
-// のキャレットまでを流し直した本文に置き換える 1 つで、undo は INSERT の 1 単位に吸収する。
-[[nodiscard]] VimStep replayed_insert(const VimState &state, const VimEditorView &view,
-                                      const VimInsertRepeat &repeat, VimStep step)
+// 鍵 1 つを種類ごとの replayed_key へ写す（#1093）。
+[[nodiscard]] VimStep replayed_key(const VimState &state, const VimEditorView &view,
+                                   const VimKey &key)
+{
+    return std::visit([&](const auto &value) { return replayed_key(state, view, value); }, key);
+}
+
+// 鍵の列を残りの周だけ本文の写しへ流し直した本文・キャレット・消した手前の端（#1093）。
+[[nodiscard]] std::tuple<TextBuffer, Offset, Offset>
+replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t remaining,
+                const std::vector<VimKey> &keys)
 {
     VimState replaying = state;
     replaying.insert_repeat = std::nullopt;
-    const Offset escaped = view.selection.caret;
     TextBuffer text = view.text;
-    Offset caret = escaped;
-    Offset low = escaped;
-    for (std::size_t round = 0; round < repeat.remaining; ++round)
+    Offset caret = view.selection.caret;
+    Offset low = caret;
+    for (std::size_t round = 0; round < remaining; ++round)
     {
-        for (const VimKey &key : repeat.keys)
+        for (const VimKey &key : keys)
         {
             const Selection here = collapsed_at(caret);
-            VimStep keyed = replayed_key(replaying, VimEditorView{text, here, view.viewport}, key);
+            const VimEditorView replay_view{text, here, view.viewport};
+            VimStep keyed = replayed_key(replaying, replay_view, key);
             replaying = std::move(keyed.next);
             auto replayed = replayed_effect(text, caret, keyed.effect);
             text = std::move(replayed.first);
@@ -290,6 +322,19 @@ namespace
             low = Offset{std::min(low.value, caret.value)};
         }
     }
+    return {std::move(text), caret, low};
+}
+
+// 回数の残りの周で鍵の列を流し直す（#1093・Vim の start_redo_ins）。2 周目からの消す鍵は前の周
+// が入れた本文も、行頭なら前の行との改行（backspace の eol）も消すので、本文の写しの上で 1 鍵
+// ずつ打った鍵と同じ insert_character / insert_special を通す。始めの位置（insert_start）は周を
+// またいで持ち越す（Vim の Insstart_orig も同じ INSERT のまま）。効果は、消した手前の端から Esc
+// のキャレットまでを流し直した本文に置き換える 1 つで、undo は INSERT の 1 単位に吸収する。
+[[nodiscard]] VimStep replayed_insert(const VimEditorView &view, VimStep step,
+                                      const std::tuple<TextBuffer, Offset, Offset> &replayed)
+{
+    const Offset escaped = view.selection.caret;
+    const auto &[text, caret, low] = replayed;
     // 流し直しが手前を消さず何も残さなければ、本文は Esc の前のまま（`2o<C-w>`）。
     if (low == escaped && caret == escaped)
     {
@@ -314,15 +359,21 @@ namespace
     VimStep step{vim_resting_from(state, state.unnamed_register), VimMoveTo{back}};
     // `'^` は 1 つ左へ戻る前のキャレット（Vim の b_last_insert・#1039）。
     step.insert_left = caret.value - back.value;
-    if (!state.insert_repeat.has_value() || state.insert_repeat.value().keys.empty())
+    if (!state.insert_repeat.has_value())
     {
         return step;
     }
     const VimInsertRepeat &repeat = state.insert_repeat.value();
-    auto typed = typed_text(repeat.keys);
+    const std::vector<VimKey> keys = repeat.keys.owned_keys();
+    if (keys.empty())
+    {
+        return step;
+    }
+    auto typed = typed_text(keys);
     if (!typed.has_value())
     {
-        return replayed_insert(state, view, repeat, std::move(step));
+        return replayed_insert(view, std::move(step),
+                               replayed_rounds(state, view, repeat.remaining, keys));
     }
     // 打った本文だけの列は、流し直しても本文を残りの回数だけ続けたものと同じなので 1 回で作る。
     auto result = repeated(typed.value(), repeat.remaining);
@@ -514,6 +565,59 @@ namespace detail
     }
     return VimStep{std::move(next),
                    VimInsertAt{caret, std::move(body), rest, EditBoundary::absorb}};
+}
+
+// INSERT の消す鍵（Backspace・Ctrl-w・Ctrl-u）か（#1093）。鍵の種類が増えたら std::visit が
+// erased_nothing で落ちる（CPP-002）。
+namespace
+{
+[[nodiscard]] bool erases_in_insert(VimCharacter) noexcept
+{
+    return false;
+}
+
+[[nodiscard]] bool erases_in_insert(const VimSearchPattern &) noexcept
+{
+    return false;
+}
+
+[[nodiscard]] bool erases_in_insert(VimSpecialKey key) noexcept
+{
+    switch (key)
+    {
+    case VimSpecialKey::backspace:
+    case VimSpecialKey::control_w:
+    case VimSpecialKey::control_u:
+        return true;
+    case VimSpecialKey::escape:
+    case VimSpecialKey::enter:
+    case VimSpecialKey::arrow_left:
+    case VimSpecialKey::arrow_right:
+    case VimSpecialKey::arrow_up:
+    case VimSpecialKey::arrow_down:
+    case VimSpecialKey::home:
+    case VimSpecialKey::end:
+    case VimSpecialKey::page_up:
+    case VimSpecialKey::page_down:
+    case VimSpecialKey::control_r:
+    case VimSpecialKey::control_d:
+    case VimSpecialKey::control_f:
+    case VimSpecialKey::control_b:
+    case VimSpecialKey::control_v:
+    case VimSpecialKey::control_a:
+    case VimSpecialKey::control_x:
+        return false;
+    }
+    std::unreachable();
+}
+} // namespace
+
+// 何も消せずに止まった消す鍵（本文の先頭の Backspace・Ctrl-w・Ctrl-u・Vim のビープ）か（#1093）。
+// Vim の ins_bs はビープで返る鍵を redo に足さないので、回数の鍵の列にも `.` の記録にも載せない。
+[[nodiscard]] bool erased_nothing(const VimKey &key, const VimEffect &effect) noexcept
+{
+    return std::holds_alternative<VimNoEffect>(effect) &&
+           std::visit([](const auto &value) { return erases_in_insert(value); }, key);
 }
 
 // INSERT で記録を `i` から取り直す鍵（決定 4）。ADR 0028 の決定 3 が挿入の反復を切るのと

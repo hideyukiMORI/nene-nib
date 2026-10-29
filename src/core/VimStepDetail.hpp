@@ -214,6 +214,7 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
 [[nodiscard]] VimStep insert_register_step(const VimState &state, const VimEditorView &view,
                                            const VimKey &key);
 [[nodiscard]] bool restarts_insert(VimKey key) noexcept;
+[[nodiscard]] bool erased_nothing(const VimKey &key, const VimEffect &effect) noexcept;
 [[nodiscard]] VimState insert_started(const VimState &state, const VimEditorView &view,
                                       const VimKey &key);
 [[nodiscard]] VimStep completed_text_object(const VimState &state, const VimEditorView &view,

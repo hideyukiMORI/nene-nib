@@ -1157,10 +1157,12 @@ template <typename Value, typename Same>
                              return before.target == after.target && before.name == after.name &&
                                     before.append == after.append;
                          }) &&
-           same_optional(
-               left.insert_repeat, right.insert_repeat,
-               [](const VimInsertRepeat &before, const VimInsertRepeat &after)
-               { return before.remaining == after.remaining && before.keys == after.keys; }) &&
+           same_optional(left.insert_repeat, right.insert_repeat,
+                         [](const VimInsertRepeat &before, const VimInsertRepeat &after)
+                         {
+                             return before.remaining == after.remaining &&
+                                    before.keys.owned_keys() == after.keys.owned_keys();
+                         }) &&
            left.input_wait.has_value() == right.input_wait.has_value();
 }
 
