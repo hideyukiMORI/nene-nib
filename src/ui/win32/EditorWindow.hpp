@@ -24,6 +24,7 @@
 #include "Milestone.hpp"
 #include "PaneLayouts.hpp"
 #include "PresentedMilestones.hpp"
+#include "PreviewTaskPress.hpp"
 #include "RenderFailure.hpp"
 #include "RendererSources.hpp"
 #include "RgbColor.hpp"
@@ -294,8 +295,8 @@ class EditorWindow final
     // 消す（ADR 0056 の決定 9）。
     std::optional<core::TitleBarTarget> left_pressed_;
     std::optional<core::TitleBarTarget> middle_pressed_;
-    // プレビューの枠で押したチェックボックスの要素の番号（離したら消す）。
-    std::optional<std::size_t> preview_task_pressed_;
+    // プレビューの枠で押したチェックボックス（離したとき・次に押したときに消す）。
+    PreviewTaskPress preview_task_press_;
     // OSの捕捉の寿命だけ。選択のanchor/caretの正本はcontrollerにある。
     bool selecting_ = false;
     POINT selection_point_{};

@@ -26,21 +26,26 @@ void EditorWindow::point_text(POINT point, core::SelectionAnchoring anchoring)
 // 下のチェックボックスだけを覚える（ADR 0155 の追補 24）。
 void EditorWindow::press_preview_task(LPARAM data)
 {
-    preview_task_pressed_ =
+    preview_task_press_.press(
         renderer_ == nullptr ? std::nullopt
-                             : renderer_->preview_task_at(GET_X_LPARAM(data), GET_Y_LPARAM(data));
+                             : renderer_->preview_task_at(GET_X_LPARAM(data), GET_Y_LPARAM(data)));
 }
 
 void EditorWindow::release_preview_task(LPARAM data)
 {
-    const auto pressed = std::exchange(preview_task_pressed_, std::nullopt);
-    if (!pressed.has_value() || renderer_ == nullptr || !previewing())
+    if (!preview_task_press_.pressed())
     {
         return;
     }
-    if (renderer_->preview_task_at(GET_X_LPARAM(data), GET_Y_LPARAM(data)) == pressed)
+    // 面（Ctrl+P）が開いている間は帯の離すと同じく送らない。押しは release で必ず消える。
+    const bool reachable =
+        renderer_ != nullptr && previewing() && !controller_.command_palette_active();
+    const auto block = preview_task_press_.release(
+        reachable ? renderer_->preview_task_at(GET_X_LPARAM(data), GET_Y_LPARAM(data))
+                  : std::nullopt);
+    if (block.has_value())
     {
-        send(application::TogglePreviewTask{pressed.value()});
+        send(application::TogglePreviewTask{block.value()});
     }
 }
 

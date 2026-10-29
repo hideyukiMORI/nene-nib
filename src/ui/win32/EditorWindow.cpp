@@ -1125,6 +1125,7 @@ void EditorWindow::activate_caption(WPARAM word) noexcept
 void EditorWindow::click_client(LPARAM data)
 {
     left_pressed_ = std::nullopt;
+    preview_task_press_.forget();
     if (controller_.command_palette_active())
     {
         click_palette(data);

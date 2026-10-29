@@ -24,6 +24,7 @@
 #include "PreviewPane.hpp"
 #include "PreviewPlacement.hpp"
 #include "PreviewScene.hpp"
+#include "PreviewTaskPress.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "PreviewTextStyle.hpp"
 #include "PreviewViewport.hpp"
@@ -727,6 +728,27 @@ void check_task_pixels()
                !pane.task_at(area.left - 1, press.top).has_value(),
            "a point outside the press targets finds nothing");
 }
+// 押した要素と離した要素が同じときだけ切り替える（ADR 0056 の決定 9・#1102 のレビュー
+// R1-1）。窓の外で 離して WM_LBUTTONUP が来なくても、次の WM_LBUTTONDOWN の入口の forget
+// で押しは消え、別の所を 押してから同じ箱の上で離しても切り替わらない。
+void check_task_press()
+{
+    win32::PreviewTaskPress press;
+    press.press(1U);
+    expect(press.release(1U) == 1U, "pressing and releasing on the same box toggles it");
+    expect(!press.release(1U).has_value(), "a release without a press toggles nothing");
+    press.press(1U);
+    expect(!press.release(0U).has_value() && !press.pressed(),
+           "releasing on another box toggles nothing and forgets the press");
+    press.press(1U);
+    press.forget();
+    press.press(std::nullopt);
+    expect(!press.release(1U).has_value(),
+           "a press elsewhere after a lost release does not toggle the box released on");
+    press.press(1U);
+    press.forget();
+    expect(!press.release(1U).has_value(), "the next press forgets a press left over");
+}
 } // namespace
 
 void verify_preview_layouts()
@@ -752,5 +774,6 @@ void verify_preview_layouts()
     check_anchor_after_carriage_returns();
     check_task_boxes();
     check_task_pixels();
+    check_task_press();
 }
 } // namespace nenenib::tests::ui
