@@ -553,15 +553,33 @@ static_assert(every_alignment_has_one_row(),
 
 [[nodiscard]] std::optional<char32_t> vim_number_control_character(VimSpecialKey key) noexcept
 {
-    if (key == VimSpecialKey::control_a)
+    switch (key)
     {
+    case VimSpecialKey::control_a:
         return control_a_character;
-    }
-    if (key == VimSpecialKey::control_x)
-    {
+    case VimSpecialKey::control_x:
         return control_x_character;
+    case VimSpecialKey::escape:
+    case VimSpecialKey::enter:
+    case VimSpecialKey::backspace:
+    case VimSpecialKey::arrow_left:
+    case VimSpecialKey::arrow_right:
+    case VimSpecialKey::arrow_up:
+    case VimSpecialKey::arrow_down:
+    case VimSpecialKey::control_r:
+    case VimSpecialKey::home:
+    case VimSpecialKey::end:
+    case VimSpecialKey::page_up:
+    case VimSpecialKey::page_down:
+    case VimSpecialKey::control_d:
+    case VimSpecialKey::control_u:
+    case VimSpecialKey::control_f:
+    case VimSpecialKey::control_b:
+    case VimSpecialKey::control_v:
+    case VimSpecialKey::control_w:
+        return std::nullopt;
     }
-    return std::nullopt;
+    std::unreachable();
 }
 
 [[nodiscard]] std::optional<VimWindowCommand> vim_window_command_for(VimSpecialKey key) noexcept

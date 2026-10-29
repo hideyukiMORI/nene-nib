@@ -14,8 +14,9 @@ leaves Vim in NORMAL mode (an insert ends with `<Esc>`, a VISUAL selection with 
 oracle can observe: no `"+ "*` (the real clipboard), no `q` / `@` (recording does not work inside
 `:normal`), no `u` / `<C-r>` (the oracle's `:normal!` is one undo unit), no viewport keys
 (`H M L <C-d> <C-u> <C-f> <C-b> <C-e> <C-y> z… gj gk g0 g$ gm gM <PageUp> <PageDown>`), no tabs,
-windows, Ex or Ctrl+P, no keys Nib does not take yet (`R s S gv`, VISUAL `<C-a> <C-x>`, block `I A c C > <`)
-and no INSERT `<BS>`.
+windows, Ex or Ctrl+P, no keys Nib does not take yet (`R s S gv`, block `I A c C > <`)
+and no INSERT `<BS>`. The generator does not make VISUAL `<C-a> <C-x> g<C-a> g<C-x>` yet, only
+the NORMAL `{n}<C-a>` `{n}<C-x>`.
 
 The buffer has 1 to 12 lines mixing ASCII words, spaces, tabs, bracket and quote pairs, punctuation,
 Japanese (kana, kanji, full-width letters), empty lines and trailing spaces. It never ends with a
