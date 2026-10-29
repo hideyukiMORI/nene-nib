@@ -172,20 +172,12 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 }
 
 // Vim の `map` の待ちで積んだ鍵を、写す前に流さずに保つ意図（ADR 0176 の決定 4）。打った鍵
-// （VimKeyPress は入口の表が積み・流す）と待ちの合図（MapTimeout は自分で流す）、それに文書にも
-// モードにも触れない合図（自動退避・プレビューの間引き）と窓の寸法・外観・帯の上の hover。
-// これ以外の意図（IME の確定・マウス・WorkCompleted・モードを変える意図…）は、受ける前に積んだ
-// 鍵を順に engine へ流す（積んだ鍵を失わない）。
+// （VimKeyPress は入口の表が積み・流す）と、使う人の操作ではない意図（keeps_tab_walk の一覧の
+// 1 か所・WorkCompleted と合図と窓の寸法・外観・帯の hover・MapTimeout は自分で流す）。これ以外の
+// 使う人の操作（IME の確定・マウス・モードを変える意図…）は、受ける前に積んだ鍵を順に流す。
 [[nodiscard]] bool keeps_key_map_pending(const EditorIntent &intent) noexcept
 {
-    return std::holds_alternative<VimKeyPress>(intent) ||
-           std::holds_alternative<MapTimeout>(intent) ||
-           std::holds_alternative<AutosaveTick>(intent) ||
-           std::holds_alternative<PreviewTick>(intent) ||
-           std::holds_alternative<VisibleLines>(intent) ||
-           std::holds_alternative<TitleBarWidth>(intent) ||
-           std::holds_alternative<PointTitleBar>(intent) ||
-           std::holds_alternative<RefreshAppearance>(intent);
+    return std::holds_alternative<VimKeyPress>(intent) || keeps_tab_walk(intent);
 }
 
 // 上下に動くときに狙う横位置を保つ意図。上下の移動そのものと、30 秒ごとに必ず来る自動退避の

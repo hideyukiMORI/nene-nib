@@ -621,7 +621,7 @@ void verify_records_and_replay()
            "press_vim_keys does not look up the table");
 }
 
-// 待ちの間の IME の確定と WorkCompleted は積んだ鍵を先に流し、窓の寸法は待ちを保つ（決定 4）。
+// 待ちの間の IME の確定は積んだ鍵を先に流し、WorkCompleted と窓の寸法は待ちを保つ（決定 4）。
 void verify_flush_before_intents()
 {
     Editing ime(insert_escape());
@@ -633,8 +633,13 @@ void verify_flush_before_intents()
     Editing work(insert_escape());
     open_vim_document(work, "abc\n");
     vim_replay(work.controller(), "ij");
-    static_cast<void>(work.controller().apply(application::WorkCompleted{}));
-    expect(shown_body(work.controller()) == "jabc\n", "WorkCompleted flushes the waiting j");
+    const auto worked = work.controller().apply(application::WorkCompleted{});
+    expect(shown_body(work.controller()) == "abc\n" && !worked.map_timer.has_value(),
+           "WorkCompleted keeps the waiting j");
+    vim_replay(work.controller(), "j");
+    expect(whole_vim_body(work.controller()) == "abc\n" &&
+               work.controller().vim_state().mode == core::VimMode::normal,
+           "the next key completes the wait after WorkCompleted");
     Editing sized(insert_escape());
     open_vim_document(sized, "abc\n");
     vim_replay(sized.controller(), "ij");
