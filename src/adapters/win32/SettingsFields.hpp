@@ -25,6 +25,9 @@ struct SettingsFields
     // 検索の大小（#1041・v4 の鍵に足す。v4 は未公開なので版は上げない）。
     std::optional<std::string_view> ignorecase;
     std::optional<std::string_view> smartcase;
+    // 行番号の相対表示と追従の余白（#1041・同じく v4 の後から足した鍵）。
+    std::optional<std::string_view> relativenumber;
+    std::optional<std::string_view> scrolloff;
     // `lsp.<language>.command` の行（鍵の中の言語の名前と値・読んだ順）。
     std::vector<std::pair<std::string_view, std::string_view>> lsp_commands;
     // Vim の `map.<modes>.<lhs>` の行（鍵の全体と値・ファイルの中の順）と `mapleader`

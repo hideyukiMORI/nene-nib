@@ -25,15 +25,17 @@ using Field = std::optional<std::string_view> SettingsFields::*;
 
 // 鍵の名前と DTO の欄の対（同じ位置）。v4 だけの鍵も読むが、旧版にあれば apply_v4_fields
 // が拒否する。
-constexpr std::array<std::string_view, 14> field_names{
-    "version", "colorscheme", "font_family", "font_size", "guide",     "wrap",       "ui_language",
-    "lsp",     "explorer",    "root",        "features",  "mapleader", "ignorecase", "smartcase"};
-constexpr std::array<Field, 14> field_members{
+constexpr std::array<std::string_view, 16> field_names{
+    "version",     "colorscheme", "font_family",    "font_size", "guide",    "wrap",
+    "ui_language", "lsp",         "explorer",       "root",      "features", "mapleader",
+    "ignorecase",  "smartcase",   "relativenumber", "scrolloff"};
+constexpr std::array<Field, 16> field_members{
     &SettingsFields::version,     &SettingsFields::colorscheme, &SettingsFields::font_family,
     &SettingsFields::font_size,   &SettingsFields::guide,       &SettingsFields::wrap,
     &SettingsFields::ui_language, &SettingsFields::lsp,         &SettingsFields::explorer,
     &SettingsFields::root,        &SettingsFields::features,    &SettingsFields::mapleader,
-    &SettingsFields::ignorecase,  &SettingsFields::smartcase};
+    &SettingsFields::ignorecase,  &SettingsFields::smartcase,   &SettingsFields::relativenumber,
+    &SettingsFields::scrolloff};
 
 // 言語ごとのサーバーの命令の鍵 `lsp.<language>.command`（ADR 0160・ADR 0170 の決定 3）。
 constexpr std::string_view lsp_prefix = "lsp.";
@@ -270,11 +272,28 @@ later_switch_from(const std::optional<std::string_view> &value)
     return switch_from(value);
 }
 
+// 追従の余白も後から足した鍵（#1041）。無ければ 0、有れば core の読み 1 本で厳密に読む。
+[[nodiscard]] std::expected<std::size_t, Failure>
+later_scrolloff_from(const std::optional<std::string_view> &value)
+{
+    if (!value.has_value())
+    {
+        return 0;
+    }
+    const auto parsed = core::scrolloff_of(value.value());
+    if (!parsed.has_value())
+    {
+        return std::unexpected(Failure::malformed);
+    }
+    return parsed.value();
+}
+
 [[nodiscard]] bool has_v4_fields(const SettingsFields &fields) noexcept
 {
     return fields.ui_language.has_value() || fields.lsp.has_value() ||
            fields.explorer.has_value() || fields.root.has_value() || fields.features.has_value() ||
            fields.ignorecase.has_value() || fields.smartcase.has_value() ||
+           fields.relativenumber.has_value() || fields.scrolloff.has_value() ||
            !fields.lsp_commands.empty() || !fields.maps.empty() || fields.mapleader.has_value();
 }
 
@@ -363,8 +382,10 @@ lsp_commands_from(const SettingsFields &fields)
     auto commands = lsp_commands_from(fields);
     const auto ignorecase = later_switch_from(fields.ignorecase);
     const auto smartcase = later_switch_from(fields.smartcase);
+    const auto relativenumber = later_switch_from(fields.relativenumber);
+    const auto scrolloff = later_scrolloff_from(fields.scrolloff);
     if (!language || !lsp || !explorer || !root || !features || !commands || !ignorecase ||
-        !smartcase)
+        !smartcase || !relativenumber || !scrolloff)
     {
         return std::unexpected(Failure::malformed);
     }
@@ -376,6 +397,8 @@ lsp_commands_from(const SettingsFields &fields)
     settings.lsp_commands = std::move(commands).value();
     settings.ignorecase = ignorecase.value();
     settings.smartcase = smartcase.value();
+    settings.relativenumber = relativenumber.value();
+    settings.scrolloff = scrolloff.value();
     return apply_maps(settings, fields);
 }
 
@@ -529,11 +552,12 @@ std::string encode_settings(const core::EditorSettings &settings)
     const auto root = settings.root.has_value() ? settings.root.value().text() : std::string_view{};
     return std::format("version=4\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
                        "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n"
-                       "ignorecase={}\nsmartcase={}\n{}{}",
+                       "ignorecase={}\nsmartcase={}\nrelativenumber={}\nscrolloff={}\n{}{}",
                        theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
                        language_text(settings.ui_language), switch_text(settings.lsp),
                        switch_text(settings.explorer), root, features_text(settings.features),
                        switch_text(settings.ignorecase), switch_text(settings.smartcase),
+                       switch_text(settings.relativenumber), settings.scrolloff,
                        lsp_commands_text(settings.lsp_commands), maps_text(settings));
 }
 } // namespace nenenib::adapters::win32

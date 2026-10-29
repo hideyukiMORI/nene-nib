@@ -663,17 +663,20 @@ void verify_settings_versions()
            "guide and wrapping round trip through v4");
     expect(bytes.starts_with("version=4\n") &&
                bytes.ends_with("guide=off\nwrap=off\nui_language=system\nlsp=off\nexplorer=off\n"
-                               "root=\nfeatures=\nignorecase=off\nsmartcase=off\n"),
-           "v4 writer emits the canonical thirteen-field schema");
+                               "root=\nfeatures=\nignorecase=off\nsmartcase=off\n"
+                               "relativenumber=off\nscrolloff=0\n"),
+           "v4 writer emits the canonical fifteen-field schema");
     const auto v3 = decode_settings(v3_settings, SettingsVersion::v3);
     expect(v3 && v3.value().guide == nenenib::core::GuideVisibility::hidden &&
                v3.value().wrapping == nenenib::core::LineWrapping::no_wrap &&
                v3.value().ui_language == nenenib::core::DisplayLanguageChoice::japanese &&
                !v3.value().lsp && !v3.value().explorer && !v3.value().root.has_value() &&
-               v3.value().features.empty() && !v3.value().ignorecase && !v3.value().smartcase,
+               v3.value().features.empty() && !v3.value().ignorecase && !v3.value().smartcase &&
+               !v3.value().relativenumber && v3.value().scrolloff == 0,
            "v3 keeps its values, stays Japanese and takes the other v4 defaults");
-    for (const auto extra : {"ui_language=system\n", "lsp=off\n", "explorer=off\n", "root=\n",
-                             "features=\n", "ignorecase=off\n", "smartcase=off\n"})
+    for (const auto extra :
+         {"ui_language=system\n", "lsp=off\n", "explorer=off\n", "root=\n", "features=\n",
+          "ignorecase=off\n", "smartcase=off\n", "relativenumber=off\n", "scrolloff=0\n"})
     {
         const auto refused = decode_settings(std::string(v3_settings) + extra, SettingsVersion::v3);
         expect(!refused && refused.error() == SettingsFailure::malformed,
@@ -731,8 +734,8 @@ void verify_settings_lsp_commands()
     settings.lsp_commands = {{"python", "C:\\py\\pylsp.exe"},
                              {"cpp", "C:\\llvm\\clangd.exe --log=error"}};
     const auto bytes = encode_settings(settings);
-    expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nlsp.cpp.command=C:"
-                           "\\llvm\\clangd.exe --log=error\n"
+    expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
+                           "scrolloff=0\nlsp.cpp.command=C:\\llvm\\clangd.exe --log=error\n"
                            "lsp.python.command=C:\\py\\pylsp.exe\n"),
            "commands follow the fixed keys in language name order");
     const auto decoded = decode_settings(bytes, SettingsVersion::v4);
@@ -772,7 +775,8 @@ void verify_settings_maps()
         MapRow{VimModeSet{false, true, false, false, false}, "jj", "<Esc>", false},
         MapRow{VimModeSet{true, false, true, false, false}, "<leader>w", ":w<CR>", true}};
     const auto bytes = encode_settings(settings);
-    expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nmapleader=<Space>\n"
+    expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
+                           "scrolloff=0\nmapleader=<Space>\n"
                            "map.i.jj=!<Esc>\nmap.nv.<leader>w=:w<CR>\n"),
            "the leader and the map rows follow the other lines in order");
     const auto decoded = decode_settings(bytes, SettingsVersion::v4);
@@ -849,13 +853,19 @@ std::string without_setting(const std::string &bytes, std::string_view key)
 void verify_settings_v4_later_keys()
 {
     const auto bytes = encode_settings(default_editor_settings());
-    const auto older = decode_settings(
-        without_setting(without_setting(bytes, "ignorecase"), "smartcase"), SettingsVersion::v4);
+    auto stripped = bytes;
+    for (const auto key : {"ignorecase", "smartcase", "relativenumber", "scrolloff"})
+    {
+        stripped = without_setting(stripped, key);
+    }
+    const auto older = decode_settings(stripped, SettingsVersion::v4);
     expect(older && !older.value().ignorecase && !older.value().smartcase &&
+               !older.value().relativenumber && older.value().scrolloff == 0 &&
                encode_settings(older.value()) == bytes,
-           "a v4 without the later keys reads them as off and writes them back");
+           "a v4 without the later keys reads them as off and 0 and writes them back");
     expect(!decode_settings(bytes + "ignorecase=on\n", SettingsVersion::v4) &&
-               !decode_settings(with_setting(bytes, "smartcase", "yes"), SettingsVersion::v4),
+               !decode_settings(with_setting(bytes, "smartcase", "yes"), SettingsVersion::v4) &&
+               !decode_settings(bytes + "scrolloff=0\n", SettingsVersion::v4),
            "a present later key is still read strictly");
 }
 
@@ -869,12 +879,13 @@ void verify_settings_v4_fields()
     settings.features = {"matchparen", "change_marks", "todo_marks2"};
     settings.ignorecase = true;
     settings.smartcase = true;
+    settings.relativenumber = true;
+    settings.scrolloff = 999;
     const auto bytes = encode_settings(settings);
-    expect(
-        bytes.find("\nui_language=zh-hans\nlsp=on\nexplorer=on\nroot=C:\\work\\my dir=x\n"
-                   "features=matchparen,change_marks,todo_marks2\nignorecase=on\nsmartcase=on\n") !=
-            std::string::npos,
-        "v4 writes the language, the switches, the root, the features and the search case");
+    expect(bytes.find("\nui_language=zh-hans\nlsp=on\nexplorer=on\nroot=C:\\work\\my dir=x\n"
+                      "features=matchparen,change_marks,todo_marks2\nignorecase=on\nsmartcase=on\n"
+                      "relativenumber=on\nscrolloff=999\n") != std::string::npos,
+           "v4 writes the language, the switches, the root, the features and the Vim options");
     const auto decoded = decode_settings(bytes, SettingsVersion::v4);
     expect(decoded && same_settings(decoded.value(), settings) &&
                decoded.value().features == settings.features,
@@ -890,9 +901,10 @@ void verify_settings_v4_fields()
     for (const auto &[key, value] :
          {Row{"ui_language", "ja-JP"}, Row{"ui_language", "JA"}, Row{"ui_language", ""},
           Row{"lsp", "ON"}, Row{"explorer", "yes"}, Row{"ignorecase", "1"}, Row{"smartcase", ""},
-          Row{"features", "a,,b"}, Row{"features", ",a"}, Row{"features", "a,"},
-          Row{"features", "Wrap"}, Row{"features", "a b"}, Row{"features", "a,a"},
-          Row{"root", "C:\\a\x01"}})
+          Row{"relativenumber", "1"}, Row{"scrolloff", "1000"}, Row{"scrolloff", "07"},
+          Row{"scrolloff", ""}, Row{"scrolloff", "-1"}, Row{"features", "a,,b"},
+          Row{"features", ",a"}, Row{"features", "a,"}, Row{"features", "Wrap"},
+          Row{"features", "a b"}, Row{"features", "a,a"}, Row{"root", "C:\\a\x01"}})
     {
         const auto result = decode_settings(with_setting(bytes, key, value), SettingsVersion::v4);
         expect(!result && result.error() == SettingsFailure::malformed,

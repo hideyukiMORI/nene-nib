@@ -69,6 +69,20 @@ namespace
     }
     return LineNumber{caret_line.value - lines + 1};
 }
+
+[[nodiscard]] LineNumber followed_inside(LineNumber first_visible, LineNumber caret_line,
+                                         std::size_t lines, ScrollFollow follow) noexcept
+{
+    if (caret_line.value < first_visible.value)
+    {
+        return followed_above(first_visible, caret_line, lines, follow);
+    }
+    if (caret_line.value - first_visible.value >= lines)
+    {
+        return followed_below(first_visible, caret_line, lines, follow);
+    }
+    return first_visible;
+}
 } // namespace
 
 LineNumber first_visible_within(LineNumber requested, std::size_t total_lines,
@@ -81,16 +95,25 @@ LineNumber first_visible_within(LineNumber requested, std::size_t total_lines,
 LineNumber first_visible_for_caret(LineNumber first_visible, LineNumber caret_line,
                                    std::size_t visible_lines, ScrollFollow follow) noexcept
 {
-    const std::size_t lines = std::max<std::size_t>(visible_lines, 1);
-    if (caret_line.value < first_visible.value)
+    return first_visible_with_margin(first_visible, caret_line, ViewportRows{visible_lines, 0},
+                                     follow);
+}
+
+// 余白の内側（先頭行 + margin から margin 行を除いた高さ）を見える範囲とみなして寄せ、結果を
+// margin だけ戻す。中央へ寄せる形は (行数 - 2 margin - 1) / 2 + margin = (行数 - 1) / 2 なので
+// 余白が無いときと同じ位置になる。
+LineNumber first_visible_with_margin(LineNumber first_visible, LineNumber caret_line,
+                                     ViewportRows rows, ScrollFollow follow) noexcept
+{
+    const std::size_t total = std::max<std::size_t>(rows.visible_lines, 1);
+    const std::size_t kept = std::min(rows.margin, (total - 1) / 2);
+    const std::size_t lines = total - kept * 2;
+    const LineNumber inner{first_visible.value + kept};
+    const LineNumber followed = followed_inside(inner, caret_line, lines, follow);
+    if (followed == inner)
     {
-        return followed_above(first_visible, caret_line, lines, follow);
+        return first_visible;
     }
-    const std::size_t offset = caret_line.value - first_visible.value;
-    if (offset >= lines)
-    {
-        return followed_below(first_visible, caret_line, lines, follow);
-    }
-    return first_visible;
+    return shifted_above(followed, kept);
 }
 } // namespace nenenib::core

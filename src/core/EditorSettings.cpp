@@ -13,7 +13,8 @@ bool same_settings(const EditorSettings &left, const EditorSettings &right) noex
            left.explorer == right.explorer && left.root == right.root &&
            left.features == right.features && left.lsp_commands == right.lsp_commands &&
            left.maps == right.maps && left.mapleader == right.mapleader &&
-           left.ignorecase == right.ignorecase && left.smartcase == right.smartcase;
+           left.ignorecase == right.ignorecase && left.smartcase == right.smartcase &&
+           left.relativenumber == right.relativenumber && left.scrolloff == right.scrolloff;
 }
 
 VimPatternCase search_case(const EditorSettings &settings) noexcept
@@ -23,6 +24,26 @@ VimPatternCase search_case(const EditorSettings &settings) noexcept
         return VimPatternCase::sensitive;
     }
     return settings.smartcase ? VimPatternCase::smart : VimPatternCase::ignore;
+}
+
+std::optional<std::size_t> scrolloff_of(std::string_view text) noexcept
+{
+    constexpr std::size_t digits_limit = 3;
+    constexpr std::size_t decimal_base = 10;
+    if (text.empty() || text.size() > digits_limit || (text.size() > 1 && text.front() == '0'))
+    {
+        return std::nullopt;
+    }
+    std::size_t value = 0;
+    for (const char digit : text)
+    {
+        if (digit < '0' || digit > '9')
+        {
+            return std::nullopt;
+        }
+        value = value * decimal_base + static_cast<std::size_t>(digit - '0');
+    }
+    return value;
 }
 
 bool affects_line_height(const EditorSettings &before, const EditorSettings &after) noexcept

@@ -174,6 +174,7 @@ void verify_vim_random_scope();
 // VimWindowTests.cpp（ADR 0148 の決定 7）
 void verify_vim_window_contracts();
 void verify_vim_window_scope();
+void verify_vim_view_scope();
 
 // VimClipboardTests.cpp
 void verify_vim_clipboard_contracts();

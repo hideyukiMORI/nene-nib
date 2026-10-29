@@ -2979,6 +2979,95 @@ def verify_syntax(executable: Path, environment: dict, scheme: str, frames: Path
     return record
 
 
+GUTTER_POLLS = 30
+GUTTER_PADDING_DIPS = 16
+GUTTER_POLL_SECONDS = 0.1
+
+
+def gutter_ink_left(pixels: bytes, width: int, body: dict, index: int) -> int | None:
+    """The leftmost x in the gutter of row `index` whose colour is not the gutter ground."""
+    top = body["firstRowTop"] + body["lineHeight"] * index
+    ground = pixel(pixels, width, body["bandLeft"] + 1, top + 1)
+    for x in range(body["bandLeft"] + 1, body["gutter"]):
+        for y in range(top, top + body["lineHeight"]):
+            if pixel(pixels, width, x, y) != ground:
+                return x
+    return None
+
+
+def verify_gutter(executable: Path, environment: dict, frames: Path | None) -> dict:
+    """Issue #1041: `:set relativenumber` redraws only the gutter (ADR 0008 addendum).
+
+    The caret stays on line 1 of tests/syntax/sample.cpp. Line 1 turns into its absolute number on
+    the left and the other rows into distances, so the gutter changes and the body does not; the
+    ink of row 0 starts further left. Ctrl+P takes the foreground once (`:set rnu`)."""
+    root = Path(__file__).resolve().parents[1]
+    opened = root / "tests/syntax/sample.cpp"
+    process, window, _ = start(executable, environment, [str(opened)])
+    try:
+        raise_window(window)
+        time.sleep(0.6)
+        assert await_cover_gone(window), "the WARP cover child is still over the window"
+        assert_uncovered(window)
+        dpi = user.GetDpiForWindow(window)
+        client = rectangle(window, user.GetClientRect)
+        width, height = client[2] - client[0], client[3] - client[1]
+        body = body_points(width, height, dpi)
+        before = capture(window, width, height)
+        snapshot(frames, window, "gutter-before")
+        try:
+            palette_command(window, ":set rnu")
+        except ForegroundRefused as refused:
+            return {"driven": False, "note": f"{refused}; the gutter stays in nib_window_tests"}
+        # 面が閉じて行番号が描き直されるまで待つ（Enter の後の 1 frame は面が残る・#1098 の 1 回目）。
+        after = capture(window, width, height)
+        for _ in range(GUTTER_POLLS):
+            if gutter_ink_left(after, width, body, 0) != gutter_ink_left(before, width, body, 0):
+                break
+            time.sleep(GUTTER_POLL_SECONDS)
+            after = capture(window, width, height)
+        time.sleep(GUTTER_POLL_SECONDS)
+        after = capture(window, width, height)
+        snapshot(frames, window, "gutter-relativenumber")
+        rows = min(body["visibleLines"], 8)
+        bottom = body["firstRowTop"] + body["lineHeight"] * rows
+
+        def strip(pixels: bytes, left: int, right: int) -> list:
+            return [pixel(pixels, width, x, y) for y in range(body["firstRowTop"], bottom)
+                    for x in range(left, right)]
+
+        gutter_changed = strip(before, body["bandLeft"], body["gutter"]) != strip(
+            after, body["bandLeft"], body["gutter"])
+        # キャレットの升（行頭の 1 升ぶん）は点滅するので比べない。
+        text_left = body["contentLeft"] + body["lineHeight"]
+        body_kept = strip(before, text_left, width - 4) == strip(after, text_left, width - 4)
+        left_before = gutter_ink_left(before, width, body, 0)
+        left_after = gutter_ink_left(after, width, body, 0)
+        changed = [(x, y) for y in range(body["firstRowTop"], bottom)
+                   for x in range(text_left, width - 4)
+                   if pixel(before, width, x, y) != pixel(after, width, x, y)]
+        box = ([min(p[0] for p in changed), min(p[1] for p in changed),
+                max(p[0] for p in changed), max(p[1] for p in changed)] if changed else None)
+        record = {"driven": True, "dpi": dpi, "rows": rows, "gutterChanged": gutter_changed,
+                  "bodyKept": body_kept, "row0InkLeft": [left_before, left_after],
+                  "body": body, "bodyChangedPixels": len(changed), "bodyChangedBox": box}
+        print(json.dumps(record, ensure_ascii=False), file=sys.stderr)
+        assert gutter_changed, "`:set rnu` left the gutter as it was"
+        assert body_kept, "`:set rnu` changed the body text"
+        # 左寄せの番号は右の余白と同じ幅（renderer の gutter_padding_dips = 16）を左にも置く。
+        padding = to_pixels(int(GUTTER_PADDING_DIPS + 0.5), dpi)
+        record["gutterPadding"] = padding
+        moved = (left_before is not None and left_after is not None
+                 and padding <= left_after < left_before)
+        assert moved, "the caret line number did not move left to the padding"
+        close(window)
+        record["exitCode"] = process.wait(timeout=5)
+        assert record["exitCode"] == 0, record["exitCode"]
+    finally:
+        stop(process)
+    return record
+
+
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
@@ -3003,6 +3092,8 @@ def main() -> None:
     parser.add_argument("--scheme", choices=["dark", "light", "grid"], default="dark",
                         help="with --preview: the colour scheme, or the grid document; "
                              "with --syntax: dark or light")
+    parser.add_argument("--gutter", action="store_true",
+                        help="Issue #1041: `:set rnu` redraws only the gutter (runs alone)")
     parser.add_argument("--syntax", action="store_true",
                         help="run the C++ colouring section alone (Issue #816); it sends real keys")
     parser.add_argument("--restore", action="store_true",
@@ -3052,6 +3143,11 @@ def main() -> None:
                              or arguments.keys is not None or arguments.open is not None
                              or arguments.scheme == "grid"):
         parser.error("--syntax runs alone with --scheme dark or light")
+    if arguments.gutter and (arguments.tabs or arguments.split or arguments.preview
+                             or arguments.restore or arguments.grid or arguments.giant_text
+                             or arguments.autosave or arguments.palette or arguments.syntax
+                             or arguments.keys is not None or arguments.open is not None):
+        parser.error("--gutter runs alone")
     frames = arguments.capture.resolve() if arguments.capture is not None else None
     if frames is not None:
         frames.mkdir(parents=True, exist_ok=True)
@@ -3082,6 +3178,14 @@ def main() -> None:
     if arguments.preview:
         try:
             record = verify_preview(executable, environment, arguments.scheme, output, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.gutter:
+        try:
+            record = verify_gutter(executable, environment, frames)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)

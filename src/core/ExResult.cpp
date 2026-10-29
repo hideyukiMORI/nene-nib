@@ -535,9 +535,97 @@ switch_request(std::string_view option, std::span<const std::string_view> names)
                     switch_message(name, wanted.value())};
 }
 
+// 行番号の相対表示の名前（#1041）。`set rnu` `set nornu` `set rnu?` と長い名前。文言は
+// `relativenumber=on` の形。
+constexpr std::array<std::string_view, 2> relativenumber_names{"relativenumber", "rnu"};
+
+[[nodiscard]] std::optional<ExResult> relativenumber_option(std::string_view option,
+                                                            const EditorSettings &settings)
+{
+    const auto request = switch_request(option, relativenumber_names);
+    if (!request.has_value())
+    {
+        return std::nullopt;
+    }
+    const std::string_view name = relativenumber_names.front();
+    if (!request.value().has_value())
+    {
+        return ExResult{std::nullopt, std::nullopt, std::nullopt,
+                        switch_message(name, settings.relativenumber)};
+    }
+    const bool wanted = request.value().value();
+    EditorSettings changed = settings;
+    changed.relativenumber = wanted;
+    return ExResult{std::move(changed), std::nullopt, std::nullopt, switch_message(name, wanted)};
+}
+
+// 追従の余白の名前（#1041）。`set so=N` `set so?` `set so`（数の option の名前だけは問い・
+// Vim と同じ）と長い名前。値は core の scrolloff_of の 1 本で読み、範囲の外は E474 と同じ失敗。
+constexpr std::array<std::string_view, 2> scrolloff_names{"scrolloff", "so"};
+
+[[nodiscard]] DisplayText scrolloff_message(std::size_t value)
+{
+    return DisplayText::parse(std::string(scrolloff_names.front()) + "=" + std::to_string(value))
+        .value();
+}
+
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
+scrolloff_result(std::string_view value, const EditorSettings &settings)
+{
+    const auto parsed = scrolloff_of(value);
+    if (!parsed.has_value())
+    {
+        return std::unexpected(ExFailure::invalid_argument);
+    }
+    EditorSettings changed = settings;
+    changed.scrolloff = parsed.value();
+    return ExResult{std::move(changed), std::nullopt, std::nullopt,
+                    scrolloff_message(parsed.value())};
+}
+
+[[nodiscard]] bool asks_for(std::string_view option, std::string_view name) noexcept
+{
+    return option == name || (option.ends_with('?') && option.substr(0, option.size() - 1) == name);
+}
+
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+scrolloff_option(std::string_view option, const EditorSettings &settings)
+{
+    for (const std::string_view name : scrolloff_names)
+    {
+        if (asks_for(option, name))
+        {
+            return ExResult{std::nullopt, std::nullopt, std::nullopt,
+                            scrolloff_message(settings.scrolloff)};
+        }
+        if (option.starts_with(name) && option.substr(name.size()).starts_with('='))
+        {
+            return scrolloff_result(option.substr(name.size() + 1), settings);
+        }
+    }
+    return std::nullopt;
+}
+
+// 画面の見え方の option（行番号の相対表示と追従の余白・#1041）。どちらにも当たらなければ無し。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+view_option(std::string_view option, const EditorSettings &settings)
+{
+    auto relative = relativenumber_option(option, settings);
+    if (relative.has_value())
+    {
+        return std::expected<ExResult, ExEvaluationFailure>{std::move(relative).value()};
+    }
+    return scrolloff_option(option, settings);
+}
+
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 set_option(std::string_view option, const EditorSettings &settings)
 {
+    auto view = view_option(option, settings);
+    if (view.has_value())
+    {
+        return std::move(view).value();
+    }
     auto letter_case = case_option(option, settings);
     if (letter_case.has_value())
     {
@@ -979,7 +1067,7 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
 // 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
-constexpr std::array<std::string_view, 36> fixed_candidates{"colorscheme",
+constexpr std::array<std::string_view, 39> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -1014,7 +1102,10 @@ constexpr std::array<std::string_view, 36> fixed_candidates{"colorscheme",
                                                             "set ignorecase",
                                                             "set noignorecase",
                                                             "set smartcase",
-                                                            "set nosmartcase"};
+                                                            "set nosmartcase",
+                                                            "set relativenumber",
+                                                            "set norelativenumber",
+                                                            "set scrolloff="};
 
 [[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
                                   std::string_view suffix = {})

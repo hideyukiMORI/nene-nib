@@ -57,6 +57,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace nenenib::tests
@@ -803,6 +804,75 @@ void verify_ex_smartcase()
     }
 }
 
+// 行番号の相対表示（#1041）。`rnu` と長い名前・`no` の形は保存する設定に載り、問いは settings を
+// 空のまま返す。
+void verify_ex_relativenumber()
+{
+    const auto defaults = core::default_editor_settings();
+    expect(!defaults.relativenumber && defaults.scrolloff == 0,
+           "relativenumber is off and scrolloff is 0 by default like Vim");
+    for (const auto text : {"set rnu", "set relativenumber"})
+    {
+        const auto on = core::evaluate_ex(text, defaults, Appearance::dark);
+        expect(carries_settings(on) && settings_of(on).relativenumber &&
+                   message_of(on) == "relativenumber=on",
+               "set rnu turns relativenumber on through the saved settings");
+    }
+    auto relative = defaults;
+    relative.relativenumber = true;
+    for (const auto text : {"set nornu", "set norelativenumber"})
+    {
+        const auto off = core::evaluate_ex(text, relative, Appearance::dark);
+        expect(carries_settings(off) && !settings_of(off).relativenumber &&
+                   message_of(off) == "relativenumber=off",
+               "set nornu turns it off");
+    }
+    const auto asked = core::evaluate_ex("set rnu?", relative, Appearance::dark);
+    expect(asked.has_value() && !carries_settings(asked) &&
+               message_of(asked) == "relativenumber=on",
+           "rnu? tells the current value without changing settings");
+    for (const auto text : {"set rn", "set rnu!", "set nornu?"})
+    {
+        expect(!core::evaluate_ex(text, defaults, Appearance::dark).has_value(),
+               "other spellings of relativenumber are refused");
+    }
+}
+
+// 追従の余白（#1041）。`so=N` は 0〜999 の 10 進だけを受け、`so?` と名前だけの `so` は問い。
+void verify_ex_scrolloff()
+{
+    const auto defaults = core::default_editor_settings();
+    for (const auto text : {"set so=5", "set scrolloff=5"})
+    {
+        const auto set = core::evaluate_ex(text, defaults, Appearance::dark);
+        expect(carries_settings(set) && settings_of(set).scrolloff == 5 &&
+                   message_of(set) == "scrolloff=5",
+               "set so=5 stores the margin through the saved settings");
+    }
+    const auto widest = core::evaluate_ex("set so=999", defaults, Appearance::dark);
+    expect(carries_settings(widest) && settings_of(widest).scrolloff == 999,
+           "999 is the largest stored margin");
+    auto margin = defaults;
+    margin.scrolloff = 7;
+    for (const auto text : {"set so?", "set so", "set scrolloff?", "set scrolloff"})
+    {
+        const auto asked = core::evaluate_ex(text, margin, Appearance::dark);
+        expect(asked.has_value() && !carries_settings(asked) && message_of(asked) == "scrolloff=7",
+               "so? and so tell the current margin without changing settings");
+    }
+    for (const auto text : {"set so=1000", "set so=-1", "set so=", "set so=05", "set so=x"})
+    {
+        const auto refused = core::evaluate_ex(text, defaults, Appearance::dark);
+        expect(!refused.has_value() && std::holds_alternative<core::ExFailure>(refused.error()) &&
+                   std::get<core::ExFailure>(refused.error()) == core::ExFailure::invalid_argument,
+               "a margin outside 0 to 999 or not in plain decimal is an invalid argument");
+    }
+    expect(core::scrolloff_of("0") == std::optional<std::size_t>{0} &&
+               core::scrolloff_of("42") == std::optional<std::size_t>{42} &&
+               !core::scrolloff_of("4a").has_value(),
+           "the one scrolloff reader is shared by Ex and the settings codec");
+}
+
 // ルート（ADR 0162 の決定 7）。`root=<経路>` と `root=` は settings に載り、`root?` と `root=.` は
 // settings を空のまま返す。`root=.` は controller が解く要求。
 void verify_ex_explorer_root()
@@ -840,7 +910,7 @@ void verify_ex_explorer_root()
     expect(long_message.size() <= core::DisplayText::maximum_bytes &&
                long_message.starts_with("root=C:\\aaa") && long_message.ends_with("…"),
            "a long root is cut with an ellipsis");
-    expect(core::command_completions("set r") ==
+    expect(core::command_completions("set ro") ==
                std::vector<std::string>{"set root=", "set root=."},
            "completion lists the two root rows");
 }
@@ -881,6 +951,9 @@ const auto completion_ordinary = std::vector<std::string>{"colorscheme",
                                                           "set noignorecase",
                                                           "set smartcase",
                                                           "set nosmartcase",
+                                                          "set relativenumber",
+                                                          "set norelativenumber",
+                                                          "set scrolloff=",
                                                           "edit",
                                                           "buffer",
                                                           "ls",
@@ -1171,5 +1244,7 @@ void verify_ex_settings()
     verify_ex_explorer_root();
     verify_ex_search_case();
     verify_ex_smartcase();
+    verify_ex_relativenumber();
+    verify_ex_scrolloff();
 }
 } // namespace nenenib::tests

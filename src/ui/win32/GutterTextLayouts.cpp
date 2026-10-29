@@ -31,11 +31,15 @@ void GutterTextLayouts::clear()
 }
 
 std::optional<Microsoft::WRL::ComPtr<IDWriteTextLayout>>
-GutterTextLayouts::lookup(std::string_view text, const core::LayoutRect &area)
+GutterTextLayouts::lookup(std::string_view text, const core::LayoutRect &area,
+                          core::GutterAlignment alignment)
 {
     const auto key = dimensions(area);
     const auto matches = [&](const GutterTextLayout &entry)
-    { return entry.layout != nullptr && entry.text == text && entry.area == key; };
+    {
+        return entry.layout != nullptr && entry.text == text && entry.area == key &&
+               entry.alignment == alignment;
+    };
     const auto current = std::ranges::find_if(current_, matches);
     if (current != current_.end())
     {
@@ -51,11 +55,12 @@ GutterTextLayouts::lookup(std::string_view text, const core::LayoutRect &area)
 }
 
 void GutterTextLayouts::retain(std::string_view text, const core::LayoutRect &area,
+                               core::GutterAlignment alignment,
                                Microsoft::WRL::ComPtr<IDWriteTextLayout> layout)
 {
-    if (layout != nullptr && !lookup(text, area).has_value())
+    if (layout != nullptr && !lookup(text, area, alignment).has_value())
     {
-        current_.push_back({std::string{text}, dimensions(area), std::move(layout)});
+        current_.push_back({std::string{text}, dimensions(area), alignment, std::move(layout)});
     }
 }
 } // namespace nenenib::ui::win32
