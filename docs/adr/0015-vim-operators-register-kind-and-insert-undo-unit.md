@@ -104,6 +104,17 @@ VISUAL の `y` は触らない。`d` `c` の後のキャレットは別の規則
 - キャレットは範囲の先頭（Vim の `oap->start`）。`:help exclusive-linewise` で行単位になった範囲が空の行だけでも同じで（`⏎x1` の `jgUb` は (1, 1)）、行単位の空の範囲も打ち消さない。
 - fixture は `empty-case-` の 36 件（Vim 9.1 の実測・`d` `y` の一致している形と VISUAL の空の行の `.` も入れて不変を固定）。
 
+### 決定 14（2026-10-29 追記・#1038）
+
+14. **`Ctrl-a` `Ctrl-x` は数の増減で、1 回の `Edit`・undo 1 単位・`.` に載り・レジスタを書かない。`nrformats` は `bin,hex` に固定する**（Vim の defaults.vim の値・8 進・英字・unsigned は読まない・`:set nrformats=` は後続）。
+    - 数を探す・増減した本文を作るのは core の純関数 `VimNumber.hpp` の 3 本（`vim_find_number` `vim_find_selected_number` `vim_incremented_text`）で、Vim 9.1 の `do_addsub` と `vim_str2nr` をそのまま写す: キャレットが 2 進・16 進の桁か `0x` `0b` の上ならその数、そうでなければキャレットの上か右の最初の 10 進の数。直前の `-` は 10 進の負号で、16 進と 2 進の前の `-` は残して正の数として増減する。
+      値は 64 bit の符号なしで、10 進は回り込むと負号が反転し（`18446744073709551615` の `Ctrl-a` は `-18446744073709551615`）、読むときに溢れた数は最大値に貼り付いて増減しない。`0` で始まる数は桁数（符号と接頭辞を除く）を保って 0 で埋め（`007` → `008`・`0x00ff` → `0x0100`・`00` の `Ctrl-x` は `-01`）、16 進の桁の大小は数の最後の英字に合わせ（`0xaF` → `0xB0`）、`0x` `0X` の大小は元のまま。回数は 999999999 に貼り付く（Vim の normal.c）。
+    - **行を写さない**: engine（`VimStepNumbers.cpp`）はキャレットの前後 4096 バイトの窓を `text_range` で読み、純関数が窓の端（行の端ではない端）まで読みに行ったら `VimNumberMiss::window_short` を返すので窓を倍にして読み直す。16 MiB の 1 行でも数がキャレットの近くにあれば 8 KiB しか写さない。
+    - NORMAL: 置き換えは `VimReplaceRange` の 1 つで、キャレットは新しい数の最後の桁、`u` の戻り先は押したときのキャレット（`Edit.restore` の既定）。数が無ければ失敗（`not_found`・残りの鍵は打ち切る）、空行は失敗にせず何もしない、オペレータの後ろ（`d<C-a>`）は失敗にせず打ち消す（Vim の `clearop`）、NORMAL の `g Ctrl-a` は失敗（Vim のビープ）。
+    - VISUAL: 各行の選択の中の最初の数を増減し、行ごとの置き換えを `VimReplaceBlock` にまとめる（undo 1 単位）。数を探す範囲は文字単位なら選択と行の重なり・行単位なら行の全体・矩形なら丸ごと入っている本文（Vim の `block_prep` の textcol / textlen）で、行単位のほかは数を範囲の中で切る（`12345` の `llvl<C-a>` は `12355`）。`-` は選択の中にあるときだけ負号。`g Ctrl-a` `g Ctrl-x` は数を変えた行ごとに足す量を回数ずつ増やす（数の無い行は数えない）。キャレットと `u` の戻り先は選択の始まり（行単位は最初の行の行頭・矩形は左上）。数の無い選択も失敗にしない。
+    - 鍵は `VimSpecialKey::control_a` `control_x`（`g` の後ろは表の 0x01 と 0x18・本文 ↔ 鍵の写しも同じ値・`r<C-a>` は他の Ctrl 鍵と同じく何もしない）。窓は Vim の NORMAL と VISUAL でだけ Ctrl+A / Ctrl+X を写す（D71 の Vim 優先・INSERT は通常モードの表へ落ちる）。INSERT の `Ctrl-a`（直前の挿入）と `Ctrl-x`（補完）は未対応で何もしない。
+    - fixture は `increment-` の 72 件（Vim 9.1 の oracle で実測・どれも `set nrformats=bin,hex` を fixture の設定に書く。oracle の `-u NONE` の Vim の既定は `bin,octal,hex` で、`007` の `Ctrl-a` が 8 進の `010` になる）。窓の外を読まないこと・値の往復・範囲の形は `--vim-number-property`（固定 seed の性質の試験）。
+
 ## 強制
 
 - fixture の再生（ADR 0005 / 0012）— **active**（`nib_unit` が `VimFixtures.hpp` の全項目を再生し、レジスタの種類も突き合わせる）
@@ -111,6 +122,7 @@ VISUAL の `y` は触らない。`d` `c` の後のキャレットは別の規則
 - CPP-002: `VimOperator` / `VimRegisterKind` / `EditBoundary` の `switch` に `default` を書かない・`std::visit` の写し先を欠かさない — **active**（コンパイルと clang-tidy）
 - ARC-007 / CPP-013: core から時刻・OS のシンボルが出ない — **active**（`eng/symbols.py`）
 - `J` `gJ`・`~` `g~` `gu` `gU`・`>` `<`（決定 9〜11）— **active**（fixture `J-` `gJ-` `tilde-` `gtilde-` `gu-` `gU-` `shift-right-` `shift-left-` を `nib_unit` が再生・CRLF の文書と undo の単位と `.` の記録は `--vim-replace` の手書きの契約）
+- `Ctrl-a` `Ctrl-x` と VISUAL の連番（決定 14）— **active**（fixture `increment-` 72 件を `nib_unit` が再生・純関数の性質は `--vim-number-property`）
 - undo の単位（決定 5）— 単体テスト（CTest）。`ia<BS>b<Esc>u`・`cwfoo<Esc>u` は 1 単位、`ia<Left>b<Esc>u` は 2 単位
 
 ## 結果

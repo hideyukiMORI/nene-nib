@@ -244,6 +244,7 @@ void verify_vim_character_scope();
 // VimCaseTests.cpp
 void verify_vim_case_contracts();
 void verify_vim_case_scope();
+void verify_vim_number_property_scope();
 
 // VimVirtualColumnTests.cpp
 void verify_vim_virtual_column_contracts();

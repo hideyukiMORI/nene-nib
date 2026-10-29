@@ -8,7 +8,7 @@
 
 namespace nenenib::tests
 {
-inline constexpr std::array<VimKeyName, 20> vim_key_names{{
+inline constexpr std::array<VimKeyName, 22> vim_key_names{{
     {"<Esc>", nenenib::core::VimSpecialKey::escape},
     {"<CR>", nenenib::core::VimSpecialKey::enter},
     {"<BS>", nenenib::core::VimSpecialKey::backspace},
@@ -29,6 +29,8 @@ inline constexpr std::array<VimKeyName, 20> vim_key_names{{
     {"<Up>", nenenib::core::VimSpecialKey::arrow_up},
     {"<Down>", nenenib::core::VimSpecialKey::arrow_down},
     {"<C-w>", nenenib::core::VimSpecialKey::control_w},
+    {"<C-a>", nenenib::core::VimSpecialKey::control_a},
+    {"<C-x>", nenenib::core::VimSpecialKey::control_x},
 }};
 } // namespace nenenib::tests
 // clang-format on

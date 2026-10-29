@@ -36,6 +36,10 @@ constexpr char32_t carriage_return_character = 0x0D;
 // vim_window_control_character もこの値を引く・VimStep.cpp に写しを置かない）。
 constexpr char32_t control_v_character = 0x16;
 constexpr char32_t control_w_character = 0x17;
+// `Ctrl-a` `Ctrl-x`（ADR 0015 の決定 14）。`g` の後ろの特別な鍵（vim_number_control_character）と、
+// 本文 → 鍵の写しはこの値を引く。
+constexpr char32_t control_a_character = 0x01;
+constexpr char32_t control_x_character = 0x18;
 
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
@@ -227,7 +231,11 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::move_mark_line, VimActionGroup::motion},
      {VimAction::move_mark_exact, VimActionGroup::motion},
      {VimAction::reselect_visual, VimActionGroup::enter_visual},
-     {VimAction::insert_at_last_insert, VimActionGroup::insert_line}}};
+     {VimAction::insert_at_last_insert, VimActionGroup::insert_line},
+     {VimAction::increment_number, VimActionGroup::number},
+     {VimAction::decrement_number, VimActionGroup::number},
+     {VimAction::increment_sequence, VimActionGroup::number},
+     {VimAction::decrement_sequence, VimActionGroup::number}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 37> motion_bindings{
@@ -270,8 +278,8 @@ constexpr std::array<VimMotionBinding, 37> motion_bindings{
      {VimAction::move_mark_exact, VimMotion::mark_exact}}};
 
 // g の後ろの鍵 → 動作（ADR 0027 / Issue #222 / ADR 0057 の決定 2 / ADR 0144 の決定 4 /
-// ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10 / #1039 の gv gi）。ここに無い鍵は g を打ち消す。
-constexpr std::array<VimBinding, 19> g_bindings{
+// ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10・14 / #1039 の gv gi）。ここに無い鍵は g を打ち消す。
+constexpr std::array<VimBinding, 21> g_bindings{
     {{U'g', VimAction::move_document_first},
      {U'e', VimAction::move_previous_word_end},
      {U'E', VimAction::move_previous_big_word_end},
@@ -290,7 +298,9 @@ constexpr std::array<VimBinding, 19> g_bindings{
      {U'u', VimAction::lower_case_operator},
      {U'U', VimAction::upper_case_operator},
      {U'v', VimAction::reselect_visual},
-     {U'i', VimAction::insert_at_last_insert}}};
+     {U'i', VimAction::insert_at_last_insert},
+     {control_a_character, VimAction::increment_sequence},
+     {control_x_character, VimAction::decrement_sequence}}};
 
 // 保留を立てる鍵 → オペレータ（ADR 0015 の決定 1・10・11）。同じ行の鍵を保留の後ろで押すと
 // 行単位（dd g~g~ >>）。
@@ -534,6 +544,39 @@ static_assert(every_alignment_has_one_row(),
     case VimSpecialKey::control_u:
     case VimSpecialKey::control_f:
     case VimSpecialKey::control_b:
+    case VimSpecialKey::control_a:
+    case VimSpecialKey::control_x:
+        return std::nullopt;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] std::optional<char32_t> vim_number_control_character(VimSpecialKey key) noexcept
+{
+    switch (key)
+    {
+    case VimSpecialKey::control_a:
+        return control_a_character;
+    case VimSpecialKey::control_x:
+        return control_x_character;
+    case VimSpecialKey::escape:
+    case VimSpecialKey::enter:
+    case VimSpecialKey::backspace:
+    case VimSpecialKey::arrow_left:
+    case VimSpecialKey::arrow_right:
+    case VimSpecialKey::arrow_up:
+    case VimSpecialKey::arrow_down:
+    case VimSpecialKey::control_r:
+    case VimSpecialKey::home:
+    case VimSpecialKey::end:
+    case VimSpecialKey::page_up:
+    case VimSpecialKey::page_down:
+    case VimSpecialKey::control_d:
+    case VimSpecialKey::control_u:
+    case VimSpecialKey::control_f:
+    case VimSpecialKey::control_b:
+    case VimSpecialKey::control_v:
+    case VimSpecialKey::control_w:
         return std::nullopt;
     }
     std::unreachable();
