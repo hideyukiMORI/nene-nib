@@ -4,14 +4,28 @@
 
 namespace nenenib::core
 {
-SearchLine::SearchLine(InputText input, VimSearchDirection direction)
-    : input_(std::move(input)), direction_(direction)
+SearchLine::SearchLine(InputText input, InputLinePrompt prompt)
+    : input_(std::move(input)), prompt_(prompt)
 {
 }
 
 SearchLine SearchLine::opened(VimSearchDirection direction)
 {
-    return SearchLine(InputText{std::string{}, Offset{0}}, direction);
+    return SearchLine(InputText{std::string{}, Offset{0}}, direction == VimSearchDirection::forward
+                                                               ? InputLinePrompt::search_forward
+                                                               : InputLinePrompt::search_backward);
+}
+
+SearchLine SearchLine::opened_find(std::string_view preset)
+{
+    const InputText empty{std::string{}, Offset{0}};
+    auto filled = inserted_input(empty, preset);
+    return SearchLine(filled ? std::move(filled).value() : empty, InputLinePrompt::find);
+}
+
+SearchLine SearchLine::opened_go_to_line()
+{
+    return SearchLine(InputText{std::string{}, Offset{0}}, InputLinePrompt::go_to_line);
 }
 
 std::string_view SearchLine::text() const noexcept
@@ -26,7 +40,13 @@ Offset SearchLine::caret() const noexcept
 
 VimSearchDirection SearchLine::direction() const noexcept
 {
-    return direction_;
+    return prompt_ == InputLinePrompt::search_backward ? VimSearchDirection::backward
+                                                       : VimSearchDirection::forward;
+}
+
+InputLinePrompt SearchLine::prompt() const noexcept
+{
+    return prompt_;
 }
 
 std::expected<SearchLine, ExFailure> SearchLine::inserted(std::string_view text) const
@@ -36,13 +56,13 @@ std::expected<SearchLine, ExFailure> SearchLine::inserted(std::string_view text)
     {
         return std::unexpected(next.error());
     }
-    return SearchLine(std::move(next).value(), direction_);
+    return SearchLine(std::move(next).value(), prompt_);
 }
 
 SearchLine SearchLine::edited(CommandEdit edit) const
 {
     // 補完は無い（却下した選択肢の 4 行目）。Tab の 2 つは文字列もキャレットも変えない。
-    return SearchLine(edited_input(input_, edit), direction_);
+    return SearchLine(edited_input(input_, edit), prompt_);
 }
 
 SearchLine SearchLine::recalled(const InputHistory &history, CommandEdit direction) const
@@ -52,7 +72,7 @@ SearchLine SearchLine::recalled(const InputHistory &history, CommandEdit directi
     {
         return *this;
     }
-    SearchLine line(history.shown(walk.value()), direction_);
+    SearchLine line(history.shown(walk.value()), prompt_);
     line.history_walk_ = walk;
     return line;
 }

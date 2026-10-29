@@ -518,6 +518,19 @@ bool EditorWindow::press_palette_key(WPARAM word)
     }
 }
 
+// 「検索: 」の F3 / Shift+F3 は Enter と同じく次・前の当たりへ（ADR 0174 の決定 6）。
+// ほかの入力行（Vim の `/` を含む）では今までどおり何もしない。
+bool EditorWindow::press_find_key(WPARAM word)
+{
+    if (word != VK_F3 || !controller_.find_line_active())
+    {
+        return false;
+    }
+    send(application::SearchHop{held(VK_SHIFT) ? core::VimSearchDirection::backward
+                                               : core::VimSearchDirection::forward});
+    return true;
+}
+
 void EditorWindow::press_command_key(WPARAM word)
 {
     if (held(VK_CONTROL) && !held(VK_MENU))
@@ -525,7 +538,7 @@ void EditorWindow::press_command_key(WPARAM word)
         press_command_control_key(word);
         return;
     }
-    if (press_palette_key(word))
+    if (press_palette_key(word) || press_find_key(word))
     {
         return;
     }

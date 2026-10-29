@@ -133,6 +133,11 @@ where it was, a click on the first task check box toggles it once the tick has a
 edited body (previewTask-<scheme>.png, Issue #1101), and Ctrl+Shift+M closes it again (previewClosed-<scheme>.png: no divider).
 `--preview --scheme grid` opens one Markdown line of 20,000 characters, answers the grid question
 with yes and opens the preview (previewGrid.png) for the anchor to be checked by eye.
+Issue #1127 (#1046 N1a) adds the ordinary find prompt (ADR 0174), which `--find` runs alone: a
+four-line file is opened, Ctrl+F (sent with SendInput) opens 検索: (find-prompt.png), `beta` is
+typed and its matches are painted (find-typed.png), Enter and F3 move the caret with the prompt
+kept (find-enter.png, find-f3.png: the 行 X, 桁 Y item changes) and Esc closes the prompt while the
+matches stay painted (find-escape.png).
 Python standard library and ctypes only.
 """
 
@@ -3165,6 +3170,79 @@ def verify_explorer(executable: Path, environment: dict, output: Path,
     return record
 
 
+VK_F = 0x46
+VK_F3 = 0x72
+FIND_DOCUMENT = "find sample\nbeta one\nbeta two\nbeta three\n"
+
+
+def verify_find(executable: Path, environment: dict, output: Path, frames: Path | None) -> dict:
+    """Issue #1127 (#1046 N1a): the ordinary find prompt, ADR 0174 decisions 3, 5 and 6.
+
+    Ctrl+F opens 検索: on the left of the status bar, typing `beta` paints the matches below the
+    caret (incsearch and the search face), Enter and F3 move the caret (the 行 X, 桁 Y item changes)
+    with the prompt kept, and Esc closes the prompt while the matches stay painted. Ctrl+F takes the
+    foreground once; the rest are posted keys."""
+    opened = output / "find-sample.txt"
+    opened.write_text(FIND_DOCUMENT, encoding="utf-8", newline="\n")
+    process, window, _ = start(executable, environment, [str(opened)])
+    try:
+        raise_window(window)
+        time.sleep(0.6)
+        assert await_cover_gone(window), "the WARP cover child is still over the window"
+        assert_uncovered(window)
+        dpi = user.GetDpiForWindow(window)
+        client = rectangle(window, user.GetClientRect)
+        width, height = client[2] - client[0], client[3] - client[1]
+        size = (width, height)
+        body = body_points(width, height, dpi)
+        left = status_left_box(width, height, dpi)
+        position = status_item_box(width, height, dpi, 0)
+        row = content_row_box(body, 2, width, dpi)
+        before = capture(window, width, height)
+        snapshot(frames, window, "find-before")
+        if not press_chord(window, VK_CONTROL, VK_F):
+            return {"driven": False, "note": "the window could not take the foreground; the "
+                    "prompt stays in the --find-replace unit tests"}
+        prompted = await_new_frame(window, before, size)
+        snapshot(frames, window, "find-prompt")
+        write_text(window, "beta")
+        typed = await_new_frame(window, prompted, size)
+        snapshot(frames, window, "find-typed")
+        press(window, VK_RETURN)
+        entered = await_new_frame(window, typed, size)
+        snapshot(frames, window, "find-enter")
+        press(window, VK_F3)
+        hopped = await_new_frame(window, entered, size)
+        snapshot(frames, window, "find-f3")
+        press(window, VK_ESCAPE)
+        closed = await_new_frame(window, hopped, size)
+        snapshot(frames, window, "find-escape")
+
+        def box(pixels: bytes, area: tuple) -> list:
+            return box_pixels(pixels, width, area)
+
+        record = {
+            "driven": True, "dpi": dpi,
+            "promptShown": box(prompted, left) != box(before, left),
+            "matchesPainted": box(typed, row) != box(before, row),
+            "enterMoved": box(entered, position) != box(typed, position),
+            "enterKeptPrompt": box(entered, left) != box(before, left),
+            "f3Moved": box(hopped, position) != box(entered, position),
+            "escapeClosedPrompt": box(closed, left) == box(before, left),
+            "matchesStayed": box(closed, row) != box(before, row),
+        }
+        print(json.dumps(record, ensure_ascii=False), file=sys.stderr)
+        for name in ("promptShown", "matchesPainted", "enterMoved", "enterKeptPrompt", "f3Moved",
+                     "escapeClosedPrompt", "matchesStayed"):
+            assert record[name], f"find: {name} did not hold"
+        close(window)
+        record["exitCode"] = process.wait(timeout=5)
+        assert record["exitCode"] == 0, record["exitCode"]
+    finally:
+        stop(process)
+    return record
+
+
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
@@ -3205,6 +3283,8 @@ def main() -> None:
                         help="run the explorer panel section alone (Issue #997); it sends real keys")
     parser.add_argument("--palette", action="store_true",
                         help="run the palette section alone (Issue #706); it sends real keys")
+    parser.add_argument("--find", action="store_true",
+                        help="run the ordinary find section alone (Issue #1127); it sends Ctrl+F")
     arguments = parser.parse_args()
     if arguments.keys is not None and arguments.capture is None:
         parser.error("--keys needs --capture <dir>")
@@ -3253,6 +3333,12 @@ def main() -> None:
                              or arguments.autosave or arguments.palette or arguments.syntax
                              or arguments.keys is not None or arguments.open is not None):
         parser.error("--gutter runs alone")
+    if arguments.find and (arguments.tabs or arguments.split or arguments.preview
+                           or arguments.restore or arguments.grid or arguments.giant_text
+                           or arguments.autosave or arguments.palette or arguments.syntax
+                           or arguments.gutter or arguments.explorer
+                           or arguments.keys is not None or arguments.open is not None):
+        parser.error("--find runs alone")
     frames = arguments.capture.resolve() if arguments.capture is not None else None
     if frames is not None:
         frames.mkdir(parents=True, exist_ok=True)
@@ -3291,6 +3377,14 @@ def main() -> None:
     if arguments.explorer:
         try:
             record = verify_explorer(executable, environment, output, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.find:
+        try:
+            record = verify_find(executable, environment, output, frames)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)

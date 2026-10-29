@@ -1,5 +1,6 @@
 #include "VimStepDetail.hpp"
 
+#include "LiteralPattern.hpp"
 #include "VimAction.hpp"
 #include "VimMatchRequest.hpp"
 #include "VimMotionRange.hpp"
@@ -213,14 +214,20 @@ namespace
 }
 
 // `*` / `#` が拾った本文の magic の特殊文字を `\` で escape する（Vim の nv_ident の aux_ptr・
-// Issue #961）。`#` は区切りの `?` も escape する。多バイト文字のバイトは ASCII と重ならない。
+// Issue #961）。逃がし方は通常モードの検索語と同じ literal_pattern の 1 本（ADR 0174 の決定 4）で、
+// `#` は区切りの `?` も escape する。多バイト文字のバイトは ASCII と重ならない。
 [[nodiscard]] std::string escaped_search_text(std::string_view text, VimSearchDirection direction)
 {
-    constexpr std::string_view special = "/.*~[^$\\";
-    std::string escaped;
-    for (const char byte : text)
+    const std::string literal = literal_pattern(text);
+    if (direction != VimSearchDirection::backward)
     {
-        if (special.contains(byte) || (byte == '?' && direction == VimSearchDirection::backward))
+        return literal;
+    }
+    std::string escaped;
+    escaped.reserve(literal.size());
+    for (const char byte : literal)
+    {
+        if (byte == '?')
         {
             escaped.push_back('\\');
         }

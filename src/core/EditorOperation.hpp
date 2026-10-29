@@ -40,6 +40,13 @@ enum class EditorOperation : std::uint8_t
     insert_date_time,
     // 保存の形を選ぶ 2 つ（ADR 0010 の追補 #1049 の決定 2 の (c)）。
     choose_encoding,
-    choose_line_ending
+    choose_line_ending,
+    // 通常モードの検索・置換・行へ移動（ADR 0174 の決定 1）。鍵は通常モードの行だけで、Vim では
+    // 鍵の無い行（F1 の一覧から選ぶと `/` と `:` の入力行・決定 2）。
+    find,
+    find_next,
+    find_previous,
+    replace,
+    go_to_line
 };
 } // namespace nenenib::core

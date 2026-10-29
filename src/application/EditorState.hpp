@@ -16,6 +16,7 @@
 #include "EditorSettings.hpp"
 #include "ExplorerState.hpp"
 #include "FileFailure.hpp"
+#include "FindState.hpp"
 #include "InputHistory.hpp"
 #include "Language.hpp"
 #include "LineEnding.hpp"
@@ -84,6 +85,10 @@ class EditorState final
     // Ctrl+P の面を開くときに焦点を本文へ戻す 1 か所だけ。
     [[nodiscard]] const ExplorerState &explorer() const noexcept;
     [[nodiscard]] EditorState with_explorer(ExplorerState explorer) const;
+    // 通常モードの検索（ADR 0174 の決定 3）。窓に 1 つで保存せず、タブの切り替えでは変わらない。
+    // 置くのは controller の「検索: 」の確定だけ。
+    [[nodiscard]] const FindState &find() const noexcept;
+    [[nodiscard]] EditorState with_find(FindState find) const;
     // Vim の `map` の左辺の途中で積んだ鍵（ADR 0176 の決定 3・4）。窓に 1 つで、engine にはまだ
     // 渡していない。積むのと流して空にするのは controller の打った鍵の入口と MapTimeout と
     // 「先に流す」意図の入口だけ。表が空なら常に空。
@@ -325,6 +330,8 @@ class EditorState final
     // 木は大きくなり得るので、状態の写し（with_* のたび）で複製しない不変の束で持つ（ADR 0056 の
     // 脇のタブと同じ形）。
     std::shared_ptr<const ExplorerState> explorer_ = std::make_shared<const ExplorerState>();
+    // 状態は打鍵ごとに写るので、語の文字列は共有して写さない（explorer_ と同じ形）。
+    std::shared_ptr<const FindState> find_ = std::make_shared<const FindState>();
     std::vector<core::VimKey> key_map_pending_;
     std::vector<ParkedTab> parked_;
     std::size_t active_ = 0;

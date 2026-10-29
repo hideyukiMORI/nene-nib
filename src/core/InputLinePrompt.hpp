@@ -15,6 +15,10 @@ enum class InputLinePrompt : std::uint8_t
     // `/` の検索。
     search_forward,
     // `?` の検索。
-    search_backward
+    search_backward,
+    // 通常モードの検索（「検索: 」・ADR 0174 の決定 3）。語は literal で照合器へ渡る。
+    find,
+    // 通常モードの行へ移動（「行: 」・ADR 0174 の決定 3・8）。
+    go_to_line
 };
 } // namespace nenenib::core

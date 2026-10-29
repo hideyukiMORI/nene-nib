@@ -18,6 +18,8 @@ namespace nenenib::ui::win32
 // ブックマークの鍵は TabShortcut と BookmarkKey の経路のまま）。
 // F1 と F5（日時の挿入・ADR 0175）は修飾なしだけ、F6 は Ctrl なし（Shift はそのまま入れる）。
 // Ctrl つきの M（プレビュー・ADR 0155）と V（文字だけの貼り付け・ADR 0157）も写す。
+// 検索・置換・行へ移動の Ctrl つきの F H G と、Ctrl なしの F3（Shift はそのまま入れる）も写す
+// （ADR 0174 の決定 1・Vim モードでは表に鍵の行が無いので今までどおり Vim の鍵へ流れる）。
 [[nodiscard]] inline std::optional<core::KeyChord> function_chord(WPARAM key, bool control,
                                                                   bool shift)
 {
@@ -28,6 +30,10 @@ namespace nenenib::ui::win32
     if (key == VK_F6)
     {
         return core::KeyChord{false, shift, core::OperationKey::f6};
+    }
+    if (key == VK_F3)
+    {
+        return core::KeyChord{false, shift, core::OperationKey::f3};
     }
     if (key == VK_F1 && !shift)
     {
@@ -43,7 +49,7 @@ namespace nenenib::ui::win32
 [[nodiscard]] inline std::optional<core::KeyChord> operation_chord(WPARAM key, bool control,
                                                                    bool shift)
 {
-    if (key == VK_F1 || key == VK_F5 || key == VK_F6)
+    if (key == VK_F1 || key == VK_F3 || key == VK_F5 || key == VK_F6)
     {
         return function_chord(key, control, shift);
     }
@@ -72,6 +78,12 @@ namespace nenenib::ui::win32
         return chord(core::OperationKey::e);
     case 'V':
         return chord(core::OperationKey::v);
+    case 'F':
+        return chord(core::OperationKey::f);
+    case 'H':
+        return chord(core::OperationKey::h);
+    case 'G':
+        return chord(core::OperationKey::g);
     case VK_OEM_PLUS:
     case VK_ADD:
         return chord(core::OperationKey::plus);

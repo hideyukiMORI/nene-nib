@@ -34,6 +34,12 @@ enum class OperationKey : std::uint8_t
     // は表に行を置かない。
     e,
     // 修飾なしの F5 の日時の挿入（ADR 0175 の決定 3）。
-    f5
+    f5,
+    // 通常モードの検索・置換・行へ移動の Ctrl+F・Ctrl+H・Ctrl+G と F3 / Shift+F3（ADR 0174 の
+    // 決定 1）。Vim の `gg` の `g` とは関係が無い。
+    f,
+    h,
+    g,
+    f3
 };
 } // namespace nenenib::core

@@ -21,7 +21,7 @@ namespace nenenib::core
 // 「Shift を見ていなかった今の振る舞いを保つ行」は Shift なしの行のすぐ後ろに置く。見せる鍵は
 // そのモードで最初に当たる行なので、一覧に見える鍵は Shift なしのまま（Vim の開くは
 // Ctrl+Shift+O）。
-inline constexpr std::array<OperationBinding, 38> operation_bindings{{
+inline constexpr std::array<OperationBinding, 48> operation_bindings{{
     {EditorOperation::open_file, OperationModes::ordinary, KeyChord{true, false, OperationKey::o}},
     // 通常モードでは Shift を見ていなかった今の振る舞いを保つ行で、Vim では開くの鍵（D71）。
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, true, OperationKey::o}},
@@ -85,6 +85,22 @@ inline constexpr std::array<OperationBinding, 38> operation_bindings{{
     // 保存の形を選ぶ（ADR 0010 の追補 #1049 の決定 2 の (c)）。鍵なしで F1 の一覧から。
     {EditorOperation::choose_encoding, OperationModes::both, std::nullopt},
     {EditorOperation::choose_line_ending, OperationModes::both, std::nullopt},
+    // 検索・置換・行へ移動（ADR 0174 の決定 1・2）。鍵は通常モードだけ（Vim の
+    // Ctrl+F は半画面送り・Ctrl+H は <BS>・Ctrl+G は Vim のまま・D71）。Vim は鍵の
+    // 無い行で F1 の一覧に載り、選ぶと `/` と `:` の入力行（`find_next` /
+    // `find_previous` は `n` / `N` と同じ 1 本）。
+    {EditorOperation::find, OperationModes::ordinary, KeyChord{true, false, OperationKey::f}},
+    {EditorOperation::find, OperationModes::vim, std::nullopt},
+    {EditorOperation::find_next, OperationModes::ordinary,
+     KeyChord{false, false, OperationKey::f3}},
+    {EditorOperation::find_next, OperationModes::vim, std::nullopt},
+    {EditorOperation::find_previous, OperationModes::ordinary,
+     KeyChord{false, true, OperationKey::f3}},
+    {EditorOperation::find_previous, OperationModes::vim, std::nullopt},
+    {EditorOperation::replace, OperationModes::ordinary, KeyChord{true, false, OperationKey::h}},
+    {EditorOperation::replace, OperationModes::vim, std::nullopt},
+    {EditorOperation::go_to_line, OperationModes::ordinary, KeyChord{true, false, OperationKey::g}},
+    {EditorOperation::go_to_line, OperationModes::vim, std::nullopt},
 }};
 
 // 鍵とモード → 操作。表を上から見て、鍵が同じでモードに効く最初の行。値なしは「割り当てが無い」。
