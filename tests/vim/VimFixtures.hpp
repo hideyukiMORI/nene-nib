@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 891e3609fc20a4ec74bb540344c77acf2193b0d07c5d5211a758401b3e82ded6 / 2737 fixtures
+// fixtures.json: sha256 ca26362aedcd1dd1ec6f04105a1f098c0c34eedb024ed7f67540185009851d98 / 2741 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2737> vim_fixtures{{
+constexpr std::array<VimFixture, 2741> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2749,6 +2749,10 @@ constexpr std::array<VimFixture, 2737> vim_fixtures{{
     {"block-replace-wide-undo", "abcd", "<C-v>lr語u", "abcd", 1, 1, "", "", std::nullopt},
     {"block-replace-wide-three-lines", "abcde\nab\nabcdefg", "<C-v>jjllr語", "語 de\n語\n語 defg", 1, 1, "", "", std::nullopt},
     {"block-replace-wide-tab-inside-narrow", "ab\tcd\nefghijklmn", "3l<C-v>jhhrZ", "ab    ZZZd\nefghijZZZn", 1, 3, "", "", std::nullopt},
+    {"block-replace-wide-short-dollar-odd", "abc", "<C-v>$r語", "語", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-short-line-odd", "abcde\nabc\nabcdefg", "<C-v>jjlllr語", "語語e\n語\n語語efg", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-dollar-odd-lines", "abcde\nabc", "<C-v>j$r語", "語語\n語", 1, 1, "", "", std::nullopt},
+    {"block-replace-wide-exact-end-odd", "abc\nabcdef", "<C-v>jllr語", "語 \n語 def", 1, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

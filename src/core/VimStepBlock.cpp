@@ -59,10 +59,11 @@ namespace detail
 namespace
 {
 // 矩形の左上。取ったあとも消したあとも置き換えたあとも Vim はここへキャレットを置く（実測）。
-// 端で切れた文字を消すと残る空白のぶんだけ右へ寄る。
-[[nodiscard]] Offset block_caret(const VimBlockRange &block, std::size_t kept)
+// 左上が端で切れた Tab や全角なら、その文字のあった所＝埋め直した空白の先頭（ADR 0035 の追補
+// #1067・Vim は oap->start へ戻す）。
+[[nodiscard]] Offset block_caret(const VimBlockRange &block)
 {
-    return Offset{block.lines.front().range.begin.value + kept};
+    return block.lines.front().range.begin;
 }
 
 [[nodiscard]] VimRegister block_register(const TextBuffer &text, const VimBlockRange &block)
@@ -77,9 +78,10 @@ namespace
 }
 
 // 矩形の 1 行が覆った桁の数を埋める本文（ADR 0035 の追補 #1067）。幅 2 の文字は桁の数の半分だけ
-// 並べ、奇数なら空白 1 つで埋める（Vim の op_replace の `numc / 2` と endspaces・実測）。ほかの
-// 文字は桁の数だけ並ぶ（Tab も 1 桁ずつ・実測）。
-[[nodiscard]] std::string replaced_block_fill(std::size_t covered, char32_t target)
+// 並べ、奇数なら矩形の右端に届いた行だけ空白 1 つで埋める（Vim の op_replace の `numc / 2` と
+// `!bd.is_short`・短い行と `$` の矩形は足さない・実測）。ほかの文字は桁の数だけ並ぶ（Tab も
+// 1 桁ずつ・実測）。
+[[nodiscard]] std::string replaced_block_fill(std::size_t covered, char32_t target, bool reached)
 {
     const bool wide = display_width(target) == DisplayWidth::wide;
     const std::size_t copies = wide ? covered / 2 : covered;
@@ -88,7 +90,7 @@ namespace
     {
         append_utf8(fill, target);
     }
-    fill.append(wide ? covered % 2 : 0, ' ');
+    fill.append(wide && reached ? covered % 2 : 0, ' ');
     return fill;
 }
 
@@ -111,7 +113,10 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
         }
         std::string body(line.keep_lead, ' ');
         const std::size_t covered = std::min(right, columns) - left + single_step;
-        body.append(replaced_block_fill(covered, target));
+        // 行の最後の桁が矩形の右の桁に届いたか（桁は 1 から）。`$` の矩形はどの行も届かない行
+        // （Vim の is_short・実測）。
+        const bool reached = block.wish == VimColumnWish::at_column && columns >= right;
+        body.append(replaced_block_fill(covered, target, reached));
         body.append(line.keep_tail, ' ');
         edits.push_back(VimBlockEdit{line.range, std::move(body)});
     }
@@ -137,9 +142,9 @@ namespace detail
     case VimOperator::remove:
         return restored_at(
             with_clipboard(VimStep{std::move(next), vim_remove_block(block)}, std::move(clipboard)),
-            block_caret(block, 0));
+            block_caret(block));
     case VimOperator::yank:
-        return with_clipboard(VimStep{std::move(next), VimMoveTo{block_caret(block, 0)}},
+        return with_clipboard(VimStep{std::move(next), VimMoveTo{block_caret(block)}},
                               std::move(clipboard));
     case VimOperator::change:
     // `c` は範囲外（決定 5）。大小文字の矩形は cased_block（追補 #959）、字下げの矩形は #770
@@ -162,8 +167,8 @@ namespace detail
     // 文字のあった所＝埋めた空白の先頭（Vim の op_replace は oap->start へ戻す・#1067 で実測）。
     return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
                                VimReplaceBlock{replaced_block_edits(view.text, block, target),
-                                               block_caret(block, 0)}},
-                       block_caret(block, 0));
+                                               block_caret(block)}},
+                       block_caret(block));
 }
 } // namespace detail
 
@@ -198,8 +203,8 @@ namespace detail
     const VimBlockRange block = block_of(state, view);
     return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
                                VimReplaceBlock{cased_block_edits(view.text, block, operation),
-                                               block_caret(block, 0)}},
-                       block_caret(block, 0));
+                                               block_caret(block)}},
+                       block_caret(block));
 }
 } // namespace detail
 
