@@ -1,6 +1,7 @@
 #include "SettingsCodec.hpp"
 
 #include "BuiltinThemes.hpp"
+#include "KeyMap.hpp"
 #include "KeyValueFields.hpp"
 #include "LanguageTable.hpp"
 #include "SettingsFields.hpp"
@@ -9,6 +10,7 @@
 #include <array>
 #include <cstddef>
 #include <format>
+#include <functional>
 #include <optional>
 #include <string>
 #include <utility>
@@ -23,18 +25,20 @@ using Field = std::optional<std::string_view> SettingsFields::*;
 
 // 鍵の名前と DTO の欄の対（同じ位置）。v4 だけの鍵も読むが、旧版にあれば apply_v4_fields
 // が拒否する。
-constexpr std::array<std::string_view, 11> field_names{
-    "version",     "colorscheme", "font_family", "font_size", "guide",   "wrap",
-    "ui_language", "lsp",         "explorer",    "root",      "features"};
-constexpr std::array<Field, 11> field_members{
+constexpr std::array<std::string_view, 12> field_names{
+    "version",     "colorscheme", "font_family", "font_size", "guide",    "wrap",
+    "ui_language", "lsp",         "explorer",    "root",      "features", "mapleader"};
+constexpr std::array<Field, 12> field_members{
     &SettingsFields::version,     &SettingsFields::colorscheme, &SettingsFields::font_family,
     &SettingsFields::font_size,   &SettingsFields::guide,       &SettingsFields::wrap,
     &SettingsFields::ui_language, &SettingsFields::lsp,         &SettingsFields::explorer,
-    &SettingsFields::root,        &SettingsFields::features};
+    &SettingsFields::root,        &SettingsFields::features,    &SettingsFields::mapleader};
 
 // 言語ごとのサーバーの命令の鍵 `lsp.<language>.command`（ADR 0160・ADR 0170 の決定 3）。
 constexpr std::string_view lsp_prefix = "lsp.";
 constexpr std::string_view lsp_suffix = ".command";
+// Vim の `map` の行の鍵の接頭辞（ADR 0176 の決定 1）。行の形の検査は core の parse_map_line。
+constexpr std::string_view map_prefix = "map.";
 
 // 表示言語の希望値の全値（ADR 0123 の改訂の決定 1）。値を足したら language_text の switch
 // が落ちる。
@@ -84,6 +88,11 @@ constexpr std::array<core::DisplayLanguageChoice, 7> language_choices{
                 value);
             continue;
         }
+        if (key.starts_with(map_prefix))
+        {
+            fields.maps.emplace_back(key, value);
+            continue;
+        }
         const auto found = std::ranges::find(field_names, key);
         if (found == field_names.end())
         {
@@ -92,6 +101,9 @@ constexpr std::array<core::DisplayLanguageChoice, 7> language_choices{
         const auto index = static_cast<std::size_t>(found - field_names.begin());
         fields.*field_members.at(index) = value;
     }
+    // 鍵の表は名前の順なので、`map` の行はファイルの中の位置（借りた bytes の中の鍵の先頭）の
+    // 順に戻す。同じモードと左辺は後の行が勝つ（ADR 0176 の決定 1）。
+    std::ranges::sort(fields.maps, std::less<>{}, [](const auto &row) { return row.first.data(); });
     return fields;
 }
 
@@ -249,7 +261,7 @@ language_from(std::string_view text)
 {
     return fields.ui_language.has_value() || fields.lsp.has_value() ||
            fields.explorer.has_value() || fields.root.has_value() || fields.features.has_value() ||
-           !fields.lsp_commands.empty();
+           !fields.lsp_commands.empty() || !fields.maps.empty() || fields.mapleader.has_value();
 }
 
 // `lsp.<language>.command=<値>` の行。言語は LanguageTable の名前だけ、同じ言語の 2 行目は
@@ -275,6 +287,34 @@ lsp_commands_from(const SettingsFields &fields)
     std::ranges::sort(commands, {},
                       [](const auto &row) -> const std::string & { return row.first; });
     return commands;
+}
+
+// `map.<modes>.<lhs>=<rhs>` の行と `mapleader=`（ADR 0176 の決定 1）。0 行以上・壊れた行は
+// 設定の全体を拒む（ADR 0114）。`mapleader` が無ければ既定の `\`。
+[[nodiscard]] std::expected<void, Failure> apply_maps(core::EditorSettings &settings,
+                                                      const SettingsFields &fields)
+{
+    std::vector<core::MapRow> rows;
+    rows.reserve(fields.maps.size());
+    for (const auto &[key, value] : fields.maps)
+    {
+        auto row = core::parse_map_line(key, value);
+        if (!row.has_value())
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        rows.push_back(std::move(row).value());
+    }
+    if (fields.mapleader.has_value())
+    {
+        if (!core::parse_map_leader(fields.mapleader.value()).has_value())
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        settings.mapleader = std::string(fields.mapleader.value());
+    }
+    settings.maps = std::move(rows);
+    return {};
 }
 
 // v4 だけの欄。旧版はどれも持たず（あれば未知の鍵として拒否）、表示言語は日本語（更新で今の表示を
@@ -312,7 +352,7 @@ lsp_commands_from(const SettingsFields &fields)
     settings.root = std::move(root).value();
     settings.features = std::move(features).value();
     settings.lsp_commands = std::move(commands).value();
-    return {};
+    return apply_maps(settings, fields);
 }
 
 [[nodiscard]] std::string_view version_text(SettingsVersion version)
@@ -397,6 +437,21 @@ validated(const SettingsFields &fields, SettingsVersion version, const core::The
     return text;
 }
 
+// `mapleader=` は既定と違うときだけ、`map` の行は持っている順に（lsp の行の後ろ・ADR 0176）。
+[[nodiscard]] std::string maps_text(const core::EditorSettings &settings)
+{
+    std::string text;
+    if (settings.mapleader != core::default_editor_settings().mapleader)
+    {
+        text += std::format("mapleader={}\n", settings.mapleader);
+    }
+    for (const auto &row : settings.maps)
+    {
+        text += std::format("{}={}\n", core::map_line_key(row), core::map_line_value(row));
+    }
+    return text;
+}
+
 // `lsp.<language>.command=<値>` の行を言語の名前の順に（features の後ろ）。
 [[nodiscard]] std::string
 lsp_commands_text(const std::vector<std::pair<std::string, std::string>> &commands)
@@ -449,10 +504,10 @@ std::string encode_settings(const core::EditorSettings &settings)
     }
     const auto root = settings.root.has_value() ? settings.root.value().text() : std::string_view{};
     return std::format("version=4\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
-                       "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n{}",
+                       "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n{}{}",
                        theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
                        language_text(settings.ui_language), switch_text(settings.lsp),
                        switch_text(settings.explorer), root, features_text(settings.features),
-                       lsp_commands_text(settings.lsp_commands));
+                       lsp_commands_text(settings.lsp_commands), maps_text(settings));
 }
 } // namespace nenenib::adapters::win32

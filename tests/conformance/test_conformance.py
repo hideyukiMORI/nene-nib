@@ -433,7 +433,7 @@ class RepositoryChecks(unittest.TestCase):
         return [f"{f.rule}: {f.detail}" for f in cnf.key_names_checks(self.root)]
 
     def seed_key_names(self, content=None):
-        path = self.root / "tests/vim/VimKeyNames.hpp"
+        path = self.root / "src/core/VimKeyNames.hpp"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(vim_oracle.key_names_header().encode("utf-8") if content is None else content)
 
@@ -442,7 +442,7 @@ class RepositoryChecks(unittest.TestCase):
         self.assertEqual([], self.key_names_details())
 
     def test_cnf010_key_names_stored_file_positive(self):
-        stored = (ROOT / "tests/vim/VimKeyNames.hpp").read_bytes()
+        stored = (ROOT / "src/core/VimKeyNames.hpp").read_bytes()
         self.seed_key_names(stored)
         self.assertEqual([], self.key_names_details())
 

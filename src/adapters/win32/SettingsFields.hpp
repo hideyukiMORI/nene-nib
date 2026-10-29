@@ -24,5 +24,9 @@ struct SettingsFields
     std::optional<std::string_view> features;
     // `lsp.<language>.command` の行（鍵の中の言語の名前と値・読んだ順）。
     std::vector<std::pair<std::string_view, std::string_view>> lsp_commands;
+    // Vim の `map.<modes>.<lhs>` の行（鍵の全体と値・ファイルの中の順）と `mapleader`
+    // （ADR 0176 の決定 1）。
+    std::vector<std::pair<std::string_view, std::string_view>> maps;
+    std::optional<std::string_view> mapleader;
 };
 } // namespace nenenib::adapters::win32

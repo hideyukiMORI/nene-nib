@@ -14,10 +14,12 @@
 #include "FilePath.hpp"
 #include "FindHandle.hpp"
 #include "HtmlClipboardFormat.hpp"
+#include "MapRow.hpp"
 #include "Milestone.hpp"
 #include "SettingsCodec.hpp"
 #include "TemporaryFiles.hpp"
 #include "TextEncoding.hpp"
+#include "VimModeSet.hpp"
 #include "Win32ClipboardAdapter.hpp"
 #include "Win32CodePageAdapter.hpp"
 #include "Win32FileAdapter.hpp"
@@ -755,6 +757,63 @@ void verify_settings_lsp_commands()
     auto other = settings;
     other.lsp_commands.pop_back();
     expect(!same_settings(other, settings), "commands take part in the settings comparison");
+}
+
+// Vim の `map.<modes>.<lhs>=<rhs>` の行と `mapleader=`（ADR 0176 の決定 1・#1081）。0 行以上・
+// 書くときは lsp の行の後ろに持っている順・読むときはファイルの順・壊れた行は全体の拒否。
+void verify_settings_maps()
+{
+    using nenenib::core::MapRow;
+    using nenenib::core::VimModeSet;
+    auto settings = default_editor_settings();
+    settings.mapleader = "<Space>";
+    settings.maps = {
+        MapRow{VimModeSet{false, true, false, false, false}, "jj", "<Esc>", false},
+        MapRow{VimModeSet{true, false, true, false, false}, "<leader>w", ":w<CR>", true}};
+    const auto bytes = encode_settings(settings);
+    expect(
+        bytes.ends_with("features=\nmapleader=<Space>\nmap.i.jj=!<Esc>\nmap.nv.<leader>w=:w<CR>\n"),
+        "the leader and the map rows follow the other lines in order");
+    const auto decoded = decode_settings(bytes, SettingsVersion::v4);
+    expect(decoded && same_settings(decoded.value(), settings) &&
+               encode_settings(decoded.value()) == bytes,
+           "map rows and the leader round trip");
+    const auto plain = encode_settings(default_editor_settings());
+    expect(plain.find("map") == std::string::npos, "no rows and the default leader write nothing");
+    const auto none = decode_settings(plain, SettingsVersion::v4);
+    expect(none && none.value().maps.empty() && none.value().mapleader == "\\",
+           "zero rows and no leader line read as the defaults");
+    const auto ordered =
+        decode_settings(plain + "map.x.q=b\nmap.n.zz=a\nmap.v.q=c\n", SettingsVersion::v4);
+    expect(ordered && ordered.value().maps.size() == 3 && ordered.value().maps.at(0).rhs == "b" &&
+               ordered.value().maps.at(1).rhs == "a" && ordered.value().maps.at(2).rhs == "c",
+           "rows keep the order of the file");
+    for (const auto line :
+         {"map.i.jj=\n", "map.i.abcd=x\n", "map.q.j=x\n", "map.i.<C-s>=x\n", "map.i.j=<Nope>\n",
+          "map.ii.j=x\n", "map.i=x\n", "mapleader=ab\n", "mapleader=\n", "map.i.j=a\nmap.i.j=b\n"})
+    {
+        const auto result = decode_settings(plain + line, SettingsVersion::v4);
+        expect(!result && result.error() == SettingsFailure::malformed,
+               "broken map rows and leaders refuse the whole settings");
+    }
+    const auto old =
+        decode_settings(std::string(v3_settings) + "map.i.jj=<Esc>\n", SettingsVersion::v3);
+    const auto old_leader =
+        decode_settings(std::string(v3_settings) + "mapleader=,\n", SettingsVersion::v3);
+    expect(!old && !old_leader, "v3 rejects map rows and the leader");
+    auto other = settings;
+    other.maps.pop_back();
+    auto leader = settings;
+    leader.mapleader = ",";
+    expect(!same_settings(other, settings) && !same_settings(leader, settings),
+           "rows and the leader take part in the settings comparison");
+}
+
+// 接頭辞の族の行（`lsp.<language>.command` と `map.<modes>.<lhs>`）。
+void verify_settings_lines()
+{
+    verify_settings_lsp_commands();
+    verify_settings_maps();
 }
 
 // 設定 v4 の 1 行を value に替えた bytes（key の行が無ければ bytes のまま）。
@@ -1946,7 +2005,7 @@ int run_memory_tests(std::string_view scope)
     verify_settings_versions();
     verify_older_settings_versions();
     verify_settings_v4_fields();
-    verify_settings_lsp_commands();
+    verify_settings_lines();
     std::printf("Settings codec: %zu checks, %zu failures\n", check_count(), failure_count());
     return test_result();
 }
@@ -1997,7 +2056,7 @@ int main(int argc, char **argv)
     verify_settings_versions();
     verify_older_settings_versions();
     verify_settings_v4_fields();
-    verify_settings_lsp_commands();
+    verify_settings_lines();
     verify_settings_restart(files);
     verify_settings_lock(files);
     verify_settings_failures(files);

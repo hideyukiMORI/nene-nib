@@ -68,7 +68,7 @@ Issue #98 is refused, because dropping an empty `settings` reads as a changed in
 
 `KEY_TABLE` is the one table of the fixture key notation (`<Esc>` `<NL>` `<Space>` ...): each row
 holds the name, the Vim spelling and the Nib key (ADR 0054). `KEY_NAMES` is derived from it, and
-the C++ table tests/vim/VimKeyNames.hpp is generated from it by `key_names_header`. `--regenerate`
+the C++ table src/core/VimKeyNames.hpp is generated from it by `key_names_header`. `--regenerate`
 writes that header next to VimFixtures.hpp and `--key-names` writes it alone without Vim; CNF-010
 compares the stored bytes with the function's output.
 """
@@ -94,7 +94,7 @@ ORACLE_TIMEOUT_SECONDS = 30
 DEFAULT_SETTINGS = ["set nocompatible", "set backspace=indent,eol,start"]
 # fixture の記法の表（ADR 0054）。正本はここ 1 か所だけで、1 行が 名前・Vim の二重引用符つき文字列の
 # 書き方・Nib の鍵。Nib の鍵は特殊鍵なら VimSpecialKey の列挙子の名前、文字ならコードポイント。
-# C++ の表 tests/vim/VimKeyNames.hpp は key_names_header() が作る生成物で、一致は CNF-010 が守る。
+# C++ の表 src/core/VimKeyNames.hpp は key_names_header() が作る生成物で、一致は CNF-010 が守る。
 # 測定の領域にあるので、表を変えると部分再生成は「測定コードが変わった」で拒む（決定 7）。
 KEY_TABLE = (("<Esc>", "\\<Esc>", "escape"), ("<CR>", "\\<CR>", "enter"),
              ("<BS>", "\\<BS>", "backspace"), ("<C-r>", "\\<C-r>", "control_r"),
@@ -486,7 +486,7 @@ def key_name_row(name: str, key: str | int) -> str:
 
 
 def key_names_header(table: tuple = KEY_TABLE) -> str:
-    """The whole of tests/vim/VimKeyNames.hpp (ADR 0054 decision 3). Needs no Vim.
+    """The whole of src/core/VimKeyNames.hpp (ADR 0054 decision 3). Needs no Vim.
 
     CNF-010 compares the stored file with this output byte for byte, so this is the one place
     the C++ table's form is written.
@@ -501,12 +501,12 @@ def key_names_header(table: tuple = KEY_TABLE) -> str:
             "\n"
             "#include <array>\n"
             "\n"
-            "namespace nenenib::tests\n"
+            "namespace nenenib::core\n"
             "{\n"
             f"inline constexpr std::array<VimKeyName, {len(table)}> vim_key_names{{{{\n"
             f"{body}\n"
             "}};\n"
-            "} // namespace nenenib::tests\n"
+            "} // namespace nenenib::core\n"
             "// clang-format on\n")
 
 
@@ -772,14 +772,14 @@ def main() -> int:
                         help="rewrite tests/vim/fixtures.json in the canonical form without Vim, "
                              "reusing every generated row from --reuse-ref")
     parser.add_argument("--key-names", action="store_true",
-                        help="rewrite tests/vim/VimKeyNames.hpp from KEY_TABLE without Vim")
+                        help="rewrite src/core/VimKeyNames.hpp from KEY_TABLE without Vim")
     arguments = parser.parse_args()
     source = root / "tests/vim/fixtures.json"
     target = root / "tests/vim/VimFixtures.hpp"
-    key_names_target = root / "tests/vim/VimKeyNames.hpp"
+    key_names_target = root / "src/core/VimKeyNames.hpp"
     if arguments.key_names:
         if arguments.regenerate or arguments.format or arguments.only:
-            parser.error("--key-names writes only tests/vim/VimKeyNames.hpp; use it on its own")
+            parser.error("--key-names writes only src/core/VimKeyNames.hpp; use it on its own")
         write_header(key_names_target, key_names_header())
         print(f"key names: {len(KEY_TABLE)} name(s); written to {key_names_target}")
         return 0

@@ -25,6 +25,8 @@
 #include "VimCharacterSearchKind.hpp"
 #include "VimCount.hpp"
 #include "VimKey.hpp"
+#include "VimKeyName.hpp"
+#include "VimKeyNames.hpp"
 #include "VimKeyPress.hpp"
 #include "VimPrefix.hpp"
 #include "VimRegister.hpp"
@@ -71,9 +73,12 @@ using nenenib::core::Offset;
 using nenenib::core::SelectionAnchoring;
 using nenenib::core::TextBuffer;
 using nenenib::core::TextPosition;
+using nenenib::core::vim_key_names;
 using nenenib::core::VimCharacter;
 using nenenib::core::VimCharacterSearchKind;
 using nenenib::core::VimKey;
+using nenenib::core::VimKeyName;
+using nenenib::core::VimNamedKey;
 using nenenib::core::VimPrefix;
 using nenenib::core::VimRegister;
 using nenenib::core::VimRegisterKind;

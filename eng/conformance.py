@@ -409,13 +409,13 @@ def fixture_digest_checks(root: Path, rules: dict) -> list[Finding]:
 
 
 def key_names_checks(root: Path) -> list[Finding]:
-    """CNF-010: tests/vim/VimKeyNames.hpp is exactly what eng/vim-oracle.py writes from KEY_TABLE.
+    """CNF-010: src/core/VimKeyNames.hpp is exactly what eng/vim-oracle.py writes from KEY_TABLE.
 
     The fixture key notation has one table, in the oracle (ADR 0054); the C++ table is generated
     from it. Unlike VimFixtures.hpp this needs no Vim, so the whole file is compared, not a digest
     line. Missing and different are both findings; `eng/vim-oracle.py --key-names` writes it.
     """
-    name = "tests/vim/VimKeyNames.hpp"
+    name = "src/core/VimKeyNames.hpp"
     path = root / name
     if not path.is_file():
         return [Finding("CNF-010", name, "the generated key names are missing; run eng/vim-oracle.py --key-names")]

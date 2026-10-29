@@ -205,7 +205,7 @@ computer-use 無しで見た目を確かめるときは `python eng/verify-windo
 
 ### 生成物
 
-手で書かない生成物と、書き直す道具は次のとおり（一致は CNF-010）。`tests/vim/VimFixtures.hpp` は `python -X utf8 eng/vim-oracle.py --regenerate`（`--only <接頭辞>`）、`tests/vim/VimKeyNames.hpp` は `python eng/vim-oracle.py --key-names`、Vim の大小の写像の表 `src/core/CaseMappingTable.hpp` は `python eng/case-mapping.py --write`（固定の Python の `unicodedata` から・`--check` は違えば 1 で終わる・Issue #781）。
+手で書かない生成物と、書き直す道具は次のとおり（一致は CNF-010）。`tests/vim/VimFixtures.hpp` は `python -X utf8 eng/vim-oracle.py --regenerate`（`--only <接頭辞>`）、`src/core/VimKeyNames.hpp`（core の表・fixture の再生と設定の `map` が読む・ADR 0176） は `python eng/vim-oracle.py --key-names`、Vim の大小の写像の表 `src/core/CaseMappingTable.hpp` は `python eng/case-mapping.py --write`（固定の Python の `unicodedata` から・`--check` は違えば 1 で終わる・Issue #781）。
 
 製品の版入力は **`CMakeLists.txt` の `project(... VERSION)`** だけとする。設定画面・manifest・VERSIONINFO・配布物名はビルドがそこから導出し、
 2 か所目に手で書かない。配布物の正規生成経路は次の 1 本である。

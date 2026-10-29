@@ -91,6 +91,9 @@ void verify_text_buffer_property_scope();
 // VimPatternPropertyTests.cpp（#899・検索の pattern の parse と matched の性質の試験）
 void verify_vim_pattern_property_scope();
 
+// KeyMapTests.cpp（#1081・ADR 0176・Vim の map の表と設定の行の契約と性質）
+void verify_key_map_scope();
+
 // JsonTests.cpp / JsonPropertyTests.cpp（#994・ADR 0160 の決定 4・core の JSON の契約と性質）
 void verify_json_scope();
 void verify_json_property_scope();

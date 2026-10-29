@@ -7,6 +7,7 @@
 #include "FontSize.hpp"
 #include "GuideVisibility.hpp"
 #include "LineWrapping.hpp"
+#include "MapRow.hpp"
 #include "Theme.hpp"
 #include "ThemeChoice.hpp"
 
@@ -23,7 +24,9 @@ namespace nenenib::core
 // エクスプローラーのルートで、無しは「決めていない」（ADR 0162 の決定 3）。
 // features はオンの機能の名前（ASCII）の列で、空は「表の既定」。中身はここでは
 // 解釈しない。lsp_commands は言語ごとのサーバーの命令（言語の名前と値・言語の
-// 名前の順・ADR 0160）で、値の検証は使う所（L0c）がする。
+// 名前の順・ADR 0160）で、値の検証は使う所（L0c）がする。maps は Vim の `map` の行（読んだ順・
+// 同じモードと左辺は後の行が勝つ）、mapleader は `<leader>` の鍵の記法（既定は `\`）で、表は
+// key_map_of が作る（ADR 0176 の決定 1・2）。
 struct EditorSettings
 {
     FontSize font_size;
@@ -38,6 +41,8 @@ struct EditorSettings
     std::optional<FilePath> root = std::nullopt;
     std::vector<std::string> features = {};
     std::vector<std::pair<std::string, std::string>> lsp_commands = {};
+    std::vector<MapRow> maps = {};
+    std::string mapleader = "\\";
 };
 
 [[nodiscard]] EditorSettings default_editor_settings();
