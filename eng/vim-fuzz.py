@@ -284,15 +284,17 @@ def expand_word(rng: random.Random, template: str, text: str, marks: tuple[str, 
         "{P}": lambda: str(rng.randint(1, 100)), "{B}": lambda: str(rng.randint(1, 20)),
         "{c}": character, "{i}": insert, "{p}": pattern, "{k}": lambda: rng.choice(marks),
         "{r}": lambda: "" if rng.random() < 0.7 else rng.choice(registers),
-        "{m}": lambda: expand_word(rng, rng.choice(OPERATOR_MOTIONS), text),
+        "{m}": lambda: expand_word(rng, rng.choice(OPERATOR_MOTIONS), text, generator=generator),
         "{o}": lambda: rng.choice(TEXT_OBJECTS),
-        "{v}": lambda: "".join(expand_word(rng, rng.choice(VISUAL_MOTIONS), text)
+        "{v}": lambda: "".join(expand_word(rng, rng.choice(VISUAL_MOTIONS), text,
+                                           generator=generator)
                                for _ in range(rng.randint(1, 3))),
-        "{w}": lambda: "".join(expand_word(rng, rng.choice(VISUAL_MOTIONS), text)
+        "{w}": lambda: "".join(expand_word(rng, rng.choice(VISUAL_MOTIONS), text,
+                                           generator=generator)
                                if rng.random() < 0.7 else rng.choice(TEXT_OBJECTS)
                                for _ in range(rng.randint(1, 3))),
-        "{V}": lambda: expand_word(rng, rng.choice(VISUAL_ENDS), text),
-        "{X}": lambda: expand_word(rng, rng.choice(BLOCK_ENDS), text),
+        "{V}": lambda: expand_word(rng, rng.choice(VISUAL_ENDS), text, generator=generator),
+        "{X}": lambda: expand_word(rng, rng.choice(BLOCK_ENDS), text, generator=generator),
     }
     result = []
     index = 0
