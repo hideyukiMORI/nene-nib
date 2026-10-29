@@ -541,12 +541,34 @@ namespace
     return 0;
 }
 
+// 右の埋めのために Vim の do_put が数えるレジスタの 1 行の幅（#1117）。Vim は桁を 0 に戻しながら
+// 1 バイトずつ数えるので、Tab はどこにあっても tabstop ぶん、2 バイト目からの続きのバイトは
+// 1 つにつき 4 桁（不正なバイトの `<xx>`）、先頭のバイトはその文字の幅で、幅 0 の文字も 1 桁に
+// 数える（固定 Vim 9.1 の実測・fixture `block-put-wide-`）。表示の幅とは違う、埋めのためだけの数。
+[[nodiscard]] std::size_t put_block_cells(std::string_view line) noexcept
+{
+    constexpr std::size_t continuation_cells = 4;
+    std::size_t cells = 0;
+    std::size_t byte = 0;
+    while (byte < line.size())
+    {
+        const char32_t value = code_point_at(line, Offset{byte});
+        const std::size_t next = next_code_point(line, Offset{byte}).value;
+        cells +=
+            value == tab_character ? vim_tab_stop : std::max(single_step, column_advance(value, 0));
+        cells += (next - byte - single_step) * continuation_cells;
+        byte = next;
+    }
+    return cells;
+}
+
 // 貼る 1 行ぶんの本文。回数ぶん並べ、`padded` 個のうしろだけを幅まで空白で埋める。貼り先の
-// 行に本文が続かないときは最後の 1 つを埋めない（固定 Vim の block_prep と同じ・実測）。
+// 行に本文が続かないときは最後の 1 つを埋めない（固定 Vim の block_prep と同じ・実測）。埋める
+// 数は `put_block_cells` で数える（Vim の do_put の spaces と同じ・#1117）。
 [[nodiscard]] std::string put_block_body(const std::string &line, std::size_t width,
                                          std::size_t count, std::size_t padded)
 {
-    const std::size_t filled = virtual_width(line);
+    const std::size_t filled = put_block_cells(line);
     const std::size_t spaces = width > filled ? width - filled : 0;
     std::string body;
     for (std::size_t step = 0; step < count; ++step)
