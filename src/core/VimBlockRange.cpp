@@ -121,7 +121,17 @@ constexpr std::size_t single_step = 1;
         lines.push_back(block_line(text, LineNumber{number}, left, right));
     }
     return VimBlockRange{std::move(lines), first, VirtualColumn{left},
-                         VimBlockWidth{block_columns(left, right)}};
+                         VimBlockWidth{block_columns(left, right)}, VimColumnWish::at_column};
+}
+
+// `$` の矩形。右端は覆う行のうちいちばん長い行の終わりで、どの行も右端に届かない行として扱う
+// （ADR 0035 の追補 #1067）。
+[[nodiscard]] VimBlockRange line_end_block(const TextBuffer &text, const OffsetRange &ordered,
+                                           std::size_t left)
+{
+    VimBlockRange block = built_block(text, ordered, left, longest_line(text, ordered));
+    block.wish = VimColumnWish::at_line_end;
+    return block;
 }
 } // namespace
 
@@ -133,7 +143,7 @@ VimBlockRange vim_block_range(const TextBuffer &text, const Selection &selection
     switch (wish)
     {
     case VimColumnWish::at_line_end:
-        return built_block(text, ordered, left, longest_line(text, ordered));
+        return line_end_block(text, ordered, left);
     case VimColumnWish::at_column:
         break;
     }
@@ -148,7 +158,7 @@ VimBlockRange vim_replayed_block_range(const TextBuffer &text, const Selection &
     switch (extent.wish)
     {
     case VimColumnWish::at_line_end:
-        return built_block(text, ordered, left, longest_line(text, ordered));
+        return line_end_block(text, ordered, left);
     case VimColumnWish::at_column:
         break;
     }

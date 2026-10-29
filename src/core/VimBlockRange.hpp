@@ -21,13 +21,15 @@ namespace nenenib::core
 // `.` の大きさも、この 1 本が決めた行ごとの範囲を使う（ARC-001）。純関数。
 //
 // `lines` は上の行から 1 行ずつで、`first` がその最初の行。`left` は矩形の左の仮想桁、
-// `width` は覆う桁の数（1 以上）。
+// `width` は覆う桁の数（1 以上）。`wish` が at_line_end なら `$` の矩形で、どの行も矩形の
+// 右端に届かない行として扱う（矩形の `r` の幅 2 の空白・ADR 0035 の追補 #1067）。
 struct VimBlockRange
 {
     std::vector<VimBlockLine> lines;
     LineNumber first;
     VirtualColumn left;
     VimBlockWidth width;
+    VimColumnWish wish;
 };
 
 // 選択の 2 つの角を仮想桁の矩形と読む。左右は角の文字の「最初の桁」と「最後の桁」の小さいほうと
