@@ -11,6 +11,7 @@
 #include "Editing.hpp"
 #include "EditorDelivery.hpp"
 #include "EditorSettings.hpp"
+#include "EndSession.hpp"
 #include "ExMapCommand.hpp"
 #include "ExMapRequest.hpp"
 #include "ExMapVerb.hpp"
@@ -28,6 +29,7 @@
 #include "MapTimer.hpp"
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
+#include "SessionEnd.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "VimCharacter.hpp"
@@ -653,6 +655,14 @@ void verify_walk_and_size()
     const auto walked = walk.controller().apply(application::WalkRecentTab{core::TabStep::next});
     expect(shown_body(walk.controller()) == "jabc\n" && walked.map_timer == MapTimer::stop,
            "Ctrl+Tab flushes the waiting j");
+    Editing closing(insert_escape());
+    open_vim_document(closing, "abc\n");
+    vim_replay(closing.controller(), "ij");
+    const auto ended =
+        closing.controller().apply(application::EndSession{application::SessionEnd::window_closed});
+    expect(shown_body(closing.controller()) == "abc\n" && ended.map_timer == MapTimer::stop &&
+               !closing.controller().apply(application::MapTimeout{}).repaint,
+           "EndSession drops the waiting j instead of typing it");
     Editing sized(insert_escape());
     open_vim_document(sized, "abc\n");
     vim_replay(sized.controller(), "ij");

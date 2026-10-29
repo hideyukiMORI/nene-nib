@@ -407,6 +407,16 @@ void EditorController::flush_key_map_pending()
     }
 }
 
+void EditorController::discard_key_map_pending()
+{
+    if (state_.key_map_pending().empty())
+    {
+        return;
+    }
+    state_ = state_.with_key_map_pending({});
+    map_timer_ = MapTimer::stop;
+}
+
 void EditorController::accept(const MapTimeout &)
 {
     if (state_.key_map_pending().empty())

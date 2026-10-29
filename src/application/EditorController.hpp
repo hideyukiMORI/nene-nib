@@ -189,19 +189,21 @@ class EditorController final
     // の表を引いて、表に無い鍵はそのまま、 左辺の途中は積んで待ち、決まった鍵の列は順に
     // deliver_vim_key へ流す。表が空なら分岐 1 つで
     // deliver_vim_key。再生（`.`・マクロ・press_vim_keys）と IME の確定はここを通らない。
-    std::optional<core::VimRepeatFailure> typed_vim_key(const core::VimKey &key);
+    [[nodiscard]] std::optional<core::VimRepeatFailure> typed_vim_key(const core::VimKey &key);
     // key_map_step の答えごとの写し（std::visit・答えが増えたらコンパイルが落ちる）。waited は
     // 引く前に待ちがあったか（流して空にしたらタイマーを外す）。
-    std::optional<core::VimRepeatFailure> typed_step(core::KeyMapPass pass, const core::VimKey &key,
-                                                     bool waited);
-    std::optional<core::VimRepeatFailure> typed_step(core::KeyMapPending pending,
-                                                     const core::VimKey &key, bool waited);
-    std::optional<core::VimRepeatFailure> typed_step(core::KeyMapEmit emitted,
-                                                     const core::VimKey &key, bool waited);
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    typed_step(core::KeyMapPass pass, const core::VimKey &key, bool waited);
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    typed_step(core::KeyMapPending pending, const core::VimKey &key, bool waited);
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    typed_step(core::KeyMapEmit emitted, const core::VimKey &key, bool waited);
     // 表を引くモード。Vim モードで入力行が閉じていて、1 鍵の引数を待っていないときだけ値がある。
     [[nodiscard]] std::optional<core::VimMapMode> key_map_mode() const noexcept;
     // 積んだ鍵を key_map_flush で流して空にする（MapTimeout と、待ちを保たない意図の入口）。
     void flush_key_map_pending();
+    // 積んだ鍵を流さずに捨てる（窓が閉じていく EndSession だけ）。
+    void discard_key_map_pending();
     // 待ちの合図（決定 4）。積んだ鍵が無ければ何も変えない（描き直さない）。
     void accept(const MapTimeout &);
     // 設定の `maps` と `mapleader` から表を作り直す。設定を置く 2 か所（起動・persist_settings）
