@@ -21,7 +21,7 @@ VISUAL `<C-a> <C-x> g<C-a> g<C-x>` yet, only the NORMAL `{n}<C-a>` `{n}<C-x>`, a
 Generator 4 adds keys inside INSERT: `<Left>` `<Right>` `<Home>` `<End>` between two inserted texts
 (Vim's `stop_arrow` starts a new insert, so `.` repeats only the part after the arrow) and `<BS>`
 (the oracle's `backspace=indent,eol,start` deletes before the insert's start, and `0i<BS>` at a line
-start joins the line with the one above). After one of these words `.` is picked with four times
+start joins the line with the one above). After one of these words `.` is picked with sixteen times
 its weight (`ARROW_WORDS`).
 
 The buffer has 1 to 12 lines mixing ASCII words, spaces, tabs, bracket and quote pairs, punctuation,
@@ -140,7 +140,7 @@ WORDS_4 = (
 )
 # この語の直後の `.` は重みを ARROW_DOT_FACTOR 倍にする（矢印の後の `.` と undo の単位を見る）。
 ARROW_WORDS = frozenset(kind for kind, _, _ in WORDS_4)
-ARROW_DOT_FACTOR = 4
+ARROW_DOT_FACTOR = 16
 # `g;` `g,` は語にしない。fuzz も 1 本の `:normal!` なので Vim では全体が 1 つの undo の単位
 # （変更の列は 1 件）になり、命令ごとに単位を作る Nib といつも違う。契約 `--vim-marks` の
 # verify_change_list が単位を分けた Vim の測定で守る（#1037・#1072 R5-2）。
