@@ -68,6 +68,7 @@ FR-003 の T2 に残る VISUAL の 3 つめ、矩形（`Ctrl-v`）を入れる�
 6. **`.`** は決定 7 と補足 6 のまま（記録した大きさで選び直してから鍵を流す）。矩形の `I` `A` は入るだけで本文を変えないことがあるので、VISUAL の記録は「INSERT へ入る鍵」からも始める。`N.` の回数は VISUAL の `>` `<` の再生に使わない（実測）。
 7. **差分 fuzz**: `eng/vim-fuzz.py` の `WORDS` に矩形の後の `I` `A` `c` `C` `>` `<` を 1 行ずつ足した（生成器の版は 3）。
 
+決定 4 の「`~` `u` `U` は範囲外」を外す。矩形 VISUAL の `~` `u` `U`（ADR 0015 の決定 10 の大小文字）は、行ごとに ~~`r` と同じ範囲（`VimBlockLine.range`・端で切れた Tab や全角も含む）~~ → 矩形の仮想桁に丸ごと入る本文（`VimBlockLine.inside`・追補 #1104）の ASCII の英字だけを変え、効果は `r` と同じ `VimReplaceBlock`（行ごとの `VimBlockEdit` の列・undo 1 単位）。切れた文字は大小が無いので空白に割らずそのまま残る。`$` の矩形は各行の末尾まで、矩形に届かない短い行と幅 0 の行は飛ばす。キャレットと `u` の戻り先は矩形の左上（左上が切れた Tab ならその Tab の先頭）。レジスタは書かない。`.` は決定 7 と補足 6 の規則（記録した大きさで選び直す）のまま。非 ASCII の大小は #781、矩形の `>` `<` は #770 で、いまは鍵を拒んで矩形のまま残る。根拠は固定 Vim 9.1 の oracle の `block-case-` の fixture 10 件（`<C-v>jlU`・`<C-v>$U`・`$` の矩形と空行・`~`・`u`・短い行・全角の混在・端の Tab・左上の Tab・`.`）。
 
 ## 追補（2026-10-29・#1090 矩形の `O` は左右の仮想桁で角を決める）
 
@@ -80,6 +81,20 @@ FR-003 の T2 に残る VISUAL の 3 つめ、矩形（`Ctrl-v`）を入れる�
 矩形の左右の桁の決め方（両角の `virtual_column` の最小と `virtual_column_end` の最大＝ Vim の `getvvcol` の start / end）は正しく、`VimBlockRange.cpp` は変えない。違っていたのは矩形の角になるキャレットの位置で、VISUAL の移動が欲しい列に覚える桁だった。Vim の `getvvcol` の cursor は、Tab の上では最後の桁だが **VISUAL でキャレットが錨より手前か同じ所にあるときは最初の桁**になる（ADR 0034 の補足 3 の例外）。だから `\t;  abc` の `4l<C-v>0j` は `0` の欲しい列が 1 桁目になり、次の行の 1 桁目へ落ちて矩形の左は 1 桁目（Nib は Tab の最後の 8 桁目へ落ちていた）。`h` `^`（空白だけの行で Tab に止まる）も同じで、`1|` は前から回数の桁。錨より後ろの Tab は最後の桁のまま（`<C-v>jll` で Tab に乗って `j` すると 8 桁目）、NORMAL の `0j` も最後の桁のまま（Vim は NORMAL では Tab の終わりから落ちる）。文字単位の VISUAL（`v0j`）も同じ規則に従う。
 
 決め方は core の `landed_column(text, mode, anchor, moved)` の 1 本で、着地から欲しい列を書く所はすべてこれを通す: `VimMotion` の移動（NORMAL の `landed_step`・VISUAL の `visual_moved`）・VISUAL に入る `[count]v` の広げ（`entered_visual`・回数つきの広げは錨より後ろへ伸びるので最後の桁）・検索の移動（`/` `?` `n` `N` `*` `#`）・`f` `F` `t` `T`・テキストオブジェクトの VISUAL と取消・画面送り（Ctrl-d / Ctrl-u ほか・`zt` ほか）・横送りの押し出し。`wanted_after` は着地の桁を引数に取る。Vim の出どころは `getvcol` の cursor の条件（Tab の上で `VIsual_active` かつ `LTOREQ_POS(pos, VIsual)` なら最初の桁）で、`'selection'` が `exclusive` なら錨に関係なく最初の桁になるが、Nib は `inclusive` 固定なので扱わない。Vim は `curswant` を次の縦の移動の時点で決める（`update_curswant` の遅延）が、VISUAL に入る前に NORMAL で決まった桁は実測でも Tab の最後の桁のまま（`4l0<C-v>jy` と先頭が Tab の文書の `<C-v>jy` はどちらも 8 桁目）で、Nib の「移動の時点で決める」と一致する。根拠は固定 Vim 9.1 の oracle の `block-tab-zero-` の fixture 16 件（`0` `1|` `h` `^` `?^` `F<Tab>` の後の `j` `k` と `y` `d` `r` `x`・錨より後ろの Tab・1 行・VISUAL に入る前の `0` と最初の位置）と `visual-wanted-` の 5 件（文字単位の `v0j` `v?^` `0vj`・NORMAL の `0j` と最初の `j`）。矩形の `I` の fixture は矩形の `I A c C` の PR（#1042）の後に足す。テキストオブジェクトの経路は同じ 1 本を通すが、キャレットが錨より手前の Tab に着く形の fixture は無い。
+
+## 追補（2026-10-29・#1104 矩形の端に掛かる文字の operator ごとの扱い）
+
+矩形の端（左右どちらでも・1 つの文字の内側に矩形が収まる形も）に半分だけ掛かる Tab や全角を、operator ごとに次のとおり扱う（Vim 9.1 の `block_prep()` の `is_del` と `op_tilde()` の `textstart + textlen`）。
+
+| operator | 端に掛かる文字 | 範囲 |
+| --- | --- | --- |
+| `d` `x`（矩形の `c` は決定 5 で範囲外） | 文字ごと消し、矩形の外側だった桁を空白で埋める（決定 4・補足） | `VimBlockLine.range` と `keep_lead` / `keep_tail` |
+| `r` | 文字ごと置き換え、覆った桁を `{char}` の幅で埋める（追補 #1067） | `VimBlockLine.range` |
+| `~` `u` `U` | **対象にしない**。そのまま残し、空白にも割らない | `VimBlockLine.inside` |
+| `y` | レジスタには丸ごと入る本文と覆った桁の空白（決定 2） | `inside` と `lead` / `tail` |
+| `I` `A` | 後続（#1042） | — |
+
+`~` `u` `U` の切り詰めは `VimStepBlock.cpp` の `cased_block_edits` の 1 か所で、`vim_block_range` が決めた `inside`（端で切れた文字を外した範囲）をそのまま使い、呼び出し元で幅を数えない。丸ごと入る文字が無い行は飛ばす。キャレットと `u` の戻り先は追補 #959 のまま矩形の左上。これまでは `range`（切れた文字も含む）を変えていたので、端に掛かる全角の英字（`Ａ` ↔ `ａ`・#990 の表）が Vim と違って変わっていた（fuzz seed 33 の `fuzz-33-0210`）。根拠は固定 Vim 9.1 の oracle の `block-case-wide-` の fixture 12 件（右端に掛かる全角の `u` `U` `~`・左端に掛かる全角を 2 桁目から・`O` で角を入れ替えた形・左端に掛かる全角の右に続く英字・全角が丸ごと入る `u` `U`（変わる）・右端に掛かる全角の右に続く英字・`$` の矩形（変わる）・1 つの全角の内側に収まる矩形・fuzz seed 33 の最小）。
 
 ## 強制
 

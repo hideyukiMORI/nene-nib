@@ -2931,5 +2931,17 @@
   {"name":"changelist-put-below","text":"abc\ndef","keys":"yypggg;x"},
   {"name":"changelist-join","text":"abc\ndef\nghi","keys":"JGg;x"},
   {"name":"changelist-operator","text":"abc\ndef\nghi\njkl","keys":"jjxggdg;"},
-  {"name":"changelist-visual","text":"abc\ndef\nghi\njkl","keys":"jjxggvjg;d"}
+  {"name":"changelist-visual","text":"abc\ndef\nghi\njkl","keys":"jjxggvjg;d"},
+  {"name":"block-case-wide-right-u","text":"ABC\nABＡ\nABC","keys":"<C-v>jjllu"},
+  {"name":"block-case-wide-right-upper","text":"abc\nabａ\nabc","keys":"<C-v>jjllU"},
+  {"name":"block-case-wide-right-tilde","text":"abc\nabａ\nabc","keys":"<C-v>jjll~"},
+  {"name":"block-case-wide-left-u","text":"ABC\nＡBC\nABC","keys":"l<C-v>jjlu"},
+  {"name":"block-case-wide-left-swapped-corner","text":"ABC\nＡBC\nABC","keys":"<C-v>jjlOlu"},
+  {"name":"block-case-wide-left-then-letter","text":"ABCDE\nABＡDE\nABCDE","keys":"lll<C-v>jjlu"},
+  {"name":"block-case-wide-inside-changes","text":"ABC\nABＡB\nABC","keys":"<C-v>jjlllu"},
+  {"name":"block-case-wide-inside-upper","text":"abc\nabａb\nabc","keys":"<C-v>jjlllU"},
+  {"name":"block-case-wide-right-then-letter","text":"ABCDE\nABＡDE\nABCDE","keys":"<C-v>jjllu"},
+  {"name":"block-case-wide-dollar","text":"ABC\nABＡBC\nABCDE","keys":"<C-v>jj$u"},
+  {"name":"block-case-wide-within-one-character","text":"ab\nＡb\nab","keys":"l<C-v>jj~"},
+  {"name":"block-case-wide-fuzz-33","text":"    'sq' end.漢字  foo_bar\tHello[sq]\n    end. ＡＢＣ beta  x1\tx1  'sq'  \n  gamma  ","keys":"<C-v>GWOu"}
 ]

@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 4adcaeab3ad4571da114db395b8329ba1272c4967639f4549802bd0a637177cd / 2933 fixtures
+// fixtures.json: sha256 cb95c33e5f9a536bea184728cd3d1de90f9810a529ba5f3e78ee60c91bcfe645 / 2945 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2933> vim_fixtures{{
+constexpr std::array<VimFixture, 2945> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2945,6 +2945,18 @@ constexpr std::array<VimFixture, 2933> vim_fixtures{{
     {"changelist-join", "abc\ndef\nghi", "JGg;x", "abc def\nhi", 2, 1, "g", "v", std::nullopt},
     {"changelist-operator", "abc\ndef\nghi\njkl", "jjxggdg;", "abc\ndef\nhi\njkl", 1, 1, "g", "v", std::nullopt},
     {"changelist-visual", "abc\ndef\nghi\njkl", "jjxggvjg;d", "abc\ndef\nhi\njkl", 2, 1, "g", "v", std::nullopt},
+    {"block-case-wide-right-u", "ABC\nABＡ\nABC", "<C-v>jjllu", "abc\nabＡ\nabc", 1, 1, "", "", std::nullopt},
+    {"block-case-wide-right-upper", "abc\nabａ\nabc", "<C-v>jjllU", "ABC\nABａ\nABC", 1, 1, "", "", std::nullopt},
+    {"block-case-wide-right-tilde", "abc\nabａ\nabc", "<C-v>jjll~", "ABC\nABａ\nABC", 1, 1, "", "", std::nullopt},
+    {"block-case-wide-left-u", "ABC\nＡBC\nABC", "l<C-v>jjlu", "Abc\nＡbC\nAbc", 1, 2, "", "", std::nullopt},
+    {"block-case-wide-left-swapped-corner", "ABC\nＡBC\nABC", "<C-v>jjlOlu", "AbC\nＡBC\nAbC", 1, 2, "", "", std::nullopt},
+    {"block-case-wide-left-then-letter", "ABCDE\nABＡDE\nABCDE", "lll<C-v>jjlu", "ABCde\nABＡdE\nABCde", 1, 4, "", "", std::nullopt},
+    {"block-case-wide-inside-changes", "ABC\nABＡB\nABC", "<C-v>jjlllu", "abc\nabａB\nabc", 1, 1, "", "", std::nullopt},
+    {"block-case-wide-inside-upper", "abc\nabａb\nabc", "<C-v>jjlllU", "ABC\nABＡb\nABC", 1, 1, "", "", std::nullopt},
+    {"block-case-wide-right-then-letter", "ABCDE\nABＡDE\nABCDE", "<C-v>jjllu", "abcDE\nabＡDE\nabcDE", 1, 1, "", "", std::nullopt},
+    {"block-case-wide-dollar", "ABC\nABＡBC\nABCDE", "<C-v>jj$u", "abc\nabａbc\nabcde", 1, 1, "", "", std::nullopt},
+    {"block-case-wide-within-one-character", "ab\nＡb\nab", "l<C-v>jj~", "aB\nＡb\naB", 1, 2, "", "", std::nullopt},
+    {"block-case-wide-fuzz-33", "    'sq' end.漢字  foo_bar\tHello[sq]\n    end. ＡＢＣ beta  x1\tx1  'sq'  \n  gamma  ", "<C-v>GWOu", "    'sq' end.漢字  foo_bar\tHello[sq]\n    end. ＡＢＣ beta  x1\tx1  'sq'  \n  gamma  ", 1, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
