@@ -424,17 +424,23 @@ namespace
 
 namespace detail
 {
-// VISUAL の u と Ctrl-r の戻り先（ADR 0052 の決定 10）。文字単位は選択の先頭。行単位は先頭行の
-// 上で、固定の端が先頭行なら行頭（1 行だけの `Vd` も・実測）、動く端だけが先頭行ならその位置。
-// 矩形は左上（block_operated と replaced_block が書く）。
-[[nodiscard]] Offset visual_restore(const TextBuffer &text, const Selection &selection,
-                                    VimMode mode)
+// VISUAL の u と Ctrl-r の戻り先（ADR 0052 の決定 10）で、大小文字の後のキャレット（#1109）。
+// Vim の do_pending_operator が置く oap->start。文字単位は選択の先頭。行単位は先頭行の上で、
+// 固定の端が先頭行なら行頭（1 行だけの `Vd` も・実測）、動く端だけが先頭行ならその位置。`.` の
+// 再生（redo_VIsual_busy）は行頭へ寄せず、選び直しの錨＝`.` を打った位置（`wV~jl.` は 2 行目の
+// 2 桁目・実測）。矩形は左上（block_operated と replaced_block が書く）。
+[[nodiscard]] Offset visual_restore(const VimState &state, const TextBuffer &text,
+                                    const Selection &selection)
 {
     const Offset first =
         selection.anchor.value < selection.caret.value ? selection.anchor : selection.caret;
-    if (mode != VimMode::visual_line)
+    if (state.mode != VimMode::visual_line)
     {
         return first;
+    }
+    if (state.redoing_visual)
+    {
+        return selection.anchor;
     }
     const LineNumber line = line_of(text, first);
     return line_of(text, selection.anchor) == line ? text.line_start(line) : selection.caret;
