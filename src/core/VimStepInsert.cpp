@@ -389,6 +389,44 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
     return step;
 }
 
+// 矩形の 1 行目が INSERT の前より伸びたぶん（ほかの行へ写す本文）と、回数の繰り返しの 1 行目の
+// 編集（#1042・#1093）。回数の繰り返しは本文の後ろへ足す VimInsertAt か、消す鍵を含む流し直しの
+// VimReplaceRange で、流し直しは置き換えた後の 1 行目から伸びたぶんを読む（Vim の op_insert も
+// 回数の周を終えた 1 行目を写す）。1 行目の中に収まらない流し直し（前の行とつないだ・改行を
+// 打った）と、伸びていない 1 行目は写さない（空）。
+[[nodiscard]] std::optional<std::pair<std::string, std::vector<VimBlockEdit>>>
+first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const VimEffect &effect)
+{
+    const Offset start = text.line_start(insert.first);
+    const Offset end = text.line_end(insert.first);
+    std::string line = text.text_range(start, end);
+    std::vector<VimBlockEdit> edits;
+    std::string tail;
+    if (const auto *replaced = std::get_if<VimReplaceRange>(&effect))
+    {
+        if (replaced->range.begin.value < start.value || end.value < replaced->range.end.value ||
+            replaced->utf8.find('\n') != std::string::npos)
+        {
+            return std::nullopt;
+        }
+        line.replace(replaced->range.begin.value - start.value,
+                     replaced->range.end.value - replaced->range.begin.value, replaced->utf8);
+        edits.push_back(VimBlockEdit{replaced->range, replaced->utf8});
+    }
+    if (line.size() <= insert.line_bytes)
+    {
+        return std::nullopt;
+    }
+    if (const auto *repeat = std::get_if<VimInsertAt>(&effect))
+    {
+        edits.push_back(VimBlockEdit{OffsetRange{repeat->at, repeat->at}, repeat->utf8});
+        tail = repeat->utf8;
+    }
+    std::string body = line.substr(insert.at.value - start.value, line.size() - insert.line_bytes);
+    body += tail;
+    return std::pair{std::move(body), std::move(edits)};
+}
+
 // 矩形の INSERT の Esc（ADR 0035 の追補 #1042）。1 行目が入る前より伸びたぶんを打った本文として
 // 読み（回数の繰り返しもその後ろに足す）、残りの行の同じ桁へ写して 1 行目の INSERT と 1 つの undo
 // 単位にする。何も打たなかったら写さない。`I` `A` は Esc の行が 1 行目でなければ（改行を打った）
@@ -399,22 +437,26 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
                                    VimStep step)
 {
     const TextBuffer &text = view.text;
-    const std::size_t bytes =
-        text.line_end(insert.first).value - text.line_start(insert.first).value;
     const bool left_first_line = line_of(text, view.selection.caret) != insert.first;
-    if ((insert.caret.has_value() && left_first_line) || bytes <= insert.line_bytes)
+    if (insert.caret.has_value() && left_first_line)
     {
         return step;
     }
-    std::string body =
-        text.text_range(insert.at, Offset{insert.at.value + bytes - insert.line_bytes});
-    std::vector<VimBlockEdit> edits;
+    auto growth = first_line_growth(insert, text, step.effect);
+    if (!growth.has_value())
+    {
+        return step;
+    }
+    std::string body = std::move(growth.value().first);
+    std::vector<VimBlockEdit> edits = std::move(growth.value().second);
     Offset resting = view.selection.caret;
     if (const auto *repeat = std::get_if<VimInsertAt>(&step.effect))
     {
-        edits.push_back(VimBlockEdit{OffsetRange{repeat->at, repeat->at}, repeat->utf8});
-        body += repeat->utf8;
         resting = repeat->caret;
+    }
+    if (const auto *replaced = std::get_if<VimReplaceRange>(&step.effect))
+    {
+        resting = replaced->caret;
     }
     if (const auto *moved = std::get_if<VimMoveTo>(&step.effect))
     {

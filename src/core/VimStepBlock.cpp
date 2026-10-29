@@ -332,7 +332,7 @@ namespace
     next.mode = VimMode::insert;
     if (count > single_step)
     {
-        next.insert_repeat = VimInsertRepeat{count - single_step, std::string{}};
+        next.insert_repeat = VimInsertRepeat{count - single_step, VimRecordedKeys::from({})};
     }
     next.block_insert = insert;
     return next;

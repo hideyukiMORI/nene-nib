@@ -1902,6 +1902,25 @@ void verify_vim_viewport_request()
     verify_indexed_columns_across_chunks();
 }
 
+// 矩形の回数付き `I` `A` の中の消す鍵（#1093 と #1042 の重なり）。回数の周は 1 行目で打鍵を流し
+// 直し、周を終えた 1 行目の伸びたぶんをほかの行へ写す（Vim の op_insert）。値は oracle の measure
+// で測った Vim 9.1（2026-10-29）。fixture の生成を回さない席が置いたので、ここに固定する。
+void verify_vim_block_count_replay()
+{
+    constexpr std::array<VimFixture, 3> contracts{{
+        {"block-count-insert-ctrl-w", "abc def\nabc def\nabc def", "w<C-v>jj2Ixy<C-w>z<Esc>",
+         "abc zdef\nabc zdef\nabc zdef", 1, 5, "", "", std::nullopt},
+        {"block-count-append-ctrl-u", "abc def\nabc def\nabc def", "w<C-v>jj3Aq <C-u>r<Esc>",
+         "abc dref\nabc dref\nabc dref", 1, 5, "", "", std::nullopt},
+        {"block-count-insert-shrinks", "abc def\nabc def\nabc def", "w<C-v>jj2I<C-w>z<Esc>",
+         "zdef\nabc def\nabc def", 1, 1, "", "", std::nullopt},
+    }};
+    for (const VimFixture &contract : contracts)
+    {
+        verify_vim_fixture(contract);
+    }
+}
+
 // 回数付き INSERT の流し直し（#1093）が CRLF の文書でも行をつなぎ、undo 1 回で戻ること。engine は
 // LF で数えた置き換えを返し、controller が文書の改行へ直す。
 void verify_vim_count_insert_replay_crlf()
@@ -1961,6 +1980,7 @@ void verify_vim_engine()
     verify_vim_insert_motion_breaks_the_unit();
     verify_vim_put_line_endings();
     verify_vim_count_insert_replay_crlf();
+    verify_vim_block_count_replay();
     verify_vim_crlf();
     verify_vim_other_keys();
     verify_vim_normal_stops_at_failure();
