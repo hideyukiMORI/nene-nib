@@ -183,7 +183,7 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
     case WM_KEYDOWN:
         end_selection_drag();
         timing_.mark(core::Milestone::input_received);
-        if (!press_bookmark_key(word, data) && !press_help_key(word, data) &&
+        if (!press_bookmark_key(word, data) && !press_function_key(word, data) &&
             !press_mode_key(word, data))
         {
             press_key(word);
@@ -289,12 +289,14 @@ bool EditorWindow::press_bookmark_key(WPARAM word, LPARAM data)
     return true;
 }
 
-// F1 は入力行や面が開いていても効く（ADR 0078 の決定 9）。長押しの反復では送らない
-// （ブックマークの鍵と同じ守り）。変換中の守りは controller にある。
-bool EditorWindow::press_help_key(WPARAM word, LPARAM data)
+// F1 は入力行や面が開いていても効く（ADR 0078 の決定 9）。F5 の日時の挿入も同じで、入力行へ
+// 入れるかは controller が決める（ADR 0175 の決定 3）。長押しの反復では送らない（ブックマークの
+// 鍵と同じ守り）。変換中の守りは controller にある。
+bool EditorWindow::press_function_key(WPARAM word, LPARAM data)
 {
     const auto chord = held_chord(word);
-    if (!chord.has_value() || chord.value().key != core::OperationKey::f1)
+    if (!chord.has_value() || (chord.value().key != core::OperationKey::f1 &&
+                               chord.value().key != core::OperationKey::f5))
     {
         return false;
     }

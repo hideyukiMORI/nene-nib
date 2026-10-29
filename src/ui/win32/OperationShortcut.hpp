@@ -10,12 +10,13 @@
 namespace nenenib::ui::win32
 {
 // 仮想キー → 操作の鍵の写し（ADR 0078 の決定 2・13）。何が起きるかは core::operation_for が決める。
-// 写すのは Ctrl つきの O S P Z Y + - 0 Space \、Ctrl+Shift+F4、修飾なしの F1、Ctrl なしの F6 だけ。
+// 写すのは Ctrl つきの O S P Z Y + - 0 Space \、Ctrl+Shift+F4、修飾なしの F1 と F5、Ctrl なしの F6
+// だけ。
 // 主キーとテンキーの + - 0 は同じ値。`\` は JIS 配列の 2 つの物理キー（VK_OEM_5 の ¥ と
 // VK_OEM_102 の ろ）を同じ値にする（ADR 0148 の決定 6）。Shift は押されているままを入れる（表に
 // Shift つきの行がある）。Alt のときは呼ばない。T W D Tab と Shift なしの F4 は写さない（タブと
 // ブックマークの鍵は TabShortcut と BookmarkKey の経路のまま）。
-// F1 は修飾なしだけ、F6 は Ctrl なし（Shift はそのまま入れる）。
+// F1 と F5（日時の挿入・ADR 0175）は修飾なしだけ、F6 は Ctrl なし（Shift はそのまま入れる）。
 // Ctrl つきの M（プレビュー・ADR 0155）と V（文字だけの貼り付け・ADR 0157）も写す。
 [[nodiscard]] inline std::optional<core::KeyChord> function_chord(WPARAM key, bool control,
                                                                   bool shift)
@@ -32,13 +33,17 @@ namespace nenenib::ui::win32
     {
         return core::KeyChord{false, false, core::OperationKey::f1};
     }
+    if (key == VK_F5 && !shift)
+    {
+        return core::KeyChord{false, false, core::OperationKey::f5};
+    }
     return std::nullopt;
 }
 
 [[nodiscard]] inline std::optional<core::KeyChord> operation_chord(WPARAM key, bool control,
                                                                    bool shift)
 {
-    if (key == VK_F1 || key == VK_F6)
+    if (key == VK_F1 || key == VK_F5 || key == VK_F6)
     {
         return function_chord(key, control, shift);
     }

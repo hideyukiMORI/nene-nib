@@ -37,6 +37,7 @@
 #include "ScriptedBell.hpp"
 #include "ScriptedBookmarks.hpp"
 #include "ScriptedClipboard.hpp"
+#include "ScriptedClock.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScriptedFolders.hpp"
@@ -528,6 +529,7 @@ void verify_recency_ranked()
     ScriptedAutosave autosave;
     ScriptedFonts fonts;
     ScriptedBell bell;
+    ScriptedClock wall_clock;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -536,7 +538,7 @@ void verify_recency_ranked()
     EditorController controller(EditorPorts{appearance, clipboard, files, code_pages, settings,
                                             themes, session, history, folders, bookmarks,
                                             text_layouts, autosave, fonts, bell, markdown, reads,
-                                            language_server},
+                                            language_server, wall_clock},
                                 initial);
     return controller.frame();
 }

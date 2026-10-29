@@ -32,6 +32,8 @@ enum class OperationKey : std::uint8_t
     v,
     // Ctrl+Shift+E のエクスプローラー（ADR 0162 の決定 7）。Shift なしの Ctrl+E
     // は表に行を置かない。
-    e
+    e,
+    // 修飾なしの F5 の日時の挿入（ADR 0175 の決定 3）。
+    f5
 };
 } // namespace nenenib::core

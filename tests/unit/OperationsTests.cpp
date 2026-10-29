@@ -44,7 +44,7 @@ constexpr KeyChord ctrl_shift(OperationKey key)
 
 // 鍵 → 通常モードの操作・Vim の操作。表の全行の鍵と、表に無い鍵の組み合わせ。
 using ChordRow = std::tuple<KeyChord, Operation, Operation>;
-constexpr std::array<ChordRow, 43> chord_rows{{
+constexpr std::array<ChordRow, 46> chord_rows{{
     // Vim の Ctrl+O はジャンプの戻り（D71・#1037）。Vim の開くは Ctrl+Shift+O。
     {ctrl(OperationKey::o), EditorOperation::open_file, std::nullopt},
     {ctrl(OperationKey::s), EditorOperation::save, EditorOperation::save},
@@ -102,12 +102,17 @@ constexpr std::array<ChordRow, 43> chord_rows{{
     {ctrl_shift(OperationKey::e), EditorOperation::toggle_explorer,
      EditorOperation::toggle_explorer},
     {ctrl(OperationKey::e), std::nullopt, std::nullopt},
+    // 日時の挿入（ADR 0175 の決定 3）。修飾なしの F5 だけ・両モード。
+    {KeyChord{false, false, OperationKey::f5}, EditorOperation::insert_date_time,
+     EditorOperation::insert_date_time},
+    {KeyChord{false, true, OperationKey::f5}, std::nullopt, std::nullopt},
+    {ctrl(OperationKey::f5), std::nullopt, std::nullopt},
 }};
 
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
-constexpr std::array<ShownRow, 25> shown_rows{{
+constexpr std::array<ShownRow, 26> shown_rows{{
     {EditorOperation::open_file, "Ctrl+O", "Ctrl+Shift+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
@@ -135,11 +140,13 @@ constexpr std::array<ShownRow, 25> shown_rows{{
     {EditorOperation::toggle_explorer, "Ctrl+Shift+E", "Ctrl+Shift+E", true, true},
     // 鍵なし。F1 の一覧からだけ（ADR 0162 の決定 7）。
     {EditorOperation::choose_explorer_root, "", "", true, true},
+    // F5 の日時の挿入（ADR 0175 の決定 3）。
+    {EditorOperation::insert_date_time, "F5", "F5", true, true},
 }};
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
 using LabelRow = std::pair<KeyChord, std::string_view>;
-constexpr std::array<LabelRow, 26> label_rows{{
+constexpr std::array<LabelRow, 27> label_rows{{
     {ctrl(OperationKey::o), "Ctrl+O"},
     {ctrl(OperationKey::s), "Ctrl+S"},
     {ctrl(OperationKey::t), "Ctrl+T"},
@@ -166,6 +173,7 @@ constexpr std::array<LabelRow, 26> label_rows{{
     {ctrl_shift(OperationKey::m), "Ctrl+Shift+M"},
     {ctrl_shift(OperationKey::v), "Ctrl+Shift+V"},
     {ctrl_shift(OperationKey::e), "Ctrl+Shift+E"},
+    {KeyChord{false, false, OperationKey::f5}, "F5"},
 }};
 
 std::string shown_label(EditorOperation operation, EditMode mode)
@@ -298,7 +306,7 @@ void verify_operation_choices()
 {
     const auto ordinary = nenenib::core::operation_choices("", EditMode::ordinary);
     const auto vim = nenenib::core::operation_choices("", EditMode::vim);
-    expect(ordinary.size() == 25 && vim.size() == 23,
+    expect(ordinary.size() == 26 && vim.size() == 24,
            "an empty query lists every operation available in the mode");
     std::vector<Operation> in_order;
     for (const auto &text : nenenib::core::operation_texts)
@@ -349,6 +357,21 @@ void verify_operation_choices()
     expect(key_for(EditorOperation::font_larger, EditMode::ordinary) == "Ctrl++",
            "a key kept with Shift is not the shown key");
 }
+
+// F5 の日時の挿入は F1 の一覧に表の行から載る（ADR 0175 の決定 3・ADR 0078）。
+void verify_date_time_choice()
+{
+    expect(row_text(EditorOperation::insert_date_time, EditMode::ordinary) ==
+                   "日時を挿入|" +
+                       std::string(nenenib::core::operation_text(EditorOperation::insert_date_time)
+                                       .description) +
+                       "|F5" &&
+               key_for(EditorOperation::insert_date_time, EditMode::vim) == "F5",
+           "the operation list shows insert date and time with F5 in both modes");
+    expect(operations_of(nenenib::core::operation_choices("f5", EditMode::ordinary)) ==
+               std::vector<Operation>{EditorOperation::insert_date_time},
+           "F5 finds insert date and time");
+}
 } // namespace
 
 void verify_operations_scope()
@@ -359,5 +382,6 @@ void verify_operations_scope()
     verify_no_shared_key();
     verify_texts();
     verify_operation_choices();
+    verify_date_time_choice();
 }
 } // namespace nenenib::tests

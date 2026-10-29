@@ -15,6 +15,7 @@
 #include "Win32Bell.hpp"
 #include "Win32BookmarkAdapter.hpp"
 #include "Win32ClipboardAdapter.hpp"
+#include "Win32Clock.hpp"
 #include "Win32CodePageAdapter.hpp"
 #include "Win32DocumentReader.hpp"
 #include "Win32FileAdapter.hpp"
@@ -45,6 +46,9 @@
 
 namespace
 {
+// 合成ルートの adapter の名前空間（run の行を関数長の上限に収める）。
+namespace nib_adapters = nenenib::adapters::win32;
+
 constexpr wchar_t product_name[] = L"NeNe Nib";
 
 const wchar_t *reason_of(nenenib::ui::win32::WindowFailure failure) noexcept
@@ -253,12 +257,10 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32ThemeAdapter themes(
         files, nenenib::adapters::win32::local_theme_directory());
     // 前回のタブの一覧は窓が閉じるときに書き、引数の無い起動で読む（ADR 0059 の決定 2・3・6）。
-    nenenib::adapters::win32::Win32SessionAdapter session(
-        files, nenenib::adapters::win32::local_session_paths());
+    nib_adapters::Win32SessionAdapter session(files, nib_adapters::local_session_paths());
     // 閉じたファイルの履歴は閉じたときに書き、Ctrl+P の面を開くときに読む。起動の道では読まない
     // （ADR 0060 の決定 8）。
-    nenenib::adapters::win32::Win32HistoryAdapter history(
-        files, nenenib::adapters::win32::local_history_path());
+    nib_adapters::Win32HistoryAdapter history(files, nib_adapters::local_history_path());
     // 裏の仕事のワーカー 1 本と、それを借りて同じフォルダを読む adapter（ADR 0062 の決定 5・10）。
     // スレッドはここでは起きず、最初の仕事で起きる。controller より先に宣言して後に壊す
     // （壊れる順は 窓 → controller → adapter → ワーカー → device の箱）。
@@ -271,8 +273,7 @@ int run(HINSTANCE instance)
     // Markdown のプレビューの解析も同じワーカーを借りる（ADR 0155 の決定 5・壊れる順は folders
     // と同じ）。
     nenenib::adapters::win32::Win32MarkdownAdapter markdown(worker);
-    nenenib::adapters::win32::Win32BookmarkAdapter bookmarks(
-        files, nenenib::adapters::win32::local_bookmark_path());
+    nib_adapters::Win32BookmarkAdapter bookmarks(files, nib_adapters::local_bookmark_path());
     nenenib::ui::win32::BodyTextLayouts text_layouts;
     // 字体の一覧は ui/win32 が DirectWrite から読み、adapters が OS の照合順に並べる（#696）。
     nenenib::ui::win32::SystemFontFamilies system_fonts;
@@ -280,12 +281,14 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32AutosaveAdapter autosave(
         worker, files, nenenib::adapters::win32::local_autosave_root());
     nenenib::adapters::win32::Win32Bell bell;
+    nib_adapters::Win32Clock wall_clock;
     nenenib::adapters::win32::Win32DocumentReader reads(worker, files, code_pages);
     nenenib::adapters::win32::Win32LanguageServer language_server({});
     nenenib::application::EditorController controller(
-        nenenib::application::EditorPorts{
-            appearance, clipboard, files, code_pages, settings, themes, session, history, folders,
-            bookmarks, text_layouts, autosave, fonts, bell, markdown, reads, language_server},
+        nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
+                                          themes, session, history, folders, bookmarks,
+                                          text_layouts, autosave, fonts, bell, markdown, reads,
+                                          language_server, wall_clock},
         initial_documents(given));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。

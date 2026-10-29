@@ -3,6 +3,7 @@
 
 #include "CaretMove.hpp"
 #include "ClipboardText.hpp"
+#include "DateTimeText.hpp"
 #include "DeleteDirection.hpp"
 #include "DisplayInquiry.hpp"
 #include "DisplayText.hpp"
@@ -20,6 +21,8 @@
 #include "VimKey.hpp"
 #include "VimMarkEdits.hpp"
 #include "VimMode.hpp"
+#include "VimSpecialKey.hpp"
+#include "VimState.hpp"
 #include "VisualPosition.hpp"
 
 #include <algorithm>
@@ -126,6 +129,27 @@ constexpr std::size_t single_page_line = 1;
 }
 // クリップボードに書けなかった知らせ（ADR 0134 の決定 3）。
 constexpr std::string_view clipboard_unwritten_notice = "クリップボードに書けませんでした";
+// NORMAL / VISUAL で次の鍵を待っているか（オペレータ・回数・レジスタの名指し・1 鍵の待ち）。
+// VISUAL の Esc は VISUAL を出るので、VISUAL ではオペレータと 1 鍵の待ちだけを待ちと見る（回数と
+// レジスタの名指しは選択を捨ててまで取り消さない）。
+[[nodiscard]] bool vim_waiting(const core::VimState &vim) noexcept
+{
+    const bool keyed = vim.pending.has_value() || vim.input_wait.has_value();
+    switch (vim.mode)
+    {
+    case core::VimMode::normal:
+        return keyed || vim.count.has_value() || vim.selected_register.has_value();
+    case core::VimMode::insert:
+    case core::VimMode::visual:
+    case core::VimMode::visual_line:
+    case core::VimMode::visual_block:
+        return keyed;
+    }
+    std::unreachable();
+}
+
+// F5 を Vim の NORMAL / VISUAL で押したときの知らせ（ADR 0175 の決定 3）。鳴らさない。
+constexpr std::string_view date_time_insert_only_notice = "INSERT モードで F5 を押してください";
 // 貼り付けの知らせ（ADR 0157 の決定 3・7）。鳴らさない情報の 1 行。
 constexpr std::string_view html_missing_notice = "HTML が無いので文字だけを貼りました";
 constexpr std::string_view html_unconverted_notice = "HTML を変換できないので文字だけを貼りました";
@@ -679,6 +703,52 @@ void EditorController::accept(const CommitText &intent)
         break;
     }
     type_as_vim_keys(intent.utf8);
+}
+
+void EditorController::accept(const InsertDateTime &)
+{
+    // 変換中は IME の確定を待つ（日時を変換中の文字列の前へ割り込ませない）。
+    if (state_.composition().has_value())
+    {
+        return;
+    }
+    // 入力行（面・Ex の行・検索の行）は打った文字と同じ道で入れる。下のモードの決まりは見ない。
+    if (command_line_active())
+    {
+        accept(CommandText{core::date_time_text(ports_.wall_clock.now())});
+        return;
+    }
+    switch (state_.mode())
+    {
+    case core::EditMode::ordinary:
+        // 選択があれば置き換え、無ければキャレットに入れる。InsertText と同じ Edit 1 回。
+        accept(InsertText{core::date_time_text(ports_.wall_clock.now())});
+        return;
+    case core::EditMode::vim:
+        break;
+    }
+    switch (state_.vim().mode)
+    {
+    case core::VimMode::insert:
+        // IME の確定と同じく打鍵として engine へ流す（ADR 0014）。undo は INSERT 1 回のまま。
+        type_as_vim_keys(core::date_time_text(ports_.wall_clock.now()));
+        return;
+    case core::VimMode::normal:
+    case core::VimMode::visual:
+    case core::VimMode::visual_line:
+    case core::VimMode::visual_block:
+        // Vim の鍵の意味を黙って変えない（D71）。時刻は読まない。待ちの途中なら、Vim が割り当ての
+        // 無い鍵を受けたときと同じく Esc の道で待ちを取り消す（#1120 の R3-1）。
+        // 材料は固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
+        if (vim_waiting(state_.vim()))
+        {
+            static_cast<void>(step_vim(core::VimKey{core::VimSpecialKey::escape}));
+        }
+        state_ = state_.with_command_message(
+            core::DisplayText::parse(date_time_insert_only_notice).value());
+        return;
+    }
+    std::unreachable();
 }
 
 void EditorController::accept(const CancelComposition &)

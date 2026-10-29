@@ -32,6 +32,7 @@
 #include "ScriptedBell.hpp"
 #include "ScriptedBookmarks.hpp"
 #include "ScriptedClipboard.hpp"
+#include "ScriptedClock.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScriptedFolders.hpp"
@@ -381,6 +382,7 @@ void verify_quiet_start_with_files()
     ScriptedAutosave autosave;
     ScriptedFonts fonts;
     ScriptedBell bell;
+    ScriptedClock wall_clock;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -389,14 +391,15 @@ void verify_quiet_start_with_files()
     EditorController controller(EditorPorts{appearance, clipboard, files, code_pages, settings,
                                             themes, session, history, folders, bookmarks,
                                             text_layouts, autosave, fonts, bell, markdown, reads,
-                                            language_server},
+                                            language_server, wall_clock},
                                 {work_open('a'), work_open('b')});
     expect(controller.frame().tabs.size() == 2 && history.reads() == 0 && history.writes() == 0 &&
                folders.requests().empty() && folders.collects() == 0 && autosave.touches() == 0 &&
                fonts.lists() == 0 && bell.rings() == 0 && markdown.requests().empty() &&
-               markdown.collects() == 0 && language_server.touches() == 0,
-           "starting with file arguments never touches the history, the folder, autosave nor "
-           "the bell");
+               markdown.collects() == 0 && language_server.touches() == 0 &&
+               wall_clock.calls() == 0,
+           "starting with file arguments never touches the history, the folder, autosave, the "
+           "bell nor the clock");
 }
 
 // 面が出ていても、開く・切り替え・新しいタブ・打鍵・保存はフォルダの entries を頼まない
@@ -440,8 +443,9 @@ void verify_quiet_paths()
                restored.folders().collects() == 0 && restored.autosave().touches() == 0 &&
                restored.fonts().lists() == 0 && restored.bell().rings() == 0 &&
                restored.markdown().requests().empty() && restored.markdown().collects() == 0 &&
-               restored.language_server().touches() == 0,
-           "restoring the last tabs never touches the history, the folder, autosave nor the bell");
+               restored.language_server().touches() == 0 && restored.wall_clock().calls() == 0,
+           "restoring the last tabs never touches the history, the folder, autosave, the bell nor "
+           "the clock");
     Editing editing;
     hold_work(editing.files());
     auto &controller = editing.controller();
@@ -472,10 +476,10 @@ void verify_quiet_paths()
                editing.markdown().requests().empty() && editing.markdown().collects() == 0 &&
                editing.clipboard().html_reads() == 0 && editing.clipboard().reads() == 0 &&
                read_requests == 2 && editing.reads().requests().size() == read_requests &&
-               editing.language_server().touches() == 0,
+               editing.language_server().touches() == 0 && editing.wall_clock().calls() == 0,
            "opening, switching, new tabs, saving and typing never touch the history, the folder, "
-           "autosave, the bell, the clipboard nor the language server (lsp off), and only opening "
-           "asks the read port");
+           "autosave, the bell, the clipboard, the language server (lsp off) nor the clock, and "
+           "only opening asks the read port");
     verify_quiet_explorer();
 }
 } // namespace
