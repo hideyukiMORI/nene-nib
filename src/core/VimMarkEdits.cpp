@@ -190,6 +190,13 @@ std::expected<VimMarks, VimRepeatFailure> vim_mark_set(const VimMarks &marks, ch
     return std::unexpected(VimRepeatFailure::refused);
 }
 
+VimMarks vim_marks_opened()
+{
+    // `'` は必ず置けるので、失敗の枝は来ない（来ても空のマークで始める）。
+    const VimMarkPosition opened{LineNumber{1}, 0};
+    return vim_mark_set(VimMarks{}, U'\'', opened).value_or(VimMarks{});
+}
+
 VimMarks vim_marks_jumped(const VimMarks &marks, const VimMarkPosition &from)
 {
     VimMarks next = marks;

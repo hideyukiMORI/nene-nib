@@ -326,6 +326,9 @@ def probe_script(settings: list[str], keys: str, viewport: dict | None = None,
                  " || winsaveview().topline != line('w0')"
                  " | cquit | endif" % (viewport["visible_lines"], viewport["line"],
                                         viewport["column"], viewport["first_visible"])]
+    # -es の Vim は開いた直後のカーソル（最終行）をジャンプの列に積み、call cursor は積まない。
+    # 普通に起動した Vim と同じに、置いた位置の 1 項だけの列にしてから鍵を流す（#1116・ADR 0152）。
+    setup += ["clearjumps", "normal! m'"]
     settle = []
     if viewport:
         settle = ["redraw!",
