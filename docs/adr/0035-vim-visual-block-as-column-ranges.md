@@ -21,7 +21,7 @@ FR-003 の T2 に残る VISUAL の 3 つめ、矩形（`Ctrl-v`）を入れる�
 
 1. **モードと入口**: `VimMode` に `visual_block` を足す（switch の網羅性で写し漏れが落ちる）。NORMAL / `v` / `V` からの `Ctrl-v`（`VimSpecialKey::control_v`）で入り、`visual_block` での `v` / `V` は種類の切替、`Ctrl-v` と Esc は NORMAL へ戻る。INSERT の Ctrl+V は窓の OS 貼付のまま（Vim の literal 挿入は入れない）。Vim の NORMAL / VISUAL では Ctrl+V は矩形の鍵になり、OS 貼付は INSERT と通常モードだけ（決定 9）。
 2. **矩形の幾何**: 左右の仮想桁は anchor と caret の `virtual_column` / `virtual_column_end`（ADR 0034）の小さいほうと大きいほう。`$`（`VimColumnWish::at_line_end`）が立っていれば右端は各行の内容の終わり。上下は anchor と caret の行。行ごとの範囲は `vim_block_range(text, selection, wish) -> VimBlockRange`（行ごとの `OffsetRange` の列と、左の仮想桁と幅）1 本が決め、左の桁より短い行は「行の内容の終わりの空範囲」、Tab や全角の途中に桁が掛かる文字は範囲に含める（Vim の既定・`virtualedit` 無し）。
-3. **移動**: 既存の移動の表をそのまま使い、`j` `k` は欲しい列（仮想桁・ADR 0034）で着地する。`o` は対角の角へ、`O` は同じ行の反対の角へ（anchor と caret の桁だけ入れ替え）。
+3. **移動**: 既存の移動の表をそのまま使い、`j` `k` は欲しい列（仮想桁・ADR 0034）で着地する。`o` は対角の角へ、`O` は同じ行の反対の角へ（~~anchor と caret の桁だけ入れ替え~~ → 矩形の左右の仮想桁を使い直す・追補 #1090）。
 4. **編集**: `d` `x` は効果 `VimRemoveBlock{ranges}`（行ごとの範囲の列・上の行から）、`r` は `VimReplaceBlock{ranges, character}`、`y` は無名レジスタへ。controller は範囲の列を後ろの行から順に写し、履歴は前後で 1 回ずつ閉じて undo 1 単位にする。削除後のキャレットは矩形の左上（Vim の実測に従う）。`c` `I` `A` `C` `>` `<` `J` `~` `u` `U` `p`（VISUAL の中の貼付）は範囲外（次の縦切り）。
 5. **レジスタ**: `VimRegisterKind` に `block` を足し、`VimRegister` に `width`（仮想桁の幅）を足す。本文は行を LF で結んだもの（末尾の改行なし）。`characters` / `lines` では `width` は使わない。~~`$` は「行末まで」の印~~ → **`$` の印は要らない**（補足 2）。
 6. **矩形の貼付**: NORMAL の `p` / `P` は種類が `block` なら効果 `VimInsertBlock{at, lines, width}` で、キャレットの行から下へ 1 行ずつ同じ仮想桁に挿し、行が短ければ空白で埋め、行が足りなければ末尾に行を足す（Vim の `:help v_b_p` の既定）。回数は行ごとの繰り返し。貼付後のキャレットは Vim の実測に従う。
@@ -55,6 +55,10 @@ FR-003 の T2 に残る VISUAL の 3 つめ、矩形（`Ctrl-v`）を入れる�
 ## 追補（2026-10-28・#959 矩形の `~` `u` `U`）
 
 決定 4 の「`~` `u` `U` は範囲外」を外す。矩形 VISUAL の `~` `u` `U`（ADR 0015 の決定 10 の大小文字）は、行ごとに `r` と同じ範囲（`VimBlockLine.range`・端で切れた Tab や全角も含む）の ASCII の英字だけを変え、効果は `r` と同じ `VimReplaceBlock`（行ごとの `VimBlockEdit` の列・undo 1 単位）。切れた文字は大小が無いので空白に割らずそのまま残る。`$` の矩形は各行の末尾まで、矩形に届かない短い行と幅 0 の行は飛ばす。キャレットと `u` の戻り先は矩形の左上（左上が切れた Tab ならその Tab の先頭）。レジスタは書かない。`.` は決定 7 と補足 6 の規則（記録した大きさで選び直す）のまま。非 ASCII の大小は #781、矩形の `>` `<` は #770 で、いまは鍵を拒んで矩形のまま残る。根拠は固定 Vim 9.1 の oracle の `block-case-` の fixture 10 件（`<C-v>jlU`・`<C-v>$U`・`$` の矩形と空行・`~`・`u`・短い行・全角の混在・端の Tab・左上の Tab・`.`）。
+
+## 追補（2026-10-29・#1090 矩形の `O` は左右の仮想桁で角を決める）
+
+決定 3 の `O` を Vim 9.1 の `v_swap_corners` に合わせる。両端の桁を入れ替えるのではなく、決定 2 と同じ左右の仮想桁（両端の文字の `virtual_column` の小さいほうと `virtual_column_end` の大きいほう）を使い直し、anchor の行を左の桁へ・caret の行を右の桁へ寄せる。caret の位置が変わらなければ逆（anchor の行を右・caret の行を左）。寄せは欲しい列の着地と同じ `offset_at_virtual_column`（全角や Tab の途中はその文字の先頭・短い行は VISUAL と同じく内容の終わり）で、欲しい列は caret の行に置いた桁になる（`$` の矩形も `O` で桁に戻る）。実装は `block_column_swapped` の 1 か所。根拠は固定 Vim 9.1 の oracle の `block-swap-corners-` の fixture 24 件（`    x1 ＡＢＣ` / `ＡＢＣ gamma` の `<C-v>jllOy` の再現・全角が左の角・右の角・両方・Tab の角・`$` の矩形・`O` を 2 回・1 行の矩形・上向きの矩形・`O` の後の `j` と `.`）。
 
 ## 強制
 

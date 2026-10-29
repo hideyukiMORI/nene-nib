@@ -123,17 +123,29 @@ namespace
     return step;
 }
 
-// 矩形の `O`。行はそのままで、両端の桁だけを入れ替える（ADR 0035 の決定 3・Vim 9.1 で実測）。
+// 矩形の `O`。行はそのままで、矩形の左右の仮想桁を使い直す（ADR 0035 の決定 3 と追補 #1090・
+// Vim の v_swap_corners）。左右は両端の文字の最初の桁の小さいほうと最後の桁の大きいほうで、
+// anchor の行を左へ・caret の行を右へ寄せる。caret が動かなければ逆に置く。寄せは欲しい列の
+// 着地と同じ offset_at_virtual_column（全角の途中は先頭・短い行は内容の終わり）で、欲しい列は
+// caret の行に置いた桁になる（`$` も桁へ戻る・実測）。
 [[nodiscard]] VimStep block_column_swapped(const VimState &state, const VimEditorView &view)
 {
     const TextBuffer &text = view.text;
-    const LineNumber anchor_line = line_of(text, view.selection.anchor);
-    const LineNumber caret_line = line_of(text, view.selection.caret);
-    const VirtualColumn anchor_column = caret_virtual_column(text, view.selection.anchor);
-    const VirtualColumn caret_column = caret_virtual_column(text, view.selection.caret);
-    return VimStep{visual_resting(state, state.mode),
-                   VimSelect{Selection{offset_at_virtual_column(text, anchor_line, caret_column),
-                                       offset_at_virtual_column(text, caret_line, anchor_column)}}};
+    const Selection &selection = view.selection;
+    const LineNumber anchor_line = line_of(text, selection.anchor);
+    const LineNumber caret_line = line_of(text, selection.caret);
+    const VirtualColumn left{std::min(virtual_column(text, selection.anchor).value,
+                                      virtual_column(text, selection.caret).value)};
+    const VirtualColumn right{std::max(virtual_column_end(text, selection.anchor).value,
+                                       virtual_column_end(text, selection.caret).value)};
+    const bool caret_stays = offset_at_virtual_column(text, caret_line, right) == selection.caret;
+    const VirtualColumn anchor_column = caret_stays ? right : left;
+    const VirtualColumn caret_column = caret_stays ? left : right;
+    VimState next = visual_resting(state, state.mode);
+    next.wanted_column = VimWantedColumn{VimColumnWish::at_column, caret_column};
+    return VimStep{std::move(next),
+                   VimSelect{Selection{offset_at_virtual_column(text, anchor_line, anchor_column),
+                                       offset_at_virtual_column(text, caret_line, caret_column)}}};
 }
 
 // VISUAL の移動。anchor はそのままで caret だけ動く（決定 3）。欲しい列は NORMAL と同じ。
@@ -228,8 +240,8 @@ namespace
                                                : visual_operated(state, view, VimOperator::change);
 }
 
-// VISUAL の `o` `O`。矩形の `O` だけが行を変えずに桁を入れ替え、ほかは対角の角へ移る
-// （ADR 0018 の決定 3 / ADR 0035 の決定 3）。
+// VISUAL の `o` `O`。矩形の `O` だけが行を変えずに左右の桁を使い直し、ほかは対角の角へ移る
+// （ADR 0018 の決定 3 / ADR 0035 の決定 3 と追補 #1090）。
 [[nodiscard]] VimStep visual_swapped(const VimState &state, const VimEditorView &view,
                                      VimAction action)
 {
