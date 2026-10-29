@@ -4,22 +4,27 @@
 #include "CaretMove.hpp"
 #include "Utf8.hpp"
 #include "VimAction.hpp"
+#include "VimBlockInsert.hpp"
 #include "VimCharacterBoundary.hpp"
 #include "VimInsertStart.hpp"
 #include "VimScrollDirection.hpp"
 #include "VimWordClass.hpp"
 #include "VimWordMotion.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
+#include <vector>
 
 namespace nenenib::core
 {
 using detail::backward_characters;
+using detail::block_insert_edit;
 using detail::display_view;
 using detail::finished_input_wait;
 using detail::insert_character;
@@ -205,7 +210,7 @@ namespace
                    VimRemoveRange{OffsetRange{begin, caret}}};
 }
 
-[[nodiscard]] VimStep left_insert(const VimState &state, const VimEditorView &view)
+[[nodiscard]] VimStep plain_left_insert(const VimState &state, const VimEditorView &view)
 {
     const Offset caret = view.selection.caret;
     const Offset back = backward_characters(view.text, caret, single_step);
@@ -228,6 +233,65 @@ namespace
     step.insert_left = retreat;
     step.effect = VimInsertAt{caret, std::move(body), rest, EditBoundary::absorb};
     return step;
+}
+
+// 矩形の INSERT の Esc（ADR 0035 の追補 #1042）。1 行目が入る前より伸びたぶんを打った本文として
+// 読み（回数の繰り返しもその後ろに足す）、残りの行の同じ桁へ写して 1 行目の INSERT と 1 つの undo
+// 単位にする。何も打たなかったら写さない。`I` `A` は Esc の行が 1 行目でなければ（改行を打った）
+// 写さず（固定 Vim の op_insert）、`c` `C` は行を問わず今の行番号の行へ写す（op_change・どちらも
+// 実測）。キャレットは `I` `A` なら矩形の左上（Esc の位置が手前ならそこ）、`c` `C` なら Esc
+// のふつうの位置で、`'^` は打ち終えた 所のまま。
+[[nodiscard]] VimStep block_copied(const VimBlockInsert &insert, const VimEditorView &view,
+                                   VimStep step)
+{
+    const TextBuffer &text = view.text;
+    const std::size_t bytes =
+        text.line_end(insert.first).value - text.line_start(insert.first).value;
+    const bool left_first_line = line_of(text, view.selection.caret) != insert.first;
+    if ((insert.caret.has_value() && left_first_line) || bytes <= insert.line_bytes)
+    {
+        return step;
+    }
+    std::string body =
+        text.text_range(insert.at, Offset{insert.at.value + bytes - insert.line_bytes});
+    std::vector<VimBlockEdit> edits;
+    Offset resting = view.selection.caret;
+    if (const auto *repeat = std::get_if<VimInsertAt>(&step.effect))
+    {
+        edits.push_back(VimBlockEdit{OffsetRange{repeat->at, repeat->at}, repeat->utf8});
+        body += repeat->utf8;
+        resting = repeat->caret;
+    }
+    if (const auto *moved = std::get_if<VimMoveTo>(&step.effect))
+    {
+        resting = moved->caret;
+    }
+    const std::size_t last = std::min(insert.first.value + insert.lines, text.line_count() + 1);
+    for (std::size_t index = single_step; insert.first.value + index < last; ++index)
+    {
+        auto edit = block_insert_edit(text, LineNumber{insert.first.value + index}, insert, body);
+        if (edit.has_value())
+        {
+            edits.push_back(std::move(edit).value());
+        }
+    }
+    // `I` `A` は矩形の左上へ戻る。打つ間に左上より前へ動いて打ったなら Esc の位置のまま（実測
+    // `<Home>`）。
+    const Offset caret{std::min(insert.caret.value_or(resting).value, resting.value)};
+    const std::size_t inserted_end = resting.value + step.insert_left.value_or(0);
+    step.insert_left = inserted_end > caret.value ? inserted_end - caret.value : 0;
+    step.effect = VimInsertBlock{std::move(edits), caret, EditBoundary::absorb};
+    return step;
+}
+
+[[nodiscard]] VimStep left_insert(const VimState &state, const VimEditorView &view)
+{
+    VimStep step = plain_left_insert(state, view);
+    if (!state.block_insert.has_value())
+    {
+        return step;
+    }
+    return block_copied(state.block_insert.value(), view, std::move(step));
 }
 
 [[nodiscard]] VimStep insert_page_moved(const VimState &state, const VimEditorView &view,

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "VimAction.hpp"
+#include "VimBlockInsert.hpp"
 #include "VimBlockRange.hpp"
 #include "VimCharacterSearchInvocation.hpp"
 #include "VimKeyTable.hpp"
@@ -169,6 +170,17 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
                                      char32_t target);
 [[nodiscard]] VimStep cased_block(const VimState &state, const VimEditorView &view,
                                   VimOperator operation);
+// 矩形の `I` `A`（入口）と `c` `C`（消してから入る）と、Esc で 1 行目の本文を写す 1 行の形と、
+// 矩形の `>` `<`（ADR 0035 の追補 #1042）。
+[[nodiscard]] VimStep block_inserted(const VimState &state, const VimEditorView &view,
+                                     VimAction action);
+[[nodiscard]] VimStep block_changed(const VimState &state, const VimEditorView &view,
+                                    VimColumnWish wish);
+[[nodiscard]] std::optional<VimBlockEdit> block_insert_edit(const TextBuffer &text, LineNumber line,
+                                                            const VimBlockInsert &insert,
+                                                            std::string_view body);
+[[nodiscard]] VimStep shifted_block(const VimState &state, const VimEditorView &view,
+                                    ShiftBy shift);
 [[nodiscard]] VimRegister register_read(const VimState &state,
                                         const std::optional<VimRegisterSelection> &chosen);
 [[nodiscard]] VimStep put_step(const VimState &state, const TextBuffer &text, Offset caret,

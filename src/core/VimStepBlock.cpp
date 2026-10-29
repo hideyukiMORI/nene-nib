@@ -1,8 +1,10 @@
 #include "VimStepDetail.hpp"
 
 #include "Utf8.hpp"
+#include "VimBlockInsert.hpp"
 #include "VimBlockLine.hpp"
 #include "VimBlockRange.hpp"
+#include "VimCharacterBoundary.hpp"
 #include "VimNumberedRule.hpp"
 #include "VimPutSide.hpp"
 
@@ -16,6 +18,7 @@
 
 namespace nenenib::core
 {
+using detail::block_insert_edit;
 using detail::block_of;
 using detail::block_operated;
 using detail::cancelled;
@@ -210,6 +213,264 @@ namespace detail
 
 namespace
 {
+// 矩形の INSERT が 1 行の `column` の桁に入れる本文の前の空白（ADR 0035 の追補 #1042）。桁が文字
+// （Tab か全角）の途中に落ちればその文字の手前から桁までを空白で埋め、`A` が届かない行では行末から
+// 桁までを埋める（固定 Vim の block_insert・実測）。
+[[nodiscard]] std::size_t insert_lead(std::string_view content, VimBlockInsertSide side,
+                                      VirtualColumn column)
+{
+    const std::size_t columns = virtual_width(content);
+    const std::size_t inside =
+        column.value <= columns
+            ? column.value - column_of(content, byte_at_column(content, column)).value
+            : 0;
+    switch (side)
+    {
+    case VimBlockInsertSide::line_end:
+        return 0;
+    case VimBlockInsertSide::before:
+        return inside;
+    case VimBlockInsertSide::after:
+        break;
+    }
+    return column.value <= columns ? inside : column.value - single_step - columns;
+}
+
+// `line` の行で INSERT の本文が入る所。桁が Tab の途中なら Tab ごと置き換える（Tab だけを割り、
+// 全角は前を空白で埋めて右へ送る・実測）。
+[[nodiscard]] OffsetRange insert_range(const TextBuffer &text, LineNumber line,
+                                       std::string_view content, const VimBlockInsert &insert)
+{
+    const VirtualColumn column = insert.column;
+    const Offset end = text.line_end(line);
+    switch (insert.side)
+    {
+    case VimBlockInsertSide::line_end:
+        return OffsetRange{end, end};
+    case VimBlockInsertSide::before:
+    case VimBlockInsertSide::after:
+        break;
+    }
+    if (column.value > virtual_width(content))
+    {
+        return OffsetRange{end, end};
+    }
+    const Offset start = text.line_start(line);
+    const std::size_t byte = byte_at_column(content, column);
+    const Offset at{start.value + byte};
+    const bool splits_tab = column_of(content, byte).value < column.value &&
+                            code_point_at(content, Offset{byte}) == tab_character;
+    return OffsetRange{
+        at, splits_tab ? Offset{start.value + next_code_point(content, Offset{byte}).value} : at};
+}
+
+// Tab を割ったときに本文の後ろへ残す空白（Tab の残りの桁）。
+[[nodiscard]] std::size_t insert_tail(std::string_view content, const OffsetRange &range,
+                                      Offset start, VirtualColumn column)
+{
+    if (is_empty(range))
+    {
+        return 0;
+    }
+    return column_end_of(content, range.begin.value - start.value).value - column.value +
+           single_step;
+}
+
+// `I` `c` `C` は矩形の左の桁に届かない行を飛ばす（`A` は埋める・実測）。
+[[nodiscard]] bool skips_line(std::string_view content, VimBlockInsertSide side,
+                              VirtualColumn column)
+{
+    switch (side)
+    {
+    case VimBlockInsertSide::before:
+        return column.value > virtual_width(content) + single_step;
+    case VimBlockInsertSide::after:
+    case VimBlockInsertSide::line_end:
+        break;
+    }
+    return false;
+}
+} // namespace
+
+namespace detail
+{
+// 矩形の INSERT の本文を 1 行に入れる形（ADR 0035 の追補 #1042）。Esc が 1 行目の本文を残りの行へ
+// 写すときと、`I` `A` の入口が 1 行目を埋めるとき（本文は空）に使う 1 本。写す桁と向きは `insert`
+// から読む。飛ばす行は空。
+[[nodiscard]] std::optional<VimBlockEdit> block_insert_edit(const TextBuffer &text, LineNumber line,
+                                                            const VimBlockInsert &insert,
+                                                            std::string_view body)
+{
+    const std::string content = text.line_text(line);
+    if (skips_line(content, insert.side, insert.column))
+    {
+        return std::nullopt;
+    }
+    const OffsetRange range = insert_range(text, line, content, insert);
+    std::string utf8(insert_lead(content, insert.side, insert.column), ' ');
+    utf8 += body;
+    utf8.append(insert_tail(content, range, text.line_start(line), insert.column), ' ');
+    return VimBlockEdit{range, std::move(utf8)};
+}
+} // namespace detail
+
+namespace
+{
+// `$` で取った矩形かどうか（欲しい列が行末）。`A` は各行の内容の終わりへ写す（実測）。
+[[nodiscard]] bool at_line_end(const VimState &state) noexcept
+{
+    return state.wanted_column.has_value() &&
+           state.wanted_column.value().wish == VimColumnWish::at_line_end;
+}
+
+// INSERT へ入った状態。`I` `A` の回数は打った本文を回数ぶん入れてから写す（実測 `2Iab`）。
+[[nodiscard]] VimState block_insert_entered(VimState next, std::size_t count,
+                                            const VimBlockInsert &insert)
+{
+    next.mode = VimMode::insert;
+    if (count > single_step)
+    {
+        next.insert_repeat = VimInsertRepeat{count - single_step, std::string{}};
+    }
+    next.block_insert = insert;
+    return next;
+}
+
+// `C` の矩形。選んだ矩形を `$` で取り直す（固定 Vim の v_visop は curswant を MAXCOL にしてから
+// `c` を流す）。`.` の再生では記録の大きさの左上から取り直す。
+[[nodiscard]] VimBlockRange line_end_block_of(const VimState &state, const VimEditorView &view)
+{
+    if (state.replayed_block.has_value())
+    {
+        VimBlockExtent extent = state.replayed_block.value();
+        extent.wish = VimColumnWish::at_line_end;
+        return vim_replayed_block_range(view.text, view.selection, extent);
+    }
+    return vim_block_range(view.text, view.selection, VimColumnWish::at_line_end);
+}
+
+// `A` の 1 行目で右の端が文字（全角か Tab）の途中に掛かれば、その文字の後ろから打つ（空白で埋めず
+// 割らない・固定 Vim の op_insert はカーソルを矩形の本文の次へ進める・`.`
+// の再生で実測）。残りの行は 写すときに桁で埋める（block_insert_edit）。掛からなければ空。
+[[nodiscard]] std::optional<Offset>
+after_straddled(const TextBuffer &text, const VimBlockInsert &insert, std::string_view content)
+{
+    switch (insert.side)
+    {
+    case VimBlockInsertSide::before:
+    case VimBlockInsertSide::line_end:
+        return std::nullopt;
+    case VimBlockInsertSide::after:
+        break;
+    }
+    if (insert.column.value > virtual_width(content))
+    {
+        return std::nullopt;
+    }
+    const std::size_t byte = byte_at_column(content, insert.column);
+    if (column_of(content, byte).value >= insert.column.value)
+    {
+        return std::nullopt;
+    }
+    return Offset{text.line_start(insert.first).value +
+                  vim_character_end(content, Offset{byte}).value};
+}
+
+// 入る前の 1 行目の形（本文は空）。埋める空白か割った Tab があれば、打つ本文と同じ単位に入る。
+[[nodiscard]] VimBlockEdit first_line_entry(const TextBuffer &text, const VimBlockInsert &insert,
+                                            std::string_view content)
+{
+    if (const auto after = after_straddled(text, insert, content))
+    {
+        return VimBlockEdit{OffsetRange{after.value(), after.value()}, std::string{}};
+    }
+    const Offset end = text.line_end(insert.first);
+    return block_insert_edit(text, insert.first, insert, std::string_view{})
+        .value_or(VimBlockEdit{OffsetRange{end, end}, std::string{}});
+}
+
+// `I` `A` が写す向き。`A` は `$` の矩形なら各行の内容の終わり。
+[[nodiscard]] VimBlockInsertSide insert_side(const VimState &state, VimAction action) noexcept
+{
+    if (action != VimAction::insert_at_line_end)
+    {
+        return VimBlockInsertSide::before;
+    }
+    return at_line_end(state) ? VimBlockInsertSide::line_end : VimBlockInsertSide::after;
+}
+} // namespace
+
+namespace detail
+{
+// 矩形の `I` `A`（ADR 0035 の追補 #1042）。1 行目だけに打ち、Esc で残りの行へ写す。1 行目が桁に
+// 届かない `A` や桁が Tab の途中なら、入る前に 1 行目を空白で埋める（固定 Vim の op_insert）。
+// u の戻り先は打ち始める所（実測）。
+[[nodiscard]] VimStep block_inserted(const VimState &state, const VimEditorView &view,
+                                     VimAction action)
+{
+    const VimBlockRange block = block_of(state, view);
+    const TextBuffer &text = view.text;
+    const VimBlockInsertSide side = insert_side(state, action);
+    VimBlockInsert insert{block.first,
+                          block.lines.size(),
+                          side,
+                          side == VimBlockInsertSide::before
+                              ? block.left
+                              : VirtualColumn{block_right(block) + single_step},
+                          block_caret(block),
+                          0,
+                          block_caret(block)};
+    const std::string content = text.line_text(block.first);
+    VimBlockEdit entry = first_line_entry(text, insert, content);
+    const Offset at{entry.range.begin.value +
+                    (entry.utf8.empty() ? 0 : insert_lead(content, side, insert.column))};
+    insert.at = at;
+    insert.line_bytes =
+        content.size() - (entry.range.end.value - entry.range.begin.value) + entry.utf8.size();
+    VimState next = block_insert_entered(vim_resting_from(state, state.unnamed_register),
+                                         count_of(state.count), insert);
+    if (entry.utf8.empty() && is_empty(entry.range))
+    {
+        return restored_at(VimStep{std::move(next), VimMoveTo{at}}, at);
+    }
+    const Offset begin = entry.range.begin;
+    // 埋めた編集は打つ本文と同じ INSERT の単位に入る（controller が absorb で写す）。
+    return restored_at(
+        VimStep{std::move(next), VimReplaceBlock{std::vector<VimBlockEdit>{std::move(entry)}, at}},
+        begin);
+}
+
+// 矩形の `c` `C`（ADR 0035 の追補 #1042）。`d` と同じく矩形を消してレジスタ（矩形の種類）へ書き、
+// 左の桁から `I` と同じに入る。キャレットは Esc のふつうの位置、u の戻り先は矩形の左上（実測）。
+[[nodiscard]] VimStep block_changed(const VimState &state, const VimEditorView &view,
+                                    VimColumnWish wish)
+{
+    const VimBlockRange block =
+        wish == VimColumnWish::at_line_end ? line_end_block_of(state, view) : block_of(state, view);
+    auto written = registers_written(state, block_register(view.text, block), VimOperator::change,
+                                     VimNumberedRule::by_extent);
+    if (!written.has_value())
+    {
+        return refused_register(state);
+    }
+    auto [next, clipboard] = std::move(written).value();
+    VimRemoveBlock removal = vim_remove_block(block);
+    const VimBlockLine &top = block.lines.front();
+    const std::size_t line_bytes = view.text.line_text(block.first).size() -
+                                   (top.range.end.value - top.range.begin.value) + top.keep_lead +
+                                   top.keep_tail;
+    VimState entered = block_insert_entered(
+        std::move(next), single_step,
+        VimBlockInsert{block.first, block.lines.size(), VimBlockInsertSide::before, block.left,
+                       removal.caret, line_bytes, std::nullopt});
+    return restored_at(
+        with_clipboard(VimStep{std::move(entered), std::move(removal)}, std::move(clipboard)),
+        block_caret(block));
+}
+} // namespace detail
+
+namespace
+{
 // 矩形レジスタの行（本文は LF で区切られ、末尾に改行は無い）。
 [[nodiscard]] std::vector<std::string> block_register_lines(std::string_view body)
 {
@@ -397,7 +658,7 @@ namespace
     {
         edits.push_back(appended_block_lines(text, column, rest));
     }
-    return VimInsertBlock{std::move(edits), at};
+    return VimInsertBlock{std::move(edits), at, EditBoundary::separate};
 }
 
 // 貼れないレジスタ（E353）。未使用と空のクリップボードだけ（ADR 0051 の B6）。空の本文で書かれた
@@ -429,7 +690,7 @@ namespace detail
         // 実測）。記録に載る「何も入れない貼付」は行の無い矩形の貼付で表す（本文・履歴・キャレット
         // を変えない・#988・ADR 0050 の決定 5 の追補）。
         return VimStep{vim_resting_from(state, state.unnamed_register),
-                       VimInsertBlock{std::vector<VimBlockEdit>{}, caret}};
+                       VimInsertBlock{std::vector<VimBlockEdit>{}, caret, EditBoundary::separate}};
     }
     if (source.text.empty())
     {

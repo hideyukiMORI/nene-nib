@@ -1697,6 +1697,7 @@ namespace
     next.insert_repeat = std::nullopt;
     next.recording = std::nullopt;
     next.insert_start = std::nullopt;
+    next.block_insert = std::nullopt;
     return next;
 }
 } // namespace

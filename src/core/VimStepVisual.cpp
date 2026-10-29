@@ -15,6 +15,8 @@
 namespace nenenib::core
 {
 using detail::aligned_screen;
+using detail::block_changed;
+using detail::block_inserted;
 using detail::block_operated;
 using detail::case_changed;
 using detail::cased_block;
@@ -41,6 +43,7 @@ using detail::scroll_action;
 using detail::search_action;
 using detail::ShiftBy;
 using detail::shifted;
+using detail::shifted_block;
 using detail::tab_action;
 using detail::visual_acted;
 using detail::visual_character;
@@ -211,7 +214,7 @@ namespace
 }
 
 // VISUAL の `~` `u` `U` `>` `<` と `g~` `gu` `gU`（決定 10・11）。矩形の大小文字は行ごとに効き
-// （ADR 0035 の追補 #959）、矩形の `>` `<` は #770 の範囲で、いまは鍵を拒んで矩形のまま残る。
+// （ADR 0035 の追補 #959）、矩形の `>` `<` は矩形の左の桁から字下げを動かす（追補 #1042）。
 [[nodiscard]] VimStep visual_rewritten(const VimState &state, const VimEditorView &view,
                                        VimOperator operation)
 {
@@ -225,21 +228,48 @@ namespace
     case VimOperator::lower_case:
     case VimOperator::upper_case:
         return cased_block(state, view, operation);
+    case VimOperator::shift_right:
+    case VimOperator::shift_left:
+        return shifted_block(state, view, ShiftBy{operation, count_of(state.count)});
     case VimOperator::remove:
     case VimOperator::change:
     case VimOperator::yank:
-    case VimOperator::shift_right:
-    case VimOperator::shift_left:
         return failed(visual_unchanged(state), VimRepeatFailure::refused);
     }
     std::unreachable();
 }
 
-// VISUAL の `c`。矩形は範囲外なので鍵を捨てて矩形のまま残る（ADR 0035 の決定 5）。
+// VISUAL の `c`。矩形は消してから左の桁で INSERT に入る（ADR 0035 の追補 #1042）。矩形の形は
+// 選んだまま（`$` で選んだなら行末まで）なので、`$` で取り直さない at_column を渡す。
 [[nodiscard]] VimStep visual_changed(const VimState &state, const VimEditorView &view)
 {
-    return state.mode == VimMode::visual_block ? visual_unchanged(state)
-                                               : visual_operated(state, view, VimOperator::change);
+    return state.mode == VimMode::visual_block
+               ? block_changed(state, view, VimColumnWish::at_column)
+               : visual_operated(state, view, VimOperator::change);
+}
+
+// 行に効く鍵（`I` `A` `C` `D` `Y` `gi`）。VISUAL では矩形の `I` `A` `C` だけが効く（ADR 0035 の
+// 追補 #1042・`D` `Y` と文字単位・行単位は後続）。`gi` は VISUAL では失敗する（実測・#1039）。
+[[nodiscard]] VimStep visual_line_command(const VimState &state, const VimEditorView &view,
+                                          VimAction action)
+{
+    if (action == VimAction::insert_at_last_insert)
+    {
+        return failed(visual_unchanged(state), VimRepeatFailure::refused);
+    }
+    if (state.mode != VimMode::visual_block)
+    {
+        return visual_unchanged(state);
+    }
+    if (action == VimAction::insert_at_line_start || action == VimAction::insert_at_line_end)
+    {
+        return block_inserted(state, view, action);
+    }
+    if (action == VimAction::change_to_line_end)
+    {
+        return block_changed(state, view, VimColumnWish::at_line_end);
+    }
+    return visual_unchanged(state);
 }
 
 // VISUAL の `o` `O`。矩形の `O` だけが行を変えずに左右の桁を使い直し、ほかは対角の角へ移る
@@ -376,11 +406,8 @@ namespace detail
     case VimActionGroup::number:
         return visual_numbered(state, view, action);
     case VimActionGroup::insert_line:
-        // `gi` は VISUAL では失敗する（実測・#1039）。
-        return action == VimAction::insert_at_last_insert
-                   ? failed(visual_unchanged(state), VimRepeatFailure::refused)
-                   : visual_unchanged(state);
     case VimActionGroup::edit_line:
+        return visual_line_command(state, view, action);
     case VimActionGroup::ex_line:
         return visual_unchanged(state);
     }

@@ -133,6 +133,21 @@ constexpr std::size_t single_step = 1;
     block.wish = VimColumnWish::at_line_end;
     return block;
 }
+
+// `$` の矩形で、矩形に届かない行がレジスタに入れる空白は幅より 1 つ多い（固定 Vim の block_prep は
+// MAXCOL から決めた右端の次の桁まで埋める・`y` `d` `c` とも・#1042 で実測）。届かない行は範囲が
+// 空で前の空白だけを持つ行である。
+[[nodiscard]] VimBlockRange line_end_padded(VimBlockRange block)
+{
+    for (VimBlockLine &line : block.lines)
+    {
+        if (is_empty(line.range) && line.lead > 0)
+        {
+            ++line.lead;
+        }
+    }
+    return block;
+}
 } // namespace
 
 VimBlockRange vim_block_range(const TextBuffer &text, const Selection &selection,
@@ -143,7 +158,7 @@ VimBlockRange vim_block_range(const TextBuffer &text, const Selection &selection
     switch (wish)
     {
     case VimColumnWish::at_line_end:
-        return line_end_block(text, ordered, left);
+        return line_end_padded(line_end_block(text, ordered, left));
     case VimColumnWish::at_column:
         break;
     }
@@ -158,7 +173,7 @@ VimBlockRange vim_replayed_block_range(const TextBuffer &text, const Selection &
     switch (extent.wish)
     {
     case VimColumnWish::at_line_end:
-        return line_end_block(text, ordered, left);
+        return line_end_padded(line_end_block(text, ordered, left));
     case VimColumnWish::at_column:
         break;
     }
