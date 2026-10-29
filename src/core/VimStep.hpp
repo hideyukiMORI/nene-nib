@@ -82,7 +82,8 @@ struct VimStep
                                            const VimRegister &value);
 
 // 鍵 key を流す直前に OS のクリップボードを読むか（ADR 0051 の決定 3 と追補（#848）の決定 D）。
-// `"+` `"*` を選んでいるか、`@` の次の名前を待っている（`q` の待ちは含めない）とき真で、
+// `"+` `"*` を選んでいるか、`@` の次の名前を待っている（`q` の待ちは含めない）か、INSERT の
+// `Ctrl-r` の次の鍵が `+` `*` のとき（#1040・ほかの名前では読まない）真で、
 // vim_reads_unnamed_clipboard が真のときも真。controller は vim_step を呼ぶ直前にこれを見て、
 // 真なら 1 回読んで写しを置く。何が読む状態かを決めるのは engine の側である（ARC-004）。
 [[nodiscard]] bool vim_reads_clipboard(const VimState &state, const VimKey &key) noexcept;

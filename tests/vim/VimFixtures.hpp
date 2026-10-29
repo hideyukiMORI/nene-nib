@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 e3e5bf6f4a2a2b4357d1ab6816753bb7e43ab6ef463d457e58f9ef2d160ed41a / 2579 fixtures
+// fixtures.json: sha256 b96e29b581eecd83265467b7ab5ef0cfa8542f3e62beb7e696bbc751a2ca206e / 2585 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2579> vim_fixtures{{
+constexpr std::array<VimFixture, 2585> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2591,6 +2591,12 @@ constexpr std::array<VimFixture, 2579> vim_fixtures{{
     {"insert-control-ctrl-w-count", "x", "3Aabc def<C-w><Esc>", "xabc abc abc ", 1, 13, "", "", std::nullopt},
     {"insert-control-ctrl-u-count", "x", "3Aab<C-u>c<Esc>", "xc", 1, 2, "", "", std::nullopt},
     {"insert-control-ctrl-w-count-consumed", "xy", "3Aab<C-w>c<Esc>", "xyc", 1, 3, "", "", std::nullopt},
+    {"insert-control-ctrl-w-arrow-left-of-start", "abc def", "Axy<Left><Left><Left>z<C-w><Esc>", "abc defxy", 1, 6, "", "", std::nullopt},
+    {"insert-control-ctrl-u-arrow-left-of-start", "abc def", "Axy<Left><Left><Left>z<C-u><Esc>", "abc defxy", 1, 6, "", "", std::nullopt},
+    {"insert-control-ctrl-u-arrow-home", "abc def", "Axy<Home>z<C-u><Esc>", "abc defxy", 1, 1, "", "", std::nullopt},
+    {"insert-control-ctrl-u-arrow-back-right", "abc def", "Axy<Left><Left><Left>z<Right><Right><Right>w<C-u><Esc>", "abc de", 1, 6, "", "", std::nullopt},
+    {"insert-control-ctrl-u-arrow-other-line", "abc def\nghi", "jAxy<Up>z<C-u><Esc>", "ef\nghixy", 1, 1, "", "", std::nullopt},
+    {"insert-control-ctrl-u-arrow-then-backspace", "abc def", "Axy<Left><Left><Left><BS>z<C-u><Esc>", "fxy", 1, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

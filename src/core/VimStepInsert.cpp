@@ -106,7 +106,7 @@ namespace
     VimState next = insert_record_erased(state);
     if (next.insert_start.has_value() && next.insert_start.value().line == line)
     {
-        next.insert_start = VimInsertStart{above, end.value - text.line_start(above).value};
+        next.insert_start = VimInsertStart{above, end.value - text.line_start(above).value, false};
     }
     return VimStep{std::move(next), VimRemoveRange{OffsetRange{end, caret}}};
 }
@@ -197,9 +197,9 @@ namespace
     Offset begin = floor;
     if (by_word)
     {
-        const std::string content = text.text_range(line_start, caret);
-        begin =
-            Offset{line_start.value + word_erase_begin(content, floor.value - line_start.value)};
+        // 消しうるのは floor から先だけなので、行頭からは写さない（1 行 16 MiB の行・#1040）。
+        const std::string content = text.text_range(floor, caret);
+        begin = Offset{floor.value + word_erase_begin(content, 0)};
     }
     return VimStep{insert_record_cut(state, caret.value - begin.value),
                    VimRemoveRange{OffsetRange{begin, caret}}};
@@ -339,18 +339,81 @@ namespace detail
                    VimInsertAt{caret, std::move(body), rest, EditBoundary::absorb}};
 }
 
-// INSERT の最初の鍵の前に、始めの位置をキャレットから置く（#1040）。INSERT へ入る命令の効果は
-// controller が写すので、入った後の最初の鍵で読むのが Vim の Insstart と同じ位置になる。
-[[nodiscard]] VimState insert_started(const VimState &state, const VimEditorView &view)
+// INSERT で記録を `i` から取り直す鍵（決定 4）。ADR 0028 の決定 3 が挿入の反復を切るのと
+// 同じ境界で、Vim も移動のあとの入力を新しい挿入として扱う（Home / End / 矢印で実測）。
+[[nodiscard]] bool restarts_insert(VimKey key) noexcept
 {
-    if (state.mode != VimMode::insert || state.insert_start.has_value())
+    if (!std::holds_alternative<VimSpecialKey>(key))
+    {
+        return false;
+    }
+    switch (std::get<VimSpecialKey>(key))
+    {
+    case VimSpecialKey::arrow_left:
+    case VimSpecialKey::arrow_right:
+    case VimSpecialKey::arrow_up:
+    case VimSpecialKey::arrow_down:
+    case VimSpecialKey::home:
+    case VimSpecialKey::end:
+    case VimSpecialKey::page_up:
+    case VimSpecialKey::page_down:
+        return true;
+    case VimSpecialKey::escape:
+    case VimSpecialKey::enter:
+    case VimSpecialKey::backspace:
+    case VimSpecialKey::control_r:
+    case VimSpecialKey::control_d:
+    case VimSpecialKey::control_u:
+    case VimSpecialKey::control_f:
+    case VimSpecialKey::control_b:
+    case VimSpecialKey::control_v:
+    case VimSpecialKey::control_w:
+        return false;
+    }
+    std::unreachable();
+}
+
+namespace
+{
+// 移動の後に打った最初の鍵の前の始めの位置（Vim の stop_arrow と update_Insstart_orig・#1040）。
+// キャレットの桁が始めの桁以下なら（行は比べない）始めをキャレットへ移し、右なら動かさない
+// （`Axy<Left><Left><Left>z<C-w>` は z だけ・`jAxy<Up>z<C-u>` は行頭まで・oracle で実測）。
+[[nodiscard]] VimInsertStart arrow_stopped(VimInsertStart start, VimInsertStart caret) noexcept
+{
+    if (caret.byte_column > start.byte_column)
+    {
+        start.moved = false;
+        return start;
+    }
+    return caret;
+}
+} // namespace
+
+// INSERT の鍵の前に始めの位置を整える（#1040）。最初の鍵ではキャレットから置き（INSERT へ入る
+// 命令の効果は controller が写すので、入った後の最初の鍵で読むのが Vim の Insstart と同じ位置）、
+// 移動の鍵では印を立て、印の後の最初の移動でない鍵で arrow_stopped を通す。
+[[nodiscard]] VimState insert_started(const VimState &state, const VimEditorView &view,
+                                      const VimKey &key)
+{
+    if (state.mode != VimMode::insert)
     {
         return state;
     }
     VimState next = state;
     const Offset caret = view.selection.caret;
     const LineNumber line = line_of(view.text, caret);
-    next.insert_start = VimInsertStart{line, caret.value - view.text.line_start(line).value};
+    const VimInsertStart here{line, caret.value - view.text.line_start(line).value, false};
+    const bool moving = !state.input_wait.has_value() && restarts_insert(key);
+    VimInsertStart start = state.insert_start.value_or(here);
+    if (moving)
+    {
+        start.moved = true;
+    }
+    else if (start.moved)
+    {
+        start = arrow_stopped(start, here);
+    }
+    next.insert_start = start;
     return next;
 }
 } // namespace detail

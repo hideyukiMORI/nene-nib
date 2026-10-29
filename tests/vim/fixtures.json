@@ -2577,5 +2577,11 @@
   {"name":"insert-control-ctrl-r-lines-count","text":"foo","keys":"\"ayy3A-<C-r>a<Esc>"},
   {"name":"insert-control-ctrl-w-count","text":"x","keys":"3Aabc def<C-w><Esc>"},
   {"name":"insert-control-ctrl-u-count","text":"x","keys":"3Aab<C-u>c<Esc>"},
-  {"name":"insert-control-ctrl-w-count-consumed","text":"xy","keys":"3Aab<C-w>c<Esc>"}
+  {"name":"insert-control-ctrl-w-count-consumed","text":"xy","keys":"3Aab<C-w>c<Esc>"},
+  {"name":"insert-control-ctrl-w-arrow-left-of-start","text":"abc def","keys":"Axy<Left><Left><Left>z<C-w><Esc>"},
+  {"name":"insert-control-ctrl-u-arrow-left-of-start","text":"abc def","keys":"Axy<Left><Left><Left>z<C-u><Esc>"},
+  {"name":"insert-control-ctrl-u-arrow-home","text":"abc def","keys":"Axy<Home>z<C-u><Esc>"},
+  {"name":"insert-control-ctrl-u-arrow-back-right","text":"abc def","keys":"Axy<Left><Left><Left>z<Right><Right><Right>w<C-u><Esc>"},
+  {"name":"insert-control-ctrl-u-arrow-other-line","text":"abc def\nghi","keys":"jAxy<Up>z<C-u><Esc>"},
+  {"name":"insert-control-ctrl-u-arrow-then-backspace","text":"abc def","keys":"Axy<Left><Left><Left><BS>z<C-u><Esc>"}
 ]

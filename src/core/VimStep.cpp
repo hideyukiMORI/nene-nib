@@ -80,6 +80,7 @@ using detail::page_step;
 using detail::pending_operator;
 using detail::performed;
 using detail::put_step;
+using detail::register_selection_of;
 using detail::repeated_change;
 using detail::repeated_character_search;
 using detail::replacement_key;
@@ -1735,6 +1736,22 @@ bool vim_reads_unnamed_clipboard(const VimState &state, const VimKey &key) noexc
     return action == VimAction::put_after || action == VimAction::put_before;
 }
 
+namespace
+{
+// 鍵が `+` か `*`（クリップボードの名前）か（#1040）。INSERT の `Ctrl-r`
+// は名前がそれのときだけ読む。
+[[nodiscard]] bool names_clipboard(const VimKey &key) noexcept
+{
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    if (character == nullptr)
+    {
+        return false;
+    }
+    const auto selection = register_selection_of(character->code);
+    return selection.has_value() && selection.value().target == VimRegisterTarget::clipboard;
+}
+} // namespace
+
 bool vim_reads_clipboard(const VimState &state, const VimKey &key) noexcept
 {
     if (vim_reads_unnamed_clipboard(state, key))
@@ -1751,7 +1768,12 @@ bool vim_reads_clipboard(const VimState &state, const VimKey &key) noexcept
         return false;
     }
     const auto *const prefix = std::get_if<VimPrefix>(&state.input_wait.value());
-    return prefix != nullptr && (*prefix == VimPrefix::at || *prefix == VimPrefix::insert_register);
+    if (prefix == nullptr)
+    {
+        return false;
+    }
+    return *prefix == VimPrefix::at ||
+           (*prefix == VimPrefix::insert_register && names_clipboard(key));
 }
 
 VimState vim_clipboard_loaded(const VimState &state, VimRegister value)
@@ -1827,7 +1849,7 @@ namespace
 
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
-    auto step = stepped(insert_started(state, view), view, key);
+    auto step = stepped(insert_started(state, view, key), view, key);
     if (step.layout_request.has_value() || step.row_request.has_value() || step.viewport_request)
     {
         return step;

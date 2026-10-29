@@ -31,6 +31,7 @@ using detail::register_selection_of;
 using detail::repeated_change;
 using detail::replayed_macro;
 using detail::resolved_count;
+using detail::restarts_insert;
 using detail::started_macro;
 using detail::started_prefix;
 using detail::vim_recorded;
@@ -444,40 +445,6 @@ namespace
 [[nodiscard]] bool changes_text(const VimEffect &effect) noexcept
 {
     return std::visit([](const auto &value) { return changes_text(value); }, effect);
-}
-
-// INSERT で記録を `i` から取り直す鍵（決定 4）。ADR 0028 の決定 3 が挿入の反復を切るのと
-// 同じ境界で、Vim も移動のあとの入力を新しい挿入として扱う（Home / End / 矢印で実測）。
-[[nodiscard]] bool restarts_insert(VimKey key) noexcept
-{
-    if (!std::holds_alternative<VimSpecialKey>(key))
-    {
-        return false;
-    }
-    switch (std::get<VimSpecialKey>(key))
-    {
-    case VimSpecialKey::arrow_left:
-    case VimSpecialKey::arrow_right:
-    case VimSpecialKey::arrow_up:
-    case VimSpecialKey::arrow_down:
-    case VimSpecialKey::home:
-    case VimSpecialKey::end:
-    case VimSpecialKey::page_up:
-    case VimSpecialKey::page_down:
-        return true;
-    case VimSpecialKey::escape:
-    case VimSpecialKey::enter:
-    case VimSpecialKey::backspace:
-    case VimSpecialKey::control_r:
-    case VimSpecialKey::control_d:
-    case VimSpecialKey::control_u:
-    case VimSpecialKey::control_f:
-    case VimSpecialKey::control_b:
-    case VimSpecialKey::control_v:
-    case VimSpecialKey::control_w:
-        return false;
-    }
-    std::unreachable();
 }
 
 // `.` の再生は今のキャレットから探し直すので、incsearch の起点は記録に残さない（ADR 0043 の

@@ -335,6 +335,19 @@ void verify_clipboard_insert_lines()
            "Ctrl-r * inserts the folded text with its line feed");
 }
 
+// INSERT の `Ctrl-r` の名前が `+` `*` でなければ OS を読まない（#1040・レビュー R1-1）。
+void verify_clipboard_insert_named()
+{
+    Editing editing;
+    open_vim_document(editing, "X1\nX2");
+    editing.clipboard().hold(held("OS"));
+    vim_replay(editing.controller(), "\"ayiwA<C-r>a<C-r>z<C-r>\"<Esc>");
+    expect(whole_vim_body(editing.controller()) == "X1X1X1\nX2",
+           "Ctrl-r a and Ctrl-r \" insert the registers");
+    expect(editing.clipboard().reads() == 0 && editing.clipboard().writes() == 0,
+           "Ctrl-r with a name other than + or * never touches the clipboard");
+}
+
 // `@+` `@*` と `@@`（決定 5・B8）。`@@` も再生の時点で読み直す。
 void verify_clipboard_macro_replay()
 {
@@ -627,6 +640,7 @@ void verify_vim_clipboard_contracts()
     verify_clipboard_dot();
     verify_clipboard_insert_register();
     verify_clipboard_insert_lines();
+    verify_clipboard_insert_named();
     verify_clipboard_macro_replay();
     verify_clipboard_inside_macro();
     verify_clipboard_block();
