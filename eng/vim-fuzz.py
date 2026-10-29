@@ -115,7 +115,7 @@ WORDS = (
     ("gv", 1, "gv{X}"),
     ("gi", 1, "{n}gi{i}<Esc>"),
     ("<C-o>", 1, "{n}<C-o>"),
-    ("<C-i>", 1, "{n}<C-i>"),
+    ("<Tab>", 1, "{n}<Tab>"),
 )
 # `g;` `g,` は語にしない。fuzz も 1 本の `:normal!` なので Vim では全体が 1 つの undo の単位
 # （変更の列は 1 件）になり、命令ごとに単位を作る Nib といつも違う。契約 `--vim-marks` の
@@ -264,7 +264,7 @@ def initial_state() -> dict:
 def available(kind: str, state: dict) -> bool:
     """Whether the state allows the word kind at all (Issue #963)."""
     # `Ctrl-o` `Ctrl-i` も跳びの後だけ（-es の Vim は開いた最終行をジャンプの列に持つ・#1037）。
-    if kind in ("''", "``", "<C-o>", "<C-i>"):
+    if kind in ("''", "``", "<C-o>", "<Tab>"):
         return state["jumped"]
     if kind in ("n", "N"):
         return state["searched"]
