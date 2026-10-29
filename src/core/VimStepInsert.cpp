@@ -648,6 +648,7 @@ namespace
     case VimSpecialKey::control_v:
     case VimSpecialKey::control_a:
     case VimSpecialKey::control_x:
+    case VimSpecialKey::control_o:
         return false;
     }
     std::unreachable();
