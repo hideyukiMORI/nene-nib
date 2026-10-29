@@ -1,6 +1,7 @@
 #pragma once
 
 #include "VimBlockExtent.hpp"
+#include "VimBlockInsert.hpp"
 #include "VimCharacterSearch.hpp"
 #include "VimCount.hpp"
 #include "VimInputWait.hpp"
@@ -87,6 +88,10 @@ struct VimState
     // INSERT を始めた位置（#1040）。INSERT の最初の鍵が vim_step の入口でキャレットから置き、
     // INSERT を離れる（vim_resting_from）か入力を捨てる（input_discarded）と消える。
     std::optional<VimInsertStart> insert_start = std::nullopt;
+    // 矩形の `I` `A` `c` `C` で入った INSERT のあいだだけ値を持つ（ADR 0035 の追補 #1042）。Esc が
+    // 1 行目に打った本文を残りの行へ写す。立てるのは矩形の入口、消えるのは
+    // vim_resting_from（Esc）と INSERT のキャレットの移動（打つ行を離れたら写さない）。
+    std::optional<VimBlockInsert> block_insert = std::nullopt;
 };
 
 // 鍵を 1 つ食べ終わったあとの NORMAL。回数・オペレータ・欲しい列は空で、無名レジスタだけ残る。

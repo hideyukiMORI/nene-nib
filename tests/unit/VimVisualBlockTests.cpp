@@ -161,13 +161,14 @@ void verify_vim_block_line_endings()
 }
 
 // 矩形では範囲外の鍵（決定 5）。どれも本文を変えず、矩形のまま残る。`~` `u` `U` は追補
-// （#959）で効くので block-case- の fixture が測る。
+// （#959）、`c` `I` `A` `C` `>` `<` は追補（#1042）で効くので block-case- と block-insert- の
+// fixture が測る。
 void verify_vim_block_unsupported_keys()
 {
     Editing editing;
     EditorController &controller = vim_block_editor(editing, "abcdef\nghijkl\nmnopqr");
     vim_replay(controller, "yy<C-v>jl");
-    constexpr std::array<std::string_view, 7> keys{"c", "I", "A", "C", ">", "J", "p"};
+    constexpr std::array<std::string_view, 2> keys{"J", "p"};
     for (const std::string_view key : keys)
     {
         vim_replay(controller, key);
@@ -179,6 +180,31 @@ void verify_vim_block_unsupported_keys()
     expect(controller.frame().mode_label == "VISUAL BLOCK",
            "a text object does not turn the block into a characterwise selection");
     expect(vim_body(controller.frame()) == "abcdef\nghijkl\nmnopqr", "and changes nothing");
+}
+
+// 矩形の INSERT（ADR 0035 の追補 #1042）。打つのは 1 行目だけで、Esc が CRLF の文書の残りの行へ
+// 同じ桁で写し、1 行目の入力と合わせて 1 回の `u` で戻る。fixture は LF だけなのでここで測る。
+void verify_vim_block_insert_document_newlines()
+{
+    Editing editing;
+    const std::string original = "abc\r\ndef\r\nghi";
+    EditorController &controller = vim_block_editor(editing, original);
+    vim_replay(controller, "l<C-v>jjIXY");
+    expect(vim_body(controller.frame()) == "aXYbc\ndef\nghi",
+           "the block INSERT types on the first line only");
+    vim_replay(controller, "<Esc>");
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(editing.files().written() == "aXYbc\r\ndXYef\r\ngXYhi",
+           "Esc copies the typed text to every CRLF line at the same column");
+    vim_replay(controller, "u");
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(editing.files().written() == original, "one undo takes back the typing and the copies");
+    vim_replay(controller, "0l<C-v>jlcZ<Esc>");
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(editing.files().written() == "aZ\r\ndZ\r\nghi", "blockwise c keeps CRLF");
+    vim_replay(controller, "u");
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(editing.files().written() == original, "one undo takes back the block c");
 }
 
 // core の純関数を直に測る。行ごとの範囲・左の桁・幅が 1 本で決まること（決定 2）。
@@ -247,6 +273,7 @@ void verify_vim_block_contracts()
     verify_vim_block_undo_unit();
     verify_vim_block_line_endings();
     verify_vim_block_unsupported_keys();
+    verify_vim_block_insert_document_newlines();
     verify_vim_block_range();
     verify_vim_block_reselect();
 }

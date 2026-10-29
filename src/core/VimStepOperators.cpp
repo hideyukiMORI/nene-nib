@@ -18,11 +18,13 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace nenenib::core
 {
 using detail::adjusted_for_exclusive;
 using detail::backward_characters;
+using detail::block_of;
 using detail::cancelled;
 using detail::caret_on_line;
 using detail::case_changed;
@@ -735,6 +737,162 @@ namespace detail
     return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
                                VimReplaceRange{span, std::move(body), caret}},
                        range.restore.value_or(range.range.begin));
+}
+} // namespace detail
+
+namespace
+{
+// 1 つの code point が空白（Space か Tab）か。矩形の字下げが動かすのはこの 2 つだけ（Vim の
+// VIM_ISWHITE）。
+[[nodiscard]] bool is_blank(char32_t value) noexcept
+{
+    return value == U' ' || value == U'\t';
+}
+
+// 桁 `from` から `to` まで（どちらも 0 始まり）を noexpandtab で埋める空白。止まりを越えるたびに
+// Tab、残りを空白（Vim の tabstop_fromto）。
+[[nodiscard]] std::string blank_between(std::size_t from, std::size_t to)
+{
+    std::string blank;
+    std::size_t at = from;
+    while ((at / vim_tab_stop + single_step) * vim_tab_stop <= to)
+    {
+        blank.push_back('\t');
+        at = (at / vim_tab_stop + single_step) * vim_tab_stop;
+    }
+    blank.append(to - at, ' ');
+    return blank;
+}
+
+// 行の中を桁を数えながら歩く位置（バイトと 0 始まりの桁）。
+using BlockWalk = std::pair<std::size_t, std::size_t>;
+
+// 1 文字進む。
+[[nodiscard]] BlockWalk walked(std::string_view line, BlockWalk at)
+{
+    const char32_t value = code_point_at(line, Offset{at.first});
+    return {next_code_point(line, Offset{at.first}).value,
+            at.second + column_advance(value, at.second)};
+}
+
+// 空白の続く限り進む。
+[[nodiscard]] BlockWalk past_blanks(std::string_view line, BlockWalk at)
+{
+    while (at.first < line.size() && is_blank(code_point_at(line, Offset{at.first})))
+    {
+        at = walked(line, at);
+    }
+    return at;
+}
+
+// 矩形の左の桁 `left`（0 始まり）より手前で終わる文字を歩き終えた位置と、その直前に続く空白の
+// 始まり（空白で終わらなければ同じ位置）。端に掛かった文字は歩かない。
+[[nodiscard]] std::pair<BlockWalk, BlockWalk> before_block(std::string_view line, std::size_t left)
+{
+    BlockWalk at{0, 0};
+    BlockWalk run = at;
+    while (at.first < line.size())
+    {
+        const BlockWalk next = walked(line, at);
+        if (next.second > left)
+        {
+            break;
+        }
+        if (!is_blank(code_point_at(line, Offset{at.first})))
+        {
+            run = next;
+        }
+        at = next;
+    }
+    return {at, run};
+}
+
+// `>` の 1 行（Vim の shift_block の右）。矩形の左の桁の直前に続く空白（端に掛かった Tab も）から
+// 後ろの空白までをまとめ、shiftwidth × 回数を足した幅で作り直す。全角が端に掛かればその前に、桁 0
+// から数えた shiftwidth × 回数の空白を入れる（固定 Vim は多バイト文字を割らずに ws_vcol を 0 に
+// する・#1042 で実測）。
+[[nodiscard]] VimBlockEdit right_shifted(std::string_view line, Offset start, std::size_t left,
+                                         std::size_t width)
+{
+    const auto [at, run] = before_block(line, left);
+    if (at.first < line.size() && at.second < left &&
+        !is_blank(code_point_at(line, Offset{at.first})))
+    {
+        const Offset before{start.value + at.first};
+        return VimBlockEdit{OffsetRange{before, before}, blank_between(0, width)};
+    }
+    const BlockWalk text = past_blanks(line, at);
+    const std::size_t total = width + text.second - run.second;
+    return VimBlockEdit{
+        OffsetRange{Offset{start.value + run.first}, Offset{start.value + text.first}},
+        blank_between(run.second, run.second + total)};
+}
+
+// `<` の 1 行（Vim の shift_block の左）。矩形の左の桁から続く空白の幅だけ（多くても shiftwidth ×
+// 回数）左へ寄せる。端に掛かった文字（Tab も全角も）は空白に割れ、手前の空白は Tab のまま残る
+// （実測）。動かなければ空。
+[[nodiscard]] std::optional<VimBlockEdit> left_shifted(std::string_view line, Offset start,
+                                                       std::size_t left, std::size_t width)
+{
+    const BlockWalk at = before_block(line, left).first;
+    const bool straddles = at.first < line.size() && at.second < left;
+    const BlockWalk text = past_blanks(line, straddles ? walked(line, at) : at);
+    const std::size_t space = text.second > left ? text.second - left : 0;
+    if (space == 0)
+    {
+        return std::nullopt;
+    }
+    const std::size_t destination = text.second - std::min(space, width);
+    BlockWalk kept = straddles ? at : BlockWalk{at.first, left};
+    while (kept.first < text.first && walked(line, kept).second <= destination)
+    {
+        kept = walked(line, kept);
+    }
+    return VimBlockEdit{
+        OffsetRange{Offset{start.value + kept.first}, Offset{start.value + text.first}},
+        std::string(destination - kept.second, ' ')};
+}
+} // namespace
+
+namespace detail
+{
+// 矩形の `>` `<`（ADR 0035 の追補 #1042・ADR 0015 の決定 11）。行の頭ではなく矩形の左の桁から
+// 字下げを動かし、左の桁に届かない行は飛ばす。キャレットも u の戻り先も矩形の左上（実測）。
+[[nodiscard]] VimStep shifted_block(const VimState &state, const VimEditorView &view, ShiftBy shift)
+{
+    const auto [operation, amount] = shift;
+    if (amount > std::numeric_limits<std::size_t>::max() / vim_shift_width / vim_tab_stop)
+    {
+        return failed(cancelled(state), VimRepeatFailure::too_large);
+    }
+    const VimBlockRange block = block_of(state, view);
+    const std::size_t left = block.left.value - single_step;
+    const std::size_t width = vim_shift_width * amount;
+    std::vector<VimBlockEdit> edits;
+    for (std::size_t index = 0; index < block.lines.size(); ++index)
+    {
+        const LineNumber number{block.first.value + index};
+        const std::string line = view.text.line_text(number);
+        // 空行は動かさない（Vim の op_shift は空行を飛ばす・実測）。
+        if (line.empty() || left > virtual_width(line))
+        {
+            continue;
+        }
+        const Offset start = view.text.line_start(number);
+        if (operation == VimOperator::shift_right)
+        {
+            edits.push_back(right_shifted(line, start, left, width));
+            continue;
+        }
+        if (auto moved = left_shifted(line, start, left, width))
+        {
+            edits.push_back(std::move(moved).value());
+        }
+    }
+    const Offset caret = block.lines.front().range.begin;
+    return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
+                               VimReplaceBlock{std::move(edits), caret}},
+                       caret);
 }
 } // namespace detail
 

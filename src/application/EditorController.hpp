@@ -541,7 +541,10 @@ class EditorController final
     void perform(const core::VimRemoveBlock &effect);
     void perform(const core::VimReplaceBlock &effect);
     void perform(const core::VimInsertBlock &effect);
-    void apply_block(const std::vector<core::VimBlockEdit> &edits, core::Offset caret);
+    void apply_block(const std::vector<core::VimBlockEdit> &edits, core::Offset caret,
+                     core::EditBoundary boundary);
+    // 矩形の INSERT の Esc（ADR 0035 の追補 #1042）。写した編集を 1 行目の INSERT の単位に畳む。
+    void fold_block_into_insert(const std::vector<core::VimBlockEdit> &edits, core::Offset caret);
     // `.` の再生（ADR 0030 の決定 7）。鍵を同じ accept の経路へ流すだけで、`.` は記録されない
     // ので再帰は深さ 1 で止まる。UI・IME・描画は通らない。
     void perform(const core::VimReplay &effect);

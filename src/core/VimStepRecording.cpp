@@ -665,7 +665,10 @@ namespace
     // `"a` の後ろも次の鍵待ちと同じく記録を続ける（ADR 0048 の決定 10）。
     const bool waiting =
         step.next.input_wait.has_value() || step.next.selected_register.has_value();
-    if (!before.recording.has_value() && !changes_text(step.effect) && !waiting)
+    // 矩形の `I` `A` は入るだけで本文を変えないことがあるが、INSERT の鍵を Esc まで記録する
+    // （ADR 0035 の追補 #1042）。
+    const bool inserting = step.next.mode == VimMode::insert;
+    if (!before.recording.has_value() && !changes_text(step.effect) && !waiting && !inserting)
     {
         return step;
     }
@@ -677,7 +680,7 @@ namespace
     VimRepeatRecord record = before.recording.value_or(VimRepeatRecord{
         std::nullopt, VimRecordedKeys::from(counted), visual_extent_of(before, view)});
     record = appended(std::move(record), key);
-    if (waiting || step.next.mode == VimMode::insert)
+    if (waiting || inserting)
     {
         step.next.recording = std::move(record);
         return step;

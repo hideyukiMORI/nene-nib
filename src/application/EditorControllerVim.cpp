@@ -737,7 +737,8 @@ void EditorController::perform(const core::VimReplaceRange &effect)
 // 矩形の編集（ADR 0035 の決定 3）。行ごとの置き換えを、上の行から下の行までを覆う 1 つの
 // 置き換えに畳んでから既存の replace へ流す。こうすると履歴に入る Edit が 1 つになり、矩形
 // 全体が undo 1 単位になる（固定 Vim も 1 回の `u` で戻す・実測）。改行は文書の形へ直す。
-void EditorController::apply_block(const std::vector<core::VimBlockEdit> &edits, core::Offset caret)
+void EditorController::apply_block(const std::vector<core::VimBlockEdit> &edits, core::Offset caret,
+                                   core::EditBoundary boundary)
 {
     if (edits.empty())
     {
@@ -754,23 +755,65 @@ void EditorController::apply_block(const std::vector<core::VimBlockEdit> &edits,
         body += with_document_newlines(edit.utf8, newline);
         at = edit.range.end;
     }
-    replace(span, body, core::EditBoundary::separate);
+    replace(span, body, boundary);
     move_caret_to(caret, core::SelectionAnchoring::collapse);
 }
 
+// 矩形の `c` と `A` の入口は INSERT へ入る鍵なので、消した・埋めた編集に打つ本文が畳まれる
+// （vim_boundary が absorb・ADR 0035 の追補 #1042）。
 void EditorController::perform(const core::VimRemoveBlock &effect)
 {
-    apply_block(effect.edits, effect.caret);
+    apply_block(effect.edits, effect.caret, vim_boundary());
 }
 
 void EditorController::perform(const core::VimReplaceBlock &effect)
 {
-    apply_block(effect.edits, effect.caret);
+    apply_block(effect.edits, effect.caret, vim_boundary());
 }
 
+// 矩形の貼付は単位を切り、矩形の INSERT の Esc は 1 行目の INSERT の単位に畳む（ADR 0035 の追補
+// #1042）。
 void EditorController::perform(const core::VimInsertBlock &effect)
 {
-    apply_block(effect.edits, effect.caret);
+    switch (effect.boundary)
+    {
+    case core::EditBoundary::absorb:
+        fold_block_into_insert(effect.edits, effect.caret);
+        return;
+    case core::EditBoundary::coalesce:
+    case core::EditBoundary::separate:
+        break;
+    }
+    apply_block(effect.edits, effect.caret, core::EditBoundary::separate);
+}
+
+// 矩形の INSERT の Esc が残りの行へ写した本文を、1 行目に打った INSERT の単位（履歴のいちばん上）と
+// 1 つの Edit に畳む（固定 Vim も 1 回の `u` で全行を戻す・実測）。畳んだ Edit は単位の頭から、
+// 写した最後の行の終わりまでを覆い、戻り先は単位の戻り先（打ち始めた所・`c` は矩形の左上）のまま。
+void EditorController::fold_block_into_insert(const std::vector<core::VimBlockEdit> &edits,
+                                              core::Offset caret)
+{
+    const auto unit = state_.history().undo();
+    if (edits.empty() || !unit.has_value() ||
+        edits.front().range.begin.value < unit.value().at.value)
+    {
+        apply_block(edits, caret, core::EditBoundary::separate);
+        return;
+    }
+    const core::Edit &open = unit.value();
+    const core::EditHistory before = state_.history().undone();
+    const std::size_t typed_end = open.at.value + open.inserted.size();
+    const std::size_t untouched =
+        state_.text().size_bytes() - std::max(typed_end, edits.back().range.end.value);
+    std::string removed = open.removed;
+    removed += state_.text().text_range(core::Offset{typed_end},
+                                        core::Offset{state_.text().size_bytes() - untouched});
+    apply_block(edits, caret, core::EditBoundary::separate);
+    std::string inserted =
+        state_.text().text_range(open.at, core::Offset{state_.text().size_bytes() - untouched});
+    state_ = state_.with_history(
+        before.pushed(core::Edit{open.at, std::move(removed), std::move(inserted), open.restore},
+                      core::EditBoundary::separate));
 }
 
 // `.`（ADR 0030 の決定 7）。前後で履歴を閉じるので、再生した命令が 1 つの undo 単位になる。

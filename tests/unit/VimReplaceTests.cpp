@@ -237,7 +237,7 @@ void verify_vim_join_document_newlines()
 }
 
 // 大小文字のオペレータは CRLF の改行を保ち、1 回の変更が undo 1 単位（ADR 0015 の決定 10）。
-// 矩形 VISUAL の `>` `<` は鍵を拒んで矩形のまま残り（#770）、`~` `u` `U` は行ごとに効く（#959）。
+// 矩形 VISUAL の `>` `<` は左の桁から字下げを動かし（#1042）、`~` `u` `U` は行ごとに効く（#959）。
 void verify_vim_case_document_newlines()
 {
     Editing editing;
@@ -259,16 +259,15 @@ void verify_vim_case_document_newlines()
     vim_replay(controller, "u");
     applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
     expect(editing.files().written() == original, "the second undo restores the original case");
-    for (const std::string_view keys : {">", "<"})
-    {
-        vim_replay(controller, "gg<C-v>j");
-        vim_replay(controller, keys);
-        expect(controller.vim_state().mode == VimMode::visual_block,
-               "a blockwise shift key is refused and the block stays");
-        vim_replay(controller, "<Esc>");
-        applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
-        expect(editing.files().written() == original, "a refused blockwise key changes nothing");
-    }
+    // 矩形の `>` `<` は矩形の左の桁から字下げを動かし、CRLF を保つ（ADR 0035 の追補 #1042）。
+    vim_replay(controller, "gg<C-v>j>");
+    expect(controller.vim_state().mode == VimMode::normal, "a blockwise shift key ends VISUAL");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "\taB\r\n\tcD\r\nx",
+           "blockwise > indents each CRLF line from the left column");
+    vim_replay(controller, "gg0<C-v>j<");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == original, "blockwise < takes the indent back");
     // 矩形の `~` `u` `U` は行ごとに効き、CRLF を保って undo 1 単位（ADR 0035 の追補 #959）。
     vim_replay(controller, "gg<C-v>jlU");
     expect(controller.vim_state().mode == VimMode::normal, "a blockwise case key ends VISUAL");
