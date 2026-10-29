@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 8ff8a87ded2524bede6d7371370fccaef760352bd38ee0903a815b6466355af5 / 3062 fixtures
+// fixtures.json: sha256 bd7d9c25c8aea5d0ce54fda888178a4f93a92fe8bb991999278a58bc4fef1ec4 / 3077 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3062> vim_fixtures{{
+constexpr std::array<VimFixture, 3077> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2988,6 +2988,21 @@ constexpr std::array<VimFixture, 3062> vim_fixtures{{
     {"jumplist-operator", "a\nb\nc\nd", "Gggjd<C-o>x", "a\nb\nc\nd", 2, 1, "", "", std::nullopt},
     {"jumplist-visual", "a\nb\nc\nd", "Gggvj<C-o>d", "a\nb\nc\nd", 2, 1, "", "", std::nullopt},
     {"jumplist-same-place", "a\nb\nc", "Ggggg<C-o>x", "\nb\nc", 1, 1, "a", "v", std::nullopt},
+    {"jumplist-count-end-search", "\n- (paren) end. , , です。   ", "?nd<CR>2<C-o>", "\n- (paren) end. , , です。   ", 2, 12, "", "", std::nullopt},
+    {"jumplist-count-end-search-indent", "and\nb\nc\nd\ne\nf\ng\nh\ni\nend", "d^?nd<CR>>>2<C-o>", "and\nb\nc\nd\ne\nf\ng\nh\ni\n\tend", 10, 2, "", "", std::nullopt},
+    {"jumplist-count-end-one", "a\nb\nc\nd\ne", "Ggg2<C-o>x", "\nb\nc\nd\ne", 1, 1, "a", "v", std::nullopt},
+    {"jumplist-count-end-two", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg3G5G2<C-o>x", "\n2\n3\n4\n5\n6\n7\n8", 1, 1, "1", "v", std::nullopt},
+    {"jumplist-count-end-all", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg3G5G3<C-o>x", "1\n2\n3\n4\n5\n6\n7\n", 8, 1, "8", "v", std::nullopt},
+    {"jumplist-count-end-short", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg3G5G4<C-o>x", "1\n2\n3\n4\n5\n6\n7\n8", 5, 1, "", "", std::nullopt},
+    {"jumplist-count-end-tab", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg3G5G2<C-o><Tab>x", "1\n2\n\n4\n5\n6\n7\n8", 3, 1, "3", "v", std::nullopt},
+    {"jumplist-count-middle", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg3G5G7G<C-o>2<C-o>x", "\n2\n3\n4\n5\n6\n7\n8", 1, 1, "1", "v", std::nullopt},
+    {"jumplist-count-middle-short", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg3G5G7G<C-o>4<C-o>x", "1\n2\n3\n4\n5\n6\n7\n8", 5, 1, "", "", std::nullopt},
+    {"jumplist-count-same-line", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg3G5G3G7G2<C-o>x", "1\n2\n3\n4\n\n6\n7\n8", 5, 1, "5", "v", std::nullopt},
+    {"jumplist-count-same-line-end", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg3G5G3G2<C-o>x", "1\n2\n\n4\n5\n6\n7\n8", 3, 1, "3", "v", std::nullopt},
+    {"jumplist-count-pcmark", "1\n2\n3\n4\n5\n6\n7\n8", "Ggg3G5G2<C-o>''x", "1\n2\n3\n4\n\n6\n7\n8", 5, 1, "5", "v", std::nullopt},
+    {"jumplist-count-changes", "abc\ndef\nghi\njkl\nmno", "jjxG2g;x", "abc\ndef\ni\njkl\nmno", 3, 1, "h", "v", std::nullopt},
+    {"jumplist-count-changes-end", "abc\ndef\nghi\njkl\nmno", "jjxgg3g;x", "abc\ndef\ni\njkl\nmno", 3, 1, "h", "v", std::nullopt},
+    {"jumplist-count-start-entry", "a\nb\nc\nd\ne", "jj<C-o>x", "\nb\nc\nd\ne", 1, 1, "a", "v", std::nullopt},
     {"changelist-back", "abc\ndef\nghi\njkl", "jjxggg;x", "abc\ndef\ni\njkl", 3, 1, "h", "v", std::nullopt},
     {"changelist-count", "abc\ndef\nghi\njkl", "jjxgg5g;x", "abc\ndef\ni\njkl", 3, 1, "h", "v", std::nullopt},
     {"changelist-newer-at-end", "abc\ndef\nghi\njkl", "jjxggg,x", "abc\ndef\ni\njkl", 3, 1, "h", "v", std::nullopt},

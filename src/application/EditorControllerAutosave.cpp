@@ -13,6 +13,7 @@
 #include "TabTitle.hpp"
 #include "TextPosition.hpp"
 #include "UnloadedDocument.hpp"
+#include "VimMarkEdits.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -102,6 +103,8 @@ constexpr std::string_view unrestored_prefix = "戻せませんでした: ";
                          std::nullopt,
                          std::move(view)};
     bundle.language = language;
+    // 開いた位置をジャンプの列に 1 項持って始める（ADR 0152 の追補 #1116）。
+    bundle.marks = core::vim_marks_opened();
     return bundle;
 }
 } // namespace

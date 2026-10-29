@@ -4,6 +4,7 @@
 #include "SaveState.hpp"
 #include "SearchLine.hpp"
 #include "TabTitle.hpp"
+#include "VimMarkEdits.hpp"
 #include "VimStep.hpp"
 
 #include <algorithm>
@@ -527,7 +528,8 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
     next.display_inquiry_ = DisplayInquiry::unjudged;
     // 本文が丸ごと替わるので、同じ文書を見るもう 1 つの枠は先頭に戻す（ADR 0148 の決定 5）。
     next.restart_other_showing(autosave_ids_.at(active_));
-    next.vim_marks_ = core::VimMarks{};
+    // 開いた位置をジャンプの列に 1 項持って始める（ADR 0152 の追補 #1116）。
+    next.vim_marks_ = core::vim_marks_opened();
     return next;
 }
 

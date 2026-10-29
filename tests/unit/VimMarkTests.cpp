@@ -415,7 +415,10 @@ void verify_marks_follow_documents()
     const auto back = added.with_switched(0);
     expect(back.vim_marks() == set, "switching back brings the document's marks");
     const auto reopened = state.with_opened(text_of("x"), state.document());
-    expect(reopened.vim_marks() == VimMarks{}, "an opened document starts with the opening marks");
+    expect(reopened.vim_marks() == nenenib::core::vim_marks_opened() &&
+               reopened.vim_marks().jumps.count == 1 &&
+               reopened.vim_marks().jumps.entries.at(0) == VimMarkPosition{LineNumber{1}, 0},
+           "an opened document starts with the opened place in the jump list (#1116)");
     const nenenib::application::Document document{std::nullopt, nenenib::core::TextEncoding::utf8,
                                                   std::size_t{0}};
     const nenenib::application::DocumentState bundle{
@@ -465,8 +468,8 @@ void verify_vim_mark_scope()
             ++selected;
         }
     }
-    expect(selected == 149,
-           "the scope replays the 149 oracle fixtures of %, the marks and the jump lists");
+    expect(selected == 164,
+           "the scope replays the 164 oracle fixtures of %, the marks and the jump lists");
     verify_vim_mark_contracts();
 }
 } // namespace nenenib::tests

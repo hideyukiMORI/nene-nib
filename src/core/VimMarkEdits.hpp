@@ -33,6 +33,10 @@ namespace nenenib::core
 [[nodiscard]] std::expected<VimMarks, VimRepeatFailure>
 vim_mark_set(const VimMarks &marks, char32_t name, const VimMarkPosition &at);
 
+// 開いた文書のマーク（ADR 0152 の追補 #1116）。普通に起動した Vim と同じに、開いた位置（1 行目の
+// 桁 0）を `m'` と同じ vim_mark_set でジャンプの列に 1 項積む。文書を開く道はどれもこれを使う。
+[[nodiscard]] VimMarks vim_marks_opened();
+
 // 飛ぶ鍵の前の位置を置く（決定 4・Vim の setpcmark）。前の値は prior_context に退ける。
 [[nodiscard]] VimMarks vim_marks_jumped(const VimMarks &marks, const VimMarkPosition &from);
 
