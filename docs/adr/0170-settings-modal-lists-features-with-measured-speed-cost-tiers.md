@@ -48,3 +48,11 @@ v4 の鍵の集合に `ignorecase=on|off` と `smartcase=on|off`（Vim の既定
 ## 追補（2026-10-29・#1041）: 決定 3 の鍵に `relativenumber` `scrolloff`
 
 v4 の鍵の集合に `relativenumber=on|off`（既定オフ）と `scrolloff=<0〜999 の 10 進・先頭の 0 なし>`（既定 0）を `smartcase` の後ろ・`lsp.<language>.command` の前に足す。`ignorecase` `smartcase` と同じく v4 の最初の定義の後に足した鍵なので、無い v4 は既定を補って読み、有れば厳密に読み（値の読みは core の `scrolloff_of` の 1 本で Ex と共用）、書くときは必ず書く。旧版に在れば拒否。変えるのは `:set rnu` `nornu` `rnu?` `so=N` `so?` `so`（長い名前も）だけで、`features` の表とモーダルの「機能」の節には出さない。
+## 追補（2026-10-29・設計席の決定・v4 に後から足す鍵の読み方）
+
+決定 3 は「v4 の鍵の集合は 1 回で決める」としたが、同じ日の翌日に `map.*` / `mapleader`（ADR 0176・#1082）と `ignorecase` / `smartcase`（#1084）を足すことになり、この先も `relativenumber` `scrolloff`（#1041）等が続く。v4 はどの公開版も書いていないので版は上げないが、鍵を足すたびに hide の手元の `settings.v4` が壊れ、ADR 0114 の規則で保存も拒まれる。次の形で足す。
+
+- **最初の定義の鍵**（`version` `colorscheme` `font_family` `font_size` `guide` `wrap` `ui_language` `lsp` `explorer` `root` `features`・2026-10-28 の #1055）は**必須**のまま。
+- **後から足す鍵**は、読むときに無ければ既定を補い、書くときは必ず書く。有れば厳密に読む（値の形が違えば拒否・重複は拒否・未知の鍵は拒否のまま）。接頭辞の族（`lsp.<language>.command`・`map.<modes>.<lhs>`）は 0 行以上で同じ側。
+- 足した鍵は ADR の追補に 1 行ずつ記録する: `ignorecase` `smartcase`（#1084・既定 off）・`map.*` `mapleader`（#1082・既定は行なし・`\`）。
+- 版を上げるのは、鍵の意味や形を変えるときだけ（ADR 0114）。
