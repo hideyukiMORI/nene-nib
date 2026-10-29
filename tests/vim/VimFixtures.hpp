@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 3537e29c75cce66af9ddfdefc84ff2a20d3d5bdd472f0cd15c455da4f211194d / 3046 fixtures
+// fixtures.json: sha256 8ff8a87ded2524bede6d7371370fccaef760352bd38ee0903a815b6466355af5 / 3062 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3046> vim_fixtures{{
+constexpr std::array<VimFixture, 3062> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3009,6 +3009,22 @@ constexpr std::array<VimFixture, 3046> vim_fixtures{{
     {"block-case-wide-dollar", "ABC\nABＡBC\nABCDE", "<C-v>jj$u", "abc\nabａbc\nabcde", 1, 1, "", "", std::nullopt},
     {"block-case-wide-within-one-character", "ab\nＡb\nab", "l<C-v>jj~", "aB\nＡb\naB", 1, 2, "", "", std::nullopt},
     {"block-case-wide-fuzz-33", "    'sq' end.漢字  foo_bar\tHello[sq]\n    end. ＡＢＣ beta  x1\tx1  'sq'  \n  gamma  ", "<C-v>GWOu", "    'sq' end.漢字  foo_bar\tHello[sq]\n    end. ＡＢＣ beta  x1\tx1  'sq'  \n  gamma  ", 1, 1, "", "", std::nullopt},
+    {"block-put-wide-fuzz-47", "?\t１２ :  ", "<C-v>3wyp", "??\t１２ :  \t１２ :  ", 1, 2, "?\t１２ :  ", "\02617", std::nullopt},
+    {"block-put-wide-fuzz-47-before", "?\t１２ :  ", "<C-v>3wypx17|\"61y-T\t", "?\t１２ :  \t１２ :  ", 1, 13, "?", "v", std::nullopt},
+    {"block-put-wide-tab-end-p", "a\tb\n0123456789\nxyzxyzxyzxyz", "<C-v>jllyjp", "a\tb\n0a  123456789\nx012yzxyzxyzxyz", 2, 2, "a  \n012", "\0263", std::nullopt},
+    {"block-put-wide-tab-end-P", "a\tb\n0123456789\nxyzxyzxyzxyz", "<C-v>jllyjP", "a\tb\na  0123456789\n012xyzxyzxyzxyz", 2, 1, "a  \n012", "\0263", std::nullopt},
+    {"block-put-wide-full-width-p", "aＡb\nabcd\nxyzxyz", "l<C-v>jyjp", "aＡb\nabＡcd\nxybczxyz", 2, 3, "Ａ\nbc", "\0262", std::nullopt},
+    {"block-put-wide-full-width-P", "aＡb\nabcd\nxyzxyz", "l<C-v>jyGP", "aＡb\nabcd\nＡxyzxyz\nbc", 3, 1, "Ａ\nbc", "\0262", std::nullopt},
+    {"block-put-wide-line-end", "aＡ\nab\nxyz", "<C-v>jly$p", "aＡa \nab ab\nxyz", 1, 5, "a \nab", "\0262", std::nullopt},
+    {"block-put-wide-short-line", "a\tbc\nx\nmnopqrstuvwx\nmnopqrstuvwx", "<C-v>llljyjjp", "a\tbc\nx\nma nopqrstuvwx\nmx nopqrstuvwx", 3, 2, "a \nx", "\0262", std::nullopt},
+    {"block-put-wide-dollar", "a\tb\nＡＢ\nmnopqrstuv\nmnopqrstuv", "<C-v>j$yjjp", "a\tb\nＡＢ\nma\tbnopqrstuv\nmＡＢnopqrstuv", 3, 2, "a\tb\nＡＢ", "\0269", std::nullopt},
+    {"block-put-wide-target-tab", "aＡb\nabc\nx\ty\nx\ty", "l<C-v>jyjjp", "aＡb\nabc\nx\tＡy\nx\tbcy", 3, 3, "Ａ\nbc", "\0262", std::nullopt},
+    {"block-put-wide-count", "\tb\nａb\nmnop\nmnop", "<C-v>jyjj2p", "\tb\nａb\nmnop\t\t\nmnopａbａb", 3, 5, "\t\nａb", "\0268", std::nullopt},
+    {"block-put-wide-tab-only", "\tb\nab\nmnop\nmnop", "<C-v>jyjjp", "\tb\nab\nmnop\t\nmnopab", 3, 5, "\t\nab", "\0268", std::nullopt},
+    {"block-put-wide-combining", "é\nabcdefghijklmnopqrst\nmnop\nmnop", "<C-v>j19lyjjp", "é\nabcdefghijklmnopqrst\nmé              nop\nmabcdefghijklmnopqrstnop", 3, 2, "é\nabcdefghijklmnopqrst", "\02620", std::nullopt},
+    {"block-put-wide-zero-width-space", "a​b\nabcdefghijklmnopqrst\nmnop\nmnop", "<C-v>j19lyjjp", "a​b\nabcdefghijklmnopqrst\nma​b    nop\nmabcdefghijklmnopqrstnop", 3, 2, "a​b\nabcdefghijklmnopqrst", "\02620", std::nullopt},
+    {"block-put-wide-c1-control", "ab\nabcdefghijklmnopqrst\nmnop\nmnop", "<C-v>j19lyjjp", "ab\nabcdefghijklmnopqrst\nmab             nop\nmabcdefghijklmnopqrstnop", 3, 2, "ab\nabcdefghijklmnopqrst", "\02620", std::nullopt},
+    {"block-put-wide-emoji", "a😀b\nabcdefghijklmnopqrst\nmnop\nmnop", "<C-v>j19lyjjp", "a😀b\nabcdefghijklmnopqrst\nma😀b    nop\nmabcdefghijklmnopqrstnop", 3, 2, "a😀b\nabcdefghijklmnopqrst", "\02620", std::nullopt},
     {"search-case-ic-lower", "abc ABC abc", ":set ic<CR>/abc<CR>", "abc ABC abc", 1, 5, "", "", std::nullopt},
     {"search-case-noic-default", "abc ABC abc", "/abc<CR>", "abc ABC abc", 1, 9, "", "", std::nullopt},
     {"search-case-noic-explicit", "abc ABC abc", ":set ic<CR>:set noic<CR>/abc<CR>", "abc ABC abc", 1, 9, "", "", std::nullopt},
