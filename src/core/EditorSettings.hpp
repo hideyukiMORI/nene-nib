@@ -10,6 +10,7 @@
 #include "MapRow.hpp"
 #include "Theme.hpp"
 #include "ThemeChoice.hpp"
+#include "VimPatternCase.hpp"
 
 #include <optional>
 #include <string>
@@ -43,9 +44,16 @@ struct EditorSettings
     std::vector<std::pair<std::string, std::string>> lsp_commands = {};
     std::vector<MapRow> maps = {};
     std::string mapleader = "\\";
+    // 検索の大小（Vim の `ignorecase` `smartcase`・既定はどちらもオフ・ADR 0032 の追補・#1041）。
+    // `:set` だけが変え、設定の面には出さない。
+    bool ignorecase = false;
+    bool smartcase = false;
 };
 
 [[nodiscard]] EditorSettings default_editor_settings();
+// 設定の `ignorecase` `smartcase` から照合器の旗へ（#1041）。smartcase は ignorecase が
+// オンのときだけ効く（Vim と同じ）。
+[[nodiscard]] VimPatternCase search_case(const EditorSettings &settings) noexcept;
 [[nodiscard]] bool same_settings(const EditorSettings &left, const EditorSettings &right) noexcept;
 // 字の大きさか字体が変わると本文の行高と文字組みが変わる。窓は新しい行高の幾何を送り直す
 // （ADR 0128 の決定 8）。判定はこの 1 本で、呼び手で欄を数えない。

@@ -63,4 +63,20 @@ char32_t vim_toggled(char32_t value) noexcept
     const char32_t upper = vim_to_upper(value);
     return upper != value ? upper : mapped(case_to_lower, value);
 }
+
+char32_t vim_folded(char32_t value) noexcept
+{
+    constexpr char32_t dotted_capital_i = U'İ';
+    constexpr char32_t dotless_small_i = U'ı';
+    if (value < 0x80)
+    {
+        return value >= U'A' && value <= U'Z' ? static_cast<char32_t>(value + (U'a' - U'A'))
+                                              : value;
+    }
+    if (value == dotted_capital_i || value == dotless_small_i)
+    {
+        return value;
+    }
+    return vim_to_lower(vim_to_upper(value));
+}
 } // namespace nenenib::core

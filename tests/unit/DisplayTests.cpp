@@ -843,7 +843,8 @@ ascii_spans(std::size_t row, const std::vector<core::OffsetRange> &matches)
 [[nodiscard]] bool grid_matches_whole_line(const EditorFrame &frame, std::string_view line,
                                            std::string_view pattern)
 {
-    const auto parsed = core::VimPattern::parse(pattern, core::VimSearchDirection::forward);
+    const auto parsed = core::VimPattern::parse(pattern, core::VimSearchDirection::forward,
+                                                core::VimPatternCase::sensitive);
     if (!parsed.has_value() || frame.grid.empty())
     {
         return false;

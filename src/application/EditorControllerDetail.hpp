@@ -32,7 +32,9 @@ namespace nenenib::application::detail
 [[nodiscard]] core::ScrollExtent scroll_extent_for(core::EditMode mode) noexcept;
 [[nodiscard]] std::string with_document_newlines(std::string_view utf8, std::string_view newline);
 [[nodiscard]] const core::SearchLine *previewed_line(const EditorState &state);
-[[nodiscard]] std::optional<core::VimPattern> typed_pattern(const core::SearchLine &line);
+// 入力中のパターン（incsearch の preview）。大小の旗は確定の検索と同じ設定の値（#1041）。
+[[nodiscard]] std::optional<core::VimPattern> typed_pattern(const core::SearchLine &line,
+                                                            core::VimPatternCase letter_case);
 [[nodiscard]] const DocumentView &parked_view(const ParkedTab &tab);
 [[nodiscard]] std::vector<DocumentView> tab_views(const EditorState &state,
                                                   const DocumentView &active);

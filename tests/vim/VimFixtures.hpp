@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 cb95c33e5f9a536bea184728cd3d1de90f9810a529ba5f3e78ee60c91bcfe645 / 2945 fixtures
+// fixtures.json: sha256 3536aa1f431c4f06b7777720b5660a9312b915c0b90db5ee1b0962f6c70fdbd2 / 2975 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2945> vim_fixtures{{
+constexpr std::array<VimFixture, 2975> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2957,6 +2957,36 @@ constexpr std::array<VimFixture, 2945> vim_fixtures{{
     {"block-case-wide-dollar", "ABC\nABＡBC\nABCDE", "<C-v>jj$u", "abc\nabａbc\nabcde", 1, 1, "", "", std::nullopt},
     {"block-case-wide-within-one-character", "ab\nＡb\nab", "l<C-v>jj~", "aB\nＡb\naB", 1, 2, "", "", std::nullopt},
     {"block-case-wide-fuzz-33", "    'sq' end.漢字  foo_bar\tHello[sq]\n    end. ＡＢＣ beta  x1\tx1  'sq'  \n  gamma  ", "<C-v>GWOu", "    'sq' end.漢字  foo_bar\tHello[sq]\n    end. ＡＢＣ beta  x1\tx1  'sq'  \n  gamma  ", 1, 1, "", "", std::nullopt},
+    {"search-case-ic-lower", "abc ABC abc", ":set ic<CR>/abc<CR>", "abc ABC abc", 1, 5, "", "", std::nullopt},
+    {"search-case-noic-default", "abc ABC abc", "/abc<CR>", "abc ABC abc", 1, 9, "", "", std::nullopt},
+    {"search-case-noic-explicit", "abc ABC abc", ":set ic<CR>:set noic<CR>/abc<CR>", "abc ABC abc", 1, 9, "", "", std::nullopt},
+    {"search-case-ignorecase-long", "abc ABC abc", ":set ignorecase<CR>/abc<CR>", "abc ABC abc", 1, 5, "", "", std::nullopt},
+    {"search-case-scs-upper", "xyz abc ABC Abc", ":set ic<CR>:set scs<CR>/Abc<CR>", "xyz abc ABC Abc", 1, 13, "", "", std::nullopt},
+    {"search-case-scs-lower", "xyz ABC abc", ":set ic<CR>:set scs<CR>/abc<CR>", "xyz ABC abc", 1, 5, "", "", std::nullopt},
+    {"search-case-scs-without-ic", "xyz ABC abc", ":set scs<CR>/abc<CR>", "xyz ABC abc", 1, 9, "", "", std::nullopt},
+    {"search-case-n", "abc ABC Abc", ":set ic<CR>/abc<CR>n", "abc ABC Abc", 1, 9, "", "", std::nullopt},
+    {"search-case-N", "abc ABC Abc", ":set ic<CR>/abc<CR>NN", "abc ABC Abc", 1, 9, "", "", std::nullopt},
+    {"search-case-backward", "ABC xyz abc", "$:set ic<CR>?abc<CR>?<CR>", "ABC xyz abc", 1, 1, "", "", std::nullopt},
+    {"search-case-star-ic-scs", "Abc abc ABC", ":set ic<CR>:set scs<CR>*", "Abc abc ABC", 1, 5, "", "", std::nullopt},
+    {"search-case-star-noic", "Abc abc Abc", "*", "Abc abc Abc", 1, 9, "", "", std::nullopt},
+    {"search-case-star-n-ignores-scs", "Abc abc ABC", ":set ic<CR>:set scs<CR>*n", "Abc abc ABC", 1, 9, "", "", std::nullopt},
+    {"search-case-hash-ic", "abc ABC Abc", "$:set ic<CR>#", "abc ABC Abc", 1, 5, "", "", std::nullopt},
+    {"search-case-backslash-c", "xyz ABC abc", "/\\cabc<CR>", "xyz ABC abc", 1, 5, "", "", std::nullopt},
+    {"search-case-backslash-c-end", "xyz ABC abc", "/abc\\c<CR>", "xyz ABC abc", 1, 5, "", "", std::nullopt},
+    {"search-case-backslash-C", "xyz ABC abc", ":set ic<CR>/\\Cabc<CR>", "xyz ABC abc", 1, 9, "", "", std::nullopt},
+    {"search-case-backslash-both", "xyz ABC abc", "/\\C\\cabc<CR>", "xyz ABC abc", 1, 5, "", "", std::nullopt},
+    {"search-case-backslash-C-scs", "xyz abc ABC", ":set ic<CR>:set scs<CR>/\\Cabc<CR>", "xyz abc ABC", 1, 5, "", "", std::nullopt},
+    {"search-case-scs-escape-upper", "xyz ABC abc", ":set ic<CR>:set scs<CR>/\\Sbc<CR>", "xyz ABC abc", 1, 5, "", "", std::nullopt},
+    {"search-case-set-range", "zz Bx ax", ":set ic<CR>/[a-c]x<CR>", "zz Bx ax", 1, 4, "", "", std::nullopt},
+    {"search-case-set-negated", "zz Ax bx", ":set ic<CR>/[^a]x<CR>", "zz Ax bx", 1, 7, "", "", std::nullopt},
+    {"search-case-set-upper-scs", "zz bx Bx", ":set ic<CR>:set scs<CR>/[B]x<CR>", "zz bx Bx", 1, 7, "", "", std::nullopt},
+    {"search-case-delete", "xx ABC", ":set ic<CR>d/abc<CR>", "ABC", 1, 1, "xx ", "v", std::nullopt},
+    {"search-case-set-after-search", "ABC abc xyz", "/abc<CR>:set ic<CR>n", "ABC abc xyz", 1, 1, "", "", std::nullopt},
+    {"search-case-noic-after-search", "abc ABC abc", ":set ic<CR>/abc<CR>:set noic<CR>n", "abc ABC abc", 1, 9, "", "", std::nullopt},
+    {"search-case-non-ascii", "x É é", ":set ic<CR>/é<CR>", "x É é", 1, 3, "", "", std::nullopt},
+    {"search-case-non-ascii-scs", "x é É", ":set ic<CR>:set scs<CR>/É<CR>", "x é É", 1, 6, "", "", std::nullopt},
+    {"search-case-greek", "x Σ σ", ":set ic<CR>/σ<CR>", "x Σ σ", 1, 3, "", "", std::nullopt},
+    {"search-case-word-escape", "xyz ABC abc", ":set ic<CR>/\\<abc\\><CR>", "xyz ABC abc", 1, 5, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

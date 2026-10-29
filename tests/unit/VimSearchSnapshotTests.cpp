@@ -5,6 +5,7 @@
 #include "SwitchTab.hpp"
 #include "TestSupport.hpp"
 #include "VimSearchSnapshot.hpp"
+#include "VimSmartcase.hpp"
 #include "VimTestSupport.hpp"
 
 #include <array>
@@ -16,8 +17,10 @@ namespace nenenib::tests
 {
 namespace
 {
+using core::VimPatternCase;
 using core::VimSearchDirection;
 using core::VimSearchSnapshot;
+using core::VimSmartcase;
 
 template <typename T>
 concept RvalueSearchText = requires(T &&snapshot) { std::move(snapshot).text(); };
@@ -50,7 +53,8 @@ void verify_search_defensive_ownership()
     std::string raw(256U, 'a');
     const std::string expected = raw;
     char *alias = raw.data();
-    const auto snapshot = VimSearchSnapshot::from(raw, VimSearchDirection::forward);
+    const auto snapshot = VimSearchSnapshot::from(raw, VimSearchDirection::forward,
+                                                  VimPatternCase::sensitive, VimSmartcase::honored);
     alias[0] = 'z';
     expect_search_literal(snapshot, expected);
     expect(raw.front() == 'z', "the caller keeps its independent mutable buffer");
@@ -58,23 +62,27 @@ void verify_search_defensive_ownership()
     raw.shrink_to_fit();
     expect_search_literal(snapshot, expected);
     const auto temporary =
-        VimSearchSnapshot::from(std::string("short"), VimSearchDirection::forward);
+        VimSearchSnapshot::from(std::string("short"), VimSearchDirection::forward,
+                                VimPatternCase::sensitive, VimSmartcase::honored);
     expect_search_literal(temporary, "short");
 }
 
 void verify_search_copy_and_rvalues()
 {
-    auto original = VimSearchSnapshot::from("alpha", VimSearchDirection::forward);
+    auto original = VimSearchSnapshot::from("alpha", VimSearchDirection::forward,
+                                            VimPatternCase::sensitive, VimSmartcase::honored);
     const auto copied = original;
     const auto constructed = static_cast<VimSearchSnapshot &&>(original);
-    auto assigned = VimSearchSnapshot::from("other", VimSearchDirection::backward);
+    auto assigned = VimSearchSnapshot::from("other", VimSearchDirection::backward,
+                                            VimPatternCase::sensitive, VimSmartcase::honored);
     assigned = static_cast<VimSearchSnapshot &&>(original);
     for (const auto &snapshot : std::array{original, copied, constructed, assigned})
     {
         expect_search_literal(snapshot, "alpha");
         expect(&snapshot.parsed() == &original.parsed(), "all owners share the same const parse");
     }
-    original = VimSearchSnapshot::from("changed", VimSearchDirection::forward);
+    original = VimSearchSnapshot::from("changed", VimSearchDirection::forward,
+                                       VimPatternCase::sensitive, VimSmartcase::honored);
     expect_search_literal(original, "changed");
     expect_search_literal(copied, "alpha");
     expect(&original.parsed() != &copied.parsed(), "replacing an owner leaves the sibling intact");
@@ -82,7 +90,8 @@ void verify_search_copy_and_rvalues()
 
 void expect_search_failure(std::string_view raw, core::VimPatternFailure expected)
 {
-    const auto snapshot = VimSearchSnapshot::from(raw, VimSearchDirection::forward);
+    const auto snapshot = VimSearchSnapshot::from(raw, VimSearchDirection::forward,
+                                                  VimPatternCase::sensitive, VimSmartcase::honored);
     const auto copy = snapshot;
     expect(copy.text() == raw && !copy.parsed().has_value() && copy.parsed().error() == expected,
            "a failed parse keeps its raw value and exact closed failure");
@@ -96,20 +105,23 @@ void verify_search_failures_and_direction()
     expect_search_failure("a\\|b", VimPatternFailure::branch);
     expect_search_failure("a\\+", VimPatternFailure::quantifier);
     expect_search_failure("\\va", VimPatternFailure::magic);
-    expect_search_failure("\\ca", VimPatternFailure::ignore_case);
     expect_search_failure("\\n", VimPatternFailure::escape);
     expect_search_failure("~", VimPatternFailure::previous_substitute);
     expect_search_failure("a/e", VimPatternFailure::offset);
-    const auto forward = VimSearchSnapshot::from("a?", VimSearchDirection::forward);
+    const auto forward = VimSearchSnapshot::from("a?", VimSearchDirection::forward,
+                                                 VimPatternCase::sensitive, VimSmartcase::honored);
     expect_search_literal(forward, "a?");
-    const auto backward = VimSearchSnapshot::from(forward.text(), VimSearchDirection::backward);
+    const auto backward = VimSearchSnapshot::from(forward.text(), VimSearchDirection::backward,
+                                                  VimPatternCase::sensitive, VimSmartcase::honored);
     expect(backward.text() == "a?" && backward.direction() == VimSearchDirection::backward &&
                !backward.parsed().has_value() &&
                backward.parsed().error() == VimPatternFailure::offset,
            "the same raw text is reparsed for the new delimiter direction");
-    const auto restored = VimSearchSnapshot::from(backward.text(), VimSearchDirection::forward);
+    const auto restored = VimSearchSnapshot::from(backward.text(), VimSearchDirection::forward,
+                                                  VimPatternCase::sensitive, VimSmartcase::honored);
     expect_search_literal(restored, "a?");
-    const auto ranges = VimSearchSnapshot::from("[日界]*x", VimSearchDirection::forward);
+    const auto ranges = VimSearchSnapshot::from("[日界]*x", VimSearchDirection::forward,
+                                                VimPatternCase::sensitive, VimSmartcase::honored);
     expect(ranges.parsed().has_value() && ranges.parsed().value().matched("日界x", 0U).has_value(),
            "owned set ranges and repeated atoms remain available to the one evaluator");
 }
@@ -118,13 +130,15 @@ void verify_search_state_branches()
 {
     auto original =
         core::vim_resting_state(core::VimRegister{"", core::VimRegisterKind::characters});
-    original.last_search = VimSearchSnapshot::from("before", VimSearchDirection::forward);
+    original.last_search = VimSearchSnapshot::from(
+        "before", VimSearchDirection::forward, VimPatternCase::sensitive, VimSmartcase::honored);
     const auto sibling = original;
     auto changed = core::vim_resting_from(original, original.unnamed_register);
     expect(changed.last_search.has_value() && original.last_search.has_value() &&
                &changed.last_search.value().parsed() == &original.last_search.value().parsed(),
            "resting carries the existing owner without parsing again");
-    changed.last_search = VimSearchSnapshot::from("after", VimSearchDirection::backward);
+    changed.last_search = VimSearchSnapshot::from("after", VimSearchDirection::backward,
+                                                  VimPatternCase::sensitive, VimSmartcase::honored);
     expect(original.last_search.has_value() && sibling.last_search.has_value() &&
                original.last_search.value().text() == "before" &&
                &original.last_search.value().parsed() == &sibling.last_search.value().parsed(),

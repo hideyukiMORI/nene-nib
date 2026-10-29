@@ -25,7 +25,8 @@ std::expected<std::uint64_t, ProbeFailure>
 searched_buffer(ProbeWorkload workload, const std::string &input, application::TimingPort &timing)
 {
     const auto text = core::TextBuffer::from_utf8(input);
-    const auto pattern = core::VimPattern::parse("a", core::VimSearchDirection::forward);
+    const auto pattern = core::VimPattern::parse("a", core::VimSearchDirection::forward,
+                                                 core::VimPatternCase::sensitive);
     if (!text.has_value() || !pattern.has_value() || text.value().text() != search_buffer_input() ||
         text.value().piece_count() != 1U || text.value().line_count() != 1U ||
         text.value().size_bytes() != 61440U)

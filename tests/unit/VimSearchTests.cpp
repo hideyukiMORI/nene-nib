@@ -63,6 +63,7 @@ using nenenib::core::vim_word_at;
 using nenenib::core::VimMatchRequest;
 using nenenib::core::VimMode;
 using nenenib::core::VimPattern;
+using nenenib::core::VimPatternCase;
 using nenenib::core::VimPatternFailure;
 using nenenib::core::VimRegister;
 using nenenib::core::VimRegisterKind;
@@ -77,7 +78,8 @@ namespace core = nenenib::core;
 [[nodiscard]] std::optional<std::size_t> matched_begin(std::string_view pattern,
                                                        std::string_view line, std::size_t from)
 {
-    const auto parsed = VimPattern::parse(pattern, VimSearchDirection::forward);
+    const auto parsed =
+        VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
     expect(parsed.has_value(), "the measured pattern is inside the supported subset");
     if (!parsed.has_value())
     {
@@ -92,7 +94,7 @@ namespace core = nenenib::core;
                                                    VimSearchDirection direction)
 {
     const auto buffer = TextBuffer::from_utf8(text);
-    const auto parsed = VimPattern::parse(pattern, direction);
+    const auto parsed = VimPattern::parse(pattern, direction, VimPatternCase::sensitive);
     expect(buffer.has_value() && parsed.has_value(), "the searched body and pattern are valid");
     if (!buffer.has_value() || !parsed.has_value())
     {
@@ -127,7 +129,8 @@ namespace core = nenenib::core;
 
 [[nodiscard]] bool rejects(std::string_view pattern, VimPatternFailure failure)
 {
-    const auto parsed = VimPattern::parse(pattern, VimSearchDirection::forward);
+    const auto parsed =
+        VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
     return !parsed.has_value() && parsed.error() == failure;
 }
 
@@ -182,7 +185,8 @@ void verify_vim_pattern_subset()
 [[nodiscard]] bool match_range_is(std::string_view pattern, std::string_view line, std::size_t from,
                                   core::VimPatternMatch expected)
 {
-    const auto parsed = VimPattern::parse(pattern, VimSearchDirection::forward);
+    const auto parsed =
+        VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
     expect(parsed.has_value(), "the priority test uses a supported pattern");
     if (!parsed.has_value())
     {
@@ -228,13 +232,16 @@ void verify_vim_pattern_evaluation_bounds()
     expect(match_range_is(".*", "", 0, {0, 0}), "an empty line permits an empty repetition");
     expect(match_range_is("", "a🖋b", 6, {6, 6}),
            "an empty pattern accepts the starting byte without a frontier");
-    const auto repeated = VimPattern::parse(".*", VimSearchDirection::forward).value();
+    const auto repeated =
+        VimPattern::parse(".*", VimSearchDirection::forward, VimPatternCase::sensitive).value();
     expect(!repeated.matched("a🖋b", 7).has_value(),
            "a starting byte beyond the line cannot match an empty repetition");
-    const auto plain = VimPattern::parse("", VimSearchDirection::forward).value();
+    const auto plain =
+        VimPattern::parse("", VimSearchDirection::forward, VimPatternCase::sensitive).value();
     expect(!plain.matched("a🖋b", 7).has_value(),
            "a starting byte beyond the line cannot match an empty sequence");
-    const auto anchored_pattern = VimPattern::parse("^a*$", VimSearchDirection::forward).value();
+    const auto anchored_pattern =
+        VimPattern::parse("^a*$", VimSearchDirection::forward, VimPatternCase::sensitive).value();
     expect(!anchored_pattern.matched("baa", 0).has_value(),
            "a failed line-start condition cannot seed a later match");
     const std::string literal(16384, 'a');
@@ -283,8 +290,6 @@ void verify_vim_pattern_rejections()
     expect(rejects("fo\\?", VimPatternFailure::quantifier), "its other spelling too");
     expect(rejects("\\v(foo)", VimPatternFailure::magic), "very magic is refused");
     expect(rejects("\\Mfoo", VimPatternFailure::magic), "nomagic is refused");
-    expect(rejects("\\cfoo", VimPatternFailure::ignore_case), "a case switch is refused");
-    expect(rejects("\\Cfoo", VimPatternFailure::ignore_case), "both case switches are refused");
     expect(rejects("\\%(foo", VimPatternFailure::escape), "a percent escape is refused");
     expect(rejects("\\_foo", VimPatternFailure::escape), "a multiline escape is refused");
     expect(rejects("alpha\\r$", VimPatternFailure::escape), "a carriage return escape is refused");
@@ -294,14 +299,17 @@ void verify_vim_pattern_rejections()
     expect(rejects("foo/e", VimPatternFailure::offset), "a forward offset is refused");
     expect(rejects("foo\xE3", VimPatternFailure::invalid_utf8),
            "a pattern cut inside a multibyte sequence is refused");
-    const auto backward = VimPattern::parse("foo?e", VimSearchDirection::backward);
+    const auto backward =
+        VimPattern::parse("foo?e", VimSearchDirection::backward, VimPatternCase::sensitive);
     expect(!backward.has_value() && backward.error() == VimPatternFailure::offset,
            "a backward offset is refused at its own separator");
-    const auto question = VimPattern::parse("a?b", VimSearchDirection::forward);
+    const auto question =
+        VimPattern::parse("a?b", VimSearchDirection::forward, VimPatternCase::sensitive);
     expect(question.has_value() && question.value().matched("a?b c", 0).has_value(),
            "a question mark is a plain character in a forward search");
     // `\` の付いた区切りは文字そのもの（Vim の skip_regexp・#961）。
-    const auto escaped = VimPattern::parse("a\\?b", VimSearchDirection::backward);
+    const auto escaped =
+        VimPattern::parse("a\\?b", VimSearchDirection::backward, VimPatternCase::sensitive);
     expect(escaped.has_value() && escaped.value().matched("a?b", 0).has_value() &&
                !escaped.value().matched("ab", 0).has_value(),
            "an escaped question mark is the character itself in a backward search");
@@ -702,7 +710,8 @@ void verify_vim_search_dot()
 
 void verify_vim_search_fixtures()
 {
-    // 検索の 135 件と、鍵の分類の表・次キー待ちを共有する境界の代表（`.`・r・f/t・gg）。
+    // 検索の 165 件（大小の 30 件・#1041
+    // を含む）と、鍵の分類の表・次キー待ちを共有する境界の代表（`.`・r・f/t・gg）。
     constexpr std::array<std::string_view, 6> boundaries{
         "replace-char-one",    "replace-char-count", "char-search-f-count",
         "char-search-t-first", "line-jump-gg-count", "dot-remove-word"};
@@ -716,7 +725,7 @@ void verify_vim_search_fixtures()
             ++selected;
         }
     }
-    expect(selected == 141, "the scope replays 135 search fixtures and 6 shared boundaries");
+    expect(selected == 171, "the scope replays 165 search fixtures and 6 shared boundaries");
 }
 
 // 次の一致を求める 1 本の経路（ADR 0041 の決定 1）。確定の検索の鍵と incsearch の preview が
@@ -725,7 +734,7 @@ void verify_vim_search_fixtures()
 match_found(std::string_view text, std::string_view pattern, const VimMatchRequest &request)
 {
     const auto buffer = TextBuffer::from_utf8(text);
-    const auto parsed = VimPattern::parse(pattern, request.direction);
+    const auto parsed = VimPattern::parse(pattern, request.direction, VimPatternCase::sensitive);
     expect(buffer.has_value() && parsed.has_value(), "the matched body and pattern are valid");
     if (!buffer.has_value() || !parsed.has_value())
     {
@@ -820,7 +829,7 @@ pieced(std::string_view text, std::initializer_list<std::pair<std::size_t, std::
 [[nodiscard]] std::expected<VimSearchHit, core::VimSearchNoticeKind>
 pieced_found(const TextBuffer &buffer, std::string_view pattern, const VimMatchRequest &request)
 {
-    const auto parsed = VimPattern::parse(pattern, request.direction);
+    const auto parsed = VimPattern::parse(pattern, request.direction, VimPatternCase::sensitive);
     expect(parsed.has_value(), "the pieced pattern is valid");
     if (!parsed.has_value())
     {
@@ -979,7 +988,7 @@ void verify_ex_incsearch_commands()
     const auto theme = core::evaluate_ex("colorscheme dracula", settings, Appearance::dark);
     expect(theme.has_value() && !theme.value().incsearch.has_value(),
            "commands that are not about incsearch leave it alone");
-    const auto completions = core::command_completions("set noi");
+    const auto completions = core::command_completions("set noinc");
     expect(completions.size() == 1 && completions.front() == "set noincsearch",
            "the option is offered as a completion");
     auto state =
@@ -1050,10 +1059,69 @@ void verify_vim_search_history()
     verify_replayed_escape_history();
 }
 
+[[nodiscard]] std::optional<std::size_t>
+cased_match(std::string_view pattern, VimPatternCase letter_case, std::string_view line)
+{
+    const auto parsed = VimPattern::parse(pattern, VimSearchDirection::forward, letter_case);
+    expect(parsed.has_value(), "the case pattern is inside the supported subset");
+    const auto match = parsed.value().matched(line, 0);
+    return match.has_value() ? std::optional<std::size_t>{match.value().begin} : std::nullopt;
+}
+
+// 大小の旗（#1041）。旗は parse の引数 1 つで、`\c` `\C` が旗より強く `\c` が勝つ。smart は
+// `\` に続く文字を数えず、`[...]` の中の大文字は数える。`\w` などの集合は畳まない。
+void verify_vim_pattern_case()
+{
+    using Case = VimPatternCase;
+    expect(cased_match("abc", Case::sensitive, "ABC abc") == std::optional<std::size_t>{4} &&
+               cased_match("abc", Case::ignore, "ABC abc") == std::optional<std::size_t>{0} &&
+               cased_match("ABC", Case::ignore, "x abc") == std::optional<std::size_t>{2},
+           "ignore folds both the pattern and the line");
+    expect(cased_match("abc", Case::smart, "ABC abc") == std::optional<std::size_t>{0} &&
+               cased_match("Abc", Case::smart, "ABC abc Abc") == std::optional<std::size_t>{8},
+           "smart ignores the case only while the pattern has no capital");
+    expect(cased_match("\\cabc", Case::sensitive, "ABC") == std::optional<std::size_t>{0} &&
+               cased_match("abc\\c", Case::sensitive, "ABC") == std::optional<std::size_t>{0} &&
+               cased_match("\\Cabc", Case::ignore, "ABC abc") == std::optional<std::size_t>{4} &&
+               cased_match("\\C\\cabc", Case::sensitive, "ABC") == std::optional<std::size_t>{0} &&
+               cased_match("\\Cabc", Case::smart, "ABC abc") == std::optional<std::size_t>{4},
+           "the pattern switches win over the flag and the ignoring one wins over the other");
+    expect(cased_match("\\Sbc", Case::smart, "xyz ABC") == std::optional<std::size_t>{4} &&
+               cased_match("[B]x", Case::smart, "bx Bx") == std::optional<std::size_t>{3},
+           "smart skips escaped letters and counts a capital in a set");
+    expect(cased_match("[a-c]x", Case::ignore, "zz Bx") == std::optional<std::size_t>{3} &&
+               cased_match("[^a]x", Case::ignore, "Ax bx") == std::optional<std::size_t>{3} &&
+               cased_match("[A-C]x", Case::ignore, "zz bx") == std::optional<std::size_t>{3},
+           "a bracket set folds and a negated one leaves the folded letter out");
+    expect(cased_match("\\w", Case::ignore, "\u0131a") == std::optional<std::size_t>{2} &&
+               cased_match("\\W", Case::ignore, "Aa-") == std::optional<std::size_t>{2},
+           "the escaped classes do not fold");
+    expect(cased_match("\u00e9", Case::ignore, "x \u00c9") == std::optional<std::size_t>{2} &&
+               cased_match("\u03c3", Case::ignore, "\u03a3\u03c2") ==
+                   std::optional<std::size_t>{0} &&
+               cased_match("\u03c2", Case::ignore, "x\u03c3") == std::optional<std::size_t>{1} &&
+               cased_match("\u00c9", Case::smart, "\u00e9 \u00c9") == std::optional<std::size_t>{3},
+           "a letter outside ASCII folds and counts as a capital for smartcase");
+    expect(!cased_match("i", Case::ignore, "\u0130\u0131").has_value(),
+           "the Turkish dotted and dotless i do not fold to i");
+    const auto literal = [](std::string_view pattern, VimPatternCase letter_case)
+    {
+        return VimPattern::parse(pattern, VimSearchDirection::forward, letter_case)
+            .value()
+            .literal_bytes();
+    };
+    expect(literal("abc", Case::sensitive) == std::optional<std::string>{"abc"} &&
+               !literal("abc", Case::ignore).has_value() &&
+               literal("Abc", Case::smart) == std::optional<std::string>{"Abc"} &&
+               literal("12-3", Case::ignore) == std::optional<std::string>{"12-3"},
+           "a folding pattern with letters has no byte literal to narrow lines");
+}
+
 } // namespace
 
 void verify_vim_search_contracts()
 {
+    verify_vim_pattern_case();
     verify_vim_search_snapshot_contracts();
     verify_vim_find_match();
     verify_vim_search_empty_lines();

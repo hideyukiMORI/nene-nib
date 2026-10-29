@@ -123,7 +123,7 @@ void place_insert_left(EditorState &state, std::optional<std::size_t> left)
     {
         return std::nullopt;
     }
-    const auto pattern = typed_pattern(*line);
+    const auto pattern = typed_pattern(*line, core::search_case(state.settings()));
     if (!pattern.has_value())
     {
         return std::nullopt;
@@ -606,7 +606,7 @@ void EditorController::accept(const SearchHop &intent)
     {
         return;
     }
-    const auto pattern = typed_pattern(*line);
+    const auto pattern = typed_pattern(*line, core::search_case(state_.settings()));
     if (!pattern.has_value())
     {
         return;
@@ -1013,6 +1013,7 @@ EditorController::measured_vim_step(const VimStepSource &source)
                             spans}};
     // 文書のマークを貸す（ADR 0152 の決定 2）。この関数の中では状態を変えないので参照は保たれる。
     view.marks = &state_.vim_marks();
+    view.search_case = core::search_case(state_.settings());
     auto step = engine_step(state_.vim(), view, source);
     // どの要求も同じ 1 歩（鍵か行番号）をもう一度流す。viewport は 1 度渡したら以後も渡したまま。
     // 回数の上限は持たない。同じ問いの立て直しと viewport の二重要求は inconsistent で止まり、

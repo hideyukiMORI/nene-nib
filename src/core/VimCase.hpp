@@ -15,4 +15,9 @@ namespace nenenib::core
 
 // 小文字なら大文字へ、そうでなく大文字なら小文字へ。どちらでもなければそのまま。
 [[nodiscard]] char32_t vim_toggled(char32_t value) noexcept;
+
+// `ignorecase` の照合で比べる畳んだ形（ADR 0032 の追補・#1041）。Vim の utf_fold（Unicode の
+// CaseFolding の C と S）に合わせ、大文字にしてから小文字にする（`ς` と `σ` と `Σ`、`ſ` と `s`、
+// Kelvin の `K` と `k` が同じになる）。トルコ語の `İ` `ı` は CaseFolding の C / S に無く畳まない。
+[[nodiscard]] char32_t vim_folded(char32_t value) noexcept;
 } // namespace nenenib::core

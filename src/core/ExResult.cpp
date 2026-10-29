@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <limits>
 #include <optional>
+#include <span>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -470,9 +471,77 @@ explorer_option(std::string_view option, const EditorSettings &settings)
                     .lsp = request};
 }
 
+// 検索の大小の option の名前（#1041）。長い名前と Vim の短い名前（`ic` `scs`）。
+constexpr std::array<std::string_view, 2> ignorecase_names{"ignorecase", "ic"};
+constexpr std::array<std::string_view, 2> smartcase_names{"smartcase", "scs"};
+
+[[nodiscard]] DisplayText switch_message(std::string_view name, bool on)
+{
+    return DisplayText::parse(std::string(name) + (on ? "=on" : "=off")).value();
+}
+
+// 名前 `name`・`no<name>`・`<name>?` のどれかなら、その真偽か問い（値が無い）。
+[[nodiscard]] std::optional<std::optional<bool>>
+switch_request(std::string_view option, std::span<const std::string_view> names)
+{
+    for (const std::string_view name : names)
+    {
+        if (option == name)
+        {
+            return std::optional<bool>{true};
+        }
+        if (option.starts_with("no") && option.substr(2) == name)
+        {
+            return std::optional<bool>{false};
+        }
+        if (option.ends_with('?') && option.substr(0, option.size() - 1) == name)
+        {
+            return std::optional<bool>{std::nullopt};
+        }
+    }
+    return std::nullopt;
+}
+
+// `set ic` `set noic` `set ic?` と `scs` の同じ 3 つ（長い名前も・#1041）。保存する設定に載せ、
+// 文言は `set wrap` と同じ `ignorecase=on` の形。問いは今の値を文言にするだけで settings は空。
+[[nodiscard]] std::optional<ExResult> case_option(std::string_view option,
+                                                  const EditorSettings &settings)
+{
+    const auto ignorecase = switch_request(option, ignorecase_names);
+    const auto smartcase = switch_request(option, smartcase_names);
+    if (!ignorecase.has_value() && !smartcase.has_value())
+    {
+        return std::nullopt;
+    }
+    const bool ignoring = ignorecase.has_value();
+    const std::optional<bool> wanted = ignoring ? ignorecase.value() : smartcase.value();
+    const std::string_view name = ignoring ? ignorecase_names.front() : smartcase_names.front();
+    if (!wanted.has_value())
+    {
+        const bool current = ignoring ? settings.ignorecase : settings.smartcase;
+        return ExResult{std::nullopt, std::nullopt, std::nullopt, switch_message(name, current)};
+    }
+    EditorSettings changed = settings;
+    if (ignoring)
+    {
+        changed.ignorecase = wanted.value();
+    }
+    else
+    {
+        changed.smartcase = wanted.value();
+    }
+    return ExResult{std::move(changed), std::nullopt, std::nullopt,
+                    switch_message(name, wanted.value())};
+}
+
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 set_option(std::string_view option, const EditorSettings &settings)
 {
+    auto letter_case = case_option(option, settings);
+    if (letter_case.has_value())
+    {
+        return std::move(letter_case).value();
+    }
     if (option == "wrap")
     {
         return wrap_result(settings, LineWrapping::wrap);
@@ -904,7 +973,7 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
 // 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
-constexpr std::array<std::string_view, 32> fixed_candidates{"colorscheme",
+constexpr std::array<std::string_view, 36> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -935,7 +1004,11 @@ constexpr std::array<std::string_view, 32> fixed_candidates{"colorscheme",
                                                             "set root=",
                                                             "set root=.",
                                                             "set lsp",
-                                                            "set nolsp"};
+                                                            "set nolsp",
+                                                            "set ignorecase",
+                                                            "set noignorecase",
+                                                            "set smartcase",
+                                                            "set nosmartcase"};
 
 [[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
                                   std::string_view suffix = {})

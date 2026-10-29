@@ -7,6 +7,7 @@
 #include "VimSearch.hpp"
 #include "VimSearchHit.hpp"
 #include "VimSearchRequest.hpp"
+#include "VimSmartcase.hpp"
 #include "VimWordMotion.hpp"
 
 #include <optional>
@@ -179,7 +180,12 @@ namespace detail
         return search_noticed(state, notice_of(VimSearchNoticeKind::no_previous_pattern));
     }
     VimState remembered = state;
-    remembered.last_search = VimSearchSnapshot::from(pattern, key.direction);
+    // 空のパターンは直前の smartcase の扱いも引き継ぐ（`*` の後の `/<CR>`・Vim の no_scs）。
+    const VimSmartcase smartcase = key.pattern.empty() && state.last_search.has_value()
+                                       ? state.last_search.value().smartcase()
+                                       : VimSmartcase::honored;
+    remembered.last_search =
+        VimSearchSnapshot::from(pattern, key.direction, view.search_case, smartcase);
     // incsearch の Ctrl-G / Ctrl-T が起点を動かしていればそこから探す。範囲の端は元のキャレット
     // （ADR 0043 の決定 3）。
     const Offset caret = view.selection.caret;
@@ -242,7 +248,8 @@ namespace
         view.text.text_range(found.value().begin, found.value().end), direction);
     VimState remembered = state;
     remembered.last_search =
-        VimSearchSnapshot::from(word.has_value() ? "\\<" + text + "\\>" : text, direction);
+        VimSearchSnapshot::from(word.has_value() ? "\\<" + text + "\\>" : text, direction,
+                                view.search_case, VimSmartcase::ignored);
     // 探し始めるのは語の先頭だが、範囲の端は元のキャレットである（実測）。
     return search_from(remembered, view,
                        VimSearchRequest{found.value().begin, view.selection.caret, direction});

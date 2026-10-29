@@ -12,7 +12,17 @@ bool same_settings(const EditorSettings &left, const EditorSettings &right) noex
            left.ui_language == right.ui_language && left.lsp == right.lsp &&
            left.explorer == right.explorer && left.root == right.root &&
            left.features == right.features && left.lsp_commands == right.lsp_commands &&
-           left.maps == right.maps && left.mapleader == right.mapleader;
+           left.maps == right.maps && left.mapleader == right.mapleader &&
+           left.ignorecase == right.ignorecase && left.smartcase == right.smartcase;
+}
+
+VimPatternCase search_case(const EditorSettings &settings) noexcept
+{
+    if (!settings.ignorecase)
+    {
+        return VimPatternCase::sensitive;
+    }
+    return settings.smartcase ? VimPatternCase::smart : VimPatternCase::ignore;
 }
 
 bool affects_line_height(const EditorSettings &before, const EditorSettings &after) noexcept

@@ -621,7 +621,7 @@ std::optional<EditorController::SearchPattern> EditorController::search_pattern(
     const core::SearchLine *typing = previewed_line(state_);
     if (state_.mode() == core::EditMode::vim && typing != nullptr)
     {
-        auto parsed = typed_pattern(*typing);
+        auto parsed = typed_pattern(*typing, core::search_case(state_.settings()));
         if (!parsed.has_value())
         {
             return std::nullopt;

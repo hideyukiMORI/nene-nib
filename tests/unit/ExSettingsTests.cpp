@@ -736,6 +736,73 @@ void verify_ex_explorer_switch()
            "other options carry no root request");
 }
 
+// 検索の大小（#1041）。`ic` `scs` と長い名前・`no` の形は保存する設定に載り、問いは settings を
+// 空のまま今の値を `ignorecase=on` の形で返す。
+void verify_ex_search_case()
+{
+    const auto defaults = core::default_editor_settings();
+    expect(!defaults.ignorecase && !defaults.smartcase &&
+               core::search_case(defaults) == core::VimPatternCase::sensitive,
+           "both options are off by default like Vim");
+    for (const auto text : {"set ic", "set ignorecase"})
+    {
+        const auto on = core::evaluate_ex(text, defaults, Appearance::dark);
+        expect(carries_settings(on) && settings_of(on).ignorecase && !settings_of(on).smartcase &&
+                   message_of(on) == "ignorecase=on",
+               "set ic and set ignorecase turn ignorecase on through the saved settings");
+    }
+    auto ignoring = defaults;
+    ignoring.ignorecase = true;
+    expect(core::search_case(ignoring) == core::VimPatternCase::ignore,
+           "ignorecase alone ignores the case");
+    for (const auto text : {"set noic", "set noignorecase"})
+    {
+        const auto off = core::evaluate_ex(text, ignoring, Appearance::dark);
+        expect(carries_settings(off) && !settings_of(off).ignorecase &&
+                   message_of(off) == "ignorecase=off",
+               "set noic turns it off");
+    }
+    for (const auto text : {"set ic?", "set ignorecase?"})
+    {
+        const auto asked = core::evaluate_ex(text, ignoring, Appearance::dark);
+        expect(asked.has_value() && !carries_settings(asked) &&
+                   message_of(asked) == "ignorecase=on",
+               "ic? tells the current value without changing settings");
+    }
+}
+
+// `scs` の 3 つと、ほかの綴りの拒否（#1041）。
+void verify_ex_smartcase()
+{
+    const auto defaults = core::default_editor_settings();
+    auto ignoring = defaults;
+    ignoring.ignorecase = true;
+    for (const auto text : {"set scs", "set smartcase"})
+    {
+        const auto on = core::evaluate_ex(text, ignoring, Appearance::dark);
+        expect(carries_settings(on) && settings_of(on).smartcase && settings_of(on).ignorecase &&
+                   message_of(on) == "smartcase=on" &&
+                   core::search_case(settings_of(on)) == core::VimPatternCase::smart,
+               "set scs turns smartcase on and keeps ignorecase");
+    }
+    auto smart_alone = defaults;
+    smart_alone.smartcase = true;
+    expect(core::search_case(smart_alone) == core::VimPatternCase::sensitive,
+           "smartcase without ignorecase keeps the case like Vim");
+    const auto asked = core::evaluate_ex("set scs?", smart_alone, Appearance::dark);
+    expect(asked.has_value() && !carries_settings(asked) && message_of(asked) == "smartcase=on",
+           "scs? tells the current value");
+    const auto off = core::evaluate_ex("set nosmartcase", smart_alone, Appearance::dark);
+    expect(carries_settings(off) && !settings_of(off).smartcase &&
+               message_of(off) == "smartcase=off",
+           "set nosmartcase turns it off");
+    for (const auto text : {"set noic?", "set ic!", "set invic", "set icase", "set ignorecas"})
+    {
+        const auto refused = core::evaluate_ex(text, defaults, Appearance::dark);
+        expect(!refused.has_value(), "other spellings are refused");
+    }
+}
+
 // ルート（ADR 0162 の決定 7）。`root=<経路>` と `root=` は settings に載り、`root?` と `root=.` は
 // settings を空のまま返す。`root=.` は controller が解く要求。
 void verify_ex_explorer_root()
@@ -810,6 +877,10 @@ const auto completion_ordinary = std::vector<std::string>{"colorscheme",
                                                           "set root=.",
                                                           "set lsp",
                                                           "set nolsp",
+                                                          "set ignorecase",
+                                                          "set noignorecase",
+                                                          "set smartcase",
+                                                          "set nosmartcase",
                                                           "edit",
                                                           "buffer",
                                                           "ls",
@@ -1079,5 +1150,7 @@ void verify_ex_settings()
     verify_ex_clipboard_option();
     verify_ex_explorer_switch();
     verify_ex_explorer_root();
+    verify_ex_search_case();
+    verify_ex_smartcase();
 }
 } // namespace nenenib::tests

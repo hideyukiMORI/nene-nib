@@ -54,9 +54,10 @@ namespace nenenib::application::detail
     return line;
 }
 
-[[nodiscard]] std::optional<core::VimPattern> typed_pattern(const core::SearchLine &line)
+[[nodiscard]] std::optional<core::VimPattern> typed_pattern(const core::SearchLine &line,
+                                                            core::VimPatternCase letter_case)
 {
-    auto parsed = core::VimPattern::parse(line.text(), line.direction());
+    auto parsed = core::VimPattern::parse(line.text(), line.direction(), letter_case);
     if (!parsed)
     {
         return std::nullopt;

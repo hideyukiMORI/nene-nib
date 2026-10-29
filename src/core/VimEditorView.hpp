@@ -7,6 +7,7 @@
 #include "VimKeySource.hpp"
 #include "VimLayoutView.hpp"
 #include "VimMarks.hpp"
+#include "VimPatternCase.hpp"
 #include "VimRowLanding.hpp"
 #include "VimTabs.hpp"
 #include "VimViewport.hpp"
@@ -36,5 +37,8 @@ struct VimEditorView
     const VimMarks *marks = &no_vim_marks;
     // マークへの移動の着地（決定 3）。`'` `` ` `` の次の鍵で engine が名前を解いて置く。
     std::optional<Offset> mark_landing = std::nullopt;
+    // 検索の大小の旗（設定の `ignorecase` `smartcase`・ADR 0032 の追補・#1041）。controller が
+    // 設定から置き、`/` `?` の Enter と `*` `#` が新しい検索を解くときに読む。
+    VimPatternCase search_case = VimPatternCase::sensitive;
 };
 } // namespace nenenib::core
