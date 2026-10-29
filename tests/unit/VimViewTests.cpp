@@ -1,16 +1,22 @@
 // scope `--vim-view` の単体テスト（#1041・ADR 0019 / ADR 0008 の追補）。`scrolloff` の余白と
 // `relativenumber` の行番号の文字は画面の値なので oracle では測れず、ここで契約にする。
+#include "Column.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "EditorSettings.hpp"
 #include "GutterAlignment.hpp"
 #include "GutterLabels.hpp"
 #include "InsertText.hpp"
 #include "LineNumber.hpp"
+#include "PlaceCaret.hpp"
 #include "Scopes.hpp"
+#include "ScriptedSettings.hpp"
 #include "SelectEditMode.hpp"
+#include "SelectionAnchoring.hpp"
 #include "TestSupport.hpp"
+#include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
@@ -18,6 +24,7 @@
 #include "VisibleLines.hpp"
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -27,12 +34,16 @@ namespace
 {
 using nenenib::application::EditorFrame;
 using nenenib::application::InsertText;
+using nenenib::application::PlaceCaret;
 using nenenib::application::SelectEditMode;
 using nenenib::application::VimKeyPress;
 using nenenib::application::VisibleLines;
+using nenenib::core::Column;
 using nenenib::core::EditMode;
 using nenenib::core::GutterAlignment;
 using nenenib::core::LineNumber;
+using nenenib::core::SelectionAnchoring;
+using nenenib::core::TextPosition;
 using nenenib::core::VimCharacter;
 using nenenib::core::VimKey;
 
@@ -136,6 +147,60 @@ void verify_gutter_labels()
                below.alignment == GutterAlignment::trailing,
            "#1041 other lines show the distance from the caret line on the right");
 }
+// 折り返した行（ADR 0019 の追補の決定 2）: 余白は画面行で数える。幅 40 升の窓で 6 行目は
+// 3 画面行。`so=2` の `j` は、キャレットの下に 2 画面行が残るように画面行の単位で送る。
+void verify_scrolloff_wrapped_rows()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{shown_lines, nenenib::core::TextViewGeometry{400, 20, 96}});
+    std::string text = "line\nline\nline\nline\nline\n" + std::string(100, 'w') + "\n";
+    for (std::size_t line = 0; line < 30; ++line)
+    {
+        text += "line\n";
+    }
+    text += "line";
+    static_cast<void>(controller.apply(InsertText{text}));
+    applied(controller, SelectEditMode{EditMode::vim});
+    static_cast<void>(run_ex(controller, "set so=2"));
+    static_cast<void>(pressed(controller, U"gg"));
+    const auto seventh = pressed(controller, U"jjjjjj");
+    expect(seventh.caret.position.line == LineNumber{7} && seventh.first_visible == LineNumber{2},
+           "#1041 line 7 on screen row 8 scrolls one screen row to keep 2 rows below");
+    const auto ninth = pressed(controller, U"jj");
+    expect(ninth.caret.position.line == LineNumber{9} && ninth.first_visible == LineNumber{4},
+           "#1041 the margin keeps counting screen rows past the wrapped line");
+}
+
+// 通常モードでも効く（ADR 0019 / 0008 の追補・設定は窓の値で wrap と同じくモードを見ない）。
+// `so=2` のクリックは余白の内側へ送り、`rnu` の行番号は相対。
+void verify_ordinary_mode_options()
+{
+    auto settings = nenenib::core::default_editor_settings();
+    settings.scrolloff = 2;
+    settings.relativenumber = true;
+    Editing editing(SettingsReading{std::optional{settings}});
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{shown_lines, nenenib::core::TextViewGeometry{400, 20, 96}});
+    std::string text;
+    for (std::size_t line = 1; line < document_lines; ++line)
+    {
+        text += "line\n";
+    }
+    text += "line";
+    static_cast<void>(controller.apply(InsertText{text}));
+    const auto end = controller.frame();
+    expect(end.first_visible == LineNumber{51}, "#1041 the ordinary window shows the last lines");
+    applied(controller,
+            PlaceCaret{TextPosition{LineNumber{52}, Column{0}}, SelectionAnchoring::collapse});
+    const auto clicked = controller.frame();
+    expect(clicked.caret.position.line == LineNumber{52} && clicked.first_visible == LineNumber{50},
+           "#1041 a click inside the upper margin scrolls the ordinary window by the margin");
+    const auto label = nenenib::core::gutter_label(LineNumber{50}, clicked.caret.position.line,
+                                                   clicked.settings.relativenumber);
+    expect(clicked.settings.relativenumber && label.text == "2",
+           "#1041 relativenumber numbers the ordinary gutter from the caret line");
+}
 } // namespace
 
 void verify_vim_view_scope()
@@ -144,5 +209,7 @@ void verify_vim_view_scope()
     verify_scrolloff_alignment();
     verify_scrolloff_center();
     verify_gutter_labels();
+    verify_scrolloff_wrapped_rows();
+    verify_ordinary_mode_options();
 }
 } // namespace nenenib::tests

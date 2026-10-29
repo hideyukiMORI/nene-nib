@@ -87,4 +87,5 @@ ADR 0005（Vim を oracle にする）・ADR 0009（選択とスクロールの�
 2. **呼ぶのは application の追従の 1 か所。** `VisualTextView::followed_first` が設定の `scrolloff` を渡す（画面行の単位なので、折り返し・格子・巨大な行の窓でも同じ）。仮の行の座標は余白の分だけ下げ、上へ寄せる余白が仮の 1 行目で切れないようにする（余白 0 なら今までと同じ）。文書の先頭と末尾では余白は効かない（先頭は 1 行目で止まり、末尾は `filled_viewport` の収めで切れる）。
 3. **engine が画面を決める鍵（`VimNavigate`）の後も、同じ追従の計算を縦だけに 1 回当てる**（`EditorController::perform(VimNavigate)`・余白が 0 なら何もしない）。`zt` `z<CR>` は余白の分だけ上を残し、`zb` `z-` は下を残し（Vim の scroll_cursor_top / bot と同じ値）、`zz` `z.` は変わらない。Ctrl-d / Ctrl-u は窓とキャレットを同じ量だけ動かすので、余白の外のキャレットは動かさない。
 4. **限界（後続）。** `H` `M` `L` と Ctrl-f / Ctrl-b は Vim では余白の分だけ**キャレットを**動かす（cursor_correct）が、Nib は engine が置いたキャレットを保って**窓を**余白の分だけ送る。キャレットの行が Vim と違い得る（`so=3` の `H` は Vim では先頭 + 3 行目・Nib は先頭の行で窓が 3 行上がる）。oracle は画面を測れないので fixture にはならない。engine に余白を渡して cursor_correct を足すかは設計席が決める。
-5. **契約。** `nib_tests --vim-view`（既定実行にも載る）が `j` `k` の余白・文書の先頭・`zt` `zb` `zz`・`so=999` の中央を controller で、既定実行の `verify_scroll_margin`（`CoreTests.cpp`）が純関数の値を確かめる。
+5. **両方のモードで効く。** `scrolloff` は窓の設定で、`wrap` と同じくモードを見ない（通常モードの打鍵・クリック・ドラッグの追従も余白を残す・Vim の `scrolloff` もマウスで同じ性質・既定 0 では変わらない）。中央へ寄せる閾値は余白の内側の行数で計る（Vim との一致は oracle で測れず未確認）。
+6. **契約。** `nib_tests --vim-view`（既定実行にも載る）が `j` `k` の余白・文書の先頭・`zt` `zb` `zz`・`so=999` の中央・折り返した行の画面行の単位・通常モードのクリックを controller で、既定実行の `verify_scroll_margin`（`CoreTests.cpp`）が純関数の値を確かめる。

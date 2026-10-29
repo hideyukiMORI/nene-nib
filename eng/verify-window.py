@@ -2980,6 +2980,7 @@ def verify_syntax(executable: Path, environment: dict, scheme: str, frames: Path
 
 
 GUTTER_POLLS = 30
+GUTTER_PADDING_DIPS = 16
 GUTTER_POLL_SECONDS = 0.1
 
 
@@ -3053,8 +3054,12 @@ def verify_gutter(executable: Path, environment: dict, frames: Path | None) -> d
         print(json.dumps(record, ensure_ascii=False), file=sys.stderr)
         assert gutter_changed, "`:set rnu` left the gutter as it was"
         assert body_kept, "`:set rnu` changed the body text"
-        moved = left_before is not None and left_after is not None and left_after < left_before
-        assert moved, "the caret line number did not move to the left"
+        # 左寄せの番号は右の余白と同じ幅（renderer の gutter_padding_dips = 16）を左にも置く。
+        padding = to_pixels(int(GUTTER_PADDING_DIPS + 0.5), dpi)
+        record["gutterPadding"] = padding
+        moved = (left_before is not None and left_after is not None
+                 and padding <= left_after < left_before)
+        assert moved, "the caret line number did not move left to the padding"
         close(window)
         record["exitCode"] = process.wait(timeout=5)
         assert record["exitCode"] == 0, record["exitCode"]
