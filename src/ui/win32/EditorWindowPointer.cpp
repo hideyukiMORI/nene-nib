@@ -4,9 +4,9 @@
 #include "BodyLayout.hpp"
 #include "DevicePixels.hpp"
 #include "EditMode.hpp"
+#include "EditorOperation.hpp"
 #include "ExplorerKey.hpp"
 #include "ExplorerKeyKind.hpp"
-#include "FontSizeAdjustment.hpp"
 #include "NewTab.hpp"
 #include "PaletteLayout.hpp"
 #include "PaneLayouts.hpp"
@@ -420,6 +420,14 @@ std::int32_t EditorWindow::title_bar_width() const
 void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
 {
     const auto delta = static_cast<std::int16_t>(HIWORD(word));
+    // Ctrl を押したホイールは、面・エクスプローラー・プレビュー・帯の上でも字の大きさ（ADR 0150 の追補・#1048）。
+    // 送りの分岐より前に見る。Ctrl の無いホイールは残りを捨てる。
+    if ((GET_KEYSTATE_WPARAM(word) & MK_CONTROL) != 0)
+    {
+        zoom_wheel(delta);
+        return;
+    }
+    zoom_wheel_remainder_ = 0;
     // 面の上のホイールは一覧だけを送り、選択は動かさない（ADR 0150 の決定 2）。
     if (controller_.command_palette_active())
     {
@@ -433,12 +441,6 @@ void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
         scroll_tabs(delta);
         return;
     }
-    if ((LOWORD(word) & MK_CONTROL) != 0)
-    {
-        zoom_wheel(delta);
-        return;
-    }
-    zoom_wheel_remainder_ = 0;
     // エクスプローラーの面の上は面の行だけを送る（ADR 0162 の決定 4・wheel_turned の累積）。
     if (over_explorer(data))
     {
@@ -547,16 +549,15 @@ void EditorWindow::scroll_tabs(std::int32_t delta)
 
 void EditorWindow::zoom_wheel(std::int32_t delta)
 {
-    zoom_wheel_remainder_ += delta;
-    const std::int32_t steps = zoom_wheel_remainder_ / WHEEL_DELTA;
-    zoom_wheel_remainder_ %= WHEEL_DELTA;
-    if (steps == 0)
+    // 1 刻み（WHEEL_DELTA）で 1 段。本文と同じ wheel_turned の累積で、lines の負が奥（大きく）。
+    // 実行は鍵（Ctrl+＋ / −）と一覧と同じ run_operation の 1 本（ADR 0078 / ADR 0150 の追補）。
+    const auto turn = wheel_turned(zoom_wheel_remainder_, delta, 1);
+    zoom_wheel_remainder_ = turn.remainder;
+    const auto operation =
+        turn.lines < 0 ? core::EditorOperation::font_larger : core::EditorOperation::font_smaller;
+    for (std::int32_t step = 0; step < (turn.lines < 0 ? -turn.lines : turn.lines); ++step)
     {
-        return;
+        run_operation(operation);
     }
-    const auto adjustment =
-        steps > 0 ? core::FontSizeAdjustment::increase : core::FontSizeAdjustment::decrease;
-    const auto amount = static_cast<std::size_t>(steps > 0 ? steps : -steps);
-    send(application::AdjustFontSize{adjustment, amount});
 }
 } // namespace nenenib::ui::win32
