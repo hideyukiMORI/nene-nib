@@ -58,7 +58,8 @@ std::expected<std::uint64_t, ProbeFailure>
 matched_pattern(ProbeWorkload workload, const std::string &input, application::TimingPort &timing)
 {
     const std::string source = pattern_text(workload);
-    const auto pattern = core::VimPattern::parse(source, core::VimSearchDirection::forward);
+    const auto pattern = core::VimPattern::parse(source, core::VimSearchDirection::forward,
+                                                 core::VimPatternCase::sensitive);
     if (!pattern.has_value() || input != pattern_probe_input(workload))
     {
         return std::unexpected(ProbeFailure::wrong_result);

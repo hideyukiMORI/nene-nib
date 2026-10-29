@@ -56,7 +56,8 @@ std::expected<std::uint64_t, ProbeFailure> searched_spans(SearchSpanWorkload wor
                                                           application::TimingPort &timing)
 {
     const auto text = core::TextBuffer::from_utf8(input);
-    const auto pattern = core::VimPattern::parse(span_word, core::VimSearchDirection::forward);
+    const auto pattern = core::VimPattern::parse(span_word, core::VimSearchDirection::forward,
+                                                 core::VimPatternCase::sensitive);
     if (!text.has_value() || !pattern.has_value() || text.value().line_count() != span_lines ||
         text.value().piece_count() != 1U)
     {

@@ -663,17 +663,17 @@ void verify_settings_versions()
            "guide and wrapping round trip through v4");
     expect(bytes.starts_with("version=4\n") &&
                bytes.ends_with("guide=off\nwrap=off\nui_language=system\nlsp=off\nexplorer=off\n"
-                               "root=\nfeatures=\n"),
-           "v4 writer emits the canonical eleven-field schema");
+                               "root=\nfeatures=\nignorecase=off\nsmartcase=off\n"),
+           "v4 writer emits the canonical thirteen-field schema");
     const auto v3 = decode_settings(v3_settings, SettingsVersion::v3);
     expect(v3 && v3.value().guide == nenenib::core::GuideVisibility::hidden &&
                v3.value().wrapping == nenenib::core::LineWrapping::no_wrap &&
                v3.value().ui_language == nenenib::core::DisplayLanguageChoice::japanese &&
                !v3.value().lsp && !v3.value().explorer && !v3.value().root.has_value() &&
-               v3.value().features.empty(),
+               v3.value().features.empty() && !v3.value().ignorecase && !v3.value().smartcase,
            "v3 keeps its values, stays Japanese and takes the other v4 defaults");
-    for (const auto extra :
-         {"ui_language=system\n", "lsp=off\n", "explorer=off\n", "root=\n", "features=\n"})
+    for (const auto extra : {"ui_language=system\n", "lsp=off\n", "explorer=off\n", "root=\n",
+                             "features=\n", "ignorecase=off\n", "smartcase=off\n"})
     {
         const auto refused = decode_settings(std::string(v3_settings) + extra, SettingsVersion::v3);
         expect(!refused && refused.error() == SettingsFailure::malformed,
@@ -724,16 +724,17 @@ void verify_older_settings_versions()
 
 // `lsp.<language>.command` の行（ADR 0170 の決定 3・#1044）。0
 // 行以上・言語は表の名前だけ・同じ言語は 1 行・値は空でない。書くときは features
-// の後ろに言語の名前の順。
+// と検索の大小の後ろに言語の名前の順。
 void verify_settings_lsp_commands()
 {
     auto settings = default_editor_settings();
     settings.lsp_commands = {{"python", "C:\\py\\pylsp.exe"},
                              {"cpp", "C:\\llvm\\clangd.exe --log=error"}};
     const auto bytes = encode_settings(settings);
-    expect(bytes.ends_with("features=\nlsp.cpp.command=C:\\llvm\\clangd.exe --log=error\n"
+    expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nlsp.cpp.command=C:"
+                           "\\llvm\\clangd.exe --log=error\n"
                            "lsp.python.command=C:\\py\\pylsp.exe\n"),
-           "commands follow features in language name order");
+           "commands follow the fixed keys in language name order");
     const auto decoded = decode_settings(bytes, SettingsVersion::v4);
     expect(decoded && decoded.value().lsp_commands.size() == 2 &&
                decoded.value().lsp_commands.front().first == "cpp" &&
@@ -851,10 +852,14 @@ void verify_settings_v4_fields()
     settings.explorer = true;
     settings.root = nenenib::core::FilePath::parse("C:\\work\\my dir=x").value();
     settings.features = {"matchparen", "change_marks", "todo_marks2"};
+    settings.ignorecase = true;
+    settings.smartcase = true;
     const auto bytes = encode_settings(settings);
-    expect(bytes.find("\nui_language=zh-hans\nlsp=on\nexplorer=on\nroot=C:\\work\\my dir=x\n"
-                      "features=matchparen,change_marks,todo_marks2\n") != std::string::npos,
-           "v4 writes the language, the switches, the root and the features");
+    expect(
+        bytes.find("\nui_language=zh-hans\nlsp=on\nexplorer=on\nroot=C:\\work\\my dir=x\n"
+                   "features=matchparen,change_marks,todo_marks2\nignorecase=on\nsmartcase=on\n") !=
+            std::string::npos,
+        "v4 writes the language, the switches, the root, the features and the search case");
     const auto decoded = decode_settings(bytes, SettingsVersion::v4);
     expect(decoded && same_settings(decoded.value(), settings) &&
                decoded.value().features == settings.features,
@@ -869,9 +874,10 @@ void verify_settings_v4_fields()
     using Row = std::pair<std::string_view, std::string_view>;
     for (const auto &[key, value] :
          {Row{"ui_language", "ja-JP"}, Row{"ui_language", "JA"}, Row{"ui_language", ""},
-          Row{"lsp", "ON"}, Row{"explorer", "yes"}, Row{"features", "a,,b"}, Row{"features", ",a"},
-          Row{"features", "a,"}, Row{"features", "Wrap"}, Row{"features", "a b"},
-          Row{"features", "a,a"}, Row{"root", "C:\\a\x01"}})
+          Row{"lsp", "ON"}, Row{"explorer", "yes"}, Row{"ignorecase", "1"}, Row{"smartcase", ""},
+          Row{"features", "a,,b"}, Row{"features", ",a"}, Row{"features", "a,"},
+          Row{"features", "Wrap"}, Row{"features", "a b"}, Row{"features", "a,a"},
+          Row{"root", "C:\\a\x01"}})
     {
         const auto result = decode_settings(with_setting(bytes, key, value), SettingsVersion::v4);
         expect(!result && result.error() == SettingsFailure::malformed,
@@ -881,7 +887,8 @@ void verify_settings_v4_fields()
     expect(empty && empty.value().features.empty(), "an empty feature list is accepted");
     const auto unrooted = decode_settings(with_setting(bytes, "root", ""), SettingsVersion::v4);
     expect(unrooted && !unrooted.value().root.has_value(), "an empty root means no root");
-    for (const auto key : {"ui_language", "lsp", "explorer", "root", "features", "wrap", "guide"})
+    for (const auto key : {"ui_language", "lsp", "explorer", "root", "features", "wrap", "guide",
+                           "ignorecase", "smartcase"})
     {
         const auto result = decode_settings(without_setting(bytes, key), SettingsVersion::v4);
         expect(!result && result.error() == SettingsFailure::malformed, "every v4 key is required");

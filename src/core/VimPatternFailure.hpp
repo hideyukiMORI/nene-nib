@@ -16,8 +16,6 @@ enum class VimPatternFailure : std::uint8_t
     quantifier,
     // `\v` `\V` `\m` `\M`
     magic,
-    // `\c` `\C`
-    ignore_case,
     // そのほかの未対応の `\`（`\%` `\_` `\@` `\&` `\z` と `\n` `\t` などの英数字、末尾の単独の
     // `\`）
     escape,

@@ -44,3 +44,7 @@ font_size=13.5
 ## 関連
 
 ADR 0008 / 0009 / 0010 / 0017 / 0019、SPECIFICATION D13 / D14 / FR-016 / FR-017、`docs/plans/2026-09-15-colorschemes.md`。
+
+## 追補（2026-10-29・#1041）
+
+設定 v4 の鍵に `ignorecase` `smartcase` を足した（ADR 0170 の決定 3 の追補・ADR 0032 の追補）。

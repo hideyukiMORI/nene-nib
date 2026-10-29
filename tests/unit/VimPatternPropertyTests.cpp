@@ -37,6 +37,7 @@ namespace nenenib::tests
 namespace
 {
 using core::VimPattern;
+using core::VimPatternCase;
 using core::VimPatternFailure;
 using core::VimPatternMatch;
 using core::VimSearchDirection;
@@ -101,7 +102,7 @@ constexpr std::array<std::string_view, 40> supported_fragments{{
 }};
 
 // 受けない断片と、末尾に置いたときの閉じた失敗（VimPatternFailure.hpp の一覧）。
-constexpr std::array<Unsupported, 24> unsupported_fragments{{
+constexpr std::array<Unsupported, 22> unsupported_fragments{{
     {"\\(", VimPatternFailure::group},
     {"\\)", VimPatternFailure::group},
     {"\\(a*\\)*b", VimPatternFailure::group},
@@ -116,8 +117,6 @@ constexpr std::array<Unsupported, 24> unsupported_fragments{{
     {"\\V", VimPatternFailure::magic},
     {"\\m", VimPatternFailure::magic},
     {"\\M", VimPatternFailure::magic},
-    {"\\c", VimPatternFailure::ignore_case},
-    {"\\C", VimPatternFailure::ignore_case},
     {"\\%d", VimPatternFailure::escape},
     {"\\_s", VimPatternFailure::escape},
     {"\\@", VimPatternFailure::escape},
@@ -437,8 +436,10 @@ Case large_case(Random &random)
 [[nodiscard]] std::string_view case_violation(const Case &input)
 {
     const auto &[pattern_text, line] = input;
-    const Parsed first = VimPattern::parse(pattern_text, VimSearchDirection::forward);
-    const Parsed second = VimPattern::parse(pattern_text, VimSearchDirection::forward);
+    const Parsed first =
+        VimPattern::parse(pattern_text, VimSearchDirection::forward, VimPatternCase::sensitive);
+    const Parsed second =
+        VimPattern::parse(pattern_text, VimSearchDirection::forward, VimPatternCase::sensitive);
     const std::string_view parsed_violation = parse_violation(pattern_text, first, second);
     if (!parsed_violation.empty() || !first.has_value() || !within_contract(input))
     {
@@ -469,7 +470,8 @@ Case large_case(Random &random)
     {
         return violation;
     }
-    return VimPattern::parse(input.first, VimSearchDirection::forward).has_value()
+    return VimPattern::parse(input.first, VimSearchDirection::forward, VimPatternCase::sensitive)
+                   .has_value()
                ? std::string_view{}
                : "a pattern of supported fragments is refused";
 }
@@ -587,7 +589,8 @@ void verify_unsupported_suffixes()
         const Unsupported &suffix =
             unsupported_fragments.at(below(random, unsupported_fragments.size()));
         const std::string pattern = supported_pattern(random).append(suffix.first);
-        const Parsed parsed = VimPattern::parse(pattern, VimSearchDirection::forward);
+        const Parsed parsed =
+            VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
         const bool refused = !parsed.has_value() && parsed.error() == suffix.second;
         if (!refused && holds)
         {
@@ -603,15 +606,17 @@ void verify_unsupported_suffixes()
 // `\(a*\)*b` は group で断られる。
 void verify_backtracking_is_bounded()
 {
-    expect(VimPattern::parse("\\(a*\\)*b", VimSearchDirection::forward) ==
-               std::unexpected(VimPatternFailure::group),
-           "a nested star group is refused as group");
+    expect(
+        VimPattern::parse("\\(a*\\)*b", VimSearchDirection::forward, VimPatternCase::sensitive) ==
+            std::unexpected(VimPatternFailure::group),
+        "a nested star group is refused as group");
     const std::array<std::string, 2> lines{std::string(64U, 'a'),
                                            std::string(large_line_bytes, 'a')};
     bool holds = true;
     for (const std::string_view text : explosive_patterns)
     {
-        const Parsed parsed = VimPattern::parse(text, VimSearchDirection::forward);
+        const Parsed parsed =
+            VimPattern::parse(text, VimSearchDirection::forward, VimPatternCase::sensitive);
         holds = holds && parsed.has_value();
         for (const std::string &line : lines)
         {
@@ -620,8 +625,9 @@ void verify_backtracking_is_bounded()
         }
     }
     expect(holds, "patterns of many stars answer on a run of a without matching");
-    const VimPattern greedy =
-        VimPattern::parse("a*a*a*a*a*a*a*a*", VimSearchDirection::forward).value();
+    const VimPattern greedy = VimPattern::parse("a*a*a*a*a*a*a*a*", VimSearchDirection::forward,
+                                                VimPatternCase::sensitive)
+                                  .value();
     const Found whole = greedy.matched(lines.at(1), 0U);
     expect(whole.has_value() && whole.value().begin == 0U && whole.value().end == large_line_bytes,
            "a run of stars takes the whole 4 KiB line");
@@ -645,7 +651,8 @@ void verify_known_cases()
         outside = outside && !within_contract({std::string{pattern}, std::string{line}});
     }
     expect(outside, "lines cut inside a multibyte sequence are outside the contract");
-    const Parsed cut = VimPattern::parse("\xE3", VimSearchDirection::forward);
+    const Parsed cut =
+        VimPattern::parse("\xE3", VimSearchDirection::forward, VimPatternCase::sensitive);
     expect(!cut.has_value() && cut.error() == VimPatternFailure::invalid_utf8 &&
                case_violation({"\xE3", ""}).empty() && case_violation({"a\xC3", "a"}).empty(),
            "patterns cut inside a multibyte sequence are refused as invalid_utf8");

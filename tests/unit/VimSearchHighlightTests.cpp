@@ -39,6 +39,7 @@ using nenenib::application::SelectEditMode;
 using nenenib::application::VisibleLines;
 using nenenib::core::EditMode;
 using nenenib::core::VimPattern;
+using nenenib::core::VimPatternCase;
 using nenenib::core::VimSearchDirection;
 using nenenib::core::VimSearchHighlight;
 using nenenib::core::VimState;
@@ -48,7 +49,8 @@ namespace app = nenenib::application;
 
 [[nodiscard]] std::vector<MatchSpan> matches_of(std::string_view line, std::string_view pattern)
 {
-    const auto parsed = VimPattern::parse(pattern, VimSearchDirection::forward);
+    const auto parsed =
+        VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
     std::vector<MatchSpan> spans;
     for (const auto &match : nenenib::core::vim_line_matches(line, parsed.value()))
     {
@@ -88,7 +90,8 @@ void verify_vim_line_matches()
 [[nodiscard]] std::vector<MatchSpan> window_matches_of(std::string_view text, std::size_t from,
                                                        std::size_t to, std::string_view pattern)
 {
-    const auto parsed = VimPattern::parse(pattern, VimSearchDirection::forward);
+    const auto parsed =
+        VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
     std::vector<MatchSpan> spans;
     for (const auto &match : core::vim_window_matches(
              text, core::OffsetRange{core::Offset{from}, core::Offset{to}}, parsed.value()))
@@ -100,7 +103,9 @@ void verify_vim_line_matches()
 
 [[nodiscard]] std::optional<std::size_t> longest_of(std::string_view pattern)
 {
-    return VimPattern::parse(pattern, VimSearchDirection::forward).value().longest_bytes();
+    return VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive)
+        .value()
+        .longest_bytes();
 }
 
 // 行の一部の窓の中の一致（#556）。窓の前の文字は文脈で、`^` と `\<` はそれを見る。一致は窓の
@@ -329,6 +334,39 @@ void verify_search_highlight_frame()
            "an edit that breaks the word takes the match away with it");
 }
 
+// 大小の旗と当たりの数（#1041）。`:set ic` の当たりは大小を畳み、`:set noic` は直前の検索を
+// 解き直して塗り直す。`smartcase` は大文字のあるパターンだけ区別し、incsearch の preview も同じ旗。
+void verify_search_highlight_case()
+{
+    Editing session;
+    open_vim_document(session, "Beta beta\nBETA x");
+    EditorController &controller = session.controller();
+    vim_replay(controller, ":set ic<CR>/beta<CR>");
+    expect(frame_matches(controller.frame(), 0) == std::vector<MatchSpan>{{1, 5}, {6, 10}} &&
+               frame_matches(controller.frame(), 1) == std::vector<MatchSpan>{{1, 5}},
+           "ignorecase paints every spelling of the word");
+    vim_replay(controller, ":set noic<CR>");
+    expect(frame_matches(controller.frame(), 0) == std::vector<MatchSpan>{{6, 10}} &&
+               frame_matches(controller.frame(), 1).empty(),
+           "noignorecase solves the remembered search again");
+    vim_replay(controller, ":set ic<CR>:set scs<CR>/BETA<CR>");
+    expect(frame_matches(controller.frame(), 0).empty() &&
+               frame_matches(controller.frame(), 1) == std::vector<MatchSpan>{{1, 5}},
+           "smartcase keeps the case of a pattern with capitals");
+    vim_replay(controller, "/bet");
+    expect(frame_matches(controller.frame(), 0) == std::vector<MatchSpan>{{1, 4}, {6, 9}} &&
+               frame_matches(controller.frame(), 1) == std::vector<MatchSpan>{{1, 4}},
+           "the incsearch preview reads the same flag");
+    vim_replay(controller, "<Esc>gg*");
+    expect(frame_matches(controller.frame(), 0) == std::vector<MatchSpan>{{1, 5}, {6, 10}} &&
+               frame_matches(controller.frame(), 1) == std::vector<MatchSpan>{{1, 5}},
+           "a star search ignores smartcase and keeps ignorecase");
+    vim_replay(controller, ":set noic<CR>");
+    expect(frame_matches(controller.frame(), 0) == std::vector<MatchSpan>{{1, 5}} &&
+               frame_matches(controller.frame(), 1).empty(),
+           "the star search is solved again with the case kept");
+}
+
 // 強調しない場合（決定 3・6）と、見えていない行（決定 3）。
 void verify_search_highlight_line_scope()
 {
@@ -426,6 +464,7 @@ void verify_vim_search_highlight_contracts()
     verify_search_highlight_line_scope();
     verify_search_highlight_columns();
     verify_search_highlight_backward_selection();
+    verify_search_highlight_case();
 }
 
 void verify_vim_search_highlight_scope()

@@ -112,3 +112,12 @@ FR-003 の T2「検索 `/ ? n N * #`」を実装する。Ex の `:` は `VimOpen
 | 完全な Vim 正規表現 | 「難所」であり、まず T2 で使う部分集合を閉じた失敗つきで入れ、未対応は拒否する |
 | `CommandLine` に prompt 種別を持たせて流用 | 補完と `ThemeCatalog` を検索が抱えることになる。編集の純関数だけを共用し、型は分ける |
 | 未対応の構文をリテラルとして照合する | Vim と違う答えを黙って返す。拒否してメッセージを出すほうが正直 |
+
+## 追補（2026-10-29・#1041）: `ignorecase` と `smartcase`
+
+1. **大小の旗は照合器の引数 1 つ。** `VimPatternCase{sensitive, ignore, smart}` を `VimPattern::parse(pattern, separator, letter_case)` が受け、`\c` `\C` と合わせて「畳むか」を parse の 1 回で決めて値に持つ。旗をパターンの文字列に埋め込まない。`\c` `\C` は旗より強く、両方あれば `\c` が勝つ（`/\C\cabc` は畳む・実測）。`\c` `\C` は未対応の構文から外す（`VimPatternFailure::ignore_case` を消す）。
+2. **smart の「大文字がある」** は Vim の pat_has_uppercase と同じく `\` とそれに続く 1 文字を数えない（`\S` `\C` は数えない）。`[B]` の中の文字は数える。ASCII の外の大文字（`É`）も数える（実測）。
+3. **畳み方。** literal は `vim_folded`（大文字にしてから小文字・`ς` `σ` `Σ` が同じ・トルコ語の `İ` `ı` は畳まない・Vim の utf_fold）で比べる。`[...]` は文字か畳んだ形かその大文字が区間に入れば成員で、`[^a]` は `A` を外す（実測）。`\d \w \s` は畳まない（Vim の文字クラスと同じ）。区間の側にだけ別の綴りがある組（`[ς]` と `σ`）は当たらない（区間を歩かない限界）。畳むパターンは英字か ASCII の外を含めば `literal_bytes` を持たない（#583 の行の絞り込みは効かない）。
+4. **呼び手。** 設定 `ignorecase` `smartcase` から `search_case(settings)` が旗を作り（`smartcase` は `ignorecase` がオンのときだけ）、`/` `?` の Enter・incsearch の preview・`hlsearch` の当たりが同じ旗を使う。`*` `#` は `ignorecase` だけを見て `smartcase` を見ず（`VimSmartcase::ignored`）、その後の `n` `N` と空のパターンの `/<CR>` も同じ扱いを引き継ぐ（Vim の no_scs・`*n` で実測）。
+5. **設定が変わったら直前の検索を解き直す。** `/abc` の後の `:set ic` で `n` は大小を畳む（実測）。`EditorState::with_settings` が旗の変わったときだけ `last_search` を `recased` する 1 か所で、engine と描画は解き直した値を読む。
+6. **契約。** fixture `search-case-` 30 件（oracle が `:normal!` の中の `:set ic<CR>` をそのまま測る・前置きの欄は足さない）・`--vim-search` の照合器の試験・`--vim-search-highlight` の当たりの数と preview・`--ex-settings` の `:set ic` `scs` の形。

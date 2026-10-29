@@ -25,14 +25,15 @@ using Field = std::optional<std::string_view> SettingsFields::*;
 
 // 鍵の名前と DTO の欄の対（同じ位置）。v4 だけの鍵も読むが、旧版にあれば apply_v4_fields
 // が拒否する。
-constexpr std::array<std::string_view, 12> field_names{
-    "version",     "colorscheme", "font_family", "font_size", "guide",    "wrap",
-    "ui_language", "lsp",         "explorer",    "root",      "features", "mapleader"};
-constexpr std::array<Field, 12> field_members{
+constexpr std::array<std::string_view, 14> field_names{
+    "version",     "colorscheme", "font_family", "font_size", "guide",      "wrap",      "ui_language",
+    "lsp",         "explorer",    "root",        "features",  "mapleader",  "ignorecase", "smartcase"};
+constexpr std::array<Field, 14> field_members{
     &SettingsFields::version,     &SettingsFields::colorscheme, &SettingsFields::font_family,
     &SettingsFields::font_size,   &SettingsFields::guide,       &SettingsFields::wrap,
     &SettingsFields::ui_language, &SettingsFields::lsp,         &SettingsFields::explorer,
-    &SettingsFields::root,        &SettingsFields::features,    &SettingsFields::mapleader};
+    &SettingsFields::root,        &SettingsFields::features,    &SettingsFields::mapleader,
+    &SettingsFields::ignorecase,  &SettingsFields::smartcase};
 
 // 言語ごとのサーバーの命令の鍵 `lsp.<language>.command`（ADR 0160・ADR 0170 の決定 3）。
 constexpr std::string_view lsp_prefix = "lsp.";
@@ -261,6 +262,7 @@ language_from(std::string_view text)
 {
     return fields.ui_language.has_value() || fields.lsp.has_value() ||
            fields.explorer.has_value() || fields.root.has_value() || fields.features.has_value() ||
+           fields.ignorecase.has_value() || fields.smartcase.has_value() ||
            !fields.lsp_commands.empty() || !fields.maps.empty() || fields.mapleader.has_value();
 }
 
@@ -347,7 +349,10 @@ lsp_commands_from(const SettingsFields &fields)
     auto root = root_from(fields.root.value());
     auto features = features_from(fields.features.value());
     auto commands = lsp_commands_from(fields);
-    if (!language || !lsp || !explorer || !root || !features || !commands)
+    const auto ignorecase = switch_from(fields.ignorecase);
+    const auto smartcase = switch_from(fields.smartcase);
+    if (!language || !lsp || !explorer || !root || !features || !commands || !ignorecase ||
+        !smartcase)
     {
         return std::unexpected(Failure::malformed);
     }
@@ -357,6 +362,8 @@ lsp_commands_from(const SettingsFields &fields)
     settings.root = std::move(root).value();
     settings.features = std::move(features).value();
     settings.lsp_commands = std::move(commands).value();
+    settings.ignorecase = ignorecase.value();
+    settings.smartcase = smartcase.value();
     return apply_maps(settings, fields);
 }
 
@@ -457,7 +464,7 @@ validated(const SettingsFields &fields, SettingsVersion version, const core::The
     return text;
 }
 
-// `lsp.<language>.command=<値>` の行を言語の名前の順に（features の後ろ）。
+// `lsp.<language>.command=<値>` の行を言語の名前の順に（固定の鍵の後ろ）。
 [[nodiscard]] std::string
 lsp_commands_text(const std::vector<std::pair<std::string, std::string>> &commands)
 {
@@ -509,10 +516,12 @@ std::string encode_settings(const core::EditorSettings &settings)
     }
     const auto root = settings.root.has_value() ? settings.root.value().text() : std::string_view{};
     return std::format("version=4\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
-                       "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n{}{}",
+                       "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n"
+                       "ignorecase={}\nsmartcase={}\n{}{}",
                        theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
                        language_text(settings.ui_language), switch_text(settings.lsp),
                        switch_text(settings.explorer), root, features_text(settings.features),
+                       switch_text(settings.ignorecase), switch_text(settings.smartcase),
                        lsp_commands_text(settings.lsp_commands), maps_text(settings));
 }
 } // namespace nenenib::adapters::win32

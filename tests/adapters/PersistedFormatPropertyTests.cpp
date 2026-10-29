@@ -96,10 +96,10 @@ void expect(bool condition, const char *message)
 
 constexpr std::array<std::string_view, 6> settings_samples{{
     "version=4\ncolorscheme=system\nfont_family=Consolas\nfont_size=13.5\nguide=on\nwrap=on\n"
-    "ui_language=system\nlsp=off\nexplorer=off\nroot=\nfeatures=\n",
+    "ui_language=system\nlsp=off\nexplorer=off\nroot=\nfeatures=\nignorecase=off\nsmartcase=off\n",
     "version=4\ncolorscheme=neutral-light\nfont_family=Consolas\nfont_size=8\nguide=off\n"
     "wrap=off\nui_language=zh-hans\nlsp=on\nexplorer=on\nroot=C:\\work dir\n"
-    "features=matchparen,change_marks\n",
+    "features=matchparen,change_marks\nignorecase=on\nsmartcase=off\n",
     "version=3\ncolorscheme=system\nfont_family=Consolas\nfont_size=13.5\nguide=on\nwrap=on\n",
     "\xEF\xBB\xBF\r\nversion = 1\r\n colorscheme = neutral-light \r\n"
     "\vfont_family = 日本語 Font=Test\r\nfont_size=21.25\f",

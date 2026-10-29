@@ -20,5 +20,8 @@ struct VimPatternAtom
     // set の区間の VimPattern の列の中での始まりと個数。ほかの種類では 0。
     std::size_t first_range;
     std::size_t range_count;
+    // `[...]` の集合なら真（`ignorecase` で大小を畳む）。`\d \w \s` の集合は Vim と同じく
+    // 畳まない（#1041）。
+    bool bracketed;
 };
 } // namespace nenenib::core

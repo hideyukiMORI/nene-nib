@@ -2,6 +2,7 @@
 
 #include "Offset.hpp"
 #include "Utf8.hpp"
+#include "VimCase.hpp"
 #include "VimPatternAtomKind.hpp"
 #include "VimPatternEvaluation.hpp"
 #include "VimWordClass.hpp"
@@ -28,7 +29,6 @@ constexpr std::size_t longest_code_point = 4;
 constexpr std::array<char32_t, 2> group_escapes{U'(', U')'};
 constexpr std::array<char32_t, 5> quantifier_escapes{U'{', U'}', U'+', U'=', U'?'};
 constexpr std::array<char32_t, 4> magic_escapes{U'v', U'V', U'm', U'M'};
-constexpr std::array<char32_t, 2> case_escapes{U'c', U'C'};
 constexpr std::array<char32_t, 5> other_escapes{U'%', U'_', U'@', U'&', U'z'};
 
 // `\d \D \w \W \s \S` の文字集合。表は 1 つで、大文字は否定だけが違う。
@@ -74,12 +74,12 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
 
 [[nodiscard]] VimPatternAtom atom_of(VimPatternAtomKind kind) noexcept
 {
-    return VimPatternAtom{kind, 0, false, false, 0, 0};
+    return VimPatternAtom{kind, 0, false, false, 0, 0, false};
 }
 
 [[nodiscard]] VimPatternAtom literal_atom(char32_t code) noexcept
 {
-    return VimPatternAtom{VimPatternAtomKind::literal, code, false, false, 0, 0};
+    return VimPatternAtom{VimPatternAtomKind::literal, code, false, false, 0, 0, false};
 }
 
 [[nodiscard]] std::uint32_t class_at(std::string_view line, std::size_t at)
@@ -135,10 +135,6 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
     {
         return VimPatternFailure::magic;
     }
-    if (contains(case_escapes, code))
-    {
-        return VimPatternFailure::ignore_case;
-    }
     if (contains(other_escapes, code) || ascii_alphanumeric(code))
     {
         return VimPatternFailure::escape;
@@ -172,7 +168,7 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
     const std::size_t first = ranges.size();
     ranges.insert(ranges.end(), members.begin(), members.end());
     atoms.push_back(
-        VimPatternAtom{VimPatternAtomKind::set, 0, negated, false, first, members.size()});
+        VimPatternAtom{VimPatternAtomKind::set, 0, negated, false, first, members.size(), false});
     return true;
 }
 
@@ -212,13 +208,28 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
         if (code_point_at(pattern, Offset{scan}) == U']' && scan != first)
         {
             atoms.push_back(VimPatternAtom{VimPatternAtomKind::set, 0, negated, false, saved,
-                                           ranges.size() - saved});
+                                           ranges.size() - saved, true});
             return next_code_point(pattern, Offset{scan}).value;
         }
         scan = parsed_member(pattern, scan, ranges);
     }
     ranges.resize(saved);
     return std::nullopt;
+}
+
+// `\c` と `\C`（#1041）。原子を足さず、パターン全体の大小を決める。`\c` は `\C` より強い
+// （Vim の regcomp は RF_ICASE を先に見る・`/\C\cabc` は大小を畳む・実測）。
+void forced_case(char32_t code, std::optional<VimPatternCase> &forced) noexcept
+{
+    if (code == U'c')
+    {
+        forced = VimPatternCase::ignore;
+        return;
+    }
+    if (forced != VimPatternCase::ignore)
+    {
+        forced = VimPatternCase::sensitive;
+    }
 }
 
 [[nodiscard]] std::expected<std::size_t, VimPatternFailure>
@@ -306,6 +317,57 @@ parsed_item(std::string_view pattern, std::size_t at, std::vector<VimPatternAtom
     return next;
 }
 
+// `smartcase` の「大文字がある」（Vim の pat_has_uppercase）。`\` とそれに続く 1 文字は数えない
+// （`\S` `\W` `\C` は大文字ではない）。`[B]` の中の文字は数える（実測）。大文字は小文字の写像を
+// 持つ文字（VimCase の表の 1 つ）。
+[[nodiscard]] bool has_uppercase(std::string_view pattern)
+{
+    std::size_t at = 0;
+    while (at < pattern.size())
+    {
+        const char32_t code = code_point_at(pattern, Offset{at});
+        at = next_code_point(pattern, Offset{at}).value;
+        if (code == U'\\')
+        {
+            at = at < pattern.size() ? next_code_point(pattern, Offset{at}).value : at;
+            continue;
+        }
+        if (vim_to_lower(code) != code)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool ignores_case(VimPatternCase letter_case, std::optional<VimPatternCase> forced,
+                                std::string_view pattern)
+{
+    switch (forced.value_or(letter_case))
+    {
+    case VimPatternCase::sensitive:
+        return false;
+    case VimPatternCase::ignore:
+        return true;
+    case VimPatternCase::smart:
+        return !has_uppercase(pattern);
+    }
+    std::unreachable();
+}
+
+// 大小を畳むとバイト列の一致で絞れない文字（英字と ASCII の外）。
+[[nodiscard]] bool cased_byte(char32_t code) noexcept
+{
+    return code >= 0x80 || (code >= U'A' && code <= U'Z') || (code >= U'a' && code <= U'z');
+}
+
+// 項目の始まりの `\c` か `\C`（#1041）。原子を足さない。
+[[nodiscard]] bool case_escape(std::string_view pattern, std::size_t at) noexcept
+{
+    return at + 1 < pattern.size() && pattern[at] == '\\' &&
+           (pattern[at + 1] == 'c' || pattern[at + 1] == 'C');
+}
+
 [[nodiscard]] char32_t separator_of(VimSearchDirection direction) noexcept
 {
     return direction == VimSearchDirection::forward ? U'/' : U'?';
@@ -321,8 +383,9 @@ parsed_item(std::string_view pattern, std::size_t at, std::vector<VimPatternAtom
 }
 } // namespace
 
-VimPattern::VimPattern(std::vector<VimPatternAtom> atoms, std::vector<VimPatternRange> ranges)
-    : atoms_(std::move(atoms)), ranges_(std::move(ranges))
+VimPattern::VimPattern(std::vector<VimPatternAtom> atoms, std::vector<VimPatternRange> ranges,
+                       bool ignore_case)
+    : atoms_(std::move(atoms)), ranges_(std::move(ranges)), ignore_case_(ignore_case)
 {
 }
 
@@ -354,7 +417,8 @@ std::optional<std::string> VimPattern::literal_bytes() const
     std::string bytes;
     for (const VimPatternAtom &atom : atoms_)
     {
-        if (atom.kind != VimPatternAtomKind::literal || atom.repeated)
+        if (atom.kind != VimPatternAtomKind::literal || atom.repeated ||
+            (ignore_case_ && cased_byte(atom.code)))
         {
             return std::nullopt;
         }
@@ -384,7 +448,8 @@ bool VimPattern::anchored(std::string_view line, const VimPatternAtom &atom, std
 }
 
 std::expected<VimPattern, VimPatternFailure> VimPattern::parse(std::string_view pattern,
-                                                               VimSearchDirection separator)
+                                                               VimSearchDirection separator,
+                                                               VimPatternCase letter_case)
 {
     // 歩き（code_point_at）は検証済みの UTF-8 が前提なので、入口で確かめる（#906）。
     if (!validate_utf8(pattern).has_value())
@@ -393,6 +458,7 @@ std::expected<VimPattern, VimPatternFailure> VimPattern::parse(std::string_view 
     }
     std::vector<VimPatternAtom> atoms;
     std::vector<VimPatternRange> ranges;
+    std::optional<VimPatternCase> forced;
     std::size_t at = 0;
     while (at < pattern.size())
     {
@@ -406,6 +472,12 @@ std::expected<VimPattern, VimPatternFailure> VimPattern::parse(std::string_view 
             at += 2;
             continue;
         }
+        if (case_escape(pattern, at))
+        {
+            forced_case(code_point_at(pattern, Offset{at + 1}), forced);
+            at += 2;
+            continue;
+        }
         const auto next = parsed_item(pattern, at, atoms, ranges);
         if (!next)
         {
@@ -413,16 +485,31 @@ std::expected<VimPattern, VimPatternFailure> VimPattern::parse(std::string_view 
         }
         at = next.value();
     }
-    return VimPattern(std::move(atoms), std::move(ranges));
+    return VimPattern(std::move(atoms), std::move(ranges),
+                      ignores_case(letter_case, forced, pattern));
 }
 
-bool VimPattern::in_set(const VimPatternAtom &atom, char32_t code) const
+bool VimPattern::in_ranges(const VimPatternAtom &atom, char32_t code) const
 {
     bool found = false;
     for (std::size_t index = 0; index < atom.range_count; ++index)
     {
         const VimPatternRange range = ranges_.at(atom.first_range + index);
         found = found || (code >= range.first && code <= range.last);
+    }
+    return found;
+}
+
+// 大小を畳む `[...]` は、文字か畳んだ形かその大文字が区間に入れば成員（`[^a]` は `A` を外す・
+// 実測）。Vim は区間の各文字を畳んで比べるので、区間の側にだけ別の綴りがある組（`[ς]` と `σ`）は
+// 当たらない（区間を歩かない・#1041 の限界）。
+bool VimPattern::in_set(const VimPatternAtom &atom, char32_t code) const
+{
+    bool found = in_ranges(atom, code);
+    if (!found && ignore_case_ && atom.bracketed)
+    {
+        const char32_t folded = vim_folded(code);
+        found = in_ranges(atom, folded) || in_ranges(atom, vim_to_upper(folded));
     }
     return found != atom.negated;
 }
@@ -434,7 +521,7 @@ bool VimPattern::consumes(const VimPatternAtom &atom, char32_t code) const
     case VimPatternAtomKind::any:
         return true;
     case VimPatternAtomKind::literal:
-        return code == atom.code;
+        return code == atom.code || (ignore_case_ && vim_folded(code) == vim_folded(atom.code));
     case VimPatternAtomKind::set:
         return in_set(atom, code);
     // 幅の無い原子は 1 文字も食べない。

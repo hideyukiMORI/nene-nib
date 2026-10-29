@@ -26,8 +26,6 @@ constexpr std::string_view not_found_alone = "E486: Pattern not found";
         return "Unsupported pattern item: \\{ \\+ \\= \\?";
     case VimPatternFailure::magic:
         return "Unsupported pattern item: \\v \\V \\m \\M";
-    case VimPatternFailure::ignore_case:
-        return "Unsupported pattern item: \\c \\C";
     case VimPatternFailure::escape:
         return "Unsupported pattern escape";
     case VimPatternFailure::previous_substitute:

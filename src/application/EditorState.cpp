@@ -280,6 +280,13 @@ std::optional<SettingsIssue> EditorState::settings_failure() const noexcept
 EditorState EditorState::with_settings(core::EditorSettings settings) const
 {
     EditorState next(*this);
+    // 直前の検索は今の `ignorecase` `smartcase` で解き直す（`/abc` の後の `:set ic` で `n` が
+    // 大小を畳む・Vim 9.1 の実測・#1041）。旗が変わったときだけ、ここ 1 か所で。
+    const core::VimPatternCase letter_case = core::search_case(settings);
+    if (letter_case != core::search_case(settings_) && next.vim_.last_search.has_value())
+    {
+        next.vim_.last_search = next.vim_.last_search.value().recased(letter_case);
+    }
     next.settings_ = std::move(settings);
     return next;
 }
