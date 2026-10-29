@@ -9,7 +9,7 @@ namespace nenenib::core
 {
 // 操作の名前・読み・短い説明の表（ADR 0078 の決定 5）。EditorOperation の順に全値を 1 回ずつ持つ
 // （OperationTexts.cpp の static_assert が守る）。鍵の表示名はここに書かず key_chord_label で作る。
-inline constexpr std::array<OperationText, 25> operation_texts{{
+inline constexpr std::array<OperationText, 30> operation_texts{{
     {EditorOperation::open_file, "ファイルを開く", "ふぁいるをひらく",
      "保存してあるファイルを選んで開きます"},
     {EditorOperation::save, "保存", "ほぞん", "いまのファイルに上書きします"},
@@ -53,6 +53,15 @@ inline constexpr std::array<OperationText, 25> operation_texts{{
      "ルートからのフォルダの木を左の面に出す・もう一度で消します"},
     {EditorOperation::choose_explorer_root, "ルートのフォルダを選ぶ", "るーとのふぉるだをえらぶ",
      "エクスプローラーのルートにするフォルダを選びます"},
+    // 検索・置換・行へ移動（ADR 0174 の決定 1）。
+    {EditorOperation::find, "検索", "けんさく", "文字列を探して次の当たりへ移ります"},
+    {EditorOperation::find_next, "次を検索", "つぎをけんさく",
+     "最後に探した文字列の次の当たりへ移ります"},
+    {EditorOperation::find_previous, "前を検索", "まえをけんさく",
+     "最後に探した文字列の前の当たりへ移ります"},
+    {EditorOperation::replace, "置換", "ちかん", "探した文字列を別の文字列に置き換えます"},
+    {EditorOperation::go_to_line, "行へ移動", "ぎょうへいどう",
+     "行番号（行:桁）を入れてそこへ移ります"},
 }};
 
 // 操作の文字の行。switch ではなく表を引く。

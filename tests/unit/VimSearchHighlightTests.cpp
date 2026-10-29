@@ -392,8 +392,9 @@ void verify_search_highlight_line_scope()
     expect(frame_matches(controller.frame(), 0).empty(), "and so does an option that is off");
     static_cast<void>(run_ex(controller, "set hlsearch"));
     static_cast<void>(controller.apply_frame(app::SelectEditMode{EditMode::ordinary}));
-    expect(frame_matches(controller.frame(), 0).empty(),
-           "the ordinary mode has no search, so it highlights nothing");
+    // 最後の検索は通常モードと共有で、塗りもモードをまたいで続く（ADR 0174 の決定 5）。
+    expect(frame_matches(controller.frame(), 0) == std::vector<MatchSpan>{{1, 5}},
+           "the ordinary mode keeps painting the last search");
 }
 
 // 桁の作り方が選択と同じ 1 本であること（決定 4）。全角・Tab・CRLF で確かめる。

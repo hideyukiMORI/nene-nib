@@ -16,7 +16,7 @@ constexpr std::array<OperationChoiceExpected, 2> expected_0{
 constexpr std::array<OperationChoiceExpected, 0> expected_1{{
 
 }};
-constexpr std::array<OperationChoiceExpected, 25> expected_2{
+constexpr std::array<OperationChoiceExpected, 30> expected_2{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -79,11 +79,24 @@ constexpr std::array<OperationChoiceExpected, 25> expected_2{
       core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::choose_explorer_root, 24U, "ルートのフォルダを選ぶ", 11U,
       "エクスプローラーのルートにするフォルダを選びます", 24U, "", "",
-      core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 23> expected_3{
-    {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
-      "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::find, 25U, "検索", 2U, "文字列を探して次の当たりへ移ります", 17U,
+      "Ctrl+F", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::find_next, 26U, "次を検索", 4U,
+      "最後に探した文字列の次の当たりへ移ります", 20U, "F3", "", core::CommandChoiceKind::operate,
       std::nullopt},
+     {core::EditorOperation::find_previous, 27U, "前を検索", 4U,
+      "最後に探した文字列の前の当たりへ移ります", 20U, "Shift+F3", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::replace, 28U, "置換", 2U, "探した文字列を別の文字列に置き換えます",
+      19U, "Ctrl+H", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::go_to_line, 29U, "行へ移動", 4U,
+      "行番号（行:桁）を入れてそこへ移ります", 19U, "Ctrl+G", "", core::CommandChoiceKind::operate,
+      std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 28> expected_3{
+    {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
+      "保存してあるファイルを選んで開きます", 18U, "Ctrl+Shift+O", "",
+      core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::save, 1U, "保存", 2U, "いまのファイルに上書きします", 14U, "Ctrl+S",
       "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::save_as, 2U, "名前を付けて保存", 8U, "別の名前のファイルに保存します",
@@ -139,8 +152,21 @@ constexpr std::array<OperationChoiceExpected, 23> expected_3{
       core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::choose_explorer_root, 24U, "ルートのフォルダを選ぶ", 11U,
       "エクスプローラーのルートにするフォルダを選びます", 24U, "", "",
-      core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 25> expected_4{
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::find, 25U, "検索", 2U, "文字列を探して次の当たりへ移ります", 17U, "",
+      "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::find_next, 26U, "次を検索", 4U,
+      "最後に探した文字列の次の当たりへ移ります", 20U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::find_previous, 27U, "前を検索", 4U,
+      "最後に探した文字列の前の当たりへ移ります", 20U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::replace, 28U, "置換", 2U, "探した文字列を別の文字列に置き換えます",
+      19U, "", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::go_to_line, 29U, "行へ移動", 4U,
+      "行番号（行:桁）を入れてそこへ移ります", 19U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 30> expected_4{
     {{core::EditorOperation::paste_html, 22U, "HTML のまま貼り付け", 12U,
       "クリップボードの HTML をタグごと貼ります", 23U, "", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -151,6 +177,9 @@ constexpr std::array<OperationChoiceExpected, 25> expected_4{
       "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::next_pane, 18U, "隣の枠へ", 4U, "もう 1 つの枠へ移ります", 13U, "F6",
       "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::find_next, 26U, "次を検索", 4U,
+      "最後に探した文字列の次の当たりへ移ります", 20U, "F3", "", core::CommandChoiceKind::operate,
+      std::nullopt},
      {core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -180,8 +209,18 @@ constexpr std::array<OperationChoiceExpected, 25> expected_4{
      {core::EditorOperation::split_vertical, 16U, "左右に分ける", 6U,
       "本文を左右 2 つの枠に分けて同じ文書を出します", 24U, "Ctrl+\\", "",
       core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::find, 25U, "検索", 2U, "文字列を探して次の当たりへ移ります", 17U,
+      "Ctrl+F", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::replace, 28U, "置換", 2U, "探した文字列を別の文字列に置き換えます",
+      19U, "Ctrl+H", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::go_to_line, 29U, "行へ移動", 4U,
+      "行番号（行:桁）を入れてそこへ移ります", 19U, "Ctrl+G", "", core::CommandChoiceKind::operate,
+      std::nullopt},
      {core::EditorOperation::recent_tab, 5U, "前に使ったタブへ", 8U, "最近使った順にタブを移ります",
       14U, "Ctrl+Tab", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::find_previous, 27U, "前を検索", 4U,
+      "最後に探した文字列の前の当たりへ移ります", 20U, "Shift+F3", "",
+      core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::save_as, 2U, "名前を付けて保存", 8U, "別の名前のファイルに保存します",
       15U, "Ctrl+Shift+S", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::split_horizontal, 17U, "上下に分ける", 6U,
@@ -204,9 +243,12 @@ constexpr std::array<OperationChoiceExpected, 25> expected_4{
      {core::EditorOperation::toggle_mode, 15U, "通常 / Vim を切り替える", 15U,
       "編集のしかたを通常と Vim で切り替えます", 22U, "Ctrl+Shift+Space", "",
       core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 10> expected_5{
+constexpr std::array<OperationChoiceExpected, 11> expected_5{
     {{core::EditorOperation::save, 1U, "保存", 2U, "いまのファイルに上書きします", 14U, "Ctrl+S",
       "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
+      "保存してあるファイルを選んで開きます", 18U, "Ctrl+Shift+O", "",
+      core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::save_as, 2U, "名前を付けて保存", 8U, "別の名前のファイルに保存します",
       15U, "Ctrl+Shift+S", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::toggle_bookmark, 9U, "ブックマークに付ける・外す", 13U,
@@ -265,17 +307,17 @@ constexpr std::array<OperationChoiceSample, 10> samples{
       "operation-choice-v1\nmiss-"
       "ordinary\nordinary\nqqq\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820"
       "d98\n"},
-     {"", core::EditMode::ordinary, 256U, 796160U, expected_2,
+     {"", core::EditMode::ordinary, 256U, 953600U, expected_2,
       "operation-choice-v1\nall-"
       "ordinary\nordinary\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98"
       "\n"},
-     {"", core::EditMode::vim, 256U, 751616U, expected_3,
+     {"", core::EditMode::vim, 256U, 903424U, expected_3,
       "operation-choice-v1\nall-"
       "vim\nvim\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {" ", core::EditMode::ordinary, 256U, 796160U, expected_4,
+     {" ", core::EditMode::ordinary, 256U, 953600U, expected_4,
       "operation-choice-v1\nspace-ordinary\nordinary\n "
       "\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {"cTrL+s", core::EditMode::vim, 1024U, 1508352U, expected_5,
+     {"cTrL+s", core::EditMode::vim, 1024U, 1625088U, expected_5,
       "operation-choice-v1\nkey-vim\nvim\ncTrL+"
       "s\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
      {"タブ", core::EditMode::ordinary, 1024U, 569344U, expected_6,

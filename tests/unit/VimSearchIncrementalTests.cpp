@@ -326,7 +326,11 @@ void verify_incsearch_option()
                std::optional{std::pair{std::size_t{1}, MatchSpan{6, 9}}},
            "and typing previews again");
     static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::ordinary}));
-    expect(frame_paints_nothing(controller.frame()) && !controller.frame().command_line.has_value(),
+    // preview は入力行と一緒に消え、残るのは最後の検索の塗りだけ（ADR 0174 の決定 5）。
+    const auto left = controller.frame();
+    expect(!left.command_line.has_value() &&
+               frame_current(left) == std::optional{std::pair{std::size_t{0}, MatchSpan{7, 9}}} &&
+               frame_matches(left, 1) == std::vector<MatchSpan>{{1, 3}},
            "leaving Vim while typing takes the preview away with the input line");
 }
 

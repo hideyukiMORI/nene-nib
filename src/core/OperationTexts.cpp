@@ -38,6 +38,11 @@ namespace
     case EditorOperation::paste_html:
     case EditorOperation::toggle_explorer:
     case EditorOperation::choose_explorer_root:
+    case EditorOperation::find:
+    case EditorOperation::find_next:
+    case EditorOperation::find_previous:
+    case EditorOperation::replace:
+    case EditorOperation::go_to_line:
         return true;
     }
     return false;

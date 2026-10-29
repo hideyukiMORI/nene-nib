@@ -3,6 +3,9 @@
 #include "ActivateCommandChoice.hpp"
 #include "AdjustFontSize.hpp"
 #include "AutosaveTick.hpp"
+#include "BeginFind.hpp"
+#include "BeginGoToLine.hpp"
+#include "BeginReplace.hpp"
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
@@ -83,5 +86,5 @@ using EditorIntent = std::variant<
     OpenOperationList, PointText, SelectDisplay, SelectLanguage, SelectSyntax, ScrollPaletteList,
     SplitPane, SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick, TogglePreviewTask,
     ToggleExplorer, ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen,
-    LanguageServerTick, MapTimeout>;
+    LanguageServerTick, MapTimeout, BeginFind, BeginGoToLine, BeginReplace>;
 } // namespace nenenib::application

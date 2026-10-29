@@ -187,6 +187,11 @@ constexpr float full_channel = 255.0F;
         return "/";
     case core::InputLinePrompt::search_backward:
         return "?";
+    // 通常モードの検索と行へ移動（ADR 0174 の決定 3）。
+    case core::InputLinePrompt::find:
+        return "検索: ";
+    case core::InputLinePrompt::go_to_line:
+        return "行: ";
     }
     std::unreachable();
 }

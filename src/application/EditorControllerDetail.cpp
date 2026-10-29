@@ -1,5 +1,7 @@
 #include "EditorControllerDetail.hpp"
 
+#include "InputLinePrompt.hpp"
+#include "LiteralPattern.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
@@ -37,8 +39,9 @@ namespace nenenib::application::detail
     }
     return result;
 }
-// incsearch が入力中のパターンを見せる状態か（ADR 0041 の決定 3・4）。検索の入力行が開いていて、
-// 入力が空でなく、incsearch が on のときだけ。
+// incsearch が入力中のパターンを見せる状態か（ADR 0041 の決定 3・4）。検索の入力行（Vim の `/` `?`
+// と通常モードの「検索: 」・ADR 0174 の決定 5）が開いていて、入力が空でなく、incsearch が on の
+// ときだけ。「行: 」は検索ではないので見せない。
 [[nodiscard]] const core::SearchLine *previewed_line(const EditorState &state)
 {
     const auto &input = state.command_input();
@@ -47,17 +50,40 @@ namespace nenenib::application::detail
         return nullptr;
     }
     const auto *line = std::get_if<core::SearchLine>(&input.value());
-    if (line == nullptr || line->text().empty())
+    if (line == nullptr || line->text().empty() || !searched_text(*line).has_value())
     {
         return nullptr;
     }
     return line;
 }
 
+std::optional<std::string> searched_text(const core::SearchLine &line)
+{
+    switch (line.prompt())
+    {
+    case core::InputLinePrompt::search_forward:
+    case core::InputLinePrompt::search_backward:
+        return std::string(line.text());
+    // 通常モードの語は magic を解釈せず、逃がしてから同じ照合器へ（ADR 0174 の決定 4）。
+    case core::InputLinePrompt::find:
+        return core::literal_pattern(line.text());
+    case core::InputLinePrompt::go_to_line:
+    case core::InputLinePrompt::ex:
+    case core::InputLinePrompt::palette:
+        return std::nullopt;
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] std::optional<core::VimPattern> typed_pattern(const core::SearchLine &line,
                                                             core::VimPatternCase letter_case)
 {
-    auto parsed = core::VimPattern::parse(line.text(), line.direction(), letter_case);
+    const auto text = searched_text(line);
+    if (!text.has_value())
+    {
+        return std::nullopt;
+    }
+    auto parsed = core::VimPattern::parse(text.value(), line.direction(), letter_case);
     if (!parsed)
     {
         return std::nullopt;

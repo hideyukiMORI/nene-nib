@@ -32,6 +32,12 @@ enum class OperationKey : std::uint8_t
     v,
     // Ctrl+Shift+E のエクスプローラー（ADR 0162 の決定 7）。Shift なしの Ctrl+E
     // は表に行を置かない。
-    e
+    e,
+    // 通常モードの検索・置換・行へ移動の Ctrl+F・Ctrl+H・Ctrl+G と F3 / Shift+F3（ADR 0174 の
+    // 決定 1）。Vim の `gg` の `g` とは関係が無い。
+    f,
+    h,
+    g,
+    f3
 };
 } // namespace nenenib::core

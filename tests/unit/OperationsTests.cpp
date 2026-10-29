@@ -44,7 +44,7 @@ constexpr KeyChord ctrl_shift(OperationKey key)
 
 // 鍵 → 通常モードの操作・Vim の操作。表の全行の鍵と、表に無い鍵の組み合わせ。
 using ChordRow = std::tuple<KeyChord, Operation, Operation>;
-constexpr std::array<ChordRow, 43> chord_rows{{
+constexpr std::array<ChordRow, 51> chord_rows{{
     // Vim の Ctrl+O はジャンプの戻り（D71・#1037）。Vim の開くは Ctrl+Shift+O。
     {ctrl(OperationKey::o), EditorOperation::open_file, std::nullopt},
     {ctrl(OperationKey::s), EditorOperation::save, EditorOperation::save},
@@ -102,12 +102,22 @@ constexpr std::array<ChordRow, 43> chord_rows{{
     {ctrl_shift(OperationKey::e), EditorOperation::toggle_explorer,
      EditorOperation::toggle_explorer},
     {ctrl(OperationKey::e), std::nullopt, std::nullopt},
+    // 検索・置換・行へ移動（ADR 0174 の決定 1）。鍵は通常モードだけで、Vim の
+    // Ctrl+F / H / G と F3 は表の外（Vim の鍵のまま・D71）。
+    {ctrl(OperationKey::f), EditorOperation::find, std::nullopt},
+    {KeyChord{false, false, OperationKey::f3}, EditorOperation::find_next, std::nullopt},
+    {KeyChord{false, true, OperationKey::f3}, EditorOperation::find_previous, std::nullopt},
+    {ctrl(OperationKey::h), EditorOperation::replace, std::nullopt},
+    {ctrl(OperationKey::g), EditorOperation::go_to_line, std::nullopt},
+    {ctrl_shift(OperationKey::f), std::nullopt, std::nullopt},
+    {ctrl_shift(OperationKey::g), std::nullopt, std::nullopt},
+    {ctrl(OperationKey::f3), std::nullopt, std::nullopt},
 }};
 
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
-constexpr std::array<ShownRow, 25> shown_rows{{
+constexpr std::array<ShownRow, 30> shown_rows{{
     {EditorOperation::open_file, "Ctrl+O", "Ctrl+Shift+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
@@ -135,11 +145,17 @@ constexpr std::array<ShownRow, 25> shown_rows{{
     {EditorOperation::toggle_explorer, "Ctrl+Shift+E", "Ctrl+Shift+E", true, true},
     // 鍵なし。F1 の一覧からだけ（ADR 0162 の決定 7）。
     {EditorOperation::choose_explorer_root, "", "", true, true},
+    // 鍵は通常モードだけ。Vim は鍵の無い行で一覧に載る（ADR 0174 の決定 1・2）。
+    {EditorOperation::find, "Ctrl+F", "", true, true},
+    {EditorOperation::find_next, "F3", "", true, true},
+    {EditorOperation::find_previous, "Shift+F3", "", true, true},
+    {EditorOperation::replace, "Ctrl+H", "", true, true},
+    {EditorOperation::go_to_line, "Ctrl+G", "", true, true},
 }};
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
 using LabelRow = std::pair<KeyChord, std::string_view>;
-constexpr std::array<LabelRow, 26> label_rows{{
+constexpr std::array<LabelRow, 31> label_rows{{
     {ctrl(OperationKey::o), "Ctrl+O"},
     {ctrl(OperationKey::s), "Ctrl+S"},
     {ctrl(OperationKey::t), "Ctrl+T"},
@@ -166,6 +182,11 @@ constexpr std::array<LabelRow, 26> label_rows{{
     {ctrl_shift(OperationKey::m), "Ctrl+Shift+M"},
     {ctrl_shift(OperationKey::v), "Ctrl+Shift+V"},
     {ctrl_shift(OperationKey::e), "Ctrl+Shift+E"},
+    {ctrl(OperationKey::f), "Ctrl+F"},
+    {ctrl(OperationKey::h), "Ctrl+H"},
+    {ctrl(OperationKey::g), "Ctrl+G"},
+    {KeyChord{false, false, OperationKey::f3}, "F3"},
+    {KeyChord{false, true, OperationKey::f3}, "Shift+F3"},
 }};
 
 std::string shown_label(EditorOperation operation, EditMode mode)
@@ -298,7 +319,7 @@ void verify_operation_choices()
 {
     const auto ordinary = nenenib::core::operation_choices("", EditMode::ordinary);
     const auto vim = nenenib::core::operation_choices("", EditMode::vim);
-    expect(ordinary.size() == 25 && vim.size() == 23,
+    expect(ordinary.size() == 30 && vim.size() == 28,
            "an empty query lists every operation available in the mode");
     std::vector<Operation> in_order;
     for (const auto &text : nenenib::core::operation_texts)

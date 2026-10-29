@@ -96,6 +96,7 @@
 #include "VimRegister.hpp"
 #include "VimRepeatFailure.hpp"
 #include "VimRowSpan.hpp"
+#include "VimSearchDirection.hpp"
 #include "VimSearchPattern.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
@@ -143,6 +144,9 @@ class EditorController final
     [[nodiscard]] EditorFrame press_vim_keys(std::span<const core::VimKey> keys);
     [[nodiscard]] EditorFrame frame();
     [[nodiscard]] bool command_line_active() const noexcept;
+    // 通常モードの「検索: 」が開いているか（F3 / Shift+F3 を当たりへの移動にする・ADR 0174 の
+    // 決定 6）。
+    [[nodiscard]] bool find_line_active() const noexcept;
     [[nodiscard]] bool command_palette_active() const noexcept;
     // 帯の配置の入力を状態の 4 つの値（タブの本数・アクティブの位置・送り量・マウスを載せた要素）
     // から読むだけの口。行も題名も作らない（ADR 0056 の決定 9）。窓の hit test と hover が
@@ -338,6 +342,22 @@ class EditorController final
     void accept(const ActivateCommandChoice &intent);
     void accept(const SearchHop &intent);
     void accept(const StoreVimRegister &intent);
+    // 通常モードの検索・置換・行へ移動（ADR 0174）。Vim モードは入力行の前置き（決定 2）。
+    void accept(const BeginFind &);
+    void accept(const BeginGoToLine &);
+    void accept(const BeginReplace &);
+    // Vim モードで一覧から選んだ操作の鍵を 1 つ engine へ流す（`/` `:` `n` `N`・
+    // 決定 2）。INSERT なら先に <Esc> で NORMAL へ戻す（INSERT の `/` は文字）。
+    std::optional<core::VimRepeatFailure> step_vim_command(core::VimKey key);
+    // 「検索: 」の確定と F3 / Shift+F3（決定 3・6）。語を逃がして engine の
+    // 検索の鍵 1 つにし、入力行は閉じない。confirmed は Enter（断りの音を鳴らす）。
+    std::optional<core::VimRepeatFailure>
+    hop_find(const core::SearchLine &line, core::VimSearchDirection relative, bool confirmed);
+    // 入力行の無い F3 / Shift+F3 と一覧の「次を検索」「前を検索」（決定 2・6）。本文の順の向きを
+    // 最後の検索の向きと比べて `n` か `N` を流す。
+    void repeat_find(core::VimSearchDirection relative);
+    // 「行: 」の確定（決定 8）。`:N` と同じ着地へ行き、桁があれば行の中へ寄せる。
+    void go_to_line(const core::SearchLine &line);
     // タブ（ADR 0056 の決定 3・4・6）。切り替えは leave_document → EditorState の置く・広げる →
     // enter_document の順で、どの意図もこの 1 本を通る。
     void accept(const NewTab &);

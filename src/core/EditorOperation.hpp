@@ -35,6 +35,13 @@ enum class EditorOperation : std::uint8_t
     paste_html,
     // エクスプローラーの 2 つ（ADR 0162 の決定 7）。
     toggle_explorer,
-    choose_explorer_root
+    choose_explorer_root,
+    // 通常モードの検索・置換・行へ移動（ADR 0174 の決定 1）。鍵は通常モードの行だけで、Vim では
+    // 鍵の無い行（F1 の一覧から選ぶと `/` と `:` の入力行・決定 2）。
+    find,
+    find_next,
+    find_previous,
+    replace,
+    go_to_line
 };
 } // namespace nenenib::core

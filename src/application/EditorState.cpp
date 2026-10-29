@@ -376,6 +376,18 @@ EditorState EditorState::with_explorer(ExplorerState explorer) const
     return next;
 }
 
+const FindState &EditorState::find() const noexcept
+{
+    return *find_;
+}
+
+EditorState EditorState::with_find(FindState find) const
+{
+    EditorState next(*this);
+    next.find_ = std::make_shared<const FindState>(std::move(find));
+    return next;
+}
+
 const std::vector<core::VimKey> &EditorState::key_map_pending() const noexcept
 {
     return key_map_pending_;

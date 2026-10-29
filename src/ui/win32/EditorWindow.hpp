@@ -197,6 +197,7 @@ class EditorWindow final
     void press_command_key(WPARAM word);
     void press_command_control_key(WPARAM word);
     [[nodiscard]] bool press_palette_key(WPARAM word);
+    [[nodiscard]] bool press_find_key(WPARAM word);
     void send_palette_or(core::CommandEdit edit,
                          const std::optional<application::EditorIntent> &otherwise);
     void press_plain_key(WPARAM word);
@@ -256,6 +257,7 @@ class EditorWindow final
     void run_tab_operation(core::EditorOperation operation);
     void run_pane_operation(core::EditorOperation operation);
     void run_edit_operation(core::EditorOperation operation);
+    void run_sent_operation(core::EditorOperation operation);
     [[nodiscard]] bool keeps_block_key(core::EditorOperation operation) const noexcept;
     void scroll_tabs(std::int32_t delta);
     void zoom_wheel(std::int32_t delta);

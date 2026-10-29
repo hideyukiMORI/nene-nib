@@ -1,6 +1,9 @@
 #include "EditorWindow.hpp"
 #include "EditorWindowDetail.hpp"
 
+#include "BeginFind.hpp"
+#include "BeginGoToLine.hpp"
+#include "BeginReplace.hpp"
 #include "ClosePane.hpp"
 #include "CloseTab.hpp"
 #include "EditMode.hpp"
@@ -14,6 +17,7 @@
 #include "OpenOperationList.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
+#include "SearchHop.hpp"
 #include "SelectEditMode.hpp"
 #include "SettingsNotice.hpp"
 #include "SplitLayout.hpp"
@@ -24,6 +28,7 @@
 #include "TextEncoding.hpp"
 #include "ToggleBookmark.hpp"
 #include "UnsavedTab.hpp"
+#include "VimSearchDirection.hpp"
 
 #include <bit>
 #include <cstddef>
@@ -312,13 +317,9 @@ void EditorWindow::run_operation(core::EditorOperation operation)
         run_tab_operation(operation);
         return;
     case core::EditorOperation::list_files:
-        send(application::OpenCommandPalette{});
-        return;
     case core::EditorOperation::list_operations:
-        send(application::OpenOperationList{});
-        return;
     case core::EditorOperation::toggle_bookmark:
-        send(application::ToggleBookmark{});
+        run_sent_operation(operation);
         return;
     case core::EditorOperation::undo:
     case core::EditorOperation::redo:
@@ -346,6 +347,13 @@ void EditorWindow::run_operation(core::EditorOperation operation)
     case core::EditorOperation::toggle_explorer:
     case core::EditorOperation::choose_explorer_root:
         run_pane_operation(operation);
+        return;
+    case core::EditorOperation::find:
+    case core::EditorOperation::find_next:
+    case core::EditorOperation::find_previous:
+    case core::EditorOperation::replace:
+    case core::EditorOperation::go_to_line:
+        run_sent_operation(operation);
         return;
     }
     std::unreachable();
@@ -390,6 +398,11 @@ void EditorWindow::run_tab_operation(core::EditorOperation operation)
     case core::EditorOperation::paste_html:
     case core::EditorOperation::toggle_explorer:
     case core::EditorOperation::choose_explorer_root:
+    case core::EditorOperation::find:
+    case core::EditorOperation::find_next:
+    case core::EditorOperation::find_previous:
+    case core::EditorOperation::replace:
+    case core::EditorOperation::go_to_line:
         return;
     }
     std::unreachable();
@@ -425,6 +438,11 @@ void EditorWindow::run_pane_operation(core::EditorOperation operation)
         return;
     case core::EditorOperation::toggle_explorer:
     case core::EditorOperation::choose_explorer_root:
+    case core::EditorOperation::find:
+    case core::EditorOperation::find_next:
+    case core::EditorOperation::find_previous:
+    case core::EditorOperation::replace:
+    case core::EditorOperation::go_to_line:
         // 本文の枠を縮める左の面（ADR
         // 0162）。面の状態と意図（E3）とフォルダ選びのダイアログ（E4）が
         // まだ無いので何もしない。鍵の Ctrl+Shift+E も ui の写し（operation_chord）にはまだ無い。
@@ -447,6 +465,65 @@ void EditorWindow::run_pane_operation(core::EditorOperation operation)
     case core::EditorOperation::toggle_mode:
     case core::EditorOperation::paste_plain:
     case core::EditorOperation::paste_html:
+        return;
+    }
+    std::unreachable();
+}
+
+// 意図を 1 つ送るだけの操作（一覧・ブックマークと、検索・置換・行へ移動）。検索の 5 つは
+// どちらのモードで何をするかを controller が決める（Vim は `/` `:` `n` `N` の前置き・
+// ADR 0174 の決定 1・2）。置換の本体は #1046 の N1b が BeginReplace に書く。ほかの値は
+// run_operation が先に扱うので、ここへは来ない。
+void EditorWindow::run_sent_operation(core::EditorOperation operation)
+{
+    switch (operation)
+    {
+    case core::EditorOperation::list_files:
+        send(application::OpenCommandPalette{});
+        return;
+    case core::EditorOperation::list_operations:
+        send(application::OpenOperationList{});
+        return;
+    case core::EditorOperation::toggle_bookmark:
+        send(application::ToggleBookmark{});
+        return;
+    case core::EditorOperation::find:
+        send(application::BeginFind{});
+        return;
+    case core::EditorOperation::find_next:
+        send(application::SearchHop{core::VimSearchDirection::forward});
+        return;
+    case core::EditorOperation::find_previous:
+        send(application::SearchHop{core::VimSearchDirection::backward});
+        return;
+    case core::EditorOperation::replace:
+        send(application::BeginReplace{});
+        return;
+    case core::EditorOperation::go_to_line:
+        send(application::BeginGoToLine{});
+        return;
+    case core::EditorOperation::open_file:
+    case core::EditorOperation::save:
+    case core::EditorOperation::save_as:
+    case core::EditorOperation::new_tab:
+    case core::EditorOperation::close_tab:
+    case core::EditorOperation::recent_tab:
+    case core::EditorOperation::recent_tab_back:
+    case core::EditorOperation::undo:
+    case core::EditorOperation::redo:
+    case core::EditorOperation::font_larger:
+    case core::EditorOperation::font_smaller:
+    case core::EditorOperation::font_reset:
+    case core::EditorOperation::toggle_mode:
+    case core::EditorOperation::split_vertical:
+    case core::EditorOperation::split_horizontal:
+    case core::EditorOperation::next_pane:
+    case core::EditorOperation::close_pane:
+    case core::EditorOperation::toggle_preview:
+    case core::EditorOperation::paste_plain:
+    case core::EditorOperation::paste_html:
+    case core::EditorOperation::toggle_explorer:
+    case core::EditorOperation::choose_explorer_root:
         return;
     }
     std::unreachable();
@@ -492,6 +569,11 @@ void EditorWindow::run_edit_operation(core::EditorOperation operation)
     case core::EditorOperation::toggle_preview:
     case core::EditorOperation::toggle_explorer:
     case core::EditorOperation::choose_explorer_root:
+    case core::EditorOperation::find:
+    case core::EditorOperation::find_next:
+    case core::EditorOperation::find_previous:
+    case core::EditorOperation::replace:
+    case core::EditorOperation::go_to_line:
         return;
     }
     std::unreachable();
