@@ -95,6 +95,8 @@ hide の指示（朝）「これから 1 日、外回りでデスクにいない
 | #1095（上限 1 GiB・BOM のずらし） | 14/9/11% | 0 regression | 単打 0.576・16 MiB open 49.3・長い行 1.086 |
 | #1096（`map` の入口・表が空の既定） | 2/5/8%（計測の途中で席の Debug ビルドが始まった可能性） | 0 regression | 単打 0.555・連打 2.26・16 MiB open 61.2（min 48.9・揺れ）・長い行 0.997 |
 
+| main `e7628a5c`（夜・#1073 の分割まで入った後・22:55） | 1/0% | **0 regression** | 起動 41.8・窓 32.6・単打 0.605・連打 2.69・16 MiB open 49.8・16 MiB 連打 2.88・面 1.03・長い行 1.10（ログ `D:/NeNeNib/outputs/20261029/gate-main-e7628a5c.log`・Release `main-replayer/build/release-e7628a5`・試用の exe はこれ） |
+
 ## 4a. 昼の merge と窓の検査
 
 - merge の列（1 本ずつ・乗せ替え → 衝突を自動で解いたときだけ手元の Debug のビルドと既定実行 → Ready → CI → squash）: #1068 → #1077 → #1069（`VimState.hpp` で #1068 と衝突・設計席が解いた）→ #1079 → #1070（CI が 25 分かかったので古い列を止めて同じ run で引き継ぎ）→ #1076（`VimKeyNames.hpp` の生成物・`KEY_TABLE`・鍵の表・`VimAction`・`VimStepInsert` / `Recording` / `Visual`・fuzz の 9 ファイルで衝突 → 設計席が解いた。解いた後の手元のビルドで 2 回落ちた: 行の閉じ括弧の欠け（`}}};` を 4 文字消した）と `NibTests.cpp` の 2 表の数（git が行は自動で併合するが大きさは数え直しが要る）→ 直して通した）。
