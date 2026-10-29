@@ -177,21 +177,23 @@ namespace detail
 
 namespace
 {
-// 矩形の `~` `u` `U`（ADR 0035 の追補 #959・ADR 0015 の決定 10）。行ごとに `r` と同じ本文
-// （端で切れた文字も含む）の ASCII の英字だけを変える。切れた文字は Tab か全角で大小が無い
-// ので、空白に割らずそのまま残る（実測）。矩形に届かない行と幅 0 の行は飛ばす。
+// 矩形の `~` `u` `U`（ADR 0035 の追補 #959 / #1104・ADR 0015 の決定 10）。行ごとに矩形の
+// 仮想桁に丸ごと入る本文（`inside`）だけの大小を変える。端に掛かった文字（左右の端の全角や
+// Tab）は対象にせず、空白にも割らない（Vim の block_prep の is_del が偽の textlen・#1104 で
+// 実測）。矩形に丸ごと入る文字が無い行は飛ばす。
 [[nodiscard]] std::vector<VimBlockEdit>
 cased_block_edits(const TextBuffer &text, const VimBlockRange &block, VimOperator operation)
 {
     std::vector<VimBlockEdit> edits;
     for (const VimBlockLine &line : block.lines)
     {
-        if (is_empty(line.range))
+        if (is_empty(line.inside))
         {
             continue;
         }
         edits.push_back(VimBlockEdit{
-            line.range, cased_text(text.text_range(line.range.begin, line.range.end), operation)});
+            line.inside,
+            cased_text(text.text_range(line.inside.begin, line.inside.end), operation)});
     }
     return edits;
 }
