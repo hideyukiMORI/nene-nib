@@ -238,7 +238,7 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::increment_number, VimActionGroup::number},
      {VimAction::decrement_number, VimActionGroup::number},
      {VimAction::increment_sequence, VimActionGroup::number},
-     {VimAction::decrement_sequence, VimActionGroup::number}},
+     {VimAction::decrement_sequence, VimActionGroup::number},
      {VimAction::jump_older, VimActionGroup::jump_list},
      {VimAction::jump_newer, VimActionGroup::jump_list},
      {VimAction::change_older, VimActionGroup::jump_list},
@@ -308,7 +308,7 @@ constexpr std::array<VimBinding, 23> g_bindings{
      {U'v', VimAction::reselect_visual},
      {U'i', VimAction::insert_at_last_insert},
      {control_a_character, VimAction::increment_sequence},
-     {control_x_character, VimAction::decrement_sequence}},
+     {control_x_character, VimAction::decrement_sequence},
      {U';', VimAction::change_older},
      {U',', VimAction::change_newer}}};
 

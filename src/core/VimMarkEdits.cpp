@@ -2,9 +2,9 @@
 
 #include "LineNumber.hpp"
 #include "VimCaret.hpp"
-#include "VimLastVisual.hpp"
 #include "VimJumpList.hpp"
 #include "VimJumpLists.hpp"
+#include "VimLastVisual.hpp"
 #include "VimMarkShift.hpp"
 
 #include <cstddef>

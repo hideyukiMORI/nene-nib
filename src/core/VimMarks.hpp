@@ -1,8 +1,8 @@
 #pragma once
 
 #include "LineNumber.hpp"
-#include "VimLastVisual.hpp"
 #include "VimJumpList.hpp"
+#include "VimLastVisual.hpp"
 #include "VimMarkPosition.hpp"
 
 #include <array>
