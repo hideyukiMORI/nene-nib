@@ -304,6 +304,7 @@ class EditorController final
     [[nodiscard]] std::size_t explorer_page() const noexcept;
     void step_explorer(bool down);
     void select_explorer_row(std::size_t row);
+    void release_explorer(const std::optional<core::FilePath> &released, std::size_t row);
     void click_explorer_row(std::size_t row);
     void open_explorer_folder(std::optional<std::size_t> row);
     void enter_explorer_row(std::optional<std::size_t> row);
@@ -654,8 +655,9 @@ class EditorController final
     std::optional<std::uint64_t> folder_live_;
     // エクスプローラーが頼んで読み終えていないフォルダ（決定 5）。ルートを替えると捨てる。
     std::optional<ExplorerFolder> explorer_folder_;
-    // 面の上で押した行（決定 4・ADR 0056 の決定 9）。離したときに同じ行かを比べて消す。
-    std::optional<std::size_t> explorer_pressed_;
+    // 面の上で押した行の節の経路（決定 4・ADR 0056 の決定 9）。離したときに同じ節かを比べて消す。
+    // 「…」の行と行の外を押したときは値なし（離しても何もしない）。
+    std::optional<core::FilePath> explorer_pressed_;
     // 字体の一覧（#597・D58）。補完が求めた最初の 1 回だけ読み、読めなくても再読しない。
     std::optional<core::FontFamilies> font_families_;
     // プレビューの券（ADR 0155 の決定 6）。要求ごとに 1 つ進み、閉じて開き直しても戻さない

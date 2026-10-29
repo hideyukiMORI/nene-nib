@@ -96,17 +96,17 @@ constexpr std::string_view root_prefix = "root=";
     return row == 0 ? 0 : row - 1;
 }
 
-// 選んだ行の節の経路（「…」の行と範囲の外は値なし）。裏で届いた子を置いても同じ節を選び続ける
-// ための控え。
-[[nodiscard]] std::optional<core::FilePath> selected_path(const ExplorerState &explorer,
-                                                          std::span<const core::ExplorerRow> rows)
+// 行 row の節の経路（「…」の行と範囲の外は値なし）。節の番号は前の行に子が届くと変わるので、
+// 行をまたいで同じ節を指すときは経路で覚える。
+[[nodiscard]] std::optional<core::FilePath> path_at(const core::ExplorerTree &tree,
+                                                    std::span<const core::ExplorerRow> rows,
+                                                    std::optional<std::size_t> row)
 {
-    if (!explorer.selected.has_value() || explorer.selected.value() >= rows.size())
+    if (!row.has_value() || row.value() >= rows.size() || rows[row.value()].more)
     {
         return std::nullopt;
     }
-    const core::ExplorerRow &row = rows[explorer.selected.value()];
-    return row.more ? std::nullopt : explorer.tree.path_of(row.node);
+    return tree.path_of(rows[row.value()].node);
 }
 
 // 経路 path の節の行。見えていなければ値なし。
@@ -204,28 +204,37 @@ void EditorController::accept(const PointExplorer &intent)
     {
         return;
     }
-    const std::size_t rows = state_.explorer().tree.visible_rows().size();
+    const auto &tree = state_.explorer().tree;
+    const auto rows = tree.visible_rows();
     switch (intent.pointing)
     {
     case ExplorerPointing::pressed:
-        explorer_pressed_ = intent.row < rows ? std::optional{intent.row} : std::nullopt;
+        // 押した行は節の経路で覚える（押してから離すまでに子が届いて行がずれても取り違えない）。
+        explorer_pressed_ = path_at(tree, rows, intent.row);
         focus_explorer(true);
         return;
     case ExplorerPointing::released:
-        if (std::exchange(explorer_pressed_, std::nullopt) == std::optional{intent.row} &&
-            intent.row < rows)
-        {
-            click_explorer_row(intent.row);
-        }
+        release_explorer(path_at(tree, rows, intent.row), intent.row);
         return;
     case ExplorerPointing::double_click:
         explorer_pressed_.reset();
-        if (intent.row < rows)
+        if (intent.row < rows.size())
         {
             select_explorer_row(intent.row);
             enter_explorer_row(intent.row);
         }
         return;
+    }
+}
+
+// 離した行の節 released が押した節と同じときだけ 1 回のクリックにする。押した印は消す。
+void EditorController::release_explorer(const std::optional<core::FilePath> &released,
+                                        std::size_t row)
+{
+    const auto pressed = std::exchange(explorer_pressed_, std::nullopt);
+    if (pressed.has_value() && released == pressed)
+    {
+        click_explorer_row(row);
     }
 }
 
@@ -515,7 +524,7 @@ void EditorController::place_explorer_entries(const core::FilePath &folder,
     {
         return;
     }
-    const auto kept = selected_path(explorer, explorer.tree.visible_rows());
+    const auto kept = path_at(explorer.tree, explorer.tree.visible_rows(), explorer.selected);
     explorer.tree = explorer.tree.loaded(node.value(), entries);
     const auto rows = explorer.tree.visible_rows();
     if (kept.has_value())
@@ -526,7 +535,8 @@ void EditorController::place_explorer_entries(const core::FilePath &folder,
     state_ = state_.with_explorer(clamped(std::move(explorer), rows.size(), explorer_page()));
 }
 
-// 面の表示値（決定 3・8）。面が消えていれば値なし（分岐 1 つ）。行は見えている行の全部の写し。
+// 面の表示値（決定 3・8）。面が消えていれば値なし（分岐 1 つ）。名前を写すのは first_visible から
+// 面の行数（explorer_page）ぶんだけで、frame の費用は木の大きさではなく画面の行数に依る。
 std::optional<ExplorerView> EditorController::explorer_view() const
 {
     if (!state_.settings().explorer)
@@ -536,14 +546,17 @@ std::optional<ExplorerView> EditorController::explorer_view() const
     const ExplorerState &explorer = state_.explorer();
     const auto nodes = explorer.tree.nodes();
     const auto rows = explorer.tree.visible_rows();
+    const std::size_t first = std::min(explorer.first_visible, rows.size());
+    const std::size_t last = std::min(first + explorer_page(), rows.size());
     std::vector<ExplorerRowView> views;
-    views.reserve(rows.size());
-    for (const core::ExplorerRow &row : rows)
+    views.reserve(last - first);
+    for (std::size_t index = first; index < last; ++index)
     {
+        const core::ExplorerRow &row = rows[index];
         views.push_back(ExplorerRowView{row.more ? std::string{} : nodes[row.node].name, row.depth,
                                         row.folder, row.open, row.hidden, row.more});
     }
-    return ExplorerView{explorer.tree.root(), std::move(views), explorer.selected, explorer.focused,
-                        explorer.first_visible};
+    return ExplorerView{explorer.tree.root(), std::move(views), rows.size(),
+                        explorer.selected,    explorer.focused, first};
 }
 } // namespace nenenib::application

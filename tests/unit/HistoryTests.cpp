@@ -3,6 +3,7 @@
 // scope `--history` の単体テスト（ADR 0042 決定 2・ADR 0060 の決定 8）。閉じたファイルの履歴を
 // 書き換える純関数 history_recorded / history_forgotten と、履歴の替え玉の往復。
 #include "Appearance.hpp"
+#include "CancelCommand.hpp"
 #include "ClosePane.hpp"
 #include "CloseTab.hpp"
 #include "Column.hpp"
@@ -21,6 +22,7 @@
 #include "InsertText.hpp"
 #include "LineNumber.hpp"
 #include "NewTab.hpp"
+#include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "SaveDocument.hpp"
 #include "Scopes.hpp"
@@ -394,9 +396,10 @@ void verify_quiet_start_with_files()
            "the bell");
 }
 
-// 起動・開く・切り替え・新しいタブ・保存・打鍵の道では、履歴を読まない・書かない（D24・決定 8）。
 // 面が出ていても、開く・切り替え・新しいタブ・打鍵・保存はフォルダの entries を頼まない
-// （ADR 0162 の決定 5）。頼むのは起動のルートの 1 回だけ。
+// （ADR 0162 の決定 5）。explorer=on と root の設定で起動すると、constructor の sync_explorer が
+// ルートを 1 回頼む。その答えの前に Ctrl+P の面を開いて閉じると控えが捨てられ、ルートは
+// 「開いていて読んでいない」まま port が空く。この状態で打てば、誤って頼む道は 2 回目を出す。
 void verify_quiet_explorer()
 {
     auto settings = nenenib::core::default_editor_settings();
@@ -406,21 +409,25 @@ void verify_quiet_explorer()
     hold_work(editing.files());
     auto &controller = editing.controller();
     applied(controller, VisibleLines{3});
-    editing.folders().serve(
-        nenenib::application::FolderBatch{editing.folders().requests().back().ticket,
-                                          {},
-                                          nenenib::application::FolderProgress::complete});
-    applied(controller, nenenib::application::WorkCompleted{});
-    open_work(editing, "ab");
+    open_work(editing, "a");
+    applied(controller, nenenib::application::OpenCommandPalette{});
+    applied(controller, nenenib::application::CancelCommand{});
+    const auto waiting = editing.folders().entry_requests();
+    open_work(editing, "b");
     applied(controller, SwitchTab{0});
     applied(controller, NewTab{});
     applied(controller, InsertText{"typed"});
     applied(controller,
             SaveDocument{path_of("C:\\work\\new.txt"), nenenib::core::TextEncoding::utf8});
-    expect(editing.folders().entry_requests() == 1,
-           "with the panel shown, typing, switching and saving never list the folder's entries");
+    expect(waiting == 1 && editing.folders().entry_requests() == 1,
+           "with a folder waiting and the port idle, opening, switching, new tabs, typing and "
+           "saving never list the folder's entries");
+    applied(controller, nenenib::application::WorkCompleted{});
+    expect(editing.folders().entry_requests() == 2,
+           "the waiting folder is listed again on the next work signal");
 }
 
+// 起動・開く・切り替え・新しいタブ・保存・打鍵の道では、履歴を読まない・書かない（D24・決定 8）。
 void verify_quiet_paths()
 {
     verify_quiet_start_with_files();

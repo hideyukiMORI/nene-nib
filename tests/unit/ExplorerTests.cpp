@@ -293,6 +293,28 @@ void verify_pointing()
     expect(printed(outside) == printed(twice), "a row outside the rows does nothing");
 }
 
+// 押してから離すまでに子が届いて行がずれても、押した節と離した節が違えば何もしない（ADR 0056 の
+// 決定 9 の形・レビュー R5-2）。
+void verify_pointing_across_arrival()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    static_cast<void>(key(editing, ExplorerKeyKind::j));
+    static_cast<void>(key(editing, ExplorerKeyKind::j));
+    static_cast<void>(key(editing, ExplorerKeyKind::l));
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply_frame(PointExplorer{2, ExplorerPointing::pressed}));
+    static_cast<void>(
+        deliver(editing, {entry_of("C:\\proj\\src\\main.cpp", false)}, FolderProgress::complete));
+    const auto shifted = controller.apply_frame(PointExplorer{2, ExplorerPointing::released});
+    expect(printed(shifted) == ".git/+~;src/-;.main.cpp;README.md;sel 1 first 0 focus 1",
+           "a release on the row a new child moved under the pointer does nothing");
+    static_cast<void>(controller.apply_frame(PointExplorer{3, ExplorerPointing::pressed}));
+    const auto same = controller.apply_frame(PointExplorer{3, ExplorerPointing::released});
+    expect(printed(same) == ".git/+~;src/-;.main.cpp;README.md;sel 3 first 0 focus 1",
+           "a press and release on the same entry selects it");
+}
+
 void verify_scroll()
 {
     Editing editing(shown_at(project));
@@ -309,6 +331,10 @@ void verify_scroll()
     const auto down = controller.apply_frame(app::ScrollExplorer{3});
     expect(view_of(down).first_visible == 3 && !view_of(down).selected.has_value(),
            "the wheel moves the first row and not the selection");
+    expect(view_of(down).total == 10 && view_of(down).rows.size() == 4 &&
+               view_of(down).rows.front().name == "f3.txt" &&
+               view_of(down).rows.back().name == "f6.txt",
+           "the frame carries the panel's rows from the first visible row");
     expect(view_of(controller.apply_frame(app::ScrollExplorer{100})).first_visible == 6,
            "the wheel stops when the last row is at the bottom");
     expect(view_of(controller.apply_frame(app::ScrollExplorer{-100})).first_visible == 0,
@@ -400,9 +426,13 @@ void verify_truncated()
     }
     editing.folders().serve(std::move(batch));
     const auto frame = editing.controller().apply_frame(app::WorkCompleted{});
-    const auto rows = view_of(frame).rows;
-    expect(rows.size() == core::ExplorerTree::entry_limit + 1 && rows.back().more &&
-               rows.front().name == "f0000",
+    expect(view_of(frame).total == core::ExplorerTree::entry_limit + 1 &&
+               view_of(frame).rows.size() == 10 && view_of(frame).rows.front().name == "f0000",
+           "the frame carries only the panel's rows of a large folder");
+    const auto bottom = editing.controller().apply_frame(app::ScrollExplorer{5000});
+    const auto rows = view_of(bottom).rows;
+    expect(view_of(bottom).first_visible == core::ExplorerTree::entry_limit + 1 - 10 &&
+               rows.size() == 10 && rows.back().more && rows.front().name == "f1991",
            "more entries than the limit end with the … row");
 }
 
@@ -470,6 +500,7 @@ void verify_explorer_contracts()
     verify_keys();
     verify_enter_opens_file();
     verify_pointing();
+    verify_pointing_across_arrival();
     verify_scroll();
     verify_one_listing_at_a_time();
     verify_stale_and_root();
