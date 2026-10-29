@@ -3,6 +3,8 @@
 // 裏へ回った大きなファイルは揃うまでタブを足さずステータスバーに 1 行だけ出し、今の券の結果だけを
 // 採る。失敗は値で、告げ方は呼び手ごとの今の規則。まだ読んでいないタブ・起動の復元・一覧から
 // 開く道も同じ port を通る。
+#include "CancelCommand.hpp"
+#include "CloseTab.hpp"
 #include "CommandText.hpp"
 #include "DocumentByteLimit.hpp"
 #include "DocumentReadFinished.hpp"
@@ -26,11 +28,14 @@
 #include "Session.hpp"
 #include "SessionEnd.hpp"
 #include "SessionTab.hpp"
+#include "SettleRecentTab.hpp"
 #include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
+#include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
 #include "VisibleLines.hpp"
+#include "WalkRecentTab.hpp"
 #include "WorkCompleted.hpp"
 
 #include <algorithm>
@@ -41,6 +46,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -260,7 +266,8 @@ void hold_listed(ScriptedFiles &files)
 }
 
 // 起動の復元とまだ読んでいないタブも同じ port を通る。起動で読むのは見ていたタブだけ。
-// まだ読んでいないタブが裏へ回されたら、頼みを取り消して読めなかったタブとして外す（暫定）。
+// まだ読んでいないタブが裏へ回されたら、タブは帯に残して読み込み中の 1 行を出し、揃ったら
+// そのタブへ切り替える（追補 1）。
 void verify_open_restored()
 {
     Editing restored(two_listed(), hold_listed);
@@ -276,10 +283,135 @@ void verify_open_restored()
            "a tab not read yet is read through the port when it is shown");
     Editing deferred(two_listed(), hold_listed);
     deferred.reads().defer_above(0);
-    const auto dropped = deferred.controller().apply_frame(app::SwitchTab{0});
-    expect(cancelled(deferred, last_ticket(deferred)) && dropped.tabs.size() == 1 &&
-               notice_of(dropped) == "開けませんでした: a.txt",
-           "a tab whose read is deferred is cancelled and dropped with one line");
+    applied(deferred.controller(), app::VisibleLines{10});
+    const auto waiting = deferred.controller().apply_frame(app::SwitchTab{0});
+    const std::uint64_t ticket = last_ticket(deferred);
+    expect(!cancelled(deferred, ticket) && waiting.tabs.size() == 2 && first_line(waiting) == "b" &&
+               notice_of(waiting) == "読み込み中: a.txt",
+           "a tab whose read is deferred stays in the band with one reading line");
+    const std::size_t requests = deferred.reads().requests().size();
+    applied(deferred.controller(), app::SwitchTab{0});
+    expect(deferred.reads().requests().size() == requests,
+           "showing the tab being read again does not ask the port twice");
+    deferred.reads().finish(ticket);
+    const auto switched = deferred.controller().apply_frame(app::WorkCompleted{});
+    expect(switched.tabs.size() == 2 && switched.document.title.text() == "a.txt" &&
+               first_line(switched) == "a" && notice_of(switched) == "-",
+           "the finished tab read switches to that tab");
+}
+
+// 裏で読んでいるタブを揃う前に閉じると、その読みは取り消され、帯の並びはほかに変わらない。
+void verify_open_tab_closed_while_reading()
+{
+    Editing editing(two_listed(), hold_listed);
+    editing.reads().defer_above(0);
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    applied(controller, app::SwitchTab{0});
+    const std::uint64_t ticket = last_ticket(editing);
+    const auto closed = controller.apply_frame(app::CloseTab{0});
+    expect(cancelled(editing, ticket) && closed.tabs.size() == 1 && first_line(closed) == "b" &&
+               notice_of(closed) == "-",
+           "closing a tab being read cancels its read");
+    editing.reads().finish(ticket);
+    const auto after = controller.apply_frame(app::WorkCompleted{});
+    expect(after.tabs.size() == 1 && first_line(after) == "b",
+           "a cancelled tab read opens nothing");
+}
+
+// 起動の復元で見ていたタブが裏へ回されたら、無題を仮に残し、揃ったらそのタブへ切り替えて無題を
+// 外す。
+void verify_open_restored_deferred()
+{
+    Editing editing(two_listed(), {},
+                    [](ScriptedFiles &files, ScriptedDocumentReads &reads)
+                    {
+                        hold_listed(files);
+                        reads.defer_above(0);
+                    });
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    const auto waiting = controller.apply_frame(app::WorkCompleted{});
+    expect(waiting.tabs.size() == 3 && notice_of(waiting) == "読み込み中: b.txt",
+           "a deferred restored tab keeps a placeholder untitled and one reading line");
+    editing.reads().finish(last_ticket(editing));
+    const auto reached = controller.apply_frame(app::WorkCompleted{});
+    expect(reached.tabs.size() == 2 && reached.document.title.text() == "b.txt" &&
+               first_line(reached) == "b" && notice_of(reached) == "-",
+           "the restored tab opens and the placeholder untitled goes away");
+}
+
+// Ctrl+Tab の歩きの最中は揃った結果を採らず、歩きが終わる意図の終わりで採る（追補 2）。
+void verify_open_held_while_walking()
+{
+    Editing editing;
+    open_small_then_defer(editing);
+    editing.files().hold_at("C:\\work\\c.txt", Bytes{"c"});
+    auto &controller = editing.controller();
+    applied(controller, app::OpenDocument{path_of("C:\\work\\c.txt")});
+    applied(controller, app::OpenDocument{path_of("C:\\work\\big.txt")});
+    const std::uint64_t ticket = last_ticket(editing);
+    applied(controller, app::WalkRecentTab{core::TabStep::next});
+    editing.reads().finish(ticket);
+    const auto walking = controller.apply_frame(app::WorkCompleted{});
+    expect(walking.tabs.size() == 2 && controller.tab_walking() &&
+               notice_of(walking) == "読み込み中: big.txt",
+           "a finished read is held while walking tabs");
+    const auto settled = controller.apply_frame(app::SettleRecentTab{});
+    expect(settled.tabs.size() == 3 && settled.document.title.text() == "big.txt" &&
+               first_line(settled) == "large body" && notice_of(settled) == "-",
+           "the held read opens when the walk settles");
+}
+
+// Ctrl+P の面が開いている最中は揃った結果を採らず、面が閉じる意図の終わりで採る（追補 2）。
+void verify_open_held_while_palette()
+{
+    Editing editing;
+    open_small_then_defer(editing);
+    auto &controller = editing.controller();
+    applied(controller, app::OpenDocument{path_of("C:\\work\\big.txt")});
+    const std::uint64_t ticket = last_ticket(editing);
+    applied(controller, app::OpenCommandPalette{});
+    editing.reads().finish(ticket);
+    const auto held = controller.apply_frame(app::WorkCompleted{});
+    expect(held.tabs.size() == 1 && controller.command_palette_active(),
+           "a finished read is held while the palette is open");
+    const auto closed = controller.apply_frame(app::CancelCommand{});
+    expect(closed.tabs.size() == 2 && first_line(closed) == "large body" &&
+               !controller.command_palette_active(),
+           "the held read opens when the palette closes");
+}
+
+// 起動の引数が 2 つ以上なら券ごとに並べて順に採る。後の引数は前の引数を取り消さず、後に頼んだ
+// ものが先に揃っても前のものを待つ（追補 4・ADR 0056 の決定 13）。
+void verify_open_arguments_in_order()
+{
+    const std::vector<app::OpenDocument> arguments{
+        app::OpenDocument{path_of("C:\\work\\big.txt")},
+        app::OpenDocument{path_of("C:\\work\\huge.txt")}};
+    Editing editing(SessionReading{}, arguments,
+                    [](ScriptedFiles &files, ScriptedDocumentReads &reads)
+                    {
+                        files.hold_at("C:\\work\\big.txt", Bytes{"large body"});
+                        files.hold_at("C:\\work\\huge.txt", Bytes{"huge body"});
+                        reads.defer_above(deferred_bytes);
+                    });
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    const auto &requests = editing.reads().requests();
+    expect(requests.size() == 2 && editing.reads().cancels().empty(),
+           "every argument is asked and none is cancelled");
+    const std::uint64_t first = requests.front().ticket;
+    const std::uint64_t second = requests.back().ticket;
+    editing.reads().finish(second);
+    const auto waiting = controller.apply_frame(app::WorkCompleted{});
+    expect(waiting.tabs.size() == 1 && notice_of(waiting) == "読み込み中: big.txt",
+           "a later argument waits for the earlier one");
+    editing.reads().finish(first);
+    const auto opened = controller.apply_frame(app::WorkCompleted{});
+    expect(opened.tabs.size() == 2 && opened.tabs.front().title.text() == "big.txt" &&
+               opened.document.title.text() == "huge.txt" && notice_of(opened) == "-",
+           "the arguments open in order and the last one is active");
 }
 
 // 一覧から開く道（同期）も同じ port で、揃えばタブが足される。
@@ -308,6 +440,11 @@ void verify_open_async_contracts()
     verify_open_end_session();
     verify_open_failures();
     verify_open_restored();
+    verify_open_tab_closed_while_reading();
+    verify_open_restored_deferred();
+    verify_open_held_while_walking();
+    verify_open_held_while_palette();
+    verify_open_arguments_in_order();
     verify_open_listed();
 }
 

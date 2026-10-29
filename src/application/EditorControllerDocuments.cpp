@@ -19,12 +19,14 @@
 #include "Language.hpp"
 #include "LanguageTable.hpp"
 #include "PaletteOrigin.hpp"
+#include "ReadingTarget.hpp"
 #include "SaveState.hpp"
 #include "Selection.hpp"
 #include "Session.hpp"
 #include "SessionEnd.hpp"
 #include "SessionTab.hpp"
 #include "SplitLayout.hpp"
+#include "TabReach.hpp"
 #include "TabRecency.hpp"
 #include "TabTitle.hpp"
 #include "TextCaret.hpp"
@@ -268,6 +270,39 @@ utf16_parts(const core::TextBuffer &text, std::string_view mark, core::ByteOrder
 constexpr std::string_view unreached_prefix = "開けませんでした: ";
 constexpr std::string_view reading_prefix = "読み込み中: ";
 
+// 読み込み中の要求の列の中で券の位置（ADR 0159 の決定 5）。無ければ値なし。
+[[nodiscard]] std::optional<std::size_t> reading_index(const std::vector<DocumentReading> &readings,
+                                                       std::uint64_t ticket)
+{
+    const auto found = std::ranges::find(readings, ticket, &DocumentReading::ticket);
+    if (found == readings.end())
+    {
+        return std::nullopt;
+    }
+    return static_cast<std::size_t>(std::distance(readings.begin(), found));
+}
+
+[[nodiscard]] std::vector<DocumentReading> without_ticket(std::vector<DocumentReading> readings,
+                                                          std::uint64_t ticket)
+{
+    std::erase_if(readings,
+                  [ticket](const DocumentReading &reading) { return reading.ticket == ticket; });
+    return readings;
+}
+
+[[nodiscard]] std::vector<DocumentReading> with_appended(std::vector<DocumentReading> readings,
+                                                         DocumentReading reading)
+{
+    readings.push_back(std::move(reading));
+    return readings;
+}
+
+// 開く要求か（まだ読んでいないタブの読みでないか・追補 1）。
+[[nodiscard]] bool opens(const DocumentReading &reading) noexcept
+{
+    return std::holds_alternative<OpenFailureReply>(reading.target);
+}
+
 [[nodiscard]] core::DisplayText unreached_message(const core::FilePath &path, std::size_t others)
 {
     return named_notice(unreached_prefix,
@@ -351,12 +386,20 @@ void EditorController::restore_tabs(const Session &session)
     std::size_t position = std::min(session.active, session.tabs.size() - 1) + 1;
     while (state_.tab_count() > 1)
     {
-        if (reach_tab(position))
+        switch (reach_tab(position))
         {
+        case TabReach::reached:
             leave_document();
             state_ = state_.with_switched(position).with_closed(0).with_recency_ranked(ranks);
             enter_document();
             return;
+        case TabReach::reading:
+            // 裏で読んでいる間は無題を仮に残し、揃ってそのタブへ切り替えたときに外す（追補 1）。
+            restore_untitled_ = state_.autosave_ids().at(0);
+            restore_ranks_ = std::move(ranks);
+            return;
+        case TabReach::dropped:
+            break;
         }
         ranks.erase(std::next(ranks.begin(), static_cast<std::ptrdiff_t>(position - 1)));
         position = position < state_.tab_count() ? position : position - 1;
@@ -608,18 +651,24 @@ bool EditorController::blank_untitled() const
            state_.history().size() == 0;
 }
 
-// 開く（ADR 0056 の決定 5・ADR 0159 の決定 1・3〜5）。(a) 同じファイルのタブへ切り替える（読み
-// 直さない）→ 読みの port に頼む。同じファイルを読み込み中なら 2 本目を頼まず今の要求を続け、
-// ほかの読み込み中の要求は取り消す。揃ったら (b) 何も書いていない無題に開く → (c) アクティブの
-// 右に新しいタブを足して開く（open_read）。開けなかったらタブを足さず、呼び手の告げ方で告げる。
+// 開く（ADR 0056 の決定 5・ADR 0159 の決定 1・3〜5・追補 4）。(a) 同じファイルのタブへ切り替える
+// （読み直さない）→ 読みの port に頼む。同じファイルを読み込み中なら 2 本目を頼まず今の要求を
+// 続ける。使う人の開く意図はほかの開く要求を取り消し、起動の引数は券ごとに並べて順に採る。
+// 揃ったら (b) 何も書いていない無題に開く → (c) アクティブの右に新しいタブを足して開く
+// （open_read）。開けなかったらタブを足さず、呼び手の告げ方で告げる。
 void EditorController::open_document(const core::FilePath &path, OpenFailureReply reply)
 {
-    const auto &reading = state_.reading();
-    if (reading.has_value() && ports_.files.same_file(reading.value().path, path))
+    const auto &readings = state_.readings();
+    if (std::ranges::any_of(
+            readings, [&](const DocumentReading &reading)
+            { return opens(reading) && ports_.files.same_file(reading.path, path); }))
     {
         return;
     }
-    cancel_reading();
+    if (!starting_)
+    {
+        cancel_readings(true);
+    }
     const auto open = open_tab_of(path);
     if (open.has_value())
     {
@@ -630,12 +679,14 @@ void EditorController::open_document(const core::FilePath &path, OpenFailureRepl
     state_ = state_.with_composition(std::nullopt);
     const std::uint64_t ticket = ++read_tickets_;
     // 要求を先に置き、同期に揃った結果も裏で揃った結果と同じ adopt_read の 1 本で採る（決定 3）。
-    state_ = state_.with_reading(DocumentReading{path, ticket, 0, 0, reply});
+    state_ = state_.with_readings(
+        with_appended(state_.readings(), DocumentReading{path, ticket, 0, 0, reply}));
     auto outcome = ports_.reads.request(DocumentReadRequest{path, ticket, maximum_file_bytes});
     if (outcome.has_value())
     {
         adopt_read(std::move(outcome).value());
     }
+    settle_reads();
 }
 
 void EditorController::adopt_read(DocumentReadOutcome outcome)
@@ -659,33 +710,150 @@ void EditorController::adopt_read(DocumentReadOutcome outcome)
 
 void EditorController::adopt_progress(const DocumentReadProgress &progress)
 {
-    const auto &reading = state_.reading();
-    if (!reading.has_value() || reading.value().ticket != progress.ticket)
+    const auto index = reading_index(state_.readings(), progress.ticket);
+    if (!index.has_value())
     {
         return;
     }
-    DocumentReading next = reading.value();
-    next.read_bytes = progress.read_bytes;
-    next.total_bytes = progress.total_bytes;
-    state_ = state_.with_reading(std::move(next));
+    auto readings = state_.readings();
+    DocumentReading &reading = readings.at(index.value());
+    reading.read_bytes = progress.read_bytes;
+    reading.total_bytes = progress.total_bytes;
+    state_ = state_.with_readings(std::move(readings));
 }
 
-// 券が今の要求と違う結果は捨てる（ADR 0127 §3 の一回確定・決定 5）。
+// 券が読み込み中の要求に無い結果は捨てる（ADR 0127 §3 の一回確定・決定 5）。揃った結果は
+// 採る瞬間まで留める（追補 2）。
 void EditorController::adopt_finished(DocumentReadFinished finished)
 {
-    const auto &reading = state_.reading();
-    if (!reading.has_value() || reading.value().ticket != finished.ticket)
+    if (!reading_index(state_.readings(), finished.ticket).has_value())
     {
         return;
     }
-    const DocumentReading done = reading.value();
-    state_ = state_.with_reading(std::nullopt);
-    if (!finished.document)
+    arrived_reads_.push_back(std::move(finished));
+}
+
+std::optional<DocumentReadFinished> EditorController::take_arrived(std::uint64_t ticket)
+{
+    const auto found = std::ranges::find(arrived_reads_, ticket, &DocumentReadFinished::ticket);
+    if (found == arrived_reads_.end())
     {
-        answer_unopened(done.path, finished.document.error(), done.reply);
+        return std::nullopt;
+    }
+    DocumentReadFinished finished = std::move(*found);
+    arrived_reads_.erase(found);
+    return finished;
+}
+
+// Ctrl+Tab の歩き・入力行（`:` と検索）・Ctrl+P の面の最中は揃った結果を採らない（追補 2）。
+bool EditorController::reads_held() const noexcept
+{
+    return state_.tab_walking() || state_.command_input().has_value();
+}
+
+// 留めた結果を頼んだ順に採る（追補 2・4）。開く要求は先に頼んだ開く要求が揃うまで待ち、
+// まだ読んでいないタブの読みは揃った順に採る。採るたびに状態が動くので、券で引き直す。
+void EditorController::settle_reads()
+{
+    if (arrived_reads_.empty() || reads_held())
+    {
         return;
     }
-    open_read(done.path, std::move(finished.document).value());
+    std::vector<std::uint64_t> tickets;
+    tickets.reserve(state_.readings().size());
+    for (const DocumentReading &reading : state_.readings())
+    {
+        tickets.push_back(reading.ticket);
+    }
+    bool open_waiting = false;
+    for (const std::uint64_t ticket : tickets)
+    {
+        open_waiting = settle_read(ticket, open_waiting);
+    }
+}
+
+// 券 1 つぶんを採る。open_waiting は先に頼んだ開く要求がまだ揃っていないか。返すのは次の券に
+// 渡す open_waiting。
+bool EditorController::settle_read(std::uint64_t ticket, bool open_waiting)
+{
+    const auto index = reading_index(state_.readings(), ticket);
+    if (!index.has_value() || reads_held())
+    {
+        return open_waiting;
+    }
+    const DocumentReading reading = state_.readings().at(index.value());
+    if (opens(reading) && open_waiting)
+    {
+        return open_waiting;
+    }
+    auto finished = take_arrived(ticket);
+    if (!finished.has_value())
+    {
+        return open_waiting || opens(reading);
+    }
+    state_ = state_.with_readings(without_ticket(state_.readings(), ticket));
+    std::visit([&](const auto &target)
+               { finish_reading(reading.path, target, std::move(finished.value().document)); },
+               reading.target);
+    return open_waiting;
+}
+
+void EditorController::finish_reading(const core::FilePath &path, OpenFailureReply reply,
+                                      std::expected<OpenedDocument, FileFailure> document)
+{
+    if (!document)
+    {
+        answer_unopened(path, document.error(), reply);
+        return;
+    }
+    open_read(path, std::move(document).value());
+}
+
+void EditorController::finish_reading(const core::FilePath &, AutosaveId tab,
+                                      std::expected<OpenedDocument, FileFailure> document)
+{
+    finish_tab_read(tab, std::move(document));
+}
+
+// まだ読んでいないタブの裏の読みが揃った（追補 1）。読めたらそのタブへ切り替え、読めなければ
+// 帯から外して 1 行知らせる。起動の復元で無題が仮に残っていれば、切り替えた後に外す。
+void EditorController::finish_tab_read(AutosaveId tab,
+                                       std::expected<OpenedDocument, FileFailure> document)
+{
+    const auto position = tab_position_of(tab);
+    if (!position.has_value())
+    {
+        return;
+    }
+    const std::optional<AutosaveId> placeholder = std::exchange(restore_untitled_, std::nullopt);
+    const bool replaces = placeholder.has_value() &&
+                          state_.autosave_ids().at(state_.active_tab()) == placeholder.value() &&
+                          blank_untitled();
+    if (loaded_tab(position.value(), std::move(document)) != TabReach::reached)
+    {
+        return;
+    }
+    accept(SwitchTab{position.value()});
+    if (!replaces)
+    {
+        return;
+    }
+    const auto untitled = tab_position_of(placeholder.value());
+    if (untitled.has_value() && untitled.value() != state_.active_tab())
+    {
+        state_ = state_.with_closed(untitled.value()).with_recency_ranked(restore_ranks_);
+    }
+}
+
+std::optional<std::size_t> EditorController::tab_position_of(AutosaveId tab) const
+{
+    const auto &ids = state_.autosave_ids();
+    const auto found = std::ranges::find(ids, tab);
+    if (found == ids.end())
+    {
+        return std::nullopt;
+    }
+    return static_cast<std::size_t>(std::distance(ids.begin(), found));
 }
 
 void EditorController::open_read(const core::FilePath &path, OpenedDocument opened)
@@ -742,15 +910,58 @@ void EditorController::answer_unopened(const core::FilePath &path, FileFailure f
     std::unreachable();
 }
 
-void EditorController::cancel_reading()
+// 読み込み中の要求を取り消す（券の仕事をやめさせて要求と留めた結果を消す・決定 5）。only_opens
+// なら開く要求だけ（使う人の新しい開く意図）、そうでなければタブの読みも（EndSession）。
+void EditorController::cancel_readings(bool only_opens)
 {
-    const auto &reading = state_.reading();
-    if (!reading.has_value())
+    std::vector<DocumentReading> kept;
+    for (const DocumentReading &reading : state_.readings())
+    {
+        if (only_opens && !opens(reading))
+        {
+            kept.push_back(reading);
+            continue;
+        }
+        ports_.reads.cancel(reading.ticket);
+        static_cast<void>(take_arrived(reading.ticket));
+    }
+    if (kept.size() != state_.readings().size())
+    {
+        state_ = state_.with_readings(std::move(kept));
+    }
+}
+
+// 揃う前に閉じたタブの読みは取り消す（追補 1）。閉じる道はどれもこの後に通る（apply の終わり）。
+void EditorController::cancel_closed_tab_reads()
+{
+    std::vector<DocumentReading> kept;
+    for (const DocumentReading &reading : state_.readings())
+    {
+        const auto *tab = std::get_if<AutosaveId>(&reading.target);
+        if (tab != nullptr && !tab_position_of(*tab).has_value())
+        {
+            ports_.reads.cancel(reading.ticket);
+            static_cast<void>(take_arrived(reading.ticket));
+            continue;
+        }
+        kept.push_back(reading);
+    }
+    if (kept.size() != state_.readings().size())
+    {
+        state_ = state_.with_readings(std::move(kept));
+    }
+}
+
+// 意図の終わりで読みの後始末をする（追補 1・2）。歩きが終わる・入力行や面が閉じる意図の終わりに
+// 留めた結果を採る。読み込み中の要求が無ければ欄を 1 つ読むだけで抜ける。
+void EditorController::follow_reads()
+{
+    if (state_.readings().empty())
     {
         return;
     }
-    ports_.reads.cancel(reading.value().ticket);
-    state_ = state_.with_reading(std::nullopt);
+    cancel_closed_tab_reads();
+    settle_reads();
 }
 
 void EditorController::collect_reads()
@@ -759,16 +970,18 @@ void EditorController::collect_reads()
     {
         adopt_read(std::move(outcome));
     }
+    settle_reads();
 }
 
+// 読み込み中の 1 行（決定 4）。頼んだ順の最初の要求を見せる。
 std::optional<core::DisplayText> EditorController::reading_message() const
 {
-    const auto &reading = state_.reading();
-    if (!reading.has_value())
+    const auto &readings = state_.readings();
+    if (readings.empty())
     {
         return std::nullopt;
     }
-    const DocumentReading &value = reading.value();
+    const DocumentReading &value = readings.front();
     const std::string name(value.path.file_name().empty() ? value.path.text()
                                                           : value.path.file_name());
     if (value.total_bytes == 0)
@@ -885,46 +1098,69 @@ void EditorController::enter_document()
     request_preview(true);
 }
 
-bool EditorController::reach_tab(std::size_t position)
+TabReach EditorController::reach_tab(std::size_t position)
 {
     const auto unloaded = state_.unloaded_at(position);
     if (!unloaded.has_value())
     {
-        return position < state_.tab_count();
+        return position < state_.tab_count() ? TabReach::reached : TabReach::dropped;
+    }
+    const AutosaveId tab = state_.autosave_ids().at(position);
+    // 同じタブを裏で読んでいる最中なら 2 本目を頼まない（追補 1）。
+    if (std::ranges::any_of(state_.readings(),
+                            [tab](const DocumentReading &reading)
+                            {
+                                const auto *target = std::get_if<AutosaveId>(&reading.target);
+                                return target != nullptr && *target == tab;
+                            }))
+    {
+        return TabReach::reading;
+    }
+    const core::FilePath path = unloaded.value().path;
+    const std::uint64_t ticket = ++read_tickets_;
+    state_ = state_.with_readings(
+        with_appended(state_.readings(), DocumentReading{path, ticket, 0, 0, tab}));
+    auto outcome = ports_.reads.request(DocumentReadRequest{path, ticket, maximum_file_bytes});
+    if (!outcome.has_value())
+    {
+        return TabReach::reading;
+    }
+    // 同期に揃った結果も同じ adopt_read を通す（決定 3・追補 4）。揃っていればここで採る。
+    adopt_read(std::move(outcome).value());
+    auto finished = take_arrived(ticket);
+    if (!finished.has_value())
+    {
+        return TabReach::reading;
+    }
+    state_ = state_.with_readings(without_ticket(state_.readings(), ticket));
+    return loaded_tab(position, std::move(finished.value().document));
+}
+
+// 揃った本文でまだ読んでいないタブを束に置き換える（ADR 0059 の決定 5）。読めなかったタブは帯と
+// 使った順から外し、1 行知らせる。ダイアログの経路（last_failure）には載せない（D26:
+// 窓を止めない）。
+TabReach EditorController::loaded_tab(std::size_t position,
+                                      std::expected<OpenedDocument, FileFailure> document)
+{
+    const auto unloaded = state_.unloaded_at(position);
+    if (!unloaded.has_value())
+    {
+        return position < state_.tab_count() ? TabReach::reached : TabReach::dropped;
     }
     const UnloadedDocument &tab = unloaded.value();
-    auto document = read_now(tab.path);
     if (!document)
     {
-        // 読めなかったタブは帯と使った順から外し、1 行知らせる。ダイアログの経路（last_failure）
-        // には載せない（D26: 窓を止めない）。
+        const core::FilePath path = tab.path;
         state_ = state_.with_dropped(position);
-        report_unreached(tab.path);
+        report_unreached(path);
         reveal_active_tab();
-        return false;
+        return TabReach::dropped;
     }
     OpenedDocument opened = std::move(document).value();
     state_ = state_.with_loaded(
         position, reached_bundle(std::move(opened.text),
                                  Document{tab.path, opened.encoding, std::size_t{0}}, tab));
-    return true;
-}
-
-// 裏へ回された（同期の上限を超える）ときは頼みを取り消し、今の上限を超えたときと同じ too_large
-// として扱う。まだ読んでいないタブを裏で読む形は ADR 0159 に無く、合成ルートの上限（L2c）までの
-// 暫定（今の同期の上限と同じ振る舞い）。
-std::expected<OpenedDocument, FileFailure> EditorController::read_now(const core::FilePath &path)
-{
-    const std::uint64_t ticket = ++read_tickets_;
-    auto outcome = ports_.reads.request(DocumentReadRequest{path, ticket, maximum_file_bytes});
-    auto *finished =
-        outcome.has_value() ? std::get_if<DocumentReadFinished>(&outcome.value()) : nullptr;
-    if (finished == nullptr)
-    {
-        ports_.reads.cancel(ticket);
-        return std::unexpected(FileFailure::too_large);
-    }
-    return std::move(finished->document);
+    return TabReach::reached;
 }
 
 void EditorController::report_unreached(const core::FilePath &path)
@@ -937,8 +1173,9 @@ void EditorController::report_unreached(const core::FilePath &path)
 // 窓は閉じていく途中なので、状態を変えず何も出さない。
 void EditorController::accept(const EndSession &intent)
 {
-    // 読み込み中の要求は取消で、ファイルは開かれない（ADR 0159 の決定 5・11）。
-    cancel_reading();
+    // 読み込み中の要求は取消で、ファイルは開かれない（ADR 0159 の決定 5・11・追補 1）。
+    cancel_readings(false);
+    restore_untitled_.reset();
     // 言語サーバーは待たずに止める（ADR 0160 の追補）。子が居なければ呼ばない。
     end_language_server_session();
     settle_follow();
@@ -1040,12 +1277,21 @@ void EditorController::close_active_tab()
     {
         const std::size_t active = state_.active_tab();
         const std::size_t neighbour = active + 1 < state_.tab_count() ? active + 1 : active - 1;
-        if (reach_tab(neighbour))
+        switch (reach_tab(neighbour))
         {
+        case TabReach::reached:
             leave_document();
             state_ = state_.with_closed(active);
             enter_document();
             return;
+        case TabReach::reading:
+            // 隣を裏で読んでいる間は空の無題に移り、揃ったら隣へ切り替える（追補 1）。
+            leave_document();
+            state_ = state_.with_new_tab().with_closed(active);
+            enter_document();
+            return;
+        case TabReach::dropped:
+            break;
         }
     }
     leave_document();

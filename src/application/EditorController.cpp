@@ -391,6 +391,9 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // SelectLanguage も同じ（ADR 0154 の決定 4）。SelectSyntax も同じ（ADR 0156 の追補）。
     // 面のホイール ScrollPaletteList も使う人の操作の側なので載せない（ADR 0150 の決定 2）。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
+    // 閉じたタブの読みの取消と、歩き・入力行・面の終わりで留めた読みの採用（ADR 0159 の追補
+    // 1・2）。
+    follow_reads();
     fit_command_rows();
     ask_display();
     reconcile_language_server();

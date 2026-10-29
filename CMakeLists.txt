@@ -51,7 +51,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/ThemeCatalog.cpp src/core/ThemeLookupFailure.cpp src/core/ExEvaluationFailure.cpp
     src/core/BookmarkKey.cpp src/core/BodyLayout.cpp src/core/PaneLayouts.cpp src/core/EditAdjust.cpp src/core/CaretMove.cpp src/core/ClipboardText.cpp src/core/CommandLayout.cpp
     src/core/CommandLine.cpp src/core/FontFamilies.cpp src/core/CommandChoice.cpp src/core/SubsequenceScore.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
-    src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExplorerLayout.cpp src/core/ExplorerTree.cpp src/core/ExResult.cpp src/core/FontSize.cpp
+    src/core/BytesReservation.cpp src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExplorerLayout.cpp src/core/ExplorerTree.cpp src/core/ExResult.cpp src/core/FontSize.cpp
     src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp src/core/InputHistory.cpp
     src/core/KeyChord.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
     src/core/NewlineIndex.cpp src/core/ScrollBounds.cpp src/core/SearchLine.cpp
@@ -204,7 +204,8 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/SessionCodec.cpp
     src/adapters/win32/Win32SessionAdapter.cpp src/adapters/win32/TextLines.cpp
     src/adapters/win32/BookmarkCodec.cpp src/adapters/win32/Win32BookmarkAdapter.cpp
-    src/adapters/win32/SynchronousDocumentReader.cpp
+    src/adapters/win32/SynchronousDocumentReader.cpp src/adapters/win32/Win32DocumentReader.cpp
+    src/adapters/win32/DocumentReadShelf.cpp src/adapters/win32/DocumentChunkRead.cpp
     src/adapters/win32/HistoryCodec.cpp src/adapters/win32/Win32HistoryAdapter.cpp
     src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32Bell.cpp
     src/adapters/win32/ClipboardCalls.cpp src/adapters/win32/HtmlClipboardFormat.cpp src/adapters/win32/Win32ClipboardAdapter.cpp
@@ -286,6 +287,16 @@ nenenib_link(nib_long_path_tests nenenib_application)
 nenenib_link(nib_long_path_tests nenenib_adapters)
 add_test(NAME nib_adapters_long_paths COMMAND nib_long_path_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(nib_adapters_long_paths PROPERTIES TIMEOUT 60)
+
+# Issue #993: 開く道の読み（Win32DocumentReader）を本物のファイルとワーカー 1 本で測る（ADR 0159）。
+# 65 MiB の見本を書いて塊の仕事で読む。時刻は読まず、合図の受け皿だけを待つので、止まらないときは
+# この制限時間で落ちる。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
+nenenib_target(nib_document_reader_tests adapter_tests EXECUTABLE tests/adapters/DocumentReaderTests.cpp)
+nenenib_link(nib_document_reader_tests nenenib_core)
+nenenib_link(nib_document_reader_tests nenenib_application)
+nenenib_link(nib_document_reader_tests nenenib_adapters)
+add_test(NAME nib_adapters_document_reader COMMAND nib_document_reader_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_adapters_document_reader PROPERTIES TIMEOUT 120)
 
 # Issue #897: 設定・前回のタブ・履歴・ブックマーク・自動退避の台帳の復号に、固定 seed で壊した
 # バイト列を通す性質の試験。ファイルには触れない。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。

@@ -8,7 +8,6 @@
 #include "LocalSettingsPath.hpp"
 #include "Milestone.hpp"
 #include "OpenDocument.hpp"
-#include "SynchronousDocumentReader.hpp"
 #include "SystemFontFamilies.hpp"
 #include "TemporaryFiles.hpp"
 #include "Win32AppearanceAdapter.hpp"
@@ -17,6 +16,7 @@
 #include "Win32BookmarkAdapter.hpp"
 #include "Win32ClipboardAdapter.hpp"
 #include "Win32CodePageAdapter.hpp"
+#include "Win32DocumentReader.hpp"
 #include "Win32FileAdapter.hpp"
 #include "Win32FolderAdapter.hpp"
 #include "Win32FontCollationAdapter.hpp"
@@ -230,15 +230,13 @@ void bind_window_handle(const nenenib::ui::win32::EditorWindow &window,
 }
 
 // 「届いた」の合図は窓ができてから渡す。番号と HWND は ui が持ち、adapters は知らない（ADR 0062
-// の決定 7）。Markdown のプレビューの adapter も同じワーカーを借りる（ADR 0155 の決定 5）。
-void bind_work_signal(const nenenib::ui::win32::EditorWindow &window,
-                      nenenib::adapters::win32::Win32FolderAdapter &folders,
-                      nenenib::adapters::win32::Win32AutosaveAdapter &autosave,
-                      nenenib::adapters::win32::Win32MarkdownAdapter &markdown)
+// の決定 7）。同じフォルダ・自動退避・Markdown のプレビュー（ADR 0155 の決定 5）・開く道の読み
+// （ADR 0159 の決定 9）の adapter が同じワーカーを借りる。起動の引数の読みは窓より先に頼まれる
+// ので、開く道の読みはそれより前に届いた結果を bind のときに 1 回知らせる。
+template <typename... Adapters>
+void bind_work_signal(const nenenib::ui::win32::EditorWindow &window, Adapters &...adapters)
 {
-    folders.bind(window.work_signal());
-    autosave.bind(window.work_signal());
-    markdown.bind(window.work_signal());
+    (adapters.bind(window.work_signal()), ...);
 }
 
 int run(HINSTANCE instance)
@@ -282,7 +280,7 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32AutosaveAdapter autosave(
         worker, files, nenenib::adapters::win32::local_autosave_root());
     nenenib::adapters::win32::Win32Bell bell;
-    nenenib::adapters::win32::SynchronousDocumentReader reads(files, code_pages);
+    nenenib::adapters::win32::Win32DocumentReader reads(worker, files, code_pages);
     nenenib::adapters::win32::Win32LanguageServer language_server({});
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{
@@ -299,7 +297,7 @@ int run(HINSTANCE instance)
         return report(reason_of(window.error()));
     }
     bind_window_handle(*window.value(), clipboard, language_server);
-    bind_work_signal(*window.value(), folders, autosave, markdown);
+    bind_work_signal(*window.value(), folders, autosave, markdown, reads);
     pump_messages(*window.value(), warmup, language_server);
     return window.value()->rendering_failed() ? 1 : 0;
 }

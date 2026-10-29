@@ -66,8 +66,14 @@ std::expected<OpenedDocument, FileFailure> read_opened_document(FilePort &files,
     {
         return std::unexpected(bytes.error());
     }
+    return opened_document_of(code_pages, std::move(bytes).value());
+}
+
+std::expected<OpenedDocument, FileFailure> opened_document_of(CodePagePort &code_pages,
+                                                              core::SealedBytes &&bytes)
+{
     // 封印済みの列をそのまま判定へ移す。複写はしない（ADR 0141 決定 4）。
-    auto detected = core::DetectedText::from_sealed(std::move(bytes).value());
+    auto detected = core::DetectedText::from_sealed(std::move(bytes));
     if (!detected)
     {
         return std::unexpected(file_failure_of(detected.error()));

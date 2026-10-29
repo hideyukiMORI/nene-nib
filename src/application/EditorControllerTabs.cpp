@@ -9,6 +9,7 @@
 #include "PaneView.hpp"
 #include "PreviewView.hpp"
 #include "SplitLayout.hpp"
+#include "TabReach.hpp"
 #include "TabRecency.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
@@ -97,7 +98,7 @@ void EditorController::accept(const SwitchTab &intent)
     }
     // 行き先がまだ読んでいない文書ならここで読む。読めなければそのタブは外れて知らせだけが残り、
     // 今の文書の一時の値（入力行・変換中の文字列）は閉じない（ADR 0059 の決定 5）。
-    if (!reach_tab(intent.index))
+    if (reach_tab(intent.index) != TabReach::reached)
     {
         return;
     }
@@ -122,7 +123,7 @@ void EditorController::accept(const WalkRecentTab &intent)
     }
     // 行き先が読めなければ外れて、歩きは今のタブのまま続く。次の 1 歩は外れた後の使った順の
     // 隣へ行く（ADR 0059 の決定 5）。
-    if (!reach_tab(destination.value()))
+    if (reach_tab(destination.value()) != TabReach::reached)
     {
         return;
     }
@@ -214,11 +215,16 @@ void EditorController::accept(const SwitchPane &)
     {
         return;
     }
-    const auto &ids = state_.autosave_ids();
-    const auto found = std::ranges::find(ids, other->tab);
-    if (found == ids.end() ||
-        !reach_tab(static_cast<std::size_t>(std::distance(ids.begin(), found))))
+    const auto position = tab_position_of(other->tab);
+    const TabReach reach = position.has_value() ? reach_tab(position.value()) : TabReach::dropped;
+    switch (reach)
     {
+    case TabReach::reached:
+        break;
+    case TabReach::reading:
+        // 裏で読んでいる間は枠をそのまま残す（揃ったらそのタブへ切り替わる・ADR 0159 の追補 1）。
+        return;
+    case TabReach::dropped:
         // 読めなかった文書は reach_tab が帯から外して知らせる。もう 1 つの枠も外す。
         state_ = state_.without_split();
         return;

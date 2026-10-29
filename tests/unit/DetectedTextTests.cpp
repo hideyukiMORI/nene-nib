@@ -1,12 +1,15 @@
+#include "BytesReservation.hpp"
 #include "DetectedText.hpp"
 #include "Scopes.hpp"
 #include "SealedBytes.hpp"
 #include "TestSupport.hpp"
+#include "Utf8.hpp"
 
 #include <algorithm>
 #include <array>
 #include <concepts>
 #include <cstddef>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -18,6 +21,7 @@ namespace nenenib::tests
 namespace
 {
 using core::byte_order_mark;
+using core::BytesReservation;
 using core::DetectedText;
 using core::EncodingFailure;
 using core::LineEnding;
@@ -57,6 +61,23 @@ static_assert(std::same_as<decltype(std::declval<const SealedBytes &>().view()),
 static_assert(!ExposesSealedData<SealedBytes>);
 static_assert(!ReleasesSealedBytes<SealedBytes>);
 static_assert(!WritesThroughSealedView<SealedBytes>);
+
+// 予約（ADR 0141 の追補 11 (e)）。複写できず、封印の前の列を読む口が無い。
+template <typename Reservation>
+concept ViewsReservation = requires(Reservation &reservation) { reservation.view(); };
+template <typename Reservation>
+concept ExposesReservationData = requires(Reservation &reservation) { reservation.data(); };
+template <typename Reservation>
+concept SealsReservationLvalue = requires(Reservation &reservation) { reservation.seal(); };
+
+static_assert(!std::is_copy_constructible_v<BytesReservation>);
+static_assert(!std::is_copy_assignable_v<BytesReservation>);
+static_assert(std::is_nothrow_move_constructible_v<BytesReservation>);
+static_assert(!std::is_default_constructible_v<BytesReservation>);
+static_assert(!ViewsReservation<BytesReservation>);
+static_assert(!ExposesReservationData<BytesReservation>);
+static_assert(!SealsReservationLvalue<BytesReservation>);
+static_assert(!std::is_constructible_v<SealedBytes, std::string, std::optional<std::size_t>>);
 
 [[nodiscard]] SealedBytes sealed_of(std::string_view source)
 {
@@ -250,6 +271,110 @@ void verify_detected_utf16()
                EncodingFailure::undecodable,
            "an unpaired surrogate in sealed bytes is undecodable");
 }
+
+// 予約を step バイトずつの窓で埋めて封印する（塊の切り方だけを変える）。
+[[nodiscard]] SealedBytes sealed_in_steps(std::string_view source, std::size_t step)
+{
+    auto reservation = BytesReservation::reserve(source.size());
+    std::size_t written = 0;
+    while (written < source.size())
+    {
+        const auto target = reservation.window(step);
+        std::copy_n(source.data() + written, target.size(), target.data());
+        reservation.commit(target.size());
+        written += target.size();
+    }
+    return std::move(reservation).seal();
+}
+
+// 追補 11 (f): 窓は宣言の残りを超えず、commit の超過は切り詰められ、封印の長さは確定の合計。
+void verify_reservation_lengths()
+{
+    auto reservation = BytesReservation::reserve(10);
+    const auto first = reservation.window(4);
+    expect(first.size() == 4, "a window is as long as asked while the declaration has room");
+    std::ranges::fill(first, 'a');
+    reservation.commit(4);
+    const auto second = reservation.window(100);
+    expect(second.size() == 6, "a window never exceeds the declared remainder");
+    std::ranges::fill(second.first(2), 'b');
+    reservation.commit(2);
+    const auto third = reservation.window(3);
+    std::ranges::fill(third, 'c');
+    reservation.commit(50);
+    expect(reservation.window(100).size() == 1,
+           "an excessive commit is cut to its window and the remainder stays");
+    reservation.commit(0);
+    const auto sealed = std::move(reservation).seal();
+    expect(sealed.view() == "aaaabbccc" && sealed.size() == 9,
+           "the sealed length is the sum of the committed lengths");
+    auto none = BytesReservation::reserve(0);
+    expect(none.window(8).empty(), "an empty declaration lends an empty window");
+    expect(std::move(none).seal().size() == 0, "an empty declaration seals empty bytes");
+}
+
+// 追補 11 (g): 塊の切り方を変えても、判定と code point の数は借りた列の判定と同じ。
+void verify_reservation_chunking()
+{
+    const std::array<std::string, 9> samples{"",
+                                             "ASCII\n",
+                                             "日本語\r\n続き😀",
+                                             std::string(byte_order_mark()) + "あいう",
+                                             "\x93\xFA\x96\x7B",
+                                             "\xFF",
+                                             std::string("\xFF\xFE\x42\x30", 4),
+                                             "\xE3\x81",
+                                             std::string(70000, 'a') + "あ" +
+                                                 std::string(70000, 'b')};
+    const std::array<std::size_t, 4> steps{1, 2, 4, 65536};
+    for (const auto &sample : samples)
+    {
+        const auto borrowed = DetectedText::from_bytes(sample);
+        const auto counted = core::validate_utf8(sample);
+        const std::optional<std::size_t> points =
+            counted.has_value() ? std::optional<std::size_t>(counted.value()) : std::nullopt;
+        for (const std::size_t step : steps)
+        {
+            auto sealed = sealed_in_steps(sample, step);
+            expect(sealed.view() == sample, "every chunking seals the same bytes");
+            expect(sealed.utf8_code_points() == points,
+                   "every chunking counts the same code points as one validation");
+            const auto detected = DetectedText::from_sealed(std::move(sealed));
+            expect(detected.has_value() == borrowed.has_value() &&
+                       (!borrowed.has_value() ||
+                        (detected.value().encoding() == borrowed.value().encoding() &&
+                         detected.value().bytes() == borrowed.value().bytes())) &&
+                       (borrowed.has_value() || detected.error() == borrowed.error()),
+                   "every chunking detects like the borrowed bytes");
+        }
+    }
+    // 3 バイトの文字の途中で窓を切る（あ = E3 81 82）。
+    auto split = BytesReservation::reserve(4);
+    const std::string_view kana = "xあ";
+    auto head = split.window(2);
+    std::copy_n(kana.data(), 2, head.data());
+    split.commit(2);
+    auto tail = split.window(2);
+    std::copy_n(kana.data() + 2, 2, tail.data());
+    split.commit(2);
+    const auto joined = std::move(split).seal();
+    expect(joined.utf8_code_points() == std::optional<std::size_t>(2),
+           "a character split across windows is validated whole");
+}
+
+// 追補 11 (h): filled は reserve → seal と同じ列と検証を作る。
+void verify_filled_is_reservation()
+{
+    const std::array<std::string, 4> samples{"", "abc", "日本", "\x93\xFA"};
+    for (const auto &sample : samples)
+    {
+        const auto filled = sealed_of(sample);
+        const auto reserved = sealed_in_steps(sample, sample.size() + 1);
+        expect(filled.view() == reserved.view() &&
+                   filled.utf8_code_points() == reserved.utf8_code_points(),
+               "filled seals the same bytes and validation as a reservation");
+    }
+}
 } // namespace
 
 void verify_detected_text_contracts()
@@ -261,5 +386,8 @@ void verify_detected_text_contracts()
     verify_defensive_boundaries();
     verify_sealed_fill();
     verify_sealed_detection();
+    verify_reservation_lengths();
+    verify_reservation_chunking();
+    verify_filled_is_reservation();
 }
 } // namespace nenenib::tests

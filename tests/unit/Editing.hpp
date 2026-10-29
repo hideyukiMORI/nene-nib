@@ -3,6 +3,7 @@
 #include "Appearance.hpp"
 #include "EditorController.hpp"
 #include "EditorPorts.hpp"
+#include "OpenDocument.hpp"
 #include "ScriptedAppearance.hpp"
 #include "ScriptedAutosave.hpp"
 #include "ScriptedBell.hpp"
@@ -25,6 +26,7 @@
 #include <functional>
 #include <optional>
 #include <utility>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -48,6 +50,14 @@ class Editing final
     // 読むファイルを仕込んでから controller を作る。
     Editing(SessionReading listed, const std::function<void(ScriptedFiles &)> &prepare)
         : session_(std::move(listed)), controller_(prepared_ports(prepare))
+    {
+    }
+
+    // 起動の引数と前回のタブの一覧で controller を作る口（ADR 0159 の追補 1・4）。ファイルと読みの
+    // 替え玉（裏へ回す境目）を仕込んでから controller を作る。
+    Editing(SessionReading listed, const std::vector<nenenib::application::OpenDocument> &initial,
+            const std::function<void(ScriptedFiles &, ScriptedDocumentReads &)> &prepare)
+        : session_(std::move(listed)), controller_(prepared_reads(prepare), initial)
     {
     }
 
@@ -136,6 +146,12 @@ class Editing final
     }
 
   private:
+    [[nodiscard]] nenenib::application::EditorPorts
+    prepared_reads(const std::function<void(ScriptedFiles &, ScriptedDocumentReads &)> &prepare)
+    {
+        return prepared_ports([&](ScriptedFiles &files) { prepare(files, reads_); });
+    }
+
     // controller より先に宣言したポートは、この時点でもう出来ている。
     [[nodiscard]] nenenib::application::EditorPorts
     prepared_ports(const std::function<void(ScriptedFiles &)> &prepare)

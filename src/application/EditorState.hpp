@@ -112,10 +112,11 @@ class EditorState final
     [[nodiscard]] EditorState with_settings_failure(std::optional<SettingsIssue> failure) const;
     [[nodiscard]] EditorState with_command_input(std::optional<CommandInput> command) const;
     [[nodiscard]] EditorState with_command_message(std::optional<core::DisplayText> message) const;
-    // 裏で読んでいる最中の開く要求（ADR 0159 の決定 4・5）。窓に 1 つで、帯の外にある（タブの
-    // 切り替え・閉じるでは変わらない）。置くのと消すのは controller の開く道と EndSession だけ。
-    [[nodiscard]] const std::optional<DocumentReading> &reading() const noexcept;
-    [[nodiscard]] EditorState with_reading(std::optional<DocumentReading> reading) const;
+    // 裏で読んでいる最中の要求（ADR 0159 の決定 4・5・追補 1・4）。頼んだ順に並び、開く要求は
+    // この順に採る。まだ読んでいないタブの読みは行き先のタブを退避番号で名指す。置くのと消すのは
+    // controller の開く道・reach_tab・揃った結果の採用・取消だけ。
+    [[nodiscard]] const std::vector<DocumentReading> &readings() const noexcept;
+    [[nodiscard]] EditorState with_readings(std::vector<DocumentReading> readings) const;
     [[nodiscard]] EditorState with_search_preview(std::optional<SearchPreview> preview) const;
     // 開いた本文で入れ替える。履歴は空・キャレットとスクロールは先頭に戻り、
     // モードと外観は保たれる（ADR 0010 の決定 8）。
@@ -311,7 +312,7 @@ class EditorState final
     std::optional<SettingsIssue> settings_failure_;
     std::optional<CommandInput> command_input_;
     std::optional<core::DisplayText> command_message_;
-    std::optional<DocumentReading> reading_;
+    std::vector<DocumentReading> readings_;
     std::optional<SearchPreview> search_preview_;
     core::InputHistory ex_history_ = core::InputHistory::empty();
     core::InputHistory search_history_ = core::InputHistory::empty();
