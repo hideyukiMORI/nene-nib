@@ -511,6 +511,9 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
 
 std::expected<void, RenderFailure> Direct2DRenderer::create_guide_formats(const wchar_t *face)
 {
+    // 鍵の箱の幅は書式で測ったものなので、書式と一緒に捨てる（#1122）。
+    measured_guide_keys_.reset();
+    measured_guide_key_width_ = 0;
     const auto key = make_format(family(L"Cascadia Code", L"Consolas"), 12.5F,
                                  DWRITE_FONT_WEIGHT_NORMAL, guide_key_format_);
     const auto label = make_format(face, 13.5F, DWRITE_FONT_WEIGHT_NORMAL, guide_label_format_);
@@ -1613,8 +1616,18 @@ std::int32_t Direct2DRenderer::body_guide_key_width(const application::EditorFra
     {
         return 0;
     }
-    return guide_key_width(*dwrite_.Get(), *guide_key_format_.Get(), frame.guide.entries,
-                           scaled(guide_key_padding_dips));
+    const std::array<std::string, 3> keys{frame.guide.entries.at(0).key,
+                                          frame.guide.entries.at(1).key,
+                                          frame.guide.entries.at(2).key};
+    if (measured_guide_keys_.has_value() && measured_guide_keys_.value() == keys)
+    {
+        return measured_guide_key_width_;
+    }
+    measured_guide_key_width_ =
+        guide_key_width(*dwrite_.Get(), *guide_key_format_.Get(), frame.guide.entries,
+                        scaled(guide_key_padding_dips));
+    measured_guide_keys_ = keys;
+    return measured_guide_key_width_;
 }
 
 void Direct2DRenderer::draw_body_guide(const application::EditorFrame &frame,
