@@ -94,7 +94,9 @@ class TextBuffer final
     [[nodiscard]] std::size_t rebuilt_column_chunks() const noexcept;
 
   private:
-    [[nodiscard]] static TextBuffer from_validated_utf8(std::string text);
+    // skip は original の先頭で本文に入れないバイト数（UTF-8 の BOM の 3・ADR 0159 の決定 8）。列は
+    // 消さずに最初の piece の開始をずらす。
+    [[nodiscard]] static TextBuffer from_validated_utf8(std::string text, std::size_t skip = 0);
 
     using Buffer = std::shared_ptr<const std::string>;
     using Chunks = std::vector<std::shared_ptr<AddChunk>>;

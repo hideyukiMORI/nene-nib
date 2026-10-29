@@ -77,7 +77,7 @@ using nenenib::core::FilePath;
 using nenenib::core::Milestone;
 using nenenib::core::TextEncoding;
 
-// application が渡す上限と同じ値（ADR 0010 の決定 12）。正本は core の 1 か所（#792）。
+// application が渡す上限と同じ値（ADR 0159 の決定 7）。正本は core の 1 か所。
 constexpr std::size_t read_limit = nenenib::core::maximum_document_bytes;
 constexpr wchar_t folder[] = L"nib-adapter-files";
 constexpr wchar_t recorded_marks[] = L"nib-adapter-files/timing.json";
@@ -324,7 +324,7 @@ void verify_read_request_size()
     const auto maximum = static_cast<std::size_t>((std::numeric_limits<DWORD>::max)());
     expect(file_read_request_size(0) == 0, "zero remaining bytes request nothing");
     expect(file_read_request_size(read_limit) == read_limit,
-           "a complete 64 MiB read keeps its single request");
+           "a complete 1 GiB read keeps its single request");
     expect(file_read_request_size(maximum - 1) == maximum - 1,
            "one byte below DWORD maximum is not split");
     expect(file_read_request_size(maximum) == maximum, "DWORD maximum fits one read request");

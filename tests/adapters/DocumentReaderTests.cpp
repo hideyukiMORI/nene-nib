@@ -2,8 +2,10 @@
 // （Win32DocumentReader）を本物のファイルと worker 1 本で測る。64 MiB を超える見本は worker の塊の
 // 仕事で読まれ、進み具合が塊ごとに届き、揃った本文の長さと行数が見本と一致する。取消の後は終わりが
 // 届かない。64 MiB 以下は呼んだスレッドで揃う。見本はビルドディレクトリの直下に固定の名前で書き、
-// 冒頭で前回の残りを消して終わりに消す。時刻は読まない（Sleep・時計・タイムアウトの待ちを書かない）。
+// 冒頭で前回の残りを消して終わりに消す。上限（1 GiB と復号の 64 MiB）を超える見本は読む前・写す前に
+// 断る（ADR 0159 の決定 7）。時刻は読まない（Sleep・時計・タイムアウトの待ちを書かない）。
 // 待つのは合図の受け皿（セマフォ）だけで、止まらないときは CTest の制限時間で落ちる。
+#include "DocumentByteLimit.hpp"
 #include "DocumentReadFinished.hpp"
 #include "DocumentReadOutcome.hpp"
 #include "DocumentReadProgress.hpp"
@@ -41,12 +43,15 @@ constexpr wchar_t large_name[] = L"nib-document-reader-large.txt";
 constexpr char large_path[] = "nib-document-reader-large.txt";
 constexpr wchar_t small_name[] = L"nib-document-reader-small.txt";
 constexpr char small_path[] = "nib-document-reader-small.txt";
+constexpr wchar_t oversized_name[] = L"nib-document-reader-oversized.txt";
+constexpr char oversized_path[] = "nib-document-reader-oversized.txt";
+constexpr wchar_t utf16_name[] = L"nib-document-reader-utf16.txt";
+constexpr char utf16_path[] = "nib-document-reader-utf16.txt";
 // 64 バイトの固定の行（LF）。65 MiB は 64 MiB の塊 1 つと残りの 1 MiB に分かれる。
 constexpr std::string_view sample_line =
     "nib document reader sample line 0123456789 abcdefghijklmnopqrst\n";
 constexpr std::size_t large_bytes = std::size_t{65} * 1024 * 1024;
 constexpr std::size_t large_lines = large_bytes / 64;
-constexpr std::size_t no_limit = std::size_t{1} << 40U;
 
 static_assert(sample_line.size() == 64);
 
@@ -144,7 +149,8 @@ void verify_large_on_worker()
     adapters::Win32DocumentReader reads(worker, files, code_pages);
     Arrivals arrived{0};
     reads.bind([&arrived] { arrived.release(); });
-    const auto asked = reads.request(app::DocumentReadRequest{path_of(large_path), 7, no_limit});
+    const auto asked = reads.request(
+        app::DocumentReadRequest{path_of(large_path), 7, core::maximum_document_bytes});
     expect(!asked.has_value(), "a file over 64 MiB is read on the worker");
     const auto seen = until_finished(reads, arrived, 7);
     std::size_t progress = 0;
@@ -182,7 +188,8 @@ void verify_cancelled_on_worker()
     adapters::Win32DocumentReader reads(worker, files, code_pages);
     Arrivals arrived{0};
     reads.bind([&arrived] { arrived.release(); });
-    const auto asked = reads.request(app::DocumentReadRequest{path_of(large_path), 9, no_limit});
+    const auto asked = reads.request(
+        app::DocumentReadRequest{path_of(large_path), 9, core::maximum_document_bytes});
     expect(!asked.has_value(), "the cancelled read starts on the worker");
     reads.cancel(9);
     // 走っていた塊が積み直した次の塊も流れ終わるまで、列の後ろを 2 回待つ。
@@ -205,7 +212,8 @@ void verify_small_synchronous()
     adapters::Win32FileAdapter files;
     adapters::Win32CodePageAdapter code_pages;
     adapters::Win32DocumentReader reads(worker, files, code_pages);
-    const auto asked = reads.request(app::DocumentReadRequest{path_of(small_path), 3, no_limit});
+    const auto asked = reads.request(
+        app::DocumentReadRequest{path_of(small_path), 3, core::maximum_document_bytes});
     expect(asked.has_value() && std::holds_alternative<app::DocumentReadFinished>(asked.value()),
            "a file of 64 MiB or less is read on the calling thread");
     if (asked.has_value())
@@ -216,13 +224,82 @@ void verify_small_synchronous()
                "the small file opens with its lines");
     }
     expect(!worker.started(), "a small file does not wake the worker");
-    const auto missing = reads.request(
-        app::DocumentReadRequest{path_of("nib-document-reader-none.txt"), 4, no_limit});
+    const auto missing = reads.request(app::DocumentReadRequest{
+        path_of("nib-document-reader-none.txt"), 4, core::maximum_document_bytes});
     expect(missing.has_value() &&
                !std::get<app::DocumentReadFinished>(missing.value()).document.has_value() &&
                std::get<app::DocumentReadFinished>(missing.value()).document.error() ==
                    app::FileFailure::not_found,
            "a missing file fails on the calling thread");
+}
+
+// 開く上限（1 GiB）を 1 バイト超えるファイルは、読む前に呼んだスレッドで too_large になる（ADR 0159
+// の決定 7）。見本は大きさだけを伸ばしたファイル（中身は書かない）。
+void verify_past_open_limit()
+{
+    const HANDLE file = CreateFileW(oversized_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                                    FILE_ATTRIBUTE_NORMAL, nullptr);
+    expect(file != INVALID_HANDLE_VALUE, "the oversized sample is created");
+    if (file == INVALID_HANDLE_VALUE)
+    {
+        return;
+    }
+    LARGE_INTEGER size{};
+    size.QuadPart = static_cast<LONGLONG>(core::maximum_document_bytes) + 1;
+    expect(SetFilePointerEx(file, size, nullptr, FILE_BEGIN) != 0 && SetEndOfFile(file) != 0,
+           "the oversized sample is one byte past 1 GiB");
+    CloseHandle(file);
+    adapters::Win32Worker worker;
+    adapters::Win32FileAdapter files;
+    adapters::Win32CodePageAdapter code_pages;
+    adapters::Win32DocumentReader reads(worker, files, code_pages);
+    const auto asked = reads.request(
+        app::DocumentReadRequest{path_of(oversized_path), 5, core::maximum_document_bytes});
+    expect(asked.has_value() &&
+               !std::get<app::DocumentReadFinished>(asked.value()).document.has_value() &&
+               std::get<app::DocumentReadFinished>(asked.value()).document.error() ==
+                   app::FileFailure::too_large,
+           "a file one byte past 1 GiB is too_large before it is read");
+    expect(!worker.started(), "a file past the open limit does not wake the worker");
+    expect(DeleteFileW(oversized_name) != 0, "the oversized sample is removed");
+}
+
+// 64 MiB を超える UTF-16 は worker で読み終えてから、写す前に too_large_to_decode になる（決定 7・
+// L-3）。
+void verify_utf16_past_decoded_limit()
+{
+    std::string body("\xFF\xFE", 2);
+    body.append(large_bytes, 'A');
+    const HANDLE file = CreateFileW(utf16_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                                    FILE_ATTRIBUTE_NORMAL, nullptr);
+    expect(file != INVALID_HANDLE_VALUE, "the UTF-16 sample is created");
+    if (file == INVALID_HANDLE_VALUE)
+    {
+        return;
+    }
+    DWORD written = 0;
+    expect(WriteFile(file, body.data(), static_cast<DWORD>(body.size()), &written, nullptr) != 0 &&
+               written == body.size(),
+           "the UTF-16 sample is written whole");
+    CloseHandle(file);
+    adapters::Win32Worker worker;
+    adapters::Win32FileAdapter files;
+    adapters::Win32CodePageAdapter code_pages;
+    adapters::Win32DocumentReader reads(worker, files, code_pages);
+    Arrivals arrived{0};
+    reads.bind([&arrived] { arrived.release(); });
+    const auto asked = reads.request(
+        app::DocumentReadRequest{path_of(utf16_path), 6, core::maximum_document_bytes});
+    expect(!asked.has_value(), "a UTF-16 file over 64 MiB is read on the worker");
+    bool refused = false;
+    for (const auto &outcome : until_finished(reads, arrived, 6))
+    {
+        const auto *finished = std::get_if<app::DocumentReadFinished>(&outcome);
+        refused = refused || (finished != nullptr && !finished->document.has_value() &&
+                              finished->document.error() == app::FileFailure::too_large_to_decode);
+    }
+    expect(refused, "a UTF-16 file over 64 MiB is too_large_to_decode");
+    expect(DeleteFileW(utf16_name) != 0, "the UTF-16 sample is removed");
 }
 } // namespace
 
@@ -230,11 +307,15 @@ int main()
 {
     DeleteFileW(large_name);
     DeleteFileW(small_name);
+    DeleteFileW(oversized_name);
+    DeleteFileW(utf16_name);
     write_sample(large_name, large_lines);
     write_sample(small_name, 4);
     verify_small_synchronous();
     verify_large_on_worker();
     verify_cancelled_on_worker();
+    verify_past_open_limit();
+    verify_utf16_past_decoded_limit();
     expect(DeleteFileW(large_name) != 0 && DeleteFileW(small_name) != 0,
            "the sample files are removed");
     std::printf("Document reader adapter: %zu checks, %zu failures\n", checks(), failures());

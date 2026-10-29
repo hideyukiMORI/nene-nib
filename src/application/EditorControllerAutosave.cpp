@@ -67,6 +67,8 @@ autosave_bundle(const std::shared_ptr<const UnloadedDocument> &)
 
 // 自動退避の失敗の 1 行（ADR 0137 の決定 4）。
 constexpr std::string_view autosave_failed_message = "自動退避できませんでした";
+// 上限を超える本文を退避しない知らせ（ADR 0159 の決定 7・L-4）。
+constexpr std::string_view autosave_oversized_message = "64 MiB を超える文書は自動退避しません";
 // 自動退避の残骸を読めなかった知らせ（ADR 0137 の決定 6）。
 constexpr std::string_view unrestored_prefix = "戻せませんでした: ";
 
@@ -129,6 +131,9 @@ void EditorController::autosave_now()
             autosave_ledger_.erase(id);
             break;
         case AutosaveStep::keep:
+            break;
+        case AutosaveStep::oversized:
+            notify_autosave_oversized(id);
             break;
         }
     }
@@ -291,5 +296,19 @@ void EditorController::notify_autosave_failure()
     autosave_notified_ = true;
     // 材料は固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
     reject(core::DisplayText::parse(autosave_failed_message).value());
+}
+
+// 退避しない知らせは文書ごとに 1 回（ADR 0159 の決定 7・L-4）。打鍵の失敗ではないので鳴らさない。
+void EditorController::notify_autosave_oversized(AutosaveId id)
+{
+    if (std::ranges::find(autosave_oversized_, id) != autosave_oversized_.end())
+    {
+        return;
+    }
+    autosave_oversized_.push_back(id);
+    repaint_ = true;
+    // 材料は固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
+    state_ =
+        state_.with_command_message(core::DisplayText::parse(autosave_oversized_message).value());
 }
 } // namespace nenenib::application

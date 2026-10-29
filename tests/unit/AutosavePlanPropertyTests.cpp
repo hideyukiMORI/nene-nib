@@ -296,6 +296,7 @@ constexpr std::array<Apply, 12> operations{
             ledger.erase(id);
             break;
         case AutosaveStep::keep:
+        case AutosaveStep::oversized:
             break;
         }
     }
@@ -537,7 +538,9 @@ using Branches = std::array<std::size_t, 8>;
     std::size_t branch = branch_store;
     switch (step)
     {
+    // 生成する本文は上限より十分小さいので oversized は出ない（出れば下の神託との比較が落ちる）。
     case AutosaveStep::store:
+    case AutosaveStep::oversized:
         branch = branch_store;
         break;
     case AutosaveStep::keep:

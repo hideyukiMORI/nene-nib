@@ -23,7 +23,9 @@ through eng/window_driver.py, and reads the file back.
                             single keystroke becomes a value (#298 / ADR 0075 decision 7)
 
 Two optional giant benches run only when --bench names them (OPTIONAL_BENCHES, ADR 0138); the eight
-above stay the default set and the only ones compare() judges:
+above stay the default set and the only ones compare() judges. Two more optional benches open a
+512 MiB and a 1 GiB document (open-large-file-512mib / -1gib, ADR 0159): process creation -> the
+window title names the document, i.e. the read on the worker was adopted (polled by this script):
 
   open-giant-line-16mib     process creation -> the first frame that draws the body (body_presented,
                             after the grid question is answered) over a document that is one
@@ -143,7 +145,8 @@ import winreg
 from window_driver import (answer_question, api, become_dpi_aware, capture_png, close, covered_by,
                            dismiss_dialog, IDNO, kernel, post_together, press_chord, press_combination,
                            raise_window, rectangle, start, stop, take_foreground, user, VK_CONTROL,
-                           VK_SHIFT, VK_T, WindowCovered, WindowUnavailable, write_text)
+                           VK_SHIFT, VK_T, window_title, WindowCovered, WindowUnavailable,
+                           write_text)
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "eng/perf-reference.json"
@@ -199,6 +202,17 @@ CPP_TEMPLATES = (
 )
 CPP_LINES = 1000
 CPP_SHA256 = "4e8e2597f1f9c351ac4ace227fe3fb346ba1f6bd1c4b8d072a057c258032367d"
+# 512 MiB と 1 GiB の文書（ADR 0159 の決定 10）。1 行は「8 桁の番号と空白」と固定の文で 62 bytes ＋
+# CRLF の 64 bytes・BOM なし・大きさちょうど。決定的に作り、SHA-256 で守る。
+LARGE_FILE_LINE = "nenenib large file sample line for the 512 MiB / 1 GiB open bench"
+LARGE_FILE_LINE_BYTES = 64
+LARGE_FILE_SHA256 = {
+    "open-large-file-512mib": "20a4524b5234f3aa8230fb9f6bdaef23e01db64cb19e5f4074d499722dfd5f6f",
+    "open-large-file-1gib": "eabf15326af763b1ffe23c81b6d44996e96aa0ebb90f97a14c711db7effd6ae2",
+}
+# 1 GiB の裏の読みと改行の索引は秒の桁になり得る。揃わなければその試行は欠測。
+LARGE_FILE_SECONDS = 180.0
+TITLE_POLL_SECONDS = 0.01
 # プレビューの解析は worker が裏で行い、ui の tick が結果を引く（ADR 0155）。鍵の後に窓のスレッドが
 # 静かになってからさらにこれだけ待ち、もう一度静かになるのを待つ。
 PREVIEW_TICK_SECONDS = 0.5
@@ -228,11 +242,16 @@ SPLIT_PANE_BENCHES = {"split-pane-key-100-same-vertical": ("vertical", False),
                       "split-pane-key-100-other-horizontal": ("horizontal", True)}
 SPLIT_BENCHES = (SPLIT_SINGLE_BENCH, *SPLIT_PANE_BENCHES)
 GIANT_BENCHES = (GIANT_OPEN_BENCH, GIANT_SINGLE_BENCH)
+# 512 MiB と 1 GiB の文書を開く（ADR 0159 の決定 10・段 6・D63）。--bench で名指ししたときだけ測り、
+# 基準値に載せない。値はプロセスの生成から、裏の読みが揃って窓の題名がその文書の名前になるまで。
+LARGE_FILE_BENCHES = {"open-large-file-512mib": 512 * 1024 * 1024,
+                      "open-large-file-1gib": 1024 * 1024 * 1024}
 # プレビューを開いた 1 打鍵（#818）。--bench で名指ししたときだけ測り、基準値に載せない。
 PREVIEW_BENCH = "key-to-frame-single-preview-open"
 # C++ の文書の 1 打鍵（#816・ADR 0156 の決定 15）。--bench で名指ししたときだけ測り、基準値に載せない。
 CPP_BENCH = "key-to-frame-single-cpp"
-OPTIONAL_BENCHES = (*GIANT_BENCHES, *SPLIT_BENCHES, PREVIEW_BENCH, CPP_BENCH)
+OPTIONAL_BENCHES = (*GIANT_BENCHES, *SPLIT_BENCHES, PREVIEW_BENCH, CPP_BENCH,
+                    *LARGE_FILE_BENCHES)
 PACED_KEYS = 100
 PACED_CHARACTER = "a"
 PACED_BUDGET_MS = 16.7
@@ -278,7 +297,7 @@ KEY_MILESTONES = ("frame_built", "frame_drawn", "frame_presented")
 SINGLE_BENCHES = ("key-to-frame-single", LONG_LINE_BENCH, CPP_BENCH, PREVIEW_BENCH,
                   GIANT_SINGLE_BENCH)
 # 記録の breakdown には 16 MiB の打鍵の到着の幅（ARRIVAL_SEGMENT）も同じ形で載せる（#179）。
-BREAKDOWN_BENCHES = (*STARTUP_BENCHES, LARGE_BURST_BENCH, *SINGLE_BENCHES)
+BREAKDOWN_BENCHES = (*STARTUP_BENCHES, LARGE_BURST_BENCH, *SINGLE_BENCHES, *LARGE_FILE_BENCHES)
 
 
 class TrialNotObserved(RuntimeError):
@@ -398,6 +417,32 @@ def giant_line_document(folder: Path) -> Path:
     if digest != GIANT_LINE_SHA256:
         raise SystemExit(f"Speed: {path} has SHA-256 {digest}, not {GIANT_LINE_SHA256};"
                          f" {', '.join(GIANT_BENCHES)} are not measured")
+    return path
+
+
+def large_file_text_chunk(first: int, count: int) -> bytes:
+    """count lines of the 512 MiB / 1 GiB document starting at line number first."""
+    return "".join(f"{index:08d} {LARGE_FILE_LINE}"[:LARGE_FILE_LINE_BYTES - 2] + "\r\n"
+                   for index in range(first, first + count)).encode("ascii")
+
+
+def large_file_document(folder: Path, bench: str) -> Path:
+    """ADR 0159's 512 MiB or 1 GiB document byte for byte; any other digest stops before a trial."""
+    size = LARGE_FILE_BENCHES[bench]
+    path = folder / f"{bench}.txt"
+    if (path.is_file() and path.stat().st_size == size
+            and file_sha256(path) == LARGE_FILE_SHA256[bench]):
+        return path
+    folder.mkdir(parents=True, exist_ok=True)
+    lines = size // LARGE_FILE_LINE_BYTES
+    step = 1 << 16
+    with path.open("wb") as handle:
+        for first in range(0, lines, step):
+            handle.write(large_file_text_chunk(first, min(step, lines - first)))
+    digest = file_sha256(path)
+    if digest != LARGE_FILE_SHA256[bench]:
+        raise SystemExit(f"Speed: {path} has SHA-256 {digest}, not {LARGE_FILE_SHA256[bench]};"
+                         f" {bench} is not measured")
     return path
 
 
@@ -1349,6 +1394,70 @@ def bench_large_file(executable: Path, environment: dict, folder: Path,
             {"open-large-file-16mib": breakdown(measured)})
 
 
+class ProcessMemoryCounters(c.Structure):
+    """PROCESS_MEMORY_COUNTERS (psapi)."""
+    _fields_ = [("cb", w.DWORD), ("PageFaultCount", w.DWORD),
+                ("PeakWorkingSetSize", c.c_size_t), ("WorkingSetSize", c.c_size_t),
+                ("QuotaPeakPagedPoolUsage", c.c_size_t), ("QuotaPagedPoolUsage", c.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", c.c_size_t), ("QuotaNonPagedPoolUsage", c.c_size_t),
+                ("PagefileUsage", c.c_size_t), ("PeakPagefileUsage", c.c_size_t)]
+
+
+def peak_memory(process) -> tuple[int, int] | None:
+    """The process's peak private bytes (PeakPagefileUsage) and peak working set, or None."""
+    counters = ProcessMemoryCounters()
+    counters.cb = c.sizeof(counters)
+    psapi = c.WinDLL("psapi", use_last_error=True)
+    psapi.GetProcessMemoryInfo.argtypes = [w.HANDLE, c.POINTER(ProcessMemoryCounters), w.DWORD]
+    psapi.GetProcessMemoryInfo.restype = w.BOOL
+    if not psapi.GetProcessMemoryInfo(int(process._handle), c.byref(counters), counters.cb):
+        return None
+    return int(counters.PeakPagefileUsage), int(counters.PeakWorkingSetSize)
+
+
+# 試行ごとの private bytes と working set の山（測った順）。記録に値と並べて載せる。
+LARGE_FILE_MEMORY: dict = {}
+
+
+def bench_large_file_async(executable: Path, environment: dict, folder: Path, document: Path,
+                           bench: str) -> tuple[dict, dict]:
+    """Process creation -> the title names the document (the read on the worker was adopted).
+
+    The value is taken by this script (the title is polled every TITLE_POLL_SECONDS from just
+    before the process is created), so it carries that step. The report's marks give the startup
+    breakdown and the first frame, which is drawn with the reading line before the document arrives
+    (ADR 0159 decision 4); adoptedAfterFirstFrame is the time between the two.
+    """
+    report = report_path(folder, bench)
+    begun = time.perf_counter()
+    process, window, _ = start(executable, environment,
+                               ["--measure", str(report), str(document)],
+                               seconds=LARGE_FILE_SECONDS)
+    adopted = None
+    memory = None
+    try:
+        deadline = begun + LARGE_FILE_SECONDS
+        while time.perf_counter() < deadline and process.poll() is None:
+            if window_title(window).startswith(document.name):
+                adopted = (time.perf_counter() - begun) * 1000.0
+                break
+            time.sleep(TITLE_POLL_SECONDS)
+        memory = peak_memory(process)
+        close(window)
+        process.wait(timeout=LARGE_FILE_SECONDS)
+    finally:
+        stop(process)
+    if adopted is None:
+        print(f"Speed: {document.name} was not adopted; this trial of {bench} is missing")
+        return {bench: None}, {}
+    measured = read_report(report)
+    parts = breakdown(measured)
+    parts["adoptedAfterFirstFrame"] = adopted - float(measured["processCreationToFirstFrameMs"])
+    if memory is not None:
+        LARGE_FILE_MEMORY.setdefault(bench, []).append(memory)
+    return {bench: adopted}, {bench: parts}
+
+
 def spread(samples: dict) -> dict:
     """Median and range per startup segment; the samples themselves stay out (5 x 10 numbers)."""
     return {name: {"medianMs": round(statistics.median(values), 4),
@@ -1392,7 +1501,7 @@ def judged_samples(measured: dict) -> int | None:
 def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
                 document: Path | None, palette: Path | None, long_line: Path | None = None,
                 giant: Path | None = None, grid: bool = True, preview: Path | None = None,
-                cpp: Path | None = None):
+                cpp: Path | None = None, large_files: dict | None = None):
     """Only the required stimulus groups; a shared trial keeps its original stimulus (#272)."""
     if any(name in names for name in ("startup-first-frame", "startup-window-shown")):
         yield bench_startup(executable, environment, folder)
@@ -1414,9 +1523,12 @@ def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
         yield bench_preview_single(executable, environment, folder, preview)
     if CPP_BENCH in names:
         yield bench_cpp(executable, environment, folder, cpp)
+    for bench, path in (large_files or {}).items():
+        yield bench_large_file_async(executable, environment, folder, path, bench)
 
 
-def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool = True) -> dict:
+def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool = True,
+            large_folder: Path | None = None) -> dict:
     names = BENCHES if bench is None else (bench,)
     become_dpi_aware()
     executable, environment, folder = prepare(build)
@@ -1430,6 +1542,10 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     giant = giant_line_document(folder) if any(name in names for name in GIANT_BENCHES) else None
     preview = preview_document(folder) if PREVIEW_BENCH in names else None
     cpp = cpp_document(folder) if CPP_BENCH in names else None
+    # 512 MiB と 1 GiB の文書は大きいので、置き場を --large-folder で選べる（既定は out/speed）。
+    large_files = {name: large_file_document(large_folder or folder, name)
+                   for name in names if name in LARGE_FILE_BENCHES}
+    LARGE_FILE_MEMORY.clear()
     samples: dict = {name: [] for name in names}
     # 刺激が届かなかった試行は値にせず数える（Issue #30）。中央値は残った試行から出す。
     missing: dict = {name: 0 for name in names}
@@ -1440,7 +1556,8 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     waits: list = []
     for _ in range(repetitions):
         for values, parts in run_benches(executable, environment, folder, names, document, palette,
-                                         long_line, giant, grid, preview, cpp):
+                                         long_line, giant, grid, preview, cpp,
+                                         large_files):
             for name, value in values.items():
                 if name not in samples:
                     continue
@@ -1461,7 +1578,15 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     if GIANT_OPEN_BENCH in names:
         record["values"][GIANT_OPEN_BENCH]["questionWaitMs"] = [
             None if wait is None else round(wait, 4) for wait in waits]
-    if document is not None:
+    for name, peaks in LARGE_FILE_MEMORY.items():
+        record["values"][name]["peakPrivateBytes"] = [peak[0] for peak in peaks]
+        record["values"][name]["peakWorkingSetBytes"] = [peak[1] for peak in peaks]
+    if large_files:
+        name, path = next(iter(large_files.items()))
+        record["document"] = {"path": path.name, "bytes": path.stat().st_size,
+                              "lines": path.stat().st_size // LARGE_FILE_LINE_BYTES,
+                              "sha256": LARGE_FILE_SHA256[name]}
+    elif document is not None:
         record["document"] = {"path": document.name, "bytes": document.stat().st_size,
                               "lines": LARGE_LINES}
     elif giant is not None:
@@ -1613,7 +1738,7 @@ def gather(arguments) -> dict:
         print(f"Speed: recorded {write_record(record)}")
         return record
     record = measure(arguments.executable, arguments.repetitions, arguments.bench,
-                     arguments.grid_answer == "yes")
+                     arguments.grid_answer == "yes", arguments.large_folder)
     print(describe(record))
     print(f"Speed: recorded {write_record(record)}")
     return record
@@ -1694,6 +1819,8 @@ def main() -> int:
                         help="the answer the giant benches give to the grid question (ADR 0140)")
     parser.add_argument("--split-document", choices=SPLIT_DOCUMENTS, default="empty",
                         help="the existing fixture the split benches type into")
+    parser.add_argument("--large-folder", type=Path,
+                        help="where the 512 MiB / 1 GiB documents are made and kept (out/speed)")
     parser.add_argument("--split-verdict", nargs=2, type=Path, metavar=("S_RECORD", "P_RECORD"),
                         help="judge an S and a P record of the split benches (ADR 0120)")
     arguments = parser.parse_args()
@@ -1708,6 +1835,10 @@ def main() -> int:
         parser.error(f"{PREVIEW_BENCH} is recorded with --record only; it has no reference (#818)")
     if arguments.bench == CPP_BENCH and (arguments.adopt or arguments.check or arguments.values):
         parser.error(f"{CPP_BENCH} is recorded with --record only; it has no reference (#816)")
+    if arguments.bench in LARGE_FILE_BENCHES and (arguments.adopt or arguments.check
+                                                  or arguments.values):
+        parser.error(f"{arguments.bench} is recorded with --record only; it has no reference"
+                     " (ADR 0159)")
     if not (arguments.record or arguments.adopt or arguments.check):
         parser.error("one of --record, --adopt or --check is required")
     if arguments.check:

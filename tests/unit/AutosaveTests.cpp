@@ -14,6 +14,7 @@
 #include "DiscardAutosave.hpp"
 #include "DisplayText.hpp"
 #include "Document.hpp"
+#include "DocumentByteLimit.hpp"
 #include "DocumentView.hpp"
 #include "Edit.hpp"
 #include "EditBoundary.hpp"
@@ -30,6 +31,7 @@
 #include "MoveCaret.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
+#include "OpenDocument.hpp"
 #include "PlaceCaret.hpp"
 #include "RestoreAutosave.hpp"
 #include "SaveDocument.hpp"
@@ -78,6 +80,8 @@ using Plan = std::vector<std::pair<AutosaveId, AutosaveStep>>;
         return 'd';
     case AutosaveStep::keep:
         return 'k';
+    case AutosaveStep::oversized:
+        return 'o';
     }
     std::unreachable();
 }
@@ -323,6 +327,45 @@ void verify_failure_notified_once()
     editing.autosave().fail(AutosaveId{1}, app::AutosaveFailure::unwritable);
     expect(notice(controller.apply_frame(app::WorkCompleted{})) == "none",
            "the success of another tab beside the failure does not lower the notice");
+}
+
+// 本文が core::maximum_decoded_document_bytes を超えたら書かず、文書ごとに 1 回だけ知らせる（ADR
+// 0159 の決定 7・L-4）。ちょうどは書く。前の退避は消さない。
+void verify_tick_skips_oversized()
+{
+    constexpr std::size_t limit = core::maximum_decoded_document_bytes;
+    std::string body;
+    body.reserve(limit);
+    while (body.size() + 8U <= limit)
+    {
+        body.append("aaaaaaa\n");
+    }
+    body.resize(limit - 1U, 'a');
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    editing.files().hold(std::move(body));
+    applied(controller, app::OpenDocument{sample_path()});
+    applied(controller, app::InsertText{"x"});
+    applied(controller, app::AutosaveTick{});
+    expect(editing.autosave().stored().size() == 1 &&
+               editing.autosave().stored().back().bytes.size() == limit,
+           "a body of exactly 64 MiB is stored");
+    applied(controller, app::InsertText{"y"});
+    const auto told = controller.apply_frame(app::AutosaveTick{});
+    expect(editing.autosave().stored().size() == 1 && editing.autosave().discarded().empty() &&
+               notice(told) == "64 MiB を超える文書は自動退避しません",
+           "a body past 64 MiB is not stored, the earlier store is kept, and it is told");
+    applied(controller, app::InsertText{"z"});
+    const auto again = controller.apply_frame(app::AutosaveTick{});
+    expect(editing.autosave().stored().size() == 1 && notice(again) == "none",
+           "the same document is told only once");
+    applied(controller, app::NewTab{});
+    applied(controller, app::InsertText{"small"});
+    applied(controller, app::AutosaveTick{});
+    expect(editing.autosave().stored().size() == 2 &&
+               bytes_of(editing.autosave().stored().back()) == "small",
+           "another document below the limit is still stored");
 }
 
 // 失敗した id は帳面から外れ、本文が変わらなくても次の合図で書き直す（決定 4）。成功の後の合図は
@@ -627,6 +670,7 @@ void verify_autosave_contracts()
     verify_tick_encodes_and_discards();
     verify_failure_notified_once();
     verify_failed_store_retried();
+    verify_tick_skips_oversized();
     verify_tick_keeps_wanted_column();
     verify_restore_remnants();
     verify_restored_tabs_autosave();

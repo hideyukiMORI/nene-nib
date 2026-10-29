@@ -584,13 +584,13 @@ class SelectedMeasurementTests(unittest.TestCase):
 
     def test_gather_forwards_the_selection_to_measure(self):
         arguments = mock.Mock(values=None, executable=Path("build"), repetitions=5,
-                              bench=speed.PALETTE_BENCH, grid_answer="yes")
+                              bench=speed.PALETTE_BENCH, grid_answer="yes", large_folder=None)
         written = speed.selected_record(record({}), speed.PALETTE_BENCH)
         with mock.patch.object(speed, "measure", return_value=written) as measure, \
                 mock.patch.object(speed, "write_record", return_value=Path("record.json")), \
                 contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(written, speed.gather(arguments))
-        measure.assert_called_once_with(Path("build"), 5, speed.PALETTE_BENCH, True)
+        measure.assert_called_once_with(Path("build"), 5, speed.PALETTE_BENCH, True, None)
 
 
 class PartialRecordTests(unittest.TestCase):
@@ -803,9 +803,31 @@ class GiantLineTests(unittest.TestCase):
     def test_the_optional_benches_are_not_in_the_default_set(self):
         self.assertEqual(("open-giant-line-16mib", "key-to-frame-single-giant-line-16mib"),
                          speed.GIANT_BENCHES)
-        self.assertEqual((*speed.GIANT_BENCHES, *speed.SPLIT_BENCHES, speed.PREVIEW_BENCH, speed.CPP_BENCH), speed.OPTIONAL_BENCHES)
+        self.assertEqual((*speed.GIANT_BENCHES, *speed.SPLIT_BENCHES, speed.PREVIEW_BENCH, speed.CPP_BENCH,
+                          *speed.LARGE_FILE_BENCHES), speed.OPTIONAL_BENCHES)
         self.assertFalse(set(speed.OPTIONAL_BENCHES) & set(speed.BENCHES))
         self.assertIn(speed.GIANT_OPEN_BENCH, speed.BREAKDOWN_BENCHES)
+
+    def test_the_large_file_benches_are_optional_and_fixed(self):
+        """ADR 0159 decision 10: 512 MiB and 1 GiB, recorded only, from fixed 64-byte CRLF lines."""
+        self.assertEqual({"open-large-file-512mib": 512 * 1024 * 1024,
+                          "open-large-file-1gib": 1024 * 1024 * 1024}, speed.LARGE_FILE_BENCHES)
+        for name in speed.LARGE_FILE_BENCHES:
+            with self.subTest(name=name):
+                self.assertIn(name, speed.OPTIONAL_BENCHES)
+                self.assertNotIn(name, speed.BENCHES)
+                self.assertIn(name, speed.BREAKDOWN_BENCHES)
+                self.assertRegex(speed.LARGE_FILE_SHA256[name], "^[0-9a-f]{64}$")
+        chunk = speed.large_file_text_chunk(0, 3)
+        lines = chunk.split(b"\r\n")
+        self.assertEqual(3 * speed.LARGE_FILE_LINE_BYTES, len(chunk))
+        self.assertEqual(b"", lines[-1])
+        self.assertTrue(all(len(line) == speed.LARGE_FILE_LINE_BYTES - 2 for line in lines[:3]))
+        self.assertTrue(lines[0].startswith(b"00000000 ") and lines[2].startswith(b"00000002 "))
+        last = (speed.LARGE_FILE_BENCHES["open-large-file-1gib"] // speed.LARGE_FILE_LINE_BYTES) - 1
+        self.assertTrue(speed.large_file_text_chunk(last, 1).startswith(f"{last:08d} ".encode()))
+        self.assertEqual(chunk[speed.LARGE_FILE_LINE_BYTES:],
+                         speed.large_file_text_chunk(1, 2))
 
     def test_compare_never_judges_an_optional_bench(self):
         values = {name: {"medianMs": 9000.0} for name in speed.OPTIONAL_BENCHES}

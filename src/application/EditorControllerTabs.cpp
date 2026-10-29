@@ -109,8 +109,7 @@ void EditorController::accept(const SwitchTab &intent)
 
 void EditorController::accept(const WalkRecentTab &intent)
 {
-    const auto destination =
-        core::tab_recency_walked(state_.recency(), state_.active_tab(), intent.step);
+    auto destination = core::tab_recency_walked(state_.recency(), state_.active_tab(), intent.step);
     if (!destination.has_value())
     {
         return;
@@ -121,15 +120,26 @@ void EditorController::accept(const WalkRecentTab &intent)
         state_ = state_.with_walked(destination.value());
         return;
     }
-    // 行き先が読めなければ外れて、歩きは今のタブのまま続く。次の 1 歩は外れた後の使った順の
-    // 隣へ行く（ADR 0059 の決定 5）。
-    if (reach_tab(destination.value()) != TabReach::reached)
+    // 行き先が裏の読みの途中なら、帯に残したまま飛ばして次の行き先へ進む（ADR 0159 の追補 6）。
+    // 一周して今のタブへ戻れば候補が全部読みの途中で、動かない。行き先が読めなければ外れて、
+    // 歩きは今のタブのまま続く。次の 1 歩は外れた後の使った順の隣へ行く（ADR 0059 の決定 5）。
+    while (destination.has_value() && destination.value() != state_.active_tab())
     {
-        return;
+        switch (reach_tab(destination.value()))
+        {
+        case TabReach::reached:
+            leave_document();
+            state_ = state_.with_walked(destination.value());
+            enter_document();
+            return;
+        case TabReach::reading:
+            destination =
+                core::tab_recency_walked(state_.recency(), destination.value(), intent.step);
+            break;
+        case TabReach::dropped:
+            return;
+        }
     }
-    leave_document();
-    state_ = state_.with_walked(destination.value());
-    enter_document();
 }
 
 void EditorController::accept(const SettleRecentTab &)

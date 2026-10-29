@@ -11,6 +11,8 @@
 #include "DocumentReadRequest.hpp"
 #include "DocumentReading.hpp"
 #include "DocumentState.hpp"
+#include "EditMode.hpp"
+#include "EditorState.hpp"
 #include "ExLanguageRequest.hpp"
 #include "ExResult.hpp"
 #include "ExSyntaxRequest.hpp"
@@ -33,6 +35,7 @@
 #include "TextPosition.hpp"
 #include "UnloadedDocument.hpp"
 #include "Utf16.hpp"
+#include "VimState.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -57,8 +60,7 @@ using detail::parked_path;
 
 namespace
 {
-// 同期で読むのはここまで（ADR 0010 の決定 12）。値の正本は core の 1 か所で、退避の読み戻しも同じ
-// 値を読む（#792・ADR 0121 の追補の決定 8）。
+// 開く本文の上限（ADR 0159 の決定 7）。値の正本は core の 1 か所。
 constexpr std::size_t maximum_file_bytes = core::maximum_document_bytes;
 
 [[nodiscard]] std::string_view ex_write_failure(FileFailure failure) noexcept
@@ -74,6 +76,7 @@ constexpr std::size_t maximum_file_bytes = core::maximum_document_bytes;
     case FileFailure::unreadable:
     case FileFailure::unwritable:
     case FileFailure::too_large:
+    case FileFailure::too_large_to_decode:
     case FileFailure::undecodable:
     case FileFailure::unsupported_utf32:
     case FileFailure::insufficient_memory:
@@ -298,6 +301,16 @@ constexpr std::string_view reading_prefix = "読み込み中: ";
 }
 
 // 開く要求か（まだ読んでいないタブの読みでないか・追補 1）。
+// Vim の待ち（回数・オペレータ・次の 1 鍵・選んだレジスタ）の最中か（ADR 0159 の追補 5）。待ちを
+// 終える鍵の意図の終わりで留めた結果を採る。
+[[nodiscard]] bool vim_waiting(const EditorState &state) noexcept
+{
+    const core::VimState &vim = state.vim();
+    return state.mode() == core::EditMode::vim &&
+           (vim.count.has_value() || vim.pending.has_value() || vim.input_wait.has_value() ||
+            vim.selected_register.has_value());
+}
+
 [[nodiscard]] bool opens(const DocumentReading &reading) noexcept
 {
     return std::holds_alternative<OpenFailureReply>(reading.target);
@@ -745,10 +758,12 @@ std::optional<DocumentReadFinished> EditorController::take_arrived(std::uint64_t
     return finished;
 }
 
-// Ctrl+Tab の歩き・入力行（`:` と検索）・Ctrl+P の面の最中は揃った結果を採らない（追補 2）。
+// Ctrl+Tab の歩き・入力行（`:` と検索）・Ctrl+P の面・IME の変換中・Vim の待ちの最中は揃った結果を
+// 採らない（追補 2・5）。録画（`q`）は窓の値で文書に依らないので留めない。
 bool EditorController::reads_held() const noexcept
 {
-    return state_.tab_walking() || state_.command_input().has_value();
+    return state_.tab_walking() || state_.command_input().has_value() ||
+           state_.composition().has_value() || vim_waiting(state_);
 }
 
 // 留めた結果を頼んだ順に採る（追補 2・4）。開く要求は先に頼んだ開く要求が揃うまで待ち、

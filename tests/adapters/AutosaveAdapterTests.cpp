@@ -543,7 +543,7 @@ class LimitRecordingFiles final : public nenenib::application::FilePort
     std::size_t limit_ = 0;
 };
 
-// (g) 退避の読み戻しの上限は開く上限と同じ core の 1 つの値（#792・ADR 0121 の追補の決定 8）。
+// (g) 退避の読み戻しの上限は退避の上限と同じ core の 1 つの値（ADR 0159 の決定 7）。
 void verify_read_limit(adapters::Win32Worker &worker, adapters::Win32FileAdapter &files)
 {
     LimitRecordingFiles recording(files);
@@ -552,8 +552,8 @@ void verify_read_limit(adapters::Win32Worker &worker, adapters::Win32FileAdapter
     const auto seven = remnant_with(listed, 7);
     expect(seven.has_value() && limited.read(seven.value()).has_value(),
            "the remnant is read through the recording port");
-    expect(recording.limit() == core::maximum_document_bytes,
-           "reading a remnant back uses the same limit as opening a file");
+    expect(recording.limit() == core::maximum_decoded_document_bytes,
+           "reading a remnant back uses the autosave limit of 64 MiB");
 }
 
 void verify_autosave()

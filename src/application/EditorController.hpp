@@ -227,7 +227,7 @@ class EditorController final
     void adopt_progress(const DocumentReadProgress &progress);
     void adopt_finished(DocumentReadFinished finished);
     [[nodiscard]] std::optional<DocumentReadFinished> take_arrived(std::uint64_t ticket);
-    // 歩き・入力行・面の最中か（揃った結果を採らない・追補 2）。
+    // 歩き・入力行・面・IME の変換中・Vim の待ちの最中か（揃った結果を採らない・追補 2・5）。
     [[nodiscard]] bool reads_held() const noexcept;
     // 留めた結果を頼んだ順に採る（追補 2・4）。開く要求は open_read か answer_unopened へ、タブの
     // 読みは finish_tab_read へ渡す。
@@ -436,6 +436,7 @@ class EditorController final
     // worker の失敗を引き、成功するまで 1 回だけ知らせる（決定 4）。
     void collect_autosave();
     void notify_autosave_failure();
+    void notify_autosave_oversized(AutosaveId id);
     // 帯（ADR 0056 の決定 2・3・8）。帯の幅・ホイール・マウスを載せた要素。
     void accept(const TitleBarWidth &intent);
     void accept(const ScrollTabs &intent);
@@ -742,6 +743,9 @@ class EditorController final
     AutosaveLedger autosave_ledger_;
     // 「自動退避できませんでした」を出したか。次に成功するまで 2 回目を出さない（決定 4）。
     bool autosave_notified_ = false;
+    // 上限を超えて退避しない知らせを出した文書の退避番号（ADR 0159 の決定 7・L-4）。番号は再利用
+    // されないので文書ごとに 1 回。
+    std::vector<AutosaveId> autosave_oversized_;
     // 起動の問いの間だけ持つ残骸の列（決定 6）。autosave_remnants() が置き、答えの意図が空にする。
     std::vector<AutosaveRemnant> autosave_remnants_;
     // 枠の側ごとの構文の状態の覚え（ADR 0156 の決定 9・first と second の 2 つ）。frame だけが

@@ -30,6 +30,7 @@
 #include "DeleteText.hpp"
 #include "DisplayForm.hpp"
 #include "DocumentByteLimit.hpp"
+#include "DocumentDecoding.hpp"
 #include "Edit.hpp"
 #include "EditBoundary.hpp"
 #include "EditHistory.hpp"
@@ -2033,10 +2034,12 @@ void verify_document_open()
     editing.files().hold(std::string("一行目\r\n二行目"));
     const auto frame = controller.apply_frame(OpenDocument{sample_path()});
     expect(editing.files().read_path() == "C:\\work\\note.txt", "the path went through the port");
-    static_assert(nenenib::core::maximum_document_bytes == 64U * 1024U * 1024U,
-                  "#792 makes the limit one constant and keeps its 64 MiB value");
+    static_assert(nenenib::core::maximum_document_bytes == std::size_t{1024} * 1024U * 1024U,
+                  "ADR 0159 decision 7 raises the open limit to 1 GiB (D63)");
+    static_assert(nenenib::core::maximum_decoded_document_bytes == std::size_t{64} * 1024U * 1024U,
+                  "ADR 0159 decision 7 keeps 64 MiB for bodies that need decoding");
     expect(editing.files().read_limit() == nenenib::core::maximum_document_bytes,
-           "the 64 MiB limit is handed to the port, not measured after the read");
+           "the 1 GiB limit is handed to the port, not measured after the read");
     expect(frame.document.title.text() == "note.txt", "the tab takes the file name");
     expect(frame.document.encoding == TextEncoding::utf8, "plain UTF-8 is detected");
     expect(frame.document.save_state == SaveState::saved, "a freshly opened file is saved");
@@ -2086,6 +2089,55 @@ void expect_open_failure(Bytes content, FileFailure expected, const char *descri
            "a failed open does not change the body");
 }
 
+// 上限は 2 つ（ADR 0159 の決定 7）。UTF-8 / UTF-8 BOM は開く上限（1 GiB・port が読む前に断る）
+// だけ、Shift_JIS / UTF-16 は入力のバイト数で 64 MiB まで。境界の値はちょうどが通り 1 つ先が断る。
+void verify_document_open_limits()
+{
+    constexpr std::size_t decoded = nenenib::core::maximum_decoded_document_bytes;
+    constexpr std::size_t whole = nenenib::core::maximum_document_bytes;
+    using nenenib::application::exceeds_decoded_limit;
+    expect(!exceeds_decoded_limit(TextEncoding::shift_jis, decoded) &&
+               exceeds_decoded_limit(TextEncoding::shift_jis, decoded + 1U) &&
+               !exceeds_decoded_limit(TextEncoding::utf16_le, decoded) &&
+               exceeds_decoded_limit(TextEncoding::utf16_le, decoded + 1U) &&
+               !exceeds_decoded_limit(TextEncoding::utf16_be, decoded) &&
+               exceeds_decoded_limit(TextEncoding::utf16_be, decoded + 1U),
+           "Shift_JIS and UTF-16 pass at 64 MiB and stop one byte past it");
+    expect(!exceeds_decoded_limit(TextEncoding::utf8, whole) &&
+               !exceeds_decoded_limit(TextEncoding::utf8_bom, whole) &&
+               !exceeds_decoded_limit(TextEncoding::utf8, decoded + 1U),
+           "UTF-8 is bound only by the open limit");
+    // CP932 の 2 バイト文字を並べた本文。ちょうど 64 MiB は開き、2 バイト先は断る。
+    std::string japanese;
+    japanese.reserve(decoded + 2U);
+    for (std::size_t at = 0; at < decoded / 2U; ++at)
+    {
+        japanese.append("\x93\xFA");
+    }
+    Editing at_limit;
+    at_limit.files().hold(japanese);
+    at_limit.code_pages().decode_to(std::string("日"));
+    const auto opened = at_limit.controller().apply_frame(OpenDocument{sample_path()});
+    expect(opened.document.encoding == TextEncoding::shift_jis &&
+               !opened.document.last_failure.has_value() && opened.lines.at(0).text == "日",
+           "a Shift_JIS body of exactly 64 MiB opens");
+    japanese.append("\x93\xFA");
+    expect_open_failure(std::move(japanese), FileFailure::too_large_to_decode,
+                        "a Shift_JIS body two bytes past 64 MiB is too_large_to_decode");
+    std::string utf16(nenenib::core::utf16_le_byte_order_mark());
+    utf16.append(decoded, 'A');
+    expect_open_failure(std::move(utf16), FileFailure::too_large_to_decode,
+                        "a UTF-16 body past 64 MiB is refused before it is converted");
+    // UTF-8 は 64 MiB を超えても開く（開く上限は 1 GiB）。
+    std::string plain(decoded + 1U, 'a');
+    Editing past_decoded;
+    past_decoded.files().hold(std::move(plain));
+    const auto large = past_decoded.controller().apply_frame(OpenDocument{sample_path()});
+    expect(!large.document.last_failure.has_value() &&
+               large.document.encoding == TextEncoding::utf8 && large.total_lines == 1,
+           "a UTF-8 body one byte past 64 MiB opens");
+}
+
 void verify_document_open_failures()
 {
     expect_open_failure(std::unexpected(FileFailure::not_found), FileFailure::not_found,
@@ -2098,8 +2150,9 @@ void verify_document_open_failures()
                         "the port may also report unwritable");
     expect_open_failure(std::unexpected(FileFailure::too_large), FileFailure::too_large,
                         "a file past the limit is refused by the port before it is read");
-    expect_open_failure(std::string(nenenib::core::maximum_document_bytes + 1U, 'a'),
-                        FileFailure::too_large, "one byte past 64 MiB is too_large (#792)");
+    expect_open_failure(std::unexpected(FileFailure::too_large_to_decode),
+                        FileFailure::too_large_to_decode,
+                        "the port may also report a body too large to decode");
     expect_open_failure(std::string("\xFF\x41", 2), FileFailure::undecodable,
                         "bytes that are neither UTF-8 nor CP932 are undecodable");
     expect_open_failure(std::string("\xFF\xFE\x41", 3), FileFailure::undecodable,
@@ -2163,6 +2216,24 @@ void verify_document_save()
     expect(saved.caret.position == TextPosition{LineNumber{1}, Column{2}},
            "saving does not move the caret");
     expect(!saved.document.last_failure.has_value(), "a good save reports nothing");
+}
+
+// BOM の本文は列の先頭を piece でずらして持つ（ADR 0159 の決定 8）。保存は BOM を 1
+// つだけ付け直し、 開いたバイト列のまま書く。
+void verify_document_bom_shift_save()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    const std::string bytes = std::string(byte_order_mark()) + "本文\r\nつづき\r\n";
+    editing.files().hold(bytes);
+    const auto opened = controller.apply_frame(OpenDocument{sample_path()});
+    expect(opened.lines.at(0).text == "本文" && opened.total_lines == 3 &&
+               opened.caret.position == TextPosition{LineNumber{1}, Column{1}},
+           "the shifted BOM body starts at line 1 column 1");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8_bom});
+    expect(editing.files().written() == bytes &&
+               editing.files().written_segments() == std::vector<std::size_t>{3, bytes.size() - 3U},
+           "saving a shifted BOM body writes one BOM and the read body as one piece");
 }
 
 void verify_document_save_segments()
@@ -2655,6 +2726,7 @@ void verify_document_read_contracts()
     verify_document_open();
     verify_document_open_encodings();
     verify_document_open_failures();
+    verify_document_open_limits();
     verify_document_open_boundaries();
     verify_document_save_contracts();
 }
@@ -2662,6 +2734,7 @@ void verify_document_read_contracts()
 void verify_document_save_contracts()
 {
     verify_document_save_segments();
+    verify_document_bom_shift_save();
     verify_document_save_empty();
     verify_document_save();
     verify_document_save_encodings();

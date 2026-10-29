@@ -1,5 +1,6 @@
 #include "DocumentDecoding.hpp"
 
+#include "DocumentByteLimit.hpp"
 #include "TextEncoding.hpp"
 #include "TextFailure.hpp"
 
@@ -7,6 +8,21 @@
 
 namespace nenenib::application
 {
+bool exceeds_decoded_limit(core::TextEncoding encoding, std::size_t input_bytes) noexcept
+{
+    switch (encoding)
+    {
+    case core::TextEncoding::utf8:
+    case core::TextEncoding::utf8_bom:
+        return false;
+    case core::TextEncoding::shift_jis:
+    case core::TextEncoding::utf16_le:
+    case core::TextEncoding::utf16_be:
+        return input_bytes > core::maximum_decoded_document_bytes;
+    }
+    std::unreachable();
+}
+
 FileFailure file_failure_of(core::EncodingFailure failure) noexcept
 {
     switch (failure)
@@ -72,6 +88,17 @@ std::expected<OpenedDocument, FileFailure> read_opened_document(FilePort &files,
 std::expected<OpenedDocument, FileFailure> opened_document_of(CodePagePort &code_pages,
                                                               core::SealedBytes &&bytes)
 {
+    // 復号の要る本文の上限は入力のバイト数で、復号（UTF-16 の写し）の前に断る（決定 7・L-3）。
+    // 上限以下と正しい UTF-8 は判定を見ない。
+    if (bytes.size() > core::maximum_decoded_document_bytes &&
+        !bytes.utf8_code_points().has_value())
+    {
+        const auto encoding = core::detect_encoding(bytes.view());
+        if (encoding.has_value() && exceeds_decoded_limit(encoding.value(), bytes.size()))
+        {
+            return std::unexpected(FileFailure::too_large_to_decode);
+        }
+    }
     // 封印済みの列をそのまま判定へ移す。複写はしない（ADR 0141 決定 4）。
     auto detected = core::DetectedText::from_sealed(std::move(bytes));
     if (!detected)

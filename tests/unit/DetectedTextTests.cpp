@@ -244,6 +244,69 @@ void verify_detected_boundaries()
                std::string(byte_order_mark()) + "x",
            "a second BOM remains body text");
 }
+
+// BOM の本文は列を消さずに最初の piece の開始を 3 にずらす（ADR 0159 の決定 8）。BOM の無い同じ
+// 本文と、読む口（全文・行・位置・最長の行・改行の形・仮想桁の索引）と編集の後の本文が一致し、
+// piece は 1 本のまま（写していない）。
+void expect_same_reading(const TextBuffer &shifted, const TextBuffer &plain, const char *message)
+{
+    bool same = shifted.text() == plain.text() && shifted.size_bytes() == plain.size_bytes() &&
+                shifted.line_count() == plain.line_count() &&
+                shifted.line_ending() == plain.line_ending() &&
+                shifted.longest_line_bytes() == plain.longest_line_bytes() &&
+                shifted.segments().size() == plain.segments().size();
+    for (std::size_t line = 1; line <= plain.line_count() + 1; ++line)
+    {
+        const LineNumber number{line};
+        same = same && shifted.line_start(number) == plain.line_start(number) &&
+               shifted.line_end(number) == plain.line_end(number) &&
+               shifted.line_terminator_end(number) == plain.line_terminator_end(number) &&
+               shifted.line_text(number) == plain.line_text(number);
+    }
+    for (std::size_t at = 0; at <= plain.size_bytes(); ++at)
+    {
+        same = same && shifted.position_of(Offset{at}) == plain.position_of(Offset{at}) &&
+               shifted.offset_of(plain.position_of(Offset{at})) ==
+                   plain.offset_of(plain.position_of(Offset{at}));
+    }
+    expect(same, message);
+}
+
+// 1 つの本文の BOM のずらし。BOM の無い同じ本文と、そのまま・仮想桁の索引つき・先頭と末尾の編集の
+// 後で読む口が一致する。
+void verify_bom_shift_of(const std::string &sample)
+{
+    auto bom = DetectedText::from_bytes(std::string(byte_order_mark()) + sample).value();
+    const auto shifted = TextBuffer::from_utf8(std::move(bom)).value();
+    const auto plain = TextBuffer::from_utf8(DetectedText::from_bytes(sample).value()).value();
+    expect(shifted.piece_count() == (sample.empty() ? 0U : 1U),
+           "the shifted BOM body is one piece over the read bytes");
+    expect(shifted.line_start(LineNumber{0}) == Offset{0} &&
+               shifted.line_start(LineNumber{1}) == Offset{0},
+           "line 1 starts at offset 0 after the BOM");
+    expect_same_reading(shifted, plain, "a shifted BOM body reads like the plain body");
+    expect_same_reading(shifted.with_virtual_columns(), plain.with_virtual_columns(),
+                        "the virtual column index agrees after the BOM shift");
+    expect_same_reading(shifted.insert(Offset{0}, "前\n"), plain.insert(Offset{0}, "前\n"),
+                        "an insert at the top agrees after the BOM shift");
+    const Offset cut{std::min<std::size_t>(2, sample.size())};
+    expect_same_reading(shifted.erase(Offset{0}, cut), plain.erase(Offset{0}, cut),
+                        "an erase at the top agrees after the BOM shift");
+    expect_same_reading(shifted.insert(Offset{sample.size()}, "後"),
+                        plain.insert(Offset{sample.size()}, "後"),
+                        "an insert at the end agrees after the BOM shift");
+}
+
+void verify_bom_shift()
+{
+    const std::array<std::string, 6> samples{
+        "", "x", "\n", "一行目\r\n二行目\r\n", "a\tb\nc\x01\n\n末尾", std::string("\r\n", 2)};
+    for (const auto &sample : samples)
+    {
+        verify_bom_shift_of(sample);
+    }
+}
+
 // UTF-16 は BOM を外して UTF-8 へ写した列を持ち、本文はその UTF-8 から作る（ADR 0149 の決定 2）。
 void verify_detected_utf16()
 {
@@ -382,6 +445,7 @@ void verify_detected_text_contracts()
     verify_detected_utf16();
     verify_detected_rejections();
     verify_detected_boundaries();
+    verify_bom_shift();
     verify_owned_and_borrowed();
     verify_defensive_boundaries();
     verify_sealed_fill();
