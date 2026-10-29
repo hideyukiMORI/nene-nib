@@ -271,7 +271,8 @@ void verify_ex_highlight_commands()
                "only the four measured spellings are accepted");
     }
     // Issue #501: every prefix from noh to nohlsearch, nothing shorter or longer.
-    for (const auto text : {"no", "nohx", "nohlsearchx", "noh!", "nohl!", "Noh"})
+    // `:no` は Vim と同じく noremap（ADR 0176 の決定 6）なので、ここには並べない。
+    for (const auto text : {"nohx", "nohlsearchx", "noh!", "nohl!", "Noh"})
     {
         const auto refused = core::evaluate_ex(text, settings, Appearance::dark);
         expect(!refused &&

@@ -4,8 +4,15 @@
 #include "CommandEdit.hpp"
 #include "DisplayText.hpp"
 #include "Edit.hpp"
+#include "EditMode.hpp"
 #include "ExLineRequest.hpp"
 #include "ExResult.hpp"
+#include "KeyMap.hpp"
+#include "KeyMapEmit.hpp"
+#include "KeyMapPass.hpp"
+#include "KeyMapPending.hpp"
+#include "MapTimeout.hpp"
+#include "MapTimer.hpp"
 #include "SearchLine.hpp"
 #include "SearchPreview.hpp"
 #include "Selection.hpp"
@@ -21,6 +28,7 @@
 #include "VimJumpLists.hpp"
 #include "VimKey.hpp"
 #include "VimKeySource.hpp"
+#include "VimMapMode.hpp"
 #include "VimMarkEdits.hpp"
 #include "VimMarkPosition.hpp"
 #include "VimMatchRequest.hpp"
@@ -266,7 +274,7 @@ EditorFrame EditorController::press_vim_key(const core::VimKey &key)
 {
     settle_tab_walk_before(false);
     begin_intent(false);
-    static_cast<void>(deliver_vim_key(key));
+    static_cast<void>(typed_vim_key(key));
     fit_command_rows();
     return frame();
 }
@@ -304,13 +312,124 @@ void EditorController::undone_marks(const core::Edit &edit)
 
 // 窓は入力行の鍵を VimKeyPress ではなく CommandText / EditCommand / SubmitCommand /
 // CancelCommand で送る。入力行（設定一覧を含む）が開いているあいだに届いた Vim の鍵は捨てる。
+// 閉じていれば打った鍵の入口（`map` の表）を通る。
 void EditorController::accept(const VimKeyPress &intent)
 {
     if (state_.command_input().has_value())
     {
         return;
     }
-    static_cast<void>(step_vim(intent.key));
+    static_cast<void>(typed_vim_key(intent.key));
+}
+
+// 打った鍵の入口（ADR 0176 の決定 3・4）。表が空なら分岐 1 つで今までの道。表を引けないとき
+// （通常モード・入力行・1 鍵の引数待ち）は積んだ鍵を先に流してから今の鍵を流す。
+std::optional<core::VimRepeatFailure> EditorController::typed_vim_key(const core::VimKey &key)
+{
+    if (key_map_.mappings.empty())
+    {
+        return deliver_vim_key(key);
+    }
+    const auto mode = key_map_mode();
+    if (!mode.has_value())
+    {
+        flush_key_map_pending();
+        return deliver_vim_key(key);
+    }
+    const bool waited = !state_.key_map_pending().empty();
+    auto step = core::key_map_step(key_map_, mode.value(), state_.key_map_pending(), key);
+    return std::visit([this, &key, waited](auto &&value)
+                      { return this->typed_step(std::move(value), key, waited); }, std::move(step));
+}
+
+// 表に無い鍵はそのまま流す。
+std::optional<core::VimRepeatFailure>
+EditorController::typed_step(core::KeyMapPass /*pass*/, const core::VimKey &key, bool /*waited*/)
+{
+    return deliver_vim_key(key);
+}
+
+// 左辺の途中は積んで待つ（engine へ渡さない・INSERT でも本文に入れない）。
+std::optional<core::VimRepeatFailure> EditorController::typed_step(core::KeyMapPending /*pending*/,
+                                                                   const core::VimKey &key,
+                                                                   bool /*waited*/)
+{
+    auto pending = state_.key_map_pending();
+    pending.push_back(key);
+    state_ = state_.with_key_map_pending(std::move(pending));
+    map_timer_ = MapTimer::start;
+    return std::nullopt;
+}
+
+// 決まった鍵の列を順に流し、次の待ちを積む。窓で打った鍵と同じく、途中の鍵が失敗しても残りの
+// 鍵を流す（ADR 0046 の決定 3）。
+std::optional<core::VimRepeatFailure>
+EditorController::typed_step(core::KeyMapEmit emitted, const core::VimKey & /*key*/, bool waited)
+{
+    const bool waits = !emitted.waiting.empty();
+    state_ = state_.with_key_map_pending(std::move(emitted.waiting));
+    if (waits || waited)
+    {
+        map_timer_ = waits ? MapTimer::start : MapTimer::stop;
+    }
+    std::optional<core::VimRepeatFailure> failure;
+    for (const core::VimKey &mapped : emitted.keys)
+    {
+        failure = deliver_vim_key(mapped);
+    }
+    return failure;
+}
+
+std::optional<core::VimMapMode> EditorController::key_map_mode() const noexcept
+{
+    if (state_.mode() != core::EditMode::vim || state_.command_input().has_value())
+    {
+        return std::nullopt;
+    }
+    return core::vim_map_mode_of(state_.vim());
+}
+
+void EditorController::flush_key_map_pending()
+{
+    if (state_.key_map_pending().empty())
+    {
+        return;
+    }
+    const std::vector<core::VimKey> waited = state_.key_map_pending();
+    state_ = state_.with_key_map_pending({});
+    map_timer_ = MapTimer::stop;
+    const auto mode = key_map_mode();
+    const auto keys =
+        mode.has_value() ? core::key_map_flush(key_map_, mode.value(), waited) : waited;
+    for (const core::VimKey &key : keys)
+    {
+        static_cast<void>(deliver_vim_key(key));
+    }
+}
+
+void EditorController::discard_key_map_pending()
+{
+    if (state_.key_map_pending().empty())
+    {
+        return;
+    }
+    state_ = state_.with_key_map_pending({});
+    map_timer_ = MapTimer::stop;
+}
+
+void EditorController::accept(const MapTimeout &)
+{
+    if (state_.key_map_pending().empty())
+    {
+        repaint_ = false;
+        return;
+    }
+    flush_key_map_pending();
+}
+
+void EditorController::refresh_key_map()
+{
+    key_map_ = core::key_map_of(state_.settings()).value_or(core::KeyMap{});
 }
 
 // 再生の鍵の口（ADR 0048 の決定 8）。入力行が開いていれば鍵を窓と同じ入力行の intent に写し、

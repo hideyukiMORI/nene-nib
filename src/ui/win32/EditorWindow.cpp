@@ -28,6 +28,7 @@
 #include "KeyMotion.hpp"
 #include "KeyVimSpecial.hpp"
 #include "LanguageServerTick.hpp"
+#include "MapTimeout.hpp"
 #include "Milestone.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
@@ -1507,6 +1508,10 @@ void EditorWindow::receive_timer(WPARAM word)
     case WindowTimer::language_server:
         send(application::LanguageServerTick{});
         return;
+    case WindowTimer::key_map:
+        KillTimer(window_, word);
+        send(application::MapTimeout{});
+        return;
     }
 }
 
@@ -1584,6 +1589,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     const auto operation_request = delivery.operation_request;
     // 格子表示の問いも同じ（ADR 0140 の決定 2）。
     const bool display_asked = delivery.display_question;
+    follow_key_map_timer(window_, delivery.map_timer);
     if (std::holds_alternative<application::AdjustFontSize>(intent))
     {
         announce_settings(delivery);

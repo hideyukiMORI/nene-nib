@@ -637,12 +637,18 @@ void EditorController::accept(const ComposeText &intent)
     }
 }
 
+// IME の確定は打った鍵の入口（`map` の表）を通らない。積んだ鍵は意図の入口で先に流れている
+// （ADR 0176 の決定 4）。入力行が開いていれば捨てる（VimKeyPress と同じ）。
 void EditorController::type_as_vim_keys(std::string_view utf8)
 {
     core::Offset at{0};
     while (at.value < utf8.size())
     {
-        accept(VimKeyPress{core::VimKey{core::VimCharacter{core::code_point_at(utf8, at)}}});
+        if (!state_.command_input().has_value())
+        {
+            static_cast<void>(
+                step_vim(core::VimKey{core::VimCharacter{core::code_point_at(utf8, at)}}));
+        }
         at = core::next_code_point(utf8, at);
     }
 }

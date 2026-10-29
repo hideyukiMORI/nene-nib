@@ -28,6 +28,7 @@
 #include "ExLanguageRequest.hpp"
 #include "ExLineRequest.hpp"
 #include "ExLspRequest.hpp"
+#include "ExMapRequest.hpp"
 #include "ExPaletteRequest.hpp"
 #include "ExResult.hpp"
 #include "ExRootRequest.hpp"
@@ -47,6 +48,7 @@
 #include "GridRowView.hpp"
 #include "GridTally.hpp"
 #include "JsonValue.hpp"
+#include "KeyMap.hpp"
 #include "LanguageServerLink.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
@@ -54,6 +56,7 @@
 #include "LspRequest.hpp"
 #include "LspRequestKind.hpp"
 #include "LspResponse.hpp"
+#include "MapTimer.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "OpenFailureReply.hpp"
@@ -87,6 +90,7 @@
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
+#include "VimMapMode.hpp"
 #include "VimMarks.hpp"
 #include "VimPattern.hpp"
 #include "VimRegister.hpp"
@@ -181,6 +185,30 @@ class EditorController final
     void accept(const VisibleLines &intent);
     void accept(const SelectEditMode &intent);
     void accept(const VimKeyPress &intent);
+    // 使う人が打った鍵の入口（ADR 0176 の決定 3）。Vim の `map`
+    // の表を引いて、表に無い鍵はそのまま、 左辺の途中は積んで待ち、決まった鍵の列は順に
+    // deliver_vim_key へ流す。表が空なら分岐 1 つで
+    // deliver_vim_key。再生（`.`・マクロ・press_vim_keys）と IME の確定はここを通らない。
+    [[nodiscard]] std::optional<core::VimRepeatFailure> typed_vim_key(const core::VimKey &key);
+    // key_map_step の答えごとの写し（std::visit・答えが増えたらコンパイルが落ちる）。waited は
+    // 引く前に待ちがあったか（流して空にしたらタイマーを外す）。
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    typed_step(core::KeyMapPass pass, const core::VimKey &key, bool waited);
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    typed_step(core::KeyMapPending pending, const core::VimKey &key, bool waited);
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    typed_step(core::KeyMapEmit emitted, const core::VimKey &key, bool waited);
+    // 表を引くモード。Vim モードで入力行が閉じていて、1 鍵の引数を待っていないときだけ値がある。
+    [[nodiscard]] std::optional<core::VimMapMode> key_map_mode() const noexcept;
+    // 積んだ鍵を key_map_flush で流して空にする（MapTimeout と、待ちを保たない意図の入口）。
+    void flush_key_map_pending();
+    // 積んだ鍵を流さずに捨てる（窓が閉じていく EndSession だけ）。
+    void discard_key_map_pending();
+    // 待ちの合図（決定 4）。積んだ鍵が無ければ何も変えない（描き直さない）。
+    void accept(const MapTimeout &);
+    // 設定の `maps` と `mapleader` から表を作り直す。設定を置く 2 か所（起動・persist_settings）
+    // だけが呼ぶ。作れない設定（読み手が拒むので届かない）は空の表。
+    void refresh_key_map();
     // 再生の鍵の口（ADR 0048 の決定 8）。入力行が開いていれば窓と同じ入力行の intent へ、
     // 閉じていれば engine へ。失敗を返すのは engine の鍵だけ。
     [[nodiscard]] std::optional<core::VimRepeatFailure> deliver_vim_key(const core::VimKey &key);
@@ -490,6 +518,8 @@ class EditorController final
     [[nodiscard]] bool answer_current_value(const core::ExResult &result);
     void answer_syntax(const core::ExSyntaxRequest &request);
     void answer_clipboard(core::ExClipboardRequest request);
+    // `:nmap` 系の要求を設定へ写して保存する（ADR 0176 の決定 6）。断りは 1 行の知らせ。
+    void run_map_request(const core::ExMapRequest &request);
     // Ex のタブの命令の写し先（ADR 0057 の決定 5・6）。命令が増えたら switch が落ちる（CPP-002）。
     void run_tab_request(const core::ExTabRequest &request);
     // Ex の `:N` `:$` の写し先（ADR 0022 の追補・Issue #847）。engine の `{N}G` と同じ着地。
@@ -760,5 +790,10 @@ class EditorController final
     // 言語サーバーとのつながり（ADR 0160 の決定 5・6）。EditorControllerLanguageServer.cpp の群
     // だけが読み書きする。
     LanguageServerLink language_server_;
+    // Vim の `map` の表（ADR 0176 の決定 2）。設定から refresh_key_map だけが作る。
+    core::KeyMap key_map_;
+    // この意図が頼む待ちのタイマー（EditorDelivery.map_timer）。apply の入口で空に戻し、待ちを
+    // 積む・流す所だけが置く。
+    std::optional<MapTimer> map_timer_;
 };
 } // namespace nenenib::application

@@ -376,6 +376,18 @@ EditorState EditorState::with_explorer(ExplorerState explorer) const
     return next;
 }
 
+const std::vector<core::VimKey> &EditorState::key_map_pending() const noexcept
+{
+    return key_map_pending_;
+}
+
+EditorState EditorState::with_key_map_pending(std::vector<core::VimKey> pending) const
+{
+    EditorState next(*this);
+    next.key_map_pending_ = std::move(pending);
+    return next;
+}
+
 EditorState EditorState::with_command_message(std::optional<core::DisplayText> message) const
 {
     EditorState next(*this);

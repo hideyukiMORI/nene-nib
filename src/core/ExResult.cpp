@@ -4,6 +4,7 @@
 #include "AsciiCase.hpp"
 #include "BuiltinThemes.hpp"
 #include "ExLineRequest.hpp"
+#include "ExMapCommand.hpp"
 #include "ExPaletteName.hpp"
 #include "ExTabName.hpp"
 #include "ExTabRequest.hpp"
@@ -943,6 +944,11 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     {
         return highlight_result(VimSearchHighlight::suspended);
     }
+    auto map = map_command(text);
+    if (map.has_value())
+    {
+        return std::move(map).value();
+    }
     auto syntax = syntax_command(text);
     if (syntax.has_value())
     {
@@ -1140,6 +1146,13 @@ void append_language_candidates(std::vector<std::string> &candidates, std::strin
         if (prefix_matches(prefix, name.name))
         {
             candidates.emplace_back(name.name);
+        }
+    }
+    for (const auto name : map_command_candidates())
+    {
+        if (prefix_matches(prefix, name))
+        {
+            candidates.emplace_back(name);
         }
     }
     append_document_candidates(candidates, prefix);

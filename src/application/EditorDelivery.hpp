@@ -10,6 +10,7 @@
 #include "EditorSettings.hpp"
 #include "ImeStance.hpp"
 #include "InputLinePrompt.hpp"
+#include "MapTimer.hpp"
 #include "SettingsIssue.hpp"
 #include "VimMode.hpp"
 
@@ -46,5 +47,8 @@ struct EditorDelivery
     // 変えなかったときだけ false で、ui はそのとき無効化を積まない（ADR 0155 の追補・#813）。
     // ほかの意図は true。
     bool repaint = true;
+    // Vim の `map` の待ちのタイマー（ADR 0176 の決定 4）。この意図が待ちを始めた・積み替えたら
+    // start、待ちを流して空にしたら stop、変えなかったら空。
+    std::optional<MapTimer> map_timer = std::nullopt;
 };
 } // namespace nenenib::application

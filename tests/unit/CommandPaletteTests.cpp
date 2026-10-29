@@ -110,8 +110,10 @@ void verify_palette_choices()
 {
     const auto all = choices_for(":");
     expect(all.size() == core::ex_command_candidates().size(), "Ex and palette share the catalog");
-    // 設定候補の点数は長さ、同点は文字列の順。ls、wq、xit の順になる（ADR 0066）。
-    expect(all.front().command == "ls" && all.at(1).command == "wq" && all.at(2).command == "xit",
+    // 設定候補の点数は長さ、同点は文字列の順。ls、wq、map、xit の順になる（ADR 0066・ADR 0176 の
+    // 決定 6 の map）。
+    expect(all.front().command == "ls" && all.at(1).command == "wq" && all.at(2).command == "map" &&
+               all.at(3).command == "xit",
            "empty query has deterministic ranking");
     // 同点（空の入力では長さ）の並びは Ex の補完と同じ名前順（#696）。
     for (std::size_t index = 1; index < all.size(); ++index)

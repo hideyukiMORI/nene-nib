@@ -8,6 +8,9 @@
 #include "DisplayText.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExLineRequest.hpp"
+#include "ExMapCommand.hpp"
+#include "ExMapRequest.hpp"
+#include "ExMapVerb.hpp"
 #include "ExResult.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
@@ -367,6 +370,11 @@ bool EditorController::ran_ex_request(const core::ExResult &result)
         run_root_request(result.root.value());
         return true;
     }
+    if (result.map.has_value())
+    {
+        run_map_request(result.map.value());
+        return true;
+    }
     return answer_current_value(result);
 }
 
@@ -402,6 +410,33 @@ void EditorController::run_palette_request(const core::ExPaletteRequest &request
     const bool active = request.scope == core::PaletteScope::tabs && request.query.empty();
     open_palette(core::palette_input_for(core::PaletteQuery{request.scope, request.query}),
                  active ? state_.active_tab() : 0);
+}
+
+// `map` の要求は設定の行を書き換えて v4 へ保存し、表は persist_settings が作り直す（ADR 0176 の
+// 決定 6）。成功は Vim と同じく何も出さない。引数なしの一覧（Ctrl+P の読むだけの出どころ）は
+// まだ無い（出どころの記号が決まっていない）ので断る。
+void EditorController::run_map_request(const core::ExMapRequest &request)
+{
+    switch (request.verb)
+    {
+    case core::ExMapVerb::list:
+        reject(core::DisplayText::parse("Not supported: listing mappings").value());
+        return;
+    case core::ExMapVerb::add:
+    case core::ExMapVerb::remove:
+    case core::ExMapVerb::leader:
+        break;
+    }
+    const auto settings = core::map_edited(state_.settings(), request);
+    if (!settings)
+    {
+        reject(core::ex_map_failure_message(settings.error()));
+        return;
+    }
+    if (!persist_settings(settings.value()))
+    {
+        reject(core::DisplayText::parse("Settings could not be saved").value());
+    }
 }
 
 // `:N` は鍵の `{N}G` と同じ engine の着地を同じ写しの道で写す（2 本にしない）。着地は必ず本文の中で

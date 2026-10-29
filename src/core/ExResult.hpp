@@ -10,6 +10,7 @@
 #include "ExLanguageRequest.hpp"
 #include "ExLineRequest.hpp"
 #include "ExLspRequest.hpp"
+#include "ExMapRequest.hpp"
 #include "ExPaletteRequest.hpp"
 #include "ExRootRequest.hpp"
 #include "ExSyntaxRequest.hpp"
@@ -46,6 +47,8 @@ inline constexpr std::string_view guifont_command = "set guifont=";
 // 要求（ADR 0162 の決定 7）で、経路を解いて設定に載せるのは controller。lsp は `:set lsp`
 // `:set nolsp` `:set lsp?` の要求（ADR 0160 の決定 7）で、設定の保存と言語サーバーの起動・停止は
 // controller。
+// map は Vim の `map` の Ex（`:nmap` 系・`:unmap` 系・`:let mapleader=`）の要求（ADR 0176 の
+// 決定 6）で、設定を書き換えて保存するのは controller。
 struct ExResult
 {
     std::optional<EditorSettings> settings;
@@ -63,6 +66,7 @@ struct ExResult
     std::optional<ExClipboardRequest> clipboard = std::nullopt;
     std::optional<ExRootRequest> root = std::nullopt;
     std::optional<ExLspRequest> lsp = std::nullopt;
+    std::optional<ExMapRequest> map = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
