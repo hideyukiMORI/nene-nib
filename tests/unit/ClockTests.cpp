@@ -1,6 +1,7 @@
 // Issue #1050 / ADR 0175。F5 の日時の挿入と現在時刻の port。時刻は替え玉 ScriptedClock が置いた
 // 値だけを読み（実時刻を読まない）、controller が now() を呼ぶのは InsertDateTime のときだけ。
 #include "AutosaveTick.hpp"
+#include "CancelCommand.hpp"
 #include "DateTimeText.hpp"
 #include "Editing.hpp"
 #include "HistoryAction.hpp"
@@ -98,6 +99,28 @@ void verify_vim()
            "one u removes the whole INSERT together with the date and time");
 }
 
+// #1120 の R3-1: オペレータの待ちの途中の F5 は、知らせと一緒に待ちを取り消す（Esc と同じ道）。
+// 続く j は削除ではなく移動になる。VISUAL の F5 は選択を残す。
+void verify_vim_waiting()
+{
+    Editing editing;
+    open_vim_document(editing, "ab\ncd\n");
+    auto &controller = editing.controller();
+    vim_replay(controller, "d");
+    applied(controller, app::InsertDateTime{});
+    expect(!controller.vim_state().pending.has_value() &&
+               notice(controller.frame()) == insert_only && editing.wall_clock().calls() == 0,
+           "F5 after an operator cancels the operator and says so in one line");
+    vim_replay(controller, "jx");
+    expect(vim_body(controller.frame()) == "ab\nd\n",
+           "the j after the cancelled operator moves instead of deleting lines");
+    vim_replay(controller, "ggvl");
+    applied(controller, app::InsertDateTime{});
+    vim_replay(controller, "d");
+    expect(vim_body(controller.frame()) == "\nd\n" && editing.wall_clock().calls() == 0,
+           "F5 in VISUAL keeps the selection, so the next d deletes it");
+}
+
 // 決定 3（入力行）: `:` と検索の行が開いていれば、入力行に文字として入れる。本文は変えない。
 void verify_input_line()
 {
@@ -110,6 +133,13 @@ void verify_input_line()
     expect(frame.command_line.has_value() && frame.command_line.value().text == placed &&
                vim_body(frame) == "ab\n" && editing.wall_clock().calls() == 1,
            "F5 with the Ex line open types the date and time into the line");
+    applied(controller, app::CancelCommand{});
+    vim_replay(controller, "/");
+    applied(controller, app::InsertDateTime{});
+    const auto searching = controller.frame();
+    expect(searching.command_line.has_value() && searching.command_line.value().text == placed &&
+               vim_body(searching) == "ab\n" && editing.wall_clock().calls() == 2,
+           "F5 with the search line open types the date and time into the line");
 }
 
 // 決定 4: 使う人の操作ではない合図は時刻を読まない。
@@ -131,6 +161,7 @@ void verify_clock_contracts()
     verify_text_form();
     verify_ordinary_insert();
     verify_vim();
+    verify_vim_waiting();
     verify_input_line();
     verify_quiet_signals();
 }

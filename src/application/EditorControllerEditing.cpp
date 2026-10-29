@@ -21,6 +21,8 @@
 #include "VimKey.hpp"
 #include "VimMarkEdits.hpp"
 #include "VimMode.hpp"
+#include "VimSpecialKey.hpp"
+#include "VimState.hpp"
 #include "VisualPosition.hpp"
 
 #include <algorithm>
@@ -127,6 +129,25 @@ constexpr std::size_t single_page_line = 1;
 }
 // クリップボードに書けなかった知らせ（ADR 0134 の決定 3）。
 constexpr std::string_view clipboard_unwritten_notice = "クリップボードに書けませんでした";
+// NORMAL / VISUAL で次の鍵を待っているか（オペレータ・回数・レジスタの名指し・1 鍵の待ち）。
+// VISUAL の Esc は VISUAL を出るので、VISUAL ではオペレータと 1 鍵の待ちだけを待ちと見る（回数と
+// レジスタの名指しは選択を捨ててまで取り消さない）。
+[[nodiscard]] bool vim_waiting(const core::VimState &vim) noexcept
+{
+    const bool keyed = vim.pending.has_value() || vim.input_wait.has_value();
+    switch (vim.mode)
+    {
+    case core::VimMode::normal:
+        return keyed || vim.count.has_value() || vim.selected_register.has_value();
+    case core::VimMode::insert:
+    case core::VimMode::visual:
+    case core::VimMode::visual_line:
+    case core::VimMode::visual_block:
+        return keyed;
+    }
+    std::unreachable();
+}
+
 // F5 を Vim の NORMAL / VISUAL で押したときの知らせ（ADR 0175 の決定 3）。鳴らさない。
 constexpr std::string_view date_time_insert_only_notice = "INSERT モードで F5 を押してください";
 // 貼り付けの知らせ（ADR 0157 の決定 3・7）。鳴らさない情報の 1 行。
@@ -716,8 +737,13 @@ void EditorController::accept(const InsertDateTime &)
     case core::VimMode::visual:
     case core::VimMode::visual_line:
     case core::VimMode::visual_block:
-        // Vim の鍵の意味を黙って変えない（D71）。時刻は読まない。
+        // Vim の鍵の意味を黙って変えない（D71）。時刻は読まない。待ちの途中なら、Vim が割り当ての
+        // 無い鍵を受けたときと同じく Esc の道で待ちを取り消す（#1120 の R3-1）。
         // 材料は固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
+        if (vim_waiting(state_.vim()))
+        {
+            static_cast<void>(step_vim(core::VimKey{core::VimSpecialKey::escape}));
+        }
         state_ = state_.with_command_message(
             core::DisplayText::parse(date_time_insert_only_notice).value());
         return;
