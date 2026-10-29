@@ -505,6 +505,19 @@ void verify_undo_caret_after_dot()
     verify_undo_caret_case("x 3.", first + "x" + undo_caret_move(1, 1) + "3.", counted);
 }
 
+// 行単位の VISUAL の `.` の `u` は、選び直しの錨（`.` を打った位置）へ戻る（ADR 0015 決定 10 の
+// 追補 #1109・Vim の do_pending_operator の redo 分岐は oap->start の桁を 0 にしない）。元の
+// 変更の戻り先は固定の端の行頭（ADR 0052 の決定 10）。oracle では `.` の後の `u` を測れない。
+void verify_undo_caret_after_visual_line_dot()
+{
+    const std::string there = undo_caret_move(2, 12);
+    const std::string first = undo_caret_move(6, 8);
+    constexpr std::array<CaretAt, 4> anchored{{{2, 12}, {6, 1}, {6, 1}, {2, 12}}};
+    verify_undo_caret_case("V~ .", first + "V~" + there + ".", anchored);
+    verify_undo_caret_case("VjU .", first + "VjU" + there + ".", anchored);
+    verify_undo_caret_case("V> .", first + "V>" + there + ".", anchored);
+}
+
 // U11: マクロは 1 回の `u` で全部戻り、戻り先はマクロの最初の変更の戻り先。
 void verify_undo_caret_macro(std::string_view name, std::string_view macro, std::string_view keys,
                              std::span<const CaretAt> carets)
@@ -584,6 +597,7 @@ void verify_undo_caret_ordinary_history()
 void verify_vim_undo_caret_contracts()
 {
     verify_undo_caret_after_dot();
+    verify_undo_caret_after_visual_line_dot();
     verify_undo_caret_after_macro();
     verify_undo_caret_walks_back();
     verify_undo_caret_lost_line();
