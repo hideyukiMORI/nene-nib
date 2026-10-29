@@ -231,7 +231,7 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::move_mark_line, VimActionGroup::motion},
      {VimAction::move_mark_exact, VimActionGroup::motion},
      {VimAction::reselect_visual, VimActionGroup::enter_visual},
-     {VimAction::insert_at_last_insert, VimActionGroup::insert_line,
+     {VimAction::insert_at_last_insert, VimActionGroup::insert_line},
      {VimAction::increment_number, VimActionGroup::number},
      {VimAction::decrement_number, VimActionGroup::number},
      {VimAction::increment_sequence, VimActionGroup::number},
@@ -279,7 +279,7 @@ constexpr std::array<VimMotionBinding, 37> motion_bindings{
 
 // g の後ろの鍵 → 動作（ADR 0027 / Issue #222 / ADR 0057 の決定 2 / ADR 0144 の決定 4 /
 // ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10・14 / #1039 の gv gi）。ここに無い鍵は g を打ち消す。
-constexpr std::array<VimBinding, 19> g_bindings{
+constexpr std::array<VimBinding, 21> g_bindings{
     {{U'g', VimAction::move_document_first},
      {U'e', VimAction::move_previous_word_end},
      {U'E', VimAction::move_previous_big_word_end},
@@ -298,7 +298,7 @@ constexpr std::array<VimBinding, 19> g_bindings{
      {U'u', VimAction::lower_case_operator},
      {U'U', VimAction::upper_case_operator},
      {U'v', VimAction::reselect_visual},
-     {U'i', VimAction::insert_at_last_insert,
+     {U'i', VimAction::insert_at_last_insert},
      {control_a_character, VimAction::increment_sequence},
      {control_x_character, VimAction::decrement_sequence}}};
 
