@@ -23,6 +23,9 @@
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
+#include "VimJumpList.hpp"
+#include "VimJumpLists.hpp"
+#include "VimJumpMove.hpp"
 #include "VimMarkEdits.hpp"
 #include "VimMarkPosition.hpp"
 #include "VimMarks.hpp"
@@ -34,6 +37,7 @@
 #include "../vim/VimFixtures.hpp"
 
 #include <cstddef>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -340,6 +344,62 @@ void verify_change_list()
            "u after a unit that added nothing adds a position");
     expect(body_after("abc\ndef\nghi", "xGxuug;g;x") == "bc\ndef\nghi",
            "u after a unit that added a position only moves the last one");
+    // 再生（`@a`）の全体は 1 単位で、変更の列に足すのは最初の 1 回だけ（Vim の測定: [1,0] [4,0]）。
+    const std::string five = "abc\ndef\nghi\njkl\nmno";
+    expect(body_after(five, "qaxjq3@ag;g;x") == "c\nef\nhi\nkl\nmno",
+           "3@a adds one position and moves it to the last line it changed");
+    expect(body_after(five, "qaxjq3@ag;g;g;x") == "bc\nef\nhi\nkl\nmno",
+           "the third g; after 3@a is past the oldest");
+    // 20 桁の回数は SIZE_MAX で止まり、足しても回り込まない（#1072 R2-1）。
+    expect(body_after("a\nb\nc\nd\ne", "Ggg3G<C-o><C-o>99999999999999999999<Tab>x") ==
+               "a\nb\nc\nd\ne",
+           "a huge count of <Tab> fails");
+}
+
+// 列の上限 100（Vim の JUMPLISTSIZE）と巨大な回数（#1072 R2-1・R5-1）。純関数の契約。
+void verify_jump_list_limits()
+{
+    using nenenib::core::vim_jump_list_limit;
+    const auto at_line = [](std::size_t line) { return VimMarkPosition{LineNumber{line}, 0}; };
+    VimMarks marks{};
+    for (std::size_t line = 1; line <= vim_jump_list_limit + 1; ++line)
+    {
+        marks.jumps = nenenib::core::vim_jump_appended(marks.jumps, at_line(line));
+    }
+    expect(marks.jumps.count == vim_jump_list_limit && marks.jumps.index == vim_jump_list_limit &&
+               marks.jumps.entries.at(0).line.value == 2,
+           "the 101st jump drops the oldest");
+    const auto past = nenenib::core::vim_jump_moved(marks, at_line(200), true, 100);
+    expect(!past.target.has_value() && past.marks.jumps.count == vim_jump_list_limit &&
+               past.marks.jumps.entries.at(0).line.value == 3,
+           "100 Ctrl-o on a full list pushes the caret, drops the oldest and fails");
+    const auto oldest = nenenib::core::vim_jump_moved(marks, at_line(200), true, 99);
+    expect(oldest.target.has_value() && oldest.target.value().line.value == 3,
+           "99 Ctrl-o on a full list reaches the second of the old entries");
+    VimMarks changes{};
+    for (std::size_t line = 1; line <= vim_jump_list_limit + 1; ++line)
+    {
+        changes = nenenib::core::vim_change_recorded(changes, at_line(line), true);
+    }
+    expect(changes.changes.count == vim_jump_list_limit &&
+               changes.changes.index == vim_jump_list_limit &&
+               changes.changes.entries.at(0).line.value == 2 &&
+               changes.changes.entries.at(vim_jump_list_limit - 1).line.value == 101,
+           "the 101st change drops the oldest");
+    VimMarks five{};
+    for (std::size_t line = 1; line <= 5; ++line)
+    {
+        five.jumps = nenenib::core::vim_jump_appended(five.jumps, at_line(line));
+        five = nenenib::core::vim_change_recorded(five, at_line(line), true);
+    }
+    five.jumps.index = 2;
+    five.changes.index = 2;
+    constexpr std::size_t huge = std::numeric_limits<std::size_t>::max();
+    expect(!nenenib::core::vim_jump_moved(five, at_line(9), false, huge).target.has_value(),
+           "Ctrl-i with a huge count fails");
+    const auto newest = nenenib::core::vim_change_moved(five, false, huge);
+    expect(newest.target.has_value() && newest.marks.changes.index == 4,
+           "g, with a huge count stops at the newest");
 }
 
 // マークは文書の値で、タブを切り替えると文書に付いていく（決定 2）。まだ読んでいない文書と
@@ -388,6 +448,7 @@ void verify_vim_mark_contracts()
     verify_reselect_and_last_insert_crlf();
     verify_g_records_kept();
     verify_change_list();
+    verify_jump_list_limits();
 }
 
 void verify_vim_mark_scope()

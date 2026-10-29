@@ -105,7 +105,8 @@ VimJumpMove vim_jump_moved(const VimMarks &marks, const VimMarkPosition &caret, 
     VimMarks next = marks;
     next.jumps = vim_jumps_cleaned(marks.jumps);
     const VimJumpList &list = next.jumps;
-    const bool beyond = older ? count > list.index : list.index + count >= list.count;
+    // 回数は SIZE_MAX まで来るので、足さずに引いて比べる（index は count を越えない）。
+    const bool beyond = older ? count > list.index : count >= list.count - list.index;
     if (list.count == 0 || beyond)
     {
         return VimJumpMove{std::move(next), std::nullopt};
@@ -137,7 +138,7 @@ VimJumpMove vim_change_moved(const VimMarks &marks, bool older, std::size_t coun
     {
         index = count > at ? 0 : at - count;
     }
-    else if (at + count < list.count)
+    else if (count < list.count - at)
     {
         index = at + count;
     }
