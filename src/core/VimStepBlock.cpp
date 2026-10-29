@@ -417,9 +417,9 @@ namespace detail
                           side == VimBlockInsertSide::before
                               ? block.left
                               : VirtualColumn{block_right(block) + single_step},
-                          block_caret(block, 0),
+                          block_caret(block),
                           0,
-                          block_caret(block, 0)};
+                          block_caret(block)};
     const std::string content = text.line_text(block.first);
     VimBlockEdit entry = first_line_entry(text, insert, content);
     const Offset at{entry.range.begin.value +
@@ -465,7 +465,7 @@ namespace detail
                        removal.caret, line_bytes, std::nullopt});
     return restored_at(
         with_clipboard(VimStep{std::move(entered), std::move(removal)}, std::move(clipboard)),
-        block_caret(block, 0));
+        block_caret(block));
 }
 } // namespace detail
 
