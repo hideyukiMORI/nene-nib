@@ -53,7 +53,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/CommandLine.cpp src/core/FontFamilies.cpp src/core/CommandChoice.cpp src/core/SubsequenceScore.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
     src/core/BytesReservation.cpp src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExplorerLayout.cpp src/core/ExplorerTree.cpp src/core/ExMapCommand.cpp src/core/ExResult.cpp src/core/FontSize.cpp
     src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp src/core/InputHistory.cpp
-    src/core/KeyChord.cpp src/core/KeyMap.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
+    src/core/DateTimeText.cpp src/core/KeyChord.cpp src/core/KeyMap.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
     src/core/NewlineIndex.cpp src/core/ScrollBounds.cpp src/core/GutterLabels.cpp src/core/SearchLine.cpp
     src/core/StatusBarLayout.cpp src/core/StatusItems.cpp
     src/core/TabDestination.cpp src/core/TabKeyTable.cpp src/core/TabRecency.cpp src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
@@ -141,7 +141,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimViewTests.cpp
     tests/unit/ExFileTests.cpp
     tests/unit/ExDocumentTests.cpp
-    tests/unit/ExWritePathTests.cpp tests/unit/BellTests.cpp
+    tests/unit/ExWritePathTests.cpp tests/unit/BellTests.cpp tests/unit/ClockTests.cpp
     tests/unit/OrdinaryCharacterTests.cpp
     tests/unit/VimVisualBlockTests.cpp
     tests/unit/TabsTests.cpp
@@ -210,7 +210,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/SynchronousDocumentReader.cpp src/adapters/win32/Win32DocumentReader.cpp
     src/adapters/win32/DocumentReadShelf.cpp src/adapters/win32/DocumentChunkRead.cpp
     src/adapters/win32/HistoryCodec.cpp src/adapters/win32/Win32HistoryAdapter.cpp
-    src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32Bell.cpp
+    src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32Bell.cpp src/adapters/win32/Win32Clock.cpp
     src/adapters/win32/ClipboardCalls.cpp src/adapters/win32/HtmlClipboardFormat.cpp src/adapters/win32/Win32ClipboardAdapter.cpp
     src/adapters/win32/Win32CodePageAdapter.cpp src/adapters/win32/Win32FontCollationAdapter.cpp
     src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/TemporaryFiles.cpp

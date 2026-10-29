@@ -51,6 +51,8 @@ namespace
         return "V";
     case OperationKey::e:
         return "E";
+    case OperationKey::f5:
+        return "F5";
     }
     std::unreachable();
 }

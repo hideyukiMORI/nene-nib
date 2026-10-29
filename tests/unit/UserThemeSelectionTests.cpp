@@ -31,6 +31,7 @@
 #include "ScriptedBell.hpp"
 #include "ScriptedBookmarks.hpp"
 #include "ScriptedClipboard.hpp"
+#include "ScriptedClock.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScriptedFolders.hpp"
@@ -244,6 +245,7 @@ void verify_theme_startup_notice()
     ScriptedAutosave autosave;
     ScriptedFonts fonts;
     ScriptedBell bell;
+    ScriptedClock wall_clock;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -253,7 +255,7 @@ void verify_theme_startup_notice()
     EditorController controller{app::EditorPorts{appearance, clipboard, files, pages, settings,
                                                  themes, session, history, folders, bookmarks,
                                                  text_layouts, autosave, fonts, bell, markdown,
-                                                 reads, language_server},
+                                                 reads, language_server, wall_clock},
                                 initial};
     auto frame = controller.frame();
     expect(frame.lines.front().text == "initial body", "initial document uses normal file load");
@@ -269,7 +271,7 @@ void verify_theme_startup_notice()
     EditorController unreadable{app::EditorPorts{appearance, clipboard, files, pages, broken,
                                                  themes, session, history, folders, bookmarks,
                                                  text_layouts, autosave, fonts, bell, markdown,
-                                                 reads, language_server},
+                                                 reads, language_server, wall_clock},
                                 initial};
     expect(unreadable.frame().lines.front().text == "initial body" &&
                unreadable.frame().settings_failure == app::SettingsFailure::malformed,

@@ -5,6 +5,7 @@
 #include "BellPort.hpp"
 #include "BookmarkPort.hpp"
 #include "ClipboardPort.hpp"
+#include "ClockPort.hpp"
 #include "CodePagePort.hpp"
 #include "DocumentReadPort.hpp"
 #include "FilePort.hpp"
@@ -47,5 +48,8 @@ struct EditorPorts
     DocumentReadPort &reads;
     // 言語サーバーと話す口（ADR 0160 の決定 1）。設定の lsp がオフなら呼ばない（決定 9）。
     LanguageServerPort &language_server;
+    // 現在時刻（ADR 0175 の決定 1）。F5 の日時の挿入だけが呼ぶ（決定 4）。名前の `clock` は
+    // ARC-007 の字句検査（nondeterministicNames）が adapters の外で拒むので wall_clock にする。
+    ClockPort &wall_clock;
 };
 } // namespace nenenib::application

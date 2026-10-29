@@ -182,8 +182,8 @@ class EditorWindow final
     void type_text(std::string utf8);
     void press_key(WPARAM word);
     [[nodiscard]] bool press_bookmark_key(WPARAM word, LPARAM data);
-    // F1（操作の一覧・ADR 0078 の決定 9）。扱ったら true。
-    [[nodiscard]] bool press_help_key(WPARAM word, LPARAM data);
+    // F1（操作の一覧・ADR 0078 の決定 9）と F5（日時の挿入・ADR 0175）。扱ったら true。
+    [[nodiscard]] bool press_function_key(WPARAM word, LPARAM data);
     // 通常 / Vim の切り替え（Ctrl+Shift+Space・D61）。反復では切り替えない。扱ったら true。
     [[nodiscard]] bool press_mode_key(WPARAM word, LPARAM data);
     // 鍵と一覧が実行する唯一の口（ADR 0078 の決定 7）。

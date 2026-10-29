@@ -9,6 +9,7 @@
 #include "ScriptedBell.hpp"
 #include "ScriptedBookmarks.hpp"
 #include "ScriptedClipboard.hpp"
+#include "ScriptedClock.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedDocumentReads.hpp"
 #include "ScriptedFiles.hpp"
@@ -42,7 +43,7 @@ class Editing final
           controller_(nenenib::application::EditorPorts{
               appearance_, clipboard_, files_, code_pages_, settings_, themes_, session_, history_,
               folders_, bookmarks_, text_layouts_, autosave_, fonts_, bell_, markdown_, reads_,
-              language_server_})
+              language_server_, wall_clock_})
     {
     }
 
@@ -145,6 +146,11 @@ class Editing final
         return language_server_;
     }
 
+    [[nodiscard]] ScriptedClock &wall_clock() noexcept
+    {
+        return wall_clock_;
+    }
+
   private:
     [[nodiscard]] nenenib::application::EditorPorts
     prepared_reads(const std::function<void(ScriptedFiles &, ScriptedDocumentReads &)> &prepare)
@@ -158,9 +164,9 @@ class Editing final
     {
         prepare(files_);
         return nenenib::application::EditorPorts{
-            appearance_, clipboard_, files_,    code_pages_, settings_,       themes_,
-            session_,    history_,   folders_,  bookmarks_,  text_layouts_,   autosave_,
-            fonts_,      bell_,      markdown_, reads_,      language_server_};
+            appearance_, clipboard_, files_,    code_pages_, settings_,        themes_,
+            session_,    history_,   folders_,  bookmarks_,  text_layouts_,    autosave_,
+            fonts_,      bell_,      markdown_, reads_,      language_server_, wall_clock_};
     }
 
     ScriptedAppearance appearance_{Reading{Appearance::dark}};
@@ -180,6 +186,7 @@ class Editing final
     ScriptedMarkdown markdown_;
     ScriptedDocumentReads reads_{files_, code_pages_};
     ScriptedLanguageServer language_server_;
+    ScriptedClock wall_clock_;
     EditorController controller_;
 };
 } // namespace nenenib::tests

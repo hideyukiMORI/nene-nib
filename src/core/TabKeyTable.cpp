@@ -62,6 +62,7 @@ namespace
     case EditorOperation::paste_html:
     case EditorOperation::toggle_explorer:
     case EditorOperation::choose_explorer_root:
+    case EditorOperation::insert_date_time:
         return std::nullopt;
     }
     std::unreachable();

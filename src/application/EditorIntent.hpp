@@ -19,6 +19,7 @@
 #include "ExplorerKey.hpp"
 #include "ExplorerRootChosen.hpp"
 #include "HistoryAction.hpp"
+#include "InsertDateTime.hpp"
 #include "InsertText.hpp"
 #include "LanguageServerTick.hpp"
 #include "MapTimeout.hpp"
@@ -83,5 +84,5 @@ using EditorIntent = std::variant<
     OpenOperationList, PointText, SelectDisplay, SelectLanguage, SelectSyntax, ScrollPaletteList,
     SplitPane, SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick, TogglePreviewTask,
     ToggleExplorer, ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen,
-    LanguageServerTick, MapTimeout>;
+    LanguageServerTick, MapTimeout, InsertDateTime>;
 } // namespace nenenib::application

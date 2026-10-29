@@ -555,6 +555,9 @@ class EditorController final
     void accept(const ComposeText &intent);
     void accept(const CommitText &intent);
     void accept(const CancelComposition &);
+    // F5 の日時の挿入（ADR 0175 の決定 3）。時刻はここだけで ClockPort から読む（決定 4）。入力行・
+    // 通常モード・Vim INSERT は IME の確定と同じ道で入れ、Vim のほかのモードは 1 行知らせる。
+    void accept(const InsertDateTime &);
 
     // VimEffect の写し先。選択肢が増えたら std::visit がここで足りずコンパイルが落ちる
     // （CPP-002 / ADR 0012 の決定 3）。どれも既存の 1 本の経路を呼ぶだけ（ARC-001）。
