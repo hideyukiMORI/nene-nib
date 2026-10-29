@@ -3099,5 +3099,11 @@
   {"name":"insert-column-one-newline","text":"  ab","keys":"$gIx<CR>y<Esc>"},
   {"name":"insert-column-one-undo","text":"  ab","keys":"$gIxy<Esc>u"},
   {"name":"insert-column-one-multibyte","text":"  あい","keys":"$gIx<Esc>"},
-  {"name":"insert-column-one-second-line","text":"ab\n   cd","keys":"j$gIz<Esc>"}
+  {"name":"insert-column-one-second-line","text":"ab\n   cd","keys":"j$gIz<Esc>"},
+  {"name":"insert-column-one-visual-char-delete","text":"  abc","keys":"$vgId"},
+  {"name":"insert-column-one-visual-line-delete","text":"  abc\n  def","keys":"$VgId"},
+  {"name":"insert-column-one-visual-block-delete","text":"  abc\n  def","keys":"$<C-v>jgId"},
+  {"name":"insert-column-one-visual-char-yank","text":"  abc","keys":"$hvgIy"},
+  {"name":"insert-column-one-operator-delete","text":"  abc","keys":"$dgIx"},
+  {"name":"insert-column-one-operator-yank","text":"  abc","keys":"$ygIx"}
 ]

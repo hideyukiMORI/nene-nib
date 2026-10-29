@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 ab100c9d70226a577cf1349958ac4cf4024dba2a0e11f657ca7151b3ceb9225a / 3101 fixtures
+// fixtures.json: sha256 cf6b686820c930b2f168ef4a5ec712169e76c759ff7d0e5427b84b26d833fb99 / 3107 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3101> vim_fixtures{{
+constexpr std::array<VimFixture, 3107> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3113,6 +3113,12 @@ constexpr std::array<VimFixture, 3101> vim_fixtures{{
     {"insert-column-one-undo", "  ab", "$gIxy<Esc>u", "  ab", 1, 1, "", "", std::nullopt},
     {"insert-column-one-multibyte", "  あい", "$gIx<Esc>", "x  あい", 1, 1, "", "", std::nullopt},
     {"insert-column-one-second-line", "ab\n   cd", "j$gIz<Esc>", "ab\nz   cd", 2, 1, "", "", std::nullopt},
+    {"insert-column-one-visual-char-delete", "  abc", "$vgId", "  abc", 1, 1, "", "", std::nullopt},
+    {"insert-column-one-visual-line-delete", "  abc\n  def", "$VgId", "  abc\n  def", 1, 1, "", "", std::nullopt},
+    {"insert-column-one-visual-block-delete", "  abc\n  def", "$<C-v>jgId", "  abc\n  def", 2, 1, "", "", std::nullopt},
+    {"insert-column-one-visual-char-yank", "  abc", "$hvgIy", "  abc", 1, 1, "", "", std::nullopt},
+    {"insert-column-one-operator-delete", "  abc", "$dgIx", "  abc", 1, 1, "", "", std::nullopt},
+    {"insert-column-one-operator-yank", "  abc", "$ygIx", "  abc", 1, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

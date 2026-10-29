@@ -1074,6 +1074,15 @@ namespace
     {
         return search_action(state, view, action);
     }
+    // `dgI` は Vim の nv_g_cmd と同じく beginline(0) でキャレットを 1 桁目へ動かしてから
+    // オペレータを打ち消して鳴る（#1032 の実測）。
+    if (action == VimAction::insert_at_column_one)
+    {
+        return failed(
+            VimStep{vim_resting_from(state, state.unnamed_register),
+                    VimMoveTo{view.text.line_start(line_of(view.text, view.selection.caret))}},
+            VimRepeatFailure::refused);
+    }
     const auto motion = laid_out_motion(view, action);
     if (!motion.has_value())
     {
