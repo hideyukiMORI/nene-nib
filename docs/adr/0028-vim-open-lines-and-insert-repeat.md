@@ -46,3 +46,7 @@ FR-003のNORMAL `o` / `O`を実装する。既存のINSERT、行索引、改行�
 ## 追補（2026-10-28・Issue #1027）
 
 `I` の入る位置は最初の非空白で、空白だけの行では行末（空白の後ろ）にする（Vim の `beginline(BL_WHITE | BL_FIX)`・`VimStep.cpp` の `insert_line_start_landing` の 1 本）。`^` が空白だけの行で最後の文字に止まる規則（`vim_first_non_blank`）は変えない（`gI` は Nib にまだ無く範囲外）。`insert-first-nonblank-*` の 9 fixture が固定 Vim との一致を守る。
+
+## 追補（2026-10-30・Issue #1032）
+
+`gI` は `I` と同じ道（`insert_action`）で INSERT に入り、着地だけ行の 1 桁目（空白を飛ばさない・Vim の `nv_g_cmd` の `beginline(0)`）にする（`VimAction::insert_at_column_one`・`g` の接頭辞の表の 1 行）。回数は `VimInsertRepeat` で反復し、`.` は打った鍵の列（`gI…<Esc>`）をそのまま再生する（`gi` と違い `i` に置き換えない）。`insert-column-one-*` の 13 fixture が固定 Vim との一致を守る。VISUAL の `gI` は範囲外（今は VISUAL の行の鍵の既定のとおり選択を変えない）。

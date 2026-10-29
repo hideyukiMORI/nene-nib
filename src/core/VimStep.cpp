@@ -698,6 +698,12 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return entered_insert(state, insert_line_start_landing(view.text, view.selection.caret));
     }
+    if (action == VimAction::insert_at_column_one)
+    {
+        // `gI` は空白を飛ばさず行の 1 桁目（Vim の nv_g_cmd の beginline(0)・#1032）。
+        return entered_insert(state,
+                              view.text.line_start(line_of(view.text, view.selection.caret)));
+    }
     return entered_insert(state, view.text.line_end(line_of(view.text, view.selection.caret)));
 }
 

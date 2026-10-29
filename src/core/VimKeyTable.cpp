@@ -242,7 +242,8 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::jump_older, VimActionGroup::jump_list},
      {VimAction::jump_newer, VimActionGroup::jump_list},
      {VimAction::change_older, VimActionGroup::jump_list},
-     {VimAction::change_newer, VimActionGroup::jump_list}}};
+     {VimAction::change_newer, VimActionGroup::jump_list},
+     {VimAction::insert_at_column_one, VimActionGroup::insert_line}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 37> motion_bindings{
@@ -285,9 +286,10 @@ constexpr std::array<VimMotionBinding, 37> motion_bindings{
      {VimAction::move_mark_exact, VimMotion::mark_exact}}};
 
 // g の後ろの鍵 → 動作（ADR 0027 / Issue #222 / ADR 0057 の決定 2 / ADR 0144 の決定 4 /
-// ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10・14 / #1039 の gv gi / ADR 0152 の追補 #1037）。
+// ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10・14 / #1039 の gv gi / ADR 0152 の追補 #1037 /
+// ADR 0028 の追補 #1032 の gI）。
 // ここに無い鍵は g を打ち消す。
-constexpr std::array<VimBinding, 23> g_bindings{
+constexpr std::array<VimBinding, 24> g_bindings{
     {{U'g', VimAction::move_document_first},
      {U'e', VimAction::move_previous_word_end},
      {U'E', VimAction::move_previous_big_word_end},
@@ -307,6 +309,7 @@ constexpr std::array<VimBinding, 23> g_bindings{
      {U'U', VimAction::upper_case_operator},
      {U'v', VimAction::reselect_visual},
      {U'i', VimAction::insert_at_last_insert},
+     {U'I', VimAction::insert_at_column_one},
      {control_a_character, VimAction::increment_sequence},
      {control_x_character, VimAction::decrement_sequence},
      {U';', VimAction::change_older},

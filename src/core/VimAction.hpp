@@ -167,10 +167,13 @@ enum class VimAction : std::uint8_t
     jump_older,
     jump_newer,
     change_older,
-    change_newer
+    change_newer,
+    // `gI`。行の 1 桁目（空白の前）で `I` と同じく INSERT に入る（ADR 0028 の追補・#1032）。
+    insert_at_column_one
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::change_newer) + 1;
+constexpr std::size_t vim_action_count =
+    static_cast<std::size_t>(VimAction::insert_at_column_one) + 1;
 } // namespace nenenib::core

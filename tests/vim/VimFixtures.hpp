@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 cfd577a69d932afbfa5f6deb263091dca5d0f1978de313dbe8983baf60d54814 / 3088 fixtures
+// fixtures.json: sha256 ab100c9d70226a577cf1349958ac4cf4024dba2a0e11f657ca7151b3ceb9225a / 3101 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3088> vim_fixtures{{
+constexpr std::array<VimFixture, 3101> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3100,6 +3100,19 @@ constexpr std::array<VimFixture, 3088> vim_fixtures{{
     {"control-del-block-yank-put", "a\177bc\nxyzwvu\n123456", "<C-v>j2lyGp", "a\177bc\nxyzwvu\n1a\177b23456\n xyz", 3, 2, "a\177b\nxyz", "\0263", std::nullopt},
     {"control-del-block-yank-put-pads", "a\177b\nxy\n123456", "<C-v>j2ly2jlp", "a\177b\nxy\n12a\177b3456\n  xy", 3, 3, "a\177b\nxy", "\0263", std::nullopt},
     {"control-del-block-dollar-yank-put", "a\177b\nxyzw\n123456", "<C-v>j$y2jp", "a\177b\nxyzw\n1a\177b 23456\n xyzw", 3, 2, "a\177b\nxyzw", "\0264", std::nullopt},
+    {"insert-column-one-blank-line", "   ", "gIx<Esc>", "x   ", 1, 1, "", "", std::nullopt},
+    {"insert-column-one-indented", "    abc", "$gIx<Esc>", "x    abc", 1, 1, "", "", std::nullopt},
+    {"insert-column-one-empty-line", "a\n\nb", "jgIx<Esc>", "a\nx\nb", 2, 1, "", "", std::nullopt},
+    {"insert-column-one-tab-indent", "\tab", "$gIx<Esc>", "x\tab", 1, 1, "", "", std::nullopt},
+    {"insert-column-one-count", "  ab", "3gIx<Esc>", "xxx  ab", 1, 3, "", "", std::nullopt},
+    {"insert-column-one-count-two-keys", "  ab", "2gIxy<Esc>", "xyxy  ab", 1, 4, "", "", std::nullopt},
+    {"insert-column-one-dot", "  ab\n  cd", "gIx<Esc>j$.", "x  ab\nx  cd", 2, 1, "", "", std::nullopt},
+    {"insert-column-one-dot-count", "  ab\n  cd", "gIxy<Esc>j2.", "xy  ab\nxyxy  cd", 2, 4, "", "", std::nullopt},
+    {"insert-column-one-count-dot", "  ab\n  cd", "2gIx<Esc>j$.", "xx  ab\nxx  cd", 2, 2, "", "", std::nullopt},
+    {"insert-column-one-newline", "  ab", "$gIx<CR>y<Esc>", "x\ny  ab", 2, 1, "", "", std::nullopt},
+    {"insert-column-one-undo", "  ab", "$gIxy<Esc>u", "  ab", 1, 1, "", "", std::nullopt},
+    {"insert-column-one-multibyte", "  あい", "$gIx<Esc>", "x  あい", 1, 1, "", "", std::nullopt},
+    {"insert-column-one-second-line", "ab\n   cd", "j$gIz<Esc>", "ab\nz   cd", 2, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
