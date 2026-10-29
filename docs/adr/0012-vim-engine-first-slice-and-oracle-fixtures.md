@@ -84,8 +84,18 @@ Phase 0 の V2 で、Vim 9.1 を `-u NONE -i NONE -N -n -es -S probe.vim` で走
 INSERT の `Ctrl-w` `Ctrl-u` `Ctrl-r {name}` を足した。値は oracle（`backspace=indent,eol,start` は `DEFAULT_SETTINGS` が `-u NONE` の上に置く・`autoindent` は無い）の fixture `insert-control-` 43 件で守る。
 
 - **始めの位置**: `VimState.insert_start`（Vim の `Insstart_orig`・行と行頭からのバイト数）。INSERT の最初の鍵の前に `vim_step` の入口（`insert_started`）がキャレットから置き、`vim_resting_from` と `input_discarded` が消す。同じ行の手前を消しても動かず（`A<BS>xy<C-w>` は `y` だけを消す）、動くのは 2 つだけ。始めの行を前の行とつないだときはつないだ点へ（`jI<C-w>x<C-w>` は `x` だけ）。矢印・Home などで動いた後の最初の移動でない鍵では、キャレットの桁が始めの桁以下なら（行は比べない）キャレットへ、右なら動かない（Vim の `stop_arrow` と `update_Insstart_orig`・`Axy<Left><Left><Left>z<C-w>` は `z` だけ・`Axy<Left>z<Right>…` や `jAxy<Up>z<C-u>` は動かない側）。
-- **`Ctrl-w` `Ctrl-u`**: キャレットが始めの行で始めの桁より右ならそこ、ほかは行頭まで消す（少なくとも 1 文字）。`Ctrl-w` は手前の空白を消してから `b` と同じ表 `vim_character_class` の同じ種類の連なりで止まる。行頭では前の行と 1 鍵ぶんつなぐだけ（Backspace と同じ `joined_back`）。Issue の見込みの「2 段目は字下げの後」は `autoindent` のときだけで、既定の Vim では 2 段目が行頭（実測）。`.` の記録には鍵のまま残る。回数つきの入力（`3A…`）は記録の全部に届いた消し方なら反復をやめ（`3Aab<C-u>c` は `xc`）、記録の中で止まれば記録を短くする。
+- **`Ctrl-w` `Ctrl-u`**: キャレットが始めの行で始めの桁より右ならそこ、ほかは行頭まで消す（少なくとも 1 文字）。`Ctrl-w` は手前の空白を消してから `b` と同じ表 `vim_character_class` の同じ種類の連なりで止まる。行頭では前の行と 1 鍵ぶんつなぐだけ（Backspace と同じ `joined_back`）。Issue の見込みの「2 段目は字下げの後」は `autoindent` のときだけで、既定の Vim では 2 段目が行頭（実測）。`.` の記録には鍵のまま残る。回数つきの入力（`3A…`）の反復は下の #1093 の追記（近似をやめ、鍵の列を流し直す）。
 - **`Ctrl-r {name}`**: `Ctrl-r` は次の 1 鍵を待つ `VimPrefix::insert_register`。名前 → 選択は `register_selection_of`、読みは `register_read` の 1 本で、本文は `VimInsertAt` の 1 回（undo は INSERT の 1 単位）。名前にならない鍵・空のレジスタは何も入れず INSERT を続ける。`.` の記録は鍵 2 つではなく入れた本文の文字（Vim の redo も本文・`"ayiwA<C-r>a<Esc>j0"ayiw.` は `bazfoo`）。`"+` `"*` は名前の鍵の直前に controller が写しを置く既存の道（`vim_reads_clipboard`）。本文は文字として入れ、制御文字を鍵として解かない（Vim は打鍵として解く・差は後続）。`Ctrl-r Ctrl-r` `Ctrl-r Ctrl-o` `Ctrl-r Ctrl-p` と読み取り専用のレジスタ `.` `:` `/` `%` は後続。
+
+## 追記（2026-10-29・Issue #1093）
+
+#1040 の「回数つきの入力は記録の全部に届いた消し方なら反復をやめ、記録の中で止まれば記録を短くする」近似をやめ、Vim の規則に替えた。値は oracle の fixture `insert-count-control-` 27 件（Issue の 5 件・fuzz seed 32〜40 の 6 件・Backspace の 5 件・undo 3 件ほか）で守る。
+
+- **反復は打鍵の列を流し直す 1 本**: Vim の `edit()` は Esc で回数が残れば `start_redo_ins()` で redo の打鍵（`Ctrl-w` `Ctrl-u` `<BS>` を含む）をそのまま流す。回数の記録 `VimInsertRepeat` を本文から鍵の列 `keys` に替え（o / O は改行の鍵 1 つから始まる・`Ctrl-r {name}` は入れた本文の文字）、Esc（`left_insert`）は残りの周で列を本文の写しの上で 1 鍵ずつ打った鍵と同じ `insert_character` / `insert_special` に通す。2 周目からの `Ctrl-u` は 1 周目が入れた本文を消し、行頭なら前の行とつなぐ（`backspace=eol`・`10G2A<C-u>` は 2 行目が改行ごと消える）。2 周目の `Ctrl-w` は 1 周目の語を消す（`3i <C-w>  .(` は空白 6）。始めの位置 `insert_start` は周をまたいで持ち越す（Vim の `Insstart_orig` も同じ INSERT のまま・つないだらつないだ点へ動くのも同じ）。`backspace` は oracle と同じ固定値で、設定にしない。
+- **効果は 1 つ**: 流し直しで消した手前の端から Esc のキャレットまでを、流し直した本文（LF で数えて controller が文書の改行へ直す）に置き換える `VimReplaceRange` を 1 つ返す。`VimReplaceRange` に履歴の境界 `boundary` を足し（`r` などの置換は今までどおり `separate`）、この置き換えは `absorb`。消す鍵を含まない列は、流し直しても本文の繰り返しと同じなので今までどおり `repeated` で 1 回に作る（`VimInsertAt`）。
+- **INSERT の undo 1 単位を保つ**: 置き換えが単位の頭より前（前の行との改行）から単位が入れた本文の中までに及ぶので、`absorbed`（ADR 0015 の決定 5）の「挿入開始より前を消す削除」を「挿入開始より前から、入れた本文の中までの置き換え」に広げた（削除だけはその特別な形）。`j2i<BS><BS>x<Esc>u` と `jw2i<C-u><Esc>u` は 1 回の `u` で戻る（実測）。
+- **何も消せない消す鍵は記録しない**: 本文の先頭（1 行目の行頭）の `<BS>` `Ctrl-w` `Ctrl-u` は Vim の `ins_bs` がビープで返り redo に足さないので、回数の鍵の列にも `.` の記録にも載せない（`3i<C-u>x` は `xxx`・`i<C-w>(日本foo<Esc>1.` は `(日本fo(日本fooo`）。
+- **矩形の回数**: 矩形の `I` `A` `c` `C`（ADR 0035 の追補 #1042）の回数の周に消す鍵が混ざるときも、1 行目で打鍵を流し直し、周を終えた 1 行目の伸びたぶんをほかの行へ写す（Vim の `op_insert`・`w<C-v>jj2Ixy<C-w>z` は各行 `z`）。前の行とつないだなど 1 行目に収まらない流し直しは写さない（fixture `insert-count-control-block-` 5 件）。
 
 ## 関連
 

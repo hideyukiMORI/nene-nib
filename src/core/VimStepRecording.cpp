@@ -20,6 +20,7 @@ using detail::combined_count;
 using detail::counted;
 using detail::counts_as_digit;
 using detail::decimal_base;
+using detail::erased_nothing;
 using detail::failed;
 using detail::finished_input_wait;
 using detail::line_of;
@@ -537,6 +538,12 @@ namespace
             record = appended(std::move(record), std::move(typed));
         }
         next.recording = std::move(record);
+        return next;
+    }
+    // 何も消せない消す鍵は `.` の記録にも残さない（#1093・`i<C-w>x<Esc>j0.` は x だけ）。
+    if (erased_nothing(key, effect))
+    {
+        next.recording = before.recording;
         return next;
     }
     if (next.mode == VimMode::normal)

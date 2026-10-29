@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 3536aa1f431c4f06b7777720b5660a9312b915c0b90db5ee1b0962f6c70fdbd2 / 2975 fixtures
+// fixtures.json: sha256 77a030e5f8128a02bd7ffb98f987b16f204d896f0af8d2643753d23de3cd7d54 / 3007 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2975> vim_fixtures{{
+constexpr std::array<VimFixture, 3007> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2672,6 +2672,38 @@ constexpr std::array<VimFixture, 2975> vim_fixtures{{
     {"insert-control-ctrl-u-arrow-back-right", "abc def", "Axy<Left><Left><Left>z<Right><Right><Right>w<C-u><Esc>", "abc de", 1, 6, "", "", std::nullopt},
     {"insert-control-ctrl-u-arrow-other-line", "abc def\nghi", "jAxy<Up>z<C-u><Esc>", "ef\nghixy", 1, 1, "", "", std::nullopt},
     {"insert-control-ctrl-u-arrow-then-backspace", "abc def", "Axy<Left><Left><Left><BS>z<C-u><Esc>", "fxy", 1, 1, "", "", std::nullopt},
+    {"insert-count-control-comma-ctrl-w", "foo bar", "2i,<C-w><Esc>", "foo bar", 1, 1, "", "", std::nullopt},
+    {"insert-count-control-word-ctrl-w", "foo bar", "3ia b<C-w><Esc>", "a a a foo bar", 1, 6, "", "", std::nullopt},
+    {"insert-count-control-ctrl-w-nothing-typed", "foo bar", "w2i<C-w><Esc>", "bar", 1, 1, "", "", std::nullopt},
+    {"insert-count-control-ctrl-u-dots", "foo bar\nbaz", "j2A..<C-u><Esc>", "foo bar\nbaz", 2, 3, "", "", std::nullopt},
+    {"insert-count-control-open-ctrl-w", "foo bar\nbaz", "2o<C-w><Esc>", "foo bar\nbaz", 1, 7, "", "", std::nullopt},
+    {"insert-count-control-ctrl-u-nothing-typed", "foo bar\nbaz", "jw2i<C-u><Esc>", "foo barz", 1, 7, "", "", std::nullopt},
+    {"insert-count-control-ctrl-u-dot", "foo\nbar baz\nqux", "jA<C-u><Esc>j.", "foo\n\n", 3, 1, "", "", std::nullopt},
+    {"insert-count-control-fuzz-32-0039", "\t,  ?\t(paren)  かな\n\tword", "10G2A<C-u><Esc>", "\t,  ?\t(paren)  かな", 1, 19, "", "", std::nullopt},
+    {"insert-count-control-fuzz-33-0018", "  漢字 beta  日本語  , a.b 'sq'   ", "3Afoo<C-u> \t<CR><Esc>", "  漢字 beta  日本語  , a.b 'sq'    \t\n \t\n \t\n", 4, 1, "", "", std::nullopt},
+    {"insert-count-control-fuzz-33-0157", "    a.b end. １２,\nalpha  ", "2A <C-u><CR>かなbar<Esc>", "    a.b end. １２,\n\nかなbar\nalpha  ", 3, 9, "", "", std::nullopt},
+    {"insert-count-control-fuzz-36-0029", "?beta ; ", "i<C-w>(日本foo<Esc>1.", "(日本fo(日本fooo?beta ; ", 1, 19, "", "", std::nullopt},
+    {"insert-count-control-fuzz-37-0212", "; beta end.\n\tfoo_bar  !  ", "3i <C-w>  .(<Esc>", "      .(; beta end.\n\tfoo_bar  !  ", 1, 8, "", "", std::nullopt},
+    {"insert-count-control-fuzz-40-0024", "foo_bar\nword", "4Ax\t  <C-u>)日本<CR><Esc>", "foo_bar)日本\n)日本\n)日本\n)日本\n\nword", 5, 1, "", "", std::nullopt},
+    {"insert-count-control-ctrl-u-joins-lines", "a\nb\nc\nd", "G3A<C-u><Esc>", "a\nb\n", 3, 1, "", "", std::nullopt},
+    {"insert-count-control-open-above-ctrl-u", "foo\nbar", "j2Ox<C-u>y<Esc>", "foo\ny\ny\nbar", 3, 1, "", "", std::nullopt},
+    {"insert-count-control-count-dot", "foo\nbar", "2Aab<C-w>c<Esc>j.", "fooc\nbarc", 2, 4, "", "", std::nullopt},
+    {"insert-count-control-count-undo", "foo\nbar", "j3Ax<C-u>y<Esc>u", "foo\nbar", 2, 3, "", "", std::nullopt},
+    {"insert-count-control-ctrl-w-at-start-dot", "foo\nbar", "i<C-w>x<Esc>j0.", "xfoo\nxbar", 2, 1, "", "", std::nullopt},
+    {"insert-count-control-ctrl-u-at-start-count", "foo\nbar", "3i<C-u>x<Esc>", "xxxfoo\nbar", 1, 3, "", "", std::nullopt},
+    {"insert-count-control-backspace-at-start", "foo\nbar", "3i<BS>x<Esc>", "xxxfoo\nbar", 1, 3, "", "", std::nullopt},
+    {"insert-count-control-backspace-typed", "foo", "3Aab<BS>c<Esc>", "fooacacac", 1, 9, "", "", std::nullopt},
+    {"insert-count-control-backspace-before-start", "foo", "3A<BS>x<Esc>", "fox", 1, 3, "", "", std::nullopt},
+    {"insert-count-control-backspace-joins", "foo\nbar", "j3i<BS>x<Esc>", "fooxbar", 1, 4, "", "", std::nullopt},
+    {"insert-count-control-backspace-at-start-dot", "foo\nbar", "i<BS>x<Esc>j0.", "xfoo\nxbar", 2, 1, "", "", std::nullopt},
+    {"insert-count-control-join-undo", "foo bar\nbaz", "jw2i<C-u><Esc>u", "foo bar\nbaz", 2, 3, "", "", std::nullopt},
+    {"insert-count-control-backspace-join-undo", "foo\nbar", "j2i<BS><BS>x<Esc>u", "foo\nbar", 2, 1, "", "", std::nullopt},
+    {"insert-count-control-backspace-join-retype", "foo\nbar", "j2i<BS><BS>x<Esc>", "fxbar", 1, 2, "", "", std::nullopt},
+    {"insert-count-control-block-insert-ctrl-w", "abc def\nabc def\nabc def", "w<C-v>jj2Ixy<C-w>z<Esc>", "abc zdef\nabc zdef\nabc zdef", 1, 5, "", "", std::nullopt},
+    {"insert-count-control-block-append-ctrl-u", "abc def\nabc def\nabc def", "w<C-v>jj3Ap <C-u>r<Esc>", "abc dref\nabc dref\nabc dref", 1, 5, "", "", std::nullopt},
+    {"insert-count-control-block-insert-shrinks", "abc def\nabc def\nabc def", "w<C-v>jj2I<C-w>z<Esc>", "zdef\nabc def\nabc def", 1, 1, "", "", std::nullopt},
+    {"insert-count-control-block-insert-joins", "abc\nab def\nab def", "j0<C-v>j2Ix<C-u><C-u>z<Esc>", "zab def\nab def", 1, 1, "", "", std::nullopt},
+    {"insert-count-control-block-change-ctrl-w", "abc def\nabc def\nabc def", "w<C-v>jj2cxy<C-w>z<Esc>", "abc zef\nabc zef\nabc zef", 1, 5, "d\nd\nd", "\0261", std::nullopt},
     {"empty-case-gU-h", "x1", "gUh", "X1", 1, 1, "", "", std::nullopt},
     {"empty-case-gU-1h", "x1", "gU1h", "X1", 1, 1, "", "", std::nullopt},
     {"empty-case-gU-0", "x1", "gU0", "X1", 1, 1, "", "", std::nullopt},

@@ -852,8 +852,7 @@ void EditorController::perform(const core::VimInsertAt &effect)
 void EditorController::perform(const core::VimReplaceRange &effect)
 {
     const std::string_view newline = core::newline_of(state_.line_ending());
-    replace(effect.range, with_document_newlines(effect.utf8, newline),
-            core::EditBoundary::separate);
+    replace(effect.range, with_document_newlines(effect.utf8, newline), effect.boundary);
     move_caret_to(caret_after_insert(effect.range.begin, effect.utf8, effect.caret, newline.size()),
                   core::SelectionAnchoring::collapse);
 }

@@ -153,7 +153,7 @@ namespace
             splits_line ? body.size() : previous_code_point(body, Offset{body.size()}).value;
     }
     VimStep step{vim_resting_from(state, state.unnamed_register),
-                 VimReplaceRange{selected, std::move(body), caret}};
+                 VimReplaceRange{selected, std::move(body), caret, EditBoundary::separate}};
     // NORMAL の r は engine が書かない（ADR 0052 の決定 11）。VISUAL は決定 10。
     if (state.mode != VimMode::normal)
     {

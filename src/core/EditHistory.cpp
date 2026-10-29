@@ -48,15 +48,17 @@ std::optional<Edit> absorbed(const Edit &previous, const Edit &edit)
         inserted.replace(edit.at.value - previous.at.value, edit.removed.size(), edit.inserted);
         return Edit{previous.at, previous.removed, std::move(inserted), previous.restore};
     }
-    if (!edit.inserted.empty())
-    {
-        return std::nullopt;
-    }
     const std::size_t erased = edit.at.value + edit.removed.size();
-    if (erased == previous.at.value)
+    if (edit.at.value < previous.at.value && erased >= previous.at.value && erased <= end)
     {
-        // 挿入を始めた位置より前を消した。単位の頭が前へ動き、消した本文が removed の先頭に付く。
-        return Edit{edit.at, edit.removed + previous.removed, previous.inserted, previous.restore};
+        // 挿入を始めた位置より前から、単位が入れた本文の中（または頭）までを置き換えた。単位の頭が
+        // 前へ動き、前の本文は removed の先頭に付き、入れた本文の消された頭は新しい本文に替わる。
+        // 削除だけ（Backspace が頭の前を消す）と、回数付き INSERT の流し直しが前の行とつないで
+        // から打ち直す置き換え（#1093）がここへ来る。
+        const std::size_t before = previous.at.value - edit.at.value;
+        return Edit{edit.at, edit.removed.substr(0, before) + previous.removed,
+                    edit.inserted + previous.inserted.substr(erased - previous.at.value),
+                    previous.restore};
     }
     return std::nullopt;
 }

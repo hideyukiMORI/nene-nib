@@ -161,7 +161,7 @@ namespace detail
     std::string body = vim_incremented_text(span, step_of(state), subtracts(action));
     const Offset landing{range.begin.value + body.size() - single_step};
     return VimStep{vim_resting_from(state, state.unnamed_register),
-                   VimReplaceRange{range, std::move(body), landing}};
+                   VimReplaceRange{range, std::move(body), landing, EditBoundary::separate}};
 }
 
 // VISUAL の `Ctrl-a` `Ctrl-x` と `g Ctrl-a` `g Ctrl-x`。各行の最初の数を増減し、全部を 1 つの
