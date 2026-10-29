@@ -257,8 +257,14 @@ class EditorWindow final
     void follow_split(core::SplitLayout previous, application::EditorDelivery &delivery);
     void follow_explorer(application::EditorDelivery &delivery);
     void choose_explorer_root();
+    // エクスプローラーの面の群（EditorWindowExplorer.cpp・ADR 0162 の決定 4）。
     void scroll_explorer(std::int32_t delta);
     [[nodiscard]] bool over_explorer(LPARAM data) const;
+    void press_explorer_key(WPARAM word);
+    [[nodiscard]] std::optional<std::size_t> explorer_row_at(LPARAM data) const;
+    [[nodiscard]] bool press_explorer(LPARAM data);
+    void release_explorer(LPARAM data);
+    [[nodiscard]] bool double_click_explorer(LPARAM data);
     void run_tab_operation(core::EditorOperation operation);
     void run_pane_operation(core::EditorOperation operation);
     void run_edit_operation(core::EditorOperation operation);
@@ -299,6 +305,8 @@ class EditorWindow final
     std::int32_t palette_wheel_remainder_ = 0;
     // エクスプローラーの面のホイールの余り（ADR 0162 の決定 4）。
     std::int32_t explorer_wheel_remainder_ = 0;
+    // 面の上で左を押して、まだ離していない（離したときにだけ PointExplorer の released を送る）。
+    bool explorer_pressed_ = false;
     UINT wheel_setting_ = default_wheel_scroll_lines;
     // 帯で押した要素（左ボタンと中ボタンで 1 つずつ）。離した要素と同じときだけ動かし、離したら
     // 消す（ADR 0056 の決定 9）。

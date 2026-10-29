@@ -944,24 +944,25 @@ EditorDelivery EditorController::delivery() const
 {
     auto settings = shown_settings();
     const auto &theme = core::selected_theme(settings, state_.appearance());
-    return EditorDelivery{theme.appearance,
-                          state_.mode(),
-                          state_.vim().mode,
-                          ime_stance_of(state_.mode(), state_.vim().mode, state_.command_input()),
-                          state_.command_input().transform(input_line_prompt_of),
-                          composed(),
-                          command_composed(),
-                          active_document_view(),
-                          std::move(settings),
-                          state_.settings_failure(),
-                          command_message(),
-                          state_.closing(),
-                          state_.close_request(),
-                          state_.operation_request(),
-                          state_.display_question(),
-                          layout_failure_,
-                          true,
-                          std::nullopt};
+    return EditorDelivery{
+        theme.appearance,
+        state_.mode(),
+        state_.vim().mode,
+        ime_stance_of(state_.mode(), state_.vim().mode, state_.command_input(), explorer_focused()),
+        state_.command_input().transform(input_line_prompt_of),
+        composed(),
+        command_composed(),
+        active_document_view(),
+        std::move(settings),
+        state_.settings_failure(),
+        command_message(),
+        state_.closing(),
+        state_.close_request(),
+        state_.operation_request(),
+        state_.display_question(),
+        layout_failure_,
+        true,
+        std::nullopt};
 }
 
 // 頼まれた追従を解決してから作る（ADR 0128 の決定 3）。解決の失敗は failure に載る。

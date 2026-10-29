@@ -2,6 +2,8 @@
 // 意図 4 つと焦点の 3 状態、FolderPort の entries の往復と古い券、読めないフォルダの 1 行、
 // ファイルを開く open_listed の道、設定の保存、Ctrl+P の面と port を分け合う順番を見る。
 // port はどれも替え玉で、時刻・スレッド・OS には触れない。
+#include "CommandInput.hpp"
+#include "CommandLine.hpp"
 #include "CommandText.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -20,6 +22,7 @@
 #include "FolderEntry.hpp"
 #include "FolderListingKind.hpp"
 #include "FolderProgress.hpp"
+#include "ImeStance.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "PointExplorer.hpp"
@@ -32,6 +35,7 @@
 #include "SettingsFailure.hpp"
 #include "TestSupport.hpp"
 #include "ToggleExplorer.hpp"
+#include "VimMode.hpp"
 #include "VisibleLines.hpp"
 #include "WorkCompleted.hpp"
 
@@ -331,11 +335,12 @@ void verify_scroll()
     const auto down = controller.apply_frame(app::ScrollExplorer{3});
     expect(view_of(down).first_visible == 3 && !view_of(down).selected.has_value(),
            "the wheel moves the first row and not the selection");
-    expect(view_of(down).total == 10 && view_of(down).rows.size() == 4 &&
+    // 面の行数は本文の 4 行 − ルート名の 1 行 = 3（E4 の追補）。
+    expect(view_of(down).total == 10 && view_of(down).rows.size() == 3 &&
                view_of(down).rows.front().name == "f3.txt" &&
-               view_of(down).rows.back().name == "f6.txt",
+               view_of(down).rows.back().name == "f5.txt",
            "the frame carries the panel's rows from the first visible row");
-    expect(view_of(controller.apply_frame(app::ScrollExplorer{100})).first_visible == 6,
+    expect(view_of(controller.apply_frame(app::ScrollExplorer{100})).first_visible == 7,
            "the wheel stops when the last row is at the bottom");
     expect(view_of(controller.apply_frame(app::ScrollExplorer{-100})).first_visible == 0,
            "the wheel stops at the first row");
@@ -345,8 +350,62 @@ void verify_scroll()
     }
     const auto followed = controller.frame();
     expect(view_of(followed).selected == std::optional<std::size_t>{5} &&
-               view_of(followed).first_visible == 2,
+               view_of(followed).first_visible == 3,
            "moving the selection keeps it in view");
+}
+
+// 面の行数は本文の見えている行数 − 1（ルート名の行・最小 1）を application の 1 か所で導き、
+// 選んだ行は面の最後の行より下へ出ない（E4 の追補・ADR 0162 の決定 2）。
+void verify_panel_rows()
+{
+    Editing editing(shown_at(project));
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{5});
+    app::FolderBatch batch{
+        editing.folders().requests().back().ticket, {}, FolderProgress::complete};
+    for (std::size_t index = 0; index < 12; ++index)
+    {
+        batch.entries.push_back(entry_of(std::format("C:\\proj\\g{:02}.txt", index), false));
+    }
+    editing.folders().serve(std::move(batch));
+    static_cast<void>(controller.apply_frame(app::WorkCompleted{}));
+    bool inside = true;
+    for (std::size_t step = 0; step < 12; ++step)
+    {
+        const auto view = view_of(key(editing, ExplorerKeyKind::j));
+        inside = inside && view.rows.size() == 4 && view.selected.has_value() &&
+                 view.selected.value() >= view.first_visible &&
+                 view.selected.value() < view.first_visible + view.rows.size();
+    }
+    expect(inside, "the selected row stays inside the panel's four rows under five body lines");
+    applied(controller, app::VisibleLines{1});
+    expect(view_of(controller.frame()).rows.size() == 1, "a one line body still shows one row");
+    const auto read = controller.explorer_view();
+    expect(read.has_value() && read.value_or(app::ExplorerView{}).first_visible ==
+                                   view_of(controller.frame()).first_visible,
+           "the window reads the same panel view without a frame");
+}
+
+// 面に焦点がある間は IME を閉じたまま（NORMAL と同じ）、焦点が外れたらモードの規則に戻る
+// （ADR 0061 の決定 1・E4 の追補）。窓の鍵の行き先は explorer_focused の安い読みで決める。
+void verify_ime_and_focus()
+{
+    Editing editing(shown_at(project));
+    auto &controller = editing.controller();
+    expect(!controller.explorer_focused() && controller.frame().ime == app::ImeStance::as_left,
+           "a shown panel without the focus leaves the IME as the mode says");
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    expect(controller.explorer_focused() && controller.delivery().ime == app::ImeStance::closed,
+           "the focused panel keeps the IME closed");
+    static_cast<void>(key(editing, ExplorerKeyKind::esc));
+    expect(!controller.explorer_focused() && controller.delivery().ime == app::ImeStance::as_left,
+           "Esc gives the focus back and the IME follows the mode again");
+    expect(app::ime_stance_of(core::EditMode::vim, core::VimMode::insert, std::nullopt, true) ==
+                   app::ImeStance::closed &&
+               app::ime_stance_of(core::EditMode::ordinary, core::VimMode::normal,
+                                  app::CommandInput{core::CommandLine::empty()},
+                                  true) == app::ImeStance::closed_once,
+           "an open input line still decides the stance over the focused panel");
 }
 
 void verify_one_listing_at_a_time()
@@ -426,13 +485,14 @@ void verify_truncated()
     }
     editing.folders().serve(std::move(batch));
     const auto frame = editing.controller().apply_frame(app::WorkCompleted{});
+    // 面の行数は本文の 10 行 − ルート名の 1 行 = 9（E4 の追補）。
     expect(view_of(frame).total == core::ExplorerTree::entry_limit + 1 &&
-               view_of(frame).rows.size() == 10 && view_of(frame).rows.front().name == "f0000",
+               view_of(frame).rows.size() == 9 && view_of(frame).rows.front().name == "f0000",
            "the frame carries only the panel's rows of a large folder");
     const auto bottom = editing.controller().apply_frame(app::ScrollExplorer{5000});
     const auto rows = view_of(bottom).rows;
-    expect(view_of(bottom).first_visible == core::ExplorerTree::entry_limit + 1 - 10 &&
-               rows.size() == 10 && rows.back().more && rows.front().name == "f1991",
+    expect(view_of(bottom).first_visible == core::ExplorerTree::entry_limit + 1 - 9 &&
+               rows.size() == 9 && rows.back().more && rows.front().name == "f1992",
            "more entries than the limit end with the … row");
 }
 
@@ -502,6 +562,8 @@ void verify_explorer_contracts()
     verify_pointing();
     verify_pointing_across_arrival();
     verify_scroll();
+    verify_panel_rows();
+    verify_ime_and_focus();
     verify_one_listing_at_a_time();
     verify_stale_and_root();
     verify_unreadable();

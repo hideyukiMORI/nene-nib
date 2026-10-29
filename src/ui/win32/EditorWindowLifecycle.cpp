@@ -93,6 +93,7 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     registration.lpfnWndProc = procedure;
     registration.lpszClassName = class_name;
     registration.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    registration.style = CS_DBLCLKS; // 面のダブルクリック（ADR 0162）。面の外は押しと同じ。
     class_ = RegisterClassExW(&registration);
     if (class_ == 0)
     {
@@ -277,6 +278,7 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_NCLBUTTONUP:
         return press_caption(message, word, data);
     case WM_LBUTTONDOWN:
+    case WM_LBUTTONDBLCLK:
     case WM_LBUTTONUP:
     case WM_MBUTTONDOWN:
     case WM_MBUTTONUP:

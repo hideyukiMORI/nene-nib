@@ -144,6 +144,12 @@ class EditorController final
     [[nodiscard]] EditorFrame frame();
     [[nodiscard]] bool command_line_active() const noexcept;
     [[nodiscard]] bool command_palette_active() const noexcept;
+    // エクスプローラーの面に焦点があるか（ADR 0162 の決定 4・E4 で足した口）。窓が鍵の行き先を
+    // 決めるための安い読みで、frame を作らない。面が消えていれば偽。
+    [[nodiscard]] bool explorer_focused() const noexcept;
+    // 面の表示値（決定 3・8）。窓が押した行の木の位置（first_visible を足す）を決めるための口で、
+    // frame の本文の行は作らない（command_palette_view と同じ形）。面が消えていれば値なし。
+    [[nodiscard]] std::optional<ExplorerView> explorer_view() const;
     // 帯の配置の入力を状態の 4 つの値（タブの本数・アクティブの位置・送り量・マウスを載せた要素）
     // から読むだけの口。行も題名も作らない（ADR 0056 の決定 9）。窓の hit test と hover が
     // マウスの動くたびに呼ぶ。width は帯の幅（物理画素）。値は title_bar_input(frame(), ...)
@@ -362,7 +368,8 @@ class EditorController final
     // 設定 root へ書いて「root=<path>」を知らせる。書けなければ失敗の 1 行。
     void set_explorer_root(const core::FilePath &folder);
     void focus_explorer(bool focused);
-    // 面の行数（本文の見えている行数・行の高さは本文と同じ・決定 2）。
+    // 面の行数（決定 2・E4 の追補）。行の高さは本文と同じで、先頭の 1 行はルート名なので本文の
+    // 見えている行数 − 1（最小 1）。
     [[nodiscard]] std::size_t explorer_page() const noexcept;
     void step_explorer(bool down);
     void select_explorer_row(std::size_t row);
@@ -381,7 +388,6 @@ class EditorController final
     void adopt_explorer_batch(ExplorerFolder &pending, FolderBatch &batch);
     void place_explorer_entries(const core::FilePath &folder,
                                 std::span<const core::ExplorerEntry> entries);
-    [[nodiscard]] std::optional<ExplorerView> explorer_view() const;
     // 表示形式（ADR 0140 の決定 2・3）。窓の問いの「はい」と Ex の `:set display=` が通る 1 本。
     void accept(const SelectDisplay &intent);
     // 言語（ADR 0154 の決定 4・5）。Ex の `:set filetype=` `:set ft=` が通る 1 本。

@@ -3068,6 +3068,103 @@ def verify_gutter(executable: Path, environment: dict, frames: Path | None) -> d
     return record
 
 
+EXPLORER_PANEL_DIPS = 240
+CRLF = bytes([13, 10])
+EXPLORER_SETTLE_SECONDS = 0.8
+VK_E = 0x45
+VK_J = 0x4A
+VK_L = 0x4C
+
+
+def explorer_probe(width: int, height: int, dpi: int) -> tuple[int, int]:
+    """A point inside the explorer panel near its bottom, where no row is drawn in this run: the
+    panel is min(240 DIP, 40 % of the client) wide over the body band (core::explorer_layout)."""
+    panel = min(to_pixels(EXPLORER_PANEL_DIPS, dpi), width * 40 // 100)
+    _, _, _, bottom = pane_bands(width, height, dpi)[0][0]
+    return panel // 2, bottom - 4
+
+
+def write_explorer_root(output: Path) -> Path:
+    root = output / "explorer-root"
+    (root / "sub").mkdir(parents=True, exist_ok=True)
+    (root / "sub" / "inner.txt").write_bytes(b"inner" + CRLF)
+    (root / "top.txt").write_bytes(b"top" + CRLF)
+    return root
+
+
+def explorer_ground(window, frames: Path | None, name: str) -> list[int]:
+    time.sleep(EXPLORER_SETTLE_SECONDS)
+    snapshot(frames, window, name)
+    client = rectangle(window, user.GetClientRect)
+    width, height = client[2] - client[0], client[3] - client[1]
+    x, y = explorer_probe(width, height, user.GetDpiForWindow(window))
+    return pixel(capture(window, width, height), width, x, y)
+
+
+def drive_explorer(window, root: Path, frames: Path | None) -> dict:
+    """The Vim toggle and `:set root=` (posted) give the panel a root; Ctrl+Shift+E shows the panel
+    with the focus; the keys j l j Enter open sub/inner.txt as a new tab; Ctrl+Shift+E takes the
+    focus only, Esc gives it back, and Ctrl+Shift+E twice (focus, then hide) takes the panel away.
+    The root goes through Vim's Ex line because the Ctrl+P settings list takes listed commands."""
+    client = rectangle(window, user.GetClientRect)
+    dpi = user.GetDpiForWindow(window)
+    toggle = toggle_points(client[2] - client[0], client[3] - client[1], dpi)
+    click(window, toggle["vim"][0], toggle["vim"][1])
+    time.sleep(0.5)
+    send_key_sequence(window, f":set root={root}<CR>")
+    record = {"before": explorer_ground(window, frames, "explorer-before")}
+    chord = [VK_CONTROL, VK_SHIFT]
+    if not press_combination(window, chord, VK_E):
+        raise ForegroundRefused("the window could not take the foreground")
+    record["shown"] = explorer_ground(window, frames, "explorer-shown")
+    assert record["shown"] != record["before"], "Ctrl+Shift+E did not show the panel"
+    press(window, VK_J)
+    time.sleep(EXPLORER_SETTLE_SECONDS)
+    press(window, VK_L)
+    explorer_ground(window, frames, "explorer-folder-open")
+    press(window, VK_J)
+    time.sleep(EXPLORER_SETTLE_SECONDS)
+    press(window, VK_RETURN)
+    record["fileOpened"] = explorer_ground(window, frames, "explorer-file-open")
+    record["title"] = window_title(window)
+    assert "inner.txt" in record["title"], f"Enter did not open inner.txt: {record['title']}"
+    assert press_combination(window, chord, VK_E), "the focus chord was refused"
+    record["focused"] = explorer_ground(window, frames, "explorer-focused")
+    press(window, VK_ESCAPE)
+    record["escaped"] = explorer_ground(window, frames, "explorer-escaped")
+    assert press_combination(window, chord, VK_E), "the focus chord was refused"
+    time.sleep(EXPLORER_SETTLE_SECONDS)
+    assert press_combination(window, chord, VK_E), "the hide chord was refused"
+    record["hidden"] = explorer_ground(window, frames, "explorer-hidden")
+    assert record["hidden"] != record["shown"], "the second Ctrl+Shift+E did not hide the panel"
+    assert record["hidden"] == record["before"], "the hidden panel left a mark on the body"
+    return record
+
+
+def verify_explorer(executable: Path, environment: dict, output: Path,
+                    frames: Path | None) -> dict:
+    """Issue #997: the explorer panel (ADR 0162 decision 9). It sends real keys (Ctrl+Shift+E and
+    Ctrl+P take the foreground); j l Enter Esc are posted."""
+    root = write_explorer_root(output)
+    process, window, _ = start(executable, environment)
+    try:
+        raise_window(window)
+        time.sleep(0.6)
+        assert await_cover_gone(window), "the WARP cover child is still over the window"
+        assert_uncovered(window)
+        try:
+            record = {"driven": True, **drive_explorer(window, root, frames)}
+        except ForegroundRefused as refused:
+            return {"driven": False, "note": f"{refused}; the panel stays in the unit tests"}
+        close(window)
+        dismiss_dialog(process, IDNO)
+        record["exitCode"] = process.wait(timeout=5)
+        assert record["exitCode"] == 0, record["exitCode"]
+    finally:
+        stop(process)
+    return record
+
+
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
@@ -3104,6 +3201,8 @@ def main() -> None:
                         help="run the giant line text section alone (Issue #547); posted messages only")
     parser.add_argument("--autosave", action="store_true",
                         help="run the autosave section alone (Issue #515); posted messages only")
+    parser.add_argument("--explorer", action="store_true",
+                        help="run the explorer panel section alone (Issue #997); it sends real keys")
     parser.add_argument("--palette", action="store_true",
                         help="run the palette section alone (Issue #706); it sends real keys")
     arguments = parser.parse_args()
@@ -3143,6 +3242,12 @@ def main() -> None:
                              or arguments.keys is not None or arguments.open is not None
                              or arguments.scheme == "grid"):
         parser.error("--syntax runs alone with --scheme dark or light")
+    if arguments.explorer and (arguments.tabs or arguments.split or arguments.preview
+                               or arguments.restore or arguments.grid or arguments.giant_text
+                               or arguments.autosave or arguments.palette or arguments.syntax
+                               or arguments.gutter
+                               or arguments.keys is not None or arguments.open is not None):
+        parser.error("--explorer runs alone")
     if arguments.gutter and (arguments.tabs or arguments.split or arguments.preview
                              or arguments.restore or arguments.grid or arguments.giant_text
                              or arguments.autosave or arguments.palette or arguments.syntax
@@ -3178,6 +3283,14 @@ def main() -> None:
     if arguments.preview:
         try:
             record = verify_preview(executable, environment, arguments.scheme, output, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.explorer:
+        try:
+            record = verify_explorer(executable, environment, output, frames)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)

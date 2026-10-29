@@ -22,8 +22,10 @@ enum class ImeStance : std::uint8_t
     closed_once
 };
 
-// 編集のモード・Vim のモード・開いている入力から構えを決める純関数（ADR 0061 の決定 1）。
-// 入力があれば入力の種類が決め、無ければモードが決める。
+// 編集のモード・Vim のモード・開いている入力・エクスプローラーの面の焦点から構えを決める純関数
+// （ADR 0061 の決定 1）。入力があれば入力の種類が決め、無ければ面に焦点がある間は閉じたまま
+// （NORMAL と同じ・ADR 0162 の決定 4）、どれでもなければモードが決める。
 [[nodiscard]] ImeStance ime_stance_of(core::EditMode mode, core::VimMode vim_mode,
-                                      const std::optional<CommandInput> &input);
+                                      const std::optional<CommandInput> &input,
+                                      bool explorer_focused);
 } // namespace nenenib::application

@@ -27,4 +27,14 @@ constexpr SHORT key_down_mask = static_cast<SHORT>(0x8000);
 {
     return core::to_utf16(utf8).value_or(std::wstring{});
 }
+
+std::int32_t low_word_of(LPARAM data) noexcept
+{
+    return static_cast<std::int32_t>(static_cast<short>(LOWORD(data)));
+}
+
+std::int32_t high_word_of(LPARAM data) noexcept
+{
+    return static_cast<std::int32_t>(static_cast<short>(HIWORD(data)));
+}
 } // namespace nenenib::ui::win32::detail

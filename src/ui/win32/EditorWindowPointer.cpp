@@ -4,13 +4,13 @@
 #include "BodyLayout.hpp"
 #include "DevicePixels.hpp"
 #include "EditMode.hpp"
-#include "ExplorerLayout.hpp"
+#include "ExplorerKey.hpp"
+#include "ExplorerKeyKind.hpp"
 #include "FontSizeAdjustment.hpp"
 #include "NewTab.hpp"
 #include "PaletteLayout.hpp"
 #include "PaneLayouts.hpp"
 #include "PointTitleBar.hpp"
-#include "ScrollExplorer.hpp"
 #include "ScrollPaletteList.hpp"
 #include "ScrollPane.hpp"
 #include "ScrollTabs.hpp"
@@ -32,6 +32,8 @@
 namespace nenenib::ui::win32
 {
 using detail::held;
+using detail::high_word_of;
+using detail::low_word_of;
 
 namespace
 {
@@ -41,16 +43,6 @@ constexpr std::int32_t resize_border_dips = 8;
 constexpr std::array<LRESULT, 9> border_codes{HTNOWHERE, HTLEFT,       HTRIGHT,
                                               HTTOP,     HTTOPLEFT,    HTTOPRIGHT,
                                               HTBOTTOM,  HTBOTTOMLEFT, HTBOTTOMRIGHT};
-
-[[nodiscard]] std::int32_t low_word_of(LPARAM data) noexcept
-{
-    return static_cast<std::int32_t>(static_cast<short>(LOWORD(data)));
-}
-
-[[nodiscard]] std::int32_t high_word_of(LPARAM data) noexcept
-{
-    return static_cast<std::int32_t>(static_cast<short>(HIWORD(data)));
-}
 
 [[nodiscard]] bool caption_button(WPARAM word) noexcept
 {
@@ -101,11 +93,19 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
     case WM_LBUTTONDOWN:
         click_client(data);
         return 0;
+    case WM_LBUTTONDBLCLK:
+        // 面の上だけがダブルクリック。ほかは 2 回目の押しとして今までどおり（CS_DBLCLKS）。
+        if (!double_click_explorer(data))
+        {
+            click_client(data);
+        }
+        return 0;
     case WM_LBUTTONUP:
         drag_selection(data);
         end_selection_drag();
         release_preview_task(data);
         release_title_bar(data);
+        release_explorer(data);
         return 0;
     case WM_MBUTTONDOWN:
         press_middle(data);
@@ -330,6 +330,10 @@ void EditorWindow::click_client(LPARAM data)
         send(application::CancelCommand{});
         return;
     }
+    if (press_explorer(data))
+    {
+        return;
+    }
     switch (core::status_bar_hit(layout, low_word_of(data), high_word_of(data)))
     {
     // 意図は「どちらを選んだか」。同じ側を押しても controller が同じ表示値を返すだけ（ARC-011）。
@@ -350,6 +354,11 @@ void EditorWindow::click_client(LPARAM data)
 // 0155）。
 void EditorWindow::click_body(LPARAM data)
 {
+    // 面に焦点がある間に本文を押したら焦点を本文へ戻す。面の Esc と同じ意図（ADR 0162 の追補）。
+    if (controller_.explorer_focused())
+    {
+        send(application::ExplorerKey{application::ExplorerKeyKind::esc});
+    }
     const auto settings = controller_.delivery().settings;
     const auto other =
         core::other_pane_layout(body_panes(settings), controller_.split().active_side);
@@ -437,33 +446,6 @@ void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
     }
     explorer_wheel_remainder_ = 0;
     scroll_body(delta, data);
-}
-
-void EditorWindow::scroll_explorer(std::int32_t delta)
-{
-    // 1 刻みの行数は OS の設定から。1 画面の設定なら本文の見えている行数（面の行数と同じ）。
-    std::size_t visible = 0;
-    if (wheel_setting_ == WHEEL_PAGESCROLL)
-    {
-        visible = active_body(controller_.delivery().settings).visible_lines;
-    }
-    const auto turn = wheel_turned(explorer_wheel_remainder_, delta,
-                                   wheel_lines_per_notch(wheel_setting_, visible));
-    explorer_wheel_remainder_ = turn.remainder;
-    if (turn.lines == 0)
-    {
-        return;
-    }
-    send(application::ScrollExplorer{turn.lines});
-}
-
-bool EditorWindow::over_explorer(LPARAM data) const
-{
-    // WM_MOUSEWHEEL の位置は画面の座標なので、クライアントの座標に直してから見る。
-    POINT point{low_word_of(data), high_word_of(data)};
-    ScreenToClient(window_, &point);
-    const auto panel = explorer_frame(controller_.delivery().settings).panel;
-    return panel.has_value() && core::contains(panel.value(), point.x, point.y);
 }
 
 void EditorWindow::scroll_palette(std::int32_t delta)
