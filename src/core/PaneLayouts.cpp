@@ -10,12 +10,22 @@ namespace nenenib::core
 namespace
 {
 constexpr std::int32_t divider_dips = 1;
+
+// client の中の本文の帯。縦（タブの帯の下からステータスバーの上まで）と横を client の原点から
+// 測る。エクスプローラーの面が左を取ると client の左端は 0 でない（ADR 0162 の決定 2）。
+[[nodiscard]] LayoutRect body_band(LayoutRect client, std::uint32_t dpi,
+                                   FontSize font_size) noexcept
+{
+    const LayoutRect band = body_layout(width_of(client), height_of(client), dpi, font_size).band;
+    return LayoutRect{client.left + band.left, client.top + band.top, client.left + band.right,
+                      client.top + band.bottom};
+}
 } // namespace
 
 PaneLayouts pane_layouts(LayoutRect client, std::uint32_t dpi, FontSize font_size,
                          SplitLayout layout) noexcept
 {
-    const BodyLayout whole = body_layout(width_of(client), height_of(client), dpi, font_size);
+    const BodyLayout whole = body_layout_in(body_band(client, dpi, font_size), dpi, font_size);
     const LayoutRect band = whole.band;
     const std::int32_t divider = std::max(to_pixels(divider_dips, dpi), 1);
     switch (layout)

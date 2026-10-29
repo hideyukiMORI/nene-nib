@@ -12,8 +12,10 @@
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
 #include "EditorOperation.hpp"
+#include "EditorSettings.hpp"
 #include "EndSession.hpp"
 #include "ExitCause.hpp"
+#include "ExplorerLayout.hpp"
 #include "FilePath.hpp"
 #include "FontSize.hpp"
 #include "FontSizeAdjustment.hpp"
@@ -253,6 +255,10 @@ class EditorWindow final
     [[nodiscard]] bool over_title_bar(LPARAM data) const;
     [[nodiscard]] bool over_other_pane(LPARAM data) const;
     void follow_split(core::SplitLayout previous, application::EditorDelivery &delivery);
+    void follow_explorer(application::EditorDelivery &delivery);
+    void choose_explorer_root();
+    void scroll_explorer(std::int32_t delta);
+    [[nodiscard]] bool over_explorer(LPARAM data) const;
     void run_tab_operation(core::EditorOperation operation);
     void run_pane_operation(core::EditorOperation operation);
     void run_edit_operation(core::EditorOperation operation);
@@ -263,8 +269,9 @@ class EditorWindow final
     void scroll_body(std::int32_t delta, LPARAM data);
     void read_wheel_setting();
     [[nodiscard]] application::VisibleLines body_view() const;
-    [[nodiscard]] core::PaneLayouts body_panes(core::FontSize font_size) const;
-    [[nodiscard]] core::BodyLayout active_body(core::FontSize font_size) const;
+    [[nodiscard]] core::PaneLayouts body_panes(const core::EditorSettings &settings) const;
+    [[nodiscard]] core::ExplorerLayout explorer_frame(const core::EditorSettings &settings) const;
+    [[nodiscard]] core::BodyLayout active_body(const core::EditorSettings &settings) const;
 
     HINSTANCE instance_;
     application::EditorController &controller_;
@@ -290,6 +297,8 @@ class EditorWindow final
     std::int32_t body_wheel_remainder_ = 0;
     // 面の一覧のホイールの余り（単位は本文と同じ・#737）。本文の余りとは別の対象なので共有しない。
     std::int32_t palette_wheel_remainder_ = 0;
+    // エクスプローラーの面のホイールの余り（ADR 0162 の決定 4）。
+    std::int32_t explorer_wheel_remainder_ = 0;
     UINT wheel_setting_ = default_wheel_scroll_lines;
     // 帯で押した要素（左ボタンと中ボタンで 1 つずつ）。離した要素と同じときだけ動かし、離したら
     // 消す（ADR 0056 の決定 9）。
@@ -307,6 +316,8 @@ class EditorWindow final
         std::to_underlying(WindowTimer::language_server);
     // プレビューの合図のタイマーを張っているか。開いているかの正本は application の枠の状態。
     bool preview_ticking_ = false;
+    // 最後に本文の寸法を送ったときにエクスプローラーの面が出ていたか（ADR 0162 の決定 2）。
+    bool shown_explorer_ = false;
     // いまの編集モード。鍵をどちらの表で引くかを決めるだけで、正本は EditorState（ARC-004）。
     core::EditMode mode_ = core::EditMode::ordinary;
     // Ctrl+V を矩形の鍵に写すかどうかを決めるのに要る（ADR 0035 の決定 9）。

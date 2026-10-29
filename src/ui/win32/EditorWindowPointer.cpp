@@ -4,11 +4,13 @@
 #include "BodyLayout.hpp"
 #include "DevicePixels.hpp"
 #include "EditMode.hpp"
+#include "ExplorerLayout.hpp"
 #include "FontSizeAdjustment.hpp"
 #include "NewTab.hpp"
 #include "PaletteLayout.hpp"
 #include "PaneLayouts.hpp"
 #include "PointTitleBar.hpp"
+#include "ScrollExplorer.hpp"
 #include "ScrollPaletteList.hpp"
 #include "ScrollPane.hpp"
 #include "ScrollTabs.hpp"
@@ -348,9 +350,9 @@ void EditorWindow::click_client(LPARAM data)
 // 0155）。
 void EditorWindow::click_body(LPARAM data)
 {
-    const auto font_size = controller_.delivery().settings.font_size;
+    const auto settings = controller_.delivery().settings;
     const auto other =
-        core::other_pane_layout(body_panes(font_size), controller_.split().active_side);
+        core::other_pane_layout(body_panes(settings), controller_.split().active_side);
     if (other.has_value() &&
         core::contains(other.value().band, low_word_of(data), high_word_of(data)))
     {
@@ -361,7 +363,7 @@ void EditorWindow::click_body(LPARAM data)
         }
         send(application::SwitchPane{});
     }
-    if (core::contains(active_body(font_size).band, low_word_of(data), high_word_of(data)))
+    if (core::contains(active_body(settings).band, low_word_of(data), high_word_of(data)))
     {
         place_caret(data);
         begin_selection_drag();
@@ -427,7 +429,41 @@ void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
         return;
     }
     zoom_wheel_remainder_ = 0;
+    // エクスプローラーの面の上は面の行だけを送る（ADR 0162 の決定 4・wheel_turned の累積）。
+    if (over_explorer(data))
+    {
+        scroll_explorer(delta);
+        return;
+    }
+    explorer_wheel_remainder_ = 0;
     scroll_body(delta, data);
+}
+
+void EditorWindow::scroll_explorer(std::int32_t delta)
+{
+    // 1 刻みの行数は OS の設定から。1 画面の設定なら本文の見えている行数（面の行数と同じ）。
+    std::size_t visible = 0;
+    if (wheel_setting_ == WHEEL_PAGESCROLL)
+    {
+        visible = active_body(controller_.delivery().settings).visible_lines;
+    }
+    const auto turn = wheel_turned(explorer_wheel_remainder_, delta,
+                                   wheel_lines_per_notch(wheel_setting_, visible));
+    explorer_wheel_remainder_ = turn.remainder;
+    if (turn.lines == 0)
+    {
+        return;
+    }
+    send(application::ScrollExplorer{turn.lines});
+}
+
+bool EditorWindow::over_explorer(LPARAM data) const
+{
+    // WM_MOUSEWHEEL の位置は画面の座標なので、クライアントの座標に直してから見る。
+    POINT point{low_word_of(data), high_word_of(data)};
+    ScreenToClient(window_, &point);
+    const auto panel = explorer_frame(controller_.delivery().settings).panel;
+    return panel.has_value() && core::contains(panel.value(), point.x, point.y);
 }
 
 void EditorWindow::scroll_palette(std::int32_t delta)
@@ -501,8 +537,8 @@ bool EditorWindow::over_other_pane(LPARAM data) const
     // WM_MOUSEWHEEL の位置は画面の座標なので、クライアントの座標に直してから見る。
     POINT point{low_word_of(data), high_word_of(data)};
     ScreenToClient(window_, &point);
-    const auto other = core::other_pane_layout(
-        body_panes(controller_.delivery().settings.font_size), controller_.split().active_side);
+    const auto other = core::other_pane_layout(body_panes(controller_.delivery().settings),
+                                               controller_.split().active_side);
     return other.has_value() && core::contains(other.value().band, point.x, point.y);
 }
 

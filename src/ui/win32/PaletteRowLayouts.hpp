@@ -27,7 +27,12 @@ class PaletteRowLayouts final
 {
   public:
     using TextLayout = Microsoft::WRL::ComPtr<IDWriteTextLayout>;
+    // 既定の上限（面とタブの題名）。エクスプローラーの面は見えている行が多いので、同じ型の実体を
+    // 大きい上限で作る（ADR 0162 の決定 8）。
     static constexpr std::size_t capacity = core::palette_row_limit * 4;
+
+    PaletteRowLayouts() = default;
+    explicit PaletteRowLayouts(std::size_t limit) noexcept : limit_(limit) {}
 
     // 鍵の layout を返す。無ければ make() で作って覚える。幅か高さが 0 以下の欄は make() を
     // 呼ばずに null を返す（描く物が無い欄で layout を作らない）。
@@ -57,5 +62,6 @@ class PaletteRowLayouts final
 
     std::vector<PaletteRowLayout> entries_;
     std::uint64_t generation_ = 0;
+    std::size_t limit_ = capacity;
 };
 } // namespace nenenib::ui::win32

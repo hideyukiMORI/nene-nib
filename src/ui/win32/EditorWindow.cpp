@@ -6,6 +6,7 @@
 #include "CommitText.hpp"
 #include "EditorIntent.hpp"
 #include "EditorSettings.hpp"
+#include "ExplorerLayout.hpp"
 #include "LanguageServerTick.hpp"
 #include "MapTimeout.hpp"
 #include "PaneLayouts.hpp"
@@ -87,24 +88,32 @@ void EditorWindow::resize()
 }
 
 // 本文の枠の配置（ADR 0148 の決定 8）。窓の行数・マウス・描画が同じ pane_layouts の 1 本を引く。
-core::PaneLayouts EditorWindow::body_panes(core::FontSize font_size) const
+// エクスプローラーの面が出ていれば、面の幅だけ右へ縮めた client から求める（ADR 0162 の決定 2）。
+core::PaneLayouts EditorWindow::body_panes(const core::EditorSettings &settings) const
 {
-    RECT client{};
-    GetClientRect(window_, &client);
-    return core::pane_layouts(core::LayoutRect{0, 0, client.right, client.bottom}, dpi_, font_size,
+    return core::pane_layouts(explorer_frame(settings).body, dpi_, settings.font_size,
                               controller_.split().layout);
 }
 
-core::BodyLayout EditorWindow::active_body(core::FontSize font_size) const
+// 面の配置。出ているかは設定 explorer（面の表示値が frame に載るのと同じ値）が決める。
+core::ExplorerLayout EditorWindow::explorer_frame(const core::EditorSettings &settings) const
 {
-    return core::active_pane_layout(body_panes(font_size), controller_.split().active_side);
+    RECT client{};
+    GetClientRect(window_, &client);
+    return core::explorer_layout(core::LayoutRect{0, 0, client.right, client.bottom}, dpi_,
+                                 settings.font_size, settings.explorer);
+}
+
+core::BodyLayout EditorWindow::active_body(const core::EditorSettings &settings) const
+{
+    return core::active_pane_layout(body_panes(settings), controller_.split().active_side);
 }
 
 // 寸法は操作中の枠の本文（両枠の幅と高さは等しいので、もう 1 つの枠も同じ寸法・決定 1）。
 application::VisibleLines EditorWindow::body_view() const
 {
     const auto delivered = controller_.delivery();
-    const auto body = active_body(delivered.settings.font_size);
+    const auto body = active_body(delivered.settings);
     core::TextViewGeometry geometry{std::max(core::width_of(body.content), 1), body.line_height,
                                     dpi_};
     // 本文の書式の字幅は格子の 1 升と同じ所（BodyTextLayouts::cell）で測る。巨大な行の窓の x の
@@ -244,6 +253,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     }
     delivery = follow_look(std::move(delivery));
     follow_split(previous_layout, delivery);
+    follow_explorer(delivery);
     follow_ime(delivery);
     mode_ = delivery.mode;
     vim_mode_ = delivery.vim_mode;
@@ -305,5 +315,17 @@ void EditorWindow::follow_split(core::SplitLayout previous, application::EditorD
     {
         delivery = controller_.apply(body_view());
     }
+}
+
+// エクスプローラーの面を出した・消した（鍵・一覧・Ex の `set explorer`）ら、本文の幅が変わるので
+// 操作中の枠の行数と幅を送り直す（ADR 0162 の決定 2）。面が消えたままの打鍵の道は比べるだけ。
+void EditorWindow::follow_explorer(application::EditorDelivery &delivery)
+{
+    if (delivery.settings.explorer == shown_explorer_)
+    {
+        return;
+    }
+    shown_explorer_ = delivery.settings.explorer;
+    delivery = controller_.apply(body_view());
 }
 } // namespace nenenib::ui::win32

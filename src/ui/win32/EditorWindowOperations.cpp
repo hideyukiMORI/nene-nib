@@ -4,6 +4,7 @@
 #include "ClosePane.hpp"
 #include "CloseTab.hpp"
 #include "EditMode.hpp"
+#include "ExplorerRootChosen.hpp"
 #include "FileDialog.hpp"
 #include "FileDrop.hpp"
 #include "FileFailure.hpp"
@@ -24,6 +25,7 @@
 #include "TabCommand.hpp"
 #include "TextEncoding.hpp"
 #include "ToggleBookmark.hpp"
+#include "ToggleExplorer.hpp"
 #include "UnsavedTab.hpp"
 
 #include <bit>
@@ -430,10 +432,12 @@ void EditorWindow::run_pane_operation(core::EditorOperation operation)
         send(application::TogglePreview{});
         return;
     case core::EditorOperation::toggle_explorer:
+        // 本文の枠を縮める左の面（ADR 0162 の決定 4・7）。本文の行数と幅は deliver が面の出し
+        // 入れの変わり目で送り直す（follow_explorer）。
+        send(application::ToggleExplorer{});
+        return;
     case core::EditorOperation::choose_explorer_root:
-        // 本文の枠を縮める左の面（ADR
-        // 0162）。面の状態と意図（E3）とフォルダ選びのダイアログ（E4）が
-        // まだ無いので何もしない。鍵の Ctrl+Shift+E も ui の写し（operation_chord）にはまだ無い。
+        choose_explorer_root();
         return;
     case core::EditorOperation::open_file:
     case core::EditorOperation::save:
@@ -503,6 +507,17 @@ void EditorWindow::run_edit_operation(core::EditorOperation operation)
         return;
     }
     std::unreachable();
+}
+
+// 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ
+// フォルダを意図にする。取り消しは何も送らない。
+void EditorWindow::choose_explorer_root()
+{
+    auto folder = choose_folder(window_);
+    if (folder.has_value())
+    {
+        send(application::ExplorerRootChosen{std::move(folder).value()});
+    }
 }
 
 // 保存の失敗の知らせは deliver が AdjustFontSize の後に出す。変換中は送らない（今の鍵と同じ）。

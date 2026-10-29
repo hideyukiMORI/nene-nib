@@ -68,6 +68,8 @@ namespace nenenib::ui::win32
         return chord(core::OperationKey::y);
     case 'M':
         return chord(core::OperationKey::m);
+    case 'E':
+        return chord(core::OperationKey::e);
     case 'V':
         return chord(core::OperationKey::v);
     case VK_OEM_PLUS:

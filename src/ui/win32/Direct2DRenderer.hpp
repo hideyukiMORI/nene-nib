@@ -12,6 +12,8 @@
 #include "DeviceWarmup.hpp"
 #include "DisplayLine.hpp"
 #include "EditorFrame.hpp"
+#include "ExplorerLayout.hpp"
+#include "ExplorerPainter.hpp"
 #include "GridRowPainter.hpp"
 #include "GridRowView.hpp"
 #include "GutterTextLayouts.hpp"
@@ -304,6 +306,8 @@ class Direct2DRenderer final
     void draw_keycap_layout(IDWriteTextLayout *shown, const core::LayoutRect &note,
                             const KeycapStyle &style);
     void draw_palette_footer(const application::EditorFrame &frame, const core::LayoutRect &area);
+    // エクスプローラーの面（ADR 0162 の決定 8）。面が無い frame は保持を捨てるだけ。
+    void draw_explorer(const application::EditorFrame &frame, const core::ExplorerLayout &layout);
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);
 
@@ -327,6 +331,8 @@ class Direct2DRenderer final
     TextFormat gutter_format_;
     // 面の行の右端の鍵。本文の字体・UI の大きさ・左寄せ（幅を測るので右寄せにしない）。
     TextFormat key_format_;
+    // エクスプローラーの面の名前。UI の字体・本文の大きさ・文字単位の省略記号（ADR 0162）。
+    TextFormat explorer_format_;
     TextFormat guide_key_format_;
     TextFormat guide_label_format_;
     TextFormat guide_note_format_;
@@ -339,6 +345,9 @@ class Direct2DRenderer final
     PaletteRowLayouts palette_layouts_;
     // タブの題名の文字組み。同じ型で、書式・DPI の作り直しでだけ捨てる（#924）。
     PaletteRowLayouts tab_layouts_;
+    // エクスプローラーの面の行の文字組み。同じ型で上限だけ大きい。書式の作り直しと面を消した
+    // ときに捨てる（ADR 0162 の決定 8）。
+    PaletteRowLayouts explorer_layouts_{ExplorerPainter::retained};
     // other の枠のプレビュー。要素の layout の保持は frame をまたいで再利用する（ADR 0155）。
     PreviewPane preview_;
     // 通常7枠と案内4枠。録画時は案内が無く8枠（ADR 0079・言語の項目で 11・ADR 0154 の決定 6）。
