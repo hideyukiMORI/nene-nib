@@ -341,8 +341,9 @@ std::string map_line_value(const MapRow &row)
 
 std::expected<VimKey, KeyMapFailure> parse_map_leader(std::string_view text)
 {
+    // 端の空白は設定の行の読み手が落とすので書けない（空白の leader は `<Space>` と書く）。
     auto keys = keys_of_notation(text, std::nullopt);
-    if (!keys.has_value() || keys.value().size() != 1)
+    if (!line_safe(text) || !keys.has_value() || keys.value().size() != 1)
     {
         return std::unexpected(KeyMapFailure::bad_leader);
     }

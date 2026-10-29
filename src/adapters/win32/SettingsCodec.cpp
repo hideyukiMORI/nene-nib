@@ -299,7 +299,12 @@ lsp_commands_from(const SettingsFields &fields)
     for (const auto &[key, value] : fields.maps)
     {
         auto row = core::parse_map_line(key, value);
-        if (!row.has_value())
+        // 書き戻す鍵はモードの文字を並べ直した正準の鍵なので、同じ鍵の 2 行はそれで判定する
+        // （`map.vn.x` と `map.nv.x` を通すと、保存で同じ鍵の 2 行を書いてしまう）。
+        if (!row.has_value() ||
+            std::ranges::any_of(
+                rows, [&row](const core::MapRow &earlier)
+                { return core::map_line_key(earlier) == core::map_line_key(row.value()); }))
         {
             return std::unexpected(Failure::malformed);
         }

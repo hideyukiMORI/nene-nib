@@ -204,7 +204,7 @@ void verify_leader()
                core::parse_map_leader("<Space>") == character(U' ') &&
                core::parse_map_leader(",") == character(U','),
            "the leader is one key in the notation");
-    for (const auto text : {"", "ab", "<leader>", "<Nope>"})
+    for (const auto text : {"", "ab", "<leader>", "<Nope>", " ", "\t"})
     {
         const auto leader = core::parse_map_leader(text);
         expect(!leader.has_value() && leader.error() == KeyMapFailure::bad_leader,

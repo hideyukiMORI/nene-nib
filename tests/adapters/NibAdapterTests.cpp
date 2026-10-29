@@ -788,9 +788,9 @@ void verify_settings_maps()
     expect(ordered && ordered.value().maps.size() == 3 && ordered.value().maps.at(0).rhs == "b" &&
                ordered.value().maps.at(1).rhs == "a" && ordered.value().maps.at(2).rhs == "c",
            "rows keep the order of the file");
-    for (const auto line :
-         {"map.i.jj=\n", "map.i.abcd=x\n", "map.q.j=x\n", "map.i.<C-s>=x\n", "map.i.j=<Nope>\n",
-          "map.ii.j=x\n", "map.i=x\n", "mapleader=ab\n", "mapleader=\n", "map.i.j=a\nmap.i.j=b\n"})
+    for (const auto line : {"map.i.jj=\n", "map.i.abcd=x\n", "map.q.j=x\n", "map.i.<C-s>=x\n",
+                            "map.i.j=<Nope>\n", "map.ii.j=x\n", "map.i=x\n", "mapleader=ab\n",
+                            "mapleader=\n", "map.i.j=a\nmap.i.j=b\n", "map.vn.x=a\nmap.nv.x=b\n"})
     {
         const auto result = decode_settings(plain + line, SettingsVersion::v4);
         expect(!result && result.error() == SettingsFailure::malformed,
@@ -801,6 +801,11 @@ void verify_settings_maps()
     const auto old_leader =
         decode_settings(std::string(v3_settings) + "mapleader=,\n", SettingsVersion::v3);
     expect(!old && !old_leader, "v3 rejects map rows and the leader");
+    const auto spelled = decode_settings(plain + "mapleader=,\nmap.vn.x=a\n", SettingsVersion::v4);
+    expect(spelled && spelled.value().mapleader == "," &&
+               encode_settings(spelled.value()) == plain + "mapleader=,\nmap.nv.x=a\n" &&
+               decode_settings(encode_settings(spelled.value()), SettingsVersion::v4),
+           "a row is written with its canonical key and a comma leader round trips");
     auto other = settings;
     other.maps.pop_back();
     auto leader = settings;
