@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 e77e09e1d885687aedbf066c28440780f1d8b76f85094de1f96fe44eb29420c5 / 3002 fixtures
+// fixtures.json: sha256 77a030e5f8128a02bd7ffb98f987b16f204d896f0af8d2643753d23de3cd7d54 / 3007 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3002> vim_fixtures{{
+constexpr std::array<VimFixture, 3007> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2699,6 +2699,11 @@ constexpr std::array<VimFixture, 3002> vim_fixtures{{
     {"insert-count-control-join-undo", "foo bar\nbaz", "jw2i<C-u><Esc>u", "foo bar\nbaz", 2, 3, "", "", std::nullopt},
     {"insert-count-control-backspace-join-undo", "foo\nbar", "j2i<BS><BS>x<Esc>u", "foo\nbar", 2, 1, "", "", std::nullopt},
     {"insert-count-control-backspace-join-retype", "foo\nbar", "j2i<BS><BS>x<Esc>", "fxbar", 1, 2, "", "", std::nullopt},
+    {"insert-count-control-block-insert-ctrl-w", "abc def\nabc def\nabc def", "w<C-v>jj2Ixy<C-w>z<Esc>", "abc zdef\nabc zdef\nabc zdef", 1, 5, "", "", std::nullopt},
+    {"insert-count-control-block-append-ctrl-u", "abc def\nabc def\nabc def", "w<C-v>jj3Ap <C-u>r<Esc>", "abc dref\nabc dref\nabc dref", 1, 5, "", "", std::nullopt},
+    {"insert-count-control-block-insert-shrinks", "abc def\nabc def\nabc def", "w<C-v>jj2I<C-w>z<Esc>", "zdef\nabc def\nabc def", 1, 1, "", "", std::nullopt},
+    {"insert-count-control-block-insert-joins", "abc\nab def\nab def", "j0<C-v>j2Ix<C-u><C-u>z<Esc>", "zab def\nab def", 1, 1, "", "", std::nullopt},
+    {"insert-count-control-block-change-ctrl-w", "abc def\nabc def\nabc def", "w<C-v>jj2cxy<C-w>z<Esc>", "abc zef\nabc zef\nabc zef", 1, 5, "d\nd\nd", "\0261", std::nullopt},
     {"empty-case-gU-h", "x1", "gUh", "X1", 1, 1, "", "", std::nullopt},
     {"empty-case-gU-1h", "x1", "gU1h", "X1", 1, 1, "", "", std::nullopt},
     {"empty-case-gU-0", "x1", "gU0", "X1", 1, 1, "", "", std::nullopt},
