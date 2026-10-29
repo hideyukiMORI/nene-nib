@@ -844,6 +844,21 @@ std::string without_setting(const std::string &bytes, std::string_view key)
 
 // v4 の鍵の集合（ADR 0170 の決定 3）。全欄の往復・必須・値の検証・features の空と 3
 // 件・重複の拒否。
+// v4 の最初の定義（#1055）の後に足した鍵（ADR 0170 決定 3 の追補・#1083）。無い v4 は既定 off で
+// 読め、書き戻すと鍵が入る。有れば厳密に読み、重複は拒否する。
+void verify_settings_v4_later_keys()
+{
+    const auto bytes = encode_settings(default_editor_settings());
+    const auto older = decode_settings(
+        without_setting(without_setting(bytes, "ignorecase"), "smartcase"), SettingsVersion::v4);
+    expect(older && !older.value().ignorecase && !older.value().smartcase &&
+               encode_settings(older.value()) == bytes,
+           "a v4 without the later keys reads them as off and writes them back");
+    expect(!decode_settings(bytes + "ignorecase=on\n", SettingsVersion::v4) &&
+               !decode_settings(with_setting(bytes, "smartcase", "yes"), SettingsVersion::v4),
+           "a present later key is still read strictly");
+}
+
 void verify_settings_v4_fields()
 {
     auto settings = default_editor_settings();
@@ -887,8 +902,7 @@ void verify_settings_v4_fields()
     expect(empty && empty.value().features.empty(), "an empty feature list is accepted");
     const auto unrooted = decode_settings(with_setting(bytes, "root", ""), SettingsVersion::v4);
     expect(unrooted && !unrooted.value().root.has_value(), "an empty root means no root");
-    for (const auto key : {"ui_language", "lsp", "explorer", "root", "features", "wrap", "guide",
-                           "ignorecase", "smartcase"})
+    for (const auto key : {"ui_language", "lsp", "explorer", "root", "features", "wrap", "guide"})
     {
         const auto result = decode_settings(without_setting(bytes, key), SettingsVersion::v4);
         expect(!result && result.error() == SettingsFailure::malformed, "every v4 key is required");
@@ -896,6 +910,7 @@ void verify_settings_v4_fields()
     expect(!decode_settings(bytes + "features=\n", SettingsVersion::v4) &&
                !decode_settings(bytes + "root=\n", SettingsVersion::v4),
            "duplicate v4 keys are refused");
+    verify_settings_v4_later_keys();
 }
 
 void verify_settings_restart(Win32FileAdapter &files)

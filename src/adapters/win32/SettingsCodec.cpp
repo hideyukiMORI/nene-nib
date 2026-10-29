@@ -258,6 +258,18 @@ language_from(std::string_view text)
     }
 }
 
+// v4 の最初の定義（#1055）の後に足した on/off の鍵。無ければ既定の off、有れば厳密に読む
+// （ADR 0170 決定 3 の追補・#1083）。書くときは必ず書く。
+[[nodiscard]] std::expected<bool, Failure>
+later_switch_from(const std::optional<std::string_view> &value)
+{
+    if (!value.has_value())
+    {
+        return false;
+    }
+    return switch_from(value);
+}
+
 [[nodiscard]] bool has_v4_fields(const SettingsFields &fields) noexcept
 {
     return fields.ui_language.has_value() || fields.lsp.has_value() ||
@@ -349,8 +361,8 @@ lsp_commands_from(const SettingsFields &fields)
     auto root = root_from(fields.root.value());
     auto features = features_from(fields.features.value());
     auto commands = lsp_commands_from(fields);
-    const auto ignorecase = switch_from(fields.ignorecase);
-    const auto smartcase = switch_from(fields.smartcase);
+    const auto ignorecase = later_switch_from(fields.ignorecase);
+    const auto smartcase = later_switch_from(fields.smartcase);
     if (!language || !lsp || !explorer || !root || !features || !commands || !ignorecase ||
         !smartcase)
     {
