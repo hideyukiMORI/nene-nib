@@ -28,6 +28,7 @@ using detail::horizontal_action;
 using detail::input_action;
 using detail::jumped_by;
 using detail::laid_out_motion;
+using detail::landed_column;
 using detail::landing_of;
 using detail::line_of;
 using detail::moved_or_failed;
@@ -161,7 +162,8 @@ namespace
     const VimMotionLanding landing = landing_of(view, state, motion.value());
     const Offset moved = landing.offset;
     VimState next = visual_resting(state, state.mode);
-    next.wanted_column = wanted_after(view.text, wanted, moved, motion.value());
+    next.wanted_column = wanted_after(
+        wanted, landed_column(view.text, state.mode, view.selection.anchor, moved), motion.value());
     return jumped_by(moved_or_failed(VimStep{std::move(next),
                                              VimSelect{Selection{view.selection.anchor, moved}}},
                                      motion.value(), view.selection.caret, landing),

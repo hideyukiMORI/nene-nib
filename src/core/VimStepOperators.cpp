@@ -905,8 +905,9 @@ namespace
                                                 Offset destination)
 {
     VimState next = finished_input_wait(state);
-    next.wanted_column =
-        VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(view.text, destination)};
+    next.wanted_column = VimWantedColumn{
+        VimColumnWish::at_column,
+        detail::landed_column(view.text, state.mode, view.selection.anchor, destination)};
     switch (state.mode)
     {
     case VimMode::normal:

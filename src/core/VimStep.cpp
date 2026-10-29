@@ -64,6 +64,7 @@ using detail::insert_special;
 using detail::insert_started;
 using detail::joined;
 using detail::laid_out_motion;
+using detail::landed_column;
 using detail::landed_step;
 using detail::last_view_line;
 using detail::line_below;
@@ -311,13 +312,15 @@ namespace
     std::unreachable();
 }
 
-[[nodiscard]] VimState navigated_state(const VimState &state, const TextBuffer &text, Offset caret)
+[[nodiscard]] VimState navigated_state(const VimState &state, const VimEditorView &view,
+                                       Offset caret)
 {
     VimState next = state;
     next.count = std::nullopt;
     next.pending = std::nullopt;
     next.wanted_column =
-        VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, caret)};
+        VimWantedColumn{VimColumnWish::at_column,
+                        landed_column(view.text, state.mode, view.selection.anchor, caret)};
     return next;
 }
 
@@ -325,14 +328,14 @@ namespace
                                 LineNumber caret_line)
 {
     const Offset caret = vim_first_non_blank(view.text, view.text.line_start(caret_line));
-    return VimStep{navigated_state(state, view.text, caret),
+    return VimStep{navigated_state(state, view, caret),
                    VimNavigate{navigated_selection(state, view.selection, caret), first}};
 }
 
 [[nodiscard]] VimStep navigated_at(const VimState &state, const VimEditorView &view,
                                    LineNumber first, Offset caret)
 {
-    return VimStep{navigated_state(state, view.text, caret),
+    return VimStep{navigated_state(state, view, caret),
                    VimNavigate{navigated_selection(state, view.selection, caret), first}};
 }
 
@@ -342,7 +345,7 @@ namespace
                                     const VimDisplayNavigation &target, Offset placed)
 {
     const Offset caret = rested_in(view.text, placed, state.mode);
-    VimState next = navigated_state(state, view.text, caret);
+    VimState next = navigated_state(state, view, caret);
     const bool line_end = state.wanted_column.has_value() &&
                           state.wanted_column.value().wish == VimColumnWish::at_line_end;
     if (caret == view.selection.caret || line_end)
@@ -426,8 +429,7 @@ namespace detail
     if (first == vim_viewport_of(view).first_visible)
     {
         const Offset caret = view.selection.caret;
-        return VimStep{navigated_state(state, view.text, caret),
-                       VimNavigate{view.selection, first}};
+        return VimStep{navigated_state(state, view, caret), VimNavigate{view.selection, first}};
     }
     const std::size_t height =
         std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
@@ -495,7 +497,8 @@ namespace
     if ((mode == VimMode::visual || mode == VimMode::visual_block) && moved != caret)
     {
         next.wanted_column =
-            wanted_after(text, wanted_column_of(text, state, caret), moved, VimMotion::right);
+            wanted_after(wanted_column_of(text, state, caret),
+                         landed_column(text, mode, caret, moved), VimMotion::right);
     }
     return VimStep{std::move(next), VimSelect{Selection{caret, moved}}};
 }
@@ -864,8 +867,9 @@ namespace detail
     const VimHorizontalScroll &result = outcome.value();
     if (result.pushed)
     {
-        next.wanted_column = VimWantedColumn{VimColumnWish::at_column,
-                                             caret_virtual_column(view.text, result.caret)};
+        next.wanted_column = VimWantedColumn{
+            VimColumnWish::at_column,
+            landed_column(view.text, state.mode, view.selection.anchor, result.caret)};
     }
     const VimViewport viewport = vim_viewport_of(view);
     return VimStep{std::move(next),
@@ -967,7 +971,7 @@ namespace detail
         return requested_layout(state, top.error());
     }
     const VisualPosition first = top.value();
-    VimState next = navigated_state(finished_input_wait(state), view.text, caret);
+    VimState next = navigated_state(finished_input_wait(state), view, caret);
     if (!first_non_blank)
     {
         next.wanted_column = state.wanted_column;

@@ -74,8 +74,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
 [[nodiscard]] Offset moved_by(const VimEditorView &view, const VimState &state, VimMotion motion);
 [[nodiscard]] VimMotionLanding landing_of(const VimEditorView &view, const VimState &state,
                                           VimMotion motion);
-[[nodiscard]] VimWantedColumn wanted_after(const TextBuffer &text, const VimWantedColumn &wanted,
-                                           Offset moved, VimMotion motion);
+[[nodiscard]] VimWantedColumn wanted_after(const VimWantedColumn &wanted, VirtualColumn landed,
+                                           VimMotion motion);
 [[nodiscard]] VimWantedColumn wanted_for(const VimEditorView &view, const VimState &state,
                                          VimMotion motion);
 [[nodiscard]] VimStep cancelled(const VimState &state);
@@ -232,6 +232,8 @@ inline constexpr char32_t carriage_return_character = 0x0D;
 [[nodiscard]] Offset backward_characters(const TextBuffer &text, Offset caret, std::size_t count);
 [[nodiscard]] VimWantedColumn wanted_column_of(const TextBuffer &text, const VimState &state,
                                                Offset caret);
+[[nodiscard]] VirtualColumn landed_column(const TextBuffer &text, VimMode mode, Offset anchor,
+                                          Offset moved);
 [[nodiscard]] Offset rested_in(const TextBuffer &text, Offset caret, VimMode mode);
 [[nodiscard]] Offset caret_on_line(const TextBuffer &text, const VimWantedColumn &wanted,
                                    LineNumber line, VimMode mode);
