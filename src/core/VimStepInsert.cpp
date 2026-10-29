@@ -83,8 +83,10 @@ namespace
 [[nodiscard]] VimStep left_insert(const VimState &state, const VimEditorView &view)
 {
     const Offset caret = view.selection.caret;
-    VimStep step{vim_resting_from(state, state.unnamed_register),
-                 VimMoveTo{backward_characters(view.text, caret, single_step)}};
+    const Offset back = backward_characters(view.text, caret, single_step);
+    VimStep step{vim_resting_from(state, state.unnamed_register), VimMoveTo{back}};
+    // `'^` は 1 つ左へ戻る前のキャレット（Vim の b_last_insert・#1039）。
+    step.insert_left = caret.value - back.value;
     if (!state.insert_repeat.has_value() || state.insert_repeat.value().text.empty())
     {
         return step;
@@ -98,6 +100,7 @@ namespace
     std::string body = std::move(result).value();
     const std::size_t retreat = body.back() == '\n' ? 0 : last_code_point_size(body);
     const Offset rest{caret.value + body.size() - retreat};
+    step.insert_left = retreat;
     step.effect = VimInsertAt{caret, std::move(body), rest, EditBoundary::absorb};
     return step;
 }

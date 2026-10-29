@@ -226,6 +226,37 @@ void verify_mark_approximations()
            "a charwise delete of the whole text removes the marks (Vim keeps them: x)");
 }
 
+// `gv` と `gi` の CRLF（ADR 0018 / ADR 0152 の追補・#1039）。oracle は CRLF を流せないので、LF の
+// fixture `gv-gi-` と同じ鍵が CRLF の文書でも同じ本文になることを固定する。回数の繰り返しが行を
+// 足しても `'^` は入れた本文の後ろ、文字単位の削除でつながった前の選択の端は最初の行へつながる。
+void verify_reselect_and_last_insert_crlf()
+{
+    const auto body_after = [](std::string text, std::string_view keys)
+    {
+        Editing editing;
+        open_vim_document(editing, std::move(text));
+        vim_normal(editing.controller(), keys);
+        return whole_vim_body(editing.controller());
+    };
+    expect(body_after("abcd\r\nefgh", "l3ia<CR>b<Esc>gggiZ<Esc>") == "aa\nba\nba\nbZbcd\nefgh",
+           "gi after a repeated insert with line breaks in a CRLF text");
+    expect(body_after("abcdef\r\nghijkl\r\nmnop", "lvjld0gvd") == "a\nmnop",
+           "gv after a charwise delete across a CRLF line break");
+    expect(body_after("abcd\r\nefgh\r\nijkl", "jvl<Esc>ggddgvd") == "gh\nijkl",
+           "gv after dd above the selection in a CRLF text");
+}
+
+// `gi` だけが記録を `i` に書き換え、`g` の後のほかの命令の記録は変えない（#1039 のレビュー R1-2）。
+// `gJ` の後の `.` は `gJ`（字下げを残す）として繰り返し、`J` にも `i` にもならない。
+void verify_g_records_kept()
+{
+    Editing editing;
+    open_vim_document(editing, "a\n  b\nc\n  d");
+    vim_normal(editing.controller(), "gJj.");
+    expect(whole_vim_body(editing.controller()) == "a  b\nc  d",
+           "the record of gJ keeps its g and . repeats gJ");
+}
+
 // 開いた時点の前の位置は 1 行目の桁 0（ADR 0152 の追補・#962）。本物の Vim 9.1（非 Ex）は開いた
 // 直後の `''` を 1 行目へ跳ばす（`getpos("''")` は [0, 1, 1, 0]）。oracle の -es は最終行で開くので
 // fixture にしない。新しいタブで開いた文書も同じ値で始まる。
@@ -306,6 +337,8 @@ void verify_vim_mark_contracts()
     verify_mark_approximations();
     verify_marks_from_opening();
     verify_marks_follow_documents();
+    verify_reselect_and_last_insert_crlf();
+    verify_g_records_kept();
 }
 
 void verify_vim_mark_scope()

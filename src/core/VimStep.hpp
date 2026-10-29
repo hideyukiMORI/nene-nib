@@ -48,6 +48,12 @@ struct VimStep
     // マークの新しい値（ADR 0152 の決定 2）。`m` と飛ぶ鍵（前の位置）が置く。controller は効果を
     // 写す前に文書へ置き、写した編集が行をずらしたら marks_adjusted で直す（決定 6）。
     std::optional<VimMarks> marks = std::nullopt;
+    // INSERT を抜けた位置（`'^`・ADR 0152 の追補・#1039）。効果を写した後のキャレットから同じ行を
+    // 右へ何バイトかで表す（Esc が 1 文字左へ戻した分・戻らなければ 0）。回数の繰り返しを入れた
+    // 後ろにもなる（Vim の b_last_insert は繰り返しの後のカーソル・実測）。写した編集の後の位置
+    // なので marks には入れず、controller が効果を写した後のキャレットから文書のマークへ置く
+    // （CRLF の文書で入れた本文の改行が長くなっても同じ行の中の差は変わらない）。
+    std::optional<std::size_t> insert_left = std::nullopt;
 };
 
 // 入力行の取消のあとの状態（ADR 0032 の決定 1）。保留中のオペレータと回数と組み立て中の

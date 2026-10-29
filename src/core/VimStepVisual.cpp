@@ -2,10 +2,14 @@
 
 #include "VimAction.hpp"
 #include "VimActionGroup.hpp"
+#include "VimCaret.hpp"
 #include "VimKeyTable.hpp"
+#include "VimMarkEdits.hpp"
 #include "VimMotionRange.hpp"
 #include "VimVisualRange.hpp"
 
+#include <algorithm>
+#include <optional>
 #include <utility>
 
 namespace nenenib::core
@@ -30,6 +34,7 @@ using detail::moved_or_failed;
 using detail::removed_exactly;
 using detail::requested_layout;
 using detail::requested_viewport;
+using detail::reselected_visual;
 using detail::restored_at;
 using detail::scroll_action;
 using detail::search_action;
@@ -38,6 +43,7 @@ using detail::shifted;
 using detail::tab_action;
 using detail::visual_acted;
 using detail::visual_character;
+using detail::visual_left;
 using detail::visual_resting;
 using detail::visual_restore;
 using detail::visual_special;
@@ -56,6 +62,39 @@ namespace detail
     VimState next = vim_resting_from(state, state.unnamed_register);
     next.mode = mode;
     return next;
+}
+
+// 抜ける VISUAL を前の選択として覚える値（ADR 0018 の追補・#1039）。種類・両端・欲しい列は
+// 鍵の前の値で、Vim の end_visual_mode と do_pending_operator が b_visual に置くのと同じ。
+[[nodiscard]] VimLastVisual visual_left(const VimState &state, const VimEditorView &view)
+{
+    return VimLastVisual{state.mode, vim_mark_position_of(view.text, view.selection.anchor),
+                         vim_mark_position_of(view.text, view.selection.caret),
+                         state.wanted_column};
+}
+
+// `gv`（#1039）。前の選択を種類・両端・欲しい列ごと選び直す。前の選択が無いか、始めの端の行が
+// 本文の外なら空（Vim の nv_gv のビープ・最終行の `dd` の後で実測）。キャレットの端の行は最後の
+// 行へ寄せ、桁はどちらも行の内容の終わりまで（Vim の check_cursor）。
+[[nodiscard]] std::optional<VimStep> reselected_visual(const VimState &state,
+                                                       const VimEditorView &view)
+{
+    const std::optional<VimLastVisual> &last = view.marks->last_visual;
+    if (!last.has_value())
+    {
+        return std::nullopt;
+    }
+    const VimLastVisual &previous = last.value();
+    const auto anchor = vim_mark_offset(view.text, previous.anchor);
+    if (!anchor.has_value())
+    {
+        return std::nullopt;
+    }
+    const LineNumber line{std::min(previous.caret.line.value, view.text.line_count())};
+    const Offset caret = vim_line_and_column(view.text, line, previous.caret.byte);
+    VimState next = visual_resting(state, previous.mode);
+    next.wanted_column = previous.wanted;
+    return VimStep{std::move(next), VimSelect{Selection{anchor.value(), caret}}};
 }
 } // namespace detail
 
@@ -201,6 +240,21 @@ namespace
                    VimSelect{Selection{view.selection.caret, view.selection.anchor}}};
 }
 
+// VISUAL の `gv`（#1039）。今の選択と前の選択を入れ替える（Vim の nv_gv）。前の選択が無ければ
+// 失敗して今の選択のまま残る（実測）。
+[[nodiscard]] VimStep visual_exchanged(const VimState &state, const VimEditorView &view)
+{
+    auto step = reselected_visual(state, view);
+    if (!step.has_value())
+    {
+        return failed(visual_unchanged(state), VimRepeatFailure::not_found);
+    }
+    VimMarks marks = *view.marks;
+    marks.last_visual = visual_left(state, view);
+    step.value().marks = std::move(marks);
+    return std::move(step).value();
+}
+
 [[nodiscard]] VimStep visual_selection_action(const VimState &state, const VimEditorView &view,
                                               VimAction action)
 {
@@ -284,6 +338,8 @@ namespace detail
     case VimActionGroup::scroll:
         return scroll_action(state, view, action);
     case VimActionGroup::enter_visual:
+        return action == VimAction::reselect_visual ? visual_exchanged(state, view)
+                                                    : visual_selection_action(state, view, action);
     case VimActionGroup::edit_range:
         return visual_selection_action(state, view, action);
     case VimActionGroup::insert_object:
@@ -302,8 +358,12 @@ namespace detail
         return aligned_screen(state, view, action);
     case VimActionGroup::history:
         return visual_history(state, view, action);
-    case VimActionGroup::edit_line:
     case VimActionGroup::insert_line:
+        // `gi` は VISUAL では失敗する（実測・#1039）。
+        return action == VimAction::insert_at_last_insert
+                   ? failed(visual_unchanged(state), VimRepeatFailure::refused)
+                   : visual_unchanged(state);
+    case VimActionGroup::edit_line:
     case VimActionGroup::ex_line:
         return visual_unchanged(state);
     }

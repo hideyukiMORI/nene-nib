@@ -306,6 +306,7 @@ namespace
     next.mode = visual_mode_of(extent);
     next.wanted_column = replayed_wanted(extent);
     next.replayed_block = replayed_extent(extent);
+    next.redoing_visual = true;
     next.recording = VimRepeatRecord{std::nullopt, VimRecordedKeys::from({}), extent};
     return VimStep{std::move(next), VimReplay{numbered_advanced(record.keys.owned_keys()), extent}};
 }
@@ -553,6 +554,33 @@ namespace
     return next;
 }
 
+// `g` の次の鍵 `i`（`gi`）か。`g` の後に INSERT へ入るほかの命令（`gI` など）は記録を変えない。
+[[nodiscard]] bool is_gi(const VimState &state, const VimKey &key) noexcept
+{
+    if (!state.input_wait.has_value())
+    {
+        return false;
+    }
+    const auto *const prefix = std::get_if<VimPrefix>(&state.input_wait.value());
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    return prefix != nullptr && *prefix == VimPrefix::g && character != nullptr &&
+           vim_g_action_for(character->code) == VimAction::insert_at_last_insert;
+}
+
+// `gi` の記録は `i`（#1039）。Vim の nv_g_cmd は命令を `i` に変えてから挿入を始めるので、`.` は
+// `'^` へ行かずにキャレットの所で同じ本文を入れる（実測）。記録の末尾の `g` を `i` に置き換える。
+[[nodiscard]] VimRepeatRecord insert_recorded_as_i(const VimState &before, VimRepeatRecord record)
+{
+    std::vector<VimKey> keys = before.recording.value_or(VimRepeatRecord{}).keys.owned_keys();
+    if (!keys.empty())
+    {
+        keys.pop_back();
+    }
+    keys.emplace_back(VimCharacter{U'i'});
+    record.keys = VimRecordedKeys::from(keys);
+    return record;
+}
+
 // NORMAL の記録。完了した鍵だけが効果で分かれ、途中の鍵と INSERT へ入る命令は記録を続ける。
 [[nodiscard]] VimState normal_recorded(const VimState &before, VimState next,
                                        const VimEffect &effect, VimKey key)
@@ -563,7 +591,8 @@ namespace
         // VISUAL への遷移は記録を捨てる（決定 5）。INSERT へ入る命令は Esc まで続ける。
         if (next.mode == VimMode::insert)
         {
-            next.recording = std::move(record);
+            next.recording = is_gi(before, key) ? insert_recorded_as_i(before, std::move(record))
+                                                : std::move(record);
         }
         return next;
     }

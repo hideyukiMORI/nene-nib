@@ -149,10 +149,15 @@ enum class VimAction : std::uint8_t
     prefix_mark_exact,
     // マークへの移動。鍵からは引かず、`'` `` ` `` の次の鍵が名前を解いてから写す（決定 3）。
     move_mark_line,
-    move_mark_exact
+    move_mark_exact,
+    // `gv`。前の選択を選び直す。VISUAL の中では今の選択と入れ替える（ADR 0018 の追補・#1039）。
+    reselect_visual,
+    // `gi`。最後に INSERT を抜けた位置（`'^`）で `i` を始める（ADR 0152 の追補・#1039）。
+    insert_at_last_insert
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::move_mark_exact) + 1;
+constexpr std::size_t vim_action_count =
+    static_cast<std::size_t>(VimAction::insert_at_last_insert) + 1;
 } // namespace nenenib::core
