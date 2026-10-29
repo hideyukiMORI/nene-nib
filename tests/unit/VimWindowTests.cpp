@@ -19,6 +19,7 @@
 #include "VimPrefix.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterText.hpp"
+#include "VimRemoveRange.hpp"
 #include "VimReplay.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
@@ -198,7 +199,7 @@ void verify_window_after_other_waits()
 }
 
 // VISUAL でも効き、VISUAL は解除しない（枠を移るときに畳むのは controller）。INSERT
-// では何もしない。
+// では窓の命令ではなく語を消す（#1040）。
 void verify_window_modes()
 {
     expect(commands(window_step_of("v|w"), VimWindowCommand::next, VimMode::visual) &&
@@ -209,10 +210,10 @@ void verify_window_modes()
            "control-w works in every VISUAL mode and keeps it");
     expect(refused(window_step_of("v|x"), VimMode::visual), "and fails outside the table there");
     const VimStep inserting = window_step_of("i|");
-    expect(std::holds_alternative<VimNoEffect>(inserting.effect) &&
+    expect(std::holds_alternative<nenenib::core::VimRemoveRange>(inserting.effect) &&
                !inserting.failure.has_value() && inserting.next.mode == VimMode::insert &&
                !inserting.next.input_wait.has_value(),
-           "control-w in INSERT does nothing and does not wait");
+           "control-w in INSERT erases a word and does not wait");
     const VimStep typed = window_step_of("i|w");
     expect(typed.next.mode == VimMode::insert &&
                std::holds_alternative<nenenib::core::VimInsertString>(typed.effect),
@@ -274,9 +275,8 @@ void verify_window_controller()
     static_cast<void>(controller.press_vim_keys(window_keys("|xx")));
     expect(whole_vim_body(controller) == "abc def", "a refused second key drops the keys after it");
     static_cast<void>(controller.press_vim_keys(window_keys("i|<Esc>")));
-    expect(whole_vim_body(controller) == "abc def" &&
-               controller.vim_state().mode == VimMode::normal,
-           "control-w in INSERT types nothing");
+    expect(whole_vim_body(controller) == "c def" && controller.vim_state().mode == VimMode::normal,
+           "control-w in INSERT erases the word before the caret instead of a window command");
 }
 } // namespace
 

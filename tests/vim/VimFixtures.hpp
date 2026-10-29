@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 4210fed7235c6ef25d0b5acc4a168dca7ce53038eb0fb27083cb66100f0a0be8 / 2536 fixtures
+// fixtures.json: sha256 b96e29b581eecd83265467b7ab5ef0cfa8542f3e62beb7e696bbc751a2ca206e / 2585 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2536> vim_fixtures{{
+constexpr std::array<VimFixture, 2585> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2548,6 +2548,55 @@ constexpr std::array<VimFixture, 2536> vim_fixtures{{
     {"gv-gi-gi-count-newline", "abcd\nefgh", "l3ia<CR>b<Esc>gggiZ<Esc>", "aa\nba\nba\nbZbcd\nefgh", 4, 2, "", "", std::nullopt},
     {"gv-gi-gi-visual-fails", "abc def\nefgh", "vgiwd", "abc def\nefgh", 1, 1, "", "", std::nullopt},
     {"gv-gi-gi-operator-fails", "abc def\nefgh", "dgiw", "abc def\nefgh", 1, 1, "", "", std::nullopt},
+    {"insert-control-ctrl-w-typed", "xyz", "Aabc def<C-w><Esc>", "xyzabc ", 1, 7, "", "", std::nullopt},
+    {"insert-control-ctrl-w-blanks", "xyz", "A  <C-w><Esc>", "xyz", 1, 3, "", "", std::nullopt},
+    {"insert-control-ctrl-w-stops-at-start", "foo bar", "A baz<C-w><C-w><Esc>", "foo bar", 1, 7, "", "", std::nullopt},
+    {"insert-control-ctrl-w-past-start", "foo bar", "Abaz<C-w><C-w><Esc>", "foo ", 1, 4, "", "", std::nullopt},
+    {"insert-control-ctrl-w-blank-then-word", "foo  bar", "A<C-w><C-w><Esc>", "", 1, 1, "", "", std::nullopt},
+    {"insert-control-ctrl-w-joins-line", "foo  \nbar", "jI<C-w><Esc>", "foo  bar", 1, 5, "", "", std::nullopt},
+    {"insert-control-ctrl-w-join-moves-start", "foo bar\nbaz", "jI<C-w>x<C-w><Esc>", "foo barbaz", 1, 7, "", "", std::nullopt},
+    {"insert-control-ctrl-w-text-start", "abc", "i<C-w><Esc>", "abc", 1, 1, "", "", std::nullopt},
+    {"insert-control-ctrl-w-wide", "abcあいう漢字", "A<C-w><C-w><Esc>", "abc", 1, 3, "", "", std::nullopt},
+    {"insert-control-ctrl-w-punctuation", "foo..bar", "A<C-w><C-w><Esc>", "foo", 1, 3, "", "", std::nullopt},
+    {"insert-control-ctrl-w-combining", "abc é", "A<C-w><Esc>", "abc ", 1, 4, "", "", std::nullopt},
+    {"insert-control-ctrl-w-original-start", "abc def", "A<BS>xy<C-w><Esc>", "abc dex", 1, 7, "", "", std::nullopt},
+    {"insert-control-ctrl-w-after-arrow", "abc def", "A x<Left><C-w><Esc>", "abc defx", 1, 7, "", "", std::nullopt},
+    {"insert-control-ctrl-u-to-start", "  foo bar", "Abaz<C-u><Esc>", "  foo bar", 1, 9, "", "", std::nullopt},
+    {"insert-control-ctrl-u-line-start", "  foo bar", "Abaz<C-u><C-u><Esc>", "", 1, 1, "", "", std::nullopt},
+    {"insert-control-ctrl-u-joins", "foo\nbar", "jA<C-u><C-u><Esc>", "foo", 1, 3, "", "", std::nullopt},
+    {"insert-control-ctrl-u-new-line", "foo\nbar", "jAx<CR>yz<C-u><C-u><C-u><Esc>", "foo\nbar", 2, 3, "", "", std::nullopt},
+    {"insert-control-ctrl-u-after-arrow", "abc def", "Axy<Left><C-u><Esc>", "abc defy", 1, 7, "", "", std::nullopt},
+    {"insert-control-ctrl-u-original-start", "abc def", "A<BS><BS>xyz<C-u><Esc>", "abc dxy", 1, 7, "", "", std::nullopt},
+    {"insert-control-ctrl-r-named-lines", "foo\nbar", "\"ayyjA<C-r>a<Esc>", "foo\nbarfoo\n", 3, 1, "foo\n", "V", std::nullopt},
+    {"insert-control-ctrl-r-named-before", "foo\nbar", "\"ayyji<C-r>a<Esc>", "foo\nfoo\nbar", 3, 1, "foo\n", "V", std::nullopt},
+    {"insert-control-ctrl-r-tab", "\tfoo\nbar", "\"ayyjA<C-r>a<Esc>", "\tfoo\nbar\tfoo\n", 3, 1, "\tfoo\n", "V", std::nullopt},
+    {"insert-control-ctrl-r-zero", "foo bar\nbaz", "yiwjA<C-r>0<Esc>", "foo bar\nbazfoo", 2, 6, "foo", "v", std::nullopt},
+    {"insert-control-ctrl-r-small-delete", "foo bar\nbaz", "xjA<C-r>-<Esc>", "oo bar\nbazf", 2, 4, "f", "v", std::nullopt},
+    {"insert-control-ctrl-r-unnamed", "foo bar\nbaz", "ywjA<C-r>\"<Esc>", "foo bar\nbazfoo ", 2, 7, "foo ", "v", std::nullopt},
+    {"insert-control-ctrl-r-empty", "foo bar\nbaz", "A<C-r>zx<Esc>", "foo barx\nbaz", 1, 8, "", "", std::nullopt},
+    {"insert-control-ctrl-r-black-hole", "foo bar\nbaz", "A<C-r>_x<Esc>", "foo barx\nbaz", 1, 8, "", "", std::nullopt},
+    {"insert-control-ctrl-r-invalid", "abc", "A<C-r>!x<Esc>", "abcx", 1, 4, "", "", std::nullopt},
+    {"insert-control-ctrl-r-escape", "abc", "A<C-r><Esc>x<Esc>", "abcx", 1, 4, "", "", std::nullopt},
+    {"insert-control-ctrl-r-append-name", "foo bar\nbaz", "\"AyiwA<C-r>A<Esc>", "foo barfoo\nbaz", 1, 10, "foo", "v", std::nullopt},
+    {"insert-control-ctrl-r-then-ctrl-w", "foo bar\nbaz", "\"ayiwA<C-r>a<C-w><Esc>", "foo bar\nbaz", 1, 7, "foo", "v", std::nullopt},
+    {"insert-control-ctrl-r-then-join", "abc\ndef", "yyjA<C-r>\"<C-w><Esc>", "abc\ndefabc", 2, 6, "abc\n", "V", std::nullopt},
+    {"insert-control-ctrl-r-dot-text", "foo bar\nbaz", "\"ayiwA<C-r>a<Esc>j0\"ayiw.", "foo barfoo\nbazfoo", 2, 6, "baz", "v", std::nullopt},
+    {"insert-control-ctrl-w-dot", "foo bar\nqux quux", "Abaz<C-w><C-w><Esc>j.", "foo \nqux ", 2, 4, "", "", std::nullopt},
+    {"insert-control-ctrl-u-dot", "foo\nbar baz", "A<C-u>x<Esc>j.", "x\nx", 2, 1, "", "", std::nullopt},
+    {"insert-control-ctrl-r-undo", "foo bar\nbaz", "\"ayiwA<C-r>a<Esc>u", "foo bar\nbaz", 1, 7, "foo", "v", std::nullopt},
+    {"insert-control-ctrl-r-lines-undo", "foo\nbar", "\"ayyjA<C-r>a<Esc>u", "foo\nbar", 2, 3, "foo\n", "V", std::nullopt},
+    {"insert-control-ctrl-w-undo", "foo bar\nbaz", "A<C-w>x<Esc>u", "foo bar\nbaz", 1, 7, "", "", std::nullopt},
+    {"insert-control-ctrl-r-count", "foo", "\"ayiw3A-<C-r>a<Esc>", "foo-foo-foo-foo", 1, 15, "foo", "v", std::nullopt},
+    {"insert-control-ctrl-r-lines-count", "foo", "\"ayy3A-<C-r>a<Esc>", "foo-foo\n-foo\n-foo\n", 4, 1, "foo\n", "V", std::nullopt},
+    {"insert-control-ctrl-w-count", "x", "3Aabc def<C-w><Esc>", "xabc abc abc ", 1, 13, "", "", std::nullopt},
+    {"insert-control-ctrl-u-count", "x", "3Aab<C-u>c<Esc>", "xc", 1, 2, "", "", std::nullopt},
+    {"insert-control-ctrl-w-count-consumed", "xy", "3Aab<C-w>c<Esc>", "xyc", 1, 3, "", "", std::nullopt},
+    {"insert-control-ctrl-w-arrow-left-of-start", "abc def", "Axy<Left><Left><Left>z<C-w><Esc>", "abc defxy", 1, 6, "", "", std::nullopt},
+    {"insert-control-ctrl-u-arrow-left-of-start", "abc def", "Axy<Left><Left><Left>z<C-u><Esc>", "abc defxy", 1, 6, "", "", std::nullopt},
+    {"insert-control-ctrl-u-arrow-home", "abc def", "Axy<Home>z<C-u><Esc>", "abc defxy", 1, 1, "", "", std::nullopt},
+    {"insert-control-ctrl-u-arrow-back-right", "abc def", "Axy<Left><Left><Left>z<Right><Right><Right>w<C-u><Esc>", "abc de", 1, 6, "", "", std::nullopt},
+    {"insert-control-ctrl-u-arrow-other-line", "abc def\nghi", "jAxy<Up>z<C-u><Esc>", "ef\nghixy", 1, 1, "", "", std::nullopt},
+    {"insert-control-ctrl-u-arrow-then-backspace", "abc def", "Axy<Left><Left><Left><BS>z<C-u><Esc>", "fxy", 1, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

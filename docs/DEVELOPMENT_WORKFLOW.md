@@ -200,7 +200,7 @@ computer-use 無しで見た目を確かめるときは `python eng/verify-windo
 
 ### Vim の差分 fuzz
 
-`python eng/vim-fuzz.py --count 300 --seed 1 --out D:/NeNeNib/outputs/<日付>/vim-fuzz-seed1 --shrink` が固定 seed のランダムな本文と鍵列を本物の Vim 9.1（`eng/vim-oracle.py` の `measure` を import）で測り、再生器 `nib_vim_replay`（`tests/unit/VimReplayMain.cpp`・Debug の `build/` で `cmake --build build --target nib_vim_replay`・CTest に載せない）で Nib に流して本文・`line`・`column`・無名レジスタの本文と種類を比べ、`mismatches.json` と `summary.md` を書く（Issue #954）。`--from-fixtures 50` は再生器の自己検査。生成器（`generator=2`）は前の語に依る語（`''` `` ` ` `` は跳びの後・`n` `N` は検索の後・`"1`〜`"9` の読みは名前なしの `dd` `cc` の後・`'a` `` `a `` は `ma` の後）を状態で絞り、`--exclude <語>...` は語を名前で外し、`--known <Issue>:<語>,<語>`（複数可）はその語を含む不一致を既知として別に数え、`--seeds 1-5` は seed ごとに `<out>/seed-N/` と合計の `<out>/summary.md` を書く（拒否は `rejected.json` に Vim のエラーと拒んだ語・Issue #963）。Vim が要るので CI とゲートには載せず、見つけた違いは Issue に起こして直す。
+`python eng/vim-fuzz.py --count 300 --seed 1 --out D:/NeNeNib/outputs/<日付>/vim-fuzz-seed1 --shrink` が固定 seed のランダムな本文と鍵列を本物の Vim 9.1（`eng/vim-oracle.py` の `measure` を import）で測り、再生器 `nib_vim_replay`（`tests/unit/VimReplayMain.cpp`・Debug の `build/` で `cmake --build build --target nib_vim_replay`・CTest に載せない）で Nib に流して本文・`line`・`column`・無名レジスタの本文と種類を比べ、`mismatches.json` と `summary.md` を書く（Issue #954）。`--from-fixtures 50` は再生器の自己検査。生成器（`generator=3`・#1040 で INSERT の `Ctrl-w` `Ctrl-u` `Ctrl-r` の 3 語を足した）は前の語に依る語（`''` `` ` ` `` は跳びの後・`n` `N` は検索の後・`"1`〜`"9` の読みは名前なしの `dd` `cc` の後・`'a` `` `a `` は `ma` の後）を状態で絞り、`--exclude <語>...` は語を名前で外し、`--known <Issue>:<語>,<語>`（複数可）はその語を含む不一致を既知として別に数え、`--seeds 1-5` は seed ごとに `<out>/seed-N/` と合計の `<out>/summary.md` を書く（拒否は `rejected.json` に Vim のエラーと拒んだ語・Issue #963）。Vim が要るので CI とゲートには載せず、見つけた違いは Issue に起こして直す。
 
 ### 生成物
 

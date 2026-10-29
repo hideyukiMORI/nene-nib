@@ -358,8 +358,11 @@ void verify_vim_other_keys()
            "the arrows move like k and h");
     vim_replay(controller, "i");
     static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimCharacter{U'\t'}}}));
+    // INSERT の Ctrl-r は名前を待ち、空のレジスタ z は何も入れない（#1040）。
     static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::control_r}}));
-    expect(vim_body(controller.frame()) == "\tone\ntwo", "Tab inserts a tab and Ctrl-r is ignored");
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimCharacter{U'z'}}}));
+    expect(vim_body(controller.frame()) == "\tone\ntwo",
+           "Tab inserts a tab and Ctrl-r with an empty register inserts nothing");
     static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::arrow_down}}));
     static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::arrow_right}}));
     expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{3}},
@@ -874,8 +877,9 @@ void verify_vim_viewport_mode_edges()
 
     VimState inserting = remembered;
     inserting.mode = VimMode::insert;
-    for (const VimSpecialKey key : {VimSpecialKey::control_d, VimSpecialKey::control_u,
-                                    VimSpecialKey::control_f, VimSpecialKey::control_b})
+    // INSERT の Ctrl-u は入力の始めまで消す（#1040・fixture の insert-control-）。
+    for (const VimSpecialKey key :
+         {VimSpecialKey::control_d, VimSpecialKey::control_f, VimSpecialKey::control_b})
     {
         const auto ignored = vim_step(inserting, view, VimKey{key});
         expect(std::holds_alternative<VimNoEffect>(ignored.effect),

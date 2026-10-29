@@ -79,6 +79,14 @@ Phase 0 の V2 で、Vim 9.1 を `-u NONE -i NONE -N -n -es -S probe.vim` で走
 
 - 移動の表に `%`（`VimMotion::matching_pair`）を 1 行足した。回数なしは対応する括弧（inclusive の文字単位・'matchpairs' の既定 `(:),{:},[:]` を固定・引用符の内側を飛ばす Vim の既定）、`{N}%` は本文の N % の行（行単位・100 超は失敗）。マーク `'x` `` `x `` は `VimMotion::mark_line`（行単位）と `mark_exact`（exclusive）の 2 行で、名前は鍵を写す前に engine が解く。マークの所有と編集のずれの直し方は [ADR 0152](0152-vim-marks-are-document-values-adjusted-by-edits.md)。
 
+## 追記（2026-10-29・Issue #1040）
+
+INSERT の `Ctrl-w` `Ctrl-u` `Ctrl-r {name}` を足した。値は oracle（`backspace=indent,eol,start` は `DEFAULT_SETTINGS` が `-u NONE` の上に置く・`autoindent` は無い）の fixture `insert-control-` 43 件で守る。
+
+- **始めの位置**: `VimState.insert_start`（Vim の `Insstart_orig`・行と行頭からのバイト数）。INSERT の最初の鍵の前に `vim_step` の入口（`insert_started`）がキャレットから置き、`vim_resting_from` と `input_discarded` が消す。同じ行の手前を消しても動かず（`A<BS>xy<C-w>` は `y` だけを消す）、動くのは 2 つだけ。始めの行を前の行とつないだときはつないだ点へ（`jI<C-w>x<C-w>` は `x` だけ）。矢印・Home などで動いた後の最初の移動でない鍵では、キャレットの桁が始めの桁以下なら（行は比べない）キャレットへ、右なら動かない（Vim の `stop_arrow` と `update_Insstart_orig`・`Axy<Left><Left><Left>z<C-w>` は `z` だけ・`Axy<Left>z<Right>…` や `jAxy<Up>z<C-u>` は動かない側）。
+- **`Ctrl-w` `Ctrl-u`**: キャレットが始めの行で始めの桁より右ならそこ、ほかは行頭まで消す（少なくとも 1 文字）。`Ctrl-w` は手前の空白を消してから `b` と同じ表 `vim_character_class` の同じ種類の連なりで止まる。行頭では前の行と 1 鍵ぶんつなぐだけ（Backspace と同じ `joined_back`）。Issue の見込みの「2 段目は字下げの後」は `autoindent` のときだけで、既定の Vim では 2 段目が行頭（実測）。`.` の記録には鍵のまま残る。回数つきの入力（`3A…`）は記録の全部に届いた消し方なら反復をやめ（`3Aab<C-u>c` は `xc`）、記録の中で止まれば記録を短くする。
+- **`Ctrl-r {name}`**: `Ctrl-r` は次の 1 鍵を待つ `VimPrefix::insert_register`。名前 → 選択は `register_selection_of`、読みは `register_read` の 1 本で、本文は `VimInsertAt` の 1 回（undo は INSERT の 1 単位）。名前にならない鍵・空のレジスタは何も入れず INSERT を続ける。`.` の記録は鍵 2 つではなく入れた本文の文字（Vim の redo も本文・`"ayiwA<C-r>a<Esc>j0"ayiw.` は `bazfoo`）。`"+` `"*` は名前の鍵の直前に controller が写しを置く既存の道（`vim_reads_clipboard`）。本文は文字として入れ、制御文字を鍵として解かない（Vim は打鍵として解く・差は後続）。`Ctrl-r Ctrl-r` `Ctrl-r Ctrl-o` `Ctrl-r Ctrl-p` と読み取り専用のレジスタ `.` `:` `/` `%` は後続。
+
 ## 関連
 
 ADR 0005（自前 Vim・oracle）・ADR 0006（表駆動）・ADR 0009（piece table・意図の和型・undo の区切り）・採用案 `docs/design/2026-09-15-editing-look.md`（D15）。

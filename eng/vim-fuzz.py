@@ -96,6 +96,9 @@ WORDS = (
     ("p", 3, "{r}{n}p"), ("P", 3, "{r}{n}P"),
     ("i", 3, "{n}i{i}<Esc>"), ("a", 3, "{n}a{i}<Esc>"), ("I", 2, "{n}I{i}<Esc>"),
     ("A", 2, "{n}A{i}<Esc>"), ("o", 2, "{n}o{i}<Esc>"), ("O", 2, "{n}O{i}<Esc>"),
+    # INSERT の Ctrl-w / Ctrl-u / Ctrl-r（#1040）。Ctrl-r は無名レジスタを読む。
+    ("i<C-w>", 1, "{n}i{i}<C-w>{i}<Esc>"), ("A<C-u>", 1, "{n}A{i}<C-u>{i}<Esc>"),
+    ("a<C-r>", 1, '{n}a{i}<C-r>"{i}<Esc>'),
     (".", 3, "{n}."),
     ("/", 2, "/{p}<CR>"), ("?", 1, "?{p}<CR>"), ("n", 2, "{n}n"), ("N", 1, "{n}N"),
     ("*", 2, "{n}*"), ("#", 1, "{n}#"),
@@ -126,7 +129,7 @@ TEXT_PIECES = ("alpha", "beta", "gamma", "foo_bar", "x1", "a.b", "word", "Hello"
                "(paren)", "[sq]", "{br}", "<w>", '"dq s"', "'sq'", "<b>tag</b>", ",", ";", "!",
                "?", ":", "-", "日本語", "かな", "漢字", "ＡＢＣ", "１２", "です。", "、")
 # 語の依存（Issue #963）。生成器の版は summary.md に書く（固定 seed の順が変わったら上げる）。
-GENERATOR_VERSION = 2
+GENERATOR_VERSION = 3
 WORD_NAMES = tuple(kind for kind, _, _ in WORDS)
 JUMP_WORDS = frozenset(("G", "gg", "NG", "Ngg", "N%", "/", "?", "*", "#", "%", "n", "N", "'", "`",
                         "''", "``"))
