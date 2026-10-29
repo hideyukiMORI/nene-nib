@@ -1,3 +1,4 @@
+#include "EditorOperation.hpp"
 #include "WheelTurn.hpp"
 #include "WindowChecks.hpp"
 
@@ -80,6 +81,11 @@ void verify_zoom_wheel_turns()
     const auto smaller = wheel_turned(half.remainder, -WHEEL_DELTA / 2, one_step);
     expect(half.lines == 0 && smaller.lines == 1 && smaller.remainder == 0,
            "a Ctrl notch towards the user makes the font one step smaller only when complete");
+    using nenenib::core::EditorOperation;
+    using nenenib::ui::win32::zoom_wheel_operation;
+    expect(zoom_wheel_operation(larger.lines) == EditorOperation::font_larger &&
+               zoom_wheel_operation(smaller.lines) == EditorOperation::font_smaller,
+           "turning the Ctrl wheel away enlarges the font and towards the user shrinks it");
 }
 } // namespace
 

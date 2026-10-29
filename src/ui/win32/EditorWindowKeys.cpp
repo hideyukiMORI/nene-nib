@@ -205,6 +205,8 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
     case WM_KILLFOCUS:
         end_selection_drag();
         settle_tab_walk();
+        // よそで Ctrl を離すと WM_KEYUP は来ないので、ここでも残りを捨てる（#1048）。
+        zoom_wheel_remainder_ = 0;
         break;
     default:
         break;

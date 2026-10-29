@@ -1,5 +1,7 @@
 #pragma once
 
+#include "EditorOperation.hpp"
+
 #include <windows.h>
 
 #include <algorithm>
@@ -44,5 +46,12 @@ inline constexpr std::int32_t wheel_lines_limit = 10'000;
     const bool reversed = (remainder > 0 && delta < 0) || (remainder < 0 && delta > 0);
     const std::int32_t scaled = (reversed ? 0 : remainder) + (delta * per_notch);
     return WheelTurn{scaled % WHEEL_DELTA, -(scaled / WHEEL_DELTA)};
+}
+
+// Ctrl つきのホイールの 1 段の向き（#1048・ADR 0150 の追補）。wheel_turned の lines の負（奥）が
+// 大きく、正（手前）が小さく。回数は lines の絶対値。
+[[nodiscard]] constexpr core::EditorOperation zoom_wheel_operation(std::int32_t lines) noexcept
+{
+    return lines < 0 ? core::EditorOperation::font_larger : core::EditorOperation::font_smaller;
 }
 } // namespace nenenib::ui::win32

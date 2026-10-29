@@ -553,8 +553,7 @@ void EditorWindow::zoom_wheel(std::int32_t delta)
     // 実行は鍵（Ctrl+＋ / −）と一覧と同じ run_operation の 1 本（ADR 0078 / ADR 0150 の追補）。
     const auto turn = wheel_turned(zoom_wheel_remainder_, delta, 1);
     zoom_wheel_remainder_ = turn.remainder;
-    const auto operation =
-        turn.lines < 0 ? core::EditorOperation::font_larger : core::EditorOperation::font_smaller;
+    const auto operation = zoom_wheel_operation(turn.lines);
     for (std::int32_t step = 0; step < (turn.lines < 0 ? -turn.lines : turn.lines); ++step)
     {
         run_operation(operation);
