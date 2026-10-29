@@ -88,7 +88,7 @@ FR-003 の T2 に残る VISUAL の 3 つめ、矩形（`Ctrl-v`）を入れる�
 
 | operator | 端に掛かる文字 | 範囲 |
 | --- | --- | --- |
-| `d` `x`（矩形の `c` は決定 5 で範囲外） | 文字ごと消し、矩形の外側だった桁を空白で埋める（決定 4・補足） | `VimBlockLine.range` と `keep_lead` / `keep_tail` |
+| `d` `x`（矩形の `c` は決定 4 で範囲外） | 文字ごと消し、矩形の外側だった桁を空白で埋める（決定 4・補足） | `VimBlockLine.range` と `keep_lead` / `keep_tail` |
 | `r` | 文字ごと置き換え、覆った桁を `{char}` の幅で埋める（追補 #1067） | `VimBlockLine.range` |
 | `~` `u` `U` | **対象にしない**。そのまま残し、空白にも割らない | `VimBlockLine.inside` |
 | `y` | レジスタには丸ごと入る本文と覆った桁の空白（決定 2） | `inside` と `lead` / `tail` |
