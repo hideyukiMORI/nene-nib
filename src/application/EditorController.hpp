@@ -30,6 +30,7 @@
 #include "ExLspRequest.hpp"
 #include "ExMapRequest.hpp"
 #include "ExPaletteRequest.hpp"
+#include "ExPreviewRequest.hpp"
 #include "ExResult.hpp"
 #include "ExRootRequest.hpp"
 #include "ExSyntaxRequest.hpp"
@@ -66,6 +67,8 @@
 #include "PaneSide.hpp"
 #include "PaneSource.hpp"
 #include "PendingLspRequest.hpp"
+#include "PreviewFullRoute.hpp"
+#include "PreviewPlacement.hpp"
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
 #include "ServerEvent.hpp"
@@ -164,6 +167,9 @@ class EditorController final
     // 枠の配置と操作中の枠の側（ADR 0148 の決定 8）。窓がマウスの点の下の枠と、本文の行数を
     // 数える枠（pane_layouts の片側）を引くための口で、状態の 1 欄を読むだけ。
     [[nodiscard]] const SplitState &split() const noexcept;
+    // プレビューの見せ方（ADR 0155 の改訂 15）。窓が tick
+    // のタイマー・クリック・ホイールを決める口で、 状態を読むだけ。
+    [[nodiscard]] PreviewPlacement preview_placement() const noexcept;
     // アクティブな文書の本文を読むだけの口。試験が仮想桁の索引の持ち方（ADR 0140 の決定 4）を
     // 確かめるために読む。状態を変える口はここには無い。
     [[nodiscard]] const core::TextBuffer &text() const noexcept;
@@ -404,6 +410,21 @@ class EditorController final
     void accept(const PreviewTick &);
     // チェックボックスの切り替え（ADR 0155 の追補 24）。使う人の操作で、本文の編集 1 回。
     void accept(const TogglePreviewTask &intent);
+    // 見せ方を選ぶ（ADR 0155 の改訂 16）。F1 の一覧と `:preview` の 1 本。
+    void accept(const SetPreviewPlacement &intent);
+    void place_preview(PreviewPlacement placement);
+    // 全面をやめて placement（off か side）へ。本文の見える位置を錨の行に揃える（改訂 17）。
+    void leave_full_preview(PreviewPlacement placement);
+    // `:preview?` と `:preview full|side|off` の答え（今の見せ方を 1 行）。
+    void answer_preview(core::ExPreviewRequest request);
+    // 全面の間の意図の振り分け（改訂 17）。入口の 1 か所で、写さずに受けたら真。
+    [[nodiscard]] bool route_full_preview(const EditorIntent &intent);
+    void run_full_preview_route(PreviewFullRoute route, const EditorIntent &intent);
+    void finish_vim_g(const VimKeyPress &press);
+    // 見せているプレビューの錨を本文の行で lines 動かす（ADR 0155 の決定 7・改訂 17）。端で止まる。
+    void scroll_preview(std::int64_t lines);
+    // 全面で通常モードの Space（追補 25）。キャレットの行のタスクを切り替え、無ければ知らせる。
+    void toggle_caret_task();
     // プレビューが開いていれば、今の本文の解析を頼む（決定 3・6・9）。fresh は操作中の文書が
     // 替わったときで、前の結果と知らせを捨てて追従に戻す。16 MiB を超える本文は頼まず知らせる。
     void request_preview(bool fresh);
@@ -785,6 +806,9 @@ class EditorController final
     std::vector<std::size_t> restore_ranks_;
     // 前の frame の本文の先頭行（決定 7）。frame だけが読み書きする。
     std::optional<core::LineNumber> preview_body_top_;
+    // 全面の間に Vim の `g` を受けて次の鍵を待っているか（`gg` `gt` `gT`・ADR 0155 の改訂 17）。
+    // 読み書きは route_full_preview の 1 か所。
+    bool preview_vim_g_ = false;
     // 自動退避の帳面（ADR 0137 の決定 2）。AutosaveTick の道だけが読み書きする。
     AutosaveLedger autosave_ledger_;
     // 「自動退避できませんでした」を出したか。次に成功するまで 2 回目を出さない（決定 4）。

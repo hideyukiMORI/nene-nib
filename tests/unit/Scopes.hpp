@@ -157,6 +157,9 @@ void verify_preview_scope();
 // PreviewTaskTests.cpp（ADR 0155 の追補 24〜26・タスクリストの切り替えの application の側）
 void verify_preview_task_scope();
 
+// PreviewFullTests.cpp（ADR 0155 の改訂 15〜17・20・全面プレビューの見せ方と鍵の振り分け）
+void verify_preview_full_scope();
+
 // ExitPlanTests.cpp（ADR 0133）
 void verify_exit_plan_scope();
 

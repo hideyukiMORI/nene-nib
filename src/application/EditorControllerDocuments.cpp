@@ -428,8 +428,9 @@ void EditorController::fail(FileFailure failure)
     state_ = state_.with_failure(failure);
 }
 
-// 今の値を controller が答える Ex（言語・構文の色・クリップボードの同期）。どれかなら置いて今の値を
-// 1 行知らせ、真を返す。
+// 今の値を controller が答える
+// Ex（言語・構文の色・クリップボードの同期・プレビューの見せ方）。どれかなら置いて今の値を 1
+// 行知らせ、真を返す。
 bool EditorController::answer_current_value(const core::ExResult &result)
 {
     if (result.language.has_value())
@@ -450,6 +451,11 @@ bool EditorController::answer_current_value(const core::ExResult &result)
     if (result.lsp.has_value())
     {
         answer_lsp(result.lsp.value());
+        return true;
+    }
+    if (result.preview.has_value())
+    {
+        answer_preview(result.preview.value());
         return true;
     }
     return false;
@@ -583,6 +589,13 @@ void EditorController::run_document_request(const core::ExDocumentRequest &reque
             return;
         }
         break;
+    }
+    // 全面プレビューの間は全面を抜けるだけ（側の「プレビューだけを閉じる」と同じ・ADR 0155 の
+    // 追補 33）。タブも隠した枠も閉じず、未保存も捨てない（`:wq` `:x` は上で保存してから）。
+    if (state_.full_preview() != nullptr)
+    {
+        leave_full_preview(PreviewPlacement::off);
+        return;
     }
     // 2 枠では操作中の枠を閉じる（もう 1 つの枠の表示を持ってきてから 1 枠へ）。文書は残るので
     // 未保存でも拒否しない（ADR 0148 の決定 5・hide の決定を待つ仮置き）。

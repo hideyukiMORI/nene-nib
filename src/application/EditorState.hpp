@@ -20,6 +20,8 @@
 #include "Language.hpp"
 #include "LineEnding.hpp"
 #include "ParkedTab.hpp"
+#include "PreviewPlacement.hpp"
+#include "PreviewView.hpp"
 #include "ScrollState.hpp"
 #include "SearchPreview.hpp"
 #include "Selection.hpp"
@@ -271,6 +273,25 @@ class EditorState final
     // 本文の枠なら置き換え（枠は 2 つまで・ADR 0148 の決定 1）、プレビューなら値を差し替える。
     // 配置と側は 2 枠のまま保つ。閉じるのは without_split。
     [[nodiscard]] EditorState with_preview(PreviewView view) const;
+    // 全面のプレビュー（ADR 0155 の改訂 15）。無ければ nullptr。指す先は次に状態を写すまで。
+    [[nodiscard]] const PreviewView *full_preview() const noexcept;
+    // 見せているプレビュー（全面ならそれ、側ならもう 1 つの枠のもの・無ければ nullptr）。券・tick・
+    // 結果の採用・錨はこの 1 つを読む（決定 5〜9 は見せ方に依らない・改訂 19）。
+    [[nodiscard]] const PreviewView *shown_preview() const noexcept;
+    // 見せているプレビューの値を差し替える（全面なら全面、そうでなければ with_preview と同じ）。
+    [[nodiscard]] EditorState with_shown_preview(PreviewView view) const;
+    // 今の見せ方（全面・側・無し）。
+    [[nodiscard]] PreviewPlacement preview_placement() const noexcept;
+    // 全面へ（改訂 15）。側のプレビューがあればその値を移し（枠は 1 つに戻し、配置と側を覚える）、
+    // 無ければ fresh を置く。もう 1 つの枠が本文の枠なら、そのまま保って隠す。既に全面なら何も
+    // 変えない。戻り先（Esc）は移る前の見せ方。
+    [[nodiscard]] EditorState with_full_preview(PreviewView fresh) const;
+    // 全面をやめて placement（off か side）へ（改訂 16）。side なら全面の値をもう 1 つの枠へ移す
+    // （1 枠なら覚えた配置と側で分ける）。off なら値を捨てる（隠していた本文の枠はそのまま）。
+    // 全面でなければ何も変えない。full を渡したときも何も変えない。
+    [[nodiscard]] EditorState without_full_preview(PreviewPlacement placement) const;
+    // Esc の戻り先（全面の前の見せ方・off か side）。
+    [[nodiscard]] PreviewPlacement full_preview_return() const noexcept;
 
   private:
     EditorState(core::Appearance appearance, core::EditMode mode, DocumentState untitled);
@@ -339,5 +360,10 @@ class EditorState final
     std::int32_t tab_scroll_ = 0;
     std::optional<core::TitleBarTarget> hovered_;
     SplitState split_;
+    // 全面のプレビューと、全面の前の見せ方・側の配置と側（Esc で戻す・ADR 0155 の改訂 15・16）。
+    std::optional<PreviewView> full_preview_;
+    PreviewPlacement full_return_ = PreviewPlacement::off;
+    core::SplitLayout full_return_layout_ = core::SplitLayout::vertical;
+    core::PaneSide full_return_side_ = core::PaneSide::first;
 };
 } // namespace nenenib::application

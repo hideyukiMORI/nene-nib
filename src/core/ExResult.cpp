@@ -844,6 +844,50 @@ syntax_command(std::string_view text)
     return result;
 }
 
+// `:preview` と引数 `full` `side` `off` `?`・引数なし（ADR 0155 の改訂 16・#1052）。Vim の
+// `:prev[ious]`
+// と重ならないよう省略は認めない（完全な名前だけ）。見せ方は窓の値で設定に載せないので settings
+// は空。問いの文言は今の見せ方を知る controller が `preview=…` に書き換える。ほかの引数は
+// E474、範囲の形は unsupported_argument。名前が当たらなければ値なし（ほかの命令として扱う）。
+constexpr std::string_view preview_name = "preview";
+
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+preview_command(std::string_view text)
+{
+    const std::size_t range = leading(text, is_digit);
+    const std::size_t letters = leading(text.substr(range), is_letter);
+    if (text.substr(range, letters) != preview_name)
+    {
+        return std::nullopt;
+    }
+    if (range > 0)
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    const std::string_view argument = trimmed(text.substr(range + letters));
+    ExPreviewRequest request = ExPreviewRequest::show;
+    if (argument == "full")
+    {
+        request = ExPreviewRequest::full;
+    }
+    else if (argument == "side")
+    {
+        request = ExPreviewRequest::side;
+    }
+    else if (argument == "off")
+    {
+        request = ExPreviewRequest::off;
+    }
+    else if (!argument.empty() && argument != "?")
+    {
+        return std::unexpected(ExFailure::invalid_argument);
+    }
+    ExResult result{std::nullopt, std::nullopt, std::nullopt,
+                    DisplayText::parse(preview_name).value()};
+    result.preview = request;
+    return result;
+}
+
 constexpr std::array<ExPaletteName, 5> palette_names{{
     {"edit", 1, PaletteScope::files},
     {"buffer", 1, PaletteScope::tabs},
@@ -1042,6 +1086,11 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     {
         return std::move(syntax).value();
     }
+    auto preview = preview_command(text);
+    if (preview.has_value())
+    {
+        return std::move(preview).value();
+    }
     auto tab = tab_command(text);
     if (tab.has_value())
     {
@@ -1067,7 +1116,7 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
 // 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
-constexpr std::array<std::string_view, 39> fixed_candidates{"colorscheme",
+constexpr std::array<std::string_view, 42> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -1105,7 +1154,10 @@ constexpr std::array<std::string_view, 39> fixed_candidates{"colorscheme",
                                                             "set nosmartcase",
                                                             "set relativenumber",
                                                             "set norelativenumber",
-                                                            "set scrolloff="};
+                                                            "set scrolloff=",
+                                                            "preview full",
+                                                            "preview side",
+                                                            "preview off"};
 
 [[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
                                   std::string_view suffix = {})

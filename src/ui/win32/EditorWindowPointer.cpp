@@ -360,6 +360,13 @@ void EditorWindow::click_body(LPARAM data)
     {
         send(application::ExplorerKey{application::ExplorerKeyKind::esc});
     }
+    // 全面プレビューの間は本文の面の全部がプレビューで、押して覚えるのはチェックボックスだけ
+    // （本文のキャレットも枠も動かさない・ADR 0155 の改訂 15・追補 24）。
+    if (full_previewing())
+    {
+        press_preview_task(data);
+        return;
+    }
     const auto settings = controller_.delivery().settings;
     const auto other =
         core::other_pane_layout(body_panes(settings), controller_.split().active_side);

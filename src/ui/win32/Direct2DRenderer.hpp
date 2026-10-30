@@ -244,6 +244,9 @@ class Direct2DRenderer final
                          const core::LayoutRect &area, const application::LineView &line);
     void draw_line(const application::EditorFrame &frame, const BodyPane &pane,
                    const application::LineView &line);
+    // 本文の面の全部（area は面を除いた client・全面のプレビューか枠と案内・ADR 0155 の改訂 15）。
+    void draw_body_area(const application::EditorFrame &frame, const core::LayoutRect &area,
+                        const core::PaneLayouts &panes, const core::OperationGuideLayout &guide);
     // 操作中の枠（body は pane_layouts の active_side の側）。
     void draw_body(const application::EditorFrame &frame, const core::BodyLayout &body);
     void draw_other_body(const application::EditorFrame &frame, const core::PaneLayouts &panes);

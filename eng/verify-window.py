@@ -133,6 +133,11 @@ where it was, a click on the first task check box toggles it once the tick has a
 edited body (previewTask-<scheme>.png, Issue #1101), and Ctrl+Shift+M closes it again (previewClosed-<scheme>.png: no divider).
 `--preview --scheme grid` opens one Markdown line of 20,000 characters, answers the grid question
 with yes and opens the preview (previewGrid.png) for the anchor to be checked by eye.
+Issue #1145 adds the full preview (ADR 0155 の改訂 15〜17), which `--preview-full` runs alone:
+tests/preview/sample.md is opened, `:preview full` through Ctrl+P draws the preview over the whole
+body with no gutter (previewFull.png), a typed `x` shows the refusal in the status bar and leaves
+the body unchanged (previewFullRefused.png), and Esc brings the body back as it was
+(previewFullLeft.png).
 Python standard library and ctypes only.
 """
 
@@ -2908,6 +2913,64 @@ def verify_preview(executable: Path, environment: dict, scheme: str, output: Pat
     return record
 
 
+def drive_preview_full(window, frames: Path | None) -> dict:
+    """The steps of verify_preview_full on one window, in the ordinary mode (Issue #1145)."""
+    client = rectangle(window, user.GetClientRect)
+    width, height = client[2] - client[0], client[3] - client[1]
+    dpi = user.GetDpiForWindow(window)
+    size = (width, height)
+    bands, _ = pane_bands(width, height, dpi)
+    band = bands[0]
+    status = (0, band[3], width, height)
+    record: dict = {"dpi": dpi}
+    start_frame = capture(window, width, height)
+    palette_command(window, ":preview full")
+    full, seconds = await_preview_document(window, start_frame, size, band)
+    record["documentShownSeconds"] = seconds
+    assert seconds is not None, "the full preview never drew its document"
+    snapshot(frames, window, "previewFull")
+    body = body_points(width, height, dpi)
+    gutter = (body["bandLeft"], body["bandTop"], body["gutter"], band[3])
+    # 全面では gutter の地を塗らず、本文の面の全部がプレビューの地（ADR 0155 の改訂 15）。
+    record["gutterRepainted"] = box_changed(start_frame, full, width, gutter)
+    assert record["gutterRepainted"], "the gutter is still drawn under the full preview"
+    write_text(window, "x")
+    refused = await_new_frame(window, full, size, seconds=2.0)
+    record["refusalShown"] = box_changed(full, refused, width, status)
+    record["bodyKept"] = not box_changed(full, refused, width, band)
+    assert record["refusalShown"] and record["bodyKept"], "typing in the full preview reached the body"
+    snapshot(frames, window, "previewFullRefused")
+    press(window, VK_ESCAPE)
+    back = await_new_frame(window, refused, size, seconds=2.0)
+    snapshot(frames, window, "previewFullLeft")
+    record["bodyRestored"] = not box_changed(start_frame, back, width, band)
+    assert record["bodyRestored"], "Esc did not bring the body back as it was"
+    return record
+
+
+def verify_preview_full(executable: Path, environment: dict, frames: Path | None) -> dict:
+    """Issue #1145: `:preview full` draws the preview over the whole body (no gutter), typed keys
+    are refused with one line in the status bar and leave the body as it was, and Esc brings the
+    body back (ADR 0155 の改訂 15〜17)."""
+    root = Path(__file__).resolve().parents[1]
+    process, window, _ = start(executable, environment, [str(root / "tests/preview/sample.md")])
+    try:
+        raise_window(window)
+        time.sleep(0.6)
+        assert await_cover_gone(window), "the WARP cover child is still over the window"
+        assert_uncovered(window)
+        try:
+            record = {"driven": True, **drive_preview_full(window, frames)}
+        except ForegroundRefused as refused:
+            return {"driven": False, "note": f"{refused}; the full preview stays in the unit tests"}
+        close(window)
+        record["exitCode"] = process.wait(timeout=5)
+        assert record["exitCode"] == 0, record["exitCode"]
+    finally:
+        stop(process)
+    return record
+
+
 SYNTAX_INK_PIXELS = 12
 SYNTAX_WINDOW_DIPS = (960, 860)
 
@@ -3186,6 +3249,9 @@ def main() -> None:
                         help="run the split section alone (Issue #683); it sends real keys")
     parser.add_argument("--preview", action="store_true",
                         help="run the Markdown preview section alone (Issue #801); it sends real keys")
+    parser.add_argument("--preview-full", action="store_true",
+                        help="run the full Markdown preview section alone (Issue #1145); it sends "
+                             "real keys")
     parser.add_argument("--scheme", choices=["dark", "light", "grid"], default="dark",
                         help="with --preview: the colour scheme, or the grid document; "
                              "with --syntax: dark or light")
@@ -3220,6 +3286,9 @@ def main() -> None:
     if arguments.preview and (arguments.tabs or arguments.split or arguments.keys is not None
                               or arguments.open is not None):
         parser.error("--preview runs alone")
+    if arguments.preview_full and (arguments.preview or arguments.tabs or arguments.split
+                                   or arguments.keys is not None or arguments.open is not None):
+        parser.error("--preview-full runs alone")
     if arguments.restore and (arguments.tabs or arguments.keys is not None
                               or arguments.open is not None):
         parser.error("--restore runs alone")
@@ -3275,6 +3344,14 @@ def main() -> None:
     if arguments.split:
         try:
             record = verify_split(executable, environment, expected_appearance(), frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.preview_full:
+        try:
+            record = verify_preview_full(executable, environment, frames)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)

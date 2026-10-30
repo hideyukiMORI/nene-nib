@@ -11,7 +11,6 @@
 #include "MapTimeout.hpp"
 #include "PaneLayouts.hpp"
 #include "PreviewTick.hpp"
-#include "PreviewView.hpp"
 #include "SplitLayout.hpp"
 #include "TitleBarWidth.hpp"
 #include "WorkCompleted.hpp"
@@ -291,11 +290,15 @@ void EditorWindow::follow_preview_timer()
     stop_preview_timer();
 }
 
-// other の枠がプレビューか（正本は application の枠の状態）。
+// プレビューを見せているか（側の枠か全面・正本は application の見せ方・ADR 0155 の改訂 15）。
 bool EditorWindow::previewing() const
 {
-    const auto &other = controller_.split().other;
-    return other.has_value() && std::holds_alternative<application::PreviewView>(other.value());
+    return controller_.preview_placement() != application::PreviewPlacement::off;
+}
+
+bool EditorWindow::full_previewing() const
+{
+    return controller_.preview_placement() == application::PreviewPlacement::full;
 }
 
 void EditorWindow::stop_preview_timer()
