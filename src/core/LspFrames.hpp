@@ -10,6 +10,7 @@
 namespace nenenib::core
 {
 // 1 つの枠の本文の上限（ADR 0160 の決定 3・L-4 の文書の大きさと同じ桁）と、見出しの上限。
+// 見出しの上限は空行の前までの長さで、空行を含めた長さはこれ＋4 バイトまで（#1165）。
 inline constexpr std::size_t lsp_body_limit = std::size_t{16} * 1024 * 1024;
 inline constexpr std::size_t lsp_header_limit = std::size_t{8} * 1024;
 
