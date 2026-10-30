@@ -2410,6 +2410,15 @@ void verify_history_absorbing()
     expect(absorbed_edit(typed, Edit{Offset{4}, "ya", "Z", Offset{4}}) ==
                Edit{Offset{4}, "y", "Zb", Offset{5}},
            "the untouched tail of the inserted text stays after the replacement");
+    expect(absorbed_edit(typed, Edit{Offset{3}, "xy", "Z", Offset{3}}) ==
+               Edit{Offset{3}, "xy", "Zab", Offset{5}},
+           "a replacement that ends at the head of the insert keeps all of its text (#1107)");
+    expect(absorbed_edit(Edit{Offset{5}, "q", "ab", Offset{5}},
+                         Edit{Offset{3}, "xyab", "Z", Offset{3}}) ==
+               Edit{Offset{3}, "xyq", "Z", Offset{5}},
+           "what the unit replaced stays after the text the replacement took from before it");
+    expect(!absorbed(typed, Edit{Offset{2}, "x", "Z", Offset{2}}).has_value(),
+           "a replacement that ends before the head of the insert does not join");
     expect(!absorbed(typed, Edit{Offset{4}, "yabq", "Z", Offset{4}}).has_value(),
            "a replacement past the end of the inserted text does not join");
     expect(!absorbed(typed, Edit{Offset{9}, "", "c", Offset{9}}).has_value(),
