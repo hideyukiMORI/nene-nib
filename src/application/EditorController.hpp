@@ -139,7 +139,8 @@ class EditorController final
     [[nodiscard]] EditorFrame press_vim_key(const core::VimKey &key);
     // fixture の harness が :normal! の意味で流す口（Issue #230）。鍵を順に press_vim_key と
     // 同じに流し、鍵が閉じた失敗で終わったら残りの鍵を流さない。窓で打った鍵は失敗しても
-    // 次の鍵が走るので、この口は通らない。
+    // 次の鍵が走るので、この口は通らない。各鍵の後に追従を解決する（Vim の
+    // update_topline・#1154）。
     [[nodiscard]] EditorFrame press_vim_keys(std::span<const core::VimKey> keys);
     [[nodiscard]] EditorFrame frame();
     [[nodiscard]] bool command_line_active() const noexcept;
