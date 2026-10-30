@@ -4,6 +4,7 @@
 #include "CommandInputProbe.hpp"
 #include "CompletionPrefixProbe.hpp"
 #include "ExCompletionProbe.hpp"
+#include "ExplorerFrameProbe.hpp"
 #include "FileNameProbe.hpp"
 #include "FrameDocumentProbe.hpp"
 #include "FrameProbe.hpp"
@@ -915,6 +916,17 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(ExplorerFrameWorkload workload)
+{
+    switch (workload)
+    {
+    case ExplorerFrameWorkload::typing_shown:
+    case ExplorerFrameWorkload::typing_hidden:
+        return 204U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -930,7 +942,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 204> dispatches{{
+constexpr std::array<ProbeDispatch, 206> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1345,6 +1357,10 @@ constexpr std::array<ProbeDispatch, 204> dispatches{{
                      lexed_lines},
     ProbeDispatchRow{LexerWorkload::cmake_backfill_200, "lexer-cmake-backfill-200", lexer_input,
                      lexed_lines},
+    ProbeDispatchRow{ExplorerFrameWorkload::typing_shown, "explorer-typing-shown-1000-64",
+                     explorer_frame_input, explorer_frame_typing},
+    ProbeDispatchRow{ExplorerFrameWorkload::typing_hidden, "explorer-typing-hidden-64",
+                     explorer_frame_input, explorer_frame_typing},
 }};
 
 constexpr auto dispatch_names = []
@@ -1387,7 +1403,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 204U);
+static_assert(dispatches.size() == 206U);
 static_assert(dispatch_is_complete());
 
 } // namespace

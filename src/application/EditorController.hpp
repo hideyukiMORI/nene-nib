@@ -759,6 +759,8 @@ class EditorController final
     // 窓の client の物理画素（ADR 0150 の決定 1）。0 は寸法が届く前。
     std::int32_t window_width_ = 0;
     std::int32_t window_height_ = 0;
+    // エクスプローラーの面の高さに入る行数（ルート名の行を含む・#1125）。0 は寸法が届く前。
+    std::size_t explorer_lines_ = 0;
     std::optional<TextLayoutFailure> layout_failure_;
     // 今の意図が描き直しを要るか（EditorDelivery.repaint）。apply の入口で true に戻し、合図
     // （AutosaveTick / PreviewTick）が何も変えなかったときだけ false にする（#813）。

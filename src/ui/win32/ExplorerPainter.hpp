@@ -23,8 +23,9 @@ namespace nenenib::ui::win32
 // 印 ▸ ▾ とルート名は muted。先頭の行はルート名（ルートが無ければ案内）、その下に view.rows を
 // 1 行ずつ。行の横は「余白 + 深さ × 字下げ」に印の升、その右に名前で、長い名前は書式に焼いた
 // 文字単位の省略記号「…」で切る（タブの題名と同じ規則）。行の文字組みは PaletteRowLayouts の
-// 保持から引き、同じ行は frame をまたいで作り直さない（#904 の形）。target は製品では Direct2D の
-// 描画先、tests/ui は WIC の bitmap の描画先。色は Palette のトークンだけ（ADR 0008）。
+// 保持から鍵の hash で O(1) に引き（#1125）、同じ行は frame をまたいで作り直さない（#904
+// の形）。target は製品では Direct2D の 描画先、tests/ui は WIC の bitmap の描画先。色は Palette
+// のトークンだけ（ADR 0008）。
 class ExplorerPainter final
 {
   public:

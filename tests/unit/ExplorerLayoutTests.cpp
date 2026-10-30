@@ -6,10 +6,12 @@
 #include "FontSize.hpp"
 #include "LayoutRect.hpp"
 #include "PaneLayouts.hpp"
+#include "PaneSide.hpp"
 #include "Scopes.hpp"
 #include "SplitLayout.hpp"
 #include "TestSupport.hpp"
 
+#include <cstddef>
 #include <cstdint>
 
 namespace nenenib::tests
@@ -62,6 +64,25 @@ void verify_hidden_and_origin()
     expect(panel_of(shown) == LayoutRect{10, 5 + body.band.top, 250, 5 + body.band.bottom} &&
                shown.body == LayoutRect{250, 5, 1210, 805},
            "the panel and the body follow the client origin");
+}
+
+// 面の行数は帯の全高を行の高さで割った数（#1125）。面を消していても、分割の枠の高さでもない。
+void verify_panel_lines()
+{
+    const auto font = core::default_font_size();
+    const LayoutRect client{0, 0, 1200, 800};
+    const auto body = core::body_layout(1200, 800, 96, font);
+    const auto lines = core::explorer_panel_lines(client, 96, font);
+    expect(lines == static_cast<std::size_t>(core::height_of(body.band) / body.line_height),
+           "the panel's lines are the body band height over the line height");
+    expect(lines >= body.visible_lines, "the panel is never shorter than the unsplit body");
+    const auto split = core::active_pane_layout(
+        core::pane_layouts(core::explorer_layout(client, 96, font, true).body, 96, font,
+                           core::SplitLayout::horizontal),
+        core::PaneSide::first);
+    expect(split.visible_lines + 1 < lines, "a horizontal split does not halve the panel's lines");
+    expect(core::explorer_panel_lines(LayoutRect{0, 0, 0, 0}, 96, font) == 0,
+           "an empty client has no panel lines");
 }
 
 void verify_steps_and_dpi()
@@ -121,6 +142,7 @@ void verify_explorer_layout_scope()
     verify_width_rule();
     verify_hidden_and_origin();
     verify_steps_and_dpi();
+    verify_panel_lines();
     verify_body_panes();
 }
 } // namespace nenenib::tests

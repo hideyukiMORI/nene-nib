@@ -3,6 +3,7 @@
 #include "FontSize.hpp"
 #include "LayoutRect.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 
@@ -30,4 +31,9 @@ struct ExplorerLayout
 // バーの上まで）。shown が偽なら panel は値なしで body は client のまま。
 [[nodiscard]] ExplorerLayout explorer_layout(LayoutRect client, std::uint32_t dpi,
                                              FontSize font_size, bool shown) noexcept;
+
+// 面の高さ（本文の帯の全高）に入る行数（先頭のルート名の行を含む・切り捨て・#1125）。面が
+// 出ているかに依らず、本文の分割（ADR 0148）にも依らない。行の高さが 0 以下なら 0。
+[[nodiscard]] std::size_t explorer_panel_lines(LayoutRect client, std::uint32_t dpi,
+                                               FontSize font_size) noexcept;
 } // namespace nenenib::core

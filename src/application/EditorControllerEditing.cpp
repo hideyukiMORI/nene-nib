@@ -569,6 +569,7 @@ void EditorController::accept(const VisibleLines &intent)
     view_geometry_ = intent.geometry;
     window_width_ = intent.window_width;
     window_height_ = intent.window_height;
+    explorer_lines_ = intent.explorer_lines;
     state_ = state_.with_vim(core::vim_after_resize(state_.vim(), previous, lines));
     auto scroll = state_.scroll();
     scroll.visible_lines = lines;

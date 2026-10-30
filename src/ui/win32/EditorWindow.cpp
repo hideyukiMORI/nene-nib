@@ -124,7 +124,11 @@ application::VisibleLines EditorWindow::body_view() const
     // 面と補完の行数は窓全体の寸法から決める（ADR 0150 の決定 1・枠の寸法ではない）。
     RECT client{};
     GetClientRect(window_, &client);
-    return application::VisibleLines{body.visible_lines, geometry, client.right, client.bottom};
+    // 面の行数も窓全体の高さから数える（分割の枠の高さではない・#1125・ADR 0162 の追補）。
+    return application::VisibleLines{
+        body.visible_lines, geometry, client.right, client.bottom,
+        core::explorer_panel_lines(core::LayoutRect{0, 0, client.right, client.bottom}, dpi_,
+                                   delivered.settings.font_size)};
 }
 
 void EditorWindow::send(const application::EditorIntent &intent)

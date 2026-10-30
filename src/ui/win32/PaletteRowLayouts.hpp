@@ -7,11 +7,13 @@
 
 #include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <dwrite.h>
+#include <list>
+#include <string>
+#include <string_view>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
-#include <vector>
 #include <wrl/client.h>
 
 namespace nenenib::ui::win32
@@ -23,6 +25,8 @@ namespace nenenib::ui::win32
 // （null の）layout は覚えない。構築では OS 資源を作らない。
 // タブの題名も同じ型の別の実体で保持する（#924）。帯に見える数は上限に収まり、面を閉じても
 // 捨てない。
+// 引き方は鍵を 1 本のバイト列に畳んだ文字列の hash で O(1)（#1125・ADR 0162 の追補）。列は最後に
+// 引いた順に並べ、上限を越えたら列の末尾（最も前に使ったもの）を捨てる。
 class PaletteRowLayouts final
 {
   public:
@@ -60,8 +64,13 @@ class PaletteRowLayouts final
     [[nodiscard]] TextLayout lookup(const PaletteRowKey &key);
     void retain(const PaletteRowKey &key, const TextLayout &layout);
 
-    std::vector<PaletteRowLayout> entries_;
-    std::uint64_t generation_ = 0;
+    using Entries = std::list<PaletteRowLayout>;
+
+    // 引く鍵の作業場。引くたびに作り直さず、容量を使い回す。
+    std::string probe_;
+    // 先頭が最後に引いたもの。list の節は動かないので、索引の鍵は節の key を借りる。
+    Entries entries_;
+    std::unordered_map<std::string_view, Entries::iterator> index_;
     std::size_t limit_ = capacity;
 };
 } // namespace nenenib::ui::win32

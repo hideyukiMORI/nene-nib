@@ -303,9 +303,11 @@ void EditorController::focus_explorer(bool focused)
 
 std::size_t EditorController::explorer_page() const noexcept
 {
-    // 面の先頭の行はルート名（採用案の表）。本文の行の上の余白（12 DIP）は行の高さより小さいので、
-    // 面の高さに入る行数は本文の見えている行数 − 1 を下回らない＝最後の行が切れない。
-    return std::max<std::size_t>(state_.scroll().visible_lines, 2) - 1;
+    // 面の先頭の行はルート名（採用案の表）。面の行数は窓の client の高さから窓が数えた面の行数
+    // （VisibleLines.explorer_lines）から導き、本文の分割（ADR 0148）で変わらない（#1125・
+    // ADR 0162 の追補）。寸法が届く前（0）だけ本文の見えている行数を面の行数とみなす。
+    const std::size_t lines = explorer_lines_ > 0 ? explorer_lines_ : state_.scroll().visible_lines;
+    return std::max<std::size_t>(lines, 2) - 1;
 }
 
 bool EditorController::explorer_focused() const noexcept

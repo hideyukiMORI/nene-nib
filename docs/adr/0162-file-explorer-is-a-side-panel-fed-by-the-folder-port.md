@@ -72,3 +72,11 @@ hide の指示（2026-10-28）: ルートを設定してそこからツリー状
 2. **ダブルクリック。** 窓の class に `CS_DBLCLKS` を立て、面の上の `WM_LBUTTONDBLCLK` だけを `PointExplorer{double_click}` にする。面の外の `WM_LBUTTONDBLCLK` は `WM_LBUTTONDOWN` と同じ道（本文と帯の押しは不変）。
 3. **本文の枠。** `pane_layouts` は client の原点（left / top）を使う（E2 では原点 0 に固定されていて、決定 2 の「縮めた client を渡す」が成り立たなかった）。原点 0 の呼び出しの結果は不変。
 4. **凍結した値（採用案の「実装で凍結する値」）。** 面の左右の余白 8 DIP・印の升の幅は `explorer_layout` の `marker`（2 つの印の桁の多い方 × 字の大きさ）・「…」は書式に焼いた文字単位の省略記号（タブの題名と同じ）。面の名前の字は UI の字体（Segoe UI Variable Text → Segoe UI）を本文の大きさの比で拡げた大きさ。行の文字組みは `PaletteRowLayouts` の別の実体（上限 512）で保持し、書式の作り直しと面を消したときに捨てる。
+
+## 追補（2026-10-30・#1125）面の行数は client の高さ・保持は名前で引く・面を出した 1 打鍵の費用
+
+PR #1121 の独立レビュー（R6-2 / R4-1）の後続。設計席の判断（依頼書 E5）を記す。
+
+1. **面の行数は窓の client の高さから導く。** E4 の追補 1 の「本文の `visible_lines` − 1」をやめる。上下の分割（ADR 0148）では操作中の枠の `visible_lines` が本文の半分の高さになり、窓の全高に出る面の下半分が空いていた。窓は `VisibleLines.explorer_lines` に「面の高さ（本文の帯の全高）に入る行数（ルート名の行を含む）」を載せ、数えるのは core の `explorer_panel_lines(client, dpi, font_size)` の 1 本（面が出ているか・分割に依らない）。application は `explorer_page()` の 1 か所で「それ − 1（ルート名の行）・最小 1」を導く。`explorer_lines` が 0（寸法が届く前）のときだけ本文の見えている行数を面の行数とみなす。契約は `--explorer` の `verify_panel_rows_from_window`、core は `--explorer-layout` の `verify_panel_lines`、画素は `nib_window_tests --explorer` の `verify_split_rows`（上下の分割でも面の最後の行に名前がある）。ホイールの 1 画面の設定（`WHEEL_PAGESCROLL`）の送り量は本文の行数のまま（後続）。
+2. **行の文字組みの保持は鍵の hash で O(1) に引く。** `PaletteRowLayouts` の鍵の形（書式・役・DPI・欄の幅と高さ・文字列）はそのままで、鍵を 1 本のバイト列に畳んで `unordered_map` で引き、最後に引いた順の `list` で上限を越えた末尾（最も前に使ったもの）を捨てる。エクスプローラーの上限 512 は不変。同じ型の Ctrl+P の面とタブの題名の実体も同じ引き方になる（捨てる順の契約 `verify_capacity` は不変）。
+3. **費用は `nib_perf_probes` の workload で前後を測る。** `explorer-typing-shown-1000-64`（面を出して 1,000 件を読んだ後に 64 打鍵・各打鍵で frame）と対の `explorer-typing-hidden-64`。任意のベンチは足さず（D60 と同じく 8 本と混ぜない）、`eng/compare-probes.py` の名前の表にも載せない。probe は application までなので、決定 2 の ui の保持の引き方はこの probe の区間に入らない。
