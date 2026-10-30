@@ -52,13 +52,26 @@ def dependency_closure(module: str, modules: dict) -> set[str]:
     return closure
 
 
+def offered(module: str, defined: set[str], modules: dict) -> set[str]:
+    """Definitions of a dependency that may resolve another module's undefined symbols.
+
+    A third_party module offers only the public API named in its "exports" (exact names; none when
+    absent). Its library also defines CRT inline wrappers such as sprintf (/Od keeps them), which
+    must not hide a core call to them from ARC-003 (Issue #772 / ADR 0151).
+    """
+    settings = modules.get(module, {})
+    if not settings.get("path", "").startswith("third_party/"):
+        return defined
+    return defined & set(settings.get("exports", []))
+
+
 def unresolved(module: str, tables: dict[str, tuple[set[str], set[str]]], modules: dict) -> set[str]:
     """Undefined symbols of a module that neither itself nor its declared dependencies define."""
     defined, undefined = tables[module]
     provided = set(defined)
     for dependency in dependency_closure(module, modules):
         if dependency in tables:
-            provided |= tables[dependency][0]
+            provided |= offered(dependency, tables[dependency][0], modules)
     return undefined - provided
 
 

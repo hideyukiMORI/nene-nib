@@ -52,6 +52,26 @@ class SymbolTests(unittest.TestCase):
                   "core": (set(), {"?run@NibState@nenenib@@QEAAXXZ"})}
         self.assertEqual({"?run@NibState@nenenib@@QEAAXXZ"}, symbols.unresolved("core", tables, MODULES))
 
+    def test_third_party_offers_only_its_named_api(self):
+        # Issue #772: Debug の nenenib_md4c.lib は UCRT の inline の sprintf 系も定義する。
+        # core の未定義を解決してよいのは architecture.json の exports（md4c は md_parse）だけ。
+        tables = {"third_party_md4c": ({"md_parse", "sprintf", "_vsnprintf_l"}, {"__stdio_common_vsprintf"}),
+                  "core": (set(), {"md_parse", "sprintf", "_vsnprintf_l"})}
+        self.assertEqual({"sprintf", "_vsnprintf_l"}, symbols.unresolved("core", tables, MODULES))
+        findings = symbols.classify(symbols.unresolved("core", tables, MODULES), "core", ALLOWLIST)
+        self.assertEqual(["ARC-003: core: undeclared external symbol _vsnprintf_l",
+                          "ARC-003: core: undeclared external symbol sprintf"], findings)
+
+    def test_third_party_without_exports_offers_nothing(self):
+        modules = {"third_party_x": {"path": "third_party/x", "dependencies": []},
+                   "core": {"path": "src/core", "dependencies": ["third_party_x"]}}
+        tables = {"third_party_x": ({"x_parse"}, set()), "core": (set(), {"x_parse"})}
+        self.assertEqual({"x_parse"}, symbols.unresolved("core", tables, modules))
+
+    def test_third_party_resolves_its_own_definitions(self):
+        tables = {"third_party_md4c": ({"md_parse", "sprintf"}, {"sprintf", "malloc"})}
+        self.assertEqual({"malloc"}, symbols.unresolved("third_party_md4c", tables, MODULES))
+
     def test_allowed_symbols_pass(self):
         allowed = {"memcpy", "__chkstk", "__asan_init", "__ubsan_handle_add_overflow",
                    "_Asan_vector_should_annotate", "??2@YAPEAX_K@Z", "??3@YAXPEAX_K@Z",

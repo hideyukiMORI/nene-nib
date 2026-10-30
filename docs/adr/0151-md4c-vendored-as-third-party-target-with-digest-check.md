@@ -81,7 +81,13 @@ md4c は SAX 型（`enter_block / leave_block / enter_span / leave_span / text` 
 - 実体参照の表は CommonMark の例の範囲。表の外は綴りのまま。
 - builder の確保の失敗（と止める述語が投げた `bad_alloc`）は、md4c に渡すコールバックの中で受けて打ち切りの値を返し、`parse_markdown` は `MarkdownFailure::insufficient_memory` で返す（#817 の追補）。例外は md4c の C のフレームを通らず、md4c は自分の確保を解放して戻る（`/EHsc` は `extern "C"` の `md_parse` を投げないものとして扱うので、`md_parse` の外では受けない）。プレビューの入力は上限（計画 M-3・16 MiB）で抑える。
 - 表・脚注・数式・画像・HTML の解釈はしない（初版の範囲案）。
-- `eng/symbols.py` は core の未定義を閉包の定義で解決するので、Debug の `nenenib_md4c.lib` が定義する UCRT の inline の `sprintf` 系を core が呼んでも ARC-003 にならない。名指しの API（`md_parse`）だけに限るのは #772。
+- （#772 で解いた）`eng/symbols.py` は core の未定義を閉包の定義の全部で解決していたので、Debug の `nenenib_md4c.lib` が定義する UCRT の inline の `sprintf` 系を core が呼んでも ARC-003 にならなかった。third_party の定義で解決するのを名指しの API（`md_parse`）だけに限った（下の追補）。
+
+## 追補（#772・2026-10-30）: third_party の定義で解決するのは名指しの API だけ
+
+- `eng/architecture.json` の third_party のモジュール（path が `third_party/` で始まる）は `exports` に公開シンボルを完全な名前で持つ（md4c は `md_parse` の 1 つ）。`eng/symbols.py` の `unresolved` は、依存先が third_party のときその定義のうち `exports` に載るものだけを `provided` に入れる（関数 `offered`）。`exports` の無い third_party は何も解決しない。
+- third_party 自身の未定義は、これまでどおり自分の定義の全部で解決する（md4c の中の `sprintf` 系の包みは md4c の中で閉じる）。
+- これで core が `sprintf` などを呼ぶと、Debug の `nenenib_md4c.lib` が同じ名前を定義していても `ARC-003: core: undeclared external symbol sprintf` で落ちる。正例・反例は `tests/conformance/test_symbols.py`、実ライブラリでの反例の記録は PR の本文。
 
 ## 強制
 
