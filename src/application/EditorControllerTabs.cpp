@@ -256,6 +256,13 @@ void EditorController::accept(const SwitchPane &)
 
 void EditorController::accept(const ClosePane &)
 {
+    // 全面プレビューの間の「枠を閉じる」と `:only` は全面を抜けるだけ（隠した本文の枠は残す・
+    // ADR 0155 の追補 33）。
+    if (state_.full_preview() != nullptr)
+    {
+        leave_full_preview(PreviewPlacement::off);
+        return;
+    }
     state_ = state_.without_split();
 }
 

@@ -1,9 +1,11 @@
 // 全面の Markdown プレビューの application の契約（ADR 0155 の改訂 15〜17・20・#1052 の N5a）。
 // 3 つの見せ方の遷移・Esc の戻り先・編集の拒否と知らせ・通る鍵・錨の往復・静かな道。
+#include "AutosaveTick.hpp"
 #include "CancelSelection.hpp"
 #include "CaretMotion.hpp"
 #include "ClipboardAction.hpp"
 #include "ClipboardOperation.hpp"
+#include "ClosePane.hpp"
 #include "Column.hpp"
 #include "DeleteDirection.hpp"
 #include "DeleteText.hpp"
@@ -24,6 +26,8 @@
 #include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenDocument.hpp"
+#include "PaneFrame.hpp"
+#include "PaneSide.hpp"
 #include "PlaceCaret.hpp"
 #include "PreviewFrame.hpp"
 #include "PreviewPlacement.hpp"
@@ -38,6 +42,8 @@
 #include "SelectionAnchoring.hpp"
 #include "SetPreviewPlacement.hpp"
 #include "SplitLayout.hpp"
+#include "SplitPane.hpp"
+#include "SwitchPane.hpp"
 #include "SwitchTab.hpp"
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
@@ -395,6 +401,82 @@ void verify_quiet_paths_full()
                editing.markdown().collects() == collected,
            "after leaving full the port is quiet again");
 }
+
+// 10. 全面の間の `:q` `:q!` `:wq` `:x`・枠を閉じる・`:only` は全面を抜けて off にするだけ（ADR 0155
+// の追補 33）。タブも隠した枠も閉じず、未保存を捨てない。`:wq` `:x` は保存してから抜ける。
+void verify_quit_leaves_full()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    open_text(editing, "text");
+    applied(controller, app::InsertText{"a"});
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    for (const std::string_view quit : {"q", "q!"})
+    {
+        applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+        const EditorFrame left = run_ex(controller, std::string(quit));
+        expect(controller.preview_placement() == PreviewPlacement::off && left.tabs.size() == 1 &&
+                   !left.closing && body_of(left) == "atext" &&
+                   left.document.save_state == core::SaveState::modified,
+               ":q and :q! in full leave full and keep the tab and the unsaved body");
+    }
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    const EditorFrame written = run_ex(controller, "wq");
+    expect(controller.preview_placement() == PreviewPlacement::off && written.tabs.size() == 1 &&
+               !written.closing && written.document.save_state == core::SaveState::saved,
+           ":wq in full saves and leaves full");
+    applied(controller, app::InsertText{"b"});
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    const EditorFrame updated = run_ex(controller, "x");
+    expect(controller.preview_placement() == PreviewPlacement::off && updated.tabs.size() == 1 &&
+               updated.document.save_state == core::SaveState::saved,
+           ":x in full saves the change and leaves full");
+    applied(controller, app::SplitPane{core::SplitLayout::vertical});
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    const EditorFrame closed = controller.apply_frame(app::ClosePane{});
+    expect(controller.preview_placement() == PreviewPlacement::off &&
+               closed.layout == core::SplitLayout::vertical && closed.other.has_value(),
+           "closing the pane in full leaves full and keeps the hidden body panes");
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    const EditorFrame only = run_ex(controller, "only");
+    expect(controller.preview_placement() == PreviewPlacement::off &&
+               only.layout == core::SplitLayout::vertical,
+           ":only in full leaves full and keeps the hidden body panes");
+}
+
+// 11. 本文の 2 枠は全面の間も保ったまま隠し、Esc で戻る（改訂 15）。右の側から入った側の
+// プレビューも、配置と側ごと戻る。全面の間も自動退避の合図は通り、知らせを出さない（R1-1）。
+void verify_hidden_panes_return()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    open_text(editing, "text");
+    applied(controller, app::SplitPane{core::SplitLayout::horizontal});
+    applied(controller, app::SwitchPane{});
+    const EditorFrame split = controller.frame();
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    applied(controller, app::InsertText{"x"});
+    const EditorFrame back = controller.apply_frame(app::CancelSelection{});
+    expect(split.active_side == core::PaneSide::second && back.layout == split.layout &&
+               back.active_side == split.active_side && back.other.has_value() &&
+               std::holds_alternative<app::PaneFrame>(back.other.value()),
+           "Esc from full brings the hidden body panes back as they were");
+    applied(controller, app::TogglePreview{});
+    const EditorFrame side = controller.frame();
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    const EditorFrame returned = controller.apply_frame(app::CancelSelection{});
+    expect(side_of(side) != nullptr && returned.layout == side.layout &&
+               returned.active_side == core::PaneSide::second && side_of(returned) != nullptr,
+           "side, full and side again keep the layout and the second side");
+
+    Editing saved;
+    open_text(saved, "text");
+    applied(saved.controller(), app::InsertText{"a"});
+    applied(saved.controller(), app::SetPreviewPlacement{PreviewPlacement::full});
+    const EditorFrame ticked = saved.controller().apply_frame(app::AutosaveTick{});
+    expect(saved.autosave().stored().size() == 1 && message_of(ticked).empty(),
+           "the autosave tick passes in full and says nothing");
+}
 } // namespace
 
 void verify_preview_full_scope()
@@ -408,5 +490,7 @@ void verify_preview_full_scope()
     verify_anchor_round_trip();
     verify_passing_keys();
     verify_quiet_paths_full();
+    verify_quit_leaves_full();
+    verify_hidden_panes_return();
 }
 } // namespace nenenib::tests
