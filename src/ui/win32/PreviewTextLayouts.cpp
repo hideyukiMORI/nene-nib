@@ -1,6 +1,7 @@
 #include "PreviewTextLayouts.hpp"
 
 #include "PreviewMetrics.hpp"
+#include "PreviewSelectionText.hpp"
 #include "Utf16.hpp"
 
 #include <algorithm>
@@ -192,7 +193,7 @@ std::expected<PreviewTextLayout, RenderFailure>
 PreviewTextLayouts::make(const core::PreviewBlock &block, float width,
                          const PreviewTextStyle &style)
 {
-    const auto shown = preview_shown_text(block);
+    const auto shown = core::preview_shown_text(block);
     const auto wide = core::to_utf16(shown);
     if (!wide)
     {

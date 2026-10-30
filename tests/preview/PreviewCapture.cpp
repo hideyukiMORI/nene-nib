@@ -220,7 +220,8 @@ constexpr float default_height = 900.0F;
     win32::PreviewPainter<ID2D1RenderTarget> painter(target, layouts, brushes, failure);
     target.BeginDraw();
     painter.paint(win32::PreviewScene{document, tops.value(), style, frame,
-                                      win32::preview_pixels(options.scroll, style.dpi)});
+                                      win32::preview_pixels(options.scroll, style.dpi),
+                                      std::nullopt});
     const bool drawn = SUCCEEDED(target.EndDraw()) && !failure.has_value();
     std::printf("preview: %zu blocks, %zu measured, %zu layouts held, %zu created\n",
                 document.blocks.size(), tops.value().size(), layouts.held(), layouts.created());

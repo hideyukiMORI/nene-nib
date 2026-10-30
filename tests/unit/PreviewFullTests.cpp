@@ -18,6 +18,7 @@
 #include "InsertDateTime.hpp"
 #include "InsertText.hpp"
 #include "LineNumber.hpp"
+#include "MarkdownDocument.hpp"
 #include "MarkdownOutcome.hpp"
 #include "MarkdownParse.hpp"
 #include "MarkdownStop.hpp"
@@ -29,8 +30,12 @@
 #include "PaneFrame.hpp"
 #include "PaneSide.hpp"
 #include "PlaceCaret.hpp"
+#include "PointPreview.hpp"
 #include "PreviewFrame.hpp"
 #include "PreviewPlacement.hpp"
+#include "PreviewPoint.hpp"
+#include "PreviewSelection.hpp"
+#include "PreviewSelectionText.hpp"
 #include "PreviewTick.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
@@ -38,6 +43,7 @@
 #include "ScriptedMarkdown.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollPane.hpp"
+#include "SelectAll.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "SetPreviewPlacement.hpp"
@@ -57,6 +63,7 @@
 #include "WorkCompleted.hpp"
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -133,6 +140,12 @@ void open_text(Editing &editing, std::string text, std::size_t visible = 4)
         text += "line " + std::to_string(line) + "\n\n";
     }
     return text;
+}
+
+// 全面の選択（全面でない・選択が無ければ nullopt）。
+[[nodiscard]] std::optional<core::PreviewSelection> selection_of(const EditorFrame &frame)
+{
+    return frame.full_preview.has_value() ? frame.full_preview.value().selection : std::nullopt;
 }
 
 // 全面の錨の行（全面でなければ 0）。
@@ -477,6 +490,137 @@ void verify_hidden_panes_return()
     expect(saved.autosave().stored().size() == 1 && message_of(ticked).empty(),
            "the autosave tick passes in full and says nothing");
 }
+
+// 12. コピーの本文は見えている文字（改訂 18）。見出し・段落・リスト・コードを要素の境の改行 1 つで
+// つなぎ、Markdown の記号・リストの点と番号・チェックボックスは入れず、コードはそのまま、水平線は
+// 飛ばす。向きに依らず同じで、空の選択は空。core の純関数 preview_selection_text の 1 本。
+void verify_selection_text()
+{
+    const auto parsed = core::parse_markdown(
+        "# Title\n\nsome *text* here\n\n1. one\n2. two\n\n- [ ] task\n\n---\n\n```\ncode\n  "
+        "line\n```\n",
+        core::MarkdownStop::never());
+    if (!parsed)
+    {
+        expect(false, "the selection sample parses");
+        return;
+    }
+    const core::MarkdownDocument &document = parsed.value();
+    const auto all = core::preview_selection_all(document);
+    expect(all.has_value() && core::preview_selection_text(document, all.value()) ==
+                                  "Title\nsome text here\none\ntwo\ntask\ncode\n  line",
+           "select all copies the shown text of every block joined by one newline");
+    const core::PreviewSelection forward{1, 5, 2, 2};
+    const core::PreviewSelection backward{2, 2, 1, 5};
+    expect(core::preview_selection_text(document, forward) == "text here\non" &&
+               core::preview_selection_text(document, backward) == "text here\non",
+           "a partial selection copies the same text in either direction");
+    expect(core::preview_selection_text(document, core::PreviewSelection{1, 3, 1, 3}).empty() &&
+               !core::preview_selected_bytes(document, core::PreviewSelection{1, 3, 1, 3}, 1)
+                    .has_value(),
+           "an empty selection copies and paints nothing");
+    const auto bytes = core::preview_selected_bytes(document, forward, 1);
+    expect(bytes.has_value() && bytes.value().first == 5 &&
+               bytes.value().second == std::string_view("some text here").size() &&
+               !core::preview_selected_bytes(document, forward, 0).has_value(),
+           "the painted bytes of a block follow the ordered selection");
+    core::PreviewPoint point{0, 0};
+    for (int step = 0; step < 6; ++step)
+    {
+        point = core::preview_point_moved(document, point, core::CaretMotion::next_character);
+    }
+    expect(point == core::PreviewPoint{1, 0} &&
+               core::preview_point_moved(document, point, core::CaretMotion::previous_character) ==
+                   core::PreviewPoint{0, 5} &&
+               core::preview_point_moved(document, point, core::CaretMotion::next_line) ==
+                   core::PreviewPoint{1, std::string_view("some text here").size()} &&
+               core::preview_point_moved(document, core::PreviewPoint{4, 4},
+                                         core::CaretMotion::next_character) ==
+                   core::PreviewPoint{6, 0},
+           "Shift+arrows step one character across block ends, by block up and down, and skip "
+           "the rule");
+}
+
+// 13. 全面の選択とコピーの鍵（改訂 18）。Shift+矢印は錨の要素の頭から選び、Ctrl+C は文書の改行の
+// 形で ClipboardPort へ置き（替え玉だけ）、Ctrl+A は全部、マウスは押した点から伸ばす。どれも本文を
+// 変えず知らせも出さない。選択がある間の Space は本文に届かない鍵。全面をやめると選択は消える。
+void verify_selection_keys()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    open_text(editing, "# Title\r\n\r\ntext\r\n");
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    serve_parsed(editing);
+    for (int step = 0; step < 3; ++step)
+    {
+        applied(controller, app::MoveCaret{core::CaretMotion::next_character,
+                                           core::SelectionAnchoring::extend});
+    }
+    const EditorFrame stepped = controller.frame();
+    expect(selection_of(stepped) == core::PreviewSelection{0, 0, 0, 3} &&
+               message_of(stepped).empty(),
+           "Shift+Right selects from the start of the anchor block");
+    applied(controller, app::ClipboardAction{app::ClipboardOperation::copy});
+    expect(editing.clipboard().writes() == 1 && editing.clipboard().read().value_or("") == "Tit",
+           "Ctrl+C puts the selected shown text on the clipboard");
+    applied(controller, app::SelectAll{});
+    applied(controller, app::ClipboardAction{app::ClipboardOperation::copy});
+    expect(editing.clipboard().read().value_or("") == "Title\r\ntext",
+           "Ctrl+A selects every block and the copy uses the document newline");
+    const EditorFrame pressed = controller.apply_frame(
+        app::PointPreview{core::PreviewPoint{1, 1}, core::SelectionAnchoring::collapse});
+    const EditorFrame dragged = controller.apply_frame(
+        app::PointPreview{core::PreviewPoint{1, 3}, core::SelectionAnchoring::extend});
+    expect(selection_of(pressed) == core::PreviewSelection{1, 1, 1, 1} &&
+               selection_of(dragged) == core::PreviewSelection{1, 1, 1, 3},
+           "a press starts an empty selection and a drag extends it");
+    expect(message_of(controller.apply_frame(app::InsertText{" "})) == refused,
+           "Space with a selection does not reach the body");
+    applied(controller, app::CancelSelection{});
+    expect(body_of(controller.frame()) == "# Title\n\ntext\n" &&
+               controller.frame().document.save_state == core::SaveState::saved,
+           "selecting and copying never change the body");
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    serve_parsed(editing);
+    applied(controller, app::SelectAll{});
+    applied(controller, app::TogglePreview{});
+    const EditorFrame side = controller.frame();
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    expect(side_of(side) != nullptr && !side_of(side)->selection.has_value() &&
+               controller.frame().full_preview.has_value() &&
+               !selection_of(controller.frame()).has_value(),
+           "the selection does not move to the side pane nor back to full");
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::off});
+    applied(controller, app::SelectAll{});
+    const std::size_t writes = editing.clipboard().writes();
+    applied(controller,
+            app::PointPreview{core::PreviewPoint{0, 2}, core::SelectionAnchoring::extend});
+    applied(controller, app::ClipboardAction{app::ClipboardOperation::copy});
+    expect(editing.clipboard().writes() == writes + 1U &&
+               editing.clipboard().read().value_or("").starts_with("# Title"),
+           "outside full the preview pointer does nothing and Ctrl+C copies the body as before");
+}
+
+// 14. Vim の全面の y と Ctrl-a（改訂 18）。y はオペレータを待たずに選択を置き、Ctrl-a は数を
+// 増やさず全部を選ぶ。置けないときは 1 行知らせ、本文は変えない（ADR 0134）。
+void verify_vim_selection()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    open_text(editing, "a 1\n\nb\n");
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    serve_parsed(editing);
+    applied(controller, app::VimKeyPress{core::VimKey{core::VimSpecialKey::control_a}});
+    const EditorFrame copied = vim_keys(controller, "y");
+    expect(editing.clipboard().read().value_or("") == "a 1\nb" && message_of(copied).empty(),
+           "Ctrl-a selects all and y copies it in Vim");
+    editing.clipboard().refuse_writes();
+    const EditorFrame refused_copy = vim_keys(controller, "y");
+    applied(controller, app::CancelSelection{});
+    expect(!message_of(refused_copy).empty() && body_of(controller.frame()) == "a 1\n\nb\n",
+           "a refused copy says so and the number was not incremented");
+}
 } // namespace
 
 void verify_preview_full_scope()
@@ -492,5 +636,8 @@ void verify_preview_full_scope()
     verify_quiet_paths_full();
     verify_quit_leaves_full();
     verify_hidden_panes_return();
+    verify_selection_text();
+    verify_selection_keys();
+    verify_vim_selection();
 }
 } // namespace nenenib::tests

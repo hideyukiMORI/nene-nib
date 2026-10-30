@@ -1,8 +1,11 @@
 #include "PreviewPane.hpp"
 
 #include "PreviewBlock.hpp"
+#include "PreviewBlockKind.hpp"
+#include "PreviewMetrics.hpp"
 #include "PreviewPainter.hpp"
 #include "PreviewScene.hpp"
+#include "PreviewSelectionText.hpp"
 
 #include <algorithm>
 #include <iterator>
@@ -18,15 +21,6 @@ namespace
     return left.first == right.first && left.width == right.width && left.height == right.height;
 }
 } // namespace
-
-std::size_t preview_anchor_block(const core::MarkdownDocument &document, core::Offset anchor)
-{
-    const auto after = std::upper_bound(document.blocks.begin(), document.blocks.end(), anchor,
-                                        [](core::Offset offset, const core::PreviewBlock &block)
-                                        { return offset < block.source_begin; });
-    const auto count = static_cast<std::size_t>(std::distance(document.blocks.begin(), after));
-    return count == 0 ? 0 : count - 1;
-}
 
 std::expected<const PreviewBlockTops *, RenderFailure>
 PreviewPane::remeasure(const std::shared_ptr<const core::MarkdownDocument> &document,
@@ -75,7 +69,8 @@ std::expected<void, RenderFailure> PreviewPane::draw_scene(ID2D1RenderTarget &ta
     ++painted_;
     std::optional<RenderFailure> failure;
     PreviewPainter<ID2D1RenderTarget> painter(target, layouts_, brushes_, failure);
-    painter.paint(PreviewScene{*key.document, *measured.value(), key.style, frame, 0.0F});
+    painter.paint(
+        PreviewScene{*key.document, *measured.value(), key.style, frame, 0.0F, key.selection});
     if (failure.has_value())
     {
         return std::unexpected(failure.value());
@@ -147,9 +142,10 @@ std::expected<void, RenderFailure> PreviewPane::paint(ID2D1RenderTarget &target,
     area_ = area;
     const auto width = core::width_of(area);
     const auto height = core::height_of(area);
-    PreviewPictureKey key{&target, document, preview_anchor_block(*document, frame.anchor),
-                          width,   height,   style,
-                          theme_};
+    PreviewPictureKey key{
+        &target, document,       core::preview_anchor_block(*document, frame.anchor),
+        width,   height,         style,
+        theme_,  frame.selection};
     // 座標は物理画素の整数なので、拡大縮小せず最近傍で写せば滲まない。
     const auto destination =
         D2D1::RectF(static_cast<float>(area.left), static_cast<float>(area.top),
@@ -200,6 +196,66 @@ std::optional<std::size_t> PreviewPane::task_at(std::int32_t x, std::int32_t y) 
         }
     }
     return std::nullopt;
+}
+
+std::optional<core::PreviewPoint> PreviewPane::point_at(std::int32_t x, std::int32_t y)
+{
+    if (!area_.has_value() || !tops_.has_value() || measured_ == nullptr ||
+        tops_.value().first() >= tops_.value().size())
+    {
+        return std::nullopt;
+    }
+    const auto &area = area_.value();
+    const auto &tops = tops_.value();
+    const auto local = static_cast<float>(y - area.top);
+    std::size_t index = tops.first();
+    for (auto at = tops.first(); at < tops.size() && tops.top(at) <= local; ++at)
+    {
+        index = at;
+    }
+    const auto &block = measured_->blocks.at(index);
+    if (local < tops.top(index) || block.kind == core::PreviewBlockKind::rule)
+    {
+        return core::PreviewPoint{index, 0};
+    }
+    if (local >= tops.bottom(index))
+    {
+        return core::PreviewPoint{index, core::preview_shown_text(block).size()};
+    }
+    return hit_block(tops, area, index, D2D1::Point2F(static_cast<float>(x - area.left), local));
+}
+
+std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops &tops,
+                                                         const core::LayoutRect &area,
+                                                         std::size_t index, D2D1_POINT_2F point)
+{
+    if (!measured_style_.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto &style = measured_style_.value();
+    const auto &block = measured_->blocks.at(index);
+    // 描く所（PreviewPainter::draw_text）と同じ幅と原点。コードブロックは面の内側の余白だけ下げる。
+    const auto inset =
+        block.kind == core::PreviewBlockKind::code ? preview_code_padding(style.dpi) : 0.0F;
+    const auto width = preview_text_width(block, static_cast<float>(core::width_of(area)),
+                                          tops.indent(index), style.dpi);
+    const auto layout = layouts_.get(block, width, style);
+    if (!layout)
+    {
+        return std::nullopt;
+    }
+    BOOL trailing = FALSE;
+    BOOL inside = FALSE;
+    DWRITE_HIT_TEST_METRICS metrics{};
+    if (FAILED(layout.value()->HitTestPoint(point.x - tops.indent(index) - inset,
+                                            point.y - tops.top(index) - inset, &trailing, &inside,
+                                            &metrics)))
+    {
+        return std::nullopt;
+    }
+    const auto units = metrics.textPosition + (trailing != FALSE ? metrics.length : 0U);
+    return core::PreviewPoint{index, preview_byte_of_units(core::preview_shown_text(block), units)};
 }
 
 std::size_t PreviewPane::created() const noexcept

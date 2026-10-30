@@ -145,6 +145,11 @@ class EditorWindow final
     // ときだけ TogglePreviewTask を送る（ADR 0056 の決定 9 の形）。
     void press_preview_task(LPARAM data);
     void release_preview_task(LPARAM data);
+    // 全面プレビューの描いた文字の上の押しとドラッグ（ADR 0155 の改訂 18）。押した点の文字の位置を
+    // renderer の hit test で引いて PointPreview を送り（Shift つきは選択を伸ばす）、捕まえて
+    // 離すまで同じ意図で動く端を送る。
+    void press_preview_text(LPARAM data);
+    void end_preview_drag();
     // 描く唯一の口。Present が返った直後に frame_presented を打ち、本文を描いた最初の frame では
     // body_presented も打つ（ADR 0011 の決定 1・ADR 0138 の決定 2）。
     [[nodiscard]] std::expected<void, RenderFailure> draw_frame();
@@ -317,6 +322,8 @@ class EditorWindow final
     PreviewTaskPress preview_task_press_;
     // OSの捕捉の寿命だけ。選択のanchor/caretの正本はcontrollerにある。
     bool selecting_ = false;
+    // 全面プレビューの文字をドラッグで選んでいる間（ADR 0155 の改訂 18）。
+    bool preview_dragging_ = false;
     POINT selection_point_{};
     static constexpr UINT_PTR selection_timer = std::to_underlying(WindowTimer::selection);
     static constexpr UINT_PTR autosave_timer = std::to_underlying(WindowTimer::autosave);

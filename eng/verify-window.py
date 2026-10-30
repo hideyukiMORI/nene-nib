@@ -136,8 +136,9 @@ with yes and opens the preview (previewGrid.png) for the anchor to be checked by
 Issue #1145 adds the full preview (ADR 0155 の改訂 15〜17), which `--preview-full` runs alone:
 tests/preview/sample.md is opened, `:preview full` through Ctrl+P draws the preview over the whole
 body with no gutter (previewFull.png), a typed `x` shows the refusal in the status bar and leaves
-the body unchanged (previewFullRefused.png), and Esc brings the body back as it was
-(previewFullLeft.png).
+the body unchanged (previewFullRefused.png), Ctrl+A paints the selection face under every block (previewFullSelected.png,
+Issue #1052; Ctrl+C is not pressed because it would write the real clipboard), and Esc brings the
+body back as it was (previewFullLeft.png).
 Python standard library and ctypes only.
 """
 
@@ -2940,6 +2941,14 @@ def drive_preview_full(window, frames: Path | None) -> dict:
     record["bodyKept"] = not box_changed(full, refused, width, band)
     assert record["refusalShown"] and record["bodyKept"], "typing in the full preview reached the body"
     snapshot(frames, window, "previewFullRefused")
+    # Ctrl+A は全部の要素を選び、選択の面を文字の下に塗る（ADR 0155 の改訂 18・#1052）。
+    # Ctrl+C は実機のクリップボードを書き換えるので、ここでは押さない（契約は替え玉で守る）。
+    assert press_chord(window, VK_CONTROL, ord("A")), "Ctrl+A was not delivered"
+    selected = await_new_frame(window, refused, size, seconds=2.0)
+    record["selectionShown"] = box_changed(refused, selected, width, band)
+    assert record["selectionShown"], "Ctrl+A did not paint the selection in the full preview"
+    snapshot(frames, window, "previewFullSelected")
+    refused = selected
     press(window, VK_ESCAPE)
     back = await_new_frame(window, refused, size, seconds=2.0)
     snapshot(frames, window, "previewFullLeft")
