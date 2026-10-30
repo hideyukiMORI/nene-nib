@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <expected>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -26,4 +27,7 @@ struct LspFrames
 // 大文字小文字を区別しない・`Content-Type` とほかの名前は読み飛ばす）。本文はその後ろの N バイト。
 // 途中で尽きた枠は返さず、consumed はそこより前で止まる。見出しの誤りと上限の超えは閉じた失敗。
 [[nodiscard]] std::expected<LspFrames, LspFrameFailure> lsp_frames(std::string_view bytes);
+
+// 本文 1 通に `Content-Length` の見出しを付けた枠（送る側・lsp_frames が切り出す形の逆）。
+[[nodiscard]] std::string lsp_framed(std::string_view body);
 } // namespace nenenib::core

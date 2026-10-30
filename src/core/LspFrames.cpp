@@ -3,10 +3,12 @@
 #include "LspFrameFailure.hpp"
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cstddef>
 #include <expected>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <system_error>
 
@@ -191,5 +193,21 @@ std::expected<LspFrames, LspFrameFailure> lsp_frames(std::string_view bytes)
         frames.consumed = static_cast<std::size_t>(found.data() - bytes.data()) + found.size();
     }
     return frames;
+}
+
+std::string lsp_framed(std::string_view body)
+{
+    constexpr std::string_view prefix = "Content-Length: ";
+    // size_t の 10 進は 20 桁に収まる。
+    constexpr std::size_t digit_capacity = 20;
+    std::array<char, digit_capacity> digits{};
+    const auto written = std::to_chars(digits.data(), digits.data() + digits.size(), body.size());
+    std::string frame;
+    frame.reserve(prefix.size() + digit_capacity + header_end_mark.size() + body.size());
+    frame.append(prefix);
+    frame.append(digits.data(), written.ptr);
+    frame.append(header_end_mark);
+    frame.append(body);
+    return frame;
 }
 } // namespace nenenib::core

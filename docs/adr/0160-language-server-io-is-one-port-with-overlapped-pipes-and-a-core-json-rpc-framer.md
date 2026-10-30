@@ -63,5 +63,6 @@ LSP 3.17 は子プロセスと stdio で JSON-RPC 2.0 を話す（`Content-Lengt
 - **絶対パスだけ**: `ServerLaunch.executable` が絶対パスでなければ `ServerFailure::not_found`（決定 7 の「設定に書いたパスだけを起こす」を作業フォルダの相対の解決で崩さない）。
 - **孫の継承**: 子の process が終わったら `TerminateJobObject` で子孫を片付け、出力の EOF を待たずに `ServerExited` へ進める。
 - **枠の切り出し**: #1009 の `lsp_frames` が main に入るまで adapter の `ServerFramer` が自前で切る（2 本目の経路・#1022 で置き換える）。
+  - **#1022 で置き換えた**: adapter の `ServerFramer` を消し、`Win32LanguageServer` が受けたバイト列を繋いで `core::lsp_frames` に渡し `consumed` だけ捨てる（2 本目の経路は無い）。送る側の枠も core の `lsp_framed` の 1 本。`LspFrameFailure` は `ServerFailure` へ写し（見出しの誤り 3 種は `read_failed`・`body_too_long` は `message_too_long`・`header_too_long` は足した `header_too_long`）、壊れた読みの中で壊れた枠の前にあった本文も積まない。
 - **`stop` で event の列を捨てる**（古い子の `ServerMessage` が新しい `ServerStarted` の前に混ざらない）。
 - **後続**: パイプの DACL を自分だけに（今は名前の推測で先に繋がれても `pipe_failed` で安全に落ちる）。

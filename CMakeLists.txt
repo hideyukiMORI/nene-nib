@@ -226,7 +226,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/AutosaveShelf.cpp
     src/adapters/win32/Win32AutosaveAdapter.cpp
     src/adapters/win32/OverlappedDrain.cpp src/adapters/win32/PipeRead.cpp src/adapters/win32/PipeWrite.cpp
-    src/adapters/win32/ServerFramer.cpp src/adapters/win32/ServerCommandLine.cpp
+    src/adapters/win32/ServerCommandLine.cpp
     src/adapters/win32/InheritedHandles.cpp src/adapters/win32/ServerChild.cpp
     src/adapters/win32/Win32LanguageServer.cpp)
 nenenib_link(nenenib_adapters nenenib_core)
