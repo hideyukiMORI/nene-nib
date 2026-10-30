@@ -21,7 +21,8 @@ inline constexpr std::size_t vim_mark_count = 26;
 // vim_marks_checked で読んで消す（Vim の w_prev_pcmark と checkpcmark・決定 5）。どの値も単独で
 // 妥当なので公開 aggregate（CPP-003）。比較は非メンバー。previous_context の既定は 1 行目の桁 0
 // で、Vim がバッファを開いた時点で pcmark を (1, 1) に置くのと同じ（ADR 0152 の追補・#962）。
-// 開いた文書・新しいタブ・まだ読んでいない文書を読んだ束はこの既定の値で始まる。
+// 新しいタブはこの既定の値で始まり、開いた文書・起動の無題・前回のタブと自動退避から戻した束は
+// vim_marks_opened の値（列に 1 項・ADR 0152 の追補 #1116 / #1124）で始まる。
 // last_insert は最後に INSERT を抜けた位置（`'^`・`gi` の行き先）、last_visual は前の選択
 // （`gv`）で、どちらも Vim の b_last_insert と b_visual と同じく文書の値（ADR 0152 と ADR 0018 の
 // 追補・#1039）。

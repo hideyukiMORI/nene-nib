@@ -218,12 +218,14 @@ void rank_session_tabs(std::vector<std::optional<SessionTab>> &band,
 
 // 読んだ本文と、まだ読んでいない文書が覚えていた位置から束を作る（決定 5）。カーソルは行を寄せて
 // から桁を行の中の文字の境目へ寄せる（offset_of は行の終わりで止まり、コードポイントの先頭にしか
-// 着かない）。履歴は空、Vim のマークは開いた位置の 1 項だけ（ADR 0152 の追補 #1116）。
+// 着かない）。履歴は空、Vim のマークは戻したキャレットの 1 項だけ（ADR 0152 の追補 #1116 /
+// #1124）。
 [[nodiscard]] DocumentState reached_bundle(core::TextBuffer text, Document document,
                                            const UnloadedDocument &tab)
 {
     const core::Offset caret =
         text.offset_of(core::TextPosition{line_within(text, tab.caret.line), tab.caret.column});
+    const core::VimMarkPosition opened = core::vim_mark_position_of(text, caret);
     const core::LineNumber first_visible = line_within(text, tab.first_visible);
     DocumentView view{tab.view.title, document.path, document.encoding, core::SaveState::saved,
                       std::nullopt};
@@ -241,8 +243,9 @@ void rank_session_tabs(std::vector<std::optional<SessionTab>> &band,
                          tab.horizontal,
                          tab.affinity};
     bundle.language = language;
-    // 開いた位置をジャンプの列に 1 項持って始める（ADR 0152 の追補 #1116）。
-    bundle.marks = core::vim_marks_opened();
+    // 戻したキャレットをジャンプの列に 1 項持って始める（viminfo の `'"` で位置を戻した Vim の列の
+    // 1 項・ADR 0152 の追補 #1124）。
+    bundle.marks = core::vim_marks_opened(opened);
     return bundle;
 }
 

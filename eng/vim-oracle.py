@@ -315,20 +315,20 @@ def probe_script(settings: list[str], keys: str, viewport: dict | None = None,
               + (" + ['topline=' . line('w0')] + ['scroll=' . &scroll]" if viewport else "")
               + ", 'out.txt')")
     # Ex モードで開いた直後のカーソルは先頭ではないので、毎回 (1, 1) に置いてから鍵を流す。
-    setup = ["call cursor(1, 1)"]
-    if viewport:
-        setup = ["set nowrap", f"resize {viewport['visible_lines']}",
-                 f"call cursor({viewport['line']}, {viewport['column']})",
-                 "call winrestview({'lnum': %d, 'topline': %d})"
-                 % (viewport["line"], viewport["first_visible"]),
-                 "redraw!",
-                 "if winheight(0) != %d || line('.') != %d || col('.') != %d || line('w0') != %d"
-                 " || winsaveview().topline != line('w0')"
-                 " | cquit | endif" % (viewport["visible_lines"], viewport["line"],
-                                        viewport["column"], viewport["first_visible"])]
     # -es の Vim は開いた直後のカーソル（最終行）をジャンプの列に積み、call cursor は積まない。
-    # 普通に起動した Vim と同じに、置いた位置の 1 項だけの列にしてから鍵を流す（#1116・ADR 0152）。
-    setup += ["clearjumps", "normal! m'"]
+    # 普通に起動した Vim と同じに、1 行目の 1 項だけの列にしてから鍵を流す（#1116・ADR 0152）。
+    # viewport の位置は Nib の fixture と同じに、開いた後でジャンプにならない置き方で置く（#1124）。
+    setup = ["call cursor(1, 1)", "clearjumps", "normal! m'"]
+    if viewport:
+        setup += ["set nowrap", f"resize {viewport['visible_lines']}",
+                  f"call cursor({viewport['line']}, {viewport['column']})",
+                  "call winrestview({'lnum': %d, 'topline': %d})"
+                  % (viewport["line"], viewport["first_visible"]),
+                  "redraw!",
+                  "if winheight(0) != %d || line('.') != %d || col('.') != %d || line('w0') != %d"
+                  " || winsaveview().topline != line('w0')"
+                  " | cquit | endif" % (viewport["visible_lines"], viewport["line"],
+                                         viewport["column"], viewport["first_visible"])]
     settle = []
     if viewport:
         settle = ["redraw!",

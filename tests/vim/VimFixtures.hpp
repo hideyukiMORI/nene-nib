@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 bd7d9c25c8aea5d0ce54fda888178a4f93a92fe8bb991999278a58bc4fef1ec4 / 3077 fixtures
+// fixtures.json: sha256 61af136fae247ce9df56e216482b8ca8d69f6b270ddbc11b907d391bbfc5f43c / 3085 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3077> vim_fixtures{{
+constexpr std::array<VimFixture, 3085> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3003,6 +3003,14 @@ constexpr std::array<VimFixture, 3077> vim_fixtures{{
     {"jumplist-count-changes", "abc\ndef\nghi\njkl\nmno", "jjxG2g;x", "abc\ndef\ni\njkl\nmno", 3, 1, "h", "v", std::nullopt},
     {"jumplist-count-changes-end", "abc\ndef\nghi\njkl\nmno", "jjxgg3g;x", "abc\ndef\ni\njkl\nmno", 3, 1, "h", "v", std::nullopt},
     {"jumplist-count-start-entry", "a\nb\nc\nd\ne", "jj<C-o>x", "\nb\nc\nd\ne", 1, 1, "a", "v", std::nullopt},
+    {"jumplist-open-viewport-back", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "<C-o>", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 1, 1, "", "", VimViewportFixture{10, 6, 10, 1, 1, 5}},
+    {"jumplist-open-viewport-back-forward", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "<C-o><Tab>", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 10, 1, "", "", VimViewportFixture{10, 6, 10, 1, 1, 5}},
+    {"jumplist-open-viewport-quote", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "''", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 1, 1, "", "", VimViewportFixture{10, 6, 10, 1, 1, 5}},
+    {"jumplist-open-viewport-backtick", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "``", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 1, 1, "", "", VimViewportFixture{10, 6, 10, 1, 1, 5}},
+    {"jumplist-open-viewport-quote-twice", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "''''", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 10, 1, "", "", VimViewportFixture{10, 6, 10, 1, 1, 5}},
+    {"jumplist-open-viewport-G-twice", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "G<C-o><C-o>", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 1, 1, "", "", VimViewportFixture{10, 6, 10, 1, 1, 5}},
+    {"jumplist-open-viewport-H-back-delete", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "H<C-o>x", "01\n02\n03\n04\n05\n06\n07\n08\n09\n0\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 10, 1, "1", "v", VimViewportFixture{10, 6, 10, 1, 6, 5}},
+    {"jumplist-open-viewport-count-over", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "2<C-o>x", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 10, 1, "", "", VimViewportFixture{10, 6, 10, 1, 6, 5}},
     {"changelist-back", "abc\ndef\nghi\njkl", "jjxggg;x", "abc\ndef\ni\njkl", 3, 1, "h", "v", std::nullopt},
     {"changelist-count", "abc\ndef\nghi\njkl", "jjxgg5g;x", "abc\ndef\ni\njkl", 3, 1, "h", "v", std::nullopt},
     {"changelist-newer-at-end", "abc\ndef\nghi\njkl", "jjxggg,x", "abc\ndef\ni\njkl", 3, 1, "h", "v", std::nullopt},
