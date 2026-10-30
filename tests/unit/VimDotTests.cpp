@@ -614,14 +614,15 @@ void verify_vim_dot_fixtures()
     {
         if (fixture.name.starts_with("dot-") || fixture.name.starts_with("visual-dot-") ||
             fixture.name.starts_with("counted-insert-") ||
+            fixture.name.starts_with("insert-arrow-dot-") ||
             std::ranges::find(boundaries, fixture.name) != boundaries.end())
         {
             verify_vim_fixture(fixture);
             ++selected;
         }
     }
-    expect(selected == 198,
-           "the scope replays 113 dot and 78 VISUAL dot fixtures and 7 shared boundaries");
+    expect(selected == 210, "the scope replays 113 dot, 78 VISUAL dot and 12 insert-arrow dot "
+                            "fixtures and 7 shared boundaries");
 }
 } // namespace
 
