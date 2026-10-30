@@ -1,3 +1,4 @@
+#include "EditorOperation.hpp"
 #include "WheelTurn.hpp"
 #include "WindowChecks.hpp"
 
@@ -65,6 +66,27 @@ void verify_palette_wheel_turns()
     expect(notch.lines == -3 && notch.remainder == 0,
            "one palette notch away scrolls the setting's 3 lines up");
 }
+
+// Ctrl つきのホイールは字の大きさ（#1048・ADR 0150 の追補）。窓の `zoom_wheel` は 1 刻みを
+// 1 段にして wheel_turned に渡し、lines の負（奥）を font_larger、正（手前）を font_smaller の
+// 回数にする。
+void verify_zoom_wheel_turns()
+{
+    using nenenib::ui::win32::wheel_turned;
+    constexpr std::int32_t one_step = 1;
+    const auto larger = wheel_turned(0, WHEEL_DELTA, one_step);
+    expect(larger.lines == -1 && larger.remainder == 0,
+           "one Ctrl notch away makes the font one step larger");
+    const auto half = wheel_turned(0, -WHEEL_DELTA / 2, one_step);
+    const auto smaller = wheel_turned(half.remainder, -WHEEL_DELTA / 2, one_step);
+    expect(half.lines == 0 && smaller.lines == 1 && smaller.remainder == 0,
+           "a Ctrl notch towards the user makes the font one step smaller only when complete");
+    using nenenib::core::EditorOperation;
+    using nenenib::ui::win32::zoom_wheel_operation;
+    expect(zoom_wheel_operation(larger.lines) == EditorOperation::font_larger &&
+               zoom_wheel_operation(smaller.lines) == EditorOperation::font_smaller,
+           "turning the Ctrl wheel away enlarges the font and towards the user shrinks it");
+}
 } // namespace
 
 // 本文のホイールの余りと 1 刻みの行数（#499）。WM_MOUSEWHEEL の delta は奥が正で、ScrollLines の
@@ -103,5 +125,6 @@ void verify_wheel_turns()
     expect(still.lines == 0 && still.remainder == 0, "a zero setting carries nothing");
     verify_wheel_edges();
     verify_palette_wheel_turns();
+    verify_zoom_wheel_turns();
 }
 } // namespace nenenib::tests::ui

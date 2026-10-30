@@ -198,11 +198,15 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
         if (word == VK_CONTROL)
         {
             settle_tab_walk();
+            // Ctrl を離したら字の大きさのホイールの残りを捨てる（ADR 0150 の追補・#1048）。
+            zoom_wheel_remainder_ = 0;
         }
         break;
     case WM_KILLFOCUS:
         end_selection_drag();
         settle_tab_walk();
+        // よそで Ctrl を離すと WM_KEYUP は来ないので、ここでも残りを捨てる（#1048）。
+        zoom_wheel_remainder_ = 0;
         break;
     default:
         break;
