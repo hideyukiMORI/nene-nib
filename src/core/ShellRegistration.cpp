@@ -4,8 +4,11 @@
 #include "LanguageTable.hpp"
 
 #include <algorithm>
+#include <initializer_list>
+#include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace nenenib::core
 {
@@ -16,6 +19,7 @@ constexpr std::string_view verb_key = "Software\\Classes\\*\\shell\\NeNeNib";
 constexpr std::string_view application_key = "Software\\Classes\\Applications\\NeNeNib.exe";
 constexpr std::string_view prog_id_prefix = "NeNeNib.";
 constexpr std::string_view classes_key = "Software\\Classes\\";
+constexpr std::string_view product_key = "Software\\NeNeNib";
 constexpr std::string_view capabilities_key = "Software\\NeNeNib\\Capabilities";
 constexpr std::string_view registered_applications_key = "Software\\RegisteredApplications";
 constexpr std::string_view registered_application_name = "NeNeNib";
@@ -87,15 +91,19 @@ void add_verb_and_application(ShellRegistrationPlan &plan, const ShellRegistrati
                               const std::vector<std::string> &extensions)
 {
     const auto command = command_of(input.exe_path);
-    plan.push_back({std::string(verb_key), "", input.display_name});
-    plan.push_back({std::string(verb_key), "Icon", icon_of(input.exe_path)});
-    plan.push_back({joined(verb_key, "\\command"), "", command});
-    plan.push_back({std::string(application_key), "FriendlyAppName", input.friendly_app_name});
-    plan.push_back({joined(application_key, command_suffix), "", command});
+    plan.push_back(
+        {std::string(verb_key), "", input.display_name, ShellRegistrationRemoval::subtree});
+    plan.push_back({std::string(verb_key), "Icon", icon_of(input.exe_path),
+                    ShellRegistrationRemoval::subtree});
+    plan.push_back({joined(verb_key, "\\command"), "", command, ShellRegistrationRemoval::subtree});
+    plan.push_back({std::string(application_key), "FriendlyAppName", input.friendly_app_name,
+                    ShellRegistrationRemoval::subtree});
+    plan.push_back(
+        {joined(application_key, command_suffix), "", command, ShellRegistrationRemoval::subtree});
     const auto supported = joined(application_key, "\\SupportedTypes");
     for (const auto &extension : extensions)
     {
-        plan.push_back({supported, extension, ""});
+        plan.push_back({supported, extension, "", ShellRegistrationRemoval::subtree});
     }
 }
 
@@ -109,9 +117,11 @@ void add_prog_ids(ShellRegistrationPlan &plan, const ShellRegistrationInput &inp
     {
         const std::string_view bare = std::string_view(extension).substr(1);
         const auto key = joined(classes_key, joined(prog_id_prefix, bare));
-        plan.push_back({key, "", joined(bare, prog_id_description_suffix)});
-        plan.push_back({joined(key, "\\DefaultIcon"), "", icon});
-        plan.push_back({joined(key, command_suffix), "", command});
+        plan.push_back(
+            {key, "", joined(bare, prog_id_description_suffix), ShellRegistrationRemoval::subtree});
+        plan.push_back({joined(key, "\\DefaultIcon"), "", icon, ShellRegistrationRemoval::subtree});
+        plan.push_back(
+            {joined(key, command_suffix), "", command, ShellRegistrationRemoval::subtree});
     }
 }
 
@@ -119,17 +129,38 @@ void add_prog_ids(ShellRegistrationPlan &plan, const ShellRegistrationInput &inp
 void add_capabilities(ShellRegistrationPlan &plan, const ShellRegistrationInput &input,
                       const std::vector<std::string> &extensions)
 {
-    plan.push_back({std::string(capabilities_key), "ApplicationName", input.friendly_app_name});
-    plan.push_back(
-        {std::string(capabilities_key), "ApplicationDescription", input.friendly_app_name});
+    plan.push_back({std::string(capabilities_key), "ApplicationName", input.friendly_app_name,
+                    ShellRegistrationRemoval::subtree});
+    plan.push_back({std::string(capabilities_key), "ApplicationDescription",
+                    input.friendly_app_name, ShellRegistrationRemoval::subtree});
     const auto associations = joined(capabilities_key, "\\FileAssociations");
     for (const auto &extension : extensions)
     {
         plan.push_back({associations, extension,
-                        joined(prog_id_prefix, std::string_view(extension).substr(1))});
+                        joined(prog_id_prefix, std::string_view(extension).substr(1)),
+                        ShellRegistrationRemoval::subtree});
     }
     plan.push_back({std::string(registered_applications_key),
-                    std::string(registered_application_name), std::string(capabilities_key)});
+                    std::string(registered_application_name), std::string(capabilities_key),
+                    ShellRegistrationRemoval::value});
+}
+// key_path が属する Nib の木の根。右クリックの項目とアプリはその鍵、`Software\NeNeNib` の下は
+// `Software\NeNeNib`、ほかの `Software\Classes\` の下（ProgId）は次の 1 段。
+[[nodiscard]] std::string subtree_root_of(std::string_view key_path)
+{
+    for (const auto root : {verb_key, application_key, product_key})
+    {
+        if (key_path == root || key_path.starts_with(joined(root, "\\")))
+        {
+            return std::string(root);
+        }
+    }
+    if (key_path.starts_with(classes_key))
+    {
+        const auto end = key_path.find('\\', classes_key.size());
+        return std::string(key_path.substr(0, end));
+    }
+    return std::string(key_path);
 }
 } // namespace
 
@@ -150,6 +181,24 @@ shell_registration_plan(const ShellRegistrationInput &input)
     add_prog_ids(plan, input, extensions);
     add_capabilities(plan, input, extensions);
     return plan;
+}
+
+std::vector<std::string> shell_registration_subtrees(const ShellRegistrationPlan &plan)
+{
+    std::vector<std::string> roots;
+    for (const auto &entry : plan)
+    {
+        if (entry.removal != ShellRegistrationRemoval::subtree)
+        {
+            continue;
+        }
+        auto root = subtree_root_of(entry.key_path);
+        if (std::ranges::find(roots, root) == roots.end())
+        {
+            roots.push_back(std::move(root));
+        }
+    }
+    return roots;
 }
 
 std::vector<std::string> shell_registration_extensions()

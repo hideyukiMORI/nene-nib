@@ -21,6 +21,11 @@ namespace nenenib::core
 [[nodiscard]] std::expected<ShellRegistrationPlan, ShellRegistrationPlanFailure>
 shell_registration_plan(const ShellRegistrationInput &input);
 
+// 外すときに木ごと消す根（removal が subtree の値の木）を計画の順に重複なく並べる。右クリックの
+// 項目・アプリ・拡張子ごとの ProgId・`Software\NeNeNib` の順。共有の鍵の値（value）は含めない。
+[[nodiscard]] std::vector<std::string>
+shell_registration_subtrees(const ShellRegistrationPlan &plan);
+
 // 登録する拡張子。文書の言語の表（ADR 0154・listed_language_extensions）の拡張子の全部と `.txt`
 // を表の順に、小文字・`.` 付き・重複なしで並べる（別の表を書かない）。
 [[nodiscard]] std::vector<std::string> shell_registration_extensions();
