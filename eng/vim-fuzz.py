@@ -14,13 +14,28 @@ leaves Vim in NORMAL mode (an insert ends with `<Esc>`, a VISUAL selection with 
 oracle can observe: no `"+ "*` (the real clipboard), no `q` / `@` (recording does not work inside
 `:normal`), no `u` / `<C-r>` (the oracle's `:normal!` is one undo unit), no viewport keys
 (`H M L <C-d> <C-u> <C-f> <C-b> <C-e> <C-y> z… gj gk g0 g$ gm gM <PageUp> <PageDown>`), no tabs,
-windows, Ex or Ctrl+P, no keys Nib does not take yet (`R s S gv`, block `I A c C > <`)
-and no INSERT `<BS>`. The generator does not make VISUAL `<C-a> <C-x> g<C-a> g<C-x>` yet, only
-the NORMAL `{n}<C-a>` `{n}<C-x>`.
+windows, Ex or Ctrl+P and no keys Nib does not take yet (`R s S`). The generator does not make
+VISUAL `<C-a> <C-x> g<C-a> g<C-x>` yet, only the NORMAL `{n}<C-a>` `{n}<C-x>`, and no INSERT `<Up>`
+`<Down>` or `<Del>`.
+
+Generator 4 (Issue #1135) adds keys inside INSERT: `<Left>` `<Right>` `<Home>` `<End>` between two inserted texts
+(Vim's `stop_arrow` starts a new insert, so `.` repeats only the part after the arrow) and `<BS>`
+(the oracle's `backspace=indent,eol,start` deletes before the insert's start, and `0i<BS>` at a line
+start joins the line with the one above). After one of these words `.` is picked with sixteen times
+its weight (`ARROW_WORDS`). It also adds `{n}gI` (#1032).
 
 The buffer has 1 to 12 lines mixing ASCII words, spaces, tabs, bracket and quote pairs, punctuation,
 Japanese (kana, kanji, full-width letters), empty lines and trailing spaces. It never ends with a
-newline and never holds a CR or a combining character (v1).
+newline and never holds a CR. Generator 4 adds a combining acute (`e` U+0301), a combining voiced
+mark (`か` U+3099), a variation selector (`⚠` U+FE0F), a ZWJ sequence (a family emoji), a flag (two
+regional indicators) and lines that end with a full-width character, to the buffer and to the
+inserted texts (ADR 0053: a Vim character is a code point and the zero-width ones after it; a ZWJ
+sequence and a flag are several characters). `{c}` (the `f t r` character) never takes a
+zero-width code point alone from the buffer.
+
+`--generator 3` keeps generator 3's tables and draws, so its seeds give the same cases as before
+(the new rows sit at the end of each table and generator 3 leaves them out). Each run writes the
+generated cases to `<out>/cases.json`.
 
 Some words depend on what came before them (Issue #963, generator 2): `''` and `` ` ` `` only after
 a jump (the oracle's `-es` Vim starts on the last line, the user's Vim on line 1, #962), `n` `N` only
@@ -117,6 +132,17 @@ WORDS = (
     ("<C-o>", 1, "{n}<C-o>"),
     ("<Tab>", 1, "{n}<Tab>"),
 )
+# 生成器 4 の語（Issue #1135）。INSERT の中の矢印・Home / End・<BS>。`--generator 3` は外す。
+WORDS_4 = (
+    ("i<Left>", 2, "i{i}<Left>{i}<Esc>"), ("a<Right>", 2, "a{i}<Right>{i}<Esc>"),
+    ("A<Home>", 1, "A{i}<Home>{i}<Esc>"), ("i<End>", 1, "i{i}<End>{i}<Esc>"),
+    ("i<BS>", 2, "i{i}<BS>{i}<Esc>"), ("0i<BS>", 1, "0i<BS>{i}<Esc>"),
+    # `gI`（#1032）: 行の 1 桁目に挿入・回数は反復。
+    ("gI", 1, "{n}gI{i}<Esc>"),
+)
+# この語の直後の `.` は重みを ARROW_DOT_FACTOR 倍にする（矢印の後の `.` と undo の単位を見る）。
+ARROW_WORDS = frozenset(("i<Left>", "a<Right>", "A<Home>", "i<End>", "i<BS>", "0i<BS>"))
+ARROW_DOT_FACTOR = 16
 # `g;` `g,` は語にしない。fuzz も 1 本の `:normal!` なので Vim では全体が 1 つの undo の単位
 # （変更の列は 1 件）になり、命令ごとに単位を作る Nib といつも違う。契約 `--vim-marks` の
 # verify_change_list が単位を分けた Vim の測定で守る（#1037・#1072 R5-2）。
@@ -136,16 +162,25 @@ REGISTERS = tuple('"' + name for name in "abcdefghijklmnopqrstuvwxyz") + (
 MARKS = ("a", "b", "c")
 INSERT_PIECES = ("foo", "bar", "x", " ", "  ", "\t", "日本", "かな", "ＡＢ", ".", ",", "(", ")",
                  "<CR>", "z9")
+# 生成器 4 の材料: 結合文字・異体字セレクタ・ZWJ の連なり・国旗（ADR 0053）。本文と挿入で共用。
+UNICODE_PIECES = ("e\u0301", "か\u3099", "\u26a0\ufe0f",
+                  "\U0001f468\u200d\U0001f469\u200d\U0001f467", "\U0001f1ef\U0001f1f5")
 # 本文の材料（Issue #954 の 3）。`<b>…</b>` は `it` `at` のため、句点は `is` `as` のため。
 TEXT_PIECES = ("alpha", "beta", "gamma", "foo_bar", "x1", "a.b", "word", "Hello", "end.",
                "(paren)", "[sq]", "{br}", "<w>", '"dq s"', "'sq'", "<b>tag</b>", ",", ";", "!",
                "?", ":", "-", "日本語", "かな", "漢字", "ＡＢＣ", "１２", "です。", "、")
+# 生成器 4 で行末を全角にする割合と、その文字。
+FULL_WIDTH_END = 0.15
+FULL_WIDTH_ENDS = ("全", "角", "Ｚ")
+# `{c}` が本文から取らない幅 0 のコードポイント（結合文字・異体字セレクタ・ZWJ）。
+ZERO_WIDTH = frozenset("\u0301\u3099\ufe0f\u200d")
 # 語の依存（Issue #963）。生成器の版は summary.md に書く（固定 seed の順が変わったら上げる）。
-GENERATOR_VERSION = 3
+GENERATOR_VERSION = 4
+GENERATORS = (3, 4)
 # Vim に置く設定。Nib の `nrformats` は `bin,hex` の固定で、`-u NONE` の Vim の既定 `bin,octal,hex` の
 # ままだと `07<C-a>` が 8 進で測られる（ADR 0015 の決定 14）。fixture へ写すときも同じ設定を書く。
 ORACLE_SETTINGS = ["set nrformats=bin,hex"]
-WORD_NAMES = tuple(kind for kind, _, _ in WORDS)
+WORD_NAMES = tuple(kind for kind, _, _ in WORDS + WORDS_4)
 JUMP_WORDS = frozenset(("G", "gg", "NG", "Ngg", "N%", "/", "?", "*", "#", "%", "n", "N", "'", "`",
                         "''", "``"))
 SEARCH_WORDS = frozenset(("/", "?", "*", "#"))
@@ -186,17 +221,33 @@ def unknown_key_name(keys: str) -> str | None:
     return None
 
 
-def generate_text(rng: random.Random) -> str:
+def text_pieces(generator: int) -> tuple[str, ...]:
+    return TEXT_PIECES + (UNICODE_PIECES if generator >= 4 else ())
+
+
+def insert_pieces(generator: int) -> tuple[str, ...]:
+    return INSERT_PIECES + (UNICODE_PIECES if generator >= 4 else ())
+
+
+def words_of(generator: int) -> tuple[tuple[str, int, str], ...]:
+    return WORDS + (WORDS_4 if generator >= 4 else ())
+
+
+def generate_text(rng: random.Random, generator: int = GENERATOR_VERSION) -> str:
+    table = text_pieces(generator)
     lines = []
     for _ in range(rng.randint(1, LINES_LIMIT)):
         if rng.random() < 0.12:
             lines.append("")
             continue
         indent = rng.choice(("", "", "", "  ", "\t", "    "))
-        pieces = [rng.choice(TEXT_PIECES) for _ in range(rng.randint(1, 6))]
+        pieces = [rng.choice(table) for _ in range(rng.randint(1, 6))]
         separators = [rng.choice((" ", " ", " ", "  ", "\t", "")) for _ in pieces]
         line = indent + "".join(piece + separator for piece, separator in zip(pieces, separators))
         line = line.rstrip(" \t") + rng.choice(("", "", "", " ", "  "))
+        # 生成器 4 だけ: 行末の全角（乱数の消費は生成器 3 の後ろに足す）。
+        if generator >= 4 and rng.random() < FULL_WIDTH_END:
+            line = line.rstrip(" \t") + rng.choice(FULL_WIDTH_ENDS)
         lines.append(line)
     while lines and lines[-1] == "":
         lines.pop()
@@ -209,16 +260,18 @@ def patterns_of(text: str) -> list[str]:
 
 
 def expand_word(rng: random.Random, template: str, text: str, marks: tuple[str, ...] = MARKS,
-                registers: tuple[str, ...] = REGISTERS) -> str:
+                registers: tuple[str, ...] = REGISTERS, generator: int = GENERATOR_VERSION) -> str:
     def count() -> str:
         return "" if rng.random() < 0.6 else str(rng.randint(1, COUNT_LIMIT))
 
     def character() -> str:
-        own = [c for c in text if c not in "\n<\\"]
+        # 幅 0 のコードポイントは生成器 3 の本文に無いので、外しても生成器 3 の消費は同じ。
+        own = [c for c in text if c not in "\n<\\" and c not in ZERO_WIDTH]
         return rng.choice(own) if own and rng.random() < 0.7 else rng.choice(CHARACTERS)
 
     def insert() -> str:
-        return "".join(rng.choice(INSERT_PIECES) for _ in range(rng.randint(0, 3)))
+        table = insert_pieces(generator)
+        return "".join(rng.choice(table) for _ in range(rng.randint(0, 3)))
 
     def pattern() -> str:
         found = patterns_of(text)
@@ -233,15 +286,17 @@ def expand_word(rng: random.Random, template: str, text: str, marks: tuple[str, 
         "{P}": lambda: str(rng.randint(1, 100)), "{B}": lambda: str(rng.randint(1, 20)),
         "{c}": character, "{i}": insert, "{p}": pattern, "{k}": lambda: rng.choice(marks),
         "{r}": lambda: "" if rng.random() < 0.7 else rng.choice(registers),
-        "{m}": lambda: expand_word(rng, rng.choice(OPERATOR_MOTIONS), text),
+        "{m}": lambda: expand_word(rng, rng.choice(OPERATOR_MOTIONS), text, generator=generator),
         "{o}": lambda: rng.choice(TEXT_OBJECTS),
-        "{v}": lambda: "".join(expand_word(rng, rng.choice(VISUAL_MOTIONS), text)
+        "{v}": lambda: "".join(expand_word(rng, rng.choice(VISUAL_MOTIONS), text,
+                                           generator=generator)
                                for _ in range(rng.randint(1, 3))),
-        "{w}": lambda: "".join(expand_word(rng, rng.choice(VISUAL_MOTIONS), text)
+        "{w}": lambda: "".join(expand_word(rng, rng.choice(VISUAL_MOTIONS), text,
+                                           generator=generator)
                                if rng.random() < 0.7 else rng.choice(TEXT_OBJECTS)
                                for _ in range(rng.randint(1, 3))),
-        "{V}": lambda: expand_word(rng, rng.choice(VISUAL_ENDS), text),
-        "{X}": lambda: expand_word(rng, rng.choice(BLOCK_ENDS), text),
+        "{V}": lambda: expand_word(rng, rng.choice(VISUAL_ENDS), text, generator=generator),
+        "{X}": lambda: expand_word(rng, rng.choice(BLOCK_ENDS), text, generator=generator),
     }
     result = []
     index = 0
@@ -257,8 +312,10 @@ def expand_word(rng: random.Random, template: str, text: str, marks: tuple[str, 
 
 
 def initial_state() -> dict:
-    """What the words so far did: jumped, searched, wrote "1 (unnamed dd/cc), set which marks."""
-    return {"jumped": False, "searched": False, "numbered": False, "marks": frozenset()}
+    """What the words so far did: jumped, searched, wrote "1 (unnamed dd/cc), set which marks,
+    and the last word's kind (the `.` weight after an INSERT arrow word reads it)."""
+    return {"jumped": False, "searched": False, "numbered": False, "marks": frozenset(),
+            "last": ""}
 
 
 def available(kind: str, state: dict) -> bool:
@@ -286,7 +343,8 @@ def advanced(state: dict, kind: str, keys: str) -> dict:
     return {"jumped": state["jumped"] or kind in JUMP_WORDS,
             "searched": state["searched"] or kind in SEARCH_WORDS,
             "numbered": state["numbered"] or (kind in NUMBERED_WRITERS and not keys.startswith('"')),
-            "marks": state["marks"] | ({keys[1]} if kind == "m" else set())}
+            "marks": state["marks"] | ({keys[1]} if kind == "m" else set()),
+            "last": kind}
 
 
 def dependencies_hold(words: list[tuple[str, str]]) -> bool:
@@ -298,11 +356,16 @@ def dependencies_hold(words: list[tuple[str, str]]) -> bool:
     return True
 
 
-def generate_case(rng: random.Random,
-                  excluded: frozenset[str]) -> tuple[str, list[tuple[str, str]]]:
+def weight_of(kind: str, weight: int, state: dict) -> int:
+    """`.` right after an INSERT arrow word weighs ARROW_DOT_FACTOR times (generator 4 only)."""
+    return weight * ARROW_DOT_FACTOR if kind == "." and state["last"] in ARROW_WORDS else weight
+
+
+def generate_case(rng: random.Random, excluded: frozenset[str],
+                  generator: int = GENERATOR_VERSION) -> tuple[str, list[tuple[str, str]]]:
     """A buffer and its words, each word a (kind, keys) pair the words before it allow."""
-    text = generate_text(rng)
-    pool = [word for word in WORDS if word[0] not in excluded]
+    text = generate_text(rng, generator)
+    pool = [word for word in words_of(generator) if word[0] not in excluded]
     unnumbered = tuple(name for name in REGISTERS if name not in NUMBERED_READS)
     words: list[tuple[str, str]] = []
     state = initial_state()
@@ -313,10 +376,11 @@ def generate_case(rng: random.Random,
         choices = [word for word in pool if available(word[0], state)]
         if not choices:
             break
-        kind, _, template = rng.choices(choices, [weight for _, weight, _ in choices])[0]
+        kind, _, template = rng.choices(
+            choices, [weight_of(name, weight, state) for name, weight, _ in choices])[0]
         marks = tuple(sorted(state["marks"])) if kind in ("'", "`") else MARKS
         registers = unnumbered if kind in READERS and not state["numbered"] else REGISTERS
-        keys = expand_word(rng, template, text, marks, registers)
+        keys = expand_word(rng, template, text, marks, registers, generator)
         joined = "".join(keys for _, keys in words) + keys
         if unknown_key_name(joined) is None:
             words.append((kind, keys))
@@ -521,8 +585,13 @@ def fuzz(args: argparse.Namespace, seed: int, out: Path) -> dict:
     excluded = frozenset(args.exclude)
     cases = []
     for number in range(1, args.count + 1):
-        text, words = generate_case(rng, excluded)
+        text, words = generate_case(rng, excluded, args.generator)
         cases.append({"name": f"fuzz-{seed}-{number:04d}", "text": text, "words": words})
+    (out / "cases.json").write_text(
+        json.dumps([{"name": case["name"], "text": case["text"],
+                     "keys": "".join(k for _, k in case["words"]),
+                     "words": [kind for kind, _ in case["words"]]} for case in cases],
+                   ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
     measured, rejected = [], []
     for case in cases:
         keys = "".join(k for _, k in case["words"])
@@ -593,7 +662,7 @@ def fenced(value: str) -> str:
 def settings_lines(args: argparse.Namespace) -> list[str]:
     known = "; ".join(f"#{issue}: {' '.join(fenced(name) for name in names)}"
                       for issue, names in args.known)
-    return [f"- generator={GENERATOR_VERSION}（語の依存・Issue #963）",
+    return [f"- generator={args.generator}（語の依存・Issue #963・INSERT の中の鍵と結合文字は 4）",
             f"- Vim: {ORACLE.vim_version()}", f"- replayer: `{args.replay}`",
             f"- shrink: {'on' if args.shrink else 'off'}",
             "- exclude: " + (" ".join(fenced(name) for name in args.exclude) or "なし"),
@@ -782,6 +851,8 @@ def main() -> int:
     parser.add_argument("--known", type=known_spec, action="append", default=[],
                         metavar="ISSUE:WORD,WORD")
     parser.add_argument("--from-fixtures", type=int, metavar="N")
+    parser.add_argument("--generator", type=int, choices=GENERATORS, default=GENERATOR_VERSION,
+                        help="3 keeps generator 3's tables (its seeds give the same cases)")
     args = parser.parse_args()
     if not args.replay.is_file():
         parser.error(f"no replayer at {args.replay}; build the nib_vim_replay target first")
