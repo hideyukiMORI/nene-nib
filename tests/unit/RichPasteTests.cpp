@@ -140,7 +140,8 @@ void verify_language_paste()
            "an unreadable HTML falls back to the text");
 }
 
-// HTML を書くことの多い JavaScript / TypeScript の文書も Ctrl+V は fragment のまま（決定 1 の追補・#840）。
+// HTML を書くことの多い JavaScript / TypeScript の文書も Ctrl+V は fragment のまま（決定 1
+// の追補・#840）。
 void verify_script_paste()
 {
     for (const auto path : {script_path, typed_path})

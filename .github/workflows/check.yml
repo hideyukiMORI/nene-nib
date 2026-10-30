@@ -90,6 +90,13 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ steps.versions.outputs.python }}
+      # #1057: 整形の検査（QLT-004）は eng/format-check.ps1 の 1 本で、手元の全件ゲートと同じものを呼ぶ。
+      # clang-format 19.1.5 は clang-cl と同じ VS の LLVM から来て、版は toolchain.ps1 が照合する（ADR 0136 の決定 8）。
+      - name: Formatting (QLT-004)
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File ./eng/format-check.ps1
+          exit $LASTEXITCODE
       - name: Configure Release
         shell: pwsh
         run: |

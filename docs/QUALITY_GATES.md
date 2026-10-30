@@ -42,8 +42,8 @@ lint・静的解析・アーキテクチャ・依存・テスト・**速さの�
 
 整形は設定から決定的に決まる。CI がソースを書き換えて成功させることはしない。整形の正本は 1 つ（設定ファイルは置かないか 1 つだけ）。
 
-- 機械強制: **active**（eng/check.ps1 の clang-format --dry-run --Werror。反例と復帰は `eng/prove-gates.py`）
-- 外部コード（`third_party/`）は書き換えないので整形の対象外（check.ps1 の列挙から外す・バイト列は CNF-013 が守る・[ADR 0151](adr/0151-md4c-vendored-as-third-party-target-with-digest-check.md) の決定 15）
+- 機械強制: **active**（`eng/format-check.ps1` の clang-format --dry-run --Werror を eng/check.ps1 と CI の `build-and-test` job でも呼ぶ・#1057。反例と復帰は `eng/prove-gates.py`）
+- 外部コード（`third_party/`）は書き換えないので整形の対象外（format-check.ps1 の列挙から外す・バイト列は CNF-013 が守る・[ADR 0151](adr/0151-md4c-vendored-as-third-party-target-with-digest-check.md) の決定 15）
 
 ### QLT-005 — ローカルと CI は同一
 
@@ -344,7 +344,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | QLT-001 | planned | check.ps1 の全件明示指定。検証選択の妥当性はレビュー |
 | QLT-002 | active | clang-cl・clang-tidy・clang-format と実ツール反例（eng/prove-gates.py） |
 | QLT-003 | active | CNF-005（`tests/conformance` の `test_cnf005_*` 4 件・#571）。CI の check job でも木を検査（#648）。任意のスクリプトによる迂回は網羅しない |
-| QLT-004 | active | clang-format --dry-run --Werror |
+| QLT-004 | active | clang-format --dry-run --Werror（`eng/format-check.ps1`・check.ps1 と CI の `build-and-test` job でも・#1057） |
 | QLT-005 | planned | |
 | QLT-006 | planned | |
 | QLT-007 | planned | eng/prove-gates.py が 33 本の実ツールの反例を回す（#516・#571）。merge 直前の CI の `check` job が `eng/test-conformance.py` を回す（#568）。新しいゲートに証明を要求する機械は無い（レビュー事項） |
