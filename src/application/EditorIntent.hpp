@@ -28,6 +28,7 @@
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
+#include "OpenDocumentFormatList.hpp"
 #include "OpenOperationList.hpp"
 #include "OpenTabList.hpp"
 #include "PasteCommand.hpp"
@@ -47,6 +48,7 @@
 #include "SearchHop.hpp"
 #include "SelectAll.hpp"
 #include "SelectDisplay.hpp"
+#include "SelectDocumentFormat.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectLanguage.hpp"
 #include "SelectSyntax.hpp"
@@ -84,5 +86,5 @@ using EditorIntent = std::variant<
     OpenOperationList, PointText, SelectDisplay, SelectLanguage, SelectSyntax, ScrollPaletteList,
     SplitPane, SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick, TogglePreviewTask,
     ToggleExplorer, ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen,
-    LanguageServerTick, MapTimeout, InsertDateTime>;
+    LanguageServerTick, MapTimeout, InsertDateTime, SelectDocumentFormat, OpenDocumentFormatList>;
 } // namespace nenenib::application

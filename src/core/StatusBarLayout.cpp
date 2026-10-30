@@ -41,6 +41,9 @@ constexpr std::int32_t display_width_dips = 24;
 
 // 言語の欄（右端・ADR 0154 の決定 6）の添字。
 constexpr std::size_t language_item = status_item_count - 1;
+// 文字コードと改行の欄の添字（status_items_for の順・ADR 0010 の追補 #1049 の決定 2 の (a)）。
+constexpr std::size_t encoding_item = 1;
+constexpr std::size_t line_ending_item = 2;
 
 // 右から並べる。folded なら言語の欄は右端の幅 0 の矩形で、ほかの 3 項目は言語が無いときの位置。
 [[nodiscard]] std::array<LayoutRect, status_item_count>
@@ -114,6 +117,14 @@ StatusBarHit status_bar_hit(const StatusBarLayout &layout, std::int32_t x, std::
     if (contains(layout.toggle_vim, x, y))
     {
         return StatusBarHit::toggle_vim;
+    }
+    if (contains(layout.items.at(encoding_item), x, y))
+    {
+        return StatusBarHit::encoding;
+    }
+    if (contains(layout.items.at(line_ending_item), x, y))
+    {
+        return StatusBarHit::line_ending;
     }
     return StatusBarHit::none;
 }

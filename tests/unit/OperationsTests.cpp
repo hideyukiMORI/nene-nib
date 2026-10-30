@@ -112,7 +112,7 @@ constexpr std::array<ChordRow, 46> chord_rows{{
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
-constexpr std::array<ShownRow, 26> shown_rows{{
+constexpr std::array<ShownRow, 28> shown_rows{{
     {EditorOperation::open_file, "Ctrl+O", "Ctrl+Shift+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
@@ -142,6 +142,9 @@ constexpr std::array<ShownRow, 26> shown_rows{{
     {EditorOperation::choose_explorer_root, "", "", true, true},
     // F5 の日時の挿入（ADR 0175 の決定 3）。
     {EditorOperation::insert_date_time, "F5", "F5", true, true},
+    // 鍵なし。F1 の一覧からだけ（ADR 0010 の追補 #1049 の決定 2 の (c)）。
+    {EditorOperation::choose_encoding, "", "", true, true},
+    {EditorOperation::choose_line_ending, "", "", true, true},
 }};
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
@@ -306,7 +309,7 @@ void verify_operation_choices()
 {
     const auto ordinary = nenenib::core::operation_choices("", EditMode::ordinary);
     const auto vim = nenenib::core::operation_choices("", EditMode::vim);
-    expect(ordinary.size() == 26 && vim.size() == 24,
+    expect(ordinary.size() == 28 && vim.size() == 26,
            "an empty query lists every operation available in the mode");
     std::vector<Operation> in_order;
     for (const auto &text : nenenib::core::operation_texts)

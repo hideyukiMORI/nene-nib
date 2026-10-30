@@ -7,6 +7,7 @@
 #include "ExDocumentRequest.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
+#include "ExFormatRequest.hpp"
 #include "ExLanguageRequest.hpp"
 #include "ExLineRequest.hpp"
 #include "ExLspRequest.hpp"
@@ -49,6 +50,8 @@ inline constexpr std::string_view guifont_command = "set guifont=";
 // controller。
 // map は Vim の `map` の Ex（`:nmap` 系・`:unmap` 系・`:let mapleader=`）の要求（ADR 0176 の
 // 決定 6）で、設定を書き換えて保存するのは controller。
+// format は現在の文書の保存の形（文字コードか改行）の選択か問い（ADR 0010 の追補 #1049 の決定 2・
+// 設定にもセッションにも保存しない）。
 struct ExResult
 {
     std::optional<EditorSettings> settings;
@@ -67,6 +70,7 @@ struct ExResult
     std::optional<ExRootRequest> root = std::nullopt;
     std::optional<ExLspRequest> lsp = std::nullopt;
     std::optional<ExMapRequest> map = std::nullopt;
+    std::optional<ExFormatRequest> format = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>

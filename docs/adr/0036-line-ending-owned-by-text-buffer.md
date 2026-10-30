@@ -25,7 +25,7 @@ ADR 0010 は「改行の判別は core の純関数 `detect_line_ending`、本�
 3. **描画と桁**: `\r` は文字なので `Column` は 1 つ数え、仮想桁は ADR 0034 の表のとおり 2（`^M`）。描画（DirectWrite）はこの Issue では変えず、制御文字を `^M` の形で描くことは別 Issue に切る（表示の桁と engine の桁は独立・ADR 0034）。
 4. **oracle**: `run_vim` は `out.txt` を `read_bytes().decode("utf-8")` で読み、`\n` で分ける（`\r` を保つ）。fixture の `text` は LF 文書に限る既存の約束のうえで、literal CR を含む text は次の 2 つをどちらも満たすものだけを受け付け、生成器（`check_literal_cr`）が検査して拒否する。**(a) CR で終わらない行が 1 つ以上ある**（Vim は全部の行が CR で終わるときだけ `dos` と判別して CR を落とす。`:help 'fileformats'` と実測）。**(b) 最初の行が CR で終わらない**（`detect_line_ending` は最初の `\n` の直前だけを見るので、`a\r\nbc\ndef` を CRLF と読む。Vim は同じ入力を `unix` と読んで CR を残すので、この 1 点だけは私たちのほうが違う）。`register` の報告（NUL → LF の戻し）は変えない。測定の境界より上の変更なので、既存 fixture の再利用は `measurement_sources_match` の規則どおり 1 回きりの全件再測定になる（`--regenerate` の全件・時間は記録する）。既存の値は 1 行も変わらないことを差分で示す。
 5. **VISUAL の `r<CR>`**: 文字単位・行単位とも、範囲の各文字（改行を除く）を `\r` に置き換える効果は既存の `VimReplaceRange` のまま、置換文字を `\r` にする。NORMAL の `r<CR>`（行を割る）は変えない。`.` は鍵の列なので追加なし。
-6. **保存**: バイト列をそのまま書く（ADR 0010 の決定 5）。literal CR は文字として残る。
+6. **保存**: バイト列をそのまま書く（ADR 0010 の決定 5）。literal CR は文字として残る。保存の形（ADR 0010 の追補 #1049）が本文の改行の形と違うときだけ、`line_endings_converted` が `\n` の改行を保存の形に写して書く（`crlf` へは直前に `\r` の無い `\n` に `\r` を足し、`lf` へは `\r\n` を `\n` に）。`\n` の前に無い単独の `\r` はどちらでも残す（LF 文書の literal CR の直後の `\n` は、`crlf` にすると 1 つの CRLF になる）。
 7. **範囲外**: CRLF の文書の fixture（`-S` の順で測れない・既存どおり unit）、`fileformats` の Vim 流の判別（全行 CRLF のときだけ `dos`）への変更（ADR 0010 の判別を保つ・混在文書は Vim と違いうることを「結果」に残す）、制御文字の描画、`:set ff=`。
 
 ## 強制

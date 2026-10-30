@@ -130,7 +130,10 @@ namespace
 [[nodiscard]] std::array<core::DisplayText, core::status_item_count>
 status_items_of(const EditorState &state, core::TextPosition caret, core::TextEncoding encoding)
 {
-    return core::status_items_for(caret, encoding, state.line_ending(), state.language());
+    // 改行の欄は保存の形（ADR 0010 の追補 #1049 の決定 1）。選んでいなければ本文の形。
+    return core::status_items_for(caret, encoding,
+                                  save_line_ending_of(state.document(), state.line_ending()),
+                                  state.language());
 }
 // 描けない失敗だけを残す（frame の欄・ADR 0133 の追補 2026-10-18）。
 [[nodiscard]] std::optional<TextLayoutFailure>

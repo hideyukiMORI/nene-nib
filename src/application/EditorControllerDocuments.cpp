@@ -8,11 +8,14 @@
 #include "DisplayText.hpp"
 #include "DocumentByteLimit.hpp"
 #include "DocumentDecoding.hpp"
+#include "DocumentFormat.hpp"
+#include "DocumentFormatKind.hpp"
 #include "DocumentReadRequest.hpp"
 #include "DocumentReading.hpp"
 #include "DocumentState.hpp"
 #include "EditMode.hpp"
 #include "EditorState.hpp"
+#include "ExFormatRequest.hpp"
 #include "ExLanguageRequest.hpp"
 #include "ExResult.hpp"
 #include "ExSyntaxRequest.hpp"
@@ -20,6 +23,7 @@
 #include "FileHistoryEdit.hpp"
 #include "Language.hpp"
 #include "LanguageTable.hpp"
+#include "LineEndingConversion.hpp"
 #include "PaletteOrigin.hpp"
 #include "ReadingTarget.hpp"
 #include "SaveState.hpp"
@@ -261,10 +265,10 @@ void rank_session_tabs(std::vector<std::optional<SessionTab>> &band,
 // UTF-16 の本文の断片。BOM と、held に写した UTF-16 のバイト列（ADR 0149 の決定 3）。本文は
 // 正しい UTF-8 なので写しは失敗しないが、失敗は開けない列と同じに返す。
 [[nodiscard]] std::expected<std::vector<std::string_view>, FileFailure>
-utf16_parts(const core::TextBuffer &text, std::string_view mark, core::ByteOrder order,
+utf16_parts(std::string_view source, std::string_view mark, core::ByteOrder order,
             std::string &held)
 {
-    auto converted = core::utf16_bytes_of_utf8(text.text(), order);
+    auto converted = core::utf16_bytes_of_utf8(source, order);
     if (!converted)
     {
         return std::unexpected(FileFailure::unencodable);
@@ -452,6 +456,11 @@ bool EditorController::answer_current_value(const core::ExResult &result)
         answer_lsp(result.lsp.value());
         return true;
     }
+    if (result.format.has_value())
+    {
+        answer_format(result.format.value());
+        return true;
+    }
     return false;
 }
 
@@ -475,6 +484,24 @@ void EditorController::answer_syntax(const core::ExSyntaxRequest &request)
     }
     state_ = state_.with_command_message(
         core::DisplayText::parse(state_.syntax_enabled() ? "syntax=on" : "syntax=off").value());
+}
+
+// `:set fenc=` `:set ff=` は意図 SelectDocumentFormat で置き、Vim と同じく何も出さない。`?` は今の
+// 値を Vim の名前で 1 行知らせる（ADR 0010 の追補 #1049 の決定 2 の (b)）。
+void EditorController::answer_format(const core::ExFormatRequest &request)
+{
+    if (request.chosen.has_value())
+    {
+        accept(SelectDocumentFormat{request.chosen.value()});
+        return;
+    }
+    const Document &document = state_.document();
+    const std::string message =
+        request.kind == core::DocumentFormatKind::encoding
+            ? "fileencoding=" + std::string(core::encoding_option_name(document.encoding))
+            : "fileformat=" + std::string(core::line_ending_option_name(
+                                  save_line_ending_of(document, state_.line_ending())));
+    state_ = state_.with_command_message(core::DisplayText::parse(message).value());
 }
 
 // `:set clipboard=` は無名と OS の同期を Vim の状態に置き（保存しない）、どの形も今の値を 1 行で
@@ -605,21 +632,46 @@ std::expected<core::TextBuffer, FileFailure> EditorController::decoded(core::Det
 
 std::expected<std::vector<std::string_view>, FileFailure>
 EditorController::encoded_parts(const core::TextBuffer &text, core::TextEncoding encoding,
-                                std::string &held)
+                                core::LineEnding ending, std::string &held)
 {
+    // 保存の形が本文の改行の形と違うときだけ写す（ADR 0010 の追補 #1049 の決定 3）。
+    if (ending != text.line_ending())
+    {
+        return source_parts(core::line_endings_converted(text.text(), ending), encoding, held);
+    }
     switch (encoding)
     {
     case core::TextEncoding::utf8:
     case core::TextEncoding::utf8_bom:
         return utf8_parts(text, encoding);
     case core::TextEncoding::utf16_le:
-        return utf16_parts(text, core::utf16_le_byte_order_mark(), core::ByteOrder::little, held);
     case core::TextEncoding::utf16_be:
-        return utf16_parts(text, core::utf16_be_byte_order_mark(), core::ByteOrder::big, held);
     case core::TextEncoding::shift_jis:
         break;
     }
-    auto converted = ports_.code_pages.from_utf8(text.text());
+    return source_parts(text.text(), encoding, held);
+}
+
+// 1 本の UTF-8 の本文を保存の符号化の断片にする。断片は held を指す。
+std::expected<std::vector<std::string_view>, FileFailure>
+EditorController::source_parts(std::string source, core::TextEncoding encoding, std::string &held)
+{
+    switch (encoding)
+    {
+    case core::TextEncoding::utf8:
+        held = std::move(source);
+        return std::vector<std::string_view>{held};
+    case core::TextEncoding::utf8_bom:
+        held = std::move(source);
+        return std::vector<std::string_view>{core::byte_order_mark(), held};
+    case core::TextEncoding::utf16_le:
+        return utf16_parts(source, core::utf16_le_byte_order_mark(), core::ByteOrder::little, held);
+    case core::TextEncoding::utf16_be:
+        return utf16_parts(source, core::utf16_be_byte_order_mark(), core::ByteOrder::big, held);
+    case core::TextEncoding::shift_jis:
+        break;
+    }
+    auto converted = ports_.code_pages.from_utf8(source);
     if (!converted)
     {
         return std::unexpected(file_failure_of(converted.error()));
@@ -631,7 +683,9 @@ EditorController::encoded_parts(const core::TextBuffer &text, core::TextEncoding
 std::expected<void, FileFailure> EditorController::write_document(const SaveDocument &intent)
 {
     std::string held;
-    const auto parts = encoded_parts(state_.text(), intent.encoding, held);
+    const auto parts =
+        encoded_parts(state_.text(), intent.encoding,
+                      save_line_ending_of(state_.document(), state_.text().line_ending()), held);
     if (!parts)
     {
         return std::unexpected(parts.error());
@@ -1083,7 +1137,7 @@ std::expected<void, FileFailure> EditorController::save_document(const SaveDocum
     const auto history = state_.history().sealed();
     const std::size_t position = history.position();
     state_ = state_.with_history(history).with_document(
-        Document{intent.path, intent.encoding, position});
+        saved_document(state_.document(), intent.path, intent.encoding, position));
     return {};
 }
 
@@ -1256,6 +1310,16 @@ void EditorController::accept(const SelectDisplay &intent)
 void EditorController::accept(const SelectLanguage &intent)
 {
     state_ = state_.with_language(intent.language);
+}
+
+// 保存の形も文書の値で、設定にもセッションにも書かない（ADR 0010 の追補 #1049 の決定
+// 1）。変えるのは 文書の保存の形だけで、本文・履歴・保存時点の位置に触れない（undo にも載らない）。
+void EditorController::accept(const SelectDocumentFormat &intent)
+{
+    const core::LineEnding body = state_.line_ending();
+    state_ = state_.with_document(
+        std::visit([this, body](const auto &value)
+                   { return with_format(state_.document(), body, value); }, intent.format));
 }
 
 // 構文の色の入れ切りも文書の値で、設定にもセッションにも書かない（ADR 0156 の追補）。値が変わった

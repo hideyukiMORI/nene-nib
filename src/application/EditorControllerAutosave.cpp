@@ -250,7 +250,8 @@ bool EditorController::store_autosave(AutosaveId id, const core::TextBuffer &tex
                                       const Document &document, core::TextPosition caret)
 {
     std::string held;
-    const auto parts = encoded_parts(text, document.encoding, held);
+    const auto parts = encoded_parts(text, document.encoding,
+                                     save_line_ending_of(document, text.line_ending()), held);
     if (!parts)
     {
         notify_autosave_failure();

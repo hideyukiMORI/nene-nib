@@ -3,6 +3,7 @@
 
 #include "ClosePane.hpp"
 #include "CloseTab.hpp"
+#include "DocumentFormatKind.hpp"
 #include "EditMode.hpp"
 #include "ExplorerRootChosen.hpp"
 #include "FileDialog.hpp"
@@ -13,6 +14,7 @@
 #include "Milestone.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
+#include "OpenDocumentFormatList.hpp"
 #include "OpenOperationList.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
@@ -300,13 +302,12 @@ void EditorWindow::run_operation(core::EditorOperation operation)
     switch (operation)
     {
     case core::EditorOperation::open_file:
-        open_document();
-        return;
     case core::EditorOperation::save:
-        save_document();
-        return;
     case core::EditorOperation::save_as:
-        save_document_as();
+    case core::EditorOperation::insert_date_time:
+    case core::EditorOperation::choose_encoding:
+    case core::EditorOperation::choose_line_ending:
+        run_document_operation(operation);
         return;
     case core::EditorOperation::new_tab:
     case core::EditorOperation::close_tab:
@@ -349,10 +350,6 @@ void EditorWindow::run_operation(core::EditorOperation operation)
     case core::EditorOperation::toggle_explorer:
     case core::EditorOperation::choose_explorer_root:
         run_pane_operation(operation);
-        return;
-    case core::EditorOperation::insert_date_time:
-        // 何を入れるか・入れずに知らせるかは controller の 1 か所が決める（ADR 0175 の決定 3）。
-        send(application::InsertDateTime{});
         return;
     }
     std::unreachable();
@@ -398,6 +395,8 @@ void EditorWindow::run_tab_operation(core::EditorOperation operation)
     case core::EditorOperation::toggle_explorer:
     case core::EditorOperation::choose_explorer_root:
     case core::EditorOperation::insert_date_time:
+    case core::EditorOperation::choose_encoding:
+    case core::EditorOperation::choose_line_ending:
         return;
     }
     std::unreachable();
@@ -458,6 +457,8 @@ void EditorWindow::run_pane_operation(core::EditorOperation operation)
     case core::EditorOperation::paste_plain:
     case core::EditorOperation::paste_html:
     case core::EditorOperation::insert_date_time:
+    case core::EditorOperation::choose_encoding:
+    case core::EditorOperation::choose_line_ending:
         return;
     }
     std::unreachable();
@@ -504,6 +505,61 @@ void EditorWindow::run_edit_operation(core::EditorOperation operation)
     case core::EditorOperation::toggle_explorer:
     case core::EditorOperation::choose_explorer_root:
     case core::EditorOperation::insert_date_time:
+    case core::EditorOperation::choose_encoding:
+    case core::EditorOperation::choose_line_ending:
+        return;
+    }
+    std::unreachable();
+}
+
+// 文書への操作（開く・保存・日時の挿入・保存の形）。文書への操作でない値は run_operation が先に
+// 扱うので、ここへは来ない。
+void EditorWindow::run_document_operation(core::EditorOperation operation)
+{
+    switch (operation)
+    {
+    case core::EditorOperation::open_file:
+        open_document();
+        return;
+    case core::EditorOperation::save:
+        save_document();
+        return;
+    case core::EditorOperation::save_as:
+        save_document_as();
+        return;
+    case core::EditorOperation::insert_date_time:
+        // 何を入れるか・入れずに知らせるかは controller の 1 か所が決める（ADR 0175 の決定 3）。
+        send(application::InsertDateTime{});
+        return;
+    case core::EditorOperation::choose_encoding:
+        // 保存の形の面はステータスバーのクリックと同じ意図（ADR 0010 の追補 #1049 の決定 2）。
+        send(application::OpenDocumentFormatList{core::DocumentFormatKind::encoding});
+        return;
+    case core::EditorOperation::choose_line_ending:
+        send(application::OpenDocumentFormatList{core::DocumentFormatKind::line_ending});
+        return;
+    case core::EditorOperation::new_tab:
+    case core::EditorOperation::close_tab:
+    case core::EditorOperation::recent_tab:
+    case core::EditorOperation::recent_tab_back:
+    case core::EditorOperation::list_files:
+    case core::EditorOperation::list_operations:
+    case core::EditorOperation::toggle_bookmark:
+    case core::EditorOperation::undo:
+    case core::EditorOperation::redo:
+    case core::EditorOperation::font_larger:
+    case core::EditorOperation::font_smaller:
+    case core::EditorOperation::font_reset:
+    case core::EditorOperation::toggle_mode:
+    case core::EditorOperation::split_vertical:
+    case core::EditorOperation::split_horizontal:
+    case core::EditorOperation::next_pane:
+    case core::EditorOperation::close_pane:
+    case core::EditorOperation::toggle_preview:
+    case core::EditorOperation::paste_plain:
+    case core::EditorOperation::paste_html:
+    case core::EditorOperation::toggle_explorer:
+    case core::EditorOperation::choose_explorer_root:
         return;
     }
     std::unreachable();

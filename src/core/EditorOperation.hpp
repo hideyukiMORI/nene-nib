@@ -37,6 +37,9 @@ enum class EditorOperation : std::uint8_t
     toggle_explorer,
     choose_explorer_root,
     // F5 の日時の挿入（ADR 0175 の決定 3）。
-    insert_date_time
+    insert_date_time,
+    // 保存の形を選ぶ 2 つ（ADR 0010 の追補 #1049 の決定 2 の (c)）。
+    choose_encoding,
+    choose_line_ending
 };
 } // namespace nenenib::core

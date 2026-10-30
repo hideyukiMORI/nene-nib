@@ -3,11 +3,13 @@
 
 #include "BodyLayout.hpp"
 #include "DevicePixels.hpp"
+#include "DocumentFormatKind.hpp"
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
 #include "ExplorerKey.hpp"
 #include "ExplorerKeyKind.hpp"
 #include "NewTab.hpp"
+#include "OpenDocumentFormatList.hpp"
 #include "PaletteLayout.hpp"
 #include "PaneLayouts.hpp"
 #include "PointTitleBar.hpp"
@@ -343,6 +345,13 @@ void EditorWindow::click_client(LPARAM data)
         return;
     case core::StatusBarHit::toggle_vim:
         send(application::SelectEditMode{core::EditMode::vim});
+        return;
+    // 右の文字コードと改行の項目は保存の形の面を開く（ADR 0010 の追補 #1049 の決定 2 の (a)）。
+    case core::StatusBarHit::encoding:
+        send(application::OpenDocumentFormatList{core::DocumentFormatKind::encoding});
+        return;
+    case core::StatusBarHit::line_ending:
+        send(application::OpenDocumentFormatList{core::DocumentFormatKind::line_ending});
         return;
     case core::StatusBarHit::none:
         break;
