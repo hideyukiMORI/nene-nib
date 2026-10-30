@@ -3096,6 +3096,7 @@
   {"name":"word-class-ge-emoji","text":"z9⚠️amma","keys":"$ge"},
   {"name":"word-class-b-emoji","text":"z9⚠️amma","keys":"$b"},
   {"name":"word-class-e-emoji","text":"z9⚠️amma","keys":"e"},
+  {"name":"word-class-hash-emoji","text":"z9⚠️amma","keys":"3l#"},
   {"name":"word-class-w-family-zwj","text":"beta👨‍👩 x","keys":"w"},
   {"name":"word-class-w-family-zwj-twice","text":"beta👨‍👩 x","keys":"2w"},
   {"name":"word-class-star-emoji-after-arrow","text":"(é.→⚠️ x\nalphaend.→⚠️","keys":"4l*"},
