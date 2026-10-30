@@ -655,6 +655,10 @@ void EditorController::accept(const BeginReplace &)
     open_find(FindPhase::replace_with);
 }
 
+// 「今の当たり」（キャレットを含むか次の当たり・決定
+// 7）へ移る。起点をその当たりの直前の文字に置いて hop_find
+// で探すので、キャレットの始まりにある当たりも飛ばさず、最後の検索と塗りは「検索: 」の Enter
+// と同じになる。当たりが本文の先頭なら起点を置けないので、探した後にキャレットを戻す。
 std::optional<core::VimRepeatFailure>
 EditorController::advance_to_replacement(const core::SearchLine &line)
 {
@@ -662,10 +666,25 @@ EditorController::advance_to_replacement(const core::SearchLine &line)
     {
         return std::nullopt;
     }
+    FindState find = state_.find();
+    find.pattern = std::string(line.text());
+    state_ = state_.with_find(std::move(find));
+    const auto pattern = find_pattern();
+    const auto match = pattern.has_value() ? current_find_match(state_.text(), pattern.value(),
+                                                                state_.selection().caret)
+                                           : std::nullopt;
+    if (match.has_value())
+    {
+        restart_find_before(match.value().begin);
+    }
     const auto failure = hop_find(line.text(), core::VimSearchDirection::forward, true);
     if (failure.has_value())
     {
         return failure;
+    }
+    if (match.has_value() && state_.selection().caret != match.value().begin)
+    {
+        move_caret_to(match.value().begin, core::SelectionAnchoring::collapse);
     }
     state_ =
         state_.with_command_input(core::SearchLine::opened_replace_with(state_.find().replacement));
@@ -709,7 +728,7 @@ EditorController::replace_current(const core::SearchLine &line)
         return hop_find(find.pattern, core::VimSearchDirection::forward, true);
     }
     replace(match.value(), find.replacement, core::EditBoundary::separate);
-    restart_find_before_caret();
+    restart_find_before(state_.selection().caret);
     return hop_find(find.pattern, core::VimSearchDirection::forward, false);
 }
 
@@ -738,20 +757,19 @@ void EditorController::replace_all_matches()
     const core::Offset end{edit.value().at.value + edit.value().removed.size()};
     replace(core::OffsetRange{edit.value().at, end}, edit.value().inserted,
             core::EditBoundary::separate);
-    restart_find_before_caret();
+    restart_find_before(state_.selection().caret);
 }
 
-// 起点（preview の from）は「その次の文字から探す」位置なので、キャレットの直前の文字に置く。
-// キャレットが本文の先頭なら先頭（先頭の当たりは折り返して最後に着く・限界）。
-void EditorController::restart_find_before_caret()
+// 起点（preview の from）は「その次の文字から探す」位置なので、at の直前の文字に置く。
+// at が本文の先頭なら先頭（先頭の当たりは折り返して最後に着く・限界）。
+void EditorController::restart_find_before(core::Offset at)
 {
-    const core::Offset caret = state_.selection().caret;
-    core::Offset before = caret;
-    if (caret.value > 0)
+    core::Offset before = at;
+    if (at.value > 0)
     {
-        const std::size_t window = std::min<std::size_t>(caret.value, code_point_bytes);
-        const core::Offset begin{caret.value - window};
-        const std::string tail = state_.text().text_range(begin, caret);
+        const std::size_t window = std::min<std::size_t>(at.value, code_point_bytes);
+        const core::Offset begin{at.value - window};
+        const std::string tail = state_.text().text_range(begin, at);
         before = core::Offset{begin.value +
                               core::previous_code_point(tail, core::Offset{tail.size()}).value};
     }

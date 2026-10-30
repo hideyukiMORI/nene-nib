@@ -356,8 +356,8 @@ class EditorController final
     hop_find(std::string_view typed, core::VimSearchDirection relative, bool confirmed);
     // Ctrl+F（phase は find）と Ctrl+H（replace_with）の「検索: 」を前回の語で開く（決定 3）。
     void open_find(FindPhase phase);
-    // 置換の流れの「検索: 」の Enter（決定 3）。当たりへ移ってから「置換後:
-    // 」を開く。見つからなければ 「検索: 」のまま E486。
+    // 置換の流れの「検索: 」の Enter（決定 3・7）。今の当たりへ移ってから「置換後: 」を開く。
+    // 見つからなければ「検索: 」のまま E486。
     std::optional<core::VimRepeatFailure> advance_to_replacement(const core::SearchLine &line);
     // 「置換後: 」の Enter（決定 7）。今の当たりを 1 件置き換える Edit 1 回 → 次の当たりへ。
     std::optional<core::VimRepeatFailure> replace_current(const core::SearchLine &line);
@@ -366,9 +366,9 @@ class EditorController final
     void replace_all_matches();
     // 置換の語 FindState.pattern を逃がして今の大小の旗で解いた照合器。空・解けなければ値なし。
     [[nodiscard]] std::optional<core::VimPattern> find_pattern() const;
-    // 置換の Edit の後、次の検索の起点を置換後のキャレットの直前の文字に置く（キャレットから
-    // 始まる当たりを飛ばさない・決定 7）。
-    void restart_find_before_caret();
+    // 次の検索の起点を at の直前の文字に置く（at から始まる当たりを飛ばさない・決定 7）。置換の
+    // Edit の後はキャレット、「置換後: 」へ進むときは今の当たりの始まり。
+    void restart_find_before(core::Offset at);
     // 入力行の無い F3 / Shift+F3 と一覧の「次を検索」「前を検索」（決定 2・6）。本文の順の向きを
     // 最後の検索の向きと比べて `n` か `N` を流す。
     void repeat_find(core::VimSearchDirection relative);

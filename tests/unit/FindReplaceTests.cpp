@@ -444,9 +444,9 @@ void verify_replace_edges()
     static_cast<void>(controller.apply_frame(SubmitCommand{}));
     static_cast<void>(typed(controller, "aa"));
     const auto grown = controller.apply_frame(SubmitCommand{});
-    expect(vim_body(grown) == "a aa" && caret_at(grown, 1, 1) &&
-               message_of(grown) == wrapped_bottom,
-           "the replacement is not searched again and the next match wraps to the top");
+    expect(vim_body(grown) == "aa a" && caret_at(grown, 1, 4),
+           "the match under the caret at the start is replaced and the replacement is not "
+           "searched again");
     Editing missing;
     open_ordinary_document(missing, "abc");
     static_cast<void>(missing.controller().apply_frame(BeginReplace{}));
@@ -458,6 +458,29 @@ void verify_replace_edges()
     const auto all_in_find = missing.controller().apply_frame(SubmitCommand{true});
     expect(prompt_of(all_in_find) == InputLinePrompt::find && vim_body(all_in_find) == "abc",
            "Ctrl+Enter outside the replacement prompt does nothing");
+}
+
+// Ctrl+F で当たりへ移ってから Ctrl+H → Enter → Enter は、見ていた当たりを置き換える（R3-1・決定 7
+// の 「今の当たり」）。
+void verify_replace_seen_match()
+{
+    Editing session;
+    open_ordinary_document(session, std::string(three_lines));
+    EditorController &controller = session.controller();
+    static_cast<void>(controller.apply_frame(BeginFind{}));
+    static_cast<void>(typed(controller, "beta"));
+    static_cast<void>(controller.apply_frame(SubmitCommand{}));
+    static_cast<void>(controller.apply_frame(SubmitCommand{}));
+    const auto seen = controller.apply_frame(CancelCommand{});
+    expect(caret_at(seen, 2, 1), "Ctrl+F and Enter twice stand on the second match");
+    static_cast<void>(controller.apply_frame(BeginReplace{}));
+    const auto asked = controller.apply_frame(SubmitCommand{});
+    expect(prompt_of(asked) == InputLinePrompt::replace_with && caret_at(asked, 2, 1),
+           "Enter in Ctrl+H stays on the match under the caret");
+    static_cast<void>(typed(controller, "X"));
+    const auto replaced = controller.apply_frame(SubmitCommand{});
+    expect(vim_body(replaced) == "alpha beta\nX gamma\ndelta beta" && caret_at(replaced, 3, 7),
+           "Enter replaces the match that was seen and moves to the next one");
 }
 
 // Ctrl+Enter は全件を Edit 1 回で置き換え、undo 1 回で戻る（決定 7）。
@@ -514,6 +537,7 @@ void verify_find_replace_scope()
     verify_substituted_all();
     verify_replace_one();
     verify_replace_edges();
+    verify_replace_seen_match();
     verify_replace_all();
 }
 } // namespace nenenib::tests

@@ -467,7 +467,7 @@ def try_saving(window, path: Path) -> dict:
     if not press_chord(window, VK_CONTROL, VK_S):
         return {"driven": False,
                 "note": "the window could not take the foreground; Ctrl+S stays in the unit tests"}
-    time.sleep(1.2)
+    time.sleep(1.5)
     after = path.read_bytes()
     saved = {"driven": True, "bytesChanged": after != before, "title": window_title(window),
              "bytesBefore": len(before), "bytesAfter": len(after)}
