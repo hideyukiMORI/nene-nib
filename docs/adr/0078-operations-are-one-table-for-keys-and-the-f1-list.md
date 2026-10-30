@@ -72,3 +72,11 @@
 2. 行の右端の鍵の表示は `key_chord_label`（通常モード）。Vim モードでは同じ項目で、鍵の表示を Vim の鍵の列（`y` `d` `p` `ggVG` `/`）に替える: 表に `vim_hint`（`std::string_view`・無ければ空）の列を足す。文字列を別に書かない。
 3. 選ぶと `run_operation` の 1 本。Esc・外のクリック・ホイールで閉じる。面が出ている間の鍵は面へ（Ctrl+P と同じ奪い方・IME は閉じる）。意図は `OpenContextMenu{point}` と既存の面の選択の意図。
 4. 契約 `--context-menu`（開く・項目の列と順が表のとおり・通常 / Vim で鍵の表示が違う・選ぶと操作が 1 回・Esc と外のクリックで閉じる）。`nib_window_tests` の画素（位置と 1 行目）。速さ: 打鍵の道に載らない。
+
+## 追補（2026-10-30・#1122）: 空の文書の案内の鍵の箱の幅は鍵の表示名の幅から
+
+1. 空の文書の案内（D42・画 B）の鍵の列は、固定の 64 DIP（`core::operation_guide_layout` の中の定数）だったため、#1037（D71）で Vim モードの「開く」が `Ctrl+Shift+O` になると箱が足りず「Ctrl+Shi」で切れた。列の幅は **3 行の鍵の表示名（`key_chord_label` から作った `GuideEntry::key`）の幅**から決める。
+2. 字の幅は ui が測る。`ui/win32` の `guide_key_width` が描画と同じ書式 `guide_key_format_` の DirectWrite の layout で各行を測り、最も広い字の幅に左右の余白（採用の 9 DIP・描く側と同じ定数 `guide_key_padding_dips`）を足して切り上げた物理画素を、`core::GuideRequest{context, key_width}` で core に渡す。core は字の幅の表や定数を持たず、受け取った幅と採用の 64 DIP の広いほうを 3 行に共通の鍵の列にする。箱はこれまでどおり各行の字の幅で列の右端に揃える（右寄せ）。
+3. 説明の列（144 DIP）と間（20 DIP）は変えない。鍵の列が広がった分だけ全体の幅が増え、本文の横中央に置き直す。広がって本文の左右の余白に収まらなければ、これまでの規則のとおりステータスの案内へ回る（ADR 0079）。
+4. 測るのは文脈が `untouched_untitled` の frame だけ（ふだんの frame は layout を作らない）。通常モードの鍵（`Ctrl+P` `Ctrl+O` `F1`）は 64 DIP に収まるので配置は変わらない。ステータスバーの案内（ADR 0079）の枠はこの追補の外。
+5. 試験: `nib_tests` の `GuideTests` が列の幅・間・中央・収まらないときの切り替えを、`nib_window_tests --guide` が本物の DirectWrite とメモリの bitmap で「箱で切った画素と切らない画素が同じ」（Vim の 3 行・通常の 3 行）と「64 DIP の列だけでは `Ctrl+Shift+O` が切れる」を確かめる。

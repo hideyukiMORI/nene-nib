@@ -8,6 +8,7 @@
 #include "DevicePixels.hpp"
 #include "Editing.hpp"
 #include "GuideContext.hpp"
+#include "GuideRequest.hpp"
 #include "HistoryAction.hpp"
 #include "InsertText.hpp"
 #include "NewTab.hpp"
@@ -228,8 +229,8 @@ void verify_geometry_case(std::uint32_t dpi, std::int32_t width, std::int32_t he
         core::body_layout(core::to_pixels(width, dpi), core::to_pixels(height, dpi), dpi, size);
     const auto status =
         core::status_bar_layout(core::to_pixels(width, dpi), core::to_pixels(height, dpi), dpi);
-    const auto guide =
-        core::operation_guide_layout(GuideContext::untouched_untitled, body, status, dpi);
+    const auto guide = core::operation_guide_layout(
+        core::GuideRequest{GuideContext::untouched_untitled, 0}, body, status, dpi);
     const std::size_t expected = height == 560 ? 1U : (width >= 646 ? 2U : 0U);
     expect(guide.index() == expected, "each tested window chooses exactly its eligible placement");
     if (const auto *layout = std::get_if<core::BodyGuideLayout>(&guide); layout != nullptr)
@@ -242,13 +243,14 @@ void verify_geometry_case(std::uint32_t dpi, std::int32_t width, std::int32_t he
         expect(width >= 646 && height == 200, "only a short wide window falls back to status");
         verify_status_geometry(*layout, status, dpi);
     }
-    const auto other = core::operation_guide_layout(GuideContext::other, body, status, dpi);
+    const auto other =
+        core::operation_guide_layout(core::GuideRequest{GuideContext::other, 0}, body, status, dpi);
     expect(!std::holds_alternative<core::BodyGuideLayout>(other),
            "named and edited documents never get a body guide");
     expect(std::holds_alternative<std::monostate>(other) == (width < 646),
            "360 and 640 DIP cannot reserve 160 DIP while preserving existing status items");
-    expect(std::holds_alternative<std::monostate>(
-               core::operation_guide_layout(GuideContext::hidden, body, status, dpi)),
+    expect(std::holds_alternative<std::monostate>(core::operation_guide_layout(
+               core::GuideRequest{GuideContext::hidden, 0}, body, status, dpi)),
            "hidden context remains hidden at every geometry");
 }
 
@@ -272,12 +274,12 @@ void verify_geometry()
     }
     const auto body = core::body_layout(228 + 31, 560, 96, core::default_font_size());
     const auto status = core::status_bar_layout(228 + 31, 560, 96);
-    expect(std::holds_alternative<std::monostate>(
-               core::operation_guide_layout(GuideContext::untouched_untitled, body, status, 96)),
+    expect(std::holds_alternative<std::monostate>(core::operation_guide_layout(
+               core::GuideRequest{GuideContext::untouched_untitled, 0}, body, status, 96)),
            "one pixel short of the horizontal body margins hides both guides");
     const auto exact = core::body_layout(228 + 32, 560, 96, core::default_font_size());
-    expect(std::holds_alternative<core::BodyGuideLayout>(
-               core::operation_guide_layout(GuideContext::untouched_untitled, exact, status, 96)),
+    expect(std::holds_alternative<core::BodyGuideLayout>(core::operation_guide_layout(
+               core::GuideRequest{GuideContext::untouched_untitled, 0}, exact, status, 96)),
            "exact horizontal body margins admit the body guide");
 }
 
@@ -294,23 +296,63 @@ void verify_layout_boundaries()
         const auto exact = core::status_bar_layout(threshold, core::to_pixels(200, dpi), dpi);
         const auto short_by_one =
             core::status_bar_layout(threshold - 1, core::to_pixels(200, dpi), dpi);
-        const auto shown = core::operation_guide_layout(GuideContext::other, body, exact, dpi);
+        const auto shown = core::operation_guide_layout(core::GuideRequest{GuideContext::other, 0},
+                                                        body, exact, dpi);
         expect(std::holds_alternative<core::StatusGuideLayout>(shown),
                "exact 160 DIP reservation admits status guide at each DPI");
         verify_status_geometry(std::get<core::StatusGuideLayout>(shown), exact, dpi);
-        expect(std::holds_alternative<std::monostate>(
-                   core::operation_guide_layout(GuideContext::other, body, short_by_one, dpi)),
+        expect(std::holds_alternative<std::monostate>(core::operation_guide_layout(
+                   core::GuideRequest{GuideContext::other, 0}, body, short_by_one, dpi)),
                "one physical pixel short of reservation hides the complete status guide");
     }
     const auto status = core::status_bar_layout(960, 265, 96);
     const auto exact = core::body_layout(960, 265, 96, core::default_font_size());
     const auto short_by_one = core::body_layout(960, 264, 96, core::default_font_size());
-    expect(std::holds_alternative<core::BodyGuideLayout>(
-               core::operation_guide_layout(GuideContext::untouched_untitled, exact, status, 96)),
+    expect(std::holds_alternative<core::BodyGuideLayout>(core::operation_guide_layout(
+               core::GuideRequest{GuideContext::untouched_untitled, 0}, exact, status, 96)),
            "exact vertical body margin admits body guide");
     expect(std::holds_alternative<core::StatusGuideLayout>(core::operation_guide_layout(
-               GuideContext::untouched_untitled, short_by_one, status, 96)),
+               core::GuideRequest{GuideContext::untouched_untitled, 0}, short_by_one, status, 96)),
            "one pixel below body height boundary falls back to status alone");
+}
+// #1122: 鍵の列は ui が測った箱の幅。64 DIP より狭ければ 64 DIP、広ければその幅で、説明の列と間は
+// 変えずに全体を本文の中央に置き直す。広がって収まらなければステータスへ回す。
+void verify_measured_key_width()
+{
+    for (const auto dpi : {96U, 120U, 192U})
+    {
+        const auto width = core::to_pixels(960, dpi);
+        const auto height = core::to_pixels(560, dpi);
+        const auto body = core::body_layout(width, height, dpi, core::default_font_size());
+        const auto status = core::status_bar_layout(width, height, dpi);
+        const auto narrow = core::operation_guide_layout(
+            core::GuideRequest{GuideContext::untouched_untitled, core::to_pixels(40, dpi)}, body,
+            status, dpi);
+        expect(core::width_of(std::get<core::BodyGuideLayout>(narrow).rows.front().key) ==
+                   core::to_pixels(64, dpi),
+               "a key narrower than 64 DIP keeps the adopted 64 DIP column");
+        const auto wide_key = core::to_pixels(64, dpi) + 23;
+        const auto wide = core::operation_guide_layout(
+            core::GuideRequest{GuideContext::untouched_untitled, wide_key}, body, status, dpi);
+        const auto &layout = std::get<core::BodyGuideLayout>(wide);
+        for (const auto &row : layout.rows)
+        {
+            expect(core::width_of(row.key) == wide_key &&
+                       row.label.left - row.key.right == core::to_pixels(20, dpi) &&
+                       core::width_of(row.label) == core::to_pixels(144, dpi),
+                   "a measured wider key widens only the key column");
+        }
+        const auto &first = layout.rows.front();
+        const auto center = first.key.left + first.label.right - body.band.left - body.band.right;
+        expect(center >= -1 && center <= 1, "the widened guide stays centered on the band");
+        expect(layout.note.left == first.key.left && layout.note.right == first.label.right,
+               "the footer spans the widened guide");
+    }
+    const auto body = core::body_layout(228 + 32, 560, 96, core::default_font_size());
+    const auto status = core::status_bar_layout(228 + 32, 560, 96);
+    expect(std::holds_alternative<std::monostate>(core::operation_guide_layout(
+               core::GuideRequest{GuideContext::untouched_untitled, 65}, body, status, 96)),
+           "a key one pixel wider than the exact margins no longer fits in the body");
 }
 } // namespace
 
@@ -323,5 +365,6 @@ void verify_guide_scope()
     verify_guide_setting_context();
     verify_geometry();
     verify_layout_boundaries();
+    verify_measured_key_width();
 }
 } // namespace nenenib::tests

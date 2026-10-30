@@ -52,6 +52,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 #include <wrl/client.h>
@@ -260,6 +261,7 @@ class Direct2DRenderer final
     void draw_grid_row(GridPainter &painter, const application::EditorFrame &frame,
                        const BodyPane &pane, const application::GridRowView &row);
     [[nodiscard]] std::int32_t gutter_padding(const core::EditorSettings &settings) const;
+    [[nodiscard]] std::int32_t body_guide_key_width(const application::EditorFrame &frame);
     void draw_body_guide(const application::EditorFrame &frame,
                          const core::OperationGuideLayout &guide);
     void draw_status_guide(const application::EditorFrame &frame,
@@ -337,6 +339,10 @@ class Direct2DRenderer final
     TextFormat guide_label_format_;
     TextFormat guide_note_format_;
     TextFormat guide_status_format_;
+    // 空の文書の案内の鍵の箱の幅（#1122）。鍵 3 本の文字列（モードで変わる）が前と同じなら
+    // 測り直さない。書式（DPI と字体）を作り直す create_guide_formats で捨てる。
+    std::optional<std::array<std::string, 3>> measured_guide_keys_;
+    std::int32_t measured_guide_key_width_ = 0;
     // 現在と直前の描画の本文資源だけ。前の列の残りは描画終了時に捨てる（ADR 0069）。
     BodyTextLayouts &body_text_;
     std::optional<RenderFailure> text_failure_;

@@ -9,10 +9,13 @@ namespace nenenib::core
 {
 namespace
 {
-[[nodiscard]] std::optional<BodyGuideLayout> body_guide(const BodyLayout &body,
-                                                        std::uint32_t dpi) noexcept
+[[nodiscard]] std::optional<BodyGuideLayout>
+body_guide(const BodyLayout &body, std::int32_t key_width, std::uint32_t dpi) noexcept
 {
-    const auto width = to_pixels(228, dpi);
+    // 鍵の列は測った箱の幅（#1122）。説明の列の左は鍵の列の右から 20 DIP、幅は 144 DIP。
+    const auto key = std::max(key_width, to_pixels(64, dpi));
+    const auto gap = to_pixels(20, dpi);
+    const auto width = key + gap + to_pixels(144, dpi);
     const auto left = body.band.left + (width_of(body.band) - width) / 2;
     const auto top = std::max(body.band.top + height_of(body.band) / 3,
                               body.content.top + body.line_height + to_pixels(12, dpi));
@@ -28,8 +31,8 @@ namespace
         const auto row_top = top + to_pixels(static_cast<std::int32_t>(index) * 32, dpi);
         const auto bottom = row_top + to_pixels(20, dpi);
         result.rows.at(index) =
-            GuideRowLayout{LayoutRect{left, row_top, left + to_pixels(64, dpi), bottom},
-                           LayoutRect{left + to_pixels(84, dpi), row_top, left + width, bottom}};
+            GuideRowLayout{LayoutRect{left, row_top, left + key, bottom},
+                           LayoutRect{left + key + gap, row_top, left + width, bottom}};
     }
     result.note =
         LayoutRect{left, top + to_pixels(104, dpi), left + width, top + to_pixels(120, dpi)};
@@ -57,16 +60,16 @@ namespace
 }
 } // namespace
 
-OperationGuideLayout operation_guide_layout(GuideContext context, const BodyLayout &body,
+OperationGuideLayout operation_guide_layout(GuideRequest request, const BodyLayout &body,
                                             const StatusBarLayout &status,
                                             std::uint32_t dpi) noexcept
 {
-    switch (context)
+    switch (request.context)
     {
     case GuideContext::hidden:
         return std::monostate{};
     case GuideContext::untouched_untitled:
-        if (const auto layout = body_guide(body, dpi); layout.has_value())
+        if (const auto layout = body_guide(body, request.key_width, dpi); layout.has_value())
         {
             return layout.value();
         }

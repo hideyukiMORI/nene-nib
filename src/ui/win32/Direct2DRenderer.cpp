@@ -9,6 +9,9 @@
 #include "DisplayLine.hpp"
 #include "EditMode.hpp"
 #include "EditorSettings.hpp"
+#include "GuideContext.hpp"
+#include "GuideKeyWidth.hpp"
+#include "GuideRequest.hpp"
 #include "GutterLabels.hpp"
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
@@ -63,6 +66,9 @@ constexpr float palette_detail_gap_dips = 12.0F;
 constexpr float palette_key_padding_dips = 9.0F;
 constexpr float palette_key_height_dips = 20.0F;
 constexpr float palette_key_radius_dips = 5.0F;
+// 空の文書の案内の鍵の枠の左右の余白（docs/design/2026-10-06-guide.md の 2 節）。箱の幅を測る
+// guide_key_width と描く draw_body_guide が同じ値を使う（#1122）。
+constexpr float guide_key_padding_dips = 9.0F;
 constexpr DWORD latency_timeout_milliseconds = 1000;
 constexpr float full_channel = 255.0F;
 
@@ -505,6 +511,9 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
 
 std::expected<void, RenderFailure> Direct2DRenderer::create_guide_formats(const wchar_t *face)
 {
+    // 鍵の箱の幅は書式で測ったものなので、書式と一緒に捨てる（#1122）。
+    measured_guide_keys_.reset();
+    measured_guide_key_width_ = 0;
     const auto key = make_format(family(L"Cascadia Code", L"Consolas"), 12.5F,
                                  DWRITE_FONT_WEIGHT_NORMAL, guide_key_format_);
     const auto label = make_format(face, 13.5F, DWRITE_FONT_WEIGHT_NORMAL, guide_label_format_);
@@ -1600,6 +1609,27 @@ void Direct2DRenderer::draw_pane(const application::EditorFrame &frame, const Bo
     body_bottom_ = std::numeric_limits<std::int32_t>::max();
 }
 
+std::int32_t Direct2DRenderer::body_guide_key_width(const application::EditorFrame &frame)
+{
+    // 本文の案内が出うる文脈だけで測る（ふだんの frame は layout を作らない・#1122）。
+    if (frame.guide.context != core::GuideContext::untouched_untitled)
+    {
+        return 0;
+    }
+    const std::array<std::string, 3> keys{frame.guide.entries.at(0).key,
+                                          frame.guide.entries.at(1).key,
+                                          frame.guide.entries.at(2).key};
+    if (measured_guide_keys_.has_value() && measured_guide_keys_.value() == keys)
+    {
+        return measured_guide_key_width_;
+    }
+    measured_guide_key_width_ =
+        guide_key_width(*dwrite_.Get(), *guide_key_format_.Get(), frame.guide.entries,
+                        scaled(guide_key_padding_dips));
+    measured_guide_keys_ = keys;
+    return measured_guide_key_width_;
+}
+
 void Direct2DRenderer::draw_body_guide(const application::EditorFrame &frame,
                                        const core::OperationGuideLayout &guide)
 {
@@ -1609,7 +1639,8 @@ void Direct2DRenderer::draw_body_guide(const application::EditorFrame &frame,
         return;
     }
     const KeycapStyle style{
-        9.0F, 20.0F, 5.0F, frame.palette.panel, frame.palette.panel_border, frame.palette.text};
+        guide_key_padding_dips, 20.0F, 5.0F, frame.palette.panel, frame.palette.panel_border,
+        frame.palette.text};
     for (std::size_t index = 0; index < body->rows.size(); ++index)
     {
         const auto &row = body->rows.at(index);
@@ -2200,7 +2231,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     const auto panes =
         core::pane_layouts(explorer.body, dpi_, frame.settings.font_size, frame.layout);
     const auto body = core::active_pane_layout(panes, frame.active_side);
-    const auto guide = core::operation_guide_layout(frame.guide.context, body, status, dpi_);
+    const auto guide = core::operation_guide_layout(
+        core::GuideRequest{frame.guide.context, body_guide_key_width(frame)}, body, status, dpi_);
     draw_title_bar(frame, title);
     draw_body(frame, body);
     draw_other_body(frame, panes);
