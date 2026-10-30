@@ -16,6 +16,7 @@
 #include "MarkdownPort.hpp"
 #include "SessionPort.hpp"
 #include "SettingsPort.hpp"
+#include "ShellRegistrationPort.hpp"
 #include "TextLayoutPort.hpp"
 #include "ThemePort.hpp"
 
@@ -51,5 +52,8 @@ struct EditorPorts
     // 現在時刻（ADR 0175 の決定 1）。F5 の日時の挿入だけが呼ぶ（決定 4）。名前の `clock` は
     // ARC-007 の字句検査（nondeterministicNames）が adapters の外で拒むので wall_clock にする。
     ClockPort &wall_clock;
+    // Windows のエクスプローラーへの登録（ADR 0178 の決定 1）。登録の 2 つの操作だけが呼び、起動と
+    // 静かな道では呼ばない（決定 4）。
+    ShellRegistrationPort &shell_registration;
 };
 } // namespace nenenib::application
