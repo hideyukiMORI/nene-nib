@@ -621,6 +621,25 @@ void verify_vim_selection()
     expect(!message_of(refused_copy).empty() && body_of(controller.frame()) == "a 1\n\nb\n",
            "a refused copy says so and the number was not incremented");
 }
+
+// 15. 解析の結果が差し替わると選択を捨てる（ADR 0155 の追補 決定 38）。チェックボックスの切り替えで
+// 本文が変わり、新しい結果が届いた後は選択が無く、知らせも出ない。
+void verify_selection_dropped_on_result()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    open_text(editing, "- [ ] a\n\ntext");
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    serve_parsed(editing);
+    applied(controller, app::SelectAll{});
+    const bool chosen = selection_of(controller.frame()).has_value();
+    applied(controller, app::TogglePreviewTask{0});
+    serve_parsed(editing);
+    const EditorFrame replaced = controller.frame();
+    expect(chosen && replaced.full_preview.has_value() && !selection_of(replaced).has_value() &&
+               message_of(replaced).empty(),
+           "a replaced result drops the selection and says nothing");
+}
 } // namespace
 
 void verify_preview_full_scope()
@@ -639,5 +658,6 @@ void verify_preview_full_scope()
     verify_selection_text();
     verify_selection_keys();
     verify_vim_selection();
+    verify_selection_dropped_on_result();
 }
 } // namespace nenenib::tests
