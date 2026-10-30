@@ -358,8 +358,9 @@ void verify_scroll()
            "moving the selection keeps it in view");
 }
 
-// 面の行数は本文の見えている行数 − 1（ルート名の行・最小 1）を application の 1 か所で導き、
-// 選んだ行は面の最後の行より下へ出ない（E4 の追補・ADR 0162 の決定 2）。
+// 窓が面の行数を送る前（explorer_lines が 0）は、面の行数は本文の見えている行数 − 1（ルート名の
+// 行・最小 1）を application の 1 か所で導き、選んだ行は面の最後の行より下へ出ない（E4 の追補・
+// ADR 0162 の決定 2）。
 void verify_panel_rows()
 {
     Editing editing(shown_at(project));
@@ -388,6 +389,41 @@ void verify_panel_rows()
     expect(read.has_value() && read.value_or(app::ExplorerView{}).first_visible ==
                                    view_of(controller.frame()).first_visible,
            "the window reads the same panel view without a frame");
+}
+
+// 面の行数は窓が client の高さから数えた面の行数 − 1（ルート名の行）で、本文の見えている行数
+// （上下の分割では半分の高さ・ADR 0148）に依らない（#1125・ADR 0162 の追補）。
+void verify_panel_rows_from_window()
+{
+    Editing editing(shown_at(project));
+    auto &controller = editing.controller();
+    // 上下の分割の操作中の枠は 4 行、面は窓の帯の全高で 9 行（ルート名を含む）。
+    applied(controller, app::VisibleLines{4, {}, 0, 0, 9});
+    app::FolderBatch batch{
+        editing.folders().requests().back().ticket, {}, FolderProgress::complete};
+    for (std::size_t index = 0; index < 20; ++index)
+    {
+        batch.entries.push_back(entry_of(std::format("C:\\proj\\h{:02}.txt", index), false));
+    }
+    editing.folders().serve(std::move(batch));
+    const auto listed = controller.apply_frame(app::WorkCompleted{});
+    expect(view_of(listed).rows.size() == 8 && view_of(listed).total == 20,
+           "the panel shows the window's lines less the root line, not the split pane's");
+    bool inside = true;
+    for (std::size_t step = 0; step < 12; ++step)
+    {
+        const auto view = view_of(key(editing, ExplorerKeyKind::j));
+        inside = inside && view.rows.size() == 8 && view.selected.has_value() &&
+                 view.selected.value() < view.first_visible + 8;
+    }
+    expect(inside, "the selection follows inside the panel's eight rows");
+    expect(view_of(controller.frame()).first_visible == 4,
+           "the first row follows the selection by the panel's rows");
+    applied(controller, app::VisibleLines{30, {}, 0, 0, 9});
+    expect(view_of(controller.frame()).rows.size() == 8,
+           "more body lines do not change the panel's rows");
+    applied(controller, app::VisibleLines{4, {}, 0, 0, 1});
+    expect(view_of(controller.frame()).rows.size() == 1, "a one line panel still shows one row");
 }
 
 // 面に焦点がある間は IME を閉じたまま（NORMAL と同じ）、焦点が外れたらモードの規則に戻る
@@ -586,6 +622,7 @@ void verify_explorer_contracts()
     verify_pointing_across_arrival();
     verify_scroll();
     verify_panel_rows();
+    verify_panel_rows_from_window();
     verify_ime_and_focus();
     verify_composition_while_focused();
     verify_one_listing_at_a_time();

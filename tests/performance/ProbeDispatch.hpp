@@ -3,6 +3,7 @@
 #include "CommandInputWorkload.hpp"
 #include "CompletionPrefixWorkload.hpp"
 #include "ExCompletionWorkload.hpp"
+#include "ExplorerFrameWorkload.hpp"
 #include "FileNameWorkload.hpp"
 #include "FrameDocumentWorkload.hpp"
 #include "FrameRowsWorkload.hpp"
@@ -34,5 +35,5 @@ using ProbeDispatch =
                  ProbeDispatchRow<PaletteChoiceWorkload>, ProbeDispatchRow<OperationChoiceWorkload>,
                  ProbeDispatchRow<SearchSpanWorkload>, ProbeDispatchRow<TextObjectWorkload>,
                  ProbeDispatchRow<MarkdownWorkload>, ProbeDispatchRow<NewlineIndexWorkload>,
-                 ProbeDispatchRow<LexerWorkload>>;
+                 ProbeDispatchRow<LexerWorkload>, ProbeDispatchRow<ExplorerFrameWorkload>>;
 } // namespace nenenib::tests::performance

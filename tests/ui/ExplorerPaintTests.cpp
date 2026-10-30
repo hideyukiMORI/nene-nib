@@ -1,7 +1,8 @@
 // #997（ADR 0162 の決定 2・8・9）: エクスプローラーの面の画素。WIC の bitmap（SoftwareTarget）に
 // ExplorerPainter で描き、地・境界（焦点で accent）・選んだ行・印・字下げ・名前の右端・面が無い
-// ときの不変・行の文字組みの保持を確かめる。窓・device は作らない。字の画素は字体に依るので、
-// Segoe UI が無い機械では測らない（QLT-013）。
+// ときの不変・行の文字組みの保持と、上下の分割でも面の行が窓の全高に並ぶこと（#1125）を
+// 確かめる。窓・device は作らない。字の画素は字体に依るので、Segoe UI が無い機械では測らない
+// （QLT-013）。窓が送る寸法 window_lines（#1125）は字体に依らないので、その前に必ず見る。
 #include "DirectWriteFactory.hpp"
 #include "ExplorerLayout.hpp"
 #include "ExplorerPainter.hpp"
@@ -13,11 +14,17 @@
 #include "LayoutRect.hpp"
 #include "Palette.hpp"
 #include "PaletteRowLayouts.hpp"
+#include "PaneLayouts.hpp"
+#include "PaneSide.hpp"
 #include "SoftwareTarget.hpp"
+#include "SplitLayout.hpp"
 #include "WindowChecks.hpp"
+#include "WindowLines.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <optional>
 #include <string>
 #include <vector>
@@ -215,10 +222,99 @@ void verify_focus_and_hidden(SoftwareTarget &target, IDWriteFactory2 &factory,
                ink_in(guide, core::LayoutRect{0, 20, border_x, 80}, palette.panel) == 0,
            "a panel without a root shows the guide line only");
 }
+// 上下の分割（ADR 0148）でも面の行数は client の高さから導く（#1125・ADR 0162 の追補）。面の
+// 行数は explorer_panel_lines − 1（ルート名の行・application の --explorer の契約が同じ規則を
+// 固定する）で、操作中の枠の見えている行数（本文の半分の高さ）では導かない。bitmap は 80 画素の
+// 高さなので、面の下端を bitmap の下端へ平行移動して、面の最後の行に名前の墨があり、分割の枠の
+// 行数から導いた行の数では届かないことを見る。
+void verify_split_rows(SoftwareTarget &target, IDWriteFactory2 &factory, IDWriteTextFormat &format)
+{
+    const auto palette = core::palette_for(core::Appearance::dark);
+    const core::LayoutRect client{0, 0, 1300, 900};
+    const auto font = core::default_font_size();
+    const auto layout = core::explorer_layout(client, dpi, font, true);
+    const auto lines = core::explorer_panel_lines(client, dpi, font);
+    const auto split = core::active_pane_layout(
+        core::pane_layouts(layout.body, dpi, font, core::SplitLayout::horizontal),
+        core::PaneSide::second);
+    expect(layout.panel.has_value() && layout.line_height > 0 && lines >= 4,
+           "the explorer panel has its lines");
+    if (!layout.panel.has_value() || layout.line_height <= 0 || lines < 4)
+    {
+        return;
+    }
+    const auto panel_area = layout.panel.value();
+    expect(lines == static_cast<std::size_t>(core::height_of(panel_area) / layout.line_height),
+           "the panel's lines are the whole band height over the line height");
+    expect(split.visible_lines < lines - 1,
+           "a horizontal split halves the body lines but not the panel's");
+    std::vector<application::ExplorerRowView> rows;
+    for (std::size_t index = 0; index + 1 < lines; ++index)
+    {
+        rows.push_back({std::format("file-{:02}.txt", index), 0, false, false, false, false});
+    }
+    const application::ExplorerView view{core::FilePath::parse("C:/proj").value(),
+                                         std::move(rows),
+                                         lines - 1,
+                                         std::nullopt,
+                                         false,
+                                         0};
+    PaletteRowLayouts layouts(ExplorerPainter::retained);
+    const ExplorerText text{&factory, &format, dpi};
+    const auto shift =
+        static_cast<float>(panel_area.bottom) - static_cast<float>(SoftwareTarget::height);
+    const auto pixels = target.painted(
+        [&](ID2D1RenderTarget &surface, ID2D1SolidColorBrush *brush)
+        {
+            surface.SetTransform(D2D1::Matrix3x2F::Translation(0.0F, -shift));
+            ExplorerPainter painter(surface, *brush, text, layouts);
+            painter.paint(view, layout, palette);
+            surface.SetTransform(D2D1::Matrix3x2F::Identity());
+        });
+    // bitmap の上の面の line 行目（0 はルート名の行）の名前の欄。
+    const auto line_in_bitmap = [&](std::size_t line)
+    {
+        const auto top = panel_area.top + (static_cast<std::int32_t>(line) * layout.line_height) -
+                         static_cast<std::int32_t>(shift);
+        return core::LayoutRect{panel_area.left + layout.padding, std::max(top, 0),
+                                panel_area.left + 120, std::max(top + layout.line_height, 0)};
+    };
+    const auto last = line_in_bitmap(lines - 1);
+    expect(last.top >= 0 && last.bottom <= static_cast<std::int32_t>(SoftwareTarget::height),
+           "the panel's last line is inside the bitmap");
+    expect(ink_in(pixels, last, palette.panel) > 0,
+           "the panel's rows run down to the last line of the window's band");
+}
+// 窓が送る寸法（EditorWindow::body_view の window_lines・#1125）。上下の分割の操作中の枠の
+// body を渡しても、面の行数は窓の client の高さから数えた explorer_panel_lines で、0 のまま
+// 送らない。窓の高さを変えれば面の行数も変わる。
+void verify_window_lines()
+{
+    const auto font = core::default_font_size();
+    const auto lines_at = [&](std::int32_t height)
+    {
+        const core::LayoutRect client{0, 0, 1300, height};
+        const auto body = core::active_pane_layout(
+            core::pane_layouts(core::explorer_layout(client, dpi, font, true).body, dpi, font,
+                               core::SplitLayout::horizontal),
+            core::PaneSide::first);
+        const auto sent = nenenib::ui::win32::window_lines(body, client, dpi, font);
+        expect(sent.lines == body.visible_lines && sent.window_height == height,
+               "the window sends the split pane's body lines and its client height");
+        expect(sent.explorer_lines != 0 &&
+                   sent.explorer_lines == core::explorer_panel_lines(client, dpi, font),
+               "the window sends the panel's lines counted from the client height");
+        expect(sent.explorer_lines > sent.lines + 1,
+               "the panel's lines are not the split pane's lines");
+        return sent.explorer_lines;
+    };
+    expect(lines_at(600) < lines_at(900), "a taller window sends more panel lines");
+}
 } // namespace
 
 void verify_explorer_paint()
 {
+    verify_window_lines();
     SoftwareTarget target;
     const auto factory = directwrite_factory();
     if (!target.ready() || factory == nullptr)
@@ -239,5 +335,6 @@ void verify_explorer_paint()
     }
     verify_panel_pixels(target, *factory.Get(), *format.Get());
     verify_focus_and_hidden(target, *factory.Get(), *format.Get());
+    verify_split_rows(target, *factory.Get(), *format.Get());
 }
 } // namespace nenenib::tests::ui

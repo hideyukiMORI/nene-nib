@@ -52,4 +52,15 @@ ExplorerLayout explorer_layout(LayoutRect client, std::uint32_t dpi, FontSize fo
     layout.body.left = client.left + width;
     return layout;
 }
+
+std::size_t explorer_panel_lines(LayoutRect client, std::uint32_t dpi, FontSize font_size) noexcept
+{
+    const ExplorerLayout layout = explorer_layout(client, dpi, font_size, true);
+    if (!layout.panel.has_value() || layout.line_height <= 0)
+    {
+        return 0;
+    }
+    return static_cast<std::size_t>(std::max(height_of(layout.panel.value()), 0) /
+                                    layout.line_height);
+}
 } // namespace nenenib::core
