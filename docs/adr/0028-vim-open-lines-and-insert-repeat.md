@@ -54,4 +54,4 @@ FR-003のNORMAL `o` / `O`を実装する。既存のINSERT、行索引、改行�
 
 ## 追補（2026-10-30・Issue #1136）
 
-決定 3 の「移動」は動いた移動だけで、行の端で動かない矢印（行頭の `<Left>`・行の内容の終わりの `<Right>`）は反復を切らない（Vim の `ins_left` `ins_right` はビープだけで `start_arrow` を呼ばない・実測 `2A<Right>x<Esc>` → `abxx`）。`.` の記録も取り直さず、始めの位置の印も立てない。判定は `VimStepInsert.cpp` の `arrow_stays` の 1 本。
+決定 3 の「移動」から、行の端で動かない `<Left>` `<Right>`（行頭の `<Left>`・行の内容の終わりの `<Right>`）だけを外す。これらは反復を切らない（Vim の `ins_left` `ins_right` はビープだけで `start_arrow` を呼ばない・実測 `2A<Right>x<Esc>` → `abxx`）。`.` の記録も取り直さず、始めの位置の印も立てない。判定は `VimStepInsert.cpp` の `arrow_stays` の 1 本。最初の行の `<Up>`・最後の行の `<Down>`・端の PgUp / PgDn は動かなくても今までどおり反復を切る（Vim との差は別の Issue）。
