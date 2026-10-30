@@ -23,5 +23,10 @@ struct VimPatternAtom
     // `[...]` の集合なら真（`ignorecase` で大小を畳む）。`\d \w \s` の集合は Vim と同じく
     // 畳まない（#1041）。
     bool bracketed;
+    // 大小を畳まずに比べる literal（#1147）。結合文字の code point と、結合文字が直後に続く
+    // 繰り返しの無い基底の文字。Vim 9.1 の NFA は基底と結合文字の列を 1 つの原子
+    // （NFA_COMPOSING）にして畳まずに比べる（`:set ic` の `/é` は `É` に当たらない・実測）。
+    // `e*` + 結合文字の `e` は別の原子として畳む（Vim の読み・実測とは合わない残差・ADR 0032）。
+    bool exact;
 };
 } // namespace nenenib::core
