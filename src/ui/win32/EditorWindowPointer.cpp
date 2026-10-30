@@ -420,8 +420,8 @@ std::int32_t EditorWindow::title_bar_width() const
 void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
 {
     const auto delta = static_cast<std::int16_t>(HIWORD(word));
-    // Ctrl を押したホイールは、面・エクスプローラー・プレビュー・帯の上でも字の大きさ（ADR 0150 の追補・#1048）。
-    // 送りの分岐より前に見る。Ctrl の無いホイールは残りを捨てる。
+    // Ctrl を押したホイールは、面・エクスプローラー・プレビュー・帯の上でも字の大きさ（ADR 0150 の
+    // 追補・#1048）。送りの分岐より前に見る。Ctrl の無いホイールは残りを捨てる。
     if ((GET_KEYSTATE_WPARAM(word) & MK_CONTROL) != 0)
     {
         zoom_wheel(delta);
