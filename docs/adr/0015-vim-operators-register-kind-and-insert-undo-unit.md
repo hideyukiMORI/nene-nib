@@ -111,6 +111,14 @@ VISUAL の `y` は触らない。`d` `c` の後のキャレットは別の規則
 - 規則は `visual_restore` の 1 本（ADR 0052 の決定 10 の u の戻り先と同じ値）で、大小文字のキャレットと u の戻り先の両方に使う。オペレータの種類で分けない。前は大小文字だけキャレットを範囲の先頭（行頭）にしていた（fuzz seed 37 の `fuzz-37-0206`・`Vgg~c$`）。`.` の再生の行頭へ寄せない規則は `visual_restore` の中にあるので `d` `c` `r` `>` `<` と大小文字の再生の u の戻り先にも効く（Vim の同じ分岐）。`u` を `.` の後に打つ形は oracle が 1 本の `:normal!` に流すので測れず（ADR 0052）、Vim の redo 分岐からの値を契約（`VimDotTests.cpp` の `verify_undo_caret_after_visual_line_dot`）で固定する。
 - 文字単位（`wvj~` は選択の先頭）と矩形は変えない。fixture は `visual-line-case-` の 19 件（Vim 9.1 の実測・`g~~` `gUk` の比較と `u` の後を含む）。
 
+### 決定 10 の追補（2026-10-30・#990）: 残りの 28 字と `ß` の `gU`
+
+- #781 の追記の「限界」を閉じる。生成器 `eng/case-mapping.py` は、Python の `str.upper` / `str.lower` が SpecialCasing の 1 対多を返す字のうち、**UnicodeData.txt（Unicode 15.0.0）の簡単な写像を持つ 28 字を上書きの表 `SIMPLE_OVERRIDES` に持つ**（大文字化は U+1F80〜U+1F87・U+1F90〜U+1F97・U+1FA0〜U+1FA7 の 24 字と U+1FB3・U+1FC3・U+1FF3 をタイトルケースの U+1F88 などへ、小文字化は `İ`（U+0130）を `i` へ）。
+  上書きは「Python の写像が 2 code point 以上の字」だけに許し（生成器が検査する）、生成物の見出しに字数を書く。表の形・生成の仕組み・CNF-010 は変えない。生成した表は固定 Vim 9.1 の `toupper()` `tolower()` と U+0080〜U+10FFFF の全数で一致する（2026-10-30 に再測定・違い 0）。
+- **`ß` の 1 対多は表の外の 1 か所**で、`cased_text` が `gU` と VISUAL の `U`（`VimOperator::upper_case`）のときだけ `ß` を `SS` にする（Vim の `swapchar` の OP_UPPER の特別扱い）。`~` `g~` `gu` と VISUAL の `~` `u` は `ß` を変えない。`ß` も `SS` も 2 バイトなので、範囲の後ろのバイトの位置は変わらない。矩形の `U` も同じ `cased_text` を通る。
+- 照合（`ignorecase` / `smartcase`）は同じ表を引くので、`smartcase` は `İ` を大文字として数え（Vim の `utf_isupper` と同じ）、`[ᾈ]` の大小を畳む照合は `ᾀ` にも当たる。照合の残りは #1147。
+- fixture は `case-rest-` の 14 件（`İ` の `guu` `~` VISUAL の `u`・ギリシャの `gUU` `g~~` `3~`・`ß` の `gUU` `gUl` `.` `~` `g~~` `guu` VISUAL の `U` と `V` の `U`・Vim 9.1 の実測）。#781 の `unicode-case-turkish-dotted-I-upper` はそのまま。
+
 ### 決定 14（2026-10-29 追記・#1038）
 
 14. **`Ctrl-a` `Ctrl-x` は数の増減で、1 回の `Edit`・undo 1 単位・`.` に載り・レジスタを書かない。`nrformats` は `bin,hex` に固定する**（Vim の defaults.vim の値・8 進・英字・unsigned は読まない・`:set nrformats=` は後続）。
