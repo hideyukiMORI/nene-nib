@@ -14,8 +14,8 @@ template <typename Value> void append_bytes(std::string &out, Value value)
     out.append(bytes.data(), bytes.size());
 }
 
-// 鍵の欄を 1
-// 本のバイト列に畳む。書式は同一性だけ（指す先の値）、欄は幅と高さだけ（原点は入れない）。
+// 鍵の欄を 1 本のバイト列に畳む。書式は同一性だけ（指す先の値）、欄は幅と高さだけ
+// （原点は入れない）。
 // 先頭の欄は固定の長さなので、文字列を最後に足せば別の鍵が同じバイト列にならない。
 void encode(std::string &out, const PaletteRowKey &key)
 {

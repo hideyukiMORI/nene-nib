@@ -1,7 +1,8 @@
 // #997（ADR 0162 の決定 2・8・9）: エクスプローラーの面の画素。WIC の bitmap（SoftwareTarget）に
 // ExplorerPainter で描き、地・境界（焦点で accent）・選んだ行・印・字下げ・名前の右端・面が無い
-// ときの不変・行の文字組みの保持と、上下の分割でも面の行が窓の全高に並ぶこと（#1125）を確かめる。窓・device
-// は作らない。字の画素は字体に依るので、 Segoe UI が無い機械では測らない（QLT-013）。
+// ときの不変・行の文字組みの保持と、上下の分割でも面の行が窓の全高に並ぶこと（#1125）を
+// 確かめる。窓・device は作らない。字の画素は字体に依るので、Segoe UI が無い機械では測らない
+// （QLT-013）。窓が送る寸法 window_lines（#1125）は字体に依らないので、その前に必ず見る。
 #include "DirectWriteFactory.hpp"
 #include "ExplorerLayout.hpp"
 #include "ExplorerPainter.hpp"
@@ -18,6 +19,7 @@
 #include "SoftwareTarget.hpp"
 #include "SplitLayout.hpp"
 #include "WindowChecks.hpp"
+#include "WindowLines.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -283,10 +285,36 @@ void verify_split_rows(SoftwareTarget &target, IDWriteFactory2 &factory, IDWrite
     expect(ink_in(pixels, last, palette.panel) > 0,
            "the panel's rows run down to the last line of the window's band");
 }
+// 窓が送る寸法（EditorWindow::body_view の window_lines・#1125）。上下の分割の操作中の枠の
+// body を渡しても、面の行数は窓の client の高さから数えた explorer_panel_lines で、0 のまま
+// 送らない。窓の高さを変えれば面の行数も変わる。
+void verify_window_lines()
+{
+    const auto font = core::default_font_size();
+    const auto lines_at = [&](std::int32_t height)
+    {
+        const core::LayoutRect client{0, 0, 1300, height};
+        const auto body = core::active_pane_layout(
+            core::pane_layouts(core::explorer_layout(client, dpi, font, true).body, dpi, font,
+                               core::SplitLayout::horizontal),
+            core::PaneSide::first);
+        const auto sent = nenenib::ui::win32::window_lines(body, client, dpi, font);
+        expect(sent.lines == body.visible_lines && sent.window_height == height,
+               "the window sends the split pane's body lines and its client height");
+        expect(sent.explorer_lines != 0 &&
+                   sent.explorer_lines == core::explorer_panel_lines(client, dpi, font),
+               "the window sends the panel's lines counted from the client height");
+        expect(sent.explorer_lines > sent.lines + 1,
+               "the panel's lines are not the split pane's lines");
+        return sent.explorer_lines;
+    };
+    expect(lines_at(600) < lines_at(900), "a taller window sends more panel lines");
+}
 } // namespace
 
 void verify_explorer_paint()
 {
+    verify_window_lines();
     SoftwareTarget target;
     const auto factory = directwrite_factory();
     if (!target.ready() || factory == nullptr)
