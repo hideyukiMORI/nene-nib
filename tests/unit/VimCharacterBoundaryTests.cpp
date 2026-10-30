@@ -1,4 +1,5 @@
-// scope `--vim-characters` の単体テスト（ADR 0042 決定 2・ADR 0053）。
+// scope `--vim-characters` の単体テスト（ADR 0042 決定 2・ADR 0053・語の種類の表は ADR 0031 の補足
+// #985）。
 #include "LineNumber.hpp"
 #include "Offset.hpp"
 #include "Scopes.hpp"
@@ -6,6 +7,9 @@
 #include "TextBuffer.hpp"
 #include "VimCaret.hpp"
 #include "VimCharacterBoundary.hpp"
+#include "VimWordClass.hpp"
+#include "VimWordClassTable.hpp"
+#include "VimWordMotion.hpp"
 
 #include "../vim/VimFixtures.hpp"
 
@@ -20,8 +24,10 @@ namespace
 using core::LineNumber;
 using core::Offset;
 using core::TextBuffer;
+using core::vim_character_class;
 using core::vim_character_end;
 using core::vim_character_start;
+using core::VimWordClass;
 
 // 1 文字は code point 1 つと直後に続く幅 0 の code point の列（ADR 0053 の決定 1）。
 void verify_vim_character_end()
@@ -104,6 +110,36 @@ void verify_resting_caret_on_a_long_line()
            "a column past the line maps to the line content end");
 }
 
+// 語の種類の表は Vim 9.1.0004 の src/mbyte.c（SHA-256
+// 5d56d30e6a5cab9b8dc1460d5995a8a53077924f26c056091825c1bb600f4a8b）の classes[] 71 区間と
+// emoji_all[] 146 区間の写し（Issue #985・ADR 0031 の補足）。値は oracle の Vim の charclass()。
+void verify_vim_word_class_table()
+{
+    expect(core::vim_utf_classes.size() == 71, "the table copies all 71 intervals of classes[]");
+    expect(core::vim_emoji_all.size() == 146, "the table copies all 146 intervals of emoji_all[]");
+    bool sorted = true;
+    for (std::size_t at = 1; at < core::vim_emoji_all.size(); ++at)
+    {
+        sorted = sorted && core::vim_emoji_all.at(at - 1).last < core::vim_emoji_all.at(at).first;
+    }
+    expect(sorted, "emoji_all[] stays sorted and apart for the binary search");
+    const auto word = [](char32_t code) { return vim_character_class(code, VimWordClass::word); };
+    expect(word(0x0085) == 1 && word(0x00A0) == 0 && word(0x00B5) == 2 && word(0x00D7) == 2,
+           "below 0x100 the default iskeyword decides");
+    expect(word(0x2190) == 1 && word(0x200D) == 1 && word(0x2000) == 0,
+           "arrows and the joiner are punctuation, the general spaces are blanks");
+    expect(word(0x2074) == 1 && word(0x2081) == 1,
+           "the overlapping 0x2060-0x27ff row wins over superscripts as in Vim's search");
+    expect(word(0x26A0) == 3 && word(0x1F468) == 3 && word(0x1F600) == 3, "emoji are class 3");
+    expect(word(0x3042) == 0x3040 && word(0x30AB) == 0x30A0 && word(0x6F22) == 0x4E00 &&
+               word(0xD55C) == 0xAC00 && word(0x2801) == 0x2800,
+           "Hiragana, Katakana, CJK, Hangul and Braille keep their own classes");
+    expect(word(0x0964) == 1 && word(0x1D400) == 1 && word(0x03B1) == 2 && word(0xFF10) == 2,
+           "the danda and math letters are punctuation, Greek and fullwidth digits are words");
+    expect(vim_character_class(0x26A0, VimWordClass::big_word) == 2,
+           "a WORD folds every non-blank class into one");
+}
+
 void verify_vim_character_fixtures()
 {
     std::size_t selected = 0;
@@ -116,6 +152,16 @@ void verify_vim_character_fixtures()
         }
     }
     expect(selected == 92, "the scope replays all 92 adopted combining-character fixtures");
+    std::size_t classes = 0;
+    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    {
+        if (fixture.name.starts_with("word-class-"))
+        {
+            verify_vim_fixture(fixture);
+            ++classes;
+        }
+    }
+    expect(classes == 38, "the scope replays all 38 word-class fixtures (Issue #985)");
 }
 } // namespace
 
@@ -124,6 +170,7 @@ void verify_vim_character_contracts()
     verify_vim_character_end();
     verify_vim_character_start();
     verify_resting_caret_on_a_long_line();
+    verify_vim_word_class_table();
 }
 
 void verify_vim_character_scope()
