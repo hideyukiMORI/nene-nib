@@ -67,16 +67,34 @@ namespace
 constexpr std::size_t arrow_window_bytes = 64;
 constexpr std::size_t longest_code_point_bytes = 4;
 
+// 行の端で動かない矢印か（行頭の `<Left>`・行の内容の終わりの `<Right>`・#1136）。
+// Vim の ins_left ins_right はここでビープだけを返し start_arrow を呼ばないので、
+// 回数の反復も `.` の記録も始めの位置も変えない（ADR 0049 / ADR 0028 の追補）。
+// 判定はこの 1 本で、矢印の 2 case と始めの位置が共用する。
+[[nodiscard]] bool arrow_stays(const TextBuffer &text, Offset caret, const VimKey &key)
+{
+    const auto *const special = std::get_if<VimSpecialKey>(&key);
+    if (special == nullptr)
+    {
+        return false;
+    }
+    const LineNumber line = line_of(text, caret);
+    const bool left = *special == VimSpecialKey::arrow_left;
+    const bool right = *special == VimSpecialKey::arrow_right;
+    return (left && caret.value <= text.line_start(line).value) ||
+           (right && caret.value >= text.line_end(line).value);
+}
+
 // INSERT の `<Left>`（Vim の ins_left と oneleft・#1136）。既定の whichwrap=b,s に `[` が無いので
 // 行頭では止まり、何も変えずに INSERT を続ける（回数もそのまま・ADR 0049 の追補）。ほかは Vim の
 // 1 文字ぶん戻る（ADR 0053 の追補）。
 [[nodiscard]] VimStep insert_left(const VimState &state, const TextBuffer &text, Offset caret)
 {
-    const Offset line_start = text.line_start(line_of(text, caret));
-    if (caret.value <= line_start.value)
+    if (arrow_stays(text, caret, VimKey{VimSpecialKey::arrow_left}))
     {
         return VimStep{state, VimNoEffect{}};
     }
+    const Offset line_start = text.line_start(line_of(text, caret));
     std::size_t window = arrow_window_bytes;
     for (;;)
     {
@@ -95,11 +113,11 @@ constexpr std::size_t longest_code_point_bytes = 4;
 // （改行の手前）では止まり、何も変えない。ほかは Vim の 1 文字ぶん進む。
 [[nodiscard]] VimStep insert_right(const VimState &state, const TextBuffer &text, Offset caret)
 {
-    const Offset line_end = text.line_end(line_of(text, caret));
-    if (caret.value >= line_end.value)
+    if (arrow_stays(text, caret, VimKey{VimSpecialKey::arrow_right}))
     {
         return VimStep{state, VimNoEffect{}};
     }
+    const Offset line_end = text.line_end(line_of(text, caret));
     std::size_t window = arrow_window_bytes;
     for (;;)
     {
@@ -712,6 +730,14 @@ namespace
 }
 } // namespace
 
+// 行の端で動かなかった矢印か（#1136）。動く矢印と Home / End などは必ず VimMoveTo を返すので、
+// 記録を取り直す鍵（restarts_insert）が効果なしで返ったのは arrow_stays の矢印だけ。Vim の
+// ins_left / ins_right はビープで返り start_arrow を呼ばないので、`.` の記録を取り直さない。
+[[nodiscard]] bool moved_nothing(const VimKey &key, const VimEffect &effect) noexcept
+{
+    return std::holds_alternative<VimNoEffect>(effect) && restarts_insert(key);
+}
+
 // 何も消せずに止まった消す鍵（本文の先頭の Backspace・Ctrl-w・Ctrl-u・Vim のビープ）か（#1093）。
 // Vim の ins_bs はビープで返る鍵を redo に足さないので、回数の鍵の列にも `.` の記録にも載せない。
 [[nodiscard]] bool erased_nothing(const VimKey &key, const VimEffect &effect) noexcept
@@ -789,6 +815,12 @@ namespace
     const VimInsertStart here{line, caret.value - view.text.line_start(line).value, false};
     const bool moving = !state.input_wait.has_value() && restarts_insert(key);
     VimInsertStart start = state.insert_start.value_or(here);
+    if (moving && arrow_stays(view.text, caret, key))
+    {
+        // 行の端で動かない矢印は印を立てず、前の印も止めない（Vim は start_arrow を呼ばない）。
+        next.insert_start = start;
+        return next;
+    }
     if (moving)
     {
         start.moved = true;

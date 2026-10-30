@@ -27,6 +27,7 @@ using detail::line_of;
 using detail::macro_name_of;
 using detail::macro_record_action;
 using detail::macro_recorded;
+using detail::moved_nothing;
 using detail::register_read;
 using detail::register_selection_of;
 using detail::repeated_change;
@@ -541,7 +542,8 @@ namespace
         return next;
     }
     // 何も消せない消す鍵は `.` の記録にも残さない（#1093・`i<C-w>x<Esc>j0.` は x だけ）。
-    if (erased_nothing(key, effect))
+    // 行の端で動かない矢印も記録を取り直さない（#1136・`A<Right>x<Esc>j.` は `Ax` を繰り返す）。
+    if (erased_nothing(key, effect) || moved_nothing(key, effect))
     {
         next.recording = before.recording;
         return next;

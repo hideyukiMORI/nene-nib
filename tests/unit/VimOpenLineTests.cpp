@@ -163,10 +163,13 @@ void verify_open_line_round_trip(std::string_view initial, std::string_view keys
 
 void verify_vim_open_line_movement()
 {
-    constexpr std::array<VimSpecialKey, 8> keys{
-        VimSpecialKey::arrow_left, VimSpecialKey::arrow_right, VimSpecialKey::arrow_up,
-        VimSpecialKey::arrow_down, VimSpecialKey::home,        VimSpecialKey::end,
-        VimSpecialKey::page_up,    VimSpecialKey::page_down};
+    // 行末の `<Right>` は行の端で動かない矢印で、Vim の ins_right は start_arrow を
+    // 呼ばず反復を切らない（#1136・ADR 0028 の追補・fixture の
+    // insert-arrow-right-at-the-line-end-keeps-the-count）。
+    constexpr std::array<VimSpecialKey, 7> keys{VimSpecialKey::arrow_left, VimSpecialKey::arrow_up,
+                                                VimSpecialKey::arrow_down, VimSpecialKey::home,
+                                                VimSpecialKey::end,        VimSpecialKey::page_up,
+                                                VimSpecialKey::page_down};
     for (const VimSpecialKey key : keys)
     {
         Editing editing;
