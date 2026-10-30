@@ -2,6 +2,7 @@
 // `relativenumber` の行番号の文字は画面の値なので oracle では測れず、ここで契約にする。`scrolloff`
 // の H M L と Ctrl-f / Ctrl-b / Ctrl-d / Ctrl-u の着地（#1099）も窓の高さが要るのでここ。
 #include "Column.hpp"
+#include "DisplayForm.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -14,6 +15,7 @@
 #include "PlaceCaret.hpp"
 #include "Scopes.hpp"
 #include "ScriptedSettings.hpp"
+#include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "TestSupport.hpp"
@@ -33,6 +35,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <utility>
 
 namespace nenenib::tests
 {
@@ -41,6 +44,7 @@ namespace
 using nenenib::application::EditorFrame;
 using nenenib::application::InsertText;
 using nenenib::application::PlaceCaret;
+using nenenib::application::SelectDisplay;
 using nenenib::application::SelectEditMode;
 using nenenib::application::VimKeyPress;
 using nenenib::application::VisibleLines;
@@ -375,6 +379,64 @@ void verify_scrolloff_cursor_correct()
         verify_operator_ranges_are_not_corrected(width);
     }
 }
+// 格子の画面行の単位の半画面と 1 画面も同じ寄せ（#1142・ADR 0019 の追補 7）。Vim に格子は
+// 無いので、論理行の道の規則を画面行に読み替えた形を固定する。8 升の幅・見えている画面行は 10 で、
+// 200 字の 1 行は 25 画面行。キャレットは 0 画面行の升 2（3 桁目）から始まり、画面行 r の同じ升は
+// 3 + 8r 桁目。
+void open_grid_window(EditorController &controller, std::string_view margin)
+{
+    applied(controller, VisibleLines{shown_lines, nenenib::core::TextViewGeometry{85, 20, 96}});
+    applied(controller, InsertText{std::string(200, 'a')});
+    applied(controller,
+            PlaceCaret{TextPosition{LineNumber{1}, Column{3}}, SelectionAnchoring::collapse});
+    applied(controller, SelectDisplay{nenenib::core::DisplayForm::grid});
+    applied(controller, SelectEditMode{EditMode::vim});
+    static_cast<void>(run_ex(controller, "set so=" + std::string(margin)));
+}
+
+// 最上段の画面行とキャレットの桁。
+[[nodiscard]] std::pair<std::size_t, std::size_t> grid_top_and_column(EditorController &controller)
+{
+    const auto frame = controller.frame();
+    const std::size_t top = frame.grid.empty() ? 999 : frame.grid.front().row;
+    return {top, frame.caret.position.column.value};
+}
+
+using GridPlace = std::pair<std::size_t, std::size_t>;
+
+void verify_grid_rows_cursor_correct()
+{
+    Editing paged;
+    EditorController &forward = paged.controller();
+    open_grid_window(forward, "3");
+    vim_replay(forward, "<C-f>");
+    expect(grid_top_and_column(forward) == GridPlace{10, 107},
+           "#1142 grid Ctrl-f with so=3 puts the caret 3 screen rows below the new top");
+    vim_replay(forward, "<C-b>");
+    expect(grid_top_and_column(forward) == GridPlace{0, 27},
+           "#1142 grid Ctrl-b back to the first screen row keeps the caret (no upper margin)");
+    Editing ended;
+    EditorController &end = ended.controller();
+    open_grid_window(end, "3");
+    vim_replay(end, "2<C-f>");
+    expect(grid_top_and_column(end) == GridPlace{20, 187},
+           "#1142 grid 2 Ctrl-f to the end keeps the upper margin and drops the lower one");
+    Editing halved;
+    EditorController &half = halved.controller();
+    open_grid_window(half, "3");
+    vim_replay(half, "<C-d>");
+    expect(grid_top_and_column(half) == GridPlace{5, 67},
+           "#1142 grid Ctrl-d with so=3 puts the caret 3 screen rows below the new top");
+    vim_replay(half, "<C-u>");
+    expect(grid_top_and_column(half) == GridPlace{0, 27},
+           "#1142 grid Ctrl-u back to the first screen row moves the caret by half a screen only");
+    Editing plain;
+    EditorController &unmargined = plain.controller();
+    open_grid_window(unmargined, "0");
+    vim_replay(unmargined, "<C-f>");
+    expect(grid_top_and_column(unmargined) == GridPlace{10, 83},
+           "#1142 grid Ctrl-f with so=0 is unchanged (the caret on the new top row)");
+}
 } // namespace
 
 void verify_vim_view_scope()
@@ -389,5 +451,6 @@ void verify_vim_view_scope()
     verify_scrolloff_wrapped_rows();
     verify_ordinary_mode_options();
     verify_scrolloff_cursor_correct();
+    verify_grid_rows_cursor_correct();
 }
 } // namespace nenenib::tests
