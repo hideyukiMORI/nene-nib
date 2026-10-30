@@ -59,4 +59,4 @@ FR-003のNORMAL `o` / `O`を実装する。既存のINSERT、行索引、改行�
 
 ## 追補（2026-10-30・Issue #1137）
 
-決定 4 の「移動の鍵は `i` から取り直す」は、移動の鍵で記録を区切り、区切った後に打った最初の移動でない鍵で `i` から取り直す（Vim の `stop_arrow`）。区切った後に何も打たずに Esc すれば記録は区切る前のまま（実測 `ix<Left><Esc>.` → `xxab`・`2.` も前の記録に掛かり `xxxab`・`2ix<Left><Esc>.` は回数ごと・`vlcZ<Home><Esc>.` は VISUAL の大きさごと繰り返す）。区切った後の印は始めの位置の `moved`（#1040 の `arrow_stopped` と同じ合図）で、`Ctrl-r` は開いた時点で取り直し、ビープの消す鍵は印を残す。`VimStepRecording.cpp` の `insert_recording` の 1 か所。`insert-arrow-dot-*` の 12 fixture が固定 Vim との一致を守る。
+決定 4 の「移動の鍵は `i` から取り直す」は、移動の鍵で記録を区切り、区切った後に打った最初の移動でない鍵で `i` から取り直す（Vim の `stop_arrow`）。区切った後に何も打たずに Esc すれば記録は区切る前のまま（実測 `ix<Left><Esc>.` → `xxab`・`2.` も前の記録に掛かり `xxxab`・`2ix<Left><Esc>.` は回数ごと・`2ix<Left><Esc>3.` は回数を置き換え・`vlcZ<Home><Esc>.` は VISUAL の大きさごと繰り返す）。区切った後の印は始めの位置の `moved`（#1040 の `arrow_stopped` と同じ合図）で、`Ctrl-r` は開いた時点で取り直す。記録は `VimStepRecording.cpp` の `insert_recording` の 1 か所。ビープの消す鍵は印も位置も鍵の前のまま残し、戻すのは INSERT の側の `insert_start_kept`（`VimStepInsert.cpp`・`insert_started` の隣・記録の有無に依らない）。`insert-arrow-dot-*` の 13 fixture が固定 Vim との一致を守る。
