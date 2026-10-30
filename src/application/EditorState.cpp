@@ -187,7 +187,11 @@ EditorState EditorState::with_themes(core::ThemeCatalog themes) const
 
 EditorState EditorState::create(core::Appearance appearance, core::EditMode mode)
 {
-    return EditorState(appearance, mode, untitled_document());
+    // 引数なしで起動した Vim の無題と同じに、起動の無題は 1 行目の 1 項を持つ。新しいタブは
+    // 持たない（Vim の `:tabnew` のバッファは自分の項を持たない・ADR 0152 の追補 #1124）。
+    DocumentState untitled = untitled_document();
+    untitled.marks = core::vim_marks_opened(core::VimMarkPosition{core::LineNumber{first_line}, 0});
+    return EditorState(appearance, mode, std::move(untitled));
 }
 
 const core::TextBuffer &EditorState::text() const noexcept
@@ -528,8 +532,9 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
     next.display_inquiry_ = DisplayInquiry::unjudged;
     // 本文が丸ごと替わるので、同じ文書を見るもう 1 つの枠は先頭に戻す（ADR 0148 の決定 5）。
     next.restart_other_showing(autosave_ids_.at(active_));
-    // 開いた位置をジャンプの列に 1 項持って始める（ADR 0152 の追補 #1116）。
-    next.vim_marks_ = core::vim_marks_opened();
+    // 開いた位置（1 行目）をジャンプの列に 1 項持って始める（ADR 0152 の追補 #1116）。
+    next.vim_marks_ =
+        core::vim_marks_opened(core::VimMarkPosition{core::LineNumber{first_line}, 0});
     return next;
 }
 

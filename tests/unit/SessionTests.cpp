@@ -662,21 +662,24 @@ void verify_restore_clamps()
            "an empty file puts the caret and the first line at the top");
 }
 
-// 前回のタブを読んだ文書のジャンプの列は開いた位置の 1 項で始まり、`<C-o>` はそこへ戻り
-// `<Tab>` は覚えていた位置へ戻る（ADR 0152 の追補 #1116）。
+// 前回のタブを読んだ文書のジャンプの列は戻したキャレットの 1 項で始まり、`G<C-o>` はそこへ戻り、
+// 次の `<C-o>` は動かない（ADR 0152 の追補 #1124）。
 void verify_restore_opened_jump()
 {
-    const std::string content = "l1\nl2\nl3 x";
+    // viminfo の `'"` で (3,2) へ戻した Vim 9.1 の列は (3,2) の 1 項だけ（#1124 の実測）。
+    const std::string content = "l1\nl2\nl3 x\nl4\nl5";
     Editing editing(listed({listed_tab("a", TextPosition{LineNumber{3}, Column{2}}, 1, 0)}, 0),
                     [&content](ScriptedFiles &files)
                     { files.hold_at("C:\\work\\a.txt", Bytes{content}); });
     EditorController &controller = editing.controller();
     expect(caret_at(controller.frame(), 3, 2), "the restored tab starts at the listed caret");
     applied(controller, SelectEditMode{EditMode::vim});
+    vim_normal(controller, "G<C-o>");
+    expect(caret_at(controller.frame(), 3, 2), "<C-o> goes back to the restored caret");
     vim_normal(controller, "<C-o>");
-    expect(caret_at(controller.frame(), 1, 1), "<C-o> goes back to the opened place");
-    vim_normal(controller, "<Tab>");
-    expect(caret_at(controller.frame(), 3, 2), "<Tab> comes back to the listed caret");
+    expect(caret_at(controller.frame(), 3, 2), "the restored caret is the first jump entry");
+    vim_normal(controller, "G''");
+    expect(caret_at(controller.frame(), 3, 1), "'' goes back to the restored line");
 }
 
 // 読めないタブは外れて 1 行知らせ、隣を試す（決定 5・6・D26）。
