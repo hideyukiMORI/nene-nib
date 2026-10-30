@@ -1,5 +1,7 @@
 #include "PrintPages.hpp"
 
+#include "BuiltinThemes.hpp"
+
 #include <algorithm>
 
 namespace nenenib::core
@@ -8,6 +10,8 @@ namespace
 {
 // 1 インチは 25.4 mm。整数のまま割るため 10 倍して 254 で割る。
 constexpr std::uint64_t tenths_of_millimetre_per_inch = 254;
+constexpr RgbColor paper_white{0xFF, 0xFF, 0xFF};
+constexpr RgbColor ink_black{0x00, 0x00, 0x00};
 } // namespace
 
 std::uint32_t print_margin(std::uint32_t dpi) noexcept
@@ -42,6 +46,17 @@ std::vector<PrintPage> print_pages(std::size_t rows, std::uint32_t rows_per_page
         first += count;
     } while (first < rows);
     return pages;
+}
+
+PrintPalette print_palette() noexcept
+{
+    const auto &theme = theme_of(theme_for(Appearance::light));
+    PrintPalette palette{theme.ui, theme.body};
+    palette.ui.background = paper_white;
+    palette.ui.text = ink_black;
+    palette.body.background = paper_white;
+    palette.body.foreground = ink_black;
+    return palette;
 }
 
 std::string print_page_label(std::size_t number, std::size_t count)

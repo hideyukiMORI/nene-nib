@@ -333,7 +333,7 @@ nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorWindowDetail.cpp src/ui/win32/EditorWindowLifecycle.cpp src/ui/win32/EditorWindowPointer.cpp src/ui/win32/EditorWindowKeys.cpp
     src/ui/win32/EditorWindowOperations.cpp src/ui/win32/EditorWindowIme.cpp src/ui/win32/EditorWindowExplorer.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FallbackSegmentMemo.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
-    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/LineUtf16Evaluation.cpp
+    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/LineUtf16Evaluation.cpp
     src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp
     src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewPlacement.cpp
     src/ui/win32/PreviewPane.cpp)
@@ -342,7 +342,8 @@ nenenib_link(nenenib_window nenenib_application)
 # ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。
 # imm32: IMM32 の変換文字列と候補窓（ADR 0014 の決定 1）。IME は窓への入力なので ui/win32 に置く。
 # shell32: WM_DROPFILES の名前と転送メモリだけを扱う（ADR 0116）。
-foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp dwmapi imm32 ole32 shell32)
+# comdlg32: 印刷のダイアログ PrintDlgExW、prntvpt: その DEVMODE を print ticket に写す（ADR 0177 の決定 6）。
+foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp dwmapi imm32 ole32 shell32 comdlg32 prntvpt)
     nenenib_system_link(nenenib_window ${library})
 endforeach()
 
@@ -360,7 +361,8 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/FallbackSegmentMemoTests.cpp
     tests/ui/ForwardingFont.cpp
     tests/ui/StatusDemandTests.cpp tests/ui/SyntaxRenderTests.cpp
-    tests/ui/PaletteLayoutTests.cpp tests/ui/ExplorerPaintTests.cpp tests/ui/PointerPressTests.cpp)
+    tests/ui/PaletteLayoutTests.cpp tests/ui/ExplorerPaintTests.cpp tests/ui/PointerPressTests.cpp
+    tests/ui/PrintRenderTests.cpp tests/ui/MemoryXpsTarget.cpp tests/ui/MemoryPackageTarget.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)
@@ -393,8 +395,9 @@ nenenib_system_link(NeNeNib ole32)
 nenenib_system_link(NeNeNib shell32)
 set_property(TARGET NeNeNib PROPERTY WIN32_EXECUTABLE TRUE)
 # ADR 0130: 窓を見せた後にしか要らない描画と文字組みの DLL は遅延読み込みにする（製品の target だけ）。
+# ADR 0177 の決定 6: 印刷のダイアログと print ticket の DLL も、最初の印刷のときだけ読む。
 target_link_options(NeNeNib PRIVATE /DELAYLOAD:d3d11.dll /DELAYLOAD:d2d1.dll /DELAYLOAD:dcomp.dll
-    /DELAYLOAD:dxgi.dll /DELAYLOAD:DWrite.dll)
+    /DELAYLOAD:dxgi.dll /DELAYLOAD:DWrite.dll /DELAYLOAD:comdlg32.dll /DELAYLOAD:prntvpt.dll)
 target_link_libraries(NeNeNib PRIVATE delayimp)
 
 # ADR 0082: 開発用の閉じた比較。unit は inline の足場だけ借用し、CTest に登録しない。
