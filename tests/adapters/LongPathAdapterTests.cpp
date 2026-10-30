@@ -2,7 +2,8 @@
 // 置き換える → 列挙する → 消す。経路の正規化は adapters の native_path の 1 本。
 // この試験の exe は manifest に longPathAware を持たないので、`\\?\` を付けない長い経路は
 // レジストリの LongPathsEnabled に依らず落ちる（反例）。製品の窓の exe は manifest でも宣言する。
-// 一時フォルダはビルドディレクトリの直下に固定の名前で作り、冒頭で前回の残りを消して終わりに消す。
+// 一時フォルダは
+// temporary_test_directory（#1103）の中に固定の名前で作り、冒頭で前回の残りを消して終わりに消す。
 // 時刻は読まない。待つのは合図の受け皿（セマフォ）だけで、止まらないときは CTest
 // の制限時間で落ちる。
 #include "FilePath.hpp"
@@ -14,6 +15,7 @@
 #include "NativePath.hpp"
 #include "ParentDirectory.hpp"
 #include "TemporaryFiles.hpp"
+#include "TemporaryTestDirectory.hpp"
 #include "Utf16.hpp"
 #include "Win32FileAdapter.hpp"
 #include "Win32FolderAdapter.hpp"
@@ -314,9 +316,7 @@ void verify_failures(adapters::Win32FileAdapter &files, const std::wstring &deep
     expect(!missing && missing.error() == FileFailure::not_found,
            "an absent long path is not_found");
 }
-} // namespace
-
-int main()
+int run_tests()
 {
     const std::wstring root = absolute(root_name);
     const std::wstring shallow = absolute(short_name);
@@ -340,4 +340,19 @@ int main()
     expect(!exists(deep) && !exists(root), "the long folders are removed");
     std::printf("Long path adapter: %zu checks, %zu failures\n", checks(), failures());
     return failures() == 0 ? 0 : 1;
+}
+} // namespace
+
+int main()
+{
+    const auto directory = nenenib::tests::temporary_test_directory(L"long-path");
+    if (!directory.has_value())
+    {
+        std::fprintf(stderr, "FAIL: the temporary test folder is not made (error %lu)\n",
+                     static_cast<unsigned long>(directory.error()));
+        return 1;
+    }
+    const int result = run_tests();
+    nenenib::tests::remove_temporary_test_directory(directory.value());
+    return result;
 }

@@ -1,6 +1,7 @@
 // Issue #515: 自動退避の置き場（Win32AutosaveAdapter）を、本物のフォルダとワーカー 1 本で測る
-// （ADR 0137 の決定 4〜6・8）。置き場はビルドディレクトリの直下の固定の名前のフォルダで、冒頭で
-// 前回の残りを消して終わりに消す。時刻は読まない（Sleep・時計・タイムアウトの待ちを書かない）。
+// （ADR 0137 の決定 4〜6・8）。置き場は
+// temporary_test_directory（#1103）の中の固定の名前のフォルダで、
+// 冒頭で前回の残りを消して終わりに消す。時刻は読まない（Sleep・時計・タイムアウトの待ちを書かない）。
 // 待つのは合図の受け皿（セマフォ）だけで、止まらないときは CTest の制限時間で落ちる。上限の
 // ある待ちは adapter の flush の中にだけあり、塞がったワーカーで 1 回（約 3 秒）使う（#735）。
 #include "AutosaveCodec.hpp"
@@ -18,6 +19,7 @@
 #include "FileWriteMode.hpp"
 #include "FindHandle.hpp"
 #include "SealedBytes.hpp"
+#include "TemporaryTestDirectory.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "Win32AutosaveAdapter.hpp"
@@ -611,9 +613,7 @@ void verify_autosave()
     }
     remove_tree(base);
 }
-} // namespace
-
-int main(int argc, char **argv)
+int run_tests(int argc, char **argv)
 {
     const std::string_view scope = argc == 2 ? argv[1] : "";
     if (argc > 2 || (argc == 2 && scope != "--autosave"))
@@ -624,4 +624,19 @@ int main(int argc, char **argv)
     verify_autosave();
     std::printf("Autosave adapter: %zu checks, %zu failures\n", checks(), failures());
     return failures() == 0 ? 0 : 1;
+}
+} // namespace
+
+int main(int argc, char **argv)
+{
+    const auto directory = nenenib::tests::temporary_test_directory(L"autosave");
+    if (!directory.has_value())
+    {
+        std::fprintf(stderr, "FAIL: the temporary test folder is not made (error %lu)\n",
+                     static_cast<unsigned long>(directory.error()));
+        return 1;
+    }
+    const int result = run_tests(argc, argv);
+    nenenib::tests::remove_temporary_test_directory(directory.value());
+    return result;
 }

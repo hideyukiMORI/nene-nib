@@ -232,33 +232,38 @@ nenenib_system_link(nenenib_adapters advapi32)
 # クリップボード（OpenClipboard / SetClipboardData）と断りの音（MessageBeep・ADR 0153）は user32。
 nenenib_system_link(nenenib_adapters user32)
 
-# QLT-013: adapters/win32 のファイル読み書きは、ビルドディレクトリ配下の一時ファイルで往復させる
-# （ADR 0010）。中核の分岐カバレッジ（coverage-policy.json）の対象には入れない。
-nenenib_target(nib_adapter_tests adapter_tests EXECUTABLE tests/adapters/NibAdapterTests.cpp)
+# QLT-013: adapters/win32 のファイル読み書きは、GetTempPathW の下の試験ごとの一時フォルダ
+# （tests/adapters/TemporaryTestDirectory・#1103）で往復させる（ADR 0010）。中核の分岐カバレッジ（coverage-policy.json）の対象には入れない。
+nenenib_target(nib_adapter_tests adapter_tests EXECUTABLE tests/adapters/NibAdapterTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
 nenenib_link(nib_adapter_tests nenenib_core)
 nenenib_link(nib_adapter_tests nenenib_application)
 nenenib_link(nib_adapter_tests nenenib_adapters)
 add_test(NAME nib_adapters COMMAND nib_adapter_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
-nenenib_target(nib_theme_tests adapter_tests EXECUTABLE tests/adapters/ThemeCodecTests.cpp)
+nenenib_target(nib_theme_tests adapter_tests EXECUTABLE tests/adapters/ThemeCodecTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
 nenenib_link(nib_theme_tests nenenib_core)
 nenenib_link(nib_theme_tests nenenib_application)
 nenenib_link(nib_theme_tests nenenib_adapters)
 add_test(NAME nib_themes COMMAND nib_theme_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
-nenenib_target(nib_session_tests adapter_tests EXECUTABLE tests/adapters/SessionAdapterTests.cpp)
+nenenib_target(nib_session_tests adapter_tests EXECUTABLE tests/adapters/SessionAdapterTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
 nenenib_link(nib_session_tests nenenib_core)
 nenenib_link(nib_session_tests nenenib_application)
 nenenib_link(nib_session_tests nenenib_adapters)
 add_test(NAME nib_sessions COMMAND nib_session_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
-nenenib_target(nib_bookmark_tests adapter_tests EXECUTABLE tests/adapters/BookmarkAdapterTests.cpp)
+nenenib_target(nib_bookmark_tests adapter_tests EXECUTABLE tests/adapters/BookmarkAdapterTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
 nenenib_link(nib_bookmark_tests nenenib_core)
 nenenib_link(nib_bookmark_tests nenenib_application)
 nenenib_link(nib_bookmark_tests nenenib_adapters)
 add_test(NAME nib_bookmarks COMMAND nib_bookmark_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
-nenenib_target(nib_history_tests adapter_tests EXECUTABLE tests/adapters/HistoryAdapterTests.cpp)
+nenenib_target(nib_history_tests adapter_tests EXECUTABLE tests/adapters/HistoryAdapterTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
 nenenib_link(nib_history_tests nenenib_core)
 nenenib_link(nib_history_tests nenenib_application)
 nenenib_link(nib_history_tests nenenib_adapters)
@@ -266,7 +271,8 @@ add_test(NAME nib_histories COMMAND nib_history_tests WORKING_DIRECTORY ${CMAKE_
 
 # Issue #271: 同じフォルダの列挙とワーカー 1 本を本物のフォルダとスレッドで測る（ADR 0062）。時刻は読まず、
 # 合図の受け皿だけを待つので、止まらないときはこの制限時間で落ちる。
-nenenib_target(nib_folder_tests adapter_tests EXECUTABLE tests/adapters/FolderAdapterTests.cpp)
+nenenib_target(nib_folder_tests adapter_tests EXECUTABLE tests/adapters/FolderAdapterTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
 nenenib_link(nib_folder_tests nenenib_core)
 nenenib_link(nib_folder_tests nenenib_application)
 nenenib_link(nib_folder_tests nenenib_adapters)
@@ -275,7 +281,8 @@ set_tests_properties(nib_folders PROPERTIES TIMEOUT 60)
 
 # Issue #515: 自動退避の置き場を本物のフォルダとワーカー 1 本で測る（ADR 0137 の決定 8）。時刻は読まず、
 # 合図の受け皿だけを待つので、止まらないときはこの制限時間で落ちる。
-nenenib_target(nib_autosave_tests adapter_tests EXECUTABLE tests/adapters/AutosaveAdapterTests.cpp)
+nenenib_target(nib_autosave_tests adapter_tests EXECUTABLE tests/adapters/AutosaveAdapterTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
 nenenib_link(nib_autosave_tests nenenib_core)
 nenenib_link(nib_autosave_tests nenenib_application)
 nenenib_link(nib_autosave_tests nenenib_adapters)
@@ -284,7 +291,8 @@ set_tests_properties(nib_autosave PROPERTIES TIMEOUT 60)
 
 # Issue #498: MAX_PATH を超える経路の書く・読む・置き換え・列挙・消すを本物のフォルダで測る。
 # 名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。列挙はワーカー 1 本の合図だけを待つ。
-nenenib_target(nib_long_path_tests adapter_tests EXECUTABLE tests/adapters/LongPathAdapterTests.cpp)
+nenenib_target(nib_long_path_tests adapter_tests EXECUTABLE tests/adapters/LongPathAdapterTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
 nenenib_link(nib_long_path_tests nenenib_core)
 nenenib_link(nib_long_path_tests nenenib_application)
 nenenib_link(nib_long_path_tests nenenib_adapters)
@@ -294,7 +302,8 @@ set_tests_properties(nib_adapters_long_paths PROPERTIES TIMEOUT 60)
 # Issue #993: 開く道の読み（Win32DocumentReader）を本物のファイルとワーカー 1 本で測る（ADR 0159）。
 # 65 MiB の見本を書いて塊の仕事で読む。時刻は読まず、合図の受け皿だけを待つので、止まらないときは
 # この制限時間で落ちる。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
-nenenib_target(nib_document_reader_tests adapter_tests EXECUTABLE tests/adapters/DocumentReaderTests.cpp)
+nenenib_target(nib_document_reader_tests adapter_tests EXECUTABLE tests/adapters/DocumentReaderTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
 nenenib_link(nib_document_reader_tests nenenib_core)
 nenenib_link(nib_document_reader_tests nenenib_application)
 nenenib_link(nib_document_reader_tests nenenib_adapters)

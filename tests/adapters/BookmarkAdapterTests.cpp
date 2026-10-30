@@ -1,11 +1,12 @@
 // Issue #278: 明示登録（bookmarks.v1）のコーデックと adapter
-// を、ビルドディレクトリ配下の 一時フォルダで測る（QLT-013 / ADR 0063 の決定 4）。使う人の
-// %LOCALAPPDATA% には触れない。
+// を、temporary_test_directory（#1103）の中の一時フォルダで測る（QLT-013 / ADR 0063 の決定
+// 4）。使う人の %LOCALAPPDATA% には触れない。
 // 一時フォルダの名前は固定で、冒頭で消して作り直す。時刻も乱数も使わない（ARC-007）。
 #include "BookmarkCodec.hpp"
 #include "FileBookmarks.hpp"
 #include "FileBookmarksFailure.hpp"
 #include "FilePath.hpp"
+#include "TemporaryTestDirectory.hpp"
 #include "Win32BookmarkAdapter.hpp"
 #include "Win32FileAdapter.hpp"
 
@@ -277,9 +278,7 @@ void verify_adapter_failures(adapters::Win32FileAdapter &files)
     expect(!unsaved && unsaved.error() == Failure::location_unavailable,
            "an unavailable location cannot be written");
 }
-} // namespace
-
-int main()
+int run_tests()
 {
     verify_round_trips();
     verify_line_ends();
@@ -292,4 +291,19 @@ int main()
     clean_folder();
     std::printf("Bookmark adapter: %zu checks, %zu failures\n", checks(), failures());
     return failures() == 0 ? 0 : 1;
+}
+} // namespace
+
+int main()
+{
+    const auto directory = nenenib::tests::temporary_test_directory(L"bookmark");
+    if (!directory.has_value())
+    {
+        std::fprintf(stderr, "FAIL: the temporary test folder is not made (error %lu)\n",
+                     static_cast<unsigned long>(directory.error()));
+        return 1;
+    }
+    const int result = run_tests();
+    nenenib::tests::remove_temporary_test_directory(directory.value());
+    return result;
 }
