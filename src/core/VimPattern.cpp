@@ -88,6 +88,13 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
     return vim_character_class(code_point_at(line, Offset{at}), VimWordClass::word);
 }
 
+// 手前の Vim の 1 文字（ADR 0053）の先頭の種類。Vim の reg_prev_class は mb_head_off で結合文字を
+// 越えて基底の文字を見る（`-` + U+0301 の後ろの `a` は語の始まり・#1146 の実測）。
+[[nodiscard]] std::uint32_t previous_class(std::string_view line, std::size_t at)
+{
+    return class_at(line, vim_character_start(line, Offset{at}).value);
+}
+
 // `\<`。語の文字で、前が無いか種類が変わるところ。種類の表は 1 つ（ADR 0031 の決定 2）。
 [[nodiscard]] bool starts_a_word(std::string_view line, std::size_t at)
 {
@@ -100,7 +107,7 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
     {
         return false;
     }
-    return at == 0 || class_at(line, previous_code_point(line, Offset{at}).value) != here;
+    return at == 0 || previous_class(line, at) != here;
 }
 
 // `\>`。直前が語の文字で、後ろが無いか種類が変わるところ。
@@ -110,7 +117,7 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
     {
         return false;
     }
-    const std::uint32_t before = class_at(line, previous_code_point(line, Offset{at}).value);
+    const std::uint32_t before = previous_class(line, at);
     if (before <= symbol_group)
     {
         return false;
@@ -436,10 +443,11 @@ bool VimPattern::anchored(std::string_view line, const VimPatternAtom &atom, std
         return at == 0;
     case VimPatternAtomKind::line_end:
         return at >= line.size();
+    // `\<` `\>` は Vim の 1 文字の境でだけ真（結合文字の上では偽・#1146）。
     case VimPatternAtomKind::word_start:
-        return starts_a_word(line, at);
+        return ends_a_character(line, at) && starts_a_word(line, at);
     case VimPatternAtomKind::word_end:
-        return ends_a_word(line, at);
+        return ends_a_character(line, at) && ends_a_word(line, at);
     case VimPatternAtomKind::literal:
     case VimPatternAtomKind::any:
     case VimPatternAtomKind::set:
@@ -492,12 +500,47 @@ std::expected<VimPattern, VimPatternFailure> VimPattern::parse(std::string_view 
 
 // 一致の終わりが文字の途中（本文の側にだけ結合文字が続く）なら一致にしない。Vim の NFA の
 // NFA_MATCH と同じく終わりだけを見るので、`/e.` は `.` が結合文字を食べて当たる（#1138）。
+// 一致の始まりも同じ境でだけ試す（Vim の regexec の列は mb_ptr2len で 1 文字ずつ進む・#1146）。
 bool VimPattern::ends_a_character(std::string_view line, std::size_t end) noexcept
 {
     // ASCII のバイトは結合文字にならないので、表を引くのは ASCII の外の側だけ。
     constexpr unsigned char ascii_limit = 0x80;
     return end >= line.size() || static_cast<unsigned char>(line[end]) < ascii_limit ||
            !vim_character_continues(line, Offset{end});
+}
+
+// at の code point を食べた後の位置。`.` と集合は Vim の 1 文字の残り（直後に続く結合文字）まで
+// 食べ、literal は code point 1 つだけを食べる（Vim の NFA の clen は utfc_ptr2len で、literal の
+// 一致だけが utf_ptr2len に縮める・`/.y` と `/[e]` は `é` に当たる・#1146 の実測）。
+std::size_t VimPattern::eaten(std::string_view line, VimPatternAtomKind kind, std::size_t at)
+{
+    std::size_t next = next_code_point(line, Offset{at}).value;
+    if (!whole_character(kind))
+    {
+        return next;
+    }
+    while (!ends_a_character(line, next))
+    {
+        next = next_code_point(line, Offset{next}).value;
+    }
+    return next;
+}
+
+bool VimPattern::whole_character(VimPatternAtomKind kind) noexcept
+{
+    switch (kind)
+    {
+    case VimPatternAtomKind::any:
+    case VimPatternAtomKind::set:
+        return true;
+    case VimPatternAtomKind::literal:
+    case VimPatternAtomKind::line_start:
+    case VimPatternAtomKind::line_end:
+    case VimPatternAtomKind::word_start:
+    case VimPatternAtomKind::word_end:
+        return false;
+    }
+    std::unreachable();
 }
 
 bool VimPattern::in_ranges(const VimPatternAtom &atom, char32_t code) const
@@ -553,8 +596,8 @@ std::optional<std::size_t> VimPattern::stepped(std::string_view line, const VimP
         return std::nullopt;
     }
     const char32_t code = code_point_at(line, Offset{at});
-    const std::size_t next = next_code_point(line, Offset{at}).value;
-    return consumes(atom, code) ? std::optional<std::size_t>{next} : std::nullopt;
+    return consumes(atom, code) ? std::optional<std::size_t>{eaten(line, atom.kind, at)}
+                                : std::nullopt;
 }
 
 std::optional<std::size_t> VimPattern::matched_sequence(std::string_view line, std::size_t at) const
@@ -588,7 +631,8 @@ std::optional<VimPatternMatch> VimPattern::matched(std::string_view line, std::s
     std::size_t at = from;
     while (at <= line.size())
     {
-        const auto end = matched_sequence(line, at);
+        // 始まりは Vim の 1 文字の先頭だけ（結合文字の上からは試さない・#1146）。
+        const auto end = ends_a_character(line, at) ? matched_sequence(line, at) : std::nullopt;
         if (end.has_value() && ends_a_character(line, end.value()))
         {
             return VimPatternMatch{at, end.value()};

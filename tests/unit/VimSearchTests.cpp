@@ -416,6 +416,24 @@ void verify_vim_pattern_composing()
            "the dot eats the mark, so the match ends on a character boundary");
     expect(composed_begin("ee*", "e\xcc\x81 ee", sensitive) == std::optional<std::size_t>{4},
            "the starred path refuses the end before the mark too");
+    // 始まりは Vim の 1 文字の先頭だけで、`.` と集合は結合文字まで食べる（#1146）。literal の
+    // `e` は基底だけを食べるので、上の `e.` は `.` が結合文字を食べて当たる。
+    expect(composed_begin(".y", "x e\xcc\x81y", sensitive) == std::optional<std::size_t>{2},
+           "a dot eats the whole marked letter, so the match starts on its base");
+    expect(composed_begin("[e]", "x e\xcc\x81 e", sensitive) == std::optional<std::size_t>{2},
+           "a bracket set eats the marked letter, unlike the bare literal");
+    expect(composed_begin("[a-z]*y", "x e\xcc\x81y", sensitive) == std::optional<std::size_t>{2},
+           "the starred path carries the set across the mark");
+    expect(composed_begin("\\<.b",
+                          "x -\xcc\x81"
+                          "bb",
+                          sensitive) == std::optional<std::size_t>{5},
+           "a word start never sits on the mark and looks past it at the base");
+    expect(composed_begin("\\<amma",
+                          "x -\xef\xb8\x8f"
+                          "amma",
+                          sensitive) == std::optional<std::size_t>{6},
+           "after a symbol with a variation selector the word starts at the letter");
 }
 
 using RangeFinder = std::optional<OffsetRange> (*)(const TextBuffer &, Offset);
@@ -745,7 +763,7 @@ void verify_vim_search_dot()
 
 void verify_vim_search_fixtures()
 {
-    // 検索の 181 件（大小の 30 件・#1041 と結合文字の 16 件・#1138
+    // 検索の 196 件（大小の 30 件・#1041 と結合文字の 16 件・#1138 と始まりの 15 件・#1146
     // を含む）と、鍵の分類の表・次キー待ちを共有する境界の代表（`.`・r・f/t・gg）。
     constexpr std::array<std::string_view, 6> boundaries{
         "replace-char-one",    "replace-char-count", "char-search-f-count",
@@ -760,7 +778,7 @@ void verify_vim_search_fixtures()
             ++selected;
         }
     }
-    expect(selected == 187, "the scope replays 181 search fixtures and 6 shared boundaries");
+    expect(selected == 202, "the scope replays 196 search fixtures and 6 shared boundaries");
 }
 
 // 次の一致を求める 1 本の経路（ADR 0041 の決定 1）。確定の検索の鍵と incsearch の preview が
