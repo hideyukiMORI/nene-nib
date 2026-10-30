@@ -147,9 +147,12 @@ using FrameBody = std::expected<std::optional<std::string_view>, LspFrameFailure
 [[nodiscard]] FrameBody frame_at(std::string_view bytes, std::size_t at)
 {
     const std::size_t header_end = bytes.find(header_end_mark, at);
-    const std::size_t header_size =
-        header_end == std::string_view::npos ? bytes.size() - at : header_end - at;
-    if (header_size > lsp_header_limit)
+    // 上限は空行を含めた見出しの長さの 1 本で決める。空行がまだ無ければ、届いた分よりあと少なくとも
+    // 1 バイト要る。こうすると空行の途中のどこで読みが切れても結果が変わらない（#1165）。
+    const std::size_t header_room = header_end == std::string_view::npos
+                                        ? bytes.size() - at + 1U
+                                        : header_end - at + header_end_mark.size();
+    if (header_room > lsp_header_limit + header_end_mark.size())
     {
         return std::unexpected(LspFrameFailure::header_too_long);
     }
@@ -157,6 +160,7 @@ using FrameBody = std::expected<std::optional<std::string_view>, LspFrameFailure
     {
         return std::nullopt;
     }
+    const std::size_t header_size = header_end - at;
     const Length length = header_length(bytes.substr(at, header_size));
     if (!length.has_value())
     {

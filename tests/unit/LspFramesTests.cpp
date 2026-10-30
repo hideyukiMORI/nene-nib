@@ -9,6 +9,7 @@
 #include <array>
 #include <cstddef>
 #include <expected>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -22,6 +23,8 @@ using core::LspFrameFailure;
 using core::LspFrames;
 using Framed = std::expected<LspFrames, LspFrameFailure>;
 using Refused = std::pair<std::string_view, LspFrameFailure>;
+// 届いた本文の列と、読みを止めた失敗（無ければ値なし）。
+using Read = std::pair<std::vector<std::string>, std::optional<LspFrameFailure>>;
 
 constexpr std::string_view one = "Content-Length: 5\r\n\r\nhello";
 constexpr std::string_view two = "Content-Length: 2\r\n\r\n{}"
@@ -101,10 +104,13 @@ void verify_limits()
     const Framed largest = core::lsp_frames("Content-Length: 16777216\r\n\r\n");
     expect(largest.has_value() && largest.value().bodies.empty(),
            "a 16 MiB body is accepted and waited for");
-    const std::string endless(core::lsp_header_limit + 1U, 'x');
+    const std::string endless(core::lsp_header_limit + 4U, 'x');
     const Framed garbage = core::lsp_frames(endless);
     expect(!garbage.has_value() && garbage.error() == LspFrameFailure::header_too_long,
-           "a header without its blank line past 8 KiB is refused");
+           "a header without its blank line that cannot end within 8 KiB is refused");
+    const std::string room(core::lsp_header_limit + 3U, 'x');
+    expect(core::lsp_frames(room).has_value(),
+           "a header without its blank line waits while 8 KiB and the blank line can still fit");
     const Framed bare_lf = core::lsp_frames("Content-Length: 5\n\nhello");
     expect(bare_lf.has_value() && bare_lf.value().bodies.empty() && bare_lf.value().consumed == 0,
            "a header ended by LF alone is not a frame and waits for CRLF");
@@ -143,6 +149,53 @@ void verify_limits()
     return bodies;
 }
 
+// 見出し（空行の前まで）が size バイトで本文が "hello" の枠。
+[[nodiscard]] std::string frame_with_header(std::size_t size)
+{
+    constexpr std::string_view head = "Content-Length: 5\r\nX: ";
+    return std::string{head} + std::string(size - head.size(), 'x') + "\r\n\r\nhello";
+}
+
+// adapter の読み方で 1 バイトずつ渡す（どの切れ目も 1 回は読みの終わりになる）。
+[[nodiscard]] Read read_byte_by_byte(std::string_view bytes)
+{
+    Read read{{}, std::nullopt};
+    std::string pending;
+    for (const char byte : bytes)
+    {
+        pending.push_back(byte);
+        const Framed framed = core::lsp_frames(pending);
+        if (!framed.has_value())
+        {
+            read.second = framed.error();
+            return read;
+        }
+        const std::vector<std::string> found = bodies_of(framed);
+        read.first.insert(read.first.end(), found.begin(), found.end());
+        pending.erase(0, framed.value().consumed);
+    }
+    return read;
+}
+
+// 見出しの上限は空行を含めた長さで決まり、読みの切れ目に依らない（#1165）。
+void verify_header_limit_at_every_split()
+{
+    const Read accepted{{"hello"}, std::nullopt};
+    const Read refused_read{{}, LspFrameFailure::header_too_long};
+    for (std::size_t size = core::lsp_header_limit - 2U; size <= core::lsp_header_limit + 1U;
+         ++size)
+    {
+        const std::string frame = frame_with_header(size);
+        const Read expected = size <= core::lsp_header_limit ? accepted : refused_read;
+        const Framed whole = core::lsp_frames(frame);
+        const Read at_once =
+            whole.has_value() ? Read{bodies_of(whole), std::nullopt} : Read{{}, whole.error()};
+        expect(at_once == expected, "a header up to 8 KiB is accepted and one past it refused");
+        expect(read_byte_by_byte(frame) == expected,
+               "a header near 8 KiB read one byte at a time gives the same result");
+    }
+}
+
 void verify_every_split()
 {
     const std::string stream = std::string{two} + std::string{one};
@@ -162,5 +215,6 @@ void verify_lsp_frames_scope()
     verify_partial_frames();
     verify_limits();
     verify_every_split();
+    verify_header_limit_at_every_split();
 }
 } // namespace nenenib::tests
