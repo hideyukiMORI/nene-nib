@@ -1,6 +1,7 @@
 // clang-format off
 // 生成物。手で編集しない。python eng/case-mapping.py --write
 // Unicode 15.0.0（Python 3.12 の unicodedata）
+// 1 対多の字は UnicodeData.txt の簡単な写像で 28 字を上書き（Issue #990）
 #pragma once
 
 #include "CaseMappingRange.hpp"
@@ -9,7 +10,7 @@
 
 namespace nenenib::core
 {
-inline constexpr std::array<CaseMappingRange, 194> case_to_upper{{
+inline constexpr std::array<CaseMappingRange, 200> case_to_upper{{
     {U'\x61', U'\x7A', 1, -32},
     {U'\xB5', U'\xB5', 1, 743},
     {U'\xE0', U'\xF6', 1, -32},
@@ -154,11 +155,17 @@ inline constexpr std::array<CaseMappingRange, 194> case_to_upper{{
     {U'\x1F78', U'\x1F79', 1, 128},
     {U'\x1F7A', U'\x1F7B', 1, 112},
     {U'\x1F7C', U'\x1F7D', 1, 126},
+    {U'\x1F80', U'\x1F87', 1, 8},
+    {U'\x1F90', U'\x1F97', 1, 8},
+    {U'\x1FA0', U'\x1FA7', 1, 8},
     {U'\x1FB0', U'\x1FB1', 1, 8},
+    {U'\x1FB3', U'\x1FB3', 1, 9},
     {U'\x1FBE', U'\x1FBE', 1, -7205},
+    {U'\x1FC3', U'\x1FC3', 1, 9},
     {U'\x1FD0', U'\x1FD1', 1, 8},
     {U'\x1FE0', U'\x1FE1', 1, 8},
     {U'\x1FE5', U'\x1FE5', 1, 7},
+    {U'\x1FF3', U'\x1FF3', 1, 9},
     {U'\x214E', U'\x214E', 1, -28},
     {U'\x2170', U'\x217F', 1, -16},
     {U'\x2184', U'\x2184', 1, -1},
@@ -206,11 +213,12 @@ inline constexpr std::array<CaseMappingRange, 194> case_to_upper{{
     {U'\x1E922', U'\x1E943', 1, -34},
 }};
 
-inline constexpr std::array<CaseMappingRange, 181> case_to_lower{{
+inline constexpr std::array<CaseMappingRange, 182> case_to_lower{{
     {U'\x41', U'\x5A', 1, 32},
     {U'\xC0', U'\xD6', 1, 32},
     {U'\xD8', U'\xDE', 1, 32},
     {U'\x100', U'\x12E', 2, 1},
+    {U'\x130', U'\x130', 1, -199},
     {U'\x132', U'\x136', 2, 1},
     {U'\x139', U'\x147', 2, 1},
     {U'\x14A', U'\x176', 2, 1},
