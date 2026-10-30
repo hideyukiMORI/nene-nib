@@ -46,12 +46,14 @@ constexpr int end_finished = 1;
 constexpr int end_continues = 2;
 
 // 0x100 未満は Vim の既定の iskeyword（-u NONE の Windows の Vim 9.1 で
-// `@,48-57,_,192-255`）で分ける。 空白は ' ' '	' NUL と U+00A0、語の文字は英数字と '_' と '@' の
-// Latin-1 の英字 U+00B5 と 192〜255、 ほかは記号（Vim の utf_class_buf の先頭・Issue #985
-// で全コードポイントを charclass() と照合）。
+// `@,48-57,_,192-255`）で分ける。空白は ' ' '\t' と U+00A0、語の文字は英数字と '_' と '@' の
+// Latin-1 の英字 U+00B5 と 192〜255、ほかは記号（Vim の utf_class_buf の先頭・Issue #985
+// で全コードポイントを charclass() と照合）。本文の NUL は記号のまま（Vim は行の NUL を
+// NL として持つ・oracle は NUL の本文を測れない・#1171 のレビュー R3-1）。
+// 行の終わりは呼び手が空白に数える。
 [[nodiscard]] std::uint32_t latin1_class(char32_t code) noexcept
 {
-    if (code == U' ' || code == U'	' || code == 0 || code == 0x00A0)
+    if (code == U' ' || code == U'\t' || code == 0x00A0)
     {
         return blank_group;
     }
