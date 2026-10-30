@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 cfd577a69d932afbfa5f6deb263091dca5d0f1978de313dbe8983baf60d54814 / 3088 fixtures
+// fixtures.json: sha256 036a4a911dd53fd470b93e5120fe5c1318b1e44d171d612c7196be2556df4cdb / 3097 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3088> vim_fixtures{{
+constexpr std::array<VimFixture, 3097> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2704,6 +2704,15 @@ constexpr std::array<VimFixture, 3088> vim_fixtures{{
     {"insert-count-control-block-insert-shrinks", "abc def\nabc def\nabc def", "w<C-v>jj2I<C-w>z<Esc>", "zdef\nabc def\nabc def", 1, 1, "", "", std::nullopt},
     {"insert-count-control-block-insert-joins", "abc\nab def\nab def", "j0<C-v>j2Ix<C-u><C-u>z<Esc>", "zab def\nab def", 1, 1, "", "", std::nullopt},
     {"insert-count-control-block-change-ctrl-w", "abc def\nabc def\nabc def", "w<C-v>jj2cxy<C-w>z<Esc>", "abc zef\nabc zef\nabc zef", 1, 5, "d\nd\nd", "\0261", std::nullopt},
+    {"insert-count-join-insert-bs-cr", "abc\ndef", "j2I<BS><CR>x<Esc>", "abc\n\nxdef", 3, 1, "", "", std::nullopt},
+    {"insert-count-join-append-ctrl-u-cr", "abc\ndef", "j2A<C-u><C-u><CR>x<Esc>", "abc\nx", 2, 1, "", "", std::nullopt},
+    {"insert-count-join-insert-ctrl-w-cr", "abc def\nghi", "j3i<C-w><CR>y<Esc>", "abc def\n\n\nyghi", 4, 1, "", "", std::nullopt},
+    {"insert-count-join-insert-undo", "abc\ndef", "j2I<BS><CR>x<Esc>u", "abc\ndef", 2, 1, "", "", std::nullopt},
+    {"insert-count-join-dot", "abc\ndef\nghi", "j2I<BS><CR>x<Esc>j.", "abc\n\nxdef\n\nxghi", 5, 1, "", "", std::nullopt},
+    {"insert-count-join-block-insert-bs-cr", "abc\ndef\nghi", "j0<C-v>j2I<BS><CR>x<Esc>", "abc\n\nxdef\nghi", 3, 1, "", "", std::nullopt},
+    {"insert-count-join-block-insert-erase-cr", "abc\ndef\nghi", "j0<C-v>j2Iz<C-u><C-u><CR>y<Esc>", "abc\nydef\nyghi", 2, 1, "", "", std::nullopt},
+    {"insert-count-join-block-insert-erase-undo", "abc\ndef\nghi", "j0<C-v>j2Iz<C-u><C-u><CR>y<Esc>u", "abc\ndef\nghi", 2, 1, "", "", std::nullopt},
+    {"insert-count-join-block-append-bs-cr", "abc\ndef\nghi", "j0<C-v>jl2A<BS><BS><BS><CR>x<Esc>", "ab\nxf\nghi", 2, 1, "", "", std::nullopt},
     {"empty-case-gU-h", "x1", "gUh", "X1", 1, 1, "", "", std::nullopt},
     {"empty-case-gU-1h", "x1", "gU1h", "X1", 1, 1, "", "", std::nullopt},
     {"empty-case-gU-0", "x1", "gU0", "X1", 1, 1, "", "", std::nullopt},

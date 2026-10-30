@@ -1902,23 +1902,35 @@ void verify_vim_viewport_request()
     verify_indexed_columns_across_chunks();
 }
 
-// 矩形の回数付き `I` `A` の中の消す鍵（#1093 と #1042 の重なり）。回数の周は 1 行目で打鍵を流し
-// 直し、周を終えた 1 行目の伸びたぶんをほかの行へ写す（Vim の op_insert）。値は oracle の measure
-// で測った Vim 9.1（2026-10-29）。fixture の生成を回さない席が置いたので、ここに固定する。
-void verify_vim_block_count_replay()
+// 矩形の回数付き `I` の中の消す鍵（#1093 と #1042 の重なり）を CRLF の文書で流し直す（#1107）。
+// LF の値は fixture `insert-count-control-block-` と `insert-count-join-block-` が Vim 9.1 で
+// 守るので、ここは controller が矩形の編集を文書の改行で写す道と、前の行とつないでから改行で
+// 1 行目へ戻った流し直しのキャレットを CRLF で見る。
+void verify_vim_block_count_replay_crlf()
 {
-    constexpr std::array<VimFixture, 3> contracts{{
-        {"block-count-insert-ctrl-w", "abc def\nabc def\nabc def", "w<C-v>jj2Ixy<C-w>z<Esc>",
-         "abc zdef\nabc zdef\nabc zdef", 1, 5, "", "", std::nullopt},
-        {"block-count-append-ctrl-u", "abc def\nabc def\nabc def", "w<C-v>jj3Aq <C-u>r<Esc>",
-         "abc dref\nabc dref\nabc dref", 1, 5, "", "", std::nullopt},
-        {"block-count-insert-shrinks", "abc def\nabc def\nabc def", "w<C-v>jj2I<C-w>z<Esc>",
-         "zdef\nabc def\nabc def", 1, 1, "", "", std::nullopt},
-    }};
-    for (const VimFixture &contract : contracts)
-    {
-        verify_vim_fixture(contract);
-    }
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string("abc def\r\nabc def\r\nabc def")});
+    static_cast<void>(controller.apply_frame(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
+    vim_replay(controller, "w<C-v>jj2Ixy<C-w>z<Esc>");
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(editing.files().written() == "abc zdef\r\nabc zdef\r\nabc zdef",
+           "the replayed Ctrl-w in a counted block insert copies to every CRLF line");
+    expect(controller.frame().caret.position == TextPosition{LineNumber{1}, Column{5}},
+           "the caret rests on the top left of the block");
+    vim_replay(controller, "u");
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(editing.files().written() == "abc def\r\nabc def\r\nabc def",
+           "one undo takes back the block insert and its copies");
+    vim_replay(controller, "ggdGiabc<CR>def<CR>ghi<Esc>gg");
+    vim_replay(controller, "j0<C-v>j2Iz<C-u><C-u><CR>y<Esc>");
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(editing.files().written() == "abc\r\nydef\r\nyghi",
+           "a replay that joins the line above and breaks back copies on CRLF lines");
+    expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{1}},
+           "the caret rests on the top left of the block after the join and break");
 }
 
 // 回数付き INSERT の流し直し（#1093）が CRLF の文書でも行をつなぎ、undo 1 回で戻ること。engine は
@@ -1980,7 +1992,7 @@ void verify_vim_engine()
     verify_vim_insert_motion_breaks_the_unit();
     verify_vim_put_line_endings();
     verify_vim_count_insert_replay_crlf();
-    verify_vim_block_count_replay();
+    verify_vim_block_count_replay_crlf();
     verify_vim_crlf();
     verify_vim_other_keys();
     verify_vim_normal_stops_at_failure();
