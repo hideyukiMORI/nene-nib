@@ -2,6 +2,7 @@
 // shell_registration_plan の 1 本が文字列で作り（決定 2）、試験はレジストリに触れずに文字列で
 // 確かめる。controller は 2 つの操作の意図のときだけ替え玉 ScriptedShellRegistration を呼ぶ
 // （決定 3・4）。
+#include "AutosaveTick.hpp"
 #include "CancelCommand.hpp"
 #include "Editing.hpp"
 #include "InsertText.hpp"
@@ -21,6 +22,7 @@
 #include "UnregisterShell.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
+#include "WorkCompleted.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -265,8 +267,10 @@ void verify_vim_and_quiet()
     applied(controller, app::OpenOperationList{});
     applied(controller, app::CancelCommand{});
     vim_replay(controller, "ix<Esc>");
-    expect(port.touches() == 0,
-           "opening the operation list and typing never touch the shell registration");
+    applied(controller, app::AutosaveTick{});
+    applied(controller, app::WorkCompleted{});
+    expect(port.touches() == 0, "opening the operation list, typing, the autosave tick and the "
+                                "work signal never touch the shell registration");
     applied(controller, app::RegisterShell{});
     expect(port.applies() == 1 && vim_body(controller.frame()) == "xab\n" &&
                notice(controller.frame()) == with_note("Windows の右クリックに登録しました"),

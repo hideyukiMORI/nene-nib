@@ -162,6 +162,18 @@ void add_capabilities(ShellRegistrationPlan &plan, const ShellRegistrationInput 
     }
     return std::string(key_path);
 }
+// 外すときに木ごと消す値か（値を足すとこの switch がコンパイルで落ちる・CPP-002）。
+[[nodiscard]] bool removes_subtree(ShellRegistrationRemoval removal) noexcept
+{
+    switch (removal)
+    {
+    case ShellRegistrationRemoval::subtree:
+        return true;
+    case ShellRegistrationRemoval::value:
+        return false;
+    }
+    std::unreachable();
+}
 } // namespace
 
 std::expected<ShellRegistrationPlan, ShellRegistrationPlanFailure>
@@ -188,7 +200,7 @@ std::vector<std::string> shell_registration_subtrees(const ShellRegistrationPlan
     std::vector<std::string> roots;
     for (const auto &entry : plan)
     {
-        if (entry.removal != ShellRegistrationRemoval::subtree)
+        if (!removes_subtree(entry.removal))
         {
             continue;
         }
