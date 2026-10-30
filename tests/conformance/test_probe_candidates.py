@@ -95,10 +95,18 @@ def probe_candidates():
     return items(block(read(PROBE), "fixed_candidates = std::to_array<std::string_view>({"), {})
 
 
+def function_body(text, signature):
+    """Return the body of the function whose declaration starts with `signature` (brace matched)."""
+    start = text.index(signature)
+    opening = text.index("{", start)
+    return block(text[opening:], "{")
+
+
 class ProbeCandidateTests(unittest.TestCase):
+    maxDiff = None
+
     def test_matching_candidates_keeps_the_order_the_probe_copies(self):
-        body = block(read(EX_RESULT), "matching_candidates(const ThemeCatalog &themes,")
-        body = body[body.index("{") :]
+        body = function_body(read(EX_RESULT), "matching_candidates(const ThemeCatalog &themes,")
         marks = ["fixed_candidates)", "palette_names)", "map_command_candidates())",
                  "append_document_candidates(", "append_theme_candidates("]
         positions = [body.find(mark) for mark in marks]
@@ -106,13 +114,29 @@ class ProbeCandidateTests(unittest.TestCase):
         self.assertEqual(positions, sorted(positions),
                          "matching_candidates changed the order of the candidate tables; "
                          "rewrite tests/performance/ExCompletionProbe.cpp to the same order")
+        # A sixth source added between the marks would pass the order check above, so the places
+        # that add candidates are counted too: 3 loops over the fixed / palette / map tables and
+        # 2 appends (documents, themes). A change here means the probe's copy needs a look.
+        added = len(re.findall(r"candidates\.(?:emplace_back|push_back)\(", body))
+        appended = len(re.findall(r"\bappend_\w+\(", body))
+        self.assertEqual((added, appended), (3, 2),
+                         "matching_candidates gained or lost a candidate source; rewrite "
+                         "fixed_candidates in tests/performance/ExCompletionProbe.cpp and this "
+                         "test to the new sources (#1182)")
 
     def test_probe_copy_equals_the_product_tables(self):
         product = product_candidates()
+        probe = probe_candidates()
         self.assertGreater(len(product), 40)
-        self.assertEqual(probe_candidates(), product,
+        missing = [name for name in product if name not in probe]
+        extra = [name for name in probe if name not in product]
+        first = next((index for index, (left, right) in enumerate(zip(probe, product))
+                      if left != right), min(len(probe), len(product)))
+        self.assertEqual(probe, product,
                          "the Ex candidate tables changed; rewrite fixed_candidates in "
-                         "tests/performance/ExCompletionProbe.cpp to the same list (#1182)")
+                         "tests/performance/ExCompletionProbe.cpp to the same list (#1182). "
+                         f"missing from the probe: {missing}; not in the product: {extra}; "
+                         f"first difference at index {first}")
 
 
 if __name__ == "__main__":

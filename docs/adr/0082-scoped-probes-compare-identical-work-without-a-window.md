@@ -187,11 +187,11 @@ checksumはuint64の剰余和でFNV(input)+FNV(display)+全startsの和+全match
 
 ## 追補（2026-10-19・#690）
 
-CTest に登録しない代わりに、`eng/check.ps1 -Full` が `eng/probe-smoke.ps1` で表 `ProbeDispatchRow` の全 workload を warmup 1 + sample 1 で 1 回ずつ流して非 0 の終了を落とし（時間は判定しない・CI の必須 check には足さない）、製品の表から導ける期待値（組み込みテーマの名前と数・Ex の固定の候補・frame の 1 行の長さ＝巨大な行のしきい値）は probe の側に literal で写さず正本から引く。
+CTest に登録しない代わりに、`eng/check.ps1 -Full` が `eng/probe-smoke.ps1` で表 `ProbeDispatchRow` の全 workload を warmup 1 + sample 1 で 1 回ずつ流して非 0 の終了を落とし（時間は判定しない・CI の必須 check には足さない）、製品の表から導ける期待値（組み込みテーマの名前と数・frame の 1 行の長さ＝巨大な行のしきい値）は probe の側に literal で写さず正本から引く（Ex の固定の候補だけは写しで持つ・下の #1182 の追補）。
 
 frame の 5 本は 1 行を巨大な行のしきい値（16,384 コードポイント）以下にするため 2026-10-19 に改名した（上の表の名前は新しい名前に直し、回数・バイト数・checksum は改名前の固定のまま残す）。ASCII の 4 本は 1 行 16,384 バイト（dense・selection・visual の `a x ` は 4,096 単位）、混合の 1 行は 2,340 単位（表示 16,380 コードポイント）。同じ日に metadata から組み込みテーマの名前の行を外したので、2026-10-19 より前の probe の記録とは入力ハッシュで突き合わせられない。
 
-#1182（2026-10-30）: Ex の固定の候補は正本が無名名前空間の表なので probe は literal の写し（`ExCompletionProbe.cpp` の `fixed_candidates`）を持ち、10-20 以降の `:set` と `map` の 34 候補で 9 本が `-Full` でだけ落ちていた。写しを製品の並びへ作り直し、写しと製品の表（`ExResult.cpp` の 3 表・`ExMapCommand.cpp` の `candidates`・`matching_candidates` の読む順）の一致を `tests/conformance/test_probe_candidates.py` が CI で守る。
+#1182（2026-10-30）: 上の段落は #690 の時点で「Ex の固定の候補も正本から引く」と書いていたが誤りで、当時から写しだった。Ex の固定の候補は正本が無名名前空間の表で、期待を製品から独立に保つため（公開関数から引くと製品の誤りを期待も写す）probe は literal の写し（`ExCompletionProbe.cpp` の `fixed_candidates`）を持ち、10-20 以降の `:set` と `map` の 34 候補で 9 本が `-Full` でだけ落ちていた。写しを製品の並びへ作り直し、写しと製品の表（`ExResult.cpp` の 3 表・`ExMapCommand.cpp` の `candidates`・`matching_candidates` の読む順）の一致を `tests/conformance/test_probe_candidates.py` が CI で守る。
 
 ## 追補（2026-10-20・#732）— 文とタグのテキストオブジェクトの 4 本
 
