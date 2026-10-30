@@ -746,8 +746,9 @@ namespace
            std::visit([](const auto &value) { return erases_in_insert(value); }, key);
 }
 
-// INSERT で記録を `i` から取り直す鍵（決定 4）。ADR 0028 の決定 3 が挿入の反復を切るのと
-// 同じ境界で、Vim も移動のあとの入力を新しい挿入として扱う（Home / End / 矢印で実測）。
+// INSERT で `.` の記録を区切る鍵（決定 4）。ADR 0028 の決定 3 が挿入の反復を切るのと同じ境界で、
+// Vim も移動のあとの入力を新しい挿入として扱う（Home / End / 矢印で実測）。`i` から取り直すのは
+// 区切った後に打った最初の移動でない鍵（#1137・insert_recording）。
 [[nodiscard]] bool restarts_insert(VimKey key) noexcept
 {
     if (!std::holds_alternative<VimSpecialKey>(key))
@@ -831,6 +832,19 @@ namespace
     }
     next.insert_start = start;
     return next;
+}
+
+// 効果を見た後に始めの位置の印を戻す（#1137）。何も消せずにビープした消す鍵は Vim の ins_bs が
+// stop_arrow に届く前に返るので、insert_started が止めた印も位置も鍵の前のまま（`.` の記録の
+// 有無に依らない・`ix<Left><BS>y<Esc>.` は `y` だけ）。行の端の矢印は insert_started が arrow_stays
+// で先に決める。
+[[nodiscard]] VimStep insert_start_kept(const VimState &before, VimStep step, const VimKey &key)
+{
+    if (erased_nothing(key, step.effect))
+    {
+        step.next.insert_start = before.insert_start;
+    }
+    return step;
 }
 } // namespace detail
 } // namespace nenenib::core

@@ -3135,5 +3135,18 @@
   {"name":"insert-arrow-right-at-the-end-then-dot","text":"ab\ncd","keys":"A<Right>x<Esc>j."},
   {"name":"insert-arrow-left-over-a-zwj-sequence","text":"a👨‍👩b","keys":"$i<Left>x<Esc>"},
   {"name":"insert-arrow-left-at-the-line-start-keeps-the-count","text":"ab","keys":"2i<Left>x<Esc>"},
-  {"name":"insert-arrow-right-at-the-line-end-keeps-the-count","text":"ab","keys":"2A<Right>x<Esc>"}
+  {"name":"insert-arrow-right-at-the-line-end-keeps-the-count","text":"ab","keys":"2A<Right>x<Esc>"},
+  {"name":"insert-arrow-dot-left-then-escape","text":"ab","keys":"ix<Left><Esc>."},
+  {"name":"insert-arrow-dot-right-then-escape","text":"ab","keys":"ix<Right><Esc>."},
+  {"name":"insert-arrow-dot-home-then-escape","text":"ab","keys":"Ax<Home><Esc>."},
+  {"name":"insert-arrow-dot-end-then-escape","text":"ab","keys":"ix<End><Esc>."},
+  {"name":"insert-arrow-dot-left-then-escape-counted-dot","text":"ab","keys":"ix<Left><Esc>2."},
+  {"name":"insert-arrow-dot-left-then-typed","text":"ab","keys":"ix<Left>y<Esc>."},
+  {"name":"insert-arrow-dot-left-after-a-counted-insert","text":"ab","keys":"2ix<Left><Esc>."},
+  {"name":"insert-arrow-dot-left-after-a-counted-insert-counted-dot","text":"ab","keys":"2ix<Left><Esc>3."},
+  {"name":"insert-arrow-dot-up-then-escape","text":"ab\ncd","keys":"jix<Up><Esc>."},
+  {"name":"insert-arrow-dot-two-arrows-then-escape","text":"abc","keys":"ix<Left><Right><Esc>."},
+  {"name":"insert-arrow-dot-home-after-visual-change","text":"abcd","keys":"vlcZ<Home><Esc>."},
+  {"name":"insert-arrow-dot-left-then-register","text":"ab","keys":"ylix<Left><C-r>\"<Esc>."},
+  {"name":"insert-arrow-dot-left-then-beeping-backspace","text":"ab","keys":"ix<Left><BS>y<Esc>."}
 ]
