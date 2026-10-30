@@ -698,6 +698,12 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return entered_insert(state, insert_line_start_landing(view.text, view.selection.caret));
     }
+    if (action == VimAction::insert_at_column_one)
+    {
+        // `gI` は空白を飛ばさず行の 1 桁目（Vim の nv_g_cmd の beginline(0)・#1032）。
+        return entered_insert(state,
+                              view.text.line_start(line_of(view.text, view.selection.caret)));
+    }
     return entered_insert(state, view.text.line_end(line_of(view.text, view.selection.caret)));
 }
 
@@ -1067,6 +1073,15 @@ namespace
     if (vim_group_for(action) == VimActionGroup::search)
     {
         return search_action(state, view, action);
+    }
+    // `dgI` は Vim の nv_g_cmd と同じく beginline(0) でキャレットを 1 桁目へ動かしてから
+    // オペレータを打ち消して鳴る（#1032 の実測）。
+    if (action == VimAction::insert_at_column_one)
+    {
+        return failed(
+            VimStep{vim_resting_from(state, state.unnamed_register),
+                    VimMoveTo{view.text.line_start(line_of(view.text, view.selection.caret))}},
+            VimRepeatFailure::refused);
     }
     const auto motion = laid_out_motion(view, action);
     if (!motion.has_value())

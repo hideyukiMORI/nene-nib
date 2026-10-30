@@ -238,14 +238,21 @@ namespace
                : visual_operated(state, view, VimOperator::change);
 }
 
-// 行に効く鍵（`I` `A` `C` `D` `Y` `gi`）。VISUAL では矩形の `I` `A` `C` だけが効く（ADR 0035 の
-// 追補 #1042・`D` `Y` と文字単位・行単位は後続）。`gi` は VISUAL では失敗する（実測・#1039）。
+// 行に効く鍵（`I` `A` `C` `D` `Y` `gi` `gI`）。VISUAL では矩形の `I` `A` `C` だけが効く（ADR 0035
+// の 追補 #1042・`D` `Y` と文字単位・行単位は後続）。`gi` は VISUAL では失敗する（実測・#1039）。
 [[nodiscard]] VimStep visual_line_command(const VimState &state, const VimEditorView &view,
                                           VimAction action)
 {
     if (action == VimAction::insert_at_last_insert)
     {
         return failed(visual_unchanged(state), VimRepeatFailure::refused);
+    }
+    // `gI` は Vim の nv_g_cmd と同じく beginline(0) で選択の端を 1 桁目へ動かしてから鳴る
+    // （`0` と同じ移動・#1032 の実測）。
+    if (action == VimAction::insert_at_column_one)
+    {
+        return failed(visual_moved(state, view, VimAction::move_line_start),
+                      VimRepeatFailure::refused);
     }
     if (state.mode != VimMode::visual_block)
     {
