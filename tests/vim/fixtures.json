@@ -3145,5 +3145,16 @@
   {"name":"insert-arrow-right-at-the-end-then-dot","text":"ab\ncd","keys":"A<Right>x<Esc>j."},
   {"name":"insert-arrow-left-over-a-zwj-sequence","text":"a👨‍👩b","keys":"$i<Left>x<Esc>"},
   {"name":"insert-arrow-left-at-the-line-start-keeps-the-count","text":"ab","keys":"2i<Left>x<Esc>"},
-  {"name":"insert-arrow-right-at-the-line-end-keeps-the-count","text":"ab","keys":"2A<Right>x<Esc>"}
+  {"name":"insert-arrow-right-at-the-line-end-keeps-the-count","text":"ab","keys":"2A<Right>x<Esc>"},
+  {"name":"block-change-empty-put-first-line-big-p","text":"\n{br}\t?","keys":"<C-v>oC.<Esc>P"},
+  {"name":"block-change-empty-put-first-line-p","text":"\nabcd","keys":"<C-v>C.<Esc>p"},
+  {"name":"block-change-empty-put-middle-line","text":"ab\n\ncd","keys":"j<C-v>C.<Esc>P"},
+  {"name":"block-change-empty-put-middle-line-into-next","text":"ab\n\ncdef","keys":"j<C-v>C<Esc>jlP"},
+  {"name":"block-change-empty-put-small-c","text":"\nabcd","keys":"<C-v>c.<Esc>P"},
+  {"name":"block-change-empty-put-small-c-next-line","text":"\nabcd","keys":"<C-v>c<Esc>jlp"},
+  {"name":"block-change-empty-put-named","text":"\nabcd","keys":"<C-v>\"aC.<Esc>j\"ap"},
+  {"name":"block-change-empty-put-named-big-p","text":"\nabcd","keys":"<C-v>\"ac<Esc>jl\"aP"},
+  {"name":"block-change-empty-put-count","text":"\nabcd","keys":"<C-v>C<Esc>jl3P"},
+  {"name":"block-change-empty-put-two-empty-lines","text":"\n\nabcd","keys":"<C-v>jC<Esc>jjlP"},
+  {"name":"block-change-empty-put-line-end","text":"\nabcd","keys":"<C-v>C<Esc>j$p"}
 ]

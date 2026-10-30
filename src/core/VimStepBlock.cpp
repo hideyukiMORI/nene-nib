@@ -755,15 +755,17 @@ namespace detail
         return VimStep{vim_resting_from(state, state.unnamed_register),
                        VimInsertBlock{std::vector<VimBlockEdit>{}, caret, EditBoundary::separate}};
     }
+    if (source.kind == VimRegisterKind::block)
+    {
+        // 本文が空の矩形（空の行で始まる矩形の `C` `c`）も 1 行・幅つきの矩形として貼り、幅の
+        // ぶんを空白で埋める（Vim の do_put の MBLOCK は y_size 1 の空の行を幅まで埋める・#1158）。
+        return VimStep{vim_resting_from(state, state.unnamed_register),
+                       put_block(state, text, caret, side)};
+    }
     if (source.text.empty())
     {
         // 空の本文は何も貼らず、キャレットも動かさない（Vim は yanklen が 0 なら列を進めない）。
         return VimStep{vim_resting_from(state, state.unnamed_register), VimNoEffect{}};
-    }
-    if (source.kind == VimRegisterKind::block)
-    {
-        return VimStep{vim_resting_from(state, state.unnamed_register),
-                       put_block(state, text, caret, side)};
     }
     auto body = repeated(source.text, count_of(state.count));
     if (!body.has_value())
