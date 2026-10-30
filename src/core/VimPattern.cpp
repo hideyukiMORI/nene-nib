@@ -3,6 +3,7 @@
 #include "Offset.hpp"
 #include "Utf8.hpp"
 #include "VimCase.hpp"
+#include "VimCharacterBoundary.hpp"
 #include "VimPatternAtomKind.hpp"
 #include "VimPatternEvaluation.hpp"
 #include "VimWordClass.hpp"
@@ -88,6 +89,7 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
 }
 
 // `\<`。語の文字で、前が無いか種類が変わるところ。種類の表は 1 つ（ADR 0031 の決定 2）。
+// 前は Vim の 1 文字の頭で見る（reg_prev_class の mb_head_off・`⚠️a` の a は語の頭・#985）。
 [[nodiscard]] bool starts_a_word(std::string_view line, std::size_t at)
 {
     if (at >= line.size())
@@ -99,7 +101,7 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
     {
         return false;
     }
-    return at == 0 || class_at(line, previous_code_point(line, Offset{at}).value) != here;
+    return at == 0 || class_at(line, vim_character_start(line, Offset{at}).value) != here;
 }
 
 // `\>`。直前が語の文字で、後ろが無いか種類が変わるところ。
@@ -109,7 +111,7 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
     {
         return false;
     }
-    const std::uint32_t before = class_at(line, previous_code_point(line, Offset{at}).value);
+    const std::uint32_t before = class_at(line, vim_character_start(line, Offset{at}).value);
     if (before <= symbol_group)
     {
         return false;

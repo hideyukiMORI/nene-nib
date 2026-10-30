@@ -8,8 +8,10 @@
 #include "VimRepeatFailure.hpp"
 #include "VimScanPoint.hpp"
 #include "VimWordAdvance.hpp"
+#include "VimWordClassTable.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -23,6 +25,7 @@ namespace
 constexpr std::uint32_t blank_group = 0;
 constexpr std::uint32_t symbol_group = 1;
 constexpr std::uint32_t word_group = 2;
+constexpr std::uint32_t emoji_group = 3;
 // 1 文字進んだ結果（Vim の inc() と同じ 4 つ）。行の内容の終わり（NUL の桁）に着いたことと、
 // 次の行へ渡ったことを区別するのは、d + w が行末で止まる特例がその 2 つで効くからである。
 constexpr int stepped_inside = 0;
@@ -42,54 +45,62 @@ constexpr int end_failed = 0;
 constexpr int end_finished = 1;
 constexpr int end_continues = 2;
 
-// Vim の utf_class_tab のうち、この縦切りが扱う範囲（Issue #22 で本物の Vim と突き合わせた）。
-// 表に無い非 ASCII は語の文字（2）に落ちる。全角の英数字もそちら（'ＡＢabc' が 1 語＝実測）。
-// 全角の記号は Vim の utf_class_tab と同じ 4 行で、全角の数字（U+FF10〜FF19）は語の文字
-// （'１２x' が 1 語・'［' は記号＝実測・Issue #961）。
-constexpr std::array<VimCharacterRange, 14> character_ranges{{{0x00A0, 0x00A0, blank_group},
-                                                              {0x00A1, 0x00BF, symbol_group},
-                                                              {0x2000, 0x206F, symbol_group},
-                                                              {0x3000, 0x3000, blank_group},
-                                                              {0x3001, 0x303F, symbol_group},
-                                                              {0x3041, 0x309F, 0x3000},
-                                                              {0x30A0, 0x30FF, 0x3001},
-                                                              {0x3400, 0x4DBF, 0x4E00},
-                                                              {0x4E00, 0x9FFF, 0x4E00},
-                                                              {0xF900, 0xFAFF, 0x4E00},
-                                                              {0xFF01, 0xFF0F, symbol_group},
-                                                              {0xFF1A, 0xFF20, symbol_group},
-                                                              {0xFF3B, 0xFF40, symbol_group},
-                                                              {0xFF5B, 0xFF65, symbol_group}}};
-
-[[nodiscard]] bool ascii_word_byte(char32_t code) noexcept
+// 0x100 未満は Vim の既定の iskeyword（-u NONE の Windows の Vim 9.1 で
+// `@,48-57,_,192-255`）で分ける。 空白は ' ' '	' NUL と U+00A0、語の文字は英数字と '_' と '@' の
+// Latin-1 の英字 U+00B5 と 192〜255、 ほかは記号（Vim の utf_class_buf の先頭・Issue #985
+// で全コードポイントを charclass() と照合）。
+[[nodiscard]] std::uint32_t latin1_class(char32_t code) noexcept
 {
-    return (code >= U'0' && code <= U'9') || (code >= U'A' && code <= U'Z') ||
-           (code >= U'a' && code <= U'z') || code == U'_';
-}
-
-[[nodiscard]] std::uint32_t ascii_class(char32_t code) noexcept
-{
-    if (code == U' ' || code == U'\t')
+    if (code == U' ' || code == U'	' || code == 0 || code == 0x00A0)
     {
         return blank_group;
     }
-    return ascii_word_byte(code) ? word_group : symbol_group;
+    const bool word = (code >= U'0' && code <= U'9') || (code >= U'A' && code <= U'Z') ||
+                      (code >= U'a' && code <= U'z') || code == U'_' || code == 0x00B5 ||
+                      code >= 0x00C0;
+    return word ? word_group : symbol_group;
 }
 
-[[nodiscard]] std::uint32_t table_class(char32_t code) noexcept
+// Vim の utf_class_buf と同じ二分探索。classes[] の区間は重なるので、道筋まで同じにする。
+template <std::size_t Size>
+[[nodiscard]] std::optional<std::uint32_t>
+searched_class(const std::array<VimCharacterRange, Size> &table, char32_t code) noexcept
 {
-    if (code < 0x80)
+    std::ptrdiff_t bottom = 0;
+    std::ptrdiff_t top = static_cast<std::ptrdiff_t>(Size) - 1;
+    while (top >= bottom)
     {
-        return ascii_class(code);
-    }
-    for (const VimCharacterRange range : character_ranges)
-    {
-        if (code >= range.first && code <= range.last)
+        const std::ptrdiff_t middle = (bottom + top) / 2;
+        const VimCharacterRange range = table.at(static_cast<std::size_t>(middle));
+        if (range.last < code)
+        {
+            bottom = middle + 1;
+        }
+        else if (range.first > code)
+        {
+            top = middle - 1;
+        }
+        else
         {
             return range.group;
         }
     }
-    return word_group;
+    return std::nullopt;
+}
+
+// 語の分類の表は Vim 9.1 の classes[] と emoji_all[] の写し（VimWordClassTable.hpp）の 1 つ。
+// 絵文字は 3、表に無い 0x100 以上は語の文字（2）。
+[[nodiscard]] std::uint32_t table_class(char32_t code) noexcept
+{
+    if (code < 0x100)
+    {
+        return latin1_class(code);
+    }
+    if (searched_class(vim_emoji_all, code).has_value())
+    {
+        return emoji_group;
+    }
+    return searched_class(vim_utf_classes, code).value_or(word_group);
 }
 
 [[nodiscard]] VimScanPoint scan_point(const TextBuffer &text, Offset caret, VimWordClass kind)
@@ -122,12 +133,14 @@ constexpr std::array<VimCharacterRange, 14> character_ranges{{{0x00A0, 0x00A0, b
 }
 
 // `*` / `#` の連なりの先頭（Vim の find_ident_at_pos の 2.）。前の文字が同じ種類の間だけ戻る。
+// 歩くのは Vim の 1 文字（mb_head_off と mb_ptr2len は U+FE0F などの幅 0
+// を前の文字に含める・#985）。
 [[nodiscard]] std::size_t run_begin(std::string_view content, std::size_t at, std::uint32_t group)
 {
     while (at > 0 &&
-           word_class_at(content, previous_code_point(content, Offset{at}).value) == group)
+           word_class_at(content, vim_character_start(content, Offset{at}).value) == group)
     {
-        at = previous_code_point(content, Offset{at}).value;
+        at = vim_character_start(content, Offset{at}).value;
     }
     return at;
 }
@@ -575,7 +588,7 @@ std::optional<OffsetRange> vim_word_at(const TextBuffer &text, Offset caret)
     std::size_t end = point.index;
     while (end < point.content.size() && word_class_at(point.content, end) == group)
     {
-        end = next_code_point(point.content, Offset{end}).value;
+        end = vim_character_end(point.content, Offset{end}).value;
     }
     return line_range(text, point.line, begin, end);
 }
@@ -596,7 +609,7 @@ std::optional<OffsetRange> vim_string_at(const TextBuffer &text, Offset caret)
     std::size_t end = point.index;
     while (end < point.content.size() && word_class_at(point.content, end) != blank_group)
     {
-        end = next_code_point(point.content, Offset{end}).value;
+        end = vim_character_end(point.content, Offset{end}).value;
     }
     return line_range(text, point.line, begin, end);
 }

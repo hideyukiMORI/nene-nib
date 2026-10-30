@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 cfd577a69d932afbfa5f6deb263091dca5d0f1978de313dbe8983baf60d54814 / 3088 fixtures
+// fixtures.json: sha256 1054d704f6514811794f9079e128addf02d9c39e197bb82a94aba30efff1b1e7 / 3127 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3088> vim_fixtures{{
+constexpr std::array<VimFixture, 3127> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3100,6 +3100,45 @@ constexpr std::array<VimFixture, 3088> vim_fixtures{{
     {"control-del-block-yank-put", "a\177bc\nxyzwvu\n123456", "<C-v>j2lyGp", "a\177bc\nxyzwvu\n1a\177b23456\n xyz", 3, 2, "a\177b\nxyz", "\0263", std::nullopt},
     {"control-del-block-yank-put-pads", "a\177b\nxy\n123456", "<C-v>j2ly2jlp", "a\177b\nxy\n12a\177b3456\n  xy", 3, 3, "a\177b\nxy", "\0263", std::nullopt},
     {"control-del-block-dollar-yank-put", "a\177b\nxyzw\n123456", "<C-v>j$y2jp", "a\177b\nxyzw\n1a\177b 23456\n xyzw", 3, 2, "a\177b\nxyzw", "\0264", std::nullopt},
+    {"word-class-ctrl-w-warning-fullwidth", "⚠ＡＢ", "A<C-w><Esc>", "⚠", 1, 1, "", "", std::nullopt},
+    {"word-class-ctrl-w-warning-vs16", "⚠️ＡＢ", "A<C-w><Esc>", "⚠️", 1, 1, "", "", std::nullopt},
+    {"word-class-ctrl-w-after-emoji", "ab⚠️", "A<C-w><Esc>", "ab", 1, 2, "", "", std::nullopt},
+    {"word-class-ctrl-w-cjk-punctuation", "漢字。かな", "A<C-w><C-w><Esc>", "漢字", 1, 4, "", "", std::nullopt},
+    {"word-class-ctrl-w-arrow", "ab←cd", "A<C-w><C-w><Esc>", "ab", 1, 2, "", "", std::nullopt},
+    {"word-class-w-warning-fullwidth", "⚠️ＡＢ x", "w", "⚠️ＡＢ x", 1, 7, "", "", std::nullopt},
+    {"word-class-ge-emoji", "z9⚠️amma", "$ge", "z9⚠️amma", 1, 3, "", "", std::nullopt},
+    {"word-class-b-emoji", "z9⚠️amma", "$b", "z9⚠️amma", 1, 9, "", "", std::nullopt},
+    {"word-class-e-emoji", "z9⚠️amma", "e", "z9⚠️amma", 1, 2, "", "", std::nullopt},
+    {"word-class-hash-emoji", "z9⚠️amma", "3l#", "z9⚠️amma", 1, 9, "", "", std::nullopt},
+    {"word-class-w-family-zwj", "beta👨‍👩 x", "w", "beta👨‍👩 x", 1, 5, "", "", std::nullopt},
+    {"word-class-w-family-zwj-twice", "beta👨‍👩 x", "2w", "beta👨‍👩 x", 1, 9, "", "", std::nullopt},
+    {"word-class-star-emoji-after-arrow", "(é.→⚠️ x\nalphaend.→⚠️", "4l*", "(é.→⚠️ x\nalphaend.→⚠️", 2, 13, "", "", std::nullopt},
+    {"word-class-star-arrow", "→⚠️ a\nb.→⚠️", "*", "→⚠️ a\nb.→⚠️", 2, 6, "", "", std::nullopt},
+    {"word-class-w-arrow", "a←b c", "w", "a←b c", 1, 2, "", "", std::nullopt},
+    {"word-class-e-arrow-run", "ab←←cd x", "e", "ab←←cd x", 1, 2, "", "", std::nullopt},
+    {"word-class-w-emoji-run", "😀😀ab x", "w", "😀😀ab x", 1, 9, "", "", std::nullopt},
+    {"word-class-w-two-emoji-kinds", "x⚠️⚠️y z", "w", "x⚠️⚠️y z", 1, 2, "", "", std::nullopt},
+    {"word-class-w-zwj-alone", "a‍b c", "w", "a‍b c", 1, 2, "", "", std::nullopt},
+    {"word-class-w-cjk-symbols", "漢字「かな」カナ x", "3w", "漢字「かな」カナ x", 1, 16, "", "", std::nullopt},
+    {"word-class-w-greek-question-mark", "αβ;γ x", "w", "αβ;γ x", 1, 5, "", "", std::nullopt},
+    {"word-class-e-greek-ano-teleia", "αβ·γδ x", "2e", "αβ·γδ x", 1, 5, "", "", std::nullopt},
+    {"word-class-w-cyrillic-comma", "привет,мир x", "2w", "привет,мир x", 1, 14, "", "", std::nullopt},
+    {"word-class-e-cyrillic", "привет мир", "e", "привет мир", 1, 11, "", "", std::nullopt},
+    {"word-class-w-devanagari-danda", "नमस्ते।दुनिया x", "w", "नमस्ते।दुनिया x", 1, 19, "", "", std::nullopt},
+    {"word-class-w-superscript-subscript", "a⁴⁵b₁₂c x", "3w", "a⁴⁵b₁₂c x", 1, 9, "", "", std::nullopt},
+    {"word-class-w-hangul", "한국어abc 문", "w", "한국어abc 문", 1, 10, "", "", std::nullopt},
+    {"word-class-w-braille", "⠁⠂ab x", "w", "⠁⠂ab x", 1, 7, "", "", std::nullopt},
+    {"word-class-w-math-alphanumeric", "𝐀𝐁ab x", "w", "𝐀𝐁ab x", 1, 9, "", "", std::nullopt},
+    {"word-class-w-c1-control", "ab c", "w", "ab c", 1, 2, "", "", std::nullopt},
+    {"word-class-w-micro-sign", "aµ¶b c", "w", "aµ¶b c", 1, 4, "", "", std::nullopt},
+    {"word-class-diw-emoji", "ab😀😀cd", "3ldiw", "abcd", 1, 3, "😀😀", "v", std::nullopt},
+    {"word-class-daw-arrow", "ab →→ cd", "3ldaw", "ab cd", 1, 4, "→→ ", "v", std::nullopt},
+    {"word-class-big-w-emoji", "a😀 b", "W", "a😀 b", 1, 7, "", "", std::nullopt},
+    {"word-class-big-b-emoji", "a😀b c😀", "$B", "a😀b c😀", 1, 8, "", "", std::nullopt},
+    {"word-class-big-e-emoji-arrow", "😀→a b", "E", "😀→a b", 1, 8, "", "", std::nullopt},
+    {"word-class-ge-arrow", "ab→cd", "$ge", "ab→cd", 1, 3, "", "", std::nullopt},
+    {"word-class-star-greek", "αβ γ\nx αβ", "*", "αβ γ\nx αβ", 2, 3, "", "", std::nullopt},
+    {"word-class-hash-cyrillic", "мир x\nмир", "j#", "мир x\nмир", 1, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
