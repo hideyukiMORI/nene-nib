@@ -131,6 +131,57 @@ void verify_scrolloff_center()
            "#1041 scrolloff=999 keeps the caret in the middle of the window");
 }
 
+// 上へ遠く跳ぶ（G の後の 30G）と、Vim の scroll_cursor_halfway と同じくキャレットを中央へ寄せる
+// （(10 - 1) / 2 = 4 行上が先頭）。仮の座標の 1 行目で切れて最上段に置かない（#1100）。
+void verify_far_jump_up_centers()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    prepared(controller, "0");
+    const auto bottom = pressed(controller, U"G");
+    expect(bottom.caret.position.line == LineNumber{document_lines},
+           "#1100 G goes to the last line");
+    const auto up = pressed(controller, U"30G");
+    expect(up.caret.position.line == LineNumber{30} && up.first_visible == LineNumber{26},
+           "#1100 a far jump up centers the caret like Vim's scroll_cursor_halfway");
+}
+
+// 打ち切り（2 × 10 + 1 = 21 行）の手前の跳び（51 行目が先頭の窓から 33G・18 行上）も中央へ寄る。
+// 閾値 (10 - 2) / 2 = 4 行より近い跳び（48G・3 行上）は寄せずに最小だけ送る（#1100）。
+void verify_far_jump_up_below_limit()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    prepared(controller, "0");
+    const auto bottom = pressed(controller, U"G");
+    expect(bottom.first_visible == LineNumber{51}, "#1100 G fills the window up to the last line");
+    const auto up = pressed(controller, U"33G");
+    expect(up.caret.position.line == LineNumber{33} && up.first_visible == LineNumber{29},
+           "#1100 a jump up short of the distance limit still centers the caret");
+    Editing near_editing;
+    EditorController &near = near_editing.controller();
+    prepared(near, "0");
+    static_cast<void>(pressed(near, U"G"));
+    const auto stepped = pressed(near, U"48G");
+    expect(stepped.caret.position.line == LineNumber{48} && stepped.first_visible == LineNumber{48},
+           "#1100 a jump up closer than the threshold scrolls only as far as needed");
+}
+
+// so=2 の遠い上への跳びも中央（先頭 26）へ寄り、キャレットは上の余白 2 行の内側に来る。
+// 仮の 1 行目で切れていたときは余白の縁（先頭 28）で止まった（#1100）。
+void verify_far_jump_up_with_margin()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    prepared(controller, "2");
+    static_cast<void>(pressed(controller, U"G"));
+    const auto up = pressed(controller, U"30G");
+    const auto row = up.caret.position.line.value - up.first_visible.value;
+    expect(up.caret.position.line == LineNumber{30} && up.first_visible == LineNumber{26} &&
+               row > 2,
+           "#1100 a far jump up with scrolloff=2 centers the caret inside the margin");
+}
+
 // 行番号の欄の文字（ADR 0008 の追補）。relativenumber はキャレットの行を絶対の番号で左寄せ、
 // ほかの行を距離で右寄せにする。
 void verify_gutter_labels()
@@ -208,6 +259,9 @@ void verify_vim_view_scope()
     verify_scrolloff_follow();
     verify_scrolloff_alignment();
     verify_scrolloff_center();
+    verify_far_jump_up_centers();
+    verify_far_jump_up_below_limit();
+    verify_far_jump_up_with_margin();
     verify_gutter_labels();
     verify_scrolloff_wrapped_rows();
     verify_ordinary_mode_options();
