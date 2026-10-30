@@ -189,3 +189,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0175](0175-the-clock-is-one-port-read-only-when-f5-inserts-the-date-and-time.md) | 現在時刻は `ClockPort` の 1 本で、読むのは F5 で日時を挿入するときだけ | 受理（D71・2026-10-29）・#1050 |
 | [0176](0176-vim-map-is-a-settings-row-applied-by-one-key-table-at-the-window-entry.md) | Vim の `map` は設定 v4 の行で、置き換えは窓の入口の鍵の表 1 つが行い、engine は知らない | 受理（D72・2026-10-29）・#1058 |
 | [0177](0177-printing-is-one-port-that-draws-the-body-layout-into-an-xps-print-control.md) | 印刷は port 1 本で、本文と同じ DirectWrite の layout を XPS の print control に描く | 受理（D71・2026-10-29）・#1047 |
+| [0178](0178-shell-registration-is-one-port-written-only-by-an-explicit-operation-under-hkcu.md) | Windows のエクスプローラーへの登録は port 1 本で、HKCU だけに、明示の操作のときだけ書く（段 1・段 2 は Store の段階） | 受理（D73・2026-10-30）・#1087 |
