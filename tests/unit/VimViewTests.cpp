@@ -27,6 +27,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -182,6 +183,37 @@ void verify_far_jump_up_with_margin()
            "#1100 a far jump up with scrolloff=2 centers the caret inside the margin");
 }
 
+// 一続きの鍵（press_vim_keys・fixture の再生の口）は各鍵の後に追従する（Vim の update_topline・
+// #1154）。窓は viewport の fixture と同じ幅 0（文字組みの問いが無く、途中の解決が起きない）。
+// `G30G` は G で先頭 51 の窓を経てから遠い上への跳びで中央へ寄り（先頭 26）、1 鍵ずつ打ったとき
+// と同じ。最後に 1 回だけ解決すると 1 行目の窓から下へ最小に送って先頭 21 になった。
+void verify_key_sequence_follows_each_key()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{shown_lines});
+    std::string text;
+    for (std::size_t line = 1; line < document_lines; ++line)
+    {
+        text += "line\n";
+    }
+    text += "line";
+    static_cast<void>(controller.apply(InsertText{text}));
+    applied(controller, SelectEditMode{EditMode::vim});
+    static_cast<void>(controller.apply(
+        PlaceCaret{TextPosition{LineNumber{1}, Column{0}}, SelectionAnchoring::collapse}));
+    expect(controller.frame().first_visible == LineNumber{1}, "#1154 the window starts at line 1");
+    std::vector<VimKey> keys;
+    for (const char32_t key : std::u32string_view{U"G30G"})
+    {
+        keys.emplace_back(VimCharacter{key});
+    }
+    const auto sequence = controller.press_vim_keys(keys);
+    expect(sequence.caret.position.line == LineNumber{30} &&
+               sequence.first_visible == LineNumber{26},
+           "#1154 a key sequence follows the caret after each key, through the window of G");
+}
+
 // 行番号の欄の文字（ADR 0008 の追補）。relativenumber はキャレットの行を絶対の番号で左寄せ、
 // ほかの行を距離で右寄せにする。
 void verify_gutter_labels()
@@ -262,6 +294,7 @@ void verify_vim_view_scope()
     verify_far_jump_up_centers();
     verify_far_jump_up_below_limit();
     verify_far_jump_up_with_margin();
+    verify_key_sequence_follows_each_key();
     verify_gutter_labels();
     verify_scrolloff_wrapped_rows();
     verify_ordinary_mode_options();

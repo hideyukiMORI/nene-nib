@@ -282,7 +282,9 @@ EditorFrame EditorController::press_vim_key(const core::VimKey &key)
 
 // fixture の harness が Vim の :normal! の意味で鍵の列を流す口（Issue #230）。1 鍵の流し方は
 // press_vim_key と同じで、鍵が閉じた失敗で終わったら残りの鍵を流さない（再生の打ち切りと同じ
-// deliver_vim_key の返り値で決める）。
+// deliver_vim_key の返り値で決める）。Vim は 1 鍵ごとに update_topline するので、各鍵の後に
+// 追従を解決する（ADR 0129 の追補・#1154）。解決を最後に 1 回へまとめると、画面の外へ出て戻る
+// 列（`G30G` `''''`）の先頭行が途中の画面を経ない値になる。窓の 1 打鍵の道はここを通らない。
 EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
 {
     for (const core::VimKey &key : keys)
@@ -291,6 +293,7 @@ EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
         begin_intent(false);
         const bool failed = deliver_vim_key(key).has_value();
         fit_command_rows();
+        settle_follow();
         if (failed)
         {
             break;
