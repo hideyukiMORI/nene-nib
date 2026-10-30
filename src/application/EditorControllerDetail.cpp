@@ -154,4 +154,21 @@ composition_view_of(const std::optional<core::Composition> &composition)
                            core::composition_underlines(composition.value()),
                            composition.value().cursor};
 }
+// 使う人の操作ではない意図（ADR 0176 の決定 4・ADR 0062 の決定 7・ADR 0137 の決定 1・ADR 0155 の
+// 決定 8・ADR 0160 の決定 6）。裏の仕事と合図（WorkCompleted・AutosaveTick・PreviewTick・
+// LanguageServerTick・MapTimeout）と、窓の
+// 寸法・外観・帯の hover。keeps_tab_walk と begin_intent と `map` の待ちを保つ側が共用する。
+bool not_user_operation(const EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<WorkCompleted>(intent) ||
+           std::holds_alternative<AutosaveTick>(intent) ||
+           std::holds_alternative<PreviewTick>(intent) ||
+           std::holds_alternative<LanguageServerTick>(intent) ||
+           std::holds_alternative<MapTimeout>(intent) ||
+           std::holds_alternative<VisibleLines>(intent) ||
+           std::holds_alternative<TitleBarWidth>(intent) ||
+           std::holds_alternative<RefreshAppearance>(intent) ||
+           std::holds_alternative<PointTitleBar>(intent);
+}
+
 } // namespace nenenib::application::detail

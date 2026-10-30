@@ -587,6 +587,13 @@ void EditorController::run_document_request(const core::ExDocumentRequest &reque
         }
         break;
     }
+    // 全面プレビューの間は全面を抜けるだけ（側の「プレビューだけを閉じる」と同じ・ADR 0155 の
+    // 追補 33）。タブも隠した枠も閉じず、未保存も捨てない（`:wq` `:x` は上で保存してから）。
+    if (state_.full_preview() != nullptr)
+    {
+        leave_full_preview(PreviewPlacement::off);
+        return;
+    }
     // 2 枠では操作中の枠を閉じる（もう 1 つの枠の表示を持ってきてから 1 枠へ）。文書は残るので
     // 未保存でも拒否しない（ADR 0148 の決定 5・hide の決定を待つ仮置き）。
     if (state_.split().layout != core::SplitLayout::none)

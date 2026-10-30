@@ -1,4 +1,5 @@
 #include "EditorController.hpp"
+#include "EditorControllerDetail.hpp"
 
 #include "CaretMotion.hpp"
 #include "ClipboardOperation.hpp"
@@ -77,21 +78,16 @@ constexpr std::string_view preview_full_refused_message =
 // 全面の Space で切り替えるタスクがキャレットの行に無いとき（追補 25）。
 constexpr std::string_view preview_no_task_message = "この行にタスクはありません";
 
-// 全面プレビューの間も写す意図のうち、タブ・窓・枠・面・合図の側（passes_full_preview の続き・
+// 全面プレビューの間も写す意図のうち、タブ・窓・枠・面の側（passes_full_preview の続き・
 // CPP-012 の関数の長さで分ける）。
 [[nodiscard]] bool passes_full_preview_window(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<NewTab>(intent) || std::holds_alternative<SwitchTab>(intent) ||
            std::holds_alternative<WalkRecentTab>(intent) ||
            std::holds_alternative<SettleRecentTab>(intent) ||
-           std::holds_alternative<CloseTab>(intent) ||
-           std::holds_alternative<PointTitleBar>(intent) ||
-           std::holds_alternative<ScrollTabs>(intent) ||
-           std::holds_alternative<TitleBarWidth>(intent) ||
+           std::holds_alternative<CloseTab>(intent) || std::holds_alternative<ScrollTabs>(intent) ||
            std::holds_alternative<OpenTabList>(intent) ||
            std::holds_alternative<EndSession>(intent) ||
-           std::holds_alternative<WorkCompleted>(intent) ||
-           std::holds_alternative<AutosaveTick>(intent) ||
            std::holds_alternative<RestoreAutosave>(intent) ||
            std::holds_alternative<DiscardAutosave>(intent) ||
            std::holds_alternative<ToggleBookmark>(intent) ||
@@ -104,27 +100,23 @@ constexpr std::string_view preview_no_task_message = "この行にタスクは�
            std::holds_alternative<SwitchPane>(intent) ||
            std::holds_alternative<ClosePane>(intent) ||
            std::holds_alternative<TogglePreview>(intent) ||
-           std::holds_alternative<PreviewTick>(intent) ||
            std::holds_alternative<TogglePreviewTask>(intent) ||
            std::holds_alternative<SetPreviewPlacement>(intent) ||
            std::holds_alternative<ToggleExplorer>(intent) ||
            std::holds_alternative<ExplorerKey>(intent) ||
            std::holds_alternative<PointExplorer>(intent) ||
            std::holds_alternative<ScrollExplorer>(intent) ||
-           std::holds_alternative<ExplorerRootChosen>(intent) ||
-           std::holds_alternative<LanguageServerTick>(intent) ||
-           std::holds_alternative<MapTimeout>(intent);
+           std::holds_alternative<ExplorerRootChosen>(intent);
 }
 
 // 全面プレビューの間も今までどおり写す意図（ADR 0155 の改訂 17）。タブ（帯・Ctrl+Tab・`gt` は鍵の
 // 側）・Ctrl+P と入力行・F1・窓と枠と面の操作・保存と開く・表示の選択・合図と裏の仕事・
-// チェックボックスのクリック（追補 24 の唯一の例外）。ここに無い意図は key_route が鍵ごとに決め、
+// チェックボックスのクリック（追補 24 の唯一の例外）。使う人の操作でない意図（合図・裏の仕事・窓の
+// 寸法）は not_user_operation の 1 本を経て全部通す。ここに無い意図は key_route が鍵ごとに決め、
 // どれにも当たらなければ本文に届かない（refuse）。新しい意図を足すときは、ここか key_route に書く。
 [[nodiscard]] bool passes_full_preview(const EditorIntent &intent) noexcept
 {
-    return std::holds_alternative<VisibleLines>(intent) ||
-           std::holds_alternative<SelectEditMode>(intent) ||
-           std::holds_alternative<RefreshAppearance>(intent) ||
+    return detail::not_user_operation(intent) || std::holds_alternative<SelectEditMode>(intent) ||
            std::holds_alternative<OpenDocument>(intent) ||
            std::holds_alternative<SaveDocument>(intent) ||
            std::holds_alternative<CancelComposition>(intent) ||
