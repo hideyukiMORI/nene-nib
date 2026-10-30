@@ -6,16 +6,18 @@
 
 #include "Win32Printer.hpp"
 
-#include "PrintDialog.hpp"
+#include "PrintComposition.hpp"
 #include "PrintRendering.hpp"
 #include "PrintSurface.hpp"
 #include "Utf16.hpp"
 
 #include <DocumentTarget.h>
+#include <cstddef>
 #include <d2d1_1.h>
 #include <d3d11.h>
 #include <dxgi.h>
 #include <objbase.h>
+#include <vector>
 #include <wrl/client.h>
 
 namespace nenenib::ui::win32
@@ -47,18 +49,35 @@ constexpr auto rendering_failed = application::PrintFailure::rendering_failed;
     return surface;
 }
 
+// print ticket の XML のバイト列を stream に戻す（空なら null・プリンタの既定）。
+[[nodiscard]] Microsoft::WRL::ComPtr<IStream> ticket_stream(const std::vector<std::byte> &ticket)
+{
+    Microsoft::WRL::ComPtr<IStream> stream;
+    const LARGE_INTEGER origin{};
+    if (ticket.empty() || FAILED(CreateStreamOnHGlobal(nullptr, TRUE, &stream)) ||
+        FAILED(stream->Write(ticket.data(), static_cast<ULONG>(ticket.size()), nullptr)) ||
+        FAILED(stream->Seek(origin, STREAM_SEEK_SET, nullptr)))
+    {
+        return {};
+    }
+    return stream;
+}
+
 // 選んだプリンタへの job（名前は題名）の受け口。出力の stream は渡さず OS のスプールへ流す。
+// 作った時点でスプールに job ができるので、これより後の失敗は render_print_job が Cancel する。
 [[nodiscard]] Microsoft::WRL::ComPtr<IPrintDocumentPackageTarget>
-spool_target(const PrintChoice &choice, const application::PrintJob &job)
+spool_target(const application::PrintSettings &settings, const application::PrintJob &job)
 {
     Microsoft::WRL::ComPtr<IPrintDocumentPackageTargetFactory> factory;
     Microsoft::WRL::ComPtr<IPrintDocumentPackageTarget> target;
+    const auto printer = core::to_utf16(settings.printer);
     const auto name = core::to_utf16(job.title.text());
-    if (!name ||
+    const auto ticket = ticket_stream(settings.ticket);
+    if (!printer || !name ||
         FAILED(CoCreateInstance(__uuidof(PrintDocumentPackageTargetFactory), nullptr,
                                 CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory))) ||
         FAILED(factory->CreateDocumentPackageTargetForPrintJob(
-            choice.printer.c_str(), name.value().c_str(), nullptr, choice.ticket.Get(), &target)))
+            printer.value().c_str(), name.value().c_str(), nullptr, ticket.Get(), &target)))
     {
         return {};
     }
@@ -66,28 +85,27 @@ spool_target(const PrintChoice &choice, const application::PrintJob &job)
 }
 } // namespace
 
+// device と紙面を先に作り、job の受け口はその後（受け口を作った後の失敗は Cancel の 1 か所）。
 std::expected<application::PrintOutcome, application::PrintFailure>
-Win32Printer::print(application::PrintJob job)
+Win32Printer::print(const application::PrintJob &job, const application::PrintSettings &settings)
 {
-    // 印刷は使う人の操作（F1 の一覧・`:hardcopy`）からだけ来るので、いま操作している窓が親。
-    const auto chosen = choose_printer(GetActiveWindow());
-    if (!chosen)
-    {
-        return std::unexpected(chosen.error());
-    }
-    const auto &pressed = chosen.value();
-    if (!pressed.has_value())
-    {
-        return application::PrintOutcome::cancelled;
-    }
-    const auto &choice = pressed.value();
     const auto surface = make_surface();
-    const auto target = spool_target(choice, job);
-    if (!surface.device || !target)
+    if (!surface.device || !surface.imaging)
     {
         return std::unexpected(rendering_failed);
     }
-    const auto printed = render_print_job(surface, *target.Get(), job, choice.setup);
+    auto composition = PrintComposition::compose(job, settings.paper);
+    if (!composition)
+    {
+        return std::unexpected(composition.error());
+    }
+    const auto target = spool_target(settings, job);
+    if (!target)
+    {
+        return std::unexpected(rendering_failed);
+    }
+    const auto printed =
+        render_print_job(surface, *target.Get(), composition.value(), settings.ranges);
     if (!printed)
     {
         return std::unexpected(printed.error());

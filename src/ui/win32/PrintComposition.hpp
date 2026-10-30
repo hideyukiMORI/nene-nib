@@ -31,7 +31,7 @@ class PrintComposition final
 {
   public:
     [[nodiscard]] static std::expected<PrintComposition, application::PrintFailure>
-    compose(const application::PrintJob &job, PrintPaper paper);
+    compose(const application::PrintJob &job, application::PrintPaper paper);
     [[nodiscard]] std::size_t page_count() const noexcept;
     // index 番目（0 始まり）のページを描く入力。この値が生きている間だけ有効。
     [[nodiscard]] PrintPageInput page(std::size_t index);
@@ -40,12 +40,12 @@ class PrintComposition final
     [[nodiscard]] std::size_t rows_per_page() const noexcept;
 
   private:
-    PrintComposition(core::EditorSettings settings, PrintPaper paper, bool gutter);
+    PrintComposition(core::EditorSettings settings, application::PrintPaper paper, bool gutter);
     [[nodiscard]] bool make_gutter_format();
     [[nodiscard]] bool add_lines(const application::PrintJob &job);
 
     core::EditorSettings settings_;
-    PrintPaper paper_;
+    application::PrintPaper paper_;
     core::PrintPalette palette_;
     core::LayoutRect header_{};
     core::BodyLayout body_{};

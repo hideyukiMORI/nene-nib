@@ -15,6 +15,8 @@
 #include <cmath>
 #include <cstdint>
 #include <optional>
+#include <ranges>
+#include <span>
 #include <string>
 #include <wrl/client.h>
 
@@ -135,28 +137,34 @@ constexpr std::int32_t header_gap = 16;
     return true;
 }
 
-// ページの画面行 [page.first_row, page.first_row + row_count) と交わる行を描く。ページをまたぐ
-// 行は本文の欄の切り抜きで上下を切る（行の layout は UNIFORM の行間なので画面行 r は r 行ぶん下）。
-// 行番号は行の最初の画面行がこのページにあるときだけ。
+// ページと交わる行を描く。ページをまたぐ行は本文の欄の切り抜きで上下を切る（行の layout は UNIFORM
+// の行間なので画面行 r は r 行ぶん下）。行番号は行の最初の画面行がこのページにあるときだけ。
 [[nodiscard]] bool draw_rows(ID2D1DeviceContext &context, Painter &painter,
                              ID2D1SolidColorBrush &brush, const PrintPageInput &input)
 {
-    const auto first = input.page.first_row;
-    const auto last = first + input.page.row_count;
     bool drawn = true;
-    for (const auto &line : input.lines)
+    for (const auto &line : print_page_lines(input.lines, input.page))
     {
-        if (line.first_row + line.rows <= first || line.first_row >= last)
-        {
-            continue;
-        }
         drawn = drawn && draw_text(painter, brush, input, line);
-        drawn = drawn && (line.first_row < first || input.gutter == nullptr ||
+        drawn = drawn && (line.first_row < input.page.first_row || input.gutter == nullptr ||
                           draw_number(context, brush, input, line));
     }
     return drawn;
 }
 } // namespace
+
+std::span<const PrintLine> print_page_lines(std::span<const PrintLine> lines,
+                                            const core::PrintPage &page) noexcept
+{
+    const auto first = page.first_row;
+    const auto last = first + page.row_count;
+    const auto begin = std::ranges::partition_point(
+        lines, [first](const PrintLine &line) { return line.first_row + line.rows <= first; });
+    const auto end = std::ranges::partition_point(std::ranges::subrange(begin, lines.end()),
+                                                  [last](const PrintLine &line)
+                                                  { return line.first_row < last; });
+    return {begin, end};
+}
 
 std::expected<void, application::PrintFailure> draw_print_page(ID2D1DeviceContext &context,
                                                                const PrintPageInput &input)

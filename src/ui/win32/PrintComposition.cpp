@@ -118,7 +118,8 @@ next_line(std::string_view text, std::size_t start, core::LineEnding ending)
 }
 } // namespace
 
-PrintComposition::PrintComposition(core::EditorSettings settings, PrintPaper paper, bool gutter)
+PrintComposition::PrintComposition(core::EditorSettings settings, application::PrintPaper paper,
+                                   bool gutter)
     : settings_(std::move(settings)), paper_(paper), palette_(core::print_palette()),
       layouts_(std::make_unique<BodyTextLayouts>())
 {
@@ -137,7 +138,7 @@ PrintComposition::PrintComposition(core::EditorSettings settings, PrintPaper pap
 }
 
 std::expected<PrintComposition, application::PrintFailure>
-PrintComposition::compose(const application::PrintJob &job, PrintPaper paper)
+PrintComposition::compose(const application::PrintJob &job, application::PrintPaper paper)
 {
     auto settings = core::default_editor_settings();
     settings.font_family = job.family;

@@ -10,5 +10,5 @@ namespace nenenib::ui::win32
 // 幅と長さ（0.1 mm）があればそれ、無ければ用紙の番号の表（A3・A4・A5・B4・B5・Letter・Legal・
 // Tabloid・Executive）、どちらも無ければ A4。GDI の DC を作らない（ui は GDI
 // を結ばない・CPP-017）。
-[[nodiscard]] PrintPaper print_paper(const DEVMODEW &mode) noexcept;
+[[nodiscard]] application::PrintPaper print_paper(const DEVMODEW &mode) noexcept;
 } // namespace nenenib::ui::win32
