@@ -571,6 +571,17 @@ void EditorWindow::press_command_key(WPARAM word)
 // Tab は INSERT の水平タブとして文字の鍵で渡す（WM_CHAR の 0x09 は制御文字として捨てられる）。
 void EditorWindow::press_vim_key(WPARAM word)
 {
+    // 全面プレビューの Shift+矢印は Vim でも選択の鍵（ADR 0155 の改訂 18）。行き先は controller の
+    // 入口の振り分けが決める。
+    if (held(VK_SHIFT) && full_previewing())
+    {
+        const auto motion = motion_for(std::span<const KeyMotion>(plain_motions), word);
+        if (motion.has_value())
+        {
+            send(application::MoveCaret{motion.value(), core::SelectionAnchoring::extend});
+            return;
+        }
+    }
     if (word == VK_TAB)
     {
         send(application::VimKeyPress{core::VimKey{core::VimCharacter{tab_character}}});

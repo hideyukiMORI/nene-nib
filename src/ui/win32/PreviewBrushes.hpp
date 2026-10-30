@@ -21,7 +21,7 @@ class PreviewBrushes final
     [[nodiscard]] ID2D1SolidColorBrush *of(PreviewInk ink) const;
 
   private:
-    static constexpr std::size_t ink_count = 10;
+    static constexpr std::size_t ink_count = 11;
     ID2D1RenderTarget *target_ = nullptr;
     std::string theme_;
     std::array<Microsoft::WRL::ComPtr<ID2D1SolidColorBrush>, ink_count> brushes_{};

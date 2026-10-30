@@ -152,7 +152,8 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // （RestoreAutosave / DiscardAutosave）は使う人の操作なので、ここに書かず歩きを確定する（決定 6）。
 // プレビューの間引きの合図（PreviewTick）も使う人の操作ではないので歩きを続ける（ADR 0155 の
 // 決定 8）。開く・閉じる（TogglePreview）とチェックボックスの切り替え（TogglePreviewTask・ADR 0155
-// の追補 24）は使う人の操作なので、ここにも begin_intent にも書かない。
+// の追補 24）と全面プレビューのマウス（PointPreview・改訂 18）は使う人の操作なので、ここにも
+// begin_intent にも書かない。
 // エクスプローラーの意図（ToggleExplorer・ExplorerKey・PointExplorer・ScrollExplorer・
 // ExplorerRootChosen）も使う人の操作なので、どちらにも書かない（ADR 0162 の決定 4）。
 // 言語サーバーの古さの合図（LanguageServerTick）も使う人の操作ではないので歩きを続ける（ADR 0160
@@ -399,7 +400,8 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     // SelectLanguage も同じ（ADR 0154 の決定 4）。SelectSyntax も同じ（ADR 0156 の追補）。
     // 面のホイール ScrollPaletteList も使う人の操作の側なので載せない（ADR 0150 の決定 2）。
-    // 見せ方の SetPreviewPlacement も使う人の操作の側（ADR 0155 の改訂 16）。全面プレビューの間の
+    // 見せ方の SetPreviewPlacement と全面のマウスの PointPreview も使う人の操作の側（ADR 0155 の
+    // 改訂 16・18）。全面プレビューの間の
     // 鍵の振り分けはここの 1 か所（改訂 17・route_full_preview）で、受けた意図は写さない。
     if (!route_full_preview(intent))
     {
@@ -1079,7 +1081,7 @@ void EditorController::add_other_pane(EditorFrame &result, const core::VimPatter
     {
         const core::Offset anchor =
             full->follows ? state_.text().line_start(result.first_visible) : full->anchor;
-        result.full_preview = PreviewFrame{full->document, anchor, full->notice};
+        result.full_preview = PreviewFrame{full->document, anchor, full->notice, full->selection};
         return;
     }
     const auto &other = state_.split().other;
@@ -1098,7 +1100,7 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
 {
     const core::Offset anchor =
         view.follows ? state_.text().line_start(result.first_visible) : view.anchor;
-    result.other = PreviewFrame{view.document, anchor, view.notice};
+    result.other = PreviewFrame{view.document, anchor, view.notice, std::nullopt};
 }
 
 void EditorController::add_other_view(EditorFrame &result, const core::VimPattern *pattern,

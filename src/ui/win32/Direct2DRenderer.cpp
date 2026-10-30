@@ -2365,4 +2365,9 @@ std::optional<std::size_t> Direct2DRenderer::preview_task_at(std::int32_t x, std
 {
     return preview_.task_at(x, y);
 }
+
+std::optional<core::PreviewPoint> Direct2DRenderer::preview_point_at(std::int32_t x, std::int32_t y)
+{
+    return preview_.point_at(x, y);
+}
 } // namespace nenenib::ui::win32

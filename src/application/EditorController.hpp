@@ -4,6 +4,7 @@
 #include "AutosaveId.hpp"
 #include "AutosaveLedger.hpp"
 #include "AutosaveRemnant.hpp"
+#include "CaretMotion.hpp"
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
 #include "CommandChoice.hpp"
@@ -425,6 +426,16 @@ class EditorController final
     void scroll_preview(std::int64_t lines);
     // 全面で通常モードの Space（追補 25）。キャレットの行のタスクを切り替え、無ければ知らせる。
     void toggle_caret_task();
+    // 全面の選択とコピー（改訂 18）。select_preview は preview_full_route が select と決めた意図
+    // （Shift+矢印・マウス）だけを受け、Ctrl+A と Vim の `Ctrl-a` は select_all、Ctrl+C と Vim の
+    // `y` は copy の行き先が select_all_preview と copy_preview_selection を呼ぶ。
+    // PointPreview は全面でなければ何もしない。
+    void accept(const PointPreview &intent);
+    void select_preview(const EditorIntent &intent);
+    void point_preview_selection(const PointPreview &intent);
+    void move_preview_selection(core::CaretMotion motion);
+    void select_all_preview();
+    void copy_preview_selection();
     // プレビューが開いていれば、今の本文の解析を頼む（決定 3・6・9）。fresh は操作中の文書が
     // 替わったときで、前の結果と知らせを捨てて追従に戻す。16 MiB を超える本文は頼まず知らせる。
     void request_preview(bool fresh);

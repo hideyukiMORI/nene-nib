@@ -1,5 +1,8 @@
 #include "PreviewBrushes.hpp"
 
+#include "RgbColor.hpp"
+#include "RgbaColor.hpp"
+
 #include <utility>
 
 namespace nenenib::ui::win32
@@ -15,31 +18,40 @@ constexpr float full_channel = 255.0F;
                         static_cast<float>(color.blue) / full_channel, 1.0F);
 }
 
-// 役割 → 色の唯一の表（採用案 D62 の §3）。
-[[nodiscard]] core::RgbColor color_of(PreviewInk ink, const core::Theme &theme) noexcept
+[[nodiscard]] D2D1_COLOR_F to_color(core::RgbaColor color) noexcept
+{
+    D2D1_COLOR_F opaque = to_color(color.color);
+    opaque.a = static_cast<float>(color.alpha) / full_channel;
+    return opaque;
+}
+
+// 役割 → 色の唯一の表（採用案 D62 の §3）。選択の面だけが不透明度を持つ（改訂 18）。
+[[nodiscard]] D2D1_COLOR_F color_of(PreviewInk ink, const core::Theme &theme) noexcept
 {
     switch (ink)
     {
     case PreviewInk::background:
-        return theme.body.background;
+        return to_color(theme.body.background);
     case PreviewInk::foreground:
-        return theme.body.foreground;
+        return to_color(theme.body.foreground);
     case PreviewInk::keyword:
-        return theme.body.keyword;
+        return to_color(theme.body.keyword);
     case PreviewInk::string:
-        return theme.body.string;
+        return to_color(theme.body.string);
     case PreviewInk::function:
-        return theme.body.function;
+        return to_color(theme.body.function);
     case PreviewInk::comment:
-        return theme.body.comment;
+        return to_color(theme.body.comment);
     case PreviewInk::operators:
-        return theme.body.operators;
+        return to_color(theme.body.operators);
     case PreviewInk::panel:
-        return theme.ui.panel;
+        return to_color(theme.ui.panel);
     case PreviewInk::muted:
-        return theme.ui.muted;
+        return to_color(theme.ui.muted);
     case PreviewInk::accent:
-        return theme.ui.accent;
+        return to_color(theme.ui.accent);
+    case PreviewInk::selection:
+        return to_color(theme.ui.selection);
     }
     std::unreachable();
 }
@@ -56,7 +68,7 @@ HRESULT PreviewBrushes::prepare(ID2D1RenderTarget &target, const core::Theme &th
     {
         brushes_.at(index).Reset();
         const auto made = target.CreateSolidColorBrush(
-            to_color(color_of(static_cast<PreviewInk>(index), theme)), &brushes_.at(index));
+            color_of(static_cast<PreviewInk>(index), theme), &brushes_.at(index));
         if (FAILED(made))
         {
             return made;

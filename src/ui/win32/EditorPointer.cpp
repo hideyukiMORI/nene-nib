@@ -2,8 +2,11 @@
 
 #include "BodyLayout.hpp"
 #include "Direct2DRenderer.hpp"
+#include "EditorWindowDetail.hpp"
+#include "PointPreview.hpp"
 #include "PointText.hpp"
 #include "ScrollLines.hpp"
+#include "SelectionAnchoring.hpp"
 #include "TogglePreviewTask.hpp"
 
 #include <algorithm>
@@ -49,6 +52,36 @@ void EditorWindow::release_preview_task(LPARAM data)
     }
 }
 
+void EditorWindow::press_preview_text(LPARAM data)
+{
+    const auto point = renderer_ == nullptr
+                           ? std::nullopt
+                           : renderer_->preview_point_at(GET_X_LPARAM(data), GET_Y_LPARAM(data));
+    if (!point.has_value() || window_ == nullptr)
+    {
+        return;
+    }
+    send(application::PointPreview{point.value(), detail::held(VK_SHIFT)
+                                                      ? core::SelectionAnchoring::extend
+                                                      : core::SelectionAnchoring::collapse});
+    SetCapture(window_);
+    preview_dragging_ = GetCapture() == window_;
+}
+
+void EditorWindow::end_preview_drag()
+{
+    if (!preview_dragging_)
+    {
+        return;
+    }
+    // 捕まえを放すと WM_CAPTURECHANGED がここへ戻るので、先に印を消す。
+    preview_dragging_ = false;
+    if (GetCapture() == window_)
+    {
+        ReleaseCapture();
+    }
+}
+
 void EditorWindow::begin_selection_drag()
 {
     if (mode_ != core::EditMode::ordinary || controller_.is_composing() || window_ == nullptr)
@@ -67,6 +100,7 @@ void EditorWindow::begin_selection_drag()
 
 void EditorWindow::end_selection_drag()
 {
+    end_preview_drag();
     if (!selecting_)
     {
         return;
@@ -81,6 +115,18 @@ void EditorWindow::end_selection_drag()
 
 void EditorWindow::drag_selection(LPARAM data)
 {
+    // 全面プレビューの選択は描いた layout の文字で伸ばす（改訂 18・面が閉じていれば止める）。
+    if (preview_dragging_)
+    {
+        const auto point = renderer_ != nullptr && full_previewing()
+                               ? renderer_->preview_point_at(GET_X_LPARAM(data), GET_Y_LPARAM(data))
+                               : std::nullopt;
+        if (point.has_value())
+        {
+            send(application::PointPreview{point.value(), core::SelectionAnchoring::extend});
+        }
+        return;
+    }
     if (selecting_)
     {
         point_text(POINT{GET_X_LPARAM(data), GET_Y_LPARAM(data)}, core::SelectionAnchoring::extend);

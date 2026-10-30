@@ -1188,6 +1188,8 @@ EditorState EditorState::without_full_preview(PreviewPlacement placement) const
     }
     PreviewView view = std::move(next.full_preview_).value();
     next.full_preview_.reset();
+    // 選択は全面の間だけのもの（ADR 0155 の改訂 18）。側の枠へは持ち込まない。
+    view.selection.reset();
     // 全面の間に本文の枠を分けていれば、その配置のまま本文の枠をプレビューに置き換える（決定 3 の
     // 開くと同じ）。1 枠なら全面の前の配置と側で分ける。
     if (next.split_.layout == core::SplitLayout::none)

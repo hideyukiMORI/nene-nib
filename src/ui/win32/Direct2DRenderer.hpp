@@ -27,6 +27,7 @@
 #include "PaletteTextRole.hpp"
 #include "PaneLayouts.hpp"
 #include "PreviewPane.hpp"
+#include "PreviewPoint.hpp"
 #include "RenderFailure.hpp"
 #include "RendererSources.hpp"
 #include "RgbColor.hpp"
@@ -93,6 +94,10 @@ class Direct2DRenderer final
     // 最後に描いたプレビューの枠の点（クライアントの物理画素）の下のチェックボックスの要素の番号
     // （ADR 0155 の追補 24）。窓が押した・離した点を引く。
     [[nodiscard]] std::optional<std::size_t> preview_task_at(std::int32_t x, std::int32_t y) const;
+    // 最後に描いたプレビューの枠の点（クライアントの物理画素）の下の文字の位置（ADR 0155 の改訂
+    // 18）。全面プレビューのドラッグの選択が引く。
+    [[nodiscard]] std::optional<core::PreviewPoint> preview_point_at(std::int32_t x,
+                                                                     std::int32_t y);
 
   private:
     // 待機可能オブジェクトは HANDLE なので所有を型で閉じる（CPP-016）。

@@ -1,19 +1,22 @@
 #pragma once
 
 #include "MarkdownDocument.hpp"
+#include "PreviewSelection.hpp"
 #include "PreviewTextStyle.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <d2d1.h>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace nenenib::ui::win32
 {
 // プレビューの枠の絵（オフスクリーンの bitmap）を使い回してよいかの鍵（#903・ADR 0155 の追補）。
 // 描く先（device context の同一性）・文書（指す先の同一性）・錨の要素・枠の幅と高さ（物理画素・
-// 知らせの帯の高さはここに入る）・字体の設定（DPI を含む）・テーマの名前（brush の鍵と同じ）。
+// 知らせの帯の高さはここに入る）・字体の設定（DPI を含む）・テーマの名前（brush の鍵と同じ）・
+// 全面プレビューの選択（ADR 0155 の改訂 18・選ぶたびに描き直す）。
 // どれかが違えば描き直す。互いに独立して妥当なので公開 aggregate（CPP-003）。
 struct PreviewPictureKey
 {
@@ -24,12 +27,14 @@ struct PreviewPictureKey
     std::int32_t height;
     PreviewTextStyle style;
     std::string theme;
+    std::optional<core::PreviewSelection> selection;
 };
 
 [[nodiscard]] inline bool operator==(const PreviewPictureKey &left, const PreviewPictureKey &right)
 {
     return left.target == right.target && left.document == right.document &&
            left.anchor == right.anchor && left.width == right.width &&
-           left.height == right.height && left.style == right.style && left.theme == right.theme;
+           left.height == right.height && left.style == right.style && left.theme == right.theme &&
+           left.selection == right.selection;
 }
 } // namespace nenenib::ui::win32
