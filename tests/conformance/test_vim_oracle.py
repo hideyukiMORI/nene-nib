@@ -80,6 +80,25 @@ class VimOracleTests(unittest.TestCase):
         self.assertIn(old_row, rendered)
         self.assertIn(vim_oracle.fixture_row(measured), rendered)
 
+    def test_partial_regeneration_keeps_a_row_whose_text_has_a_unicode_line_break(self):
+        # U+0085 と U+2028 は splitlines() なら行を切る。再利用の行は LF だけで切る（#1159）。
+        fixtures = [
+            {"name": "old-kept", "text": "a\u0085b c", "keys": "h", "settings": []},
+            {"name": "new-selected", "text": "new", "keys": "l", "settings": []},
+        ]
+        content = (json.dumps(fixtures) + "\n").encode("utf-8")
+        old_record = self.record(fixtures[0], "a\u0085b c")
+        version = "VIM 9.1 test"
+        old_header = vim_oracle.header([old_record, self.record(fixtures[1], "previous")],
+                                       version, hashlib.sha256(content).hexdigest())
+        source = Path(vim_oracle.__file__).read_text(encoding="utf-8")
+        measure = Mock(return_value=self.record(fixtures[1], "new expected"))
+        with tempfile.TemporaryDirectory() as directory, patch.object(vim_oracle, "measure", measure):
+            rendered = vim_oracle.partial_header(
+                fixtures, content, ["new-"], content, old_header, source, source,
+                version, Path(directory))
+        self.assertIn(vim_oracle.fixture_row(old_record), rendered)
+
     def test_partial_regeneration_rejects_changed_non_selected_input(self):
         fixtures, content, old_header, source, version = self.reuse_inputs()
         changed = [dict(fixtures[0], text="changed"), fixtures[1]]

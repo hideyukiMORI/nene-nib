@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 cc8750b544bfd8a6a7999209dd65d65aab646b0455c41657c0afb8889a68ffb6 / 3137 fixtures
+// fixtures.json: sha256 b94df3bd6844ac6cdd7e09e01bd8e86ef24b9cb33240da3a2e501339613a8f8e / 3147 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3137> vim_fixtures{{
+constexpr std::array<VimFixture, 3147> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3040,6 +3040,16 @@ constexpr std::array<VimFixture, 3137> vim_fixtures{{
     {"block-put-wide-zero-width-space", "a​b\nabcdefghijklmnopqrst\nmnop\nmnop", "<C-v>j19lyjjp", "a​b\nabcdefghijklmnopqrst\nma​b    nop\nmabcdefghijklmnopqrstnop", 3, 2, "a​b\nabcdefghijklmnopqrst", "\02620", std::nullopt},
     {"block-put-wide-c1-control", "ab\nabcdefghijklmnopqrst\nmnop\nmnop", "<C-v>j19lyjjp", "ab\nabcdefghijklmnopqrst\nmab             nop\nmabcdefghijklmnopqrstnop", 3, 2, "ab\nabcdefghijklmnopqrst", "\02620", std::nullopt},
     {"block-put-wide-emoji", "a😀b\nabcdefghijklmnopqrst\nmnop\nmnop", "<C-v>j19lyjjp", "a😀b\nabcdefghijklmnopqrst\nma😀b    nop\nmabcdefghijklmnopqrstnop", 3, 2, "a😀b\nabcdefghijklmnopqrst", "\02620", std::nullopt},
+    {"block-empty-delete-one-x", "\nword, gamma", "<C-v>$x", "\nword, gamma", 1, 1, "", "", std::nullopt},
+    {"block-empty-delete-one-d", "\nword", "<C-v>$d", "\nword", 1, 1, "", "", std::nullopt},
+    {"block-empty-delete-one-x-no-dollar", "\nword", "<C-v>x", "\nword", 1, 1, "", "", std::nullopt},
+    {"block-empty-delete-one-y", "\nword", "<C-v>$y", "\nword", 1, 1, "", "\0261", std::nullopt},
+    {"block-empty-delete-two-x", "\n\nword", "<C-v>j$x", "\n\nword", 1, 1, "\n", "\0261", std::nullopt},
+    {"block-empty-delete-two-y", "\n\nword", "<C-v>j$y", "\n\nword", 1, 1, "\n", "\0261", std::nullopt},
+    {"block-empty-delete-mixed-x", "\nab\nword", "<C-v>j$x", "\n\nword", 1, 1, "\nab", "\0262", std::nullopt},
+    {"block-empty-delete-keeps-unnamed", "word\n\nend", "yiwj<C-v>$xP", "word\nword\nend", 2, 4, "word", "v", std::nullopt},
+    {"block-empty-delete-named-d", "\nword", "j\"ayiwk<C-v>$\"ad\"ap", "word\nword", 1, 4, "word", "v", std::nullopt},
+    {"block-empty-delete-charwise-v-x", "\nword", "vx", "word", 1, 1, "\n", "v", std::nullopt},
     {"search-case-ic-lower", "abc ABC abc", ":set ic<CR>/abc<CR>", "abc ABC abc", 1, 5, "", "", std::nullopt},
     {"search-case-noic-default", "abc ABC abc", "/abc<CR>", "abc ABC abc", 1, 9, "", "", std::nullopt},
     {"search-case-noic-explicit", "abc ABC abc", ":set ic<CR>:set noic<CR>/abc<CR>", "abc ABC abc", 1, 9, "", "", std::nullopt},
