@@ -326,6 +326,9 @@ void verify_bell_contracts();
 // ClockTests.cpp（ADR 0175・F5 の日時の挿入）
 void verify_clock_contracts();
 
+// ShellRegistrationTests.cpp（ADR 0178・エクスプローラーへの登録）
+void verify_shell_registration_contracts();
+
 // VimEngineTests.cpp
 void verify_vim_fixture(const VimFixture &fixture);
 void verify_vim_insert_undo_unit();

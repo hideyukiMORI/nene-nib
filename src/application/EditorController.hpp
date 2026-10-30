@@ -564,6 +564,12 @@ class EditorController final
     // F5 の日時の挿入（ADR 0175 の決定 3）。時刻はここだけで ClockPort から読む（決定 4）。入力行・
     // 通常モード・Vim INSERT は IME の確定と同じ道で入れ、Vim のほかのモードは 1 行知らせる。
     void accept(const InsertDateTime &);
+    // エクスプローラーへの登録の 2 つの操作（ADR 0178 の決定 3）。ShellRegistrationPort を呼ぶのは
+    // ここだけで（決定 4）、結果は鳴らさない 1 行の知らせにする。
+    void accept(const RegisterShell &);
+    void accept(const UnregisterShell &);
+    // 登録の結果の 1 行（鳴らさない）。
+    void show_shell_notice(const std::string &text);
 
     // VimEffect の写し先。選択肢が増えたら std::visit がここで足りずコンパイルが落ちる
     // （CPP-002 / ADR 0012 の決定 3）。どれも既存の 1 本の経路を呼ぶだけ（ARC-001）。

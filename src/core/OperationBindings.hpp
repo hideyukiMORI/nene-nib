@@ -21,7 +21,7 @@ namespace nenenib::core
 // 「Shift を見ていなかった今の振る舞いを保つ行」は Shift なしの行のすぐ後ろに置く。見せる鍵は
 // そのモードで最初に当たる行なので、一覧に見える鍵は Shift なしのまま（Vim の開くは
 // Ctrl+Shift+O）。
-inline constexpr std::array<OperationBinding, 36> operation_bindings{{
+inline constexpr std::array<OperationBinding, 38> operation_bindings{{
     {EditorOperation::open_file, OperationModes::ordinary, KeyChord{true, false, OperationKey::o}},
     // 通常モードでは Shift を見ていなかった今の振る舞いを保つ行で、Vim では開くの鍵（D71）。
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, true, OperationKey::o}},
@@ -82,6 +82,9 @@ inline constexpr std::array<OperationBinding, 36> operation_bindings{{
     // 日時の挿入（ADR 0175 の決定 3）。Vim の NORMAL / VISUAL では controller が知らせだけを出す。
     {EditorOperation::insert_date_time, OperationModes::both,
      KeyChord{false, false, OperationKey::f5}},
+    // エクスプローラーへの登録（ADR 0178 の決定 3）。鍵なしで F1 の一覧から。
+    {EditorOperation::register_shell, OperationModes::both, std::nullopt},
+    {EditorOperation::unregister_shell, OperationModes::both, std::nullopt},
 }};
 
 // 鍵とモード → 操作。表を上から見て、鍵が同じでモードに効く最初の行。値なしは「割り当てが無い」。

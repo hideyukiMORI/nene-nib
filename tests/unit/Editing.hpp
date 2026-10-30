@@ -20,6 +20,7 @@
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
+#include "ScriptedShellRegistration.hpp"
 #include "ScriptedTextLayouts.hpp"
 #include "ScriptedThemes.hpp"
 #include "ThemeCatalog.hpp"
@@ -43,7 +44,7 @@ class Editing final
           controller_(nenenib::application::EditorPorts{
               appearance_, clipboard_, files_, code_pages_, settings_, themes_, session_, history_,
               folders_, bookmarks_, text_layouts_, autosave_, fonts_, bell_, markdown_, reads_,
-              language_server_, wall_clock_})
+              language_server_, wall_clock_, shell_registration_})
     {
     }
 
@@ -151,6 +152,11 @@ class Editing final
         return wall_clock_;
     }
 
+    [[nodiscard]] ScriptedShellRegistration &shell_registration() noexcept
+    {
+        return shell_registration_;
+    }
+
   private:
     [[nodiscard]] nenenib::application::EditorPorts
     prepared_reads(const std::function<void(ScriptedFiles &, ScriptedDocumentReads &)> &prepare)
@@ -163,10 +169,25 @@ class Editing final
     prepared_ports(const std::function<void(ScriptedFiles &)> &prepare)
     {
         prepare(files_);
-        return nenenib::application::EditorPorts{
-            appearance_, clipboard_, files_,    code_pages_, settings_,        themes_,
-            session_,    history_,   folders_,  bookmarks_,  text_layouts_,    autosave_,
-            fonts_,      bell_,      markdown_, reads_,      language_server_, wall_clock_};
+        return nenenib::application::EditorPorts{appearance_,
+                                                 clipboard_,
+                                                 files_,
+                                                 code_pages_,
+                                                 settings_,
+                                                 themes_,
+                                                 session_,
+                                                 history_,
+                                                 folders_,
+                                                 bookmarks_,
+                                                 text_layouts_,
+                                                 autosave_,
+                                                 fonts_,
+                                                 bell_,
+                                                 markdown_,
+                                                 reads_,
+                                                 language_server_,
+                                                 wall_clock_,
+                                                 shell_registration_};
     }
 
     ScriptedAppearance appearance_{Reading{Appearance::dark}};
@@ -187,6 +208,7 @@ class Editing final
     ScriptedDocumentReads reads_{files_, code_pages_};
     ScriptedLanguageServer language_server_;
     ScriptedClock wall_clock_;
+    ScriptedShellRegistration shell_registration_;
     EditorController controller_;
 };
 } // namespace nenenib::tests

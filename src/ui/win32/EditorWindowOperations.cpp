@@ -14,6 +14,7 @@
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "OpenOperationList.hpp"
+#include "RegisterShell.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "SelectEditMode.hpp"
@@ -26,6 +27,7 @@
 #include "TextEncoding.hpp"
 #include "ToggleBookmark.hpp"
 #include "ToggleExplorer.hpp"
+#include "UnregisterShell.hpp"
 #include "UnsavedTab.hpp"
 
 #include <bit>
@@ -315,13 +317,9 @@ void EditorWindow::run_operation(core::EditorOperation operation)
         run_tab_operation(operation);
         return;
     case core::EditorOperation::list_files:
-        send(application::OpenCommandPalette{});
-        return;
     case core::EditorOperation::list_operations:
-        send(application::OpenOperationList{});
-        return;
     case core::EditorOperation::toggle_bookmark:
-        send(application::ToggleBookmark{});
+        send_operation_intent(operation);
         return;
     case core::EditorOperation::undo:
     case core::EditorOperation::redo:
@@ -351,8 +349,9 @@ void EditorWindow::run_operation(core::EditorOperation operation)
         run_pane_operation(operation);
         return;
     case core::EditorOperation::insert_date_time:
-        // 何を入れるか・入れずに知らせるかは controller の 1 か所が決める（ADR 0175 の決定 3）。
-        send(application::InsertDateTime{});
+    case core::EditorOperation::register_shell:
+    case core::EditorOperation::unregister_shell:
+        send_operation_intent(operation);
         return;
     }
     std::unreachable();
@@ -398,6 +397,8 @@ void EditorWindow::run_tab_operation(core::EditorOperation operation)
     case core::EditorOperation::toggle_explorer:
     case core::EditorOperation::choose_explorer_root:
     case core::EditorOperation::insert_date_time:
+    case core::EditorOperation::register_shell:
+    case core::EditorOperation::unregister_shell:
         return;
     }
     std::unreachable();
@@ -458,6 +459,8 @@ void EditorWindow::run_pane_operation(core::EditorOperation operation)
     case core::EditorOperation::paste_plain:
     case core::EditorOperation::paste_html:
     case core::EditorOperation::insert_date_time:
+    case core::EditorOperation::register_shell:
+    case core::EditorOperation::unregister_shell:
         return;
     }
     std::unreachable();
@@ -504,6 +507,59 @@ void EditorWindow::run_edit_operation(core::EditorOperation operation)
     case core::EditorOperation::toggle_explorer:
     case core::EditorOperation::choose_explorer_root:
     case core::EditorOperation::insert_date_time:
+    case core::EditorOperation::register_shell:
+    case core::EditorOperation::unregister_shell:
+        return;
+    }
+    std::unreachable();
+}
+
+// 意図を 1 つ送るだけの操作。何をするか・知らせるかは controller の 1 か所が決める（ADR 0175 の
+// 決定 3・ADR 0178 の決定 3）。ほかの値は run_operation が先に扱うので、ここへは来ない。
+void EditorWindow::send_operation_intent(core::EditorOperation operation)
+{
+    switch (operation)
+    {
+    case core::EditorOperation::list_files:
+        send(application::OpenCommandPalette{});
+        return;
+    case core::EditorOperation::list_operations:
+        send(application::OpenOperationList{});
+        return;
+    case core::EditorOperation::toggle_bookmark:
+        send(application::ToggleBookmark{});
+        return;
+    case core::EditorOperation::insert_date_time:
+        send(application::InsertDateTime{});
+        return;
+    case core::EditorOperation::register_shell:
+        send(application::RegisterShell{});
+        return;
+    case core::EditorOperation::unregister_shell:
+        send(application::UnregisterShell{});
+        return;
+    case core::EditorOperation::open_file:
+    case core::EditorOperation::save:
+    case core::EditorOperation::save_as:
+    case core::EditorOperation::new_tab:
+    case core::EditorOperation::close_tab:
+    case core::EditorOperation::recent_tab:
+    case core::EditorOperation::recent_tab_back:
+    case core::EditorOperation::undo:
+    case core::EditorOperation::redo:
+    case core::EditorOperation::font_larger:
+    case core::EditorOperation::font_smaller:
+    case core::EditorOperation::font_reset:
+    case core::EditorOperation::toggle_mode:
+    case core::EditorOperation::split_vertical:
+    case core::EditorOperation::split_horizontal:
+    case core::EditorOperation::next_pane:
+    case core::EditorOperation::close_pane:
+    case core::EditorOperation::toggle_preview:
+    case core::EditorOperation::paste_plain:
+    case core::EditorOperation::paste_html:
+    case core::EditorOperation::toggle_explorer:
+    case core::EditorOperation::choose_explorer_root:
         return;
     }
     std::unreachable();
