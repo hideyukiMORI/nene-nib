@@ -121,3 +121,9 @@ FR-003 の T2「検索 `/ ? n N * #`」を実装する。Ex の `:` は `VimOpen
 4. **呼び手。** 設定 `ignorecase` `smartcase` から `search_case(settings)` が旗を作り（`smartcase` は `ignorecase` がオンのときだけ）、`/` `?` の Enter・incsearch の preview・`hlsearch` の当たりが同じ旗を使う。`*` `#` は `ignorecase` だけを見て `smartcase` を見ず（`VimSmartcase::ignored`）、その後の `n` `N` と空のパターンの `/<CR>` も同じ扱いを引き継ぐ（Vim の no_scs・`*n` で実測）。
 5. **設定が変わったら直前の検索を解き直す。** `/abc` の後の `:set ic` で `n` は大小を畳む（実測）。`EditorState::with_settings` が旗の変わったときだけ `last_search` を `recased` する 1 か所で、engine と描画は解き直した値を読む。
 6. **契約。** fixture `search-case-` 30 件（oracle が `:normal!` の中の `:set ic<CR>` をそのまま測る・前置きの欄は足さない）・`--vim-search` の照合器の試験・`--vim-search-highlight` の当たりの数と preview・`--ex-settings` の `:set ic` `scs` の形。
+
+## 追補（2026-10-30・#1138）: 結合文字の後ろで終わる当たり
+
+1. **一致の終わりが Vim の 1 文字の途中なら一致にしない。** 本文の側の終わりの位置のコードポイントが幅 0（`DisplayWidth::zero`・ADR 0053 と同じ表・`vim_character_continues`）で行頭でなければ、その当たりを捨てて次の候補を探す。`/e` は `e` + U+0301 の基底に当たらず、パターンが結合文字を含む `/é` は今のまま当たる。大小を畳んでも同じ。照合器の `matched` の反復の無い道と `VimPatternEvaluation` の受理の 2 か所で同じ関数 `VimPattern::ends_a_character` を呼ぶので、`/` `?`・`n` `N`・`*` `#`・incsearch・`hlsearch` の塗りが同時に揃う。ASCII のバイトでは表を引かない。
+2. **見るのは終わりだけ（Vim 9.1 の既定の NFA の `NFA_MATCH` の検査）。** 依頼の時点の案（regexp_bt.c の `EXACTLY` の「literal の直後」の検査）は oracle と合わない: `/e.` は `x éy` の `é` に当たる（`.` が結合文字を食べて終わりが文字の境に来る・実測 (1,3)）。fixture `search-composing-` 16 件（反復の道の `/e*` `/ee*` を単独で固定する 4 件を含む・`\+` は今どおり閉じた失敗なので `/ee*` で測る）。
+3. **対応しないもの。** `\Z`（結合文字を無視）と `\%C` は今どおり閉じた失敗。当たりの始まりが結合文字の上に来る形（`/.y` が `x éy` で Vim は `é` の先頭 (1,3)・Nib は U+0301 の上 (1,4)）と、大小を畳んだときの結合文字を含むパターン（`:set ic` の `/é` は Vim では `É` に当たらない）は残差で、この追補は扱わない。

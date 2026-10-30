@@ -85,6 +85,9 @@ void verify_vim_line_matches()
            "a multibyte match is measured in bytes");
     expect(matches_of("Foo foo", "foo") == std::vector<MatchSpan>{{4, 7}},
            "the scan is case sensitive like the search (noignorecase)");
+    // 結合文字のついた e は e の当たりに数えない（#1138・固定 Vim 9.1 の searchcount() は 2）。
+    expect(matches_of("e e\xcc\x81 e", "e") == std::vector<MatchSpan>{{0, 1}, {6, 7}},
+           "the base of a marked letter is not painted for a bare pattern");
 }
 
 [[nodiscard]] std::vector<MatchSpan> window_matches_of(std::string_view text, std::size_t from,
