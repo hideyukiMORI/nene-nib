@@ -23,6 +23,7 @@
 #include "SaveState.hpp"
 #include "SearchHop.hpp"
 #include "SelectEditMode.hpp"
+#include "SetPreviewPlacement.hpp"
 #include "SettingsNotice.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
@@ -301,7 +302,8 @@ bool EditorWindow::confirm_unsaved_tabs(bool (EditorWindow::*confirm)())
 }
 
 // 鍵と一覧が実行する唯一の口（ADR 0078 の決定 7）。中身は今ある ui の関数と意図をそのまま使い、
-// controller に操作ごとの分岐を書かない。
+// controller に操作ごとの分岐を書かない。日時の挿入で何を入れるか・入れずに知らせるかは controller
+// の 1 か所が決める（ADR 0175 の決定 3）。
 void EditorWindow::run_operation(core::EditorOperation operation)
 {
     switch (operation)
@@ -353,6 +355,7 @@ void EditorWindow::run_operation(core::EditorOperation operation)
     case core::EditorOperation::next_pane:
     case core::EditorOperation::close_pane:
     case core::EditorOperation::toggle_preview:
+    case core::EditorOperation::preview_full:
     case core::EditorOperation::toggle_explorer:
     case core::EditorOperation::choose_explorer_root:
         run_pane_operation(operation);
@@ -408,6 +411,7 @@ void EditorWindow::run_tab_operation(core::EditorOperation operation)
     case core::EditorOperation::find_previous:
     case core::EditorOperation::replace:
     case core::EditorOperation::go_to_line:
+    case core::EditorOperation::preview_full:
         return;
     }
     std::unreachable();
@@ -442,6 +446,10 @@ void EditorWindow::run_pane_operation(core::EditorOperation operation)
         return;
     case core::EditorOperation::toggle_preview:
         send(application::TogglePreview{});
+        return;
+    case core::EditorOperation::preview_full:
+        // 見せ方の遷移は controller の 1 本（ADR 0155 の改訂 16）。Esc で前の見せ方へ戻る。
+        send(application::SetPreviewPlacement{application::PreviewPlacement::full});
         return;
     case core::EditorOperation::toggle_explorer:
         send(application::ToggleExplorer{});
@@ -590,6 +598,7 @@ void EditorWindow::run_edit_operation(core::EditorOperation operation)
     case core::EditorOperation::find_previous:
     case core::EditorOperation::replace:
     case core::EditorOperation::go_to_line:
+    case core::EditorOperation::preview_full:
         return;
     }
     std::unreachable();
@@ -648,6 +657,7 @@ void EditorWindow::run_document_operation(core::EditorOperation operation)
     case core::EditorOperation::find_previous:
     case core::EditorOperation::replace:
     case core::EditorOperation::go_to_line:
+    case core::EditorOperation::preview_full:
         return;
     }
     std::unreachable();

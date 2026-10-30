@@ -177,6 +177,7 @@ class EditorWindow final
     void follow_preview_timer();
     void stop_preview_timer();
     [[nodiscard]] bool previewing() const;
+    [[nodiscard]] bool full_previewing() const;
     // 起動の問い（ADR 0137 の決定 6）。最初の frame の後に自分へ post した合図で 1 回だけ呼ばれる。
     // 前回の退避が残っていれば「はい / いいえ」を聞いて、答えの意図を送る。
     void offer_autosave();

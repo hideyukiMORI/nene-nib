@@ -47,6 +47,8 @@ enum class EditorOperation : std::uint8_t
     find_next,
     find_previous,
     replace,
-    go_to_line
+    go_to_line,
+    // 全面の Markdown プレビュー（ADR 0155 の改訂 16）。鍵なしで F1 の一覧から。
+    preview_full
 };
 } // namespace nenenib::core

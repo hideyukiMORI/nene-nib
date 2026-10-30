@@ -20,6 +20,7 @@
 #include "OtherFrame.hpp"
 #include "Palette.hpp"
 #include "PaneSide.hpp"
+#include "PreviewFrame.hpp"
 #include "SettingsIssue.hpp"
 #include "SplitLayout.hpp"
 #include "StatusItems.hpp"
@@ -124,6 +125,10 @@ struct EditorFrame
     core::PaneSide active_side = core::PaneSide::first;
     // 本文の枠かプレビューの枠（ADR 0155 の決定 1・11）。
     std::optional<OtherFrame> other{};
+    // 全面の Markdown プレビュー（ADR 0155 の改訂 15）。値があれば renderer は gutter と本文と
+    // もう 1 つの枠を描かず、本文の面の全部にこれを描く（タブの帯とステータスバーは残す）。lines と
+    // grid は空で、other は値なし。
+    std::optional<PreviewFrame> full_preview{};
     // エクスプローラーの面（ADR 0162 の決定 3・8）。設定 explorer が on のときだけ値を持つ。
     std::optional<ExplorerView> explorer{};
 };

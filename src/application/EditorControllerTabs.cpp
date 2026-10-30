@@ -264,19 +264,9 @@ void EditorController::accept(const ClosePane &)
 void EditorController::accept(const ScrollPane &intent)
 {
     // プレビューは錨を本文の行で動かし、追従をやめる（ADR 0155 の決定 7）。
-    if (const PreviewView *preview = state_.preview(); preview != nullptr)
+    if (state_.preview() != nullptr)
     {
-        PreviewView view = *preview;
-        const core::TextBuffer &text = state_.text();
-        const core::LineNumber top = settled_scroll().first_visible;
-        const core::Offset base = view.follows ? text.line_start(top) : view.anchor;
-        const auto line = static_cast<std::int64_t>(text.position_of(base).line.value);
-        const auto last = static_cast<std::int64_t>(text.line_count());
-        const auto moved = std::clamp(line + std::int64_t{intent.lines}, std::int64_t{1}, last);
-        view.anchor = text.line_start(core::LineNumber{static_cast<std::size_t>(moved)});
-        view.follows = false;
-        state_ = state_.with_preview(std::move(view));
-        preview_body_top_ = top;
+        scroll_preview(intent.lines);
         return;
     }
     const auto pane = state_.other_pane_state();
