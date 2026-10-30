@@ -3,6 +3,8 @@
 #include "Utf8.hpp"
 #include "VimCaret.hpp"
 #include "VimColumnWish.hpp"
+#include "VimCursorCorrect.hpp"
+#include "VimCursorWindow.hpp"
 #include "VimHorizontalScroll.hpp"
 #include "VimMotionLanding.hpp"
 #include "VimRepeatFailure.hpp"
@@ -211,7 +213,61 @@ using Walk = std::pair<VisualPosition, std::size_t>;
     return high < value ? high : value;
 }
 
-// 送った後の画面の最上段と最下段の間にキャレットの画面行を収め、その画面行の範囲を引く。
+// from から to（from 以後）までの画面行の数。どちらも送った後の画面の中にある。
+[[nodiscard]] Needed<std::size_t> rows_between(const VimEditorView &view, VisualPosition from,
+                                               VisualPosition to)
+{
+    std::size_t count = 0;
+    while (from.line < to.line)
+    {
+        const auto rows = rows_of(view, from.line);
+        if (!rows)
+        {
+            return std::unexpected(rows.error());
+        }
+        count += rows.value() - std::min(from.row, rows.value() - 1);
+        ++from.line.value;
+        from.row = 0;
+    }
+    return count + (to.row - std::min(from.row, to.row));
+}
+
+// 画面の最下段が文書の最後の画面行か（本文の末尾まで見えている）。
+[[nodiscard]] Needed<bool> shows_end(const VimEditorView &view, VisualPosition bottom)
+{
+    if (bottom.line.value < view.text.line_count())
+    {
+        return false;
+    }
+    const auto rows = rows_of(view, bottom.line);
+    if (!rows)
+    {
+        return std::unexpected(rows.error());
+    }
+    return bottom.row + 1 >= rows.value();
+}
+
+// 画面の最上段が文書の最初の画面行か（first）と、最下段が最後の画面行か（second）。
+using Edges = std::pair<bool, bool>;
+
+// 画面の中のキャレットの画面行の番号 offset（最上段が 0・shown は画面にある画面行の数）を余白の
+// 内側へ寄せる（#1142・ADR 0019 の追補 7）。寄せは論理行の道と同じ vim_cursor_corrected の 1 本で、
+// 画面行を行に読み替える: 最上段が文書の最初の画面行なら窓の先頭は 1 行目、最下段が最後の画面行
+// なら窓の下は行数 + 1。
+[[nodiscard]] std::size_t corrected_row(const VimEditorView &view, std::size_t offset,
+                                        std::size_t shown, Edges edges) noexcept
+{
+    const std::size_t top = edges.first ? 1 : 2;
+    const std::size_t below = top + shown;
+    const VimCursorWindow window{LineNumber{top}, LineNumber{below},
+                                 vim_viewport_of(view).visible_lines, view.scroll_margin};
+    const auto line =
+        vim_cursor_corrected(window, LineNumber{top + offset}, edges.second ? below - 1 : below);
+    return line.value - top;
+}
+
+// 送った後の画面の最上段と最下段の間にキャレットの画面行を収め、余白の内側へ寄せて、その画面行の
+// 範囲を引く。
 [[nodiscard]] Needed<VimRowSpan> target_row(const VimEditorView &view, VisualPosition caret,
                                             VisualPosition top)
 {
@@ -221,7 +277,25 @@ using Walk = std::pair<VisualPosition, std::size_t>;
     {
         return std::unexpected(bottom.error());
     }
-    const auto target = clamped(caret, top, bottom.value().first);
+    auto target = clamped(caret, top, bottom.value().first);
+    const auto offset = rows_between(view, top, target);
+    const auto ends = offset ? shows_end(view, bottom.value().first) : Needed<bool>{};
+    if (!offset || !ends)
+    {
+        return std::unexpected(!offset ? offset.error() : ends.error());
+    }
+    const bool starts = top.line.value <= 1 && top.row == 0;
+    const auto placed =
+        corrected_row(view, offset.value(), bottom.value().second + 1, Edges{starts, ends.value()});
+    if (placed != offset.value())
+    {
+        const auto moved = forward(view, top, placed);
+        if (!moved)
+        {
+            return std::unexpected(moved.error());
+        }
+        target = moved.value().first;
+    }
     return vim_row_span_of(view, VimRowRequest{target.line, target.row});
 }
 
