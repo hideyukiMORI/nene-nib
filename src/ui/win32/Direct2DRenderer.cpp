@@ -10,6 +10,7 @@
 #include "EditMode.hpp"
 #include "EditorSettings.hpp"
 #include "GutterLabels.hpp"
+#include "GutterMetrics.hpp"
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
 #include "PaletteLayout.hpp"
@@ -44,7 +45,6 @@ namespace
 // 採用案の寸法（docs/design/2026-09-15-look.md 第 2 節）。色は Palette 以外に持たない（ADR 0008）。
 constexpr float tab_text_dips = 12.5F;
 constexpr float ui_text_dips = 12.0F;
-constexpr std::int32_t gutter_padding_dips = 16;
 // text の表示の巨大な行の印 `»`（ADR 0139 の決定 2）。
 constexpr std::string_view giant_mark = "\xC2\xBB";
 constexpr std::int32_t caret_inset_dips = 2;
@@ -542,7 +542,7 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     TextFormat explorer;
 
     const auto made_gutter =
-        make_format(face, ui_text_dips * ratio, DWRITE_FONT_WEIGHT_NORMAL, gutter);
+        make_format(face, gutter_text_dips * ratio, DWRITE_FONT_WEIGHT_NORMAL, gutter);
     // エクスプローラーの面の名前は UI の字体で、本文の大きさに追従する（行の高さが本文と同じ・
     // ADR 0162 の決定 2）。長い名前は文字単位の省略記号で切る（タブの題名と同じ規則）。
     const auto made_explorer =
@@ -1420,10 +1420,7 @@ void Direct2DRenderer::draw_line(const application::EditorFrame &frame, const Bo
 
 std::int32_t Direct2DRenderer::gutter_padding(const core::EditorSettings &settings) const
 {
-    return core::to_pixels(static_cast<std::int32_t>(static_cast<float>(gutter_padding_dips) *
-                                                         core::font_size_ratio(settings.font_size) +
-                                                     0.5F),
-                           dpi_);
+    return win32::gutter_padding(settings.font_size, dpi_);
 }
 
 void Direct2DRenderer::draw_grid_rows(const application::EditorFrame &frame, const BodyPane &pane)

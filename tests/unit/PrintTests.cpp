@@ -4,6 +4,7 @@
 #include "AutosaveTick.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
+#include "EditorOperation.hpp"
 #include "EditorSettings.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
@@ -12,13 +13,15 @@
 #include "InsertText.hpp"
 #include "Language.hpp"
 #include "LineEnding.hpp"
-#include "MarkdownParse.hpp"
 #include "OpenDocument.hpp"
 #include "PrintDocument.hpp"
 #include "PrintFailure.hpp"
 #include "PrintOutcome.hpp"
 #include "PrintPage.hpp"
 #include "PrintPages.hpp"
+#include "PrintPaper.hpp"
+#include "PrintRange.hpp"
+#include "PrintSettings.hpp"
 #include "PrintSheet.hpp"
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
@@ -30,6 +33,7 @@
 #include <array>
 #include <cstddef>
 #include <expected>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -44,6 +48,13 @@ namespace app = nenenib::application;
 
 constexpr std::string_view body = "int main()\r\n{\r\n}\r\n";
 constexpr std::string_view too_large_notice = "印刷は 16 MiB までです";
+
+// ui の印刷のダイアログが選んだ設定の替え玉（決定 10）。
+[[nodiscard]] app::PrintDocument chosen()
+{
+    return app::PrintDocument{app::PrintSettings{
+        "Scripted Printer", app::PrintPaper{794, 1123}, {{2, 3}}, {std::byte{0x3C}}}};
+}
 
 [[nodiscard]] std::string notice(const app::EditorFrame &frame)
 {
@@ -94,9 +105,16 @@ void verify_job()
 {
     Editing editing;
     open_ordinary(editing, std::string(body));
-    applied(editing.controller(), app::PrintDocument{});
+    applied(editing.controller(), chosen());
     const auto &jobs = editing.printer().jobs();
     expect(jobs.size() == 1, "printing asks the port once");
+    const auto &settings_given = editing.printer().settings();
+    expect(settings_given.size() == 1 && settings_given.front().printer == "Scripted Printer" &&
+               settings_given.front().paper.width == 794 &&
+               settings_given.front().ranges.size() == 1 &&
+               settings_given.front().ranges.front().first == 2 &&
+               settings_given.front().ticket.size() == 1,
+           "the port receives the settings the dialog chose");
     const auto &job = jobs.front();
     const auto settings = core::default_editor_settings();
     expect(job.text != nullptr && *job.text == body && job.line_ending == core::LineEnding::crlf,
@@ -109,7 +127,7 @@ void verify_job()
     expect(notice(editing.controller().frame()) == "none" && editing.bell().rings() == 0,
            "a printed document says nothing and never rings");
     applied(editing.controller(), app::InsertText{"x"});
-    applied(editing.controller(), app::PrintDocument{});
+    applied(editing.controller(), chosen());
     expect(jobs.size() == 2 && jobs.back().title.text() == "note.txt" &&
                jobs.back().text->starts_with("x"),
            "a modified document prints its current body under the plain file name");
@@ -121,13 +139,13 @@ void verify_untitled_and_language()
     Editing editing;
     applied(editing.controller(), app::VisibleLines{8});
     applied(editing.controller(), app::InsertText{"a"});
-    applied(editing.controller(), app::PrintDocument{});
+    applied(editing.controller(), chosen());
     expect(editing.printer().jobs().size() == 1 &&
                editing.printer().jobs().front().title.text() == "無題",
            "an untitled document prints as 無題");
     open_vim_document(editing, std::string(body));
     vim_replay(editing.controller(), ":set ft=cpp<CR>");
-    applied(editing.controller(), app::PrintDocument{});
+    applied(editing.controller(), chosen());
     expect(editing.printer().jobs().size() == 2 &&
                editing.printer().jobs().back().language == core::Language::cpp,
            "the job carries the document's language");
@@ -139,7 +157,7 @@ void verify_answers()
     Editing editing;
     open_ordinary(editing, std::string(body));
     editing.printer().script(app::PrintOutcome::cancelled);
-    applied(editing.controller(), app::PrintDocument{});
+    applied(editing.controller(), chosen());
     expect(notice(editing.controller().frame()) == "none", "a cancelled print dialog says nothing");
     constexpr std::array<std::pair<app::PrintFailure, std::string_view>, 4> failures{{
         {app::PrintFailure::no_printer, "印刷できませんでした: プリンタがありません"},
@@ -150,12 +168,25 @@ void verify_answers()
     for (const auto &[failure, text] : failures)
     {
         editing.printer().script(std::unexpected(failure));
-        applied(editing.controller(), app::PrintDocument{});
+        applied(editing.controller(), chosen());
         expect(notice(editing.controller().frame()) == text,
                "each print failure says why in one line");
     }
     expect(editing.printer().jobs().size() == 5 && editing.bell().rings() == 0,
            "every print reaches the port once and none rings");
+    // ダイアログの失敗は ui が意図に載せる。port は呼ばない（決定 10）。
+    constexpr std::array<std::pair<app::PrintFailure, std::string_view>, 2> dialog_failures{{
+        {app::PrintFailure::no_printer, "印刷できませんでした: プリンタがありません"},
+        {app::PrintFailure::dialog_failed, "印刷できませんでした: 印刷のダイアログを開けません"},
+    }};
+    for (const auto &[failure, text] : dialog_failures)
+    {
+        applied(editing.controller(), app::PrintDocument{std::unexpected(failure)});
+        expect(notice(editing.controller().frame()) == text,
+               "a dialog failure says why in one line");
+    }
+    expect(editing.printer().jobs().size() == 5 && editing.bell().rings() == 0,
+           "a dialog failure never reaches the port and never rings");
 }
 
 // 決定 7: 16 MiB を超える本文は写さず、port を呼ばずに知らせる。
@@ -170,7 +201,7 @@ void verify_too_large()
         large += row;
     }
     open_ordinary(editing, std::move(large));
-    applied(editing.controller(), app::PrintDocument{});
+    applied(editing.controller(), chosen());
     expect(editing.printer().jobs().empty() &&
                notice(editing.controller().frame()) == too_large_notice,
            "a body over 16 MiB is not printed and says so");
@@ -209,16 +240,26 @@ void verify_hardcopy()
     verify_hardcopy_parse();
     Editing editing;
     open_vim_document(editing, std::string(body));
-    vim_replay(editing.controller(), ":hardcopy<CR>");
-    vim_replay(editing.controller(), ":ha<CR>");
-    expect(editing.printer().jobs().size() == 2 && *editing.printer().jobs().front().text == body,
-           "Vim's :hardcopy and :ha print the active document");
+    // `:hardcopy` は ui に操作「印刷」を頼むだけで、ダイアログと port は ui の道（決定 10）。
+    for (const std::string_view keys : {":hardcopy<CR>", ":ha<CR>"})
+    {
+        vim_replay(editing.controller(), keys);
+        expect(editing.controller().frame().operation_request ==
+                       std::optional{core::EditorOperation::print} &&
+                   editing.printer().jobs().empty(),
+               "Vim's :hardcopy and :ha ask the window for the print operation");
+    }
+    applied(editing.controller(), chosen());
+    expect(editing.printer().jobs().size() == 1 && *editing.printer().jobs().front().text == body &&
+               !editing.controller().frame().operation_request.has_value(),
+           "the print intent after the dialog prints the active document");
     vim_replay(editing.controller(), ":hardcopy!<CR>");
-    expect(editing.printer().jobs().size() == 2 && editing.bell().rings() == 1,
-           "a refused :hardcopy! never reaches the port");
+    expect(editing.printer().jobs().size() == 1 && editing.bell().rings() == 1 &&
+               !editing.controller().frame().operation_request.has_value(),
+           "a refused :hardcopy! never asks for the print operation");
     applied(editing.controller(), app::SelectEditMode{core::EditMode::ordinary});
-    applied(editing.controller(), app::PrintDocument{});
-    expect(editing.printer().jobs().size() == 3,
+    applied(editing.controller(), chosen());
+    expect(editing.printer().jobs().size() == 2,
            "the ordinary mode prints through the same intent");
 }
 
