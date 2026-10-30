@@ -1,5 +1,6 @@
 #include "ScriptedDocumentReads.hpp"
 #include "ScriptedLanguageServer.hpp"
+#include "ScriptedShellRegistration.hpp"
 #include "ScriptedTextLayouts.hpp"
 // scope `--session` の単体テスト（ADR 0042 決定 2・ADR 0059 の決定 1〜6）。状態から前回のタブの
 // 一覧を作る読み取りと、窓が閉じていくときの意図 EndSession。まだ読んでいない文書の状態の関数と、
@@ -530,6 +531,7 @@ void verify_recency_ranked()
     ScriptedFonts fonts;
     ScriptedBell bell;
     ScriptedClock wall_clock;
+    ScriptedShellRegistration shell_registration;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -538,7 +540,7 @@ void verify_recency_ranked()
     EditorController controller(EditorPorts{appearance, clipboard, files, code_pages, settings,
                                             themes, session, history, folders, bookmarks,
                                             text_layouts, autosave, fonts, bell, markdown, reads,
-                                            language_server, wall_clock},
+                                            language_server, wall_clock, shell_registration},
                                 initial);
     return controller.frame();
 }
