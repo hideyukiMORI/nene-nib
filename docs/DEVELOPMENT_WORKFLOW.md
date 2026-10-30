@@ -148,6 +148,8 @@ Waivers: none | WVR-NNNN
 文書・コメント・ルール変更にはアプリの動作テストは不要。開発ツールはその道具の短い正例・反例で確認する。
 全件を選ぶ場合だけ、限定不能の理由を先に知らせ、`eng/check.ps1 -Full -Reason <理由>` を使う。定型の承認確認は増やさない。
 本件に起因する失敗は直す。無関係な既存失敗は根拠と別 Issue を記録して本件を続け、無関係な全件再試行・修正や合格するまでの反復をしない。
+
+Ex の補完の候補の表（`src/core/ExResult.cpp` の `fixed_candidates`・`palette_names`・`document_names` と `src/core/ExMapCommand.cpp` の `candidates`）に行を足す・消す・並べ替える PR は、同じ PR で probe の期待の写し `tests/performance/ExCompletionProbe.cpp` の `fixed_candidates` を製品の並び（固定 → 一覧の命令 → `map` → 文書の命令と `quit!`）のとおりに作り直す。この写しを読む 9 本（`ex-completion-*` 5 本・`completion-prefix-empty-*` 2 本・`palette-choice-*-all-*` 2 本）は `eng/probe-smoke.ps1`（`-Full` でだけ回る）でしか落ちないので、写しと製品の表の一致は `tests/conformance/test_probe_candidates.py`（`eng/test-conformance.py`・CI の check job）が字面で比べて守る（#1182・ADR 0082 の追補）。
 fixture・機械の基準値・許可シンボル・規約検査の規則・保存 schema・既存 scope の checks 数に「差分 0」と書くときは、文ではなく `python eng/protected-diff.py --base <base> --head <head> [--build]` の実出力（stdout の要約と `out/protected/<短い SHA>.json` の要点）を検証結果に貼る（Issue #130・ADR 0038 の決定 5）。
 
 レビューは次を拒否する。

@@ -191,6 +191,8 @@ CTest に登録しない代わりに、`eng/check.ps1 -Full` が `eng/probe-smok
 
 frame の 5 本は 1 行を巨大な行のしきい値（16,384 コードポイント）以下にするため 2026-10-19 に改名した（上の表の名前は新しい名前に直し、回数・バイト数・checksum は改名前の固定のまま残す）。ASCII の 4 本は 1 行 16,384 バイト（dense・selection・visual の `a x ` は 4,096 単位）、混合の 1 行は 2,340 単位（表示 16,380 コードポイント）。同じ日に metadata から組み込みテーマの名前の行を外したので、2026-10-19 より前の probe の記録とは入力ハッシュで突き合わせられない。
 
+#1182（2026-10-30）: Ex の固定の候補は正本が無名名前空間の表なので probe は literal の写し（`ExCompletionProbe.cpp` の `fixed_candidates`）を持ち、10-20 以降の `:set` と `map` の 34 候補で 9 本が `-Full` でだけ落ちていた。写しを製品の並びへ作り直し、写しと製品の表（`ExResult.cpp` の 3 表・`ExMapCommand.cpp` の `candidates`・`matching_candidates` の読む順）の一致を `tests/conformance/test_probe_candidates.py` が CI で守る。
+
 ## 追補（2026-10-20・#732）— 文とタグのテキストオブジェクトの 4 本
 
 #731 と #746 のレビュー I-1 の費用を測るため、範囲関数 `vim_text_object_range`（ADR 0031）を NORMAL の畳んだキャレット・回数 1 で引く 4 本を `TextObjectWorkload` として足す（`tests/performance/TextObjectProbe.cpp`）。本文の生成と `TextBuffer` の準備・全戻り値の照合・checksum は区間外で、区間は呼び出しと結果の保持だけ。期待の範囲は同じ本文に Vim 9.1 で `y{オブジェクト}` を打って測った値（`'[` と無名レジスタの長さ）で、製品の関数から作らない。巨大な行の長さは正本 `giant_line_threshold` から引く（#690 の追補）。
