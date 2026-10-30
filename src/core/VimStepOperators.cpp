@@ -325,9 +325,10 @@ named_written(VimState state, const VimRegisterSnapshot &value, VimOperator oper
 namespace detail
 {
 // 削除・変更・yank の書き先（ADR 0050 の決定 3・ADR 0048 の決定 3 を改める）。書き手はすべて
-// ここを通る（ARC-001）。`"_` と値が無い（空の文字単位の範囲）ときはどのレジスタも変えず、
-// ほかは「名指しの書き込み → `"1` の規則 → `"-` の規則 → 無名」の順に埋める。`"+` `"*` の
-// 名指しの書き込みは状態へ置かず、OS へ出す本文として組の second に返す（ADR 0051 の決定 6）。
+// ここを通る（ARC-001）。`"_` と値が無い（空の文字単位の範囲）ときと空の 1 行の矩形の削除は
+// どのレジスタも変えず、ほかは「名指しの書き込み → `"1` の規則 → `"-` の規則 → 無名」の順に
+// 埋める。`"+` `"*` の名指しの書き込みは状態へ置かず、OS へ出す本文として組の second に返す（ADR
+// 0051 の決定 6）。
 // `:set clipboard=unnamed` でレジスタを選ばない書きも、無名と同じ本文を second に返す（追補の決定
 // C）。 命令が完了した状態を返すので、選んだレジスタと写しはここで消える。
 [[nodiscard]] std::expected<WrittenRegisters, VimRepeatFailure>
@@ -336,7 +337,12 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 {
     const bool black_hole = state.selected_register.has_value() &&
                             state.selected_register.value().target == VimRegisterTarget::black_hole;
-    if (!value.has_value() || black_hole)
+    // 空の 1 行だけの矩形の削除は消すものが無い（Vim の op_delete は 1 行で行が空なら yank の前に
+    // 返る・ADR 0050 の追補 #1159）。2 行以上の矩形は本文が改行を含むので空にならない。
+    const bool nothing_deleted = value.has_value() && operation == VimOperator::remove &&
+                                 value.value().kind == VimRegisterKind::block &&
+                                 value.value().text.empty();
+    if (!value.has_value() || black_hole || nothing_deleted)
     {
         return WrittenRegisters{vim_resting_from(state, state.unnamed_register), std::nullopt};
     }
