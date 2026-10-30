@@ -12,6 +12,7 @@
 #include "DocumentReading.hpp"
 #include "DocumentState.hpp"
 #include "EditMode.hpp"
+#include "EditorOperation.hpp"
 #include "EditorState.hpp"
 #include "ExLanguageRequest.hpp"
 #include "ExResult.hpp"
@@ -1356,8 +1357,15 @@ constexpr std::string_view print_failed_prefix = "印刷できませんでした
 }
 } // namespace
 
-void EditorController::accept(const PrintDocument &)
+void EditorController::accept(const PrintDocument &intent)
 {
+    // ダイアログの失敗は ui が意図に載せて送る（決定 10）。port は呼ばない。
+    if (!intent.settings)
+    {
+        state_ = state_.with_command_message(
+            core::DisplayText::parse(print_failure_notice(intent.settings.error())).value());
+        return;
+    }
     // 大きすぎる本文は写さず、port も呼ばない（決定 7）。
     if (state_.text().size_bytes() > core::print_byte_limit)
     {
@@ -1375,7 +1383,7 @@ void EditorController::accept(const PrintDocument &)
                  settings.font_family,
                  settings.font_size,
                  true};
-    const auto outcome = ports_.print.print(std::move(job));
+    const auto outcome = ports_.print.print(job, intent.settings.value());
     if (outcome)
     {
         // 印刷できた・取り消した、のどちらも知らせない（決定 2）。
@@ -1390,7 +1398,8 @@ void EditorController::run_print_request(core::ExPrintRequest request)
     switch (request)
     {
     case core::ExPrintRequest::active_document:
-        accept(PrintDocument{});
+        // ダイアログは ui が出すので、一覧から選んだときと同じく操作を頼む（決定 10・ADR 0078）。
+        state_ = state_.with_operation_request(core::EditorOperation::print);
         return;
     }
     std::unreachable();

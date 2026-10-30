@@ -19,6 +19,8 @@
 #include "LineEnding.hpp"
 #include "PrintJob.hpp"
 #include "PrintPages.hpp"
+#include "PrintPaper.hpp"
+#include "PrintRange.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -27,7 +29,9 @@
 #include <memory>
 #include <objbase.h>
 #include <optional>
+#include <span>
 #include <string>
+#include <utility>
 #include <vector>
 #include <wincodec.h>
 #include <wrl/client.h>
@@ -44,7 +48,7 @@ constexpr std::uint8_t ink_level = 200;
 constexpr int colored_spread = 60;
 constexpr std::size_t channels = 4;
 // A4 縦（210 × 297 mm）の DIP。
-constexpr win32::PrintPaper a4{794, 1123};
+constexpr application::PrintPaper a4{794, 1123};
 
 [[nodiscard]] application::PrintJob job_of(std::string text, core::Language language, bool gutter)
 {
@@ -261,9 +265,14 @@ void verify_pagination()
     return count;
 }
 
-// 紙面を print control からメモリの XPS へ書いたページの数。書けなければ nullopt。
-[[nodiscard]] std::optional<UINT32> printed_pages(const application::PrintJob &job,
-                                                  const win32::PrintSetup &setup)
+using Printed = std::pair<std::optional<UINT32>, unsigned>;
+
+// 紙面を print control からメモリの XPS へ書いた答え（書けたページの数と、受け口の Cancel
+// の回数）。 writable が false なら XPS
+// の書き手を作れない受け口（途中の失敗の道）。土台が作れなければ nullopt。
+[[nodiscard]] std::optional<Printed>
+print_to_memory(win32::PrintComposition &composition,
+                std::span<const application::PrintRange> ranges, bool writable)
 {
     const auto imaging = imaging_factory();
     ComPtr<IWICBitmap> bitmap;
@@ -286,14 +295,11 @@ void verify_pagination()
     }
     context.value()->GetDevice(&device);
     auto target = Microsoft::WRL::Make<MemoryPackageTarget>(
-        Microsoft::WRL::Make<MemoryXpsTarget>(xps.Get(), stream.Get()).Get());
-    const auto rendered =
-        win32::render_print_job(win32::PrintSurface{device, imaging}, *target.Get(), job, setup);
-    if (!rendered)
-    {
-        return std::nullopt;
-    }
-    return xps_pages(*xps.Get(), *stream.Get());
+        Microsoft::WRL::Make<MemoryXpsTarget>(xps.Get(), writable ? stream.Get() : nullptr).Get());
+    const auto rendered = win32::render_print_job(win32::PrintSurface{device, imaging},
+                                                  *target.Get(), composition, ranges);
+    return Printed{rendered ? xps_pages(*xps.Get(), *stream.Get()) : std::nullopt,
+                   target->cancelled()};
 }
 
 void verify_xps_pages()
@@ -303,19 +309,59 @@ void verify_xps_pages()
     {
         text += "int value = 1;\n";
     }
-    const auto job = job_of(text, core::Language::cpp, true);
-    auto composition = win32::PrintComposition::compose(job, a4);
-    const auto all = printed_pages(job, win32::PrintSetup{a4, {}});
-    const auto second = printed_pages(job, win32::PrintSetup{a4, {{2, 2}}});
-    if (!composition || !all.has_value() || !second.has_value())
+    auto composition =
+        win32::PrintComposition::compose(job_of(text, core::Language::cpp, true), a4);
+    if (!composition)
+    {
+        unmeasured("print to an in-memory XPS package (DirectWrite)");
+        return;
+    }
+    const std::vector<application::PrintRange> second_page{{2, 2}};
+    const auto all = print_to_memory(composition.value(), {}, true);
+    const auto second = print_to_memory(composition.value(), second_page, true);
+    const auto refused = print_to_memory(composition.value(), {}, false);
+    if (!all.has_value() || !second.has_value() || !refused.has_value() ||
+        !all.value().first.has_value() || !second.value().first.has_value())
     {
         unmeasured("print to an in-memory XPS package (print control)");
         return;
     }
     expect(composition.value().page_count() > 1, "the XPS sample spans more than one page");
-    expect(all.value() == composition.value().page_count(),
-           "every page is written to the XPS package");
-    expect(second.value() == 1, "a page range writes only the chosen page");
+    expect(all.value().first.value() == composition.value().page_count() && all.value().second == 0,
+           "every page is written to the XPS package and the job is not cancelled");
+    expect(second.value().first.value() == 1, "a page range writes only the chosen page");
+    expect(!refused.value().first.has_value() && refused.value().second == 1,
+           "a failure after the job target exists cancels the job once");
+}
+
+// 1 ページで見る行はそのページと交わる行だけ（二分探索・R4-1）。1 画面行の行が 1,000 本なら、
+// どのページも見る行の数はページの行数と同じで、全ページで全行をちょうど 1 回ずつ見る。
+void verify_page_lines()
+{
+    std::string text;
+    for (int line = 0; line < 999; ++line)
+    {
+        text += "a\n";
+    }
+    auto composition =
+        win32::PrintComposition::compose(job_of(text, core::Language::plain, true), a4);
+    if (!composition)
+    {
+        unmeasured("print page lines (DirectWrite)");
+        return;
+    }
+    std::size_t seen = 0;
+    bool proportional = true;
+    for (std::size_t index = 0; index < composition.value().page_count(); ++index)
+    {
+        const auto input = composition.value().page(index);
+        const auto lines = win32::print_page_lines(input.lines, input.page);
+        proportional = proportional && lines.size() == input.page.row_count &&
+                       (lines.empty() || lines.front().first_row == input.page.first_row);
+        seen += lines.size();
+    }
+    expect(proportional, "a page visits only the lines of its own rows");
+    expect(seen == 1000, "the pages visit every line exactly once");
 }
 
 [[nodiscard]] DEVMODEW mode_of(DWORD fields, short paper, short orientation)
@@ -354,5 +400,6 @@ void verify_print_render()
     verify_page_pixels();
     verify_pagination();
     verify_xps_pages();
+    verify_page_lines();
 }
 } // namespace nenenib::tests::ui

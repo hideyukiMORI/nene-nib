@@ -56,13 +56,13 @@ constexpr std::int32_t tenths_per_inch = 254;
 }
 } // namespace
 
-PrintPaper print_paper(const DEVMODEW &mode) noexcept
+application::PrintPaper print_paper(const DEVMODEW &mode) noexcept
 {
     auto [width, length] = tenths_of(mode);
     if (has(mode, DM_ORIENTATION) && mode.dmOrientation == DMORIENT_LANDSCAPE)
     {
         std::swap(width, length);
     }
-    return PrintPaper{to_dips(width), to_dips(length)};
+    return application::PrintPaper{to_dips(width), to_dips(length)};
 }
 } // namespace nenenib::ui::win32

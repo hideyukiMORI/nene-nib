@@ -14,6 +14,7 @@
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "OpenOperationList.hpp"
+#include "PrintDialog.hpp"
 #include "PrintDocument.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
@@ -31,6 +32,7 @@
 
 #include <bit>
 #include <cstddef>
+#include <expected>
 #include <functional>
 #include <optional>
 #include <string>
@@ -47,6 +49,23 @@ constexpr wchar_t untitled_file[] = L"無題.txt";
 
 // 格子表示の問いの文言（ADR 0140 の決定 2）。ここの 1 か所だけ。
 constexpr wchar_t display_question[] = L"改行の無い巨大な行があります。格子表示で開きますか。";
+
+// 印刷のダイアログを出し、選んだ設定かダイアログの失敗を意図にする。取り消しは nullopt（何も送ら
+// ない）。ダイアログは controller の apply の外で回す（ADR 0177 の決定 10）。
+[[nodiscard]] std::optional<application::PrintDocument> print_intent(HWND owner)
+{
+    auto chosen = choose_printer(owner);
+    if (!chosen)
+    {
+        return application::PrintDocument{std::unexpected(chosen.error())};
+    }
+    auto &pressed = chosen.value();
+    if (!pressed.has_value())
+    {
+        return std::nullopt;
+    }
+    return application::PrintDocument{std::move(pressed).value()};
+}
 
 // 失敗の理由は 1 行だけ出す。本文は変わらない（ADR 0010 の決定 9）。
 [[nodiscard]] const wchar_t *reason_of(application::FileFailure failure) noexcept
@@ -515,6 +534,8 @@ void EditorWindow::run_edit_operation(core::EditorOperation operation)
 
 // 意図を 1 つ送るだけの操作。日時の挿入で何を入れるか・入れずに知らせるか（ADR 0175 の決定 3）と、
 // 本文と字体を写して印刷の port を呼ぶか（ADR 0177 の決定 1・2）は controller の 1 か所が決める。
+// 印刷は先に ui がダイアログを出し、選んだ設定を意図に載せる（決定 10・Vim の `:hardcopy` も
+// controller の operation_request からここへ来る）。
 // ほかの値は run_operation が先に扱うので、ここへは来ない。
 void EditorWindow::run_document_operation(core::EditorOperation operation)
 {
@@ -524,7 +545,10 @@ void EditorWindow::run_document_operation(core::EditorOperation operation)
         send(application::InsertDateTime{});
         return;
     case core::EditorOperation::print:
-        send(application::PrintDocument{});
+        if (auto intent = print_intent(window_); intent.has_value())
+        {
+            send(std::move(intent).value());
+        }
         return;
     case core::EditorOperation::open_file:
     case core::EditorOperation::save:
