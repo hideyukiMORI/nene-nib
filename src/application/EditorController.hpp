@@ -10,6 +10,7 @@
 #include "CompositionView.hpp"
 #include "DetectedText.hpp"
 #include "Document.hpp"
+#include "DocumentFormatKind.hpp"
 #include "DocumentReadFinished.hpp"
 #include "DocumentReadOutcome.hpp"
 #include "DocumentReadProgress.hpp"
@@ -25,6 +26,7 @@
 #include "EditorState.hpp"
 #include "ExClipboardRequest.hpp"
 #include "ExDocumentRequest.hpp"
+#include "ExFormatRequest.hpp"
 #include "ExLanguageRequest.hpp"
 #include "ExLineRequest.hpp"
 #include "ExLspRequest.hpp"
@@ -50,6 +52,7 @@
 #include "JsonValue.hpp"
 #include "KeyMap.hpp"
 #include "LanguageServerLink.hpp"
+#include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
 #include "LspNotification.hpp"
@@ -393,6 +396,13 @@ class EditorController final
     // 言語（ADR 0154 の決定 4・5）。Ex の `:set filetype=` `:set ft=` が通る 1 本。
     void accept(const SelectLanguage &intent);
     void accept(const SelectSyntax &intent);
+    // 保存の形（ADR 0010 の追補 #1049 の決定 1・2）。面・`:set fenc=` `:set ff=`・F1 の操作が通る 1
+    // 本。
+    void accept(const SelectDocumentFormat &intent);
+    // 保存の形の候補の面（決定 2 の (a)・(c)）。候補は閉じた enum の全部で、今の値に印を付ける。
+    void accept(const OpenDocumentFormatList &intent);
+    [[nodiscard]] std::pair<std::vector<core::CommandChoice>, std::size_t>
+    format_choices(core::DocumentFormatKind kind) const;
     // 枠（ADR 0148）。分ける・移る・閉じる・もう 1 つの枠を送る。
     void accept(const SplitPane &intent);
     void accept(const SwitchPane &);
@@ -525,6 +535,7 @@ class EditorController final
     void answer_language(const core::ExLanguageRequest &request);
     [[nodiscard]] bool answer_current_value(const core::ExResult &result);
     void answer_syntax(const core::ExSyntaxRequest &request);
+    void answer_format(const core::ExFormatRequest &request);
     void answer_clipboard(core::ExClipboardRequest request);
     // `:nmap` 系の要求を設定へ写して保存する（ADR 0176 の決定 6）。断りは 1 行の知らせ。
     void run_map_request(const core::ExMapRequest &request);
@@ -715,8 +726,12 @@ class EditorController final
     [[nodiscard]] std::expected<void, FileFailure> write_document(const SaveDocument &intent);
     // 本文を保存の符号化の断片にする 1 本（ADR 0010・ADR 0137 の決定 4・ADR 0149）。保存と
     // 自動退避が共用する。Shift_JIS と UTF-16 は変換した本文を held に持ち、断片はそれを指す。
+    // ending は保存の改行の形で、本文の形と違うときだけ写す（ADR 0010 の追補 #1049 の決定 3）。
     [[nodiscard]] std::expected<std::vector<std::string_view>, FileFailure>
-    encoded_parts(const core::TextBuffer &text, core::TextEncoding encoding, std::string &held);
+    encoded_parts(const core::TextBuffer &text, core::TextEncoding encoding,
+                  core::LineEnding ending, std::string &held);
+    [[nodiscard]] std::expected<std::vector<std::string_view>, FileFailure>
+    source_parts(std::string source, core::TextEncoding encoding, std::string &held);
 
     EditorPorts ports_;
     EditorState state_;

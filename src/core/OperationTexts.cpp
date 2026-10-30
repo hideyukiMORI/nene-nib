@@ -39,6 +39,8 @@ namespace
     case EditorOperation::toggle_explorer:
     case EditorOperation::choose_explorer_root:
     case EditorOperation::insert_date_time:
+    case EditorOperation::choose_encoding:
+    case EditorOperation::choose_line_ending:
         return true;
     }
     return false;

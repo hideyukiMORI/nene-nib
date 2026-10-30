@@ -326,6 +326,9 @@ void verify_bell_contracts();
 // ClockTests.cpp（ADR 0175・F5 の日時の挿入）
 void verify_clock_contracts();
 
+// DocumentFormatTests.cpp（ADR 0010 の追補 #1049・保存の文字コードと改行を選ぶ）
+void verify_document_format_contracts();
+
 // VimEngineTests.cpp
 void verify_vim_fixture(const VimFixture &fixture);
 void verify_vim_insert_undo_unit();

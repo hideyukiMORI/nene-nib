@@ -6,11 +6,14 @@
 #include "CommandEdit.hpp"
 #include "CommandPalette.hpp"
 #include "DisplayText.hpp"
+#include "DocumentFormat.hpp"
+#include "DocumentFormatKind.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExResult.hpp"
 #include "FileBookmarkEdit.hpp"
 #include "FileFolder.hpp"
 #include "FolderRequest.hpp"
+#include "PaletteFolder.hpp"
 #include "PaletteMarks.hpp"
 #include "PaletteOrigin.hpp"
 #include "SaveState.hpp"
@@ -18,6 +21,7 @@
 #include "UnlistedExtensions.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -115,6 +119,92 @@ void EditorController::accept(const OpenOperationList &)
         accept(CancelCommand{});
     }
     run_palette_request(core::ExPaletteRequest{core::PaletteScope::operations, {}});
+}
+
+// 保存の形の候補の面（ADR 0010 の追補 #1049 の決定 2 の (a)・(c)）。Ctrl+P の面の部品に、出どころ
+// document_format の候補だけを渡して空の入力で開く（記号の表には載せない）。同じフォルダは読まず、
+// 前の面の読みの券は進めて捨てる。選択は今の値。開いている入力行は取消と同じ道で閉じてから開く。
+void EditorController::accept(const OpenDocumentFormatList &intent)
+{
+    if (state_.composition().has_value())
+    {
+        return;
+    }
+    if (command_line_active())
+    {
+        accept(CancelCommand{});
+    }
+    static_cast<void>(receive_folders());
+    focus_explorer(false);
+    palette_folder_ = PaletteFolder{++folder_tickets_, {}, 0, false};
+    auto [entries, current] = format_choices(intent.kind);
+    state_ = state_.with_command_input(
+        core::CommandPalette::opened(entries, "", state_.mode(),
+                                     core::CommandLine::empty(state_.themes()))
+            .selected_at(current));
+}
+
+namespace
+{
+// 候補の行の名前と、確定する Ex の命令（`:set fenc=` `:set ff=` と同じ 1 本）。
+[[nodiscard]] std::string_view format_label(core::TextEncoding encoding) noexcept
+{
+    return core::encoding_label(encoding);
+}
+
+[[nodiscard]] std::string_view format_label(core::LineEnding ending) noexcept
+{
+    return core::line_ending_label(ending);
+}
+
+[[nodiscard]] std::string format_command(core::TextEncoding encoding)
+{
+    return "set fileencoding=" + std::string(core::encoding_option_name(encoding));
+}
+
+[[nodiscard]] std::string format_command(core::LineEnding ending)
+{
+    return "set fileformat=" + std::string(core::line_ending_option_name(ending));
+}
+
+// 保存の形の候補の列と、今の値の候補の位置。
+template <typename Value, std::size_t Count>
+[[nodiscard]] std::pair<std::vector<core::CommandChoice>, std::size_t>
+listed_formats(const std::array<Value, Count> &values, Value current)
+{
+    std::vector<core::CommandChoice> entries;
+    std::size_t position = 0;
+    for (const Value value : values)
+    {
+        const bool chosen = value == current;
+        position = chosen ? entries.size() : position;
+        entries.push_back(core::CommandChoice{
+            core::DisplayText::parse(format_label(value)).value(),
+            format_command(value),
+            core::CommandChoiceKind::execute,
+            chosen ? std::optional{core::DisplayText::parse("今の形").value()} : std::nullopt,
+            core::PaletteOrigin::document_format,
+            std::nullopt,
+            {}});
+    }
+    return {std::move(entries), position};
+}
+} // namespace
+
+// 候補は閉じた enum の全部（面の順は core の表）で、今の値に印を付ける。
+std::pair<std::vector<core::CommandChoice>, std::size_t>
+EditorController::format_choices(core::DocumentFormatKind kind) const
+{
+    const Document &document = state_.document();
+    switch (kind)
+    {
+    case core::DocumentFormatKind::encoding:
+        return listed_formats(core::text_encodings, document.encoding);
+    case core::DocumentFormatKind::line_ending:
+        return listed_formats(core::line_endings,
+                              save_line_ending_of(document, state_.line_ending()));
+    }
+    std::unreachable();
 }
 
 // 面を開く（ADR 0062 の決定 14）。前の面のときに届いて残った分は collect で捨てる（たまりが空で

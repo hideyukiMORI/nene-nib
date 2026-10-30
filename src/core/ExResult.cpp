@@ -3,6 +3,8 @@
 
 #include "AsciiCase.hpp"
 #include "BuiltinThemes.hpp"
+#include "DocumentFormat.hpp"
+#include "DocumentFormatKind.hpp"
 #include "ExLineRequest.hpp"
 #include "ExMapCommand.hpp"
 #include "ExPaletteName.hpp"
@@ -301,6 +303,97 @@ language_option(std::string_view option)
     return std::nullopt;
 }
 
+// 保存の形の option の名前（ADR 0010 の追補 #1049 の決定 2 の (b)）。完全な形と Vim の短い形。
+constexpr std::array<std::string_view, 2> encoding_options{"fileencoding", "fenc"};
+constexpr std::array<std::string_view, 2> line_ending_options{"fileformat", "ff"};
+
+// 保存の形は文書の値で設定に載せない。問いの文言は今の値を知る controller が `fileencoding=<名前>`
+// `fileformat=<名前>` に書き換えるので、ここでは欄の名前だけ。
+// 欄の名前（完全な形）。
+[[nodiscard]] std::string_view format_option_name(DocumentFormatKind kind) noexcept
+{
+    switch (kind)
+    {
+    case DocumentFormatKind::encoding:
+        return encoding_options.front();
+    case DocumentFormatKind::line_ending:
+        return line_ending_options.front();
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] ExResult format_result(DocumentFormatKind kind, std::optional<DocumentFormat> chosen)
+{
+    return ExResult{.settings = std::nullopt,
+                    .highlight = std::nullopt,
+                    .incsearch = std::nullopt,
+                    .message = DisplayText::parse(format_option_name(kind)).value(),
+                    .format = ExFormatRequest{kind, chosen}};
+}
+
+[[nodiscard]] std::optional<DocumentFormat> format_named(DocumentFormatKind kind,
+                                                         std::string_view value)
+{
+    switch (kind)
+    {
+    case DocumentFormatKind::encoding:
+        return encoding_of_option_name(value).transform([](TextEncoding encoding)
+                                                        { return DocumentFormat{encoding}; });
+    case DocumentFormatKind::line_ending:
+        return line_ending_of_option_name(value).transform([](LineEnding ending)
+                                                           { return DocumentFormat{ending}; });
+    }
+    std::unreachable();
+}
+
+// `name=<値>` と `name?`。値が表に無ければ E474（Vim は任意の文字コードを受けるが、Nib の文字コード
+// は閉じている）。欄の名前でなければ空。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+format_option_of(std::string_view option, DocumentFormatKind kind,
+                 std::span<const std::string_view> names)
+{
+    for (const auto name : names)
+    {
+        if (!option.starts_with(name))
+        {
+            continue;
+        }
+        const auto rest = option.substr(name.size());
+        if (rest == "?")
+        {
+            return format_result(kind, std::nullopt);
+        }
+        if (!rest.starts_with('='))
+        {
+            continue;
+        }
+        const auto chosen = format_named(kind, rest.substr(1));
+        if (!chosen.has_value())
+        {
+            return std::unexpected(ExFailure::invalid_argument);
+        }
+        return format_result(kind, chosen);
+    }
+    return std::nullopt;
+}
+
+// 文書の値の option（言語・保存の形）。どれにも当たらなければ空。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+document_option(std::string_view option)
+{
+    auto language = language_option(option);
+    if (language.has_value())
+    {
+        return language;
+    }
+    auto encoding = format_option_of(option, DocumentFormatKind::encoding, encoding_options);
+    if (encoding.has_value())
+    {
+        return encoding;
+    }
+    return format_option_of(option, DocumentFormatKind::line_ending, line_ending_options);
+}
+
 // 設定に載せない名前の option（検索の強調・incsearch・表示形式・言語・クリップボード）。
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure> unsaved_option(std::string_view option)
 {
@@ -328,10 +421,10 @@ language_option(std::string_view option)
     {
         return display_result(DisplayForm::grid);
     }
-    auto language = language_option(option);
-    if (language.has_value())
+    auto document = document_option(option);
+    if (document.has_value())
     {
-        return std::move(language).value();
+        return std::move(document).value();
     }
     auto clipboard = clipboard_option(option);
     if (clipboard.has_value())
