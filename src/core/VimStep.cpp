@@ -11,6 +11,8 @@
 #include "VimCaret.hpp"
 #include "VimCharacterSearchInvocation.hpp"
 #include "VimClipboardText.hpp"
+#include "VimCursorCorrect.hpp"
+#include "VimCursorWindow.hpp"
 #include "VimDisplayLineEdge.hpp"
 #include "VimHorizontalScroll.hpp"
 #include "VimKeyTable.hpp"
@@ -259,20 +261,58 @@ namespace
     return shifted_line(vim_viewport_of(view).first_visible, amount, last_filled.value, direction);
 }
 
+// 末尾まで見えている窓から前へ 1 画面送れないか（Vim の onepage の FAIL
+// は、窓の先頭が末尾から余白の 行数の内側にあるとき・#1099）。余白 0
+// では先頭が最終行のときだけで、今までと同じ。
+[[nodiscard]] bool forward_page_fails(const VimEditorView &view, LineNumber first) noexcept
+{
+    return first.value + view.scroll_margin >= view.text.line_count();
+}
+
+// 回数つきの Ctrl-f が途中の周で末尾まで見える窓に着き、次の周が余白で FAIL するなら、その窓の先頭
+// （Vim の onepage は周ごとに FAIL を確かめる・#1099）。余白 0 なら何も返さない。
+[[nodiscard]] std::optional<LineNumber>
+forward_pages_held(const VimEditorView &view, std::size_t pages, std::size_t one_page) noexcept
+{
+    const std::size_t total = view.text.line_count();
+    const std::size_t height = std::max<std::size_t>(vim_viewport_of(view).visible_lines, 1);
+    const std::size_t first = vim_viewport_of(view).first_visible.value;
+    const std::size_t shown_from = total >= height ? total - height + single_step : single_step;
+    if (view.scroll_margin == 0 || first >= shown_from || one_page == 0)
+    {
+        return std::nullopt;
+    }
+    const std::size_t steps = (shown_from - first + one_page - single_step) / one_page;
+    const LineNumber reached{first + steps * one_page};
+    if (pages <= steps || !forward_page_fails(view, reached))
+    {
+        return std::nullopt;
+    }
+    return reached;
+}
+
 [[nodiscard]] LineNumber page_top(const VimEditorView &view, std::size_t pages,
                                   VimScrollDirection direction)
 {
+    const LineNumber first = vim_viewport_of(view).first_visible;
     if (direction == VimScrollDirection::down &&
         last_view_line(view).value == view.text.line_count())
     {
-        return LineNumber{view.text.line_count()};
+        return forward_page_fails(view, first) ? first : LineNumber{view.text.line_count()};
     }
     const std::size_t height =
         std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
     const std::size_t one_page = height <= 2 ? height : height - 2;
+    if (direction == VimScrollDirection::down)
+    {
+        const auto held = forward_pages_held(view, pages, one_page);
+        if (held.has_value())
+        {
+            return held.value();
+        }
+    }
     const std::size_t amount = limited_product(one_page, pages, view.text.line_count());
-    return shifted_line(vim_viewport_of(view).first_visible, amount, view.text.line_count(),
-                        direction);
+    return shifted_line(first, amount, view.text.line_count(), direction);
 }
 
 // 回数つきの Ctrl-f / Ctrl-b が途中の周で端に当たったか（Vim の onepage の FAIL）。端に当たった周は
@@ -380,6 +420,19 @@ namespace
     return step;
 }
 
+// 新しい窓の先頭 first でキャレットの行を余白の内側へ寄せる（Vim の onepage と halfpage の最後の
+// cursor_correct・#1099・ADR 0019 の追補）。文字組みの無い道の窓は 1 論理行 = 1 画面行。
+[[nodiscard]] LineNumber corrected_in(const VimEditorView &view, LineNumber first,
+                                      LineNumber caret_line) noexcept
+{
+    const std::size_t height = vim_viewport_of(view).visible_lines;
+    const std::size_t total = view.text.line_count();
+    const LineNumber below{first.value + std::min(std::max<std::size_t>(height, single_step),
+                                                  total + single_step - first.value)};
+    return vim_cursor_corrected(VimCursorWindow{first, below, height, view.scroll_margin},
+                                caret_line, total);
+}
+
 [[nodiscard]] VimStep half_page_step(const VimState &state, const VimEditorView &view,
                                      VimScrollDirection direction)
 {
@@ -398,13 +451,14 @@ namespace
     const std::size_t configured = std::min(requested, height);
     const std::size_t amount = limited_amount(configured, view.text.line_count());
     const LineNumber requested_top = half_page_top(view, amount, direction);
-    const LineNumber caret_line = shifted_line(line_of(view.text, view.selection.caret), amount,
-                                               view.text.line_count(), direction);
+    const LineNumber shifted = shifted_line(line_of(view.text, view.selection.caret), amount,
+                                            view.text.line_count(), direction);
     const LineNumber followed = first_visible_for_caret(
-        requested_top, caret_line, vim_viewport_of(view).visible_lines, ScrollFollow::minimal);
+        requested_top, shifted, vim_viewport_of(view).visible_lines, ScrollFollow::minimal);
     const LineNumber first =
         first_visible_within(followed, view.text.line_count(), vim_viewport_of(view).visible_lines,
                              ScrollExtent::last_line);
+    const LineNumber caret_line = corrected_in(view, first, shifted);
     const LineNumber current_line = line_of(view.text, view.selection.caret);
     VimStep step = caret_line == current_line
                        ? navigated_at(state, view, first, view.selection.caret)
@@ -447,6 +501,7 @@ namespace detail
             std::min(last, previous_page_top(view, count_of(state.count)).value + single_step)};
         break;
     }
+    caret_line = corrected_in(view, first, caret_line);
     if (!page_count_reached_the_end(view, count_of(state.count), direction))
     {
         return navigated(state, view, first, caret_line);

@@ -12,6 +12,7 @@
 #include "VimTabs.hpp"
 #include "VimViewport.hpp"
 
+#include <cstddef>
 #include <optional>
 
 namespace nenenib::core
@@ -40,5 +41,9 @@ struct VimEditorView
     // 検索の大小の旗（設定の `ignorecase` `smartcase`・ADR 0032 の追補・#1041）。controller が
     // 設定から置き、`/` `?` の Enter と `*` `#` が新しい検索を解くときに読む。
     VimPatternCase search_case = VimPatternCase::sensitive;
+    // 縦の余白（設定の `scrolloff`・#1099・ADR 0019 の追補）。controller が設定から写し、engine は
+    // H M L と Ctrl-f / Ctrl-b / Ctrl-d / Ctrl-u の着地を Vim の cursor_correct
+    // で寄せるときだけ読む。
+    std::size_t scroll_margin = 0;
 };
 } // namespace nenenib::core

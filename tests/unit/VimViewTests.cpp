@@ -1,5 +1,6 @@
 // scope `--vim-view` の単体テスト（#1041・ADR 0019 / ADR 0008 の追補）。`scrolloff` の余白と
-// `relativenumber` の行番号の文字は画面の値なので oracle では測れず、ここで契約にする。
+// `relativenumber` の行番号の文字は画面の値なので oracle では測れず、ここで契約にする。`scrolloff`
+// の H M L と Ctrl-f / Ctrl-b / Ctrl-d / Ctrl-u の着地（#1099）も窓の高さが要るのでここ。
 #include "Column.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -21,12 +22,17 @@
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
+#include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 
 namespace nenenib::tests
 {
@@ -252,6 +258,123 @@ void verify_ordinary_mode_options()
     expect(clicked.settings.relativenumber && label.text == "2",
            "#1041 relativenumber numbers the ordinary gutter from the caret line");
 }
+
+// Vim の cursor_correct の着地（#1099・ADR 0019 の追補）。Vim 9.1.0004 を `:set lines=12`（窓 11
+// 行）で 100 行の本文に当てた実測（D:/NeNeNib/scripts/1099/gen.py）。行は (余白, 前の先頭, 前の行,
+// 鍵, 後の 先頭, 後の行)。前の窓は余白 0 の `{先頭}Gzt{行}G` で作ってから余白を置く。
+using Landing =
+    std::tuple<std::size_t, std::size_t, std::size_t, std::string_view, std::size_t, std::size_t>;
+constexpr std::array<Landing, 28> measured_landings{{
+    // 余白が画面の半分を越えると、窓の途中では両端から詰めた範囲が潰れて残った 1
+    // 行に着き、窓の先頭が
+    // 1 行目なら下の余白は 画面 / 2 で切り詰める。回数つきの Ctrl-f は途中の周で末尾の FAIL
+    // に当たる。
+    {6, 30, 35, "H", 30, 35},       {6, 30, 35, "L", 30, 35},     {999, 30, 35, "L", 30, 35},
+    {6, 1, 1, "L", 1, 6},           {999, 1, 1, "L", 1, 6},       {3, 85, 90, "2<C-f>", 97, 100},
+    {3, 1, 1, "H", 1, 1},           {3, 1, 1, "L", 1, 8},         {3, 1, 1, "<C-f>", 10, 13},
+    {3, 1, 1, "<C-d>", 6, 9},       {3, 1, 5, "<C-u>", 1, 1},     {3, 27, 30, "2L", 27, 34},
+    {3, 30, 35, "H", 30, 33},       {3, 30, 35, "2H", 30, 33},    {3, 30, 35, "5H", 30, 34},
+    {3, 30, 35, "M", 30, 35},       {3, 30, 35, "L", 30, 37},     {3, 27, 30, "<C-b>", 18, 25},
+    {3, 30, 35, "<C-f>", 39, 42},   {3, 30, 35, "<C-d>", 35, 40}, {3, 90, 100, "<C-u>", 85, 92},
+    {3, 90, 100, "H", 90, 93},      {3, 90, 95, "L", 90, 100},    {3, 90, 95, "<C-f>", 97, 100},
+    {3, 85, 90, "<C-f>", 94, 97},   {5, 1, 1, "L", 1, 6},         {5, 85, 90, "<C-f>", 94, 99},
+    {999, 90, 95, "<C-f>", 90, 95},
+}};
+
+constexpr std::size_t measured_window = 11;
+constexpr std::size_t measured_document = 100;
+
+// 11 行の窓（幅 0 は文字組みの無い道・400 は折り返しの道）に 100 行の本文を置き、余白 0 で窓を
+// 作ってから `:set so=<margin>` を打つ。
+void placed_window(EditorController &controller, std::int32_t width, const Landing &row)
+{
+    applied(controller,
+            VisibleLines{measured_window, nenenib::core::TextViewGeometry{width, 20, 96}});
+    std::string text;
+    for (std::size_t line = 1; line <= measured_document; ++line)
+    {
+        text += "line" + std::to_string(line) + (line < measured_document ? "\n" : "");
+    }
+    static_cast<void>(controller.apply(InsertText{text}));
+    applied(controller, SelectEditMode{EditMode::vim});
+    static_cast<void>(run_ex(controller, "set so=0"));
+    vim_replay(controller, "gg" + std::to_string(std::get<1>(row)) + "Gzt" +
+                               std::to_string(std::get<2>(row)) + "G");
+    static_cast<void>(run_ex(controller, "set so=" + std::to_string(std::get<0>(row))));
+}
+
+void verify_measured_landings(std::int32_t width)
+{
+    for (const Landing &row : measured_landings)
+    {
+        Editing editing;
+        EditorController &controller = editing.controller();
+        placed_window(controller, width, row);
+        vim_replay(controller, std::get<3>(row));
+        const auto frame = controller.frame();
+        const std::string description =
+            "#1099 so=" + std::to_string(std::get<0>(row)) + " " + std::string(std::get<3>(row)) +
+            " from line " + std::to_string(std::get<2>(row)) + " lands where Vim 9.1 does (width " +
+            std::to_string(width) + ")";
+        expect(frame.first_visible == LineNumber{std::get<4>(row)} &&
+                   frame.caret.position.line == LineNumber{std::get<5>(row)},
+               description.c_str());
+    }
+}
+
+// キャレットの行だけを確かめる実測（窓の先頭は追従の切り詰めの差で Vim と違う・ADR 0019 の
+// 追補 5 の (a)）。so=6 の回数つきの Ctrl-f は 2 周目が末尾の FAIL で、Vim のキャレットは 99。
+constexpr std::array<Landing, 1> measured_caret_lines{{
+    {6, 85, 90, "2<C-f>", 0, 99},
+}};
+
+void verify_measured_caret_lines(std::int32_t width)
+{
+    for (const Landing &row : measured_caret_lines)
+    {
+        Editing editing;
+        EditorController &controller = editing.controller();
+        placed_window(controller, width, row);
+        vim_replay(controller, std::get<3>(row));
+        const std::string description =
+            "#1099 so=" + std::to_string(std::get<0>(row)) + " " + std::string(std::get<3>(row)) +
+            " puts the caret on Vim's line (width " + std::to_string(width) + ")";
+        expect(controller.frame().caret.position.line == LineNumber{std::get<5>(row)},
+               description.c_str());
+    }
+}
+
+// オペレータの範囲は寄せない（Vim の nv_scroll は op_type が NOP のときだけ cursor_correct
+// を呼ぶ）。 VISUAL の H は寄せる。行の数は Vim 9.1 の実測。
+void verify_operator_ranges_are_not_corrected(std::int32_t width)
+{
+    Editing removing;
+    EditorController &controller = removing.controller();
+    placed_window(controller, width, Landing{3, 27, 30, "", 0, 0});
+    vim_replay(controller, "dL");
+    const auto removed = whole_vim_body(controller);
+    expect(std::ranges::count(removed, '\n') + 1 == 92 &&
+               controller.frame().caret.position.line == LineNumber{30},
+           "#1099 dL with so=3 removes lines 30 to 37 (L itself is not corrected)");
+    Editing visual;
+    EditorController &selected = visual.controller();
+    placed_window(selected, width, Landing{3, 30, 35, "", 0, 0});
+    vim_replay(selected, "vHd");
+    const auto cut = whole_vim_body(selected);
+    expect(std::ranges::count(cut, '\n') + 1 == 98 &&
+               selected.frame().caret.position.line == LineNumber{33},
+           "#1099 VISUAL H with so=3 lands 3 lines below the top before d");
+}
+
+void verify_scrolloff_cursor_correct()
+{
+    for (const std::int32_t width : {0, 400})
+    {
+        verify_measured_landings(width);
+        verify_measured_caret_lines(width);
+        verify_operator_ranges_are_not_corrected(width);
+    }
+}
 } // namespace
 
 void verify_vim_view_scope()
@@ -265,5 +388,6 @@ void verify_vim_view_scope()
     verify_gutter_labels();
     verify_scrolloff_wrapped_rows();
     verify_ordinary_mode_options();
+    verify_scrolloff_cursor_correct();
 }
 } // namespace nenenib::tests

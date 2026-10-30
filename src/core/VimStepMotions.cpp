@@ -6,6 +6,8 @@
 #include "VimCharacterSearchInvocation.hpp"
 #include "VimCharacterSearchRequest.hpp"
 #include "VimCharacterSearchScan.hpp"
+#include "VimCursorCorrect.hpp"
+#include "VimCursorWindow.hpp"
 #include "VimJumpLists.hpp"
 #include "VimJumpMove.hpp"
 #include "VimKeyTable.hpp"
@@ -404,11 +406,28 @@ namespace detail
 
 namespace
 {
+// H M L の裸の移動の行。余白の内側へ寄せる（Vim の nv_scroll はオペレータの無いときだけ
+// cursor_correct を呼ぶ・#1099・ADR 0019 の追補）。文字組みの道は寄せた行を navigation
+// に置いてある。
+[[nodiscard]] LineNumber settled_screen_line(const VimEditorView &view, LineNumber line) noexcept
+{
+    if (view.navigation.has_value())
+    {
+        return view.navigation.value().settled.value_or(line);
+    }
+    const LineNumber below{last_view_line(view).value + single_step};
+    return vim_cursor_corrected(VimCursorWindow{first_view_line(view), below,
+                                                vim_viewport_of(view).visible_lines,
+                                                view.scroll_margin},
+                                line, view.text.line_count());
+}
+
 // H M L の着地（画面の行の最初の非空白）。
 [[nodiscard]] Offset screen_first_non_blank(const VimEditorView &view, VimScreenPosition position,
                                             std::size_t count)
 {
-    return vim_first_non_blank(view.text, view.text.line_start(screen_line(view, position, count)));
+    const LineNumber line = settled_screen_line(view, screen_line(view, position, count));
+    return vim_first_non_blank(view.text, view.text.line_start(line));
 }
 
 // 裸の w W e E の着地（Issue #226）。本文の終わりの NUL の桁に止まったら本文の上へ戻し
