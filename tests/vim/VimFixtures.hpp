@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 cc8750b544bfd8a6a7999209dd65d65aab646b0455c41657c0afb8889a68ffb6 / 3137 fixtures
+// fixtures.json: sha256 1afb4b25c1120d5781e7742e9ebad8362523de76f63053ef35f59fdd9a998511 / 3149 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3137> vim_fixtures{{
+constexpr std::array<VimFixture, 3149> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3149,6 +3149,18 @@ constexpr std::array<VimFixture, 3137> vim_fixtures{{
     {"insert-arrow-left-over-a-zwj-sequence", "a👨‍👩b", "$i<Left>x<Esc>", "a👨‍x👩b", 1, 9, "", "", std::nullopt},
     {"insert-arrow-left-at-the-line-start-keeps-the-count", "ab", "2i<Left>x<Esc>", "xxab", 1, 2, "", "", std::nullopt},
     {"insert-arrow-right-at-the-line-end-keeps-the-count", "ab", "2A<Right>x<Esc>", "abxx", 1, 4, "", "", std::nullopt},
+    {"insert-arrow-dot-left-then-escape", "ab", "ix<Left><Esc>.", "xxab", 1, 1, "", "", std::nullopt},
+    {"insert-arrow-dot-right-then-escape", "ab", "ix<Right><Esc>.", "xxab", 1, 2, "", "", std::nullopt},
+    {"insert-arrow-dot-home-then-escape", "ab", "Ax<Home><Esc>.", "abxx", 1, 4, "", "", std::nullopt},
+    {"insert-arrow-dot-end-then-escape", "ab", "ix<End><Esc>.", "xaxb", 1, 3, "", "", std::nullopt},
+    {"insert-arrow-dot-left-then-escape-counted-dot", "ab", "ix<Left><Esc>2.", "xxxab", 1, 2, "", "", std::nullopt},
+    {"insert-arrow-dot-left-then-typed", "ab", "ix<Left>y<Esc>.", "yyxab", 1, 1, "", "", std::nullopt},
+    {"insert-arrow-dot-left-after-a-counted-insert", "ab", "2ix<Left><Esc>.", "xxxab", 1, 2, "", "", std::nullopt},
+    {"insert-arrow-dot-up-then-escape", "ab\ncd", "jix<Up><Esc>.", "xab\nxcd", 1, 1, "", "", std::nullopt},
+    {"insert-arrow-dot-two-arrows-then-escape", "abc", "ix<Left><Right><Esc>.", "xxabc", 1, 1, "", "", std::nullopt},
+    {"insert-arrow-dot-home-after-visual-change", "abcd", "vlcZ<Home><Esc>.", "Zd", 1, 1, "Zc", "v", std::nullopt},
+    {"insert-arrow-dot-left-then-register", "ab", "ylix<Left><C-r>\"<Esc>.", "aaxab", 1, 1, "a", "v", std::nullopt},
+    {"insert-arrow-dot-left-then-beeping-backspace", "ab", "ix<Left><BS>y<Esc>.", "yyxab", 1, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

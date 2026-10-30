@@ -516,9 +516,68 @@ namespace
     return keys;
 }
 
-// INSERT の記録（決定 4）。Esc で 1 つの変更として確定し、移動の鍵は `i` から取り直す。
-// VISUAL から入った挿入は記録を持たないので、確定もしない（決定 5）。
-// `Ctrl-r {name}` は鍵ではなく入れた本文を記録する（Vim の redo も本文・oracle で実測・#1040）。
+// 矢印・Home などで区切った後に、まだ何も打っていないか（Vim の arrow_used・#1137）。印は始めの
+// 位置の moved で、#1040 の arrow_stopped と同じ合図。
+[[nodiscard]] bool arrow_pending(const VimState &state) noexcept
+{
+    return state.insert_start.has_value() && state.insert_start.value().moved;
+}
+
+// 区切った後の挿入の記録（Vim の stop_arrow の `1i`）。取り直した記録は VISUAL の大きさを持たない
+// （固定 Vim も `vlcZ<Home>Y<Esc>.` をただの挿入として繰り返す・Issue #91 で実測）。
+[[nodiscard]] VimRepeatRecord restarted_insert()
+{
+    return VimRepeatRecord{
+        std::nullopt, VimRecordedKeys::from({}).appended(VimKey{VimCharacter{U'i'}}), std::nullopt};
+}
+
+// 入力の待ち（`Ctrl-r {name}` など）の前後の記録。待ちを開く鍵は記録に残さず、区切った後なら
+// 入れる本文から取り直す（`ylix<Left><C-r>"<Esc>.` は `a`・#1137）。待ちを終える鍵は入れた本文を
+// 打った文字として足す。
+[[nodiscard]] VimRepeatRecord waited_recording(const VimState &before, VimRepeatRecord record,
+                                               const VimState &next, const VimEffect &effect)
+{
+    if (next.input_wait.has_value())
+    {
+        return arrow_pending(before) ? restarted_insert() : record;
+    }
+    for (VimKey typed : typed_keys_of(effect))
+    {
+        record = appended(std::move(record), std::move(typed));
+    }
+    return record;
+}
+
+// 何も消せない消す鍵と行の端で動かない矢印（ビープ）は、記録も区切った後の印も変えない。Vim の
+// ins_bs はビープで返り stop_arrow に届かない（#1093・#1136・`ix<Left><BS>y<Esc>.` は
+// `y`・#1137）。
+[[nodiscard]] VimState beeped_recording(const VimState &before, VimState next)
+{
+    next.recording = before.recording;
+    if (arrow_pending(before))
+    {
+        next.insert_start = before.insert_start;
+    }
+    return next;
+}
+
+// 打った鍵の記録。移動の鍵は記録を区切るだけで、区切った後の最初の移動でない鍵が `i` から
+// 取り直す（Vim の stop_arrow・#1137）。
+[[nodiscard]] VimRepeatRecord typed_recording(const VimState &before, VimRepeatRecord record,
+                                              VimKey key)
+{
+    if (restarts_insert(key))
+    {
+        return record;
+    }
+    return appended(arrow_pending(before) ? restarted_insert() : std::move(record), std::move(key));
+}
+
+// INSERT の記録（決定 4）。Esc で 1 つの変更として確定する。区切った後に何も打たずに Esc すれば
+// 記録は区切る前のまま（`ix<Left><Esc>.` は `x` を・`vlcZ<Home><Esc>.`
+// は大きさごと繰り返す・#1137）。 VISUAL から入った挿入は記録を持たないので、確定もしない（決定
+// 5）。 `Ctrl-r {name}` は鍵ではなく入れた本文を記録する（Vim の redo も本文・oracle
+// で実測・#1040）。
 [[nodiscard]] VimState insert_recording(const VimState &before, VimState next,
                                         const VimEffect &effect, VimKey key)
 {
@@ -526,43 +585,21 @@ namespace
     {
         return next;
     }
-    if (next.input_wait.has_value())
+    if (next.input_wait.has_value() || before.input_wait.has_value())
     {
-        next.recording = before.recording;
+        next.recording = waited_recording(before, before.recording.value(), next, effect);
         return next;
     }
-    if (before.input_wait.has_value())
-    {
-        VimRepeatRecord record = before.recording.value();
-        for (VimKey typed : typed_keys_of(effect))
-        {
-            record = appended(std::move(record), std::move(typed));
-        }
-        next.recording = std::move(record);
-        return next;
-    }
-    // 何も消せない消す鍵は `.` の記録にも残さない（#1093・`i<C-w>x<Esc>j0.` は x だけ）。
-    // 行の端で動かない矢印も記録を取り直さない（#1136・`A<Right>x<Esc>j.` は `Ax` を繰り返す）。
     if (erased_nothing(key, effect) || moved_nothing(key, effect))
     {
-        next.recording = before.recording;
-        return next;
+        return beeped_recording(before, std::move(next));
     }
     if (next.mode == VimMode::normal)
     {
         next.last_change = appended(before.recording.value(), key);
         return next;
     }
-    if (restarts_insert(key))
-    {
-        // 取り直した記録は VISUAL の大きさを持たない（固定 Vim も `vlcZ<Home>Y<Esc>.` を
-        // ただの挿入として繰り返す・Issue #91 で実測）。
-        next.recording = VimRepeatRecord{
-            std::nullopt, VimRecordedKeys::from({}).appended(VimKey{VimCharacter{U'i'}}),
-            std::nullopt};
-        return next;
-    }
-    next.recording = appended(before.recording.value(), key);
+    next.recording = typed_recording(before, before.recording.value(), std::move(key));
     return next;
 }
 

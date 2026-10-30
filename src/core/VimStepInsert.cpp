@@ -746,8 +746,9 @@ namespace
            std::visit([](const auto &value) { return erases_in_insert(value); }, key);
 }
 
-// INSERT で記録を `i` から取り直す鍵（決定 4）。ADR 0028 の決定 3 が挿入の反復を切るのと
-// 同じ境界で、Vim も移動のあとの入力を新しい挿入として扱う（Home / End / 矢印で実測）。
+// INSERT で `.` の記録を区切る鍵（決定 4）。ADR 0028 の決定 3 が挿入の反復を切るのと同じ境界で、
+// Vim も移動のあとの入力を新しい挿入として扱う（Home / End / 矢印で実測）。`i` から取り直すのは
+// 区切った後に打った最初の移動でない鍵（#1137・insert_recording）。
 [[nodiscard]] bool restarts_insert(VimKey key) noexcept
 {
     if (!std::holds_alternative<VimSpecialKey>(key))
