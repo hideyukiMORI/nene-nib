@@ -7,6 +7,7 @@
 #include "PreviewBrushes.hpp"
 #include "PreviewFrame.hpp"
 #include "PreviewPictureKey.hpp"
+#include "PreviewPoint.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "PreviewTextStyle.hpp"
 #include "PreviewViewport.hpp"
@@ -52,6 +53,12 @@ class PreviewPane final
     // 24）。保持の縦の位置（PreviewBlockTops::task_box）を読むだけで測らない。
     // 描いていない・文書が空・当たらなければ nullopt。
     [[nodiscard]] std::optional<std::size_t> task_at(std::int32_t x, std::int32_t y) const;
+    // 最後に描いた枠の中の点 (x, y)（描画先の物理画素）の下の文字の位置（ADR 0155 の改訂 18）。
+    // 要素は保持の縦の位置で引き、位置は要素の layout（保持から引く・無ければ作る）の HitTestPoint
+    // で決める。要素の間の余白は上の要素の終わり、測った最初の要素より上はその頭、最後の要素より
+    // 下はその終わり、水平線は頭。枠の外の点も縦の位置で引く（ドラッグが枠を出ても選び続ける）。
+    // 描いていない・文書が空・layout を作れなければ nullopt。
+    [[nodiscard]] std::optional<core::PreviewPoint> point_at(std::int32_t x, std::int32_t y);
     // 作った layout の数（試験が frame をまたいだ再利用を確かめる）。
     [[nodiscard]] std::size_t created() const noexcept;
     // 要素を描いた回数（直接か bitmap へ）・保持の絵を DrawBitmap だけで使い回した回数・作った
@@ -69,6 +76,12 @@ class PreviewPane final
     [[nodiscard]] std::expected<void, RenderFailure> draw_scene(ID2D1RenderTarget &target,
                                                                 const PreviewPictureKey &key,
                                                                 const core::LayoutRect &frame);
+    // 測った要素 index の layout の中の点 point（枠の左上から）の文字の位置。tops と area は
+    // 保持の縦の位置と最後に描いた枠。
+    [[nodiscard]] std::optional<core::PreviewPoint> hit_block(const PreviewBlockTops &tops,
+                                                              const core::LayoutRect &area,
+                                                              std::size_t index,
+                                                              D2D1_POINT_2F point);
     // 枠の大きさの描ける bitmap（大きさが同じなら今のもの）。作れなければ nullptr。
     [[nodiscard]] ID2D1Bitmap1 *picture_of(ID2D1DeviceContext &context, std::int32_t width,
                                            std::int32_t height);
@@ -92,7 +105,4 @@ class PreviewPane final
     std::size_t pictures_ = 0;
 };
 
-// anchor を含む要素（source_begin の upper_bound − 1・anchor より前に要素が無ければ 0）。
-[[nodiscard]] std::size_t preview_anchor_block(const core::MarkdownDocument &document,
-                                               core::Offset anchor);
 } // namespace nenenib::ui::win32

@@ -6,6 +6,7 @@
 #include "PreviewInk.hpp"
 #include "PreviewMetrics.hpp"
 #include "PreviewScene.hpp"
+#include "PreviewSelectionText.hpp"
 #include "PreviewStyle.hpp"
 #include "PreviewTaskBox.hpp"
 #include "PreviewTextLayouts.hpp"
@@ -249,6 +250,7 @@ template <typename Target> class PreviewPainter final
             return;
         }
         paint_spans(scene, block, *layout.value().Get(), origin);
+        fill_selection(scene, index, *layout.value().Get(), origin);
         target_.DrawTextLayout(origin, layout.value().Get(), brushes_.of(ink_of(block)),
                                D2D1_DRAW_TEXT_OPTIONS_NONE);
     }
@@ -277,7 +279,7 @@ template <typename Target> class PreviewPainter final
     void paint_spans(const PreviewScene &scene, const core::PreviewBlock &block,
                      IDWriteTextLayout &layout, D2D1_POINT_2F origin)
     {
-        const auto shown = preview_shown_text(block);
+        const auto shown = core::preview_shown_text(block);
         for (const auto &span : block.spans)
         {
             const auto begin = preview_units(shown, span.begin.value);
@@ -293,6 +295,33 @@ template <typename Target> class PreviewPainter final
                 failure_ = RenderFailure::directwrite;
                 return;
             }
+        }
+    }
+
+    // 全面プレビューの選択の面（selection・ADR 0155 の改訂 18）。文字の下に、選ばれた範囲の画面行
+    // ごとの矩形を塗る。範囲は core の preview_selected_bytes の 1 本で決める。
+    void fill_selection(const PreviewScene &scene, std::size_t index, IDWriteTextLayout &layout,
+                        D2D1_POINT_2F origin)
+    {
+        if (!scene.selection.has_value())
+        {
+            return;
+        }
+        const auto bytes =
+            core::preview_selected_bytes(scene.document, scene.selection.value(), index);
+        if (!bytes.has_value())
+        {
+            return;
+        }
+        const auto shown = core::preview_shown_text(scene.document.blocks.at(index));
+        const auto begin = preview_units(shown, bytes.value().first);
+        const auto end = preview_units(shown, bytes.value().second);
+        for (const auto &run :
+             runs_of(layout, DWRITE_TEXT_RANGE{begin, end > begin ? end - begin : 0}, origin))
+        {
+            target_.FillRectangle(
+                D2D1::RectF(run.left, run.top, run.left + run.width, run.top + run.height),
+                brushes_.of(PreviewInk::selection));
         }
     }
 

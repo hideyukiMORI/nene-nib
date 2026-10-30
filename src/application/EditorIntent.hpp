@@ -37,6 +37,7 @@
 #include "PasteCommand.hpp"
 #include "PlaceCaret.hpp"
 #include "PointExplorer.hpp"
+#include "PointPreview.hpp"
 #include "PointText.hpp"
 #include "PointTitleBar.hpp"
 #include "PreviewTick.hpp"
@@ -91,5 +92,5 @@ using EditorIntent = std::variant<
     SplitPane, SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick, TogglePreviewTask,
     ToggleExplorer, ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen,
     LanguageServerTick, MapTimeout, InsertDateTime, SelectDocumentFormat, OpenDocumentFormatList,
-    BeginFind, BeginGoToLine, BeginReplace, SetPreviewPlacement>;
+    BeginFind, BeginGoToLine, BeginReplace, SetPreviewPlacement, PointPreview>;
 } // namespace nenenib::application
