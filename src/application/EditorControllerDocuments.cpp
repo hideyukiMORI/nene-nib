@@ -20,7 +20,11 @@
 #include "FileHistoryEdit.hpp"
 #include "Language.hpp"
 #include "LanguageTable.hpp"
+#include "MarkdownParse.hpp"
 #include "PaletteOrigin.hpp"
+#include "PrintDocument.hpp"
+#include "PrintFailure.hpp"
+#include "PrintJob.hpp"
 #include "ReadingTarget.hpp"
 #include "SaveState.hpp"
 #include "Selection.hpp"
@@ -1328,5 +1332,67 @@ void EditorController::close_active_tab()
     leave_document();
     state_ = state_.with_new_tab().with_closed(0);
     enter_document();
+}
+namespace
+{
+// 印刷の知らせ（ADR 0177 の決定 2・7）。失敗の理由は PrintFailure の値ごとに 1 つ。
+constexpr std::string_view print_too_large_notice = "印刷は 16 MiB までです";
+constexpr std::string_view print_failed_prefix = "印刷できませんでした: ";
+
+[[nodiscard]] std::string print_failure_notice(PrintFailure failure)
+{
+    switch (failure)
+    {
+    case PrintFailure::no_printer:
+        return std::string(print_failed_prefix) + "プリンタがありません";
+    case PrintFailure::dialog_failed:
+        return std::string(print_failed_prefix) + "印刷のダイアログを開けません";
+    case PrintFailure::rendering_failed:
+        return std::string(print_failed_prefix) + "ページを描けません";
+    case PrintFailure::too_large:
+        return std::string(print_too_large_notice);
+    }
+    std::unreachable();
+}
+} // namespace
+
+void EditorController::accept(const PrintDocument &)
+{
+    // 大きすぎる本文は写さず、port も呼ばない（決定 7）。
+    if (state_.text().size_bytes() > core::print_byte_limit)
+    {
+        state_ =
+            state_.with_command_message(core::DisplayText::parse(print_too_large_notice).value());
+        return;
+    }
+    const auto &settings = state_.settings();
+    // 行番号の欄は本文ではいつも出す（切り替えの設定が無い）ので、印刷も描く（決定 5）。
+    auto text = std::make_shared<const std::string>(state_.text().text());
+    PrintJob job{std::move(text),
+                 state_.text().line_ending(),
+                 core::tab_title_for(state_.document().path, core::SaveState::saved),
+                 state_.language(),
+                 settings.font_family,
+                 settings.font_size,
+                 true};
+    const auto outcome = ports_.print.print(std::move(job));
+    if (outcome)
+    {
+        // 印刷できた・取り消した、のどちらも知らせない（決定 2）。
+        return;
+    }
+    state_ = state_.with_command_message(
+        core::DisplayText::parse(print_failure_notice(outcome.error())).value());
+}
+
+void EditorController::run_print_request(core::ExPrintRequest request)
+{
+    switch (request)
+    {
+    case core::ExPrintRequest::active_document:
+        accept(PrintDocument{});
+        return;
+    }
+    std::unreachable();
 }
 } // namespace nenenib::application

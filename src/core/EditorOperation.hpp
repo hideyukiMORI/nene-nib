@@ -37,6 +37,8 @@ enum class EditorOperation : std::uint8_t
     toggle_explorer,
     choose_explorer_root,
     // F5 の日時の挿入（ADR 0175 の決定 3）。
-    insert_date_time
+    insert_date_time,
+    // 印刷（ADR 0177 の決定 1）。鍵は無く、F1 の一覧と Vim の `:hardcopy` から。
+    print
 };
 } // namespace nenenib::core

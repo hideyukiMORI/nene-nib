@@ -268,6 +268,8 @@ class EditorWindow final
     void run_tab_operation(core::EditorOperation operation);
     void run_pane_operation(core::EditorOperation operation);
     void run_edit_operation(core::EditorOperation operation);
+    // 意図を 1 つ送るだけで、何をするかは controller が決める操作（日時の挿入・印刷）。
+    void run_document_operation(core::EditorOperation operation);
     [[nodiscard]] bool keeps_block_key(core::EditorOperation operation) const noexcept;
     void scroll_tabs(std::int32_t delta);
     void zoom_wheel(std::int32_t delta);

@@ -375,6 +375,12 @@ bool EditorController::ran_ex_request(const core::ExResult &result)
         run_map_request(result.map.value());
         return true;
     }
+    // `:hardcopy` は F1 の一覧の「印刷」と同じ意図へ渡す（ADR 0177 の決定 1）。
+    if (result.print.has_value())
+    {
+        run_print_request(result.print.value());
+        return true;
+    }
     return answer_current_value(result);
 }
 

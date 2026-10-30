@@ -14,6 +14,7 @@
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "OpenOperationList.hpp"
+#include "PrintDocument.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "SelectEditMode.hpp"
@@ -351,8 +352,8 @@ void EditorWindow::run_operation(core::EditorOperation operation)
         run_pane_operation(operation);
         return;
     case core::EditorOperation::insert_date_time:
-        // 何を入れるか・入れずに知らせるかは controller の 1 か所が決める（ADR 0175 の決定 3）。
-        send(application::InsertDateTime{});
+    case core::EditorOperation::print:
+        run_document_operation(operation);
         return;
     }
     std::unreachable();
@@ -398,6 +399,7 @@ void EditorWindow::run_tab_operation(core::EditorOperation operation)
     case core::EditorOperation::toggle_explorer:
     case core::EditorOperation::choose_explorer_root:
     case core::EditorOperation::insert_date_time:
+    case core::EditorOperation::print:
         return;
     }
     std::unreachable();
@@ -458,6 +460,7 @@ void EditorWindow::run_pane_operation(core::EditorOperation operation)
     case core::EditorOperation::paste_plain:
     case core::EditorOperation::paste_html:
     case core::EditorOperation::insert_date_time:
+    case core::EditorOperation::print:
         return;
     }
     std::unreachable();
@@ -504,6 +507,50 @@ void EditorWindow::run_edit_operation(core::EditorOperation operation)
     case core::EditorOperation::toggle_explorer:
     case core::EditorOperation::choose_explorer_root:
     case core::EditorOperation::insert_date_time:
+    case core::EditorOperation::print:
+        return;
+    }
+    std::unreachable();
+}
+
+// 意図を 1 つ送るだけの操作。日時の挿入で何を入れるか・入れずに知らせるか（ADR 0175 の決定 3）と、
+// 本文と字体を写して印刷の port を呼ぶか（ADR 0177 の決定 1・2）は controller の 1 か所が決める。
+// ほかの値は run_operation が先に扱うので、ここへは来ない。
+void EditorWindow::run_document_operation(core::EditorOperation operation)
+{
+    switch (operation)
+    {
+    case core::EditorOperation::insert_date_time:
+        send(application::InsertDateTime{});
+        return;
+    case core::EditorOperation::print:
+        send(application::PrintDocument{});
+        return;
+    case core::EditorOperation::open_file:
+    case core::EditorOperation::save:
+    case core::EditorOperation::save_as:
+    case core::EditorOperation::new_tab:
+    case core::EditorOperation::close_tab:
+    case core::EditorOperation::recent_tab:
+    case core::EditorOperation::recent_tab_back:
+    case core::EditorOperation::list_files:
+    case core::EditorOperation::list_operations:
+    case core::EditorOperation::toggle_bookmark:
+    case core::EditorOperation::undo:
+    case core::EditorOperation::redo:
+    case core::EditorOperation::font_larger:
+    case core::EditorOperation::font_smaller:
+    case core::EditorOperation::font_reset:
+    case core::EditorOperation::toggle_mode:
+    case core::EditorOperation::split_vertical:
+    case core::EditorOperation::split_horizontal:
+    case core::EditorOperation::next_pane:
+    case core::EditorOperation::close_pane:
+    case core::EditorOperation::toggle_preview:
+    case core::EditorOperation::paste_plain:
+    case core::EditorOperation::paste_html:
+    case core::EditorOperation::toggle_explorer:
+    case core::EditorOperation::choose_explorer_root:
         return;
     }
     std::unreachable();

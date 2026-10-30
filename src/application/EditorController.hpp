@@ -30,6 +30,7 @@
 #include "ExLspRequest.hpp"
 #include "ExMapRequest.hpp"
 #include "ExPaletteRequest.hpp"
+#include "ExPrintRequest.hpp"
 #include "ExResult.hpp"
 #include "ExRootRequest.hpp"
 #include "ExSyntaxRequest.hpp"
@@ -545,6 +546,10 @@ class EditorController final
                                      const core::ExDocumentRequest &request);
     [[nodiscard]] bool refuse_modified_quit();
     void run_document_request(const core::ExDocumentRequest &request);
+    // 印刷（ADR 0177 の決定 1・2・7）。PrintPort を呼ぶのはこの意図の 1 か所だけで、`:hardcopy` も
+    // 同じ道へ渡す。取り消しは黙り、失敗と大きすぎる本文は 1 行知らせる（鳴らさない）。
+    void accept(const PrintDocument &);
+    void run_print_request(core::ExPrintRequest request);
     // アクティブな文書の表示値。frame と一覧の候補が同じ 1 本を使う。
     [[nodiscard]] DocumentView active_document_view() const;
     [[nodiscard]] std::optional<core::InputLineView> command_line_view() const;
