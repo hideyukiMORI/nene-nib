@@ -1,18 +1,24 @@
 // scope `--vim-dot` の単体テスト（ADR 0042 決定 2）。
+#include "Column.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
+#include "LineNumber.hpp"
+#include "PlaceCaret.hpp"
 #include "SaveDocument.hpp"
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
+#include "SelectionAnchoring.hpp"
 #include "StoreVimRegister.hpp"
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
+#include "TextPosition.hpp"
 #include "VimCharacterExtent.hpp"
 #include "VimColumnWish.hpp"
 #include "VimCount.hpp"
+#include "VimInsertStart.hpp"
 #include "VimLineExtent.hpp"
 #include "VimMode.hpp"
 #include "VimRegister.hpp"
@@ -40,14 +46,20 @@ namespace nenenib::tests
 namespace
 {
 using nenenib::application::HistoryAction;
+using nenenib::application::PlaceCaret;
 using nenenib::application::SaveDocument;
 using nenenib::application::SelectEditMode;
 using nenenib::application::StoreVimRegister;
 using nenenib::application::VisibleLines;
+using nenenib::core::Column;
 using nenenib::core::EditMode;
 using nenenib::core::HistoryDirection;
+using nenenib::core::LineNumber;
+using nenenib::core::SelectionAnchoring;
 using nenenib::core::TextEncoding;
+using nenenib::core::TextPosition;
 using nenenib::core::VimColumnWish;
+using nenenib::core::VimInsertStart;
 using nenenib::core::VimMode;
 using nenenib::core::VimRegister;
 using nenenib::core::VimRegisterKind;
@@ -621,8 +633,31 @@ void verify_vim_dot_fixtures()
             ++selected;
         }
     }
-    expect(selected == 210, "the scope replays 113 dot, 78 VISUAL dot and 12 insert-arrow dot "
+    expect(selected == 211, "the scope replays 113 dot, 78 VISUAL dot and 13 insert-arrow dot "
                             "fixtures and 7 shared boundaries");
+}
+
+// ビープの消す鍵は区切った後の印を止めない（#1137・Vim の ins_bs は stop_arrow に届く前に返る）。
+// 印を戻すのは INSERT の側の insert_start_kept で、`.` の記録を持たない
+// INSERT（クリックの割り込みの 後）でも同じ。
+void verify_vim_dot_arrow_mark_survives_a_beep()
+{
+    Editing editing;
+    open_vim_document(editing, "ab");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "ix");
+    applied(controller,
+            PlaceCaret{TextPosition{LineNumber{1}, Column{1}}, SelectionAnchoring::collapse});
+    expect(controller.vim_state().mode == VimMode::insert &&
+               !controller.vim_state().recording.has_value(),
+           "the click leaves an INSERT that holds no dot recording");
+    vim_replay(controller, "<Home><BS>");
+    const std::optional<VimInsertStart> start = controller.vim_state().insert_start;
+    expect(start.has_value() && start.value().moved && start.value().byte_column == 0,
+           "a backspace that beeps at the start of the text keeps the mark the Home key set");
+    vim_replay(controller, "y");
+    const std::optional<VimInsertStart> typed = controller.vim_state().insert_start;
+    expect(typed.has_value() && !typed.value().moved, "and the first key that types stops it");
 }
 } // namespace
 
@@ -641,6 +676,7 @@ void verify_vim_dot_contracts()
     verify_vim_visual_dot_boundaries();
     verify_vim_visual_dot_columns();
     verify_vim_undo_caret_contracts();
+    verify_vim_dot_arrow_mark_survives_a_beep();
 }
 
 void verify_vim_dot_scope()

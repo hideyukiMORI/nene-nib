@@ -3143,6 +3143,7 @@
   {"name":"insert-arrow-dot-left-then-escape-counted-dot","text":"ab","keys":"ix<Left><Esc>2."},
   {"name":"insert-arrow-dot-left-then-typed","text":"ab","keys":"ix<Left>y<Esc>."},
   {"name":"insert-arrow-dot-left-after-a-counted-insert","text":"ab","keys":"2ix<Left><Esc>."},
+  {"name":"insert-arrow-dot-left-after-a-counted-insert-counted-dot","text":"ab","keys":"2ix<Left><Esc>3."},
   {"name":"insert-arrow-dot-up-then-escape","text":"ab\ncd","keys":"jix<Up><Esc>."},
   {"name":"insert-arrow-dot-two-arrows-then-escape","text":"abc","keys":"ix<Left><Right><Esc>."},
   {"name":"insert-arrow-dot-home-after-visual-change","text":"abcd","keys":"vlcZ<Home><Esc>."},

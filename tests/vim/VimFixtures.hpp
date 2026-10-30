@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 1afb4b25c1120d5781e7742e9ebad8362523de76f63053ef35f59fdd9a998511 / 3149 fixtures
+// fixtures.json: sha256 ce25fa40310a6e921e5de5d04d092f277086e8c381fb8f9ac71c0a8b64f9af32 / 3150 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3149> vim_fixtures{{
+constexpr std::array<VimFixture, 3150> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3156,6 +3156,7 @@ constexpr std::array<VimFixture, 3149> vim_fixtures{{
     {"insert-arrow-dot-left-then-escape-counted-dot", "ab", "ix<Left><Esc>2.", "xxxab", 1, 2, "", "", std::nullopt},
     {"insert-arrow-dot-left-then-typed", "ab", "ix<Left>y<Esc>.", "yyxab", 1, 1, "", "", std::nullopt},
     {"insert-arrow-dot-left-after-a-counted-insert", "ab", "2ix<Left><Esc>.", "xxxab", 1, 2, "", "", std::nullopt},
+    {"insert-arrow-dot-left-after-a-counted-insert-counted-dot", "ab", "2ix<Left><Esc>3.", "xxxxab", 1, 3, "", "", std::nullopt},
     {"insert-arrow-dot-up-then-escape", "ab\ncd", "jix<Up><Esc>.", "xab\nxcd", 1, 1, "", "", std::nullopt},
     {"insert-arrow-dot-two-arrows-then-escape", "abc", "ix<Left><Right><Esc>.", "xxabc", 1, 1, "", "", std::nullopt},
     {"insert-arrow-dot-home-after-visual-change", "abcd", "vlcZ<Home><Esc>.", "Zd", 1, 1, "Zc", "v", std::nullopt},

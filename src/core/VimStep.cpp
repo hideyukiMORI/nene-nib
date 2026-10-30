@@ -64,6 +64,7 @@ using detail::input_action;
 using detail::insert_character;
 using detail::insert_register_step;
 using detail::insert_special;
+using detail::insert_start_kept;
 using detail::insert_started;
 using detail::joined;
 using detail::jump_list_action;
@@ -1959,7 +1960,7 @@ namespace
 
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
-    auto step = stepped(insert_started(state, view, key), view, key);
+    auto step = insert_start_kept(state, stepped(insert_started(state, view, key), view, key), key);
     if (step.layout_request.has_value() || step.row_request.has_value() || step.viewport_request)
     {
         return step;

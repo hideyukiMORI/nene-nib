@@ -548,16 +548,11 @@ namespace
     return record;
 }
 
-// 何も消せない消す鍵と行の端で動かない矢印（ビープ）は、記録も区切った後の印も変えない。Vim の
-// ins_bs はビープで返り stop_arrow に届かない（#1093・#1136・`ix<Left><BS>y<Esc>.` は
-// `y`・#1137）。
+// 何も消せない消す鍵と行の端で動かない矢印（ビープ）は記録を変えない（#1093・#1136）。区切った
+// 後の印はビープの後も残る（insert_start_kept・#1137）。
 [[nodiscard]] VimState beeped_recording(const VimState &before, VimState next)
 {
     next.recording = before.recording;
-    if (arrow_pending(before))
-    {
-        next.insert_start = before.insert_start;
-    }
     return next;
 }
 

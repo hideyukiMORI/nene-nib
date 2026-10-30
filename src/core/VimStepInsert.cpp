@@ -833,5 +833,18 @@ namespace
     next.insert_start = start;
     return next;
 }
+
+// 効果を見た後に始めの位置の印を戻す（#1137）。何も消せずにビープした消す鍵は Vim の ins_bs が
+// stop_arrow に届く前に返るので、insert_started が止めた印も位置も鍵の前のまま（`.` の記録の
+// 有無に依らない・`ix<Left><BS>y<Esc>.` は `y` だけ）。行の端の矢印は insert_started が arrow_stays
+// で先に決める。
+[[nodiscard]] VimStep insert_start_kept(const VimState &before, VimStep step, const VimKey &key)
+{
+    if (erased_nothing(key, step.effect))
+    {
+        step.next.insert_start = before.insert_start;
+    }
+    return step;
+}
 } // namespace detail
 } // namespace nenenib::core
