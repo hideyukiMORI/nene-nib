@@ -14,6 +14,7 @@
 #include "ExMapRequest.hpp"
 #include "ExPaletteRequest.hpp"
 #include "ExPreviewRequest.hpp"
+#include "ExPrintRequest.hpp"
 #include "ExRootRequest.hpp"
 #include "ExSyntaxRequest.hpp"
 #include "ExTabRequest.hpp"
@@ -55,6 +56,7 @@ inline constexpr std::string_view guifont_command = "set guifont=";
 // 設定にもセッションにも保存しない）。
 // preview は `:preview full|side|off` と `:preview?` の要求（ADR 0155 の改訂 16）で、見せ方を置いて
 // 答えるのは controller。
+// print は `:hardcopy` の印刷の要求（ADR 0177 の決定 1）で、port を呼ぶのは controller。
 struct ExResult
 {
     std::optional<EditorSettings> settings;
@@ -75,6 +77,7 @@ struct ExResult
     std::optional<ExMapRequest> map = std::nullopt;
     std::optional<ExFormatRequest> format = std::nullopt;
     std::optional<ExPreviewRequest> preview = std::nullopt;
+    std::optional<ExPrintRequest> print = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>

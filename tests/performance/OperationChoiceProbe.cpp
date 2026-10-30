@@ -16,7 +16,7 @@ constexpr std::array<OperationChoiceExpected, 2> expected_0{
 constexpr std::array<OperationChoiceExpected, 0> expected_1{{
 
 }};
-constexpr std::array<OperationChoiceExpected, 34> expected_2{
+constexpr std::array<OperationChoiceExpected, 35> expected_2{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -104,8 +104,10 @@ constexpr std::array<OperationChoiceExpected, 34> expected_2{
       std::nullopt},
      {core::EditorOperation::preview_full, 33U, "Markdown プレビュー（全面）", 18U,
       "本文の面の全部に Markdown のプレビューを出す・Esc で戻る", 35U, "", "",
-      core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 32> expected_3{
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::print, 34U, "印刷", 2U, "いまの文書をプリンタを選んで印刷します", 19U,
+      "", "", core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 33> expected_3{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+Shift+O", "",
       core::CommandChoiceKind::operate, std::nullopt},
@@ -189,8 +191,10 @@ constexpr std::array<OperationChoiceExpected, 32> expected_3{
       std::nullopt},
      {core::EditorOperation::preview_full, 33U, "Markdown プレビュー（全面）", 18U,
       "本文の面の全部に Markdown のプレビューを出す・Esc で戻る", 35U, "", "",
-      core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 34> expected_4{
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::print, 34U, "印刷", 2U, "いまの文書をプリンタを選んで印刷します", 19U,
+      "", "", core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 35> expected_4{
     {{core::EditorOperation::paste_html, 22U, "HTML のまま貼り付け", 12U,
       "クリップボードの HTML をタグごと貼ります", 23U, "", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -206,6 +210,8 @@ constexpr std::array<OperationChoiceExpected, 34> expected_4{
      {core::EditorOperation::preview_full, 33U, "Markdown プレビュー（全面）", 18U,
       "本文の面の全部に Markdown のプレビューを出す・Esc で戻る", 35U, "", "",
       core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::print, 34U, "印刷", 2U, "いまの文書をプリンタを選んで印刷します", 19U,
+      "", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
       "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::next_pane, 18U, "隣の枠へ", 4U, "もう 1 つの枠へ移ります", 13U, "F6",

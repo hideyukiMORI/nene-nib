@@ -300,6 +300,7 @@ class EditorWindow final
     void run_insert_date_time();
     void run_choose_encoding();
     void run_choose_line_ending();
+    void run_print();
     [[nodiscard]] bool keeps_block_key(core::EditorOperation operation) const noexcept;
     void scroll_tabs(std::int32_t delta);
     void zoom_wheel(std::int32_t delta);
