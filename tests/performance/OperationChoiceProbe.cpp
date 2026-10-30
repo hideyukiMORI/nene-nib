@@ -16,7 +16,7 @@ constexpr std::array<OperationChoiceExpected, 2> expected_0{
 constexpr std::array<OperationChoiceExpected, 0> expected_1{{
 
 }};
-constexpr std::array<OperationChoiceExpected, 33> expected_2{
+constexpr std::array<OperationChoiceExpected, 34> expected_2{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -101,8 +101,11 @@ constexpr std::array<OperationChoiceExpected, 33> expected_2{
       19U, "Ctrl+H", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::go_to_line, 32U, "行へ移動", 4U,
       "行番号（行:桁）を入れてそこへ移ります", 19U, "Ctrl+G", "", core::CommandChoiceKind::operate,
-      std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 31> expected_3{
+      std::nullopt},
+     {core::EditorOperation::preview_full, 33U, "Markdown プレビュー（全面）", 18U,
+      "本文の面の全部に Markdown のプレビューを出す・Esc で戻る", 35U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 32> expected_3{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+Shift+O", "",
       core::CommandChoiceKind::operate, std::nullopt},
@@ -183,8 +186,11 @@ constexpr std::array<OperationChoiceExpected, 31> expected_3{
       19U, "", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::go_to_line, 32U, "行へ移動", 4U,
       "行番号（行:桁）を入れてそこへ移ります", 19U, "", "", core::CommandChoiceKind::operate,
-      std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 33> expected_4{
+      std::nullopt},
+     {core::EditorOperation::preview_full, 33U, "Markdown プレビュー（全面）", 18U,
+      "本文の面の全部に Markdown のプレビューを出す・Esc で戻る", 35U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 34> expected_4{
     {{core::EditorOperation::paste_html, 22U, "HTML のまま貼り付け", 12U,
       "クリップボードの HTML をタグごと貼ります", 23U, "", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -196,6 +202,9 @@ constexpr std::array<OperationChoiceExpected, 33> expected_4{
       core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::choose_line_ending, 27U, "改行を選ぶ", 5U,
       "保存するときの改行の形（LF / CRLF）を選びます（本文は変えません）", 37U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::preview_full, 33U, "Markdown プレビュー（全面）", 18U,
+      "本文の面の全部に Markdown のプレビューを出す・Esc で戻る", 35U, "", "",
       core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
       "", core::CommandChoiceKind::operate, std::nullopt},
@@ -334,14 +343,14 @@ constexpr std::array<OperationChoiceSample, 10> samples{
       "operation-choice-v1\nmiss-"
       "ordinary\nordinary\nqqq\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820"
       "d98\n"},
-     {"", core::EditMode::ordinary, 256U, 1091584U, expected_2,
+     {"", core::EditMode::ordinary, 256U, 1143040U, expected_2,
       "operation-choice-v1\nall-"
       "ordinary\nordinary\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98"
       "\n"},
-     {"", core::EditMode::vim, 256U, 1041408U, expected_3,
+     {"", core::EditMode::vim, 256U, 1092864U, expected_3,
       "operation-choice-v1\nall-"
       "vim\nvim\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {" ", core::EditMode::ordinary, 256U, 1091584U, expected_4,
+     {" ", core::EditMode::ordinary, 256U, 1143040U, expected_4,
       "operation-choice-v1\nspace-ordinary\nordinary\n "
       "\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
      {"cTrL+s", core::EditMode::vim, 1024U, 1625088U, expected_5,

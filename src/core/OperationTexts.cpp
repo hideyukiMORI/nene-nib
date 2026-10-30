@@ -46,6 +46,7 @@ namespace
     case EditorOperation::find_previous:
     case EditorOperation::replace:
     case EditorOperation::go_to_line:
+    case EditorOperation::preview_full:
         return true;
     }
     return false;
