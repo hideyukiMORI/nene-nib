@@ -154,6 +154,17 @@ void verify_every_split()
     }
     expect(all, "reading the stream split at any byte yields the same bodies");
 }
+
+// 送る側の枠（adapter の send が使う・#1022）は lsp_frames がそのまま切り出す。
+void verify_framed()
+{
+    expect(core::lsp_framed("hello") == one, "a body is framed with its Content-Length");
+    expect(core::lsp_framed("") == "Content-Length: 0\r\n\r\n", "an empty body is framed");
+    const std::string body(70000, 'x');
+    const std::string stream = core::lsp_framed("{}") + core::lsp_framed(body);
+    expect(bodies_of(core::lsp_frames(stream)) == std::vector<std::string>{"{}", body},
+           "framed bodies are cut back out unchanged");
+}
 } // namespace
 
 void verify_lsp_frames_scope()
@@ -162,5 +173,6 @@ void verify_lsp_frames_scope()
     verify_partial_frames();
     verify_limits();
     verify_every_split();
+    verify_framed();
 }
 } // namespace nenenib::tests

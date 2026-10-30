@@ -4,7 +4,6 @@
 #include "ServerChild.hpp"
 #include "ServerEvent.hpp"
 #include "ServerFailure.hpp"
-#include "ServerFramer.hpp"
 #include "ServerLaunch.hpp"
 
 #include <windows.h>
@@ -79,7 +78,9 @@ class Win32LanguageServer final : public application::LanguageServerPort
     std::unique_ptr<ServerChild> child_;
     // stop でパイプを閉じ、終わりを待っている子（process の立ちか expire_retired で片付く）。
     std::vector<std::unique_ptr<ServerChild>> retired_;
-    ServerFramer framer_;
+    // 受けたがまだ枠に揃っていないバイト列（core の lsp_frames の consumed より後ろ・ADR 0160 の
+    // 決定 3）。start で空にする。
+    std::string pending_;
     std::vector<application::ServerEvent> events_;
     std::vector<HANDLE> waitable_;
     bool writable_ = false;

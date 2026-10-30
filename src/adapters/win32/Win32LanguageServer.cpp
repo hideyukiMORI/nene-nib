@@ -1,5 +1,8 @@
 #include "Win32LanguageServer.hpp"
 
+#include "LspFrameFailure.hpp"
+#include "LspFrames.hpp"
+
 #include <algorithm>
 #include <utility>
 
@@ -10,6 +13,26 @@ using application::ServerFailed;
 using application::ServerFailure;
 using application::ServerMessage;
 using application::ServerStarted;
+
+namespace
+{
+// 枠の閉じた失敗を port の失敗へ写す（ADR 0160 の決定 3・6）。見出しの誤りは read_failed。
+ServerFailure failure_of(core::LspFrameFailure failure) noexcept
+{
+    switch (failure)
+    {
+    case core::LspFrameFailure::malformed_header:
+    case core::LspFrameFailure::missing_content_length:
+    case core::LspFrameFailure::invalid_content_length:
+        return ServerFailure::read_failed;
+    case core::LspFrameFailure::body_too_long:
+        return ServerFailure::message_too_long;
+    case core::LspFrameFailure::header_too_long:
+        return ServerFailure::header_too_long;
+    }
+    std::unreachable();
+}
+} // namespace
 
 Win32LanguageServer::Win32LanguageServer(std::function<void()> arrived, std::size_t read_bytes)
     : arrived_(std::move(arrived)), read_bytes_(read_bytes)
@@ -33,7 +56,7 @@ std::expected<void, ServerFailure> Win32LanguageServer::start(application::Serve
         return std::unexpected(spawned.error());
     }
     child_ = std::move(child);
-    framer_ = ServerFramer{};
+    pending_.clear();
     writable_ = true;
     post(ServerStarted{});
     issue_read();
@@ -48,7 +71,7 @@ void Win32LanguageServer::send(std::string body)
         post(ServerFailed{ServerFailure::write_failed});
         return;
     }
-    const auto pushed = child_->writer().push(framed_message(body));
+    const auto pushed = child_->writer().push(core::lsp_framed(body));
     if (!pushed.has_value())
     {
         write_failed();
@@ -177,19 +200,24 @@ void Win32LanguageServer::read_completed()
     }
 }
 
-// 切り出せた本文を積む。枠が壊れたら知らせて false（以後は読まない）。
+// 繋いだバイト列を core の lsp_frames で切り、揃った本文を積んで consumed だけ捨てる。枠が
+// 壊れたら知らせて false（流れの区切りを失ったので以後は読まない・同じ読みの中で壊れた枠の前に
+// あった本文も積まない）。
 bool Win32LanguageServer::deliver(std::string_view bytes)
 {
-    for (auto &body : framer_.feed(bytes))
+    pending_.append(bytes);
+    const auto frames = core::lsp_frames(pending_);
+    if (!frames.has_value())
     {
-        post(ServerMessage{std::move(body)});
-    }
-    const auto failure = framer_.failure();
-    if (failure.has_value())
-    {
-        post(ServerFailed{failure.value()});
+        pending_.clear();
+        post(ServerFailed{failure_of(frames.error())});
         return false;
     }
+    for (const std::string_view body : frames.value().bodies)
+    {
+        post(ServerMessage{std::string(body)});
+    }
+    pending_.erase(0, frames.value().consumed);
     return true;
 }
 

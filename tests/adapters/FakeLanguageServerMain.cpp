@@ -4,7 +4,8 @@
 // を返し、exit で 0 で終わる。initialized と textDocument/did* などほかの本文には黙る。
 // 時計を読まない。引数: --echo（受けた本文をそのまま返す）・--double（--echo の答えを 2
 // 通まとめて 1 回で書く）・--die-after <N>（N 通目を受けて答えた後に 3 で終わる）・--big
-// <bytes>（起きてすぐ bytes の本文を 1 通書く）・--hang（標準入力が閉じても終わらない。stop が
+// <bytes>（起きてすぐ bytes の本文を 1 通書く）・--endless-header <bytes>（起きてすぐ空行の無い
+// bytes の見出しを書く。見出しの長さの超えの試験）・--hang（標準入力が閉じても終わらない。stop が
 // Job Object で殺すことの試験）・--deaf（標準入力を読まずに止まる。出ている書きの取消の試験）。
 #include <windows.h>
 
@@ -207,6 +208,11 @@ int main(int argc, char **argv)
     if (big.has_value())
     {
         write_all(frame(std::string(big.value(), 'x')));
+    }
+    const auto endless = number_after(arguments, "--endless-header");
+    if (endless.has_value())
+    {
+        write_all(std::string(endless.value(), 'h'));
     }
     const bool deaf = has(arguments, "--deaf");
     const int code = deaf ? 0 : serve(arguments);

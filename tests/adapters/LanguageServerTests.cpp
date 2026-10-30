@@ -8,7 +8,6 @@
 #include "ServerCommandLine.hpp"
 #include "ServerEvent.hpp"
 #include "ServerFailure.hpp"
-#include "ServerFramer.hpp"
 #include "ServerLaunch.hpp"
 #include "Win32LanguageServer.hpp"
 
@@ -349,6 +348,20 @@ void verify_too_long()
     CloseHandle(child);
 }
 
+// 空行の来ない見出しが 8 KiB を超えたら header_too_long（ADR 0160 の決定 3・#1022）。本文は
+// 届かず、以後は読まない。
+void verify_header_too_long()
+{
+    adapters::Win32LanguageServer server([] {});
+    expect(server.start(launch_of({"--endless-header", "9000"})).has_value(),
+           "the endless header server starts");
+    const auto events = pump_until(server, any_failure);
+    expect(failed_with(events, ServerFailure::header_too_long),
+           "a header over 8 KiB without its blank line is header_too_long");
+    expect(bodies(events).empty(), "nothing is delivered from the endless header");
+    server.stop();
+}
+
 // stop は止まらない子を待たずに戻り、expire_retired が Job Object ごと殺す（ADR 0160 の追補）。
 void verify_stop_does_not_wait()
 {
@@ -396,48 +409,6 @@ void verify_restart()
     CloseHandle(first);
 }
 
-std::string framed(std::string_view header, std::string_view body)
-{
-    return std::string(header) + "\r\n\r\n" + std::string(body);
-}
-
-void verify_framer()
-{
-    const std::string two = adapters::framed_message("{}") + adapters::framed_message("[1]");
-    adapters::ServerFramer whole;
-    expect(whole.feed(two) == std::vector<std::string>{"{}", "[1]"},
-           "two frames in one feed are two bodies");
-    adapters::ServerFramer split;
-    std::vector<std::string> found;
-    for (const char letter : two)
-    {
-        for (auto &body : split.feed(std::string_view(&letter, 1)))
-        {
-            found.push_back(std::move(body));
-        }
-    }
-    expect(found == std::vector<std::string>{"{}", "[1]"} && !split.failure().has_value(),
-           "frames fed one byte at a time come out whole");
-    adapters::ServerFramer headers;
-    expect(headers.feed(framed("content-length: 2\r\nContent-Type: application/vscode-jsonrpc",
-                               "ok")) == std::vector<std::string>{"ok"},
-           "the length header is read regardless of case and other headers are ignored");
-    adapters::ServerFramer missing;
-    expect(missing.feed(framed("Content-Type: x", "ok")).empty() &&
-               missing.failure() == std::optional<ServerFailure>{ServerFailure::read_failed},
-           "a frame without Content-Length is read_failed");
-    adapters::ServerFramer huge;
-    expect(huge.feed("Content-Length: 16777217\r\n\r\n").empty() &&
-               huge.failure() == std::optional<ServerFailure>{ServerFailure::message_too_long},
-           "a body over 16 MiB is message_too_long before it arrives");
-    adapters::ServerFramer endless;
-    expect(endless.feed(std::string(adapters::server_header_limit + 8, 'h')).empty() &&
-               endless.failure() == std::optional<ServerFailure>{ServerFailure::read_failed},
-           "a header over 8 KiB is read_failed");
-    expect(endless.feed(adapters::framed_message("{}")).empty(),
-           "a failed framer cuts nothing more");
-}
-
 void verify_command_line()
 {
     expect(adapters::server_command_line(L"C:\\a b\\s.exe", {"--x", "two words", R"(q"uote)",
@@ -473,7 +444,6 @@ int main(int argc, char **argv)
         return 2;
     }
     fake_server() = std::span<char *const>(argv, static_cast<std::size_t>(argc))[1];
-    verify_framer();
     verify_command_line();
     verify_lifecycle();
     verify_bind_after_start();
@@ -483,6 +453,7 @@ int main(int argc, char **argv)
     verify_not_found();
     verify_relative_is_not_found();
     verify_too_long();
+    verify_header_too_long();
     verify_stop_does_not_wait();
     verify_stop_cancels_a_pending_write();
     verify_restart();
