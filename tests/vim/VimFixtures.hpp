@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 ee04f75b0fb7a2c0e5ee34501b0d9b43fb44f81421992a2a39799c36d99a8e39 / 3158 fixtures
+// fixtures.json: sha256 76961dce3f88c527935d4cec22a7f5194ea0fe3d09cff3875445a3812492c537 / 3171 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3158> vim_fixtures{{
+constexpr std::array<VimFixture, 3171> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3096,6 +3096,19 @@ constexpr std::array<VimFixture, 3158> vim_fixtures{{
     {"search-case-non-ascii-scs", "x é É", ":set ic<CR>:set scs<CR>/É<CR>", "x é É", 1, 6, "", "", std::nullopt},
     {"search-case-greek", "x Σ σ", ":set ic<CR>/σ<CR>", "x Σ σ", 1, 3, "", "", std::nullopt},
     {"search-case-word-escape", "xyz ABC abc", ":set ic<CR>/\\<abc\\><CR>", "xyz ABC abc", 1, 5, "", "", std::nullopt},
+    {"search-composing-ic-skips-upper", "x É é", ":set ic<CR>/é<CR>", "x É é", 1, 7, "", "", std::nullopt},
+    {"search-composing-ic-skips-lower", "x é É", ":set ic<CR>/É<CR>", "x é É", 1, 7, "", "", std::nullopt},
+    {"search-composing-ic-backslash-c", "x É é", "/\\cé<CR>", "x É é", 1, 7, "", "", std::nullopt},
+    {"search-composing-ic-backward", "x é É", ":set ic<CR>?é<CR>", "x é É", 1, 3, "", "", std::nullopt},
+    {"search-composing-ic-n", "x é É é", ":set ic<CR>/é<CR>n", "x é É é", 1, 11, "", "", std::nullopt},
+    {"search-composing-ic-scs-lower", "x É é", ":set ic<CR>:set scs<CR>/é<CR>", "x É é", 1, 7, "", "", std::nullopt},
+    {"search-composing-ic-base-before-folds", "x XÉ xé Xé", ":set ic<CR>/xé<CR>", "x XÉ xé Xé", 1, 8, "", "", std::nullopt},
+    {"search-composing-ic-after-folds", "x éX éx", ":set ic<CR>/éx<CR>", "x éX éx", 1, 3, "", "", std::nullopt},
+    {"search-composing-ic-two-marks", "x é̂ É̂ é̂", "w:set ic<CR>/é̂<CR>", "x é̂ É̂ é̂", 1, 15, "", "", std::nullopt},
+    {"search-composing-ic-greek", "x Ί ί", ":set ic<CR>/ί<CR>", "x Ί ί", 1, 8, "", "", std::nullopt},
+    {"search-composing-ic-set-folds", "x É é", ":set ic<CR>/[e]́<CR>", "x É é", 1, 3, "", "", std::nullopt},
+    {"search-composing-ic-precomposed-folds", "x É é", ":set ic<CR>/é<CR>", "x É é", 1, 3, "", "", std::nullopt},
+    {"search-composing-ic-repeat-before", "x É é", ":set ic<CR>/x*é<CR>", "x É é", 1, 7, "", "", std::nullopt},
     {"visual-line-case-gg-tilde", "  x1 \nab", "jVgg~", "  X1 \nAB", 1, 3, "", "", std::nullopt},
     {"visual-line-case-gg-tilde-then-c", "  x1 \nab", "jVgg~c$ <Esc>", "   \nAB", 1, 3, "X1 ", "v", std::nullopt},
     {"visual-line-case-tilde-mid", "abc def", "wV~", "ABC DEF", 1, 1, "", "", std::nullopt},

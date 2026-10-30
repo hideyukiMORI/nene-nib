@@ -745,7 +745,7 @@ void verify_vim_search_dot()
 
 void verify_vim_search_fixtures()
 {
-    // 検索の 181 件（大小の 30 件・#1041 と結合文字の 16 件・#1138
+    // 検索の 194 件（大小の 30 件・#1041 と結合文字の 16 件・#1138 と結合文字の大小の 13 件・#1147
     // を含む）と、鍵の分類の表・次キー待ちを共有する境界の代表（`.`・r・f/t・gg）。
     constexpr std::array<std::string_view, 6> boundaries{
         "replace-char-one",    "replace-char-count", "char-search-f-count",
@@ -760,7 +760,7 @@ void verify_vim_search_fixtures()
             ++selected;
         }
     }
-    expect(selected == 187, "the scope replays 181 search fixtures and 6 shared boundaries");
+    expect(selected == 200, "the scope replays 194 search fixtures and 6 shared boundaries");
 }
 
 // 次の一致を求める 1 本の経路（ADR 0041 の決定 1）。確定の検索の鍵と incsearch の preview が
@@ -1152,11 +1152,32 @@ void verify_vim_pattern_case()
            "a folding pattern with letters has no byte literal to narrow lines");
 }
 
+// 結合文字を伴う文字は大小を畳まずに比べる（#1147・Vim 9.1 の NFA_COMPOSING・実測）。`:set ic` の
+// `/é`（e + U+0301）は `É` に当たらず（Vim は E486）、前後の英字と `[e]` の集合は今どおり畳む。
+// 反復のある道（VimPatternEvaluation）も同じ consumes を通る。
+void verify_vim_pattern_composing_case()
+{
+    using Case = VimPatternCase;
+    expect(!cased_match("e\u0301", Case::ignore, "x E\u0301").has_value() &&
+               !cased_match("E\u0301", Case::ignore, "x e\u0301").has_value() &&
+               !cased_match("x*e\u0301", Case::ignore, "E\u0301").has_value(),
+           "a letter with a composing mark keeps its case under ignorecase");
+    expect(cased_match("e\u0301", Case::ignore, "E\u0301 e\u0301") ==
+                   std::optional<std::size_t>{4} &&
+               cased_match("xe\u0301", Case::ignore, "XE\u0301 Xe\u0301") ==
+                   std::optional<std::size_t>{5} &&
+               cased_match("e\u0301x", Case::ignore, "e\u0301X") == std::optional<std::size_t>{0} &&
+               cased_match("[e]\u0301", Case::ignore, "E\u0301") == std::optional<std::size_t>{0} &&
+               cased_match("\u00e9", Case::ignore, "\u00c9") == std::optional<std::size_t>{0},
+           "the letters around it, a set and a precomposed letter still fold");
+}
+
 } // namespace
 
 void verify_vim_search_contracts()
 {
     verify_vim_pattern_case();
+    verify_vim_pattern_composing_case();
     verify_vim_search_snapshot_contracts();
     verify_vim_find_match();
     verify_vim_search_empty_lines();

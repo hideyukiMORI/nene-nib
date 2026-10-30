@@ -1,5 +1,6 @@
 #include "VimPattern.hpp"
 
+#include "DisplayWidth.hpp"
 #include "Offset.hpp"
 #include "Utf8.hpp"
 #include "VimCase.hpp"
@@ -8,6 +9,7 @@
 #include "VimPatternEvaluation.hpp"
 #include "VimWordClass.hpp"
 #include "VimWordMotion.hpp"
+#include "VirtualColumn.hpp"
 
 #include <algorithm>
 #include <array>
@@ -75,12 +77,12 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
 
 [[nodiscard]] VimPatternAtom atom_of(VimPatternAtomKind kind) noexcept
 {
-    return VimPatternAtom{kind, 0, false, false, 0, 0, false};
+    return VimPatternAtom{kind, 0, false, false, 0, 0, false, false};
 }
 
 [[nodiscard]] VimPatternAtom literal_atom(char32_t code) noexcept
 {
-    return VimPatternAtom{VimPatternAtomKind::literal, code, false, false, 0, 0, false};
+    return VimPatternAtom{VimPatternAtomKind::literal, code, false, false, 0, 0, false, false};
 }
 
 [[nodiscard]] std::uint32_t class_at(std::string_view line, std::size_t at)
@@ -168,8 +170,8 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
     }
     const std::size_t first = ranges.size();
     ranges.insert(ranges.end(), members.begin(), members.end());
-    atoms.push_back(
-        VimPatternAtom{VimPatternAtomKind::set, 0, negated, false, first, members.size(), false});
+    atoms.push_back(VimPatternAtom{VimPatternAtomKind::set, 0, negated, false, first,
+                                   members.size(), false, false});
     return true;
 }
 
@@ -209,13 +211,33 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
         if (code_point_at(pattern, Offset{scan}) == U']' && scan != first)
         {
             atoms.push_back(VimPatternAtom{VimPatternAtomKind::set, 0, negated, false, saved,
-                                           ranges.size() - saved, true});
+                                           ranges.size() - saved, true, false});
             return next_code_point(pattern, Offset{scan}).value;
         }
         scan = parsed_member(pattern, scan, ranges);
     }
     ranges.resize(saved);
     return std::nullopt;
+}
+
+[[nodiscard]] bool composing_literal(const VimPatternAtom &atom) noexcept
+{
+    return atom.kind == VimPatternAtomKind::literal &&
+           display_width(atom.code) == DisplayWidth::zero;
+}
+
+// 結合文字（幅 0・ADR 0053 と同じ表）と、その直前の繰り返しの無い literal を畳まない印にする
+// （#1147・Vim 9.1 の NFA_COMPOSING は `mc == sta->c` で比べる）。`[e]` の集合と `e*` の後ろの
+// 結合文字の前は別の原子なので畳む（`/[e]` + U+0301 は `E` + U+0301 に当たる・実測）。
+void marked_exact(std::vector<VimPatternAtom> &atoms) noexcept
+{
+    for (std::size_t index = 0; index < atoms.size(); ++index)
+    {
+        const bool before_mark =
+            index + 1 < atoms.size() && composing_literal(atoms.at(index + 1)) &&
+            atoms.at(index).kind == VimPatternAtomKind::literal && !atoms.at(index).repeated;
+        atoms.at(index).exact = before_mark || composing_literal(atoms.at(index));
+    }
 }
 
 // `\c` と `\C`（#1041）。原子を足さず、パターン全体の大小を決める。`\c` は `\C` より強い
@@ -486,6 +508,7 @@ std::expected<VimPattern, VimPatternFailure> VimPattern::parse(std::string_view 
         }
         at = next.value();
     }
+    marked_exact(atoms);
     return VimPattern(std::move(atoms), std::move(ranges),
                       ignores_case(letter_case, forced, pattern));
 }
@@ -532,7 +555,8 @@ bool VimPattern::consumes(const VimPatternAtom &atom, char32_t code) const
     case VimPatternAtomKind::any:
         return true;
     case VimPatternAtomKind::literal:
-        return code == atom.code || (ignore_case_ && vim_folded(code) == vim_folded(atom.code));
+        return code == atom.code ||
+               (ignore_case_ && !atom.exact && vim_folded(code) == vim_folded(atom.code));
     case VimPatternAtomKind::set:
         return in_set(atom, code);
     // 幅の無い原子は 1 文字も食べない。
