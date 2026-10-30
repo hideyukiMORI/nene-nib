@@ -1,0 +1,382 @@
+// scope `--find-replace` の単体テスト（ADR 0174 の決定 9・#1046）。通常モードの検索と行へ移動の分
+// （N1a）。置換の 1 件と全件の Edit・undo は N1b がここへ足す。時計・ファイル・乱数を使わない。
+#include "BeginFind.hpp"
+#include "BeginGoToLine.hpp"
+#include "BeginReplace.hpp"
+#include "CancelCommand.hpp"
+#include "CommandEdit.hpp"
+#include "CommandText.hpp"
+#include "EditCommand.hpp"
+#include "EditMode.hpp"
+#include "Editing.hpp"
+#include "EditorController.hpp"
+#include "EditorFrame.hpp"
+#include "FindState.hpp"
+#include "GoToLineInput.hpp"
+#include "InputLinePrompt.hpp"
+#include "InputLineView.hpp"
+#include "LiteralPattern.hpp"
+#include "Offset.hpp"
+#include "OffsetRange.hpp"
+#include "OpenDocument.hpp"
+#include "Scopes.hpp"
+#include "SearchHop.hpp"
+#include "SelectEditMode.hpp"
+#include "SubmitCommand.hpp"
+#include "TestSupport.hpp"
+#include "VimMode.hpp"
+#include "VimPattern.hpp"
+#include "VimPatternCase.hpp"
+#include "VimSearchDirection.hpp"
+#include "VimTestSupport.hpp"
+#include "VisibleLines.hpp"
+
+#include <array>
+#include <cstddef>
+#include <limits>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+namespace nenenib::tests
+{
+namespace
+{
+using nenenib::application::BeginFind;
+using nenenib::application::BeginGoToLine;
+using nenenib::application::BeginReplace;
+using nenenib::application::CancelCommand;
+using nenenib::application::CommandText;
+using nenenib::application::EditorFrame;
+using nenenib::application::SearchHop;
+using nenenib::application::SelectEditMode;
+using nenenib::application::SubmitCommand;
+using nenenib::core::EditMode;
+using nenenib::core::InputLinePrompt;
+using nenenib::core::VimSearchDirection;
+
+constexpr std::string_view three_lines = "alpha beta\nbeta gamma\ndelta beta";
+constexpr std::string_view wrapped_bottom = "search hit BOTTOM, continuing at TOP";
+constexpr std::string_view wrapped_top = "search hit TOP, continuing at BOTTOM";
+
+void open_ordinary_document(Editing &editing, std::string text)
+{
+    editing.files().hold(Bytes{std::move(text)});
+    applied(editing.controller(), nenenib::application::VisibleLines{vim_visible_lines});
+    applied(editing.controller(), nenenib::application::OpenDocument{sample_path()});
+}
+
+[[nodiscard]] std::optional<InputLinePrompt> prompt_of(const EditorFrame &frame)
+{
+    return frame.command_line.transform([](const nenenib::core::InputLineView &line)
+                                        { return line.prompt; });
+}
+
+[[nodiscard]] std::string line_text_of(const EditorFrame &frame)
+{
+    return frame.command_line.has_value() ? frame.command_line.value().text : std::string{"<none>"};
+}
+
+[[nodiscard]] std::string message_of(const EditorFrame &frame)
+{
+    return frame.command_message.has_value() ? std::string(frame.command_message.value().text())
+                                             : std::string{};
+}
+
+[[nodiscard]] EditorFrame typed(EditorController &controller, std::string_view text)
+{
+    return controller.apply_frame(CommandText{std::string(text)});
+}
+
+// literal_pattern は magic の 8 文字だけを逃がし、ほかのバイトは写す（決定 4）。`*` `#` の逃がし
+// （Vim の nv_ident）も同じ 1 本。
+void verify_literal_pattern()
+{
+    expect(nenenib::core::literal_pattern("a.b*c", VimSearchDirection::forward) == "a\\.b\\*c",
+           "the dot and the star are escaped");
+    expect(nenenib::core::literal_pattern("\\/.*[~^$", VimSearchDirection::forward) ==
+               "\\\\\\/\\.\\*\\[\\~\\^\\$",
+           "every magic character of the eight is escaped");
+    expect(nenenib::core::literal_pattern("日本 ?+(){}|", VimSearchDirection::forward) ==
+               "日本 ?+(){}|",
+           "other bytes, the question mark and multibyte characters stay as typed");
+    expect(nenenib::core::literal_pattern("a?b", VimSearchDirection::backward) == "a\\?b" &&
+               nenenib::core::literal_pattern("a?b", VimSearchDirection::forward) == "a?b",
+           "only the backward word escapes its separator, the question mark");
+    expect(nenenib::core::literal_pattern("", VimSearchDirection::forward).empty(),
+           "the empty word stays empty");
+    const auto pattern = nenenib::core::VimPattern::parse(
+        nenenib::core::literal_pattern("a.c[1]", VimSearchDirection::forward),
+        VimSearchDirection::forward, nenenib::core::VimPatternCase::sensitive);
+    expect(pattern.has_value() &&
+               pattern.value().literal_bytes() == std::optional<std::string>{"a.c[1]"},
+           "the escaped word parses back to the literal bytes");
+}
+
+// 「行: 」の入力（決定 8）。ASCII の 10 進の `行` と `行:桁` だけ。
+void verify_go_to_line_input()
+{
+    using nenenib::core::go_to_line_target;
+    const auto line = go_to_line_target("12");
+    expect(line.has_value() && line.value().line == 12 && !line.value().column.has_value(),
+           "a number is a line");
+    const auto both = go_to_line_target("3:007");
+    expect(both.has_value() && both.value().line == 3 && both.value().column == std::size_t{7},
+           "a line and a column split at the colon and skip leading zeros");
+    const auto huge = go_to_line_target("99999999999999999999999:1");
+    expect(huge.has_value() && huge.value().line == std::numeric_limits<std::size_t>::max(),
+           "a line too large saturates like :N");
+    constexpr std::array<std::string_view, 9> refused{
+        {"", "abc", "１２", "3:", ":5", " 3", "3 ", "-3", "3:4:5"}};
+    for (const auto text : refused)
+    {
+        expect(!go_to_line_target(text).has_value(),
+               "anything but ASCII digits and one colon is not a line");
+    }
+}
+
+// 今の当たり（決定 7 の前提・N1b が置換の 1 件に使う）。
+void verify_current_match()
+{
+    const auto text = buffer_of("abc abc\nxyz");
+    const auto pattern = nenenib::core::VimPattern::parse("abc", VimSearchDirection::forward,
+                                                          nenenib::core::VimPatternCase::sensitive);
+    if (!pattern)
+    {
+        expect(false, "the pattern parses");
+        return;
+    }
+    const auto at = [&](std::size_t caret)
+    {
+        return nenenib::application::current_find_match(text, pattern.value(),
+                                                        nenenib::core::Offset{caret});
+    };
+    const auto range = [](std::size_t begin, std::size_t end) { return std::pair{begin, end}; };
+    const auto span = [](const std::optional<nenenib::core::OffsetRange> &found)
+    {
+        return found.has_value()
+                   ? std::optional{std::pair{found.value().begin.value, found.value().end.value}}
+                   : std::nullopt;
+    };
+    expect(span(at(0)) == range(0, 3) && span(at(2)) == range(0, 3),
+           "the match containing the caret is the current one");
+    expect(span(at(3)) == range(4, 7), "between matches the next one is current");
+    expect(span(at(9)) == range(0, 3), "after the last match the search wraps to the first");
+    const auto missing = nenenib::core::VimPattern::parse("zzz", VimSearchDirection::forward,
+                                                          nenenib::core::VimPatternCase::sensitive);
+    expect(missing.has_value() && !nenenib::application::current_find_match(
+                                       text, missing.value(), nenenib::core::Offset{0})
+                                       .has_value(),
+           "a word that never matches has no current match");
+}
+
+// Ctrl+F → 打つ → Enter / F3 / Shift+F3 → 折り返しの報せ → Esc（決定 3・5・6）。
+void verify_find_hops()
+{
+    Editing session;
+    open_ordinary_document(session, std::string(three_lines));
+    EditorController &controller = session.controller();
+    const auto opened = controller.apply_frame(BeginFind{});
+    expect(prompt_of(opened) == InputLinePrompt::find && line_text_of(opened).empty(),
+           "Ctrl+F opens the find prompt empty the first time");
+    const auto typing = typed(controller, "beta");
+    expect(current_match_is(typing, 0, MatchSpan{7, 11}) && caret_at(typing, 1, 1),
+           "incsearch previews the next match while the caret stays");
+    const auto first = controller.apply_frame(SubmitCommand{});
+    expect(caret_at(first, 1, 7) && prompt_of(first) == InputLinePrompt::find,
+           "Enter moves to the next match and keeps the prompt open");
+    const auto &remembered = controller.vim_state().last_search;
+    expect(remembered.has_value() && remembered.value().text() == "beta",
+           "the word becomes the last search of vim");
+    expect(frame_matches(first, 1) == std::vector<MatchSpan>{{1, 5}} &&
+               frame_matches(first, 2) == std::vector<MatchSpan>{{7, 11}},
+           "hlsearch paints every match in the ordinary mode");
+    expect(caret_at(controller.apply_frame(SubmitCommand{}), 2, 1), "Enter again goes on");
+    expect(caret_at(controller.apply_frame(SearchHop{VimSearchDirection::forward}), 3, 7),
+           "F3 in the prompt goes to the next match");
+    const auto wrapped = controller.apply_frame(SearchHop{VimSearchDirection::forward});
+    expect(caret_at(wrapped, 1, 7) && message_of(wrapped) == wrapped_bottom,
+           "past the bottom the search wraps and says so like vim");
+    const auto back = controller.apply_frame(SearchHop{VimSearchDirection::backward});
+    expect(caret_at(back, 3, 7) && message_of(back) == wrapped_top,
+           "Shift+F3 goes back past the top");
+    const auto closed = controller.apply_frame(CancelCommand{});
+    expect(!closed.command_line.has_value() && caret_at(closed, 3, 7),
+           "Esc closes the prompt and the caret stays on the match");
+    expect(frame_matches(closed, 0) == std::vector<MatchSpan>{{7, 11}} &&
+               frame_matches(closed, 1) == std::vector<MatchSpan>{{1, 5}},
+           "after Esc the matches stay painted on the lines without the caret");
+    const auto next = controller.apply_frame(SearchHop{VimSearchDirection::forward});
+    expect(caret_at(next, 1, 7), "F3 without the prompt goes to the next match");
+    expect(caret_at(controller.apply_frame(SearchHop{VimSearchDirection::backward}), 3, 7),
+           "Shift+F3 without the prompt goes to the previous match");
+    const auto again = controller.apply_frame(BeginFind{});
+    expect(prompt_of(again) == InputLinePrompt::find && line_text_of(again) == "beta",
+           "Ctrl+F opens with the last word");
+    expect(session.bell().rings() == 0, "a found word does not ring");
+}
+
+// literal・E486・空の語・Esc の巻き戻し・Vim の `n` へ続く（決定 4・5・6）。
+void verify_find_literal_and_failures()
+{
+    Editing session;
+    open_ordinary_document(session, "abc a.c a.c\nxyz");
+    EditorController &controller = session.controller();
+    static_cast<void>(controller.apply_frame(BeginFind{}));
+    static_cast<void>(typed(controller, "a.c"));
+    const auto found = controller.apply_frame(SubmitCommand{});
+    expect(caret_at(found, 1, 5), "the dot is a literal dot, not any character");
+    const auto &remembered = controller.vim_state().last_search;
+    expect(remembered.has_value() && remembered.value().text() == "a\\.c",
+           "the last search holds the escaped word");
+    static_cast<void>(controller.apply_frame(CancelCommand{}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
+    vim_replay(controller, "n");
+    expect(caret_at(controller.frame(), 1, 9), "vim n continues the same literal search");
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::ordinary}));
+    static_cast<void>(controller.apply_frame(BeginFind{}));
+    static_cast<void>(controller.apply_frame(
+        nenenib::application::EditCommand{nenenib::core::CommandEdit::home}));
+    const auto before = controller.frame();
+    static_cast<void>(typed(controller, "zz"));
+    const auto missing = controller.apply_frame(SubmitCommand{});
+    expect(message_of(missing).starts_with("E486") && session.bell().rings() == 1 &&
+               prompt_of(missing) == InputLinePrompt::find &&
+               missing.caret.position == before.caret.position,
+           "a missing word says E486, rings once and keeps the prompt and the caret");
+    Editing empty;
+    open_ordinary_document(empty, "abc");
+    static_cast<void>(empty.controller().apply_frame(BeginFind{}));
+    const auto nothing = empty.controller().apply_frame(SubmitCommand{});
+    expect(caret_at(nothing, 1, 1) && prompt_of(nothing) == InputLinePrompt::find &&
+               !empty.controller().vim_state().last_search.has_value() &&
+               message_of(nothing).empty(),
+           "an empty word does nothing");
+    static_cast<void>(typed(empty.controller(), "c"));
+    const auto cancelled = empty.controller().apply_frame(CancelCommand{});
+    expect(caret_at(cancelled, 1, 1) && !cancelled.command_line.has_value() &&
+               !empty.controller().vim_state().last_search.has_value(),
+           "Esc before Enter leaves the caret and remembers nothing");
+}
+
+// `?` を含む語を後ろへ（Shift+F3）探す（決定 4 の追補・後ろ向きは `?` も逃がす）。
+void verify_find_backward_question()
+{
+    Editing session;
+    open_ordinary_document(session, "a?b one\nplain\na?b two");
+    EditorController &controller = session.controller();
+    static_cast<void>(controller.apply_frame(BeginFind{}));
+    static_cast<void>(typed(controller, "a?b"));
+    const auto back = controller.apply_frame(SearchHop{VimSearchDirection::backward});
+    expect(caret_at(back, 3, 1) && message_of(back) == wrapped_top &&
+               prompt_of(back) == InputLinePrompt::find,
+           "Shift+F3 finds a word with a question mark backward");
+    const auto again = controller.apply_frame(SearchHop{VimSearchDirection::backward});
+    expect(caret_at(again, 1, 1), "and goes on to the previous one");
+    const auto forward = controller.apply_frame(SearchHop{VimSearchDirection::forward});
+    expect(caret_at(forward, 3, 1), "and F3 finds it forward again");
+}
+
+// 行へ移動（決定 8）。`:N` と同じ着地・`行:桁`・範囲の外・数でない入力。
+void verify_go_to_line()
+{
+    Editing session;
+    open_ordinary_document(session, "one\n  two\nthree\n日本語の行");
+    EditorController &controller = session.controller();
+    const auto opened = controller.apply_frame(BeginGoToLine{});
+    expect(prompt_of(opened) == InputLinePrompt::go_to_line && line_text_of(opened).empty(),
+           "Ctrl+G opens the line prompt empty");
+    static_cast<void>(typed(controller, "2"));
+    const auto line = controller.apply_frame(SubmitCommand{});
+    expect(caret_at(line, 2, 3) && !line.command_line.has_value(),
+           "a line lands on its first non-blank like :2");
+    static_cast<void>(controller.apply_frame(BeginGoToLine{}));
+    static_cast<void>(typed(controller, "4:3"));
+    expect(caret_at(controller.apply_frame(SubmitCommand{}), 4, 3),
+           "a line and a column land on that character");
+    static_cast<void>(controller.apply_frame(BeginGoToLine{}));
+    static_cast<void>(typed(controller, "99:99"));
+    expect(caret_at(controller.apply_frame(SubmitCommand{}), 4, 6),
+           "beyond the end the line and the column are clipped");
+    static_cast<void>(controller.apply_frame(BeginGoToLine{}));
+    static_cast<void>(typed(controller, "0"));
+    expect(caret_at(controller.apply_frame(SubmitCommand{}), 1, 1), "line 0 is the first line");
+    static_cast<void>(controller.apply_frame(BeginGoToLine{}));
+    static_cast<void>(typed(controller, "x"));
+    const auto refused = controller.apply_frame(SubmitCommand{});
+    expect(message_of(refused) == "行番号を入れてください" && session.bell().rings() == 1 &&
+               caret_at(refused, 1, 1) && !refused.command_line.has_value(),
+           "a line that is not a number is refused in one line");
+    static_cast<void>(controller.apply_frame(BeginGoToLine{}));
+    const auto blank = controller.apply_frame(SubmitCommand{});
+    expect(caret_at(blank, 1, 1) && !blank.command_line.has_value() && message_of(blank).empty(),
+           "an empty line prompt closes quietly");
+    Editing ex;
+    open_ordinary_document(ex, "one\n  two\nthree\n日本語の行");
+    static_cast<void>(ex.controller().apply_frame(SelectEditMode{EditMode::vim}));
+    const auto colon = run_ex(ex.controller(), "2");
+    expect(colon.caret.position == line.caret.position,
+           "the line prompt and :N land on the same place");
+}
+
+// Vim モードは鍵が Vim のまま（表の行で守る）・一覧からの前置き（決定 2）・置換は後続。
+void verify_vim_alternatives()
+{
+    Editing session;
+    open_vim_document(session, std::string(three_lines));
+    EditorController &controller = session.controller();
+    const auto slash = controller.apply_frame(BeginFind{});
+    expect(prompt_of(slash) == InputLinePrompt::search_forward && line_text_of(slash).empty(),
+           "find from the list opens the vim / line");
+    vim_replay(controller, "gam<CR>");
+    expect(caret_at(controller.frame(), 2, 6), "the / line searches as vim does");
+    vim_replay(controller, "gg0");
+    static_cast<void>(controller.apply_frame(SearchHop{VimSearchDirection::forward}));
+    expect(caret_at(controller.frame(), 2, 6), "find next from the list is vim n");
+    const auto colon = controller.apply_frame(BeginGoToLine{});
+    expect(prompt_of(colon) == InputLinePrompt::ex && line_text_of(colon).empty(),
+           "go to line from the list opens the empty : line");
+    static_cast<void>(controller.apply_frame(CancelCommand{}));
+    vim_replay(controller, "i");
+    const auto from_insert = controller.apply_frame(BeginFind{});
+    expect(prompt_of(from_insert) == InputLinePrompt::search_forward &&
+               controller.vim_state().mode == nenenib::core::VimMode::normal &&
+               vim_body(from_insert) == three_lines,
+           "find from INSERT returns to NORMAL first and types no slash");
+    static_cast<void>(controller.apply_frame(CancelCommand{}));
+    const auto replace = controller.apply_frame(BeginReplace{});
+    expect(message_of(replace) == "置換は後続です" && vim_body(replace) == three_lines,
+           "replace is announced as later and changes nothing");
+}
+
+// 通常モードの検索と Vim の `/` は同じ最後の検索で、塗りもモードをまたいで続く（決定 5）。
+void verify_shared_last_search()
+{
+    Editing session;
+    open_vim_document(session, std::string(three_lines));
+    EditorController &controller = session.controller();
+    vim_replay(controller, "/gamma<CR>");
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::ordinary}));
+    const auto ordinary = controller.frame();
+    expect(frame_matches(ordinary, 1) == std::vector<MatchSpan>{{6, 11}},
+           "a vim search stays painted in the ordinary mode");
+    expect(caret_at(controller.apply_frame(SearchHop{VimSearchDirection::forward}), 2, 6),
+           "F3 continues a vim search in the ordinary mode");
+}
+} // namespace
+
+void verify_find_replace_scope()
+{
+    verify_literal_pattern();
+    verify_go_to_line_input();
+    verify_current_match();
+    verify_find_hops();
+    verify_find_literal_and_failures();
+    verify_find_backward_question();
+    verify_go_to_line();
+    verify_vim_alternatives();
+    verify_shared_last_search();
+}
+} // namespace nenenib::tests

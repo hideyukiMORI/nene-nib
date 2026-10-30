@@ -14,11 +14,11 @@ namespace nenenib::application
 namespace
 {
 // プロンプトの文字はこの表だけが決める。写し先が足りなければコンパイルが落ちる（CPP-002）。
+// 検索の行は `/` `?` と通常モードの「検索: 」「行: 」（ADR 0174 の決定 3）。
+// 行が持つプロンプトの 1 つ。
 [[nodiscard]] core::InputLinePrompt prompt_of(const core::SearchLine &line)
 {
-    return line.direction() == core::VimSearchDirection::forward
-               ? core::InputLinePrompt::search_forward
-               : core::InputLinePrompt::search_backward;
+    return line.prompt();
 }
 
 [[nodiscard]] core::InputLinePrompt prompt_of(const core::CommandLine &)
@@ -119,6 +119,11 @@ namespace
                                        const core::InputHistory &search,
                                        core::CommandEdit direction)
 {
+    // 「行: 」は検索ではないので検索の履歴を歩かない（ADR 0174 の決定 8）。
+    if (line.prompt() == core::InputLinePrompt::go_to_line)
+    {
+        return line;
+    }
     return line.recalled(search, direction);
 }
 

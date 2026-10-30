@@ -32,6 +32,9 @@ namespace nenenib::application::detail
 [[nodiscard]] core::ScrollExtent scroll_extent_for(core::EditMode mode) noexcept;
 [[nodiscard]] std::string with_document_newlines(std::string_view utf8, std::string_view newline);
 [[nodiscard]] const core::SearchLine *previewed_line(const EditorState &state);
+// 検索の入力行の語を照合器 VimPattern の文字列にした値（`/` `?` は打ったまま・「検索: 」は
+// literal_pattern で逃がした形・ADR 0174 の決定 4）。検索でない入力行（「行: 」）は値なし。
+[[nodiscard]] std::optional<std::string> searched_text(const core::SearchLine &line);
 // 入力中のパターン（incsearch の preview）。大小の旗は確定の検索と同じ設定の値（#1041）。
 [[nodiscard]] std::optional<core::VimPattern> typed_pattern(const core::SearchLine &line,
                                                             core::VimPatternCase letter_case);

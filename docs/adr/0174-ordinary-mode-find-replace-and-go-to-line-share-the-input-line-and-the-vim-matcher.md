@@ -17,7 +17,7 @@
 
 3. **通常モードの入力は同じ入力行に 3 つのプロンプトを足す。** `InputLinePrompt` に `find`（「検索: 」）・`replace_with`（「置換後: 」）・`go_to_line`（「行: 」）。`CommandInput` は 1 本のまま（文字の編集・IME・履歴は Ex と共用・ADR 0061 の構えは `search_forward` と同じ）。置換は 2 段: Ctrl+H は `find` のプロンプトで開き（前回の検索語を置く）、Enter で `replace_with` へ進み、`replace_with` の Enter は**今の当たりを 1 件置き換えて次の当たりへ**、Ctrl+Enter は**全件を 1 回の `Edit`**、Esc は閉じる。`find` のプロンプトの Enter は次の当たりへ（入力行は閉じない・Esc で閉じる）。置換の 2 段の状態は `EditorState.find`（`FindState{std::string pattern; std::string replacement; FindPhase phase;}`・窓に 1 つ・保存しない）。
 
-4. **照合は `VimPattern` の 1 本。通常モードの語は literal。** 通常モードの入力は `magic` を解釈せず、core の純関数 `literal_pattern(std::string_view) -> std::string`（`\` `/` `.` `*` `[` `~` `^` `$` を `\` で逃がす）で `VimPattern` の文字列にしてから同じ照合器に渡す。大小は `ignorecase` / `smartcase`（#1041）の旗を共用する。#1041 が先に入っていなければ大小を区別する（Vim の既定）。空の入力は何もしない。照合器を 2 本にしない（ARC-012）。
+4. **照合は `VimPattern` の 1 本。通常モードの語は literal。** 通常モードの入力は `magic` を解釈せず、core の純関数 `literal_pattern(std::string_view) -> std::string`（`\` `/` `.` `*` `[` `~` `^` `$` を `\` で逃がす）で `VimPattern` の文字列にしてから同じ照合器に渡す。大小は `ignorecase` / `smartcase`（#1041）の旗を共用する。#1041 が先に入っていなければ大小を区別する（Vim の既定）。空の入力は何もしない。照合器を 2 本にしない（ARC-012）。追補（#1127 のレビュー R3-1）: 後ろ向き（Shift+F3・Ctrl+T）は区切りの `?` も逃がす。関数は `literal_pattern(text, direction)` の 1 本で、`*` `#` の逃がしも同じ関数を呼ぶ。
 
 5. **最後の検索は Vim と同じ 1 つ。** 通常モードの検索語は、Vim の最後の検索（`"/`・`hlsearch` の面・`n` `N` の向き）に**同じ値として**置く（literal に逃がした形）。`hlsearch` が on なら当たりは同じ `search` の面で塗られ、キャレットを含む当たりは `accent` の枠（ADR 0037）。モードを切り替えても検索語は続く。`incsearch` は通常モードの `find` にも効く（入力中の当たりを preview・ADR 0041 の形をそのまま）。
 

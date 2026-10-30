@@ -7,6 +7,7 @@
 #include "EditMode.hpp"
 #include "ExLineRequest.hpp"
 #include "ExResult.hpp"
+#include "InputLinePrompt.hpp"
 #include "KeyMap.hpp"
 #include "KeyMapEmit.hpp"
 #include "KeyMapPass.hpp"
@@ -718,6 +719,21 @@ void EditorController::accept(const SearchHop &intent)
     // 変換中かは ui と同じ述語 is_composing の 1 本で見る。
     if (is_composing())
     {
+        return;
+    }
+    // 入力行が無ければ F3 / Shift+F3 と一覧の「次を検索」「前を検索」、「検索: 」が開いていれば
+    // Enter と同じ当たりへの移動（ADR 0174 の決定 6）。
+    const auto &input = state_.command_input();
+    if (!input.has_value())
+    {
+        repeat_find(intent.relative);
+        return;
+    }
+    const auto *open = std::get_if<core::SearchLine>(&input.value());
+    if (open != nullptr && open->prompt() == core::InputLinePrompt::find)
+    {
+        const core::SearchLine typed = *open;
+        static_cast<void>(hop_find(typed, intent.relative, false));
         return;
     }
     const core::SearchLine *line = previewed_line(state_);

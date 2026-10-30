@@ -648,9 +648,10 @@ std::optional<char> EditorController::recording_name() const
 
 std::optional<EditorController::SearchPattern> EditorController::search_pattern() const
 {
-    // 入力中は入力のパターンで塗る。解析できなければ何も塗らない（ADR 0041 の決定 4）。
+    // 入力中は入力のパターンで塗る。解析できなければ何も塗らない（ADR 0041 の決定 4）。塗りは
+    // 通常モードにも効く（「検索: 」の語も同じ最後の検索・ADR 0174 の決定 5）。
     const core::SearchLine *typing = previewed_line(state_);
-    if (state_.mode() == core::EditMode::vim && typing != nullptr)
+    if (typing != nullptr)
     {
         auto parsed = typed_pattern(*typing, core::search_case(state_.settings()));
         if (!parsed.has_value())
@@ -660,8 +661,7 @@ std::optional<EditorController::SearchPattern> EditorController::search_pattern(
         return SearchPattern{std::move(parsed).value()};
     }
     const auto &remembered = state_.vim().last_search;
-    if (state_.mode() != core::EditMode::vim ||
-        state_.vim().highlight != core::VimSearchHighlight::on || !remembered.has_value())
+    if (state_.vim().highlight != core::VimSearchHighlight::on || !remembered.has_value())
     {
         return std::nullopt;
     }

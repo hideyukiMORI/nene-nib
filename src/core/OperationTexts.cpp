@@ -41,6 +41,11 @@ namespace
     case EditorOperation::insert_date_time:
     case EditorOperation::choose_encoding:
     case EditorOperation::choose_line_ending:
+    case EditorOperation::find:
+    case EditorOperation::find_next:
+    case EditorOperation::find_previous:
+    case EditorOperation::replace:
+    case EditorOperation::go_to_line:
         return true;
     }
     return false;
