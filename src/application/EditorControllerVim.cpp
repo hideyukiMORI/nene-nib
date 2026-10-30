@@ -7,6 +7,7 @@
 #include "EditMode.hpp"
 #include "ExLineRequest.hpp"
 #include "ExResult.hpp"
+#include "FindState.hpp"
 #include "InputLinePrompt.hpp"
 #include "KeyMap.hpp"
 #include "KeyMapEmit.hpp"
@@ -267,6 +268,32 @@ measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &r
     }
     spans.push_back(span.value());
     return {};
+}
+
+// 通常モードの入力行の F3 / Shift+F3 が探す語（ADR 0174 の決定 6）。「検索: 」は打っている語、
+// 「置換後: 」は置き換えずに次・前へ行くので FindState の語。ほかの入力行は値なし。
+[[nodiscard]] std::optional<std::string> hopped_word(const CommandInput &input,
+                                                     const FindState &find)
+{
+    const auto *line = std::get_if<core::SearchLine>(&input);
+    if (line == nullptr)
+    {
+        return std::nullopt;
+    }
+    switch (line->prompt())
+    {
+    case core::InputLinePrompt::find:
+        return std::string(line->text());
+    case core::InputLinePrompt::replace_with:
+        return find.pattern;
+    case core::InputLinePrompt::search_forward:
+    case core::InputLinePrompt::search_backward:
+    case core::InputLinePrompt::go_to_line:
+    case core::InputLinePrompt::ex:
+    case core::InputLinePrompt::palette:
+        return std::nullopt;
+    }
+    std::unreachable();
 }
 } // namespace
 
@@ -729,11 +756,10 @@ void EditorController::accept(const SearchHop &intent)
         repeat_find(intent.relative);
         return;
     }
-    const auto *open = std::get_if<core::SearchLine>(&input.value());
-    if (open != nullptr && open->prompt() == core::InputLinePrompt::find)
+    const auto word = hopped_word(input.value(), state_.find());
+    if (word.has_value())
     {
-        const core::SearchLine typed = *open;
-        static_cast<void>(hop_find(typed, intent.relative, false));
+        static_cast<void>(hop_find(word.value(), intent.relative, false));
         return;
     }
     const core::SearchLine *line = previewed_line(state_);

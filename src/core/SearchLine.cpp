@@ -1,9 +1,21 @@
 #include "SearchLine.hpp"
 
+#include <string>
 #include <utility>
 
 namespace nenenib::core
 {
+namespace
+{
+// preset を置いてキャレットを末尾に置いた入力。1 行の入力にならなければ空。
+[[nodiscard]] InputText preset_input(std::string_view preset)
+{
+    const InputText empty{std::string{}, Offset{0}};
+    auto filled = inserted_input(empty, preset);
+    return filled ? std::move(filled).value() : empty;
+}
+} // namespace
+
 SearchLine::SearchLine(InputText input, InputLinePrompt prompt)
     : input_(std::move(input)), prompt_(prompt)
 {
@@ -18,9 +30,12 @@ SearchLine SearchLine::opened(VimSearchDirection direction)
 
 SearchLine SearchLine::opened_find(std::string_view preset)
 {
-    const InputText empty{std::string{}, Offset{0}};
-    auto filled = inserted_input(empty, preset);
-    return SearchLine(filled ? std::move(filled).value() : empty, InputLinePrompt::find);
+    return SearchLine(preset_input(preset), InputLinePrompt::find);
+}
+
+SearchLine SearchLine::opened_replace_with(std::string_view preset)
+{
+    return SearchLine(preset_input(preset), InputLinePrompt::replace_with);
 }
 
 SearchLine SearchLine::opened_go_to_line()

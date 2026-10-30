@@ -26,5 +26,7 @@ struct InputLineView
     std::optional<std::size_t> completion_index;
     // 補完の面の見えている窓の先頭（ADR 0150 の決定 1）。ui は計算し直さずにここから描く。
     std::size_t completion_first = 0;
+    // プロンプトに添える語（「置換後 (語): 」の語・ADR 0174 の結果）。添えない入力行では空。
+    std::string prompt_detail{};
 };
 } // namespace nenenib::core

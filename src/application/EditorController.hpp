@@ -42,6 +42,7 @@
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
 #include "FilePort.hpp"
+#include "FindPhase.hpp"
 #include "FolderBatch.hpp"
 #include "FontFamilies.hpp"
 #include "GridLineMarks.hpp"
@@ -349,10 +350,25 @@ class EditorController final
     // Vim モードで一覧から選んだ操作の鍵を 1 つ engine へ流す（`/` `:` `n` `N`・
     // 決定 2）。INSERT なら先に <Esc> で NORMAL へ戻す（INSERT の `/` は文字）。
     std::optional<core::VimRepeatFailure> step_vim_command(core::VimKey key);
-    // 「検索: 」の確定と F3 / Shift+F3（決定 3・6）。語を逃がして engine の
+    // 「検索: 」の確定と F3 / Shift+F3（決定 3・6）。語 typed（打ったまま）を逃がして engine の
     // 検索の鍵 1 つにし、入力行は閉じない。confirmed は Enter（断りの音を鳴らす）。
     std::optional<core::VimRepeatFailure>
-    hop_find(const core::SearchLine &line, core::VimSearchDirection relative, bool confirmed);
+    hop_find(std::string_view typed, core::VimSearchDirection relative, bool confirmed);
+    // Ctrl+F（phase は find）と Ctrl+H（replace_with）の「検索: 」を前回の語で開く（決定 3）。
+    void open_find(FindPhase phase);
+    // 置換の流れの「検索: 」の Enter（決定 3）。当たりへ移ってから「置換後:
+    // 」を開く。見つからなければ 「検索: 」のまま E486。
+    std::optional<core::VimRepeatFailure> advance_to_replacement(const core::SearchLine &line);
+    // 「置換後: 」の Enter（決定 7）。今の当たりを 1 件置き換える Edit 1 回 → 次の当たりへ。
+    std::optional<core::VimRepeatFailure> replace_current(const core::SearchLine &line);
+    // 「置換後: 」の Ctrl+Enter（決定 7）。core の substituted_all の Edit 1 回。ほかの入力行では
+    // 何もしない。
+    void replace_all_matches();
+    // 置換の語 FindState.pattern を逃がして今の大小の旗で解いた照合器。空・解けなければ値なし。
+    [[nodiscard]] std::optional<core::VimPattern> find_pattern() const;
+    // 置換の Edit の後、次の検索の起点を置換後のキャレットの直前の文字に置く（キャレットから
+    // 始まる当たりを飛ばさない・決定 7）。
+    void restart_find_before_caret();
     // 入力行の無い F3 / Shift+F3 と一覧の「次を検索」「前を検索」（決定 2・6）。本文の順の向きを
     // 最後の検索の向きと比べて `n` か `N` を流す。
     void repeat_find(core::VimSearchDirection relative);

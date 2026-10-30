@@ -472,7 +472,7 @@ void EditorWindow::run_pane_operation(core::EditorOperation operation)
 
 // 意図を 1 つ送るだけの操作（一覧・ブックマークと、検索・置換・行へ移動）。検索の 5 つは
 // どちらのモードで何をするかを controller が決める（Vim は `/` `:` `n` `N` の前置き・
-// ADR 0174 の決定 1・2）。置換の本体は #1046 の N1b が BeginReplace に書く。ほかの値は
+// ADR 0174 の決定 1・2）。置換の 2 段は controller の BeginReplace が開く。ほかの値は
 // run_operation が先に扱うので、ここへは来ない。
 void EditorWindow::run_sent_operation(core::EditorOperation operation)
 {

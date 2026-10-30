@@ -457,6 +457,11 @@ void EditorWindow::press_command_control_key(WPARAM word)
     case 'T':
         send(application::SearchHop{core::VimSearchDirection::backward});
         return;
+    // 通常モードの「置換後: 」の全件（ADR 0174 の決定 3・7）。ほかの入力行では controller が
+    // 何もしない。
+    case VK_RETURN:
+        send(application::SubmitCommand{true});
+        return;
     default:
         break;
     }

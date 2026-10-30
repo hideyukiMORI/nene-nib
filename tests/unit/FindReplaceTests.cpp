@@ -1,5 +1,6 @@
-// scope `--find-replace` の単体テスト（ADR 0174 の決定 9・#1046）。通常モードの検索と行へ移動の分
-// （N1a）。置換の 1 件と全件の Edit・undo は N1b がここへ足す。時計・ファイル・乱数を使わない。
+// scope `--find-replace` の単体テスト（ADR 0174 の決定
+// 9・#1046）。通常モードの検索と行へ移動（N1a）と 置換の 2 段・1 件と全件の
+// Edit・undo（N1b）。時計・ファイル・乱数を使わない。
 #include "BeginFind.hpp"
 #include "BeginGoToLine.hpp"
 #include "BeginReplace.hpp"
@@ -13,6 +14,8 @@
 #include "EditorFrame.hpp"
 #include "FindState.hpp"
 #include "GoToLineInput.hpp"
+#include "HistoryAction.hpp"
+#include "HistoryDirection.hpp"
 #include "InputLinePrompt.hpp"
 #include "InputLineView.hpp"
 #include "LiteralPattern.hpp"
@@ -23,6 +26,7 @@
 #include "SearchHop.hpp"
 #include "SelectEditMode.hpp"
 #include "SubmitCommand.hpp"
+#include "SubstituteAll.hpp"
 #include "TestSupport.hpp"
 #include "VimMode.hpp"
 #include "VimPattern.hpp"
@@ -50,10 +54,12 @@ using nenenib::application::BeginReplace;
 using nenenib::application::CancelCommand;
 using nenenib::application::CommandText;
 using nenenib::application::EditorFrame;
+using nenenib::application::HistoryAction;
 using nenenib::application::SearchHop;
 using nenenib::application::SelectEditMode;
 using nenenib::application::SubmitCommand;
 using nenenib::core::EditMode;
+using nenenib::core::HistoryDirection;
 using nenenib::core::InputLinePrompt;
 using nenenib::core::VimSearchDirection;
 
@@ -131,7 +137,7 @@ void verify_go_to_line_input()
     }
 }
 
-// 今の当たり（決定 7 の前提・N1b が置換の 1 件に使う）。
+// 今の当たり（決定 7 の前提・置換の 1 件が使う）。
 void verify_current_match()
 {
     const auto text = buffer_of("abc abc\nxyz");
@@ -319,9 +325,164 @@ void verify_vim_alternatives()
                vim_body(from_insert) == three_lines,
            "find from INSERT returns to NORMAL first and types no slash");
     static_cast<void>(controller.apply_frame(CancelCommand{}));
+    vim_replay(controller, "i");
     const auto replace = controller.apply_frame(BeginReplace{});
-    expect(message_of(replace) == "置換は後続です" && vim_body(replace) == three_lines,
-           "replace is announced as later and changes nothing");
+    expect(prompt_of(replace) == InputLinePrompt::ex && line_text_of(replace) == "%s/" &&
+               controller.vim_state().mode == nenenib::core::VimMode::normal &&
+               vim_body(replace) == three_lines,
+           "replace from the list opens the : line with %s/ after leaving INSERT");
+}
+
+[[nodiscard]] std::optional<nenenib::core::VimPattern> literal_of(std::string_view word)
+{
+    auto parsed = nenenib::core::VimPattern::parse(nenenib::core::literal_pattern(word),
+                                                   VimSearchDirection::forward,
+                                                   nenenib::core::VimPatternCase::sensitive);
+    if (!parsed)
+    {
+        return std::nullopt;
+    }
+    return std::move(parsed).value();
+}
+
+// 全件の置換の純関数（決定 7）。最初の当たりから最後の当たりまでの Edit 1 つ・重なりは飛ばす・
+// 当たりが無ければ値なし・置換語は literal。
+void verify_substituted_all()
+{
+    using nenenib::core::substituted_all;
+    const auto text = buffer_of("say abc\nabc\nxabc tail");
+    const auto abc = literal_of("abc");
+    if (!abc.has_value())
+    {
+        expect(false, "the word parses");
+        return;
+    }
+    const auto edit = substituted_all(text, abc.value(), "&\\n");
+    expect(edit.has_value() && edit.value().at.value == 4 &&
+               edit.value().removed == "abc\nabc\nxabc" &&
+               edit.value().inserted == "&\\n\n&\\n\nx&\\n" && edit.value().restore.value == 4,
+           "every match from the first to the last is one edit and the replacement is literal");
+    const auto overlapping = literal_of("aa");
+    const auto pairs = substituted_all(buffer_of("aaaaa"), overlapping.value_or(abc.value()), "b");
+    expect(pairs.has_value() && pairs.value().removed == "aaaa" && pairs.value().inserted == "bb",
+           "overlapping matches are skipped like :s///g");
+    const auto japanese = literal_of("日本");
+    const auto wide =
+        substituted_all(buffer_of("日本語と日本"), japanese.value_or(abc.value()), "");
+    expect(wide.has_value() && wide.value().removed == "日本語と日本" &&
+               wide.value().inserted == "語と",
+           "multibyte matches are replaced by their bytes and an empty replacement deletes");
+    const auto missing = literal_of("zzz");
+    expect(!substituted_all(text, missing.value_or(abc.value()), "x").has_value(),
+           "a word that never matches has no edit");
+}
+
+[[nodiscard]] std::string detail_of(const EditorFrame &frame)
+{
+    return frame.command_line.has_value() ? frame.command_line.value().prompt_detail
+                                          : std::string{"<none>"};
+}
+
+// Ctrl+H → 「検索: 」→ Enter → 「置換後 (語): 」→ Enter で 1 件ずつ（決定 3・7）。1 件ごとに undo 1
+// 回。
+void verify_replace_one()
+{
+    Editing session;
+    open_ordinary_document(session, std::string(three_lines));
+    EditorController &controller = session.controller();
+    const auto opened = controller.apply_frame(BeginReplace{});
+    expect(prompt_of(opened) == InputLinePrompt::find && line_text_of(opened).empty(),
+           "Ctrl+H opens the find prompt");
+    static_cast<void>(typed(controller, "beta"));
+    const auto next = controller.apply_frame(SubmitCommand{});
+    expect(prompt_of(next) == InputLinePrompt::replace_with && line_text_of(next).empty() &&
+               detail_of(next) == "beta" && caret_at(next, 1, 7),
+           "Enter moves to the first match and asks for the replacement with the word");
+    static_cast<void>(typed(controller, "B"));
+    const auto first = controller.apply_frame(SubmitCommand{});
+    expect(vim_body(first) == "alpha B\nbeta gamma\ndelta beta" && caret_at(first, 2, 1) &&
+               prompt_of(first) == InputLinePrompt::replace_with,
+           "Enter replaces the current match and moves to the next one");
+    const auto second = controller.apply_frame(SubmitCommand{});
+    expect(vim_body(second) == "alpha B\nB gamma\ndelta beta" && caret_at(second, 3, 7),
+           "Enter again replaces the next one");
+    const auto skipped = controller.apply_frame(SearchHop{VimSearchDirection::forward});
+    expect(vim_body(skipped) == vim_body(second) && caret_at(skipped, 3, 7) &&
+               message_of(skipped) == wrapped_bottom,
+           "F3 in the replacement prompt moves without replacing");
+    const auto last = controller.apply_frame(SubmitCommand{});
+    expect(vim_body(last) == "alpha B\nB gamma\ndelta B" && message_of(last).starts_with("E486") &&
+               session.bell().rings() == 0,
+           "after the last match the prompt says E486 without ringing");
+    const auto closed = controller.apply_frame(CancelCommand{});
+    expect(!closed.command_line.has_value() && vim_body(closed) == vim_body(last),
+           "Esc closes the prompt");
+    const auto undone = controller.apply_frame(HistoryAction{HistoryDirection::undo});
+    expect(vim_body(undone) == "alpha B\nB gamma\ndelta beta",
+           "one undo takes back one replacement");
+    static_cast<void>(controller.apply_frame(HistoryAction{HistoryDirection::undo}));
+    expect(vim_body(controller.apply_frame(HistoryAction{HistoryDirection::undo})) == three_lines,
+           "each replacement is its own undo step");
+    static_cast<void>(controller.apply_frame(BeginReplace{}));
+    const auto again = controller.apply_frame(SubmitCommand{});
+    expect(prompt_of(again) == InputLinePrompt::replace_with && line_text_of(again) == "B",
+           "Ctrl+H opens with the last word and the last replacement");
+    static_cast<void>(controller.apply_frame(CancelCommand{}));
+    static_cast<void>(controller.apply_frame(BeginFind{}));
+    const auto find = controller.apply_frame(SubmitCommand{});
+    expect(prompt_of(find) == InputLinePrompt::find, "Ctrl+F after Ctrl+H only finds");
+}
+
+// 置換語が語を含んでも置き換えた所を探し直さない・見つからない語は「検索: 」のまま（決定 7）。
+void verify_replace_edges()
+{
+    Editing session;
+    open_ordinary_document(session, "a a");
+    EditorController &controller = session.controller();
+    static_cast<void>(controller.apply_frame(BeginReplace{}));
+    static_cast<void>(typed(controller, "a"));
+    static_cast<void>(controller.apply_frame(SubmitCommand{}));
+    static_cast<void>(typed(controller, "aa"));
+    const auto grown = controller.apply_frame(SubmitCommand{});
+    expect(vim_body(grown) == "a aa" && caret_at(grown, 1, 1) &&
+               message_of(grown) == wrapped_bottom,
+           "the replacement is not searched again and the next match wraps to the top");
+    Editing missing;
+    open_ordinary_document(missing, "abc");
+    static_cast<void>(missing.controller().apply_frame(BeginReplace{}));
+    static_cast<void>(typed(missing.controller(), "zz"));
+    const auto refused = missing.controller().apply_frame(SubmitCommand{});
+    expect(prompt_of(refused) == InputLinePrompt::find && message_of(refused).starts_with("E486") &&
+               missing.bell().rings() == 1,
+           "a missing word stays in the find prompt with E486 and one ring");
+    const auto all_in_find = missing.controller().apply_frame(SubmitCommand{true});
+    expect(prompt_of(all_in_find) == InputLinePrompt::find && vim_body(all_in_find) == "abc",
+           "Ctrl+Enter outside the replacement prompt does nothing");
+}
+
+// Ctrl+Enter は全件を Edit 1 回で置き換え、undo 1 回で戻る（決定 7）。
+void verify_replace_all()
+{
+    Editing session;
+    open_ordinary_document(session, std::string(three_lines));
+    EditorController &controller = session.controller();
+    static_cast<void>(controller.apply_frame(BeginReplace{}));
+    static_cast<void>(typed(controller, "beta"));
+    static_cast<void>(controller.apply_frame(SubmitCommand{}));
+    static_cast<void>(typed(controller, "BB"));
+    const auto all = controller.apply_frame(SubmitCommand{true});
+    expect(vim_body(all) == "alpha BB\nBB gamma\ndelta BB" &&
+               prompt_of(all) == InputLinePrompt::replace_with && caret_at(all, 3, 9),
+           "Ctrl+Enter replaces every match at once and keeps the prompt");
+    const auto none = controller.apply_frame(SubmitCommand{true});
+    expect(vim_body(none) == vim_body(all) && message_of(none).starts_with("E486") &&
+               session.bell().rings() == 1,
+           "Ctrl+Enter without any match says E486 and rings once");
+    static_cast<void>(controller.apply_frame(CancelCommand{}));
+    const auto undone = controller.apply_frame(HistoryAction{HistoryDirection::undo});
+    expect(vim_body(undone) == three_lines, "one undo takes back every replacement");
+    const auto again = controller.apply_frame(HistoryAction{HistoryDirection::redo});
+    expect(vim_body(again) == vim_body(all), "one redo replays them");
 }
 
 // 通常モードの検索と Vim の `/` は同じ最後の検索で、塗りもモードをまたいで続く（決定 5）。
@@ -350,5 +511,9 @@ void verify_find_replace_scope()
     verify_go_to_line();
     verify_vim_alternatives();
     verify_shared_last_search();
+    verify_substituted_all();
+    verify_replace_one();
+    verify_replace_edges();
+    verify_replace_all();
 }
 } // namespace nenenib::tests

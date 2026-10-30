@@ -119,8 +119,9 @@ namespace
                                        const core::InputHistory &search,
                                        core::CommandEdit direction)
 {
-    // 「行: 」は検索ではないので検索の履歴を歩かない（ADR 0174 の決定 8）。
-    if (line.prompt() == core::InputLinePrompt::go_to_line)
+    // 「行: 」と「置換後: 」は検索ではないので検索の履歴を歩かない（ADR 0174 の決定 3・8）。
+    if (line.prompt() == core::InputLinePrompt::go_to_line ||
+        line.prompt() == core::InputLinePrompt::replace_with)
     {
         return line;
     }

@@ -137,7 +137,10 @@ Issue #1127 (#1046 N1a) adds the ordinary find prompt (ADR 0174), which `--find`
 four-line file is opened, Ctrl+F (sent with SendInput) opens 検索: (find-prompt.png), `beta` is
 typed and its matches are painted (find-typed.png), Enter and F3 move the caret with the prompt
 kept (find-enter.png, find-f3.png: the 行 X, 桁 Y item changes) and Esc closes the prompt while the
-matches stay painted (find-escape.png).
+matches stay painted (find-escape.png). #1046 N1b adds the replacement in the same run: Ctrl+H opens
+検索: with `beta` (replace-prompt.png), Enter asks 置換後 (beta): (replace-with.png), `B` and Enter
+replace the current match (replace-one.png), Ctrl+Enter replaces the rest at once (replace-all.png),
+Esc closes the prompt (replace-escape.png) and Ctrl+S saves the replaced bytes before the close.
 Python standard library and ctypes only.
 """
 
@@ -3074,8 +3077,33 @@ def verify_gutter(executable: Path, environment: dict, frames: Path | None) -> d
 
 
 VK_F = 0x46
+VK_H = 0x48
 VK_F3 = 0x72
 FIND_DOCUMENT = "find sample\nbeta one\nbeta two\nbeta three\n"
+# Ctrl+H は 4 行目の beta を 1 件、Ctrl+Enter は残りの 2 件を置き換える。
+REPLACED_DOCUMENT = "find sample\nB one\nB two\nB three\n"
+
+
+def replace_steps(window, closed: bytes, size: tuple, frames: Path | None) -> dict:
+    """#1046 N1b: Ctrl+H → Enter → `B` Enter (one) → Ctrl+Enter (all) → Esc, one frame each."""
+    assert press_chord(window, VK_CONTROL, VK_H), "Ctrl+H could not be sent"
+    prompt = await_new_frame(window, closed, size)
+    snapshot(frames, window, "replace-prompt")
+    press(window, VK_RETURN)
+    asked = await_new_frame(window, prompt, size)
+    snapshot(frames, window, "replace-with")
+    write_text(window, "B")
+    typed = await_new_frame(window, asked, size)
+    press(window, VK_RETURN)
+    one = await_new_frame(window, typed, size)
+    snapshot(frames, window, "replace-one")
+    assert press_chord(window, VK_CONTROL, VK_RETURN), "Ctrl+Enter could not be sent"
+    every = await_new_frame(window, one, size)
+    snapshot(frames, window, "replace-all")
+    press(window, VK_ESCAPE)
+    escaped = await_new_frame(window, every, size)
+    snapshot(frames, window, "replace-escape")
+    return {"prompt": prompt, "with": typed, "one": one, "all": every, "escape": escaped}
 
 
 def verify_find(executable: Path, environment: dict, output: Path, frames: Path | None) -> dict:
@@ -3120,6 +3148,9 @@ def verify_find(executable: Path, environment: dict, output: Path, frames: Path 
         press(window, VK_ESCAPE)
         closed = await_new_frame(window, hopped, size)
         snapshot(frames, window, "find-escape")
+        replaced = replace_steps(window, closed, size, frames)
+        # 置換で本文が変わったので、閉じる前に保存する（「保存しますか」を出さない）。
+        saved = try_saving(window, opened)
 
         def box(pixels: bytes, area: tuple) -> list:
             return box_pixels(pixels, width, area)
@@ -3134,9 +3165,25 @@ def verify_find(executable: Path, environment: dict, output: Path, frames: Path 
             "escapeClosedPrompt": box(closed, left) == box(before, left),
             "matchesStayed": box(closed, row) != box(before, row),
         }
+        rows = [content_row_box(body, index, width, dpi) for index in range(1, 4)]
+
+        def changed(first: bytes, second: bytes) -> bool:
+            return any(box(first, area) != box(second, area) for area in rows)
+
+        record.update({
+            "replacePromptShown": box(replaced["prompt"], left) != box(closed, left),
+            "replaceWithShown": box(replaced["with"], left) != box(replaced["prompt"], left),
+            "replacedOne": changed(replaced["one"], replaced["with"]),
+            "replacedAll": changed(replaced["all"], replaced["one"]),
+            "replaceEscapeClosed": box(replaced["escape"], left) == box(before, left),
+            "replacedBytes": opened.read_text(encoding="utf-8") == REPLACED_DOCUMENT,
+            "saved": saved.get("driven", False),
+        })
         print(json.dumps(record, ensure_ascii=False), file=sys.stderr)
         for name in ("promptShown", "matchesPainted", "enterMoved", "enterKeptPrompt", "f3Moved",
-                     "escapeClosedPrompt", "matchesStayed"):
+                     "escapeClosedPrompt", "matchesStayed", "replacePromptShown",
+                     "replaceWithShown", "replacedOne", "replacedAll", "replaceEscapeClosed",
+                     "replacedBytes", "saved"):
             assert record[name], f"find: {name} did not hold"
         close(window)
         record["exitCode"] = process.wait(timeout=5)

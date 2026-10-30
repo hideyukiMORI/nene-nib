@@ -33,6 +33,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -175,7 +176,7 @@ constexpr float full_channel = 255.0F;
 }
 
 // 入力行のプロンプトの文字（ADR 0032 の決定 1）。選択肢が増えたらここで落ちる（CPP-002）。
-[[nodiscard]] std::string prompt_text(core::InputLinePrompt prompt)
+[[nodiscard]] std::string prompt_text(core::InputLinePrompt prompt, std::string_view detail)
 {
     switch (prompt)
     {
@@ -192,6 +193,10 @@ constexpr float full_channel = 255.0F;
         return "検索: ";
     case core::InputLinePrompt::go_to_line:
         return "行: ";
+    // 置換の 2 段目は検索語を添える（ADR 0174 の結果「置換後 (abc): 」）。
+    case core::InputLinePrompt::replace_with:
+        return detail.empty() ? std::string{"置換後: "}
+                              : std::string{"置換後 ("} + std::string(detail) + "): ";
     }
     std::unreachable();
 }
@@ -1750,7 +1755,7 @@ void Direct2DRenderer::draw_command(const application::EditorFrame &frame,
         return;
     }
     const auto &command = frame.command_line.value();
-    const std::string prefix = prompt_text(command.prompt);
+    const std::string prefix = prompt_text(command.prompt, command.prompt_detail);
     // 入力の文字のキャレットの位置（バイト）。変換中の文字列はここへ差し込む（ADR 0061 の決定 5）。
     const std::size_t at = prefix.size() + command.caret.value;
     auto shown = prefix + command.text;

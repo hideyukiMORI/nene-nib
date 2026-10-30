@@ -99,6 +99,7 @@ constexpr std::string_view probe_title = "probe.txt";
     case core::InputLinePrompt::search_forward:
     case core::InputLinePrompt::search_backward:
     case core::InputLinePrompt::find:
+    case core::InputLinePrompt::replace_with:
     case core::InputLinePrompt::go_to_line:
         return false;
     }
