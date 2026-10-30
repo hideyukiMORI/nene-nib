@@ -2198,6 +2198,11 @@ void verify_partial_shell_registration(Win32ShellRegistration &registration,
     RegDeleteTreeW(HKEY_CURRENT_USER, (root + LR"(\Classes\*\shell\NeNeNib)").c_str());
     expect(registration.status(plan) == ShellRegistrationStatus::registered_elsewhere,
            "a registration without the verb is partial and can be removed");
+    // command が自分の exe でも、ほかの群（既定のアプリの木）が欠けていれば揃っていない（R2-1）。
+    expect(registration.apply(plan).has_value(), "the plan is written once more");
+    RegDeleteTreeW(HKEY_CURRENT_USER, (root + LR"(\NeNeNib)").c_str());
+    expect(registration.status(plan) == ShellRegistrationStatus::registered_elsewhere,
+           "an own command with a missing group is not registered");
     expect(registration.remove(plan).has_value(), "the partial registration is removed");
     expect(registration.status(plan) == ShellRegistrationStatus::absent &&
                shell_test_values(HKEY_CURRENT_USER, root) == 0,

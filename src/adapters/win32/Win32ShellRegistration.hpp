@@ -5,8 +5,10 @@
 #include "ShellRegistrationPort.hpp"
 #include "ShellRegistrationStatus.hpp"
 
+#include <cstddef>
 #include <expected>
 #include <string>
+#include <utility>
 
 namespace nenenib::adapters::win32
 {
@@ -28,8 +30,12 @@ class Win32ShellRegistration final : public application::ShellRegistrationPort
     status(const core::ShellRegistrationPlan &plan) override;
 
   private:
-    // 計画の木の根か共有の値が 1 つでもあるか（途中まで書かれた登録・#1183 のレビュー R1-4）。
-    [[nodiscard]] bool partly_registered(const core::ShellRegistrationPlan &plan) const;
+    // 計画の 5 群（木の根と共有の値）のうち今ある数と全部の数（途中の登録・#1183 / #1185
+    // のレビュー）。
+    [[nodiscard]] std::pair<std::size_t, std::size_t>
+    present_groups(const core::ShellRegistrationPlan &plan) const;
+    // 右クリックの項目の command の exe が計画の exe と同じか。
+    [[nodiscard]] bool command_is_own(const core::ShellRegistrationPlan &plan) const;
 
     std::wstring root_;
 };
