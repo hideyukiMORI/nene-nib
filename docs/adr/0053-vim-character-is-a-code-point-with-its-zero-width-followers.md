@@ -54,3 +54,7 @@ Nib の今の形: 文字の幅は `display_width(code_point)`（`src/core/Displa
 | 結合文字の集合を Unicode のカテゴリ（Mn / Me）から別の表で持つ | 仮想桁の表の幅 0 と 1998 コードポイントで完全に一致している。表を 2 つ持つと版の更新で食い違う（ARC-001） |
 | 通常モードの矢印・Backspace・Delete も同じ Issue で変える | 通常モードの使い手の期待は Windows の慣習（クラスタで歩く・Backspace は結合文字だけ消す、など）で、Vim の規則とは別の判断 |
 | 行頭の孤立した結合文字の幅を同時に 1 にする | 仮想桁の表と描画（`display_line`）の両方を変える。歩き方は本 ADR の定義のままで Vim と一致するので、幅は別に決める |
+
+## 追補 2026-10-30（#1136）: INSERT の矢印も Vim の 1 文字で歩く
+
+Vim モードの INSERT の `<Left>` `<Right>` は、決定 3 の 1 対で 1 文字ずつ歩く（`<Left>` は `vim_character_start`・`<Right>` は `vim_character_end`・Vim の `oneleft` と `mb_ptr2len`）。結合文字・濁点の結合・異体字セレクタの手前には止まらない。ZWJ の連なりは決定 1 のとおり別々の文字。行の端の扱いは ADR 0049 の追補。読むのはキャレットの周りの窓だけで、行の全体は写さない。fixture は `insert-arrow-` の 14 件。通常モードの矢印は決定 8 のまま変えない。

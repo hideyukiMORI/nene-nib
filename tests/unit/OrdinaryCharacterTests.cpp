@@ -263,12 +263,15 @@ void verify_vim_insert_boundary()
     auto &controller = editing.controller();
     open_ordinary(editing, "e\u0301x");
     applied(controller, app::SelectEditMode{core::EditMode::vim});
-    vim_replay(controller, "A<Left><Left>");
-    expect(controller.frame().caret.position.column == core::Column{2},
-           "Vim INSERT left still moves one code point");
+    // Vim の INSERT の矢印は Vim の 1 文字で歩き、結合文字の手前に止まらない（#1136・ADR 0053）。
+    vim_replay(controller, "A<Left>");
+    const core::Column before_x = controller.frame().caret.position.column;
+    vim_replay(controller, "<Left>");
+    expect(controller.frame().caret.position.column == core::Column{1},
+           "Vim INSERT left moves over the base and its combining mark");
     vim_replay(controller, "<Right>");
-    expect(controller.frame().caret.position.column == core::Column{3},
-           "Vim INSERT right still moves one code point");
+    expect(controller.frame().caret.position.column == before_x,
+           "Vim INSERT right moves over the base and its combining mark");
     expect(vim_body(controller.frame()) == "e\u0301x",
            "Vim insert movement does not edit the text");
     vim_replay(controller, "<Esc>0");

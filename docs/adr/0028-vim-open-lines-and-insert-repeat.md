@@ -50,3 +50,8 @@ FR-003のNORMAL `o` / `O`を実装する。既存のINSERT、行索引、改行�
 ## 追補（2026-10-30・Issue #1032）
 
 `gI` は `I` と同じ道（`insert_action`）で INSERT に入り、着地だけ行の 1 桁目（空白を飛ばさない・Vim の `nv_g_cmd` の `beginline(0)`）にする（`VimAction::insert_at_column_one`・`g` の接頭辞の表の 1 行）。回数は `VimInsertRepeat` で反復し、`.` は打った鍵の列（`gI…<Esc>`）をそのまま再生する（`gi` と違い `i` に置き換えない）。VISUAL（`v` `V` `Ctrl-v`）とオペレータ待ち（`dgI` `ygI`）の `gI` は、Vim の `nv_g_cmd` と同じく `beginline(0)` でキャレット（VISUAL では選択の端・`0` と同じ移動）を 1 桁目へ動かしてから鳴り、本文もレジスタも変えない（オペレータは打ち消す・`:normal!` と同じく後ろの鍵は打ち切る）。`insert-column-one-*` の 19 fixture（VISUAL とオペレータ待ちの 6 件を含む）が固定 Vim との一致を守る。
+`I` の入る位置は最初の非空白で、空白だけの行では行末（空白の後ろ）にする（Vim の `beginline(BL_WHITE | BL_FIX)`・`VimStep.cpp` の `insert_line_start_landing` の 1 本）。`^` が空白だけの行で最後の文字に止まる規則（`vim_first_non_blank`）は変えない（`gI` は Nib にまだ無く範囲外）。`insert-first-nonblank-*` の 9 fixture が固定 Vim との一致を守る。
+
+## 追補（2026-10-30・Issue #1136）
+
+決定 3 の「移動」から、行の端で動かない `<Left>` `<Right>`（行頭の `<Left>`・行の内容の終わりの `<Right>`）だけを外す。これらは反復を切らない（Vim の `ins_left` `ins_right` はビープだけで `start_arrow` を呼ばない・実測 `2A<Right>x<Esc>` → `abxx`）。`.` の記録も取り直さず、始めの位置の印も立てない。判定は `VimStepInsert.cpp` の `arrow_stays` の 1 本。最初の行の `<Up>`・最後の行の `<Down>`・端の PgUp / PgDn は動かなくても今までどおり反復を切る（Vim との差は別の Issue）。

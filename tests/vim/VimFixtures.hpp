@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 049b0f687129db68a6889cbe5c7f7978c3a698aa4409dc5d6776fd55528545e6 / 3123 fixtures
+// fixtures.json: sha256 cc8750b544bfd8a6a7999209dd65d65aab646b0455c41657c0afb8889a68ffb6 / 3137 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3123> vim_fixtures{{
+constexpr std::array<VimFixture, 3137> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3135,6 +3135,20 @@ constexpr std::array<VimFixture, 3123> vim_fixtures{{
     {"insert-column-one-visual-char-yank", "  abc", "$hvgIy", "  abc", 1, 1, "", "", std::nullopt},
     {"insert-column-one-operator-delete", "  abc", "$dgIx", "  abc", 1, 1, "", "", std::nullopt},
     {"insert-column-one-operator-yank", "  abc", "$ygIx", "  abc", 1, 1, "", "", std::nullopt},
+    {"insert-arrow-left-stops-at-the-line-start", "ab\ncd", "jI<Left>x<Esc>", "ab\nxcd", 2, 1, "", "", std::nullopt},
+    {"insert-arrow-right-stops-at-the-line-end", "ab\ncd", "A<Right>x<Esc>", "abx\ncd", 1, 3, "", "", std::nullopt},
+    {"insert-arrow-right-at-the-line-end-caret", "ab\ncd", "A<Right><Esc>", "ab\ncd", 1, 2, "", "", std::nullopt},
+    {"insert-arrow-left-over-a-combining-mark", "ab", "ié<Left>x<Esc>", "xéab", 1, 1, "", "", std::nullopt},
+    {"insert-arrow-right-over-a-combining-mark", "éb", "i<Right>x<Esc>", "éxb", 1, 4, "", "", std::nullopt},
+    {"insert-arrow-right-over-a-voiced-mark", "がb", "i<Right>x<Esc>", "がxb", 1, 7, "", "", std::nullopt},
+    {"insert-arrow-right-over-a-variation-selector", "a⚠️b", "a<Right>x<Esc>", "a⚠️xb", 1, 8, "", "", std::nullopt},
+    {"insert-arrow-left-onto-a-combining-mark", "aé", "A<Left>x<Esc>", "axé", 1, 2, "", "", std::nullopt},
+    {"insert-arrow-left-at-the-line-start-then-dot", "ab\ncd\nef", "jI<Left>x<Esc>j.", "ab\nxcd\nxef", 3, 1, "", "", std::nullopt},
+    {"insert-arrow-left-with-a-count", "ab", "2ixy<Left>z<Esc>", "xzyab", 1, 2, "", "", std::nullopt},
+    {"insert-arrow-right-at-the-end-then-dot", "ab\ncd", "A<Right>x<Esc>j.", "abx\ncdx", 2, 3, "", "", std::nullopt},
+    {"insert-arrow-left-over-a-zwj-sequence", "a👨‍👩b", "$i<Left>x<Esc>", "a👨‍x👩b", 1, 9, "", "", std::nullopt},
+    {"insert-arrow-left-at-the-line-start-keeps-the-count", "ab", "2i<Left>x<Esc>", "xxab", 1, 2, "", "", std::nullopt},
+    {"insert-arrow-right-at-the-line-end-keeps-the-count", "ab", "2A<Right>x<Esc>", "abxx", 1, 4, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

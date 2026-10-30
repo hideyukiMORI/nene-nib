@@ -3121,5 +3121,19 @@
   {"name":"insert-column-one-visual-block-delete","text":"  abc\n  def","keys":"$<C-v>jgId"},
   {"name":"insert-column-one-visual-char-yank","text":"  abc","keys":"$hvgIy"},
   {"name":"insert-column-one-operator-delete","text":"  abc","keys":"$dgIx"},
-  {"name":"insert-column-one-operator-yank","text":"  abc","keys":"$ygIx"}
+  {"name":"insert-column-one-operator-yank","text":"  abc","keys":"$ygIx"},
+  {"name":"insert-arrow-left-stops-at-the-line-start","text":"ab\ncd","keys":"jI<Left>x<Esc>"},
+  {"name":"insert-arrow-right-stops-at-the-line-end","text":"ab\ncd","keys":"A<Right>x<Esc>"},
+  {"name":"insert-arrow-right-at-the-line-end-caret","text":"ab\ncd","keys":"A<Right><Esc>"},
+  {"name":"insert-arrow-left-over-a-combining-mark","text":"ab","keys":"ié<Left>x<Esc>"},
+  {"name":"insert-arrow-right-over-a-combining-mark","text":"éb","keys":"i<Right>x<Esc>"},
+  {"name":"insert-arrow-right-over-a-voiced-mark","text":"がb","keys":"i<Right>x<Esc>"},
+  {"name":"insert-arrow-right-over-a-variation-selector","text":"a⚠️b","keys":"a<Right>x<Esc>"},
+  {"name":"insert-arrow-left-onto-a-combining-mark","text":"aé","keys":"A<Left>x<Esc>"},
+  {"name":"insert-arrow-left-at-the-line-start-then-dot","text":"ab\ncd\nef","keys":"jI<Left>x<Esc>j."},
+  {"name":"insert-arrow-left-with-a-count","text":"ab","keys":"2ixy<Left>z<Esc>"},
+  {"name":"insert-arrow-right-at-the-end-then-dot","text":"ab\ncd","keys":"A<Right>x<Esc>j."},
+  {"name":"insert-arrow-left-over-a-zwj-sequence","text":"a👨‍👩b","keys":"$i<Left>x<Esc>"},
+  {"name":"insert-arrow-left-at-the-line-start-keeps-the-count","text":"ab","keys":"2i<Left>x<Esc>"},
+  {"name":"insert-arrow-right-at-the-line-end-keeps-the-count","text":"ab","keys":"2A<Right>x<Esc>"}
 ]
