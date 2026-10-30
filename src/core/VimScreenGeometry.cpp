@@ -132,7 +132,7 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
     VimDisplayNavigation result{area.first, target};
     result.settled = vim_cursor_corrected(VimCursorWindow{area.first, area.below,
                                                           vim_viewport_of(view).visible_lines,
-                                                          view.scroll_margin},
+                                                          view.scroll_margin, view.layout.lines},
                                           target, view.text.line_count());
     return result;
 }
@@ -225,7 +225,7 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
     }
     target.caret = vim_cursor_corrected(VimCursorWindow{target.first, area.value().below,
                                                         vim_viewport_of(view).visible_lines,
-                                                        view.scroll_margin},
+                                                        view.scroll_margin, view.layout.lines},
                                         target.caret, view.text.line_count());
     return target;
 }

@@ -1,6 +1,7 @@
 #include "VimCursorCorrect.hpp"
 
 #include <algorithm>
+#include <span>
 #include <utility>
 
 namespace nenenib::core
@@ -37,7 +38,20 @@ using Wanted = std::pair<std::size_t, std::size_t>;
     return above < wanted.first && (above < below || below >= wanted.second);
 }
 
-// 窓の両端から欲しい分だけ 1 行ずつ詰めた範囲（Vim の topline と botline の狭め方）。
+// 詰める行の画面行の数（Vim の plines）。文字組みの無い道と載っていない行は 1（#1141）。
+[[nodiscard]] std::size_t rows_of(const VimCursorWindow &window, std::size_t line) noexcept
+{
+    const auto found = std::ranges::lower_bound(window.rows, line, {}, [](const VimLineRows &value)
+                                                { return value.line.value; });
+    if (found == window.rows.end() || found->line.value != line)
+    {
+        return 1;
+    }
+    return std::max<std::size_t>(found->rows, 1);
+}
+
+// 窓の両端から欲しい分だけ 1 行ずつ詰めた範囲（Vim の topline と botline の狭め方・上と下の数は
+// 詰めた行の画面行の数の和）。
 [[nodiscard]] std::pair<std::size_t, std::size_t> narrowed(const VimCursorWindow &window,
                                                            Wanted wanted) noexcept
 {
@@ -49,12 +63,12 @@ using Wanted = std::pair<std::size_t, std::size_t>;
     {
         if (narrows_below(wanted, above, below))
         {
-            ++below;
+            below += rows_of(window, bottom);
             --bottom;
         }
         if (narrows_above(wanted, above, below))
         {
-            ++above;
+            above += rows_of(window, top);
             ++top;
         }
     }

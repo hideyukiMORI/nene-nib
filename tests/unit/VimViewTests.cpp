@@ -366,8 +366,83 @@ void verify_operator_ranges_are_not_corrected(std::int32_t width)
            "#1099 VISUAL H with so=3 lands 3 lines below the top before d");
 }
 
+// 高さの違う行を挟む窓の cursor_correct（#1141・ADR 0019 の追補）。Vim
+// は余白を詰めるときに詰めた行の 画面行の数（plines）を足す。Vim 9.1.0004 を `:set lines=12
+// columns=40`（窓 11 行・40 桁）で、100 行の 本文の 1 行か 2 行を 190 字の `w`（5
+// 画面行）にして測った（D:/NeNeNib/scripts/1141/gen.py・ 前の窓が Vim と同じになる 540
+// 件のうち、直す前に 43 件が違った）。行は (高い行, 2 本目の高い行 （0 は無し）, 余白, 前の先頭,
+// 前の行, 鍵, 後の先頭, 後の行)。幅 400 の文字組みの替え玉は 40 升。
+using TallLanding = std::tuple<std::size_t, std::size_t, std::size_t, std::size_t, std::size_t,
+                               std::string_view, std::size_t, std::size_t>;
+constexpr std::array<TallLanding, 49> tall_landings{{
+    {30, 0, 2, 30, 32, "H", 30, 31},      {30, 0, 2, 30, 32, "M", 30, 31},
+    {30, 0, 2, 30, 32, "2H", 30, 31},     {30, 0, 2, 30, 33, "H", 30, 31},
+    {30, 0, 2, 30, 33, "M", 30, 31},      {30, 0, 2, 30, 33, "2H", 30, 31},
+    {30, 0, 3, 30, 32, "H", 30, 31},      {30, 0, 3, 30, 32, "M", 30, 31},
+    {30, 0, 3, 30, 32, "2H", 30, 31},     {30, 0, 3, 30, 32, "<C-b>", 25, 29},
+    {30, 0, 3, 30, 33, "H", 30, 31},      {30, 0, 3, 30, 33, "M", 30, 31},
+    {30, 0, 3, 30, 33, "2H", 30, 31},     {30, 0, 3, 30, 33, "<C-b>", 25, 29},
+    {36, 0, 2, 30, 32, "L", 30, 35},      {36, 0, 2, 30, 32, "M", 30, 35},
+    {36, 0, 2, 30, 32, "2L", 30, 35},     {36, 0, 2, 30, 33, "L", 30, 35},
+    {36, 0, 2, 30, 33, "M", 30, 35},      {36, 0, 2, 30, 33, "2L", 30, 35},
+    {36, 0, 3, 30, 33, "L", 30, 35},      {36, 0, 3, 30, 33, "M", 30, 35},
+    {36, 0, 3, 30, 33, "2L", 30, 35},     {36, 0, 3, 30, 33, "<C-f>", 35, 37},
+    {36, 0, 3, 26, 30, "<C-d>", 31, 35},  {31, 0, 2, 26, 30, "<C-f>", 31, 32},
+    {31, 0, 3, 30, 32, "H", 30, 32},      {31, 0, 3, 30, 32, "M", 30, 32},
+    {31, 0, 3, 30, 32, "2H", 30, 32},     {31, 0, 3, 30, 32, "<C-d>", 31, 33},
+    {31, 0, 3, 30, 33, "H", 30, 32},      {31, 0, 3, 30, 33, "M", 30, 32},
+    {31, 0, 3, 30, 33, "2H", 30, 32},     {31, 0, 3, 26, 30, "L", 26, 30},
+    {31, 0, 3, 26, 30, "M", 26, 30},      {31, 0, 3, 26, 30, "2L", 26, 30},
+    {31, 0, 3, 26, 30, "<C-f>", 31, 32},  {30, 31, 2, 26, 30, "L", 26, 29},
+    {30, 31, 2, 26, 30, "M", 26, 29},     {30, 31, 2, 26, 30, "2L", 26, 29},
+    {30, 31, 2, 26, 30, "<C-f>", 31, 32}, {2, 0, 2, 1, 1, "<C-d>", 2, 3},
+    {2, 0, 3, 1, 1, "<C-d>", 2, 3},       {30, 0, 2, 1, 1, "L", 1, 9},
+    {2, 0, 3, 1, 1, "L", 1, 4},           {36, 0, 2, 26, 30, "L", 26, 33},
+    {33, 0, 3, 26, 30, "H", 26, 29},      {30, 0, 2, 26, 30, "H", 26, 28},
+    {30, 0, 3, 90, 95, "<C-u>", 85, 90},
+}};
+
+void placed_tall_window(EditorController &controller, const TallLanding &row)
+{
+    applied(controller,
+            VisibleLines{measured_window, nenenib::core::TextViewGeometry{400, 20, 96}});
+    std::string text;
+    for (std::size_t line = 1; line <= measured_document; ++line)
+    {
+        const bool tall = line == std::get<0>(row) || line == std::get<1>(row);
+        text += (tall ? std::string(190, 'w') : "line" + std::to_string(line)) +
+                (line < measured_document ? "\n" : "");
+    }
+    static_cast<void>(controller.apply(InsertText{text}));
+    applied(controller, SelectEditMode{EditMode::vim});
+    static_cast<void>(run_ex(controller, "set so=0"));
+    vim_replay(controller, "gg" + std::to_string(std::get<3>(row)) + "Gzt" +
+                               std::to_string(std::get<4>(row)) + "G");
+    static_cast<void>(run_ex(controller, "set so=" + std::to_string(std::get<2>(row))));
+}
+
+void verify_tall_landings()
+{
+    for (const TallLanding &row : tall_landings)
+    {
+        Editing editing;
+        EditorController &controller = editing.controller();
+        placed_tall_window(controller, row);
+        vim_replay(controller, std::get<5>(row));
+        const auto frame = controller.frame();
+        const std::string description =
+            "#1141 so=" + std::to_string(std::get<2>(row)) + " " + std::string(std::get<5>(row)) +
+            " from line " + std::to_string(std::get<4>(row)) + " with the 5-row line " +
+            std::to_string(std::get<0>(row)) + " lands where Vim 9.1 does";
+        expect(frame.first_visible == LineNumber{std::get<6>(row)} &&
+                   frame.caret.position.line == LineNumber{std::get<7>(row)},
+               description.c_str());
+    }
+}
+
 void verify_scrolloff_cursor_correct()
 {
+    verify_tall_landings();
     for (const std::int32_t width : {0, 400})
     {
         verify_measured_landings(width);
