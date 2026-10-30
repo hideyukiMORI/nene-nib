@@ -18,6 +18,8 @@
 #include "MapRow.hpp"
 #include "Milestone.hpp"
 #include "SettingsCodec.hpp"
+#include "ShellRegistration.hpp"
+#include "ShellRegistrationStatus.hpp"
 #include "TemporaryFiles.hpp"
 #include "TemporaryTestDirectory.hpp"
 #include "TextEncoding.hpp"
@@ -27,6 +29,7 @@
 #include "Win32FileAdapter.hpp"
 #include "Win32FontCollationAdapter.hpp"
 #include "Win32SettingsAdapter.hpp"
+#include "Win32ShellRegistration.hpp"
 #include "Win32TimingAdapter.hpp"
 
 #include <windows.h>
@@ -66,12 +69,14 @@ using nenenib::adapters::win32::Win32ClipboardAdapter;
 using nenenib::adapters::win32::Win32CodePageAdapter;
 using nenenib::adapters::win32::Win32FileAdapter;
 using nenenib::adapters::win32::Win32SettingsAdapter;
+using nenenib::adapters::win32::Win32ShellRegistration;
 using nenenib::adapters::win32::Win32TimingAdapter;
 using nenenib::application::ClipboardFailure;
 using nenenib::application::CodePageFailure;
 using nenenib::application::FileFailure;
 using nenenib::application::FileWriteMode;
 using nenenib::application::SettingsFailure;
+using nenenib::application::ShellRegistrationStatus;
 using nenenib::core::byte_order_mark;
 using nenenib::core::default_editor_settings;
 using nenenib::core::detect_encoding;
@@ -2017,10 +2022,221 @@ void verify_font_collation()
     expect(collated_font_names(Names{}).empty(), "no names stay empty");
 }
 
+// エクスプローラーへの登録（ADR 0178 の決定 6）は、実機の HKCU の試験の根
+// `Software\NeNeNib\test-<pid>` の下にだけ書いて消す。本当の `Software\Classes` には書かない。
+constexpr wchar_t shell_test_parent[] = LR"(Software\NeNeNib)";
+constexpr std::wstring_view shell_test_prefix = L"test-";
+// 10 進の pid の桁の上限（DWORD に収まる 10 桁未満）。
+constexpr std::size_t shell_test_digits = 9;
+
+std::wstring shell_test_root(DWORD process)
+{
+    return std::format(LR"({}\{}{})", shell_test_parent, shell_test_prefix, process);
+}
+
+// 名前の pid のプロセスが生きているか。拒否は生きている側（TemporaryFiles と同じ・ADR 0135）。
+bool process_alive(DWORD process)
+{
+    const HANDLE handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, process);
+    if (handle != nullptr)
+    {
+        CloseHandle(handle);
+        return true;
+    }
+    return GetLastError() == ERROR_ACCESS_DENIED;
+}
+
+// `test-<10 進の pid>` の pid。形が違えば 0。
+DWORD shell_test_process(std::wstring_view name)
+{
+    if (!name.starts_with(shell_test_prefix))
+    {
+        return 0;
+    }
+    const auto digits = name.substr(shell_test_prefix.size());
+    if (digits.empty() || digits.size() > shell_test_digits)
+    {
+        return 0;
+    }
+    DWORD process = 0;
+    for (const wchar_t digit : digits)
+    {
+        if (digit < L'0' || digit > L'9')
+        {
+            return 0;
+        }
+        process = (process * 10) + static_cast<DWORD>(digit - L'0');
+    }
+    return process;
+}
+
+// 前の走りが失敗して残した根を消す（pid のプロセスが生きていないものだけ・ほかの席の走りは残す）。
+void reclaim_shell_test_roots()
+{
+    HKEY parent = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, shell_test_parent, 0, KEY_READ, &parent) != ERROR_SUCCESS)
+    {
+        return;
+    }
+    std::vector<std::wstring> stale;
+    std::array<wchar_t, 256> name{};
+    for (DWORD index = 0;; ++index)
+    {
+        auto length = static_cast<DWORD>(name.size());
+        if (RegEnumKeyExW(parent, index, name.data(), &length, nullptr, nullptr, nullptr,
+                          nullptr) != ERROR_SUCCESS)
+        {
+            break;
+        }
+        const DWORD process = shell_test_process(std::wstring_view(name.data(), length));
+        if (process != 0 && process != GetCurrentProcessId() && !process_alive(process))
+        {
+            stale.emplace_back(name.data(), length);
+        }
+    }
+    for (const auto &child : stale)
+    {
+        RegDeleteTreeW(parent, child.c_str());
+    }
+    RegCloseKey(parent);
+}
+
+// 鍵の下（副鍵を含む）の値の数。鍵が無ければ 0。
+std::size_t shell_test_values(HKEY parent, const std::wstring &path)
+{
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(parent, path.c_str(), 0, KEY_READ, &key) != ERROR_SUCCESS)
+    {
+        return 0;
+    }
+    DWORD children = 0;
+    DWORD values = 0;
+    RegQueryInfoKeyW(key, nullptr, nullptr, nullptr, &children, nullptr, nullptr, &values, nullptr,
+                     nullptr, nullptr, nullptr);
+    std::size_t total = values;
+    std::array<wchar_t, 256> name{};
+    for (DWORD index = 0; index < children; ++index)
+    {
+        auto length = static_cast<DWORD>(name.size());
+        if (RegEnumKeyExW(key, index, name.data(), &length, nullptr, nullptr, nullptr, nullptr) ==
+            ERROR_SUCCESS)
+        {
+            total += shell_test_values(key, std::wstring(name.data(), length));
+        }
+    }
+    RegCloseKey(key);
+    return total;
+}
+
+std::wstring shell_test_value(const std::wstring &key, const wchar_t *name)
+{
+    std::array<wchar_t, 1024> text{};
+    auto bytes = static_cast<DWORD>(text.size() * sizeof(wchar_t));
+    if (RegGetValueW(HKEY_CURRENT_USER, key.c_str(), name, RRF_RT_REG_SZ, nullptr, text.data(),
+                     &bytes) != ERROR_SUCCESS)
+    {
+        return L"<absent>";
+    }
+    return {text.data()};
+}
+
+nenenib::core::ShellRegistrationPlan shell_test_plan(const std::string &exe_path)
+{
+    return nenenib::core::shell_registration_plan({exe_path, "NeNe Nib で開く", "NeNe Nib",
+                                                   nenenib::core::shell_registration_extensions()})
+        .value_or(nenenib::core::ShellRegistrationPlan{});
+}
+
+// 書く → 読む → 別の exe の計画 → 消す → 読む → 根ごと片付けて残骸 0。
+void verify_shell_registration_round_trip(Win32ShellRegistration &registration,
+                                          const std::wstring &root)
+{
+    const auto exe = registration.executable_path();
+    expect(exe.has_value() && exe.value_or("").ends_with("nib_adapter_tests.exe"),
+           "the executable path is this test's exe");
+    const auto plan = shell_test_plan(exe.value_or("C:\\nib.exe"));
+    expect(!plan.empty(), "the plan for this exe is made");
+    expect(registration.status(plan) == ShellRegistrationStatus::absent,
+           "nothing is registered under a fresh test root");
+    expect(registration.apply(plan).has_value(), "the plan is written under the test root");
+    expect(registration.status(plan) == ShellRegistrationStatus::registered,
+           "the written plan reads back as registered");
+    const auto command = shell_test_value(root + LR"(\Classes\*\shell\NeNeNib\command)", nullptr);
+    // 末尾は単位ごとに比べる（UCRT の wmemcmp は揃っていない番地を 8 バイトで読み UBSan
+    // が落とす）。
+    constexpr std::wstring_view quoted_argument = L"\" \"%1\"";
+    expect(command.starts_with(L"\"") && command.size() > quoted_argument.size() &&
+               std::ranges::equal(
+                   std::wstring_view(command).substr(command.size() - quoted_argument.size()),
+                   quoted_argument),
+           "the verb's command is the quoted exe and the quoted %1");
+    expect(shell_test_value(root + LR"(\RegisteredApplications)", L"NeNeNib") ==
+               LR"(Software\NeNeNib\Capabilities)",
+           "the registered application points at the capabilities key unrooted");
+    expect(shell_test_value(root + LR"(\Classes\NeNeNib.txt\shell\open\command)", nullptr) ==
+               command,
+           "the .txt ProgId opens with the same command");
+    expect(registration.status(shell_test_plan("C:\\elsewhere\\NeNeNib.exe")) ==
+               ShellRegistrationStatus::registered_elsewhere,
+           "a plan for another exe sees the registration as elsewhere");
+    expect(shell_test_values(HKEY_CURRENT_USER, root) == plan.size(),
+           "every planned value and nothing else is under the test root");
+    expect(registration.remove(plan).has_value(), "the registration is removed");
+    expect(registration.status(plan) == ShellRegistrationStatus::absent,
+           "the removed registration reads back as absent");
+    expect(shell_test_values(HKEY_CURRENT_USER, root) == 0,
+           "no value is left under the test root after remove");
+    expect(registration.remove(plan).has_value(), "removing an absent registration succeeds");
+}
+
+// 右クリックの項目だけが消えた途中の登録は registered_elsewhere で、外すと残りも消える（R1-4）。
+void verify_partial_shell_registration(Win32ShellRegistration &registration,
+                                       const std::wstring &root)
+{
+    const auto plan = shell_test_plan(registration.executable_path().value_or("C:\\nib.exe"));
+    expect(registration.apply(plan).has_value(), "the plan is written again");
+    RegDeleteTreeW(HKEY_CURRENT_USER, (root + LR"(\Classes\*\shell\NeNeNib)").c_str());
+    expect(registration.status(plan) == ShellRegistrationStatus::registered_elsewhere,
+           "a registration without the verb is partial and can be removed");
+    // command が自分の exe でも、ほかの群（既定のアプリの木）が欠けていれば揃っていない（R2-1）。
+    expect(registration.apply(plan).has_value(), "the plan is written once more");
+    RegDeleteTreeW(HKEY_CURRENT_USER, (root + LR"(\NeNeNib)").c_str());
+    expect(registration.status(plan) == ShellRegistrationStatus::registered_elsewhere,
+           "an own command with a missing group is not registered");
+    expect(registration.remove(plan).has_value(), "the partial registration is removed");
+    expect(registration.status(plan) == ShellRegistrationStatus::absent &&
+               shell_test_values(HKEY_CURRENT_USER, root) == 0,
+           "no value of the partial registration is left");
+}
+
+void verify_shell_registration()
+{
+    reclaim_shell_test_roots();
+    const auto root = shell_test_root(GetCurrentProcessId());
+    RegDeleteTreeW(HKEY_CURRENT_USER, root.c_str());
+    Win32ShellRegistration registration(root);
+    verify_shell_registration_round_trip(registration, root);
+    verify_partial_shell_registration(registration, root);
+    RegDeleteTreeW(HKEY_CURRENT_USER, root.c_str());
+    HKEY left = nullptr;
+    const auto reopened = RegOpenKeyExW(HKEY_CURRENT_USER, root.c_str(), 0, KEY_READ, &left);
+    if (reopened == ERROR_SUCCESS)
+    {
+        RegCloseKey(left);
+    }
+    expect(reopened == ERROR_FILE_NOT_FOUND, "the test root is gone after the cleanup");
+    // 親の `Software\NeNeNib` は、値も副鍵も無いときだけ消す（製品の登録やほかの席の根は残る）。
+    if (shell_test_values(HKEY_CURRENT_USER, shell_test_parent) == 0)
+    {
+        RegDeleteKeyW(HKEY_CURRENT_USER, shell_test_parent);
+    }
+}
+
 bool known_scope(std::string_view scope)
 {
     return scope == "--settings-codec" || scope == "--settings" || scope == "--files" ||
-           scope == "--code-pages" || scope == "--clipboard" || scope == "--fonts";
+           scope == "--code-pages" || scope == "--clipboard" || scope == "--fonts" ||
+           scope == "--shell-registration";
 }
 
 int run_memory_tests(std::string_view scope)
@@ -2050,6 +2266,26 @@ int run_memory_tests(std::string_view scope)
     std::printf("Settings codec: %zu checks, %zu failures\n", check_count(), failure_count());
     return test_result();
 }
+
+// 一時フォルダを使わない、OS の共有の状態（クリップボード・HKCU の試験の根）の scope。
+bool system_scope(std::string_view scope)
+{
+    return scope == "--clipboard" || scope == "--shell-registration";
+}
+
+int run_system_tests(std::string_view scope)
+{
+    if (scope == "--shell-registration")
+    {
+        verify_shell_registration();
+        std::printf("Shell registration adapter: %zu checks, %zu failures\n", check_count(),
+                    failure_count());
+        return test_result();
+    }
+    verify_clipboard();
+    std::printf("Clipboard adapter: %zu checks, %zu failures\n", check_count(), failure_count());
+    return test_result();
+}
 int run_tests(int argc, char **argv)
 {
     const std::string_view scope = argc == 2 ? argv[1] : "";
@@ -2062,12 +2298,9 @@ int run_tests(int argc, char **argv)
     {
         return run_memory_tests(scope);
     }
-    if (scope == "--clipboard")
+    if (system_scope(scope))
     {
-        verify_clipboard();
-        std::printf("Clipboard adapter: %zu checks, %zu failures\n", check_count(),
-                    failure_count());
-        return test_result();
+        return run_system_tests(scope);
     }
     reset_folder();
     Win32FileAdapter files;
@@ -2102,6 +2335,7 @@ int run_tests(int argc, char **argv)
     verify_settings_migration(files);
     verify_clipboard();
     verify_font_collation();
+    verify_shell_registration();
     if (failure_count() != 0)
     {
         std::fprintf(stderr, "Nib adapter tests: %zu of %zu checks failed\n", failure_count(),

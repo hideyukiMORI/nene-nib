@@ -227,8 +227,10 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32LanguageServer.cpp)
 nenenib_link(nenenib_adapters nenenib_core)
 nenenib_link(nenenib_adapters nenenib_application)
-# RegGetValueW（OS のテーマ読み取り）だけ。ここが advapi32 を結ぶ唯一のモジュール。
+# RegGetValueW（OS のテーマ読み取り）とエクスプローラーへの登録の Reg*（ADR 0178）。ここが advapi32 を結ぶ唯一のモジュール。
 nenenib_system_link(nenenib_adapters advapi32)
+# SHChangeNotify（エクスプローラーへの登録の後の知らせ・ADR 0178 の決定 1）は shell32。
+nenenib_system_link(nenenib_adapters shell32)
 # クリップボード（OpenClipboard / SetClipboardData）と断りの音（MessageBeep・ADR 0153）は user32。
 nenenib_system_link(nenenib_adapters user32)
 

@@ -282,7 +282,7 @@ int run(HINSTANCE instance)
         worker, files, nenenib::adapters::win32::local_autosave_root());
     nenenib::adapters::win32::Win32Bell bell;
     nib_adapters::Win32Clock wall_clock;
-    nib_adapters::Win32ShellRegistration shell_registration;
+    nib_adapters::Win32ShellRegistration shell_registration(L"Software");
     nenenib::adapters::win32::Win32DocumentReader reads(worker, files, code_pages);
     nenenib::adapters::win32::Win32LanguageServer language_server({});
     nenenib::application::EditorController controller(
