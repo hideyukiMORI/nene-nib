@@ -4,8 +4,8 @@
 
 namespace nenenib::core
 {
-// 語の種類を決める code point の区間（Vim の utf_class_tab に対応する表の 1 行）。
-// group が同じ文字どうしが 1 つの語になる。0 は空白、1 は記号、2 は語の文字。
+// 語の種類を決める code point の区間（Vim の utf_class_buf の classes[] / emoji_all[] の 1 行）。
+// group が同じ文字どうしが 1 つの語になる。0 は空白、1 は記号、2 以上は語の文字（3 は絵文字）。
 struct VimCharacterRange
 {
     char32_t first;
