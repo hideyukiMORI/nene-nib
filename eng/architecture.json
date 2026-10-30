@@ -1,6 +1,6 @@
 {
   "modules": {
-    "third_party_md4c": {"path": "third_party/md4c", "dependencies": []},
+    "third_party_md4c": {"path": "third_party/md4c", "dependencies": [], "exports": ["md_parse"]},
     "core": {"path": "src/core", "dependencies": ["third_party_md4c"]},
     "application": {"path": "src/application", "dependencies": ["core"]},
     "adapters_win32": {"path": "src/adapters/win32", "dependencies": ["application", "core"]},

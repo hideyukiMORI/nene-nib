@@ -46,7 +46,7 @@ md4c は SAX 型（`enter_block / leave_block / enter_span / leave_span / text` 
 - 止める述語 `MarkdownStop` は関数ポインタと借りた文脈の対（core は `<functional>` の `std::function` を使っていない）。`MarkdownStop::asking(呼び出し可能な値)` と `MarkdownStop::never()`。
 - md4c の enter / leave を畳む型は `MarkdownBuilder`（md4c の型を知らない・1 ファイル 1 型）。実体参照の表は `MarkdownEntity`（名前つきは CommonMark の例の 15 個・数値は 0・サロゲート・U+10FFFF 超を U+FFFD）。`marker` は決定 7 のまま `std::string`（番号つきは区切りが `)` でも `"N."`・箇条書きは `"•"`）。記号だけの項目（`- - a` の外側・`-` だけの行）は空の `list_item` を 1 つ出す。
 - `source_begin` は NORMAL / ENTITY と、本文の中を指す CODE / HTML の text から引く（コードブロックの本体の行は本文の中・行末と字下げは外）。中かどうかは `std::less_equal` の全順序で比べる。文字の無い要素の補いは「直前の位置つきの text の終わりの次の行から空行を飛ばした最初の行の行頭」・前に何も無ければ本文の先頭から空行を飛ばす（決定 8 の追記）。行の探索は位置を持たない要素のときだけ走る。行の終わりは md4c と同じく CR・LF・CRLF のどれでもよい（CRLF は 1 つ・2026-10-27・#887。LF だけを行の終わりとみなしていて、CR だけの改行の後ろの空の項目の `source_begin` が本文の末尾を指していた）。
-- `eng/symbols.py` は core の未定義 `md_parse` を閉包の `nenenib_md4c.lib` の定義で解決し、`eng/symbol-allowlist.json` は変えずに 0 violation（#772 の名指しの import は不要だった）。
+- `eng/symbols.py` は core の未定義 `md_parse` を閉包の `nenenib_md4c.lib` の定義で解決し、`eng/symbol-allowlist.json` は変えずに 0 violation（#764 の時点の記録。#772 の名指しの import は不要だった。その後 #772 で、third_party の定義は `exports` に名指しした API だけが解決する形にした・下の追補）。
 - 16 MiB の parse（組み立て込み）の probe は `markdown-parse-mixed-16mib`（入力は probe の (i) と同じ 16,777,183 バイト・209,263 要素）。Release（`77f391d`・負荷 1〜5%）の 10 回で中央値 143.2 ms・最小 141.4 ms（md4c だけの 63.8 ms に、組み立てが約 80 ms 足される）。正式な速さのゲートではない。
 
 ## 決定 16〜18（2026-10-21 追記・#784）: 描画の保持と painter の形
@@ -81,10 +81,17 @@ md4c は SAX 型（`enter_block / leave_block / enter_span / leave_span / text` 
 - 実体参照の表は CommonMark の例の範囲。表の外は綴りのまま。
 - builder の確保の失敗（と止める述語が投げた `bad_alloc`）は、md4c に渡すコールバックの中で受けて打ち切りの値を返し、`parse_markdown` は `MarkdownFailure::insufficient_memory` で返す（#817 の追補）。例外は md4c の C のフレームを通らず、md4c は自分の確保を解放して戻る（`/EHsc` は `extern "C"` の `md_parse` を投げないものとして扱うので、`md_parse` の外では受けない）。プレビューの入力は上限（計画 M-3・16 MiB）で抑える。
 - 表・脚注・数式・画像・HTML の解釈はしない（初版の範囲案）。
-- `eng/symbols.py` は core の未定義を閉包の定義で解決するので、Debug の `nenenib_md4c.lib` が定義する UCRT の inline の `sprintf` 系を core が呼んでも ARC-003 にならない。名指しの API（`md_parse`）だけに限るのは #772。
+- （#772 で解いた）`eng/symbols.py` は core の未定義を閉包の定義の全部で解決していたので、Debug の `nenenib_md4c.lib` が定義する UCRT の inline の `sprintf` 系を core が呼んでも ARC-003 にならなかった。third_party の定義で解決するのを名指しの API（`md_parse`）だけに限った（下の追補）。
+
+## 追補（#772・2026-10-30）: third_party の定義で解決するのは名指しの API だけ
+
+- `eng/architecture.json` の third_party のモジュール（path が `third_party/` で始まる）は `exports` に公開シンボルを完全な名前で持つ（md4c は `md_parse` の 1 つ）。`eng/symbols.py` の `unresolved` は、依存先が third_party のときその定義のうち `exports` に載るものだけを `provided` に入れる（関数 `offered`）。`exports` の無い third_party は何も解決しない。
+- third_party 自身の未定義は、これまでどおり自分の定義の全部で解決する（md4c の中の `sprintf` 系の包みは md4c の中で閉じる）。
+- これで core が `sprintf` などを呼ぶと、Debug の `nenenib_md4c.lib` が同じ名前を定義していても `ARC-003: core: undeclared external symbol sprintf` で落ちる。正例・反例は `tests/conformance/test_symbols.py`、実ライブラリでの反例の記録は PR の本文。
 
 ## 強制
 
 - CNF-013（`thirdPartyDigests` の照合・planned → 正例・反例を足して active）。
 - `eng/targets.cmake` の `nenenib_third_party_target` 以外に C の target を作れない（モジュールの検査）。
+- ARC-003（active）: `eng/symbols.py` の `offered` が、third_party の定義のうち `eng/architecture.json` の `exports`（md4c は `md_parse`）に載るものだけで依存元の未定義を解決する。正例・反例は `tests/conformance/test_symbols.py`（#772）。
 - `md4c.h` の include は `src/core/MarkdownParse.cpp` の 1 か所。CNF-009 と同じ字句検査（`eng/conformance.py` の `concurrency_and_simd`）が `src/` の中のほかのファイルの include を ARC-002 で拒否する。ヘッダ名と許す path は `eng/conformance-rules.json` の `markdownParserHeader` / `markdownParserAllowedPath`、正例・反例は `tests/conformance/test_conformance.py`（#765）。
