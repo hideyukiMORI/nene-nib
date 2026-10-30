@@ -348,7 +348,6 @@ void verify_too_long()
     CloseHandle(child);
 }
 
-// stop は止まらない子を待たずに戻り、expire_retired が Job Object ごと殺す（ADR 0160 の追補）。
 // 空行の来ない見出しが 8 KiB を超えたら header_too_long（ADR 0160 の決定 3・#1022）。本文は
 // 届かず、以後は読まない。
 void verify_header_too_long()
@@ -363,6 +362,7 @@ void verify_header_too_long()
     server.stop();
 }
 
+// stop は止まらない子を待たずに戻り、expire_retired が Job Object ごと殺す（ADR 0160 の追補）。
 void verify_stop_does_not_wait()
 {
     adapters::Win32LanguageServer server([] {});
