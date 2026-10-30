@@ -404,6 +404,31 @@ void open_grid_window(EditorController &controller, std::string_view margin)
 
 using GridPlace = std::pair<std::size_t, std::size_t>;
 
+// 読み替えの 2 つの端（R5-1）。下の余白: 末尾の見える窓（下の余白 0）で最後から 2 番目の画面行に
+// いたキャレットは、Ctrl-b の後の末尾の見えない窓では下に 3 画面行を残すように上へ寄る（Ctrl-d 4 回
+// で先頭 15・キャレット 23、Ctrl-b で先頭 5・キャレット 13 → 11）。上の余白 0: 余白 0 で置いた
+// キャレットから so=3 の Ctrl-u で最上段が文書の最初の画面行に戻ると、上へは寄せない。
+void verify_grid_rows_edges()
+{
+    Editing lower;
+    EditorController &below = lower.controller();
+    open_grid_window(below, "3");
+    vim_replay(below, "<C-d><C-d><C-d><C-d>");
+    expect(grid_top_and_column(below) == GridPlace{15, 187},
+           "#1142 grid Ctrl-d to the end leaves no lower margin");
+    vim_replay(below, "<C-b>");
+    expect(grid_top_and_column(below) == GridPlace{5, 91},
+           "#1142 grid Ctrl-b keeps 3 screen rows below the caret when the end is hidden");
+    Editing upper;
+    EditorController &above = upper.controller();
+    open_grid_window(above, "0");
+    vim_replay(above, "<C-d>gj");
+    static_cast<void>(run_ex(above, "set so=3"));
+    vim_replay(above, "<C-u>");
+    expect(grid_top_and_column(above) == GridPlace{0, 11},
+           "#1142 grid Ctrl-u back to the first screen row has no upper margin");
+}
+
 void verify_grid_rows_cursor_correct()
 {
     Editing paged;
@@ -436,6 +461,7 @@ void verify_grid_rows_cursor_correct()
     vim_replay(unmargined, "<C-f>");
     expect(grid_top_and_column(unmargined) == GridPlace{10, 83},
            "#1142 grid Ctrl-f with so=0 is unchanged (the caret on the new top row)");
+    verify_grid_rows_edges();
 }
 } // namespace
 

@@ -259,6 +259,7 @@ using Edges = std::pair<bool, bool>;
 {
     const std::size_t top = edges.first ? 1 : 2;
     const std::size_t below = top + shown;
+    // 読み替えた行は 1 画面行なので rows を渡さない（本物の行の高さが掛かる・#1176 の後も）。
     const VimCursorWindow window{LineNumber{top}, LineNumber{below},
                                  vim_viewport_of(view).visible_lines, view.scroll_margin};
     const auto line =
