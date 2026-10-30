@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 76961dce3f88c527935d4cec22a7f5194ea0fe3d09cff3875445a3812492c537 / 3171 fixtures
+// fixtures.json: sha256 fb2f48607be270122c291eff4b8b7b2685986901f8be2469eed2ce14ce2e15ff / 3171 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -3102,7 +3102,7 @@ constexpr std::array<VimFixture, 3171> vim_fixtures{{
     {"search-composing-ic-backward", "x é É", ":set ic<CR>?é<CR>", "x é É", 1, 3, "", "", std::nullopt},
     {"search-composing-ic-n", "x é É é", ":set ic<CR>/é<CR>n", "x é É é", 1, 11, "", "", std::nullopt},
     {"search-composing-ic-scs-lower", "x É é", ":set ic<CR>:set scs<CR>/é<CR>", "x É é", 1, 7, "", "", std::nullopt},
-    {"search-composing-ic-base-before-folds", "x XÉ xé Xé", ":set ic<CR>/xé<CR>", "x XÉ xé Xé", 1, 8, "", "", std::nullopt},
+    {"search-composing-ic-base-before-folds", "x XÉ Xé xé", ":set ic<CR>/xé<CR>", "x XÉ Xé xé", 1, 8, "", "", std::nullopt},
     {"search-composing-ic-after-folds", "x éX éx", ":set ic<CR>/éx<CR>", "x éX éx", 1, 3, "", "", std::nullopt},
     {"search-composing-ic-two-marks", "x é̂ É̂ é̂", "w:set ic<CR>/é̂<CR>", "x é̂ É̂ é̂", 1, 15, "", "", std::nullopt},
     {"search-composing-ic-greek", "x Ί ί", ":set ic<CR>/ί<CR>", "x Ί ί", 1, 8, "", "", std::nullopt},

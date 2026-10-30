@@ -227,8 +227,10 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
 }
 
 // 結合文字（幅 0・ADR 0053 と同じ表）と、その直前の繰り返しの無い literal を畳まない印にする
-// （#1147・Vim 9.1 の NFA_COMPOSING は `mc == sta->c` で比べる）。`[e]` の集合と `e*` の後ろの
-// 結合文字の前は別の原子なので畳む（`/[e]` + U+0301 は `E` + U+0301 に当たる・実測）。
+// （#1147・Vim 9.1 の NFA_COMPOSING は `mc == sta->c` で比べる）。`[e]` の集合は別の原子なので
+// 畳む（`/[e]` + U+0301 は `E` + U+0301 に当たる・実測）。`e*` + 結合文字の `e` も別の原子として
+// 畳むのは Vim の nfa_regatom の読みで、Vim 9.1 の実測（`:set ic` で E486）とは合わない残差
+// （ADR 0032 追補 7）。
 void marked_exact(std::vector<VimPatternAtom> &atoms) noexcept
 {
     for (std::size_t index = 0; index < atoms.size(); ++index)

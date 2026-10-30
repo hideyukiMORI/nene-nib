@@ -3089,7 +3089,7 @@
   {"name":"search-composing-ic-backward","text":"x é É","keys":":set ic<CR>?é<CR>"},
   {"name":"search-composing-ic-n","text":"x é É é","keys":":set ic<CR>/é<CR>n"},
   {"name":"search-composing-ic-scs-lower","text":"x É é","keys":":set ic<CR>:set scs<CR>/é<CR>"},
-  {"name":"search-composing-ic-base-before-folds","text":"x XÉ xé Xé","keys":":set ic<CR>/xé<CR>"},
+  {"name":"search-composing-ic-base-before-folds","text":"x XÉ Xé xé","keys":":set ic<CR>/xé<CR>"},
   {"name":"search-composing-ic-after-folds","text":"x éX éx","keys":":set ic<CR>/éx<CR>"},
   {"name":"search-composing-ic-two-marks","text":"x é̂ É̂ é̂","keys":"w:set ic<CR>/é̂<CR>"},
   {"name":"search-composing-ic-greek","text":"x Ί ί","keys":":set ic<CR>/ί<CR>"},
