@@ -3,6 +3,7 @@
 
 #include "CommandEdit.hpp"
 #include "DisplayText.hpp"
+#include "DocumentCaret.hpp"
 #include "Edit.hpp"
 #include "EditMode.hpp"
 #include "ExLineRequest.hpp"
@@ -95,17 +96,6 @@ void place_insert_left(EditorState &state, std::optional<std::size_t> left)
     marks.last_insert = core::vim_mark_position_of(
         state.text(), core::Offset{state.selection().caret.value + left.value()});
     state = state.with_vim_marks(std::move(marks));
-}
-
-// engine のキャレットは LF で数えた位置なので、直したあとの本文の上へずらす
-// （CRLF は改行 1 つにつき 1 バイト長い）。数えるのは貼る位置からキャレットまでの改行だけ。
-[[nodiscard]] core::Offset caret_after_insert(core::Offset at, std::string_view utf8,
-                                              core::Offset caret, std::size_t newline_bytes)
-{
-    const auto inside = static_cast<std::ptrdiff_t>(caret.value - at.value);
-    const auto newlines =
-        static_cast<std::size_t>(std::count(utf8.begin(), utf8.begin() + inside, '\n'));
-    return core::Offset{caret.value + newlines * (newline_bytes - 1)};
 }
 
 // 確定の検索の鍵と同じ vim_find_match 1 本で探した当たりの位置（ADR 0041 の決定 1）。
@@ -862,15 +852,17 @@ void EditorController::perform(const core::VimInsertAt &effect)
     const std::string_view newline = core::newline_of(state_.line_ending());
     replace(core::OffsetRange{effect.at, effect.at}, with_document_newlines(effect.utf8, newline),
             effect.boundary);
-    move_caret_to(caret_after_insert(effect.at, effect.utf8, effect.caret, newline.size()),
-                  core::SelectionAnchoring::collapse);
+    move_caret_to(
+        core::document_caret_after(effect.at, effect.utf8, effect.caret, state_.line_ending()),
+        core::SelectionAnchoring::collapse);
 }
 
 void EditorController::perform(const core::VimReplaceRange &effect)
 {
     const std::string_view newline = core::newline_of(state_.line_ending());
     replace(effect.range, with_document_newlines(effect.utf8, newline), effect.boundary);
-    move_caret_to(caret_after_insert(effect.range.begin, effect.utf8, effect.caret, newline.size()),
+    move_caret_to(core::document_caret_after(effect.range.begin, effect.utf8, effect.caret,
+                                             state_.line_ending()),
                   core::SelectionAnchoring::collapse);
 }
 

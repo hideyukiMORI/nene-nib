@@ -2,6 +2,7 @@
 
 #include "CaretMotion.hpp"
 #include "CaretMove.hpp"
+#include "DocumentCaret.hpp"
 #include "LineEnding.hpp"
 #include "Selection.hpp"
 #include "Utf8.hpp"
@@ -488,18 +489,6 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     return std::pair{std::move(body), std::move(edits)};
 }
 
-// 置き換えのキャレットを文書の本文の上の位置へ直す（#1107）。置き換えの本文とキャレットは LF で
-// 数える（controller の caret_after_insert と同じ）ので、CRLF の文書ではキャレットまでの改行
-// 1 つにつき 1 バイト後ろへずらす（前の行とつないでから改行で 1 行目へ戻った流し直し）。
-[[nodiscard]] Offset document_caret(const TextBuffer &text, const VimReplaceRange &replaced)
-{
-    const std::string_view typed = std::string_view{replaced.utf8}.substr(
-        0, replaced.caret.value - replaced.range.begin.value);
-    const auto newlines = static_cast<std::size_t>(std::ranges::count(typed, '\n'));
-    const std::size_t extra = newline_of(text.line_ending()).size() - 1;
-    return Offset{replaced.caret.value + newlines * extra};
-}
-
 // 矩形の INSERT の Esc（ADR 0035 の追補 #1042）。1 行目が入る前より伸びたぶんを打った本文として
 // 読み（回数の繰り返しもその後ろに足す）、残りの行の同じ桁へ写して 1 行目の INSERT と 1 つの undo
 // 単位にする。何も打たなかったら写さない。`I` `A` は Esc の行が 1 行目でなければ（改行を打った）
@@ -529,7 +518,10 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     }
     if (const auto *replaced = std::get_if<VimReplaceRange>(&step.effect))
     {
-        resting = document_caret(text, *replaced);
+        // 置き換えのキャレットは LF で数えるので、文書の位置の insert.caret と比べる前に直す
+        // （前の行とつないでから改行で 1 行目へ戻った流し直し・CRLF・#1107）。
+        resting = document_caret_after(replaced->range.begin, replaced->utf8, replaced->caret,
+                                       text.line_ending());
     }
     if (const auto *moved = std::get_if<VimMoveTo>(&step.effect))
     {
