@@ -85,6 +85,10 @@ void verify_format_conversion()
            "a lone CR stays a character when writing LF");
     expect(core::line_endings_converted("x\r\ny", core::LineEnding::crlf) == "x\r\ny",
            "a literal CR right before LF becomes one CRLF (the boundary of ADR 0036)");
+    expect(core::line_endings_converted("a\r\r\nb", core::LineEnding::lf) == "a\r\nb",
+           "a literal CR before a CRLF newline stays when writing LF");
+    expect(core::line_endings_converted("a\r\r\nb", core::LineEnding::crlf) == "a\r\r\nb",
+           "a literal CR before a CRLF newline is kept as is when writing CRLF");
     expect(core::line_endings_converted("", core::LineEnding::crlf).empty() &&
                core::line_endings_converted("\n", core::LineEnding::crlf) == "\r\n" &&
                core::line_endings_converted("\r\n", core::LineEnding::lf) == "\n",

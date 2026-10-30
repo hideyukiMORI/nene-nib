@@ -309,15 +309,25 @@ constexpr std::array<std::string_view, 2> line_ending_options{"fileformat", "ff"
 
 // 保存の形は文書の値で設定に載せない。問いの文言は今の値を知る controller が `fileencoding=<名前>`
 // `fileformat=<名前>` に書き換えるので、ここでは欄の名前だけ。
+// 欄の名前（完全な形）。
+[[nodiscard]] std::string_view format_option_name(DocumentFormatKind kind) noexcept
+{
+    switch (kind)
+    {
+    case DocumentFormatKind::encoding:
+        return encoding_options.front();
+    case DocumentFormatKind::line_ending:
+        return line_ending_options.front();
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] ExResult format_result(DocumentFormatKind kind, std::optional<DocumentFormat> chosen)
 {
-    const std::string_view name = kind == DocumentFormatKind::encoding
-                                      ? encoding_options.front()
-                                      : line_ending_options.front();
     return ExResult{.settings = std::nullopt,
                     .highlight = std::nullopt,
                     .incsearch = std::nullopt,
-                    .message = DisplayText::parse(name).value(),
+                    .message = DisplayText::parse(format_option_name(kind)).value(),
                     .format = ExFormatRequest{kind, chosen}};
 }
 

@@ -496,11 +496,17 @@ void EditorController::answer_format(const core::ExFormatRequest &request)
         return;
     }
     const Document &document = state_.document();
-    const std::string message =
-        request.kind == core::DocumentFormatKind::encoding
-            ? "fileencoding=" + std::string(core::encoding_option_name(document.encoding))
-            : "fileformat=" + std::string(core::line_ending_option_name(
-                                  save_line_ending_of(document, state_.line_ending())));
+    std::string message;
+    switch (request.kind)
+    {
+    case core::DocumentFormatKind::encoding:
+        message = "fileencoding=" + std::string(core::encoding_option_name(document.encoding));
+        break;
+    case core::DocumentFormatKind::line_ending:
+        message = "fileformat=" + std::string(core::line_ending_option_name(
+                                      save_line_ending_of(document, state_.line_ending())));
+        break;
+    }
     state_ = state_.with_command_message(core::DisplayText::parse(message).value());
 }
 
