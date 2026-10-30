@@ -1,6 +1,6 @@
 #include "PreviewTextLayouts.hpp"
 
-#include "PreviewPlacement.hpp"
+#include "PreviewMetrics.hpp"
 #include "Utf16.hpp"
 
 #include <algorithm>

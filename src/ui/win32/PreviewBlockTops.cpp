@@ -1,7 +1,7 @@
 #include "PreviewBlockTops.hpp"
 
 #include "PreviewBlockKind.hpp"
-#include "PreviewPlacement.hpp"
+#include "PreviewMetrics.hpp"
 #include "PreviewTaskBox.hpp"
 #include "RenderFailure.hpp"
 

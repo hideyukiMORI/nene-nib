@@ -17,7 +17,7 @@
 #include "PaletteOrigin.hpp"
 #include "PaneLayouts.hpp"
 #include "PaneRole.hpp"
-#include "PreviewPlacement.hpp"
+#include "PreviewMetrics.hpp"
 #include "PreviewTextStyle.hpp"
 #include "ReplacedTints.hpp"
 #include "RgbaColor.hpp"

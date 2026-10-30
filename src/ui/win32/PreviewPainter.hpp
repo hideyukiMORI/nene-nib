@@ -4,7 +4,7 @@
 #include "PreviewBlock.hpp"
 #include "PreviewBrushes.hpp"
 #include "PreviewInk.hpp"
-#include "PreviewPlacement.hpp"
+#include "PreviewMetrics.hpp"
 #include "PreviewScene.hpp"
 #include "PreviewStyle.hpp"
 #include "PreviewTaskBox.hpp"
