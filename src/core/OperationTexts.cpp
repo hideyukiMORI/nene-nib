@@ -39,6 +39,8 @@ namespace
     case EditorOperation::toggle_explorer:
     case EditorOperation::choose_explorer_root:
     case EditorOperation::insert_date_time:
+    case EditorOperation::register_shell:
+    case EditorOperation::unregister_shell:
         return true;
     }
     return false;

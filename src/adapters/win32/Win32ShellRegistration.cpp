@@ -2,6 +2,12 @@
 
 namespace nenenib::adapters::win32
 {
+std::expected<std::string, application::ShellRegistrationFailure>
+Win32ShellRegistration::executable_path()
+{
+    return std::unexpected(application::ShellRegistrationFailure::io_error);
+}
+
 std::expected<void, application::ShellRegistrationFailure>
 Win32ShellRegistration::apply(const core::ShellRegistrationPlan &)
 {

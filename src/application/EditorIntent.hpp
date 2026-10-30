@@ -37,6 +37,7 @@
 #include "PointTitleBar.hpp"
 #include "PreviewTick.hpp"
 #include "RefreshAppearance.hpp"
+#include "RegisterShell.hpp"
 #include "RestoreAutosave.hpp"
 #include "SaveDocument.hpp"
 #include "ScrollExplorer.hpp"
@@ -61,6 +62,7 @@
 #include "ToggleExplorer.hpp"
 #include "TogglePreview.hpp"
 #include "TogglePreviewTask.hpp"
+#include "UnregisterShell.hpp"
 #include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
 #include "WalkRecentTab.hpp"
@@ -84,5 +86,5 @@ using EditorIntent = std::variant<
     OpenOperationList, PointText, SelectDisplay, SelectLanguage, SelectSyntax, ScrollPaletteList,
     SplitPane, SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick, TogglePreviewTask,
     ToggleExplorer, ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen,
-    LanguageServerTick, MapTimeout, InsertDateTime>;
+    LanguageServerTick, MapTimeout, InsertDateTime, RegisterShell, UnregisterShell>;
 } // namespace nenenib::application

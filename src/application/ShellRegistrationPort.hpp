@@ -5,6 +5,7 @@
 #include "ShellRegistrationStatus.hpp"
 
 #include <expected>
+#include <string>
 
 namespace nenenib::application
 {
@@ -21,6 +22,9 @@ class ShellRegistrationPort
     ShellRegistrationPort &operator=(const ShellRegistrationPort &) = delete;
     ShellRegistrationPort &operator=(ShellRegistrationPort &&) = delete;
 
+    // 自分の exe の完全なパス（UTF-8）。計画の材料で、登録の操作のときだけ呼ぶ（決定 1・4）。
+    [[nodiscard]] virtual std::expected<std::string, ShellRegistrationFailure>
+    executable_path() = 0;
     // 計画の鍵と値を書く（既にある値は上書き）。
     [[nodiscard]] virtual std::expected<void, ShellRegistrationFailure>
     apply(const core::ShellRegistrationPlan &plan) = 0;
