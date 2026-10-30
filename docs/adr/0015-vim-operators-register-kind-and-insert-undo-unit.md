@@ -116,7 +116,7 @@ VISUAL の `y` は触らない。`d` `c` の後のキャレットは別の規則
 - #781 の追記の「限界」を閉じる。生成器 `eng/case-mapping.py` は、Python の `str.upper` / `str.lower` が SpecialCasing の 1 対多を返す字のうち、**UnicodeData.txt（Unicode 15.0.0）の簡単な写像を持つ 28 字を上書きの表 `SIMPLE_OVERRIDES` に持つ**（大文字化は U+1F80〜U+1F87・U+1F90〜U+1F97・U+1FA0〜U+1FA7 の 24 字と U+1FB3・U+1FC3・U+1FF3 をタイトルケースの U+1F88 などへ、小文字化は `İ`（U+0130）を `i` へ）。
   上書きは「Python の写像が 2 code point 以上の字」だけに許し（生成器が検査する）、生成物の見出しに字数を書く。表の形・生成の仕組み・CNF-010 は変えない。生成した表は固定 Vim 9.1 の `toupper()` `tolower()` と U+0080〜U+10FFFF の全数で一致する（2026-10-30 に再測定・違い 0）。
 - **`ß` の 1 対多は表の外の 1 か所**で、`cased_text` が `gU` と VISUAL の `U`（`VimOperator::upper_case`）のときだけ `ß` を `SS` にする（Vim の `swapchar` の OP_UPPER の特別扱い）。`~` `g~` `gu` と VISUAL の `~` `u` は `ß` を変えない。`ß` も `SS` も 2 バイトなので、範囲の後ろのバイトの位置は変わらない。矩形の `U` も同じ `cased_text` を通る。
-- 照合（`ignorecase` / `smartcase`）は同じ表を引くので、`smartcase` は `İ` を大文字として数え（Vim の `utf_isupper` と同じ）、`[ᾈ]` の大小を畳む照合は `ᾀ` にも当たる。照合の残りは #1147。
+- 照合（`ignorecase` / `smartcase`）は同じ表を引くので、`smartcase` は `İ` を大文字として数え、`[ᾈ]` の大小を畳む照合は `ᾀ` にも当たる。どちらも固定 Vim 9.1 で実測した（`:set ic scs`・本文 `xB a` で `search('İ\|b', 'cW')` は 0（`İ` が大文字なので大小を区別し `b` が `B` に当たらない）・対照の `ı\|b` と `x\|b` は 1・`:set ic` の `/[ᾈ]` は `ᾀ` に当たる）。照合の残りは #1147。
 - fixture は `case-rest-` の 14 件（`İ` の `guu` `~` VISUAL の `u`・ギリシャの `gUU` `g~~` `3~`・`ß` の `gUU` `gUl` `.` `~` `g~~` `guu` VISUAL の `U` と `V` の `U`・Vim 9.1 の実測）。#781 の `unicode-case-turkish-dotted-I-upper` はそのまま。
 
 ### 決定 14（2026-10-29 追記・#1038）
