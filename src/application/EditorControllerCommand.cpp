@@ -6,6 +6,8 @@
 #include "CommandLayout.hpp"
 #include "CommandPalette.hpp"
 #include "DisplayText.hpp"
+#include "EditBoundary.hpp"
+#include "EditorSettings.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExLineRequest.hpp"
 #include "ExMapCommand.hpp"
@@ -14,22 +16,28 @@
 #include "ExResult.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
+#include "FindPhase.hpp"
 #include "FindState.hpp"
 #include "FontFamilies.hpp"
 #include "GoToLineInput.hpp"
 #include "InputLinePrompt.hpp"
 #include "LiteralPattern.hpp"
+#include "Offset.hpp"
+#include "OffsetRange.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteMarks.hpp"
 #include "SearchLine.hpp"
 #include "StatusBarLayout.hpp"
+#include "SubstituteAll.hpp"
 #include "TabDestination.hpp"
 #include "TabJump.hpp"
 #include "TabJumpDirection.hpp"
 #include "TextPosition.hpp"
+#include "Utf8.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimMode.hpp"
+#include "VimPattern.hpp"
 #include "VimSearchPattern.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimStep.hpp"
@@ -120,6 +128,7 @@ namespace
     case core::InputLinePrompt::search_backward:
         return true;
     case core::InputLinePrompt::find:
+    case core::InputLinePrompt::replace_with:
     case core::InputLinePrompt::go_to_line:
     case core::InputLinePrompt::ex:
     case core::InputLinePrompt::palette:
@@ -130,8 +139,10 @@ namespace
 
 // 「行: 」が数でないときの知らせ（ADR 0174 の決定 8）。
 constexpr std::string_view not_a_line_notice = "行番号を入れてください";
-// 置換の本体は #1046 の N1b（ADR 0174 の決定 3・7）。
-constexpr std::string_view replace_later_notice = "置換は後続です";
+// Vim モードで一覧から「置換」を選んだときの `:` の前置き（ADR 0174 の決定 2）。
+constexpr std::string_view vim_replace_prefix = "%s/";
+// 置換の起点を戻す幅（UTF-8 の 1 コードポイントの最大のバイト数）。
+constexpr std::size_t code_point_bytes = 4;
 } // namespace
 
 bool EditorController::command_line_active() const noexcept
@@ -147,7 +158,8 @@ bool EditorController::find_line_active() const noexcept
         return false;
     }
     const auto *line = std::get_if<core::SearchLine>(&input.value());
-    return line != nullptr && line->prompt() == core::InputLinePrompt::find;
+    return line != nullptr && (line->prompt() == core::InputLinePrompt::find ||
+                               line->prompt() == core::InputLinePrompt::replace_with);
 }
 
 std::optional<core::InputLineView> EditorController::command_line_view() const
@@ -157,7 +169,14 @@ std::optional<core::InputLineView> EditorController::command_line_view() const
     {
         return std::nullopt;
     }
-    return input_line_of(input.value());
+    auto view = input_line_of(input.value());
+    // 「置換後: 」は 2 つの欄を同時に見せられないので、検索語をプロンプトに添える（ADR 0174
+    // の結果）。
+    if (view.prompt == core::InputLinePrompt::replace_with)
+    {
+        view.prompt_detail = state_.find().pattern;
+    }
+    return view;
 }
 
 void EditorController::accept(const CommandText &intent)
@@ -275,7 +294,16 @@ std::optional<core::VimRepeatFailure> EditorController::submit(const core::Searc
     switch (line.prompt())
     {
     case core::InputLinePrompt::find:
-        return hop_find(line, core::VimSearchDirection::forward, true);
+        switch (state_.find().phase)
+        {
+        case FindPhase::find:
+            return hop_find(line.text(), core::VimSearchDirection::forward, true);
+        case FindPhase::replace_with:
+            return advance_to_replacement(line);
+        }
+        std::unreachable();
+    case core::InputLinePrompt::replace_with:
+        return replace_current(line);
     case core::InputLinePrompt::go_to_line:
         go_to_line(line);
         return std::nullopt;
@@ -309,8 +337,14 @@ std::optional<core::VimRepeatFailure> EditorController::submit(const core::Searc
     return failure;
 }
 
-void EditorController::accept(const SubmitCommand &)
+void EditorController::accept(const SubmitCommand &intent)
 {
+    // Ctrl+Enter は「置換後: 」の全件だけ（ADR 0174 の決定 3・7）。
+    if (intent.all)
+    {
+        replace_all_matches();
+        return;
+    }
     static_cast<void>(confirmed_command());
 }
 
@@ -333,10 +367,11 @@ void EditorController::remember(const core::CommandLine &line)
 }
 
 // 「検索: 」の語も検索の履歴の 1 本へ（入力行の履歴は共用・ADR 0174 の決定 3）。
-// 「行: 」は足さない。
+// 「行: 」と「置換後: 」は足さない。
 void EditorController::remember(const core::SearchLine &line)
 {
-    if (line.prompt() == core::InputLinePrompt::go_to_line)
+    if (line.prompt() == core::InputLinePrompt::go_to_line ||
+        line.prompt() == core::InputLinePrompt::replace_with)
     {
         return;
     }
@@ -574,6 +609,14 @@ void EditorController::accept(const BeginFind &)
     case core::EditMode::ordinary:
         break;
     }
+    open_find(FindPhase::find);
+}
+
+void EditorController::open_find(FindPhase phase)
+{
+    FindState find = state_.find();
+    find.phase = phase;
+    state_ = state_.with_find(std::move(find));
     // Vim の `/` と同じく、開いたときのスクロールとキャレットを preview の戻り先と起点にする
     // （ADR 0041 の決定 3）。前回の語を置くので、開いた時点で当たりを見せる。
     const ScrollState origin = settled_scroll();
@@ -596,9 +639,124 @@ void EditorController::accept(const BeginGoToLine &)
     state_ = state_.with_command_input(core::SearchLine::opened_go_to_line());
 }
 
+// Vim モードは `:` の入力行に `%s/` を前置きする（決定 2・確定は ADR 0168 の `:s`）。通常モードは
+// 置換の流れの「検索: 」（決定 3）。
 void EditorController::accept(const BeginReplace &)
 {
-    state_ = state_.with_command_message(core::DisplayText::parse(replace_later_notice).value());
+    switch (state_.mode())
+    {
+    case core::EditMode::vim:
+        static_cast<void>(step_vim_command(core::VimKey{core::VimCharacter{U':'}}));
+        accept(CommandText{std::string(vim_replace_prefix)});
+        return;
+    case core::EditMode::ordinary:
+        break;
+    }
+    open_find(FindPhase::replace_with);
+}
+
+std::optional<core::VimRepeatFailure>
+EditorController::advance_to_replacement(const core::SearchLine &line)
+{
+    if (line.text().empty())
+    {
+        return std::nullopt;
+    }
+    const auto failure = hop_find(line.text(), core::VimSearchDirection::forward, true);
+    if (failure.has_value())
+    {
+        return failure;
+    }
+    state_ =
+        state_.with_command_input(core::SearchLine::opened_replace_with(state_.find().replacement));
+    return std::nullopt;
+}
+
+std::optional<core::VimPattern> EditorController::find_pattern() const
+{
+    const std::string &typed = state_.find().pattern;
+    if (typed.empty())
+    {
+        return std::nullopt;
+    }
+    auto parsed =
+        core::VimPattern::parse(core::literal_pattern(typed), core::VimSearchDirection::forward,
+                                core::search_case(state_.settings()));
+    if (!parsed)
+    {
+        return std::nullopt;
+    }
+    return std::move(parsed).value();
+}
+
+// 今の当たり（キャレットを含むか次の当たり・current_find_match の 1 本）を置き換える Edit 1 回
+// （undo 1 単位・restore はそのときのキャレット）。当たりが無ければ「検索: 」の Enter と同じ E486。
+// 置き換えた後は次の当たりへ移る（最後の 1 件の後の E486 は確定の断りではないので鳴らさない）。
+std::optional<core::VimRepeatFailure>
+EditorController::replace_current(const core::SearchLine &line)
+{
+    FindState find = state_.find();
+    find.replacement = std::string(line.text());
+    state_ = state_.with_find(find);
+    const auto pattern = find_pattern();
+    if (!pattern.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto match = current_find_match(state_.text(), pattern.value(), state_.selection().caret);
+    if (!match.has_value())
+    {
+        return hop_find(find.pattern, core::VimSearchDirection::forward, true);
+    }
+    replace(match.value(), find.replacement, core::EditBoundary::separate);
+    restart_find_before_caret();
+    return hop_find(find.pattern, core::VimSearchDirection::forward, false);
+}
+
+void EditorController::replace_all_matches()
+{
+    const auto &input = state_.command_input();
+    const auto *line = input.has_value() ? std::get_if<core::SearchLine>(&input.value()) : nullptr;
+    if (line == nullptr || line->prompt() != core::InputLinePrompt::replace_with)
+    {
+        return;
+    }
+    FindState find = state_.find();
+    find.replacement = std::string(line->text());
+    state_ = state_.with_find(find);
+    const auto pattern = find_pattern();
+    if (!pattern.has_value())
+    {
+        return;
+    }
+    const auto edit = core::substituted_all(state_.text(), pattern.value(), find.replacement);
+    if (!edit.has_value())
+    {
+        static_cast<void>(hop_find(find.pattern, core::VimSearchDirection::forward, true));
+        return;
+    }
+    const core::Offset end{edit.value().at.value + edit.value().removed.size()};
+    replace(core::OffsetRange{edit.value().at, end}, edit.value().inserted,
+            core::EditBoundary::separate);
+    restart_find_before_caret();
+}
+
+// 起点（preview の from）は「その次の文字から探す」位置なので、キャレットの直前の文字に置く。
+// キャレットが本文の先頭なら先頭（先頭の当たりは折り返して最後に着く・限界）。
+void EditorController::restart_find_before_caret()
+{
+    const core::Offset caret = state_.selection().caret;
+    core::Offset before = caret;
+    if (caret.value > 0)
+    {
+        const std::size_t window = std::min<std::size_t>(caret.value, code_point_bytes);
+        const core::Offset begin{caret.value - window};
+        const std::string tail = state_.text().text_range(begin, caret);
+        before = core::Offset{begin.value +
+                              core::previous_code_point(tail, core::Offset{tail.size()}).value};
+    }
+    state_ = state_.with_search_preview(
+        SearchPreview{std::nullopt, settled_scroll(), state_.text().position_of(before)});
 }
 
 std::optional<core::VimRepeatFailure> EditorController::step_vim_command(core::VimKey key)
@@ -613,16 +771,17 @@ std::optional<core::VimRepeatFailure> EditorController::step_vim_command(core::V
 // 語は Vim の最後の検索と同じ値（逃がした形）として engine の鍵 1 つで探す（決定 4・5・6）。起点は
 // preview の起点（開いたときか前の当たりのキャレット）で、着いた後は入力行を開いたまま、今の画面と
 // キャレットを次の起点にする。空の語は何もしない。
-std::optional<core::VimRepeatFailure> EditorController::hop_find(const core::SearchLine &line,
-                                                                 core::VimSearchDirection relative,
-                                                                 bool confirmed)
+std::optional<core::VimRepeatFailure>
+EditorController::hop_find(std::string_view word, core::VimSearchDirection relative, bool confirmed)
 {
-    const std::string typed(line.text());
+    const std::string typed(word);
     if (typed.empty())
     {
         return std::nullopt;
     }
-    state_ = state_.with_find(FindState{typed, state_.find().phase});
+    FindState find = state_.find();
+    find.pattern = typed;
+    state_ = state_.with_find(std::move(find));
     const auto preview = state_.search_preview();
     const std::optional<core::TextPosition> from =
         preview.has_value() ? std::optional{preview.value().from} : std::nullopt;

@@ -19,6 +19,9 @@ enum class InputLinePrompt : std::uint8_t
     // 通常モードの検索（「検索: 」・ADR 0174 の決定 3）。語は literal で照合器へ渡る。
     find,
     // 通常モードの行へ移動（「行: 」・ADR 0174 の決定 3・8）。
-    go_to_line
+    go_to_line,
+    // 通常モードの置換の 2 段目（「置換後 (語): 」・ADR 0174 の決定 3・7）。置換後の語は literal
+    // で、 照合器へは渡らない。
+    replace_with
 };
 } // namespace nenenib::core
