@@ -500,8 +500,8 @@ void verify_restore_caret()
            "a caret past the body is brought to the end of the body");
 }
 
-// 自動退避から戻した文書のジャンプの列は開いた位置の 1 項で始まり、`<C-o>` はそこへ戻り
-// `<Tab>` は戻した位置へ戻る（ADR 0152 の追補 #1116）。
+// 自動退避から戻した文書のジャンプの列は戻したキャレットの 1 項で始まり、`G<C-o>` はそこへ戻り、
+// 次の `<C-o>` は動かない（ADR 0152 の追補 #1124）。
 void verify_restore_opened_jump()
 {
     Editing editing;
