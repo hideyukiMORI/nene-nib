@@ -133,12 +133,14 @@ searched_class(const std::array<VimCharacterRange, Size> &table, char32_t code) 
 }
 
 // `*` / `#` の連なりの先頭（Vim の find_ident_at_pos の 2.）。前の文字が同じ種類の間だけ戻る。
+// 歩くのは Vim の 1 文字（mb_head_off と mb_ptr2len は U+FE0F などの幅 0
+// を前の文字に含める・#985）。
 [[nodiscard]] std::size_t run_begin(std::string_view content, std::size_t at, std::uint32_t group)
 {
     while (at > 0 &&
-           word_class_at(content, previous_code_point(content, Offset{at}).value) == group)
+           word_class_at(content, vim_character_start(content, Offset{at}).value) == group)
     {
-        at = previous_code_point(content, Offset{at}).value;
+        at = vim_character_start(content, Offset{at}).value;
     }
     return at;
 }
@@ -586,7 +588,7 @@ std::optional<OffsetRange> vim_word_at(const TextBuffer &text, Offset caret)
     std::size_t end = point.index;
     while (end < point.content.size() && word_class_at(point.content, end) == group)
     {
-        end = next_code_point(point.content, Offset{end}).value;
+        end = vim_character_end(point.content, Offset{end}).value;
     }
     return line_range(text, point.line, begin, end);
 }
@@ -607,7 +609,7 @@ std::optional<OffsetRange> vim_string_at(const TextBuffer &text, Offset caret)
     std::size_t end = point.index;
     while (end < point.content.size() && word_class_at(point.content, end) != blank_group)
     {
-        end = next_code_point(point.content, Offset{end}).value;
+        end = vim_character_end(point.content, Offset{end}).value;
     }
     return line_range(text, point.line, begin, end);
 }

@@ -161,7 +161,7 @@ void verify_vim_character_fixtures()
             ++classes;
         }
     }
-    expect(classes == 38, "the scope replays all 38 word-class fixtures (Issue #985)");
+    expect(classes == 39, "the scope replays all 39 word-class fixtures (Issue #985)");
 }
 } // namespace
 

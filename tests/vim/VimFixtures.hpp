@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 786b9464a6db3c75fd78977530de9bb263200cee2b993cb2ea9311685ea20cad / 3223 fixtures
+// fixtures.json: sha256 d5e29d03c461bb30d2f44871772da54c6acf0a7e9846bf1801b4944c5c5a3a6c / 3224 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3223> vim_fixtures{{
+constexpr std::array<VimFixture, 3224> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3206,6 +3206,7 @@ constexpr std::array<VimFixture, 3223> vim_fixtures{{
     {"word-class-ge-emoji", "z9⚠️amma", "$ge", "z9⚠️amma", 1, 3, "", "", std::nullopt},
     {"word-class-b-emoji", "z9⚠️amma", "$b", "z9⚠️amma", 1, 9, "", "", std::nullopt},
     {"word-class-e-emoji", "z9⚠️amma", "e", "z9⚠️amma", 1, 2, "", "", std::nullopt},
+    {"word-class-hash-emoji", "z9⚠️amma", "3l#", "z9⚠️amma", 1, 9, "", "", std::nullopt},
     {"word-class-w-family-zwj", "beta👨‍👩 x", "w", "beta👨‍👩 x", 1, 5, "", "", std::nullopt},
     {"word-class-w-family-zwj-twice", "beta👨‍👩 x", "2w", "beta👨‍👩 x", 1, 9, "", "", std::nullopt},
     {"word-class-star-emoji-after-arrow", "(é.→⚠️ x\nalphaend.→⚠️", "4l*", "(é.→⚠️ x\nalphaend.→⚠️", 2, 13, "", "", std::nullopt},
