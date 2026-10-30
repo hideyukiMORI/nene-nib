@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 b94df3bd6844ac6cdd7e09e01bd8e86ef24b9cb33240da3a2e501339613a8f8e / 3147 fixtures
+// fixtures.json: sha256 ee04f75b0fb7a2c0e5ee34501b0d9b43fb44f81421992a2a39799c36d99a8e39 / 3158 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3147> vim_fixtures{{
+constexpr std::array<VimFixture, 3158> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3159,6 +3159,17 @@ constexpr std::array<VimFixture, 3147> vim_fixtures{{
     {"insert-arrow-left-over-a-zwj-sequence", "a👨‍👩b", "$i<Left>x<Esc>", "a👨‍x👩b", 1, 9, "", "", std::nullopt},
     {"insert-arrow-left-at-the-line-start-keeps-the-count", "ab", "2i<Left>x<Esc>", "xxab", 1, 2, "", "", std::nullopt},
     {"insert-arrow-right-at-the-line-end-keeps-the-count", "ab", "2A<Right>x<Esc>", "abxx", 1, 4, "", "", std::nullopt},
+    {"block-change-empty-put-first-line-big-p", "\n{br}\t?", "<C-v>oC.<Esc>P", " .\n{br}\t?", 1, 1, "", "\0261", std::nullopt},
+    {"block-change-empty-put-first-line-p", "\nabcd", "<C-v>C.<Esc>p", ".\nabcd", 1, 1, "", "\0261", std::nullopt},
+    {"block-change-empty-put-middle-line", "ab\n\ncd", "j<C-v>C.<Esc>P", "ab\n .\ncd", 2, 1, "", "\0261", std::nullopt},
+    {"block-change-empty-put-middle-line-into-next", "ab\n\ncdef", "j<C-v>C<Esc>jlP", "ab\n\nc def", 3, 2, "", "\0261", std::nullopt},
+    {"block-change-empty-put-small-c", "\nabcd", "<C-v>c.<Esc>P", " .\nabcd", 1, 1, "", "\0261", std::nullopt},
+    {"block-change-empty-put-small-c-next-line", "\nabcd", "<C-v>c<Esc>jlp", "\nab cd", 2, 3, "", "\0261", std::nullopt},
+    {"block-change-empty-put-named", "\nabcd", "<C-v>\"aC.<Esc>j\"ap", ".\na bcd", 2, 2, "", "\0261", std::nullopt},
+    {"block-change-empty-put-named-big-p", "\nabcd", "<C-v>\"ac<Esc>jl\"aP", "\na bcd", 2, 2, "", "\0261", std::nullopt},
+    {"block-change-empty-put-count", "\nabcd", "<C-v>C<Esc>jl3P", "\na   bcd", 2, 2, "", "\0261", std::nullopt},
+    {"block-change-empty-put-two-empty-lines", "\n\nabcd", "<C-v>jC<Esc>jjlP", "\n\na bcd\n ", 3, 2, "\n", "\0261", std::nullopt},
+    {"block-change-empty-put-line-end", "\nabcd", "<C-v>C<Esc>j$p", "\nabcd", 2, 4, "", "\0261", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
