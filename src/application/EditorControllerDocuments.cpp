@@ -425,8 +425,9 @@ void EditorController::fail(FileFailure failure)
     state_ = state_.with_failure(failure);
 }
 
-// 今の値を controller が答える Ex（言語・構文の色・クリップボードの同期）。どれかなら置いて今の値を
-// 1 行知らせ、真を返す。
+// 今の値を controller が答える
+// Ex（言語・構文の色・クリップボードの同期・プレビューの見せ方）。どれかなら置いて今の値を 1
+// 行知らせ、真を返す。
 bool EditorController::answer_current_value(const core::ExResult &result)
 {
     if (result.language.has_value())
@@ -447,6 +448,11 @@ bool EditorController::answer_current_value(const core::ExResult &result)
     if (result.lsp.has_value())
     {
         answer_lsp(result.lsp.value());
+        return true;
+    }
+    if (result.preview.has_value())
+    {
+        answer_preview(result.preview.value());
         return true;
     }
     return false;

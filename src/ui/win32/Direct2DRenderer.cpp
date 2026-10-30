@@ -9,6 +9,7 @@
 #include "DisplayLine.hpp"
 #include "EditMode.hpp"
 #include "EditorSettings.hpp"
+#include "FullPreviewBody.hpp"
 #include "GutterLabels.hpp"
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
@@ -1569,6 +1570,24 @@ void Direct2DRenderer::draw_other(const application::EditorFrame &frame,
     }
 }
 
+// 本文の面（枠・もう 1 つの枠・空の文書の案内）。全面のプレビューは gutter も本文も描かず、
+// 本文の面の全部（1 枠の配置の帯）に描く。枠の配置は変えず、もう 1 つの枠と案内も描かない
+// （ADR 0155 の改訂 15）。
+void Direct2DRenderer::draw_body_area(const application::EditorFrame &frame,
+                                      const core::LayoutRect &area, const core::PaneLayouts &panes,
+                                      const core::OperationGuideLayout &guide)
+{
+    if (frame.full_preview.has_value())
+    {
+        draw_other(frame, full_preview_body(area, dpi_, frame.settings.font_size),
+                   frame.full_preview.value());
+        return;
+    }
+    draw_body(frame, core::active_pane_layout(panes, frame.active_side));
+    draw_other_body(frame, panes);
+    draw_body_guide(frame, guide);
+}
+
 // 1 つの枠の本文。body_top_ / body_bottom_ は描いている枠の本文の上下（字形 run の間引き）で、
 // 描き終えたら戻す。
 void Direct2DRenderer::draw_pane(const application::EditorFrame &frame, const BodyPane &pane)
@@ -2202,10 +2221,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     const auto body = core::active_pane_layout(panes, frame.active_side);
     const auto guide = core::operation_guide_layout(frame.guide.context, body, status, dpi_);
     draw_title_bar(frame, title);
-    draw_body(frame, body);
-    draw_other_body(frame, panes);
+    draw_body_area(frame, explorer.body, panes, guide);
     draw_explorer(frame, explorer);
-    draw_body_guide(frame, guide);
     draw_status_bar(frame, status);
     draw_status_guide(frame, guide);
     if (frame.command_palette.has_value())

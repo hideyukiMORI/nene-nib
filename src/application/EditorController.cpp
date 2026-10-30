@@ -415,7 +415,12 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     // SelectLanguage も同じ（ADR 0154 の決定 4）。SelectSyntax も同じ（ADR 0156 の追補）。
     // 面のホイール ScrollPaletteList も使う人の操作の側なので載せない（ADR 0150 の決定 2）。
-    std::visit([this](const auto &value) { this->accept(value); }, intent);
+    // 見せ方の SetPreviewPlacement も使う人の操作の側（ADR 0155 の改訂 16）。全面プレビューの間の
+    // 鍵の振り分けはここの 1 か所（改訂 17・route_full_preview）で、受けた意図は写さない。
+    if (!route_full_preview(intent))
+    {
+        std::visit([this](const auto &value) { this->accept(value); }, intent);
+    }
     // 閉じたタブの読みの取消と、歩き・入力行・面の終わりで留めた読みの採用（ADR 0159 の追補
     // 1・2）。
     follow_reads();
@@ -545,6 +550,11 @@ const core::VimState &EditorController::vim_state() const noexcept
 const SplitState &EditorController::split() const noexcept
 {
     return state_.split();
+}
+
+PreviewPlacement EditorController::preview_placement() const noexcept
+{
+    return state_.preview_placement();
 }
 
 void EditorController::accept(const RefreshAppearance &)
@@ -977,13 +987,15 @@ EditorFrame EditorController::frame()
     // 問いの答えを待つ間は本文の行を読まず文字組みもしない（ADR 0140 の決定 2・renderer は
     // display_pending を見て本文を描かない）。格子では画面行が grid に載る（決定 5）。
     const bool pending = display_pending(state_.display_inquiry());
-    const bool gridded =
-        !pending && state_.display() == core::DisplayForm::grid && view_geometry_.width > 0;
+    // 全面プレビューの間は本文を描かないので、行も画面行も作らない（ADR 0155 の改訂 15・20）。
+    const bool full = state_.full_preview() != nullptr;
+    const bool gridded = !pending && !full && state_.display() == core::DisplayForm::grid &&
+                         view_geometry_.width > 0;
     const auto pattern = search_pattern();
     const PaneSource source{state_, highlighted_range(), block_selection(), pattern_of(pattern),
                             state_.autosave_ids().at(state_.active_tab())};
     std::size_t lexed = 0;
-    auto lines = pending || gridded
+    auto lines = pending || gridded || full
                      ? std::expected<std::vector<LineView>, TextLayoutFailure>{}
                      : visible_lines(source, syntax_cache(state_.split().active_side), lexed);
     // frame の失敗は描けないものだけ（契約の破れは配達だけに載る・ADR 0133 の追補 2026-10-18）。
@@ -1077,6 +1089,15 @@ void EditorController::add_other_pane(EditorFrame &result, const core::VimPatter
 {
     result.layout = state_.split().layout;
     result.active_side = state_.split().active_side;
+    // 全面の間は本文の枠ももう 1 つの枠も描かない（隠した枠は状態に保つ・ADR 0155 の改訂 15）。
+    // 錨の写し方は側の枠と同じ（決定 7・11）。
+    if (const PreviewView *full = state_.full_preview(); full != nullptr)
+    {
+        const core::Offset anchor =
+            full->follows ? state_.text().line_start(result.first_visible) : full->anchor;
+        result.full_preview = PreviewFrame{full->document, anchor, full->notice};
+        return;
+    }
     const auto &other = state_.split().other;
     if (!other.has_value())
     {

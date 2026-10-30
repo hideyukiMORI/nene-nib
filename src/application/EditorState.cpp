@@ -1116,6 +1116,94 @@ EditorState EditorState::with_preview(PreviewView view) const
     return next;
 }
 
+const PreviewView *EditorState::full_preview() const noexcept
+{
+    return full_preview_.has_value() ? &full_preview_.value() : nullptr;
+}
+
+const PreviewView *EditorState::shown_preview() const noexcept
+{
+    return full_preview_.has_value() ? &full_preview_.value() : preview();
+}
+
+EditorState EditorState::with_shown_preview(PreviewView view) const
+{
+    if (!full_preview_.has_value())
+    {
+        return with_preview(std::move(view));
+    }
+    EditorState next(*this);
+    next.full_preview_ = std::move(view);
+    return next;
+}
+
+PreviewPlacement EditorState::preview_placement() const noexcept
+{
+    if (full_preview_.has_value())
+    {
+        return PreviewPlacement::full;
+    }
+    return preview() != nullptr ? PreviewPlacement::side : PreviewPlacement::off;
+}
+
+EditorState EditorState::with_full_preview(PreviewView fresh) const
+{
+    if (full_preview_.has_value())
+    {
+        return *this;
+    }
+    EditorState next(*this);
+    const PreviewView *side = preview();
+    if (side == nullptr)
+    {
+        // 本文の枠のもう 1 つは隠して保つ（改訂 15）。
+        next.full_return_ = PreviewPlacement::off;
+        next.full_preview_ = std::move(fresh);
+        return next;
+    }
+    next.full_return_ = PreviewPlacement::side;
+    next.full_return_layout_ = split_.layout;
+    next.full_return_side_ = split_.active_side;
+    next.full_preview_ = *side;
+    next.split_ = SplitState{};
+    return next;
+}
+
+EditorState EditorState::without_full_preview(PreviewPlacement placement) const
+{
+    if (!full_preview_.has_value())
+    {
+        return *this;
+    }
+    EditorState next(*this);
+    switch (placement)
+    {
+    case PreviewPlacement::full:
+        return *this;
+    case PreviewPlacement::off:
+        next.full_preview_.reset();
+        return next;
+    case PreviewPlacement::side:
+        break;
+    }
+    PreviewView view = std::move(next.full_preview_).value();
+    next.full_preview_.reset();
+    // 全面の間に本文の枠を分けていれば、その配置のまま本文の枠をプレビューに置き換える（決定 3 の
+    // 開くと同じ）。1 枠なら全面の前の配置と側で分ける。
+    if (next.split_.layout == core::SplitLayout::none)
+    {
+        next.split_.layout = full_return_layout_;
+        next.split_.active_side = full_return_side_;
+    }
+    next.split_.other = std::move(view);
+    return next;
+}
+
+PreviewPlacement EditorState::full_preview_return() const noexcept
+{
+    return full_return_;
+}
+
 std::optional<EditorState> EditorState::other_pane_state() const
 {
     const PaneView *shown = pane_of(split_.other);

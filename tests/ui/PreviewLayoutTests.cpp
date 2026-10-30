@@ -10,6 +10,8 @@
 #include "DirectWriteFactory.hpp"
 #include "WindowChecks.hpp"
 
+#include "FontSize.hpp"
+#include "FullPreviewBody.hpp"
 #include "LayoutRect.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownParse.hpp"
@@ -477,6 +479,48 @@ void check_pane_picture()
            "another theme draws the blocks again");
 }
 
+// 全面のプレビュー（ADR 0155 の改訂 15・#1145）は 1 枠の本文の帯の全部（gutter の列を含む）に描く。
+// 前の frame の本文の色（ここでは全体を塗った印の色）は帯のどこにも残らない＝gutter も本文も
+// 描かれない。帯は面を除いた client の左端から始まる。
+void check_full_preview_band()
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    win32::PreviewPane pane;
+    if (target == nullptr || !theme ||
+        !pane.prepare(*target.Get(), theme.value().view()).has_value())
+    {
+        expect(false, "the preview pane prepares its brushes for the full band check");
+        return;
+    }
+    const core::LayoutRect area{0, 0, 400, 200};
+    const auto body = win32::full_preview_body(area, 96, core::default_font_size());
+    expect(body.band.left == area.left && body.band.right == area.right &&
+               body.gutter.left >= body.band.left && body.gutter.right > body.gutter.left,
+           "the full preview band spans the gutter and the text of one pane");
+    target->BeginDraw();
+    target->Clear(D2D1::ColorF(1.0F, 0.0F, 1.0F, 1.0F));
+    const auto painted = pane.paint(
+        *target.Get(), application::PreviewFrame{picture_document(), core::Offset{0}, {}},
+        style_of(), body.band);
+    expect(SUCCEEDED(target->EndDraw()) && painted.has_value(),
+           "the full preview paints without failure");
+    const auto pixels = pixels_of(*bitmap.Get());
+    bool marked = pixels.empty();
+    for (auto y = body.band.top; y < body.band.bottom && !marked; ++y)
+    {
+        for (auto x = body.band.left; x < body.band.right && !marked; ++x)
+        {
+            const auto at = (static_cast<std::size_t>(y) * 400U + static_cast<std::size_t>(x)) * 4U;
+            marked =
+                pixels.at(at) == 0xFF && pixels.at(at + 1U) == 0x00 && pixels.at(at + 2U) == 0xFF;
+        }
+    }
+    expect(!marked, "nothing of the body or the gutter shows under the full preview");
+}
+
 // 測るのは錨の要素から枠の高さまでだけ（#811 のレビュー R1）。10 万要素の文書で錨が末尾の近くでも、
 // 作る layout は枠の高さ ÷ 最小の行高 + 1 以下で、錨の要素の上端が枠の上端。
 void check_measured_from_anchor()
@@ -769,6 +813,7 @@ void verify_preview_layouts()
     check_markers();
     check_pane_reuse();
     check_pane_picture();
+    check_full_preview_band();
     check_measured_from_anchor();
     check_list_scanned_in_range();
     check_anchor_after_carriage_returns();

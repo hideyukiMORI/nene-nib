@@ -50,6 +50,7 @@
 #include "SelectEditMode.hpp"
 #include "SelectLanguage.hpp"
 #include "SelectSyntax.hpp"
+#include "SetPreviewPlacement.hpp"
 #include "SettleRecentTab.hpp"
 #include "SplitPane.hpp"
 #include "StoreVimRegister.hpp"
@@ -84,5 +85,5 @@ using EditorIntent = std::variant<
     OpenOperationList, PointText, SelectDisplay, SelectLanguage, SelectSyntax, ScrollPaletteList,
     SplitPane, SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick, TogglePreviewTask,
     ToggleExplorer, ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen,
-    LanguageServerTick, MapTimeout, InsertDateTime>;
+    LanguageServerTick, MapTimeout, InsertDateTime, SetPreviewPlacement>;
 } // namespace nenenib::application
