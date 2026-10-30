@@ -12,7 +12,6 @@
 #include "InsertText.hpp"
 #include "Language.hpp"
 #include "LineEnding.hpp"
-#include "MarkdownParse.hpp"
 #include "OpenDocument.hpp"
 #include "PrintDocument.hpp"
 #include "PrintFailure.hpp"

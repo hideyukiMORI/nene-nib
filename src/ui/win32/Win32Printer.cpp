@@ -1,12 +1,97 @@
+// CLSID_WICImagingFactory2 は wincodec.h の DEFINE_GUID で、定義は windowscodecs.lib にある。ui は
+// その lib を結ばないので、この翻訳単位で INITGUID の形で定義を置く（selectany）。
+#include <initguid.h>
+
+#include <wincodec.h>
+
 #include "Win32Printer.hpp"
+
+#include "PrintDialog.hpp"
+#include "PrintRendering.hpp"
+#include "PrintSurface.hpp"
+#include "Utf16.hpp"
+
+#include <DocumentTarget.h>
+#include <d2d1_1.h>
+#include <d3d11.h>
+#include <dxgi.h>
+#include <objbase.h>
+#include <wrl/client.h>
 
 namespace nenenib::ui::win32
 {
+namespace
+{
+constexpr auto rendering_failed = application::PrintFailure::rendering_failed;
+
+// 印刷の device は WARP（GPU を起こさない・画面の device と別・device lost が無い）。描いた命令は
+// print control が XPS へ写すので、ラスタライズの速さは要らない。
+[[nodiscard]] PrintSurface make_surface()
+{
+    Microsoft::WRL::ComPtr<ID3D11Device> direct3d;
+    Microsoft::WRL::ComPtr<IDXGIDevice> dxgi;
+    Microsoft::WRL::ComPtr<ID2D1Factory1> factory;
+    PrintSurface surface;
+    if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr,
+                                 D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, D3D11_SDK_VERSION,
+                                 &direct3d, nullptr, nullptr)) ||
+        FAILED(direct3d.As(&dxgi)) ||
+        FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory1),
+                                 nullptr, &factory)) ||
+        FAILED(factory->CreateDevice(dxgi.Get(), &surface.device)) ||
+        FAILED(CoCreateInstance(CLSID_WICImagingFactory2, nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(&surface.imaging))))
+    {
+        return {};
+    }
+    return surface;
+}
+
+// 選んだプリンタへの job（名前は題名）の受け口。出力の stream は渡さず OS のスプールへ流す。
+[[nodiscard]] Microsoft::WRL::ComPtr<IPrintDocumentPackageTarget>
+spool_target(const PrintChoice &choice, const application::PrintJob &job)
+{
+    Microsoft::WRL::ComPtr<IPrintDocumentPackageTargetFactory> factory;
+    Microsoft::WRL::ComPtr<IPrintDocumentPackageTarget> target;
+    const auto name = core::to_utf16(job.title.text());
+    if (!name ||
+        FAILED(CoCreateInstance(__uuidof(PrintDocumentPackageTargetFactory), nullptr,
+                                CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory))) ||
+        FAILED(factory->CreateDocumentPackageTargetForPrintJob(
+            choice.printer.c_str(), name.value().c_str(), nullptr, choice.ticket.Get(), &target)))
+    {
+        return {};
+    }
+    return target;
+}
+} // namespace
+
 std::expected<application::PrintOutcome, application::PrintFailure>
 Win32Printer::print(application::PrintJob job)
 {
-    // N6b が job の本文と字体で XPS の print control に描く。いまは受け取って捨てる。
-    static_cast<void>(job);
-    return std::unexpected(application::PrintFailure::no_printer);
+    // 印刷は使う人の操作（F1 の一覧・`:hardcopy`）からだけ来るので、いま操作している窓が親。
+    const auto chosen = choose_printer(GetActiveWindow());
+    if (!chosen)
+    {
+        return std::unexpected(chosen.error());
+    }
+    const auto &pressed = chosen.value();
+    if (!pressed.has_value())
+    {
+        return application::PrintOutcome::cancelled;
+    }
+    const auto &choice = pressed.value();
+    const auto surface = make_surface();
+    const auto target = spool_target(choice, job);
+    if (!surface.device || !target)
+    {
+        return std::unexpected(rendering_failed);
+    }
+    const auto printed = render_print_job(surface, *target.Get(), job, choice.setup);
+    if (!printed)
+    {
+        return std::unexpected(printed.error());
+    }
+    return application::PrintOutcome::printed;
 }
 } // namespace nenenib::ui::win32

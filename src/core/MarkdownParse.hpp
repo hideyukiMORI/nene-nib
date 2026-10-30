@@ -22,7 +22,4 @@ parse_markdown(std::string_view text, const MarkdownStop &stop);
 // プレビューが解析を頼む本文の上限（ADR 0155 の決定 3）。これを超える本文は要求せず、枠に
 // 「プレビューは 16 MiB までです」を出す。parse_markdown 自身の上限は markdown_size_fits。
 inline constexpr std::size_t preview_byte_limit = std::size_t{16} * 1024 * 1024;
-// 印刷を頼む本文の上限（ADR 0177 の決定 7・プレビューと同じ所の定数）。これを超える本文は port を
-// 呼ばず「印刷は 16 MiB までです」を出す。ページの数には上限を置かない（OS のスプールに任せる）。
-inline constexpr std::size_t print_byte_limit = std::size_t{16} * 1024 * 1024;
 } // namespace nenenib::core
