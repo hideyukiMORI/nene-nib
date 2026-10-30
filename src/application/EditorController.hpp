@@ -427,7 +427,8 @@ class EditorController final
     // 全面で通常モードの Space（追補 25）。キャレットの行のタスクを切り替え、無ければ知らせる。
     void toggle_caret_task();
     // 全面の選択とコピー（改訂 18）。select_preview は preview_full_route が select と決めた意図
-    // （Shift+矢印・マウス・Ctrl+A と Vim の `Ctrl-a`・Ctrl+C と Vim の `y`）だけを受ける。
+    // （Shift+矢印・マウス）だけを受け、Ctrl+A と Vim の `Ctrl-a` は select_all、Ctrl+C と Vim の
+    // `y` は copy の行き先が select_all_preview と copy_preview_selection を呼ぶ。
     // PointPreview は全面でなければ何もしない。
     void accept(const PointPreview &intent);
     void select_preview(const EditorIntent &intent);

@@ -161,7 +161,7 @@ constexpr std::array<PreviewCharacterRow, 6> preview_vim_characters{{
     {U'G', PreviewFullRoute::bottom},
     {U'g', PreviewFullRoute::vim_g},
     {U':', PreviewFullRoute::pass},
-    {U'y', PreviewFullRoute::select},
+    {U'y', PreviewFullRoute::copy},
 }};
 
 // Vim の特別な鍵（改訂 17）。Esc はどのモードでも戻る。表に無い鍵は本文に届かない。
@@ -180,7 +180,7 @@ constexpr std::array<PreviewSpecialRow, 14> preview_vim_specials{{
     {core::VimSpecialKey::control_u, PreviewFullRoute::half_up},
     {core::VimSpecialKey::control_f, PreviewFullRoute::page_down},
     {core::VimSpecialKey::control_b, PreviewFullRoute::page_up},
-    {core::VimSpecialKey::control_a, PreviewFullRoute::select},
+    {core::VimSpecialKey::control_a, PreviewFullRoute::select_all},
 }};
 
 template <typename Row, typename Key>
@@ -231,7 +231,11 @@ template <typename Row, typename Key>
     {
         return PreviewFullRoute::wheel;
     }
-    if (std::holds_alternative<SelectAll>(intent) || std::holds_alternative<PointPreview>(intent))
+    if (std::holds_alternative<SelectAll>(intent))
+    {
+        return PreviewFullRoute::select_all;
+    }
+    if (std::holds_alternative<PointPreview>(intent))
     {
         return PreviewFullRoute::select;
     }
@@ -246,7 +250,7 @@ template <typename Row, typename Key>
 {
     if (const auto *clipboard = std::get_if<ClipboardAction>(&intent); clipboard != nullptr)
     {
-        return clipboard->operation == ClipboardOperation::copy ? PreviewFullRoute::select
+        return clipboard->operation == ClipboardOperation::copy ? PreviewFullRoute::copy
                                                                 : PreviewFullRoute::refuse;
     }
     if (const auto *text = std::get_if<InsertText>(&intent); text != nullptr)
@@ -629,6 +633,12 @@ void EditorController::run_full_preview_route(PreviewFullRoute route, const Edit
     case PreviewFullRoute::select:
         select_preview(intent);
         return;
+    case PreviewFullRoute::select_all:
+        select_all_preview();
+        return;
+    case PreviewFullRoute::copy:
+        copy_preview_selection();
+        return;
     case PreviewFullRoute::leave:
         leave_full_preview(state_.full_preview_return());
         return;
@@ -736,8 +746,8 @@ void EditorController::toggle_caret_task()
 // 何もしない。
 void EditorController::accept(const PointPreview &) {}
 
-// 選択とコピーの口。届くのは preview_full_route が select と決めた意図だけ（Shift+矢印の
-// MoveCaret・PointPreview・SelectAll と Vim の `Ctrl-a`・コピーの ClipboardAction と Vim の `y`）。
+// 動く端を動かす選択。届くのは preview_full_route が select と決めた意図だけ（Shift+矢印の
+// MoveCaret と全面のマウスの PointPreview）。全部の選択とコピーは別の行き先（select_all・copy）。
 void EditorController::select_preview(const EditorIntent &intent)
 {
     if (const auto *move = std::get_if<MoveCaret>(&intent); move != nullptr)
@@ -748,18 +758,7 @@ void EditorController::select_preview(const EditorIntent &intent)
     if (const auto *point = std::get_if<PointPreview>(&intent); point != nullptr)
     {
         point_preview_selection(*point);
-        return;
     }
-    const auto *press = std::get_if<VimKeyPress>(&intent);
-    const auto *special =
-        press == nullptr ? nullptr : std::get_if<core::VimSpecialKey>(&press->key);
-    if (std::holds_alternative<SelectAll>(intent) ||
-        (special != nullptr && *special == core::VimSpecialKey::control_a))
-    {
-        select_all_preview();
-        return;
-    }
-    copy_preview_selection();
 }
 
 // 押した点に空の選択を置く・ドラッグで動く端をそこへ（選び始めた端は保つ）。
