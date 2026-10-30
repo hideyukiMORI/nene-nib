@@ -428,6 +428,8 @@ def literal(value: str) -> str:
     # 矩形レジスタの種類は Ctrl-V (0x16) に幅の 10 進が続く。8 進のエスケープは 3 桁で止まる
     # ので続く数字と混ざらない（16 進の \\x は貪欲に読むので使えない・ADR 0035 の決定 10）。
     escaped = escaped.replace("\x16", "\\026")
+    # DEL（0x7F）も 8 進 3 桁で書く（#1119・DEL を含む本文の fixture `control-del-`）。
+    escaped = escaped.replace("\x7f", "\\177")
     if any(character < " " or character == "\x7f" for character in escaped):
         raise ValueError(f"unexpected control character in {value!r}")
     return f'"{escaped}"'
@@ -599,7 +601,9 @@ def parsed_header(header_content: str,
     if int(array_match.group(1)) != len(fixtures):
         raise ValueError("reuse header array count does not match fixtures.json")
 
-    rows = [line for line in header_content.splitlines() if line.startswith("    {")]
+    # splitlines は行の中の U+0085（C1 の NEL・fixture `block-put-wide-c1-control`）でも切るので、
+    # 生成物の改行の LF だけで分ける（#1119）。
+    rows = [line for line in header_content.split("\n") if line.startswith("    {")]
     row_names = []
     row_by_name = {}
     for row in rows:

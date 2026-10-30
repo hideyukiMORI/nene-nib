@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 bd7d9c25c8aea5d0ce54fda888178a4f93a92fe8bb991999278a58bc4fef1ec4 / 3077 fixtures
+// fixtures.json: sha256 cfd577a69d932afbfa5f6deb263091dca5d0f1978de313dbe8983baf60d54814 / 3088 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3077> vim_fixtures{{
+constexpr std::array<VimFixture, 3088> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3089,6 +3089,17 @@ constexpr std::array<VimFixture, 3077> vim_fixtures{{
     {"visual-line-case-tilde-forward-same-line", "abc def ghi", "wVw~", "ABC DEF GHI", 1, 1, "", "", std::nullopt},
     {"visual-line-case-tilde-dot-two-lines", "abc def\nghi jkl\nmno pqr", "wVj~jl.", "ABC DEF\nghi jkl\nMNO PQR", 2, 2, "", "", std::nullopt},
     {"visual-line-case-U-dot-up-k", "ab cd\nef gh\nij kl", "jjwVkUl.", "ab cd\nEF GH\nIJ KL", 2, 5, "", "", std::nullopt},
+    {"control-del-j-wanted-column", "a\177bcd\nabcdefgh", "3lj", "a\177bcd\nabcdefgh", 2, 4, "", "", std::nullopt},
+    {"control-del-k-wanted-column", "abcdefgh\na\177bcd", "j3lk", "abcdefgh\na\177bcd", 1, 4, "", "", std::nullopt},
+    {"control-del-j-lands-on-the-del", "abcdefgh\na\177bcd", "2ljx", "abcdefgh\na\177cd", 2, 3, "b", "v", std::nullopt},
+    {"control-del-bar-counts-one-column", "a\177bcd", "4|x", "a\177bd", 1, 4, "c", "v", std::nullopt},
+    {"control-del-bar-after-the-del", "a\177bcd", "3|x", "a\177cd", 1, 3, "b", "v", std::nullopt},
+    {"control-del-dollar-then-j", "a\177bcd\nabcdefgh", "$j", "a\177bcd\nabcdefgh", 2, 8, "", "", std::nullopt},
+    {"control-del-x-then-j-keeps-the-column", "a\177bcd\nabcdefgh", "$xj", "a\177bc\nabcdefgh", 2, 4, "d", "v", std::nullopt},
+    {"control-del-block-columns-delete", "abcdefgh\na\177bcdef", "3l<C-v>jld", "abcfgh\na\177bef", 1, 4, "de\ncd", "\0262", std::nullopt},
+    {"control-del-block-yank-put", "a\177bc\nxyzwvu\n123456", "<C-v>j2lyGp", "a\177bc\nxyzwvu\n1a\177b23456\n xyz", 3, 2, "a\177b\nxyz", "\0263", std::nullopt},
+    {"control-del-block-yank-put-pads", "a\177b\nxy\n123456", "<C-v>j2ly2jlp", "a\177b\nxy\n12a\177b3456\n  xy", 3, 3, "a\177b\nxy", "\0263", std::nullopt},
+    {"control-del-block-dollar-yank-put", "a\177b\nxyzw\n123456", "<C-v>j$y2jp", "a\177b\nxyzw\n1a\177b 23456\n xyzw", 3, 2, "a\177b\nxyzw", "\0264", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
