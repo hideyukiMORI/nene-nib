@@ -28,6 +28,7 @@
 namespace nenenib::core
 {
 using detail::backward_characters;
+using detail::block_append_carried;
 using detail::block_insert_edit;
 using detail::display_view;
 using detail::erased_nothing;
@@ -584,7 +585,9 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     {
         return step;
     }
-    std::string body = std::move(growth.value().first);
+    // `A` の 1 行目で右の端が切った Tab は、打った本文の頭に付けて写す（#1189）。
+    std::string body{block_append_carried(text, insert)};
+    body += growth.value().first;
     std::vector<VimBlockEdit> edits = std::move(growth.value().second);
     Offset resting = view.selection.caret;
     if (const auto *repeat = std::get_if<VimInsertAt>(&step.effect))
