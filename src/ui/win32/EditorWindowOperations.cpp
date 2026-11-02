@@ -309,7 +309,8 @@ namespace
 using OperationRunner = std::pair<core::EditorOperation, void (EditorWindow::*)()>;
 
 // 表の i 行目が i 番目の値を持ち、どの行も関数を指す（OperationTexts.cpp の texts_in_order と
-// 同じ形）。値を足して表に行が無ければ、足りない行は {open_file, nullptr} で埋まって落ちる。
+// 同じ形）。表の大きさは operation_texts.size() なので、行の書き忘れは {open_file, nullptr} で
+// 埋まってここが落とし、行が多すぎれば初期化子の数でコンパイルが落ちる。
 template <std::size_t Size>
 [[nodiscard]] consteval bool
 runners_in_order(const std::array<OperationRunner, Size> &rows) noexcept
@@ -366,9 +367,6 @@ EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation op
         {core::EditorOperation::go_to_line, &EditorWindow::run_go_to_line},
         {core::EditorOperation::preview_full, &EditorWindow::run_preview_full},
     }};
-    // 大きさは operation_texts（EditorOperation の値の数と OperationTexts.cpp が照合済み）と同じ。
-    static_assert(runners.size() == core::operation_texts.size(),
-                  "operation runners have one row for every EditorOperation");
     static_assert(runners_in_order(runners),
                   "operation runners follow the order of EditorOperation and point to a function");
     return runners[std::to_underlying(operation)].second;

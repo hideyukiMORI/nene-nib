@@ -85,5 +85,5 @@
 
 1. `EditorWindow::run_operation` は `constexpr` の表（操作 → 引数なしのメンバ関数）を引いて呼ぶだけにする。表は `EditorWindowOperations.cpp` の private static `runner_of` の中の `std::array<std::pair<EditorOperation, void (EditorWindow::*)()>, operation_texts.size()>` で、行は `EditorOperation` の順（private の関数を指すので `EditorWindow` のメンバの中に置く・行の型は `std::pair` の別名で CPP-011 の型を増やさない）。
 2. 群の関数（`run_document_operation` `run_tab_operation` `run_edit_operation` `run_sent_operation` `run_pane_operation`）と、そこにあった「何もしない `case` の列」は置かない。操作ごとの本体は 1 操作 1 つの小さな private メンバ関数 `run_<operation>`（引数の要らない既存の `open_document` `save_document` `save_document_as` `toggle_mode` `choose_explorer_root` は表から直に引く）。
-3. 網羅性は `static_assert` 2 つで守る: 表の大きさが `operation_texts.size()`（`OperationTexts.cpp` が値の数と照合済み）と同じこと、全行の `first` が行の番号の値で `second` が空でないこと（`OperationTexts.cpp` の `texts_in_order` と同じ形）。値を足して行が無ければ、足りない行は `{open_file, nullptr}` で埋まってコンパイルが落ちる。
+3. 網羅性は `static_assert` 1 つ（`runners_in_order`）で守る: 全行の `first` が行の番号の値で `second` が空でないこと（`OperationTexts.cpp` の `texts_in_order` と同じ形）。表の大きさは配列の型の `operation_texts.size()`（`OperationTexts.cpp` が値の数と照合済み）なので、行の書き忘れは `{open_file, nullptr}` で埋まり `runners_in_order` が落とす。行が多すぎれば初期化子の数でコンパイルが落ちる。
 4. 操作を足すときの ui の差分は、表に 1 行と小さなメンバ関数 1 つ（と `EditorWindow.hpp` の宣言 1 行）。決定 1〜7 は変えない。
