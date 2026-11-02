@@ -2,6 +2,7 @@
 
 #include "CaretMotion.hpp"
 #include "CaretMove.hpp"
+#include "DocumentCaret.hpp"
 #include "LineEnding.hpp"
 #include "Selection.hpp"
 #include "Utf8.hpp"
@@ -266,8 +267,6 @@ constexpr std::size_t longest_code_point_bytes = 4;
     return VimStep{state, VimRemoveRange{OffsetRange{begin, caret}}};
 }
 
-// 鍵の列が打った本文だけ（文字と改行）なら、その本文（#1093）。消す鍵を含む列は前の周の本文
-// まで消すので、流し直さないと決まらない（空を返す）。
 // 鍵 1 つが打った本文（#1093）。文字はその文字、改行の鍵は改行で、ほかの鍵は本文にならない。
 // 鍵の種類が増えたら std::visit がここで落ちる（CPP-002）。
 [[nodiscard]] std::optional<std::string> typed_piece(VimCharacter key)
@@ -291,6 +290,8 @@ constexpr std::size_t longest_code_point_bytes = 4;
     return std::nullopt;
 }
 
+// 鍵の列が打った本文だけ（文字と改行）なら、その本文（#1093）。消す鍵を含む列は前の周の本文
+// まで消すので、流し直さないと決まらない（空を返す）。
 [[nodiscard]] std::optional<std::string> typed_text(const std::vector<VimKey> &keys)
 {
     std::string text;
@@ -464,31 +465,91 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
     return step;
 }
 
+// 置き換えた後の 1 行目は、頭の本文・置き換えの本文の最後の行・続きの本文の 3 つをつないだもの
+// （#1107）。頭と続きは Esc の前の本文の範囲で、続きは置き換えの終わりから行末まで。
+using SplicedLine = std::tuple<OffsetRange, std::string_view, OffsetRange>;
+
+// 流し直しの置き換えの後の 1 行目（#1093・#1107）。Vim の op_insert は回数の周を終えたカーソルが
+// 1 行目に無ければ写さない。流し直しのキャレットは置き換えの本文の最後の行にあるので、前の行と
+// つないでから改行で 1 行目の番号へ戻った列（`<BS><CR>`）も、その行が 1 行目なら写す（実測
+// `j0<C-v>j2Iz<C-u><C-u><CR>y`）。置き換えが 1 行目の行末を越えるときも写さない（空）。
+[[nodiscard]] std::optional<SplicedLine> replaced_first_line(const VimBlockInsert &insert,
+                                                             const TextBuffer &text,
+                                                             const VimReplaceRange &replaced)
+{
+    const Offset start = text.line_start(insert.first);
+    const Offset end = text.line_end(insert.first);
+    const std::string_view utf8 = replaced.utf8;
+    const auto newlines = static_cast<std::size_t>(std::ranges::count(utf8, '\n'));
+    if (replaced.range.end.value < start.value || end.value < replaced.range.end.value ||
+        line_of(text, replaced.range.begin).value + newlines != insert.first.value)
+    {
+        return std::nullopt;
+    }
+    const std::size_t last = utf8.rfind('\n');
+    if (last == std::string_view::npos)
+    {
+        return SplicedLine{OffsetRange{start, replaced.range.begin}, utf8,
+                           OffsetRange{replaced.range.end, end}};
+    }
+    return SplicedLine{OffsetRange{start, start}, utf8.substr(last + 1),
+                       OffsetRange{replaced.range.end, end}};
+}
+
+// つないだ行の [from, from + length) だけを読む（#1107）。頭と続きは本文から要るぶんだけ写し、
+// 巨大な 1 行目でも行の全体を写さない（写す長さは伸びたぶんに比例する）。
+[[nodiscard]] std::string spliced_slice(const TextBuffer &text, const SplicedLine &line,
+                                        std::size_t from, std::size_t length)
+{
+    const auto &[head, middle, tail] = line;
+    std::string slice;
+    std::size_t skip = from;
+    const auto take = [&](std::size_t size)
+    {
+        const std::size_t skipped = std::min(skip, size);
+        skip -= skipped;
+        return std::pair{skipped, std::min(length - slice.size(), size - skipped)};
+    };
+    const auto read = [&](OffsetRange part)
+    {
+        const auto [skipped, taken] = take(part.end.value - part.begin.value);
+        const Offset begin{part.begin.value + skipped};
+        slice += text.text_range(begin, Offset{begin.value + taken});
+    };
+    read(head);
+    const auto [skipped, taken] = take(middle.size());
+    slice += middle.substr(skipped, taken);
+    read(tail);
+    return slice;
+}
+
 // 矩形の 1 行目が INSERT の前より伸びたぶん（ほかの行へ写す本文）と、回数の繰り返しの 1 行目の
 // 編集（#1042・#1093）。回数の繰り返しは本文の後ろへ足す VimInsertAt か、消す鍵を含む流し直しの
 // VimReplaceRange で、流し直しは置き換えた後の 1 行目から伸びたぶんを読む（Vim の op_insert も
-// 回数の周を終えた 1 行目を写す）。1 行目の中に収まらない流し直し（前の行とつないだ・改行を
-// 打った）と、伸びていない 1 行目は写さない（空）。
+// 回数の周を終えた 1 行目を写す）。伸びていない 1 行目は写さない（空）。長さは本文を写さずに
+// 数え、写すのは伸びたぶんだけ（#1107）。
 [[nodiscard]] std::optional<std::pair<std::string, std::vector<VimBlockEdit>>>
 first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const VimEffect &effect)
 {
     const Offset start = text.line_start(insert.first);
     const Offset end = text.line_end(insert.first);
-    std::string line = text.text_range(start, end);
+    SplicedLine line{OffsetRange{start, end}, std::string_view{}, OffsetRange{end, end}};
     std::vector<VimBlockEdit> edits;
     std::string tail;
     if (const auto *replaced = std::get_if<VimReplaceRange>(&effect))
     {
-        if (replaced->range.begin.value < start.value || end.value < replaced->range.end.value ||
-            replaced->utf8.find('\n') != std::string::npos)
+        auto spliced = replaced_first_line(insert, text, *replaced);
+        if (!spliced.has_value())
         {
             return std::nullopt;
         }
-        line.replace(replaced->range.begin.value - start.value,
-                     replaced->range.end.value - replaced->range.begin.value, replaced->utf8);
+        line = spliced.value();
         edits.push_back(VimBlockEdit{replaced->range, replaced->utf8});
     }
-    if (line.size() <= insert.line_bytes)
+    const auto &[head, middle, rest] = line;
+    const std::size_t length =
+        (head.end.value - head.begin.value) + middle.size() + (rest.end.value - rest.begin.value);
+    if (length <= insert.line_bytes)
     {
         return std::nullopt;
     }
@@ -497,7 +558,8 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
         edits.push_back(VimBlockEdit{OffsetRange{repeat->at, repeat->at}, repeat->utf8});
         tail = repeat->utf8;
     }
-    std::string body = line.substr(insert.at.value - start.value, line.size() - insert.line_bytes);
+    std::string body =
+        spliced_slice(text, line, insert.at.value - start.value, length - insert.line_bytes);
     body += tail;
     return std::pair{std::move(body), std::move(edits)};
 }
@@ -531,7 +593,10 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     }
     if (const auto *replaced = std::get_if<VimReplaceRange>(&step.effect))
     {
-        resting = replaced->caret;
+        // 置き換えのキャレットは LF で数えるので、文書の位置の insert.caret と比べる前に直す
+        // （前の行とつないでから改行で 1 行目へ戻った流し直し・CRLF・#1107）。
+        resting = document_caret_after(replaced->range.begin, replaced->utf8, replaced->caret,
+                                       text.line_ending());
     }
     if (const auto *moved = std::get_if<VimMoveTo>(&step.effect))
     {
