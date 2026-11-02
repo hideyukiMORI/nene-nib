@@ -650,9 +650,47 @@ namespace detail
     return result;
 }
 
+} // namespace detail
+
+namespace
+{
+// 大小文字の後のキャレット（決定 10 の追補・#1170）。写像はバイト数を変える（`İ` → `i`・`ɐ` →
+// `Ɐ`）ので、置き換える前の絶対の位置ではなく、置き換えた後の本文の行と桁で数える。Vim は
+// oap->start を行とバイトの桁で持ち、置き換えた後の行で同じバイトの桁を行の最後の文字までに
+// 詰め（check_cursor_col）、文字の途中なら頭へ寄せる（mb_adjust_cursor）（Vim 9.1 で実測）。
+// 返すのは置き換えた本文（LF 換算）の中の位置を span.begin に足したもの（VimReplaceRange.caret）。
+[[nodiscard]] Offset cased_caret(const TextBuffer &text, OffsetRange span, std::string_view body,
+                                 Offset caret)
+{
+    if (caret.value <= span.begin.value || body.empty())
+    {
+        return caret;
+    }
+    const LineNumber line = line_of(text, caret);
+    std::size_t start = 0;
+    for (std::size_t passed = line_of(text, span.begin).value; passed < line.value; ++passed)
+    {
+        start = std::min(body.find('\n', start), body.size() - 1) + 1;
+    }
+    const std::size_t column =
+        caret.value - std::max(text.line_start(line).value, span.begin.value);
+    const std::string_view row = body.substr(start, body.find('\n', start) - start);
+    if (row.empty())
+    {
+        return Offset{span.begin.value + start};
+    }
+    const Offset point = previous_code_point(row, Offset{std::min(column, row.size() - 1) + 1});
+    return Offset{span.begin.value + start +
+                  vim_character_start(row, vim_character_end(row, point)).value};
+}
+} // namespace
+
+namespace detail
+{
 // 大小文字の置き換え（決定 10）。範囲は case_span の 1 本。本文は LF 換算で、controller が文書の
-// 改行へ直して 1 Edit にする。キャレットは範囲の戻り先（行単位はキャレットと着地の小さい方・
-// ないときは範囲の先頭・Vim の oap->start）で、u の戻り先も同じ。書き換える本文が空でも変更と
+// 改行へ直して 1 Edit にする。u の戻り先は範囲の戻り先（行単位はキャレットと着地の小さい方・
+// ないときは範囲の先頭・Vim の oap->start）で、キャレットはそれを置き換えた後の本文の行と桁へ
+// 写した位置（cased_caret・#1170）。書き換える本文が空でも変更と
 // して返す（`.` の記録に残り、キャレットは範囲の先頭へ・空の置き換えは controller が履歴に積まない
 // ・#1064）。
 [[nodiscard]] VimStep case_changed(const VimState &state, const TextBuffer &text,
@@ -663,9 +701,10 @@ namespace detail
     std::string body = cased_text(
         without_newline_carriage_returns(text.text_range(span.begin, span.end), text.line_ending()),
         operation);
+    const Offset landing = cased_caret(text, span, body, caret);
     return restored_at(
         VimStep{vim_resting_from(state, state.unnamed_register),
-                VimReplaceRange{span, std::move(body), caret, EditBoundary::separate}},
+                VimReplaceRange{span, std::move(body), landing, EditBoundary::separate}},
         caret);
 }
 } // namespace detail
