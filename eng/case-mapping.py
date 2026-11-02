@@ -2,8 +2,13 @@
 
 The Vim case operators (`~` `g~` `gu` `gU` and VISUAL `~` `u` `U`) change one code point into one
 code point. The table is the simple (one to one) part of the Unicode case mapping as Python's
-`str.upper` / `str.lower` give it: a code point whose full mapping is longer than one code point
-(`ß` -> `SS`, `İ` -> `i̇`) keeps itself. Locale rules (Turkish `i`) and title case are not used.
+`str.upper` / `str.lower` give it. Python returns the full (SpecialCasing) mapping, so a code point
+whose full mapping is longer than one code point drops out; `SIMPLE_OVERRIDES` puts back the simple
+mapping that UnicodeData.txt gives those code points (28 of them, Issue #990: `İ` -> `i` and the
+Greek small letters with ypogegrammeni -> their title case capitals), which is what Vim's
+`utf_toupper` / `utf_tolower` use. `ß` has no simple uppercase and keeps itself here; the one to many
+`gU` of `ß` -> `SS` is written beside the operator (src/core/VimStepOperators.cpp `cased_text`).
+Locale rules (Turkish `i`) and title case are not used.
 
 The mapping is folded into ranges (first, last, step, delta): every `step`-th code point from
 `first` to `last` maps to itself plus `delta`. Vim's own tables are not copied; the data is the
@@ -27,10 +32,29 @@ BANNER = "// 生成物。手で編集しない。python eng/case-mapping.py --wr
 LAST_CODE_POINT = 0x10FFFF
 STEPS = (1, 2)
 
+# The simple case mapping of UnicodeData.txt (Unicode 15.0.0, fields 12 and 13; Unicode License v3)
+# for the code points whose SpecialCasing full mapping Python returns instead (Issue #990).
+# Vim 9.1's toupper() / tolower() agree with the generated table plus these 28 on U+0080..U+10FFFF.
+SIMPLE_OVERRIDES: dict[str, dict[int, int]] = {
+    "upper": {
+        **{0x1F80 + offset: 0x1F88 + offset for offset in range(8)},
+        **{0x1F90 + offset: 0x1F98 + offset for offset in range(8)},
+        **{0x1FA0 + offset: 0x1FA8 + offset for offset in range(8)},
+        0x1FB3: 0x1FBC,
+        0x1FC3: 0x1FCC,
+        0x1FF3: 0x1FFC,
+    },
+    "lower": {0x0130: 0x0069},
+}
 
-def simple_mapping(convert) -> dict[int, int]:
-    """Code point -> code point for the one-to-one part of `convert` (str.upper or str.lower)."""
-    mapping = {}
+
+def simple_mapping(convert, overrides: dict[int, int]) -> dict[int, int]:
+    """Code point -> code point for the one-to-one part of `convert` (str.upper or str.lower),
+    with `overrides` filling the code points whose full mapping is longer than one code point."""
+    for value in overrides:
+        if len(convert(chr(value))) < 2:
+            raise ValueError(f"U+{value:04X}: the override is not for a one to many full mapping")
+    mapping = dict(overrides)
     for value in range(LAST_CODE_POINT + 1):
         if 0xD800 <= value <= 0xDFFF:
             continue
@@ -80,8 +104,9 @@ def table_rows(name: str, ranges: list[tuple[int, int, int, int]]) -> str:
 def case_mapping_header() -> str:
     """The whole of src/core/CaseMappingTable.hpp. Needs no Vim."""
     tables = []
-    for name, convert in (("case_to_upper", str.upper), ("case_to_lower", str.lower)):
-        mapping = simple_mapping(convert)
+    for name, convert, overrides in (("case_to_upper", str.upper, SIMPLE_OVERRIDES["upper"]),
+                                     ("case_to_lower", str.lower, SIMPLE_OVERRIDES["lower"])):
+        mapping = simple_mapping(convert, overrides)
         ranges = folded_ranges(mapping)
         if expanded(ranges) != mapping:
             raise ValueError(f"{name}: the folded ranges do not reproduce the mapping")
@@ -89,6 +114,7 @@ def case_mapping_header() -> str:
     return ("// clang-format off\n"
             f"{BANNER}\n"
             f"// Unicode {unicodedata.unidata_version}（Python {sys.version_info.major}.{sys.version_info.minor} の unicodedata）\n"
+            f"// 1 対多の字は UnicodeData.txt の簡単な写像で {sum(map(len, SIMPLE_OVERRIDES.values()))} 字を上書き（Issue #990）\n"
             "#pragma once\n"
             "\n"
             '#include "CaseMappingRange.hpp"\n'

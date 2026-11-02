@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 fb2f48607be270122c291eff4b8b7b2685986901f8be2469eed2ce14ce2e15ff / 3171 fixtures
+// fixtures.json: sha256 97e98231600d0e4b8223fe9dfed70c21e12460edab945671ee948440c7668a32 / 3185 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3171> vim_fixtures{{
+constexpr std::array<VimFixture, 3185> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2303,6 +2303,20 @@ constexpr std::array<VimFixture, 3171> vim_fixtures{{
     {"unicode-case-turkish-dotless-i-upper", "ıi", "gUU", "II", 1, 1, "", "", std::nullopt},
     {"unicode-case-turkish-dotted-I-upper", "İi", "gUU", "İI", 1, 1, "", "", std::nullopt},
     {"unicode-case-astral-adlam-gUU", "𞤢𞤣", "gUU", "𞤀𞤁", 1, 1, "", "", std::nullopt},
+    {"case-rest-dotted-i-guu", "İstanbul İ", "guu", "istanbul i", 1, 1, "", "", std::nullopt},
+    {"case-rest-dotted-i-tilde", "İstanbul", "~", "istanbul", 1, 2, "", "", std::nullopt},
+    {"case-rest-dotted-i-visual-u", "aİb", "lvu", "aib", 1, 2, "", "", std::nullopt},
+    {"case-rest-greek-ypogegrammeni-gUU", "ᾀᾁᾗᾧᾳῃῳ", "gUU", "ᾈᾉᾟᾯᾼῌῼ", 1, 1, "", "", std::nullopt},
+    {"case-rest-greek-ypogegrammeni-gtilde", "ᾀᾈῳῼ", "g~~", "ᾈᾀῼῳ", 1, 1, "", "", std::nullopt},
+    {"case-rest-greek-ypogegrammeni-tilde-count", "ᾠᾳx", "3~", "ᾨᾼX", 1, 7, "", "", std::nullopt},
+    {"case-rest-sharp-s-gUU", "straße", "gUU", "STRASSE", 1, 1, "", "", std::nullopt},
+    {"case-rest-sharp-s-gU-motion", "aßb ß", "lgUl", "aSSb ß", 1, 2, "", "", std::nullopt},
+    {"case-rest-sharp-s-gU-dot", "ß ß ß", "gUlw.w.", "SS SS SS", 1, 7, "", "", std::nullopt},
+    {"case-rest-sharp-s-tilde", "straße", "4l~~", "straßE", 1, 7, "", "", std::nullopt},
+    {"case-rest-sharp-s-gtilde", "Straße", "g~~", "sTRAßE", 1, 1, "", "", std::nullopt},
+    {"case-rest-sharp-s-guu", "STRAßE ẞ", "guu", "straße ß", 1, 1, "", "", std::nullopt},
+    {"case-rest-sharp-s-visual-U", "straße x", "v$U", "STRASSE X", 1, 1, "", "", std::nullopt},
+    {"case-rest-sharp-s-visual-line-U", "ßa\nßb", "VjU", "SSA\nSSB", 1, 1, "", "", std::nullopt},
     {"shift-right-up-then-u", "ab\ncd", "j$>ku", "ab\ncd", 1, 2, "", "", std::nullopt},
     {"shift-left-visual-then-u", "\ta\n\tb", "jlVk<u", "\ta\n\tb", 1, 2, "", "", std::nullopt},
     {"J-after-an-exclamation-mark-adds-two-spaces", "abc!\ndef", "J", "abc!  def", 1, 5, "", "", std::nullopt},

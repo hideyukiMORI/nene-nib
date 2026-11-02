@@ -623,8 +623,11 @@ namespace detail
 {
 // Vim の 1 文字（ADR 0053）ごとに基底の code point だけを写し、続く結合文字はバイト列のまま残す
 // （Vim の swapchar が見るのは基底の文字だけ・結合文字つきの é は É ＋結合文字になる）。
+// 1 対多はここの 1 か所だけで、`gU` と VISUAL の `U` は `ß` を `SS` にする（Vim の swapchar の
+// OP_UPPER の特別扱い・`~` `g~` `gu` は変えない・どちらも 2 バイト・Issue #990）。
 [[nodiscard]] std::string cased_text(std::string_view text, VimOperator operation)
 {
+    constexpr char32_t sharp_s = U'ß';
     std::string result;
     result.reserve(text.size());
     Offset at{0};
@@ -632,7 +635,15 @@ namespace detail
     {
         const Offset end = vim_character_end(text, at);
         const Offset marks = next_code_point(text, at);
-        append_utf8(result, cased(code_point_at(text, at), operation));
+        const char32_t base = code_point_at(text, at);
+        if (operation == VimOperator::upper_case && base == sharp_s)
+        {
+            result.append("SS");
+        }
+        else
+        {
+            append_utf8(result, cased(base, operation));
+        }
         result.append(text.substr(marks.value, end.value - marks.value));
         at = end;
     }
@@ -995,6 +1006,7 @@ namespace detail
 
 // `~`（決定 10・tildeop off）。キャレットから回数の文字（結合文字ごと）を反転し、行末で止まる。
 // キャレットは反転した次の文字（行の外なら最後の文字・Vim の n_swapchar）。空行は失敗。
+// 着地は書き換えた後の本文の位置で数える（`İ` → `i` は 2 バイトが 1 バイトになる・#990）。
 [[nodiscard]] VimStep swapped_characters(const VimState &state, const TextBuffer &text,
                                          Offset caret)
 {
@@ -1005,8 +1017,10 @@ namespace detail
     }
     const Offset end = forward_characters(text, caret, count_of(state.count));
     std::string body = cased_text(text.text_range(caret, end), VimOperator::toggle_case);
-    const Offset landing =
-        end == text.line_end(line) ? backward_characters(text, end, single_step) : end;
+    const std::size_t landed = end == text.line_end(line)
+                                   ? vim_character_start(body, Offset{body.size()}).value
+                                   : body.size();
+    const Offset landing{caret.value + landed};
     return VimStep{
         vim_resting_from(state, state.unnamed_register),
         VimReplaceRange{OffsetRange{caret, end}, std::move(body), landing, EditBoundary::separate}};
