@@ -55,3 +55,8 @@ FR-003のNORMAL `o` / `O`を実装する。既存のINSERT、行索引、改行�
 ## 追補（2026-10-30・Issue #1136）
 
 決定 3 の「移動」から、行の端で動かない `<Left>` `<Right>`（行頭の `<Left>`・行の内容の終わりの `<Right>`）だけを外す。これらは反復を切らない（Vim の `ins_left` `ins_right` はビープだけで `start_arrow` を呼ばない・実測 `2A<Right>x<Esc>` → `abxx`）。`.` の記録も取り直さず、始めの位置の印も立てない。判定は `VimStepInsert.cpp` の `arrow_stays` の 1 本。最初の行の `<Up>`・最後の行の `<Down>`・端の PgUp / PgDn は動かなくても今までどおり反復を切る（Vim との差は別の Issue）。
+決定 3 の「移動」は動いた移動だけで、行の端で動かない矢印（行頭の `<Left>`・行の内容の終わりの `<Right>`）は反復を切らない（Vim の `ins_left` `ins_right` はビープだけで `start_arrow` を呼ばない・実測 `2A<Right>x<Esc>` → `abxx`）。`.` の記録も取り直さず、始めの位置の印も立てない。判定は `VimStepInsert.cpp` の `arrow_stays` の 1 本。
+
+## 追補（2026-10-30・Issue #1137）
+
+決定 4 の「移動の鍵は `i` から取り直す」は、移動の鍵で記録を区切り、区切った後に打った最初の移動でない鍵で `i` から取り直す（Vim の `stop_arrow`）。区切った後に何も打たずに Esc すれば記録は区切る前のまま（実測 `ix<Left><Esc>.` → `xxab`・`2.` も前の記録に掛かり `xxxab`・`2ix<Left><Esc>.` は回数ごと・`2ix<Left><Esc>3.` は回数を置き換え・`vlcZ<Home><Esc>.` は VISUAL の大きさごと繰り返す）。区切った後の印は始めの位置の `moved`（#1040 の `arrow_stopped` と同じ合図）で、`Ctrl-r` は開いた時点で取り直す。記録は `VimStepRecording.cpp` の `insert_recording` の 1 か所。ビープの消す鍵は印も位置も鍵の前のまま残し、戻すのは INSERT の側の `insert_start_kept`（`VimStepInsert.cpp`・`insert_started` の隣・記録の有無に依らない）。`insert-arrow-dot-*` の 13 fixture が固定 Vim との一致を守る。
