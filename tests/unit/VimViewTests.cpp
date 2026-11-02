@@ -559,6 +559,17 @@ void verify_insert_page_edges()
     vim_replay(at_bottom, "Ax<PageDown>y<Esc>k.");
     expect(whole_vim_body(at_bottom).ends_with("\nline\nlinexy\nlinexy"),
            "#1149 PgDn at the last line keeps the record of the insert");
+    // 対照: 末尾の窓からの PgUp は先頭の行が動くので、回数の反復を切る（x は 1 回だけ）。
+    Editing moving;
+    EditorController &moved = moving.controller();
+    prepared(moved, "0");
+    vim_replay(moved, "G");
+    const LineNumber before = moved.frame().first_visible;
+    vim_replay(moved, "2ix<PageUp>y<Esc>");
+    const auto body = whole_vim_body(moved);
+    expect(body.ends_with("\nxline") && std::ranges::count(body, 'x') == 1 &&
+               std::ranges::count(body, 'y') == 1 && moved.frame().first_visible != before,
+           "#1149 a moving PgUp cancels the count of the insert");
 }
 } // namespace
 

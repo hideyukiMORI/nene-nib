@@ -178,7 +178,8 @@ void verify_vim_open_line_movement()
         vim_replay(controller, "3Oabc");
         applied(controller, VimKeyPress{VimKey{key}});
         expect(!controller.vim_state().insert_repeat.has_value(),
-               "every INSERT movement cancels open-line repetition, including no-op moves");
+               "an INSERT key that moves, and Home / End even in place, cancels open-line "
+               "repetition");
         vim_replay(controller, "Z<Esc>u");
         expect(whole_vim_body(controller) == "abc\n", "movement seals the earlier insertion");
         vim_replay(controller, "u");
@@ -209,6 +210,18 @@ void verify_vim_open_line_edge_keys()
         vim_replay(controller, "u");
         expect(whole_vim_body(controller).empty(), "#1149 one undo removes all opened lines");
     }
+    // 対照: `3o` で開いた 2 行目の `<Up>` は 1 行目へ動くので、反復を切り undo を区切る（#1149）。
+    Editing moving;
+    EditorController &moved = moving.controller();
+    applied(moved, SelectEditMode{EditMode::vim});
+    vim_replay(moved, "3oabc");
+    applied(moved, VimKeyPress{VimKey{VimSpecialKey::arrow_up}});
+    expect(!moved.vim_state().insert_repeat.has_value(),
+           "#1149 an INSERT Up that moves cancels open-line repetition");
+    vim_replay(moved, "Z<Esc>u");
+    expect(whole_vim_body(moved) == "\nabc", "#1149 a moving Up seals the earlier insertion");
+    vim_replay(moved, "u");
+    expect(whole_vim_body(moved).empty(), "#1149 the earlier undo also removes the open line");
 }
 } // namespace
 
