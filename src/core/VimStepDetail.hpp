@@ -182,6 +182,8 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
 [[nodiscard]] std::optional<VimBlockEdit> block_insert_edit(const TextBuffer &text, LineNumber line,
                                                             const VimBlockInsert &insert,
                                                             std::string_view body);
+[[nodiscard]] std::string_view block_append_carried(const TextBuffer &text,
+                                                    const VimBlockInsert &insert);
 [[nodiscard]] VimStep shifted_block(const VimState &state, const VimEditorView &view,
                                     ShiftBy shift);
 [[nodiscard]] VimRegister register_read(const VimState &state,

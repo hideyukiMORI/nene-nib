@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 50b95fa9d3235ded5cbcce5264b93d16f2b0fdf6cfa7bab5e4e2b12a038c4dca / 3288 fixtures
+// fixtures.json: sha256 7b77c392dfa43356bde1e061eefbbf7faad5031ef8613edaceb7db3a98a2d779 / 3300 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3288> vim_fixtures{{
+constexpr std::array<VimFixture, 3300> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2962,6 +2962,18 @@ constexpr std::array<VimFixture, 3288> vim_fixtures{{
     {"block-insert-I-straddle", "abcdef\nあいう\nabcdef", "l<C-v>jjIX<Esc>", "aXbcdef\n Xあいう\naXbcdef", 1, 2, "", "", std::nullopt},
     {"block-insert-c-straddle", "abcdef\nあいう\nabcdef", "l<C-v>jjcX<Esc>", "aXcdef\n Xいう\naXcdef", 1, 2, "b\n \nb", "\0261", std::nullopt},
     {"block-insert-A-tab-straddle", "abcdefghij\na\tbc\nabcdefghij", "ll<C-v>jjAX<Esc>", "abcXdefghij\na  X     bc\nabcXdefghij", 1, 3, "", "", std::nullopt},
+    {"block-append-tab-pad-issue", "!\t🇯🇵\n    é <w> が<w>全", "<C-v>ew1A  <Esc>", "!\t  🇯🇵\n    é\t   <w> が<w>全", 1, 1, "", "", std::nullopt},
+    {"block-append-tab-pad-mid", "a\tbc\nabcdefghij", "<C-v>jllAX<Esc>", "a\tXbc\nabc\tXdefghij", 1, 1, "", "", std::nullopt},
+    {"block-append-tab-pad-tab-start", "a\tbc\nabcdefghij", "<C-v>jlAX<Esc>", "a\tXbc\nab\tXcdefghij", 1, 1, "", "", std::nullopt},
+    {"block-append-tab-pad-tab-end", "a\tbc\nabcdefghij", "<C-v>j7lAX<Esc>", "a\tXbc\nabcdefghXij", 1, 1, "", "", std::nullopt},
+    {"block-append-tab-pad-short", "a\tbc\nab\nabcdefghij", "<C-v>jjllAX<Esc>", "a\tXbc\nab \tX\nabc\tXdefghij", 1, 1, "", "", std::nullopt},
+    {"block-append-tab-pad-short-space", "a\tbc\na \nabcdefghij", "<C-v>jjllAX<Esc>", "a\tXbc\na  \tX\nabc\tXdefghij", 1, 1, "", "", std::nullopt},
+    {"block-append-tab-pad-empty", "a\tbc\n\nabcdefghij", "<C-v>jjllAX<Esc>", "a\tXbc\n   \tX\nabc\tXdefghij", 1, 1, "", "", std::nullopt},
+    {"block-append-tab-pad-middle-short", "a\tbc\nx\nabcdefghij", "<C-v>jjllAXY<Esc>", "a\tXYbc\nx  \tXY\nabc\tXYdefghij", 1, 1, "", "", std::nullopt},
+    {"block-append-tab-pad-both-split", "a\tbc\nab\tcd\nabc", "<C-v>jjllAX<Esc>", "a\tXbc\nab \tX     cd\nabc\tX", 1, 1, "", "", std::nullopt},
+    {"block-append-tab-pad-insert", "a\tbc\nab\nabcdefghij", "<C-v>jjllIX<Esc>", "Xa\tbc\nXab\nXabcdefghij", 1, 1, "", "", std::nullopt},
+    {"block-append-tab-pad-dollar", "a\tbc\nab\nabcdefghij", "<C-v>jj$AX<Esc>", "a\tbcX\nabX\nabcdefghijX", 1, 1, "", "", std::nullopt},
+    {"block-append-tab-pad-dot", "a\tbc\nabcdefghij\na\tbc\nabcdefghij", "<C-v>jllAX<Esc>jj.", "a\tXbc\nabc\tXdefghij\na\tXbc\nabc\tXdefghij", 3, 1, "", "", std::nullopt},
     {"block-insert-I-tab-straddle", "abcdefghij\na\tbc\nabcdefghij", "ll<C-v>jjIX<Esc>", "abXcdefghij\na X      bc\nabXcdefghij", 1, 3, "", "", std::nullopt},
     {"block-insert-A-dollar-dot", "ab\nabcd\nabc\nab", "<C-v>j$AX<Esc>jj.", "abX\nabcdX\nabcX\nabX", 3, 1, "", "", std::nullopt},
     {"block-insert-c-undo", "abcdef\nghijkl\nmnopqr", "l<C-v>jjlcab<Esc>u", "abcdef\nghijkl\nmnopqr", 1, 2, "bc\nhi\nno", "\0262", std::nullopt},

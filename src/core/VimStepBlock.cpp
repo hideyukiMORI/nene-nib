@@ -314,6 +314,33 @@ namespace detail
     utf8.append(insert_tail(content, range, text.line_start(line), insert.column), ' ');
     return VimBlockEdit{range, std::move(utf8)};
 }
+
+// 矩形の `A` が残りの行へ写す本文の頭に付ける Tab（ADR 0035 の追補 #1189）。1 行目の右の端が
+// Tab の途中に掛かれば、打ち始めた所の手前のその Tab ごと写す（固定 Vim の op_insert は打った後の
+// 1 行目を block_prep し直し、端の文字が切れていれば textlen を 1 つ戻してそこから写す本文を
+// 読む・実測 `block-append-tab-pad-`）。残りの行を桁まで埋める空白は block_insert_edit のまま。
+// 掛からなければ空。
+[[nodiscard]] std::string_view block_append_carried(const TextBuffer &text,
+                                                    const VimBlockInsert &insert)
+{
+    switch (insert.side)
+    {
+    case VimBlockInsertSide::before:
+    case VimBlockInsertSide::line_end:
+        return {};
+    case VimBlockInsertSide::after:
+        break;
+    }
+    const std::string content = text.line_text(insert.first);
+    const std::size_t byte = insert.at_byte;
+    if (byte == 0 || byte > content.size() ||
+        code_point_at(content, Offset{byte - single_step}) != tab_character)
+    {
+        return {};
+    }
+    return column_of(content, byte).value > insert.column.value ? std::string_view{"\t"}
+                                                                : std::string_view{};
+}
 } // namespace detail
 
 namespace
