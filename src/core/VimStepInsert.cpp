@@ -37,6 +37,7 @@ using detail::insert_special;
 using detail::last_code_point_size;
 using detail::line_feed;
 using detail::line_of;
+using detail::page_stays;
 using detail::page_step;
 using detail::register_read;
 using detail::register_selection_of;
@@ -68,33 +69,79 @@ namespace
 constexpr std::size_t arrow_window_bytes = 64;
 constexpr std::size_t longest_code_point_bytes = 4;
 
-// 行の端で動かない矢印か（行頭の `<Left>`・行の内容の終わりの `<Right>`・#1136）。
-// Vim の ins_left ins_right はここでビープだけを返し start_arrow を呼ばないので、
-// 回数の反復も `.` の記録も始めの位置も変えない（ADR 0049 / ADR 0028 の追補）。
-// 判定はこの 1 本で、矢印の 2 case と始めの位置が共用する。
-[[nodiscard]] bool arrow_stays(const TextBuffer &text, Offset caret, const VimKey &key)
+// 端で動かない矢印か（行頭の `<Left>`・行の内容の終わりの `<Right>`・#1136、最初の行の
+// `<Up>`・最後の行の `<Down>`・端の `<PageUp>` `<PageDown>`・#1149）。Vim の ins_left ins_right
+// ins_up ins_down ins_pageup ins_pagedown はここでビープだけを返し start_arrow を呼ばないので、
+// 回数の反復も `.` の記録も始めの位置も変えない（ADR 0049 / ADR 0028 の追補）。縦は論理行
+// （Vim の cursor_up / cursor_down の FAIL）で、折り返しの画面行は見ない。
+// 判定はこの 1 本で、矢印と PgUp / PgDn の case と始めの位置が共用する。
+[[nodiscard]] bool arrow_stays(const VimEditorView &view, const VimKey &key)
 {
     const auto *const special = std::get_if<VimSpecialKey>(&key);
     if (special == nullptr)
     {
         return false;
     }
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
     const LineNumber line = line_of(text, caret);
-    const bool left = *special == VimSpecialKey::arrow_left;
-    const bool right = *special == VimSpecialKey::arrow_right;
-    return (left && caret.value <= text.line_start(line).value) ||
-           (right && caret.value >= text.line_end(line).value);
+    switch (*special)
+    {
+    case VimSpecialKey::arrow_left:
+        return caret.value <= text.line_start(line).value;
+    case VimSpecialKey::arrow_right:
+        return caret.value >= text.line_end(line).value;
+    case VimSpecialKey::arrow_up:
+        return line.value <= 1;
+    case VimSpecialKey::arrow_down:
+        return line.value >= text.line_count();
+    case VimSpecialKey::page_up:
+        return page_stays(view, VimScrollDirection::up);
+    case VimSpecialKey::page_down:
+        return page_stays(view, VimScrollDirection::down);
+    case VimSpecialKey::escape:
+    case VimSpecialKey::enter:
+    case VimSpecialKey::backspace:
+    case VimSpecialKey::home:
+    case VimSpecialKey::end:
+    case VimSpecialKey::control_r:
+    case VimSpecialKey::control_d:
+    case VimSpecialKey::control_u:
+    case VimSpecialKey::control_f:
+    case VimSpecialKey::control_b:
+    case VimSpecialKey::control_v:
+    case VimSpecialKey::control_w:
+    case VimSpecialKey::control_a:
+    case VimSpecialKey::control_x:
+    case VimSpecialKey::control_o:
+        return false;
+    }
+    std::unreachable();
+}
+
+// INSERT の `<Up>` `<Down>`（Vim の ins_up ins_down）。端では何も変えずに INSERT を続け
+// （#1149）、ほかは論理行を 1 つ動いて反復を切る（ADR 0028 の決定 3）。
+[[nodiscard]] VimStep insert_vertical(const VimState &state, const VimEditorView &view,
+                                      VimSpecialKey key, CaretMotion motion)
+{
+    if (arrow_stays(view, VimKey{key}))
+    {
+        return VimStep{state, VimNoEffect{}};
+    }
+    return insert_moved(state, view.text, view.selection.caret, motion);
 }
 
 // INSERT の `<Left>`（Vim の ins_left と oneleft・#1136）。既定の whichwrap=b,s に `[` が無いので
 // 行頭では止まり、何も変えずに INSERT を続ける（回数もそのまま・ADR 0049 の追補）。ほかは Vim の
 // 1 文字ぶん戻る（ADR 0053 の追補）。
-[[nodiscard]] VimStep insert_left(const VimState &state, const TextBuffer &text, Offset caret)
+[[nodiscard]] VimStep insert_left(const VimState &state, const VimEditorView &view)
 {
-    if (arrow_stays(text, caret, VimKey{VimSpecialKey::arrow_left}))
+    if (arrow_stays(view, VimKey{VimSpecialKey::arrow_left}))
     {
         return VimStep{state, VimNoEffect{}};
     }
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
     const Offset line_start = text.line_start(line_of(text, caret));
     std::size_t window = arrow_window_bytes;
     for (;;)
@@ -112,12 +159,14 @@ constexpr std::size_t longest_code_point_bytes = 4;
 
 // INSERT の `<Right>`（Vim の ins_right と mb_ptr2len・#1136）。`]` が無いので行の内容の終わり
 // （改行の手前）では止まり、何も変えない。ほかは Vim の 1 文字ぶん進む。
-[[nodiscard]] VimStep insert_right(const VimState &state, const TextBuffer &text, Offset caret)
+[[nodiscard]] VimStep insert_right(const VimState &state, const VimEditorView &view)
 {
-    if (arrow_stays(text, caret, VimKey{VimSpecialKey::arrow_right}))
+    if (arrow_stays(view, VimKey{VimSpecialKey::arrow_right}))
     {
         return VimStep{state, VimNoEffect{}};
     }
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
     const Offset line_end = text.line_end(line_of(text, caret));
     std::size_t window = arrow_window_bytes;
     for (;;)
@@ -639,6 +688,13 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     {
         return std::move(request).value();
     }
+    // 端で送れない PgUp / PgDn は何も変えずに INSERT を続ける（Vim の onepage の FAIL・#1149）。
+    const VimSpecialKey key =
+        direction == VimScrollDirection::down ? VimSpecialKey::page_down : VimSpecialKey::page_up;
+    if (arrow_stays(view, VimKey{key}))
+    {
+        return VimStep{state, VimNoEffect{}};
+    }
     VimState next = state;
     next.insert_repeat = std::nullopt;
     // 格子の画面行の単位は NORMAL と同じ解決を通す（ADR 0144 の決定 5）。論理行の道は今日のまま。
@@ -671,13 +727,13 @@ namespace detail
     case VimSpecialKey::backspace:
         return erase_recorded(insert_erased(state, text, caret), key);
     case VimSpecialKey::arrow_left:
-        return insert_left(state, text, caret);
+        return insert_left(state, view);
     case VimSpecialKey::arrow_right:
-        return insert_right(state, text, caret);
+        return insert_right(state, view);
     case VimSpecialKey::arrow_up:
-        return insert_moved(state, text, caret, CaretMotion::previous_line);
+        return insert_vertical(state, view, key, CaretMotion::previous_line);
     case VimSpecialKey::arrow_down:
-        return insert_moved(state, text, caret, CaretMotion::next_line);
+        return insert_vertical(state, view, key, CaretMotion::next_line);
     case VimSpecialKey::home:
         return insert_moved(state, text, caret, CaretMotion::line_start);
     case VimSpecialKey::end:
@@ -795,9 +851,10 @@ namespace
 }
 } // namespace
 
-// 行の端で動かなかった矢印か（#1136）。動く矢印と Home / End などは必ず VimMoveTo を返すので、
-// 記録を取り直す鍵（restarts_insert）が効果なしで返ったのは arrow_stays の矢印だけ。Vim の
-// ins_left / ins_right はビープで返り start_arrow を呼ばないので、`.` の記録を取り直さない。
+// 端で動かなかった矢印か（#1136・#1149）。動く矢印と Home / End は VimMoveTo を、PgUp / PgDn は
+// VimNavigate を返すので、記録を取り直す鍵（restarts_insert）が効果なしで返ったのは arrow_stays
+// の鍵だけ。Vim の ins_left / ins_right / ins_up / ins_down / ins_pageup / ins_pagedown はビープで
+// 返り start_arrow を呼ばないので、`.` の記録を取り直さない。
 [[nodiscard]] bool moved_nothing(const VimKey &key, const VimEffect &effect) noexcept
 {
     return std::holds_alternative<VimNoEffect>(effect) && restarts_insert(key);
@@ -881,9 +938,10 @@ namespace
     const VimInsertStart here{line, caret.value - view.text.line_start(line).value, false};
     const bool moving = !state.input_wait.has_value() && restarts_insert(key);
     VimInsertStart start = state.insert_start.value_or(here);
-    if (moving && arrow_stays(view.text, caret, key))
+    if (moving && arrow_stays(view, key))
     {
-        // 行の端で動かない矢印は印を立てず、前の印も止めない（Vim は start_arrow を呼ばない）。
+        // 端で動かない矢印と PgUp / PgDn は印を立てず、前の印も止めない（Vim は start_arrow
+        // を呼ばない）。
         next.insert_start = start;
         return next;
     }

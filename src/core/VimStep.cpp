@@ -515,6 +515,19 @@ namespace detail
         state, view, first,
         rested_in(view.text, vim_line_and_column(view.text, caret_line, column), state.mode));
 }
+
+// 1 画面の送りが端で動かないか（Vim の ins_pageup / ins_pagedown が呼ぶ onepage(dir, 1) の
+// FAIL・#1149）。page_step が先頭の行を変えずに返す所と同じ page_top で決める。画面の大きさを
+// まだ知らない窓・ui が解いた移動・格子の画面行の単位は動く側に数える（今までどおり）。
+[[nodiscard]] bool page_stays(const VimEditorView &view, VimScrollDirection direction)
+{
+    if (!view.viewport.has_value() || view.navigation.has_value() ||
+        (view.layout.enabled && view.layout.unit == VimScrollUnit::row))
+    {
+        return false;
+    }
+    return page_top(view, single_step, direction) == view.viewport.value().first_visible;
+}
 } // namespace detail
 
 namespace

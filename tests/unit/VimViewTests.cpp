@@ -537,6 +537,28 @@ void verify_grid_rows_cursor_correct()
     expect(grid_top_and_column(unmargined) == GridPlace{10, 83},
            "#1142 grid Ctrl-f with so=0 is unchanged (the caret on the new top row)");
     verify_grid_rows_edges();
+
+// INSERT の PgUp / PgDn が端で送れないとき、Vim の ins_pageup / ins_pagedown は onepage の FAIL で
+// ビープだけを返し start_arrow を呼ばない。回数の反復も `.` の記録も切らない（#1149・ADR 0028 の
+// 追補）。窓の高さが要るので oracle では測れず、ここで契約にする。
+void verify_insert_page_edges()
+{
+    Editing top;
+    EditorController &at_top = top.controller();
+    prepared(at_top, "0");
+    vim_replay(at_top, "2ix<PageUp>y<Esc>j0.");
+    expect(whole_vim_body(at_top).starts_with("xyxyline\nxyxyline\nline\n") &&
+               at_top.frame().first_visible == LineNumber{1},
+           "#1149 PgUp at the first page keeps the count and the record of the insert");
+    Editing bottom;
+    EditorController &at_bottom = bottom.controller();
+    prepared(at_bottom, "0");
+    vim_replay(at_bottom, "G<C-f>");
+    expect(at_bottom.frame().first_visible == LineNumber{document_lines},
+           "#1149 Ctrl-f from the last page puts the last line at the top");
+    vim_replay(at_bottom, "Ax<PageDown>y<Esc>k.");
+    expect(whole_vim_body(at_bottom).ends_with("\nline\nlinexy\nlinexy"),
+           "#1149 PgDn at the last line keeps the record of the insert");
 }
 } // namespace
 
@@ -553,5 +575,6 @@ void verify_vim_view_scope()
     verify_ordinary_mode_options();
     verify_scrolloff_cursor_correct();
     verify_grid_rows_cursor_correct();
+    verify_insert_page_edges();
 }
 } // namespace nenenib::tests

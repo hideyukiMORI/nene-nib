@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 d18b1da244eba0e7399292095d2dfd0798f5f040103efcca5327571bf903430a / 3246 fixtures
+// fixtures.json: sha256 265c064aa855b2db4d6a8e364b5f4a07990258875e22429f5315f79c0165e973 / 3260 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3246> vim_fixtures{{
+constexpr std::array<VimFixture, 3260> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3258,6 +3258,20 @@ constexpr std::array<VimFixture, 3246> vim_fixtures{{
     {"insert-arrow-dot-home-after-visual-change", "abcd", "vlcZ<Home><Esc>.", "Zd", 1, 1, "Zc", "v", std::nullopt},
     {"insert-arrow-dot-left-then-register", "ab", "ylix<Left><C-r>\"<Esc>.", "aaxab", 1, 1, "a", "v", std::nullopt},
     {"insert-arrow-dot-left-then-beeping-backspace", "ab", "ix<Left><BS>y<Esc>.", "yyxab", 1, 1, "", "", std::nullopt},
+    {"insert-arrow-vertical-up-at-the-first-line-then-dot", "ab\ncd", "ix<Up>y<Esc>j.", "xyab\ncxyd", 2, 3, "", "", std::nullopt},
+    {"insert-arrow-vertical-down-at-the-last-line-then-dot", "ab\ncd", "jax<Down>y<Esc>k.", "abxy\ncxyd", 1, 4, "", "", std::nullopt},
+    {"insert-arrow-vertical-up-keeps-the-count-of-big-o", "ab", "3Oabc<Up><Esc>", "abc\nabc\nabc\nab", 3, 3, "", "", std::nullopt},
+    {"insert-arrow-vertical-down-keeps-the-count-of-o", "ab", "3oabc<Down><Esc>", "ab\nabc\nabc\nabc", 4, 3, "", "", std::nullopt},
+    {"insert-arrow-vertical-up-at-the-first-line-keeps-the-count", "ab\ncd", "2ix<Up>y<Esc>", "xyxyab\ncd", 1, 4, "", "", std::nullopt},
+    {"insert-arrow-vertical-up-in-the-middle-cuts-the-dot", "ab\ncd\nef", "jix<Up>y<Esc>jj.", "ayb\nxcd\neyf", 3, 2, "", "", std::nullopt},
+    {"insert-arrow-vertical-down-in-the-middle-cuts-the-dot", "ab\ncd\nef", "jix<Down>y<Esc>k.", "ab\nxycd\neyf", 2, 2, "", "", std::nullopt},
+    {"insert-arrow-vertical-up-in-the-middle-cuts-the-count", "ab\ncd", "j2ix<Up>y<Esc>", "ayb\nxcd", 1, 2, "", "", std::nullopt},
+    {"insert-arrow-vertical-up-alone-at-the-first-line-then-dot", "ab\ncd", "ix<Up><Esc>j.", "xab\nxcd", 2, 1, "", "", std::nullopt},
+    {"insert-arrow-vertical-down-alone-at-the-last-line-then-dot", "ab\ncd", "jix<Down><Esc>k.", "xab\nxcd", 1, 1, "", "", std::nullopt},
+    {"insert-arrow-vertical-up-in-a-single-line", "ab", "ax<Up>y<Esc>.", "axyxyb", 1, 5, "", "", std::nullopt},
+    {"insert-arrow-vertical-down-in-a-single-line", "ab", "ax<Down>y<Esc>.", "axyxyb", 1, 5, "", "", std::nullopt},
+    {"insert-arrow-vertical-up-at-the-first-line-keeps-the-start", "ab\ncd", "Ax<Up>y<C-u><Esc>", "ab\ncd", 1, 2, "", "", std::nullopt},
+    {"insert-arrow-vertical-down-at-the-last-line-keeps-the-start", "ab\ncd", "jAx<Down>y<C-u><Esc>", "ab\ncd", 2, 2, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

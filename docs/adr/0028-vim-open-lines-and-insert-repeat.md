@@ -54,9 +54,13 @@ FR-003のNORMAL `o` / `O`を実装する。既存のINSERT、行索引、改行�
 
 ## 追補（2026-10-30・Issue #1136）
 
-決定 3 の「移動」から、行の端で動かない `<Left>` `<Right>`（行頭の `<Left>`・行の内容の終わりの `<Right>`）だけを外す。これらは反復を切らない（Vim の `ins_left` `ins_right` はビープだけで `start_arrow` を呼ばない・実測 `2A<Right>x<Esc>` → `abxx`）。`.` の記録も取り直さず、始めの位置の印も立てない。判定は `VimStepInsert.cpp` の `arrow_stays` の 1 本。最初の行の `<Up>`・最後の行の `<Down>`・端の PgUp / PgDn は動かなくても今までどおり反復を切る（Vim との差は別の Issue）。
+決定 3 の「移動」から、行の端で動かない `<Left>` `<Right>`（行頭の `<Left>`・行の内容の終わりの `<Right>`）だけを外す。これらは反復を切らない（Vim の `ins_left` `ins_right` はビープだけで `start_arrow` を呼ばない・実測 `2A<Right>x<Esc>` → `abxx`）。`.` の記録も取り直さず、始めの位置の印も立てない。判定は `VimStepInsert.cpp` の `arrow_stays` の 1 本。最初の行の `<Up>`・最後の行の `<Down>`・端の PgUp / PgDn は動かなくても今までどおり反復を切る（Vim との差は別の Issue → #1149 で直した・下の 2026-11-03 の追補）。
 決定 3 の「移動」は動いた移動だけで、行の端で動かない矢印（行頭の `<Left>`・行の内容の終わりの `<Right>`）は反復を切らない（Vim の `ins_left` `ins_right` はビープだけで `start_arrow` を呼ばない・実測 `2A<Right>x<Esc>` → `abxx`）。`.` の記録も取り直さず、始めの位置の印も立てない。判定は `VimStepInsert.cpp` の `arrow_stays` の 1 本。
 
 ## 追補（2026-10-30・Issue #1137）
 
 決定 4 の「移動の鍵は `i` から取り直す」は、移動の鍵で記録を区切り、区切った後に打った最初の移動でない鍵で `i` から取り直す（Vim の `stop_arrow`）。区切った後に何も打たずに Esc すれば記録は区切る前のまま（実測 `ix<Left><Esc>.` → `xxab`・`2.` も前の記録に掛かり `xxxab`・`2ix<Left><Esc>.` は回数ごと・`2ix<Left><Esc>3.` は回数を置き換え・`vlcZ<Home><Esc>.` は VISUAL の大きさごと繰り返す）。区切った後の印は始めの位置の `moved`（#1040 の `arrow_stopped` と同じ合図）で、`Ctrl-r` は開いた時点で取り直す。記録は `VimStepRecording.cpp` の `insert_recording` の 1 か所。ビープの消す鍵は印も位置も鍵の前のまま残し、戻すのは INSERT の側の `insert_start_kept`（`VimStepInsert.cpp`・`insert_started` の隣・記録の有無に依らない）。`insert-arrow-dot-*` の 13 fixture が固定 Vim との一致を守る。
+
+## 追補（2026-11-03・Issue #1149）
+
+#1136 の追補の外し方を縦の端と PgUp / PgDn に広げる。最初の行の `<Up>`・最後の行の `<Down>`（Vim の `ins_up` `ins_down` の `cursor_up(1)` / `cursor_down(1)` の FAIL・論理行で判定し折り返しの画面行は見ない）と、端で送れない `<PageUp>` `<PageDown>`（`ins_pageup` `ins_pagedown` の `onepage(dir, 1)` の FAIL）は、ビープだけで `start_arrow` を呼ばないので反復を切らず、`.` の記録も取り直さず、始めの位置の印も立てない（実測 `3Oabc<Up><Esc>` → 3 行・`ix<Up>y<Esc>j.` → `xy` を繰り返す）。判定は同じ `arrow_stays` の 1 本で、PgUp / PgDn は `page_step` と同じ `page_top` を読む `page_stays`（窓の先頭の行が変わらないとき）。画面の大きさをまだ知らない窓・ui が解いた移動・格子の画面行の単位（ADR 0144 の決定 5）では今までどおり動く側に数える。`insert-arrow-vertical-*` の 14 fixture が固定 Vim との一致を守り、PgUp / PgDn は窓の高さが要るので `--vim-view` の契約（`verify_insert_page_edges`）で守る。
