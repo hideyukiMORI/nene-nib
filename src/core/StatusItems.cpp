@@ -8,6 +8,7 @@
 #include <expected>
 #include <limits>
 #include <span>
+#include <string>
 #include <string_view>
 
 namespace nenenib::core
@@ -51,6 +52,32 @@ decimal_end(std::span<char, decimal_digits> destination, std::size_t value)
     return fixed(std::string_view(storage.data(), static_cast<std::size_t>(end - storage.data())));
 }
 } // namespace
+
+std::optional<DisplayText> diagnostic_count_item(const DiagnosticCounts &counts)
+{
+    if (!counted(counts))
+    {
+        return std::nullopt;
+    }
+    std::string shown;
+    if (counts.errors > 0)
+    {
+        shown += "E" + std::to_string(counts.errors);
+    }
+    if (counts.warnings > 0)
+    {
+        shown += (shown.empty() ? "W" : " W") + std::to_string(counts.warnings);
+    }
+    switch (counts.completeness)
+    {
+    case DiagnosticsCount::complete:
+        break;
+    case DiagnosticsCount::truncated:
+        shown += "+";
+        break;
+    }
+    return fixed(shown);
+}
 
 std::array<DisplayText, status_item_count> status_items_for(const TextPosition &caret,
                                                             TextEncoding encoding,

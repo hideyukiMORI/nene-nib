@@ -91,6 +91,9 @@ std::optional<RECT> painted(Painter &painter, const app::GridRowView &row, float
                                       2,
                                       1,
                                       1.0F,
+                                      1,
+                                      1,
+                                      4,
                                       win32::PaneRole::active};
     return painter.draw(row, canvas);
 }
@@ -118,6 +121,9 @@ std::optional<RECT> painted_passive(Painter &painter, const app::GridRowView &ro
                                       2,
                                       1,
                                       1.0F,
+                                      1,
+                                      1,
+                                      4,
                                       win32::PaneRole::passive};
     return painter.draw(row, canvas);
 }

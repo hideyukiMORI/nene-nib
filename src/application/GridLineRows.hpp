@@ -43,7 +43,7 @@ class GridLineRows final
     void mark();
     void mark_row(std::size_t index, std::size_t last);
     // 構文の色と診断の下線の区間を画面行 index の升へ切る（#839・ADR 0161 の決定 4）。
-    void mark_spans(std::size_t index);
+    void mark_spans(std::size_t index, std::size_t last);
     void mark_caret();
     void compose();
     [[nodiscard]] std::optional<GridCellSpan> span_of(std::size_t index,

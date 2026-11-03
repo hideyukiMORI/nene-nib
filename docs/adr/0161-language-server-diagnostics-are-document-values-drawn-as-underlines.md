@@ -19,8 +19,15 @@ L0（ADR 0160）で port と JSON-RPC と設定が揃う。最初に見せる機
    - 追補（#1210）: 編集で診断をずらし `didChange` の変更を積むのは `language_server_edit` の 1 本で、本文を置く 3 か所（`replace`・undo・redo）が本文を置く前に呼ぶ（undo / redo は `replace` を通らないため）。
 
 4. **見せ方は下線と件数。** `LineView` に `std::vector<core::DiagnosticSpan> diagnostics`（`DiagnosticSpan{Column begin; Column end; DiagnosticSeverity severity;}`・`colors` と同じ桁・昇順・重なりは重い方だけ）を 1 欄足し、frame を作る所が見えている行の診断だけ写す（`colors` と同じ道・格子の画面行も `GridLineRows` の写し）。renderer は IME の `underline_runs` の道で **波線**（error は `SyntaxPalette.error`・warning は `.warning`・information と hint は `muted`・太さ 1 DIP・振幅 1 DIP・色のトークンは足さない）。ステータスバーの右端に 5 つ目の項目「E2 W1」（件数が 0 なら項目を出さず幅も取らない・枠は `write_status` の保持に 1 枠足して最大 12・録画と排他なので録画時は 9・ADR 0154 の形）。キャレットの行の診断の文は、キャレットが診断の区間の上にあるときだけ知らせの欄に出す（ほかの知らせがあればそちら・frame から作る値で状態に積まない・256 バイトで切る）。
+   - 追補（L1c・#995 の ui の段）:
+     - **件数と文は application が frame に載せる（R7-1）。** 型は core の `DiagnosticCounts{errors; warnings; completeness}`（`DiagnosticsCount` の打ち切り・status_items_for と同じ core の値なので core に置く）。数えるのは `diagnostic_counts(span<const Diagnostic>, DiagnosticsCount)` の 1 本で、frame の `diagnostic_counts` と窓のステータスバーの hit test（`EditorController::diagnostic_counts()`）が同じ値を引く。ui は数え直さない。キャレットの上の文は `diagnostic_notice(diagnostics, caret)`（区間 `[begin, end)` の中・空の区間はその位置・重い方が勝つ）で、`command_message` があれば作らない。文を出す frame は案内を消す（知らせと同じ・`GuideContext::hidden`）。外から来た文を 1 行にするのは `notice_line` の 1 本（最初の改行の前・制御文字は空白・256 バイトを code point の境目で切る・空と UTF-8 でない文は出さない）。
+     - **5 つ目の項目は言語の右（いちばん右）。** 文字列は core の `diagnostic_count_item`（「E2」「W1」「E2 W1」・打ち切りは末尾に「+」・0 件は値なし）。`DisplayText` は空を持てないので、4 項目の配列（`status_item_count = 4`）には入れず、`StatusBarLayout.diagnostics` の矩形を足した。件数が無ければ右端の幅 0 の矩形で間の余白も取らず、あれば幅 96 DIP（上限 1,000 件の「E500 W500+」まで）で、ほかの 4 項目はその左へ寄る。配置は `status_bar_layout(width, height, dpi, counts)` の 1 本（3 引数は件数 0 と同じ配置で、帯の高さだけを読む所が使う）。件数は畳まない（言語の欄を畳む判断は件数を置いた後の右端から）。renderer の描画とステータスバーのクリックの hit test は同じ counts を渡す。
+     - **波線。** 太さ 1 DIP・振幅 1 DIP（山から谷まで 2 DIP）・周期 4 DIP の三角波を、ui の `draw_diagnostic_wave`（`DiagnosticWave.hpp`）の 1 本で引く。画素の列ごとに太さの矩形を 1 つ塗り（同じ高さが続く列は 1 つにまとめる）、座標は整数の画素なので中間色が出ない。位相は画素の絶対の x で決め、隣り合う区間と行でつながる。下端は IME の下線と同じ（行の下端から `caret_inset`）。本文の行は区間を色の区間と同じ写し（`span_ranges`・IME の差し込み行は差し込みの後ろをずらす）で UTF-16 の範囲にし、run ごとに引く。行末の外の区間（空の診断）は行末の位置から 1 桁（ブロックの最小の幅 7 DIP）。格子は升の範囲の矩形の下端に同じ関数で引く。色は core の `diagnostic_color`（error は本文の `error`・warning は `warning`・information と hint は UI の `muted`・トークンは足さない）。診断の無い行は `empty()` の分岐 1 つで抜ける。
+     - **格子の行末の 1 升。** `grid_diagnosed_line` が行末へ切り詰めた空の範囲は、行の最後の画面行で行末の外の 1 升 `[starts.back(), starts.back() + 1)` にする（本文の表示の「行末の外に 1 桁」と揃える・R7-1）。
+     - **枠。** `write_status` の保持は 12（トグル 2・モード 1・右の 4 項目・件数 1・案内 4）、録画中は 9。件数が 0 の frame は件数の枠を使わない（`status_layout_demand` が `StatusBarLayout.diagnostics` の幅で数える）。
 
 5. **届く道は合図だけ。** `ServerMessage` は `WorkCompleted` → `collect` → `parse_json` → `publishDiagnostics` なら決定 2 の写し → `EditorDelivery.repaint`。ほかの通知（`window/showMessage` `window/logMessage`）は `showMessage` の error / warning だけ 1 行の知らせ、`logMessage` は捨てる。要求の答え（`initialize` 以外）は L1 では無い。
+   - 追補（L1c）: 写しは core の `lsp_shown_notice` の 1 本（`type` が 1 か 2 の数・`message` が文字列のときだけ `notice_line` で 1 行）。controller は既存の `with_command_message` に置くだけで、次の使う人の意図で消える（ほかの知らせと同じ）。Info（3）・Log（4）・欄の欠け・`window/logMessage` は捨てる。
 
 6. **打鍵の道の費用。** on のときに足すのは `apply` の終わりの `didChange` の組み立てと `send`（文字列の確保と `WriteFile` の発行・数十 µs の見込み・ベンチで測る）。診断の写し・ずらしは `collect` と `replace` の中で、見えている行の写しは frame の `colors` と同じ走り。off のときは分岐 1 つも足さない（port を呼ぶ所に入らない）。
 
@@ -36,6 +43,7 @@ L0（ADR 0160）で port と JSON-RPC と設定が揃う。最初に見せる機
 - off のときの port の呼び出し 0 回: **active**（#1210・`nib_tests --history` の `verify_quiet_paths` が既定の設定（off）で起動・開く・切り替え・保存・打鍵の後に port の呼ばれた回数 0 を見る。`--language-server` の `verify_quiet_when_off` が off の打鍵・合図・tick で 0 回、`verify_did_close` が on でも開いた文書の間の切り替えと保存で 0 通を見る）。
 - off の 8 本に退行なし: **active**（QLT-014）。
 - `lsp-` のベンチの基準値: **planned**（試用の後に hide が採用・D60）。
+- 件数・文・知らせ・波線の ui（決定 4・5 の追補）: **active**（L1c）。core は `nib_tests --status-items`（件数の 5 形・幅 0 の配置・hit test）と `--lsp-diagnostics`（`notice_line`・`diagnostic_notice`・`lsp_shown_notice`・`diagnostic_counts`）、application は `--language-server`（件数と `+` と文が frame に載る・区間の外で文が無い・`command_message` が勝つ・`showMessage` の error / warning だけ知らせ・行末の 1 桁と 1 升）、ui は `nib_window_tests --diagnostics`（WIC の画素で波の形と格子の error の色）と `--status`（12 枠・録画 9 枠）。
 
 ## 結果
 

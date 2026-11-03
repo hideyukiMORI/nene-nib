@@ -343,6 +343,9 @@ void verify_grid_color_ranges()
                                               2,
                                               1,
                                               1.0F,
+                                              1,
+                                              1,
+                                              4,
                                               win32::PaneRole::active};
             static_cast<void>(painter.draw(row, canvas));
         });

@@ -1,6 +1,8 @@
 #include "EditorController.hpp"
 
+#include "DiagnosticCounts.hpp"
 #include "DiagnosticEdits.hpp"
+#include "DiagnosticNotice.hpp"
 #include "DocumentUri.hpp"
 #include "JsonNumber.hpp"
 #include "JsonValue.hpp"
@@ -12,6 +14,7 @@
 #include "LspNotification.hpp"
 #include "LspPosition.hpp"
 #include "LspPositionEncoding.hpp"
+#include "OperationGuide.hpp"
 #include "SentRevision.hpp"
 
 #include <algorithm>
@@ -339,5 +342,29 @@ void EditorController::place_diagnostics(AutosaveId tab, std::vector<core::Diagn
                  ? state_.with_diagnostics(std::move(diagnostics), version, count)
                  : state_.with_parked_diagnostics(position.value(), std::move(diagnostics), version,
                                                   count);
+}
+
+core::DiagnosticCounts EditorController::diagnostic_counts() const
+{
+    return core::diagnostic_counts(state_.diagnostics(), state_.diagnostics_count());
+}
+
+void EditorController::add_diagnostics(EditorFrame &result) const
+{
+    const auto &diagnostics = state_.diagnostics();
+    if (diagnostics.empty())
+    {
+        return;
+    }
+    result.diagnostic_counts = diagnostic_counts();
+    if (result.command_message.has_value())
+    {
+        return;
+    }
+    result.diagnostic_message = core::diagnostic_notice(diagnostics, state_.selection().caret);
+    if (result.diagnostic_message.has_value())
+    {
+        result.guide = core::operation_guide(core::GuideContext::hidden, result.mode);
+    }
 }
 } // namespace nenenib::application

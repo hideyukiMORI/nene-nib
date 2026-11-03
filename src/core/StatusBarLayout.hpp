@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DiagnosticCounts.hpp"
 #include "LayoutRect.hpp"
 #include "StatusBarHit.hpp"
 #include "StatusItems.hpp"
@@ -19,6 +20,9 @@ struct StatusBarLayout
     LayoutRect toggle_vim;
     LayoutRect mode;
     std::array<LayoutRect, status_item_count> items;
+    // 診断の件数（ADR 0161 の決定 4）。言語の右のいちばん右で、件数を出さないときは右端の幅 0 の
+    // 矩形（ほかの項目は件数が無いときの位置・間の余白も取らない）。
+    LayoutRect diagnostics;
     // 表示形式の印（ADR 0140 の決定 3）。items の最初の項目の左隣で、案内の右端（items の最初の
     // 左から 28 DIP）より右に収まる幅。右寄せで書く。
     LayoutRect display;
@@ -26,6 +30,12 @@ struct StatusBarLayout
     std::int32_t segment_radius;
 };
 
+// counts は診断の件数（diagnostic_counts）。counted でなければ件数の項目は幅 0。
+[[nodiscard]] StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height,
+                                                std::uint32_t dpi,
+                                                const DiagnosticCounts &counts) noexcept;
+
+// 件数の項目を出さないときの配置（帯の高さだけを読む所と、診断を持たない試験）。
 [[nodiscard]] StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height,
                                                 std::uint32_t dpi) noexcept;
 

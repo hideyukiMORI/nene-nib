@@ -318,7 +318,8 @@ void EditorWindow::click_client(LPARAM data)
     }
     RECT client{};
     GetClientRect(window_, &client);
-    const auto layout = core::status_bar_layout(client.right, client.bottom, dpi_);
+    const auto layout =
+        core::status_bar_layout(client.right, client.bottom, dpi_, controller_.diagnostic_counts());
     const bool in_status = core::contains(layout.band, low_word_of(data), high_word_of(data));
     if (controller_.command_line_active() && in_status)
     {

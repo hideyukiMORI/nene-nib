@@ -23,6 +23,8 @@ constexpr std::int32_t segment_radius_dips = 4;
 // 文字コードは「UTF-8 BOM」「Shift_JIS」まで入る幅が要る（ADR 0010 の決定 14 で 44 → 72）。
 // 言語は最も長い名前「javascript」「typescript」まで入る幅（ADR 0154 の決定 6）。
 constexpr std::array<std::int32_t, status_item_count> item_width_dips{96, 72, 36, 72};
+// 診断の件数の幅（ADR 0161 の決定 4）。E と W の和は上限の 1,000 件なので「E500 W500+」まで入る幅。
+constexpr std::int32_t diagnostics_width_dips = 96;
 // 表示形式の印（ADR 0140 の決定 3）。最初の項目の左 2 DIP から 24 DIP。案内は最初の項目の左
 // 28 DIP で終わるので重ならない。
 constexpr std::int32_t display_gap_dips = 2;
@@ -45,12 +47,12 @@ constexpr std::size_t language_item = status_item_count - 1;
 constexpr std::size_t encoding_item = 1;
 constexpr std::size_t line_ending_item = 2;
 
-// 右から並べる。folded なら言語の欄は右端の幅 0 の矩形で、ほかの 3 項目は言語が無いときの位置。
+// 右から並べる。right は右端の項目（言語）の右端。folded なら言語の欄は右端の幅 0 の矩形で、ほかの
+// 3 項目は言語が無いときの位置。
 [[nodiscard]] std::array<LayoutRect, status_item_count>
-item_rects(std::int32_t width, const LayoutRect &band, std::uint32_t dpi, bool folded) noexcept
+item_rects(std::int32_t right, const LayoutRect &band, std::uint32_t dpi, bool folded) noexcept
 {
     std::array<LayoutRect, status_item_count> rectangles{};
-    std::int32_t right = width - to_pixels(side_padding_dips, dpi);
     for (std::size_t step = 0; step < status_item_count; ++step)
     {
         const std::size_t index = status_item_count - 1 - step;
@@ -67,19 +69,20 @@ item_rects(std::int32_t width, const LayoutRect &band, std::uint32_t dpi, bool f
 }
 
 // 右の 4 項目で `:` の入力欄の右端が command_input_minimum_dip に届かなければ言語の欄を畳む
-// （ADR 0154 の決定 6・案内を消す ADR 0079 の決定 9 より先）。判断はこの 1 か所。
+// （ADR 0154 の決定 6・案内を消す ADR 0079 の決定 9 より先）。判断はこの 1 か所。件数の項目は
+// 畳まない（ADR 0161 の決定 4）。
 [[nodiscard]] std::array<LayoutRect, status_item_count>
-fitted_item_rects(std::int32_t width, const LayoutRect &band, std::uint32_t dpi) noexcept
+fitted_item_rects(std::int32_t right, const LayoutRect &band, std::uint32_t dpi) noexcept
 {
-    const auto items = item_rects(width, band, dpi, false);
+    const auto items = item_rects(right, band, dpi, false);
     const bool fits = items.front().left - to_pixels(item_gap_dips, dpi) >=
                       to_pixels(command_input_minimum_dip, dpi);
-    return fits ? items : item_rects(width, band, dpi, true);
+    return fits ? items : item_rects(right, band, dpi, true);
 }
 } // namespace
 
-StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height,
-                                  std::uint32_t dpi) noexcept
+StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height, std::uint32_t dpi,
+                                  const DiagnosticCounts &counts) noexcept
 {
     const std::int32_t band_height = to_pixels(band_height_dips, dpi);
     const std::int32_t top = std::max(height - band_height, 0);
@@ -91,7 +94,13 @@ StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height,
                               toggle.left + padding + segment, toggle.bottom - padding};
     const std::int32_t vim_left = ordinary.right + padding;
     const std::int32_t mode_left = toggle.right + to_pixels(item_gap_dips, dpi);
-    const auto items = fitted_item_rects(width, band, dpi);
+    // 件数はいちばん右。出さないときは右端の幅 0 の矩形で、間の余白も取らない（決定 4）。
+    const std::int32_t edge = width - to_pixels(side_padding_dips, dpi);
+    const std::int32_t counted_width = counted(counts) ? to_pixels(diagnostics_width_dips, dpi) : 0;
+    const LayoutRect diagnostics{edge - counted_width, band.top, edge, band.bottom};
+    const std::int32_t right =
+        counted_width > 0 ? diagnostics.left - to_pixels(item_gap_dips, dpi) : edge;
+    const auto items = fitted_item_rects(right, band, dpi);
     return StatusBarLayout{
         .band = band,
         .toggle = toggle,
@@ -100,12 +109,20 @@ StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height,
         .mode = LayoutRect{mode_left, band.top, mode_left + to_pixels(mode_width_dips, dpi),
                            band.bottom},
         .items = items,
+        .diagnostics = diagnostics,
         .display =
             LayoutRect{items.front().left - to_pixels(display_gap_dips + display_width_dips, dpi),
                        band.top, items.front().left - to_pixels(display_gap_dips, dpi),
                        band.bottom},
         .corner_radius = to_pixels(corner_radius_dips, dpi),
         .segment_radius = to_pixels(segment_radius_dips, dpi)};
+}
+
+StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height,
+                                  std::uint32_t dpi) noexcept
+{
+    return status_bar_layout(width, height, dpi,
+                             DiagnosticCounts{0, 0, DiagnosticsCount::complete});
 }
 
 StatusBarHit status_bar_hit(const StatusBarLayout &layout, std::int32_t x, std::int32_t y) noexcept

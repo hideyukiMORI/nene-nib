@@ -36,6 +36,7 @@
 #include "TimingPort.hpp"
 #include "TitleBarLayout.hpp"
 #include "TitleBarTarget.hpp"
+#include "WaveBand.hpp"
 
 #include <windows.h>
 
@@ -195,6 +196,11 @@ class Direct2DRenderer final
                             const core::LayoutRect &area, const application::LineView &line);
     void draw_line_selection(const application::EditorFrame &frame, IDWriteTextLayout *text,
                              const core::LayoutRect &area, const application::LineView &line);
+    // 本文の桁の区間（begin と end を持つ Span の列）を描く layout の UTF-16 の範囲へ写す 1 本
+    // （色の区間と診断の下線の共用・IME の差し込み行は #839）。返す列は spans と同じ並びと長さ。
+    template <typename Span>
+    [[nodiscard]] static std::vector<DWRITE_TEXT_RANGE>
+    span_ranges(const application::LineView &line, const std::vector<Span> &spans);
     // 色の区間を描く layout の UTF-16 の範囲へ写す（ADR 0156 の決定 11・IME の差し込み行は #839）。
     [[nodiscard]] static std::vector<ColoredRun> colored_runs(const application::EditorFrame &frame,
                                                               const application::LineView &line);
@@ -203,6 +209,13 @@ class Direct2DRenderer final
     // IME の差し込み行も同じ道（差し込んだ文字列は区間の外なので text の色・#839）。
     void draw_line_text(const application::EditorFrame &frame, IDWriteTextLayout *text,
                         const core::LayoutRect &area, const application::LineView &line);
+    // 診断の波線（ADR 0161 の決定 4）。区間の run の下端に draw_diagnostic_wave で引く。行末の外の
+    // 区間（空の診断）は行末から block_minimum の幅。区間が無い行は分岐 1 つで抜ける。
+    void draw_line_diagnostics(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                               const core::LayoutRect &area, const application::LineView &line);
+    void draw_line_end_wave(IDWriteTextLayout *text, const core::LayoutRect &area, UINT32 position);
+    // 診断の波線の帯（物理画素・DPI で写した振幅・太さ・周期）。bottom は run の下端。
+    [[nodiscard]] WaveBand wave_band(float left, float right, float bottom) const;
     // 縦棒の矩形（area の中の UTF-16 の position・幅は caret_width_）。位置を引けなければ値なし。
     [[nodiscard]] std::optional<core::LayoutRect> bar_of(IDWriteTextLayout *text,
                                                          const core::LayoutRect &area,

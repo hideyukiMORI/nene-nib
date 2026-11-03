@@ -6,8 +6,10 @@
 #include "Column.hpp"
 #include "DeleteDirection.hpp"
 #include "DeleteText.hpp"
+#include "DiagnosticCounts.hpp"
 #include "DiagnosticSeverity.hpp"
 #include "DiagnosticSpan.hpp"
+#include "DiagnosticsCount.hpp"
 #include "DisplayForm.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -17,17 +19,21 @@
 #include "FilePath.hpp"
 #include "GridCellSpan.hpp"
 #include "GridDiagnosticSpan.hpp"
+#include "GuideContext.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InsertText.hpp"
 #include "LanguageServerLink.hpp"
 #include "LanguageServerTick.hpp"
 #include "LineView.hpp"
+#include "LspDiagnostics.hpp"
 #include "OpenDocument.hpp"
+#include "PlaceCaret.hpp"
 #include "SaveDocument.hpp"
 #include "Scopes.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
+#include "SelectionAnchoring.hpp"
 #include "ServerCommand.hpp"
 #include "ServerEvent.hpp"
 #include "ServerExited.hpp"
@@ -35,10 +41,12 @@
 #include "ServerFailure.hpp"
 #include "ServerMessage.hpp"
 #include "ServerStarted.hpp"
+#include "StatusItems.hpp"
 #include "SwitchTab.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
+#include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
 #include "VimKeyPress.hpp"
 #include "VimTestSupport.hpp"
@@ -714,6 +722,130 @@ void verify_parked_diagnostics()
     expect(editing.controller().frame().lines.at(0).diagnostics.empty(),
            "closing the documents on the server clears their diagnostics");
 }
+// 本文の診断の文（値なしは "<none>"）。
+[[nodiscard]] std::string diagnostic_message(const app::EditorFrame &frame)
+{
+    return frame.diagnostic_message.has_value()
+               ? std::string(frame.diagnostic_message.value().text())
+               : "<none>";
+}
+
+// キャレットを 1 行目の桁 column（1 始まり）へ置いた frame。
+[[nodiscard]] app::EditorFrame caret_at(Editing &editing, std::size_t column)
+{
+    return editing.controller().apply_frame(
+        app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{column}},
+                        core::SelectionAnchoring::collapse});
+}
+
+// main.cpp の 1 行目に error（`main`）・warning（`int`）・information（`(`）を置いて届かせる。
+void diagnosed(Editing &editing)
+{
+    started_with_lines(editing);
+    editing.language_server().publish(
+        source_uri, 0,
+        R"([{"range":{"start":{"line":0,"character":4},"end":{"line":0,"character":8}},"severity":1,"message":"bad\nmore"},)"
+        R"({"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":3}},"severity":2,"message":"w"},)"
+        R"({"range":{"start":{"line":0,"character":8},"end":{"line":0,"character":9}},"severity":3,"message":"i"}])");
+}
+
+// 決定 4（R7-1・L1c）: 件数とキャレットの上の文が frame に載る。文はキャレットが区間の外なら無く、
+// 文を出す frame は案内を消す。
+void verify_diagnostic_frame()
+{
+    Editing editing(lsp_settings(true));
+    started_with_lines(editing);
+    const auto quiet = editing.controller().frame();
+    expect(quiet.diagnostic_counts ==
+                   core::DiagnosticCounts{0, 0, core::DiagnosticsCount::complete} &&
+               !quiet.diagnostic_message.has_value(),
+           "a document without diagnostics has no count and no message");
+    Editing marked(lsp_settings(true));
+    diagnosed(marked);
+    const auto first = marked.controller().apply_frame(app::WorkCompleted{});
+    expect(first.diagnostic_counts ==
+               core::DiagnosticCounts{1, 1, core::DiagnosticsCount::complete},
+           "the frame counts errors and warnings but not information");
+    expect(diagnostic_message(first) == "w" && first.guide.context == core::GuideContext::hidden,
+           "the caret on the warning shows its message and hides the guide");
+    expect(diagnostic_message(caret_at(marked, 6)) == "bad" &&
+               diagnostic_message(caret_at(marked, 9)) == "i",
+           "the message follows the caret onto the error and the information");
+    expect(diagnostic_message(caret_at(marked, 12)) == "<none>",
+           "outside every range there is no message");
+    expect(marked.controller().diagnostic_counts() == first.diagnostic_counts,
+           "the window's count reads the same value as the frame");
+}
+
+// 決定 5（L1c）: showMessage の error / warning だけ 1 行の知らせで、診断の文より勝つ。Info・Log と
+// logMessage は知らせを残さない。
+void verify_show_message_notices()
+{
+    Editing editing(lsp_settings(true));
+    diagnosed(editing);
+    auto &server = editing.language_server();
+    static_cast<void>(editing.controller().apply(app::WorkCompleted{}));
+    server.serve(app::ServerMessage{
+        R"({"jsonrpc":"2.0","method":"window/showMessage","params":{"type":1,"message":"boom"}})"});
+    const auto told = editing.controller().apply_frame(app::WorkCompleted{});
+    expect(message(told) == "boom" && diagnostic_message(told) == "<none>",
+           "an error showMessage is a notice and wins over the caret's diagnostic message");
+    static_cast<void>(caret_at(editing, 1));
+    server.serve(app::ServerMessage{
+        R"({"jsonrpc":"2.0","method":"window/showMessage","params":{"type":2,"message":"careful"}})"});
+    expect(message(editing.controller().apply_frame(app::WorkCompleted{})) == "careful",
+           "a warning showMessage is a notice");
+    static_cast<void>(caret_at(editing, 12));
+    server.serve(app::ServerMessage{
+        R"({"jsonrpc":"2.0","method":"window/showMessage","params":{"type":3,"message":"info"}})"});
+    server.serve(app::ServerMessage{
+        R"({"jsonrpc":"2.0","method":"window/showMessage","params":{"type":4,"message":"log"}})"});
+    server.serve(app::ServerMessage{
+        R"({"jsonrpc":"2.0","method":"window/logMessage","params":{"type":1,"message":"log"}})"});
+    expect(message(editing.controller().apply_frame(app::WorkCompleted{})).empty(),
+           "info and log showMessage and logMessage leave no notice");
+}
+
+// 決定 2・4（L1c）: 上限を超えた診断は残した件数に `+` を付けて数える。
+void verify_truncated_count()
+{
+    Editing editing(lsp_settings(true));
+    started_with_lines(editing);
+    std::string many = "[";
+    for (std::size_t index = 0; index <= core::lsp_diagnostics_limit; ++index)
+    {
+        many += index == 0 ? "" : ",";
+        many +=
+            R"({"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"severity":1,"message":"e"})";
+    }
+    editing.language_server().publish(source_uri, 0, many + "]");
+    const auto truncated = editing.controller().apply_frame(app::WorkCompleted{});
+    const auto item = core::diagnostic_count_item(truncated.diagnostic_counts);
+    expect(item.has_value() && item.value().text() == "E1000+",
+           "a list over the limit counts the kept errors and ends with +");
+}
+
+// 決定 4（R7-1・L1c）: 行末の空の診断は、本文も格子も行末の外の 1 桁（1 升）に下線を引く。
+void verify_line_end_diagnostic()
+{
+    Editing editing(lsp_settings(true));
+    started_with_lines(editing);
+    auto &server = editing.language_server();
+    constexpr std::string_view at_end =
+        R"([{"range":{"start":{"line":0,"character":13},"end":{"line":0,"character":13}},"severity":1,"message":"expected ';'"}])";
+    server.publish(source_uri, 0, at_end);
+    const auto text = editing.controller().apply_frame(app::WorkCompleted{});
+    expect(underlined(text.lines.at(0), 14, 15, core::DiagnosticSeverity::error),
+           "a text line underlines one column past the line end");
+    const core::TextViewGeometry geometry{400, 20, 96};
+    static_cast<void>(editing.controller().apply(app::VisibleLines{shown_lines, geometry}));
+    const auto grid = editing.controller().apply_frame(app::SelectDisplay{core::DisplayForm::grid});
+    expect(!grid.grid.empty() &&
+               grid.grid.front().diagnostics ==
+                   std::vector{app::GridDiagnosticSpan{app::GridCellSpan{13, 14},
+                                                       core::DiagnosticSeverity::error}},
+           "a grid row underlines the one cell past the line end");
+}
 } // namespace
 
 void verify_language_server_contracts()
@@ -737,6 +869,10 @@ void verify_language_server_contracts()
     verify_diagnostics_placed();
     verify_diagnostics_follow_edits();
     verify_parked_diagnostics();
+    verify_diagnostic_frame();
+    verify_show_message_notices();
+    verify_truncated_count();
+    verify_line_end_diagnostic();
 }
 
 void verify_language_server_scope()
