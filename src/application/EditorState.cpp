@@ -705,6 +705,16 @@ EditorState::loaded_at(std::size_t position) const
     return loaded_bundle(parked_.at(parked_index_of(position)));
 }
 
+const DocumentState *EditorState::parked_bundle_at(std::size_t position) const
+{
+    if (position >= tab_count() || position == active_)
+    {
+        return nullptr;
+    }
+    const auto loaded = loaded_at(position);
+    return loaded.has_value() ? loaded.value().get() : nullptr;
+}
+
 std::optional<UnloadedDocument> EditorState::unloaded_at(std::size_t position) const
 {
     if (position >= tab_count() || position == active_)

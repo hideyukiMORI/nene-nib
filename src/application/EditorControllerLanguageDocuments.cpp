@@ -12,7 +12,6 @@
 #include "LspNotification.hpp"
 #include "LspPosition.hpp"
 #include "LspPositionEncoding.hpp"
-#include "ParkedTab.hpp"
 #include "SentRevision.hpp"
 
 #include <algorithm>
@@ -20,7 +19,6 @@
 #include <cstdint>
 #include <expected>
 #include <iterator>
-#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -101,19 +99,6 @@ namespace
     core::JsonObject params;
     params.emplace_back("textDocument", core::JsonValue{document_identifier(uri, std::nullopt)});
     return core::JsonValue{std::move(params)};
-}
-
-// 帯の位置 position の読み込み済みの脇の束（アクティブ・まだ読んでいない文書なら nullptr）。
-[[nodiscard]] const DocumentState *parked_bundle(const EditorState &state, std::size_t position)
-{
-    if (position == state.active_tab())
-    {
-        return nullptr;
-    }
-    const std::size_t index = position < state.active_tab() ? position : position - 1;
-    const auto *bundle =
-        std::get_if<std::shared_ptr<const DocumentState>>(&state.parked().at(index));
-    return bundle != nullptr ? bundle->get() : nullptr;
 }
 
 // 通知の params の `uri`（届いた診断の文書を引く鍵だけ・中身の検査は core の写しが行う）。
@@ -224,7 +209,7 @@ void EditorController::flush_language_server_changes(LanguageServerDocument &doc
     {
         return;
     }
-    const DocumentState *bundle = parked_bundle(state_, position.value());
+    const DocumentState *bundle = state_.parked_bundle_at(position.value());
     if (bundle == nullptr && position.value() != state_.active_tab())
     {
         return;
@@ -232,6 +217,16 @@ void EditorController::flush_language_server_changes(LanguageServerDocument &doc
     const auto &text = bundle != nullptr ? bundle->text : state_.text();
     const auto version = static_cast<std::uint64_t>(
         bundle != nullptr ? bundle->history.revision() : state_.history().revision());
+    // 意図の中の編集が差し引き 0 なら、再生の畳みが履歴を意図の前へ戻すので版は進まない。本文は
+    // 最後に送った版と同じなので、変更も積んだ編集も捨てて送らない（LSP は版の増加を求める）。
+    if (version <= document.sent.back().version)
+    {
+        auto &edits = document.sent.back().edits;
+        const auto kept = edits.size() - std::min(edits.size(), document.changes.size());
+        edits.erase(std::next(edits.begin(), static_cast<std::ptrdiff_t>(kept)), edits.end());
+        document.changes.clear();
+        return;
+    }
     ports_.language_server.send(core::lsp_notification_body(
         "textDocument/didChange",
         did_change_params(document.uri, version, std::exchange(document.changes, {}))));

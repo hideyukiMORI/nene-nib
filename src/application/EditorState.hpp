@@ -193,6 +193,10 @@ class EditorState final
     // 帯の位置 position がまだ読んでいない文書なら、その値。アクティブ・範囲の外・読み込み済みは
     // 値なし。読むのは controller の reach_tab だけ（ADR 0059 の決定 5）。
     [[nodiscard]] std::optional<UnloadedDocument> unloaded_at(std::size_t position) const;
+    // 帯の位置 position の読み込み済みの脇の束（帯の位置 → 脇の列の写しはこの型の 1 か所）。
+    // アクティブ・範囲の外・まだ読んでいない文書は nullptr。言語サーバーの didChange が意図の途中で
+    // 切り替えた文書の本文と版を読む（ADR 0161 の決定 1）。
+    [[nodiscard]] const DocumentState *parked_bundle_at(std::size_t position) const;
     // 前回のタブ（ADR 0059 の決定 6）。今の帯の右へ、まだ読んでいない文書を順に並べる。使った順の
     // 列にも足し、アクティブは先頭のまま。アクティブは動かさない。
     [[nodiscard]] EditorState with_restored(std::vector<UnloadedDocument> documents) const;

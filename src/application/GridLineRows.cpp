@@ -63,6 +63,10 @@ template <typename Marked>
 [[nodiscard]] std::vector<Marked> split_marked(const std::vector<Marked> &marked, std::size_t from,
                                                std::size_t cells)
 {
+    if (marked.empty())
+    {
+        return {};
+    }
     std::vector<Marked> result;
     result.reserve(marked.size() + 1);
     const auto placed = [](Marked item, GridCellSpan span)

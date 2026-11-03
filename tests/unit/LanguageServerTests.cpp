@@ -538,6 +538,38 @@ void verify_did_change_bundles()
         "undo sends the reverse edit with a new version");
 }
 
+// 決定 1（R3-1）: 意図の中の編集が差し引き 0 なら版は進まないので、didChange を送らない。
+void verify_net_zero_intent()
+{
+    Editing macro(lsp_settings(true));
+    macro.files().hold_at(std::string(second_path), Bytes{std::string("abc\n")});
+    applied(macro.controller(), app::SelectEditMode{core::EditMode::vim});
+    applied(macro.controller(), app::OpenDocument{path_of(second_path)});
+    static_cast<void>(delivered(macro, app::ServerStarted{}));
+    answered(macro);
+    auto &server = macro.language_server();
+    for (const auto &key : vim_keys_of("qaix<Esc>xq"))
+    {
+        applied(macro.controller(), app::VimKeyPress{key});
+    }
+    const auto recorded = server.notifications("textDocument/didChange");
+    for (const auto &key : vim_keys_of("@a"))
+    {
+        applied(macro.controller(), app::VimKeyPress{key});
+    }
+    expect(!recorded.empty() &&
+               server.notifications("textDocument/didChange").size() == recorded.size(),
+           "a replay that types and deletes the same character sends no didChange");
+    for (const auto &key : vim_keys_of("x"))
+    {
+        applied(macro.controller(), app::VimKeyPress{key});
+    }
+    const auto after = server.notifications("textDocument/didChange");
+    expect(after.size() == recorded.size() + 1 &&
+               version_in(after.back()).value_or(0) > version_in(recorded.back()).value_or(0),
+           "the next real edit still goes out with a version above the last sent one");
+}
+
 // 決定 1: タブを閉じたら `didClose`。切り替えと保存では送らない（決定 8）。2 言語目は前を閉じる。
 void verify_did_close()
 {
@@ -579,6 +611,32 @@ void verify_did_close()
                contains(order.at(order.size() - 2), R"("method":"textDocument/didClose")") &&
                contains(order.at(order.size() - 2), source_uri),
            "a document of a second language closes the first language's documents and server");
+}
+
+// 決定 1（R5-1）: 名前を付けて保存で URI が変われば、古い URI を閉じて新しい URI を今の版で開き、
+// 古い URI の診断は片付ける。
+void verify_saved_as()
+{
+    constexpr std::string_view renamed_path = "C:\\work\\renamed.cpp";
+    Editing editing(lsp_settings(true));
+    started_with_lines(editing);
+    auto &server = editing.language_server();
+    applied(editing.controller(), app::InsertText{"x"});
+    server.publish(source_uri, 1, main_error);
+    const auto marked = editing.controller().apply_frame(app::WorkCompleted{});
+    const std::size_t before = server.sent().size();
+    const auto saved = editing.controller().apply_frame(
+        app::SaveDocument{path_of(renamed_path), core::TextEncoding::utf8});
+    const auto &sent = server.sent();
+    expect(!marked.lines.at(0).diagnostics.empty() && sent.size() == before + 2 &&
+               contains(sent.at(before), R"("method":"textDocument/didClose")") &&
+               contains(sent.at(before), source_uri) &&
+               contains(sent.back(), R"("method":"textDocument/didOpen")") &&
+               contains(sent.back(), R"("uri":"file:///C:/work/renamed.cpp")") &&
+               version_in(sent.back()) == std::optional<std::uint64_t>{1},
+           "saving under another name closes the old URI and opens the new one at the revision");
+    expect(saved.lines.at(0).diagnostics.empty(),
+           "the old URI's diagnostics are cleared when it is closed");
 }
 
 // 決定 2・5: `publishDiagnostics` は文書の値に載り、見えている行の LineView.diagnostics に写る。
@@ -673,7 +731,9 @@ void verify_language_server_contracts()
     verify_quiet_when_off();
     verify_did_open();
     verify_did_change_bundles();
+    verify_net_zero_intent();
     verify_did_close();
+    verify_saved_as();
     verify_diagnostics_placed();
     verify_diagnostics_follow_edits();
     verify_parked_diagnostics();
