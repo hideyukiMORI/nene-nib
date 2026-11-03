@@ -4,11 +4,14 @@
 #include "ServerEvent.hpp"
 #include "ServerFailure.hpp"
 #include "ServerLaunch.hpp"
+#include "ServerMessage.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -60,6 +63,34 @@ class ScriptedLanguageServer final : public nenenib::application::LanguageServer
     void serve(nenenib::application::ServerEvent event)
     {
         events_.push_back(std::move(event));
+    }
+    // 返す通知の台本（ADR 0161 の決定 8）。uri の文書の `publishDiagnostics` 1 通を次の collect
+    // に足す。version が無ければ欄を書かない。diagnostics は `Diagnostic[]` の JSON。
+    void publish(std::string_view uri, std::optional<std::uint64_t> version,
+                 std::string_view diagnostics)
+    {
+        std::string body = R"({"jsonrpc":"2.0","method":"textDocument/publishDiagnostics",)";
+        body += R"("params":{"uri":")" + std::string{uri} + "\"";
+        if (version.has_value())
+        {
+            body += R"(,"version":)" + std::to_string(version.value());
+        }
+        body += R"(,"diagnostics":)" + std::string{diagnostics} + "}}";
+        serve(nenenib::application::ServerMessage{std::move(body)});
+    }
+    // 受けた通知の記録（決定 8）。send で受けた本文のうち method の通知を順に返す。
+    [[nodiscard]] std::vector<std::string> notifications(std::string_view method) const
+    {
+        const std::string key = R"("method":")" + std::string{method} + "\"";
+        std::vector<std::string> found;
+        for (const std::string &body : sent_)
+        {
+            if (body.find(key) != std::string::npos)
+            {
+                found.push_back(body);
+            }
+        }
+        return found;
     }
     // 次の start を failure で断らせる（1 回だけ）。
     void refuse(nenenib::application::ServerFailure failure)

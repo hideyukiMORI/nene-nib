@@ -10,6 +10,8 @@
 #include "CommandChoice.hpp"
 #include "CompositionView.hpp"
 #include "DetectedText.hpp"
+#include "Diagnostic.hpp"
+#include "DiagnosticsCount.hpp"
 #include "Document.hpp"
 #include "DocumentFormatKind.hpp"
 #include "DocumentReadFinished.hpp"
@@ -530,6 +532,21 @@ class EditorController final
     void expire_lsp_request(const PendingLspRequest &request);
     void answer_lsp(core::ExLspRequest request);
     void end_language_server_session();
+    // 文書の同期と診断（ADR 0161 の決定 1〜3・5）。sync は running の間の apply の終わりで、閉じた
+    // タブ・言語や URI や大きさの変わったアクティブな文書を `didClose` し、この意図の編集を文書
+    // ごとに 1 通の `didChange` に束ね、送っていないアクティブな文書を `didOpen` する。close_all は
+    // `shutdown` の前（notify）と stop（送らない）で全部を閉じて診断を片付ける。edit は編集の
+    // 1 本（replace・undo・redo）が本文を置く前に呼び、診断をずらし、開いた文書なら変更を積む。
+    void sync_language_server_documents();
+    void close_language_server_documents(bool notify);
+    void close_language_server_document(const LanguageServerDocument &document, bool notify);
+    void open_language_server_document(AutosaveId tab, std::string uri);
+    void flush_language_server_changes(LanguageServerDocument &document);
+    [[nodiscard]] std::optional<std::string> language_server_uri() const;
+    void language_server_edit(const core::Edit &edit);
+    void receive_diagnostics(const core::LspNotification &notification);
+    void place_diagnostics(AutosaveId tab, std::vector<core::Diagnostic> diagnostics,
+                           std::uint64_t version, core::DiagnosticsCount count);
     // 自動退避の合図（ADR 0137 の決定 1・2）。WorkCompleted と同じく使う人の操作の途中の状態を
     // 動かさない。
     void accept(const AutosaveTick &);

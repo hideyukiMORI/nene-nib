@@ -1,6 +1,7 @@
 #include "EditorController.hpp"
 
 #include "DisplayText.hpp"
+#include "DocumentUri.hpp"
 #include "FileFolder.hpp"
 #include "JsonNull.hpp"
 #include "JsonNumber.hpp"
@@ -9,6 +10,7 @@
 #include "LanguageServerLink.hpp"
 #include "LanguageServerPhase.hpp"
 #include "LanguageTable.hpp"
+#include "LspDiagnostics.hpp"
 #include "LspIncoming.hpp"
 #include "LspMessages.hpp"
 #include "LspNotification.hpp"
@@ -40,9 +42,9 @@ constexpr std::string_view server_silent_message = "言語サーバーが答え�
 constexpr std::string_view server_given_up_message =
     "言語サーバーを止めました（:set lsp で再開）: ";
 
-// `initialize` の params（決定 5）。位置の単位は utf-8 と utf-16 を申し出る。作業フォルダは
-// 起こす要求の root で渡すので rootUri は null（段 L1 で文書の URI と一緒に決める）。
-[[nodiscard]] core::JsonValue initialize_params()
+// `initialize` の params（決定 5）。位置の単位は utf-8 と utf-16 を申し出る。rootUri は起こす
+// 要求の root（設定の root か最初に開いた文書のフォルダ）の URI（ADR 0161 の決定 1）。
+[[nodiscard]] core::JsonValue initialize_params(const std::string &root_uri)
 {
     core::JsonObject general;
     general.emplace_back("positionEncodings",
@@ -52,7 +54,7 @@ constexpr std::string_view server_given_up_message =
     capabilities.emplace_back("general", core::JsonValue{std::move(general)});
     core::JsonObject params;
     params.emplace_back("processId", core::JsonValue{core::JsonNull{}});
-    params.emplace_back("rootUri", core::JsonValue{core::JsonNull{}});
+    params.emplace_back("rootUri", core::JsonValue{root_uri});
     params.emplace_back("capabilities", core::JsonValue{std::move(capabilities)});
     return core::JsonValue{std::move(params)};
 }
@@ -118,11 +120,18 @@ void EditorController::reconcile_language_server()
         return;
     case LanguageServerPhase::starting:
     case LanguageServerPhase::initializing:
-    case LanguageServerPhase::running:
         if (!on || link.language != std::optional<core::Language>{language})
         {
             shut_language_server();
         }
+        return;
+    case LanguageServerPhase::running:
+        if (!on || link.language != std::optional<core::Language>{language})
+        {
+            shut_language_server();
+            return;
+        }
+        sync_language_server_documents();
         return;
     case LanguageServerPhase::shutting_down:
         return;
@@ -174,6 +183,7 @@ std::optional<ServerLaunch> EditorController::wanted_language_server(core::Langu
 void EditorController::start_language_server(core::Language language, ServerLaunch launch)
 {
     auto &link = language_server_;
+    link.root_uri = document_uri(launch.root);
     const auto started = ports_.language_server.start(std::move(launch));
     if (!started)
     {
@@ -190,6 +200,7 @@ void EditorController::start_language_server(core::Language language, ServerLaun
 void EditorController::stop_language_server()
 {
     auto &link = language_server_;
+    close_language_server_documents(false);
     ports_.language_server.stop();
     link.phase = LanguageServerPhase::idle;
     link.language.reset();
@@ -215,6 +226,7 @@ void EditorController::shut_language_server()
         return;
     case LanguageServerPhase::running:
         link.pending.clear();
+        close_language_server_documents(true);
         send_lsp_request(LspRequestKind::shutdown, "shutdown", core::JsonValue{core::JsonNull{}});
         link.phase = LanguageServerPhase::shutting_down;
         return;
@@ -280,7 +292,7 @@ void EditorController::receive_server(const ServerStarted & /*started*/)
         return;
     }
     link.phase = LanguageServerPhase::initializing;
-    send_lsp_request(LspRequestKind::initialize, "initialize", initialize_params());
+    send_lsp_request(LspRequestKind::initialize, "initialize", initialize_params(link.root_uri));
 }
 
 // 読めない本文は捨てる（段 L0 は寿命の答えだけを読む）。
@@ -361,8 +373,15 @@ void EditorController::receive_lsp(const core::LspResponse &response)
     }
 }
 
-// サーバーからの通知は段 L0 では読まない（`window/showMessage` の表示は L1・決定 10）。
-void EditorController::receive_lsp(const core::LspNotification & /*notification*/) {}
+// サーバーからの通知（ADR 0161 の決定 5）。診断は文書の値へ写す。`window/showMessage` の 1 行の
+// 知らせと `window/logMessage` を捨てるのは段 L1c（ui の段）で、ここではまだ何もしない。
+void EditorController::receive_lsp(const core::LspNotification &notification)
+{
+    if (notification.method == core::lsp_publish_diagnostics_method)
+    {
+        receive_diagnostics(notification);
+    }
+}
 
 // サーバーからの要求は MethodNotFound で断る（決定 5）。
 void EditorController::receive_lsp(const core::LspRequest &request)
