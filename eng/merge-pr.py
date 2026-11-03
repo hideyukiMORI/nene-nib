@@ -227,4 +227,7 @@ def main(argv=None, runner=run_gh) -> int:
 
 
 if __name__ == "__main__":
+    # #1200: PR titles can carry characters cp932 cannot encode (#1169's "ß" stopped the merge queue).
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     raise SystemExit(main())
