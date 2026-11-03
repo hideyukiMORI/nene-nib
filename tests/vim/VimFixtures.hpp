@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 265c064aa855b2db4d6a8e364b5f4a07990258875e22429f5315f79c0165e973 / 3260 fixtures
+// fixtures.json: sha256 24c28455bbb2af48a506cdb02fee8a9ff66eb60b1fccbaa1968495debc3f3a6a / 3272 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3260> vim_fixtures{{
+constexpr std::array<VimFixture, 3272> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2317,6 +2317,18 @@ constexpr std::array<VimFixture, 3260> vim_fixtures{{
     {"case-rest-sharp-s-guu", "STRAßE ẞ", "guu", "straße ß", 1, 1, "", "", std::nullopt},
     {"case-rest-sharp-s-visual-U", "straße x", "v$U", "STRASSE X", 1, 1, "", "", std::nullopt},
     {"case-rest-sharp-s-visual-line-U", "ßa\nßb", "VjU", "SSA\nSSB", 1, 1, "", "", std::nullopt},
+    {"case-rest-visual-line-dotted-i-u-end", "İİx\nab", "jVkllu", "iix\nab", 1, 3, "", "", std::nullopt},
+    {"case-rest-visual-line-dotted-i-u-middle", "İİx\nab", "jVklu", "iix\nab", 1, 3, "", "", std::nullopt},
+    {"case-rest-visual-line-dotless-i-U", "ııx\nab", "jVkllU", "IIX\nAB", 1, 3, "", "", std::nullopt},
+    {"case-rest-visual-line-dotted-i-tilde", "İİx\nab", "jVkll~", "iiX\nAB", 1, 3, "", "", std::nullopt},
+    {"case-rest-visual-line-dotted-i-line-end", "xİİ\nab", "jVk$u", "xii\nab", 1, 3, "", "", std::nullopt},
+    {"case-rest-visual-line-three-middle", "ab\nİİx\ncd", "jjVkllu", "ab\niix\ncd", 2, 3, "", "", std::nullopt},
+    {"case-rest-visual-line-dotted-i-undo", "İİx\nab", "jVklluu", "İİx\nab", 1, 5, "", "", std::nullopt},
+    {"case-rest-visual-line-grow-U", "ɐɐx\nab", "jVkllU", "ⱯⱯX\nAB", 1, 4, "", "", std::nullopt},
+    {"case-rest-visual-line-grow-U-middle", "ɐɐx\nab", "jVklU", "ⱯⱯX\nAB", 1, 1, "", "", std::nullopt},
+    {"case-rest-visual-char-dotted-i-u", "İİx\nab", "jvkllu", "İİx\nab", 1, 5, "", "", std::nullopt},
+    {"case-rest-visual-block-dotted-i-u", "İİx\nİİy", "j<C-v>kllu", "iix\niiy", 1, 1, "", "", std::nullopt},
+    {"case-rest-visual-line-normal-guj", "İİx\nab", "llguj", "iix\nab", 1, 3, "", "", std::nullopt},
     {"shift-right-up-then-u", "ab\ncd", "j$>ku", "ab\ncd", 1, 2, "", "", std::nullopt},
     {"shift-left-visual-then-u", "\ta\n\tb", "jlVk<u", "\ta\n\tb", 1, 2, "", "", std::nullopt},
     {"J-after-an-exclamation-mark-adds-two-spaces", "abc!\ndef", "J", "abc!  def", 1, 5, "", "", std::nullopt},

@@ -313,7 +313,7 @@ void verify_vim_undo_boundaries()
 // 再生の経路は fixture と同じ 1 本（verify_vim_fixture）を通す（ARC-001）。
 void verify_vim_crlf_documents()
 {
-    constexpr std::array<VimFixture, 10> contracts{{
+    constexpr std::array<VimFixture, 11> contracts{{
         {"crlf-line-jump-G", "a\r\n  b\r\nc", "2G", "a\n  b\nc", 2, 3, "", "", std::nullopt},
         {"crlf-open-line-below", "aa\r\nbb", "oX<Esc>", "aa\nX\nbb", 2, 1, "", "", std::nullopt},
         {"crlf-open-line-above", "aa\r\nbb", "jOX<Esc>", "aa\nX\nbb", 2, 1, "", "", std::nullopt},
@@ -329,6 +329,10 @@ void verify_vim_crlf_documents()
         {"crlf-dot-open-below", "ab\r\ncd", "ofoo<Esc>.", "ab\nfoo\nfoo\ncd", 3, 3, "", "",
          std::nullopt},
         {"crlf-dot-remove-line", "ab\r\ncd\r\nef", "dd.", "ef", 1, 1, "cd\n", "V", std::nullopt},
+        // 大小の写像で縮んだ行のキャレットは置き換えた後の行の同じバイトの桁（#1170・LF は
+        // case-rest-visual-line-three-middle）。
+        {"crlf-case-visual-line-shrunk", "ab\r\n\u0130\u0130x\r\ncd", "jjVkllu", "ab\niix\ncd", 2,
+         3, "", "", std::nullopt},
     }};
     for (const VimFixture &contract : contracts)
     {

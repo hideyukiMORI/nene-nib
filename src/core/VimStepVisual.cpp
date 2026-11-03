@@ -193,7 +193,8 @@ namespace
     case VimOperator::toggle_case:
     case VimOperator::lower_case:
     case VimOperator::upper_case:
-        // キャレットも u の戻り先も range.restore（Vim の oap->start・#1109）。
+        // u の戻り先は range.restore（Vim の oap->start・#1109）、キャレットはそれを置き換えた後の
+        // 行と桁へ写した位置（case_changed の cased_caret・#1170）。
         return case_changed(state, view.text, range, operation);
     case VimOperator::shift_right:
     case VimOperator::shift_left:

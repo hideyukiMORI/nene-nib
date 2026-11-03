@@ -102,7 +102,7 @@ void verify_unicode_case_fixtures()
             ++selected;
         }
     }
-    expect(selected == 29, "the scope replays the 15 unicode-case and 14 case-rest fixtures");
+    expect(selected == 41, "the scope replays the 15 unicode-case and 26 case-rest fixtures");
 }
 } // namespace
 
