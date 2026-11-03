@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 d742b483a2aa7ab97b68e0a4efef96293205f5688e4ca37223cd97d0e3102f0b / 3250 fixtures
+// fixtures.json: sha256 4148c393bef54f0ace5a17690040818f8ae24e6961062da772d0d34731271c8d / 3265 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3250> vim_fixtures{{
+constexpr std::array<VimFixture, 3265> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2951,6 +2951,21 @@ constexpr std::array<VimFixture, 3250> vim_fixtures{{
     {"block-append-tab-pad-cr", "a\rbc\nabcdef", "<C-v>jlAX<Esc>", "a\rXbc\nab\rXcdef", 1, 1, "", "", std::nullopt},
     {"block-append-tab-pad-count", "a\tbc\nab\nabcdefghij", "<C-v>jjll2AX<Esc>", "a\tXXbc\nab \tXX\nabc\tXXdefghij", 1, 1, "", "", std::nullopt},
     {"block-append-tab-pad-left", "a\tbc\nab\nabcdefghij", "<C-v>jjllAXY<Left>Z<Esc>", "a\tXZYbc\nab \tXZY\nabc\tXZYdefghij", 1, 1, "", "", std::nullopt},
+    {"block-insert-wide-start-issue", "-\tfoo_bar\t?'sq'\t:'sq' \n[sq] ?\t? １２é\t-", "o🇯🇵é<Esc><C-v>oGEI  <Esc>", "-\tfoo_bar\t?'sq'\t:'sq' \n🇯  🇵é\n[sq ] ?\t? １２é\t-", 2, 5, "", "", std::nullopt},
+    {"block-insert-wide-start-wide-x", "aあbc\nabcdef", "3l<C-v>j3|IX<Esc>", "aXあbc\nabcdef", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-wide-xy", "aあbc\nabcdef", "3l<C-v>j3|IXY<Esc>", "aXYあbc\nabYcdef", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-wide-typed-wide", "aあbc\nabcdef", "3l<C-v>j3|Iい<Esc>", "aいあbc\nabいcdef", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-flag-first", "a🇯🇵bc\nabcdefgh", "4l<C-v>j3|IXY<Esc>", "aXY🇯🇵bc\nabYcdefgh", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-flag-second", "a🇯🇵bc\nabcdefgh", "4l<C-v>j5|IXY<Esc>", "a🇯XY🇵bc\nabcdYefgh", 1, 6, "", "", std::nullopt},
+    {"block-insert-wide-start-tab-x", "a\tbc\nabcdefghij", "3l<C-v>j4|IX<Esc>", "aX\tbc\nabcdefghij", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-tab-xyz", "a\tbc\nabcdefghij", "3l<C-v>j4|IXYZ<Esc>", "aXYZ\tbc\nabcZdefghij", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-short", "aあbc\na\nabcdef", "3l<C-v>jj3|IXY<Esc>", "aXYあbc\na\nabYcdef", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-append", "aあbc\nabcdef", "3l<C-v>j3|AX<Esc>", "aあbcX\nabcdeXf", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-head", "aあbc\nabcdef", "3l<C-v>j2|IXY<Esc>", "aXYあbc\naXYbcdef", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-count", "aあbc\nabcdef", "3l<C-v>j3|2IX<Esc>", "aXXあbc\nabXcdef", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-count-xy", "aあbc\nabcdef", "3l<C-v>j3|2IXY<Esc>", "aXYXYあbc\nabYXYcdef", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-dot", "aあbc\nabcdef\naあbc\nabcdef", "3l<C-v>j3|IXY<Esc>jj.", "aXYあbc\nabYcdef\naXYあbc\naXYbcdef", 3, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-undo", "aあbc\nabcdef", "3l<C-v>j3|IXY<Esc>u", "aあbc\nabcdef", 1, 2, "", "", std::nullopt},
     {"block-insert-I-tab-straddle", "abcdefghij\na\tbc\nabcdefghij", "ll<C-v>jjIX<Esc>", "abXcdefghij\na X      bc\nabXcdefghij", 1, 3, "", "", std::nullopt},
     {"block-insert-A-dollar-dot", "ab\nabcd\nabc\nab", "<C-v>j$AX<Esc>jj.", "abX\nabcdX\nabcX\nabX", 3, 1, "", "", std::nullopt},
     {"block-insert-c-undo", "abcdef\nghijkl\nmnopqr", "l<C-v>jjlcab<Esc>u", "abcdef\nghijkl\nmnopqr", 1, 2, "bc\nhi\nno", "\0262", std::nullopt},

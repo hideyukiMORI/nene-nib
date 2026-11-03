@@ -218,14 +218,19 @@ namespace
 // 矩形の INSERT が 1 行の `column` の桁に入れる本文の前の空白（ADR 0035 の追補 #1042）。桁が文字
 // （Tab か全角）の途中に落ちればその文字の手前から桁までを空白で埋め、`A` が届かない行では行末から
 // 桁までを埋める（固定 Vim の block_insert・実測）。
+// 桁が文字（Tab か全角）の途中に落ちれば、その文字のうち桁より前の桁の数。行が桁に届かなければ 0。
+[[nodiscard]] std::size_t straddled_columns(std::string_view content, VirtualColumn column) noexcept
+{
+    return column.value <= virtual_width(content)
+               ? column.value - column_of(content, byte_at_column(content, column)).value
+               : 0;
+}
+
 [[nodiscard]] std::size_t insert_lead(std::string_view content, VimBlockInsertSide side,
                                       VirtualColumn column)
 {
     const std::size_t columns = virtual_width(content);
-    const std::size_t inside =
-        column.value <= columns
-            ? column.value - column_of(content, byte_at_column(content, column)).value
-            : 0;
+    const std::size_t inside = straddled_columns(content, column);
     switch (side)
     {
     case VimBlockInsertSide::line_end:
@@ -315,6 +320,32 @@ namespace detail
     return VimBlockEdit{range, std::move(utf8)};
 }
 
+// 矩形の `I` が Esc で残りの行へ写す本文（ADR 0035 の追補 #1196）。1 行目の左の端が文字の途中に
+// 掛かっていたら（`straddled`）、打った本文をその文字の頭の桁から並べ、左の桁を含む Vim の 1 文字
+// （切れればその文字ごと）から後ろだけを写す。左の桁に届かなければ空（固定 Vim の op_insert は
+// 打った後の 1 行目を block_prep(is_del = TRUE) し直し、bd2.textcol から伸びたぶんを読む）。
+[[nodiscard]] std::string block_copied_body(const VimBlockInsert &insert, std::string body)
+{
+    if (insert.straddled == 0)
+    {
+        return body;
+    }
+    const std::size_t edge = insert.column.value - single_step;
+    std::size_t column = edge - insert.straddled;
+    Offset at{0};
+    while (at.value < body.size() && column < edge)
+    {
+        const std::size_t width = column_advance(code_point_at(body, at), column);
+        if (column + width > edge)
+        {
+            break;
+        }
+        column += width;
+        at = vim_character_end(body, at);
+    }
+    return body.substr(at.value);
+}
+
 } // namespace detail
 
 namespace
@@ -395,14 +426,38 @@ after_straddled(const TextBuffer &text, const VimBlockInsert &insert, std::strin
     return range.end.value - range.begin.value == single_step ? single_step : 0;
 }
 
+// `I` の 1 行目で左の端が文字の途中に掛かるときの、端より前の桁の数（ADR 0035 の追補 #1196）。
+// 1 行目はその文字の頭から打つ（空白で埋めず Tab も割らない・固定 Vim は矩形の左上を
+// coladvance で文字の頭に置く）。`A` は 0（右の端は after_straddled）。
+[[nodiscard]] std::size_t before_straddled(const VimBlockInsert &insert,
+                                           std::string_view content) noexcept
+{
+    switch (insert.side)
+    {
+    case VimBlockInsertSide::after:
+    case VimBlockInsertSide::line_end:
+        return 0;
+    case VimBlockInsertSide::before:
+        break;
+    }
+    return straddled_columns(content, insert.column);
+}
+
 // 入る前の 1 行目の形（本文は空）。埋める空白か割った Tab があれば、打つ本文と同じ単位に入る。
 [[nodiscard]] VimBlockEdit first_line_entry(const TextBuffer &text, const VimBlockInsert &insert,
+                                            std::string_view content,
                                             const std::optional<OffsetRange> &straddled)
 {
     if (straddled.has_value())
     {
         const Offset after = straddled.value().end;
         return VimBlockEdit{OffsetRange{after, after}, std::string{}};
+    }
+    if (insert.straddled > 0)
+    {
+        const Offset head{text.line_start(insert.first).value +
+                          byte_at_column(content, insert.column)};
+        return VimBlockEdit{OffsetRange{head, head}, std::string{}};
     }
     const Offset end = text.line_end(insert.first);
     return block_insert_edit(text, insert.first, insert, std::string_view{})
@@ -458,11 +513,13 @@ namespace detail
                           block_caret(block),
                           0,
                           block_caret(block),
+                          0,
                           0};
     const std::string content = text.line_text(block.first);
     const std::optional<OffsetRange> straddled = after_straddled(text, insert, content);
     insert.carried = carried_bytes(straddled);
-    VimBlockEdit entry = first_line_entry(text, insert, straddled);
+    insert.straddled = before_straddled(insert, content);
+    VimBlockEdit entry = first_line_entry(text, insert, content, straddled);
     const Offset at{entry.range.begin.value +
                     (entry.utf8.empty() ? 0 : insert_lead(content, side, insert.column))};
     insert.at = at;
@@ -504,7 +561,7 @@ namespace detail
     VimState entered = block_insert_entered(
         std::move(next), single_step,
         VimBlockInsert{block.first, block.lines.size(), VimBlockInsertSide::before, block.left,
-                       removal.caret, line_bytes, std::nullopt, 0});
+                       removal.caret, line_bytes, std::nullopt, 0, 0});
     return restored_at(
         with_clipboard(VimStep{std::move(entered), std::move(removal)}, std::move(clipboard)),
         block_caret(block));

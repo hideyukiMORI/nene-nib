@@ -17,6 +17,9 @@ namespace nenenib::core
 // 空かどうかは改行を打ったときの違いも決める（`I` `A` は写さない・`c` `C` は写す・実測）。
 // `carried` は `A` の 1 行目で右の端が切った 1 バイトの文字（Tab か制御文字）の数（0 か 1）。
 // Esc は `at` の手前のその文字を打った本文の頭に付けて写す（#1189）。決めるのは入口の 1 回。
+// `straddled` は `I` の 1 行目で左の端が切った文字（全角か Tab）のうち端より前の桁の数（掛からな
+// ければ 0）。1 行目はその文字の頭から打ち、Esc は打った本文のうち端の桁から後ろだけを写す
+// （#1196・block_copied_body）。決めるのは入口の 1 回。
 // 本文は持たない（ARC-004）。
 struct VimBlockInsert
 {
@@ -28,5 +31,6 @@ struct VimBlockInsert
     std::size_t line_bytes;
     std::optional<Offset> caret;
     std::size_t carried;
+    std::size_t straddled;
 };
 } // namespace nenenib::core
