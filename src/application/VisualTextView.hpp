@@ -9,6 +9,7 @@
 #include "ScrollState.hpp"
 #include "TextCaret.hpp"
 #include "TextLayoutPort.hpp"
+#include "VimLineRows.hpp"
 #include "VimRowRequest.hpp"
 #include "VimRowSpan.hpp"
 #include "VisualPosition.hpp"
@@ -145,6 +146,19 @@ class VisualTextView final
     distance(core::VisualPosition first, core::VisualPosition last, std::size_t limit);
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
     followed_first(core::VisualPosition caret, core::ScrollFollow follow);
+    [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
+    screen_followed_first(core::VisualPosition caret, core::VisualPosition first,
+                          core::ScrollFollow follow);
+    // Vim モードの追従（Vim の update_topline の写し・#1178・ADR 0019
+    // の追補）。窓の先頭は論理行で、
+    // 行の高さは窓の行と、窓が動くときだけキャレットの周りの行を文字組みして借りる。格子・答えの
+    // 窓でキャレットが見えないとき（窓より高い行）は値が無く、呼び手は画面行の追従へ戻る。
+    [[nodiscard]] std::expected<std::optional<core::VisualPosition>, TextLayoutFailure>
+    vim_followed_first(core::VisualPosition caret, core::VisualPosition first);
+    // [from, to] の行（本文の中だけ）の画面行の数を heights
+    // に行の順で足す（載っていれば読み直さない）。
+    [[nodiscard]] std::expected<void, TextLayoutFailure>
+    measured_lines(std::vector<core::VimLineRows> &heights, std::size_t from, std::size_t to);
 
     const EditorState &state_;
     TextLayoutPort &layouts_;

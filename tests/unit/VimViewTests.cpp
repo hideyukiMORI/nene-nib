@@ -15,6 +15,7 @@
 #include "PlaceCaret.hpp"
 #include "Scopes.hpp"
 #include "ScriptedSettings.hpp"
+#include "ScrollLines.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
@@ -44,6 +45,7 @@ namespace
 using nenenib::application::EditorFrame;
 using nenenib::application::InsertText;
 using nenenib::application::PlaceCaret;
+using nenenib::application::ScrollLines;
 using nenenib::application::SelectDisplay;
 using nenenib::application::SelectEditMode;
 using nenenib::application::VimKeyPress;
@@ -444,6 +446,74 @@ void verify_tall_landings()
     }
 }
 
+// Vim モードの追従は Vim の update_topline（#1178・ADR 0019 の追補）。`:set so=` の後の窓と、
+// そこからの鍵の後の窓とキャレットを、#1141 と同じ置き方（窓 11 行・40 升・100 行・5 画面行の
+// 行）で Vim 9.1.0004 の実測（D:/NeNeNib/scripts/1141/gen.py の 882 件）から選んだ。行は (高い行,
+// 2 本目の高い行（0 は無し）, 余白, 前の先頭, 前の行, 鍵, `:set so=` の後の先頭, 鍵の後の先頭,
+// 鍵の後の行)。上側の scroll_cursor_top（先頭 30・行 30・so=2 は 28）・中央寄せ・下側の
+// scroll_cursor_bot（先頭 90・行 95）・高い行を挟む窓・動かない窓を含む。
+using ToplineRow = std::tuple<std::size_t, std::size_t, std::size_t, std::size_t, std::size_t,
+                              std::string_view, std::size_t, std::size_t, std::size_t>;
+constexpr std::array<ToplineRow, 13> topline_rows{{
+    {30, 0, 2, 30, 30, "H", 28, 28, 30},
+    {30, 0, 3, 26, 30, "L", 27, 27, 30},
+    {30, 0, 3, 29, 30, "<C-d>", 27, 30, 33},
+    {36, 0, 2, 29, 30, "L", 28, 28, 33},
+    {30, 31, 2, 29, 30, "<C-f>", 29, 32, 34},
+    {30, 31, 3, 30, 33, "2H", 31, 31, 32},
+    {95, 0, 2, 90, 95, "<C-u>", 91, 86, 90},
+    {95, 0, 3, 90, 95, "H", 92, 92, 95},
+    {2, 0, 3, 30, 32, "<C-b>", 29, 20, 27},
+    {33, 0, 2, 26, 30, "2L", 26, 26, 30},
+    {36, 0, 3, 30, 32, "L", 29, 29, 32},
+    {31, 0, 2, 30, 30, "<C-d>", 28, 31, 33},
+    {30, 0, 2, 26, 30, "H", 26, 26, 28},
+}};
+
+void verify_topline_updated()
+{
+    for (const ToplineRow &row : topline_rows)
+    {
+        Editing editing;
+        EditorController &controller = editing.controller();
+        placed_tall_window(controller,
+                           TallLanding{std::get<0>(row), std::get<1>(row), std::get<2>(row),
+                                       std::get<3>(row), std::get<4>(row), std::get<5>(row), 0, 0});
+        const std::string window = "#1178 so=" + std::to_string(std::get<2>(row)) + " top " +
+                                   std::to_string(std::get<3>(row)) + " line " +
+                                   std::to_string(std::get<4>(row)) + " with the 5-row line " +
+                                   std::to_string(std::get<0>(row));
+        const auto placed = controller.frame();
+        expect(placed.first_visible == LineNumber{std::get<6>(row)} &&
+                   placed.caret.position.line == LineNumber{std::get<4>(row)},
+               (window + " moves the window where Vim 9.1 update_topline does").c_str());
+        vim_replay(controller, std::get<5>(row));
+        const auto moved = controller.frame();
+        expect(moved.first_visible == LineNumber{std::get<7>(row)} &&
+                   moved.caret.position.line == LineNumber{std::get<8>(row)},
+               (window + " then " + std::string(std::get<5>(row)) + " lands where Vim 9.1 does")
+                   .c_str());
+    }
+}
+
+// 「通常 | Vim」の切り替えは窓を動かさない（追従を頼まない）。so=3 の Vim の update_topline なら
+// 先頭 30・行 30 の窓を上げるが、切り替えた時点の先頭を保つ。
+void verify_mode_switch_keeps_window()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    placed_tall_window(controller, TallLanding{36, 0, 3, 1, 1, "", 0, 0});
+    applied(controller, SelectEditMode{EditMode::ordinary});
+    applied(controller, ScrollLines{29});
+    const auto scrolled = controller.frame();
+    applied(controller, SelectEditMode{EditMode::vim});
+    const auto entered = controller.frame();
+    expect(entered.first_visible == scrolled.first_visible &&
+               entered.first_visible == LineNumber{30} &&
+               entered.caret.position.line == LineNumber{30},
+           "#1178 switching to Vim keeps the window where update_topline with so=3 would move it");
+}
+
 void verify_scrolloff_cursor_correct()
 {
     verify_tall_landings();
@@ -553,5 +623,7 @@ void verify_vim_view_scope()
     verify_ordinary_mode_options();
     verify_scrolloff_cursor_correct();
     verify_grid_rows_cursor_correct();
+    verify_topline_updated();
+    verify_mode_switch_keeps_window();
 }
 } // namespace nenenib::tests
