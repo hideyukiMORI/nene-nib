@@ -66,3 +66,7 @@ LSP 3.17 は子プロセスと stdio で JSON-RPC 2.0 を話す（`Content-Lengt
   - **#1022 で置き換えた**: adapter の `ServerFramer` を消し、`Win32LanguageServer` が受けたバイト列を繋いで `core::lsp_frames` に渡し `consumed` だけ捨てる（2 本目の経路は無い）。送る側の枠も core の `lsp_framed` の 1 本。`LspFrameFailure` は `ServerFailure` へ写し（見出しの誤り 3 種は `read_failed`・`body_too_long` は `message_too_long`・`header_too_long` は足した `header_too_long`）、壊れた読みの中で壊れた枠の前にあった本文も積まない。`Content-Length` が 2 回ある見出しも（以前の後勝ちでなく）`read_failed`。読みの切れ目で届く本文は変わり得るが、どちらでもサーバーは止めて起こし直すので寿命の結果は同じで、再起動 3 回の規則は確実に止まる（`failures` は 0 に戻らない）。
 - **`stop` で event の列を捨てる**（古い子の `ServerMessage` が新しい `ServerStarted` の前に混ざらない）。
 - **後続**: パイプの DACL を自分だけに（今は名前の推測で先に繋がれても `pipe_failed` で安全に落ちる）。
+
+## 追補（2026-10-30・#1165・PR #1164 の独立レビュー R1-1）: 見出しの上限は空行を含めた長さ
+
+- **決定 3 の見出しの上限**: `frame_at` は「空行 `\r\n\r\n` を含めた見出しの長さ」の 1 本で断る。空行が届いていればその長さ、まだ届いていなければ届いた分＋1 バイト（あと少なくとも 1 バイト要る）を `lsp_header_limit + 4` と比べる。空行の前が 8,192 バイトまでの見出しは、空行の途中のどこで読みが切れても受け、8,193 バイト以上はどこで切れても `header_too_long`（上限の値は変えない・空行の無い列は 8,195 バイトまで待つ）。契約 `--lsp-frames` が 8,190〜8,193 バイトの見出しを 1 バイトずつ渡して確かめる。
