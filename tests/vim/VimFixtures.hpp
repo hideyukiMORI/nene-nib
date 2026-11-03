@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 24c28455bbb2af48a506cdb02fee8a9ff66eb60b1fccbaa1968495debc3f3a6a / 3272 fixtures
+// fixtures.json: sha256 50b95fa9d3235ded5cbcce5264b93d16f2b0fdf6cfa7bab5e4e2b12a038c4dca / 3288 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3272> vim_fixtures{{
+constexpr std::array<VimFixture, 3288> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2739,6 +2739,22 @@ constexpr std::array<VimFixture, 3272> vim_fixtures{{
     {"insert-count-join-block-insert-erase-cr", "abc\ndef\nghi", "j0<C-v>j2Iz<C-u><C-u><CR>y<Esc>", "abc\nydef\nyghi", 2, 1, "", "", std::nullopt},
     {"insert-count-join-block-insert-erase-undo", "abc\ndef\nghi", "j0<C-v>j2Iz<C-u><C-u><CR>y<Esc>u", "abc\ndef\nghi", 2, 1, "", "", std::nullopt},
     {"insert-count-join-block-append-bs-cr", "abc\ndef\nghi", "j0<C-v>jl2A<BS><BS><BS><CR>x<Esc>", "ab\nxf\nghi", 2, 1, "", "", std::nullopt},
+    {"insert-count-join-2-change-3cw", "one two three four\nfive", "3cwabc<CR>def<Esc>", "abc\ndef four\nfive", 2, 3, "one two three", "v", std::nullopt},
+    {"insert-count-join-2-change-2C", "one two\nthree\nfour", "2Cxy<CR>z<Esc>", "xy\nz\nfour", 2, 1, "one two\nthree", "v", std::nullopt},
+    {"insert-count-join-2-change-block-erase-cr", "abc\ndef\nghi", "j0<C-v>j2cz<C-u><C-u><CR>y<Esc>", "abc\nyef\nyhi", 2, 1, "d\ng", "\0261", std::nullopt},
+    {"insert-count-join-2-change-block-bs-cr", "abc\ndef\nghi", "j0<C-v>j2c<BS><BS><CR>x<Esc>", "ab\nxef\nxhi", 2, 1, "d\ng", "\0261", std::nullopt},
+    {"insert-count-join-2-change-block-bs-cr-middle", "abc\ndef\nghi", "jl<C-v>j2c<BS><BS><BS><CR>xy<Esc>", "ab\nxyf\ngyi", 2, 2, "e\nh", "\0261", std::nullopt},
+    {"insert-count-join-2-change-block-bs-cr-wide", "abc\ndef\nghi", "j0<C-v>jl3c<BS><BS><CR>x<Esc>", "ab\nxf\nxi", 2, 1, "de\ngh", "\0262", std::nullopt},
+    {"insert-count-join-2-change-block-end-bs-cr", "abc\ndef\nghi", "j0<C-v>j2C<BS><BS><CR>x<Esc>", "ab\nx\nx", 2, 1, "def\nghi", "\0263", std::nullopt},
+    {"insert-count-join-2-change-block-end-off-line", "abc def\nabc def\nabc def", "w<C-v>j2Cxy<BS><CR>z<Esc>", "abc x\nz\nabc \nabc def", 2, 1, "def\ndef", "\0263", std::nullopt},
+    {"insert-count-join-2-change-block-typed-cr", "abc def\nabc def\nabc def", "w<C-v>j2Cxy<CR>z<Esc>", "abc xy\nz\nabc \nabc def", 2, 1, "def\ndef", "\0263", std::nullopt},
+    {"insert-count-join-2-insert-block-bs-cr", "abc\ndef\nghi", "j0<C-v>jI<BS><BS><CR>x<Esc>", "ab\nxdef\nxghi", 2, 1, "", "", std::nullopt},
+    {"insert-count-join-2-insert-block-count-bs-cr", "abc\ndef\nghi", "j0<C-v>j2I<BS><BS><CR>x<Esc>", "ab\nxdef\nxghi", 2, 1, "", "", std::nullopt},
+    {"insert-count-join-2-entry-append-bs-erase-cr", "abc\ndef\nghi", "j<C-v>j$2A<BS><C-u><CR><Esc>", "abc\n\nghi", 2, 1, "", "", std::nullopt},
+    {"insert-count-join-2-entry-append-bs-word-cr", "abc\ndef\nghi", "j<C-v>j$2A<BS><C-w><CR><Esc>", "abc\n\nghi", 2, 1, "", "", std::nullopt},
+    {"insert-count-join-2-entry-append-cr-bs-erase-cr", "abc\ndef\nghi", "j<C-v>j$2A<CR><BS><BS><C-u><CR><Esc>", "abc\n\nghi", 2, 1, "", "", std::nullopt},
+    {"insert-count-join-2-entry-3ia-cr", "abc\ndef\nghi", "3ia<CR><Esc>", "a\na\na\nabc\ndef\nghi", 4, 1, "", "", std::nullopt},
+    {"insert-count-join-2-entry-2O-bs", "abc\ndef\nghi", "j2Ox<BS><BS><Esc>", "abc\ndef\nghi", 1, 3, "", "", std::nullopt},
     {"empty-case-gU-h", "x1", "gUh", "X1", 1, 1, "", "", std::nullopt},
     {"empty-case-gU-1h", "x1", "gU1h", "X1", 1, 1, "", "", std::nullopt},
     {"empty-case-gU-0", "x1", "gU0", "X1", 1, 1, "", "", std::nullopt},

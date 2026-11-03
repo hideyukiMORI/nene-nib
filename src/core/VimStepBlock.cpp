@@ -437,14 +437,14 @@ namespace detail
                           side == VimBlockInsertSide::before
                               ? block.left
                               : VirtualColumn{block_right(block) + single_step},
-                          block_caret(block),
+                          0,
                           0,
                           block_caret(block)};
     const std::string content = text.line_text(block.first);
     VimBlockEdit entry = first_line_entry(text, insert, content);
     const Offset at{entry.range.begin.value +
                     (entry.utf8.empty() ? 0 : insert_lead(content, side, insert.column))};
-    insert.at = at;
+    insert.at_byte = at.value - text.line_start(block.first).value;
     insert.line_bytes =
         content.size() - (entry.range.end.value - entry.range.begin.value) + entry.utf8.size();
     VimState next = block_insert_entered(vim_resting_from(state, state.unnamed_register),
@@ -483,7 +483,8 @@ namespace detail
     VimState entered = block_insert_entered(
         std::move(next), single_step,
         VimBlockInsert{block.first, block.lines.size(), VimBlockInsertSide::before, block.left,
-                       removal.caret, line_bytes, std::nullopt});
+                       removal.caret.value - view.text.line_start(block.first).value, line_bytes,
+                       std::nullopt});
     return restored_at(
         with_clipboard(VimStep{std::move(entered), std::move(removal)}, std::move(clipboard)),
         block_caret(block));
