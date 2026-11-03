@@ -28,7 +28,6 @@
 namespace nenenib::core
 {
 using detail::backward_characters;
-using detail::block_append_carried;
 using detail::block_insert_edit;
 using detail::display_view;
 using detail::erased_nothing;
@@ -613,6 +612,17 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     return std::pair{std::move(body), std::move(edits)};
 }
 
+// `A` の 1 行目で右の端が切った 1 バイトの文字（入口で覚えた `carried`・#1189）。写す本文の頭に
+// 付ける。読むのはその 1 バイトだけで、行を写さない。切っていなければ空。
+[[nodiscard]] std::string block_carried_text(const TextBuffer &text, const VimBlockInsert &insert)
+{
+    if (insert.carried == 0)
+    {
+        return {};
+    }
+    return text.text_range(Offset{insert.at.value - insert.carried}, insert.at);
+}
+
 // 矩形の INSERT の Esc（ADR 0035 の追補 #1042）。1 行目が入る前より伸びたぶんを打った本文として
 // 読み（回数の繰り返しもその後ろに足す）、残りの行の同じ桁へ写して 1 行目の INSERT と 1 つの undo
 // 単位にする。何も打たなかったら写さない。`I` `A` は Esc の行が 1 行目でなければ（改行を打った）
@@ -633,8 +643,7 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     {
         return step;
     }
-    // `A` の 1 行目で右の端が切った Tab は、打った本文の頭に付けて写す（#1189）。
-    std::string body{block_append_carried(text, insert)};
+    std::string body = block_carried_text(text, insert);
     body += growth.value().first;
     std::vector<VimBlockEdit> edits = std::move(growth.value().second);
     Offset resting = view.selection.caret;

@@ -16,7 +16,10 @@ namespace nenenib::core
 // Vim の textcol と同じ行の中の桁（前の行を消してから改行で 1 行目へ戻っても同じ所・#1173）。
 // `column` は写す桁（1 始まり）、`caret` は写したあとのキャレットで、`I` `A` は矩形の左上、
 // `c` `C` は空（Esc のふつうの位置）。空かどうかは改行を打ったときの違いも決める（`I` `A` は
-// 写さない・`c` `C` は写す・実測）。本文は持たない（ARC-004）。
+// 写さない・`c` `C` は写す・実測）。
+// `carried` は `A` の 1 行目で右の端が切った 1 バイトの文字（Tab か制御文字）の数（0 か 1）。
+// Esc は `at_byte` の手前のその文字を打った本文の頭に付けて写す（#1189）。決めるのは入口の 1 回。
+// 本文は持たない（ARC-004）。
 struct VimBlockInsert
 {
     LineNumber first;
@@ -26,5 +29,6 @@ struct VimBlockInsert
     std::size_t at_byte;
     std::size_t line_bytes;
     std::optional<Offset> caret;
+    std::size_t carried;
 };
 } // namespace nenenib::core
