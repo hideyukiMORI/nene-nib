@@ -237,7 +237,8 @@ class KeySegmentTests(unittest.TestCase):
 
     def test_the_single_benches_have_a_breakdown_and_describe_prints_it(self):
         self.assertEqual(("key-to-frame-single", speed.LONG_LINE_BENCH, speed.CPP_BENCH,
-                          speed.PREVIEW_BENCH, speed.GIANT_SINGLE_BENCH), speed.SINGLE_BENCHES)
+                          speed.PREVIEW_BENCH, speed.GIANT_SINGLE_BENCH, speed.LSP_SINGLE_BENCH),
+                         speed.SINGLE_BENCHES)
         self.assertTrue(set(speed.SINGLE_BENCHES) <= set(speed.BREAKDOWN_BENCHES))
         written = record({})
         written["breakdown"] = {speed.LONG_LINE_BENCH: speed.spread(
@@ -382,12 +383,18 @@ class BenchTableTests(unittest.TestCase):
         """eng/prove-gates.py builds its QLT-014 proof from these descriptions (ADR 0044 decision 6)."""
         reference = json.loads((ROOT / "eng/perf-reference.json").read_text(encoding="utf-8"))
         # split の 5 本は基準値に載せない（ADR 0148 決定 14）。判定は --split-verdict の対だけ。
-        self.assertEqual([*speed.BENCHES, *speed.GIANT_BENCHES], list(reference["benches"]))
+        self.assertEqual([*speed.BENCHES, *speed.GIANT_BENCHES, *speed.LSP_BENCHES],
+                         list(reference["benches"]))
         self.assertFalse(set(speed.SPLIT_BENCHES) & set(reference["benches"]))
         self.assertIn("ADR 0044", reference["benches"]["key-to-frame-burst-200-16mib"])
         self.assertIn("ADR 0075", reference["benches"][speed.LONG_LINE_BENCH])
         for name in speed.GIANT_BENCHES:
             self.assertIn("ADR 0138", reference["benches"][name])
+        # LSP の 3 本は説明だけで、どの機械にも基準値を持たない（#995 L1d・D60）。
+        for name in speed.LSP_BENCHES:
+            self.assertIn("ADR 0161", reference["benches"][name])
+            for machine in reference["machines"].values():
+                self.assertNotIn(name, machine["values"])
 
     def test_the_real_machine_judges_the_long_line_bench_by_the_floor(self):
         """#298: adopted with --adopt --bench (gate-proofs 5-cs); QLT-014 says the floor decides."""
@@ -804,7 +811,7 @@ class GiantLineTests(unittest.TestCase):
         self.assertEqual(("open-giant-line-16mib", "key-to-frame-single-giant-line-16mib"),
                          speed.GIANT_BENCHES)
         self.assertEqual((*speed.GIANT_BENCHES, *speed.SPLIT_BENCHES, speed.PREVIEW_BENCH, speed.CPP_BENCH,
-                          *speed.LARGE_FILE_BENCHES), speed.OPTIONAL_BENCHES)
+                          *speed.LARGE_FILE_BENCHES, *speed.LSP_BENCHES), speed.OPTIONAL_BENCHES)
         self.assertFalse(set(speed.OPTIONAL_BENCHES) & set(speed.BENCHES))
         self.assertIn(speed.GIANT_OPEN_BENCH, speed.BREAKDOWN_BENCHES)
 
@@ -1269,6 +1276,144 @@ class SplitVerdictTests(unittest.TestCase):
                 self.assertIn(json.loads(printed.getvalue())["verdict"], ("pass", "fail"))
         finally:
             shutil.rmtree(SPLIT_WORK, ignore_errors=True)
+
+
+class LanguageServerBenchTests(unittest.TestCase):
+    """#995 L1d (ADR 0161 decision 7, D60): three optional lsp- benches, recorded only."""
+
+    def test_the_lsp_benches_are_optional_and_never_compared(self):
+        self.assertEqual(("lsp-single-key", "lsp-burst-200", "lsp-diagnostics-ready"),
+                         speed.LSP_BENCHES)
+        for name in speed.LSP_BENCHES:
+            with self.subTest(name=name):
+                self.assertIn(name, speed.OPTIONAL_BENCHES)
+                self.assertNotIn(name, speed.BENCHES)
+        values = {name: {"medianMs": 9000.0} for name in speed.LSP_BENCHES}
+        recorded = {name: {"medianMs": 1.0} for name in speed.LSP_BENCHES}
+        self.assertEqual(([], []), speed.compare(REFERENCE, values, recorded))
+
+    def test_the_burst_keeps_the_arrival_span_of_the_empty_document(self):
+        delivered = speed.BURST_KEYS + 2
+        self.assertIsNone(speed.burst_failure(3.0, 10.0, delivered, speed.LSP_BURST_BENCH))
+        self.assertIn("not together",
+                      speed.burst_failure(3.0, 60.0, delivered, speed.LSP_BURST_BENCH))
+
+    def test_the_ready_value_is_the_second_frame_after_the_last_input(self):
+        entries = [{"milestone": "input_received", "qpcMicroseconds": 1000},
+                   {"milestone": "frame_presented", "qpcMicroseconds": 1500},
+                   {"milestone": "frame_presented", "qpcMicroseconds": 3000},
+                   {"milestone": "input_received", "qpcMicroseconds": 10000},
+                   {"milestone": "frame_presented", "qpcMicroseconds": 10600},
+                   {"milestone": "frame_presented", "qpcMicroseconds": 12500}]
+        inputs = speed.input_indexes(entries)
+        self.assertEqual([10600, 12500], speed.frames_after(entries, inputs[-1]))
+        self.assertEqual(2.5, speed.measured_ready(entries, inputs))
+        self.assertIsNone(speed.measured_ready(entries[:5], speed.input_indexes(entries[:5])))
+        self.assertIsNone(speed.measured_ready(entries[3:], speed.input_indexes(entries[3:])))
+
+    def ready_trial(self, entries):
+        process = mock.Mock()
+        boundaries = {name: mock.Mock() for name in
+                      ("start", "report_path", "raise_window", "take_foreground", "covered_by",
+                       "await_language_server", "await_quiet", "write_text", "close",
+                       "dismiss_dialog", "stop", "observed_marks", "time")}
+        boundaries["start"].return_value = process, 123, []
+        boundaries["take_foreground"].return_value = True
+        boundaries["covered_by"].return_value = None
+        boundaries["await_quiet"].return_value = True
+        boundaries["dismiss_dialog"].return_value = True
+        boundaries["observed_marks"].return_value = entries
+        with mock.patch.multiple(speed, **boundaries), contextlib.redirect_stdout(io.StringIO()):
+            result = speed.lsp_ready_trial(Path("exe"), {}, Path("folder"), Path("c.cpp"),
+                                           speed.LSP_SERVER)
+        boundaries["await_language_server"].assert_called_once_with(process, 123, speed.LSP_SERVER)
+        self.assertEqual(["w", "a"], [call.args[1] for call in
+                                      boundaries["write_text"].call_args_list])
+        boundaries["stop"].assert_called_once_with(process)
+        return result
+
+    def test_the_ready_trial_measures_after_the_warmup_diagnostics(self):
+        entries = [{"milestone": "input_received", "qpcMicroseconds": 1000},
+                   {"milestone": "frame_presented", "qpcMicroseconds": 1500},
+                   {"milestone": "frame_presented", "qpcMicroseconds": 3000},
+                   {"milestone": "input_received", "qpcMicroseconds": 10000},
+                   {"milestone": "frame_presented", "qpcMicroseconds": 10600},
+                   {"milestone": "frame_presented", "qpcMicroseconds": 12500}]
+        self.assertEqual(2.5, self.ready_trial(entries))
+
+    def test_a_ready_trial_without_the_warmup_diagnostics_or_a_second_frame_is_missing(self):
+        early = [{"milestone": "input_received", "qpcMicroseconds": 1000},
+                 {"milestone": "frame_presented", "qpcMicroseconds": 1500},
+                 {"milestone": "input_received", "qpcMicroseconds": 2000},
+                 {"milestone": "frame_presented", "qpcMicroseconds": 2600},
+                 {"milestone": "frame_presented", "qpcMicroseconds": 4500}]
+        self.assertIsNone(self.ready_trial(early))
+        single = [{"milestone": "input_received", "qpcMicroseconds": 1000},
+                  {"milestone": "frame_presented", "qpcMicroseconds": 1500},
+                  {"milestone": "frame_presented", "qpcMicroseconds": 3000},
+                  {"milestone": "input_received", "qpcMicroseconds": 10000},
+                  {"milestone": "frame_presented", "qpcMicroseconds": 10600}]
+        self.assertIsNone(self.ready_trial(single))
+
+    def test_the_server_is_awaited_as_a_child_of_the_editor(self):
+        process = mock.Mock()
+        process.pid = 42
+        process.poll.return_value = None
+        with mock.patch.object(speed, "child_names", side_effect=[[], ["NIB_FAKE_LANGUAGE_SERVER.EXE"]]), \
+                mock.patch.object(speed, "await_quiet", return_value=True) as quiet, \
+                mock.patch.object(speed.time, "sleep"):
+            speed.await_language_server(process, 7, speed.LSP_SERVER)
+        quiet.assert_called_once_with(7)
+        process.poll.return_value = 0
+        with mock.patch.object(speed, "child_names", return_value=[]), \
+                self.assertRaisesRegex(speed.TrialNotObserved, "never ran"):
+            speed.await_language_server(process, 7, speed.LSP_SERVER)
+
+    def test_the_keys_trial_routes_both_values_and_the_single_breakdown(self):
+        steps = {"frame_built": 0.1, "frame_drawn": 0.2, "frame_presented": 0.3}
+        trial = (0.7, 2.5, 1.0, speed.BURST_KEYS + 2, steps)
+        with mock.patch.object(speed, "lsp_environment", return_value={"lsp": "on"}), \
+                mock.patch.object(speed, "keys_trial", return_value=trial) as keys:
+            values, parts = speed.bench_lsp_keys(Path("exe"), {}, Path("folder"), Path("c.cpp"),
+                                                 Path("bin") / speed.LSP_SERVER)
+        self.assertEqual({speed.LSP_SINGLE_BENCH: 0.7, speed.LSP_BURST_BENCH: 2.5}, values)
+        self.assertEqual({speed.LSP_SINGLE_BENCH: steps}, parts)
+        keys.assert_called_once_with(Path("exe"), {"lsp": "on"}, Path("folder"), Path("c.cpp"),
+                                     server=speed.LSP_SERVER)
+
+    def test_the_settings_turn_the_server_on_in_a_tool_profile_only(self):
+        work = ROOT / "out/test-speed-lsp"
+        shutil.rmtree(work, ignore_errors=True)
+        try:
+            environment = {"LOCALAPPDATA": str(work / "profile")}
+            path = speed.write_settings(environment, {"lsp": "on"},
+                                        {"cpp": '"C:\\b\\nib_fake_language_server.exe" --silent'})
+            text = path.read_text(encoding="utf-8")
+            self.assertTrue(text.startswith("version=4\ncolorscheme=system\n"))
+            self.assertIn("\nlsp=on\n", text)
+            self.assertTrue(text.endswith(
+                'scrolloff=0\nlsp.cpp.command="C:\\b\\nib_fake_language_server.exe" --silent\n'))
+            with self.assertRaises(AssertionError):
+                speed.write_settings(environment, {"nosuch": "x"})
+            with mock.patch.dict(speed.os.environ, {"LOCALAPPDATA": str(work / "profile")}), \
+                    self.assertRaises(AssertionError):
+                speed.write_settings(environment, {"lsp": "on"})
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    def test_an_absent_fake_server_stops_before_a_trial(self):
+        with self.assertRaisesRegex(SystemExit, "nib_fake_language_server"):
+            speed.language_server_of(ROOT / "out/test-speed-absent/NeNeNib.exe")
+
+    def test_the_lsp_benches_are_recorded_only(self):
+        for name in speed.LSP_BENCHES:
+            for flag in ("--adopt", "--check"):
+                with self.subTest(name=name, flag=flag), \
+                        mock.patch.object(sys, "argv", ["measure-speed.py", flag, "--bench", name]), \
+                        contextlib.redirect_stderr(io.StringIO()), \
+                        self.assertRaises(SystemExit) as stopped:
+                    speed.main()
+                self.assertEqual(2, stopped.exception.code)
 
 
 if __name__ == "__main__":

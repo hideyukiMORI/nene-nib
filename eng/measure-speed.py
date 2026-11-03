@@ -61,6 +61,25 @@ runs only when --bench names it and is never compared with the reference or adop
                             type, function, string, number, operators; checked by SHA-256), so
                             every frame lexes its visible lines and the 200 lines above them
 
+Three more optional benches measure the editor with a language server on (#995 L1d, ADR 0161
+decision 7, D60): they run only when --bench names them, are recorded with --record only, are
+never compared with the eight and have no reference until hide adopts one after the L1 trial. Each
+writes settings.v4 with lsp=on and lsp.cpp.command naming nib_fake_language_server.exe of the
+same build folder as --executable into its own profile (out/speed/profile-lsp), opens
+single-cpp-1000.cpp, and waits until that server runs as the editor's child and the window thread
+went quiet (initialize is answered at once by the fake, and didOpen follows it), before the warmup:
+
+  lsp-single-key            key-to-frame-single over that document with the fake --silent server
+  lsp-burst-200             key-to-frame-burst-200 in the same trial (the same 50 ms arrival span)
+  lsp-diagnostics-ready     reference value: the fake --diagnostics 100 answers didOpen and every
+                            didChange with 100 diagnostics at once; the warmup and the measured
+                            keystroke are each sent after the window thread went quiet, and the
+                            value is the measured keystroke's input_received -> the second
+                            frame_presented after it. The product marks no milestone for
+                            diagnostics, so "the second frame" approximates "the frame that
+                            carries the underlines" (publishDiagnostics -> WorkCompleted ->
+                            repaint); a trial with fewer than two frames after it is missing
+
 Five more optional benches measure split (ADR 0120 decisions 2-7, ADR 0148 decision 14) and are
 never compared with the reference: split-single-key-100 (S, one pane) and
 split-pane-key-100-{same,other}-{vertical,horizontal} (P, two panes made with Ctrl+backslash or
@@ -142,11 +161,11 @@ import subprocess
 import time
 import winreg
 
-from window_driver import (answer_question, api, become_dpi_aware, capture_png, close, covered_by,
-                           dismiss_dialog, IDNO, kernel, post_together, press_chord, press_combination,
-                           raise_window, rectangle, start, stop, take_foreground, user, VK_CONTROL,
-                           VK_SHIFT, VK_T, window_title, WindowCovered, WindowUnavailable,
-                           write_text)
+from window_driver import (answer_question, api, become_dpi_aware, capture_png, child_names, close,
+                           covered_by, dismiss_dialog, IDNO, kernel, post_together, press_chord,
+                           press_combination, raise_window, rectangle, start, stop,
+                           take_foreground, user, VK_CONTROL, VK_SHIFT, VK_T, window_title,
+                           WindowCovered, WindowUnavailable, write_settings, write_text)
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "eng/perf-reference.json"
@@ -250,8 +269,19 @@ LARGE_FILE_BENCHES = {"open-large-file-512mib": 512 * 1024 * 1024,
 PREVIEW_BENCH = "key-to-frame-single-preview-open"
 # C++ の文書の 1 打鍵（#816・ADR 0156 の決定 15）。--bench で名指ししたときだけ測り、基準値に載せない。
 CPP_BENCH = "key-to-frame-single-cpp"
+# LSP オンの 3 本（#995 L1d・ADR 0161 の決定 7・D60）。--bench で名指ししたときだけ測り、オフの 8 本と
+# 比べず、基準値は L1 の試用の後に hide が採る（それまで --record だけ）。
+LSP_SINGLE_BENCH = "lsp-single-key"
+LSP_BURST_BENCH = "lsp-burst-200"
+LSP_READY_BENCH = "lsp-diagnostics-ready"
+LSP_BENCHES = (LSP_SINGLE_BENCH, LSP_BURST_BENCH, LSP_READY_BENCH)
 OPTIONAL_BENCHES = (*GIANT_BENCHES, *SPLIT_BENCHES, PREVIEW_BENCH, CPP_BENCH,
-                    *LARGE_FILE_BENCHES)
+                    *LARGE_FILE_BENCHES, *LSP_BENCHES)
+# 替え玉のサーバーは測る exe と同じ build の中のもの（tests/adapters/FakeLanguageServerMain.cpp）。
+LSP_SERVER = "nib_fake_language_server.exe"
+LSP_DIAGNOSTICS = 100
+# 道具の profile を分ける。lsp=on の settings.v4 がオフのベンチの profile に残らないように。
+LSP_PROFILE = "profile-lsp"
 PACED_KEYS = 100
 PACED_CHARACTER = "a"
 PACED_BUDGET_MS = 16.7
@@ -295,7 +325,7 @@ STARTUP_BENCHES = ("startup-first-frame", "open-large-file-16mib", GIANT_OPEN_BE
 # 返った）-> frame_presented（Present が返った）。区間名は起動の内訳と同じく「到達する節目の名前」。
 KEY_MILESTONES = ("frame_built", "frame_drawn", "frame_presented")
 SINGLE_BENCHES = ("key-to-frame-single", LONG_LINE_BENCH, CPP_BENCH, PREVIEW_BENCH,
-                  GIANT_SINGLE_BENCH)
+                  GIANT_SINGLE_BENCH, LSP_SINGLE_BENCH)
 # 記録の breakdown には 16 MiB の打鍵の到着の幅（ARRIVAL_SEGMENT）も同じ形で載せる（#179）。
 BREAKDOWN_BENCHES = (*STARTUP_BENCHES, LARGE_BURST_BENCH, *SINGLE_BENCHES, *LARGE_FILE_BENCHES)
 
@@ -685,7 +715,7 @@ def burst_failure(burst: float | None, span: float, delivered: int,
         return f"only {delivered} of {BURST_KEYS + 2} keystrokes were measured by the window"
     if burst is None:
         return "no frame was presented after the 200 keystrokes"
-    if name == EMPTY_BURST_BENCH and span > BURST_SPAN_LIMIT_MS:
+    if name in (EMPTY_BURST_BENCH, LSP_BURST_BENCH) and span > BURST_SPAN_LIMIT_MS:
         return f"the 200 keystrokes reached the window over {span:.1f} ms, not together"
     return None
 
@@ -840,7 +870,8 @@ def await_quiet(window, seconds: float = LARGE_SECONDS) -> bool:
 def keys_trial(executable: Path, environment: dict, folder: Path,
                document: Path | None = None,
                burst: bool = True,
-               grid: bool = True) -> tuple[float | None, float | None, float, int, dict]:
+               grid: bool = True,
+               server: str | None = None) -> tuple[float | None, float | None, float, int, dict]:
     """One trial: single ms, 200 keystroke ms, how long the 200 took to arrive, keystrokes measured,
     and the single's segments (key_segments; {} when they were not marked).
 
@@ -852,6 +883,9 @@ def keys_trial(executable: Path, environment: dict, folder: Path,
     warmup and the single only, each posted after the window thread went quiet, and the single is
     a value only when the warmup's frame was presented before it was read. That trial answers the
     grid question first: grid=True is "yes" (ADR 0140 decision 8).
+
+    With server (the language server's executable name) the trial waits for that server before the
+    settle and the warmup (await_language_server, #995 L1d); the keystrokes are the same.
     """
     if not burst:
         return quiet_single_trial(executable, environment, folder, document, grid)
@@ -872,6 +906,8 @@ def keys_trial(executable: Path, environment: dict, folder: Path,
         covering = covered_by(window)
         if covering is not None:
             print(f"Speed: another window covers the bench window ({covering})")
+        if server is not None:
+            await_language_server(process, window, server)
         time.sleep(SETTLE_SECONDS)
         # 最初の 1 打鍵は捨てる。交換鎖が定常になる前の 1 枚は合成器の都合で何十 vsync も遅れる。
         write_text(window, "w")
@@ -948,6 +984,147 @@ def quiet_single_trial(executable: Path, environment: dict, folder: Path,
             return None, None, 0.0, len(inputs), {}
     return (measured_single(marks, inputs), None, 0.0, len(inputs),
             single_segments(marks, inputs))
+
+
+def await_language_server(process, window, server: str) -> None:
+    """Wait until server runs as the editor's child and the window thread went quiet (#995 L1d).
+
+    The product marks no milestone for the server, and the measurement file is read only at exit.
+    The editor starts the server when the document is opened (ADR 0160); the fake answers
+    initialize at once and the editor sends didOpen on that answer, so a running child and a quiet
+    window thread are the observable sign that both happened. A server that never runs within
+    LARGE_SECONDS leaves the trial unobserved.
+    """
+    deadline = time.monotonic() + LARGE_SECONDS
+    while server.lower() not in (name.lower() for name in child_names(process.pid)):
+        if time.monotonic() >= deadline or process.poll() is not None:
+            raise TrialNotObserved(f"the language server {server} never ran as the editor's child")
+        time.sleep(QUIET_POLL_SECONDS)
+    if not await_quiet(window):
+        print("Speed: the window thread did not go quiet after the language server started")
+
+
+def language_server_of(executable: Path) -> Path:
+    """The fake language server of the same build as the measured exe; absent stops the run."""
+    server = executable.resolve().parent / LSP_SERVER
+    if not server.is_file():
+        raise SystemExit(f"Speed: {server} is absent; build nib_fake_language_server in the same"
+                         f" build folder as {executable.name} to measure the lsp- benches")
+    return server
+
+
+def lsp_environment(environment: dict, server: Path, argument: str) -> dict:
+    """The lsp profile's environment, its settings.v4 written for this trial (lsp=on, cpp)."""
+    profile = OUTPUT / LSP_PROFILE
+    profile.mkdir(parents=True, exist_ok=True)
+    lsp = dict(environment, LOCALAPPDATA=str(profile), APPDATA=str(profile))
+    write_settings(lsp, {"lsp": "on"}, {"cpp": f'"{server}" {argument}'})
+    return lsp
+
+
+def bench_lsp_keys(executable: Path, environment: dict, folder: Path, document: Path,
+                   server: Path) -> tuple[dict, dict]:
+    """key-to-frame-single and -burst-200 over the C++ document with the fake --silent server on.
+
+    The trial is keys_trial with the server awaited first; it is repeated and recorded missing the
+    way bench_keys repeats key-to-frame-burst-200 (Issue #30 / #36), with the same arrival span.
+    """
+    lsp = lsp_environment(environment, server, "--silent")
+    single = None
+    for attempt in range(BURST_ATTEMPTS):
+        try:
+            single, burst, span, delivered, steps = keys_trial(executable, lsp, folder, document,
+                                                               server=server.name)
+        except (TrialNotObserved, subprocess.TimeoutExpired) as unobserved:
+            single, reason = None, str(unobserved)
+        else:
+            reason = burst_failure(burst, span, delivered, LSP_BURST_BENCH)
+            if reason is None:
+                return ({LSP_SINGLE_BENCH: single, LSP_BURST_BENCH: burst},
+                        single_parts(LSP_SINGLE_BENCH, steps if single is not None else {}))
+        print(f"Speed: {reason}; repeating the trial ({attempt + 1}/{BURST_ATTEMPTS})")
+    print(f"Speed: no trial delivered the stimulus as specified in {BURST_ATTEMPTS} attempts;"
+          f" this trial of {LSP_BURST_BENCH} is missing")
+    return {LSP_SINGLE_BENCH: single, LSP_BURST_BENCH: None}, {}
+
+
+def frames_after(marks: list, index: int) -> list[int]:
+    """Every frame_presented after that input, in order (qpcMicroseconds)."""
+    return [int(entry["qpcMicroseconds"]) for entry in marks[index + 1:]
+            if entry["milestone"] == "frame_presented"]
+
+
+def measured_ready(marks: list, inputs: list) -> float | None:
+    """The last input -> the second frame presented after it in ms, or None without two frames.
+
+    The first frame answers the keystroke; the diagnostics the server published for its didChange
+    arrive afterwards through WorkCompleted and repaint, so the second frame stands for the frame
+    that carries the underlines (an approximation: the product marks no diagnostics milestone).
+    """
+    if len(inputs) < 2:
+        return None
+    frames = frames_after(marks, inputs[-1])
+    if len(frames) < 2:
+        return None
+    return (frames[1] - int(marks[inputs[-1]]["qpcMicroseconds"])) / MICROSECONDS_PER_MILLISECOND
+
+
+def lsp_ready_trial(executable: Path, environment: dict, folder: Path, document: Path,
+                    server: str) -> float | None:
+    """The warmup and one keystroke with the fake --diagnostics server, each after quiet."""
+    report = report_path(folder, "keys-lsp-ready")
+    process, window, _ = start(executable, environment,
+                               ["--measure", str(report), str(document)], seconds=LARGE_SECONDS)
+    try:
+        raise_window(window)
+        if not take_foreground(window):
+            print("Speed: the bench window did not take the foreground")
+        covering = covered_by(window)
+        if covering is not None:
+            print(f"Speed: another window covers the bench window ({covering})")
+        await_language_server(process, window, server)
+        time.sleep(SETTLE_SECONDS)
+        write_text(window, "w")
+        if not await_quiet(window):
+            print("Speed: the window thread did not go quiet after the warmup keystroke")
+        write_text(window, "a")
+        if not await_quiet(window):
+            print("Speed: the window thread did not go quiet after the measured keystroke")
+        close(window)
+        if not dismiss_dialog(process, IDNO, seconds=LARGE_SECONDS):
+            raise TrialNotObserved("the unsaved confirmation never came up")
+        process.wait(timeout=LARGE_SECONDS)
+    finally:
+        stop(process)
+    marks = observed_marks(report)
+    inputs = input_indexes(marks)
+    if len(inputs) < 2:
+        print(f"Speed: {len(inputs)} inputs were read; the warmup and one more are needed")
+        return None
+    warmed = frames_after(marks, inputs[-2])
+    if len(warmed) < 2 or warmed[1] > int(marks[inputs[-1]]["qpcMicroseconds"]):
+        print("Speed: the measured keystroke was read before the warmup's diagnostics were drawn")
+        return None
+    value = measured_ready(marks, inputs)
+    if value is None:
+        print("Speed: fewer than two frames followed the measured keystroke")
+    return value
+
+
+def bench_lsp_ready(executable: Path, environment: dict, folder: Path, document: Path,
+                    server: Path) -> tuple[dict, dict]:
+    """lsp-diagnostics-ready; a trial not observed is repeated as bench_keys does."""
+    lsp = lsp_environment(environment, server, f"--diagnostics {LSP_DIAGNOSTICS}")
+    for attempt in range(BURST_ATTEMPTS):
+        try:
+            value = lsp_ready_trial(executable, lsp, folder, document, server.name)
+        except (TrialNotObserved, subprocess.TimeoutExpired) as unobserved:
+            print(f"Speed: {unobserved}; repeating the trial ({attempt + 1}/{BURST_ATTEMPTS})")
+            continue
+        return {LSP_READY_BENCH: value}, {}
+    print(f"Speed: no trial was observed in {BURST_ATTEMPTS} attempts;"
+          f" this trial of {LSP_READY_BENCH} is missing")
+    return {LSP_READY_BENCH: None}, {}
 
 
 def bench_giant_single(executable: Path, environment: dict, folder: Path,
@@ -1501,7 +1678,8 @@ def judged_samples(measured: dict) -> int | None:
 def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
                 document: Path | None, palette: Path | None, long_line: Path | None = None,
                 giant: Path | None = None, grid: bool = True, preview: Path | None = None,
-                cpp: Path | None = None, large_files: dict | None = None):
+                cpp: Path | None = None, large_files: dict | None = None,
+                server: Path | None = None):
     """Only the required stimulus groups; a shared trial keeps its original stimulus (#272)."""
     if any(name in names for name in ("startup-first-frame", "startup-window-shown")):
         yield bench_startup(executable, environment, folder)
@@ -1523,6 +1701,10 @@ def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
         yield bench_preview_single(executable, environment, folder, preview)
     if CPP_BENCH in names:
         yield bench_cpp(executable, environment, folder, cpp)
+    if any(name in names for name in (LSP_SINGLE_BENCH, LSP_BURST_BENCH)):
+        yield bench_lsp_keys(executable, environment, folder, cpp, server)
+    if LSP_READY_BENCH in names:
+        yield bench_lsp_ready(executable, environment, folder, cpp, server)
     for bench, path in (large_files or {}).items():
         yield bench_large_file_async(executable, environment, folder, path, bench)
 
@@ -1541,7 +1723,10 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     # 1 行 16 MiB の文書も SHA-256 が違えば測らない（ADR 0138 決定 1）。
     giant = giant_line_document(folder) if any(name in names for name in GIANT_BENCHES) else None
     preview = preview_document(folder) if PREVIEW_BENCH in names else None
-    cpp = cpp_document(folder) if CPP_BENCH in names else None
+    lsp = any(name in names for name in LSP_BENCHES)
+    # LSP の 3 本も構文の色分けと同じ C++ の文書（#995 L1d）。替え玉は測る exe と同じ build から。
+    cpp = cpp_document(folder) if CPP_BENCH in names or lsp else None
+    server = language_server_of(build) if lsp else None
     # 512 MiB と 1 GiB の文書は大きいので、置き場を --large-folder で選べる（既定は out/speed）。
     large_files = {name: large_file_document(large_folder or folder, name)
                    for name in names if name in LARGE_FILE_BENCHES}
@@ -1557,7 +1742,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     for _ in range(repetitions):
         for values, parts in run_benches(executable, environment, folder, names, document, palette,
                                          long_line, giant, grid, preview, cpp,
-                                         large_files):
+                                         large_files, server):
             for name, value in values.items():
                 if name not in samples:
                     continue
@@ -1598,6 +1783,13 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     elif cpp is not None:
         record["document"] = {"path": cpp.name, "bytes": cpp.stat().st_size,
                               "lines": CPP_LINES, "sha256": CPP_SHA256}
+    if server is not None:
+        ready = LSP_READY_BENCH in names
+        record["languageServer"] = {
+            "executable": server.name, "sha256": file_sha256(server),
+            "argument": f"--diagnostics {LSP_DIAGNOSTICS}" if ready else "--silent",
+            "readyFrame": "the second frame_presented after the keystroke (approximation)"
+                          if ready else None}
     return record
 
 
@@ -1835,6 +2027,9 @@ def main() -> int:
         parser.error(f"{PREVIEW_BENCH} is recorded with --record only; it has no reference (#818)")
     if arguments.bench == CPP_BENCH and (arguments.adopt or arguments.check or arguments.values):
         parser.error(f"{CPP_BENCH} is recorded with --record only; it has no reference (#816)")
+    if arguments.bench in LSP_BENCHES and (arguments.adopt or arguments.check or arguments.values):
+        parser.error(f"{arguments.bench} is recorded with --record only; its reference is adopted"
+                     " by hide after the L1 trial (ADR 0161 decision 7, D60)")
     if arguments.bench in LARGE_FILE_BENCHES and (arguments.adopt or arguments.check
                                                   or arguments.values):
         parser.error(f"{arguments.bench} is recorded with --record only; it has no reference"
