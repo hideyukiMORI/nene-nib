@@ -1,6 +1,8 @@
 #include "EditorController.hpp"
 
+#include "DiagnosticCounts.hpp"
 #include "DiagnosticEdits.hpp"
+#include "DiagnosticNotice.hpp"
 #include "DocumentUri.hpp"
 #include "JsonNumber.hpp"
 #include "JsonValue.hpp"
@@ -12,6 +14,7 @@
 #include "LspNotification.hpp"
 #include "LspPosition.hpp"
 #include "LspPositionEncoding.hpp"
+#include "OperationGuide.hpp"
 #include "SentRevision.hpp"
 
 #include <algorithm>
@@ -339,5 +342,41 @@ void EditorController::place_diagnostics(AutosaveId tab, std::vector<core::Diagn
                  ? state_.with_diagnostics(std::move(diagnostics), version, count)
                  : state_.with_parked_diagnostics(position.value(), std::move(diagnostics), version,
                                                   count);
+}
+
+core::DiagnosticCounts EditorController::diagnostic_counts() const
+{
+    return core::diagnostic_counts(state_.diagnostics(), state_.diagnostics_count());
+}
+
+// 知らせの欄に出す診断の文の優先はこの 1 か所（ADR 0161 の決定 4 の追補）。ほかの知らせ
+// （command_message）とマクロの録画（`recording @a` を隠さない・R3-3）が勝つ。
+std::optional<core::DisplayText> EditorController::shown_diagnostic_message() const
+{
+    const auto &diagnostics = state_.diagnostics();
+    if (diagnostics.empty() || command_message().has_value() || recording_name().has_value())
+    {
+        return std::nullopt;
+    }
+    return core::diagnostic_notice(diagnostics, state_.selection().caret);
+}
+
+bool EditorController::diagnostic_message_shown() const
+{
+    return shown_diagnostic_message().has_value();
+}
+
+void EditorController::add_diagnostics(EditorFrame &result) const
+{
+    if (state_.diagnostics().empty())
+    {
+        return;
+    }
+    result.diagnostic_counts = diagnostic_counts();
+    result.diagnostic_message = shown_diagnostic_message();
+    if (result.diagnostic_message.has_value())
+    {
+        result.guide = core::operation_guide(core::GuideContext::hidden, result.mode);
+    }
 }
 } // namespace nenenib::application

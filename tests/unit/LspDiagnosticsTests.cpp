@@ -3,7 +3,9 @@
 // 写しを当てる。位置は ASCII・日本語・絵文字（UTF-16 の代理対）・CRLF・行と桁の外、上限は
 // 1,000 件、ずらしは編集の前・中・後ろ・境目。最後に固定 seed の性質の試験を 1 本流す。
 #include "Diagnostic.hpp"
+#include "DiagnosticCounts.hpp"
 #include "DiagnosticEdits.hpp"
+#include "DiagnosticNotice.hpp"
 #include "DiagnosticSeverity.hpp"
 #include "DiagnosticSpan.hpp"
 #include "DiagnosticsCount.hpp"
@@ -16,6 +18,8 @@
 #include "LspPosition.hpp"
 #include "LspPositionEncoding.hpp"
 #include "LspRange.hpp"
+#include "LspShowMessage.hpp"
+#include "NoticeLine.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "PublishedDiagnostics.hpp"
@@ -30,6 +34,7 @@
 #include <expected>
 #include <optional>
 #include <random>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -447,6 +452,100 @@ void verify_shift_property()
     expect(broken == 0, "shifted diagnostics stay inside the text, keep their order, cover the "
                         "same text as before the edit, and those away from the edit survive");
 }
+// 決定 4・5（L1c）: 外から来た文を知らせの 1 行にする 1 本。改行の前まで・制御文字は空白・
+// 256 バイトを code point の境目で切る・空は値なし。
+void verify_notice_line()
+{
+    const auto shown = [](std::string_view text)
+    {
+        const auto line = core::notice_line(text);
+        return line.has_value() ? std::string{line.value().text()} : std::string{"<none>"};
+    };
+    expect(shown("bad\nmore") == "bad" && shown("a\rb") == "a",
+           "a notice keeps the text before the first line break");
+    expect(shown("a\tb\x7f") == "a b ", "control characters in a notice become spaces");
+    expect(shown("") == "<none>" && shown("\nx") == "<none>", "an empty notice is not shown");
+    std::string wide;
+    for (std::size_t index = 0; index < 100; ++index)
+    {
+        wide += "\xE3\x81\x82";
+    }
+    const std::string cut = shown(wide);
+    expect(cut.size() == 255 && cut == wide.substr(0, 255),
+           "a notice over 256 bytes is cut at the last code point boundary within 256 bytes");
+    expect(shown(std::string(300, 'x')) == std::string(256, 'x'),
+           "an ASCII notice is cut at exactly 256 bytes");
+    expect(shown("\xFF") == "<none>", "a notice that is not UTF-8 is not shown");
+}
+
+// 決定 4: キャレットの上の診断の文。区間の中（空の区間はその位置）で、重いものが勝つ。
+void verify_caret_notice()
+{
+    const std::vector<Diagnostic> diagnostics{
+        Diagnostic{OffsetRange{Offset{0}, Offset{3}}, DiagnosticSeverity::warning, "w"},
+        Diagnostic{OffsetRange{Offset{2}, Offset{6}}, DiagnosticSeverity::error, "e\nmore"},
+        Diagnostic{OffsetRange{Offset{8}, Offset{8}}, DiagnosticSeverity::hint, "h"},
+    };
+    const auto at = [&diagnostics](std::size_t caret)
+    {
+        const auto notice = core::diagnostic_notice(diagnostics, Offset{caret});
+        return notice.has_value() ? std::string{notice.value().text()} : std::string{"<none>"};
+    };
+    expect(at(0) == "w" && at(1) == "w", "the caret inside a warning shows its message");
+    expect(at(2) == "e" && at(5) == "e", "the heavier diagnostic wins where they overlap");
+    expect(at(6) == "<none>" && at(7) == "<none>", "the end of a range is outside it");
+    expect(at(8) == "h", "an empty range shows its message when the caret is at it");
+    expect(core::diagnostic_notice({}, Offset{0}) == std::nullopt,
+           "no diagnostics show no message");
+}
+
+// 決定 5: `window/showMessage` は Error と Warning だけ 1 行の知らせ。Info・Log・logMessage
+// は捨てる。
+void verify_show_message()
+{
+    const auto notice = [](std::string_view method, std::string_view params)
+    {
+        const auto parsed = core::parse_json(params);
+        const core::LspNotification notification{.method = std::string{method},
+                                                 .params = parsed.value_or(JsonValue{})};
+        const auto shown = core::lsp_shown_notice(notification);
+        return shown.has_value() ? std::string{shown.value().text()} : std::string{"<none>"};
+    };
+    const auto show = core::lsp_show_message_method;
+    expect(notice(show, R"({"type":1,"message":"boom\nstack"})") == "boom" &&
+               notice(show, R"({"type":2,"message":"careful"})") == "careful",
+           "an error or warning showMessage becomes a one-line notice");
+    expect(notice(show, R"({"type":3,"message":"info"})") == "<none>" &&
+               notice(show, R"({"type":4,"message":"log"})") == "<none>",
+           "info and log showMessage are dropped");
+    expect(notice(core::lsp_log_message_method, R"({"type":1,"message":"log"})") == "<none>",
+           "logMessage is dropped");
+    expect(notice(show, R"({"type":1})") == "<none>" &&
+               notice(show, R"({"message":"m"})") == "<none>" &&
+               notice(show, R"({"type":"1","message":"m"})") == "<none>",
+           "a showMessage without a numeric type or a message is dropped");
+    expect(notice(show, R"({"type":1,"message":")" + std::string(300, 'x') + "\"}") ==
+               std::string(256, 'x'),
+           "a long showMessage is cut to 256 bytes");
+}
+
+// 決定 4: 件数は error と warning だけを数え、打ち切りを運ぶ。
+void verify_counts()
+{
+    const std::vector<Diagnostic> diagnostics{
+        Diagnostic{OffsetRange{Offset{0}, Offset{1}}, DiagnosticSeverity::error, "e"},
+        Diagnostic{OffsetRange{Offset{0}, Offset{1}}, DiagnosticSeverity::warning, "w"},
+        Diagnostic{OffsetRange{Offset{0}, Offset{1}}, DiagnosticSeverity::error, "e"},
+        Diagnostic{OffsetRange{Offset{0}, Offset{1}}, DiagnosticSeverity::information, "i"},
+        Diagnostic{OffsetRange{Offset{0}, Offset{1}}, DiagnosticSeverity::hint, "h"},
+    };
+    expect(core::diagnostic_counts(diagnostics, core::DiagnosticsCount::truncated) ==
+               core::DiagnosticCounts{2, 1, core::DiagnosticsCount::truncated},
+           "information and hint are not counted and the truncation is carried");
+    expect(!core::counted(core::diagnostic_counts(std::span(diagnostics).subspan(3),
+                                                  core::DiagnosticsCount::complete)),
+           "only information and hint do not show the count");
+}
 } // namespace
 
 void verify_lsp_diagnostics_scope()
@@ -459,5 +558,9 @@ void verify_lsp_diagnostics_scope()
     verify_shifts();
     verify_spans();
     verify_shift_property();
+    verify_notice_line();
+    verify_caret_notice();
+    verify_show_message();
+    verify_counts();
 }
 } // namespace nenenib::tests

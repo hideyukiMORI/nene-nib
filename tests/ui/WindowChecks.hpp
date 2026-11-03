@@ -35,4 +35,5 @@ void verify_explorer_paint();
 void verify_pointer_presses();
 void verify_guide_key_width();
 void verify_print_render();
+void verify_diagnostic_waves();
 } // namespace nenenib::tests::ui

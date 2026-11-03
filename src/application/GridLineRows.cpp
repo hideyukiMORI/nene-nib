@@ -342,10 +342,10 @@ void GridLineRows::mark_row(std::size_t index, std::size_t last)
     }
     row.current_match =
         marks.current.has_value() ? span_of(index, marks.current.value()) : std::nullopt;
-    mark_spans(index);
+    mark_spans(index, last);
 }
 
-void GridLineRows::mark_spans(std::size_t index)
+void GridLineRows::mark_spans(std::size_t index, std::size_t last)
 {
     const auto &marks = source_.marks;
     auto &row = rows_.at(index);
@@ -357,9 +357,20 @@ void GridLineRows::mark_spans(std::size_t index)
             row.colors.push_back(GridColorSpan{span.value(), color.role});
         }
     }
+    // 行末の空の診断（grid_diagnosed_line が行末へ切り詰めた空の範囲）は、本文の表示と同じく行末の
+    // 外の 1 升に下線を引く（ADR 0161 の決定 4 の追補）。行の最後の画面行だけ。
+    const bool line_end = !stopped_ && row.row == last;
     for (const auto &diagnostic : marks.diagnostics)
     {
-        const auto span = span_of(index, diagnostic.range);
+        std::optional<GridCellSpan> span;
+        if (diagnostic.range.begin.value != diagnostic.range.end.value)
+        {
+            span = span_of(index, diagnostic.range);
+        }
+        else if (line_end)
+        {
+            span = GridCellSpan{row.starts.back(), row.starts.back() + 1};
+        }
         if (span.has_value())
         {
             row.diagnostics.push_back(GridDiagnosticSpan{span.value(), diagnostic.severity});

@@ -4,6 +4,8 @@
 #include "BodyTextPainter.hpp"
 #include "CaretShape.hpp"
 #include "ColoredRun.hpp"
+#include "DiagnosticColor.hpp"
+#include "DiagnosticWave.hpp"
 #include "GridRowCanvas.hpp"
 #include "GridRowView.hpp"
 #include "PaneRole.hpp"
@@ -12,6 +14,7 @@
 #include "SyntaxColor.hpp"
 #include "TextLayoutRequest.hpp"
 #include "Utf8.hpp"
+#include "WaveBand.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -61,6 +64,7 @@ template <typename Target, typename Layouts> class GridRowPainter final
         {
             draw_text(layout, canvas, rectangle(canvas, span));
         }
+        draw_diagnostics(row, canvas);
         draw_clauses(layout, row, canvas);
         if (row.current_match.has_value())
         {
@@ -232,6 +236,21 @@ template <typename Target, typename Layouts> class GridRowPainter final
         auto box = rectangle(canvas, span);
         box = D2D1::RectF(box.left + inset, box.top + inset, box.right - inset, box.bottom - inset);
         target_.DrawRectangle(box, brush_, canvas.stroke);
+    }
+
+    // 診断の波線（ADR 0161 の決定 4）。升の範囲の下端に本文と同じ draw_diagnostic_wave で引く。
+    // 行末の空の診断は application が行末の外の 1 升にしてある。
+    void draw_diagnostics(const application::GridRowView &row, const GridRowCanvas &canvas)
+    {
+        for (const auto &span : row.diagnostics)
+        {
+            color(core::diagnostic_color(canvas.body, canvas.palette, span.severity));
+            const auto box = rectangle(canvas, span.cells);
+            draw_diagnostic_wave(
+                target_, brush_,
+                WaveBand{box.left, box.right, canvas.area.bottom - canvas.caret_inset,
+                         canvas.wave_amplitude, canvas.wave_thickness, canvas.wave_period});
+        }
     }
 
     void underline(const GridRowCanvas &canvas, D2D1_RECT_F box, std::int32_t thickness)

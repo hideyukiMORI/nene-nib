@@ -5,6 +5,9 @@
 #include "ColoredRun.hpp"
 #include "ComposedLine.hpp"
 #include "DevicePixels.hpp"
+#include "DiagnosticColor.hpp"
+#include "DiagnosticCounts.hpp"
+#include "DiagnosticWave.hpp"
 #include "DisplayFormLabel.hpp"
 #include "DisplayLine.hpp"
 #include "EditMode.hpp"
@@ -59,6 +62,10 @@ constexpr std::int32_t block_radius_dips = 1;
 // IME の文節の下線（採用案 D15・ADR 0014 の決定 7）。注目文節は太く、他は細い。
 constexpr std::int32_t target_underline_dips = 2;
 constexpr std::int32_t other_underline_dips = 1;
+// 診断の波線（ADR 0161 の決定 4）。太さ 1 DIP・振幅 1 DIP（山から谷まで 2 DIP）・周期 4 DIP。
+constexpr std::int32_t wave_thickness_dips = 1;
+constexpr std::int32_t wave_amplitude_dips = 1;
+constexpr std::int32_t wave_period_dips = 4;
 
 // モード表示の文字と `recording @a` のあいだ（ADR 0046 の決定 8）。
 constexpr float recording_gap_dips = 12.0F;
@@ -1200,8 +1207,9 @@ void Direct2DRenderer::draw_passive_caret(IDWriteTextLayout *text, const core::L
 // IME の差し込み行（#839）の区間は、差し込みの後ろが差し込んだ code point の数だけずれている。
 // 本文の桁へ戻して差し込む前の行で写し、差し込んだ UTF-16 の数だけ後ろへずらす。差し込みを
 // またぐ区間は application が割ってある。
-std::vector<ColoredRun> Direct2DRenderer::colored_runs(const application::EditorFrame &frame,
-                                                       const application::LineView &line)
+template <typename Span>
+std::vector<DWRITE_TEXT_RANGE> Direct2DRenderer::span_ranges(const application::LineView &line,
+                                                             const std::vector<Span> &spans)
 {
     LineUtf16Evaluation positions(line.display.text);
     const auto at = line.composed.has_value()
@@ -1214,9 +1222,9 @@ std::vector<ColoredRun> Direct2DRenderer::colored_runs(const application::Editor
             ? utf16_at(line.composed.value().text, line.composed.value().insertion.end.value) -
                   utf16_at(line.composed.value().text, line.composed.value().insertion.begin.value)
             : 0;
-    std::vector<ColoredRun> colored;
-    colored.reserve(line.colors.size());
-    for (const auto &span : line.colors)
+    std::vector<DWRITE_TEXT_RANGE> ranges;
+    ranges.reserve(spans.size());
+    for (const auto &span : spans)
     {
         const bool after = span.begin.value >= at.value + count;
         const std::size_t back = after ? count : 0;
@@ -1226,10 +1234,24 @@ std::vector<ColoredRun> Direct2DRenderer::colored_runs(const application::Editor
                                                   core::Column{span.end.value - back}},
                               positions);
         range.startPosition += after ? inserted : 0;
-        if (range.length > 0)
+        ranges.push_back(range);
+    }
+    return ranges;
+}
+
+std::vector<ColoredRun> Direct2DRenderer::colored_runs(const application::EditorFrame &frame,
+                                                       const application::LineView &line)
+{
+    const auto ranges = span_ranges(line, line.colors);
+    std::vector<ColoredRun> colored;
+    colored.reserve(line.colors.size());
+    for (std::size_t index = 0; index < ranges.size(); ++index)
+    {
+        if (ranges.at(index).length > 0)
         {
             colored.push_back(
-                ColoredRun{range, to_color(core::syntax_color(frame.body, span.role))});
+                ColoredRun{ranges.at(index),
+                           to_color(core::syntax_color(frame.body, line.colors.at(index).role))});
         }
     }
     return colored;
@@ -1249,6 +1271,62 @@ void Direct2DRenderer::draw_line_text(const application::EditorFrame &frame,
     body_painter().draw_colored_body_text(
         text, area, BodyColors{colored, to_color(frame.palette.text)},
         [this](const D2D1_COLOR_F &color) { brush_->SetColor(color); });
+}
+
+WaveBand Direct2DRenderer::wave_band(float left, float right, float bottom) const
+{
+    const auto inset = static_cast<float>(core::to_pixels(caret_inset_dips, dpi_));
+    return WaveBand{left,
+                    right,
+                    static_cast<std::int32_t>(std::floor(bottom - inset)),
+                    core::to_pixels(wave_amplitude_dips, dpi_),
+                    core::to_pixels(wave_thickness_dips, dpi_),
+                    core::to_pixels(wave_period_dips, dpi_)};
+}
+
+void Direct2DRenderer::draw_line_diagnostics(const application::EditorFrame &frame,
+                                             IDWriteTextLayout *text, const core::LayoutRect &area,
+                                             const application::LineView &line)
+{
+    if (line.diagnostics.empty())
+    {
+        return;
+    }
+    const auto ranges = span_ranges(line, line.diagnostics);
+    for (std::size_t index = 0; index < ranges.size(); ++index)
+    {
+        const auto &range = ranges.at(index);
+        brush_->SetColor(to_color(core::diagnostic_color(frame.body, frame.palette,
+                                                         line.diagnostics.at(index).severity)));
+        if (range.length == 0)
+        {
+            draw_line_end_wave(text, area, range.startPosition);
+            continue;
+        }
+        for (const auto &run : runs_of(text, area, range))
+        {
+            draw_diagnostic_wave(*context_.Get(), brush_.Get(),
+                                 wave_band(run.left, run.left + run.width, run.top + run.height));
+        }
+    }
+}
+
+// 行末の外の区間（空の診断・ADR 0161 の決定 4）。行末の後ろに 1 桁ぶん（ブロックの最小の幅）。
+void Direct2DRenderer::draw_line_end_wave(IDWriteTextLayout *text, const core::LayoutRect &area,
+                                          UINT32 position)
+{
+    const auto point = text_layout_point(text, position, core::CaretAffinity::trailing);
+    if (!point)
+    {
+        text_failure_ = RenderFailure::directwrite;
+        return;
+    }
+    const float x = static_cast<float>(area.left) + point.value().x;
+    const float top = static_cast<float>(area.top) + point.value().y;
+    draw_diagnostic_wave(
+        *context_.Get(), brush_.Get(),
+        wave_band(x, x + static_cast<float>(core::to_pixels(block_minimum_dips, dpi_)),
+                  top + static_cast<float>(body_line_height_)));
 }
 
 void Direct2DRenderer::outline_block(
@@ -1348,6 +1426,7 @@ void Direct2DRenderer::draw_composed_line(const application::EditorFrame &frame,
     const UINT32 stop = utf16_at(shown.text, shown.insertion.end.value);
     draw_replaced(frame, text.Get(), area,
                   replaced_ranges(line.display, DWRITE_TEXT_RANGE{base, stop - base}));
+    draw_line_diagnostics(frame, text.Get(), area, line);
     draw_clauses(frame, text.Get(), area, base);
     draw_bar_caret(frame, text.Get(), area, positions.units_of(shown.cursor));
 }
@@ -1369,6 +1448,7 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame, co
     }
     draw_line_text(frame, text.Get(), area, line);
     draw_replaced(frame, text.Get(), area, replaced_ranges(line.display, DWRITE_TEXT_RANGE{0, 0}));
+    draw_line_diagnostics(frame, text.Get(), area, line);
     draw_current_match(frame, text.Get(), area, line);
     if (line.number != pane.caret.position.line)
     {
@@ -1509,6 +1589,9 @@ void Direct2DRenderer::draw_grid_row(GridPainter &painter, const application::Ed
         core::to_pixels(target_underline_dips, dpi_),
         core::to_pixels(other_underline_dips, dpi_),
         scaled(1.0F),
+        core::to_pixels(wave_amplitude_dips, dpi_),
+        core::to_pixels(wave_thickness_dips, dpi_),
+        core::to_pixels(wave_period_dips, dpi_),
         pane.role};
     context_->PushAxisAlignedClip(to_rect(body.content), D2D1_ANTIALIAS_MODE_ALIASED);
     const auto caret = painter.draw(row, canvas);
@@ -1734,6 +1817,13 @@ void Direct2DRenderer::draw_status_bar(const application::EditorFrame &frame,
         write_status(frame.status_items.at(index).text(), status_format_.Get(),
                      layout.items.at(index), frame.palette.muted);
     }
+    // 診断の件数（言語の右・ADR 0161 の決定 4）。0 件なら項目も幅も無く、枠も使わない。
+    const auto counted = core::diagnostic_count_item(frame.diagnostic_counts);
+    if (counted.has_value() && core::width_of(layout.diagnostics) > 0)
+    {
+        write_status(counted.value().text(), status_format_.Get(), layout.diagnostics,
+                     frame.palette.muted);
+    }
     // 表示形式の印（ADR 0140 の決定 3）。文字は core の表、右寄せは write_right の 1 本。
     const auto mark = core::display_form_label(frame.display);
     if (!mark.empty())
@@ -1766,16 +1856,19 @@ void Direct2DRenderer::draw_status_left(const application::EditorFrame &frame,
     draw_recording(frame, layout, mode);
 }
 
+// 知らせの 1 行。command_message か、キャレットの上の診断の文（ADR 0161 の決定 4）の値のある方を
+// 同じ描き方で書く。両方が値を持つことは無い（application の add_diagnostics が決める）。
 void Direct2DRenderer::draw_status_message(const application::EditorFrame &frame,
                                            const core::LayoutRect &area)
 {
-    if (!frame.command_message.has_value())
+    const auto &message =
+        frame.diagnostic_message.has_value() ? frame.diagnostic_message : frame.command_message;
+    if (!message.has_value())
     {
         return;
     }
     context_->PushAxisAlignedClip(to_rect(area), D2D1_ANTIALIAS_MODE_ALIASED);
-    write_status(frame.command_message.value().text(), command_format_.Get(), area,
-                 frame.palette.text);
+    write_status(message.value().text(), command_format_.Get(), area, frame.palette.text);
     context_->PopAxisAlignedClip();
 }
 
@@ -2248,7 +2341,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     const auto width = static_cast<std::int32_t>(size.width);
     const auto height = static_cast<std::int32_t>(size.height);
     const auto title = core::title_bar_layout(application::title_bar_input(frame, width, dpi_));
-    const auto status = core::status_bar_layout(width, height, dpi_);
+    const auto status = core::status_bar_layout(width, height, dpi_, frame.diagnostic_counts);
     // 面が出ていれば本文の枠は面の幅だけ右へ縮めた client から求める（ADR 0162 の決定 2・
     // ADR 0148 の 1 本はそのまま）。面が消えていれば body は client のまま。
     const auto explorer =
