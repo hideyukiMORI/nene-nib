@@ -72,7 +72,7 @@ src/app
 - 何か -> 合成ルート: 禁止
 
 OS ライブラリは `nenenib_system_link` でだけ結び、`eng/architecture.json` の `platformLibraries` に無ければ configure が落ちる:
-`adapters_win32` は kernel32 / shell32 / advapi32 / ole32、`ui_win32` は user32 / d2d1 / dwrite / dxgi / d3d11 / dcomp / dwmapi / imm32 / ole32 / shell32（ADR 0116）、`app` は user32。
+`adapters_win32` は kernel32 / shell32 / advapi32 / ole32、`ui_win32` は user32 / d2d1 / dwrite / dxgi / d3d11 / dcomp / dwmapi / imm32 / ole32 / shell32（ADR 0116）/ comdlg32 / prntvpt（ADR 0177）、`app` は user32。
 gdi32 はどこにも無い（ADR 0002）。
 
 ---
