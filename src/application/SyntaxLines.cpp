@@ -1,5 +1,6 @@
 #include "SyntaxLines.hpp"
 
+#include "ComposedSpans.hpp"
 #include "GiantLineWindow.hpp"
 #include "Lexer.hpp"
 #include "Utf8.hpp"
@@ -31,32 +32,6 @@ namespace
     }
     const std::string body = text.text_range(text.line_start(line), text.line_end(line));
     return core::lex_state(language, in, body);
-}
-
-// IME の差し込み行の区間（#839）。差し込みの手前は本文の桁のまま、後ろは差し込んだ code point の
-// 数だけずらし、差し込みをまたぐ区間は 2 つに割る（格子の split_colors と同じ理屈）。
-[[nodiscard]] std::vector<core::ColorSpan>
-composed_colors(const std::vector<core::ColorSpan> &spans, core::Column at, std::size_t count)
-{
-    std::vector<core::ColorSpan> result;
-    result.reserve(spans.size() + 1);
-    const auto moved = [count](core::Column column) { return core::Column{column.value + count}; };
-    for (const auto &span : spans)
-    {
-        if (span.end.value <= at.value)
-        {
-            result.push_back(span);
-            continue;
-        }
-        if (span.begin.value < at.value)
-        {
-            result.push_back(core::ColorSpan{span.begin, at, span.role});
-            result.push_back(core::ColorSpan{moved(at), moved(span.end), span.role});
-            continue;
-        }
-        result.push_back(core::ColorSpan{moved(span.begin), moved(span.end), span.role});
-    }
-    return result;
 }
 } // namespace
 
@@ -100,9 +75,9 @@ std::optional<core::LexState> colored_line(core::Language language,
     }
     auto result = core::lex_line(language, in.value(), view.text);
     view.colors = view.composed.has_value()
-                      ? composed_colors(result.spans,
-                                        composed_source_column(view.display, view.composed.value()),
-                                        view.composed.value().inserted_columns)
+                      ? composed_spans(result.spans,
+                                       composed_source_column(view.display, view.composed.value()),
+                                       view.composed.value().inserted_columns)
                       : std::move(result.spans);
     return result.out;
 }

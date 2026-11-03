@@ -16,6 +16,7 @@ L0（ADR 0160）で port と JSON-RPC と設定が揃う。最初に見せる機
 2. **診断は文書の値。** `DocumentState` に `std::vector<core::Diagnostic> diagnostics`（`Diagnostic{OffsetRange range; DiagnosticSeverity severity /* error warning information hint */; std::string message;}`・公開 aggregate・比較は非メンバー）と `std::uint64_t diagnostics_version`（届いたときの `version`）。`publishDiagnostics` の position（`line` と `character`・`positionEncoding` が `utf-16` なら UTF-16 の単位）は core の純関数 `lsp_range_to_offsets(text, range, encoding)` で本文の offset に写す（行は改行の索引・桁は `Utf16` の 1 本・行や桁が本文の外なら切り詰める）。1 文書の診断は **1,000 件まで**（超えた分は捨てて件数に `+` を付ける・限界）。
 
 3. **編集で位置をずらす 1 本。** 新しい診断が届くまで、古い診断は編集で位置をずらして見せる（マークと同じ `EditAdjust` の規則・ADR 0152・編集の範囲の中の診断は消す）。ずらすのは `replace` の 1 か所（`forget_syntax_before` と同じ所）。届いた診断の `version` が今の `revision()` より古ければ、届いた後の編集でずらしてから置く（サーバーは古い版の位置で返す）。`version` が今より新しいことは無い。
+   - 追補（#1210）: 編集で診断をずらし `didChange` の変更を積むのは `language_server_edit` の 1 本で、本文を置く 3 か所（`replace`・undo・redo）が本文を置く前に呼ぶ（undo / redo は `replace` を通らないため）。
 
 4. **見せ方は下線と件数。** `LineView` に `std::vector<core::DiagnosticSpan> diagnostics`（`DiagnosticSpan{Column begin; Column end; DiagnosticSeverity severity;}`・`colors` と同じ桁・昇順・重なりは重い方だけ）を 1 欄足し、frame を作る所が見えている行の診断だけ写す（`colors` と同じ道・格子の画面行も `GridLineRows` の写し）。renderer は IME の `underline_runs` の道で **波線**（error は `SyntaxPalette.error`・warning は `.warning`・information と hint は `muted`・太さ 1 DIP・振幅 1 DIP・色のトークンは足さない）。ステータスバーの右端に 5 つ目の項目「E2 W1」（件数が 0 なら項目を出さず幅も取らない・枠は `write_status` の保持に 1 枠足して最大 12・録画と排他なので録画時は 9・ADR 0154 の形）。キャレットの行の診断の文は、キャレットが診断の区間の上にあるときだけ知らせの欄に出す（ほかの知らせがあればそちら・frame から作る値で状態に積まない・256 バイトで切る）。
 
@@ -36,7 +37,7 @@ L0（ADR 0160）で port と JSON-RPC と設定が揃う。最初に見せる機
 ## 強制
 
 - 診断の位置の写しとずらしが core の純関数 1 本ずつ: **active**（`eng/symbols.py`・契約）。#995 の core の段で `lsp_range_to_offsets` と `lsp_published_diagnostics`（`LspDiagnostics.hpp`）・`diagnostics_adjusted` と `diagnostic_spans`（`DiagnosticEdits.hpp`）を足し、契約 `nib_tests --lsp-diagnostics`（既定実行にも載る・固定 seed の性質の試験を含む）が守る。
-- off のときの port の呼び出し 0 回: **planned**（`verify_quiet_paths` の欄・L1 の PR で active）。
+- off のときの port の呼び出し 0 回: **active**（#1210・`nib_tests --history` の `verify_quiet_paths` が既定の設定（off）で起動・開く・切り替え・保存・打鍵の後に port の呼ばれた回数 0 を見る。`--language-server` の `verify_quiet_when_off` が off の打鍵・合図・tick で 0 回、`verify_did_close` が on でも開いた文書の間の切り替えと保存で 0 通を見る）。
 - off の 8 本に退行なし: **active**（QLT-014）。
 - `lsp-` のベンチの基準値: **planned**（試用の後に hide が採用・D60）。
 

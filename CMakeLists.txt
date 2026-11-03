@@ -90,7 +90,9 @@ nenenib_target(nenenib_application application STATIC
     src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
     src/application/AutosavePlan.cpp src/application/PasteKind.cpp
     src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp src/application/DocumentDecoding.cpp
-    src/application/EditorControllerLanguageServer.cpp src/application/ServerCommand.cpp)
+    src/application/EditorControllerLanguageServer.cpp src/application/ServerCommand.cpp
+    src/application/EditorControllerLanguageDocuments.cpp src/application/DocumentUri.cpp
+    src/application/DiagnosticLines.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
 nenenib_target(nib_tests unit_tests EXECUTABLE

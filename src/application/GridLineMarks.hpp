@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GridColorRange.hpp"
+#include "GridDiagnosticRange.hpp"
 #include "OffsetRange.hpp"
 
 #include <cstddef>
@@ -21,5 +22,7 @@ struct GridLineMarks
     // 構文の色の区間（#839・ADR 0156 の追補）。字句器を持たない言語・`:syntax
     // off`・巨大な行では空。
     std::vector<GridColorRange> colors{};
+    // 診断の下線の区間（ADR 0161 の決定 4）。文書に診断が無い・巨大な行では空。
+    std::vector<GridDiagnosticRange> diagnostics{};
 };
 } // namespace nenenib::application

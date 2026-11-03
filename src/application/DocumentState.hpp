@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CaretAffinity.hpp"
+#include "Diagnostic.hpp"
+#include "DiagnosticsCount.hpp"
 #include "DisplayForm.hpp"
 #include "DisplayInquiry.hpp"
 #include "Document.hpp"
@@ -14,7 +16,9 @@
 #include "VimMarks.hpp"
 #include "VimWantedColumn.hpp"
 
+#include <cstdint>
 #include <optional>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -49,5 +53,12 @@ struct DocumentState
     // 構文の色の入れ切り（ADR 0156 の追補・#829）。言語と同じく文書ごとの値で、設定にもタブの一覧
     // にも入れない。開いた文書・まだ読んでいない文書を読んだ束・新しいタブは true。
     bool syntax_enabled = true;
+    // 言語サーバーの診断（ADR 0161 の決定 2・3）。文書の値で、脇に置いても保つ。diagnostics
+    // は本文の 位置で、編集でずらすのは controller の編集の 1 本（replace・undo・redo）だけ。
+    // diagnostics_version は置いた診断が届いたときの版、diagnostics_count は上限で打ち切ったか
+    // （件数に `+` を付ける・決定 2）。開いた文書・新しいタブは空。
+    std::vector<core::Diagnostic> diagnostics{};
+    std::uint64_t diagnostics_version = 0;
+    core::DiagnosticsCount diagnostics_count = core::DiagnosticsCount::complete;
 };
 } // namespace nenenib::application

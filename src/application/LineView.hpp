@@ -2,6 +2,7 @@
 
 #include "ColorSpan.hpp"
 #include "ComposedLine.hpp"
+#include "DiagnosticSpan.hpp"
 #include "DisplayLine.hpp"
 #include "LineNumber.hpp"
 #include "LineWindow.hpp"
@@ -42,6 +43,10 @@ struct LineView
     // 字句器を持たない言語・巨大な行の窓では空。IME の差し込み行（composed）は、差し込みの後ろの
     // 区間を差し込んだ code point の数だけずらしてあり、差し込みの範囲には区間が無い（#839）。
     std::vector<core::ColorSpan> colors{};
+    // 診断の下線の区間（ADR 0161 の決定 4）。桁は colors と同じ本文の桁で、昇順で重ならない（重なる
+    // 所は重い方だけ）。文書に診断が無い・巨大な行の窓では空。IME の差し込み行は colors と同じく
+    // 差し込みの後ろをずらし、差し込みの範囲には区間が無い。
+    std::vector<core::DiagnosticSpan> diagnostics{};
 };
 
 [[nodiscard]] inline std::string_view presented_text(const LineView &line) noexcept
