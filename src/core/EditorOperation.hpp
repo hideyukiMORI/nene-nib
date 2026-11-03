@@ -49,6 +49,8 @@ enum class EditorOperation : std::uint8_t
     replace,
     go_to_line,
     // 全面の Markdown プレビュー（ADR 0155 の改訂 16）。鍵なしで F1 の一覧から。
-    preview_full
+    preview_full,
+    // 印刷（ADR 0177 の決定 1）。鍵は無く、F1 の一覧と Vim の `:hardcopy` から。
+    print
 };
 } // namespace nenenib::core

@@ -897,6 +897,31 @@ window_command(std::string_view text)
     return result;
 }
 
+// `:ha[rdcopy]`（ADR 0177 の決定 1・最短は Vim と同じ `ha`）。アクティブな文書の印刷の要求で、
+// 設定は変えない。引数（`> file.ps` の PostScript など）・`!`・範囲の形は unsupported_argument
+// （決定 9 の後続）。名前が当たらなければ値なし（ほかの命令として扱う）。
+constexpr std::string_view hardcopy_name = "hardcopy";
+constexpr std::size_t hardcopy_shortest = 2;
+
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+print_command(std::string_view text)
+{
+    const std::size_t range = leading(text, is_digit);
+    const std::size_t letters = leading(text.substr(range), is_letter);
+    if (!abbreviates(text.substr(range, letters), hardcopy_name, hardcopy_shortest))
+    {
+        return std::nullopt;
+    }
+    if (range > 0 || !trimmed(text.substr(range + letters)).empty())
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    ExResult result{std::nullopt, std::nullopt, std::nullopt,
+                    DisplayText::parse(hardcopy_name).value()};
+    result.print = ExPrintRequest::active_document;
+    return result;
+}
+
 // `:sy[ntax]`（最短は Vim と同じ `sy`）と引数 `on` `off` `?`・引数なし（ADR 0156 の追補・#829）。
 // 構文の色は文書の値で設定に載せないので settings は空。問いの文言は今の値を知る controller が
 // `syntax=on` / `syntax=off` に書き換える。ほかの引数（`enable` など）は E474、範囲の形は
@@ -1154,6 +1179,19 @@ document_command(std::string_view text)
     return result;
 }
 
+// 今の文書への命令のうち `:hardcopy` と保存・読み直しの命令（remaining_command の認知の複雑さを
+// 10 以内に保つための束ね・順は print_command → document_command のまま）。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+document_command_or_print(std::string_view text)
+{
+    auto print = print_command(text);
+    if (print.has_value())
+    {
+        return print;
+    }
+    return document_command(text);
+}
+
 // colorscheme と set のほか（Vim の強調の止め方とタブ・ファイルの命令）。どれにも当たらなければ
 // unknown_command。
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
@@ -1199,7 +1237,7 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     {
         return std::move(palette).value();
     }
-    auto document = document_command(text);
+    auto document = document_command_or_print(text);
     if (document.has_value())
     {
         return std::move(document).value();
@@ -1209,7 +1247,7 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
 // 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
-constexpr std::array<std::string_view, 42> fixed_candidates{"colorscheme",
+constexpr std::array<std::string_view, 43> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -1250,7 +1288,8 @@ constexpr std::array<std::string_view, 42> fixed_candidates{"colorscheme",
                                                             "set scrolloff=",
                                                             "preview full",
                                                             "preview side",
-                                                            "preview off"};
+                                                            "preview off",
+                                                            hardcopy_name};
 
 [[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
                                   std::string_view suffix = {})

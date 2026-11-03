@@ -122,7 +122,7 @@ constexpr std::array<ChordRow, 54> chord_rows{{
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
-constexpr std::array<ShownRow, 34> shown_rows{{
+constexpr std::array<ShownRow, 35> shown_rows{{
     {EditorOperation::open_file, "Ctrl+O", "Ctrl+Shift+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
@@ -163,6 +163,8 @@ constexpr std::array<ShownRow, 34> shown_rows{{
     {EditorOperation::go_to_line, "Ctrl+G", "", true, true},
     // 鍵なし。F1 の一覧からだけ（ADR 0155 の改訂 16）。
     {EditorOperation::preview_full, "", "", true, true},
+    // 鍵なし。F1 の一覧と Vim の `:hardcopy` から（ADR 0177 の決定 1）。
+    {EditorOperation::print, "", "", true, true},
 }};
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
@@ -332,7 +334,7 @@ void verify_operation_choices()
 {
     const auto ordinary = nenenib::core::operation_choices("", EditMode::ordinary);
     const auto vim = nenenib::core::operation_choices("", EditMode::vim);
-    expect(ordinary.size() == 34 && vim.size() == 32,
+    expect(ordinary.size() == 35 && vim.size() == 33,
            "an empty query lists every operation available in the mode");
     std::vector<Operation> in_order;
     for (const auto &text : nenenib::core::operation_texts)
@@ -398,6 +400,19 @@ void verify_date_time_choice()
                std::vector<Operation>{EditorOperation::insert_date_time},
            "F5 finds insert date and time");
 }
+
+// 印刷は鍵なしで F1 の一覧に両モードとも載る（ADR 0177 の決定 1・ADR 0078）。
+void verify_print_choice()
+{
+    expect(row_text(EditorOperation::print, EditMode::ordinary) ==
+                   "印刷|いまの文書をプリンタを選んで印刷します|" &&
+               row_text(EditorOperation::print, EditMode::vim) ==
+                   "印刷|いまの文書をプリンタを選んで印刷します|",
+           "the operation list shows print without a key in both modes");
+    expect(operations_of(nenenib::core::operation_choices("いんさつ", EditMode::vim)) ==
+               std::vector<Operation>{EditorOperation::print},
+           "the reading finds print");
+}
 } // namespace
 
 void verify_operations_scope()
@@ -409,5 +424,6 @@ void verify_operations_scope()
     verify_texts();
     verify_operation_choices();
     verify_date_time_choice();
+    verify_print_choice();
 }
 } // namespace nenenib::tests

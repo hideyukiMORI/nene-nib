@@ -21,7 +21,7 @@ namespace nenenib::core
 // 「Shift を見ていなかった今の振る舞いを保つ行」は Shift なしの行のすぐ後ろに置く。見せる鍵は
 // そのモードで最初に当たる行なので、一覧に見える鍵は Shift なしのまま（Vim の開くは
 // Ctrl+Shift+O）。
-inline constexpr std::array<OperationBinding, 49> operation_bindings{{
+inline constexpr std::array<OperationBinding, 50> operation_bindings{{
     {EditorOperation::open_file, OperationModes::ordinary, KeyChord{true, false, OperationKey::o}},
     // 通常モードでは Shift を見ていなかった今の振る舞いを保つ行で、Vim では開くの鍵（D71）。
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, true, OperationKey::o}},
@@ -103,6 +103,8 @@ inline constexpr std::array<OperationBinding, 49> operation_bindings{{
     {EditorOperation::go_to_line, OperationModes::vim, std::nullopt},
     // 全面の Markdown プレビュー（ADR 0155 の改訂 16）。鍵なしで F1 の一覧から。
     {EditorOperation::preview_full, OperationModes::both, std::nullopt},
+    // 印刷（ADR 0177 の決定 1）。鍵は無く F1 の一覧から（Ctrl+P は面の鍵・D71 の代替）。
+    {EditorOperation::print, OperationModes::both, std::nullopt},
 }};
 
 // 鍵とモード → 操作。表を上から見て、鍵が同じでモードに効く最初の行。値なしは「割り当てが無い」。

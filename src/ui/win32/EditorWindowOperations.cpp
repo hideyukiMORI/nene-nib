@@ -20,6 +20,7 @@
 #include "OpenDocumentFormatList.hpp"
 #include "OpenOperationList.hpp"
 #include "OperationTexts.hpp"
+#include "PrintDocument.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "SearchHop.hpp"
@@ -366,6 +367,7 @@ EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation op
         {core::EditorOperation::replace, &EditorWindow::run_replace},
         {core::EditorOperation::go_to_line, &EditorWindow::run_go_to_line},
         {core::EditorOperation::preview_full, &EditorWindow::run_preview_full},
+        {core::EditorOperation::print, &EditorWindow::run_print},
     }};
     static_assert(runners_in_order(runners),
                   "operation runners follow the order of EditorOperation and point to a function");
@@ -544,6 +546,13 @@ void EditorWindow::run_choose_encoding()
 void EditorWindow::run_choose_line_ending()
 {
     send(application::OpenDocumentFormatList{core::DocumentFormatKind::line_ending});
+}
+
+// 本文と字体を写して印刷の port を呼ぶか・知らせるかは controller の 1 か所が決める
+// （ADR 0177 の決定 1・2）。
+void EditorWindow::run_print()
+{
+    send(application::PrintDocument{});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

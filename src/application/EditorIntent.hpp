@@ -41,6 +41,7 @@
 #include "PointText.hpp"
 #include "PointTitleBar.hpp"
 #include "PreviewTick.hpp"
+#include "PrintDocument.hpp"
 #include "RefreshAppearance.hpp"
 #include "RestoreAutosave.hpp"
 #include "SaveDocument.hpp"
@@ -92,5 +93,5 @@ using EditorIntent = std::variant<
     SplitPane, SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick, TogglePreviewTask,
     ToggleExplorer, ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen,
     LanguageServerTick, MapTimeout, InsertDateTime, SelectDocumentFormat, OpenDocumentFormatList,
-    BeginFind, BeginGoToLine, BeginReplace, SetPreviewPlacement, PointPreview>;
+    BeginFind, BeginGoToLine, BeginReplace, SetPreviewPlacement, PointPreview, PrintDocument>;
 } // namespace nenenib::application
