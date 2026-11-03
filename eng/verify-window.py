@@ -2638,6 +2638,29 @@ def palette_look(window, frames: Path | None, name: str) -> dict:
             "ground": pixel(pixels, width, ground_x, ground_y)}
 
 
+def await_palette_closed(window, seconds: float = 8.0) -> bool:
+    """Capture until every palette row wears the body ground (await_ink's way): the palette closed.
+
+    Issue #1201: Enter follows the typed query, and on a loaded Debug build the look read after
+    PALETTE_SETTLE_SECONDS caught the palette still open on a partial query (two rows apart from the
+    saved ground). False at the deadline."""
+    client = rectangle(window, user.GetClientRect)
+    width, height = client[2] - client[0], client[3] - client[1]
+    dpi = user.GetDpiForWindow(window)
+    x = palette_probe_x(width, dpi)
+    ground_x, ground_y = body_ground_point(width, height, dpi)
+    deadline = time.monotonic() + seconds
+    while True:
+        pixels = capture(window, width, height)
+        ground = tuple(pixel(pixels, width, ground_x, ground_y))
+        if all(tuple(pixel(pixels, width, x, y)) == ground
+               for y in palette_rows(height, dpi, PALETTE_SCHEMES)):
+            return True
+        if time.monotonic() > deadline:
+            return False
+        time.sleep(0.1)
+
+
 def open_schemes(window) -> None:
     # 投げた WM_CHAR は入力の列（SendInput の鍵）より先に読まれるので、面が開いてから打つ。
     if not press_chord(window, VK_CONTROL, VK_P):
@@ -2692,7 +2715,9 @@ def drive_palette(window, appearance: str, frames: Path | None) -> dict:
     # Enter で確定すると面が閉じ、選んだ配色（開いた時点でプレビューされた最初の配色）が残る。
     open_schemes(window)
     press(window, VK_RETURN)
+    closed = await_palette_closed(window)
     steps["confirmed"] = palette_look(window, frames, "paletteConfirmed")
+    assert closed, f"Enter did not close the palette: {steps['confirmed']}"
     assert steps["confirmed"]["ground"] == first, \
         f"Enter did not keep the chosen scheme: {steps['confirmed']} (chosen {first})"
     return steps
