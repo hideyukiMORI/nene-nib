@@ -306,6 +306,8 @@ class EditorWindow final
     void run_choose_encoding();
     void run_choose_line_ending();
     void run_print();
+    void run_register_shell();
+    void run_unregister_shell();
     [[nodiscard]] bool keeps_block_key(core::EditorOperation operation) const noexcept;
     void scroll_tabs(std::int32_t delta);
     void zoom_wheel(std::int32_t delta);

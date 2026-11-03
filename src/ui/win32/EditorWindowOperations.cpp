@@ -22,6 +22,7 @@
 #include "OperationTexts.hpp"
 #include "PrintDialog.hpp"
 #include "PrintDocument.hpp"
+#include "RegisterShell.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "SearchHop.hpp"
@@ -36,6 +37,7 @@
 #include "TextEncoding.hpp"
 #include "ToggleBookmark.hpp"
 #include "ToggleExplorer.hpp"
+#include "UnregisterShell.hpp"
 #include "UnsavedTab.hpp"
 #include "VimSearchDirection.hpp"
 
@@ -387,6 +389,8 @@ EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation op
         {core::EditorOperation::go_to_line, &EditorWindow::run_go_to_line},
         {core::EditorOperation::preview_full, &EditorWindow::run_preview_full},
         {core::EditorOperation::print, &EditorWindow::run_print},
+        {core::EditorOperation::register_shell, &EditorWindow::run_register_shell},
+        {core::EditorOperation::unregister_shell, &EditorWindow::run_unregister_shell},
     }};
     static_assert(runners_in_order(runners),
                   "operation runners follow the order of EditorOperation and point to a function");
@@ -576,6 +580,18 @@ void EditorWindow::run_print()
     {
         send(std::move(intent).value());
     }
+}
+
+// エクスプローラーへの登録の 2 つ（ADR 0178 の決定 3）。書く・消す・知らせるは controller の
+// 1 か所が決める。
+void EditorWindow::run_register_shell()
+{
+    send(application::RegisterShell{});
+}
+
+void EditorWindow::run_unregister_shell()
+{
+    send(application::UnregisterShell{});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

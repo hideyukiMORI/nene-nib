@@ -51,6 +51,9 @@ enum class EditorOperation : std::uint8_t
     // 全面の Markdown プレビュー（ADR 0155 の改訂 16）。鍵なしで F1 の一覧から。
     preview_full,
     // 印刷（ADR 0177 の決定 1）。鍵は無く、F1 の一覧と Vim の `:hardcopy` から。
-    print
+    print,
+    // エクスプローラーへの登録の 2 つ（ADR 0178 の決定 3）。
+    register_shell,
+    unregister_shell
 };
 } // namespace nenenib::core
