@@ -200,6 +200,7 @@ CPP-013: core: concurrency symbol outside the worker adapter _Mtx_lock
 | strict up-to-date | 同 ruleset `strict_required_status_checks_policy: true` | 2026-09-15 |
 | force push / ブランチ削除の禁止 | 同 ruleset の `non_fast_forward` と `deletion` | 2026-09-15 |
 | squash のみ | リポジトリ設定 `allow_squash_merge` のみ true・`delete_branch_on_merge` true ＋ ruleset の `allowed_merge_methods` | 2026-09-15 |
+| squash ＋ まとめ枝の rebase | 2026-11-04 07:13 JST（hide の判断 2026-11-03・#1220・ADR 0021 追補）: ruleset `main` の `allowed_merge_methods` を `[squash, rebase]` に、リポジトリ設定 `allow_rebase_merge` を true に（`allow_merge_commit` は false のまま）。rebase はまとめ枝の `merge-pr.py --integration` だけが使う。変更前の ruleset は `D:/NeNeNib/outputs/20261104/ruleset-before.json` | 2026-11-04 |
 
 読み戻し: `gh api repos/hideyukiMORI/nene-nib/rulesets/23337476`（2026-09-15）。
 

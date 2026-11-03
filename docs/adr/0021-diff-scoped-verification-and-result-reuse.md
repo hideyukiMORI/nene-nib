@@ -30,3 +30,26 @@ ADR 0001 / 0003 / 0006 / 0011 / 0016 / 0019 と過去の日報・引き継ぎ・
 - 全件テストをローカルと CI の双方で繰り返す: 不変の入力を工程だけで測り直す。
 - 大規模な自動選定・キャッシュ基盤: この更新の範囲を超える。
 - 全検査を無効化する: 必要な退行確認と Git・検証記録の確認を失う。
+
+## 追補（2026-11-04・#1220・hide の判断 2026-11-03）: まとめ枝 — レビュー済みの PR を 1 本に積み、CI 1 回で rebase merge する
+
+### 文脈
+
+1 本ずつ「main の上に乗せ替え → CI（30〜45 分）→ squash」の形は、レビュー済みの PR が 17 本並ぶと CI だけで 10 時間を超え、1 日の実装より長い（2026-11-03 の実測・[日報](../reports/2026-11-03.md)）。hide の判断（2026-11-03 23:4x）: 「ブランチを新たに建ててまとめられるものをそこでマージして回す時間を少なくする。リポジトリの決まりをそろそろ緩めないと実装速度がどんどん遅くなる」。
+
+### 決定
+
+1. **まとめ枝は 1 本の PR で、1 PR = 1 commit。** 枝の名前は GIT-002 の形 `chore/<まとめ Issue>-integration-<yyyymmdd>`（CI の `validate-git.ps1` が head の枝の名前を見る）。レビュー済みの PR を列の順に `git merge --squash <その PR の head>` で積み、commit の件名は **元の PR の題**（GIT-003・Issue 番号つき）、本文は `Closes #N`（題の番号と同じ 1 つ）・`PR #K（head <sha>）を squash と同じ中身でまとめ枝 #<まとめ Issue> に積む。`・元の PR の commit の列（GitHub の squash の既定と同じ `* <message>`）。親の PR の上に積んだ子の PR は、親を積んだ後に子の head を積む（3-way merge が親の分を同じ変更として畳む）。衝突はまとめ枝で 1 回だけ解き、解き方は「両側の和」でなく**基の版に差し込む**（和型の末尾・操作の表の行・`NibTests.cpp` の件数・2026-11-03 の記録 §5.4）。
+2. **検証はまとめ枝で 1 回。** 元の PR ごとの独立レビューと検証記録は済んでいることが前提で、まとめ枝では「積んだ結果の木」を確かめる: 手元の Debug の `nib_tests` ＋ `NeNeNib` ＋ `nib_perf_probes` のビルド（警告 0）・`nib_tests` の既定実行・`python eng/conformance.py --build-dir build`・`python eng/symbols.py --build-dir build --require core application`・`eng/format-check.ps1`・衝突を解いた PR の契約の selector。CI は `check.yml` の 1 回（定義は変えない・`display_title` はまとめ枝の PR の番号と head）。元の PR の検証記録は ADR 0021 の 2 のとおり再利用し、まとめ枝の PR の本文には積んだ PR の列と衝突を解いた所と上の検証の結果を書く。
+3. **main へは rebase merge。** 正典の道具は `eng/merge-pr.py --integration`（別の道具を作らない・ARC-001）。確かめること: base が `main`・OPEN・ready・題が GIT-003 でまとめ Issue を指し本文の `Closes` はそれ 1 つ（1 本の PR と同じ検査）・**head の全 commit が GIT-003 の形で、本文に件名と同じ番号の `Closes #N` を持つ**・枝が main の先端を含む（`compare` の `behind_by == 0`。rebase merge が作り直す commit の木は CI が通した木と同じ）・ruleset の `allowed_merge_methods` に `rebase` がある・CI が緑（`run_ci` は 1 本の PR と同じ）。merge は `gh pr merge --rebase --match-head-commit <head>`。merge の後に `compare/<base>...<mergeCommit>` の commit の数が PR の commit の数と同じことを読み取り、積んだ元の PR（commit の本文の `PR #K`）を「main の commit <sha> として入った」のコメントで閉じる（Issue は commit の `Closes` で GitHub が閉じる・元の PR は head が main に無いので自動では閉じない）。
+4. **ruleset は `allowed_merge_methods: ["squash", "rebase"]`。** リポジトリの `allow_rebase_merge` も on（2026-11-04 07:13 JST に設計席が API で変更・hide の判断の実行・[gate-proofs](../quality/gate-proofs.md) に記録）。1 本の PR の merge の形（squash・PR ごとの CI）は変えない。merge queue・auto merge・全 PR 一律の required status check は置かない（ADR 0118）。GitHub UI からの merge まで機械強制しない（GIT-004 の planned のまま）。
+5. **緩めるのは「PR ごとの CI」だけ。** 保つのは「CI は merge される状態そのものを通した」（まとめ枝 = main の先端 ＋ 積んだ commit で、rebase merge は木を変えない）と「main の履歴は 1 commit = 1 Issue」の 2 つ。レビューの済んでいない PR・設計を変える PR（ADR の受理が要るもの）・速さの受理（D41）の要るものは、まとめ枝に積まない（1 本ずつ）。
+6. **道具の試験**は `tests/conformance/test_merge_pr.py`（`--integration` の受理と、rebase を許さない ruleset・GIT-003 でない commit・`Closes` の無い / 番号の違う commit・main より遅れた枝・commit の数の不一致・CI 失敗の拒否）。
+
+### 置き換える記述
+
+GIT-004 の「マージは squash のみ」→「1 本の PR は squash・まとめ枝は rebase」。ADR 0118 の「PR必須、squashのみ…は維持する」の squash は、この追補の rebase を含む。QUALITY_GATES の ruleset の記述も同じ。
+
+### 残るリスク
+
+rebase merge は GitHub が commit を作り直すので SHA が変わり committer は GitHub になる（squash でも同じ）。まとめ枝に積んだ後に元の PR へ push があっても道具は気づかない（積んだ head を commit の本文に書き、閉じるときのコメントで照合できる）。衝突の解き方の誤りは、まとめ枝の手元の検証と CI が受け止める。
