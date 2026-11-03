@@ -9,7 +9,7 @@ namespace nenenib::core
 {
 // 操作の名前・読み・短い説明の表（ADR 0078 の決定 5）。EditorOperation の順に全値を 1 回ずつ持つ
 // （OperationTexts.cpp の static_assert が守る）。鍵の表示名はここに書かず key_chord_label で作る。
-inline constexpr std::array<OperationText, 33> operation_texts{{
+inline constexpr std::array<OperationText, 34> operation_texts{{
     {EditorOperation::open_file, "ファイルを開く", "ふぁいるをひらく",
      "保存してあるファイルを選んで開きます"},
     {EditorOperation::save, "保存", "ほぞん", "いまのファイルに上書きします"},
@@ -68,6 +68,8 @@ inline constexpr std::array<OperationText, 33> operation_texts{{
     {EditorOperation::replace, "置換", "ちかん", "探した文字列を別の文字列に置き換えます"},
     {EditorOperation::go_to_line, "行へ移動", "ぎょうへいどう",
      "行番号（行:桁）を入れてそこへ移ります"},
+    {EditorOperation::preview_full, "Markdown プレビュー（全面）", "まーくだうんぷれびゅーぜんめん",
+     "本文の面の全部に Markdown のプレビューを出す・Esc で戻る"},
 }};
 
 // 操作の文字の行。switch ではなく表を引く。

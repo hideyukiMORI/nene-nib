@@ -6,6 +6,7 @@
 #include "DocumentState.hpp"
 #include "DocumentView.hpp"
 #include "EditMode.hpp"
+#include "EditorIntent.hpp"
 #include "EditorState.hpp"
 #include "FilePath.hpp"
 #include "LineNumber.hpp"
@@ -29,6 +30,9 @@
 // する。
 namespace nenenib::application::detail
 {
+// 使う人の操作ではない意図（裏の仕事と合図・窓の寸法・外観・帯の hover）。keeps_tab_walk と
+// begin_intent と `map` の待ちと、全面プレビューの振り分け（ADR 0155 の改訂 17）が共用する 1 本。
+[[nodiscard]] bool not_user_operation(const EditorIntent &intent) noexcept;
 [[nodiscard]] core::ScrollExtent scroll_extent_for(core::EditMode mode) noexcept;
 [[nodiscard]] std::string with_document_newlines(std::string_view utf8, std::string_view newline);
 [[nodiscard]] const core::SearchLine *previewed_line(const EditorState &state);
