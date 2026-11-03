@@ -103,6 +103,8 @@ void verify_json_property_scope();
 // の対応と位置）
 void verify_lsp_frames_scope();
 void verify_lsp_messages_scope();
+// LspDiagnosticsTests.cpp（#995・ADR 0161 の決定 2・3・4・8・診断の写しとずらしと行の区間）
+void verify_lsp_diagnostics_scope();
 // LanguageServerTests.cpp（#994・controller の配線と寿命・`:set lsp`・替え玉のサーバー）
 void verify_language_server_contracts();
 void verify_language_server_scope();

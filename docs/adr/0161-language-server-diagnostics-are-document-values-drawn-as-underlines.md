@@ -29,9 +29,13 @@ L0（ADR 0160）で port と JSON-RPC と設定が揃う。最初に見せる機
 
 9. **限界（L2 以降・別 ADR）。** 補完・hover・定義・code action・`relatedInformation`・`textDocument/didSave`・複数のサーバーの同時起動・診断の一覧の面（Ctrl+P の `!` など）・診断の間を跳ぶ鍵（`]d` `[d`）。
 
+## 追補（#1208・core の段の決め事・2026-11-03）
+
+決定 2 / 4 を core に置いたときの細部（設計席の判断・PR #1207）。`lsp_published_diagnostics` は `severity` が無い件を error として読み（LSP 3.17 は client に任せる・VS Code と同じ）、1〜4 の外の `severity`・`range` や `message` の欠けた件はその件だけ捨てて通知の全体は断らない。1,000 件の上限は残した件で数え、超えたら `PublishedDiagnostics.count` を `truncated` にする（件数の `+`）。`lsp_range_to_offsets` は行が本文の外の端を本文の末尾へ切り詰め、start も外なら末尾の空の区間（EOF の診断）として残す。`diagnostic_spans` は空の診断と改行のバイトだけに掛かる診断を行末（空の診断はその位置）の 1 桁にし、内容と改行をまたぐ診断は内容の上だけにする。`PublishedDiagnostics.version` は `version` の無い通知では値なしで、決定 2 の `diagnostics_version` と決定 3 のずらしへの写し方は L1b（application）が決める。
+
 ## 強制
 
-- 診断の位置の写しとずらしが core の純関数 1 本ずつ: **active**（`eng/symbols.py`・契約）。
+- 診断の位置の写しとずらしが core の純関数 1 本ずつ: **active**（`eng/symbols.py`・契約）。#995 の core の段で `lsp_range_to_offsets` と `lsp_published_diagnostics`（`LspDiagnostics.hpp`）・`diagnostics_adjusted` と `diagnostic_spans`（`DiagnosticEdits.hpp`）を足し、契約 `nib_tests --lsp-diagnostics`（既定実行にも載る・固定 seed の性質の試験を含む）が守る。
 - off のときの port の呼び出し 0 回: **planned**（`verify_quiet_paths` の欄・L1 の PR で active）。
 - off の 8 本に退行なし: **active**（QLT-014）。
 - `lsp-` のベンチの基準値: **planned**（試用の後に hide が採用・D60）。
