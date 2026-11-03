@@ -17,6 +17,7 @@
 #include "PrintPort.hpp"
 #include "SessionPort.hpp"
 #include "SettingsPort.hpp"
+#include "ShellRegistrationPort.hpp"
 #include "TextLayoutPort.hpp"
 #include "ThemePort.hpp"
 
@@ -54,5 +55,8 @@ struct EditorPorts
     ClockPort &wall_clock;
     // 印刷（ADR 0177 の決定 2）。意図 PrintDocument だけが呼ぶ。
     PrintPort &print;
+    // Windows のエクスプローラーへの登録（ADR 0178 の決定 1）。登録の 2 つの操作だけが呼び、起動と
+    // 静かな道では呼ばない（決定 4）。
+    ShellRegistrationPort &shell_registration;
 };
 } // namespace nenenib::application

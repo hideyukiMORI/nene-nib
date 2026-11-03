@@ -336,6 +336,9 @@ void verify_document_format_contracts();
 // PrintTests.cpp（ADR 0177・印刷の頁割りと PrintPort と :hardcopy）
 void verify_print_contracts();
 
+// ShellRegistrationTests.cpp（ADR 0178・エクスプローラーへの登録）
+void verify_shell_registration_contracts();
+
 // VimEngineTests.cpp
 void verify_vim_fixture(const VimFixture &fixture);
 void verify_vim_insert_undo_unit();

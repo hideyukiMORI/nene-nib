@@ -1,5 +1,6 @@
 #include "ScriptedDocumentReads.hpp"
 #include "ScriptedLanguageServer.hpp"
+#include "ScriptedShellRegistration.hpp"
 #include "ScriptedTextLayouts.hpp"
 // scope `--user-theme-selection` の単体テスト（ADR 0042 決定 2）。
 #include "Appearance.hpp"
@@ -248,17 +249,19 @@ void verify_theme_startup_notice()
     ScriptedBell bell;
     ScriptedClock wall_clock;
     ScriptedPrinter printer;
+    ScriptedShellRegistration shell_registration;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, pages};
     ScriptedLanguageServer language_server;
     const std::vector initial{app::OpenDocument{FilePath::parse("initial.txt").value()}};
-    EditorController controller{app::EditorPorts{appearance, clipboard, files, pages, settings,
-                                                 themes, session, history, folders, bookmarks,
-                                                 text_layouts, autosave, fonts, bell, markdown,
-                                                 reads, language_server, wall_clock, printer},
-                                initial};
+    EditorController controller{
+        app::EditorPorts{appearance,   clipboard,       files,      pages,   settings,
+                         themes,       session,         history,    folders, bookmarks,
+                         text_layouts, autosave,        fonts,      bell,    markdown,
+                         reads,        language_server, wall_clock, printer, shell_registration},
+        initial};
     auto frame = controller.frame();
     expect(frame.lines.front().text == "initial body", "initial document uses normal file load");
     expect(frame.command_message.value_or(fixed_text("none")).text() ==
@@ -270,11 +273,12 @@ void verify_theme_startup_notice()
     expect(!frame.command_message.has_value() && themes.reads() == 1,
            "user input clears notice without rereading themes");
     ScriptedSettings broken{SettingsReading{std::unexpect, app::SettingsFailure::malformed}};
-    EditorController unreadable{app::EditorPorts{appearance, clipboard, files, pages, broken,
-                                                 themes, session, history, folders, bookmarks,
-                                                 text_layouts, autosave, fonts, bell, markdown,
-                                                 reads, language_server, wall_clock, printer},
-                                initial};
+    EditorController unreadable{
+        app::EditorPorts{appearance,   clipboard,       files,      pages,   broken,
+                         themes,       session,         history,    folders, bookmarks,
+                         text_layouts, autosave,        fonts,      bell,    markdown,
+                         reads,        language_server, wall_clock, printer, shell_registration},
+        initial};
     expect(unreadable.frame().lines.front().text == "initial body" &&
                unreadable.frame().settings_failure == app::SettingsFailure::malformed,
            "failed settings do not prevent opening initial document");
