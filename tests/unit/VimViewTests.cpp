@@ -537,6 +537,7 @@ void verify_grid_rows_cursor_correct()
     expect(grid_top_and_column(unmargined) == GridPlace{10, 83},
            "#1142 grid Ctrl-f with so=0 is unchanged (the caret on the new top row)");
     verify_grid_rows_edges();
+}
 
 // INSERT の PgUp / PgDn が端で送れないとき、Vim の ins_pageup / ins_pagedown は onepage の FAIL で
 // ビープだけを返し start_arrow を呼ばない。回数の反復も `.` の記録も切らない（#1149・ADR 0028 の
