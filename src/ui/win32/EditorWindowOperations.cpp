@@ -19,6 +19,7 @@
 #include "OpenDocument.hpp"
 #include "OpenDocumentFormatList.hpp"
 #include "OpenOperationList.hpp"
+#include "OperationTexts.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "SearchHop.hpp"
@@ -36,6 +37,7 @@
 #include "UnsavedTab.hpp"
 #include "VimSearchDirection.hpp"
 
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <functional>
@@ -301,367 +303,247 @@ bool EditorWindow::confirm_unsaved_tabs(bool (EditorWindow::*confirm)())
     return window_ != nullptr;
 }
 
+namespace
+{
+// 操作の表の 1 行（ADR 0078 の追補 #1188）。行の型を足さず std::pair の別名で書く（CPP-011）。
+using OperationRunner = std::pair<core::EditorOperation, void (EditorWindow::*)()>;
+
+// 表の i 行目が i 番目の値を持ち、どの行も関数を指す（OperationTexts.cpp の texts_in_order と
+// 同じ形）。表の大きさは operation_texts.size() なので、行の書き忘れは {open_file, nullptr} で
+// 埋まってここが落とし、行が多すぎれば初期化子の数でコンパイルが落ちる。
+template <std::size_t Size>
+[[nodiscard]] consteval bool
+runners_in_order(const std::array<OperationRunner, Size> &rows) noexcept
+{
+    for (std::size_t index = 0; index < rows.size(); ++index)
+    {
+        if (std::to_underlying(rows[index].first) != index || rows[index].second == nullptr)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+} // namespace
+
+// 操作 → メンバ関数の表（ADR 0078 の追補 #1188）。行は EditorOperation の順。private の関数を指す
+// ので、表は EditorWindow の static メンバ関数の中に置く。操作を足すときは行を 1 つと小さな
+// メンバ関数を 1 つ足す。
+EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation operation) noexcept
+{
+    static constexpr std::array<OperationRunner, core::operation_texts.size()> runners{{
+        {core::EditorOperation::open_file, &EditorWindow::open_document},
+        {core::EditorOperation::save, &EditorWindow::save_document},
+        {core::EditorOperation::save_as, &EditorWindow::save_document_as},
+        {core::EditorOperation::new_tab, &EditorWindow::run_new_tab},
+        {core::EditorOperation::close_tab, &EditorWindow::run_close_tab},
+        {core::EditorOperation::recent_tab, &EditorWindow::run_recent_tab},
+        {core::EditorOperation::recent_tab_back, &EditorWindow::run_recent_tab_back},
+        {core::EditorOperation::list_files, &EditorWindow::run_list_files},
+        {core::EditorOperation::list_operations, &EditorWindow::run_list_operations},
+        {core::EditorOperation::toggle_bookmark, &EditorWindow::run_toggle_bookmark},
+        {core::EditorOperation::undo, &EditorWindow::run_undo},
+        {core::EditorOperation::redo, &EditorWindow::run_redo},
+        {core::EditorOperation::font_larger, &EditorWindow::run_font_larger},
+        {core::EditorOperation::font_smaller, &EditorWindow::run_font_smaller},
+        {core::EditorOperation::font_reset, &EditorWindow::run_font_reset},
+        {core::EditorOperation::toggle_mode, &EditorWindow::toggle_mode},
+        {core::EditorOperation::split_vertical, &EditorWindow::run_split_vertical},
+        {core::EditorOperation::split_horizontal, &EditorWindow::run_split_horizontal},
+        {core::EditorOperation::next_pane, &EditorWindow::run_next_pane},
+        {core::EditorOperation::close_pane, &EditorWindow::run_close_pane},
+        {core::EditorOperation::toggle_preview, &EditorWindow::run_toggle_preview},
+        {core::EditorOperation::paste_plain, &EditorWindow::run_paste_plain},
+        {core::EditorOperation::paste_html, &EditorWindow::run_paste_html},
+        {core::EditorOperation::toggle_explorer, &EditorWindow::run_toggle_explorer},
+        {core::EditorOperation::choose_explorer_root, &EditorWindow::choose_explorer_root},
+        {core::EditorOperation::insert_date_time, &EditorWindow::run_insert_date_time},
+        {core::EditorOperation::choose_encoding, &EditorWindow::run_choose_encoding},
+        {core::EditorOperation::choose_line_ending, &EditorWindow::run_choose_line_ending},
+        {core::EditorOperation::find, &EditorWindow::run_find},
+        {core::EditorOperation::find_next, &EditorWindow::run_find_next},
+        {core::EditorOperation::find_previous, &EditorWindow::run_find_previous},
+        {core::EditorOperation::replace, &EditorWindow::run_replace},
+        {core::EditorOperation::go_to_line, &EditorWindow::run_go_to_line},
+        {core::EditorOperation::preview_full, &EditorWindow::run_preview_full},
+    }};
+    static_assert(runners_in_order(runners),
+                  "operation runners follow the order of EditorOperation and point to a function");
+    return runners[std::to_underlying(operation)].second;
+}
+
 // 鍵と一覧が実行する唯一の口（ADR 0078 の決定 7）。中身は今ある ui の関数と意図をそのまま使い、
-// controller に操作ごとの分岐を書かない。日時の挿入で何を入れるか・入れずに知らせるかは controller
-// の 1 か所が決める（ADR 0175 の決定 3）。
+// controller に操作ごとの分岐を書かない。操作ごとの関数は runner_of の表が引く（追補 #1188）。
 void EditorWindow::run_operation(core::EditorOperation operation)
 {
-    switch (operation)
-    {
-    case core::EditorOperation::open_file:
-    case core::EditorOperation::save:
-    case core::EditorOperation::save_as:
-    case core::EditorOperation::insert_date_time:
-    case core::EditorOperation::choose_encoding:
-    case core::EditorOperation::choose_line_ending:
-        run_document_operation(operation);
-        return;
-    case core::EditorOperation::new_tab:
-    case core::EditorOperation::close_tab:
-    case core::EditorOperation::recent_tab:
-    case core::EditorOperation::recent_tab_back:
-        run_tab_operation(operation);
-        return;
-    case core::EditorOperation::list_files:
-    case core::EditorOperation::list_operations:
-    case core::EditorOperation::toggle_bookmark:
-    case core::EditorOperation::find:
-    case core::EditorOperation::find_next:
-    case core::EditorOperation::find_previous:
-    case core::EditorOperation::replace:
-    case core::EditorOperation::go_to_line:
-        run_sent_operation(operation);
-        return;
-    case core::EditorOperation::undo:
-    case core::EditorOperation::redo:
-    case core::EditorOperation::paste_plain:
-    case core::EditorOperation::paste_html:
-        run_edit_operation(operation);
-        return;
-    case core::EditorOperation::font_larger:
-        adjust_font(core::FontSizeAdjustment::increase);
-        return;
-    case core::EditorOperation::font_smaller:
-        adjust_font(core::FontSizeAdjustment::decrease);
-        return;
-    case core::EditorOperation::font_reset:
-        adjust_font(core::FontSizeAdjustment::reset);
-        return;
-    case core::EditorOperation::toggle_mode:
-        toggle_mode();
-        return;
-    case core::EditorOperation::split_vertical:
-    case core::EditorOperation::split_horizontal:
-    case core::EditorOperation::next_pane:
-    case core::EditorOperation::close_pane:
-    case core::EditorOperation::toggle_preview:
-    case core::EditorOperation::preview_full:
-    case core::EditorOperation::toggle_explorer:
-    case core::EditorOperation::choose_explorer_root:
-        run_pane_operation(operation);
-        return;
-    }
-    std::unreachable();
+    (this->*runner_of(operation))();
 }
 
-// タブの操作（ADR 0056 / 0058 / 0078）。タブの操作でない値は run_operation が先に扱うので、ここへは
-// 来ない。
-void EditorWindow::run_tab_operation(core::EditorOperation operation)
+// タブの操作（ADR 0056 / 0058 / 0078）。
+void EditorWindow::run_new_tab()
 {
-    switch (operation)
-    {
-    case core::EditorOperation::new_tab:
-        run_tab_command(core::TabCommand::open);
-        return;
-    case core::EditorOperation::close_tab:
-        run_tab_command(core::TabCommand::close);
-        return;
-    case core::EditorOperation::recent_tab:
-        walk_recent_tab(core::TabCommand::next);
-        return;
-    case core::EditorOperation::recent_tab_back:
-        walk_recent_tab(core::TabCommand::previous);
-        return;
-    case core::EditorOperation::open_file:
-    case core::EditorOperation::save:
-    case core::EditorOperation::save_as:
-    case core::EditorOperation::list_files:
-    case core::EditorOperation::list_operations:
-    case core::EditorOperation::toggle_bookmark:
-    case core::EditorOperation::undo:
-    case core::EditorOperation::redo:
-    case core::EditorOperation::font_larger:
-    case core::EditorOperation::font_smaller:
-    case core::EditorOperation::font_reset:
-    case core::EditorOperation::toggle_mode:
-    case core::EditorOperation::split_vertical:
-    case core::EditorOperation::split_horizontal:
-    case core::EditorOperation::next_pane:
-    case core::EditorOperation::close_pane:
-    case core::EditorOperation::toggle_preview:
-    case core::EditorOperation::paste_plain:
-    case core::EditorOperation::paste_html:
-    case core::EditorOperation::toggle_explorer:
-    case core::EditorOperation::choose_explorer_root:
-    case core::EditorOperation::insert_date_time:
-    case core::EditorOperation::choose_encoding:
-    case core::EditorOperation::choose_line_ending:
-    case core::EditorOperation::find:
-    case core::EditorOperation::find_next:
-    case core::EditorOperation::find_previous:
-    case core::EditorOperation::replace:
-    case core::EditorOperation::go_to_line:
-    case core::EditorOperation::preview_full:
-        return;
-    }
-    std::unreachable();
+    run_tab_command(core::TabCommand::open);
 }
 
-// 枠の操作（ADR 0148 の決定 6）。本文の行数と幅は deliver が配置の変わり目で送り直す
-// （follow_split）。枠の操作でない値は run_operation が先に扱うので、ここへは来ない。
-// 枠を閉じるのは操作中の枠（`:q` と `Ctrl-w c` と同じ向き・決定 5）で、1 枠ではどちらも何もしない。
-// プレビューの枠へは移れないので、プレビューだけを閉じる（ADR 0155）。Markdown のプレビューは枠に
-// 置くので、枠の操作の 1 本に並べる（ADR 0155 の決定 3）。エクスプローラーは本文の枠を縮める左の面
-// （ADR 0162 の決定 4・7）で、本文の行数と幅は deliver が面の出し入れの変わり目で送り直す
-// （follow_explorer）。全面の見せ方の遷移は controller の 1 本（ADR 0155 の改訂 16）で、Esc で前の
-// 見せ方へ戻る。
-void EditorWindow::run_pane_operation(core::EditorOperation operation)
+void EditorWindow::run_close_tab()
 {
-    switch (operation)
-    {
-    case core::EditorOperation::split_vertical:
-        send(application::SplitPane{core::SplitLayout::vertical});
-        return;
-    case core::EditorOperation::split_horizontal:
-        send(application::SplitPane{core::SplitLayout::horizontal});
-        return;
-    case core::EditorOperation::next_pane:
-        send(application::SwitchPane{});
-        return;
-    case core::EditorOperation::close_pane:
-        if (!previewing())
-        {
-            send(application::SwitchPane{});
-        }
-        send(application::ClosePane{});
-        return;
-    case core::EditorOperation::toggle_preview:
-        send(application::TogglePreview{});
-        return;
-    case core::EditorOperation::preview_full:
-        send(application::SetPreviewPlacement{application::PreviewPlacement::full});
-        return;
-    case core::EditorOperation::toggle_explorer:
-        send(application::ToggleExplorer{});
-        return;
-    case core::EditorOperation::choose_explorer_root:
-        choose_explorer_root();
-        return;
-    case core::EditorOperation::open_file:
-    case core::EditorOperation::save:
-    case core::EditorOperation::save_as:
-    case core::EditorOperation::new_tab:
-    case core::EditorOperation::close_tab:
-    case core::EditorOperation::recent_tab:
-    case core::EditorOperation::recent_tab_back:
-    case core::EditorOperation::list_files:
-    case core::EditorOperation::list_operations:
-    case core::EditorOperation::toggle_bookmark:
-    case core::EditorOperation::undo:
-    case core::EditorOperation::redo:
-    case core::EditorOperation::font_larger:
-    case core::EditorOperation::font_smaller:
-    case core::EditorOperation::font_reset:
-    case core::EditorOperation::toggle_mode:
-    case core::EditorOperation::paste_plain:
-    case core::EditorOperation::paste_html:
-    case core::EditorOperation::insert_date_time:
-    case core::EditorOperation::choose_encoding:
-    case core::EditorOperation::choose_line_ending:
-    case core::EditorOperation::find:
-    case core::EditorOperation::find_next:
-    case core::EditorOperation::find_previous:
-    case core::EditorOperation::replace:
-    case core::EditorOperation::go_to_line:
-        return;
-    }
-    std::unreachable();
+    run_tab_command(core::TabCommand::close);
+}
+
+void EditorWindow::run_recent_tab()
+{
+    walk_recent_tab(core::TabCommand::next);
+}
+
+void EditorWindow::run_recent_tab_back()
+{
+    walk_recent_tab(core::TabCommand::previous);
 }
 
 // 意図を 1 つ送るだけの操作（一覧・ブックマークと、検索・置換・行へ移動）。検索の 5 つは
 // どちらのモードで何をするかを controller が決める（Vim は `/` `:` `n` `N` の前置き・
-// ADR 0174 の決定 1・2）。置換の本体は #1046 の N1b が BeginReplace に書く。ほかの値は
-// run_operation が先に扱うので、ここへは来ない。
-void EditorWindow::run_sent_operation(core::EditorOperation operation)
+// ADR 0174 の決定 1・2）。置換の本体は #1046 の N1b が BeginReplace に書く。
+void EditorWindow::run_list_files()
 {
-    switch (operation)
-    {
-    case core::EditorOperation::list_files:
-        send(application::OpenCommandPalette{});
-        return;
-    case core::EditorOperation::list_operations:
-        send(application::OpenOperationList{});
-        return;
-    case core::EditorOperation::toggle_bookmark:
-        send(application::ToggleBookmark{});
-        return;
-    case core::EditorOperation::find:
-        send(application::BeginFind{});
-        return;
-    case core::EditorOperation::find_next:
-        send(application::SearchHop{core::VimSearchDirection::forward});
-        return;
-    case core::EditorOperation::find_previous:
-        send(application::SearchHop{core::VimSearchDirection::backward});
-        return;
-    case core::EditorOperation::replace:
-        send(application::BeginReplace{});
-        return;
-    case core::EditorOperation::go_to_line:
-        send(application::BeginGoToLine{});
-        return;
-    case core::EditorOperation::open_file:
-    case core::EditorOperation::save:
-    case core::EditorOperation::save_as:
-    case core::EditorOperation::new_tab:
-    case core::EditorOperation::close_tab:
-    case core::EditorOperation::recent_tab:
-    case core::EditorOperation::recent_tab_back:
-    case core::EditorOperation::undo:
-    case core::EditorOperation::redo:
-    case core::EditorOperation::font_larger:
-    case core::EditorOperation::font_smaller:
-    case core::EditorOperation::font_reset:
-    case core::EditorOperation::toggle_mode:
-    case core::EditorOperation::split_vertical:
-    case core::EditorOperation::split_horizontal:
-    case core::EditorOperation::next_pane:
-    case core::EditorOperation::close_pane:
-    case core::EditorOperation::toggle_preview:
-    case core::EditorOperation::preview_full:
-    case core::EditorOperation::paste_plain:
-    case core::EditorOperation::paste_html:
-    case core::EditorOperation::toggle_explorer:
-    case core::EditorOperation::choose_explorer_root:
-    case core::EditorOperation::insert_date_time:
-    case core::EditorOperation::choose_encoding:
-    case core::EditorOperation::choose_line_ending:
-        return;
-    }
-    std::unreachable();
+    send(application::OpenCommandPalette{});
+}
+
+void EditorWindow::run_list_operations()
+{
+    send(application::OpenOperationList{});
+}
+
+void EditorWindow::run_toggle_bookmark()
+{
+    send(application::ToggleBookmark{});
+}
+
+void EditorWindow::run_find()
+{
+    send(application::BeginFind{});
+}
+
+void EditorWindow::run_find_next()
+{
+    send(application::SearchHop{core::VimSearchDirection::forward});
+}
+
+void EditorWindow::run_find_previous()
+{
+    send(application::SearchHop{core::VimSearchDirection::backward});
+}
+
+void EditorWindow::run_replace()
+{
+    send(application::BeginReplace{});
+}
+
+void EditorWindow::run_go_to_line()
+{
+    send(application::BeginGoToLine{});
 }
 
 // 元に戻す・やり直すと貼り付けの 2 つ（ADR 0157 の決定 2・3）。貼り付けは Ctrl+V と同じ意図
 // ClipboardAction の値を変えるだけで、Vim の NORMAL / VISUAL で何もしないのは controller が決める。
-// 編集の操作でない値は run_operation が先に扱うので、ここへは来ない。
-void EditorWindow::run_edit_operation(core::EditorOperation operation)
+void EditorWindow::run_undo()
 {
-    switch (operation)
-    {
-    case core::EditorOperation::undo:
-        send_history(core::HistoryDirection::undo);
-        return;
-    case core::EditorOperation::redo:
-        send_history(core::HistoryDirection::redo);
-        return;
-    case core::EditorOperation::paste_plain:
-        send(application::ClipboardAction{application::ClipboardOperation::paste_plain});
-        return;
-    case core::EditorOperation::paste_html:
-        send(application::ClipboardAction{application::ClipboardOperation::paste_html});
-        return;
-    case core::EditorOperation::open_file:
-    case core::EditorOperation::save:
-    case core::EditorOperation::save_as:
-    case core::EditorOperation::new_tab:
-    case core::EditorOperation::close_tab:
-    case core::EditorOperation::recent_tab:
-    case core::EditorOperation::recent_tab_back:
-    case core::EditorOperation::list_files:
-    case core::EditorOperation::list_operations:
-    case core::EditorOperation::toggle_bookmark:
-    case core::EditorOperation::font_larger:
-    case core::EditorOperation::font_smaller:
-    case core::EditorOperation::font_reset:
-    case core::EditorOperation::toggle_mode:
-    case core::EditorOperation::split_vertical:
-    case core::EditorOperation::split_horizontal:
-    case core::EditorOperation::next_pane:
-    case core::EditorOperation::close_pane:
-    case core::EditorOperation::toggle_preview:
-    case core::EditorOperation::toggle_explorer:
-    case core::EditorOperation::choose_explorer_root:
-    case core::EditorOperation::insert_date_time:
-    case core::EditorOperation::choose_encoding:
-    case core::EditorOperation::choose_line_ending:
-    case core::EditorOperation::find:
-    case core::EditorOperation::find_next:
-    case core::EditorOperation::find_previous:
-    case core::EditorOperation::replace:
-    case core::EditorOperation::go_to_line:
-    case core::EditorOperation::preview_full:
-        return;
-    }
-    std::unreachable();
+    send_history(core::HistoryDirection::undo);
 }
 
-// 文書への操作（開く・保存・日時の挿入・保存の形）。文書への操作でない値は run_operation が先に
-// 扱うので、ここへは来ない。
-void EditorWindow::run_document_operation(core::EditorOperation operation)
+void EditorWindow::run_redo()
 {
-    switch (operation)
+    send_history(core::HistoryDirection::redo);
+}
+
+void EditorWindow::run_paste_plain()
+{
+    send(application::ClipboardAction{application::ClipboardOperation::paste_plain});
+}
+
+void EditorWindow::run_paste_html()
+{
+    send(application::ClipboardAction{application::ClipboardOperation::paste_html});
+}
+
+// 文字の大きさの 3 つ。変換中は送らないのは adjust_font が守る。
+void EditorWindow::run_font_larger()
+{
+    adjust_font(core::FontSizeAdjustment::increase);
+}
+
+void EditorWindow::run_font_smaller()
+{
+    adjust_font(core::FontSizeAdjustment::decrease);
+}
+
+void EditorWindow::run_font_reset()
+{
+    adjust_font(core::FontSizeAdjustment::reset);
+}
+
+// 枠の操作（ADR 0148 の決定 6）。本文の行数と幅は deliver が配置の変わり目で送り直す
+// （follow_split）。Markdown のプレビューは枠に置くので、枠の操作に並べる（ADR 0155 の決定 3）。
+// エクスプローラーは本文の枠を縮める左の面（ADR 0162 の決定 4・7）で、本文の行数と幅は deliver が
+// 面の出し入れの変わり目で送り直す（follow_explorer）。
+void EditorWindow::run_split_vertical()
+{
+    send(application::SplitPane{core::SplitLayout::vertical});
+}
+
+void EditorWindow::run_split_horizontal()
+{
+    send(application::SplitPane{core::SplitLayout::horizontal});
+}
+
+void EditorWindow::run_next_pane()
+{
+    send(application::SwitchPane{});
+}
+
+// 枠を閉じるのは操作中の枠（`:q` と `Ctrl-w c` と同じ向き・ADR 0148 の決定 5）で、1 枠ではどちらも
+// 何もしない。プレビューの枠へは移れないので、プレビューだけを閉じる（ADR 0155）。
+void EditorWindow::run_close_pane()
+{
+    if (!previewing())
     {
-    case core::EditorOperation::open_file:
-        open_document();
-        return;
-    case core::EditorOperation::save:
-        save_document();
-        return;
-    case core::EditorOperation::save_as:
-        save_document_as();
-        return;
-    case core::EditorOperation::insert_date_time:
-        // 何を入れるか・入れずに知らせるかは controller の 1 か所が決める（ADR 0175 の決定 3）。
-        send(application::InsertDateTime{});
-        return;
-    case core::EditorOperation::choose_encoding:
-        // 保存の形の面はステータスバーのクリックと同じ意図（ADR 0010 の追補 #1049 の決定 2）。
-        send(application::OpenDocumentFormatList{core::DocumentFormatKind::encoding});
-        return;
-    case core::EditorOperation::choose_line_ending:
-        send(application::OpenDocumentFormatList{core::DocumentFormatKind::line_ending});
-        return;
-    case core::EditorOperation::new_tab:
-    case core::EditorOperation::close_tab:
-    case core::EditorOperation::recent_tab:
-    case core::EditorOperation::recent_tab_back:
-    case core::EditorOperation::list_files:
-    case core::EditorOperation::list_operations:
-    case core::EditorOperation::toggle_bookmark:
-    case core::EditorOperation::undo:
-    case core::EditorOperation::redo:
-    case core::EditorOperation::font_larger:
-    case core::EditorOperation::font_smaller:
-    case core::EditorOperation::font_reset:
-    case core::EditorOperation::toggle_mode:
-    case core::EditorOperation::split_vertical:
-    case core::EditorOperation::split_horizontal:
-    case core::EditorOperation::next_pane:
-    case core::EditorOperation::close_pane:
-    case core::EditorOperation::toggle_preview:
-    case core::EditorOperation::paste_plain:
-    case core::EditorOperation::paste_html:
-    case core::EditorOperation::toggle_explorer:
-    case core::EditorOperation::choose_explorer_root:
-    case core::EditorOperation::find:
-    case core::EditorOperation::find_next:
-    case core::EditorOperation::find_previous:
-    case core::EditorOperation::replace:
-    case core::EditorOperation::go_to_line:
-    case core::EditorOperation::preview_full:
-        return;
+        send(application::SwitchPane{});
     }
-    std::unreachable();
+    send(application::ClosePane{});
+}
+
+void EditorWindow::run_toggle_preview()
+{
+    send(application::TogglePreview{});
+}
+
+// 全面の見せ方の遷移は controller の 1 本（ADR 0155 の改訂 16）で、Esc で前の見せ方へ戻る。
+void EditorWindow::run_preview_full()
+{
+    send(application::SetPreviewPlacement{application::PreviewPlacement::full});
+}
+
+void EditorWindow::run_toggle_explorer()
+{
+    send(application::ToggleExplorer{});
+}
+
+// 文書への操作。開く・保存は open_document / save_document / save_document_as を表が直に引く。
+// 日時の挿入で何を入れるか・入れずに知らせるかは controller の 1 か所が決める
+// （ADR 0175 の決定 3）。
+void EditorWindow::run_insert_date_time()
+{
+    send(application::InsertDateTime{});
+}
+
+// 保存の形の面はステータスバーのクリックと同じ意図（ADR 0010 の追補 #1049 の決定 2）。
+void EditorWindow::run_choose_encoding()
+{
+    send(application::OpenDocumentFormatList{core::DocumentFormatKind::encoding});
+}
+
+void EditorWindow::run_choose_line_ending()
+{
+    send(application::OpenDocumentFormatList{core::DocumentFormatKind::line_ending});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ
