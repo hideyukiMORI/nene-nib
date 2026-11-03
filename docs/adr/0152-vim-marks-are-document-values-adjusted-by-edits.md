@@ -115,3 +115,7 @@ Vim 9.1（`--not-a-term` の普通の起動・`getjumplist()`）の実測。
 - **viewport の fixture の揃え方。** oracle の probe は `call cursor(1, 1)` `clearjumps` `normal! m'` を viewport の位置を置く前に流す（1 行目の 1 項の列にしてから、ジャンプにならない `call cursor()` と `winrestview()` で置く）。Nib の再生も開いた（1 行目の 1 項の）後に `PlaceCaret` で置くので同じ列になる。#1116 の限界「viewport の fixture にジャンプの鍵を入れない」は外す（fixture `jumplist-open-viewport-` 8 件）。測定コードが変わったので全件（3085 件）を再生成し、値が変わったのは足した 8 件だけだった（既存の 3077 件は不変）。
 - 限界: `:e` と Ctrl+O で開いた文書は #1116 のまま `(1, 0)` の 1 項で始める。Vim の `:e` の新しいバッファは自分の項を持たない（列の項は前のバッファのもの）が、Nib の列は文書ごとで前の文書の項へは飛ばないので、開いた文書の中の見え方は `''` と `<C-o>` の行き先が 1 行目になる点だけが違い得る（今回の 4 つの道の外・変えていない）。
 - 限界: 一続きの鍵（fixture の再生・`press_vim_keys`）で窓の外へ飛んで窓の中へ戻る鍵（`<C-o><Tab>` `''''`）は、Vim が鍵ごとに先頭行を追従するのに対し、Nib は途中の追従を解かず元の先頭行のまま残る（viewport の fixture で先頭行が 1 と 6 で違った）。列の 1 項とは別の、鍵の列の中の追従の違いなので、この追補の fixture には入れない（別 Issue）。
+
+## 追補（2026-11-03・#999）: 行をまたぐ入れ子の深さ
+
+- `%` の走査は行を渡るたびに入れ子の深さを 0 に戻していた（`(\n(\n)\n)` の 1 行目の `%` が 3 行目へ着いた）。これは限界ではなく誤りで、Vim の `findmatchlimit` の `count` と同じく行をまたいでも深さを保つよう直した。走査は matchparen と共用の `matched_bracket` の 1 本（ADR 0164）。fixture `matching-pair-nested-lines-` 3 件（`%` `G%` `d%`）が oracle の実測で守る。

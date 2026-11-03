@@ -8,12 +8,37 @@
 #include <cstddef>
 #include <iterator>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <utility>
 #include <vector>
 
 namespace nenenib::application
 {
+std::vector<core::OffsetRange> color_span_bytes(std::string_view text,
+                                                std::span<const core::ColorSpan> colors)
+{
+    std::vector<core::OffsetRange> bytes;
+    bytes.reserve(colors.size());
+    std::size_t byte = 0;
+    std::size_t column = 1;
+    // 桁は昇順なので、行の先頭から 1 回だけ前へ歩いて写す（区間ごとに行頭へ戻らない）。
+    const auto byte_at = [&byte, &column, text](core::Column wanted)
+    {
+        for (; column < wanted.value && byte < text.size(); ++column)
+        {
+            byte = core::next_code_point(text, core::Offset{byte}).value;
+        }
+        return core::Offset{byte};
+    };
+    for (const auto &span : colors)
+    {
+        const auto begin = byte_at(span.begin);
+        bytes.push_back(core::OffsetRange{begin, byte_at(span.end)});
+    }
+    return bytes;
+}
+
 namespace
 {
 using Ranges = std::vector<core::OffsetRange>;
@@ -106,28 +131,18 @@ constexpr std::string_view bracket_bytes{"()[]{}"};
                              text.line_terminator_end(core::LineNumber{end})};
 }
 
-// 行の桁（code point の序数・行頭が 1）の、行の中のバイト位置。
-[[nodiscard]] std::size_t byte_of(std::string_view text, core::Column column)
-{
-    std::size_t byte = 0;
-    for (std::size_t at = 1; at < column.value && byte < text.size(); ++at)
-    {
-        byte = core::next_code_point(text, core::Offset{byte}).value;
-    }
-    return byte;
-}
-
 // 1 行の string / comment の区間を本文の位置で足す。roles は同じ順の役割。
 void add_excluded(const core::TextBuffer &text, const LineView &line, Ranges &ranges, Roles &roles)
 {
     const auto start = text.line_start(line.number).value;
-    for (const auto &span : line.colors)
+    const auto bytes = color_span_bytes(line.text, line.colors);
+    for (std::size_t index = 0; index < bytes.size(); ++index)
     {
-        if (excluded_role(span.role))
+        if (excluded_role(line.colors.at(index).role))
         {
-            ranges.push_back(core::OffsetRange{core::Offset{start + byte_of(line.text, span.begin)},
-                                               core::Offset{start + byte_of(line.text, span.end)}});
-            roles.push_back(span.role);
+            ranges.push_back(core::OffsetRange{core::Offset{start + bytes.at(index).begin.value},
+                                               core::Offset{start + bytes.at(index).end.value}});
+            roles.push_back(line.colors.at(index).role);
         }
     }
 }

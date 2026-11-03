@@ -3,6 +3,8 @@
 // 括弧の列で素朴な全文の走査と窓の中で一致する性質、application の frame の LineView::bracket の
 // 写し（INSERT と通常モードの直前・構文の区間の除外・見えていない相手は写さない）。時計・ファイル・
 // 乱数の種を読まない。
+#include "ColorSpan.hpp"
+#include "Column.hpp"
 #include "ComposeText.hpp"
 #include "Composition.hpp"
 #include "EditMode.hpp"
@@ -11,6 +13,7 @@
 #include "EditorFrame.hpp"
 #include "FilePath.hpp"
 #include "LineView.hpp"
+#include "MatchParen.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "OpenDocument.hpp"
@@ -18,13 +21,16 @@
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionSpan.hpp"
+#include "SyntaxRole.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
 #include "TextPosition.hpp"
+#include "Utf8.hpp"
 #include "VimMatchingPair.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -128,6 +134,84 @@ void verify_skipped()
     expect(core::matched_bracket(text, Offset{0}, whole(text), comment) == Offset{10} &&
                core::matched_bracket(text, Offset{10}, whole(text), comment) == Offset{0},
            "brackets inside a skipped range are not counted");
+}
+
+// 桁 → バイトの素朴な写し（区間ごとに行頭から歩く）。
+[[nodiscard]] std::size_t naive_byte(std::string_view text, std::size_t column)
+{
+    std::size_t byte = 0;
+    for (std::size_t at = 1; at < column && byte < text.size(); ++at)
+    {
+        byte = nenenib::core::next_code_point(text, Offset{byte}).value;
+    }
+    return byte;
+}
+
+// 1 行に昇順で重ならない区間を count 個（各 1〜3 桁・間は 0〜2 桁）。
+[[nodiscard]] std::vector<core::ColorSpan> random_spans(Random &random, std::size_t columns,
+                                                        std::size_t count)
+{
+    std::vector<core::ColorSpan> spans;
+    std::size_t column = 1;
+    while (spans.size() < count && column < columns)
+    {
+        const std::size_t begin = column + (random() % 3);
+        const std::size_t end = std::min(begin + 1 + (random() % 3), columns + 1);
+        if (begin >= end)
+        {
+            break;
+        }
+        spans.push_back(core::ColorSpan{core::Column{begin}, core::Column{end},
+                                        random() % 2 == 0 ? core::SyntaxRole::string
+                                                          : core::SyntaxRole::comment});
+        column = end;
+    }
+    return spans;
+}
+
+// R4-1: 区間の桁のバイトへの写しは、行を 1 回だけ歩く写しと区間ごとの素朴な写しで一致する。
+// 多バイトの字（全角・結合文字・4 バイト）を混ぜ、1 行に区間を 2,000 個まで並べる。
+void verify_color_span_bytes()
+{
+    constexpr std::array<std::string_view, 5> pieces{
+        {"a", "(", "\xE3\x81\x82", "e\xCC\x81", "\xF0\x9F\x98\x80"}};
+    Random random(property_seed);
+    bool agreed = true;
+    for (std::size_t round = 0; round < 50; ++round)
+    {
+        std::string line;
+        const std::size_t length = 100 + (random() % 500);
+        for (std::size_t index = 0; index < length; ++index)
+        {
+            line += pieces.at(random() % pieces.size());
+        }
+        const auto columns = nenenib::core::code_point_count(line);
+        const auto spans = random_spans(random, columns, 300);
+        const auto bytes = app::color_span_bytes(line, spans);
+        agreed = agreed && bytes.size() == spans.size();
+        for (std::size_t index = 0; agreed && index < spans.size(); ++index)
+        {
+            agreed = bytes.at(index).begin.value == naive_byte(line, spans.at(index).begin.value) &&
+                     bytes.at(index).end.value == naive_byte(line, spans.at(index).end.value);
+        }
+    }
+    expect(agreed, "one walk over the line maps every span column to the naive byte offset");
+    // 1 行に縮めた JSON の形（16,000 字・文字列の区間 4,000 個）も 1 回の歩きで終わる。
+    std::string minified;
+    std::vector<core::ColorSpan> strings;
+    for (std::size_t index = 0; index < 4000; ++index)
+    {
+        strings.push_back(core::ColorSpan{core::Column{minified.size() + 1},
+                                          core::Column{minified.size() + 4},
+                                          core::SyntaxRole::string});
+        minified += "\"a\":";
+    }
+    const auto mapped = app::color_span_bytes(minified, strings);
+    expect(mapped.size() == strings.size() &&
+               mapped.back() ==
+                   OffsetRange{Offset{minified.size() - 4}, Offset{minified.size() - 1}},
+           "a minified line with thousands of string spans maps in one walk");
+    expect(app::color_span_bytes("abc", {}).empty(), "a line without spans maps nothing");
 }
 
 // 素朴な全文の走査（引用符も `\` も無い本文）。同じ種類の括弧の深さが負になった所が相手。
@@ -344,6 +428,7 @@ void verify_matchparen_scope()
     verify_pairs();
     verify_window();
     verify_skipped();
+    verify_color_span_bytes();
     verify_property();
     verify_vim_frame();
     verify_ordinary_frame();

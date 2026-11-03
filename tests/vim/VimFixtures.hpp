@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 d321eda82794845302923bb0837788e9d8a766d3da84998093aeb4cf1dcf16e8 / 3336 fixtures
+// fixtures.json: sha256 82cac81ed9814303551bc248429657060e2c2d545d77a7c67cd71ae3298ce943 / 3339 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3336> vim_fixtures{{
+constexpr std::array<VimFixture, 3339> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2347,6 +2347,9 @@ constexpr std::array<VimFixture, 3336> vim_fixtures{{
     {"percent-from-line-end", "(a [b] c)", "$%", "(a [b] c)", 1, 1, "", "", std::nullopt},
     {"percent-brace-multiline", "a {\n  b\n}", "%", "a {\n  b\n}", 3, 1, "", "", std::nullopt},
     {"percent-brace-multiline-back", "a {\n  b\n}", "G%", "a {\n  b\n}", 1, 3, "", "", std::nullopt},
+    {"matching-pair-nested-lines-forward", "(\n(\n)\n)", "%", "(\n(\n)\n)", 4, 1, "", "", std::nullopt},
+    {"matching-pair-nested-lines-back", "(\n(\n)\n)", "G%", "(\n(\n)\n)", 1, 1, "", "", std::nullopt},
+    {"matching-pair-nested-lines-delete", "f(a(b\nc)d)x", "f(d%", "fx", 1, 2, "(a(b\nc)d)", "v", std::nullopt},
     {"percent-no-bracket-fails", "a b c", "%x", "a b c", 1, 1, "", "", std::nullopt},
     {"percent-unmatched-fails", "a (b c", "%x", "a (b c", 1, 1, "", "", std::nullopt},
     {"percent-after-last-fails", "(a)x", "$%x", "(a)x", 1, 4, "", "", std::nullopt},
