@@ -28,6 +28,7 @@
 namespace nenenib::core
 {
 using detail::backward_characters;
+using detail::block_copied_body;
 using detail::block_insert_edit;
 using detail::display_view;
 using detail::erased_nothing;
@@ -625,6 +626,29 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     return text.text_range(Offset{at.value - insert.carried}, at);
 }
 
+// 1 行目の編集の後ろへ、残りの行に写す編集を足す。写す本文が空（`I` の打った本文が左の桁に
+// 届かない・#1196）ならほかの行は変えない。
+[[nodiscard]] std::vector<VimBlockEdit> copied_line_edits(const TextBuffer &text,
+                                                          const VimBlockInsert &insert,
+                                                          std::string_view body,
+                                                          std::vector<VimBlockEdit> edits)
+{
+    if (body.empty())
+    {
+        return edits;
+    }
+    const std::size_t last = std::min(insert.first.value + insert.lines, text.line_count() + 1);
+    for (std::size_t index = single_step; insert.first.value + index < last; ++index)
+    {
+        auto edit = block_insert_edit(text, LineNumber{insert.first.value + index}, insert, body);
+        if (edit.has_value())
+        {
+            edits.push_back(std::move(edit).value());
+        }
+    }
+    return edits;
+}
+
 // 矩形の INSERT の Esc（ADR 0035 の追補 #1042）。1 行目が入る前より伸びたぶんを打った本文として
 // 読み（回数の繰り返しもその後ろに足す）、残りの行の同じ桁へ写して 1 行目の INSERT と 1 つの undo
 // 単位にする。何も打たなかったら写さない。`I` `A` は Esc の行が 1 行目でなければ（改行を打った）
@@ -647,6 +671,7 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     }
     std::string body = block_carried_text(text, insert);
     body += growth.value().first;
+    body = block_copied_body(insert, std::move(body));
     std::vector<VimBlockEdit> edits = std::move(growth.value().second);
     Offset resting = view.selection.caret;
     // ここへ来る繰り返しの本文は改行を含まない（改行を含む `I` `A` は上の問いで返り、VISUAL の `c`
@@ -667,15 +692,7 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     {
         resting = moved->caret;
     }
-    const std::size_t last = std::min(insert.first.value + insert.lines, text.line_count() + 1);
-    for (std::size_t index = single_step; insert.first.value + index < last; ++index)
-    {
-        auto edit = block_insert_edit(text, LineNumber{insert.first.value + index}, insert, body);
-        if (edit.has_value())
-        {
-            edits.push_back(std::move(edit).value());
-        }
-    }
+    edits = copied_line_edits(text, insert, body, std::move(edits));
     // `I` `A` は矩形の左上へ戻る。打つ間に左上より前へ動いて打ったなら Esc の位置のまま（実測
     // `<Home>`）。
     const Offset caret{std::min(insert.caret.value_or(resting).value, resting.value)};
