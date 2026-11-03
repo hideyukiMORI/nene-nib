@@ -49,7 +49,9 @@ def stacked(subject, issue, source=None):
 COMMITS = [[stacked("feat(ui): 印刷の口を足す (#1050)", 1050, "1157"),
             stacked("fix(ui): 印刷の余白を直す (#1158)", 1158, "1160")],
            [stacked("feat(eng): merge-pr.py にまとめ枝の口を足す (#1220)", 1220)]]
-COMPARE = {"behind_by": 0, "ahead_by": 3, "status": "ahead"}
+# The post-merge count starts at the merge base read just before merge, not the PR baseRefOid ("c" * 40).
+MERGE_BASE = "d" * 40
+COMPARE = {"behind_by": 0, "ahead_by": 3, "status": "ahead", "merge_base_commit": {"sha": MERGE_BASE}}
 MAIN_SHAS = ["7" * 40, "8" * 40, "9" * 40]
 LANDED = {"total_commits": 3, "commits": [
     {"sha": sha, "commit": {"message": entry["commit"]["message"]}}
@@ -88,7 +90,7 @@ class MergeBoundary(unittest.TestCase):
                     value = (compare_responses.pop(0) if compare_responses is not None else
                              COMPARE if compare is None else compare)
                     code = 0
-                elif path.endswith(f"/compare/{'c' * 40}...{'b' * 40}"):
+                elif path.endswith(f"/compare/{MERGE_BASE}...{'b' * 40}"):
                     value, code = LANDED if landed is None else landed, 0
                 else:
                     self.fail(f"Unexpected API: {arguments}")
@@ -490,16 +492,18 @@ class IntegrationMerge(unittest.TestCase):
         self.assert_refused(result, calls, error, "no commits")
 
     def test_branch_behind_main_or_with_a_different_count_is_refused(self):
-        for compare, reason in (({"behind_by": 1, "ahead_by": 3}, "behind main"),
-                                ({"behind_by": 0, "ahead_by": 4}, "ahead of main"),
-                                ({"behind_by": "0", "ahead_by": 3}, "malformed")):
+        for compare, reason in ((dict(COMPARE, behind_by=1), "behind main"),
+                                (dict(COMPARE, ahead_by=4), "ahead of main"),
+                                (dict(COMPARE, behind_by="0"), "malformed"),
+                                ({"behind_by": 0, "ahead_by": 3}, "malformed"),
+                                (dict(COMPARE, merge_base_commit={"sha": "abc"}), "malformed")):
             with self.subTest(compare=compare):
                 result, calls, output, error = self.integrate(compare=compare, execute=True)
                 self.assert_refused(result, calls, error, reason)
                 self.assertFalse(any("POST" in call for call in calls))
 
     def test_main_moving_during_ci_is_refused_before_merge(self):
-        result, calls, output, error = self.integrate(compare=[COMPARE, {"behind_by": 1, "ahead_by": 3}],
+        result, calls, output, error = self.integrate(compare=[COMPARE, dict(COMPARE, behind_by=1)],
                                                       execute=True)
         self.assert_refused(result, calls, error, "behind main")
         self.assertEqual(sum("POST" in call for call in calls), 1)

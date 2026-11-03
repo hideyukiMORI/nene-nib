@@ -129,9 +129,12 @@ def integration_commits(pages: object) -> list[dict]:
     return commits
 
 
-def check_contains_main(comparison: object, count: int) -> None:
+def check_contains_main(comparison: object, count: int) -> str:
+    """Return the merge base, which is main's tip when the branch is not behind (#1220)."""
+    base = comparison.get("merge_base_commit") if isinstance(comparison, dict) else None
     if not isinstance(comparison, dict) or type(comparison.get("behind_by")) is not int or \
-            type(comparison.get("ahead_by")) is not int:
+            type(comparison.get("ahead_by")) is not int or not isinstance(base, dict) or \
+            not re.fullmatch(r"[0-9a-f]{40}", str(base.get("sha", ""))):
         raise MergeRefused("Branch comparison with main is malformed")
     if comparison["behind_by"] != 0:
         raise MergeRefused(f"Integration branch is {comparison['behind_by']} commit(s) behind main: "
@@ -139,6 +142,7 @@ def check_contains_main(comparison: object, count: int) -> None:
     if comparison["ahead_by"] != count:
         raise MergeRefused(f"Integration branch is {comparison['ahead_by']} commit(s) ahead of main "
                            f"but the PR has {count} commit(s)")
+    return base["sha"]
 
 
 def close_sources(number: int, commits: list[dict], landed: list, runner) -> tuple[list, list]:
@@ -320,8 +324,8 @@ def main(argv=None, runner=run_gh) -> int:
             raise MergeRefused("Branch rules changed during merge preparation")
         if options.integration:
             # main can move while CI runs; the rebased tree must still be the tree CI passed.
-            check_contains_main(read_json(api_command(f"compare/main...{options.expected_head}"), runner),
-                                len(commits))
+            merge_base = check_contains_main(read_json(api_command(f"compare/main...{options.expected_head}"),
+                                                       runner), len(commits))
         executing = True
         result = runner(command)
         print(json.dumps({"mergeExit": result.returncode, "stdout": result.stdout,
@@ -340,7 +344,7 @@ def main(argv=None, runner=run_gh) -> int:
         if not options.integration:
             return 0
         inspect = "main"
-        landed = read_json(api_command(f"compare/{record['baseRefOid']}...{commit['oid']}"), runner)
+        landed = read_json(api_command(f"compare/{merge_base}...{commit['oid']}"), runner)
         if not isinstance(landed, dict) or landed.get("total_commits") != len(commits) or \
                 not isinstance(landed.get("commits"), list):
             total = landed.get("total_commits") if isinstance(landed, dict) else None
