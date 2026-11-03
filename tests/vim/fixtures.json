@@ -3244,5 +3244,19 @@
   {"name":"insert-arrow-dot-two-arrows-then-escape","text":"abc","keys":"ix<Left><Right><Esc>."},
   {"name":"insert-arrow-dot-home-after-visual-change","text":"abcd","keys":"vlcZ<Home><Esc>."},
   {"name":"insert-arrow-dot-left-then-register","text":"ab","keys":"ylix<Left><C-r>\"<Esc>."},
-  {"name":"insert-arrow-dot-left-then-beeping-backspace","text":"ab","keys":"ix<Left><BS>y<Esc>."}
+  {"name":"insert-arrow-dot-left-then-beeping-backspace","text":"ab","keys":"ix<Left><BS>y<Esc>."},
+  {"name":"insert-arrow-vertical-up-at-the-first-line-then-dot","text":"ab\ncd","keys":"ix<Up>y<Esc>j."},
+  {"name":"insert-arrow-vertical-down-at-the-last-line-then-dot","text":"ab\ncd","keys":"jax<Down>y<Esc>k."},
+  {"name":"insert-arrow-vertical-up-keeps-the-count-of-big-o","text":"ab","keys":"3Oabc<Up><Esc>"},
+  {"name":"insert-arrow-vertical-down-keeps-the-count-of-o","text":"ab","keys":"3oabc<Down><Esc>"},
+  {"name":"insert-arrow-vertical-up-at-the-first-line-keeps-the-count","text":"ab\ncd","keys":"2ix<Up>y<Esc>"},
+  {"name":"insert-arrow-vertical-up-in-the-middle-cuts-the-dot","text":"ab\ncd\nef","keys":"jix<Up>y<Esc>jj."},
+  {"name":"insert-arrow-vertical-down-in-the-middle-cuts-the-dot","text":"ab\ncd\nef","keys":"jix<Down>y<Esc>k."},
+  {"name":"insert-arrow-vertical-up-in-the-middle-cuts-the-count","text":"ab\ncd","keys":"j2ix<Up>y<Esc>"},
+  {"name":"insert-arrow-vertical-up-alone-at-the-first-line-then-dot","text":"ab\ncd","keys":"ix<Up><Esc>j."},
+  {"name":"insert-arrow-vertical-down-alone-at-the-last-line-then-dot","text":"ab\ncd","keys":"jix<Down><Esc>k."},
+  {"name":"insert-arrow-vertical-up-in-a-single-line","text":"ab","keys":"ax<Up>y<Esc>."},
+  {"name":"insert-arrow-vertical-down-in-a-single-line","text":"ab","keys":"ax<Down>y<Esc>."},
+  {"name":"insert-arrow-vertical-up-at-the-first-line-keeps-the-start","text":"ab\ncd","keys":"Ax<Up>y<C-u><Esc>"},
+  {"name":"insert-arrow-vertical-down-at-the-last-line-keeps-the-start","text":"ab\ncd","keys":"jAx<Down>y<C-u><Esc>"}
 ]

@@ -165,11 +165,11 @@ void verify_vim_open_line_movement()
 {
     // 行末の `<Right>` は行の端で動かない矢印で、Vim の ins_right は start_arrow を
     // 呼ばず反復を切らない（#1136・ADR 0028 の追補・fixture の
-    // insert-arrow-right-at-the-line-end-keeps-the-count）。
-    constexpr std::array<VimSpecialKey, 7> keys{VimSpecialKey::arrow_left, VimSpecialKey::arrow_up,
+    // insert-arrow-right-at-the-line-end-keeps-the-count）。最初の行の `<Up>` と先頭の窓の
+    // PgUp も同じく端で動かず反復を切らない（#1149・verify_vim_open_line_edge_keys）。
+    constexpr std::array<VimSpecialKey, 5> keys{VimSpecialKey::arrow_left,
                                                 VimSpecialKey::arrow_down, VimSpecialKey::home,
-                                                VimSpecialKey::end,        VimSpecialKey::page_up,
-                                                VimSpecialKey::page_down};
+                                                VimSpecialKey::end, VimSpecialKey::page_down};
     for (const VimSpecialKey key : keys)
     {
         Editing editing;
@@ -178,13 +178,52 @@ void verify_vim_open_line_movement()
         vim_replay(controller, "3Oabc");
         applied(controller, VimKeyPress{VimKey{key}});
         expect(!controller.vim_state().insert_repeat.has_value(),
-               "every INSERT movement cancels open-line repetition, including no-op moves");
+               "an INSERT key that moves, and Home / End even in place, cancels open-line "
+               "repetition");
         vim_replay(controller, "Z<Esc>u");
         expect(whole_vim_body(controller) == "abc\n", "movement seals the earlier insertion");
         vim_replay(controller, "u");
         expect(whole_vim_body(controller).empty(), "the earlier undo also removes the open line");
     }
 }
+
+namespace
+{
+// `3O` で開いた最初の行の `<Up>` と先頭の窓の PgUp は端で動かず、Vim の ins_up / ins_pageup は
+// start_arrow を呼ばないので回数の反復を切らない（#1149・ADR 0028 の追補・fixture の
+// insert-arrow-vertical-up-keeps-the-count-of-big-o）。
+void verify_vim_open_line_edge_keys()
+{
+    constexpr std::array<VimSpecialKey, 2> keys{VimSpecialKey::arrow_up, VimSpecialKey::page_up};
+    for (const VimSpecialKey key : keys)
+    {
+        Editing editing;
+        EditorController &controller = editing.controller();
+        applied(controller, SelectEditMode{EditMode::vim});
+        vim_replay(controller, "3Oabc");
+        applied(controller, VimKeyPress{VimKey{key}});
+        expect(controller.vim_state().insert_repeat.has_value(),
+               "#1149 an INSERT key that stays at the edge keeps open-line repetition");
+        vim_replay(controller, "Z<Esc>");
+        expect(whole_vim_body(controller) == "abcZ\nabcZ\nabcZ\n",
+               "#1149 the repetition replays the whole insertion");
+        vim_replay(controller, "u");
+        expect(whole_vim_body(controller).empty(), "#1149 one undo removes all opened lines");
+    }
+    // 対照: `3o` で開いた 2 行目の `<Up>` は 1 行目へ動くので、反復を切り undo を区切る（#1149）。
+    Editing moving;
+    EditorController &moved = moving.controller();
+    applied(moved, SelectEditMode{EditMode::vim});
+    vim_replay(moved, "3oabc");
+    applied(moved, VimKeyPress{VimKey{VimSpecialKey::arrow_up}});
+    expect(!moved.vim_state().insert_repeat.has_value(),
+           "#1149 an INSERT Up that moves cancels open-line repetition");
+    vim_replay(moved, "Z<Esc>u");
+    expect(whole_vim_body(moved) == "\nabc", "#1149 a moving Up seals the earlier insertion");
+    vim_replay(moved, "u");
+    expect(whole_vim_body(moved).empty(), "#1149 the earlier undo also removes the open line");
+}
+} // namespace
 
 void verify_vim_open_line_fixtures()
 {
@@ -311,6 +350,7 @@ void verify_vim_open_line_contracts()
     verify_vim_open_line_undo();
     verify_vim_open_line_intermediate();
     verify_vim_open_line_movement();
+    verify_vim_open_line_edge_keys();
     verify_vim_open_line_switch();
     verify_vim_interrupt_discards();
     verify_vim_open_line_external_input();

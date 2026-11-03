@@ -35,6 +35,7 @@ namespace nenenib::core::detail
                                       VimScrollDirection direction) noexcept;
 [[nodiscard]] VimStep page_step(const VimState &state, const VimEditorView &view,
                                 VimScrollDirection direction);
+[[nodiscard]] bool page_stays(const VimEditorView &view, VimScrollDirection direction);
 [[nodiscard]] VimStep scroll_action(const VimState &state, const VimEditorView &view,
                                     VimAction action);
 [[nodiscard]] VimStep input_action(const VimState &state, const VimEditorView &view,
