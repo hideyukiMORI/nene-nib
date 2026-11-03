@@ -49,7 +49,8 @@ def pr_command(action: str, number: int, *arguments: str) -> list[str]:
     return ["pr", action, str(number), "--repo", REPOSITORY, *arguments]
 
 
-def merge_command(number: int, expected_head: str, record: dict, rules: list) -> list[str]:
+def merge_command(number: int, expected_head: str, record: dict, rules: list,
+                  integration: bool = False) -> list[str]:
     if not isinstance(record, dict):
         raise MergeRefused("PR response is not an object")
     expected = {"number": number, "headRefOid": expected_head, "state": "OPEN",
@@ -68,8 +69,114 @@ def merge_command(number: int, expected_head: str, record: dict, rules: list) ->
         raise MergeRefused("Branch rules are missing or malformed")
     if any(rule["type"] == "merge_queue" for rule in rules):
         raise MergeRefused("Merge queues are not supported by this synchronous merge tool")
+    if integration:
+        if not rebase_allowed(rules):
+            raise MergeRefused("The main ruleset does not allow rebase merges (allowed_merge_methods)")
+        # ADR 0021 追補 決定 3: rebase merge は件名を使わない。
+        return pr_command("merge", number, "--rebase", "--match-head-commit", expected_head)
     return pr_command("merge", number, "--squash", "--match-head-commit", expected_head,
                       "--subject", title)
+
+
+def rebase_allowed(rules: list) -> bool:
+    for rule in rules:
+        parameters = rule.get("parameters") if rule["type"] == "pull_request" else None
+        methods = parameters.get("allowed_merge_methods") if isinstance(parameters, dict) else None
+        if isinstance(methods, list) and "rebase" in methods:
+            return True
+    return False
+
+
+def flatten_pages(pages: object, what: str) -> list:
+    if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
+        raise MergeRefused(f"{what} pages are malformed")
+    return [entry for page in pages for entry in page]
+
+
+def commit_message(entry: object) -> str:
+    commit = entry.get("commit") if isinstance(entry, dict) else None
+    message = commit.get("message") if isinstance(commit, dict) else None
+    if not isinstance(message, str):
+        raise MergeRefused("Commit entry is malformed")
+    return message
+
+
+def subject_of(message: str) -> str:
+    lines = message.splitlines()
+    return lines[0] if lines else ""
+
+
+def integration_commits(pages: object) -> list[dict]:
+    """ADR 0021 追補 決定 1 / 3: every stacked commit is GIT-003 and closes the Issue in its subject."""
+    entries = flatten_pages(pages, "Commit")
+    if not entries:
+        raise MergeRefused("Integration PR has no commits")
+    commits = []
+    for entry in entries:
+        message = commit_message(entry)
+        subject = subject_of(message)
+        errors = CONVENTIONS.validate(message)
+        if errors:
+            raise MergeRefused(f"Commit {subject!r}: " + "; ".join(errors))
+        issue = re.search(r"\(#([1-9]\d*)\)$", subject).group(1)
+        closes = re.findall(r"(?m)^Closes #([1-9]\d*)\b", message)
+        if not closes or any(number != issue for number in closes):
+            raise MergeRefused(f"Commit {subject!r} must close #{issue} on a line starting with Closes #{issue}")
+        source = re.search(r"(?m)^PR #([1-9]\d*)（head ([0-9a-f]{40})）", message)
+        commits.append({"subject": subject,
+                        "source": None if source is None else {"number": int(source.group(1)),
+                                                                "head": source.group(2)}})
+    return commits
+
+
+def check_contains_main(comparison: object, count: int) -> str:
+    """Return the merge base, which is main's tip when the branch is not behind (#1220)."""
+    base = comparison.get("merge_base_commit") if isinstance(comparison, dict) else None
+    if not isinstance(comparison, dict) or type(comparison.get("behind_by")) is not int or \
+            type(comparison.get("ahead_by")) is not int or not isinstance(base, dict) or \
+            not re.fullmatch(r"[0-9a-f]{40}", str(base.get("sha", ""))):
+        raise MergeRefused("Branch comparison with main is malformed")
+    if comparison["behind_by"] != 0:
+        raise MergeRefused(f"Integration branch is {comparison['behind_by']} commit(s) behind main: "
+                           "rebase it onto main first")
+    if comparison["ahead_by"] != count:
+        raise MergeRefused(f"Integration branch is {comparison['ahead_by']} commit(s) ahead of main "
+                           f"but the PR has {count} commit(s)")
+    return base["sha"]
+
+
+def close_sources(number: int, commits: list[dict], landed: list, runner) -> tuple[list, list]:
+    """Close each stacked PR whose head is unchanged; report the rest without stopping."""
+    main_shas = {}
+    for entry in landed:
+        message = entry.get("commit", {}).get("message") if isinstance(entry, dict) and \
+            isinstance(entry.get("commit"), dict) else None
+        if isinstance(message, str) and isinstance(entry.get("sha"), str):
+            main_shas.setdefault(subject_of(message), entry["sha"])
+    closed, not_closed = [], []
+    for commit in commits:
+        source = commit["source"]
+        if source is None:
+            continue
+        sha = main_shas.get(commit["subject"])
+        if sha is None:
+            not_closed.append({"number": source["number"], "reason": "no main commit with the same subject"})
+            continue
+        try:
+            state = read_json(pr_command("view", source["number"], "--json", "headRefOid,state"), runner)
+        except ValueError as error:
+            not_closed.append({"number": source["number"], "reason": str(error)})
+            continue
+        if not isinstance(state, dict) or state.get("state") != "OPEN" or state.get("headRefOid") != source["head"]:
+            not_closed.append({"number": source["number"], "reason": "not OPEN or head differs", "observed": state})
+            continue
+        comment = f"まとめ枝 #{number} の rebase merge で main に入った（commit {sha}・ADR 0021 追補・#1220）"
+        result = runner(pr_command("close", source["number"], "--comment", comment))
+        if result.returncode:
+            not_closed.append({"number": source["number"], "reason": f"close failed: {result.stderr.strip()}"})
+            continue
+        closed.append({"number": source["number"], "mainCommit": sha})
+    return closed, not_closed
 
 
 def api_command(path: str, *arguments: str) -> list[str]:
@@ -174,23 +281,34 @@ def main(argv=None, runner=run_gh) -> int:
     parser.add_argument("--expected-head", type=commit_hash, required=True)
     parser.add_argument("--execute", action="store_true", help="execute once; otherwise only print the plan")
     parser.add_argument("--ci-run", type=positive_number, help="resume a previously dispatched merge CI run")
+    parser.add_argument("--integration", action="store_true",
+                        help="rebase-merge an integration PR of stacked commits (ADR 0021 addendum, #1220)")
     options = parser.parse_args(argv)
     executing = False
+    inspect = "the PR"
     try:
         record = read_json(pr_command("view", options.number, "--json", PR_FIELDS), runner)
         rules = read_json(api_command("rules/branches/main"), runner)
-        command = merge_command(options.number, options.expected_head, record, rules)
+        command = merge_command(options.number, options.expected_head, record, rules, options.integration)
+        commits = []
+        if options.integration:
+            commits = integration_commits(read_json(api_command(
+                f"pulls/{options.number}/commits?per_page=100", "--paginate", "--slurp"), runner))
+            check_contains_main(read_json(api_command(f"compare/main...{options.expected_head}"), runner),
+                                len(commits))
         pages = read_json(api_command(f"pulls/{options.number}/files?per_page=100", "--paginate", "--slurp"), runner)
         docs_only = documentation_only(pages, record.get("changedFiles"))
         if docs_only and any(rule["type"] == "required_status_checks" for rule in rules):
             raise MergeRefused("Documentation-only merge is still blocked by required status checks in the ruleset")
         recorded = conformance_recorded(record.get("body"))
-        print(json.dumps({"execute": options.execute, "repository": REPOSITORY, "number": options.number,
-                          "head": options.expected_head, "subject": record["title"],
-                          "ci": "skip (documentation only)" if docs_only else "run before merge",
-                          "conformanceRecorded": recorded,
-                          "branchRules": rules, "command": ["gh", *command]},
-                         ensure_ascii=False), flush=True)
+        plan = {"execute": options.execute, "repository": REPOSITORY, "number": options.number,
+                "head": options.expected_head, "subject": record["title"],
+                "ci": "skip (documentation only)" if docs_only else "run before merge",
+                "conformanceRecorded": recorded,
+                "branchRules": rules, "command": ["gh", *command]}
+        if options.integration:
+            plan.update({"integration": True, "commits": len(commits)})
+        print(json.dumps(plan, ensure_ascii=False), flush=True)
         if not options.execute:
             return 0
         if docs_only and not recorded:
@@ -204,6 +322,10 @@ def main(argv=None, runner=run_gh) -> int:
         latest_rules = read_json(api_command("rules/branches/main"), runner)
         if latest_rules != rules:
             raise MergeRefused("Branch rules changed during merge preparation")
+        if options.integration:
+            # main can move while CI runs; the rebased tree must still be the tree CI passed.
+            merge_base = check_contains_main(read_json(api_command(f"compare/main...{options.expected_head}"),
+                                                       runner), len(commits))
         executing = True
         result = runner(command)
         print(json.dumps({"mergeExit": result.returncode, "stdout": result.stdout,
@@ -219,9 +341,22 @@ def main(argv=None, runner=run_gh) -> int:
         commit = merged.get("mergeCommit")
         if not isinstance(commit, dict) or not re.fullmatch(r"[0-9a-f]{40}", str(commit.get("oid", ""))):
             raise MergeRefused("The merge commit is not recorded")
+        if not options.integration:
+            return 0
+        inspect = "main"
+        landed = read_json(api_command(f"compare/{merge_base}...{commit['oid']}"), runner)
+        if not isinstance(landed, dict) or landed.get("total_commits") != len(commits) or \
+                not isinstance(landed.get("commits"), list):
+            total = landed.get("total_commits") if isinstance(landed, dict) else None
+            raise MergeRefused(f"main gained {total} commit(s) but the PR has {len(commits)}")
+        closed, not_closed = close_sources(options.number, commits, landed["commits"], runner)
+        if not_closed:
+            print(json.dumps({"notClosed": not_closed}, ensure_ascii=False), flush=True)
+        print(json.dumps({"integration": True, "commits": len(commits), "closed": closed},
+                         ensure_ascii=False), flush=True)
         return 0
     except (OSError, UnicodeError, ValueError, subprocess.TimeoutExpired) as error:
-        suffix = "; merge outcome unknown: inspect the PR before any further action" if executing else ""
+        suffix = f"; merge outcome unknown: inspect {inspect} before any further action" if executing else ""
         print(f"Merge refused: {error}{suffix}", file=sys.stderr)
         return 2
 
