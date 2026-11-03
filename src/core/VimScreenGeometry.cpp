@@ -84,6 +84,7 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
                                                                    LineNumber first)
 {
     std::size_t occupied = 0;
+    std::size_t filled = 0;
     auto below = first;
     auto last = first;
     while (below.value <= view.text.line_count())
@@ -99,10 +100,14 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
             break;
         }
         occupied += rows.value();
+        filled = occupied;
         last = below;
         ++below.value;
     }
-    const auto middle = middle_of(view, first, occupied);
+    // `M` の半分は収まりきった行の画面行で数える。収まらない行の残り（`@` の段）は Vim の
+    // w_empty_rows に入る。1 行も収まらなければ窓の全体（#1177・Vim の nv_scroll と
+    // set_empty_rows）。
+    const auto middle = middle_of(view, first, filled > 0 ? filled : occupied);
     if (!middle)
     {
         return std::unexpected(middle.error());

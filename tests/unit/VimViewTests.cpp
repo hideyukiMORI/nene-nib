@@ -32,6 +32,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -406,6 +407,16 @@ constexpr std::array<TallLanding, 49> tall_landings{{
     {30, 0, 3, 90, 95, "<C-u>", 85, 90},
 }};
 
+// 高い行が窓の下で収まりきらないときの `M`（#1177）。Vim の nv_scroll は半分を
+// `(窓の高さ - w_empty_rows + 1) / 2` で数え、収まりきらない行の残りの段は w_empty_rows に入る。
+// 同じ実測（D:/NeNeNib/scripts/1141/gen.py）の、前の窓が Vim と同じで直す前に違った 4 件。
+constexpr std::array<TallLanding, 4> tall_middles{{
+    {36, 0, 2, 26, 30, "M", 26, 30},
+    {36, 0, 3, 26, 30, "M", 26, 30},
+    {36, 0, 2, 29, 30, "M", 28, 31},
+    {33, 0, 2, 26, 30, "M", 26, 29},
+}};
+
 void placed_tall_window(EditorController &controller, const TallLanding &row)
 {
     applied(controller,
@@ -425,9 +436,9 @@ void placed_tall_window(EditorController &controller, const TallLanding &row)
     static_cast<void>(run_ex(controller, "set so=" + std::to_string(std::get<2>(row))));
 }
 
-void verify_tall_landings()
+void verify_tall_rows(std::span<const TallLanding> rows, std::string_view issue)
 {
-    for (const TallLanding &row : tall_landings)
+    for (const TallLanding &row : rows)
     {
         Editing editing;
         EditorController &controller = editing.controller();
@@ -435,13 +446,20 @@ void verify_tall_landings()
         vim_replay(controller, std::get<5>(row));
         const auto frame = controller.frame();
         const std::string description =
-            "#1141 so=" + std::to_string(std::get<2>(row)) + " " + std::string(std::get<5>(row)) +
-            " from line " + std::to_string(std::get<4>(row)) + " with the 5-row line " +
-            std::to_string(std::get<0>(row)) + " lands where Vim 9.1 does";
+            std::string(issue) + " so=" + std::to_string(std::get<2>(row)) + " " +
+            std::string(std::get<5>(row)) + " from line " + std::to_string(std::get<4>(row)) +
+            " with the 5-row line " + std::to_string(std::get<0>(row)) +
+            " lands where Vim 9.1 does";
         expect(frame.first_visible == LineNumber{std::get<6>(row)} &&
                    frame.caret.position.line == LineNumber{std::get<7>(row)},
                description.c_str());
     }
+}
+
+void verify_tall_landings()
+{
+    verify_tall_rows(tall_landings, "#1141");
+    verify_tall_rows(tall_middles, "#1177");
 }
 
 void verify_scrolloff_cursor_correct()
