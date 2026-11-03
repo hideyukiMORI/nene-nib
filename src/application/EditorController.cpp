@@ -1050,6 +1050,7 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     result.syntax_lexed = lexed;
     add_other_pane(result, source.pattern);
     result.explorer = explorer_view();
+    add_diagnostics(result);
 }
 
 std::optional<SyntaxStateCache> &EditorController::syntax_cache(core::PaneSide side) noexcept

@@ -171,6 +171,13 @@ class EditorController final
     // マウスの動くたびに呼ぶ。width は帯の幅（物理画素）。値は title_bar_input(frame(), ...)
     // と同じ。
     [[nodiscard]] core::TitleBarInput title_bar_input(std::int32_t width, std::uint32_t dpi) const;
+    // アクティブな文書の診断の件数（ADR 0161 の決定 4）。数えるのは core::diagnostic_counts の
+    // 1 本で、frame の diagnostic_counts と窓のステータスバーの hit test（status_bar_layout）が
+    // 同じ値を引く。frame を作らない。
+    [[nodiscard]] core::DiagnosticCounts diagnostic_counts() const;
+    // 知らせの欄にキャレットの上の診断の文が出ているか（frame の diagnostic_message の有無と同じ
+    // 値・ADR 0161 の決定 4 の追補）。窓がステータスバーのクリックを決める口で、frame を作らない。
+    [[nodiscard]] bool diagnostic_message_shown() const;
     // 無名レジスタと Vim のモードは表示値に載らないので、fixture の再生だけがここを読む
     // （ADR 0012 の決定 7）。状態を変える口はここには無い。
     [[nodiscard]] const core::VimState &vim_state() const noexcept;
@@ -791,6 +798,12 @@ class EditorController final
                         const PreviewView &view) const;
     void finish_frame(EditorFrame &result, const PaneSource &source, bool gridded,
                       std::size_t lexed);
+    // 診断の件数とキャレットの上の診断の文を frame に載せる（ADR 0161 の決定 4）。文はほかの
+    // 知らせ（command_message）が無いときだけで、文を出す frame は案内を消す（知らせと同じ）。
+    void add_diagnostics(EditorFrame &result) const;
+    // 知らせの欄に出す診断の文（優先の式の 1 か所）。add_diagnostics と diagnostic_message_shown が
+    // 読む。
+    [[nodiscard]] std::optional<core::DisplayText> shown_diagnostic_message() const;
     // 枠の側の構文の覚え（ADR 0156 の決定 9）。操作中の枠ともう 1 つの枠は別の覚えを持つ。
     [[nodiscard]] std::optional<SyntaxStateCache> &syntax_cache(core::PaneSide side) noexcept;
     // 操作中でない側の覚え。

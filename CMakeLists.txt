@@ -74,7 +74,8 @@ nenenib_target(nenenib_core core STATIC
     src/core/Lexer.cpp src/core/LexCpp.cpp src/core/LexCursor.cpp src/core/LexJson.cpp src/core/LexPython.cpp src/core/LexMarkdown.cpp src/core/LexJavaScript.cpp src/core/LexHtml.cpp src/core/LexCss.cpp src/core/LexYaml.cpp src/core/LexToml.cpp src/core/LexGdscript.cpp src/core/LexIni.cpp src/core/LexCsharp.cpp src/core/LexRust.cpp src/core/LexGo.cpp src/core/LexPhp.cpp src/core/LexSql.cpp src/core/LexLua.cpp src/core/LexDockerfile.cpp src/core/LexPowershell.cpp src/core/LexShell.cpp src/core/LexCmake.cpp src/core/SyntaxColor.cpp
     src/core/JsonNumber.cpp src/core/JsonValue.cpp src/core/JsonParse.cpp src/core/JsonWrite.cpp
     src/core/LspFrames.cpp src/core/LspMessages.cpp src/core/LspPosition.cpp
-    src/core/LspDiagnostics.cpp src/core/DiagnosticEdits.cpp)
+    src/core/LspDiagnostics.cpp src/core/DiagnosticEdits.cpp src/core/DiagnosticCounts.cpp
+    src/core/NoticeLine.cpp src/core/DiagnosticNotice.cpp src/core/LspShowMessage.cpp src/core/DiagnosticColor.cpp)
 # core の parse_markdown（#765）だけが md4c を呼ぶ。md4c.h を include するのは src/core/MarkdownParse.cpp の 1 か所（CNF-009）。
 nenenib_link(nenenib_core nenenib_md4c)
 
@@ -379,7 +380,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/ReplacedTintTests.cpp tests/ui/FallbackRangeTests.cpp tests/ui/PreviewLayoutTests.cpp
     tests/ui/FallbackSegmentMemoTests.cpp
     tests/ui/ForwardingFont.cpp
-    tests/ui/StatusDemandTests.cpp tests/ui/SyntaxRenderTests.cpp
+    tests/ui/StatusDemandTests.cpp tests/ui/SyntaxRenderTests.cpp tests/ui/DiagnosticWaveTests.cpp
     tests/ui/PaletteLayoutTests.cpp tests/ui/ExplorerPaintTests.cpp tests/ui/PointerPressTests.cpp tests/ui/GuideKeyWidthTests.cpp
     tests/ui/PrintRenderTests.cpp tests/ui/MemoryXpsTarget.cpp tests/ui/MemoryPackageTarget.cpp)
 nenenib_link(nib_window_tests nenenib_core)

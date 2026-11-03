@@ -1785,6 +1785,52 @@ void verify_status_items()
     expect(japanese.at(1).text() == "Shift_JIS", "an old Japanese file says Shift_JIS");
 }
 
+// ADR 0161 の決定 4: 右端（言語の右）の 5 つ目の項目「E2 W1」。E だけ・W だけ・両方・打ち切りの
+// `+`・0 件は値なし。配置は件数が無ければ右端の幅 0 で間の余白も取らず、あれば言語の右の 96 DIP。
+void verify_diagnostic_status_items()
+{
+    using nenenib::core::DiagnosticCounts;
+    using nenenib::core::DiagnosticsCount;
+    const auto label = [](DiagnosticCounts counts)
+    {
+        const auto item = nenenib::core::diagnostic_count_item(counts);
+        return item.has_value() ? std::string{item.value().text()} : std::string{"<none>"};
+    };
+    expect(label(DiagnosticCounts{2, 0, DiagnosticsCount::complete}) == "E2",
+           "errors only show E and the count");
+    expect(label(DiagnosticCounts{0, 1, DiagnosticsCount::complete}) == "W1",
+           "warnings only show W and the count");
+    expect(label(DiagnosticCounts{2, 1, DiagnosticsCount::complete}) == "E2 W1",
+           "errors and warnings show both");
+    expect(label(DiagnosticCounts{600, 400, DiagnosticsCount::truncated}) == "E600 W400+",
+           "a truncated list ends with +");
+    expect(label(DiagnosticCounts{0, 0, DiagnosticsCount::complete}) == "<none>" &&
+               label(DiagnosticCounts{0, 0, DiagnosticsCount::truncated}) == "<none>",
+           "no errors and no warnings show no item");
+    const auto none = status_bar_layout(960, 360, 96);
+    const auto zero =
+        status_bar_layout(960, 360, 96, DiagnosticCounts{0, 0, DiagnosticsCount::complete});
+    expect(none.items == zero.items && none.diagnostics == zero.diagnostics,
+           "zero counts lay out the same as no counts");
+    expect(none.diagnostics == LayoutRect{948, 332, 948, 360} && none.items.at(3).right == 948,
+           "without counts the count item has no width and takes no gap");
+    const auto shown =
+        status_bar_layout(960, 360, 96, DiagnosticCounts{1, 0, DiagnosticsCount::complete});
+    expect(shown.diagnostics == LayoutRect{852, 332, 948, 360} &&
+               shown.items.at(3) == LayoutRect{764, 332, 836, 360},
+           "the count is the rightmost item, 96 DIP, right of the language");
+    // 360 DIP の窓（R3-1）: 言語を畳み、それでも `:` の入力欄が届かないので件数も幅 0 にする。
+    const auto narrow =
+        status_bar_layout(360, 360, 96, DiagnosticCounts{1, 0, DiagnosticsCount::complete});
+    expect(narrow.items.front().left - 16 >= 96 &&
+               narrow.items.front().left >= narrow.toggle.right &&
+               width_of(narrow.diagnostics) == 0,
+           "a 360 DIP window with counts keeps the input's minimum width and the toggle clear");
+    expect(status_bar_hit(shown, 730, 346) == StatusBarHit::line_ending &&
+               status_bar_hit(none, 730, 346) == StatusBarHit::none,
+           "the hit test follows the items moved by the count");
+}
+
 void verify_device_pixels()
 {
     expect(to_pixels(40, 96) == 40, "96 DPI is one to one");
@@ -2618,6 +2664,7 @@ void verify_status_items_scope()
 {
     verify_status_items();
     verify_status_position_boundaries();
+    verify_diagnostic_status_items();
 }
 
 void verify_theme_scope()
@@ -2643,6 +2690,7 @@ void verify_look()
     verify_milestone();
     verify_status_items();
     verify_status_position_boundaries();
+    verify_diagnostic_status_items();
     verify_device_pixels();
     verify_rect_geometry();
     verify_title_bar_rectangles();

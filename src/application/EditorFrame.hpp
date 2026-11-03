@@ -5,7 +5,9 @@
 #include "CommandLine.hpp"
 #include "CommandPaletteView.hpp"
 #include "CompositionView.hpp"
+#include "DiagnosticCounts.hpp"
 #include "DisplayForm.hpp"
+#include "DisplayText.hpp"
 #include "DocumentView.hpp"
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
@@ -131,6 +133,12 @@ struct EditorFrame
     std::optional<PreviewFrame> full_preview{};
     // エクスプローラーの面（ADR 0162 の決定 3・8）。設定 explorer が on のときだけ値を持つ。
     std::optional<ExplorerView> explorer{};
+    // アクティブな文書の診断の件数（ADR 0161 の決定 4）。renderer は core::diagnostic_count_item で
+    // ステータスバーの右端の項目にし、status_bar_layout にも同じ値を渡す（ui は数え直さない）。
+    core::DiagnosticCounts diagnostic_counts{0, 0, core::DiagnosticsCount::complete};
+    // キャレットの上の診断の文（決定 4・core::diagnostic_notice）。command_message があれば値なし
+    // （ほかの知らせが勝つ）で、renderer は知らせの欄に同じ描き方で書く。状態に積まない。
+    std::optional<core::DisplayText> diagnostic_message{};
 };
 
 // 変換中か（本文と入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

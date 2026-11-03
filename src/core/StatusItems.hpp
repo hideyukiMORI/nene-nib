@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DiagnosticCounts.hpp"
 #include "DisplayText.hpp"
 #include "Language.hpp"
 #include "LineEnding.hpp"
@@ -8,6 +9,7 @@
 
 #include <array>
 #include <cstddef>
+#include <optional>
 
 namespace nenenib::core
 {
@@ -20,4 +22,10 @@ inline constexpr std::size_t status_item_count = 4;
                                                                           TextEncoding encoding,
                                                                           LineEnding ending,
                                                                           Language language);
+
+// ステータスバーの右端（言語の右）の 5 つ目の項目「E2 W1」（ADR 0161 の決定 4）。error だけなら
+// 「E2」、warning だけなら「W1」、診断を上限で打ち切っていれば末尾に「+」。error も warning も 0
+// なら 値なし（項目を出さず幅も取らない・status_bar_layout）。文字列はこの 1 本で作り、renderer に
+// 書かない。
+[[nodiscard]] std::optional<DisplayText> diagnostic_count_item(const DiagnosticCounts &counts);
 } // namespace nenenib::core

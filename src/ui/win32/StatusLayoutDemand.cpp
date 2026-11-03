@@ -34,7 +34,7 @@ StatusLeftState status_left_state(const application::EditorFrame &frame) noexcep
     {
         return StatusLeftState::command_input;
     }
-    if (frame.command_message.has_value() && !palette)
+    if ((frame.command_message.has_value() || frame.diagnostic_message.has_value()) && !palette)
     {
         return StatusLeftState::message;
     }
@@ -49,6 +49,7 @@ std::size_t status_layout_demand(StatusLeftState left, const core::StatusBarLayo
     {
         items += core::width_of(item) > 0 ? 1 : 0;
     }
+    items += core::width_of(status.diagnostics) > 0 ? 1 : 0;
     const auto *const shown = std::get_if<core::StatusGuideLayout>(&guide);
     const std::size_t guide_demand = shown == nullptr ? 0 : shown->rows.size() * 2;
     return left_demand(left) + items + guide_demand;

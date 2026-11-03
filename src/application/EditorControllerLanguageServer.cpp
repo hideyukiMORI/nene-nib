@@ -18,6 +18,7 @@
 #include "LspRequest.hpp"
 #include "LspRequestKind.hpp"
 #include "LspResponse.hpp"
+#include "LspShowMessage.hpp"
 #include "PendingLspRequest.hpp"
 #include "ServerCommand.hpp"
 
@@ -373,13 +374,20 @@ void EditorController::receive_lsp(const core::LspResponse &response)
     }
 }
 
-// サーバーからの通知（ADR 0161 の決定 5）。診断は文書の値へ写す。`window/showMessage` の 1 行の
-// 知らせと `window/logMessage` を捨てるのは段 L1c（ui の段）で、ここではまだ何もしない。
+// サーバーからの通知（ADR 0161 の決定 5）。診断は文書の値へ写す。`window/showMessage` は Error と
+// Warning だけ 1 行の知らせ（lsp_shown_notice）にし、Info・Log と `window/logMessage` ほかの通知は
+// 捨てる。
 void EditorController::receive_lsp(const core::LspNotification &notification)
 {
     if (notification.method == core::lsp_publish_diagnostics_method)
     {
         receive_diagnostics(notification);
+        return;
+    }
+    auto notice = core::lsp_shown_notice(notification);
+    if (notice.has_value())
+    {
+        state_ = state_.with_command_message(std::move(notice));
     }
 }
 
