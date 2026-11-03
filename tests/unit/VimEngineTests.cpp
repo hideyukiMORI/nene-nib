@@ -1937,6 +1937,43 @@ void verify_vim_block_count_replay_crlf()
            "the caret rests on the top left of the block after the join and break");
 }
 
+// 矩形の回数付き `I` `C` の打った本文だけの繰り返し（VimInsertAt）の Esc のキャレットと `'^`（#1173
+// の R3-3）。engine は本文を LF で数えるので、同じ鍵を LF と CRLF の文書で打ち、行と桁が同じかを
+// 見る。改行を含む `I` の繰り返しは 1 行目を離れて写さない（op_insert）。VISUAL の `C` は回数を流し
+// 直さず、改行を打っても 1 行目が伸びたぶんを写す（op_change）。
+// この契約は「改行を含む VimInsertAt が矩形の写しの枝へ届かない」経路の不変条件を見張る。矩形の
+// `c` `C` が回数を流し直すようになるか入口の問いが動いて赤になったら、block_copied の VimInsertAt
+// の枝も document_caret_after に通す（#1173 の R5-1）。
+[[nodiscard]] std::pair<TextPosition, TextPosition> block_repeat_rest(std::string_view newline,
+                                                                      std::string_view keys)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    std::string text = "abc def";
+    text += newline;
+    text += "abc def";
+    text += newline;
+    text += "abc def";
+    editing.files().hold(Bytes{std::move(text)});
+    static_cast<void>(controller.apply_frame(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
+    vim_replay(controller, keys);
+    const TextPosition rest = controller.frame().caret.position;
+    vim_replay(controller, "gg0`^");
+    return {rest, controller.frame().caret.position};
+}
+
+void verify_vim_block_count_insert_at_line_endings()
+{
+    for (const std::string_view keys :
+         {"w<C-v>jj2Ixy<Esc>", "w<C-v>j2Ixy<CR>z<Esc>", "w<C-v>j2Cxy<CR>z<Esc>"})
+    {
+        expect(block_repeat_rest("\r\n", keys) == block_repeat_rest("\n", keys),
+               "a counted block insert rests and marks '^ at the same place on LF and CRLF");
+    }
+}
+
 // 回数付き INSERT の流し直し（#1093）が CRLF の文書でも行をつなぎ、undo 1 回で戻ること。engine は
 // LF で数えた置き換えを返し、controller が文書の改行へ直す。
 void verify_vim_count_insert_replay_crlf()
@@ -1997,6 +2034,7 @@ void verify_vim_engine()
     verify_vim_put_line_endings();
     verify_vim_count_insert_replay_crlf();
     verify_vim_block_count_replay_crlf();
+    verify_vim_block_count_insert_at_line_endings();
     verify_vim_crlf();
     verify_vim_other_keys();
     verify_vim_normal_stops_at_failure();

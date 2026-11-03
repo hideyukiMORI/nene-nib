@@ -607,8 +607,7 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
         edits.push_back(VimBlockEdit{OffsetRange{repeat->at, repeat->at}, repeat->utf8});
         tail = repeat->utf8;
     }
-    std::string body =
-        spliced_slice(text, line, insert.at.value - start.value, length - insert.line_bytes);
+    std::string body = spliced_slice(text, line, insert.at_byte, length - insert.line_bytes);
     body += tail;
     return std::pair{std::move(body), std::move(edits)};
 }
@@ -636,6 +635,9 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     std::string body = std::move(growth.value().first);
     std::vector<VimBlockEdit> edits = std::move(growth.value().second);
     Offset resting = view.selection.caret;
+    // ここへ来る繰り返しの本文は改行を含まない（改行を含む `I` `A` は上の問いで返り、VISUAL の `c`
+    // `C` は回数を流し直さない）ので、LF で数えたキャレットのまま文書の位置になる（#1173・契約
+    // verify_vim_block_count_insert_at_line_endings）。
     if (const auto *repeat = std::get_if<VimInsertAt>(&step.effect))
     {
         resting = repeat->caret;
