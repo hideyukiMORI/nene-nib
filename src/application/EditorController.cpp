@@ -5,6 +5,7 @@
 #include "CommandChoice.hpp"
 #include "CommandInput.hpp"
 #include "CommandPalette.hpp"
+#include "DiagnosticLines.hpp"
 #include "DisplayInquiry.hpp"
 #include "DisplayText.hpp"
 #include "ExResult.hpp"
@@ -766,6 +767,7 @@ EditorController::visible_lines(const PaneSource &source, std::optional<SyntaxSt
         auto shown = line_view(source, visual.line(line),
                                block_row(source.block, line, source.range), caret);
         lex = colored_line(key.language, lex, shown, lexed);
+        diagnosed_line(state, shown);
         const auto count = screen_rows_of(shown);
         if (!count)
         {
@@ -878,6 +880,7 @@ EditorController::grid_visible_rows(const PaneSource &source,
         tally.searched += marks.searched;
         tally.lexed += lex.has_value() ? 1 : 0;
         lex = grid_colored_line(state, lex, line, marks.colors);
+        grid_diagnosed_line(state, line, marks.diagnostics);
         GridLineRows(GridLineSource{state, cells.value(), line, from, from + take,
                                     static_cast<std::int64_t>(screen), visible, std::move(marks),
                                     caret})

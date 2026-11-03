@@ -2,15 +2,32 @@
 // ScriptedLanguageServer で、起動 → `initialize` → 答え → `initialized`・失敗の値・再起動の
 // 上限 3・tick の古さ・設定の on / off で start / stop・`:set lsp` の要求を確かめる。本物の
 // clangd も窓も使わない。
+#include "CloseTab.hpp"
+#include "Column.hpp"
+#include "DeleteDirection.hpp"
+#include "DeleteText.hpp"
+#include "DiagnosticSeverity.hpp"
+#include "DiagnosticSpan.hpp"
+#include "DisplayForm.hpp"
+#include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorSettings.hpp"
 #include "ExLspRequest.hpp"
 #include "ExResult.hpp"
 #include "FilePath.hpp"
+#include "GridCellSpan.hpp"
+#include "GridDiagnosticSpan.hpp"
+#include "HistoryAction.hpp"
+#include "HistoryDirection.hpp"
 #include "InsertText.hpp"
+#include "LanguageServerLink.hpp"
 #include "LanguageServerTick.hpp"
+#include "LineView.hpp"
 #include "OpenDocument.hpp"
+#include "SaveDocument.hpp"
 #include "Scopes.hpp"
+#include "SelectDisplay.hpp"
+#include "SelectEditMode.hpp"
 #include "ServerCommand.hpp"
 #include "ServerEvent.hpp"
 #include "ServerExited.hpp"
@@ -21,10 +38,16 @@
 #include "SwitchTab.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
+#include "TextEncoding.hpp"
+#include "TextViewGeometry.hpp"
+#include "VimKeyPress.hpp"
+#include "VimTestSupport.hpp"
+#include "VisibleLines.hpp"
 #include "WalkRecentTab.hpp"
 #include "WorkCompleted.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -161,13 +184,19 @@ void verify_lifecycle()
         editing,
         app::ServerMessage{
             R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-8"}}})"}));
-    expect(server.sent().size() == 2 && contains(last_sent(editing), R"("method":"initialized")") &&
-               !contains(last_sent(editing), R"("id")"),
-           "the answer to initialize is followed by the initialized notification");
+    expect(server.sent().size() == 3 &&
+               contains(server.sent().at(1), R"("method":"initialized")") &&
+               !contains(server.sent().at(1), R"("id")") &&
+               contains(last_sent(editing), R"("method":"textDocument/didOpen")"),
+           "the answer to initialize is followed by initialized and then the open document");
+    expect(contains(server.sent().front(), R"("rootUri":"file:///C:/work")"),
+           "initialize names the launch folder as the root URI (ADR 0161 decision 1)");
     const std::size_t before = server.touches();
     applied(editing.controller(), app::InsertText{"x"});
     applied(editing.controller(), app::InsertText{"y"});
-    expect(server.touches() == before, "typing never calls the language server port in L0");
+    expect(server.touches() == before + 2 &&
+               server.notifications("textDocument/didChange").size() == 2,
+           "each typed intent sends exactly one didChange (ADR 0161 decision 1)");
     static_cast<void>(delivered(
         editing,
         app::ServerMessage{
@@ -213,8 +242,10 @@ void verify_language_follow()
     started(editing);
     auto &server = editing.language_server();
     applied(editing.controller(), app::OpenDocument{path_of(note_path)});
-    expect(contains(last_sent(editing), R"("method":"shutdown")"),
-           "a document without a command shuts the server down");
+    const auto &sent = server.sent();
+    expect(contains(last_sent(editing), R"("method":"shutdown")") &&
+               contains(sent.at(sent.size() - 2), R"("method":"textDocument/didClose")"),
+           "a document without a command closes the open documents and shuts the server down");
     static_cast<void>(
         delivered(editing, app::ServerMessage{R"({"jsonrpc":"2.0","id":2,"result":null})"}));
     expect(server.stops() == 1 && server.launches().size() == 1,
@@ -270,8 +301,10 @@ void verify_failures_reset()
         static_cast<void>(delivered(editing, app::ServerStarted{}));
         answered(editing);
     }
+    const auto &sent = server.sent();
     expect(server.launches().size() == 6 &&
-               contains(last_sent(editing), R"("method":"initialized")"),
+               contains(sent.at(sent.size() - 2), R"("method":"initialized")") &&
+               contains(last_sent(editing), R"("method":"textDocument/didOpen")"),
            "a server that initializes again is restarted after every single failure");
 }
 
@@ -351,6 +384,278 @@ void verify_quiet_when_off()
     expect(editing.language_server().touches() == 0,
            "with lsp off nothing reaches the language server port");
 }
+
+// ---------------------------------------------------------------- 段 L1（ADR 0161・#1210）
+
+constexpr std::string_view source_uri = "file:///C:/work/main.cpp";
+constexpr std::string_view second_path = "C:\\work\\two.cpp";
+constexpr std::string_view second_uri = "file:///C:/work/two.cpp";
+constexpr std::string_view script_path = "C:\\work\\run.py";
+// main.cpp の `main`（0 行目の 4〜8 文字目）の error。文は 2 行目を捨てて 1 行になる。
+constexpr std::string_view main_error =
+    R"([{"range":{"start":{"line":0,"character":4},"end":{"line":0,"character":8}},"severity":1,"message":"bad\nmore"}])";
+// main.cpp の `int`（0 行目の 0〜3 文字目）の warning。
+constexpr std::string_view int_warning =
+    R"([{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":3}},"severity":2,"message":"w"}])";
+constexpr std::size_t shown_lines = 4;
+
+// 本文の `"version":N` の N（無ければ値なし）。
+[[nodiscard]] std::optional<std::uint64_t> version_in(std::string_view body)
+{
+    constexpr std::string_view key = R"("version":)";
+    const std::size_t at = body.find(key);
+    if (at == std::string_view::npos)
+    {
+        return std::nullopt;
+    }
+    std::uint64_t value = 0;
+    for (std::size_t index = at + key.size();
+         index < body.size() && body[index] >= '0' && body[index] <= '9'; ++index)
+    {
+        value = value * 10 + static_cast<std::uint64_t>(body[index] - '0');
+    }
+    return value;
+}
+
+[[nodiscard]] std::size_t occurrences(std::string_view text, std::string_view part)
+{
+    std::size_t count = 0;
+    for (std::size_t at = text.find(part); at != std::string_view::npos;
+         at = text.find(part, at + part.size()))
+    {
+        ++count;
+    }
+    return count;
+}
+
+// 行の下線がちょうど 1 つの区間 [begin, end)（桁は 1 始まり）か。
+[[nodiscard]] bool underlined(const app::LineView &line, std::size_t begin, std::size_t end,
+                              core::DiagnosticSeverity severity)
+{
+    return line.diagnostics ==
+           std::vector{core::DiagnosticSpan{core::Column{begin}, core::Column{end}, severity}};
+}
+
+// 見えている行を持つ設定で起こす（started と同じ形に VisibleLines を足す）。
+void started_with_lines(Editing &editing)
+{
+    static_cast<void>(editing.controller().apply(app::VisibleLines{shown_lines}));
+    started(editing);
+}
+
+// lsp を on にし、cpp と python に命令を書いた設定。
+[[nodiscard]] SettingsReading two_language_settings()
+{
+    auto settings = core::default_editor_settings();
+    settings.lsp = true;
+    settings.lsp_commands = {{"cpp", std::string{clangd_command}}, {"python", "pylsp"}};
+    return SettingsReading{std::optional<core::EditorSettings>{std::move(settings)}};
+}
+
+// 決定 1: `didOpen` は on・命令のある言語・4 MiB 以下の文書を `initialized` の後に全文で送る。
+void verify_did_open()
+{
+    Editing editing(lsp_settings(true));
+    started(editing);
+    auto &server = editing.language_server();
+    const auto opened = server.notifications("textDocument/didOpen");
+    expect(opened.size() == 1 && contains(opened.front(), R"("uri":"file:///C:/work/main.cpp")") &&
+               contains(opened.front(), R"("languageId":"cpp")") &&
+               version_in(opened.front()) == std::optional<std::uint64_t>{0} &&
+               contains(opened.front(), R"("text":"int main() {}\n")"),
+           "the active C++ document is opened with its URI, language, revision and full text");
+
+    Editing big(lsp_settings(true));
+    big.files().hold_at(std::string(source_path),
+                        Bytes{std::string(app::language_server_document_limit + 1, 'x')});
+    applied(big.controller(), app::OpenDocument{path_of(source_path)});
+    static_cast<void>(delivered(big, app::ServerStarted{}));
+    answered(big);
+    expect(big.language_server().notifications("textDocument/didOpen").empty() &&
+               contains(big.language_server().sent().back(), R"("method":"initialized")"),
+           "a document over 4 MiB is not sent to the server");
+
+    Editing growing(lsp_settings(true));
+    started(growing);
+    applied(growing.controller(),
+            app::InsertText{std::string(app::language_server_document_limit, 'x')});
+    expect(growing.language_server().notifications("textDocument/didClose").size() == 1 &&
+               growing.language_server().notifications("textDocument/didChange").empty(),
+           "an edit that grows the document over 4 MiB closes it instead of sending the change");
+}
+
+// 決定 1: 1 意図の編集は 1 通の `didChange` に順のまま束ね、version は意図の後の revision()。
+void verify_did_change_bundles()
+{
+    Editing editing(lsp_settings(true));
+    started(editing);
+    auto &server = editing.language_server();
+    applied(editing.controller(), app::InsertText{"x"});
+    const auto typed = server.notifications("textDocument/didChange");
+    expect(
+        typed.size() == 1 && version_in(typed.front()) == std::optional<std::uint64_t>{1} &&
+            contains(
+                typed.front(),
+                R"("contentChanges":[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"text":"x"}])"),
+        "one typed character is one incremental change at the caret with the next version");
+
+    Editing macro(lsp_settings(true));
+    macro.files().hold_at(std::string(second_path), Bytes{std::string("abc\ndef\nghi\n")});
+    applied(macro.controller(), app::SelectEditMode{core::EditMode::vim});
+    applied(macro.controller(), app::OpenDocument{path_of(second_path)});
+    static_cast<void>(delivered(macro, app::ServerStarted{}));
+    answered(macro);
+    for (const auto &key : vim_keys_of("qaxjxq"))
+    {
+        applied(macro.controller(), app::VimKeyPress{key});
+    }
+    const auto recorded = macro.language_server().notifications("textDocument/didChange");
+    for (const auto &key : vim_keys_of("@a"))
+    {
+        applied(macro.controller(), app::VimKeyPress{key});
+    }
+    const auto replayed = macro.language_server().notifications("textDocument/didChange");
+    expect(
+        recorded.size() == 2 && replayed.size() == 3 &&
+            occurrences(replayed.back(), R"("range")") == 2 &&
+            contains(
+                replayed.back(),
+                R"({"range":{"start":{"line":1,"character":0},"end":{"line":1,"character":1}},"text":""},{"range":{"start":{"line":2,"character":0},"end":{"line":2,"character":1}},"text":""})") &&
+            version_in(replayed.back()).value_or(0) > version_in(recorded.back()).value_or(0),
+        "a macro's two edits go out as one didChange in order with a later version");
+
+    Editing undo(lsp_settings(true));
+    started(undo);
+    applied(undo.controller(), app::InsertText{"x"});
+    applied(undo.controller(), app::HistoryAction{core::HistoryDirection::undo});
+    const auto undone = undo.language_server().notifications("textDocument/didChange");
+    expect(
+        undone.size() == 2 &&
+            contains(
+                undone.back(),
+                R"({"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"text":""})") &&
+            version_in(undone.back()) == std::optional<std::uint64_t>{2},
+        "undo sends the reverse edit with a new version");
+}
+
+// 決定 1: タブを閉じたら `didClose`。切り替えと保存では送らない（決定 8）。2 言語目は前を閉じる。
+void verify_did_close()
+{
+    Editing editing(lsp_settings(true));
+    hold_documents(editing);
+    editing.files().hold_at(std::string(second_path), Bytes{std::string("abc\n")});
+    started(editing);
+    auto &server = editing.language_server();
+    applied(editing.controller(), app::OpenDocument{path_of(second_path)});
+    expect(server.notifications("textDocument/didOpen").size() == 2 &&
+               contains(server.notifications("textDocument/didOpen").back(),
+                        R"("uri":"file:///C:/work/two.cpp")"),
+           "a second document of the same language is opened on the same server");
+    const std::size_t quiet = server.sent().size();
+    applied(editing.controller(), app::SwitchTab{0});
+    applied(editing.controller(), app::SwitchTab{1});
+    static_cast<void>(editing.controller().apply_frame(
+        app::SaveDocument{path_of(second_path), core::TextEncoding::utf8}));
+    expect(server.sent().size() == quiet && server.launches().size() == 1,
+           "switching between open documents and saving send nothing (no didSave)");
+    applied(editing.controller(), app::CloseTab{1});
+    const auto closed = server.notifications("textDocument/didClose");
+    expect(closed.size() == 1 && contains(closed.front(), second_uri),
+           "closing a tab closes its document on the server");
+    static_cast<void>(run_ex(editing.controller(), "set nolsp"));
+    const auto &sent = server.sent();
+    expect(server.notifications("textDocument/didClose").size() == 2 &&
+               contains(sent.at(sent.size() - 2), R"("uri":"file:///C:/work/main.cpp")") &&
+               contains(sent.back(), R"("method":"shutdown")"),
+           "set nolsp closes the remaining documents before shutdown");
+
+    Editing languages(two_language_settings());
+    hold_documents(languages);
+    languages.files().hold_at(std::string(script_path), Bytes{std::string("x = 1\n")});
+    started(languages);
+    applied(languages.controller(), app::OpenDocument{path_of(script_path)});
+    const auto &order = languages.language_server().sent();
+    expect(contains(order.back(), R"("method":"shutdown")") &&
+               contains(order.at(order.size() - 2), R"("method":"textDocument/didClose")") &&
+               contains(order.at(order.size() - 2), source_uri),
+           "a document of a second language closes the first language's documents and server");
+}
+
+// 決定 2・5: `publishDiagnostics` は文書の値に載り、見えている行の LineView.diagnostics に写る。
+void verify_diagnostics_placed()
+{
+    Editing editing(lsp_settings(true));
+    started_with_lines(editing);
+    auto &server = editing.language_server();
+    server.publish(source_uri, 0, main_error);
+    const auto frame = editing.controller().apply_frame(app::WorkCompleted{});
+    expect(frame.lines.size() == 2 &&
+               underlined(frame.lines.at(0), 5, 9, core::DiagnosticSeverity::error) &&
+               frame.lines.at(1).diagnostics.empty(),
+           "a published error is underlined on its visible line only");
+    server.publish(source_uri, 0, "[]");
+    expect(editing.controller().apply_frame(app::WorkCompleted{}).lines.at(0).diagnostics.empty(),
+           "an empty publish clears the document's diagnostics");
+    server.publish("file:///C:/work/other.cpp", 0, main_error);
+    server.publish(source_uri, 99, main_error);
+    expect(editing.controller().apply_frame(app::WorkCompleted{}).lines.at(0).diagnostics.empty(),
+           "diagnostics for an unopened URI or an unsent version are dropped");
+
+    const core::TextViewGeometry geometry{85, 20, 96};
+    static_cast<void>(editing.controller().apply(app::VisibleLines{shown_lines, geometry}));
+    server.publish(source_uri, 0, main_error);
+    static_cast<void>(editing.controller().apply(app::WorkCompleted{}));
+    const auto grid = editing.controller().apply_frame(app::SelectDisplay{core::DisplayForm::grid});
+    expect(!grid.grid.empty() && grid.grid.front().diagnostics ==
+                                     std::vector{app::GridDiagnosticSpan{
+                                         app::GridCellSpan{4, 8}, core::DiagnosticSeverity::error}},
+           "the grid row carries the same underline in cells");
+}
+
+// 決定 3: 編集で診断をずらし、古い version の診断は届いた版の本文で写してから後の編集でずらす。
+void verify_diagnostics_follow_edits()
+{
+    Editing editing(lsp_settings(true));
+    started_with_lines(editing);
+    auto &server = editing.language_server();
+    server.publish(source_uri, 0, main_error);
+    static_cast<void>(editing.controller().apply(app::WorkCompleted{}));
+    const auto typed = editing.controller().apply_frame(app::InsertText{"xy"});
+    expect(underlined(typed.lines.at(0), 7, 11, core::DiagnosticSeverity::error),
+           "typing before a diagnostic moves it with the text");
+    server.publish(source_uri, 0, int_warning);
+    const auto stale = editing.controller().apply_frame(app::WorkCompleted{});
+    expect(underlined(stale.lines.at(0), 3, 6, core::DiagnosticSeverity::warning),
+           "a diagnostic for an older version is placed through the later edits");
+    const auto before =
+        editing.controller().apply_frame(app::DeleteText{core::DeleteDirection::backward});
+    expect(underlined(before.lines.at(0), 2, 5, core::DiagnosticSeverity::warning),
+           "deleting before a diagnostic moves it back");
+    const auto inside =
+        editing.controller().apply_frame(app::DeleteText{core::DeleteDirection::forward});
+    expect(inside.lines.at(0).diagnostics.empty(),
+           "an edit inside the range drops the diagnostic until the server publishes again");
+}
+
+// 決定 2・5: 脇に置いた文書の診断も、その束に載って切り替えで見える。
+void verify_parked_diagnostics()
+{
+    Editing editing(lsp_settings(true));
+    editing.files().hold_at(std::string(second_path), Bytes{std::string("abc\n")});
+    started_with_lines(editing);
+    auto &server = editing.language_server();
+    applied(editing.controller(), app::OpenDocument{path_of(second_path)});
+    server.publish(source_uri, 0, main_error);
+    const auto aside = editing.controller().apply_frame(app::WorkCompleted{});
+    expect(aside.lines.at(0).diagnostics.empty(),
+           "a parked document's diagnostics do not show on the active document");
+    const auto back = editing.controller().apply_frame(app::SwitchTab{0});
+    expect(underlined(back.lines.at(0), 5, 9, core::DiagnosticSeverity::error),
+           "switching back shows the diagnostics placed while it was parked");
+    static_cast<void>(run_ex(editing.controller(), "set nolsp"));
+    expect(editing.controller().frame().lines.at(0).diagnostics.empty(),
+           "closing the documents on the server clears their diagnostics");
+}
 } // namespace
 
 void verify_language_server_contracts()
@@ -366,6 +671,12 @@ void verify_language_server_contracts()
     verify_staleness();
     verify_tick_is_not_an_operation();
     verify_quiet_when_off();
+    verify_did_open();
+    verify_did_change_bundles();
+    verify_did_close();
+    verify_diagnostics_placed();
+    verify_diagnostics_follow_edits();
+    verify_parked_diagnostics();
 }
 
 void verify_language_server_scope()

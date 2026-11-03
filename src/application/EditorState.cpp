@@ -537,6 +537,9 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
     next.display_ = core::DisplayForm::text;
     next.language_ = language_of(next.document_);
     next.syntax_enabled_ = true;
+    next.diagnostics_.clear();
+    next.diagnostics_version_ = 0;
+    next.diagnostics_count_ = core::DiagnosticsCount::complete;
     next.display_inquiry_ = DisplayInquiry::unjudged;
     // 本文が丸ごと替わるので、同じ文書を見るもう 1 つの枠は先頭に戻す（ADR 0148 の決定 5）。
     next.restart_other_showing(autosave_ids_.at(active_));
@@ -590,6 +593,52 @@ EditorState EditorState::with_vim_marks(core::VimMarks marks) const
 {
     EditorState next(*this);
     next.vim_marks_ = std::move(marks);
+    return next;
+}
+
+const std::vector<core::Diagnostic> &EditorState::diagnostics() const noexcept
+{
+    return diagnostics_;
+}
+
+std::uint64_t EditorState::diagnostics_version() const noexcept
+{
+    return diagnostics_version_;
+}
+
+core::DiagnosticsCount EditorState::diagnostics_count() const noexcept
+{
+    return diagnostics_count_;
+}
+
+EditorState EditorState::with_diagnostics(std::vector<core::Diagnostic> diagnostics,
+                                          std::uint64_t version, core::DiagnosticsCount count) const
+{
+    EditorState next(*this);
+    next.diagnostics_ = std::move(diagnostics);
+    next.diagnostics_version_ = version;
+    next.diagnostics_count_ = count;
+    return next;
+}
+
+EditorState EditorState::with_parked_diagnostics(std::size_t position,
+                                                 std::vector<core::Diagnostic> diagnostics,
+                                                 std::uint64_t version,
+                                                 core::DiagnosticsCount count) const
+{
+    const auto loaded =
+        position == active_ || position >= tab_count() ? std::nullopt : loaded_at(position);
+    if (!loaded.has_value())
+    {
+        return *this;
+    }
+    auto bundle = *loaded.value();
+    bundle.diagnostics = std::move(diagnostics);
+    bundle.diagnostics_version = version;
+    bundle.diagnostics_count = count;
+    EditorState next(*this);
+    next.parked_.at(parked_index_of(position)) =
+        std::make_shared<const DocumentState>(std::move(bundle));
     return next;
 }
 
@@ -822,7 +871,8 @@ std::shared_ptr<const DocumentState> EditorState::parked_active() const
         DocumentState{text_, core::collapsed_at(selection_.caret), std::move(history), document_,
                       scroll_.first_visible, vim_.wanted_column, vim_.scroll_lines, std::move(view),
                       scroll_.first_row, scroll_.horizontal, caret_affinity_, display_,
-                      display_inquiry_, vim_marks_, language_, syntax_enabled_});
+                      display_inquiry_, vim_marks_, language_, syntax_enabled_, diagnostics_,
+                      diagnostics_version_, diagnostics_count_});
 }
 
 // 広げる（決定 1・4）。見えている行数は窓全体の値なので保ち、先頭行だけを文書から取る。
@@ -840,6 +890,9 @@ void EditorState::spread(const DocumentState &tab)
     vim_marks_ = tab.marks;
     language_ = tab.language;
     syntax_enabled_ = tab.syntax_enabled;
+    diagnostics_ = tab.diagnostics;
+    diagnostics_version_ = tab.diagnostics_version;
+    diagnostics_count_ = tab.diagnostics_count;
     vim_ = core::vim_switched_document(vim_, tab.wanted_column, tab.scroll_lines);
 }
 

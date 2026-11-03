@@ -154,6 +154,20 @@ class EditorState final
     // （engine の値）と編集の 3 か所（replace・undo・redo）だけ。開いた文書は空。
     [[nodiscard]] const core::VimMarks &vim_marks() const noexcept;
     [[nodiscard]] EditorState with_vim_marks(core::VimMarks marks) const;
+    // 言語サーバーの診断（ADR 0161 の決定 2）。アクティブな文書のもので、開いた文書・新しいタブは
+    // 空。置くのは controller の診断の受け（届いたとき）と編集の 1 本（ずらす）と、`didClose` の
+    // 後の片付けだけ。with_parked_diagnostics は帯の位置 position の読み込み済みの脇の束に置く
+    // （アクティブ・範囲の外・まだ読んでいない文書なら何も変えない）。
+    [[nodiscard]] const std::vector<core::Diagnostic> &diagnostics() const noexcept;
+    [[nodiscard]] std::uint64_t diagnostics_version() const noexcept;
+    [[nodiscard]] core::DiagnosticsCount diagnostics_count() const noexcept;
+    [[nodiscard]] EditorState with_diagnostics(std::vector<core::Diagnostic> diagnostics,
+                                               std::uint64_t version,
+                                               core::DiagnosticsCount count) const;
+    [[nodiscard]] EditorState with_parked_diagnostics(std::size_t position,
+                                                      std::vector<core::Diagnostic> diagnostics,
+                                                      std::uint64_t version,
+                                                      core::DiagnosticsCount count) const;
     [[nodiscard]] EditorState with_display_inquiry(DisplayInquiry inquiry) const;
     // 本文を仮想桁の索引を持つ写しに置き換える（ADR 0140 の決定 4）。本文の中身・履歴・選択は
     // 変えない。持たせるのは巨大な行の文書を開いたときと、格子にするときだけ。
@@ -337,6 +351,9 @@ class EditorState final
     core::VimState vim_;
     Document document_;
     core::VimMarks vim_marks_{};
+    std::vector<core::Diagnostic> diagnostics_;
+    std::uint64_t diagnostics_version_ = 0;
+    core::DiagnosticsCount diagnostics_count_ = core::DiagnosticsCount::complete;
     std::optional<core::Composition> composition_;
     std::optional<FileFailure> last_failure_;
     core::EditorSettings settings_;

@@ -57,23 +57,29 @@ constexpr std::string_view space = " ";
                         span.end > from ? span.end + cells : span.end};
 }
 
-// 構文の色は差し込んだ升に掛けない（#839）。差し込みをまたぐ区間は手前と後ろの 2 つに割る。
-[[nodiscard]] std::vector<GridColorSpan> split_colors(const std::vector<GridColorSpan> &colors,
-                                                      std::size_t from, std::size_t cells)
+// 構文の色と診断の下線は差し込んだ升に掛けない（#839・ADR 0161 の決定 4）。差し込みをまたぐ
+// 区間は手前と後ろの 2 つに割る。Marked は升の cells とほかの欄を持つ区間。
+template <typename Marked>
+[[nodiscard]] std::vector<Marked> split_marked(const std::vector<Marked> &marked, std::size_t from,
+                                               std::size_t cells)
 {
-    std::vector<GridColorSpan> result;
-    result.reserve(colors.size() + 1);
-    for (const auto &color : colors)
+    std::vector<Marked> result;
+    result.reserve(marked.size() + 1);
+    const auto placed = [](Marked item, GridCellSpan span)
     {
-        const auto span = color.cells;
+        item.cells = span;
+        return item;
+    };
+    for (const auto &item : marked)
+    {
+        const auto span = item.cells;
         if (span.begin < from && span.end > from)
         {
-            result.push_back(GridColorSpan{GridCellSpan{span.begin, from}, color.role});
-            result.push_back(
-                GridColorSpan{GridCellSpan{from + cells, span.end + cells}, color.role});
+            result.push_back(placed(item, GridCellSpan{span.begin, from}));
+            result.push_back(placed(item, GridCellSpan{from + cells, span.end + cells}));
             continue;
         }
-        result.push_back(GridColorSpan{shifted_span(span, from, cells), color.role});
+        result.push_back(placed(item, shifted_span(span, from, cells)));
     }
     return result;
 }
@@ -85,7 +91,8 @@ void shift_spans(GridRowView &row, std::size_t from, std::size_t cells)
     row.current_match = row.current_match.transform(moved);
     std::ranges::transform(row.matches, row.matches.begin(), moved);
     std::ranges::transform(row.replaced, row.replaced.begin(), moved);
-    row.colors = split_colors(row.colors, from, cells);
+    row.colors = split_marked(row.colors, from, cells);
+    row.diagnostics = split_marked(row.diagnostics, from, cells);
 }
 
 // 差し込む位置: キャレットの升で始まる最初の code point の後ろの、幅 0 の code point（前の文字の
@@ -331,12 +338,27 @@ void GridLineRows::mark_row(std::size_t index, std::size_t last)
     }
     row.current_match =
         marks.current.has_value() ? span_of(index, marks.current.value()) : std::nullopt;
+    mark_spans(index);
+}
+
+void GridLineRows::mark_spans(std::size_t index)
+{
+    const auto &marks = source_.marks;
+    auto &row = rows_.at(index);
     for (const auto &color : marks.colors)
     {
         const auto span = span_of(index, color.range);
         if (span.has_value())
         {
             row.colors.push_back(GridColorSpan{span.value(), color.role});
+        }
+    }
+    for (const auto &diagnostic : marks.diagnostics)
+    {
+        const auto span = span_of(index, diagnostic.range);
+        if (span.has_value())
+        {
+            row.diagnostics.push_back(GridDiagnosticSpan{span.value(), diagnostic.severity});
         }
     }
 }

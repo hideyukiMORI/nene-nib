@@ -2,6 +2,7 @@
 
 #include "GridCellSpan.hpp"
 #include "GridColorSpan.hpp"
+#include "GridDiagnosticSpan.hpp"
 #include "LineNumber.hpp"
 
 #include <cstddef>
@@ -42,5 +43,8 @@ struct GridRowView
     // 構文の色の升（#839・ADR 0156 の追補）。当たりと同じ写しで本文の位置から切り、変換中の文字列
     // を差し込んだ升は区間を割って色を付けない。
     std::vector<GridColorSpan> colors{};
+    // 診断の下線の升（ADR 0161 の決定 4）。colors と同じ写しで本文の位置から切り、変換中の文字列を
+    // 差し込んだ升は区間を割って下線を付けない。
+    std::vector<GridDiagnosticSpan> diagnostics{};
 };
 } // namespace nenenib::application

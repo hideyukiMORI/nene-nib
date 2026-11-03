@@ -188,6 +188,7 @@ void EditorController::replace(const core::OffsetRange &range, std::string_view 
     state_ = state_.with_vim_marks(std::move(marks));
     auto document = after_edit_at(state_.document(), before);
     forget_syntax_before(edit);
+    language_server_edit(edit);
     adjust_other(edit, next);
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), std::move(history),
                               std::move(document));
@@ -518,8 +519,10 @@ void EditorController::undo_edit()
     const core::Offset caret{at.value + edit.value().removed.size()};
     // undo は編集の逆向き（inserted を removed に戻す）。
     forget_syntax_before(edit.value());
-    adjust_other(core::Edit{at, edit.value().inserted, edit.value().removed, at}, next);
-    undone_marks(core::Edit{at, edit.value().inserted, edit.value().removed, at});
+    const core::Edit undone{at, edit.value().inserted, edit.value().removed, at};
+    language_server_edit(undone);
+    adjust_other(undone, next);
+    undone_marks(undone);
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().undone(),
                               state_.document());
     follow_caret();
@@ -537,6 +540,7 @@ void EditorController::redo_edit()
     auto next = state_.text().replaced(at, end, edit.value().inserted);
     const core::Offset caret{at.value + edit.value().inserted.size()};
     forget_syntax_before(edit.value());
+    language_server_edit(edit.value());
     adjust_other(core::Edit{at, edit.value().removed, edit.value().inserted, at}, next);
     undone_marks(edit.value());
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone(),

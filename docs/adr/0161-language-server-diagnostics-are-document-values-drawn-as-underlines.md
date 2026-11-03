@@ -32,7 +32,7 @@ L0（ADR 0160）で port と JSON-RPC と設定が揃う。最初に見せる機
 ## 強制
 
 - 診断の位置の写しとずらしが core の純関数 1 本ずつ: **active**（`eng/symbols.py`・契約）。#995 の core の段で `lsp_range_to_offsets` と `lsp_published_diagnostics`（`LspDiagnostics.hpp`）・`diagnostics_adjusted` と `diagnostic_spans`（`DiagnosticEdits.hpp`）を足し、契約 `nib_tests --lsp-diagnostics`（既定実行にも載る・固定 seed の性質の試験を含む）が守る。
-- off のときの port の呼び出し 0 回: **planned**（`verify_quiet_paths` の欄・L1 の PR で active）。
+- off のときの port の呼び出し 0 回: **active**（#1210・`nib_tests --history` の `verify_quiet_paths` が既定の設定（off）で起動・開く・切り替え・保存・打鍵の後に port の呼ばれた回数 0 を見る。`--language-server` の `verify_quiet_when_off` が off の打鍵・合図・tick で 0 回、`verify_did_close` が on でも開いた文書の間の切り替えと保存で 0 通を見る）。
 - off の 8 本に退行なし: **active**（QLT-014）。
 - `lsp-` のベンチの基準値: **planned**（試用の後に hide が採用・D60）。
 
