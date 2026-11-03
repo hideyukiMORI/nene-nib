@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 4148c393bef54f0ace5a17690040818f8ae24e6961062da772d0d34731271c8d / 3265 fixtures
+// fixtures.json: sha256 76f4f01e59b8498fb84b49c764c2a7eab9c88d4d42edfe5576363b07be009f3a / 3272 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3265> vim_fixtures{{
+constexpr std::array<VimFixture, 3272> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2966,6 +2966,13 @@ constexpr std::array<VimFixture, 3265> vim_fixtures{{
     {"block-insert-wide-start-count-xy", "aあbc\nabcdef", "3l<C-v>j3|2IXY<Esc>", "aXYXYあbc\nabYXYcdef", 1, 2, "", "", std::nullopt},
     {"block-insert-wide-start-dot", "aあbc\nabcdef\naあbc\nabcdef", "3l<C-v>j3|IXY<Esc>jj.", "aXYあbc\nabYcdef\naXYあbc\naXYbcdef", 3, 2, "", "", std::nullopt},
     {"block-insert-wide-start-undo", "aあbc\nabcdef", "3l<C-v>j3|IXY<Esc>u", "aあbc\nabcdef", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-left-before", "aあbc\nabcdef", "3l<C-v>j3|IX<Left><Left>Z<Esc>", "ZaXあbc\nabXcdef", 1, 1, "", "", std::nullopt},
+    {"block-insert-wide-start-home", "aあbc\nabcdef", "3l<C-v>j3|IXY<Home>Z<Esc>", "ZaXYあbc\nabXYcdef", 1, 1, "", "", std::nullopt},
+    {"block-insert-wide-start-ctrl", "a\026bc\nabcdef", "3l<C-v>j3|IXY<Esc>", "aXY\026bc\nabYcdef", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-cr", "a\rbc\nabcdef", "3l<C-v>j3|IXY<Esc>", "aXY\rbc\nabYcdef", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-zwsp", "a​bc\nabcdefghij", "3l<C-v>j5|IXYZW<Esc>", "aXYZW​bc\nabcdWefghij", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-typed-tab", "aあbc\nabcdef", "3l<C-v>j3|IX<Tab>Y<Esc>", "aX\tYあbc\nab\tYcdef", 1, 2, "", "", std::nullopt},
+    {"block-insert-wide-start-tab-typed-tab", "a\tbc\nabcdefghij", "3l<C-v>j4|I<Tab>Y<Esc>", "a\tY\tbc\nabc\tYdefghij", 1, 2, "", "", std::nullopt},
     {"block-insert-I-tab-straddle", "abcdefghij\na\tbc\nabcdefghij", "ll<C-v>jjIX<Esc>", "abXcdefghij\na X      bc\nabXcdefghij", 1, 3, "", "", std::nullopt},
     {"block-insert-A-dollar-dot", "ab\nabcd\nabc\nab", "<C-v>j$AX<Esc>jj.", "abX\nabcdX\nabcX\nabX", 3, 1, "", "", std::nullopt},
     {"block-insert-c-undo", "abcdef\nghijkl\nmnopqr", "l<C-v>jjlcab<Esc>u", "abcdef\nghijkl\nmnopqr", 1, 2, "bc\nhi\nno", "\0262", std::nullopt},

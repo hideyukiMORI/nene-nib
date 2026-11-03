@@ -215,10 +215,8 @@ namespace detail
 
 namespace
 {
-// 矩形の INSERT が 1 行の `column` の桁に入れる本文の前の空白（ADR 0035 の追補 #1042）。桁が文字
-// （Tab か全角）の途中に落ちればその文字の手前から桁までを空白で埋め、`A` が届かない行では行末から
-// 桁までを埋める（固定 Vim の block_insert・実測）。
-// 桁が文字（Tab か全角）の途中に落ちれば、その文字のうち桁より前の桁の数。行が桁に届かなければ 0。
+// 桁が文字（幅 2 以上の文字・Tab・2 桁以上の制御文字など）の途中に落ちれば、その文字のうち桁より
+// 前の桁の数。文字の頭ちょうどか、行が桁に届かなければ 0。
 [[nodiscard]] std::size_t straddled_columns(std::string_view content, VirtualColumn column) noexcept
 {
     return column.value <= virtual_width(content)
@@ -226,6 +224,9 @@ namespace
                : 0;
 }
 
+// 矩形の INSERT が 1 行の `column` の桁に入れる本文の前の空白（ADR 0035 の追補 #1042）。桁が文字
+// （Tab か全角）の途中に落ちればその文字の手前から桁までを空白で埋め、`A` が届かない行では行末から
+// 桁までを埋める（固定 Vim の block_insert・実測）。
 [[nodiscard]] std::size_t insert_lead(std::string_view content, VimBlockInsertSide side,
                                       VirtualColumn column)
 {
@@ -398,15 +399,11 @@ after_straddled(const TextBuffer &text, const VimBlockInsert &insert, std::strin
     case VimBlockInsertSide::after:
         break;
     }
-    if (insert.column.value > virtual_width(content))
+    if (straddled_columns(content, insert.column) == 0)
     {
         return std::nullopt;
     }
     const std::size_t byte = byte_at_column(content, insert.column);
-    if (column_of(content, byte).value >= insert.column.value)
-    {
-        return std::nullopt;
-    }
     const std::size_t start = text.line_start(insert.first).value;
     return OffsetRange{Offset{start + byte},
                        Offset{start + vim_character_end(content, Offset{byte}).value}};
