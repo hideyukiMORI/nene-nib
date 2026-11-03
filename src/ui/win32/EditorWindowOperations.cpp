@@ -20,6 +20,7 @@
 #include "OpenDocumentFormatList.hpp"
 #include "OpenOperationList.hpp"
 #include "OperationTexts.hpp"
+#include "PrintDialog.hpp"
 #include "PrintDocument.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
@@ -41,6 +42,7 @@
 #include <array>
 #include <bit>
 #include <cstddef>
+#include <expected>
 #include <functional>
 #include <optional>
 #include <string>
@@ -57,6 +59,23 @@ constexpr wchar_t untitled_file[] = L"無題.txt";
 
 // 格子表示の問いの文言（ADR 0140 の決定 2）。ここの 1 か所だけ。
 constexpr wchar_t display_question[] = L"改行の無い巨大な行があります。格子表示で開きますか。";
+
+// 印刷のダイアログを出し、選んだ設定かダイアログの失敗を意図にする。取り消しは nullopt（何も送ら
+// ない）。ダイアログは controller の apply の外で回す（ADR 0177 の決定 10）。
+[[nodiscard]] std::optional<application::PrintDocument> print_intent(HWND owner)
+{
+    auto chosen = choose_printer(owner);
+    if (!chosen)
+    {
+        return application::PrintDocument{std::unexpected(chosen.error())};
+    }
+    auto &pressed = chosen.value();
+    if (!pressed.has_value())
+    {
+        return std::nullopt;
+    }
+    return application::PrintDocument{std::move(pressed).value()};
+}
 
 // 失敗の理由は 1 行だけ出す。本文は変わらない（ADR 0010 の決定 9）。
 [[nodiscard]] const wchar_t *reason_of(application::FileFailure failure) noexcept
@@ -549,10 +568,14 @@ void EditorWindow::run_choose_line_ending()
 }
 
 // 本文と字体を写して印刷の port を呼ぶか・知らせるかは controller の 1 か所が決める
-// （ADR 0177 の決定 1・2）。
+// （ADR 0177 の決定 1・2）。先に ui がダイアログを出し、選んだ設定を意図に載せる（決定 10・Vim の
+// `:hardcopy` も controller の operation_request からここへ来る）。取り消しは何も送らない。
 void EditorWindow::run_print()
 {
-    send(application::PrintDocument{});
+    if (auto intent = print_intent(window_); intent.has_value())
+    {
+        send(std::move(intent).value());
+    }
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

@@ -32,7 +32,7 @@
 ## 強制
 
 - 印刷の道が port 1 本・描画が本文と同じ書式: **planned**（契約 `--print` と `nib_window_tests`・この PR で active）。
-- 起動の道に DLL を載せない・8 本の速さに退行なし: **active**（QLT-014・ADR 0130 の遅延読み込みの検査）。
+- 起動の道に DLL を載せない: 遅延読み込みは `NeNeNib` の `/DELAYLOAD:` の 1 か所で、確かめは `llvm-readobj --coff-imports` の手の記録（Debug・**planned**・機械の検査の道具は無い）。8 本の速さに退行なし: **active**（QLT-014・起動の速さの間接の検出）。（2026-10-30 の追補 10 の後で書き分けた・#1160 のレビュー R6-1・ADR 0001）
 
 ## 結果
 
@@ -47,3 +47,16 @@
 | `adapters/win32` に実装 | DirectWrite / Direct2D は ui の許可（ADR 0116）。`TextLayoutPort` と同じく ui が実装する |
 | 印刷プレビューの面を初版に | 見た目の判断（/design と D 番号）が要る。先にダイアログ → 印刷の 1 本 |
 | Ctrl+P を印刷に | 面の鍵。D71 の「代替」（一覧と Ex） |
+
+## 追補（2026-10-30・#1047 の N6b の実装の結果）
+
+1. **`print_byte_limit` は印刷の header。** 決定 7 の「`preview_byte_limit` と同じ所」を改め、定数は `src/core/PrintPages.hpp`（`print_margin_millimetres` の隣）に置く。印刷の controller と試験が Markdown の解析の header を読まない（PR #1157 の独立レビュー R1-2）。知らせの「16 MiB」の文字は定数と別に書いてある（プレビューと同じ形・揃えるなら別 Issue）。
+2. **紙面の座標は DIP。** 印刷の DC は作らない（GDI を結ばない・CPP-017）ので、決定 5 の「印刷の DC の論理 DPI」は Direct2D の DIP（dpi 96・`core::reference_dpi`）で、print control が紙の解像度へ写す。紙の大きさはダイアログの DEVMODE の幅と長さ、無ければ用紙の番号の表（`PrintPaperSizes.cpp`・A3 / A4 / A5 / B4 / B5 / Letter / Legal / Tabloid / Executive）、どちらも無ければ A4。
+3. **頁割りの単位（R5-1）。** 1 ページの行数は `print_rows_per_page` に「上の余白から本文の最初の行まで」をヘッダの高さとして渡す。本文の行の高さは `body_layout_in` の整数で、印刷の layout も同じ整数の `DWRITE_LINE_SPACING_METHOD_UNIFORM`（`BodyTextLayouts::set_spacing`）なので、切り上げは要らず割り算が合う。行番号の欄の幅は本文と同じ `body_layout_in`、番号の字の大きさと余白は画面と同じ `GutterMetrics.hpp` の定数（renderer と共用）。
+4. **文字組みは使い捨ての `BodyTextLayouts`。** 印刷の 1 回ごとに `BodyTextLayouts` を 1 つ作り（画面の合成ルートのものとは別の値）、本文と同じ書式・字体選択・Tab の 8 升で、紙の幅で文字単位に折り返す（`wrapping = wrap` に固定・決定 9 の nowrap は後続）。ヘッダの題名と「n / N」も同じ書式で、右寄せは字の幅を測って置く（書式は LEADING）。
+5. **配色の型。** `core::print_palette()` の戻りは `core::PrintPalette{ Palette ui; SyntaxPalette body; }`。`BodyTextPainter` は区間の色を `ColoredRun`（`syntax_color(body, role)`）で、区間の外を `ui.text` で受ける。
+6. **置き場。** `Win32Printer`（WARP の device → 紙面 → job の受け口 → 描く・ダイアログは追補 10 で ui へ）、`choose_printer`（`PrintDlgExW` と DEVMODE → print ticket の `PTConvertDevModeToPrintTicket`・写せなければプリンタの既定）、`render_print_job`（print control・ページの範囲・失敗で `Cancel`）、`PrintComposition`（紙面）、`draw_print_page`（1 ページ）は `src/ui/win32`。ダイアログの親は本窓（追補 10 で `GetActiveWindow()` から改めた）。
+7. **ライブラリと遅延読み込み。** `eng/architecture.json` の `ui_win32` に `comdlg32` と `prntvpt` を足し（ADR 0116 の追補）、`NeNeNib` の `/DELAYLOAD:` に `comdlg32.dll` と `prntvpt.dll` を足す。`IPrintDocumentPackageTargetFactory` と WIC と XPS の object model は `CoCreateInstance`（ole32）。`CLSID_WICImagingFactory2` は `Win32Printer.cpp` の `INITGUID` で定義を置く（windowscodecs を結ばない）。
+8. **試験の形。** `nib_window_tests --print` が、1 ページを WIC の bitmap に描いた画素（ヘッダの左右・行番号の有無・構文の色・折り返し）、1 ページの行数が下の余白に収まること、ページの数と 2 ページ目の続き、紙の大きさの純関数、print control からメモリの XPS（`MemoryPackageTarget` と `MemoryXpsTarget`・ファイルも実機のプリンタも使わない）へ書いたページの数と範囲の選択を確かめる。`Win32Printer` は ui の型なので `nib_adapter_tests`（ui を結べない・ARC-002）ではなく `nib_window_tests` に置く。ダイアログを出す窓の節（`eng/verify-window.py --print`）は作らない。
+9. **強制の段。** 「印刷の道が port 1 本・描画が本文と同じ書式」は契約 `--print`（N6a）と `nib_window_tests --print`（この追補）で **active**。実機のプリンタでの印刷・ダイアログの操作は施主の確認。
+10. **ダイアログは ui、port は描くだけ（設計席の判断 A・#1160 のレビュー R1-3）。** `PrintDlgExW` の modal loop を controller の `apply` の中で回さない（modal loop が配る `WM_TIMER` の意図が外側の `apply` に再入するため）。開く・保存と同じ形で、ui の `run_document_operation(print)` が先に `choose_printer`（本窓が親）でダイアログを出し、選んだ設定 `application::PrintSettings{ printer（UTF-8）; paper（DIP）; ranges; ticket（print ticket の XML のバイト列） }` か、ダイアログの失敗（`no_printer` / `dialog_failed`）を意図 `PrintDocument{ std::expected<PrintSettings, PrintFailure> settings; }` で送る。取り消しは送らない。controller は失敗なら 1 行で知らせ、そうでなければ 16 MiB を確かめて `ports_.print.print(job, settings)` を呼ぶだけ。`PrintPort` の署名は `print(const PrintJob &, const PrintSettings &)`。Vim の `:hardcopy` は controller が `operation_request(print)` を立て（一覧から選んだときと同じ形・ADR 0078）、ui が `deliver` の終わりで読んでダイアログ → 意図の道を通る。`PrintPaper` と `PrintRange` は application の型（ui の `PrintSetup` と `PrintChoice` は無くした）。`Win32Printer::print` は WARP の device → 紙面（compose）→ job の受け口の順で作り、受け口を作った後の失敗は `render_print_job` の 1 か所で `Cancel` する（R1-1）。1 ページで描く行は `print_page_lines` の二分探索で、ページと交わる行だけを見る（R4-1）。16 MiB を超える本文はダイアログを出した後に知らせる（ui は本文の大きさを持たない・限界）。

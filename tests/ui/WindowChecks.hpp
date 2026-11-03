@@ -34,4 +34,5 @@ void verify_palette_layouts();
 void verify_explorer_paint();
 void verify_pointer_presses();
 void verify_guide_key_width();
+void verify_print_render();
 } // namespace nenenib::tests::ui

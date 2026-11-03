@@ -26,3 +26,7 @@ ADR 0010のファイル選択と同じく、ドロップもUIが受け取るパ�
 - [Extended Window Styles](https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles): WS_EX_ACCEPTFILESでファイルを受け取る。
 - [DragQueryFileW](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-dragqueryfilew): 件数と終端を含まない必要長を取得する。
 - [DragFinish](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-dragfinish): OSが渡した名前のメモリを解放する。
+
+## 追補（2026-10-30・#1047・ADR 0177 の決定 6）
+
+ui の許可の表（`eng/architecture.json` の `platformLibraries.ui_win32`）に、印刷のダイアログ `PrintDlgExW` の `comdlg32` と、その DEVMODE を print ticket に写す `prntvpt` を足す。どちらも製品の `NeNeNib` では遅延読み込み（ADR 0130 の形）で、起動の道に載せない。
