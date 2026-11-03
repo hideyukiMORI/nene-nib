@@ -7,6 +7,7 @@
 #include "EditBoundary.hpp"
 #include "EditorIntent.hpp"
 #include "ExPreviewRequest.hpp"
+#include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "MarkdownFailure.hpp"
 #include "MarkdownOutcome.hpp"
@@ -17,6 +18,9 @@
 #include "PreviewBlock.hpp"
 #include "PreviewFullRoute.hpp"
 #include "PreviewPlacement.hpp"
+#include "PreviewPoint.hpp"
+#include "PreviewSelection.hpp"
+#include "PreviewSelectionText.hpp"
 #include "PreviewView.hpp"
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
@@ -157,7 +161,7 @@ constexpr std::array<PreviewCharacterRow, 6> preview_vim_characters{{
     {U'G', PreviewFullRoute::bottom},
     {U'g', PreviewFullRoute::vim_g},
     {U':', PreviewFullRoute::pass},
-    {U'y', PreviewFullRoute::select},
+    {U'y', PreviewFullRoute::copy},
 }};
 
 // Vim の特別な鍵（改訂 17）。Esc はどのモードでも戻る。表に無い鍵は本文に届かない。
@@ -176,7 +180,7 @@ constexpr std::array<PreviewSpecialRow, 14> preview_vim_specials{{
     {core::VimSpecialKey::control_u, PreviewFullRoute::half_up},
     {core::VimSpecialKey::control_f, PreviewFullRoute::page_down},
     {core::VimSpecialKey::control_b, PreviewFullRoute::page_up},
-    {core::VimSpecialKey::control_a, PreviewFullRoute::select},
+    {core::VimSpecialKey::control_a, PreviewFullRoute::select_all},
 }};
 
 template <typename Row, typename Key>
@@ -215,7 +219,8 @@ template <typename Row, typename Key>
 }
 
 // Esc とホイールとマウスの行き先。Esc は通常モードでは CancelSelection。ホイールは本文の上でも
-// もう 1 つの枠の上でも錨を送る。
+// もう 1 つの枠の上でも錨を送る。Ctrl+A と全面のマウス（PointPreview）は選択（改訂 18）。本文の
+// マウスの意図（PlaceCaret・PointText）は全面の間は ui が送らず、届いても何もしない。
 [[nodiscard]] PreviewFullRoute pointer_route(const EditorIntent &intent) noexcept
 {
     if (std::holds_alternative<CancelSelection>(intent))
@@ -226,10 +231,17 @@ template <typename Row, typename Key>
     {
         return PreviewFullRoute::wheel;
     }
-    const bool selecting = std::holds_alternative<SelectAll>(intent) ||
-                           std::holds_alternative<PlaceCaret>(intent) ||
-                           std::holds_alternative<PointText>(intent);
-    return selecting ? PreviewFullRoute::select : PreviewFullRoute::refuse;
+    if (std::holds_alternative<SelectAll>(intent))
+    {
+        return PreviewFullRoute::select_all;
+    }
+    if (std::holds_alternative<PointPreview>(intent))
+    {
+        return PreviewFullRoute::select;
+    }
+    const bool body_pointer =
+        std::holds_alternative<PlaceCaret>(intent) || std::holds_alternative<PointText>(intent);
+    return body_pointer ? PreviewFullRoute::ignore : PreviewFullRoute::refuse;
 }
 
 // 通常モードのクリップボードと文字の行き先（ほかは pointer_route）。コピーは選択の口（N5b）、
@@ -238,7 +250,7 @@ template <typename Row, typename Key>
 {
     if (const auto *clipboard = std::get_if<ClipboardAction>(&intent); clipboard != nullptr)
     {
-        return clipboard->operation == ClipboardOperation::copy ? PreviewFullRoute::select
+        return clipboard->operation == ClipboardOperation::copy ? PreviewFullRoute::copy
                                                                 : PreviewFullRoute::refuse;
     }
     if (const auto *text = std::get_if<InsertText>(&intent); text != nullptr)
@@ -413,6 +425,8 @@ void EditorController::collect_preview()
             view.document =
                 std::make_shared<const core::MarkdownDocument>(std::move(outcome.result).value());
             view.notice.reset();
+            // 選択の位置は前の結果の要素を指すので、差し替えたら捨てる（改訂 18）。
+            view.selection.reset();
             changed = true;
             continue;
         }
@@ -615,8 +629,15 @@ void EditorController::run_full_preview_route(PreviewFullRoute route, const Edit
     {
     case PreviewFullRoute::pass:
     case PreviewFullRoute::ignore:
-    // 選択とコピーの口（改訂 18・N5b）。今は届くが何もしない。
+        return;
     case PreviewFullRoute::select:
+        select_preview(intent);
+        return;
+    case PreviewFullRoute::select_all:
+        select_all_preview();
+        return;
+    case PreviewFullRoute::copy:
+        copy_preview_selection();
         return;
     case PreviewFullRoute::leave:
         leave_full_preview(state_.full_preview_return());
@@ -689,7 +710,12 @@ void EditorController::toggle_caret_task()
 {
     const PreviewView *preview = state_.shown_preview();
     const auto selection = state_.selection();
-    if (preview == nullptr || preview->document == nullptr || selection.anchor != selection.caret)
+    // 全面の選択がある間の Space も本文に届かない鍵（追補 25 の「選択の無いとき」）。
+    const bool selected =
+        preview != nullptr && preview->document != nullptr && preview->selection.has_value() &&
+        core::preview_selection_range(*preview->document, preview->selection.value()).has_value();
+    if (preview == nullptr || preview->document == nullptr || selection.anchor != selection.caret ||
+        selected)
     {
         state_ = state_.with_command_message(
             core::DisplayText::parse(preview_full_refused_message).value());
@@ -712,5 +738,95 @@ void EditorController::toggle_caret_task()
         }
     }
     state_ = state_.with_command_message(core::DisplayText::parse(preview_no_task_message).value());
+}
+
+// ---------------------------------------------------------------- 全面の選択（ADR 0155 の改訂 18）
+
+// 全面の間は route_full_preview が select_preview へ渡す。ここに来るのは全面でないときだけで、
+// 何もしない。
+void EditorController::accept(const PointPreview &) {}
+
+// 動く端を動かす選択。届くのは preview_full_route が select と決めた意図だけ（Shift+矢印の
+// MoveCaret と全面のマウスの PointPreview）。全部の選択とコピーは別の行き先（select_all・copy）。
+void EditorController::select_preview(const EditorIntent &intent)
+{
+    if (const auto *move = std::get_if<MoveCaret>(&intent); move != nullptr)
+    {
+        move_preview_selection(move->motion);
+        return;
+    }
+    if (const auto *point = std::get_if<PointPreview>(&intent); point != nullptr)
+    {
+        point_preview_selection(*point);
+    }
+}
+
+// 押した点に空の選択を置く・ドラッグで動く端をそこへ（選び始めた端は保つ）。
+void EditorController::point_preview_selection(const PointPreview &intent)
+{
+    const PreviewView *full = state_.full_preview();
+    if (full == nullptr || full->document == nullptr)
+    {
+        return;
+    }
+    PreviewView view = *full;
+    const auto at = core::preview_point_clamped(*view.document, intent.point);
+    const bool extend =
+        intent.anchoring == core::SelectionAnchoring::extend && view.selection.has_value();
+    view.selection = core::preview_selection_of(
+        extend ? core::preview_selection_origin(view.selection.value()) : at, at);
+    state_ = state_.with_shown_preview(std::move(view));
+}
+
+// Shift+矢印。選択が無ければ枠の上端の要素（錨の要素）の頭から選び始める。
+void EditorController::move_preview_selection(core::CaretMotion motion)
+{
+    const PreviewView *full = state_.full_preview();
+    if (full == nullptr || full->document == nullptr)
+    {
+        return;
+    }
+    PreviewView view = *full;
+    const core::MarkdownDocument &document = *view.document;
+    const core::Offset anchor =
+        view.follows ? state_.text().line_start(settled_scroll().first_visible) : view.anchor;
+    const core::PreviewPoint top{core::preview_anchor_block(document, anchor), 0};
+    const core::PreviewPoint origin =
+        view.selection.has_value() ? core::preview_selection_origin(view.selection.value()) : top;
+    const core::PreviewPoint head =
+        view.selection.has_value() ? core::preview_selection_head(view.selection.value()) : top;
+    view.selection =
+        core::preview_selection_of(origin, core::preview_point_moved(document, head, motion));
+    state_ = state_.with_shown_preview(std::move(view));
+}
+
+void EditorController::select_all_preview()
+{
+    const PreviewView *full = state_.full_preview();
+    if (full == nullptr || full->document == nullptr)
+    {
+        return;
+    }
+    PreviewView view = *full;
+    view.selection = core::preview_selection_all(*view.document);
+    state_ = state_.with_shown_preview(std::move(view));
+}
+
+// 見えている文字を文書の改行の形で置く（ADR 0051 の規則・Ctrl+C と同じ）。選択が無ければ何も
+// しない。置けなければ clipboard_written が 1 行知らせる（ADR 0134）。
+void EditorController::copy_preview_selection()
+{
+    const PreviewView *full = state_.full_preview();
+    if (full == nullptr || full->document == nullptr || !full->selection.has_value())
+    {
+        return;
+    }
+    const std::string text = core::preview_selection_text(*full->document, full->selection.value());
+    if (text.empty())
+    {
+        return;
+    }
+    static_cast<void>(clipboard_written(
+        detail::with_document_newlines(text, core::newline_of(state_.line_ending()))));
 }
 } // namespace nenenib::application

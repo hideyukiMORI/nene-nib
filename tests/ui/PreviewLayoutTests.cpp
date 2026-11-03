@@ -25,7 +25,10 @@
 #include "PreviewMetrics.hpp"
 #include "PreviewPainter.hpp"
 #include "PreviewPane.hpp"
+#include "PreviewPoint.hpp"
 #include "PreviewScene.hpp"
+#include "PreviewSelection.hpp"
+#include "PreviewSelectionText.hpp"
 #include "PreviewTaskPress.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "PreviewTextStyle.hpp"
@@ -36,6 +39,7 @@
 #include "ThemeCatalog.hpp"
 #include "ThemeName.hpp"
 
+#include <algorithm>
 #include <array>
 #include <combaseapi.h>
 #include <cstddef>
@@ -188,7 +192,7 @@ void check_visible_only()
     win32::PreviewPainter<CountingTarget> painter(target, layouts, brushes, failure);
     painter.paint(win32::PreviewScene{document, tops.value(), style,
                                       core::LayoutRect{0, 0, static_cast<std::int32_t>(width), 200},
-                                      scroll});
+                                      scroll, std::nullopt});
     expect(!failure.has_value() && target.balanced(), "the preview paints without failure");
     expect(layouts.held() > 0 && layouts.held() < 10 && target.text_layouts() == layouts.held(),
            "only the visible preview blocks are created and drawn");
@@ -249,8 +253,8 @@ void check_image_span()
     std::optional<win32::RenderFailure> failure;
     win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
     target->BeginDraw();
-    painter.paint(
-        win32::PreviewScene{document, tops.value(), style, core::LayoutRect{0, 0, 400, 200}, 0.0F});
+    painter.paint(win32::PreviewScene{document, tops.value(), style,
+                                      core::LayoutRect{0, 0, 400, 200}, 0.0F, std::nullopt});
     expect(SUCCEEDED(target->EndDraw()) && !failure.has_value(), "the image span is painted");
     const auto layout = layouts.get(document.blocks.front(), width - 32.0F, style);
     DWRITE_FONT_STYLE slanted = DWRITE_FONT_STYLE_NORMAL;
@@ -350,19 +354,21 @@ void check_pane_reuse()
     const core::LayoutRect area{0, 0, 400, 200};
     target->BeginDraw();
     const auto empty =
-        pane.paint(*target.Get(), application::PreviewFrame{nullptr, {}, {}}, style, area);
-    const auto first = pane.paint(
-        *target.Get(), application::PreviewFrame{shown, core::Offset{40 * 16}, {}}, style, area);
+        pane.paint(*target.Get(), application::PreviewFrame{nullptr, {}, {}, {}}, style, area);
+    const auto first =
+        pane.paint(*target.Get(), application::PreviewFrame{shown, core::Offset{40 * 16}, {}, {}},
+                   style, area);
     const auto made = pane.created();
-    const auto second = pane.paint(
-        *target.Get(), application::PreviewFrame{shown, core::Offset{40 * 16}, {}}, style, area);
+    const auto second =
+        pane.paint(*target.Get(), application::PreviewFrame{shown, core::Offset{40 * 16}, {}, {}},
+                   style, area);
     expect(SUCCEEDED(target->EndDraw()) && empty.has_value() && first.has_value() &&
                second.has_value(),
            "a frame with a preview paints without failure");
     expect(made > 0 && pane.created() == made,
            "the preview layouts are reused across frames for the same document");
-    expect(win32::preview_anchor_block(*shown, core::Offset{40 * 16 + 3}) == 40 &&
-               win32::preview_anchor_block(*shown, core::Offset{5}) == 0,
+    expect(core::preview_anchor_block(*shown, core::Offset{40 * 16 + 3}) == 40 &&
+               core::preview_anchor_block(*shown, core::Offset{5}) == 0,
            "the anchor picks the block that holds it");
 }
 
@@ -421,7 +427,7 @@ void check_pane_reuse()
     target->BeginDraw();
     target->Clear(D2D1::ColorF(0.0F, 0.0F, 0.0F, 0.0F));
     win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
-    painter.paint(win32::PreviewScene{document, tops.value(), style, area, 0.0F});
+    painter.paint(win32::PreviewScene{document, tops.value(), style, area, 0.0F, std::nullopt});
     if (FAILED(target->EndDraw()) || failure.has_value())
     {
         return {};
@@ -449,7 +455,7 @@ void check_pane_picture()
     const auto document = picture_document();
     const auto style = style_of();
     const core::LayoutRect area{10, 20, 390, 180};
-    const application::PreviewFrame at_four{document, core::Offset{4 * 16}, {}};
+    const application::PreviewFrame at_four{document, core::Offset{4 * 16}, {}, {}};
     held->BeginDraw();
     held->Clear(D2D1::ColorF(0.0F, 0.0F, 0.0F, 0.0F));
     const auto first = pane.paint(*held.Get(), at_four, style, area);
@@ -462,8 +468,9 @@ void check_pane_picture()
     expect(!through.empty() && through == directly_painted(*document, theme.value().view(), area),
            "the held preview picture has the same pixels as painting directly");
     held->BeginDraw();
-    const auto moved = pane.paint(
-        *held.Get(), application::PreviewFrame{document, core::Offset{8 * 16}, {}}, style, area);
+    const auto moved =
+        pane.paint(*held.Get(), application::PreviewFrame{document, core::Offset{8 * 16}, {}, {}},
+                   style, area);
     expect(moved.has_value() && pane.painted() == 2 && pane.pictures() == 1,
            "another anchor draws the blocks again into the same bitmap");
     const auto resized =
@@ -503,7 +510,7 @@ void check_full_preview_band()
     target->BeginDraw();
     target->Clear(D2D1::ColorF(1.0F, 0.0F, 1.0F, 1.0F));
     const auto painted = pane.paint(
-        *target.Get(), application::PreviewFrame{picture_document(), core::Offset{0}, {}},
+        *target.Get(), application::PreviewFrame{picture_document(), core::Offset{0}, {}, {}},
         style_of(), body.band);
     expect(SUCCEEDED(target->EndDraw()) && painted.has_value(),
            "the full preview paints without failure");
@@ -519,6 +526,110 @@ void check_full_preview_band()
         }
     }
     expect(!marked, "nothing of the body or the gutter shows under the full preview");
+}
+
+// 全面プレビューの選択（ADR 0155 の改訂 18）。選択の面は文字の下に selection の色で塗り、空の選択は
+// 何も変えず、選んでいない要素の画素は変わらない。点の下の文字の位置は描いた layout の hit test
+// で、 文字の左は要素の頭・行の右の外は要素の終わり・要素の間は上の要素の終わり・最後の要素より下は
+// その終わり。
+[[nodiscard]] std::vector<std::uint8_t> selection_painted(ID2D1RenderTarget &target,
+                                                          IWICBitmap &bitmap,
+                                                          win32::PreviewPane &pane,
+                                                          const application::PreviewFrame &frame)
+{
+    target.BeginDraw();
+    target.Clear(D2D1::ColorF(0.0F, 0.0F, 0.0F, 0.0F));
+    const auto painted = pane.paint(target, frame, style_of(), core::LayoutRect{0, 0, 400, 200});
+    if (FAILED(target.EndDraw()) || !painted.has_value())
+    {
+        return {};
+    }
+    return pixels_of(bitmap);
+}
+
+[[nodiscard]] bool same_rows(const std::vector<std::uint8_t> &left,
+                             const std::vector<std::uint8_t> &right, std::int32_t top,
+                             std::int32_t bottom)
+{
+    constexpr std::size_t stride = 400U * 4U;
+    const auto begin = static_cast<std::size_t>(std::max(top, 0)) * stride;
+    const auto end = std::min(static_cast<std::size_t>(std::max(bottom, 0)) * stride, left.size());
+    return left.size() == right.size() &&
+           std::equal(left.begin() + static_cast<std::ptrdiff_t>(begin),
+                      left.begin() + static_cast<std::ptrdiff_t>(end),
+                      right.begin() + static_cast<std::ptrdiff_t>(begin));
+}
+
+[[nodiscard]] std::shared_ptr<const core::MarkdownDocument> selection_document()
+{
+    auto parsed =
+        core::parse_markdown("first paragraph\n\nsecond one", core::MarkdownStop::never());
+    if (!parsed)
+    {
+        return nullptr;
+    }
+    return std::make_shared<const core::MarkdownDocument>(std::move(parsed).value());
+}
+
+// 点の下の文字の位置（描いた後の pane の hit test）。
+void check_selection_points(win32::PreviewPane &pane, const win32::PreviewBlockTops &measured)
+{
+    const auto first_top = static_cast<std::int32_t>(measured.top(0));
+    const auto first_bottom = static_cast<std::int32_t>(measured.bottom(0));
+    const auto second_top = static_cast<std::int32_t>(measured.top(1));
+    const auto left = static_cast<std::int32_t>(measured.indent(0));
+    const auto middle = (first_top + first_bottom) / 2;
+    const auto first_end = std::string_view("first paragraph").size();
+    const auto gap = pane.point_at(left, (first_bottom + second_top) / 2);
+    const auto inside = pane.point_at(left + 2, middle);
+    expect(pane.point_at(left - 4, middle) == core::PreviewPoint{0, 0} &&
+               pane.point_at(399, middle) == core::PreviewPoint{0, first_end} &&
+               (second_top <= first_bottom || gap == core::PreviewPoint{0, first_end}) &&
+               pane.point_at(left, 199) ==
+                   core::PreviewPoint{1, std::string_view("second one").size()} &&
+               inside.has_value() && inside.value_or(core::PreviewPoint{9, 9}).block == 0 &&
+               inside.value_or(core::PreviewPoint{9, 9}).offset <= 1U,
+           "the point under the pointer is the character of the drawn layout");
+}
+
+void check_selection_pixels()
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    const auto document = selection_document();
+    win32::PreviewPane pane;
+    if (target == nullptr || !theme || document == nullptr ||
+        !pane.prepare(*target.Get(), theme.value().view()).has_value())
+    {
+        expect(false, "the preview pane prepares its brushes for the selection checks");
+        return;
+    }
+    const auto frame_of = [&document](std::optional<core::PreviewSelection> selection)
+    { return application::PreviewFrame{document, core::Offset{0}, {}, selection}; };
+    const auto plain =
+        selection_painted(*target.Get(), *bitmap.Get(), pane, frame_of(std::nullopt));
+    const auto empty = selection_painted(*target.Get(), *bitmap.Get(), pane,
+                                         frame_of(core::PreviewSelection{0, 3, 0, 3}));
+    const auto chosen = selection_painted(*target.Get(), *bitmap.Get(), pane,
+                                          frame_of(core::PreviewSelection{0, 0, 0, 5}));
+    PreviewTextLayouts layouts;
+    const auto tops = win32::PreviewBlockTops::measure(*document, layouts, style_of(),
+                                                       win32::PreviewViewport{0, 400.0F, 200.0F});
+    if (plain.empty() || chosen.empty() || !tops || tops.value().size() != 2)
+    {
+        expect(false, "the selection paints and both blocks are measured");
+        return;
+    }
+    const auto &measured = tops.value();
+    expect(plain == empty, "an empty preview selection paints nothing");
+    expect(!same_rows(plain, chosen, static_cast<std::int32_t>(measured.top(0)),
+                      static_cast<std::int32_t>(measured.bottom(0))) &&
+               same_rows(plain, chosen, static_cast<std::int32_t>(measured.top(1)),
+                         static_cast<std::int32_t>(measured.bottom(1))),
+           "the selection face shows under the chosen text only");
+    check_selection_points(pane, measured);
 }
 
 // 測るのは錨の要素から枠の高さまでだけ（#811 のレビュー R1）。10 万要素の文書で錨が末尾の近くでも、
@@ -598,9 +709,9 @@ void check_anchor_after_carriage_returns()
 {
     const auto parsed = core::parse_markdown("- foo\r-\r- bar", core::MarkdownStop::never());
     expect(parsed.has_value() && parsed.value().blocks.size() == 3 &&
-               win32::preview_anchor_block(parsed.value(), core::Offset{3}) == 0 &&
-               win32::preview_anchor_block(parsed.value(), core::Offset{6}) == 1 &&
-               win32::preview_anchor_block(parsed.value(), core::Offset{11}) == 2,
+               core::preview_anchor_block(parsed.value(), core::Offset{3}) == 0 &&
+               core::preview_anchor_block(parsed.value(), core::Offset{6}) == 1 &&
+               core::preview_anchor_block(parsed.value(), core::Offset{11}) == 2,
            "the anchor follows the caret through a document with CR line endings");
 }
 
@@ -666,7 +777,7 @@ void check_task_boxes()
     const auto painted = win32::PreviewBlockTops::measure(*document, counted, style, whole);
     win32::PreviewPainter<CountingTarget> painter(target, counted, brushes, failure);
     painter.paint(win32::PreviewScene{*document, painted.value(), style,
-                                      core::LayoutRect{0, 0, 400, 200}, 0.0F});
+                                      core::LayoutRect{0, 0, 400, 200}, 0.0F, std::nullopt});
     expect(!failure.has_value() && target.outlines().size() == 2 && target.lines() == 2 &&
                target.text_layouts() == 4,
            "two boxes, two lines of one check and the bullet without a bracket text");
@@ -739,7 +850,7 @@ void check_task_pixels()
     target->BeginDraw();
     target->Clear(D2D1::ColorF(0.0F, 0.0F, 0.0F, 0.0F));
     const auto painted = pane.paint(
-        *target.Get(), application::PreviewFrame{document, core::Offset{0}, {}}, style, area);
+        *target.Get(), application::PreviewFrame{document, core::Offset{0}, {}, {}}, style, area);
     expect(SUCCEEDED(target->EndDraw()) && painted.has_value(), "the task items paint");
     PreviewTextLayouts layouts;
     const auto tops = win32::PreviewBlockTops::measure(
@@ -820,5 +931,6 @@ void verify_preview_layouts()
     check_task_boxes();
     check_task_pixels();
     check_task_press();
+    check_selection_pixels();
 }
 } // namespace nenenib::tests::ui

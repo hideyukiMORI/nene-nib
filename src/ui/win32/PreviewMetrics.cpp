@@ -2,8 +2,10 @@
 
 #include "DevicePixels.hpp"
 #include "LayoutRect.hpp"
+#include "Offset.hpp"
 #include "PreviewTaskBox.hpp"
 #include "Utf16.hpp"
+#include "Utf8.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -176,20 +178,27 @@ float preview_extent(core::PreviewBlockKind kind, float text_height, std::uint32
     std::unreachable();
 }
 
-std::string_view preview_shown_text(const core::PreviewBlock &block) noexcept
-{
-    std::string_view text = block.text;
-    if (preview_monospaced(block.kind) && text.ends_with('\n'))
-    {
-        text.remove_suffix(1);
-    }
-    return text;
-}
-
 std::uint32_t preview_units(std::string_view shown, std::size_t byte)
 {
     return static_cast<std::uint32_t>(
         core::utf16_length(shown.substr(0, std::min(byte, shown.size()))).value_or(0));
+}
+
+std::size_t preview_byte_of_units(std::string_view shown, std::uint32_t units)
+{
+    std::size_t at = 0;
+    std::size_t counted = 0;
+    while (at < shown.size())
+    {
+        const auto next = core::next_code_point(shown, core::Offset{at}).value;
+        counted += core::utf16_length(shown.substr(at, next - at)).value_or(1);
+        if (counted > units)
+        {
+            return at;
+        }
+        at = next;
+    }
+    return shown.size();
 }
 
 std::string_view preview_marker(const core::PreviewBlock &block) noexcept

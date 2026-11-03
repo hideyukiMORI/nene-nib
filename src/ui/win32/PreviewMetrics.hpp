@@ -45,11 +45,12 @@ namespace nenenib::ui::win32
 // 要素の縦の大きさ。text_height は layout の GetMetrics().height（水平線は使わない）。
 [[nodiscard]] float preview_extent(core::PreviewBlockKind kind, float text_height,
                                    std::uint32_t dpi) noexcept;
-// layout に渡す文字（コードブロックと HTML ブロックの末尾の改行を 1 つ落とす）。
-[[nodiscard]] std::string_view preview_shown_text(const core::PreviewBlock &block) noexcept;
 // 要素の文字の中のバイト位置 → layout の UTF-16 の位置（core の変換 utf16_length の 1 本で数える・
 // 装飾の範囲の写しは PreviewTextLayouts と PreviewPainter がこれを読む）。
 [[nodiscard]] std::uint32_t preview_units(std::string_view shown, std::size_t byte);
+// layout の UTF-16 の位置 → 要素の文字の中のバイト位置（preview_units の逆・hit test が読む）。
+// code point の途中（代理対の後ろ半分）に落ちた位置はその code point の頭へ寄せ、文字の外は末尾。
+[[nodiscard]] std::size_t preview_byte_of_units(std::string_view shown, std::uint32_t units);
 // 箇条書きの記号（深さ 1 は •・2 は ◦・3 以上は ▪）。番号はそのまま。
 [[nodiscard]] std::string_view preview_marker(const core::PreviewBlock &block) noexcept;
 // 記号を描く layout の要素（本文の字体の段落）と、その layout の幅（折り返さないだけ広い）。
