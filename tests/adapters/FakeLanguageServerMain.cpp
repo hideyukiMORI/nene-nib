@@ -7,9 +7,15 @@
 // <bytes>（起きてすぐ bytes の本文を 1 通書く）・--endless-header <bytes>（起きてすぐ空行の無い
 // bytes の見出しを書く。見出しの長さの超えの試験）・--hang（標準入力が閉じても終わらない。stop が
 // Job Object で殺すことの試験）・--deaf（標準入力を読まずに止まる。出ている書きの取消の試験）。
+// ベンチの引数（#995 の L1d・ADR 0161 の決定 7）: --diagnostics <N>（textDocument/didOpen と
+// didChange を受けるたびに、同じ uri と version で N 件の publishDiagnostics を 1 通すぐ書く。
+// 1 行目から順に 1 行 1 件・range は各行の 0〜4・severity は error と warning を交互・message は
+// 「fake <番号>」。ほかの振る舞いの引数と併せると何も読まずに 4 で終わる）・--silent（did*
+// に黙る。引数なしと同じで、ベンチの 設定の行に意図を書くための名前）。
 #include <windows.h>
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cstddef>
 #include <optional>
@@ -24,6 +30,12 @@ using Arguments = std::span<char *const>;
 constexpr std::string_view header_end = "\r\n\r\n";
 constexpr std::string_view length_name = "Content-Length:";
 constexpr int died_exit_code = 3;
+// --diagnostics をほかの振る舞いの引数と併せたとき（#1217 のレビュー R1-1）。読まずに終わる。
+constexpr int mixed_exit_code = 4;
+// --diagnostics と併せない振る舞いの引数（引数の表）。
+constexpr std::array<std::string_view, 8> other_behaviours{
+    "--echo", "--double", "--die-after",      "--big",
+    "--hang", "--deaf",   "--endless-header", "--silent"};
 
 // 標準入力から読んだがまだ枠に切っていないバイト列。
 std::string &unread()
@@ -126,6 +138,61 @@ bool calls(std::string_view body, std::string_view method)
     return body.find("\"method\":\"" + std::string(method) + "\"") != std::string_view::npos;
 }
 
+// 本文の中の `"<name>":` の後ろの値をそのまま（文字列は引用符ごと・数はそのまま）。本文の text は
+// JSON の文字列で `"` が `\"` になっているので、鍵の形は本物の欄にだけ当たる。
+std::string_view member_value(std::string_view body, std::string_view name)
+{
+    const std::string key = "\"" + std::string(name) + "\":";
+    const auto at = body.find(key);
+    if (at == std::string_view::npos)
+    {
+        return "null";
+    }
+    const auto value = body.substr(at + key.size());
+    if (value.starts_with('"'))
+    {
+        return value.substr(0, value.find('"', 1) + 1);
+    }
+    return value.substr(0, value.find_first_of(",}"));
+}
+
+// 1 件の診断。line 行目の 0〜4・偶数番は error（1）・奇数番は warning（2）。
+std::string fake_diagnostic(std::size_t line)
+{
+    const std::string at = std::to_string(line);
+    return R"({"range":{"start":{"line":)" + at + R"(,"character":0},"end":{"line":)" + at +
+           R"(,"character":4}},"severity":)" + (line % 2 == 0 ? "1" : "2") +
+           R"(,"message":"fake )" + at + R"("})";
+}
+
+// didOpen と didChange に、同じ uri と version で count 件の publishDiagnostics を 1 通返す。
+void publish_diagnostics(std::string_view body, std::size_t count)
+{
+    if (!calls(body, "textDocument/didOpen") && !calls(body, "textDocument/didChange"))
+    {
+        return;
+    }
+    std::string diagnostics;
+    for (std::size_t line = 0; line < count; ++line)
+    {
+        if (line != 0)
+        {
+            diagnostics += ',';
+        }
+        diagnostics += fake_diagnostic(line);
+    }
+    constexpr std::string_view head =
+        R"({"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":)";
+    std::string published(head);
+    published += member_value(body, "uri");
+    published += R"(,"version":)";
+    published += member_value(body, "version");
+    published += R"(,"diagnostics":[)";
+    published += diagnostics;
+    published += "]}}";
+    write_all(frame(published));
+}
+
 void answer(std::string_view body)
 {
     const std::string id(request_id(body));
@@ -172,6 +239,11 @@ void respond(Arguments arguments, std::string_view body)
     if (!has(arguments, "--echo"))
     {
         answer(body);
+        const auto diagnostics = number_after(arguments, "--diagnostics");
+        if (diagnostics.has_value())
+        {
+            publish_diagnostics(body, diagnostics.value());
+        }
         return;
     }
     const std::string once = frame(body);
@@ -204,6 +276,12 @@ int serve(Arguments arguments)
 int main(int argc, char **argv)
 {
     const Arguments arguments(argv, static_cast<std::size_t>(argc));
+    if (has(arguments, "--diagnostics") &&
+        std::ranges::any_of(other_behaviours,
+                            [&](std::string_view name) { return has(arguments, name); }))
+    {
+        return mixed_exit_code;
+    }
     const auto big = number_after(arguments, "--big");
     if (big.has_value())
     {
