@@ -360,11 +360,32 @@ using Lookup = std::tuple<const VimToplineWindow &, std::size_t, std::optional<s
     return std::min(std::get<0>(shown) + static_cast<std::size_t>(lines), count_of(lookup));
 }
 
+// 先頭から行 last（本文の末尾で切る）までが窓に全部入るか。入れば w_botline は last より下で、
+// キャレット + 余白 = last なら check_botline
+// は要らない（窓の下の行を読まずに分かる・答えは同じ）。
+[[nodiscard]] bool fits_through(Lookup &lookup, std::size_t top, std::size_t last) noexcept
+{
+    Rows done = 0;
+    for (std::size_t line = top; line <= std::min(last, count_of(lookup)); ++line)
+    {
+        done += plines(lookup, line);
+        if (done > height_of(lookup))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 // update_topline の下側: check_botline が要れば、近ければ scroll_cursor_bot、遠ければ
 // scroll_cursor_halfway。
 [[nodiscard]] std::size_t bottom_checked(Lookup &lookup, std::size_t top,
                                          std::size_t cursor) noexcept
 {
+    if (fits_through(lookup, top, cursor + static_cast<std::size_t>(margin_of(lookup))))
+    {
+        return top;
+    }
     const Shown shown = shown_from(lookup, top);
     if (!bottom_short(lookup, shown, cursor))
     {

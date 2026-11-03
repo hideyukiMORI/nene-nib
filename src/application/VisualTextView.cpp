@@ -892,15 +892,19 @@ VisualTextView::vim_topline(core::LineNumber caret, core::LineNumber top,
     }
 }
 
-// 先頭 top（段 0）の窓でキャレットの画面行が見えるか。行の高さは core が読んだ heights から数え、
-// 載っていない行だけ文字組みする（R4-3）。
+// 先頭 top（段つき）の窓でキャレットの画面行が見えるか。行の高さは core が読んだ heights から
+// 数え、載っていない行だけ文字組みする（独立レビュー R4-3）。
 std::expected<bool, TextLayoutFailure>
-VisualTextView::vim_caret_shown(std::vector<core::VimLineRows> &heights, core::LineNumber top,
+VisualTextView::vim_caret_shown(std::vector<core::VimLineRows> &heights, core::VisualPosition top,
                                 core::VisualPosition caret)
 {
-    const auto height = std::max<std::size_t>(state_.scroll().visible_lines, 1);
+    if (caret < top)
+    {
+        return false;
+    }
+    const auto limit = std::max<std::size_t>(state_.scroll().visible_lines, 1) + top.row;
     std::size_t used = caret.row;
-    for (core::LineNumber line = top; line < caret.line && used < height; ++line.value)
+    for (core::LineNumber line = top.line; line < caret.line && used < limit; ++line.value)
     {
         const auto count = measured_rows(heights, line);
         if (!count)
@@ -909,11 +913,11 @@ VisualTextView::vim_caret_shown(std::vector<core::VimLineRows> &heights, core::L
         }
         used += count.value();
     }
-    return !(caret.line < top) && used < height;
+    return used < limit;
 }
 
-// 窓が動かなければ（答えが今の先頭）今の先頭（画面行の位置も）を保ち、描いた行の中で見えるかを
-// 数える。答えの窓でキャレットの画面行が見えなければ値を返さない。
+// 答えが今の先頭なら今の先頭（画面行の位置も）を保つ。答えの窓でキャレットの画面行が見えなければ
+// 値を返さない。
 std::expected<std::optional<core::VisualPosition>, TextLayoutFailure>
 VisualTextView::vim_followed_first(core::VisualPosition caret, core::VisualPosition first)
 {
@@ -923,23 +927,13 @@ VisualTextView::vim_followed_first(core::VisualPosition caret, core::VisualPosit
     {
         return std::unexpected(top.error());
     }
-    if (top.value() != first.line)
+    const auto candidate = top.value() == first.line ? first : core::VisualPosition{top.value(), 0};
+    const auto shown = vim_caret_shown(heights, candidate, caret);
+    if (!shown)
     {
-        const auto shown = vim_caret_shown(heights, top.value(), caret);
-        if (!shown)
-        {
-            return std::unexpected(shown.error());
-        }
-        return shown.value() ? std::optional{core::VisualPosition{top.value(), 0}} : std::nullopt;
+        return std::unexpected(shown.error());
     }
-    const auto height = std::max<std::size_t>(state_.scroll().visible_lines, 1);
-    const auto below = caret < first ? std::expected<std::size_t, TextLayoutFailure>{height}
-                                     : distance(first, caret, height);
-    if (!below)
-    {
-        return std::unexpected(below.error());
-    }
-    return below.value() < height ? std::optional{first} : std::nullopt;
+    return shown.value() ? std::optional{candidate} : std::nullopt;
 }
 
 std::expected<ScrollState, TextLayoutFailure> VisualTextView::followed(core::TextCaret caret,

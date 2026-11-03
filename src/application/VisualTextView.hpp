@@ -160,7 +160,7 @@ class VisualTextView final
     vim_topline(core::LineNumber caret, core::LineNumber top,
                 std::vector<core::VimLineRows> &heights);
     [[nodiscard]] std::expected<bool, TextLayoutFailure>
-    vim_caret_shown(std::vector<core::VimLineRows> &heights, core::LineNumber top,
+    vim_caret_shown(std::vector<core::VimLineRows> &heights, core::VisualPosition top,
                     core::VisualPosition caret);
     // heights の行 line の画面行の数（載っていなければ文字組みして行の順に足す）。
     [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>
