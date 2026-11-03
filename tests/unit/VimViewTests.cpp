@@ -33,6 +33,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -451,10 +452,13 @@ void verify_tall_landings()
 // 行）で Vim 9.1.0004 の実測（D:/NeNeNib/scripts/1141/gen.py の 882 件）から選んだ。行は (高い行,
 // 2 本目の高い行（0 は無し）, 余白, 前の先頭, 前の行, 鍵, `:set so=` の後の先頭, 鍵の後の先頭,
 // 鍵の後の行)。上側の scroll_cursor_top（先頭 30・行 30・so=2 は 28）・中央寄せ・下側の
-// scroll_cursor_bot（先頭 90・行 95）・高い行を挟む窓・動かない窓を含む。
+// scroll_cursor_bot（先頭 90・行 95）・高い行を挟む窓・動かない窓を含む。後ろの 5 行は跳びの後の
+// 窓（D:/NeNeNib/scripts/1178/vim/gen.py で同じ置き方の Vim 9.1.0004 を測った）: 下側の
+// scroll_cursor_halfway（遠い下への `70G` と高い行を越える `41G`）と、scroll_cursor_bot の送りが
+// 窓以上になって上を先に足す halfway（prefer_above）に入る `41G` `38G` `8j`。
 using ToplineRow = std::tuple<std::size_t, std::size_t, std::size_t, std::size_t, std::size_t,
                               std::string_view, std::size_t, std::size_t, std::size_t>;
-constexpr std::array<ToplineRow, 13> topline_rows{{
+constexpr std::array<ToplineRow, 18> topline_rows{{
     {30, 0, 2, 30, 30, "H", 28, 28, 30},
     {30, 0, 3, 26, 30, "L", 27, 27, 30},
     {30, 0, 3, 29, 30, "<C-d>", 27, 30, 33},
@@ -468,6 +472,11 @@ constexpr std::array<ToplineRow, 13> topline_rows{{
     {36, 0, 3, 30, 32, "L", 29, 29, 32},
     {31, 0, 2, 30, 30, "<C-d>", 28, 31, 33},
     {30, 0, 2, 26, 30, "H", 26, 26, 28},
+    {0, 0, 0, 1, 1, "70G", 1, 65, 70},
+    {36, 0, 0, 1, 1, "41G", 1, 37, 41},
+    {40, 0, 0, 26, 30, "41G", 26, 40, 41},
+    {37, 38, 2, 26, 30, "38G", 26, 37, 38},
+    {36, 31, 0, 26, 30, "8j", 26, 36, 38},
 }};
 
 void verify_topline_updated()
@@ -494,6 +503,88 @@ void verify_topline_updated()
                (window + " then " + std::string(std::get<5>(row)) + " lands where Vim 9.1 does")
                    .c_str());
     }
+}
+
+// 窓より高い行（窓 11 行に 600 字 = 15 画面行の行 30）では、Vim の答えの窓（先頭 30 の段 0）で
+// キャレットの画面行が見えなくなると画面行の追従へ戻る（#1178・ADR 0019 の追補の決定 3）。`j` で
+// その行に入ると先頭 30 の段 0、`12gj` で 12 段目へ下りると窓は段の途中から始まり、キャレットの段が
+// 見えている。
+void verify_taller_than_window()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller,
+            VisibleLines{measured_window, nenenib::core::TextViewGeometry{400, 20, 96}});
+    std::string text;
+    for (std::size_t line = 1; line <= measured_document; ++line)
+    {
+        text += (line == 30 ? std::string(600, 'w') : "line" + std::to_string(line)) +
+                (line < measured_document ? "\n" : "");
+    }
+    static_cast<void>(controller.apply(InsertText{text}));
+    applied(controller, SelectEditMode{EditMode::vim});
+    vim_replay(controller, "gg25Gzt");
+    vim_replay(controller, "5j");
+    const auto entered = controller.frame();
+    expect(entered.first_visible == LineNumber{30} && !entered.lines.empty() &&
+               entered.lines.front().screen_row == 0 &&
+               entered.caret.position.line == LineNumber{30},
+           "#1178 j onto a line taller than the window puts that line at the top (Vim halfway)");
+    vim_replay(controller, "12gj");
+    const auto deep = controller.frame();
+    const auto first_row = deep.lines.empty() ? std::int64_t{0} : -deep.lines.front().screen_row;
+    const auto caret_row = static_cast<std::int64_t>(deep.caret.position.column.value / 40);
+    expect(deep.first_visible == LineNumber{30} && first_row > 0 && caret_row >= first_row &&
+               caret_row - first_row < static_cast<std::int64_t>(measured_window),
+           "#1178 12gj inside the tall line falls back to the screen-row follow and keeps the "
+           "caret row visible");
+}
+
+// 追従が文字組みするのは描く行と core が問うた行だけ（#1178 の独立レビュー R4-1 / R4-2・ADR
+// 0128）。 どの行も 3 画面行（120 字）で窓 11 行には 4 行しか描かない文書で、`gg`・窓の下端での `j`
+// の連打・ INSERT の打鍵の間に新しく作られた layout の数は、frame
+// が初めて描いた行の数と打った文字の数を
+// 越えない（窓の外を論理行の固定幅で先読みすると越える）。本文は寸法が届く前に入れて、まだどの行も
+// 文字組みしていない所から数える。
+// 鍵を打って frame を描き、初めて描いた行の数を返す。
+[[nodiscard]] std::size_t newly_drawn(EditorController &controller, std::set<std::size_t> &drawn,
+                                      std::string_view keys)
+{
+    vim_replay(controller, keys);
+    std::size_t newly = 0;
+    for (const auto &line : controller.frame().lines)
+    {
+        newly += drawn.insert(line.number.value).second ? 1 : 0;
+    }
+    return newly;
+}
+
+void verify_follow_reads_drawn_lines()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    std::string text;
+    for (std::size_t line = 1; line <= measured_document; ++line)
+    {
+        text += "line" + std::to_string(line) + std::string(110, 'w') +
+                (line < measured_document ? "\n" : "");
+    }
+    static_cast<void>(controller.apply(InsertText{text}));
+    applied(controller, SelectEditMode{EditMode::vim});
+    applied(controller,
+            VisibleLines{measured_window, nenenib::core::TextViewGeometry{400, 20, 96}});
+    std::set<std::size_t> drawn;
+    static_cast<void>(newly_drawn(controller, drawn, ""));
+    const std::size_t before = editing.text_layouts().made();
+    std::size_t newly = newly_drawn(controller, drawn, "gg");
+    for (std::size_t press = 0; press < 20; ++press)
+    {
+        newly += newly_drawn(controller, drawn, "j");
+    }
+    newly += newly_drawn(controller, drawn, "ixyz");
+    expect(controller.frame().first_visible.value > 1 &&
+               editing.text_layouts().made() - before <= newly + 3,
+           "#1178 the Vim follow lays out only the drawn lines and the lines it asks for");
 }
 
 // 「通常 | Vim」の切り替えは窓を動かさない（追従を頼まない）。so=3 の Vim の update_topline なら
@@ -625,5 +716,7 @@ void verify_vim_view_scope()
     verify_grid_rows_cursor_correct();
     verify_topline_updated();
     verify_mode_switch_keeps_window();
+    verify_taller_than_window();
+    verify_follow_reads_drawn_lines();
 }
 } // namespace nenenib::tests

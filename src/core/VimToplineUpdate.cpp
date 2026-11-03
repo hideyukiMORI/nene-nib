@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <expected>
+#include <optional>
 #include <span>
 #include <tuple>
 #include <utility>
@@ -26,47 +28,57 @@ using Walk = std::tuple<std::size_t, std::size_t, Rows, Rows, Rows>;
 using Side = std::pair<std::size_t, Rows>;
 // 上の側と下の側。
 using Halves = std::pair<Side, Side>;
+// 読む窓・行数・載っていなくて最初に読んだ行（問いとして返す）。
+using Lookup = std::tuple<const VimToplineWindow &, std::size_t, std::optional<std::size_t>>;
 
-[[nodiscard]] Rows height_of(const VimToplineWindow &window) noexcept
+[[nodiscard]] Rows height_of(const Lookup &lookup) noexcept
 {
-    return static_cast<Rows>(window.height);
+    return static_cast<Rows>(std::get<0>(lookup).height);
 }
 
-[[nodiscard]] Rows margin_of(const VimToplineWindow &window) noexcept
+[[nodiscard]] Rows margin_of(const Lookup &lookup) noexcept
 {
-    return static_cast<Rows>(std::min(window.margin, margin_limit));
+    return static_cast<Rows>(std::min(std::get<0>(lookup).margin, margin_limit));
 }
 
-// Vim の plines。本文の外は beyond、載っていない行は 1。
-[[nodiscard]] Rows plines(const VimToplineWindow &window, std::size_t count,
-                          std::size_t line) noexcept
+[[nodiscard]] std::size_t count_of(const Lookup &lookup) noexcept
 {
+    return std::get<1>(lookup);
+}
+
+// Vim の plines。本文の外は beyond。載っていない行は 1 と数え、問う道なら最初の 1 行を覚える（その
+// 回の答えは捨てて、application が測ってから呼び直す）。
+[[nodiscard]] Rows plines(Lookup &lookup, std::size_t line) noexcept
+{
+    auto &[window, count, wanted] = lookup;
     if (line < 1 || line > count)
     {
         return beyond;
     }
     const auto found = std::ranges::lower_bound(window.rows, line, {}, [](const VimLineRows &value)
                                                 { return value.line.value; });
-    if (found == window.rows.end() || found->line.value != line)
+    if (found != window.rows.end() && found->line.value == line)
     {
-        return 1;
+        return static_cast<Rows>(std::max<std::size_t>(found->rows, 1));
     }
-    return static_cast<Rows>(std::max<std::size_t>(found->rows, 1));
+    if (window.asks && !wanted.has_value())
+    {
+        wanted = line;
+    }
+    return 1;
 }
 
 // topline_back の高さ（Vim の PLINES_WIN_NOFILL は窓の高さで切る・本文の上は beyond）。
-[[nodiscard]] Rows back_plines(const VimToplineWindow &window, std::size_t count,
-                               std::size_t line) noexcept
+[[nodiscard]] Rows back_plines(Lookup &lookup, std::size_t line) noexcept
 {
-    const Rows rows = plines(window, count, line);
-    return line < 1 ? rows : std::min(rows, std::max<Rows>(height_of(window), 1));
+    const Rows rows = plines(lookup, line);
+    return line < 1 ? rows : std::min(rows, std::max<Rows>(height_of(lookup), 1));
 }
 
 // check_top_offset: キャレットの上に余白の画面行が窓の中に無いか。
-[[nodiscard]] bool top_offset_short(const VimToplineWindow &window, std::size_t count,
-                                    std::size_t top, std::size_t cursor) noexcept
+[[nodiscard]] bool top_offset_short(Lookup &lookup, std::size_t top, std::size_t cursor) noexcept
 {
-    const Rows margin = margin_of(window);
+    const Rows margin = margin_of(lookup);
     if (cursor >= top + static_cast<std::size_t>(margin))
     {
         return false;
@@ -74,23 +86,22 @@ using Halves = std::pair<Side, Side>;
     Rows above = 0;
     for (std::size_t line = cursor; above < margin && line > top; --line)
     {
-        above += back_plines(window, count, line - 1);
+        above += back_plines(lookup, line - 1);
     }
     return above < margin;
 }
 
 // scroll_cursor_halfway の下へ 1 行（本文の下は「~」の 1 段で、使った段は増やさない）。
-[[nodiscard]] bool added_below(const VimToplineWindow &window, std::size_t count, Side &below,
-                               Rows &used) noexcept
+[[nodiscard]] bool added_below(Lookup &lookup, Side &below, Rows &used) noexcept
 {
-    if (below.first >= count)
+    if (below.first >= count_of(lookup))
     {
         ++below.second;
         return true;
     }
-    const Rows rows = plines(window, count, below.first + 1);
+    const Rows rows = plines(lookup, below.first + 1);
     used += rows;
-    if (used > height_of(window))
+    if (used > height_of(lookup))
     {
         return false;
     }
@@ -99,12 +110,11 @@ using Halves = std::pair<Side, Side>;
     return true;
 }
 
-[[nodiscard]] bool added_above(const VimToplineWindow &window, std::size_t count, Side &above,
-                               Rows &used) noexcept
+[[nodiscard]] bool added_above(Lookup &lookup, Side &above, Rows &used) noexcept
 {
-    const Rows rows = back_plines(window, count, above.first - 1);
+    const Rows rows = back_plines(lookup, above.first - 1);
     used += rows;
-    if (used > height_of(window))
+    if (used > height_of(lookup))
     {
         return false;
     }
@@ -114,40 +124,38 @@ using Halves = std::pair<Side, Side>;
 }
 
 // 1 周で下を先に足す（Vim の prefer_above が偽: 下が上以下なら下、その後に下が上より多ければ上）。
-[[nodiscard]] bool balanced_below_first(const VimToplineWindow &window, std::size_t count,
-                                        Halves &halves, Rows &used) noexcept
+[[nodiscard]] bool balanced_below_first(Lookup &lookup, Halves &halves, Rows &used) noexcept
 {
     auto &[above, below] = halves;
-    if (below.second <= above.second && !added_below(window, count, below, used))
+    if (below.second <= above.second && !added_below(lookup, below, used))
     {
         return false;
     }
-    return below.second <= above.second || added_above(window, count, above, used);
+    return below.second <= above.second || added_above(lookup, above, used);
 }
 
 // 1 周で上を先に足す（prefer_above が真: 下が上以上なら上、その後に下が上より少なければ下）。
-[[nodiscard]] bool balanced_above_first(const VimToplineWindow &window, std::size_t count,
-                                        Halves &halves, Rows &used) noexcept
+[[nodiscard]] bool balanced_above_first(Lookup &lookup, Halves &halves, Rows &used) noexcept
 {
     auto &[above, below] = halves;
-    if (below.second >= above.second && !added_above(window, count, above, used))
+    if (below.second >= above.second && !added_above(lookup, above, used))
     {
         return false;
     }
-    return below.second >= above.second || added_below(window, count, below, used);
+    return below.second >= above.second || added_below(lookup, below, used);
 }
 
 // scroll_cursor_halfway（atend は偽）: キャレットの行から上と下へ交互に足し、窓を越える手前の
 // 上の行を先頭にする。
-[[nodiscard]] std::size_t cursor_halfway(const VimToplineWindow &window, std::size_t count,
-                                         std::size_t cursor, bool prefer_above) noexcept
+[[nodiscard]] std::size_t cursor_halfway(Lookup &lookup, std::size_t cursor,
+                                         bool prefer_above) noexcept
 {
     Halves halves{Side{cursor, 0}, Side{cursor, 0}};
-    Rows used = plines(window, count, cursor);
+    Rows used = plines(lookup, cursor);
     while (halves.first.first > 1)
     {
-        const bool going = prefer_above ? balanced_above_first(window, count, halves, used)
-                                        : balanced_below_first(window, count, halves, used);
+        const bool going = prefer_above ? balanced_above_first(lookup, halves, used)
+                                        : balanced_below_first(lookup, halves, used);
         if (!going)
         {
             break;
@@ -163,10 +171,9 @@ using Halves = std::pair<Side, Side>;
 }
 
 // scroll_cursor_top が上の行と組にして下に足す行（余白がまだ要り、本文の最後の行より前のとき）。
-[[nodiscard]] Rows paired_below(const VimToplineWindow &window, std::size_t count, std::size_t line,
-                                bool wanted) noexcept
+[[nodiscard]] Rows paired_below(Lookup &lookup, std::size_t line, bool wanted) noexcept
 {
-    return wanted && line < count ? plines(window, count, line) : 0;
+    return wanted && line < count_of(lookup) ? plines(lookup, line) : 0;
 }
 
 // 上の行を足すのを止めるか（送りが scrolljump を越えたか先頭に届き、上の余白が足りた）。
@@ -177,11 +184,10 @@ using Halves = std::pair<Side, Side>;
 
 // scroll_cursor_top（always は偽）: キャレットの上に余白の行を置いた先頭。窓に収まらなければ
 // scroll_cursor_halfway。先頭は下げない（折り返す行で上がるだけ）。
-[[nodiscard]] std::size_t cursor_top(const VimToplineWindow &window, std::size_t count,
-                                     std::size_t top, std::size_t cursor) noexcept
+[[nodiscard]] std::size_t cursor_top(Lookup &lookup, std::size_t top, std::size_t cursor) noexcept
 {
-    const Rows margin = margin_of(window);
-    Rows used = plines(window, count, cursor);
+    const Rows margin = margin_of(lookup);
+    Rows used = plines(lookup, cursor);
     Rows scrolled = above_window(cursor, top, used);
     Rows extra = 0;
     std::size_t above = cursor - 1;
@@ -189,14 +195,14 @@ using Halves = std::pair<Side, Side>;
     std::size_t reached = cursor;
     while (above > 0)
     {
-        const Rows rows = plines(window, count, above);
+        const Rows rows = plines(lookup, above);
         scrolled += above_window(above, top, rows);
         if (top_settled(reached >= top, scrolled, extra, margin))
         {
             break;
         }
-        used += rows + paired_below(window, count, below, extra + rows <= margin);
-        if (used > height_of(window))
+        used += rows + paired_below(lookup, below, extra + rows <= margin);
+        if (used > height_of(lookup))
         {
             break;
         }
@@ -205,39 +211,37 @@ using Halves = std::pair<Side, Side>;
         --above;
         ++below;
     }
-    if (used > height_of(window))
+    if (used > height_of(lookup))
     {
-        return cursor_halfway(window, count, cursor, false);
+        return cursor_halfway(lookup, cursor, false);
     }
     return std::min(std::min(reached, top), cursor);
 }
 
 // comp_botline と set_empty_rows: 先頭から窓に全部入る行を数える。
-[[nodiscard]] Shown shown_from(const VimToplineWindow &window, std::size_t count,
-                               std::size_t top) noexcept
+[[nodiscard]] Shown shown_from(Lookup &lookup, std::size_t top) noexcept
 {
     Rows done = 0;
     std::size_t line = top;
-    while (line <= count)
+    while (line <= count_of(lookup))
     {
-        const Rows rows = plines(window, count, line);
-        if (done + rows > height_of(window))
+        const Rows rows = plines(lookup, line);
+        if (done + rows > height_of(lookup))
         {
             break;
         }
         done += rows;
         ++line;
     }
-    return Shown{top, line, done == 0 ? 0 : height_of(window) - done};
+    return Shown{top, line, done == 0 ? 0 : height_of(lookup) - done};
 }
 
 // check_botline: キャレットが窓の下にあるか、下に余白の画面行が無いか。窓の下の行が本文の外
 // （末尾まで見えている）なら要らない。
-[[nodiscard]] bool bottom_short(const VimToplineWindow &window, std::size_t count,
-                                const Shown &shown, std::size_t cursor) noexcept
+[[nodiscard]] bool bottom_short(Lookup &lookup, const Shown &shown, std::size_t cursor) noexcept
 {
     const std::size_t botline = std::get<1>(shown);
-    if (botline > count)
+    if (botline > count_of(lookup))
     {
         return false;
     }
@@ -245,7 +249,7 @@ using Halves = std::pair<Side, Side>;
     {
         return true;
     }
-    const Rows margin = margin_of(window);
+    const Rows margin = margin_of(lookup);
     if (cursor + static_cast<std::size_t>(margin) < botline)
     {
         return false;
@@ -253,7 +257,7 @@ using Halves = std::pair<Side, Side>;
     Rows below = std::get<2>(shown);
     for (std::size_t line = cursor + 1; line < botline && below < margin; ++line)
     {
-        below += plines(window, count, line);
+        below += plines(lookup, line);
     }
     return below < margin;
 }
@@ -279,30 +283,29 @@ using Halves = std::pair<Side, Side>;
 }
 
 // scroll_cursor_bot の 1 歩: 上へ 1 行、本文の末尾の前なら下へ 1 行。窓を越えたら偽。
-[[nodiscard]] bool stepped_bottom(const VimToplineWindow &window, std::size_t count,
-                                  const Shown &shown, Walk &walk) noexcept
+[[nodiscard]] bool stepped_bottom(Lookup &lookup, const Shown &shown, Walk &walk) noexcept
 {
     auto &[above, below, used, scrolled, extra] = walk;
-    const Rows upper = back_plines(window, count, above - 1);
+    const Rows upper = back_plines(lookup, above - 1);
     used += upper;
-    if (used > height_of(window))
+    if (used > height_of(lookup))
     {
         return false;
     }
     --above;
     scrolled += past_window(above, shown, upper);
-    if (below >= count)
+    if (below >= count_of(lookup))
     {
         return true;
     }
-    const Rows lower = plines(window, count, below + 1);
+    const Rows lower = plines(lookup, below + 1);
     used += lower;
-    if (used > height_of(window))
+    if (used > height_of(lookup))
     {
         return false;
     }
     ++below;
-    if (extra < margin_of(window) || scrolled < scroll_jump)
+    if (extra < margin_of(lookup) || scrolled < scroll_jump)
     {
         extra += lower;
         scrolled += past_window(below, shown, lower);
@@ -312,15 +315,14 @@ using Halves = std::pair<Side, Side>;
 
 // 送る論理行の数（scroll_cursor_bot の line_count・窓より大きければ使った段、窓の下の行を
 // 越えて足りなければ 9999）。
-[[nodiscard]] Rows lines_to_scroll(const VimToplineWindow &window, std::size_t count,
-                                   const Shown &shown, const Walk &walk) noexcept
+[[nodiscard]] Rows lines_to_scroll(Lookup &lookup, const Shown &shown, const Walk &walk) noexcept
 {
     const Rows scrolled = std::get<3>(walk);
     if (scrolled <= 0)
     {
         return 0;
     }
-    if (std::get<2>(walk) > height_of(window))
+    if (std::get<2>(walk) > height_of(lookup))
     {
         return std::get<2>(walk);
     }
@@ -329,7 +331,7 @@ using Halves = std::pair<Side, Side>;
     for (std::size_t line = std::get<0>(shown); reached < scrolled && line <= std::get<1>(shown);
          ++line)
     {
-        reached += plines(window, count, line);
+        reached += plines(lookup, line);
         ++lines;
     }
     return reached < scrolled ? 9999 : lines;
@@ -337,90 +339,86 @@ using Halves = std::pair<Side, Side>;
 
 // scroll_cursor_bot（set_topbot は偽）: 窓の下に余白の行が残るように送る。送りが窓の高さ以上なら
 // 上を先に足す scroll_cursor_halfway。
-[[nodiscard]] std::size_t cursor_bot(const VimToplineWindow &window, std::size_t count,
-                                     const Shown &shown, std::size_t cursor) noexcept
+[[nodiscard]] std::size_t cursor_bot(Lookup &lookup, const Shown &shown,
+                                     std::size_t cursor) noexcept
 {
-    const Rows used = plines(window, count, cursor);
+    const Rows used = plines(lookup, cursor);
     Walk walk{cursor, cursor, used, past_window(cursor, shown, used), 0};
     while (std::get<0>(walk) > 1 &&
-           !bottom_settled(margin_of(window), walk, std::get<1>(shown), count))
+           !bottom_settled(margin_of(lookup), walk, std::get<1>(shown), count_of(lookup)))
     {
-        if (!stepped_bottom(window, count, shown, walk))
+        if (!stepped_bottom(lookup, shown, walk))
         {
             break;
         }
     }
-    const Rows lines = lines_to_scroll(window, count, shown, walk);
-    if (lines >= height_of(window) && lines > scroll_jump)
+    const Rows lines = lines_to_scroll(lookup, shown, walk);
+    if (lines >= height_of(lookup) && lines > scroll_jump)
     {
-        return cursor_halfway(window, count, cursor, true);
+        return cursor_halfway(lookup, cursor, true);
     }
-    return std::min(std::get<0>(shown) + static_cast<std::size_t>(lines), count);
+    return std::min(std::get<0>(shown) + static_cast<std::size_t>(lines), count_of(lookup));
 }
 
 // update_topline の下側: check_botline が要れば、近ければ scroll_cursor_bot、遠ければ
 // scroll_cursor_halfway。
-[[nodiscard]] std::size_t bottom_checked(const VimToplineWindow &window, std::size_t count,
-                                         std::size_t top, std::size_t cursor) noexcept
+[[nodiscard]] std::size_t bottom_checked(Lookup &lookup, std::size_t top,
+                                         std::size_t cursor) noexcept
 {
-    const Shown shown = shown_from(window, count, top);
-    if (!bottom_short(window, count, shown, cursor))
+    const Shown shown = shown_from(lookup, top);
+    if (!bottom_short(lookup, shown, cursor))
     {
         return top;
     }
     const std::size_t lines =
-        cursor + 1 + static_cast<std::size_t>(margin_of(window)) - std::get<1>(shown);
-    return lines <= window.height + 1 ? cursor_bot(window, count, shown, cursor)
-                                      : cursor_halfway(window, count, cursor, false);
+        cursor + 1 + static_cast<std::size_t>(margin_of(lookup)) - std::get<1>(shown);
+    return lines <= std::get<0>(lookup).height + 1 ? cursor_bot(lookup, shown, cursor)
+                                                   : cursor_halfway(lookup, cursor, false);
 }
 
 // update_topline の上側が要るか（先頭が 1 行目でなく、キャレットが先頭より上か上の余白が無い）。
-[[nodiscard]] bool top_needed(const VimToplineWindow &window, std::size_t count, std::size_t top,
-                              std::size_t cursor) noexcept
+[[nodiscard]] bool top_needed(Lookup &lookup, std::size_t top, std::size_t cursor) noexcept
 {
-    return top > 1 && (cursor < top || top_offset_short(window, count, top, cursor));
+    return top > 1 && (cursor < top || top_offset_short(lookup, top, cursor));
 }
-} // namespace
 
-LineNumber vim_topline_updated(const VimToplineWindow &window, LineNumber caret,
-                               std::size_t line_count) noexcept
+// update_topline の全体（上側の後に下側・上側が中央へ寄せたら下側は見ない）。
+[[nodiscard]] std::size_t updated_top(Lookup &lookup, std::size_t top, std::size_t cursor) noexcept
 {
-    const std::size_t count = std::max<std::size_t>(line_count, 1);
-    const std::size_t cursor = std::clamp<std::size_t>(caret.value, 1, count);
-    std::size_t top = std::clamp<std::size_t>(window.top.value, 1, count);
-    if (window.height == 0)
-    {
-        return LineNumber{cursor};
-    }
-    if (top_needed(window, count, top, cursor))
+    if (top_needed(lookup, top, cursor))
     {
         // キャレットから先頭 + 余白までの論理行（Vim の n）が halfheight 以上なら中央へ寄せる。
         const auto distance =
-            static_cast<Rows>(top) + margin_of(window) - static_cast<Rows>(cursor);
-        const Rows halfheight = std::max<Rows>(height_of(window) / 2 - 1, 2);
+            static_cast<Rows>(top) + margin_of(lookup) - static_cast<Rows>(cursor);
+        const Rows halfheight = std::max<Rows>(height_of(lookup) / 2 - 1, 2);
         if (distance >= halfheight)
         {
-            return LineNumber{cursor_halfway(window, count, cursor, false)};
+            return cursor_halfway(lookup, cursor, false);
         }
-        top = cursor_top(window, count, top, cursor);
+        top = cursor_top(lookup, top, cursor);
     }
-    return LineNumber{bottom_checked(window, count, top, cursor)};
+    return bottom_checked(lookup, top, cursor);
 }
+} // namespace
 
-bool vim_topline_kept(const VimToplineWindow &window, LineNumber caret,
-                      std::size_t line_count) noexcept
+std::expected<LineNumber, VimRowsNeeded> vim_topline_updated(const VimToplineWindow &window,
+                                                             LineNumber caret,
+                                                             std::size_t line_count) noexcept
 {
     const std::size_t count = std::max<std::size_t>(line_count, 1);
     const std::size_t cursor = std::clamp<std::size_t>(caret.value, 1, count);
     const std::size_t top = std::clamp<std::size_t>(window.top.value, 1, count);
     if (window.height == 0)
     {
-        return cursor == top;
+        return LineNumber{cursor};
     }
-    if (top_needed(window, count, top, cursor))
+    Lookup lookup{window, count, std::nullopt};
+    const std::size_t updated = updated_top(lookup, top, cursor);
+    const std::optional<std::size_t> &wanted = std::get<2>(lookup);
+    if (wanted.has_value())
     {
-        return false;
+        return std::unexpected(VimRowsNeeded{LineNumber{wanted.value()}});
     }
-    return !bottom_short(window, count, shown_from(window, count, top), cursor);
+    return LineNumber{updated};
 }
 } // namespace nenenib::core
