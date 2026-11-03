@@ -974,14 +974,7 @@ void Direct2DRenderer::tint_runs(IDWriteTextLayout *text, const core::LayoutRect
 void Direct2DRenderer::outline_runs(IDWriteTextLayout *text, const core::LayoutRect &area,
                                     DWRITE_TEXT_RANGE range, float stroke)
 {
-    const float inset = stroke / 2.0F;
-    for (const auto &run : runs_of(text, area, range))
-    {
-        context_->DrawRectangle(D2D1::RectF(run.left + inset, run.top + inset,
-                                            run.left + run.width - inset,
-                                            run.top + run.height - inset),
-                                brush_.Get(), stroke);
-    }
+    body_painter().outline_runs(text, area, range, stroke);
 }
 
 DWRITE_TEXT_RANGE Direct2DRenderer::range_of(const application::LineView &line,
@@ -1032,13 +1025,20 @@ void Direct2DRenderer::draw_current_match(const application::EditorFrame &frame,
                                           IDWriteTextLayout *text, const core::LayoutRect &area,
                                           const application::LineView &line)
 {
-    if (!line.current_match.has_value())
+    if (!line.current_match.has_value() && !line.bracket.has_value())
     {
         return;
     }
+    // matchparen の相手の括弧も同じ枠（ADR 0164 の決定 4）。
     brush_->SetColor(to_color(frame.palette.accent));
     LineUtf16Evaluation positions(line.display.text);
-    outline_runs(text, area, range_of(line, line.current_match.value(), positions), scaled(1.0F));
+    for (const auto &span : {line.current_match, line.bracket})
+    {
+        if (span.has_value())
+        {
+            outline_runs(text, area, range_of(line, span.value(), positions), scaled(1.0F));
+        }
+    }
 }
 
 void Direct2DRenderer::draw_line_selection(const application::EditorFrame &frame,

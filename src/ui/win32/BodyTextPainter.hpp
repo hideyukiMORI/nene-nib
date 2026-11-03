@@ -142,6 +142,20 @@ template <typename Target, typename Layouts = BodyTextLayouts> class BodyTextPai
         runs.resize(count);
         return runs;
     }
+    // 範囲の当たり矩形を内側 stroke の枠で囲む。検索の現在の当たり（ADR 0037 の
+    // 決定 5）と matchparen の相手の括弧（ADR 0164 の決定 4）。色は呼び手が置く。
+    void outline_runs(IDWriteTextLayout *text, const core::LayoutRect &area,
+                      DWRITE_TEXT_RANGE range, float stroke)
+    {
+        const float inset = stroke / 2.0F;
+        for (const auto &run : runs_of(text, area, range))
+        {
+            target_.DrawRectangle(D2D1::RectF(run.left + inset, run.top + inset,
+                                              run.left + run.width - inset,
+                                              run.top + run.height - inset),
+                                  brush_, stroke);
+        }
+    }
     // 範囲の字だけを描き直す。範囲の当たり矩形ごとに、その切り抜きの中に行の layout
     // をもう一度通す。
     void tint_runs(IDWriteTextLayout *text, const core::LayoutRect &area, DWRITE_TEXT_RANGE range)

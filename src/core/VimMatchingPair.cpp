@@ -3,9 +3,12 @@
 #include "LineNumber.hpp"
 #include "VimPairScan.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
+#include <iterator>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -115,12 +118,23 @@ constexpr std::array<BracketPair, 3> match_pairs{{{'(', ')'}, {'[', ']'}, {'{', 
     std::string content = text.line_text(line);
     const std::size_t index = backwards ? content.size() : 0;
     const bool quotes = even_quotes(content);
-    return VimPairScan{line, std::move(content), index, quotes, false, 0};
+    return VimPairScan{line, text.line_start(line).value, std::move(content), index, quotes, false,
+                       0};
 }
 
-// 1 文字戻る。本文の先頭なら false。前の行へ渡ったら行の内容の終わりに立つ。
-[[nodiscard]] bool stepped_back(const TextBuffer &text, VimPairScan &scan)
+// 走査の今の位置の本文のバイト位置。
+[[nodiscard]] std::size_t offset_of(const VimPairScan &scan) noexcept
 {
+    return scan.start + scan.index;
+}
+
+// 1 文字戻る。本文の先頭か窓の始まりなら false。前の行へ渡ったら行の内容の終わりに立つ。
+[[nodiscard]] bool stepped_back(const TextBuffer &text, VimPairScan &scan, std::size_t begin)
+{
+    if (offset_of(scan) <= begin)
+    {
+        return false;
+    }
     if (scan.index > 0)
     {
         --scan.index;
@@ -130,18 +144,21 @@ constexpr std::array<BracketPair, 3> match_pairs{{{'(', ')'}, {'[', ']'}, {'{', 
         }
         return true;
     }
-    if (scan.line.value <= 1)
+    // 窓の始まりより前の行は写さない（巨大な行を読まない）。
+    if (scan.line.value <= 1 || text.line_end(LineNumber{scan.line.value - 1}).value < begin)
     {
         return false;
     }
     const bool inside = scan.inside;
+    const std::size_t depth = scan.depth;
     scan = scan_at(text, LineNumber{scan.line.value - 1}, true);
     scan.inside = inside;
+    scan.depth = depth;
     return true;
 }
 
-// 1 文字進む。本文の末尾なら false。行の内容の終わりから次の行の行頭へ渡る。
-[[nodiscard]] bool stepped_forward(const TextBuffer &text, VimPairScan &scan)
+// 1 文字進む。本文の末尾か窓の終わりなら false。行の内容の終わりから次の行の行頭へ渡る。
+[[nodiscard]] bool stepped_forward(const TextBuffer &text, VimPairScan &scan, std::size_t end)
 {
     if (scan.index < scan.content.size())
     {
@@ -150,15 +167,19 @@ constexpr std::array<BracketPair, 3> match_pairs{{{'(', ')'}, {'[', ']'}, {'{', 
         {
             ++scan.index;
         }
-        return true;
+        return offset_of(scan) < end;
     }
-    if (scan.line.value >= text.line_count())
+    // 窓の終わりから後ろの行は写さない（巨大な行を読まない）。
+    if (scan.line.value >= text.line_count() ||
+        text.line_start(LineNumber{scan.line.value + 1}).value >= end)
     {
         return false;
     }
     const bool inside = scan.inside;
+    const std::size_t depth = scan.depth;
     scan = scan_at(text, LineNumber{scan.line.value + 1}, false);
     scan.inside = inside;
+    scan.depth = depth;
     return true;
 }
 
@@ -216,12 +237,22 @@ constexpr std::array<BracketPair, 3> match_pairs{{{'(', ')'}, {'[', ']'}, {'{', 
     return scan.inside;
 }
 
-// 括弧を数える。相手が見つかれば true。
-[[nodiscard]] bool counted(VimPairScan &scan, const BracketPair &pair, bool escaped)
+// 本文の位置 at が除く区間のどれかの中か。区間は昇順で重ならない。
+[[nodiscard]] bool skipped_at(std::span<const OffsetRange> skipped, std::size_t at)
+{
+    const auto after = std::ranges::upper_bound(skipped, at, {}, [](const OffsetRange &range)
+                                                { return range.begin.value; });
+    return after != skipped.begin() && at < std::prev(after)->end.value;
+}
+
+// 括弧を数える。相手が見つかれば true。除く区間の中の括弧は数えない（ADR 0164 の決定 3）。
+[[nodiscard]] bool counted(VimPairScan &scan, const BracketPair &pair, bool escaped,
+                           std::span<const OffsetRange> skipped)
 {
     const char byte = scan.content[scan.index];
     if ((byte != pair.first && byte != pair.second) ||
-        odd_backslashes(scan.content, scan.index) != escaped)
+        odd_backslashes(scan.content, scan.index) != escaped ||
+        skipped_at(skipped, offset_of(scan)))
     {
         return false;
     }
@@ -242,14 +273,28 @@ constexpr std::array<BracketPair, 3> match_pairs{{{'(', ')'}, {'[', ']'}, {'{', 
 std::optional<Offset> vim_matching_pair(const TextBuffer &text, Offset caret)
 {
     const LineNumber line = text.position_of(caret).line;
-    VimPairScan scan = scan_at(text, line, false);
-    const auto start = first_bracket(scan.content, caret.value - text.line_start(line).value);
-    if (!start.has_value())
+    const Offset start = text.line_start(line);
+    const auto found = first_bracket(text.line_text(line), caret.value - start.value);
+    if (!found.has_value())
     {
         return std::nullopt;
     }
-    scan.index = start.value();
-    const auto found = bracket_of(scan.content[scan.index]);
+    return matched_bracket(text, Offset{start.value + found.value()},
+                           OffsetRange{Offset{0}, Offset{text.size_bytes()}}, {});
+}
+
+std::optional<Offset> matched_bracket(const TextBuffer &text, Offset bracket, OffsetRange window,
+                                      std::span<const OffsetRange> skipped)
+{
+    if (bracket.value < window.begin.value || bracket.value >= window.end.value ||
+        bracket.value >= text.size_bytes())
+    {
+        return std::nullopt;
+    }
+    const LineNumber line = text.position_of(bracket).line;
+    VimPairScan scan = scan_at(text, line, false);
+    scan.index = bracket.value - scan.start;
+    const auto found = bracket_of(byte_at(scan.content, scan.index));
     if (!found.has_value())
     {
         return std::nullopt;
@@ -257,11 +302,12 @@ std::optional<Offset> vim_matching_pair(const TextBuffer &text, Offset caret)
     const BracketPair pair = found.value();
     const bool backwards = !opens(pair.first);
     const bool escaped = odd_backslashes(scan.content, scan.index);
-    while (backwards ? stepped_back(text, scan) : stepped_forward(text, scan))
+    while (backwards ? stepped_back(text, scan, window.begin.value)
+                     : stepped_forward(text, scan, window.end.value))
     {
-        if (!passed_quoting(scan, backwards) && counted(scan, pair, escaped))
+        if (!passed_quoting(scan, backwards) && counted(scan, pair, escaped, skipped))
         {
-            return Offset{text.line_start(scan.line).value + scan.index};
+            return Offset{offset_of(scan)};
         }
     }
     return std::nullopt;

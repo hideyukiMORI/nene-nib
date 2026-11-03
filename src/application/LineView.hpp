@@ -47,6 +47,9 @@ struct LineView
     // 所は重い方だけ）。文書に診断が無い・巨大な行の窓では空。IME の差し込み行は colors と同じく
     // 差し込みの後ろをずらし、差し込みの範囲には区間が無い。
     std::vector<core::DiagnosticSpan> diagnostics{};
+    // matchparen の相手の括弧（ADR 0164 の決定 4）。桁は current_match と同じ本文の
+    // 桁で、renderer は同じ枠で描く。操作中の枠でキャレットの括弧の相手が載る行だけ。
+    std::optional<core::SelectionSpan> bracket{};
 };
 
 [[nodiscard]] inline std::string_view presented_text(const LineView &line) noexcept

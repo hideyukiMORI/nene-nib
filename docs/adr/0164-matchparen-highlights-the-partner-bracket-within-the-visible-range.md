@@ -21,7 +21,7 @@ Vim は `matchparen` の plugin を既定で読み込み、キャレットの下
 
 ## 強制
 
-- 全文を走らない（`window` の打ち切り）: **active**（契約・性質の試験）。
+- 全文を走らない（`window` の打ち切り）: **active**（`nib_tests --matchparen` の契約と固定 seed の性質の試験・#999。窓は見えている行の前後 1 画面で、巨大な行の手前で止める）。枠の画素は `nib_window_tests --matchparen`。
 - 8 本の速さと +1% の線: **active**（QLT-014・PR 本文の A/B）。
 
 ## 結果

@@ -36,4 +36,6 @@ void verify_pointer_presses();
 void verify_guide_key_width();
 void verify_print_render();
 void verify_diagnostic_waves();
+// matchparen の相手の括弧の枠（ADR 0164 の決定 4・#999）。
+void verify_matchparen_outline();
 } // namespace nenenib::tests::ui
