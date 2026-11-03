@@ -98,6 +98,7 @@ constexpr auto fixed_candidates = std::to_array<std::string_view>({"colorscheme"
                                                                    "preview full",
                                                                    "preview side",
                                                                    "preview off",
+                                                                   "hardcopy",
                                                                    "edit",
                                                                    "buffer",
                                                                    "ls",

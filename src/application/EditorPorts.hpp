@@ -14,6 +14,7 @@
 #include "HistoryPort.hpp"
 #include "LanguageServerPort.hpp"
 #include "MarkdownPort.hpp"
+#include "PrintPort.hpp"
 #include "SessionPort.hpp"
 #include "SettingsPort.hpp"
 #include "TextLayoutPort.hpp"
@@ -51,5 +52,7 @@ struct EditorPorts
     // 現在時刻（ADR 0175 の決定 1）。F5 の日時の挿入だけが呼ぶ（決定 4）。名前の `clock` は
     // ARC-007 の字句検査（nondeterministicNames）が adapters の外で拒むので wall_clock にする。
     ClockPort &wall_clock;
+    // 印刷（ADR 0177 の決定 2）。意図 PrintDocument だけが呼ぶ。
+    PrintPort &print;
 };
 } // namespace nenenib::application

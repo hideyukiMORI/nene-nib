@@ -24,6 +24,7 @@
 #include "Win32HistoryAdapter.hpp"
 #include "Win32LanguageServer.hpp"
 #include "Win32MarkdownAdapter.hpp"
+#include "Win32Printer.hpp"
 #include "Win32SessionAdapter.hpp"
 #include "Win32SettingsAdapter.hpp"
 #include "Win32ThemeAdapter.hpp"
@@ -282,13 +283,14 @@ int run(HINSTANCE instance)
         worker, files, nenenib::adapters::win32::local_autosave_root());
     nenenib::adapters::win32::Win32Bell bell;
     nib_adapters::Win32Clock wall_clock;
+    nenenib::ui::win32::Win32Printer printer;
     nenenib::adapters::win32::Win32DocumentReader reads(worker, files, code_pages);
     nenenib::adapters::win32::Win32LanguageServer language_server({});
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
                                           themes, session, history, folders, bookmarks,
                                           text_layouts, autosave, fonts, bell, markdown, reads,
-                                          language_server, wall_clock},
+                                          language_server, wall_clock, printer},
         initial_documents(given));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。

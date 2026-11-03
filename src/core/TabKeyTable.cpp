@@ -71,6 +71,7 @@ namespace
     case EditorOperation::replace:
     case EditorOperation::go_to_line:
     case EditorOperation::preview_full:
+    case EditorOperation::print:
         return std::nullopt;
     }
     std::unreachable();
