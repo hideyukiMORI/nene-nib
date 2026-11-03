@@ -1941,6 +1941,9 @@ void verify_vim_block_count_replay_crlf()
 // の R3-3）。engine は本文を LF で数えるので、同じ鍵を LF と CRLF の文書で打ち、行と桁が同じかを
 // 見る。改行を含む `I` の繰り返しは 1 行目を離れて写さない（op_insert）。VISUAL の `C` は回数を流し
 // 直さず、改行を打っても 1 行目が伸びたぶんを写す（op_change）。
+// この契約は「改行を含む VimInsertAt が矩形の写しの枝へ届かない」経路の不変条件を見張る。矩形の
+// `c` `C` が回数を流し直すようになるか入口の問いが動いて赤になったら、block_copied の VimInsertAt
+// の枝も document_caret_after に通す（#1173 の R5-1）。
 [[nodiscard]] std::pair<TextPosition, TextPosition> block_repeat_rest(std::string_view newline,
                                                                       std::string_view keys)
 {
