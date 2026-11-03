@@ -1323,7 +1323,9 @@ class LanguageServerBenchTests(unittest.TestCase):
         boundaries["await_quiet"].return_value = True
         boundaries["dismiss_dialog"].return_value = True
         boundaries["observed_marks"].return_value = entries
-        with mock.patch.multiple(speed, **boundaries), contextlib.redirect_stdout(io.StringIO()):
+        self.kept = []
+        with mock.patch.multiple(speed, **boundaries), contextlib.redirect_stdout(io.StringIO()), \
+                mock.patch.object(speed, "LSP_READY_FRAMES", self.kept):
             result = speed.lsp_ready_trial(Path("exe"), {}, Path("folder"), Path("c.cpp"),
                                            speed.LSP_SERVER)
         boundaries["await_language_server"].assert_called_once_with(process, 123, speed.LSP_SERVER)
@@ -1331,6 +1333,22 @@ class LanguageServerBenchTests(unittest.TestCase):
                                       boundaries["write_text"].call_args_list])
         boundaries["stop"].assert_called_once_with(process)
         return result
+
+    def test_a_second_frame_beyond_the_gap_limit_is_missing_and_both_frames_are_kept(self):
+        """#1217 R3-1: the keystroke and the underlines shared one frame; the second is unrelated."""
+        far = 600 + 1000 * (speed.LSP_READY_GAP_MS + 1)
+        entries = [{"milestone": "input_received", "qpcMicroseconds": 1000},
+                   {"milestone": "frame_presented", "qpcMicroseconds": 1500},
+                   {"milestone": "frame_presented", "qpcMicroseconds": 3000},
+                   {"milestone": "input_received", "qpcMicroseconds": 10000},
+                   {"milestone": "frame_presented", "qpcMicroseconds": 10600},
+                   {"milestone": "frame_presented", "qpcMicroseconds": 10000 + far}]
+        self.assertIsNone(speed.measured_ready(entries, speed.input_indexes(entries)))
+        self.assertIsNone(self.ready_trial(entries))
+        self.assertEqual([[0.6, far / 1000]], self.kept)
+        self.assertEqual(2.5, self.ready_trial(entries[:5] + [
+            {"milestone": "frame_presented", "qpcMicroseconds": 12500}]))
+        self.assertEqual([[0.6, 2.5]], self.kept)
 
     def test_the_ready_trial_measures_after_the_warmup_diagnostics(self):
         entries = [{"milestone": "input_received", "qpcMicroseconds": 1000},
@@ -1414,6 +1432,17 @@ class LanguageServerBenchTests(unittest.TestCase):
                         self.assertRaises(SystemExit) as stopped:
                     speed.main()
                 self.assertEqual(2, stopped.exception.code)
+
+    def test_an_earlier_record_is_never_judged_for_an_lsp_bench(self):
+        """#1217 R4-1: --values is refused too, so no earlier record becomes a judged one."""
+        for name in speed.LSP_BENCHES:
+            argv = ["measure-speed.py", "--record", "--values", "earlier.json", "--bench", name]
+            with self.subTest(name=name), mock.patch.object(sys, "argv", argv), \
+                    contextlib.redirect_stderr(io.StringIO()) as printed, \
+                    self.assertRaises(SystemExit) as stopped:
+                speed.main()
+            self.assertEqual(2, stopped.exception.code)
+            self.assertIn("--record only", printed.getvalue())
 
 
 if __name__ == "__main__":

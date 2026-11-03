@@ -10,11 +10,12 @@
 // ベンチの引数（#995 の L1d・ADR 0161 の決定 7）: --diagnostics <N>（textDocument/didOpen と
 // didChange を受けるたびに、同じ uri と version で N 件の publishDiagnostics を 1 通すぐ書く。
 // 1 行目から順に 1 行 1 件・range は各行の 0〜4・severity は error と warning を交互・message は
-// 「fake <番号>」。ほかの引数と組み合わせない）・--silent（did* に黙る。引数なしと同じで、ベンチの
-// 設定の行に意図を書くための名前）。
+// 「fake <番号>」。ほかの振る舞いの引数と併せると何も読まずに 4 で終わる）・--silent（did*
+// に黙る。引数なしと同じで、ベンチの 設定の行に意図を書くための名前）。
 #include <windows.h>
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cstddef>
 #include <optional>
@@ -29,6 +30,12 @@ using Arguments = std::span<char *const>;
 constexpr std::string_view header_end = "\r\n\r\n";
 constexpr std::string_view length_name = "Content-Length:";
 constexpr int died_exit_code = 3;
+// --diagnostics をほかの振る舞いの引数と併せたとき（#1217 のレビュー R1-1）。読まずに終わる。
+constexpr int mixed_exit_code = 4;
+// --diagnostics と併せない振る舞いの引数（引数の表）。
+constexpr std::array<std::string_view, 8> other_behaviours{
+    "--echo", "--double", "--die-after",      "--big",
+    "--hang", "--deaf",   "--endless-header", "--silent"};
 
 // 標準入力から読んだがまだ枠に切っていないバイト列。
 std::string &unread()
@@ -269,6 +276,12 @@ int serve(Arguments arguments)
 int main(int argc, char **argv)
 {
     const Arguments arguments(argv, static_cast<std::size_t>(argc));
+    if (has(arguments, "--diagnostics") &&
+        std::ranges::any_of(other_behaviours,
+                            [&](std::string_view name) { return has(arguments, name); }))
+    {
+        return mixed_exit_code;
+    }
     const auto big = number_after(arguments, "--big");
     if (big.has_value())
     {

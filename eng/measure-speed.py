@@ -78,7 +78,10 @@ went quiet (initialize is answered at once by the fake, and didOpen follows it),
                             frame_presented after it. The product marks no milestone for
                             diagnostics, so "the second frame" approximates "the frame that
                             carries the underlines" (publishDiagnostics -> WorkCompleted ->
-                            repaint); a trial with fewer than two frames after it is missing
+                            repaint); a trial with fewer than two frames after it, or whose second
+                            frame comes more than LSP_READY_GAP_MS after the first (the keystroke
+                            and the underlines shared one frame, and the second is unrelated), is
+                            missing; each trial's two frames are kept in the record
 
 Five more optional benches measure split (ADR 0120 decisions 2-7, ADR 0148 decision 14) and are
 never compared with the reference: split-single-key-100 (S, one pane) and
@@ -280,6 +283,12 @@ OPTIONAL_BENCHES = (*GIANT_BENCHES, *SPLIT_BENCHES, PREVIEW_BENCH, CPP_BENCH,
 # 替え玉のサーバーは測る exe と同じ build の中のもの（tests/adapters/FakeLanguageServerMain.cpp）。
 LSP_SERVER = "nib_fake_language_server.exe"
 LSP_DIAGNOSTICS = 100
+# 打鍵の frame と診断の frame の間隔の上限（#1217 のレビュー R3-1）。替え玉はマイクロ秒で答え、席の
+# 確認では診断の frame は打鍵の frame の約 1 ms 後、無関係な frame（閉じる・タイマー）は 300 ms 以上後
+# だった。これを越えた 2 枚目は打鍵と下線が 1 枚に重なった試行の別の frame なので欠測にする。
+LSP_READY_GAP_MS = 100.0
+# lsp-diagnostics-ready の試行ごとの [1 枚目, 2 枚目]（打鍵の input_received からの ms）。記録に残す。
+LSP_READY_FRAMES: list = []
 # 道具の profile を分ける。lsp=on の settings.v4 がオフのベンチの profile に残らないように。
 LSP_PROFILE = "profile-lsp"
 PACED_KEYS = 100
@@ -1054,19 +1063,30 @@ def frames_after(marks: list, index: int) -> list[int]:
             if entry["milestone"] == "frame_presented"]
 
 
-def measured_ready(marks: list, inputs: list) -> float | None:
-    """The last input -> the second frame presented after it in ms, or None without two frames.
-
-    The first frame answers the keystroke; the diagnostics the server published for its didChange
-    arrive afterwards through WorkCompleted and repaint, so the second frame stands for the frame
-    that carries the underlines (an approximation: the product marks no diagnostics milestone).
-    """
+def ready_frames(marks: list, inputs: list) -> list[float] | None:
+    """The first two frames after the last input, in ms from it, or None without two of them."""
     if len(inputs) < 2:
         return None
     frames = frames_after(marks, inputs[-1])
     if len(frames) < 2:
         return None
-    return (frames[1] - int(marks[inputs[-1]]["qpcMicroseconds"])) / MICROSECONDS_PER_MILLISECOND
+    read = int(marks[inputs[-1]]["qpcMicroseconds"])
+    return [(frame - read) / MICROSECONDS_PER_MILLISECOND for frame in frames[:2]]
+
+
+def measured_ready(marks: list, inputs: list) -> float | None:
+    """The last input -> the second frame presented after it in ms, or None when it is not one.
+
+    The first frame answers the keystroke; the diagnostics the server published for its didChange
+    arrive afterwards through WorkCompleted and repaint, so the second frame stands for the frame
+    that carries the underlines (an approximation: the product marks no diagnostics milestone).
+    When the two shared one frame, the second frame is an unrelated later one; a second frame more
+    than LSP_READY_GAP_MS after the first is that case and is not a value (#1217 R3-1).
+    """
+    frames = ready_frames(marks, inputs)
+    if frames is None or frames[1] - frames[0] > LSP_READY_GAP_MS:
+        return None
+    return frames[1]
 
 
 def lsp_ready_trial(executable: Path, environment: dict, folder: Path, document: Path,
@@ -1098,6 +1118,8 @@ def lsp_ready_trial(executable: Path, environment: dict, folder: Path, document:
         stop(process)
     marks = observed_marks(report)
     inputs = input_indexes(marks)
+    # 観測できた試行ごとに 1 項（2 枚が無ければ None）。値にならなかった試行も残す（R3-1）。
+    LSP_READY_FRAMES.append(ready_frames(marks, inputs))
     if len(inputs) < 2:
         print(f"Speed: {len(inputs)} inputs were read; the warmup and one more are needed")
         return None
@@ -1107,7 +1129,8 @@ def lsp_ready_trial(executable: Path, environment: dict, folder: Path, document:
         return None
     value = measured_ready(marks, inputs)
     if value is None:
-        print("Speed: fewer than two frames followed the measured keystroke")
+        print("Speed: fewer than two frames followed the measured keystroke, or the second came"
+              f" more than {LSP_READY_GAP_MS} ms after the first")
     return value
 
 
@@ -1731,6 +1754,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     large_files = {name: large_file_document(large_folder or folder, name)
                    for name in names if name in LARGE_FILE_BENCHES}
     LARGE_FILE_MEMORY.clear()
+    LSP_READY_FRAMES.clear()
     samples: dict = {name: [] for name in names}
     # 刺激が届かなかった試行は値にせず数える（Issue #30）。中央値は残った試行から出す。
     missing: dict = {name: 0 for name in names}
@@ -1763,6 +1787,10 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     if GIANT_OPEN_BENCH in names:
         record["values"][GIANT_OPEN_BENCH]["questionWaitMs"] = [
             None if wait is None else round(wait, 4) for wait in waits]
+    if LSP_READY_BENCH in names:
+        record["values"][LSP_READY_BENCH]["framesMs"] = [
+            None if frames is None else [round(value, 4) for value in frames]
+            for frames in LSP_READY_FRAMES]
     for name, peaks in LARGE_FILE_MEMORY.items():
         record["values"][name]["peakPrivateBytes"] = [peak[0] for peak in peaks]
         record["values"][name]["peakWorkingSetBytes"] = [peak[1] for peak in peaks]
@@ -1789,7 +1817,8 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
             "executable": server.name, "sha256": file_sha256(server),
             "argument": f"--diagnostics {LSP_DIAGNOSTICS}" if ready else "--silent",
             "readyFrame": "the second frame_presented after the keystroke (approximation)"
-                          if ready else None}
+                          if ready else None,
+            "readyGapLimitMs": LSP_READY_GAP_MS if ready else None}
     return record
 
 
