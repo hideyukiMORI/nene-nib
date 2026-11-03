@@ -362,9 +362,9 @@ void verify_vim_alternatives()
 
 [[nodiscard]] std::optional<nenenib::core::VimPattern> literal_of(std::string_view word)
 {
-    auto parsed = nenenib::core::VimPattern::parse(nenenib::core::literal_pattern(word),
-                                                   VimSearchDirection::forward,
-                                                   nenenib::core::VimPatternCase::sensitive);
+    auto parsed = nenenib::core::VimPattern::parse(
+        nenenib::core::literal_pattern(word, VimSearchDirection::forward),
+        VimSearchDirection::forward, nenenib::core::VimPatternCase::sensitive);
     if (!parsed)
     {
         return std::nullopt;

@@ -698,9 +698,9 @@ std::optional<core::VimPattern> EditorController::find_pattern() const
     {
         return std::nullopt;
     }
-    auto parsed =
-        core::VimPattern::parse(core::literal_pattern(typed), core::VimSearchDirection::forward,
-                                core::search_case(state_.settings()));
+    auto parsed = core::VimPattern::parse(
+        core::literal_pattern(typed, core::VimSearchDirection::forward),
+        core::VimSearchDirection::forward, core::search_case(state_.settings()));
     if (!parsed)
     {
         return std::nullopt;
