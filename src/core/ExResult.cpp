@@ -1179,6 +1179,19 @@ document_command(std::string_view text)
     return result;
 }
 
+// 今の文書への命令のうち `:hardcopy` と保存・読み直しの命令（remaining_command の認知の複雑さを
+// 10 以内に保つための束ね・順は print_command → document_command のまま）。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+document_command_or_print(std::string_view text)
+{
+    auto print = print_command(text);
+    if (print.has_value())
+    {
+        return print;
+    }
+    return document_command(text);
+}
+
 // colorscheme と set のほか（Vim の強調の止め方とタブ・ファイルの命令）。どれにも当たらなければ
 // unknown_command。
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
@@ -1224,12 +1237,7 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     {
         return std::move(palette).value();
     }
-    auto print = print_command(text);
-    if (print.has_value())
-    {
-        return std::move(print).value();
-    }
-    auto document = document_command(text);
+    auto document = document_command_or_print(text);
     if (document.has_value())
     {
         return std::move(document).value();
