@@ -349,19 +349,31 @@ core::DiagnosticCounts EditorController::diagnostic_counts() const
     return core::diagnostic_counts(state_.diagnostics(), state_.diagnostics_count());
 }
 
-void EditorController::add_diagnostics(EditorFrame &result) const
+// 知らせの欄に出す診断の文の優先はこの 1 か所（ADR 0161 の決定 4 の追補）。ほかの知らせ
+// （command_message）とマクロの録画（`recording @a` を隠さない・R3-3）が勝つ。
+std::optional<core::DisplayText> EditorController::shown_diagnostic_message() const
 {
     const auto &diagnostics = state_.diagnostics();
-    if (diagnostics.empty())
+    if (diagnostics.empty() || command_message().has_value() || recording_name().has_value())
+    {
+        return std::nullopt;
+    }
+    return core::diagnostic_notice(diagnostics, state_.selection().caret);
+}
+
+bool EditorController::diagnostic_message_shown() const
+{
+    return shown_diagnostic_message().has_value();
+}
+
+void EditorController::add_diagnostics(EditorFrame &result) const
+{
+    if (state_.diagnostics().empty())
     {
         return;
     }
     result.diagnostic_counts = diagnostic_counts();
-    if (result.command_message.has_value())
-    {
-        return;
-    }
-    result.diagnostic_message = core::diagnostic_notice(diagnostics, state_.selection().caret);
+    result.diagnostic_message = shown_diagnostic_message();
     if (result.diagnostic_message.has_value())
     {
         result.guide = core::operation_guide(core::GuideContext::hidden, result.mode);

@@ -1819,6 +1819,13 @@ void verify_diagnostic_status_items()
     expect(shown.diagnostics == LayoutRect{852, 332, 948, 360} &&
                shown.items.at(3) == LayoutRect{764, 332, 836, 360},
            "the count is the rightmost item, 96 DIP, right of the language");
+    // 360 DIP の窓（R3-1）: 言語を畳み、それでも `:` の入力欄が届かないので件数も幅 0 にする。
+    const auto narrow =
+        status_bar_layout(360, 360, 96, DiagnosticCounts{1, 0, DiagnosticsCount::complete});
+    expect(narrow.items.front().left - 16 >= 96 &&
+               narrow.items.front().left >= narrow.toggle.right &&
+               width_of(narrow.diagnostics) == 0,
+           "a 360 DIP window with counts keeps the input's minimum width and the toggle clear");
     expect(status_bar_hit(shown, 730, 346) == StatusBarHit::line_ending &&
                status_bar_hit(none, 730, 346) == StatusBarHit::none,
            "the hit test follows the items moved by the count");

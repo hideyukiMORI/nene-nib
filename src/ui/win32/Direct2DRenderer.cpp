@@ -1854,13 +1854,13 @@ void Direct2DRenderer::draw_status_left(const application::EditorFrame &frame,
     draw_recording(frame, layout, mode);
 }
 
-// 知らせの 1 行。ほかの知らせが無い frame だけキャレットの上の診断の文が載る（ADR 0161 の決定 4・
-// application が command_message を優先して決める）。描き方は同じ 1 本。
+// 知らせの 1 行。command_message か、キャレットの上の診断の文（ADR 0161 の決定 4）の値のある方を
+// 同じ描き方で書く。両方が値を持つことは無い（application の add_diagnostics が決める）。
 void Direct2DRenderer::draw_status_message(const application::EditorFrame &frame,
                                            const core::LayoutRect &area)
 {
     const auto &message =
-        frame.command_message.has_value() ? frame.command_message : frame.diagnostic_message;
+        frame.diagnostic_message.has_value() ? frame.diagnostic_message : frame.command_message;
     if (!message.has_value())
     {
         return;

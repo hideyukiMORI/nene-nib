@@ -777,6 +777,32 @@ void verify_diagnostic_frame()
            "the window's count reads the same value as the frame");
 }
 
+// 決定 4 の追補（R3-3）: マクロの録画中は診断の文を出さず `recording @a` を隠さない。窓の口
+// diagnostic_message_shown は frame の文の有無と同じ値。
+void verify_recording_hides_message()
+{
+    Editing editing(lsp_settings(true));
+    diagnosed(editing);
+    applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+    const auto shown = editing.controller().apply_frame(app::WorkCompleted{});
+    expect(diagnostic_message(shown) == "w" && editing.controller().diagnostic_message_shown(),
+           "the message shows in Vim mode and the window's reading agrees");
+    for (const auto &key : vim_keys_of("qa"))
+    {
+        applied(editing.controller(), app::VimKeyPress{key});
+    }
+    const auto recording = editing.controller().frame();
+    expect(recording.recording.has_value() && diagnostic_message(recording) == "<none>" &&
+               !editing.controller().diagnostic_message_shown(),
+           "recording a macro hides the diagnostic message so `recording @a` stays visible");
+    for (const auto &key : vim_keys_of("q"))
+    {
+        applied(editing.controller(), app::VimKeyPress{key});
+    }
+    expect(diagnostic_message(editing.controller().frame()) == "w",
+           "the message comes back when the recording stops");
+}
+
 // 決定 5（L1c）: showMessage の error / warning だけ 1 行の知らせで、診断の文より勝つ。Info・Log と
 // logMessage は知らせを残さない。
 void verify_show_message_notices()
@@ -871,6 +897,7 @@ void verify_language_server_contracts()
     verify_parked_diagnostics();
     verify_diagnostic_frame();
     verify_show_message_notices();
+    verify_recording_hides_message();
     verify_truncated_count();
     verify_line_end_diagnostic();
 }

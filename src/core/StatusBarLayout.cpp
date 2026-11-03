@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <utility>
 
 namespace nenenib::core
 {
@@ -68,16 +69,43 @@ item_rects(std::int32_t right, const LayoutRect &band, std::uint32_t dpi, bool f
     return rectangles;
 }
 
-// 右の 4 項目で `:` の入力欄の右端が command_input_minimum_dip に届かなければ言語の欄を畳む
-// （ADR 0154 の決定 6・案内を消す ADR 0079 の決定 9 より先）。判断はこの 1 か所。件数の項目は
-// 畳まない（ADR 0161 の決定 4）。
+// `:` の入力欄の右端（最初の項目の左から間の余白）が command_input_minimum_dip に届くか
+// （ADR 0154 の決定 6）。言語と件数を畳むかの判断はこの式の 1 つ。
+[[nodiscard]] bool reaches(const std::array<LayoutRect, status_item_count> &items,
+                           std::uint32_t dpi) noexcept
+{
+    return items.front().left - to_pixels(item_gap_dips, dpi) >=
+           to_pixels(command_input_minimum_dip, dpi);
+}
+
+// 右の 4 項目で入力欄が届かなければ言語の欄を畳む（ADR 0154 の決定 6・案内を消す ADR 0079 の
+// 決定 9 より先）。
 [[nodiscard]] std::array<LayoutRect, status_item_count>
 fitted_item_rects(std::int32_t right, const LayoutRect &band, std::uint32_t dpi) noexcept
 {
     const auto items = item_rects(right, band, dpi, false);
-    const bool fits = items.front().left - to_pixels(item_gap_dips, dpi) >=
-                      to_pixels(command_input_minimum_dip, dpi);
-    return fits ? items : item_rects(right, band, dpi, true);
+    return reaches(items, dpi) ? items : item_rects(right, band, dpi, true);
+}
+
+// 件数の矩形と右の 4 項目（ADR 0161 の決定 4 の追補・R3-1）。件数はいちばん右で、出さないときは
+// 右端 edge の幅 0 の矩形で間の余白も取らない。畳む順は言語 → 件数で、件数を置いて言語を畳んでも
+// 入力欄が届かなければ件数も幅 0 にする。
+[[nodiscard]] std::pair<LayoutRect, std::array<LayoutRect, status_item_count>>
+counted_item_rects(std::int32_t edge, const LayoutRect &band, std::uint32_t dpi,
+                   const DiagnosticCounts &counts) noexcept
+{
+    if (counted(counts))
+    {
+        const LayoutRect diagnostics{edge - to_pixels(diagnostics_width_dips, dpi), band.top, edge,
+                                     band.bottom};
+        const auto items =
+            fitted_item_rects(diagnostics.left - to_pixels(item_gap_dips, dpi), band, dpi);
+        if (reaches(items, dpi))
+        {
+            return {diagnostics, items};
+        }
+    }
+    return {LayoutRect{edge, band.top, edge, band.bottom}, fitted_item_rects(edge, band, dpi)};
 }
 } // namespace
 
@@ -94,13 +122,8 @@ StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height, std::
                               toggle.left + padding + segment, toggle.bottom - padding};
     const std::int32_t vim_left = ordinary.right + padding;
     const std::int32_t mode_left = toggle.right + to_pixels(item_gap_dips, dpi);
-    // 件数はいちばん右。出さないときは右端の幅 0 の矩形で、間の余白も取らない（決定 4）。
-    const std::int32_t edge = width - to_pixels(side_padding_dips, dpi);
-    const std::int32_t counted_width = counted(counts) ? to_pixels(diagnostics_width_dips, dpi) : 0;
-    const LayoutRect diagnostics{edge - counted_width, band.top, edge, band.bottom};
-    const std::int32_t right =
-        counted_width > 0 ? diagnostics.left - to_pixels(item_gap_dips, dpi) : edge;
-    const auto items = fitted_item_rects(right, band, dpi);
+    const auto [diagnostics, items] =
+        counted_item_rects(width - to_pixels(side_padding_dips, dpi), band, dpi, counts);
     return StatusBarLayout{
         .band = band,
         .toggle = toggle,
