@@ -97,3 +97,21 @@ ADR 0012（移動の表・oracle）・ADR 0032（`last_search`）・ADR 0056（�
 - **回数つきの `Ctrl-o` の規則は変えない。** Vim 9.1 の `movemark` は `idx + count < 0` なら積む前に失敗し、末尾の後ろにいれば今の位置を積んで 1 つ前から数える。Nib の `vim_jump_moved` は #1037 からこの形で、fuzz seed 45（`?nd<CR>2<C-o>`）の違いは列の起点の 1 項の有無だった（fixture `jumplist-count-` 17 件）。
 - **oracle の揃え方。** `-es` の Vim は開いた直後のカーソルが最終行なので列に `(最終行, 0)` を持ち、`call cursor()` は列に積まない。`eng/vim-oracle.py` の probe は、カーソル（viewport の始めの位置を含む）を置いた後に `clearjumps` と `normal! m'` を流し、普通の起動と同じ「置いた位置の 1 項」の列にしてから鍵を流す。測定コードが変わったので全件（3061 件）を再生成し、値が変わったのは #1116 の `jumplist-count-` の 3 件だけだった（既存の 3044 件は不変）。#1037 の限界の「fixture は `Ggg` で始めて両方の列を揃える」は不要になったが、既存の fixture の鍵は変えない。
 - 限界: viewport の fixture は oracle が viewport の位置を列に積むが、Nib の再生は開いた（1 行目の）後に `PlaceCaret` で置くので積まない。viewport の fixture にジャンプの鍵を入れない。新しい空の文書（ファイル無しの起動・Ctrl+T）は開く道を通らないので空の列のまま（後続）。
+
+## 追補（2026-10-30・#1124）: 最初の 1 項の位置（復元・viewport の fixture・起動の無題・新しいタブ）
+
+Vim 9.1（`--not-a-term` の普通の起動・`getjumplist()`）の実測。
+
+| 道 | Vim の測り方 | Vim の最初の 1 項 | Nib |
+|---|---|---|---|
+| ファイルを指定した起動 | `vim f.txt` | `(1, 0)` | `with_opened`（#1116 のまま） |
+| 前回のタブ・自動退避の復元 | `-u DEFAULTS` で viminfo の `'"`（列の `-'` 行を除いた viminfo）から `(3, 1)` へ戻す | 戻した位置 `(3, 1)` の 1 項だけ（`<C-o>` は (3,2) に留まり、`G<C-o><C-o>` の 2 つ目は失敗） | `reached_bundle` と `restored_document` は戻したキャレットで始める |
+| 引数なしの起動の無題 | `vim` | 無題の `(1, 0)` | `EditorState::create` の無題は `(1, 0)` の 1 項 |
+| Ctrl+T・`:tabnew` | `vim f.txt` の後に `:tabnew`（`:enew` `:e g.txt` `:tabe g.txt` も同じ） | 新しいバッファの項は無い（列の項は前のバッファのもの） | `with_new_tab` は空の列のまま |
+| viewport の fixture | oracle の probe | — | 下の揃え方 |
+
+- **作るのは `vim_marks_opened(at)` の 1 本。** 引数に最初の 1 項の位置を取る（中は `m'` と同じ `vim_mark_set`）。開く道と起動の無題は 1 行目の桁 0、復元の 2 か所は寄せた後のキャレットを `vim_mark_position_of` で写した位置。#1116 の「復元で戻すキャレットは開いた後に置くので 1 行目のまま」は、この実測で取り消す。
+- **新しいタブは項を持たない。** Vim の列は窓ごとで、`:tabnew` の窓は前の窓の列（前のバッファの項）を写す。Nib の列は文書ごとなので、新しい文書の中の項が無い形に揃える（前の文書の項へ飛ぶ道は持たない・列の規則は変えない）。起動の無題と新しいタブは同じ `untitled_document()` を使い、項を足すのは `create` の 1 か所。
+- **viewport の fixture の揃え方。** oracle の probe は `call cursor(1, 1)` `clearjumps` `normal! m'` を viewport の位置を置く前に流す（1 行目の 1 項の列にしてから、ジャンプにならない `call cursor()` と `winrestview()` で置く）。Nib の再生も開いた（1 行目の 1 項の）後に `PlaceCaret` で置くので同じ列になる。#1116 の限界「viewport の fixture にジャンプの鍵を入れない」は外す（fixture `jumplist-open-viewport-` 8 件）。測定コードが変わったので全件（3085 件）を再生成し、値が変わったのは足した 8 件だけだった（既存の 3077 件は不変）。
+- 限界: `:e` と Ctrl+O で開いた文書は #1116 のまま `(1, 0)` の 1 項で始める。Vim の `:e` の新しいバッファは自分の項を持たない（列の項は前のバッファのもの）が、Nib の列は文書ごとで前の文書の項へは飛ばないので、開いた文書の中の見え方は `''` と `<C-o>` の行き先が 1 行目になる点だけが違い得る（今回の 4 つの道の外・変えていない）。
+- 限界: 一続きの鍵（fixture の再生・`press_vim_keys`）で窓の外へ飛んで窓の中へ戻る鍵（`<C-o><Tab>` `''''`）は、Vim が鍵ごとに先頭行を追従するのに対し、Nib は途中の追従を解かず元の先頭行のまま残る（viewport の fixture で先頭行が 1 と 6 で違った）。列の 1 項とは別の、鍵の列の中の追従の違いなので、この追補の fixture には入れない（別 Issue）。
