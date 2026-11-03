@@ -37,6 +37,8 @@ using Piece = std::pair<std::pair<std::size_t, std::size_t>, DiagnosticSeverity>
 }
 
 // 診断 1 件を行の内容 [0, line.size()] のバイトへ切り、桁の区間にする。行に掛からなければ値なし。
+// 内容に掛からない空の診断と、行末の改行のバイトに掛かる診断（LSP の {N, 行末} → {N+1, 0}）は、
+// その位置（改行なら内容の終わり）から 1 桁の区間にする（選択が改行を示すのと同じ・ADR 0018）。
 [[nodiscard]] std::optional<Piece> piece_of(std::string_view line, Offset line_start,
                                             const Diagnostic &diagnostic)
 {
@@ -44,24 +46,22 @@ using Piece = std::pair<std::pair<std::size_t, std::size_t>, DiagnosticSeverity>
     const std::size_t finish = start + line.size();
     const std::size_t begin = diagnostic.range.begin.value;
     const std::size_t end = diagnostic.range.end.value;
-    if (begin == end)
-    {
-        if (begin < start || begin > finish)
-        {
-            return std::nullopt;
-        }
-        const std::size_t column = column_index(line, begin - start);
-        return Piece{{column, column + 1}, diagnostic.severity};
-    }
     const std::size_t clipped_begin = std::max(begin, start);
     const std::size_t clipped_end = std::min(end, finish);
-    if (clipped_begin >= clipped_end)
+    if (clipped_begin < clipped_end)
+    {
+        return Piece{
+            {column_index(line, clipped_begin - start), column_index(line, clipped_end - start)},
+            diagnostic.severity};
+    }
+    const bool point = begin == end && start <= begin && begin <= finish;
+    const bool newline = begin < end && begin <= finish && finish < end;
+    if (!point && !newline)
     {
         return std::nullopt;
     }
-    return Piece{
-        {column_index(line, clipped_begin - start), column_index(line, clipped_end - start)},
-        diagnostic.severity};
+    const std::size_t column = column_index(line, (point ? begin : finish) - start);
+    return Piece{{column, column + 1}, diagnostic.severity};
 }
 
 // 桁 column を覆う区間の中で最も重い重さ。覆う区間が無ければ値なし。

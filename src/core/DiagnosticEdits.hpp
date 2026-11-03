@@ -23,7 +23,8 @@ namespace nenenib::core
 // は その行頭の本文のバイト位置。診断の区間を行の内容へ切り、桁（code point の序数・行頭が 1）の
 // 昇順で重ならない列にする。重なる所は重い方だけ（error > warning > information > hint）で、隣り
 // 合う同じ重さはつなぐ。空の診断（begin == end）は行の内容の中か行末にあれば、その桁から 1 桁
-// ぶんの区間にする（行末では内容の外の 1 桁）。
+// ぶんの区間にする（行末では内容の外の 1 桁）。改行のバイトだけに掛かる診断も行末の 1 桁にする
+// （内容と改行をまたぐ診断は内容の上だけ）。
 [[nodiscard]] std::vector<DiagnosticSpan> diagnostic_spans(std::string_view line, Offset line_start,
                                                            std::span<const Diagnostic> diagnostics);
 } // namespace nenenib::core

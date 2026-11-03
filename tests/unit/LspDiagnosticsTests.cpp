@@ -23,6 +23,7 @@
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -323,6 +324,17 @@ void verify_spans()
     const std::vector<DiagnosticSpan> widened{span_of(2, 3, error), span_of(7, 8, hint)};
     expect(core::diagnostic_spans(line, start, empty) == widened,
            "an empty diagnostic in the line becomes one column; others outside are skipped");
+    // 改行のバイトだけ（16..17）は行末の 1 桁、内容と改行をまたぐ（13..17）は内容の上だけ。
+    const std::vector<Diagnostic> newline_only{diagnostic_at(16, 17, warning)};
+    expect(core::diagnostic_spans(line, start, newline_only) ==
+               std::vector<DiagnosticSpan>{span_of(7, 8, warning)},
+           "a diagnostic on the line break alone becomes one column at the line end");
+    const std::vector<Diagnostic> through_break{diagnostic_at(13, 17, error)};
+    expect(core::diagnostic_spans(line, start, through_break) ==
+               std::vector<DiagnosticSpan>{span_of(4, 7, error)},
+           "a diagnostic over the content and the line break stays on the content");
+    expect(core::diagnostic_spans("", Offset{17}, newline_only).empty(),
+           "a line break diagnostic does not mark the next line");
 }
 
 [[nodiscard]] std::size_t below(Random &random, std::size_t bound)
@@ -358,6 +370,26 @@ void verify_spans()
 }
 
 // 残った診断の本文が編集の前と同じで、本文の中にあり、並びが保たれるか。
+// 編集の範囲から離れた件（end < at か begin > at + removed）が通し番号の文で kept に残るか。
+[[nodiscard]] bool far_kept(const std::vector<Diagnostic> &original,
+                            const std::vector<Diagnostic> &kept, const Edit &edit)
+{
+    const std::size_t at = edit.at.value;
+    const std::size_t removed_end = at + edit.removed.size();
+    for (const Diagnostic &diagnostic : original)
+    {
+        const bool far =
+            diagnostic.range.end.value < at || diagnostic.range.begin.value > removed_end;
+        const bool found = std::ranges::any_of(kept, [&](const Diagnostic &survivor)
+                                               { return survivor.message == diagnostic.message; });
+        if (far && !found)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 [[nodiscard]] bool shifted_well(const std::string &before, const std::string &after,
                                 const std::vector<Diagnostic> &original,
                                 const std::vector<Diagnostic> &kept)
@@ -409,10 +441,11 @@ void verify_shift_property()
         const Edit edit{Offset{at}, before.substr(at, removed), inserted, Offset{at}};
         const std::string after = before.substr(0, at) + inserted + before.substr(at + removed);
         const std::vector<Diagnostic> kept = core::diagnostics_adjusted(diagnostics, edit);
-        broken += static_cast<std::size_t>(!shifted_well(before, after, diagnostics, kept));
+        broken += static_cast<std::size_t>(!shifted_well(before, after, diagnostics, kept) ||
+                                           !far_kept(diagnostics, kept, edit));
     }
-    expect(broken == 0, "shifted diagnostics stay inside the text, keep their order and cover the "
-                        "same text as before the edit");
+    expect(broken == 0, "shifted diagnostics stay inside the text, keep their order, cover the "
+                        "same text as before the edit, and those away from the edit survive");
 }
 } // namespace
 
