@@ -134,6 +134,13 @@ CI の共有ランナーは host の CPU 世代が混ざり、世代差は許容
 退行と別の終了コード 2 でゲートを落とす（Issue #30。どちらでも落ちるが、直す先が違うので別の文で言う）。
 長い日本語行の 1 打鍵 `key-to-frame-single-long-line`（#291 の文書を道具が作って SHA-256 で照合・`key-to-frame-single` と同じ試行・[ADR 0075](adr/0075-merge-acceptance-uses-the-speed-gate-and-effect-size.md) 決定 7・#298）は、許容に床 2 ms が効く（実機の基準値 5.431 ms の 25% は 1.36 ms で床より小さく、床は約 37% にあたる）。実機の指紋 `bc8a356f37c68491` は 2026-10-06 に基準値を採用して判定する。CI の指紋は基準値を採るまで記録だけ。
 既定の 8 本のほかに、1 行が 16 MiB の文書の任意の 2 本 `open-giant-line-16mib` と `key-to-frame-single-giant-line-16mib`（`OPTIONAL_BENCHES`・`--bench` で名指ししたときだけ測る・`compare` は判定しない・基準値は 1 回測ってから後・[ADR 0138](adr/0138-giant-line-bench.md)・#513）がある。
+LSP オンの速さは、オフの 8 本と混ぜない任意のベンチで記録する（施主決定 D60・[ADR 0161](adr/0161-language-server-diagnostics-are-document-values-drawn-as-underlines.md) 決定 7・#995 / #1216）。どれも `--bench` で名指ししたときだけ測り、`--record` だけを受け（`--check` `--adopt` `--values` は拒否）、基準値は L1 の試用の後に hide が採るまで無い（**planned**）。替え玉のサーバーは測る exe と同じ build の `nib_fake_language_server.exe` で、道具の profile `out/speed/profile-lsp` の `settings.v4` に `lsp=on` と `lsp.cpp.command` を書き、構文の色分けと同じ `single-cpp-1000.cpp` を開いて、替え玉が窓の子として起きて窓のスレッドが静かになってから暖機する。
+
+| ベンチ | 替え玉 | 値 |
+|---|---|---|
+| `lsp-single-key` | `--silent` | `key-to-frame-single` と同じ暖機の後の 1 打鍵の `input_received` → 次の `frame_presented`（単打の段の内訳つき） |
+| `lsp-burst-200` | `--silent`（同じ試行） | `key-to-frame-burst-200` と同じ 200 打鍵（到着の幅 50 ms） |
+| `lsp-diagnostics-ready`（参考値） | `--diagnostics 100` | 静かになってから送る 1 打鍵の `input_received` → その後の **2 枚目**の `frame_presented`（診断の節目が無いので「下線の載った frame」の近似） |
 
 - 機械強制: **active**（施主の実機と、CI の指紋 `e7a87d5b`。[ADR 0011](adr/0011-speed-measurement-timing-port-and-paint-coalescing.md)・Issue #16／[ADR 0016](adr/0016-ci-speed-reference-per-host-fingerprint.md)・Issue #47。`eng/check.ps1` が Release の exe で `eng/measure-speed.py --check` を走らせ、
   `eng/perf-reference.json` に指紋の一致する機械では基準値との比較で落ちる。**CI で active なのは指紋 `e7a87d5b`（AMD EPYC 7763）の run だけ**で、他の指紋の host は記録だけ・打鍵 2 本は許容の floor 2 ms に飲まれて判定にならない — どちらも **planned**。

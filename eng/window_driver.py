@@ -234,6 +234,79 @@ def forget_session(environment: dict) -> bool:
     return deleted
 
 
+# settings.v4 の全部の鍵と、設定ファイルの無い起動と同じ値（ADR 0170 決定 3・#1041）。書くのは
+# 道具の profile だけで、利用者の本物の設定には書かない。
+SETTINGS_V4_DEFAULTS = (("version", "4"), ("colorscheme", "system"),
+                        ("font_family", "Cascadia Code"), ("font_size", "13.5"), ("guide", "on"),
+                        ("wrap", "on"), ("ui_language", "system"), ("lsp", "off"),
+                        ("explorer", "off"), ("root", ""), ("features", ""),
+                        ("ignorecase", "off"), ("smartcase", "off"), ("relativenumber", "off"),
+                        ("scrolloff", "0"))
+
+
+def write_settings(environment: dict, changed: dict[str, str] | None = None,
+                   lsp_commands: dict[str, str] | None = None) -> Path:
+    """Write NeNeNib/settings.v4 of the tool profile the environment names; return its path.
+
+    Every fixed key is written with the value an editor without a settings file uses, except the
+    ones named in changed; lsp_commands adds one lsp.<language>.command line per language (ADR
+    0160 decision 7), whose language is the name language_name gives (cpp, python, ...). The
+    user's own profile is refused the same way forget_session refuses it (#995 L1d).
+    """
+    profile = environment.get("LOCALAPPDATA")
+    own = os.environ.get("LOCALAPPDATA")
+    if not profile or (own and os.path.normcase(os.path.abspath(profile))
+                       == os.path.normcase(os.path.abspath(own))):
+        raise AssertionError("write_settings only writes a tool profile, not the user's own")
+    fields = dict(SETTINGS_V4_DEFAULTS)
+    unknown = set(changed or {}) - set(fields)
+    if unknown:
+        raise AssertionError(f"settings.v4 has no key {sorted(unknown)}")
+    fields.update(changed or {})
+    lines = [f"{key}={value}" for key, value in fields.items()]
+    lines += [f"lsp.{language}.command={command}"
+              for language, command in sorted((lsp_commands or {}).items())]
+    path = Path(profile) / "NeNeNib" / "settings.v4"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    return path
+
+
+class PROCESSENTRY32W(c.Structure):
+    _fields_ = [
+        ("dwSize", w.DWORD), ("cntUsage", w.DWORD), ("th32ProcessID", w.DWORD),
+        ("th32DefaultHeapID", c.c_size_t), ("th32ModuleID", w.DWORD), ("cntThreads", w.DWORD),
+        ("th32ParentProcessID", w.DWORD), ("pcPriClassBase", w.LONG), ("dwFlags", w.DWORD),
+        ("szExeFile", w.WCHAR * 260),
+    ]
+
+
+TH32CS_SNAPPROCESS = 0x2
+INVALID_HANDLE = w.HANDLE(-1).value
+api(kernel, "CreateToolhelp32Snapshot", w.HANDLE, w.DWORD, w.DWORD)
+api(kernel, "Process32FirstW", w.BOOL, w.HANDLE, c.POINTER(PROCESSENTRY32W))
+api(kernel, "Process32NextW", w.BOOL, w.HANDLE, c.POINTER(PROCESSENTRY32W))
+
+
+def child_names(pid: int) -> list[str]:
+    """The executable names of the running processes whose parent is pid (e.g. a language server)."""
+    snapshot = kernel.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+    if not snapshot or snapshot == INVALID_HANDLE:
+        return []
+    try:
+        entry = PROCESSENTRY32W()
+        entry.dwSize = c.sizeof(PROCESSENTRY32W)
+        names = []
+        found = kernel.Process32FirstW(snapshot, c.byref(entry))
+        while found:
+            if entry.th32ParentProcessID == pid:
+                names.append(entry.szExeFile)
+            found = kernel.Process32NextW(snapshot, c.byref(entry))
+        return names
+    finally:
+        kernel.CloseHandle(snapshot)
+
+
 def owned_window(pid: int, class_name: str) -> int:
     """The first visible window of this class owned by this process, or 0 (#448)."""
     child = None
