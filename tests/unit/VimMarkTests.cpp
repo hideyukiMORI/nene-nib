@@ -298,6 +298,30 @@ void verify_marks_from_opening()
     }
 }
 
+// 引数なしの起動の無題と新しいタブの列（ADR 0152 の追補 #1124）。Vim 9.1 の `vim` だけの起動は
+// 無題の 1 行目を 1 項持ち、`ia<CR>b<CR>c<CR>d<Esc>3G<C-o><C-o>` は (1,1) に着く。`:tabnew` の
+// バッファは自分の項を持たず、2 つ目の `<C-o>` はこの文書の中では行き先が無い（(4,1) のまま）。
+void verify_untitled_jump_entry()
+{
+    const auto after = [](bool new_tab)
+    {
+        Editing editing;
+        nenenib::application::EditorController &controller = editing.controller();
+        applied(controller, nenenib::application::VisibleLines{10});
+        if (new_tab)
+        {
+            applied(controller, nenenib::application::NewTab{});
+        }
+        applied(controller, nenenib::application::SelectEditMode{EditMode::vim});
+        vim_normal(controller, "ia<CR>b<CR>c<CR>d<Esc>3G<C-o><C-o>");
+        return controller.frame();
+    };
+    expect(caret_at(after(false), 1, 1),
+           "the untitled document of a start goes back to line 1 by the second <C-o>");
+    expect(caret_at(after(true), 4, 1),
+           "a new tab holds no jump entry of its own before the first jump");
+}
+
 // 変更の列の失敗と、undo の単位をまたぐ列（ADR 0152 の追補 #1037）。oracle は鍵を 1 本の
 // `:normal!` に流すので undo の単位が 1 つしか無く（変更の列は 1 件）、E662 E663 E664 E19 は -es の
 // Vim がエラーで終わる。値は Vim 9.1 で単位ごとに `:normal!` を分けて `let &ul = &ul` で区切った
@@ -412,10 +436,17 @@ void verify_marks_follow_documents()
     expect(VimMarks{}.previous_context == VimMarkPosition{LineNumber{1}, 0},
            "the opening marks put the previous context on line 1 column 0");
     expect(added.vim_marks() == VimMarks{}, "a new tab starts with the opening marks");
+    // 引数なしで起動した Vim の無題は 1 行目の 1 項を持ち、`:tabnew`
+    // のバッファは持たない（#1124）。
+    const auto started = EditorState::create(Appearance::dark, EditMode::vim);
+    expect(started.vim_marks() == nenenib::core::vim_marks_opened({LineNumber{1}, 0}) &&
+               started.vim_marks().jumps.count == 1 &&
+               started.with_new_tab().vim_marks() == VimMarks{},
+           "the untitled document of a start holds line 1 in the jump list and a new tab none");
     const auto back = added.with_switched(0);
     expect(back.vim_marks() == set, "switching back brings the document's marks");
     const auto reopened = state.with_opened(text_of("x"), state.document());
-    expect(reopened.vim_marks() == nenenib::core::vim_marks_opened() &&
+    expect(reopened.vim_marks() == nenenib::core::vim_marks_opened({LineNumber{1}, 0}) &&
                reopened.vim_marks().jumps.count == 1 &&
                reopened.vim_marks().jumps.entries.at(0) == VimMarkPosition{LineNumber{1}, 0},
            "an opened document starts with the opened place in the jump list (#1116)");
@@ -447,6 +478,7 @@ void verify_vim_mark_contracts()
     verify_operator_cancels();
     verify_mark_approximations();
     verify_marks_from_opening();
+    verify_untitled_jump_entry();
     verify_marks_follow_documents();
     verify_reselect_and_last_insert_crlf();
     verify_g_records_kept();
@@ -468,8 +500,8 @@ void verify_vim_mark_scope()
             ++selected;
         }
     }
-    expect(selected == 164,
-           "the scope replays the 164 oracle fixtures of %, the marks and the jump lists");
+    expect(selected == 172,
+           "the scope replays the 172 oracle fixtures of %, the marks and the jump lists");
     verify_vim_mark_contracts();
 }
 } // namespace nenenib::tests

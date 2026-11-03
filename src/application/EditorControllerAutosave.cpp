@@ -90,6 +90,7 @@ constexpr std::string_view unrestored_prefix = "戻せませんでした: ";
 {
     const core::Offset placed =
         text.offset_of(core::TextPosition{line_within(text, caret.line), caret.column});
+    const core::VimMarkPosition opened = core::vim_mark_position_of(text, placed);
     DocumentView view{core::tab_title_for(document.path, core::SaveState::modified), document.path,
                       document.encoding, core::SaveState::modified, std::nullopt};
     // 戻した文書の言語もパスから引く（ADR 0154 の決定 5）。
@@ -103,8 +104,9 @@ constexpr std::string_view unrestored_prefix = "戻せませんでした: ";
                          std::nullopt,
                          std::move(view)};
     bundle.language = language;
-    // 開いた位置をジャンプの列に 1 項持って始める（ADR 0152 の追補 #1116）。
-    bundle.marks = core::vim_marks_opened();
+    // 戻したキャレットをジャンプの列に 1 項持って始める（reached_bundle と同じ・ADR 0152 の追補
+    // #1124）。
+    bundle.marks = core::vim_marks_opened(opened);
     return bundle;
 }
 } // namespace
