@@ -613,14 +613,16 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
 }
 
 // `A` の 1 行目で右の端が切った 1 バイトの文字（入口で覚えた `carried`・#1189）。写す本文の頭に
-// 付ける。読むのはその 1 バイトだけで、行を写さない。切っていなければ空。
+// 付ける。読むのは 1 行目の行頭から `at_byte` の手前の 1 バイトだけで、行を写さない。切って
+// いなければ空。
 [[nodiscard]] std::string block_carried_text(const TextBuffer &text, const VimBlockInsert &insert)
 {
     if (insert.carried == 0)
     {
         return {};
     }
-    return text.text_range(Offset{insert.at.value - insert.carried}, insert.at);
+    const Offset at{text.line_start(insert.first).value + insert.at_byte};
+    return text.text_range(Offset{at.value - insert.carried}, at);
 }
 
 // 矩形の INSERT の Esc（ADR 0035 の追補 #1042）。1 行目が入る前より伸びたぶんを打った本文として

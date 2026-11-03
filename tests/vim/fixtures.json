@@ -2966,6 +2966,7 @@
   {"name":"block-append-tab-pad-cr","text":"a\rbc\nabcdef","keys":"<C-v>jlAX<Esc>"},
   {"name":"block-append-tab-pad-count","text":"a\tbc\nab\nabcdefghij","keys":"<C-v>jjll2AX<Esc>"},
   {"name":"block-append-tab-pad-left","text":"a\tbc\nab\nabcdefghij","keys":"<C-v>jjllAXY<Left>Z<Esc>"},
+  {"name":"block-append-tab-pad-later-line","text":"xyz\na\tbc\nabcdefghij","keys":"j<C-v>jllAX<Esc>"},
   {"name":"block-insert-I-tab-straddle","text":"abcdefghij\na\tbc\nabcdefghij","keys":"ll<C-v>jjIX<Esc>"},
   {"name":"block-insert-A-dollar-dot","text":"ab\nabcd\nabc\nab","keys":"<C-v>j$AX<Esc>jj."},
   {"name":"block-insert-c-undo","text":"abcdef\nghijkl\nmnopqr","keys":"l<C-v>jjlcab<Esc>u"},
