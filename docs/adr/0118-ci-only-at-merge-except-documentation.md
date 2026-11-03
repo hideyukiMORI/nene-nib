@@ -25,7 +25,7 @@ CIの中身は既存のGit規約・検証記録・差分空白の確認と木の
 ## 強制と制限
 
 全PR共通のrequired status checkは文書免除と両立しないので、main rulesetからこの条件だけを外す。
-PR必須、squashのみ、force push・削除禁止、未解決レビュー拒否は維持する。
+PR必須、squashのみ（2026-11-04 からはレビュー済みの PR を積んだまとめ枝だけ rebase・[ADR 0021 追補](0021-diff-scoped-verification-and-result-reuse.md)・#1220）、force push・削除禁止、未解決レビュー拒否は維持する。
 対象別CIの強制は正典の`eng/merge-pr.py`で行う。GitHub UIや直接の`gh pr merge`まで対象別に機械強制するものではない（planned）。
 CI成功は製品動作や検証記録の真実性を保証しない。forkのheadを手動workflowのrefにできないため、統合道具は同repoの作業ブランチだけを受け付ける。
 

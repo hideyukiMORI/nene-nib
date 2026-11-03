@@ -34,7 +34,7 @@ production コード・ビルド・依存・方針・利用者向けドキュメ
 9. PR を **draft** で出す
 10. 影響した規則 ID を 1 つずつ自己レビューする
 11. 必要な検証と再利用根拠を PR に記録して Ready にする。工程・文書・SHA の変更だけで測り直さない
-12. 記録の妥当性をレビューし、下記の`eng/merge-pr.py`でsquash mergeする。CIはこの実行時だけ起動し、文書のみなら起動しない（QLT-012・ADR 0118）
+12. 記録の妥当性をレビューし、下記の`eng/merge-pr.py`でsquash mergeする。CIはこの実行時だけ起動し、文書のみなら起動しない（QLT-012・ADR 0118）。レビュー済みの PR が並ぶときは、まとめ枝に 1 PR = 1 commit で積んで手元の検証と CI を 1 回にし、`--integration` で rebase merge する（[ADR 0021 追補](adr/0021-diff-scoped-verification-and-result-reuse.md)・#1220）
 13. 作業木を畳み、ローカル枝を消す（remote 枝はマージで自動的に消える）
 
 ---
@@ -57,6 +57,7 @@ CI成功は検証記録の真実性を保証しないため、手順11〜12の�
 ```text
 python eng/merge-pr.py <PR番号> --expected-head <40桁のhead SHA>
 python eng/merge-pr.py <PR番号> --expected-head <同じhead SHA> --execute
+python eng/merge-pr.py <まとめ枝のPR番号> --expected-head <head SHA> --integration [--execute]
 ```
 
 最初のplanに表示された対象/head/件名/CI要否を確認する。planはCIを起動しない。実行前後でPRとrulesを読み直し、headの競合はGitHub側の`--match-head-commit`で拒否する。

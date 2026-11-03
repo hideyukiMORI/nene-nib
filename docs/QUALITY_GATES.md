@@ -340,7 +340,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | GIT-001 | planned | PR テンプレート＋CI（`Closes #N`） |
 | GIT-002 | planned | ruleset＋CI（head ブランチ名） |
 | GIT-003 | active | `.githooks/commit-msg` → eng/validate-commit-message.ps1 → eng/git-conventions.py ＋ CI の eng/validate-git.ps1（全コミットと PR タイトル）・tests/conformance の GitChecks |
-| GIT-004 | planned | PR テンプレート＋ruleset（squash-only） |
+| GIT-004 | planned | PR テンプレート＋ruleset（squash・まとめ枝だけ rebase・ADR 0021 追補） |
 | QLT-001 | planned | check.ps1 の全件明示指定。検証選択の妥当性はレビュー |
 | QLT-002 | active | clang-cl・clang-tidy・clang-format と実ツール反例（eng/prove-gates.py） |
 | QLT-003 | active | CNF-005（`tests/conformance` の `test_cnf005_*` 4 件・#571）。CI の check job でも木を検査（#648）。任意のスクリプトによる迂回は網羅しない |
@@ -408,11 +408,11 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 - 生成物のドリフトが無いこと（作業ツリーが汚れないこと）
 - 期限切れ waiver が無いこと
 - 未解決のレビュー指摘が無いこと
-- squash merge のみ
+- squash merge（レビュー済みの PR を 1 PR = 1 commit で積んだまとめ枝だけ rebase merge・[ADR 0021 追補](adr/0021-diff-scoped-verification-and-result-reuse.md)・#1220）
 
 `main` への直接 push・force push・ブランチ削除は禁止する。
 
-main rulesetに全PR共通のrequired status checkを置かない（#430・ADR 0118）。PR必須・squash・削除/force push禁止は維持し、対象別CI判定は`eng/merge-pr.py`に集約する。
+main rulesetに全PR共通のrequired status checkを置かない（#430・ADR 0118）。PR必須・squash（まとめ枝は rebase）・削除/force push禁止は維持し、対象別CI判定は`eng/merge-pr.py`に集約する。
 
 🔴 **リポジトリ設定（ruleset）を適用したら、その事実を [quality/gate-proofs.md](quality/gate-proofs.md) に記録する。**
 **設定していないものを「必須になっている」と書かない。**
