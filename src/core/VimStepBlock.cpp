@@ -314,6 +314,7 @@ namespace detail
     utf8.append(insert_tail(content, range, text.line_start(line), insert.column), ' ');
     return VimBlockEdit{range, std::move(utf8)};
 }
+
 } // namespace detail
 
 namespace
@@ -351,10 +352,11 @@ namespace
     return vim_block_range(view.text, view.selection, VimColumnWish::at_line_end);
 }
 
-// `A` の 1 行目で右の端が文字（全角か Tab）の途中に掛かれば、その文字の後ろから打つ（空白で埋めず
-// 割らない・固定 Vim の op_insert はカーソルを矩形の本文の次へ進める・`.`
-// の再生で実測）。残りの行は 写すときに桁で埋める（block_insert_edit）。掛からなければ空。
-[[nodiscard]] std::optional<Offset>
+// `A` の 1 行目で右の端が文字（全角・Tab・制御文字）の途中に掛かれば、その文字の範囲。その文字の
+// 後ろから打つ（空白で埋めず割らない・固定 Vim の op_insert はカーソルを矩形の本文の次へ進める・
+// `.` の再生で実測）。残りの行は 写すときに桁で埋める（block_insert_edit）。掛からなければ空。
+// 「右の端が文字の途中に掛かるか」を決めるのはここ 1 か所（Esc の写しは覚えた `carried` を読む）。
+[[nodiscard]] std::optional<OffsetRange>
 after_straddled(const TextBuffer &text, const VimBlockInsert &insert, std::string_view content)
 {
     switch (insert.side)
@@ -374,17 +376,33 @@ after_straddled(const TextBuffer &text, const VimBlockInsert &insert, std::strin
     {
         return std::nullopt;
     }
-    return Offset{text.line_start(insert.first).value +
-                  vim_character_end(content, Offset{byte}).value};
+    const std::size_t start = text.line_start(insert.first).value;
+    return OffsetRange{Offset{start + byte},
+                       Offset{start + vim_character_end(content, Offset{byte}).value}};
+}
+
+// 切れた文字のうち、Esc で残りの行へ写す頭のバイト数（ADR 0035 の追補 #1189）。固定 Vim の
+// op_insert は打った後の 1 行目を block_prep し直し、端の文字が切れていれば（endspaces）textlen を
+// 1 バイト戻してそこから写す本文を読む。1 バイトの文字（Tab・制御文字）ならその文字ごと写る
+// （実測 `block-append-tab-pad-`）。全角は Vim が UTF-8 の途中のバイトを写して壊すので揃えず 0。
+[[nodiscard]] std::size_t carried_bytes(const std::optional<OffsetRange> &straddled) noexcept
+{
+    if (!straddled.has_value())
+    {
+        return 0;
+    }
+    const OffsetRange range = straddled.value();
+    return range.end.value - range.begin.value == single_step ? single_step : 0;
 }
 
 // 入る前の 1 行目の形（本文は空）。埋める空白か割った Tab があれば、打つ本文と同じ単位に入る。
 [[nodiscard]] VimBlockEdit first_line_entry(const TextBuffer &text, const VimBlockInsert &insert,
-                                            std::string_view content)
+                                            const std::optional<OffsetRange> &straddled)
 {
-    if (const auto after = after_straddled(text, insert, content))
+    if (straddled.has_value())
     {
-        return VimBlockEdit{OffsetRange{after.value(), after.value()}, std::string{}};
+        const Offset after = straddled.value().end;
+        return VimBlockEdit{OffsetRange{after, after}, std::string{}};
     }
     const Offset end = text.line_end(insert.first);
     return block_insert_edit(text, insert.first, insert, std::string_view{})
@@ -439,9 +457,12 @@ namespace detail
                               : VirtualColumn{block_right(block) + single_step},
                           0,
                           0,
-                          block_caret(block)};
+                          block_caret(block),
+                          0};
     const std::string content = text.line_text(block.first);
-    VimBlockEdit entry = first_line_entry(text, insert, content);
+    const std::optional<OffsetRange> straddled = after_straddled(text, insert, content);
+    insert.carried = carried_bytes(straddled);
+    VimBlockEdit entry = first_line_entry(text, insert, straddled);
     const Offset at{entry.range.begin.value +
                     (entry.utf8.empty() ? 0 : insert_lead(content, side, insert.column))};
     insert.at_byte = at.value - text.line_start(block.first).value;
@@ -484,7 +505,7 @@ namespace detail
         std::move(next), single_step,
         VimBlockInsert{block.first, block.lines.size(), VimBlockInsertSide::before, block.left,
                        removal.caret.value - view.text.line_start(block.first).value, line_bytes,
-                       std::nullopt});
+                       std::nullopt, 0});
     return restored_at(
         with_clipboard(VimStep{std::move(entered), std::move(removal)}, std::move(clipboard)),
         block_caret(block));

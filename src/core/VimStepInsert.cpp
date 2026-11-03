@@ -612,6 +612,19 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     return std::pair{std::move(body), std::move(edits)};
 }
 
+// `A` の 1 行目で右の端が切った 1 バイトの文字（入口で覚えた `carried`・#1189）。写す本文の頭に
+// 付ける。読むのは 1 行目の行頭から `at_byte` の手前の 1 バイトだけで、行を写さない。切って
+// いなければ空。
+[[nodiscard]] std::string block_carried_text(const TextBuffer &text, const VimBlockInsert &insert)
+{
+    if (insert.carried == 0)
+    {
+        return {};
+    }
+    const Offset at{text.line_start(insert.first).value + insert.at_byte};
+    return text.text_range(Offset{at.value - insert.carried}, at);
+}
+
 // 矩形の INSERT の Esc（ADR 0035 の追補 #1042）。1 行目が入る前より伸びたぶんを打った本文として
 // 読み（回数の繰り返しもその後ろに足す）、残りの行の同じ桁へ写して 1 行目の INSERT と 1 つの undo
 // 単位にする。何も打たなかったら写さない。`I` `A` は Esc の行が 1 行目でなければ（改行を打った）
@@ -632,7 +645,8 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     {
         return step;
     }
-    std::string body = std::move(growth.value().first);
+    std::string body = block_carried_text(text, insert);
+    body += growth.value().first;
     std::vector<VimBlockEdit> edits = std::move(growth.value().second);
     Offset resting = view.selection.caret;
     // ここへ来る繰り返しの本文は改行を含まない（改行を含む `I` `A` は上の問いで返り、VISUAL の `c`
