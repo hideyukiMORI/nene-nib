@@ -232,6 +232,11 @@ class EditorController final
     typed_step(core::KeyMapPending pending, const core::VimKey &key, bool waited);
     [[nodiscard]] std::optional<core::VimRepeatFailure>
     typed_step(core::KeyMapEmit emitted, const core::VimKey &key, bool waited);
+    // 表が決めた鍵の列を単位（右辺 1 つか表に無い 1 鍵）ごとに deliver_vim_key へ流す。単位の
+    // 途中の鍵が失敗したらその単位の残りを捨てる（Vim の beep_flush の FLUSH_MINIMAL・#1257）。
+    // 返すのは最後に流した鍵の答え。
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    delivered_units(const core::KeyMapEmit &emitted);
     // 表を引くモード。Vim モードで入力行が閉じていて、1 鍵の引数を待っていないときだけ値がある。
     [[nodiscard]] std::optional<core::VimMapMode> key_map_mode() const noexcept;
     // 積んだ鍵を key_map_flush で流して空にする（MapTimeout と、待ちを保たない意図の入口）。
