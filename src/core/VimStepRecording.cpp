@@ -686,10 +686,15 @@ namespace
     case VimMode::visual_line:
         return VimLineExtent{lines};
     case VimMode::visual_block:
-        return VimBlockExtent{lines,
-                              state.wanted_column.has_value() ? state.wanted_column.value().wish
-                                                              : VimColumnWish::at_column,
-                              block_of(state, view).width};
+        // 幅だけを引き、行ごとの形は作らない（#1198）。`.` の再生の中は記録の大きさから決め直す
+        // 矩形なので block_of のまま。
+        return VimBlockExtent{
+            lines,
+            state.wanted_column.has_value() ? state.wanted_column.value().wish
+                                            : VimColumnWish::at_column,
+            state.replayed_block.has_value()
+                ? block_of(state, view).width
+                : vim_block_width(view.text, view.selection, state.wanted_column)};
     case VimMode::visual:
         return character_extent_of(view.text, state, view.selection, lines);
     }

@@ -43,6 +43,11 @@ struct VimBlockRange
 [[nodiscard]] VimBlockRange vim_block_range_for(const TextBuffer &text, const Selection &selection,
                                                 const std::optional<VimWantedColumn> &wanted);
 
+// vim_block_range_for と同じ矩形の幅だけ（`.` の記録が覚える大きさ・ADR 0035 の追補 #1198）。
+// 左右の桁と `$` のときの最長の行だけを引き、行ごとの形は作らない。
+[[nodiscard]] VimBlockWidth vim_block_width(const TextBuffer &text, const Selection &selection,
+                                            const std::optional<VimWantedColumn> &wanted);
+
 // `.` が再生する矩形（ADR 0035 の決定 7）。左上は選択の先の角で、幅は記録した大きさをその
 // まま使う（`$` は覆う行から決め直す）。角から幅を読み直すと、短い行へ畳まれた角のぶんだけ
 // 矩形が痩せる（固定 Vim も redo_VIsual_vcol を覚えている・Issue #112 で実測）。

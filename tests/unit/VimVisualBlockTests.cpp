@@ -22,21 +22,37 @@
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
+#include "Utf8.hpp"
+#include "VimBlockEdit.hpp"
 #include "VimBlockExtent.hpp"
+#include "VimBlockInsert.hpp"
+#include "VimBlockLine.hpp"
 #include "VimBlockRange.hpp"
 #include "VimBlockWidth.hpp"
 #include "VimColumnWish.hpp"
+#include "VimEditorView.hpp"
+#include "VimEffect.hpp"
+#include "VimKey.hpp"
+#include "VimMode.hpp"
+#include "VimState.hpp"
+#include "VimStep.hpp"
 #include "VimTestSupport.hpp"
 #include "VimVisualReselect.hpp"
 #include "VirtualColumn.hpp"
+#include "VirtualColumnIndex.hpp"
 #include "VisibleLines.hpp"
 
 #include "../vim/VimFixtures.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <variant>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -50,6 +66,7 @@ using nenenib::application::SelectAll;
 using nenenib::application::SelectEditMode;
 using nenenib::application::VisibleLines;
 using nenenib::core::CaretShape;
+using nenenib::core::collapsed_at;
 using nenenib::core::Column;
 using nenenib::core::EditMode;
 using nenenib::core::LineNumber;
@@ -61,11 +78,31 @@ using nenenib::core::TextBuffer;
 using nenenib::core::TextEncoding;
 using nenenib::core::TextPosition;
 using nenenib::core::vim_block_range;
+using nenenib::core::vim_block_range_for;
 using nenenib::core::vim_block_text;
+using nenenib::core::vim_block_width;
+using nenenib::core::vim_step;
 using nenenib::core::vim_visual_reselect;
+using nenenib::core::VimBlockEdit;
 using nenenib::core::VimBlockExtent;
+using nenenib::core::VimBlockInsert;
+using nenenib::core::VimBlockLine;
+using nenenib::core::VimBlockRange;
 using nenenib::core::VimBlockWidth;
 using nenenib::core::VimColumnWish;
+using nenenib::core::VimEditorView;
+using nenenib::core::VimEffect;
+using nenenib::core::VimInsertBlock;
+using nenenib::core::VimInsertString;
+using nenenib::core::VimKey;
+using nenenib::core::VimMode;
+using nenenib::core::VimMoveTo;
+using nenenib::core::VimNavigate;
+using nenenib::core::VimRemoveBlock;
+using nenenib::core::VimReplaceBlock;
+using nenenib::core::VimSelect;
+using nenenib::core::VimState;
+using nenenib::core::VimStep;
 using nenenib::core::VirtualColumn;
 
 // ---------------------------------------------------------------- 矩形 VISUAL（ADR 0035）
@@ -269,6 +306,298 @@ void verify_vim_block_reselect()
            "$ puts the far end at the last line's content end and ignores the width");
 }
 
+// ---------------------------------------------------------------- 索引の道の同値（#1198）
+
+// 矩形が 1 行を覆う形の 6 欄と、左の桁・幅・向き。
+[[nodiscard]] bool same_block_range(const VimBlockRange &left, const VimBlockRange &right)
+{
+    return left.first == right.first && left.left == right.left && left.width == right.width &&
+           left.wish == right.wish &&
+           std::ranges::equal(left.lines, right.lines,
+                              [](const VimBlockLine &one, const VimBlockLine &other)
+                              {
+                                  return one.range == other.range && one.inside == other.inside &&
+                                         one.lead == other.lead && one.tail == other.tail &&
+                                         one.keep_lead == other.keep_lead &&
+                                         one.keep_tail == other.keep_tail;
+                              });
+}
+
+[[nodiscard]] bool same_block_edits(const std::vector<VimBlockEdit> &left,
+                                    const std::vector<VimBlockEdit> &right)
+{
+    return std::ranges::equal(left, right, [](const VimBlockEdit &one, const VimBlockEdit &other)
+                              { return one.range == other.range && one.utf8 == other.utf8; });
+}
+
+// 矩形の鍵が起こす効果の中身（範囲と本文とキャレット）。ほかの効果は種類だけ。
+[[nodiscard]] bool same_block_effect(const VimEffect &left, const VimEffect &right)
+{
+    if (left.index() != right.index())
+    {
+        return false;
+    }
+    if (const auto *replaced = std::get_if<VimReplaceBlock>(&left))
+    {
+        const auto &other = std::get<VimReplaceBlock>(right);
+        return replaced->caret == other.caret && same_block_edits(replaced->edits, other.edits);
+    }
+    if (const auto *removed = std::get_if<VimRemoveBlock>(&left))
+    {
+        const auto &other = std::get<VimRemoveBlock>(right);
+        return removed->caret == other.caret && same_block_edits(removed->edits, other.edits);
+    }
+    if (const auto *inserted = std::get_if<VimInsertBlock>(&left))
+    {
+        const auto &other = std::get<VimInsertBlock>(right);
+        return inserted->caret == other.caret && same_block_edits(inserted->edits, other.edits);
+    }
+    if (const auto *moved = std::get_if<VimMoveTo>(&left))
+    {
+        return moved->caret == std::get<VimMoveTo>(right).caret;
+    }
+    if (const auto *selected = std::get_if<VimSelect>(&left))
+    {
+        return selected->selection == std::get<VimSelect>(right).selection;
+    }
+    if (const auto *typed = std::get_if<VimInsertString>(&left))
+    {
+        return typed->utf8 == std::get<VimInsertString>(right).utf8;
+    }
+    return true;
+}
+
+[[nodiscard]] bool same_block_insert(const std::optional<VimBlockInsert> &left,
+                                     const std::optional<VimBlockInsert> &right)
+{
+    if (!left.has_value() || !right.has_value())
+    {
+        return left.has_value() == right.has_value();
+    }
+    const VimBlockInsert &one = left.value();
+    const VimBlockInsert &other = right.value();
+    return one.first == other.first && one.lines == other.lines && one.side == other.side &&
+           one.column == other.column && one.at_byte == other.at_byte &&
+           one.line_bytes == other.line_bytes && one.caret == other.caret &&
+           one.carried == other.carried && one.straddled == other.straddled;
+}
+
+// `.` の記録が覚えた矩形の大きさ（vim_block_width の道）。
+[[nodiscard]] std::optional<VimBlockExtent> recorded_block(const VimState &state)
+{
+    if (!state.recording.has_value() || !state.recording.value().visual.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto &extent = state.recording.value().visual.value();
+    if (const auto *block = std::get_if<VimBlockExtent>(&extent))
+    {
+        return *block;
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] bool same_indexed_step(const VimStep &left, const VimStep &right)
+{
+    return same_block_effect(left.effect, right.effect) && left.next.mode == right.next.mode &&
+           same_block_insert(left.next.block_insert, right.next.block_insert) &&
+           left.restore == right.restore && left.failure.has_value() == right.failure.has_value() &&
+           left.next.wanted_column == right.next.wanted_column &&
+           recorded_block(left.next) == recorded_block(right.next);
+}
+
+[[nodiscard]] TextBuffer with_block_edits(const TextBuffer &text, std::vector<VimBlockEdit> edits)
+{
+    std::ranges::sort(edits, [](const VimBlockEdit &one, const VimBlockEdit &other)
+                      { return other.range.begin < one.range.begin; });
+    TextBuffer next = text;
+    for (const VimBlockEdit &edit : edits)
+    {
+        next = next.replaced(edit.range.begin, edit.range.end, edit.utf8);
+    }
+    return next;
+}
+
+// 試験の中で効果を本文と選択へ写す（controller の写しの小さな替え玉・矩形の鍵と INSERT
+// の文字だけ）。
+[[nodiscard]] std::pair<TextBuffer, Selection>
+block_applied(const TextBuffer &text, const Selection &selection, const VimEffect &effect)
+{
+    if (const auto *moved = std::get_if<VimMoveTo>(&effect))
+    {
+        return {text, collapsed_at(moved->caret)};
+    }
+    if (const auto *selected = std::get_if<VimSelect>(&effect))
+    {
+        return {text, selected->selection};
+    }
+    if (const auto *navigated = std::get_if<VimNavigate>(&effect))
+    {
+        return {text, navigated->selection};
+    }
+    if (const auto *typed = std::get_if<VimInsertString>(&effect))
+    {
+        return {text.insert(selection.caret, typed->utf8),
+                collapsed_at(Offset{selection.caret.value + typed->utf8.size()})};
+    }
+    if (const auto *replaced = std::get_if<VimReplaceBlock>(&effect))
+    {
+        return {with_block_edits(text, replaced->edits), collapsed_at(replaced->caret)};
+    }
+    if (const auto *removed = std::get_if<VimRemoveBlock>(&effect))
+    {
+        return {with_block_edits(text, removed->edits), collapsed_at(removed->caret)};
+    }
+    if (const auto *inserted = std::get_if<VimInsertBlock>(&effect))
+    {
+        return {with_block_edits(text, inserted->edits), collapsed_at(inserted->caret)};
+    }
+    return {text, selection};
+}
+
+// 同じ本文の「索引を持たない本文」と「持つ本文」に同じ鍵を流し、鍵ごとの答えが同じか。矩形の
+// VISUAL のあいだは frame と同じ vim_block_range_for と、記録の vim_block_width も照らす。比べた
+// 鍵の数を compared に足す。
+[[nodiscard]] bool indexed_block_keys_agree(std::string_view body, Offset start,
+                                            std::string_view keys, std::size_t &compared)
+{
+    const auto parsed = TextBuffer::from_utf8(body);
+    if (!parsed.has_value())
+    {
+        return false;
+    }
+    TextBuffer plain = parsed.value();
+    TextBuffer indexed = plain.with_virtual_columns();
+    Selection selection = collapsed_at(start);
+    VimState plain_state = empty_vim_state();
+    VimState indexed_state = empty_vim_state();
+    bool same = true;
+    for (const VimKey &key : vim_keys_of(keys))
+    {
+        if (plain_state.mode == VimMode::visual_block)
+        {
+            const auto block = vim_block_range_for(plain, selection, plain_state.wanted_column);
+            same =
+                same &&
+                same_block_range(
+                    block, vim_block_range_for(indexed, selection, indexed_state.wanted_column)) &&
+                vim_block_width(indexed, selection, indexed_state.wanted_column) == block.width &&
+                vim_block_width(plain, selection, plain_state.wanted_column) == block.width;
+        }
+        const VimStep plain_step =
+            vim_step(plain_state, VimEditorView{plain, selection, std::nullopt}, key);
+        const VimStep indexed_step =
+            vim_step(indexed_state, VimEditorView{indexed, selection, std::nullopt}, key);
+        same = same && same_indexed_step(plain_step, indexed_step);
+        auto [next_plain, next_selection] = block_applied(plain, selection, plain_step.effect);
+        indexed = block_applied(indexed, selection, plain_step.effect).first;
+        plain = std::move(next_plain);
+        selection = next_selection;
+        plain_state = plain_step.next;
+        indexed_state = indexed_step.next;
+        ++compared;
+    }
+    return same && indexed.has_virtual_columns() && plain.text() == indexed.text();
+}
+
+// 矩形の入口の鍵（`I` `A` `c` `C` `d` `y` `r` `~` と Esc の写し）。
+constexpr std::array<std::string_view, 12> indexed_block_keys{
+    "<C-v>jIxy<Esc>",  "<C-v>jlAz<Esc>", "$<C-v>jAq<Esc>", "<C-v>3j2Ap<Esc>",
+    "<C-v>jlcnn<Esc>", "<C-v>jCm<Esc>",  "<C-v>3jld",      "<C-v>3jly",
+    "<C-v>2jlrZ",      "<C-v>jl~",       "$<C-v>3jI<Esc>", "<C-v>3j$Aw<Esc>"};
+
+// 1 つの角から矩形の入口の鍵を全部流す。
+[[nodiscard]] bool indexed_keys_agree_at(std::string_view body, Offset at, std::size_t &compared)
+{
+    bool same = true;
+    for (const std::string_view keys : indexed_block_keys)
+    {
+        same = indexed_block_keys_agree(body, at, keys, compared) && same;
+    }
+    return same;
+}
+
+// 1 行目と 2 行目の code point ごとに矩形の角を置く（改行と CRLF の `\r` は飛ばす）。
+[[nodiscard]] bool indexed_body_agrees(std::string_view body, std::size_t &compared)
+{
+    const std::size_t second = body.find('\n') + 1;
+    const std::size_t third = body.find('\n', second);
+    bool same = true;
+    for (std::size_t at = 0; at < third; ++at)
+    {
+        const bool corner =
+            nenenib::core::is_boundary(body, Offset{at}) && body.at(at) != '\n' &&
+            !(body.at(at) == '\r' && at + 1 < body.size() && body.at(at + 1) == '\n');
+        same = (!corner || indexed_keys_agree_at(body, Offset{at}, compared)) && same;
+    }
+    return same;
+}
+
+// 小さな本文: Tab の途中・全角の途中・結合文字・`^V` と `\r` の 2
+// 桁の制御文字・短い行・空行・CRLF。
+void verify_vim_block_indexed_small()
+{
+    constexpr std::array<std::string_view, 3> bodies{
+        "ab\tcd\xE6\x97\xA5"
+        "ef\x16gh\n\t\xE5\x85\xA8gh\x16ij\re\xCC\x81z\nx\n\nab\rcde\xCC\x81"
+        "fg\tk\n",
+        "\xE6\x97\xA5\t\xE6\x97\xA5x\n\t\t\tend\ne\xCC\x81\xCC\x81\t\xE5\x85\xA8\nshort",
+        "ab\tc\xE6\x97\xA5\r\n\t\xE5\x85\xA8"
+        "d\r\nxy\r\n\r\nlonger line\r\n"};
+    std::size_t compared = 0;
+    bool same = true;
+    for (const std::string_view body : bodies)
+    {
+        same = indexed_body_agrees(body, compared) && same;
+    }
+    expect(same, "an indexed text answers every blockwise key the same as a copied line");
+    expect(compared == 2800, "the blockwise equivalence compares 2800 keys");
+}
+
+// 塊の境 `boundary` の前後（-64・0・+63 の次の code point）に矩形の角を置く。
+[[nodiscard]] bool indexed_boundary_agrees(std::string_view body, std::size_t boundary,
+                                           std::size_t &compared)
+{
+    bool same = true;
+    for (const std::size_t near : {boundary - 64, boundary, boundary + 63})
+    {
+        std::size_t at = near;
+        while (!nenenib::core::is_boundary(body, Offset{at}))
+        {
+            ++at;
+        }
+        for (const std::string_view keys : {"<C-v>jIxy<Esc>", "<C-v>jlAz<Esc>"})
+        {
+            same = indexed_block_keys_agree(body, Offset{at}, keys, compared) && same;
+        }
+    }
+    return same;
+}
+
+// 塊（約 64 KiB）の境の前後に矩形の端を置く（200 KB の行 2 本）。1 行目の中の最初の境だけ。
+void verify_vim_block_indexed_across_chunks()
+{
+    std::string line;
+    while (line.size() < 200'000)
+    {
+        line += "ab\t\xE6\x97\xA5"
+                "e\xCC\x81\x01z\t";
+    }
+    const std::string body = line + "\n" + line;
+    const auto parsed = TextBuffer::from_utf8(body);
+    expect(parsed.has_value(), "the chunked block sample parses");
+    const TextBuffer indexed = parsed.value().with_virtual_columns();
+    const auto chunks = indexed.virtual_columns().value().get().chunks();
+    const auto inside =
+        std::ranges::find_if(chunks, [&line](const auto &chunk)
+                             { return chunk.start > 0 && chunk.start + 64 < line.size(); });
+    expect(inside != chunks.end(), "a chunk boundary falls inside the first line");
+    std::size_t compared = 0;
+    bool same = inside == chunks.end() || indexed_boundary_agrees(body, inside->start, compared);
+    same = indexed_block_keys_agree(body, Offset{0}, "$<C-v>jAq<Esc>", compared) && same;
+    expect(same, "the blockwise keys agree when the block edges sit near a chunk boundary");
+}
+
 void verify_vim_block_fixtures()
 {
     std::size_t selected = 0;
@@ -295,6 +624,8 @@ void verify_vim_block_contracts()
     verify_vim_block_insert_interrupted();
     verify_vim_block_range();
     verify_vim_block_reselect();
+    verify_vim_block_indexed_small();
+    verify_vim_block_indexed_across_chunks();
 }
 
 void verify_vim_block_scope()
