@@ -71,6 +71,8 @@ namespace
 // INSERT の矢印が読む窓の初めの大きさ（行の全体は写さない・長い結合文字の列では倍に広げる）。
 constexpr std::size_t arrow_window_bytes = 64;
 constexpr std::size_t longest_code_point_bytes = 4;
+// 索引を持つ本文の `Ctrl-w` が読む窓の初めの大きさ（#1258・語が長ければ倍に広げる）。
+constexpr std::size_t erase_window_bytes = 64;
 
 // 端で動かない矢印か（行頭の `<Left>`・行の内容の終わりの `<Right>`・#1136、最初の行の
 // `<Up>`・最後の行の `<Down>`・端の `<PageUp>` `<PageDown>`・#1149）。Vim の ins_left ins_right
@@ -308,6 +310,27 @@ constexpr std::size_t longest_code_point_bytes = 4;
     return index;
 }
 
+// 仮想桁の索引を持つ本文の `Ctrl-w` の左端（#1258）。floor が行頭に戻ると floor から写すのは行の
+// 全体になるので（1 行 16 MiB の行）、キャレットの手前の窓だけを読んで word_erase_begin に渡し、
+// 窓の頭で止まった（語が窓より長い）か止めた所の手前の文字が窓の頭から始まる（窓の頭は文字の頭
+// とは限らない）ときだけ窓を倍にして読み直す。窓が floor に届けば floor から写した答えと同じ。
+// 持たない本文は今のまま floor から写す（ADR 0035 の追補）。
+[[nodiscard]] Offset indexed_word_erase_begin(const TextBuffer &text, Offset floor, Offset caret)
+{
+    std::size_t window = erase_window_bytes;
+    for (;;)
+    {
+        const Offset begin{caret.value - std::min(window, caret.value - floor.value)};
+        const std::string content = text.text_range(begin, caret);
+        const std::size_t index = word_erase_begin(content, 0);
+        if (begin == floor || (index > 0 && vim_character_start(content, Offset{index}).value > 0))
+        {
+            return Offset{begin.value + index};
+        }
+        window *= 2;
+    }
+}
+
 // INSERT の `Ctrl-w` と `Ctrl-u`（#1040）。行頭では前の行とつなぎ、ほかは左端まで（`Ctrl-w` は語の
 // 境でも）消す。`.` の記録と回数の鍵の列には鍵のまま残り、再生も同じ消し方をする（Vim の redo
 // と同じ・#1093）。
@@ -326,7 +349,11 @@ constexpr std::size_t longest_code_point_bytes = 4;
     }
     const Offset floor = erase_floor(state, text, caret, line);
     Offset begin = floor;
-    if (by_word)
+    if (by_word && text.has_virtual_columns())
+    {
+        begin = indexed_word_erase_begin(text, floor, caret);
+    }
+    else if (by_word)
     {
         // 消しうるのは floor から先だけなので、行頭からは写さない（1 行 16 MiB の行・#1040）。
         const std::string content = text.text_range(floor, caret);

@@ -119,7 +119,9 @@ FR-003 の T2 に残る VISUAL の 3 つめ、矩形（`Ctrl-v`）を入れる�
 
 ## 追補（2026-11-03・#1196 矩形の `I` で 1 行目の左の端が文字の途中）
 
-矩形の `I`（追補 #1042）で **1 行目の左の端が 2 桁以上の文字（全角・国旗の片方・Tab・`^V` や LF 文書の `` のような制御文字・`<200b>` のような書式用文字、どれでも）の途中に掛かる**とき（矩形の左の桁がほかの行の角で決まる形）、1 行目はその文字の頭から打ち、空白で埋めず Tab も割らない。Esc でほかの行へ写す本文は、打った本文を 1 行目のその文字の頭の桁から並べたとき **矩形の左の桁を含む文字（切れていればその文字ごと）から後ろ**だけで、左の桁に届かなければ何も写さない（`aあbc` の `あ` の 2 桁目が左の端で `XY` を打つと、1 行目は `aXYあbc`、ほかの行には `Y` だけが入る）。ほかの行の桁・埋める空白・Tab を割る形（`block_insert_edit`）は変えない。Vim の出どころは 3 つ: `do_pending_operator` が矩形の左上を `coladvance(start_vcol)` で文字の頭に置き（`virtualedit` 無し）、`op_insert` は打った後の 1 行目を `block_prep(is_del = TRUE)` し直した `bd2.textcol`（左の桁を含む文字の頭）から「伸びたぶん」を読み、`block_insert` の `b_insert` の枝はその本文を `startspaces` の空白の後ろへ入れる。1 行目で端より前の桁の数は入口が `VimBlockInsert.straddled` に 1 回だけ覚え、Esc で写す本文の頭を落とすのは `VimStepBlock.cpp` の `block_copied_body` の 1 か所（Vim の 1 文字は `vim_character_end`・桁は `column_advance`）。`A`・`c` `C`・端が文字の頭ちょうどの `I` は変わらない。打つ間に打ち始めより前へ `<Left>` `<Home>` で動いて打った形も、1 行目の打ち始め（切れた文字の頭）から伸びたぶんを同じ規則で切るだけで Vim と一致する（実測・Vim の `op_insert` の `b_op_start_orig` の調整の枝）。打つ本文に Tab を含めば、その Tab の幅は 1 行目の実際の桁で数える。根拠は固定 Vim 9.1 の oracle の `block-insert-wide-start-` の fixture 22 件（Issue の fuzz seed 24 の `fuzz-24-0020` の最小・全角の途中で 1 文字 / 2 文字 / 全角を打つ・国旗の 1 つ目 / 2 つ目の途中・Tab の途中で 1 文字 / 3 文字・短い行・`A`（対照）・文字の頭ちょうど（対照）・回数つき `2I` を 2 件・`.`・`u`・打ち始めより前へ `<Left>` 2 回 / `<Home>` で動いて打つ・左の端が `^V` / `` / `<200b>` の途中・打つ本文に Tab・Tab の途中で Tab を打つ）。
+矩形の `I`（追補 #1042）で **1 行目の左の端が 2 桁以上の文字（全角・国旗の片方・Tab・`^V` や LF 文書の `
+` のような制御文字・`<200b>` のような書式用文字、どれでも）の途中に掛かる**とき（矩形の左の桁がほかの行の角で決まる形）、1 行目はその文字の頭から打ち、空白で埋めず Tab も割らない。Esc でほかの行へ写す本文は、打った本文を 1 行目のその文字の頭の桁から並べたとき **矩形の左の桁を含む文字（切れていればその文字ごと）から後ろ**だけで、左の桁に届かなければ何も写さない（`aあbc` の `あ` の 2 桁目が左の端で `XY` を打つと、1 行目は `aXYあbc`、ほかの行には `Y` だけが入る）。ほかの行の桁・埋める空白・Tab を割る形（`block_insert_edit`）は変えない。Vim の出どころは 3 つ: `do_pending_operator` が矩形の左上を `coladvance(start_vcol)` で文字の頭に置き（`virtualedit` 無し）、`op_insert` は打った後の 1 行目を `block_prep(is_del = TRUE)` し直した `bd2.textcol`（左の桁を含む文字の頭）から「伸びたぶん」を読み、`block_insert` の `b_insert` の枝はその本文を `startspaces` の空白の後ろへ入れる。1 行目で端より前の桁の数は入口が `VimBlockInsert.straddled` に 1 回だけ覚え、Esc で写す本文の頭を落とすのは `VimStepBlock.cpp` の `block_copied_body` の 1 か所（Vim の 1 文字は `vim_character_end`・桁は `column_advance`）。`A`・`c` `C`・端が文字の頭ちょうどの `I` は変わらない。打つ間に打ち始めより前へ `<Left>` `<Home>` で動いて打った形も、1 行目の打ち始め（切れた文字の頭）から伸びたぶんを同じ規則で切るだけで Vim と一致する（実測・Vim の `op_insert` の `b_op_start_orig` の調整の枝）。打つ本文に Tab を含めば、その Tab の幅は 1 行目の実際の桁で数える。根拠は固定 Vim 9.1 の oracle の `block-insert-wide-start-` の fixture 22 件（Issue の fuzz seed 24 の `fuzz-24-0020` の最小・全角の途中で 1 文字 / 2 文字 / 全角を打つ・国旗の 1 つ目 / 2 つ目の途中・Tab の途中で 1 文字 / 3 文字・短い行・`A`（対照）・文字の頭ちょうど（対照）・回数つき `2I` を 2 件・`.`・`u`・打ち始めより前へ `<Left>` 2 回 / `<Home>` で動いて打つ・左の端が `^V` / `
+` / `<200b>` の途中・打つ本文に Tab・Tab の途中で Tab を打つ）。
 
 ## 追補（2026-11-04・#1198 巨大な 1 行の矩形の入口は索引の道）
 
@@ -128,6 +130,10 @@ FR-003 の T2 に残る VISUAL の 3 つめ、矩形（`Ctrl-v`）を入れる�
 ## 追補（2026-11-04・#1237 巨大な 1 行の矩形の `r` `p` と `.`・Esc の 1 文字戻りも索引の道）
 
 追補 #1198 で範囲の外に置いた 5 か所も同じ口 `VimLineColumns` と `line_virtual_width` に寄せる。矩形の `r`（`replaced_block_edits`）は行の幅を `line_virtual_width` で引き、矩形の `c` `C`（`block_changed`）は 1 行目のバイト数を行を写さず `line_end − line_start` で数える。矩形のレジスタの `p` `P`（`put_lead` / `put_block_line` / `put_padded`）は貼る行ごとに 1 つの `VimLineColumns` に幅・`byte_at`・最初と最後の桁・code point を問う。Esc とほかの 1 文字戻り（`backward_characters`）は `VimLineColumns::character_start` に問い、索引を持つ本文はキャレットの手前の窓（64 バイトから倍に伸ばし、窓の頭まで戻ったら読み直す・行頭に届いた窓の答えは行を写した答えと同じ）だけを読む。`.` の再生の中で記録し直す大きさは、再生の矩形（`vim_replayed_block_range`）と同じ左の桁（選択の先の角）と右の桁（記録した幅か `$` なら覆う行の最長）から幅だけを引く `vim_replayed_block_width` で引く（`vim_block_width` は選択の両端から桁を決めるので再生の中では答えが違う）。持たない本文は行を 1 回写して今の `std::string_view` 版に渡し、答えは変えない。索引の意味は変えない。正しさは同値の試験 `verify_vim_block_indexed_rest`（同じ小さな本文に `r`・`p` `P`・`.` の再生・Esc と `h` の 14 列・`.` は controller と同じく選び直して再生の鍵を流す）と、塊の境の版に足した 4 列が守る。
+
+## 追補（2026-11-04・#1258 INSERT の `Ctrl-w` と大きな回数の 1 文字戻りも窓の道）
+
+追補 #1237 の後に残った 2 か所も、索引を持つ本文では行を写さない。INSERT の `Ctrl-w`（`insert_cut`）は、消せる左端（`erase_floor`）が行頭に戻ると左端から写すのが行の全体になるので、索引を持つ本文ではキャレットの手前の窓（64 バイトから倍に伸ばす）だけを読んで今の `word_erase_begin` に渡す。窓の頭で止まった（語が窓より長い）か、止めた所の手前の文字が窓の頭から始まる（窓の頭は文字の頭とは限らない）ときだけ読み直し、窓が左端に届けば左端から写した答えと同じ。`Ctrl-u` は今も本文を読まない。1 文字戻り（`backward_characters`・Esc と `{N}h` `X` `dh`）は `VimLineColumns::character_start(byte, count)` が回数ごと受け、索引を持つ本文は窓を 1 回読むごとにその中で何歩も戻る（窓の頭まで戻ったらそこから窓を倍にして読み直す・大きな回数でも読むのは戻る距離の 2 倍まで）。手前の 1 バイトが幅 0 でない ASCII なら、その 1 歩は code point を読まずに 1 バイト戻る（`vim_character_start` と同じ答え）。持たない本文は今のまま（`Ctrl-w` は左端から写し、1 文字戻りは行の写しを 1 文字ずつ戻る）。索引の意味は変えない。正しさは同値の試験 `verify_vim_block_indexed_cut`（同じ小さな本文と窓より長い語の本文に `Ctrl-w` `Ctrl-u` と大きな回数の `h` `X` `dh` の 12 列）と、塊の境の版に足した 3 列が守る。
 
 ## 強制
 
@@ -149,3 +155,5 @@ FR-003 の T2 に残る VISUAL の 3 つめ、矩形（`Ctrl-v`）を入れる�
 | 矩形の桁を code point で数える | Tab と全角で Vim と食い違う（Issue #91 で実測）。ADR 0034 が仮想桁を用意する |
 | Vim モードでも Ctrl+V を OS 貼付のままにし、矩形は別の鍵にする | Vim と違う鍵は覚え直しになる。INSERT と通常モードの貼付は残るので不便は小さい |
 | レジスタの幅を持たず貼付のたびに本文から計算する | `$` で取った矩形と短い行の埋め方が Vim と一致しない（`getregtype()` が幅を返すのは幅が本文だけでは決まらないから） |
+
+残るもの: 前へ進む `l`（`forward_characters`・`VimStepDetail.cpp`）は今も行の全体を写す（後続 Issue）。

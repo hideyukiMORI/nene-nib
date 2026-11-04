@@ -22,4 +22,10 @@ vim_block_put(VimBlockWorkload workload, const std::string &input, application::
 [[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
 vim_block_repeated(VimBlockWorkload workload, const std::string &input,
                    application::TimingPort &timing);
+[[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
+vim_insert_word_cut(VimBlockWorkload workload, const std::string &input,
+                    application::TimingPort &timing);
+[[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
+vim_counted_left(VimBlockWorkload workload, const std::string &input,
+                 application::TimingPort &timing);
 } // namespace nenenib::tests::performance
