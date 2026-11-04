@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 d321eda82794845302923bb0837788e9d8a766d3da84998093aeb4cf1dcf16e8 / 3336 fixtures
+// fixtures.json: sha256 d39e26f252cdcff905d54279ab85d9e9008525478d219c5d8c22d60386b4d5c8 / 3337 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3336> vim_fixtures{{
+constexpr std::array<VimFixture, 3337> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -380,6 +380,7 @@ constexpr std::array<VimFixture, 3336> vim_fixtures{{
     {"viewport-counted-page-back-past-bof-indented", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", "3<C-b>", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", 4, 5, "", "", VimViewportFixture{6, 3, 4, 5, 1, 3}},
     {"viewport-counted-page-forward-reaches-eof-mid-count-indented", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", "3<C-f>", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", 12, 3, "", "", VimViewportFixture{6, 1, 1, 5, 12, 3}},
     {"viewport-counted-page-back-reaches-bof-mid-count-indented", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", "3<C-b>", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", 4, 5, "", "", VimViewportFixture{6, 7, 12, 5, 1, 3}},
+    {"viewport-so-two-j-at-bottom", "01 alpha beta\n02 alpha beta\n03 alpha beta\n04 alpha beta\n05 alpha beta\n06 alpha beta\n07 alpha beta\n08 alpha beta\n09 alpha beta\n10 alpha beta\n11 alpha beta\n12 alpha beta\n13 alpha beta\n14 alpha beta\n15 alpha beta\n16 alpha beta\n17 alpha beta\n18 alpha beta\n19 alpha beta\n20 alpha beta\n21 alpha beta\n22 alpha beta\n23 alpha beta\n24 alpha beta\n25 alpha beta\n26 alpha beta\n27 alpha beta\n28 alpha beta\n29 alpha beta\n30 alpha beta", "2j", "01 alpha beta\n02 alpha beta\n03 alpha beta\n04 alpha beta\n05 alpha beta\n06 alpha beta\n07 alpha beta\n08 alpha beta\n09 alpha beta\n10 alpha beta\n11 alpha beta\n12 alpha beta\n13 alpha beta\n14 alpha beta\n15 alpha beta\n16 alpha beta\n17 alpha beta\n18 alpha beta\n19 alpha beta\n20 alpha beta\n21 alpha beta\n22 alpha beta\n23 alpha beta\n24 alpha beta\n25 alpha beta\n26 alpha beta\n27 alpha beta\n28 alpha beta\n29 alpha beta\n30 alpha beta", 9, 1, "", "", VimViewportFixture{10, 1, 7, 1, 2, 5, 0, 0, 0, 0, 0, 0, 2}},
     {"char-search-f-first", "axbxcxd", "fx", "axbxcxd", 1, 2, "", "", std::nullopt},
     {"char-search-f-count", "axbxcxd", "2fx", "axbxcxd", 1, 4, "", "", std::nullopt},
     {"char-search-F-first", "axbxcxd", "$Fx", "axbxcxd", 1, 6, "", "", std::nullopt},

@@ -249,15 +249,11 @@ void arrange_unwrapped_viewport(EditorController &controller, const VimFixture &
                frame.first_visible.value == viewport.first_visible,
            "the unwrapped oracle viewport can be arranged");
 }
-} // namespace
 
-void arrange_vim_viewport(EditorController &controller, const VimFixture &fixture)
+// 窓の形ごとに窓を置く（折り返す・折り返さない・旧 fixture の 1 行 1 画面行）。
+void placed_vim_viewport(EditorController &controller, const VimFixture &fixture,
+                         const VimViewportFixture &viewport)
 {
-    if (!fixture.viewport.has_value())
-    {
-        return;
-    }
-    const auto &viewport = fixture.viewport.value();
     if (viewport.wrap_columns > 0)
     {
         arrange_wrapped_viewport(controller, fixture, viewport);
@@ -275,6 +271,23 @@ void arrange_vim_viewport(EditorController &controller, const VimFixture &fixtur
     const std::int64_t requested = static_cast<std::int64_t>(viewport.first_visible);
     static_cast<void>(
         controller.apply_frame(ScrollLines{static_cast<std::int32_t>(requested - current)}));
+}
+} // namespace
+
+void arrange_vim_viewport(EditorController &controller, const VimFixture &fixture)
+{
+    if (!fixture.viewport.has_value())
+    {
+        return;
+    }
+    const auto &viewport = fixture.viewport.value();
+    placed_vim_viewport(controller, fixture, viewport);
+    // fixture の `set scrolloff=N`（#1239）。窓を作ってから余白を打つ（fuzz の再生器と契約
+    // --vim-view の placed_window と同じ順）。0 の fixture は打たない。
+    if (viewport.scrolloff > 0)
+    {
+        static_cast<void>(run_ex(controller, "set so=" + std::to_string(viewport.scrolloff)));
+    }
 }
 
 // fixture の `register`（ADR 0046 の決定 6・oracle の `let @a = "…"`）。記法の鍵を VimKey の列へ
