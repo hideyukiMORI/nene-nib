@@ -59,7 +59,7 @@ CIは非文書変更のマージ直前だけ起動し、Git規約・検証記録
 PR番号を件名のIssue番号へ転記せず、任意のsubject引数も設けない。ready/OPEN/main/期待headを確認し、非文書変更は手動workflowの対象run成功がなければ統合しない。
 planではCIも起動しない。`--execute`が文書判定・必要なCI・統合を進める。CI待機が切れたら表示された`--ci-run <ID>`で同じrunを確認する。
 repoは正本へ明示固定し、Unicode改行を含む複数論理行とmerge queueを拒否する。完了は同repoのMERGED状態とmergeCommitを読み取って確認する。
-失敗を再試行せず、timeout等で成否不明ならPRを読み取って確認する。GitHub UIや直接CLIまでの全経路を強制するものではないため、機械強制の状態をactiveへ変更しない。
+失敗を再試行せず（merge の呼び出しの GitHub の 5xx / `Merge already in progress` だけは PR が OPEN かつ head 不変の間、同じ命令を 30 秒ごとに最大 10 回・ADR 0021 追補 決定 8）、timeout等で成否不明ならPRを読み取って確認する。GitHub UIや直接CLIまでの全経路を強制するものではないため、機械強制の状態をactiveへ変更しない。
 
 - 機械強制: **planned**（PRテンプレート・対象別CIを扱う統合道具・rulesetの `allowed_merge_methods: [squash, rebase]`（rebase はまとめ枝の道具だけが使う）。全PR一律のrequired status checkは置かない）
 
