@@ -763,9 +763,9 @@ void verify_vim_search_dot()
 
 void verify_vim_search_fixtures()
 {
-    // 検索の 209 件（大小の 30 件・#1041 と結合文字の 16 件・#1138 と結合文字の大小の 13 件・#1147
-    // と始まりの 15 件・#1146
-    // を含む）と、鍵の分類の表・次キー待ちを共有する境界の代表（`.`・r・f/t・gg）。
+    // 検索の 212 件（大小の 30 件・#1041 と結合文字の 16 件・#1138 と結合文字の大小の 13 件・#1147
+    // と始まりの 18 件・#1146 を含む）と、鍵の分類の表・次キー待ちを共有する境界の代表（`.`・r・
+    // f/t・gg）。
     constexpr std::array<std::string_view, 6> boundaries{
         "replace-char-one",    "replace-char-count", "char-search-f-count",
         "char-search-t-first", "line-jump-gg-count", "dot-remove-word"};
@@ -779,7 +779,7 @@ void verify_vim_search_fixtures()
             ++selected;
         }
     }
-    expect(selected == 215, "the scope replays 209 search fixtures and 6 shared boundaries");
+    expect(selected == 218, "the scope replays 212 search fixtures and 6 shared boundaries");
 }
 
 // 次の一致を求める 1 本の経路（ADR 0041 の決定 1）。確定の検索の鍵と incsearch の preview が
@@ -1172,7 +1172,8 @@ void verify_vim_pattern_case()
 }
 
 // 結合文字を伴う文字は大小を畳まずに比べる（#1147・Vim 9.1 の NFA_COMPOSING・実測）。`:set ic` の
-// `/é`（e + U+0301）は `É` に当たらず（Vim は E486）、前後の英字と `[e]` の集合は今どおり畳む。
+// `/é`（e + U+0301）は `É` に当たらず（Vim は E486）、前後の英字と `[e]` の集合は今どおり畳む
+// （`[e]` の直後の結合文字は Vim が読み飛ばす・#1146）。
 // 反復のある道（VimPatternEvaluation）も同じ consumes を通る。
 void verify_vim_pattern_composing_case()
 {
@@ -1189,6 +1190,13 @@ void verify_vim_pattern_composing_case()
                cased_match("[e]\u0301", Case::ignore, "E\u0301") == std::optional<std::size_t>{0} &&
                cased_match("\u00e9", Case::ignore, "\u00c9") == std::optional<std::size_t>{0},
            "the letters around it, a set and a precomposed letter still fold");
+    // 閉じ大括弧の直後の結合文字は集合と 1 文字として読み飛ばされる（Vim の MB_PTR_ADV・#1146）。
+    expect(
+        cased_match("[e]\u0302y", Case::sensitive, "x e\u0301y") == std::optional<std::size_t>{2} &&
+            cased_match("[e]\u0301", Case::sensitive, "x e y") == std::optional<std::size_t>{2} &&
+            cased_match("[e]\u0301*y", Case::sensitive, "x e\u0301y") ==
+                std::optional<std::size_t>{2},
+        "the composing marks right after a set are skipped with its closing bracket");
 }
 
 } // namespace
