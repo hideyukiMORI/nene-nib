@@ -18,6 +18,8 @@ namespace nenenib::core
 namespace
 {
 constexpr char32_t tab_character = U'\t';
+// UTF-8 の 1 code point の最長のバイト数。索引の道が `at` の 1 文字だけを読む窓。
+constexpr std::size_t longest_code_point_bytes = 4;
 
 // 正本の範囲表からコンパイル時に作るBMPの索引。意味の表を複製しない（ADR 0074）。
 [[nodiscard]] constexpr auto bmp_width_index()
@@ -138,6 +140,15 @@ std::size_t virtual_width(std::string_view text) noexcept
     return column_before(text, text.size()) - 1;
 }
 
+std::size_t line_virtual_width(const TextBuffer &text, LineNumber line)
+{
+    if (text.has_virtual_columns())
+    {
+        return text.virtual_columns().value().get().virtual_column_at(text, text.line_end(line));
+    }
+    return virtual_width(text.line_text(line));
+}
+
 VirtualColumn column_of(std::string_view line, std::size_t byte) noexcept
 {
     return VirtualColumn{column_before(line, byte)};
@@ -180,6 +191,21 @@ VirtualColumn virtual_column(const TextBuffer &text, Offset at)
 
 VirtualColumn virtual_column_end(const TextBuffer &text, Offset at)
 {
+    // 索引を持つ本文は最初の桁を索引から引き、`at` の 1 code point だけを読む（#1198・
+    // caret_virtual_column と同じ形）。
+    if (const auto indexed = indexed_column(text, at); indexed.has_value())
+    {
+        const Offset end = text.line_end(text.position_of(at).line);
+        const std::size_t column = indexed.value();
+        if (at.value >= end.value)
+        {
+            return VirtualColumn{column};
+        }
+        const std::string head =
+            text.text_range(at, Offset{std::min(at.value + longest_code_point_bytes, end.value)});
+        const std::size_t advance = advance_of(code_point_at(head, Offset{0}), column);
+        return VirtualColumn{advance == 0 ? column : column + advance - 1};
+    }
     const auto [line, byte] = line_and_byte(text, at);
     return column_end_of(line, byte);
 }
