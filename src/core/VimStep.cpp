@@ -75,7 +75,6 @@ using detail::jump_list_action;
 using detail::laid_out_motion;
 using detail::landed_column;
 using detail::landed_step;
-using detail::last_view_line;
 using detail::line_below;
 using detail::line_of;
 using detail::macro_record_action;
@@ -212,16 +211,6 @@ namespace
 {
     return std::min(amount, total);
 }
-
-[[nodiscard]] std::size_t limited_product(std::size_t left, std::size_t right,
-                                          std::size_t total) noexcept
-{
-    if (left == 0 || right == 0)
-    {
-        return 0;
-    }
-    return left > total / right ? total : std::min(left * right, total);
-}
 } // namespace
 
 namespace detail
@@ -274,28 +263,6 @@ namespace
     return first.value + view.scroll_margin >= view.text.line_count();
 }
 
-// 回数つきの Ctrl-f が途中の周で末尾まで見える窓に着き、次の周が余白で FAIL するなら、その窓の先頭
-// （Vim の onepage は周ごとに FAIL を確かめる・#1099）。余白 0 なら何も返さない。
-[[nodiscard]] std::optional<LineNumber>
-forward_pages_held(const VimEditorView &view, std::size_t pages, std::size_t one_page) noexcept
-{
-    const std::size_t total = view.text.line_count();
-    const std::size_t height = std::max<std::size_t>(vim_viewport_of(view).visible_lines, 1);
-    const std::size_t first = vim_viewport_of(view).first_visible.value;
-    const std::size_t shown_from = total >= height ? total - height + single_step : single_step;
-    if (view.scroll_margin == 0 || first >= shown_from || one_page == 0)
-    {
-        return std::nullopt;
-    }
-    const std::size_t steps = (shown_from - first + one_page - single_step) / one_page;
-    const LineNumber reached{first + steps * one_page};
-    if (pages <= steps || !forward_page_fails(view, reached))
-    {
-        return std::nullopt;
-    }
-    return reached;
-}
-
 // 1 画面の送りの量（Vim の get_scroll_overlap の重なりを引いた行数・1 論理行 = 1 画面行）。
 // 重なりは高さ 5 以上で 2 行・4 で 1 行・3 以下で 0 行（h1 + h2 + h3 と h2 + h3 + h4 が
 // 高さ − 2 に収まるかで決まる・#1229・ADR 0019 の追補）。後ろへは本文の末尾で重なりが減る
@@ -344,6 +311,29 @@ forward_pages_held(const VimEditorView &view, std::size_t pages, std::size_t one
     return {top, caret};
 }
 
+// 回数ぶん前へ送った先頭（Vim の onepage の FORWARD の周）。周ごとに FAIL（末尾が見えていて先頭が
+// 末尾から余白の内側・#1099）を確かめて止まり、末尾が見えている周（`w_botline > line_count`）は
+// 先頭を最終行にし、ほかの周は窓の下の行から重なりを上へ数えた行（先頭 + page_advance）へ送る。
+// 2 周目以降も末尾が見えたら最終行へ行く（回数を掛けた送りの量で止めない・#1261）。
+[[nodiscard]] LineNumber pages_forward(const VimEditorView &view, std::size_t pages) noexcept
+{
+    const std::size_t total = view.text.line_count();
+    const std::size_t height =
+        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
+    const std::size_t one_page = page_advance(view);
+    LineNumber top = vim_viewport_of(view).first_visible;
+    for (std::size_t page = 0; page < pages; ++page)
+    {
+        const bool end_shown = top.value + height - single_step >= total;
+        if (end_shown && forward_page_fails(view, top))
+        {
+            break;
+        }
+        top = end_shown ? LineNumber{total} : LineNumber{top.value + one_page};
+    }
+    return top;
+}
+
 // 後ろへの最後の周のキャレットの行。窓の外なら呼び手が窓の中へ入れる。
 [[nodiscard]] LineNumber page_back_caret(const VimEditorView &view, std::size_t pages) noexcept
 {
@@ -353,27 +343,14 @@ forward_pages_held(const VimEditorView &view, std::size_t pages, std::size_t one
 [[nodiscard]] LineNumber page_top(const VimEditorView &view, std::size_t pages,
                                   VimScrollDirection direction)
 {
-    const LineNumber first = vim_viewport_of(view).first_visible;
-    if (direction == VimScrollDirection::down &&
-        last_view_line(view).value == view.text.line_count())
-    {
-        return forward_page_fails(view, first) ? first : LineNumber{view.text.line_count()};
-    }
-    const std::size_t one_page = page_advance(view);
     switch (direction)
     {
     case VimScrollDirection::down:
-        break;
+        return pages_forward(view, pages);
     case VimScrollDirection::up:
         return pages_back(view, pages).first;
     }
-    const auto held = forward_pages_held(view, pages, one_page);
-    if (held.has_value())
-    {
-        return held.value();
-    }
-    const std::size_t amount = limited_product(one_page, pages, view.text.line_count());
-    return shifted_line(first, amount, view.text.line_count(), direction);
+    std::unreachable();
 }
 
 // 回数つきの Ctrl-f / Ctrl-b が途中の周で端に当たったか（Vim の onepage の FAIL）。端に当たった周は
