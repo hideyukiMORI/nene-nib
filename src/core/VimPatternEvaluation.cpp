@@ -22,8 +22,8 @@ namespace
 } // namespace
 
 VimPatternEvaluation::VimPatternEvaluation(const VimPattern &pattern, std::string_view line)
-    : pattern_(pattern), line_(line), at_(0), current_begins_(pattern.atoms_.size() + 1),
-      next_begins_(pattern.atoms_.size() + 1)
+    : pattern_(pattern), line_(line), at_(0), skipping_(pattern.atoms_.size() + 1),
+      current_begins_(2 * skipping_), next_begins_(2 * skipping_)
 {
     current_.reserve(pattern.atoms_.size());
     next_.reserve(pattern.atoms_.size());
@@ -64,6 +64,41 @@ VimPatternEvaluation::expanded(std::vector<std::size_t> &order,
     return std::nullopt;
 }
 
+// `.` と集合が 1 文字の残りの結合文字を食べる間（#1146）、候補は skipping_ 以上の番号で
+// 「target へ向かう途中」として列に残る（Vim の NFA の add_off と同じ・優先順を保つ）。
+std::optional<VimPatternMatch> VimPatternEvaluation::arrived(std::size_t target, std::size_t begin)
+{
+    if (VimPattern::ends_a_character(line_, at_))
+    {
+        return expanded(next_, next_begins_, target, begin);
+    }
+    const std::size_t slot = skipping_ + target;
+    if (!next_begins_.at(slot).has_value())
+    {
+        next_begins_.at(slot) = begin;
+        next_.push_back(slot);
+    }
+    return std::nullopt;
+}
+
+// 列の 1 候補に code を食べさせて次の列へ置く。途中の印の候補は食べずに target へ向かう。
+std::optional<VimPatternMatch> VimPatternEvaluation::stepped(std::size_t index, std::size_t begin,
+                                                             char32_t code)
+{
+    if (index >= skipping_)
+    {
+        return arrived(index - skipping_, begin);
+    }
+    const VimPatternAtom &atom = pattern_.atoms_.at(index);
+    if (!pattern_.consumes(atom, code))
+    {
+        return std::nullopt;
+    }
+    const std::size_t target = atom.repeated ? index : index + 1;
+    return VimPattern::whole_character(atom.kind) ? arrived(target, begin)
+                                                  : expanded(next_, next_begins_, target, begin);
+}
+
 void VimPatternEvaluation::advanced()
 {
     const std::size_t before = at_;
@@ -73,14 +108,12 @@ void VimPatternEvaluation::advanced()
     std::ranges::fill(next_begins_, std::nullopt);
     for (const std::size_t index : current_)
     {
-        const VimPatternAtom &atom = pattern_.atoms_.at(index);
         const auto begin = current_begins_.at(index);
-        if (!begin.has_value() || !pattern_.consumes(atom, code))
+        if (!begin.has_value())
         {
             continue;
         }
-        const auto match =
-            expanded(next_, next_begins_, atom.repeated ? index : index + 1, begin.value());
+        const auto match = stepped(index, begin.value(), code);
         if (match.has_value())
         {
             found_ = match;
@@ -97,7 +130,8 @@ std::optional<VimPatternMatch> VimPatternEvaluation::matched(std::size_t from)
     at_ = from;
     while (true)
     {
-        if (!found_.has_value())
+        // 始まりは Vim の 1 文字の先頭だけ（結合文字の上からは試さない・#1146）。
+        if (!found_.has_value() && VimPattern::ends_a_character(line_, at_))
         {
             found_ = expanded(current_, current_begins_, 0, at_);
         }
