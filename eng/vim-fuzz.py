@@ -12,8 +12,8 @@ The key grammar is `WORDS`, the one table of generator units at the top of this 
 leaves Vim in NORMAL mode (an insert ends with `<Esc>`, a VISUAL selection with an operator or
 `<Esc>`), because the oracle refuses keys that do not. The table holds only keys Nib handles and the
 oracle can observe: no `"+ "*` (the real clipboard), no `q` / `@` (recording does not work inside
-`:normal`), no `u` / `<C-r>` (the oracle's `:normal!` is one undo unit), no viewport keys
-(`H M L <C-d> <C-u> <C-f> <C-b> <C-e> <C-y> z… gj gk g0 g$ gm gM <PageUp> <PageDown>`), no tabs,
+`:normal`), no `u` / `<C-r>` (the oracle's `:normal!` is one undo unit), no viewport keys before
+generator 5 (`H M L <C-d> <C-u> <C-f> <C-b> <C-e> <C-y> z… gj gk g0 g$ gm gM <PageUp> <PageDown>`), no tabs,
 windows, Ex or Ctrl+P and no keys Nib does not take yet (`R s S`). The generator does not make
 VISUAL `<C-a> <C-x> g<C-a> g<C-x>` yet, only the NORMAL `{n}<C-a>` `{n}<C-x>`, and no INSERT `<Up>`
 `<Down>` or `<Del>`.
@@ -23,6 +23,18 @@ Generator 4 (Issue #1135) adds keys inside INSERT: `<Left>` `<Right>` `<Home>` `
 (the oracle's `backspace=indent,eol,start` deletes before the insert's start, and `0i<BS>` at a line
 start joins the line with the one above). After one of these words `.` is picked with sixteen times
 its weight (`ARROW_WORDS`). It also adds `{n}gI` (#1032).
+
+Generator 5 (Issue #1224) measures the viewport. Its buffer is 30 to 60 numbered short lines (no
+wrapping: the oracle's window is `nowrap` and the replayer has no layout, so a logical line is a
+screen row), and each case draws from its seed a window (`visible_lines` 8 to 12, `first_visible`,
+and a start `line` / `column` inside the window and its margin) and `set scrolloff=0|2|3`. The
+oracle measures it through the fixtures' viewport probe (`--not-a-term`, `resize`), and the replayer
+places the same window with `arrange_vim_viewport` (the fixtures' path), types `:set so=N`, and also
+compares `first_visible` and `scroll` (Vim's 'scroll'). `WORDS_5` adds the screen words `H M L zt zz
+zb z<CR> z. z- z+ z^ <C-d> <C-u> <C-f> <C-b> <PageUp> <PageDown>` (with counts; a `z` count is a line
+number) and `d y v` with `H M L`, mixed into generator 4's words. `<C-e>` `<C-y>` are not in Nib or in
+the key notation table yet, so they stay out. The shrinker deletes only words in generator 5 (deleting
+a line would move the window). Generators 3 and 4 never reach this table or its draws.
 
 The buffer has 1 to 12 lines mixing ASCII words, spaces, tabs, bracket and quote pairs, punctuation,
 Japanese (kana, kanji, full-width letters), empty lines and trailing spaces. It never ends with a
@@ -60,12 +72,14 @@ mismatched) and the differences by word kind.
 and writes the totals and every new difference to `<out>/summary.md`.
 
 `--from-fixtures N` is the replayer's self-check: it measures the first N tests/vim/fixtures.json
-cases without settings, viewport or register through the same oracle and expects every one `ok`.
+cases without settings, viewport or register, and the first N viewport cases (only `set scrolloff=`
+as settings, no register), through the same oracle and expects every one `ok`.
 
 Usage:
     python eng/vim-fuzz.py --count 300 --seed 1 --out D:/NeNeNib/outputs/<date>/vim-fuzz-seed1 --shrink
     python eng/vim-fuzz.py --seeds 1-5 --count 300 --shrink --known 781:~,g~ --out D:/NeNeNib/outputs/<date>/vim-fuzz-seeds
     python eng/vim-fuzz.py --from-fixtures 50 --out D:/NeNeNib/outputs/<date>/vim-fuzz-fixtures
+    python eng/vim-fuzz.py --generator 5 --seeds 1-5 --count 300 --shrink --out D:/NeNeNib/outputs/<date>/vim-fuzz-gen5
 
 Python standard library only. Nothing here reads the clock or the environment; the order of the
 cases is the seed's order (no parallelism).
@@ -86,6 +100,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REPLAY = ROOT / "build" / "nib_vim_replay.exe"
 FIELDS = ("text", "line", "column", "register", "register_kind")
+# 生成器 5 の件（viewport つき）が加えて比べる欄（#1224）。
+VIEWPORT_FIELDS = ("first_visible", "scroll")
 
 # 語の表（生成器の単位・Issue #954 の 2）。1 行が 語の種類・重み・鍵の型。型の `{…}` は
 # expand_word が埋める: {n} 省略できる回数 / {N} 行の番号 / {P} 割合 / {B} 桁 / {c} 1 文字 /
@@ -141,6 +157,24 @@ WORDS_4 = (
     ("gI", 1, "{n}gI{i}<Esc>"),
 )
 # この語の直後の `.` は重みを ARROW_DOT_FACTOR 倍にする（矢印の後の `.` と undo の単位を見る）。
+# 生成器 5 の語（Issue #1224）。画面移動の語。`{q}` は z の回数（行の番号）、`{S}` は
+# オペレータと VISUAL の中の H M L。`--generator 3` と `4` は外す（WORDS と WORDS_4 は変えない）。
+WORDS_5 = (
+    ("H", 4, "{n}H"), ("M", 3, "M"), ("L", 4, "{n}L"),
+    ("zt", 3, "{q}zt"), ("zz", 3, "{q}zz"), ("zb", 3, "{q}zb"), ("z<CR>", 2, "{q}z<CR>"),
+    ("z.", 2, "{q}z."), ("z-", 2, "{q}z-"), ("z+", 2, "{q}z+"), ("z^", 2, "{q}z^"),
+    ("<C-d>", 4, "{n}<C-d>"), ("<C-u>", 4, "{n}<C-u>"), ("<C-f>", 3, "{n}<C-f>"),
+    ("<C-b>", 3, "{n}<C-b>"), ("<PageUp>", 1, "<PageUp>"), ("<PageDown>", 1, "<PageDown>"),
+    ("dS", 2, "{r}{n}d{S}"), ("yS", 2, "{r}{n}y{S}"), ("vS", 2, "v{S}{V}"),
+)
+# 生成器 5 の `{S}`（H M L）。
+SCREEN_MOTIONS = ("{n}H", "M", "{n}L")
+# 生成器 5 の本文と窓（#1224）。行は 2 桁の番号で始まり、本文の材料を 0〜4 個続ける。
+NUMBERED_LINES = (30, 60)
+NUMBERED_PIECES = 4
+NUMBERED_EMPTY = 0.08
+VISIBLE_LINES = (8, 12)
+SCROLLOFFS = (0, 2, 3)
 ARROW_WORDS = frozenset(("i<Left>", "a<Right>", "A<Home>", "i<End>", "i<BS>", "0i<BS>"))
 ARROW_DOT_FACTOR = 16
 # `g;` `g,` は語にしない。fuzz も 1 本の `:normal!` なので Vim では全体が 1 つの undo の単位
@@ -176,13 +210,14 @@ FULL_WIDTH_ENDS = ("全", "角", "Ｚ")
 ZERO_WIDTH = frozenset("\u0301\u3099\ufe0f\u200d")
 # 語の依存（Issue #963）。生成器の版は summary.md に書く（固定 seed の順が変わったら上げる）。
 GENERATOR_VERSION = 4
-GENERATORS = (3, 4)
+GENERATORS = (3, 4, 5)
 # Vim に置く設定。Nib の `nrformats` は `bin,hex` の固定で、`-u NONE` の Vim の既定 `bin,octal,hex` の
 # ままだと `07<C-a>` が 8 進で測られる（ADR 0015 の決定 14）。fixture へ写すときも同じ設定を書く。
 ORACLE_SETTINGS = ["set nrformats=bin,hex"]
-WORD_NAMES = tuple(kind for kind, _, _ in WORDS + WORDS_4)
+WORD_NAMES = tuple(kind for kind, _, _ in WORDS + WORDS_4 + WORDS_5)
+# `H M L` も Vim の jump-motions（生成器 3 / 4 は作らないので、その列は変わらない）。
 JUMP_WORDS = frozenset(("G", "gg", "NG", "Ngg", "N%", "/", "?", "*", "#", "%", "n", "N", "'", "`",
-                        "''", "``"))
+                        "''", "``", "H", "M", "L"))
 SEARCH_WORDS = frozenset(("/", "?", "*", "#"))
 NUMBERED_WRITERS = frozenset(("dd", "cc"))
 NUMBERED_READS = tuple('"' + digit for digit in "123456789")
@@ -230,10 +265,49 @@ def insert_pieces(generator: int) -> tuple[str, ...]:
 
 
 def words_of(generator: int) -> tuple[tuple[str, int, str], ...]:
-    return WORDS + (WORDS_4 if generator >= 4 else ())
+    return WORDS + (WORDS_4 if generator >= 4 else ()) + (WORDS_5 if generator >= 5 else ())
+
+
+def generate_numbered_text(rng: random.Random) -> str:
+    """Generator 5's buffer: 30 to 60 short lines, each a two-digit number and a few pieces."""
+    lines = []
+    count = rng.randint(*NUMBERED_LINES)
+    for number in range(1, count + 1):
+        if 1 < number < count and rng.random() < NUMBERED_EMPTY:
+            lines.append("")
+            continue
+        pieces = [rng.choice(TEXT_PIECES) for _ in range(rng.randint(0, NUMBERED_PIECES))]
+        lines.append(" ".join([f"{number:02d}", *pieces]))
+    return "\n".join(lines)
+
+
+def generate_window(rng: random.Random, text: str) -> dict:
+    """Generator 5's window: `set scrolloff=` and a viewport whose start sits inside the margin.
+
+    The oracle's probe refuses a window Vim would move on its own (the start outside the margin), so
+    the start line keeps `min(scrolloff, (visible_lines - 1) // 2)` lines above and below it, except
+    at the buffer's ends, and the start column is the first byte of a character of that line.
+    """
+    lines = text.split("\n")
+    scrolloff = rng.choice(SCROLLOFFS)
+    visible = rng.randint(*VISIBLE_LINES)
+    first = rng.randint(1, max(1, len(lines) - visible + 1))
+    margin = min(scrolloff, (visible - 1) // 2)
+    last = min(len(lines), first + visible - 1)
+    low = 1 if first == 1 else first + margin
+    high = len(lines) if last == len(lines) else last - margin
+    line = rng.randint(low, max(low, high))
+    content = lines[line - 1]
+    starts = [len(content[:index].encode("utf-8")) + 1 for index in range(len(content))]
+    column = rng.choice(starts) if starts and rng.random() < 0.5 else 1
+    return {"settings": [*ORACLE_SETTINGS, f"set scrolloff={scrolloff}"], "scrolloff": scrolloff,
+            "viewport": {"visible_lines": visible, "first_visible": first, "line": line,
+                         "column": column}}
 
 
 def generate_text(rng: random.Random, generator: int = GENERATOR_VERSION) -> str:
+    if generator >= 5:
+        return generate_numbered_text(rng)
     table = text_pieces(generator)
     lines = []
     for _ in range(rng.randint(1, LINES_LIMIT)):
@@ -297,6 +371,9 @@ def expand_word(rng: random.Random, template: str, text: str, marks: tuple[str, 
                                for _ in range(rng.randint(1, 3))),
         "{V}": lambda: expand_word(rng, rng.choice(VISUAL_ENDS), text, generator=generator),
         "{X}": lambda: expand_word(rng, rng.choice(BLOCK_ENDS), text, generator=generator),
+        # 生成器 5 だけの枠（#1224）。z の回数は本文の行の番号、{S} は H M L。
+        "{q}": lambda: "" if rng.random() < 0.6 else str(rng.randint(1, text.count("\n") + 1)),
+        "{S}": lambda: expand_word(rng, rng.choice(SCREEN_MOTIONS), text, generator=generator),
     }
     result = []
     index = 0
@@ -411,6 +488,12 @@ def replay_line(measured: dict) -> str:
     values = (measured["name"], measured["text"], measured["keys"], measured["expected"],
               str(measured["line"]), str(measured["column"]), measured["register"],
               measured["register_kind"])
+    viewport = measured.get("viewport")
+    if viewport is not None:
+        # viewport つきの件は 7 欄を足す（tests/unit/VimReplayMain.cpp の冒頭・#1224）。
+        values += tuple(str(viewport[key]) for key in (
+            "visible_lines", "first_visible", "line", "column", "expected_first_visible",
+            "expected_scroll_lines")) + (str(measured.get("scrolloff", 0)),)
     return "\t".join(escape(value) for value in values)
 
 
@@ -444,21 +527,29 @@ def replay(replayer: Path, work: Path, measured: list[dict]) -> dict[str, dict]:
     return results
 
 
-def measure(work: Path, name: str, text: str, keys: str) -> tuple[dict | None, str]:
-    """The oracle's answer, or None and the reason it refused."""
+def measure(work: Path, name: str, text: str, keys: str,
+            window: dict | None = None) -> tuple[dict | None, str]:
+    """The oracle's answer, or None and the reason it refused. `window` is generator 5's
+    settings and viewport (`generate_window`); the answer then carries its `scrolloff`."""
+    fixture = {"name": name, "text": text, "keys": keys, "settings": ORACLE_SETTINGS}
+    if window is not None:
+        fixture.update(settings=window["settings"], viewport=window["viewport"])
     try:
-        return ORACLE.measure(work, {"name": name, "text": text, "keys": keys,
-                                     "settings": ORACLE_SETTINGS}), ""
+        answer = ORACLE.measure(work, fixture)
+        if window is not None:
+            answer["scrolloff"] = window["scrolloff"]
+        return answer, ""
     except ValueError as error:
         return None, f"ValueError: {error}"
     except RuntimeError as error:
         return None, f"RuntimeError: {str(error).splitlines()[0] if str(error) else ''}"
 
 
-def still_differs(replayer: Path, work: Path, text: str, keys: str, fields: set[str]) -> dict | None:
+def still_differs(replayer: Path, work: Path, text: str, keys: str, fields: set[str],
+                  window: dict | None = None) -> dict | None:
     if not keys:
         return None
-    measured, _ = measure(work, "shrink", text, keys)
+    measured, _ = measure(work, "shrink", text, keys, window)
     if measured is None:
         return None
     result = replay(replayer, work, [measured])["shrink"]
@@ -468,8 +559,9 @@ def still_differs(replayer: Path, work: Path, text: str, keys: str, fields: set[
 
 
 def shrink(replayer: Path, work: Path, text: str, words: list[tuple[str, str]],
-           fields: set[str]) -> dict:
-    """Deletes words, then lines, while Vim and Nib still disagree on one of the same fields."""
+           fields: set[str], window: dict | None = None) -> dict:
+    """Deletes words, then lines, while Vim and Nib still disagree on one of the same fields.
+    With a window (generator 5) it deletes only words: a deleted line would move the window."""
     current = list(words)
     lines = text.split("\n")
     last = None
@@ -483,11 +575,11 @@ def shrink(replayer: Path, work: Path, text: str, words: list[tuple[str, str]],
             if not dependencies_hold(candidate):
                 continue
             found = still_differs(replayer, work, "\n".join(lines),
-                                  "".join(k for _, k in candidate), fields)
+                                  "".join(k for _, k in candidate), fields, window)
             if found is not None:
                 current, last, changed = candidate, found, True
         for index in reversed(range(len(lines))):
-            if len(lines) == 1:
+            if len(lines) == 1 or window is not None:
                 break
             candidate = lines[:index] + lines[index + 1:]
             joined = "\n".join(candidate)
@@ -498,8 +590,9 @@ def shrink(replayer: Path, work: Path, text: str, words: list[tuple[str, str]],
                 lines, last, changed = candidate, found, True
     keys = "".join(k for _, k in current)
     if last is None:
-        last = still_differs(replayer, work, "\n".join(lines), keys, fields)
+        last = still_differs(replayer, work, "\n".join(lines), keys, fields, window)
     minimal = {"name": "", "text": "\n".join(lines), "keys": keys,
+               **window_fields(window),
                "words": [kind for kind, _ in current], "word_keys": [k for _, k in current]}
     if last is not None:
         minimal["oracle"] = oracle_values(last["measured"])
@@ -508,8 +601,21 @@ def shrink(replayer: Path, work: Path, text: str, words: list[tuple[str, str]],
 
 
 def oracle_values(measured: dict) -> dict:
-    return {"text": measured["expected"], "line": measured["line"], "column": measured["column"],
-            "register": measured["register"], "register_kind": measured["register_kind"]}
+    values = {"text": measured["expected"], "line": measured["line"], "column": measured["column"],
+              "register": measured["register"], "register_kind": measured["register_kind"]}
+    viewport = measured.get("viewport")
+    if viewport is not None:
+        values.update(first_visible=viewport["expected_first_visible"],
+                      scroll=viewport["expected_scroll_lines"])
+    return values
+
+
+def window_fields(window: dict | None) -> dict:
+    """The fixture keys of a generator 5 window (`settings` and `viewport`), so a mismatch's
+    `name` / `text` / `keys` / `settings` / `viewport` copy into tests/vim/fixtures.json as they are."""
+    if window is None:
+        return {}
+    return {"settings": window["settings"], "viewport": window["viewport"]}
 
 
 def covered_by(kinds: list[str], representative: list[str]) -> bool:
@@ -521,17 +627,21 @@ def covered_by(kinds: list[str], representative: list[str]) -> bool:
     return position == len(representative)
 
 
-def vim_errors(work: Path, text: str, keys: str) -> str:
+def vim_errors(work: Path, text: str, keys: str, window: dict | None = None) -> str:
     """Vim's error lines for a refused case: the oracle's probe again under `-V1` (Issue #963).
 
     The oracle's `-es` run writes nothing to stderr, so this second run (same probe, same buffer)
-    exists only to show which E-number refused; it never feeds a measurement.
+    exists only to show which E-number refused; it never feeds a measurement. A generator 5 case
+    runs the viewport probe the oracle ran (`--not-a-term` in place of `-es`).
     """
     diagnose = work / "diagnose"
     diagnose.mkdir(parents=True, exist_ok=True)
     (diagnose / "input.txt").write_bytes(text.encode("utf-8"))
-    (diagnose / "probe.vim").write_text(ORACLE.probe_script([], keys), encoding="utf-8")
-    command = [str(ORACLE.VIM), "-u", "NONE", "-i", "NONE", "-N", "-n", "-es", "-V1",
+    settings, viewport = ([], None) if window is None else (window["settings"], window["viewport"])
+    (diagnose / "probe.vim").write_text(ORACLE.probe_script(settings, keys, viewport),
+                                        encoding="utf-8")
+    mode = "-es" if window is None else "--not-a-term"
+    command = [str(ORACLE.VIM), "-u", "NONE", "-i", "NONE", "-N", "-n", mode, "-V1",
                "--cmd", "lang mes C", "-S", "probe.vim", "input.txt"]
     try:
         finished = subprocess.run(command, cwd=diagnose, capture_output=True,
@@ -542,10 +652,11 @@ def vim_errors(work: Path, text: str, keys: str) -> str:
     return "\n".join(line.strip() for line in lines if re.match(r"\s*E\d+:", line))
 
 
-def rejecting_word(work: Path, text: str, words: list[tuple[str, str]]) -> str:
+def rejecting_word(work: Path, text: str, words: list[tuple[str, str]],
+                   window: dict | None = None) -> str:
     """The word whose prefix first makes the oracle refuse (the last word when only all of it does)."""
     for size in range(1, len(words)):
-        answer, _ = measure(work, "diagnose", text, "".join(k for _, k in words[:size]))
+        answer, _ = measure(work, "diagnose", text, "".join(k for _, k in words[:size]), window)
         if answer is None:
             return words[size - 1][0]
     return words[-1][0] if words else "?"
@@ -586,22 +697,28 @@ def fuzz(args: argparse.Namespace, seed: int, out: Path) -> dict:
     cases = []
     for number in range(1, args.count + 1):
         text, words = generate_case(rng, excluded, args.generator)
-        cases.append({"name": f"fuzz-{seed}-{number:04d}", "text": text, "words": words})
+        # 窓は生成器 5 だけが引く（生成器 3 / 4 の乱数の消費は変えない・#1224）。
+        window = generate_window(rng, text) if args.generator >= 5 else None
+        cases.append({"name": f"fuzz-{seed}-{number:04d}", "text": text, "words": words,
+                      "window": window})
     (out / "cases.json").write_text(
         json.dumps([{"name": case["name"], "text": case["text"],
                      "keys": "".join(k for _, k in case["words"]),
+                     **window_fields(case["window"]),
                      "words": [kind for kind, _ in case["words"]]} for case in cases],
                    ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
     measured, rejected = [], []
     for case in cases:
         keys = "".join(k for _, k in case["words"])
-        answer, reason = measure(work, case["name"], case["text"], keys)
+        window = case["window"]
+        answer, reason = measure(work, case["name"], case["text"], keys, window)
         if answer is None:
             rejected.append({"name": case["name"], "text": case["text"], "keys": keys,
+                             **window_fields(window),
                              "words": [kind for kind, _ in case["words"]],
-                             "word": rejecting_word(work, case["text"], case["words"]),
+                             "word": rejecting_word(work, case["text"], case["words"], window),
                              "reason": reason,
-                             "stderr": vim_errors(work, case["text"], keys)})
+                             "stderr": vim_errors(work, case["text"], keys, window)})
         else:
             measured.append(answer)
     results = replay(args.replay, work, measured) if measured else {}
@@ -618,6 +735,7 @@ def fuzz(args: argparse.Namespace, seed: int, out: Path) -> dict:
         case = by_name[answer["name"]]
         mismatches.append({
             "name": answer["name"], "text": answer["text"], "keys": answer["keys"],
+            **window_fields(case["window"]),
             "words": [kind for kind, _ in case["words"]],
             "fields": sorted(result["fields"]), "oracle": oracle_values(answer),
             "nib": {field: actual for field, (_, actual) in result["fields"].items()},
@@ -634,7 +752,7 @@ def fuzz(args: argparse.Namespace, seed: int, out: Path) -> dict:
                 continue
             case = by_name[entry["name"]]
             entry["minimal"] = shrink(args.replay, work, case["text"], case["words"],
-                                      set(entry["fields"]))
+                                      set(entry["fields"]), case["window"])
             entry["minimal"]["name"] = entry["name"] + "-min"
             representatives.append(entry)
     for entry in mismatches:
@@ -662,7 +780,8 @@ def fenced(value: str) -> str:
 def settings_lines(args: argparse.Namespace) -> list[str]:
     known = "; ".join(f"#{issue}: {' '.join(fenced(name) for name in names)}"
                       for issue, names in args.known)
-    return [f"- generator={args.generator}（語の依存・Issue #963・INSERT の中の鍵と結合文字は 4）",
+    return [f"- generator={args.generator}（語の依存・Issue #963・INSERT の中の鍵と結合文字は 4・"
+            "viewport と画面移動の語は 5）",
             f"- Vim: {ORACLE.vim_version()}", f"- replayer: `{args.replay}`",
             f"- shrink: {'on' if args.shrink else 'off'}",
             "- exclude: " + (" ".join(fenced(name) for name in args.exclude) or "なし"),
@@ -675,6 +794,11 @@ def mismatch_lines(entry: dict, mismatches: list[dict], heading: str) -> list[st
     nib = shown.get("nib", entry["nib"])
     lines = [f"{heading} {entry['name']}（欄: {', '.join(sorted(nib)) or '?'}）", "",
              f"- text: {fenced(shown['text'])}", f"- keys: {fenced(shown['keys'])}"]
+    if "viewport" in entry:
+        viewport = entry["viewport"]
+        lines.append(f"- window: {fenced(entry['settings'][-1])} visible_lines "
+                     f"{viewport['visible_lines']} first_visible {viewport['first_visible']} "
+                     f"line {viewport['line']} column {viewport['column']}")
     for field in sorted(nib):
         lines.append(f"- {field}: Vim {fenced(str(oracle[field]))} / Nib {fenced(nib[field])}")
     represented = [e["name"] for e in mismatches if e.get("represented_by") == entry["name"]]
@@ -787,19 +911,30 @@ def fuzz_seeds(args: argparse.Namespace) -> int:
 
 
 def from_fixtures(args: argparse.Namespace) -> int:
-    """The replayer's self-check on the first N plain fixtures (no settings/viewport/register)."""
+    """The replayer's self-check on the first N plain fixtures (no settings/viewport/register) and
+    the first N viewport fixtures whose only settings are `set scrolloff=` (#1224)."""
     work = args.out / "work"
     work.mkdir(parents=True, exist_ok=True)
     fixtures = json.loads((ROOT / "tests" / "vim" / "fixtures.json").read_text(encoding="utf-8"))
     plain = [f for f in fixtures if not set(f) - {"name", "text", "keys"}][:args.from_fixtures]
+    windowed = [f for f in fixtures if "viewport" in f
+                and not set(f) - {"name", "text", "keys", "settings", "viewport"}
+                and all(re.fullmatch(r"set scrolloff=\d+", s) for s in f.get("settings", []))
+                ][:args.from_fixtures]
     measured = [ORACLE.measure(work, fixture) for fixture in plain]
+    for fixture in windowed:
+        answer = ORACLE.measure(work, fixture)
+        answer["scrolloff"] = next((int(s.split("=")[1]) for s in fixture.get("settings", [])), 0)
+        measured.append(answer)
     results = replay(args.replay, work, measured)
     counts = Counter(result["status"] for result in results.values())
     for name, result in results.items():
         if result["status"] != "ok":
             print(f"{result['status']} {name} {result['fields'] or result['reason']}")
-    print(f"fixtures {len(plain)}: " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
-    return 0 if counts.get("ok", 0) == len(plain) else 1
+    total = len(plain) + len(windowed)
+    print(f"fixtures {len(plain)} + viewport {len(windowed)}: "
+          + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
+    return 0 if counts.get("ok", 0) == total else 1
 
 
 def word_name(value: str) -> str:
@@ -852,7 +987,8 @@ def main() -> int:
                         metavar="ISSUE:WORD,WORD")
     parser.add_argument("--from-fixtures", type=int, metavar="N")
     parser.add_argument("--generator", type=int, choices=GENERATORS, default=GENERATOR_VERSION,
-                        help="3 keeps generator 3's tables (its seeds give the same cases)")
+                        help="3 keeps generator 3's tables (its seeds give the same cases); "
+                             "5 adds the viewport and the screen words (#1224)")
     args = parser.parse_args()
     if not args.replay.is_file():
         parser.error(f"no replayer at {args.replay}; build the nib_vim_replay target first")
