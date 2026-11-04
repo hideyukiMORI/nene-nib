@@ -1018,6 +1018,15 @@ aligned_line_caret(const VimState &state, const VimEditorView &view, VimAlignedL
     }
     std::unreachable();
 }
+
+// 回数つきの位置合わせが前の位置を `''` に置くか（Vim の nv_zet: 回数 count0 が今の行の番号と
+// 違えば setpcmark してから行を選ぶ・ADR 0152 の追補 #1235）。回数が行数を超えて最終行に
+// 寄るときも回数は今の行と比べ、動かなかった鍵は終わりの vim_marks_checked が戻す。
+[[nodiscard]] bool counted_alignment_jumps(const VimState &state, const VimEditorView &view)
+{
+    return state.count.has_value() &&
+           state.count.value().value != line_of(view.text, view.selection.caret).value;
+}
 } // namespace
 
 namespace detail
@@ -1054,8 +1063,9 @@ namespace detail
     {
         next.wanted_column = state.wanted_column;
     }
-    return VimStep{std::move(next), VimNavigate{navigated_selection(state, view.selection, caret),
-                                                first.line, first.row}};
+    VimStep step{std::move(next), VimNavigate{navigated_selection(state, view.selection, caret),
+                                              first.line, first.row}};
+    return counted_alignment_jumps(state, view) ? context_marked(std::move(step), view) : step;
 }
 } // namespace detail
 
