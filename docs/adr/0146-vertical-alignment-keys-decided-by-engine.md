@@ -41,6 +41,7 @@ PR #637（ADR 0145 決定 5）で `z` の接頭辞の表 `z_bindings` ができ�
    4. キャレット・欲しい列・VISUAL・オペレータ待ち・端で失敗しないことは決定 3・4 と同じ（最初の非空白へ動くので `navigated`）。横位置は決定 6（`nullopt`）。
    5. 検証: nowrap は viewport つき fixture（`z-plus-` `z-caret-` の 12 件・`--regenerate --only z-plus- --only z-caret-`）、wrap on は `eng/vim-wrap-oracle.py` の 4 件（3 画面行の行が窓の下端にかかるときと先頭のときの `z+`・上にあるときの `z^` と `60z^`・全件を測り直す）、格子は契約 `--vim`（巨大な 1 行で `z+` `z^` が同じ行の先頭の画面行を上・下に置く・短い行の文書で wrap on と同じ先頭）。
       件数は main（#653 の後）への積み直しの後で Vim の fixture 1913 → 1914（`999z+` の範囲の外を含む 13 件）・wrap 205 → 209。oracle の答えと決定 2 の差は無し。
+   6. （追補 2026-11-04・#1227）回数つきの `z^` の 1 段目は余白（`scrolloff`）を含む。Vim 9.1 の `nv_zet` の `case '^'` は回数があると `scroll_cursor_bot(0, TRUE)` を呼んでから `w_cursor.lnum = w_topline` とする。`scroll_cursor_bot` は `set_topbot` の枝で行 N を下端に置いた後、`extra >= so`（下の余白を数え終えた）か `boff.lnum + 1 > ml_line_count`（本文の終わり）まで下の行を足して `scrollup` するので、T は「N を下端に置き、N の下に余白の分（本文の終わりで切れる）の画面行を足した窓」の先頭になる。2 では余白を数えず、余白の分だけ上の行に着いていた（生成器 5 の 10 件・#1224）。直しは `counted_above_line` が決定 5 の `bottom` の先頭に追従の 1 本 `vim_topline_updated`（Vim の `update_topline` → `check_botline` → `scroll_cursor_bot`・ADR 0019 の追補）を当てて T を求める（余白の数え方を 2 本書かない）。2 段目（T を下端に）は従来どおり追従が余白を当てる。回数なしの `z^` と `z+` は変わらない。fixture `viewport-z-caret-count-` の 5 件（Issue の表・本文の終わりで余白が 1 になる `41z^` を含む）。
 
 ## 却下した選択肢
 
