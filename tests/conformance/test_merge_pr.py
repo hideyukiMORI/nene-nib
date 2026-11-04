@@ -57,6 +57,13 @@ LANDED = {"total_commits": 3, "commits": [
     {"sha": sha, "commit": {"message": entry["commit"]["message"]}}
     for sha, entry in zip(MAIN_SHAS, [entry for page in COMMITS for entry in page])]}
 SOURCES = {number: {"headRefOid": head, "state": "OPEN"} for number, head in SOURCE_HEADS.items()}
+# #1223: what `gh pr merge` printed for PR #1259 (D:/NeNeNib/outputs/20261104/merge-1259*.out).
+BAD_GATEWAY = (1, 'non-200 OK status code: 502 Bad Gateway body: "<html>\\r\\n<head><title>502 Bad Gateway'
+                  '</title></head>"\n')
+IN_PROGRESS = (1, "GraphQL: Merge already in progress (mergePullRequest)\n")
+STILL_OPEN = {"number": 900, "headRefOid": HEAD, "state": "OPEN", "mergeCommit": None,
+              "url": "https://github.com/hideyukiMORI/nene-nib/pull/900"}
+UNSOURCED = {"subject": "feat(eng): merge-pr.py にまとめ枝の口を足す (#1220)", "reason": "no PR #K（head <sha>） line"}
 
 
 class MergeBoundary(unittest.TestCase):
@@ -70,6 +77,9 @@ class MergeBoundary(unittest.TestCase):
         run_responses = copy.deepcopy(run) if isinstance(run, list) else None
         watch_exits = list(watch_exit) if isinstance(watch_exit, list) else None
         view_responses = copy.deepcopy(run_view) if isinstance(run_view, list) else None
+        merge_results = list(merge_exit) if isinstance(merge_exit, list) else None
+        merged_responses = copy.deepcopy(merged) if isinstance(merged, list) else None
+        self.sleeps = []
 
         def runner(arguments, timeout=None):
             calls.append(arguments)
@@ -107,13 +117,20 @@ class MergeBoundary(unittest.TestCase):
             if arguments[1] in ("view", "close") and arguments[2] != "900":
                 self.assertTrue(integration and any(call[1] == "merge" for call in calls))
                 if arguments[1] == "close":
+                    if isinstance(close_exit, Exception):
+                        raise close_exit
                     return subprocess.CompletedProcess(arguments, close_exit, "", "close error" if close_exit else "")
                 self.assertEqual(arguments[5:], ["--json", "headRefOid,state"])
                 value = (SOURCES if sources is None else sources)[arguments[2]]
+                if isinstance(value, Exception):
+                    raise value
                 return subprocess.CompletedProcess(arguments, 0, json.dumps(value), "")
             if arguments[1] == "view":
                 if any(call[1] == "merge" for call in calls):
-                    return subprocess.CompletedProcess(arguments, 0, json.dumps(MERGED if merged is None else merged), "")
+                    self.assertEqual(arguments[5:], ["--json", "number,headRefOid,state,mergeCommit,url"])
+                    value = (merged_responses.pop(0) if merged_responses is not None else
+                             MERGED if merged is None else merged)
+                    return subprocess.CompletedProcess(arguments, 0, json.dumps(value), "")
                 if latest is not None and sum(call[:2] == ["pr", "view"] for call in calls) > 1:
                     return subprocess.CompletedProcess(arguments, 0, json.dumps(latest), "")
                 return subprocess.CompletedProcess(arguments, read_exit,
@@ -122,11 +139,15 @@ class MergeBoundary(unittest.TestCase):
             if arguments[1] == "merge":
                 if merge_timeout:
                     raise subprocess.TimeoutExpired(arguments, 60)
+                if merge_results is not None:
+                    code, stderr = merge_results.pop(0)
+                    return subprocess.CompletedProcess(arguments, code, "", stderr)
                 return subprocess.CompletedProcess(arguments, merge_exit, "merge output", "merge error" if merge_exit else "")
             self.fail(f"Unexpected command: {arguments}")
 
         output, error = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error), \
+                patch.object(MERGE.time, "sleep", side_effect=self.sleeps.append):
             result = MERGE.main(["900", "--expected-head", HEAD, *(["--execute"] if execute else []),
                                  *(["--ci-run", str(ci_run)] if ci_run else []),
                                  *(["--integration"] if integration else [])], runner)
@@ -394,6 +415,66 @@ class MergeBoundary(unittest.TestCase):
         self.assertEqual([call[1] for call in calls].count("merge"), 1)
         self.assertIn("outcome unknown", error)
 
+    def test_transient_merge_failure_waits_and_calls_the_same_merge_again(self):
+        # #1223: #1259 got 502, then "Merge already in progress", then merged on the third call.
+        result, calls, output, error = self.invoke(execute=True, merge_exit=[BAD_GATEWAY, IN_PROGRESS, (0, "")],
+                                                  merged=[STILL_OPEN, STILL_OPEN, MERGED])
+        self.assertEqual(result, 0, error)
+        merges = [call for call in calls if call[:2] == ["pr", "merge"]]
+        self.assertEqual(merges, [["pr", "merge", "900", "--repo", REPOSITORY, "--squash",
+                                   "--match-head-commit", HEAD, "--subject", TITLE]] * 3)
+        self.assertEqual(sum("POST" in call for call in calls), 1)
+        self.assertFalse(any(call[0] == "run" for call in calls))
+        self.assertEqual(self.sleeps, [MERGE.MERGE_RETRY_SECONDS] * 2)
+        self.assertEqual(MERGE.MERGE_RETRY_SECONDS, 30)
+        lines = [json.loads(line) for line in output.splitlines()]
+        self.assertEqual([line["mergeRetry"] for line in lines if "mergeRetry" in line], [1, 2])
+        self.assertEqual(lines[-1]["observedAfterMerge"], MERGED)
+
+    def test_failed_merge_call_observed_as_merged_goes_on_to_the_post_merge_check(self):
+        result, calls, output, error = self.invoke(execute=True, merge_exit=[BAD_GATEWAY], merged=[MERGED, MERGED])
+        self.assertEqual(result, 0, error)
+        self.assertEqual([call[1] for call in calls].count("merge"), 1)
+        self.assertEqual(self.sleeps, [])
+        self.assertEqual(json.loads(output.splitlines()[-1])["observedAfterMerge"], MERGED)
+        # The post-merge check still applies: a wrong merge commit stops with "outcome unknown".
+        result, calls, output, error = self.invoke(execute=True, merge_exit=[BAD_GATEWAY],
+                                                  merged=[MERGED, dict(MERGED, mergeCommit=None)])
+        self.assertEqual(result, 2)
+        self.assertIn("outcome unknown", error)
+
+    def test_failed_merge_call_with_another_head_or_state_stops(self):
+        for observed in (dict(STILL_OPEN, headRefOid="c" * 40), dict(STILL_OPEN, state="CLOSED"),
+                         dict(STILL_OPEN, number=42), None):
+            with self.subTest(observed=observed):
+                result, calls, output, error = self.invoke(execute=True, merge_exit=[IN_PROGRESS],
+                                                          merged=[observed])
+                self.assertEqual(result, 2)
+                self.assertEqual([call[1] for call in calls].count("merge"), 1)
+                self.assertEqual(self.sleeps, [])
+                self.assertIn("after a failed merge call", error)
+                self.assertIn("merge outcome unknown: inspect the PR", error)
+
+    def test_merge_retries_stop_after_ten(self):
+        result, calls, output, error = self.invoke(execute=True, merge_exit=[IN_PROGRESS] * 11,
+                                                  merged=[STILL_OPEN] * 11)
+        self.assertEqual(result, 2)
+        self.assertEqual([call[1] for call in calls].count("merge"), 1 + MERGE.MERGE_RETRIES)
+        self.assertEqual(MERGE.MERGE_RETRIES, 10)
+        self.assertEqual(self.sleeps, [30] * 10)
+        self.assertEqual(sum("POST" in call for call in calls), 1)
+        self.assertIn("still failing after 10 retries", error)
+        self.assertIn("merge outcome unknown", error)
+
+    def test_other_merge_failures_are_returned_without_reading_or_waiting(self):
+        for stderr in ("GraphQL: Pull Request is not mergeable (mergePullRequest)",
+                       "Head branch was modified. Review and try the merge again.", "HTTP 422"):
+            with self.subTest(stderr=stderr):
+                result, calls, output, error = self.invoke(execute=True, merge_exit=[(1, stderr)])
+                self.assertEqual(result, 1)
+                self.assertEqual([call[1] for call in calls if call[0] == "pr"], ["view", "view", "merge"])
+                self.assertEqual(self.sleeps, [])
+
     def test_process_boundary_does_not_use_shell_or_rewrite_subject(self):
         command = ["pr", "merge", "900", "--repo", REPOSITORY, "--squash", "--match-head-commit", HEAD, "--subject", TITLE]
         with patch.object(MERGE.subprocess, "run") as run:
@@ -454,7 +535,8 @@ class IntegrationMerge(unittest.TestCase):
         self.assertEqual(final, {"integration": True, "commits": 3,
                                  "closed": [{"number": 1157, "mainCommit": MAIN_SHAS[0]},
                                             {"number": 1160, "mainCommit": MAIN_SHAS[1]}]})
-        self.assertNotIn("notClosed", output)
+        # #1223: a commit without its `PR #K（head <sha>）` line is reported, not skipped silently.
+        self.assertEqual(json.loads(output.splitlines()[-2]), {"notClosed": [UNSOURCED]})
 
     def test_changed_or_closed_source_prs_are_reported_not_closed(self):
         sources = {"1157": {"headRefOid": "f" * 40, "state": "OPEN"},
@@ -463,7 +545,7 @@ class IntegrationMerge(unittest.TestCase):
         self.assertEqual(result, 0, error)
         self.assertFalse(any(call[:2] == ["pr", "close"] for call in calls))
         lines = [json.loads(line) for line in output.splitlines()]
-        self.assertEqual([entry["number"] for entry in lines[-2]["notClosed"]], [1157, 1160])
+        self.assertEqual([entry.get("number") for entry in lines[-2]["notClosed"]], [1157, 1160, None])
         self.assertEqual(lines[-1]["closed"], [])
 
     def test_ruleset_without_rebase_is_refused(self):
@@ -522,6 +604,92 @@ class IntegrationMerge(unittest.TestCase):
                 self.assertEqual([call[1] for call in calls].count("merge"), 1)
                 self.assertFalse(any(call[:2] == ["pr", "close"] for call in calls))
                 self.assertIn("merge outcome unknown: inspect main", error)
+
+    def test_transient_merge_failure_is_waited_on_without_new_ci(self):
+        result, calls, output, error = self.integrate(execute=True, merge_exit=[BAD_GATEWAY, (0, "")],
+                                                      merged=[STILL_OPEN, MERGED])
+        self.assertEqual(result, 0, error)
+        self.assertEqual([call for call in calls if call[:2] == ["pr", "merge"]],
+                         [["pr", "merge", "900", "--repo", REPOSITORY, "--rebase", "--match-head-commit", HEAD]] * 2)
+        self.assertEqual(sum("POST" in call for call in calls), 1)
+        self.assertEqual(self.sleeps, [30])
+        self.assertEqual([call[2] for call in calls if call[:2] == ["pr", "close"]], ["1157", "1160"])
+
+    def test_closing_keywords_for_another_issue_are_refused(self):
+        # #1223: GitHub closes on close/closes/closed/fix/fixes/fixed/resolve/resolves/resolved in any case.
+        for line in ("Fixes #1159", "closes #1159", "RESOLVED: #1159", "fix #1159", "Closed #1159",
+                     "resolves hideyukiMORI/nene-nib#1159", "fixed https://github.com/hideyukiMORI/nene-nib/issues/1159",
+                     "* fix(ui): 余白 (#1158) fixes #1159"):
+            with self.subTest(line=line):
+                entry = stacked("fix(ui): 印刷の余白を直す (#1158)", 1158, "1160")
+                entry["commit"]["message"] += line + "\n"
+                result, calls, output, error = self.integrate(commits=[[COMMITS[0][0], entry], COMMITS[1]],
+                                                              execute=True)
+                self.assert_refused(result, calls, error, "closing keywords")
+                self.assertFalse(any("POST" in call for call in calls))
+        for line in ("Fixes #1158", "resolved #1158", "prefix #1159", "unresolved #1159", "fix(ui): x (#1159)"):
+            with self.subTest(line=line):
+                entry = stacked("fix(ui): 印刷の余白を直す (#1158)", 1158, "1160")
+                entry["commit"]["message"] += line + "\n"
+                commits = [[COMMITS[0][0], entry], COMMITS[1]]
+                self.assertEqual(len(MERGE.integration_commits(commits)), 3)
+
+    def test_more_commits_than_github_lists_is_refused_with_the_limit(self):
+        with self.assertRaisesRegex(MERGE.MergeRefused, "at most 250"):
+            MERGE.check_contains_main(dict(COMPARE, ahead_by=251), 250)
+        with self.assertRaises(MERGE.MergeRefused) as refused:
+            MERGE.check_contains_main(dict(COMPARE, ahead_by=4), 3)
+        self.assertNotIn("at most", str(refused.exception))
+        self.assertEqual(MERGE.check_contains_main(dict(COMPARE, ahead_by=250), 250), MERGE_BASE)
+
+    def test_main_commits_are_matched_by_stacked_order_not_subject(self):
+        # #1223: two stacked PRs with the same title each get their own main commit.
+        same = "fix(ui): 印刷の余白を直す (#1158)"
+        commits = [[stacked(same, 1158, "1157"), stacked(same, 1158, "1160")], COMMITS[1]]
+        landed = {"total_commits": 3, "commits": [
+            {"sha": sha, "commit": {"message": entry["commit"]["message"]}}
+            for sha, entry in zip(MAIN_SHAS, [entry for page in commits for entry in page])]}
+        result, calls, output, error = self.integrate(commits=commits, landed=landed, execute=True)
+        self.assertEqual(result, 0, error)
+        self.assertEqual(json.loads(output.splitlines()[-1])["closed"],
+                         [{"number": 1157, "mainCommit": MAIN_SHAS[0]}, {"number": 1160, "mainCommit": MAIN_SHAS[1]}])
+
+    def test_main_commit_with_another_subject_or_missing_is_reported_not_closed(self):
+        landed = copy.deepcopy(LANDED)
+        landed["commits"][1]["commit"]["message"] = "fix(ui): 別の題 (#1158)\n"
+        for value, reason in ((landed, "main commit 2"), (dict(LANDED, commits=LANDED["commits"][:1]), "main commit 2")):
+            with self.subTest(reason=reason):
+                result, calls, output, error = self.integrate(landed=value, execute=True)
+                self.assertEqual(result, 0, error)
+                self.assertEqual([call[2] for call in calls if call[:2] == ["pr", "close"]], ["1157"])
+                not_closed = json.loads(output.splitlines()[-2])["notClosed"]
+                self.assertEqual(not_closed[0]["number"], 1160)
+                self.assertIn(reason, not_closed[0]["reason"])
+                self.assertEqual(not_closed[1:], [UNSOURCED])
+
+    def test_failed_close_is_reported_and_the_rest_continue(self):
+        for close_exit, reason in ((1, "close failed: close error"),
+                                   (subprocess.TimeoutExpired(["gh"], 60), "TimeoutExpired"),
+                                   (OSError("gh is missing"), "OSError: gh is missing")):
+            with self.subTest(reason=reason):
+                result, calls, output, error = self.integrate(execute=True, close_exit=close_exit)
+                self.assertEqual(result, 0, error)
+                self.assertEqual([call[2] for call in calls if call[:2] == ["pr", "close"]], ["1157", "1160"])
+                lines = [json.loads(line) for line in output.splitlines()]
+                self.assertEqual([entry.get("number") for entry in lines[-2]["notClosed"]], [1157, 1160, None])
+                self.assertIn(reason, lines[-2]["notClosed"][0]["reason"])
+                self.assertEqual(lines[-1]["closed"], [])
+
+    def test_failed_source_read_is_reported_and_the_next_pr_is_closed(self):
+        for failure in (OSError("gh is missing"), subprocess.TimeoutExpired(["gh"], 60)):
+            with self.subTest(failure=type(failure).__name__):
+                sources = dict(SOURCES, **{"1157": failure})
+                result, calls, output, error = self.integrate(execute=True, sources=sources)
+                self.assertEqual(result, 0, error)
+                lines = [json.loads(line) for line in output.splitlines()]
+                self.assertEqual(lines[-2]["notClosed"][0]["number"], 1157)
+                self.assertIn(type(failure).__name__, lines[-2]["notClosed"][0]["reason"])
+                self.assertEqual(lines[-1]["closed"], [{"number": 1160, "mainCommit": MAIN_SHAS[1]}])
 
 
 if __name__ == "__main__":

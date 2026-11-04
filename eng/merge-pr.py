@@ -19,6 +19,17 @@ API_ROOT = f"repos/{REPO_NAME}"
 WATCH_SECONDS = 2700
 # #667: `gh run watch` can exit non-zero while the same run is still going; wait on that run again.
 WATCH_RETRIES = 3
+# #1223: a merge call can fail with a GitHub 5xx or "Merge already in progress" while GitHub is still
+# merging (#1259 merged on the third call). Wait on the same PR; never start a new CI run.
+MERGE_RETRIES = 10
+MERGE_RETRY_SECONDS = 30
+TRANSIENT_MERGE_FAILURE = re.compile(r"(?i)\b5\d\d (?:bad gateway|service unavailable|gateway time-?out|"
+                                     r"internal server error)\b|merge already in progress")
+# GitHub's pulls/<n>/commits and compare list at most 250 commits (ADR 0021 追補 決定 6).
+COMMIT_LIMIT = 250
+# GitHub closes the referenced Issue for any of these keywords, in any case (#1223).
+CLOSING_REFERENCE = re.compile(r"(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?[ \t]+"
+                               r"((?:[\w.-]+/[\w.-]+)?#\d+|https?://\S+/(?:issues|pull)/\d+)")
 PR_FIELDS = "number,title,body,headRefOid,headRefName,state,isDraft,baseRefName,baseRefOid,changedFiles,isCrossRepository"
 # #648: documentation-only merges skip CI, so the PR body must carry the tree conformance result.
 CONFORMANCE_RECORD = re.compile(r"(?m)^.*conformance\.py.*(?<![0-9])0 violation")
@@ -107,7 +118,11 @@ def subject_of(message: str) -> str:
 
 
 def integration_commits(pages: object) -> list[dict]:
-    """ADR 0021 追補 決定 1 / 3: every stacked commit is GIT-003 and closes the Issue in its subject."""
+    """ADR 0021 追補 決定 1 / 3: every stacked commit is GIT-003 and closes the Issue in its subject.
+
+    GitHub lists at most 250 commits of a PR (COMMIT_LIMIT), so an integration branch holds at most 250;
+    a longer branch is refused by the ahead_by count in check_contains_main (ADR 0021 追補 決定 6).
+    """
     entries = flatten_pages(pages, "Commit")
     if not entries:
         raise MergeRefused("Integration PR has no commits")
@@ -122,6 +137,11 @@ def integration_commits(pages: object) -> list[dict]:
         closes = re.findall(r"(?m)^Closes #([1-9]\d*)\b", message)
         if not closes or any(number != issue for number in closes):
             raise MergeRefused(f"Commit {subject!r} must close #{issue} on a line starting with Closes #{issue}")
+        # #1223: rebase merge keeps the message, so any closing keyword would close that Issue too.
+        others = [reference for reference in CLOSING_REFERENCE.findall(message) if reference != f"#{issue}"]
+        if others:
+            raise MergeRefused(f"Commit {subject!r} has closing keywords for {', '.join(others)}; "
+                               f"only #{issue} may be closed")
         source = re.search(r"(?m)^PR #([1-9]\d*)（head ([0-9a-f]{40})）", message)
         commits.append({"subject": subject,
                         "source": None if source is None else {"number": int(source.group(1)),
@@ -140,43 +160,84 @@ def check_contains_main(comparison: object, count: int) -> str:
         raise MergeRefused(f"Integration branch is {comparison['behind_by']} commit(s) behind main: "
                            "rebase it onto main first")
     if comparison["ahead_by"] != count:
+        limit = (f" (GitHub lists at most {COMMIT_LIMIT} commits; an integration branch holds at most "
+                 f"{COMMIT_LIMIT})") if comparison["ahead_by"] > COMMIT_LIMIT else ""
         raise MergeRefused(f"Integration branch is {comparison['ahead_by']} commit(s) ahead of main "
-                           f"but the PR has {count} commit(s)")
+                           f"but the PR has {count} commit(s){limit}")
     return base["sha"]
 
 
 def close_sources(number: int, commits: list[dict], landed: list, runner) -> tuple[list, list]:
-    """Close each stacked PR whose head is unchanged; report the rest without stopping."""
-    main_shas = {}
-    for entry in landed:
-        message = entry.get("commit", {}).get("message") if isinstance(entry, dict) and \
-            isinstance(entry.get("commit"), dict) else None
-        if isinstance(message, str) and isinstance(entry.get("sha"), str):
-            main_shas.setdefault(subject_of(message), entry["sha"])
+    """Close each stacked PR whose head is unchanged; report the rest without stopping.
+
+    The rebased commits land in the stacked order, so the main commit is matched by position, not by
+    subject (two PRs can share a title, #1223). A commit without its source line is reported too.
+    """
     closed, not_closed = [], []
-    for commit in commits:
+    for position, commit in enumerate(commits):
         source = commit["source"]
         if source is None:
+            not_closed.append({"subject": commit["subject"], "reason": "no PR #K（head <sha>） line"})
             continue
-        sha = main_shas.get(commit["subject"])
-        if sha is None:
-            not_closed.append({"number": source["number"], "reason": "no main commit with the same subject"})
+        entry = landed[position] if position < len(landed) else None
+        message = entry.get("commit", {}).get("message") if isinstance(entry, dict) and \
+            isinstance(entry.get("commit"), dict) else None
+        sha = entry.get("sha") if isinstance(entry, dict) else None
+        if not isinstance(message, str) or not isinstance(sha, str) or \
+                not re.fullmatch(r"[0-9a-f]{40}", sha) or subject_of(message) != commit["subject"]:
+            not_closed.append({"number": source["number"],
+                               "reason": f"main commit {position + 1} is missing or has another subject"})
             continue
         try:
             state = read_json(pr_command("view", source["number"], "--json", "headRefOid,state"), runner)
-        except ValueError as error:
-            not_closed.append({"number": source["number"], "reason": str(error)})
+            if not isinstance(state, dict) or state.get("state") != "OPEN" or \
+                    state.get("headRefOid") != source["head"]:
+                not_closed.append({"number": source["number"], "reason": "not OPEN or head differs",
+                                   "observed": state})
+                continue
+            comment = f"まとめ枝 #{number} の rebase merge で main に入った（commit {sha}・ADR 0021 追補・#1220）"
+            result = runner(pr_command("close", source["number"], "--comment", comment))
+        except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+            # #1223: one failed call must not hide which PRs were closed and which were not.
+            not_closed.append({"number": source["number"], "reason": f"{type(error).__name__}: {error}"})
             continue
-        if not isinstance(state, dict) or state.get("state") != "OPEN" or state.get("headRefOid") != source["head"]:
-            not_closed.append({"number": source["number"], "reason": "not OPEN or head differs", "observed": state})
-            continue
-        comment = f"まとめ枝 #{number} の rebase merge で main に入った（commit {sha}・ADR 0021 追補・#1220）"
-        result = runner(pr_command("close", source["number"], "--comment", comment))
         if result.returncode:
             not_closed.append({"number": source["number"], "reason": f"close failed: {result.stderr.strip()}"})
             continue
         closed.append({"number": source["number"], "mainCommit": sha})
     return closed, not_closed
+
+
+def merge_once(command: list[str], number: int, head: str, runner) -> int:
+    """Call the merge; on a transient GitHub failure wait on the same PR (#1223, ADR 0021 追補 決定 8).
+
+    Retried only while the PR is still OPEN at the same head: a MERGED PR goes on to the post-merge
+    check, any other state stops. No new CI run is started. Other failures are returned unretried.
+    """
+    retried = 0
+    while True:
+        result = runner(command)
+        print(json.dumps({"mergeExit": result.returncode, "stdout": result.stdout,
+                          "stderr": result.stderr}, ensure_ascii=False), flush=True)
+        if not result.returncode:
+            return 0
+        if TRANSIENT_MERGE_FAILURE.search(f"{result.stderr}\n{result.stdout}") is None:
+            return result.returncode
+        observed = read_json(pr_command("view", number, "--json", "number,headRefOid,state,mergeCommit,url"),
+                             runner)
+        print(json.dumps({"observedAfterMergeFailure": observed}, ensure_ascii=False), flush=True)
+        if not isinstance(observed, dict) or observed.get("number") != number or \
+                observed.get("headRefOid") != head:
+            raise MergeRefused("PR number or head differs after a failed merge call")
+        if observed.get("state") == "MERGED":
+            return 0
+        if observed.get("state") != "OPEN":
+            raise MergeRefused(f"PR is {observed.get('state')} after a failed merge call")
+        if retried == MERGE_RETRIES:
+            raise MergeRefused(f"merge call still failing after {MERGE_RETRIES} retries")
+        retried += 1
+        print(json.dumps({"mergeRetry": retried, "waitSeconds": MERGE_RETRY_SECONDS}), flush=True)
+        time.sleep(MERGE_RETRY_SECONDS)
 
 
 def api_command(path: str, *arguments: str) -> list[str]:
@@ -327,11 +388,9 @@ def main(argv=None, runner=run_gh) -> int:
             merge_base = check_contains_main(read_json(api_command(f"compare/main...{options.expected_head}"),
                                                        runner), len(commits))
         executing = True
-        result = runner(command)
-        print(json.dumps({"mergeExit": result.returncode, "stdout": result.stdout,
-                          "stderr": result.stderr}, ensure_ascii=False), flush=True)
-        if result.returncode:
-            return result.returncode
+        code = merge_once(command, options.number, options.expected_head, runner)
+        if code:
+            return code
         merged = read_json(pr_command("view", options.number, "--json",
                                       "number,headRefOid,state,mergeCommit,url"), runner)
         print(json.dumps({"observedAfterMerge": merged}, ensure_ascii=False), flush=True)
