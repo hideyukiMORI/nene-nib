@@ -325,15 +325,18 @@ void verify_steps()
            "a key that is a whole left side and the start of a longer one waits");
     const auto matched = core::key_map_step(jj, VimMapMode::insert, j, character(U'j'));
     const auto *units = std::get_if<KeyMapEmit>(&matched);
-    expect(units != nullptr && units->ends == std::vector<std::size_t>{1U},
+    expect(units != nullptr && units->ends == std::vector<std::size_t>{1U} &&
+               units->reads == std::vector<std::size_t>{2U},
            "a matched right side is one unit");
     const auto split = core::key_map_step(jj, VimMapMode::insert, j, character(U'k'));
     const auto *typed_units = std::get_if<KeyMapEmit>(&split);
-    expect(typed_units != nullptr && typed_units->ends == std::vector<std::size_t>{1U, 2U},
+    expect(typed_units != nullptr && typed_units->ends == std::vector<std::size_t>{1U, 2U} &&
+               typed_units->reads == std::vector<std::size_t>{1U, 2U},
            "each key not in the table is its own unit");
     const auto chained = core::key_map_step(nested, VimMapMode::normal, {}, character(U'n'));
     const auto *chained_units = std::get_if<KeyMapEmit>(&chained);
-    expect(chained_units != nullptr && chained_units->ends == std::vector<std::size_t>{3U},
+    expect(chained_units != nullptr && chained_units->ends == std::vector<std::size_t>{3U} &&
+               chained_units->reads == std::vector<std::size_t>{1U},
            "a right side looked up once more stays one unit");
     expect(core::key_map_flush(shorter, VimMapMode::insert, j).ends == std::vector<std::size_t>{1U},
            "the timeout flush marks the same units");
@@ -452,11 +455,11 @@ void verify_steps()
     return result;
 }
 
-// 単位の区切りが昇順で、空の単位が無く、最後が鍵の列の長さか（#1257）。
-[[nodiscard]] bool whole_units(const KeyMapEmit &emitted)
+// 列の区切りが昇順で、空の区切りが無く、最後が whole か（#1257）。
+[[nodiscard]] bool rising_to(const std::vector<std::size_t> &marks, std::size_t whole)
 {
     std::size_t begin = 0;
-    for (const std::size_t end : emitted.ends)
+    for (const std::size_t end : marks)
     {
         if (end <= begin)
         {
@@ -464,7 +467,15 @@ void verify_steps()
         }
         begin = end;
     }
-    return begin == emitted.keys.size();
+    return begin == whole;
+}
+
+// 単位の区切り（流す鍵の位置と読んだ鍵の位置）が同じ数で、どちらも昇順で最後が列の長さか
+// （#1257・#1266）。
+[[nodiscard]] bool whole_units(const KeyMapEmit &emitted, std::size_t read)
+{
+    return emitted.reads.size() == emitted.ends.size() &&
+           rising_to(emitted.ends, emitted.keys.size()) && rising_to(emitted.reads, read);
 }
 
 void verify_key_map_property()
@@ -491,12 +502,13 @@ void verify_key_map_property()
         const auto flowed = streamed(map, mode, input, bounded);
         const auto whole = core::key_map_flush(map, mode, input);
         agreed += flowed == whole.keys ? 1U : 0U;
-        ordered += static_cast<std::size_t>(whole_units(whole));
+        ordered += static_cast<std::size_t>(whole_units(whole, input.size()));
         matched += !noremap_only || flowed == replaced(map, mode, input) ? 1U : 0U;
     }
     expect(agreed == property_cases,
            "keys flowed one at a time equal the whole input replaced at once");
-    expect(ordered == property_cases, "the units rise strictly and end at the last key flowed");
+    expect(ordered == property_cases,
+           "the units rise strictly and end at the last key flowed and the last key read");
     expect(matched == property_cases,
            "a noremap table flows the longest left side replaced from the start");
     expect(bounded, "the waiting keys stay shorter than the longest left side");
@@ -658,16 +670,12 @@ void verify_records_and_replay()
            "press_vim_keys does not look up the table");
 }
 
-// 右辺の途中の鍵が失敗したら右辺の残りを捨て、打った鍵は流す（Vim の beep_flush の
-// FLUSH_MINIMAL・追補 19・#1257）。期待値は Vim 9.1 の実測（100 行の本文・feedkeys の 't'）:
-// `x` → 1 行目・`xj` → 2・`qj`（`qz` の待ちの後の j）→ 2・`xw`（w は 3j）→ 4・`q` の待ちの
-// タイムアウト → 1。失敗しない右辺は今までどおり `y` → 44・`yj` → 45。
-[[nodiscard]] std::size_t mapped_line(std::string_view keys, bool timeout)
+// Vim の 100 行の本文で 50G から keys を打ち（timeout なら最後に 1
+// 秒の待ちを流し）、キャレットの行。
+[[nodiscard]] std::size_t hundred_lines_caret(std::vector<MapRow> rows, std::string_view keys,
+                                              bool timeout)
 {
-    Editing editing(mapped_settings(
-        {MapRow{normal_only, "x", "gg<C-b>44%", true}, MapRow{normal_only, "y", "gg44%", true},
-         MapRow{normal_only, "q", "gg<C-b>44%", true}, MapRow{normal_only, "qz", "G", true},
-         MapRow{normal_only, "w", "3j", true}}));
+    Editing editing(mapped_settings(std::move(rows)));
     std::string text;
     for (std::size_t line = 1; line <= 100U; ++line)
     {
@@ -685,6 +693,19 @@ void verify_records_and_replay()
     return controller.frame().caret.position.line.value;
 }
 
+// 右辺の途中の鍵が失敗したら右辺の残りを捨て、打った鍵は流す（Vim の beep_flush の
+// FLUSH_MINIMAL・追補 19・#1257）。期待値は Vim 9.1 の実測（100 行の本文・feedkeys の 't'）:
+// `x` → 1 行目・`xj` → 2・`qj`（`qz` の待ちの後の j）→ 2・`xw`（w は 3j）→ 4・`q` の待ちの
+// タイムアウト → 1。失敗しない右辺は今までどおり `y` → 44・`yj` → 45。
+[[nodiscard]] std::size_t mapped_line(std::string_view keys, bool timeout)
+{
+    return hundred_lines_caret(
+        {MapRow{normal_only, "x", "gg<C-b>44%", true}, MapRow{normal_only, "y", "gg44%", true},
+         MapRow{normal_only, "q", "gg<C-b>44%", true}, MapRow{normal_only, "qz", "G", true},
+         MapRow{normal_only, "w", "3j", true}},
+        keys, timeout);
+}
+
 void verify_failed_expansion()
 {
     expect(mapped_line("x", false) == 1U, "<C-b> failing at the top drops 44% of the right side");
@@ -695,6 +716,43 @@ void verify_failed_expansion()
     expect(mapped_line("q", true) == 1U, "the timeout flush drops the rest of a failed right side");
     expect(mapped_line("y", false) == 44U, "a right side that does not fail runs to its end");
     expect(mapped_line("yj", false) == 45U, "a key typed after a whole right side runs");
+}
+
+// 前の単位がモードを変えたら、後の単位と待ちは今のモードの表で引く（Vim 9.1 の実測・
+// `feedkeys(…, 'tx')`・#1266）。`nmap x v` の後の `j` は `vmap j` で引かれる。
+void verify_unit_mode()
+{
+    const MapRow visual_x{normal_only, "x", "v", true};
+    const MapRow wait_x{normal_only, "xy", "G", true};
+    const MapRow visual_j{visual_set, "j", "3k<Esc>", true};
+    expect(hundred_lines_caret({visual_x, wait_x, visual_j}, "xj", false) == 47U,
+           "a key after a right side that enters VISUAL uses the vmap");
+    expect(hundred_lines_caret({visual_x, MapRow{normal_only, "xyz", "G", true},
+                                MapRow{visual_set, "y", "3k<Esc>", true}},
+                               "xy", true) == 47U,
+           "the timeout flush looks up the later key in the new mode");
+    expect(hundred_lines_caret({MapRow{normal_only, "x", "2j", true}, wait_x, visual_j}, "xj",
+                               false) == 53U,
+           "a right side that keeps NORMAL keeps the nmap table for the later key");
+    const MapRow append{normal_only, "q", "A", true};
+    const MapRow wait_q{normal_only, "qz", "G", true};
+    expect(hundred_lines_caret({append, wait_q, MapRow{insert_only, "j", "<Esc>3k", true}}, "qj",
+                               false) == 47U,
+           "a key after a right side that enters INSERT uses the imap");
+    expect(hundred_lines_caret({append, wait_q}, "qj<Esc>", false) == 50U,
+           "without an imap the later key is typed into the text");
+    const MapRow visual_jk{visual_set, "jk", "5k<Esc>", true};
+    expect(hundred_lines_caret({visual_x, wait_x, visual_jk, visual_j}, "xj", false) == 50U,
+           "a later key that starts a vmap left side waits in the new mode");
+    expect(hundred_lines_caret({visual_x, wait_x, visual_jk, visual_j}, "xj", true) == 47U,
+           "the new wait flushes with the vmap on the timeout");
+    expect(hundred_lines_caret({visual_x, wait_x, visual_jk, visual_j}, "xjk", false) == 45U,
+           "the new wait completes the longer vmap");
+    expect(hundred_lines_caret({MapRow{normal_only, "x", "f", true},
+                                MapRow{normal_only, "x0z", "G", true},
+                                MapRow{normal_only, "k", "3j", true}},
+                               "x0k", false) == 53U,
+           "after the argument of f the later key is looked up in NORMAL again");
 }
 
 // 待ちの間の IME の確定は積んだ鍵を先に流し、WorkCompleted は待ちを保つ（決定 4）。
@@ -851,6 +909,7 @@ void verify_key_map_scope()
     verify_ordinary_mode();
     verify_records_and_replay();
     verify_failed_expansion();
+    verify_unit_mode();
     verify_flush_before_intents();
     verify_walk_and_size();
     verify_ex_commands();

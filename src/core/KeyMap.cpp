@@ -406,6 +406,7 @@ KeyMapStep key_map_step(const KeyMap &map, VimMapMode mode, std::span<const VimK
     const KeySpan whole{buffer};
     Keys keys;
     std::vector<std::size_t> ends;
+    std::vector<std::size_t> reads;
     bool mapped = false;
     std::size_t at = 0;
     while (at < whole.size() && !waits(map, mode, whole.subspan(at)))
@@ -414,6 +415,7 @@ KeyMapStep key_map_step(const KeyMap &map, VimMapMode mode, std::span<const VimK
         at += count;
         mapped = mapped || row;
         ends.push_back(keys.size());
+        reads.push_back(at);
     }
     if (keys.empty())
     {
@@ -425,7 +427,7 @@ KeyMapStep key_map_step(const KeyMap &map, VimMapMode mode, std::span<const VimK
     }
     return KeyMapEmit{std::move(keys),
                       Keys(whole.begin() + static_cast<std::ptrdiff_t>(at), whole.end()),
-                      std::move(ends)};
+                      std::move(ends), std::move(reads)};
 }
 
 KeyMapEmit key_map_flush(const KeyMap &map, VimMapMode mode, std::span<const VimKey> pending)
@@ -436,6 +438,7 @@ KeyMapEmit key_map_flush(const KeyMap &map, VimMapMode mode, std::span<const Vim
     {
         at += consume(map, mode, pending.subspan(at), flushed.keys).first;
         flushed.ends.push_back(flushed.keys.size());
+        flushed.reads.push_back(at);
     }
     return flushed;
 }

@@ -224,19 +224,26 @@ class EditorController final
     // deliver_vim_key へ流す。表が空なら分岐 1 つで
     // deliver_vim_key。再生（`.`・マクロ・press_vim_keys）と IME の確定はここを通らない。
     [[nodiscard]] std::optional<core::VimRepeatFailure> typed_vim_key(const core::VimKey &key);
-    // key_map_step の答えごとの写し（std::visit・答えが増えたらコンパイルが落ちる）。waited は
-    // 引く前に待ちがあったか（流して空にしたらタイマーを外す）。
-    [[nodiscard]] std::optional<core::VimRepeatFailure>
-    typed_step(core::KeyMapPass pass, const core::VimKey &key, bool waited);
-    [[nodiscard]] std::optional<core::VimRepeatFailure>
-    typed_step(core::KeyMapPending pending, const core::VimKey &key, bool waited);
-    [[nodiscard]] std::optional<core::VimRepeatFailure>
-    typed_step(core::KeyMapEmit emitted, const core::VimKey &key, bool waited);
+    // key_map_step の答えごとの写し（std::visit・答えが増えたらコンパイルが落ちる）。key は今の
+    // 鍵。Emit は積んだ鍵と今の鍵の列を作って delivered_units に渡す（引く前に待ちがあれば、
+    // 流して空にしたらタイマーを外す）。
+    [[nodiscard]] std::optional<core::VimRepeatFailure> typed_step(core::KeyMapPass pass,
+                                                                   const core::VimKey &key);
+    [[nodiscard]] std::optional<core::VimRepeatFailure> typed_step(core::KeyMapPending pending,
+                                                                   const core::VimKey &key);
+    [[nodiscard]] std::optional<core::VimRepeatFailure> typed_step(core::KeyMapEmit emitted,
+                                                                   const core::VimKey &key);
     // 表が決めた鍵の列を単位（右辺 1 つか表に無い 1 鍵）ごとに deliver_vim_key へ流す。単位の
     // 途中の鍵が失敗したらその単位の残りを捨てる（Vim の beep_flush の FLUSH_MINIMAL・#1257）。
+    // 単位を流した後に表を引くモードが変わっていたら、typed の読んでいない残り（後の単位と待ち）
+    // を今のモードで引き直す（Vim の vgetorpeek は鍵ごとに今の State で表を引く・#1266）。
     // 返すのは最後に流した鍵の答え。
     [[nodiscard]] std::optional<core::VimRepeatFailure>
-    delivered_units(const core::KeyMapEmit &emitted);
+    delivered_units(const core::KeyMapEmit &emitted, std::span<const core::VimKey> typed);
+    // 読んでいない鍵の列 rest を引き直す。表を引けないモードの間は 1 鍵ずつそのまま流し、引ける
+    // モードになったら最後の 1 鍵の前までを待ちに置いて打った鍵の入口で引く。
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    typed_again(std::span<const core::VimKey> rest);
     // 表を引くモード。Vim モードで入力行が閉じていて、1 鍵の引数を待っていないときだけ値がある。
     [[nodiscard]] std::optional<core::VimMapMode> key_map_mode() const noexcept;
     // 積んだ鍵を key_map_flush で流して空にする（MapTimeout と、待ちを保たない意図の入口）。
