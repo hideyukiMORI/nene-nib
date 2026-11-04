@@ -5,18 +5,27 @@
 #include "ProbeWorkload.hpp"
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
+#include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
+#include "VimBlockWidth.hpp"
 #include "VimCharacter.hpp"
 #include "VimEditorView.hpp"
+#include "VimInsertBlock.hpp"
+#include "VimInsertString.hpp"
 #include "VimKey.hpp"
 #include "VimMode.hpp"
 #include "VimMoveTo.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
+#include "VimReplaceBlock.hpp"
+#include "VimReplay.hpp"
+#include "VimSelect.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
 #include "VimStep.hpp"
+#include "VimVisualReselect.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <iostream>
 #include <optional>
@@ -24,6 +33,7 @@
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::tests::performance
 {
@@ -49,6 +59,76 @@ constexpr std::string_view giant_unit = "abcdefg ";
 {
     return core::vim_step(state, core::VimEditorView{text, selection, std::nullopt}, key);
 }
+
+// 矩形の `r` `p` と `.` の 3 本が角を置く所（本文の真ん中・`a` の上）。
+[[nodiscard]] core::Offset giant_middle() noexcept
+{
+    return core::Offset{giant_bytes / 2U};
+}
+
+[[nodiscard]] std::expected<core::TextBuffer, ProbeFailure> indexed_giant(VimBlockWorkload workload,
+                                                                          const std::string &input)
+{
+    const auto parsed = core::TextBuffer::from_utf8(input);
+    if (!parsed.has_value() || input != vim_block_input(workload) ||
+        parsed.value().line_count() != 1U)
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    std::cerr << "preparedPieces=" << parsed.value().piece_count()
+              << " preparedHash=" << checksum_of(input) << '\n';
+    return parsed.value().with_virtual_columns();
+}
+
+[[nodiscard]] core::TextBuffer with_block_edits(const core::TextBuffer &text,
+                                                std::vector<core::VimBlockEdit> edits)
+{
+    std::ranges::sort(edits, [](const core::VimBlockEdit &one, const core::VimBlockEdit &other)
+                      { return other.range.begin < one.range.begin; });
+    core::TextBuffer next = text;
+    for (const core::VimBlockEdit &edit : edits)
+    {
+        next = next.replaced(edit.range.begin, edit.range.end, edit.utf8);
+    }
+    return next;
+}
+
+// 効果を本文と選択へ写す小さな替え玉（矩形の鍵と INSERT の文字だけ・単体試験の block_applied と
+// 同じ形）。
+[[nodiscard]] std::pair<core::TextBuffer, core::Selection> applied(const core::TextBuffer &text,
+                                                                   const core::Selection &selection,
+                                                                   const core::VimEffect &effect)
+{
+    if (const auto *moved = std::get_if<core::VimMoveTo>(&effect))
+    {
+        return {text, core::collapsed_at(moved->caret)};
+    }
+    if (const auto *selected = std::get_if<core::VimSelect>(&effect))
+    {
+        return {text, selected->selection};
+    }
+    if (const auto *typed = std::get_if<core::VimInsertString>(&effect))
+    {
+        return {text.insert(selection.caret, typed->utf8),
+                core::collapsed_at(core::Offset{selection.caret.value + typed->utf8.size()})};
+    }
+    if (const auto *inserted = std::get_if<core::VimInsertBlock>(&effect))
+    {
+        return {with_block_edits(text, inserted->edits), core::collapsed_at(inserted->caret)};
+    }
+    return {text, selection};
+}
+
+// 鍵を 1 つ流して効果を写す。本文・選択・状態を進める。
+void pressed(core::VimState &state, core::TextBuffer &text, core::Selection &selection,
+             core::VimKey key)
+{
+    const core::VimStep step = stepped(state, text, selection, key);
+    auto [next_text, next_selection] = applied(text, selection, step.effect);
+    text = std::move(next_text);
+    selection = next_selection;
+    state = step.next;
+}
 } // namespace
 
 std::string vim_block_input(VimBlockWorkload workload)
@@ -56,6 +136,9 @@ std::string vim_block_input(VimBlockWorkload workload)
     switch (workload)
     {
     case VimBlockWorkload::insert_giant_1line:
+    case VimBlockWorkload::replace_giant_1line:
+    case VimBlockWorkload::put_giant_1line:
+    case VimBlockWorkload::repeat_giant_1line:
         return giant_line();
     }
     std::unreachable();
@@ -106,5 +189,109 @@ std::expected<std::uint64_t, ProbeFailure> vim_block_inserted(VimBlockWorkload w
     }
     return checksum_of(input) + insert.at_byte + insert.line_bytes + insert.column.value +
            drawn.width.columns;
+}
+// 真ん中の 1 文字の矩形の `r`（#1237）。区間は `<C-v>` と `r` と置く文字の 3 鍵。効果は 1 行の
+// 置き換えで、本文は置く文字の 1 つ。
+std::expected<std::uint64_t, ProbeFailure> vim_block_replaced(VimBlockWorkload workload,
+                                                              const std::string &input,
+                                                              application::TimingPort &timing)
+{
+    const auto prepared = indexed_giant(workload, input);
+    if (!prepared.has_value())
+    {
+        return std::unexpected(prepared.error());
+    }
+    const core::TextBuffer &text = prepared.value();
+    const core::Selection caret = core::collapsed_at(giant_middle());
+    const core::VimState resting = core::vim_resting_state(
+        core::VimRegister{std::string{}, core::VimRegisterKind::characters});
+    timing.mark(core::Milestone::probe_started);
+    const core::VimStep block = stepped(resting, text, caret, core::VimSpecialKey::control_v);
+    const core::VimStep pending = stepped(block.next, text, caret, core::VimCharacter{U'r'});
+    const core::VimStep replaced = stepped(pending.next, text, caret, core::VimCharacter{U'Z'});
+    timing.mark(core::Milestone::probe_finished);
+    const auto *effect = std::get_if<core::VimReplaceBlock>(&replaced.effect);
+    if (effect == nullptr || effect->edits.size() != 1U || effect->edits.front().utf8 != "Z" ||
+        effect->edits.front().range.begin != giant_middle() || effect->caret != giant_middle())
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return checksum_of(input) + effect->edits.front().range.end.value + effect->caret.value;
+}
+
+// 真ん中の文字の後ろへ 1 行・幅 2 の矩形のレジスタを貼る `p`（#1237）。区間は `p` の 1 鍵。
+std::expected<std::uint64_t, ProbeFailure>
+vim_block_put(VimBlockWorkload workload, const std::string &input, application::TimingPort &timing)
+{
+    const auto prepared = indexed_giant(workload, input);
+    if (!prepared.has_value())
+    {
+        return std::unexpected(prepared.error());
+    }
+    const core::TextBuffer &text = prepared.value();
+    const core::Selection caret = core::collapsed_at(giant_middle());
+    const core::VimState resting = core::vim_resting_state(
+        core::VimRegister{"xy", core::VimRegisterKind::block, core::VimBlockWidth{2}});
+    timing.mark(core::Milestone::probe_started);
+    const core::VimStep put = stepped(resting, text, caret, core::VimCharacter{U'p'});
+    timing.mark(core::Milestone::probe_finished);
+    const auto *effect = std::get_if<core::VimInsertBlock>(&put.effect);
+    const core::Offset after{giant_middle().value + 1U};
+    if (effect == nullptr || effect->edits.size() != 1U || effect->edits.front().utf8 != "xy" ||
+        effect->edits.front().range.begin != after || effect->edits.front().range.end != after ||
+        effect->caret != after)
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return checksum_of(input) + effect->caret.value + effect->edits.front().utf8.size();
+}
+
+// 真ん中の 1 文字の矩形で `Ix<Esc>` を打った後の `.`（#1237）。打つところは区間の外で、区間は
+// `.` の鍵と、controller と同じく選び直してから流す再生の鍵（`I` `x` `<Esc>`）。
+std::expected<std::uint64_t, ProbeFailure> vim_block_repeated(VimBlockWorkload workload,
+                                                              const std::string &input,
+                                                              application::TimingPort &timing)
+{
+    const auto prepared = indexed_giant(workload, input);
+    if (!prepared.has_value())
+    {
+        return std::unexpected(prepared.error());
+    }
+    core::TextBuffer text = prepared.value();
+    core::Selection selection = core::collapsed_at(giant_middle());
+    core::VimState state = core::vim_resting_state(
+        core::VimRegister{std::string{}, core::VimRegisterKind::characters});
+    for (const core::VimKey &key :
+         {core::VimKey{core::VimSpecialKey::control_v}, core::VimKey{core::VimCharacter{U'I'}},
+          core::VimKey{core::VimCharacter{U'x'}}, core::VimKey{core::VimSpecialKey::escape}})
+    {
+        pressed(state, text, selection, key);
+    }
+    if (selection.caret != giant_middle() || text.size_bytes() != input.size() + 1U)
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    timing.mark(core::Milestone::probe_started);
+    const core::VimStep repeat = stepped(state, text, selection, core::VimCharacter{U'.'});
+    const auto *replay = std::get_if<core::VimReplay>(&repeat.effect);
+    if (replay == nullptr || !replay->reselect.has_value())
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    const std::vector<core::VimKey> keys = replay->keys;
+    state = repeat.next;
+    selection = core::vim_visual_reselect(text, selection.caret, replay->reselect.value());
+    for (const core::VimKey &key : keys)
+    {
+        pressed(state, text, selection, key);
+    }
+    timing.mark(core::Milestone::probe_finished);
+    if (state.mode != core::VimMode::normal || selection.caret != giant_middle() ||
+        text.size_bytes() != input.size() + 2U ||
+        text.text_range(giant_middle(), core::Offset{giant_middle().value + 3U}) != "xxa")
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return checksum_of(input) + text.size_bytes() + keys.size();
 }
 } // namespace nenenib::tests::performance
