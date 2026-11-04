@@ -197,7 +197,8 @@ void place_insert_left(EditorState &state, std::optional<std::size_t> left)
 
 // Vim の問いの往復の契約の破れの知らせ（ADR 0133 の追補 2026-10-18・#665）。鍵は効かない。
 constexpr std::string_view inconsistent_layout_notice = "内部の不整合: 画面行の問い（鍵は無効）";
-// engine を呼ぶ 1 か所の写し（Issue #1023）。鍵は vim_step・`:N` の行は vim_line_jumped。
+// engine を呼ぶ 1 か所の写し（Issue #1023）。鍵は vim_step・`:N` の行は vim_line_jumped・押しの
+// VISUAL は vim_pointer_selected（#1250）。
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
                                         const core::VimEditorView &view, const core::VimKey &key)
 {
@@ -209,6 +210,13 @@ constexpr std::string_view inconsistent_layout_notice = "内部の不整合: 画
                                         const core::ExLineRequest &request)
 {
     return core::vim_line_jumped(state, view, request.line);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
+                                        const PointerSelection &pointed)
+{
+    return core::vim_pointer_selected(state, view, pointed.selection, pointed.mode);
 }
 
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,

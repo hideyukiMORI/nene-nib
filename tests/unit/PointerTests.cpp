@@ -19,6 +19,7 @@
 #include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
 #include "VimMode.hpp"
+#include "VimNamedRegisters.hpp"
 #include "VimRegisterKind.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
@@ -164,6 +165,70 @@ void verify_vim_from_visual()
                yanked(controller, "foo", VimRegisterKind::characters),
            "a double click in INSERT leaves INSERT and selects the word");
 }
+// 押しは鍵ではない（V-1255 の R1）。`.` の記録・待ち・INSERT の回数・マクロの録画を鍵の意味で
+// 通らない。
+void verify_vim_keeps_repeat()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    prepare_vim(controller);
+    vim_replay(controller, "x");
+    press(controller, 35, 0, PointerClicks::double_);
+    vim_replay(controller, "<Esc>");
+    vim_replay(controller, ".");
+    expect(whole_vim_body(controller).starts_with("oo ba  baz\n"),
+           "a double click does not forget the change that . repeats");
+}
+
+void verify_vim_waits_dropped()
+{
+    for (const std::string_view keys : {"vi", "i<C-r>"})
+    {
+        Editing editing;
+        auto &controller = editing.controller();
+        prepare_vim(controller);
+        vim_replay(controller, keys);
+        press(controller, 45, 0, PointerClicks::double_);
+        expect(whole_vim_body(controller) == sample &&
+                   controller.frame().vim_mode == VimMode::visual,
+               "a double click in the middle of a waiting key types nothing and enters VISUAL");
+        expect(yanked(controller, "bar", VimRegisterKind::characters),
+               "the word is selected after the wait is dropped");
+    }
+    Editing editing;
+    auto &controller = editing.controller();
+    prepare_vim(controller);
+    vim_replay(controller, "vi");
+    press(controller, 15, 0, PointerClicks::triple);
+    expect(whole_vim_body(controller) == sample &&
+               controller.frame().vim_mode == VimMode::visual_line,
+           "a triple click in the middle of a waiting key enters linewise VISUAL");
+}
+
+void verify_vim_insert_count_dropped()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    prepare_vim(controller);
+    vim_replay(controller, "3ifoo");
+    press(controller, 95, 0, PointerClicks::double_);
+    vim_replay(controller, "<Esc>");
+    expect(whole_vim_body(controller).starts_with("foofoo bar  baz\n"),
+           "a double click leaves a counted INSERT without repeating it");
+}
+
+void verify_vim_macro_untouched()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    prepare_vim(controller);
+    vim_replay(controller, "qa");
+    press(controller, 45, 0, PointerClicks::double_);
+    vim_replay(controller, "yq");
+    const auto index = vim_register_index(U'a').value_or(0);
+    const auto &macro = controller.vim_state().registers.registers.at(index);
+    expect(macro.value().text == "y", "a double click while recording a macro is not recorded");
+}
 } // namespace
 
 void verify_pointer_scope()
@@ -173,5 +238,9 @@ void verify_pointer_scope()
     verify_vim_word();
     verify_vim_line();
     verify_vim_from_visual();
+    verify_vim_keeps_repeat();
+    verify_vim_waits_dropped();
+    verify_vim_insert_count_dropped();
+    verify_vim_macro_untouched();
 }
 } // namespace nenenib::tests

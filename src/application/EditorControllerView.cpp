@@ -7,18 +7,15 @@
 #include "Offset.hpp"
 #include "PlaceCaret.hpp"
 #include "PointerClicks.hpp"
+#include "PointerSelection.hpp"
 #include "ScreenMotion.hpp"
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
 #include "TextCaret.hpp"
 #include "TextPosition.hpp"
 #include "VimCaret.hpp"
-#include "VimCharacter.hpp"
 #include "VimCharacterBoundary.hpp"
-#include "VimKey.hpp"
 #include "VimMode.hpp"
-#include "VimSpecialKey.hpp"
-#include "VimState.hpp"
 #include "VimTextObject.hpp"
 #include "VimTextObjectRange.hpp"
 #include "VimTextObjectRequest.hpp"
@@ -47,8 +44,9 @@ namespace
 // 押した点の手前の文字を決めるために読む幅（結合文字の連なりを含む Vim の 1 文字に足りる）。
 constexpr std::size_t pointed_window_bytes = 64;
 
-// 押した文字の語（`iw`）を半開区間の選択にする。範囲にならない（空の本文）ならキャレットのまま。
-[[nodiscard]] core::Selection clicked_word(const core::TextBuffer &text, core::Offset rest)
+// 押した文字の語（`iw`）の VISUAL の選択（caret は含む側の端）。範囲にならない（空の本文）なら
+// キャレットのまま。通常モードと Vim モードが同じ 1 本を使う。
+[[nodiscard]] core::Selection clicked_word_visual(const core::TextBuffer &text, core::Offset rest)
 {
     const auto outcome = core::vim_text_object_range(
         text, core::Selection{rest, rest},
@@ -56,11 +54,14 @@ constexpr std::size_t pointed_window_bytes = 64;
                                    core::VimMode::visual},
         1);
     const auto *span = std::get_if<core::VimTextObjectSpan>(&outcome);
-    if (span == nullptr)
-    {
-        return core::Selection{rest, rest};
-    }
-    const auto range = core::vim_visual_range(text, span->selection, span->mode).range;
+    return span == nullptr ? core::Selection{rest, rest} : span->selection;
+}
+
+// 通常モードの語は VISUAL の選択を描く範囲（vim_visual_range）と同じ写しで半開区間にする。
+[[nodiscard]] core::Selection clicked_word(const core::TextBuffer &text, core::Offset rest)
+{
+    const auto range =
+        core::vim_visual_range(text, clicked_word_visual(text, rest), core::VimMode::visual).range;
     return core::Selection{range.begin, range.end};
 }
 
@@ -399,42 +400,30 @@ void EditorController::select_clicked(core::Offset pointed, PointerClicks clicks
         selection = clicked_line(text, rest);
         break;
     }
-    state_ = state_.with_selection(selection);
+    // 押しが折り返しの段の境目（trailing）に置いた向きを残さない（キャレットは選択の端）。
+    state_ = state_.with_selection(selection).with_caret_affinity(core::CaretAffinity::leading);
     follow_caret();
 }
 
-// Vim は使う人が打つのと同じ鍵を engine へ流す（VISUAL に入る・`gv` の前の選択・`'<` `'>` は鍵の
-// 道が書く・ARC-001）。VISUAL と INSERT にいれば先に Esc で抜け（前の選択が `gv` に残る・INSERT
-// の中断は INSERT のままなので `v` が文字になる）、NORMAL の数・オペレータ・1 鍵の待ちは捨ててから
-// 押した文字へ置く（一覧から選んだ操作の step_vim_command と同じ抜け方）。
+// Vim は鍵を流さず、engine の押しの入口（vim_pointer_selected）が VISUAL の種類と選択を直に置く
+// （#1250・gvim の do_mouse と同じく `.` とマクロの記録に積まない）。待ち・回数・オペレータは捨て、
+// INSERT は回数の反復なしで離れ、前の VISUAL は `gv` に残る。語は `v` `iw` と同じ選択、行は `V`
+// と同じく押した文字に両端を置く。
 void EditorController::select_clicked_in_vim(core::Offset pointed, PointerClicks clicks)
 {
-    switch (state_.vim().mode)
-    {
-    case core::VimMode::insert:
-    case core::VimMode::visual:
-    case core::VimMode::visual_line:
-    case core::VimMode::visual_block:
-        static_cast<void>(step_vim(core::VimKey{core::VimSpecialKey::escape}));
-        break;
-    case core::VimMode::normal:
-        state_ =
-            state_.with_vim(core::vim_resting_from(state_.vim(), state_.vim().unnamed_register));
-        break;
-    }
-    accept(PlaceCaret{state_.text().position_of(pointed), core::SelectionAnchoring::collapse,
-                      core::CaretAffinity::leading});
+    const auto &text = state_.text();
+    const auto rest = core::vim_resting_caret(text, pointed);
     switch (clicks)
     {
     case PointerClicks::single:
         return;
     case PointerClicks::double_:
-        static_cast<void>(step_vim(core::VimKey{core::VimCharacter{U'v'}}));
-        static_cast<void>(step_vim(core::VimKey{core::VimCharacter{U'i'}}));
-        static_cast<void>(step_vim(core::VimKey{core::VimCharacter{U'w'}}));
+        static_cast<void>(
+            stepped_vim(PointerSelection{clicked_word_visual(text, rest), core::VimMode::visual}));
         return;
     case PointerClicks::triple:
-        static_cast<void>(step_vim(core::VimKey{core::VimCharacter{U'V'}}));
+        static_cast<void>(
+            stepped_vim(PointerSelection{core::Selection{rest, rest}, core::VimMode::visual_line}));
         return;
     }
 }
