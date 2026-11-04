@@ -44,7 +44,8 @@ ADR 0001 / 0003 / 0006 / 0011 / 0016 / 0019 と過去の日報・引き継ぎ・
 3. **main へは rebase merge。** 正典の道具は `eng/merge-pr.py --integration`（別の道具を作らない・ARC-001）。確かめること: base が `main`・OPEN・ready・題が GIT-003 でまとめ Issue を指し本文の `Closes` はそれ 1 つ（1 本の PR と同じ検査）・**head の全 commit が GIT-003 の形で、本文に件名と同じ番号の `Closes #N` を持つ**・枝が main の先端を含む（`compare` の `behind_by == 0`。rebase merge が作り直す commit の木は CI が通した木と同じ）・ruleset の `allowed_merge_methods` に `rebase` がある・CI が緑（`run_ci` は 1 本の PR と同じ）。merge は `gh pr merge --rebase --match-head-commit <head>`。merge の後に `compare/<base>...<mergeCommit>` の commit の数が PR の commit の数と同じことを読み取り、積んだ元の PR（commit の本文の `PR #K`）を「main の commit <sha> として入った」のコメントで閉じる（Issue は commit の `Closes` で GitHub が閉じる・元の PR は head が main に無いので自動では閉じない）。
 4. **ruleset は `allowed_merge_methods: ["squash", "rebase"]`。** リポジトリの `allow_rebase_merge` も on（2026-11-04 07:13 JST に設計席が API で変更・hide の判断の実行・[gate-proofs](../quality/gate-proofs.md) に記録）。1 本の PR の merge の形（squash・PR ごとの CI）は変えない。merge queue・auto merge・全 PR 一律の required status check は置かない（ADR 0118）。GitHub UI からの merge まで機械強制しない（GIT-004 の planned のまま）。
 5. **緩めるのは「PR ごとの CI」だけ。** 保つのは「CI は merge される状態そのものを通した」（まとめ枝 = main の先端 ＋ 積んだ commit で、rebase merge は木を変えない）と「main の履歴は 1 commit = 1 Issue」の 2 つ。レビューの済んでいない PR・設計を変える PR（ADR の受理が要るもの）・速さの受理（D41）の要るものは、まとめ枝に積まない（1 本ずつ）。
-6. **道具の試験**は `tests/conformance/test_merge_pr.py`（`--integration` の受理と、rebase を許さない ruleset・GIT-003 でない commit・`Closes` の無い / 番号の違う commit・main より遅れた枝・commit の数の不一致・CI 失敗の拒否）。
+6. **道具の実装で決めた 2 点（PR #1221・2026-11-04）。** merge の直前（CI の後）に `compare main...head` をもう一度読み、CI の間に main が進んでいれば merge しない（決定 3 の `behind_by == 0` を CI の後にも当てる）。merge 後の照合の起点は PR の `baseRefOid` でなく、その compare の `merge_base_commit`（behind 0 のとき main の先端そのもの）。GitHub の `pulls/<n>/commits` と `compare` は 250 commit で打ち切られるので、まとめ枝は 250 commit まで（超えれば道具が拒む・安全側）。
+7. **道具の試験**は `tests/conformance/test_merge_pr.py`（`--integration` の受理と、rebase を許さない ruleset・GIT-003 でない commit・`Closes` の無い / 番号の違う commit・main より遅れた枝・commit の数の不一致・CI 失敗の拒否）。
 
 ### 置き換える記述
 
@@ -52,4 +53,4 @@ GIT-004 の「マージは squash のみ」→「1 本の PR は squash・まと
 
 ### 残るリスク
 
-rebase merge は GitHub が commit を作り直すので SHA が変わり committer は GitHub になる（squash でも同じ）。まとめ枝に積んだ後に元の PR へ push があっても道具は気づかない（積んだ head を commit の本文に書き、閉じるときのコメントで照合できる）。衝突の解き方の誤りは、まとめ枝の手元の検証と CI が受け止める。
+最後の `compare` から merge までの数秒の間に main が進むと CI と違う木が入り得る（merge 後の commit の数の照合で必ず気づく・道具では閉じられない）。rebase merge は GitHub が commit を作り直すので SHA が変わり committer は GitHub になる（squash でも同じ）。まとめ枝に積んだ後に元の PR へ push があっても道具は気づかない（積んだ head を commit の本文に書き、閉じるときのコメントで照合できる）。衝突の解き方の誤りは、まとめ枝の手元の検証と CI が受け止める。
