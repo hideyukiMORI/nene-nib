@@ -47,6 +47,7 @@
 #include "VimCharacter.hpp"
 #include "VimKeyPress.hpp"
 #include "VimMode.hpp"
+#include "VimSearchHighlight.hpp"
 #include "VisibleLines.hpp"
 
 #include <array>
@@ -1218,6 +1219,53 @@ void verify_command_history_controller()
            "a command run from the palette is not remembered");
     static_cast<void>(controller.apply_frame(app::CancelCommand{}));
 }
+
+// Ex の解析関数の表（Issue #1199）。候補の命令はどれも表のどれかの行に当たり、表の各行は境目の
+// 入力 1 つで当たる欄を返す（`line_command` が先頭・`hardcopy` は `document` の前）。
+[[nodiscard]] bool ex_result_has(std::string_view text, auto field)
+{
+    const auto result = core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark);
+    return result.has_value() && field(result.value());
+}
+
+void verify_ex_command_table()
+{
+    const auto settings = core::default_editor_settings();
+    for (const auto &candidate : core::ex_command_candidates())
+    {
+        const auto result = core::evaluate_ex(candidate, settings, Appearance::dark);
+        expect(result.has_value() ||
+                   result.error() != core::ExEvaluationFailure{core::ExFailure::unknown_command},
+               "every Ex candidate reaches a row of the parser table");
+    }
+    expect(ex_result_has("3", [](const core::ExResult &r) { return r.line.has_value(); }) &&
+               ex_result_has("$", [](const core::ExResult &r) { return r.line.has_value(); }),
+           "line numbers reach the line row");
+    expect(ex_result_has("noh", [](const core::ExResult &r)
+                         { return r.highlight == core::VimSearchHighlight::suspended; }),
+           ":noh suspends the highlight");
+    expect(ex_fails_with("noh x", core::ExFailure::unknown_command),
+           ":noh with an argument stays unknown");
+    expect(ex_result_has("nmap", [](const core::ExResult &r) { return r.map.has_value(); }),
+           ":nmap reaches the map row");
+    expect(ex_result_has("sy", [](const core::ExResult &r) { return r.syntax.has_value(); }),
+           ":sy reaches the syntax row");
+    expect(ex_result_has("preview", [](const core::ExResult &r) { return r.preview.has_value(); }),
+           ":preview reaches the preview row");
+    expect(ex_result_has("tabs", [](const core::ExResult &r) { return r.tab.has_value(); }),
+           ":tabs reaches the tab row");
+    expect(ex_result_has("on", [](const core::ExResult &r) { return r.window.has_value(); }),
+           ":on reaches the window row");
+    expect(ex_result_has("ls", [](const core::ExResult &r) { return r.palette.has_value(); }),
+           ":ls reaches the palette row");
+    expect(ex_result_has("ha", [](const core::ExResult &r) { return r.print.has_value(); }),
+           ":ha reaches the print row");
+    expect(ex_fails_with("3ha", core::ExFailure::unsupported_argument),
+           "a range on :hardcopy is unsupported");
+    expect(ex_result_has("w", [](const core::ExResult &r) { return r.document.has_value(); }),
+           ":w reaches the document row");
+}
+
 } // namespace
 
 void verify_ex_settings()
@@ -1250,5 +1298,6 @@ void verify_ex_settings()
     verify_ex_smartcase();
     verify_ex_relativenumber();
     verify_ex_scrolloff();
+    verify_ex_command_table();
 }
 } // namespace nenenib::tests
