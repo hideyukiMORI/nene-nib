@@ -598,6 +598,11 @@ constexpr std::array<std::string_view, 12> indexed_cut_keys{"i<C-w>x<Esc>",
                                                             "d3h",
                                                             "d99h"};
 
+// 大きな回数の 1 文字進み（`{N}l` `{N}<Space>` `{N}x` `d{N}l`・行末を越える回数・`<Space>` は
+// 次の行へ渡る・#1269）。
+constexpr std::array<std::string_view, 10> indexed_forward_keys{
+    "3l", "99l", "3<Space>", "99<Space>", "3x", "99x", "d3l", "d99l", "v99l", "a<Esc>99l"};
+
 // 1 つの角から鍵の列を全部流す。
 [[nodiscard]] bool indexed_keys_agree_at(std::string_view body, Offset at,
                                          std::span<const std::string_view> lists,
@@ -702,6 +707,20 @@ void verify_vim_block_indexed_cut()
     expect(compared == 15093, "the cut and counted-left equivalence compares 15093 keys");
 }
 
+// 同じ小さな本文と長い語の本文で、大きな回数の 1 文字進み（#1269）。
+void verify_vim_block_indexed_forward()
+{
+    std::size_t compared = 0;
+    bool same = true;
+    for (const std::string_view body : indexed_bodies)
+    {
+        same = indexed_body_agrees(body, indexed_forward_keys, compared) && same;
+    }
+    same = indexed_body_agrees(long_word_body, indexed_forward_keys, compared) && same;
+    expect(same, "an indexed text answers counted l, <Space>, x and dl the same");
+    expect(compared == 11997, "the counted-right equivalence compares 11997 keys");
+}
+
 // 塊の境 `boundary` の前後（-64・0・+63 の次の code point）に矩形の角を置く。
 [[nodiscard]] bool indexed_boundary_agrees(std::string_view body, std::size_t boundary,
                                            std::span<const std::string_view> lists,
@@ -742,10 +761,12 @@ void verify_vim_block_indexed_across_chunks()
                              { return chunk.start > 0 && chunk.start + 64 < line.size(); });
     expect(inside != chunks.end(), "a chunk boundary falls inside the first line");
     // 入口の 2 列（#1198）と、`r` `p` `.` と Esc の 4 列（#1237）と、`Ctrl-w` と大きな回数の
-    // 1 文字戻りの 3 列（#1258）。
-    constexpr std::array<std::string_view, 9> lists{
-        "<C-v>jIxy<Esc>", "<C-v>jlAz<Esc>", "<C-v>jlrZ", "<C-v>jlyjp", "<C-v>jIxy<Esc>j.",
-        "ix<Esc>",        "i<C-w>x<Esc>",   "99999h",    "d99999h"};
+    // 1 文字戻りの 3 列（#1258）と、大きな回数の 1 文字進みの 3 列（#1269・`<Space>` は 1
+    // 歩ごとに行を写す持たない本文の道が重いので小さな本文の列だけ）。
+    constexpr std::array<std::string_view, 12> lists{
+        "<C-v>jIxy<Esc>",   "<C-v>jlAz<Esc>", "<C-v>jlrZ",    "<C-v>jlyjp",
+        "<C-v>jIxy<Esc>j.", "ix<Esc>",        "i<C-w>x<Esc>", "99999h",
+        "d99999h",          "99999l",         "99999x",       "d99999l"};
     std::size_t compared = 0;
     bool same =
         inside == chunks.end() || indexed_boundary_agrees(body, inside->start, lists, compared);
@@ -782,6 +803,7 @@ void verify_vim_block_contracts()
     verify_vim_block_indexed_small();
     verify_vim_block_indexed_rest();
     verify_vim_block_indexed_cut();
+    verify_vim_block_indexed_forward();
     verify_vim_block_indexed_across_chunks();
 }
 
