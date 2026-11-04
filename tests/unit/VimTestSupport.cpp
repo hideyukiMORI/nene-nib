@@ -284,9 +284,13 @@ void arrange_vim_viewport(EditorController &controller, const VimFixture &fixtur
     placed_vim_viewport(controller, fixture, viewport);
     // fixture の `set scrolloff=N`（#1239）。窓を作ってから余白を打つ（fuzz の再生器と契約
     // --vim-view の placed_window と同じ順）。0 の fixture は打たない。
+    // oracle は so を窓より先に置くが、置いた直後の検査で topline が動かないことを確かめているので
+    // 結果の状態は同じ。
     if (viewport.scrolloff > 0)
     {
-        static_cast<void>(run_ex(controller, "set so=" + std::to_string(viewport.scrolloff)));
+        const auto frame = run_ex(controller, "set so=" + std::to_string(viewport.scrolloff));
+        expect(frame.settings.scrolloff == viewport.scrolloff,
+               "the fixture's scrolloff is set before its keys");
     }
 }
 
