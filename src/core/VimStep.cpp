@@ -294,7 +294,8 @@ forward_pages_held(const VimEditorView &view, std::size_t pages, std::size_t one
 
 // 1 画面の送りの量（Vim の get_scroll_overlap の重なりを引いた行数・1 論理行 = 1 画面行）。
 // 重なりは高さ 5 以上で 2 行・4 で 1 行・3 以下で 0 行（h1 + h2 + h3 と h2 + h3 + h4 が
-// 高さ − 2 に収まるかで決まる・#1229・ADR 0019 の追補）。前へも後ろへも同じ。
+// 高さ − 2 に収まるかで決まる・#1229・ADR 0019 の追補）。後ろへは本文の末尾で重なりが減る
+// （back_overlap）。
 [[nodiscard]] std::size_t page_advance(const VimEditorView &view) noexcept
 {
     const std::size_t height =
@@ -308,32 +309,41 @@ forward_pages_held(const VimEditorView &view, std::size_t pages, std::size_t one
     return height == one_line_overlap_height ? height - 1 : height;
 }
 
-// 回数ぶん後ろへ送った先頭と、最後に送れた周の前の先頭（Vim の onepage の BACKWARD の周）。
-// 新しい先頭の 1 つ上の行が無ければ（送った先頭が 2 行目以下になるなら）先頭は 1 行目へ行く
-// （新しい先頭の上を数える歩きが本文の前へ出る・`loff.lnum < 1`・#1229）。先頭が 1 行目の周は
-// FAIL で止まる。
-[[nodiscard]] std::pair<LineNumber, LineNumber> pages_back(const VimEditorView &view,
-                                                           std::size_t pages) noexcept
-{
-    const std::size_t advance = page_advance(view);
-    LineNumber top = vim_viewport_of(view).first_visible;
-    LineNumber before = top;
-    for (std::size_t page = 0; page < pages && top.value > single_step; ++page)
-    {
-        before = top;
-        top = top.value > advance + 2 ? LineNumber{top.value - advance} : LineNumber{single_step};
-    }
-    return {top, before};
-}
-
-// 後ろへの最後の周のキャレットの行（Vim の onepage はキャレットを周の前の先頭の 1 つ上から
-// 重なりの行数だけ下・新しい窓の下端の行に置く・#1229）。窓の外なら呼び手が窓の中へ入れる。
-[[nodiscard]] LineNumber page_back_caret(const VimEditorView &view, std::size_t pages) noexcept
+// 後ろへの 1 周の重なり（Vim の get_scroll_overlap の BACKWARD は先頭の 1 つ上から botline_forw で
+// 下へ数え、本文の末尾より先の行は MAXCOL で重なりを打ち切る）。先頭が最終行なら 0 行、その 1 つ
+// 上なら高々 1 行（#1229 のレビュー R0-1）。前へは窓の下の行から上へ数えるので本文の中で収まる。
+[[nodiscard]] std::size_t back_overlap(const VimEditorView &view, LineNumber top) noexcept
 {
     const std::size_t height =
         std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
-    const std::size_t overlap = height - page_advance(view);
-    return LineNumber{pages_back(view, pages).second.value - single_step + overlap};
+    const std::size_t total = view.text.line_count();
+    return std::min(height - page_advance(view), total - std::min(top.value, total));
+}
+
+// 回数ぶん後ろへ送った先頭と、最後に送れた周のキャレットの行（Vim の onepage の BACKWARD の周）。
+// キャレットは周の前の先頭の 1 つ上から重なりの行数だけ下（新しい窓の下端の行）に置き、そこから
+// 上へ窓の高さ + 1 行を数える歩きが本文の前へ出たら（`loff.lnum < 1`）先頭を 1 行目にする（送った
+// 先頭が 2 行目以下になる周・#1229）。先頭が 1 行目の周は FAIL で止まる。
+[[nodiscard]] std::pair<LineNumber, LineNumber> pages_back(const VimEditorView &view,
+                                                           std::size_t pages) noexcept
+{
+    const std::size_t height =
+        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
+    LineNumber top = vim_viewport_of(view).first_visible;
+    LineNumber caret = top;
+    for (std::size_t page = 0; page < pages && top.value > single_step; ++page)
+    {
+        caret = LineNumber{top.value - single_step + back_overlap(view, top)};
+        top = caret.value > height + single_step ? LineNumber{caret.value + single_step - height}
+                                                 : LineNumber{single_step};
+    }
+    return {top, caret};
+}
+
+// 後ろへの最後の周のキャレットの行。窓の外なら呼び手が窓の中へ入れる。
+[[nodiscard]] LineNumber page_back_caret(const VimEditorView &view, std::size_t pages) noexcept
+{
+    return pages_back(view, pages).second;
 }
 
 [[nodiscard]] LineNumber page_top(const VimEditorView &view, std::size_t pages,
