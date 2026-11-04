@@ -17,6 +17,7 @@
 #include "VimMoveTo.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
+#include "VimRemoveRange.hpp"
 #include "VimReplaceBlock.hpp"
 #include "VimReplay.hpp"
 #include "VimSelect.hpp"
@@ -139,6 +140,8 @@ std::string vim_block_input(VimBlockWorkload workload)
     case VimBlockWorkload::replace_giant_1line:
     case VimBlockWorkload::put_giant_1line:
     case VimBlockWorkload::repeat_giant_1line:
+    case VimBlockWorkload::insert_ctrl_w_giant_1line:
+    case VimBlockWorkload::count_h_giant_1line:
         return giant_line();
     }
     std::unreachable();
@@ -293,5 +296,69 @@ std::expected<std::uint64_t, ProbeFailure> vim_block_repeated(VimBlockWorkload w
         return std::unexpected(ProbeFailure::wrong_result);
     }
     return checksum_of(input) + text.size_bytes() + keys.size();
+}
+
+// 真ん中の `a` の前で `i` を打ってからの INSERT の `<C-w>`（#1258）。`i` は区間の外で、区間は
+// `<C-w>` の 1 鍵。始めの桁がキャレットと同じなので消せる左端は行頭で、消すのは手前の空白と語の
+// 8 バイト。
+std::expected<std::uint64_t, ProbeFailure> vim_insert_word_cut(VimBlockWorkload workload,
+                                                               const std::string &input,
+                                                               application::TimingPort &timing)
+{
+    const auto prepared = indexed_giant(workload, input);
+    if (!prepared.has_value())
+    {
+        return std::unexpected(prepared.error());
+    }
+    core::TextBuffer text = prepared.value();
+    core::Selection selection = core::collapsed_at(giant_middle());
+    core::VimState state = core::vim_resting_state(
+        core::VimRegister{std::string{}, core::VimRegisterKind::characters});
+    pressed(state, text, selection, core::VimCharacter{U'i'});
+    if (state.mode != core::VimMode::insert || selection.caret != giant_middle())
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    timing.mark(core::Milestone::probe_started);
+    const core::VimStep cut = stepped(state, text, selection, core::VimSpecialKey::control_w);
+    timing.mark(core::Milestone::probe_finished);
+    const auto *effect = std::get_if<core::VimRemoveRange>(&cut.effect);
+    const core::Offset word{giant_middle().value - giant_unit.size()};
+    if (effect == nullptr || effect->range.begin != word || effect->range.end != giant_middle())
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return checksum_of(input) + effect->range.begin.value + effect->range.end.value;
+}
+
+// 真ん中から `99999999h`（#1258）。回数の数字は区間の外で、区間は `h` の 1 鍵。回数が行頭までの
+// 文字の数より多いので行頭に着く。
+std::expected<std::uint64_t, ProbeFailure> vim_counted_left(VimBlockWorkload workload,
+                                                            const std::string &input,
+                                                            application::TimingPort &timing)
+{
+    const auto prepared = indexed_giant(workload, input);
+    if (!prepared.has_value())
+    {
+        return std::unexpected(prepared.error());
+    }
+    core::TextBuffer text = prepared.value();
+    core::Selection selection = core::collapsed_at(giant_middle());
+    core::VimState state = core::vim_resting_state(
+        core::VimRegister{std::string{}, core::VimRegisterKind::characters});
+    constexpr std::size_t digits = 8;
+    for (std::size_t digit = 0; digit < digits; ++digit)
+    {
+        pressed(state, text, selection, core::VimCharacter{U'9'});
+    }
+    timing.mark(core::Milestone::probe_started);
+    const core::VimStep left = stepped(state, text, selection, core::VimCharacter{U'h'});
+    timing.mark(core::Milestone::probe_finished);
+    const auto *moved = std::get_if<core::VimMoveTo>(&left.effect);
+    if (moved == nullptr || moved->caret != core::Offset{0} || left.failure.has_value())
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return checksum_of(input) + giant_middle().value + moved->caret.value;
 }
 } // namespace nenenib::tests::performance
