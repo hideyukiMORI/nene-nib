@@ -1219,6 +1219,7 @@ void verify_command_history_controller()
            "a command run from the palette is not remembered");
     static_cast<void>(controller.apply_frame(app::CancelCommand{}));
 }
+
 // Ex の解析関数の表（Issue #1199）。候補の命令はどれも表のどれかの行に当たり、表の各行は境目の
 // 入力 1 つで当たる欄を返す（`line_command` が先頭・`hardcopy` は `document` の前）。
 [[nodiscard]] bool ex_result_has(std::string_view text, auto field)
@@ -1239,7 +1240,7 @@ void verify_ex_command_table()
     }
     expect(ex_result_has("3", [](const core::ExResult &r) { return r.line.has_value(); }) &&
                ex_result_has("$", [](const core::ExResult &r) { return r.line.has_value(); }),
-           "line numbers reach the line row first");
+           "line numbers reach the line row");
     expect(ex_result_has("noh", [](const core::ExResult &r)
                          { return r.highlight == core::VimSearchHighlight::suspended; }),
            ":noh suspends the highlight");
@@ -1258,7 +1259,7 @@ void verify_ex_command_table()
     expect(ex_result_has("ls", [](const core::ExResult &r) { return r.palette.has_value(); }),
            ":ls reaches the palette row");
     expect(ex_result_has("ha", [](const core::ExResult &r) { return r.print.has_value(); }),
-           ":ha reaches the print row before the document row");
+           ":ha reaches the print row");
     expect(ex_fails_with("3ha", core::ExFailure::unsupported_argument),
            "a range on :hardcopy is unsupported");
     expect(ex_result_has("w", [](const core::ExResult &r) { return r.document.has_value(); }),
