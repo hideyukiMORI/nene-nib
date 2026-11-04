@@ -115,3 +115,18 @@ Vim 9.1（`--not-a-term` の普通の起動・`getjumplist()`）の実測。
 - **viewport の fixture の揃え方。** oracle の probe は `call cursor(1, 1)` `clearjumps` `normal! m'` を viewport の位置を置く前に流す（1 行目の 1 項の列にしてから、ジャンプにならない `call cursor()` と `winrestview()` で置く）。Nib の再生も開いた（1 行目の 1 項の）後に `PlaceCaret` で置くので同じ列になる。#1116 の限界「viewport の fixture にジャンプの鍵を入れない」は外す（fixture `jumplist-open-viewport-` 8 件）。測定コードが変わったので全件（3085 件）を再生成し、値が変わったのは足した 8 件だけだった（既存の 3077 件は不変）。
 - 限界: `:e` と Ctrl+O で開いた文書は #1116 のまま `(1, 0)` の 1 項で始める。Vim の `:e` の新しいバッファは自分の項を持たない（列の項は前のバッファのもの）が、Nib の列は文書ごとで前の文書の項へは飛ばないので、開いた文書の中の見え方は `''` と `<C-o>` の行き先が 1 行目になる点だけが違い得る（今回の 4 つの道の外・変えていない）。
 - 限界: 一続きの鍵（fixture の再生・`press_vim_keys`）で窓の外へ飛んで窓の中へ戻る鍵（`<C-o><Tab>` `''''`）は、Vim が鍵ごとに先頭行を追従するのに対し、Nib は途中の追従を解かず元の先頭行のまま残る（viewport の fixture で先頭行が 1 と 6 で違った）。列の 1 項とは別の、鍵の列の中の追従の違いなので、この追補の fixture には入れない（別 Issue）。
+
+## 追補（2026-11-04・#1235）: 跳びの一覧と回数つきの `z` の位置合わせ
+
+Vim 9.1 の `:help jump-motions` は跳びを `'` `` ` `` `G` `/` `?` `n` `N` `%` `(` `)` `[[` `]]` `{` `}` `:s` `:tag` `L` `M` `H` と「新しいファイルを開く命令」とする。help の一覧の外でも、ソースで `setpcmark()` を呼ぶ鍵は跳びと同じに `''` `` `` `` とジャンプの列へ積む（`gg`・`*` `#`・`m'`・回数つきの `z` の位置合わせ）。Nib の受け持ちは次のとおり。
+
+| Vim の鍵 | Vim の所 | Nib の所 |
+|---|---|---|
+| `gg` `G` `{N}G` `H` `M` `L` `%` `'x` `` `x `` | 移動の表の跳び（`nv_goto` `nv_scroll` `nv_percent` `nv_gomark` の `setpcmark`） | 移動の表の `jump_motions`（`VimKeyTable.cpp`・`vim_motion_is_jump` → `jumped_by`・決定 4） |
+| `/` `?` `n` `N` `*` `#` | `normal_search` の `SEARCH_MARK` | 検索の写し先（決定 4） |
+| `{count}z<CR>` `{count}zt` `{count}z.` `{count}zz` `{count}z-` `{count}zb` `{count}z+` `{count}z^` | `nv_zet`: 回数 `count0` があり今の行の番号と違えば `setpcmark()` してから回数の行（行数を超えれば最終行）へ動く | 位置合わせの `aligned_screen`（`VimStep.cpp`）の `counted_alignment_jumps` → `context_marked`（#1235） |
+| `m'` `` m` `` | `setmark_pos` | `vim_mark_set`（#1037） |
+| `(` `)` `[[` `]]` `{` `}` `:s` `:tag` | 跳び | この版に鍵が無い（足すときは `jump_motions` に 1 行） |
+
+- 回数つきの `z` は移動の表の外（`VimActionGroup::screen_alignment`）なので、表に行を足さず位置合わせの 1 本が置く。前の位置は鍵を打つ前のキャレット（`setpcmark` は回数の行へ動く前）。回数が今の行と同じ（`49zt` を 49 行目で）は置かない。回数が行数を超えて最終行にいるとき（`G99zt`）は回数と今の行が違うので置き、動かなかったので鍵の終わりの `vim_marks_checked`（`checkpcmark`・決定 5）が戻す。NORMAL と VISUAL は同じ 1 本を通る。
+- Issue #1235 は「`H` `M` `L` が `''` を置かない」と見立てたが、`H` `M` `L` は決定 4 から跳びで、fuzz の `49ztgI<Esc>M''` の違いは `49zt` が前の位置を置かなかったことだった（Vim は `49zt` で 43 行目を置き、`M` は同じ位置に着いて `checkpcmark` が 43 行目へ戻すので `''` は 43 行目）。fixture `viewport-hml-jump-mark-` 21 件（`H''` `M''` `` L`` `` `H<C-o>` `L<C-o>`・回数つきの `z` の 8 鍵・同じ行・行数を超える回数・VISUAL の `v20zt<Esc>''` `` v20zt<Esc>`` ``・どれも so=0）。限界: `count-zt-same-line`（`Gk49zt''`）と `count-zt-beyond-on-last`（`G99zt''`）は、`G` が置いた 43 行目へ `''` が戻るので、前の位置を置いても置かなくても同じ答えになる（置いても `checkpcmark` が戻す）。条件「回数 ≠ 今の行」の退行はこの 2 件では捕まらない。
