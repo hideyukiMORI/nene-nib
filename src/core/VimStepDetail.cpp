@@ -3,6 +3,7 @@
 #include "VimCaret.hpp"
 #include "VimCharacterBoundary.hpp"
 #include "VimKeyTable.hpp"
+#include "VimLineColumns.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -90,15 +91,16 @@ namespace detail
     return Offset{start.value + index};
 }
 
+// 1 文字の頭は VimLineColumns に問う（索引を持つ本文は行を写さずキャレットの手前の窓だけを読む・
+// Esc の 1 文字戻り・#1237）。
 [[nodiscard]] Offset backward_characters(const TextBuffer &text, Offset caret, std::size_t count)
 {
-    const LineNumber line = line_of(text, caret);
-    const Offset start = text.line_start(line);
-    const std::string content = text.text_range(start, text.line_end(line));
+    const VimLineColumns content(text, line_of(text, caret));
+    const Offset start = content.start();
     std::size_t index = caret.value - start.value;
     for (std::size_t step = 0; step < count && index > 0; ++step)
     {
-        index = vim_character_start(content, Offset{index}).value;
+        index = content.character_start(index);
     }
     return Offset{start.value + index};
 }

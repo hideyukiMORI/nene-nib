@@ -196,6 +196,21 @@ VimBlockRange vim_replayed_block_range(const TextBuffer &text, const Selection &
     return built_block(text, ordered, left, left + extent.width.columns - single_step);
 }
 
+VimBlockWidth vim_replayed_block_width(const TextBuffer &text, const Selection &selection,
+                                       const VimBlockExtent &extent)
+{
+    const OffsetRange ordered = selection_range(selection);
+    const std::size_t left = virtual_column(text, ordered.begin).value;
+    switch (extent.wish)
+    {
+    case VimColumnWish::at_line_end:
+        return VimBlockWidth{block_columns(left, longest_line(text, ordered))};
+    case VimColumnWish::at_column:
+        break;
+    }
+    return VimBlockWidth{block_columns(left, left + extent.width.columns - single_step)};
+}
+
 VimBlockRange vim_block_range_for(const TextBuffer &text, const Selection &selection,
                                   const std::optional<VimWantedColumn> &wanted)
 {

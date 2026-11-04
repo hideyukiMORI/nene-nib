@@ -125,6 +125,10 @@ FR-003 の T2 に残る VISUAL の 3 つめ、矩形（`Ctrl-v`）を入れる�
 
 矩形の入口（`vim_block_range` の行ごとの形と、`I` `A` `c` `C` の 1 行目の形・Esc の写し `block_insert_edit`）が 1 行の桁を問うのは新しい借用の口 `VimLineColumns`（`src/core/VimLineColumns.{hpp,cpp}`）の 1 本にする。分けるのは行ごとに 1 回の `text.has_virtual_columns()` で、索引を持つ本文（巨大な行の文書と格子・ADR 0140 の決定 4）は行を写さず、幅は行末の部分和、`byte_at` は `offset_at_virtual_column`、最初の桁は `virtual_column`、最後の桁は `virtual_column_end`（索引を持つ本文では `at` の 1 code point だけを読む道を足した）、Vim の 1 文字の境と code point は問いの位置から読む窓（64 バイトから倍に伸ばし行の終わりまで）で引く。持たない本文は行を 1 回写して今の `std::string_view` 版（`column_of` `byte_at_column` ほか）に渡し、答えも道も変えない（ADR 0139 の決定 6・ADR 0144 の決定 2 と同じ分け方）。行の幅だけを問う所（`$` の最長の行）は `line_virtual_width` を呼ぶ。`.` の記録が覚える大きさは `vim_block_width`（左右の桁と `$` の最長の行だけ・行ごとの形は作らない）で引き、記録のためだけに矩形を作り直さない（`.` の再生の中は記録の大きさから決め直す矩形なので従来どおり）。索引の意味（`byte_at_virtual_column` ほか・ADR 0140 / 0144）は変えない。正しさは同値の試験（`--vim-visual-block` の `verify_vim_block_indexed_small` と `_across_chunks`・同じ本文の持つ / 持たない 2 つに同じ鍵を流し、効果・`block_insert` の全欄・戻り先・記録の大きさ・frame と同じ `vim_block_range_for` の 6 欄が一致）が守る。`r` の `replaced_block_edits`・矩形の `p`・Esc の `backward_characters` は範囲の外で後続。
 
+## 追補（2026-11-04・#1237 巨大な 1 行の矩形の `r` `p` と `.`・Esc の 1 文字戻りも索引の道）
+
+追補 #1198 で範囲の外に置いた 5 か所も同じ口 `VimLineColumns` と `line_virtual_width` に寄せる。矩形の `r`（`replaced_block_edits`）は行の幅を `line_virtual_width` で引き、矩形の `c` `C`（`block_changed`）は 1 行目のバイト数を行を写さず `line_end − line_start` で数える。矩形のレジスタの `p` `P`（`put_lead` / `put_block_line` / `put_padded`）は貼る行ごとに 1 つの `VimLineColumns` に幅・`byte_at`・最初と最後の桁・code point を問う。Esc とほかの 1 文字戻り（`backward_characters`）は `VimLineColumns::character_start` に問い、索引を持つ本文はキャレットの手前の窓（64 バイトから倍に伸ばし、窓の頭まで戻ったら読み直す・行頭に届いた窓の答えは行を写した答えと同じ）だけを読む。`.` の再生の中で記録し直す大きさは、再生の矩形（`vim_replayed_block_range`）と同じ左の桁（選択の先の角）と右の桁（記録した幅か `$` なら覆う行の最長）から幅だけを引く `vim_replayed_block_width` で引く（`vim_block_width` は選択の両端から桁を決めるので再生の中では答えが違う）。持たない本文は行を 1 回写して今の `std::string_view` 版に渡し、答えは変えない。索引の意味は変えない。正しさは同値の試験 `verify_vim_block_indexed_rest`（同じ小さな本文に `r`・`p` `P`・`.` の再生・Esc と `h` の 14 列・`.` は controller と同じく選び直して再生の鍵を流す）と、塊の境の版に足した 4 列が守る。
+
 ## 強制
 
 - モード・効果・レジスタの種類・大きさの和型の写し漏れ: **active**（`switch` / `std::visit` の網羅性・CPP-002）
