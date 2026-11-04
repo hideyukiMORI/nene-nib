@@ -555,6 +555,63 @@ void verify_topline_updated()
     }
 }
 
+// 行単位の削除で本文が短くなり、先頭が本文の外に残ったときの追従（#1230・ADR 0019 の追補
+// 2026-11-04）。Vim の w_topline は行数で切られず、n = 先頭 + 余白 - キャレットが halfheight
+// 以上なら中央へ寄せる。行は (行数, 空の行（0 は無し）, 窓, 余白, 前の先頭, 前の行, 鍵,
+// 鍵の後の先頭, 鍵の後の行)。`GdH` 形（消した後は先頭 40・行数 39・窓 8・so=2 → 32）と `cip`
+// 形（先頭 13・行数 9・窓 12・so=3 → 1）で、どちらも fixture viewport-after-linewise-delete- の
+// Vim 9.1 の実測と同じ窓。
+using ShrunkRow = std::tuple<std::size_t, std::size_t, std::size_t, std::size_t, std::size_t,
+                             std::size_t, std::string_view, std::size_t, std::size_t>;
+constexpr std::array<ShrunkRow, 2> shrunk_rows{{
+    {47, 0, 8, 2, 40, 47, "dH", 32, 39},
+    {30, 8, 12, 3, 13, 20, "cip<Esc>", 1, 9},
+}};
+
+// 行数の行を "line<N>" で並べ、空の行の番号だけ空にする。
+[[nodiscard]] std::string shrunk_text(const ShrunkRow &row)
+{
+    std::string text;
+    for (std::size_t line = 1; line <= std::get<0>(row); ++line)
+    {
+        text += (line == std::get<1>(row) ? std::string{} : "line" + std::to_string(line)) +
+                (line < std::get<0>(row) ? "\n" : "");
+    }
+    return text;
+}
+
+void verify_topline_after_shrinking()
+{
+    for (const ShrunkRow &row : shrunk_rows)
+    {
+        Editing editing;
+        EditorController &controller = editing.controller();
+        applied(controller,
+                VisibleLines{std::get<2>(row), nenenib::core::TextViewGeometry{400, 20, 96}});
+        static_cast<void>(controller.apply(InsertText{shrunk_text(row)}));
+        applied(controller, SelectEditMode{EditMode::vim});
+        static_cast<void>(run_ex(controller, "set so=0"));
+        vim_replay(controller, "gg" + std::to_string(std::get<4>(row)) + "Gzt" +
+                                   std::to_string(std::get<5>(row)) + "G");
+        static_cast<void>(run_ex(controller, "set so=" + std::to_string(std::get<3>(row))));
+        const std::string window = "#1230 so=" + std::to_string(std::get<3>(row)) + " window " +
+                                   std::to_string(std::get<2>(row)) + " top " +
+                                   std::to_string(std::get<4>(row)) + " line " +
+                                   std::to_string(std::get<5>(row));
+        const auto placed = controller.frame();
+        expect(placed.first_visible == LineNumber{std::get<4>(row)} &&
+                   placed.caret.position.line == LineNumber{std::get<5>(row)},
+               (window + " is placed before the keys").c_str());
+        vim_replay(controller, std::get<6>(row));
+        const auto moved = controller.frame();
+        expect(moved.first_visible == LineNumber{std::get<7>(row)} &&
+                   moved.caret.position.line == LineNumber{std::get<8>(row)},
+               (window + " then " + std::string(std::get<6>(row)) +
+                " recenters from the top left past the last line as Vim 9.1 does")
+                   .c_str());
+    }
+}
+
 // 窓より高い行（窓 11 行に 600 字 = 15 画面行の行 30）では、Vim の答えの窓（先頭 30 の段 0）で
 // キャレットの画面行が見えなくなると画面行の追従へ戻る（#1178・ADR 0019 の追補の決定 3）。`j` で
 // その行に入ると先頭 30 の段 0、`12gj` で 12 段目へ下りると窓は段の途中から始まり、キャレットの段が
@@ -801,6 +858,7 @@ void verify_vim_view_scope()
     verify_grid_rows_cursor_correct();
     verify_insert_page_edges();
     verify_topline_updated();
+    verify_topline_after_shrinking();
     verify_mode_switch_keeps_window();
     verify_taller_than_window();
     verify_follow_reads_drawn_lines();
