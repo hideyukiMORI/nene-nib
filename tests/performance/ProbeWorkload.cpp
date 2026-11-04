@@ -25,6 +25,7 @@
 #include "StatusItemsProbe.hpp"
 #include "TabDisplayProbe.hpp"
 #include "TextObjectProbe.hpp"
+#include "VimBlockProbe.hpp"
 
 #include "DeleteText.hpp"
 #include "DisplayLine.hpp"
@@ -927,6 +928,16 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(VimBlockWorkload workload)
+{
+    switch (workload)
+    {
+    case VimBlockWorkload::insert_giant_1line:
+        return 206U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -942,7 +953,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 206> dispatches{{
+constexpr std::array<ProbeDispatch, 207> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1361,6 +1372,8 @@ constexpr std::array<ProbeDispatch, 206> dispatches{{
                      explorer_frame_input, explorer_frame_typing},
     ProbeDispatchRow{ExplorerFrameWorkload::typing_hidden, "explorer-typing-hidden-64",
                      explorer_frame_input, explorer_frame_typing},
+    ProbeDispatchRow{VimBlockWorkload::insert_giant_1line, "vim-block-insert-giant-1line",
+                     vim_block_input, vim_block_inserted},
 }};
 
 constexpr auto dispatch_names = []
@@ -1403,7 +1416,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 206U);
+static_assert(dispatches.size() == 207U);
 static_assert(dispatch_is_complete());
 
 } // namespace

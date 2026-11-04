@@ -197,7 +197,8 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              'lexer-shell-visible-60',
              'lexer-shell-backfill-200',
              'lexer-cmake-visible-60',
-             'lexer-cmake-backfill-200')
+             'lexer-cmake-backfill-200',
+             'vim-block-insert-giant-1line')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -438,6 +439,8 @@ def lexer_input(workload: str) -> bytes:
 
 
 def fixed_input(workload: str) -> bytes:
+    if workload == "vim-block-insert-giant-1line":
+        return b"abcdefg " * (16 * 1024 * 1024 // 8)
     if workload in WORKLOADS[152:194]:
         return lexer_input(workload)
     if workload in WORKLOADS[148:152]:
