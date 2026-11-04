@@ -294,6 +294,60 @@ forward_pages_held(const VimEditorView &view, std::size_t pages, std::size_t one
     return reached;
 }
 
+// 1 画面の送りの量（Vim の get_scroll_overlap の重なりを引いた行数・1 論理行 = 1 画面行）。
+// 重なりは高さ 5 以上で 2 行・4 で 1 行・3 以下で 0 行（h1 + h2 + h3 と h2 + h3 + h4 が
+// 高さ − 2 に収まるかで決まる・#1229・ADR 0019 の追補）。後ろへは本文の末尾で重なりが減る
+// （back_overlap）。
+[[nodiscard]] std::size_t page_advance(const VimEditorView &view) noexcept
+{
+    const std::size_t height =
+        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
+    constexpr std::size_t two_line_overlap_height = 5;
+    constexpr std::size_t one_line_overlap_height = 4;
+    if (height >= two_line_overlap_height)
+    {
+        return height - 2;
+    }
+    return height == one_line_overlap_height ? height - 1 : height;
+}
+
+// 後ろへの 1 周の重なり（Vim の get_scroll_overlap の BACKWARD は先頭の 1 つ上から botline_forw で
+// 下へ数え、本文の末尾より先の行は MAXCOL で重なりを打ち切る）。先頭が最終行なら 0 行、その 1 つ
+// 上なら高々 1 行（#1229 のレビュー R0-1）。前へは窓の下の行から上へ数えるので本文の中で収まる。
+[[nodiscard]] std::size_t back_overlap(const VimEditorView &view, LineNumber top) noexcept
+{
+    const std::size_t height =
+        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
+    const std::size_t total = view.text.line_count();
+    return std::min(height - page_advance(view), total - std::min(top.value, total));
+}
+
+// 回数ぶん後ろへ送った先頭と、最後に送れた周のキャレットの行（Vim の onepage の BACKWARD の周）。
+// キャレットは周の前の先頭の 1 つ上から重なりの行数だけ下（新しい窓の下端の行）に置き、そこから
+// 上へ窓の高さ + 1 行を数える歩きが本文の前へ出たら（`loff.lnum < 1`）先頭を 1 行目にする（送った
+// 先頭が 2 行目以下になる周・#1229）。先頭が 1 行目の周は FAIL で止まる。
+[[nodiscard]] std::pair<LineNumber, LineNumber> pages_back(const VimEditorView &view,
+                                                           std::size_t pages) noexcept
+{
+    const std::size_t height =
+        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
+    LineNumber top = vim_viewport_of(view).first_visible;
+    LineNumber caret = top;
+    for (std::size_t page = 0; page < pages && top.value > single_step; ++page)
+    {
+        caret = LineNumber{top.value - single_step + back_overlap(view, top)};
+        top = caret.value > height + single_step ? LineNumber{caret.value + single_step - height}
+                                                 : LineNumber{single_step};
+    }
+    return {top, caret};
+}
+
+// 後ろへの最後の周のキャレットの行。窓の外なら呼び手が窓の中へ入れる。
+[[nodiscard]] LineNumber page_back_caret(const VimEditorView &view, std::size_t pages) noexcept
+{
+    return pages_back(view, pages).second;
+}
+
 [[nodiscard]] LineNumber page_top(const VimEditorView &view, std::size_t pages,
                                   VimScrollDirection direction)
 {
@@ -303,16 +357,18 @@ forward_pages_held(const VimEditorView &view, std::size_t pages, std::size_t one
     {
         return forward_page_fails(view, first) ? first : LineNumber{view.text.line_count()};
     }
-    const std::size_t height =
-        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
-    const std::size_t one_page = height <= 2 ? height : height - 2;
-    if (direction == VimScrollDirection::down)
+    const std::size_t one_page = page_advance(view);
+    switch (direction)
     {
-        const auto held = forward_pages_held(view, pages, one_page);
-        if (held.has_value())
-        {
-            return held.value();
-        }
+    case VimScrollDirection::down:
+        break;
+    case VimScrollDirection::up:
+        return pages_back(view, pages).first;
+    }
+    const auto held = forward_pages_held(view, pages, one_page);
+    if (held.has_value())
+    {
+        return held.value();
     }
     const std::size_t amount = limited_product(one_page, pages, view.text.line_count());
     return shifted_line(first, amount, view.text.line_count(), direction);
@@ -325,20 +381,6 @@ forward_pages_held(const VimEditorView &view, std::size_t pages, std::size_t one
 {
     return pages > single_step &&
            page_top(view, pages, direction) == page_top(view, pages - single_step, direction);
-}
-
-[[nodiscard]] LineNumber previous_page_top(const VimEditorView &view, std::size_t pages)
-{
-    const std::size_t height =
-        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
-    const std::size_t one_page = height <= 2 ? height : height - 2;
-    const std::size_t distance = vim_viewport_of(view).first_visible.value - single_step;
-    const std::size_t steps_to_top = distance / one_page + (distance % one_page != 0 ? 1 : 0);
-    const std::size_t effective = std::min(pages, steps_to_top);
-    const std::size_t previous_steps = effective > 0 ? effective - single_step : 0;
-    const std::size_t amount = limited_product(one_page, previous_steps, view.text.line_count());
-    return shifted_line(vim_viewport_of(view).first_visible, amount, view.text.line_count(),
-                        VimScrollDirection::up);
 }
 
 [[nodiscard]] Selection navigated_selection(const VimState &state, const Selection &selection,
@@ -551,8 +593,7 @@ namespace detail
     case VimScrollDirection::down:
         break;
     case VimScrollDirection::up:
-        caret_line = LineNumber{
-            std::min(last, previous_page_top(view, count_of(state.count)).value + single_step)};
+        caret_line = LineNumber{std::min(last, page_back_caret(view, count_of(state.count)).value)};
         break;
     }
     caret_line = corrected_in(view, first, caret_line);
