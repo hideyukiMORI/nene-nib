@@ -10,6 +10,7 @@
 #include "VimBlockInsert.hpp"
 #include "VimCharacterBoundary.hpp"
 #include "VimInsertStart.hpp"
+#include "VimRepeatFailure.hpp"
 #include "VimScrollDirection.hpp"
 #include "VimWordClass.hpp"
 #include "VimWordMotion.hpp"
@@ -32,6 +33,7 @@ using detail::block_copied_body;
 using detail::block_insert_edit;
 using detail::display_view;
 using detail::erased_nothing;
+using detail::failed;
 using detail::finished_input_wait;
 using detail::insert_character;
 using detail::insert_special;
@@ -721,12 +723,15 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     {
         return std::move(request).value();
     }
-    // 端で送れない PgUp / PgDn は何も変えずに INSERT を続ける（Vim の onepage の FAIL・#1149）。
+    // 端で送れない PgUp / PgDn は何も変えずに INSERT を続け（反復も `.` の記録も切らない・#1149）、
+    // 失敗の印を添える（#1246）。Vim の ins_pageup / ins_pagedown の呼ぶ onepage は FAIL の周で
+    // beep_flush するので、`:normal!` と再生の残りの鍵を捨てる（NORMAL の #1228 と同じ条件）。
+    // 端の `<Up>` `<Down>` は ins_up / ins_down の vim_beep だけで、残りを捨てない。
     const VimSpecialKey key =
         direction == VimScrollDirection::down ? VimSpecialKey::page_down : VimSpecialKey::page_up;
     if (arrow_stays(view, VimKey{key}))
     {
-        return VimStep{state, VimNoEffect{}};
+        return failed(VimStep{state, VimNoEffect{}}, VimRepeatFailure::not_moved);
     }
     VimState next = state;
     next.insert_repeat = std::nullopt;
