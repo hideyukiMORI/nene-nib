@@ -237,7 +237,8 @@ class KeySegmentTests(unittest.TestCase):
 
     def test_the_single_benches_have_a_breakdown_and_describe_prints_it(self):
         self.assertEqual(("key-to-frame-single", speed.LONG_LINE_BENCH, speed.CPP_BENCH,
-                          speed.PREVIEW_BENCH, speed.GIANT_SINGLE_BENCH, speed.LSP_SINGLE_BENCH),
+                          speed.PREVIEW_BENCH, speed.GIANT_SINGLE_BENCH, speed.LSP_SINGLE_BENCH,
+                          speed.MATCHPAREN_BENCH),
                          speed.SINGLE_BENCHES)
         self.assertTrue(set(speed.SINGLE_BENCHES) <= set(speed.BREAKDOWN_BENCHES))
         written = record({})
@@ -811,9 +812,25 @@ class GiantLineTests(unittest.TestCase):
         self.assertEqual(("open-giant-line-16mib", "key-to-frame-single-giant-line-16mib"),
                          speed.GIANT_BENCHES)
         self.assertEqual((*speed.GIANT_BENCHES, *speed.SPLIT_BENCHES, speed.PREVIEW_BENCH, speed.CPP_BENCH,
-                          *speed.LARGE_FILE_BENCHES, *speed.LSP_BENCHES), speed.OPTIONAL_BENCHES)
+                          *speed.LARGE_FILE_BENCHES, *speed.LSP_BENCHES,
+                          speed.MATCHPAREN_BENCH), speed.OPTIONAL_BENCHES)
         self.assertFalse(set(speed.OPTIONAL_BENCHES) & set(speed.BENCHES))
         self.assertIn(speed.GIANT_OPEN_BENCH, speed.BREAKDOWN_BENCHES)
+
+    def test_the_matchparen_bench_is_optional_and_its_document_fixed(self):
+        """#999 / ADR 0164 decision 5: recorded only, the caret starts on a brace of a fixed C++."""
+        self.assertEqual("matchparen-single-key", speed.MATCHPAREN_BENCH)
+        self.assertIn(speed.MATCHPAREN_BENCH, speed.OPTIONAL_BENCHES)
+        self.assertNotIn(speed.MATCHPAREN_BENCH, speed.BENCHES)
+        data = speed.matchparen_text().encode("ascii")
+        lines = data.split(b"\r\n")
+        self.assertEqual(speed.MATCHPAREN_SHA256, hashlib.sha256(data).hexdigest())
+        self.assertEqual(speed.MATCHPAREN_LINES, len(lines) - 1)
+        self.assertEqual(b"", lines[-1])
+        self.assertEqual(b"{", lines[0])
+        self.assertEqual(b"}", lines[speed.MATCHPAREN_BLOCK - 1])
+        self.assertEqual(data.count(b"("), data.count(b")"))
+        self.assertEqual(data.count(b"{"), data.count(b"}"))
 
     def test_the_large_file_benches_are_optional_and_fixed(self):
         """ADR 0159 decision 10: 512 MiB and 1 GiB, recorded only, from fixed 64-byte CRLF lines."""

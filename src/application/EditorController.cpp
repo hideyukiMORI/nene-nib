@@ -16,6 +16,7 @@
 #include "GridLineSource.hpp"
 #include "ImeStance.hpp"
 #include "LineSpanEvaluation.hpp"
+#include "MatchParen.hpp"
 #include "ModeLabel.hpp"
 #include "PaneFrame.hpp"
 #include "PaneView.hpp"
@@ -1048,6 +1049,8 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
         lexed = tally.lexed;
     }
     result.syntax_lexed = lexed;
+    // matchparen は操作中の枠の text の表示の行だけ（ADR 0164・格子と問いの間は行が空）。
+    mark_bracket(state_, state_.scroll().visible_lines, result.lines);
     add_other_pane(result, source.pattern);
     result.explorer = explorer_view();
     add_diagnostics(result);

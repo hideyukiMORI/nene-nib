@@ -130,3 +130,6 @@ Vim 9.1 の `:help jump-motions` は跳びを `'` `` ` `` `G` `/` `?` `n` `N` `%
 
 - 回数つきの `z` は移動の表の外（`VimActionGroup::screen_alignment`）なので、表に行を足さず位置合わせの 1 本が置く。前の位置は鍵を打つ前のキャレット（`setpcmark` は回数の行へ動く前）。回数が今の行と同じ（`49zt` を 49 行目で）は置かない。回数が行数を超えて最終行にいるとき（`G99zt`）は回数と今の行が違うので置き、動かなかったので鍵の終わりの `vim_marks_checked`（`checkpcmark`・決定 5）が戻す。NORMAL と VISUAL は同じ 1 本を通る。
 - Issue #1235 は「`H` `M` `L` が `''` を置かない」と見立てたが、`H` `M` `L` は決定 4 から跳びで、fuzz の `49ztgI<Esc>M''` の違いは `49zt` が前の位置を置かなかったことだった（Vim は `49zt` で 43 行目を置き、`M` は同じ位置に着いて `checkpcmark` が 43 行目へ戻すので `''` は 43 行目）。fixture `viewport-hml-jump-mark-` 21 件（`H''` `M''` `` L`` `` `H<C-o>` `L<C-o>`・回数つきの `z` の 8 鍵・同じ行・行数を超える回数・VISUAL の `v20zt<Esc>''` `` v20zt<Esc>`` ``・どれも so=0）。限界: `count-zt-same-line`（`Gk49zt''`）と `count-zt-beyond-on-last`（`G99zt''`）は、`G` が置いた 43 行目へ `''` が戻るので、前の位置を置いても置かなくても同じ答えになる（置いても `checkpcmark` が戻す）。条件「回数 ≠ 今の行」の退行はこの 2 件では捕まらない。
+## 追補（2026-11-03・#999）: 行をまたぐ入れ子の深さ
+
+- `%` の走査は行を渡るたびに入れ子の深さを 0 に戻していた（`(\n(\n)\n)` の 1 行目の `%` が 3 行目へ着いた）。これは限界ではなく誤りで、Vim の `findmatchlimit` の `count` と同じく行をまたいでも深さを保つよう直した。走査は matchparen と共用の `matched_bracket` の 1 本（ADR 0164）。fixture `matching-pair-nested-lines-` 3 件（`%` `G%` `d%`）が oracle の実測で守る。
