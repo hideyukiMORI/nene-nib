@@ -75,6 +75,7 @@
 #include "PaneSide.hpp"
 #include "PaneSource.hpp"
 #include "PendingLspRequest.hpp"
+#include "PointerClicks.hpp"
 #include "PreviewFullRoute.hpp"
 #include "PreviewPlacement.hpp"
 #include "ScrollState.hpp"
@@ -722,6 +723,14 @@ class EditorController final
     void move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring,
                        core::CaretAffinity affinity = core::CaretAffinity::leading);
     void accept(const PointText &intent);
+    // 続けて押した 2 回目と 3 回目（#1250）。pointed_character は押した点の下の文字の先頭
+    // （キャレットの境目でなく、点が右半分にあっても指した文字）。select_clicked は通常モードなら語
+    // （Vim の `iw` と同じ範囲）か行（改行まで）を選び、Vim は engine の押しの入口
+    // （vim_pointer_selected・鍵ではない）で VISUAL を直に置く。
+    [[nodiscard]] std::expected<core::Offset, TextLayoutFailure>
+    pointed_character(VisualTextView &view, core::TextCaret caret, float x);
+    void select_clicked(core::Offset pointed, PointerClicks clicks);
+    void select_clicked_in_vim(core::Offset pointed, PointerClicks clicks);
     [[nodiscard]] bool move_visual(const MoveCaret &intent);
     // 画面を動かさずにキャレットを見えている範囲へ入れた位置（#785）。
     [[nodiscard]] std::expected<core::TextCaret, TextLayoutFailure> caret_in_view();

@@ -5,6 +5,7 @@
 #include "EditorWindowDetail.hpp"
 #include "PointPreview.hpp"
 #include "PointText.hpp"
+#include "PointerClicks.hpp"
 #include "ScrollLines.hpp"
 #include "SelectionAnchoring.hpp"
 #include "TogglePreviewTask.hpp"
@@ -16,13 +17,15 @@
 
 namespace nenenib::ui::win32
 {
-void EditorWindow::point_text(POINT point, core::SelectionAnchoring anchoring)
+void EditorWindow::point_text(POINT point, core::SelectionAnchoring anchoring,
+                              application::PointerClicks clicks)
 {
     selection_point_ = point;
     const auto body = active_body(controller_.delivery().settings);
     const auto row =
         static_cast<std::int64_t>(std::max(point.y - body.content.top, 0L) / body.line_height);
-    send(application::PointText{static_cast<float>(point.x - body.content.left), row, anchoring});
+    send(application::PointText{static_cast<float>(point.x - body.content.left), row, anchoring,
+                                clicks});
 }
 
 // プレビューの枠は移る先ではないので、押しても本文のキャレットは動かさない（ADR 0155）。押した点の
@@ -129,7 +132,8 @@ void EditorWindow::drag_selection(LPARAM data)
     }
     if (selecting_)
     {
-        point_text(POINT{GET_X_LPARAM(data), GET_Y_LPARAM(data)}, core::SelectionAnchoring::extend);
+        point_text(POINT{GET_X_LPARAM(data), GET_Y_LPARAM(data)}, core::SelectionAnchoring::extend,
+                   application::PointerClicks::single);
     }
 }
 
@@ -151,7 +155,7 @@ void EditorWindow::scroll_selection()
     }
     if (direction != 0 || point.x < body.content.left || point.x >= body.content.right)
     {
-        point_text(point, core::SelectionAnchoring::extend);
+        point_text(point, core::SelectionAnchoring::extend, application::PointerClicks::single);
     }
 }
 } // namespace nenenib::ui::win32

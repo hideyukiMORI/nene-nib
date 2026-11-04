@@ -1,11 +1,13 @@
 #pragma once
 
 #include "Offset.hpp"
+#include "Selection.hpp"
 #include "VimCount.hpp"
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
 #include "VimMarks.hpp"
+#include "VimMode.hpp"
 #include "VimRepeatFailure.hpp"
 #include "VimRowRequest.hpp"
 #include "VimSearchNotice.hpp"
@@ -120,6 +122,15 @@ struct VimStep
 // 鍵ではないので `.` とマクロの記録には積まない。controller は鍵と同じ写しの道で結果を写す。
 [[nodiscard]] VimStep vim_line_jumped(const VimState &state, const VimEditorView &view,
                                       std::optional<std::size_t> line);
+
+// 本文のダブルクリック・トリプルクリックの VISUAL（#1250・ADR 0056 の決定 9
+// の追補）。鍵ではないので
+// `.` とマクロの記録には積まない（gvim の do_mouse が Visual を直に始めるのと同じ）。待ち・回数・
+// オペレータ・レジスタの名指しは捨て、INSERT は回数の反復なしで離れ（vim_interrupted と同じ
+// 捨て方）、前が VISUAL なら前の選択（`gv`）を鍵と同じ 1 か所で覚える。効果は VimSelect で、
+// selection は VISUAL の選択（caret は含む側の端）、mode は visual か visual_line。
+[[nodiscard]] VimStep vim_pointer_selected(const VimState &state, const VimEditorView &view,
+                                           Selection selection, VimMode mode);
 
 // Vim エンジンの鍵の唯一の入口（ARC-001）。純関数で、時刻・OS・スレッドを持たない（ARC-007）。
 // 本文・選択・表示領域を 1 回だけ借用する（ADR 0019 の決定 1）。NORMAL / INSERT は

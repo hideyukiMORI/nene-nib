@@ -29,6 +29,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <optional>
 #include <utility>
 
@@ -103,14 +104,17 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
     switch (message)
     {
     case WM_LBUTTONDOWN:
-        click_client(data);
+        click_client(data, counted_clicks(application::PointerClicks::single, data));
         return 0;
     case WM_LBUTTONDBLCLK:
-        // 面の上だけがダブルクリック。ほかは 2 回目の押しとして今までどおり（CS_DBLCLKS）。
-        if (!double_click_explorer(data))
+        // 面の上は面のダブルクリック（ADR 0162）。ほかは 2
+        // 回目の押しで、本文なら語を選ぶ（#1250）。
+        if (double_click_explorer(data))
         {
-            return pointer_message(single_press_of(message), word, data);
+            last_clicks_ = application::PointerClicks::single;
+            return 0;
         }
+        click_client(data, counted_clicks(application::PointerClicks::double_, data));
         return 0;
     case WM_LBUTTONUP:
         drag_selection(data);
@@ -312,7 +316,7 @@ void EditorWindow::activate_caption(WPARAM word) noexcept
     }
 }
 
-void EditorWindow::click_client(LPARAM data)
+void EditorWindow::click_client(LPARAM data, application::PointerClicks clicks)
 {
     left_pressed_ = std::nullopt;
     preview_task_press_.forget();
@@ -367,13 +371,13 @@ void EditorWindow::click_client(LPARAM data)
     case core::StatusBarHit::none:
         break;
     }
-    click_body(data);
+    click_body(data, clicks);
 }
 
 // もう 1 つの枠を押したら先にその枠へ移り、移った後の配置で同じ点を解く（ADR 0148 の決定 11）。
 // プレビューの枠は移る先ではないので、押しても何もしない（本文のキャレットも動かさない・ADR
 // 0155）。
-void EditorWindow::click_body(LPARAM data)
+void EditorWindow::click_body(LPARAM data, application::PointerClicks clicks)
 {
     // 面に焦点がある間に本文を押したら焦点を本文へ戻す。面の Esc と同じ意図（ADR 0162 の追補）。
     if (controller_.explorer_focused())
@@ -406,8 +410,7 @@ void EditorWindow::click_body(LPARAM data)
     }
     if (core::contains(active_body(settings).band, low_word_of(data), high_word_of(data)))
     {
-        place_caret(data);
-        begin_selection_drag();
+        place_caret(data, clicks);
     }
 }
 
@@ -434,11 +437,36 @@ void EditorWindow::click_palette(LPARAM data)
     }
 }
 
-void EditorWindow::place_caret(LPARAM data)
+void EditorWindow::place_caret(LPARAM data, application::PointerClicks clicks)
 {
     const auto anchoring =
         held(VK_SHIFT) ? core::SelectionAnchoring::extend : core::SelectionAnchoring::collapse;
-    point_text(POINT{low_word_of(data), high_word_of(data)}, anchoring);
+    point_text(POINT{low_word_of(data), high_word_of(data)}, anchoring, clicks);
+    // 語と行を選んだ押しはドラッグを始めない（離したときの位置で選択を縮めない・#1250）。
+    if (clicks == application::PointerClicks::single)
+    {
+        begin_selection_drag();
+    }
+}
+
+application::PointerClicks EditorWindow::counted_clicks(application::PointerClicks pressed,
+                                                        LPARAM data)
+{
+    const POINT point{low_word_of(data), high_word_of(data)};
+    const LONG pressed_at = GetMessageTime();
+    // 升は OS のダブルクリックの升（幅と高さの全体・押した点が中心）。時刻は 32 ビットで巡るので
+    // 符号なしの差で比べる。
+    const bool close_by =
+        std::abs(point.x - last_click_point_.x) <= GetSystemMetrics(SM_CXDOUBLECLK) / 2 &&
+        std::abs(point.y - last_click_point_.y) <= GetSystemMetrics(SM_CYDOUBLECLK) / 2;
+    const bool soon = static_cast<DWORD>(pressed_at) - static_cast<DWORD>(last_click_time_) <=
+                      GetDoubleClickTime();
+    const bool continued = last_clicks_ != application::PointerClicks::single && close_by && soon;
+    const auto clicks = continued ? application::PointerClicks::triple : pressed;
+    last_clicks_ = clicks;
+    last_click_time_ = pressed_at;
+    last_click_point_ = point;
+    return clicks;
 }
 
 std::int32_t EditorWindow::title_bar_width() const

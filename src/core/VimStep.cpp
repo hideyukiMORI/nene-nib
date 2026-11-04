@@ -18,11 +18,13 @@
 #include "VimKeyTable.hpp"
 #include "VimLayoutNeed.hpp"
 #include "VimMarkEdits.hpp"
+#include "VimNoEffect.hpp"
 #include "VimPutSide.hpp"
 #include "VimScreenGeometry.hpp"
 #include "VimScreenPlace.hpp"
 #include "VimScreenRows.hpp"
 #include "VimScrollDirection.hpp"
+#include "VimSelect.hpp"
 #include "VimTextObjectCancel.hpp"
 #include "VimTextObjectOutcome.hpp"
 #include "VimTextObjectRange.hpp"
@@ -2092,6 +2094,22 @@ namespace
     return step;
 }
 } // namespace
+
+VimStep vim_pointer_selected(const VimState &state, const VimEditorView &view, Selection selection,
+                             VimMode mode)
+{
+    // 一度 NORMAL へ離れた形で前の選択を覚えさせ（visual_remembered は VISUAL
+    // を抜ける歩だけ書く）、 それから押しの VISUAL を置く。input_discarded は last_change
+    // とレジスタとマクロの録画を保つ。
+    VimState left = input_discarded(state);
+    left.mode = VimMode::normal;
+    VimStep step = visual_remembered(state, view, VimStep{std::move(left), VimNoEffect{}});
+    step.next.mode = mode;
+    step.next.wanted_column = std::nullopt;
+    step.next.redoing_visual = false;
+    step.effect = VimSelect{selection};
+    return step;
+}
 
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
 {

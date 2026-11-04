@@ -252,8 +252,9 @@ LRESULT CALLBACK EditorWindow::procedure(HWND window, UINT message, WPARAM word,
     {
         return DefWindowProcW(window, message, word, data);
     }
-    // CS_DBLCLKS の 2 回目の押しは 1 回目と同じ押しへ写す。左だけは面のダブルクリックがあるので
-    // そのまま渡す（ADR 0162 の E4 の追補・中ボタンの続けてのタブを閉じる・ADR 0056 の決定 9）。
+    // CS_DBLCLKS の 2 回目の押しは 1 回目と同じ押しへ写す。左だけは面のダブルクリックと本文の語の
+    // 選択（#1250）があるのでそのまま渡す（ADR 0162 の E4 の追補・中ボタンの続けてのタブを閉じる・
+    // ADR 0056 の決定 9）。
     const UINT routed = message == WM_LBUTTONDBLCLK ? message : single_press_of(message);
     const LRESULT result = self->dispatch(routed, word, data);
     if (message == WM_NCDESTROY)
