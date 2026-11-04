@@ -615,6 +615,33 @@ class IntegrationMerge(unittest.TestCase):
         self.assertEqual(self.sleeps, [30])
         self.assertEqual([call[2] for call in calls if call[:2] == ["pr", "close"]], ["1157", "1160"])
 
+    def test_other_failure_after_a_wait_reads_the_pr_and_continues_when_merged(self):
+        # V-1263 D-1: the earlier merge finished while waiting; the next call fails as "already merged".
+        result, calls, output, error = self.integrate(
+            execute=True, merge_exit=[IN_PROGRESS, (1, "GraphQL: Pull request is already merged (mergePullRequest)")],
+            merged=[STILL_OPEN, MERGED, MERGED])
+        self.assertEqual(result, 0, error)
+        self.assertEqual([call[1] for call in calls].count("merge"), 2)
+        self.assertEqual(self.sleeps, [30])
+        self.assertEqual([call[2] for call in calls if call[:2] == ["pr", "close"]], ["1157", "1160"])
+        # Still OPEN: the failure is returned as before.
+        result, calls, output, error = self.integrate(
+            execute=True, merge_exit=[IN_PROGRESS, (1, "GraphQL: Pull Request is not mergeable")],
+            merged=[STILL_OPEN, STILL_OPEN])
+        self.assertEqual(result, 1)
+        self.assertFalse(any(call[:2] == ["pr", "close"] for call in calls))
+
+    def test_main_moving_while_waiting_stops_before_the_next_call(self):
+        # V-1263 F-3: compare is read again before each repeated call.
+        result, calls, output, error = self.integrate(
+            execute=True, merge_exit=[IN_PROGRESS], merged=[STILL_OPEN],
+            compare=[COMPARE, COMPARE, dict(COMPARE, behind_by=1)])
+        self.assertEqual(result, 2)
+        self.assertEqual([call[1] for call in calls].count("merge"), 1)
+        self.assertEqual(sum(f"compare/main...{HEAD}" in " ".join(call) for call in calls), 3)
+        self.assertIn("behind main", error)
+        self.assertIn("merge outcome unknown", error)
+
     def test_closing_keywords_for_another_issue_are_refused(self):
         # #1223: GitHub closes on close/closes/closed/fix/fixes/fixed/resolve/resolves/resolved in any case.
         for line in ("Fixes #1159", "closes #1159", "RESOLVED: #1159", "fix #1159", "Closed #1159",

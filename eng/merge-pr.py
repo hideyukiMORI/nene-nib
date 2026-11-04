@@ -172,6 +172,8 @@ def close_sources(number: int, commits: list[dict], landed: list, runner) -> tup
 
     The rebased commits land in the stacked order, so the main commit is matched by position, not by
     subject (two PRs can share a title, #1223). A commit without its source line is reported too.
+    Each notClosed entry is {"number", "reason"[, "observed"]} for a stacked PR, or
+    {"subject", "reason"} for a commit without its `PR #K（head <sha>）` line.
     """
     closed, not_closed = [], []
     for position, commit in enumerate(commits):
@@ -208,11 +210,13 @@ def close_sources(number: int, commits: list[dict], landed: list, runner) -> tup
     return closed, not_closed
 
 
-def merge_once(command: list[str], number: int, head: str, runner) -> int:
+def merge_once(command: list[str], number: int, head: str, runner, before_retry=None) -> int:
     """Call the merge; on a transient GitHub failure wait on the same PR (#1223, ADR 0021 追補 決定 8).
 
     Retried only while the PR is still OPEN at the same head: a MERGED PR goes on to the post-merge
-    check, any other state stops. No new CI run is started. Other failures are returned unretried.
+    check, any other state stops. No new CI run is started. Other failures are returned unretried,
+    except after a retry, when the earlier merge may have finished: then a MERGED PR goes on too.
+    before_retry runs just before each repeated call (the integration branch re-reads compare).
     """
     retried = 0
     while True:
@@ -221,11 +225,17 @@ def merge_once(command: list[str], number: int, head: str, runner) -> int:
                           "stderr": result.stderr}, ensure_ascii=False), flush=True)
         if not result.returncode:
             return 0
-        if TRANSIENT_MERGE_FAILURE.search(f"{result.stderr}\n{result.stdout}") is None:
+        transient = TRANSIENT_MERGE_FAILURE.search(f"{result.stderr}\n{result.stdout}") is not None
+        if not transient and not retried:
             return result.returncode
         observed = read_json(pr_command("view", number, "--json", "number,headRefOid,state,mergeCommit,url"),
                              runner)
         print(json.dumps({"observedAfterMergeFailure": observed}, ensure_ascii=False), flush=True)
+        if not transient:
+            # V-1263 D-1: "already merged" / "not mergeable" after a wait can mean the earlier call merged.
+            merged = isinstance(observed, dict) and observed.get("number") == number and \
+                observed.get("headRefOid") == head and observed.get("state") == "MERGED"
+            return 0 if merged else result.returncode
         if not isinstance(observed, dict) or observed.get("number") != number or \
                 observed.get("headRefOid") != head:
             raise MergeRefused("PR number or head differs after a failed merge call")
@@ -238,6 +248,8 @@ def merge_once(command: list[str], number: int, head: str, runner) -> int:
         retried += 1
         print(json.dumps({"mergeRetry": retried, "waitSeconds": MERGE_RETRY_SECONDS}), flush=True)
         time.sleep(MERGE_RETRY_SECONDS)
+        if before_retry is not None:
+            before_retry()
 
 
 def api_command(path: str, *arguments: str) -> list[str]:
@@ -388,7 +400,11 @@ def main(argv=None, runner=run_gh) -> int:
             merge_base = check_contains_main(read_json(api_command(f"compare/main...{options.expected_head}"),
                                                        runner), len(commits))
         executing = True
-        code = merge_once(command, options.number, options.expected_head, runner)
+        # V-1263 F-3: main must not move while waiting; keep the window to seconds as before the wait.
+        before_retry = (lambda: check_contains_main(read_json(api_command(f"compare/main...{options.expected_head}"),
+                                                              runner), len(commits))) \
+            if options.integration else None
+        code = merge_once(command, options.number, options.expected_head, runner, before_retry)
         if code:
             return code
         merged = read_json(pr_command("view", options.number, "--json",
