@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 35d62638858e405109596e12642b026b23584615d2dbe8f79f1c17093b4208fd / 3423 fixtures
+// fixtures.json: sha256 223a65d00adf3dccf1775347fe37dde872984c5c71a0aa5ea0a9ae33fbfaf535 / 3441 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3423> vim_fixtures{{
+constexpr std::array<VimFixture, 3441> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2749,6 +2749,24 @@ constexpr std::array<VimFixture, 3423> vim_fixtures{{
     {"insert-count-control-ctrl-u-at-start-count", "foo\nbar", "3i<C-u>x<Esc>", "xxxfoo\nbar", 1, 3, "", "", std::nullopt},
     {"insert-count-control-backspace-at-start", "foo\nbar", "3i<BS>x<Esc>", "xxxfoo\nbar", 1, 3, "", "", std::nullopt},
     {"insert-count-control-backspace-typed", "foo", "3Aab<BS>c<Esc>", "fooacacac", 1, 9, "", "", std::nullopt},
+    {"insert-count-ctrl-w-fuzz-7-0241", "11 x\n12 ?\n13", "j2l4i<C-w>ＡＢ<Tab>  <Esc>", "11 x\nＡＢ\t   ?\n13", 2, 9, "", "", std::nullopt},
+    {"insert-count-ctrl-w-before-start-once", "12 ?", "2li<C-w>ＡＢ→  <Esc>", "ＡＢ→   ?", 1, 11, "", "", std::nullopt},
+    {"insert-count-ctrl-w-before-start-tab-once", "12 ?", "2li<C-w>ＡＢ<Tab>  <Esc>", "ＡＢ\t   ?", 1, 9, "", "", std::nullopt},
+    {"insert-count-ctrl-w-before-start-ascii", "12 ?", "2l4i<C-w>ab <Esc>", "abab  ?", 1, 5, "", "", std::nullopt},
+    {"insert-count-ctrl-w-before-start-wide", "12 ?", "2l4i<C-w>Ａ<Esc>", "Ａ ?", 1, 1, "", "", std::nullopt},
+    {"insert-count-ctrl-w-start-inside-wide", "12 ?", "2l2i<C-w>ＡＢ<Esc>", "ＡＢ ?", 1, 4, "", "", std::nullopt},
+    {"insert-count-ctrl-w-start-on-boundary", "ab ?", "3l2i<C-w>Ａx<Esc>", "ＡＡx?", 1, 7, "", "", std::nullopt},
+    {"insert-count-ctrl-w-start-on-boundary-once", "ab ?", "3li<C-w>Ａx<Esc>", "Ａx?", 1, 4, "", "", std::nullopt},
+    {"insert-count-ctrl-w-buffer-start", "foo", "4i<C-w>Ａ <Esc>", "Ａ Ａ Ａ Ａ foo", 1, 16, "", "", std::nullopt},
+    {"insert-count-ctrl-w-buffer-start-once", "foo", "i<C-w>Ａ <Esc>", "Ａ foo", 1, 4, "", "", std::nullopt},
+    {"insert-count-ctrl-w-start-inside-composing", "ab?", "2l2i<C-w>xéy<Esc>", "xéy?", 1, 5, "", "", std::nullopt},
+    {"insert-count-ctrl-w-ctrl-u-start-inside-composing", "ab?", "2l2i<C-u>xéy<Esc>", "xéy?", 1, 5, "", "", std::nullopt},
+    {"insert-count-ctrl-w-backspace-before-start", "12 ?", "2l4i<BS>Ａ<Esc>", "1Ａ ?", 1, 2, "", "", std::nullopt},
+    {"insert-count-ctrl-w-backspace-inside-wide", "12 ?", "2l2i<BS>ＡＢ<Esc>", "1ＡＡＢ ?", 1, 8, "", "", std::nullopt},
+    {"insert-count-ctrl-w-backspace-once", "12 ?", "2li<BS>ＡＢ<Esc>", "1ＡＢ ?", 1, 5, "", "", std::nullopt},
+    {"insert-count-ctrl-w-ctrl-u-before-start", "12 ?", "2l4i<C-u>Ａ<Esc>", "Ａ ?", 1, 1, "", "", std::nullopt},
+    {"insert-count-ctrl-w-ctrl-u-inside-wide", "12 ?", "2l2i<C-u>ＡＢ<Esc>", "ＡＢ ?", 1, 4, "", "", std::nullopt},
+    {"insert-count-ctrl-w-ctrl-u-once", "12 ?", "2li<C-u>ＡＢ<Esc>", "ＡＢ ?", 1, 4, "", "", std::nullopt},
     {"insert-count-control-backspace-before-start", "foo", "3A<BS>x<Esc>", "fox", 1, 3, "", "", std::nullopt},
     {"insert-count-control-backspace-joins", "foo\nbar", "j3i<BS>x<Esc>", "fooxbar", 1, 4, "", "", std::nullopt},
     {"insert-count-control-backspace-at-start-dot", "foo\nbar", "i<BS>x<Esc>j0.", "xfoo\nxbar", 2, 1, "", "", std::nullopt},
