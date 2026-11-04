@@ -1160,7 +1160,8 @@ document_command(std::string_view text)
 // 行番号だけの命令（ADR 0022 の追補・Issue #847）。全体が 10 進の数字だけか `$` だけのときに
 // 当たり、ほかの形（`:3,5` `:+3` `:'a` `:3d`）は値なし（今までどおりほかの命令として扱う）。
 // 数字は先頭の 0 を許し（`:007`）、size_t に収まらなければ最大に飽和する（Vim も最後の行）。
-[[nodiscard]] std::optional<ExResult> line_command(std::string_view text)
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+line_command(std::string_view text)
 {
     const bool last = text == "$";
     if (!last && (text.empty() || leading(text, is_digit) != text.size()))
@@ -1179,68 +1180,42 @@ document_command(std::string_view text)
     return result;
 }
 
-// 今の文書への命令のうち `:hardcopy` と保存・読み直しの命令（remaining_command の認知の複雑さを
-// 10 以内に保つための束ね・順は print_command → document_command のまま）。
+// `:nohlsearch` と短縮形の `:noh` `:nohl` … は次の検索まで強調を止めるだけで、設定は変えない。
+// 引数があれば値なし（ほかの命令として扱う）。名前と引数の切り出しは evaluate_ex と同じ最初の空白。
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
-document_command_or_print(std::string_view text)
+nohlsearch_command(std::string_view text)
 {
-    auto print = print_command(text);
-    if (print.has_value())
+    const auto space = text.find(' ');
+    const auto name = text.substr(0, space);
+    const auto argument =
+        space == std::string_view::npos ? std::string_view{} : trimmed(text.substr(space + 1));
+    if (!abbreviates(name, nohlsearch_name, nohlsearch_shortest) || !argument.empty())
     {
-        return print;
+        return std::nullopt;
     }
-    return document_command(text);
+    return highlight_result(VimSearchHighlight::suspended);
 }
 
-// colorscheme と set のほか（Vim の強調の止め方とタブ・ファイルの命令）。どれにも当たらなければ
-// unknown_command。
-[[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
-remaining_command(std::string_view text, std::string_view name, std::string_view argument)
+// colorscheme と set のほかの命令の解析関数の表（Issue #1199・CPP-012・ADR 0022 の追補）。上から
+// 見て最初に値を返した行が勝つ。`line_command` が先頭（数字だけ・`$` だけの行は名前を持たない）、
+// `print_command`（`:ha[rdcopy]`）は `document_command` の前。行を足すときは解析関数を 1 つ書いて
+// ここに 1 行足す（無名名前空間の関数を書き忘れると -Wunused-function で落ちる）。
+using ExCommandParser =
+    std::optional<std::expected<ExResult, ExEvaluationFailure>> (*)(std::string_view);
+constexpr std::array<ExCommandParser, 10> command_parsers{
+    line_command, nohlsearch_command, map_command,     syntax_command, preview_command,
+    tab_command,  window_command,     palette_command, print_command,  document_command};
+
+// 表のどの行にも当たらなければ unknown_command。
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure> remaining_command(std::string_view text)
 {
-    auto line = line_command(text);
-    if (line.has_value())
+    for (const ExCommandParser parser : command_parsers)
     {
-        return std::move(line).value();
-    }
-    // `:nohlsearch` と短縮形の `:noh` `:nohl` … は次の検索まで強調を止めるだけで、設定は変えない。
-    if (abbreviates(name, nohlsearch_name, nohlsearch_shortest) && argument.empty())
-    {
-        return highlight_result(VimSearchHighlight::suspended);
-    }
-    auto map = map_command(text);
-    if (map.has_value())
-    {
-        return std::move(map).value();
-    }
-    auto syntax = syntax_command(text);
-    if (syntax.has_value())
-    {
-        return std::move(syntax).value();
-    }
-    auto preview = preview_command(text);
-    if (preview.has_value())
-    {
-        return std::move(preview).value();
-    }
-    auto tab = tab_command(text);
-    if (tab.has_value())
-    {
-        return std::move(tab).value();
-    }
-    auto window = window_command(text);
-    if (window.has_value())
-    {
-        return std::move(window).value();
-    }
-    auto palette = palette_command(text);
-    if (palette.has_value())
-    {
-        return std::move(palette).value();
-    }
-    auto document = document_command_or_print(text);
-    if (document.has_value())
-    {
-        return std::move(document).value();
+        auto parsed = parser(text);
+        if (parsed.has_value())
+        {
+            return std::move(parsed).value();
+        }
     }
     return std::unexpected(ExFailure::unknown_command);
 }
@@ -1466,7 +1441,7 @@ std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
     {
         return set_option(argument, settings);
     }
-    return remaining_command(text, name, argument);
+    return remaining_command(text);
 }
 
 std::vector<std::string> ex_command_candidates(const ThemeCatalog &themes)
