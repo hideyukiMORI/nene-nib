@@ -240,8 +240,23 @@ constexpr std::size_t longest_code_point_bytes = 4;
         state, VimRemoveRange{OffsetRange{backward_characters(text, caret, single_step), caret}}};
 }
 
+// 始めの桁が今の本文で 1 文字の頭か（#1234）。Vim の ins_bs は 1 文字ずつ dec_cursor で戻り、
+// 桁が Insstart_orig.col と等しくなった所でだけ止まる。手前を消して打ち直した本文（回数の 2 周目
+// の `<C-w>ＡＢ`）では始めの桁が全角の途中に来ることがあり、そこは歩いても踏まないので止まらない。
+// 読むのは始めの桁の前後の数バイトだけ（1 行 16 MiB の行・#1040）。
+[[nodiscard]] bool erase_lands_on(const TextBuffer &text, Offset floor, Offset caret)
+{
+    constexpr std::size_t widest_code_point = 4;
+    const Offset before{floor.value - 1};
+    const Offset after{std::min(caret.value, floor.value + widest_code_point)};
+    const std::string window = text.text_range(before, after);
+    const Offset at{1};
+    return is_boundary(window, at) && !vim_character_continues(window, at);
+}
+
 // `Ctrl-w` `Ctrl-u` が戻れる左端（Vim の ins_bs の mincol と Insstart_orig・#1040）。キャレットが
-// 始めの行で始めの桁より右にあればそこ、ほかは行頭（autoindent は無いので字下げで止まらない）。
+// 始めの行で始めの桁より右にあり、その桁が文字の頭ならそこ、ほかは行頭（autoindent は無いので
+// 字下げで止まらない・始めの桁が文字の途中なら Vim も行頭まで歩く・#1234）。
 [[nodiscard]] Offset erase_floor(const VimState &state, const TextBuffer &text, Offset caret,
                                  LineNumber line)
 {
@@ -251,11 +266,13 @@ constexpr std::size_t longest_code_point_bytes = 4;
         return line_start;
     }
     const VimInsertStart start = state.insert_start.value();
-    if (start.line == line && start.byte_column < caret.value - line_start.value)
+    if (start.line != line || start.byte_column == 0 ||
+        start.byte_column >= caret.value - line_start.value)
     {
-        return Offset{line_start.value + start.byte_column};
+        return line_start;
     }
-    return line_start;
+    const Offset floor{line_start.value + start.byte_column};
+    return erase_lands_on(text, floor, caret) ? floor : line_start;
 }
 
 // Vim の vim_isspace（Tab・改行の類・空白）。語の前の空白を先に消すかを決める。

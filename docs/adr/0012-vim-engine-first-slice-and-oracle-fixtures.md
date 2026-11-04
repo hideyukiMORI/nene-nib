@@ -103,6 +103,14 @@ INSERT の `Ctrl-w` `Ctrl-u` `Ctrl-r {name}` を足した。値は oracle（`bac
 - **写しを読む所は行の中のバイトの桁**: 矩形の INSERT の覚え `VimBlockInsert` の読み始めを本文の位置 `at` から行頭からのバイトの桁 `at_byte` に替えた（Vim の `textcol`）。前の行を消してから改行で 1 行目の番号へ戻った列（`j0<C-v>jI<BS><BS><CR>x`・回数なしでも）は、1 行目の頭が前へずれても同じ桁から読む。`c` `C` の行の問いは Vim と同じ結果で外さない（改行で 1 行目を離れた `w<C-v>j2Cxy<BS><CR>z` も Vim は写さない）。入口の問い（流し直しの前のキャレット）は、1 周目が 1 行目を離れ流し直しの後に戻る列でも 1 行目が伸びず、写すかどうかの違いが本文に出ない（`j<C-v>j$2A<BS><C-u><CR>`）ので動かさない。流し直しの後に 1 行目へ戻るには、1 周目が最後の改行の後に打った本文が 1 行目の頭（入る前のキャレットより前）より短い必要があり、そのとき戻った 1 行目は入る前より伸びないので、写す本文はどちらの置き場所でも空になる（fixture は矩形の入口 3 件・ふつうの回数 INSERT 2 件）。
 - **打った本文だけの繰り返しのキャレット**: 矩形の Esc に届く `VimInsertAt` の本文は改行を含まない（改行を含む `I` `A` は 1 行目を離れて写さず、VISUAL の `c` `C` は回数を流し直さない・fixture `insert-count-join-2-change-block-` で実測）ので、LF で数えたキャレットのまま文書の位置で、直さない（CRLF の契約 `verify_vim_block_count_insert_at_line_endings` 3 列）。Esc の費用（巨大な 1 行で行の全体を読む所）は数字を Issue に残し、直すのは別 Issue。
 
+## 追記（2026-11-04・Issue #1234）
+
+回数つきの INSERT の 2 周目からの `Ctrl-w` `Ctrl-u` が、始めの桁の文字の途中で止まっていた（生成器 5 の fuzz-7-0241・`12 ?` の `?` の手前で `4i<C-w>ＡＢ<Tab>  <Esc>`）。値は oracle の fixture `insert-count-ctrl-w-` 16 件（消せる場合・本文の先頭で消せない場合・回数 1 と 4・`<BS>` と `<C-u>` の同じ形）で守る。
+
+- **`backspace` の既定**: Issue の見込みの「`backspace=` が空で始めより前を消せない」は当たらない。oracle は `-u NONE` の上に `DEFAULT_SETTINGS` の `set backspace=indent,eol,start` を置く（#1040 の追記のとおり）ので、1 周目の `Ctrl-w` は始めより前の `12` を消す。Nib は `backspace` を設定にせず、この固定値のまま（`:set backspace=` は後続にしない）。消せないのは本文の先頭（1 行目の行頭）だけで、そこは #1093 の「何も消せない消す鍵は記録しない」が受け持つ（ビープで返り redo に足さない・fixture `insert-count-ctrl-w-buffer-start` は `Ａ ` が 4 回）。
+- **止まるのは歩いて始めの桁を踏んだときだけ**: Vim の `ins_bs`（`edit.c`）の `BACKSPACE_WORD` / `BACKSPACE_LINE` の do-while は `dec_cursor()` で 1 文字ずつ戻り、続ける条件は `curwin->w_cursor.col > mincol && (can_bs(BS_NOSTOP) || lnum != Insstart_orig.lnum || col != Insstart_orig.col)`（`nostop` は既定に無い）。桁はバイトで、比べるのは等しいかだけ。`Insstart_orig` は `edit()` の主の loop の頭で毎鍵 `Insstart` に戻る（`update_Insstart_orig`）ので、`ins_bs` の末尾の「始めより前を消したら `Insstart_orig.col` を寄せる」は次の鍵に残らず、始めの桁は 1 周目に手前を消しても動かない（#1040 の追記と同じ）。回数の残りは Esc（`ins_esc`）の `start_redo_ins()` が redo の打鍵を流し直すので、2 周目の本文の上では始めの桁（`12 ?` の 2）が 1 周目に入れた全角（3 バイト）の途中に来る。そこは `dec_cursor` が踏まないので、Vim は語の境か行頭まで戻る（`2l2i<C-w>ＡＢ` は `ＡＢ ?`・`2l4i<C-u>Ａ` は `Ａ ?`）。
+- **Nib の形**: 左端を決める `erase_floor`（`VimStepInsert.cpp`）は、始めの桁がキャレットより左にあり、かつその桁が今の本文で 1 文字の頭（`is_boundary` で code point の頭・`vim_character_continues` で幅 0 の続きでない・ADR 0053）のときだけそこで止め、ほかは行頭まで。読むのは始めの桁の前後の数バイトだけで、行を写さない（1 行 16 MiB の行・#1040）。始めの桁が文字の頭に来る形（`ab ?` の `3l2i<C-w>Ａx` は 2 周目が `x` だけを消して `ＡＡx?`）は前のまま。`<BS>` は始めの桁で止まらない（`BACKSPACE_CHAR` は 1 文字で抜ける）ので変えない。
+
 ## 関連
 
 ADR 0005（自前 Vim・oracle）・ADR 0006（表駆動）・ADR 0009（piece table・意図の和型・undo の区切り）・採用案 `docs/design/2026-09-15-editing-look.md`（D15）。
