@@ -15,7 +15,8 @@
 // の 7 欄を足す。窓は fixture の再生と同じ arrange_vim_viewport で置き、余白は窓を置いた後で
 // `:set so=` を打つ（契約 --vim-view の placed_window と同じ順）。比べる欄に `first_visible` と
 // `scroll`（Vim の 'scroll'）が加わる。鍵の記法の表
-// （src/core/VimKeyNames.hpp）に無い `<…>` を含む件と、欄の数が違う行は `skip <name> <理由>`。
+// （src/core/VimKeyNames.hpp）に無い `<…>` を含む件と、欄の数が違う行と、数の欄が
+// std::uint32_t の範囲を超える行は `skip <name> <理由>`（#1233）。
 #include "../vim/VimFixture.hpp"
 #include "../vim/VimViewportFixture.hpp"
 #include "EditMode.hpp"
@@ -41,6 +42,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -71,6 +73,9 @@ constexpr std::size_t viewport_field_count = 15;
 constexpr std::size_t viewport_numbers = viewport_field_count - field_count;
 using ViewportValues = std::array<std::size_t, viewport_numbers>;
 constexpr std::size_t read_chunk = 65536;
+// 数の欄の上限。fixture の line・column と窓の値は std::uint32_t に狭めるので、超える欄は読めない
+// 欄として skip にする（#1233・R2-1）。
+constexpr std::size_t number_limit = std::numeric_limits<std::uint32_t>::max();
 
 // `\` の後の 1 文字が表す文字（`\n` `\t` `\r` のほかは文字そのもの・`\\` は `\`）。
 [[nodiscard]] char unescaped_character(char escaped) noexcept
@@ -205,6 +210,7 @@ constexpr std::size_t read_chunk = 65536;
     return std::nullopt;
 }
 
+// 10 進の数の欄。空・数字でない文字・number_limit を超える値は無し。
 [[nodiscard]] std::optional<std::size_t> number_of(std::string_view value)
 {
     if (value.empty())
@@ -219,6 +225,10 @@ constexpr std::size_t read_chunk = 65536;
             return std::nullopt;
         }
         result = result * 10 + static_cast<std::size_t>(character - '0');
+        if (result > number_limit)
+        {
+            return std::nullopt;
+        }
     }
     return result;
 }
@@ -238,6 +248,7 @@ void write_mismatch(const std::string &name, std::string_view field, std::string
 
 // viewport の 7 欄（visible_lines first_visible start_line start_column expected_first_visible
 // expected_scroll_lines scrolloff）から fixture の窓の値を作る。余白は最後の欄で別に読む。
+// どの欄も number_of が number_limit 以下に収めてあるので、狭めで値は変わらない。
 [[nodiscard]] VimViewportFixture viewport_of(const ViewportValues &values)
 {
     return VimViewportFixture{
@@ -421,7 +432,8 @@ void replay_line(std::string_view line)
     const auto column = number_of(fields.at(5));
     if (!line_number.has_value() || !column.has_value())
     {
-        write_line("skip " + name + " line and column must be decimal numbers");
+        write_line("skip " + name + " line and column must be decimal numbers up to " +
+                   std::to_string(number_limit));
         return;
     }
     if (fields.size() == field_count)
@@ -432,7 +444,8 @@ void replay_line(std::string_view line)
     const auto values = viewport_values(fields);
     if (!values.has_value())
     {
-        write_line("skip " + name + " viewport fields must be decimal numbers");
+        write_line("skip " + name + " viewport fields must be decimal numbers up to " +
+                   std::to_string(number_limit));
         return;
     }
     replay_one(fields, line_number.value(), column.value(), values);

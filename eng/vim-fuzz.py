@@ -52,8 +52,11 @@ generated cases to `<out>/cases.json`.
 Some words depend on what came before them (Issue #963, generator 2): `''` and `` ` ` `` only after
 a jump (the oracle's `-es` Vim starts on the last line, the user's Vim on line 1, #962), `n` `N` only
 after `/ ? * #`, a read of `"1`..`"9` (`p` `P`) only after an unnamed `dd` or `cc`, and `'a` `` `a ``
-only after `ma`. The generator picks each word from the words the state so far allows, and the
-shrinker keeps only candidates whose words still hold. `--exclude WORD...` drops words from the
+only after `ma`. `d y v` with `H M L` (`dS yS vS`) are jumps too (Vim's `nv_scroll` sets the
+previous context mark), but only the dependency check (the shrinker) counts them; the generator
+draws with the set before them so that generator 5's seeds keep their cases (#1233). The generator
+picks each word from the words the state so far allows, and the shrinker keeps only candidates
+whose words still hold. `--exclude WORD...` drops words from the
 table by name; `--known ISSUE:WORD,WORD` (repeatable) counts a difference whose words (the minimal
 ones with `--shrink`) include one of those words as known under that Issue instead of new. A known
 name may also be a text object (`aB` `i(`), which matches a `dobj` `cobj` `yobj` `v` word holding it.
@@ -66,14 +69,17 @@ with `name` / `text` / `keys` first, so those three keys copy into tests/vim/fix
 are, followed by the oracle's and Nib's values. `--shrink` deletes words from the keys and lines from
 the buffer while both Vim and the replayer still disagree on one of the same fields, and records the
 smallest case under `minimal`. `<out>/summary.md` holds the counts (generated, rejected, matched,
-mismatched) and the differences by word kind.
+mismatched), the differences by word kind, and the new differences folded by their word sequence
+(the minimal one when shrunk): one line per sequence with its count and names, and the details of
+only the first case of each (#1233).
 
 `--seeds A-B` runs the seeds A..B one after another, each into `<out>/seed-N/` as `--seed` would,
-and writes the totals and every new difference to `<out>/summary.md`.
+and writes the totals and the new differences, folded the same way, to `<out>/summary.md`.
 
 `--from-fixtures N` is the replayer's self-check: it measures the first N tests/vim/fixtures.json
-cases without settings, viewport or register, and the first N viewport cases (only `set scrolloff=`
-as settings, no register), through the same oracle and expects every one `ok`.
+cases without settings, viewport or register, the first N viewport cases with `scrolloff` 0 and the
+first N with `scrolloff` above 0 (only `set scrolloff=` as settings, no register, only the four
+window keys the replayer carries), through the same oracle and expects every one `ok`.
 
 Usage:
     python eng/vim-fuzz.py --count 300 --seed 1 --out D:/NeNeNib/outputs/<date>/vim-fuzz-seed1 --shrink
@@ -102,6 +108,8 @@ DEFAULT_REPLAY = ROOT / "build" / "nib_vim_replay.exe"
 FIELDS = ("text", "line", "column", "register", "register_kind")
 # 生成器 5 の件（viewport つき）が加えて比べる欄（#1224）。
 VIEWPORT_FIELDS = ("first_visible", "scroll")
+# 再生器の 7 欄が運ぶ viewport の鍵（`--from-fixtures` はこれだけの fixture を測る・#1233）。
+VIEWPORT_KEYS = frozenset(("visible_lines", "first_visible", "line", "column"))
 
 # 語の表（生成器の単位・Issue #954 の 2）。1 行が 語の種類・重み・鍵の型。型の `{…}` は
 # expand_word が埋める: {n} 省略できる回数 / {N} 行の番号 / {P} 割合 / {B} 桁 / {c} 1 文字 /
@@ -215,9 +223,13 @@ GENERATORS = (3, 4, 5)
 # ままだと `07<C-a>` が 8 進で測られる（ADR 0015 の決定 14）。fixture へ写すときも同じ設定を書く。
 ORACLE_SETTINGS = ["set nrformats=bin,hex"]
 WORD_NAMES = tuple(kind for kind, _, _ in WORDS + WORDS_4 + WORDS_5)
-# `H M L` も Vim の jump-motions（生成器 3 / 4 は作らないので、その列は変わらない）。
+# `H M L` も Vim の jump-motions（生成器 3 / 4 は作らないので、その列は変わらない）。オペレータと
+# VISUAL の中の `H M L`（`dS` `yS` `vS`）も Vim の nv_scroll が setpcmark を呼ぶので跳び（#1233）。
 JUMP_WORDS = frozenset(("G", "gg", "NG", "Ngg", "N%", "/", "?", "*", "#", "%", "n", "N", "'", "`",
-                        "''", "``", "H", "M", "L"))
+                        "''", "``", "H", "M", "L", "dS", "yS", "vS"))
+# 生成が引く跳びの集合。生成器 5 の固定 seed の列を変えないため、`dS` `yS` `vS` を跳びと数えるのは
+# 依存の検査（shrink の候補）だけで、生成は前の集合で引く。生成で数えるのは次の版（生成器 6）。
+GENERATION_JUMP_WORDS = JUMP_WORDS - {"dS", "yS", "vS"}
 SEARCH_WORDS = frozenset(("/", "?", "*", "#"))
 NUMBERED_WRITERS = frozenset(("dd", "cc"))
 NUMBERED_READS = tuple('"' + digit for digit in "123456789")
@@ -416,8 +428,9 @@ def word_holds(state: dict, kind: str, keys: str) -> bool:
     return not (kind in READERS and keys.startswith(NUMBERED_READS) and not state["numbered"])
 
 
-def advanced(state: dict, kind: str, keys: str) -> dict:
-    return {"jumped": state["jumped"] or kind in JUMP_WORDS,
+def advanced(state: dict, kind: str, keys: str, jumps: frozenset[str] = JUMP_WORDS) -> dict:
+    """The state after a word. `jumps` is GENERATION_JUMP_WORDS while generating (#1233)."""
+    return {"jumped": state["jumped"] or kind in jumps,
             "searched": state["searched"] or kind in SEARCH_WORDS,
             "numbered": state["numbered"] or (kind in NUMBERED_WRITERS and not keys.startswith('"')),
             "marks": state["marks"] | ({keys[1]} if kind == "m" else set()),
@@ -461,7 +474,7 @@ def generate_case(rng: random.Random, excluded: frozenset[str],
         joined = "".join(keys for _, keys in words) + keys
         if unknown_key_name(joined) is None:
             words.append((kind, keys))
-            state = advanced(state, kind, keys)
+            state = advanced(state, kind, keys, GENERATION_JUMP_WORDS)
     return text, words
 
 
@@ -788,7 +801,32 @@ def settings_lines(args: argparse.Namespace) -> list[str]:
             "- known: " + (known or "なし"), ""]
 
 
-def mismatch_lines(entry: dict, mismatches: list[dict], heading: str) -> list[str]:
+def word_groups(entries: list[dict]) -> list[list[dict]]:
+    """Differences folded by their word sequence (the minimal one when shrunk), in the order each
+    sequence first appears (#1233: nine `{N}z^` alone were listed one by one)."""
+    groups: dict[tuple[str, ...], list[dict]] = {}
+    for entry in entries:
+        words = entry["minimal"]["words"] if "minimal" in entry else entry["words"]
+        groups.setdefault(tuple(words), []).append(entry)
+    return list(groups.values())
+
+
+def group_lines(groups: list[list[dict]]) -> list[str]:
+    """`summary.md`'s kinds: one line per word sequence, with its count and names."""
+    lines = ["## 新規の不一致の種類（同じ語の列で畳む・最小化した件はその語）", ""]
+    for group in sorted(groups, key=len, reverse=True):
+        first = group[0]
+        words = first["minimal"]["words"] if "minimal" in first else first["words"]
+        lines.append(f"- {fenced(' '.join(words))}: {len(group)}"
+                     f"（{' '.join(entry['name'] for entry in group)}）")
+    if not groups:
+        lines.append("- 0")
+    lines.append("")
+    return lines
+
+
+def mismatch_lines(entry: dict, mismatches: list[dict], heading: str,
+                   same: list[str] | None = None) -> list[str]:
     shown = entry.get("minimal", entry)
     oracle = shown.get("oracle", entry["oracle"])
     nib = shown.get("nib", entry["nib"])
@@ -804,6 +842,8 @@ def mismatch_lines(entry: dict, mismatches: list[dict], heading: str) -> list[st
     represented = [e["name"] for e in mismatches if e.get("represented_by") == entry["name"]]
     if represented:
         lines.append(f"- 同じ原因と見た件: {len(represented)}")
+    if same:
+        lines.append(f"- 同じ語の列の件: {len(same)}（{' '.join(same)}）")
     lines.append("")
     return lines
 
@@ -854,14 +894,16 @@ def summary_text(args, tally, rejected, skipped, mismatches) -> str:
     if not kinds:
         lines.append("- 0")
     lines.append("")
-    lines.append("## 新規の不一致（最小化した件）")
-    lines.append("")
     new = [e for e in mismatches if e["known"] is None and "represented_by" not in e]
+    groups = word_groups(new)
+    lines.extend(group_lines(groups))
+    lines.append("## 新規の不一致（最小化した件・同じ語の列は最初の 1 件）")
+    lines.append("")
     if not new:
         lines.append("新規の不一致は 0。")
         lines.append("")
-    for entry in new:
-        lines.extend(mismatch_lines(entry, mismatches, "###"))
+    for group in groups:
+        lines.extend(mismatch_lines(group[0], mismatches, "###", [e["name"] for e in group[1:]]))
     lines.append("## 既知の不一致")
     lines.append("")
     known = [e for e in mismatches if e["known"] is not None]
@@ -893,15 +935,17 @@ def fuzz_seeds(args: argparse.Namespace) -> int:
     lines.append("既知（Issue ごと）: " + (", ".join(f"#{k} {v}" for k, v in sorted(by_issue.items()))
                                          or "0"))
     lines.append("")
-    lines.append("## 新規の不一致（全 seed・最小化した件）")
+    new = [(entry, run["mismatches"]) for run in runs for entry in run["mismatches"]
+           if entry["known"] is None and "represented_by" not in entry]
+    run_of = {id(entry): mismatches for entry, mismatches in new}
+    groups = word_groups([entry for entry, _ in new])
+    lines.extend(group_lines(groups))
+    lines.append("## 新規の不一致（全 seed・最小化した件・同じ語の列は最初の 1 件）")
     lines.append("")
-    count = 0
-    for run in runs:
-        for entry in run["mismatches"]:
-            if entry["known"] is None and "represented_by" not in entry:
-                lines.extend(mismatch_lines(entry, run["mismatches"], "###"))
-                count += 1
-    if count == 0:
+    for group in groups:
+        lines.extend(mismatch_lines(group[0], run_of[id(group[0])], "###",
+                                    [e["name"] for e in group[1:]]))
+    if not new:
         lines.append("新規の不一致は 0。")
         lines.append("")
     args.out.mkdir(parents=True, exist_ok=True)
@@ -910,21 +954,37 @@ def fuzz_seeds(args: argparse.Namespace) -> int:
     return 0
 
 
+def scrolloff_of(fixture: dict) -> int:
+    """A viewport fixture's `set scrolloff=N` (0 without one: `-u NONE` Vim's default)."""
+    return next((int(s.split("=")[1]) for s in fixture.get("settings", [])), 0)
+
+
+def replayable_window(fixture: dict) -> bool:
+    """A viewport fixture the replayer's 7 fields carry: no register, only `set scrolloff=` as
+    settings, and only the four window keys (`wrap_columns` and the like would be measured wrong,
+    #1233)."""
+    return ("viewport" in fixture
+            and not set(fixture) - {"name", "text", "keys", "settings", "viewport"}
+            and set(fixture["viewport"]) <= VIEWPORT_KEYS
+            and all(re.fullmatch(r"set scrolloff=\d+", s) for s in fixture.get("settings", [])))
+
+
 def from_fixtures(args: argparse.Namespace) -> int:
-    """The replayer's self-check on the first N plain fixtures (no settings/viewport/register) and
-    the first N viewport fixtures whose only settings are `set scrolloff=` (#1224)."""
+    """The replayer's self-check on the first N plain fixtures (no settings/viewport/register), the
+    first N viewport fixtures with `scrolloff` 0 and the first N with `scrolloff` above 0, so the
+    replayer's `:set so=N` path is measured too (#1224・#1233)."""
     work = args.out / "work"
     work.mkdir(parents=True, exist_ok=True)
     fixtures = json.loads((ROOT / "tests" / "vim" / "fixtures.json").read_text(encoding="utf-8"))
     plain = [f for f in fixtures if not set(f) - {"name", "text", "keys"}][:args.from_fixtures]
-    windowed = [f for f in fixtures if "viewport" in f
-                and not set(f) - {"name", "text", "keys", "settings", "viewport"}
-                and all(re.fullmatch(r"set scrolloff=\d+", s) for s in f.get("settings", []))
-                ][:args.from_fixtures]
+    windows = [f for f in fixtures if replayable_window(f)]
+    flat = [f for f in windows if scrolloff_of(f) == 0][:args.from_fixtures]
+    margined = [f for f in windows if scrolloff_of(f) > 0][:args.from_fixtures]
+    windowed = flat + margined
     measured = [ORACLE.measure(work, fixture) for fixture in plain]
     for fixture in windowed:
         answer = ORACLE.measure(work, fixture)
-        answer["scrolloff"] = next((int(s.split("=")[1]) for s in fixture.get("settings", [])), 0)
+        answer["scrolloff"] = scrolloff_of(fixture)
         measured.append(answer)
     results = replay(args.replay, work, measured)
     counts = Counter(result["status"] for result in results.values())
@@ -932,7 +992,7 @@ def from_fixtures(args: argparse.Namespace) -> int:
         if result["status"] != "ok":
             print(f"{result['status']} {name} {result['fields'] or result['reason']}")
     total = len(plain) + len(windowed)
-    print(f"fixtures {len(plain)} + viewport {len(windowed)}: "
+    print(f"fixtures {len(plain)} + viewport {len(flat)} (so=0) + {len(margined)} (so>0): "
           + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
     return 0 if counts.get("ok", 0) == total else 1
 
