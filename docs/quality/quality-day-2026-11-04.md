@@ -223,3 +223,13 @@ merge 済み・閉じ済みの PR の作業木 82 本（clean・未 push 0）を
 まとめ枝 4 の merge: CI run [41806832885](https://github.com/hideyukiMORI/nene-nib/actions/runs/41806832885) success → rebase merge で **main `b40ea348`**（4 commit・元の PR 4 本は道具が閉じた・新しい待ち直しの道は今回は通らなかった）。試用の exe `D:/NeNeNib/evidence/20261104-trial/NeNeNib-main-b40ea348.exe`（README 22〜24）。
 
 **今日の合計: まとめ枝 4 本（#1220 #1240 #1251 #1264）で製品の PR 36 本と道具の PR 2 本が CI 4 回で main に入り、文書 PR 3 本。** fuzz 生成器 5 は 60 件 → 1 件（oracle の既知の差 `z-M`）。
+
+## 11. 夜 3（hide「区切りのいいところで止めて日報と引き継ぎ書を書いて」まで）
+
+| Issue | PR | 内容 | 状態 |
+|---|---|---|---|
+| #1233 fuzz の道具の後続 | #1273（席 F2・`f7e55a48`） | `--from-fixtures` に so>0・summary の種類の畳み・`JUMP_WORDS`（生成には効かせない・候補 A・生成器 6 で）・再生器の `uint32` の範囲・文言 | V-1273: 止める 0・直してから 0 → まとめ枝 5（#1274）に積んだ |
+| #1266 map の単位ごとのモード | #1275（席 I17・`d7875876`） | `KeyMapEmit.reads`・`delivered_units` が単位を流すたびにモードを読み直し、変わっていれば残りを `typed_again` で戻す。実測 5 件・`--key-map` 777 | V-1275: 止める 0・直してから 1（M1: 1 鍵の引数待ちの後の鍵を引き直さない・main からの退行）＋軽 3 → 席が直し中 `352dc7f2`・`--key-map` 779・再レビューは翌日。後続は Issue #1276 |
+| #1269 `l` の歩き | #1277（席 I16・`190bbf67`） | `character_end(byte, count)`・`forward_characters` を `VimLineColumns` に・同値の試験 11,997 鍵・probe `99999999l` 90.9 → 14.2 ms。**窓の終わりで切れた UTF-8 を `decode` が窓の外まで読む穴**（ASan の container-overflow・前の `character_end` にも眠っていた）を `whole_code_points` で直した | **レビューは未**（翌日） |
+
+まとめ枝 5（#1274）は #1273 だけ積んで止めた。hide の指示で新しい席は出さない。
