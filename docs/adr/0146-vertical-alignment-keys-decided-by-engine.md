@@ -68,3 +68,12 @@ PR #637（ADR 0145 決定 5）で `z` の接頭辞の表 `z_bindings` ができ�
 ## 追補（2026-11-04・#1235）: 回数つきの位置合わせは跳び
 
 Vim の `nv_zet` は `z<CR>` `zt` `z.` `zz` `z-` `zb` `z+` `z^` に回数 `count0` があり今の行の番号と違えば、回数の行へ動く前に `setpcmark()` する。Nib も `aligned_screen` が同じ条件（`counted_alignment_jumps`）で前の位置を `''` `` `` `` とジャンプの列へ置く。跳びの一覧と鍵の終わりの戻し方は ADR 0152 の追補（#1235）。
+
+## 追補（2026-11-04・#1231）: 回数つきの `zt` `zz` `zb` の欲しい列は動く前のキャレットで決まる
+
+生成器 5 の fuzz（#1224）が見つけた違い（`so=2` 高さ 11・先頭 14・17 行目の `gI<Tab>かな<Esc>18zz3k` は Vim 8 桁 / Nib 5 桁）。
+
+1. **Vim の規則。** `exec_normal`（`:normal!`）は鍵ごとに `update_topline_cursor` → `update_curswant` を、対話の `main_loop` も鍵ごとに `update_curswant` を呼ぶので、`w_set_curswant` が立っている（Esc の `oneleft` の後など）欲しい列は**次の鍵を始める前**に今のキャレットの桁で決まる。`nv_zet` の回数の行への移動は `w_cursor.lnum` を変えて `check_cursor_col` で桁を収めるだけで、`w_set_curswant` を立てない。だから `{N}zt` `{N}zz` `{N}zb` の後の `j` `k` は**動く前の行の桁**を使う（`z<CR>` `z.` `z-` は `beginline` で欲しい列も最初の非空白・決定 4 のまま）。
+2. **Nib。** 欲しい列がまだ決まっていない（`VimState.wanted_column` が無い）ときに `aligned_screen` がそれを空のまま運び、次の `k` が回数の行のキャレットの桁から決めていた。`aligned_screen` は `wanted_column_of(本文, 状態, 動く前のキャレット)` を置く（決まっていればそのまま・決定 4 の「欲しい列を保つ」の写し方は変えない）。
+3. **検証。** fixture `viewport-small-` 7 件（直す前に落ちるのは Esc の後の 2 件・`l` の後の 5 件は Nib も欲しい列を決めているので前から一致する守り・Issue の件を `so=2` / `so=0` で 2 件・`4l17zzk` `4l17ztk` `4l17zbk`（`so=2`）の短い行で収めた桁・同じ行の `$16zz2j`・回数つきの `z.` は最初の非空白）。
+4. **同じ Issue の残り 2 件。** (a) `<C-d>vggx2<C-u>f;` は #1228（カーソルが 1 行目の Ctrl-u は失敗して残りの鍵を捨てる）で既に直っていて、fixture `viewport-edge-fails-half-up-after-a-visual-delete-to-the-top` が守る（Issue の見込みの `startofline` ではなかった）。(b) `z-M`（`so=3` 高さ 11・先頭 5・8 行目で Vim 4 行目 / Nib 6 行目）は本件では直さない。Vim の `scroll_cursor_bot(0, TRUE)` は先頭が 1 行目に着くと `set_empty_rows(used)` で「1〜8 行目の和」から空き段 3 を置き、`VALID_BOTLINE` を立てたまま返る（先頭が変わったときは「`update_screen()` が botline を決め直す」とだけ書いてある）。`:normal!` の中では描き直しが無いので、次の `M` の `validate_botline` は古い `w_empty_rows` = 3 を読み、半分が `(11 − 3 + 1) / 2 = 4` になる。`z-` と `M` の間に `redraw!` を挟むと Vim も 6 行目（Nib と同じ・`D:/NeNeNib/scripts/20261104/1231/probe.vim` で実測）。打った鍵の Nib は毎回描く対話の Vim と同じ答えなので、合わせるかは設計席の判断に返した。
