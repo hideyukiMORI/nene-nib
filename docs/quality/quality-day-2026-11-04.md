@@ -206,3 +206,20 @@ merge 済み・閉じ済みの PR の作業木 82 本（clean・未 push 0）を
 - まとめ枝 3 のゲート（同じ木の Release・負荷 6%・matchparen 既定オン入り）: **8 benches checked, 0 regression(s)**（起動 40.1・窓 30.3・単打 0.62・200 打鍵 2.84・16 MiB を開く 51.2・16 MiB で 200 打鍵 3.03・面 1.04・長い行 1.09 ms・115 s）。
 - まとめ枝 3 の木の Release の再生器で生成器 5 の seed 1〜10（既知は #1231 の `z-M`）: 不一致 2（既知 1・**新規 1**: `zz2<C-f>a)<Esc>`・so=0 vis12 top24 at30 で `a)` の位置が違う → Issue #1261・#1229 の回数つき `<C-f>` が本文の終わりに掛かる形の残差の見込み）。朝の 60 件からは 2 件。
 - まとめ枝 3 の merge: CI run [41790476108](https://github.com/hideyukiMORI/nene-nib/actions/runs/41790476108) success → `gh pr merge --rebase` が GitHub の **502 Bad Gateway** で落ちた（PR は OPEN・head 不変）→ 同じ run を `--ci-run` で渡して再試行すると「Merge already in progress」→ 20 秒 × 9 回待っても OPEN のままだったので 3 回目の再試行で **main `40cc1467`**（6 commit・元の PR 6 本は道具が閉じた）。道具の「失敗を再試行しない」は merge の結果が分かっている（OPEN・head 不変）ときの再試行までは禁じていない（ADR 0118 の「成否不明なら PR を読んで確認」の形）。道具の後続（#1223）に「502 と in progress のときの待ち直し」を足す。
+
+## 10. 深夜（夜 2 の席とまとめ枝 4）
+
+| Issue | PR | 内容 | レビュー |
+|---|---|---|---|
+| #1223 道具の後続 | #1263（席 T2・`84048ac3`） | merge の呼び出しが 5xx か「Merge already in progress」のときは PR を読み直し、OPEN かつ head 不変なら 30 秒ごとに最大 10 回呼び直す（新しい CI は起こさない）・閉じる語の全部・元の PR の対応は積んだ順・`close_sources` の例外・250 の上限・ADR 0021 決定 8 / ADR 0118 の例外。49 tests | V-1263: 止める 0・直してから 1（待ち直しの後に merge が完了していたときの事後照合）＋ F-3（呼び直しの前に `behind_by` を読み直す）→ 直し済み。F-1 / F-2 は #1223 に残す |
+| #1257 map の展開の途中の失敗 | #1265（席 I14・`8a38c72d`） | Vim は展開した鍵だけを単位（右辺 1 つ）ごとに捨て、打った鍵は捨てない（`flush_buffers(FLUSH_MINIMAL)`・実測 7 件）。`KeyMapEmit.ends` と `delivered_units` の 1 本。`--key-map` 761 | V-1265: 止める 0・直してから 0。気づき（流しの途中でモードが変わると後の単位は最初のモードの表）→ Issue #1266 |
+| #1261 `zz` の後の回数つき `<C-f>` | #1267（席 I13・`d456c048`） | Vim の `onepage` の前への周は末尾が見えている周で先頭を最終行にする。Nib はその写しを最初の周だけに持っていた → 周ごとの 1 本 `pages_forward`（`forward_pages_held` と `limited_product` を畳む）。fixture 11 件・fuzz 2 → 1（新規 0） | V-1267: 止める 0・直してから 0 |
+| #1258 巨大な 1 行の残り 2 | #1268（席 I15・`88ec92ef`） | `<C-w>` の左端は 64 バイトの窓（`indexed_word_erase_begin`）・`character_start(byte, count)` で何歩も戻る・ASCII の 1 歩の速道。`<C-w>` 1.55 → 0.011 ms・`99999999h` 509 → 15 ms。同値の試験 15,093 鍵 | V-1268: 止める 0・直してから 1（ADR の 1 文・設計席が足した）。`l` は Issue #1269 |
+
+まとめ枝 4（#1264・PR #1270・4 commit・衝突なし）: Debug 全 target 0 warning（495 s）・ctest 15・symbols 0・conformance 0・format 1491・validate-git 4・`test_merge_pr` 49。merge は枝の中の新しい `merge-pr.py --integration`（待ち直し入り）で。
+
+まとめ枝 4 のゲート（同じ木の Release・負荷 5%）: **8 benches checked, 0 regression(s)**（起動 41.0・窓 30.6・単打 0.59・200 打鍵 3.15・16 MiB を開く 52.8・16 MiB で 200 打鍵 2.99・面 1.08・長い行 0.86 ms・115 s）。
+
+まとめ枝 4 の merge: CI run [41806832885](https://github.com/hideyukiMORI/nene-nib/actions/runs/41806832885) success → rebase merge で **main `b40ea348`**（4 commit・元の PR 4 本は道具が閉じた・新しい待ち直しの道は今回は通らなかった）。試用の exe `D:/NeNeNib/evidence/20261104-trial/NeNeNib-main-b40ea348.exe`（README 22〜24）。
+
+**今日の合計: まとめ枝 4 本（#1220 #1240 #1251 #1264）で製品の PR 36 本と道具の PR 2 本が CI 4 回で main に入り、文書 PR 3 本。** fuzz 生成器 5 は 60 件 → 1 件（oracle の既知の差 `z-M`）。
