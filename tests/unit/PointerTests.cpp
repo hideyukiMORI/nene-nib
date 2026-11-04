@@ -198,7 +198,7 @@ void verify_vim_waits_dropped()
     Editing editing;
     auto &controller = editing.controller();
     prepare_vim(controller);
-    vim_replay(controller, "vi");
+    vim_replay(controller, "i<C-r>");
     press(controller, 15, 0, PointerClicks::triple);
     expect(whole_vim_body(controller) == sample &&
                controller.frame().vim_mode == VimMode::visual_line,

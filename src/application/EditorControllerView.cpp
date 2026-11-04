@@ -420,11 +420,14 @@ void EditorController::select_clicked_in_vim(core::Offset pointed, PointerClicks
     case PointerClicks::double_:
         static_cast<void>(
             stepped_vim(PointerSelection{clicked_word_visual(text, rest), core::VimMode::visual}));
-        return;
+        break;
     case PointerClicks::triple:
         static_cast<void>(
             stepped_vim(PointerSelection{core::Selection{rest, rest}, core::VimMode::visual_line}));
-        return;
+        break;
     }
+    // 押しが折り返しの段の境目（trailing）に置いた向きを残さない（perform(VimSelect) は gv などと
+    // 共用なので、押しの道だけで戻す）。
+    state_ = state_.with_caret_affinity(core::CaretAffinity::leading);
 }
 } // namespace nenenib::application
