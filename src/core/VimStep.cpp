@@ -1143,7 +1143,10 @@ namespace detail
 // 縦の位置合わせ zt zz zb z<CR> z. z- z+ z^（ADR 0146 の決定 1〜6・9）。回数か窓の外の行で行を
 // 選び、z<CR> z. z- z+ z^ は行の最初の非空白へ動いて（欲しい列もそこ）から、engine が先頭行を
 // 決めて VimNavigate で返す。
-// zt zz zb は欲しい列を保つ。横位置は保つ（first_column は無し）。行が画面より高いときの先頭は
+// zt zz zb は欲しい列を保つ。まだ決まっていない欲しい列（Esc の後など）は
+// 動く前のキャレットの桁で決める（Vim は鍵の前に update_curswant する。
+// 回数の行へ動く check_cursor_col は curswant を変えない・追補 #1231）。
+// 横位置は保つ（first_column は無し）。行が画面より高いときの先頭は
 // 決定 5 の規則。NORMAL と VISUAL は同じ 1 本を通り、VISUAL は錨を保つ。
 [[nodiscard]] VimStep aligned_screen(const VimState &state, const VimEditorView &view,
                                      VimAction action)
@@ -1170,7 +1173,7 @@ namespace detail
     VimState next = navigated_state(finished_input_wait(state), view, caret);
     if (!first_non_blank)
     {
-        next.wanted_column = state.wanted_column;
+        next.wanted_column = wanted_column_of(view.text, state, view.selection.caret);
     }
     VimStep step{std::move(next), VimNavigate{navigated_selection(state, view.selection, caret),
                                               first.line, first.row}};
