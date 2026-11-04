@@ -4,7 +4,7 @@
 #include "OffsetRange.hpp"
 #include "TextPosition.hpp"
 #include "VimBlockEdit.hpp"
-#include "VimCharacterBoundary.hpp"
+#include "VimLineColumns.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -43,7 +43,7 @@ constexpr std::size_t single_step = 1;
     for (std::size_t number = line_of(text, ordered.begin).value;
          number <= line_of(text, ordered.end).value; ++number)
     {
-        longest = std::max(longest, virtual_width(text.line_text(LineNumber{number})));
+        longest = std::max(longest, line_virtual_width(text, LineNumber{number}));
     }
     return longest;
 }
@@ -61,28 +61,29 @@ constexpr std::size_t single_step = 1;
 
 // 1 行ぶんの形（決定 2）。行が矩形より手前で終わればレジスタに幅ぶんの空白だけが入り、本文は
 // 動かない。端が文字の途中に掛かればその文字は丸ごと `range` に入り、掛かった桁は空白になる。
+// 桁は VimLineColumns に問う（索引を持つ本文は行を写さない・#1198）。
 [[nodiscard]] VimBlockLine block_line(const TextBuffer &text, LineNumber number, std::size_t left,
                                       std::size_t right)
 {
-    const std::string line = text.line_text(number);
-    const Offset start = text.line_start(number);
-    const std::size_t columns = virtual_width(line);
+    const VimLineColumns line(text, number);
+    const Offset start = line.start();
+    const std::size_t columns = line.width();
     if (left > columns + single_step)
     {
-        return empty_line_at(text.line_end(number), block_columns(left, right));
+        return empty_line_at(Offset{start.value + line.size()}, block_columns(left, right));
     }
     const std::size_t last_column = std::min(right, columns);
     if (left > last_column)
     {
-        return empty_line_at(Offset{start.value + byte_at_column(line, VirtualColumn{left})}, 0);
+        return empty_line_at(Offset{start.value + line.byte_at(VirtualColumn{left})}, 0);
     }
-    const std::size_t first_byte = byte_at_column(line, VirtualColumn{left});
-    const std::size_t last_byte = byte_at_column(line, VirtualColumn{last_column});
-    const std::size_t first_begins = column_of(line, first_byte).value;
-    const std::size_t first_ends = column_end_of(line, first_byte).value;
-    const std::size_t last_begins = column_of(line, last_byte).value;
-    const std::size_t last_ends = column_end_of(line, last_byte).value;
-    const std::size_t after_last = vim_character_end(line, Offset{last_byte}).value;
+    const std::size_t first_byte = line.byte_at(VirtualColumn{left});
+    const std::size_t last_byte = line.byte_at(VirtualColumn{last_column});
+    const std::size_t first_begins = line.column_of(first_byte).value;
+    const std::size_t first_ends = line.column_end_of(first_byte).value;
+    const std::size_t last_begins = line.column_of(last_byte).value;
+    const std::size_t last_ends = line.column_end_of(last_byte).value;
+    const std::size_t after_last = line.character_end(last_byte);
     const OffsetRange range{Offset{start.value + first_byte}, Offset{start.value + after_last}};
     if (first_byte == last_byte && first_begins < left && last_ends > right)
     {
@@ -96,8 +97,7 @@ constexpr std::size_t single_step = 1;
     }
     const bool cut_left = first_begins < left;
     const bool cut_right = last_ends > right;
-    const std::size_t inside_begin =
-        cut_left ? vim_character_end(line, Offset{first_byte}).value : first_byte;
+    const std::size_t inside_begin = cut_left ? line.character_end(first_byte) : first_byte;
     const std::size_t inside_end = std::max(inside_begin, cut_right ? last_byte : after_last);
     return VimBlockLine{
         range,
@@ -163,6 +163,22 @@ VimBlockRange vim_block_range(const TextBuffer &text, const Selection &selection
         break;
     }
     return built_block(text, ordered, left, right_column_of(text, ordered));
+}
+
+VimBlockWidth vim_block_width(const TextBuffer &text, const Selection &selection,
+                              const std::optional<VimWantedColumn> &wanted)
+{
+    const OffsetRange ordered = selection_range(selection);
+    const std::size_t left = left_column_of(text, ordered);
+    const VimColumnWish wish = wanted.has_value() ? wanted.value().wish : VimColumnWish::at_column;
+    switch (wish)
+    {
+    case VimColumnWish::at_line_end:
+        return VimBlockWidth{block_columns(left, longest_line(text, ordered))};
+    case VimColumnWish::at_column:
+        break;
+    }
+    return VimBlockWidth{block_columns(left, right_column_of(text, ordered))};
 }
 
 VimBlockRange vim_replayed_block_range(const TextBuffer &text, const Selection &selection,

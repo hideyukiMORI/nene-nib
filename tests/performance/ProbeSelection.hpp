@@ -19,6 +19,7 @@
 #include "StatusItemsWorkload.hpp"
 #include "TabDisplayWorkload.hpp"
 #include "TextObjectWorkload.hpp"
+#include "VimBlockWorkload.hpp"
 
 #include <variant>
 
@@ -30,7 +31,7 @@ using ProbeSelection =
                  CommandInputWorkload, ExCompletionWorkload, CompletionPrefixWorkload,
                  PaletteChoiceWorkload, OperationChoiceWorkload, SearchSpanWorkload,
                  TextObjectWorkload, MarkdownWorkload, NewlineIndexWorkload, LexerWorkload,
-                 ExplorerFrameWorkload>;
+                 ExplorerFrameWorkload, VimBlockWorkload>;
 
 [[nodiscard]] std::optional<ProbeSelection> workload_of(std::string_view name) noexcept;
 [[nodiscard]] std::string input_of(ProbeSelection workload);

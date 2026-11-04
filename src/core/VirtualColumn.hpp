@@ -57,6 +57,9 @@ inline constexpr std::size_t vim_shift_width = 8;
 // 行頭に置いた文字列が占める桁の数（Tab は tabstop で止まる）。行の長さと、矩形レジスタの
 // 1 行が覆う幅をここで数える（ADR 0035 の決定 5）。
 [[nodiscard]] std::size_t virtual_width(std::string_view text) noexcept;
+// 本文の行 line の内容が占める桁の数（上の virtual_width と同じ答え）。索引を持つ本文は行を写さず
+// 行末の部分和から引く（ADR 0140 の決定 4・矩形の入口 #1198）。
+[[nodiscard]] std::size_t line_virtual_width(const TextBuffer &text, LineNumber line);
 
 // 行の文字列の中だけで数える同じ 3 つ。矩形は 1 行につき何度も桁を引くので、行を取り直さずに
 // 済むこちらを使う（上の TextBuffer 版もこの 3 本の上に載っている・ARC-001）。
