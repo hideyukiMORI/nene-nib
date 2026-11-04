@@ -403,7 +403,7 @@ namespace
     }
     const std::size_t byte = line.byte_at(insert.column);
     const std::size_t start = line.start().value;
-    return OffsetRange{Offset{start + byte}, Offset{start + line.character_end(byte)}};
+    return OffsetRange{Offset{start + byte}, Offset{start + line.character_end(byte, single_step)}};
 }
 
 // 切れた文字のうち、Esc で残りの行へ写す頭のバイト数（ADR 0035 の追補 #1189）。固定 Vim の
