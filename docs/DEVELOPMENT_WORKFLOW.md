@@ -51,7 +51,7 @@ PR番号と期待headを必須にし、返却番号/OPEN/ready/main/head一致�
 対象repoは道具の一つの定数`github.com/hideyukiMORI/nene-nib`から全read/mergeへ明示し、`GH_REPO`やdefault remoteに委ねない。
 branch rulesを同repoから読み、未取得/不正やmerge queueがある場合は止める。件名の単行判定は既存validatorと同じ`splitlines()`で行う。
 既定はplan出力、明示`--execute`だけで`gh pr merge --squash --match-head-commit`へ進む。任意subject/管理者override/auto/branch削除は設けない。
-引数はshellを通さず配列で渡し、失敗を再試行しない。実行中のtimeout等は成否不明として、PRの実状態を読んでから次を判断する。
+引数はshellを通さず配列で渡し、失敗を再試行しない（例外: merge の呼び出しが GitHub の 5xx / `Merge already in progress` で落ち PR が OPEN かつ head 不変なら、30 秒ごとに最大 10 回同じ命令を呼び直す・新しい CI は起こさない・ADR 0021 追補 決定 8・#1223）。実行中のtimeout等は成否不明として、PRの実状態を読んでから次を判断する。
 CI成功は検証記録の真実性を保証しないため、手順11〜12のレビューを省略しない。文書のみなら差分と必要な目視で十分で、代替検証スクリプトや長い記録を作らない。ただし文書のみの merge は CI を起動しないので、PR 本文の `検証（実行したコマンドと結果）:` の行に `python eng/conformance.py → 0 violation(s)` を記録する。無ければ `merge-pr.py --execute` が拒否する（#648・ADR 0118）。
 
 ```text
