@@ -403,6 +403,15 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
     return first.value == 1;
 }
 
+// 1 画面も送れなかった周（端の Ctrl-f / Ctrl-b）はキャレットが余白の内側にいるので寄せない。
+// 端で FAIL した周があれば失敗の印を載せる（#1228）。
+[[nodiscard]] Navigation page_finished(const VimEditorView &view, VimDisplayNavigation result,
+                                       std::optional<VimRepeatFailure> failure)
+{
+    result.failure = failure;
+    return result.preserve_column ? Navigation{result} : corrected(view, result);
+}
+
 [[nodiscard]] Navigation page_target(const VimState &state, const VimEditorView &view,
                                      VimScreenKind kind)
 {
@@ -410,6 +419,7 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
                                 view.text.position_of(view.selection.caret).line, true};
     const bool down = kind == VimScreenKind::page_down;
     const auto count = std::min(vim_search_count(state), view.text.line_count());
+    std::optional<VimRepeatFailure> failure = std::nullopt;
     for (std::size_t index = 0; index < count; ++index)
     {
         const auto fails = page_fails(view, result.first, down);
@@ -419,6 +429,7 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
         }
         if (fails.value())
         {
+            failure = VimRepeatFailure::not_moved;
             break;
         }
         const auto next = down ? page_down(view, result.first) : page_up(view, result.first);
@@ -428,8 +439,7 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
         }
         result = next.value();
     }
-    // 1 画面も送れなかった周（端の Ctrl-f / Ctrl-b）はキャレットが余白の内側にいるので寄せない。
-    return result.preserve_column ? Navigation{result} : corrected(view, result);
+    return page_finished(view, result, failure);
 }
 
 [[nodiscard]] std::optional<VimScreenKind> screen_kind(VimAction action)
