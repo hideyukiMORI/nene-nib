@@ -537,13 +537,25 @@ constexpr std::array<std::string_view, 12> indexed_block_keys{
 // 桁の制御文字・短い行・空行・CRLF。
 void verify_vim_block_indexed_small()
 {
-    constexpr std::array<std::string_view, 3> bodies{
+    constexpr std::array<std::string_view, 4> bodies{
         "ab\tcd\xE6\x97\xA5"
         "ef\x16gh\n\t\xE5\x85\xA8gh\x16ij\re\xCC\x81z\nx\n\nab\rcde\xCC\x81"
         "fg\tk\n",
         "\xE6\x97\xA5\t\xE6\x97\xA5x\n\t\t\tend\ne\xCC\x81\xCC\x81\t\xE5\x85\xA8\nshort",
         "ab\tc\xE6\x97\xA5\r\n\t\xE5\x85\xA8"
-        "d\r\nxy\r\n\r\nlonger line\r\n"};
+        "d\r\nxy\r\n\r\nlonger line\r\n",
+        // Tab と `e` の後に U+0301 が 40 個（80 バイト）。境を探す窓（64 バイト）を倍にする。
+        "a\t"
+        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+        "bc\ne"
+        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+        "fg\t\nxyz"};
     std::size_t compared = 0;
     bool same = true;
     for (const std::string_view body : bodies)
@@ -551,7 +563,7 @@ void verify_vim_block_indexed_small()
         same = indexed_body_agrees(body, compared) && same;
     }
     expect(same, "an indexed text answers every blockwise key the same as a copied line");
-    expect(compared == 2800, "the blockwise equivalence compares 2800 keys");
+    expect(compared == 8960, "the blockwise equivalence compares 8960 keys");
 }
 
 // 塊の境 `boundary` の前後（-64・0・+63 の次の code point）に矩形の角を置く。
