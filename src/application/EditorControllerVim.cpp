@@ -305,17 +305,28 @@ EditorFrame EditorController::press_vim_key(const core::VimKey &key)
 // 列（`G30G` `''''`）の先頭行が途中の画面を経ない値になる。窓の 1 打鍵の道はここを通らない。
 EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
 {
-    for (const core::VimKey &key : keys)
+    const auto failed = [this](const core::VimKey &key)
     {
         settle_tab_walk_before(false);
         begin_intent(false);
-        const bool failed = deliver_vim_key(key).has_value();
+        const bool result = deliver_vim_key(key).has_value();
         fit_command_rows();
         settle_follow();
-        if (failed)
+        return result;
+    };
+    for (const core::VimKey &key : keys)
+    {
+        if (!failed(key))
         {
-            break;
+            continue;
         }
+        // :normal! は鍵が尽きた INSERT を Esc で終える（Vim の vgetorpeek の ex_normal_busy・回数の
+        // 反復も効く）。失敗で残りを捨てた INSERT（端の PgUp / PgDn・#1246）も同じに終える。
+        if (state_.vim().mode == core::VimMode::insert)
+        {
+            static_cast<void>(failed(core::VimKey{core::VimSpecialKey::escape}));
+        }
+        break;
     }
     return frame();
 }
