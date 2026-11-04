@@ -279,6 +279,22 @@ class VimOracleTests(unittest.TestCase):
                                         "macro": {"name": "a", "keys": "x"}})
         self.assertTrue(macro.endswith(', std::nullopt, VimMacroFixture{\'a\', "x"}},'))
 
+    def test_header_row_carries_the_scrolloff_only_when_it_is_not_zero(self):
+        record = self.record({"name": "so", "text": "ab", "keys": "j"}, "ab")
+        viewport = {"visible_lines": 10, "first_visible": 1, "line": 7, "column": 1,
+                    "expected_first_visible": 2, "expected_scroll_lines": 5}
+        plain = vim_oracle.fixture_row({**record, "viewport": viewport, "macro": None})
+        self.assertTrue(plain.endswith("VimViewportFixture{10, 1, 7, 1, 2, 5}},"))
+        zero = vim_oracle.fixture_row({**record, "viewport": viewport, "macro": None,
+                                       "scrolloff": 0})
+        self.assertEqual(zero, plain)
+        margin = vim_oracle.fixture_row({**record, "viewport": viewport, "macro": None,
+                                         "scrolloff": 2})
+        self.assertTrue(margin.endswith("VimViewportFixture{10, 1, 7, 1, 2, 5, 0, 0, 0, 0, 0, 0, 2}},"))
+        self.assertEqual(vim_oracle.settings_scrolloff(["set nrformats=bin,hex",
+                                                         "set scrolloff=3"]), 3)
+        self.assertEqual(vim_oracle.settings_scrolloff([]), 0)
+
     def test_canonical_form_is_idempotent_and_ends_with_one_newline(self):
         content = vim_oracle.canonical_fixtures_json(
             [{"name": "one", "text": "a", "keys": "x"}, {"name": "two", "text": "b", "keys": "y"}])

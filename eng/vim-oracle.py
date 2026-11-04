@@ -435,13 +435,35 @@ def literal(value: str) -> str:
     return f'"{escaped}"'
 
 
+def settings_scrolloff(settings: list[str]) -> int:
+    """`set scrolloff=N` の N（最後の 1 つ・無ければ 0）。nib_tests の再生が窓を作った後に
+    `:set so=N` を打つ（#1239）。"""
+    value = 0
+    for setting in settings:
+        match = re.fullmatch(r"set scrolloff=(\d+)", setting)
+        if match:
+            value = int(match.group(1))
+    return value
+
+
+def measured_record(work: Path, fixture: dict) -> dict:
+    """測った行に、再生が要る余白（scrolloff）を添える。測定の領域（literal より上）は変えない。"""
+    record = measure(work, fixture)
+    record["scrolloff"] = settings_scrolloff(fixture.get("settings", []))
+    return record
+
+
 def fixture_row(record: dict) -> str:
     viewport = record.get("viewport")
+    # 余白は 0 でないときだけ VimViewportFixture の末尾の欄に書く（間の 6 欄は既定の 0・#1239）。
+    # so=0 の行は前と同じ字面のまま残る。
+    scrolloff = record.get("scrolloff", 0)
+    margin = "" if scrolloff == 0 else ", 0, 0, 0, 0, 0, 0, %d" % scrolloff
     viewport_value = "std::nullopt" if viewport is None else (
-        "VimViewportFixture{%d, %d, %d, %d, %d, %d}" %
+        "VimViewportFixture{%d, %d, %d, %d, %d, %d%s}" %
         (viewport["visible_lines"], viewport["first_visible"], viewport["line"],
          viewport["column"], viewport["expected_first_visible"],
-         viewport["expected_scroll_lines"]))
+         viewport["expected_scroll_lines"], margin))
     # マクロのレジスタは在るときだけ末尾に足す（VimFixture の既定値は空・ADR 0046 の決定 6）。
     # 無い行は前と同じ字面のまま残る。
     macro = record.get("macro")
@@ -648,7 +670,7 @@ def partial_header(fixtures: list[dict], fixture_content: bytes, prefixes: list[
     for fixture in fixtures:
         name = fixture["name"]
         if name in selected:
-            rows.append(fixture_row(measure(work, fixture)))
+            rows.append(fixture_row(measured_record(work, fixture)))
         else:
             rows.append(old_rows[name])
     digest = hashlib.sha256(fixture_content).hexdigest()
@@ -837,7 +859,7 @@ def main() -> int:
                 fixtures, content, arguments.only, reuse_fixture_content, reuse_header_content,
                 reuse_oracle_source, Path(__file__).read_text(encoding="utf-8"), version, work)
         else:
-            records = [measure(work, fixture) for fixture in fixtures]
+            records = [measured_record(work, fixture) for fixture in fixtures]
             rendered = header(records, version, hashlib.sha256(content).hexdigest())
     finally:
         shutil.rmtree(work, ignore_errors=True)
