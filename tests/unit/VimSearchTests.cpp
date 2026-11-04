@@ -1194,8 +1194,7 @@ void verify_vim_pattern_composing_case()
     expect(
         cased_match("[e]\u0302y", Case::sensitive, "x e\u0301y") == std::optional<std::size_t>{2} &&
             cased_match("[e]\u0301", Case::sensitive, "x e y") == std::optional<std::size_t>{2} &&
-            cased_match("[e]\u0301*y", Case::sensitive, "x e\u0301y") ==
-                std::optional<std::size_t>{2},
+            cased_match("[e]\u0301*y", Case::sensitive, "x y") == std::optional<std::size_t>{2},
         "the composing marks right after a set are skipped with its closing bracket");
 }
 

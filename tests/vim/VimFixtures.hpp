@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 2d92af848fb5bee4794e426c9b2d6127574ee754b2b03e806789d24ad337e50a / 3354 fixtures
+// fixtures.json: sha256 bb6664a54b0b3a2975958b0f2aae774d5e0d980a96d43fbd25c056e65c360357 / 3354 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -3190,7 +3190,7 @@ constexpr std::array<VimFixture, 3354> vim_fixtures{{
     {"search-composing-start-dot-star-y", "x éy", "/\\s.*y<CR>", "x éy", 1, 2, "", "", std::nullopt},
     {"search-composing-start-set-mark-plain", "x e y", "/[e]́<CR>", "x e y", 1, 3, "", "", std::nullopt},
     {"search-composing-start-set-other-mark-y", "x éy", "/[e]̂y<CR>", "x éy", 1, 3, "", "", std::nullopt},
-    {"search-composing-start-set-mark-star-y", "x éy", "/[e]́*y<CR>", "x éy", 1, 3, "", "", std::nullopt},
+    {"search-composing-start-set-mark-star-y", "x y", "/[e]́*y<CR>", "x y", 1, 3, "", "", std::nullopt},
     {"search-case-N", "abc ABC Abc", ":set ic<CR>/abc<CR>NN", "abc ABC Abc", 1, 9, "", "", std::nullopt},
     {"search-case-backward", "ABC xyz abc", "$:set ic<CR>?abc<CR>?<CR>", "ABC xyz abc", 1, 1, "", "", std::nullopt},
     {"search-case-star-ic-scs", "Abc abc ABC", ":set ic<CR>:set scs<CR>*", "Abc abc ABC", 1, 5, "", "", std::nullopt},

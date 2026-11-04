@@ -222,8 +222,8 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
                                            ranges.size() - saved, true, false});
             // 閉じ大括弧の直後の結合文字は閉じ大括弧と 1 文字として読み飛ばす（Vim の
             // nfa_regatom の `MB_PTR_ADV(regparse)` は utfc_ptr2len で進む・`/[e]` + U+0301 は
-            // `e` にも `É` にも当たる・#1146 の実測）。集合は 1 文字の残りの結合文字まで食べる
-            // ので、後ろに比べる原子は残らない。
+            // `e` にも `é` にも（`ic` なら `É` にも）当たる・#1146 の実測）。集合は 1 文字の残りの
+            // 結合文字まで食べるので、後ろに比べる原子は残らない。
             return vim_character_end(pattern, Offset{scan}).value;
         }
         scan = parsed_member(pattern, scan, ranges);
