@@ -83,6 +83,15 @@ went quiet (initialize is answered at once by the fake, and didOpen follows it),
                             and the underlines shared one frame, and the second is unrelated), is
                             missing; each trial's two frames are kept in the record
 
+One more optional bench records matchparen (#999, ADR 0164 decision 5) the same way: it runs only
+when --bench names it and is never compared with the reference or adopted into it:
+
+  matchparen-single-key     the key-to-frame-single-long-line trial over matchparen-1000.cpp,
+                            1000 C++ lines in blocks of 25 that open with `{` and close with `}`
+                            around 23 lines full of `( ) [ ] { }` (checked by SHA-256); the
+                            document starts with `{`, so every typed character leaves the caret
+                            on that brace and every frame searches its partner 24 lines below
+
 Five more optional benches measure split (ADR 0120 decisions 2-7, ADR 0148 decision 14) and are
 never compared with the reference: split-single-key-100 (S, one pane) and
 split-pane-key-100-{same,other}-{vertical,horizontal} (P, two panes made with Ctrl+backslash or
@@ -224,6 +233,12 @@ CPP_TEMPLATES = (
 )
 CPP_LINES = 1000
 CPP_SHA256 = "4e8e2597f1f9c351ac4ace227fe3fb346ba1f6bd1c4b8d072a057c258032367d"
+# matchparen の 1 打鍵（#999・ADR 0164 の決定 5）。25 行の塊が `{` で始まり `}` で終わり、間の 23 行は
+# 括弧の多い呼び出し。CRLF・1000 行・BOM なし・拡張子が .cpp なので構文の区間も付く。
+MATCHPAREN_BLOCK = 25
+MATCHPAREN_LINE = "    call_{n}(values[{k}], {{ {k}, ({k} + 1) }}, other(x[0]));"
+MATCHPAREN_LINES = 1000
+MATCHPAREN_SHA256 = "c7a84cc9a183babe4ea1ae1b58c0b6def4212930730662a64881cb2ac87870c9"
 # 512 MiB と 1 GiB の文書（ADR 0159 の決定 10）。1 行は「8 桁の番号と空白」と固定の文で 62 bytes ＋
 # CRLF の 64 bytes・BOM なし・大きさちょうど。決定的に作り、SHA-256 で守る。
 LARGE_FILE_LINE = "nenenib large file sample line for the 512 MiB / 1 GiB open bench"
@@ -278,8 +293,11 @@ LSP_SINGLE_BENCH = "lsp-single-key"
 LSP_BURST_BENCH = "lsp-burst-200"
 LSP_READY_BENCH = "lsp-diagnostics-ready"
 LSP_BENCHES = (LSP_SINGLE_BENCH, LSP_BURST_BENCH, LSP_READY_BENCH)
+# 括弧の上のキャレットの 1 打鍵（#999・ADR 0164 の決定 5）。--bench で名指ししたときだけ測り、
+# 基準値に載せない（+1% の線は設計席が空の文書の 1 打鍵の A/B で見る）。
+MATCHPAREN_BENCH = "matchparen-single-key"
 OPTIONAL_BENCHES = (*GIANT_BENCHES, *SPLIT_BENCHES, PREVIEW_BENCH, CPP_BENCH,
-                    *LARGE_FILE_BENCHES, *LSP_BENCHES)
+                    *LARGE_FILE_BENCHES, *LSP_BENCHES, MATCHPAREN_BENCH)
 # 替え玉のサーバーは測る exe と同じ build の中のもの（tests/adapters/FakeLanguageServerMain.cpp）。
 LSP_SERVER = "nib_fake_language_server.exe"
 LSP_DIAGNOSTICS = 100
@@ -334,7 +352,7 @@ STARTUP_BENCHES = ("startup-first-frame", "open-large-file-16mib", GIANT_OPEN_BE
 # 返った）-> frame_presented（Present が返った）。区間名は起動の内訳と同じく「到達する節目の名前」。
 KEY_MILESTONES = ("frame_built", "frame_drawn", "frame_presented")
 SINGLE_BENCHES = ("key-to-frame-single", LONG_LINE_BENCH, CPP_BENCH, PREVIEW_BENCH,
-                  GIANT_SINGLE_BENCH, LSP_SINGLE_BENCH)
+                  GIANT_SINGLE_BENCH, LSP_SINGLE_BENCH, MATCHPAREN_BENCH)
 # 記録の breakdown には 16 MiB の打鍵の到着の幅（ARRIVAL_SEGMENT）も同じ形で載せる（#179）。
 BREAKDOWN_BENCHES = (*STARTUP_BENCHES, LARGE_BURST_BENCH, *SINGLE_BENCHES, *LARGE_FILE_BENCHES)
 
@@ -515,6 +533,33 @@ def cpp_document(folder: Path) -> Path:
     if digest != CPP_SHA256:
         raise SystemExit(f"Speed: {path} has SHA-256 {digest}, not {CPP_SHA256};"
                          f" {CPP_BENCH} is not measured")
+    return path
+
+
+def matchparen_text() -> str:
+    """#999's 1000-line C++ document: blocks of 25 lines from `{` to `}` around bracket-heavy calls."""
+    lines = []
+    for index in range(MATCHPAREN_LINES):
+        position = index % MATCHPAREN_BLOCK
+        if position == 0:
+            lines.append("{")
+        elif position == MATCHPAREN_BLOCK - 1:
+            lines.append("}")
+        else:
+            lines.append(MATCHPAREN_LINE.format(n=f"{index:06d}", k=position))
+    return "".join(f"{line}\r\n" for line in lines)
+
+
+def matchparen_document(folder: Path) -> Path:
+    """#999's document byte for byte; any other digest stops before a trial."""
+    path = folder / "matchparen-1000.cpp"
+    if path.is_file() and file_sha256(path) == MATCHPAREN_SHA256:
+        return path
+    path.write_bytes(matchparen_text().encode("ascii"))
+    digest = file_sha256(path)
+    if digest != MATCHPAREN_SHA256:
+        raise SystemExit(f"Speed: {path} has SHA-256 {digest}, not {MATCHPAREN_SHA256};"
+                         f" {MATCHPAREN_BENCH} is not measured")
     return path
 
 
@@ -831,6 +876,15 @@ def bench_cpp(executable: Path, environment: dict, folder: Path,
     Every frame lexes the visible lines (ADR 0156), so the single keystroke carries the colouring.
     """
     return bench_long_line(executable, environment, folder, document, CPP_BENCH)
+
+
+def bench_matchparen(executable: Path, environment: dict, folder: Path,
+                     document: Path) -> tuple[dict, dict]:
+    """key-to-frame-single over the bracket document: the caret stays on the first `{`.
+
+    Every typed character lands before that brace, so every frame searches its partner (ADR 0164).
+    """
+    return bench_long_line(executable, environment, folder, document, MATCHPAREN_BENCH)
 
 
 api(kernel, "GetThreadTimes", w.BOOL, w.HANDLE, c.POINTER(c.c_ulonglong),
@@ -1702,7 +1756,7 @@ def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
                 document: Path | None, palette: Path | None, long_line: Path | None = None,
                 giant: Path | None = None, grid: bool = True, preview: Path | None = None,
                 cpp: Path | None = None, large_files: dict | None = None,
-                server: Path | None = None):
+                server: Path | None = None, matchparen: Path | None = None):
     """Only the required stimulus groups; a shared trial keeps its original stimulus (#272)."""
     if any(name in names for name in ("startup-first-frame", "startup-window-shown")):
         yield bench_startup(executable, environment, folder)
@@ -1728,6 +1782,8 @@ def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
         yield bench_lsp_keys(executable, environment, folder, cpp, server)
     if LSP_READY_BENCH in names:
         yield bench_lsp_ready(executable, environment, folder, cpp, server)
+    if MATCHPAREN_BENCH in names:
+        yield bench_matchparen(executable, environment, folder, matchparen)
     for bench, path in (large_files or {}).items():
         yield bench_large_file_async(executable, environment, folder, path, bench)
 
@@ -1750,6 +1806,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     # LSP の 3 本も構文の色分けと同じ C++ の文書（#995 L1d）。替え玉は測る exe と同じ build から。
     cpp = cpp_document(folder) if CPP_BENCH in names or lsp else None
     server = language_server_of(build) if lsp else None
+    matchparen = matchparen_document(folder) if MATCHPAREN_BENCH in names else None
     # 512 MiB と 1 GiB の文書は大きいので、置き場を --large-folder で選べる（既定は out/speed）。
     large_files = {name: large_file_document(large_folder or folder, name)
                    for name in names if name in LARGE_FILE_BENCHES}
@@ -1766,7 +1823,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     for _ in range(repetitions):
         for values, parts in run_benches(executable, environment, folder, names, document, palette,
                                          long_line, giant, grid, preview, cpp,
-                                         large_files, server):
+                                         large_files, server, matchparen):
             for name, value in values.items():
                 if name not in samples:
                     continue
@@ -1811,6 +1868,9 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     elif cpp is not None:
         record["document"] = {"path": cpp.name, "bytes": cpp.stat().st_size,
                               "lines": CPP_LINES, "sha256": CPP_SHA256}
+    elif matchparen is not None:
+        record["document"] = {"path": matchparen.name, "bytes": matchparen.stat().st_size,
+                              "lines": MATCHPAREN_LINES, "sha256": MATCHPAREN_SHA256}
     if server is not None:
         ready = LSP_READY_BENCH in names
         record["languageServer"] = {
@@ -2059,6 +2119,10 @@ def main() -> int:
     if arguments.bench in LSP_BENCHES and (arguments.adopt or arguments.check or arguments.values):
         parser.error(f"{arguments.bench} is recorded with --record only; its reference is adopted"
                      " by hide after the L1 trial (ADR 0161 decision 7, D60)")
+    if arguments.bench == MATCHPAREN_BENCH and (arguments.adopt or arguments.check
+                                                or arguments.values):
+        parser.error(f"{MATCHPAREN_BENCH} is recorded with --record only; it has no reference"
+                     " (#999)")
     if arguments.bench in LARGE_FILE_BENCHES and (arguments.adopt or arguments.check
                                                   or arguments.values):
         parser.error(f"{arguments.bench} is recorded with --record only; it has no reference"
