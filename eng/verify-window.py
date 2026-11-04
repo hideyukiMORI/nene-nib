@@ -170,7 +170,7 @@ import winreg
 from window_driver import (acknowledge_dialog, answer_question, api, ask_hit, await_dialog,
                            assert_uncovered, become_dpi_aware,
                            capture as capture_client, capture_png, click, close, covered_by,
-                           dialog_text, dismiss_dialog, gdi, GWL_STYLE, HTCAPTION, HTCLOSE,
+                           dialog_text, dismiss_dialog, double_click, gdi, GWL_STYLE, HTCAPTION, HTCLOSE,
                            HWND_TOPMOST, IDCANCEL, IDNO, IDYES, parse_keys, press, press_chord, press_combination,
                            press_held_repeat, raise_window, rectangle, send_key_sequence,
                            send_keys, start, stop, tick_autosave,
@@ -3388,6 +3388,63 @@ def verify_find(executable: Path, environment: dict, output: Path, frames: Path 
     return record
 
 
+DOUBLE_CLICK_DOCUMENT = "wwwwwwwwwwwwwwwwwwww tail\nsecond\n"
+DOUBLE_CLICKED_DOCUMENT = "X tail\nY"
+
+
+def verify_double_click(executable: Path, environment: dict, output: Path,
+                        frames: Path | None) -> dict:
+    """Issue #1250: a double click on the body selects the word, a triple click the line.
+
+    The first row starts with a long word so a point just right of the content edge lands inside it
+    whatever the font. Posted presses (window_driver.double_click) need no real pointer; typed
+    characters replace the selection, and Ctrl+S (the one foreground) writes the bytes that prove
+    which ranges were selected: the word without the blank after it, the line with its newline."""
+    opened = output / "double-click-sample.txt"
+    opened.write_text(DOUBLE_CLICK_DOCUMENT, encoding="utf-8", newline="\n")
+    process, window, _ = start(executable, environment, [str(opened)])
+    try:
+        raise_window(window)
+        time.sleep(0.6)
+        assert await_cover_gone(window), "the WARP cover child is still over the window"
+        assert_uncovered(window)
+        dpi = user.GetDpiForWindow(window)
+        client = rectangle(window, user.GetClientRect)
+        width, height = client[2] - client[0], client[3] - client[1]
+        size = (width, height)
+        body = body_points(width, height, dpi)
+        x = body["contentLeft"] + to_pixels(6, dpi)
+        before = capture(window, width, height)
+        snapshot(frames, window, "double-click-before")
+        double_click(window, x, row_middle(body, 0))
+        selected = await_new_frame(window, before, size)
+        snapshot(frames, window, "double-click-word")
+        write_text(window, "X")
+        typed = await_new_frame(window, selected, size)
+        double_click(window, x, row_middle(body, 1), triple=True)
+        lined = await_new_frame(window, typed, size)
+        snapshot(frames, window, "double-click-line")
+        write_text(window, "Y")
+        await_new_frame(window, lined, size)
+        snapshot(frames, window, "double-click-typed")
+        saved = try_saving(window, opened)
+        if not saved.get("driven", False):
+            close(window)
+            return {"driven": False, "note": saved["note"]}
+        record = {"driven": True, "dpi": dpi,
+                  "bytes": opened.read_text(encoding="utf-8"),
+                  "selectionPainted": selected != before}
+        print(json.dumps(record, ensure_ascii=False), file=sys.stderr)
+        assert record["selectionPainted"], "double click: the selection was not painted"
+        assert record["bytes"] == DOUBLE_CLICKED_DOCUMENT, f"double click: {record['bytes']!r}"
+        close(window)
+        record["exitCode"] = process.wait(timeout=5)
+        assert record["exitCode"] == 0, record["exitCode"]
+    finally:
+        stop(process)
+    return record
+
+
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
@@ -3431,6 +3488,9 @@ def main() -> None:
                         help="run the explorer panel section alone (Issue #997); it sends real keys")
     parser.add_argument("--palette", action="store_true",
                         help="run the palette section alone (Issue #706); it sends real keys")
+    parser.add_argument("--double-click", action="store_true",
+                        help="run the body double/triple click section alone (Issue #1250); it "
+                        "sends Ctrl+S")
     parser.add_argument("--find", action="store_true",
                         help="run the ordinary find section alone (Issue #1127); it sends Ctrl+F")
     arguments = parser.parse_args()
@@ -3490,6 +3550,12 @@ def main() -> None:
                            or arguments.gutter or arguments.explorer
                            or arguments.keys is not None or arguments.open is not None):
         parser.error("--find runs alone")
+    if arguments.double_click and (arguments.tabs or arguments.split or arguments.preview
+                                   or arguments.restore or arguments.grid or arguments.giant_text
+                                   or arguments.autosave or arguments.palette or arguments.syntax
+                                   or arguments.gutter or arguments.explorer or arguments.find
+                                   or arguments.keys is not None or arguments.open is not None):
+        parser.error("--double-click runs alone")
     frames = arguments.capture.resolve() if arguments.capture is not None else None
     if frames is not None:
         frames.mkdir(parents=True, exist_ok=True)
@@ -3536,6 +3602,14 @@ def main() -> None:
     if arguments.explorer:
         try:
             record = verify_explorer(executable, environment, output, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.double_click:
+        try:
+            record = verify_double_click(executable, environment, output, frames)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)

@@ -1115,16 +1115,16 @@ void verify_giant_click()
     const EditorFrame middle = placed(controller, 2, 100'001);
     expect(shown_line(middle, 2).left < 0.0F && shown_line(middle, 1).left == 0.0F,
            "the giant line scrolls to the caret while the short line stays");
-    const EditorFrame head =
-        controller.apply_frame(app::PointText{20.0F, 0, core::SelectionAnchoring::collapse});
+    const EditorFrame head = controller.apply_frame(
+        app::PointText{20.0F, 0, core::SelectionAnchoring::collapse, app::PointerClicks::single});
     expect(head.caret.position == core::TextPosition{core::LineNumber{1}, core::Column{3}},
            "a click on a short line is not shifted by the giant line's scroll");
     const EditorFrame again = placed(controller, 2, 100'001);
     const auto &giant = shown_line(again, 2);
     const auto column =
         static_cast<std::size_t>(((50.0F - giant.left) / 10.0F) + 0.5F) + giant.window.code_point;
-    const EditorFrame clicked =
-        controller.apply_frame(app::PointText{50.0F, 1, core::SelectionAnchoring::collapse});
+    const EditorFrame clicked = controller.apply_frame(
+        app::PointText{50.0F, 1, core::SelectionAnchoring::collapse, app::PointerClicks::single});
     expect(column < 100'000 &&
                clicked.caret.position ==
                    core::TextPosition{core::LineNumber{2}, core::Column{column + 1}},

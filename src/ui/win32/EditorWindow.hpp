@@ -25,6 +25,7 @@
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
 #include "PaneLayouts.hpp"
+#include "PointerClicks.hpp"
 #include "PresentedMilestones.hpp"
 #include "PreviewTaskPress.hpp"
 #include "RenderFailure.hpp"
@@ -132,11 +133,17 @@ class EditorWindow final
     void finish_display_question(bool question);
     [[nodiscard]] LRESULT press_caption(UINT message, WPARAM word, LPARAM data) noexcept;
     void activate_caption(WPARAM word) noexcept;
-    void click_client(LPARAM data);
+    void click_client(LPARAM data, application::PointerClicks clicks);
     void click_palette(LPARAM data);
-    void place_caret(LPARAM data);
-    void click_body(LPARAM data);
-    void point_text(POINT point, core::SelectionAnchoring anchoring);
+    void place_caret(LPARAM data, application::PointerClicks clicks);
+    void click_body(LPARAM data, application::PointerClicks clicks);
+    void point_text(POINT point, core::SelectionAnchoring anchoring,
+                    application::PointerClicks clicks);
+    // 左の押しを続けた回数に数える（#1250）。OS のダブルクリックは 2 回目、その後に OS の
+    // ダブルクリックの時間と升の中で押せば 3 回目（4 回目以降も 3
+    // 回目）。時刻は押しの窓メッセージの 時刻（GetMessageTime）だけを読む。
+    [[nodiscard]] application::PointerClicks counted_clicks(application::PointerClicks pressed,
+                                                            LPARAM data);
     void begin_selection_drag();
     void end_selection_drag();
     void drag_selection(LPARAM data);
@@ -359,6 +366,10 @@ class EditorWindow final
     // 全面プレビューの文字をドラッグで選んでいる間（ADR 0155 の改訂 18）。
     bool preview_dragging_ = false;
     POINT selection_point_{};
+    // 直前の左の押しの回数・時刻・点（counted_clicks だけが読み書きする）。
+    application::PointerClicks last_clicks_ = application::PointerClicks::single;
+    LONG last_click_time_ = 0;
+    POINT last_click_point_{};
     static constexpr UINT_PTR selection_timer = std::to_underlying(WindowTimer::selection);
     static constexpr UINT_PTR autosave_timer = std::to_underlying(WindowTimer::autosave);
     static constexpr UINT_PTR preview_timer = std::to_underlying(WindowTimer::preview);
