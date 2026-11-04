@@ -124,6 +124,7 @@ WM_TIMER = 0x0113
 AUTOSAVE_TIMER = 2
 WM_LBUTTONDOWN = 0x0201
 WM_LBUTTONUP = 0x0202
+WM_LBUTTONDBLCLK = 0x0203
 VK_RETURN = 0x0D
 VK_BACK = 0x08
 VK_TAB = 0x09
@@ -376,6 +377,22 @@ def click(window, x: int, y: int) -> None:
     packed = (y << 16) | (x & 0xFFFF)
     assert user.PostMessageW(window, WM_LBUTTONDOWN, 1, packed)
     assert user.PostMessageW(window, WM_LBUTTONUP, 0, packed)
+
+
+def double_click(window, x: int, y: int, triple: bool = False) -> None:
+    """Post a left double click (and a third press when triple) at a client point.
+
+    The window class has CS_DBLCLKS, so the OS sends the second press as WM_LBUTTONDBLCLK; posting it
+    directly needs no real pointer and no timing from the OS. The third press is an ordinary
+    WM_LBUTTONDOWN that the window counts by GetMessageTime (Issue #1250)."""
+    packed = (y << 16) | (x & 0xFFFF)
+    assert user.PostMessageW(window, WM_LBUTTONDOWN, 1, packed)
+    assert user.PostMessageW(window, WM_LBUTTONUP, 0, packed)
+    assert user.PostMessageW(window, WM_LBUTTONDBLCLK, 1, packed)
+    assert user.PostMessageW(window, WM_LBUTTONUP, 0, packed)
+    if triple:
+        assert user.PostMessageW(window, WM_LBUTTONDOWN, 1, packed)
+        assert user.PostMessageW(window, WM_LBUTTONUP, 0, packed)
 
 
 def press(window, key: int, times: int = 1) -> None:

@@ -1,10 +1,30 @@
 #include "EditorController.hpp"
 #include "EditorControllerDetail.hpp"
 
+#include "CaretAffinity.hpp"
 #include "DisplayInquiry.hpp"
+#include "LineNumber.hpp"
+#include "Offset.hpp"
+#include "PlaceCaret.hpp"
+#include "PointerClicks.hpp"
 #include "ScreenMotion.hpp"
+#include "Selection.hpp"
+#include "TextBuffer.hpp"
 #include "TextCaret.hpp"
 #include "TextPosition.hpp"
+#include "VimCaret.hpp"
+#include "VimCharacter.hpp"
+#include "VimCharacterBoundary.hpp"
+#include "VimKey.hpp"
+#include "VimMode.hpp"
+#include "VimSpecialKey.hpp"
+#include "VimState.hpp"
+#include "VimTextObject.hpp"
+#include "VimTextObjectRange.hpp"
+#include "VimTextObjectRequest.hpp"
+#include "VimTextObjectScope.hpp"
+#include "VimTextObjectSpan.hpp"
+#include "VimVisualRange.hpp"
 #include "VisualPosition.hpp"
 
 #include <algorithm>
@@ -13,7 +33,10 @@
 #include <expected>
 #include <limits>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <utility>
+#include <variant>
 
 namespace nenenib::application
 {
@@ -21,6 +44,36 @@ using detail::scroll_extent_for;
 
 namespace
 {
+// 押した点の手前の文字を決めるために読む幅（結合文字の連なりを含む Vim の 1 文字に足りる）。
+constexpr std::size_t pointed_window_bytes = 64;
+
+// 押した文字の語（`iw`）を半開区間の選択にする。範囲にならない（空の本文）ならキャレットのまま。
+[[nodiscard]] core::Selection clicked_word(const core::TextBuffer &text, core::Offset rest)
+{
+    const auto outcome = core::vim_text_object_range(
+        text, core::Selection{rest, rest},
+        core::VimTextObjectRequest{core::VimTextObjectScope::inner, core::VimTextObject::word,
+                                   core::VimMode::visual},
+        1);
+    const auto *span = std::get_if<core::VimTextObjectSpan>(&outcome);
+    if (span == nullptr)
+    {
+        return core::Selection{rest, rest};
+    }
+    const auto range = core::vim_visual_range(text, span->selection, span->mode).range;
+    return core::Selection{range.begin, range.end};
+}
+
+// 押した行を行頭から次の行の頭まで（最終行は本文の終わり）。
+[[nodiscard]] core::Selection clicked_line(const core::TextBuffer &text, core::Offset rest)
+{
+    const auto line = text.position_of(rest).line;
+    const auto end = line.value < text.line_count()
+                         ? text.line_start(core::LineNumber{line.value + 1})
+                         : core::Offset{text.size_bytes()};
+    return core::Selection{text.line_start(line), end};
+}
+
 [[nodiscard]] core::ScrollFollow scroll_follow_for(core::EditMode mode) noexcept
 {
     switch (mode)
@@ -269,6 +322,120 @@ void EditorController::accept(const PointText &intent)
         layout_failure_ = caret.error();
         return;
     }
-    accept(PlaceCaret{caret.value().position, intent.anchoring, caret.value().affinity});
+    switch (intent.clicks)
+    {
+    case PointerClicks::single:
+        accept(PlaceCaret{caret.value().position, intent.anchoring, caret.value().affinity});
+        return;
+    case PointerClicks::double_:
+    case PointerClicks::triple:
+        break;
+    }
+    const auto pointed = pointed_character(view, caret.value(), intent.x + scroll.horizontal);
+    if (!pointed)
+    {
+        layout_failure_ = pointed.error();
+        return;
+    }
+    select_clicked(pointed.value(), intent.clicks);
+}
+
+// 位置解決はキャレットの境目（近いほう）を返すので、点が文字の右半分にあれば境目は次の文字の前に
+// なる。境目の x が点より右なら、手前の Vim の 1 文字（結合文字を含む・ADR 0053）へ戻す。手前の
+// 文字は境目の前の数バイトだけを読んで決める（行を写さない）。
+std::expected<core::Offset, TextLayoutFailure>
+EditorController::pointed_character(VisualTextView &view, core::TextCaret caret, float x)
+{
+    const auto &text = state_.text();
+    const auto offset = text.offset_of(caret.position);
+    const auto located = view.location(caret);
+    if (!located)
+    {
+        return std::unexpected(located.error());
+    }
+    const auto line_start = text.line_start(caret.position.line);
+    if (located.value().x <= x || offset == line_start)
+    {
+        return offset;
+    }
+    const auto from = core::Offset{
+        std::max(line_start.value, offset.value - std::min(offset.value, pointed_window_bytes))};
+    const auto before = text.text_range(from, offset);
+    // 窓の頭が code point の途中なら、次の code point の頭から読む（UTF-8
+    // の続きのバイトを飛ばす）。
+    const auto lead = std::ranges::find_if(
+        before, [](char byte) { return (static_cast<unsigned char>(byte) & 0xC0U) != 0x80U; });
+    const auto skipped = static_cast<std::size_t>(lead - before.begin());
+    const std::string_view window = std::string_view{before}.substr(skipped);
+    return core::Offset{from.value + skipped +
+                        core::vim_character_start(window, core::Offset{window.size()}).value};
+}
+
+// 語は Vim の `iw` の 1 本（vim_text_object_range・ADR 0031）で、VISUAL の選択を描く範囲
+// （vim_visual_range）と同じ写しで半開区間にする。空行の `iw` は改行を選ぶ（Vim 9.1 の `viw`
+// と同じ・ 実測）。行は行頭から次の行の頭まで（最終行は本文の終わり・gvim の `<3-LeftMouse>`
+// と同じ）。
+void EditorController::select_clicked(core::Offset pointed, PointerClicks clicks)
+{
+    switch (state_.mode())
+    {
+    case core::EditMode::vim:
+        select_clicked_in_vim(pointed, clicks);
+        return;
+    case core::EditMode::ordinary:
+        break;
+    }
+    const auto &text = state_.text();
+    const auto rest = core::vim_resting_caret(text, pointed);
+    core::Selection selection{rest, rest};
+    switch (clicks)
+    {
+    case PointerClicks::single:
+        break;
+    case PointerClicks::double_:
+        selection = clicked_word(text, rest);
+        break;
+    case PointerClicks::triple:
+        selection = clicked_line(text, rest);
+        break;
+    }
+    state_ = state_.with_selection(selection);
+    follow_caret();
+}
+
+// Vim は使う人が打つのと同じ鍵を engine へ流す（VISUAL に入る・`gv` の前の選択・`'<` `'>` は鍵の
+// 道が書く・ARC-001）。VISUAL と INSERT にいれば先に Esc で抜け（前の選択が `gv` に残る・INSERT
+// の中断は INSERT のままなので `v` が文字になる）、NORMAL の数・オペレータ・1 鍵の待ちは捨ててから
+// 押した文字へ置く（一覧から選んだ操作の step_vim_command と同じ抜け方）。
+void EditorController::select_clicked_in_vim(core::Offset pointed, PointerClicks clicks)
+{
+    switch (state_.vim().mode)
+    {
+    case core::VimMode::insert:
+    case core::VimMode::visual:
+    case core::VimMode::visual_line:
+    case core::VimMode::visual_block:
+        static_cast<void>(step_vim(core::VimKey{core::VimSpecialKey::escape}));
+        break;
+    case core::VimMode::normal:
+        state_ =
+            state_.with_vim(core::vim_resting_from(state_.vim(), state_.vim().unnamed_register));
+        break;
+    }
+    accept(PlaceCaret{state_.text().position_of(pointed), core::SelectionAnchoring::collapse,
+                      core::CaretAffinity::leading});
+    switch (clicks)
+    {
+    case PointerClicks::single:
+        return;
+    case PointerClicks::double_:
+        static_cast<void>(step_vim(core::VimKey{core::VimCharacter{U'v'}}));
+        static_cast<void>(step_vim(core::VimKey{core::VimCharacter{U'i'}}));
+        static_cast<void>(step_vim(core::VimKey{core::VimCharacter{U'w'}}));
+        return;
+    case PointerClicks::triple:
+        static_cast<void>(step_vim(core::VimKey{core::VimCharacter{U'V'}}));
+        return;
+    }
 }
 } // namespace nenenib::application

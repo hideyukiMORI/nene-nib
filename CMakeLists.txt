@@ -175,6 +175,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/LexerPropertyTests.cpp
     tests/unit/PreviewTests.cpp
     tests/unit/PreviewTaskTests.cpp
+    tests/unit/PointerTests.cpp
     tests/unit/PreviewFullTests.cpp
     tests/unit/HtmlToMarkdownTests.cpp
     tests/unit/MarkdownPropertyTests.cpp
