@@ -91,18 +91,13 @@ namespace detail
     return Offset{start.value + index};
 }
 
-// 1 文字の頭は VimLineColumns に問う（索引を持つ本文は行を写さずキャレットの手前の窓だけを読む・
-// Esc の 1 文字戻り・#1237）。
+// 1 文字の頭は VimLineColumns に問う（索引を持つ本文は行を写さずキャレットの手前の窓だけを読み、
+// 大きな回数でも窓を 1 回読むごとに何歩も戻る・Esc の 1 文字戻り #1237・`{N}h` `X` `dh` #1258）。
 [[nodiscard]] Offset backward_characters(const TextBuffer &text, Offset caret, std::size_t count)
 {
     const VimLineColumns content(text, line_of(text, caret));
     const Offset start = content.start();
-    std::size_t index = caret.value - start.value;
-    for (std::size_t step = 0; step < count && index > 0; ++step)
-    {
-        index = content.character_start(index);
-    }
-    return Offset{start.value + index};
+    return Offset{start.value + content.character_start(caret.value - start.value, count)};
 }
 
 [[nodiscard]] VimWantedColumn wanted_column_of(const TextBuffer &text, const VimState &state,

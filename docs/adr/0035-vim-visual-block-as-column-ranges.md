@@ -129,6 +129,10 @@ FR-003 の T2 に残る VISUAL の 3 つめ、矩形（`Ctrl-v`）を入れる�
 
 追補 #1198 で範囲の外に置いた 5 か所も同じ口 `VimLineColumns` と `line_virtual_width` に寄せる。矩形の `r`（`replaced_block_edits`）は行の幅を `line_virtual_width` で引き、矩形の `c` `C`（`block_changed`）は 1 行目のバイト数を行を写さず `line_end − line_start` で数える。矩形のレジスタの `p` `P`（`put_lead` / `put_block_line` / `put_padded`）は貼る行ごとに 1 つの `VimLineColumns` に幅・`byte_at`・最初と最後の桁・code point を問う。Esc とほかの 1 文字戻り（`backward_characters`）は `VimLineColumns::character_start` に問い、索引を持つ本文はキャレットの手前の窓（64 バイトから倍に伸ばし、窓の頭まで戻ったら読み直す・行頭に届いた窓の答えは行を写した答えと同じ）だけを読む。`.` の再生の中で記録し直す大きさは、再生の矩形（`vim_replayed_block_range`）と同じ左の桁（選択の先の角）と右の桁（記録した幅か `$` なら覆う行の最長）から幅だけを引く `vim_replayed_block_width` で引く（`vim_block_width` は選択の両端から桁を決めるので再生の中では答えが違う）。持たない本文は行を 1 回写して今の `std::string_view` 版に渡し、答えは変えない。索引の意味は変えない。正しさは同値の試験 `verify_vim_block_indexed_rest`（同じ小さな本文に `r`・`p` `P`・`.` の再生・Esc と `h` の 14 列・`.` は controller と同じく選び直して再生の鍵を流す）と、塊の境の版に足した 4 列が守る。
 
+## 追補（2026-11-04・#1258 INSERT の `Ctrl-w` と大きな回数の 1 文字戻りも窓の道）
+
+追補 #1237 の後に残った 2 か所も、索引を持つ本文では行を写さない。INSERT の `Ctrl-w`（`insert_cut`）は、消せる左端（`erase_floor`）が行頭に戻ると左端から写すのが行の全体になるので、索引を持つ本文ではキャレットの手前の窓（64 バイトから倍に伸ばす）だけを読んで今の `word_erase_begin` に渡す。窓の頭で止まった（語が窓より長い）か、止めた所の手前の文字が窓の頭から始まる（窓の頭は文字の頭とは限らない）ときだけ読み直し、窓が左端に届けば左端から写した答えと同じ。`Ctrl-u` は今も本文を読まない。1 文字戻り（`backward_characters`・Esc と `{N}h` `X` `dh`）は `VimLineColumns::character_start(byte, count)` が回数ごと受け、索引を持つ本文は窓を 1 回読むごとにその中で何歩も戻る（窓の頭まで戻ったらそこから窓を倍にして読み直す・大きな回数でも読むのは戻る距離の 2 倍まで）。持たない本文は今のまま（`Ctrl-w` は左端から写し、1 文字戻りは行の写しを 1 文字ずつ戻る）。索引の意味は変えない。正しさは同値の試験 `verify_vim_block_indexed_cut`（同じ小さな本文と窓より長い語の本文に `Ctrl-w` `Ctrl-u` と大きな回数の `h` `X` `dh` の 12 列）と、塊の境の版に足した 3 列が守る。
+
 ## 強制
 
 - モード・効果・レジスタの種類・大きさの和型の写し漏れ: **active**（`switch` / `std::visit` の網羅性・CPP-002）

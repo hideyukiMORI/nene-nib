@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace nenenib::core
 {
@@ -17,6 +18,25 @@ namespace
 constexpr std::size_t character_window_bytes = 64;
 // UTF-8 の 1 code point の最長のバイト数。窓の終わりで切れた code point を読まないための余白。
 constexpr std::size_t longest_code_point_bytes = 4;
+
+// content の at から手前へ Vim の 1 文字ずつ最大 count 回戻り、止まった位置と戻った回数を返す。
+// clipped（content の頭が行頭ではない窓）なら、窓の頭まで戻る 1 歩は答えが確かでないので踏まない。
+[[nodiscard]] std::pair<std::size_t, std::size_t>
+characters_back(std::string_view content, std::size_t at, bool clipped, std::size_t count)
+{
+    std::size_t walked = 0;
+    while (walked < count && at > 0)
+    {
+        const std::size_t found = vim_character_start(content, Offset{at}).value;
+        if (found == 0 && clipped)
+        {
+            break;
+        }
+        at = found;
+        ++walked;
+    }
+    return {at, walked};
+}
 } // namespace
 
 VimLineColumns::VimLineColumns(const TextBuffer &text, LineNumber line)
@@ -102,29 +122,30 @@ std::size_t VimLineColumns::character_end(std::size_t byte) const
     }
 }
 
-// 索引の道は byte の手前の窓（と byte の 1 code point）を読み、窓の頭まで戻ってしまったら（窓の
-// 頭は文字の頭とは限らない）窓を倍にして読み直す。行頭まで届いた窓の答えは行を写した答えと同じ。
-std::size_t VimLineColumns::character_start(std::size_t byte) const
+// 索引の道は byte の手前の窓（と byte の 1 code point）を 1 回読み、その中で何歩も戻る（大きな
+// 回数の `h` `X` `dh`・#1258）。窓の頭まで戻ってしまったら（窓の頭は文字の頭とは限らない）そこで
+// 止めた位置から窓を倍にして読み直す。行頭まで届いた窓の答えは行を写した答えと同じ。
+std::size_t VimLineColumns::character_start(std::size_t byte, std::size_t count) const
 {
     if (copied_.has_value())
     {
-        return vim_character_start(copied_.value(), Offset{byte}).value;
+        return characters_back(copied_.value(), byte, false, count).first;
     }
-    const std::size_t at = std::min(byte, size_);
+    std::size_t at = std::min(byte, size_);
+    std::size_t left = count;
     std::size_t window = character_window_bytes;
-    for (;;)
+    while (left > 0 && at > 0)
     {
         const std::size_t begin = at > window ? at - window : 0;
         const std::size_t stop = std::min(at + longest_code_point_bytes, size_);
         const std::string content =
             text_.get().text_range(Offset{start_.value + begin}, Offset{start_.value + stop});
-        const std::size_t found = vim_character_start(content, Offset{at - begin}).value;
-        if (begin == 0 || found > 0)
-        {
-            return begin + found;
-        }
+        const auto [local, walked] = characters_back(content, at - begin, begin > 0, left);
+        at = begin + local;
+        left -= walked;
         window *= 2;
     }
+    return at;
 }
 
 char32_t VimLineColumns::code_point_at(std::size_t byte) const

@@ -34,6 +34,7 @@
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
 #include "VimMode.hpp"
+#include "VimRemoveRange.hpp"
 #include "VimReplay.hpp"
 #include "VimState.hpp"
 #include "VimStep.hpp"
@@ -104,6 +105,7 @@ using nenenib::core::VimMode;
 using nenenib::core::VimMoveTo;
 using nenenib::core::VimNavigate;
 using nenenib::core::VimRemoveBlock;
+using nenenib::core::VimRemoveRange;
 using nenenib::core::VimReplaceBlock;
 using nenenib::core::VimReplay;
 using nenenib::core::VimSelect;
@@ -352,6 +354,10 @@ void verify_vim_block_reselect()
     {
         return typed->utf8 == std::get<VimInsertString>(right).utf8;
     }
+    if (const auto *removed = std::get_if<VimRemoveRange>(&left))
+    {
+        return removed->range == std::get<VimRemoveRange>(right).range;
+    }
     if (const auto *replay = std::get_if<VimReplay>(&left))
     {
         const auto &other = std::get<VimReplay>(right);
@@ -458,6 +464,11 @@ block_applied(const TextBuffer &text, const Selection &selection, const VimEffec
     {
         return {text.insert(selection.caret, typed->utf8),
                 collapsed_at(Offset{selection.caret.value + typed->utf8.size()})};
+    }
+    if (const auto *removed = std::get_if<VimRemoveRange>(&effect))
+    {
+        return {text.replaced(removed->range.begin, removed->range.end, ""),
+                collapsed_at(removed->range.begin)};
     }
     if (const auto *replaced = std::get_if<VimReplaceBlock>(&effect))
     {
@@ -572,6 +583,21 @@ constexpr std::array<std::string_view, 14> indexed_rest_keys{
     "<C-v>jly2p",        "<C-v>jIxy<Esc>j.", "<C-v>jlAz<Esc>l.", "$<C-v>jAq<Esc>j.", "<C-v>jlrZj.",
     "<C-v>jlcnn<Esc>j.", "<C-v>jCm<Esc>j.",  "ix<Esc>",          "a<Esc>3h"};
 
+// INSERT の `Ctrl-w` `Ctrl-u`（始めの桁が行頭に戻る形と始めの桁で止まる形・行頭で前の行と
+// つなぐ形）と、大きな回数の 1 文字戻り（`{N}h` `X` `dh`・行頭を越える回数・#1258）。
+constexpr std::array<std::string_view, 12> indexed_cut_keys{"i<C-w>x<Esc>",
+                                                            "ixy z<C-w><C-w>",
+                                                            "a<C-w><C-w><Esc>",
+                                                            "A<C-w>",
+                                                            "i<C-u>",
+                                                            "0i<C-w>",
+                                                            "3h",
+                                                            "99h",
+                                                            "3X",
+                                                            "99X",
+                                                            "d3h",
+                                                            "d99h"};
+
 // 1 つの角から鍵の列を全部流す。
 [[nodiscard]] bool indexed_keys_agree_at(std::string_view body, Offset at,
                                          std::span<const std::string_view> lists,
@@ -650,6 +676,32 @@ void verify_vim_block_indexed_rest()
     expect(compared == 13824, "the rest of the blockwise equivalence compares 13824 keys");
 }
 
+// 語の窓（64 バイト）より長い同じ種類の文字の連なり（ASCII の語・全角・空白と Tab）。`Ctrl-w`
+// の窓を倍にする（#1258）。
+constexpr std::string_view long_word_body =
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    " \xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5"
+    "\xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5"
+    "\xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5"
+    "\xE6\x97\xA5\xE6\x97\xA5\xE6\x97\xA5z\n"
+    "\t \t \t \t \t \t \t \t \t \t \t \t \t \t \t \t \t "
+    "\t \t \t \t \t \t \t \t \t \t \t \t \t \t \t \t \t "
+    "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\nend";
+
+// 同じ小さな本文と長い語の本文で、INSERT の `Ctrl-w` `Ctrl-u` と大きな回数の 1 文字戻り（#1258）。
+void verify_vim_block_indexed_cut()
+{
+    std::size_t compared = 0;
+    bool same = true;
+    for (const std::string_view body : indexed_bodies)
+    {
+        same = indexed_body_agrees(body, indexed_cut_keys, compared) && same;
+    }
+    same = indexed_body_agrees(long_word_body, indexed_cut_keys, compared) && same;
+    expect(same, "an indexed text answers Ctrl-w, Ctrl-u and counted h, X and dh the same");
+    expect(compared == 15093, "the cut and counted-left equivalence compares 15093 keys");
+}
+
 // 塊の境 `boundary` の前後（-64・0・+63 の次の code point）に矩形の角を置く。
 [[nodiscard]] bool indexed_boundary_agrees(std::string_view body, std::size_t boundary,
                                            std::span<const std::string_view> lists,
@@ -689,10 +741,11 @@ void verify_vim_block_indexed_across_chunks()
         std::ranges::find_if(chunks, [&line](const auto &chunk)
                              { return chunk.start > 0 && chunk.start + 64 < line.size(); });
     expect(inside != chunks.end(), "a chunk boundary falls inside the first line");
-    // 入口の 2 列（#1198）と、`r` `p` `.` と Esc の 4 列（#1237）。
-    constexpr std::array<std::string_view, 6> lists{"<C-v>jIxy<Esc>",   "<C-v>jlAz<Esc>",
-                                                    "<C-v>jlrZ",        "<C-v>jlyjp",
-                                                    "<C-v>jIxy<Esc>j.", "ix<Esc>"};
+    // 入口の 2 列（#1198）と、`r` `p` `.` と Esc の 4 列（#1237）と、`Ctrl-w` と大きな回数の
+    // 1 文字戻りの 3 列（#1258）。
+    constexpr std::array<std::string_view, 9> lists{
+        "<C-v>jIxy<Esc>", "<C-v>jlAz<Esc>", "<C-v>jlrZ", "<C-v>jlyjp", "<C-v>jIxy<Esc>j.",
+        "ix<Esc>",        "i<C-w>x<Esc>",   "99999h",    "d99999h"};
     std::size_t compared = 0;
     bool same =
         inside == chunks.end() || indexed_boundary_agrees(body, inside->start, lists, compared);
@@ -728,6 +781,7 @@ void verify_vim_block_contracts()
     verify_vim_block_reselect();
     verify_vim_block_indexed_small();
     verify_vim_block_indexed_rest();
+    verify_vim_block_indexed_cut();
     verify_vim_block_indexed_across_chunks();
 }
 
