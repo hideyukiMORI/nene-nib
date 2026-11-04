@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 99410152296f874536929bc3a3dbefd849853f0c7ad3a25d66c7351c19617cf1 / 3436 fixtures
+// fixtures.json: sha256 890b101ff06a0a67630ff14b08847c12e4e61269d261d0960eafe77001eee4ce / 3438 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3436> vim_fixtures{{
+constexpr std::array<VimFixture, 3438> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2756,6 +2756,8 @@ constexpr std::array<VimFixture, 3436> vim_fixtures{{
     {"insert-count-ctrl-w-start-on-boundary-once", "ab ?", "3li<C-w>Ａx<Esc>", "Ａx?", 1, 4, "", "", std::nullopt},
     {"insert-count-ctrl-w-buffer-start", "foo", "4i<C-w>Ａ <Esc>", "Ａ Ａ Ａ Ａ foo", 1, 16, "", "", std::nullopt},
     {"insert-count-ctrl-w-buffer-start-once", "foo", "i<C-w>Ａ <Esc>", "Ａ foo", 1, 4, "", "", std::nullopt},
+    {"insert-count-ctrl-w-start-inside-composing", "ab?", "2l2i<C-w>xéy<Esc>", "xéy?", 1, 5, "", "", std::nullopt},
+    {"insert-count-ctrl-w-ctrl-u-start-inside-composing", "ab?", "2l2i<C-u>xéy<Esc>", "xéy?", 1, 5, "", "", std::nullopt},
     {"insert-count-ctrl-w-backspace-before-start", "12 ?", "2l4i<BS>Ａ<Esc>", "1Ａ ?", 1, 2, "", "", std::nullopt},
     {"insert-count-ctrl-w-backspace-inside-wide", "12 ?", "2l2i<BS>ＡＢ<Esc>", "1ＡＡＢ ?", 1, 8, "", "", std::nullopt},
     {"insert-count-ctrl-w-backspace-once", "12 ?", "2li<BS>ＡＢ<Esc>", "1ＡＢ ?", 1, 5, "", "", std::nullopt},

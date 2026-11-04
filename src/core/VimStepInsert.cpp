@@ -246,9 +246,8 @@ constexpr std::size_t longest_code_point_bytes = 4;
 // 読むのは始めの桁の前後の数バイトだけ（1 行 16 MiB の行・#1040）。
 [[nodiscard]] bool erase_lands_on(const TextBuffer &text, Offset floor, Offset caret)
 {
-    constexpr std::size_t widest_code_point = 4;
     const Offset before{floor.value - 1};
-    const Offset after{std::min(caret.value, floor.value + widest_code_point)};
+    const Offset after{std::min(caret.value, floor.value + longest_code_point_bytes)};
     const std::string window = text.text_range(before, after);
     const Offset at{1};
     return is_boundary(window, at) && !vim_character_continues(window, at);

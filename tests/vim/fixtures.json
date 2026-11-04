@@ -2743,6 +2743,8 @@
   {"name":"insert-count-ctrl-w-start-on-boundary-once","text":"ab ?","keys":"3li<C-w>Ａx<Esc>"},
   {"name":"insert-count-ctrl-w-buffer-start","text":"foo","keys":"4i<C-w>Ａ <Esc>"},
   {"name":"insert-count-ctrl-w-buffer-start-once","text":"foo","keys":"i<C-w>Ａ <Esc>"},
+  {"name":"insert-count-ctrl-w-start-inside-composing","text":"ab?","keys":"2l2i<C-w>xéy<Esc>"},
+  {"name":"insert-count-ctrl-w-ctrl-u-start-inside-composing","text":"ab?","keys":"2l2i<C-u>xéy<Esc>"},
   {"name":"insert-count-ctrl-w-backspace-before-start","text":"12 ?","keys":"2l4i<BS>Ａ<Esc>"},
   {"name":"insert-count-ctrl-w-backspace-inside-wide","text":"12 ?","keys":"2l2i<BS>ＡＢ<Esc>"},
   {"name":"insert-count-ctrl-w-backspace-once","text":"12 ?","keys":"2li<BS>ＡＢ<Esc>"},
