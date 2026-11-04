@@ -34,6 +34,7 @@
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
 #include "VimMode.hpp"
+#include "VimReplay.hpp"
 #include "VimState.hpp"
 #include "VimStep.hpp"
 #include "VimTestSupport.hpp"
@@ -47,7 +48,9 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <deque>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -81,6 +84,8 @@ using nenenib::core::vim_block_range;
 using nenenib::core::vim_block_range_for;
 using nenenib::core::vim_block_text;
 using nenenib::core::vim_block_width;
+using nenenib::core::vim_replayed_block_range;
+using nenenib::core::vim_replayed_block_width;
 using nenenib::core::vim_step;
 using nenenib::core::vim_visual_reselect;
 using nenenib::core::VimBlockEdit;
@@ -100,6 +105,7 @@ using nenenib::core::VimMoveTo;
 using nenenib::core::VimNavigate;
 using nenenib::core::VimRemoveBlock;
 using nenenib::core::VimReplaceBlock;
+using nenenib::core::VimReplay;
 using nenenib::core::VimSelect;
 using nenenib::core::VimState;
 using nenenib::core::VimStep;
@@ -330,7 +336,31 @@ void verify_vim_block_reselect()
                               { return one.range == other.range && one.utf8 == other.utf8; });
 }
 
-// 矩形の鍵が起こす効果の中身（範囲と本文とキャレット）。ほかの効果は種類だけ。
+// 矩形でない効果のうち、キャレット・選択・打った本文・`.` の鍵の列と選び直す大きさ（#1237）。
+// ほかの効果は種類だけ。種類は呼ぶ側で比べてある。
+[[nodiscard]] bool same_other_effect(const VimEffect &left, const VimEffect &right)
+{
+    if (const auto *moved = std::get_if<VimMoveTo>(&left))
+    {
+        return moved->caret == std::get<VimMoveTo>(right).caret;
+    }
+    if (const auto *selected = std::get_if<VimSelect>(&left))
+    {
+        return selected->selection == std::get<VimSelect>(right).selection;
+    }
+    if (const auto *typed = std::get_if<VimInsertString>(&left))
+    {
+        return typed->utf8 == std::get<VimInsertString>(right).utf8;
+    }
+    if (const auto *replay = std::get_if<VimReplay>(&left))
+    {
+        const auto &other = std::get<VimReplay>(right);
+        return replay->keys == other.keys && replay->reselect == other.reselect;
+    }
+    return true;
+}
+
+// 矩形の鍵が起こす効果の中身（範囲と本文とキャレット）。ほかの効果は same_other_effect。
 [[nodiscard]] bool same_block_effect(const VimEffect &left, const VimEffect &right)
 {
     if (left.index() != right.index())
@@ -352,19 +382,7 @@ void verify_vim_block_reselect()
         const auto &other = std::get<VimInsertBlock>(right);
         return inserted->caret == other.caret && same_block_edits(inserted->edits, other.edits);
     }
-    if (const auto *moved = std::get_if<VimMoveTo>(&left))
-    {
-        return moved->caret == std::get<VimMoveTo>(right).caret;
-    }
-    if (const auto *selected = std::get_if<VimSelect>(&left))
-    {
-        return selected->selection == std::get<VimSelect>(right).selection;
-    }
-    if (const auto *typed = std::get_if<VimInsertString>(&left))
-    {
-        return typed->utf8 == std::get<VimInsertString>(right).utf8;
-    }
-    return true;
+    return same_other_effect(left, right);
 }
 
 [[nodiscard]] bool same_block_insert(const std::optional<VimBlockInsert> &left,
@@ -403,6 +421,7 @@ void verify_vim_block_reselect()
            same_block_insert(left.next.block_insert, right.next.block_insert) &&
            left.restore == right.restore && left.failure.has_value() == right.failure.has_value() &&
            left.next.wanted_column == right.next.wanted_column &&
+           left.next.replayed_block == right.next.replayed_block &&
            recorded_block(left.next) == recorded_block(right.next);
 }
 
@@ -455,9 +474,53 @@ block_applied(const TextBuffer &text, const Selection &selection, const VimEffec
     return {text, selection};
 }
 
+// 矩形の VISUAL のあいだの照らし。frame と同じ vim_block_range_for の形と記録の vim_block_width、
+// `.` の再生の中なら再生の矩形（vim_replayed_block_range）の幅と記録し直す幅
+// （vim_replayed_block_width・#1237）。どちらの本文でも同じ答えか。状態（欲しい列と再生の大きさ）
+// は 2 つの本文で同じことを same_indexed_step が鍵ごとに照らしている。
+[[nodiscard]] bool same_drawn_block(const TextBuffer &plain, const TextBuffer &indexed,
+                                    const Selection &selection, const VimState &state)
+{
+    if (state.mode != VimMode::visual_block)
+    {
+        return true;
+    }
+    const auto block = vim_block_range_for(plain, selection, state.wanted_column);
+    const bool drawn =
+        same_block_range(block, vim_block_range_for(indexed, selection, state.wanted_column)) &&
+        vim_block_width(indexed, selection, state.wanted_column) == block.width &&
+        vim_block_width(plain, selection, state.wanted_column) == block.width;
+    if (!state.replayed_block.has_value())
+    {
+        return drawn;
+    }
+    const VimBlockExtent extent = state.replayed_block.value();
+    const VimBlockWidth replayed = vim_replayed_block_range(plain, selection, extent).width;
+    return drawn && vim_replayed_block_width(plain, selection, extent) == replayed &&
+           vim_replayed_block_width(indexed, selection, extent) == replayed;
+}
+
+// `.` の再生（ADR 0033 の決定 4）。controller と同じく選び直してから、再生の鍵を列の頭へ
+// 差し込む。ほかの効果では何もしない。
+void queued_replay(const TextBuffer &text, const VimEffect &effect, Selection &selection,
+                   std::deque<VimKey> &queue)
+{
+    const auto *replay = std::get_if<VimReplay>(&effect);
+    if (replay == nullptr)
+    {
+        return;
+    }
+    if (replay->reselect.has_value())
+    {
+        selection = vim_visual_reselect(text, selection.caret, replay->reselect.value());
+    }
+    queue.insert(queue.begin(), replay->keys.begin(), replay->keys.end());
+}
+
 // 同じ本文の「索引を持たない本文」と「持つ本文」に同じ鍵を流し、鍵ごとの答えが同じか。矩形の
-// VISUAL のあいだは frame と同じ vim_block_range_for と、記録の vim_block_width も照らす。比べた
-// 鍵の数を compared に足す。
+// VISUAL のあいだは frame と同じ vim_block_range_for と、記録の vim_block_width も照らす。`.` は
+// controller と同じく選び直してから再生の鍵を列の頭へ差し込んで流す（再生の中の記録の幅も照らす・
+// #1237）。比べた鍵の数を compared に足す。
 [[nodiscard]] bool indexed_block_keys_agree(std::string_view body, Offset start,
                                             std::string_view keys, std::size_t &compared)
 {
@@ -472,18 +535,13 @@ block_applied(const TextBuffer &text, const Selection &selection, const VimEffec
     VimState plain_state = empty_vim_state();
     VimState indexed_state = empty_vim_state();
     bool same = true;
-    for (const VimKey &key : vim_keys_of(keys))
+    const std::vector<VimKey> typed = vim_keys_of(keys);
+    std::deque<VimKey> queue(typed.begin(), typed.end());
+    while (!queue.empty())
     {
-        if (plain_state.mode == VimMode::visual_block)
-        {
-            const auto block = vim_block_range_for(plain, selection, plain_state.wanted_column);
-            same =
-                same &&
-                same_block_range(
-                    block, vim_block_range_for(indexed, selection, indexed_state.wanted_column)) &&
-                vim_block_width(indexed, selection, indexed_state.wanted_column) == block.width &&
-                vim_block_width(plain, selection, plain_state.wanted_column) == block.width;
-        }
+        const VimKey key = queue.front();
+        queue.pop_front();
+        same = same && same_drawn_block(plain, indexed, selection, plain_state);
         const VimStep plain_step =
             vim_step(plain_state, VimEditorView{plain, selection, std::nullopt}, key);
         const VimStep indexed_step =
@@ -495,6 +553,7 @@ block_applied(const TextBuffer &text, const Selection &selection, const VimEffec
         selection = next_selection;
         plain_state = plain_step.next;
         indexed_state = indexed_step.next;
+        queued_replay(plain, plain_step.effect, selection, queue);
         ++compared;
     }
     return same && indexed.has_virtual_columns() && plain.text() == indexed.text();
@@ -506,11 +565,20 @@ constexpr std::array<std::string_view, 12> indexed_block_keys{
     "<C-v>jlcnn<Esc>", "<C-v>jCm<Esc>",  "<C-v>3jld",      "<C-v>3jly",
     "<C-v>2jlrZ",      "<C-v>jl~",       "$<C-v>3jI<Esc>", "<C-v>3j$Aw<Esc>"};
 
-// 1 つの角から矩形の入口の鍵を全部流す。
-[[nodiscard]] bool indexed_keys_agree_at(std::string_view body, Offset at, std::size_t &compared)
+// 矩形の `r`（`$` の矩形）・矩形のレジスタの `p` `P`（回数・行末の後ろ）・`.` の再生（`I` `A` `c`
+// `C` `r` `d` の後）・Esc の 1 文字戻りと `h`（#1237）。
+constexpr std::array<std::string_view, 14> indexed_rest_keys{
+    "$<C-v>jrZ",         "<C-v>3j$rQ",       "<C-v>jlyjp",       "<C-v>3jlyP",       "<C-v>jly$p",
+    "<C-v>jly2p",        "<C-v>jIxy<Esc>j.", "<C-v>jlAz<Esc>l.", "$<C-v>jAq<Esc>j.", "<C-v>jlrZj.",
+    "<C-v>jlcnn<Esc>j.", "<C-v>jCm<Esc>j.",  "ix<Esc>",          "a<Esc>3h"};
+
+// 1 つの角から鍵の列を全部流す。
+[[nodiscard]] bool indexed_keys_agree_at(std::string_view body, Offset at,
+                                         std::span<const std::string_view> lists,
+                                         std::size_t &compared)
 {
     bool same = true;
-    for (const std::string_view keys : indexed_block_keys)
+    for (const std::string_view keys : lists)
     {
         same = indexed_block_keys_agree(body, at, keys, compared) && same;
     }
@@ -518,7 +586,9 @@ constexpr std::array<std::string_view, 12> indexed_block_keys{
 }
 
 // 1 行目と 2 行目の code point ごとに矩形の角を置く（改行と CRLF の `\r` は飛ばす）。
-[[nodiscard]] bool indexed_body_agrees(std::string_view body, std::size_t &compared)
+[[nodiscard]] bool indexed_body_agrees(std::string_view body,
+                                       std::span<const std::string_view> lists,
+                                       std::size_t &compared)
 {
     const std::size_t second = body.find('\n') + 1;
     const std::size_t third = body.find('\n', second);
@@ -528,46 +598,61 @@ constexpr std::array<std::string_view, 12> indexed_block_keys{
         const bool corner =
             nenenib::core::is_boundary(body, Offset{at}) && body.at(at) != '\n' &&
             !(body.at(at) == '\r' && at + 1 < body.size() && body.at(at + 1) == '\n');
-        same = (!corner || indexed_keys_agree_at(body, Offset{at}, compared)) && same;
+        same = (!corner || indexed_keys_agree_at(body, Offset{at}, lists, compared)) && same;
     }
     return same;
 }
 
 // 小さな本文: Tab の途中・全角の途中・結合文字・`^V` と `\r` の 2
 // 桁の制御文字・短い行・空行・CRLF。
+constexpr std::array<std::string_view, 4> indexed_bodies{
+    "ab\tcd\xE6\x97\xA5"
+    "ef\x16gh\n\t\xE5\x85\xA8gh\x16ij\re\xCC\x81z\nx\n\nab\rcde\xCC\x81"
+    "fg\tk\n",
+    "\xE6\x97\xA5\t\xE6\x97\xA5x\n\t\t\tend\ne\xCC\x81\xCC\x81\t\xE5\x85\xA8\nshort",
+    "ab\tc\xE6\x97\xA5\r\n\t\xE5\x85\xA8"
+    "d\r\nxy\r\n\r\nlonger line\r\n",
+    // Tab と `e` の後に U+0301 が 40 個（80 バイト）。境を探す窓（64 バイト）を倍にする。
+    "a\t"
+    "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+    "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+    "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+    "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+    "bc\ne"
+    "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+    "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+    "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+    "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+    "fg\t\nxyz"};
+
 void verify_vim_block_indexed_small()
 {
-    constexpr std::array<std::string_view, 4> bodies{
-        "ab\tcd\xE6\x97\xA5"
-        "ef\x16gh\n\t\xE5\x85\xA8gh\x16ij\re\xCC\x81z\nx\n\nab\rcde\xCC\x81"
-        "fg\tk\n",
-        "\xE6\x97\xA5\t\xE6\x97\xA5x\n\t\t\tend\ne\xCC\x81\xCC\x81\t\xE5\x85\xA8\nshort",
-        "ab\tc\xE6\x97\xA5\r\n\t\xE5\x85\xA8"
-        "d\r\nxy\r\n\r\nlonger line\r\n",
-        // Tab と `e` の後に U+0301 が 40 個（80 バイト）。境を探す窓（64 バイト）を倍にする。
-        "a\t"
-        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
-        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
-        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
-        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
-        "bc\ne"
-        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
-        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
-        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
-        "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
-        "fg\t\nxyz"};
     std::size_t compared = 0;
     bool same = true;
-    for (const std::string_view body : bodies)
+    for (const std::string_view body : indexed_bodies)
     {
-        same = indexed_body_agrees(body, compared) && same;
+        same = indexed_body_agrees(body, indexed_block_keys, compared) && same;
     }
     expect(same, "an indexed text answers every blockwise key the same as a copied line");
     expect(compared == 8960, "the blockwise equivalence compares 8960 keys");
 }
 
+// 同じ小さな本文で、矩形の `r` `p` と `.` の再生と Esc の 1 文字戻り（#1237）。
+void verify_vim_block_indexed_rest()
+{
+    std::size_t compared = 0;
+    bool same = true;
+    for (const std::string_view body : indexed_bodies)
+    {
+        same = indexed_body_agrees(body, indexed_rest_keys, compared) && same;
+    }
+    expect(same, "an indexed text answers r, p, . and Esc in a block the same as a copied line");
+    expect(compared == 13824, "the rest of the blockwise equivalence compares 13824 keys");
+}
+
 // 塊の境 `boundary` の前後（-64・0・+63 の次の code point）に矩形の角を置く。
 [[nodiscard]] bool indexed_boundary_agrees(std::string_view body, std::size_t boundary,
+                                           std::span<const std::string_view> lists,
                                            std::size_t &compared)
 {
     bool same = true;
@@ -578,7 +663,7 @@ void verify_vim_block_indexed_small()
         {
             ++at;
         }
-        for (const std::string_view keys : {"<C-v>jIxy<Esc>", "<C-v>jlAz<Esc>"})
+        for (const std::string_view keys : lists)
         {
             same = indexed_block_keys_agree(body, Offset{at}, keys, compared) && same;
         }
@@ -604,8 +689,13 @@ void verify_vim_block_indexed_across_chunks()
         std::ranges::find_if(chunks, [&line](const auto &chunk)
                              { return chunk.start > 0 && chunk.start + 64 < line.size(); });
     expect(inside != chunks.end(), "a chunk boundary falls inside the first line");
+    // 入口の 2 列（#1198）と、`r` `p` `.` と Esc の 4 列（#1237）。
+    constexpr std::array<std::string_view, 6> lists{"<C-v>jIxy<Esc>",   "<C-v>jlAz<Esc>",
+                                                    "<C-v>jlrZ",        "<C-v>jlyjp",
+                                                    "<C-v>jIxy<Esc>j.", "ix<Esc>"};
     std::size_t compared = 0;
-    bool same = inside == chunks.end() || indexed_boundary_agrees(body, inside->start, compared);
+    bool same =
+        inside == chunks.end() || indexed_boundary_agrees(body, inside->start, lists, compared);
     same = indexed_block_keys_agree(body, Offset{0}, "$<C-v>jAq<Esc>", compared) && same;
     expect(same, "the blockwise keys agree when the block edges sit near a chunk boundary");
 }
@@ -637,6 +727,7 @@ void verify_vim_block_contracts()
     verify_vim_block_range();
     verify_vim_block_reselect();
     verify_vim_block_indexed_small();
+    verify_vim_block_indexed_rest();
     verify_vim_block_indexed_across_chunks();
 }
 

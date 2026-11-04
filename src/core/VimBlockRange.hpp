@@ -55,6 +55,12 @@ struct VimBlockRange
                                                      const Selection &selection,
                                                      const VimBlockExtent &extent);
 
+// vim_replayed_block_range と同じ矩形の幅だけ（`.` の再生の中で記録し直す大きさ・#1237）。左の桁
+// は選択の先の角、右は記録した幅か `$` なら覆う行の最長で、行ごとの形は作らない。
+[[nodiscard]] VimBlockWidth vim_replayed_block_width(const TextBuffer &text,
+                                                     const Selection &selection,
+                                                     const VimBlockExtent &extent);
+
 // 矩形が覆った本文（レジスタに入る形）。行を LF でつなぎ、末尾に改行は付けない。
 [[nodiscard]] std::string vim_block_text(const TextBuffer &text, const VimBlockRange &block);
 

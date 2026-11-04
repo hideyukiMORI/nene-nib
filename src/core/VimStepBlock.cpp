@@ -99,7 +99,8 @@ namespace
 }
 
 // r（決定 4）。行ごとに「矩形が覆った桁の数」を同じ文字で埋める＝ Tab の上では桁の数ぶん並ぶ
-// （Issue #112 で実測）。矩形より手前で終わる行には何も書かない。
+// （Issue #112 で実測）。矩形より手前で終わる行には何も書かない。行の幅は line_virtual_width
+// （索引を持つ本文は行を写さない・#1237）。
 [[nodiscard]] std::vector<VimBlockEdit>
 replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_t target)
 {
@@ -109,8 +110,7 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     for (std::size_t index = 0; index < block.lines.size(); ++index)
     {
         const VimBlockLine &line = block.lines.at(index);
-        const std::size_t columns =
-            virtual_width(text.line_text(LineNumber{block.first.value + index}));
+        const std::size_t columns = line_virtual_width(text, LineNumber{block.first.value + index});
         if (columns < left || is_empty(line.range))
         {
             continue;
@@ -547,9 +547,10 @@ namespace detail
     VimRemoveBlock removal = vim_remove_block(block);
     removal.caret = change_entry(view.text, block, removal);
     const VimBlockLine &top = block.lines.front();
-    const std::size_t line_bytes = view.text.line_text(block.first).size() -
-                                   (top.range.end.value - top.range.begin.value) + top.keep_lead +
-                                   top.keep_tail;
+    // 1 行目のバイト数は行を写さず行頭と行末の差で数える（#1237）。
+    const std::size_t line_bytes =
+        (view.text.line_end(block.first).value - view.text.line_start(block.first).value) -
+        (top.range.end.value - top.range.begin.value) + top.keep_lead + top.keep_tail;
     VimState entered = block_insert_entered(
         std::move(next), single_step,
         VimBlockInsert{block.first, block.lines.size(), VimBlockInsertSide::before, block.left,
@@ -594,18 +595,18 @@ namespace
 }
 
 // 貼る本文が始まる桁までに入れる空白の数。行が桁より短ければ末尾まで埋め、桁が Tab の途中に
-// 落ちればその Tab の左側ぶんを空白にする（固定 Vim も Tab だけを割る・実測）。
-[[nodiscard]] std::size_t put_lead(const TextBuffer &text, LineNumber line, std::size_t column)
+// 落ちればその Tab の左側ぶんを空白にする（固定 Vim も Tab だけを割る・実測）。桁は VimLineColumns
+// に問う（索引を持つ本文は行を写さない・#1237）。
+[[nodiscard]] std::size_t put_lead(const VimLineColumns &line, std::size_t column)
 {
-    const std::string content = text.line_text(line);
-    const std::size_t columns = virtual_width(content);
+    const std::size_t columns = line.width();
     if (column > columns)
     {
         return column - single_step - columns;
     }
-    const std::size_t byte = byte_at_column(content, VirtualColumn{column});
-    const std::size_t begins = column_of(content, byte).value;
-    if (begins < column && code_point_at(content, Offset{byte}) == tab_character)
+    const std::size_t byte = line.byte_at(VirtualColumn{column});
+    const std::size_t begins = line.column_of(byte).value;
+    if (begins < column && line.code_point_at(byte) == tab_character)
     {
         return column - begins;
     }
@@ -675,28 +676,27 @@ namespace
 
 // 1 行ぶんの貼付。行が桁より短ければ手前を空白で埋め、桁が Tab の途中に落ちればその Tab を
 // 空白に割って置き換える（固定 Vim も Tab だけを割る・実測）。
-[[nodiscard]] VimBlockEdit put_block_line(const TextBuffer &text, LineNumber line,
-                                          std::size_t column, const std::string &body)
+[[nodiscard]] VimBlockEdit put_block_line(const VimLineColumns &line, std::size_t column,
+                                          const std::string &body)
 {
-    const std::string content = text.line_text(line);
-    const Offset start = text.line_start(line);
-    const std::size_t lead = put_lead(text, line, column);
+    const Offset start = line.start();
+    const std::size_t lead = put_lead(line, column);
     std::string utf8(lead, ' ');
     utf8 += body;
-    if (column > virtual_width(content))
+    if (column > line.width())
     {
-        return VimBlockEdit{OffsetRange{text.line_end(line), text.line_end(line)}, std::move(utf8)};
+        const Offset end{start.value + line.size()};
+        return VimBlockEdit{OffsetRange{end, end}, std::move(utf8)};
     }
-    const std::size_t byte = byte_at_column(content, VirtualColumn{column});
+    const std::size_t byte = line.byte_at(VirtualColumn{column});
     if (lead == 0)
     {
         return VimBlockEdit{OffsetRange{Offset{start.value + byte}, Offset{start.value + byte}},
                             std::move(utf8)};
     }
-    utf8.append(column_end_of(content, byte).value - column + single_step, ' ');
+    utf8.append(line.column_end_of(byte).value - column + single_step, ' ');
     return VimBlockEdit{
-        OffsetRange{Offset{start.value + byte},
-                    Offset{start.value + next_code_point(content, Offset{byte}).value}},
+        OffsetRange{Offset{start.value + byte}, Offset{start.value + line.next_code_point(byte)}},
         std::move(utf8)};
 }
 
@@ -716,10 +716,10 @@ namespace
 }
 
 // 貼り先の行に本文が続くかどうか。続くときは矩形の形を保つために右も空白で埋める（実測）。
-[[nodiscard]] std::size_t put_padded(const TextBuffer &text, LineNumber line, std::size_t column,
+[[nodiscard]] std::size_t put_padded(const VimLineColumns &line, std::size_t column,
                                      std::size_t count)
 {
-    return column <= virtual_width(text.line_text(line)) ? count : count - single_step;
+    return column <= line.width() ? count : count - single_step;
 }
 } // namespace
 
@@ -774,6 +774,9 @@ namespace
     const std::size_t last = std::min(first + lines.size() - single_step, text.line_count());
     std::vector<VimBlockEdit> edits;
     std::vector<std::string> rest;
+    // 1 行目の手前の空白（キャレットは貼った本文の頭）。行ごとの桁は 1 行に 1 つの VimLineColumns
+    // に問う（#1237）。
+    std::size_t first_lead = 0;
     for (std::size_t index = 0; index < lines.size(); ++index)
     {
         const std::size_t number = first + index;
@@ -782,12 +785,16 @@ namespace
             rest.push_back(put_block_body(lines.at(index), width, count, count - single_step));
             continue;
         }
-        const LineNumber line{number};
+        const VimLineColumns line(text, LineNumber{number});
+        if (index == 0)
+        {
+            first_lead = put_lead(line, column);
+        }
         edits.push_back(put_block_line(
-            text, line, column,
-            put_block_body(lines.at(index), width, count, put_padded(text, line, column, count))));
+            line, column,
+            put_block_body(lines.at(index), width, count, put_padded(line, column, count))));
     }
-    const Offset at{edits.front().range.begin.value + put_lead(text, LineNumber{first}, column)};
+    const Offset at{edits.front().range.begin.value + first_lead};
     if (!rest.empty())
     {
         edits.push_back(appended_block_lines(text, column, rest));
