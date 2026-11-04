@@ -27,6 +27,8 @@
 #include "VimTextObjectOutcome.hpp"
 #include "VimTextObjectRange.hpp"
 #include "VimTextObjectRequest.hpp"
+#include "VimToplineUpdate.hpp"
+#include "VimToplineWindow.hpp"
 #include "VisualPosition.hpp"
 
 #include <algorithm>
@@ -1028,16 +1030,28 @@ namespace
     return rested_in(text, vim_line_and_column(text, line, column), state.mode);
 }
 
-// z^ の回数つきの行（ADR 0146 の決定 9・Vim の nv_zet）。回数の行を下端に置いたときの先頭の行。
+// z^ の回数つきの行（ADR 0146 の決定 9・#1227・Vim の nv_zet）。回数の行を下端に置いたときの
+// 先頭の行。Vim の 1 段目は scroll_cursor_bot(0, TRUE) で、下端に置いてから scrolloff の余白
+// （本文の終わりで切れる）の分だけ上へ送る。送りは追従と同じ 1 本（vim_topline_updated）で数える。
 [[nodiscard]] std::expected<LineNumber, VimLayoutNeed> counted_above_line(const VimState &state,
                                                                           const VimEditorView &view)
 {
-    const auto top = vim_aligned_top(view, counted_line_caret(state, view), VimScreenPlace::bottom);
+    const Offset caret = counted_line_caret(state, view);
+    const auto top = vim_aligned_top(view, caret, VimScreenPlace::bottom);
     if (!top)
     {
         return std::unexpected(top.error());
     }
-    return top.value().line;
+    const VimToplineWindow window{top.value().line,
+                                  std::max<std::size_t>(vim_viewport_of(view).visible_lines, 1),
+                                  view.scroll_margin, view.layout.lines, view.layout.enabled};
+    const auto margined =
+        vim_topline_updated(window, view.text.position_of(caret).line, view.text.line_count());
+    if (!margined)
+    {
+        return std::unexpected(VimLayoutNeed{margined.error().line});
+    }
+    return margined.value();
 }
 
 // 選んだ行の行頭（呼び手が最初の非空白へ動かす）。行が決まらなければ要る配置を返す。
