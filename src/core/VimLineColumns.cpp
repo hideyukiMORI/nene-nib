@@ -102,6 +102,31 @@ std::size_t VimLineColumns::character_end(std::size_t byte) const
     }
 }
 
+// 索引の道は byte の手前の窓（と byte の 1 code point）を読み、窓の頭まで戻ってしまったら（窓の
+// 頭は文字の頭とは限らない）窓を倍にして読み直す。行頭まで届いた窓の答えは行を写した答えと同じ。
+std::size_t VimLineColumns::character_start(std::size_t byte) const
+{
+    if (copied_.has_value())
+    {
+        return vim_character_start(copied_.value(), Offset{byte}).value;
+    }
+    const std::size_t at = std::min(byte, size_);
+    std::size_t window = character_window_bytes;
+    for (;;)
+    {
+        const std::size_t begin = at > window ? at - window : 0;
+        const std::size_t stop = std::min(at + longest_code_point_bytes, size_);
+        const std::string content =
+            text_.get().text_range(Offset{start_.value + begin}, Offset{start_.value + stop});
+        const std::size_t found = vim_character_start(content, Offset{at - begin}).value;
+        if (begin == 0 || found > 0)
+        {
+            return begin + found;
+        }
+        window *= 2;
+    }
+}
+
 char32_t VimLineColumns::code_point_at(std::size_t byte) const
 {
     if (copied_.has_value())

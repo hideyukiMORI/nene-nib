@@ -933,6 +933,9 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     switch (workload)
     {
     case VimBlockWorkload::insert_giant_1line:
+    case VimBlockWorkload::replace_giant_1line:
+    case VimBlockWorkload::put_giant_1line:
+    case VimBlockWorkload::repeat_giant_1line:
         return 206U + static_cast<std::size_t>(workload);
     }
     std::unreachable();
@@ -953,7 +956,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 207> dispatches{{
+constexpr std::array<ProbeDispatch, 210> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1374,6 +1377,12 @@ constexpr std::array<ProbeDispatch, 207> dispatches{{
                      explorer_frame_input, explorer_frame_typing},
     ProbeDispatchRow{VimBlockWorkload::insert_giant_1line, "vim-block-insert-giant-1line",
                      vim_block_input, vim_block_inserted},
+    ProbeDispatchRow{VimBlockWorkload::replace_giant_1line, "vim-block-replace-giant-1line",
+                     vim_block_input, vim_block_replaced},
+    ProbeDispatchRow{VimBlockWorkload::put_giant_1line, "vim-block-put-giant-1line",
+                     vim_block_input, vim_block_put},
+    ProbeDispatchRow{VimBlockWorkload::repeat_giant_1line, "vim-block-repeat-giant-1line",
+                     vim_block_input, vim_block_repeated},
 }};
 
 constexpr auto dispatch_names = []
@@ -1416,7 +1425,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 207U);
+static_assert(dispatches.size() == 210U);
 static_assert(dispatch_is_complete());
 
 } // namespace
