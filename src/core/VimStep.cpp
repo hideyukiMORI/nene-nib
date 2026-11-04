@@ -399,8 +399,8 @@ forward_pages_held(const VimEditorView &view, std::size_t pages, std::size_t one
                                                 target.first, target.first_row}};
 }
 
-[[nodiscard]] VimStep displayed_navigation(const VimState &state, const VimEditorView &view,
-                                           const VimDisplayNavigation &target)
+[[nodiscard]] VimStep displayed_moved(const VimState &state, const VimEditorView &view,
+                                      const VimDisplayNavigation &target)
 {
     if (target.placed.has_value())
     {
@@ -421,6 +421,19 @@ forward_pages_held(const VimEditorView &view, std::size_t pages, std::size_t one
     return step;
 }
 
+// 文字組みの道の画面移動。端で失敗した送りは窓とキャレットを解いたとおりに動かし、失敗の印を
+// 添える（Vim の onepage の FAIL・#1228）。
+[[nodiscard]] VimStep displayed_navigation(const VimState &state, const VimEditorView &view,
+                                           const VimDisplayNavigation &target)
+{
+    auto step = displayed_moved(state, view, target);
+    if (!target.failure.has_value())
+    {
+        return step;
+    }
+    return failed(std::move(step), target.failure.value());
+}
+
 // 新しい窓の先頭 first でキャレットの行を余白の内側へ寄せる（Vim の onepage と halfpage の最後の
 // cursor_correct・#1099・ADR 0019 の追補）。文字組みの無い道の窓は 1 論理行 = 1 画面行。
 [[nodiscard]] LineNumber corrected_in(const VimEditorView &view, LineNumber first,
@@ -434,9 +447,43 @@ forward_pages_held(const VimEditorView &view, std::size_t pages, std::size_t one
                                 caret_line, total);
 }
 
+// 半画面の送りが端で失敗するか（Vim の nv_halfpage は CTRL-U でカーソルが 1 行目・CTRL-D で
+// 最終行のとき halfpage を呼ばずに clearopbeep する・#1228・ADR 0019 の追補）。窓の位置は見ない。
+// 格子の画面行の単位は 1 行の中の画面行を送るので、今までどおり端でも動く側に数える（ADR 0144）。
+[[nodiscard]] bool half_page_fails(const VimEditorView &view, VimScrollDirection direction)
+{
+    if (view.layout.enabled && view.layout.unit == VimScrollUnit::row)
+    {
+        return false;
+    }
+    const LineNumber line = line_of(view.text, view.selection.caret);
+    switch (direction)
+    {
+    case VimScrollDirection::up:
+        return line.value == single_step;
+    case VimScrollDirection::down:
+        return line.value == view.text.line_count();
+    }
+    std::unreachable();
+}
+
+// 端で失敗した半画面（clearopbeep）。回数と保留を捨て、モード・欲しい列・窓・'scroll' は保つ。
+// 失敗の印で `:normal!` と `.` とマクロの残りの鍵を打ち切る（beep_flush・#1228）。
+[[nodiscard]] VimStep half_page_failed(const VimState &state)
+{
+    VimState next = state;
+    next.count = std::nullopt;
+    next.pending = std::nullopt;
+    return failed(VimStep{std::move(next), VimNoEffect{}}, VimRepeatFailure::not_moved);
+}
+
 [[nodiscard]] VimStep half_page_step(const VimState &state, const VimEditorView &view,
                                      VimScrollDirection direction)
 {
+    if (half_page_fails(view, direction))
+    {
+        return half_page_failed(state);
+    }
     if (view.navigation.has_value())
     {
         return displayed_navigation(state, view, view.navigation.value());
@@ -485,8 +532,12 @@ namespace detail
     const LineNumber first = page_top(view, count_of(state.count), direction);
     if (first == vim_viewport_of(view).first_visible)
     {
+        // 最初の周で端に当たった（Vim の onepage の FAIL・後ろへは先頭行が 1・前へは末尾が見えて
+        // 先頭が末尾から余白の内側）。beep_flush が残りの鍵を打ち切る（#1228）。
         const Offset caret = view.selection.caret;
-        return VimStep{navigated_state(state, view, caret), VimNavigate{view.selection, first}};
+        return failed(
+            VimStep{navigated_state(state, view, caret), VimNavigate{view.selection, first}},
+            VimRepeatFailure::not_moved);
     }
     const std::size_t height =
         std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
@@ -508,12 +559,15 @@ namespace detail
         return navigated(state, view, first, caret_line);
     }
     // 回数の途中で端に当たった周は Vim の onepage が FAIL を返し、beginline を飛ばす。キャレットは
-    // 行だけ画面へ入り、同じバイトの桁を保つ（check_cursor_col・Issue #411）。
+    // 行だけ画面へ入り、同じバイトの桁を保つ（check_cursor_col・Issue #411）。窓は送った所まで
+    // 動いたまま、beep_flush が残りの鍵を打ち切る（#1228）。
     const Offset caret = view.selection.caret;
     const std::size_t column = caret.value - view.text.line_start(line_of(view.text, caret)).value;
-    return navigated_at(
-        state, view, first,
-        rested_in(view.text, vim_line_and_column(view.text, caret_line, column), state.mode));
+    return failed(
+        navigated_at(
+            state, view, first,
+            rested_in(view.text, vim_line_and_column(view.text, caret_line, column), state.mode)),
+        VimRepeatFailure::not_moved);
 }
 
 // 1 画面の送りが端で動かないか（Vim の ins_pageup / ins_pagedown が呼ぶ onepage(dir, 1) の
