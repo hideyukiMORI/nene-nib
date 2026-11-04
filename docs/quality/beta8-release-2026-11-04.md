@@ -35,4 +35,16 @@
 
 ## 公開の結果
 
-（公開の後に埋める）
+2026-11-04 21:34（JST）に公開した。手順 1〜2 と 4 は設計席、手順 3（tag と pre-release）は hide が `D:/NeNeNib/evidence/beta8-release/publish.ps1` を 1 行で実行した（beta.7 の教訓: 長い命令を `!` で打たずスクリプトにする）。
+
+- URL: https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.8（pre-release・release id 433896754・published 2026-11-04T12:34:06Z）
+- tag `v0.1.0-beta.8`（annotated）→ `e556b0e2d0a74584c6d08645aa8c675393adcc82`（main・梱包の commit と同じ・この記録の文書 PR #1281 の merge）
+- 梱包: `pwsh -NoProfile -File eng/package-release.ps1 -Beta 8 ...` が `D:/NeNeNib/worktrees/beta8`（detached・origin/main `e556b0e2`・未追跡 0）で成功。記録 `D:/NeNeNib/releases/v0.1.0-beta.8/package.json`。exe の SHA-256 `1344c61563b3b0d562ac9c65b6389df29a3beefeb597af14a9cba6e630f13cf5`（3,030,528 bytes）。1 回目は出力先のフォルダを先に作ってしまい道具が「既にある」と断った（空のフォルダを消して 2 回目で成功）。
+- 起動・描画: `python D:/NeNeNib/evidence/beta8-release/release-smoke.py` が pass（隔離 profile・DPI 120・正常終了 0・本文不変・PNG を設計席が見た）。
+- 速さ: `python eng/measure-speed.py --check --repetitions 5 --executable D:/NeNeNib/releases/v0.1.0-beta.8/extracted/NeNeNib.exe` → **8 benches checked, 0 regression(s), 0 unmeasurable**（別の席の clang-tidy が終わるのを待ち負荷 9% で 1 回・中央値 ms: 起動 45.4・窓 33.7・単打 0.576・連打 2.700・16 MiB open 59.3・16 MiB 連打 2.861・面 1.060・長い行 1.072）。記録 `D:/NeNeNib/evidence/beta8-release/gate-beta8.log` と `load-before-gate.txt`。
+- 添付: `NeNeNib-0.1.0-beta.8-windows-x64.zip` 1,258,747 bytes・SHA-256 `d8d57ee54fbdab48cfca5b21128ef589754f11c625b9157738f3f5140de6ee49`、`SHA256SUMS` 104 bytes
+- 照合（`verify-publication.py`・`gh release download` で再取得）: bytes 一致・zip の中身一致・tag の commit 一致・展開した exe の起動 pass（release-smoke-01）→ `result: pass`。写しは `D:/NeNeNib/releases/v0.1.0-beta.8/publication-verification.json` と `github-release.json`。
+- hide の試用（公開の前・2026-11-04 夜・`NeNeNib-main-b40ea348.exe`）: LSP の診断（clangd・E の件数・波線・キャレットの行の文・打鍵の引っかかり無し）と普段の操作 6 つ OK。試用で見つかったもの 2 件は beta.8 の範囲外として Issue に: [#1282](https://github.com/hideyukiMORI/nene-nib/issues/1282)（「保存しますか」のダイアログのボタンが hide の実機で「OK／さらに詳しく／キャンセル」と出た・コードは `MB_YESNOCANCEL`・文言を自分で持つ形へ）。「Ctrl+Shift+M を 2 回で全面」は試用の表の誤りで製品は ADR 0155 のとおり（全面にも鍵を足すかは hide の判断・beta.9 以降）。
+- 設定ファイルの事故: hide が `lsp.cpp.command=` の行を PowerShell に貼ったとき画面の折り返しで改行が値に入り、`settings.v4` が「形式が正しくありません」になった（読み手の拒否は正しい動き）。直しは `D:/NeNeNib/scripts/20261104/fix-settings-v4.ps1`。hide に渡す設定の行もスクリプトか 1 行の短いものにする。
+
+教訓: 梱包の出力先は道具が作る（先に `mkdir` しない）。速さのゲートの前に別の席のビルド（clang-tidy）を待つ script を置くと、測り直しをせずに 1 回で済む。
