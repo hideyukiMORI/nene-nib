@@ -670,10 +670,6 @@ void verify_records_and_replay()
            "press_vim_keys does not look up the table");
 }
 
-// 右辺の途中の鍵が失敗したら右辺の残りを捨て、打った鍵は流す（Vim の beep_flush の
-// FLUSH_MINIMAL・追補 19・#1257）。期待値は Vim 9.1 の実測（100 行の本文・feedkeys の 't'）:
-// `x` → 1 行目・`xj` → 2・`qj`（`qz` の待ちの後の j）→ 2・`xw`（w は 3j）→ 4・`q` の待ちの
-// タイムアウト → 1。失敗しない右辺は今までどおり `y` → 44・`yj` → 45。
 // Vim の 100 行の本文で 50G から keys を打ち（timeout なら最後に 1
 // 秒の待ちを流し）、キャレットの行。
 [[nodiscard]] std::size_t hundred_lines_caret(std::vector<MapRow> rows, std::string_view keys,
@@ -697,6 +693,10 @@ void verify_records_and_replay()
     return controller.frame().caret.position.line.value;
 }
 
+// 右辺の途中の鍵が失敗したら右辺の残りを捨て、打った鍵は流す（Vim の beep_flush の
+// FLUSH_MINIMAL・追補 19・#1257）。期待値は Vim 9.1 の実測（100 行の本文・feedkeys の 't'）:
+// `x` → 1 行目・`xj` → 2・`qj`（`qz` の待ちの後の j）→ 2・`xw`（w は 3j）→ 4・`q` の待ちの
+// タイムアウト → 1。失敗しない右辺は今までどおり `y` → 44・`yj` → 45。
 [[nodiscard]] std::size_t mapped_line(std::string_view keys, bool timeout)
 {
     return hundred_lines_caret(
@@ -748,6 +748,11 @@ void verify_unit_mode()
            "the new wait flushes with the vmap on the timeout");
     expect(hundred_lines_caret({visual_x, wait_x, visual_jk, visual_j}, "xjk", false) == 45U,
            "the new wait completes the longer vmap");
+    expect(hundred_lines_caret({MapRow{normal_only, "x", "f", true},
+                                MapRow{normal_only, "x0z", "G", true},
+                                MapRow{normal_only, "k", "3j", true}},
+                               "x0k", false) == 53U,
+           "after the argument of f the later key is looked up in NORMAL again");
 }
 
 // 待ちの間の IME の確定は積んだ鍵を先に流し、WorkCompleted は待ちを保つ（決定 4）。
