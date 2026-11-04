@@ -799,7 +799,7 @@ VisualTextView::followed_first(core::VisualPosition caret, core::ScrollFollow fo
     const auto first = normalized.value();
     if (follow == core::ScrollFollow::vim && !gridded())
     {
-        const auto vim = vim_followed_first(caret, first);
+        const auto vim = vim_followed_first(caret, first, state_.scroll().first_visible);
         if (!vim)
         {
             return std::unexpected(vim.error());
@@ -917,12 +917,14 @@ VisualTextView::vim_caret_shown(std::vector<core::VimLineRows> &heights, core::V
 }
 
 // 答えが今の先頭なら今の先頭（画面行の位置も）を保つ。答えの窓でキャレットの画面行が見えなければ
-// 値を返さない。
+// 値を返さない。core へ渡す先頭 topline は本文の行数で切る前の値で、行単位の削除で本文の外に
+// 残った先頭も Vim の w_topline と同じにそのまま数える（#1230・ADR 0019 の追補）。
 std::expected<std::optional<core::VisualPosition>, TextLayoutFailure>
-VisualTextView::vim_followed_first(core::VisualPosition caret, core::VisualPosition first)
+VisualTextView::vim_followed_first(core::VisualPosition caret, core::VisualPosition first,
+                                   core::LineNumber topline)
 {
     std::vector<core::VimLineRows> heights;
-    const auto top = vim_topline(caret.line, first.line, heights);
+    const auto top = vim_topline(caret.line, topline, heights);
     if (!top)
     {
         return std::unexpected(top.error());

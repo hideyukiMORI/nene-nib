@@ -155,7 +155,8 @@ class VisualTextView final
     // 呼ばない。答えの窓でキャレットが見えないとき（窓より高い行）は値が無く、呼び手は画面行の
     // 追従へ戻る。
     [[nodiscard]] std::expected<std::optional<core::VisualPosition>, TextLayoutFailure>
-    vim_followed_first(core::VisualPosition caret, core::VisualPosition first);
+    vim_followed_first(core::VisualPosition caret, core::VisualPosition first,
+                       core::LineNumber topline);
     [[nodiscard]] std::expected<core::LineNumber, TextLayoutFailure>
     vim_topline(core::LineNumber caret, core::LineNumber top,
                 std::vector<core::VimLineRows> &heights);

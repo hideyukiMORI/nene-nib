@@ -428,7 +428,10 @@ std::expected<LineNumber, VimRowsNeeded> vim_topline_updated(const VimToplineWin
 {
     const std::size_t count = std::max<std::size_t>(line_count, 1);
     const std::size_t cursor = std::clamp<std::size_t>(caret.value, 1, count);
-    const std::size_t top = std::clamp<std::size_t>(window.top.value, 1, count);
+    // 先頭は本文の行数で切らない。行単位の削除の後は先頭が本文の外のまま残り、Vim の n（先頭 +
+    // 余白 - キャレット）はその値で数える（Vim の mark_adjust は curwin の w_topline を動かさない・
+    // #1230）。キャレットは本文の中なので、先頭が本文の外なら上側は必ず決め直す。
+    const std::size_t top = std::max<std::size_t>(window.top.value, 1);
     if (window.height == 0)
     {
         return LineNumber{cursor};
