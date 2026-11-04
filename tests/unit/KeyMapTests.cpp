@@ -298,7 +298,7 @@ void verify_steps()
            "a mismatch flows the waiting j and the key");
     expect(is_pass(core::key_map_step(jj, VimMapMode::normal, {}, character(U'j'))),
            "an insert map does not touch NORMAL");
-    expect(core::key_map_flush(jj, VimMapMode::insert, j) == j,
+    expect(core::key_map_flush(jj, VimMapMode::insert, j).keys == j,
            "the timeout flows the waiting keys as they are");
     const auto jk = map_of({MapRow{insert_only, "jk", "<Esc>", false}});
     expect(emits(core::key_map_step(jk, VimMapMode::insert, j, character(U'j')), j, j),
@@ -321,8 +321,22 @@ void verify_steps()
     const auto shorter =
         map_of({MapRow{insert_only, "j", "a", false}, MapRow{insert_only, "jj", "b", false}});
     expect(is_pending(core::key_map_step(shorter, VimMapMode::insert, {}, character(U'j'))) &&
-               core::key_map_flush(shorter, VimMapMode::insert, j) == text_keys(U"a"),
+               core::key_map_flush(shorter, VimMapMode::insert, j).keys == text_keys(U"a"),
            "a key that is a whole left side and the start of a longer one waits");
+    const auto matched = core::key_map_step(jj, VimMapMode::insert, j, character(U'j'));
+    const auto *units = std::get_if<KeyMapEmit>(&matched);
+    expect(units != nullptr && units->ends == std::vector<std::size_t>{1U},
+           "a matched right side is one unit");
+    const auto split = core::key_map_step(jj, VimMapMode::insert, j, character(U'k'));
+    const auto *typed_units = std::get_if<KeyMapEmit>(&split);
+    expect(typed_units != nullptr && typed_units->ends == std::vector<std::size_t>{1U, 2U},
+           "each key not in the table is its own unit");
+    const auto chained = core::key_map_step(nested, VimMapMode::normal, {}, character(U'n'));
+    const auto *chained_units = std::get_if<KeyMapEmit>(&chained);
+    expect(chained_units != nullptr && chained_units->ends == std::vector<std::size_t>{3U},
+           "a right side looked up once more stays one unit");
+    expect(core::key_map_flush(shorter, VimMapMode::insert, j).ends == std::vector<std::size_t>{1U},
+           "the timeout flush marks the same units");
     const auto op = map_of({MapRow{VimModeSet{false, false, false, false, true}, "w", "e", false}});
     expect(emits(core::key_map_step(op, VimMapMode::operator_pending, {}, character(U'w')),
                  text_keys(U"e")) &&
@@ -394,7 +408,7 @@ void verify_steps()
         }
         bounded = bounded && pending.size() < core::key_map_lhs_limit;
     }
-    const auto rest = core::key_map_flush(map, mode, pending);
+    const auto rest = core::key_map_flush(map, mode, pending).keys;
     flowed.insert(flowed.end(), rest.begin(), rest.end());
     return flowed;
 }
@@ -438,10 +452,26 @@ void verify_steps()
     return result;
 }
 
+// 単位の区切りが昇順で、空の単位が無く、最後が鍵の列の長さか（#1257）。
+[[nodiscard]] bool whole_units(const KeyMapEmit &emitted)
+{
+    std::size_t begin = 0;
+    for (const std::size_t end : emitted.ends)
+    {
+        if (end <= begin)
+        {
+            return false;
+        }
+        begin = end;
+    }
+    return begin == emitted.keys.size();
+}
+
 void verify_key_map_property()
 {
     Random random{0x1058'0A11'0B0E'5EEDULL};
     std::size_t agreed = 0;
+    std::size_t ordered = 0;
     std::size_t matched = 0;
     bool bounded = true;
     for (std::size_t round = 0; round < property_cases; ++round)
@@ -459,11 +489,14 @@ void verify_key_map_property()
         const auto mode = map_modes.at(below(random, map_modes.size()));
         const auto input = random_keys(random);
         const auto flowed = streamed(map, mode, input, bounded);
-        agreed += flowed == core::key_map_flush(map, mode, input) ? 1U : 0U;
+        const auto whole = core::key_map_flush(map, mode, input);
+        agreed += flowed == whole.keys ? 1U : 0U;
+        ordered += static_cast<std::size_t>(whole_units(whole));
         matched += !noremap_only || flowed == replaced(map, mode, input) ? 1U : 0U;
     }
     expect(agreed == property_cases,
            "keys flowed one at a time equal the whole input replaced at once");
+    expect(ordered == property_cases, "the units rise strictly and end at the last key flowed");
     expect(matched == property_cases,
            "a noremap table flows the longest left side replaced from the start");
     expect(bounded, "the waiting keys stay shorter than the longest left side");
@@ -625,6 +658,45 @@ void verify_records_and_replay()
            "press_vim_keys does not look up the table");
 }
 
+// 右辺の途中の鍵が失敗したら右辺の残りを捨て、打った鍵は流す（Vim の beep_flush の
+// FLUSH_MINIMAL・追補 19・#1257）。期待値は Vim 9.1 の実測（100 行の本文・feedkeys の 't'）:
+// `x` → 1 行目・`xj` → 2・`qj`（`qz` の待ちの後の j）→ 2・`xw`（w は 3j）→ 4・`q` の待ちの
+// タイムアウト → 1。失敗しない右辺は今までどおり `y` → 44・`yj` → 45。
+[[nodiscard]] std::size_t mapped_line(std::string_view keys, bool timeout)
+{
+    Editing editing(mapped_settings(
+        {MapRow{normal_only, "x", "gg<C-b>44%", true}, MapRow{normal_only, "y", "gg44%", true},
+         MapRow{normal_only, "q", "gg<C-b>44%", true}, MapRow{normal_only, "qz", "G", true},
+         MapRow{normal_only, "w", "3j", true}}));
+    std::string text;
+    for (std::size_t line = 1; line <= 100U; ++line)
+    {
+        text += std::to_string(line) + (line < 100U ? "\n" : "");
+    }
+    // 末尾に改行を置かない（置くと Nib の本文は 101 行目の空行を持ち `44%` が 45 行目になる）。
+    open_vim_document(editing, std::move(text));
+    auto &controller = editing.controller();
+    vim_replay(controller, "50G");
+    vim_replay(controller, keys);
+    if (timeout)
+    {
+        static_cast<void>(controller.apply(application::MapTimeout{}));
+    }
+    return controller.frame().caret.position.line.value;
+}
+
+void verify_failed_expansion()
+{
+    expect(mapped_line("x", false) == 1U, "<C-b> failing at the top drops 44% of the right side");
+    expect(mapped_line("xj", false) == 2U, "a key typed after the failed right side still runs");
+    expect(mapped_line("qj", false) == 2U,
+           "the key that ended a wait runs after the failed right side");
+    expect(mapped_line("xw", false) == 4U, "the next mapped key still expands and runs");
+    expect(mapped_line("q", true) == 1U, "the timeout flush drops the rest of a failed right side");
+    expect(mapped_line("y", false) == 44U, "a right side that does not fail runs to its end");
+    expect(mapped_line("yj", false) == 45U, "a key typed after a whole right side runs");
+}
+
 // 待ちの間の IME の確定は積んだ鍵を先に流し、WorkCompleted は待ちを保つ（決定 4）。
 void verify_flush_before_intents()
 {
@@ -778,6 +850,7 @@ void verify_key_map_scope()
     verify_mode_tables();
     verify_ordinary_mode();
     verify_records_and_replay();
+    verify_failed_expansion();
     verify_flush_before_intents();
     verify_walk_and_size();
     verify_ex_commands();

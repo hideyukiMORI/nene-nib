@@ -405,6 +405,7 @@ KeyMapStep key_map_step(const KeyMap &map, VimMapMode mode, std::span<const VimK
     buffer.push_back(key);
     const KeySpan whole{buffer};
     Keys keys;
+    std::vector<std::size_t> ends;
     bool mapped = false;
     std::size_t at = 0;
     while (at < whole.size() && !waits(map, mode, whole.subspan(at)))
@@ -412,6 +413,7 @@ KeyMapStep key_map_step(const KeyMap &map, VimMapMode mode, std::span<const VimK
         const auto [count, row] = consume(map, mode, whole.subspan(at), keys);
         at += count;
         mapped = mapped || row;
+        ends.push_back(keys.size());
     }
     if (keys.empty())
     {
@@ -422,18 +424,19 @@ KeyMapStep key_map_step(const KeyMap &map, VimMapMode mode, std::span<const VimK
         return KeyMapPass{};
     }
     return KeyMapEmit{std::move(keys),
-                      Keys(whole.begin() + static_cast<std::ptrdiff_t>(at), whole.end())};
+                      Keys(whole.begin() + static_cast<std::ptrdiff_t>(at), whole.end()),
+                      std::move(ends)};
 }
 
-std::vector<VimKey> key_map_flush(const KeyMap &map, VimMapMode mode,
-                                  std::span<const VimKey> pending)
+KeyMapEmit key_map_flush(const KeyMap &map, VimMapMode mode, std::span<const VimKey> pending)
 {
-    Keys keys;
+    KeyMapEmit flushed;
     std::size_t at = 0;
     while (at < pending.size())
     {
-        at += consume(map, mode, pending.subspan(at), keys).first;
+        at += consume(map, mode, pending.subspan(at), flushed.keys).first;
+        flushed.ends.push_back(flushed.keys.size());
     }
-    return keys;
+    return flushed;
 }
 } // namespace nenenib::core
