@@ -13,6 +13,7 @@ namespace nenenib::core
 // 行ごとの画面行の数（Vim の plines・行の順）で、application が文字組みから借りる。asks が真の道
 // （文字組みの道）では、載っていない行を読むと vim_topline_updated がその行を問いとして返す。偽の道
 // （文字組みの無い道）では載っていない行は 1 論理行 = 1 画面行。
+// top は本文の行数を越えてよい（行単位の削除の後に残る Vim の w_topline・#1230）。
 struct VimToplineWindow
 {
     LineNumber top;
