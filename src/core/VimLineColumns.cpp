@@ -1,5 +1,6 @@
 #include "VimLineColumns.hpp"
 
+#include "DisplayWidth.hpp"
 #include "Utf8.hpp"
 #include "VimCharacterBoundary.hpp"
 #include "VirtualColumnIndex.hpp"
@@ -19,15 +20,44 @@ constexpr std::size_t character_window_bytes = 64;
 // UTF-8 の 1 code point の最長のバイト数。窓の終わりで切れた code point を読まないための余白。
 constexpr std::size_t longest_code_point_bytes = 4;
 
-// content の at から手前へ Vim の 1 文字ずつ最大 count 回戻り、止まった位置と戻った回数を返す。
-// clipped（content の頭が行頭ではない窓）なら、窓の頭まで戻る 1 歩は答えが確かでないので踏まない。
+// 行の写しの上で at から手前へ Vim の 1 文字ずつ count 回戻る（索引を持たない本文の道・今のまま）。
+[[nodiscard]] std::size_t copied_characters_back(std::string_view line, std::size_t at,
+                                                 std::size_t count)
+{
+    for (std::size_t step = 0; step < count && at > 0; ++step)
+    {
+        at = vim_character_start(line, Offset{at}).value;
+    }
+    return at;
+}
+
+// 文字の頭 at（そこの code point は前の文字に続かない）の手前の 1 文字の頭。手前の 1 バイトが
+// 幅 0 でない ASCII ならその 1 バイトが 1 文字で、vim_character_start と同じ答えを code point を
+// 読まずに返す（大きな回数の `h` の 1 歩・#1258）。ほかは vim_character_start に問う。
+[[nodiscard]] std::size_t character_before(std::string_view content, std::size_t at,
+                                           bool at_start) noexcept
+{
+    constexpr unsigned char ascii_end = 0x80U;
+    const auto before = static_cast<unsigned char>(content[at - 1]);
+    if (at_start && before < ascii_end && display_width(before) != DisplayWidth::zero)
+    {
+        return at - 1;
+    }
+    return vim_character_start(content, Offset{at}).value;
+}
+
+// 窓 content の at から手前へ Vim の 1 文字ずつ最大 count 回戻り、止まった位置と戻った回数を
+// 返す。clipped（content の頭が行頭ではない窓）なら、窓の頭まで戻る 1 歩は答えが確かでないので
+// 踏まない。at が文字の頭か（そこの code point が前の文字に続かないか）は最初の 1 歩の前に 1 回
+// だけ確かめ、1 歩戻った後は必ず頭。
 [[nodiscard]] std::pair<std::size_t, std::size_t>
 characters_back(std::string_view content, std::size_t at, bool clipped, std::size_t count)
 {
     std::size_t walked = 0;
     while (walked < count && at > 0)
     {
-        const std::size_t found = vim_character_start(content, Offset{at}).value;
+        const std::size_t found = character_before(
+            content, at, walked > 0 || !vim_character_continues(content, Offset{at}));
         if (found == 0 && clipped)
         {
             break;
@@ -129,7 +159,7 @@ std::size_t VimLineColumns::character_start(std::size_t byte, std::size_t count)
 {
     if (copied_.has_value())
     {
-        return characters_back(copied_.value(), byte, false, count).first;
+        return copied_characters_back(copied_.value(), byte, count);
     }
     std::size_t at = std::min(byte, size_);
     std::size_t left = count;
