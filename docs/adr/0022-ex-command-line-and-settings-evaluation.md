@@ -24,6 +24,14 @@ C2の設定保存に対話的な入口を足す。画面はhideが採用したEx
 7. ステータス左側を入力または結果メッセージに置き換え、右の行/桁・encoding・line endingは維持する。コマンド領域と候補panelをcoreの配置から導き、狭い窓では幅を0以上に制限する。文字とcaretは左領域内にclipし、長い入力はcaretに追従する。本文のcaretは入力中に描かない。UI文字サイズは本文のptと独立。
 8. この設定用ExはNORMALから始める。Vim範囲/回数付きEx、VISUAL範囲、パイプ、VimScript、`:w` / `:q`、履歴、Ctrl+Pは後続。範囲や未対応構文を黙って別コマンドとして実行しない。Ex中のIMEはNORMALと同じ閉状態を維持し、Unicodeフォント名はUTF-8入力/貼付で受ける。本文のIME経路へ流さない。
 
+## 追補（2026-11-04・#1199）: Ex の解析は解析関数の表
+
+1. 操作の表（ADR 0078 の追補 #1188）と同じく、core の Ex も表で引く。`colorscheme` と `set` のほかの命令は、`ExResult.cpp` の無名名前空間の `constexpr std::array<ExCommandParser, N> command_parsers` を `remaining_command(text)` が上から回し、最初に値を返した行の結果を返す。どの行にも当たらなければ `unknown_command`（開いた入力なので CPP-002 の `default` には当たらない）。
+2. 行の型は `using ExCommandParser = std::optional<std::expected<ExResult, ExEvaluationFailure>> (*)(std::string_view);`（`using` なので CPP-011 の型を増やさない）。値なしは「この行の命令ではない」、`expected` の失敗は「この行の命令だが受けない」。
+3. 行の順は `line_command`（数字だけ・`$` だけ）が先頭、`print_command`（`:ha[rdcopy]`）は `document_command` の前。`:noh[lsearch]` も 1 行 `nohlsearch_command` にし、`evaluate_ex` の名前と引数の切り出しを中に写す。束ねの関数（`document_command_or_print`）は置かない。
+4. 網羅性の `static_assert` は置かない。無名名前空間の解析関数を表に書き忘れると `-Wunused-function`（`/W4` が含む・`/WX` で error）でコンパイルが落ち、単体試験 `verify_ex_command_table` が候補の全件が表のどれかの行に当たることと各行の境目の入力を守る。
+5. 命令を足すときの差分は、解析関数 1 つと表に 1 行（と補完の候補）。候補の名前の表 `fixed_candidates` と解析関数の名前の 2 か所の統合は別 Issue。
+
 ## 検証
 
 ### 固定済みSTLの参照追加
