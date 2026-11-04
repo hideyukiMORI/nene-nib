@@ -8,8 +8,16 @@
 // もので、製品の core は触れない。
 // 出力（UTF-8・改行は `\n`）: 1 件ごとに `ok <name>`、違えば違った欄ごとに 1 行の
 // `mismatch <name> <欄> expected=<値> actual=<値>`（値は入力と同じエスケープ）。本文が違う件は
-// line / column の比較が意味を持たないので `text` の 1 行だけを書く。鍵の記法の表
+// line / column の比較が意味を持たないので `text` の 1 行だけを書く。
+// viewport つきの件（生成器 5・#1224）は 8 欄の後ろに
+//   visible_lines \t first_visible \t start_line \t start_column \t expected_first_visible \t
+//   expected_scroll_lines \t scrolloff
+// の 7 欄を足す。窓は fixture の再生と同じ arrange_vim_viewport で置き、余白は窓を置いた後で
+// `:set so=` を打つ（契約 --vim-view の placed_window と同じ順）。比べる欄に `first_visible` と
+// `scroll`（Vim の 'scroll'）が加わる。鍵の記法の表
 // （src/core/VimKeyNames.hpp）に無い `<…>` を含む件と、欄の数が違う行は `skip <name> <理由>`。
+#include "../vim/VimFixture.hpp"
+#include "../vim/VimViewportFixture.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -18,15 +26,20 @@
 #include "SelectEditMode.hpp"
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
+#include "VimCount.hpp"
 #include "VimKeyName.hpp"
 #include "VimKeyNames.hpp"
+#include "VimRegister.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 
 #include <fcntl.h>
 #include <io.h>
 
+#include <algorithm>
+#include <array>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <optional>
 #include <string>
@@ -42,13 +55,21 @@ using nenenib::application::VisibleLines;
 using nenenib::core::EditMode;
 using nenenib::core::TextPosition;
 using nenenib::core::vim_key_names;
+using nenenib::core::VimCount;
 using nenenib::core::VimKeyName;
+using nenenib::core::VimRegister;
 using nenenib::tests::Bytes;
 using nenenib::tests::Editing;
+using nenenib::tests::VimFixture;
+using nenenib::tests::VimViewportFixture;
 using Fields = std::vector<std::string>;
 
 // 1 件の欄の数（name text keys expected line column register register_kind）。
 constexpr std::size_t field_count = 8;
+// viewport つきの件の欄の数（上の 8 欄と viewport の 7 欄・#1224）。
+constexpr std::size_t viewport_field_count = 15;
+constexpr std::size_t viewport_numbers = viewport_field_count - field_count;
+using ViewportValues = std::array<std::size_t, viewport_numbers>;
 constexpr std::size_t read_chunk = 65536;
 
 // `\` の後の 1 文字が表す文字（`\n` `\t` `\r` のほかは文字そのもの・`\\` は `\`）。
@@ -215,9 +236,97 @@ void write_mismatch(const std::string &name, std::string_view field, std::string
                " actual=" + escaped(actual));
 }
 
-// verify_vim_fixture と同じ道で 1 件を流し、違った欄ごとに 1 行を書く。
-void replay_one(const Fields &fields, std::size_t line_number, std::size_t column)
+// viewport の 7 欄（visible_lines first_visible start_line start_column expected_first_visible
+// expected_scroll_lines scrolloff）から fixture の窓の値を作る。余白は最後の欄で別に読む。
+[[nodiscard]] VimViewportFixture viewport_of(const ViewportValues &values)
 {
+    return VimViewportFixture{
+        static_cast<std::uint32_t>(values.at(0)), static_cast<std::uint32_t>(values.at(1)),
+        static_cast<std::uint32_t>(values.at(2)), static_cast<std::uint32_t>(values.at(3)),
+        static_cast<std::uint32_t>(values.at(4)), static_cast<std::uint32_t>(values.at(5))};
+}
+
+// 窓の欄を比べる（verify_vim_fixture の viewport と scroll lines の比較と同じ値）。
+[[nodiscard]] std::size_t viewport_differences(const std::string &name,
+                                               const VimViewportFixture &viewport,
+                                               std::size_t first_visible, std::size_t scroll_lines)
+{
+    std::size_t differences = 0;
+    if (first_visible != viewport.expected_first_visible)
+    {
+        write_mismatch(name, "first_visible", std::to_string(viewport.expected_first_visible),
+                       std::to_string(first_visible));
+        ++differences;
+    }
+    if (scroll_lines != viewport.expected_scroll_lines)
+    {
+        write_mismatch(name, "scroll", std::to_string(viewport.expected_scroll_lines),
+                       std::to_string(scroll_lines));
+        ++differences;
+    }
+    return differences;
+}
+
+// 本文の後の 4 欄（line column register register_kind）を比べる。
+[[nodiscard]] std::size_t caret_and_register_differences(const VimFixture &fixture,
+                                                         const TextPosition &caret,
+                                                         const VimRegister &actual)
+{
+    const std::string name(fixture.name);
+    const std::string actual_kind = nenenib::tests::vim_register_kind(actual);
+    std::size_t differences = 0;
+    if (caret.line.value != fixture.line)
+    {
+        write_mismatch(name, "line", std::to_string(fixture.line),
+                       std::to_string(caret.line.value));
+        ++differences;
+    }
+    const std::size_t actual_column =
+        nenenib::tests::vim_byte_column(std::string(fixture.expected_text), caret);
+    if (actual_column != fixture.column)
+    {
+        write_mismatch(name, "column", std::to_string(fixture.column),
+                       std::to_string(actual_column));
+        ++differences;
+    }
+    if (actual.text != fixture.register_text)
+    {
+        write_mismatch(name, "register", fixture.register_text, actual.text);
+        ++differences;
+    }
+    if (actual_kind != fixture.register_kind)
+    {
+        write_mismatch(name, "register_kind", fixture.register_kind, actual_kind);
+        ++differences;
+    }
+    return differences;
+}
+
+// 本文を開いて Vim にし、fixture の窓を置いてから余白を打つ（契約 --vim-view の placed_window
+// の順）。
+void prepare(Editing &editing, const VimFixture &fixture, std::size_t scrolloff)
+{
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string(fixture.text)});
+    static_cast<void>(controller.apply_frame(VisibleLines{nenenib::tests::vim_visible_lines}));
+    static_cast<void>(controller.apply_frame(OpenDocument{nenenib::tests::sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
+    nenenib::tests::arrange_vim_viewport(controller, fixture);
+    if (scrolloff > 0)
+    {
+        static_cast<void>(
+            nenenib::tests::run_ex(controller, "set so=" + std::to_string(scrolloff)));
+    }
+}
+
+// verify_vim_fixture と同じ道で 1 件を流し、違った欄ごとに 1 行を書く。viewport つきの件は
+// 窓を置いてから余白を打つ。
+void replay_one(const Fields &fields, std::size_t line_number, std::size_t column,
+                const std::optional<ViewportValues> &window)
+{
+    const std::optional<VimViewportFixture> viewport =
+        window.has_value() ? std::optional{viewport_of(window.value())} : std::nullopt;
+    const std::size_t scrolloff = window.has_value() ? window.value().at(viewport_numbers - 1) : 0;
     const std::string &name = fields.at(0);
     const std::string text = unescaped(fields.at(1));
     const std::string keys = unescaped(fields.at(2));
@@ -225,49 +334,62 @@ void replay_one(const Fields &fields, std::size_t line_number, std::size_t colum
     const std::string register_text = unescaped(fields.at(6));
     const std::string register_kind = unescaped(fields.at(7));
 
+    const VimFixture fixture{name,
+                             text,
+                             keys,
+                             expected,
+                             static_cast<std::uint32_t>(line_number),
+                             static_cast<std::uint32_t>(column),
+                             register_text,
+                             register_kind,
+                             viewport};
     Editing editing;
     EditorController &controller = editing.controller();
-    editing.files().hold(Bytes{text});
-    static_cast<void>(controller.apply_frame(VisibleLines{nenenib::tests::vim_visible_lines}));
-    static_cast<void>(controller.apply_frame(OpenDocument{nenenib::tests::sample_path()}));
-    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
+    prepare(editing, fixture, scrolloff);
     nenenib::tests::vim_normal(controller, keys);
     const TextPosition caret = controller.frame().caret.position;
-    const std::string actual_register = controller.vim_state().unnamed_register.value().text;
-    const std::string actual_kind =
-        nenenib::tests::vim_register_kind(controller.vim_state().unnamed_register.value());
+    const std::size_t first_visible = controller.frame().first_visible.value;
+    const std::size_t fallback =
+        std::max<std::size_t>(viewport.has_value() ? viewport.value().visible_lines / 2 : 1, 1);
+    const std::size_t scroll_lines =
+        controller.vim_state().scroll_lines.value_or(VimCount{fallback}).value;
+    const VimRegister actual_register = controller.vim_state().unnamed_register.value();
     const std::string body = nenenib::tests::whole_vim_body(controller);
     if (body != expected)
     {
         write_mismatch(name, "text", expected, body);
         return;
     }
-    std::size_t differences = 0;
-    if (caret.line.value != line_number)
+    std::size_t differences = caret_and_register_differences(fixture, caret, actual_register);
+    if (viewport.has_value())
     {
-        write_mismatch(name, "line", std::to_string(line_number), std::to_string(caret.line.value));
-        ++differences;
-    }
-    const std::size_t actual_column = nenenib::tests::vim_byte_column(expected, caret);
-    if (actual_column != column)
-    {
-        write_mismatch(name, "column", std::to_string(column), std::to_string(actual_column));
-        ++differences;
-    }
-    if (actual_register != register_text)
-    {
-        write_mismatch(name, "register", register_text, actual_register);
-        ++differences;
-    }
-    if (actual_kind != register_kind)
-    {
-        write_mismatch(name, "register_kind", register_kind, actual_kind);
-        ++differences;
+        differences += viewport_differences(name, viewport.value(), first_visible, scroll_lines);
     }
     if (differences == 0)
     {
         write_line("ok " + name);
     }
+}
+
+// viewport の 7 欄を数として読む。読めない欄があれば無し。
+[[nodiscard]] std::optional<ViewportValues> viewport_values(const Fields &fields)
+{
+    ViewportValues values{};
+    for (std::size_t index = 0; index < viewport_numbers; ++index)
+    {
+        const auto value = number_of(fields.at(field_count + index));
+        if (!value.has_value())
+        {
+            return std::nullopt;
+        }
+        values.at(index) = value.value();
+    }
+    return values;
+}
+
+[[nodiscard]] bool known_field_count(std::size_t count) noexcept
+{
+    return count == field_count || count == viewport_field_count;
 }
 
 void replay_line(std::string_view line)
@@ -282,9 +404,10 @@ void replay_line(std::string_view line)
     }
     const Fields fields = fields_of(line);
     const std::string name = fields.at(0);
-    if (fields.size() != field_count)
+    if (!known_field_count(fields.size()))
     {
-        write_line("skip " + name + " expected " + std::to_string(field_count) + " fields, got " +
+        write_line("skip " + name + " expected " + std::to_string(field_count) + " or " +
+                   std::to_string(viewport_field_count) + " fields, got " +
                    std::to_string(fields.size()));
         return;
     }
@@ -301,7 +424,18 @@ void replay_line(std::string_view line)
         write_line("skip " + name + " line and column must be decimal numbers");
         return;
     }
-    replay_one(fields, line_number.value(), column.value());
+    if (fields.size() == field_count)
+    {
+        replay_one(fields, line_number.value(), column.value(), std::nullopt);
+        return;
+    }
+    const auto values = viewport_values(fields);
+    if (!values.has_value())
+    {
+        write_line("skip " + name + " viewport fields must be decimal numbers");
+        return;
+    }
+    replay_one(fields, line_number.value(), column.value(), values);
 }
 
 [[nodiscard]] std::string whole_stream(std::FILE *stream)
