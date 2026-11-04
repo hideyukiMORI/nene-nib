@@ -59,7 +59,7 @@ map_row_of(VimModeSet modes, std::string_view lhs, std::string_view rhs, bool re
                                       std::span<const VimKey> pending, const VimKey &key);
 // 待ちの列を待たずに流す（1 秒の待ちの意図 MapTimeout・決定 4）。左辺に一致する最も長い行が
 // あれば右辺に替え、無い鍵はそのまま。表に一致が無ければ keys は pending と同じ列。waiting は
-// 空で、ends は key_map_step と同じ単位の区切り（#1257）。
+// 空で、ends と reads は key_map_step と同じ単位の区切り（#1257・#1266）。
 [[nodiscard]] KeyMapEmit key_map_flush(const KeyMap &map, VimMapMode mode,
                                        std::span<const VimKey> pending);
 } // namespace nenenib::core
