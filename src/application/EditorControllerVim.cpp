@@ -550,6 +550,8 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpe
     case core::VimSpecialKey::control_a:
     case core::VimSpecialKey::control_x:
     case core::VimSpecialKey::control_o:
+    case core::VimSpecialKey::control_e:
+    case core::VimSpecialKey::control_y:
         return std::nullopt;
     }
     std::unreachable();

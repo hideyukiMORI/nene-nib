@@ -156,14 +156,17 @@ constexpr char32_t tab_character = U'\t';
 }
 
 // Vim モードで Ctrl と一緒に押された鍵（ADR 0019 / ADR 0035 の決定 9）。表に無い鍵と、
-// INSERT の Ctrl+V（OS の貼付）・Ctrl+A・Ctrl+X は空を返し、呼ぶ側の通常モードの表へ落ちる。
-// Ctrl+A / Ctrl+X は NORMAL と VISUAL で数の増減（ADR 0015 の決定 14）。
+// INSERT の Ctrl+V（OS の貼付）・Ctrl+A・Ctrl+X・Ctrl+E・Ctrl+Y は空を返し、呼ぶ側の通常モードの
+// 表へ落ちる。Ctrl+A / Ctrl+X は NORMAL と VISUAL で数の増減（ADR 0015 の決定 14）、Ctrl+E /
+// Ctrl+Y は窓を 1 行ずつ送る（ADR 0019 の追補 #1232・通常モードの Ctrl+Y のやり直しは変えない）。
 [[nodiscard]] std::optional<core::VimSpecialKey> vim_control_key(WPARAM word,
                                                                  core::VimMode vim) noexcept
 {
-    constexpr std::array<KeyVimSpecial, 3> command_keys{{{'V', core::VimSpecialKey::control_v},
+    constexpr std::array<KeyVimSpecial, 5> command_keys{{{'V', core::VimSpecialKey::control_v},
                                                          {'A', core::VimSpecialKey::control_a},
-                                                         {'X', core::VimSpecialKey::control_x}}};
+                                                         {'X', core::VimSpecialKey::control_x},
+                                                         {'E', core::VimSpecialKey::control_e},
+                                                         {'Y', core::VimSpecialKey::control_y}}};
     const auto special = vim_control_special_for(word);
     if (special.has_value() || !vim_block_key(vim))
     {

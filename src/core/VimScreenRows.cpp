@@ -524,6 +524,22 @@ vim_row_half_navigation(const VimState &state, const VimEditorView &view,
     return settled(state, view, origin.value(), Moves{top.value(), caret.value()});
 }
 
+std::expected<VimDisplayNavigation, VimLayoutNeed>
+vim_row_line_navigation(const VimState &state, const VimEditorView &view,
+                        VimScrollDirection direction, std::size_t amount)
+{
+    const auto origin = origin_of(view);
+    const auto top =
+        origin ? walked(view, origin.value().first, amount, direction) : Needed<Walk>{};
+    if (!origin || !top)
+    {
+        return std::unexpected(!origin ? origin.error() : top.error());
+    }
+    const auto &caret = origin.value().second;
+    return settled(state, view, origin.value(),
+                   Moves{top.value(), Walk{VisualPosition{caret.line, caret.row}, 0}});
+}
+
 std::expected<VimRowLanding, VimLayoutNeed>
 vim_row_landing(const VimEditorView &view, VimScrollDirection direction, std::size_t amount,
                 const std::optional<VimWantedColumn> &wanted)
