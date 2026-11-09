@@ -403,16 +403,36 @@ using Lookup = std::tuple<const VimToplineWindow &, std::size_t, std::optional<s
     return top > 1 && (cursor < top || top_offset_short(lookup, top, cursor));
 }
 
+// キャレットから先頭 + 余白までの論理行（Vim の n）が halfheight 以上か。
+[[nodiscard]] bool far_from_top(const Lookup &lookup, std::size_t top, std::size_t cursor) noexcept
+{
+    const auto distance = static_cast<Rows>(top) + margin_of(lookup) - static_cast<Rows>(cursor);
+    return distance >= std::max<Rows>(height_of(lookup) / 2 - 1, 2);
+}
+
+// check_top_offset を歩かずに答えが scroll_cursor_halfway（下を先に足す）に決まるか（#1214）。
+// 余白が窓の高さより大きく、先頭が 1 行目でなく、キャレットが先頭より下で n が halfheight 以上
+// （このときキャレットは先頭 + 余白より上）。check_top_offset が真なら上側が halfway
+// に寄せる。偽なら 先頭からキャレットの前までの画面行は余白以上 = 窓の高さ + 1
+// 以上なので、w_botline はキャレットより 上で check_botline が要り、Vim の line_count（キャレット −
+// w_botline + 1 + 余白）は余白 + 2 以上 = 窓の高さ + 3 以上で、下側も halfway に寄せる。
+[[nodiscard]] bool halfway_either_way(const Lookup &lookup, std::size_t top,
+                                      std::size_t cursor) noexcept
+{
+    return margin_of(lookup) > height_of(lookup) && top > 1 && cursor >= top &&
+           far_from_top(lookup, top, cursor);
+}
+
 // update_topline の全体（上側の後に下側・上側が中央へ寄せたら下側は見ない）。
 [[nodiscard]] std::size_t updated_top(Lookup &lookup, std::size_t top, std::size_t cursor) noexcept
 {
+    if (halfway_either_way(lookup, top, cursor))
+    {
+        return cursor_halfway(lookup, cursor, false);
+    }
     if (top_needed(lookup, top, cursor))
     {
-        // キャレットから先頭 + 余白までの論理行（Vim の n）が halfheight 以上なら中央へ寄せる。
-        const auto distance =
-            static_cast<Rows>(top) + margin_of(lookup) - static_cast<Rows>(cursor);
-        const Rows halfheight = std::max<Rows>(height_of(lookup) / 2 - 1, 2);
-        if (distance >= halfheight)
+        if (far_from_top(lookup, top, cursor))
         {
             return cursor_halfway(lookup, cursor, false);
         }
