@@ -411,11 +411,11 @@ using Lookup = std::tuple<const VimToplineWindow &, std::size_t, std::optional<s
 }
 
 // check_top_offset を歩かずに答えが scroll_cursor_halfway（下を先に足す）に決まるか（#1214）。
-// 余白が窓の高さより大きく、先頭が 1 行目でなく、キャレットが先頭より下で n が halfheight 以上
-// （このときキャレットは先頭 + 余白より上）。check_top_offset が真なら上側が halfway
-// に寄せる。偽なら 先頭からキャレットの前までの画面行は余白以上 = 窓の高さ + 1
-// 以上なので、w_botline はキャレットより 上で check_botline が要り、Vim の line_count（キャレット −
-// w_botline + 1 + 余白）は余白 + 2 以上 = 窓の高さ + 3 以上で、下側も halfway に寄せる。
+// 余白が窓の高さより大きく、先頭が 1 行目でなく、キャレットが先頭以上で n が halfheight 以上
+// （このときキャレットは先頭 + 余白より上）。check_top_offset が真なら上側が halfway に寄せる。
+// 偽なら先頭からキャレットの前までの画面行は余白以上 = 窓の高さ + 1 以上なので、w_botline は
+// キャレットより上で check_botline が要り、Vim の line_count（キャレット − w_botline + 1 +
+// 余白）は余白 + 2 以上 = 窓の高さ + 3 以上で、下側も halfway に寄せる。
 [[nodiscard]] bool halfway_either_way(const Lookup &lookup, std::size_t top,
                                       std::size_t cursor) noexcept
 {

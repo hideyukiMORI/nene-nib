@@ -698,8 +698,8 @@ void verify_follow_reads_drawn_lines()
 // 決定 5 の (e)）。Vim の `update_topline` は `check_top_offset` が真でも偽でも
 // `scroll_cursor_halfway` に行くので、追従はキャレットの上の行を歩いて測らない。どの行も 5
 // 画面行（全角 198 字と 4 桁の番号・80 升）の 1000 行の文書の 100 行目から `500j` を 1
-// 回打つ間に新しく作られる layout は、窓 1 つ分（40 本） 以下（直す前は上の行を 1 本ずつ測って 172
-// 本）。着地は Vim の halfway（先頭 597）。
+// 回打つ間に新しく作られる layout は、窓 1 つ分（40 本）以下（直す前は上の行を 1 本ずつ測って
+// 206 本）。着地は Vim の halfway（先頭 597）。
 void verify_far_jump_with_large_margin()
 {
     constexpr std::size_t window = 40;
