@@ -73,6 +73,8 @@ void verify_autosave_contracts();
 void verify_autosave_scope();
 // AutosavePlanPropertyTests.cpp（#930・autosave_plan と clears_autosave の性質の試験）
 void verify_autosave_plan_property_scope();
+// AutosaveRestorePropertyTests.cpp（#1290・起動時の復元の性質の試験）
+void verify_autosave_restore_property_scope();
 
 // OperationsTests.cpp
 void verify_operations_scope();
