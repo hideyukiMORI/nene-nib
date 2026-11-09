@@ -577,6 +577,9 @@ def dismiss_dialog(process, button: int, seconds: float = 2.5) -> bool:
     The unsaved confirmation is a TaskDialog (its #32770 holds a DirectUIHWND), which does not
     take a posted WM_COMMAND, so it is pressed with TDM_CLICK_BUTTON; a MessageBox takes WM_COMMAND.
     Both use the same IDYES / IDNO / IDCANCEL ids (ADR 0133, addendum #1282).
+    The kind is read from the DirectUIHWND child when the dialog is first seen; if a TaskDialog
+    were seen before that child exists, the WM_COMMAND is ignored and dialog_closed fails the
+    caller (it never passes by mistake). The callers do not pass the kind (PR #1295, review L1).
     """
     dialog = await_dialog(process, seconds)
     if not dialog:

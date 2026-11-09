@@ -26,6 +26,7 @@
 #include "SaveDocument.hpp"
 #include "SaveQuestion.hpp"
 #include "SaveState.hpp"
+#include "SaveStep.hpp"
 #include "SearchHop.hpp"
 #include "SelectEditMode.hpp"
 #include "SetPreviewPlacement.hpp"
@@ -277,13 +278,15 @@ bool EditorWindow::confirm_discard()
     {
         return true;
     }
-    switch (ask_save(window_, product_name, SaveQuestion::unsaved))
+    const auto answer = ask_save(window_, product_name, SaveQuestion::unsaved);
+    switch (save_step(SaveQuestion::unsaved, answer))
     {
-    case SaveAnswer::discard:
+    case SaveStep::close_discarding:
         return true;
-    case SaveAnswer::cancel:
+    case SaveStep::stay:
+    case SaveStep::close_keeping:
         return false;
-    case SaveAnswer::save:
+    case SaveStep::save:
         // 保存に失敗したか取り消したときは、まだ未保存のままなので続けない。
         save_document();
         return controller_.delivery().document.save_state == core::SaveState::saved;
@@ -297,11 +300,20 @@ bool EditorWindow::confirm_lost_tab()
     // 理由（announce のダイアログ）を見せた後でもう一度聞く。
     while (controller_.delivery().document.save_state != core::SaveState::saved)
     {
-        if (ask_save(window_, product_name, SaveQuestion::rendering_lost) != SaveAnswer::save)
+        const auto answer = ask_save(window_, product_name, SaveQuestion::rendering_lost);
+        switch (save_step(SaveQuestion::rendering_lost, answer))
         {
+        case SaveStep::save:
+            save_document();
+            break;
+        case SaveStep::close_discarding:
+        case SaveStep::stay:
+            return true;
+        case SaveStep::close_keeping:
+            // 箱を出せなかった。閉じるが捨てたことにせず、自動退避を残す（ADR 0137 の決定 5）。
+            unsaved_kept_ = true;
             return true;
         }
-        save_document();
     }
     return true;
 }

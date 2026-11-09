@@ -79,7 +79,7 @@ hide の実機（Windows 11 Pro 26300・日本語・試用 exe `NeNeNib-main-b40
 ### 決定
 
 1. **「保存しますか」の 2 つの形（決定 2 の閉じる確認と、決定 3 の描画を失った後の確認）は ui/win32 の `ask_save(owner, title, SaveQuestion)` の 1 本で出す。** 形は `TaskDialogIndirect` の custom button で、`unsaved` は「保存する(&Y)／保存しない(&N)／キャンセル」、`rendering_lost` は「保存する(&Y)／保存しない(&N)」（取消は無い）。既定のボタンは先頭（「保存する」・`MB_DEFBUTTON1` と同じ）。Esc・Alt+F4・× は `unsaved` だけでキャンセル（`TDF_ALLOW_DIALOG_CANCELLATION`）、`rendering_lost` では効かない（`MB_YESNO` と同じ）。アクセスキーは MessageBox の Y / N を保つ。
-2. **ボタンの id は MessageBox と同じ `IDYES` / `IDNO` / `IDCANCEL`。** 押された id → 答え `SaveAnswer { save, discard, cancel }` は純関数 `save_answer_of` の 1 本で、箱を出せなかった（`TaskDialogIndirect` の失敗）・知らない id はキャンセル（閉じない側）に倒す。道具（`eng/window_driver.py` の `dismiss_dialog`）が `WM_COMMAND` で答える口は変わらない（窓の class も `#32770` のまま）。答えの写像（保存する → 保存の道・保存しない → 閉じる・キャンセル → 何もしない）は `confirm_discard` の `switch` で、`default` を書かない（CPP-002）。`exit_plan` と `SessionEnd` は変えない。
+2. **ボタンの id は MessageBox と同じ `IDYES` / `IDNO` / `IDCANCEL`。** 押された id → 答え `SaveAnswer { save, discard, cancel }` は純関数 `save_answer_of` の 1 本で、箱を出せなかった（`TaskDialogIndirect` の失敗・文の変換の失敗）・知らない id はキャンセルに倒す。id は同じで、道具（`eng/window_driver.py` の `dismiss_dialog`）は TaskDialog（窓の class は `#32770` のまま）に `TDM_CLICK_BUTTON` を送る（TaskDialog は posted の `WM_COMMAND` を受けない）。答えの後の一歩は純関数 `save_step(SaveQuestion, SaveAnswer)` の 1 本（保存する → 保存の道・保存しない → 捨てて閉じる・キャンセル → `unsaved` では閉じない）で、`confirm_discard` と `confirm_lost_tab` が `switch` で写し、`default` を書かない（CPP-002）。**`rendering_lost` で箱を出せなかった（キャンセル）ときは、窓は閉じるが未保存を捨てたことにしない（`EndSession.unsaved_discarded` を立てず、自動退避を残して次の起動で問う・ADR 0137 の決定 5）。** 箱の入れ子のループの間に閉じる確認（`unsaved`）がもう一度来たら、2 つ目の箱を出さずにキャンセルを返す（`ask_save` の入口の 1 か所）。`exit_plan` と `SessionEnd` は変えない。
 3. **文は core の `save_question_text(SaveQuestionText)` の 1 か所（UTF-8）。** 文の名前の閉じた enum で、表示言語の表（#1019 の `ui_texts`）へはこの値ごと移す。ui/win32 に文の別表を置かない。
 4. **comctl32 v6 は manifest の依存（`Microsoft.Windows.Common-Controls` 6.0.0.0）で選び、DLL は遅延読み込み（`/DELAYLOAD:comctl32.dll`・ADR 0130 と同じ形）にする。** 起動の道に DLL の読み込みを足さない（検証を参照）。ui/win32 の platformLibraries に `comctl32` を足す（`eng/architecture.json`）。
 
@@ -91,4 +91,4 @@ hide の実機（Windows 11 Pro 26300・日本語・試用 exe `NeNeNib-main-b40
 
 ### 検証
 
-`nib_window_tests --save-question`（ボタンの id → 答え・2 つの形のボタンの並びと既定・文の名前・各ボタンの id が文の意味の答えになること）。起動の後の module の一覧（Debug の exe・自分の profile・前後）と `dumpbin /dependents`・箱の PNG・`WM_COMMAND IDNO` で道具が答えられることは #1282 の PR に記録する。
+`nib_window_tests --save-question`（ボタンの id → 答え・2 つの形のボタンの並びと既定・文の名前・各ボタンの id が文の意味の答えになること・`save_step` の 6 通り（キャンセルは `unsaved` で閉じず、`rendering_lost` で閉じるが捨てない））。起動の後の module の一覧（Debug の exe・自分の profile・前後）と `dumpbin /dependents`・箱の PNG・`WM_COMMAND IDNO` で道具が答えられることは #1282 の PR に記録する。

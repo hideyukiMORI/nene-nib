@@ -1,6 +1,7 @@
 #include "SaveAnswer.hpp"
 #include "SaveQuestion.hpp"
 #include "SaveQuestionText.hpp"
+#include "SaveStep.hpp"
 #include "WindowChecks.hpp"
 
 #include <windows.h>
@@ -18,9 +19,11 @@ using nenenib::core::SaveQuestionText;
 using nenenib::ui::win32::save_answer_of;
 using nenenib::ui::win32::save_buttons;
 using nenenib::ui::win32::save_message;
+using nenenib::ui::win32::save_step;
 using nenenib::ui::win32::SaveAnswer;
 using nenenib::ui::win32::SaveButton;
 using nenenib::ui::win32::SaveQuestion;
+using nenenib::ui::win32::SaveStep;
 
 // ボタンの id → 答え（#1282）。保存する → 保存の道・保存しない → 閉じる・キャンセル → 何もしない。
 // 箱を出せなかった 0 と知らない id は閉じない側（キャンセル）に倒す。
@@ -73,6 +76,23 @@ void verify_buttons()
            "every button's id answers what its label says");
 }
 
+// 答えの後の一歩（ADR 0133 の追補 #1282）。キャンセル（箱を出せなかったも含む）は閉じる確認では
+// 閉じず、描画を失った後では閉じるが捨てたことにしない（自動退避を残す・ADR 0137 の決定 5）。
+void verify_steps()
+{
+    for (const auto question : {SaveQuestion::unsaved, SaveQuestion::rendering_lost})
+    {
+        expect(save_step(question, SaveAnswer::save) == SaveStep::save,
+               "saving goes down the save path in both forms");
+        expect(save_step(question, SaveAnswer::discard) == SaveStep::close_discarding,
+               "discarding closes and counts as discarded in both forms");
+    }
+    expect(save_step(SaveQuestion::unsaved, SaveAnswer::cancel) == SaveStep::stay,
+           "cancelling the closing question keeps the window");
+    expect(save_step(SaveQuestion::rendering_lost, SaveAnswer::cancel) == SaveStep::close_keeping,
+           "a lost-rendering question that could not be shown closes without discarding");
+}
+
 // 文は core の 1 か所で、ボタンは OS の既定の文言（はい／いいえ）に依らない。
 void verify_texts()
 {
@@ -94,6 +114,7 @@ void verify_save_question()
 {
     verify_answers();
     verify_buttons();
+    verify_steps();
     verify_texts();
 }
 } // namespace nenenib::tests::ui
