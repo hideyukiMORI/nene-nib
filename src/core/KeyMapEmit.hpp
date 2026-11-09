@@ -13,11 +13,14 @@ namespace nenenib::core
 // 待ちの列を waiting に置き換える。ends は keys を区切る単位（表の 1 行の右辺か、表に無い 1 鍵）の
 // 終わりの位置の昇順で、最後は keys の長さ。単位の途中の鍵が失敗したら呼び手はその単位の残りを
 // 捨てて次の単位へ進む（Vim の beep_flush の FLUSH_MINIMAL は展開した鍵だけを捨て、打った鍵は
-// 残す・#1257）。
+// 残す・#1257）。reads は ends と同じ並びで、単位ごとに引いた鍵の列（積んだ鍵と今の鍵、
+// flush では積んだ鍵）のどこまでを読んだか。単位を流してモードが変わったら、呼び手は読んで
+// いない残りを今のモードで引き直す（Vim の vgetorpeek は鍵ごとに今の State で表を引く・#1266）。
 struct KeyMapEmit
 {
     std::vector<VimKey> keys;
     std::vector<VimKey> waiting;
     std::vector<std::size_t> ends;
+    std::vector<std::size_t> reads;
 };
 } // namespace nenenib::core
