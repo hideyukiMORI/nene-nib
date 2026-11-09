@@ -670,8 +670,8 @@ void verify_records_and_replay()
            "press_vim_keys does not look up the table");
 }
 
-// Vim の 100 行の本文で 50G から keys を打ち（timeout なら最後に 1
-// 秒の待ちを流し）、キャレットの行。
+// Vim の 100 行の本文で 50G から keys を打った後のキャレットの行。
+// timeout なら最後に 1 秒の待ちを流す。
 [[nodiscard]] std::size_t hundred_lines_caret(std::vector<MapRow> rows, std::string_view keys,
                                               bool timeout)
 {
