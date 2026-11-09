@@ -78,6 +78,8 @@ void verify_autosave_plan_property_scope();
 void verify_operations_scope();
 // FindReplaceTests.cpp
 void verify_find_replace_scope();
+// SubstitutePropertyTests.cpp（#1291・ADR 0174 の決定 7・置換の全件の性質）
+void verify_substitute_property_scope();
 // MatchParenTests.cpp（ADR 0164・matchparen）
 void verify_matchparen_scope();
 
@@ -105,6 +107,8 @@ void verify_json_property_scope();
 // の対応と位置）
 void verify_lsp_frames_scope();
 void verify_lsp_messages_scope();
+// LspFramesPropertyTests.cpp（#1291・ADR 0160 の決定 3・5・枠の分割と受信の性質）
+void verify_lsp_frames_property_scope();
 // LspDiagnosticsTests.cpp（#995・ADR 0161 の決定 2・3・4・8・診断の写しとずらしと行の区間）
 void verify_lsp_diagnostics_scope();
 // LanguageServerTests.cpp（#994・controller の配線と寿命・`:set lsp`・替え玉のサーバー）
