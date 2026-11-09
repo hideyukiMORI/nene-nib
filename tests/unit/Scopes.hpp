@@ -125,6 +125,8 @@ void verify_explorer_contracts();
 void verify_explorer_scope();
 // EditingPropertyTests.cpp（#955・通常モードの編集の意図の列の性質の試験）
 void verify_editing_property_scope();
+// ControllerMixedPropertyTests.cpp（#1288・controller に混ぜた意図の列の性質の試験）
+void verify_controller_mixed_property_scope();
 
 // SyntaxTests.cpp（#816・ADR 0156 の決定 7〜10・14・見えている行の色の区間）
 void verify_syntax_scope();
