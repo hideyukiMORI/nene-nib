@@ -83,7 +83,7 @@ constexpr std::size_t single_step = 1;
     const std::size_t first_ends = line.column_end_of(first_byte).value;
     const std::size_t last_begins = line.column_of(last_byte).value;
     const std::size_t last_ends = line.column_end_of(last_byte).value;
-    const std::size_t after_last = line.character_end(last_byte);
+    const std::size_t after_last = line.character_end(last_byte, single_step);
     const OffsetRange range{Offset{start.value + first_byte}, Offset{start.value + after_last}};
     if (first_byte == last_byte && first_begins < left && last_ends > right)
     {
@@ -97,7 +97,8 @@ constexpr std::size_t single_step = 1;
     }
     const bool cut_left = first_begins < left;
     const bool cut_right = last_ends > right;
-    const std::size_t inside_begin = cut_left ? line.character_end(first_byte) : first_byte;
+    const std::size_t inside_begin =
+        cut_left ? line.character_end(first_byte, single_step) : first_byte;
     const std::size_t inside_end = std::max(inside_begin, cut_right ? last_byte : after_last);
     return VimBlockLine{
         range,

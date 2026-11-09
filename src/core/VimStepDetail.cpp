@@ -1,7 +1,6 @@
 #include "VimStepDetail.hpp"
 
 #include "VimCaret.hpp"
-#include "VimCharacterBoundary.hpp"
 #include "VimKeyTable.hpp"
 #include "VimLineColumns.hpp"
 
@@ -9,7 +8,6 @@
 #include <cstddef>
 #include <limits>
 #include <optional>
-#include <string>
 #include <utility>
 
 namespace nenenib::core
@@ -76,19 +74,14 @@ namespace detail
     return text.position_of(caret).line;
 }
 
-// 行の中で count 文字ぶん先（1 文字は ADR 0053 の境）。
-// 行の内容の終わり（Vim が NUL を置く桁）までは進める。
+// 行の中で count 文字ぶん先（1 文字は ADR 0053 の境）。行の内容の終わり（Vim が NUL を置く桁）
+// までは進める。1 文字の終わりは VimLineColumns に問う（索引を持つ本文は行を写さずキャレットから
+// 後ろの窓だけを読み、大きな回数でも窓を 1 回読むごとに何歩も進む・`l` `<Space>` `x` #1269）。
 [[nodiscard]] Offset forward_characters(const TextBuffer &text, Offset caret, std::size_t count)
 {
-    const LineNumber line = line_of(text, caret);
-    const Offset start = text.line_start(line);
-    const std::string content = text.text_range(start, text.line_end(line));
-    std::size_t index = caret.value - start.value;
-    for (std::size_t step = 0; step < count && index < content.size(); ++step)
-    {
-        index = vim_character_end(content, Offset{index}).value;
-    }
-    return Offset{start.value + index};
+    const VimLineColumns content(text, line_of(text, caret));
+    const Offset start = content.start();
+    return Offset{start.value + content.character_end(caret.value - start.value, count)};
 }
 
 // 1 文字の頭は VimLineColumns に問う（索引を持つ本文は行を写さずキャレットの手前の窓だけを読み、

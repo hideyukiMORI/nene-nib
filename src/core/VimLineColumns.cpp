@@ -31,6 +31,91 @@ constexpr std::size_t longest_code_point_bytes = 4;
     return at;
 }
 
+// 行の写しの上で at から Vim の 1 文字ずつ count 回進む（索引を持たない本文の道・今のまま）。
+[[nodiscard]] std::size_t copied_characters_forward(std::string_view line, std::size_t at,
+                                                    std::size_t count)
+{
+    for (std::size_t step = 0; step < count && at < line.size(); ++step)
+    {
+        at = vim_character_end(line, Offset{at}).value;
+    }
+    return at;
+}
+
+// content の at から始まる 1 文字の終わり。at と次の 1 バイトがどちらも ASCII で、次のバイトが
+// 幅 0 でなければその 1 バイトが 1 文字で、vim_character_end と同じ答えを code point を読まずに
+// 返す（大きな回数の `l` の 1 歩・#1269）。ほかは vim_character_end に問う。
+[[nodiscard]] std::size_t character_after(std::string_view content, std::size_t at) noexcept
+{
+    constexpr unsigned char ascii_end = 0x80U;
+    const std::size_t next = at + 1;
+    if (next < content.size() && static_cast<unsigned char>(content[at]) < ascii_end)
+    {
+        const auto after = static_cast<unsigned char>(content[next]);
+        if (after < ascii_end && display_width(after) != DisplayWidth::zero)
+        {
+            return next;
+        }
+    }
+    return vim_character_end(content, Offset{at}).value;
+}
+
+// 行の途中で切った窓の終わりに掛かる code point を落とした長さ（窓の中の code point を全部読める
+// ようにする・Utf8.cpp の decode は列の長さを頭のバイトから決めて読む）。
+[[nodiscard]] std::size_t whole_code_points(std::string_view content) noexcept
+{
+    constexpr unsigned char two_bytes = 0xC0U;
+    constexpr unsigned char three_bytes = 0xE0U;
+    constexpr unsigned char four_bytes = 0xF0U;
+    std::size_t lead = content.size();
+    while (lead > 0 && !is_boundary(content, Offset{lead - 1}))
+    {
+        --lead;
+    }
+    if (lead == 0)
+    {
+        return 0;
+    }
+    --lead;
+    const auto first = static_cast<unsigned char>(content[lead]);
+    std::size_t length = longest_code_point_bytes;
+    if (first < two_bytes)
+    {
+        length = 1;
+    }
+    else if (first < three_bytes)
+    {
+        length = 2;
+    }
+    else if (first < four_bytes)
+    {
+        length = 3;
+    }
+    return lead + length <= content.size() ? content.size() : lead;
+}
+
+// 窓 content の頭から Vim の 1 文字ずつ最大 count 回進み、止まった位置と進んだ回数を返す。
+// clipped（content の終わりが行の終わりではない窓）なら、終わりが窓の終わりから 1 code point
+// ぶんの余白に入る 1 歩は（窓の外に幅 0 の code point が続くかもしれず）答えが確かでないので
+// 踏まない。
+[[nodiscard]] std::pair<std::size_t, std::size_t>
+characters_forward(std::string_view content, bool clipped, std::size_t count)
+{
+    std::size_t at = 0;
+    std::size_t walked = 0;
+    while (walked < count && at < content.size())
+    {
+        const std::size_t found = character_after(content, at);
+        if (clipped && found + longest_code_point_bytes > content.size())
+        {
+            break;
+        }
+        at = found;
+        ++walked;
+    }
+    return {at, walked};
+}
+
 // 文字の頭 at（そこの code point は前の文字に続かない）の手前の 1 文字の頭。手前の 1 バイトが
 // 幅 0 でない ASCII ならその 1 バイトが 1 文字で、vim_character_start と同じ答えを code point を
 // 読まずに返す（大きな回数の `h` の 1 歩・#1258）。ほかは vim_character_start に問う。
@@ -125,31 +210,33 @@ VirtualColumn VimLineColumns::column_end_of(std::size_t byte) const
     return virtual_column_end(text_.get(), Offset{start_.value + std::min(byte, size_)});
 }
 
-// 索引の道は byte から窓を読み、文字の終わりが窓の終わりに近ければ窓を倍にして読み直す（Tab の
-// 後ろに長く続く結合文字の列でも行の終わりまで伸ばせる・VimCaret の character_near と同じ形）。
-std::size_t VimLineColumns::character_end(std::size_t byte) const
+// 索引の道は byte から窓を 1 回読み、その中で何歩も進む（大きな回数の `l` `<Space>` `x`・#1269）。
+// 終わりが窓の終わりに近い 1 歩（Tab の後ろに長く続く結合文字の列）はそこで止め、止めた位置から
+// 窓を倍にして読み直す（VimCaret の character_near と同じ形）。行の終わりまで届いた窓の答えは行を
+// 写した答えと同じ。
+std::size_t VimLineColumns::character_end(std::size_t byte, std::size_t count) const
 {
     if (copied_.has_value())
     {
-        return vim_character_end(copied_.value(), Offset{byte}).value;
+        return copied_characters_forward(copied_.value(), byte, count);
     }
-    if (byte >= size_)
-    {
-        return byte;
-    }
+    std::size_t at = byte;
+    std::size_t left = count;
     std::size_t window = character_window_bytes;
-    for (;;)
+    while (left > 0 && at < size_)
     {
-        const std::size_t length = std::min(window, size_ - byte);
-        const std::string content = text_.get().text_range(Offset{start_.value + byte},
-                                                           Offset{start_.value + byte + length});
-        const std::size_t end = vim_character_end(content, Offset{0}).value;
-        if (byte + length == size_ || end + longest_code_point_bytes <= content.size())
-        {
-            return byte + end;
-        }
+        const std::size_t stop = std::min(at + window, size_);
+        const std::string content =
+            text_.get().text_range(Offset{start_.value + at}, Offset{start_.value + stop});
+        const bool clipped = stop < size_;
+        const std::string_view whole{content.data(),
+                                     clipped ? whole_code_points(content) : content.size()};
+        const auto [local, walked] = characters_forward(whole, clipped, left);
+        at += local;
+        left -= walked;
         window *= 2;
     }
+    return at;
 }
 
 // 索引の道は byte の手前の窓（と byte の 1 code point）を 1 回読み、その中で何歩も戻る（大きな

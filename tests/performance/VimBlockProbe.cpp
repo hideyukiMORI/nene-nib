@@ -142,6 +142,7 @@ std::string vim_block_input(VimBlockWorkload workload)
     case VimBlockWorkload::repeat_giant_1line:
     case VimBlockWorkload::insert_ctrl_w_giant_1line:
     case VimBlockWorkload::count_h_giant_1line:
+    case VimBlockWorkload::count_l_giant_1line:
         return giant_line();
     }
     std::unreachable();
@@ -356,6 +357,38 @@ std::expected<std::uint64_t, ProbeFailure> vim_counted_left(VimBlockWorkload wor
     timing.mark(core::Milestone::probe_finished);
     const auto *moved = std::get_if<core::VimMoveTo>(&left.effect);
     if (moved == nullptr || moved->caret != core::Offset{0} || left.failure.has_value())
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return checksum_of(input) + giant_middle().value + moved->caret.value;
+}
+
+// 真ん中から `99999999l`（#1269）。回数の数字は区間の外で、区間は `l` の 1 鍵。回数が行末までの
+// 文字の数より多いので、NORMAL の行の最後の文字（末尾の空白）に着く。
+std::expected<std::uint64_t, ProbeFailure> vim_counted_right(VimBlockWorkload workload,
+                                                             const std::string &input,
+                                                             application::TimingPort &timing)
+{
+    const auto prepared = indexed_giant(workload, input);
+    if (!prepared.has_value())
+    {
+        return std::unexpected(prepared.error());
+    }
+    core::TextBuffer text = prepared.value();
+    core::Selection selection = core::collapsed_at(giant_middle());
+    core::VimState state = core::vim_resting_state(
+        core::VimRegister{std::string{}, core::VimRegisterKind::characters});
+    constexpr std::size_t digits = 8;
+    for (std::size_t digit = 0; digit < digits; ++digit)
+    {
+        pressed(state, text, selection, core::VimCharacter{U'9'});
+    }
+    timing.mark(core::Milestone::probe_started);
+    const core::VimStep right = stepped(state, text, selection, core::VimCharacter{U'l'});
+    timing.mark(core::Milestone::probe_finished);
+    const auto *moved = std::get_if<core::VimMoveTo>(&right.effect);
+    const core::Offset last{text.size_bytes() - 1U};
+    if (moved == nullptr || moved->caret != last || right.failure.has_value())
     {
         return std::unexpected(ProbeFailure::wrong_result);
     }

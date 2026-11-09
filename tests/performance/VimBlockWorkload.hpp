@@ -7,7 +7,7 @@ namespace nenenib::tests::performance
 // 巨大な 1 行の矩形 `I` の入口（#1198）。16 MiB の 1 行（索引を持つ本文・ADR 0140 の決定 4）で
 // `$` の後の `<C-v>`（鍵と frame が引く矩形）と `I` の鍵を 1 回ずつ流す。残りの 3 本は同じ本文の
 // 真ん中で、矩形の `r`・矩形のレジスタの `p`・`I` の後の `.` の再生（#1237）。最後の 2 本も同じ
-// 本文の真ん中で、INSERT の `<C-w>` と大きな回数の `h`（#1258）。
+// 本文の真ん中で、INSERT の `<C-w>` と大きな回数の `h`（#1258）と大きな回数の `l`（#1269）。
 enum class VimBlockWorkload : std::uint8_t
 {
     insert_giant_1line,
@@ -15,6 +15,7 @@ enum class VimBlockWorkload : std::uint8_t
     put_giant_1line,
     repeat_giant_1line,
     insert_ctrl_w_giant_1line,
-    count_h_giant_1line
+    count_h_giant_1line,
+    count_l_giant_1line
 };
 } // namespace nenenib::tests::performance

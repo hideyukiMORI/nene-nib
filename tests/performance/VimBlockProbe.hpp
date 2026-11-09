@@ -28,4 +28,7 @@ vim_insert_word_cut(VimBlockWorkload workload, const std::string &input,
 [[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
 vim_counted_left(VimBlockWorkload workload, const std::string &input,
                  application::TimingPort &timing);
+[[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
+vim_counted_right(VimBlockWorkload workload, const std::string &input,
+                  application::TimingPort &timing);
 } // namespace nenenib::tests::performance
