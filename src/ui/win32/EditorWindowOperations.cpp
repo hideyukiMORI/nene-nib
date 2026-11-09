@@ -24,6 +24,7 @@
 #include "PrintDocument.hpp"
 #include "RegisterShell.hpp"
 #include "SaveDocument.hpp"
+#include "SaveQuestion.hpp"
 #include "SaveState.hpp"
 #include "SearchHop.hpp"
 #include "SelectEditMode.hpp"
@@ -276,19 +277,18 @@ bool EditorWindow::confirm_discard()
     {
         return true;
     }
-    const int answer = MessageBoxW(window_, L"変更が保存されていません。保存しますか。",
-                                   product_name, MB_YESNOCANCEL | MB_ICONWARNING);
-    if (answer == IDNO)
+    switch (ask_save(window_, product_name, SaveQuestion::unsaved))
     {
+    case SaveAnswer::discard:
         return true;
-    }
-    if (answer != IDYES)
-    {
+    case SaveAnswer::cancel:
         return false;
+    case SaveAnswer::save:
+        // 保存に失敗したか取り消したときは、まだ未保存のままなので続けない。
+        save_document();
+        return controller_.delivery().document.save_state == core::SaveState::saved;
     }
-    // 保存に失敗したか取り消したときは、まだ未保存のままなので続けない。
-    save_document();
-    return controller_.delivery().document.save_state == core::SaveState::saved;
+    std::unreachable();
 }
 
 bool EditorWindow::confirm_lost_tab()
@@ -297,9 +297,7 @@ bool EditorWindow::confirm_lost_tab()
     // 理由（announce のダイアログ）を見せた後でもう一度聞く。
     while (controller_.delivery().document.save_state != core::SaveState::saved)
     {
-        const int answer = MessageBoxW(window_, L"描画できなくなったので閉じます。保存しますか。",
-                                       product_name, MB_YESNO | MB_ICONWARNING);
-        if (answer != IDYES)
+        if (ask_save(window_, product_name, SaveQuestion::rendering_lost) != SaveAnswer::save)
         {
             return true;
         }

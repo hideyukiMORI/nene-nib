@@ -69,3 +69,26 @@
 ### 検証
 
 `--application` の `verify_vim_round_trip_judgements`（3 つの判定と `blocks_drawing`。viewport の二重要求は本物の core の engine には無い形なので純関数だけで確かめる）と `verify_vim_inconsistent_round_trip`（替え玉 `ScriptedTextLayouts::misnumber_rows` で番号の問いにだけ違う段を答え、`gj` が配達に `inconsistent` を 1 回だけ載せ・次の配達と frame には載らず・鍵は効かず・知らせが立つこと。`reject` の `unavailable` は今どおり配達と frame に載ること）。
+
+## 追補 2026-11-10（#1282）: 「保存しますか」の文言は自分で持つ（TaskDialogIndirect の custom button）
+
+### 文脈
+
+hide の実機（Windows 11 Pro 26300・日本語・試用 exe `NeNeNib-main-b40ea348.exe`・2026-11-04 夜）で、未保存の文書を閉じたときの「保存しますか」のボタンが「OK／さらに詳しく／キャンセル」と出た。コードは `MessageBoxW(..., MB_YESNOCANCEL | MB_ICONWARNING)` で、Win32 の `MB_*` にこの組は無い。`MessageBoxW` のボタンの文言は OS が決めるので、OS の build の描き方が変わると Nib の意図（保存する／保存しない／取消）が使う人に伝わらない。同じ機械の別の席（2026-11-10・Debug の exe・自分の profile）では「はい(Y)／いいえ(N)／キャンセル」と出て、再現の条件はまだ分かっていない（切り分けは設計席と hide）。
+
+### 決定
+
+1. **「保存しますか」の 2 つの形（決定 2 の閉じる確認と、決定 3 の描画を失った後の確認）は ui/win32 の `ask_save(owner, title, SaveQuestion)` の 1 本で出す。** 形は `TaskDialogIndirect` の custom button で、`unsaved` は「保存する(&Y)／保存しない(&N)／キャンセル」、`rendering_lost` は「保存する(&Y)／保存しない(&N)」（取消は無い）。既定のボタンは先頭（「保存する」・`MB_DEFBUTTON1` と同じ）。Esc・Alt+F4・× は `unsaved` だけでキャンセル（`TDF_ALLOW_DIALOG_CANCELLATION`）、`rendering_lost` では効かない（`MB_YESNO` と同じ）。アクセスキーは MessageBox の Y / N を保つ。
+2. **ボタンの id は MessageBox と同じ `IDYES` / `IDNO` / `IDCANCEL`。** 押された id → 答え `SaveAnswer { save, discard, cancel }` は純関数 `save_answer_of` の 1 本で、箱を出せなかった（`TaskDialogIndirect` の失敗）・知らない id はキャンセル（閉じない側）に倒す。道具（`eng/window_driver.py` の `dismiss_dialog`）が `WM_COMMAND` で答える口は変わらない（窓の class も `#32770` のまま）。答えの写像（保存する → 保存の道・保存しない → 閉じる・キャンセル → 何もしない）は `confirm_discard` の `switch` で、`default` を書かない（CPP-002）。`exit_plan` と `SessionEnd` は変えない。
+3. **文は core の `save_question_text(SaveQuestionText)` の 1 か所（UTF-8）。** 文の名前の閉じた enum で、表示言語の表（#1019 の `ui_texts`）へはこの値ごと移す。ui/win32 に文の別表を置かない。
+4. **comctl32 v6 は manifest の依存（`Microsoft.Windows.Common-Controls` 6.0.0.0）で選び、DLL は遅延読み込み（`/DELAYLOAD:comctl32.dll`・ADR 0130 と同じ形）にする。** 起動の道に DLL の読み込みを足さない（検証を参照）。ui/win32 の platformLibraries に `comctl32` を足す（`eng/architecture.json`）。
+
+### 却下した選択肢
+
+- 箱を出すときだけ activation context を作る（`CreateActCtxW` と別の manifest の資源）: 起動の道は manifest の依存と同じく変わらず、コードと資源が増える。manifest の依存は遅延読み込みと組んで起動に DLL を足さないので、こちらを採る理由が無い。
+- 自前の小さな窓: 描画を失った後（決定 3）でも出せることが要り、OS の箱の方が確か。アクセシビリティ・DPI・キーボード操作を自分で持つことになる。
+- `MessageBoxW` のまま `SetWindowsHookEx` でボタンの文字を書き換える: OS の箱の内部の作りに依り、#1282 と同じ種類の壊れ方をする。
+
+### 検証
+
+`nib_window_tests --save-question`（ボタンの id → 答え・2 つの形のボタンの並びと既定・文の名前・各ボタンの id が文の意味の答えになること）。起動の後の module の一覧（Debug の exe・自分の profile・前後）と `dumpbin /dependents`・箱の PNG・`WM_COMMAND IDNO` で道具が答えられることは #1282 の PR に記録する。

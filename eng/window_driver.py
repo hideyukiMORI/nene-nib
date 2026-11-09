@@ -113,6 +113,8 @@ WINDOW_CLASS = "NeNeNib.Editor"
 DIALOG_CLASS = "#32770"
 WM_CLOSE = 0x0010
 WM_COMMAND = 0x0111
+# TaskDialog の TDM_CLICK_BUTTON（WM_USER + 102）。「保存しますか」は TaskDialog（ADR 0133 の追補 #1282）。
+TDM_CLICK_BUTTON = 0x0400 + 102
 IDYES = 6
 IDNO = 7
 IDCANCEL = 2
@@ -570,11 +572,17 @@ def dialog_closed(dialog, seconds: float = 3.0) -> bool:
 
 
 def dismiss_dialog(process, button: int, seconds: float = 2.5) -> bool:
-    """Press one button of the unsaved confirmation; the real keyboard is never touched."""
+    """Press one button of the unsaved confirmation; the real keyboard is never touched.
+
+    The unsaved confirmation is a TaskDialog (its #32770 holds a DirectUIHWND), which does not
+    take a posted WM_COMMAND, so it is pressed with TDM_CLICK_BUTTON; a MessageBox takes WM_COMMAND.
+    Both use the same IDYES / IDNO / IDCANCEL ids (ADR 0133, addendum #1282).
+    """
     dialog = await_dialog(process, seconds)
     if not dialog:
         return False
-    assert user.PostMessageW(dialog, WM_COMMAND, button, 0)
+    task_dialog = bool(user.FindWindowExW(dialog, None, "DirectUIHWND", None))
+    assert user.PostMessageW(dialog, TDM_CLICK_BUTTON if task_dialog else WM_COMMAND, button, 0)
     assert dialog_closed(dialog), "the confirmation did not take the answer"
     return True
 
