@@ -196,6 +196,9 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/LanguageServerTests.cpp
     tests/unit/TitleBarLayoutPropertyTests.cpp
     tests/unit/GridCellsPropertyTests.cpp
+    tests/unit/UtfPropertyTests.cpp
+    tests/unit/PrintPagesPropertyTests.cpp
+    tests/unit/ShellRegistrationPropertyTests.cpp
     tests/unit/DocumentFormatTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)

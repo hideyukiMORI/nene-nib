@@ -111,6 +111,13 @@ void verify_lsp_diagnostics_scope();
 void verify_language_server_contracts();
 void verify_language_server_scope();
 
+// UtfPropertyTests.cpp / PrintPagesPropertyTests.cpp / ShellRegistrationPropertyTests.cpp（#1289・
+// UTF の往復・印刷の改ページ・エクスプローラーへの登録の計画の性質の試験）
+void verify_utf_property_contracts();
+void verify_utf_property_scope();
+void verify_print_pages_property_scope();
+void verify_shell_registration_property_scope();
+
 // TitleBarLayoutPropertyTests.cpp（#929・タブの帯の配置と hit test の一致の性質の試験）
 void verify_title_bar_layout_property_scope();
 
