@@ -53,6 +53,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <utility>
 
 namespace nenenib::ui::win32
@@ -339,7 +340,7 @@ class EditorWindow final
     wchar_t pending_high_surrogate_ = 0;
     // 前の配達で窓が当てた字（大きさと字体）と明暗。配達のたびに比べ、変わったときだけ当てる
     // （ADR 0150 の決定 5）。
-    std::pair<float, std::string> shown_font_;
+    std::tuple<float, std::string, bool> shown_font_;
     core::Appearance shown_appearance_ = core::Appearance::light;
     // 前の配達で窓の縁に当てた帯の地（#795）。配色が変われば明暗が同じでも当て直す。
     core::RgbColor shown_border_{};

@@ -92,6 +92,14 @@ when --bench names it and is never compared with the reference or adopted into i
                             document starts with `{`, so every typed character leaves the caret
                             on that brace and every frame searches its partner 24 lines below
 
+One more optional bench records the minimap (#1017, ADR 0171 decision 6) the same way: it runs
+only when --bench names it and is never compared with the reference or adopted into it:
+
+  minimap-single-key        the key-to-frame-single-cpp trial over single-cpp-1000.cpp with
+                            settings.v4 features=minimap written into its own profile
+                            (out/speed/profile-minimap), so every frame copies the held minimap
+                            bitmap once and redraws the band of the typed row
+
 Five more optional benches measure split (ADR 0120 decisions 2-7, ADR 0148 decision 14) and are
 never compared with the reference: split-single-key-100 (S, one pane) and
 split-pane-key-100-{same,other}-{vertical,horizontal} (P, two panes made with Ctrl+backslash or
@@ -296,8 +304,13 @@ LSP_BENCHES = (LSP_SINGLE_BENCH, LSP_BURST_BENCH, LSP_READY_BENCH)
 # 括弧の上のキャレットの 1 打鍵（#999・ADR 0164 の決定 5）。--bench で名指ししたときだけ測り、
 # 基準値に載せない（+1% の線は設計席が空の文書の 1 打鍵の A/B で見る）。
 MATCHPAREN_BENCH = "matchparen-single-key"
+# ミニマップをオンにした C++ の文書の 1 打鍵（#1017・ADR 0171 の決定 6）。--bench で名指ししたときだけ
+# 測り、基準値に載せない（+1% の線は設計席がオフの空の文書の 1 打鍵の A/B で見る）。
+MINIMAP_BENCH = "minimap-single-key"
+# 道具の profile を分ける。features=minimap の settings.v4 がほかのベンチの profile に残らないように。
+MINIMAP_PROFILE = "profile-minimap"
 OPTIONAL_BENCHES = (*GIANT_BENCHES, *SPLIT_BENCHES, PREVIEW_BENCH, CPP_BENCH,
-                    *LARGE_FILE_BENCHES, *LSP_BENCHES, MATCHPAREN_BENCH)
+                    *LARGE_FILE_BENCHES, *LSP_BENCHES, MATCHPAREN_BENCH, MINIMAP_BENCH)
 # 替え玉のサーバーは測る exe と同じ build の中のもの（tests/adapters/FakeLanguageServerMain.cpp）。
 LSP_SERVER = "nib_fake_language_server.exe"
 LSP_DIAGNOSTICS = 100
@@ -352,7 +365,7 @@ STARTUP_BENCHES = ("startup-first-frame", "open-large-file-16mib", GIANT_OPEN_BE
 # 返った）-> frame_presented（Present が返った）。区間名は起動の内訳と同じく「到達する節目の名前」。
 KEY_MILESTONES = ("frame_built", "frame_drawn", "frame_presented")
 SINGLE_BENCHES = ("key-to-frame-single", LONG_LINE_BENCH, CPP_BENCH, PREVIEW_BENCH,
-                  GIANT_SINGLE_BENCH, LSP_SINGLE_BENCH, MATCHPAREN_BENCH)
+                  GIANT_SINGLE_BENCH, LSP_SINGLE_BENCH, MATCHPAREN_BENCH, MINIMAP_BENCH)
 # 記録の breakdown には 16 MiB の打鍵の到着の幅（ARRIVAL_SEGMENT）も同じ形で載せる（#179）。
 BREAKDOWN_BENCHES = (*STARTUP_BENCHES, LARGE_BURST_BENCH, *SINGLE_BENCHES, *LARGE_FILE_BENCHES)
 
@@ -876,6 +889,20 @@ def bench_cpp(executable: Path, environment: dict, folder: Path,
     Every frame lexes the visible lines (ADR 0156), so the single keystroke carries the colouring.
     """
     return bench_long_line(executable, environment, folder, document, CPP_BENCH)
+
+
+def bench_minimap(executable: Path, environment: dict, folder: Path,
+                  document: Path) -> tuple[dict, dict]:
+    """key-to-frame-single over the C++ document with the minimap on (#1017, ADR 0171 decision 6).
+
+    The trial is bench_cpp's over its own profile, whose settings.v4 turns the minimap on; every
+    frame copies the held bitmap once and redraws the band of the typed row.
+    """
+    profile = OUTPUT / MINIMAP_PROFILE
+    profile.mkdir(parents=True, exist_ok=True)
+    minimap = dict(environment, LOCALAPPDATA=str(profile), APPDATA=str(profile))
+    write_settings(minimap, {"features": "minimap"})
+    return bench_long_line(executable, minimap, folder, document, MINIMAP_BENCH)
 
 
 def bench_matchparen(executable: Path, environment: dict, folder: Path,
@@ -1784,6 +1811,8 @@ def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
         yield bench_lsp_ready(executable, environment, folder, cpp, server)
     if MATCHPAREN_BENCH in names:
         yield bench_matchparen(executable, environment, folder, matchparen)
+    if MINIMAP_BENCH in names:
+        yield bench_minimap(executable, environment, folder, cpp)
     for bench, path in (large_files or {}).items():
         yield bench_large_file_async(executable, environment, folder, path, bench)
 
@@ -1804,7 +1833,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     preview = preview_document(folder) if PREVIEW_BENCH in names else None
     lsp = any(name in names for name in LSP_BENCHES)
     # LSP の 3 本も構文の色分けと同じ C++ の文書（#995 L1d）。替え玉は測る exe と同じ build から。
-    cpp = cpp_document(folder) if CPP_BENCH in names or lsp else None
+    cpp = cpp_document(folder) if CPP_BENCH in names or MINIMAP_BENCH in names or lsp else None
     server = language_server_of(build) if lsp else None
     matchparen = matchparen_document(folder) if MATCHPAREN_BENCH in names else None
     # 512 MiB と 1 GiB の文書は大きいので、置き場を --large-folder で選べる（既定は out/speed）。
@@ -2119,6 +2148,8 @@ def main() -> int:
     if arguments.bench in LSP_BENCHES and (arguments.adopt or arguments.check or arguments.values):
         parser.error(f"{arguments.bench} is recorded with --record only; its reference is adopted"
                      " by hide after the L1 trial (ADR 0161 decision 7, D60)")
+    if arguments.bench == MINIMAP_BENCH and (arguments.adopt or arguments.check or arguments.values):
+        parser.error(f"{MINIMAP_BENCH} is recorded with --record only; it has no reference (#1017)")
     if arguments.bench == MATCHPAREN_BENCH and (arguments.adopt or arguments.check
                                                 or arguments.values):
         parser.error(f"{MATCHPAREN_BENCH} is recorded with --record only; it has no reference"

@@ -11,10 +11,12 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import random
 import shutil
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -238,7 +240,7 @@ class KeySegmentTests(unittest.TestCase):
     def test_the_single_benches_have_a_breakdown_and_describe_prints_it(self):
         self.assertEqual(("key-to-frame-single", speed.LONG_LINE_BENCH, speed.CPP_BENCH,
                           speed.PREVIEW_BENCH, speed.GIANT_SINGLE_BENCH, speed.LSP_SINGLE_BENCH,
-                          speed.MATCHPAREN_BENCH),
+                          speed.MATCHPAREN_BENCH, speed.MINIMAP_BENCH),
                          speed.SINGLE_BENCHES)
         self.assertTrue(set(speed.SINGLE_BENCHES) <= set(speed.BREAKDOWN_BENCHES))
         written = record({})
@@ -813,9 +815,34 @@ class GiantLineTests(unittest.TestCase):
                          speed.GIANT_BENCHES)
         self.assertEqual((*speed.GIANT_BENCHES, *speed.SPLIT_BENCHES, speed.PREVIEW_BENCH, speed.CPP_BENCH,
                           *speed.LARGE_FILE_BENCHES, *speed.LSP_BENCHES,
-                          speed.MATCHPAREN_BENCH), speed.OPTIONAL_BENCHES)
+                          speed.MATCHPAREN_BENCH, speed.MINIMAP_BENCH), speed.OPTIONAL_BENCHES)
         self.assertFalse(set(speed.OPTIONAL_BENCHES) & set(speed.BENCHES))
         self.assertIn(speed.GIANT_OPEN_BENCH, speed.BREAKDOWN_BENCHES)
+
+    def test_the_minimap_bench_is_optional_and_writes_its_own_profile(self):
+        """#1017 / ADR 0171 decision 6: recorded only, over the C++ document with the minimap on."""
+        self.assertEqual("minimap-single-key", speed.MINIMAP_BENCH)
+        self.assertIn(speed.MINIMAP_BENCH, speed.OPTIONAL_BENCHES)
+        self.assertNotIn(speed.MINIMAP_BENCH, speed.BENCHES)
+        self.assertNotEqual(speed.LSP_PROFILE, speed.MINIMAP_PROFILE)
+        seen = {}
+
+        def trial(executable, environment, folder, document, name):
+            seen.update(environment=environment, document=document, name=name)
+            return {name: 1.0}, {}
+
+        with tempfile.TemporaryDirectory() as folder, \
+                mock.patch.object(speed, "OUTPUT", Path(folder)), \
+                mock.patch.object(speed, "bench_long_line", trial), \
+                mock.patch.dict(os.environ, {"LOCALAPPDATA": str(Path(folder) / "own")}):
+            values, _ = speed.bench_minimap(Path("NeNeNib.exe"), {}, Path(folder),
+                                            Path("single-cpp-1000.cpp"))
+            written = (Path(folder) / speed.MINIMAP_PROFILE / "NeNeNib" /
+                       "settings.v4").read_text(encoding="utf-8")
+        self.assertEqual({speed.MINIMAP_BENCH: 1.0}, values)
+        self.assertEqual(speed.MINIMAP_BENCH, seen["name"])
+        self.assertIn("features=minimap\n", written)
+        self.assertTrue(seen["environment"]["LOCALAPPDATA"].endswith(speed.MINIMAP_PROFILE))
 
     def test_the_matchparen_bench_is_optional_and_its_document_fixed(self):
         """#999 / ADR 0164 decision 5: recorded only, the caret starts on a brace of a fixed C++."""

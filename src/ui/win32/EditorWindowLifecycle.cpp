@@ -121,7 +121,7 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     // （ADR 0010 の決定 9）。
     const auto opened = controller_.delivery();
     apply_backdrop(opened);
-    shown_font_ = font_of(opened.settings);
+    shown_font_ = font_of(opened.settings, controller_.minimap_shown());
     timing_.mark(core::Milestone::backdrop_applied);
     // 配置してから見せる。生成時に (0,0) で見せない（ADR 0008 の決定 7）。device の生成は
     // ドライバの初期化で 160 ms 掛かるので、その前に Mica の面だけの窓を見せる（ADR 0013）。

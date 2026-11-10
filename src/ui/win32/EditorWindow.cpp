@@ -9,6 +9,7 @@
 #include "ExplorerLayout.hpp"
 #include "LanguageServerTick.hpp"
 #include "MapTimeout.hpp"
+#include "MinimapLayout.hpp"
 #include "PaneLayouts.hpp"
 #include "PreviewTick.hpp"
 #include "SplitLayout.hpp"
@@ -89,10 +90,13 @@ void EditorWindow::resize()
 
 // 本文の枠の配置（ADR 0148 の決定 8）。窓の行数・マウス・描画が同じ pane_layouts の 1 本を引く。
 // エクスプローラーの面が出ていれば、面の幅だけ右へ縮めた client から求める（ADR 0162 の決定 2）。
+// ミニマップが出ていれば、さらに右端を縮める（ADR 0171 の決定 2・出ていなければ幅 0
+// で分岐しない）。
 core::PaneLayouts EditorWindow::body_panes(const core::EditorSettings &settings) const
 {
-    return core::pane_layouts(explorer_frame(settings).body, dpi_, settings.font_size,
-                              controller_.split().layout);
+    const auto minimap = core::minimap_layout(explorer_frame(settings).body, dpi_,
+                                              settings.font_size, controller_.minimap_shown());
+    return core::pane_layouts(minimap.body, dpi_, settings.font_size, controller_.split().layout);
 }
 
 // 面の配置。出ているかは設定 explorer（面の表示値が frame に載るのと同じ値）が決める。
@@ -214,7 +218,7 @@ application::EditorDelivery EditorWindow::follow_look(application::EditorDeliver
     {
         apply_backdrop(delivery);
     }
-    auto font = font_of(delivery.settings);
+    auto font = font_of(delivery.settings, controller_.minimap_shown());
     if (font == shown_font_)
     {
         return delivery;

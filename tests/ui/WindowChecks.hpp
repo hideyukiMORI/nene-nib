@@ -38,5 +38,7 @@ void verify_print_render();
 void verify_diagnostic_waves();
 // matchparen の相手の括弧の枠（ADR 0164 の決定 4・#999）。
 void verify_matchparen_outline();
+// ミニマップの絵（ADR 0171 の決定 4・7・#1017 の段 1）。
+void verify_minimap_paint();
 void verify_save_question();
 } // namespace nenenib::tests::ui

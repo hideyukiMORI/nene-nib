@@ -18,6 +18,7 @@
 #include "InputLineView.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
+#include "MinimapFrame.hpp"
 #include "OperationGuide.hpp"
 #include "OtherFrame.hpp"
 #include "Palette.hpp"
@@ -133,6 +134,10 @@ struct EditorFrame
     std::optional<PreviewFrame> full_preview{};
     // エクスプローラーの面（ADR 0162 の決定 3・8）。設定 explorer が on のときだけ値を持つ。
     std::optional<ExplorerView> explorer{};
+    // ミニマップ（ADR 0171 の決定 1〜4）。設定 minimap がオンのときだけ値を持つ（オフの frame は
+    // 何もしない関数を通るだけで、ここは既定の値なし）。renderer は値の有無で面の幅と描く関数を
+    // 表から引く（分岐しない）。
+    std::optional<MinimapFrame> minimap{};
     // アクティブな文書の診断の件数（ADR 0161 の決定 4）。renderer は core::diagnostic_count_item で
     // ステータスバーの右端の項目にし、status_bar_layout にも同じ値を渡す（ui は数え直さない）。
     core::DiagnosticCounts diagnostic_counts{0, 0, core::DiagnosticsCount::complete};

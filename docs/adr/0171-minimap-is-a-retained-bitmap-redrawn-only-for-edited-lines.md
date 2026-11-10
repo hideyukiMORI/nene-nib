@@ -30,6 +30,25 @@
 得られるもの: 文書の形と今の位置が右端で分かり、クリックで跳べる。巨大な文書でも費用は窓の大きさ。
 失うもの・残る穴: 本文の 80 DIP が狭くなる（オフが既定）。窓の外の色は tick で埋まるまで `muted`。
 
+## 追補（2026-11-10・#1017 の段 1）: 入れた範囲・段 2 に残した範囲・オフで分岐なしの示し方
+
+段 1 で入れたもの:
+
+- 設定 `minimap` は `features` の名前（`core::minimap_feature`）。`:set minimap` / `nominimap` / `minimap?` は `ExResult.cpp` の `minimap_option`（`relativenumber` と同じ `switch_request`）で、補完の候補の表に `set minimap` `set nominimap` を足した（probe の写しも同じ並び）。`EditorFeature` の表（ADR 0170 の決定 4）はまだ無いので、名前は core の 1 定数で持ち、表ができたら表の 1 行に移す。
+- core: 1 行の塊 `minimap_row`・面の最上段 `minimap_top`（VS Code と同じ比例の送り）・窓 `minimap_window`（最上段の周りの前後 2,000 行・含んでいれば前の窓のまま・編集で 5,000 行を超えたら作り直す）・帯の合わせ `minimap_band_joined`・面の配置 `minimap_layout`（決定 2 の値のまま: 80 DIP・1 行 2 物理画素・100 桁）。
+- application: `MinimapCache`（窓の行ごとの塊と行頭の字句の状態）。編集は replace・undo・redo の 1 か所から受け、変わった行と、行頭の状態が前と揃うまでの下の行だけを読み直して帯を積む。frame の `minimap` は窓の塊の借り（`shared_ptr<const MinimapRows>`）と、前の frame からの帯（`base` と `band`）だけで、本文の全部は写さない。窓を作り直すときは窓の手前を `syntax_backfill_lines` だけ遡って状態を求め、窓の 4,000 行を一度に字句器へ通す（決定 4 の「見えている範囲の外の色は tick で埋める」は段 2）。4 KiB を超える行は先頭だけを読み、色を付けない（巨大な行の窓と同じ限界）。
+- ui: `MinimapPicture`（bitmap は面の幅 × 512 行刻みの高さ）。frame ごとに面の地・`DrawBitmap` 1 回・見えている範囲の面（`accent` を brush の不透明度 10% で）。帯は同じ行の数なら上書き、行の増減は下の行を `CopyFromBitmap`（scratch の bitmap を経る）でずらし、減った後の下の残りを消す。行の塊・テーマ（色の表）・面の幅が変われば窓ごと描く。
+- 契約: `nib_tests --minimap`（core と application）・`nib_window_tests --minimap`（WIC の描画先で bitmap を経た画素と直接の画素の一致・2 frame 目の使い回しと `DrawBitmap` 1 回・帯の描き直し（同じ行の数・増える・減る）・base の違う frame は窓ごと・テーマと面の幅で作り直す）。任意のベンチ `minimap-single-key`（C++ の文書・自分の profile に `features=minimap`）を足した（測るのは設計席）。
+
+段 2 に残したもの: クリック・ドラッグ・ホイール（決定 5・面の上の押下はまだ本文の点として扱われる）、スクロールで窓を出たときの帯の描き足し（段 1 は窓ごと作り直す）、窓の外の構文の色の静かな tick、2 枠の枠ごとのミニマップ（段 1 は client の右端に 1 つ・アクティブな文書だけ）、DPI とテーマの切り替えの窓の試験（`nib_window_tests` は面の幅とテーマで作り直すことを WIC で確かめた）。
+
+オフで分岐なしの示し方（決定 1・強制の 2 行目）:
+
+- application: 編集の 3 か所（`replace`・`undo_edit`・`redo_edit`）と frame の 1 か所（`finish_frame`）は、メンバー関数ポインタ `minimap_edited_` / `minimap_framed_` を 1 回呼ぶだけ。オフの間は何もしない関数（`skip_minimap_edit` / `skip_minimap_frame`）を指し、差し替えるのは設定が変わったとき（`persist_settings`）と起動の 1 か所の `sync_minimap` だけ。frame の `minimap` は既定の値なし。
+- renderer: 面の幅は `minimap_layout` が `shown` を掛けて 0 にし、描く関数は `frame.minimap.has_value()` で引く 2 行の表（`skip_minimap` / `draw_minimap`）の間接呼び出し。
+- 窓: 本文の枠の幅は同じく `minimap_layout` の掛け算で、出した・消したときに寸法を送り直す判定は既にある字の比べ（`FontKey`）の 1 欄にした（新しい比べは足していない。ただし tuple の比べが 1 欄ぶん長くなる）。
+- 速さの A/B（空の文書の 1 打鍵）は設計席が静かな機械で測る（この席は測っていない）。
+
 ## 却下した選択肢
 
 | 選択肢 | 却下の理由 |

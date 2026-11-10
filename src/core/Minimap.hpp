@@ -1,0 +1,55 @@
+#pragma once
+
+#include "ColorSpan.hpp"
+#include "EditorSettings.hpp"
+#include "LineNumber.hpp"
+#include "MinimapBlock.hpp"
+#include "MinimapWindow.hpp"
+
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <string_view>
+
+namespace nenenib::core
+{
+// ミニマップ（ADR 0171・施主決定 D70・FR-030）の値と純関数。描くのは ui/win32、窓と行の塊を作る
+// のは application、ここはどちらも使う寸法と規則の 1 か所。
+
+// 設定 v4 の features の名前（ADR 0170 の決定 3・既定オフ・`:set minimap`）。
+inline constexpr std::string_view minimap_feature = "minimap";
+// 面の幅（DIP）と 1 行の高さ（物理画素）と 1 行の桁の上限（決定 2）。1 桁 = 1 物理画素。
+inline constexpr std::int32_t minimap_width_dips = 80;
+inline constexpr std::int32_t minimap_row_pixels = 2;
+inline constexpr std::size_t minimap_columns = 100;
+// 窓は見えている所の前後 minimap_reach 行（決定 4）。編集で行が増えて窓が
+// minimap_window_limit 行を超えたら、窓を作り直す（bitmap の高さを抑える）。
+inline constexpr std::size_t minimap_reach = 2'000;
+inline constexpr std::size_t minimap_window_limit = minimap_reach * 2 + minimap_reach / 2;
+// 塊を作るのに 1 行から読むバイトの上限。上限を超える行は先頭だけを読み、色を付けない（巨大な
+// 行の窓と同じく行の全体を写さない・限界）。100 桁は UTF-8 で 400 バイトに収まる。
+inline constexpr std::size_t minimap_line_bytes = 4'096;
+
+// 設定でミニマップを出すか（features に名前がある）。設定が変わったときだけ読む（決定 1）。
+[[nodiscard]] bool minimap_shown(const EditorSettings &settings) noexcept;
+// features の名前を足す・外した設定（ほかの名前の順は変えない・足すときは末尾）。
+[[nodiscard]] EditorSettings minimap_set(EditorSettings settings, bool shown);
+
+// 1 行の塊の列（決定 3）。line は改行を含まない 1 行、colors はその行の構文の色の区間（桁は
+// code point の序数）。空白（U+0020・Tab・U+3000）は塊にせず、Tab は次の 8 の倍数まで進み、全角は
+// 2 桁。同じ役割で隣り合う文字は 1 つの塊にまとめ、minimap_columns 桁で切る。
+[[nodiscard]] MinimapRow minimap_row(std::string_view line, std::span<const ColorSpan> colors);
+
+// 面の最上段に来る行（VS Code と同じ比例の送り）。文書が面に収まれば 1 行目。見えている最初の行
+// first_visible の位置の割合を、面に入りきらない行の範囲に写す（first_visible
+// より下にはならない）。
+[[nodiscard]] LineNumber minimap_top(LineNumber first_visible, std::size_t visible,
+                                     std::size_t total, std::size_t rows) noexcept;
+
+// 面に出す行 [top, top + rows) を含む窓（決定 4）。held がそれを含み、大きさが
+// minimap_window_limit 以内で文書の中にあれば held のまま。そうでなければ top の周りの前後
+// minimap_reach 行（文書の端では寄せる）。
+[[nodiscard]] MinimapWindow minimap_window(const std::optional<MinimapWindow> &held, LineNumber top,
+                                           std::size_t rows, std::size_t total) noexcept;
+} // namespace nenenib::core
