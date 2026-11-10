@@ -116,6 +116,27 @@ void verify_vim_dot_counts()
            "and a smaller count replaces it again");
 }
 
+// `"{name}.` の回数は 2 乗で、normal_cmd と同じく 999999999 に貼り付ける（#1337・ADR 0030 の
+// 追補）。積の計算が溢れず、再生の鍵は名前ごと記録し直される。
+void verify_vim_dot_register_count_saturates()
+{
+    Editing editing;
+    open_vim_document(editing, "abcdefghijklm");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "x\"a3.");
+    expect(vim_body(controller.frame()) == "klm" &&
+               dot_record_is(controller.vim_state(), nenenib::core::VimCount{9}, "\"ax"),
+           "a dot after a register and a count replays the count squared into that register");
+    vim_replay(controller, "u\"a99999.");
+    expect(dot_record_is(controller.vim_state(),
+                         nenenib::core::VimCount{nenenib::core::vim_count_limit}, "\"ax"),
+           "the squared count saturates at the count limit instead of wrapping");
+    vim_replay(controller, "u\"a99999999999999999999.");
+    expect(dot_record_is(controller.vim_state(),
+                         nenenib::core::VimCount{nenenib::core::vim_count_limit}, "\"ax"),
+           "and so does a typed count that already saturated");
+}
+
 void verify_vim_dot_history()
 {
     Editing editing;
@@ -633,7 +654,7 @@ void verify_vim_dot_fixtures()
             ++selected;
         }
     }
-    expect(selected == 211, "the scope replays 113 dot, 78 VISUAL dot and 13 insert-arrow dot "
+    expect(selected == 254, "the scope replays 156 dot, 78 VISUAL dot and 13 insert-arrow dot "
                             "fixtures and 7 shared boundaries");
 }
 
@@ -666,6 +687,7 @@ void verify_vim_dot_contracts()
     verify_vim_dot_cancels();
     verify_vim_dot_recording();
     verify_vim_dot_counts();
+    verify_vim_dot_register_count_saturates();
     verify_vim_dot_history();
     verify_vim_dot_document();
     verify_vim_dot_modes();

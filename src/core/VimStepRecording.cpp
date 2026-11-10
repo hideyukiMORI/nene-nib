@@ -1,6 +1,8 @@
 #include "VimStepDetail.hpp"
 
 #include "Utf8.hpp"
+#include "VimCount.hpp"
+#include "VimRegisterSelection.hpp"
 #include "VimRegisterText.hpp"
 
 #include <cstddef>
@@ -239,6 +241,52 @@ namespace
     return result;
 }
 
+// `"{name}.` の再生の回数（ADR 0030 の追補 #1337）。Vim 9.1 の nv_dot は名前を消さないので、
+// normal_cmd は名前が残るあいだ opcount（`.` の回数）を持ち越し、start_redo が積んだ同じ回数の
+// 桁に掛ける。`:help .` の文には無い振る舞いで、実測のまま写す。2 乗をやめるならここだけを
+// 変える。積は normal_cmd と同じく vim_count_limit に貼り付ける。
+[[nodiscard]] VimCount register_dot_count(VimCount count) noexcept
+{
+    if (count.value != 0 && count.value > vim_count_limit / count.value)
+    {
+        return VimCount{vim_count_limit};
+    }
+    return VimCount{count.value * count.value};
+}
+
+// 再生の回数（決定 6）。`.` に回数が無ければ記録の回数、あれば `.` の回数（#1319 の積）で
+// 置き換え、`"{name}` が残っていれば register_dot_count を通す（#1337）。
+[[nodiscard]] std::optional<VimCount> replayed_count(const VimState &state,
+                                                     const VimRepeatRecord &record) noexcept
+{
+    if (!state.count.has_value())
+    {
+        return record.count;
+    }
+    if (!state.selected_register.has_value())
+    {
+        return state.count;
+    }
+    return register_dot_count(state.count.value());
+}
+
+// `"{name}.` の名前を再生の鍵の頭に置く（ADR 0030 の追補 #1337）。記録の頭が `"` なら
+// start_redo の積む記録の名前が後から選び直すので置かない（番号送りもその名前の上で進む）。
+// 再生した鍵は名前ごと記録し直されるので、続く `.` も同じ名前へ書く。
+[[nodiscard]] std::vector<VimKey> register_prefixed(const VimState &state, std::vector<VimKey> keys)
+{
+    const VimKey quote{VimCharacter{U'"'}};
+    if (!state.selected_register.has_value() || (!keys.empty() && keys.front() == quote))
+    {
+        return keys;
+    }
+    const VimRegisterSelection selection = state.selected_register.value();
+    const char32_t name = selection.append ? static_cast<char32_t>(selection.name) - (U'a' - U'A')
+                                           : static_cast<char32_t>(selection.name);
+    keys.insert(keys.begin(), {quote, VimKey{VimCharacter{name}}});
+    return keys;
+}
+
 // `.` の番号送り（ADR 0050 の決定 8）。記録の先頭に並ぶ `"{名前}` の組の最後の組の名前が
 // `1`〜`8` なら 1 つ進めた鍵列を返す。`9` `0` `-` と名前つき、先頭の組でない `"1`（INSERT で
 // 打った本文）はそのまま。再生した鍵は記録し直されるので、次の `.` はさらに進む。
@@ -303,7 +351,8 @@ namespace
 
 // VISUAL の記録の再生（ADR 0033 の決定 4・6）。step が記録の種類の VISUAL へ切り替えて大きさを
 // 効果に載せ、controller が選び直してから鍵を流す。回数は使わない（固定 Vim も `2.` で大きさを
-// 変えない・実測）。組み立て中の記録に同じ大きさを先に置くので、再生した鍵はこの大きさをその
+// 変えない・実測）が、`"{name}.`
+// の名前へは書く（register_prefixed・#1337）。組み立て中の記録に同じ大きさを先に置くので、再生した鍵はこの大きさをその
 // まま記録し直す＝桁や行が足りずに畳まれても次の `.` は元の大きさで繰り返す（Vim も同じ・実測）。
 [[nodiscard]] VimStep replayed_visual(const VimState &state, const VimRepeatRecord &record,
                                       const VimVisualExtent &extent)
@@ -314,14 +363,16 @@ namespace
     next.replayed_block = replayed_extent(extent);
     next.redoing_visual = true;
     next.recording = VimRepeatRecord{std::nullopt, VimRecordedKeys::from({}), extent};
-    return VimStep{std::move(next), VimReplay{numbered_advanced(record.keys.owned_keys()), extent,
-                                              VimReplayKind::repeat}};
+    return VimStep{std::move(next),
+                   VimReplay{register_prefixed(state, numbered_advanced(record.keys.owned_keys())),
+                             extent, VimReplayKind::repeat}};
 }
 } // namespace
 
 namespace detail
 {
-// `.`。直前の変更が無ければ何も起きない。回数は `.` に付いた回数が優先で、無ければ記録の回数。
+// `.`。直前の変更が無ければ何も起きない。回数は replayed_count、`"{name}` は register_prefixed が
+// 鍵の列に載せる（vim_resting_from が選んだレジスタを捨てても名前は鍵が運ぶ・#1337）。
 [[nodiscard]] VimStep repeated_change(const VimState &state)
 {
     if (!state.last_change.has_value())
@@ -333,9 +384,10 @@ namespace detail
     {
         return replayed_visual(state, record, record.visual.value());
     }
-    const std::optional<VimCount> count = state.count.has_value() ? state.count : record.count;
     return VimStep{vim_resting_from(state, state.unnamed_register),
-                   VimReplay{replayed_keys(count, numbered_advanced(record.keys.owned_keys())),
+                   VimReplay{replayed_keys(replayed_count(state, record),
+                                           register_prefixed(
+                                               state, numbered_advanced(record.keys.owned_keys()))),
                              std::nullopt, VimReplayKind::repeat}};
 }
 } // namespace detail
