@@ -240,6 +240,14 @@ class EditorController final
     // 返すのは最後に流した鍵の答え。
     [[nodiscard]] std::optional<core::VimRepeatFailure>
     delivered_units(const core::KeyMapEmit &emitted, std::span<const core::VimKey> typed);
+    // 1 単位を流す。plain（表に無い鍵・`noremap` の右辺・左辺で始まる右辺のその分）はそのまま、
+    // remapped（`map` の右辺の残り）は 1 鍵ごとに流す時点のモードで rhs_unit_step に 1 段だけ
+    // 引かせて流す（#1276）。途中の鍵が失敗したら残りを捨て、その答えを返す。
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    delivered_unit(std::span<const core::VimKey> plain, std::span<const core::VimKey> remapped);
+    // keys を順に deliver_vim_key へ流し、失敗した鍵で止めてその答えを返す。
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    delivered_keys(std::span<const core::VimKey> keys);
     // 読んでいない鍵の列 rest を引き直す。表を引けないモードの間は 1 鍵ずつそのまま流し、引ける
     // モードになったら最後の 1 鍵の前までを待ちに置いて打った鍵の入口で引く。
     [[nodiscard]] std::optional<core::VimRepeatFailure>
