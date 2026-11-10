@@ -192,6 +192,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/KeyMapTests.cpp
     tests/unit/LspFramesTests.cpp
     tests/unit/LspMessagesTests.cpp
+    tests/unit/LspFramesPropertyTests.cpp
+    tests/unit/SubstitutePropertyTests.cpp
     tests/unit/LspDiagnosticsTests.cpp
     tests/unit/LanguageServerTests.cpp
     tests/unit/TitleBarLayoutPropertyTests.cpp
