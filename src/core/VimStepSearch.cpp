@@ -107,14 +107,13 @@ namespace
 }
 
 // オペレータの後ろの検索は exclusive で、既存の 1 本の規則を通る（決定 3）。
-// 範囲が空（回数が自分自身へ折り返した）ときは本文もレジスタも変えない（実測）。
+// 範囲が空（回数が自分自身へ折り返した）ときも同じ道を通る（#1344）。Vim の do_pending_operator
+// は空の範囲を oap->empty にするだけで（cpo-E が既定で無い）、`d` は op_delete が何も書かずに
+// 返り、`c` は INSERT に入り、`y` は空の文字単位を yank する（実測）。1 桁目の `d0` `c0`
+// `y0` と同じ規則なので、performed の空の範囲の扱いがそのまま当てはまる。
 [[nodiscard]] VimStep search_operated(const VimState &state, const VimEditorView &view,
                                       const VimSearchRequest &request, Offset destination)
 {
-    if (destination == request.anchor)
-    {
-        return VimStep{search_rested(state), VimNoEffect{}};
-    }
     VimMotionRange range =
         exclusive_range(view.text, characters_between(request.anchor, destination));
     // 検索の移動の削除は 1 行の中でも `"1` へ行く（ADR 0050 の決定 4）。
