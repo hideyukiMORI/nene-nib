@@ -21,6 +21,7 @@ using detail::combined_count;
 using detail::counted;
 using detail::counts_as_digit;
 using detail::decimal_base;
+using detail::drops_count_digit;
 using detail::erased_nothing;
 using detail::failed;
 using detail::finished_input_wait;
@@ -478,6 +479,16 @@ namespace
            !next.selected_register.has_value();
 }
 
+// NORMAL で `x` として効く `<Del>` か（回数の桁を消す `<Del>` と 1 鍵の待ちの `<Del>`
+// を除く・#1325）。
+[[nodiscard]] bool deletes_like_x(const VimState &before, const VimKey &key) noexcept
+{
+    const auto *const special = std::get_if<VimSpecialKey>(&key);
+    return special != nullptr && *special == VimSpecialKey::delete_key &&
+           before.mode == VimMode::normal && !before.input_wait.has_value() &&
+           !drops_count_digit(before, key);
+}
+
 // NORMAL の鍵を記録へ（決定 2）。回数の桁は記録せず、回数はそのときの積を 1 つだけ残す。
 // 次の 1 鍵を待つ状態（`"` の名前・`r` の文字・`f F t T` の対象など）の数字は回数の桁ではなく
 // 引数なので記録に残す（ADR 0050 の決定 9 を待ち全体へ・Issue #209）。オペレータ待ちは待ちでは
@@ -496,6 +507,20 @@ namespace
         counts_as_digit(before, std::get<VimCharacter>(key).code))
     {
         return record;
+    }
+    // 回数の桁を消す `<Del>` も回数の桁と同じく記録しない（#1325）。
+    if (drops_count_digit(before, key))
+    {
+        return record;
+    }
+    // `x` として効く `<Del>` は Vim の redo に積まれた "dl" と同じく `x` で記録し、前の `"a`
+    // も捨てる （nv_optrans の "dl" は名前を持たない・#1325）。`<Del>` のまま残すと `3.`
+    // が前に置く回数の 桁を消してしまう。
+    if (deletes_like_x(before, key))
+    {
+        VimRepeatRecord plain{};
+        plain.count = combined_count(before);
+        return appended(std::move(plain), VimKey{VimCharacter{U'x'}});
     }
     record.count = combined_count(before);
     return appended(std::move(record), key);

@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 d4e6ddc3add68acecf2cf9bdaa49e74121838060ee8dc04e8fabfabb9419134c / 3602 fixtures
+// fixtures.json: sha256 686c6bac7efbaf498ec576c80a38b85dec98592155222927d62ee08d74b5c1c9 / 3654 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3602> vim_fixtures{{
+constexpr std::array<VimFixture, 3654> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3614,6 +3614,58 @@ constexpr std::array<VimFixture, 3602> vim_fixtures{{
     {"count-register-visual-counts-around-register", "line01 abcdefghij\nline02 abcdefghij\nline03 abcdefghij\nline04 abcdefghij\nline05 abcdefghij\nline06 abcdefghij\nline07 abcdefghij\nline08 abcdefghij\nline09 abcdefghij\nline10 abcdefghij\nline11 abcdefghij\nline12 abcdefghij\nline13 abcdefghij\nline14 abcdefghij\nline15 abcdefghij\nline16 abcdefghij\nline17 abcdefghij\nline18 abcdefghij\nline19 abcdefghij\nline20 abcdefghij\nline21 abcdefghij\nline22 abcdefghij\nline23 abcdefghij\nline24 abcdefghij\nline25 abcdefghij\nline26 abcdefghij\nline27 abcdefghij\nline28 abcdefghij\nline29 abcdefghij\nline30 abcdefghij", "v2\"a3jd", "ine07 abcdefghij\nline08 abcdefghij\nline09 abcdefghij\nline10 abcdefghij\nline11 abcdefghij\nline12 abcdefghij\nline13 abcdefghij\nline14 abcdefghij\nline15 abcdefghij\nline16 abcdefghij\nline17 abcdefghij\nline18 abcdefghij\nline19 abcdefghij\nline20 abcdefghij\nline21 abcdefghij\nline22 abcdefghij\nline23 abcdefghij\nline24 abcdefghij\nline25 abcdefghij\nline26 abcdefghij\nline27 abcdefghij\nline28 abcdefghij\nline29 abcdefghij\nline30 abcdefghij", 1, 1, "line01 abcdefghij\nline02 abcdefghij\nline03 abcdefghij\nline04 abcdefghij\nline05 abcdefghij\nline06 abcdefghij\nl", "v", std::nullopt},
     {"count-register-visual-register-count-then-j", "line01 abcdefghij\nline02 abcdefghij\nline03 abcdefghij\nline04 abcdefghij\nline05 abcdefghij\nline06 abcdefghij\nline07 abcdefghij\nline08 abcdefghij\nline09 abcdefghij\nline10 abcdefghij\nline11 abcdefghij\nline12 abcdefghij\nline13 abcdefghij\nline14 abcdefghij\nline15 abcdefghij\nline16 abcdefghij\nline17 abcdefghij\nline18 abcdefghij\nline19 abcdefghij\nline20 abcdefghij\nline21 abcdefghij\nline22 abcdefghij\nline23 abcdefghij\nline24 abcdefghij\nline25 abcdefghij\nline26 abcdefghij\nline27 abcdefghij\nline28 abcdefghij\nline29 abcdefghij\nline30 abcdefghij", "v2\"a3jjd", "ine08 abcdefghij\nline09 abcdefghij\nline10 abcdefghij\nline11 abcdefghij\nline12 abcdefghij\nline13 abcdefghij\nline14 abcdefghij\nline15 abcdefghij\nline16 abcdefghij\nline17 abcdefghij\nline18 abcdefghij\nline19 abcdefghij\nline20 abcdefghij\nline21 abcdefghij\nline22 abcdefghij\nline23 abcdefghij\nline24 abcdefghij\nline25 abcdefghij\nline26 abcdefghij\nline27 abcdefghij\nline28 abcdefghij\nline29 abcdefghij\nline30 abcdefghij", 1, 1, "line01 abcdefghij\nline02 abcdefghij\nline03 abcdefghij\nline04 abcdefghij\nline05 abcdefghij\nline06 abcdefghij\nline07 abcdefghij\nl", "v", std::nullopt},
     {"count-register-visual-register-then-count-j", "line01 abcdefghij\nline02 abcdefghij\nline03 abcdefghij\nline04 abcdefghij\nline05 abcdefghij\nline06 abcdefghij\nline07 abcdefghij\nline08 abcdefghij\nline09 abcdefghij\nline10 abcdefghij\nline11 abcdefghij\nline12 abcdefghij\nline13 abcdefghij\nline14 abcdefghij\nline15 abcdefghij\nline16 abcdefghij\nline17 abcdefghij\nline18 abcdefghij\nline19 abcdefghij\nline20 abcdefghij\nline21 abcdefghij\nline22 abcdefghij\nline23 abcdefghij\nline24 abcdefghij\nline25 abcdefghij\nline26 abcdefghij\nline27 abcdefghij\nline28 abcdefghij\nline29 abcdefghij\nline30 abcdefghij", "v\"a2jjd", "ine04 abcdefghij\nline05 abcdefghij\nline06 abcdefghij\nline07 abcdefghij\nline08 abcdefghij\nline09 abcdefghij\nline10 abcdefghij\nline11 abcdefghij\nline12 abcdefghij\nline13 abcdefghij\nline14 abcdefghij\nline15 abcdefghij\nline16 abcdefghij\nline17 abcdefghij\nline18 abcdefghij\nline19 abcdefghij\nline20 abcdefghij\nline21 abcdefghij\nline22 abcdefghij\nline23 abcdefghij\nline24 abcdefghij\nline25 abcdefghij\nline26 abcdefghij\nline27 abcdefghij\nline28 abcdefghij\nline29 abcdefghij\nline30 abcdefghij", 1, 1, "line01 abcdefghij\nline02 abcdefghij\nline03 abcdefghij\nl", "v", std::nullopt},
+    {"del-key-normal-removes-the-character", "abc", "l<Del>", "ac", 1, 2, "b", "v", std::nullopt},
+    {"del-key-normal-count-is-edited-not-used", "abcdef", "l3<Del>", "abcdef", 1, 2, "", "", std::nullopt},
+    {"del-key-normal-count-then-del-twice", "abc\ndef", "l5<Del><Del>", "ac\ndef", 1, 2, "b", "v", std::nullopt},
+    {"del-key-normal-at-the-line-end", "abc\ndef", "$<Del>", "ab\ndef", 1, 2, "c", "v", std::nullopt},
+    {"del-key-normal-on-an-empty-line", "abc\n\ndef", "j<Del>jx", "abc\n\nef", 3, 1, "d", "v", std::nullopt},
+    {"del-key-normal-takes-the-combining-mark", "ábc", "<Del>", "bc", 1, 1, "á", "v", std::nullopt},
+    {"del-key-normal-wide-character", "あいう", "l<Del>", "あう", 1, 4, "い", "v", std::nullopt},
+    {"del-key-normal-zwj-sequence", "x👨‍👩y", "l<Del>", "x‍👩y", 1, 2, "👨", "v", std::nullopt},
+    {"del-key-count-drops-the-last-digit", "abcdefghijklmnop", "12<Del>x", "bcdefghijklmnop", 1, 1, "a", "v", std::nullopt},
+    {"del-key-count-drops-to-nothing", "abcdef", "3<Del>x", "bcdef", 1, 1, "a", "v", std::nullopt},
+    {"del-key-count-dropped-then-zero-is-a-motion", "abcdef", "$2<Del>0x", "bcdef", 1, 1, "a", "v", std::nullopt},
+    {"del-key-count-twice-then-a-digit", "abcdefghijklmnopqrstuvwxyz0123456789", "23<Del>4x", "yz0123456789", 1, 1, "abcdefghijklmnopqrstuvwx", "v", std::nullopt},
+    {"del-key-count-dropped-twice", "abcdefghijklmnop", "123<Del><Del>x", "bcdefghijklmnop", 1, 1, "a", "v", std::nullopt},
+    {"del-key-count-after-an-operator", "one two three four", "2d3<Del>w", "three four", 1, 1, "one two ", "v", std::nullopt},
+    {"del-key-count-after-an-operator-to-nothing", "one two three four", "d3<Del>w", "two three four", 1, 1, "one ", "v", std::nullopt},
+    {"del-key-after-an-operator-fails", "abc def", "d<Del>x", "abc def", 1, 1, "", "", std::nullopt},
+    {"del-key-after-a-counted-operator-fails", "abc def", "2d<Del>x", "abc def", 1, 1, "", "", std::nullopt},
+    {"del-key-drops-the-register", "abc", "\"a<Del>\"ap", "bZc", 1, 2, "a", "v", std::nullopt, VimMacroFixture{'a', "Z"}},
+    {"del-key-dot-after-a-register-drops-it", "abcd", "\"a<Del>.\"ap", "cZd", 1, 2, "b", "v", std::nullopt, VimMacroFixture{'a', "Z"}},
+    {"del-key-dot-repeats", "abcdef", "<Del>.", "cdef", 1, 1, "b", "v", std::nullopt},
+    {"del-key-count-dropped-then-dot-does-nothing", "abcdef", "2<Del>.", "abcdef", 1, 1, "", "", std::nullopt},
+    {"del-key-dot-with-a-new-count", "abcdefgh", "2l<Del>3.", "abgh", 1, 3, "def", "v", std::nullopt},
+    {"del-key-undo", "abc", "<Del>u", "abc", 1, 1, "a", "v", std::nullopt},
+    {"del-key-after-r", "abc", "r<Del>x", "abc", 1, 1, "", "", std::nullopt},
+    {"del-key-after-f", "abc", "f<Del>x", "abc", 1, 1, "", "", std::nullopt},
+    {"del-key-after-g", "abc", "g<Del>x", "abc", 1, 1, "", "", std::nullopt},
+    {"del-key-after-quote", "abc", "\"<Del>x", "abc", 1, 1, "", "", std::nullopt},
+    {"del-key-visual-removes-the-selection", "abcdef", "lvl<Del>", "adef", 1, 2, "bc", "v", std::nullopt},
+    {"del-key-visual-line", "abc\ndef\nghi", "Vj<Del>", "ghi", 1, 1, "abc\ndef\n", "V", std::nullopt},
+    {"del-key-visual-block", "abcd\nefgh\nijkl", "l<C-v>jl<Del>", "ad\neh\nijkl", 1, 2, "bc\nfg", "\0262", std::nullopt},
+    {"del-key-visual-dot", "abcdefgh", "vl<Del>.", "efgh", 1, 1, "cd", "v", std::nullopt},
+    {"del-key-visual-count-drops-the-digit", "abcdefgh", "v3<Del>l<Del>", "cdefgh", 1, 1, "ab", "v", std::nullopt},
+    {"del-key-insert-removes-forward", "abcdef", "li<Del>x<Esc>", "axcdef", 1, 2, "", "", std::nullopt},
+    {"del-key-insert-takes-the-combining-mark", "ábc", "i<Del><Esc>", "bc", 1, 1, "", "", std::nullopt},
+    {"del-key-insert-wide-character", "あいう", "li<Del><Esc>", "あう", 1, 1, "", "", std::nullopt},
+    {"del-key-insert-at-the-line-end-joins", "abc\n  def", "A<Del><Esc>", "abc  def", 1, 3, "", "", std::nullopt},
+    {"del-key-insert-on-an-empty-line-joins", "abc\n\ndef", "ji<Del><Esc>", "abc\ndef", 2, 1, "", "", std::nullopt},
+    {"del-key-insert-at-the-buffer-end", "abc", "A<Del>x<Esc>", "abcx", 1, 4, "", "", std::nullopt},
+    {"del-key-insert-twice", "abcdef", "i<Del><Del>x<Esc>", "xcdef", 1, 1, "", "", std::nullopt},
+    {"del-key-insert-with-a-count", "abcdefgh", "3i<Del>x<Esc>", "xxxdefgh", 1, 3, "", "", std::nullopt},
+    {"del-key-insert-dot", "abcdef\nabcdef", "i<Del>x<Esc>j0.", "xbcdef\nxbcdef", 2, 1, "", "", std::nullopt},
+    {"del-key-insert-dot-after-a-beep", "abc\ndef", "jA<Del>x<Esc>k0.", "abcxdefx", 1, 4, "", "", std::nullopt},
+    {"del-key-insert-undo", "abc\ndef", "A<Del>x<Esc>u", "abc\ndef", 1, 3, "", "", std::nullopt},
+    {"del-key-undo-between-typed-text", "abc", "ix<Del>y<Esc>u", "abc", 1, 1, "", "", std::nullopt},
+    {"del-key-undo-after-typed-text", "abc", "ixy<Del><Esc>u", "abc", 1, 1, "", "", std::nullopt},
+    {"del-key-undo-joins-at-the-line-end", "abc\ndef", "Ax<Del>y<Esc>u", "abc\ndef", 1, 3, "", "", std::nullopt},
+    {"del-key-undo-with-a-count", "abcdefgh", "2ix<Del>y<Esc>u", "abcdefgh", 1, 1, "", "", std::nullopt},
+    {"del-key-undo-twice-after-typed-text", "abcdef", "lix<Del><Del>y<Esc>u", "abcdef", 1, 2, "", "", std::nullopt},
+    {"del-key-insert-after-an-arrow", "abcdef", "a<Left><Del>y<Esc>", "ybcdef", 1, 1, "", "", std::nullopt},
+    {"del-key-insert-after-an-arrow-dot", "abcdef\nabcdef", "a<Right><Del>y<Esc>j0.", "abydef\nybcdef", 2, 1, "", "", std::nullopt},
+    {"del-key-block-insert", "abcd\nefgh", "<C-v>jI<Del>x<Esc>", "xbcd\nefgh", 1, 1, "", "", std::nullopt},
+    {"del-key-macro", "abc\ndef", "2@a", "bc\nef", 2, 1, "d", "v", std::nullopt, VimMacroFixture{'a', "<Del>j"}},
 }};
 } // namespace nenenib::tests
 // clang-format on

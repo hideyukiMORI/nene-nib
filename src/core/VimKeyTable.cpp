@@ -564,6 +564,7 @@ static_assert(every_alignment_has_one_row(),
     case VimSpecialKey::control_o:
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
+    case VimSpecialKey::delete_key:
         return std::nullopt;
     }
     std::unreachable();
@@ -598,6 +599,7 @@ static_assert(every_alignment_has_one_row(),
     case VimSpecialKey::control_o:
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
+    case VimSpecialKey::delete_key:
         return std::nullopt;
     }
     std::unreachable();
