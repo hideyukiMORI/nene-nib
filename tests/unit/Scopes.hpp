@@ -10,6 +10,7 @@ namespace nenenib::tests
 {
 void verify_body_layout_scope();
 void verify_wrapped_view_scope();
+void verify_edge_arrows_scope();
 void verify_vim_wrapped_scope();
 void verify_vim_wrapped_contracts();
 // UTF 検証と表示値/UTF-16の直接の境界（ADR 0086）。

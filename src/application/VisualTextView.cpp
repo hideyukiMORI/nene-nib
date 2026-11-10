@@ -656,8 +656,8 @@ std::expected<core::VisualPosition, TextLayoutFailure> VisualTextView::last()
     return core::VisualPosition{number, count.value() - 1};
 }
 
-std::expected<core::VisualPosition, TextLayoutFailure>
-VisualTextView::forward(core::VisualPosition from, std::size_t amount)
+std::expected<ShiftedPosition, TextLayoutFailure> VisualTextView::forward(core::VisualPosition from,
+                                                                          std::size_t amount)
 {
     while (true)
     {
@@ -670,11 +670,11 @@ VisualTextView::forward(core::VisualPosition from, std::size_t amount)
         const auto available = count.value() - 1 - from.row;
         if (amount <= available)
         {
-            return core::VisualPosition{from.line, from.row + amount};
+            return ShiftedPosition{core::VisualPosition{from.line, from.row + amount}, false};
         }
         if (from.line.value == state_.text().line_count())
         {
-            return core::VisualPosition{from.line, count.value() - 1};
+            return ShiftedPosition{core::VisualPosition{from.line, count.value() - 1}, true};
         }
         amount -= available + 1;
         ++from.line.value;
@@ -682,7 +682,7 @@ VisualTextView::forward(core::VisualPosition from, std::size_t amount)
     }
 }
 
-std::expected<core::VisualPosition, TextLayoutFailure>
+std::expected<ShiftedPosition, TextLayoutFailure>
 VisualTextView::backward(core::VisualPosition from, std::size_t amount)
 {
     while (true)
@@ -695,11 +695,11 @@ VisualTextView::backward(core::VisualPosition from, std::size_t amount)
         from.row = std::min(from.row, count.value() - 1);
         if (amount <= from.row)
         {
-            return core::VisualPosition{from.line, from.row - amount};
+            return ShiftedPosition{core::VisualPosition{from.line, from.row - amount}, false};
         }
         if (from.line.value == 1)
         {
-            return core::VisualPosition{core::LineNumber{1}, 0};
+            return ShiftedPosition{core::VisualPosition{core::LineNumber{1}, 0}, true};
         }
         amount -= from.row + 1;
         --from.line.value;
@@ -710,18 +710,27 @@ VisualTextView::backward(core::VisualPosition from, std::size_t amount)
 std::expected<core::VisualPosition, TextLayoutFailure>
 VisualTextView::shifted(core::VisualPosition from, std::int64_t amount)
 {
+    return reached(from, amount).transform([](const ShiftedPosition &value) { return value.at; });
+}
+
+std::expected<ShiftedPosition, TextLayoutFailure> VisualTextView::reached(core::VisualPosition from,
+                                                                          std::int64_t amount)
+{
     from.line.value = std::clamp<std::size_t>(from.line.value, 1, state_.text().line_count());
     const auto steps = magnitude(amount);
-    // 制御文字の表示は最大6文字/byte。巨大な回数で全文書を歩かない。
+    // 制御文字の表示は最大6文字/byte。巨大な回数で全文書を歩かない。画面行の総数はこの上限より
+    // 少ないので、ここへ来る送りは必ず端で止まる。
     const auto &composed = state_.composition();
     const auto composition = composed.has_value() ? composed.value().utf8.size() : 0;
     const auto maximum = state_.text().size_bytes() * 6 + state_.text().line_count() + composition;
     if (steps >= maximum)
     {
-        return amount < 0
-                   ? std::expected<core::VisualPosition, TextLayoutFailure>{core::VisualPosition{
-                         core::LineNumber{1}, 0}}
-                   : last();
+        if (amount < 0)
+        {
+            return ShiftedPosition{core::VisualPosition{core::LineNumber{1}, 0}, true};
+        }
+        return last().transform([](core::VisualPosition end)
+                                { return ShiftedPosition{end, true}; });
     }
     return amount < 0 ? backward(from, steps) : forward(from, steps);
 }
@@ -758,7 +767,7 @@ VisualTextView::constrained(core::VisualPosition first, core::ScrollExtent exten
     {
         return std::unexpected(highest.error());
     }
-    return highest.value() < normalized.value() ? highest : normalized;
+    return highest.value().at < normalized.value() ? highest.value().at : normalized.value();
 }
 
 std::expected<std::size_t, TextLayoutFailure>
@@ -838,7 +847,8 @@ VisualTextView::screen_followed_first(core::VisualPosition caret, core::VisualPo
     {
         return first;
     }
-    return backward(caret, virtual_caret.value - target.value);
+    return backward(caret, virtual_caret.value - target.value)
+        .transform([](const ShiftedPosition &value) { return value.at; });
 }
 
 std::expected<std::size_t, TextLayoutFailure>

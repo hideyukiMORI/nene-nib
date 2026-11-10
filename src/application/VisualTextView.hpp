@@ -7,6 +7,7 @@
 #include "ScrollExtent.hpp"
 #include "ScrollFollow.hpp"
 #include "ScrollState.hpp"
+#include "ShiftedPosition.hpp"
 #include "TextCaret.hpp"
 #include "TextLayoutPort.hpp"
 #include "VimLineRows.hpp"
@@ -52,6 +53,11 @@ class VisualTextView final
     position(core::TextCaret caret);
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
     shifted(core::VisualPosition from, std::int64_t amount);
+    // shifted と同じ送りに、本文の最初か最後の画面行で止まって送りきれなかったかを添える
+    // （通常モードの上下の移動が本文の端へ着くかを決める 1 か所・#1386）。格子と折り返しの
+    // 有無は shifted と同じく rows が答える。
+    [[nodiscard]] std::expected<ShiftedPosition, TextLayoutFailure>
+    reached(core::VisualPosition from, std::int64_t amount);
     [[nodiscard]] std::expected<core::TextCaret, TextLayoutFailure>
     caret_at(core::VisualPosition at, float x);
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
@@ -137,9 +143,9 @@ class VisualTextView final
     // 番兵（#664）。found が at を含まなければ隣の段（前・後）で引き直す。
     [[nodiscard]] std::expected<core::VimRowSpan, TextLayoutFailure>
     containing(core::LineNumber number, const core::VimRowSpan &found, core::Offset at);
-    [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
+    [[nodiscard]] std::expected<ShiftedPosition, TextLayoutFailure>
     forward(core::VisualPosition from, std::size_t amount);
-    [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
+    [[nodiscard]] std::expected<ShiftedPosition, TextLayoutFailure>
     backward(core::VisualPosition from, std::size_t amount);
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure> last();
     [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>

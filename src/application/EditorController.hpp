@@ -828,6 +828,10 @@ class EditorController final
     void select_clicked(core::Offset pointed, PointerClicks clicks);
     void select_clicked_in_vim(core::Offset pointed, PointerClicks clicks);
     [[nodiscard]] bool move_visual(const MoveCaret &intent);
+    // 上下の移動が本文の最初か最後の画面行で止まったときの着地（本文の先頭か末尾・#1386）。
+    void move_to_text_edge(VisualTextView &view, const MoveCaret &intent, std::int64_t rows);
+    // PgDn / PgUp の画面の先頭の送り。文字組みに失敗したら false。
+    [[nodiscard]] bool page_top_shifted(VisualTextView &view, std::int64_t rows);
     // 画面を動かさずにキャレットを見えている範囲へ入れた位置（#785）。
     [[nodiscard]] std::expected<core::TextCaret, TextLayoutFailure> caret_in_view();
     [[nodiscard]] VisualTextView visual_view();
