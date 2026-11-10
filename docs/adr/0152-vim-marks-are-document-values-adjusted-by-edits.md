@@ -133,3 +133,8 @@ Vim 9.1 の `:help jump-motions` は跳びを `'` `` ` `` `G` `/` `?` `n` `N` `%
 ## 追補（2026-11-03・#999）: 行をまたぐ入れ子の深さ
 
 - `%` の走査は行を渡るたびに入れ子の深さを 0 に戻していた（`(\n(\n)\n)` の 1 行目の `%` が 3 行目へ着いた）。これは限界ではなく誤りで、Vim の `findmatchlimit` の `count` と同じく行をまたいでも深さを保つよう直した。走査は matchparen と共用の `matched_bracket` の 1 本（ADR 0164）。fixture `matching-pair-nested-lines-` 3 件（`%` `G%` `d%`）が oracle の実測で守る。
+
+## 追補（2026-11-10・#1361）: 矩形の編集は行ごとに直す
+
+- 決定 6 の `replace` の呼び出しのうち、矩形の効果（`VimRemoveBlock` `VimReplaceBlock` `VimInsertBlock`）を写す `apply_block` だけは、畳んだ 1 つの Edit ではなく行ごとの置き換えを `marks_block_adjusted(marks, 編集の前の本文, 行ごとの置き換え)` に渡す（下の行から `marks_adjusted` に通す）。Vim の矩形のオペレータ（`shift_block`・矩形の `op_delete` `op_change`・`block_insert`・`op_replace` `op_tilde` の矩形）は `mark_adjust` を呼ばないので、改行を含まない行の置き換えはマークを動かさない。最後の変更（`'.`）と変更の列は今までどおり畳んだ Edit から置く。
+- 行単位・文字単位の行を保つ置き換え（`>` `<` `~` `r` の行単位と文字単位）と、undo / redo の行数の変わらない編集は同じ近似のまま（ADR 0018 の追補 #1361 の「測った」）。

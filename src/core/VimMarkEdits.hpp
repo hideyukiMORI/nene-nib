@@ -3,12 +3,14 @@
 #include "Edit.hpp"
 #include "Offset.hpp"
 #include "TextBuffer.hpp"
+#include "VimBlockEdit.hpp"
 #include "VimMarkPosition.hpp"
 #include "VimMarks.hpp"
 #include "VimRepeatFailure.hpp"
 
 #include <expected>
 #include <optional>
+#include <span>
 
 namespace nenenib::core
 {
@@ -50,6 +52,14 @@ vim_mark_set(const VimMarks &marks, char32_t name, const VimMarkPosition &at);
 // マークは挿入・削除した行数ぶん動かし、行の中の編集では桁を動かさない。before は編集の前の本文。
 [[nodiscard]] VimMarks marks_adjusted(const VimMarks &marks, const TextBuffer &before,
                                       const Edit &edit);
+
+// 矩形の編集でマークを直す（決定 6 の追補・#1361）。Vim の矩形のオペレータ（op_shift の
+// shift_block・op_delete と op_change の矩形・op_insert の block_insert・op_replace・op_tilde）は
+// 行の中だけを書き換えて mark_adjust を呼ばないので、上の行から下の行までを覆う 1 つの Edit では
+// なく行ごとの置き換え（上から順）を下の行から marks_adjusted に通す。改行を含まない行の
+// 置き換えはマークを動かさず、本文の終わりに足した行（矩形の貼付）だけが行を足す。
+[[nodiscard]] VimMarks marks_block_adjusted(const VimMarks &marks, const TextBuffer &before,
+                                            std::span<const VimBlockEdit> edits);
 
 // 編集が置く最後の変更の位置（決定 7・Vim の changed_lines / changed_bytes が置く `'.`）。
 // before は編集の前の本文。
