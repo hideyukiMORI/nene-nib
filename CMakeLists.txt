@@ -164,6 +164,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/OpenAsyncTests.cpp
     tests/unit/AutosaveTests.cpp
     tests/unit/AutosavePlanPropertyTests.cpp
+    tests/unit/AutosaveRestorePropertyTests.cpp
     tests/unit/OperationsTests.cpp
     tests/unit/FindReplaceTests.cpp tests/unit/MatchParenTests.cpp
     tests/unit/GuideTests.cpp
@@ -324,6 +325,26 @@ nenenib_link(nib_document_reader_tests nenenib_application)
 nenenib_link(nib_document_reader_tests nenenib_adapters)
 add_test(NAME nib_adapters_document_reader COMMAND nib_document_reader_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(nib_adapters_document_reader PROPERTIES TIMEOUT 120)
+
+# Issue #1290: 開く道の塊の読みを、塊の境がどこに来ても一括の読みと同じかで見る性質の試験（ADR 0159）。
+# 本物のファイルとワーカー 1 本。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
+nenenib_target(nib_document_chunk_property_tests adapter_tests EXECUTABLE tests/adapters/DocumentChunkPropertyTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
+nenenib_link(nib_document_chunk_property_tests nenenib_core)
+nenenib_link(nib_document_chunk_property_tests nenenib_application)
+nenenib_link(nib_document_chunk_property_tests nenenib_adapters)
+add_test(NAME nib_adapters_document_chunk_property COMMAND nib_document_chunk_property_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_adapters_document_chunk_property PROPERTIES TIMEOUT 60)
+
+# Issue #1290: 自動退避の一覧と本文の 2 ファイルの組に傷を入れ、残骸・読み・forget を模型と照らす
+# 性質の試験（ADR 0137）。本物のフォルダ。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
+nenenib_target(nib_autosave_pair_property_tests adapter_tests EXECUTABLE tests/adapters/AutosavePairPropertyTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
+nenenib_link(nib_autosave_pair_property_tests nenenib_core)
+nenenib_link(nib_autosave_pair_property_tests nenenib_application)
+nenenib_link(nib_autosave_pair_property_tests nenenib_adapters)
+add_test(NAME nib_adapters_autosave_pair_property COMMAND nib_autosave_pair_property_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_adapters_autosave_pair_property PROPERTIES TIMEOUT 120)
 
 # Issue #897: 設定・前回のタブ・履歴・ブックマーク・自動退避の台帳の復号に、固定 seed で壊した
 # バイト列を通す性質の試験。ファイルには触れない。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
