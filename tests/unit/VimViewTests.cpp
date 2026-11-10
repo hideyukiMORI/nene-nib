@@ -886,7 +886,7 @@ void verify_insert_page_edges()
 
 // 再生（`@`）の中の最後の鍵が Ctrl-e なら、外側の `@a` の終わりも先頭を追従で戻さない（M1・
 // ADR 0019 の追補 #1232）。入れ子の `@b` も同じ 1 本の再生の口を通る。最後が `<C-e>j` なら j の
-// 追従が効く（keeps_top は残らない）。期待値は同じ鍵を直接打った結果（fixture で Vim と一致）。
+// 追従が効く（kept は残らない）。期待値は同じ鍵を直接打った結果（fixture で Vim と一致）。
 [[nodiscard]] std::pair<std::size_t, std::size_t> top_and_line(const EditorFrame &frame)
 {
     return {frame.first_visible.value, frame.caret.position.line.value};

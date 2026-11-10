@@ -16,4 +16,9 @@ namespace nenenib::core
 // L（オペレータの 無いとき）と Ctrl-f / Ctrl-b / Ctrl-d / Ctrl-u の着地が呼ぶ。
 [[nodiscard]] LineNumber vim_cursor_corrected(const VimCursorWindow &window, LineNumber caret,
                                               std::size_t line_count) noexcept;
+
+// キャレットの行が初めから余白の内側にあって cursor_correct が早めに戻るか（Vim は戻る前に
+// VALID_TOPLINE を立てない・1 画面の送りの FAIL の後の追従を決める・#1362）。
+[[nodiscard]] bool vim_cursor_within_margins(const VimCursorWindow &window, LineNumber caret,
+                                             std::size_t line_count) noexcept;
 } // namespace nenenib::core
