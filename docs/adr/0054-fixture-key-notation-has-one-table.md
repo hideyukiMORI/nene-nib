@@ -59,13 +59,14 @@ oracle には部分再生成の再利用の証明がある（`measurement_source
 決定:
 
 1. fixture の記法の鍵を、窓（`src/ui/win32/EditorWindowKeys.cpp`）が送るのと同じ意図に写して 1 つずつ `apply` し、窓の描画と同じく 1 鍵ごとに `frame` を読む（`tests/unit/VimFixtureWindowPathTests.cpp`）。入力行が開いていれば `CommandText` / `SubmitCommand` / `CancelCommand` / `EditCommand`（Tab は補完・上下は履歴）/ `PasteCommand`（`<C-v>`）、閉じていれば `VimKeyPress`。窓が Vim の鍵より先に引く操作・ブックマーク・タブの表に fixture の鍵の和音が Vim モードで無いことを `operation_for` と `tab_command_for` で確かめる。
-2. 期待は engine の道の結果（本文・キャレット・無名レジスタと種類・窓の先頭と先頭の画面行・横位置・半画面の行数・モード）。窓の道は鍵を失敗で打ち切らないので、打った鍵の道（`press_vim_key`）と比べる。失敗で残りを捨てない fixture では打った鍵の道と `:normal!` の道（`press_vim_keys`）が一致し、その値は `verify_vim_fixture` が oracle と突き合わせている。失敗で残りを捨てる fixture（#230）は件数を数える（全件で 129 + 折り返す窓の 8）。
-3. 窓の準備（`viewport`・`settings` の `scrolloff`・`register` 欄のマクロ・折り返す窓）は engine の道と同じ部品（`arrange_vim_viewport`・`store_vim_fixture_macro`）で置くので、どの種類も飛ばさない。窓が Vim の鍵として送らない鍵（Tab 以外の制御文字・INSERT の Ctrl+V / A / X / E / Y）を含む fixture は理由ごとに数えて飛ばす。HEAD ではどちらも 0 件。
-4. 件数（再生・打ち切り・理由ごとの飛ばし・食い違い）を `expect` で断言する。fixture を足したら数え直す。
-5. 既定実行は並びの 10 件に 1 件（先頭から・決定的・`--vim-fixture-window-path`）、全件は名指しの scope `--vim-window-path-all`（`nib_unit_scopes` が回す）。Debug の所要は全件 約 205 s（3,944 件・engine の道の 2 本と窓の道の 3 回ずつ）、10 件に 1 件で約 26 s（施主の機械・ほかの席と並べた値）。
+2. 期待は engine の道の結果（本文・キャレット・無名レジスタと種類・窓の先頭と先頭の画面行・横位置・半画面の行数・モード）。窓の道は鍵を失敗で打ち切らないので、打った鍵の道（`press_vim_key`）と比べる。失敗で残りを捨てない fixture では打った鍵の道と `:normal!` の道（`press_vim_keys`）が一致し、その値は `verify_vim_fixture` が oracle と突き合わせている。失敗で残りを捨てる fixture（#230）も件ごとに打った鍵の道と比べ、その件数は数えて出すだけで固定の数では断言しない（main `c67cf493` の上で全件 148 + 折り返す窓の 8）。
+3. 窓の準備（`viewport`・`settings` の `scrolloff`・`register` 欄のマクロ・折り返す窓）は engine の道と同じ部品（`arrange_vim_viewport`・`store_vim_fixture_macro`）で置くので、どの種類も飛ばさない。窓が Vim の鍵として送らない鍵（Tab 以外の制御文字・INSERT の Ctrl+V / A / X / E / Y）を含む fixture は理由ごとに数えて飛ばす。今の fixture ではどちらも 0 件で、飛ばす道は `<NL>` と INSERT の `<C-a>` の小さな反例で 1 件ずつ踏む。
+4. 件数は fixture の数との関係で断言する: 選んだ件数 == 再生した件数（全件では `vim_fixtures.size()`）・飛ばし 0・食い違い 0。絶対の件数は書かないので、ほかの PR が fixture を足してもこの検査は古くならない（#1356 のレビュー M2）。
+5. 既定実行は並びの 40 件に 1 件（先頭から・決定的・`--vim-fixture-window-path`）と、名前が `window-path-` で始まる fixture の全部（変異で落ちる fixture を並びの位置に頼らず入れる・#1356 のレビュー L4）、全件は名指しの scope `--vim-window-path-all`（`nib_unit_scopes` が回す）。Debug の所要は全件 約 205 s（3,944 件・engine の道の 2 本と窓の道の 3 回ずつ）、10 件に 1 件で約 26 s（施主の機械・ほかの席と並べた値）。#1356 の乗せ替えで 40 件に 1 件にし、main `c67cf493` の上で全件 3,750 + 332 件が約 224 s、既定実行の 104 + 9 件が約 9 s（Debug・施主の機械）。
+7. 窓の鍵の振り分けの写し（`command_line_send` と `vim_send`）は `EditorWindowKeys.cpp` と `VimSpecialKeys.hpp` の複製のまま置く。module `unit_tests` は core と application にだけ依存し（`eng/architecture.json`）、ui/win32 の表 `vim_specials` を include できない。代わりに写しの `switch` は `VimSpecialKey` の全部の値を `default` なしで並べ、値が増えると試験がコンパイルで落ちる（CPP-002）。`<Del>` は閉じていれば `VimKeyPress{delete_key}`、入力行では `EditCommand::erase`（#1325）。
 6. 窓の道でだけ違う形（INSERT の挿入点が Vim の 1 文字の途中に立つ）は既存の fixture に 1 件も無かったので、`VimWindowPathTests` の実測の 10 行を oracle の fixture `window-path-1326-*` として足した（oracle の変更は無し・`--regenerate --only window-path-1326-`）。
 
-強制: **active**。変異で確かめた。`keep_vim_character` の INSERT の早い return を `break` にし、`VimKeyPress` の早い return も消す（PR #1323 の最初の形）と、全件は `window-path-1326-` の 5 件・既定実行の 10 件に 1 件は 1 件（`insert-ctrl-r-before-a-lone-mark`）で落ちる。INSERT の return だけを `break` にした変異は、窓の鍵が `VimKeyPress` の早い return で寄せを通らないので落ちない（窓の鍵の道では観測できない形）。
+強制: **active**。変異で確かめた。`keep_vim_character` の INSERT の早い return を `break` にし、`VimKeyPress` の早い return も消す（PR #1323 の最初の形）と、全件は `window-path-1326-` の 5 件・既定実行の 10 件に 1 件は 1 件（`insert-ctrl-r-before-a-lone-mark`）で落ちる。#1356 の乗せ替えの後（40 件に 1 件と `window-path-` の全部）は既定実行も全件も同じ 5 件で落ちる。INSERT の return だけを `break` にした変異は、窓の鍵が `VimKeyPress` の早い return で寄せを通らないので落ちない（窓の鍵の道では観測できない形）。
 
 却下した選択肢:
 
