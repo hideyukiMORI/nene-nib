@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MarkdownDocument.hpp"
+#include "MarkdownImage.hpp"
 #include "MarkdownStop.hpp"
 #include "MarkdownTask.hpp"
 #include "PreviewBlock.hpp"
@@ -47,8 +48,11 @@ class MarkdownBuilder final
     void rule();
     void open_leaf(PreviewBlockKind kind, std::uint8_t level);
     void close_leaf();
-    // style が nullopt の装飾（画像など）は積みの対だけを保つ。
+    // style が nullopt の装飾（打ち消しなど）は積みの対だけを保つ。
     void enter_span(std::optional<PreviewStyle> style);
+    // 画像の装飾を開き、画像の節を覚える（ADR 0155 の追補 47）。source と title は実体参照を解いた
+    // md4c の属性。閉じる leave_span が alt と範囲の終わりを書く。
+    void enter_image(std::string source, std::string title);
     void leave_span();
     // shown を要素の文字に足す。source が本文の中を指せば、要素の最初の位置と直前の終わりに使う。
     void text(std::string_view shown, std::string_view source);
@@ -63,6 +67,9 @@ class MarkdownBuilder final
     PreviewBlock &ensure_leaf();
     void close_implicit();
     void flush_marker();
+    // 開いている画像の節のいちばん内側を、要素の text の今の終わりで閉じる。closed は閉じの「]」を
+    // 足した後か。
+    void finish_image(const PreviewBlock &block, bool closed);
 
     std::string_view input_;
     const MarkdownStop *stop_;
@@ -75,6 +82,9 @@ class MarkdownBuilder final
     std::size_t quote_depth_ = 0;
     std::vector<std::optional<std::uint64_t>> lists_;
     std::vector<std::optional<std::size_t>> spans_;
+    std::vector<MarkdownImage> images_;
+    // 開いている画像の節の images_ の番号（入れ子は外側が先）。
+    std::vector<std::size_t> open_images_;
     std::optional<std::size_t> last_end_;
     bool stopped_ = false;
     bool exhausted_ = false;

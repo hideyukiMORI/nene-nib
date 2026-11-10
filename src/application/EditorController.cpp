@@ -611,6 +611,9 @@ void EditorController::accept(const WorkCompleted &)
     request_explorer_folder();
     // 退避 → フォルダ → Markdown の順（ADR 0155 の決定 6）。プレビューが閉じていれば呼ばない。
     collect_preview();
+    // プレビューの画像は解析の結果の後（新しい結果が引き継いだ entry の券で採る・ADR 0155 の追補 50
+    // ）。
+    collect_preview_images();
     // 言語サーバー（ADR 0160 の決定 1）。子が居なければ呼ばない。
     collect_language_server();
     const auto &input = state_.command_input();
@@ -1134,7 +1137,8 @@ void EditorController::add_other_pane(EditorFrame &result, const core::VimPatter
     {
         const core::Offset anchor =
             full->follows ? state_.text().line_start(result.first_visible) : full->anchor;
-        result.full_preview = PreviewFrame{full->document, anchor, full->notice, full->selection};
+        result.full_preview =
+            PreviewFrame{full->document, anchor, full->notice, full->selection, full->images};
         return;
     }
     const auto &other = state_.split().other;
@@ -1153,7 +1157,7 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
 {
     const core::Offset anchor =
         view.follows ? state_.text().line_start(result.first_visible) : view.anchor;
-    result.other = PreviewFrame{view.document, anchor, view.notice, std::nullopt};
+    result.other = PreviewFrame{view.document, anchor, view.notice, std::nullopt, view.images};
 }
 
 void EditorController::add_other_view(EditorFrame &result, const core::VimPattern *pattern,

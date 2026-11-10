@@ -39,6 +39,7 @@
 #include "ScriptedFolders.hpp"
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
+#include "ScriptedImages.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPrinter.hpp"
 #include "ScriptedSession.hpp"
@@ -387,6 +388,7 @@ void verify_quiet_start_with_files()
     ScriptedClock wall_clock;
     ScriptedPrinter printer;
     ScriptedShellRegistration shell_registration;
+    ScriptedImages images;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -396,16 +398,17 @@ void verify_quiet_start_with_files()
         EditorPorts{appearance,   clipboard,       files,      code_pages, settings,
                     themes,       session,         history,    folders,    bookmarks,
                     text_layouts, autosave,        fonts,      bell,       markdown,
-                    reads,        language_server, wall_clock, printer,    shell_registration},
+                    reads,        language_server, wall_clock, printer,    shell_registration,
+                    images},
         {work_open('a'), work_open('b')});
     expect(controller.frame().tabs.size() == 2 && history.reads() == 0 && history.writes() == 0 &&
                folders.requests().empty() && folders.collects() == 0 && autosave.touches() == 0 &&
                fonts.lists() == 0 && bell.rings() == 0 && markdown.requests().empty() &&
                markdown.collects() == 0 && language_server.touches() == 0 &&
                wall_clock.calls() == 0 && printer.jobs().empty() &&
-               shell_registration.touches() == 0,
+               shell_registration.touches() == 0 && images.touches() == 0,
            "starting with file arguments never touches the history, the folder, autosave, the "
-           "bell, the clock, the printer nor the shell registration");
+           "bell, the clock, the printer, the shell registration nor the preview images");
 }
 
 // 面が出ていても、開く・切り替え・新しいタブ・打鍵・保存はフォルダの entries を頼まない
@@ -450,9 +453,10 @@ void verify_quiet_paths()
                restored.fonts().lists() == 0 && restored.bell().rings() == 0 &&
                restored.markdown().requests().empty() && restored.markdown().collects() == 0 &&
                restored.language_server().touches() == 0 && restored.wall_clock().calls() == 0 &&
-               restored.printer().jobs().empty() && restored.shell_registration().touches() == 0,
+               restored.printer().jobs().empty() && restored.shell_registration().touches() == 0 &&
+               restored.images().touches() == 0,
            "restoring the last tabs never touches the history, the folder, autosave, the bell, "
-           "the clock, the printer nor the shell registration");
+           "the clock, the printer, the shell registration nor the preview images");
     Editing editing;
     hold_work(editing.files());
     auto &controller = editing.controller();
@@ -484,10 +488,11 @@ void verify_quiet_paths()
                editing.clipboard().html_reads() == 0 && editing.clipboard().reads() == 0 &&
                read_requests == 2 && editing.reads().requests().size() == read_requests &&
                editing.language_server().touches() == 0 && editing.wall_clock().calls() == 0 &&
-               editing.printer().jobs().empty() && editing.shell_registration().touches() == 0,
+               editing.printer().jobs().empty() && editing.shell_registration().touches() == 0 &&
+               editing.images().touches() == 0,
            "opening, switching, new tabs, saving and typing never touch the history, the folder, "
-           "autosave, the bell, the clipboard, the language server (lsp off), the clock nor the "
-           "printer, and only opening asks the read port");
+           "autosave, the bell, the clipboard, the language server (lsp off), the clock, the "
+           "printer nor the preview images, and only opening asks the read port");
     verify_quiet_explorer();
 }
 } // namespace

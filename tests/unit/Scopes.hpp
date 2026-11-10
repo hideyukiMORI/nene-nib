@@ -178,6 +178,8 @@ void verify_language_scope();
 // PreviewTests.cpp（ADR 0155・Markdown のプレビューの application の側）
 void verify_preview_contracts();
 void verify_preview_scope();
+void verify_preview_image_contracts();
+void verify_preview_image_scope();
 
 // PreviewTaskTests.cpp（ADR 0155 の追補 24〜26・タスクリストの切り替えの application の側）
 void verify_preview_task_scope();
