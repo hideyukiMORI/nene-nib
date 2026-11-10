@@ -1,6 +1,7 @@
 #include "EditorWindow.hpp"
 #include "EditorWindowDetail.hpp"
 
+#include "ClosingSteps.hpp"
 #include "DevicePixels.hpp"
 #include "EditorSettings.hpp"
 #include "EndSession.hpp"
@@ -345,7 +346,9 @@ LRESULT EditorWindow::lifetime_message(UINT message, WPARAM word, LPARAM data)
         if (word != FALSE)
         {
             // 確かめずに閉じるので、捨てた印は立てない（未保存の退避は残る・ADR 0137 の決定 5）。
-            remember_session(application::EndSession{application::SessionEnd::window_closed});
+            // leave と同じく先に窓を隠してから書く（ADR 0133 の追補 #1340）。
+            close_through(ClosingRoute::session_ends,
+                          application::EndSession{application::SessionEnd::window_closed});
         }
         return 0;
     case WM_DESTROY:
@@ -486,19 +489,47 @@ void EditorWindow::leave(application::SessionEnd reason)
     // 来る道（end_window と最後のタブの close_tab）は未保存のタブをすべて確かめ済み。ここで残る
     // 未保存は使う人が「いいえ」と答えて捨てたもの（ADR 0137 の決定 5）。描画を失った後に箱を
     // 出せなかったタブがあれば、捨てたことにしない（ADR 0133 の追補 #1282）。
-    remember_session(application::EndSession{
-        .reason = reason,
-        .unsaved_discarded =
-            !unsaved_kept_ &&
-            application::next_unsaved_tab(controller_.documents(), 0).has_value()});
-    // 壊す窓に立てた OS の終了を止める理由は、ここで外す（ADR 0133 の決定 4）。確認を通り抜けたので
-    // 残る未保存は捨てると決めたもの。
-    if (shutdown_blocked_)
+    close_through(ClosingRoute::window_closes,
+                  application::EndSession{
+                      .reason = reason,
+                      .unsaved_discarded =
+                          !unsaved_kept_ &&
+                          application::next_unsaved_tab(controller_.documents(), 0).has_value()});
+}
+
+void EditorWindow::close_through(ClosingRoute route, const application::EndSession &intent)
+{
+    for (const ClosingStep step : closing_steps(route))
     {
-        static_cast<void>(ShutdownBlockReasonDestroy(window_));
-        shutdown_blocked_ = false;
+        close_step(step, intent);
     }
-    DestroyWindow(window_);
+}
+
+void EditorWindow::close_step(ClosingStep step, const application::EndSession &intent)
+{
+    switch (step)
+    {
+    case ClosingStep::hide_window:
+        // 書き込みを待つ間に窓とタスクバーのボタンを残さない。子の覆い窓も一緒に消える。
+        ShowWindow(window_, SW_HIDE);
+        return;
+    case ClosingStep::remember_session:
+        remember_session(intent);
+        return;
+    case ClosingStep::release_session_block:
+        // 壊す窓に立てた OS の終了を止める理由は、書き終えてから外す（ADR 0133 の決定 4）。確認を
+        // 通り抜けたので残る未保存は捨てると決めたもの。
+        if (shutdown_blocked_)
+        {
+            static_cast<void>(ShutdownBlockReasonDestroy(window_));
+            shutdown_blocked_ = false;
+        }
+        return;
+    case ClosingStep::destroy_window:
+        DestroyWindow(window_);
+        return;
+    }
+    std::unreachable();
 }
 
 LRESULT EditorWindow::query_session_end()

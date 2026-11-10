@@ -39,4 +39,6 @@ void verify_diagnostic_waves();
 // matchparen の相手の括弧の枠（ADR 0164 の決定 4・#999）。
 void verify_matchparen_outline();
 void verify_save_question();
+// 閉じる手順の列（ADR 0133 の追補 #1340）。
+void verify_closing_steps();
 } // namespace nenenib::tests::ui
