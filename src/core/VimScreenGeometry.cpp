@@ -6,6 +6,7 @@
 #include "VimKeyTable.hpp"
 #include "VimRowRequest.hpp"
 #include "VimScreenKind.hpp"
+#include "VimScreenLine.hpp"
 #include "VimScreenRows.hpp"
 #include "VimScreenWindow.hpp"
 #include "VimScrollDirection.hpp"
@@ -124,15 +125,15 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
         return std::unexpected(window.error());
     }
     const auto &area = window.value();
-    const auto amount = std::min(vim_search_count(state) - 1, area.last.value - area.first.value);
+    // H と L は窓の大きさで切らない（Vim の nv_scroll・#1293）。寄せるのは settled だけ。
     auto target = area.middle;
     if (kind == VimScreenKind::top)
     {
-        target = LineNumber{area.first.value + amount};
+        target = vim_screen_top_line(area.first, vim_search_count(state), view.text.line_count());
     }
     if (kind == VimScreenKind::bottom)
     {
-        target = LineNumber{area.last.value - amount};
+        target = vim_screen_bottom_line(area.last, vim_search_count(state));
     }
     VimDisplayNavigation result{area.first, target};
     result.settled = vim_cursor_corrected(VimCursorWindow{area.first, area.below,
