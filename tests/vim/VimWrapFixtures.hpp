@@ -2,11 +2,11 @@
 // oracle: C:\Program Files\Vim\vim91\vim.exe - VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3
 // 2024 23:53:58)
 
-// wrap-fixtures.json: sha256 ea983b38467dc1eaee227907abe1607effc707079785d6843f8fc0cb59b84b6b
+// wrap-fixtures.json: sha256 c17ab99c82b8b73307d9166d0bdf77a8842bcec1765256fbbb16cb911c9b0900
 
 // measurement: sha256 b4bf3d1d1d97bdf6570cecc45ccb4d73f6b16c7d1678ea52a7c7136ed68b9c6d
 
-// shared oracle: sha256 9b5d3b0acc19b544d310970fe7cdb2b01ce91f1eda31f434762855517870e829
+// shared oracle: sha256 0c0b05bff3c2332715aa09a970cf3f6df4bc985716a48c52d094fca852c0598a
 
 #pragma once
 
@@ -16,7 +16,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 307> vim_wrap_fixtures{{
+constexpr std::array<VimFixture, 315> vim_wrap_fixtures{{
     {"wrap-top-00",
      "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
      "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
@@ -3041,5 +3041,61 @@ constexpr std::array<VimFixture, 307> vim_wrap_fixtures{{
      "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
      "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
      3, 4, "", "", VimViewportFixture{12, 1, 3, 12, 1, 6, 0, 0, 20, 0, 0}},
+    {"wrap-ctrl-e-pushes-the-caret",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     "<C-e>",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     2, 1, "", "", VimViewportFixture{6, 1, 1, 1, 2, 3, 20, 0}},
+    {"wrap-ctrl-e-count-over-a-tall-line",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     "2<C-e>",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     3, 1, "", "", VimViewportFixture{6, 1, 3, 1, 3, 3, 20, 0}},
+    {"wrap-ctrl-e-stops-at-the-last-line",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     "9<C-e>",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     12, 1, "", "", VimViewportFixture{6, 8, 12, 1, 12, 3, 20, 0}},
+    {"wrap-ctrl-e-visual",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     "v2<C-e>d",
+     "ccccccccc\n4dddddddddddddddddddddddd\n5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     1, 1, "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3", "v",
+     VimViewportFixture{6, 1, 1, 1, 1, 3, 20, 0}},
+    {"wrap-ctrl-y-tall-lines-push-the-caret",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     "<C-y>",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     4, 1, "", "", VimViewportFixture{6, 3, 7, 1, 2, 3, 20, 0}},
+    {"wrap-ctrl-y-count",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     "2<C-y>",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     7, 1, "", "", VimViewportFixture{6, 5, 10, 1, 3, 3, 20, 0}},
+    {"wrap-ctrl-y-keeps-the-column",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     "<C-y>",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     4, 3, "", "", VimViewportFixture{6, 3, 6, 3, 2, 3, 20, 0}},
+    {"wrap-ctrl-y-onto-the-tall-line",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     "3<C-y>",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     4, 1, "", "", VimViewportFixture{6, 5, 9, 1, 2, 3, 20, 0}},
 }};
 } // namespace nenenib::tests
