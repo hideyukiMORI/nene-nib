@@ -62,6 +62,9 @@ python eng/merge-pr.py <まとめ枝のPR番号> --expected-head <head SHA> --in
 
 最初のplanに表示された対象/head/件名/CI要否を確認する。planはCIを起動しない。実行前後でPRとrulesを読み直し、headの競合はGitHub側の`--match-head-commit`で拒否する。
 CI待機が切れた場合は表示された`--ci-run <ID>`を同じ指定に加えて結果を確認し、CIを重複起動しない。
+まとめ枝の道具が merge の後で止まったら（終了 2・`unfinished` の行）、手で PR を閉じる前に `unfinished` の `merged` `mergeCommit` `mergeBase` と `resume` の命令を読む（ADR 0021 追補 決定 9・#1345）。
+`resume` の命令（`--resume-after-merge --merge-base <sha>`）は merge も CI もせず、main の列が積んだ commit と全部一致するときだけ開いたままの元の PR を閉じる。まず `--execute` を外して照合だけ流す。
+続きの口も拒んだら（`Resume refused`）道具では閉じず、main を確かめてから手で閉じ、その結果を記録に残す。
 終了0だけで完了とはせず、同repoのPR番号/headがMERGEDでmergeCommitが得られたことを読み取る。未確認なら再試行せず成否不明として扱う。
 PR metadata/rulesの読取と統合は原子的ではないため、操作中にこれらを並行変更しない。競合時に自動復旧やqueueの取消は行わない。
 GitHub UIや直接のgh操作まで機械強制するものではなく、規約のplanned/不能の区別は維持する。
