@@ -220,6 +220,7 @@ class EditorController final
   private:
     // 意図の前に 1 意図ぶんだけの表示（失敗・報せ）を消す。keeps_message は報せを残す意図。
     void begin_intent(bool keeps_message);
+    void forget_unkept_marks(const EditorIntent &intent);
     // Ctrl+Tab の歩きの途中に歩きを続けない入口が来たら、写す前に確定する（ADR 0058 の決定 4）。
     // keeps_walk は歩きを続ける意図か。Vim の鍵は歩きを続けない。
     void settle_tab_walk_before(bool keeps_walk);
@@ -513,6 +514,7 @@ class EditorController final
     void release_explorer(const std::optional<core::FilePath> &released, std::size_t row);
     void click_explorer_row(std::size_t row);
     void double_click_explorer(std::size_t row);
+    void second_click_explorer(const core::FilePath &path);
     void open_explorer_folder(std::optional<std::size_t> row);
     void enter_explorer_row(std::optional<std::size_t> row);
     void collapse_explorer_row();
@@ -1004,8 +1006,10 @@ class EditorController final
     // 面の上で押した行の節の経路（決定 4・ADR 0056 の決定 9）。離したときに同じ節かを比べて消す。
     // 「…」の行と行の外を押したときは値なし（離しても何もしない）。
     std::optional<core::FilePath> explorer_pressed_;
-    // 直前の 1 回のクリックが効いた節の経路（決定 4 の改め #1388）。ダブルクリックの 2 打目がこの節
-    // なら、2 回読まず・2 回開閉しない。次の押しと 2 打目で消す。
+    // 直前の 1 回のクリックが効いた節の経路（決定 4 の改め #1388）。ダブルクリックの 2 打目は画面の
+    // 行を引き直さずにこの節として扱い、2 回読まず・2 回開閉しない。消すのは次の押し・2 打目・
+    // 面のマウス以外の使う人の操作（apply の入口の 1 か所）・面を消す / ルートを替える
+    // （sync_explorer）。
     std::optional<core::FilePath> explorer_clicked_;
     // 境をドラッグしている間の面の幅（DIP・ADR 0162 の追補 D78）。設定には離したときにだけ書く。
     std::optional<std::int32_t> explorer_dragged_;

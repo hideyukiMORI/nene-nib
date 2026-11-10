@@ -9,6 +9,7 @@
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
 #include "Composition.hpp"
+#include "DisplayForm.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -28,6 +29,7 @@
 #include "FolderEntry.hpp"
 #include "FolderListingKind.hpp"
 #include "FolderProgress.hpp"
+#include "GiantLine.hpp"
 #include "ImeStance.hpp"
 #include "InsertText.hpp"
 #include "NewTab.hpp"
@@ -41,8 +43,10 @@
 #include "ScriptedFolders.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScrollExplorer.hpp"
+#include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
 #include "SettingsFailure.hpp"
+#include "SettleRecentTab.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "ToggleExplorer.hpp"
@@ -364,8 +368,8 @@ void verify_click_opens_file()
            "a click on a file that cannot be opened leaves one notice line and the focus");
 }
 
-// ダブルクリック（#1388）。1 打目のクリックで開いているので、2
-// 打目は焦点を本文へ移すだけで読まない。
+// ダブルクリック（#1388）。1 打目のクリックで開いているので、2 打目は焦点を本文へ移すだけ。
+// 2 回は読まない。
 void verify_double_click_reads_once()
 {
     Editing editing(shown_at(project));
@@ -423,6 +427,119 @@ void verify_folder_double_click_toggles_once()
     expect(printed(reopened) == ".git/+~;src/-;.main.cpp;README.md;sel 1 first 0 focus 1",
            "a single click opens the folder again");
     expect(editing.reads().requests().empty(), "clicking folders reads no file");
+}
+
+// ファイル path を読んだ回数（読みの port の要求の数）。
+[[nodiscard]] std::size_t reads_of(Editing &editing, std::string_view path)
+{
+    std::size_t count = 0;
+    for (const auto &request : editing.reads().requests())
+    {
+        count += request.path == path_of(path) ? 1U : 0U;
+    }
+    return count;
+}
+
+// 2 打目の 1 通（DBLCLK と離し）。
+app::EditorFrame second_press(Editing &editing, std::size_t row)
+{
+    static_cast<void>(
+        editing.controller().apply_frame(PointExplorer{row, ExplorerPointing::double_click}));
+    return editing.controller().apply_frame(PointExplorer{row, ExplorerPointing::released});
+}
+
+// 1 打目と 2 打目の間に裏の列挙で上に行が足され、2 打目の画面の行が別の節を指しても、2 打目は
+// 1 打目の節として扱う（レビュー V-1391 の M-1 の (b)）。
+void verify_double_click_across_arrival()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    editing.files().hold_at("C:\\proj\\README.md", Bytes{"read me"});
+    editing.files().hold_at("C:\\proj\\src\\main.cpp", Bytes{"int main"});
+    static_cast<void>(clicked(editing, 1));
+    static_cast<void>(clicked(editing, 2));
+    static_cast<void>(
+        deliver(editing, {entry_of("C:\\proj\\src\\main.cpp", false)}, FolderProgress::complete));
+    const auto second = second_press(editing, 2);
+    expect(printed(second) == ".git/+~;src/-;.main.cpp;README.md;sel 3 first 0 focus 0",
+           "a second press after children arrived above stays on the clicked file");
+    expect(second.document.title.text() == "README.md" &&
+               reads_of(editing, "C:\\proj\\README.md") == 1 &&
+               reads_of(editing, "C:\\proj\\src\\main.cpp") == 0,
+           "the clicked file is read once and the row moved under the pointer is not read");
+}
+
+// 末尾までスクロールした面で開いたフォルダをダブルクリックすると、1 打目の畳みで先頭が切り詰め
+// られて行が画面上でずれる。2 打目は 1 打目の節として扱い、ほかの行を開閉しない（M-1 の (a)）。
+void verify_double_click_collapse_at_bottom()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    auto &controller = editing.controller();
+    static_cast<void>(clicked(editing, 1));
+    static_cast<void>(
+        deliver(editing, {entry_of("C:\\proj\\src\\main.cpp", false)}, FolderProgress::complete));
+    // 面は窓の 4 行 − ルート名の 1 行 = 3 行。見えている行は 4 行なので、末尾の先頭は 1。
+    applied(controller, app::VisibleLines{10, {}, 0, 0, 4});
+    const auto bottom = controller.apply_frame(app::ScrollExplorer{100});
+    expect(printed(bottom) == "src/-;.main.cpp;README.md;sel 1 first 1 focus 1",
+           "the panel is scrolled to its last rows with the open folder on the first line");
+    const auto requests = editing.folders().entry_requests();
+    static_cast<void>(clicked(editing, 1));
+    const auto collapsed = controller.frame();
+    expect(printed(collapsed) == ".git/+~;src/+;README.md;sel 1 first 0 focus 1",
+           "the first press closes the folder and the first row is pulled up");
+    // 2 打目は同じ画面の点。先頭が 0 になったので、画面の行は .git を指す。
+    const auto second = second_press(editing, 0);
+    expect(printed(second) == printed(collapsed) &&
+               editing.folders().entry_requests() == requests && editing.reads().requests().empty(),
+           "the second press closes nothing else, opens nothing and reads no file");
+}
+
+// 1 打目と 2 打目の間に使う人の操作（タブの切り替え）が入ったら、2 打目は画面の行を引いて 1 回の
+// クリックとして効かせ、そのファイルをアクティブにする。読みは増えない（レビュー V-1391 の R-1）。
+void verify_double_click_after_tab_switch()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    editing.files().hold_at("C:\\proj\\README.md", Bytes{"read me"});
+    editing.files().hold_at("C:\\work\\b.txt", Bytes{"bee"});
+    auto &controller = editing.controller();
+    applied(controller, app::OpenDocument{path_of("C:\\work\\b.txt")});
+    const auto opened = clicked(editing, 2);
+    expect(opened.document.title.text() == "README.md" && opened.tabs.size() == 2,
+           "a click opens the file in a second tab");
+    applied(controller, app::WalkRecentTab{core::TabStep::next});
+    const auto walked = controller.apply_frame(app::SettleRecentTab{});
+    expect(walked.document.title.text() == "b.txt", "Ctrl+Tab goes back to the other tab");
+    const auto second = second_press(editing, 2);
+    expect(second.document.title.text() == "README.md" && second.tabs.size() == 2 &&
+               reads_of(editing, "C:\\proj\\README.md") == 1 &&
+               printed(second) == ".git/+~;src/+;README.md;sel 2 first 0 focus 0",
+           "a second press after a tab switch makes the clicked file active without reading it");
+}
+
+// 1 打目で開いたファイルが巨大な行の問いを出したとき（ADR 0140 の決定 2）。窓は同じ配達の中で
+// モーダルに聞いて答えを意図で返すので、2 打目は答えの後に来る。2 打目は読み直さず、もう一度
+// 聞かない（レビュー V-1391 の F-1）。
+void verify_double_click_after_question()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    const std::string giant = "head\n" + std::string(core::giant_line_threshold + 1, 'x') + "\n";
+    editing.files().hold_at("C:\\proj\\README.md", Bytes{giant});
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(PointExplorer{2, ExplorerPointing::pressed}));
+    const auto asked = controller.apply(PointExplorer{2, ExplorerPointing::released});
+    expect(asked.display_question, "a click on a giant line file raises the question");
+    static_cast<void>(controller.apply(app::SelectDisplay{core::DisplayForm::text}));
+    const auto pressed = controller.apply(PointExplorer{2, ExplorerPointing::double_click});
+    const auto second = controller.apply_frame(PointExplorer{2, ExplorerPointing::released});
+    expect(!pressed.display_question && second.document.title.text() == "README.md" &&
+               reads_of(editing, "C:\\proj\\README.md") == 1 && second.tabs.size() == 1 &&
+               second.display == core::DisplayForm::text &&
+               printed(second) == ".git/+~;src/+;README.md;sel 2 first 0 focus 0",
+           "a second press after the answer reads nothing, asks nothing and gives the focus");
 }
 
 // 押してから離すまでに子が届いて行がずれても、押した節と離した節が違えば何もしない（ADR 0056 の
@@ -914,6 +1031,10 @@ void verify_explorer_contracts()
     verify_click_opens_file();
     verify_double_click_reads_once();
     verify_folder_double_click_toggles_once();
+    verify_double_click_across_arrival();
+    verify_double_click_collapse_at_bottom();
+    verify_double_click_after_tab_switch();
+    verify_double_click_after_question();
     verify_scroll();
     verify_panel_rows();
     verify_panel_rows_from_window();

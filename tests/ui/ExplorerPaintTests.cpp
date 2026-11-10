@@ -346,11 +346,10 @@ void verify_chosen_width_pixels(SoftwareTarget &target, IDWriteFactory2 &factory
                pixel_is(pixels, 404, 30, core::RgbColor{0, 0, 0}),
            "the panel is painted at the chosen width with its border at the right edge");
 }
-// 面の行の上の左ボタン（ADR 0162 の決定 4 の改め・#1388）。窓は面の上の速い 2 回の押しを OS の
-// 「押す → 離す → DBLCLK → 離す」のまま pressed → released → double_click → released と送り、2
-// 打目の 意味（読まない・開閉しない）は application の契約
-// --explorer（verify_double_click_reads_once・
-// verify_folder_double_click_toggles_once）が同じ列で決める。押していない離しは送らない。
+// 面の行の上の左ボタン（ADR 0162 の決定 4 の改め・#1388）。窓は面の上の速い 2 回の押しを、OS の
+// 「押す → 離す → DBLCLK → 離す」のまま pressed → released → double_click → released と送る。
+// 押していない離しは送らない。2 打目の意味（読まない・開閉しない）は application が決める。
+// 契約は --explorer の verify_double_click_reads_once と verify_folder_double_click_toggles_once。
 void verify_click_messages()
 {
     using application::ExplorerPointing;

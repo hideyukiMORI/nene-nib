@@ -216,8 +216,7 @@ void EditorController::accept(const PointExplorer &intent)
     {
     case ExplorerPointing::pressed:
         // 押した行は節の経路で覚える（押してから離すまでに子が届いて行がずれても取り違えない）。
-        // 新しい押しは前のクリックの印を消す（ダブルクリックの 2
-        // 打目と組むのは直前のクリックだけ）。
+        // 新しい押しは前のクリックの印を消す。2 打目と組むのは直前のクリックだけ。
         explorer_pressed_ = path_at(tree, rows, intent.row);
         explorer_clicked_.reset();
         focus_explorer(true);
@@ -245,39 +244,63 @@ void EditorController::release_explorer(const std::optional<core::FilePath> &rel
     }
 }
 
-// ダブルクリックの 2 打目（決定 4 の改め #1388）。OS は「押す → 離す → DBLCLK → 離す」と送るので、
-// 1 打目は 1 回のクリックとして既に効いている（ファイルは開いた・フォルダは開閉した）。2 打目は
-// 1 打目のクリックが同じ節に効いていれば、ファイルなら焦点を本文へ移すだけ（2 回読まない）、
-// フォルダなら何もしない（開いて閉じる、にしない）。1 打目が効いていなければ（押した行と離した行が
-// 違った・境の押しの後など）1 回のクリックとして効かせ、ファイルなら焦点を本文へ移す（Enter
-// と同じ）。 2
-// 打目の後の離しは押した印が無いので何もしない。「…」の行は選ぶだけ・行の外は何もしない。
+// ダブルクリックの 2 打目（決定 4 の改め #1388）。OS は「押す → 離す → DBLCLK → 離す」と送る。
+// 1 打目は 1 回のクリックとして既に効いている（ファイルは開いた・フォルダは開閉した）。
+// DBLCLK は 1 打目の押しから数 px の中でしか来ないので、2 打目は 1 打目と同じ節を指す。
+// 1 打目が効いた節（explorer_clicked_）があれば、画面の行を引き直さずにその節として扱う
+// （second_click_explorer）。1 打目の開閉や裏で届いた子で行が画面上でずれても、別の行を押さない
+// （レビュー V-1391 の M-1）。行を引くのは効いた節が無いときだけ（押した行と離した行が違った・
+// 間に別の操作が入った）で、1 回のクリックとして効かせ、ファイルなら焦点を本文へ移す（Enter と
+// 同じ）。「…」の行は選ぶだけ・行の外は何もしない。2 打目の後の離しは押した印が無いので
+// 何もしない。
 void EditorController::double_click_explorer(std::size_t row)
 {
     const auto clicked = std::exchange(explorer_clicked_, std::nullopt);
+    if (clicked.has_value())
+    {
+        second_click_explorer(clicked.value());
+        return;
+    }
     const auto rows = state_.explorer().tree.visible_rows();
     if (row >= rows.size())
     {
         return;
     }
-    const auto path = path_at(state_.explorer().tree, rows, row);
-    const bool folder = rows[row].folder;
-    if (!path.has_value())
-    {
-        select_explorer_row(row);
-        return;
-    }
-    if (path != clicked)
-    {
-        click_explorer_row(row);
-    }
-    else
-    {
-        select_explorer_row(row);
-    }
-    if (!folder)
+    const bool file = !rows[row].more && !rows[row].folder;
+    click_explorer_row(row);
+    if (file)
     {
         focus_explorer(false);
+    }
+}
+
+// 1 打目が効いた節 path への 2 打目。節が見えていれば選ぶ。フォルダは何もしない（開いて閉じる、
+// にしない）。ファイルは焦点を本文へ移し、開いたタブがあれば open_listed の 1 本でそのタブを
+// アクティブにする（開いていれば切り替えるだけで読まない）。タブが無いのは、読み中（揃えば
+// アクティブになる・open_listed も何もしない）か、1 打目で開けなかったとき（試し直さない・
+// 知らせは 1 打目の 1 行だけ）。
+void EditorController::second_click_explorer(const core::FilePath &path)
+{
+    const auto &tree = state_.explorer().tree;
+    const auto node = tree.node_of(path);
+    if (!node.has_value())
+    {
+        return;
+    }
+    const bool folder = tree.nodes()[node.value()].folder;
+    const auto row = row_of(tree, tree.visible_rows(), path);
+    if (row.has_value())
+    {
+        select_explorer_row(row.value());
+    }
+    if (folder)
+    {
+        return;
+    }
+    focus_explorer(false);
+    if (open_tab_of(path).has_value())
+    {
+        open_listed(path, std::nullopt);
     }
 }
 
@@ -432,10 +455,9 @@ void EditorController::select_explorer_row(std::size_t row)
     state_ = state_.with_explorer(followed(std::move(explorer), rows, explorer_page()));
 }
 
-// 1 回のクリック（決定 4 の改め #1388・VS Code / Cursor
-// と同じ手触り）。選んで、フォルダなら開閉し、 ファイルなら一覧から開くのと同じ open_listed
-// の道で開く（焦点は面に残す・失敗は 1 行・履歴は
-// 触らない・既に開いていればそのタブへ切り替える）。「…」の行は選ぶだけ。
+// 1 回のクリック（決定 4 の改め #1388）。VS Code や Cursor と同じ手触り。選んで、フォルダなら
+// 開閉する。ファイルなら一覧から開くのと同じ open_listed の道で開く（焦点は面に残す・失敗は
+// 1 行・履歴は触らない・既に開いていればそのタブへ切り替える）。「…」の行は選ぶだけ。
 void EditorController::click_explorer_row(std::size_t row)
 {
     select_explorer_row(row);
@@ -476,8 +498,8 @@ void EditorController::open_explorer_folder(std::optional<std::size_t> row)
     request_explorer_folder();
 }
 
-// Enter（決定 4・6）。フォルダは開き、ファイルは一覧から開くのと同じ open_listed
-// の 道で開いて本文へ焦点を戻す（面は残す・失敗は 1 行・履歴は触らない）。
+// Enter（決定 4・6）。フォルダは開く。ファイルは一覧から開くのと同じ open_listed の道で開いて、
+// 本文へ焦点を戻す（面は残す・失敗は 1 行・履歴は触らない）。
 void EditorController::enter_explorer_row(std::optional<std::size_t> row)
 {
     const ExplorerState &explorer = state_.explorer();
@@ -529,14 +551,17 @@ void EditorController::sync_explorer()
                           std::nullopt, explorer.focused, 0};
         explorer_folder_.reset();
         explorer_pressed_.reset();
+        explorer_clicked_.reset();
         changed = true;
     }
     // ドラッグの途中で面が閉じたら（ToggleExplorer・`:set noexplorer` など、どの道でも設定の 1 本
     // persist_settings からここへ来る）、ドラッグは終わりで、ドラッグの幅は捨てて設定に書かない
     // （Issue #1380 の設計席の決め・ADR 0162 の追補 D78）。次に開いたときは覚えた幅。
+    // 面が消えたら、ダブルクリックの 2 打目と組む印も捨てる（#1388・レビュー V-1391 の R-1）。
     if (!settings.explorer)
     {
         explorer_dragged_.reset();
+        explorer_clicked_.reset();
     }
     if (!settings.explorer && explorer.focused)
     {
