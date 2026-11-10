@@ -18,6 +18,7 @@ using detail::aligned_screen;
 using detail::block_changed;
 using detail::block_inserted;
 using detail::block_operated;
+using detail::cancelled;
 using detail::case_changed;
 using detail::cased_block;
 using detail::changed;
@@ -36,6 +37,7 @@ using detail::landed_column;
 using detail::landing_of;
 using detail::line_of;
 using detail::moved_or_failed;
+using detail::range_shift_fits;
 using detail::removed_exactly;
 using detail::requested_layout;
 using detail::requested_viewport;
@@ -200,7 +202,13 @@ namespace
         return case_changed(state, view.text, range, operation);
     case VimOperator::shift_right:
     case VimOperator::shift_left:
-        // VISUAL の回数は字下げを動かす回数（Vim の op_shift の amount）。
+        // VISUAL の回数は字下げを動かす回数（Vim の op_shift の amount）。文書の上限を超えるなら
+        // 作る前に断る（#1341）。
+        if (!range_shift_fits(view.text, range, ShiftBy{operation, count_of(state.count)},
+                              view.document_limit))
+        {
+            return failed(cancelled(state), VimRepeatFailure::too_large);
+        }
         return shifted(state, view.text, range, ShiftBy{operation, count_of(state.count)});
     }
     std::unreachable();

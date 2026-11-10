@@ -1,8 +1,10 @@
 #include "VimStepDetail.hpp"
 
+#include "LineEnding.hpp"
 #include "Utf8.hpp"
 #include "VimPutSide.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <expected>
 #include <optional>
@@ -28,15 +30,35 @@ namespace detail
 {
 // ---------------------------------------------------------------- p / P（決定 4）
 
-[[nodiscard]] std::expected<std::string, VimRepeatFailure> repeated(std::string_view body,
-                                                                    std::size_t count)
+[[nodiscard]] std::size_t count_room(const TextBuffer &text, std::size_t limit) noexcept
+{
+    const std::size_t size = text.size_bytes();
+    return size < limit ? limit - size : 0;
+}
+
+[[nodiscard]] std::size_t written_bytes(std::string_view body, const TextBuffer &text) noexcept
+{
+    const auto newlines = static_cast<std::size_t>(std::ranges::count(body, '\n'));
+    return body.size() + newlines * (newline_of(text.line_ending()).size() - single_step);
+}
+
+[[nodiscard]] bool fits_repeated(std::size_t piece, std::size_t count, std::size_t room) noexcept
+{
+    return piece == 0 || count <= room / piece;
+}
+
+// Vim は結果がメモリに入るかぎり貼る（`999999999p` は 1 GB の行を作り、`yy999999999p` は
+// 止まらない・実測）。Nib は編集の後の文書が開ける上限を超える回数を、確保の前に閉じた失敗で断る
+// （#1341）。CRLF の文書では本文の改行を 2 バイトに数える（controller が判定の後で写すため）。
+[[nodiscard]] std::expected<std::string, VimRepeatFailure>
+repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::size_t limit)
 {
     std::string result;
     if (body.empty())
     {
         return result;
     }
-    if (count > result.max_size() / body.size())
+    if (!fits_repeated(written_bytes(body, text), count, count_room(text, limit)))
     {
         return std::unexpected(VimRepeatFailure::too_large);
     }
