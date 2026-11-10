@@ -21,6 +21,7 @@ namespace nenenib::core
 using detail::characters_between;
 using detail::context_marked;
 using detail::exclusive_range;
+using detail::operator_start;
 using detail::opposite;
 using detail::performed;
 using detail::resolved_count;
@@ -118,7 +119,8 @@ namespace
         exclusive_range(view.text, characters_between(request.anchor, destination));
     // 検索の移動の削除は 1 行の中でも `"1` へ行く（ADR 0050 の決定 4）。
     range.numbered = VimNumberedRule::always;
-    return performed(state, view.text, request.anchor, range);
+    // 後ろ向きで行単位になった y は検索の当たりに着く（Vim の oap->start・#1294）。
+    return performed(state, view.text, operator_start(request.anchor, destination), range);
 }
 
 // 検索の鍵は `:nohlsearch` で止めた強調を戻す（ADR 0037 の決定 1）。見つからなくても（E486）、

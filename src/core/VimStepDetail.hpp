@@ -142,6 +142,7 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
 [[nodiscard]] VimOperator operation_of(const VimState &state) noexcept;
 [[nodiscard]] VimStep performed(const VimState &state, const TextBuffer &text, Offset caret,
                                 const VimMotionRange &range);
+[[nodiscard]] Offset operator_start(Offset before, Offset landing) noexcept;
 [[nodiscard]] VimState finished_input_wait(const VimState &state);
 [[nodiscard]] VimStep completed_character_search(const VimState &state, const VimEditorView &view,
                                                  VimCharacterSearch search,
