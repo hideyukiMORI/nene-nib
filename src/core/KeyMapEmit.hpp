@@ -19,6 +19,9 @@ namespace nenenib::core
 // remaps は ends と同じ並びで、単位ごとに右辺を 1 段引き直す鍵の始まりの位置（`map` の右辺の頭か、
 // 右辺が左辺で始まるならその後・`noremap` の右辺と表に無い鍵は単位の終わり）。呼び手はそこから
 // 単位の終わりまでを 1 鍵ごとに流す時点のモードで rhs_unit_step に引かせる（#1276）。
+// mapped は ends と同じ並びで、単位が表の行に当たったか（偽は表に無い 1 鍵）。呼び手は当たった
+// 単位の鍵を右辺の鍵（マクロに積まない）として流し、録画がその単位の前にも後にも立っていれば
+// 打った左辺（reads の前の単位の終わりからこの単位まで）を録画に積む（#1312）。
 struct KeyMapEmit
 {
     std::vector<VimKey> keys;
@@ -26,5 +29,6 @@ struct KeyMapEmit
     std::vector<std::size_t> ends;
     std::vector<std::size_t> reads;
     std::vector<std::size_t> remaps;
+    std::vector<bool> mapped;
 };
 } // namespace nenenib::core

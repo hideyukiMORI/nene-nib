@@ -16,6 +16,8 @@
 #include "KeyMapPending.hpp"
 #include "MapTimeout.hpp"
 #include "MapTimer.hpp"
+#include "ReplayLevel.hpp"
+#include "ScopedValue.hpp"
 #include "ScrollFollow.hpp"
 #include "SearchLine.hpp"
 #include "SearchPreview.hpp"
@@ -43,6 +45,7 @@
 #include "VimRemoveBlock.hpp"
 #include "VimReplaceBlock.hpp"
 #include "VimReplay.hpp"
+#include "VimReplayKind.hpp"
 #include "VimRoundTrip.hpp"
 #include "VimSearch.hpp"
 #include "VimSearchDirection.hpp"
@@ -58,6 +61,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <optional>
 #include <span>
@@ -443,19 +447,58 @@ EditorController::delivered_units(const core::KeyMapEmit &emitted,
     const std::span<const core::VimKey> keys{emitted.keys};
     std::optional<core::VimRepeatFailure> failure;
     std::size_t begin = 0;
+    std::size_t read = 0;
     for (std::size_t unit = 0; unit < emitted.ends.size(); ++unit)
     {
         const std::size_t remap = emitted.remaps.at(unit);
-        failure = delivered_unit(keys.subspan(begin, remap - begin),
-                                 keys.subspan(remap, emitted.ends.at(unit) - remap));
+        failure = typed_unit(
+            emitted.mapped.at(unit), typed.subspan(read, emitted.reads.at(unit) - read),
+            keys.subspan(begin, remap - begin), keys.subspan(remap, emitted.ends.at(unit) - remap));
         begin = emitted.ends.at(unit);
-        const auto rest = typed.subspan(emitted.reads.at(unit));
+        read = emitted.reads.at(unit);
+        const auto rest = typed.subspan(read);
         if (!rest.empty() && key_map_mode(rest.front()) != mode)
         {
             return typed_again(rest);
         }
     }
     return failure;
+}
+
+// 表に当たった単位の鍵は右辺の鍵（mapped）として流し、engine はマクロに積まない。代わりに打った
+// 左辺を、録画が単位の前に立っていれば右辺の最初の鍵の後で積む。最初の鍵が止める `q` なら左辺も
+// 録らず（R14・`nmap , q`）、2 つ目以降の `q` なら左辺は残る（`nmap Z jq` の `qajZ` は `jZ`）。
+// 右辺が録画を始めたら左辺は録らない（R15・Vim の gotchars は左辺を読んだ時点で録る・ADR 0176 の
+// 追補 32・33・#1312）。
+std::optional<core::VimRepeatFailure>
+EditorController::typed_unit(bool mapped, std::span<const core::VimKey> lhs,
+                             std::span<const core::VimKey> plain,
+                             std::span<const core::VimKey> remapped)
+{
+    if (!mapped)
+    {
+        return delivered_unit(plain, remapped);
+    }
+    using HeldLhs = std::optional<std::span<const core::VimKey>>;
+    const ScopedValue<core::VimKeySource> source{unit_source_, core::VimKeySource::mapped};
+    const ScopedValue<HeldLhs> held{
+        held_lhs_, state_.vim().macro_recording.has_value() ? HeldLhs{lhs} : HeldLhs{}};
+    auto failure = delivered_unit(plain, remapped);
+    recorded_held_lhs();
+    return failure;
+}
+
+void EditorController::recorded_held_lhs()
+{
+    if (!held_lhs_.has_value())
+    {
+        return;
+    }
+    const auto lhs = held_lhs_.value();
+    held_lhs_ = std::nullopt;
+    auto vim = state_.vim();
+    core::vim_macro_typed(vim, lhs);
+    state_ = state_.with_vim(std::move(vim));
 }
 
 // plain はそのまま、remapped は 1 鍵ごとに流す時点のモードで 1 段だけ引き直して流す（Vim は
@@ -487,6 +530,7 @@ EditorController::delivered_keys(std::span<const core::VimKey> keys)
     for (const core::VimKey &key : keys)
     {
         auto failure = deliver_vim_key(key);
+        recorded_held_lhs();
         if (failure.has_value())
         {
             return failure;
@@ -1150,33 +1194,161 @@ void EditorController::perform(const core::VimReplay &effect)
     }
     if (replay_depth_.has_value())
     {
-        queue_nested_replay(effect.keys, replay_depth_.value() + 1);
+        queue_nested_replay(effect.keys, replay_depth_.value() + 1, effect.kind);
         return;
     }
     replay_history_ = state_.history();
     replay_text_ = state_.text();
     vim_top_kept_ = false;
     replay_queue_.assign(effect.keys.begin(), effect.keys.end());
-    replay_depths_.assign(effect.keys.size(), 1);
-    while (!replay_queue_.empty())
+    replay_levels_.assign(effect.keys.size(), ReplayLevel{1U, effect.kind});
+    // 表は再生を始めるときに 1 回だけ見る（表が空なら鍵ごとに表を見ない・#1312）。
+    if (key_map_.mappings.empty())
     {
-        const core::VimKey key = replay_queue_.front();
-        replay_depth_ = replay_depths_.front();
-        replay_queue_.pop_front();
-        replay_depths_.pop_front();
-        const auto failure = deliver_vim_key(key);
-        if (failure.has_value())
-        {
-            replay_failure_ = failure;
-            replay_queue_.clear();
-            replay_depths_.clear();
-        }
+        replayed_plain_queue();
+    }
+    else
+    {
+        replayed_mapped_queue();
     }
     replay_depth_ = std::nullopt;
     close_replayed_unit();
     replay_history_ = std::nullopt;
     replay_text_ = std::nullopt;
     state_ = state_.with_history(state_.history().sealed());
+}
+
+std::size_t EditorController::replay_waits() const noexcept
+{
+    return replay_waits_;
+}
+
+void EditorController::replayed_plain_queue()
+{
+    while (!replay_queue_.empty())
+    {
+        const core::VimKey key = replay_queue_.front();
+        replay_depth_ = replay_levels_.front().depth;
+        replay_queue_.pop_front();
+        replay_levels_.pop_front();
+        const auto failure = deliver_vim_key(key);
+        if (failure.has_value())
+        {
+            replay_failure_ = failure;
+            replay_queue_.clear();
+            replay_levels_.clear();
+        }
+    }
+}
+
+// `@` の鍵は流す時点の表で引く（Vim の do_execreg は REMAP_YES・ADR 0176 の追補 33・#1312）。
+// 待ちは再生の中だけで持ち、列が尽きたらタイマーを待たずに流す。失敗した鍵で列も待ちも捨てる。
+void EditorController::replayed_mapped_queue()
+{
+    while (!replay_queue_.empty() || !replay_pending_.empty())
+    {
+        const auto failure = replay_queue_.empty() ? flushed_replay() : replayed_front();
+        if (failure.has_value())
+        {
+            replay_failure_ = failure;
+            replay_queue_.clear();
+            replay_levels_.clear();
+            replay_pending_.clear();
+        }
+    }
+}
+
+// `.` の鍵は替えた後の鍵なので引かない（Vim の start_redo は REMAP_NONE）。前に `@` の鍵が
+// 待っていれば先に流す。
+std::optional<core::VimRepeatFailure> EditorController::replayed_front()
+{
+    const core::VimKey key = replay_queue_.front();
+    const ReplayLevel level = replay_levels_.front();
+    replay_depth_ = level.depth;
+    replay_queue_.pop_front();
+    replay_levels_.pop_front();
+    switch (level.kind)
+    {
+    case core::VimReplayKind::repeat:
+        if (!replay_pending_.empty())
+        {
+            requeued(std::span<const core::VimKey>{&key, 1U}, level.kind);
+            return flushed_replay();
+        }
+        return deliver_vim_key(key);
+    case core::VimReplayKind::macro:
+        return replayed_macro_key(key);
+    }
+    std::unreachable();
+}
+
+std::optional<core::VimRepeatFailure> EditorController::replayed_macro_key(const core::VimKey &key)
+{
+    const auto mode = key_map_mode(replay_pending_.empty() ? key : replay_pending_.front());
+    if (!mode.has_value())
+    {
+        if (replay_pending_.empty())
+        {
+            return deliver_vim_key(key);
+        }
+        requeued(std::span<const core::VimKey>{&key, 1U}, core::VimReplayKind::macro);
+        return flushed_replay();
+    }
+    auto step = core::key_map_step(key_map_, mode.value(), replay_pending_, key);
+    return std::visit([this, &key](auto &&value)
+                      { return this->replayed_step(std::move(value), key); }, std::move(step));
+}
+
+std::optional<core::VimRepeatFailure> EditorController::replayed_step(core::KeyMapPass /*pass*/,
+                                                                      const core::VimKey &key)
+{
+    return deliver_vim_key(key);
+}
+
+std::optional<core::VimRepeatFailure>
+EditorController::replayed_step(core::KeyMapPending /*pending*/, const core::VimKey &key)
+{
+    replay_pending_.push_back(key);
+    ++replay_waits_;
+    return std::nullopt;
+}
+
+std::optional<core::VimRepeatFailure> EditorController::replayed_step(core::KeyMapEmit emitted,
+                                                                      const core::VimKey &key)
+{
+    std::vector<core::VimKey> typed = std::exchange(replay_pending_, {});
+    typed.push_back(key);
+    return replayed_unit(emitted, typed);
+}
+
+std::optional<core::VimRepeatFailure>
+EditorController::replayed_unit(const core::KeyMapEmit &emitted,
+                                std::span<const core::VimKey> typed)
+{
+    requeued(typed.subspan(emitted.reads.front()), core::VimReplayKind::macro);
+    const std::span<const core::VimKey> keys{emitted.keys};
+    const std::size_t remap = emitted.remaps.front();
+    return delivered_unit(keys.first(remap), keys.subspan(remap, emitted.ends.front() - remap));
+}
+
+std::optional<core::VimRepeatFailure> EditorController::flushed_replay()
+{
+    const std::vector<core::VimKey> waited = std::exchange(replay_pending_, {});
+    const auto mode = key_map_mode(waited.front());
+    if (!mode.has_value())
+    {
+        requeued(std::span<const core::VimKey>{waited}.subspan(1), core::VimReplayKind::macro);
+        return deliver_vim_key(waited.front());
+    }
+    return replayed_unit(core::key_map_flush(key_map_, mode.value(), waited), waited);
+}
+
+void EditorController::requeued(std::span<const core::VimKey> keys, core::VimReplayKind kind)
+{
+    replay_queue_.insert(replay_queue_.begin(), keys.begin(), keys.end());
+    replay_levels_.insert(
+        replay_levels_.begin(), keys.size(),
+        ReplayLevel{static_cast<std::uint32_t>(replay_depth_.value_or(1U)), kind});
 }
 
 void EditorController::close_replayed_unit()
@@ -1198,18 +1370,21 @@ void EditorController::reopen_replayed_unit()
     replay_text_ = state_.text();
 }
 
-void EditorController::queue_nested_replay(const std::vector<core::VimKey> &keys, std::size_t depth)
+void EditorController::queue_nested_replay(const std::vector<core::VimKey> &keys, std::size_t depth,
+                                           core::VimReplayKind kind)
 {
     if (depth > core::vim_replay_depth_limit)
     {
         replay_queue_.clear();
-        replay_depths_.clear();
+        replay_levels_.clear();
+        replay_pending_.clear();
         state_ = state_.with_command_message(
             core::DisplayText::parse("E132: Macro depth is higher than 100").value());
         return;
     }
     replay_queue_.insert(replay_queue_.begin(), keys.begin(), keys.end());
-    replay_depths_.insert(replay_depths_.begin(), keys.size(), depth);
+    replay_levels_.insert(replay_levels_.begin(), keys.size(),
+                          ReplayLevel{static_cast<std::uint32_t>(depth), kind});
 }
 
 // 再生は命令ごとに編集を積むが、`[count]@a` と `.` の全体を 1 回の `u` で戻すのが Vim と同じ
@@ -1307,7 +1482,7 @@ EditorController::measured_vim_step(const VimStepSource &source)
     // 表示領域は engine が求めたときだけ渡す（ADR 0129 の決定 2）。追従を解決するのはその時だけ。
     core::VimEditorView view{
         state_.text(), state_.selection(), std::nullopt,
-        replay_depth_.has_value() ? core::VimKeySource::replayed : core::VimKeySource::typed,
+        replay_depth_.has_value() ? core::VimKeySource::replayed : unit_source_,
         core::VimTabs{state_.active_tab(), state_.tab_count()},
         // 格子は常に折り返す（ADR 0140 の決定 7）。wrap off の text 形は無効のまま（gj gk は j k・
         // ADR 0145 の決定 4）。横送りの row_request は有効か否かに関わらず答える。
