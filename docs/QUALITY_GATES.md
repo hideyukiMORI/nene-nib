@@ -384,7 +384,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 ## 4. 選択できる検査（全件は `eng/check.ps1 -Full -Reason <理由>`）
 
 下表は検査の一覧であり、毎回全部を実行する指示ではない。関連する target / test / 検査関数を既存の引数で指定する。
-例: 文書整合は `eng/conformance.py` の `document_checks`、中核は `cmake --build build --target nib_tests` と `ctest --test-dir build -R '^nib_unit$' --output-on-failure`、
+例: 文書整合は `eng/conformance.py` の `document_checks`、中核は `cmake --build build --target nib_tests` と `ctest --test-dir build -R '^nib_unit' --output-on-failure`（`nib_unit` は既定実行・`nib_unit_scopes` は名指しの scope を全部回す `nib_tests --every-scope`。名指しの scope にしかない検査も CTest で回る: **active**・ADR 0042 の追補・#1324）、
 検証ツールは `python -m unittest discover -s tests/conformance -p '<該当テスト>.py'`。全件が必要なときだけ上記の明示指定を使う。
 
 | 層 | 目的 | 実体 |
