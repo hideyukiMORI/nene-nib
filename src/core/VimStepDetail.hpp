@@ -137,8 +137,8 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
 [[nodiscard]] VimStep shifted(const VimState &state, const TextBuffer &text,
                               const VimMotionRange &range, ShiftBy shift);
 // `>` が lines 行（または range の覆う行）の字下げを作り直した後も文書が limit に収まるか
-// （#1341）。1 行に足すのは多くとも shiftwidth × 回数 / tabstop の Tab と端数の空白で、`<` は
-// 本文を増やさない。NORMAL の `>>` は 1 段だけなので見ない。
+// （#1341）。1 行に足すのは多くとも回数 + 9 バイト（shiftwidth × 回数 / tabstop + tabstop + 1）で、
+// `<` は本文を増やさない。NORMAL の `>>` は 1 段だけなので見ない。
 [[nodiscard]] bool shift_fits(const TextBuffer &text, std::size_t lines, ShiftBy shift,
                               std::size_t limit) noexcept;
 [[nodiscard]] bool range_shift_fits(const TextBuffer &text, const VimMotionRange &range,
@@ -165,10 +165,11 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
                                         VimOperator operation);
 [[nodiscard]] VimStep operated_to_line_end(const VimState &state, const TextBuffer &text,
                                            Offset caret, VimOperator operation);
-// 回数で本文を増やす編集（`p` `P` の回数・INSERT の回数の反復・`o` の回数・矩形の `p`・VISUAL
-// と矩形の `>`）が、編集の後も文書の上限 limit（製品は maximum_document_bytes・ADR 0159 の決定 7・
-// VimEditorView.document_limit）に収まる残りのバイト数と、piece を count 個並べた量が room に
-// 収まるか（#1341）。確保の前に掛け算をせずに判定する。
+// 回数で本文を増やす編集（`p` `P` の回数・INSERT の回数の反復・`o` の回数・矩形の `p`・矩形の
+// `I` `A` `c` `C` の写し・VISUAL と矩形の `>`）が、編集の後も文書の上限 limit（製品は
+// maximum_document_bytes・ADR 0159 の決定 7・VimEditorView.document_limit）に収まる残りの
+// バイト数と、piece を count 個並べた量が room に収まるか（#1341）。確保の前に掛け算をせずに
+// 判定する。
 [[nodiscard]] std::size_t count_room(const TextBuffer &text, std::size_t limit) noexcept;
 [[nodiscard]] bool fits_repeated(std::size_t piece, std::size_t count, std::size_t room) noexcept;
 // LF で数えた効果の本文を文書へ写した後のバイト数。controller が `\n` を文書の改行の形へ直すので、

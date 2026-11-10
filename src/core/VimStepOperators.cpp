@@ -782,9 +782,11 @@ namespace
 
 namespace detail
 {
-// 作り直した字下げは、桁が shiftwidth × 回数だけ増えるので Tab が多くとも
-// shiftwidth × 回数 / tabstop + 1 個増え、端数の空白は tabstop 未満（Vim の set_indent と同じ
-// noexpandtab）。`Vj999999999>` は 2 行に約 1 GB ずつの Tab を作るので、作る前に断る（#1341）。
+// 1 行に足すのは多くとも shiftwidth × 回数 / tabstop + tabstop + 1 バイト（shiftwidth と
+// tabstop が 8 なので回数 + 9）。行単位の `>` は回数ぶんの Tab しか増やさず、矩形の `>` は割った
+// 空白（1 バイト・多くとも tabstop 桁）を Tab と tabstop 未満の空白に作り直す（Vim の set_indent と
+// 同じ noexpandtab）。`Vj999999999>` は 2 行に約 1 GB ずつの Tab を作るので、作る前に
+// 断る（#1341）。
 [[nodiscard]] bool shift_fits(const TextBuffer &text, std::size_t lines, ShiftBy shift,
                               std::size_t limit) noexcept
 {

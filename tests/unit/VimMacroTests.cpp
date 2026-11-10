@@ -12,12 +12,17 @@
 #include "StoreVimRegister.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
+#include "VimBlockEdit.hpp"
 #include "VimCharacter.hpp"
 #include "VimClipboardText.hpp"
 #include "VimEditorView.hpp"
+#include "VimEffect.hpp"
 #include "VimInsertAt.hpp"
+#include "VimInsertBlock.hpp"
+#include "VimInsertString.hpp"
 #include "VimKey.hpp"
 #include "VimMode.hpp"
+#include "VimMoveTo.hpp"
 #include "VimNamedRegisters.hpp"
 #include "VimNoEffect.hpp"
 #include "VimNumberedRegisters.hpp"
@@ -28,6 +33,7 @@
 #include "VimReplay.hpp"
 #include "VimSearchDirection.hpp"
 #include "VimSearchPattern.hpp"
+#include "VimSelect.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
 #include "VimStep.hpp"
@@ -36,6 +42,7 @@
 
 #include "../vim/VimFixtures.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <optional>
@@ -62,10 +69,14 @@ using nenenib::core::vim_clipboard_loaded;
 using nenenib::core::vim_reads_clipboard;
 using nenenib::core::vim_register_of_clipboard;
 using nenenib::core::vim_step;
+using nenenib::core::VimBlockEdit;
 using nenenib::core::VimEditorView;
 using nenenib::core::VimInsertAt;
+using nenenib::core::VimInsertBlock;
+using nenenib::core::VimInsertString;
 using nenenib::core::VimKey;
 using nenenib::core::VimMode;
+using nenenib::core::VimMoveTo;
 using nenenib::core::VimNoEffect;
 using nenenib::core::VimPrefix;
 using nenenib::core::VimRegister;
@@ -73,6 +84,7 @@ using nenenib::core::VimRegisterKind;
 using nenenib::core::VimReplay;
 using nenenib::core::VimSearchDirection;
 using nenenib::core::VimSearchPattern;
+using nenenib::core::VimSelect;
 using nenenib::core::VimSpecialKey;
 using nenenib::core::VimState;
 using nenenib::core::VimStep;
@@ -1058,12 +1070,13 @@ void verify_huge_count_crlf_boundary()
     expect(!limited_failure(rest, {"a\nb", Offset{0}}, "34oab<Esc>", 103).has_value() &&
                limited_failure(rest, {"a\r\nb", Offset{0}}, "34oab<Esc>", 103) == refused,
            "the o count counts two bytes for each CRLF newline");
-    // 矩形の `p`（幅 2 の 2 行・25 個）。1 行は手前の空白（桁 2）と改行と本文 50 バイトで、上限 114
-    // では LF の 7 バイトの文書は 106 で通り、CRLF の 8 バイトの文書は 108 で断る。
+    // 矩形の `p`（幅 2 の 2 行・25 個）。1 行は手前の空白の上界 max(桁 2, tabstop 8) と改行と本文
+    // 50 バイトで、上限 125 では LF の 7 バイトの文書は 118 で通り、CRLF の 8 バイトの文書は 120 で
+    // 断る。
     const VimState block = nenenib::core::vim_resting_state(
         VimRegister{"ab\ncd", VimRegisterKind::block, nenenib::core::VimBlockWidth{2}});
-    expect(!limited_failure(block, {"abc\ndef", Offset{0}}, "25p", 114).has_value() &&
-               limited_failure(block, {"abc\r\ndef", Offset{0}}, "25p", 114) == refused,
+    expect(!limited_failure(block, {"abc\ndef", Offset{0}}, "25p", 125).has_value() &&
+               limited_failure(block, {"abc\r\ndef", Offset{0}}, "25p", 125) == refused,
            "a block put counts the newline of the document for each line");
 }
 
@@ -1084,6 +1097,135 @@ void verify_huge_count_shift_refused()
            "a counted visual < never grows the document");
 }
 
+// 小さな上限の試験の中で効果を本文と選択へ写す（controller の写しの小さな替え玉・#1341）。矩形の
+// INSERT と矩形の `p` が通る効果だけ。本文は LF。
+[[nodiscard]] std::pair<TextBuffer, Selection>
+limited_applied(const TextBuffer &text, const Selection &selection,
+                const nenenib::core::VimEffect &effect)
+{
+    if (const auto *moved = std::get_if<VimMoveTo>(&effect))
+    {
+        return {text, collapsed_at(moved->caret)};
+    }
+    if (const auto *selected = std::get_if<VimSelect>(&effect))
+    {
+        return {text, selected->selection};
+    }
+    if (const auto *typed = std::get_if<VimInsertString>(&effect))
+    {
+        return {text.insert(selection.caret, typed->utf8),
+                collapsed_at(Offset{selection.caret.value + typed->utf8.size()})};
+    }
+    if (const auto *repeat = std::get_if<VimInsertAt>(&effect))
+    {
+        return {text.insert(repeat->at, repeat->utf8), collapsed_at(repeat->caret)};
+    }
+    if (const auto *inserted = std::get_if<VimInsertBlock>(&effect))
+    {
+        std::vector<VimBlockEdit> edits = inserted->edits;
+        std::ranges::sort(edits, [](const VimBlockEdit &one, const VimBlockEdit &other)
+                          { return other.range.begin < one.range.begin; });
+        TextBuffer next = text;
+        for (const VimBlockEdit &edit : edits)
+        {
+            next = next.replaced(edit.range.begin, edit.range.end, edit.utf8);
+        }
+        return {next, collapsed_at(inserted->caret)};
+    }
+    return {text, selection};
+}
+
+// 断ったか（どれかの鍵が too_large）と、効果を写した後の本文。
+using LimitedRun = std::pair<bool, std::string>;
+
+// 小さな上限で鍵を流し、効果を本文へ写す（#1341）。実際の大きさは写した後の本文で数える。
+[[nodiscard]] LimitedRun limited_run(std::string_view body, std::string_view keys,
+                                     std::size_t limit)
+{
+    const std::optional<nenenib::core::VimRepeatFailure> too_large{
+        nenenib::core::VimRepeatFailure::too_large};
+    TextBuffer text = buffer_of(body);
+    Selection selection = collapsed_at(Offset{0});
+    VimState state = empty_vim_state();
+    bool refused = false;
+    for (const VimKey &key : vim_keys_of(keys))
+    {
+        VimEditorView view{text, selection, VimViewport{LineNumber{1}, vim_visible_lines, 0}};
+        view.document_limit = limit;
+        VimStep step = vim_step(state, view, key);
+        refused = refused || step.failure == too_large;
+        auto [next_text, next_selection] = limited_applied(text, selection, step.effect);
+        text = std::move(next_text);
+        selection = next_selection;
+        state = std::move(step.next);
+    }
+    return {refused, text.text()};
+}
+
+// 断らなかった鍵の後の本文は上限に収まる（見積もりが上界）。keys の `%` に 1 から counts までの
+// 回数を入れて流す。
+[[nodiscard]] bool limited_estimates_hold(std::string_view body, std::string_view keys,
+                                          std::size_t limit, std::size_t counts)
+{
+    bool held = true;
+    for (std::size_t count = 1; count <= counts; ++count)
+    {
+        std::string typed(keys);
+        typed.replace(typed.find('%'), 1, std::to_string(count));
+        const auto [refused, after] = limited_run(body, typed, limit);
+        held = held && (refused || after.size() <= limit);
+    }
+    return held;
+}
+
+// 矩形の `I` `A` の回数は、写す本文 × 行の数で上限を見る（PR #1348 の再レビュー M1）。1 行は写す
+// 本文と多くとも max(桁, tabstop) の空白なので、上限 300 で `a` の 3 行（Esc で 6 バイト）は
+// 3 × (N + 8) ≤ 294 の N = 90 まで、10 行（Esc で 20 バイト）は 10 × (N + 8) ≤ 280 の N = 20 まで。
+// 断った鍵は 1 周目の本文だけを全部の行へ写す。
+void verify_huge_count_block_insert_refused()
+{
+    const std::string_view three = "a\na\na";
+    const std::string_view ten = "a\na\na\na\na\na\na\na\na\na";
+    expect(!limited_run(three, "<C-v>G90Ix<Esc>", 300).first &&
+               limited_run(three, "<C-v>G91Ix<Esc>", 300) == LimitedRun{true, "xa\nxa\nxa"},
+           "a counted block I over 3 lines is refused past the copied lines");
+    expect(!limited_run(ten, "<C-v>G20Ix<Esc>", 300).first &&
+               limited_run(ten, "<C-v>G21Ix<Esc>", 300).first,
+           "a counted block I over 10 lines is refused past the copied lines");
+    // 1 行目だけなら収まる回数（10 行の 50 個は 1 行目で 49 バイト・全部で 519 バイト）も断る。
+    expect(limited_run(ten, "<C-v>G50Ix<Esc>", 300).first,
+           "the copied lines count against the limit, not only the first line");
+    const std::array<std::string_view, 4> forms{"<C-v>G%Ix<Esc>", "2l<C-v>G%Ix<Esc>",
+                                                "5l<C-v>G%Ayz<Esc>", "l<C-v>Glcw%<Esc>"};
+    for (const std::string_view keys : forms)
+    {
+        expect(limited_estimates_hold("abcdef\na\n\tbc\nabcdefgh", keys, 200, 60),
+               "a block insert that is not refused stays inside the limit");
+    }
+}
+
+// 矩形の `p` の 1 行の余分は多くとも max(桁, tabstop) と改行（PR #1348 の再レビュー M2）。桁の途中
+// で割る Tab（`abc` `\tx` `\ty` の `0p` は 2 行目が +9 バイト・Vim と同じ）・全角の途中・行末より
+// 右・足す行のどれも、断らなかった貼り付けの後の本文は上限に収まる。
+void verify_huge_count_block_put_estimate()
+{
+    const std::array<std::array<std::string_view, 2>, 4> cases{{
+        {"abc\n\tx\n\ty", "<C-v>jjly0%p"},
+        {"abc\n\xE5\x85\xA8x\n\xE5\x85\xA8y", "<C-v>jjly0%p"},
+        {"abcdef\na\nb", "<C-v>jjly$%p"},
+        {"abcdef\nab\ncd", "<C-v>jjlyG$%p"},
+    }};
+    for (const auto &[body, keys] : cases)
+    {
+        bool held = true;
+        for (std::size_t limit = body.size(); limit < body.size() + 80; ++limit)
+        {
+            held = held && limited_estimates_hold(body, keys, limit, 4);
+        }
+        expect(held, "a block put that is not refused stays inside the limit");
+    }
+}
+
 // 断った鍵は E1240 を 1 行出し、鳴らさない（#1341・ADR 0153 の決定 2）。`@` の中で断っても同じ。
 void verify_huge_count_notice()
 {
@@ -1099,6 +1241,9 @@ void verify_huge_count_notice()
                    frame.command_message.value().text() == "E1240: Resulting text too long" &&
                    editing.bell().rings() == 0U,
                "a put refused at the document limit shows E1240 without the bell");
+        // `@a` の残りの `x` も流れない（再生の残りを捨てる）。
+        expect(whole_vim_body(controller) == "abc\ndef",
+               "a refused put leaves the text and the rest of the macro does not run");
     }
 }
 
@@ -1125,6 +1270,8 @@ void verify_vim_macro_contracts()
     verify_huge_count_insert_refused();
     verify_huge_count_crlf_boundary();
     verify_huge_count_shift_refused();
+    verify_huge_count_block_insert_refused();
+    verify_huge_count_block_put_estimate();
     verify_huge_count_notice();
     verify_macro_append();
     verify_macro_numbered_recording();

@@ -46,4 +46,4 @@ OS の音は OS の呼び出しなので、中核（core / application）から�
 
 ## 追補（2026-11-10・#1341）
 
-決定 2 の「鍵の失敗では鳴らさない」に 1 つ足す。回数で本文を増やす編集（`p` `P` の回数・INSERT と `o` の回数・矩形の `p`・VISUAL と矩形の `>`）を文書の上限で断った鍵（`VimRepeatFailure::too_large`）は、`EditorController::stepped_vim` が `E1240: Resulting text too long` を `with_command_message` で 1 行出すだけで、`reject` を通さず鳴らさない（ADR 0046 の追補 #1341）。
+決定 2 の「鍵の失敗では鳴らさない」に 1 つ足す。回数で本文を増やす編集（`p` `P` の回数・INSERT と `o` の回数・矩形の `p`・矩形の `I` `A` `c` `C` の写し・VISUAL と矩形の `>`）を文書の上限で断った鍵（`VimRepeatFailure::too_large`）は、`EditorController::stepped_vim` が `E1240: Resulting text too long` を `with_command_message` で 1 行出すだけで、`reject` を通さず鳴らさない（ADR 0046 の追補 #1341）。

@@ -806,7 +806,9 @@ namespace
 }
 
 // 矩形の `p` `P` の本文が文書の上限に収まるか（#1341）。1 行は回数ぶんの本文と幅までの空白で、
-// 手前の空白（桁まで）と改行（文書の改行の形の幅）も数える。Vim は行ごとにそのまま確保する
+// 本文の外に足すのは多くとも max(桁, tabstop) と改行（文書の改行の形の幅）: 行末より右の桁は
+// 手前を桁 − 1 個の空白で埋め、足す行は改行と桁 − 1 個の空白、桁の途中で割る Tab（1 バイト）は
+// 多くとも tabstop 個の空白になる（PR #1348 の再レビュー M2）。Vim は行ごとにそのまま確保する
 // （`<C-v>jy999999999p` は 2 GB の 2 行を作る・実測）。
 [[nodiscard]] bool block_put_fits(const VimState &state, const VimEditorView &view, VimPutSide side)
 {
@@ -815,7 +817,8 @@ namespace
     const VimRegister source = register_read(state, state.selected_register);
     const std::size_t width = source.width.has_value() ? source.width.value().columns : single_step;
     const std::size_t count = count_of(state.count);
-    const std::size_t lead = put_column(text, caret, side) + newline_of(text.line_ending()).size();
+    const std::size_t lead = std::max(put_column(text, caret, side), vim_tab_stop) +
+                             newline_of(text.line_ending()).size();
     std::size_t room = count_room(text, view.document_limit);
     for (const std::string &line : block_register_lines(source.text))
     {
