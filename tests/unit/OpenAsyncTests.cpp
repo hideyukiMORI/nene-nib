@@ -4,7 +4,9 @@
 // 採る。失敗は値で、告げ方は呼び手ごとの今の規則。まだ読んでいないタブ・起動の復元・一覧から
 // 開く道も同じ port を通る。
 #include "CancelCommand.hpp"
+#include "CaretMotion.hpp"
 #include "CloseTab.hpp"
+#include "Column.hpp"
 #include "CommandText.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
@@ -22,6 +24,7 @@
 #include "FilePath.hpp"
 #include "InsertText.hpp"
 #include "LineNumber.hpp"
+#include "MoveCaret.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "Scopes.hpp"
@@ -29,6 +32,7 @@
 #include "ScriptedFiles.hpp"
 #include "ScriptedSession.hpp"
 #include "SelectEditMode.hpp"
+#include "SelectionAnchoring.hpp"
 #include "Session.hpp"
 #include "SessionEnd.hpp"
 #include "SessionTab.hpp"
@@ -38,6 +42,7 @@
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
+#include "TextViewGeometry.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
@@ -539,6 +544,37 @@ void verify_walk_skips_reading_tabs()
                alone.reads().requests().size() == requests,
            "the walk does not move when every other tab is being read");
 }
+
+// 合図は上下の移動の狙いの横位置を保つが、読み終えた文書を採ってタブが替わった合図は狙いを捨てる
+// （#1296）。a.txt の 1 行目の行末から下へ動いて狙いを持ったまま big.txt の読みが終わると、次の
+// 下への移動は big.txt の行頭の桁から決まる（a.txt の狙いの桁 7 へは行かない）。
+void verify_adopted_read_drops_wanted_x()
+{
+    Editing editing;
+    editing.files().hold_at("C:\\work\\a.txt", Bytes{"abcdef\nx"});
+    editing.files().hold_at("C:\\work\\big.txt", Bytes{"ab\nabcdef"});
+    auto &controller = editing.controller();
+    applied(controller,
+            app::VisibleLines{10, core::TextViewGeometry{400, 20, 96, 10.0F}, 800, 600, 20});
+    applied(controller, app::OpenDocument{path_of("C:\\work\\a.txt")});
+    editing.reads().defer_above(deferred_bytes);
+    applied(controller, app::OpenDocument{path_of("C:\\work\\big.txt")});
+    const std::uint64_t ticket = last_ticket(editing);
+    applied(controller,
+            app::MoveCaret{core::CaretMotion::line_end, core::SelectionAnchoring::collapse});
+    applied(controller,
+            app::MoveCaret{core::CaretMotion::next_line, core::SelectionAnchoring::collapse});
+    editing.reads().finish(ticket);
+    const auto opened = controller.apply_frame(app::WorkCompleted{});
+    expect(opened.document.title.text() == "big.txt" &&
+               opened.caret.position == core::TextPosition{core::LineNumber{1}, core::Column{1}},
+           "the finished read switches to big.txt at its start");
+    const auto moved = controller.apply_frame(
+        app::MoveCaret{core::CaretMotion::next_line, core::SelectionAnchoring::collapse});
+    expect(moved.caret.position == core::TextPosition{core::LineNumber{2}, core::Column{1}},
+           "the move after an adopted read starts from the new caret, not the old wanted column");
+}
+
 } // namespace
 
 void verify_open_async_contracts()
@@ -558,6 +594,7 @@ void verify_open_async_contracts()
     verify_open_held_while_composing();
     verify_open_held_while_vim_waits();
     verify_walk_skips_reading_tabs();
+    verify_adopted_read_drops_wanted_x();
 }
 
 void verify_open_async_scope()

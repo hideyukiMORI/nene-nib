@@ -1,6 +1,7 @@
 #include "EditorController.hpp"
 #include "EditorControllerDetail.hpp"
 
+#include "AutosaveId.hpp"
 #include "CaretShape.hpp"
 #include "CommandChoice.hpp"
 #include "CommandInput.hpp"
@@ -8,6 +9,7 @@
 #include "DiagnosticLines.hpp"
 #include "DisplayInquiry.hpp"
 #include "DisplayText.hpp"
+#include "EditHistory.hpp"
 #include "ExResult.hpp"
 #include "FolderBatch.hpp"
 #include "FolderProgress.hpp"
@@ -18,6 +20,7 @@
 #include "LineSpanEvaluation.hpp"
 #include "MatchParen.hpp"
 #include "ModeLabel.hpp"
+#include "Offset.hpp"
 #include "PaneFrame.hpp"
 #include "PaneView.hpp"
 #include "PreviewFrame.hpp"
@@ -45,6 +48,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -52,6 +56,7 @@
 namespace nenenib::application
 {
 using detail::composition_view_of;
+using detail::is_signal;
 using detail::not_user_operation;
 using detail::previewed_line;
 using detail::tab_views;
@@ -181,19 +186,27 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
     return std::holds_alternative<VimKeyPress>(intent) || not_user_operation(intent);
 }
 
-// 上下に動くときに狙う横位置を保つ意図。上下の移動そのものと、30 秒ごとに必ず来る自動退避の
-// 合図（使う人の操作ではない・ADR 0137 の決定 1）とプレビューの間引きの合図（ADR 0155 の追補・
-// #813）。もう 1 つの枠だけを送るホイールも操作中の枠の
+// 上下に動くときに狙う横位置を保つ意図。上下の移動そのものと、合図（is_signal の 1 本・裏の
+// 仕事の完了・自動退避・プレビューの間引き・言語サーバーの古さ・`map` の待ちの時切れ。使う人の
+// 操作ではない・ADR 0062 の追補・#1296）。もう 1 つの枠だけを送るホイールも操作中の枠の
 // キャレットに触れないので保つ（ADR 0148 の決定 11）。これ以外の意図は写す前に狙いを捨てる。
+// 合図が文書かキャレットを動かしたとき（読み終えた文書の採用・待ちの鍵を流す）は、写した後に
+// apply が捨てる。
 // 枠の意図（SplitPane / SwitchPane / ClosePane / ScrollPane）は使う人の操作なので、
 // keeps_tab_walk と begin_intent の表には載せない（歩きを終え、告知を消す）。
 [[nodiscard]] bool keeps_wanted_x(const EditorIntent &intent) noexcept
 {
-    return std::holds_alternative<MoveCaret>(intent) ||
-           std::holds_alternative<AutosaveTick>(intent) ||
-           std::holds_alternative<PreviewTick>(intent) ||
-           std::holds_alternative<LanguageServerTick>(intent) ||
+    return std::holds_alternative<MoveCaret>(intent) || is_signal(intent) ||
            std::holds_alternative<ScrollPane>(intent);
+}
+
+// 狙いの横位置が指す所（アクティブなタブ・本文の改訂・キャレット）。合図の前後で比べる。
+using CaretAnchor = std::tuple<AutosaveId, std::size_t, core::Offset>;
+
+[[nodiscard]] CaretAnchor caret_anchor_of(const EditorState &state)
+{
+    return CaretAnchor{state.autosave_ids().at(state.active_tab()), state.history().revision(),
+                       state.selection().caret};
 }
 
 // 格子の照合の窓の余裕（#556）。一致の長さの上限が決まらない（`*` の繰り返し）検索は、この余裕の
@@ -380,6 +393,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     {
         wanted_x_.reset();
     }
+    const auto anchor = caret_anchor_of(state_);
     settle_tab_walk_before(keeps_tab_walk(intent));
     // 窓の寸法と帯の上のマウスは文書に触れないので、Vim の告知を消さない（ADR 0056 の決定 3）。
     // Ctrl を離したときの使った順の確定も同じ（ADR 0058 の決定 3）。窓が閉じていくときの一覧の
@@ -417,6 +431,10 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 閉じたタブの読みの取消と、歩き・入力行・面の終わりで留めた読みの採用（ADR 0159 の追補
     // 1・2）。
     follow_reads();
+    if (is_signal(intent) && caret_anchor_of(state_) != anchor)
+    {
+        wanted_x_.reset();
+    }
     fit_command_rows();
     ask_display();
     reconcile_language_server();
