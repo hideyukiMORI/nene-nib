@@ -82,17 +82,6 @@ using Units = std::pair<std::size_t, bool>;
     return code_point_at(text.text_range(at, until), Offset{0});
 }
 
-// 窓の末尾の欠けた code point を落とす。
-[[nodiscard]] std::size_t whole_code_points(std::string_view window)
-{
-    std::size_t size = window.size();
-    while (size > 0 && (static_cast<unsigned char>(window.at(size - 1)) & 0xC0U) == 0x80U)
-    {
-        --size;
-    }
-    return size > 0 ? size - 1 : 0;
-}
-
 // 行の中で次の文字の先頭（ADR 0053）。at は行の内容の終わりより前。
 [[nodiscard]] Offset next_in_line(const TextBuffer &text, Offset at)
 {

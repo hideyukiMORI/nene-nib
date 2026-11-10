@@ -8,6 +8,7 @@
 #include "Utf8.hpp"
 #include "VimAction.hpp"
 #include "VimBlockInsert.hpp"
+#include "VimCaret.hpp"
 #include "VimCharacterBoundary.hpp"
 #include "VimInsertStart.hpp"
 #include "VimRepeatFailure.hpp"
@@ -174,19 +175,8 @@ constexpr std::size_t erase_window_bytes = 64;
     }
     const TextBuffer &text = view.text;
     const Offset caret = view.selection.caret;
-    const Offset line_end = text.line_end(line_of(text, caret));
-    std::size_t window = arrow_window_bytes;
-    for (;;)
-    {
-        const Offset end{caret.value + std::min(window, line_end.value - caret.value)};
-        const std::string content = text.text_range(caret, end);
-        const Offset after = vim_character_end(content, Offset{0});
-        if (end == line_end || after.value + longest_code_point_bytes <= content.size())
-        {
-            return insert_moved_to(state, Offset{caret.value + after.value});
-        }
-        window *= 2;
-    }
+    return insert_moved_to(state,
+                           vim_character_after(text, caret, text.line_end(line_of(text, caret))));
 }
 
 // 回数の鍵の列に key を足す（#1093）。回数の無い INSERT では何もしない。

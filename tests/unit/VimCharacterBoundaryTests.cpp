@@ -1,5 +1,6 @@
 // scope `--vim-characters` の単体テスト（ADR 0042 決定 2・ADR 0053・語の種類の表は ADR 0031 の補足
 // #985）。
+#include "EditorIntent.hpp"
 #include "LineNumber.hpp"
 #include "Offset.hpp"
 #include "Scopes.hpp"
@@ -7,15 +8,20 @@
 #include "TextBuffer.hpp"
 #include "VimCaret.hpp"
 #include "VimCharacterBoundary.hpp"
+#include "VimLineColumns.hpp"
+#include "VimTestSupport.hpp"
 #include "VimWordClass.hpp"
 #include "VimWordClassTable.hpp"
 #include "VimWordMotion.hpp"
 
 #include "../vim/VimFixtures.hpp"
 
+#include <array>
 #include <cstddef>
+#include <random>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace nenenib::tests
 {
@@ -110,6 +116,185 @@ void verify_resting_caret_on_a_long_line()
            "a column past the line maps to the line content end");
 }
 
+// ---------------------------------------- 窓の終わりで切れた UTF-8（#1292）
+
+// U+20DD（3 バイト・幅 0）を count 個。`a` U+0301 か「漢」（どちらも 3 バイト）の後ろに 21 個以上
+// 並べると、行頭から読んだ 64 バイトの窓の 63 番目のバイトに U+20DD の頭が来る。
+[[nodiscard]] std::string enclosing_marks(std::size_t count)
+{
+    std::string marks;
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        marks += "\xE2\x83\x9D";
+    }
+    return marks;
+}
+
+// 寄せ（VimCaret の character_near）は窓の終わりで切れた 3 バイトの頭を decode しない。答えは
+// 窓を倍にして読み直した行の答え。
+void verify_resting_caret_across_a_window_end()
+{
+    const auto buffer =
+        TextBuffer::from_utf8("a\xCC\x81" + enclosing_marks(25) + std::string(100, 'x'));
+    expect(buffer.has_value(), "the marked line is valid UTF-8");
+    if (!buffer.has_value())
+    {
+        return;
+    }
+    expect(core::vim_resting_caret(buffer.value(), Offset{0}) == Offset{0} &&
+               core::vim_resting_caret(buffer.value(), Offset{3}) == Offset{0},
+           "a run of 3-byte marks across the window end rests on its base");
+}
+
+// 1 升 10 画素・幅 40 升の折り返さない窓で開く。
+void open_unwrapped_line(Editing &editing, std::string text)
+{
+    open_vim_document(editing, std::move(text));
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(nenenib::application::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(nenenib::application::CommandText{":set nowrap"}));
+    static_cast<void>(controller.apply(nenenib::application::SubmitCommand{}));
+    applied(controller, nenenib::application::VisibleLines{
+                            3, nenenib::core::TextViewGeometry{400, 20, 96, 10.0F}});
+}
+
+// 横送りの押し（VimHorizontalScroll の character_after）と INSERT の <Right>（VimStepInsert）は、
+// 窓の終わりで切れた 3 バイトの頭を decode しない。行頭の x の後ろの文字の頭から窓を読む（行頭の
+// キャレットの寄せは x だけを歩く）。「漢」の 2 升目が左端に来た `2zl` は次の文字へ、`a<Right>`
+// は結合の列の後ろへ着く（後ろの x は「漢」の行で 28 番目・`a` U+0301 の行で 29 番目の code
+// point）。
+void verify_window_walks_across_a_window_end()
+{
+    Editing scrolled;
+    open_unwrapped_line(scrolled, "x\xE6\xBC\xA2" + enclosing_marks(25) + std::string(200, 'x'));
+    vim_normal(scrolled.controller(), "2zl");
+    const auto pushed = scrolled.controller().frame();
+    expect(pushed.horizontal == 20.0F && pushed.caret.position.column.value == 28,
+           "zl past a fullwidth base with a long run of marks pushes the caret to the next "
+           "character");
+    Editing inserted;
+    open_unwrapped_line(inserted, "xa\xCC\x81" + enclosing_marks(25) + std::string(100, 'x'));
+    vim_normal(inserted.controller(), "a<Right>");
+    expect(inserted.controller().frame().caret.position.column.value == 29,
+           "<Right> in INSERT steps over a long run of marks across the window end");
+}
+
+// 乱数の本文の材料: 1〜4 バイトの code point・Tab・幅 0（U+0301 は 2 バイト・U+20DD と U+FE0F は
+// 3 バイト）・絵文字。
+constexpr std::array<std::string_view, 9> window_pieces{
+    "a",        "\t",           "\xC3\xA9",    "\xE3\x81\x82", "\xE6\xBC\xA2", "\xF0\x9F\x98\x80",
+    "\xCC\x81", "\xE2\x83\x9D", "\xEF\xB8\x8F"};
+constexpr std::size_t window_plain_pieces = 6;
+
+// 固定 seed の 1 行（改行を含まない）。幅 0 の材料は 1〜40 個の列で入れ、窓（64 バイト）の境を
+// またがせる。
+[[nodiscard]] std::string window_line(std::mt19937_64 &random)
+{
+    std::string line;
+    const std::size_t target = 40 + static_cast<std::size_t>(random() % 400U);
+    while (line.size() < target)
+    {
+        const auto piece = static_cast<std::size_t>(random() % window_pieces.size());
+        const std::size_t repeat =
+            piece < window_plain_pieces ? 1 : 1 + static_cast<std::size_t>(random() % 40U);
+        for (std::size_t index = 0; index < repeat; ++index)
+        {
+            line += window_pieces.at(piece);
+        }
+    }
+    return line;
+}
+
+// 行の写しの上の素朴な答え: byte を含む Vim の 1 文字の先頭（行の終わりなら最後の文字の先頭）。
+[[nodiscard]] std::size_t copied_character_containing(std::string_view line, std::size_t byte)
+{
+    std::size_t start = 0;
+    std::size_t at = 0;
+    while (at < line.size())
+    {
+        const std::size_t end = vim_character_end(line, Offset{at}).value;
+        if (byte < end)
+        {
+            return at;
+        }
+        start = at;
+        at = end;
+    }
+    return start;
+}
+
+// 行の写しの上で start から Vim の 1 文字ずつ count 回進んだ終わりと、count 回戻った頭。
+[[nodiscard]] std::pair<std::size_t, std::size_t> copied_steps(std::string_view line,
+                                                               std::size_t start, std::size_t count)
+{
+    std::size_t forward = start;
+    std::size_t back = start;
+    for (std::size_t step = 0; step < count; ++step)
+    {
+        forward = forward < line.size() ? vim_character_end(line, Offset{forward}).value : forward;
+        back = back > 0 ? vim_character_start(line, Offset{back}).value : back;
+    }
+    return {forward, back};
+}
+
+// 索引を持つ本文の VimLineColumns の character_end と character_start（窓の道）が、start の
+// 文字の頭から count 回の歩きで行の写しと同じ答えを返すか。
+[[nodiscard]] bool columns_agree(const core::VimLineColumns &columns, std::string_view line,
+                                 std::size_t start)
+{
+    bool same = true;
+    for (const std::size_t count : {std::size_t{1}, std::size_t{3}, std::size_t{50}})
+    {
+        const auto [forward, back] = copied_steps(line, start, count);
+        same = same && columns.character_end(start, count) == forward &&
+               columns.character_start(start, count) == back;
+    }
+    return same;
+}
+
+// 窓の道の 4 つの答え（vim_character_after・vim_resting_caret・VimLineColumns の character_end と
+// character_start）を、行の全体を写した素朴な答えと比べる。compared は比べた数。
+[[nodiscard]] bool window_walks_agree(const std::string &line, std::size_t &compared)
+{
+    const auto buffer = TextBuffer::from_utf8(line + "\nb");
+    if (!buffer.has_value())
+    {
+        return false;
+    }
+    const TextBuffer &text = buffer.value();
+    const TextBuffer indexed = text.with_virtual_columns();
+    const core::VimLineColumns columns{indexed, LineNumber{1}};
+    const Offset line_end{line.size()};
+    bool same = true;
+    for (std::size_t at = 0; at < line.size(); at = core::next_code_point(line, Offset{at}).value)
+    {
+        const std::size_t start = copied_character_containing(line, at);
+        same = same &&
+               core::vim_character_after(text, Offset{at}, line_end) ==
+                   vim_character_end(line, Offset{at}) &&
+               core::vim_resting_caret(text, Offset{at}).value == start &&
+               columns_agree(columns, line, start);
+        compared += 8;
+    }
+    same = same && core::vim_resting_caret(text, line_end).value ==
+                       copied_character_containing(line, line.size());
+    return same;
+}
+
+// 性質: 乱数の本文（固定 seed）で、窓だけを読む 1 文字の道は行を写した答えと同じ（#1292）。
+void verify_window_walks_match_the_copied_line()
+{
+    std::mt19937_64 random{0x1292U};
+    std::size_t compared = 0;
+    bool same = true;
+    for (std::size_t round = 0; round < 60; ++round)
+    {
+        same = window_walks_agree(window_line(random), compared) && same;
+    }
+    expect(same, "window walks over random UTF-8 lines answer as the copied line does");
+    expect(compared > 10'000, "the window property compares more than 10000 answers");
+}
+
 // 語の種類の表は Vim 9.1.0004 の src/mbyte.c（SHA-256
 // 5d56d30e6a5cab9b8dc1460d5995a8a53077924f26c056091825c1bb600f4a8b）の classes[] 71 区間と
 // emoji_all[] 146 区間の写し（Issue #985・ADR 0031 の補足）。値は oracle の Vim の charclass()。
@@ -170,6 +355,9 @@ void verify_vim_character_contracts()
     verify_vim_character_end();
     verify_vim_character_start();
     verify_resting_caret_on_a_long_line();
+    verify_resting_caret_across_a_window_end();
+    verify_window_walks_across_a_window_end();
+    verify_window_walks_match_the_copied_line();
     verify_vim_word_class_table();
 }
 

@@ -60,40 +60,6 @@ constexpr std::size_t longest_code_point_bytes = 4;
     return vim_character_end(content, Offset{at}).value;
 }
 
-// 行の途中で切った窓の終わりに掛かる code point を落とした長さ（窓の中の code point を全部読める
-// ようにする・Utf8.cpp の decode は列の長さを頭のバイトから決めて読む）。
-[[nodiscard]] std::size_t whole_code_points(std::string_view content) noexcept
-{
-    constexpr unsigned char two_bytes = 0xC0U;
-    constexpr unsigned char three_bytes = 0xE0U;
-    constexpr unsigned char four_bytes = 0xF0U;
-    std::size_t lead = content.size();
-    while (lead > 0 && !is_boundary(content, Offset{lead - 1}))
-    {
-        --lead;
-    }
-    if (lead == 0)
-    {
-        return 0;
-    }
-    --lead;
-    const auto first = static_cast<unsigned char>(content[lead]);
-    std::size_t length = longest_code_point_bytes;
-    if (first < two_bytes)
-    {
-        length = 1;
-    }
-    else if (first < three_bytes)
-    {
-        length = 2;
-    }
-    else if (first < four_bytes)
-    {
-        length = 3;
-    }
-    return lead + length <= content.size() ? content.size() : lead;
-}
-
 // 窓 content の頭から Vim の 1 文字ずつ最大 count 回進み、止まった位置と進んだ回数を返す。
 // clipped（content の終わりが行の終わりではない窓）なら、終わりが窓の終わりから 1 code point
 // ぶんの余白に入る 1 歩は（窓の外に幅 0 の code point が続くかもしれず）答えが確かでないので

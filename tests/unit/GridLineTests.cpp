@@ -281,6 +281,17 @@ void verify_giant_line_window()
     expect(window_of("", 0) == OffsetRange{Offset{0}, Offset{0}},
            "an empty line is an empty window");
 
+    // 「漢」の後ろに U+20DD（3 バイト・幅 0）が 30 個。錨の周りの前後 64 バイトの窓の終わりに
+    // U+20DD の頭が掛かり、切れた 3 バイトを decode しない（#1292）。錨は最初の U+20DD。
+    std::string enclosed = std::string(100, 'a') + "\xE6\xBC\xA2";
+    for (std::size_t mark = 0; mark < 30; ++mark)
+    {
+        enclosed += "\xE2\x83\x9D";
+    }
+    enclosed += std::string(100, 'a');
+    expect(window_of(enclosed, 103) == OffsetRange{Offset{0}, Offset{enclosed.size()}},
+           "a run of 3-byte marks across the read end still finds the character around the anchor");
+
     const auto lines = buffer_of("x\n" + plain + "\nyz");
     expect(giant_line_window(VirtualColumnIndex::from_text(lines), lines, LineNumber{2},
                              Offset{2 + 2'048}) == OffsetRange{Offset{2}, Offset{2 + 6'144}},

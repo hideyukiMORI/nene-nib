@@ -50,10 +50,13 @@ constexpr std::size_t longest_code_point_bytes = 4;
         const Offset begin{at.value - std::min(before, at.value - line_start.value)};
         const Offset end{at.value + std::min(after, line_end.value - at.value)};
         const std::string content = text.text_range(begin, end);
+        const bool clipped = !(end == line_end);
+        const std::string_view whole{content.data(),
+                                     clipped ? whole_code_points(content) : content.size()};
         const Offset character_end =
-            character_end_containing(content, Offset{at.value - begin.value});
-        const Offset start = vim_character_start(content, character_end);
-        if (!(end == line_end) && character_end.value + longest_code_point_bytes > content.size())
+            character_end_containing(whole, Offset{at.value - begin.value});
+        const Offset start = vim_character_start(whole, character_end);
+        if (clipped && character_end.value + longest_code_point_bytes > whole.size())
         {
             after *= 2;
         }
@@ -68,6 +71,25 @@ constexpr std::size_t longest_code_point_bytes = 4;
     }
 }
 } // namespace
+
+Offset vim_character_after(const TextBuffer &text, Offset at, Offset line_end)
+{
+    std::size_t window = caret_window_bytes;
+    for (;;)
+    {
+        const Offset end{at.value + std::min(window, line_end.value - at.value)};
+        const std::string content = text.text_range(at, end);
+        const bool clipped = !(end == line_end);
+        const std::string_view whole{content.data(),
+                                     clipped ? whole_code_points(content) : content.size()};
+        const Offset next = vim_character_end(whole, Offset{0});
+        if (!clipped || next.value + longest_code_point_bytes <= whole.size())
+        {
+            return Offset{at.value + next.value};
+        }
+        window *= 2;
+    }
+}
 
 Offset vim_resting_caret(const TextBuffer &text, Offset caret)
 {
