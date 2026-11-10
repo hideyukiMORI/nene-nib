@@ -1,6 +1,6 @@
 // EditorWindow のエクスプローラーの面の群（ADR 0162 の決定 4・ADR 0158 の追補 7）。面に焦点が
-// あるときの鍵の写し・面の上の押した行と離した行とダブルクリック・ホイール。面の状態と規則は
-// application が持ち、ここは窓の入力を意図へ写すだけ。
+// あるときの鍵の写し・面の上の押した行と離した行とダブルクリック・ホイール・面と本文の境の
+// ドラッグ（追補 D78）。面の状態と規則は application が持ち、ここは窓の入力を意図へ写すだけ。
 #include "EditorWindow.hpp"
 #include "EditorWindowDetail.hpp"
 
@@ -8,9 +8,11 @@
 #include "ExplorerKeyKind.hpp"
 #include "ExplorerLayout.hpp"
 #include "ExplorerPointing.hpp"
+#include "ExplorerResizing.hpp"
 #include "ExplorerView.hpp"
 #include "LayoutRect.hpp"
 #include "PointExplorer.hpp"
+#include "ResizeExplorer.hpp"
 #include "ScrollExplorer.hpp"
 #include "WheelTurn.hpp"
 
@@ -151,6 +153,151 @@ void EditorWindow::scroll_explorer(std::int32_t delta)
         return;
     }
     send(application::ScrollExplorer{turn.lines});
+}
+
+// ---------------------------------------------------------------- 境のドラッグ（ADR 0162 の追補
+// D78）
+
+// 点が面と本文の境（左右 3 DIP）の上か。面が消えていれば設定を読まずに偽（マウスの動くたびに
+// 通るので、frame を作らない・面が消えている道は controller の 1 欄を読むだけ）。
+bool EditorWindow::explorer_divider_at(std::int32_t x, std::int32_t y) const
+{
+    if (!controller_.explorer_width().has_value())
+    {
+        return false;
+    }
+    return core::explorer_divider_hit(explorer_frame(controller_.delivery().settings), dpi_, x, y);
+}
+
+// 面の右端を点 x に置いたときに覚える幅（DIP）。押した点と右端のずれを引く。
+std::int32_t EditorWindow::explorer_width_at(std::int32_t x) const
+{
+    RECT client{};
+    GetClientRect(window_, &client);
+    return core::explorer_dragged_width(client.right, dpi_, x - explorer_grab_offset_.value_or(0));
+}
+
+// 境の押し。面の行の押しより先に引く（境は面の右端の行と重なる）。押しただけでは何も送らない。
+bool EditorWindow::press_explorer_divider(LPARAM data)
+{
+    const auto x = low_word_of(data);
+    if (!explorer_divider_at(x, high_word_of(data)))
+    {
+        return false;
+    }
+    const auto panel = explorer_frame(controller_.delivery().settings).panel;
+    SetCapture(window_);
+    if (GetCapture() == window_ && panel.has_value())
+    {
+        explorer_grab_offset_ = x - panel.value().right;
+        explorer_grab_x_ = x;
+        explorer_dragged_.reset();
+    }
+    return true;
+}
+
+// 押したまま動かした。押した点から動いたときだけ幅を送り、本文の寸法を送り直す（窓の寸法が変わった
+// ときと同じ道・設定には書かない）。
+void EditorWindow::drag_explorer_divider(LPARAM data)
+{
+    const auto x = low_word_of(data);
+    if (!explorer_grab_offset_.has_value() ||
+        (!explorer_dragged_.has_value() && x == explorer_grab_x_))
+    {
+        return;
+    }
+    const auto width = explorer_width_at(x);
+    if (explorer_dragged_ == width)
+    {
+        return;
+    }
+    explorer_dragged_ = width;
+    send(application::ResizeExplorer{application::ExplorerResizing::dragged, width});
+    send(body_view());
+}
+
+// 離した。動かしていれば離した点の幅を送る（controller が設定へ 1
+// 回書く）。境を押していなければ偽。
+bool EditorWindow::release_explorer_divider(LPARAM data)
+{
+    if (!explorer_grab_offset_.has_value())
+    {
+        return false;
+    }
+    const bool moved = std::exchange(explorer_dragged_, std::nullopt).has_value() ||
+                       low_word_of(data) != explorer_grab_x_;
+    const auto width = explorer_width_at(low_word_of(data));
+    // 捕まえを放すと WM_CAPTURECHANGED がここへ戻るので、先に印を消す。
+    explorer_grab_offset_.reset();
+    if (GetCapture() == window_)
+    {
+        ReleaseCapture();
+    }
+    if (moved)
+    {
+        send(application::ResizeExplorer{application::ExplorerResizing::dragged, width});
+        send(application::ResizeExplorer{application::ExplorerResizing::released, width});
+        send(body_view());
+    }
+    return true;
+}
+
+// 離す前に捕まえを失った（別の窓へ移った・Alt+Tab）。最後に送った幅を離したのと同じに送る。
+void EditorWindow::lose_explorer_divider()
+{
+    if (!std::exchange(explorer_grab_offset_, std::nullopt).has_value())
+    {
+        return;
+    }
+    const auto dragged = std::exchange(explorer_dragged_, std::nullopt);
+    if (dragged.has_value())
+    {
+        send(application::ResizeExplorer{application::ExplorerResizing::released, dragged.value()});
+        send(body_view());
+    }
+}
+
+// 境のダブルクリックは既定の幅（今の式）へ戻す。境の上でなければ偽。
+bool EditorWindow::reset_explorer_width(LPARAM data)
+{
+    if (controller_.command_palette_active() ||
+        !explorer_divider_at(low_word_of(data), high_word_of(data)))
+    {
+        return false;
+    }
+    send(application::ResizeExplorer{application::ExplorerResizing::reset, 0});
+    send(body_view());
+    return true;
+}
+
+// WM_MOUSEMOVE の点が境に載ったか・外れたか。変わったときだけカーソルを置き直す（点はメッセージの
+// 値から読み、OS のカーソルの位置は読まない・ARC-007）。ドラッグの間は捕まえているので変えない。
+void EditorWindow::hover_explorer_divider(LPARAM data)
+{
+    if (explorer_grab_offset_.has_value())
+    {
+        return;
+    }
+    const bool over = !controller_.command_palette_active() &&
+                      explorer_divider_at(low_word_of(data), high_word_of(data));
+    if (over == std::exchange(over_explorer_divider_, over))
+    {
+        return;
+    }
+    SetCursor(LoadCursorW(nullptr, over ? IDC_SIZEWE : IDC_ARROW));
+}
+
+// WM_SETCURSOR。client の上で最後の WM_MOUSEMOVE が境に載っていれば左右の矢印を保つ（ドラッグの
+// 間は捕まえているので WM_SETCURSOR は来ない）。ほかは偽（DefWindowProcW が窓の class のカーソルを
+// 置く）。
+bool EditorWindow::explorer_divider_cursor(LPARAM data) const
+{
+    if (LOWORD(data) != HTCLIENT || !over_explorer_divider_)
+    {
+        return false;
+    }
+    SetCursor(LoadCursorW(nullptr, IDC_SIZEWE));
+    return true;
 }
 
 bool EditorWindow::over_explorer(LPARAM data) const

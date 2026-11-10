@@ -45,6 +45,7 @@
 #include "ExplorerEntry.hpp"
 #include "ExplorerFolder.hpp"
 #include "ExplorerView.hpp"
+#include "ExplorerWidth.hpp"
 #include "FileBookmarks.hpp"
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
@@ -171,6 +172,11 @@ class EditorController final
     // 面の表示値（決定 3・8）。窓が押した行の木の位置（first_visible を足す）を決めるための口で、
     // frame の本文の行は作らない（command_palette_view と同じ形）。面が消えていれば値なし。
     [[nodiscard]] std::optional<ExplorerView> explorer_view() const;
+    // 出ている面の幅の求め（ADR 0162 の追補 D78）。ドラッグの間はその幅、ほかは設定
+    // explorer_width。
+    // 面が消えていれば値なし。窓が境の当たり・面と本文の配置を引く安い読みで、frame を作らない
+    // （マウスの動くたびに呼ばれる）。frame の ExplorerView.width と同じ値。
+    [[nodiscard]] std::optional<core::ExplorerWidth> explorer_width() const noexcept;
     // 帯の配置の入力を状態の 4 つの値（タブの本数・アクティブの位置・送り量・マウスを載せた要素）
     // から読むだけの口。行も題名も作らない（ADR 0056 の決定 9）。窓の hit test と hover が
     // マウスの動くたびに呼ぶ。width は帯の幅（物理画素）。値は title_bar_input(frame(), ...)
@@ -488,6 +494,7 @@ class EditorController final
     void accept(const PointExplorer &intent);
     void accept(const ScrollExplorer &intent);
     void accept(const ExplorerRootChosen &intent);
+    void accept(const ResizeExplorer &intent);
     // `:set root=.` の要求（決定 7）。
     void run_root_request(core::ExRootRequest request);
     // 設定 root へ書いて「root=<path>」を知らせる。書けなければ失敗の 1 行。
@@ -991,6 +998,8 @@ class EditorController final
     // 面の上で押した行の節の経路（決定 4・ADR 0056 の決定 9）。離したときに同じ節かを比べて消す。
     // 「…」の行と行の外を押したときは値なし（離しても何もしない）。
     std::optional<core::FilePath> explorer_pressed_;
+    // 境をドラッグしている間の面の幅（DIP・ADR 0162 の追補 D78）。設定には離したときにだけ書く。
+    std::optional<std::int32_t> explorer_dragged_;
     // 字体の一覧（#597・D58）。補完が求めた最初の 1 回だけ読み、読めなくても再読しない。
     std::optional<core::FontFamilies> font_families_;
     // プレビューの券（ADR 0155 の決定 6）。要求ごとに 1 つ進み、閉じて開き直しても戻さない

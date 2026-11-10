@@ -4,12 +4,14 @@
 #include "ExplorerEntry.hpp"
 #include "ExplorerFolder.hpp"
 #include "ExplorerNode.hpp"
+#include "ExplorerResizing.hpp"
 #include "ExplorerRow.hpp"
 #include "ExplorerRowView.hpp"
 #include "ExplorerState.hpp"
 #include "ExplorerStep.hpp"
 #include "ExplorerTree.hpp"
 #include "ExplorerView.hpp"
+#include "ExplorerWidth.hpp"
 #include "FileFolder.hpp"
 #include "FilePath.hpp"
 #include "FolderBatch.hpp"
@@ -17,6 +19,7 @@
 #include "FolderListingKind.hpp"
 #include "FolderProgress.hpp"
 #include "FolderRequest.hpp"
+#include "ResizeExplorer.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -257,6 +260,51 @@ void EditorController::accept(const ScrollExplorer &intent)
 void EditorController::accept(const ExplorerRootChosen &intent)
 {
     set_explorer_root(intent.folder);
+}
+
+// 面の幅のドラッグ（ADR 0162 の追補・施主決定 D78）。動かしている間は幅を状態に置くだけで設定に
+// 書かない。離したら動かした幅を、ダブルクリックなら「無し」（既定の式）を persist_settings の 1 本
+// で 1 回書く（同じ値なら書かない）。動かさずに離したときは書かない（押しただけで既定の式を
+// 数字に変えない）。面が消えていれば何もしない（ドラッグの印だけ消す）。
+void EditorController::accept(const ResizeExplorer &intent)
+{
+    if (!state_.settings().explorer)
+    {
+        explorer_dragged_.reset();
+        return;
+    }
+    auto settings = state_.settings();
+    switch (intent.resizing)
+    {
+    case ExplorerResizing::dragged:
+        explorer_dragged_ = intent.width_dips;
+        return;
+    case ExplorerResizing::released:
+        if (!std::exchange(explorer_dragged_, std::nullopt).has_value())
+        {
+            return;
+        }
+        settings.explorer_width = intent.width_dips;
+        break;
+    case ExplorerResizing::reset:
+        explorer_dragged_.reset();
+        settings.explorer_width = std::nullopt;
+        break;
+    }
+    if (!persist_settings(std::move(settings)))
+    {
+        reject(core::DisplayText::parse("Settings could not be saved").value());
+    }
+}
+
+std::optional<core::ExplorerWidth> EditorController::explorer_width() const noexcept
+{
+    if (!state_.settings().explorer)
+    {
+        return std::nullopt;
+    }
+    return core::ExplorerWidth{explorer_dragged_.has_value() ? explorer_dragged_
+                                                             : state_.settings().explorer_width};
 }
 
 // `:set root=.`（決定 7）。アクティブな文書のフォルダをルートにする。無題なら失敗の 1 行。
@@ -565,7 +613,12 @@ std::optional<ExplorerView> EditorController::explorer_view() const
         views.push_back(ExplorerRowView{row.more ? std::string{} : nodes[row.node].name, row.depth,
                                         row.folder, row.open, row.hidden, row.more});
     }
-    return ExplorerView{explorer.tree.root(), std::move(views), rows.size(),
-                        explorer.selected,    explorer.focused, first};
+    return ExplorerView{explorer.tree.root(),
+                        std::move(views),
+                        rows.size(),
+                        explorer.selected,
+                        explorer.focused,
+                        first,
+                        explorer_width().value_or(core::ExplorerWidth{})};
 }
 } // namespace nenenib::application

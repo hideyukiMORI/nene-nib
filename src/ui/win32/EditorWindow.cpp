@@ -95,13 +95,14 @@ core::PaneLayouts EditorWindow::body_panes(const core::EditorSettings &settings)
                               controller_.split().layout);
 }
 
-// 面の配置。出ているかは設定 explorer（面の表示値が frame に載るのと同じ値）が決める。
+// 面の配置。出ているかと幅は controller の explorer_width（面の表示値が frame に載るのと同じ値・
+// ドラッグの間はその幅・ADR 0162 の追補 D78）が決める。
 core::ExplorerLayout EditorWindow::explorer_frame(const core::EditorSettings &settings) const
 {
     RECT client{};
     GetClientRect(window_, &client);
     return core::explorer_layout(core::LayoutRect{0, 0, client.right, client.bottom}, dpi_,
-                                 settings.font_size, settings.explorer);
+                                 settings.font_size, controller_.explorer_width());
 }
 
 core::BodyLayout EditorWindow::active_body(const core::EditorSettings &settings) const

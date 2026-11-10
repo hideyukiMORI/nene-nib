@@ -100,16 +100,17 @@ constexpr std::array<LRESULT, 9> border_codes{HTNOWHERE, HTLEFT,       HTRIGHT,
 
 LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
 {
-    // マウスの 7 通。帯の上の要素は同じ 1 本の title_bar_target で引く（ADR 0056 の決定 9）。
+    // マウスの 7 通とカーソル。帯の上の要素は同じ 1 本の title_bar_target で引く（ADR 0056 の
+    // 決定 9）。面と本文の境（ADR 0162 の追補 D78）は面の行より先に引く。
     switch (message)
     {
     case WM_LBUTTONDOWN:
         click_client(data, counted_clicks(application::PointerClicks::single, data));
         return 0;
     case WM_LBUTTONDBLCLK:
-        // 面の上は面のダブルクリック（ADR 0162）。ほかは 2
+        // 境の上は既定の幅へ戻す（D78）。面の上は面のダブルクリック（ADR 0162）。ほかは 2
         // 回目の押しで、本文なら語を選ぶ（#1250）。
-        if (double_click_explorer(data))
+        if (reset_explorer_width(data) || double_click_explorer(data))
         {
             last_clicks_ = application::PointerClicks::single;
             return 0;
@@ -117,11 +118,7 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         click_client(data, counted_clicks(application::PointerClicks::double_, data));
         return 0;
     case WM_LBUTTONUP:
-        drag_selection(data);
-        end_selection_drag();
-        release_preview_task(data);
-        release_title_bar(data);
-        release_explorer(data);
+        release_left(data);
         return 0;
     case WM_MBUTTONDOWN:
         press_middle(data);
@@ -130,22 +127,42 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         middle_click(data);
         return 0;
     case WM_MOUSEMOVE:
+        drag_explorer_divider(data);
+        hover_explorer_divider(data);
         drag_selection(data);
         point_at(data);
         return 0;
     case WM_MOUSELEAVE:
+        over_explorer_divider_ = false;
         hover(std::nullopt);
         return 0;
     case WM_MOUSEWHEEL:
         turn_wheel(word, data);
         return 0;
     case WM_CAPTURECHANGED:
+        lose_explorer_divider();
         end_selection_drag();
         return 0;
+    case WM_SETCURSOR:
+        return explorer_divider_cursor(data) ? TRUE : DefWindowProcW(window_, message, word, data);
     default:
         break;
     }
     return DefWindowProcW(window_, message, word, data);
+}
+
+void EditorWindow::release_left(LPARAM data)
+{
+    // 境を押していたら、離したのは境のドラッグの終わりだけ（面の行・帯・本文の離しにしない・D78）。
+    if (release_explorer_divider(data))
+    {
+        return;
+    }
+    drag_selection(data);
+    end_selection_drag();
+    release_preview_task(data);
+    release_title_bar(data);
+    release_explorer(data);
 }
 
 core::TitleBarLayout EditorWindow::title_bar() const
@@ -347,7 +364,7 @@ void EditorWindow::click_client(LPARAM data, application::PointerClicks clicks)
         send(application::CancelCommand{});
         return;
     }
-    if (press_explorer(data))
+    if (press_explorer_divider(data) || press_explorer(data))
     {
         return;
     }

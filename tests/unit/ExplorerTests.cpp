@@ -1,6 +1,7 @@
 // Issue #997（ADR 0162 の決定 3〜6・9）: エクスプローラーの application の契約 `--explorer`。
 // 意図 4 つと焦点の 3 状態、FolderPort の entries の往復と古い券、読めないフォルダの 1 行、
 // ファイルを開く open_listed の道、設定の保存、Ctrl+P の面と port を分け合う順番を見る。
+// 面の幅のドラッグ（ResizeExplorer・追補 D78）は動かす間は書かず、離したときと戻したときだけ書く。
 // port はどれも替え玉で、時刻・スレッド・OS には触れない。
 #include "CommandInput.hpp"
 #include "CommandLine.hpp"
@@ -16,10 +17,12 @@
 #include "ExplorerKey.hpp"
 #include "ExplorerKeyKind.hpp"
 #include "ExplorerPointing.hpp"
+#include "ExplorerResizing.hpp"
 #include "ExplorerRootChosen.hpp"
 #include "ExplorerRowView.hpp"
 #include "ExplorerTree.hpp"
 #include "ExplorerView.hpp"
+#include "ExplorerWidth.hpp"
 #include "FilePath.hpp"
 #include "FolderBatch.hpp"
 #include "FolderEntry.hpp"
@@ -30,6 +33,7 @@
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "PointExplorer.hpp"
+#include "ResizeExplorer.hpp"
 #include "Scopes.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScriptedFolders.hpp"
@@ -610,6 +614,89 @@ void verify_palette_shares_port()
     const auto frame = deliver(editing, {entry_of("C:\\proj\\a", false)}, FolderProgress::complete);
     expect(printed(frame).starts_with("a;"), "the panel loads after the palette");
 }
+[[nodiscard]] app::ResizeExplorer resized(app::ExplorerResizing resizing, std::int32_t dips)
+{
+    return app::ResizeExplorer{resizing, dips};
+}
+
+// 窓の読み（explorer_width）と frame の面の幅（ExplorerView.width）の DIP。面が消えていれば -1、
+// 既定の式なら 0。
+[[nodiscard]] std::int32_t width_of(const app::EditorController &controller)
+{
+    const auto width = controller.explorer_width();
+    return width.has_value() ? width.value().dips.value_or(0) : -1;
+}
+
+[[nodiscard]] std::int32_t width_of(const app::EditorFrame &frame)
+{
+    return frame.explorer.has_value() ? view_of(frame).width.dips.value_or(0) : -1;
+}
+
+// 面の幅のドラッグ（追補 D78）。動かしている間は状態だけ、離したら 1 回書く、ダブルクリックは
+// 既定の式へ戻して書く。動かさずに離したら書かない。
+void verify_resize_writes_on_release()
+{
+    Editing editing(shown_at(project));
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    expect(width_of(controller) == 0 && width_of(controller.frame()) == 0,
+           "a settings file without explorer_width uses the default formula");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 300)));
+    expect(editing.settings().writes() == 0 && width_of(controller) == 0,
+           "releasing the divider without dragging writes nothing");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 300)));
+    const auto dragging = controller.apply_frame(resized(app::ExplorerResizing::dragged, 320));
+    expect(editing.settings().writes() == 0 && width_of(controller) == 320 &&
+               width_of(dragging) == 320 && !dragging.settings.explorer_width.has_value(),
+           "dragging shows the width without writing the settings");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 330)));
+    expect(editing.settings().writes() == 1 && saved(editing).explorer_width == 330 &&
+               width_of(controller) == 330 && width_of(controller.frame()) == 330,
+           "releasing writes the released width once");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 330)));
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 330)));
+    expect(editing.settings().writes() == 1, "the same width is not written again");
+    const auto reset = controller.apply_frame(resized(app::ExplorerResizing::reset, 0));
+    expect(editing.settings().writes() == 2 && !saved(editing).explorer_width.has_value() &&
+               width_of(reset) == 0,
+           "a double click goes back to the default formula and writes once");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::reset, 0)));
+    expect(editing.settings().writes() == 2, "resetting the default again writes nothing");
+}
+
+// 覚えた幅で起動する・面が消えていれば何もしない・書けなければ覚えた幅へ戻して知らせる（D78）。
+void verify_resize_remembered_and_hidden()
+{
+    auto remembered = core::default_editor_settings();
+    remembered.explorer = true;
+    remembered.explorer_width = 400;
+    Editing editing(SettingsReading{remembered});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    expect(width_of(controller) == 400 && width_of(controller.frame()) == 400,
+           "the remembered width is used at start");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 250)));
+    editing.settings().fail(app::SettingsFailure::unwritable);
+    const auto failed = controller.apply_frame(resized(app::ExplorerResizing::released, 250));
+    expect(message_of(failed) == "Settings could not be saved" && width_of(controller) == 400,
+           "a width that cannot be written is told and the remembered width stays");
+    editing.settings().fail(std::nullopt);
+    const auto cleared = controller.apply_frame(resized(app::ExplorerResizing::dragged, 260));
+    expect(message_of(cleared) == "-",
+           "dragging is a user operation and clears the one-intent message");
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    const auto writes = editing.settings().writes();
+    expect(width_of(controller) == -1 && width_of(controller.frame()) == -1,
+           "a hidden panel has no width");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 300)));
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 300)));
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::reset, 0)));
+    expect(editing.settings().writes() == writes && width_of(controller) == -1,
+           "a hidden panel ignores the divider");
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    expect(width_of(controller) == 400, "a panel shown again has the remembered width");
+}
 } // namespace
 
 void verify_explorer_contracts()
@@ -631,6 +718,8 @@ void verify_explorer_contracts()
     verify_truncated();
     verify_root_requests();
     verify_palette_shares_port();
+    verify_resize_writes_on_release();
+    verify_resize_remembered_and_hidden();
 }
 
 void verify_explorer_scope()

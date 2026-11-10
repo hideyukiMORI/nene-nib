@@ -1,6 +1,7 @@
 #include "SettingsCodec.hpp"
 
 #include "BuiltinThemes.hpp"
+#include "ExplorerLayout.hpp"
 #include "KeyMap.hpp"
 #include "KeyValueFields.hpp"
 #include "LanguageTable.hpp"
@@ -9,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <format>
 #include <functional>
 #include <optional>
@@ -25,17 +27,17 @@ using Field = std::optional<std::string_view> SettingsFields::*;
 
 // 鍵の名前と DTO の欄の対（同じ位置）。v4 だけの鍵も読むが、旧版にあれば apply_v4_fields
 // が拒否する。
-constexpr std::array<std::string_view, 16> field_names{
-    "version",     "colorscheme", "font_family",    "font_size", "guide",    "wrap",
-    "ui_language", "lsp",         "explorer",       "root",      "features", "mapleader",
-    "ignorecase",  "smartcase",   "relativenumber", "scrolloff"};
-constexpr std::array<Field, 16> field_members{
-    &SettingsFields::version,     &SettingsFields::colorscheme, &SettingsFields::font_family,
-    &SettingsFields::font_size,   &SettingsFields::guide,       &SettingsFields::wrap,
-    &SettingsFields::ui_language, &SettingsFields::lsp,         &SettingsFields::explorer,
-    &SettingsFields::root,        &SettingsFields::features,    &SettingsFields::mapleader,
-    &SettingsFields::ignorecase,  &SettingsFields::smartcase,   &SettingsFields::relativenumber,
-    &SettingsFields::scrolloff};
+constexpr std::array<std::string_view, 17> field_names{
+    "version",     "colorscheme", "font_family",    "font_size", "guide",         "wrap",
+    "ui_language", "lsp",         "explorer",       "root",      "features",      "mapleader",
+    "ignorecase",  "smartcase",   "relativenumber", "scrolloff", "explorer_width"};
+constexpr std::array<Field, 17> field_members{
+    &SettingsFields::version,     &SettingsFields::colorscheme,   &SettingsFields::font_family,
+    &SettingsFields::font_size,   &SettingsFields::guide,         &SettingsFields::wrap,
+    &SettingsFields::ui_language, &SettingsFields::lsp,           &SettingsFields::explorer,
+    &SettingsFields::root,        &SettingsFields::features,      &SettingsFields::mapleader,
+    &SettingsFields::ignorecase,  &SettingsFields::smartcase,     &SettingsFields::relativenumber,
+    &SettingsFields::scrolloff,   &SettingsFields::explorer_width};
 
 // 言語ごとのサーバーの命令の鍵 `lsp.<language>.command`（ADR 0160・ADR 0170 の決定 3）。
 constexpr std::string_view lsp_prefix = "lsp.";
@@ -288,13 +290,23 @@ later_scrolloff_from(const std::optional<std::string_view> &value)
     return parsed.value();
 }
 
+// 面の幅も後から足した鍵（ADR 0162 の追補・施主決定 D78）。無い・空・形の違う値はどれも既定の式
+// （値なし）で、設定の全体を拒まない（D78 の「壊れた値は既定」・ADR 0170 の追補）。値の読みは core
+// の explorer_width_of の 1 本。
+[[nodiscard]] std::optional<std::int32_t>
+later_explorer_width_from(const std::optional<std::string_view> &value) noexcept
+{
+    return value.has_value() ? core::explorer_width_of(value.value()) : std::nullopt;
+}
+
 [[nodiscard]] bool has_v4_fields(const SettingsFields &fields) noexcept
 {
     return fields.ui_language.has_value() || fields.lsp.has_value() ||
            fields.explorer.has_value() || fields.root.has_value() || fields.features.has_value() ||
            fields.ignorecase.has_value() || fields.smartcase.has_value() ||
            fields.relativenumber.has_value() || fields.scrolloff.has_value() ||
-           !fields.lsp_commands.empty() || !fields.maps.empty() || fields.mapleader.has_value();
+           fields.explorer_width.has_value() || !fields.lsp_commands.empty() ||
+           !fields.maps.empty() || fields.mapleader.has_value();
 }
 
 // `lsp.<language>.command=<値>` の行。言語は LanguageTable の名前だけ、同じ言語の 2 行目は
@@ -399,6 +411,7 @@ lsp_commands_from(const SettingsFields &fields)
     settings.smartcase = smartcase.value();
     settings.relativenumber = relativenumber.value();
     settings.scrolloff = scrolloff.value();
+    settings.explorer_width = later_explorer_width_from(fields.explorer_width);
     return apply_maps(settings, fields);
 }
 
@@ -550,14 +563,19 @@ std::string encode_settings(const core::EditorSettings &settings)
         break;
     }
     const auto root = settings.root.has_value() ? settings.root.value().text() : std::string_view{};
+    // 面の幅は無ければ空（既定の式）。書くときは必ず書く（ADR 0170 の追補・#1380）。
+    const auto explorer_width = settings.explorer_width.has_value()
+                                    ? std::to_string(settings.explorer_width.value())
+                                    : std::string{};
     return std::format("version=4\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
                        "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n"
-                       "ignorecase={}\nsmartcase={}\nrelativenumber={}\nscrolloff={}\n{}{}",
+                       "ignorecase={}\nsmartcase={}\nrelativenumber={}\nscrolloff={}\n"
+                       "explorer_width={}\n{}{}",
                        theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
                        language_text(settings.ui_language), switch_text(settings.lsp),
                        switch_text(settings.explorer), root, features_text(settings.features),
                        switch_text(settings.ignorecase), switch_text(settings.smartcase),
-                       switch_text(settings.relativenumber), settings.scrolloff,
+                       switch_text(settings.relativenumber), settings.scrolloff, explorer_width,
                        lsp_commands_text(settings.lsp_commands), maps_text(settings));
 }
 } // namespace nenenib::adapters::win32
