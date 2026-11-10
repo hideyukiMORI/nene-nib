@@ -53,3 +53,9 @@
 ## 追補 2026-10-30（#1136）: INSERT の `[` `]` も既定 `whichwrap=b,s` に従う
 
 決定 7 の固定の `b,s` には `[` `]` が無いので、Vim モードの INSERT の `<Left>` は行頭で、`<Right>` は行の内容の終わり（改行の手前）で止まり、行をまたがない（Vim の edit.c `ins_left` `ins_right`）。止まるときは失敗にせず INSERT を続け、何も変えない（Vim のビープは `:normal!` を止めない・回数の反復と `.` の記録と始めの位置も変えない・ADR 0028 の追補）。`<Up>` `<Down>` `<Home>` `<End>`・通常モードの矢印は変えない。
+
+## 追補 2026-11-11（#1364）: 1 桁目から 1 桁目までの `d<BS>` `c<BS>` はレジスタへ行単位で書く
+
+前の行の行末に止まった `d<BS>` `c<BS>`（Vim の nv_left が `CA_NO_ADJ_OP_END` を立てる）は、do_pending_operator の exclusive の言い換えを通らない。そのうえで範囲の始まりと終わりがどちらも 1 桁目で 2 行以上なら、Vim の op_yank（register.c の「If the cursor was in column 1 before and after the movement, and the operator is not inclusive, the yank is always linewise」）がレジスタを行単位で書く。間に空白だけの行があると回数の残りで 1 桁目まで戻り、この形になる（`x⏎␣␣⏎ab` の `Gd3<BS>`）。消す本文は文字単位のまま変わらない（`c` は行を残さず、`d` のキャレットは範囲の先頭で最初の非空白へ寄らない・Vim 9.1 の実測）。
+
+印は `VimMotionRange.yank_shape`（閉じた enum `VimYankShape`）で、立てるのは `operated` の `keeps_the_line_break` の枝の `column_one_yank` の 1 か所、読むのは `register_of` の 1 か所。ほかの exclusive な移動では言い換えが先に終わりを前の行へ戻す（1 桁目の始まりは常に字下げの中なので行単位になる）ので、この形は残らない。テキストオブジェクト（`it` `i{` `is` `ap` など）は Vim 9.1 の実測で Nib と一致していて変えない。fixture は `exclusive-linewise-blank-` の 14 件。
