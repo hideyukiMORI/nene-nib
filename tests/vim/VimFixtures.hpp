@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 6675cf6eeb68b86332641adfd7ee20017df8e44f8bb4ef2a52882a5a1242f076 / 3740 fixtures
+// fixtures.json: sha256 2344809fe7aa3eb8c937912292060dca6f41153ef81ba936bea67a696a56ce96 / 3750 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3740> vim_fixtures{{
+constexpr std::array<VimFixture, 3750> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3752,6 +3752,16 @@ constexpr std::array<VimFixture, 3740> vim_fixtures{{
     {"count-repeat-1334-N", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", "/e<CR>21N", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", 1, 13, "", "", std::nullopt},
     {"count-repeat-1334-star", "one x one y one\nz one", "9*", "one x one y one\nz one", 1, 7, "", "", std::nullopt},
     {"count-repeat-1334-hash", "one x one y one\nz one", "w10#", "one x one y one\nz one", 1, 5, "", "", std::nullopt},
+    {"window-path-1326-i-before-a-lone-mark", "́a", "iab<Esc>", "ab́a", 1, 2, "", "", std::nullopt},
+    {"window-path-1326-I-on-tab-space-and-mark", "\t ́x", "Iz<Esc>", "\t źx", 1, 3, "", "", std::nullopt},
+    {"window-path-1326-I-on-space-and-mark", " ́x", "Iz<Esc>", " źx", 1, 2, "", "", std::nullopt},
+    {"window-path-1326-a-on-a-lone-mark", "́a", "az<Esc>", "́za", 1, 3, "", "", std::nullopt},
+    {"window-path-1326-A-after-a-marked-end", "éx́", "Az<Esc>", "éx́z", 1, 7, "", "", std::nullopt},
+    {"window-path-1326-o-below-a-lone-mark", "́a", "oz<Esc>", "́a\nz", 2, 1, "", "", std::nullopt},
+    {"window-path-1326-insert-left-before-a-lone-mark", "́a", "ia<Left>b<Esc>", "báa", 1, 1, "", "", std::nullopt},
+    {"window-path-1326-insert-right-over-a-lone-mark", "́a", "i<Right>z<Esc>", "́za", 1, 3, "", "", std::nullopt},
+    {"window-path-1326-insert-ctrl-r-before-a-lone-mark", "́a\nxy", "j\"ay$k0i<C-r>az<Esc>", "xyźa\nxy", 1, 3, "xy", "v", std::nullopt},
+    {"window-path-1326-dot-replays-the-typed-insert", "́a\ńa", "iab<Esc>+.", "ab́a\nab́a", 2, 2, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
