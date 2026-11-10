@@ -16,6 +16,7 @@
 #include "OpenCommandPalette.hpp"
 #include "PlaceCaret.hpp"
 #include "Scopes.hpp"
+#include "ScrollLines.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
@@ -161,8 +162,8 @@ void verify_selection_edges()
            "Down with a selection on the last line collapses it and lands at the end");
 }
 
-// 4. もう端に居るときは何も変えない（選択も狙う横位置も画面の先頭も）。選択があって Shift なしなら
-// 畳むだけ。
+// 4. もう端に居るときはキャレット・選択・狙う横位置を変えない（画面がキャレットを見せていれば画面も
+// 変えない・離れていたときは 14）。選択があって Shift なしなら畳むだけ。
 void verify_already_at_edge()
 {
     Editing editing;
@@ -173,7 +174,7 @@ void verify_already_at_edge()
            "Down from a long line clamps to the end of the short last line");
     const auto still = controller.apply_frame(move(CaretMotion::next_line));
     expect(still.caret.position == at(2, 3) && selection_of(still).empty(),
-           "Down at the end of the text changes nothing");
+           "Down at the end of the text with the caret in view changes nothing");
     expect(caret_after(controller, move(CaretMotion::previous_line)) == at(1, 7),
            "Down at the end keeps the wanted x of the earlier Down");
     applied(controller, place(2, 1));
@@ -188,7 +189,7 @@ void verify_already_at_edge()
     applied(controller, place(1, 1));
     const auto top = controller.apply_frame(move(CaretMotion::previous_line));
     expect(top.caret.position == at(1, 1) && top.first_visible == core::LineNumber{1},
-           "Up at the start of the text changes nothing");
+           "Up at the start of the text with the caret in view changes nothing");
 }
 
 // 5. 端へ着いた後の狙う横位置は着いた位置の横位置（ブラウザの textarea と同じ）。
@@ -232,7 +233,7 @@ void verify_page_edges()
            "PgDn on the last page lands at the end with the last screen filled");
     const auto again = controller.apply_frame(move(CaretMotion::page_down));
     expect(again.caret.position == at(10, 3) && again.first_visible == core::LineNumber{8},
-           "PgDn at the end of the text changes nothing");
+           "PgDn at the end of the text with the caret in view changes nothing");
     expect(caret_after(controller, move(CaretMotion::page_up)) == at(7, 3),
            "PgUp after landing at the end goes up from the landed column");
     applied(controller, place(2, 2));
@@ -349,6 +350,135 @@ void verify_vim_unchanged()
     expect(caret_after(controller, move(CaretMotion::previous_line)) == at(1, 2),
            "Vim Up on the first line does not jump to the start");
 }
+
+// 12. Shift で末尾へ着いた後の Shift+↑ ↓ は、選択の起点を保ったまま着いた位置の横位置で伸び縮みする
+// （レビュー V-1392 の推奨 1）。
+void verify_selection_after_edge()
+{
+    Editing editing;
+    prepare(editing, "ab\ncdef", wide);
+    auto &controller = editing.controller();
+    applied(controller, place(2, 2));
+    const auto down =
+        controller.apply_frame(move(CaretMotion::next_line, SelectionAnchoring::extend));
+    expect(down.caret.position == at(2, 5) && selection_of(down) == "2:2-5",
+           "Shift+Down on the last line extends to the end of the text");
+    const auto up =
+        controller.apply_frame(move(CaretMotion::previous_line, SelectionAnchoring::extend));
+    expect(up.caret.position == at(1, 3) && selection_of(up) == "1:3-4|2:1-2",
+           "Shift+Up after landing goes up from the landed x and keeps the anchor");
+    const auto again =
+        controller.apply_frame(move(CaretMotion::next_line, SelectionAnchoring::extend));
+    expect(again.caret.position == at(2, 5) && selection_of(again) == "2:2-5",
+           "Shift+Down again comes back to the end with the same anchor");
+}
+
+// 13. もう端で何もしない ↓ は undo の切れ目を作らない（前後の打鍵は 1 単位に畳まれる）。
+void verify_idle_edge_keeps_undo_unit()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{3, wide});
+    applied(controller, app::InsertText{"a"});
+    expect(caret_after(controller, move(CaretMotion::next_line)) == at(1, 2),
+           "Down at the end of the typed text changes nothing");
+    applied(controller, app::InsertText{"b"});
+    expect(controller.text().size_bytes() == 2, "both letters are typed");
+    applied(controller, app::HistoryAction{core::HistoryDirection::undo});
+    expect(controller.text().size_bytes() == 0,
+           "undo removes both letters because the idle Down made no boundary");
+}
+
+[[nodiscard]] std::string ten_short_lines()
+{
+    std::string text = "ab";
+    for (std::size_t line = 1; line < 10; ++line)
+    {
+        text += "\nab";
+    }
+    return text;
+}
+
+// 14. もう端に居ても、画面がキャレットから離れていれば（ホイールで送った後）、キャレットが
+// 見える所へ送り返す（2026-11-10 のレビューの後の決め・ADR 0144 の決定 11）。キャレットは
+// 動かない。
+void verify_idle_edge_brings_caret_into_view()
+{
+    Editing editing;
+    prepare(editing, ten_short_lines(), wide);
+    auto &controller = editing.controller();
+    expect(controller.frame().first_visible == core::LineNumber{8} &&
+               controller.frame().caret.position == at(10, 3),
+           "the typed text leaves the caret at the end with the last screen shown");
+    for (const auto motion : {CaretMotion::next_line, CaretMotion::page_down})
+    {
+        applied(controller, app::ScrollLines{-99});
+        expect(controller.frame().first_visible == core::LineNumber{1},
+               "the wheel scrolls away from the caret at the end");
+        const auto back = controller.apply_frame(move(motion));
+        expect(back.caret.position == at(10, 3) && back.first_visible == core::LineNumber{8},
+               "Down or PgDn at the end scrolls the caret back into view without moving it");
+    }
+    applied(controller, place(1, 1));
+    for (const auto motion : {CaretMotion::previous_line, CaretMotion::page_up})
+    {
+        applied(controller, app::ScrollLines{99});
+        expect(controller.frame().first_visible == core::LineNumber{8},
+               "the wheel scrolls away from the caret at the start");
+        const auto back = controller.apply_frame(move(motion));
+        expect(back.caret.position == at(1, 1) && back.first_visible == core::LineNumber{1},
+               "Up or PgUp at the start scrolls the caret back into view without moving it");
+    }
+    Editing wrapped;
+    prepare(wrapped, "abcdefghijklmnopqrstuvwx", narrow, 2);
+    auto &rows = wrapped.controller();
+    applied(rows, app::ScrollLines{-99});
+    const auto away = rows.frame();
+    expect(!away.lines.empty() && away.lines.front().screen_row == 0,
+           "the wheel scrolls the wrapped line back to its first screen row");
+    const auto followed = rows.apply_frame(move(CaretMotion::next_line));
+    expect(followed.caret.position == at(1, 25) && !followed.lines.empty() &&
+               followed.lines.front().screen_row == -4,
+           "Down at the end of a wrapped line scrolls its last screen rows back into view");
+}
+
+// 15. Shift+PgDn は最後の頁で本文の末尾まで選択を伸ばし、格子の PgUp は最初の頁で本文の先頭へ着く。
+void verify_more_page_edges()
+{
+    Editing editing;
+    prepare(editing, ten_short_lines(), wide);
+    auto &controller = editing.controller();
+    applied(controller, place(9, 1));
+    const auto end =
+        controller.apply_frame(move(CaretMotion::page_down, SelectionAnchoring::extend));
+    expect(end.caret.position == at(10, 3) && selection_of(end).starts_with("9:1-") &&
+               selection_of(end).ends_with("|10:1-3"),
+           "Shift+PgDn on the last page extends the selection to the end of the text");
+    Editing grid;
+    auto &cells = grid.controller();
+    applied(cells, app::VisibleLines{3, grid_geometry});
+    applied(cells, app::InsertText{std::string(200, 'a')});
+    applied(cells, place(1, 12));
+    applied(cells, app::SelectDisplay{core::DisplayForm::grid});
+    applied(cells, app::SelectEditMode{core::EditMode::ordinary});
+    const auto start = cells.apply_frame(move(CaretMotion::page_up));
+    expect(start.caret.position == at(1, 1) && !start.grid.empty() && start.grid.front().row == 0,
+           "grid PgUp on the first page lands at the start of the text");
+}
+
+// 16. 幅のちょうど倍数で折り返す行の末尾から ↑ は、上の画面行へ戻る（末尾の向きが無い画面行を
+// 指さない）。
+void verify_exact_wrap_end()
+{
+    Editing editing;
+    prepare(editing, "abcdefgh", narrow);
+    auto &controller = editing.controller();
+    applied(controller, place(1, 6));
+    expect(caret_after(controller, move(CaretMotion::next_line)) == at(1, 9),
+           "Down on the last of two full screen rows lands at the end of the text");
+    expect(caret_after(controller, move(CaretMotion::previous_line)) == at(1, 5),
+           "Up from the end of an exactly wrapped line goes back to the upper screen row");
+}
 } // namespace
 
 void verify_edge_arrows_scope()
@@ -364,5 +494,10 @@ void verify_edge_arrows_scope()
     verify_grid_edges();
     verify_split_edges();
     verify_vim_unchanged();
+    verify_selection_after_edge();
+    verify_idle_edge_keeps_undo_unit();
+    verify_idle_edge_brings_caret_into_view();
+    verify_more_page_edges();
+    verify_exact_wrap_end();
 }
 } // namespace nenenib::tests

@@ -1580,7 +1580,7 @@ void verify_ordinary_page_end()
     }
     // 最後の頁の PgDn は本文の末尾へ着く（#1386・ADR 0144 の決定 11）。
     expect(grid_top_and_column(grid.controller()) == RowPair{22, 201},
-           "ordinary PgDn in the grid stops with the last 3 screen rows shown at the end");
+           "ordinary PgDn in the grid lands at the end with the last 3 screen rows shown");
 }
 
 void verify_grid_display_moves()

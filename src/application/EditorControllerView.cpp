@@ -267,10 +267,11 @@ bool EditorController::move_visual(const MoveCaret &intent)
 }
 
 // 本文の最初か最後の画面行で止まった上下の移動（↑ ↓ PgUp PgDn）は、本文の先頭か末尾へ着く
-// （施主の要望 2026-11-10・#1386・ADR 0144 の追補）。もう着いていれば何も変えない（狙う横位置も
-// 画面の先頭も）。着いた後の狙う横位置は着いた位置のもの（捨てて、次の上下で location から読む）。
-// 通るのは端に当たったときだけ。上下の移動の道に足すのは歩きが持つ印の読み 1 つで、文字組みの
-// 問い合わせは足さない（ADR 0128 の追従の遅延解決のまま）。
+// （施主の要望 2026-11-10・#1386・ADR 0144 の追補）。もう着いていればキャレット・選択・狙う横位置を
+// 変えず、画面がキャレットから離れていたときだけ見える所へ送り返す（追従を頼むだけで、見えていれば
+// 画面も不変・2026-11-10 のレビューの後の決め）。着いた後の狙う横位置は着いた位置のもの（捨てて、
+// 次の上下で location から読む）。通るのは端に当たったときだけ。上下の移動の道に足すのは歩きが持つ
+// 印の読み 1 つで、文字組みの問い合わせは足さない（ADR 0128 の追従の遅延解決のまま）。
 void EditorController::move_to_text_edge(VisualTextView &view, const MoveCaret &intent,
                                          std::int64_t rows)
 {
@@ -280,6 +281,7 @@ void EditorController::move_to_text_edge(VisualTextView &view, const MoveCaret &
     if (selection.caret == edge &&
         (collapsed || intent.anchoring == core::SelectionAnchoring::extend))
     {
+        follow_caret();
         return;
     }
     if (page_motion(intent.motion) && !page_top_shifted(view, rows))
