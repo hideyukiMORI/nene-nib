@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 ea3160584d565d15e192ec0b32d07df70b03823458aef8dc4b0cc60916db602f / 3906 fixtures
+// fixtures.json: sha256 f07a4f1b5c1ef498aacab9e79ae510d714260b0847269ecace82ed104e7f118f / 3923 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3906> vim_fixtures{{
+constexpr std::array<VimFixture, 3923> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3918,6 +3918,23 @@ constexpr std::array<VimFixture, 3906> vim_fixtures{{
     {"huge-count-shift-covers-every-line", "a\nb\nc", "999999999>>", "\ta\n\tb\n\tc", 1, 2, "", "", std::nullopt},
     {"huge-count-tilde-stops-at-the-line-end", "abc\ndef", "999999999~", "ABC\ndef", 1, 3, "", "", std::nullopt},
     {"huge-count-replace-past-the-line-end-fails", "abc", "999999999rx", "abc", 1, 1, "", "", std::nullopt},
+    {"visual-jump-mark-line-shift-right", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "12jV2{>''", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\n\ts1\n\ts2\n\n\tt1", 13, 2, "", "", std::nullopt},
+    {"visual-jump-mark-char-shift-right", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "12jv2{>''", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\n\ts1\n\ts2\n\n\tt1", 13, 2, "", "", std::nullopt},
+    {"visual-jump-mark-line-shift-left", "\tp1\n\tp2\n\n\tq1\n\tq2\n\n\tr1\n\tr2\n\n\ts1\n\ts2\n\n\tt1", "12jV2{<''", "\tp1\n\tp2\n\n\tq1\n\tq2\n\n\tr1\n\tr2\n\ns1\ns2\n\nt1", 13, 1, "", "", std::nullopt},
+    {"visual-jump-mark-line-tilde", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "12jV2{~''", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\nS1\nS2\n\nT1", 13, 1, "", "", std::nullopt},
+    {"visual-jump-mark-char-tilde", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "12jv2{~''", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\nS1\nS2\n\nT1", 13, 1, "", "", std::nullopt},
+    {"visual-jump-mark-char-upper", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "12jv2{U''", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\nS1\nS2\n\nT1", 13, 1, "", "", std::nullopt},
+    {"visual-jump-mark-char-lower", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "12jv2{u''", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", 13, 1, "", "", std::nullopt},
+    {"visual-jump-mark-gg-shift", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "12jVgg>''", "\tp1\n\tp2\n\n\tq1\n\tq2\n\n\tr1\n\tr2\n\n\ts1\n\ts2\n\n\tt1", 13, 2, "", "", std::nullopt},
+    {"visual-jump-mark-char-replace", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "12jv2{rx''", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\nxx\nxx\n\nx1", 13, 1, "", "", std::nullopt},
+    {"visual-jump-mark-named-shift", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "12jmaV2{>'a", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\n\ts1\n\ts2\n\n\tt1", 13, 2, "", "", std::nullopt},
+    {"visual-jump-mark-named-tilde", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "12jmav2{~'a", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\nS1\nS2\n\nT1", 13, 1, "", "", std::nullopt},
+    {"visual-jump-mark-operator-shift", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "12jma>gg'a", "\tp1\n\tp2\n\n\tq1\n\tq2\n\n\tr1\n\tr2\n\n\ts1\n\ts2\n\n\tt1", 13, 2, "", "", std::nullopt},
+    {"visual-jump-mark-operator-case", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "12jmagUgg'a", "P1\nP2\n\nQ1\nQ2\n\nR1\nR2\n\nS1\nS2\n\nT1", 13, 1, "", "", std::nullopt},
+    {"visual-jump-mark-escape-control", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "12jV2{<Esc>''", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", 13, 1, "", "", std::nullopt},
+    {"visual-jump-mark-join-control", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "12jmakkkJ'a", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1 s2\n\nt1", 12, 1, "", "", std::nullopt},
+    {"visual-jump-mark-gv-after-line-shift", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "3jVj>ggjgvd", "p1\np2\n\n\nr1\nr2\n\ns1\ns2\n\nt1", 4, 1, "\tq1\n\tq2\n", "V", std::nullopt},
+    {"visual-jump-mark-gv-after-char-tilde", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "3jvjl~ggjgvd", "p1\np2\n\n\n\nr1\nr2\n\ns1\ns2\n\nt1", 4, 1, "Q1\nQ2", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

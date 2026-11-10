@@ -19,7 +19,9 @@
 #include "VimCharacter.hpp"
 #include "VimJumpLists.hpp"
 #include "VimKey.hpp"
+#include "VimLineMarks.hpp"
 #include "VimMarkEdits.hpp"
+#include "VimMarks.hpp"
 #include "VimMode.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
@@ -28,9 +30,11 @@
 #include <algorithm>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 
 namespace nenenib::application
 {
@@ -153,11 +157,31 @@ constexpr std::string_view date_time_insert_only_notice = "INSERT モードで F
 // 貼り付けの知らせ（ADR 0157 の決定 3・7）。鳴らさない情報の 1 行。
 constexpr std::string_view html_missing_notice = "HTML が無いので文字だけを貼りました";
 constexpr std::string_view html_unconverted_notice = "HTML を変換できないので文字だけを貼りました";
+
+// 編集で行がずれたマーク（ADR 0152 の決定 6）。行をその場で書き換えた置き換え（kept）は Vim が
+// mark_adjust を呼ばないので動かさない（#1360）。矩形は行ごとの置き換えで直す（#1361）。
+[[nodiscard]] core::VimMarks
+edited_marks(const core::VimMarks &marks, const core::TextBuffer &before, const core::Edit &edit,
+             const std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> &lines)
+{
+    if (const auto *const block_lines = std::get_if<std::span<const core::VimBlockEdit>>(&lines))
+    {
+        return core::marks_block_adjusted(marks, before, *block_lines);
+    }
+    switch (std::get<core::VimLineMarks>(lines))
+    {
+    case core::VimLineMarks::kept:
+        return marks;
+    case core::VimLineMarks::shifted:
+        return core::marks_adjusted(marks, before, edit);
+    }
+    std::unreachable();
+}
 } // namespace
 
-void EditorController::replace(const core::OffsetRange &range, std::string_view text,
-                               core::EditBoundary boundary,
-                               std::span<const core::VimBlockEdit> block_lines)
+void EditorController::replace(
+    const core::OffsetRange &range, std::string_view text, core::EditBoundary boundary,
+    std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> lines)
 {
     // 編集を始める瞬間のキャレット。Vim の u と Ctrl-r の戻り先で、書くのはここだけ（ADR 0052 の
     // 決定 2）。
@@ -183,9 +207,7 @@ void EditorController::replace(const core::OffsetRange &range, std::string_view 
     const bool started =
         history.position() != before &&
         (!replay_history_.has_value() || before == replay_history_.value().position());
-    auto marks = block_lines.empty()
-                     ? core::marks_adjusted(state_.vim_marks(), state_.text(), edit)
-                     : core::marks_block_adjusted(state_.vim_marks(), state_.text(), block_lines);
+    auto marks = edited_marks(state_.vim_marks(), state_.text(), edit, lines);
     marks.last_change = core::vim_last_change_of(state_.text(), edit);
     marks = core::vim_change_recorded(marks, marks.last_change.value(), started);
     state_ = state_.with_vim_marks(std::move(marks));

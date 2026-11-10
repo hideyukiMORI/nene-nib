@@ -105,6 +105,7 @@
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
 #include "VimKeySource.hpp"
+#include "VimLineMarks.hpp"
 #include "VimMapMode.hpp"
 #include "VimMarks.hpp"
 #include "VimPattern.hpp"
@@ -797,10 +798,12 @@ class EditorController final
     // INSERT にいるあいだの編集は 1 つの undo 単位に吸収する（ADR 0015 の決定 5）。
     [[nodiscard]] core::EditBoundary vim_boundary() const noexcept;
 
-    // block_lines は矩形の行ごとの置き換え（apply_block だけが渡す）。渡すとマークは行ごとに直す
-    // （marks_block_adjusted・#1361）。
+    // lines はマークの行の直し方。矩形の行ごとの置き換え（apply_block だけが渡す）ならマークは
+    // 行ごとに直し（marks_block_adjusted・#1361）、VimLineMarks::kept（VimReplaceRange が渡す）なら
+    // 行をその場で書き換えた置き換えでマークの行を動かさない（#1360）。
     void replace(const core::OffsetRange &range, std::string_view text, core::EditBoundary boundary,
-                 std::span<const core::VimBlockEdit> block_lines = {});
+                 std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> lines =
+                     core::VimLineMarks::shifted);
     void move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring,
                        core::CaretAffinity affinity = core::CaretAffinity::leading);
     void accept(const PointText &intent);

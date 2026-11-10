@@ -712,10 +712,10 @@ namespace detail
         without_newline_carriage_returns(text.text_range(span.begin, span.end), text.line_ending()),
         operation);
     const Offset landing = cased_caret(text, span, body, caret);
-    return restored_at(
-        VimStep{vim_resting_from(state, state.unnamed_register),
-                VimReplaceRange{span, std::move(body), landing, EditBoundary::separate}},
-        caret);
+    return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
+                               VimReplaceRange{span, std::move(body), landing,
+                                               EditBoundary::separate, VimLineMarks::kept}},
+                       caret);
 }
 } // namespace detail
 
@@ -837,10 +837,10 @@ namespace detail
     }
     const OffsetRange span{text.line_start(first), text.line_end(last)};
     const Offset caret{span.begin.value + first_line_first_non_blank(body)};
-    return restored_at(
-        VimStep{vim_resting_from(state, state.unnamed_register),
-                VimReplaceRange{span, std::move(body), caret, EditBoundary::separate}},
-        range.restore.value_or(range.range.begin));
+    return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
+                               VimReplaceRange{span, std::move(body), caret, EditBoundary::separate,
+                                               VimLineMarks::kept}},
+                       range.restore.value_or(range.range.begin));
 }
 } // namespace detail
 
@@ -1084,7 +1084,7 @@ namespace detail
     const OffsetRange span{text.line_start(first), text.line_end(last)};
     return VimStep{vim_resting_from(state, state.unnamed_register),
                    VimReplaceRange{span, std::move(body), Offset{span.begin.value + joint},
-                                   EditBoundary::separate}};
+                                   EditBoundary::separate, VimLineMarks::shifted}};
 }
 
 // `~`（決定 10・tildeop off）。キャレットから回数の文字（結合文字ごと）を反転し、行末で止まる。
@@ -1104,9 +1104,9 @@ namespace detail
                                    ? vim_character_start(body, Offset{body.size()}).value
                                    : body.size();
     const Offset landing{caret.value + landed};
-    return VimStep{
-        vim_resting_from(state, state.unnamed_register),
-        VimReplaceRange{OffsetRange{caret, end}, std::move(body), landing, EditBoundary::separate}};
+    return VimStep{vim_resting_from(state, state.unnamed_register),
+                   VimReplaceRange{OffsetRange{caret, end}, std::move(body), landing,
+                                   EditBoundary::separate, VimLineMarks::kept}};
 }
 
 // いま効かせるオペレータ。保留が無ければ「消す」＝ x が通る道（x は保留を立てずにここへ来る）。
