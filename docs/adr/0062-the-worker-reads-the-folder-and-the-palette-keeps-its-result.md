@@ -101,6 +101,25 @@ Ctrl+P の 3 本目の出どころ「同じフォルダ」は、今見ている�
 - #271 の実装: 意図 `WorkCompleted` は使う人の操作ではないので、controller の入口は Ctrl+Tab の歩きを続け、知らせを消さない。#271 では何もしなかった。#272 から `collect()` を 1 回呼び、今の券の結果を面へ写す。
 - #900 の追補（行の文字組みの保持）: renderer は面の見えている行の欄（名前・場所・右端の補足・鍵）の DirectWrite の layout を `src/ui/win32` の `PaletteRowLayouts` に保持し、打鍵の前後で同じ行は作り直さない。鍵は `PaletteRowKey`（書式の同一性＝字体と大きさ・焼き方 `PaletteTextRole`（`plain` 名前と鍵・`trimmed` 場所の文字単位の省略・`trailing` 右寄せの補足）・表示文字列・欄の幅と高さ・DPI）。原点・色・選択の地は描くたびに与えるので鍵に入れない（ADR 0114 の保持と同じ形）。上限は `palette_row_limit` の 4 倍（32 欄）で、越えたら最も前に使ったものから捨てる（#1125 で世代番号の最小を探す形から、鍵の hash で引き最後に引いた順の list の末尾を捨てる形に変えた・捨てる順は同じ・ADR 0162 の #1125 の追補 2）。書式と DPI の作り直し（`create_text_formats` / `create_body_formats`）と面を閉じた frame で全部捨て、device lost は renderer ごと作り直すので保持も消える。作れなかった layout は覚えない。名前の欄は場所の有無によらず同じ layout を `DrawTextLayout` で描く（`DrawTextW` と同じ画素・`tests/ui` の `GutterLayoutTests`）。契約は `nib_window_tests --palette`。
 
+## 追補（2026-11-10・#1296・「合図か」を 1 本に）
+
+性質の試験 #1288 が、通常モードの上下の移動の狙いの横位置（`wanted_x_`）を `WorkCompleted` 1 つが捨てる破れを見つけた。原因は、入口の「使う人の操作か」の列のうち `keeps_wanted_x` だけが合図を個別に並べ、`WorkCompleted` と `MapTimeout` が漏れていたこと。
+
+1. **「合図か」を決めるのは application の `detail::is_signal` の 1 本**（`EditorControllerDetail.cpp`）。合図は `WorkCompleted`・`AutosaveTick`・`PreviewTick`・`LanguageServerTick`・`MapTimeout`。`not_user_operation` は `is_signal` に窓の寸法・外観・帯の hover を足したもの、`keeps_wanted_x` は `MoveCaret`・`ScrollPane`・`is_signal`。合図を足すときは `is_signal` に 1 行足す。
+2. **合図が文書かキャレットを動かしたら狙いを捨てる**: 合図は狙いを保つが、写した後に「アクティブなタブの退避番号・本文の改訂（`EditHistory::revision()`）・キャレット」が合図の前と違えば `apply` が `wanted_x_` を捨てる（読み終えた文書の採用でタブが替わる・`MapTimeout` が待ちの鍵を流す）。古い文書の狙いの桁で新しい文書を動かさない。
+3. 入口の列と合図（前 → 後）:
+
+| 列 | 判定 | 前 | 後 |
+| --- | --- | --- | --- |
+| `keeps_tab_walk`（歩きを続ける） | `not_user_operation` | 合図 5 つとも入る | 同じ（`is_signal` 経由） |
+| `begin_intent`（知らせを残す） | `not_user_operation` ほか | 5 つとも入る | 同じ |
+| `keeps_key_map_pending`（`map` の待ちを保つ） | `not_user_operation` | 5 つとも入る | 同じ |
+| `passes_full_preview`（全面プレビューの間に通す） | `not_user_operation` | 5 つとも入る | 同じ |
+| `keeps_wanted_x`（狙いの横位置を保つ） | 個別の列 | `AutosaveTick` `PreviewTick` `LanguageServerTick` だけ・**`WorkCompleted` `MapTimeout` が漏れ** | `is_signal`（5 つ） |
+
+   ほかに意図の種類で分ける所: ui の `deliver` は `CommitText` / `CancelComposition` だけを見る（IME の取消）で合図に依らない。Vim の待ち・`.` の記録・マクロの録画・undo のまとめは engine の状態で、合図は `vim_step` を通らない（`MapTimeout` は待ちの鍵を流すのが役目）。面の選択は `WorkCompleted` の `extended` が保つ（決定 14〜18）。ダブルクリックの数は OS の `clicks` で、意図の列に依らない。実害のある漏れは `keeps_wanted_x` の 1 つだけだった。窓の寸法・外観・帯の hover（`VisibleLines` `TitleBarWidth` `RefreshAppearance` `PointTitleBar`）は今も狙いを捨てる（寸法と字体が変われば画素の狙いが別の桁を指すため・本追補では変えない）。
+4. 試験: `nib_tests --controller-mixed-property` の性質 4 は `MoveCaret` の直前にも `WorkCompleted` を挟む（#1288 の絞りを外した）。もとの生成器は本番の 5 組に `MoveCaret` が 1 つだけで直前の `WorkCompleted` が 0 だったので、上下と行頭・行末の移動を 2〜4 個続ける `make_moves` を足した（本番の 5 組で `MoveCaret` 13・直前の `WorkCompleted` 1）。列が変わったので、届く状態の検査の seed を 12881 から 12883 にした（12881 の 4 件は INSERT に届かなくなった）。手元の 50 倍の走りは合図と関係の無い既存の破れ #1309（Vim の `$` の後の `DeleteText` が結合文字の途中にキャレットを置く）で落ちる。手書きの `verify_known_cases` は #1296 の最小の再現に、合図 1 つ（`AutosaveTick`・`WorkCompleted`）と 2 つ続き（`WorkCompleted` `PreviewTick`・`LanguageServerTick` `MapTimeout`・`WorkCompleted` ×2）を挟んで合図なしと同じ着地（3 行 7 桁）を見る。`verify_signals_reach_moves` は本番の組の合図を挟んだ列に `WorkCompleted`・`AutosaveTick`・`MoveCaret` が各 5 回以上、`MoveCaret` の直前の `WorkCompleted` が 1 回以上出ることを数える。`--open-async` の `verify_adopted_read_drops_wanted_x` は、読み終えた文書の採用でタブが替わった後の下への移動が新しいキャレットから決まることを見る。
+
 ## 却下した選択肢
 
 | 選択肢 | 却下の理由 |

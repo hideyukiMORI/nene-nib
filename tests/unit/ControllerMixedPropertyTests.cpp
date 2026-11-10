@@ -11,8 +11,8 @@
 //      エクスプローラーの焦点は面が出ているときだけ。
 //   4. 合図（WorkCompleted と AutosaveTick）を任意の位置に挟んだ列と挟まない列で、使う人の
 //      各意図の後の観測（本文・キャレット・選択・帯・モード・Vim の待ち・入力行・面・知らせ）が
-//      同じ（CLAUDE.md §2「合図は使う人の操作ではない」）。MoveCaret の直前には WorkCompleted を
-//      挟まない（#1296 の破れを含まない範囲に絞る・既知の組に最小の再現の説明）。
+//      同じ（CLAUDE.md §2「合図は使う人の操作ではない」）。MoveCaret の直前にも WorkCompleted を
+//      挟む（#1296 で絞りを外した・既知の組に最小の再現）。
 //   5. 列の終わりに入力行・変換・焦点を閉じて通常モードへ戻し、帯の各タブで undo を歩の数より
 //      多く打つと、そのタブが開いたときの本文（ファイルの本文・無題は空）に戻る。
 // port は替え玉だけ（ファイル・クリップボード・時計・印刷・LSP・フォルダに触れない）。フォルダの
@@ -104,6 +104,8 @@ constexpr std::size_t step_floor = 30U;
 constexpr std::size_t step_spread = 41U;
 constexpr std::size_t visible_lines = 400U;
 constexpr std::size_t tab_reach = 6U;
+// 本番の組の合図を挟んだ列に、種類ごとに少なくとも出る回数（#1296）。
+constexpr std::size_t signal_floor = 5U;
 
 constexpr std::array<std::string_view, 3> paths{"C:\\m\\a.txt", "C:\\m\\b.txt", "C:\\m\\c.md"};
 constexpr std::array<std::string_view, 12> body_tokens{
@@ -515,7 +517,10 @@ void append_band(std::string &out, const app::EditorFrame &frame)
 {
     const auto *intent = std::get_if<app::EditorIntent>(&action);
     return intent != nullptr && (std::holds_alternative<app::WorkCompleted>(*intent) ||
-                                 std::holds_alternative<app::AutosaveTick>(*intent));
+                                 std::holds_alternative<app::AutosaveTick>(*intent) ||
+                                 std::holds_alternative<app::PreviewTick>(*intent) ||
+                                 std::holds_alternative<app::LanguageServerTick>(*intent) ||
+                                 std::holds_alternative<app::MapTimeout>(*intent));
 }
 
 void open_files(Editing &editing, const Bodies &bodies)
@@ -646,16 +651,13 @@ void settle_for_undo(app::EditorController &controller)
     return intent != nullptr && std::holds_alternative<app::MoveCaret>(*intent);
 }
 
-// 0 個以上の合図を 1 つずつ確率 1/3 で足す。next は合図の後に来る歩（列の末尾なら無し）。
-// MoveCaret の直前には WorkCompleted を挟まない: いまの製品は WorkCompleted で通常モードの
-// 上下の移動の狙いの横位置を捨てる（#1296・keeps_wanted_x に WorkCompleted が無い）。その破れを
-// 含まない範囲に性質を絞る。#1296 が直ったらこの絞りを外す。
-void append_signals(Random &random, std::vector<Step> &steps, const Step *next)
+// 0 個以上の合図を 1 つずつ確率 1/3 で足す。どの歩の前にも WorkCompleted を挟める（#1296 で
+// 上下の移動の前の絞りを外した）。
+void append_signals(Random &random, std::vector<Step> &steps)
 {
-    const bool work_allowed = next == nullptr || !moves_caret(*next);
     while (below(random, 3U) == 0U)
     {
-        const bool work = below(random, 2U) == 0U && work_allowed;
+        const bool work = below(random, 2U) == 0U;
         steps.emplace_back(work ? "work_completed" : "autosave_tick",
                            work ? Action{app::EditorIntent{app::WorkCompleted{}}}
                                 : Action{app::EditorIntent{app::AutosaveTick{}}});
@@ -668,12 +670,11 @@ void append_signals(Random &random, std::vector<Step> &steps, const Step *next)
     Random random{seed};
     Case output{input.first, {}};
     const auto &steps = input.second;
-    append_signals(random, output.second, steps.empty() ? nullptr : &steps.front());
-    for (std::size_t index = 0; index < steps.size(); ++index)
+    append_signals(random, output.second);
+    for (const Step &step : steps)
     {
-        output.second.push_back(steps.at(index));
-        append_signals(random, output.second,
-                       index + 1U < steps.size() ? &steps.at(index + 1U) : nullptr);
+        output.second.push_back(step);
+        append_signals(random, output.second);
     }
     return output;
 }
@@ -803,6 +804,19 @@ void make_tabs(Random &random, Steps &steps)
     steps.push_back(made.at(kind));
 }
 
+// 上下の移動の続き（#1296）: 通常モードの上下と行頭・行末の移動を 2〜4 個続ける。狙いの横位置
+// （wanted_x）は続けた上下の移動の間だけ生きるので、合図がその間に挟まる形を作る。
+void make_moves(Random &random, Steps &steps)
+{
+    for (std::size_t count = 2U + below(random, 3U); count > 0U; --count)
+    {
+        const std::size_t motion = below(random, 4U);
+        steps.push_back(intent_step(
+            "move " + std::to_string(motion + 2U),
+            app::MoveCaret{motions.at(motion + 2U), core::SelectionAnchoring::collapse}));
+    }
+}
+
 void make_edit(Random &random, Steps &steps)
 {
     const std::size_t kind = below(random, 8U);
@@ -884,10 +898,11 @@ void make_ime(Random &random, Steps &steps)
 
 using Maker = void (*)(Random &, Steps &);
 // 行の重みは並べた回数。鍵と編集を厚くし、面・行・タブ・パネル・IME を同じくらいに混ぜる。
-constexpr std::array<Maker, 20> makers{make_keys, make_keys,    make_keys,   make_keys, make_keys,
-                                       make_edit, make_edit,    make_edit,   make_mode, make_mode,
-                                       make_ex,   make_palette, make_find,   make_tabs, make_tabs,
-                                       make_tabs, make_panels,  make_panels, make_ime,  make_ime};
+// 上下の移動の続き（make_moves）は #1296 で足した。
+constexpr std::array<Maker, 21> makers{
+    make_keys, make_keys, make_keys,   make_keys,   make_keys,    make_edit, make_edit,
+    make_edit, make_mode, make_mode,   make_ex,     make_palette, make_find, make_tabs,
+    make_tabs, make_tabs, make_panels, make_panels, make_ime,     make_ime,  make_moves};
 
 [[nodiscard]] std::string random_body(Random &random)
 {
@@ -1034,13 +1049,12 @@ void count_reached(Reached &reached, const app::EditorController &controller,
     }
 }
 
-// 生成した列が面・入力行・Vim の INSERT・エクスプローラーの焦点・変換・複数タブ・歩きの途中・
-// 本文の変更に届く。どれかが 0 なら性質の試験はその状態を見ていない。
-void verify_generator_reaches_the_states()
+// seed から作った cases 件の列を流し、届いた状態を数える。
+[[nodiscard]] Reached reached_by(std::uint64_t seed, std::size_t cases)
 {
-    Random random{12881U};
+    Random random{seed};
     Reached reached{};
-    for (std::size_t index = 0; index < 4U; ++index)
+    for (std::size_t index = 0; index < cases; ++index)
     {
         const Case input = random_case(random);
         Editing editing;
@@ -1052,6 +1066,16 @@ void verify_generator_reaches_the_states()
             count_reached(reached, editing.controller(), frame);
         }
     }
+    return reached;
+}
+
+// 生成した列が面・入力行・Vim の INSERT・エクスプローラーの焦点・変換・複数タブ・歩きの途中・
+// 本文の変更に届く。どれかが 0 なら性質の試験はその状態を見ていない。seed は #1296 で生成器に
+// 上下の移動の続きを足したとき 12881 から 12883 にした（12881 の 4 件は INSERT に届かなくなった・
+// 12881〜12896 の 16 個のうち 13 個が全部に届く）。
+void verify_generator_reaches_the_states()
+{
+    const Reached reached = reached_by(12883U, 4U);
     expect(std::ranges::all_of(reached, [](std::size_t count) { return count > 0U; }),
            "the mixed cases reach the palette, an input line, INSERT, the explorer focus, a "
            "composition, several tabs, a walk and a modified document");
@@ -1062,31 +1086,75 @@ void verify_generator_reaches_the_states()
     return intent_step("move", app::MoveCaret{motion, core::SelectionAnchoring::collapse});
 }
 
-// 通常モードの上下の移動の狙いの横位置（wanted_x）を AutosaveTick を挟んでも保つ。同じ列の
-// 最後の 2 つの移動の間に WorkCompleted を挟むと、いまの製品は 3 行 2 桁へ着く（#1296 の最小の
-// 再現・直るまで性質は MoveCaret の直前に WorkCompleted を挟まない）。
+// 2 つの移動の間（列の 5 歩目の前）に合図の列 signals を挟んだ列。
+[[nodiscard]] Case between_moves(const Case &input, const std::vector<Step> &signals)
+{
+    Case output = input;
+    output.second.insert(std::next(output.second.begin(), 4), signals.begin(), signals.end());
+    return output;
+}
+
+// 通常モードの上下の移動の狙いの横位置（wanted_x）を、どの合図を挟んでも保つ（#1296 の最小の
+// 再現・直す前は WorkCompleted を挟むと 3 行 2 桁へ着いた）。合図が 2 つ続いても同じ。
 void verify_known_cases()
 {
     const Case wanted{Bodies{"abcdef\nx\nabcdef", "", ""},
                       {moved(core::CaretMotion::line_end), moved(core::CaretMotion::document_start),
                        moved(core::CaretMotion::line_end), moved(core::CaretMotion::next_line),
                        moved(core::CaretMotion::next_line)}};
-    Case tick = wanted;
-    tick.second.insert(std::next(tick.second.begin(), 4), intent_step("tick", app::AutosaveTick{}));
     const auto plain = outcome_of(wanted, false);
-    const auto ticked = outcome_of(tick, false);
     expect(plain.first.empty() && plain.second.back().starts_with("abcdef\nx\nabcdef|3,7,"),
            "two downward moves through a short line land back on the wanted column");
-    expect(ticked.first.empty() && ticked.second == plain.second,
-           "an AutosaveTick between two vertical moves keeps the wanted column");
-    const Case signals = signalled(wanted, 7U);
-    bool narrowed = true;
-    for (std::size_t index = 0; index + 1U < signals.second.size(); ++index)
+    const std::array<std::vector<Step>, 5> signal_runs{
+        std::vector<Step>{intent_step("tick", app::AutosaveTick{})},
+        std::vector<Step>{intent_step("work", app::WorkCompleted{})},
+        std::vector<Step>{intent_step("work", app::WorkCompleted{}),
+                          intent_step("preview", app::PreviewTick{})},
+        std::vector<Step>{intent_step("server", app::LanguageServerTick{}),
+                          intent_step("map", app::MapTimeout{})},
+        std::vector<Step>{intent_step("work", app::WorkCompleted{}),
+                          intent_step("work", app::WorkCompleted{})}};
+    for (const auto &signals : signal_runs)
     {
-        narrowed = narrowed && !(signals.second.at(index).first == "work_completed" &&
-                                 moves_caret(signals.second.at(index + 1U)));
+        const auto mixed = outcome_of(between_moves(wanted, signals), false);
+        expect(mixed.first.empty() && mixed.second == plain.second,
+               "signals between two vertical moves keep the wanted column (#1296)");
     }
-    expect(narrowed, "the signals put no WorkCompleted right before a MoveCaret (#1296)");
+}
+
+// 合図の種類ごとの出た回数（WorkCompleted・AutosaveTick・MoveCaret・MoveCaret の直前の
+// WorkCompleted）。
+using SignalCounts = std::array<std::size_t, 4>;
+
+void count_signals(SignalCounts &counts, const std::vector<Step> &steps)
+{
+    for (std::size_t index = 0; index < steps.size(); ++index)
+    {
+        const Step &step = steps.at(index);
+        const bool work = step.first == "work_completed";
+        counts.at(0) += work ? 1U : 0U;
+        counts.at(1) += step.first == "autosave_tick" ? 1U : 0U;
+        counts.at(2) += moves_caret(step) ? 1U : 0U;
+        counts.at(3) +=
+            work && index + 1U < steps.size() && moves_caret(steps.at(index + 1U)) ? 1U : 0U;
+    }
+}
+
+// 本番の組（性質の seed の family_cases 件）の合図を挟んだ列に、WorkCompleted・AutosaveTick・
+// MoveCaret と、MoveCaret の直前の WorkCompleted が出る。0 なら性質 4 はその形を見ていない。
+void verify_signals_reach_moves()
+{
+    Random random{12882U};
+    SignalCounts counts{};
+    for (std::size_t index = 0; index < family_cases; ++index)
+    {
+        const Case input = random_case(random);
+        count_signals(counts, signalled(input, seed_of(input)).second);
+    }
+    expect(counts.at(0) >= signal_floor && counts.at(1) >= signal_floor &&
+               counts.at(2) >= signal_floor && counts.at(3) > 0U,
+           "the signalled cases hold WorkCompleted, AutosaveTick and MoveCaret steps and a "
+           "WorkCompleted right before a MoveCaret");
 }
 
 // 検査そのものが破れを見つける（観測の違い・行の外のキャレット・1 文字の途中）。
@@ -1119,6 +1187,7 @@ void verify_controller_mixed_property_scope()
     verify_generator_reaches_the_states();
     verify_checks_catch_a_break();
     verify_known_cases();
+    verify_signals_reach_moves();
     expect(broken_cases("mixed controller intents keep their invariants", 12882U, case_violation) ==
                0U,
            "mixed edits, Vim keys, tabs, the palette, Ex and find lines, the explorer, the "

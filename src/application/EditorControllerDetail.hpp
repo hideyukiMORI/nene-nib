@@ -30,7 +30,12 @@
 // する。
 namespace nenenib::application::detail
 {
-// 使う人の操作ではない意図（裏の仕事と合図・窓の寸法・外観・帯の hover）。keeps_tab_walk と
+// 合図（裏の仕事の完了と時計の合図: WorkCompleted・AutosaveTick・PreviewTick・
+// LanguageServerTick・MapTimeout）。「この意図は合図か」を決める 1 本で、not_user_operation と
+// 上下の移動の狙いの横位置を保つ側（keeps_wanted_x）がこれを呼ぶ（ADR 0062 の追補・#1296）。
+// 合図を足すときはここに 1 行足す。
+[[nodiscard]] bool is_signal(const EditorIntent &intent) noexcept;
+// 使う人の操作ではない意図（合図・窓の寸法・外観・帯の hover）。keeps_tab_walk と
 // begin_intent と `map` の待ちと、全面プレビューの振り分け（ADR 0155 の改訂 17）が共用する 1 本。
 [[nodiscard]] bool not_user_operation(const EditorIntent &intent) noexcept;
 [[nodiscard]] core::ScrollExtent scroll_extent_for(core::EditMode mode) noexcept;
