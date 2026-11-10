@@ -431,6 +431,8 @@ def literal(value: str) -> str:
     escaped = escaped.replace("\x16", "\\026")
     # DEL（0x7F）も 8 進 3 桁で書く（#1119・DEL を含む本文の fixture `control-del-`）。
     escaped = escaped.replace("\x7f", "\\177")
+    # 改ページ（0x0C）は段落の境の fixture `paragraph-macro-formfeed-`（#1359・Vim の startPS）。
+    escaped = escaped.replace("\x0c", "\\f")
     if any(character < " " or character == "\x7f" for character in escaped):
         raise ValueError(f"unexpected control character in {value!r}")
     return f'"{escaped}"'
