@@ -784,8 +784,10 @@ class EditorController final
     // INSERT にいるあいだの編集は 1 つの undo 単位に吸収する（ADR 0015 の決定 5）。
     [[nodiscard]] core::EditBoundary vim_boundary() const noexcept;
 
-    void replace(const core::OffsetRange &range, std::string_view text,
-                 core::EditBoundary boundary);
+    // block_lines は矩形の行ごとの置き換え（apply_block だけが渡す）。渡すとマークは行ごとに直す
+    // （marks_block_adjusted・#1361）。
+    void replace(const core::OffsetRange &range, std::string_view text, core::EditBoundary boundary,
+                 std::span<const core::VimBlockEdit> block_lines = {});
     void move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring,
                        core::CaretAffinity affinity = core::CaretAffinity::leading);
     void accept(const PointText &intent);

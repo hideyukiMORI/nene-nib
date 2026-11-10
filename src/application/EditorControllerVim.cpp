@@ -1152,6 +1152,8 @@ void EditorController::perform(const core::VimReplaceRange &effect)
 // 矩形の編集（ADR 0035 の決定 3）。行ごとの置き換えを、上の行から下の行までを覆う 1 つの
 // 置き換えに畳んでから既存の replace へ流す。こうすると履歴に入る Edit が 1 つになり、矩形
 // 全体が undo 1 単位になる（固定 Vim も 1 回の `u` で戻す・実測）。改行は文書の形へ直す。
+// マークは畳んだ Edit でなく行ごとの置き換えで直す（Vim の矩形のオペレータは mark_adjust を
+// 呼ばない・#1361）。
 void EditorController::apply_block(const std::vector<core::VimBlockEdit> &edits, core::Offset caret,
                                    core::EditBoundary boundary)
 {
@@ -1170,7 +1172,7 @@ void EditorController::apply_block(const std::vector<core::VimBlockEdit> &edits,
         body += with_document_newlines(edit.utf8, newline);
         at = edit.range.end;
     }
-    replace(span, body, boundary);
+    replace(span, body, boundary, edits);
     move_caret_to(caret, core::SelectionAnchoring::collapse);
 }
 

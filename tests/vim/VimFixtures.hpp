@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 6675cf6eeb68b86332641adfd7ee20017df8e44f8bb4ef2a52882a5a1242f076 / 3740 fixtures
+// fixtures.json: sha256 8b001c24600949f544cd8e9ef8a8908344fa2ba6785c865de2277180648bc14f / 3762 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3740> vim_fixtures{{
+constexpr std::array<VimFixture, 3762> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2700,6 +2700,28 @@ constexpr std::array<VimFixture, 3740> vim_fixtures{{
     {"gv-gi-gi-count-newline", "abcd\nefgh", "l3ia<CR>b<Esc>gggiZ<Esc>", "aa\nba\nba\nbZbcd\nefgh", 4, 2, "", "", std::nullopt},
     {"gv-gi-gi-visual-fails", "abc def\nefgh", "vgiwd", "abc def\nefgh", 1, 1, "", "", std::nullopt},
     {"gv-gi-gi-operator-fails", "abc def\nefgh", "dgiw", "abc def\nefgh", 1, 1, "", "", std::nullopt},
+    {"gv-after-block-change-word", "13\n14 (paren) x\n15\n16 word", "gg<C-v>2wcX<Esc>gv<Esc>", "X\nXparen) x\n15\n16 word", 2, 4, "13\n14 (", "\0264", std::nullopt},
+    {"gv-after-block-change-lines", "13\n14 (paren) x\n15\n16 word", "gg<C-v>jjcX<Esc>gv<Esc>", "X3\nX4 (paren) x\nX5\n16 word", 3, 1, "1\n1\n1", "\0261", std::nullopt},
+    {"gv-after-block-shift-caret", "ab\ncd\nef", "gg<C-v>jj>gv<Esc>", "\tab\n\tcd\n\tef", 3, 1, "", "", std::nullopt},
+    {"gv-after-block-shift-dollar-delete", "ab\ncd\nef", "gg<C-v>$G>gvd", "ab\ncd\nef", 1, 1, "\t\n\t\n\t", "\0268", std::nullopt},
+    {"gv-after-block-shift-yank", "ab\ncd\nef", "gg<C-v>jj>gvy", "\tab\n\tcd\n\tef", 1, 1, "\t\n\t\n\t", "\0268", std::nullopt},
+    {"gv-after-block-shift-wide-delete", "ab\ncd\nef", "gg<C-v>jjl>gvd", "b\nd\nf", 1, 1, "\ta\n\tc\n\te", "\0269", std::nullopt},
+    {"gv-after-block-delete-jump-delete", "ab\ncd\nef", "gg<C-v>$Gd<C-o>gvd", "\n\n", 1, 1, "b\nd\nf", "\0261", std::nullopt},
+    {"gv-after-block-change-delete", "abc\ncde\nefg", "ggl<C-v>jjlcXYZ<Esc>gvd", "aZ\ncZ\neZ", 1, 2, "XY\nXY\nXY", "\0262", std::nullopt},
+    {"gv-after-block-insert-delete", "abc\ncde\nefg", "ggl<C-v>jjIXY<Esc>gvd", "aYbc\ncYde\neYfg", 1, 2, "X\nX\nX", "\0261", std::nullopt},
+    {"gv-after-block-append-delete", "abc\ncde\nefg", "ggl<C-v>jjAXY<Esc>gvd", "aXYc\ncXYe\neXYg", 1, 2, "b\nd\nf", "\0261", std::nullopt},
+    {"gv-after-block-change-line-end-delete", "abc\ncde\nefg", "ggl<C-v>jjCXY<Esc>gvd", "a\nc\ne", 1, 1, "XY\nXY\nXY", "\0262", std::nullopt},
+    {"gv-after-block-replace-delete", "abc\ncde\nefg", "ggl<C-v>jjrxgvd", "ac\nce\neg", 1, 2, "x\nx\nx", "\0261", std::nullopt},
+    {"gv-after-block-delete-delete", "abc\ncde\nefg", "ggl<C-v>jjdgvd", "a\nc\ne", 1, 1, "c\ne\ng", "\0261", std::nullopt},
+    {"gv-after-block-tilde-delete", "abc\ncde\nefg", "ggl<C-v>jj~gvd", "ac\nce\neg", 1, 2, "B\nD\nF", "\0261", std::nullopt},
+    {"gv-after-block-upward-change", "abc\ncde\nefg", "Gl<C-v>kkcX<Esc>gvd", "ac\nce\neg", 1, 2, "X\nX\nX", "\0261", std::nullopt},
+    {"gv-after-block-dot-delete", "abc\ncde\nefg", "ggl<C-v>jjcX<Esc>j.gvd", "ac\nce\neg", 1, 2, "X\nX\nX", "\0261", std::nullopt},
+    {"gv-after-block-mark-shift", "abc\ncde\nefg", "Gma<C-v>ggl>'a", "\tabc\n\tcde\n\tefg", 3, 2, "", "", std::nullopt},
+    {"gv-after-block-mark-change", "abc\ncde\nefg", "Gmagg<C-v>jjcX<Esc>`a", "Xbc\nXde\nXfg", 3, 1, "a\nc\ne", "\0261", std::nullopt},
+    {"gv-after-block-wide-change", "あいう\nかきく\nさしす", "ggl<C-v>jjlcX<Esc>gvd", "あ\nか\nさ", 1, 1, "X\nX\nX", "\0262", std::nullopt},
+    {"gv-after-block-wide-shift", "あいう\nかきく\nさしす", "ggl<C-v>jj>gvd", "あ  いう\nか  きく\nさ  しす", 1, 4, "\t\n\t\n\t", "\0266", std::nullopt},
+    {"gv-after-block-shift-empty-line", "abc\n\ncde", "gg<C-v>jj>gvd", "abc\n\ncde", 1, 1, "\t\n\n\t", "\0268", std::nullopt},
+    {"gv-after-block-char-change", "abc\ncde\nefg", "ggvjcX<Esc>gvd", "de\nefg", 1, 1, "X", "v", std::nullopt},
     {"insert-control-ctrl-w-typed", "xyz", "Aabc def<C-w><Esc>", "xyzabc ", 1, 7, "", "", std::nullopt},
     {"insert-control-ctrl-w-blanks", "xyz", "A  <C-w><Esc>", "xyz", 1, 3, "", "", std::nullopt},
     {"insert-control-ctrl-w-stops-at-start", "foo bar", "A baz<C-w><C-w><Esc>", "foo bar", 1, 7, "", "", std::nullopt},

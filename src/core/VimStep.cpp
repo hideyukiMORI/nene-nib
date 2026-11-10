@@ -2213,8 +2213,24 @@ namespace
 // INSERT へ入る道を区別せず、鍵の前が VISUAL で後が VISUAL でなければ鍵の前の選択を覚える
 // （Vim の end_visual_mode と do_pending_operator）。`.` の VISUAL の再生は置かず、再生の鍵が
 // VISUAL にいるあいだ印を持ち越す（Vim の redo_VIsual_busy・実測）。
+// 前の選択に置く欲しい列（#1361）。矩形の `C` は Vim の v_visop が curswant を MAXCOL にしてから
+// `c` を流し、do_pending_operator がその curswant を b_visual.vi_curswant に置くので行末の印に
+// なる。ほかの鍵は鍵の前の欲しい列（引数を待つ鍵の `C` は文字なので除く）。
+[[nodiscard]] VimState visual_left_state(const VimState &state, const VimKey &key)
+{
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    if (state.mode != VimMode::visual_block || state.input_wait.has_value() ||
+        character == nullptr || vim_action_for(character->code) != VimAction::change_to_line_end)
+    {
+        return state;
+    }
+    VimState left = state;
+    left.wanted_column = VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
+    return left;
+}
+
 [[nodiscard]] VimStep visual_remembered(const VimState &state, const VimEditorView &view,
-                                        VimStep step)
+                                        const VimKey &key, VimStep step)
 {
     if (!is_visual_mode(state.mode))
     {
@@ -2231,7 +2247,7 @@ namespace
         return step;
     }
     VimMarks marks = step.marks.value_or(*view.marks);
-    marks.last_visual = visual_left(state, view);
+    marks.last_visual = visual_left(visual_left_state(state, key), view);
     step.marks = std::move(marks);
     return step;
 }
@@ -2256,7 +2272,8 @@ VimStep vim_pointer_selected(const VimState &state, const VimEditorView &view, S
     // とレジスタとマクロの録画を保つ。
     VimState left = input_discarded(state);
     left.mode = VimMode::normal;
-    VimStep step = visual_remembered(state, view, VimStep{std::move(left), VimNoEffect{}});
+    VimStep step = visual_remembered(state, view, VimKey{VimSpecialKey::escape},
+                                     VimStep{std::move(left), VimNoEffect{}});
     step.next.mode = mode;
     step.next.wanted_column = std::nullopt;
     step.next.redoing_visual = false;
@@ -2272,7 +2289,7 @@ VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
     {
         return step;
     }
-    step = visual_remembered(state, view, std::move(step));
+    step = visual_remembered(state, view, key, std::move(step));
     return macro_recorded(state, view, vim_recorded(state, view, std::move(step), key), key);
 }
 } // namespace nenenib::core

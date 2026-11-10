@@ -409,6 +409,21 @@ VimMarks marks_adjusted(const VimMarks &marks, const TextBuffer &before, const E
     return next;
 }
 
+VimMarks marks_block_adjusted(const VimMarks &marks, const TextBuffer &before,
+                              std::span<const VimBlockEdit> edits)
+{
+    // 下の行から通すと、まだ通していない上の行の位置は編集の前の本文のまま読める。
+    VimMarks next = marks;
+    for (auto edit = edits.rbegin(); edit != edits.rend(); ++edit)
+    {
+        const OffsetRange &range = edit->range;
+        next = marks_adjusted(
+            next, before,
+            Edit{range.begin, before.text_range(range.begin, range.end), edit->utf8, range.begin});
+    }
+    return next;
+}
+
 VimMarkPosition vim_last_change_of(const TextBuffer &before, const Edit &edit)
 {
     const LineNumber first = before.position_of(edit.at).line;
