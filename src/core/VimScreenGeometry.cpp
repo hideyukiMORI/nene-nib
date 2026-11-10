@@ -105,6 +105,12 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
         last = below;
         ++below.value;
     }
+    // 先頭の行が窓より高ければ、窓の高さに切って窓を埋める 1 行と数え、窓の下の行は次の行（Vim の
+    // comp_botline は plines_correct_topline で先頭の行を w_height に切る・#1307）。
+    if (below == first && first.value <= view.text.line_count())
+    {
+        ++below.value;
+    }
     // `M` の半分は収まりきった行の画面行で数える。収まらない行の残り（`@` の段）は Vim の
     // w_empty_rows に入る。1 行も収まらなければ窓の全体（#1177・Vim の nv_scroll と
     // set_empty_rows）。
