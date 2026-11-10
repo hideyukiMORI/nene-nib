@@ -29,6 +29,7 @@ Sonnet の棚卸し（scratchpad `probe-split.md`）の要点: `NibTests.cpp` �
 - scope ごとの checks 数と fixture の不変: **active**（`python eng/protected-diff.py --base origin/main --build` が `scopes 20 / same 20`・fixtures 1339 -> 1339・`--allow` 無し）。既定の `nib_tests` の総数も不変。
 - 1 scope = 1 翻訳単位・表は `NibTests.cpp`・関数の中身は不変: **planned**（レビュー事項。`Scopes.hpp` の宣言と `scopes` 表の対応を目で確かめる。#160 では実体 383 個のうち 382 個が一字一句同じことを 1 度きりのスクリプトで照合した）。
 - ファイル長の閾値: 入れない（CNF-002 は planned のまま・QLT-010 の「閾値は ADR 相当」に該当しないことを明記）。
+- 名指しの scope にしかない検査（fixture の選び方の件数と名前など）が CTest で回ること: **active**（2026-11-10・#1324 の追補）。
 
 ## 結果
 
@@ -43,3 +44,26 @@ Sonnet の棚卸し（scratchpad `probe-split.md`）の要点: `NibTests.cpp` �
 | ファイル長の上限を CNF-002 として今 active にする | 閾値の導入は ADR 相当（QLT-010）で、いま落ちている検査が無い。分割の動機は席の読む範囲と衝突であり、閾値ではない |
 | `scopes` 表も各ファイルへ移し登録を分散する | `eng/protected-diff.py` が 1 ファイルの 1 表を読む形（#130）を壊す。表が 1 か所にあるほうが scope の一覧として読める |
 | `tests/unit/vim/` のサブディレクトリに置く | 平らな `tests/unit/` で `Vim` 接頭辞のほうが `eng/targets.cmake` の検査と `architecture.json` を触らずに済む |
+
+## 追補（2026-11-10・#1324）名指しの scope も CTest で回す
+
+文脈: CTest が回すのは引数なしの `nib_tests`（`nib_unit`）だけだった。`scopes` 表の selector にしかない検査（`verify_vim_macro_scope` の「`macro` 欄のある fixture の件数と名前」など）はどの門も回さず、#1246 と #1233 が `macro` 欄つきの `insert-page-edge-` と `viewport-ctrl-e-` の fixture を足したとき、`--vim-macro` が落ちたまま main に入った（main `275a1535` で 7 件。113 本の selector を 1 本ずつ回した棚卸しで落ちたのはこの 1 本だけ）。
+
+決定:
+
+1. `nib_tests --every-scope` は `scopes` 表を上から順に同じプロセスで回し、落ちた scope の名前を `FAIL scope <名前>` で出す。表は `scopes` の 1 つだけを読む（CMake に selector の列を写さない・ARC-001）。
+2. `contracts` 表に同じ名前で同じ関数がある scope（113 本中 55 本）は既定実行が回すので飛ばす。残る 58 本を回す。
+3. CTest に `nib_unit_scopes`（`nib_tests --every-scope`）を 1 本足す。CI の build-and-test は Release の `ctest` なので、そのまま門に載る。
+4. `--vim-macro` の名前の検査は向きを逆にした（`macro-` の fixture は必ず `macro` 欄を持つ）。`macro` 欄はほかの族の fixture も持つので、選んだ fixture の名前を `macro-` / `register-` に限らない。件数は 156（42 + 108 + ほかの族の 6）。
+
+費用（施主の機械・Release）: 既定の `nib_tests` 10.2 s に対して `--every-scope` 6.7 s。Debug では 355 s に対して約 320 s（ほかのビルドと並べた値）。CI の機械はこれより遅いので、CI の `ctest` は 1 本ぶん（目安で +7〜15 s）延びる。
+
+強制: 変異で確かめた。fixture `char-search-f-first` を `dot-char-search-f-first` に付け替えると、既定実行は通り（2,341,043 checks）、`--every-scope` は `--vim-dot`・`--vim-character-search`・`--vim-line-jumps` の件数で落ちる。
+
+却下した選択肢:
+
+| 選択肢 | 却下の理由 |
+| --- | --- |
+| scope の自己検査（件数と名前）を既定実行の契約へ移す | 自己検査は 20 本余りの scope の関数の中で fixture の再生と組になっていて、移すと各ファイルを割る手が要る。selector にしかない検査は自己検査だけではなく、移した分しか守れない |
+| `eng/conformance.py` で fixture の名前の接頭辞と scope の表を照合する | scope が fixture を選ぶ条件は C++ の述語（`macro` 欄の有無・複数の接頭辞の組）で、Python に写すと条件が 2 本になる（ARC-001）。今回の穴（`macro` 欄で選ぶ）は名前の照合では見えない |
+| CTest に selector ごとの `add_test` を並べる | selector の列を CMake に写すことになり、表が 2 つになる。1 本の `--every-scope` で同じことが守れる |

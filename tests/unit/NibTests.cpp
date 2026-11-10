@@ -244,8 +244,45 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 113> scopes{{
     {"--shell-registration-property", verify_shell_registration_property_scope},
 }};
 
+// 名指しの scope にしかない検査（fixture の選び方の件数と名前など）を CTest で回す入口（#1324）。
+// 既定実行の契約と同じ関数の scope は既定実行が回すので飛ばす。落ちた scope の名前を出す。
+[[nodiscard]] bool contracted_as_is(std::string_view name, void (*verify)())
+{
+    for (const auto &[contract, contracted] : contracts)
+    {
+        if (contract == name && contracted == verify)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void verify_every_scope()
+{
+    for (const auto &[name, verify] : scopes)
+    {
+        if (contracted_as_is(name, verify))
+        {
+            continue;
+        }
+        const std::size_t before = failure_count();
+        verify();
+        if (failure_count() != before)
+        {
+            std::fprintf(stderr, "FAIL scope %.*s: %zu checks failed\n",
+                         static_cast<int>(name.size()), name.data(), failure_count() - before);
+        }
+    }
+}
+
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
 {
+    if (command == "--every-scope")
+    {
+        verify_every_scope();
+        return true;
+    }
     for (const auto &[name, verify] : scopes)
     {
         if (command == name)
