@@ -67,7 +67,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimTextObjectRange.cpp src/core/VimParagraphObject.cpp src/core/VimSentenceObject.cpp src/core/VimTagObject.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
     src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
-    src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp src/core/LanguageTable.cpp
+    src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp src/core/SaveQuestionText.cpp src/core/LanguageTable.cpp
     src/core/Lexer.cpp src/core/LexCpp.cpp src/core/LexCursor.cpp
     src/core/MarkdownParse.cpp src/core/MarkdownBuilder.cpp src/core/MarkdownEntity.cpp src/core/PreviewSelectionText.cpp
     src/core/HtmlAttribute.cpp src/core/HtmlMarkdownWriter.cpp src/core/HtmlToMarkdown.cpp
@@ -357,14 +357,15 @@ nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FallbackSegmentMemo.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
     src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp
     src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewMetrics.cpp
-    src/ui/win32/PreviewPane.cpp src/ui/win32/FullPreviewBody.cpp)
+    src/ui/win32/PreviewPane.cpp src/ui/win32/FullPreviewBody.cpp src/ui/win32/SaveQuestion.cpp)
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
 # ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。
 # imm32: IMM32 の変換文字列と候補窓（ADR 0014 の決定 1）。IME は窓への入力なので ui/win32 に置く。
 # shell32: WM_DROPFILES の名前と転送メモリだけを扱う（ADR 0116）。
 # comdlg32: 印刷のダイアログ PrintDlgExW、prntvpt: その DEVMODE を print ticket に写す（ADR 0177 の決定 6）。
-foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp dwmapi imm32 ole32 shell32 comdlg32 prntvpt)
+# comctl32: 「保存しますか」の TaskDialogIndirect（v6・ADR 0133 の追補 #1282）。
+foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp dwmapi imm32 ole32 shell32 comdlg32 prntvpt comctl32)
     nenenib_system_link(nenenib_window ${library})
 endforeach()
 
@@ -384,7 +385,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/StatusDemandTests.cpp tests/ui/SyntaxRenderTests.cpp tests/ui/DiagnosticWaveTests.cpp
     tests/ui/PaletteLayoutTests.cpp tests/ui/ExplorerPaintTests.cpp tests/ui/PointerPressTests.cpp tests/ui/GuideKeyWidthTests.cpp
     tests/ui/PrintRenderTests.cpp tests/ui/MemoryXpsTarget.cpp tests/ui/MemoryPackageTarget.cpp
-    tests/ui/MatchParenOutlineTests.cpp)
+    tests/ui/MatchParenOutlineTests.cpp tests/ui/SaveQuestionTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)
@@ -418,8 +419,10 @@ nenenib_system_link(NeNeNib shell32)
 set_property(TARGET NeNeNib PROPERTY WIN32_EXECUTABLE TRUE)
 # ADR 0130: 窓を見せた後にしか要らない描画と文字組みの DLL は遅延読み込みにする（製品の target だけ）。
 # ADR 0177 の決定 6: 印刷のダイアログと print ticket の DLL も、最初の印刷のときだけ読む。
+# ADR 0133 の追補（#1282）: 「保存しますか」の comctl32（v6 は manifest の依存）も、最初の箱のときだけ読む。
 target_link_options(NeNeNib PRIVATE /DELAYLOAD:d3d11.dll /DELAYLOAD:d2d1.dll /DELAYLOAD:dcomp.dll
-    /DELAYLOAD:dxgi.dll /DELAYLOAD:DWrite.dll /DELAYLOAD:comdlg32.dll /DELAYLOAD:prntvpt.dll)
+    /DELAYLOAD:dxgi.dll /DELAYLOAD:DWrite.dll /DELAYLOAD:comdlg32.dll /DELAYLOAD:prntvpt.dll
+    /DELAYLOAD:comctl32.dll)
 target_link_libraries(NeNeNib PRIVATE delayimp)
 
 # ADR 0082: 開発用の閉じた比較。unit は inline の足場だけ借用し、CTest に登録しない。

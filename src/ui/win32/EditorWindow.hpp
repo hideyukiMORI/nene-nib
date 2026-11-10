@@ -259,7 +259,7 @@ class EditorWindow final
     // 未保存なら聞く。閉じる・開き直すのを続けてよいときだけ true（ADR 0010 の決定 10）。
     [[nodiscard]] bool confirm_discard();
     // 描画を失った後の「保存しますか」（ADR 0133 の決定 3）。取消は無く、保存するまでか捨てるまで
-    // 聞き直す。いつも true。
+    // 聞き直す。箱を出せなかったときは unsaved_kept_ を立てて閉じる側へ。いつも true。
     [[nodiscard]] bool confirm_lost_tab();
     void update_title(const application::EditorDelivery &frame);
     void announce(const application::EditorDelivery &frame);
@@ -404,6 +404,9 @@ class EditorWindow final
     ATOM class_ = 0;
     UINT dpi_ = 96;
     bool rendering_failed_ = false;
+    // 描画を失った後の「保存しますか」を出せなかった印。leave は未保存を捨てたことにしない
+    // （自動退避を残す・ADR 0133 の追補 #1282）。
+    bool unsaved_kept_ = false;
     // WM_QUERYENDSESSION で ShutdownBlockReasonCreate を立てた印（ADR 0133 の決定 4）。
     bool shutdown_blocked_ = false;
 };

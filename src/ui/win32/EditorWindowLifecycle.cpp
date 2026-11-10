@@ -484,10 +484,12 @@ void EditorWindow::end_window(application::ExitCause cause, application::Session
 void EditorWindow::leave(application::SessionEnd reason)
 {
     // 来る道（end_window と最後のタブの close_tab）は未保存のタブをすべて確かめ済み。ここで残る
-    // 未保存は使う人が「いいえ」と答えて捨てたもの（ADR 0137 の決定 5）。
+    // 未保存は使う人が「いいえ」と答えて捨てたもの（ADR 0137 の決定 5）。描画を失った後に箱を
+    // 出せなかったタブがあれば、捨てたことにしない（ADR 0133 の追補 #1282）。
     remember_session(application::EndSession{
         .reason = reason,
         .unsaved_discarded =
+            !unsaved_kept_ &&
             application::next_unsaved_tab(controller_.documents(), 0).has_value()});
     // 壊す窓に立てた OS の終了を止める理由は、ここで外す（ADR 0133 の決定 4）。確認を通り抜けたので
     // 残る未保存は捨てると決めたもの。
