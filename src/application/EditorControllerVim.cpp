@@ -14,6 +14,7 @@
 #include "KeyMapEmit.hpp"
 #include "KeyMapPass.hpp"
 #include "KeyMapPending.hpp"
+#include "LineNumber.hpp"
 #include "MapTimeout.hpp"
 #include "MapTimer.hpp"
 #include "ReplayLevel.hpp"
@@ -23,6 +24,7 @@
 #include "SearchPreview.hpp"
 #include "Selection.hpp"
 #include "SplitLayout.hpp"
+#include "TextBuffer.hpp"
 #include "TextCaret.hpp"
 #include "TextPosition.hpp"
 #include "Utf8.hpp"
@@ -846,6 +848,58 @@ void EditorController::settle_vim_caret()
     }
     move_caret_to(core::vim_resting_caret(state_.text(), state_.selection().caret),
                   core::SelectionAnchoring::collapse);
+}
+
+// Delete / Backspace の DeleteText・InsertText・貼り付けと切り取り・Ctrl+Z / Ctrl+Y・SelectAll は
+// engine の鍵を通らずに本文とキャレットを動かす。そのため Vim の NORMAL と VISUAL の
+// キャレットを、1 文字の途中（結合文字の手前）や NORMAL の行の最後の文字の先へ置きうる。
+// 意図ごとに寄せを書かず、入口の終わりで 1 回だけ見る（ADR 0053 の追補 #1309）。
+// 寄せの規則は既存の 2 本: NORMAL は settle_vim_caret（vim_resting_caret）、
+// VISUAL は行の桁の写し vim_line_and_column（行の内容の終わりは保つ・広げた選択の錨は
+// 動かさない）。INSERT は寄せない（Vim 9.1 の INSERT の挿入点は結合文字の手前にも立つ・
+// 決定 2）。engine を通った鍵は stepped_vim が寄せているので、入力行が開いていなければ
+// 引き直さない（決定 3）。外れていなければ何もしない（画面も追わない）。
+void EditorController::keep_vim_character(const EditorIntent &intent)
+{
+    switch (state_.mode())
+    {
+    case core::EditMode::ordinary:
+        return;
+    case core::EditMode::vim:
+        break;
+    }
+    if (std::holds_alternative<VimKeyPress>(intent) && !state_.command_input().has_value())
+    {
+        return;
+    }
+    const core::Selection selection = state_.selection();
+    const core::TextBuffer &text = state_.text();
+    switch (state_.vim().mode)
+    {
+    case core::VimMode::insert:
+        return;
+    case core::VimMode::normal:
+        if (!(core::vim_resting_caret(text, selection.caret) == selection.caret))
+        {
+            settle_vim_caret();
+        }
+        return;
+    case core::VimMode::visual:
+    case core::VimMode::visual_line:
+    case core::VimMode::visual_block:
+        break;
+    }
+    const core::LineNumber line = text.position_of(selection.caret).line;
+    const core::Offset kept =
+        core::vim_line_and_column(text, line, selection.caret.value - text.line_start(line).value);
+    if (kept == selection.caret)
+    {
+        return;
+    }
+    // 畳んだ選択は畳んだまま寄せる。
+    const core::Offset anchor = selection.anchor == selection.caret ? kept : selection.anchor;
+    state_ = state_.with_selection(core::Selection{anchor, kept});
+    follow_caret();
 }
 
 // Vim の効果を本文に写すときの undo の区切り（ADR 0015 の決定 5）。INSERT にいるあいだの編集は

@@ -279,6 +279,12 @@ void verify_vim_line_jump_recovery();
 void verify_vim_character_contracts();
 void verify_vim_character_scope();
 
+// VimExternalCaretTests.cpp
+void verify_vim_external_caret();
+
+// VimWindowPathTests.cpp
+void verify_vim_window_path();
+
 // VimCaseTests.cpp
 void verify_vim_case_contracts();
 void verify_vim_case_scope();

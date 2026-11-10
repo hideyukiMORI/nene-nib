@@ -806,6 +806,10 @@ class EditorController final
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();
     void settle_vim_step(const core::VimStep &step);
+    // engine を通らない意図の後に、Vim の NORMAL と VISUAL のキャレットが 1 文字の境（NORMAL は行の
+    // 最後の文字の上）から外れていたときだけ寄せる。INSERT は寄せない。入口 apply の終わりの 1 か所
+    // から呼ぶ（ADR 0053 の追補 #1309）。
+    void keep_vim_character(const EditorIntent &intent);
     // 追従は頼むだけで、スクロールを読む直前に 1 回だけ解決する（ADR 0128 の決定 1・2）。
     void follow_caret();
     void follow_position(core::TextPosition position);

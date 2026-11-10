@@ -431,6 +431,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 閉じたタブの読みの取消と、歩き・入力行・面の終わりで留めた読みの採用（ADR 0159 の追補
     // 1・2）。
     follow_reads();
+    keep_vim_character(intent);
     if (is_signal(intent) && caret_anchor_of(state_) != anchor)
     {
         wanted_x_.reset();
