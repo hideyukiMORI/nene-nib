@@ -33,6 +33,7 @@
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "VimCharacter.hpp"
+#include "VimCount.hpp"
 #include "VimKey.hpp"
 #include "VimKeyName.hpp"
 #include "VimKeyNames.hpp"
@@ -48,6 +49,7 @@
 #include "VimRegisterKind.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
+#include "VimStep.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 #include "WalkRecentTab.hpp"
@@ -288,22 +290,58 @@ void verify_map_modes()
 {
     auto state =
         core::vim_resting_state(core::VimRegister{"", core::VimRegisterKind::uninitialized});
-    expect(core::vim_map_mode_of(state) == VimMapMode::normal, "resting NORMAL maps as n");
+    expect(core::vim_map_mode_of(state, character(U'j')) == VimMapMode::normal,
+           "resting NORMAL maps as n");
     state.pending = core::VimPendingOperator{core::VimOperator::remove, std::nullopt};
-    expect(core::vim_map_mode_of(state) == VimMapMode::operator_pending,
+    expect(core::vim_map_mode_of(state, character(U'j')) == VimMapMode::operator_pending,
            "a pending operator maps as o");
     state.pending = std::nullopt;
     state.input_wait = core::VimPrefix::g;
-    expect(!core::vim_map_mode_of(state).has_value(), "a one key argument is not mapped");
+    expect(!core::vim_map_mode_of(state, character(U'j')).has_value(),
+           "a one key argument is not mapped");
     state.input_wait = std::nullopt;
     state.mode = core::VimMode::insert;
-    expect(core::vim_map_mode_of(state) == VimMapMode::insert, "INSERT maps as i");
+    expect(core::vim_map_mode_of(state, character(U'j')) == VimMapMode::insert, "INSERT maps as i");
     for (const auto mode :
          {core::VimMode::visual, core::VimMode::visual_line, core::VimMode::visual_block})
     {
         state.mode = mode;
-        expect(core::vim_map_mode_of(state) == VimMapMode::visual, "every VISUAL maps as v");
+        expect(core::vim_map_mode_of(state, character(U'j')) == VimMapMode::visual,
+               "every VISUAL maps as v");
     }
+}
+
+// 回数の続きの `0` は表を引かない（Vim の no_zero_mapping・normal.c の normal_cmd_get_count・
+// getchar.c の handle_mapping・#1311）。回数の先頭の `0` とオペレータの後の `0` は引く。
+void verify_zero_in_count()
+{
+    auto state =
+        core::vim_resting_state(core::VimRegister{"", core::VimRegisterKind::uninitialized});
+    const auto zero = character(U'0');
+    expect(core::vim_map_mode_of(state, zero) == VimMapMode::normal,
+           "a 0 without a count maps as n");
+    state.count = core::VimCount{5};
+    expect(!core::vim_map_mode_of(state, zero).has_value() &&
+               core::vim_continues_count(state, zero),
+           "a 0 after a count is not mapped");
+    expect(core::vim_map_mode_of(state, character(U'1')) == VimMapMode::normal &&
+               core::vim_map_mode_of(state, core::VimKey{core::VimSpecialKey::escape}) ==
+                   VimMapMode::normal,
+           "other keys after a count are mapped");
+    state.mode = core::VimMode::visual_line;
+    expect(!core::vim_map_mode_of(state, zero).has_value(), "the same holds in VISUAL");
+    state.mode = core::VimMode::normal;
+    state.pending = core::VimPendingOperator{core::VimOperator::remove, core::VimCount{2}};
+    state.count = std::nullopt;
+    expect(core::vim_map_mode_of(state, zero) == VimMapMode::operator_pending,
+           "the 0 after 2d is a motion and maps as o");
+    state.count = core::VimCount{1};
+    expect(!core::vim_map_mode_of(state, zero).has_value(), "the 0 of d10 is not mapped");
+    state.pending = std::nullopt;
+    state.mode = core::VimMode::insert;
+    expect(core::vim_map_mode_of(state, zero) == VimMapMode::insert &&
+               !core::vim_continues_count(state, zero),
+           "INSERT maps a 0 whatever the count");
 }
 
 // 1 段の引き直しの表（a → b → c・q → a・noremap の x → b・左辺で始まる n → nbb）。
@@ -785,10 +823,12 @@ void verify_records_and_replay()
            "press_vim_keys does not look up the table");
 }
 
-// Vim の 100 行の本文で 50G から keys を打った後のキャレットの行と本文。
-// timeout なら最後に 1 秒の待ちを流す。
-[[nodiscard]] std::pair<std::size_t, std::string>
-hundred_lines_after(std::vector<MapRow> rows, std::string_view keys, bool timeout)
+// Vim の 100 行の本文で start（1 行目からの移動・空なら 1 行目）の後に keys を打った後の
+// キャレットの行と本文。timeout なら最後に 1 秒の待ちを流す。
+[[nodiscard]] std::pair<std::size_t, std::string> hundred_lines_from(std::vector<MapRow> rows,
+                                                                     std::string_view start,
+                                                                     std::string_view keys,
+                                                                     bool timeout)
 {
     Editing editing(mapped_settings(std::move(rows)));
     std::string text;
@@ -799,13 +839,20 @@ hundred_lines_after(std::vector<MapRow> rows, std::string_view keys, bool timeou
     // 末尾に改行を置かない（置くと Nib の本文は 101 行目の空行を持ち `44%` が 45 行目になる）。
     open_vim_document(editing, std::move(text));
     auto &controller = editing.controller();
-    vim_replay(controller, "50G");
+    vim_replay(controller, start);
     vim_replay(controller, keys);
     if (timeout)
     {
         static_cast<void>(controller.apply(application::MapTimeout{}));
     }
     return {controller.frame().caret.position.line.value, whole_vim_body(controller)};
+}
+
+// 50G から keys を打った後のキャレットの行と本文。
+[[nodiscard]] std::pair<std::size_t, std::string>
+hundred_lines_after(std::vector<MapRow> rows, std::string_view keys, bool timeout)
+{
+    return hundred_lines_from(std::move(rows), "50G", keys, timeout);
 }
 
 [[nodiscard]] std::size_t hundred_lines_caret(std::vector<MapRow> rows, std::string_view keys,
@@ -972,6 +1019,80 @@ void verify_scrolled_right_side()
            "a right side ending in <C-e>j follows the caret after j");
 }
 
+// 1 行目から keys を打った後のキャレットの行。
+[[nodiscard]] std::size_t top_caret(std::vector<MapRow> rows, std::string_view keys)
+{
+    return hundred_lines_from(std::move(rows), "", keys, false).first;
+}
+
+[[nodiscard]] std::size_t line_count(std::string_view body)
+{
+    return static_cast<std::size_t>(std::ranges::count(body, '\n')) + 1U;
+}
+
+// 回数の続きの `0` は表を引かない（Vim 9.1 の no_zero_mapping の実測・100 行の本文・
+// `feedkeys(…, 'tx')`・`D:/NeNeNib/scripts/20261110/1311/probe.vim` の Z・#1311・ADR 0176 の
+// 追補 30）。回数の先頭の `0`・オペレータの後の `0`・回数が終わった後の `0` は引く。
+void verify_zero_in_count_keys()
+{
+    const MapRow zero_end{normal_only, "0", "G", true};
+    expect(top_caret({zero_end}, "10j") == 11U, "Z1: the 0 of 10j is a digit");
+    expect(top_caret({zero_end}, "50G") == 50U, "Z2: nmap 0 G leaves 50G on line 50");
+    expect(hundred_lines_caret({zero_end}, "0", false) == 100U, "Z3: a 0 alone uses the nmap");
+    const MapRow visual_zero{visual_set, "0", "G", true};
+    expect(top_caret({visual_zero}, "v10j<Esc>") == 11U &&
+               top_caret({visual_zero}, "V10j<Esc>") == 11U,
+           "Z4 Z5: the 0 of a VISUAL count is a digit");
+    expect(hundred_lines_caret({visual_zero}, "v0<Esc>", false) == 100U,
+           "Z6: a 0 alone in VISUAL uses the vmap");
+    const MapRow pending_zero{pending_only, "0", "G", true};
+    const auto counted = hundred_lines_from({pending_zero}, "", "d10j", false);
+    expect(counted.first == 1U && line_count(counted.second) == 89U &&
+               counted.second.starts_with("12\n13\n"),
+           "Z7: the 0 of d10j is a digit and 11 lines go");
+    const auto alone = hundred_lines_after({pending_zero}, "d0", false);
+    expect(alone.first == 49U && line_count(alone.second) == 49U,
+           "Z8: d0 uses the omap and deletes to the end");
+    const auto after_count = hundred_lines_after({pending_zero}, "2d0", false);
+    expect(after_count.first == 2U && line_count(after_count.second) == 51U &&
+               after_count.second.starts_with("1\n51\n"),
+           "Z9: the 0 after 2d starts no count and uses the omap");
+    expect(top_caret({zero_end}, "\"a10j") == 11U, "Z10: the 0 of a count after \"a is a digit");
+    // 限界（追補 31）: Vim は `"a` の後で回数を数え直す（Z11・`5"a0` は `0` を引いて 5 行目）。
+    // Nib の engine は `"a` の後も回数を続ける（`5"a0` は回数 50）ので、表もそれに従って引かない。
+    expect(hundred_lines_caret({zero_end}, "5\"a0", false) == 50U,
+           "Z11: the 0 after 5\"a follows the engine count and is not looked up");
+    expect(top_caret({MapRow{normal_only, "x", "10j", true}, zero_end}, "x") == 11U,
+           "Z12: the 0 of a count in a right side is not looked up");
+    const MapRow zero_a{normal_only, "0a", "G", true};
+    const auto appended = hundred_lines_from({zero_a}, "", "10aZ<Esc>", false);
+    expect(appended.second.starts_with("1ZZZZZZZZZZ\n"),
+           "Z13: the 0 of a count does not start the left side 0a");
+    expect(top_caret({zero_a}, "0a") == 100U, "Z14: 0a without a count uses the nmap");
+    expect(top_caret({MapRow{normal_only, "10", "G", true}}, "10") == 100U,
+           "Z15: a left side that starts with a digit before the count is mapped");
+    expect(top_caret({MapRow{normal_only, "5a", "x", true}, MapRow{normal_only, "0", "gg", true}},
+                     "50j") == 51U,
+           "Z16: the 0 after a waited 5 that became a count is a digit");
+    expect(top_caret({MapRow{normal_only, "2a", "x", true}, MapRow{normal_only, "0", "gg", true}},
+                     "320G") == 100U,
+           "Z17: the 0 after a waited digit inside the count is a digit");
+    expect(hundred_lines_caret({zero_end}, "g0", false) == 50U,
+           "Z18: the argument of g is not mapped");
+    const auto inserted =
+        hundred_lines_from({MapRow{insert_only, "0", "Z", true}}, "", "3i0<Esc>", false);
+    expect(inserted.second.starts_with("ZZZ1\n"), "Z19: INSERT maps the 0 after a count");
+    const auto removed = hundred_lines_after({zero_end}, "5x0", false);
+    expect(removed.first == 100U && removed.second.contains("\n49\n\n51\n"),
+           "Z20: the 0 after the count is used up uses the nmap");
+    const auto replaced = hundred_lines_from({zero_end}, "", "1r0", false);
+    expect(replaced.first == 1U && replaced.second.starts_with("0\n2\n"),
+           "Z22: the argument of r is not mapped");
+    const auto deleted = hundred_lines_after({zero_end}, "d20j", false);
+    expect(deleted.first == 50U && line_count(deleted.second) == 79U,
+           "Z23: the nmap does not apply to the 0 of d20j");
+}
+
 // 待ちの間の IME の確定は積んだ鍵を先に流し、WorkCompleted は待ちを保つ（決定 4）。
 void verify_flush_before_intents()
 {
@@ -1116,6 +1237,7 @@ void verify_key_map_scope()
     verify_leader();
     verify_override();
     verify_map_modes();
+    verify_zero_in_count();
     verify_steps();
     verify_raw_right_sides();
     verify_key_map_property();
@@ -1131,6 +1253,7 @@ void verify_key_map_scope()
     verify_rhs_mode();
     verify_rhs_other_modes();
     verify_scrolled_right_side();
+    verify_zero_in_count_keys();
     verify_flush_before_intents();
     verify_walk_and_size();
     verify_ex_commands();

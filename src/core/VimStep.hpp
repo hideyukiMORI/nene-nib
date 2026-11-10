@@ -90,6 +90,12 @@ struct VimStep
 // 真なら 1 回読んで写しを置く。何が読む状態かを決めるのは engine の側である（ARC-004）。
 [[nodiscard]] bool vim_reads_clipboard(const VimState &state, const VimKey &key) noexcept;
 
+// 鍵 key を engine が回数の続きの桁として読む `0` か（Vim の no_zero_mapping・ADR 0176 の追補 30・
+// #1311）。NORMAL・VISUAL・オペレータ待ちで 1 鍵の引数を待たず、回数が値を持つ間の `0` だけが
+// 真（回数の先頭の `0` は行頭へ・オペレータの後の回数は別に数える）。表を引く側
+// （vim_map_mode_of）はこれを見て、回数の続きの `0` を表で引かない。
+[[nodiscard]] bool vim_continues_count(const VimState &state, const VimKey &key) noexcept;
+
 // 読んだ本文を無名へ置く側か（追補（#848）の決定 D）。`:set clipboard=unnamed` で、レジスタを
 // 選ばず・オペレータも次の鍵の待ちも無い NORMAL の `p` `P`（回数の後でも）のとき真。
 // 真なら controller は vim_unnamed_loaded、偽なら vim_clipboard_loaded で置く（2
