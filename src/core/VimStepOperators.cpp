@@ -517,6 +517,9 @@ namespace
 {
 // y のあとのキャレット。行単位VISUALは下向き・単一行なら先頭、上向きなら現在位置。
 // NORMALの行単位は同じ桁を保つ。VISUAL終了時の行末の寄せはcontrollerの共通経路を使う。
+// NORMALの行単位でcaretが範囲の最初の行にあればcaretそのもの（Vimのdo_pending_operatorは
+// oap->startへ置く。yyと下へ動いたyは動く前のバイトの桁で、欲しい列から引き直さない。
+// 回数つきのztの後のyyで両者が違う・Issue #1294）。
 [[nodiscard]] Offset yanked_caret(const TextBuffer &text, const VimState &state, Offset caret,
                                   const VimMotionRange &range)
 {
@@ -533,6 +536,11 @@ namespace
         {
             return line_of(text, caret) == line_of(text, range.range.end) ? range.range.begin
                                                                           : caret;
+        }
+        if (state.mode == VimMode::normal &&
+            line_of(text, caret) == line_of(text, range.range.begin))
+        {
+            return caret;
         }
         return caret_on_line(text, wanted_column_of(text, state, caret),
                              line_of(text, range.range.begin), VimMode::normal);
@@ -1280,11 +1288,13 @@ namespace detail
         return cancelled_at_landing(state, view, wanted);
     }
     VimState performed_from = state;
+    Offset yanked_from = view.selection.caret;
     // 行単位の y は移動の前の位置と着地の (行, 桁) で早い方へ着く（Vim の op_yank は範囲の始まり
     // oap->start へキャレットを置き、do_pending_operator は LT_POS で行と桁を比べる）。上へ動いた
     // 移動と、同じ行の手前に着く移動（`$ygg` `j$yG` `$y'a`）は着地の桁: `-` gg G H M L 'a は最初の
     // 非空白、`k` は欲しい列を保つ（Issue #411 / #965 / #1065・ADR 0015 の追補）。下へ動いた y と
-    // 同じ行の後ろに着く y は範囲の始まり＝キャレットのまま。本文の位置の順は (行, 桁) の順と同じ。
+    // 同じ行の後ろに着く y は範囲の始まり＝キャレットのまま（バイトの桁・#1294）。手前に着く y は
+    // 着地を yanked_caret へ渡す。本文の位置の順は (行, 桁) の順と同じ。
     // `_` は y の下ではカーソルを動かさない（Vim の nv_lineop は OP_YANK で beginline を呼ばない・
     // `j$y_` は `$` のまま）ので、同じ行の最初の非空白を着地として比べない（決定 13）。
     if (operation == VimOperator::yank && range.value().kind == VimRegisterKind::lines &&
@@ -1295,11 +1305,12 @@ namespace detail
         {
             performed_from.wanted_column = VimWantedColumn{
                 VimColumnWish::at_column, caret_virtual_column(view.text, destination)};
+            yanked_from = destination;
         }
     }
     // 飛ぶ移動はオペレータの後ろでも前の位置を置く（Vim の setpcmark・ADR 0152 の決定 4）。
     return jumped_by(
-        performed(performed_from, view.text, view.selection.caret,
+        performed(performed_from, view.text, yanked_from,
                   keeps_the_line_break(view.text, range.value(), wanted, operation)
                       ? range.value()
                       : adjusted_for_exclusive(view.text,
