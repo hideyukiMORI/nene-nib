@@ -472,6 +472,36 @@ void verify_vim_bracket_prefix_refuses()
     }
 }
 
+// `[` `]` の後ろの Esc は失敗にせず打ち消すだけ（Vim は鳴らさず、`[<Esc>x` `d[<Esc>x` の x が
+// 効く・`z<Esc>` と同じ・Issue #1344）。回数と保留中のオペレータも消える。
+[[nodiscard]] bool bracket_escaped(const VimState &state, const VimEditorView &view,
+                                   char32_t prefix)
+{
+    const auto started = vim_step(state, view, VimKey{VimCharacter{prefix}});
+    const auto escaped = vim_step(started.next, view, VimKey{VimSpecialKey::escape});
+    return waits_for_prefix(started.next, nenenib::core::VimPrefix::bracket) &&
+           !escaped.failure.has_value() &&
+           std::holds_alternative<nenenib::core::VimNoEffect>(escaped.effect) &&
+           !escaped.next.input_wait.has_value() && !escaped.next.pending.has_value() &&
+           !escaped.next.count.has_value() && escaped.next.mode == state.mode;
+}
+
+void verify_vim_bracket_escape_cancels()
+{
+    const auto buffer = TextBuffer::from_utf8("abc").value();
+    const VimEditorView view{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 8, 0}};
+    const VimState normal = empty_vim_state();
+    const auto counted = vim_step(normal, view, VimKey{VimCharacter{U'3'}}).next;
+    const auto pending = vim_step(normal, view, VimKey{VimCharacter{U'd'}}).next;
+    for (const char32_t prefix : std::u32string_view{U"[]"})
+    {
+        expect(bracket_escaped(normal, view, prefix) && bracket_escaped(counted, view, prefix),
+               "Esc after [ or ] cancels without failing so the next key runs (Issue #1344)");
+        expect(bracket_escaped(pending, view, prefix),
+               "Esc after d[ or d] cancels the operator without failing (Issue #1344)");
+    }
+}
+
 // 本文の端を越える巨大な回数の `)` `(` `}` `{` は、端に着いた後の回数を空回りせずに失敗する
 // （Vim の findsent の EQUAL_POS の枝と findpar・Issue #1334・止まらなければ CTest の TIMEOUT）。
 void verify_vim_huge_count_motions_stop()
@@ -566,6 +596,7 @@ void verify_vim_text_object_contracts()
     verify_vim_sentence_across_pieces();
     verify_vim_sentence_before_crlf();
     verify_vim_bracket_prefix_refuses();
+    verify_vim_bracket_escape_cancels();
     verify_vim_huge_count_motions_stop();
     verify_vim_huge_count_sentence_objects();
 }

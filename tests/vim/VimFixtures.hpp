@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 6675cf6eeb68b86332641adfd7ee20017df8e44f8bb4ef2a52882a5a1242f076 / 3740 fixtures
+// fixtures.json: sha256 8fd95916caa278f7ee7ce0b27485ad2c5701a8b4c1052770274bcd0cfaac70bb / 3769 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3740> vim_fixtures{{
+constexpr std::array<VimFixture, 3769> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3752,6 +3752,35 @@ constexpr std::array<VimFixture, 3740> vim_fixtures{{
     {"count-repeat-1334-N", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", "/e<CR>21N", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", 1, 13, "", "", std::nullopt},
     {"count-repeat-1334-star", "one x one y one\nz one", "9*", "one x one y one\nz one", 1, 7, "", "", std::nullopt},
     {"count-repeat-1334-hash", "one x one y one\nz one", "w10#", "one x one y one\nz one", 1, 5, "", "", std::nullopt},
+    {"search-operator-empty-yank-one-match-N", "abc foo def", "/foo<CR>y1N", "abc foo def", 1, 5, "", "v", std::nullopt},
+    {"search-operator-empty-yank-two-matches-2N", "foo x foo", "/foo<CR>y2N", "foo x foo", 1, 7, "", "v", std::nullopt},
+    {"search-operator-empty-yank-multi-line-3n", "foo\nbar foo\n\nfoo baz", "/foo<CR>y3n", "foo\nbar foo\n\nfoo baz", 2, 5, "", "v", std::nullopt},
+    {"search-operator-empty-yank-star", "foo x", "y*", "foo x", 1, 1, "", "v", std::nullopt},
+    {"search-operator-empty-yank-hash", "foo x", "y#", "foo x", 1, 1, "", "v", std::nullopt},
+    {"search-operator-empty-yank-slash-on-only-match", "abc foo def", "wy/foo<CR>", "abc foo def", 1, 5, "", "v", std::nullopt},
+    {"search-operator-empty-yank-question-on-only-match", "abc foo def", "wy?foo<CR>", "abc foo def", 1, 5, "", "v", std::nullopt},
+    {"search-operator-empty-yank-writes-zero-register", "abc foo def", "yl/foo<CR>y1N\"0p", "abc foo def", 1, 5, "", "v", std::nullopt},
+    {"search-operator-empty-yank-named-register", "abc foo def", "/foo<CR>\"ay1N\"ap", "abc foo def", 1, 5, "", "v", std::nullopt},
+    {"search-operator-empty-yank-then-x-runs", "abc foo def", "/foo<CR>y1Nx", "abc oo def", 1, 5, "f", "v", std::nullopt},
+    {"search-operator-empty-change-one-match-n", "abc foo def", "/foo<CR>c1nX<Esc>", "abc Xfoo def", 1, 5, "", "", std::nullopt},
+    {"search-operator-empty-change-two-matches-2n", "foo x foo", "/foo<CR>c2nX<Esc>", "foo x Xfoo", 1, 7, "", "", std::nullopt},
+    {"search-operator-empty-change-overlap-4n", "aaaa b aaaa", "/aa<CR>c4nX<Esc>", "aaXaa b aaaa", 1, 3, "", "", std::nullopt},
+    {"search-operator-empty-change-multi-line-3n", "foo\nbar foo\n\nfoo baz", "/foo<CR>c3nX<Esc>", "foo\nbar Xfoo\n\nfoo baz", 2, 5, "", "", std::nullopt},
+    {"search-operator-empty-change-star", "foo x", "c*X<Esc>", "Xfoo x", 1, 1, "", "", std::nullopt},
+    {"search-operator-empty-change-hash", "foo x", "c#X<Esc>", "Xfoo x", 1, 1, "", "", std::nullopt},
+    {"search-operator-empty-change-slash-on-only-match", "abc foo def", "wc/foo<CR>X<Esc>", "abc Xfoo def", 1, 5, "", "", std::nullopt},
+    {"search-operator-empty-change-keeps-register", "abc foo def", "yl/foo<CR>c1nX<Esc>", "abc Xfoo def", 1, 5, "a", "v", std::nullopt},
+    {"search-operator-empty-change-dot-repeats", "abc foo def", "/foo<CR>c1nX<Esc>0.", "Xfoo def", 1, 1, "abc X", "v", std::nullopt},
+    {"search-operator-empty-change-undo", "abc foo def", "/foo<CR>c1nX<Esc>u", "abc foo def", 1, 5, "", "", std::nullopt},
+    {"search-operator-empty-delete-then-x-runs", "abc foo def", "/foo<CR>d1nx", "abc oo def", 1, 5, "f", "v", std::nullopt},
+    {"search-operator-empty-delete-keeps-register", "abc foo def", "yl/foo<CR>d1n", "abc foo def", 1, 5, "a", "v", std::nullopt},
+    {"search-operator-empty-delete-dot-repeats", "abc foo def", "/foo<CR>d1n0.", "foo def", 1, 1, "abc ", "v", std::nullopt},
+    {"search-operator-empty-delete-star-then-x", "foo x", "d*x", "oo x", 1, 1, "f", "v", std::nullopt},
+    {"search-operator-empty-delete-slash-then-x", "abc foo def", "wd/foo<CR>x", "abc oo def", 1, 5, "f", "v", std::nullopt},
+    {"search-operator-empty-bracket-left-escape-cancels", "abc", "[<Esc>x", "bc", 1, 1, "a", "v", std::nullopt},
+    {"search-operator-empty-bracket-right-escape-cancels", "abc", "]<Esc>x", "bc", 1, 1, "a", "v", std::nullopt},
+    {"search-operator-empty-bracket-escape-after-count", "abc", "3[<Esc>x", "bc", 1, 1, "a", "v", std::nullopt},
+    {"search-operator-empty-bracket-escape-cancels-operator", "abc", "d[<Esc>x", "bc", 1, 1, "a", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
