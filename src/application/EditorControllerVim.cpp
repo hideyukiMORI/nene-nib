@@ -309,7 +309,7 @@ measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &r
 {
     if (const auto *const navigate = std::get_if<core::VimNavigate>(&step.effect))
     {
-        return navigate->keeps_top;
+        return navigate->topline == core::VimToplineSettle::kept;
     }
     return std::holds_alternative<core::VimReplay>(step.effect) && replayed_top_kept;
 }
@@ -1068,8 +1068,16 @@ void EditorController::perform(const core::VimNavigate &effect)
                                        state_.caret_affinity()};
     // `scrolloff` の余白は追従と同じ 1 本の計算で縦だけに効かせる。`zt` `zb` は余白の分だけ
     // 戻り、Ctrl-d / Ctrl-u は余白の外のキャレットを動かさない（#1041・ADR 0019 の追補）。
-    // Ctrl-e Ctrl-y は engine の先頭のまま（keeps_top・Vim の VALID_TOPLINE・追補 #1232）。
-    if (state_.settings().scrolloff > 0 && !effect.keeps_top)
+    // Ctrl-e Ctrl-y と、キャレットの動かない 1 画面の送りの FAIL は engine の先頭のまま（kept・
+    // Vim の VALID_TOPLINE・追補 #1232 / #1362）。キャレットの動いた FAIL は余白の追従を掛けず、
+    // Vim の update_topline の写しだけを頼む（updated・VISUAL も鍵の終わりの寄せを通らないので
+    // ここで頼む・#1362）。
+    if (effect.topline == core::VimToplineSettle::updated)
+    {
+        follow_caret();
+    }
+    if (state_.settings().scrolloff > 0 &&
+        effect.topline == core::VimToplineSettle::margin_followed)
     {
         const auto kept = visual_view().followed(caret, core::ScrollFollow::minimal,
                                                  detail::scroll_extent_for(state_.mode()));

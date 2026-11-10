@@ -12,6 +12,7 @@
 #include "VimScrollDirection.hpp"
 #include "VimScrollUnit.hpp"
 #include "VimStep.hpp"
+#include "VimToplineSettle.hpp"
 
 #include <algorithm>
 #include <array>
@@ -228,17 +229,26 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
 
 // 新しい窓でキャレットの行を余白の内側へ寄せる（Vim の onepage と halfpage の最後の
 // cursor_correct・ #1099・ADR 0019 の追補）。窓の下端は文字組みの値で数えた全部の入る最後の行の次。
-[[nodiscard]] Navigation corrected(const VimEditorView &view, VimDisplayNavigation target)
+[[nodiscard]] std::expected<VimCursorWindow, LineNumber>
+correction_window(const VimEditorView &view, LineNumber first)
 {
-    const auto area = window_of(view, target.first);
+    const auto area = window_of(view, first);
     if (!area)
     {
         return std::unexpected(area.error());
     }
-    target.caret = vim_cursor_corrected(VimCursorWindow{target.first, area.value().below,
-                                                        vim_viewport_of(view).visible_lines,
-                                                        view.scroll_margin, view.layout.lines},
-                                        target.caret, view.text.line_count());
+    return VimCursorWindow{first, area.value().below, vim_viewport_of(view).visible_lines,
+                           view.scroll_margin, view.layout.lines};
+}
+
+[[nodiscard]] Navigation corrected(const VimEditorView &view, VimDisplayNavigation target)
+{
+    const auto window = correction_window(view, target.first);
+    if (!window)
+    {
+        return std::unexpected(window.error());
+    }
+    target.caret = vim_cursor_corrected(window.value(), target.caret, view.text.line_count());
     return target;
 }
 
@@ -315,8 +325,11 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
     return lines[one ? 1 : 2];
 }
 
-[[nodiscard]] Navigation page_down(const VimEditorView &view, LineNumber first)
+// 前へ 1 周（Vim の onepage の FORWARD）。末尾が見えている周は先頭を最終行にしてキャレットを
+// 置かない（周の前の行のまま・後の cursor_correct が窓へ入れる・#1362）。
+[[nodiscard]] Navigation page_down(const VimEditorView &view, VimDisplayNavigation from)
 {
+    const LineNumber first = from.first;
     const auto area = window_of(view, first);
     if (!area)
     {
@@ -324,8 +337,7 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
     }
     if (area.value().below.value > view.text.line_count())
     {
-        return VimDisplayNavigation{LineNumber{view.text.line_count()},
-                                    LineNumber{view.text.line_count()}};
+        return VimDisplayNavigation{LineNumber{view.text.line_count()}, from.caret};
     }
     const auto next = overlap(view, area.value().below, false);
     if (!next)
@@ -412,10 +424,39 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
 
 // 1 画面も送れなかった周（端の Ctrl-f / Ctrl-b）はキャレットが余白の内側にいるので寄せない。
 // 端で FAIL した周があれば失敗の印を載せる（#1228）。
+// 端で FAIL した送りの先頭の決め直し（vim_failed_page_topline・#1362）。最初の周の FAIL（窓も
+// キャレットも動かない・preserve_column）は cursor_correct がキャレットの行を動かさないときだけ
+// VALID_TOPLINE
+// が残る形にし、動かすときは今までの形のまま（文字組みの道はキャレットを置き直さない）。
+[[nodiscard]] Navigation page_failed(const VimEditorView &view, VimDisplayNavigation result)
+{
+    const LineNumber before = view.text.position_of(view.selection.caret).line;
+    const LineNumber paged = result.caret;
+    const auto window = correction_window(view, result.first);
+    if (!window)
+    {
+        return std::unexpected(window.error());
+    }
+    const LineNumber settled = vim_cursor_corrected(window.value(), paged, view.text.line_count());
+    if (result.preserve_column && !(settled == paged))
+    {
+        return result;
+    }
+    result.caret = result.preserve_column ? paged : settled;
+    result.topline = vim_failed_page_topline(
+        before, paged, settled,
+        vim_cursor_within_margins(window.value(), paged, view.text.line_count()));
+    return result;
+}
+
 [[nodiscard]] Navigation page_finished(const VimEditorView &view, VimDisplayNavigation result,
                                        std::optional<VimRepeatFailure> failure)
 {
     result.failure = failure;
+    if (failure.has_value())
+    {
+        return page_failed(view, result);
+    }
     return result.preserve_column ? Navigation{result} : corrected(view, result);
 }
 
@@ -439,7 +480,7 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
             failure = VimRepeatFailure::not_moved;
             break;
         }
-        const auto next = down ? page_down(view, result.first) : page_up(view, result.first);
+        const auto next = down ? page_down(view, result) : page_up(view, result.first);
         if (!next)
         {
             return std::unexpected(next.error());

@@ -29,6 +29,7 @@
 #include "VimTextObjectOutcome.hpp"
 #include "VimTextObjectRange.hpp"
 #include "VimTextObjectRequest.hpp"
+#include "VimToplineSettle.hpp"
 #include "VimToplineUpdate.hpp"
 #include "VimToplineWindow.hpp"
 #include "VisualPosition.hpp"
@@ -315,17 +316,20 @@ namespace
     return {top, caret};
 }
 
-// 回数ぶん前へ送った先頭（Vim の onepage の FORWARD の周）。周ごとに FAIL（末尾が見えていて先頭が
-// 末尾から余白の内側・#1099）を確かめて止まり、末尾が見えている周（`w_botline > line_count`）は
-// 先頭を最終行にし、ほかの周は窓の下の行から重なりを上へ数えた行（先頭 + page_advance）へ送る。
-// 2 周目以降も末尾が見えたら最終行へ行く（回数を掛けた送りの量で止めない・#1261）。
-[[nodiscard]] LineNumber pages_forward(const VimEditorView &view, std::size_t pages) noexcept
+// 回数ぶん前へ送った先頭と、最後に重なりの周が置いたキャレットの行（Vim の onepage の FORWARD の
+// 周）。周ごとに FAIL（末尾が見えていて先頭が末尾から余白の内側・#1099）を確かめて止まり、末尾が
+// 見えている周（`w_botline > line_count`）は先頭を最終行にしてキャレットを置かず、ほかの周は窓の
+// 下の行から重なりを上へ数えた行（先頭 + page_advance）を先頭とキャレットにする。2 周目以降も
+// 末尾が見えたら最終行へ行く（回数を掛けた送りの量で止めない・#1261）。
+[[nodiscard]] std::pair<LineNumber, std::optional<LineNumber>>
+pages_forward(const VimEditorView &view, std::size_t pages) noexcept
 {
     const std::size_t total = view.text.line_count();
     const std::size_t height =
         std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
     const std::size_t one_page = page_advance(view);
     LineNumber top = vim_viewport_of(view).first_visible;
+    std::optional<LineNumber> caret = std::nullopt;
     for (std::size_t page = 0; page < pages; ++page)
     {
         const bool end_shown = top.value + height - single_step >= total;
@@ -334,8 +338,9 @@ namespace
             break;
         }
         top = end_shown ? LineNumber{total} : LineNumber{top.value + one_page};
+        caret = end_shown ? caret : std::optional{top};
     }
-    return top;
+    return {top, caret};
 }
 
 // 後ろへの最後の周のキャレットの行。窓の外なら呼び手が窓の中へ入れる。
@@ -350,9 +355,28 @@ namespace
     switch (direction)
     {
     case VimScrollDirection::down:
-        return pages_forward(view, pages);
+        return pages_forward(view, pages).first;
     case VimScrollDirection::up:
         return pages_back(view, pages).first;
+    }
+    std::unreachable();
+}
+
+// 回数ぶんの周の後で cursor_correct の前のキャレットの行（Vim の onepage の周が置いた行・周が
+// 置かなければ鍵の前の行）。前へは最後の重なりの周の先頭、後ろへは最後に送れた周の行（#1362）。
+[[nodiscard]] LineNumber paged_caret(const VimEditorView &view, std::size_t pages,
+                                     VimScrollDirection direction)
+{
+    const LineNumber before = line_of(view.text, view.selection.caret);
+    switch (direction)
+    {
+    case VimScrollDirection::down:
+        return pages_forward(view, pages).second.value_or(before);
+    case VimScrollDirection::up:
+    {
+        const auto [top, caret] = pages_back(view, pages);
+        return top == vim_viewport_of(view).first_visible ? before : caret;
+    }
     }
     std::unreachable();
 }
@@ -448,12 +472,31 @@ namespace
     return step;
 }
 
+// 先頭 first の窓の最後の行（文字組みの無い道は 1 論理行 = 1 画面行）。
+[[nodiscard]] LineNumber window_last(const VimEditorView &view, LineNumber first) noexcept
+{
+    const std::size_t height =
+        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
+    return LineNumber{first.value +
+                      std::min(height - single_step, view.text.line_count() - first.value)};
+}
+
+// 画面移動の効果に先頭の決め直しを載せる（VimToplineSettle・#1232 / #1362）。
+[[nodiscard]] VimStep with_topline(VimStep step, VimToplineSettle settle)
+{
+    if (auto *const navigate = std::get_if<VimNavigate>(&step.effect); navigate != nullptr)
+    {
+        navigate->topline = settle;
+    }
+    return step;
+}
+
 // 文字組みの道の画面移動。端で失敗した送りは窓とキャレットを解いたとおりに動かし、失敗の印を
-// 添える（Vim の onepage の FAIL・#1228）。
+// 添える（Vim の onepage の FAIL・#1228）。先頭の決め直しも写す（#1362）。
 [[nodiscard]] VimStep displayed_navigation(const VimState &state, const VimEditorView &view,
                                            const VimDisplayNavigation &target)
 {
-    auto step = displayed_moved(state, view, target);
+    auto step = with_topline(displayed_moved(state, view, target), target.topline);
     if (!target.failure.has_value())
     {
         return step;
@@ -463,15 +506,58 @@ namespace
 
 // 新しい窓の先頭 first でキャレットの行を余白の内側へ寄せる（Vim の onepage と halfpage の最後の
 // cursor_correct・#1099・ADR 0019 の追補）。文字組みの無い道の窓は 1 論理行 = 1 画面行。
-[[nodiscard]] LineNumber corrected_in(const VimEditorView &view, LineNumber first,
-                                      LineNumber caret_line) noexcept
+[[nodiscard]] VimCursorWindow correction_window(const VimEditorView &view,
+                                                LineNumber first) noexcept
 {
     const std::size_t height = vim_viewport_of(view).visible_lines;
     const std::size_t total = view.text.line_count();
     const LineNumber below{first.value + std::min(std::max<std::size_t>(height, single_step),
                                                   total + single_step - first.value)};
-    return vim_cursor_corrected(VimCursorWindow{first, below, height, view.scroll_margin},
-                                caret_line, total);
+    return VimCursorWindow{first, below, height, view.scroll_margin};
+}
+
+[[nodiscard]] LineNumber corrected_in(const VimEditorView &view, LineNumber first,
+                                      LineNumber caret_line) noexcept
+{
+    return vim_cursor_corrected(correction_window(view, first), caret_line, view.text.line_count());
+}
+
+// 1 画面の送りが FAIL で返った着地（Vim の onepage の FAIL）。キャレットは cursor_correct が置いた
+// 行へ同じバイトの桁で入り（beginline を飛ばす・#411）、窓は送った所まで動いたまま、beep_flush
+// が残りの鍵を打ち切る（#1228）。先頭の決め直しは vim_failed_page_topline（#1362）。最初の周の
+// FAIL で行が動かなければ選択もそのまま置く。
+[[nodiscard]] VimToplineSettle failed_page_topline(const VimEditorView &view, LineNumber first,
+                                                   LineNumber paged, LineNumber caret_line)
+{
+    const bool within =
+        vim_cursor_within_margins(correction_window(view, first), paged, view.text.line_count());
+    return vim_failed_page_topline(line_of(view.text, view.selection.caret), paged, caret_line,
+                                   within);
+}
+
+[[nodiscard]] VimStep page_failed(const VimState &state, const VimEditorView &view,
+                                  LineNumber first, LineNumber paged)
+{
+    const Offset caret = view.selection.caret;
+    const LineNumber before = line_of(view.text, caret);
+    const LineNumber caret_line = corrected_in(
+        view, first, LineNumber{std::min(paged.value, window_last(view, first).value)});
+    const VimToplineSettle settle = failed_page_topline(view, first, paged, caret_line);
+    if (first == vim_viewport_of(view).first_visible && caret_line == before)
+    {
+        return failed(with_topline(VimStep{navigated_state(state, view, caret),
+                                           VimNavigate{view.selection, first}},
+                                   settle),
+                      VimRepeatFailure::not_moved);
+    }
+    const std::size_t column = caret.value - view.text.line_start(before).value;
+    return failed(
+        with_topline(
+            navigated_at(state, view, first,
+                         rested_in(view.text, vim_line_and_column(view.text, caret_line, column),
+                                   state.mode)),
+            settle),
+        VimRepeatFailure::not_moved);
 }
 
 // 半画面の送りが端で失敗するか（Vim の nv_halfpage は CTRL-U でカーソルが 1 行目・CTRL-D で
@@ -560,40 +646,25 @@ namespace detail
     if (first == vim_viewport_of(view).first_visible)
     {
         // 最初の周で端に当たった（Vim の onepage の FAIL・後ろへは先頭行が 1・前へは末尾が見えて
-        // 先頭が末尾から余白の内側）。beep_flush が残りの鍵を打ち切る（#1228）。
-        const Offset caret = view.selection.caret;
-        return failed(
-            VimStep{navigated_state(state, view, caret), VimNavigate{view.selection, first}},
-            VimRepeatFailure::not_moved);
+        // 先頭が末尾から余白の内側）。窓は動かず、キャレットは cursor_correct だけを受ける。
+        return page_failed(state, view, first, line_of(view.text, view.selection.caret));
     }
-    const std::size_t height =
-        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
-    const std::size_t last =
-        first.value + std::min(height - single_step, view.text.line_count() - first.value);
+    if (page_count_reached_the_end(view, count_of(state.count), direction))
+    {
+        // 回数の途中で端に当たった周は Vim の onepage が FAIL を返し、beginline を飛ばす（#411）。
+        return page_failed(state, view, first, paged_caret(view, count_of(state.count), direction));
+    }
     LineNumber caret_line = first;
     switch (direction)
     {
     case VimScrollDirection::down:
         break;
     case VimScrollDirection::up:
-        caret_line = LineNumber{std::min(last, page_back_caret(view, count_of(state.count)).value)};
+        caret_line = LineNumber{std::min(window_last(view, first).value,
+                                         page_back_caret(view, count_of(state.count)).value)};
         break;
     }
-    caret_line = corrected_in(view, first, caret_line);
-    if (!page_count_reached_the_end(view, count_of(state.count), direction))
-    {
-        return navigated(state, view, first, caret_line);
-    }
-    // 回数の途中で端に当たった周は Vim の onepage が FAIL を返し、beginline を飛ばす。キャレットは
-    // 行だけ画面へ入り、同じバイトの桁を保つ（check_cursor_col・Issue #411）。窓は送った所まで
-    // 動いたまま、beep_flush が残りの鍵を打ち切る（#1228）。
-    const Offset caret = view.selection.caret;
-    const std::size_t column = caret.value - view.text.line_start(line_of(view.text, caret)).value;
-    return failed(
-        navigated_at(
-            state, view, first,
-            rested_in(view.text, vim_line_and_column(view.text, caret_line, column), state.mode)),
-        VimRepeatFailure::not_moved);
+    return navigated(state, view, first, corrected_in(view, first, caret_line));
 }
 
 // 1 画面の送りが端で動かないか（Vim の ins_pageup / ins_pagedown が呼ぶ onepage(dir, 1) の
@@ -673,11 +744,7 @@ namespace
 // Ctrl-e Ctrl-y の先頭は scrolloff の追従に掛けない（Vim の VALID_TOPLINE・追補 #1232）。
 [[nodiscard]] VimStep kept_top(VimStep step)
 {
-    if (auto *const navigate = std::get_if<VimNavigate>(&step.effect); navigate != nullptr)
-    {
-        navigate->keeps_top = true;
-    }
-    return step;
+    return with_topline(std::move(step), VimToplineSettle::kept);
 }
 
 // Ctrl-e Ctrl-y（ADR 0019 の追補 #1232・Vim の scroll_redraw）。窓は engine が決めた先頭へ送る。
