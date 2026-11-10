@@ -22,11 +22,17 @@ inline constexpr std::uint32_t image_decoded_side_limit = 2048;
 // 1 画素のバイト数（B G R A の 4 バイト・application の ImagePixels）。
 inline constexpr std::size_t image_pixel_bytes = 4;
 
+// 復号した 1 枚の画素の最大のバイト数（2048 × 2048 × 4 = 16 MiB）。画像は読むまで大きさが分からない
+// ので、application はこの分が保持の上限に収まるときだけ頼む（ADR 0155 の追補 51）。
+inline constexpr std::size_t image_decoded_byte_limit =
+    std::size_t{image_decoded_side_limit} * image_decoded_side_limit * image_pixel_bytes;
+
 // 1 文書で出す画像の数の上限（本文の順で最初の 256 個・ADR 0155 の追補 50）。それより後ろの画像は頼
 // まず「[画像: alt]」のまま。
 inline constexpr std::size_t preview_image_limit = 256;
 
-// application が持つ復号済みの画素の合計の上限（32 MiB）。超えたら読めた順の古いものから捨てる（ADR
-// 0155 の追補 51）。長辺 2048 の画像 1 枚は 16 MiB なので、少なくとも 2 枚は持てる。
+// application が持つ復号済みの画素の合計の上限（32 MiB）。頼む前に、頼むものより錨から遠い画像を範
+// 囲の外→遠い順に捨てて image_decoded_byte_limit の分を空ける（ADR 0155 の追補 51）。長辺 2048 の画
+// 像 1 枚は 16 MiB なので、少なくとも 2 枚は持てる。
 inline constexpr std::size_t preview_image_held_byte_limit = std::size_t{32} * 1024 * 1024;
 } // namespace nenenib::core

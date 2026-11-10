@@ -55,6 +55,7 @@
 #include "GridLineMarks.hpp"
 #include "GridRowView.hpp"
 #include "GridTally.hpp"
+#include "ImageOutcome.hpp"
 #include "JsonValue.hpp"
 #include "KeyMap.hpp"
 #include "LanguageServerLink.hpp"
@@ -568,11 +569,15 @@ class EditorController final
     void request_preview(bool fresh);
     // プレビューが開いていれば今の券の結果を引く（決定 6・10）。WorkCompleted の道だけが呼ぶ。
     void collect_preview();
-    // プレビューが開いていれば、錨の要素から見える範囲の画像を頼む（ADR 0155 の追補 50）。解析の結
-    // 果が届いたとき・PreviewTick・錨を送ったときだけ呼ぶ。画像の節が無ければ何もしない。
+    // プレビューが開いていれば、錨の要素から見える範囲の画像を錨に近い順に 1 つ頼む（ADR 0155 の追
+    // 補 50・51）。口に頼み中があれば頼まない。解析の結果が届いたとき・画像の結果を引いたとき・
+    // PreviewTick・錨を送ったときだけ呼ぶ。画像の節が無ければ何もしない。
     void request_preview_images();
-    // プレビューが開いていれば画像の結果を引く（追補 50）。WorkCompleted の道だけが呼ぶ。
+    // プレビューが開いていれば画像の結果を引き、次の 1 つを頼む（追補 50）。WorkCompleted の道だけ
+    // が呼ぶ。
     void collect_preview_images();
+    // 画像の口の結果を全部引き、頼み中の券の結果があれば頼み中を解く（引く所はここの 1 本）。
+    [[nodiscard]] std::vector<ImageOutcome> take_preview_images();
     // 本文が送られたら（前の frame と先頭行が違えば）プレビューを追従に戻す（決定 7）。frame の 1
     // か所。
     void follow_preview_on_scroll(core::LineNumber first_visible);
@@ -1003,6 +1008,9 @@ class EditorController final
     std::uint64_t preview_tickets_ = 0;
     // プレビューの画像の券（ADR 0155 の追補 50）。画像の要求ごとに 1 つ進み、戻さない。
     std::uint64_t preview_image_tickets_ = 0;
+    // 画像の口に頼んで結果をまだ引いていない券（追補 51・高々 1 つ）。文書が替わっても結果を引くま
+    // で次を頼まない（ワーカーを待たせるのは最大 1 枚の復号の時間）。
+    std::optional<std::uint64_t> preview_image_pending_;
     // 読みの port の券（ADR 0159 の決定 5）。プロセスで 1 つの通し番号で、頼むたびに進む。
     std::uint64_t read_tickets_ = 0;
     // 揃ったがまだ採っていない読みの結果（ADR 0159 の追補 2）。歩き・入力行・面の最中は留め、

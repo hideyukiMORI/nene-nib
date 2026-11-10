@@ -40,16 +40,17 @@ ImageSize image_decoded_size(ImageSize original) noexcept
                      image_decoded_side_limit};
 }
 
-ImageSize image_placement(ImageSize natural, std::uint32_t frame_width) noexcept
+ImageSize image_placement(ImageSize original, std::uint32_t frame_width) noexcept
 {
-    if (natural.width == 0U || natural.height == 0U || frame_width == 0U)
+    if (original.width == 0U || original.height == 0U || frame_width == 0U)
     {
         return ImageSize{0U, 0U};
     }
-    if (natural.width <= frame_width)
+    const ImageSize decoded = image_decoded_size(original);
+    if (decoded.width <= frame_width)
     {
-        return natural;
+        return decoded;
     }
-    return ImageSize{frame_width, scaled_side(natural.height, frame_width, natural.width)};
+    return ImageSize{frame_width, scaled_side(original.height, frame_width, original.width)};
 }
 } // namespace nenenib::core

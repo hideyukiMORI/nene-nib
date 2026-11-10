@@ -17,8 +17,10 @@ namespace nenenib::core
 // application はこの大きさの画素だけを受け取る。
 [[nodiscard]] ImageSize image_decoded_size(ImageSize original) noexcept;
 
-// プレビューに描く大きさ（DIP）。natural は元の画像の大きさ（1 画素 = 1 DIP・DPI を見ない）、
-// frame_width は枠の本文の幅（DIP）。natural の幅が frame_width 以下なら natural のまま（拡大しな
-// い）、広ければ幅を frame_width にして高さを同じ比で縮める。どれかが 0 なら {0, 0}。
-[[nodiscard]] ImageSize image_placement(ImageSize natural, std::uint32_t frame_width) noexcept;
+// プレビューに描く大きさ（DIP）。original は元の画像の大きさ、frame_width は枠の本文の幅（DIP）。上
+// 限は復号した大きさ image_decoded_size(original)（1 画素 = 1 DIP・DPI を見ない）で、画素を拡大しな
+// い。その幅が frame_width 以下ならそのまま、広ければ幅を frame_width にして高さを元の比で縮める
+// （長辺が 2048 を超える細長い画像は 1000×20000 → 102×2048）。丸めで 0 になる辺は 1。どれかが 0 な
+// ら {0, 0}。
+[[nodiscard]] ImageSize image_placement(ImageSize original, std::uint32_t frame_width) noexcept;
 } // namespace nenenib::core

@@ -26,6 +26,7 @@
 #include "OpenDocument.hpp"
 #include "PreviewFrame.hpp"
 #include "PreviewImageStatus.hpp"
+#include "PreviewImageWindow.hpp"
 #include "PreviewImages.hpp"
 #include "PreviewStyle.hpp"
 #include "PreviewTick.hpp"
@@ -222,6 +223,42 @@ void verify_absolute_references()
            "a drive relative path is malformed");
 }
 
+// レビュー V-1385 の参照の表の釘（いまの実装はどれも安全側・退行を止める）。
+void verify_reference_pins()
+{
+    const std::optional<core::FilePath> base = path_of(readme);
+    expect(refused("\\\\?\\C:\\a.png", base, ImageReferenceRefusal::network) &&
+               refused("\\\\.\\CON", base, ImageReferenceRefusal::network) &&
+               refused("\\\\?\\UNC\\s\\x", base, ImageReferenceRefusal::network),
+           "device paths are refused as network places");
+    expect(refused("file:////server/share/a.png", base, ImageReferenceRefusal::malformed) &&
+               refused("file:///%5C%5Cserver%5Cshare%5Ca.png", base,
+                       ImageReferenceRefusal::malformed) &&
+               refused("file://%5C%5Cserver/a.png", base, ImageReferenceRefusal::network),
+           "a file URL never reaches the network through extra slashes or encoded backslashes");
+    expect(
+        resolved("%5C%5Cserver%5Cshare%5Ca.png", base) == "C:\\server\\share\\a.png" &&
+            resolved("%2F%2Fhost%2Fa.png", base) == "C:\\host\\a.png",
+        "an encoded UNC prefix is resolved from the drive root and never becomes a network path");
+    expect(refused("file:///c|/a.png", base, ImageReferenceRefusal::malformed),
+           "the old form file:///c|/ is refused");
+    // 予約のデバイス名は経路としては通る（段 2 の adapter が開いた後に GetFileType が
+    // FILE_TYPE_DISK でなければ断る・追補 54）。
+    expect(resolved("CON", base) == "C:\\docs\\CON" && resolved("NUL", base) == "C:\\docs\\NUL" &&
+               resolved("COM1", base) == "C:\\docs\\COM1" &&
+               resolved("a/CON", base) == "C:\\docs\\a\\CON" &&
+               resolved("file:///C:/CON", base) == "C:\\CON",
+           "reserved device names pass as paths (stage 2 refuses what is not a disk file)");
+    // 文書のフォルダの外もローカルのファイルなので指せる（D79 が断るのはネットだけ・追補 54）。
+    expect(resolved("a%2F..%2F..%2F..%2Fwindows%2Fwin.ini", base) == "C:\\windows\\win.ini" &&
+               resolved("/a.png", base) == "C:\\a.png",
+           "a reference may leave the folder of the document (a local file)");
+    expect(refused("a.png:stream", base, ImageReferenceRefusal::unknown_scheme) &&
+               resolved("%zz.png", base) == "C:\\docs\\%zz.png" &&
+               resolved("C%3A%5Cwindows%5Cwin.ini", base) == "C:\\docs\\C:\\windows\\win.ini",
+           "a stream name is a scheme, a bad escape stays and an encoded drive is not a drive");
+}
+
 void verify_refused_schemes()
 {
     const std::optional<core::FilePath> base = path_of(readme);
@@ -313,6 +350,12 @@ void verify_sizes()
                core::image_placement(ImageSize{3U, 5U}, 2U) == ImageSize{2U, 3U} &&
                core::image_placement(ImageSize{401U, 3U}, 200U) == ImageSize{200U, 1U},
            "a wider image is shrunk to the frame width with the height rounded");
+    expect(core::image_placement(ImageSize{4096U, 1024U}, 3000U) == ImageSize{2048U, 512U} &&
+               core::image_placement(ImageSize{4096U, 1024U}, 800U) == ImageSize{800U, 200U} &&
+               core::image_placement(ImageSize{1000U, 20000U}, 800U) == ImageSize{102U, 2048U} &&
+               core::image_placement(ImageSize{1U, 64'000'000U}, 800U) == ImageSize{1U, 2048U} &&
+               core::image_placement(ImageSize{20000U, 1U}, 800U) == ImageSize{800U, 1U},
+           "the decoded size is the upper bound (pixels are never enlarged) and no side is 0");
     expect(core::image_placement(ImageSize{300U, 100U}, 0U) == ImageSize{0U, 0U} &&
                core::image_placement(ImageSize{0U, 5U}, 10U) == ImageSize{0U, 0U},
            "a zero size or frame places nothing");
@@ -351,6 +394,35 @@ void verify_sizes()
     return text;
 }
 
+// 頼んだ要求の券（頼まなかったら 0・券は 1 から）。
+[[nodiscard]] std::uint64_t ticket_of(const std::optional<app::ImageRequest> &request)
+{
+    return request.has_value() ? request.value().ticket : 0U;
+}
+
+// 頼んだ要求の経路（頼まなかったら空）。
+[[nodiscard]] std::string requested_path(const std::optional<app::ImageRequest> &request)
+{
+    return request.has_value() ? std::string(request.value().path.text()) : std::string();
+}
+
+// 窓で頼めなくなるまで、頼むたびに original の大きさの結果を置く。頼んだ経路を返す（券はこの中の
+// 数・頼み中は高々 1 つなので外の券と重なっても取り違えない）。
+[[nodiscard]] std::vector<std::string> read_all(app::PreviewImages &images,
+                                                const core::MarkdownDocument &document,
+                                                app::PreviewImageWindow window, ImageSize original)
+{
+    std::vector<std::string> paths;
+    std::uint64_t tickets = 0;
+    for (auto request = images.claim(document, window, true, tickets); request.has_value();
+         request = images.claim(document, window, true, tickets))
+    {
+        paths.emplace_back(requested_path(request));
+        static_cast<void>(images.received(loaded(ticket_of(request), original)));
+    }
+    return paths;
+}
+
 void verify_slots()
 {
     const auto document = parsed_document("![a](a.png) ![b](http://x/b.png) ![c](a.png) "
@@ -375,6 +447,16 @@ void verify_slots()
     expect(many.count() == core::preview_image_limit && !many.status_of(256).has_value() &&
                !many.refusal_of(256).has_value() && many.status_of(255) == Status::waiting,
            "only the first 256 images of a document are shown");
+    std::string repeated;
+    for (std::size_t index = 0; index < 300U; ++index)
+    {
+        repeated += "![r](r" + std::to_string(index % 7U) + ".png)\n\n";
+    }
+    const auto shared = app::PreviewImages::of(parsed_document(repeated), path_of(readme), nullptr);
+    expect(shared.count() == core::preview_image_limit && shared.path_of(0) == shared.path_of(7) &&
+               shared.path_of(6) == shared.path_of(251) && shared.path_of(0) != shared.path_of(1) &&
+               shared.path_of(255)->text() == "C:\\docs\\r3.png",
+           "256 nodes over 7 paths share 7 entries (the paths are matched through a sorted index)");
 }
 
 void verify_claims()
@@ -382,15 +464,18 @@ void verify_claims()
     const auto document = parsed_document(paragraphs(6U));
     auto images = app::PreviewImages::of(document, path_of(readme), nullptr);
     std::uint64_t tickets = 0;
-    expect(images.wants(document, 1U, 3U), "waiting images in the window are wanted");
-    const auto requests = images.claim(document, 1U, 3U, tickets);
-    expect(requests.size() == 2U && requests.at(0).ticket == 1U && requests.at(1).ticket == 2U &&
-               requests.at(0).path.text() == "C:\\docs\\p1.png" &&
-               requests.at(1).path.text() == "C:\\docs\\p2.png" && tickets == 2U,
-           "only the images in [first, end) are requested in body order with the next tickets");
-    expect(images.status_of(1) == Status::requested && images.status_of(0) == Status::waiting &&
-               !images.wants(document, 1U, 3U),
-           "requested images are not wanted again");
+    expect(images.wants(document, {1U, 3U}, true) && !images.wants(document, {1U, 3U}, false) &&
+               !images.claim(document, {1U, 3U}, false, tickets).has_value() && tickets == 0U,
+           "waiting images in the window are requested only while the port has no request");
+    const auto first = images.claim(document, {1U, 3U}, true, tickets);
+    expect(first.has_value() && ticket_of(first) == 1U &&
+               requested_path(first) == "C:\\docs\\p1.png" && tickets == 1U &&
+               images.status_of(1) == Status::requested && images.status_of(2) == Status::waiting &&
+               images.status_of(0) == Status::waiting,
+           "only the image nearest the anchor block is requested, with the next ticket");
+    expect(!images.wants(document, {1U, 3U}, true) &&
+               !images.claim(document, {1U, 3U}, true, tickets).has_value(),
+           "while one image is requested no other image is requested");
     expect(!images.received(loaded(7U, ImageSize{4U, 2U})) &&
                images.status_of(1) == Status::requested,
            "a result for a ticket nobody waits for is dropped");
@@ -399,13 +484,22 @@ void verify_claims()
                images.pixels_of(1)->original == ImageSize{4U, 2U} && images.held_bytes() == 32U,
            "a loaded result holds its pixels");
     expect(!images.received(loaded(1U, ImageSize{4U, 2U})), "the same ticket is taken only once");
+    const auto second = images.claim(document, {1U, 3U}, true, tickets);
+    expect(second.has_value() && ticket_of(second) == 2U &&
+               requested_path(second) == "C:\\docs\\p2.png",
+           "the next nearest image is requested after the result is taken");
     expect(images.received(failed(2U, app::ImageFailure::unsupported)) &&
-               images.status_of(2) == Status::failed && images.pixels_of(2) == nullptr &&
-               images.wants(document, 0U, 6U),
+               images.status_of(2) == Status::failed && images.pixels_of(2) == nullptr,
            "a failed image stays as text");
-    const auto more = images.claim(document, 0U, 6U, tickets);
-    expect(more.size() == 4U && tickets == 6U && images.status_of(2) == Status::failed,
-           "a failed image is never requested again for the same document");
+    expect(read_all(images, document, {0U, 6U}, ImageSize{1U, 1U}) ==
+                   std::vector<std::string>{"C:\\docs\\p0.png", "C:\\docs\\p3.png",
+                                            "C:\\docs\\p4.png", "C:\\docs\\p5.png"} &&
+               images.status_of(2) == Status::failed,
+           "images are requested one by one nearest the anchor first and a failed one never again");
+    static_cast<void>(images.claim(document, {3U, 4U}, true, tickets));
+    expect(!images.claim(document, {0U, 6U}, true, tickets).has_value() &&
+               images.status_of(2) == Status::failed,
+           "leaving the window and coming back does not request a failed image either");
 }
 
 void verify_malformed_pixels()
@@ -413,45 +507,101 @@ void verify_malformed_pixels()
     const auto document = parsed_document(paragraphs(4U));
     auto images = app::PreviewImages::of(document, path_of(readme), nullptr);
     std::uint64_t tickets = 0;
-    static_cast<void>(images.claim(document, 0U, 4U, tickets));
     auto wrong_size = std::make_shared<const app::ImagePixels>(
         app::ImagePixels{ImageSize{4096U, 4U}, ImageSize{4096U, 4U}, {}});
     auto short_bytes = std::make_shared<const app::ImagePixels>(
         app::ImagePixels{ImageSize{2U, 2U}, ImageSize{2U, 2U}, std::vector<std::uint8_t>(15U)});
-    expect(images.received(app::ImageOutcome{1U, wrong_size}) &&
-               images.received(app::ImageOutcome{2U, short_bytes}) &&
-               images.received(app::ImageOutcome{3U, nullptr}) &&
-               images.status_of(0) == Status::failed && images.status_of(1) == Status::failed &&
-               images.status_of(2) == Status::failed && images.held_bytes() == 0U,
+    const auto first = images.claim(document, {0U, 4U}, true, tickets);
+    const bool wrong = images.received(app::ImageOutcome{ticket_of(first), wrong_size});
+    const auto second = images.claim(document, {0U, 4U}, true, tickets);
+    const bool short_taken = images.received(app::ImageOutcome{ticket_of(second), short_bytes});
+    const auto third = images.claim(document, {0U, 4U}, true, tickets);
+    const bool null_taken = images.received(app::ImageOutcome{ticket_of(third), nullptr});
+    expect(wrong && short_taken && null_taken && images.status_of(0) == Status::failed &&
+               images.status_of(1) == Status::failed && images.status_of(2) == Status::failed &&
+               images.held_bytes() == 0U,
            "pixels that break the rules of ImagePixels are taken as a corrupt image");
 }
 
+// 必須 M1（V-1385）: 3 枚の 2048 × 2048 の文書は 2 枚を持ち、本文を変えた再解析で頼み直さない。
 void verify_held_limit()
+{
+    const std::string body = "![a](a.png)\n\n![b](b.png)\n\n![c](c.png)\n";
+    const auto document = parsed_document(body);
+    auto images = app::PreviewImages::of(document, path_of(readme), nullptr);
+    std::uint64_t tickets = 0;
+    const ImageSize largest{2048U, 2048U};
+    expect(read_all(images, document, {0U, 3U}, largest) ==
+                   std::vector<std::string>{"C:\\docs\\a.png", "C:\\docs\\b.png"} &&
+               images.held_bytes() == core::preview_image_held_byte_limit,
+           "two images of 2048 by 2048 fill the 32 MiB");
+    expect(
+        images.status_of(0) == Status::loaded && images.status_of(1) == Status::loaded &&
+            images.status_of(2) == Status::waiting && !images.wants(document, {0U, 3U}, true),
+        "the third is not requested: only farther images may be dropped (no read and drop loop)");
+    const auto edited = parsed_document(body + "x");
+    auto next = app::PreviewImages::of(edited, path_of(readme), &images);
+    expect(!next.wants(edited, {0U, 4U}, true) &&
+               !next.claim(edited, {0U, 4U}, true, tickets).has_value() &&
+               next.status_of(0) == Status::loaded && next.status_of(1) == Status::loaded,
+           "a new parse after typing requests nothing again (M1)");
+}
+
+// 範囲の中で捨てた画像（evicted）は、範囲の中にある間は再解析の後も頼み直さず、範囲を出て戻ると頼
+// む。
+void verify_evicted()
 {
     const auto document = parsed_document(paragraphs(4U));
     auto images = app::PreviewImages::of(document, path_of(readme), nullptr);
     std::uint64_t tickets = 0;
-    static_cast<void>(images.claim(document, 0U, 4U, tickets));
     const ImageSize largest{2048U, 2048U};
-    expect(images.received(loaded(1U, largest)) && images.received(loaded(2U, largest)) &&
+    expect(read_all(images, document, {1U, 4U}, largest) ==
+               std::vector<std::string>{"C:\\docs\\p1.png", "C:\\docs\\p2.png"},
+           "from block 1 the two nearest images are held");
+    const auto nearer = images.claim(document, {0U, 4U}, true, tickets);
+    expect(nearer.has_value() && requested_path(nearer) == "C:\\docs\\p0.png" &&
+               images.status_of(2) == Status::evicted && images.status_of(1) == Status::loaded &&
+               images.held_bytes() == core::image_decoded_byte_limit,
+           "a nearer image drops the farthest one in the window before it is requested");
+    expect(images.received(loaded(ticket_of(nearer), largest)) &&
+               !images.wants(document, {0U, 4U}, true) && images.status_of(2) == Status::evicted &&
                images.held_bytes() == core::preview_image_held_byte_limit,
-           "two images of 2048 by 2048 fill the 32 MiB");
-    expect(images.received(loaded(3U, largest)) && images.status_of(0) == Status::evicted &&
-               images.pixels_of(0) == nullptr && images.status_of(1) == Status::loaded &&
-               images.status_of(2) == Status::loaded &&
-               images.held_bytes() == core::preview_image_held_byte_limit,
-           "the third image evicts the oldest loaded one");
-    expect(!images.wants(document, 0U, 4U) && images.claim(document, 0U, 4U, tickets).empty() &&
-               images.status_of(0) == Status::evicted,
-           "an evicted image inside the window is not requested again (no loop)");
-    expect(images.wants(document, 1U, 4U), "an evicted image outside the window is wanted");
-    expect(images.claim(document, 1U, 4U, tickets).empty() &&
-               images.status_of(0) == Status::waiting,
+           "the dropped image is not requested while it stays in the window");
+    const auto edited = parsed_document(paragraphs(4U) + "x");
+    auto next = app::PreviewImages::of(edited, path_of(readme), &images);
+    expect(next.status_of(2) == Status::evicted && !next.wants(edited, {0U, 5U}, true) &&
+               !next.claim(edited, {0U, 5U}, true, tickets).has_value(),
+           "a new parse keeps the evicted image evicted and requests nothing (M1)");
+    expect(next.wants(edited, {3U, 5U}, false) &&
+               !next.claim(edited, {3U, 5U}, false, tickets).has_value() &&
+               next.status_of(2) == Status::waiting,
            "leaving the window makes the evicted image wait again");
-    const auto back = images.claim(document, 0U, 1U, tickets);
-    expect(back.size() == 1U && back.front().path.text() == "C:\\docs\\p0.png" &&
-               images.status_of(0) == Status::requested,
-           "coming back to the window requests it again");
+    const auto back = next.claim(edited, {2U, 5U}, true, tickets);
+    expect(back.has_value() && requested_path(back) == "C:\\docs\\p2.png" &&
+               next.status_of(0) == Status::waiting && next.status_of(1) == Status::loaded,
+           "coming back requests it, dropping the image outside the window farthest first");
+}
+
+// 必須 M2（V-1385）: 1920 × 1080 の 41 枚の窓は、錨に近い画像を持ち、窓の下端の画像で捨てない。
+void verify_nearest_kept()
+{
+    const auto document = parsed_document(paragraphs(41U));
+    auto images = app::PreviewImages::of(document, path_of(readme), nullptr);
+    std::uint64_t tickets = 0;
+    const ImageSize screenshot{1920U, 1080U};
+    const std::size_t one = std::size_t{1920U} * 1080U * core::image_pixel_bytes;
+    expect(read_all(images, document, {0U, 41U}, screenshot) ==
+                   std::vector<std::string>{"C:\\docs\\p0.png", "C:\\docs\\p1.png",
+                                            "C:\\docs\\p2.png"} &&
+               images.held_bytes() == 3U * one,
+           "of 41 screenshots in the window the 3 nearest the anchor are read, one at a time");
+    expect(images.status_of(0) == Status::loaded && images.status_of(2) == Status::loaded &&
+               images.status_of(3) == Status::waiting && images.status_of(40) == Status::waiting,
+           "the images on the screen near the anchor are kept and the rest wait");
+    const auto edited = parsed_document(paragraphs(41U) + "x");
+    auto next = app::PreviewImages::of(edited, path_of(readme), &images);
+    expect(!next.claim(edited, {0U, 42U}, true, tickets).has_value(),
+           "a new parse requests none of the 41 again (M1)");
 }
 
 void verify_carried()
@@ -459,9 +609,12 @@ void verify_carried()
     const auto first = parsed_document("![a](a.png)\n\n![b](b.png)\n\n![c](c.png)\n");
     auto images = app::PreviewImages::of(first, path_of(readme), nullptr);
     std::uint64_t tickets = 0;
-    static_cast<void>(images.claim(first, 0U, 3U, tickets));
-    expect(images.received(loaded(1U, ImageSize{2U, 2U})) &&
-               images.received(failed(2U, app::ImageFailure::missing)),
+    const auto a = images.claim(first, {0U, 3U}, true, tickets);
+    const bool a_taken = images.received(loaded(ticket_of(a), ImageSize{2U, 2U}));
+    const auto b = images.claim(first, {0U, 3U}, true, tickets);
+    const bool b_taken = images.received(failed(ticket_of(b), app::ImageFailure::missing));
+    const auto c = images.claim(first, {0U, 3U}, true, tickets);
+    expect(a_taken && b_taken && c.has_value() && ticket_of(c) == 3U,
            "a is loaded, b failed and c is still requested");
     const auto edited = parsed_document("# new\n\n![c](c.png)\n\n![a2](a.png)\n\n![d](d.png)\n\n"
                                         "![b](b.png)\n");
@@ -470,11 +623,15 @@ void verify_carried()
                next.status_of(0) == Status::requested && next.status_of(2) == Status::waiting &&
                next.status_of(3) == Status::failed && next.held_bytes() == 16U,
            "a new parse of the same document keeps the state of the same paths");
+    expect(!next.claim(edited, {0U, 5U}, true, tickets).has_value(),
+           "the request made before the new parse is still the one request");
     expect(next.received(loaded(3U, ImageSize{1U, 1U})) && next.status_of(0) == Status::loaded,
            "a result for a request made before the new parse is still taken");
-    const auto requests = next.claim(edited, 0U, 5U, tickets);
-    expect(requests.size() == 1U && requests.front().path.text() == "C:\\docs\\d.png",
-           "only the new path is requested");
+    const auto request = next.claim(edited, {0U, 5U}, true, tickets);
+    const bool d_taken = next.received(loaded(ticket_of(request), ImageSize{1U, 1U}));
+    expect(requested_path(request) == "C:\\docs\\d.png" && d_taken &&
+               !next.claim(edited, {0U, 5U}, true, tickets).has_value(),
+           "only the new path is requested and the failed one is not");
 }
 
 // ---------------------------------------------------------------- application: 道（追補 50）
@@ -515,6 +672,20 @@ void open_readme(Editing &editing, std::string_view text, std::size_t visible)
     return paths;
 }
 
+// 最後の要求に original の大きさの結果を返して合図を送ることを、新しい要求が来なくなるまで繰り返
+// す。
+void serve_until_quiet(Editing &editing, ImageSize original)
+{
+    auto &images = editing.images();
+    std::size_t served = 0;
+    while (images.requests().size() > served)
+    {
+        served = images.requests().size();
+        images.serve(loaded(images.requests().back().ticket, original));
+        applied(editing.controller(), app::WorkCompleted{});
+    }
+}
+
 void verify_requests_visible_images()
 {
     Editing editing;
@@ -529,13 +700,17 @@ void verify_requests_visible_images()
                preview->images->status_of(0) == Status::requested &&
                preview->images->pixels_of(0) == nullptr,
            "the frame carries the image state and a requested image is still text");
-    expect(
-        requested_paths(editing.images()) ==
-            std::vector<std::string>{"C:\\docs\\p0.png", "C:\\docs\\p1.png", "C:\\docs\\p2.png"},
-        "the parse result requests the images of the anchor block and the next visible lines + 1");
-    expect(editing.images().requests().front().ticket == 1U &&
+    expect(requested_paths(editing.images()) == std::vector<std::string>{"C:\\docs\\p0.png"},
+           "the parse result requests only the image of the anchor block");
+    applied(controller, app::PreviewTick{});
+    expect(editing.images().requests().size() == 1U,
+           "a tick while one image is requested requests nothing");
+    serve_until_quiet(editing, ImageSize{1U, 1U});
+    expect(requested_paths(editing.images()) == std::vector<std::string>{"C:\\docs\\p0.png",
+                                                                         "C:\\docs\\p1.png",
+                                                                         "C:\\docs\\p2.png"} &&
                editing.images().requests().back().ticket == 3U,
-           "each image request takes the next ticket");
+           "each result asks the next image of the anchor block and the next visible lines + 1");
     applied(controller, app::PreviewTick{});
     expect(editing.images().requests().size() == 3U, "a tick with nothing new requests nothing");
     // 錨は行頭で、画像の段落の source_begin は alt の文字の位置なので、行 5（p2
@@ -545,12 +720,45 @@ void verify_requests_visible_images()
     expect(editing.images().requests().size() == 4U &&
                editing.images().requests().back().path.text() == "C:\\docs\\p3.png",
            "moving the anchor requests the images that came into the window");
+    serve_until_quiet(editing, ImageSize{1U, 1U});
     applied(controller, app::ScrollPane{12});
-    expect(editing.images().requests().back().path.text() == "C:\\docs\\p9.png" &&
-               editing.images().requests().size() == 7U,
-           "the images skipped by the anchor are not requested");
+    serve_until_quiet(editing, ImageSize{1U, 1U});
+    expect(requested_paths(editing.images()) ==
+               std::vector<std::string>{"C:\\docs\\p0.png", "C:\\docs\\p1.png", "C:\\docs\\p2.png",
+                                        "C:\\docs\\p3.png", "C:\\docs\\p7.png", "C:\\docs\\p8.png",
+                                        "C:\\docs\\p9.png"},
+           "the images skipped by the anchor are not requested and the anchor block goes first");
     applied(controller, app::ScrollPane{100});
     expect(editing.images().requests().size() == 7U, "the net image at the end is never requested");
+}
+
+// 必須 M2 の道: 41 枚の 1920 × 1080 を見えている 40 行の窓で開くと、1 枚ずつ錨に近い 3 枚を読み、打
+// った後の再解析で頼み直さない。
+void verify_one_request_at_a_time()
+{
+    Editing editing;
+    open_readme(editing, paragraphs(41U), 40U);
+    auto &controller = editing.controller();
+    applied(controller, app::TogglePreview{});
+    static_cast<void>(parsed_back(editing));
+    expect(requested_paths(editing.images()) == std::vector<std::string>{"C:\\docs\\p0.png"},
+           "a window of 41 images puts only one request on the worker");
+    serve_until_quiet(editing, ImageSize{1920U, 1080U});
+    const app::EditorFrame read = controller.frame();
+    const auto *images = preview_of(read)->images.get();
+    expect(requested_paths(editing.images()) == std::vector<std::string>{"C:\\docs\\p0.png",
+                                                                         "C:\\docs\\p1.png",
+                                                                         "C:\\docs\\p2.png"} &&
+               images->status_of(0) == Status::loaded && images->status_of(2) == Status::loaded &&
+               images->status_of(3) == Status::waiting,
+           "the 3 images nearest the anchor are read one by one and kept");
+    applied(controller, app::InsertText{"x"});
+    applied(controller, app::PreviewTick{});
+    applied(controller, app::PreviewTick{});
+    const auto reparsed = parsed_back(editing);
+    expect(editing.images().requests().size() == 3U &&
+               preview_of(reparsed)->images->status_of(0) == Status::loaded,
+           "a new parse after typing requests none of them again");
 }
 
 void verify_results_reach_the_frame()
@@ -562,7 +770,6 @@ void verify_results_reach_the_frame()
     const app::EditorFrame first = parsed_back(editing);
     const auto *before = preview_of(first)->images.get();
     editing.images().serve(loaded(1U, ImageSize{8U, 4U}));
-    editing.images().serve(failed(2U, app::ImageFailure::corrupt));
     editing.images().serve(loaded(99U, ImageSize{8U, 4U}));
     const app::EditorDelivery delivered = controller.apply(app::WorkCompleted{});
     const app::EditorFrame taken = controller.frame();
@@ -570,21 +777,26 @@ void verify_results_reach_the_frame()
     expect(delivered.repaint && after->images.get() != before &&
                after->images->status_of(0) == Status::loaded &&
                after->images->pixels_of(0)->size == ImageSize{8U, 4U} &&
-               after->images->status_of(1) == Status::failed,
-           "WorkCompleted puts the results of waiting tickets and the frame gets a new state");
-    const auto *kept = after->images.get();
+               after->images->status_of(1) == Status::requested &&
+               editing.images().requests().size() == 2U,
+           "WorkCompleted puts the result of the waiting ticket and asks the next image");
+    editing.images().serve(failed(2U, app::ImageFailure::corrupt));
+    applied(controller, app::WorkCompleted{});
+    const auto *kept = preview_of(controller.frame())->images.get();
+    expect(kept->status_of(1) == Status::failed, "a failed result stays as text");
     editing.images().serve(loaded(1U, ImageSize{8U, 4U}));
     applied(controller, app::WorkCompleted{});
     expect(preview_of(controller.frame())->images.get() == kept,
            "a result nobody waits for leaves the state as it is");
-    // 打鍵の後の解析は同じ経路の状態を引き継ぎ、読めた画像を頼み直さない。
+    // 打鍵の後の解析は同じ経路の状態を引き継ぎ、読めた画像も失敗した画像も頼み直さない。
     applied(controller, app::InsertText{"x"});
     applied(controller, app::PreviewTick{});
     applied(controller, app::PreviewTick{});
     const auto reparsed = parsed_back(editing);
     expect(editing.markdown().requests().size() == 2U && editing.images().requests().size() == 2U &&
-               preview_of(reparsed)->images->status_of(0) == Status::loaded,
-           "a new parse of the edited body keeps the loaded image without asking again");
+               preview_of(reparsed)->images->status_of(0) == Status::loaded &&
+               preview_of(reparsed)->images->status_of(1) == Status::failed,
+           "a new parse of the edited body keeps the loaded and the failed image without asking");
 }
 
 void verify_switch_drops_images()
@@ -609,6 +821,33 @@ void verify_switch_drops_images()
     expect(editing.images().requests().size() == 2U &&
                editing.images().requests().back().ticket == 2U,
            "coming back asks again with the next ticket");
+}
+
+// 文書が替わっても、前の文書の頼み中の結果を引くまでは次を頼まない（ワーカーの列は高々 1 件）。届い
+// た前の券の結果は新しい文書の画像に置かない。
+void verify_one_request_across_switch()
+{
+    Editing editing;
+    open_readme(editing, "![a](a.png)\n", 10U);
+    auto &controller = editing.controller();
+    applied(controller, app::NewTab{});
+    applied(controller, app::InsertText{"![b](C:\\pics\\b.png)\n"});
+    applied(controller, app::SwitchTab{0});
+    applied(controller, app::TogglePreview{});
+    static_cast<void>(parsed_back(editing));
+    applied(controller, app::SwitchTab{1});
+    const app::EditorFrame other = parsed_back(editing);
+    expect(requested_paths(editing.images()) == std::vector<std::string>{"C:\\docs\\a.png"} &&
+               preview_of(other)->images->status_of(0) == Status::waiting,
+           "the new document waits while the request of the previous document is in the worker");
+    editing.images().serve(loaded(1U, ImageSize{2U, 2U}));
+    const app::EditorFrame settled = controller.apply_frame(app::WorkCompleted{});
+    expect(requested_paths(editing.images()) ==
+                   std::vector<std::string>{"C:\\docs\\a.png", "C:\\pics\\b.png"} &&
+               editing.images().requests().back().ticket == 2U &&
+               preview_of(settled)->images->status_of(0) == Status::requested &&
+               preview_of(settled)->images->pixels_of(0) == nullptr,
+           "the old result is dropped and then the new document asks with the next ticket");
 }
 
 void verify_untitled_relative_stays_text()
@@ -658,16 +897,21 @@ void verify_preview_image_contracts()
     verify_relative_references();
     verify_absolute_references();
     verify_refused_schemes();
+    verify_reference_pins();
     verify_formats();
     verify_sizes();
     verify_slots();
     verify_claims();
     verify_malformed_pixels();
     verify_held_limit();
+    verify_evicted();
+    verify_nearest_kept();
     verify_carried();
     verify_requests_visible_images();
+    verify_one_request_at_a_time();
     verify_results_reach_the_frame();
     verify_switch_drops_images();
+    verify_one_request_across_switch();
     verify_untitled_relative_stays_text();
     verify_closed_preview_is_quiet();
 }
