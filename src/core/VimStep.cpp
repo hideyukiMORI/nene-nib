@@ -621,9 +621,14 @@ pages_forward(const VimEditorView &view, std::size_t pages) noexcept
                              ScrollExtent::last_line);
     const LineNumber caret_line = corrected_in(view, first, shifted);
     const LineNumber current_line = line_of(view.text, view.selection.caret);
-    VimStep step = caret_line == current_line
-                       ? navigated_at(state, view, first, view.selection.caret)
-                       : navigated(state, view, first, caret_line);
+    // halfpage は最後の cursor_correct でキャレットを余白の内側へ置き、先頭の決め直しは
+    // 後の update_topline の写しだけ（余白の最小の追従は掛けない）。本文の末尾より下の段が
+    // 見えている窓（w_botline > 行数）では update_topline は下の余白を見ないので、先頭は
+    // 送った所のまま（#1374）。
+    VimStep step = with_topline(caret_line == current_line
+                                    ? navigated_at(state, view, first, view.selection.caret)
+                                    : navigated(state, view, first, caret_line),
+                                VimToplineSettle::updated);
     if (state.count.has_value() &&
         (first != vim_viewport_of(view).first_visible || caret_line != current_line))
     {
