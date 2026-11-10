@@ -1578,8 +1578,9 @@ void verify_ordinary_page_end()
     {
         applied(grid.controller(), MoveCaret{CaretMotion::page_down, SelectionAnchoring::collapse});
     }
-    expect(grid_top_and_column(grid.controller()) == RowPair{22, 195},
-           "ordinary PgDn in the grid stops with the last 3 screen rows shown");
+    // 最後の頁の PgDn は本文の末尾へ着く（#1386・ADR 0144 の決定 11）。
+    expect(grid_top_and_column(grid.controller()) == RowPair{22, 201},
+           "ordinary PgDn in the grid stops with the last 3 screen rows shown at the end");
 }
 
 void verify_grid_display_moves()

@@ -238,37 +238,72 @@ bool EditorController::move_visual(const MoveCaret &intent)
         return true;
     }
     const float x = motion.value().x.value_or(wanted_x_.value_or(point.value().x));
-    wanted_x_ = motion.value().x.has_value() ? std::nullopt : std::optional{x};
     const auto moved =
-        view.shifted(core::VisualPosition{source.line, point.value().row}, motion.value().rows);
+        view.reached(core::VisualPosition{source.line, point.value().row}, motion.value().rows);
     if (!moved)
     {
         layout_failure_ = moved.error();
         return true;
     }
-    const auto caret = view.caret_at(moved.value(), x);
+    if (moved.value().stopped)
+    {
+        move_to_text_edge(view, intent, motion.value().rows);
+        return true;
+    }
+    wanted_x_ = motion.value().x.has_value() ? std::nullopt : std::optional{x};
+    const auto caret = view.caret_at(moved.value().at, x);
     if (!caret)
     {
         layout_failure_ = caret.error();
         return true;
     }
-    // PgDn / PgUp は画面の先頭も同じ数の画面行だけ送る（ADR 0144 の決定 7）。端は本文の最初と最後の
-    // 画面行で止まり、追従（画面を埋める）がキャレットの見える範囲へ収める。
-    if (page_motion(intent.motion))
+    if (page_motion(intent.motion) && !page_top_shifted(view, motion.value().rows))
     {
-        const auto &scroll = state_.scroll();
-        const auto top = view.shifted(core::VisualPosition{scroll.first_visible, scroll.first_row},
-                                      motion.value().rows);
-        if (!top)
-        {
-            layout_failure_ = top.error();
-            return true;
-        }
-        state_ = state_.with_scroll(ScrollState{top.value().line, scroll.visible_lines,
-                                                top.value().row, scroll.horizontal});
+        return true;
     }
     move_caret_to(state_.text().offset_of(caret.value().position), intent.anchoring,
                   caret.value().affinity);
+    return true;
+}
+
+// 本文の最初か最後の画面行で止まった上下の移動（↑ ↓ PgUp PgDn）は、本文の先頭か末尾へ着く
+// （施主の要望 2026-11-10・#1386・ADR 0144 の追補）。もう着いていれば何も変えない（狙う横位置も
+// 画面の先頭も）。着いた後の狙う横位置は着いた位置のもの（捨てて、次の上下で location から読む）。
+// 通るのは端に当たったときだけ。上下の移動の道に足すのは歩きが持つ印の読み 1 つで、文字組みの
+// 問い合わせは足さない（ADR 0128 の追従の遅延解決のまま）。
+void EditorController::move_to_text_edge(VisualTextView &view, const MoveCaret &intent,
+                                         std::int64_t rows)
+{
+    const core::Offset edge{rows < 0 ? 0 : state_.text().size_bytes()};
+    const auto &selection = state_.selection();
+    const bool collapsed = selection.anchor == selection.caret;
+    if (selection.caret == edge &&
+        (collapsed || intent.anchoring == core::SelectionAnchoring::extend))
+    {
+        return;
+    }
+    if (page_motion(intent.motion) && !page_top_shifted(view, rows))
+    {
+        return;
+    }
+    wanted_x_.reset();
+    move_caret_to(edge, intent.anchoring);
+}
+
+// PgDn / PgUp は画面の先頭も同じ数の画面行だけ送る（ADR 0144 の決定 7）。端は本文の最初と最後の
+// 画面行で止まり、追従（画面を埋める）がキャレットの見える範囲へ収める。失敗は layout_failure_。
+bool EditorController::page_top_shifted(VisualTextView &view, std::int64_t rows)
+{
+    const auto &scroll = state_.scroll();
+    const auto top =
+        view.shifted(core::VisualPosition{scroll.first_visible, scroll.first_row}, rows);
+    if (!top)
+    {
+        layout_failure_ = top.error();
+        return false;
+    }
+    state_ = state_.with_scroll(
+        ScrollState{top.value().line, scroll.visible_lines, top.value().row, scroll.horizontal});
     return true;
 }
 
