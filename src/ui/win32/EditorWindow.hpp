@@ -53,7 +53,6 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <tuple>
 #include <utility>
 
 namespace nenenib::ui::win32
@@ -271,6 +270,7 @@ class EditorWindow final
     [[nodiscard]] bool over_other_pane(LPARAM data) const;
     void follow_split(core::SplitLayout previous, application::EditorDelivery &delivery);
     void follow_explorer(application::EditorDelivery &delivery);
+    void follow_minimap(application::EditorDelivery &delivery);
     void choose_explorer_root();
     // エクスプローラーの面の群（EditorWindowExplorer.cpp・ADR 0162 の決定 4）。
     void scroll_explorer(std::int32_t delta);
@@ -340,7 +340,7 @@ class EditorWindow final
     wchar_t pending_high_surrogate_ = 0;
     // 前の配達で窓が当てた字（大きさと字体）と明暗。配達のたびに比べ、変わったときだけ当てる
     // （ADR 0150 の決定 5）。
-    std::tuple<float, std::string, bool> shown_font_;
+    std::pair<float, std::string> shown_font_;
     core::Appearance shown_appearance_ = core::Appearance::light;
     // 前の配達で窓の縁に当てた帯の地（#795）。配色が変われば明暗が同じでも当て直す。
     core::RgbColor shown_border_{};
@@ -380,6 +380,8 @@ class EditorWindow final
     bool preview_ticking_ = false;
     // 最後に本文の寸法を送ったときにエクスプローラーの面が出ていたか（ADR 0162 の決定 2）。
     bool shown_explorer_ = false;
+    // 同じくミニマップが出ていたか（ADR 0171 の決定 2・controller の minimap_shown の写し）。
+    bool shown_minimap_ = false;
     // いまの編集モード。鍵をどちらの表で引くかを決めるだけで、正本は EditorState（ARC-004）。
     core::EditMode mode_ = core::EditMode::ordinary;
     // Ctrl+V を矩形の鍵に写すかどうかを決めるのに要る（ADR 0035 の決定 9）。

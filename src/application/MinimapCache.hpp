@@ -54,6 +54,10 @@ class MinimapCache final
                                           core::LexState &state);
     void relex_band(const core::TextBuffer &after, std::size_t begin, std::size_t removed,
                     std::size_t inserted);
+    // 行の増減のある帯: 前の band.removed 行を読み直した band.inserted 行に入れ替える。state は
+    // 帯の最初の行頭の状態で、帯の終わりの状態に書き換える。
+    void replace_rows(const core::TextBuffer &after, const core::MinimapBand &band,
+                      core::LexState &state);
 
     std::shared_ptr<MinimapRows> rows_;
     // 窓の行ごとの行頭の字句の状態（rows_ の行の数 + 1・最後は窓の最後の行の終わりの状態）。

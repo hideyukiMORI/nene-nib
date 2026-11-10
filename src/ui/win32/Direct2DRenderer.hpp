@@ -332,10 +332,7 @@ class Direct2DRenderer final
     void draw_palette_footer(const application::EditorFrame &frame, const core::LayoutRect &area);
     // エクスプローラーの面（ADR 0162 の決定 8）。面が無い frame は保持を捨てるだけ。
     void draw_explorer(const application::EditorFrame &frame, const core::ExplorerLayout &layout);
-    // ミニマップ（ADR 0171 の決定 1・2）。draw は frame.minimap の有無で
-    // 2 つのどちらかを表から引いて呼ぶ（オフの道に分岐を足さない）。
-    void skip_minimap(const application::EditorFrame &frame,
-                      const core::LayoutRect &panel) noexcept;
+    // ミニマップ（ADR 0171 の決定 1・2）。面が無い frame は最初の 1 行で返る。
     void draw_minimap(const application::EditorFrame &frame, const core::LayoutRect &panel);
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);

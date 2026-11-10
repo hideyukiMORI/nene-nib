@@ -200,7 +200,8 @@ class EditorController final
     // のタイマー・クリック・ホイールを決める口で、 状態を読むだけ。
     [[nodiscard]] PreviewPlacement preview_placement() const noexcept;
     // ミニマップを出すか（ADR 0171 の決定 1）。窓が本文の枠の幅を数えるのと、出した・消したときに
-    // 寸法を送り直すのに読む口で、設定が変わったときに sync_minimap が置いた 1 欄を読むだけ。
+    // 寸法を送り直すのに読む口。設定（sync_minimap が置いた 1 欄）がオンで、全面プレビューでない
+    // とき（本文が隠れている間は面を出さない・レビュー L6）。frame の minimap と同じ条件。
     [[nodiscard]] bool minimap_shown() const noexcept;
     // アクティブな文書の本文を読むだけの口。試験が仮想桁の索引の持ち方（ADR 0140 の決定 4）を
     // 確かめるために読む。状態を変える口はここには無い。
@@ -509,14 +510,13 @@ class EditorController final
     void collapse_explorer_row();
     // 設定が変わった後（persist_settings）と起動の 1 か所。木をルートに揃え、読むものを頼む。
     void sync_explorer();
-    // ミニマップ（ADR 0171 の決定 1）。設定が変わった後（persist_settings）と起動の 1 か所だけが
-    // sync_minimap を呼び、編集と frame の口（minimap_edited_ と minimap_framed_）をオンの関数か
-    // 何もしない関数に差し替える。オフの間、編集の道と frame の道はミニマップのために分岐しない
-    // （何もしない関数を 1 回呼ぶだけ）。本体は EditorControllerMinimap.cpp。
+    // ミニマップ（ADR 0171 の決定 1 と追補）。設定が変わった後（persist_settings）と起動の 1 か所
+    // だけが sync_minimap で minimap_shown_ を置く。編集の 3 か所（replace・undo・redo）の
+    // note_minimap_edit と frame の 1 か所の add_minimap は、オフなら最初の 1 行で返る
+    // （forget_syntax_before・explorer_view と同じ早い return）。本体は
+    // EditorControllerMinimap.cpp。
     void sync_minimap();
-    void skip_minimap_edit(const core::TextBuffer &after, const core::Edit &edit) noexcept;
     void note_minimap_edit(const core::TextBuffer &after, const core::Edit &edit);
-    void skip_minimap_frame(EditorFrame &result) noexcept;
     void add_minimap(EditorFrame &result);
     // FolderPort が今の誰かの仕事を走らせているか（エクスプローラーは 1 つずつ頼む）。
     [[nodiscard]] bool folder_busy() const noexcept;
@@ -1038,14 +1038,10 @@ class EditorController final
     // 読み書きする。
     std::optional<SyntaxStateCache> first_syntax_;
     std::optional<SyntaxStateCache> second_syntax_;
-    // ミニマップの窓の行の塊（ADR 0171 の決定 4）と、設定で選んだ編集と frame の口（決定 1）。
-    // 口を差し替えるのは sync_minimap だけ。
+    // ミニマップの窓の行の塊（ADR 0171 の決定 4）と設定の値（決定 1）。minimap_shown_ を置くのは
+    // sync_minimap だけ。
     MinimapCache minimap_;
     bool minimap_shown_ = false;
-    void (EditorController::*minimap_edited_)(const core::TextBuffer &, const core::Edit &) =
-        &EditorController::skip_minimap_edit;
-    void (EditorController::*minimap_framed_)(EditorFrame &) =
-        &EditorController::skip_minimap_frame;
     // 言語サーバーとのつながり（ADR 0160 の決定 5・6）。EditorControllerLanguageServer.cpp の群
     // だけが読み書きする。
     LanguageServerLink language_server_;

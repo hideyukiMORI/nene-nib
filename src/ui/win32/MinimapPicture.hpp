@@ -22,8 +22,7 @@
 
 namespace nenenib::ui::win32
 {
-[[nodiscard]] MinimapColors minimap_colors(const core::Palette &palette,
-                                           const core::SyntaxPalette &body) noexcept;
+[[nodiscard]] MinimapColors minimap_colors(const core::Palette &palette) noexcept;
 
 // ミニマップの絵（ADR 0171 の決定 4）。renderer が 1 つ所有し、アクティブな文書の窓の行の塊を
 // オフスクリーンの bitmap（幅は面の幅・1 行 = core::minimap_row_pixels）に持つ。frame の行の塊が
@@ -45,11 +44,12 @@ class MinimapPicture final
     static void draw_rows(const MinimapPen &pen, std::span<const core::MinimapRow> rows,
                           D2D1_POINT_2F origin);
     // 描いた行の数（直接か bitmap へ）・DrawBitmap の回数・作った bitmap の数・下の行をずらした
-    // 回数（試験が窓ごとと帯だけを数える口）。
+    // 回数・帯の前に命令を流した回数（試験が窓ごとと帯だけを数える口）。
     [[nodiscard]] std::size_t painted_rows() const noexcept;
     [[nodiscard]] std::size_t copies() const noexcept;
     [[nodiscard]] std::size_t pictures() const noexcept;
     [[nodiscard]] std::size_t shifts() const noexcept;
+    [[nodiscard]] std::size_t flushes() const noexcept;
 
   private:
     // 幅 width・行 rows の入る bitmap（今のものが同じ幅で足りればそれ）。作れなければ nullptr。
@@ -77,9 +77,11 @@ class MinimapPicture final
     std::shared_ptr<const application::MinimapRows> held_;
     std::uint64_t held_serial_ = 0;
     std::optional<MinimapColors> held_colors_;
+    std::optional<core::SyntaxPalette> held_body_;
     std::size_t painted_rows_ = 0;
     std::size_t copies_ = 0;
     std::size_t pictures_ = 0;
     std::size_t shifts_ = 0;
+    std::size_t flushes_ = 0;
 };
 } // namespace nenenib::ui::win32

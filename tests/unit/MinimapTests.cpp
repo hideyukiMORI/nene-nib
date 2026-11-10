@@ -1,8 +1,11 @@
 // scope `--minimap` の単体テスト（ADR 0171・施主決定 D70・Issue #1017 の段 1）。core の 1 行の塊
 // （空白・Tab・全角・構文の区間・100 桁）・面の最上段の行・窓・帯の合わせ・面の配置・設定と Ex の
-// `set minimap`、application の frame（オフは値なし・オンは窓の範囲と塊・編集の帯・Enter の帯・
-// 窓より上の編集は窓ごと・別の文書は窓ごと）。時計・ファイル・乱数の種を読まない。
+// `set minimap`、面の上の点は本文の枠の外、application の frame（オフは値なし・オンは窓の範囲と
+// 塊・編集の帯・Enter の帯・ブロックコメントの途中の編集・undo / redo の帯・4 KiB を超える行・
+// 折り返す行の見えている範囲・全面プレビューの間は出さない・窓より上の編集は窓ごと・別の文書は
+// 窓ごと）。時計・ファイル・乱数の種を読まない。
 #include "Appearance.hpp"
+#include "CancelSelection.hpp"
 #include "ColorSpan.hpp"
 #include "Column.hpp"
 #include "EditMode.hpp"
@@ -13,6 +16,8 @@
 #include "EditorSettings.hpp"
 #include "ExResult.hpp"
 #include "FilePath.hpp"
+#include "HistoryAction.hpp"
+#include "HistoryDirection.hpp"
 #include "InsertText.hpp"
 #include "LayoutRect.hpp"
 #include "LineNumber.hpp"
@@ -23,15 +28,23 @@
 #include "MinimapLayout.hpp"
 #include "MinimapWindow.hpp"
 #include "OpenDocument.hpp"
+#include "PaneLayouts.hpp"
+#include "PaneSide.hpp"
 #include "PlaceCaret.hpp"
+#include "PreviewPlacement.hpp"
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
+#include "SetPreviewPlacement.hpp"
+#include "SplitLayout.hpp"
 #include "SyntaxRole.hpp"
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
+#include "TextViewGeometry.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -54,6 +67,7 @@ using core::SyntaxRole;
 
 constexpr std::string_view code_path = "C:\\work\\minimap.cpp";
 constexpr std::string_view other_path = "C:\\work\\other.txt";
+constexpr std::string_view markdown_path = "C:\\work\\minimap.md";
 
 [[nodiscard]] MinimapBlock muted(std::uint16_t left, std::uint16_t width)
 {
@@ -88,6 +102,14 @@ void verify_row_blocks()
            "a long line is cut at 100 columns");
     expect(core::minimap_row("", {}).empty() && core::minimap_row(" \t ", {}).empty(),
            "an empty or blank line has no blocks");
+    // 結合文字は幅 0 で塊にならず、前の文字に桁を足さない（column_advance の表の 1 本）。
+    expect(core::minimap_row("e\u0301x", {}) == core::MinimapRow{muted(0, 2)},
+           "a combining mark takes no column");
+    // 制御文字は描く形 `^M` の 2 桁（ADR 0040・同じ表）。
+    expect(core::minimap_row("a\rb", {}) == core::MinimapRow{muted(0, 4)},
+           "a control character takes the two columns of its ^M form");
+    expect(core::minimap_row("\r\tx", {}) == core::MinimapRow{muted(0, 2), muted(8, 1)},
+           "a tab after a control character stops at column 8");
 }
 
 // 面の最上段は比例の送りで、文書が面に収まれば 1 行目。最後の画面では文書の最後の行が面の
@@ -157,6 +179,41 @@ void verify_layout()
     const auto doubled =
         core::minimap_layout(client, 192, core::default_editor_settings().font_size, true);
     expect(core::width_of(doubled.panel) == 160, "the width follows the DPI");
+}
+
+using PanelPoints = std::array<std::pair<std::int32_t, std::int32_t>, 5>;
+
+// 枠 band に points のどれも入らないか。
+[[nodiscard]] bool outside_band(const core::LayoutRect &band, const PanelPoints &points)
+{
+    return std::ranges::none_of(points, [&band](const auto &point)
+                                { return core::contains(band, point.first, point.second); });
+}
+
+// 面の上の点はどの本文の枠の band にも入らない（窓の click_body は band の中だけで place_caret
+// するので、面の上の押下はキャレットも選択も動かさない・段 1・レビュー L4）。2 枠のどちらの側でも。
+void verify_panel_press_outside_body()
+{
+    const core::LayoutRect client{0, 0, 1000, 700};
+    const auto font = core::default_editor_settings().font_size;
+    const auto shown = core::minimap_layout(client, 96, font, true);
+    const auto &panel = shown.panel;
+    const PanelPoints points{{{panel.left, panel.top},
+                              {panel.right - 1, panel.top},
+                              {panel.left, panel.bottom - 1},
+                              {panel.right - 1, panel.bottom - 1},
+                              {(panel.left + panel.right) / 2, (panel.top + panel.bottom) / 2}}};
+    bool outside = core::width_of(panel) > 0;
+    for (const auto layout :
+         {core::SplitLayout::none, core::SplitLayout::vertical, core::SplitLayout::horizontal})
+    {
+        const auto panes = core::pane_layouts(shown.body, 96, font, layout);
+        for (const auto side : {core::PaneSide::first, core::PaneSide::second})
+        {
+            outside = outside && outside_band(core::active_pane_layout(panes, side).band, points);
+        }
+    }
+    expect(outside, "a press on the minimap panel is outside every body band");
 }
 
 // Ex の答えの設定と文言（設定が無い・失敗は既定の設定と空の文言）。
@@ -283,7 +340,7 @@ void verify_frame_rows()
     const auto minimap = minimap_of(frame);
     const auto &rows = rows_of(frame);
     expect(rows.window == core::MinimapWindow{LineNumber{1}, 5} && minimap.top == LineNumber{1} &&
-               minimap.first_visible == LineNumber{1} && minimap.visible == 20 &&
+               minimap.first_visible == LineNumber{1} && minimap.visible == 5 &&
                !minimap.band.has_value(),
            "the window is the whole short document and starts at the panel top");
     if (rows.rows.size() != 5)
@@ -300,6 +357,112 @@ void verify_frame_rows()
 
 // 1 行の中の打鍵は 1 行の帯、Enter は 1 行が 2 行に替わる帯（決定 4）。前の frame の serial が
 // base に載る。
+// ブロックコメントの途中の行で `*/` を打つと、下の行の色が comment から外れるまで読み直す。
+void verify_comment_relex()
+{
+    Editing editing{SettingsReading{std::optional{minimap_settings()}}};
+    auto &controller = editing.controller();
+    open_at(editing, code_path, "int a;\n/* begin\nx\ny\nz\n*/\nint b;\n", 20);
+    const auto held = minimap_of(controller.frame()).rows;
+    if (held == nullptr || held->rows.size() < 7)
+    {
+        expect(false, "the comment document borrows its rows");
+        return;
+    }
+    expect(held->rows.at(3).front().role == SyntaxRole::comment,
+           "the rows inside the block comment are comments");
+    place(controller, 3, 1);
+    edit(controller, app::InsertText{"*/ "});
+    const auto closed = controller.frame();
+    expect(band_of(closed).begin == 2 && band_of(closed).inserted >= 3 &&
+               !held->rows.at(3).front().role.has_value() &&
+               !held->rows.at(4).front().role.has_value() &&
+               held->rows.at(6).front().role == SyntaxRole::type,
+           "closing the comment in its middle reads the rows below again");
+}
+
+// undo と redo も replace と同じ帯（undo の帯は編集の逆向き）。
+void verify_history_bands()
+{
+    Editing editing{SettingsReading{std::optional{minimap_settings()}}};
+    auto &controller = editing.controller();
+    open_at(editing, code_path, numbered_lines(30), 20);
+    const auto held = minimap_of(controller.frame()).rows;
+    if (held == nullptr)
+    {
+        expect(false, "the history document borrows its rows");
+        return;
+    }
+    const auto original = held->rows.at(2);
+    place(controller, 3, 1);
+    edit(controller, app::InsertText{"x"});
+    static_cast<void>(controller.frame());
+    edit(controller, app::HistoryAction{core::HistoryDirection::undo});
+    const auto undone = controller.frame();
+    expect(minimap_of(undone).rows == held && band_of(undone) == core::MinimapBand{2, 1, 1} &&
+               held->rows.at(2) == original,
+           "undo redraws the band of the row it restores");
+    edit(controller, app::HistoryAction{core::HistoryDirection::redo});
+    const auto redone = controller.frame();
+    expect(band_of(redone) == core::MinimapBand{2, 1, 1} && held->rows.at(2).front() == muted(0, 4),
+           "redo redraws the same band again");
+    place(controller, 5, 1);
+    edit(controller, app::InsertText{"\n"});
+    static_cast<void>(controller.frame());
+    edit(controller, app::HistoryAction{core::HistoryDirection::undo});
+    const auto joined = controller.frame();
+    expect(band_of(joined) == core::MinimapBand{4, 2, 1} && held->window.rows == 31,
+           "undoing an Enter turns two rows back into one");
+}
+
+// 4 KiB を超える行は先頭だけを読み、100 桁で切って色を付けない。次の行は色が戻る。
+void verify_long_line_rows()
+{
+    Editing editing{SettingsReading{std::optional{minimap_settings()}}};
+    auto &controller = editing.controller();
+    open_at(editing, code_path, "int" + std::string(10'000, 'x') + "\nint y;\n", 20);
+    const auto frame = controller.frame();
+    const auto &rows = rows_of(frame);
+    expect(rows.rows.size() == 3 &&
+               rows.rows.at(0) ==
+                   core::MinimapRow{muted(0, static_cast<std::uint16_t>(core::minimap_columns))} &&
+               rows.rows.at(1).front().role == SyntaxRole::type,
+           "a line over 4 KiB is cut at 100 columns without colour and the next line is coloured");
+}
+
+// 折り返す行があっても、見えている範囲は見えている論理行の数（画面行の数ではない・レビュー L2）。
+void verify_wrapped_face()
+{
+    Editing editing{SettingsReading{std::optional{minimap_settings()}}};
+    auto &controller = editing.controller();
+    editing.files().hold_at(std::string(code_path),
+                            Bytes{std::string(50, 'a') + "\n" + numbered_lines(20)});
+    // 1 画面行 10 升の幅で、1 行目は 5 画面行、2 行目からの 16 升の行は 2 画面行に折れる。
+    // 10 画面行に 1〜4 行目が出る（4 行目は 1 画面行だけ見える）。
+    applied(controller, app::VisibleLines{10, core::TextViewGeometry{100, 20, 96}, 1000, 700});
+    applied(controller, app::OpenDocument{core::FilePath::parse(code_path).value()});
+    const auto frame = controller.frame();
+    expect(frame.lines.size() == 4 && frame.lines.front().screen_rows == 5 &&
+               minimap_of(frame).visible == 4,
+           "the visible face covers the logical lines that are shown");
+}
+
+// 全面プレビューの間は本文が隠れているので面を出さない。戻れば出る（レビュー L6）。
+void verify_full_preview_hides()
+{
+    Editing editing{SettingsReading{std::optional{minimap_settings()}}};
+    auto &controller = editing.controller();
+    open_at(editing, markdown_path, "# title\n\ntext\n", 20);
+    expect(controller.frame().minimap.has_value(), "a markdown document shows the minimap");
+    const auto full = controller.apply_frame(app::SetPreviewPlacement{app::PreviewPlacement::full});
+    expect(full.full_preview.has_value() && !full.minimap.has_value() &&
+               !controller.minimap_shown(),
+           "the full preview hides the minimap");
+    const auto back = controller.apply_frame(app::CancelSelection{});
+    expect(!back.full_preview.has_value() && back.minimap.has_value() && controller.minimap_shown(),
+           "leaving the full preview shows it again");
+}
+
 void verify_frame_bands()
 {
     Editing editing{SettingsReading{std::optional{minimap_settings()}}};
@@ -386,9 +549,15 @@ void verify_minimap_scope()
     verify_window();
     verify_band_join();
     verify_layout();
+    verify_panel_press_outside_body();
     verify_setting();
     verify_frame_rows();
     verify_frame_bands();
+    verify_comment_relex();
+    verify_history_bands();
+    verify_long_line_rows();
+    verify_wrapped_face();
+    verify_full_preview_hides();
     verify_frame_rebuilds();
 }
 } // namespace nenenib::tests

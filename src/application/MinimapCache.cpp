@@ -142,22 +142,20 @@ void MinimapCache::relex_band(const core::TextBuffer &after, std::size_t begin, 
     auto &rows = rows_->rows;
     const std::size_t first = rows_->window.first.value;
     core::LexState state = states_.at(begin);
-    std::vector<core::MinimapRow> fresh;
-    std::vector<core::LexState> starts;
-    fresh.reserve(inserted);
-    starts.reserve(inserted);
-    for (std::size_t index = 0; index < inserted; ++index)
+    if (removed == inserted)
     {
-        starts.push_back(state);
-        fresh.push_back(row_at(after, core::LineNumber{first + begin + index}, state));
+        // 行の増減の無い編集（いちばん多い打鍵）は、変わった行の要素だけをその場で書き換える
+        // （窓の 4,000 要素を動かさない・レビュー L1）。
+        for (std::size_t index = begin; index < begin + inserted; ++index)
+        {
+            states_.at(index) = state;
+            rows.at(index) = row_at(after, core::LineNumber{first + index}, state);
+        }
     }
-    const auto at = static_cast<std::ptrdiff_t>(begin);
-    const auto span = static_cast<std::ptrdiff_t>(removed);
-    rows.erase(rows.begin() + at, rows.begin() + at + span);
-    rows.insert(rows.begin() + at, std::make_move_iterator(fresh.begin()),
-                std::make_move_iterator(fresh.end()));
-    states_.erase(states_.begin() + at, states_.begin() + at + span);
-    states_.insert(states_.begin() + at, starts.begin(), starts.end());
+    else
+    {
+        replace_rows(after, core::MinimapBand{begin, removed, inserted}, state);
+    }
     // 帯の下は、行頭の状態が前と揃うまで読み直す（ブロックコメントを開いた・閉じた編集）。
     std::size_t end = begin + inserted;
     while (end < rows.size() && !(states_.at(end) == state))
@@ -176,6 +174,30 @@ void MinimapCache::relex_band(const core::TextBuffer &after, std::size_t begin, 
     rows_->serial = serial_;
     const core::MinimapBand band{begin, removed + walked, inserted + walked};
     dirty_ = dirty_.has_value() ? core::minimap_band_joined(dirty_.value(), band) : band;
+}
+
+void MinimapCache::replace_rows(const core::TextBuffer &after, const core::MinimapBand &band,
+                                core::LexState &state)
+{
+    const auto [begin, removed, inserted] = band;
+    auto &rows = rows_->rows;
+    const std::size_t first = rows_->window.first.value;
+    std::vector<core::MinimapRow> fresh;
+    std::vector<core::LexState> starts;
+    fresh.reserve(inserted);
+    starts.reserve(inserted);
+    for (std::size_t index = 0; index < inserted; ++index)
+    {
+        starts.push_back(state);
+        fresh.push_back(row_at(after, core::LineNumber{first + begin + index}, state));
+    }
+    const auto at = static_cast<std::ptrdiff_t>(begin);
+    const auto span = static_cast<std::ptrdiff_t>(removed);
+    rows.erase(rows.begin() + at, rows.begin() + at + span);
+    rows.insert(rows.begin() + at, std::make_move_iterator(fresh.begin()),
+                std::make_move_iterator(fresh.end()));
+    states_.erase(states_.begin() + at, states_.begin() + at + span);
+    states_.insert(states_.begin() + at, starts.begin(), starts.end());
 }
 
 void MinimapCache::forget() noexcept

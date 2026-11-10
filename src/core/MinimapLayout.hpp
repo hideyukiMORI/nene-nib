@@ -20,8 +20,8 @@ struct MinimapLayout
 };
 
 // 面の幅は min(80 DIP, client の幅)。縦は本文の帯（タブの帯の下からステータスバーの上まで）。
-// shown が偽なら幅は 0 で body は client のまま。分岐せず幅に shown を掛ける（決定 1・オフの道に
-// 分岐を足さない）。
+// shown が偽なら最初の 1 行で返り（決定 1 の追補・本文の配置を計算しない）、面は幅 0・行 0 で
+// body は client のまま。
 [[nodiscard]] MinimapLayout minimap_layout(LayoutRect client, std::uint32_t dpi, FontSize font_size,
                                            bool shown) noexcept;
 } // namespace nenenib::core

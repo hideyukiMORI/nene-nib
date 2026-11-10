@@ -6,6 +6,9 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
+#include <cstddef>
+#include <type_traits>
 #include <utility>
 
 namespace nenenib::ui::win32
@@ -20,12 +23,6 @@ constexpr std::size_t picture_row_step = 512;
 constexpr std::size_t background_color = 0;
 constexpr std::size_t face_color = 1;
 constexpr std::size_t muted_color = 2;
-constexpr std::size_t first_role_color = 3;
-constexpr std::array<core::SyntaxRole, minimap_color_count - first_role_color> roles{
-    core::SyntaxRole::comment,  core::SyntaxRole::keyword,   core::SyntaxRole::string,
-    core::SyntaxRole::number,   core::SyntaxRole::type,      core::SyntaxRole::function,
-    core::SyntaxRole::constant, core::SyntaxRole::operators, core::SyntaxRole::error,
-    core::SyntaxRole::warning};
 
 [[nodiscard]] D2D1_COLOR_F to_color(core::RgbColor color) noexcept
 {
@@ -44,10 +41,22 @@ constexpr std::array<core::SyntaxRole, minimap_color_count - first_role_color> r
     return static_cast<UINT32>(row * static_cast<std::size_t>(core::minimap_row_pixels));
 }
 
-[[nodiscard]] std::size_t color_of(const std::optional<core::SyntaxRole> &role) noexcept
+// 塊の色。役割は core::syntax_color の switch の 1 本で引く（表の位置を数えない・レビュー M1）。
+[[nodiscard]] core::RgbColor color_of(const MinimapPen &pen,
+                                      const std::optional<core::SyntaxRole> &role) noexcept
 {
-    return role.has_value() ? first_role_color + static_cast<std::size_t>(role.value())
-                            : muted_color;
+    return role.has_value() ? core::syntax_color(pen.body, role.value())
+                            : pen.colors.at(muted_color);
+}
+
+// 前に描いた絵の構文の色と同じか。SyntaxPalette は詰め物の無い RgbColor の列なので、バイトの
+// 一致が値の一致（欄を手で並べない）。
+[[nodiscard]] bool same_body(const std::optional<core::SyntaxPalette> &held,
+                             const core::SyntaxPalette &body) noexcept
+{
+    static_assert(std::has_unique_object_representations_v<core::SyntaxPalette>);
+    using Bytes = std::array<std::byte, sizeof(core::SyntaxPalette)>;
+    return held.has_value() && std::bit_cast<Bytes>(held.value()) == std::bit_cast<Bytes>(body);
 }
 
 [[nodiscard]] D2D1_RECT_F rect_of(const core::LayoutRect &area) noexcept
@@ -85,14 +94,14 @@ void fill_ground(const MinimapPen &pen, const core::LayoutRect &panel)
 // 1 行の塊（区間ごとに 1 つの FillRectangle）。current は brush
 // に置いてある色で、変わるときだけ置く。
 void draw_row(const MinimapPen &pen, const core::MinimapRow &row, D2D1_POINT_2F origin,
-              std::optional<std::size_t> &current)
+              std::optional<core::RgbColor> &current)
 {
     for (const auto &block : row)
     {
-        const std::size_t color = color_of(block.role);
+        const core::RgbColor color = color_of(pen, block.role);
         if (current != color)
         {
-            pen.brush.SetColor(to_color(pen.colors.at(color)));
+            pen.brush.SetColor(to_color(color));
             current = color;
         }
         const float left = origin.x + static_cast<float>(block.left);
@@ -112,23 +121,19 @@ void draw_row(const MinimapPen &pen, const core::MinimapRow &row, D2D1_POINT_2F 
 }
 } // namespace
 
-MinimapColors minimap_colors(const core::Palette &palette, const core::SyntaxPalette &body) noexcept
+MinimapColors minimap_colors(const core::Palette &palette) noexcept
 {
     MinimapColors colors{};
     colors.at(background_color) = palette.background;
     colors.at(face_color) = palette.accent;
     colors.at(muted_color) = palette.muted;
-    for (std::size_t index = 0; index < roles.size(); ++index)
-    {
-        colors.at(first_role_color + index) = core::syntax_color(body, roles.at(index));
-    }
     return colors;
 }
 
 void MinimapPicture::draw_rows(const MinimapPen &pen, std::span<const core::MinimapRow> rows,
                                D2D1_POINT_2F origin)
 {
-    std::optional<std::size_t> current;
+    std::optional<core::RgbColor> current;
     D2D1_POINT_2F at = origin;
     for (const auto &row : rows)
     {
@@ -209,7 +214,8 @@ void MinimapPicture::record(ID2D1DeviceContext &context, const MinimapPen &pen,
     context.GetTarget(&previous);
     context.SetTarget(picture_.Get());
     context.Clear(D2D1::ColorF(0.0F, 0.0F, 0.0F, 0.0F));
-    draw_rows(MinimapPen{context, pen.brush, pen.colors}, rows.rows, D2D1::Point2F(0.0F, 0.0F));
+    draw_rows(MinimapPen{context, pen.brush, pen.colors, pen.body}, rows.rows,
+              D2D1::Point2F(0.0F, 0.0F));
     context.SetTarget(previous.Get());
     painted_rows_ += rows.rows.size();
 }
@@ -258,11 +264,19 @@ bool MinimapPicture::redraw_band(ID2D1DeviceContext &context, const MinimapPen &
     const std::size_t now = rows.rows.size();
     const std::size_t before = now + band.removed - band.inserted;
     const auto size = picture_->GetPixelSize();
-    // 前に bitmap へ描いた命令を流してから写す。
-    if (!band_fits(band, now, before, size.height) || FAILED(context.Flush()) ||
-        !shift_rows(context, band, before))
+    if (!band_fits(band, now, before, size.height))
     {
         return false;
+    }
+    // 行の増減があるときだけ、前に bitmap へ描いた命令を流してから下の行を写す（同じ行の数の
+    // 打鍵は写さないので流さない・レビュー L1）。
+    if (band.removed != band.inserted)
+    {
+        ++flushes_;
+        if (FAILED(context.Flush()) || !shift_rows(context, band, before))
+        {
+            return false;
+        }
     }
     Microsoft::WRL::ComPtr<ID2D1Image> previous;
     context.GetTarget(&previous);
@@ -271,7 +285,7 @@ bool MinimapPicture::redraw_band(ID2D1DeviceContext &context, const MinimapPen &
     clear_rows(context, width, band.begin, band.begin + band.inserted);
     // 行が減ったら、ずらした後の下に残った前の行を消す。
     clear_rows(context, width, now, std::max(now, before));
-    draw_rows(MinimapPen{context, pen.brush, pen.colors},
+    draw_rows(MinimapPen{context, pen.brush, pen.colors, pen.body},
               std::span(rows.rows).subspan(band.begin, band.inserted),
               D2D1::Point2F(0.0F, row_y(band.begin)));
     context.SetTarget(previous.Get());
@@ -283,7 +297,8 @@ void MinimapPicture::bring_up(ID2D1DeviceContext &context, const MinimapPen &pen
                               const application::MinimapFrame &frame)
 {
     const auto &rows = *frame.rows;
-    const bool same = held_ == frame.rows && held_colors_ == pen.colors;
+    const bool same =
+        held_ == frame.rows && held_colors_ == pen.colors && same_body(held_body_, pen.body);
     const bool current = same && held_serial_ == rows.serial;
     const bool banded = same && !current && held_serial_ == frame.base && frame.band.has_value() &&
                         redraw_band(context, pen, rows, frame.band.value());
@@ -294,6 +309,7 @@ void MinimapPicture::bring_up(ID2D1DeviceContext &context, const MinimapPen &pen
     held_ = frame.rows;
     held_serial_ = rows.serial;
     held_colors_ = pen.colors;
+    held_body_ = pen.body;
 }
 
 std::expected<void, RenderFailure> MinimapPicture::paint(const MinimapPen &pen,
@@ -345,5 +361,10 @@ std::size_t MinimapPicture::pictures() const noexcept
 std::size_t MinimapPicture::shifts() const noexcept
 {
     return shifts_;
+}
+
+std::size_t MinimapPicture::flushes() const noexcept
+{
+    return flushes_;
 }
 } // namespace nenenib::ui::win32

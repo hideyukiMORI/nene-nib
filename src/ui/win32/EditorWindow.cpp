@@ -90,8 +90,8 @@ void EditorWindow::resize()
 
 // 本文の枠の配置（ADR 0148 の決定 8）。窓の行数・マウス・描画が同じ pane_layouts の 1 本を引く。
 // エクスプローラーの面が出ていれば、面の幅だけ右へ縮めた client から求める（ADR 0162 の決定 2）。
-// ミニマップが出ていれば、さらに右端を縮める（ADR 0171 の決定 2・出ていなければ幅 0
-// で分岐しない）。
+// ミニマップが出ていれば、さらに右端を縮める（ADR 0171 の決定 2・出ていなければ minimap_layout
+// は最初の 1 行で返る）。
 core::PaneLayouts EditorWindow::body_panes(const core::EditorSettings &settings) const
 {
     const auto minimap = core::minimap_layout(explorer_frame(settings).body, dpi_,
@@ -218,7 +218,7 @@ application::EditorDelivery EditorWindow::follow_look(application::EditorDeliver
     {
         apply_backdrop(delivery);
     }
-    auto font = font_of(delivery.settings, controller_.minimap_shown());
+    auto font = font_of(delivery.settings);
     if (font == shown_font_)
     {
         return delivery;
@@ -262,6 +262,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     delivery = follow_look(std::move(delivery));
     follow_split(previous_layout, delivery);
     follow_explorer(delivery);
+    follow_minimap(delivery);
     follow_ime(delivery);
     mode_ = delivery.mode;
     vim_mode_ = delivery.vim_mode;
@@ -338,6 +339,18 @@ void EditorWindow::follow_explorer(application::EditorDelivery &delivery)
         return;
     }
     shown_explorer_ = delivery.settings.explorer;
+    delivery = controller_.apply(body_view());
+}
+
+// ミニマップを出した・消した（`set minimap`・全面プレビューの出入り）ら、同じく送り直す（ADR 0171
+// の決定 2）。follow_explorer と同じ形で、出ていないままの打鍵の道は比べるだけ。
+void EditorWindow::follow_minimap(application::EditorDelivery &delivery)
+{
+    if (controller_.minimap_shown() == shown_minimap_)
+    {
+        return;
+    }
+    shown_minimap_ = controller_.minimap_shown();
     delivery = controller_.apply(body_view());
 }
 } // namespace nenenib::ui::win32

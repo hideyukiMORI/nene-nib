@@ -5,10 +5,13 @@
 // - 編集の帯だけを描き直す（同じ行の数・行が増える・減る）。
 // - 前の frame を描いていなければ窓ごと描く。
 // - テーマと面の幅（DPI）が変われば作り直す。
+// - 行の増減の無い帯は命令を流さない（Flush は行をずらすときだけ）。
+// - どの core::SyntaxRole の値の塊も core::syntax_color の色で描く（色の表の位置を数えない）。
 #include "WindowChecks.hpp"
 
 #include "LayoutRect.hpp"
 #include "LineNumber.hpp"
+#include "Minimap.hpp"
 #include "MinimapBand.hpp"
 #include "MinimapBlock.hpp"
 #include "MinimapFrame.hpp"
@@ -16,6 +19,8 @@
 #include "MinimapPicture.hpp"
 #include "MinimapRows.hpp"
 #include "MinimapWindow.hpp"
+#include "SyntaxColor.hpp"
+#include "SyntaxPalette.hpp"
 #include "SyntaxRole.hpp"
 #include "Theme.hpp"
 #include "ThemeCatalog.hpp"
@@ -26,6 +31,7 @@
 #include <d2d1.h>
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 #include <wincodec.h>
 #include <wrl/client.h>
@@ -42,6 +48,9 @@ constexpr UINT target_width = 200;
 constexpr UINT target_height = 320;
 constexpr std::size_t window_rows = 120;
 constexpr core::LayoutRect panel{100, 10, 180, 300};
+
+// 面の UI の色と本文の構文の色（MinimapPen の 2 つの色の組）。
+using Ink = std::pair<win32::MinimapColors, core::SyntaxPalette>;
 
 [[nodiscard]] Microsoft::WRL::ComPtr<ID2D1RenderTarget>
 wic_target(Microsoft::WRL::ComPtr<IWICBitmap> &bitmap)
@@ -141,14 +150,15 @@ class Canvas final
 
     // 同じ frame を直接描いた画素（比べる相手）。
     [[nodiscard]] std::vector<std::uint8_t> direct(const application::MinimapFrame &frame,
-                                                   const win32::MinimapColors &colors,
+                                                   const Ink &colors,
                                                    const core::LayoutRect &area = panel)
     {
         win32::MinimapPicture picture;
         return paint(
             [&](ID2D1RenderTarget &target, ID2D1SolidColorBrush &brush)
             {
-                picture.paint_directly(win32::MinimapPen{target, brush, colors}, frame, area);
+                picture.paint_directly(
+                    win32::MinimapPen{target, brush, colors.first, colors.second}, frame, area);
                 return true;
             });
     }
@@ -156,13 +166,15 @@ class Canvas final
     // picture の bitmap を経て描いた画素。
     [[nodiscard]] std::vector<std::uint8_t> held(win32::MinimapPicture &picture,
                                                  const application::MinimapFrame &frame,
-                                                 const win32::MinimapColors &colors,
+                                                 const Ink &colors,
                                                  const core::LayoutRect &area = panel)
     {
         return paint(
             [&](ID2D1RenderTarget &target, ID2D1SolidColorBrush &brush)
             {
-                return picture.paint(win32::MinimapPen{target, brush, colors}, frame, area)
+                return picture
+                    .paint(win32::MinimapPen{target, brush, colors.first, colors.second}, frame,
+                           area)
                     .has_value();
             });
     }
@@ -173,7 +185,7 @@ class Canvas final
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush_;
 };
 
-[[nodiscard]] std::optional<win32::MinimapColors> colors_of(std::string_view name)
+[[nodiscard]] std::optional<Ink> colors_of(std::string_view name)
 {
     const auto catalog = core::ThemeCatalog::builtins();
     const auto theme = catalog.find(core::ThemeName::parse(name).value());
@@ -182,11 +194,11 @@ class Canvas final
         return std::nullopt;
     }
     const auto view = theme.value().view();
-    return win32::minimap_colors(view.ui, view.body);
+    return Ink{win32::minimap_colors(view.ui), view.body};
 }
 
 // bitmap を経た画素と直接の画素・2 frame 目の使い回し・面の最上段のずれ。
-void check_held_picture(Canvas &canvas, Canvas &reference, const win32::MinimapColors &colors)
+void check_held_picture(Canvas &canvas, Canvas &reference, const Ink &colors)
 {
     win32::MinimapPicture picture;
     const auto rows = rows_of(window_rows);
@@ -208,7 +220,7 @@ void check_held_picture(Canvas &canvas, Canvas &reference, const win32::MinimapC
 }
 
 // 編集の帯: 同じ行の数・行が増える・減る。どれも直接の画素と同じで、描いた行は帯だけ。
-void check_bands(Canvas &canvas, Canvas &reference, const win32::MinimapColors &colors)
+void check_bands(Canvas &canvas, Canvas &reference, const Ink &colors)
 {
     win32::MinimapPicture picture;
     auto rows = rows_of(window_rows);
@@ -219,8 +231,9 @@ void check_bands(Canvas &canvas, Canvas &reference, const win32::MinimapColors &
     const auto typed = frame_of(rows, 1, 1, core::MinimapBand{5, 1, 1});
     const auto after_typing = canvas.held(picture, typed, colors);
     expect(!after_typing.empty() && after_typing == reference.direct(typed, colors) &&
-               picture.painted_rows() == whole + 1 && picture.shifts() == 0,
-           "a band of one row redraws that row only");
+               picture.painted_rows() == whole + 1 && picture.shifts() == 0 &&
+               picture.flushes() == 0,
+           "a band of one row redraws that row only and flushes nothing");
     rows->rows.at(7) = row_of(7, 5);
     rows->rows.insert(rows->rows.begin() + 8, row_of(8, 5));
     rows->window.rows = rows->rows.size();
@@ -228,8 +241,9 @@ void check_bands(Canvas &canvas, Canvas &reference, const win32::MinimapColors &
     const auto entered = frame_of(rows, 1, 2, core::MinimapBand{7, 1, 2});
     const auto after_enter = canvas.held(picture, entered, colors);
     expect(!after_enter.empty() && after_enter == reference.direct(entered, colors) &&
-               picture.painted_rows() == whole + 3 && picture.shifts() == 1,
-           "a row that becomes two shifts the rows below and redraws two rows");
+               picture.painted_rows() == whole + 3 && picture.shifts() == 1 &&
+               picture.flushes() == 1,
+           "a row that becomes two flushes once, shifts the rows below and redraws two rows");
     rows->rows.erase(rows->rows.begin() + 20, rows->rows.begin() + 22);
     rows->rows.at(20) = row_of(20, 7);
     rows->window.rows = rows->rows.size();
@@ -249,8 +263,7 @@ void check_bands(Canvas &canvas, Canvas &reference, const win32::MinimapColors &
 }
 
 // テーマが変われば窓ごと描き直し、面の幅（DPI）が変われば bitmap を作り直す（決定 4）。
-void check_rebuilds(Canvas &canvas, Canvas &reference, const win32::MinimapColors &colors,
-                    const win32::MinimapColors &other)
+void check_rebuilds(Canvas &canvas, Canvas &reference, const Ink &colors, const Ink &other)
 {
     win32::MinimapPicture picture;
     const auto rows = rows_of(window_rows);
@@ -265,6 +278,50 @@ void check_rebuilds(Canvas &canvas, Canvas &reference, const win32::MinimapColor
     expect(!widened.empty() && widened == reference.direct(frame, other, wider) &&
                picture.painted_rows() == 3 * window_rows && picture.pictures() == 2,
            "a wider panel makes a new bitmap and draws the window again");
+}
+// 画素の列の (x, y) の色（BGRA・不透明）。
+[[nodiscard]] core::RgbColor pixel_at(const std::vector<std::uint8_t> &pixels, UINT x, UINT y)
+{
+    const std::size_t at = (static_cast<std::size_t>(y) * target_width + x) * 4;
+    return core::RgbColor{pixels.at(at + 2), pixels.at(at + 1), pixels.at(at)};
+}
+
+// どの役割の塊も core::syntax_color（default の無い switch の 1 本）の色で描く。役割が増えれば
+// そこでコンパイルが落ち、表の位置がずれて例外や別の色になることはない（レビュー M1）。
+void check_every_role(Canvas &canvas, const Ink &colors)
+{
+    constexpr auto last = std::to_underlying(core::SyntaxRole::warning);
+    auto rows = std::make_shared<application::MinimapRows>(application::MinimapRows{
+        core::MinimapWindow{core::LineNumber{1}, std::size_t{last} + 1}, {}, 1});
+    for (std::size_t value = 0; value <= last; ++value)
+    {
+        rows->rows.push_back(
+            core::MinimapRow{core::MinimapBlock{0, 10, static_cast<core::SyntaxRole>(value)}});
+    }
+    rows->rows.push_back(core::MinimapRow{core::MinimapBlock{0, 10, std::nullopt}});
+    // 見えている範囲の面は役割の行より下（first_visible = 40）に置き、色に重ねない。
+    const application::MinimapFrame frame{rows, core::LineNumber{1}, core::LineNumber{40}, 1,
+                                          0,    std::nullopt};
+    const auto pixels = canvas.direct(frame, colors);
+    if (pixels.empty())
+    {
+        expect(false, "the role rows are painted");
+        return;
+    }
+    bool matched = true;
+    for (std::size_t value = 0; value <= last; ++value)
+    {
+        const auto y =
+            static_cast<UINT>(panel.top) + static_cast<UINT>(value * core::minimap_row_pixels);
+        matched =
+            matched && pixel_at(pixels, static_cast<UINT>(panel.left) + 5, y) ==
+                           core::syntax_color(colors.second, static_cast<core::SyntaxRole>(value));
+    }
+    const auto muted_y =
+        static_cast<UINT>(panel.top) + static_cast<UINT>((last + 1) * core::minimap_row_pixels);
+    expect(matched &&
+               pixel_at(pixels, static_cast<UINT>(panel.left) + 5, muted_y) == colors.first.at(2),
+           "every syntax role paints in its syntax_color and a block without one in muted");
 }
 } // namespace
 
@@ -282,5 +339,6 @@ void verify_minimap_paint()
     check_held_picture(canvas, reference, colors.value());
     check_bands(canvas, reference, colors.value());
     check_rebuilds(canvas, reference, colors.value(), other.value());
+    check_every_role(canvas, colors.value());
 }
 } // namespace nenenib::tests::ui

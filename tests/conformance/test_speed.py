@@ -815,7 +815,8 @@ class GiantLineTests(unittest.TestCase):
                          speed.GIANT_BENCHES)
         self.assertEqual((*speed.GIANT_BENCHES, *speed.SPLIT_BENCHES, speed.PREVIEW_BENCH, speed.CPP_BENCH,
                           *speed.LARGE_FILE_BENCHES, *speed.LSP_BENCHES,
-                          speed.MATCHPAREN_BENCH, speed.MINIMAP_BENCH), speed.OPTIONAL_BENCHES)
+                          speed.MATCHPAREN_BENCH, speed.MINIMAP_BENCH, speed.MINIMAP_BURST_BENCH),
+                         speed.OPTIONAL_BENCHES)
         self.assertFalse(set(speed.OPTIONAL_BENCHES) & set(speed.BENCHES))
         self.assertIn(speed.GIANT_OPEN_BENCH, speed.BREAKDOWN_BENCHES)
 
@@ -843,6 +844,35 @@ class GiantLineTests(unittest.TestCase):
         self.assertEqual(speed.MINIMAP_BENCH, seen["name"])
         self.assertIn("features=minimap\n", written)
         self.assertTrue(seen["environment"]["LOCALAPPDATA"].endswith(speed.MINIMAP_PROFILE))
+
+    def test_the_minimap_burst_is_optional_and_uses_the_minimap_profile(self):
+        """#1017 / ADR 0171 decision 6: 200 keystrokes over the C++ document with the minimap on."""
+        self.assertEqual("minimap-burst-200", speed.MINIMAP_BURST_BENCH)
+        self.assertIn(speed.MINIMAP_BURST_BENCH, speed.OPTIONAL_BENCHES)
+        self.assertNotIn(speed.MINIMAP_BURST_BENCH, speed.BENCHES)
+        delivered = speed.BURST_KEYS + 2
+        self.assertIsNone(speed.burst_failure(3.0, 10.0, delivered, speed.MINIMAP_BURST_BENCH))
+        self.assertIn("not together",
+                      speed.burst_failure(3.0, 60.0, delivered, speed.MINIMAP_BURST_BENCH))
+        trial = (0.7, 2.5, 1.0, delivered, {})
+        with tempfile.TemporaryDirectory() as folder, \
+                mock.patch.object(speed, "OUTPUT", Path(folder)), \
+                mock.patch.object(speed, "keys_trial", return_value=trial) as keys:
+            values, parts = speed.bench_minimap_burst(Path("exe"), {}, Path(folder),
+                                                      Path("c.cpp"))
+            written = (Path(folder) / speed.MINIMAP_PROFILE / "NeNeNib" /
+                       "settings.v4").read_text(encoding="utf-8")
+        self.assertEqual({speed.MINIMAP_BURST_BENCH: 2.5}, values)
+        self.assertEqual({}, parts)
+        self.assertIn("features=minimap\n", written)
+        environment = keys.call_args.args[1]
+        self.assertTrue(environment["LOCALAPPDATA"].endswith(speed.MINIMAP_PROFILE))
+        self.assertEqual(Path("c.cpp"), keys.call_args.args[3])
+        with mock.patch.object(speed, "minimap_environment", return_value={}), \
+                mock.patch.object(speed, "keys_trial", return_value=(None, None, 1.0, 3, {})), \
+                mock.patch("builtins.print"):
+            missing, _ = speed.bench_minimap_burst(Path("exe"), {}, Path("f"), Path("c.cpp"))
+        self.assertEqual({speed.MINIMAP_BURST_BENCH: None}, missing)
 
     def test_the_matchparen_bench_is_optional_and_its_document_fixed(self):
         """#999 / ADR 0164 decision 5: recorded only, the caret starts on a brace of a fixed C++."""

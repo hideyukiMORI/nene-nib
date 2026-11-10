@@ -1074,7 +1074,7 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     mark_bracket(state_, state_.scroll().visible_lines, result.lines);
     add_other_pane(result, source.pattern);
     result.explorer = explorer_view();
-    (this->*minimap_framed_)(result);
+    add_minimap(result);
     add_diagnostics(result);
 }
 

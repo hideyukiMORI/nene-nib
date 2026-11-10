@@ -11,9 +11,9 @@ namespace
 constexpr SHORT key_down_mask = static_cast<SHORT>(0x8000);
 } // namespace
 
-[[nodiscard]] FontKey font_of(const core::EditorSettings &settings, bool minimap)
+[[nodiscard]] FontKey font_of(const core::EditorSettings &settings)
 {
-    return FontKey{settings.font_size.points(), std::string(settings.font_family.text()), minimap};
+    return FontKey{settings.font_size.points(), std::string(settings.font_family.text())};
 }
 
 [[nodiscard]] bool held(int key) noexcept
