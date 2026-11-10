@@ -3598,6 +3598,7 @@
   {"name":"del-key-after-an-operator-fails","text":"abc def","keys":"d<Del>x"},
   {"name":"del-key-after-a-counted-operator-fails","text":"abc def","keys":"2d<Del>x"},
   {"name":"del-key-drops-the-register","text":"abc","keys":"\"a<Del>\"ap","register":{"name":"a","keys":"Z"}},
+  {"name":"del-key-dot-after-a-register-drops-it","text":"abcd","keys":"\"a<Del>.\"ap","register":{"name":"a","keys":"Z"}},
   {"name":"del-key-dot-repeats","text":"abcdef","keys":"<Del>."},
   {"name":"del-key-count-dropped-then-dot-does-nothing","text":"abcdef","keys":"2<Del>."},
   {"name":"del-key-dot-with-a-new-count","text":"abcdefgh","keys":"2l<Del>3."},

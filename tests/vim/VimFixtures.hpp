@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 94dab377230e57ed10f1534e5777b142fd12b729be415de37cf6720d2a4605ef / 3627 fixtures
+// fixtures.json: sha256 9efa3dcf17e7544535cbaf20f99b6a1ab39331e0969b4cc3617a1a099a3ab273 / 3628 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3627> vim_fixtures{{
+constexpr std::array<VimFixture, 3628> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3611,6 +3611,7 @@ constexpr std::array<VimFixture, 3627> vim_fixtures{{
     {"del-key-after-an-operator-fails", "abc def", "d<Del>x", "abc def", 1, 1, "", "", std::nullopt},
     {"del-key-after-a-counted-operator-fails", "abc def", "2d<Del>x", "abc def", 1, 1, "", "", std::nullopt},
     {"del-key-drops-the-register", "abc", "\"a<Del>\"ap", "bZc", 1, 2, "a", "v", std::nullopt, VimMacroFixture{'a', "Z"}},
+    {"del-key-dot-after-a-register-drops-it", "abcd", "\"a<Del>.\"ap", "cZd", 1, 2, "b", "v", std::nullopt, VimMacroFixture{'a', "Z"}},
     {"del-key-dot-repeats", "abcdef", "<Del>.", "cdef", 1, 1, "b", "v", std::nullopt},
     {"del-key-count-dropped-then-dot-does-nothing", "abcdef", "2<Del>.", "abcdef", 1, 1, "", "", std::nullopt},
     {"del-key-dot-with-a-new-count", "abcdefgh", "2l<Del>3.", "abgh", 1, 3, "def", "v", std::nullopt},
