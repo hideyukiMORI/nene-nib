@@ -51,6 +51,7 @@ using detail::operated;
 using detail::operated_on_lines;
 using detail::operated_to_line_end;
 using detail::operation_of;
+using detail::operator_start;
 using detail::opposite;
 using detail::pending_operator;
 using detail::performed;
@@ -516,10 +517,8 @@ namespace detail
 namespace
 {
 // y のあとのキャレット。行単位VISUALは下向き・単一行なら先頭、上向きなら現在位置。
-// NORMALの行単位は同じ桁を保つ。VISUAL終了時の行末の寄せはcontrollerの共通経路を使う。
-// NORMALの行単位でcaretが範囲の最初の行にあればcaretそのもの（Vimのdo_pending_operatorは
-// 動く前の位置と着地の早い方へ置く。呼び手が早い方を渡す: yy Y y_ は line_yank_from、移動の
-// y は operated。欲しい列から引き直さない・回数つきのztの後で両者が違う・Issue #1294）。
+// NORMALの行単位は呼び手が operator_start で決めた位置そのもの（Vim の oap->start・欲しい列から
+// 引き直さない・Issue #1294）。VISUAL終了時の行末の寄せはcontrollerの共通経路を使う。
 [[nodiscard]] Offset yanked_caret(const TextBuffer &text, const VimState &state, Offset caret,
                                   const VimMotionRange &range)
 {
@@ -537,13 +536,7 @@ namespace
             return line_of(text, caret) == line_of(text, range.range.end) ? range.range.begin
                                                                           : caret;
         }
-        if (state.mode == VimMode::normal &&
-            line_of(text, caret) == line_of(text, range.range.begin))
-        {
-            return caret;
-        }
-        return caret_on_line(text, wanted_column_of(text, state, caret),
-                             line_of(text, range.range.begin), VimMode::normal);
+        return caret;
     }
     std::unreachable();
 }
@@ -551,6 +544,15 @@ namespace
 
 namespace detail
 {
+// オペレータの後のキャレット（Vim の do_pending_operator は動く前の位置と移動の着地を LT_POS で
+// (行, 桁) に比べ、早い方を oap->start としてカーソルに置く）。行単位の y の呼び手はすべてここを
+// 通る: yy Y y_ は line_yank_from、移動の y は operated、検索の y は search_operated（#1294）。
+// 本文の位置の順は (行, 桁) の順と同じ。
+[[nodiscard]] Offset operator_start(Offset before, Offset landing) noexcept
+{
+    return landing.value < before.value ? landing : before;
+}
+
 [[nodiscard]] VimStep yanked(const VimState &state, const TextBuffer &text, Offset caret,
                              const VimMotionRange &range)
 {
@@ -1278,8 +1280,8 @@ namespace
 namespace
 {
 // yy Y y_ の y が置くキャレット（Vim の nv_lineop は cursor_down(count1 - 1) で最後の行の欲しい列へ
-// 動き、do_pending_operator が動く前の位置と (行, 桁) で早い方へ置く・Issue #1294）。下へ動く
-// 回数つきは動く前のキャレット、1 行なら同じ行の欲しい列と早い方。y 以外は caret を読まない。
+// 動き、do_pending_operator が動く前の位置と早い方へ置く・Issue #1294）。下へ動く回数つきの着地は
+// 下の行なので必ず後ろで、動く前のキャレットが残る。1 行なら同じ行の欲しい列が着地。
 [[nodiscard]] Offset line_yank_from(const TextBuffer &text, const VimState &state, Offset caret,
                                     std::size_t count)
 {
@@ -1287,9 +1289,8 @@ namespace
     {
         return caret;
     }
-    const Offset landing = caret_on_line(text, wanted_column_of(text, state, caret),
-                                         line_of(text, caret), VimMode::normal);
-    return landing.value < caret.value ? landing : caret;
+    return operator_start(caret, caret_on_line(text, wanted_column_of(text, state, caret),
+                                               line_of(text, caret), VimMode::normal));
 }
 } // namespace
 
@@ -1305,39 +1306,28 @@ namespace detail
     {
         return cancelled_at_landing(state, view, wanted);
     }
-    VimState performed_from = state;
-    Offset yanked_from = wanted == VimMotion::first_non_blank_below
-                             ? line_yank_from(view.text, state, view.selection.caret,
-                                              resolved_motion_count(state, view.text, wanted))
-                             : view.selection.caret;
-    // 行単位の y は移動の前の位置と着地の (行, 桁) で早い方へ着く（Vim の op_yank は範囲の始まり
-    // oap->start へキャレットを置き、do_pending_operator は LT_POS で行と桁を比べる）。上へ動いた
-    // 移動と、同じ行の手前に着く移動（`$ygg` `j$yG` `$y'a`）は着地の桁: `-` gg G H M L 'a は最初の
-    // 非空白、`k` は欲しい列を保つ（Issue #411 / #965 / #1065・ADR 0015 の追補）。下へ動いた y と
-    // 同じ行の後ろに着く y は範囲の始まり＝キャレットのまま（バイトの桁・#1294）。手前に着く y は
-    // 着地を yanked_caret へ渡す。本文の位置の順は (行, 桁) の順と同じ。
+    // 行単位の y は移動の前の位置と着地の早い方へ着く（operator_start）。上へ動いた移動と、同じ行の
+    // 手前に着く移動（`$ygg` `j$yG` `$y'a`）は着地の桁: `-` gg G H M L 'a は最初の非空白、`k` は
+    // 欲しい列を保つ（Issue #411 / #965 / #1065・ADR 0015 の追補）。下へ動いた y と同じ行の後ろに
+    // 着く y は動く前のキャレットのまま（バイトの桁・#1294）。
     // `_` は y の下ではカーソルを動かさない（Vim の nv_lineop は OP_YANK で beginline を呼ばない・
     // `j$y_` は `$` のまま）ので、同じ行の最初の非空白を着地として比べない（決定 13）。着地は yy と
-    // 同じ欲しい列（line_yank_from）。
-    if (operation == VimOperator::yank && range.value().kind == VimRegisterKind::lines &&
-        wanted != VimMotion::first_non_blank_below)
+    // 同じ欲しい列（line_yank_from）。exclusive が行単位に変わった `jyb` も同じ（範囲は変えた後で
+    // 見る）。y 以外のオペレータは caret を読まない。
+    const VimMotionRange operated_range =
+        keeps_the_line_break(view.text, range.value(), wanted, operation)
+            ? range.value()
+            : adjusted_for_exclusive(view.text, landed(view, state, wanted, range.value()), wanted);
+    Offset yanked_from = view.selection.caret;
+    if (operation == VimOperator::yank && operated_range.kind == VimRegisterKind::lines)
     {
-        const Offset destination = moved_by(view, state, wanted);
-        if (destination.value < view.selection.caret.value)
-        {
-            performed_from.wanted_column = VimWantedColumn{
-                VimColumnWish::at_column, caret_virtual_column(view.text, destination)};
-            yanked_from = destination;
-        }
+        yanked_from = wanted == VimMotion::first_non_blank_below
+                          ? line_yank_from(view.text, state, view.selection.caret,
+                                           resolved_motion_count(state, view.text, wanted))
+                          : operator_start(view.selection.caret, moved_by(view, state, wanted));
     }
     // 飛ぶ移動はオペレータの後ろでも前の位置を置く（Vim の setpcmark・ADR 0152 の決定 4）。
-    return jumped_by(
-        performed(performed_from, view.text, yanked_from,
-                  keeps_the_line_break(view.text, range.value(), wanted, operation)
-                      ? range.value()
-                      : adjusted_for_exclusive(view.text,
-                                               landed(view, state, wanted, range.value()), wanted)),
-        view, wanted);
+    return jumped_by(performed(state, view.text, yanked_from, operated_range), view, wanted);
 }
 
 // オペレータを自分の回数といっしょに保留する（決定 1）。積んだ回数はここで移る。
