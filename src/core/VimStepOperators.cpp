@@ -518,8 +518,8 @@ namespace
 // y のあとのキャレット。行単位VISUALは下向き・単一行なら先頭、上向きなら現在位置。
 // NORMALの行単位は同じ桁を保つ。VISUAL終了時の行末の寄せはcontrollerの共通経路を使う。
 // NORMALの行単位でcaretが範囲の最初の行にあればcaretそのもの（Vimのdo_pending_operatorは
-// oap->startへ置く。yyと下へ動いたyは動く前のバイトの桁で、欲しい列から引き直さない。
-// 回数つきのztの後のyyで両者が違う・Issue #1294）。
+// 動く前の位置と着地の早い方へ置く。呼び手が早い方を渡す: yy Y y_ は line_yank_from、移動の
+// y は operated。欲しい列から引き直さない・回数つきのztの後で両者が違う・Issue #1294）。
 [[nodiscard]] Offset yanked_caret(const TextBuffer &text, const VimState &state, Offset caret,
                                   const VimMotionRange &range)
 {
@@ -1275,6 +1275,24 @@ namespace
 }
 } // namespace
 
+namespace
+{
+// yy Y y_ の y が置くキャレット（Vim の nv_lineop は cursor_down(count1 - 1) で最後の行の欲しい列へ
+// 動き、do_pending_operator が動く前の位置と (行, 桁) で早い方へ置く・Issue #1294）。下へ動く
+// 回数つきは動く前のキャレット、1 行なら同じ行の欲しい列と早い方。y 以外は caret を読まない。
+[[nodiscard]] Offset line_yank_from(const TextBuffer &text, const VimState &state, Offset caret,
+                                    std::size_t count)
+{
+    if (count != single_step)
+    {
+        return caret;
+    }
+    const Offset landing = caret_on_line(text, wanted_column_of(text, state, caret),
+                                         line_of(text, caret), VimMode::normal);
+    return landing.value < caret.value ? landing : caret;
+}
+} // namespace
+
 namespace detail
 {
 [[nodiscard]] VimStep operated(const VimState &state, const VimEditorView &view, VimMotion motion)
@@ -1288,7 +1306,10 @@ namespace detail
         return cancelled_at_landing(state, view, wanted);
     }
     VimState performed_from = state;
-    Offset yanked_from = view.selection.caret;
+    Offset yanked_from = wanted == VimMotion::first_non_blank_below
+                             ? line_yank_from(view.text, state, view.selection.caret,
+                                              resolved_motion_count(state, view.text, wanted))
+                             : view.selection.caret;
     // 行単位の y は移動の前の位置と着地の (行, 桁) で早い方へ着く（Vim の op_yank は範囲の始まり
     // oap->start へキャレットを置き、do_pending_operator は LT_POS で行と桁を比べる）。上へ動いた
     // 移動と、同じ行の手前に着く移動（`$ygg` `j$yG` `$y'a`）は着地の桁: `-` gg G H M L 'a は最初の
@@ -1296,7 +1317,8 @@ namespace detail
     // 同じ行の後ろに着く y は範囲の始まり＝キャレットのまま（バイトの桁・#1294）。手前に着く y は
     // 着地を yanked_caret へ渡す。本文の位置の順は (行, 桁) の順と同じ。
     // `_` は y の下ではカーソルを動かさない（Vim の nv_lineop は OP_YANK で beginline を呼ばない・
-    // `j$y_` は `$` のまま）ので、同じ行の最初の非空白を着地として比べない（決定 13）。
+    // `j$y_` は `$` のまま）ので、同じ行の最初の非空白を着地として比べない（決定 13）。着地は yy と
+    // 同じ欲しい列（line_yank_from）。
     if (operation == VimOperator::yank && range.value().kind == VimRegisterKind::lines &&
         wanted != VimMotion::first_non_blank_below)
     {
@@ -1342,7 +1364,8 @@ namespace detail
     range.value().restore = landing.value < caret.value ? landing : caret;
     VimState with = state;
     with.pending = VimPendingOperator{operation, std::nullopt};
-    return performed(with, text, caret, range.value());
+    return performed(with, text, line_yank_from(text, state, caret, resolved_count(state)),
+                     range.value());
 }
 
 // D と C。d$ / c$ と同じ経路（決定 6）。回数は $ が受け取る（2D が 2 行ぶんになる）。
