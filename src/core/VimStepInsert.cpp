@@ -2,7 +2,6 @@
 
 #include "CaretMotion.hpp"
 #include "CaretMove.hpp"
-#include "DocumentByteLimit.hpp"
 #include "DocumentCaret.hpp"
 #include "LineEnding.hpp"
 #include "Selection.hpp"
@@ -34,7 +33,6 @@ namespace nenenib::core
 using detail::backward_characters;
 using detail::block_copied_body;
 using detail::block_insert_edit;
-using detail::count_room;
 using detail::display_view;
 using detail::erased_nothing;
 using detail::failed;
@@ -465,8 +463,8 @@ constexpr std::size_t erase_window_bytes = 64;
 }
 
 // 鍵の列を残りの周だけ本文の写しへ流し直した本文・キャレット・消した手前の端（#1093）。
-// 周の終わりに本文が文書の上限（maximum_document_bytes）を超えたら、残りの周を流さずに
-// too_large（#1341）。
+// 周の終わりに本文が文書の上限（view.document_limit）を超えたら、残りの周を流さずに too_large
+// （#1341）。写しの本文は文書の改行の形で入るので、CRLF の改行も 2 バイトに数える。
 [[nodiscard]] std::expected<std::tuple<TextBuffer, Offset, Offset>, VimRepeatFailure>
 replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t remaining,
                 const std::vector<VimKey> &keys)
@@ -489,7 +487,7 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
             caret = replayed.second;
             low = Offset{std::min(low.value, caret.value)};
         }
-        if (text.size_bytes() > maximum_document_bytes)
+        if (text.size_bytes() > view.document_limit)
         {
             return std::unexpected(VimRepeatFailure::too_large);
         }
@@ -552,7 +550,7 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
         return replayed_insert(view, std::move(step), replayed.value());
     }
     // 打った本文だけの列は、流し直しても本文を残りの回数だけ続けたものと同じなので 1 回で作る。
-    auto result = repeated(typed.value(), repeat.remaining, count_room(view.text));
+    auto result = repeated(typed.value(), repeat.remaining, view.text, view.document_limit);
     if (!result.has_value())
     {
         // 残りの周の本文が文書の上限を超える（`999999999ix<Esc>` の 1 GB 超）。1 周目の本文は

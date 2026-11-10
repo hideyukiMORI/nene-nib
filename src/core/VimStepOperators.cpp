@@ -782,6 +782,34 @@ namespace
 
 namespace detail
 {
+// 作り直した字下げは、桁が shiftwidth × 回数だけ増えるので Tab が多くとも
+// shiftwidth × 回数 / tabstop + 1 個増え、端数の空白は tabstop 未満（Vim の set_indent と同じ
+// noexpandtab）。`Vj999999999>` は 2 行に約 1 GB ずつの Tab を作るので、作る前に断る（#1341）。
+[[nodiscard]] bool shift_fits(const TextBuffer &text, std::size_t lines, ShiftBy shift,
+                              std::size_t limit) noexcept
+{
+    const auto [operation, amount] = shift;
+    if (operation != VimOperator::shift_right)
+    {
+        return true;
+    }
+    if (amount > std::numeric_limits<std::size_t>::max() / vim_shift_width)
+    {
+        return false;
+    }
+    const std::size_t growth = amount * vim_shift_width / vim_tab_stop + vim_tab_stop + single_step;
+    return fits_repeated(growth, lines, count_room(text, limit));
+}
+
+// VISUAL の `>` が覆う行の数で shift_fits を引く（#1341）。
+[[nodiscard]] bool range_shift_fits(const TextBuffer &text, const VimMotionRange &range,
+                                    ShiftBy shift, std::size_t limit) noexcept
+{
+    const std::size_t lines =
+        last_covered_line(text, range).value - line_of(text, range.range.begin).value + single_step;
+    return shift_fits(text, lines, shift, limit);
+}
+
 // > < の置き換え（決定 11）。範囲が覆う行を 1 行ずつ作り直し、最初の行から最後の行の内容の終わり
 // までを 1 つの置き換えにする（undo 1 単位）。キャレットは最初の行の最初の非空白、u の戻り先は
 // 範囲の戻り先。
@@ -940,6 +968,10 @@ namespace detail
         return failed(cancelled(state), VimRepeatFailure::too_large);
     }
     const VimBlockRange block = block_of(state, view);
+    if (!shift_fits(view.text, block.lines.size(), shift, view.document_limit))
+    {
+        return failed(cancelled(state), VimRepeatFailure::too_large);
+    }
     const std::size_t left = block.left.value - single_step;
     const std::size_t width = vim_shift_width * amount;
     std::vector<VimBlockEdit> edits;

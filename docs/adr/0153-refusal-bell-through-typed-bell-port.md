@@ -43,3 +43,7 @@ OS の音は OS の呼び出しなので、中核（core / application）から�
 - マクロや `.` の再生の中の `:` と `/` の確定も同じ確定の道を通るので鳴る（Vim も鳴る・契約 `--bell` がレジスタに置いた `:nosuch<CR>` の `@a` で固定）。
 - まだ読んでいないタブを読めない（「開けませんでした: <名前>」）は、Ctrl+P から開けないときと同じ文でも鳴らさない。起動の復元でも通る道で、静かな道の契約（決定 6）を守るため。
 - 検索の確定で鳴らすのは engine が `not_found` で返す検索の失敗だけ。layout を作れない失敗と契約の破れは鳴らない。
+
+## 追補（2026-11-10・#1341）
+
+決定 2 の「鍵の失敗では鳴らさない」に 1 つ足す。回数で本文を増やす編集（`p` `P` の回数・INSERT と `o` の回数・矩形の `p`・VISUAL と矩形の `>`）を文書の上限で断った鍵（`VimRepeatFailure::too_large`）は、`EditorController::stepped_vim` が `E1240: Resulting text too long` を `with_command_message` で 1 行出すだけで、`reject` を通さず鳴らさない（ADR 0046 の追補 #1341）。

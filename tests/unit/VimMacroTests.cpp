@@ -1015,6 +1015,93 @@ void verify_huge_count_insert_refused()
     }
 }
 
+// 文書の上限を小さな値に置いた core の vim_step（#1341）。1 GiB を確保せずに上限の境を見る。
+// 効果は本文へ写さないので、最後の鍵の失敗だけを見る。
+// 本文とキャレット。
+using LimitedText = std::pair<std::string_view, Offset>;
+
+[[nodiscard]] std::optional<nenenib::core::VimRepeatFailure>
+limited_failure(const VimState &state, LimitedText text, std::string_view keys, std::size_t limit)
+{
+    const TextBuffer buffer = buffer_of(text.first);
+    const Selection selection = collapsed_at(text.second);
+    VimEditorView view{buffer, selection, VimViewport{LineNumber{1}, vim_visible_lines, 0}};
+    view.document_limit = limit;
+    VimStep step{state, VimNoEffect{}};
+    for (const VimKey &key : vim_keys_of(keys))
+    {
+        step = vim_step(step.next, view, key);
+    }
+    return step.failure;
+}
+
+// 効果の本文は LF で数え controller が判定の後で文書の改行へ写すので、CRLF の文書では改行を
+// 2 バイトに数える（#1341）。同じ回数が LF の文書では通り、CRLF の文書では断られる境。
+void verify_huge_count_crlf_boundary()
+{
+    const std::optional<nenenib::core::VimRepeatFailure> refused{
+        nenenib::core::VimRepeatFailure::too_large};
+    const VimState rest = empty_vim_state();
+    // 空行の `yy` は "\n"。上限 304: LF は 4 バイトの文書に 300 個、CRLF は 6 バイトに 149 個。
+    expect(!limited_failure(rest, {"a\n\nb", Offset{2}}, "yy300p", 304).has_value() &&
+               limited_failure(rest, {"a\n\nb", Offset{2}}, "yy301p", 304) == refused,
+           "a line put fills the limit of an LF document exactly");
+    expect(!limited_failure(rest, {"a\r\n\r\nb", Offset{3}}, "yy149p", 304).has_value() &&
+               limited_failure(rest, {"a\r\n\r\nb", Offset{3}}, "yy150p", 304) == refused,
+           "a line put counts two bytes for each CRLF newline");
+    // INSERT の回数の残りの周（"\n" を 51 回）。上限 104 で LF の 3 バイトの文書は 101 まで、CRLF
+    // の 4 バイトの文書は 2 バイト × 50 まで。
+    expect(!limited_failure(rest, {"a\nb", Offset{0}}, "52i<CR><Esc>", 104).has_value() &&
+               limited_failure(rest, {"a\r\nb", Offset{0}}, "52i<CR><Esc>", 104) == refused,
+           "the insert count counts two bytes for each CRLF newline");
+    // `o` の回数の残りの周（"\nab"）。上限 103 で LF は 3 バイト × 33、CRLF は 4 バイト × 24 まで。
+    expect(!limited_failure(rest, {"a\nb", Offset{0}}, "34oab<Esc>", 103).has_value() &&
+               limited_failure(rest, {"a\r\nb", Offset{0}}, "34oab<Esc>", 103) == refused,
+           "the o count counts two bytes for each CRLF newline");
+    // 矩形の `p`（幅 2 の 2 行・25 個）。1 行は手前の空白（桁 2）と改行と本文 50 バイトで、上限 114
+    // では LF の 7 バイトの文書は 106 で通り、CRLF の 8 バイトの文書は 108 で断る。
+    const VimState block = nenenib::core::vim_resting_state(
+        VimRegister{"ab\ncd", VimRegisterKind::block, nenenib::core::VimBlockWidth{2}});
+    expect(!limited_failure(block, {"abc\ndef", Offset{0}}, "25p", 114).has_value() &&
+               limited_failure(block, {"abc\r\ndef", Offset{0}}, "25p", 114) == refused,
+           "a block put counts the newline of the document for each line");
+}
+
+// VISUAL の回数つきの `>` と矩形の `>` も同じ上限（#1341）。1 行に足すのは多くとも回数 + 9 バイト
+// （shiftwidth 8・tabstop 8）で、上限 103 の 3 バイトの文書は 91 段まで。`<` は増やさない。
+void verify_huge_count_shift_refused()
+{
+    const std::optional<nenenib::core::VimRepeatFailure> refused{
+        nenenib::core::VimRepeatFailure::too_large};
+    const VimState rest = empty_vim_state();
+    expect(!limited_failure(rest, {"a\nb", Offset{0}}, "V91>", 103).has_value() &&
+               limited_failure(rest, {"a\nb", Offset{0}}, "V92>", 103) == refused,
+           "a counted visual > past the document limit is refused");
+    expect(!limited_failure(rest, {"a\nb", Offset{0}}, "<C-v>91>", 103).has_value() &&
+               limited_failure(rest, {"a\nb", Offset{0}}, "<C-v>92>", 103) == refused,
+           "a counted block > past the document limit is refused");
+    expect(!limited_failure(rest, {"\ta\nb", Offset{1}}, "V92<", 103).has_value(),
+           "a counted visual < never grows the document");
+}
+
+// 断った鍵は E1240 を 1 行出し、鳴らさない（#1341・ADR 0153 の決定 2）。`@` の中で断っても同じ。
+void verify_huge_count_notice()
+{
+    for (const std::string_view keys : {std::string_view{"yiw999999999p"}, std::string_view{"@a"}})
+    {
+        Editing editing;
+        open_vim_document(editing, "abc\ndef");
+        EditorController &controller = editing.controller();
+        applied(controller, stored_text('a', "yiw999999999px"));
+        vim_replay(controller, keys);
+        const auto frame = controller.frame();
+        expect(frame.command_message.has_value() &&
+                   frame.command_message.value().text() == "E1240: Resulting text too long" &&
+                   editing.bell().rings() == 0U,
+               "a put refused at the document limit shows E1240 without the bell");
+    }
+}
+
 // 録画を経る fixture と `"` の fixture は同じレジスタの表を通るので 1 scope（ADR 0048 の決定 11）。
 [[nodiscard]] bool macro_fixture(const VimFixture &fixture) noexcept
 {
@@ -1036,6 +1123,9 @@ void verify_vim_macro_contracts()
     verify_macro_rounds_keep_the_order();
     verify_huge_count_put_refused();
     verify_huge_count_insert_refused();
+    verify_huge_count_crlf_boundary();
+    verify_huge_count_shift_refused();
+    verify_huge_count_notice();
     verify_macro_append();
     verify_macro_numbered_recording();
     verify_macro_numbered_stored();

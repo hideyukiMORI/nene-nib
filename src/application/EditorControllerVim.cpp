@@ -203,6 +203,8 @@ void place_insert_left(EditorState &state, std::optional<std::size_t> left)
 
 // Vim の問いの往復の契約の破れの知らせ（ADR 0133 の追補 2026-10-18・#665）。鍵は効かない。
 constexpr std::string_view inconsistent_layout_notice = "内部の不整合: 画面行の問い（鍵は無効）";
+// 回数で本文を増やす編集を文書の上限で断った鍵の知らせ（#1341・Vim 9.1 の同じ種類の文）。
+constexpr std::string_view too_long_notice = "E1240: Resulting text too long";
 // engine を呼ぶ 1 か所の写し（Issue #1023）。鍵は vim_step・`:N` の行は vim_line_jumped・押しの
 // VISUAL は vim_pointer_selected（#1250）。
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
@@ -781,6 +783,12 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     if (step.notice.has_value())
     {
         state_ = state_.with_command_message(core::vim_search_message(step.notice.value()));
+    }
+    // 文書の上限で断った鍵は 1 行知らせる（#1341）。自分の失敗だけを見るので、再生の中で断った鍵の
+    // 1 回だけ出て、再生を返した鍵では重ねない。鍵の失敗なので鳴らさない（ADR 0153 の決定 2）。
+    if (step.failure == std::optional{core::VimRepeatFailure::too_large})
+    {
+        state_ = state_.with_command_message(core::DisplayText::parse(too_long_notice).value());
     }
     // 書けなかった知らせは検索の報せの後に置き、同じ鍵で両方起きたら書けなかった方を見せる。
     send_vim_clipboard(step.clipboard);

@@ -190,8 +190,9 @@ class EditorController final
     // `@` の再生の中で `map` の左辺の途中まで読んで待った回数（起動からの累計・#1312）。性質の
     // 試験が待ちと flush の道を通ったことを確かめるための口で、状態を変えない。
     [[nodiscard]] std::size_t replay_waits() const noexcept;
-    // 再生の列へ積んだ周の数（起動からの累計・#1341）。`[count]@a` は 1 周ずつ積むので、巨大な
-    // 回数でも鍵が失敗した所で止まったことを、時計を読まずに数で確かめるための口。
+    // 再生の列へ積んだ周の数（起動からの累計・#1341・`.` の再生も 1 周に数える）。`[count]@a` は
+    // 1 周ずつ積むので、巨大な回数でも鍵が失敗した所で止まったことを、時計を読まずに数で確かめる
+    // ための口。
     [[nodiscard]] std::size_t replay_rounds() const noexcept;
     // Ctrl+Tab で歩いている間だけ真（ADR 0058 の決定 4）。窓が Ctrl を離したとき・フォーカスを
     // 失ったときに SettleRecentTab を送るかを決めるための口で、状態の 1 欄を読むだけ。
@@ -960,7 +961,7 @@ class EditorController final
     // `[count]@a` のまだ積んでいない周（#1341）。queue_replay が置き、next_replay_round が減らし、
     // dropped_replay が捨てる。
     std::vector<ReplayRounds> replay_rounds_;
-    // replay_rounds の数（queued_round だけが足す）。
+    // replay_rounds の数（queued_round だけが足す・`.` の 1 周も数える）。
     std::size_t replay_round_count_ = 0;
     std::optional<std::size_t> replay_depth_;
     // `@` の再生の中で `map` の左辺の途中まで読んだ鍵（#1312）。再生の中だけで持ち、列が尽きたら

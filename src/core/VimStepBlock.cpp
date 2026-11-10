@@ -1,5 +1,6 @@
 #include "VimStepDetail.hpp"
 
+#include "LineEnding.hpp"
 #include "Utf8.hpp"
 #include "VimBlockInsert.hpp"
 #include "VimBlockLine.hpp"
@@ -805,16 +806,17 @@ namespace
 }
 
 // 矩形の `p` `P` の本文が文書の上限に収まるか（#1341）。1 行は回数ぶんの本文と幅までの空白で、
-// 手前の空白（桁まで）と改行も数える。Vim は行ごとにそのまま確保する（`<C-v>jy999999999p` は
-// 2 GB の 2 行を作る・実測）。
-[[nodiscard]] bool block_put_fits(const VimState &state, const TextBuffer &text, Offset caret,
-                                  VimPutSide side)
+// 手前の空白（桁まで）と改行（文書の改行の形の幅）も数える。Vim は行ごとにそのまま確保する
+// （`<C-v>jy999999999p` は 2 GB の 2 行を作る・実測）。
+[[nodiscard]] bool block_put_fits(const VimState &state, const VimEditorView &view, VimPutSide side)
 {
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
     const VimRegister source = register_read(state, state.selected_register);
     const std::size_t width = source.width.has_value() ? source.width.value().columns : single_step;
     const std::size_t count = count_of(state.count);
-    const std::size_t lead = put_column(text, caret, side) + single_step;
-    std::size_t room = count_room(text);
+    const std::size_t lead = put_column(text, caret, side) + newline_of(text.line_ending()).size();
+    std::size_t room = count_room(text, view.document_limit);
     for (const std::string &line : block_register_lines(source.text))
     {
         const std::size_t cells = put_block_cells(line);
@@ -840,9 +842,10 @@ namespace
 
 namespace detail
 {
-[[nodiscard]] VimStep put_step(const VimState &state, const TextBuffer &text, Offset caret,
-                               VimPutSide side)
+[[nodiscard]] VimStep put_step(const VimState &state, const VimEditorView &view, VimPutSide side)
 {
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
     const VimRegister source = register_read(state, state.selected_register);
     const bool black_hole = state.selected_register.has_value() &&
                             state.selected_register.value().target == VimRegisterTarget::black_hole;
@@ -861,7 +864,7 @@ namespace detail
     }
     if (source.kind == VimRegisterKind::block)
     {
-        if (!block_put_fits(state, text, caret, side))
+        if (!block_put_fits(state, view, side))
         {
             return failed(cancelled(state), VimRepeatFailure::too_large);
         }
@@ -875,7 +878,7 @@ namespace detail
         // 空の本文は何も貼らず、キャレットも動かさない（Vim は yanklen が 0 なら列を進めない）。
         return VimStep{vim_resting_from(state, state.unnamed_register), VimNoEffect{}};
     }
-    auto body = repeated(source.text, count_of(state.count), count_room(text));
+    auto body = repeated(source.text, count_of(state.count), text, view.document_limit);
     if (!body.has_value())
     {
         return failed(cancelled(state), body.error());

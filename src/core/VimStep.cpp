@@ -743,7 +743,7 @@ namespace
 [[nodiscard]] VimStep put_action(const VimState &state, const VimEditorView &view, VimAction action)
 {
     const VimPutSide side = action == VimAction::put_after ? VimPutSide::after : VimPutSide::before;
-    return put_step(state, view.text, view.selection.caret, side);
+    return put_step(state, view, side);
 }
 
 [[nodiscard]] VimStep line_end_action(const VimState &state, const VimEditorView &view,
