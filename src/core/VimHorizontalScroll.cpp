@@ -27,8 +27,6 @@ namespace
 constexpr char32_t tab_character = U'\t';
 // 1 つの code point の UTF-8 の最長のバイト数。1 文字の頭の code point だけを読む。
 constexpr std::size_t longest_code_point_bytes = 4;
-// 次の文字の先頭を探すときに読む最初の窓（結合文字の列が長ければ倍にして読み直す）。
-constexpr std::size_t character_window_bytes = 64;
 
 // 行の内容の範囲 [start, end)。
 using LineBounds = std::pair<Offset, Offset>;
@@ -64,24 +62,6 @@ using LineBounds = std::pair<Offset, Offset>;
 [[nodiscard]] std::size_t cells_of(char32_t value, std::size_t column) noexcept
 {
     return std::max<std::size_t>(column_advance(value, column), 1);
-}
-
-// at から始まる Vim の 1 文字の次の文字の先頭（ADR 0053）。at の後ろの窓だけを読み、文字の終わりが
-// 窓の終わりに触れていれば窓を倍にして読み直す。
-[[nodiscard]] Offset character_after(const TextBuffer &text, Offset at, Offset line_end)
-{
-    std::size_t window = character_window_bytes;
-    for (;;)
-    {
-        const Offset end{std::min(at.value + window, line_end.value)};
-        const std::string content = text.text_range(at, end);
-        const Offset next = vim_character_end(content, Offset{0});
-        if (end == line_end || next.value + longest_code_point_bytes <= content.size())
-        {
-            return Offset{at.value + next.value};
-        }
-        window *= 2;
-    }
 }
 
 // 新しい leftcol の上限。キャレットの行の最後の文字の最初の升（Vim 9.1 の実測・最後の文字が
@@ -155,7 +135,7 @@ using CaretCells = std::tuple<std::size_t, std::size_t, std::size_t>;
     const Offset at = character_at_cell(text, number, left);
     const bool starts = left == 0 || character_at_cell(text, number, left - 1) != at;
     return starts ? vim_resting_caret(text, at)
-                  : vim_resting_caret(text, character_after(text, at, line.second));
+                  : vim_resting_caret(text, vim_character_after(text, at, line.second));
 }
 
 // 画面 [left, left + columns) の外に出たキャレットを端の文字へ押す（Vim の leftcol_changed・

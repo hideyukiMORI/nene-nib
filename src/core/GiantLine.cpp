@@ -48,8 +48,11 @@ constexpr unsigned char continuation_bits = 0x80;
     const auto from = at - std::min(at - line.begin.value, margin);
     const auto to = std::min(line.end.value, at + margin);
     const auto read = text.text_range(Offset{from}, Offset{to});
-    const auto skip = leading_continuations(read);
-    const auto bytes = std::string_view(read).substr(skip);
+    // 行の途中で切った終わりの code point は decode しない（#1292）。
+    const std::string_view whole{read.data(),
+                                 to < line.end.value ? whole_code_points(read) : read.size()};
+    const auto skip = leading_continuations(whole);
+    const auto bytes = whole.substr(skip);
     const auto base = from + skip;
     if (at < base)
     {
