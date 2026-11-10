@@ -70,6 +70,10 @@ namespace
         return "\x18";
     case VimSpecialKey::control_o:
         return "\x0F";
+    case VimSpecialKey::control_e:
+        return "\x05";
+    case VimSpecialKey::control_y:
+        return "\x19";
     }
     std::unreachable();
 }
@@ -83,7 +87,8 @@ constexpr std::array special_keys{
     VimSpecialKey::end,        VimSpecialKey::page_up,     VimSpecialKey::page_down,
     VimSpecialKey::control_d,  VimSpecialKey::control_u,   VimSpecialKey::control_f,
     VimSpecialKey::control_b,  VimSpecialKey::control_v,   VimSpecialKey::control_w,
-    VimSpecialKey::control_a,  VimSpecialKey::control_x,   VimSpecialKey::control_o};
+    VimSpecialKey::control_a,  VimSpecialKey::control_x,   VimSpecialKey::control_o,
+    VimSpecialKey::control_e,  VimSpecialKey::control_y};
 
 // Vim の Ctrl-H。本文 → 鍵でだけ backspace に読む（鍵 → 本文は `<80>kb`）。
 constexpr std::string_view control_h = "\x08";

@@ -759,6 +759,7 @@ class EditorController final
     // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();
+    void settle_vim_step(const core::VimStep &step);
     // 追従は頼むだけで、スクロールを読む直前に 1 回だけ解決する（ADR 0128 の決定 1・2）。
     void follow_caret();
     void follow_position(core::TextPosition position);
@@ -900,6 +901,11 @@ class EditorController final
     // 再生を打ち切った鍵の失敗（Issue #983）。perform(VimReplay) が置き、`.` や `@` を打った鍵の
     // deliver_vim_key が自分の失敗として返して消す（Vim の :normal! は残りの鍵を捨てる）。
     std::optional<core::VimRepeatFailure> replay_failure_;
+    // 最後に流した Vim の鍵が窓の先頭を確かめ済みで終えたか（Ctrl-e Ctrl-y の keeps_top・Vim の
+    // VALID_TOPLINE・ADR 0019 の追補 #1232）。stepped_vim が鍵ごとに置き、再生を返した外側の鍵は
+    // 中の最後の鍵の値を引き継いで、鍵の終わりの寄せ（追従）を頼まない。perform(VimReplay) が
+    // 再生の始めに消す。
+    bool vim_top_kept_ = false;
     // 再生の編集を畳む起点（ADR 0046 の決定 3）。再生の外では空。perform(VimReplay) が置いて
     // 消し、再生の中で文書が替わったら reopen_replayed_unit が入った文書の値へ置き直す。
     std::optional<core::EditHistory> replay_history_;

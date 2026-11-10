@@ -119,6 +119,8 @@ constexpr std::size_t erase_window_bytes = 64;
     case VimSpecialKey::control_a:
     case VimSpecialKey::control_x:
     case VimSpecialKey::control_o:
+    case VimSpecialKey::control_e:
+    case VimSpecialKey::control_y:
         return false;
     }
     std::unreachable();
@@ -836,6 +838,8 @@ namespace detail
     case VimSpecialKey::control_x:
     // INSERT の Ctrl-o（Vim では NORMAL の命令を 1 つ）は未対応で、失敗にせず何もしない（#1037）。
     case VimSpecialKey::control_o:
+    case VimSpecialKey::control_e:
+    case VimSpecialKey::control_y:
         return VimStep{state, VimNoEffect{}};
     case VimSpecialKey::page_up:
         return insert_page_moved(state, view, VimScrollDirection::up);
@@ -926,6 +930,8 @@ namespace
     case VimSpecialKey::control_a:
     case VimSpecialKey::control_x:
     case VimSpecialKey::control_o:
+    case VimSpecialKey::control_e:
+    case VimSpecialKey::control_y:
         return false;
     }
     std::unreachable();
@@ -982,6 +988,8 @@ namespace
     case VimSpecialKey::control_a:
     case VimSpecialKey::control_x:
     case VimSpecialKey::control_o:
+    case VimSpecialKey::control_e:
+    case VimSpecialKey::control_y:
         return false;
     }
     std::unreachable();

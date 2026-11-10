@@ -293,6 +293,20 @@ measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &r
     }
     std::unreachable();
 }
+// 鍵の終わりにキャレットを寄せて追従を頼むか。入力行が開いていれば寄せない。Ctrl-e Ctrl-y は
+// engine が置いたキャレットと先頭のまま終える。追従（Vim の update_topline の写し）を頼むと
+// scrolloff が先頭を戻すので、Vim の VALID_TOPLINE と同じに飛ばす（キャレットは engine がモードの
+// 寄せまで済ませた・ADR 0019 の追補 #1232）。再生（`.` `@`）を返した鍵は、中で最後に流した鍵が
+// 先頭を確かめ済みで終えたか（replayed_top_kept）を引き継ぐ。入れ子の再生は鍵を積むだけで、
+// 積んだ鍵が後から流れるので引き継がない。
+[[nodiscard]] bool keeps_vim_top(const core::VimStep &step, bool replayed_top_kept)
+{
+    if (const auto *const navigate = std::get_if<core::VimNavigate>(&step.effect))
+    {
+        return navigate->keeps_top;
+    }
+    return std::holds_alternative<core::VimReplay>(step.effect) && replayed_top_kept;
+}
 } // namespace
 
 // fixture と契約の harness が打つ 1 鍵（ADR 0048 の決定 8）。入力行の写しは再生と同じ
@@ -568,6 +582,8 @@ std::optional<core::VimRepeatFailure> EditorController::deliver_vim_key(const co
     {
         return step_vim(key);
     }
+    // 入力行の鍵は先頭を確かめない（確定が流す engine の鍵は stepped_vim が置き直す・#1232）。
+    vim_top_kept_ = false;
     return std::visit([this](const auto &value) { return this->command_key(value); }, key);
 }
 
@@ -623,6 +639,8 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpe
     case core::VimSpecialKey::control_a:
     case core::VimSpecialKey::control_x:
     case core::VimSpecialKey::control_o:
+    case core::VimSpecialKey::control_e:
+    case core::VimSpecialKey::control_y:
         return std::nullopt;
     }
     std::unreachable();
@@ -720,10 +738,7 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     {
         state_ = state_.with_history(state_.history().sealed());
     }
-    if (!state_.command_input().has_value())
-    {
-        settle_vim_caret();
-    }
+    settle_vim_step(step);
     // 鍵の終わりに、動かなかった・消えた前の位置を戻す（決定 5・Vim の checkpcmark）。
     check_vim_marks();
     // 再生（`.` `@`）の中の鍵が失敗したら、再生を返した鍵の失敗にする（Issue #983）。
@@ -746,6 +761,17 @@ void EditorController::adopt_vim_marks(const std::optional<core::VimMarks> &mark
     if (marks.has_value())
     {
         state_ = state_.with_vim_marks(marks.value());
+    }
+}
+
+// 鍵の終わりの寄せ（keeps_vim_top の判定を覚えてから寄せる・ADR 0019 の追補 #1232）。再生を
+// 返した外側の鍵が引き継ぐのは、再生がいま終わったとき（入れ子なら鍵を積んだだけ）だけ。
+void EditorController::settle_vim_step(const core::VimStep &step)
+{
+    vim_top_kept_ = keeps_vim_top(step, !replay_depth_.has_value() && vim_top_kept_);
+    if (!state_.command_input().has_value() && !vim_top_kept_)
+    {
+        settle_vim_caret();
     }
 }
 
@@ -936,7 +962,8 @@ void EditorController::perform(const core::VimNavigate &effect)
                                        state_.caret_affinity()};
     // `scrolloff` の余白は追従と同じ 1 本の計算で縦だけに効かせる。`zt` `zb` は余白の分だけ
     // 戻り、Ctrl-d / Ctrl-u は余白の外のキャレットを動かさない（#1041・ADR 0019 の追補）。
-    if (state_.settings().scrolloff > 0)
+    // Ctrl-e Ctrl-y は engine の先頭のまま（keeps_top・Vim の VALID_TOPLINE・追補 #1232）。
+    if (state_.settings().scrolloff > 0 && !effect.keeps_top)
     {
         const auto kept = visual_view().followed(caret, core::ScrollFollow::minimal,
                                                  detail::scroll_extent_for(state_.mode()));
@@ -1124,6 +1151,7 @@ void EditorController::perform(const core::VimReplay &effect)
     }
     replay_history_ = state_.history();
     replay_text_ = state_.text();
+    vim_top_kept_ = false;
     replay_queue_.assign(effect.keys.begin(), effect.keys.end());
     replay_depths_.assign(effect.keys.size(), 1);
     while (!replay_queue_.empty())

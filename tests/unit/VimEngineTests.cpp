@@ -1354,11 +1354,16 @@ void verify_vim_wrapped_viewport_request()
                                      row * width};
 }
 
-[[nodiscard]] nenenib::core::VimStep rows_answered(const VimState &state, const TextBuffer &text,
-                                                   nenenib::core::VimScrollUnit unit,
-                                                   const VimKey &key)
+// 窓の初めのキャレットと先頭の画面行（rows_answered は 1 段目の 3 字目・最初の画面行）。
+using RowStart = std::pair<nenenib::core::Offset, std::size_t>;
+using UnitKey = std::pair<nenenib::core::VimScrollUnit, VimKey>;
+
+[[nodiscard]] nenenib::core::VimStep rows_walked(const VimState &state, const TextBuffer &text,
+                                                 const UnitKey &pressed, RowStart start)
 {
-    const Selection selection = collapsed_at(nenenib::core::Offset{2});
+    const auto &[unit, key] = pressed;
+    const auto [caret, first_row] = start;
+    const Selection selection = collapsed_at(caret);
     std::vector<VimLineRows> rows;
     std::vector<nenenib::core::VimRowSpan> spans;
     VimEditorView view{text,          selection,
@@ -1369,7 +1374,7 @@ void verify_vim_wrapped_viewport_request()
     {
         if (step.viewport_request)
         {
-            view.viewport = VimViewport{LineNumber{1}, 3, 0};
+            view.viewport = VimViewport{LineNumber{1}, 3, first_row};
         }
         else if (step.layout_request.has_value())
         {
@@ -1389,6 +1394,13 @@ void verify_vim_wrapped_viewport_request()
         step = vim_step(state, view, key);
     }
     return step;
+}
+
+[[nodiscard]] nenenib::core::VimStep rows_answered(const VimState &state, const TextBuffer &text,
+                                                   nenenib::core::VimScrollUnit unit,
+                                                   const VimKey &key)
+{
+    return rows_walked(state, text, UnitKey{unit, key}, RowStart{nenenib::core::Offset{2}, 0});
 }
 
 // 索引を持つ本文の桁は、行を写して数えた桁と同じ（ADR 0144・VirtualColumn の 1 本）。
@@ -1473,6 +1485,41 @@ void verify_vim_row_unit_pages()
     expect(stayed != nullptr && stayed->first_row == 0 &&
                stayed->selection.caret == nenenib::core::Offset{2},
            "the line unit PgDn of a one-line text stays put as before");
+    // Ctrl-e Ctrl-y の格子の形（ADR 0019 の追補 #1232）。先頭を 1 画面行送り、窓の上へ出た
+    // キャレットは同じ桁で窓の最上段へ。1 行目の最初の画面行の Ctrl-y は何も変えない。
+    const auto scrolled = rows_answered(state, text.value(), nenenib::core::VimScrollUnit::row,
+                                        vim_keys_of("<C-e>").front());
+    const auto *const line_down = std::get_if<VimNavigate>(&scrolled.effect);
+    expect(line_down != nullptr && line_down->first_visible == LineNumber{1} &&
+               line_down->first_row == 1 &&
+               line_down->selection.caret == nenenib::core::Offset{10} && line_down->keeps_top,
+           "the row unit Ctrl-e moves the top one screen row and pushes the caret into the window");
+    const auto held = rows_answered(state, text.value(), nenenib::core::VimScrollUnit::row,
+                                    vim_keys_of("<C-y>").front());
+    const auto *const line_up = std::get_if<VimNavigate>(&held.effect);
+    expect(line_up != nullptr && line_up->first_row == 0 &&
+               line_up->selection.caret == nenenib::core::Offset{2} && !held.failure.has_value(),
+           "the row unit Ctrl-y at the first screen row changes nothing and does not fail");
+    // 回数は本文の最後の画面行で止まり（5 画面行の行で最後の段・first_row 4
+    // が先頭）、上へ出たキャレットは同じ 桁で最上段へ。最後の画面行が先頭の窓の Ctrl-e
+    // は何も変えず失敗もしない（後半の端）。
+    const auto counted = vim_state_after("5", VimEditorView{text.value(), origin, std::nullopt});
+    const auto clamped = rows_answered(counted, text.value(), nenenib::core::VimScrollUnit::row,
+                                       vim_keys_of("<C-e>").front());
+    const auto *const to_last = std::get_if<VimNavigate>(&clamped.effect);
+    expect(to_last != nullptr && to_last->first_row == 4 &&
+               to_last->selection.caret == nenenib::core::Offset{34} &&
+               !clamped.failure.has_value(),
+           "the row unit 5 Ctrl-e stops the top at the last screen row and keeps the column");
+    const auto at_end =
+        rows_walked(state, text.value(),
+                    UnitKey{nenenib::core::VimScrollUnit::row, vim_keys_of("<C-e>").front()},
+                    RowStart{nenenib::core::Offset{34}, 4});
+    const auto *const end_held = std::get_if<VimNavigate>(&at_end.effect);
+    expect(end_held != nullptr && end_held->first_row == 4 &&
+               end_held->selection.caret == nenenib::core::Offset{34} &&
+               !at_end.failure.has_value(),
+           "the row unit Ctrl-e at the last screen row changes nothing and does not fail");
 }
 
 // 縦の位置合わせの替え玉（ADR 0146 の決定 5・8）。どの行も grid_width 字ごとに折り返し、

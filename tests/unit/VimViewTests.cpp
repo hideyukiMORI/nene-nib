@@ -19,12 +19,15 @@
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
+#include "StoreVimRegister.hpp"
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
+#include "VimRegister.hpp"
+#include "VimRegisterKind.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 
@@ -880,6 +883,49 @@ void verify_insert_page_edges()
                std::ranges::count(body, 'y') == 1 && moved.frame().first_visible != before,
            "#1149 a moving PgUp cancels the count of the insert");
 }
+
+// 再生（`@`）の中の最後の鍵が Ctrl-e なら、外側の `@a` の終わりも先頭を追従で戻さない（M1・
+// ADR 0019 の追補 #1232）。入れ子の `@b` も同じ 1 本の再生の口を通る。最後が `<C-e>j` なら j の
+// 追従が効く（keeps_top は残らない）。期待値は同じ鍵を直接打った結果（fixture で Vim と一致）。
+[[nodiscard]] std::pair<std::size_t, std::size_t> top_and_line(const EditorFrame &frame)
+{
+    return {frame.first_visible.value, frame.caret.position.line.value};
+}
+
+[[nodiscard]] std::pair<std::size_t, std::size_t> typed_directly(std::string_view keys)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    prepared(controller, "3");
+    vim_replay(controller, keys);
+    return top_and_line(controller.frame());
+}
+
+[[nodiscard]] std::pair<std::size_t, std::size_t> replayed_nested(std::string_view inner)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    prepared(controller, "3");
+    using nenenib::core::VimRegister;
+    using nenenib::core::VimRegisterKind;
+    applied(controller, nenenib::application::StoreVimRegister{
+                            'b', VimRegister{std::string(inner), VimRegisterKind::characters}});
+    applied(controller, nenenib::application::StoreVimRegister{
+                            'a', VimRegister{"@b", VimRegisterKind::characters}});
+    vim_replay(controller, "@a");
+    return top_and_line(controller.frame());
+}
+
+void verify_scroll_line_in_a_macro()
+{
+    const auto direct = typed_directly("50<C-e>");
+    expect(direct.first == 51U, "50<C-e> under so=3 keeps the top at line 51");
+    expect(replayed_nested("50\x05") == direct,
+           "a nested macro ending in 50<C-e> keeps the top the key put");
+    expect(replayed_nested("5\x05j") == typed_directly("5<C-e>j"),
+           "a nested macro ending in <C-e>j follows the caret after j");
+}
+
 } // namespace
 
 void verify_vim_view_scope()
@@ -903,5 +949,6 @@ void verify_vim_view_scope()
     verify_taller_than_window();
     verify_follow_reads_drawn_lines();
     verify_far_jump_with_large_margin();
+    verify_scroll_line_in_a_macro();
 }
 } // namespace nenenib::tests

@@ -199,6 +199,8 @@ namespace detail
     case VimSpecialKey::control_a:
     case VimSpecialKey::control_x:
     case VimSpecialKey::control_o:
+    case VimSpecialKey::control_e:
+    case VimSpecialKey::control_y:
         return VimStep{finished_input_wait(state), VimNoEffect{}};
     }
     std::unreachable();

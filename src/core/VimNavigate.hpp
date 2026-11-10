@@ -19,5 +19,9 @@ struct VimNavigate
     LineNumber first_visible;
     std::size_t first_row = 0;
     std::optional<std::size_t> first_column = std::nullopt;
+    // 先頭を scrolloff の追従に掛けずにそのまま置く（Vim の scroll_redraw が立てる VALID_TOPLINE・
+    // Ctrl-e Ctrl-y だけ・ADR 0019 の追補 #1232）。余白の寄せは engine が cursor_correct
+    // で済ませた。
+    bool keeps_top = false;
 };
 } // namespace nenenib::core

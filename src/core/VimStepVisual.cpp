@@ -478,6 +478,10 @@ namespace detail
     // VISUAL の Ctrl-o は Vim の nv_pcmark が checkclearopq で失敗する（#1037）。
     case VimSpecialKey::control_o:
         return failed(visual_unchanged(state), VimRepeatFailure::refused);
+    case VimSpecialKey::control_e:
+        return visual_acted(state, view, VimAction::scroll_line_down);
+    case VimSpecialKey::control_y:
+        return visual_acted(state, view, VimAction::scroll_line_up);
     }
     std::unreachable();
 }

@@ -3762,5 +3762,101 @@
       "column": 12,
       "leftcol": 0
     }
+  },
+  {
+    "name": "wrap-ctrl-e-pushes-the-caret",
+    "text": "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+    "keys": "<C-e>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 6,
+      "first_visible": 1,
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "wrap-ctrl-e-count-over-a-tall-line",
+    "text": "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+    "keys": "2<C-e>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 6,
+      "first_visible": 1,
+      "line": 3,
+      "column": 1
+    }
+  },
+  {
+    "name": "wrap-ctrl-e-stops-at-the-last-line",
+    "text": "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+    "keys": "9<C-e>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 6,
+      "first_visible": 8,
+      "line": 12,
+      "column": 1
+    }
+  },
+  {
+    "name": "wrap-ctrl-e-visual",
+    "text": "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+    "keys": "v2<C-e>d",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 6,
+      "first_visible": 1,
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "wrap-ctrl-y-tall-lines-push-the-caret",
+    "text": "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+    "keys": "<C-y>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 6,
+      "first_visible": 3,
+      "line": 7,
+      "column": 1
+    }
+  },
+  {
+    "name": "wrap-ctrl-y-count",
+    "text": "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+    "keys": "2<C-y>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 6,
+      "first_visible": 5,
+      "line": 10,
+      "column": 1
+    }
+  },
+  {
+    "name": "wrap-ctrl-y-keeps-the-column",
+    "text": "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+    "keys": "<C-y>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 6,
+      "first_visible": 3,
+      "line": 6,
+      "column": 3
+    }
+  },
+  {
+    "name": "wrap-ctrl-y-onto-the-tall-line",
+    "text": "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+    "keys": "3<C-y>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 6,
+      "first_visible": 5,
+      "line": 9,
+      "column": 1
+    }
   }
 ]
