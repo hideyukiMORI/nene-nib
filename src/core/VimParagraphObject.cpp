@@ -7,6 +7,7 @@
 #include "VimCaret.hpp"
 #include "VimMode.hpp"
 #include "VimMotionRange.hpp"
+#include "VimParagraphStart.hpp"
 #include "VimRegisterKind.hpp"
 #include "VimTextObjectCancel.hpp"
 #include "VimTextObjectScope.hpp"
@@ -63,22 +64,32 @@ constexpr std::size_t window_bytes = 64;
 
 // ------------------------------------------------------------------ 選択の無い所から
 
-// 同じ種類（空白行か段落の行か）の並びを後ろへ伸ばした最後の行。
+// 段落の行の並びが line で切れるか（Vim の current_par の startPS(lnum, 0, 0)・#1359）。空白行の
+// 並びは nroff のマクロの行でも改ページでも切れない（Vim も空白でない行だけに問う）。
+[[nodiscard]] bool run_breaks_at(const TextBuffer &text, std::size_t line, bool white)
+{
+    return !white && vim_paragraph_start(text, LineNumber{line});
+}
+
+// 同じ種類（空白行か段落の行か）の並びを後ろへ伸ばした最後の行。段落の行の並びは、次の行が
+// 段落の始まり（nroff のマクロの行・改ページ）なら伸ばさない。
 [[nodiscard]] std::size_t through_run(const TextBuffer &text, std::size_t line, bool white)
 {
     std::size_t end = line;
-    while (end < text.line_count() && line_is_white(text, end + 1) == white)
+    while (end < text.line_count() && line_is_white(text, end + 1) == white &&
+           !run_breaks_at(text, end + 1, white))
     {
         ++end;
     }
     return end;
 }
 
-// 段落か空白行の並びの先頭の行。
+// 段落か空白行の並びの先頭の行。段落の行の並びは、段落の始まりの行より前へ戻らない。
 [[nodiscard]] std::size_t run_start(const TextBuffer &text, std::size_t line, bool white)
 {
     std::size_t start = line;
-    while (start > 1 && line_is_white(text, start - 1) == white)
+    while (start > 1 && line_is_white(text, start - 1) == white &&
+           !run_breaks_at(text, start, white))
     {
         --start;
     }
@@ -154,25 +165,29 @@ constexpr std::size_t window_bytes = 64;
     return line == (backward ? 1 : text.line_count());
 }
 
-// 同じ種類の並びを向きの側へ伸ばした端の行。
+// 同じ種類の並びを向きの側へ伸ばした端の行。段落の行の並びは段落の始まりで切れる（後ろ向きは
+// 端の行が始まりなら、前向きは次の行が始まりなら止まる・Vim の startPS(start_lnum + (dir > 0))）。
 [[nodiscard]] std::size_t run_edge(const TextBuffer &text, std::size_t line, bool backward)
 {
     const bool white = line_is_white(text, line);
     std::size_t edge = line;
     while (!at_boundary(text, edge, backward) &&
-           line_is_white(text, neighbor(edge, backward)) == white)
+           line_is_white(text, neighbor(edge, backward)) == white &&
+           !run_breaks_at(text, backward ? edge : edge + 1, white))
     {
         edge = neighbor(edge, backward);
     }
     return edge;
 }
 
-// 1 つぶん広げる。i は隣の並び 1 つ、a はその先の並びまで 2 つ。
+// 1 つぶん広げる。i は隣の並び 1 つ、a はその先の並びまで 2 つ。2 つめの並びが 1 つめと同じ
+// 種類（段落の始まりで切れた段落の行どうし）なら 1 つめで止まる（Vim の prev_start_is_white）。
 [[nodiscard]] std::size_t extended_once(const TextBuffer &text, std::size_t line, bool backward,
                                         bool include)
 {
     const std::size_t edge = run_edge(text, neighbor(line, backward), backward);
-    if (!include || at_boundary(text, edge, backward))
+    if (!include || at_boundary(text, edge, backward) ||
+        line_is_white(text, neighbor(edge, backward)) == line_is_white(text, edge))
     {
         return edge;
     }
@@ -214,8 +229,9 @@ constexpr std::size_t window_bytes = 64;
     return text.line_start(LineNumber{line}) == text.line_end(LineNumber{line});
 }
 
-// 回数 1 つぶんの歩き（Vim の findpar の内側の for）。空でない行を 1 つ越えた後の、出発の行でない
-// 空の行で止まる。2 つめは本文の端で尽きなかったか（尽きたら端の行に留まる）。
+// 回数 1 つぶんの歩き（Vim の findpar の内側の for）。空でない行を 1 つ越えた後の（その行自身でも
+// よい）、出発の行でない段落の始まり（空の行・nroff のマクロの行・改ページ・#1359）で止まる。
+// 2 つめは本文の端で尽きなかったか（尽きたら端の行に留まる）。
 [[nodiscard]] std::pair<std::size_t, bool> paragraph_walk(const TextBuffer &text, std::size_t line,
                                                           bool backward)
 {
@@ -225,7 +241,7 @@ constexpr std::size_t window_bytes = 64;
     {
         const bool empty = line_is_empty(text, current);
         did_skip = did_skip || !empty;
-        if (!first && did_skip && empty)
+        if (!first && did_skip && vim_paragraph_start(text, LineNumber{current}))
         {
             return {current, true};
         }

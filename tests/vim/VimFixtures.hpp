@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 d433c06d244ea0da24674659d91c8ab875ef6e3f68849ab503979bfb896d073d / 3822 fixtures
+// fixtures.json: sha256 e1358143fb279ad2f6818cd594983f0c12e6dff2e5868c1f700cc4ceb6e82d54 / 3846 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3822> vim_fixtures{{
+constexpr std::array<VimFixture, 3846> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3695,6 +3695,30 @@ constexpr std::array<VimFixture, 3822> vim_fixtures{{
     {"paragraph-motion-empty-lines-forward", "x\n\n\ny", "j}", "x\n\n\ny", 4, 1, "", "", std::nullopt},
     {"paragraph-motion-empty-lines-d", "x\n\n\ny", "jd}", "x", 1, 1, "\n\ny\n", "V", std::nullopt},
     {"paragraph-motion-multibyte-last-char", "あい\n\nうえお", "2}x", "あい\n\nうえ", 3, 4, "お", "v", std::nullopt},
+    {"paragraph-macro-pp-forward", "a1 b1.\n.PP\nc1 d1.\ne1 f1.", "}", "a1 b1.\n.PP\nc1 d1.\ne1 f1.", 2, 1, "", "", std::nullopt},
+    {"paragraph-macro-pp-backward", "a1 b1.\n.PP\nc1 d1.\ne1 f1.", "G{", "a1 b1.\n.PP\nc1 d1.\ne1 f1.", 2, 1, "", "", std::nullopt},
+    {"paragraph-macro-pp-count", "a1 b1.\n.PP\nc1 d1.\ne1 f1.", "2}", "a1 b1.\n.PP\nc1 d1.\ne1 f1.", 4, 6, "", "", std::nullopt},
+    {"paragraph-macro-pp-dap", "a1 b1.\n.PP\nc1 d1.\ne1 f1.", "dap", ".PP\nc1 d1.\ne1 f1.", 1, 1, "a1 b1.\n", "V", std::nullopt},
+    {"paragraph-macro-pp-dip-below", "a1 b1.\n.PP\nc1 d1.\ne1 f1.", "jdip", "a1 b1.", 1, 1, ".PP\nc1 d1.\ne1 f1.\n", "V", std::nullopt},
+    {"paragraph-macro-sh-section", "a1\n.SH\nb1", "}", "a1\n.SH\nb1", 2, 1, "", "", std::nullopt},
+    {"paragraph-macro-p-with-argument", "a1\n.P x\nb1", "}", "a1\n.P x\nb1", 2, 1, "", "", std::nullopt},
+    {"paragraph-macro-longer-names-not", "a1\n.Px\nb1\n.Hx\nc1", "}", "a1\n.Px\nb1\n.Hx\nc1", 5, 2, "", "", std::nullopt},
+    {"paragraph-macro-ordinary-dot-lines-not", "a1\n.gitignore\n.py\n. P\n .PP\n.P\tx\nb1", "}", "a1\n.gitignore\n.py\n. P\n .PP\n.P\tx\nb1", 7, 2, "", "", std::nullopt},
+    {"paragraph-macro-lowercase-sh-pp", "echo\n.sh\n.pp\nx", "2}", "echo\n.sh\n.pp\nx", 3, 1, "", "", std::nullopt},
+    {"paragraph-macro-brace-lines-not", "a1\n{\n}\nb1", "}", "a1\n{\n}\nb1", 4, 2, "", "", std::nullopt},
+    {"paragraph-macro-formfeed-forward", "a b.\n\fc d.\ne", "}", "a b.\n\fc d.\ne", 2, 1, "", "", std::nullopt},
+    {"paragraph-macro-formfeed-sentence", "a b.\n\fc d.\ne", ")", "a b.\n\fc d.\ne", 2, 1, "", "", std::nullopt},
+    {"paragraph-macro-sentence-forward", "a1 b1.\n.PP\nc1 d1.\ne1 f1.", ")", "a1 b1.\n.PP\nc1 d1.\ne1 f1.", 2, 1, "", "", std::nullopt},
+    {"paragraph-macro-sentence-backward", "a1 b1\n.PP c\nd1", "G(", "a1 b1\n.PP c\nd1", 2, 1, "", "", std::nullopt},
+    {"paragraph-macro-sentence-from-macro-line", "a1 b1.\n.PP\nc1 d1.\ne1 f1.", "j0)", "a1 b1.\n.PP\nc1 d1.\ne1 f1.", 3, 1, "", "", std::nullopt},
+    {"paragraph-macro-sentence-last-line-fails", "a1.\n.PP", "G0)x", "a1.\n.PP", 2, 1, "", "", std::nullopt},
+    {"paragraph-macro-dis", "a1 b1.\n.PP\nc1 d1.\ne1 f1.", "jdis", "a1 b1.\nc1 d1.\ne1 f1.", 2, 1, ".PP\n", "V", std::nullopt},
+    {"paragraph-macro-das", "a1 b1.\n.PP\nc1 d1.\ne1 f1.", "jdas", "a1 b1.\ne1 f1.", 2, 1, ".PP\nc1 d1.\n", "V", std::nullopt},
+    {"paragraph-macro-visual-ap-extend", "a1\na2\n.PP\nb1\n\nc1", "Vjapd", "c1", 1, 1, "a1\na2\n.PP\nb1\n\n", "V", std::nullopt},
+    {"paragraph-macro-visual-ap-extend-back", "a1\na2\n.PP\nb1\n\nc1", "GVkapd", "a1\na2", 2, 1, ".PP\nb1\n\nc1\n", "V", std::nullopt},
+    {"paragraph-macro-visual-ip-extend", "a1\na2\n.PP\nb1\n\nc1", "Vjipd", "\nc1", 1, 1, "a1\na2\n.PP\nb1\n", "V", std::nullopt},
+    {"paragraph-macro-two-macros-dap", "x\n.PP\n.PP\ny", "jdap", "x\n.PP\ny", 2, 1, ".PP\n", "V", std::nullopt},
+    {"paragraph-macro-two-macros-count", "x\n.PP\n.PP\ny", "2}", "x\n.PP\n.PP\ny", 3, 1, "", "", std::nullopt},
     {"sentence-motion-forward", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", ")", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", 1, 10, "", "", std::nullopt},
     {"sentence-motion-count", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "2)", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", 1, 23, "", "", std::nullopt},
     {"sentence-motion-next-line", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "3)", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", 2, 1, "", "", std::nullopt},
