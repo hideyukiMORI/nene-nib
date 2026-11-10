@@ -14,6 +14,7 @@
 #include "VimLineEndStop.hpp"
 #include "VimMarkEdits.hpp"
 #include "VimMatchingPair.hpp"
+#include "VimScreenLine.hpp"
 #include "VimScreenPosition.hpp"
 #include "VimWordEndStop.hpp"
 #include "VimWordMotion.hpp"
@@ -360,11 +361,11 @@ namespace detail
     switch (position)
     {
     case VimScreenPosition::top:
-        return LineNumber{first.value + std::min(count - single_step, last.value - first.value)};
+        return vim_screen_top_line(first, count, view.text.line_count());
     case VimScreenPosition::middle:
         return LineNumber{first.value + (last.value - first.value) / 2};
     case VimScreenPosition::bottom:
-        return LineNumber{last.value - std::min(count - single_step, last.value - first.value)};
+        return vim_screen_bottom_line(last, count);
     }
     std::unreachable();
 }
@@ -422,11 +423,14 @@ namespace
                                 line, view.text.line_count());
 }
 
-// H M L の着地（画面の行の最初の非空白）。
-[[nodiscard]] Offset screen_first_non_blank(const VimEditorView &view, VimScreenPosition position,
-                                            std::size_t count)
+// H M L の着地（画面の行の最初の非空白）。オペレータの待ちでは余白の内側へ寄せない（Vim の
+// nv_scroll は op_type == OP_NOP のときだけ cursor_correct を呼ぶ・`4y3H` の戻り先は寄せない
+// 行で比べる・#1293）。
+[[nodiscard]] Offset screen_first_non_blank(const VimEditorView &view, const VimState &state,
+                                            VimScreenPosition position, std::size_t count)
 {
-    const LineNumber line = settled_screen_line(view, screen_line(view, position, count));
+    const LineNumber target = screen_line(view, position, count);
+    const LineNumber line = state.pending.has_value() ? target : settled_screen_line(view, target);
     return vim_first_non_blank(view.text, view.text.line_start(line));
 }
 
@@ -588,15 +592,15 @@ namespace
 }
 
 // H M L gg G の着地（行の最初の非空白）。
-[[nodiscard]] Offset line_jump_landing(const VimEditorView &view, VimMotion motion,
-                                       std::size_t count)
+[[nodiscard]] Offset line_jump_landing(const VimEditorView &view, const VimState &state,
+                                       VimMotion motion, std::size_t count)
 {
     if (motion == VimMotion::document_first || motion == VimMotion::document_last)
     {
         return vim_first_non_blank(view.text,
                                    view.text.line_start(document_line(view.text, count)));
     }
-    return screen_first_non_blank(view, screen_position_of(motion), count);
+    return screen_first_non_blank(view, state, screen_position_of(motion), count);
 }
 
 // `<Space>` `<BS>` の着地（行をまたぐ l h・ADR 0049）。
@@ -672,7 +676,7 @@ namespace detail
     case VimMotion::screen_bottom:
     case VimMotion::document_first:
     case VimMotion::document_last:
-        return line_jump_landing(view, motion, count);
+        return line_jump_landing(view, state, motion, count);
     case VimMotion::next_line:
     case VimMotion::previous_line:
         return other_line_landing(text, caret, motion == VimMotion::next_line, count);
