@@ -28,9 +28,16 @@ inline constexpr std::array<KeyVimSpecial, 12> vim_specials{
      {VK_NEXT, core::VimSpecialKey::page_down},
      {VK_DELETE, core::VimSpecialKey::delete_key}}};
 
-// 表に無い仮想キーは空（呼ぶ側は何も送らない）。
-[[nodiscard]] constexpr std::optional<core::VimSpecialKey> vim_special_for(WPARAM key) noexcept
+// 表に無い仮想キーは空（呼ぶ側は何も送らない）。Shift+Delete も空: Vim の `<S-Del>` は `<Del>`
+// と別の鍵で、通常モードの Shift+Delete（切り取り）とも紛れるので、鍵を増やさない（#1325 の
+// レビュー L2）。
+[[nodiscard]] constexpr std::optional<core::VimSpecialKey> vim_special_for(WPARAM key,
+                                                                           bool shifted) noexcept
 {
+    if (shifted && key == VK_DELETE)
+    {
+        return std::nullopt;
+    }
     for (const KeyVimSpecial entry : vim_specials)
     {
         if (entry.key == key)

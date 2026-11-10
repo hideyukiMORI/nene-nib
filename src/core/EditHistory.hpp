@@ -13,7 +13,8 @@
 namespace nenenib::core
 {
 // 直前のEditにeditを畳んだ結果（ADR 0015 / 0028）。inserted範囲内の編集と、その直前の
-// 削除を合成する。範囲から離れていれば空を返す。INSERTのundo単位を作る唯一の経路。
+// 削除と、その終わりから後ろの削除（INSERT の `<Del>`・#1325）を合成する。範囲から離れていれば
+// 空を返す。INSERTのundo単位を作る唯一の経路。
 // 畳んだ結果の restore は previous の値（最初の編集の瞬間のキャレット・ADR 0052 の決定 3）。
 [[nodiscard]] std::optional<Edit> absorbed(const Edit &previous, const Edit &edit);
 

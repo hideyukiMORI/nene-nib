@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 9efa3dcf17e7544535cbaf20f99b6a1ab39331e0969b4cc3617a1a099a3ab273 / 3628 fixtures
+// fixtures.json: sha256 4ac705783d8b004cb4ea3b468e7383f55a2010cc27820c35a9e3c0fab3bc54fe / 3633 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3628> vim_fixtures{{
+constexpr std::array<VimFixture, 3633> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3636,6 +3636,11 @@ constexpr std::array<VimFixture, 3628> vim_fixtures{{
     {"del-key-insert-dot", "abcdef\nabcdef", "i<Del>x<Esc>j0.", "xbcdef\nxbcdef", 2, 1, "", "", std::nullopt},
     {"del-key-insert-dot-after-a-beep", "abc\ndef", "jA<Del>x<Esc>k0.", "abcxdefx", 1, 4, "", "", std::nullopt},
     {"del-key-insert-undo", "abc\ndef", "A<Del>x<Esc>u", "abc\ndef", 1, 3, "", "", std::nullopt},
+    {"del-key-undo-between-typed-text", "abc", "ix<Del>y<Esc>u", "abc", 1, 1, "", "", std::nullopt},
+    {"del-key-undo-after-typed-text", "abc", "ixy<Del><Esc>u", "abc", 1, 1, "", "", std::nullopt},
+    {"del-key-undo-joins-at-the-line-end", "abc\ndef", "Ax<Del>y<Esc>u", "abc\ndef", 1, 3, "", "", std::nullopt},
+    {"del-key-undo-with-a-count", "abcdefgh", "2ix<Del>y<Esc>u", "abcdefgh", 1, 1, "", "", std::nullopt},
+    {"del-key-undo-twice-after-typed-text", "abcdef", "lix<Del><Del>y<Esc>u", "abcdef", 1, 2, "", "", std::nullopt},
     {"del-key-insert-after-an-arrow", "abcdef", "a<Left><Del>y<Esc>", "ybcdef", 1, 1, "", "", std::nullopt},
     {"del-key-insert-after-an-arrow-dot", "abcdef\nabcdef", "a<Right><Del>y<Esc>j0.", "abydef\nybcdef", 2, 1, "", "", std::nullopt},
     {"del-key-block-insert", "abcd\nefgh", "<C-v>jI<Del>x<Esc>", "xbcd\nefgh", 1, 1, "", "", std::nullopt},

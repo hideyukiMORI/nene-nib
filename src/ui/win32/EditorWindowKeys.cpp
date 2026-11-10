@@ -589,7 +589,7 @@ void EditorWindow::press_vim_key(WPARAM word)
         send(application::VimKeyPress{core::VimKey{core::VimCharacter{tab_character}}});
         return;
     }
-    const auto special = vim_special_for(word);
+    const auto special = vim_special_for(word, held(VK_SHIFT));
     if (special)
     {
         send(application::VimKeyPress{core::VimKey{special.value()}});
