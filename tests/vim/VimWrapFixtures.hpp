@@ -4,7 +4,7 @@
 
 // wrap-fixtures.json: sha256 c17ab99c82b8b73307d9166d0bdf77a8842bcec1765256fbbb16cb911c9b0900
 
-// measurement: sha256 b4bf3d1d1d97bdf6570cecc45ccb4d73f6b16c7d1678ea52a7c7136ed68b9c6d
+// measurement: sha256 4f48b1c81d44d1a648ecde42c8b3a679af91e39f8ff855c97ae71d40a22bb1fe
 
 // shared oracle: sha256 0c0b05bff3c2332715aa09a970cf3f6df4bc985716a48c52d094fca852c0598a
 

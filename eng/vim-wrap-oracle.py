@@ -164,7 +164,8 @@ def main() -> int:
     if any(fixture['text'].endswith('\n') for fixture in fixtures):
         raise ValueError("fixture text must not end with a newline")
     version = subprocess.run([str(oracle.VIM), "--version"], capture_output=True, check=True,
-                             text=True, creationflags=subprocess.CREATE_NO_WINDOW).stdout.splitlines()[0]
+                             text=True, encoding="utf-8", errors="replace",
+                             creationflags=subprocess.CREATE_NO_WINDOW).stdout.splitlines()[0]
     records = [measured(args.output / fixture['name'], fixture) for fixture in fixtures]
     (args.output / "results.json").write_text(json.dumps(records, ensure_ascii=False, indent=2),
                                              encoding="utf-8", newline="\n")

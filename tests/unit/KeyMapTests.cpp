@@ -697,6 +697,36 @@ void verify_failed_expansion()
     expect(mapped_line("yj", false) == 45U, "a key typed after a whole right side runs");
 }
 
+// 右辺の最後が Ctrl-e でも先頭は scrolloff の追従で戻らない（ADR 0019 の追補 #1232）。右辺は
+// 1 鍵ずつ流すので、最後の鍵の keeps_top がそのまま効く。`<C-e>j` で終われば j の追従が効く。
+// 期待値は同じ本文・窓・余白のマクロの fixture（viewport-ctrl-e-macro-）の Vim 9.1 の値。
+[[nodiscard]] std::pair<std::size_t, std::size_t> scrolled_by_right_side(char32_t typed_key)
+{
+    Editing editing(mapped_settings(
+        {MapRow{normal_only, "Q", "50<C-e>", true}, MapRow{normal_only, "W", "5<C-e>j", true}}));
+    std::string text;
+    for (std::size_t line = 1; line <= 30U; ++line)
+    {
+        text += (line < 10U ? "0" : "") + std::to_string(line) + (line < 30U ? "\n" : "");
+    }
+    open_vim_document(editing, std::move(text));
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(application::VisibleLines{10}));
+    static_cast<void>(run_ex(controller, "set so=3"));
+    vim_replay(controller, "6G");
+    static_cast<void>(typed(controller, typed_key));
+    const auto frame = controller.frame();
+    return {frame.first_visible.value, frame.caret.position.line.value};
+}
+
+void verify_scrolled_right_side()
+{
+    expect(scrolled_by_right_side(U'Q') == std::pair<std::size_t, std::size_t>{30U, 30U},
+           "a right side ending in 50<C-e> keeps the top at the last line under so=3");
+    expect(scrolled_by_right_side(U'W') == std::pair<std::size_t, std::size_t>{6U, 10U},
+           "a right side ending in <C-e>j follows the caret after j");
+}
+
 // 待ちの間の IME の確定は積んだ鍵を先に流し、WorkCompleted は待ちを保つ（決定 4）。
 void verify_flush_before_intents()
 {
@@ -851,6 +881,7 @@ void verify_key_map_scope()
     verify_ordinary_mode();
     verify_records_and_replay();
     verify_failed_expansion();
+    verify_scrolled_right_side();
     verify_flush_before_intents();
     verify_walk_and_size();
     verify_ex_commands();

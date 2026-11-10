@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 7fc2ef845e574ef08b61e58a3686b660db545ddcd312233852b7d5e4b78da998 / 3506 fixtures
+// fixtures.json: sha256 cef292437c415d38a3056664046b3240b1aac782e958c0c597442f3b5afb9a8a / 3511 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3506> vim_fixtures{{
+constexpr std::array<VimFixture, 3511> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3518,6 +3518,11 @@ constexpr std::array<VimFixture, 3506> vim_fixtures{{
     {"viewport-ctrl-y-is-not-repeated-by-dot", "01 abc\n02 abcd\n03 abcde\n04 abcdef\n05 abcdefg\n06 abcdefgh\n07 ab\n08 abc\n09 abcd\n10 abcde\n11 abcdef\n12 abcdefg\n13 abcdefgh\n14 ab\n15 abc\n16 abcd\n17 abcde\n18 abcdef\n19 abcdefg\n20 abcdefgh\n21 ab\n22 abc\n23 abcd\n24 abcde\n25 abcdef\n26 abcdefg\n27 abcdefgh\n28 ab\n29 abc\n30 abcd", "x<C-y>.", "01 abc\n02 abcd\n03 abcde\n04 abcdef\n05 abcdefg\n06 abcdefgh\n07 ab\n08 abc\n09 abcd\n10 abcde\n11 abcdef\n12 abcdefg\n13 abcdefgh\n4 ab\n5 abc\n16 abcd\n17 abcde\n18 abcdef\n19 abcdefg\n20 abcdefgh\n21 ab\n22 abc\n23 abcd\n24 abcde\n25 abcdef\n26 abcdefg\n27 abcdefgh\n28 ab\n29 abc\n30 abcd", 14, 1, "1", "v", VimViewportFixture{10, 6, 15, 1, 5, 5}},
     {"viewport-ctrl-y-then-ctrl-e-returns", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "4<C-y>4<C-e>", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 15, 1, "", "", VimViewportFixture{10, 10, 19, 1, 10, 5}},
     {"viewport-ctrl-y-in-a-small-window", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "2<C-y>", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 10, 1, "", "", VimViewportFixture{3, 10, 12, 1, 8, 1}},
+    {"viewport-ctrl-e-macro-ends-with-ctrl-e", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "@a", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 30, 1, "", "", VimViewportFixture{10, 1, 6, 1, 30, 5, 0, 0, 0, 0, 0, 0, 3}, VimMacroFixture{'a', "50<C-e>"}},
+    {"viewport-ctrl-e-macro-ends-with-ctrl-y", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "@a", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 24, 1, "", "", VimViewportFixture{10, 21, 25, 1, 18, 5, 0, 0, 0, 0, 0, 0, 3}, VimMacroFixture{'a', "3<C-y>"}},
+    {"viewport-ctrl-e-macro-ctrl-e-then-j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "@a", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 10, 1, "", "", VimViewportFixture{10, 1, 6, 1, 6, 5, 0, 0, 0, 0, 0, 0, 3}, VimMacroFixture{'a', "5<C-e>j"}},
+    {"viewport-ctrl-e-macro-with-a-count", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "3@a", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 10, 1, "", "", VimViewportFixture{10, 1, 6, 1, 7, 5, 0, 0, 0, 0, 0, 0, 3}, VimMacroFixture{'a', "2<C-e>"}},
+    {"viewport-ctrl-e-macro-again-with-at-at", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "@a@@", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 20, 1, "", "", VimViewportFixture{10, 1, 6, 1, 17, 5, 0, 0, 0, 0, 0, 0, 3}, VimMacroFixture{'a', "8<C-e>"}},
 }};
 } // namespace nenenib::tests
 // clang-format on
