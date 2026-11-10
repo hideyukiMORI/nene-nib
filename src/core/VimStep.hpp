@@ -84,11 +84,11 @@ struct VimStep
 [[nodiscard]] VimState vim_register_stored(const VimState &state, char name,
                                            const VimRegister &value);
 
-// 録画中なら打った鍵 keys をマクロの録画に積んだあとの状態（Vim の gotchars は打った鍵だけを
-// 録る・ADR 0176 の追補 33・#1312）。controller が `map` の表に当たった単位の左辺を、録画がその
-// 単位の前にも後にも立っているときに積む。engine の録画（vim_step に届いた打った鍵）も同じ 1 本を
-// 通る。録画していなければ何も変えない。
-[[nodiscard]] VimState vim_macro_typed(VimState state, std::span<const VimKey> keys);
+// 録画中なら打った鍵 keys を state のマクロの録画にその場で積む（Vim の gotchars は打った鍵だけを
+// 録る・ADR 0176 の追補 33・#1312）。controller が `map` の表に当たった単位の左辺を、録画が単位の
+// 前に立っていて右辺の最初の鍵の後にも立っているときに積む（追補 32）。engine の録画（vim_step に
+// 届いた打った鍵）も同じ 1 本を通る。録画していなければ何も変えない。
+void vim_macro_typed(VimState &state, std::span<const VimKey> keys);
 
 // 鍵 key を流す直前に OS のクリップボードを読むか（ADR 0051 の決定 3 と追補（#848）の決定 D）。
 // `"+` `"*` を選んでいるか、`@` の次の名前を待っている（`q` の待ちは含めない）か、INSERT の

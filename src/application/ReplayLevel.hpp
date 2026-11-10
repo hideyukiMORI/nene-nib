@@ -2,6 +2,7 @@
 
 #include "VimReplayKind.hpp"
 
+#include <cstddef>
 #include <cstdint>
 
 namespace nenenib::application
@@ -14,4 +15,6 @@ struct ReplayLevel
     std::uint32_t depth;
     core::VimReplayKind kind;
 };
+// 列の要素の大きさは今までの深さ（std::size_t）と同じ（表が空のときの費用を変えない）。
+static_assert(sizeof(ReplayLevel) == sizeof(std::size_t));
 } // namespace nenenib::application

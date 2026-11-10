@@ -789,23 +789,23 @@ namespace detail
     {
         return step;
     }
-    step.next = vim_macro_typed(std::move(step.next), std::span<const VimKey>{&key, 1U});
+    vim_macro_typed(step.next, std::span<const VimKey>{&key, 1U});
     return step;
 }
 } // namespace detail
 
-// 録画の書き手の 1 本（engine の macro_recorded と controller の打った左辺が通る・#1312）。
-VimState vim_macro_typed(VimState state, std::span<const VimKey> keys)
+// 録画の書き手の 1 本（engine の macro_recorded と controller の打った左辺が通る・#1312）。その場
+// で積む（録画中の鍵ごとに VimState を move しない）。
+void vim_macro_typed(VimState &state, std::span<const VimKey> keys)
 {
     if (!state.macro_recording.has_value())
     {
-        return state;
+        return;
     }
     auto &recording = state.macro_recording.value();
     for (const VimKey &key : keys)
     {
         recording.keys = recording.keys.appended(replayable(key));
     }
-    return state;
 }
 } // namespace nenenib::core

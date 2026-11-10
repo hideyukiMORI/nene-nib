@@ -1352,6 +1352,38 @@ void verify_recorded_typed_keys()
            "R20: a mapped q is j and cannot start recording");
 }
 
+// 右辺が録画を止める・始める形（R21〜R28）。左辺が録画から消えるのは右辺の最初の鍵が録画を
+// 止めたときだけで、右辺の途中で止めたら左辺は残る（Vim の get_recorded の last_recorded_len・
+// ADR 0176 の追補 32）。右辺が録画を始めたら、どの位置でも左辺は録らない。期待値は Vim 9.1 の実測
+// （`D:\NeNeNib\scripts\20261110\i12b\probe.vim`・`feedkeys(…, 'tx')`）。
+void verify_recording_edges()
+{
+    expect(probed_last({MapRow{normal_only, "Z", "jq", true}}, {"50GqajZ"}) ==
+               vim_line(52U, "rega=jZ regb="),
+           "R21: a right side that stops recording after j keeps the typed Z");
+    expect(probed_last({MapRow{normal_only, "Z", "qqb", true}}, {"50GqajZkq"}) ==
+               vim_line(50U, "rega=j regb=k"),
+           "R22: the first q drops Z and the next qb records only the typed k");
+    expect(probed_last({MapRow{normal_only, "Z", "jqqb", true}}, {"50GqajZkq"}) ==
+               vim_line(51U, "rega=jZ regb=k"),
+           "R23: a later q keeps Z in a and qb records only the typed k");
+    expect(probed_last({MapRow{normal_only, "Z", "Yq", true}, MapRow{normal_only, "Y", "j", true}},
+                       {"50GqajZ"}) == vim_line(52U, "rega=jZ regb="),
+           "R24: a remapped first key j keeps Z");
+    expect(probed_last({MapRow{normal_only, "Z", "Y", true}, MapRow{normal_only, "Y", "q", true}},
+                       {"50GqajZ"}) == vim_line(51U, "rega=j regb="),
+           "R25: a remapped first key q drops Z");
+    expect(probed_last({MapRow{normal_only, "Z", "qa", true}}, {"50GZjjq"}) ==
+               vim_line(52U, "rega=jj regb="),
+           "R26: a right side qa starts recording without Z");
+    expect(probed_last({MapRow{normal_only, "Z", "jqa", true}}, {"50GZjq"}) ==
+               vim_line(52U, "rega=j regb="),
+           "R27: a right side that starts recording after j does not record Z");
+    expect(probed_last({MapRow{normal_only, "Z", "qajq", true}}, {"50GZ"}) ==
+               vim_line(51U, "rega= regb="),
+           "R28: a right side that starts and stops recording leaves a empty");
+}
+
 // `@a` `@@` `[count]@a` と本文から作ったレジスタは流す時点の表で引く（R2 R3 R4b R6b R7 R11 R12
 // R13 R17c R19）。`.` は引かない（R17b）。
 void verify_macro_replay_maps()
@@ -1405,8 +1437,9 @@ void verify_macro_waiting_keys()
 }
 
 // 表が空の editor と、どの行にも当たらない表の editor で、同じ鍵の列（録画・再生・`.`・INSERT）の
-// 本文とキャレットとレジスタ a b が一致する（固定 seed）。
-[[nodiscard]] std::string macro_run(std::vector<MapRow> rows, std::span<const std::string> words)
+// 本文とキャレットの行と列とレジスタ a b が一致する（固定 seed）。second は再生の中の待ちの回数。
+[[nodiscard]] std::pair<std::string, std::size_t> macro_run(std::vector<MapRow> rows,
+                                                            std::span<const std::string> words)
 {
     Editing editing(mapped_settings(std::move(rows)));
     open_vim_document(editing, "abc def\nghi jkl\nmno pqr\nstu vwx\n");
@@ -1416,10 +1449,12 @@ void verify_macro_waiting_keys()
         vim_replay(controller, word);
     }
     static_cast<void>(controller.apply(application::MapTimeout{}));
-    return whole_vim_body(controller) + "|" +
-           std::to_string(controller.frame().caret.position.line.value) + "|" +
-           shown_register(controller.vim_state(), U'a') + "|" +
-           shown_register(controller.vim_state(), U'b');
+    const auto caret = controller.frame().caret.position;
+    return {whole_vim_body(controller) + "|" + std::to_string(caret.line.value) + ":" +
+                std::to_string(caret.column.value) + "|" +
+                shown_register(controller.vim_state(), U'a') + "|" +
+                shown_register(controller.vim_state(), U'b'),
+            controller.replay_waits()};
 }
 
 void verify_unmatched_table_property()
@@ -1427,13 +1462,18 @@ void verify_unmatched_table_property()
     constexpr std::array<std::string_view, 16> words{"qa", "qb",      "q",  "x",  "j",   "k",
                                                      "w",  "b",       "@a", "@b", "2@a", "@@",
                                                      ".",  "iy<Esc>", "u",  "dd"};
+    // `xQ` と `yQ` は語の頭の鍵で始まって完結しない左辺で、打った `x` `y` と再生の中の `x` を
+    // 待たせて次の鍵（列の終わり）で流す（打った鍵の待ちと時間切れ・replay_pending_ と flush
+    // の道）。
     const std::vector<MapRow> unmatched{
-        MapRow{normal_only, "Q", "dd", true}, MapRow{normal_only, "Zx", "G", true},
+        MapRow{normal_only, "Q", "dd", true},     MapRow{normal_only, "Zx", "G", true},
         MapRow{insert_only, "Q", "<Esc>", false}, MapRow{visual_set, "Q", "d", true},
-        MapRow{pending_only, "Q", "w", true}};
+        MapRow{pending_only, "Q", "w", true},     MapRow{normal_only, "xQ", "G", true},
+        MapRow{insert_only, "yQ", "Z", true}};
     Random random{1312U};
     constexpr std::size_t cases = 200U;
     std::size_t agreed = 0;
+    std::size_t waits = 0;
     for (std::size_t round = 0; round < cases; ++round)
     {
         std::vector<std::string> picked;
@@ -1442,10 +1482,16 @@ void verify_unmatched_table_property()
         {
             picked.emplace_back(words.at(random() % words.size()));
         }
-        agreed += macro_run({}, picked) == macro_run(unmatched, picked) ? 1U : 0U;
+        const auto [plain, plain_waits] = macro_run({}, picked);
+        const auto [mapped, mapped_waits] = macro_run(unmatched, picked);
+        expect(plain_waits == 0U, "an empty table never waits inside a replay");
+        agreed += plain == mapped ? 1U : 0U;
+        waits += mapped_waits;
     }
     expect(agreed == cases,
            "an empty table and a table that never matches record and replay the same keys");
+    // 再生の中で `x` を待った回数（固定 seed 1312 の 200 件の数え値・待ちと flush の道を通る）。
+    expect(waits == 103U, "the replays wait on x and flush it the expected times");
 }
 } // namespace
 
@@ -1478,6 +1524,7 @@ void verify_key_map_scope()
     verify_ex_commands();
     verify_ex_parsing();
     verify_recorded_typed_keys();
+    verify_recording_edges();
     verify_macro_replay_maps();
     verify_macro_waiting_keys();
     verify_unmatched_table_property();

@@ -186,6 +186,9 @@ class EditorController final
     // 無名レジスタと Vim のモードは表示値に載らないので、fixture の再生だけがここを読む
     // （ADR 0012 の決定 7）。状態を変える口はここには無い。
     [[nodiscard]] const core::VimState &vim_state() const noexcept;
+    // `@` の再生の中で `map` の左辺の途中まで読んで待った回数（起動からの累計・#1312）。性質の
+    // 試験が待ちと flush の道を通ったことを確かめるための口で、状態を変えない。
+    [[nodiscard]] std::size_t replay_waits() const noexcept;
     // Ctrl+Tab で歩いている間だけ真（ADR 0058 の決定 4）。窓が Ctrl を離したとき・フォーカスを
     // 失ったときに SettleRecentTab を送るかを決めるための口で、状態の 1 欄を読むだけ。
     [[nodiscard]] bool tab_walking() const noexcept;
@@ -250,14 +253,18 @@ class EditorController final
     [[nodiscard]] std::optional<core::VimRepeatFailure>
     delivered_unit(std::span<const core::VimKey> plain, std::span<const core::VimKey> remapped);
     // 打った鍵の入口の 1 単位。表に当たった単位は右辺の鍵として（engine はマクロに積まない）流し、
-    // 録画が単位の前にも後にも立っていれば打った左辺 lhs を core の vim_macro_typed で録画に積む
-    // （Vim の gotchars は打った鍵だけを録る・ADR 0176 の追補 33・#1312）。
+    // 録画が単位の前に立っていれば打った左辺 lhs を右辺の最初の鍵の後で録画に積む。最初の鍵が
+    // 録画を止めたら左辺も録らない（Vim の get_recorded が消すのは `q` を返した vgetc の間に録った
+    // 鍵だけ・`nmap Z jq` は Z を残す・ADR 0176 の追補 32・33・#1312）。
     [[nodiscard]] std::optional<core::VimRepeatFailure>
     typed_unit(bool mapped, std::span<const core::VimKey> lhs, std::span<const core::VimKey> plain,
                std::span<const core::VimKey> remapped);
-    // keys を順に deliver_vim_key へ流し、失敗した鍵で止めてその答えを返す。
+    // keys を順に deliver_vim_key へ流し、失敗した鍵で止めてその答えを返す。鍵を 1 つ流したら
+    // 置いてある左辺を recorded_held_lhs で積む。
     [[nodiscard]] std::optional<core::VimRepeatFailure>
     delivered_keys(std::span<const core::VimKey> keys);
+    // typed_unit が置いた左辺を、まだ録画が立っていれば録画に積んで消す（追補 32・#1312）。
+    void recorded_held_lhs();
     // 読んでいない鍵の列 rest を引き直す。表を引けないモードの間は 1 鍵ずつそのまま流し、引ける
     // モードになったら最後の 1 鍵の前までを待ちに置いて打った鍵の入口で引く。
     [[nodiscard]] std::optional<core::VimRepeatFailure>
@@ -942,6 +949,11 @@ class EditorController final
     // 再生の外で engine に流す鍵の出どころ（typed か mapped）。typed_unit が表に当たった単位の
     // 間だけ mapped にする。再生の中は replayed が勝つ（measured_vim_step）。
     core::VimKeySource unit_source_ = core::VimKeySource::typed;
+    // 表に当たった単位の打った左辺で、右辺の最初の鍵を流した後に録画へ積むもの（#1312）。
+    // typed_unit が録画中にだけ置き（ScopedValue で戻す）、recorded_held_lhs が積んで消す。
+    std::optional<std::span<const core::VimKey>> held_lhs_;
+    // replay_waits の数（replayed_step の Pending だけが足す）。
+    std::size_t replay_waits_ = 0;
     // 再生を打ち切った鍵の失敗（Issue #983）。perform(VimReplay) が置き、`.` や `@` を打った鍵の
     // deliver_vim_key が自分の失敗として返して消す（Vim の :normal! は残りの鍵を捨てる）。
     std::optional<core::VimRepeatFailure> replay_failure_;

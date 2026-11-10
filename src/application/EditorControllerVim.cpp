@@ -17,6 +17,7 @@
 #include "MapTimeout.hpp"
 #include "MapTimer.hpp"
 #include "ReplayLevel.hpp"
+#include "ScopedValue.hpp"
 #include "ScrollFollow.hpp"
 #include "SearchLine.hpp"
 #include "SearchPreview.hpp"
@@ -451,8 +452,10 @@ EditorController::delivered_units(const core::KeyMapEmit &emitted,
 }
 
 // 表に当たった単位の鍵は右辺の鍵（mapped）として流し、engine はマクロに積まない。代わりに打った
-// 左辺を、録画が単位の前にも後にも立っているときだけ積む（止める `q` や始める `qa` を右辺が流した
-// ら左辺ごと録らない・Vim の R14 R15・ADR 0176 の追補 33・#1312）。
+// 左辺を、録画が単位の前に立っていれば右辺の最初の鍵の後で積む。最初の鍵が止める `q` なら左辺も
+// 録らず（R14・`nmap , q`）、2 つ目以降の `q` なら左辺は残る（`nmap Z jq` の `qajZ` は `jZ`）。
+// 右辺が録画を始めたら左辺は録らない（R15・Vim の gotchars は左辺を読んだ時点で録る・ADR 0176 の
+// 追補 32・33・#1312）。
 std::optional<core::VimRepeatFailure>
 EditorController::typed_unit(bool mapped, std::span<const core::VimKey> lhs,
                              std::span<const core::VimKey> plain,
@@ -462,15 +465,26 @@ EditorController::typed_unit(bool mapped, std::span<const core::VimKey> lhs,
     {
         return delivered_unit(plain, remapped);
     }
-    const bool recording = state_.vim().macro_recording.has_value();
-    unit_source_ = core::VimKeySource::mapped;
+    using HeldLhs = std::optional<std::span<const core::VimKey>>;
+    const ScopedValue<core::VimKeySource> source{unit_source_, core::VimKeySource::mapped};
+    const ScopedValue<HeldLhs> held{
+        held_lhs_, state_.vim().macro_recording.has_value() ? HeldLhs{lhs} : HeldLhs{}};
     auto failure = delivered_unit(plain, remapped);
-    unit_source_ = core::VimKeySource::typed;
-    if (recording && state_.vim().macro_recording.has_value())
-    {
-        state_ = state_.with_vim(core::vim_macro_typed(state_.vim(), lhs));
-    }
+    recorded_held_lhs();
     return failure;
+}
+
+void EditorController::recorded_held_lhs()
+{
+    if (!held_lhs_.has_value())
+    {
+        return;
+    }
+    const auto lhs = held_lhs_.value();
+    held_lhs_ = std::nullopt;
+    auto vim = state_.vim();
+    core::vim_macro_typed(vim, lhs);
+    state_ = state_.with_vim(std::move(vim));
 }
 
 // plain はそのまま、remapped は 1 鍵ごとに流す時点のモードで 1 段だけ引き直して流す（Vim は
@@ -502,6 +516,7 @@ EditorController::delivered_keys(std::span<const core::VimKey> keys)
     for (const core::VimKey &key : keys)
     {
         auto failure = deliver_vim_key(key);
+        recorded_held_lhs();
         if (failure.has_value())
         {
             return failure;
@@ -1175,6 +1190,11 @@ void EditorController::perform(const core::VimReplay &effect)
     state_ = state_.with_history(state_.history().sealed());
 }
 
+std::size_t EditorController::replay_waits() const noexcept
+{
+    return replay_waits_;
+}
+
 void EditorController::replayed_plain_queue()
 {
     while (!replay_queue_.empty())
@@ -1261,6 +1281,7 @@ std::optional<core::VimRepeatFailure>
 EditorController::replayed_step(core::KeyMapPending /*pending*/, const core::VimKey &key)
 {
     replay_pending_.push_back(key);
+    ++replay_waits_;
     return std::nullopt;
 }
 
