@@ -296,6 +296,7 @@ class EditorWindow final
     void lose_explorer_divider();
     [[nodiscard]] bool reset_explorer_width(LPARAM data);
     void hover_explorer_divider(LPARAM data);
+    void end_hidden_explorer_drag();
     void release_left(LPARAM data);
     [[nodiscard]] bool explorer_divider_cursor(LPARAM data) const;
     [[nodiscard]] std::int32_t explorer_width_at(std::int32_t x) const;
@@ -343,7 +344,7 @@ class EditorWindow final
     void read_wheel_setting();
     [[nodiscard]] application::VisibleLines body_view() const;
     [[nodiscard]] core::PaneLayouts body_panes(const core::EditorSettings &settings) const;
-    [[nodiscard]] core::ExplorerLayout explorer_frame(const core::EditorSettings &settings) const;
+    [[nodiscard]] core::ExplorerLayout explorer_frame(core::FontSize font_size) const;
     [[nodiscard]] core::BodyLayout active_body(const core::EditorSettings &settings) const;
 
     HINSTANCE instance_;

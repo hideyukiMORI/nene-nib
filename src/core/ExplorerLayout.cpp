@@ -55,14 +55,20 @@ std::int32_t explorer_panel_width(std::int32_t client_width, std::uint32_t dpi,
             std::min(to_pixels(panel_width_dips, dpi), client_width * panel_width_percent / 100),
             0);
     }
-    return clamped_panel_pixels(to_pixels(width.dips.value(), dpi), client_width, dpi);
+    return clamped_panel_pixels(to_pixels(explorer_width_clamped(width.dips.value()), dpi),
+                                client_width, dpi);
+}
+
+std::int32_t explorer_width_clamped(std::int32_t dips) noexcept
+{
+    return std::clamp(dips, explorer_width_minimum_dips, explorer_width_limit_dips);
 }
 
 std::int32_t explorer_dragged_width(std::int32_t client_width, std::uint32_t dpi,
                                     std::int32_t panel_pixels) noexcept
 {
     const std::int32_t dips = to_dips(clamped_panel_pixels(panel_pixels, client_width, dpi), dpi);
-    return std::clamp(dips, explorer_width_minimum_dips, explorer_width_limit_dips);
+    return explorer_width_clamped(dips);
 }
 
 bool explorer_divider_hit(const ExplorerLayout &layout, std::uint32_t dpi, std::int32_t x,

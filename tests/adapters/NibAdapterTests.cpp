@@ -729,6 +729,15 @@ void verify_older_settings_versions()
     const auto v1 = "version=1\n" + common.substr(0, common.rfind("guide="));
     expect(!decode_settings(v1 + "guide=on\n", SettingsVersion::v1), "v1 rejects guide");
     expect(!decode_settings(v1 + "wrap=on\n", SettingsVersion::v1), "v1 rejects wrap");
+    // 後から足した v4 の鍵 explorer_width も旧版では未知の鍵として拒否する（#1380 の T-5）。
+    for (const auto width : {"explorer_width=300\n", "explorer_width=\n"})
+    {
+        const auto in_v2 = decode_settings(v2 + width, SettingsVersion::v2);
+        const auto in_v1 = decode_settings(v1 + width, SettingsVersion::v1);
+        expect(!in_v2 && in_v2.error() == SettingsFailure::malformed && !in_v1 &&
+                   in_v1.error() == SettingsFailure::malformed,
+               "v1 and v2 reject explorer_width");
+    }
     const auto wrong_old = decode_settings(v1, SettingsVersion::v4);
     expect(!wrong_old && wrong_old.error() == SettingsFailure::unsupported_version,
            "a v1 document is not read as v4");
@@ -879,6 +888,16 @@ void verify_settings_explorer_width(const std::string &bytes)
     }
     expect(!decode_settings(chosen + "explorer_width=200\n", SettingsVersion::v4),
            "a duplicate explorer_width is refused like every key");
+    for (const auto edge : {120, 9999})
+    {
+        const auto read = decode_settings(
+            with_setting(bytes, "explorer_width", std::to_string(edge)), SettingsVersion::v4);
+        expect(read && read.value().explorer_width == edge,
+               "the range edges 120 and 9999 are read as chosen widths");
+    }
+    const auto empty_twice = decode_settings(bytes + "explorer_width=\n", SettingsVersion::v4);
+    expect(!empty_twice && empty_twice.error() == SettingsFailure::malformed,
+           "two empty explorer_width lines are refused as a duplicate");
     expect(!same_settings(settings, default_editor_settings()),
            "the width takes part in the settings comparison");
 }

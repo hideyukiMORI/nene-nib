@@ -46,9 +46,14 @@ inline constexpr std::int32_t explorer_width_limit_dips = 9999;
 [[nodiscard]] std::int32_t explorer_panel_width(std::int32_t client_width, std::uint32_t dpi,
                                                 ExplorerWidth width) noexcept;
 
+// 使う人が決める幅（DIP）を [explorer_width_minimum_dips, explorer_width_limit_dips] に収める 1 本
+// （D78・Issue #1380）。ドラッグの幅を求める所と、意図 ResizeExplorer を受ける controller の入口が
+// 共用し、設定に書く値は常に自分の読み explorer_width_of で読める。INT32_MAX や負の値でも溢れない。
+[[nodiscard]] std::int32_t explorer_width_clamped(std::int32_t dips) noexcept;
+
 // 境のドラッグで面の右端を panel_pixels（client の左からの物理画素）に置いたときに覚える幅
 // （DIP）。explorer_panel_width と同じ範囲に切り詰めた画素を DIP へ直し（切り捨て）、
-// [explorer_width_minimum_dips, explorer_width_limit_dips] に収める（設定の値として常に読める）。
+// explorer_width_clamped で収める（設定の値として常に読める）。
 [[nodiscard]] std::int32_t explorer_dragged_width(std::int32_t client_width, std::uint32_t dpi,
                                                   std::int32_t panel_pixels) noexcept;
 
@@ -58,7 +63,8 @@ inline constexpr std::int32_t explorer_width_limit_dips = 9999;
                                         std::int32_t x, std::int32_t y) noexcept;
 
 // 設定 explorer_width の値（10 進・先頭の 0 なし・explorer_width_minimum_dips〜
-// explorer_width_limit_dips）。空と形の違う値は値なし（既定の式・D78 の「壊れた値は既定」）。
+// explorer_width_limit_dips）。空と形の違う値は値なし（既定の式・Issue #1380 の設計席の決め・ADR
+// 0170 の追補）。
 [[nodiscard]] std::optional<std::int32_t> explorer_width_of(std::string_view text) noexcept;
 
 // 面の高さ（本文の帯の全高）に入る行数（先頭のルート名の行を含む・切り捨て・#1125）。面が

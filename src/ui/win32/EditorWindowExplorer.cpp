@@ -74,8 +74,7 @@ void EditorWindow::press_explorer_key(WPARAM word)
 // 木の行の数（行の外・controller は何もしない・押した印は消す）。
 std::optional<std::size_t> EditorWindow::explorer_row_at(LPARAM data) const
 {
-    const auto settings = controller_.delivery().settings;
-    const auto layout = explorer_frame(settings);
+    const auto layout = explorer_frame(controller_.font_size());
     const auto x = low_word_of(data);
     const auto y = high_word_of(data);
     if (!layout.panel.has_value() || !core::contains(layout.panel.value(), x, y) ||
@@ -166,7 +165,7 @@ bool EditorWindow::explorer_divider_at(std::int32_t x, std::int32_t y) const
     {
         return false;
     }
-    return core::explorer_divider_hit(explorer_frame(controller_.delivery().settings), dpi_, x, y);
+    return core::explorer_divider_hit(explorer_frame(controller_.font_size()), dpi_, x, y);
 }
 
 // 面の右端を点 x に置いたときに覚える幅（DIP）。押した点と右端のずれを引く。
@@ -185,7 +184,7 @@ bool EditorWindow::press_explorer_divider(LPARAM data)
     {
         return false;
     }
-    const auto panel = explorer_frame(controller_.delivery().settings).panel;
+    const auto panel = explorer_frame(controller_.font_size()).panel;
     SetCapture(window_);
     if (GetCapture() == window_ && panel.has_value())
     {
@@ -257,6 +256,24 @@ void EditorWindow::lose_explorer_divider()
     }
 }
 
+// ドラッグの途中で面が閉じた（ToggleExplorer・`:set noexplorer` など・follow_explorer が呼ぶ）。
+// ドラッグは終わりで、幅は送らない（controller もドラッグの幅を捨て、設定は覚えた値のまま・
+// Issue #1380 の設計席の決め）。捕まえを放すと WM_CAPTURECHANGED が lose_explorer_divider へ戻る
+// ので、先に印を消す。境のカーソルの印も消す（面が無いので境も無い）。
+void EditorWindow::end_hidden_explorer_drag()
+{
+    over_explorer_divider_ = false;
+    if (!std::exchange(explorer_grab_offset_, std::nullopt).has_value())
+    {
+        return;
+    }
+    explorer_dragged_.reset();
+    if (GetCapture() == window_)
+    {
+        ReleaseCapture();
+    }
+}
+
 // 境のダブルクリックは既定の幅（今の式）へ戻す。境の上でなければ偽。
 bool EditorWindow::reset_explorer_width(LPARAM data)
 {
@@ -272,9 +289,12 @@ bool EditorWindow::reset_explorer_width(LPARAM data)
 
 // WM_MOUSEMOVE の点が境に載ったか・外れたか。変わったときだけカーソルを置き直す（点はメッセージの
 // 値から読み、OS のカーソルの位置は読まない・ARC-007）。ドラッグの間は捕まえているので変えない。
+// ほかの要素を押している間（本文・全面プレビューの選択のドラッグ・面の行・帯）も、境を横切って
+// カーソルを変えない（Issue #1380 の R-3）。
 void EditorWindow::hover_explorer_divider(LPARAM data)
 {
-    if (explorer_grab_offset_.has_value())
+    if (explorer_grab_offset_.has_value() || selecting_ || preview_dragging_ || explorer_pressed_ ||
+        left_pressed_.has_value())
     {
         return;
     }
@@ -305,7 +325,7 @@ bool EditorWindow::over_explorer(LPARAM data) const
     // WM_MOUSEWHEEL の位置は画面の座標なので、クライアントの座標に直してから見る。
     POINT point{low_word_of(data), high_word_of(data)};
     ScreenToClient(window_, &point);
-    const auto panel = explorer_frame(controller_.delivery().settings).panel;
+    const auto panel = explorer_frame(controller_.font_size()).panel;
     return panel.has_value() && core::contains(panel.value(), point.x, point.y);
 }
 } // namespace nenenib::ui::win32

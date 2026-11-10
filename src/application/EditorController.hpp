@@ -53,6 +53,7 @@
 #include "FindPhase.hpp"
 #include "FolderBatch.hpp"
 #include "FontFamilies.hpp"
+#include "FontSize.hpp"
 #include "GridLineMarks.hpp"
 #include "GridRowView.hpp"
 #include "GridTally.hpp"
@@ -177,6 +178,10 @@ class EditorController final
     // 面が消えていれば値なし。窓が境の当たり・面と本文の配置を引く安い読みで、frame を作らない
     // （マウスの動くたびに呼ばれる）。frame の ExplorerView.width と同じ値。
     [[nodiscard]] std::optional<core::ExplorerWidth> explorer_width() const noexcept;
+    // 字の大きさ（保存した値・配色の重ねは字の大きさを変えないので delivery().settings と同じ値）。
+    // 窓がマウスの動くたびに面の配置を引く安い読みで、delivery を作らない（title_bar_input と同じ
+    // 形・Issue #1380 の R-2）。
+    [[nodiscard]] core::FontSize font_size() const noexcept;
     // 帯の配置の入力を状態の 4 つの値（タブの本数・アクティブの位置・送り量・マウスを載せた要素）
     // から読むだけの口。行も題名も作らない（ADR 0056 の決定 9）。窓の hit test と hover が
     // マウスの動くたびに呼ぶ。width は帯の幅（物理画素）。値は title_bar_input(frame(), ...)

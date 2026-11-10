@@ -3,6 +3,7 @@
 #include "EditorControllerDetail.hpp"
 #include "ExplorerEntry.hpp"
 #include "ExplorerFolder.hpp"
+#include "ExplorerLayout.hpp"
 #include "ExplorerNode.hpp"
 #include "ExplorerResizing.hpp"
 #include "ExplorerRow.hpp"
@@ -19,6 +20,7 @@
 #include "FolderListingKind.hpp"
 #include "FolderProgress.hpp"
 #include "FolderRequest.hpp"
+#include "FontSize.hpp"
 #include "ResizeExplorer.hpp"
 
 #include <algorithm>
@@ -265,7 +267,10 @@ void EditorController::accept(const ExplorerRootChosen &intent)
 // 面の幅のドラッグ（ADR 0162 の追補・施主決定 D78）。動かしている間は幅を状態に置くだけで設定に
 // 書かない。離したら動かした幅を、ダブルクリックなら「無し」（既定の式）を persist_settings の 1 本
 // で 1 回書く（同じ値なら書かない）。動かさずに離したときは書かない（押しただけで既定の式を
-// 数字に変えない）。面が消えていれば何もしない（ドラッグの印だけ消す）。
+// 数字に変えない）。面が消えていれば何もしない（ドラッグの印だけ消す）。幅は入口で
+// core::explorer_width_clamped の 1 本に収める（窓を経ない送り手でも、書いた値を自分の読みで
+// 既定に戻さない・溢れない）。ドラッグの途中で面が閉じたら、設定の 1 本 sync_explorer がドラッグの
+// 幅を捨てる。
 void EditorController::accept(const ResizeExplorer &intent)
 {
     if (!state_.settings().explorer)
@@ -273,18 +278,19 @@ void EditorController::accept(const ResizeExplorer &intent)
         explorer_dragged_.reset();
         return;
     }
+    const auto width = core::explorer_width_clamped(intent.width_dips);
     auto settings = state_.settings();
     switch (intent.resizing)
     {
     case ExplorerResizing::dragged:
-        explorer_dragged_ = intent.width_dips;
+        explorer_dragged_ = width;
         return;
     case ExplorerResizing::released:
         if (!std::exchange(explorer_dragged_, std::nullopt).has_value())
         {
             return;
         }
-        settings.explorer_width = intent.width_dips;
+        settings.explorer_width = width;
         break;
     case ExplorerResizing::reset:
         explorer_dragged_.reset();
@@ -295,6 +301,11 @@ void EditorController::accept(const ResizeExplorer &intent)
     {
         reject(core::DisplayText::parse("Settings could not be saved").value());
     }
+}
+
+core::FontSize EditorController::font_size() const noexcept
+{
+    return state_.settings().font_size;
 }
 
 std::optional<core::ExplorerWidth> EditorController::explorer_width() const noexcept
@@ -469,6 +480,13 @@ void EditorController::sync_explorer()
         explorer_folder_.reset();
         explorer_pressed_.reset();
         changed = true;
+    }
+    // ドラッグの途中で面が閉じたら（ToggleExplorer・`:set noexplorer` など、どの道でも設定の 1 本
+    // persist_settings からここへ来る）、ドラッグは終わりで、ドラッグの幅は捨てて設定に書かない
+    // （Issue #1380 の設計席の決め・ADR 0162 の追補 D78）。次に開いたときは覚えた幅。
+    if (!settings.explorer)
+    {
+        explorer_dragged_.reset();
     }
     if (!settings.explorer && explorer.focused)
     {
