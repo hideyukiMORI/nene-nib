@@ -285,6 +285,10 @@ void verify_vim_external_caret();
 // VimWindowPathTests.cpp
 void verify_vim_window_path();
 
+// VimFixtureWindowPathTests.cpp
+void verify_vim_fixture_window_path_sample();
+void verify_vim_fixture_window_path_all();
+
 // VimCaseTests.cpp
 void verify_vim_case_contracts();
 void verify_vim_case_scope();

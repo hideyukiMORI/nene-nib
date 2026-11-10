@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 d4e6ddc3add68acecf2cf9bdaa49e74121838060ee8dc04e8fabfabb9419134c / 3602 fixtures
+// fixtures.json: sha256 c0ff134e6543134a12899db0705da8bba652c081d74dca9a8c63b242e6d17eb0 / 3612 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3602> vim_fixtures{{
+constexpr std::array<VimFixture, 3612> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3614,6 +3614,16 @@ constexpr std::array<VimFixture, 3602> vim_fixtures{{
     {"count-register-visual-counts-around-register", "line01 abcdefghij\nline02 abcdefghij\nline03 abcdefghij\nline04 abcdefghij\nline05 abcdefghij\nline06 abcdefghij\nline07 abcdefghij\nline08 abcdefghij\nline09 abcdefghij\nline10 abcdefghij\nline11 abcdefghij\nline12 abcdefghij\nline13 abcdefghij\nline14 abcdefghij\nline15 abcdefghij\nline16 abcdefghij\nline17 abcdefghij\nline18 abcdefghij\nline19 abcdefghij\nline20 abcdefghij\nline21 abcdefghij\nline22 abcdefghij\nline23 abcdefghij\nline24 abcdefghij\nline25 abcdefghij\nline26 abcdefghij\nline27 abcdefghij\nline28 abcdefghij\nline29 abcdefghij\nline30 abcdefghij", "v2\"a3jd", "ine07 abcdefghij\nline08 abcdefghij\nline09 abcdefghij\nline10 abcdefghij\nline11 abcdefghij\nline12 abcdefghij\nline13 abcdefghij\nline14 abcdefghij\nline15 abcdefghij\nline16 abcdefghij\nline17 abcdefghij\nline18 abcdefghij\nline19 abcdefghij\nline20 abcdefghij\nline21 abcdefghij\nline22 abcdefghij\nline23 abcdefghij\nline24 abcdefghij\nline25 abcdefghij\nline26 abcdefghij\nline27 abcdefghij\nline28 abcdefghij\nline29 abcdefghij\nline30 abcdefghij", 1, 1, "line01 abcdefghij\nline02 abcdefghij\nline03 abcdefghij\nline04 abcdefghij\nline05 abcdefghij\nline06 abcdefghij\nl", "v", std::nullopt},
     {"count-register-visual-register-count-then-j", "line01 abcdefghij\nline02 abcdefghij\nline03 abcdefghij\nline04 abcdefghij\nline05 abcdefghij\nline06 abcdefghij\nline07 abcdefghij\nline08 abcdefghij\nline09 abcdefghij\nline10 abcdefghij\nline11 abcdefghij\nline12 abcdefghij\nline13 abcdefghij\nline14 abcdefghij\nline15 abcdefghij\nline16 abcdefghij\nline17 abcdefghij\nline18 abcdefghij\nline19 abcdefghij\nline20 abcdefghij\nline21 abcdefghij\nline22 abcdefghij\nline23 abcdefghij\nline24 abcdefghij\nline25 abcdefghij\nline26 abcdefghij\nline27 abcdefghij\nline28 abcdefghij\nline29 abcdefghij\nline30 abcdefghij", "v2\"a3jjd", "ine08 abcdefghij\nline09 abcdefghij\nline10 abcdefghij\nline11 abcdefghij\nline12 abcdefghij\nline13 abcdefghij\nline14 abcdefghij\nline15 abcdefghij\nline16 abcdefghij\nline17 abcdefghij\nline18 abcdefghij\nline19 abcdefghij\nline20 abcdefghij\nline21 abcdefghij\nline22 abcdefghij\nline23 abcdefghij\nline24 abcdefghij\nline25 abcdefghij\nline26 abcdefghij\nline27 abcdefghij\nline28 abcdefghij\nline29 abcdefghij\nline30 abcdefghij", 1, 1, "line01 abcdefghij\nline02 abcdefghij\nline03 abcdefghij\nline04 abcdefghij\nline05 abcdefghij\nline06 abcdefghij\nline07 abcdefghij\nl", "v", std::nullopt},
     {"count-register-visual-register-then-count-j", "line01 abcdefghij\nline02 abcdefghij\nline03 abcdefghij\nline04 abcdefghij\nline05 abcdefghij\nline06 abcdefghij\nline07 abcdefghij\nline08 abcdefghij\nline09 abcdefghij\nline10 abcdefghij\nline11 abcdefghij\nline12 abcdefghij\nline13 abcdefghij\nline14 abcdefghij\nline15 abcdefghij\nline16 abcdefghij\nline17 abcdefghij\nline18 abcdefghij\nline19 abcdefghij\nline20 abcdefghij\nline21 abcdefghij\nline22 abcdefghij\nline23 abcdefghij\nline24 abcdefghij\nline25 abcdefghij\nline26 abcdefghij\nline27 abcdefghij\nline28 abcdefghij\nline29 abcdefghij\nline30 abcdefghij", "v\"a2jjd", "ine04 abcdefghij\nline05 abcdefghij\nline06 abcdefghij\nline07 abcdefghij\nline08 abcdefghij\nline09 abcdefghij\nline10 abcdefghij\nline11 abcdefghij\nline12 abcdefghij\nline13 abcdefghij\nline14 abcdefghij\nline15 abcdefghij\nline16 abcdefghij\nline17 abcdefghij\nline18 abcdefghij\nline19 abcdefghij\nline20 abcdefghij\nline21 abcdefghij\nline22 abcdefghij\nline23 abcdefghij\nline24 abcdefghij\nline25 abcdefghij\nline26 abcdefghij\nline27 abcdefghij\nline28 abcdefghij\nline29 abcdefghij\nline30 abcdefghij", 1, 1, "line01 abcdefghij\nline02 abcdefghij\nline03 abcdefghij\nl", "v", std::nullopt},
+    {"window-path-1326-i-before-a-lone-mark", "́a", "iab<Esc>", "ab́a", 1, 2, "", "", std::nullopt},
+    {"window-path-1326-I-on-tab-space-and-mark", "\t ́x", "Iz<Esc>", "\t źx", 1, 3, "", "", std::nullopt},
+    {"window-path-1326-I-on-space-and-mark", " ́x", "Iz<Esc>", " źx", 1, 2, "", "", std::nullopt},
+    {"window-path-1326-a-on-a-lone-mark", "́a", "az<Esc>", "́za", 1, 3, "", "", std::nullopt},
+    {"window-path-1326-A-after-a-marked-end", "éx́", "Az<Esc>", "éx́z", 1, 7, "", "", std::nullopt},
+    {"window-path-1326-o-below-a-lone-mark", "́a", "oz<Esc>", "́a\nz", 2, 1, "", "", std::nullopt},
+    {"window-path-1326-insert-left-before-a-lone-mark", "́a", "ia<Left>b<Esc>", "báa", 1, 1, "", "", std::nullopt},
+    {"window-path-1326-insert-right-over-a-lone-mark", "́a", "i<Right>z<Esc>", "́za", 1, 3, "", "", std::nullopt},
+    {"window-path-1326-insert-ctrl-r-before-a-lone-mark", "́a\nxy", "j\"ay$k0i<C-r>az<Esc>", "xyźa\nxy", 1, 3, "xy", "v", std::nullopt},
+    {"window-path-1326-dot-replays-the-typed-insert", "́a\ńa", "iab<Esc>+.", "ab́a\nab́a", 2, 2, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

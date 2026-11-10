@@ -75,6 +75,7 @@ Nib でも clang-tidy の `bugprone-unchecked-optional-access` が MSVC STL の 
 
 振る舞いを変えたら、いちばん狭い安定した境界にテストを足す。不具合の修正は、可能なら**先に落ちる回帰テスト**を書いてから直す。
 Vim の振る舞いは oracle から生成した fixture が期待値である（ADR 0005）。
+fixture は窓の道（窓が送るのと同じ意図を `apply`）でも再生し、engine の道と同じ本文・キャレット・レジスタ・窓の先頭・モードになることを守る: **active**（`tests/unit/VimFixtureWindowPathTests.cpp`・既定実行は 10 件に 1 件・全件は `--vim-window-path-all` を `nib_unit_scopes` が回す・ADR 0054 の追補・#1326）。
 
 - 機械強制: **planned**（レビュー事項。カバレッジ下限＝QLT-009 が部分的に代替する）
 

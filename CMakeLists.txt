@@ -139,6 +139,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimVirtualColumnTests.cpp
     tests/unit/VimCharacterBoundaryTests.cpp
     tests/unit/VimExternalCaretTests.cpp
+    tests/unit/VimFixtureWindowPathTests.cpp
     tests/unit/VimWindowPathTests.cpp
     tests/unit/VimCaseTests.cpp
     tests/unit/VimNumberPropertyTests.cpp
