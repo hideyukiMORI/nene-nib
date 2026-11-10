@@ -751,6 +751,9 @@ class EditorController final
     // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();
+    // engine を通らない意図の後に、Vim のキャレットが 1 文字の境（NORMAL は行の最後の文字の上）から
+    // 外れていたときだけ寄せる。入口 apply の終わりの 1 か所から呼ぶ（ADR 0053 の追補 #1309）。
+    void keep_vim_character();
     // 追従は頼むだけで、スクロールを読む直前に 1 回だけ解決する（ADR 0128 の決定 1・2）。
     void follow_caret();
     void follow_position(core::TextPosition position);

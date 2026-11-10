@@ -171,6 +171,7 @@ void verify_vim_character_contracts()
     verify_vim_character_start();
     verify_resting_caret_on_a_long_line();
     verify_vim_word_class_table();
+    verify_vim_external_caret();
 }
 
 void verify_vim_character_scope()

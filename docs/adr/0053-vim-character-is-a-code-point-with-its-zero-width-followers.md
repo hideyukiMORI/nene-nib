@@ -58,3 +58,11 @@ Nib の今の形: 文字の幅は `display_width(code_point)`（`src/core/Displa
 ## 追補 2026-10-30（#1136）: INSERT の矢印も Vim の 1 文字で歩く
 
 Vim モードの INSERT の `<Left>` `<Right>` は、決定 3 の 1 対で 1 文字ずつ歩く（`<Left>` は `vim_character_start`・`<Right>` は `vim_character_end`・Vim の `oneleft` と `mb_ptr2len`）。結合文字・濁点の結合・異体字セレクタの手前には止まらない。ZWJ の連なりは決定 1 のとおり別々の文字。行の端の扱いは ADR 0049 の追補。読むのはキャレットの周りの窓だけで、行の全体は写さない。fixture は `insert-arrow-` の 14 件。通常モードの矢印は決定 8 のまま変えない。
+
+## 追補 2026-11-10（#1309）: engine を通らない意図の後もキャレットは 1 文字の境に立つ
+
+Vim モードでも、Delete / Backspace の `DeleteText`（Vim の削除の単位は ADR 0065 の決定 6 のとおりコードポイントのまま）・`InsertText`・`NewLine`・貼り付けと切り取りの `ClipboardAction`・Ctrl+Z / Ctrl+Y の `HistoryAction`・`SelectAll` は engine の鍵を通らずに本文とキャレットを動かす。性質の試験（#1288 の 50 倍の走り）が、NORMAL の `$` の後の `DeleteText` が `e` + U+0301 の基底だけを消してキャレットを残った結合文字の手前（手前の文字の途中）に置く形を見つけた。手書きの表では、ほかに INSERT と VISUAL の `DeleteText`・INSERT の `MoveCaret` の 1 コードポイントの左右（ADR 0065 の決定 1 のコードポイントの単位）・行頭の孤立した結合文字の前への `InsertText` と貼り付け・`DeleteText` の後の Ctrl+Z（文字の途中）・`x` の後の Ctrl+Z / Ctrl+Y と `SelectAll`（NORMAL の行の最後の文字の先）が同じく外れていた。NORMAL の `MoveCaret`・`PlaceCaret`（クリック）・Vim の鍵は既に寄せていた。
+
+決定: 寄せは意図ごとに書かず、controller の入口 `apply` の終わりの 1 か所（`keep_vim_character`）で、Vim モードのときにキャレットが外れているときだけ寄せる。規則は既存の 2 本だけを使う: NORMAL は決定 5 の寄せ（`settle_vim_caret` → `vim_resting_caret`）、INSERT と VISUAL は行の桁の写し `vim_line_and_column`（文字の途中ならその文字の先頭・行の内容の終わりは保つ・畳んだ選択は畳んだまま寄せ、広げた選択の錨は動かさない）。外れていなければ何もせず、画面も追わない（Vim の鍵の後の画面は変わらない）。入力行が開いていても見る（入力行の間に届いた本文の編集の後も境を守る）。
+
+範囲の外: Vim モードの `DeleteText` が Vim の 1 文字（基底と結合文字の列）をまとめて消すか（今は ADR 0065 の決定 6 のコードポイント・窓は Vim モードでは `DeleteText` を送らない）と、広げた選択の錨が文字の途中に残る形。試験は `--vim-characters` の契約 `verify_vim_external_caret`（意図の表 23 行と固定 seed 13090 の 48 組の性質・手元の 50 倍（6,000 組まで）も通る）。
