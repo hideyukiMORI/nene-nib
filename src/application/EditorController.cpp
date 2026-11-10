@@ -161,7 +161,7 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // 自動退避の合図（AutosaveTick）も同じ理由で歩きを続ける（ADR 0137 の決定 1）。起動の問いの答え
 // （RestoreAutosave / DiscardAutosave）は使う人の操作なので、ここに書かず歩きを確定する（決定 6）。
 // プレビューの間引きの合図（PreviewTick）も使う人の操作ではないので歩きを続ける（ADR 0155 の
-// 決定 8）。開く・閉じる（TogglePreview）とチェックボックスの切り替え（TogglePreviewTask・ADR 0155
+// 決定 8）。見せ方の巡回（TogglePreview）とチェックボックスの切り替え（TogglePreviewTask・ADR 0155
 // の追補 24）と全面プレビューのマウス（PointPreview・改訂 18）は使う人の操作なので、ここにも
 // begin_intent にも書かない。
 // エクスプローラーの意図（ToggleExplorer・ExplorerKey・PointExplorer・ScrollExplorer・

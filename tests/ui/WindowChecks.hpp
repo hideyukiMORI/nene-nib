@@ -41,4 +41,6 @@ void verify_matchparen_outline();
 void verify_save_question();
 // Vim モードの仮想キー → 特別な鍵の表（#1325・Delete は `<Del>`）。
 void verify_vim_special_keys();
+// Ctrl+Shift+M はどのモードでも操作 toggle_preview（施主決定 D77・#1354）。
+void verify_preview_cycle_key();
 } // namespace nenenib::tests::ui

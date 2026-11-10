@@ -44,7 +44,7 @@ inline constexpr std::array<OperationText, 37> operation_texts{{
     {EditorOperation::next_pane, "隣の枠へ", "となりのわくへ", "もう 1 つの枠へ移ります"},
     {EditorOperation::close_pane, "枠を閉じる", "わくをとじる", "いまの枠を閉じて 1 つに戻します"},
     {EditorOperation::toggle_preview, "Markdown プレビュー", "まーくだうんぷれびゅー",
-     "Markdown のプレビューを右（下）の枠に出す・もう一度で閉じる"},
+     "Markdown のプレビューを右（下）の枠に出す・もう一度で全面・もう一度で閉じる"},
     {EditorOperation::paste_plain, "文字だけを貼り付け", "もじだけをはりつけ",
      "クリップボードの文字だけを貼ります（HTML を変換しない）"},
     {EditorOperation::paste_html, "HTML のまま貼り付け", "えいちてぃーえむえるのままはりつけ",

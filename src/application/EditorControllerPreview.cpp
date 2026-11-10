@@ -296,21 +296,17 @@ template <typename Row, typename Key>
 
 // ---------------------------------------------------------------- プレビュー（ADR 0155）
 
-// 開く・閉じるの 1 本（決定 3）。開く前に、前に開いていたときの残りを捨てる（たまりが空でないと
-// 次の合図が来ない・ADR 0062 の決定 15 と同じ）。
+// Ctrl+Shift+M は off → side → full → off と巡る（施主決定 D77・ADR 0155 の追補 #1354）。次の
+// 見せ方は純関数 cycled_preview_placement の 1 本が決め、遷移は place_preview の 1 本が行う。
 void EditorController::accept(const TogglePreview &)
 {
-    // 全面の間は側の鍵で側へ戻す（ADR 0155 の改訂 16・もう一度で閉じる）。
-    if (state_.full_preview() != nullptr)
-    {
-        leave_full_preview(PreviewPlacement::side);
-        return;
-    }
-    if (state_.preview() != nullptr)
-    {
-        state_ = state_.without_split();
-        return;
-    }
+    place_preview(cycled_preview_placement(state_.preview_placement()));
+}
+
+// 側の枠を開く（決定 3）。開く前に、前に開いていたときの残りを捨てる（たまりが空でないと次の合図が
+// 来ない・ADR 0062 の決定 15 と同じ）。
+void EditorController::open_side_preview()
+{
     static_cast<void>(ports_.markdown.collect());
     settle_follow();
     state_ = state_.with_preview(PreviewView{});
@@ -507,7 +503,7 @@ void EditorController::place_preview(PreviewPlacement placement)
             leave_full_preview(PreviewPlacement::side);
             return;
         }
-        accept(TogglePreview{});
+        open_side_preview();
         return;
     case PreviewPlacement::full:
         break;
