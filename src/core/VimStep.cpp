@@ -134,6 +134,8 @@ constexpr char32_t control_b_character = 0x02;
 constexpr char32_t control_d_character = 0x04;
 
 constexpr char32_t control_f_character = 0x06;
+constexpr char32_t control_e_character = 0x05;
+constexpr char32_t control_y_character = 0x19;
 
 constexpr char32_t control_u_character = 0x15;
 
@@ -665,14 +667,62 @@ namespace
         action == VimAction::scroll_page_down ? VimScrollDirection::down : VimScrollDirection::up;
     return page_step(state, view, direction);
 }
+
+// Ctrl-e Ctrl-y の先頭は scrolloff の追従に掛けない（Vim の VALID_TOPLINE・追補 #1232）。
+[[nodiscard]] VimStep kept_top(VimStep step)
+{
+    if (auto *const navigate = std::get_if<VimNavigate>(&step.effect); navigate != nullptr)
+    {
+        navigate->keeps_top = true;
+    }
+    return step;
+}
+
+// Ctrl-e Ctrl-y（ADR 0019 の追補 #1232・Vim の scroll_redraw）。窓は engine が決めた先頭へ送る。
+// キャレットの行が変わったときだけ、変わらない欲しい列（curswant）でその行へ着く（coladvance）。
+// 行が変わらなければキャレットも欲しい列もそのまま。格子は画面行の着地（row_navigated）。
+[[nodiscard]] VimStep line_scroll_step(const VimState &state, const VimEditorView &view,
+                                       VimAction action)
+{
+    const auto direction =
+        action == VimAction::scroll_line_down ? VimScrollDirection::down : VimScrollDirection::up;
+    const auto target = vim_line_scroll(state, view, direction);
+    if (!target)
+    {
+        return requested_layout(state, target.error());
+    }
+    const VimDisplayNavigation &result = target.value();
+    if (result.placed.has_value())
+    {
+        return kept_top(row_navigated(state, view, result, result.placed.value()));
+    }
+    VimState next = state;
+    next.count = std::nullopt;
+    next.pending = std::nullopt;
+    if (result.preserve_column)
+    {
+        return kept_top(VimStep{std::move(next), VimNavigate{view.selection, result.first}});
+    }
+    const VimWantedColumn wanted = wanted_column_of(view.text, state, view.selection.caret);
+    const Offset caret = caret_on_line(view.text, wanted, result.caret, state.mode);
+    next.wanted_column = wanted;
+    return kept_top(
+        VimStep{std::move(next),
+                VimNavigate{navigated_selection(state, view.selection, caret), result.first}});
+}
 } // namespace
 
 namespace detail
 {
-// 半画面と 1 画面の巻き（ADR 0019）。NORMAL と VISUAL は同じ 1 本を通る。
+// 半画面と 1 画面の巻き（ADR 0019）と Ctrl-e Ctrl-y（追補 #1232）。NORMAL と VISUAL は同じ 1 本を
+// 通る。
 [[nodiscard]] VimStep scroll_action(const VimState &state, const VimEditorView &view,
                                     VimAction action)
 {
+    if (action == VimAction::scroll_line_down || action == VimAction::scroll_line_up)
+    {
+        return line_scroll_step(state, view, action);
+    }
     if (action == VimAction::scroll_half_down || action == VimAction::scroll_half_up)
     {
         return half_page_action(state, view, action);
@@ -1512,6 +1562,10 @@ namespace
         return acted(state, view, VimAction::decrement_number);
     case VimSpecialKey::control_o:
         return acted(state, view, VimAction::jump_older);
+    case VimSpecialKey::control_e:
+        return acted(state, view, VimAction::scroll_line_down);
+    case VimSpecialKey::control_y:
+        return acted(state, view, VimAction::scroll_line_up);
     }
     std::unreachable();
 }
@@ -1532,6 +1586,10 @@ namespace
         return control_f_character;
     case VimSpecialKey::control_b:
         return control_b_character;
+    case VimSpecialKey::control_e:
+        return control_e_character;
+    case VimSpecialKey::control_y:
+        return control_y_character;
     case VimSpecialKey::control_w:
         return vim_window_control_character(key);
     case VimSpecialKey::control_a:

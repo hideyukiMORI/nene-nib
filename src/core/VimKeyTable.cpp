@@ -145,6 +145,8 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::scroll_half_up, VimActionGroup::scroll},
      {VimAction::scroll_page_down, VimActionGroup::scroll},
      {VimAction::scroll_page_up, VimActionGroup::scroll},
+     {VimAction::scroll_line_down, VimActionGroup::scroll},
+     {VimAction::scroll_line_up, VimActionGroup::scroll},
      {VimAction::visual, VimActionGroup::enter_visual},
      {VimAction::visual_line, VimActionGroup::enter_visual},
      {VimAction::open_line_below, VimActionGroup::enter_visual},
@@ -560,6 +562,8 @@ static_assert(every_alignment_has_one_row(),
     case VimSpecialKey::control_a:
     case VimSpecialKey::control_x:
     case VimSpecialKey::control_o:
+    case VimSpecialKey::control_e:
+    case VimSpecialKey::control_y:
         return std::nullopt;
     }
     std::unreachable();
@@ -592,6 +596,8 @@ static_assert(every_alignment_has_one_row(),
     case VimSpecialKey::control_v:
     case VimSpecialKey::control_w:
     case VimSpecialKey::control_o:
+    case VimSpecialKey::control_e:
+    case VimSpecialKey::control_y:
         return std::nullopt;
     }
     std::unreachable();

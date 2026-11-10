@@ -685,6 +685,96 @@ lined_top(const VimEditorView &view, Offset caret, VimScreenPlace place)
     return VisualPosition{top.value(), 0};
 }
 
+// Ctrl-e Ctrl-y の窓の下端（Vim の w_botline）。文字組みが無効なら 1 論理行 = 1 画面行で、本文の
+// 末尾まで見えていれば行数 + 1。
+[[nodiscard]] std::expected<LineNumber, LineNumber> scrolled_below(const VimEditorView &view,
+                                                                   LineNumber first)
+{
+    if (!view.layout.enabled)
+    {
+        const std::size_t total = view.text.line_count();
+        return LineNumber{first.value + std::min(height_of(view), total + 1 - first.value)};
+    }
+    const auto window = window_of(view, first);
+    if (!window)
+    {
+        return std::unexpected(window.error());
+    }
+    return window.value().below;
+}
+
+// Ctrl-y のキャレットの行（Vim の scrolldown の最後: キャレットの行の最後の画面行が窓の下へ出る間、
+// 1 行ずつ上へ）。窓の先頭から足して窓に全部入る最後の行で、先頭の行より上へは行かない（窓より
+// 高い行の部分行 w_skipcol は扱わない）。
+[[nodiscard]] std::expected<LineNumber, LineNumber> fitted_caret(const VimEditorView &view,
+                                                                 LineNumber first, LineNumber caret)
+{
+    if (!view.layout.enabled)
+    {
+        return LineNumber{std::min(caret.value, first.value + height_of(view) - 1)};
+    }
+    std::size_t used = 0;
+    LineNumber fitted = first;
+    for (LineNumber line = first; line.value <= caret.value; ++line.value)
+    {
+        const auto rows = rows_of(view, line);
+        if (!rows)
+        {
+            return std::unexpected(rows.error());
+        }
+        used += rows.value();
+        if (used > height_of(view))
+        {
+            break;
+        }
+        fitted = line;
+    }
+    return fitted;
+}
+
+// 論理行の単位の Ctrl-e Ctrl-y（Vim の scrollup / scrolldown と scroll_redraw）。窓は回数の行だけ
+// 送り、Ctrl-e は最終行が先頭まで・Ctrl-y は 1 行目まで（端でも失敗しない）。キャレットは窓の外へ
+// 出るときだけ動き、scrolloff があれば cursor_correct で余白の内側へ寄せる。
+[[nodiscard]] Navigation line_scrolled(const VimEditorView &view, VimScrollDirection direction,
+                                       std::size_t count)
+{
+    const std::size_t total = view.text.line_count();
+    const LineNumber top{
+        std::clamp<std::size_t>(vim_viewport_of(view).first_visible.value, 1, total)};
+    const LineNumber line = view.text.position_of(view.selection.caret).line;
+    LineNumber first = top;
+    auto caret = std::expected<LineNumber, LineNumber>{line};
+    switch (direction)
+    {
+    case VimScrollDirection::down:
+        first.value += std::min(count, total - top.value);
+        caret = LineNumber{std::max(line.value, first.value)};
+        break;
+    case VimScrollDirection::up:
+        first.value -= std::min(count, top.value - 1);
+        caret = fitted_caret(view, first, line);
+        break;
+    }
+    if (!caret)
+    {
+        return std::unexpected(caret.error());
+    }
+    const auto below = scrolled_below(view, first);
+    if (!below)
+    {
+        return std::unexpected(below.error());
+    }
+    LineNumber settled = caret.value();
+    if (view.scroll_margin > 0)
+    {
+        settled = vim_cursor_corrected(VimCursorWindow{first, below.value(),
+                                                       vim_viewport_of(view).visible_lines,
+                                                       view.scroll_margin, view.layout.lines},
+                                       settled, total);
+    }
+    return VimDisplayNavigation{first, settled, settled == line};
+}
+
 // 横送りの鍵（ADR 0145 の決定 2）。画面の幅と今の横位置を表示領域から読む。
 [[nodiscard]] bool scrolls_horizontally(VimAction action) noexcept
 {
@@ -705,6 +795,7 @@ lined_top(const VimEditorView &view, Offset caret, VimScreenPlace place)
 bool vim_reads_viewport(VimAction action) noexcept
 {
     return screen_kind(action).has_value() || scrolls_horizontally(action) ||
+           action == VimAction::scroll_line_down || action == VimAction::scroll_line_up ||
            vim_group_for(action) == VimActionGroup::screen_alignment ||
            moves_in_display_line(action);
 }
@@ -723,6 +814,22 @@ vim_display_navigation(const VimState &state, const VimEditorView &view, VimActi
         return std::unexpected(result.error());
     }
     return std::optional{result.value()};
+}
+
+std::expected<VimDisplayNavigation, VimLayoutNeed>
+vim_line_scroll(const VimState &state, const VimEditorView &view, VimScrollDirection direction)
+{
+    const std::size_t count = vim_search_count(state);
+    if (view.layout.enabled && view.layout.unit == VimScrollUnit::row)
+    {
+        return vim_row_line_navigation(state, view, direction, count);
+    }
+    const auto result = line_scrolled(view, direction, count);
+    if (!result)
+    {
+        return std::unexpected(VimLayoutNeed{result.error()});
+    }
+    return result.value();
 }
 
 std::expected<VisualPosition, VimLayoutNeed> vim_aligned_top(const VimEditorView &view,

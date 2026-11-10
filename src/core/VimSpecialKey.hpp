@@ -32,6 +32,10 @@ enum class VimSpecialKey : std::uint8_t
     control_a,
     control_x,
     // `Ctrl-o`（ジャンプの列を古い方へ・ADR 0152 の追補 #1037）。NORMAL でだけ効く。
-    control_o
+    control_o,
+    // `Ctrl-e` `Ctrl-y`（窓を 1 行ずつ送る・ADR 0019 の追補 #1232）。窓は Vim の NORMAL / VISUAL
+    // でだけ写す。INSERT の「下 / 上の行の文字を写す」は入れない（INSERT では何もしない）。
+    control_e,
+    control_y
 };
 } // namespace nenenib::core

@@ -5,6 +5,7 @@
 #include "VimEditorView.hpp"
 #include "VimLayoutNeed.hpp"
 #include "VimScreenPlace.hpp"
+#include "VimScrollDirection.hpp"
 #include "VimState.hpp"
 #include "VisualPosition.hpp"
 
@@ -14,7 +15,7 @@
 namespace nenenib::core
 {
 // 表示領域（VimViewport）を読む鍵か（ADR 0129 の決定 1）。画面の行に関わる H M L と
-// Ctrl-d/u/f/b（PgUp/PgDn も同じ動作）・横送り・縦の位置合わせ（ADR 0146 の決定 2）。
+// Ctrl-d/u/f/b（PgUp/PgDn も同じ動作）・Ctrl-e/y・横送り・縦の位置合わせ（ADR 0146 の決定 2）。
 [[nodiscard]] bool vim_reads_viewport(VimAction action) noexcept;
 
 // 純粋な画面移動の解決。行数か行の中の画面行が足りなければ、その問いを返し、状態は変えない。
@@ -22,6 +23,15 @@ namespace nenenib::core
 [[nodiscard]] std::expected<std::optional<VimDisplayNavigation>, VimLayoutNeed>
 vim_display_navigation(const VimState &state, const VimEditorView &view, VimAction action);
 
+// `Ctrl-e`（down）と `Ctrl-y`（up）の窓とキャレット（ADR 0019 の追補 #1232・Vim 9.1 の
+// nv_scroll_line → scroll_redraw → scrollup / scrolldown・smoothscroll は無し）。窓を回数（count1）
+// の行だけ送り（下へは最終行が先頭まで・上へは 1 行目まで・端でも失敗しない）、キャレットの行は
+// 窓の外へ出るときだけ窓の端の行へ動く（Ctrl-y は行の全部が窓に入る行まで）。scrolloff があれば
+// cursor_correct で余白の内側へ寄せる。preserve_column はキャレットの行が変わらないこと。格子は
+// 画面行の単位で同じ規則（ADR 0144 の決定 5 の形・placed を置く）。足りない文字組みの値は
+// VimLayoutNeed。
+[[nodiscard]] std::expected<VimDisplayNavigation, VimLayoutNeed>
+vim_line_scroll(const VimState &state, const VimEditorView &view, VimScrollDirection direction);
 // 縦の位置合わせ（zt zz zb z<CR> z. z-）の新しい画面の先頭（ADR 0146 の決定 5）。caret は
 // 回数で選んで最初の非空白へ動いた後のキャレット。文字組みが無効なら 1 論理行 = 1 画面行の
 // 算術、wrap on の text 形は論理行の単位で行の画面行数を問い（Vim の scroll_cursor_bot と

@@ -44,6 +44,13 @@ vim_row_navigation(const VimState &state, const VimEditorView &view, VimScrollDi
 vim_row_half_navigation(const VimState &state, const VimEditorView &view,
                         VimScrollDirection direction, std::size_t amount);
 
+// Ctrl-e Ctrl-y の格子の形（ADR 0019 の追補 #1232・ADR 0144 の決定 5 の形）。先頭を amount 画面行
+// だけ direction へ送り（本文の最初 / 最後の画面行で止める）、キャレットの画面行は動かさずに送った
+// 後の画面の中へ収めて余白の内側へ寄せる。先頭が動かなければ何も変えない（失敗にしない）。
+[[nodiscard]] std::expected<VimDisplayNavigation, VimLayoutNeed>
+vim_row_line_navigation(const VimState &state, const VimEditorView &view,
+                        VimScrollDirection direction, std::size_t amount);
+
 // `gj` `gk` の着地（ADR 0144 の決定 3・4）。キャレットの画面行から direction へ amount 画面行
 // だけ歩き（行の端を越えたら隣の論理行の最後 / 最初の画面行へ）、行き先の画面行の中で欲しい列に
 // 着く。欲しい列の決め方は画面移動と同じ 1 本（決定 3 の追補・今の画面行の始まりからの桁）。
