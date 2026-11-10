@@ -58,3 +58,16 @@ Nib の今の形: 文字の幅は `display_width(code_point)`（`src/core/Displa
 ## 追補 2026-10-30（#1136）: INSERT の矢印も Vim の 1 文字で歩く
 
 Vim モードの INSERT の `<Left>` `<Right>` は、決定 3 の 1 対で 1 文字ずつ歩く（`<Left>` は `vim_character_start`・`<Right>` は `vim_character_end`・Vim の `oneleft` と `mb_ptr2len`）。結合文字・濁点の結合・異体字セレクタの手前には止まらない。ZWJ の連なりは決定 1 のとおり別々の文字。行の端の扱いは ADR 0049 の追補。読むのはキャレットの周りの窓だけで、行の全体は写さない。fixture は `insert-arrow-` の 14 件。通常モードの矢印は決定 8 のまま変えない。
+
+## 追補 2026-11-10（#1325）: Vim モードの Delete キーは engine の `<Del>`
+
+Vim モードの窓は Delete キーを `VimKeyPress{VimSpecialKey::delete_key}` として engine へ流す（表は `src/ui/win32/VimSpecialKeys.hpp` の `vim_specials` の 1 行）。通常モードの `DeleteText`（ADR 0065 の決定 6）は Vim の意味を持たず、Vim モードでは送らない。fixture の記法は `eng/vim-oracle.py` の `KEY_TABLE` に `<Del>` の 1 行（ADR 0054・生成物 `VimKeyNames.hpp`）。規則は Vim 9.1.0004 の source と `-es -u NONE` の実測:
+
+1. **NORMAL は `x`。** `nv_cmds` の `K_DEL` は `nv_abbrev` で、`cmdchar` を `'x'` に替えて `nv_optrans` へ渡す（`"dl"` を積む）。打った回数は 3 のとおり `<Del>` に届かない（`3<Del>` は回数を消すだけで本文を変えない）。回数が `x` に届くのは `.` の流し直し（`2l<Del>3.` は 3 文字）とマクロの回数（`2@a`）。オペレータの後（`d<Del>`）は `nv_optrans` の `checkclearopq` で失敗し、オペレータを打ち消す。
+2. **`"a<Del>` は名前を捨てる。** `K_DEL` の行は `NV_KEEPREG` を持たないので、`normal_cmd` が命令の後に `clearop` で名前を消し、積まれた `"dl"` は無名へ書く（`x` の行は `NV_KEEPREG` を持つので `"ax` は `"a` へ書く）。engine は `normal_deleted` で `selected_register` を外して `x` の道を通す。
+3. **回数の途中は最後の桁を消す。** `normal_cmd_get_count` は `count0 != 0` の間の `K_DEL` を `count0 /= 10` に読む（`12<Del>x` は 1 文字・`3<Del>x` は回数なし・`2<Del>0` の `0` は行頭への移動・オペレータの後の回数 `2d3<Del>w` も同じ）。判定は `drops_count_digit` の 1 本で、`.` の記録も回数の桁と同じく残さない。次の 1 鍵を待つ状態（`r` `f` `"` `g` など）では名前にも対象にも読まず、Vim の `clearopbeep` で失敗して後ろを打ち切る（`r<Del>x` `f<Del>x` `g<Del>x` は本文を変えない・実測。NORMAL はオペレータと回数も捨て、VISUAL は待ちだけを消す。INSERT の `Ctrl-r` の待ちは除く）。
+4. **VISUAL は `x`**（`nv_abbrev` → `v_visop` が `d` のオペレータにする・名前は保つ）。回数の途中は 3 と同じ。
+5. **INSERT は `ins_del`。** キャレットの下の Vim の 1 文字（`del_char` → `del_chars` の `utfc_ptr2len`・結合文字を含む・決定 1 の 1 文字）を消し、キャレットは動かない。行の内容の終わりでは次の行とつなぐ（`backspace` の `eol`・`do_join` の `insert_space` は FALSE なので `gJ` と同じく空白を足さず次の行の字下げも残す）。最後の行の終わりでは何も消さない（`vim_beep`）が、`AppendCharToRedobuff(K_DEL)` は必ず通るので、回数の鍵の列と `.` の記録に必ず載せる（Backspace の「止まった鍵は足さない」を通さない）。回数つきの INSERT（`3i<Del>x<Esc>`）の残りの周も `<Del>` を流し直して前方を消すので、流し直しの置き換えの終わりは Esc の位置ではなく、キャレットの後ろの手を付けていない尾の長さから決める（`replayed_insert`・`xxxdefgh`）。
+6. **入力行（`:` `/` `?`）の Delete は `c_<Del>`**（`cmdline_erase_chars`）: キャレットの下を消し、行末では手前の 1 文字を消す（実測 `:let g:a=1234<Del>` は 123）。空の行では Backspace と同じく閉じる（source。`-es` は ex mode なので測れない）。controller の `vim_line_edit` が `erase` を行末で `backspace` に替え、通常モードの「検索: 」「行: 」と面の Delete は変えない。再生の中の `<Del>` も同じ `EditCommand{erase}` に写す。
+
+fixture は `del-key-` の 46 件、controller の契約は `nib_tests --vim-del`、窓の表は `nib_window_tests --vim-keys`。

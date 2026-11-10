@@ -102,6 +102,9 @@ void verify_vim_pattern_property_scope();
 // KeyMapTests.cpp（#1081・ADR 0176・Vim の map の表と設定の行の契約と性質）
 void verify_key_map_scope();
 
+// VimDeleteKeyTests.cpp（#1325・Vim モードの Delete キー `<Del>` の controller の道）
+void verify_vim_delete_key_scope();
+
 // JsonTests.cpp / JsonPropertyTests.cpp（#994・ADR 0160 の決定 4・core の JSON の契約と性質）
 void verify_json_scope();
 void verify_json_property_scope();

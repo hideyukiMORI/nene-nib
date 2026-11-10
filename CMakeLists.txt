@@ -192,6 +192,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/JsonTests.cpp
     tests/unit/JsonPropertyTests.cpp
     tests/unit/KeyMapTests.cpp
+    tests/unit/VimDeleteKeyTests.cpp
     tests/unit/LspFramesTests.cpp
     tests/unit/LspMessagesTests.cpp
     tests/unit/LspFramesPropertyTests.cpp
@@ -412,7 +413,8 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/StatusDemandTests.cpp tests/ui/SyntaxRenderTests.cpp tests/ui/DiagnosticWaveTests.cpp
     tests/ui/PaletteLayoutTests.cpp tests/ui/ExplorerPaintTests.cpp tests/ui/PointerPressTests.cpp tests/ui/GuideKeyWidthTests.cpp
     tests/ui/PrintRenderTests.cpp tests/ui/MemoryXpsTarget.cpp tests/ui/MemoryPackageTarget.cpp
-    tests/ui/MatchParenOutlineTests.cpp tests/ui/SaveQuestionTests.cpp)
+    tests/ui/MatchParenOutlineTests.cpp tests/ui/SaveQuestionTests.cpp
+    tests/ui/VimSpecialKeyTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)

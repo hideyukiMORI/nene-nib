@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 8e03e20c46a638988acc2457be0bb3ed459c813a46309bb3f42b396b01a9d95d / 3581 fixtures
+// fixtures.json: sha256 94dab377230e57ed10f1534e5777b142fd12b729be415de37cf6720d2a4605ef / 3627 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3581> vim_fixtures{{
+constexpr std::array<VimFixture, 3627> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3593,6 +3593,52 @@ constexpr std::array<VimFixture, 3581> vim_fixtures{{
     {"yank-line-caret-gg-from-the-wanted-column", "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\nab\n\t\tdeep tab line", "15l8Gyggj", "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\nab\n\t\tdeep tab line", 2, 1, "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\n", "V", std::nullopt},
     {"yank-line-caret-k-keeps-the-wanted-column", "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\nab\n\t\tdeep tab line", "15l3jykj", "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\nab\n\t\tdeep tab line", 4, 1, "\tfoo bar baz\n\n", "V", std::nullopt},
     {"yank-line-caret-screen-top-ignores-scrolloff", "01 line words here\n02 line words here\n  03 indented words\n04 line words here\n05 line words here\n  06 indented words\n07 line words here\n08 line words here\n  09 indented words\n10 line words here\n11 line words here\n  12 indented words\n13 line words here\n14 line words here\n  15 indented words\n16 line words here\n17 line words here\n  18 indented words\n19 line words here\n20 line words here\n  21 indented words\n22 line words here\n23 line words here\n  24 indented words\n25 line words here\n26 line words here\n  27 indented words\n28 line words here\n29 line words here\n  30 indented words\n31 line words here\n32 line words here\n  33 indented words\n34 line words here\n35 line words here\n  36 indented words\n37 line words here\n38 line words here\n  39 indented words\n40 line words here", "yH", "01 line words here\n02 line words here\n  03 indented words\n04 line words here\n05 line words here\n  06 indented words\n07 line words here\n08 line words here\n  09 indented words\n10 line words here\n11 line words here\n  12 indented words\n13 line words here\n14 line words here\n  15 indented words\n16 line words here\n17 line words here\n  18 indented words\n19 line words here\n20 line words here\n  21 indented words\n22 line words here\n23 line words here\n  24 indented words\n25 line words here\n26 line words here\n  27 indented words\n28 line words here\n29 line words here\n  30 indented words\n31 line words here\n32 line words here\n  33 indented words\n34 line words here\n35 line words here\n  36 indented words\n37 line words here\n38 line words here\n  39 indented words\n40 line words here", 4, 1, "04 line words here\n05 line words here\n  06 indented words\n07 line words here\n08 line words here\n  09 indented words\n", "V", VimViewportFixture{10, 4, 9, 2, 1, 5, 0, 0, 0, 0, 0, 0, 3}},
+    {"del-key-normal-removes-the-character", "abc", "l<Del>", "ac", 1, 2, "b", "v", std::nullopt},
+    {"del-key-normal-count-is-edited-not-used", "abcdef", "l3<Del>", "abcdef", 1, 2, "", "", std::nullopt},
+    {"del-key-normal-count-then-del-twice", "abc\ndef", "l5<Del><Del>", "ac\ndef", 1, 2, "b", "v", std::nullopt},
+    {"del-key-normal-at-the-line-end", "abc\ndef", "$<Del>", "ab\ndef", 1, 2, "c", "v", std::nullopt},
+    {"del-key-normal-on-an-empty-line", "abc\n\ndef", "j<Del>jx", "abc\n\nef", 3, 1, "d", "v", std::nullopt},
+    {"del-key-normal-takes-the-combining-mark", "ábc", "<Del>", "bc", 1, 1, "á", "v", std::nullopt},
+    {"del-key-normal-wide-character", "あいう", "l<Del>", "あう", 1, 4, "い", "v", std::nullopt},
+    {"del-key-normal-zwj-sequence", "x👨‍👩y", "l<Del>", "x‍👩y", 1, 2, "👨", "v", std::nullopt},
+    {"del-key-count-drops-the-last-digit", "abcdefghijklmnop", "12<Del>x", "bcdefghijklmnop", 1, 1, "a", "v", std::nullopt},
+    {"del-key-count-drops-to-nothing", "abcdef", "3<Del>x", "bcdef", 1, 1, "a", "v", std::nullopt},
+    {"del-key-count-dropped-then-zero-is-a-motion", "abcdef", "$2<Del>0x", "bcdef", 1, 1, "a", "v", std::nullopt},
+    {"del-key-count-twice-then-a-digit", "abcdefghijklmnopqrstuvwxyz0123456789", "23<Del>4x", "yz0123456789", 1, 1, "abcdefghijklmnopqrstuvwx", "v", std::nullopt},
+    {"del-key-count-dropped-twice", "abcdefghijklmnop", "123<Del><Del>x", "bcdefghijklmnop", 1, 1, "a", "v", std::nullopt},
+    {"del-key-count-after-an-operator", "one two three four", "2d3<Del>w", "three four", 1, 1, "one two ", "v", std::nullopt},
+    {"del-key-count-after-an-operator-to-nothing", "one two three four", "d3<Del>w", "two three four", 1, 1, "one ", "v", std::nullopt},
+    {"del-key-after-an-operator-fails", "abc def", "d<Del>x", "abc def", 1, 1, "", "", std::nullopt},
+    {"del-key-after-a-counted-operator-fails", "abc def", "2d<Del>x", "abc def", 1, 1, "", "", std::nullopt},
+    {"del-key-drops-the-register", "abc", "\"a<Del>\"ap", "bZc", 1, 2, "a", "v", std::nullopt, VimMacroFixture{'a', "Z"}},
+    {"del-key-dot-repeats", "abcdef", "<Del>.", "cdef", 1, 1, "b", "v", std::nullopt},
+    {"del-key-count-dropped-then-dot-does-nothing", "abcdef", "2<Del>.", "abcdef", 1, 1, "", "", std::nullopt},
+    {"del-key-dot-with-a-new-count", "abcdefgh", "2l<Del>3.", "abgh", 1, 3, "def", "v", std::nullopt},
+    {"del-key-undo", "abc", "<Del>u", "abc", 1, 1, "a", "v", std::nullopt},
+    {"del-key-after-r", "abc", "r<Del>x", "abc", 1, 1, "", "", std::nullopt},
+    {"del-key-after-f", "abc", "f<Del>x", "abc", 1, 1, "", "", std::nullopt},
+    {"del-key-after-g", "abc", "g<Del>x", "abc", 1, 1, "", "", std::nullopt},
+    {"del-key-after-quote", "abc", "\"<Del>x", "abc", 1, 1, "", "", std::nullopt},
+    {"del-key-visual-removes-the-selection", "abcdef", "lvl<Del>", "adef", 1, 2, "bc", "v", std::nullopt},
+    {"del-key-visual-line", "abc\ndef\nghi", "Vj<Del>", "ghi", 1, 1, "abc\ndef\n", "V", std::nullopt},
+    {"del-key-visual-block", "abcd\nefgh\nijkl", "l<C-v>jl<Del>", "ad\neh\nijkl", 1, 2, "bc\nfg", "\0262", std::nullopt},
+    {"del-key-visual-dot", "abcdefgh", "vl<Del>.", "efgh", 1, 1, "cd", "v", std::nullopt},
+    {"del-key-visual-count-drops-the-digit", "abcdefgh", "v3<Del>l<Del>", "cdefgh", 1, 1, "ab", "v", std::nullopt},
+    {"del-key-insert-removes-forward", "abcdef", "li<Del>x<Esc>", "axcdef", 1, 2, "", "", std::nullopt},
+    {"del-key-insert-takes-the-combining-mark", "ábc", "i<Del><Esc>", "bc", 1, 1, "", "", std::nullopt},
+    {"del-key-insert-wide-character", "あいう", "li<Del><Esc>", "あう", 1, 1, "", "", std::nullopt},
+    {"del-key-insert-at-the-line-end-joins", "abc\n  def", "A<Del><Esc>", "abc  def", 1, 3, "", "", std::nullopt},
+    {"del-key-insert-on-an-empty-line-joins", "abc\n\ndef", "ji<Del><Esc>", "abc\ndef", 2, 1, "", "", std::nullopt},
+    {"del-key-insert-at-the-buffer-end", "abc", "A<Del>x<Esc>", "abcx", 1, 4, "", "", std::nullopt},
+    {"del-key-insert-twice", "abcdef", "i<Del><Del>x<Esc>", "xcdef", 1, 1, "", "", std::nullopt},
+    {"del-key-insert-with-a-count", "abcdefgh", "3i<Del>x<Esc>", "xxxdefgh", 1, 3, "", "", std::nullopt},
+    {"del-key-insert-dot", "abcdef\nabcdef", "i<Del>x<Esc>j0.", "xbcdef\nxbcdef", 2, 1, "", "", std::nullopt},
+    {"del-key-insert-dot-after-a-beep", "abc\ndef", "jA<Del>x<Esc>k0.", "abcxdefx", 1, 4, "", "", std::nullopt},
+    {"del-key-insert-undo", "abc\ndef", "A<Del>x<Esc>u", "abc\ndef", 1, 3, "", "", std::nullopt},
+    {"del-key-insert-after-an-arrow", "abcdef", "a<Left><Del>y<Esc>", "ybcdef", 1, 1, "", "", std::nullopt},
+    {"del-key-insert-after-an-arrow-dot", "abcdef\nabcdef", "a<Right><Del>y<Esc>j0.", "abydef\nybcdef", 2, 1, "", "", std::nullopt},
+    {"del-key-block-insert", "abcd\nefgh", "<C-v>jI<Del>x<Esc>", "xbcd\nefgh", 1, 1, "", "", std::nullopt},
+    {"del-key-macro", "abc\ndef", "2@a", "bc\nef", 2, 1, "d", "v", std::nullopt, VimMacroFixture{'a', "<Del>j"}},
 }};
 } // namespace nenenib::tests
 // clang-format on

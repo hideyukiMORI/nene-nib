@@ -30,6 +30,7 @@
 #include "VimMode.hpp"
 #include "VimSearchDirection.hpp"
 #include "VimSpecialKey.hpp"
+#include "VimSpecialKeys.hpp"
 #include "WalkRecentTab.hpp"
 
 #include <algorithm>
@@ -64,20 +65,6 @@ constexpr std::array<KeyMotion, 4> control_motions{{{VK_LEFT, core::CaretMotion:
                                                     {VK_RIGHT, core::CaretMotion::next_word},
                                                     {VK_HOME, core::CaretMotion::document_start},
                                                     {VK_END, core::CaretMotion::document_end}}};
-// Vim モードの仮想キー → 特別な鍵。通常モードの表と入れ替えて引く（ADR 0012 の決定 4）。
-// Delete は engine の `<Del>`（#1325）。通常モードの DeleteText（ADR 0065 の決定 6）は送らない。
-constexpr std::array<KeyVimSpecial, 12> vim_specials{{{VK_ESCAPE, core::VimSpecialKey::escape},
-                                                      {VK_RETURN, core::VimSpecialKey::enter},
-                                                      {VK_BACK, core::VimSpecialKey::backspace},
-                                                      {VK_LEFT, core::VimSpecialKey::arrow_left},
-                                                      {VK_RIGHT, core::VimSpecialKey::arrow_right},
-                                                      {VK_UP, core::VimSpecialKey::arrow_up},
-                                                      {VK_DOWN, core::VimSpecialKey::arrow_down},
-                                                      {VK_HOME, core::VimSpecialKey::home},
-                                                      {VK_END, core::VimSpecialKey::end},
-                                                      {VK_PRIOR, core::VimSpecialKey::page_up},
-                                                      {VK_NEXT, core::VimSpecialKey::page_down},
-                                                      {VK_DELETE, core::VimSpecialKey::delete_key}}};
 // Ctrl+W は Vim の窓の命令の入口（ADR 0148 の決定 7）。INSERT でも engine へ流し、engine
 // が語を消す（#1040）。Ctrl+O はジャンプの戻り（#1037・D71）で、INSERT では engine が無視する。
 constexpr std::array<KeyVimSpecial, 6> vim_control_specials{
@@ -107,18 +94,6 @@ constexpr char32_t tab_character = U'\t';
         if (entry.key == key)
         {
             return entry.motion;
-        }
-    }
-    return std::nullopt;
-}
-
-[[nodiscard]] std::optional<core::VimSpecialKey> vim_special_for(WPARAM key) noexcept
-{
-    for (const KeyVimSpecial entry : vim_specials)
-    {
-        if (entry.key == key)
-        {
-            return entry.special;
         }
     }
     return std::nullopt;

@@ -617,6 +617,10 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpe
     case core::VimSpecialKey::backspace:
         accept(EditCommand{core::CommandEdit::backspace});
         return std::nullopt;
+    // `<Del>` は窓の Delete と同じ写し（Vim の c_<Del> は accept(EditCommand) が決める・#1325）。
+    case core::VimSpecialKey::delete_key:
+        accept(EditCommand{core::CommandEdit::erase});
+        return std::nullopt;
     case core::VimSpecialKey::arrow_left:
         accept(EditCommand{core::CommandEdit::left});
         return std::nullopt;

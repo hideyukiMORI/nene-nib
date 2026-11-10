@@ -137,13 +137,15 @@ namespace
     std::unreachable();
 }
 
-// Vim の入力行（`:` `/` `?`）の Delete は Vim の c_<Del>（cmdline_erase_chars・#1325）。キャレットの
-// 下の文字を消し、行末では手前の 1 文字を消す（Backspace と同じ・空の行では取消になる）。
-// ほかの入力行（通常モードの「検索: 」「行: 」と面）の Delete は今のまま（ADR 0065 の決定 6）。
+// Vim の入力行（`:` `/` `?`）の Delete は Vim の
+// c_<Del>（cmdline_erase_chars・#1325）。キャレットの 下の文字を消し、行末では手前の 1
+// 文字を消す（Backspace と同じ・空の行では取消になる）。 ほかの入力行（通常モードの「検索: 」「行:
+// 」と面）の Delete は今のまま（ADR 0065 の決定 6）。
 [[nodiscard]] core::CommandEdit vim_line_edit(const core::InputLineView &line,
                                               core::CommandEdit edit) noexcept
 {
-    const bool vim_line = line.prompt == core::InputLinePrompt::ex || vim_search_prompt(line.prompt);
+    const bool vim_line =
+        line.prompt == core::InputLinePrompt::ex || vim_search_prompt(line.prompt);
     if (edit == core::CommandEdit::erase && vim_line && line.caret.value >= line.text.size())
     {
         return core::CommandEdit::backspace;
@@ -232,10 +234,10 @@ void EditorController::accept(const EditCommand &intent)
             return;
         }
     }
-    state_ = state_.with_command_input(recalls_history(edit)
-                                           ? recalled_command(input.value(), state_.ex_history(),
-                                                              state_.search_history(), edit)
-                                           : edited_command(input.value(), edit));
+    state_ = state_.with_command_input(
+        recalls_history(edit)
+            ? recalled_command(input.value(), state_.ex_history(), state_.search_history(), edit)
+            : edited_command(input.value(), edit));
     reach_font_families();
     update_search_preview();
 }

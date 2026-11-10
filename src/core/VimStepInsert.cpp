@@ -248,15 +248,15 @@ constexpr std::size_t erase_window_bytes = 64;
     const Offset line_end = text.line_end(line);
     if (caret.value < line_end.value)
     {
-        return VimStep{state, VimRemoveRange{OffsetRange{
-                                  caret, vim_character_after(text, caret, line_end)}}};
+        return VimStep{
+            state, VimRemoveRange{OffsetRange{caret, vim_character_after(text, caret, line_end)}}};
     }
     if (line.value >= text.line_count())
     {
         return VimStep{state, VimNoEffect{}};
     }
-    return VimStep{state, VimRemoveRange{OffsetRange{
-                              line_end, text.line_start(LineNumber{line.value + 1})}}};
+    return VimStep{
+        state, VimRemoveRange{OffsetRange{line_end, text.line_start(LineNumber{line.value + 1})}}};
 }
 
 // 始めの桁が今の本文で 1 文字の頭か（#1234）。Vim の ins_bs は 1 文字ずつ dec_cursor で戻り、
@@ -521,8 +521,11 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
 {
     const Offset escaped = view.selection.caret;
     const auto &[text, caret, low] = replayed;
-    // 流し直しが手前を消さず何も残さなければ、本文は Esc の前のまま（`2o<C-w>`）。
-    if (low == escaped && caret == escaped)
+    // 流し直しのキャレットの後ろは手を付けていない元の本文の尾で、`<Del>` が前方を消した周の分
+    // だけ元の本文の Esc の位置より先まで食う（#1325）。置き換えの終わりは尾の長さから決める。
+    const Offset consumed{view.text.size_bytes() - (text.size_bytes() - caret.value)};
+    // 流し直しが手前も前方も消さず何も残さなければ、本文は Esc の前のまま（`2o<C-w>`）。
+    if (low == escaped && caret == escaped && consumed == escaped)
     {
         return step;
     }
@@ -534,7 +537,7 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
     const Offset rest{begin.value + body.size() - retreat};
     step.insert_left = retreat;
     step.effect =
-        VimReplaceRange{OffsetRange{begin, escaped}, std::move(body), rest, EditBoundary::absorb};
+        VimReplaceRange{OffsetRange{begin, consumed}, std::move(body), rest, EditBoundary::absorb};
     return step;
 }
 
