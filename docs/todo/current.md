@@ -144,5 +144,5 @@ Issue の無いものは「未起票」。着手は hide の指示で。番号�
 - `verify-window.py` は 2026-09-23 以来初めて全節が通る（#486 / #539）。
 - `tests/conformance` は 336 件通る（#555 で CI の契約を ADR 0136 に合わせた）。
 - planned → active: CPP-003/004/005/009/016・ARC-005/010・CNF-001〜005・GIT-003・QLT-012（反例の証明つき・D49）。prove-gates は 32 本・205 秒。
-- 組み込み125テーマ、Vim oracle 1853件。settings.v4（#1044・2026-10-28）/session.v2、64MiB上限（段 2 は #993・L2a が port を入れた）、同期FilePortを維持。保存schema変更なし（自動退避の `autosave.v1` は #530 で足す）。
-- 2GiB/512MiB/100ms、split、Markdown、構文解析、設定モーダル/日英切替、手動横スクロール/スクロールバー、Vim のドラッグは未対応/未受理（`gj` `gk` `g0` `g$` は 2026-10-18 に main）。Waivers none。
+- 組み込み125テーマ、Vim oracle の fixture 3906 件（2026-11-10・main `04a45f4c`）。settings.v4（#1044・2026-10-28）/session.v2/`autosave.v1`（#530）。開く上限は 1 GiB で読むのは worker（#993・ADR 0159 追補）。構文の色分けの `Language` は plain を除いて 25 値（上の 10-23 の段落の「28 言語」は当時の数え方で、出典は確かめていない）。
+- 設定モーダル/表示言語の切替（#1016 / #1019）、手動横スクロール/スクロールバー、Vim のドラッグ、ミニマップ（PR #1366・未 merge）は未対応/未受理。split（D64・ADR 0148）・Markdown プレビュー（ADR 0155）・構文の色分け（ADR 0156）・`gj` `gk` `g0` `g$` は main。巨大ファイルは 1 GiB まで開く（512 MiB / 1 GiB のベンチは任意・D63）。Waivers none。

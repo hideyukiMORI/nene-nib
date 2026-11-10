@@ -1,6 +1,6 @@
 # ADR 0155 — Markdown プレビューは split の other の枠に置き、更新は券つきの `MarkdownPort` と 200 ms の tick の間引きで行う
 
-- 状態: 提案（段 5 の ui と hide の試用の後に受理）
+- 状態: 受理（段 5 の ui は #801 で main・hide の試用 OK 2026-10-22（beta.6 の 14 項目））
 - 日付: 2026-10-22
 - Issue: #800（段 4・5 の application と core の側・この ADR）・#801（adapters と ui・次の工程）・親 #763
 - 規則: FR-007 / D7、ARC-001 / ARC-003 / ARC-007 / ARC-010 / ARC-011 / CPP-002 / CPP-003 / CPP-004 / CPP-005 / CPP-011、ADR 0004（ワーカー 1 本と仕事ごとの port）/ 0062（券と `collect`・決定 7・15）/ 0078（操作の表）/ 0137（tick の合図・改訂番号で比べる）/ 0148（split の other）/ 0151（`parse_markdown`）
