@@ -960,7 +960,7 @@ void verify_vim_macro_scope()
             ++selected;
         }
     }
-    expect(selected == 159, "the scope replays the 42 macro, 108 register and 9 other "
+    expect(selected == 164, "the scope replays the 42 macro, 108 register and 14 other "
                             "fixtures with a macro register");
     expect(named, "every macro- fixture carries a macro register");
     verify_vim_macro_contracts();
