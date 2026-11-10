@@ -21,10 +21,12 @@ using detail::block_operated;
 using detail::case_changed;
 using detail::cased_block;
 using detail::changed;
+using detail::count_digit_dropped;
 using detail::count_of;
 using detail::counted;
 using detail::counts_as_digit;
 using detail::display_view;
+using detail::drops_count_digit;
 using detail::failed;
 using detail::horizontal_action;
 using detail::input_action;
@@ -482,6 +484,13 @@ namespace detail
         return visual_acted(state, view, VimAction::scroll_line_down);
     case VimSpecialKey::control_y:
         return visual_acted(state, view, VimAction::scroll_line_up);
+    // VISUAL の `<Del>` は `x`（Vim の nv_abbrev → v_visop・#1325）。回数の途中は桁を消す。
+    case VimSpecialKey::delete_key:
+        if (drops_count_digit(state, VimKey{key}))
+        {
+            return count_digit_dropped(state);
+        }
+        return visual_character(state, view, VimCharacter{U'x'});
     }
     std::unreachable();
 }

@@ -806,6 +806,9 @@ void verify_mode_tables()
            "an omap applies after an operator and not as a motion");
     expect(mapped_body({MapRow{visual_only_set, "q", "d", true}}, "abcdef\n", "vlq") == "cdef\n",
            "an xmap applies in VISUAL");
+    expect(mapped_body({MapRow{normal_only, "<Del>", "dd", true}}, "abc\ndef\n", "<Del>") ==
+               "def\n",
+           "the <Del> key is read as the left side of an nmap (#1325)");
 }
 
 // 通常モード（「通常 | Vim」の通常）には効かない（決定 5）。

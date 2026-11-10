@@ -60,6 +60,14 @@ std::optional<Edit> absorbed(const Edit &previous, const Edit &edit)
                     edit.inserted + previous.inserted.substr(erased - previous.at.value),
                     previous.restore};
     }
+    if (edit.at.value == end)
+    {
+        // 入れた本文の終わりから後ろの元の本文を消した（INSERT の `<Del>`・#1325）。消した本文は
+        // 単位が置き換えた本文の続きなので removed の後ろに付き、単位の頭はそのまま。終わりへの
+        // 挿入だけの編集は最初の枝が畳むので、ここへ来るのは削除を伴う編集だけ。
+        return Edit{previous.at, previous.removed + edit.removed, previous.inserted + edit.inserted,
+                    previous.restore};
+    }
     return std::nullopt;
 }
 

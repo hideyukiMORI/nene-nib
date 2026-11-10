@@ -55,11 +55,13 @@ using detail::characters_between;
 using detail::combined_count;
 using detail::completed_character_search;
 using detail::completed_text_object;
+using detail::count_digit_dropped;
 using detail::count_of;
 using detail::counted;
 using detail::counts_as_digit;
 using detail::decimal_base;
 using detail::display_view;
+using detail::drops_count_digit;
 using detail::failed;
 using detail::finished_input_wait;
 using detail::forward_characters;
@@ -1509,6 +1511,25 @@ namespace detail
     next.count = typed;
     return VimStep{std::move(next), VimNoEffect{}};
 }
+
+// Vim の normal_cmd_get_count は回数を打っている途中（count0 が 0 でない）の K_DEL を
+// `count0 /= 10` に読み、命令にしない（#1325）。NORMAL と VISUAL とオペレータの後の回数で同じで、
+// 次の 1 鍵を待つ状態（`r` `f` `"` など）と INSERT では回数を読まない。
+[[nodiscard]] bool drops_count_digit(const VimState &state, const VimKey &key) noexcept
+{
+    const auto *const special = std::get_if<VimSpecialKey>(&key);
+    return special != nullptr && *special == VimSpecialKey::delete_key &&
+           state.mode != VimMode::insert && !state.input_wait.has_value() &&
+           state.count.has_value();
+}
+
+[[nodiscard]] VimStep count_digit_dropped(const VimState &state)
+{
+    VimState next = state;
+    const std::size_t rest = state.count.value_or(VimCount{0}).value / decimal_base;
+    next.count = rest == 0 ? std::nullopt : std::optional{VimCount{rest}};
+    return VimStep{std::move(next), VimNoEffect{}};
+}
 } // namespace detail
 
 namespace
@@ -1545,6 +1566,22 @@ namespace detail
 
 namespace
 {
+// NORMAL の `<Del>` は `x`（Vim の nv_abbrev が cmdchar を 'x' に替えて nv_optrans
+// へ渡す・#1325）。 オペレータの後は x と同じく checkclearopq
+// で失敗する。回数の途中は桁を消す。nv_cmds の K_DEL の 行は NV_KEEPREG を持たないので、normal_cmd
+// が命令の後に `"a` を捨て、nv_optrans が積んだ "dl" は無名へ書く（`"a<Del>` は `x`
+// と同じ範囲を無名へ・実測）。
+[[nodiscard]] VimStep normal_deleted(const VimState &state, const VimEditorView &view)
+{
+    if (drops_count_digit(state, VimKey{VimSpecialKey::delete_key}))
+    {
+        return count_digit_dropped(state);
+    }
+    VimState unnamed = state;
+    unnamed.selected_register = std::nullopt;
+    return normal_character(unnamed, view, VimCharacter{U'x'});
+}
+
 // NORMAL の特別な鍵。矢印は h j k l と同じ動作で、Home / End は 0 と $（ADR 0015 の決定 6）。
 // Esc は保留を捨てるだけ（ADR 0012 の決定 5）。Backspace は行をまたぐ h（ADR 0049 の決定 1）。
 [[nodiscard]] VimStep normal_special(const VimState &state, const VimEditorView &view,
@@ -1596,6 +1633,8 @@ namespace
         return acted(state, view, VimAction::scroll_line_down);
     case VimSpecialKey::control_y:
         return acted(state, view, VimAction::scroll_line_up);
+    case VimSpecialKey::delete_key:
+        return normal_deleted(state, view);
     }
     std::unreachable();
 }
@@ -1637,6 +1676,7 @@ namespace
     case VimSpecialKey::page_down:
     case VimSpecialKey::control_v:
     case VimSpecialKey::control_o:
+    case VimSpecialKey::delete_key:
         return std::nullopt;
     }
     std::unreachable();
@@ -1897,6 +1937,20 @@ namespace
     if (!state.input_wait.has_value())
     {
         std::unreachable();
+    }
+    // 1 鍵を待つ NORMAL / VISUAL の命令（`r` `f` `t` `g` `z` `"` `q` `@` `m` `'` `Ctrl-w`
+    // とテキスト オブジェクト）は K_DEL を名前にも対象にも読まず、Vim の clearopbeep
+    // で失敗して後ろを打ち切る （`r<Del>x` `f<Del>x` `g<Del>x`
+    // は本文を変えない・実測・#1325）。INSERT の `Ctrl-r` の待ちは除く。
+    if (const auto *const special = std::get_if<VimSpecialKey>(&key);
+        special != nullptr && *special == VimSpecialKey::delete_key &&
+        state.mode != VimMode::insert)
+    {
+        // VISUAL は clearop が選択を残すので待ちだけを消し、NORMAL はオペレータと回数も捨てる。
+        VimStep refused = is_visual_mode(state.mode)
+                              ? VimStep{finished_input_wait(state), VimNoEffect{}}
+                              : cancelled(state);
+        return failed(std::move(refused), VimRepeatFailure::refused);
     }
     return std::visit([&](const auto wait) { return awaited_step(state, view, wait, key); },
                       state.input_wait.value());
