@@ -2001,6 +2001,16 @@ bool vim_reads_clipboard(const VimState &state, const VimKey &key) noexcept
            (*prefix == VimPrefix::insert_register && names_clipboard(key));
 }
 
+bool vim_continues_count(const VimState &state, const VimKey &key) noexcept
+{
+    if (state.mode == VimMode::insert || state.input_wait.has_value())
+    {
+        return false;
+    }
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    return character != nullptr && character->code == U'0' && counts_as_digit(state, U'0');
+}
+
 VimState vim_clipboard_loaded(const VimState &state, VimRegister value)
 {
     VimState next = state;

@@ -49,9 +49,12 @@ map_row_of(VimModeSet modes, std::string_view lhs, std::string_view rhs, bool re
 // 設定の `maps` と `mapleader` から表を作る（`<leader>` はここで展開する）。
 [[nodiscard]] std::expected<KeyMap, KeyMapFailure> key_map_of(const EditorSettings &settings);
 
-// 今の Vim の状態で表を引くモード（決定 5）。1 鍵の引数を待つ間（`f` `r` `m` `"` `g` `z`
-// の次の鍵・テキストオブジェクトの `i` `a` の次）は無し（Vim と同じく表を引かない）。
-[[nodiscard]] std::optional<VimMapMode> vim_map_mode_of(const VimState &state) noexcept;
+// 今の Vim の状態で、次に読む鍵 front から表を引くモード（決定 5）。1 鍵の引数を待つ間（`f` `r`
+// `m` `"` `g` `z` の次の鍵・テキストオブジェクトの `i` `a` の次）は無し（Vim
+// と同じく表を引かない）。 front が回数の続きの `0`（vim_continues_count）のときも無し（Vim の
+// no_zero_mapping・`nmap 0 G` があっても `50G` は 50 行目・ADR 0176 の追補 30・#1311）。
+[[nodiscard]] std::optional<VimMapMode> vim_map_mode_of(const VimState &state,
+                                                        const VimKey &front) noexcept;
 
 // 表を 1 鍵ぶん引く 1 本（決定 2・4）。pending は待ちの列（前の答えが Pending なら積んだ鍵・
 // Emit なら waiting）。表が空なら分岐 1 つで Pass。右辺は生のまま返し、1 段の引き直しは
@@ -66,8 +69,8 @@ map_row_of(VimModeSet modes, std::string_view lhs, std::string_view rhs, bool re
 // `map` の右辺の残り rest（KeyMapEmit.remaps から単位の終わりまで）の先頭の 1 つを、流す時点の
 // モード mode で 1 段だけ引く（Vim は右辺の鍵も読む時点の State で引く・ADR 0176 の追補 26・
 // #1276）。左辺が最も長い行が rest の中で当たればその左辺の長さと右辺（引き直さない）、当たらない
-// か mode が無い（1 鍵の引数待ち・入力行）なら 1 と rest の先頭の 1 鍵。待たない。返す右辺は表の
-// 中を指すので、呼び手は表を作り直しうる鍵を流す前に写す。
+// か mode が無い（1 鍵の引数待ち・入力行・回数の続きの `0`）なら 1 と rest の先頭の 1
+// 鍵。待たない。返す右辺は表の 中を指すので、呼び手は表を作り直しうる鍵を流す前に写す。
 [[nodiscard]] std::pair<std::size_t, std::span<const VimKey>>
 rhs_unit_step(const KeyMap &map, std::optional<VimMapMode> mode, std::span<const VimKey> rest);
 } // namespace nenenib::core

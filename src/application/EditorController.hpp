@@ -252,8 +252,10 @@ class EditorController final
     // モードになったら最後の 1 鍵の前までを待ちに置いて打った鍵の入口で引く。
     [[nodiscard]] std::optional<core::VimRepeatFailure>
     typed_again(std::span<const core::VimKey> rest);
-    // 表を引くモード。Vim モードで入力行が閉じていて、1 鍵の引数を待っていないときだけ値がある。
-    [[nodiscard]] std::optional<core::VimMapMode> key_map_mode() const noexcept;
+    // 次に読む鍵 front から表を引くモード。Vim モードで入力行が閉じていて、1 鍵の引数を待たず、
+    // front が回数の続きの `0` でないときだけ値がある（core::vim_map_mode_of・#1311）。
+    [[nodiscard]] std::optional<core::VimMapMode>
+    key_map_mode(const core::VimKey &front) const noexcept;
     // 積んだ鍵を key_map_flush で流して空にする（MapTimeout と、待ちを保たない意図の入口）。
     void flush_key_map_pending();
     // 積んだ鍵を流さずに捨てる（窓が閉じていく EndSession だけ）。
