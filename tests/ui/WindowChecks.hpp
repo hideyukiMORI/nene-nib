@@ -43,4 +43,6 @@ void verify_save_question();
 void verify_vim_special_keys();
 // 閉じる手順の列（ADR 0133 の追補 #1340）。
 void verify_closing_steps();
+// Ctrl+Shift+M はどのモードでも操作 toggle_preview（施主決定 D77・#1354）。
+void verify_preview_cycle_key();
 } // namespace nenenib::tests::ui

@@ -130,7 +130,9 @@ right pane (previewOpened-<scheme>.png: the divider is drawn and the right band 
 `hello` is typed at the start of the text and the right band changes once the 200 ms tick has
 asked for a new parse (previewUpdated-<scheme>.png), a click in the preview leaves the caret
 where it was, a click on the first task check box toggles it once the tick has asked for the
-edited body (previewTask-<scheme>.png, Issue #1101), and Ctrl+Shift+M closes it again (previewClosed-<scheme>.png: no divider).
+edited body (previewTask-<scheme>.png, Issue #1101), Ctrl+Shift+M moves it to the whole body
+(previewCycledFull-<scheme>.png, Issue #1354: the key cycles side, full and closed) and Ctrl+Shift+M
+closes it again (previewClosed-<scheme>.png: no divider).
 `--preview --scheme grid` opens one Markdown line of 20,000 characters, answers the grid question
 with yes and opens the preview (previewGrid.png) for the anchor to be checked by eye.
 Issue #1127 (#1046 N1a) adds the ordinary find prompt (ADR 0174), which `--find` runs alone: a
@@ -2909,11 +2911,17 @@ def drive_preview(window, scheme: str, frames: Path | None) -> dict:
     record.update(toggle_preview_task(window, clicked, size, bands[1]))
     snapshot(frames, window, f"previewTask-{scheme}")
     clicked = capture(window, width, height)
-    closed = split_chord(window, clicked, size, frames, f"previewClosed-{scheme}",
+    # Issue #1354（D77）: Ctrl+Shift+M は側の枠 → 全面 → 閉じる と巡る。2 回目で全面（左の本文の帯も
+    # プレビューに変わる）、3 回目で閉じる。
+    full = split_chord(window, clicked, size, frames, f"previewCycledFull-{scheme}",
+                       ([VK_CONTROL, VK_SHIFT], VK_M))
+    record["fullChangedLeft"] = box_changed(clicked, full, width, bands[0])
+    assert record["fullChangedLeft"], "the second Ctrl+Shift+M did not move the preview to full"
+    closed = split_chord(window, full, size, frames, f"previewClosed-{scheme}",
                          ([VK_CONTROL, VK_SHIFT], VK_M))
     record["closedDivider"] = divider_colours(closed, width, divider)
     record["closedChanged"] = box_changed(clicked, closed, width, bands[1])
-    assert record["closedChanged"], "Ctrl+Shift+M did not close the preview"
+    assert record["closedChanged"], "the third Ctrl+Shift+M did not close the preview"
     return record
 
 

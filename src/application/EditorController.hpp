@@ -530,8 +530,8 @@ class EditorController final
     void accept(const SwitchPane &);
     void accept(const ClosePane &);
     void accept(const ScrollPane &intent);
-    // Markdown のプレビュー（ADR 0155）。開く・閉じるは使う人の操作（決定 3）、tick は間引きの
-    // 合図で使う人の操作ではない（決定 8）。
+    // Markdown のプレビュー（ADR 0155）。見せ方の巡回は使う人の操作（決定 3・追補 #1354）、tick
+    // は間引きの合図で使う人の操作ではない（決定 8）。
     void accept(const TogglePreview &);
     void accept(const PreviewTick &);
     // チェックボックスの切り替え（ADR 0155 の追補 24）。使う人の操作で、本文の編集 1 回。
@@ -539,6 +539,8 @@ class EditorController final
     // 見せ方を選ぶ（ADR 0155 の改訂 16）。F1 の一覧と `:preview` の 1 本。
     void accept(const SetPreviewPlacement &intent);
     void place_preview(PreviewPlacement placement);
+    // off から側の枠を開く（決定 3）。place_preview の side の 1 か所から呼ぶ。
+    void open_side_preview();
     // 全面をやめて placement（off か side）へ。本文の見える位置を錨の行に揃える（改訂 17）。
     void leave_full_preview(PreviewPlacement placement);
     // `:preview?` と `:preview full|side|off` の答え（今の見せ方を 1 行）。
