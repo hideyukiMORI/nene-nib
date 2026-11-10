@@ -10,6 +10,11 @@
 //   3. 復号できた値は符号化して復号し直すと同じ値になる（見本は変異の前にも確かめる）。
 //   4. 復号できた値は ADR の上限と不変量を守る（数・1 始まりの位置・絶対のパス・順位の順列）。
 // 自動退避のスナップショット（本文）は復号を持たずバイト列のまま返すので、この試験の対象外。
+// ユーザーテーマのファイル（ThemeCodec / ColorCodec・ADR 0024 / 0117・#1289）も同じ変異の族に載せ、
+// 加えて組み込みの 125 テーマを省略の無いファイルに書いて復号すると同じ色に戻ること、色を乱数で
+// 替えたテーマは対比が足りれば往復し足りなければ insufficient_contrast だけで断ること、色の文字列の
+// 復号が「# と 16 進ちょうど 6 / 8 桁」の模型と一致することを確かめる（製品は書く口を持たないので
+// 書き手は試験の側）。
 // 回数は Debug（ASan）で 1 秒以内に終わる値。50 倍の走りは rounds を手で 50 にして回す（commit
 // しない）。 生成器は std::mt19937_64
 // の剰余だけを使い、分布の型・時刻・環境変数は使わない（ARC-007）。
@@ -18,6 +23,8 @@
 #include "AutosaveEntry.hpp"
 #include "AutosaveFailure.hpp"
 #include "BookmarkCodec.hpp"
+#include "BuiltinThemes.hpp"
+#include "ColorCodec.hpp"
 #include "EditorSettings.hpp"
 #include "FileBookmarks.hpp"
 #include "FileBookmarksFailure.hpp"
@@ -33,6 +40,13 @@
 #include "SettingsFailure.hpp"
 #include "SettingsIssue.hpp"
 #include "SettingsVersion.hpp"
+#include "Theme.hpp"
+#include "ThemeCodec.hpp"
+#include "ThemeColorFields.hpp"
+#include "ThemeContrast.hpp"
+#include "ThemeDocument.hpp"
+#include "ThemeFailure.hpp"
+#include "ThemeName.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
@@ -43,6 +57,7 @@
 #include <cstdio>
 #include <expected>
 #include <format>
+#include <optional>
 #include <random>
 #include <span>
 #include <string>
@@ -692,6 +707,327 @@ std::string_view autosave_break(std::string_view bytes)
     return holds;
 }
 
+// --- テーマのファイル（ADR 0024 / 0117・#1289）---
+
+// 試験のテーマの名前（組み込みの名前と system は予約なので使わない）。
+constexpr std::string_view theme_stem = "my-theme";
+constexpr std::size_t theme_inputs = 400U * rounds;
+constexpr std::size_t color_inputs = 3000U * rounds;
+// 色の文字列の生成に使う文字（16 進・大小・16 進でない英字・符号・空白・#）。
+constexpr std::string_view color_alphabet = "#0123456789abcdefABCDEFgxG+- ";
+
+[[nodiscard]] core::ThemeName theme_name()
+{
+    return core::ThemeName::parse(theme_stem).value();
+}
+
+[[nodiscard]] std::string hex_of(core::RgbColor color)
+{
+    return std::format("#{:02X}{:02X}{:02X}", color.red, color.green, color.blue);
+}
+
+[[nodiscard]] std::string hex_of(core::RgbaColor color)
+{
+    return hex_of(color.color) + std::format("{:02X}", color.alpha);
+}
+
+// テーマの値を、省略の無い v1 のファイルに書く（製品は書く口を持たないので試験の側の書き手）。
+[[nodiscard]] std::string theme_text(const core::Theme &theme)
+{
+    std::string text =
+        std::format("version=1\nname={}\nappearance={}\nauthor={}\nlicense={}\nurl={}\n",
+                    theme_stem, theme.appearance == core::Appearance::dark ? "dark" : "light",
+                    theme.source.author, theme.source.license, theme.source.url);
+    for (const auto &field : adapters::body_color_fields)
+    {
+        text += std::format("{}={}\n", field.key, hex_of(theme.body.*(field.member)));
+    }
+    for (const auto &field : adapters::ui_rgb_fields)
+    {
+        text += std::format("{}={}\n", field.key, hex_of(theme.ui.*(field.member)));
+    }
+    for (const auto &field : adapters::ui_rgba_fields)
+    {
+        text += std::format("{}={}\n", field.key, hex_of(theme.ui.*(field.member)));
+    }
+    return text;
+}
+
+[[nodiscard]] bool same_palettes(const core::Theme &left, const core::Theme &right)
+{
+    const auto body = [&left, &right](const auto &field)
+    { return left.body.*(field.member) == right.body.*(field.member); };
+    const auto ui = [&left, &right](const auto &field)
+    { return left.ui.*(field.member) == right.ui.*(field.member); };
+    return std::ranges::all_of(adapters::body_color_fields, body) &&
+           std::ranges::all_of(adapters::ui_rgb_fields, ui) &&
+           std::ranges::all_of(adapters::ui_rgba_fields, ui);
+}
+
+[[nodiscard]] bool same_theme(const core::Theme &left, const core::Theme &right)
+{
+    return left.name == right.name && left.appearance == right.appearance &&
+           left.source.author == right.source.author &&
+           left.source.license == right.source.license && left.source.url == right.source.url &&
+           same_palettes(left, right);
+}
+
+// ファイルから読めない失敗（not_found・unreadable）は復号から返らない。
+[[nodiscard]] bool theme_failure_expected(core::ThemeFailure failure) noexcept
+{
+    switch (failure)
+    {
+    case core::ThemeFailure::not_found:
+    case core::ThemeFailure::unreadable:
+        return false;
+    case core::ThemeFailure::too_large:
+    case core::ThemeFailure::malformed:
+    case core::ThemeFailure::duplicate_key:
+    case core::ThemeFailure::unknown_key:
+    case core::ThemeFailure::missing_field:
+    case core::ThemeFailure::unsupported_version:
+    case core::ThemeFailure::invalid_name:
+    case core::ThemeFailure::name_mismatch:
+    case core::ThemeFailure::reserved_name:
+    case core::ThemeFailure::invalid_text:
+    case core::ThemeFailure::invalid_appearance:
+    case core::ThemeFailure::invalid_color:
+    case core::ThemeFailure::insufficient_contrast:
+        return true;
+    }
+    std::unreachable();
+}
+
+// 復号できたテーマは名前が期待どおりで、対比が足り、省略の無いファイルに書き直して復号すると同じ
+// 値になる（決定性も同じ呼び出しで見る）。
+std::string_view theme_break(std::string_view bytes)
+{
+    const auto decoded = adapters::decode_theme(bytes, theme_name());
+    const auto twice = adapters::decode_theme(bytes, theme_name());
+    if (decoded.has_value() != twice.has_value() || (!decoded && decoded.error() != twice.error()))
+    {
+        return "a theme decodes differently on a second call";
+    }
+    if (!decoded)
+    {
+        return theme_failure_expected(decoded.error()) ? holds
+                                                       : "a theme fails with a non-decode failure";
+    }
+    const core::Theme view = core::theme_view(decoded.value());
+    if (view.name != theme_stem || !adapters::theme_has_contrast(view) ||
+        !same_theme(view, core::theme_view(twice.value())))
+    {
+        return "a decoded theme breaks its invariants";
+    }
+    const auto again = adapters::decode_theme(theme_text(view), theme_name());
+    if (!again || !same_theme(core::theme_view(again.value()), view))
+    {
+        return "a decoded theme does not round trip";
+    }
+    return holds;
+}
+
+bool theme_decodes(std::string_view bytes)
+{
+    return adapters::decode_theme(bytes, theme_name()).has_value();
+}
+
+// 組み込みのテーマを名前だけ替えた見本（変異の元・往復の土台）。
+[[nodiscard]] core::Theme renamed(const core::Theme &theme)
+{
+    core::Theme copy = theme;
+    copy.name = theme_stem;
+    return copy;
+}
+
+[[nodiscard]] const std::vector<std::string> &theme_texts()
+{
+    static const std::vector<std::string> texts = []
+    {
+        std::vector<std::string> all;
+        for (const core::Theme &theme : core::builtin_themes)
+        {
+            all.push_back(theme_text(renamed(theme)));
+        }
+        return all;
+    }();
+    return texts;
+}
+
+[[nodiscard]] Samples theme_samples()
+{
+    static const std::vector<std::string_view> views(theme_texts().begin(), theme_texts().end());
+    return views;
+}
+
+// 書いたテーマの復号は、対比が足りれば書いた値と同じ、足りなければ insufficient_contrast。
+[[nodiscard]] bool theme_round_trips(const core::Theme &theme)
+{
+    const auto decoded = adapters::decode_theme(theme_text(theme), theme_name());
+    if (!adapters::theme_has_contrast(theme))
+    {
+        return !decoded && decoded.error() == core::ThemeFailure::insufficient_contrast;
+    }
+    return decoded.has_value() && same_theme(core::theme_view(decoded.value()), theme);
+}
+
+void verify_builtin_themes_round_trip()
+{
+    const bool all = std::ranges::all_of(core::builtin_themes, [](const core::Theme &theme)
+                                         { return theme_round_trips(renamed(theme)); });
+    expect(all, "every builtin theme written as a file decodes to the same colors");
+}
+
+[[nodiscard]] core::RgbColor random_rgb(Random &random)
+{
+    return core::RgbColor{static_cast<std::uint8_t>(below(random, 256U)),
+                          static_cast<std::uint8_t>(below(random, 256U)),
+                          static_cast<std::uint8_t>(below(random, 256U))};
+}
+
+// 組み込みのテーマの色を 1〜6 個だけ乱数の色に替える（対比の足りない組も作る）。
+[[nodiscard]] core::Theme perturbed(Random &random)
+{
+    core::Theme theme =
+        renamed(core::builtin_themes.at(below(random, core::builtin_themes.size())));
+    const std::size_t edits = 1U + below(random, 6U);
+    for (std::size_t edit = 0; edit < edits; ++edit)
+    {
+        const std::size_t at =
+            below(random, adapters::body_color_fields.size() + adapters::ui_rgb_fields.size() + 1U);
+        if (at < adapters::body_color_fields.size())
+        {
+            theme.body.*(adapters::body_color_fields.at(at).member) = random_rgb(random);
+            continue;
+        }
+        if (at < adapters::body_color_fields.size() + adapters::ui_rgb_fields.size())
+        {
+            const auto &field = adapters::ui_rgb_fields.at(at - adapters::body_color_fields.size());
+            theme.ui.*(field.member) = random_rgb(random);
+            continue;
+        }
+        theme.ui.selection =
+            core::RgbaColor{random_rgb(random), static_cast<std::uint8_t>(below(random, 256U))};
+    }
+    return theme;
+}
+
+void verify_perturbed_themes()
+{
+    Random random{8921U};
+    std::size_t broken = 0;
+    std::size_t refused = 0;
+    for (std::size_t input = 0; input < theme_inputs; ++input)
+    {
+        const core::Theme theme = perturbed(random);
+        refused += adapters::theme_has_contrast(theme) ? 0U : 1U;
+        if (!theme_round_trips(theme) && broken++ == 0U)
+        {
+            std::fprintf(stderr, "  perturbed theme: does not round trip:\n%s\n",
+                         theme_text(theme).c_str());
+        }
+    }
+    expect(broken == 0U, "perturbed themes round trip or fail only on contrast");
+    expect(refused > 0U && refused < theme_inputs,
+           "the theme generator makes both readable and low-contrast themes");
+}
+
+// 色の模型: `#` と 16 進の digits 個ちょうど（大小どちらも）だけを受ける。
+[[nodiscard]] std::optional<std::uint32_t> model_hex(std::string_view text, std::size_t digits)
+{
+    if (text.size() != digits + 1U || text.front() != '#')
+    {
+        return std::nullopt;
+    }
+    std::uint32_t value = 0;
+    for (const char digit : text.substr(1))
+    {
+        const auto position =
+            std::string_view("0123456789abcdef")
+                .find(static_cast<char>(digit >= 'A' && digit <= 'F' ? digit - 'A' + 'a' : digit));
+        if (position == std::string_view::npos)
+        {
+            return std::nullopt;
+        }
+        value = value * 16U + static_cast<std::uint32_t>(position);
+    }
+    return value;
+}
+
+[[nodiscard]] bool color_matches(std::string_view text)
+{
+    const auto rgb = adapters::decode_rgb(text);
+    const auto rgba = adapters::decode_rgba(text);
+    const auto model_rgb = model_hex(text, 6U);
+    const auto model_rgba = model_hex(text, 8U);
+    const bool rgb_same =
+        model_rgb.has_value()
+            ? rgb.has_value() && hex_of(rgb.value()) == std::format("#{:06X}", model_rgb.value())
+            : !rgb && rgb.error() == core::ThemeFailure::invalid_color;
+    const bool rgba_same =
+        model_rgba.has_value()
+            ? rgba.has_value() && hex_of(rgba.value()) == std::format("#{:08X}", model_rgba.value())
+            : !rgba && rgba.error() == core::ThemeFailure::invalid_color;
+    return rgb_same && rgba_same;
+}
+
+[[nodiscard]] std::string random_color_text(Random &random)
+{
+    std::string text = below(random, 4U) == 0U ? "" : "#";
+    const std::size_t length =
+        below(random, 4U) == 0U ? below(random, 11U) : 6U + 2U * below(random, 2U);
+    for (std::size_t at = 0; at < length; ++at)
+    {
+        const bool hex = below(random, 8U) != 0U;
+        text.push_back(hex ? color_alphabet.at(1U + below(random, 22U))
+                           : color_alphabet.at(below(random, color_alphabet.size())));
+    }
+    return text;
+}
+
+[[nodiscard]] char lowered_hex(char digit) noexcept
+{
+    return digit >= 'A' && digit <= 'F' ? static_cast<char>(digit - 'A' + 'a') : digit;
+}
+
+// 各色の 256 値は大文字でも小文字でも往復する。
+[[nodiscard]] bool channel_round_trips(std::uint32_t value)
+{
+    const core::RgbColor color{static_cast<std::uint8_t>(value),
+                               static_cast<std::uint8_t>(255U - value),
+                               static_cast<std::uint8_t>(value * 7U)};
+    const std::string upper = hex_of(color);
+    std::string lower = upper;
+    std::ranges::transform(lower, lower.begin(), lowered_hex);
+    const auto upper_read = adapters::decode_rgb(upper);
+    const auto lower_read = adapters::decode_rgb(lower);
+    return upper_read.has_value() && lower_read.has_value() && upper_read.value() == color &&
+           lower_read.value() == color;
+}
+
+void verify_color_codec()
+{
+    Random random{8922U};
+    std::size_t broken = 0;
+    std::size_t accepted = 0;
+    for (std::size_t input = 0; input < color_inputs; ++input)
+    {
+        const std::string text = random_color_text(random);
+        accepted += adapters::decode_rgb(text).has_value() ? 1U : 0U;
+        if (!color_matches(text) && broken++ == 0U)
+        {
+            std::fprintf(stderr, "  color '%s' differs from the model\n", text.c_str());
+        }
+    }
+    for (std::uint32_t value = 0; value < 256U; ++value)
+    {
+        broken += channel_round_trips(value) ? 0U : 1U;
+    }
+    expect(broken == 0U, "decode_rgb and decode_rgba match the hex model and round trip");
+    expect(accepted > color_inputs / 10U && accepted < color_inputs,
+           "the color generator makes both valid and invalid colors");
+}
+
 // --- 見本・境界・決定性 ---
 
 // 見本は変異の前に復号できて往復する（命題 3）。
@@ -852,6 +1188,17 @@ void verify_generators_are_deterministic()
     expect(same, "the generators give the same inputs for the same seed");
 }
 
+void verify_theme_families()
+{
+    verify_builtin_themes_round_trip();
+    verify_samples(theme_samples(), theme_break, theme_decodes,
+                   "the theme samples decode and round trip");
+    verify_perturbed_themes();
+    verify_color_codec();
+    verify_family("themes hold on mutated samples", 8906U, mutated, {theme_samples(), theme_break});
+    verify_family("themes hold on composed lines", 8916U, composed, {theme_samples(), theme_break});
+}
+
 void verify_mutated_families()
 {
     verify_family("settings hold on mutated samples", 8901U, mutated,
@@ -895,6 +1242,7 @@ int main(int argc, char **argv)
     verify_byte_limits();
     verify_mutated_families();
     verify_composed_families();
+    verify_theme_families();
     std::printf("Persisted format properties: %zu checks, %zu failures\n", checks(), failures());
     return failures() == 0 ? 0 : 1;
 }
