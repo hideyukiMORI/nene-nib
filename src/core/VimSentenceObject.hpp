@@ -1,11 +1,13 @@
 #pragma once
 
+#include "Offset.hpp"
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
 #include "VimTextObjectOutcome.hpp"
 #include "VimTextObjectRequest.hpp"
 
 #include <cstddef>
+#include <optional>
 
 namespace nenenib::core
 {
@@ -22,4 +24,12 @@ namespace nenenib::core
                                                              const Selection &selection,
                                                              VimTextObjectRequest request,
                                                              std::size_t count);
+
+// 文の移動 `(` `)` の着地（Vim の findsent(dir, count)・Issue #1316・ADR 0031 の決定 10 の追補）。
+// 回数 1 つぶんの歩きは `is` `as` と同じ境の関数（findsent(dir, 1)）で、回数だけ繰り返す。文の
+// 終わりを探す歩きが本文の端で尽きたとき、残りの回数があれば nullopt（Vim の FAIL・動かない）、
+// 最後の 1 つなら尽きた所（前向きは最後の行の内容の終わり＝Vim が NUL を置く桁）。NORMAL の寄せ
+// （adjust_cursor）は呼び出し元が行う。純関数。
+[[nodiscard]] std::optional<Offset> vim_sentence_motion(const TextBuffer &text, Offset caret,
+                                                        bool forward, std::size_t count);
 } // namespace nenenib::core

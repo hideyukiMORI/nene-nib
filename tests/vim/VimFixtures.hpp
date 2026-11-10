@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 8e03e20c46a638988acc2457be0bb3ed459c813a46309bb3f42b396b01a9d95d / 3581 fixtures
+// fixtures.json: sha256 83c9b933aa58db70d5ea3630073cfc848f8d6acbfa5e5cef87ed0c08aac33f02 / 3641 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3581> vim_fixtures{{
+constexpr std::array<VimFixture, 3641> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3593,6 +3593,66 @@ constexpr std::array<VimFixture, 3581> vim_fixtures{{
     {"yank-line-caret-gg-from-the-wanted-column", "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\nab\n\t\tdeep tab line", "15l8Gyggj", "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\nab\n\t\tdeep tab line", 2, 1, "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\n", "V", std::nullopt},
     {"yank-line-caret-k-keeps-the-wanted-column", "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\nab\n\t\tdeep tab line", "15l3jykj", "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\nab\n\t\tdeep tab line", 4, 1, "\tfoo bar baz\n\n", "V", std::nullopt},
     {"yank-line-caret-screen-top-ignores-scrolloff", "01 line words here\n02 line words here\n  03 indented words\n04 line words here\n05 line words here\n  06 indented words\n07 line words here\n08 line words here\n  09 indented words\n10 line words here\n11 line words here\n  12 indented words\n13 line words here\n14 line words here\n  15 indented words\n16 line words here\n17 line words here\n  18 indented words\n19 line words here\n20 line words here\n  21 indented words\n22 line words here\n23 line words here\n  24 indented words\n25 line words here\n26 line words here\n  27 indented words\n28 line words here\n29 line words here\n  30 indented words\n31 line words here\n32 line words here\n  33 indented words\n34 line words here\n35 line words here\n  36 indented words\n37 line words here\n38 line words here\n  39 indented words\n40 line words here", "yH", "01 line words here\n02 line words here\n  03 indented words\n04 line words here\n05 line words here\n  06 indented words\n07 line words here\n08 line words here\n  09 indented words\n10 line words here\n11 line words here\n  12 indented words\n13 line words here\n14 line words here\n  15 indented words\n16 line words here\n17 line words here\n  18 indented words\n19 line words here\n20 line words here\n  21 indented words\n22 line words here\n23 line words here\n  24 indented words\n25 line words here\n26 line words here\n  27 indented words\n28 line words here\n29 line words here\n  30 indented words\n31 line words here\n32 line words here\n  33 indented words\n34 line words here\n35 line words here\n  36 indented words\n37 line words here\n38 line words here\n  39 indented words\n40 line words here", 4, 1, "04 line words here\n05 line words here\n  06 indented words\n07 line words here\n08 line words here\n  09 indented words\n", "V", VimViewportFixture{10, 4, 9, 2, 1, 5, 0, 0, 0, 0, 0, 0, 3}},
+    {"paragraph-motion-forward", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "}", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", 3, 1, "", "", std::nullopt},
+    {"paragraph-motion-count-skips-white-line", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "2}", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", 7, 1, "", "", std::nullopt},
+    {"paragraph-motion-last-line-last-char", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "3}", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", 8, 5, "", "", std::nullopt},
+    {"paragraph-motion-count-past-end-fails", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "4}x", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", 1, 1, "", "", std::nullopt},
+    {"paragraph-motion-backward", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "G{", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", 7, 1, "", "", std::nullopt},
+    {"paragraph-motion-backward-past-start-fails", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "G4{x", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", 8, 1, "", "", std::nullopt},
+    {"paragraph-motion-at-first-line-stays", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "{x", "1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", 1, 1, "a", "v", std::nullopt},
+    {"paragraph-motion-from-empty-line", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "jj}", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", 7, 1, "", "", std::nullopt},
+    {"paragraph-motion-from-white-line-backward", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "jjj{", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", 3, 1, "", "", std::nullopt},
+    {"paragraph-motion-d-linewise", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "d}", "\n  \ne2 f2\ng2\n\nh3 i3", 1, 1, "a1 b1\nc1 d1\n", "V", std::nullopt},
+    {"paragraph-motion-d-charwise", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "ld}", "a\n\n  \ne2 f2\ng2\n\nh3 i3", 1, 1, "1 b1\nc1 d1", "v", std::nullopt},
+    {"paragraph-motion-d-backward-linewise", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "jd{", "c1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", 1, 1, "a1 b1\n", "V", std::nullopt},
+    {"paragraph-motion-d-backward-charwise", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "j$d{", "1\n\n  \ne2 f2\ng2\n\nh3 i3", 1, 1, "a1 b1\nc1 d", "v", std::nullopt},
+    {"paragraph-motion-y-backward-from-last", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "G$y{", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", 7, 1, "\nh3 i", "v", std::nullopt},
+    {"paragraph-motion-d-count-to-end-whole-lines", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "d3}", "", 1, 1, "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3\n", "V", std::nullopt},
+    {"paragraph-motion-d-count-fails", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "d4}x", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", 1, 1, "", "", std::nullopt},
+    {"paragraph-motion-d-last-line", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "Gd}", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\n", 8, 1, "h3 i3", "v", std::nullopt},
+    {"paragraph-motion-d-last-char", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "G$d}", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i", 8, 4, "3", "v", std::nullopt},
+    {"paragraph-motion-d-from-empty-line", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "jjd}", "a1 b1\nc1 d1\n\nh3 i3", 3, 1, "\n  \ne2 f2\ng2\n", "V", std::nullopt},
+    {"paragraph-motion-c", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "lc}X<Esc>", "aX\n\n  \ne2 f2\ng2\n\nh3 i3", 1, 2, "1 b1\nc1 d1", "v", std::nullopt},
+    {"paragraph-motion-visual", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "v}d", "  \ne2 f2\ng2\n\nh3 i3", 1, 1, "a1 b1\nc1 d1\n\n", "v", std::nullopt},
+    {"paragraph-motion-visual-line", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "V}d", "  \ne2 f2\ng2\n\nh3 i3", 1, 2, "a1 b1\nc1 d1\n\n", "V", std::nullopt},
+    {"paragraph-motion-visual-backward", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "G$v{d", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n", 7, 1, "\nh3 i3", "v", std::nullopt},
+    {"paragraph-motion-jump-back", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "2}''", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", 1, 1, "", "", std::nullopt},
+    {"paragraph-motion-numbered-register", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "d}\"1p", "\na1 b1\nc1 d1\n  \ne2 f2\ng2\n\nh3 i3", 2, 1, "a1 b1\nc1 d1\n", "V", std::nullopt},
+    {"paragraph-motion-repeat", "a1 b1\nc1 d1\n\n  \ne2 f2\ng2\n\nh3 i3", "d}.", "\nh3 i3", 1, 1, "\n  \ne2 f2\ng2\n", "V", std::nullopt},
+    {"paragraph-motion-empty-lines-forward", "x\n\n\ny", "j}", "x\n\n\ny", 4, 1, "", "", std::nullopt},
+    {"paragraph-motion-empty-lines-d", "x\n\n\ny", "jd}", "x", 1, 1, "\n\ny\n", "V", std::nullopt},
+    {"paragraph-motion-multibyte-last-char", "あい\n\nうえお", "2}x", "あい\n\nうえ", 3, 4, "お", "v", std::nullopt},
+    {"sentence-motion-forward", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", ")", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", 1, 10, "", "", std::nullopt},
+    {"sentence-motion-count", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "2)", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", 1, 23, "", "", std::nullopt},
+    {"sentence-motion-next-line", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "3)", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", 2, 1, "", "", std::nullopt},
+    {"sentence-motion-empty-line", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "4)", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", 3, 1, "", "", std::nullopt},
+    {"sentence-motion-runs-out-at-last", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "7)x", "One two. Three four!  Five?\nSix seven\n\nEight. Nin", 4, 10, "e", "v", std::nullopt},
+    {"sentence-motion-count-past-end-fails", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "8)x", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", 1, 1, "", "", std::nullopt},
+    {"sentence-motion-backward", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "G$(", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", 4, 8, "", "", std::nullopt},
+    {"sentence-motion-backward-to-start", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "G$7(", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", 1, 1, "", "", std::nullopt},
+    {"sentence-motion-backward-past-start-fails", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "G$8(x", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", 4, 11, "", "", std::nullopt},
+    {"sentence-motion-backward-at-start-stays", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "(x", "ne two. Three four!  Five?\nSix seven\n\nEight. Nine", 1, 1, "O", "v", std::nullopt},
+    {"sentence-motion-backward-count-at-start-fails", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "2(x", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", 1, 1, "", "", std::nullopt},
+    {"sentence-motion-d", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "d)", "Three four!  Five?\nSix seven\n\nEight. Nine", 1, 1, "One two. ", "v", std::nullopt},
+    {"sentence-motion-d-count", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "d2)", "Five?\nSix seven\n\nEight. Nine", 1, 1, "One two. Three four!  ", "v", std::nullopt},
+    {"sentence-motion-c", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "c)X<Esc>", "XThree four!  Five?\nSix seven\n\nEight. Nine", 1, 1, "One two. ", "v", std::nullopt},
+    {"sentence-motion-y-backward", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "fry(", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", 1, 10, "Th", "v", std::nullopt},
+    {"sentence-motion-d-last-sentence", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "Gwd)", "One two. Three four!  Five?\nSix seven\n\nEightNine", 4, 6, ". ", "v", std::nullopt},
+    {"sentence-motion-d-last-char", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "G$d)", "One two. Three four!  Five?\nSix seven\n\nEight. Nin", 4, 10, "e", "v", std::nullopt},
+    {"sentence-motion-d-linewise", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "jd)", "One two. Three four!  Five?\n\nEight. Nine", 2, 1, "Six seven\n", "V", std::nullopt},
+    {"sentence-motion-d-backward-linewise", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "jjd(", "One two. Three four!  Five?\n\nEight. Nine", 2, 1, "Six seven\n", "V", std::nullopt},
+    {"sentence-motion-d-empty-line", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "jjd)", "One two. Three four!  Five?\nSix seven\nEight. Nine", 3, 1, "\n", "V", std::nullopt},
+    {"sentence-motion-visual", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "v)y", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", 1, 1, "One two. T", "v", std::nullopt},
+    {"sentence-motion-visual-count", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "v2)d", "ive?\nSix seven\n\nEight. Nine", 1, 1, "One two. Three four!  F", "v", std::nullopt},
+    {"sentence-motion-visual-at-end", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "Gwwv)d", "One two. Three four!  Five?\nSix seven\n\nEight. ", 4, 7, "Nine", "v", std::nullopt},
+    {"sentence-motion-visual-from-empty-line", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "jjv)d", "One two. Three four!  Five?\nSix seven\night. Nine", 3, 1, "\nE", "v", std::nullopt},
+    {"sentence-motion-jump-back", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "3)''", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", 1, 1, "", "", std::nullopt},
+    {"sentence-motion-numbered-register", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "d)\"1p", "TOne two. hree four!  Five?\nSix seven\n\nEight. Nine", 1, 10, "One two. ", "v", std::nullopt},
+    {"sentence-motion-repeat", "One two. Three four!  Five?\nSix seven\n\nEight. Nine", "d).", "Five?\nSix seven\n\nEight. Nine", 1, 1, "Three four!  ", "v", std::nullopt},
+    {"sentence-motion-japanese", "日本語の文。 次の文です. Next one\nLast", ")", "日本語の文。 次の文です. Next one\nLast", 1, 37, "", "", std::nullopt},
+    {"sentence-motion-closers", "He said \"Hi.\"  Then (left.) Gone!\n  Indented. More", "2)", "He said \"Hi.\"  Then (left.) Gone!\n  Indented. More", 1, 29, "", "", std::nullopt},
+    {"sentence-motion-d-indent", "He said \"Hi.\"  Then (left.) Gone!\n  Indented. More", "jd)", "He said \"Hi.\"  Then (left.) Gone!\nIndented. More", 2, 1, "  ", "v", std::nullopt},
+    {"sentence-motion-d-backward-across-lines", "He said \"Hi.\"  Then (left.) Gone!\n  Indented. More", "jwd(", "He said \"Hi.\"  Then (left.) Indented. More", 1, 29, "Gone!\n  ", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

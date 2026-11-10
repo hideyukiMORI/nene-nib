@@ -72,6 +72,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
 [[nodiscard]] Offset column_landing(const TextBuffer &text, LineNumber line, std::size_t count,
                                     VimMode mode);
 [[nodiscard]] std::optional<LineNumber> percent_line(const TextBuffer &text, std::size_t count);
+[[nodiscard]] std::optional<Offset> paragraph_or_sentence(const TextBuffer &text, Offset caret,
+                                                          VimMotion motion, std::size_t count);
 [[nodiscard]] Offset mark_landing_of(const VimEditorView &view, VimMotion motion, VimMode mode);
 [[nodiscard]] Offset moved_by(const VimEditorView &view, const VimState &state, VimMotion motion);
 [[nodiscard]] VimMotionLanding landing_of(const VimEditorView &view, const VimState &state,

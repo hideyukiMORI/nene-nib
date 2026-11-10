@@ -417,8 +417,9 @@ using Units = std::pair<std::size_t, bool>;
     }
 }
 
-// Vim の findsent(dir, 1)。前向きは次の文の先頭、後ろ向きは今の（か手前の）文の先頭。
-[[nodiscard]] Offset sentence_start(const TextBuffer &text, Offset at, bool forward)
+// Vim の findsent の回数 1 つぶん。前向きは次の文の先頭、後ろ向きは今の（か手前の）文の先頭。
+// 2 つめは文の終わりを探す歩きが本文の端で尽きなかったか（Vim は残りの回数があれば FAIL）。
+[[nodiscard]] Advance sentence_walk(const TextBuffer &text, Offset at, bool forward)
 {
     Offset here = at;
     if (code_at(text, here) == 0)
@@ -426,7 +427,7 @@ using Units = std::pair<std::size_t, bool>;
         here = past_empty(text, here, forward);
         if (forward)
         {
-            return advanced_past_blanks(text, here);
+            return Advance{advanced_past_blanks(text, here), true};
         }
     }
     else if (!forward)
@@ -434,7 +435,13 @@ using Units = std::pair<std::size_t, bool>;
         here = retreated_or_kept(text, here);
     }
     const Advance edge = sentence_edge(text, back_over_punctuation(text, here, forward), forward);
-    return edge.second ? advanced_past_blanks(text, edge.first) : edge.first;
+    return edge.second ? Advance{advanced_past_blanks(text, edge.first), true} : edge;
+}
+
+// Vim の findsent(dir, 1)。
+[[nodiscard]] Offset sentence_start(const TextBuffer &text, Offset at, bool forward)
+{
+    return sentence_walk(text, at, forward).first;
 }
 
 // Vim の findsent_forward。文の先頭から、並びの数だけ前へ。
@@ -614,6 +621,22 @@ using Units = std::pair<std::size_t, bool>;
                           VimRegisterKind::characters};
 }
 } // namespace
+
+std::optional<Offset> vim_sentence_motion(const TextBuffer &text, Offset caret, bool forward,
+                                          std::size_t count)
+{
+    Offset here = caret;
+    for (std::size_t left = count; left > 0; --left)
+    {
+        const Advance walked = sentence_walk(text, here, forward);
+        if (!walked.second && left > 1)
+        {
+            return std::nullopt;
+        }
+        here = walked.first;
+    }
+    return here;
+}
 
 VimTextObjectOutcome vim_sentence_object_range(const TextBuffer &text, const Selection &selection,
                                                VimTextObjectRequest request, std::size_t count)

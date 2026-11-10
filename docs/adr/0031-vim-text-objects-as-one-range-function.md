@@ -2,7 +2,7 @@
 
 - 状態: 受理（実測 364 ケースで決定 1〜8 を確かめ、食い違った 4 点を実測に合わせて直した。2026-09-22 に Issue #99 が残る 3 点を 208 ケース測って閉じ、決定 2・4 を直した。同日 Issue #111 が引用符の対の選び方を 645 ケース測って閉じ、決定 4・6 を直した＝下の 2 つの「補足」）
 - 日付: 2026-09-22
-- Issue: #93 / #99 / #111 / #729（段落と文・決定 9・10）/ #745（タグ・決定 11）
+- Issue: #93 / #99 / #111 / #729（段落と文・決定 9・10）/ #745（タグ・決定 11）/ #1316（段落と文の移動 `{ } ( )`）
 - 影響する規則: ARC-001 / ARC-004 / ARC-007 / ARC-009 / CPP-002 / CPP-004 / CPP-006 / CPP-011 / CPP-012 / QLT-001 / QLT-008 / QLT-012 / QLT-013 / CNF-010
 
 ## 文脈
@@ -159,3 +159,14 @@ Issue の 2 件目（fuzz-2-0056）の Vim の停止は `aB` ではなく、そ�
 ## 補足（2026-10-30・Issue #985）
 
 語の種類の表（決定 2 の `vim_character_class`・ADR 0012 の決定 5）を、固定 Vim 9.1.0004 の `src/mbyte.c` の `utf_class_buf` の `classes[]`（71 区間）と `emoji_all[]`（146 区間）の全部の写し `src/core/VimWordClassTable.hpp` にした（出所 `https://raw.githubusercontent.com/vim/vim/v9.1.0004/src/mbyte.c`・SHA-256 `5d56d30e6a5cab9b8dc1460d5995a8a53077924f26c056091825c1bb600f4a8b`・ADR 0074 の形でコンパイル時の表・意味の表は 1 つ）。引き方も Vim と同じで、0x100 未満は既定の `iskeyword`（`@,48-57,_,192-255`・U+0085 などの C1 は記号・U+00B5 は語）、次に絵文字なら 3、次に `classes[]` を Vim と同じ二分探索で引き、無ければ語の文字（2）。`classes[]` は `{0x2060, 0x27ff}` が後ろの上付き・下付き・記号の行と重なるので、区間を並べ直さず探索の道筋まで同じにする（上付きの U+2074 は Vim でも 1）。全コードポイントを oracle の Vim の `charclass()` と照合して 0 件の違い（Issue #985）。`w b e ge W B E` と `* #`・INSERT の `Ctrl-w`・`iw aw`・`\<` `\>` はどれも `vim_character_class` の 1 本を読む（fixture `word-class-` 39 件）。`*` `#` の語の先頭と末尾の歩きと `\<` `\>` の前の文字は、Vim の `mb_head_off` / `mb_ptr2len` と同じく 1 文字（ADR 0053 の `vim_character_start` / `vim_character_end`）で歩く。コードポイントで歩くと `⚠️amma` の U+FE0F（表に無く 2）が `amma` と同じ種類に数えられて語の頭がずれる（`z9⚠️amma` の `3l#`）。`iskeyword` の設定は扱わない。
+
+## 補足（2026-11-10・Issue #1316）
+
+段落と文の移動 `{` `}` `(` `)` を、固定 Vim 9.1.0004 の `normal.c` の `nv_findpar` / `nv_brace` / `adjust_cursor` と `textobject.c` の `findpar` / `findsent` / `startPS` の読みと fixture 60 件（`paragraph-motion-` 29 件・`sentence-motion-` 31 件・NORMAL・回数・`d c y`・`v` `V`・`''`・`"1`・`.`・本文の端の失敗・全角・閉じ括弧類・行頭の空白）で決めた。60 件のうち修正前の再生で落ちたのは 52 件（通った 8 件は、Vim でも失敗して何もしない 6 件と、`''` で元の位置へ戻る 2 件）。
+**境の関数**: 文の移動は `is` `as` と同じ `findsent(dir, 1)` の 1 本（`VimSentenceObject.cpp` の `sentence_walk`・決定 10 の塊の走査 #751 もそのまま）を回数だけ回す `vim_sentence_motion`。段落の移動は `vim_paragraph_motion`（`VimParagraphObject.cpp`）で、境は **空の行**（`startPS(lnum, NUL, FALSE)` の `*s == NUL`）。`ip` `ap` の空白行（space と tab だけの行も境・`current_par` の `linewhite`）とは Vim でも別の判定なので、同じ述語にしない（`  ` の行は `}` では越える・実測）。`startPS` の改ページ（form feed）で始まる行と nroff のマクロの行（`'paragraphs'` `'sections'`）は、テキストオブジェクトと同じく境にしない（残差）。
+**段落の歩き**（`findpar` の内側の `for`）: 出発の行から向きへ歩き、空でない行を 1 つ見た後（`did_skip`）の、出発の行でない空の行で止まって行頭に着く。本文の端に当たったら、残りの回数があれば `FAIL`（動かない・`clearopbeep` でオペレータも打ち消す・`4}x` の `x` は打たれない）、最後の 1 つなら端の行に留まる。前向きに最後の行へ着いたら、その行の最後の文字に着き、範囲はその文字まで inclusive（`*pincl = TRUE`・`G$d}` は最後の 1 文字を消す）。後ろ向きは常に行頭。
+**文の歩き**（`findsent(dir, count)`）: 回数 1 つぶんは `is` `as` と同じで、文の終わりを探す歩きが本文の端で尽きたとき（`(*func)(&pos) == -1`）、残りの回数があれば `FAIL`、最後の 1 つなら尽きた所（前向きは最後の行の内容の終わり＝NUL の桁）で空白を飛ばさない（`noskip`）。NUL に止まったら、NORMAL とオペレータでは最後の文字へ寄せて inclusive にし（`adjust_cursor`）、VISUAL では寄せない（`VIsual_active`・`v)d` は最後の文字まで）。範囲の終わりは NUL の桁のまま渡せば exclusive でも同じ範囲になる。
+**範囲**: どれも exclusive の文字単位（`motion_type = MCHAR`・`inclusive = FALSE`）で、1 行の中でも `"1` へ行く（`use_reg_one`・`VimNumberedRule::always`）。行頭で終わる範囲は `:help exclusive-linewise` の言い換え（`exclusive_range`・始まりが字下げの中なら行単位）を通り、`d` は決定 3 の Vi 互換規則も通る（`d}` が段落の行を行単位で消し、`d3}` が本文の終わりまで届くと全部の行を消す）。着地は欲しい列を着いた桁にする（`w_set_curswant = TRUE`）。
+**ジャンプ**: どれも成功したら `setpcmark` する飛ぶ移動（ADR 0152 の決定 4 の `jump_motions` の表）。失敗した移動は置かない。
+**鍵**: NORMAL の表の 4 行で、オペレータ待ちと VISUAL も同じ表を引く。`i` `a` の後ろの `{` `}` `(` `)` はテキストオブジェクトの表（決定 1）が先に引くので当たらない（既存の `di(` `vi{` などの fixture がそのまま通る）。
+**費用**: probe `sentence-motion-giant-1line-16384`（`text-object-sentence-giant-1line-16384` と同じ `.` `!` `?` を含まないしきい値ちょうどの 1 行の真ん中から `)` の 1 鍵を `vim_step` で流す）。

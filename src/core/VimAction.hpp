@@ -173,10 +173,16 @@ enum class VimAction : std::uint8_t
     // `Ctrl-e` `Ctrl-y`。窓を回数の行だけ下 / 上へ送り、キャレットは窓の外へ出るときだけ動かす
     // （Vim の nv_scroll_line・scroll_redraw・ADR 0019 の追補 #1232）。
     scroll_line_down,
-    scroll_line_up
+    scroll_line_up,
+    // `{` `}` `(` `)`。段落と文の移動（Issue #1316・Vim の nv_findpar と nv_brace）。
+    move_paragraph_backward,
+    move_paragraph_forward,
+    move_sentence_backward,
+    move_sentence_forward
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::scroll_line_up) + 1;
+constexpr std::size_t vim_action_count =
+    static_cast<std::size_t>(VimAction::move_sentence_forward) + 1;
 } // namespace nenenib::core
