@@ -276,6 +276,43 @@ void verify_macro_depth_limit()
     expect(whole_vim_body(controller) == "bcdef", "the next typed key runs normally");
 }
 
+// 鍵の数の上限（#1351・施主決定 D75）。`@c` の c が `{N}@ax` なら、いちばん外の再生が流す鍵は
+// c の 6 つ（`9993@a` の桁と `@` `a`）と a の N 周（`0` を N 回）と最後の `x`。N = 9993 なら `x` は
+// 10,000 鍵目で流れ、N = 9994 なら上限を超えるので捨てて 1 行知らせる（Vim は止まらず `x` まで流す
+// ので本文が `b` になる・ここが Vim と違う最小の形）。`0` は失敗しない安い鍵で、時計は読まない。
+[[nodiscard]] std::pair<std::string, std::optional<std::string>>
+limited_replay(std::string_view outer)
+{
+    Editing editing;
+    open_vim_document(editing, "ab");
+    EditorController &controller = editing.controller();
+    applied(controller, stored_text('a', "0"));
+    applied(controller, stored_text('c', outer));
+    vim_replay(controller, "@c");
+    const auto message = controller.frame().command_message;
+    return {whole_vim_body(controller),
+            message.has_value() ? std::optional<std::string>{std::string{message.value().text()}}
+                                : std::nullopt};
+}
+
+void verify_macro_key_limit()
+{
+    static_assert(nenenib::core::vim_replay_key_limit == 10000U);
+    const auto [inside, quiet] = limited_replay("9993@ax");
+    expect(inside == "b" && !quiet.has_value(), "the 10000th replayed key still runs");
+    const auto [over, notice] = limited_replay("9994@ax");
+    expect(over == "ab" &&
+               notice ==
+                   std::optional<std::string>{"再生を 10,000 鍵で止めました（残りは捨てました）"},
+           "the 10001st replayed key is dropped with one notice line");
+    Editing editing;
+    open_vim_document(editing, "ab");
+    EditorController &controller = editing.controller();
+    applied(controller, stored_text('a', "0"));
+    vim_replay(controller, "999999999@ax");
+    expect(whole_vim_body(controller) == "b", "a typed key after the stopped replay runs normally");
+}
+
 // 巨大な回数の `@`（#1341・ADR 0046 の決定 3 の追補）。鍵の列を回数ぶん並べず 1 周ずつ積むので、
 // 鍵が失敗した周で止まり、積んだ周の数は回数に比例しない（時計は読まない）。b は `xl`。
 [[nodiscard]] std::size_t huge_rounds(std::string text, std::string_view macro,
@@ -1264,6 +1301,7 @@ void verify_vim_macro_contracts()
     verify_macro_failure_stops_the_rest();
     verify_macro_records_failed_replace();
     verify_macro_depth_limit();
+    verify_macro_key_limit();
     verify_macro_huge_count_stops();
     verify_macro_rounds_keep_the_order();
     verify_huge_count_put_refused();

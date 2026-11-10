@@ -327,6 +327,9 @@ class EditorController final
     void next_replay_round();
     // 鍵の失敗と深さの上限で、列・周・待ちを全部捨てる。
     void dropped_replay();
+    // 再生の列から次の 1 歩を流してよいか（#1351・施主決定 D75）。いちばん外の再生で流した歩が
+    // core::vim_replay_key_limit に達していたら、列・周・待ちを捨てて 1 行知らせ、偽を返す。
+    [[nodiscard]] bool replay_step_allowed();
     // 再生の列を先頭から流す 2 本（#1312）。表が空なら plain（今までの道のまま・鍵ごとの分岐と
     // 割り当てを足さない）、表に行があれば mapped（`@` の鍵は流す時点の表で引く・`.` の鍵は
     // 引かない）。どちらも失敗した鍵で列の残りを捨てる。
@@ -967,6 +970,9 @@ class EditorController final
     std::vector<ReplayRounds> replay_rounds_;
     // replay_rounds の数（queued_round だけが足す・`.` の 1 周も数える）。
     std::size_t replay_round_count_ = 0;
+    // いちばん外の再生で列から流した歩の数（#1351）。perform(VimReplay) が再生の始めに 0 に戻し、
+    // replay_step_allowed だけが足す。
+    std::size_t replay_steps_ = 0;
     std::optional<std::size_t> replay_depth_;
     // `@` の再生の中で `map` の左辺の途中まで読んだ鍵（#1312）。再生の中だけで持ち、列が尽きたら
     // 待たずに流す。state_ の待ち（打った鍵の分）へ持ち越さない。
