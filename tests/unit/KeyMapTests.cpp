@@ -900,6 +900,14 @@ void verify_rhs_mode()
     expect(hundred_lines_caret({MapRow{normal_only, "x", "v<Esc>j", true}, visual_k}, "x", false) ==
                51U,
            "B15: a right side back in NORMAL uses the nmap table again");
+    // 限界（追補 28）: 引き直した右辺はもう引かない（P3・Vim 52）。右辺の内側の引き直しは右辺の
+    // 終わりをまたいで待たない（P8b・`xj` を 1 回の typeahead で Vim 100）。
+    expect(hundred_lines_caret({visual_x, visual_k, MapRow{visual_set, "k", "2j", false}}, "x",
+                               false) == 49U,
+           "P3: the right side looked up once is not looked up again");
+    expect(hundred_lines_caret({visual_x, visual_k, MapRow{visual_set, "jj", "G", true}}, "xj",
+                               true) == 48U,
+           "P8b: the look-up inside a right side does not wait across its end");
 }
 
 // 右辺が INSERT・OPERATOR-PENDING・入力行・引数待ちに入った後の鍵（#1276・同じ実測）。

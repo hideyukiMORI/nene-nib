@@ -453,9 +453,12 @@ EditorController::delivered_unit(std::span<const core::VimKey> plain,
     while (!failure.has_value() && !remapped.empty())
     {
         const auto [count, found] = core::rhs_unit_step(key_map_, key_map_mode(), remapped);
-        const std::vector<core::VimKey> expanded(found.begin(), found.end());
+        const auto unit = remapped.first(count);
         remapped = remapped.subspan(count);
-        failure = delivered_keys(expanded);
+        // 当たらなければ found は単位の鍵そのもの（写さない）。当たれば表の右辺なので写す。
+        failure = found.data() == unit.data()
+                      ? delivered_keys(found)
+                      : delivered_keys(std::vector<core::VimKey>(found.begin(), found.end()));
     }
     return failure;
 }

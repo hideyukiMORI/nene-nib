@@ -238,6 +238,23 @@ void append(Keys &out, KeySpan keys)
     return {found->lhs.size(), true};
 }
 
+// 待ちの無い 1 鍵を列を作らずに決める（待つなら Pending・表に当たらないなら Pass・当たるなら
+// 無し）。表に行があっても Pass と最初の Pending の道は割り当てない（ADR 0176 の追補 27・#1276）。
+[[nodiscard]] std::optional<KeyMapStep> alone_step(const KeyMap &map, VimMapMode mode,
+                                                   const VimKey &key)
+{
+    const KeySpan alone{&key, 1U};
+    if (waits(map, mode, alone))
+    {
+        return KeyMapPending{};
+    }
+    if (longest(map, mode, alone) == nullptr)
+    {
+        return KeyMapPass{};
+    }
+    return std::nullopt;
+}
+
 // 後の行が前の行の同じ左辺のモードを上書きする（`v` と `x` は同じ VISUAL）。
 void override_modes(KeyMap &map, const KeyMapping &later)
 {
@@ -382,6 +399,13 @@ KeyMapStep key_map_step(const KeyMap &map, VimMapMode mode, std::span<const VimK
     if (map.mappings.empty())
     {
         return KeyMapPass{};
+    }
+    if (pending.empty())
+    {
+        if (auto settled = alone_step(map, mode, key); settled.has_value())
+        {
+            return std::move(settled).value();
+        }
     }
     Keys buffer(pending.begin(), pending.end());
     buffer.push_back(key);
