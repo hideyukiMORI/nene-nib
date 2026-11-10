@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 50fc63bb96469a270a66cb2e8850450ea9739a7e290d64d7257574880be0d999 / 3812 fixtures
+// fixtures.json: sha256 d433c06d244ea0da24674659d91c8ab875ef6e3f68849ab503979bfb896d073d / 3822 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3812> vim_fixtures{{
+constexpr std::array<VimFixture, 3822> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3824,6 +3824,16 @@ constexpr std::array<VimFixture, 3812> vim_fixtures{{
     {"dot-register-count-macro-register-and-count-before-at-dot", "line01 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline02 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline03 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline04 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline05 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline06 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline07 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline08 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline09 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline10 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN", "\"ayl\"bx\"a3@qG\"ap", "01 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline02 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline03 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline04 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline05 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline06 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline07 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline08 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline09 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nlline10 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN", 10, 2, "e", "v", std::nullopt, VimMacroFixture{'q', "."}},
     {"dot-register-count-macro-counted-at-dot", "line01 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline02 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline03 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline04 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline05 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline06 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline07 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline08 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline09 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline10 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN", "x2@q", "e01 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline02 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline03 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline04 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline05 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline06 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline07 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline08 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline09 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline10 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN", 1, 1, "n", "v", std::nullopt, VimMacroFixture{'q', "."}},
     {"dot-register-count-macro-counted-dot-without-register", "line01 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline02 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline03 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline04 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline05 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline06 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline07 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline08 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline09 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline10 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN", "x@q", "01 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline02 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline03 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline04 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline05 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline06 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline07 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline08 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline09 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline10 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN", 1, 1, "ine", "v", std::nullopt, VimMacroFixture{'q', "3."}},
+    {"window-path-1326-i-before-a-lone-mark", "́a", "iab<Esc>", "ab́a", 1, 2, "", "", std::nullopt},
+    {"window-path-1326-I-on-tab-space-and-mark", "\t ́x", "Iz<Esc>", "\t źx", 1, 3, "", "", std::nullopt},
+    {"window-path-1326-I-on-space-and-mark", " ́x", "Iz<Esc>", " źx", 1, 2, "", "", std::nullopt},
+    {"window-path-1326-a-on-a-lone-mark", "́a", "az<Esc>", "́za", 1, 3, "", "", std::nullopt},
+    {"window-path-1326-A-after-a-marked-end", "éx́", "Az<Esc>", "éx́z", 1, 7, "", "", std::nullopt},
+    {"window-path-1326-o-below-a-lone-mark", "́a", "oz<Esc>", "́a\nz", 2, 1, "", "", std::nullopt},
+    {"window-path-1326-insert-left-before-a-lone-mark", "́a", "ia<Left>b<Esc>", "báa", 1, 1, "", "", std::nullopt},
+    {"window-path-1326-insert-right-over-a-lone-mark", "́a", "i<Right>z<Esc>", "́za", 1, 3, "", "", std::nullopt},
+    {"window-path-1326-insert-ctrl-r-before-a-lone-mark", "́a\nxy", "j\"ay$k0i<C-r>az<Esc>", "xyźa\nxy", 1, 3, "xy", "v", std::nullopt},
+    {"window-path-1326-dot-replays-the-typed-insert", "́a\ńa", "iab<Esc>+.", "ab́a\nab́a", 2, 2, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
