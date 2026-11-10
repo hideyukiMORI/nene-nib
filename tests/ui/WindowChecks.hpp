@@ -41,4 +41,6 @@ void verify_matchparen_outline();
 void verify_save_question();
 // Vim モードの仮想キー → 特別な鍵の表（#1325・Delete は `<Del>`）。
 void verify_vim_special_keys();
+// 閉じる手順の列（ADR 0133 の追補 #1340）。
+void verify_closing_steps();
 } // namespace nenenib::tests::ui

@@ -2,6 +2,8 @@
 
 #include "Appearance.hpp"
 #include "BodyLayout.hpp"
+#include "ClosingRoute.hpp"
+#include "ClosingStep.hpp"
 #include "CommandEdit.hpp"
 #include "Composition.hpp"
 #include "CoverWindow.hpp"
@@ -245,9 +247,15 @@ class EditorWindow final
     void end_window(application::ExitCause cause, application::SessionEnd reason);
     // 未保存のタブを帯の左から順に映して confirm で確かめる（#237）。止められたら false。
     [[nodiscard]] bool confirm_unsaved_tabs(bool (EditorWindow::*confirm)());
-    // 窓を壊す唯一の口（ADR 0059 の決定 3・ADR 0133 の決定 1）。前回のタブの一覧を書いてから壊す。
-    // end_window と、最後の 1 つを閉じる close_tab が通る。デストラクタは作りかけの窓の後始末だけ。
+    // 窓を壊す唯一の口（ADR 0059 の決定 3・ADR 0133 の決定 1）。先に窓を隠し、前回のタブの一覧を
+    // 書いてから壊す（closing_steps(window_closes)・追補 #1340）。end_window と、最後の 1 つを
+    // 閉じる close_tab が通る。デストラクタは作りかけの窓の後始末だけ。
     void leave(application::SessionEnd reason);
+    // 閉じる手順の列を 1 段ずつ写す（ADR 0133 の追補 #1340）。destroy_window の段を持つ道は
+    // window_closes だけで、それを渡すのは leave だけ。WM_ENDSESSION は session_ends を渡す。
+    void close_through(ClosingRoute route, const application::EndSession &intent);
+    // 閉じる手順の 1 段を写す。close_through だけが呼ぶ。
+    void close_step(ClosingStep step, const application::EndSession &intent);
     // OS の終了を問われたら exit_plan(session_end) に従って止めるか通すかを返す（ADR 0133）。
     // end_window を通らず、leave_now でも窓を壊さない（確定の WM_ENDSESSION は一覧を書くだけ）。
     [[nodiscard]] LRESULT query_session_end();
