@@ -1848,9 +1848,9 @@ namespace
     return special != nullptr && *special == VimSpecialKey::escape;
 }
 
-// 名前の鍵にならなかったとき。Esc は何もせずに打ち消し、ほかは受けない（Vim の `m<Esc>`
-// `'<Esc>`）。
-[[nodiscard]] VimStep unnamed_mark(const VimState &state, const VimKey &key)
+// 待っていた鍵にならなかったとき。Esc は何もせずに打ち消し、ほかは受けない（Vim の `m<Esc>`
+// `'<Esc>` と `[<Esc>` `]<Esc>`）。
+[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key)
 {
     VimStep step{finished_input_wait(state), VimNoEffect{}};
     return is_escape(key) ? step : failed(std::move(step), VimRepeatFailure::refused);
@@ -1864,7 +1864,7 @@ namespace
     const auto *const character = std::get_if<VimCharacter>(&key);
     if (character == nullptr)
     {
-        return unnamed_mark(state, key);
+        return escaped_or_refused(state, key);
     }
     VimStep step{finished_input_wait(state), VimNoEffect{}};
     const auto marks = vim_mark_set(*view.marks, character->code,
@@ -1885,7 +1885,7 @@ namespace
     const auto *const character = std::get_if<VimCharacter>(&key);
     if (character == nullptr)
     {
-        return unnamed_mark(state, key);
+        return escaped_or_refused(state, key);
     }
     VimStep unmoved{finished_input_wait(state), VimNoEffect{}};
     const auto mark = vim_mark_named(*view.marks, character->code);
@@ -1906,10 +1906,11 @@ namespace
 }
 
 // `[` `]` の後ろの 1 鍵。族は未実装なので、どの鍵でも何も動かさずに失敗する（`[{` の `{` を
-// 段落の移動として流さない・保留中のオペレータも打ち消す・#1334）。
-[[nodiscard]] VimStep bracket_step(const VimState &state)
+// 段落の移動として流さない・保留中のオペレータも打ち消す・#1334）。Esc は鳴らさずに打ち消すだけで
+// 後ろの鍵が効く（`[<Esc>x` `d[<Esc>x` は x が消す・`z<Esc>` と同じ・実測・#1344）。
+[[nodiscard]] VimStep bracket_step(const VimState &state, const VimKey &key)
 {
-    return failed(VimStep{finished_input_wait(state), VimNoEffect{}}, VimRepeatFailure::refused);
+    return escaped_or_refused(state, key);
 }
 
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,
@@ -1939,7 +1940,7 @@ namespace
     case VimPrefix::insert_register:
         return insert_register_step(state, view, key);
     case VimPrefix::bracket:
-        return bracket_step(state);
+        return bracket_step(state, key);
     }
     std::unreachable();
 }
