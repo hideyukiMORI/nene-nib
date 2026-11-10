@@ -1473,6 +1473,21 @@ void verify_vim_row_unit_pages()
     expect(stayed != nullptr && stayed->first_row == 0 &&
                stayed->selection.caret == nenenib::core::Offset{2},
            "the line unit PgDn of a one-line text stays put as before");
+    // Ctrl-e Ctrl-y の格子の形（ADR 0019 の追補 #1232）。先頭を 1 画面行送り、窓の上へ出た
+    // キャレットは同じ桁で窓の最上段へ。1 行目の最初の画面行の Ctrl-y は何も変えない。
+    const auto scrolled = rows_answered(state, text.value(), nenenib::core::VimScrollUnit::row,
+                                        vim_keys_of("<C-e>").front());
+    const auto *const line_down = std::get_if<VimNavigate>(&scrolled.effect);
+    expect(line_down != nullptr && line_down->first_visible == LineNumber{1} &&
+               line_down->first_row == 1 &&
+               line_down->selection.caret == nenenib::core::Offset{10} && line_down->keeps_top,
+           "the row unit Ctrl-e moves the top one screen row and pushes the caret into the window");
+    const auto held = rows_answered(state, text.value(), nenenib::core::VimScrollUnit::row,
+                                    vim_keys_of("<C-y>").front());
+    const auto *const line_up = std::get_if<VimNavigate>(&held.effect);
+    expect(line_up != nullptr && line_up->first_row == 0 &&
+               line_up->selection.caret == nenenib::core::Offset{2} && !held.failure.has_value(),
+           "the row unit Ctrl-y at the first screen row changes nothing and does not fail");
 }
 
 // 縦の位置合わせの替え玉（ADR 0146 の決定 5・8）。どの行も grid_width 字ごとに折り返し、

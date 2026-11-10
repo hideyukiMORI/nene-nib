@@ -739,7 +739,8 @@ lined_top(const VimEditorView &view, Offset caret, VimScreenPlace place)
                                        std::size_t count)
 {
     const std::size_t total = view.text.line_count();
-    const LineNumber top{std::clamp<std::size_t>(vim_viewport_of(view).first_visible.value, 1, total)};
+    const LineNumber top{
+        std::clamp<std::size_t>(vim_viewport_of(view).first_visible.value, 1, total)};
     const LineNumber line = view.text.position_of(view.selection.caret).line;
     LineNumber first = top;
     auto caret = std::expected<LineNumber, LineNumber>{line};

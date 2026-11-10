@@ -293,6 +293,15 @@ measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &r
     }
     std::unreachable();
 }
+// 鍵の終わりにキャレットを寄せて追従を頼むか。入力行が開いていれば寄せない。Ctrl-e Ctrl-y は
+// engine が置いたキャレットと先頭のまま終える。追従（Vim の update_topline の写し）を頼むと
+// scrolloff が先頭を戻すので、Vim の VALID_TOPLINE と同じに飛ばす（キャレットは engine がモードの
+// 寄せまで済ませた・ADR 0019 の追補 #1232）。
+[[nodiscard]] bool settles_vim_caret(const EditorState &state, const core::VimStep &step)
+{
+    const auto *const navigate = std::get_if<core::VimNavigate>(&step.effect);
+    return !state.command_input().has_value() && (navigate == nullptr || !navigate->keeps_top);
+}
 } // namespace
 
 // fixture と契約の harness が打つ 1 鍵（ADR 0048 の決定 8）。入力行の写しは再生と同じ
@@ -649,7 +658,7 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     {
         state_ = state_.with_history(state_.history().sealed());
     }
-    if (!state_.command_input().has_value())
+    if (settles_vim_caret(state_, step))
     {
         settle_vim_caret();
     }
@@ -865,7 +874,8 @@ void EditorController::perform(const core::VimNavigate &effect)
                                        state_.caret_affinity()};
     // `scrolloff` の余白は追従と同じ 1 本の計算で縦だけに効かせる。`zt` `zb` は余白の分だけ
     // 戻り、Ctrl-d / Ctrl-u は余白の外のキャレットを動かさない（#1041・ADR 0019 の追補）。
-    if (state_.settings().scrolloff > 0)
+    // Ctrl-e Ctrl-y は engine の先頭のまま（keeps_top・Vim の VALID_TOPLINE・追補 #1232）。
+    if (state_.settings().scrolloff > 0 && !effect.keeps_top)
     {
         const auto kept = visual_view().followed(caret, core::ScrollFollow::minimal,
                                                  detail::scroll_extent_for(state_.mode()));

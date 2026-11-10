@@ -668,14 +668,24 @@ namespace
     return page_step(state, view, direction);
 }
 
+// Ctrl-e Ctrl-y の先頭は scrolloff の追従に掛けない（Vim の VALID_TOPLINE・追補 #1232）。
+[[nodiscard]] VimStep kept_top(VimStep step)
+{
+    if (auto *const navigate = std::get_if<VimNavigate>(&step.effect); navigate != nullptr)
+    {
+        navigate->keeps_top = true;
+    }
+    return step;
+}
+
 // Ctrl-e Ctrl-y（ADR 0019 の追補 #1232・Vim の scroll_redraw）。窓は engine が決めた先頭へ送る。
 // キャレットの行が変わったときだけ、変わらない欲しい列（curswant）でその行へ着く（coladvance）。
 // 行が変わらなければキャレットも欲しい列もそのまま。格子は画面行の着地（row_navigated）。
 [[nodiscard]] VimStep line_scroll_step(const VimState &state, const VimEditorView &view,
                                        VimAction action)
 {
-    const auto direction = action == VimAction::scroll_line_down ? VimScrollDirection::down
-                                                                 : VimScrollDirection::up;
+    const auto direction =
+        action == VimAction::scroll_line_down ? VimScrollDirection::down : VimScrollDirection::up;
     const auto target = vim_line_scroll(state, view, direction);
     if (!target)
     {
@@ -684,20 +694,21 @@ namespace
     const VimDisplayNavigation &result = target.value();
     if (result.placed.has_value())
     {
-        return row_navigated(state, view, result, result.placed.value());
+        return kept_top(row_navigated(state, view, result, result.placed.value()));
     }
     VimState next = state;
     next.count = std::nullopt;
     next.pending = std::nullopt;
     if (result.preserve_column)
     {
-        return VimStep{std::move(next), VimNavigate{view.selection, result.first}};
+        return kept_top(VimStep{std::move(next), VimNavigate{view.selection, result.first}});
     }
     const VimWantedColumn wanted = wanted_column_of(view.text, state, view.selection.caret);
     const Offset caret = caret_on_line(view.text, wanted, result.caret, state.mode);
     next.wanted_column = wanted;
-    return VimStep{std::move(next),
-                   VimNavigate{navigated_selection(state, view.selection, caret), result.first}};
+    return kept_top(
+        VimStep{std::move(next),
+                VimNavigate{navigated_selection(state, view.selection, caret), result.first}});
 }
 } // namespace
 
