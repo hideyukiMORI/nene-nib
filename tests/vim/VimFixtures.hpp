@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 1ad16e3f24bc903e2b8bacfd2d79797a6811799f554d7b73828eec2e455d10fb / 3506 fixtures
+// fixtures.json: sha256 ecd9ab0996242002b263268d3e1130a4d8f23cc6e8d41f3d2e7d2a2935c32ee4 / 3507 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3506> vim_fixtures{{
+constexpr std::array<VimFixture, 3507> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3518,6 +3518,7 @@ constexpr std::array<VimFixture, 3506> vim_fixtures{{
     {"yank-line-caret-mark-above-at-first-non-blank", "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\nab\n\t\tdeep tab line", "6G8lma9G$y'aj", "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\nab\n\t\tdeep tab line", 7, 5, "    indented line here\nalpha beta gamma delta\nfoo end\nab\n", "V", std::nullopt},
     {"yank-line-caret-gg-from-the-wanted-column", "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\nab\n\t\tdeep tab line", "15l8Gyggj", "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\nab\n\t\tdeep tab line", 2, 1, "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\n", "V", std::nullopt},
     {"yank-line-caret-k-keeps-the-wanted-column", "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\nab\n\t\tdeep tab line", "15l3jykj", "alpha beta gamma delta\nab\n\tfoo bar baz\n\nあいうえおかきくけこ\n    indented line here\nalpha beta gamma delta\nfoo end\nab\n\t\tdeep tab line", 4, 1, "\tfoo bar baz\n\n", "V", std::nullopt},
+    {"yank-line-caret-screen-top-ignores-scrolloff", "01 line words here\n02 line words here\n  03 indented words\n04 line words here\n05 line words here\n  06 indented words\n07 line words here\n08 line words here\n  09 indented words\n10 line words here\n11 line words here\n  12 indented words\n13 line words here\n14 line words here\n  15 indented words\n16 line words here\n17 line words here\n  18 indented words\n19 line words here\n20 line words here\n  21 indented words\n22 line words here\n23 line words here\n  24 indented words\n25 line words here\n26 line words here\n  27 indented words\n28 line words here\n29 line words here\n  30 indented words\n31 line words here\n32 line words here\n  33 indented words\n34 line words here\n35 line words here\n  36 indented words\n37 line words here\n38 line words here\n  39 indented words\n40 line words here", "yH", "01 line words here\n02 line words here\n  03 indented words\n04 line words here\n05 line words here\n  06 indented words\n07 line words here\n08 line words here\n  09 indented words\n10 line words here\n11 line words here\n  12 indented words\n13 line words here\n14 line words here\n  15 indented words\n16 line words here\n17 line words here\n  18 indented words\n19 line words here\n20 line words here\n  21 indented words\n22 line words here\n23 line words here\n  24 indented words\n25 line words here\n26 line words here\n  27 indented words\n28 line words here\n29 line words here\n  30 indented words\n31 line words here\n32 line words here\n  33 indented words\n34 line words here\n35 line words here\n  36 indented words\n37 line words here\n38 line words here\n  39 indented words\n40 line words here", 4, 1, "04 line words here\n05 line words here\n  06 indented words\n07 line words here\n08 line words here\n  09 indented words\n", "V", VimViewportFixture{10, 4, 9, 2, 1, 5, 0, 0, 0, 0, 0, 0, 3}},
 }};
 } // namespace nenenib::tests
 // clang-format on

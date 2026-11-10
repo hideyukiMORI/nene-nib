@@ -422,11 +422,14 @@ namespace
                                 line, view.text.line_count());
 }
 
-// H M L の着地（画面の行の最初の非空白）。
-[[nodiscard]] Offset screen_first_non_blank(const VimEditorView &view, VimScreenPosition position,
-                                            std::size_t count)
+// H M L の着地（画面の行の最初の非空白）。オペレータの後ろは余白へ寄せず、範囲（screen_range）と
+// 同じ行に着く（Vim の nv_scroll は OP_NOP のときだけ cursor_correct を呼ぶ。`yH` のキャレットは
+// その行の oap->start・#1294）。
+[[nodiscard]] Offset screen_first_non_blank(const VimEditorView &view, const VimState &state,
+                                            VimScreenPosition position, std::size_t count)
 {
-    const LineNumber line = settled_screen_line(view, screen_line(view, position, count));
+    const LineNumber target = screen_line(view, position, count);
+    const LineNumber line = state.pending.has_value() ? target : settled_screen_line(view, target);
     return vim_first_non_blank(view.text, view.text.line_start(line));
 }
 
@@ -588,15 +591,15 @@ namespace
 }
 
 // H M L gg G の着地（行の最初の非空白）。
-[[nodiscard]] Offset line_jump_landing(const VimEditorView &view, VimMotion motion,
-                                       std::size_t count)
+[[nodiscard]] Offset line_jump_landing(const VimEditorView &view, const VimState &state,
+                                       VimMotion motion, std::size_t count)
 {
     if (motion == VimMotion::document_first || motion == VimMotion::document_last)
     {
         return vim_first_non_blank(view.text,
                                    view.text.line_start(document_line(view.text, count)));
     }
-    return screen_first_non_blank(view, screen_position_of(motion), count);
+    return screen_first_non_blank(view, state, screen_position_of(motion), count);
 }
 
 // `<Space>` `<BS>` の着地（行をまたぐ l h・ADR 0049）。
@@ -672,7 +675,7 @@ namespace detail
     case VimMotion::screen_bottom:
     case VimMotion::document_first:
     case VimMotion::document_last:
-        return line_jump_landing(view, motion, count);
+        return line_jump_landing(view, state, motion, count);
     case VimMotion::next_line:
     case VimMotion::previous_line:
         return other_line_landing(text, caret, motion == VimMotion::next_line, count);
