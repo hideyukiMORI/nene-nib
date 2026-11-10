@@ -1,10 +1,11 @@
 // scope `--vim-characters` の契約のうち、engine を通らない意図の後の Vim のキャレット（#1309・
-// ADR 0053 の決定 5・6 と追補 #1309）。Vim モードでも、Delete / Backspace の
-// DeleteText・InsertText・ NewLine・貼り付けと切り取り・Ctrl+Z / Ctrl+Y の HistoryAction・SelectAll
-// は engine の鍵を通らずに 本文とキャレットを動かす。どの意図の後もキャレットは Vim の 1
-// 文字の境（結合文字の手前でない）に あり、NORMAL
-// では行の最後の文字を越えない。手書きの表（意図ごとの 1 行）と、固定 seed の小さな 性質（Vim
-// の鍵と engine を通らない意図を混ぜた列）で守る。
+// ADR 0053 の決定 5・6 と追補 #1309）。Vim モードでも、Delete / Backspace の DeleteText・
+// InsertText・NewLine・貼り付けと切り取り・Ctrl+Z / Ctrl+Y の HistoryAction・SelectAll は
+// engine の鍵を通らずに本文とキャレットを動かす。どの意図の後も NORMAL と VISUAL のキャレットは
+// Vim の 1 文字の境（結合文字の手前でない）にあり、NORMAL では行の最後の文字を越えない。INSERT は
+// Vim 9.1 と同じく結合文字の手前（文字の途中）にも立つので、境を問わず、意図が置いた位置のままで
+// あることを見る。手書きの表（意図ごとの 1 行）と、固定 seed の小さな性質（Vim の鍵と engine を
+// 通らない意図を混ぜた列）で守る。
 #include "CaretMotion.hpp"
 #include "ClipboardAction.hpp"
 #include "ClipboardOperation.hpp"
@@ -99,8 +100,13 @@ constexpr std::array<core::CaretMotion, 4> motions{
 }
 
 // 今の frame のキャレットが Vim の 1 文字の境にあり、NORMAL で行の最後の文字を越えないか。
+// INSERT は問わない（Vim 9.1 の INSERT の挿入点は結合文字の手前にも立つ・ADR 0053 の追補 #1309）。
 [[nodiscard]] Reason caret_breaks(EditorController &controller)
 {
+    if (controller.vim_state().mode == core::VimMode::insert)
+    {
+        return Reason{};
+    }
     const auto frame = controller.frame();
     const std::string text = vim_body(frame);
     const std::string_view line = line_of(text, frame.caret.position.line.value);
@@ -151,6 +157,24 @@ void act(EditorController &controller, const Action &action)
     return Reason{};
 }
 
+// 歩を全部送った後のキャレット（行と Vim の col('.')）。
+using Place = std::pair<std::size_t, std::size_t>;
+
+[[nodiscard]] Place finished_place(std::string body, std::string clipboard, const Steps &steps)
+{
+    Editing editing;
+    editing.clipboard().hold(std::move(clipboard));
+    open_vim_document(editing, std::move(body));
+    EditorController &controller = editing.controller();
+    for (const auto &step : steps)
+    {
+        act(controller, step.second);
+    }
+    const auto frame = controller.frame();
+    return Place{frame.caret.position.line.value,
+                 vim_byte_column(vim_body(frame), frame.caret.position)};
+}
+
 [[nodiscard]] Step keys(std::string_view typed)
 {
     return Step{std::string(typed), Action{std::string(typed)}};
@@ -184,8 +208,15 @@ void act(EditorController &controller, const Action &action)
 
 // 意図の表（#1309 の 1）。各行は Vim の鍵で位置とモードを作ってから engine を通らない意図を送る。
 // 本文 "Helloé"（é は e + U+0301）の `$` は基底 e の上。行頭の孤立した結合文字は 1 文字。
-// 名前・本文・位置とモードを作る鍵・送る意図。
-using KnownRow = std::tuple<const char *, std::string_view, std::string_view, Steps>;
+// 窓は Vim モードで DeleteText・InsertText・NewLine・HistoryAction と NORMAL の SelectAll を
+// 送らない（ADR 0053 の追補 #1309）。それらの行は窓からは届かない形で、将来の入口から境を
+// 守る防御を見る。窓から届くのは INSERT の貼り付け・切り取り・SelectAll と、MoveCaret・
+// PlaceCaret だけ。
+// 名前・本文・位置とモードを作る鍵・送る意図・INSERT の行の終わりの位置（行と col('.')）。
+// INSERT の行は意図が置いた位置のまま（寄せない・文字の途中も Vim と同じ）であることを見る。
+// INSERT でない行の位置は {0, 0} で、境だけを見る。
+using KnownRow = std::tuple<const char *, std::string_view, std::string_view, Steps, Place>;
+constexpr Place boundary_only{0U, 0U};
 
 // 本文の 3 つ: 結合文字の行（LF と CRLF）と、行頭の孤立した結合文字。
 constexpr std::string_view marked_body = "Helloe\u0301\n # h";
@@ -196,18 +227,32 @@ constexpr std::string_view lone_body = "\u0301a\n";
 [[nodiscard]] std::vector<KnownRow> deletion_rows()
 {
     return {
-        {"NORMAL $ then Delete (the #1309 case)", crlf_body, "$", {forward()}},
-        {"NORMAL $ then Delete on an LF document", marked_body, "$", {forward()}},
-        {"NORMAL $ then Backspace", marked_body, "$", {backward()}},
-        {"NORMAL 0 then Delete", marked_body, "0", {forward()}},
-        {"INSERT before the marked character then Delete", marked_body, "$i", {forward()}},
-        {"INSERT after the marked character then Backspace", marked_body, "$a", {backward()}},
-        {"VISUAL on the marked character then Delete", marked_body, "$v", {forward()}},
+        {"NORMAL $ then Delete (the #1309 case)", crlf_body, "$", {forward()}, boundary_only},
+        {"NORMAL $ then Delete on an LF document", marked_body, "$", {forward()}, boundary_only},
+        {"NORMAL $ then Backspace", marked_body, "$", {backward()}, boundary_only},
+        {"NORMAL 0 then Delete", marked_body, "0", {forward()}, boundary_only},
+        // 基底の e だけが消え、挿入点は o に付いた結合文字の手前（文字の途中）に残る。
+        {"INSERT before the marked character then Delete",
+         marked_body,
+         "$i",
+         {forward()},
+         Place{1U, 6U}},
+        {"INSERT after the marked character then Backspace",
+         marked_body,
+         "$a",
+         {backward()},
+         Place{1U, 7U}},
+        {"VISUAL on the marked character then Delete",
+         marked_body,
+         "$v",
+         {forward()},
+         boundary_only},
         {"INSERT after the marked character then a code point to the left",
          marked_body,
          "$a",
          {intent("left", app::MoveCaret{core::CaretMotion::previous_character,
-                                        core::SelectionAnchoring::collapse})}},
+                                        core::SelectionAnchoring::collapse})},
+         Place{1U, 7U}},
     };
 }
 
@@ -215,22 +260,42 @@ constexpr std::string_view lone_body = "\u0301a\n";
 [[nodiscard]] std::vector<KnownRow> insertion_rows()
 {
     return {
-        {"NORMAL $ then InsertText", marked_body, "$", {intent("insert x", app::InsertText{"x"})}},
+        {"NORMAL $ then InsertText",
+         marked_body,
+         "$",
+         {intent("insert x", app::InsertText{"x"})},
+         boundary_only},
         {"NORMAL before a lone mark then InsertText",
          lone_body,
          "",
-         {intent("insert x", app::InsertText{"x"})}},
+         {intent("insert x", app::InsertText{"x"})},
+         boundary_only},
+        // Vim 9.1 の `ix` も結合文字の手前の col 2 に立つ（`\u0301a` に `ia` で col 2）。
         {"INSERT before a lone mark then InsertText",
          lone_body,
          "i",
-         {intent("insert x", app::InsertText{"x"})}},
-        {"NORMAL $ then NewLine", marked_body, "$", {intent("newline", app::NewLine{})}},
-        {"NORMAL $x then Ctrl+Z", marked_body, "$x", {history(core::HistoryDirection::undo)}},
-        {"NORMAL $xu then Ctrl+Y", marked_body, "$xu", {history(core::HistoryDirection::redo)}},
+         {intent("insert x", app::InsertText{"x"})},
+         Place{1U, 2U}},
+        {"NORMAL $ then NewLine",
+         marked_body,
+         "$",
+         {intent("newline", app::NewLine{})},
+         boundary_only},
+        {"NORMAL $x then Ctrl+Z",
+         marked_body,
+         "$x",
+         {history(core::HistoryDirection::undo)},
+         boundary_only},
+        {"NORMAL $xu then Ctrl+Y",
+         marked_body,
+         "$xu",
+         {history(core::HistoryDirection::redo)},
+         boundary_only},
         {"NORMAL $ Delete then Ctrl+Z",
          marked_body,
          "$",
-         {forward(), history(core::HistoryDirection::undo)}},
+         {forward(), history(core::HistoryDirection::undo)},
+         boundary_only},
     };
 }
 
@@ -238,33 +303,48 @@ constexpr std::string_view lone_body = "\u0301a\n";
 [[nodiscard]] std::vector<KnownRow> selection_rows()
 {
     return {
-        {"NORMAL SelectAll", marked_body, "", {intent("select_all", app::SelectAll{})}},
-        {"INSERT SelectAll", marked_body, "i", {intent("select_all", app::SelectAll{})}},
+        {"NORMAL SelectAll",
+         marked_body,
+         "",
+         {intent("select_all", app::SelectAll{})},
+         boundary_only},
+        {"INSERT SelectAll",
+         marked_body,
+         "i",
+         {intent("select_all", app::SelectAll{})},
+         Place{2U, 5U}},
         {"INSERT before the marked character then paste",
          marked_body,
          "$i",
-         {clipboard(app::ClipboardOperation::paste, "paste")}},
+         {clipboard(app::ClipboardOperation::paste, "paste")},
+         Place{1U, 8U}},
+        // Vim 9.1 の `i<C-r>a` も貼った本文の後の結合文字の手前（col 3）に立つ。
         {"INSERT before a lone mark then paste",
          lone_body,
          "i",
-         {clipboard(app::ClipboardOperation::paste, "paste")}},
+         {clipboard(app::ClipboardOperation::paste, "paste")},
+         Place{1U, 3U}},
         {"VISUAL on the marked character then cut",
          marked_body,
          "$v",
-         {clipboard(app::ClipboardOperation::cut, "cut")}},
+         {clipboard(app::ClipboardOperation::cut, "cut")},
+         boundary_only},
         {"VISUAL before the marked character then cut",
          marked_body,
          "$hv",
-         {clipboard(app::ClipboardOperation::cut, "cut")}},
+         {clipboard(app::ClipboardOperation::cut, "cut")},
+         boundary_only},
         {"NORMAL IME commit is ignored",
          marked_body,
          "$",
-         {intent("commit", app::CommitText{"x"})}},
+         {intent("commit", app::CommitText{"x"})},
+         boundary_only},
         {"NORMAL click on the mark",
          marked_body,
          "",
          {intent("click", app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{7}},
-                                          core::SelectionAnchoring::collapse})}},
+                                          core::SelectionAnchoring::collapse})},
+         boundary_only},
     };
 }
 
@@ -274,18 +354,32 @@ void verify_known_rows()
     std::ranges::copy(insertion_rows(), std::back_inserter(rows));
     std::ranges::copy(selection_rows(), std::back_inserter(rows));
     expect(rows.size() == 23U, "the table holds 23 intents outside the engine (#1309)");
-    for (const auto &[name, body, setup, sent] : rows)
+    for (const auto &[name, body, setup, sent, place] : rows)
     {
         Steps steps{keys(setup)};
         std::ranges::copy(sent, std::back_inserter(steps));
-        const Reason reason = run(std::string(body), std::string("\u0301"), steps);
+        const std::string held("\u0301");
+        const Reason reason = run(std::string(body), held, steps);
         if (!reason.empty())
         {
             std::fprintf(stderr, "  %s: %.*s\n", name, static_cast<int>(reason.size()),
                          reason.data());
         }
-        expect(reason.empty(), "an intent outside the engine keeps the Vim caret on a character "
-                               "boundary and NORMAL on the last character (#1309)");
+        expect(reason.empty(), "an intent outside the engine keeps the NORMAL and VISUAL caret on "
+                               "a character boundary and NORMAL on the last character (#1309)");
+        if (place == boundary_only)
+        {
+            continue;
+        }
+        const Place reached = finished_place(std::string(body), held, steps);
+        if (reached != place)
+        {
+            std::fprintf(stderr, "  %s: INSERT caret at %zu:%zu, expected %zu:%zu\n", name,
+                         reached.first, reached.second, place.first, place.second);
+        }
+        expect(reached == place,
+               "an intent outside the engine leaves the INSERT caret where it put "
+               "it, inside a character as in Vim 9.1 (#1309)");
     }
 }
 

@@ -417,8 +417,9 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 閉じたタブの読みの取消と、歩き・入力行・面の終わりで留めた読みの採用（ADR 0159 の追補
     // 1・2）。
     follow_reads();
-    // どの意図の後も Vim のキャレットは 1 文字の境に立つ（ADR 0053 の追補 #1309）。
-    keep_vim_character();
+    // どの意図の後も Vim の NORMAL と VISUAL のキャレットは 1 文字の境に立つ
+    // （ADR 0053 の追補 #1309）。
+    keep_vim_character(intent);
     fit_command_rows();
     ask_display();
     reconcile_language_server();
