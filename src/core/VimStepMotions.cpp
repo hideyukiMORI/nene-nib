@@ -423,9 +423,10 @@ namespace
                                 line, view.text.line_count());
 }
 
-// H M L の着地（画面の行の最初の非空白）。オペレータの待ちでは余白の内側へ寄せない（Vim の
-// nv_scroll は op_type == OP_NOP のときだけ cursor_correct を呼ぶ・`4y3H` の戻り先は寄せない
-// 行で比べる・#1293）。
+// H M L の着地（画面の行の最初の非空白）。オペレータの待ちでは余白の内側へ寄せず、
+// 範囲（screen_range）と同じ行に着く。Vim の nv_scroll は op_type == OP_NOP のときだけ
+// cursor_correct を呼ぶ（#1293 / #1294）。`4y3H` の戻り先は寄せない行で比べ、`yH` の
+// キャレットはその行の oap->start に置く。
 [[nodiscard]] Offset screen_first_non_blank(const VimEditorView &view, const VimState &state,
                                             VimScreenPosition position, std::size_t count)
 {
