@@ -317,7 +317,26 @@ char32_t code_point_at(std::string_view text, Offset at) noexcept
     {
         return 0;
     }
-    return decode(text, at.value, sequence_length(byte_at(text, at.value)));
+    const std::size_t length = sequence_length(byte_at(text, at.value));
+    return decode(text, at.value, std::min(length, text.size() - at.value));
+}
+
+std::size_t whole_code_points(std::string_view window) noexcept
+{
+    std::size_t lead = window.size();
+    while (lead > 0 && continuation(byte_at(window, lead - 1)))
+    {
+        --lead;
+    }
+    if (lead == 0)
+    {
+        return 0;
+    }
+    --lead;
+    // 先頭になれないバイト（不正な UTF-8）は 1 バイトに数える。code_point_at はそれを 1 バイトしか
+    // 読まない。
+    const std::size_t length = std::max<std::size_t>(sequence_length(byte_at(window, lead)), 1);
+    return lead + length <= window.size() ? window.size() : lead;
 }
 
 bool is_boundary(std::string_view text, Offset at) noexcept

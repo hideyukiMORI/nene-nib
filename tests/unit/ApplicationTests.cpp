@@ -1784,6 +1784,26 @@ void open_giant_window(Editing &editing, std::string text)
     applied(controller, SelectEditMode{EditMode::vim});
 }
 
+// 格子の見えている範囲の後ろを覗く 8 バイトの終わりで、4 バイトの絵文字を切った頭を decode しない
+// （#1292・GridLineRows::walk）。行頭の a の数で見えている範囲の終わりと絵文字の位置をずらす。
+void verify_grid_peek_across_a_window_end()
+{
+    bool shown = true;
+    for (std::size_t lead = 0; lead < 4; ++lead)
+    {
+        std::string text(lead, 'a');
+        while (text.size() < 5 * (nenenib::core::giant_line_threshold / 2 + 8))
+        {
+            text += "\xF0\x9F\x98\x80"
+                    "a";
+        }
+        Editing editing;
+        open_grid_file(editing, std::move(text), 3);
+        shown = shown && !editing.controller().frame().grid.empty();
+    }
+    expect(shown, "a grid line of emoji is shown whatever the peek cuts at its end");
+}
+
 // 対の関数 horizontal_of_column / column_of_horizontal の往復（決定 8）。zl を 1 つずつ打つたびに
 // 横の送りがちょうど 1 升ずつ増え、揺れない。左端で半分欠けた全角の leftcol も同じ値に戻る。
 void verify_horizontal_round_trip()
@@ -1923,6 +1943,7 @@ void verify_screen_row_pages()
     verify_grid_display_lines();
     verify_giant_window_display_moves();
     verify_unlaid_display_moves();
+    verify_grid_peek_across_a_window_end();
     verify_vim_horizontal_scroll();
 }
 

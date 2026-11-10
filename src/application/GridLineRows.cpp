@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <iterator>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace nenenib::application
@@ -171,7 +172,10 @@ void GridLineRows::walk()
     const auto cursor = cells.cursor_at(source_.line, begin);
     column_ = cursor.column;
     cell_ = cursor.cell;
-    const auto bytes = text.text_range(begin, stop);
+    const auto read = text.text_range(begin, stop);
+    // 覗きの終わりで切れた code point は decode しない（#1292）。
+    const std::string_view bytes{read.data(), stop.value < end.value ? core::whole_code_points(read)
+                                                                     : read.size()};
     const auto display = core::display_line(bytes);
     std::size_t at = 0;
     std::size_t drawn = 0;

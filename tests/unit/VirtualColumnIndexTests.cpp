@@ -200,8 +200,10 @@ void verify_edits()
     expect(typed_index.rebuilt_chunks() <= 2, "typing one character rereads at most two chunks");
     verify_sampled(typed, typed_index, "a typed character shifts the later chunks");
 
-    const auto tab = before.replaced(Offset{3}, Offset{3}, "\t");
-    const auto tab_index = index.replaced(tab, Offset{3}, Offset{3}, "\t");
+    // 1〜3 バイト目は「日」。Tab はその後ろの文字の境に入れる（文字の途中に入れると正しい UTF-8 で
+    // なくなる・#1292）。
+    const auto tab = before.replaced(Offset{4}, Offset{4}, "\t");
+    const auto tab_index = index.replaced(tab, Offset{4}, Offset{4}, "\t");
     expect(tab_index.rebuilt_chunks() == 1, "a tab in the first chunk rereads only that chunk");
     verify_sampled(tab, tab_index, "a tab changes the tab stops of later chunks by summaries");
 

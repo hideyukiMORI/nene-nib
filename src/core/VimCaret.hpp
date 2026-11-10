@@ -12,6 +12,11 @@ namespace nenenib::core
 // 位置をここで 1 か所に寄せる（ADR 0012 の決定 5）。
 [[nodiscard]] Offset vim_resting_caret(const TextBuffer &text, Offset caret);
 
+// 行の内容の終わり line_end までの、at から始まる Vim の 1 文字の終わり（次の文字の先頭・
+// ADR 0053）。at の後ろの窓だけを読み、文字の終わりが窓の終わりに近ければ窓を倍にして読み直す
+// （行の全体は写さない）。横送りの押しと INSERT の <Right> が共用する（#1292）。
+[[nodiscard]] Offset vim_character_after(const TextBuffer &text, Offset at, Offset line_end);
+
 // at の行の最初の非空白。行が空白だけなら行の最後の文字（空行は行頭）。行単位の削除の
 // あとの位置（Vim の規則）。
 [[nodiscard]] Offset vim_first_non_blank(const TextBuffer &text, Offset at);

@@ -124,17 +124,6 @@ using Start = std::tuple<std::size_t, std::size_t, std::size_t>;
 
 // ------------------------------------------------------------------ 1 文字を歩く（ADR 0053）
 
-// 窓の末尾の欠けた code point を落とす。
-[[nodiscard]] std::size_t whole_code_points(std::string_view window)
-{
-    std::size_t size = window.size();
-    while (size > 0 && (static_cast<unsigned char>(window.at(size - 1)) & 0xC0U) == 0x80U)
-    {
-        --size;
-    }
-    return size > 0 ? size - 1 : 0;
-}
-
 // 窓の先頭の続きのバイトを飛ばした数。
 [[nodiscard]] std::size_t leading_continuations(std::string_view window)
 {

@@ -33,7 +33,16 @@ namespace nenenib::core
 
 // 検証済みの本文の at にある code point の値。at は code point の先頭でなければならない。
 // 末尾以降は 0 を返す。UTF-8 を読み解くのはここだけで、Utf16.cpp はこの値を写すだけ（ARC-001）。
+// 列が text の終わりで切れていても（不正な UTF-8・切った窓）text の外は読まない（値は正しく
+// ない・#1292）。
 [[nodiscard]] char32_t code_point_at(std::string_view text, Offset at) noexcept;
+
+// 正しい UTF-8 の行を途中のバイトで切った窓 window のうち、終わりで切れた code point を落とした
+// 長さ（最後の code point が完結していれば window.size()・全部が継続バイトなら 0）。窓を
+// decode に渡す所（窓だけを読んで Vim の 1 文字を歩く道・ADR 0053 の決定 5）はどれもこれで
+// 切る（#1292・ARC-001）。答えは正しい UTF-8（TextBuffer が作るときに検証する）を前提にする。
+// 不正な列でも code_point_at が text の外を読まないので、窓の外は読まない。
+[[nodiscard]] std::size_t whole_code_points(std::string_view window) noexcept;
 
 // at が code point の先頭（または末尾の直後）か。
 [[nodiscard]] bool is_boundary(std::string_view text, Offset at) noexcept;
