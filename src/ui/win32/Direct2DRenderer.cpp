@@ -12,6 +12,8 @@
 #include "DisplayLine.hpp"
 #include "EditMode.hpp"
 #include "EditorSettings.hpp"
+#include "ExplorerView.hpp"
+#include "ExplorerWidth.hpp"
 #include "FullPreviewBody.hpp"
 #include "GuideContext.hpp"
 #include "GuideKeyWidth.hpp"
@@ -2344,9 +2346,9 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     const auto status = core::status_bar_layout(width, height, dpi_, frame.diagnostic_counts);
     // 面が出ていれば本文の枠は面の幅だけ右へ縮めた client から求める（ADR 0162 の決定 2・
     // ADR 0148 の 1 本はそのまま）。面が消えていれば body は client のまま。
-    const auto explorer =
-        core::explorer_layout(core::LayoutRect{0, 0, width, height}, dpi_, frame.settings.font_size,
-                              frame.explorer.has_value());
+    const auto explorer = core::explorer_layout(
+        core::LayoutRect{0, 0, width, height}, dpi_, frame.settings.font_size,
+        frame.explorer.transform([](const application::ExplorerView &view) { return view.width; }));
     const auto panes =
         core::pane_layouts(explorer.body, dpi_, frame.settings.font_size, frame.layout);
     const auto body = core::active_pane_layout(panes, frame.active_side);

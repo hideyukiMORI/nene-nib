@@ -1,6 +1,7 @@
 // Issue #997（ADR 0162 の決定 3〜6・9）: エクスプローラーの application の契約 `--explorer`。
 // 意図 4 つと焦点の 3 状態、FolderPort の entries の往復と古い券、読めないフォルダの 1 行、
 // ファイルを開く open_listed の道、設定の保存、Ctrl+P の面と port を分け合う順番を見る。
+// 面の幅のドラッグ（ResizeExplorer・追補 D78）は動かす間は書かず、離したときと戻したときだけ書く。
 // port はどれも替え玉で、時刻・スレッド・OS には触れない。
 #include "CommandInput.hpp"
 #include "CommandLine.hpp"
@@ -16,20 +17,25 @@
 #include "ExplorerKey.hpp"
 #include "ExplorerKeyKind.hpp"
 #include "ExplorerPointing.hpp"
+#include "ExplorerResizing.hpp"
 #include "ExplorerRootChosen.hpp"
 #include "ExplorerRowView.hpp"
 #include "ExplorerTree.hpp"
 #include "ExplorerView.hpp"
+#include "ExplorerWidth.hpp"
 #include "FilePath.hpp"
 #include "FolderBatch.hpp"
 #include "FolderEntry.hpp"
 #include "FolderListingKind.hpp"
 #include "FolderProgress.hpp"
 #include "ImeStance.hpp"
+#include "InsertText.hpp"
+#include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "PointExplorer.hpp"
+#include "ResizeExplorer.hpp"
 #include "Scopes.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScriptedFolders.hpp"
@@ -37,16 +43,19 @@
 #include "ScrollExplorer.hpp"
 #include "SelectEditMode.hpp"
 #include "SettingsFailure.hpp"
+#include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "ToggleExplorer.hpp"
 #include "VimMode.hpp"
 #include "VisibleLines.hpp"
+#include "WalkRecentTab.hpp"
 #include "WorkCompleted.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <format>
 #include <initializer_list>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -610,6 +619,173 @@ void verify_palette_shares_port()
     const auto frame = deliver(editing, {entry_of("C:\\proj\\a", false)}, FolderProgress::complete);
     expect(printed(frame).starts_with("a;"), "the panel loads after the palette");
 }
+[[nodiscard]] app::ResizeExplorer resized(app::ExplorerResizing resizing, std::int32_t dips)
+{
+    return app::ResizeExplorer{resizing, dips};
+}
+
+// 窓の読み（explorer_width）と frame の面の幅（ExplorerView.width）の DIP。面が消えていれば -1、
+// 既定の式なら 0。
+[[nodiscard]] std::int32_t width_of(const app::EditorController &controller)
+{
+    const auto width = controller.explorer_width();
+    return width.has_value() ? width.value().dips.value_or(0) : -1;
+}
+
+[[nodiscard]] std::int32_t width_of(const app::EditorFrame &frame)
+{
+    return frame.explorer.has_value() ? view_of(frame).width.dips.value_or(0) : -1;
+}
+
+// 面の幅のドラッグ（追補 D78）。動かしている間は状態だけ、離したら 1 回書く、ダブルクリックは
+// 既定の式へ戻して書く。動かさずに離したら書かない。
+void verify_resize_writes_on_release()
+{
+    Editing editing(shown_at(project));
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    expect(width_of(controller) == 0 && width_of(controller.frame()) == 0,
+           "a settings file without explorer_width uses the default formula");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 300)));
+    expect(editing.settings().writes() == 0 && width_of(controller) == 0,
+           "releasing the divider without dragging writes nothing");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 300)));
+    const auto dragging = controller.apply_frame(resized(app::ExplorerResizing::dragged, 320));
+    expect(editing.settings().writes() == 0 && width_of(controller) == 320 &&
+               width_of(dragging) == 320 && !dragging.settings.explorer_width.has_value(),
+           "dragging shows the width without writing the settings");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 330)));
+    expect(editing.settings().writes() == 1 && saved(editing).explorer_width == 330 &&
+               width_of(controller) == 330 && width_of(controller.frame()) == 330,
+           "releasing writes the released width once");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 330)));
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 330)));
+    expect(editing.settings().writes() == 1, "the same width is not written again");
+    const auto reset = controller.apply_frame(resized(app::ExplorerResizing::reset, 0));
+    expect(editing.settings().writes() == 2 && !saved(editing).explorer_width.has_value() &&
+               width_of(reset) == 0,
+           "a double click goes back to the default formula and writes once");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::reset, 0)));
+    expect(editing.settings().writes() == 2, "resetting the default again writes nothing");
+}
+
+// 覚えた幅で起動する・面が消えていれば何もしない・書けなければ覚えた幅へ戻して知らせる（D78）。
+void verify_resize_remembered_and_hidden()
+{
+    auto remembered = core::default_editor_settings();
+    remembered.explorer = true;
+    remembered.explorer_width = 400;
+    Editing editing(SettingsReading{remembered});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    expect(width_of(controller) == 400 && width_of(controller.frame()) == 400,
+           "the remembered width is used at start");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 250)));
+    editing.settings().fail(app::SettingsFailure::unwritable);
+    const auto failed = controller.apply_frame(resized(app::ExplorerResizing::released, 250));
+    expect(message_of(failed) == "Settings could not be saved" && width_of(controller) == 400,
+           "a width that cannot be written is told and the remembered width stays");
+    editing.settings().fail(std::nullopt);
+    const auto cleared = controller.apply_frame(resized(app::ExplorerResizing::dragged, 260));
+    expect(message_of(cleared) == "-",
+           "dragging is a user operation and clears the one-intent message");
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    const auto writes = editing.settings().writes();
+    expect(width_of(controller) == -1 && width_of(controller.frame()) == -1,
+           "a hidden panel has no width");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 300)));
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 300)));
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::reset, 0)));
+    expect(editing.settings().writes() == writes && width_of(controller) == -1,
+           "a hidden panel ignores the divider");
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    expect(width_of(controller) == 400, "a panel shown again has the remembered width");
+}
+
+// controller の入口で幅を [120, 9999] に収める（#1380 の R-1）。窓を経ない送り手でも、書いた値を
+// 自分の読みで既定に戻さず、INT32_MAX や負の値で溢れない。
+void verify_resize_clamped()
+{
+    Editing editing(shown_at(project));
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 50)));
+    expect(width_of(controller) == 120 && width_of(controller.frame()) == 120,
+           "a width below the minimum drags as 120");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 50)));
+    expect(editing.settings().writes() == 1 && saved(editing).explorer_width == 120,
+           "a width below the minimum is written as 120");
+    constexpr auto largest = std::numeric_limits<std::int32_t>::max();
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, largest)));
+    const auto widest = controller.frame();
+    expect(width_of(controller) == 9999 && width_of(widest) == 9999,
+           "INT32_MAX drags as 9999 and the frame is built");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, largest)));
+    expect(editing.settings().writes() == 2 && saved(editing).explorer_width == 9999,
+           "INT32_MAX is written as 9999");
+    constexpr auto smallest = std::numeric_limits<std::int32_t>::min();
+    for (const std::int32_t negative : {-5, smallest})
+    {
+        static_cast<void>(
+            controller.apply_frame(resized(app::ExplorerResizing::dragged, negative)));
+        expect(width_of(controller) == 120, "a negative width drags as 120");
+    }
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, smallest)));
+    expect(editing.settings().writes() == 3 && saved(editing).explorer_width == 120,
+           "a negative width is written as 120");
+}
+
+// Ctrl+Tab の歩きの途中のドラッグは使う人の操作で、歩きを確定する（#1380 の T-2・ADR 0058）。
+void verify_resize_settles_tab_walk()
+{
+    Editing editing(shown_at(project));
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    applied(controller, app::InsertText{"a"});
+    for (const std::string_view body : {"b", "c", "d"})
+    {
+        applied(controller, app::NewTab{});
+        applied(controller, app::InsertText{std::string(body)});
+    }
+    applied(controller, app::WalkRecentTab{core::TabStep::next});
+    expect(controller.tab_walking(), "the walk is open before the drag");
+    const auto dragged = controller.apply_frame(resized(app::ExplorerResizing::dragged, 300));
+    expect(!controller.tab_walking() && width_of(dragged) == 300 && !dragged.lines.empty() &&
+               dragged.lines.front().text == "c",
+           "dragging the divider settles the walk on the walked tab");
+    const auto walked = controller.apply_frame(app::WalkRecentTab{core::TabStep::next});
+    expect(!walked.lines.empty() && walked.lines.front().text == "d",
+           "the settled walk put the walked tab first in the order");
+}
+
+// ドラッグの途中で面が閉じたら、ドラッグは終わりで幅は書かない（Issue #1380 の設計席の決め）。
+// 次に開いたときは覚えた幅で、開き直した後に離しても書かない。
+void verify_resize_hidden_while_dragging()
+{
+    auto remembered = core::default_editor_settings();
+    remembered.explorer = true;
+    remembered.explorer_width = 400;
+    Editing editing(SettingsReading{remembered});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 250)));
+    expect(width_of(controller) == 250, "the drag shows its width");
+    for (std::size_t toggles = 0; toggles < 2 && width_of(controller) != -1; ++toggles)
+    {
+        static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    }
+    expect(width_of(controller) == -1 && saved(editing).explorer_width == 400,
+           "closing the panel during a drag keeps the remembered width in the settings");
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    const auto writes = editing.settings().writes();
+    expect(width_of(controller) == 400 && width_of(controller.frame()) == 400,
+           "the panel shown again has the remembered width, not the dropped drag");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 250)));
+    expect(editing.settings().writes() == writes && width_of(controller) == 400 &&
+               saved(editing).explorer_width == 400,
+           "a release after the panel came back writes nothing");
+}
 } // namespace
 
 void verify_explorer_contracts()
@@ -631,6 +807,11 @@ void verify_explorer_contracts()
     verify_truncated();
     verify_root_requests();
     verify_palette_shares_port();
+    verify_resize_writes_on_release();
+    verify_resize_remembered_and_hidden();
+    verify_resize_clamped();
+    verify_resize_settles_tab_walk();
+    verify_resize_hidden_while_dragging();
 }
 
 void verify_explorer_scope()
