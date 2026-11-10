@@ -207,52 +207,34 @@ void append(Keys &out, KeySpan keys)
     out.insert(out.end(), keys.begin(), keys.end());
 }
 
-// 右辺の中を 1 段だけ引く（待たない・見つけた行の右辺はそのまま）。
-void append_once(Keys &out, const KeyMap &map, VimMapMode mode, KeySpan keys)
+// 右辺を生のまま keys に足し、1 段引き直す鍵の始まりの位置を返す（`noremap` は引き直さないので
+// 終わり・右辺が左辺で始まるならその分は引き直さない・Vim と同じ）。
+[[nodiscard]] std::size_t append_mapping(Keys &out, const KeyMapping &mapping)
 {
-    std::size_t at = 0;
-    while (at < keys.size())
-    {
-        const auto *found = longest(map, mode, keys.subspan(at));
-        if (found == nullptr)
-        {
-            out.push_back(keys[at]);
-            ++at;
-            continue;
-        }
-        append(out, found->rhs);
-        at += found->lhs.size();
-    }
-}
-
-void append_mapping(Keys &out, const KeyMap &map, VimMapMode mode, const KeyMapping &mapping)
-{
-    KeySpan rhs{mapping.rhs};
+    const std::size_t begin = out.size();
+    append(out, mapping.rhs);
     if (!mapping.remap)
     {
-        append(out, rhs);
-        return;
+        return out.size();
     }
-    if (starts_with(rhs, mapping.lhs))
-    {
-        append(out, mapping.lhs);
-        rhs = rhs.subspan(mapping.lhs.size());
-    }
-    append_once(out, map, mode, rhs);
+    return starts_with(mapping.rhs, mapping.lhs) ? begin + mapping.lhs.size() : begin;
 }
 
-// rest の先頭の 1 つ（左辺が最も長い行か、無ければ 1 鍵）を keys に流す。読んだ鍵の数と、
-// 表の行に当たったかを返す。
+// rest の先頭の 1 つ（左辺が最も長い行か、無ければ 1 鍵）を emitted に 1 単位として流す。読んだ
+// 鍵の数と、表の行に当たったかを返す。
 [[nodiscard]] std::pair<std::size_t, bool> consume(const KeyMap &map, VimMapMode mode, KeySpan rest,
-                                                   Keys &keys)
+                                                   KeyMapEmit &emitted)
 {
     const auto *found = longest(map, mode, rest);
     if (found == nullptr)
     {
-        keys.push_back(rest.front());
+        emitted.keys.push_back(rest.front());
+        emitted.remaps.push_back(emitted.keys.size());
+        emitted.ends.push_back(emitted.keys.size());
         return {1U, false};
     }
-    append_mapping(keys, map, mode, *found);
+    emitted.remaps.push_back(append_mapping(emitted.keys, *found));
+    emitted.ends.push_back(emitted.keys.size());
     return {found->lhs.size(), true};
 }
 
@@ -404,20 +386,17 @@ KeyMapStep key_map_step(const KeyMap &map, VimMapMode mode, std::span<const VimK
     Keys buffer(pending.begin(), pending.end());
     buffer.push_back(key);
     const KeySpan whole{buffer};
-    Keys keys;
-    std::vector<std::size_t> ends;
-    std::vector<std::size_t> reads;
+    KeyMapEmit emitted;
     bool mapped = false;
     std::size_t at = 0;
     while (at < whole.size() && !waits(map, mode, whole.subspan(at)))
     {
-        const auto [count, row] = consume(map, mode, whole.subspan(at), keys);
+        const auto [count, row] = consume(map, mode, whole.subspan(at), emitted);
         at += count;
         mapped = mapped || row;
-        ends.push_back(keys.size());
-        reads.push_back(at);
+        emitted.reads.push_back(at);
     }
-    if (keys.empty())
+    if (emitted.keys.empty())
     {
         return KeyMapPending{};
     }
@@ -425,9 +404,8 @@ KeyMapStep key_map_step(const KeyMap &map, VimMapMode mode, std::span<const VimK
     {
         return KeyMapPass{};
     }
-    return KeyMapEmit{std::move(keys),
-                      Keys(whole.begin() + static_cast<std::ptrdiff_t>(at), whole.end()),
-                      std::move(ends), std::move(reads)};
+    emitted.waiting.assign(whole.begin() + static_cast<std::ptrdiff_t>(at), whole.end());
+    return emitted;
 }
 
 KeyMapEmit key_map_flush(const KeyMap &map, VimMapMode mode, std::span<const VimKey> pending)
@@ -436,10 +414,20 @@ KeyMapEmit key_map_flush(const KeyMap &map, VimMapMode mode, std::span<const Vim
     std::size_t at = 0;
     while (at < pending.size())
     {
-        at += consume(map, mode, pending.subspan(at), flushed.keys).first;
-        flushed.ends.push_back(flushed.keys.size());
+        at += consume(map, mode, pending.subspan(at), flushed).first;
         flushed.reads.push_back(at);
     }
     return flushed;
+}
+
+std::pair<std::size_t, std::span<const VimKey>>
+rhs_unit_step(const KeyMap &map, std::optional<VimMapMode> mode, std::span<const VimKey> rest)
+{
+    const auto *found = mode.has_value() ? longest(map, mode.value(), rest) : nullptr;
+    if (found == nullptr)
+    {
+        return {1U, rest.first(1)};
+    }
+    return {found->lhs.size(), KeySpan{found->rhs}};
 }
 } // namespace nenenib::core
