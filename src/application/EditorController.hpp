@@ -79,6 +79,7 @@
 #include "PreviewFullRoute.hpp"
 #include "PreviewPlacement.hpp"
 #include "ReplayLevel.hpp"
+#include "ReplayRounds.hpp"
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
 #include "ServerEvent.hpp"
@@ -189,6 +190,10 @@ class EditorController final
     // `@` の再生の中で `map` の左辺の途中まで読んで待った回数（起動からの累計・#1312）。性質の
     // 試験が待ちと flush の道を通ったことを確かめるための口で、状態を変えない。
     [[nodiscard]] std::size_t replay_waits() const noexcept;
+    // 再生の列へ積んだ周の数（起動からの累計・#1341・`.` の再生も 1 周に数える）。`[count]@a` は
+    // 1 周ずつ積むので、巨大な回数でも鍵が失敗した所で止まったことを、時計を読まずに数で確かめる
+    // ための口。
+    [[nodiscard]] std::size_t replay_rounds() const noexcept;
     // Ctrl+Tab で歩いている間だけ真（ADR 0058 の決定 4）。窓が Ctrl を離したとき・フォーカスを
     // 失ったときに SettleRecentTab を送るかを決めるための口で、状態の 1 欄を読むだけ。
     [[nodiscard]] bool tab_walking() const noexcept;
@@ -313,9 +318,15 @@ class EditorController final
     // 文書ごとで、再生の外では何もしない。
     void close_replayed_unit();
     void reopen_replayed_unit();
-    // 再生の中の再生の鍵を列の先頭へ差し込む。深さが上限を超えたら残りを捨てる（決定 4）。
-    void queue_nested_replay(const std::vector<core::VimKey> &keys, std::size_t depth,
-                             core::VimReplayKind kind);
+    // 再生の最初の周を列の先頭へ差し込み、残りの周を replay_rounds_ に置く（#1341）。深さが
+    // 上限を超えたら何も差し込まず残りを捨てる（決定 4）。
+    void queue_replay(const core::VimReplay &effect, std::size_t depth);
+    // 1 周ぶんの鍵を列の先頭へ差し込む。more なら最後の鍵に round_end を立てる。
+    void queued_round(std::span<const core::VimKey> keys, ReplayLevel level, bool more);
+    // round_end の鍵を取り出したとき、replay_rounds_ の頂の次の周を積む。
+    void next_replay_round();
+    // 鍵の失敗と深さの上限で、列・周・待ちを全部捨てる。
+    void dropped_replay();
     // 再生の列を先頭から流す 2 本（#1312）。表が空なら plain（今までの道のまま・鍵ごとの分岐と
     // 割り当てを足さない）、表に行があれば mapped（`@` の鍵は流す時点の表で引く・`.` の鍵は
     // 引かない）。どちらも失敗した鍵で列の残りを捨てる。
@@ -948,9 +959,14 @@ class EditorController final
     std::optional<float> wanted_x_;
     // `.` と `@` の再生で流す鍵の列と、それぞれの鍵の入れ子の深さと種類（ADR 0046 の決定 3・4・
     // #1312）。replay_depth_ はいま流している鍵の深さで、再生の外（打った鍵）では空。どれも
-    // perform(VimReplay) と queue_nested_replay と replayed_mapped_queue の群だけが書く。
+    // perform(VimReplay) と queue_replay と replayed_mapped_queue の群だけが書く。
     std::deque<core::VimKey> replay_queue_;
     std::deque<ReplayLevel> replay_levels_;
+    // `[count]@a` のまだ積んでいない周（#1341）。queue_replay が置き、next_replay_round が減らし、
+    // dropped_replay が捨てる。
+    std::vector<ReplayRounds> replay_rounds_;
+    // replay_rounds の数（queued_round だけが足す・`.` の 1 周も数える）。
+    std::size_t replay_round_count_ = 0;
     std::optional<std::size_t> replay_depth_;
     // `@` の再生の中で `map` の左辺の途中まで読んだ鍵（#1312）。再生の中だけで持ち、列が尽きたら
     // 待たずに流す。state_ の待ち（打った鍵の分）へ持ち越さない。

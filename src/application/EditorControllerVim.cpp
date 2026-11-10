@@ -203,6 +203,8 @@ void place_insert_left(EditorState &state, std::optional<std::size_t> left)
 
 // Vim の問いの往復の契約の破れの知らせ（ADR 0133 の追補 2026-10-18・#665）。鍵は効かない。
 constexpr std::string_view inconsistent_layout_notice = "内部の不整合: 画面行の問い（鍵は無効）";
+// 回数で本文を増やす編集を文書の上限で断った鍵の知らせ（#1341・Vim 9.1 の同じ種類の文）。
+constexpr std::string_view too_long_notice = "E1240: Resulting text too long";
 // engine を呼ぶ 1 か所の写し（Issue #1023）。鍵は vim_step・`:N` の行は vim_line_jumped・押しの
 // VISUAL は vim_pointer_selected（#1250）。
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
@@ -786,6 +788,12 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     {
         state_ = state_.with_command_message(core::vim_search_message(step.notice.value()));
     }
+    // 文書の上限で断った鍵は 1 行知らせる（#1341）。自分の失敗だけを見るので、再生の中で断った鍵の
+    // 1 回だけ出て、再生を返した鍵では重ねない。鍵の失敗なので鳴らさない（ADR 0153 の決定 2）。
+    if (step.failure == std::optional{core::VimRepeatFailure::too_large})
+    {
+        state_ = state_.with_command_message(core::DisplayText::parse(too_long_notice).value());
+    }
     // 書けなかった知らせは検索の報せの後に置き、同じ鍵で両方起きたら書けなかった方を見せる。
     send_vim_clipboard(step.clipboard);
     if (before == core::VimMode::insert && before != step.next.mode)
@@ -1250,7 +1258,7 @@ void EditorController::fold_block_into_insert(const std::vector<core::VimBlockEd
 // レジスタの中身を先読みの頭へ入れるのと同じ順）。流している鍵が閉じた失敗で終わったら列の
 // 残りをすべて捨てる（Vim の「エラーで残りの打鍵を捨てる」）。差し込みの深さが上限を超えたら
 // 何も差し込まずに残りを捨てる。入れ子を C++ の呼び出しの深さにしないので、深い再帰でも
-// スタックを食わない。
+// スタックを食わない。`[count]@a` は 1 周ずつ積む（#1341・queue_replay）。
 void EditorController::perform(const core::VimReplay &effect)
 {
     state_ = state_.with_history(state_.history().sealed());
@@ -1262,14 +1270,14 @@ void EditorController::perform(const core::VimReplay &effect)
     }
     if (replay_depth_.has_value())
     {
-        queue_nested_replay(effect.keys, replay_depth_.value() + 1, effect.kind);
+        queue_replay(effect, replay_depth_.value() + 1);
         return;
     }
     replay_history_ = state_.history();
     replay_text_ = state_.text();
     vim_top_kept_ = false;
-    replay_queue_.assign(effect.keys.begin(), effect.keys.end());
-    replay_levels_.assign(effect.keys.size(), ReplayLevel{1U, effect.kind});
+    dropped_replay();
+    queue_replay(effect, 1U);
     // 表は再生を始めるときに 1 回だけ見る（表が空なら鍵ごとに表を見ない・#1312）。
     if (key_map_.mappings.empty())
     {
@@ -1291,20 +1299,29 @@ std::size_t EditorController::replay_waits() const noexcept
     return replay_waits_;
 }
 
+std::size_t EditorController::replay_rounds() const noexcept
+{
+    return replay_round_count_;
+}
+
 void EditorController::replayed_plain_queue()
 {
     while (!replay_queue_.empty())
     {
         const core::VimKey key = replay_queue_.front();
-        replay_depth_ = replay_levels_.front().depth;
+        const ReplayLevel level = replay_levels_.front();
+        replay_depth_ = level.depth;
         replay_queue_.pop_front();
         replay_levels_.pop_front();
+        if (level.round_end)
+        {
+            next_replay_round();
+        }
         const auto failure = deliver_vim_key(key);
         if (failure.has_value())
         {
             replay_failure_ = failure;
-            replay_queue_.clear();
-            replay_levels_.clear();
+            dropped_replay();
         }
     }
 }
@@ -1319,9 +1336,7 @@ void EditorController::replayed_mapped_queue()
         if (failure.has_value())
         {
             replay_failure_ = failure;
-            replay_queue_.clear();
-            replay_levels_.clear();
-            replay_pending_.clear();
+            dropped_replay();
         }
     }
 }
@@ -1335,6 +1350,10 @@ std::optional<core::VimRepeatFailure> EditorController::replayed_front()
     replay_depth_ = level.depth;
     replay_queue_.pop_front();
     replay_levels_.pop_front();
+    if (level.round_end)
+    {
+        next_replay_round();
+    }
     switch (level.kind)
     {
     case core::VimReplayKind::repeat:
@@ -1438,21 +1457,57 @@ void EditorController::reopen_replayed_unit()
     replay_text_ = state_.text();
 }
 
-void EditorController::queue_nested_replay(const std::vector<core::VimKey> &keys, std::size_t depth,
-                                           core::VimReplayKind kind)
+void EditorController::queue_replay(const core::VimReplay &effect, std::size_t depth)
 {
     if (depth > core::vim_replay_depth_limit)
     {
-        replay_queue_.clear();
-        replay_levels_.clear();
-        replay_pending_.clear();
+        dropped_replay();
         state_ = state_.with_command_message(
             core::DisplayText::parse("E132: Macro depth is higher than 100").value());
         return;
     }
+    const ReplayLevel level{static_cast<std::uint32_t>(depth), effect.kind};
+    const bool more = effect.rounds > 1U && !effect.keys.empty();
+    if (more)
+    {
+        replay_rounds_.push_back(
+            ReplayRounds{effect.keys, effect.rounds - 1U, level.depth, effect.kind});
+    }
+    queued_round(effect.keys, level, more);
+}
+
+void EditorController::queued_round(std::span<const core::VimKey> keys, ReplayLevel level,
+                                    bool more)
+{
     replay_queue_.insert(replay_queue_.begin(), keys.begin(), keys.end());
-    replay_levels_.insert(replay_levels_.begin(), keys.size(),
-                          ReplayLevel{static_cast<std::uint32_t>(depth), kind});
+    replay_levels_.insert(replay_levels_.begin(), keys.size(), level);
+    if (more)
+    {
+        replay_levels_.at(keys.size() - 1U).round_end = true;
+    }
+    ++replay_round_count_;
+}
+
+// 流している鍵が周の最後なら、鍵を流す前に次の周を頭へ積む。鍵が差し込む入れ子の再生はさらに
+// その前に入るので、順は回数ぶん繋いだ列と同じ（Vim の nv_at は周ごとに do_execreg を呼ぶ）。
+void EditorController::next_replay_round()
+{
+    ReplayRounds &top = replay_rounds_.back();
+    --top.remaining;
+    const bool more = top.remaining > 0U;
+    queued_round(top.keys, ReplayLevel{top.depth, top.kind}, more);
+    if (!more)
+    {
+        replay_rounds_.pop_back();
+    }
+}
+
+void EditorController::dropped_replay()
+{
+    replay_queue_.clear();
+    replay_levels_.clear();
+    replay_pending_.clear();
+    replay_rounds_.clear();
 }
 
 // 再生は命令ごとに編集を積むが、`[count]@a` と `.` の全体を 1 回の `u` で戻すのが Vim と同じ

@@ -1,5 +1,6 @@
 #include "VimStepDetail.hpp"
 
+#include "LineEnding.hpp"
 #include "Utf8.hpp"
 #include "VimBlockInsert.hpp"
 #include "VimBlockLine.hpp"
@@ -26,7 +27,9 @@ using detail::cancelled;
 using detail::cased_block;
 using detail::cased_text;
 using detail::count_of;
+using detail::count_room;
 using detail::failed;
+using detail::fits_repeated;
 using detail::line_of;
 using detail::put_characters;
 using detail::put_lines;
@@ -802,6 +805,34 @@ namespace
     return VimInsertBlock{std::move(edits), at, EditBoundary::separate};
 }
 
+// 矩形の `p` `P` の本文が文書の上限に収まるか（#1341）。1 行は回数ぶんの本文と幅までの空白で、
+// 本文の外に足すのは多くとも max(桁, tabstop) と改行（文書の改行の形の幅）: 行末より右の桁は
+// 手前を桁 − 1 個の空白で埋め、足す行は改行と桁 − 1 個の空白、桁の途中で割る Tab（1 バイト）は
+// 多くとも tabstop 個の空白になる（PR #1348 の再レビュー M2）。Vim は行ごとにそのまま確保する
+// （`<C-v>jy999999999p` は 2 GB の 2 行を作る・実測）。
+[[nodiscard]] bool block_put_fits(const VimState &state, const VimEditorView &view, VimPutSide side)
+{
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
+    const VimRegister source = register_read(state, state.selected_register);
+    const std::size_t width = source.width.has_value() ? source.width.value().columns : single_step;
+    const std::size_t count = count_of(state.count);
+    const std::size_t lead = std::max(put_column(text, caret, side), vim_tab_stop) +
+                             newline_of(text.line_ending()).size();
+    std::size_t room = count_room(text, view.document_limit);
+    for (const std::string &line : block_register_lines(source.text))
+    {
+        const std::size_t cells = put_block_cells(line);
+        const std::size_t piece = line.size() + (width > cells ? width - cells : 0);
+        if (room < lead || !fits_repeated(piece, count, room - lead))
+        {
+            return false;
+        }
+        room -= lead + piece * count;
+    }
+    return true;
+}
+
 // 貼れないレジスタ（E353）。未使用と空のクリップボードだけ（ADR 0051 の B6）。空の本文で書かれた
 // レジスタ（空行の `C`・#960）は Vim の do_put の y_size が 1 なので拒まない（実測）。
 [[nodiscard]] bool refuses_put(const VimState &state, const VimRegister &source)
@@ -814,9 +845,10 @@ namespace
 
 namespace detail
 {
-[[nodiscard]] VimStep put_step(const VimState &state, const TextBuffer &text, Offset caret,
-                               VimPutSide side)
+[[nodiscard]] VimStep put_step(const VimState &state, const VimEditorView &view, VimPutSide side)
 {
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
     const VimRegister source = register_read(state, state.selected_register);
     const bool black_hole = state.selected_register.has_value() &&
                             state.selected_register.value().target == VimRegisterTarget::black_hole;
@@ -835,6 +867,10 @@ namespace detail
     }
     if (source.kind == VimRegisterKind::block)
     {
+        if (!block_put_fits(state, view, side))
+        {
+            return failed(cancelled(state), VimRepeatFailure::too_large);
+        }
         // 本文が空の矩形（空の行で始まる矩形の `C` `c`）も 1 行・幅つきの矩形として貼り、幅の
         // ぶんを空白で埋める（Vim の do_put の MBLOCK は y_size 1 の空の行を幅まで埋める・#1158）。
         return VimStep{vim_resting_from(state, state.unnamed_register),
@@ -845,7 +881,7 @@ namespace detail
         // 空の本文は何も貼らず、キャレットも動かさない（Vim は yanklen が 0 なら列を進めない）。
         return VimStep{vim_resting_from(state, state.unnamed_register), VimNoEffect{}};
     }
-    auto body = repeated(source.text, count_of(state.count));
+    auto body = repeated(source.text, count_of(state.count), text, view.document_limit);
     if (!body.has_value())
     {
         return failed(cancelled(state), body.error());
