@@ -93,3 +93,17 @@ PR #1121 の独立レビュー（R6-2 / R4-1）の後続。設計席の判断（
 6. **面が消えているときの打鍵の道は不変。** 幅は面が出ているときだけ読み（`explorer_layout` は `shown` が値なしなら幅を計算しない・`explorer_view` は面が消えていれば作らない）、打鍵の道の `delivery` に欄も分岐も足さない。
 7. **契約。** core `--explorer-layout`（`verify_chosen_width` `verify_dragged_width` `verify_divider_hit` `verify_width_text`）・application `--explorer`（`verify_resize_writes_on_release` `verify_resize_remembered_and_hidden` `verify_resize_clamped` `verify_resize_settles_tab_walk` `verify_resize_hidden_while_dragging`・設定の port の書いた回数）・`--preview-full`（`verify_full_preview_resize`・全面の間も幅が変わる）・adapters の設定の codec（鍵の往復・空と壊れた値は既定・v1 / v2 / v3 に在れば拒否・境の 120 と 9999）・窓 `nib_window_tests --explorer`（`verify_chosen_width_pixels`・境は面の行と重なる）。窓の状態機械（押す・動かす・離す・捕まえを失う・ダブルクリック）の自動の試験は無く、実機のドラッグは施主の試用で確かめる（窓を前面に出す道具は回さない）。
 8. **限界。** プレビューの枠と split の境のドラッグ（ADR 0148 の決定 1 のまま）・面を右に置く設定は対象外。ドラッグの間の境の強調（色）は足していない（境界は決定 8 の `panel_border` / `accent` のまま）。ドラッグ中の Esc で元の幅へ戻す・境の軽い調整の直後の押し直しがダブルクリックになる・窓が 2 つのときの書き込みの機会・ドラッグ中の DPI の変化は後続（#1387・レビュー V-1384 の F-1〜F-4）。
+
+## 追補（2026-11-10・#1388・施主の要望）クリック 1 回でファイルを開き、フォルダを開閉する
+
+施主の要望（2026-11-10 夜）: 「Cursor とかはダブルクリックじゃなくてシングルクリックで開くよね。その方がなれてる」。決定 4 の `PointExplorer` の「シングルは選ぶだけ・ダブルは開く」と決定 6 の「開いたら本文へ焦点を戻す」を、VS Code / Cursor と同じ手触りに改める（値は設計席の決め・Issue #1388）。仕様 D66 の文言（シングルは選ぶだけ）は施主の要望で改まり、仕様の表の更新は設計席が行う（この PR は仕様を触らない）。
+
+1. **1 回のクリック。** 押した行と離した行が同じ節のとき（ADR 0056 の決定 9 のまま）、ファイルの行は選んで `open_listed` の 1 本で開き（失敗は 1 行・履歴は触らない・既に開いていればそのタブへ切り替えて読まない）、**焦点は面に残す**（続けて ↑ ↓ で歩ける）。フォルダの行は選んで開閉する（今までどおり）。「…」の行は選ぶだけ・行の外と空の所は何もしない。↑ ↓ と j k の鍵は選ぶだけで開かない。
+2. **ダブルクリックの状態機械。** OS は面の上の速い 2 回の押しを「押す → 離す → `WM_LBUTTONDBLCLK` → 離す」と送る。窓はそのまま `pressed` → `released` → `double_click` → `released` と送り（写しは ui の `explorer_pointing_of` の 1 本・押していない離しは送らない）、意味は controller が決める。controller は 1 回のクリックが効いた節の経路を `explorer_clicked_` に覚え（次の押しと 2 打目で消す）、2 打目（`double_click`）は:
+   - 覚えた節と同じ節なら、ファイルは焦点を本文へ移すだけ（**2 回読まない**）、フォルダは何もしない（**開いて閉じる、にしない**・選択だけ）。
+   - 違えば（押した行と離した行が違った・境の押しの直後など、1 打目が効いていない）1 回のクリックとして効かせ、ファイルなら焦点を本文へ移す（Enter と同じ・読みは 1 回）。
+   - 2 打目の後の離しは押した印が無いので何もしない。3 打目の押しは新しいクリック（フォルダならもう一度開閉）。
+3. **Enter は今までどおり。** ファイルは開いて焦点を本文へ・フォルダは開く（決定 4 のまま）。意図・`ExplorerPointing` の値・`keeps_tab_walk` と `begin_intent` の表は変えない（`PointExplorer` は使う人の操作のまま）。
+4. **当たらないもの。** 境のドラッグとダブルクリック（#1380・D78）は面の行より先に引くので、この規則に入らない。面のホイールは不変。面に右クリックの道は無い。
+5. **契約。** application `--explorer` の `verify_click_opens_file`（クリックで開く・焦点は面・↑ ↓ で歩ける・既に開いているタブへの切り替えは読まない・開けないファイルは 1 行で焦点は面・履歴は触らない）・`verify_double_click_reads_once`（OS の列で読みは 1 回・焦点は本文・開けないファイルも試すのは 1 回・1 打目が効かなかった 2 打目は Enter と同じ）・`verify_folder_double_click_toggles_once`（閉じたフォルダも開いたフォルダもダブルクリックで 1 回だけ開閉）・`verify_enter_opens_file`（矢印で歩くだけでは開かない）。窓 `nib_window_tests --explorer` の `verify_click_messages`（OS の 4 通の列 → 送る 4 つの意図・押していない離しは送らない・ほかのボタンと動きは面の押しではない）。窓の実機のクリックは施主の試用で確かめる（窓を前面に出す道具は回さない）。
+6. **やらないこと。** プレビューのタブ（クリックで開いたタブを次のクリックで置き換える形）は施主の判断の後で別の Issue。

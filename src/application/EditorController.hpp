@@ -512,6 +512,7 @@ class EditorController final
     void select_explorer_row(std::size_t row);
     void release_explorer(const std::optional<core::FilePath> &released, std::size_t row);
     void click_explorer_row(std::size_t row);
+    void double_click_explorer(std::size_t row);
     void open_explorer_folder(std::optional<std::size_t> row);
     void enter_explorer_row(std::optional<std::size_t> row);
     void collapse_explorer_row();
@@ -1003,6 +1004,9 @@ class EditorController final
     // 面の上で押した行の節の経路（決定 4・ADR 0056 の決定 9）。離したときに同じ節かを比べて消す。
     // 「…」の行と行の外を押したときは値なし（離しても何もしない）。
     std::optional<core::FilePath> explorer_pressed_;
+    // 直前の 1 回のクリックが効いた節の経路（決定 4 の改め #1388）。ダブルクリックの 2 打目がこの節
+    // なら、2 回読まず・2 回開閉しない。次の押しと 2 打目で消す。
+    std::optional<core::FilePath> explorer_clicked_;
     // 境をドラッグしている間の面の幅（DIP・ADR 0162 の追補 D78）。設定には離したときにだけ書く。
     std::optional<std::int32_t> explorer_dragged_;
     // 字体の一覧（#597・D58）。補完が求めた最初の 1 回だけ読み、読めなくても再読しない。

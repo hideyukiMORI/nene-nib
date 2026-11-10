@@ -110,7 +110,7 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
     case WM_LBUTTONDBLCLK:
         // 境の上は既定の幅へ戻す（D78）。面の上は面のダブルクリック（ADR 0162）。ほかは 2
         // 回目の押しで、本文なら語を選ぶ（#1250）。
-        if (reset_explorer_width(data) || double_click_explorer(data))
+        if (reset_explorer_width(data) || point_explorer(WM_LBUTTONDBLCLK, data))
         {
             last_clicks_ = application::PointerClicks::single;
             return 0;
@@ -162,7 +162,7 @@ void EditorWindow::release_left(LPARAM data)
     end_selection_drag();
     release_preview_task(data);
     release_title_bar(data);
-    release_explorer(data);
+    static_cast<void>(point_explorer(WM_LBUTTONUP, data));
 }
 
 core::TitleBarLayout EditorWindow::title_bar() const
@@ -364,7 +364,7 @@ void EditorWindow::click_client(LPARAM data, application::PointerClicks clicks)
         send(application::CancelCommand{});
         return;
     }
-    if (press_explorer_divider(data) || press_explorer(data))
+    if (press_explorer_divider(data) || point_explorer(WM_LBUTTONDOWN, data))
     {
         return;
     }

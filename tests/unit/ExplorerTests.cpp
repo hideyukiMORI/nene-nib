@@ -256,11 +256,13 @@ void verify_enter_opens_file()
     static_cast<void>(loaded_project(editing));
     editing.files().hold_at("C:\\proj\\README.md", Bytes{"read me"});
     static_cast<void>(editing.controller().apply_frame(app::ToggleExplorer{}));
-    static_cast<void>(
-        editing.controller().apply_frame(PointExplorer{2, ExplorerPointing::pressed}));
-    static_cast<void>(
-        editing.controller().apply_frame(PointExplorer{2, ExplorerPointing::released}));
+    static_cast<void>(key(editing, ExplorerKeyKind::down));
+    static_cast<void>(key(editing, ExplorerKeyKind::down));
+    const auto walked = key(editing, ExplorerKeyKind::down);
     const auto reads = editing.reads().requests().size();
+    expect(printed(walked) == ".git/+~;src/+;README.md;sel 2 first 0 focus 1" && reads == 0 &&
+               walked.document.title.text() != "README.md",
+           "walking onto a file with the arrow keys does not open it (#1388)");
     const auto opened = key(editing, ExplorerKeyKind::enter);
     expect(opened.document.title.text() == "README.md" && !opened.lines.empty() &&
                opened.lines.front().text == "read me" &&
@@ -303,11 +305,124 @@ void verify_pointing()
            "a second click closes it");
     const auto twice = controller.apply_frame(PointExplorer{1, ExplorerPointing::double_click});
     const auto after = controller.apply_frame(PointExplorer{1, ExplorerPointing::released});
-    expect(printed(twice) == ".git/+~;src/-;README.md;sel 1 first 0 focus 1" &&
-               printed(after) == printed(twice),
-           "a double click opens the folder and its release does nothing");
+    expect(printed(twice) == printed(again) && printed(after) == printed(twice),
+           "the second press of a double click after a click on the folder does not toggle it "
+           "again and its release does nothing (#1388)");
     const auto outside = controller.apply_frame(PointExplorer{9, ExplorerPointing::double_click});
     expect(printed(outside) == printed(twice), "a row outside the rows does nothing");
+}
+
+// 1 回のクリック（ADR 0162 の決定 4 の改め・#1388）。窓は面の上の速い 2 回の押しを
+// 「押す → 離す → DBLCLK → 離す」と送る（nib_window_tests --explorer の verify_click_messages）。
+app::EditorFrame clicked(Editing &editing, std::size_t row)
+{
+    static_cast<void>(
+        editing.controller().apply_frame(PointExplorer{row, ExplorerPointing::pressed}));
+    return editing.controller().apply_frame(PointExplorer{row, ExplorerPointing::released});
+}
+
+app::EditorFrame double_clicked(Editing &editing, std::size_t row)
+{
+    static_cast<void>(clicked(editing, row));
+    static_cast<void>(
+        editing.controller().apply_frame(PointExplorer{row, ExplorerPointing::double_click}));
+    return editing.controller().apply_frame(PointExplorer{row, ExplorerPointing::released});
+}
+
+void verify_click_opens_file()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    editing.files().hold_at("C:\\proj\\README.md", Bytes{"read me"});
+    static_cast<void>(editing.controller().apply_frame(app::ToggleExplorer{}));
+    const auto opened = clicked(editing, 2);
+    expect(opened.document.title.text() == "README.md" && !opened.lines.empty() &&
+               opened.lines.front().text == "read me" && editing.reads().requests().size() == 1,
+           "a click on a file opens it through the read port");
+    expect(printed(opened) == ".git/+~;src/+;README.md;sel 2 first 0 focus 1",
+           "a click on a file selects it and keeps the focus in the panel");
+    expect(editing.history().reads() == 0 && editing.history().writes() == 0,
+           "a click on a file never touches the history");
+    const auto walked = key(editing, ExplorerKeyKind::k);
+    expect(printed(walked) == ".git/+~;src/+;README.md;sel 1 first 0 focus 1",
+           "after a click the arrow keys still walk the panel");
+    static_cast<void>(editing.controller().apply_frame(app::NewTab{}));
+    const auto switched = clicked(editing, 2);
+    expect(switched.document.title.text() == "README.md" && switched.tabs.size() == 2 &&
+               editing.reads().requests().size() == 1 && message_of(switched) == "-",
+           "a click on a file already open switches to its tab without reading it again");
+    expect(clicked(editing, 9).document.title.text() == "README.md",
+           "a click outside the rows does nothing");
+
+    Editing missing(shown_at(project));
+    static_cast<void>(loaded_project(missing));
+    static_cast<void>(missing.controller().apply_frame(app::ToggleExplorer{}));
+    const auto notice = clicked(missing, 2);
+    expect(message_of(notice) == "開けませんでした: README.md" &&
+               printed(notice) == ".git/+~;src/+;README.md;sel 2 first 0 focus 1" &&
+               missing.history().reads() == 0 && missing.history().writes() == 0,
+           "a click on a file that cannot be opened leaves one notice line and the focus");
+}
+
+// ダブルクリック（#1388）。1 打目のクリックで開いているので、2
+// 打目は焦点を本文へ移すだけで読まない。
+void verify_double_click_reads_once()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    editing.files().hold_at("C:\\proj\\README.md", Bytes{"read me"});
+    static_cast<void>(editing.controller().apply_frame(app::ToggleExplorer{}));
+    const auto opened = double_clicked(editing, 2);
+    expect(opened.document.title.text() == "README.md" && editing.reads().requests().size() == 1,
+           "a double click on a file reads it once");
+    expect(printed(opened) == ".git/+~;src/+;README.md;sel 2 first 0 focus 0",
+           "a double click on a file gives the focus to the text and keeps the panel");
+    Editing missing(shown_at(project));
+    static_cast<void>(loaded_project(missing));
+    static_cast<void>(missing.controller().apply_frame(app::ToggleExplorer{}));
+    const auto first = clicked(missing, 2);
+    const auto tried = missing.reads().requests().size();
+    static_cast<void>(
+        missing.controller().apply_frame(PointExplorer{2, ExplorerPointing::double_click}));
+    const auto notice =
+        missing.controller().apply_frame(PointExplorer{2, ExplorerPointing::released});
+    expect(message_of(first) == "開けませんでした: README.md" &&
+               missing.reads().requests().size() == tried && missing.history().writes() == 0 &&
+               printed(notice) == ".git/+~;src/+;README.md;sel 2 first 0 focus 0",
+           "a double click on a file that cannot be opened tries once and leaves one line");
+    // 1 打目が効かなかった（押した行と離した行が違った）2 打目は、1 回のクリックと Enter と同じ。
+    Editing late(shown_at(project));
+    static_cast<void>(loaded_project(late));
+    late.files().hold_at("C:\\proj\\README.md", Bytes{"read me"});
+    static_cast<void>(late.controller().apply_frame(PointExplorer{1, ExplorerPointing::pressed}));
+    static_cast<void>(late.controller().apply_frame(PointExplorer{2, ExplorerPointing::released}));
+    const auto second =
+        late.controller().apply_frame(PointExplorer{2, ExplorerPointing::double_click});
+    expect(second.document.title.text() == "README.md" && late.reads().requests().size() == 1 &&
+               printed(second) == ".git/+~;src/+;README.md;sel 2 first 0 focus 0",
+           "a second press whose first click did not count opens the file once like Enter");
+}
+
+// フォルダはクリック 1 回で開閉し、ダブルクリックでも 1 回だけ（開いて閉じる、にしない・#1388）。
+void verify_folder_double_click_toggles_once()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    static_cast<void>(editing.controller().apply_frame(app::ToggleExplorer{}));
+    const auto opened = double_clicked(editing, 1);
+    expect(printed(opened) == ".git/+~;src/-;README.md;sel 1 first 0 focus 1" &&
+               editing.folders().entry_requests() == 2,
+           "a double click on a closed folder opens it once and keeps the focus in the panel");
+    static_cast<void>(
+        deliver(editing, {entry_of("C:\\proj\\src\\main.cpp", false)}, FolderProgress::complete));
+    const auto closed = double_clicked(editing, 1);
+    expect(printed(closed) == ".git/+~;src/+;README.md;sel 1 first 0 focus 1" &&
+               editing.folders().entry_requests() == 2,
+           "a double click on an open folder closes it once");
+    const auto reopened = clicked(editing, 1);
+    expect(printed(reopened) == ".git/+~;src/-;.main.cpp;README.md;sel 1 first 0 focus 1",
+           "a single click opens the folder again");
+    expect(editing.reads().requests().empty(), "clicking folders reads no file");
 }
 
 // 押してから離すまでに子が届いて行がずれても、押した節と離した節が違えば何もしない（ADR 0056 の
@@ -796,6 +911,9 @@ void verify_explorer_contracts()
     verify_enter_opens_file();
     verify_pointing();
     verify_pointing_across_arrival();
+    verify_click_opens_file();
+    verify_double_click_reads_once();
+    verify_folder_double_click_toggles_once();
     verify_scroll();
     verify_panel_rows();
     verify_panel_rows_from_window();
