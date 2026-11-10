@@ -947,17 +947,21 @@ void verify_vim_macro_contracts()
 void verify_vim_macro_scope()
 {
     std::size_t selected = 0;
+    bool named = true;
     for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
     {
+        // macro 欄はほかの族の fixture も持つ（#1246 の insert-page-edge-・viewport-ctrl-e-）。
+        // 名前で守るのは逆の向き: macro- の fixture は必ず macro 欄を持つ（#1324）。
+        named &= !fixture.name.starts_with("macro-") || fixture.macro.has_value();
         if (macro_fixture(fixture))
         {
-            expect(fixture.name.starts_with("macro-") || fixture.name.starts_with("register-"),
-                   "every selected fixture is a macro- or register- case");
             verify_vim_fixture(fixture);
             ++selected;
         }
     }
-    expect(selected == 150, "the scope replays the 42 macro and 108 register fixtures");
+    expect(selected == 156, "the scope replays the 42 macro, 108 register and 6 other "
+                            "fixtures with a macro register");
+    expect(named, "every macro- fixture carries a macro register");
     verify_vim_macro_contracts();
 }
 } // namespace nenenib::tests
