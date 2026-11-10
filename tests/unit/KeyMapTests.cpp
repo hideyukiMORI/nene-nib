@@ -1072,10 +1072,10 @@ void verify_zero_in_count_keys()
                after_count.second.starts_with("1\n51\n"),
            "Z9: the 0 after 2d starts no count and uses the omap");
     expect(top_caret({zero_end}, "\"a10j") == 11U, "Z10: the 0 of a count after \"a is a digit");
-    // 限界（追補 31）: Vim は `"a` の後で回数を数え直す（Z11・`5"a0` は `0` を引いて 5 行目）。
-    // Nib の engine は `"a` の後も回数を続ける（`5"a0` は回数 50）ので、表もそれに従って引かない。
-    expect(hundred_lines_caret({zero_end}, "5\"a0", false) == 50U,
-           "Z11: the 0 after 5\"a follows the engine count and is not looked up");
+    // `"a` の後は回数を数え直す（Z11・`5"a0` は `0` を引いて回数 5 の G で 5 行目・#1319・
+    // ADR 0048 の追補 13）。
+    expect(hundred_lines_caret({zero_end}, "5\"a0", false) == 5U,
+           "Z11: the 0 after 5\"a starts no count and uses the nmap");
     expect(top_caret({MapRow{normal_only, "x", "10j", true}, zero_end}, "x") == 11U,
            "Z12: the 0 of a count in a right side is not looked up");
     const MapRow zero_a{normal_only, "0a", "G", true};
