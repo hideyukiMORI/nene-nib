@@ -58,3 +58,21 @@ Nib の今の形: 文字の幅は `display_width(code_point)`（`src/core/Displa
 ## 追補 2026-10-30（#1136）: INSERT の矢印も Vim の 1 文字で歩く
 
 Vim モードの INSERT の `<Left>` `<Right>` は、決定 3 の 1 対で 1 文字ずつ歩く（`<Left>` は `vim_character_start`・`<Right>` は `vim_character_end`・Vim の `oneleft` と `mb_ptr2len`）。結合文字・濁点の結合・異体字セレクタの手前には止まらない。ZWJ の連なりは決定 1 のとおり別々の文字。行の端の扱いは ADR 0049 の追補。読むのはキャレットの周りの窓だけで、行の全体は写さない。fixture は `insert-arrow-` の 14 件。通常モードの矢印は決定 8 のまま変えない。
+
+## 追補 2026-11-10（#1309）: engine を通らない意図の後も NORMAL と VISUAL のキャレットは 1 文字の境に立つ
+
+Vim モードでも、Delete / Backspace の `DeleteText`・`InsertText`・`NewLine`・貼り付けと切り取りの `ClipboardAction`・Ctrl+Z / Ctrl+Y の `HistoryAction`・`SelectAll` は engine の鍵を通らずに本文とキャレットを動かす。性質の試験（#1288 の 50 倍の走り）が、NORMAL の `$` の後の `DeleteText` が `e` + U+0301 の基底だけを消してキャレットを残った結合文字の手前（手前の文字の途中）に置く形を見つけた。手書きの表では、ほかに VISUAL の `DeleteText`・`DeleteText` の後の Ctrl+Z（文字の途中）・`x` の後の Ctrl+Z / Ctrl+Y と `SelectAll`（NORMAL の行の最後の文字の先）が同じく外れていた。NORMAL の `MoveCaret`・`PlaceCaret`（クリック）・Vim の鍵は既に寄せていた。
+
+決定:
+
+1. 寄せは意図ごとに書かず、controller の入口 `apply` の終わりの 1 か所（`keep_vim_character`）で、Vim モードのときにキャレットが外れているときだけ寄せる。規則は既存の 2 本だけを使う: NORMAL は決定 5 の寄せ（`settle_vim_caret` → `vim_resting_caret`）、VISUAL は行の桁の写し `vim_line_and_column`（文字の途中ならその文字の先頭・行の内容の終わりは保つ（ADR 0018 の決定 6）・畳んだ選択は畳んだまま寄せ、広げた選択の錨は動かさない）。外れていなければ何もせず、画面も追わない。入力行が開いていても見る。
+2. **INSERT では寄せない。** Vim 9.1 の INSERT の挿入点は結合文字の手前（Vim の 1 文字の途中）に残る（`-u NONE -i NONE -N -n -es` の `:normal!` で実測・probe は `D:\NeNeNib\scripts\20261110\review-1323\probe.vim` と `D:\NeNeNib\scripts\20261110\1309-fix\probe.vim`）:
+   - 本文 `\u0301a` に `iab` は `ab\u0301a`（`ia` の後の `col('.')` は 2・`a` の後で結合文字の手前）。
+   - 本文 `\u0301a` に `i<C-r>a`（`@a` は `xy`）は `xy\u0301a`（`col('.')` は 3・貼った本文の後で結合文字の手前）。
+   - 本文 `\t \u0301x` に `I` の `col('.')` は 3（バイト 2・結合文字の手前）で、`Iz` は `\t z\u0301x`。
+   INSERT のキャレットを文字の先頭へ戻すと、窓の道（`VimKeyPress`）で次に打つ文字の位置が Vim と変わり（`iab` が `ba\u0301a`・`Iz` が `\tz \u0301x` になる）、1 回の apply の中で engine が打つ `.` の再生とも食い違う。INSERT のキャレットは engine と意図が置いた位置のままにする。
+3. engine を通った鍵（意図 `VimKeyPress`）の後は、`stepped_vim` の終わりの `settle_vim_caret` が NORMAL を寄せているので、入口の終わりでは引き直さない。入力行が開いているときだけは `stepped_vim` が寄せないので、入口の終わりで見る。
+4. 窓は Vim モードで `DeleteText`・`NewLine`・`InsertText`・`HistoryAction`・NORMAL の `SelectAll` を送らない（Delete キーは `vim_specials` に無く何も送らない・BS と Enter は `VimKeyPress`・Ctrl+Z / Ctrl+Y は `send_history` が Vim では返す）。窓から届くのは INSERT の貼り付け・切り取り・`SelectAll` と、`MoveCaret`・`PlaceCaret` だけである。届かない形は、将来の入口からも NORMAL と VISUAL の境を守る防御として決定 1 が見る。
+5. Vim モードの `DeleteText` の単位は ADR 0065 の決定 6 のとおりコードポイントのまま変えない（候補 A）。窓は Vim モードで `DeleteText` を送らないので、変えても使う人には何も変わらない。Vim モードの Delete キーをつなぐときは、`DeleteText` に Vim の意味を持たせず、engine の `<Del>` の鍵として流す（Vim の `<Del>` は NORMAL では `x`）。Vim の意味を 2 本にしない。
+
+範囲の外: 広げた選択の錨が文字の途中に残る形。試験は `--vim-characters` の契約 `verify_vim_external_caret`（意図の表 23 行・INSERT の 7 行は意図が置いた位置のままであることを見る・固定 seed 13090 の 48 組の性質は NORMAL と VISUAL の境を見る）と `verify_vim_window_path`（窓の道で打った本文を Vim 9.1 の実測と比べる 10 件・窓の道と fixture の道（`press_vim_key`）が同じ本文とキャレットとモードになる固定 seed 13091 の 48 組）。

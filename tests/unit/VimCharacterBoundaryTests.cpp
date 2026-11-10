@@ -359,6 +359,8 @@ void verify_vim_character_contracts()
     verify_window_walks_across_a_window_end();
     verify_window_walks_match_the_copied_line();
     verify_vim_word_class_table();
+    verify_vim_external_caret();
+    verify_vim_window_path();
 }
 
 void verify_vim_character_scope()
