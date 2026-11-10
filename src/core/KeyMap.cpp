@@ -232,10 +232,12 @@ void append(Keys &out, KeySpan keys)
         emitted.keys.push_back(rest.front());
         emitted.remaps.push_back(emitted.keys.size());
         emitted.ends.push_back(emitted.keys.size());
+        emitted.mapped.push_back(false);
         return {1U, false};
     }
     emitted.remaps.push_back(append_mapping(emitted.keys, *found));
     emitted.ends.push_back(emitted.keys.size());
+    emitted.mapped.push_back(true);
     return {found->lhs.size(), true};
 }
 
