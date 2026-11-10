@@ -694,6 +694,46 @@ void verify_follow_reads_drawn_lines()
            "#1178 the Vim follow lays out only the drawn lines and the lines it asks for");
 }
 
+// `so` が窓の高さより大きい（`so=999`）ときの窓の外への跳び（#1214・ADR 0019 の追補 #1178 の
+// 決定 5 の (e)）。Vim の `update_topline` は `check_top_offset` が真でも偽でも
+// `scroll_cursor_halfway` に行くので、追従はキャレットの上の行を歩いて測らない。どの行も 5
+// 画面行（全角 198 字と 4 桁の番号・80 升）の 1000 行の文書の 100 行目から `500j` を 1
+// 回打つ間に新しく作られる layout は、窓 1 つ分（40 本）以下（直す前は上の行を 1 本ずつ測って
+// 206 本）。着地は Vim の halfway（先頭 597）。
+void verify_far_jump_with_large_margin()
+{
+    constexpr std::size_t window = 40;
+    Editing editing;
+    EditorController &controller = editing.controller();
+    std::string text;
+    std::string line;
+    for (std::size_t column = 0; column < 198; ++column)
+    {
+        line += "あ";
+    }
+    // 行ごとに違う文字列（替え玉は同じ文字列の layout を 1 本と数える）で、どれも 400 升。
+    for (std::size_t number = 1; number <= 1000; ++number)
+    {
+        text += line + std::to_string(10000 + number).substr(1) + (number < 1000 ? "\n" : "");
+    }
+    static_cast<void>(controller.apply(InsertText{text}));
+    applied(controller, SelectEditMode{EditMode::vim});
+    applied(controller, VisibleLines{window, nenenib::core::TextViewGeometry{800, 20, 96}});
+    static_cast<void>(run_ex(controller, "set so=999"));
+    vim_replay(controller, "100G");
+    static_cast<void>(controller.frame());
+    const std::size_t before = editing.text_layouts().made();
+    vim_replay(controller, "500j");
+    const auto jumped = controller.frame();
+    const std::size_t made = editing.text_layouts().made() - before;
+    expect(jumped.first_visible == LineNumber{597} && jumped.caret.position.line == LineNumber{600},
+           "#1214 a far jump down with so=999 centers the caret as Vim's scroll_cursor_halfway");
+    expect(made <= window, ("#1214 a far jump down with so=999 lays out at most one window of "
+                            "lines (made " +
+                            std::to_string(made) + ")")
+                               .c_str());
+}
+
 // 「通常 | Vim」の切り替えは窓を動かさない（追従を頼まない）。so=3 の Vim の update_topline なら
 // 先頭 30・行 30 の窓を上げるが、切り替えた時点の先頭を保つ。
 void verify_mode_switch_keeps_window()
@@ -862,5 +902,6 @@ void verify_vim_view_scope()
     verify_mode_switch_keeps_window();
     verify_taller_than_window();
     verify_follow_reads_drawn_lines();
+    verify_far_jump_with_large_margin();
 }
 } // namespace nenenib::tests
