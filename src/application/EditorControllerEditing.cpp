@@ -156,7 +156,8 @@ constexpr std::string_view html_unconverted_notice = "HTML を変換できない
 } // namespace
 
 void EditorController::replace(const core::OffsetRange &range, std::string_view text,
-                               core::EditBoundary boundary)
+                               core::EditBoundary boundary,
+                               std::span<const core::VimBlockEdit> block_lines)
 {
     // 編集を始める瞬間のキャレット。Vim の u と Ctrl-r の戻り先で、書くのはここだけ（ADR 0052 の
     // 決定 2）。
@@ -182,7 +183,9 @@ void EditorController::replace(const core::OffsetRange &range, std::string_view 
     const bool started =
         history.position() != before &&
         (!replay_history_.has_value() || before == replay_history_.value().position());
-    auto marks = core::marks_adjusted(state_.vim_marks(), state_.text(), edit);
+    auto marks = block_lines.empty()
+                     ? core::marks_adjusted(state_.vim_marks(), state_.text(), edit)
+                     : core::marks_block_adjusted(state_.vim_marks(), state_.text(), block_lines);
     marks.last_change = core::vim_last_change_of(state_.text(), edit);
     marks = core::vim_change_recorded(marks, marks.last_change.value(), started);
     state_ = state_.with_vim_marks(std::move(marks));

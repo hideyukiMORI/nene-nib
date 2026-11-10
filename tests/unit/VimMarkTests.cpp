@@ -23,13 +23,16 @@
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
+#include "VimBlockEdit.hpp"
 #include "VimJumpList.hpp"
 #include "VimJumpLists.hpp"
 #include "VimJumpMove.hpp"
+#include "VimLastVisual.hpp"
 #include "VimMarkEdits.hpp"
 #include "VimMarkPosition.hpp"
 #include "VimMarks.hpp"
 #include "VimMatchingPair.hpp"
+#include "VimMode.hpp"
 #include "VimRegisterKind.hpp"
 #include "VimRepeatFailure.hpp"
 #include "VimTestSupport.hpp"
@@ -42,6 +45,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -248,6 +252,37 @@ void verify_reselect_and_last_insert_crlf()
            "gv after a charwise delete across a CRLF line break");
     expect(body_after("abcd\r\nefgh\r\nijkl", "jvl<Esc>ggddgvd") == "gh\nijkl",
            "gv after dd above the selection in a CRLF text");
+}
+
+// 矩形の行ごとの置き換え（ADR 0152 の追補 #1361）。改行を含まない行の置き換えはマークを動かさず、
+// 本文の終わりに足した行（矩形の貼付）は上のマークを動かさない。CRLF の文書でも fixture
+// `gv-after-block-` と同じ本文になる。
+void verify_marks_block_adjusted()
+{
+    const auto before = text_of("ab\ncd\nef");
+    VimMarks marks = marked({LineNumber{3}, 1});
+    marks.last_visual = nenenib::core::VimLastVisual{
+        nenenib::core::VimMode::visual_block, {LineNumber{1}, 0}, {LineNumber{3}, 0}, std::nullopt};
+    const std::vector<nenenib::core::VimBlockEdit> shifted{{{Offset{0}, Offset{0}}, "\t"},
+                                                           {{Offset{3}, Offset{3}}, "\t"},
+                                                           {{Offset{6}, Offset{6}}, "\t"}};
+    expect(nenenib::core::marks_block_adjusted(marks, before, shifted) == marks,
+           "a block shift keeps the marks and the previous selection");
+    const std::vector<nenenib::core::VimBlockEdit> appended{{{Offset{7}, Offset{7}}, "x"},
+                                                            {{Offset{8}, Offset{8}}, "\n y"}};
+    expect(nenenib::core::marks_block_adjusted(marks, before, appended) == marks,
+           "a block put that adds a line at the end keeps the marks above");
+    const auto body_after = [](std::string text, std::string_view keys)
+    {
+        Editing editing;
+        open_vim_document(editing, std::move(text));
+        vim_normal(editing.controller(), keys);
+        return whole_vim_body(editing.controller());
+    };
+    expect(body_after("ab\r\ncd\r\nef", "gg<C-v>jjl>gvd") == "b\nd\nf",
+           "gv after a block shift in a CRLF text");
+    expect(body_after("abc\r\ncde\r\nefg", "ggl<C-v>jjCXY<Esc>gvd") == "a\nc\ne",
+           "gv after a block C in a CRLF text keeps the line end");
 }
 
 // `gi` だけが記録を `i` に書き換え、`g` の後のほかの命令の記録は変えない（#1039 のレビュー R1-2）。
@@ -472,6 +507,7 @@ void verify_marks_follow_documents()
 void verify_vim_mark_contracts()
 {
     verify_marks_adjusted();
+    verify_marks_block_adjusted();
     verify_mark_values();
     verify_matching_pair_crlf();
     verify_mark_failures();
