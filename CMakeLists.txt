@@ -70,6 +70,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp src/core/SaveQuestionText.cpp src/core/LanguageTable.cpp
     src/core/Lexer.cpp src/core/LexCpp.cpp src/core/LexCursor.cpp
     src/core/MarkdownParse.cpp src/core/MarkdownBuilder.cpp src/core/MarkdownEntity.cpp src/core/PreviewSelectionText.cpp
+    src/core/ImageFormat.cpp src/core/ImageGeometry.cpp src/core/ImageReference.cpp
     src/core/HtmlAttribute.cpp src/core/HtmlMarkdownWriter.cpp src/core/HtmlToMarkdown.cpp
     src/core/Lexer.cpp src/core/LexCpp.cpp src/core/LexCursor.cpp src/core/LexJson.cpp src/core/LexPython.cpp src/core/LexMarkdown.cpp src/core/LexJavaScript.cpp src/core/LexHtml.cpp src/core/LexCss.cpp src/core/LexYaml.cpp src/core/LexToml.cpp src/core/LexGdscript.cpp src/core/LexIni.cpp src/core/LexCsharp.cpp src/core/LexRust.cpp src/core/LexGo.cpp src/core/LexPhp.cpp src/core/LexSql.cpp src/core/LexLua.cpp src/core/LexDockerfile.cpp src/core/LexPowershell.cpp src/core/LexShell.cpp src/core/LexCmake.cpp src/core/SyntaxColor.cpp
     src/core/JsonNumber.cpp src/core/JsonValue.cpp src/core/JsonParse.cpp src/core/JsonWrite.cpp
@@ -87,6 +88,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/EditorControllerEditing.cpp src/application/EditorControllerVim.cpp src/application/EditorControllerDocuments.cpp
     src/application/EditorControllerTabs.cpp src/application/EditorControllerCommand.cpp src/application/EditorControllerPalette.cpp
     src/application/EditorControllerAutosave.cpp src/application/EditorControllerPreview.cpp src/application/EditorControllerDetail.cpp
+    src/application/PreviewImages.cpp
     src/application/EditorControllerExplorer.cpp src/application/EditorControllerShell.cpp
     src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
     src/application/AutosavePlan.cpp src/application/PasteKind.cpp
@@ -180,6 +182,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/LexerTests.cpp
     tests/unit/LexerPropertyTests.cpp
     tests/unit/PreviewTests.cpp
+    tests/unit/PreviewImageTests.cpp
     tests/unit/PreviewTaskTests.cpp
     tests/unit/PointerTests.cpp
     tests/unit/PreviewFullTests.cpp
@@ -243,6 +246,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/FolderShelf.cpp
     src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
     src/adapters/win32/MarkdownShelf.cpp src/adapters/win32/Win32MarkdownAdapter.cpp
+    src/adapters/win32/Win32ImageAdapter.cpp
     src/adapters/win32/AutosaveCodec.cpp src/adapters/win32/AutosaveFolder.cpp
     src/adapters/win32/AutosaveShelf.cpp
     src/adapters/win32/Win32AutosaveAdapter.cpp

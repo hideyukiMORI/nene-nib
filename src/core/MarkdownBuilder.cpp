@@ -1,5 +1,6 @@
 #include "MarkdownBuilder.hpp"
 
+#include "MarkdownImage.hpp"
 #include "MarkdownTask.hpp"
 #include "Offset.hpp"
 #include "PreviewSpan.hpp"
@@ -181,6 +182,12 @@ void MarkdownBuilder::close_leaf()
     }
     auto block = std::move(leaf_).value();
     leaf_.reset();
+    // md4c は装飾を要素の中で閉じるので、ここで開いている画像の節は残らない。残れば今の終わりで閉じ
+    // る（閉じの「]」は足さない）。
+    while (!open_images_.empty())
+    {
+        finish_image(block, false);
+    }
     // 行の探索は位置を持たない要素のときだけ走らせる（value_or は先に評価してしまう）。
     if (leaf_begin_.has_value())
     {
@@ -225,12 +232,37 @@ void MarkdownBuilder::leave_span()
     {
         auto &block = leaf_.value();
         auto &span = block.spans.at(index.value());
-        if (span.style == PreviewStyle::image)
+        const bool image = span.style == PreviewStyle::image;
+        if (image)
         {
             block.text.append(image_closing);
         }
         span.end = Offset{block.text.size()};
+        if (image)
+        {
+            finish_image(block, true);
+        }
     }
+}
+
+void MarkdownBuilder::enter_image(std::string source, std::string title)
+{
+    enter_span(PreviewStyle::image);
+    // 要素は開いたまま閉じるまで blocks_ に入らないので、閉じたときの番号は今の blocks_ の数。
+    const Offset begin = ensure_leaf().spans.back().begin;
+    open_images_.push_back(images_.size());
+    images_.push_back(
+        MarkdownImage{blocks_.size(), begin, begin, std::move(source), std::move(title), {}});
+}
+
+void MarkdownBuilder::finish_image(const PreviewBlock &block, bool closed)
+{
+    auto &image = images_.at(open_images_.back());
+    open_images_.pop_back();
+    image.end = Offset{block.text.size()};
+    const std::size_t from = image.begin.value + image_opening.size();
+    const std::size_t to = image.end.value - (closed ? image_closing.size() : 0U);
+    image.alt = to > from ? block.text.substr(from, to - from) : std::string{};
 }
 
 void MarkdownBuilder::text(std::string_view shown, std::string_view source)
@@ -253,7 +285,7 @@ MarkdownDocument MarkdownBuilder::finished() &&
     close_implicit();
     flush_marker();
     close_leaf();
-    return MarkdownDocument{std::move(blocks_)};
+    return MarkdownDocument{std::move(blocks_), std::move(images_)};
 }
 
 std::optional<std::size_t> MarkdownBuilder::located(std::string_view source) const

@@ -38,6 +38,7 @@
 #include "ScriptedFolders.hpp"
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
+#include "ScriptedImages.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPrinter.hpp"
 #include "ScriptedSession.hpp"
@@ -250,6 +251,7 @@ void verify_theme_startup_notice()
     ScriptedClock wall_clock;
     ScriptedPrinter printer;
     ScriptedShellRegistration shell_registration;
+    ScriptedImages images;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -260,7 +262,8 @@ void verify_theme_startup_notice()
         app::EditorPorts{appearance,   clipboard,       files,      pages,   settings,
                          themes,       session,         history,    folders, bookmarks,
                          text_layouts, autosave,        fonts,      bell,    markdown,
-                         reads,        language_server, wall_clock, printer, shell_registration},
+                         reads,        language_server, wall_clock, printer, shell_registration,
+                         images},
         initial};
     auto frame = controller.frame();
     expect(frame.lines.front().text == "initial body", "initial document uses normal file load");
@@ -277,7 +280,8 @@ void verify_theme_startup_notice()
         app::EditorPorts{appearance,   clipboard,       files,      pages,   broken,
                          themes,       session,         history,    folders, bookmarks,
                          text_layouts, autosave,        fonts,      bell,    markdown,
-                         reads,        language_server, wall_clock, printer, shell_registration},
+                         reads,        language_server, wall_clock, printer, shell_registration,
+                         images},
         initial};
     expect(unreadable.frame().lines.front().text == "initial body" &&
                unreadable.frame().settings_failure == app::SettingsFailure::malformed,

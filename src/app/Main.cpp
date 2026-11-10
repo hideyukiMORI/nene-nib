@@ -22,6 +22,7 @@
 #include "Win32FolderAdapter.hpp"
 #include "Win32FontCollationAdapter.hpp"
 #include "Win32HistoryAdapter.hpp"
+#include "Win32ImageAdapter.hpp"
 #include "Win32LanguageServer.hpp"
 #include "Win32MarkdownAdapter.hpp"
 #include "Win32Printer.hpp"
@@ -245,6 +246,13 @@ void bind_work_signal(const nenenib::ui::win32::EditorWindow &window, Adapters &
     (adapters.bind(window.work_signal()), ...);
 }
 
+// 裏の仕事のワーカー 1 本と、それを借りて同じフォルダを読む adapter（ADR 0062 の決定 5・10）。
+// スレッドはここでは起きず、最初の仕事で起きる。controller より先に宣言して後に壊す
+// （壊れる順は 窓 → controller → adapter → ワーカー → device の箱）。
+// device の箱は仕事に借りられるので worker より先に宣言して後に壊す。最初の仕事として
+// device を作り始め、窓を作って見せる間に重ねる（ADR 0131 の決定 2）。
+// Markdown プレビューの画像の口（ADR 0155 の追補 53）は段 1 では口だけで結果を返さない。段 2 が
+// worker を借りて読み、窓ができてから合図を結ぶ（bind_work_signal）。
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
@@ -261,11 +269,7 @@ int run(HINSTANCE instance)
     nib_adapters::Win32SessionAdapter session(files, nib_adapters::local_session_paths());
     // 閉じたファイルの履歴は閉じたときに書き Ctrl+P の面を開くときに読む（ADR 0060 決定 8）。
     nib_adapters::Win32HistoryAdapter history(files, nib_adapters::local_history_path());
-    // 裏の仕事のワーカー 1 本と、それを借りて同じフォルダを読む adapter（ADR 0062 の決定 5・10）。
-    // スレッドはここでは起きず、最初の仕事で起きる。controller より先に宣言して後に壊す
-    // （壊れる順は 窓 → controller → adapter → ワーカー → device の箱）。
-    // device の箱は仕事に借りられるので worker より先に宣言して後に壊す。最初の仕事として
-    // device を作り始め、窓を作って見せる間に重ねる（ADR 0131 の決定 2）。
+    // 裏の仕事のワーカーと device の箱（宣言の順と壊れる順は run の上の注記）。
     nenenib::ui::win32::DeviceWarmup warmup;
     nenenib::adapters::win32::Win32Worker worker;
     worker.post([&warmup](const std::stop_token &stop) { warmup.make(stop.stop_requested()); });
@@ -286,12 +290,14 @@ int run(HINSTANCE instance)
     nib_adapters::Win32ShellRegistration shell_registration(L"Software");
     nenenib::adapters::win32::Win32DocumentReader reads(worker, files, code_pages);
     nenenib::adapters::win32::Win32LanguageServer language_server({});
+    nenenib::adapters::win32::Win32ImageAdapter images;
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{
             appearance,   clipboard,       files,      code_pages, settings,
             themes,       session,         history,    folders,    bookmarks,
             text_layouts, autosave,        fonts,      bell,       markdown,
-            reads,        language_server, wall_clock, printer,    shell_registration},
+            reads,        language_server, wall_clock, printer,    shell_registration,
+            images},
         initial_documents(given));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。

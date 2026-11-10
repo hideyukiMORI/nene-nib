@@ -38,6 +38,7 @@
 #include "ScriptedClock.hpp"
 #include "ScriptedDocumentReads.hpp"
 #include "ScriptedFonts.hpp"
+#include "ScriptedImages.hpp"
 #include "ScriptedLanguageServer.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPrinter.hpp"
@@ -226,6 +227,7 @@ void verify_startup_question()
     ScriptedClock wall_clock;
     ScriptedPrinter printer;
     ScriptedShellRegistration shell_registration;
+    ScriptedImages images;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -235,7 +237,8 @@ void verify_startup_question()
         app::EditorPorts{appearance,   clipboard,       files,      code_pages, settings,
                          themes,       session,         history,    folders,    bookmarks,
                          text_layouts, autosave,        fonts,      bell,       markdown,
-                         reads,        language_server, wall_clock, printer,    shell_registration},
+                         reads,        language_server, wall_clock, printer,    shell_registration,
+                         images},
         {open_of(giant_path), open_of(small_path)});
     expect(!controller.delivery().display_question,
            "starting with a small file last does not ask about the giant one yet");
@@ -632,6 +635,7 @@ void verify_startup_before_layout()
     ScriptedClock wall_clock;
     ScriptedPrinter printer;
     ScriptedShellRegistration shell_registration;
+    ScriptedImages images;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -641,7 +645,8 @@ void verify_startup_before_layout()
                                  settings,        themes,     session,      history,
                                  folders,         bookmarks,  text_layouts, autosave,
                                  fonts,           bell,       markdown,     reads,
-                                 language_server, wall_clock, printer,      shell_registration};
+                                 language_server, wall_clock, printer,      shell_registration,
+                                 images};
     app::EditorController started(ports, {open_of(giant_path)});
     expect(started.delivery().display_question, "starting with a giant line asks");
     const auto first = started.apply(app::VisibleLines{10, grid_geometry});
