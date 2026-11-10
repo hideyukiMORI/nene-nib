@@ -385,7 +385,8 @@ std::optional<core::VimRepeatFailure> EditorController::typed_vim_key(const core
     {
         return deliver_vim_key(key);
     }
-    const auto mode = key_map_mode();
+    const auto &pending = state_.key_map_pending();
+    const auto mode = key_map_mode(pending.empty() ? key : pending.front());
     if (!mode.has_value())
     {
         flush_key_map_pending();
@@ -431,13 +432,14 @@ std::optional<core::VimRepeatFailure> EditorController::typed_step(core::KeyMapE
     return delivered_units(emitted, typed);
 }
 
-// 引いたときのモードは流す前のモード（待ちの列を置き換えてもモードは変わらない）。単位ごとに
-// 流した後でモードを読み直し、変わっていれば残りを引き直す（ADR 0176 の追補 22・#1266）。
+// 引いたときのモードは流す前に typed の先頭から読むモード（待ちの列を置き換えてもモードは変わら
+// ない）。単位ごとに流した後で残りの先頭から読むモードを読み直し、変わっていれば残りを引き直す
+// （ADR 0176 の追補 22・#1266。回数の続きの `0` が残りの先頭に来たときも・追補 30・#1311）。
 std::optional<core::VimRepeatFailure>
 EditorController::delivered_units(const core::KeyMapEmit &emitted,
                                   std::span<const core::VimKey> typed)
 {
-    const auto mode = key_map_mode();
+    const auto mode = key_map_mode(typed.front());
     const std::span<const core::VimKey> keys{emitted.keys};
     std::optional<core::VimRepeatFailure> failure;
     std::size_t begin = 0;
@@ -448,7 +450,7 @@ EditorController::delivered_units(const core::KeyMapEmit &emitted,
                                  keys.subspan(remap, emitted.ends.at(unit) - remap));
         begin = emitted.ends.at(unit);
         const auto rest = typed.subspan(emitted.reads.at(unit));
-        if (!rest.empty() && key_map_mode() != mode)
+        if (!rest.empty() && key_map_mode(rest.front()) != mode)
         {
             return typed_again(rest);
         }
@@ -466,7 +468,8 @@ EditorController::delivered_unit(std::span<const core::VimKey> plain,
     auto failure = delivered_keys(plain);
     while (!failure.has_value() && !remapped.empty())
     {
-        const auto [count, found] = core::rhs_unit_step(key_map_, key_map_mode(), remapped);
+        const auto [count, found] =
+            core::rhs_unit_step(key_map_, key_map_mode(remapped.front()), remapped);
         const auto unit = remapped.first(count);
         remapped = remapped.subspan(count);
         // 当たらなければ found は単位の鍵そのもの（写さない）。当たれば表の右辺なので写す。
@@ -503,7 +506,7 @@ EditorController::typed_again(std::span<const core::VimKey> rest)
     }
     state_ = state_.with_key_map_pending({});
     std::optional<core::VimRepeatFailure> failure;
-    while (!rest.empty() && !key_map_mode().has_value())
+    while (!rest.empty() && !key_map_mode(rest.front()).has_value())
     {
         failure = deliver_vim_key(rest.front());
         rest = rest.subspan(1);
@@ -517,13 +520,14 @@ EditorController::typed_again(std::span<const core::VimKey> rest)
     return typed_vim_key(rest.back());
 }
 
-std::optional<core::VimMapMode> EditorController::key_map_mode() const noexcept
+std::optional<core::VimMapMode>
+EditorController::key_map_mode(const core::VimKey &front) const noexcept
 {
     if (state_.mode() != core::EditMode::vim || state_.command_input().has_value())
     {
         return std::nullopt;
     }
-    return core::vim_map_mode_of(state_.vim());
+    return core::vim_map_mode_of(state_.vim(), front);
 }
 
 void EditorController::flush_key_map_pending()
@@ -535,7 +539,7 @@ void EditorController::flush_key_map_pending()
     const std::vector<core::VimKey> waited = state_.key_map_pending();
     state_ = state_.with_key_map_pending({});
     map_timer_ = MapTimer::stop;
-    const auto mode = key_map_mode();
+    const auto mode = key_map_mode(waited.front());
     if (mode.has_value())
     {
         static_cast<void>(

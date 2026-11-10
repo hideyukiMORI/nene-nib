@@ -4,6 +4,7 @@
 #include "Utf8.hpp"
 #include "VimCharacter.hpp"
 #include "VimKeyNotation.hpp"
+#include "VimStep.hpp"
 
 #include <algorithm>
 #include <array>
@@ -373,9 +374,9 @@ std::expected<KeyMap, KeyMapFailure> key_map_of(const EditorSettings &settings)
     return map;
 }
 
-std::optional<VimMapMode> vim_map_mode_of(const VimState &state) noexcept
+std::optional<VimMapMode> vim_map_mode_of(const VimState &state, const VimKey &front) noexcept
 {
-    if (state.input_wait.has_value())
+    if (state.input_wait.has_value() || vim_continues_count(state, front))
     {
         return std::nullopt;
     }
