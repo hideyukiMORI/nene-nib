@@ -264,6 +264,63 @@ void verify_macro_depth_limit()
     expect(whole_vim_body(controller) == "bcdef", "the next typed key runs normally");
 }
 
+// 巨大な回数の `@`（#1341・ADR 0046 の決定 3 の追補）。鍵の列を回数ぶん並べず 1 周ずつ積むので、
+// 鍵が失敗した周で止まり、積んだ周の数は回数に比例しない（時計は読まない）。b は `xl`。
+[[nodiscard]] std::size_t huge_rounds(std::string text, std::string_view macro,
+                                      std::string_view keys, std::string_view body)
+{
+    Editing editing;
+    open_vim_document(editing, std::move(text));
+    EditorController &controller = editing.controller();
+    applied(controller, stored_text('a', macro));
+    applied(controller, stored_text('b', "xl"));
+    const std::size_t before = controller.replay_rounds();
+    vim_replay(controller, keys);
+    expect(whole_vim_body(controller) == body, "the huge count stops at the failing round");
+    return controller.replay_rounds() - before;
+}
+
+// 周の最後の鍵を流す前に次の周を積むので、数は流した周より 1 つ多い。`xl` の `l` は 3 周目の
+// 行末で失敗する（`x` は空の行でも失敗しないので、`x` だけのマクロは Vim も回数ぶん回る・実測）。
+void verify_macro_huge_count_stops()
+{
+    expect(huge_rounds("abcdef\nghi", "xl", "999999999@a", "bdf\nghi") == 4U,
+           "999999999@a of xl stops at the line end in the third round");
+    expect(huge_rounds("a\nb\nc", "j", "999999999@a", "a\nb\nc") == 4U,
+           "999999999@a of j stops at the last line");
+    expect(huge_rounds("abcdef", "xl", "@a999999999@@", "bdf") == 4U,
+           "999999999@@ repeats the rounds of the last macro");
+    // 入れ子の `2@b` は a の周ごとに b の 2 周を積む。a の 2 周目の b の 1 周目で `l` が失敗する
+    // （a の 3 周・b の 4 周を積む）。
+    expect(huge_rounds("abcdef", "2@b", "999999999@a", "bdf") == 7U,
+           "a nested 2@b inside 999999999@a stops with the outer rounds");
+}
+
+// 周を 1 つずつ積んでも、流れる順は回数ぶん繋いだ鍵の列と同じ（入れ子の再生は周の続きより前）。
+void verify_macro_rounds_keep_the_order()
+{
+    const std::array<std::array<std::string_view, 3>, 3> cases{{
+        {"@bl", "4@a", "xlxlxlxl"},
+        {"lx", "3@a", "lxlxlx"},
+        {"2@bj", "2@a", "xxjxxj"},
+    }};
+    for (const auto &[macro, keys, flat] : cases)
+    {
+        Editing rounds;
+        open_vim_document(rounds, "abcdefgh\nijklmnop\nqrstuvwx");
+        applied(rounds.controller(), stored_text('a', macro));
+        applied(rounds.controller(), stored_text('b', "x"));
+        vim_replay(rounds.controller(), keys);
+        Editing typed;
+        open_vim_document(typed, "abcdefgh\nijklmnop\nqrstuvwx");
+        vim_replay(typed.controller(), flat);
+        expect(whole_vim_body(rounds.controller()) == whole_vim_body(typed.controller()) &&
+                   rounds.controller().frame().caret.position ==
+                       typed.controller().frame().caret.position,
+               "the rounds run in the order of the keys repeated");
+    }
+}
+
 // 大文字の名前は追記（決定 2）。StoreVimRegister も録画の追記と同じ規則（ADR 0048 の決定 4）。
 void verify_macro_append()
 {
@@ -907,6 +964,57 @@ void verify_clipboard_block_written()
            "a block \"+y writes the block text to the clipboard");
 }
 
+// 回数で本文を増やす編集は、編集の後の文書が開ける上限（1 GiB・ADR 0159 の決定 7）を超えると
+// 確保の前に too_large で断る（#1341）。断った鍵は本文を変えず、`@` の残りも捨てる。
+void verify_huge_count_put_refused()
+{
+    const TextBuffer text = buffer_of("abc\ndef");
+    const Selection caret = collapsed_at(Offset{0});
+    const std::array<std::string_view, 3> refused{"yiw999999999p", "yiw999999999P", "yy999999999p"};
+    for (const std::string_view keys : refused)
+    {
+        const VimStep step = core_steps(empty_vim_state(), text, caret, keys);
+        expect(step.failure == std::optional{nenenib::core::VimRepeatFailure::too_large} &&
+                   std::holds_alternative<VimNoEffect>(step.effect),
+               "a put past the document limit is refused before it is built");
+    }
+    // 矩形は選択を写す controller で確かめる（2 行 x 幅 2 の 999999999 個は 1 行 2 GB）。
+    const std::array<std::string_view, 2> blocks{"<C-v>jly999999999p", "<C-v>jly999999999P"};
+    for (const std::string_view keys : blocks)
+    {
+        Editing block;
+        open_vim_document(block, "abc\ndef");
+        vim_replay(block.controller(), keys);
+        expect(whole_vim_body(block.controller()) == "abc\ndef",
+               "a block put past the document limit is refused");
+    }
+    const VimStep small = core_steps(empty_vim_state(), text, caret, "yiw3p");
+    expect(!small.failure.has_value(), "a put inside the limit is not refused");
+    Editing editing;
+    open_vim_document(editing, "abc\ndef");
+    EditorController &controller = editing.controller();
+    applied(controller, stored_text('a', "yiw999999999px"));
+    vim_replay(controller, "@a");
+    expect(whole_vim_body(controller) == "abc\ndef", "a refused put stops the rest of @a");
+}
+
+// INSERT の回数の反復と `o` の回数も同じ上限。1 周目の本文は残り、残りの周は確保しない。
+void verify_huge_count_insert_refused()
+{
+    const std::array<std::array<std::string_view, 2>, 2> cases{{
+        {"999999999ixy<Esc>", "xyabc\ndef"},
+        {"999999999oab<Esc>", "abc\nab\ndef"},
+    }};
+    for (const auto &[keys, body] : cases)
+    {
+        Editing editing;
+        open_vim_document(editing, "abc\ndef");
+        vim_replay(editing.controller(), keys);
+        expect(whole_vim_body(editing.controller()) == body,
+               "the insert count past the document limit keeps only the first round");
+    }
+}
+
 // 録画を経る fixture と `"` の fixture は同じレジスタの表を通るので 1 scope（ADR 0048 の決定 11）。
 [[nodiscard]] bool macro_fixture(const VimFixture &fixture) noexcept
 {
@@ -924,6 +1032,10 @@ void verify_vim_macro_contracts()
     verify_macro_failure_stops_the_rest();
     verify_macro_records_failed_replace();
     verify_macro_depth_limit();
+    verify_macro_huge_count_stops();
+    verify_macro_rounds_keep_the_order();
+    verify_huge_count_put_refused();
+    verify_huge_count_insert_refused();
     verify_macro_append();
     verify_macro_numbered_recording();
     verify_macro_numbered_stored();
@@ -947,17 +1059,22 @@ void verify_vim_macro_contracts()
 void verify_vim_macro_scope()
 {
     std::size_t selected = 0;
+    bool named = true;
     for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
     {
+        // macro 欄はほかの族の fixture も持つ（#1246 の insert-page-edge-・viewport-ctrl-e-・
+        // #1341 の huge-count-macro-）。名前で守るのは逆の向き: macro- の fixture は必ず macro 欄を
+        // 持つ（#1324 と同じ形）。
+        named &= !fixture.name.starts_with("macro-") || fixture.macro.has_value();
         if (macro_fixture(fixture))
         {
-            expect(fixture.name.starts_with("macro-") || fixture.name.starts_with("register-"),
-                   "every selected fixture is a macro- or register- case");
             verify_vim_fixture(fixture);
             ++selected;
         }
     }
-    expect(selected == 150, "the scope replays the 42 macro and 108 register fixtures");
+    expect(selected == 162, "the scope replays the 42 macro, 108 register and 12 other "
+                            "fixtures with a macro register");
+    expect(named, "every macro- fixture carries a macro register");
     verify_vim_macro_contracts();
 }
 } // namespace nenenib::tests

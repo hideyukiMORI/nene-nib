@@ -158,8 +158,14 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
                                         VimOperator operation);
 [[nodiscard]] VimStep operated_to_line_end(const VimState &state, const TextBuffer &text,
                                            Offset caret, VimOperator operation);
-[[nodiscard]] std::expected<std::string, VimRepeatFailure> repeated(std::string_view body,
-                                                                    std::size_t count);
+// 回数で本文を増やす編集（`p` `P` の回数・INSERT の回数の反復・`o` の回数・矩形の `p`）が、
+// 編集の後も文書の上限 maximum_document_bytes（ADR 0159 の決定 7）に収まる残りのバイト数と、
+// piece を count 個並べた量が room に収まるか（#1341）。確保の前に掛け算をせずに判定する。
+[[nodiscard]] std::size_t count_room(const TextBuffer &text) noexcept;
+[[nodiscard]] bool fits_repeated(std::size_t piece, std::size_t count, std::size_t room) noexcept;
+// body を count 個並べた本文。room に収まらなければ確保せずに too_large。
+[[nodiscard]] std::expected<std::string, VimRepeatFailure>
+repeated(std::string_view body, std::size_t count, std::size_t room);
 [[nodiscard]] std::size_t last_code_point_size(std::string_view body);
 [[nodiscard]] VimInsertAt put_characters(const TextBuffer &text, Offset caret, std::string body,
                                          VimPutSide side);

@@ -1,5 +1,6 @@
 #include "VimStepDetail.hpp"
 
+#include "DocumentByteLimit.hpp"
 #include "Utf8.hpp"
 #include "VimPutSide.hpp"
 
@@ -28,15 +29,29 @@ namespace detail
 {
 // ---------------------------------------------------------------- p / P（決定 4）
 
-[[nodiscard]] std::expected<std::string, VimRepeatFailure> repeated(std::string_view body,
-                                                                    std::size_t count)
+[[nodiscard]] std::size_t count_room(const TextBuffer &text) noexcept
+{
+    const std::size_t size = text.size_bytes();
+    return size < maximum_document_bytes ? maximum_document_bytes - size : 0;
+}
+
+[[nodiscard]] bool fits_repeated(std::size_t piece, std::size_t count, std::size_t room) noexcept
+{
+    return piece == 0 || count <= room / piece;
+}
+
+// Vim は結果がメモリに入るかぎり貼る（`999999999p` は 1 GB の行を作り、`yy999999999p`
+// は止まらない・ 実測）。Nib
+// は編集の後の文書が開ける上限を超える回数を、確保の前に閉じた失敗で断る（#1341）。
+[[nodiscard]] std::expected<std::string, VimRepeatFailure>
+repeated(std::string_view body, std::size_t count, std::size_t room)
 {
     std::string result;
     if (body.empty())
     {
         return result;
     }
-    if (count > result.max_size() / body.size())
+    if (!fits_repeated(body.size(), count, room))
     {
         return std::unexpected(VimRepeatFailure::too_large);
     }

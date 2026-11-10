@@ -35,6 +35,7 @@ using detail::repeated_change;
 using detail::replayed_macro;
 using detail::resolved_count;
 using detail::restarts_insert;
+using detail::single_step;
 using detail::started_macro;
 using detail::started_prefix;
 using detail::vim_recorded;
@@ -176,8 +177,9 @@ namespace
 namespace detail
 {
 // `[count]@{a-z}` と `@"` と `@@`（ADR 0046 の決定 3・ADR 0048 の決定 6）。レジスタの本文を
-// vim_keys_of_text で鍵列にして回数ぶん繋いだ VimReplay を返し、controller が `.` と同じ経路で
-// 1 鍵ずつ流す。名前が無い・未使用か空のレジスタはビープして何もしない。
+// vim_keys_of_text で鍵列にして回数を周の数に載せた VimReplay を返し、controller が `.` と同じ
+// 経路で 1 鍵ずつ・1 周ずつ流す（鍵の列を回数ぶん並べない・#1341）。名前が無い・未使用か空の
+// レジスタはビープして何もしない。
 [[nodiscard]] VimStep replayed_macro(const VimState &state, const VimKey &key)
 {
     VimState next = finished_input_wait(state);
@@ -190,26 +192,15 @@ namespace detail
     }
     next.last_macro = selection.value().name;
     const VimRegister source = register_read(state, selection);
-    const std::vector<VimKey> keys = source.kind == VimRegisterKind::uninitialized
-                                         ? std::vector<VimKey>{}
-                                         : vim_keys_of_text(source.text);
-    const std::size_t count = resolved_count(state);
+    std::vector<VimKey> keys = source.kind == VimRegisterKind::uninitialized
+                                   ? std::vector<VimKey>{}
+                                   : vim_keys_of_text(source.text);
     if (keys.empty())
     {
         return failed(VimStep{std::move(next), VimNoEffect{}}, VimRepeatFailure::refused);
     }
-    if (count > std::vector<VimKey>{}.max_size() / keys.size())
-    {
-        return failed(VimStep{std::move(next), VimNoEffect{}}, VimRepeatFailure::too_large);
-    }
-    std::vector<VimKey> replayed;
-    replayed.reserve(keys.size() * count);
-    for (std::size_t round = 0; round < count; ++round)
-    {
-        replayed.insert(replayed.end(), keys.begin(), keys.end());
-    }
-    return VimStep{std::move(next),
-                   VimReplay{std::move(replayed), std::nullopt, VimReplayKind::macro}};
+    return VimStep{std::move(next), VimReplay{std::move(keys), std::nullopt, VimReplayKind::macro,
+                                              resolved_count(state)}};
 }
 } // namespace detail
 
@@ -315,7 +306,7 @@ namespace
     next.redoing_visual = true;
     next.recording = VimRepeatRecord{std::nullopt, VimRecordedKeys::from({}), extent};
     return VimStep{std::move(next), VimReplay{numbered_advanced(record.keys.owned_keys()), extent,
-                                              VimReplayKind::repeat}};
+                                              VimReplayKind::repeat, single_step}};
 }
 } // namespace
 
@@ -336,7 +327,7 @@ namespace detail
     const std::optional<VimCount> count = state.count.has_value() ? state.count : record.count;
     return VimStep{vim_resting_from(state, state.unnamed_register),
                    VimReplay{replayed_keys(count, numbered_advanced(record.keys.owned_keys())),
-                             std::nullopt, VimReplayKind::repeat}};
+                             std::nullopt, VimReplayKind::repeat, single_step}};
 }
 } // namespace detail
 

@@ -51,3 +51,13 @@ Nib の今の形: `.` の記録 `VimRepeatRecord { count; keys: vector<VimKey>; 
 ## 追補（2026-11-10・#1312）
 
 決定 2 の「鍵が打たれたものか再生かは `VimEditorView.source`（`VimKeySource`）で engine に伝える」は、値が `typed` `mapped` `replayed` の 3 つになった（`mapped` は `map` の表に当たった右辺の鍵・`q` が効き、`.` の記録には載り、マクロには積まない）。録画に積むのは `typed` だけで、表に当たった単位は controller が打った左辺を同じ書き手 `vim_macro_typed` で積む（Vim の「録るのは打った鍵だけ」と同じ）。決定 3 の「`@` は `.` と同じ `VimReplay` の効果で controller が 1 鍵ずつ流す」は、`VimReplay.kind` が `macro` の鍵を流す時点の `map` の表で引く（`.` は引かない）。詳しくは [ADR 0176](0176-vim-map-is-a-settings-row-applied-by-one-key-table-at-the-window-entry.md) の追補 32〜35。決定 4 の上限の実測をもう 1 つ: Vim 9.1 は `nmap x @a` と `a=x` の `@a` も E223 を出さずに止まらず回る（60 秒で打ち切り・PR #1328 のレビューの P9）。Nib は表の右辺を通っても深さ 101 で E132 を出して止まる。
+
+## 追補（2026-11-10・#1341）巨大な回数の `@` は 1 周ずつ積み、回数で本文を増やす編集は文書の上限で断る
+
+Vim 9.1 の実測（`-es -u NONE`・`feedkeys(…, 'tx')`・1 件 20 秒で打ち切り・`D:\NeNeNib\outputs\20261110\1341\cases1.txt`）: `nv_at` は回数ぶん `do_execreg` を呼び、毎回レジスタを typebuf の頭へ積んでから流す。積む費用が回数の 2 乗に近く、`qajq100000@a` 83 ms・`qaxq100000@a` 0.78 s・`qaxq1000000@a` 9 s で、`999999999@a` は中身が `j`（最終行で失敗する）でも流す段に来ないまま 20 秒で終わらない。`x` は空の行でも失敗しないので、`x` だけのマクロは回数ぶん回る（`qaix<Esc>q10000@a` 0.76 s・`100000@a` は終わらない）。
+
+決定 3 の「`count` 回繋いだ `VimReplay { keys }`」を次に改める。engine は 1 周ぶんの鍵と周の数 `VimReplay.rounds`（`.` は 1）を返し、controller は 1 周ぶんだけを列に置く。周の最後の鍵には `ReplayLevel.round_end` の印を立て、それを列から取り出したとき、鍵を流す前に次の周を列の頭へ積む（流した鍵が差し込む入れ子の再生はさらにその前に入るので、順は回数ぶん繋いだ列と同じ）。まだ積んでいない周は `ReplayRounds` の積み重ね（頂がいま流している最も深い周）で持ち、鍵の失敗と深さの上限（決定 4）で列と一緒に捨てる。確保は 1 周ぶんで回数に比例せず、失敗する中身は失敗の周で止まる（`999999999@a` の `j` は 3 周を積んで返る）。Vim が終わる回数では結果は Vim と同じ（fixture `huge-count-macro-` の 6 件）。積んだ周の数は `EditorController::replay_rounds()` が数え、契約 `--vim-macro` は時計を読まずに周の数で断言する。
+
+回数で本文を増やす編集（`p` `P` の文字・行・矩形、INSERT の回数の反復、`o` の回数）は、編集の後の文書が開ける上限 `maximum_document_bytes`（1 GiB・ADR 0159 の決定 7）を超えるなら、確保の前に `VimRepeatFailure::too_large` で断る（本文は変えず、再生の残りも捨てる。INSERT は 1 周目の本文を残す）。Vim は確保できるかぎり実行する（`yl999999999p` は 2.7 秒で 1 GB の行、`<C-v>jy999999999p` は 2 GB の 2 行、`yy999999999p` と `999999999ix<Esc>` は 20 秒で終わらない）。上限の内の回数は Vim と同じ結果のまま（fixture `huge-count-` の put と INSERT の 6 件）。
+
+残る穴（判断待ち・#1341）: 失敗しない中身（`x` `0` `ix<Esc>`）の巨大な回数の `@` と、INSERT の回数の反復のうち打った本文だけでない列（`<Left>` や `<C-r>` を含む）は、Vim と同じく回数ぶん回るので 1 回の `apply` が終わらない（Vim は Ctrl-C で止められるが Nib に割り込みは無い）。周の数の上限で止めるか、周を意図をまたいで流して割り込みを受けるかは設計席の判断。

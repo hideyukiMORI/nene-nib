@@ -2,6 +2,7 @@
 
 #include "CaretMotion.hpp"
 #include "CaretMove.hpp"
+#include "DocumentByteLimit.hpp"
 #include "DocumentCaret.hpp"
 #include "LineEnding.hpp"
 #include "Selection.hpp"
@@ -19,6 +20,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -32,6 +34,7 @@ namespace nenenib::core
 using detail::backward_characters;
 using detail::block_copied_body;
 using detail::block_insert_edit;
+using detail::count_room;
 using detail::display_view;
 using detail::erased_nothing;
 using detail::failed;
@@ -462,7 +465,9 @@ constexpr std::size_t erase_window_bytes = 64;
 }
 
 // 鍵の列を残りの周だけ本文の写しへ流し直した本文・キャレット・消した手前の端（#1093）。
-[[nodiscard]] std::tuple<TextBuffer, Offset, Offset>
+// 周の終わりに本文が文書の上限（maximum_document_bytes）を超えたら、残りの周を流さずに
+// too_large（#1341）。
+[[nodiscard]] std::expected<std::tuple<TextBuffer, Offset, Offset>, VimRepeatFailure>
 replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t remaining,
                 const std::vector<VimKey> &keys)
 {
@@ -484,8 +489,12 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
             caret = replayed.second;
             low = Offset{std::min(low.value, caret.value)};
         }
+        if (text.size_bytes() > maximum_document_bytes)
+        {
+            return std::unexpected(VimRepeatFailure::too_large);
+        }
     }
-    return {std::move(text), caret, low};
+    return std::tuple{std::move(text), caret, low};
 }
 
 // 回数の残りの周で鍵の列を流し直す（#1093・Vim の start_redo_ins）。2 周目からの消す鍵は前の周
@@ -535,14 +544,20 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
     auto typed = typed_text(keys);
     if (!typed.has_value())
     {
-        return replayed_insert(view, std::move(step),
-                               replayed_rounds(state, view, repeat.remaining, keys));
+        auto replayed = replayed_rounds(state, view, repeat.remaining, keys);
+        if (!replayed.has_value())
+        {
+            return failed(std::move(step), replayed.error());
+        }
+        return replayed_insert(view, std::move(step), replayed.value());
     }
     // 打った本文だけの列は、流し直しても本文を残りの回数だけ続けたものと同じなので 1 回で作る。
-    auto result = repeated(typed.value(), repeat.remaining);
+    auto result = repeated(typed.value(), repeat.remaining, count_room(view.text));
     if (!result.has_value())
     {
-        return step;
+        // 残りの周の本文が文書の上限を超える（`999999999ix<Esc>` の 1 GB 超）。1 周目の本文は
+        // 残し、残りは確保せずに断る（#1341）。
+        return failed(std::move(step), result.error());
     }
     std::string body = std::move(result).value();
     const std::size_t retreat = body.back() == '\n' ? 0 : last_code_point_size(body);
