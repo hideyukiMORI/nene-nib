@@ -102,15 +102,22 @@ using Wanted = std::pair<std::size_t, std::size_t>;
 }
 } // namespace
 
+bool vim_cursor_within_margins(const VimCursorWindow &window, LineNumber caret,
+                               std::size_t line_count) noexcept
+{
+    const Wanted wanted = wanted_of(window, line_count);
+    return caret.value >= window.top.value + wanted.first &&
+           caret.value + wanted.second < window.below.value;
+}
+
 LineNumber vim_cursor_corrected(const VimCursorWindow &window, LineNumber caret,
                                 std::size_t line_count) noexcept
 {
-    const Wanted wanted = wanted_of(window, line_count);
-    if (caret.value >= window.top.value + wanted.first &&
-        caret.value + wanted.second < window.below.value)
+    if (vim_cursor_within_margins(window, caret, line_count))
     {
         return caret;
     }
-    return placed_within(window, caret, narrowed(window, wanted), line_count);
+    return placed_within(window, caret, narrowed(window, wanted_of(window, line_count)),
+                         line_count);
 }
 } // namespace nenenib::core

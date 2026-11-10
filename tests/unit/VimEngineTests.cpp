@@ -1492,7 +1492,8 @@ void verify_vim_row_unit_pages()
     const auto *const line_down = std::get_if<VimNavigate>(&scrolled.effect);
     expect(line_down != nullptr && line_down->first_visible == LineNumber{1} &&
                line_down->first_row == 1 &&
-               line_down->selection.caret == nenenib::core::Offset{10} && line_down->keeps_top,
+               line_down->selection.caret == nenenib::core::Offset{10} &&
+               line_down->topline == nenenib::core::VimToplineSettle::kept,
            "the row unit Ctrl-e moves the top one screen row and pushes the caret into the window");
     const auto held = rows_answered(state, text.value(), nenenib::core::VimScrollUnit::row,
                                     vim_keys_of("<C-y>").front());
