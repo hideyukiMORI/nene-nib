@@ -35,6 +35,7 @@ using detail::line_of;
 using detail::lines_below;
 using detail::mark_landing_of;
 using detail::motion_range;
+using detail::paragraph_or_sentence;
 using detail::percent_line;
 using detail::row_landing_in;
 using detail::screen_line;
@@ -308,10 +309,41 @@ namespace
     return range;
 }
 
-// h l 0 ^ の範囲（行の中の文字単位）。
+// `{` `}` `(` `)` の範囲（Issue #1316）。exclusive の文字単位で、1 行の中でも `"1` へ行く（Vim の
+// nv_findpar と nv_brace の use_reg_one）。前向きに最後の行へ着いた `}`（findpar の
+// pincl）と、本文の 終わりで尽きた `)`（adjust_cursor の
+// inclusive）は最後の文字まで含むので、終わりは最後の行の内容の
+// 終わり。回数の途中で本文の端に当たったら範囲が無い（clearopbeep）。行頭で終わる範囲の言い換え
+// （`:help exclusive-linewise`）は呼び出し元の exclusive_range が行う。
+[[nodiscard]] std::optional<VimMotionRange> paragraph_or_sentence_range(const TextBuffer &text,
+                                                                        Offset caret,
+                                                                        VimMotion motion,
+                                                                        std::size_t count)
+{
+    const auto landed = paragraph_or_sentence(text, caret, motion, count);
+    if (!landed.has_value())
+    {
+        return std::nullopt;
+    }
+    const LineNumber last{text.line_count()};
+    const bool reaches_the_end = motion == VimMotion::paragraph_forward &&
+                                 line_of(text, landed.value()) == last &&
+                                 text.line_start(last) != text.line_end(last);
+    VimMotionRange range =
+        characters_between(caret, reaches_the_end ? text.line_end(last) : landed.value());
+    range.numbered = VimNumberedRule::always;
+    return range;
+}
+
+// h l 0 ^ `{N}|` の範囲（行の中の文字単位）。
 [[nodiscard]] VimMotionRange sideways_range(const TextBuffer &text, Offset caret, VimMotion motion,
                                             std::size_t count)
 {
+    if (motion == VimMotion::column)
+    {
+        return characters_between(
+            caret, column_landing(text, line_of(text, caret), count, VimMode::normal));
+    }
     if (motion == VimMotion::line_start)
     {
         return characters_between(text.line_start(line_of(text, caret)), caret);
@@ -335,10 +367,33 @@ backward_word_range(const TextBuffer &text, Offset caret, const VimWordWalk &wal
                     : previous_word_range(text, caret, walk);
 }
 
-// 飛ぶ移動の範囲（H M L gg G % 'a `a）。
+// j k + - _ の範囲（行単位）。
+[[nodiscard]] std::optional<VimMotionRange> vertical_range(const TextBuffer &text, Offset caret,
+                                                           VimMotion motion, std::size_t count)
+{
+    const LineNumber line = line_of(text, caret);
+    if (motion == VimMotion::up || motion == VimMotion::previous_line)
+    {
+        return lines_above(text, line, count);
+    }
+    return lines_below(text, line,
+                       motion == VimMotion::first_non_blank_below ? count - single_step : count);
+}
+
+[[nodiscard]] bool by_paragraph_or_sentence(VimMotion motion) noexcept
+{
+    return motion == VimMotion::paragraph_backward || motion == VimMotion::paragraph_forward ||
+           motion == VimMotion::sentence_backward || motion == VimMotion::sentence_forward;
+}
+
+// 飛ぶ移動の範囲（H M L gg G % 'a `a { } ( )）。
 [[nodiscard]] std::optional<VimMotionRange> jump_range(const VimEditorView &view, VimMotion motion,
                                                        std::size_t count)
 {
+    if (by_paragraph_or_sentence(motion))
+    {
+        return paragraph_or_sentence_range(view.text, view.selection.caret, motion, count);
+    }
     if (motion == VimMotion::matching_pair)
     {
         return matching_range(view.text, view.selection.caret, count);
@@ -363,22 +418,20 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
 {
     const TextBuffer &text = view.text;
     const Offset caret = view.selection.caret;
-    const LineNumber line = line_of(text, caret);
     const VimWordWalk walk{count, vim_motion_word_class(motion)};
     switch (motion)
     {
     case VimMotion::down:
     case VimMotion::next_line:
-        return lines_below(text, line, count);
     case VimMotion::first_non_blank_below:
-        return lines_below(text, line, count - single_step);
     case VimMotion::up:
     case VimMotion::previous_line:
-        return lines_above(text, line, count);
+        return vertical_range(text, caret, motion, count);
     case VimMotion::left:
     case VimMotion::right:
     case VimMotion::line_start:
     case VimMotion::first_non_blank:
+    case VimMotion::column:
         return sideways_range(text, caret, motion, count);
     case VimMotion::line_end:
     case VimMotion::last_non_blank:
@@ -403,6 +456,10 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     case VimMotion::matching_pair:
     case VimMotion::mark_line:
     case VimMotion::mark_exact:
+    case VimMotion::paragraph_backward:
+    case VimMotion::paragraph_forward:
+    case VimMotion::sentence_backward:
+    case VimMotion::sentence_forward:
         return jump_range(view, motion, count);
     case VimMotion::wrap_right:
     case VimMotion::wrap_left:
@@ -415,8 +472,6 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     case VimMotion::line_middle:
     case VimMotion::display_line_first_non_blank:
         return display_range(view, motion);
-    case VimMotion::column:
-        return characters_between(caret, column_landing(text, line, count, VimMode::normal));
     }
     std::unreachable();
 }

@@ -6,6 +6,7 @@
 #include "VimSearchWalk.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <expected>
 #include <optional>
 #include <string>
@@ -212,11 +213,34 @@ std::vector<OffsetRange> vim_window_matches(std::string_view text, OffsetRange w
     return matches;
 }
 
+namespace
+{
+// 折り返しで最初の当たりへ戻ったら、当たりの列は step 歩ごとの繰り返しなので、残りの回数から
+// 繰り返しの分を飛ばす（巨大な回数の `n` `N` `*` `#` が折り返しを回り続けない・#1334）。1 歩の
+// 当たりは位置だけで決まり、戻るまでに折り返しは必ず起きている。
+[[nodiscard]] std::size_t cycled_step(std::optional<Offset> &first, Offset at, std::size_t step,
+                                      std::size_t count)
+{
+    if (!first.has_value())
+    {
+        first = at;
+        return step;
+    }
+    if (!(first.value() == at))
+    {
+        return step;
+    }
+    const std::size_t remaining = count - 1U - step;
+    return step + (remaining / step) * step;
+}
+} // namespace
+
 std::expected<VimSearchHit, VimSearchNoticeKind>
 vim_find_match(const TextBuffer &text, const VimPattern &pattern, const VimMatchRequest &request)
 {
     Offset at = text.offset_of(request.from);
     bool wrapped = false;
+    std::optional<Offset> first = std::nullopt;
     for (std::size_t step = 0; step < request.count; ++step)
     {
         const auto hit = searched_once(text, at, pattern, request.direction);
@@ -226,6 +250,7 @@ vim_find_match(const TextBuffer &text, const VimPattern &pattern, const VimMatch
         }
         at = hit.value().first;
         wrapped = wrapped || hit.value().second;
+        step = cycled_step(first, at, step, request.count);
     }
     return VimSearchHit{text.position_of(at), wrapped};
 }

@@ -14,8 +14,10 @@
 #include "VimLineEndStop.hpp"
 #include "VimMarkEdits.hpp"
 #include "VimMatchingPair.hpp"
+#include "VimParagraphObject.hpp"
 #include "VimScreenLine.hpp"
 #include "VimScreenPosition.hpp"
+#include "VimSentenceObject.hpp"
 #include "VimWordEndStop.hpp"
 #include "VimWordMotion.hpp"
 #include "VimWordStop.hpp"
@@ -450,6 +452,24 @@ namespace
                       : vim_word_end(text, caret, walk, VimWordEndStop::enter_the_next_word);
     return VimMotionLanding{rested_in(text, walked.offset, state.mode), walked.failure};
 }
+
+// 語の移動の着地（w W e E b B ge gE）。後ろ向きは歩きの着地と失敗をそのまま、前向きは
+// forward_word_landing が寄せる。
+[[nodiscard]] VimMotionLanding word_landing(const VimEditorView &view, const VimState &state,
+                                            VimMotion motion)
+{
+    const VimWordWalk walk{resolved_motion_count(state, view.text, motion),
+                           vim_motion_word_class(motion)};
+    if (motion == VimMotion::previous_word || motion == VimMotion::previous_big_word)
+    {
+        return vim_previous_word(view.text, view.selection.caret, walk);
+    }
+    if (motion == VimMotion::previous_word_end || motion == VimMotion::previous_big_word_end)
+    {
+        return vim_previous_word_end(view.text, view.selection.caret, walk);
+    }
+    return forward_word_landing(view, state, motion);
+}
 } // namespace
 
 namespace detail
@@ -548,6 +568,43 @@ namespace
 
 namespace detail
 {
+// `{` `}` `(` `)` の Vim のカーソル（Issue #1316）。境は `ip` `ap` `is` `as` と同じ関数の 1 本で、
+// 段落は findpar、文は findsent。回数の途中で本文の端に当たったら
+// nullopt（FAIL）。文は本文の終わりで 尽きると最後の行の内容の終わりを返し、寄せ（Vim の
+// adjust_cursor）は呼び出し元が行う。
+[[nodiscard]] std::optional<Offset> paragraph_or_sentence(const TextBuffer &text, Offset caret,
+                                                          VimMotion motion, std::size_t count)
+{
+    const bool forward =
+        motion == VimMotion::paragraph_forward || motion == VimMotion::sentence_forward;
+    const bool sentence =
+        motion == VimMotion::sentence_forward || motion == VimMotion::sentence_backward;
+    return sentence ? vim_sentence_motion(text, caret, forward, count)
+                    : vim_paragraph_motion(text, caret, forward, count);
+}
+} // namespace detail
+
+namespace
+{
+// `{` `}` `(` `)` の着地。FAIL は動かずに鳴らし、オペレータを打ち消す（Vim の clearopbeep）。
+// 本文の終わりの NUL は NORMAL では最後の文字へ寄せ、VISUAL では残す（adjust_cursor は
+// VIsual_active のとき寄せない）。
+[[nodiscard]] VimMotionLanding paragraph_or_sentence_landing(const VimEditorView &view,
+                                                             VimMotion motion, std::size_t count,
+                                                             VimMode mode)
+{
+    const Offset caret = view.selection.caret;
+    const auto landed = detail::paragraph_or_sentence(view.text, caret, motion, count);
+    if (!landed.has_value())
+    {
+        return VimMotionLanding{caret, VimRepeatFailure::not_moved};
+    }
+    return VimMotionLanding{rested_in(view.text, landed.value(), mode)};
+}
+} // namespace
+
+namespace detail
+{
 // マークへの移動の着地（ADR 0152 の決定 3）。`'` は行の最初の非空白、`` ` `` はマークの位置で、
 // NORMAL では文字の上へ寄せる（Vim の check_cursor）。名前は鍵を写す前に engine が解いて置く。
 [[nodiscard]] Offset mark_landing_of(const VimEditorView &view, VimMotion motion, VimMode mode)
@@ -634,7 +691,6 @@ namespace detail
     const std::size_t count = resolved_motion_count(state, view.text, motion);
     const TextBuffer &text = view.text;
     const Offset caret = view.selection.caret;
-    const LineNumber line = line_of(text, caret);
     switch (motion)
     {
     case VimMotion::left:
@@ -645,9 +701,8 @@ namespace detail
     case VimMotion::down:
         return vertical_caret(view, state, motion, count);
     case VimMotion::line_start:
-        return text.line_start(line);
+        return text.line_start(line_of(text, caret));
     case VimMotion::first_non_blank:
-        return vim_first_non_blank(text, caret);
     case VimMotion::next_word:
     case VimMotion::next_big_word:
     case VimMotion::word_end:
@@ -671,6 +726,10 @@ namespace detail
     case VimMotion::matching_pair:
     case VimMotion::mark_line:
     case VimMotion::mark_exact:
+    case VimMotion::paragraph_backward:
+    case VimMotion::paragraph_forward:
+    case VimMotion::sentence_backward:
+    case VimMotion::sentence_forward:
         return landing_of(view, state, motion).offset;
     case VimMotion::screen_top:
     case VimMotion::screen_middle:
@@ -685,7 +744,7 @@ namespace detail
     case VimMotion::wrap_left:
         return wrapped_landing(view, state, motion);
     case VimMotion::column:
-        return column_landing(text, line, count, state.mode);
+        return column_landing(text, line_of(text, caret), count, state.mode);
     }
     std::unreachable();
 }
@@ -722,23 +781,20 @@ namespace detail
 [[nodiscard]] VimMotionLanding landing_of(const VimEditorView &view, const VimState &state,
                                           VimMotion motion)
 {
-    const VimWordWalk walk{resolved_motion_count(state, view.text, motion),
-                           vim_motion_word_class(motion)};
+    const std::size_t count = resolved_motion_count(state, view.text, motion);
     switch (motion)
     {
     case VimMotion::previous_word:
     case VimMotion::previous_big_word:
-        return vim_previous_word(view.text, view.selection.caret, walk);
     case VimMotion::previous_word_end:
     case VimMotion::previous_big_word_end:
-        return vim_previous_word_end(view.text, view.selection.caret, walk);
     case VimMotion::next_word:
     case VimMotion::next_big_word:
     case VimMotion::word_end:
     case VimMotion::word_end_for_change:
     case VimMotion::big_word_end:
     case VimMotion::big_word_end_for_change:
-        return forward_word_landing(view, state, motion);
+        return word_landing(view, state, motion);
     case VimMotion::display_down:
     case VimMotion::display_up:
     case VimMotion::display_line_start:
@@ -748,25 +804,28 @@ namespace detail
     case VimMotion::display_line_first_non_blank:
         return row_landing_in(view, state.mode);
     case VimMotion::line_end:
-        return line_end_landing(view.text, view.selection.caret,
-                                resolved_motion_count(state, view.text, motion), state.mode);
+        return line_end_landing(view.text, view.selection.caret, count, state.mode);
     case VimMotion::last_non_blank:
     case VimMotion::first_non_blank_below:
-        return counted_line_landing(view.text, view.selection.caret,
-                                    resolved_motion_count(state, view.text, motion), motion);
+        return counted_line_landing(view.text, view.selection.caret, count, motion);
     case VimMotion::up:
     case VimMotion::down:
         return vertical_landing(view, state, motion);
     case VimMotion::matching_pair:
-        return matching_landing(view.text, view.selection.caret,
-                                resolved_motion_count(state, view.text, motion));
+        return matching_landing(view.text, view.selection.caret, count);
     case VimMotion::mark_line:
     case VimMotion::mark_exact:
         return VimMotionLanding{mark_landing_of(view, motion, state.mode)};
+    case VimMotion::paragraph_backward:
+    case VimMotion::paragraph_forward:
+    case VimMotion::sentence_backward:
+    case VimMotion::sentence_forward:
+        return paragraph_or_sentence_landing(view, motion, count, state.mode);
+    case VimMotion::first_non_blank:
+        return VimMotionLanding{vim_first_non_blank(view.text, view.selection.caret)};
     case VimMotion::left:
     case VimMotion::right:
     case VimMotion::line_start:
-    case VimMotion::first_non_blank:
     case VimMotion::screen_top:
     case VimMotion::screen_middle:
     case VimMotion::screen_bottom:
@@ -835,6 +894,10 @@ namespace detail
     case VimMotion::matching_pair:
     case VimMotion::mark_line:
     case VimMotion::mark_exact:
+    case VimMotion::paragraph_backward:
+    case VimMotion::paragraph_forward:
+    case VimMotion::sentence_backward:
+    case VimMotion::sentence_forward:
         return VimWantedColumn{VimColumnWish::at_column, landed};
     }
     std::unreachable();
@@ -921,6 +984,10 @@ namespace
     case VimMotion::matching_pair:
     case VimMotion::mark_line:
     case VimMotion::mark_exact:
+    case VimMotion::paragraph_backward:
+    case VimMotion::paragraph_forward:
+    case VimMotion::sentence_backward:
+    case VimMotion::sentence_forward:
         return false;
     }
     std::unreachable();

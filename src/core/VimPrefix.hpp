@@ -22,6 +22,8 @@ enum class VimPrefix : std::uint8_t
     mark_line,
     mark_exact,
     // INSERT の `Ctrl-r`。次の鍵が挿し込むレジスタの名前（#1040）。
-    insert_register
+    insert_register,
+    // `[` `]`。次の 1 鍵を取って失敗する（族は未実装・#1334）。
+    bracket
 };
 } // namespace nenenib::core
