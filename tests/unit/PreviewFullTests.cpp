@@ -13,6 +13,9 @@
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "EditorSettings.hpp"
+#include "ExplorerResizing.hpp"
+#include "ExplorerView.hpp"
 #include "FilePath.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
@@ -38,6 +41,7 @@
 #include "PreviewSelection.hpp"
 #include "PreviewSelectionText.hpp"
 #include "PreviewTick.hpp"
+#include "ResizeExplorer.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
 #include "ScriptedFiles.hpp"
@@ -65,6 +69,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <optional>
 #include <string>
@@ -831,6 +836,32 @@ void verify_toggle_across_tabs()
                !controller.frame().other.has_value(),
            "the next press after the tab round trip closes the preview");
 }
+
+// 全面の間も面の幅のドラッグは通る（ADR 0162 の追補 D78・ADR 0155 の改訂 17 の route_full_preview・
+// #1380 の T-3）。全面は面の右の本文の帯に描かれ、幅を変えても拒否の知らせは出ない。
+void verify_full_preview_resize()
+{
+    auto shown = core::default_editor_settings();
+    shown.explorer = true;
+    Editing editing(SettingsReading{shown});
+    auto &controller = editing.controller();
+    open_text(editing, "text");
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    serve_parsed(editing);
+    const EditorFrame dragged =
+        controller.apply_frame(app::ResizeExplorer{app::ExplorerResizing::dragged, 300});
+    expect(dragged.full_preview.has_value() && dragged.explorer.has_value() &&
+               dragged.explorer.value().width.dips == std::optional<std::int32_t>{300} &&
+               message_of(dragged).empty(),
+           "dragging the divider during the full preview changes the width without a refusal");
+    const EditorFrame released =
+        controller.apply_frame(app::ResizeExplorer{app::ExplorerResizing::released, 300});
+    expect(
+        released.full_preview.has_value() && message_of(released).empty() &&
+            editing.settings().written().value_or(core::default_editor_settings()).explorer_width ==
+                std::optional<std::int32_t>{300},
+        "releasing during the full preview writes the width and stays in full");
+}
 } // namespace
 
 void verify_preview_full_scope()
@@ -854,5 +885,6 @@ void verify_preview_full_scope()
     verify_toggle_round_trip();
     verify_toggle_with_split();
     verify_toggle_across_tabs();
+    verify_full_preview_resize();
 }
 } // namespace nenenib::tests

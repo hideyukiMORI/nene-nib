@@ -165,7 +165,8 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // の追補 24）と全面プレビューのマウス（PointPreview・改訂 18）は使う人の操作なので、ここにも
 // begin_intent にも書かない。
 // エクスプローラーの意図（ToggleExplorer・ExplorerKey・PointExplorer・ScrollExplorer・
-// ExplorerRootChosen）も使う人の操作なので、どちらにも書かない（ADR 0162 の決定 4）。
+// ExplorerRootChosen）も使う人の操作なので、どちらにも書かない（ADR 0162 の決定 4）。面の幅の
+// ドラッグ（ResizeExplorer・ADR 0162 の追補 D78）も使う人の操作の側で、どちらにも書かない。
 // 言語サーバーの古さの合図（LanguageServerTick）も使う人の操作ではないので歩きを続ける（ADR 0160
 // の決定 6）。Ctrl つきのホイールは帯の上でも字の大きさ（AdjustFontSize）になり、歩きを確定する
 // （ADR 0150 の追補・#1048）。歩きの間は Ctrl を押しているので、ScrollTabs が歩きの間に来る
@@ -420,7 +421,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     // SelectLanguage も同じ（ADR 0154 の決定 4）。SelectSyntax も同じ（ADR 0156 の追補）。
-    // 面のホイール ScrollPaletteList も使う人の操作の側なので載せない（ADR 0150 の決定 2）。
+    // 面のホイール ScrollPaletteList と幅の ResizeExplorer も使う人の操作の側なので載せない。
     // 見せ方の SetPreviewPlacement と全面のマウスの PointPreview も使う人の操作の側（ADR 0155 の
     // 改訂 16・18）。全面プレビューの間の
     // 鍵の振り分けはここの 1 か所（改訂 17・route_full_preview）で、受けた意図は写さない。

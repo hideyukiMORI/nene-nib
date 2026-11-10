@@ -287,6 +287,19 @@ class EditorWindow final
     [[nodiscard]] bool press_explorer(LPARAM data);
     void release_explorer(LPARAM data);
     [[nodiscard]] bool double_click_explorer(LPARAM data);
+    // 面と本文の境のドラッグ（ADR 0162 の追補 D78）。押す・動かす・離す・捕まえを失う・ダブル
+    // クリック・カーソル。
+    [[nodiscard]] bool explorer_divider_at(std::int32_t x, std::int32_t y) const;
+    [[nodiscard]] bool press_explorer_divider(LPARAM data);
+    void drag_explorer_divider(LPARAM data);
+    [[nodiscard]] bool release_explorer_divider(LPARAM data);
+    void lose_explorer_divider();
+    [[nodiscard]] bool reset_explorer_width(LPARAM data);
+    void hover_explorer_divider(LPARAM data);
+    void end_hidden_explorer_drag();
+    void release_left(LPARAM data);
+    [[nodiscard]] bool explorer_divider_cursor(LPARAM data) const;
+    [[nodiscard]] std::int32_t explorer_width_at(std::int32_t x) const;
     // 操作 → メンバ関数の表を引く（EditorWindowOperations.cpp・ADR 0078 の追補 #1188）。操作ごとの
     // 関数は引数なしで、本体は前の run_operation の case のまま。
     using OperationFunction = void (EditorWindow::*)();
@@ -331,7 +344,7 @@ class EditorWindow final
     void read_wheel_setting();
     [[nodiscard]] application::VisibleLines body_view() const;
     [[nodiscard]] core::PaneLayouts body_panes(const core::EditorSettings &settings) const;
-    [[nodiscard]] core::ExplorerLayout explorer_frame(const core::EditorSettings &settings) const;
+    [[nodiscard]] core::ExplorerLayout explorer_frame(core::FontSize font_size) const;
     [[nodiscard]] core::BodyLayout active_body(const core::EditorSettings &settings) const;
 
     HINSTANCE instance_;
@@ -362,6 +375,14 @@ class EditorWindow final
     std::int32_t explorer_wheel_remainder_ = 0;
     // 面の上で左を押して、まだ離していない（離したときにだけ PointExplorer の released を送る）。
     bool explorer_pressed_ = false;
+    // 境を押してから離すまで（D78）。値は押した点と面の右端のずれ（物理画素）で、動かした点から
+    // ずれを引いた所を面の右端にする。grab_x は押した点の x（同じ点の WM_MOUSEMOVE を幅の変更に
+    // しない）、dragged は最後に送った幅（DIP・捕まえを失ったときに離したのと同じに送る）。
+    std::optional<std::int32_t> explorer_grab_offset_;
+    std::int32_t explorer_grab_x_ = 0;
+    std::optional<std::int32_t> explorer_dragged_;
+    // 最後の WM_MOUSEMOVE の点が境の上だったか（カーソルを左右の矢印にする・D78）。
+    bool over_explorer_divider_ = false;
     UINT wheel_setting_ = default_wheel_scroll_lines;
     // 帯で押した要素（左ボタンと中ボタンで 1 つずつ）。離した要素と同じときだけ動かし、離したら
     // 消す（ADR 0056 の決定 9）。

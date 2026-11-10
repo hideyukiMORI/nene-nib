@@ -17,6 +17,7 @@
 #include <dwmapi.h>
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cstdint>
 #include <functional>
@@ -51,6 +52,11 @@ constexpr UINT work_message = WM_APP + 1;
 
 // 起動の問いを最初の frame の後に出す、自分宛ての合図（ADR 0137 の決定 6）。
 constexpr UINT autosave_question_message = WM_APP + 2;
+
+// pointer_message が受けるマウスの通知とカーソル（面と本文の境のカーソル・ADR 0162 の追補 D78）。
+constexpr std::array<UINT, 10> pointer_messages{
+    WM_LBUTTONDOWN, WM_LBUTTONDBLCLK, WM_LBUTTONUP,  WM_MBUTTONDOWN,    WM_MBUTTONUP,
+    WM_MOUSEMOVE,   WM_MOUSELEAVE,    WM_MOUSEWHEEL, WM_CAPTURECHANGED, WM_SETCURSOR};
 } // namespace
 
 EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &controller,
@@ -268,6 +274,11 @@ LRESULT CALLBACK EditorWindow::procedure(HWND window, UINT message, WPARAM word,
 
 LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
 {
+    // マウスの通知とカーソルは pointer_message の 1 本へ（表は pointer_messages）。
+    if (std::ranges::find(pointer_messages, message) != pointer_messages.end())
+    {
+        return pointer_message(message, word, data);
+    }
     // OS のメッセージ番号は開いた集合なので、既定分岐だけは許される（CPP-017）。
     switch (message)
     {
@@ -283,16 +294,6 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_NCLBUTTONDOWN:
     case WM_NCLBUTTONUP:
         return press_caption(message, word, data);
-    case WM_LBUTTONDOWN:
-    case WM_LBUTTONDBLCLK:
-    case WM_LBUTTONUP:
-    case WM_MBUTTONDOWN:
-    case WM_MBUTTONUP:
-    case WM_MOUSEMOVE:
-    case WM_MOUSELEAVE:
-    case WM_MOUSEWHEEL:
-    case WM_CAPTURECHANGED:
-        return pointer_message(message, word, data);
     case WM_GETMINMAXINFO:
     case WM_SETTINGCHANGE:
     case WM_SIZE:

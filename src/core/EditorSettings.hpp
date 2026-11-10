@@ -13,6 +13,7 @@
 #include "VimPatternCase.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -54,6 +55,10 @@ struct EditorSettings
     // #1041）。`:set` だけが変え、設定の面には出さない。scrolloff は 0〜999（scrolloff_limit）。
     bool relativenumber = false;
     std::size_t scrolloff = 0;
+    // エクスプローラーの面の幅（DIP・境のドラッグで決める・ADR 0162 の追補・施主決定 D78）。無しは
+    // 既定の式 min(240 DIP, client の 40%)。値は explorer_width_of が読める範囲で、描く幅は
+    // explorer_panel_width が窓に合わせて切り詰める（ここは書き換えない）。
+    std::optional<std::int32_t> explorer_width = std::nullopt;
 };
 
 // `scrolloff` の上限（Vim の値は任意の非負だが、画面の半分で切り詰めるので 999 で足りる）。

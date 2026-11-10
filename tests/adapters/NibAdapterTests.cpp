@@ -671,19 +671,21 @@ void verify_settings_versions()
     expect(bytes.starts_with("version=4\n") &&
                bytes.ends_with("guide=off\nwrap=off\nui_language=system\nlsp=off\nexplorer=off\n"
                                "root=\nfeatures=\nignorecase=off\nsmartcase=off\n"
-                               "relativenumber=off\nscrolloff=0\n"),
-           "v4 writer emits the canonical fifteen-field schema");
+                               "relativenumber=off\nscrolloff=0\nexplorer_width=\n"),
+           "v4 writer emits the canonical sixteen-field schema");
     const auto v3 = decode_settings(v3_settings, SettingsVersion::v3);
     expect(v3 && v3.value().guide == nenenib::core::GuideVisibility::hidden &&
                v3.value().wrapping == nenenib::core::LineWrapping::no_wrap &&
                v3.value().ui_language == nenenib::core::DisplayLanguageChoice::japanese &&
                !v3.value().lsp && !v3.value().explorer && !v3.value().root.has_value() &&
                v3.value().features.empty() && !v3.value().ignorecase && !v3.value().smartcase &&
-               !v3.value().relativenumber && v3.value().scrolloff == 0,
+               !v3.value().relativenumber && v3.value().scrolloff == 0 &&
+               !v3.value().explorer_width.has_value(),
            "v3 keeps its values, stays Japanese and takes the other v4 defaults");
     for (const auto extra :
          {"ui_language=system\n", "lsp=off\n", "explorer=off\n", "root=\n", "features=\n",
-          "ignorecase=off\n", "smartcase=off\n", "relativenumber=off\n", "scrolloff=0\n"})
+          "ignorecase=off\n", "smartcase=off\n", "relativenumber=off\n", "scrolloff=0\n",
+          "explorer_width=\n", "explorer_width=300\n"})
     {
         const auto refused = decode_settings(std::string(v3_settings) + extra, SettingsVersion::v3);
         expect(!refused && refused.error() == SettingsFailure::malformed,
@@ -727,6 +729,15 @@ void verify_older_settings_versions()
     const auto v1 = "version=1\n" + common.substr(0, common.rfind("guide="));
     expect(!decode_settings(v1 + "guide=on\n", SettingsVersion::v1), "v1 rejects guide");
     expect(!decode_settings(v1 + "wrap=on\n", SettingsVersion::v1), "v1 rejects wrap");
+    // 後から足した v4 の鍵 explorer_width も旧版では未知の鍵として拒否する（#1380 の T-5）。
+    for (const auto width : {"explorer_width=300\n", "explorer_width=\n"})
+    {
+        const auto in_v2 = decode_settings(v2 + width, SettingsVersion::v2);
+        const auto in_v1 = decode_settings(v1 + width, SettingsVersion::v1);
+        expect(!in_v2 && in_v2.error() == SettingsFailure::malformed && !in_v1 &&
+                   in_v1.error() == SettingsFailure::malformed,
+               "v1 and v2 reject explorer_width");
+    }
     const auto wrong_old = decode_settings(v1, SettingsVersion::v4);
     expect(!wrong_old && wrong_old.error() == SettingsFailure::unsupported_version,
            "a v1 document is not read as v4");
@@ -741,9 +752,10 @@ void verify_settings_lsp_commands()
     settings.lsp_commands = {{"python", "C:\\py\\pylsp.exe"},
                              {"cpp", "C:\\llvm\\clangd.exe --log=error"}};
     const auto bytes = encode_settings(settings);
-    expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
-                           "scrolloff=0\nlsp.cpp.command=C:\\llvm\\clangd.exe --log=error\n"
-                           "lsp.python.command=C:\\py\\pylsp.exe\n"),
+    expect(bytes.ends_with(
+               "features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
+               "scrolloff=0\nexplorer_width=\nlsp.cpp.command=C:\\llvm\\clangd.exe --log=error\n"
+               "lsp.python.command=C:\\py\\pylsp.exe\n"),
            "commands follow the fixed keys in language name order");
     const auto decoded = decode_settings(bytes, SettingsVersion::v4);
     expect(decoded && decoded.value().lsp_commands.size() == 2 &&
@@ -783,7 +795,7 @@ void verify_settings_maps()
         MapRow{VimModeSet{true, false, true, false, false}, "<leader>w", ":w<CR>", true}};
     const auto bytes = encode_settings(settings);
     expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
-                           "scrolloff=0\nmapleader=<Space>\n"
+                           "scrolloff=0\nexplorer_width=\nmapleader=<Space>\n"
                            "map.i.jj=!<Esc>\nmap.nv.<leader>w=:w<CR>\n"),
            "the leader and the map rows follow the other lines in order");
     const auto decoded = decode_settings(bytes, SettingsVersion::v4);
@@ -853,6 +865,43 @@ std::string without_setting(const std::string &bytes, std::string_view key)
     return bytes.substr(0, start) + bytes.substr(bytes.find('\n', start) + 1);
 }
 
+// エクスプローラーの面の幅 explorer_width（ADR 0162 の追補・施主決定 D78・ADR 0170 の追補）。DIP の
+// 整数の往復・空は既定の式・壊れた値と範囲の外は既定の式（設定の全体は拒まない）・重複は拒否・
+// 比較に入る。
+void verify_settings_explorer_width(const std::string &bytes)
+{
+    auto settings = default_editor_settings();
+    settings.explorer_width = 320;
+    const auto chosen = encode_settings(settings);
+    expect(chosen.find("\nscrolloff=0\nexplorer_width=320\n") != std::string::npos,
+           "a chosen width is written as decimal DIP after scrolloff");
+    const auto decoded = decode_settings(chosen, SettingsVersion::v4);
+    expect(decoded && decoded.value().explorer_width == 320 &&
+               encode_settings(decoded.value()) == chosen,
+           "a chosen width round trips");
+    for (const auto broken : {"", "0", "119", "10000", "0320", "-5", "abc", "320px", "3 20"})
+    {
+        const auto read =
+            decode_settings(with_setting(bytes, "explorer_width", broken), SettingsVersion::v4);
+        expect(read && !read.value().explorer_width.has_value(),
+               "an empty or broken width reads as the default formula");
+    }
+    expect(!decode_settings(chosen + "explorer_width=200\n", SettingsVersion::v4),
+           "a duplicate explorer_width is refused like every key");
+    for (const auto edge : {120, 9999})
+    {
+        const auto read = decode_settings(
+            with_setting(bytes, "explorer_width", std::to_string(edge)), SettingsVersion::v4);
+        expect(read && read.value().explorer_width == edge,
+               "the range edges 120 and 9999 are read as chosen widths");
+    }
+    const auto empty_twice = decode_settings(bytes + "explorer_width=\n", SettingsVersion::v4);
+    expect(!empty_twice && empty_twice.error() == SettingsFailure::malformed,
+           "two empty explorer_width lines are refused as a duplicate");
+    expect(!same_settings(settings, default_editor_settings()),
+           "the width takes part in the settings comparison");
+}
+
 // v4 の鍵の集合（ADR 0170 の決定 3）。全欄の往復・必須・値の検証・features の空と 3
 // 件・重複の拒否。
 // v4 の最初の定義（#1055）の後に足した鍵（ADR 0170 決定 3 の追補・#1083）。無い v4 は既定 off で
@@ -861,19 +910,22 @@ void verify_settings_v4_later_keys()
 {
     const auto bytes = encode_settings(default_editor_settings());
     auto stripped = bytes;
-    for (const auto key : {"ignorecase", "smartcase", "relativenumber", "scrolloff"})
+    for (const auto key :
+         {"ignorecase", "smartcase", "relativenumber", "scrolloff", "explorer_width"})
     {
         stripped = without_setting(stripped, key);
     }
     const auto older = decode_settings(stripped, SettingsVersion::v4);
     expect(older && !older.value().ignorecase && !older.value().smartcase &&
                !older.value().relativenumber && older.value().scrolloff == 0 &&
-               encode_settings(older.value()) == bytes,
-           "a v4 without the later keys reads them as off and 0 and writes them back");
+               !older.value().explorer_width.has_value() && encode_settings(older.value()) == bytes,
+           "a v4 without the later keys reads them as off, 0 and the default width and writes "
+           "them back");
     expect(!decode_settings(bytes + "ignorecase=on\n", SettingsVersion::v4) &&
                !decode_settings(with_setting(bytes, "smartcase", "yes"), SettingsVersion::v4) &&
                !decode_settings(bytes + "scrolloff=0\n", SettingsVersion::v4),
            "a present later key is still read strictly");
+    verify_settings_explorer_width(bytes);
 }
 
 void verify_settings_v4_fields()

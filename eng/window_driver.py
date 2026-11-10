@@ -237,14 +237,14 @@ def forget_session(environment: dict) -> bool:
     return deleted
 
 
-# settings.v4 の全部の鍵と、設定ファイルの無い起動と同じ値（ADR 0170 決定 3・#1041）。書くのは
+# settings.v4 の全部の鍵と、設定ファイルの無い起動と同じ値（ADR 0170 決定 3・#1041・#1380）。書くのは
 # 道具の profile だけで、利用者の本物の設定には書かない。
 SETTINGS_V4_DEFAULTS = (("version", "4"), ("colorscheme", "system"),
                         ("font_family", "Cascadia Code"), ("font_size", "13.5"), ("guide", "on"),
                         ("wrap", "on"), ("ui_language", "system"), ("lsp", "off"),
                         ("explorer", "off"), ("root", ""), ("features", ""),
                         ("ignorecase", "off"), ("smartcase", "off"), ("relativenumber", "off"),
-                        ("scrolloff", "0"))
+                        ("scrolloff", "0"), ("explorer_width", ""))
 
 
 def write_settings(environment: dict, changed: dict[str, str] | None = None,

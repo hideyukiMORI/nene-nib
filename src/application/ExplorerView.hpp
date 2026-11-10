@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ExplorerRowView.hpp"
+#include "ExplorerWidth.hpp"
 #include "FilePath.hpp"
 
 #include <cstddef>
@@ -24,5 +25,8 @@ struct ExplorerView
     std::optional<std::size_t> selected;
     bool focused;
     std::size_t first_visible;
+    // 面の幅の求め（ADR 0162 の追補 D78）。ドラッグの間はその幅、ほかは設定 explorer_width。描画は
+    // これを core::explorer_layout へ渡す（窓の explorer_width() と同じ値）。
+    core::ExplorerWidth width = {};
 };
 } // namespace nenenib::application

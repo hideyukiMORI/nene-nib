@@ -110,7 +110,8 @@ constexpr std::string_view preview_no_task_message = "この行にタスクは�
            std::holds_alternative<ExplorerKey>(intent) ||
            std::holds_alternative<PointExplorer>(intent) ||
            std::holds_alternative<ScrollExplorer>(intent) ||
-           std::holds_alternative<ExplorerRootChosen>(intent);
+           std::holds_alternative<ExplorerRootChosen>(intent) ||
+           std::holds_alternative<ResizeExplorer>(intent);
 }
 
 // 全面プレビューの間も今までどおり写す意図（ADR 0155 の改訂 17）。タブ（帯・Ctrl+Tab・`gt` は鍵の
