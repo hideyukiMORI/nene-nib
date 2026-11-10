@@ -121,3 +121,20 @@ hide の要望（2026-10-28 夜）「全面 md プレビューも欲しい。編
 40. **Esc は選択があっても全面をやめる。** Esc は改訂 16 のまま直前の見せ方へ戻り、選択だけを解く段は挟まない。プレーンな矢印・PgUp / PgDn・ホイールなどのスクロールでは選択は残る。
 41. **ドラッグで枠の外へ出ても送らない。** 全面の文字のドラッグは捕まえ（SetCapture）の間だけ動く端を伸ばし、枠の外へ出ても本文の選択のような自動の送り（タイマー）はしない。枠の外の点は縦の位置で近い要素の端に寄せる。
 42. **全面の `PlaceCaret` / `PointText` は ignore。** 全面の間、ui は本文のマウスの意図を送らず `PointPreview` を送る。届いた `PlaceCaret` / `PointText` は振り分けの表で ignore（何もしない・知らせない）とする（N5a では select の口だった）。
+
+## 追補（2026-11-10・D77・#1354）: Ctrl+Shift+M は見せ方を巡る
+
+施主決定 D77（2026-11-10）「全面の Markdown プレビューの鍵は Ctrl+Shift+M の巡回にする。鍵を増やさない」（beta.8 の試用で hide が「2 回押すと全面になる」と思って試した）。決定 3（開く / 閉じるは操作 1 つ）・改訂 16（`toggle_preview` は側のまま）・追補 27（全面から側へ）を次で改める。
+
+43. **Ctrl+Shift+M は off → side → full → off と巡る。** 次の見せ方は application の純関数 `cycled_preview_placement(PreviewPlacement)`（`PreviewPlacement.hpp`・閉じた `switch`・`default` なし）の 1 本が決め、`accept(TogglePreview)` はその値を `place_preview` の 1 本へ渡すだけ。追補 27（全面の間に押すと側へ）は廃し、全面の間に押すと閉じる（off）。全面の前の見せ方（off から入ったか side から入ったか）に依らない。側の枠を開くところ（決定 3 の「残りを捨てて即時に頼む」）は `open_side_preview` の 1 か所で、`place_preview` の side から呼ぶ。側 → 全面は `PreviewView` を移すだけで頼み直さず、全面 → off は追補 31 のとおり本文の先頭行を錨の行に揃える。
+44. **ほかの入口は今の意味のまま。** `:preview full` / `:preview side` / `:preview off` と F1 の「Markdown プレビュー（全面）」（`SetPreviewPlacement`）は見せ方を名指しで置き、巡回の関数を通らない。引数なしの `:preview` と `:preview?` は今の見せ方を 1 行で答える問いで、見せ方を変えない。全面の間の Esc は改訂 16 のまま直前の見せ方（side から来たなら side・off から来たなら off）へ戻る。鍵・操作・意図は増やさない（`toggle_preview` の説明の文だけを「右（下）の枠に出す・もう一度で全面・もう一度で閉じる」に改める）。
+45. **巡回の表。** 文書が Markdown でなくても同じ（言語で分けない）。本文の 2 枠のときは、off で押すと決定 3 のまま本文のもう 1 枠を置き換えて side、もう一度で full、もう一度で 1 枠。2 枠のまま `:preview full` / F1 で入った全面で押すと、隠した 2 枠が配置と側ごと戻る（改訂 15）。見せ方は窓の値なので、タブを切り替えても巡回は続く。
+
+| 今の見せ方 | Ctrl+Shift+M | `:preview` / `:preview?` | `:preview full`・F1 の全面 | 全面の間の Esc |
+| --- | --- | --- | --- | --- |
+| off | side | off（答えるだけ） | full | off（何もしない） |
+| side | full | side（答えるだけ） | full | side（何もしない） |
+| full（off から） | off | full（答えるだけ） | full | off |
+| full（side から） | off | full（答えるだけ） | full | side |
+
+46. **契約。** application `--preview-full`: 巡回の表（4 つの起点 × 5 つの入力 × Markdown と note.txt の 40 件）・3 回で元に戻り頼むのは側を開く 1 回だけ（通常モードと Vim）・本文の 2 枠・タブの切り替えの往復。`--preview` の「もう一度で閉じる」の契約は 3 回目で閉じる形に改めた。ui: `nib_window_tests --preview-key`（Ctrl+Shift+M は通常と Vim で `toggle_preview`・Ctrl+M と Shift+M は何もしない）。`eng/verify-window.py --preview` は 2 回目で全面（`previewCycledFull-<scheme>.png`）・3 回目で閉じる。速さ: プレビューを開いていない打鍵の道に分岐を足さない（`accept(TogglePreview)` の中だけを変えた）。

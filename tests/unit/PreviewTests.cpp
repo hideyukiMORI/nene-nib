@@ -321,9 +321,14 @@ void verify_pane_intents()
     const EditorFrame replaced = controller.apply_frame(app::TogglePreview{});
     expect(replaced.layout == SplitLayout::horizontal && preview_of(replaced) != nullptr,
            "TogglePreview replaces the other pane with the preview");
+    // 側 → 全面 → 閉じる（施主決定 D77・ADR 0155 の追補 #1354）。
+    const EditorFrame full = controller.apply_frame(app::TogglePreview{});
+    expect(full.full_preview.has_value() && !full.other.has_value(),
+           "TogglePreview on the side pane moves the preview to full");
     const EditorFrame toggled = controller.apply_frame(app::TogglePreview{});
-    expect(toggled.layout == SplitLayout::none && !toggled.other.has_value(),
-           "TogglePreview again closes the preview");
+    expect(toggled.layout == SplitLayout::none && !toggled.other.has_value() &&
+               !toggled.full_preview.has_value(),
+           "TogglePreview in full closes the preview");
 
     Editing vim;
     open_vim_document(vim, "one\ntwo");
@@ -438,6 +443,7 @@ void verify_closed_is_quiet()
            "ticks and signals without a preview never touch the markdown port");
     applied(controller, app::TogglePreview{});
     applied(controller, app::TogglePreview{});
+    applied(controller, app::TogglePreview{});
     applied(controller, app::WorkCompleted{});
     applied(controller, app::PreviewTick{});
     expect(editing.markdown().requests().size() == 1 && editing.markdown().collects() == 1,
@@ -451,6 +457,8 @@ void verify_reopen_drops_old_ticket()
     auto &controller = editing.controller();
     applied(controller, app::VisibleLines{10});
     applied(controller, app::InsertText{"body"});
+    // 開く → 全面 → 閉じる → 開く（施主決定 D77 の巡回）。
+    applied(controller, app::TogglePreview{});
     applied(controller, app::TogglePreview{});
     applied(controller, app::TogglePreview{});
     applied(controller, app::TogglePreview{});
