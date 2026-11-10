@@ -201,6 +201,15 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
            std::holds_alternative<ScrollPane>(intent);
 }
 
+// エクスプローラーのダブルクリックの 2 打目と組む印（explorer_clicked_）を保つ意図（#1388・
+// レビュー V-1391 の R-1）。面のマウスそのもの（押しと 2 打目は accept が印を決める）と、使う人の
+// 操作ではない意図（裏の仕事の合図・窓の寸法など）だけ。鍵・タブの切り替え・ほかの押しなど、
+// 使う人の操作が間に入ったら印を捨て、次の 2 打目は画面の行を引く。
+[[nodiscard]] bool keeps_explorer_click(const EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<PointExplorer>(intent) || not_user_operation(intent);
+}
+
 // 狙いの横位置が指す所（アクティブなタブ・本文の改訂・キャレット）。合図の前後で比べる。
 using CaretAnchor = std::tuple<AutosaveId, std::size_t, core::Offset>;
 
@@ -390,10 +399,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
 {
     layout_failure_.reset();
     repaint_ = true;
-    if (!keeps_wanted_x(intent))
-    {
-        wanted_x_.reset();
-    }
+    forget_unkept_marks(intent);
     const auto anchor = caret_anchor_of(state_);
     settle_tab_walk_before(keeps_tab_walk(intent));
     // 窓の寸法と帯の上のマウスは文書に触れないので、Vim の告知を消さない（ADR 0056 の決定 3）。
@@ -447,6 +453,21 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 消去に頼らない。layout を作れない失敗は作り直しの apply で消えるまで frame に載る。
     layout_failure_ = drawing_failure(layout_failure_);
     return delivered;
+}
+
+// 写す前に、意図をまたいで覚えた印のうち、この意図が保たないものを捨てる。上下の移動の狙いの
+// 横位置（keeps_wanted_x）と、エクスプローラーのダブルクリックの 2 打目と組む節
+// （keeps_explorer_click・#1388）。
+void EditorController::forget_unkept_marks(const EditorIntent &intent)
+{
+    if (!keeps_wanted_x(intent))
+    {
+        wanted_x_.reset();
+    }
+    if (!keeps_explorer_click(intent))
+    {
+        explorer_clicked_.reset();
+    }
 }
 
 EditorFrame EditorController::apply_frame(const EditorIntent &intent)
