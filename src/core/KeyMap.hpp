@@ -17,6 +17,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace nenenib::core
@@ -53,8 +54,8 @@ map_row_of(VimModeSet modes, std::string_view lhs, std::string_view rhs, bool re
 [[nodiscard]] std::optional<VimMapMode> vim_map_mode_of(const VimState &state) noexcept;
 
 // 表を 1 鍵ぶん引く 1 本（決定 2・4）。pending は待ちの列（前の答えが Pending なら積んだ鍵・
-// Emit なら waiting）。表が空なら分岐 1 つで Pass。右辺は `map` なら 1 段だけ表で引き直し
-// （右辺が左辺で始まるならその分は引き直さない・Vim と同じ）、`noremap` は引き直さない。
+// Emit なら waiting）。表が空なら分岐 1 つで Pass。右辺は生のまま返し、1 段の引き直しは
+// 呼び手が流す時点のモードで rhs_unit_step に行わせる（KeyMapEmit.remaps・#1276）。
 [[nodiscard]] KeyMapStep key_map_step(const KeyMap &map, VimMapMode mode,
                                       std::span<const VimKey> pending, const VimKey &key);
 // 待ちの列を待たずに流す（1 秒の待ちの意図 MapTimeout・決定 4）。左辺に一致する最も長い行が
@@ -62,4 +63,11 @@ map_row_of(VimModeSet modes, std::string_view lhs, std::string_view rhs, bool re
 // 空で、ends と reads は key_map_step と同じ単位の区切り（#1257・#1266）。
 [[nodiscard]] KeyMapEmit key_map_flush(const KeyMap &map, VimMapMode mode,
                                        std::span<const VimKey> pending);
+// `map` の右辺の残り rest（KeyMapEmit.remaps から単位の終わりまで）の先頭の 1 つを、流す時点の
+// モード mode で 1 段だけ引く（Vim は右辺の鍵も読む時点の State で引く・ADR 0176 の追補 26・
+// #1276）。左辺が最も長い行が rest の中で当たればその左辺の長さと右辺（引き直さない）、当たらない
+// か mode が無い（1 鍵の引数待ち・入力行）なら 1 と rest の先頭の 1 鍵。待たない。返す右辺は表の
+// 中を指すので、呼び手は表を作り直しうる鍵を流す前に写す。
+[[nodiscard]] std::pair<std::size_t, std::span<const VimKey>>
+rhs_unit_step(const KeyMap &map, std::optional<VimMapMode> mode, std::span<const VimKey> rest);
 } // namespace nenenib::core

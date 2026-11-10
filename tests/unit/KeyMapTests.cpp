@@ -58,6 +58,7 @@
 #include <cstddef>
 #include <optional>
 #include <random>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -136,6 +137,27 @@ constexpr std::array<std::string_view, 4> alphabet_notation{"a", "b", "c", "<Esc
 {
     const auto *emit = std::get_if<KeyMapEmit>(&step);
     return emit != nullptr && emit->keys == keys && emit->waiting == waiting;
+}
+
+// 1 単位の Emit で、鍵の列が keys で、引き直しの始まりが remap か（#1276）。
+[[nodiscard]] bool remaps_from(const KeyMapStep &step, const Keys &keys, std::size_t remap)
+{
+    const auto *emit = std::get_if<KeyMapEmit>(&step);
+    return emit != nullptr && emit->keys == keys && emit->remaps == std::vector<std::size_t>{remap};
+}
+
+// 右辺の残り rest を mode のまま rhs_unit_step で頭から引き直した列（#1276）。
+[[nodiscard]] Keys rhs_looked_up(const KeyMap &map, std::optional<VimMapMode> mode, Keys rest)
+{
+    Keys flowed;
+    std::span<const VimKey> left{rest};
+    while (!left.empty())
+    {
+        const auto [count, found] = core::rhs_unit_step(map, mode, left);
+        flowed.insert(flowed.end(), found.begin(), found.end());
+        left = left.subspan(count);
+    }
+    return flowed;
 }
 
 [[nodiscard]] bool fails(std::string_view key, std::string_view value, KeyMapFailure failure)
@@ -284,6 +306,14 @@ void verify_map_modes()
     }
 }
 
+// 1 段の引き直しの表（a → b → c・q → a・noremap の x → b・左辺で始まる n → nbb）。
+[[nodiscard]] KeyMap nested_map()
+{
+    return map_of({MapRow{normal_only, "a", "b", true}, MapRow{normal_only, "b", "c", true},
+                   MapRow{normal_only, "q", "a", true}, MapRow{normal_only, "x", "b", false},
+                   MapRow{normal_only, "n", "nbb", true}});
+}
+
 void verify_steps()
 {
     expect(is_pass(core::key_map_step(KeyMap{}, VimMapMode::normal, {}, character(U'j'))),
@@ -303,21 +333,7 @@ void verify_steps()
     const auto jk = map_of({MapRow{insert_only, "jk", "<Esc>", false}});
     expect(emits(core::key_map_step(jk, VimMapMode::insert, j, character(U'j')), j, j),
            "a mismatch that starts another left side waits again");
-    const auto nested =
-        map_of({MapRow{normal_only, "a", "b", true}, MapRow{normal_only, "b", "c", true},
-                MapRow{normal_only, "q", "a", true}, MapRow{normal_only, "x", "b", false},
-                MapRow{normal_only, "n", "nbb", true}});
-    expect(emits(core::key_map_step(nested, VimMapMode::normal, {}, character(U'a')),
-                 text_keys(U"c")) &&
-               emits(core::key_map_step(nested, VimMapMode::normal, {}, character(U'q')),
-                     text_keys(U"b")),
-           "a map right side is looked up once and no deeper");
-    expect(
-        emits(core::key_map_step(nested, VimMapMode::normal, {}, character(U'x')), text_keys(U"b")),
-        "a noremap right side is not looked up");
-    expect(emits(core::key_map_step(nested, VimMapMode::normal, {}, character(U'n')),
-                 text_keys(U"ncc")),
-           "a right side that starts with its left side keeps that part");
+    const auto nested = nested_map();
     const auto shorter =
         map_of({MapRow{insert_only, "j", "a", false}, MapRow{insert_only, "jj", "b", false}});
     expect(is_pending(core::key_map_step(shorter, VimMapMode::insert, {}, character(U'j'))) &&
@@ -345,6 +361,34 @@ void verify_steps()
                  text_keys(U"e")) &&
                is_pass(core::key_map_step(op, VimMapMode::normal, {}, character(U'w'))),
            "an o map acts only while an operator waits");
+}
+
+// 右辺は生のまま返り、1 段の引き直しは rhs_unit_step が与えたモードで行う（#1276）。
+void verify_raw_right_sides()
+{
+    const auto nested = nested_map();
+    expect(remaps_from(core::key_map_step(nested, VimMapMode::normal, {}, character(U'a')),
+                       text_keys(U"b"), 0U) &&
+               remaps_from(core::key_map_step(nested, VimMapMode::normal, {}, character(U'q')),
+                           text_keys(U"a"), 0U),
+           "a map right side is emitted raw and looked up again from its start");
+    expect(remaps_from(core::key_map_step(nested, VimMapMode::normal, {}, character(U'x')),
+                       text_keys(U"b"), 1U),
+           "a noremap right side is not looked up");
+    expect(remaps_from(core::key_map_step(nested, VimMapMode::normal, {}, character(U'n')),
+                       text_keys(U"nbb"), 1U),
+           "a right side that starts with its left side keeps that part");
+    expect(rhs_looked_up(nested, VimMapMode::normal, text_keys(U"a")) == text_keys(U"b") &&
+               rhs_looked_up(nested, VimMapMode::normal, text_keys(U"bb")) == text_keys(U"cc"),
+           "a right side is looked up once and no deeper");
+    expect(rhs_looked_up(nested, VimMapMode::insert, text_keys(U"bb")) == text_keys(U"bb") &&
+               rhs_looked_up(nested, std::nullopt, text_keys(U"bb")) == text_keys(U"bb"),
+           "the lookup uses the mode given and no mode looks up nothing");
+    const auto jj = map_of({MapRow{insert_only, "jj", "<Esc>", false}});
+    const Keys rest = text_keys(U"jjk");
+    const auto three = core::rhs_unit_step(jj, VimMapMode::insert, rest);
+    expect(three.first == 2U && std::ranges::equal(three.second, Keys{escape()}),
+           "the longest left side inside the right side is replaced once");
 }
 
 [[nodiscard]] std::size_t below(Random &random, std::size_t limit)
@@ -388,7 +432,29 @@ void verify_steps()
     return keys;
 }
 
-// 鍵を 1 つずつ入口に流したときの engine に届く列（待ちは最後に 1 秒の待ちで流す）。
+// Emit の単位ごとに、引き直さない分はそのまま、引き直す分は mode のまま rhs_unit_step で 1 段
+// 引いた列（モードの変わらない流しで engine に届く鍵・#1276）。
+[[nodiscard]] Keys expanded(const KeyMap &map, VimMapMode mode, const KeyMapEmit &emit)
+{
+    Keys flowed;
+    std::size_t begin = 0;
+    for (std::size_t unit = 0; unit < emit.ends.size(); ++unit)
+    {
+        const auto remap = static_cast<std::ptrdiff_t>(emit.remaps.at(unit));
+        flowed.insert(flowed.end(), emit.keys.begin() + static_cast<std::ptrdiff_t>(begin),
+                      emit.keys.begin() + remap);
+        const auto again = rhs_looked_up(
+            map, mode,
+            Keys(emit.keys.begin() + remap,
+                 emit.keys.begin() + static_cast<std::ptrdiff_t>(emit.ends.at(unit))));
+        flowed.insert(flowed.end(), again.begin(), again.end());
+        begin = emit.ends.at(unit);
+    }
+    return flowed;
+}
+
+// 鍵を 1 つずつ入口に流したときの engine に届く列（待ちは最後に 1 秒の待ちで流す・モードは
+// 変わらないとみなす）。
 [[nodiscard]] Keys streamed(const KeyMap &map, VimMapMode mode, const Keys &input, bool &bounded)
 {
     Keys flowed;
@@ -398,7 +464,8 @@ void verify_steps()
         auto step = core::key_map_step(map, mode, pending, key);
         if (auto *emit = std::get_if<KeyMapEmit>(&step))
         {
-            flowed.insert(flowed.end(), emit->keys.begin(), emit->keys.end());
+            const auto keys = expanded(map, mode, *emit);
+            flowed.insert(flowed.end(), keys.begin(), keys.end());
             pending = std::move(emit->waiting);
         }
         if (std::holds_alternative<KeyMapPending>(step))
@@ -411,7 +478,7 @@ void verify_steps()
         }
         bounded = bounded && pending.size() < core::key_map_lhs_limit;
     }
-    const auto rest = core::key_map_flush(map, mode, pending).keys;
+    const auto rest = expanded(map, mode, core::key_map_flush(map, mode, pending));
     flowed.insert(flowed.end(), rest.begin(), rest.end());
     return flowed;
 }
@@ -435,7 +502,7 @@ void verify_steps()
     return best;
 }
 
-// noremap だけの表の素朴な置き換え（左辺の最も長い一致を先頭から右辺に替える）。
+// 素朴な置き換え（左辺の最も長い一致を先頭から右辺に替え、右辺は引き直さない）。
 [[nodiscard]] Keys replaced(const KeyMap &map, VimMapMode mode, const Keys &input)
 {
     Keys result;
@@ -451,6 +518,37 @@ void verify_steps()
         }
         result.insert(result.end(), best->rhs.begin(), best->rhs.end());
         at += best->lhs.size();
+    }
+    return result;
+}
+
+// モードが変わらないときの素朴な模型（#1276）: 左辺の最も長い一致を先頭から右辺に替え、`map` の
+// 右辺はもう 1 段だけ replaced で替える（右辺が左辺で始まるならその分は替えない）。
+[[nodiscard]] Keys replaced_once(const KeyMap &map, VimMapMode mode, const Keys &input)
+{
+    Keys result;
+    std::size_t at = 0;
+    while (at < input.size())
+    {
+        const auto *best = best_fit(map, mode, input, at);
+        if (best == nullptr)
+        {
+            result.push_back(input.at(at));
+            ++at;
+            continue;
+        }
+        at += best->lhs.size();
+        if (!best->remap)
+        {
+            result.insert(result.end(), best->rhs.begin(), best->rhs.end());
+            continue;
+        }
+        const bool keeps = best->rhs.size() >= best->lhs.size() &&
+                           std::equal(best->lhs.begin(), best->lhs.end(), best->rhs.begin());
+        const auto kept = static_cast<std::ptrdiff_t>(keeps ? best->lhs.size() : 0U);
+        result.insert(result.end(), best->rhs.begin(), best->rhs.begin() + kept);
+        const auto again = replaced(map, mode, Keys(best->rhs.begin() + kept, best->rhs.end()));
+        result.insert(result.end(), again.begin(), again.end());
     }
     return result;
 }
@@ -472,10 +570,25 @@ void verify_steps()
 
 // 単位の区切り（流す鍵の位置と読んだ鍵の位置）が同じ数で、どちらも昇順で最後が列の長さか
 // （#1257・#1266）。
+// 引き直しの始まりは同じ数で、どれも単位の中か終わり（#1276）。
 [[nodiscard]] bool whole_units(const KeyMapEmit &emitted, std::size_t read)
 {
-    return emitted.reads.size() == emitted.ends.size() &&
-           rising_to(emitted.ends, emitted.keys.size()) && rising_to(emitted.reads, read);
+    if (emitted.reads.size() != emitted.ends.size() ||
+        emitted.remaps.size() != emitted.ends.size() ||
+        !rising_to(emitted.ends, emitted.keys.size()) || !rising_to(emitted.reads, read))
+    {
+        return false;
+    }
+    std::size_t begin = 0;
+    for (std::size_t unit = 0; unit < emitted.ends.size(); ++unit)
+    {
+        if (emitted.remaps.at(unit) < begin || emitted.remaps.at(unit) > emitted.ends.at(unit))
+        {
+            return false;
+        }
+        begin = emitted.ends.at(unit);
+    }
+    return true;
 }
 
 void verify_key_map_property()
@@ -501,16 +614,18 @@ void verify_key_map_property()
         const auto input = random_keys(random);
         const auto flowed = streamed(map, mode, input, bounded);
         const auto whole = core::key_map_flush(map, mode, input);
-        agreed += flowed == whole.keys ? 1U : 0U;
+        agreed += flowed == expanded(map, mode, whole) ? 1U : 0U;
         ordered += static_cast<std::size_t>(whole_units(whole, input.size()));
-        matched += !noremap_only || flowed == replaced(map, mode, input) ? 1U : 0U;
+        // noremap だけの表では replaced_once は replaced と同じ列になる。
+        matched += flowed == replaced_once(map, mode, input) ? 1U : 0U;
     }
     expect(agreed == property_cases,
            "keys flowed one at a time equal the whole input replaced at once");
     expect(ordered == property_cases,
-           "the units rise strictly and end at the last key flowed and the last key read");
+           "the units rise strictly, end at the last key flowed and read, and remap inside");
     expect(matched == property_cases,
-           "a noremap table flows the longest left side replaced from the start");
+           "the flowed keys replace the longest left side from the start and a map right side "
+           "once more");
     expect(bounded, "the waiting keys stay shorter than the longest left side");
 }
 // ---- application の入口（#1094）----
@@ -670,10 +785,10 @@ void verify_records_and_replay()
            "press_vim_keys does not look up the table");
 }
 
-// Vim の 100 行の本文で 50G から keys を打った後のキャレットの行。
+// Vim の 100 行の本文で 50G から keys を打った後のキャレットの行と本文。
 // timeout なら最後に 1 秒の待ちを流す。
-[[nodiscard]] std::size_t hundred_lines_caret(std::vector<MapRow> rows, std::string_view keys,
-                                              bool timeout)
+[[nodiscard]] std::pair<std::size_t, std::string>
+hundred_lines_after(std::vector<MapRow> rows, std::string_view keys, bool timeout)
 {
     Editing editing(mapped_settings(std::move(rows)));
     std::string text;
@@ -690,7 +805,13 @@ void verify_records_and_replay()
     {
         static_cast<void>(controller.apply(application::MapTimeout{}));
     }
-    return controller.frame().caret.position.line.value;
+    return {controller.frame().caret.position.line.value, whole_vim_body(controller)};
+}
+
+[[nodiscard]] std::size_t hundred_lines_caret(std::vector<MapRow> rows, std::string_view keys,
+                                              bool timeout)
+{
+    return hundred_lines_after(std::move(rows), keys, timeout).first;
 }
 
 // 右辺の途中の鍵が失敗したら右辺の残りを捨て、打った鍵は流す（Vim の beep_flush の
@@ -753,6 +874,72 @@ void verify_unit_mode()
                                 MapRow{normal_only, "k", "3j", true}},
                                "x0k", false) == 53U,
            "after the argument of f the later key is looked up in NORMAL again");
+}
+
+// 右辺の中の鍵は流す時点のモードの表で 1 段だけ引き直す（Vim 9.1 の実測・100 行の本文・`50G`
+// から・`feedkeys(…, 'tx')`・`D:/NeNeNib/scripts/20261110/1276/probe.vim` の B と同じ置き場の
+// `1276-I8/probe.vim` の L C・#1276・ADR 0176 の追補 26）。
+void verify_rhs_mode()
+{
+    const MapRow visual_x{normal_only, "x", "vj", true};
+    const MapRow visual_k{visual_set, "j", "k", true};
+    expect(hundred_lines_caret({visual_x, visual_k}, "x", false) == 49U,
+           "B1: the j of a right side that entered VISUAL uses the vmap");
+    expect(hundred_lines_caret({MapRow{normal_only, "x", "vjj", true}, visual_k}, "x", false) ==
+               48U,
+           "B3: every later key of the right side uses the vmap");
+    expect(hundred_lines_caret({visual_x, MapRow{visual_set, "j", "k", false}}, "x", false) == 49U,
+           "B7: a vnoremap row is looked up the same way");
+    expect(hundred_lines_caret({visual_x, visual_k}, "xj", false) == 48U,
+           "B14: the right side and the typed key both use the vmap");
+    expect(hundred_lines_caret({MapRow{normal_only, "x", "vj", false}, visual_k}, "x", false) ==
+               51U,
+           "B2: an nnoremap right side is not looked up in VISUAL either");
+    expect(hundred_lines_caret({visual_x, MapRow{normal_only, "j", "3j", true}}, "x", false) == 51U,
+           "B6: an nmap does not apply to the right side once it is in VISUAL");
+    expect(hundred_lines_caret({MapRow{normal_only, "x", "v<Esc>j", true}, visual_k}, "x", false) ==
+               51U,
+           "B15: a right side back in NORMAL uses the nmap table again");
+    // 限界（追補 28）: 引き直した右辺はもう引かない（P3・Vim 52）。右辺の内側の引き直しは右辺の
+    // 終わりをまたいで待たない（P8b・`xj` を 1 回の typeahead で Vim 100）。
+    expect(hundred_lines_caret({visual_x, visual_k, MapRow{visual_set, "k", "2j", false}}, "x",
+                               false) == 49U,
+           "P3: the right side looked up once is not looked up again");
+    expect(hundred_lines_caret({visual_x, visual_k, MapRow{visual_set, "jj", "G", true}}, "xj",
+                               true) == 48U,
+           "P8b: the look-up inside a right side does not wait across its end");
+}
+
+// 右辺が INSERT・OPERATOR-PENDING・入力行・引数待ちに入った後の鍵（#1276・同じ実測）。
+void verify_rhs_other_modes()
+{
+    const auto inserted = hundred_lines_after(
+        {MapRow{normal_only, "x", "ij<Esc>", true}, MapRow{insert_only, "j", "Z", true}}, "x",
+        false);
+    expect(inserted.first == 50U && inserted.second.contains("\n49\nZ50\n51\n"),
+           "B8: the j of a right side that entered INSERT uses the imap");
+    const auto removed = hundred_lines_after(
+        {MapRow{normal_only, "x", "dj", true}, MapRow{pending_only, "j", "k", true}}, "x", false);
+    expect(removed.first == 49U && removed.second.contains("\n48\n51\n52\n"),
+           "B9: the motion of a right side after an operator uses the omap");
+    const auto selected = hundred_lines_after(
+        {MapRow{normal_only, "x", "vjd", true}, MapRow{visual_set, "j", "k", true}}, "x", false);
+    expect(selected.first == 49U && selected.second.contains("\n48\n0\n51\n"),
+           "C3: the operator after the vmap motion runs on the VISUAL range");
+    const auto replaced_z = hundred_lines_after({MapRow{normal_only, "x", "rZk", true},
+                                                 MapRow{normal_only, "Z", "G", true},
+                                                 MapRow{normal_only, "k", "3j", true}},
+                                                "x", false);
+    expect(replaced_z.first == 53U && replaced_z.second.contains("\n49\nZ0\n51\n"),
+           "C1: the argument of r in a right side is not looked up and the key after it is");
+    const MapRow down_5{normal_only, "5", "3j", true};
+    expect(hundred_lines_caret({MapRow{normal_only, "x", ":5<CR>", true}, down_5}, "x", false) ==
+               5U,
+           "L1a: the keys of a right side in the command line are not looked up");
+    expect(hundred_lines_caret(
+               {MapRow{normal_only, "q", ":", true}, MapRow{normal_only, "qz", "G", true}, down_5},
+               "q5<CR>", false) == 5U,
+           "L1b: the typed key after a right side that opened the command line is not looked up");
 }
 
 // 待ちの間の IME の確定は積んだ鍵を先に流し、WorkCompleted は待ちを保つ（決定 4）。
@@ -900,6 +1087,7 @@ void verify_key_map_scope()
     verify_override();
     verify_map_modes();
     verify_steps();
+    verify_raw_right_sides();
     verify_key_map_property();
     verify_insert_escape();
     verify_mismatch_and_timeout();
@@ -910,6 +1098,8 @@ void verify_key_map_scope()
     verify_records_and_replay();
     verify_failed_expansion();
     verify_unit_mode();
+    verify_rhs_mode();
+    verify_rhs_other_modes();
     verify_flush_before_intents();
     verify_walk_and_size();
     verify_ex_commands();

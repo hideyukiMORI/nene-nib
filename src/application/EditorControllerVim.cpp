@@ -424,17 +424,15 @@ EditorController::delivered_units(const core::KeyMapEmit &emitted,
                                   std::span<const core::VimKey> typed)
 {
     const auto mode = key_map_mode();
+    const std::span<const core::VimKey> keys{emitted.keys};
     std::optional<core::VimRepeatFailure> failure;
-    std::size_t at = 0;
+    std::size_t begin = 0;
     for (std::size_t unit = 0; unit < emitted.ends.size(); ++unit)
     {
-        bool failed = false;
-        for (; at < emitted.ends.at(unit) && !failed; ++at)
-        {
-            failure = deliver_vim_key(emitted.keys.at(at));
-            failed = failure.has_value();
-        }
-        at = emitted.ends.at(unit);
+        const std::size_t remap = emitted.remaps.at(unit);
+        failure = delivered_unit(keys.subspan(begin, remap - begin),
+                                 keys.subspan(remap, emitted.ends.at(unit) - remap));
+        begin = emitted.ends.at(unit);
         const auto rest = typed.subspan(emitted.reads.at(unit));
         if (!rest.empty() && key_map_mode() != mode)
         {
@@ -442,6 +440,42 @@ EditorController::delivered_units(const core::KeyMapEmit &emitted,
         }
     }
     return failure;
+}
+
+// plain はそのまま、remapped は 1 鍵ごとに流す時点のモードで 1 段だけ引き直して流す（Vim は
+// 右辺の鍵も読む時点の State で引く・ADR 0176 の追補 26・#1276）。途中の鍵が失敗したら単位の
+// 残りを捨てる（追補 19）。引いた右辺は流す前に写す（流した鍵の `:nmap` が表を作り直しうる）。
+std::optional<core::VimRepeatFailure>
+EditorController::delivered_unit(std::span<const core::VimKey> plain,
+                                 std::span<const core::VimKey> remapped)
+{
+    auto failure = delivered_keys(plain);
+    while (!failure.has_value() && !remapped.empty())
+    {
+        const auto [count, found] = core::rhs_unit_step(key_map_, key_map_mode(), remapped);
+        const auto unit = remapped.first(count);
+        remapped = remapped.subspan(count);
+        // 当たらなければ found は単位の鍵そのもの（写さない）。当たれば表の右辺なので写す。
+        failure = found.data() == unit.data()
+                      ? delivered_keys(found)
+                      : delivered_keys(std::vector<core::VimKey>(found.begin(), found.end()));
+    }
+    return failure;
+}
+
+// keys を順に流し、失敗した鍵で止めてその答えを返す。
+std::optional<core::VimRepeatFailure>
+EditorController::delivered_keys(std::span<const core::VimKey> keys)
+{
+    for (const core::VimKey &key : keys)
+    {
+        auto failure = deliver_vim_key(key);
+        if (failure.has_value())
+        {
+            return failure;
+        }
+    }
+    return std::nullopt;
 }
 
 // 表を引けないモード（1 鍵の引数待ち・入力行）の間は 1 鍵ずつそのまま流してモードを読み直し、
