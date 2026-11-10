@@ -7,6 +7,7 @@
 #include "ExplorerKey.hpp"
 #include "ExplorerKeyKind.hpp"
 #include "ExplorerLayout.hpp"
+#include "ExplorerPointer.hpp"
 #include "ExplorerPointing.hpp"
 #include "ExplorerResizing.hpp"
 #include "ExplorerView.hpp"
@@ -95,44 +96,34 @@ std::optional<std::size_t> EditorWindow::explorer_row_at(LPARAM data) const
     return view.value().first_visible + line - 1;
 }
 
-// 面の上の押し（ADR 0056 の決定 9）。押した行は controller が節の経路で覚え、面に焦点を置く。
-bool EditorWindow::press_explorer(LPARAM data)
+// 面の行の上の左ボタン（ADR 0056 の決定 9・ADR 0162 の決定 4 の改め #1388）。押しと DBLCLK は
+// 面の上の行（ルート名と行の無い所は行の外）を、離しは押した印が立っているときだけ離した点の行
+// （面の外なら行の外・controller が押した印を消す）を送る。写しは explorer_pointing_of の 1 本で、
+// クリックとダブルクリックの意味は controller が決める。面の上で受けたら真。
+bool EditorWindow::point_explorer(UINT message, LPARAM data)
 {
-    const auto row = explorer_row_at(data);
+    const auto pointing = explorer_pointing_of(message, explorer_pressed_);
+    if (!pointing.has_value())
+    {
+        return false;
+    }
+    auto row = explorer_row_at(data);
+    if (pointing.value() == application::ExplorerPointing::released)
+    {
+        explorer_pressed_ = false;
+        const auto view = controller_.explorer_view();
+        if (!view.has_value())
+        {
+            return false;
+        }
+        row = row.value_or(view.value().total);
+    }
     if (!row.has_value())
     {
         return false;
     }
-    explorer_pressed_ = true;
-    send(application::PointExplorer{row.value(), application::ExplorerPointing::pressed});
-    return true;
-}
-
-// 面の上で押した後の離し。離した点が面の外なら行の外として送る（押した印を消す）。
-void EditorWindow::release_explorer(LPARAM data)
-{
-    if (!std::exchange(explorer_pressed_, false))
-    {
-        return;
-    }
-    const auto view = controller_.explorer_view();
-    if (!view.has_value())
-    {
-        return;
-    }
-    const auto row = explorer_row_at(data).value_or(view.value().total);
-    send(application::PointExplorer{row, application::ExplorerPointing::released});
-}
-
-bool EditorWindow::double_click_explorer(LPARAM data)
-{
-    const auto row = explorer_row_at(data);
-    if (!row.has_value())
-    {
-        return false;
-    }
-    explorer_pressed_ = true;
-    send(application::PointExplorer{row.value(), application::ExplorerPointing::double_click});
+    explorer_pressed_ = explorer_pressed_after(pointing.value());
+    send(application::PointExplorer{row.value(), pointing.value()});
     return true;
 }
 

@@ -284,9 +284,7 @@ class EditorWindow final
     [[nodiscard]] bool over_explorer(LPARAM data) const;
     void press_explorer_key(WPARAM word);
     [[nodiscard]] std::optional<std::size_t> explorer_row_at(LPARAM data) const;
-    [[nodiscard]] bool press_explorer(LPARAM data);
-    void release_explorer(LPARAM data);
-    [[nodiscard]] bool double_click_explorer(LPARAM data);
+    [[nodiscard]] bool point_explorer(UINT message, LPARAM data);
     // 面と本文の境のドラッグ（ADR 0162 の追補 D78）。押す・動かす・離す・捕まえを失う・ダブル
     // クリック・カーソル。
     [[nodiscard]] bool explorer_divider_at(std::int32_t x, std::int32_t y) const;
