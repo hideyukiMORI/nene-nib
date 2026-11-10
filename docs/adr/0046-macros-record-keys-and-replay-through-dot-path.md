@@ -47,3 +47,7 @@ Nib の今の形: `.` の記録 `VimRepeatRecord { count; keys: vector<VimKey>; 
 | マクロを `VimRegister`（本文の型）に文字列で入れる | 鍵列 → 文字列 → 鍵列の写しが今は無く、`"ap` も無い。統合は名前つきテキストレジスタの ADR で |
 | `q` を含む鍵列を oracle で fixture にする | `:normal!` の中で録画は動かず、黙って間違った期待値になる（probe 3 節） |
 | 再帰の上限を Vim と同じ 1000 に | 1 鍵ずつ `accept` に流す入れ子が 1000 段は深すぎる。100 で再帰マクロの慣用（終端は失敗）に足りる |
+
+## 追補（2026-11-10・#1312）
+
+決定 2 の「鍵が打たれたものか再生かは `VimEditorView.source`（`VimKeySource`）で engine に伝える」は、値が `typed` `mapped` `replayed` の 3 つになった（`mapped` は `map` の表に当たった右辺の鍵・`q` が効き、`.` の記録には載り、マクロには積まない）。録画に積むのは `typed` だけで、表に当たった単位は controller が打った左辺を同じ書き手 `vim_macro_typed` で積む（Vim の「録るのは打った鍵だけ」と同じ）。決定 3 の「`@` は `.` と同じ `VimReplay` の効果で controller が 1 鍵ずつ流す」は、`VimReplay.kind` が `macro` の鍵を流す時点の `map` の表で引く（`.` は引かない）。詳しくは [ADR 0176](0176-vim-map-is-a-settings-row-applied-by-one-key-table-at-the-window-entry.md) の追補 32〜35。

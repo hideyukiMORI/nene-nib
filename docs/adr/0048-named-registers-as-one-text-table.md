@@ -67,3 +67,7 @@ Nib の今の形: 無名レジスタ `VimRegister { text; kind; width }` は eng
 | 特殊鍵を私用領域（U+E000〜）に置く | 描画が Vim と違う（`<80>kl` に見えない）。得るものが無い |
 | 特殊鍵を含む録画を `refused` にする | INSERT の中の矢印・Home / End（ADR 0028）が普通の打鍵なので、それを含むマクロが録れなくなる |
 | `<NL>` を足さず `"ayy@a` の末尾の改行を無視する | Vim と着地が 1 行ずれる（実測）。`<NL>` `<CR>` `+` `-` は表に 4 行足すだけ |
+
+## 追補（2026-11-10・#1312）
+
+決定 8 の「再生は窓の鍵と同じ口を通る」のうち、`@a`（`"ayy` から作った本文の `@a` も）の鍵は、口の手前で流す時点の `map` の表で引く（Vim の `do_execreg` は `REMAP_YES`）。`.` と fixture の harness（`press_vim_keys`）は引かない。詳しくは [ADR 0176](0176-vim-map-is-a-settings-row-applied-by-one-key-table-at-the-window-entry.md) の追補 32〜35。

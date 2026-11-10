@@ -2065,7 +2065,7 @@ namespace
     {
         return step;
     }
-    const bool redoing = state.redoing_visual && view.source == VimKeySource::replayed;
+    const bool redoing = state.redoing_visual && vim_key_replayed(view.source);
     if (is_visual_mode(step.next.mode))
     {
         step.next.redoing_visual = redoing;

@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -128,7 +129,7 @@ namespace detail
 // 実行中は q は無効」）。録画中なら止め、そうでなければ名前を待つ。
 [[nodiscard]] VimStep macro_record_action(const VimState &state, const VimEditorView &view)
 {
-    if (view.source == VimKeySource::replayed)
+    if (vim_key_replayed(view.source))
     {
         return VimStep{finished_input_wait(state), VimNoEffect{}};
     }
@@ -207,7 +208,8 @@ namespace detail
     {
         replayed.insert(replayed.end(), keys.begin(), keys.end());
     }
-    return VimStep{std::move(next), VimReplay{std::move(replayed), std::nullopt}};
+    return VimStep{std::move(next),
+                   VimReplay{std::move(replayed), std::nullopt, VimReplayKind::macro}};
 }
 } // namespace detail
 
@@ -312,7 +314,8 @@ namespace
     next.replayed_block = replayed_extent(extent);
     next.redoing_visual = true;
     next.recording = VimRepeatRecord{std::nullopt, VimRecordedKeys::from({}), extent};
-    return VimStep{std::move(next), VimReplay{numbered_advanced(record.keys.owned_keys()), extent}};
+    return VimStep{std::move(next), VimReplay{numbered_advanced(record.keys.owned_keys()), extent,
+                                              VimReplayKind::repeat}};
 }
 } // namespace
 
@@ -331,9 +334,9 @@ namespace detail
         return replayed_visual(state, record, record.visual.value());
     }
     const std::optional<VimCount> count = state.count.has_value() ? state.count : record.count;
-    return VimStep{
-        vim_resting_from(state, state.unnamed_register),
-        VimReplay{replayed_keys(count, numbered_advanced(record.keys.owned_keys())), std::nullopt}};
+    return VimStep{vim_resting_from(state, state.unnamed_register),
+                   VimReplay{replayed_keys(count, numbered_advanced(record.keys.owned_keys())),
+                             std::nullopt, VimReplayKind::repeat}};
 }
 } // namespace detail
 
@@ -771,23 +774,38 @@ namespace detail
 
 // ------------------------------------------ マクロの録画（ADR 0046 の決定 2）
 
-// 録画中は vim_step に届いた鍵をそのまま積む。積まないのは、録画を始める鍵と止める `q`
-// （どちらも step の前後で録画が立っていない）、再生の中の鍵（打った鍵ではない）、入力行を
+// 録画中は vim_step に届いた打った鍵をそのまま積む。積まないのは、録画を始める鍵と止める `q`
+// （どちらも step の前後で録画が立っていない）、再生の中の鍵と `map` の右辺の鍵（打った鍵では
+// ない・右辺の代わりに controller が打った左辺を vim_macro_typed で積む・#1312）、入力行を
 // 開くだけの `/` `?` `:`（確定した検索は VimSearchPattern の 1 鍵として積まれる・Ex は後続）。
 // 録画は実行の経路を変えない。
 [[nodiscard]] VimStep macro_recorded(const VimState &before, const VimEditorView &view,
                                      VimStep step, VimKey key)
 {
-    if (view.source == VimKeySource::replayed || !before.macro_recording.has_value() ||
+    if (!vim_key_recorded_in_macro(view.source) || !before.macro_recording.has_value() ||
         !step.next.macro_recording.has_value() ||
         std::holds_alternative<VimOpenSearch>(step.effect) ||
         std::holds_alternative<VimOpenCommandLine>(step.effect))
     {
         return step;
     }
-    auto &recording = step.next.macro_recording.value();
-    recording.keys = recording.keys.appended(replayable(std::move(key)));
+    step.next = vim_macro_typed(std::move(step.next), std::span<const VimKey>{&key, 1U});
     return step;
 }
 } // namespace detail
+
+// 録画の書き手の 1 本（engine の macro_recorded と controller の打った左辺が通る・#1312）。
+VimState vim_macro_typed(VimState state, std::span<const VimKey> keys)
+{
+    if (!state.macro_recording.has_value())
+    {
+        return state;
+    }
+    auto &recording = state.macro_recording.value();
+    for (const VimKey &key : keys)
+    {
+        recording.keys = recording.keys.appended(replayable(key));
+    }
+    return state;
+}
 } // namespace nenenib::core
