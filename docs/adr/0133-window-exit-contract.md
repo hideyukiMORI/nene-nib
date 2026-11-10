@@ -112,10 +112,12 @@ hide の実機（Windows 11 Pro 26300・日本語・試用 exe `NeNeNib-main-b40
 
 ### 決定
 
-1. **閉じる手順は ui/win32 の純関数 `closing_steps(ClosingRoute)` の列で、`EditorWindow::close_through` が 1 段ずつ写す。** `window_closes`（`leave`: ×・Alt+F4・最後のタブ・描画を失った終わり）は「隠す（`ShowWindow(SW_HIDE)`）→ 一覧・履歴・自動退避を書く（`EndSession`）→ OS の終了を止める理由を外す → 壊す」、`session_ends`（`WM_ENDSESSION` の確定）は「隠す → 書く」で窓を壊さない（ADR 0059 の決定 3）。`destroy_window` の段を持つのは `window_closes` だけで、それを渡すのは `leave` だけ（決定 1 の「本窓を壊すのは `leave` の 1 か所」は変えない。`DestroyWindow` の字面は `close_step` の 1 か所）。
+1. **閉じる手順は ui/win32 の純関数 `closing_steps(ClosingRoute)` の列で、列を順に段へ渡す口は `run_closing_steps` の 1 本。** `EditorWindow::close_through`（`leave` と `WM_ENDSESSION` が呼ぶ）がそれに `close_step` を渡す。`window_closes`（`leave`: ×・Alt+F4・最後のタブ・描画を失った終わり）は「IME の変換を取り消す → 隠す（`ShowWindow(SW_HIDE)`）→ 一覧・履歴・自動退避を書く（`EndSession`）→ OS の終了を止める理由を外す → 壊す」。`session_ends`（`WM_ENDSESSION` の確定）は「書く」の 1 段だけで、隠さず壊さない（ADR 0059 の決定 3）。`destroy_window` の段を持つのは `window_closes` だけで、それを渡すのは `leave` だけ（決定 1 の「本窓を壊すのは `leave` の 1 か所」は変えない。`DestroyWindow` の字面は `close_step` の 1 か所）。
+   **`WM_ENDSESSION` では隠さない理由**: Microsoft Learn「Shutdown Changes for Windows Vista」の表（Canceling shutdown の行）に "the system does not allow console applications or applications without a visible window to cancel shutdown. These applications are automatically terminated if they do not respond to WM_QUERYENDSESSION or WM_ENDSESSION within 5 seconds" とある。見える窓のアプリは 5 秒の後に終了の画面に載り、使う人が「続ける / 取り消す」を選ぶまで待たれる。隠すと Nib は見える窓の無いアプリになり、強行の終わりの退避の flush（ADR 0137 の決定 9）・一覧・履歴に使える時間が 5 秒に縮む。その間の画面は OS の終了の画面に替わっていて、隠しても使う人に得は無い。
 2. **隠すのは未保存の確認を通り抜けた後。** 確認（`end_window` の `exit_plan`・最後のタブの `close_tab`）はこの列の前で、取り消せば列に入らず窓は見えたまま。`exit_plan` と `SessionEnd` は変えない。
-3. **OS の終了を止める理由は書き終えてから外す**（今日と同じ順）。書いている間に OS が終了を進めても、理由が残っていれば止まる。
+3. **OS の終了を止める理由は書き終えてから外す**（今日と同じ順）。ただし隠した後の窓は OS から見て見える窓の無いアプリで、理由が残っていても終了を止められず、5 秒で答えなければ終わらされる（限界へ）。
 4. **書き込みの中身・順・失敗の扱いは変えない**（ADR 0059 / 0060 / 0137）。`remember_session` は今日どおり結果を捨て、隠した後に失敗しても知らせる相手はいない（今日も窓を壊す直前で何も出していない）。
+5. **隠す前に IME の変換を取り消す**（`cancel_composition` の段: `ImmNotifyIME(CPS_CANCEL)` と意図 `CancelComposition`）。`SW_HIDE` は同期で `WM_KILLFOCUS` を送り、IME は焦点を失うと変換を確定することがある。確定は `CommitText` で本文に入るので、取り消さないと未保存の確認を通り抜けた後に未保存が生まれる（`unsaved_discarded` は隠す前に決めた値のまま・退避が残り次の起動で問われる）。前は確定が窓を壊すとき（書いた後）に来て黙って消えていたので、取り消しは使う人に見える結果を前と同じにする。`WM_KILLFOCUS` のほかの 2 つ（`end_selection_drag` と Ctrl+Tab の歩きの確定 `SettleRecentTab`）は本文を動かさない。歩きの確定は書く前に走るので、一覧の「見ていたタブ」は歩いて着いたタブになる。
 
 ### 却下した選択肢
 
@@ -125,8 +127,13 @@ hide の実機（Windows 11 Pro 26300・日本語・試用 exe `NeNeNib-main-b40
 
 ### 検証
 
-`nib_window_tests --closing`（2 つの道の列・隠すのが書き込みより前・止める理由は書いた後・壊すのは `window_closes` の最後の 1 回だけ・`session_ends` は壊さない・閉じる確認のキャンセルは `stay` で列に入らない）。前後の数字（同じ測り方・Release）: `WM_CLOSE` から窓が見えなくなるまで 空 567 → 2.6 ms・長い 540 → 2.6 ms（中央値・最大 12,444 → 2.7 ms）。process が終わるまでは書き込みの揺れが支配し（同じ条件で交互に測った空の 10 回: 前 532 / 後 404 ms の中央値）、隠す段そのものは約 10 ms。
+`nib_window_tests --closing`（2 つの道の列・変換の取り消しが隠すより前・隠すのが書き込みより前・止める理由は書いた後・壊すのは `window_closes` の最後の 1 回だけ・`session_ends` は書くだけで隠さず壊さない・`run_closing_steps` に替え玉を渡して列のとおりに 1 回ずつ呼ぶこと・閉じる確認のキャンセルは `stay` で列に入らない）。前後の数字（同じ測り方・Release）: `WM_CLOSE` から窓が見えなくなるまで 空 567 → 2.6 ms・長い 540 → 2.6 ms（中央値・最大 12,444 → 2.7 ms）。process が終わるまでは書き込みの揺れが支配し（同じ条件で交互に測った空の 10 回: 前 532 / 後 404 ms の中央値）、隠す段そのものは約 10 ms。
 
 ### 限界
 
-隠した後も書き込みが終わるまで process は残る（別の席のビルドで HDD が混んだ回は一覧の書き込みが 16〜19 秒、3 回は 60 秒で打ち切った）。その間に使う人が Nib を起動し直すと、新しい窓は書き終わる前の一覧（前回のもの）を読む。今日も窓が見えたまま同じだけ待っていたので、失うものは増えないが、待ちが目に見えなくなる。書き込み自体の遅さは #424 の領域。
+- 隠した後も書き込みが終わるまで process は残る（別の席のビルドで HDD が混んだ回は一覧の書き込みが 16〜19 秒、3 回は 60 秒で打ち切った）。待ちが目に見えなくなるので、使う人が気づかずに起動し直す形が増える。
+  - (i) 前の Nib（A）が隠れて書いている間に引数なしで起動した Nib（B）は、A の前の一覧を読む。B を閉じれば B が後勝ちで書くので、A の一覧は残らない（開いていたファイルは `history.v1` から Ctrl+P の `@` で戻せる）。
+  - (ii) A の書き込みが長く、その間に B を開いて閉じると、A の改名が後に着いて B の一覧を上書きする。`history.v1` も lock の無い「読む → 足す → 書く」なので片方の追記を失い得る（ADR 0059 の決定 2 / 0060 の決定 8 の後勝ちと同じ種類）。
+  - 逆に、前は書き込みが 5 秒を超えると窓が「応答なし」になり、使う人が殺すと書き込みを失った。隠せばこれは起きない。差し引きで大きくは悪くならないが、「失うものは増えない」とは言えない。後続（#1347）: 前の Nib が書き終わるのを新しい Nib が起動で上限つきで待つ（今は単一起動の確かめが無い・`CreateMutex` / `FindWindow` は 0 件）。書き込み自体の遅さは #424 の領域。
+- 窓を閉じた直後に Windows を終了し、隠れた Nib の書き込みが 5 秒を超えると、OS が Nib を終わらせ一覧と履歴の残りを失う（原子的な改名なので古い版が残るだけで、壊れはしない）。前は「応答なし」の窓が終了の画面に載り、待てた。普段の 0.5 秒では起きない。`WM_ENDSESSION` の道は隠さないので、Nib が開いたまま OS の終了が来た場合は前と同じ。
+- 変換の取り消しは IMM32 の `CPS_CANCEL` に頼る。IME が取り消しを無視して焦点を失うときに確定する形は試験で確かめていない（試用の手順: 変換中に × で閉じ、次の起動で「前回の未保存の編集」が問われないこと）。

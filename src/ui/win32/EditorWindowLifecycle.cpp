@@ -346,7 +346,8 @@ LRESULT EditorWindow::lifetime_message(UINT message, WPARAM word, LPARAM data)
         if (word != FALSE)
         {
             // 確かめずに閉じるので、捨てた印は立てない（未保存の退避は残る・ADR 0137 の決定 5）。
-            // leave と同じく先に窓を隠してから書く（ADR 0133 の追補 #1340）。
+            // 窓は隠さない。見える窓の無いアプリは 5 秒で OS に終わらされ、書く時間が縮む
+            // （ADR 0133 の追補 #1340）。
             close_through(ClosingRoute::session_ends,
                           application::EndSession{application::SessionEnd::window_closed});
         }
@@ -499,16 +500,19 @@ void EditorWindow::leave(application::SessionEnd reason)
 
 void EditorWindow::close_through(ClosingRoute route, const application::EndSession &intent)
 {
-    for (const ClosingStep step : closing_steps(route))
-    {
-        close_step(step, intent);
-    }
+    run_closing_steps(route, [this, &intent](ClosingStep step) { close_step(step, intent); });
 }
 
 void EditorWindow::close_step(ClosingStep step, const application::EndSession &intent)
 {
     switch (step)
     {
+    case ClosingStep::cancel_composition:
+        // 隠すと届く WM_KILLFOCUS で IME が変換を確定すると、確認を通り抜けた本文に CommitText が
+        // 入って未保存が生まれる。IME の側の変換を捨て、写しも消してから隠す。
+        cancel_ime_composition();
+        end_composition();
+        return;
     case ClosingStep::hide_window:
         // 書き込みを待つ間に窓とタスクバーのボタンを残さない。子の覆い窓も一緒に消える。
         ShowWindow(window_, SW_HIDE);
