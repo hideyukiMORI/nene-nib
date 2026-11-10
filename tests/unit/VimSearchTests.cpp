@@ -846,6 +846,13 @@ void verify_vim_find_match()
                  false, "a backward count of two moves twice");
     expect_match(match_found("solo word", "solo", {at_position(1, 1), forward, 2}),
                  at_position(1, 1), true, "a count keeps wrapping back to the only match");
+    // 巨大な回数は折り返しの繰り返しを飛ばして、同じ当たりへ着く（Issue #1334・固まらない）。
+    expect_match(match_found(body, "beta", {at_position(1, 1), forward, 999999999}),
+                 at_position(3, 7), true, "a count of 999999999 lands on its match in the cycle");
+    expect_match(match_found(body, "beta", {at_position(3, 7), backward, 999999998}),
+                 at_position(1, 7), true, "a huge backward count lands on its match in the cycle");
+    expect_match(match_found("solo word", "solo", {at_position(1, 1), forward, 999999999}),
+                 at_position(1, 1), true, "a huge count on the only match stays on it");
     expect_match(match_found(kana, "\xe3\x81\x8b", {at_position(1, 1), forward, 1}),
                  at_position(1, 4), false, "the column counts characters, not bytes");
     expect_match(match_found(kana, "\xe6\xbc\xa2", {at_position(1, 4), forward, 1}),

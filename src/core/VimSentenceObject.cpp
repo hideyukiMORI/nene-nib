@@ -13,6 +13,7 @@
 #include "VimTextObjectSpan.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -444,14 +445,29 @@ using Units = std::pair<std::size_t, bool>;
     return sentence_walk(text, at, forward).first;
 }
 
+// 周の始めの位置が 2 周前（同じ向きの印）と同じなら、残りの周は 2 周の繰り返しなので、残りを
+// 同じ偶奇の 1 か 2 に縮める。周の中身は位置と印だけで決まり、最後の周だけが違う。本文の端に
+// 着いた後の巨大な回数の `is` `as` を空回りしない（Vim の findsent_forward
+// は回数ぶん回る・#1334）。
+[[nodiscard]] std::size_t shortened_left(std::array<std::optional<Offset>, 2> &seen, Offset here,
+                                         bool starts, std::size_t left)
+{
+    std::optional<Offset> &last = seen.at(starts ? 1U : 0U);
+    const bool repeats = last.has_value() && last.value() == here;
+    last = here;
+    return repeats ? 1U + ((left - 1U) % 2U) : left;
+}
+
 // Vim の findsent_forward。文の先頭から、並びの数だけ前へ。
 [[nodiscard]] Offset sentences_forward(const TextBuffer &text, Offset at, std::size_t count,
                                        bool at_start)
 {
     Offset here = at;
     bool starts = at_start;
+    std::array<std::optional<Offset>, 2> seen{};
     for (std::size_t left = count; left > 0; --left)
     {
+        left = shortened_left(seen, here, starts, left);
         here = sentence_start(text, here, true);
         if (starts)
         {
@@ -487,8 +503,10 @@ using Units = std::pair<std::size_t, bool>;
 {
     Offset cursor = at;
     bool starts = at_start;
+    std::array<std::optional<Offset>, 2> seen{};
     for (std::size_t left = units.first; left > 0; --left)
     {
+        left = shortened_left(seen, cursor, starts, left);
         cursor = starts ? first_blank(text, cursor) : cursor;
         if (!starts || (!units.second && !blank(code_at(text, cursor))))
         {
@@ -620,6 +638,40 @@ using Units = std::pair<std::size_t, bool>;
     return VimMotionRange{OffsetRange{span.anchor, text.line_end(last)},
                           VimRegisterKind::characters};
 }
+
+// 端で尽きた周の位置。最後の周なら成功（Vim の findsent の break）、残りがあれば失敗（FAIL）。
+[[nodiscard]] std::optional<Offset> kept_if_last(Offset at, bool last)
+{
+    return last ? std::optional<Offset>{at} : std::nullopt;
+}
+
+// 移動の回数 1 つぶん（Vim の findsent の while の 1 周）。動かなかったら 1 文字進めて同じ周を
+// やり直し、進めなければ残りの回数があれば失敗（textobject.c の EQUAL_POS(prev_pos, pos) の
+// 枝）。周は位置が進むか失敗で抜けるので、本文の端に着いた後の回数を空回りしない（巨大な回数で
+// 固まらない・#1334）。last は最後の周か。
+[[nodiscard]] std::optional<Offset> sentence_turn(const TextBuffer &text, Offset at, bool forward,
+                                                  bool last)
+{
+    Offset here = at;
+    for (;;)
+    {
+        const Advance walked = sentence_walk(text, here, forward);
+        if (!walked.second)
+        {
+            return kept_if_last(walked.first, last);
+        }
+        if (!(walked.first == here))
+        {
+            return walked.first;
+        }
+        const Advance stepped = stepped_toward(text, here, forward);
+        if (!stepped.second)
+        {
+            return kept_if_last(stepped.first, last);
+        }
+        here = stepped.first;
+    }
+}
 } // namespace
 
 std::optional<Offset> vim_sentence_motion(const TextBuffer &text, Offset caret, bool forward,
@@ -628,12 +680,12 @@ std::optional<Offset> vim_sentence_motion(const TextBuffer &text, Offset caret, 
     Offset here = caret;
     for (std::size_t left = count; left > 0; --left)
     {
-        const Advance walked = sentence_walk(text, here, forward);
-        if (!walked.second && left > 1)
+        const auto turned = sentence_turn(text, here, forward, left == 1);
+        if (!turned.has_value())
         {
             return std::nullopt;
         }
-        here = walked.first;
+        here = turned.value();
     }
     return here;
 }

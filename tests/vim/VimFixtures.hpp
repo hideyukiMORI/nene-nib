@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 83c9b933aa58db70d5ea3630073cfc848f8d6acbfa5e5cef87ed0c08aac33f02 / 3641 fixtures
+// fixtures.json: sha256 db18f3150707e1fcbd3f594efe9b8a944a1a4c71d7bdc55bd4a603d667212113 / 3667 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3641> vim_fixtures{{
+constexpr std::array<VimFixture, 3667> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3653,6 +3653,32 @@ constexpr std::array<VimFixture, 3641> vim_fixtures{{
     {"sentence-motion-closers", "He said \"Hi.\"  Then (left.) Gone!\n  Indented. More", "2)", "He said \"Hi.\"  Then (left.) Gone!\n  Indented. More", 1, 29, "", "", std::nullopt},
     {"sentence-motion-d-indent", "He said \"Hi.\"  Then (left.) Gone!\n  Indented. More", "jd)", "He said \"Hi.\"  Then (left.) Gone!\nIndented. More", 2, 1, "  ", "v", std::nullopt},
     {"sentence-motion-d-backward-across-lines", "He said \"Hi.\"  Then (left.) Gone!\n  Indented. More", "jwd(", "He said \"Hi.\"  Then (left.) Indented. More", 1, 29, "Gone!\n  ", "v", std::nullopt},
+    {"sentence-motion-count-past-end-two-sentences", "One. Two.", "4)", "One. Two.", 1, 1, "", "", std::nullopt},
+    {"sentence-motion-count-past-end-d", "One. Two.", "d4)", "One. Two.", 1, 1, "", "", std::nullopt},
+    {"sentence-motion-count-past-end-visual-d", "One. Two.", "v4)d", "One. Two.", 1, 1, "", "", std::nullopt},
+    {"sentence-motion-count-past-end-one-sentence-x", "One.", "3)x", "One.", 1, 1, "", "", std::nullopt},
+    {"sentence-motion-count-past-end-closing-quote", "Say \"Hi.\"", "3)", "Say \"Hi.\"", 1, 1, "", "", std::nullopt},
+    {"sentence-motion-count-past-end-empty-buffer", "", "2)ix<Esc>", "", 1, 1, "", "", std::nullopt},
+    {"sentence-motion-count-past-end-paragraphs", "One two. Three four! Five?\nSix seven.\n\nEight. Nine.", "9)", "One two. Three four! Five?\nSix seven.\n\nEight. Nine.", 1, 1, "", "", std::nullopt},
+    {"sentence-motion-count-past-end-paragraphs-y", "One two. Three four! Five?\nSix seven.\n\nEight. Nine.", "y9)", "One two. Three four! Five?\nSix seven.\n\nEight. Nine.", 1, 1, "", "", std::nullopt},
+    {"sentence-motion-count-past-end-paragraphs-last-turn", "One two. Three four! Five?\nSix seven.\n\nEight. Nine.", "8)", "One two. Three four! Five?\nSix seven.\n\nEight. Nine.", 4, 12, "", "", std::nullopt},
+    {"sentence-motion-count-past-end-backward", "One two. Three four! Five?\nSix seven.\n\nEight. Nine.", "G$8(", "One two. Three four! Five?\nSix seven.\n\nEight. Nine.", 4, 12, "", "", std::nullopt},
+    {"sentence-motion-count-past-end-huge-forward", "One. Two.", "999999999)x", "One. Two.", 1, 1, "", "", std::nullopt},
+    {"sentence-motion-count-past-end-huge-backward", "One. Two.", "$999999999(x", "One. Two.", 1, 9, "", "", std::nullopt},
+    {"sentence-motion-count-past-end-huge-paragraph-forward", "One two. Three four! Five?\nSix seven.\n\nEight. Nine.", "999999999}x", "One two. Three four! Five?\nSix seven.\n\nEight. Nine.", 1, 1, "", "", std::nullopt},
+    {"sentence-motion-count-past-end-huge-paragraph-backward", "One two. Three four! Five?\nSix seven.\n\nEight. Nine.", "G999999999{x", "One two. Three four! Five?\nSix seven.\n\nEight. Nine.", 4, 1, "", "", std::nullopt},
+    {"count-repeat-1334-is", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", "d41is", "", 1, 1, "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here\n", "V", std::nullopt},
+    {"count-repeat-1334-as", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", "d41as", "", 1, 1, "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here\n", "V", std::nullopt},
+    {"count-repeat-1334-visual-is", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", "v41isd", "", 1, 1, "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", "v", std::nullopt},
+    {"count-repeat-1334-visual-as", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", "v41asd", "", 1, 1, "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", "v", std::nullopt},
+    {"count-repeat-1334-visual-is-backward", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", "G$v41isd", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\n", 5, 1, "last line here", "v", std::nullopt},
+    {"count-repeat-1334-visual-as-backward", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", "G$v41asd", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\n", 5, 1, "last line here", "v", std::nullopt},
+    {"count-repeat-1334-is-short", "ab. cd.  ef\n\ngh ij. kl", "d7is", "gh ij. kl", 1, 1, "ab. cd.  ef\n\n", "V", std::nullopt},
+    {"count-repeat-1334-visual-as-short", "ab. cd.  ef\n\ngh ij. kl", "jjv5asd", "ab. cd.  ef\n\n", 3, 1, "gh ij. kl", "v", std::nullopt},
+    {"count-repeat-1334-n", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", "/e<CR>20n", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", 5, 12, "", "", std::nullopt},
+    {"count-repeat-1334-N", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", "/e<CR>21N", "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here", 1, 13, "", "", std::nullopt},
+    {"count-repeat-1334-star", "one x one y one\nz one", "9*", "one x one y one\nz one", 1, 7, "", "", std::nullopt},
+    {"count-repeat-1334-hash", "one x one y one\nz one", "w10#", "one x one y one\nz one", 1, 5, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

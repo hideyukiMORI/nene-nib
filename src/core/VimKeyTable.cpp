@@ -46,7 +46,7 @@ constexpr char32_t tab_character = 0x09;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 77> normal_bindings{
+constexpr std::array<VimBinding, 79> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {line_feed, VimAction::move_down},
@@ -123,7 +123,9 @@ constexpr std::array<VimBinding, 77> normal_bindings{
      {U'{', VimAction::move_paragraph_backward},
      {U'}', VimAction::move_paragraph_forward},
      {U'(', VimAction::move_sentence_backward},
-     {U')', VimAction::move_sentence_forward}}};
+     {U')', VimAction::move_sentence_forward},
+     {U'[', VimAction::prefix_bracket},
+     {U']', VimAction::prefix_bracket}}};
 
 // 動作 → 大分類の表（CPP-012 / ADR 0006）。NORMAL と VISUAL の写し先はこの分類で分かれる。
 // 行の欠落と重複は下の static_assert で落ちる（動作を足したら、この表に行を足すまで通らない）。
@@ -253,7 +255,8 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::move_paragraph_backward, VimActionGroup::motion},
      {VimAction::move_paragraph_forward, VimActionGroup::motion},
      {VimAction::move_sentence_backward, VimActionGroup::motion},
-     {VimAction::move_sentence_forward, VimActionGroup::motion}}};
+     {VimAction::move_sentence_forward, VimActionGroup::motion},
+     {VimAction::prefix_bracket, VimActionGroup::input_wait}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 41> motion_bindings{
