@@ -15,6 +15,7 @@
 #include <limits>
 #include <new>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -189,6 +190,43 @@ void received_text(MarkdownBuilder &builder, MD_TEXTTYPE type, std::string_view 
     }
 }
 
+// md4c の属性（画像の src と title）の文字列。substr の型は NORMAL・ENTITY・NULLCHAR だけ（md4c.h
+// の MD_ATTRIBUTE）で、本文の text と同じく ENTITY は表で解き、NULLCHAR は U+FFFD にする。ほかの型
+// は来ないが、来たら綴りのまま。
+[[nodiscard]] std::string attribute_text(const MD_ATTRIBUTE &attribute)
+{
+    std::string text;
+    if (attribute.text == nullptr || attribute.size == 0U)
+    {
+        return text;
+    }
+    const std::string_view whole(attribute.text, attribute.size);
+    for (std::size_t index = 0; attribute.substr_offsets[index] < attribute.size; ++index)
+    {
+        const MD_OFFSET begin = attribute.substr_offsets[index];
+        const MD_OFFSET end = attribute.substr_offsets[index + 1U];
+        const std::string_view piece = whole.substr(begin, end - begin);
+        switch (attribute.substr_types[index])
+        {
+        case MD_TEXT_ENTITY:
+            text.append(markdown_entity_text(piece));
+            break;
+        case MD_TEXT_NULLCHAR:
+            text.append(replacement_character);
+            break;
+        case MD_TEXT_NORMAL:
+        case MD_TEXT_BR:
+        case MD_TEXT_SOFTBR:
+        case MD_TEXT_CODE:
+        case MD_TEXT_HTML:
+        case MD_TEXT_LATEXMATH:
+            text.append(piece);
+            break;
+        }
+    }
+    return text;
+}
+
 // 述語に問い、続けるなら step を行う。コールバックか述語が投げた bad_alloc はここで受けて印を立て、
 // 打ち切りの値を返す。例外は md4c の C のフレームを通らず、md4c は自分の確保を解放して戻る（#817・
 // ARC-010）。/EHsc は extern "C" の md_parse を投げないものとして扱うので、
@@ -225,10 +263,23 @@ int on_leave_block(MD_BLOCKTYPE type, void * /*detail*/, void *userdata)
     return guarded(builder, [&] { left_block(builder, type); });
 }
 
-int on_enter_span(MD_SPANTYPE type, void * /*detail*/, void *userdata)
+// 画像の節は参照先と題を写して覚える（ADR 0155 の追補 47）。属性の文字列は md4c の一時の領域を指す
+// ので、コールバックの中で std::string に写す。
+void entered_span(MarkdownBuilder &builder, MD_SPANTYPE type, const void *detail)
+{
+    if (type != MD_SPAN_IMG)
+    {
+        builder.enter_span(span_style(type));
+        return;
+    }
+    const auto *image = static_cast<const MD_SPAN_IMG_DETAIL *>(detail);
+    builder.enter_image(attribute_text(image->src), attribute_text(image->title));
+}
+
+int on_enter_span(MD_SPANTYPE type, void *detail, void *userdata)
 {
     auto &builder = builder_of(userdata);
-    return guarded(builder, [&] { builder.enter_span(span_style(type)); });
+    return guarded(builder, [&] { entered_span(builder, type, detail); });
 }
 
 int on_leave_span(MD_SPANTYPE /*type*/, void * /*detail*/, void *userdata)

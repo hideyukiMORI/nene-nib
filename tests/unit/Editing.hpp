@@ -16,6 +16,7 @@
 #include "ScriptedFolders.hpp"
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
+#include "ScriptedImages.hpp"
 #include "ScriptedLanguageServer.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPrinter.hpp"
@@ -46,7 +47,8 @@ class Editing final
               appearance_,   clipboard_,       files_,      code_pages_, settings_,
               themes_,       session_,         history_,    folders_,    bookmarks_,
               text_layouts_, autosave_,        fonts_,      bell_,       markdown_,
-              reads_,        language_server_, wall_clock_, printer_,    shell_registration_})
+              reads_,        language_server_, wall_clock_, printer_,    shell_registration_,
+              images_})
     {
     }
 
@@ -154,6 +156,11 @@ class Editing final
         return wall_clock_;
     }
 
+    [[nodiscard]] ScriptedImages &images() noexcept
+    {
+        return images_;
+    }
+
     [[nodiscard]] ScriptedPrinter &printer() noexcept
     {
         return printer_;
@@ -179,7 +186,8 @@ class Editing final
             appearance_,   clipboard_,       files_,      code_pages_, settings_,
             themes_,       session_,         history_,    folders_,    bookmarks_,
             text_layouts_, autosave_,        fonts_,      bell_,       markdown_,
-            reads_,        language_server_, wall_clock_, printer_,    shell_registration_};
+            reads_,        language_server_, wall_clock_, printer_,    shell_registration_,
+            images_};
     }
 
     ScriptedAppearance appearance_{Reading{Appearance::dark}};
@@ -202,6 +210,7 @@ class Editing final
     ScriptedClock wall_clock_;
     ScriptedPrinter printer_;
     ScriptedShellRegistration shell_registration_;
+    ScriptedImages images_;
     EditorController controller_;
 };
 } // namespace nenenib::tests

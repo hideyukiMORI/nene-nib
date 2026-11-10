@@ -7,6 +7,9 @@
 #include "EditBoundary.hpp"
 #include "EditorIntent.hpp"
 #include "ExPreviewRequest.hpp"
+#include "FilePath.hpp"
+#include "ImageOutcome.hpp"
+#include "ImageRequest.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "MarkdownFailure.hpp"
@@ -17,6 +20,7 @@
 #include "OffsetRange.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewFullRoute.hpp"
+#include "PreviewImages.hpp"
 #include "PreviewPlacement.hpp"
 #include "PreviewPoint.hpp"
 #include "PreviewSelection.hpp"
@@ -43,6 +47,7 @@
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -54,6 +59,19 @@ constexpr std::string_view preview_rejected_message = "Markdown を解析でき�
 constexpr std::string_view preview_memory_message = "メモリが足りずプレビューできませんでした";
 // チェックボックスの印が本文で `[ ]` `[x]` `[X]` の形でないとき（ADR 0155 の追補 24）。
 constexpr std::string_view preview_task_stale_message = "プレビューが古いので切り替えられません";
+
+// 解析の結果の画像の状態（ADR 0155 の追補 50）。画像の節が無ければ null。同じ文書の前の状態
+// previous から同じ経路の状態を引き継ぐ（読めた画素を頼み直さない）。
+[[nodiscard]] std::shared_ptr<const PreviewImages>
+images_of(const core::MarkdownDocument &document, const std::optional<core::FilePath> &base,
+          const PreviewImages *previous)
+{
+    if (document.images.empty())
+    {
+        return nullptr;
+    }
+    return std::make_shared<const PreviewImages>(PreviewImages::of(document, base, previous));
+}
 
 // 見せている結果の block の印の位置（タスクでない・範囲の外なら nullopt）。
 [[nodiscard]] std::optional<std::size_t> task_mark_of(const PreviewView &preview, std::size_t block)
@@ -308,6 +326,7 @@ void EditorController::accept(const TogglePreview &)
 void EditorController::open_side_preview()
 {
     static_cast<void>(ports_.markdown.collect());
+    static_cast<void>(ports_.images.collect());
     settle_follow();
     state_ = state_.with_preview(PreviewView{});
     request_preview(true);
@@ -345,9 +364,10 @@ void EditorController::accept(const TogglePreviewTask &intent)
     pending_follow_ = follow;
 }
 
-// 打つのを止めてから 1 tick 以上たった本文だけを頼む（決定 8）。比べるのは履歴の位置ではなく
-// 改訂番号。頼まなかった合図は見えるものを変えない（見た改訂番号は描かない）ので描き直さない
-// （ADR 0155 の追補・#813）。結果を採るのは WorkCompleted の道。
+// 打つのを止めてから 1 tick 以上たった本文だけを頼む（決定 8）。比べるのは履歴の位置ではなく改訂番
+// 号。頼まなかった合図は見えるものを変えない（見た改訂番号は描かない）ので描き直さない（ADR 0155 の
+// 追補・#813）。結果を採るのは WorkCompleted の道。見える範囲の画像もここで頼む（本文の送りで錨が動
+// いた分・追補 50）。画像を頼んでも見えるものは変わらないので描き直さない。
 void EditorController::accept(const PreviewTick &)
 {
     repaint_ = false;
@@ -361,6 +381,7 @@ void EditorController::accept(const PreviewTick &)
     {
         repaint_ = true;
         request_preview(false);
+        request_preview_images();
         return;
     }
     if (revision != preview->seen_revision)
@@ -369,6 +390,7 @@ void EditorController::accept(const PreviewTick &)
         view.seen_revision = revision;
         state_ = state_.with_shown_preview(std::move(view));
     }
+    request_preview_images();
 }
 
 void EditorController::request_preview(bool fresh)
@@ -385,6 +407,7 @@ void EditorController::request_preview(bool fresh)
     if (fresh)
     {
         view.document.reset();
+        view.images.reset();
         view.notice.reset();
         view.follows = true;
     }
@@ -420,6 +443,7 @@ void EditorController::collect_preview()
         {
             view.document =
                 std::make_shared<const core::MarkdownDocument>(std::move(outcome.result).value());
+            view.images = images_of(*view.document, state_.document().path, view.images.get());
             view.notice.reset();
             // 選択の位置は前の結果の要素を指すので、差し替えたら捨てる（改訂 18）。
             view.selection.reset();
@@ -447,6 +471,68 @@ void EditorController::collect_preview()
     {
         state_ = state_.with_shown_preview(std::move(view));
     }
+    // 新しい結果の見える範囲の画像を頼む（ほかの合図では何も変わらず、写さずに戻る）。
+    request_preview_images();
+}
+
+// 見える範囲は錨の要素から「本文の見えている行の数 + 1」個の要素（要素は 1 行以上の高さなので、枠に
+// 見える要素はこの中にある・追補 50）。範囲の中の waiting を頼み、範囲の外の evicted を waiting に
+// 戻す。何も変わらなければ状態を写さない。
+void EditorController::request_preview_images()
+{
+    const PreviewView *preview = state_.shown_preview();
+    if (preview == nullptr || preview->document == nullptr || preview->images == nullptr)
+    {
+        return;
+    }
+    const core::MarkdownDocument &document = *preview->document;
+    const ScrollState &scroll = settled_scroll();
+    const core::Offset anchor =
+        preview->follows ? state_.text().line_start(scroll.first_visible) : preview->anchor;
+    const std::size_t first = core::preview_anchor_block(document, anchor);
+    const std::size_t end = first + std::max<std::size_t>(scroll.visible_lines, 1U) + 1U;
+    if (!preview->images->wants(document, first, end))
+    {
+        return;
+    }
+    PreviewView view = *preview;
+    auto images = std::make_shared<PreviewImages>(*preview->images);
+    const auto requests = images->claim(document, first, end, preview_image_tickets_);
+    view.images = std::move(images);
+    state_ = state_.with_shown_preview(std::move(view));
+    for (const ImageRequest &request : requests)
+    {
+        ports_.images.request(request);
+    }
+}
+
+// 待っている券の結果だけを置く（追補 50）。プレビューが閉じていれば口を呼ばない（決定 10 と同じ・開
+// くときに残りを捨てる）。画像の節の無い結果に替わった後の結果は捨てる。
+void EditorController::collect_preview_images()
+{
+    const PreviewView *preview = state_.shown_preview();
+    if (preview == nullptr)
+    {
+        return;
+    }
+    std::vector<ImageOutcome> outcomes = ports_.images.collect();
+    if (outcomes.empty() || preview->images == nullptr)
+    {
+        return;
+    }
+    auto images = std::make_shared<PreviewImages>(*preview->images);
+    bool changed = false;
+    for (ImageOutcome &outcome : outcomes)
+    {
+        changed = images->received(std::move(outcome)) || changed;
+    }
+    if (!changed)
+    {
+        return;
+    }
+    PreviewView view = *preview;
+    view.images = std::move(images);
+    state_ = state_.with_shown_preview(std::move(view));
 }
 
 ScrollState EditorController::framed_scroll()
@@ -514,6 +600,7 @@ void EditorController::place_preview(PreviewPlacement placement)
         return;
     }
     static_cast<void>(ports_.markdown.collect());
+    static_cast<void>(ports_.images.collect());
     settle_follow();
     state_ = state_.with_full_preview(PreviewView{});
     request_preview(true);
@@ -698,6 +785,7 @@ void EditorController::scroll_preview(std::int64_t lines)
     view.follows = false;
     state_ = state_.with_shown_preview(std::move(view));
     preview_body_top_ = top;
+    request_preview_images();
 }
 
 // 全面の通常モードの Space（追補 25）。選択が無く、キャレットの行にタスクの項があれば、その印を

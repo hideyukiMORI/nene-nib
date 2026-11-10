@@ -568,6 +568,11 @@ class EditorController final
     void request_preview(bool fresh);
     // プレビューが開いていれば今の券の結果を引く（決定 6・10）。WorkCompleted の道だけが呼ぶ。
     void collect_preview();
+    // プレビューが開いていれば、錨の要素から見える範囲の画像を頼む（ADR 0155 の追補 50）。解析の結
+    // 果が届いたとき・PreviewTick・錨を送ったときだけ呼ぶ。画像の節が無ければ何もしない。
+    void request_preview_images();
+    // プレビューが開いていれば画像の結果を引く（追補 50）。WorkCompleted の道だけが呼ぶ。
+    void collect_preview_images();
     // 本文が送られたら（前の frame と先頭行が違えば）プレビューを追従に戻す（決定 7）。frame の 1
     // か所。
     void follow_preview_on_scroll(core::LineNumber first_visible);
@@ -996,6 +1001,8 @@ class EditorController final
     // プレビューの券（ADR 0155 の決定 6）。要求ごとに 1 つ進み、閉じて開き直しても戻さない
     // （閉じる前の要求の結果を開き直した後の券と取り違えない）。
     std::uint64_t preview_tickets_ = 0;
+    // プレビューの画像の券（ADR 0155 の追補 50）。画像の要求ごとに 1 つ進み、戻さない。
+    std::uint64_t preview_image_tickets_ = 0;
     // 読みの port の券（ADR 0159 の決定 5）。プロセスで 1 つの通し番号で、頼むたびに進む。
     std::uint64_t read_tickets_ = 0;
     // 揃ったがまだ採っていない読みの結果（ADR 0159 の追補 2）。歩き・入力行・面の最中は留め、
