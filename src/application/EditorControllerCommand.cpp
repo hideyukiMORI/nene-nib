@@ -137,6 +137,20 @@ namespace
     std::unreachable();
 }
 
+// Vim の入力行（`:` `/` `?`）の Delete は Vim の c_<Del>（cmdline_erase_chars・#1325）。キャレットの
+// 下の文字を消し、行末では手前の 1 文字を消す（Backspace と同じ・空の行では取消になる）。
+// ほかの入力行（通常モードの「検索: 」「行: 」と面）の Delete は今のまま（ADR 0065 の決定 6）。
+[[nodiscard]] core::CommandEdit vim_line_edit(const core::InputLineView &line,
+                                              core::CommandEdit edit) noexcept
+{
+    const bool vim_line = line.prompt == core::InputLinePrompt::ex || vim_search_prompt(line.prompt);
+    if (edit == core::CommandEdit::erase && vim_line && line.caret.value >= line.text.size())
+    {
+        return core::CommandEdit::backspace;
+    }
+    return edit;
+}
+
 // 「行: 」が数でないときの知らせ（ADR 0174 の決定 8）。
 constexpr std::string_view not_a_line_notice = "行番号を入れてください";
 // Vim モードで一覧から「置換」を選んだときの `:` の前置き（ADR 0174 の決定 2）。
@@ -207,16 +221,21 @@ void EditorController::accept(const EditCommand &intent)
     // 空の入力行の Backspace は取消（Ex と検索で同じ・ADR 0032 の決定 1）。
     // 設定一覧は候補を出したまま残る。
     const bool palette = std::holds_alternative<core::CommandPalette>(input.value());
-    if (!palette && input_line_of(input.value()).text.empty() &&
-        intent.edit == core::CommandEdit::backspace)
+    core::CommandEdit edit = intent.edit;
+    if (!palette)
     {
-        accept(CancelCommand{});
-        return;
+        const auto line = input_line_of(input.value());
+        edit = vim_line_edit(line, intent.edit);
+        if (line.text.empty() && edit == core::CommandEdit::backspace)
+        {
+            accept(CancelCommand{});
+            return;
+        }
     }
-    state_ = state_.with_command_input(recalls_history(intent.edit)
+    state_ = state_.with_command_input(recalls_history(edit)
                                            ? recalled_command(input.value(), state_.ex_history(),
-                                                              state_.search_history(), intent.edit)
-                                           : edited_command(input.value(), intent.edit));
+                                                              state_.search_history(), edit)
+                                           : edited_command(input.value(), edit));
     reach_font_families();
     update_search_preview();
 }

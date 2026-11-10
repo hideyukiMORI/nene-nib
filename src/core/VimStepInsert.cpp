@@ -122,6 +122,7 @@ constexpr std::size_t erase_window_bytes = 64;
     case VimSpecialKey::control_o:
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
+    case VimSpecialKey::delete_key:
         return false;
     }
     std::unreachable();
@@ -234,6 +235,28 @@ constexpr std::size_t erase_window_bytes = 64;
     }
     return VimStep{
         state, VimRemoveRange{OffsetRange{backward_characters(text, caret, single_step), caret}}};
+}
+
+// INSERT の `<Del>`（Vim の ins_del・#1325）。行の内容の終わりでは次の行とつなぎ（backspace の
+// eol・do_join の insert_space は FALSE なので `gJ` と同じく空白を足さず、次の行の字下げも残す）、
+// 最後の行の終わりでは何も消さない（vim_beep で、鍵は redo に載る）。ほかはキャレットの下の Vim の
+// 1 文字（del_char → del_chars の utfc_ptr2len・結合文字を含む）を消し、キャレットは動かない。
+[[nodiscard]] VimStep insert_deleted_forward(const VimState &state, const TextBuffer &text,
+                                             Offset caret)
+{
+    const LineNumber line = line_of(text, caret);
+    const Offset line_end = text.line_end(line);
+    if (caret.value < line_end.value)
+    {
+        return VimStep{state, VimRemoveRange{OffsetRange{
+                                  caret, vim_character_after(text, caret, line_end)}}};
+    }
+    if (line.value >= text.line_count())
+    {
+        return VimStep{state, VimNoEffect{}};
+    }
+    return VimStep{state, VimRemoveRange{OffsetRange{
+                              line_end, text.line_start(LineNumber{line.value + 1})}}};
 }
 
 // 始めの桁が今の本文で 1 文字の頭か（#1234）。Vim の ins_bs は 1 文字ずつ dec_cursor で戻り、
@@ -815,6 +838,14 @@ namespace detail
         return erase_recorded(insert_cut(state, text, caret, true), key);
     case VimSpecialKey::control_u:
         return erase_recorded(insert_cut(state, text, caret, false), key);
+    // `<Del>` は何も消せなくても redo に載る（ins_del の AppendCharToRedobuff）ので、回数の鍵の列
+    // にも必ず足す（erase_recorded の「止まった鍵は足さない」を通さない）。
+    case VimSpecialKey::delete_key:
+    {
+        VimStep step = insert_deleted_forward(state, text, caret);
+        step.next = insert_recorded(step.next, VimKey{key});
+        return step;
+    }
     case VimSpecialKey::control_r:
         return started_prefix(state, VimPrefix::insert_register);
     case VimSpecialKey::control_d:
@@ -922,6 +953,7 @@ namespace
     case VimSpecialKey::control_o:
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
+    case VimSpecialKey::delete_key:
         return false;
     }
     std::unreachable();
@@ -980,6 +1012,7 @@ namespace
     case VimSpecialKey::control_o:
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
+    case VimSpecialKey::delete_key:
         return false;
     }
     std::unreachable();

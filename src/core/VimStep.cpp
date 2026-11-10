@@ -57,7 +57,9 @@ using detail::completed_character_search;
 using detail::completed_text_object;
 using detail::count_of;
 using detail::counted;
+using detail::count_digit_dropped;
 using detail::counts_as_digit;
+using detail::drops_count_digit;
 using detail::decimal_base;
 using detail::display_view;
 using detail::failed;
@@ -1479,6 +1481,25 @@ namespace detail
     next.count = VimCount{carried + digit};
     return VimStep{std::move(next), VimNoEffect{}};
 }
+
+// Vim の normal_cmd_get_count は回数を打っている途中（count0 が 0 でない）の K_DEL を
+// `count0 /= 10` に読み、命令にしない（#1325）。NORMAL と VISUAL とオペレータの後の回数で同じで、
+// 次の 1 鍵を待つ状態（`r` `f` `"` など）と INSERT では回数を読まない。
+[[nodiscard]] bool drops_count_digit(const VimState &state, const VimKey &key) noexcept
+{
+    const auto *const special = std::get_if<VimSpecialKey>(&key);
+    return special != nullptr && *special == VimSpecialKey::delete_key &&
+           state.mode != VimMode::insert && !state.input_wait.has_value() &&
+           state.count.has_value();
+}
+
+[[nodiscard]] VimStep count_digit_dropped(const VimState &state)
+{
+    VimState next = state;
+    const std::size_t rest = state.count.value_or(VimCount{0}).value / decimal_base;
+    next.count = rest == 0 ? std::nullopt : std::optional{VimCount{rest}};
+    return VimStep{std::move(next), VimNoEffect{}};
+}
 } // namespace detail
 
 namespace
@@ -1566,6 +1587,14 @@ namespace
         return acted(state, view, VimAction::scroll_line_down);
     case VimSpecialKey::control_y:
         return acted(state, view, VimAction::scroll_line_up);
+    // `<Del>` は `x`（Vim の nv_abbrev が cmdchar を 'x' に替えて nv_optrans へ渡す・#1325）。
+    // オペレータの後は x と同じく checkclearopq で失敗する。回数の途中は桁を消す。
+    case VimSpecialKey::delete_key:
+        if (drops_count_digit(state, VimKey{key}))
+        {
+            return count_digit_dropped(state);
+        }
+        return normal_character(state, view, VimCharacter{U'x'});
     }
     std::unreachable();
 }
@@ -1607,6 +1636,7 @@ namespace
     case VimSpecialKey::page_down:
     case VimSpecialKey::control_v:
     case VimSpecialKey::control_o:
+    case VimSpecialKey::delete_key:
         return std::nullopt;
     }
     std::unreachable();

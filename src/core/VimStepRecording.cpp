@@ -20,6 +20,7 @@ using detail::combined_count;
 using detail::counted;
 using detail::counts_as_digit;
 using detail::decimal_base;
+using detail::drops_count_digit;
 using detail::erased_nothing;
 using detail::failed;
 using detail::finished_input_wait;
@@ -491,6 +492,11 @@ namespace
     }
     if (!before.input_wait.has_value() && std::holds_alternative<VimCharacter>(key) &&
         counts_as_digit(before, std::get<VimCharacter>(key).code))
+    {
+        return record;
+    }
+    // 回数の桁を消す `<Del>` も回数の桁と同じく記録しない（#1325）。
+    if (drops_count_digit(before, key))
     {
         return record;
     }

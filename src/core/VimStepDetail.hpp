@@ -53,6 +53,10 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
 requested_viewport(const VimState &state, const VimEditorView &view, VimAction action);
 [[nodiscard]] bool counts_as_digit(const VimState &state, char32_t key) noexcept;
 [[nodiscard]] VimStep counted(const VimState &state, char32_t key);
+// `<Del>` が回数の最後の桁を消す鍵か（Vim の normal_cmd_get_count の `count0 != 0`・#1325）。
+[[nodiscard]] bool drops_count_digit(const VimState &state, const VimKey &key) noexcept;
+// 回数の最後の桁を消す（`12<Del>` は 1・`3<Del>` は回数なし）。
+[[nodiscard]] VimStep count_digit_dropped(const VimState &state);
 [[nodiscard]] VimStep window_started(const VimState &state);
 [[nodiscard]] bool searches_forward(VimCharacterSearchKind kind) noexcept;
 [[nodiscard]] VimCharacterSearchKind opposite(VimCharacterSearchKind kind) noexcept;

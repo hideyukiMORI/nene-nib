@@ -65,7 +65,8 @@ constexpr std::array<KeyMotion, 4> control_motions{{{VK_LEFT, core::CaretMotion:
                                                     {VK_HOME, core::CaretMotion::document_start},
                                                     {VK_END, core::CaretMotion::document_end}}};
 // Vim モードの仮想キー → 特別な鍵。通常モードの表と入れ替えて引く（ADR 0012 の決定 4）。
-constexpr std::array<KeyVimSpecial, 11> vim_specials{{{VK_ESCAPE, core::VimSpecialKey::escape},
+// Delete は engine の `<Del>`（#1325）。通常モードの DeleteText（ADR 0065 の決定 6）は送らない。
+constexpr std::array<KeyVimSpecial, 12> vim_specials{{{VK_ESCAPE, core::VimSpecialKey::escape},
                                                       {VK_RETURN, core::VimSpecialKey::enter},
                                                       {VK_BACK, core::VimSpecialKey::backspace},
                                                       {VK_LEFT, core::VimSpecialKey::arrow_left},
@@ -75,7 +76,8 @@ constexpr std::array<KeyVimSpecial, 11> vim_specials{{{VK_ESCAPE, core::VimSpeci
                                                       {VK_HOME, core::VimSpecialKey::home},
                                                       {VK_END, core::VimSpecialKey::end},
                                                       {VK_PRIOR, core::VimSpecialKey::page_up},
-                                                      {VK_NEXT, core::VimSpecialKey::page_down}}};
+                                                      {VK_NEXT, core::VimSpecialKey::page_down},
+                                                      {VK_DELETE, core::VimSpecialKey::delete_key}}};
 // Ctrl+W は Vim の窓の命令の入口（ADR 0148 の決定 7）。INSERT でも engine へ流し、engine
 // が語を消す（#1040）。Ctrl+O はジャンプの戻り（#1037・D71）で、INSERT では engine が無視する。
 constexpr std::array<KeyVimSpecial, 6> vim_control_specials{
