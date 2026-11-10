@@ -48,7 +48,9 @@ is not a split, or a `.PP` macro line, which is), of sentences that end with `.`
 generator 5's window and draws, and counts `dS` `yS` `vS` (and the new paragraph words) as jumps while
 generating (#1233). It never makes `[` or `]` (#1342: Nib refuses every `[` key, so each case would be
 the same known difference), `"+` `"*`, `q` or a macro. With generator 6, `DEFAULT_KNOWN` sorts the
-differences that have an open Issue (#1231 #1310 #1337 #1344) as known unless `--no-known-defaults`.
+differences that have an open Issue (#1310 #1344) as known unless `--no-known-defaults`: #1310 only
+for a shrunk case of exactly a `<C-e>` / `<C-y>` word and one word after it that differs on
+`first_visible`. `summary.md` lists each rule's known cases with their minimal keys.
 
 The buffer has 1 to 12 lines mixing ASCII words, spaces, tabs, bracket and quote pairs, punctuation,
 Japanese (kana, kanji, full-width letters), empty lines and trailing spaces. It never ends with a
@@ -787,39 +789,56 @@ def known_issue(words: list[tuple[str, str]], known: list[tuple[str, tuple[str, 
     return None
 
 
-def scrolled_then_more(words: list[tuple[str, str]], window: dict | None) -> bool:
+def scrolled_then_one_key(judged: dict) -> bool:
     """#1310: Vim keeps the window `<C-e>` / `<C-y>` set until the caret's line or the text changes;
-    with `scrolloff` above 0 a later key may differ."""
-    return (window is not None and window["scrolloff"] > 0
-            and any(kind in ("<C-e>", "<C-y>") for kind, _ in words[:-1]))
+    with `scrolloff` above 0 the next key may set `first_visible` differently. Only a shrunk case
+    whose words are exactly the scroll and one word after it, differing on `first_visible`: an
+    unshrunk case or three words left may hide another cause (#1365 review)."""
+    words, window = judged["words"], judged["window"]
+    return (judged["shrunk"] and window is not None and window["scrolloff"] > 0
+            and len(words) == 2 and words[0][0] in ("<C-e>", "<C-y>")
+            and "first_visible" in judged["fields"])
 
 
 SEARCH_OPERATOR = re.compile(r'^(?:".)?\d*[dcy]\d*[nN*#/?]')
-# 生成器 6 の既定の既知（#1353）。1 行が Issue・説明・語と窓を読む述語。名前の `--known` の後に読む。
+# 生成器 6 の既定の既知（#1353）。1 行が Issue・説明・判定の述語（`judged_case` の辞書を読む）。
+# 名前の `--known` の後に読む。閉じた Issue と直した Issue の行は置かない（直った後に別の原因を
+# 隠す・#1365 のレビュー: #1231 は閉じ、#1337 は PR #1355 で直した）。
 # #1341（巨大な回数の `@` `p`）は生成しない（回数は LONG_COUNTS の 40 まで）ので行は無い。
 DEFAULT_KNOWN = (
-    ("1231", "`z-` `zb`", lambda words, window: any(kind in ("z-", "zb") for kind, _ in words)),
-    ("1310", "so>0 の `<C-e>` `<C-y>` の後の鍵", scrolled_then_more),
-    ("1337", 'レジスタつきの `.`（`".`）', lambda words, window: any(kind == '".' for kind, _ in words)),
+    ("1310", "so>0 の `<C-e>` `<C-y>` と後の 1 語だけに縮んだ `first_visible` の違い",
+     scrolled_then_one_key),
     ("1344", "検索つきのオペレータ",
-     lambda words, window: any(SEARCH_OPERATOR.match(keys) for _, keys in words)),
+     lambda judged: any(SEARCH_OPERATOR.match(keys) for _, keys in judged["words"])),
 )
 
 
-def default_known(words: list[tuple[str, str]], window: dict | None,
-                  rules: tuple = DEFAULT_KNOWN) -> str | None:
-    """The first DEFAULT_KNOWN Issue whose rule the words and window match."""
-    return next((issue for issue, _, rule in rules if rule(words, window)), None)
+def default_known(judged: dict, rules: tuple = DEFAULT_KNOWN) -> str | None:
+    """The first DEFAULT_KNOWN Issue whose rule the judged case matches."""
+    return next((issue for issue, _, rule in rules if rule(judged)), None)
 
 
-def judged_words(entry: dict, by_name: dict, mismatches: list[dict]) -> list[tuple[str, str]]:
-    """The words the known check reads: the minimal ones, the representative's, or all of them."""
+def shrunk_of(entry: dict, mismatches: list[dict]) -> dict | None:
+    """The minimal case the known check reads: the entry's own, or its representative's."""
     if "minimal" in entry:
-        return list(zip(entry["minimal"]["words"], entry["minimal"]["word_keys"]))
+        return entry["minimal"]
     if "represented_by" in entry:
         representative = next(e for e in mismatches if e["name"] == entry["represented_by"])
-        return judged_words(representative, by_name, mismatches)
-    return list(by_name[entry["name"]]["words"])
+        return shrunk_of(representative, mismatches)
+    return None
+
+
+def judged_case(entry: dict, by_name: dict, mismatches: list[dict]) -> dict:
+    """What the known checks read: the minimal words and their differing fields when shrunk,
+    otherwise all the words and fields, with the case's window."""
+    minimal = shrunk_of(entry, mismatches)
+    if minimal is not None:
+        words = list(zip(minimal["words"], minimal["word_keys"]))
+        fields = set(minimal.get("nib", {})) or set(entry["fields"])
+    else:
+        words, fields = list(by_name[entry["name"]]["words"]), set(entry["fields"])
+    return {"words": words, "fields": fields, "shrunk": minimal is not None,
+            "window": by_name[entry["name"]]["window"]}
 
 
 def fuzz(args: argparse.Namespace, seed: int, out: Path) -> dict:
@@ -890,9 +909,9 @@ def fuzz(args: argparse.Namespace, seed: int, out: Path) -> dict:
             representatives.append(entry)
     rules = DEFAULT_KNOWN if args.generator >= 6 and not args.no_known_defaults else ()
     for entry in mismatches:
-        judged = judged_words(entry, by_name, mismatches)
-        entry["known"] = (known_issue(judged, args.known)
-                          or default_known(judged, by_name[entry["name"]]["window"], rules))
+        judged = judged_case(entry, by_name, mismatches)
+        entry["known"] = (known_issue(judged["words"], args.known)
+                          or default_known(judged, rules))
     (out / "mismatches.json").write_text(
         json.dumps(mismatches, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
     (out / "rejected.json").write_text(
@@ -1029,17 +1048,32 @@ def summary_text(args, tally, rejected, skipped, mismatches) -> str:
         lines.append("")
     for group in groups:
         lines.extend(mismatch_lines(group[0], mismatches, "###", [e["name"] for e in group[1:]]))
-    lines.append("## 既知の不一致")
-    lines.append("")
-    known = [e for e in mismatches if e["known"] is not None]
-    lines.extend(f"- {e['name']} → #{e['known']}: {fenced(e.get('minimal', e)['keys'])}"
-                 for e in known)
-    if not known:
-        lines.append("- 0")
-    lines.append("")
+    lines.extend(known_lines([(e, mismatches) for e in mismatches if e["known"] is not None],
+                             "## 既知の不一致（規則ごと・最小の鍵列）"))
     if skipped:
         lines.append(f"skip: {len(skipped)}（{skipped[0]['reason']} ほか）")
     return "\n".join(lines) + "\n"
+
+
+def known_lines(known: list[tuple[dict, list[dict]]], heading: str) -> list[str]:
+    """The known cases by rule, each with the minimal keys and the words the rule read, so what a
+    rule hides stays visible (#1365 review)."""
+    lines = [heading, ""]
+    for issue in sorted({entry["known"] for entry, _ in known}):
+        lines.append(f"### #{issue}")
+        lines.append("")
+        for entry, mismatches in known:
+            if entry["known"] != issue:
+                continue
+            shown = shrunk_of(entry, mismatches) or entry
+            via = f"（{entry['represented_by']} の最小）" if "represented_by" in entry else ""
+            lines.append(f"- {entry['name']}{via}: keys {fenced(shown['keys'])}・語 "
+                         f"{fenced(' '.join(shown['words']))}・欄 "
+                         f"{', '.join(sorted(shown.get('nib', entry['nib'])))}")
+        lines.append("")
+    if not known:
+        lines.extend(["- 0", ""])
+    return lines
 
 
 def fuzz_seeds(args: argparse.Namespace) -> int:
@@ -1060,6 +1094,9 @@ def fuzz_seeds(args: argparse.Namespace) -> int:
     lines.append("既知（Issue ごと）: " + (", ".join(f"#{k} {v}" for k, v in sorted(by_issue.items()))
                                          or "0"))
     lines.append("")
+    lines.extend(known_lines([(entry, run["mismatches"]) for run in runs
+                              for entry in run["mismatches"] if entry["known"] is not None],
+                             "## 既知の不一致（全 seed・規則ごと・最小の鍵列）"))
     new = [(entry, run["mismatches"]) for run in runs for entry in run["mismatches"]
            if entry["known"] is None and "represented_by" not in entry]
     run_of = {id(entry): mismatches for entry, mismatches in new}
