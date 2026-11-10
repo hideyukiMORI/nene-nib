@@ -12,6 +12,7 @@
 #include "VimNamedRegisters.hpp"
 #include "VimNumberedRegisters.hpp"
 #include "VimPendingOperator.hpp"
+#include "VimRegisterCount.hpp"
 #include "VimRegisterSelection.hpp"
 #include "VimRegisterSnapshot.hpp"
 #include "VimRepeatRecord.hpp"
@@ -93,6 +94,10 @@ struct VimState
     // vim_resting_from（Esc）と入力を捨てる input_discarded。INSERT の中の移動では消えない（Esc の
     // 行が 1 行目なら写す・固定 Vim の op_insert・実測）。
     std::optional<VimBlockInsert> block_insert = std::nullopt;
+    // `"{name}` の前に打った回数（Vim の opcount・#1319）。回数と選んだレジスタが両方残る
+    // あいだだけ値を持ち、`"` の後の桁は数え直して掛ける（`5"a0` の `0` は桁でなく行頭・
+    // `2"a3dd` は 6 行）。置くのは selected_register、消すのは vim_step の 1 か所。
+    std::optional<VimRegisterCount> register_count = std::nullopt;
 };
 
 // 鍵を 1 つ食べ終わったあとの NORMAL。回数・オペレータ・欲しい列は空で、無名レジスタだけ残る。

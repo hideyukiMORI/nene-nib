@@ -71,3 +71,9 @@ Nib の今の形: 無名レジスタ `VimRegister { text; kind; width }` は eng
 ## 追補（2026-11-10・#1312）
 
 決定 8 の「再生は窓の鍵と同じ口を通る」のうち、`@a`（`"ayy` から作った本文の `@a` も）の鍵は、口の手前で流す時点の `map` の表で引く（Vim の `do_execreg` は `REMAP_YES`）。`.` と fixture の harness（`press_vim_keys`）は引かない。詳しくは [ADR 0176](0176-vim-map-is-a-settings-row-applied-by-one-key-table-at-the-window-entry.md) の追補 32〜35。
+
+## 追補（2026-11-10・#1319）: `"{name}` の後の回数は数え直して掛ける
+
+13. **規則（Vim 9.1 の `normal.c`）。** `nv_regname` は名前を置くときに `cap->opcount = cap->count0`（`"` の前までの回数）を覚える。`"{name}` は 1 つの命令として終わり、次の `normal_cmd` は `count0` を 0 から読み直す。`normal_cmd_get_count` の桁の条件は「`1`〜`9`、または `count0 != 0` のときの `0`」なので、`"` の直後の `0` は桁ではなく命令（行頭・map があれば表を引く）。読み終えた `count0` には `opcount` を掛ける（`count0` が 0 なら `opcount` そのもの）。オペレータの前後の掛け算（決定 2 の `3"ayy` と `"a3yy` が同じ・ADR 0015 の決定 1）と同じ 1 本の積で、`2"a3dd` は 6 行・`2"a3d2j` は 12 行・`2"a3"bj` は 6 行・`2"a10j` は 20 行・`"a5"b0` と `5"a0` は回数 5 の `0`。`"{name}` の後の移動の後（`"a2jj`・VISUAL の `v2"a3jj`）は `opcount` が 0 に戻り、次の命令の回数に掛けない。
+14. **Nib の形。** `VimState.register_count`（`VimRegisterCount{before, typed}`・`src/core/VimRegisterCount.hpp`）を `selected_register` が `"` の前の回数（積）から置き、桁の読み（`counts_as_digit` と `counted`）だけが見る。`VimState.count` は今どおり読み手の見る積（`before × typed`・typed が無ければ `before`）なので、回数を読む所は変えない。消すのは `vim_step` の 1 か所で、回数か選んだレジスタのどちらかが無くなれば消える（オペレータへ移ると回数は `pending` に入る）。`.` の記録は今どおり積の回数を 1 つ残す（#209 の規則は変わらない）。
+15. **実測と fixture。** `-es -u NONE` の oracle で `count-register-` の 21 件（`$5"a0x`・`$"a5"b0x`・`$2"a3"b0x`・`2"a3"bj`・`2"a3dd"aP`・`"a2d3j"aP`・`2"a3d2j"aP`・`2"ax`・`2"a3x`・`"a3x`・`3"ayy`・`2"a10j`・`2"a"b3dd`・`"a2"b3dd`・`2"a3dd.`・`"a2dd3.`・`d"a2jx`（オペレータの後の `"` は `clearopbeep`）・`"a2jj`・`v2"a3jd`・`v2"a3jjd`・`v"a2jjd`）。map の契約 Z11（ADR 0176 の追補 31）は Vim の値 5 に改めた。

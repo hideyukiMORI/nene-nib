@@ -1455,28 +1455,58 @@ namespace
     }
     return commanded(state, view, action);
 }
+// 打っている桁の列に 1 桁を足した回数（飽和する）。
+[[nodiscard]] VimCount digit_appended(const std::optional<VimCount> &typed, std::size_t digit)
+{
+    const std::size_t previous = typed.has_value() ? typed.value().value : 0;
+    const std::size_t largest = std::numeric_limits<std::size_t>::max();
+    const std::size_t carried =
+        previous > (largest - digit) / decimal_base ? largest - digit : previous * decimal_base;
+    return VimCount{carried + digit};
+}
+
+// 今打っている桁の列。`"{name}` の後は数え直した桁（Vim の count0）、ほかは回数そのもの。
+[[nodiscard]] std::optional<VimCount> typed_digits(const VimState &state) noexcept
+{
+    return state.register_count.has_value() ? state.register_count.value().typed : state.count;
+}
+
+// `"{name}` の前の回数に打ち直した桁を掛けた積（Vim の count0 *= opcount・飽和する）。
+[[nodiscard]] VimCount register_multiplied(VimCount before, VimCount typed) noexcept
+{
+    const std::size_t largest = std::numeric_limits<std::size_t>::max();
+    return VimCount{typed.value != 0 && before.value > largest / typed.value
+                        ? largest
+                        : before.value * typed.value};
+}
 } // namespace
 
 namespace detail
 {
+// 桁か（Vim の normal_cmd_get_count）。`0` は打っている桁の列が空でないときだけ桁で、
+// `"{name}` の後は数え直すので `5"a0` の `0` は行頭（#1319）。
 [[nodiscard]] bool counts_as_digit(const VimState &state, char32_t key) noexcept
 {
     if (key < U'0' || key > U'9')
     {
         return false;
     }
-    return key != U'0' || state.count.has_value();
+    return key != U'0' || typed_digits(state).has_value();
 }
 
 [[nodiscard]] VimStep counted(const VimState &state, char32_t key)
 {
     const auto digit = static_cast<std::size_t>(key - U'0');
-    const std::size_t previous = state.count.has_value() ? state.count.value().value : 0;
-    const std::size_t largest = std::numeric_limits<std::size_t>::max();
-    const std::size_t carried =
-        previous > (largest - digit) / decimal_base ? largest - digit : previous * decimal_base;
+    const VimCount typed = digit_appended(typed_digits(state), digit);
     VimState next = state;
-    next.count = VimCount{carried + digit};
+    if (state.register_count.has_value())
+    {
+        const VimCount before = state.register_count.value().before;
+        next.register_count = VimRegisterCount{before, typed};
+        next.count = register_multiplied(before, typed);
+        return VimStep{std::move(next), VimNoEffect{}};
+    }
+    next.count = typed;
     return VimStep{std::move(next), VimNoEffect{}};
 }
 } // namespace detail
@@ -1945,6 +1975,7 @@ namespace
     next.pending = std::nullopt;
     next.input_wait = std::nullopt;
     next.selected_register = std::nullopt;
+    next.register_count = std::nullopt;
     next.insert_repeat = std::nullopt;
     next.recording = std::nullopt;
     next.insert_start = std::nullopt;
@@ -2138,6 +2169,17 @@ namespace
     step.marks = std::move(marks);
     return step;
 }
+
+// `"{name}` の前の回数は、回数と選んだレジスタが両方残るあいだだけ持つ（#1319）。オペレータへ
+// 移った回数は pending が持ち、移動や命令で回数を使い終えれば Vim の opcount も 0 に戻る。
+[[nodiscard]] VimStep register_count_kept(VimStep step)
+{
+    if (!step.next.count.has_value() || !step.next.selected_register.has_value())
+    {
+        step.next.register_count = std::nullopt;
+    }
+    return step;
+}
 } // namespace
 
 VimStep vim_pointer_selected(const VimState &state, const VimEditorView &view, Selection selection,
@@ -2158,7 +2200,8 @@ VimStep vim_pointer_selected(const VimState &state, const VimEditorView &view, S
 
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
-    auto step = insert_start_kept(state, stepped(insert_started(state, view, key), view, key), key);
+    auto step = register_count_kept(
+        insert_start_kept(state, stepped(insert_started(state, view, key), view, key), key));
     if (step.layout_request.has_value() || step.row_request.has_value() || step.viewport_request)
     {
         return step;

@@ -148,7 +148,8 @@ namespace detail
 // ---------------------------------------------------------------- `"`（ADR 0048）
 
 // `"{name}`（決定 2）。選んだレジスタを置いて次の命令を待つ。回数は消さず（`3"ayy` と `"a3yy` は
-// 同じ）、`"a"b` は後勝ち。名前にならない鍵は回数ごと捨ててビープする。
+// 同じ）、`"a"b` は後勝ち。名前にならない鍵は回数ごと捨ててビープする。それまでの回数は
+// `"` の前の回数として覚え、後に打つ桁はそれに掛ける（Vim の nv_regname の opcount・#1319）。
 [[nodiscard]] VimStep selected_register(const VimState &state, const VimKey &key)
 {
     const auto selection = register_selection_of(macro_name_of(key).value_or(char32_t{}));
@@ -159,6 +160,9 @@ namespace detail
     VimState next = state;
     next.input_wait = std::nullopt;
     next.selected_register = selection.value();
+    next.register_count = state.count.has_value()
+                              ? std::optional{VimRegisterCount{state.count.value(), std::nullopt}}
+                              : std::nullopt;
     return VimStep{std::move(next), VimNoEffect{}};
 }
 } // namespace detail
