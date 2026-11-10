@@ -4,6 +4,7 @@
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "Selection.hpp"
+#include "VimCaret.hpp"
 #include "VimMode.hpp"
 #include "VimMotionRange.hpp"
 #include "VimRegisterKind.hpp"
@@ -204,7 +205,59 @@ constexpr std::size_t window_bytes = 64;
         lines_between(text, line_of(text, ordered.begin), line_of(text, ordered.end)), grown,
         request.mode};
 }
+
+// ------------------------------------------------------------------ 段落の移動 `{` `}`
+
+// 空の行か（Vim の startPS(lnum, NUL, FALSE) の `*s == NUL`）。移動の境は空白だけの行を含まない。
+[[nodiscard]] bool line_is_empty(const TextBuffer &text, std::size_t line)
+{
+    return text.line_start(LineNumber{line}) == text.line_end(LineNumber{line});
+}
+
+// 回数 1 つぶんの歩き（Vim の findpar の内側の for）。空でない行を 1 つ越えた後の、出発の行でない
+// 空の行で止まる。2 つめは本文の端で尽きなかったか（尽きたら端の行に留まる）。
+[[nodiscard]] std::pair<std::size_t, bool> paragraph_walk(const TextBuffer &text, std::size_t line,
+                                                          bool backward)
+{
+    bool did_skip = false;
+    std::size_t current = line;
+    for (bool first = true;; first = false)
+    {
+        const bool empty = line_is_empty(text, current);
+        did_skip = did_skip || !empty;
+        if (!first && did_skip && empty)
+        {
+            return {current, true};
+        }
+        if (at_boundary(text, current, backward))
+        {
+            return {current, false};
+        }
+        current = neighbor(current, backward);
+    }
+}
 } // namespace
+
+std::optional<Offset> vim_paragraph_motion(const TextBuffer &text, Offset caret, bool forward,
+                                           std::size_t count)
+{
+    std::size_t line = line_of(text, caret);
+    for (std::size_t left = count; left > 0; --left)
+    {
+        const auto [stop, found] = paragraph_walk(text, line, !forward);
+        if (!found && left > 1)
+        {
+            return std::nullopt;
+        }
+        line = stop;
+    }
+    // 前向きに最後の行へ着いたら、その行の最後の文字（Vim は inclusive にする）。ほかは行頭。
+    if (forward && line == text.line_count())
+    {
+        return vim_resting_caret(text, text.line_end(LineNumber{line}));
+    }
+    return text.line_start(LineNumber{line});
+}
 
 VimTextObjectOutcome vim_paragraph_object_range(const TextBuffer &text, const Selection &selection,
                                                 VimTextObjectRequest request, std::size_t count)

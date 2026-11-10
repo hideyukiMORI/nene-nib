@@ -24,11 +24,14 @@
 #include "VimEditorView.hpp"
 #include "VimKey.hpp"
 #include "VimMode.hpp"
+#include "VimMoveTo.hpp"
 #include "VimNoEffect.hpp"
 #include "VimOperator.hpp"
 #include "VimPendingOperator.hpp"
+#include "VimPrefix.hpp"
 #include "VimRegisterKind.hpp"
 #include "VimRemoveRange.hpp"
+#include "VimRepeatFailure.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
 #include "VimStep.hpp"
@@ -50,6 +53,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 
 namespace nenenib::tests
@@ -428,6 +432,107 @@ void verify_vim_sentence_before_crlf()
            "#751)");
 }
 
+// `[` `]` の後ろの 1 鍵。族は未実装なので何も動かさずに失敗し、次の鍵を `{` `}` `(` `)` の移動や
+// もう 1 つの `[` として流さない（Issue #1334・窓では失敗の後ろの鍵も走るので fixture
+// では見えない）。
+[[nodiscard]] bool bracket_refused(const VimState &state, const VimEditorView &view,
+                                   char32_t prefix, char32_t key)
+{
+    const auto started = vim_step(state, view, VimKey{VimCharacter{prefix}});
+    const auto refused = vim_step(started.next, view, VimKey{VimCharacter{key}});
+    return waits_for_prefix(started.next, nenenib::core::VimPrefix::bracket) &&
+           std::holds_alternative<nenenib::core::VimNoEffect>(started.effect) &&
+           refused.failure == nenenib::core::VimRepeatFailure::refused &&
+           std::holds_alternative<nenenib::core::VimNoEffect>(refused.effect) &&
+           !refused.next.input_wait.has_value() && !refused.next.pending.has_value() &&
+           !refused.next.count.has_value() && refused.next.mode == state.mode;
+}
+
+void verify_vim_bracket_prefix_refuses()
+{
+    const auto buffer = TextBuffer::from_utf8("a1\n\nb1 (c1). d1 {e1}\n\nf1").value();
+    const VimEditorView view{buffer, collapsed_at(Offset{7}), VimViewport{LineNumber{1}, 8, 0}};
+    constexpr std::array<std::pair<char32_t, char32_t>, 6> pairs{
+        {{U'[', U'{'}, {U']', U'}'}, {U'[', U'('}, {U']', U')'}, {U'[', U'['}, {U']', U']'}}};
+    const VimState normal = empty_vim_state();
+    const auto counted = vim_step(normal, view, VimKey{VimCharacter{U'3'}}).next;
+    const auto pending = vim_step(normal, view, VimKey{VimCharacter{U'd'}}).next;
+    VimState visual = normal;
+    visual.mode = VimMode::visual;
+    for (const auto &[prefix, key] : pairs)
+    {
+        expect(bracket_refused(normal, view, prefix, key) &&
+                   bracket_refused(counted, view, prefix, key),
+               "[ and ] take the next key and fail without running it as its own command "
+               "(Issue #1334)");
+        expect(bracket_refused(pending, view, prefix, key),
+               "an operator before [ or ] is cancelled and the text stays (Issue #1334)");
+        expect(bracket_refused(visual, view, prefix, key),
+               "[ and ] in VISUAL fail and keep the selection mode (Issue #1334)");
+    }
+}
+
+// 本文の端を越える巨大な回数の `)` `(` `}` `{` は、端に着いた後の回数を空回りせずに失敗する
+// （Vim の findsent の EQUAL_POS の枝と findpar・Issue #1334・止まらなければ CTest の TIMEOUT）。
+void verify_vim_huge_count_motions_stop()
+{
+    std::string body;
+    for (std::size_t paragraph = 0; paragraph < 64; ++paragraph)
+    {
+        body += "One two. Three four! Five?\nSix seven.\n\n";
+    }
+    body += "Eight. Nine.";
+    const auto buffer = TextBuffer::from_utf8(body).value();
+    const Offset end{buffer.size_bytes() - 1U};
+    constexpr std::array<std::pair<char32_t, bool>, 4> motions{
+        {{U')', true}, {U'(', false}, {U'}', true}, {U'{', false}}};
+    for (const auto &[key, forward] : motions)
+    {
+        const Offset start = forward ? Offset{0} : end;
+        const VimEditorView view{buffer, collapsed_at(start), VimViewport{LineNumber{1}, 8, 0}};
+        VimState state = empty_vim_state();
+        for (const char32_t digit : std::u32string_view{U"999999999"})
+        {
+            state = vim_step(state, view, VimKey{VimCharacter{digit}}).next;
+        }
+        const auto moved = vim_step(state, view, VimKey{VimCharacter{key}});
+        const auto *const landed = std::get_if<nenenib::core::VimMoveTo>(&moved.effect);
+        expect(moved.failure.has_value() && (landed == nullptr || landed->caret == start) &&
+                   !moved.next.count.has_value(),
+               "a count of 999999999 past the end of the text fails without walking the rest "
+               "(Issue #1334)");
+    }
+}
+
+// 巨大な回数の `is` `as` は、本文の端に着いた後の周を 2 周の繰り返しとして縮め、同じ偶奇の
+// 小さな回数と同じ結果になる（Vim の findsent_forward は回数ぶん回る・Issue #1334・小さな回数の
+// 側は fixture `count-repeat-1334-` が Vim と照らす）。
+void verify_vim_huge_count_sentence_objects()
+{
+    constexpr std::string_view body =
+        "One two. Three four! Five?\nSix seven (a [b] {c}) e.\n\nEight. Nine.\nlast line here";
+    constexpr std::array<std::pair<std::string_view, std::string_view>, 6> pairs{
+        {{"d999999999is", "d41is"},
+         {"d999999999as", "d41as"},
+         {"v999999999isd", "v41isd"},
+         {"v999999999asd", "v41asd"},
+         {"G$v999999999isd", "G$v41isd"},
+         {"G$v999999999asd", "G$v41asd"}}};
+    for (const auto &[huge, small] : pairs)
+    {
+        Editing hugely;
+        open_vim_document(hugely, std::string{body});
+        vim_replay(hugely.controller(), huge);
+        Editing smally;
+        open_vim_document(smally, std::string{body});
+        vim_replay(smally.controller(), small);
+        expect(whole_vim_body(hugely.controller()) == whole_vim_body(smally.controller()) &&
+                   hugely.controller().vim_state().mode == smally.controller().vim_state().mode,
+               "a count of 999999999 on is and as ends as a small count of the same parity "
+               "(Issue #1334)");
+    }
+}
+
 void verify_vim_text_object_fixtures()
 {
     constexpr std::array<std::string_view, 6> boundaries{
@@ -460,6 +565,9 @@ void verify_vim_text_object_contracts()
     verify_vim_text_object_paragraphs_and_sentences();
     verify_vim_sentence_across_pieces();
     verify_vim_sentence_before_crlf();
+    verify_vim_bracket_prefix_refuses();
+    verify_vim_huge_count_motions_stop();
+    verify_vim_huge_count_sentence_objects();
 }
 
 void verify_vim_text_object_scope()

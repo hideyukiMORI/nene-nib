@@ -1,11 +1,13 @@
 #pragma once
 
+#include "Offset.hpp"
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
 #include "VimTextObjectOutcome.hpp"
 #include "VimTextObjectRequest.hpp"
 
 #include <cstddef>
+#include <optional>
 
 namespace nenenib::core
 {
@@ -20,4 +22,13 @@ namespace nenenib::core
                                                               const Selection &selection,
                                                               VimTextObjectRequest request,
                                                               std::size_t count);
+
+// 段落の移動 `{` `}` の着地（Vim の findpar(dir, count, NUL, FALSE)・Issue #1316・ADR 0031 の決定 9
+// の追補）。境は空の行で、`ip` `ap` の空白行（space と tab だけの行も含む・Vim の current_par の
+// linewhite）とは Vim でも別の判定。空でない行を越えた後の空の行に行頭で着き、本文の端で尽きたら
+// 残りの回数があれば nullopt（Vim の FAIL・動かない）、最後の 1 つなら端の行（前向きの最後の行は
+// 最後の文字で、オペレータの範囲はその文字まで inclusive）。nroff のマクロの行と改ページ（form
+// feed）で始まる行は境にしない（テキストオブジェクトと同じ）。行は写さない。純関数。
+[[nodiscard]] std::optional<Offset> vim_paragraph_motion(const TextBuffer &text, Offset caret,
+                                                         bool forward, std::size_t count);
 } // namespace nenenib::core

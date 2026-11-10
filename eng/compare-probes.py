@@ -204,7 +204,8 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              'vim-block-repeat-giant-1line',
              'vim-insert-ctrl-w-giant-1line',
              'vim-count-h-giant-1line',
-             'vim-count-l-giant-1line')
+             'vim-count-l-giant-1line',
+             'sentence-motion-giant-1line-16384')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -445,6 +446,8 @@ def lexer_input(workload: str) -> bytes:
 
 
 def fixed_input(workload: str) -> bytes:
+    if workload == "sentence-motion-giant-1line-16384":
+        return text_object_input("text-object-sentence-giant-1line-16384")
     if workload in WORKLOADS[194:201]:
         return b"abcdefg " * (16 * 1024 * 1024 // 8)
     if workload in WORKLOADS[152:194]:

@@ -965,17 +965,19 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     std::unreachable();
 }
 
-// 次の 1 鍵を待つ接頭辞の動作 → 接頭辞（g z @ " と m ' `・ADR 0152 の決定 3）。ほかは nullopt。
+// 次の 1 鍵を待つ接頭辞の動作 → 接頭辞（g z @ " と m ' `・ADR 0152 の決定 3・[ ]）。ほかは
+// nullopt。
 [[nodiscard]] std::optional<VimPrefix> prefix_of(VimAction action) noexcept
 {
-    constexpr std::array<std::pair<VimAction, VimPrefix>, 7> prefixes{
+    constexpr std::array<std::pair<VimAction, VimPrefix>, 8> prefixes{
         {{VimAction::prefix_g, VimPrefix::g},
          {VimAction::prefix_z, VimPrefix::z},
          {VimAction::replay_macro, VimPrefix::at},
          {VimAction::select_register, VimPrefix::quote},
          {VimAction::set_mark, VimPrefix::mark},
          {VimAction::prefix_mark_line, VimPrefix::mark_line},
-         {VimAction::prefix_mark_exact, VimPrefix::mark_exact}}};
+         {VimAction::prefix_mark_exact, VimPrefix::mark_exact},
+         {VimAction::prefix_bracket, VimPrefix::bracket}}};
     for (const auto &[from, prefix] : prefixes)
     {
         if (from == action)
@@ -1267,7 +1269,8 @@ namespace
     // `'` `` ` `` も次の鍵（マークの名前）まで読む（ADR 0152 の決定 3）。`m` は Vim の nv_mark
     // と同じに オペレータを打ち消す（下の移動にならない鍵の道）。
     if (action == VimAction::prefix_g || action == VimAction::prefix_z ||
-        action == VimAction::prefix_mark_line || action == VimAction::prefix_mark_exact)
+        action == VimAction::prefix_mark_line || action == VimAction::prefix_mark_exact ||
+        action == VimAction::prefix_bracket)
     {
         return started_prefix(state, prefix_of(action).value_or(VimPrefix::g));
     }
@@ -1902,6 +1905,13 @@ namespace
                                                            : VimAction::move_mark_exact);
 }
 
+// `[` `]` の後ろの 1 鍵。族は未実装なので、どの鍵でも何も動かさずに失敗する（`[{` の `{` を
+// 段落の移動として流さない・保留中のオペレータも打ち消す・#1334）。
+[[nodiscard]] VimStep bracket_step(const VimState &state)
+{
+    return failed(VimStep{finished_input_wait(state), VimNoEffect{}}, VimRepeatFailure::refused);
+}
+
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,
                                    VimPrefix prefix, VimKey key)
 {
@@ -1928,6 +1938,8 @@ namespace
         return mark_jump_step(state, view, prefix, key);
     case VimPrefix::insert_register:
         return insert_register_step(state, view, key);
+    case VimPrefix::bracket:
+        return bracket_step(state);
     }
     std::unreachable();
 }

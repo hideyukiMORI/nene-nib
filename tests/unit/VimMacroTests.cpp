@@ -950,8 +950,9 @@ void verify_vim_macro_scope()
     bool named = true;
     for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
     {
-        // macro 欄はほかの族の fixture も持つ（#1246 の insert-page-edge-・viewport-ctrl-e-）。
-        // 名前で守るのは逆の向き: macro- の fixture は必ず macro 欄を持つ（#1324）。
+        // macro 欄はほかの族の fixture も持つ（#1246 の insert-page-edge-・#1232 の
+        // viewport-ctrl-e-・#1325 の del-key- の 3 件）。名前で守るのは逆の向き: macro- の
+        // fixture は必ず macro 欄を持つ（#1324）。
         named &= !fixture.name.starts_with("macro-") || fixture.macro.has_value();
         if (macro_fixture(fixture))
         {
@@ -959,7 +960,7 @@ void verify_vim_macro_scope()
             ++selected;
         }
     }
-    expect(selected == 156, "the scope replays the 42 macro, 108 register and 6 other "
+    expect(selected == 159, "the scope replays the 42 macro, 108 register and 9 other "
                             "fixtures with a macro register");
     expect(named, "every macro- fixture carries a macro register");
     verify_vim_macro_contracts();

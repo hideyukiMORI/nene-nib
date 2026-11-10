@@ -8,6 +8,8 @@ namespace nenenib::tests::performance
 // `$` の後の `<C-v>`（鍵と frame が引く矩形）と `I` の鍵を 1 回ずつ流す。残りの 3 本は同じ本文の
 // 真ん中で、矩形の `r`・矩形のレジスタの `p`・`I` の後の `.` の再生（#1237）。最後の 2 本も同じ
 // 本文の真ん中で、INSERT の `<C-w>` と大きな回数の `h`（#1258）と大きな回数の `l`（#1269）。
+// 文の移動の 1 本は `text-object-sentence-giant-1line-16384` と同じ巨大な行のしきい値ちょうどの
+// 1 行（`.` `!` `?` を含まない）の真ん中から `)` の鍵を 1 回流す（#1316・#751 の塊の走査）。
 enum class VimBlockWorkload : std::uint8_t
 {
     insert_giant_1line,
@@ -16,6 +18,7 @@ enum class VimBlockWorkload : std::uint8_t
     repeat_giant_1line,
     insert_ctrl_w_giant_1line,
     count_h_giant_1line,
-    count_l_giant_1line
+    count_l_giant_1line,
+    sentence_motion_giant_1line
 };
 } // namespace nenenib::tests::performance
