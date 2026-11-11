@@ -98,6 +98,52 @@ LineNumber minimap_top(LineNumber first_visible, std::size_t visible, std::size_
     return LineNumber{std::min(top, first) + 1};
 }
 
+std::int32_t minimap_pointed_row(std::int32_t y, std::int32_t panel_top) noexcept
+{
+    // 面の上へ出た点も段に直す（負の側は切り下げ）。
+    const std::int64_t offset = std::int64_t{y} - std::int64_t{panel_top};
+    const std::int64_t row = offset >= 0
+                                 ? offset / minimap_row_pixels
+                                 : -((-offset + minimap_row_pixels - 1) / minimap_row_pixels);
+    return static_cast<std::int32_t>(row);
+}
+
+LineNumber minimap_pointed_first(std::int32_t row, std::size_t visible, std::size_t total,
+                                 std::size_t rows) noexcept
+{
+    if (total <= visible)
+    {
+        return LineNumber{1};
+    }
+    // 見えている最初の行（0 始まり）の上限。minimap_top の送りの分母と同じ。
+    const std::size_t last = total - visible;
+    const auto last_signed = static_cast<std::int64_t>(last);
+    const auto half = static_cast<std::int64_t>(visible / 2);
+    // 文書が面に収まる: 面は送られない（minimap_top は 1 行目）ので、段 row は行 row + 1。
+    if (total <= rows)
+    {
+        const std::int64_t first =
+            std::clamp<std::int64_t>(std::int64_t{row} - half, 0, last_signed);
+        return LineNumber{static_cast<std::size_t>(first) + 1};
+    }
+    // 面が見えている行より短い: 面の最上段は見えている最初の行に付いて動くので、段の割合を文書に
+    // 写す（今のスクロールに依らない）。
+    if (rows <= visible)
+    {
+        const std::size_t span = rows > 1 ? rows - 1 : 1;
+        const auto at = static_cast<std::size_t>(
+            std::clamp<std::int64_t>(row, 0, static_cast<std::int64_t>(span)));
+        return LineNumber{std::min((at * last + span / 2) / span, last) + 1};
+    }
+    // 見えている範囲の面（visible 段）の上端が動ける段の数。上端 slider の面は minimap_top の比例の
+    // 送りで、見えている最初の行 first のとき first * track / last 段目に来る。その逆で、面の中央が
+    // row に来る first を四捨五入で求める。
+    const std::size_t track = rows - visible;
+    const auto slider = static_cast<std::size_t>(
+        std::clamp<std::int64_t>(std::int64_t{row} - half, 0, static_cast<std::int64_t>(track)));
+    return LineNumber{std::min((slider * last + track / 2) / track, last) + 1};
+}
+
 MinimapWindow minimap_window(const std::optional<MinimapWindow> &held, LineNumber top,
                              std::size_t rows, std::size_t total) noexcept
 {

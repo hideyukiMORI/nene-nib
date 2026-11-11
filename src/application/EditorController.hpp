@@ -147,6 +147,9 @@
 
 namespace nenenib::application
 {
+// ミニマップが最後に送った位置（先頭の行と、その行の中の画面行・ADR 0171 の決定 10 の追補）。
+using MinimapAt = std::pair<core::LineNumber, std::size_t>;
+
 // 状態遷移はここだけ（ARC-004 / ARC-011）。UI は apply の返す EditorDelivery を写す。
 // 意図は閉じた和型で、std::visit の写し先が足りなければコンパイルが落ちる（CPP-002 / ADR 0009）。
 class EditorController final
@@ -593,6 +596,9 @@ class EditorController final
     void sync_minimap();
     void note_minimap_edit(const core::TextBuffer &after, const core::Edit &edit);
     void add_minimap(EditorFrame &result);
+    // 面の上の押しとドラッグ（決定 5 の追補）。本文の窓だけを送る（ScrollLines と同じ道）。
+    void accept(const PointMinimap &intent);
+    [[nodiscard]] bool grab_minimap(MinimapPointing pointing, AutosaveId tab);
     // FolderPort が今の誰かの仕事を走らせているか（エクスプローラーは 1 つずつ頼む）。
     [[nodiscard]] bool folder_busy() const noexcept;
     void request_explorer_folder();
@@ -1211,6 +1217,14 @@ class EditorController final
     // sync_minimap だけ。
     MinimapCache minimap_;
     bool minimap_shown_ = false;
+    // 最後の frame の見えている論理行の数（add_minimap が面の範囲に使った値・決定 5 の追補）と、
+    // 面を押したときのその値（ドラッグの間は押したときの値で送り、折り返しで見えている行の数が
+    // 変わってもドラッグを単調に保つ）。0 は frame がまだ無い。
+    std::size_t minimap_visible_ = 0;
+    std::size_t minimap_grab_visible_ = 0;
+    // 押したタブと、最後に面が送った位置（先頭の行と画面行・レビュー V-1476 の M-2 と L-6）。
+    std::optional<AutosaveId> minimap_grab_tab_;
+    std::optional<MinimapAt> minimap_sent_;
     // 言語サーバーとのつながり（ADR 0160 の決定 5・6）。EditorControllerLanguageServer.cpp の群
     // だけが読み書きする。
     LanguageServerLink language_server_;

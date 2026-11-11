@@ -149,8 +149,9 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
     switch (message)
     {
     case WM_KEYDOWN:
-        // 面の幅のドラッグ中の Esc は押す前の幅へ戻すだけ（Issue #1413）。
-        if (word == VK_ESCAPE && take_explorer_escape(data))
+        // 面の幅のドラッグ中の Esc は押す前の幅へ戻すだけ（Issue #1413）。ミニマップのドラッグ中の
+        // Esc はドラッグを終えるだけ（ADR 0171 の決定 5 の追補）。
+        if (word == VK_ESCAPE && (take_explorer_escape(data) || take_minimap_escape(data)))
         {
             return 0;
         }
