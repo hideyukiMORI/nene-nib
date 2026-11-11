@@ -3,6 +3,8 @@
 
 #include "BookmarkKey.hpp"
 #include "CaretMotion.hpp"
+#include "ClipboardAction.hpp"
+#include "ClipboardKeys.hpp"
 #include "EditMode.hpp"
 #include "EditorIntent.hpp"
 #include "KeyChord.hpp"
@@ -347,6 +349,14 @@ void EditorWindow::press_key(WPARAM word)
     if (controller_.explorer_focused())
     {
         press_explorer_key(word);
+        return;
+    }
+    // Ctrl+Insert / Shift+Insert / Shift+Delete は Ctrl+C / V / X と同じ規則（D82・#1395）。
+    const auto clipboard = clipboard_key_for(word, held(VK_CONTROL), held(VK_SHIFT),
+                                             takes_os_clipboard_keys(mode_, vim_mode_));
+    if (clipboard.has_value())
+    {
+        send(application::ClipboardAction{clipboard.value()});
         return;
     }
     if (held(VK_CONTROL))

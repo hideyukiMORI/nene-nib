@@ -45,4 +45,7 @@ void verify_vim_special_keys();
 void verify_closing_steps();
 // Ctrl+Shift+M はどのモードでも操作 toggle_preview（施主決定 D77・#1354）。
 void verify_preview_cycle_key();
+// 通常モードの Windows の標準の鍵（Ctrl+N・Ctrl+Shift+Z・Ctrl / Shift+Insert・Shift+Delete・D82・
+// #1395）。
+void verify_standard_keys();
 } // namespace nenenib::tests::ui
