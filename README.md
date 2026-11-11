@@ -144,7 +144,7 @@ records in `docs/quality/`.
   persisted in `%LOCALAPPDATA%/NeNeNib/bookmarks.v1`; missing files remain registered and can be removed from
   the list. Read/write failures leave the previous list intact and show a one-line notice. The taskbar jump
   list is planned.
-- **FR-011 look** — frameless window with Mica title bar, follows the OS light / dark theme (aubergine dark, orange
+- **FR-011 look** — frameless window with an opaque tab band as its title bar, follows the OS light / dark theme (aubergine dark, orange
   accent), one paint per frame. Done.
 - **FR-012 Japanese IME** — IMM32; the composition is drawn in place and committed as one intent; Vim NORMAL turns the
   IME off, INSERT turns it back on. The Ctrl+P palette and the Vim `:` and search lines take a composition: they
@@ -268,7 +268,7 @@ saved theme leaves the original settings intact and blocks settings writes until
 
 ## What it will be
 
-- One `.exe`, starts instantly, draws with the GPU (Direct2D / DirectWrite, DXGI flip model, Mica).
+- One `.exe`, starts instantly, draws with the GPU (Direct2D / DirectWrite, DXGI flip model, DirectComposition).
 - Ordinary editing like Notepad, or Vim editing (vanilla Vim defaults first), switched by one key.
   The Vim engine is written from scratch and verified against a real headless Vim.
 - Tabs in the title bar, `Ctrl+P` for open files, bookmarks, history and the current folder, a Markdown preview,
