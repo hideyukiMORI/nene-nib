@@ -32,6 +32,7 @@ using detail::cased_text;
 using detail::changed;
 using detail::character_search_position;
 using detail::characters_between;
+using detail::column_one_yank;
 using detail::completed_character_search;
 using detail::count_of;
 using detail::failed;
@@ -133,7 +134,15 @@ constexpr char line_feed_byte = '\n';
         body.push_back('\n');
         return VimRegister{std::move(body), VimRegisterKind::lines};
     case VimRegisterKind::characters:
+        break;
+    }
+    switch (range.yank_shape)
+    {
+    case VimYankShape::by_kind:
         return VimRegister{std::move(body), VimRegisterKind::characters};
+    case VimYankShape::whole_lines:
+        // 1 桁目から 1 桁目までの範囲の本文は、終わりの行の手前までの行を改行ごと持つ（#1364）。
+        return VimRegister{std::move(body), VimRegisterKind::lines};
     }
     std::unreachable();
 }
@@ -1350,7 +1359,7 @@ namespace detail
     // 見る）。y 以外のオペレータは caret を読まない。
     const VimMotionRange operated_range =
         keeps_the_line_break(view.text, range.value(), wanted, operation)
-            ? range.value()
+            ? column_one_yank(view.text, range.value())
             : adjusted_for_exclusive(view.text, landed(view, state, wanted, range.value()), wanted);
     Offset yanked_from = view.selection.caret;
     if (operation == VimOperator::yank && operated_range.kind == VimRegisterKind::lines)

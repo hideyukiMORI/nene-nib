@@ -112,6 +112,7 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
                                                     const VimMotionRange &range, VimMotion motion);
 [[nodiscard]] bool keeps_the_line_break(const TextBuffer &text, const VimMotionRange &range,
                                         VimMotion motion, VimOperator operation);
+[[nodiscard]] VimMotionRange column_one_yank(const TextBuffer &text, const VimMotionRange &range);
 [[nodiscard]] VimMotionRange whole_lines_for_delete(const TextBuffer &text,
                                                     const VimMotionRange &range);
 // 書き手の結果（ADR 0051 の決定 6・追補（#848）の決定 C）。first は命令が完了した状態、second は
