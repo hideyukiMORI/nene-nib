@@ -580,6 +580,8 @@ void EditorWindow::remember_session(const application::EndSession &intent)
 
 void EditorWindow::change_dpi(WPARAM word, LPARAM data)
 {
+    // 境のドラッグ中に DPI が変わったら、Esc と同じく押す前の幅へ戻す（#1387 の F-4）。
+    static_cast<void>(cancel_explorer_divider());
     dpi_ = static_cast<UINT>((word >> 16U) & 0xFFFFU);
     const auto *suggested = std::bit_cast<const RECT *>(data);
     SetWindowPos(window_, nullptr, suggested->left, suggested->top,
