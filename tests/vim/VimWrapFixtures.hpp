@@ -2,11 +2,11 @@
 // oracle: C:\Program Files\Vim\vim91\vim.exe - VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3
 // 2024 23:53:58)
 
-// wrap-fixtures.json: sha256 01db246dfd488805bc96e09f0ecb7e28accedebf1fcd23a9eb93727c49bb5038
+// wrap-fixtures.json: sha256 bc8de1ae1c71d38d37a1bdb94ae199a3d14cef161b5c9321a6e9783fac809ab1
 
 // measurement: sha256 4f48b1c81d44d1a648ecde42c8b3a679af91e39f8ff855c97ae71d40a22bb1fe
 
-// shared oracle: sha256 0c0b05bff3c2332715aa09a970cf3f6df4bc985716a48c52d094fca852c0598a
+// shared oracle: sha256 cf3cfe0822171a421193664fdd5c59aafcbfe3e8cb64c58a5cbe0e3ecd999e0d
 
 #pragma once
 
@@ -16,7 +16,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 332> vim_wrap_fixtures{{
+constexpr std::array<VimFixture, 335> vim_wrap_fixtures{{
     {"wrap-top-00",
      "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
      "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
@@ -4015,5 +4015,20 @@ constexpr std::array<VimFixture, 332> vim_wrap_fixtures{{
      "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\n11 short\n12 short\n13 short\n14 short\n15 "
      "short\n16 short\n17 short\n18 short\n19 short\n20 short",
      11, 1, "", "", VimViewportFixture{5, 10, 10, 1, 11, 2, 80, 0}},
+    {"wrap-so-full-G-below-wrapped",
+     "01\n02\n03\n04\n05\n06\n07\n08\n09xxxxxxxxxxxxxxxxxxx\n10\n11\n12\n13\n14\n15",
+     ":set so=3<CR>10G",
+     "01\n02\n03\n04\n05\n06\n07\n08\n09xxxxxxxxxxxxxxxxxxx\n10\n11\n12\n13\n14\n15", 10, 1, "", "",
+     VimViewportFixture{3, 8, 8, 1, 10, 1, 20, 0}},
+    {"wrap-so-full-2j-below-wrapped",
+     "01\n02\n03\n04\n05\n06\n07\n08\n09xxxxxxxxxxxxxxxxxxx\n10\n11\n12\n13\n14\n15",
+     ":set so=3<CR>2j",
+     "01\n02\n03\n04\n05\n06\n07\n08\n09xxxxxxxxxxxxxxxxxxx\n10\n11\n12\n13\n14\n15", 10, 1, "", "",
+     VimViewportFixture{3, 8, 8, 1, 10, 1, 20, 0}},
+    {"wrap-so-full-j-onto-wrapped",
+     "01\n02\n03\n04\n05\n06\n07\n08\n09xxxxxxxxxxxxxxxxxxx\n10\n11\n12\n13\n14\n15",
+     ":set so=3<CR>j",
+     "01\n02\n03\n04\n05\n06\n07\n08\n09xxxxxxxxxxxxxxxxxxx\n10\n11\n12\n13\n14\n15", 9, 1, "", "",
+     VimViewportFixture{3, 8, 8, 1, 9, 1, 20, 0}},
 }};
 } // namespace nenenib::tests
