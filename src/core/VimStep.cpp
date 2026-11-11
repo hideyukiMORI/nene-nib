@@ -2199,8 +2199,12 @@ VimState vim_register_stored(const VimState &state, char name, const VimRegister
 
 bool vim_reads_unnamed_clipboard(const VimState &state, const VimKey &key) noexcept
 {
+    // 文字単位と行単位の VISUAL の `p` `P` も読む（Vim の nv_put_opt の adjust_clip_reg・#1418）。
+    // 矩形の VISUAL の `p` `P` はまだ効かないので読まない。
+    const bool puts = state.mode == VimMode::normal || state.mode == VimMode::visual ||
+                      state.mode == VimMode::visual_line;
     if (!state.clipboard_unnamed || state.selected_register.has_value() ||
-        state.pending.has_value() || state.input_wait.has_value() || state.mode != VimMode::normal)
+        state.pending.has_value() || state.input_wait.has_value() || !puts)
     {
         return false;
     }
@@ -2329,6 +2333,8 @@ namespace
 // INSERT へ入る道を区別せず、鍵の前が VISUAL で後が VISUAL でなければ鍵の前の選択を覚える
 // （Vim の end_visual_mode と do_pending_operator）。`.` の VISUAL の再生は置かず、再生の鍵が
 // VISUAL にいるあいだ印を持ち越す（Vim の redo_VIsual_busy・実測）。
+// 文字単位と行単位の VISUAL の `p` `P` だけは、ここで置いた値を VimStep.visual_after が効果の後に
+// 貼った本文の両端で置き直す（ADR 0018 の追補 #1418・Vim の nv_put_opt）。
 // 前の選択に置く欲しい列（#1361）は block_line_end_state の 1 本（引数を待つ鍵の `C` `D` は
 // 文字なので除く）。
 [[nodiscard]] VimState visual_left_state(const VimState &state, const VimKey &key)

@@ -861,8 +861,13 @@ void verify_unnamed_clipboard_predicate(const VimState &empty, const TextBuffer 
     expect(!vim_reads_clipboard(on, down), "other keys never read the clipboard");
     expect(nenenib::core::vim_reads_unnamed_clipboard(core_steps(on, text, caret, "3").next, put),
            "p after a count reads it");
-    expect(!nenenib::core::vim_reads_unnamed_clipboard(core_steps(on, text, caret, "v").next, put),
-           "VISUAL p does not read it (Nib has no VISUAL put)");
+    expect(nenenib::core::vim_reads_unnamed_clipboard(core_steps(on, text, caret, "v").next, put) &&
+               nenenib::core::vim_reads_unnamed_clipboard(core_steps(on, text, caret, "V").next,
+                                                          put_before),
+           "characterwise and linewise VISUAL p P read it (#1418)");
+    expect(
+        !nenenib::core::vim_reads_unnamed_clipboard(core_steps(on, text, caret, "<C-v>").next, put),
+        "blockwise VISUAL p does not read it (block VISUAL put is not implemented)");
     for (const std::string_view keys :
          {"d", "i", "\"a", "\"+", "f", "m", "@", "r", "g", "z", "'", "`", "q"})
     {

@@ -501,6 +501,59 @@ void verify_unnamed_sync_puts()
     }
 }
 
+// オンの VISUAL の `p` `P`（#1418）。どちらも直前に 1 回読んで選択を置き換え、`p` は消した本文を
+// 無名と OS へ書き（Vim の nv_put_opt は消した本文を戻す）、`P` は `"_d` で消すので書かない。
+void verify_unnamed_sync_visual_put()
+{
+    constexpr std::array<std::tuple<std::string_view, std::string_view, std::size_t>, 3> puts{{
+        {"wvep", "abc XY", 1},
+        {"wveP", "abc XY", 0},
+        {"Vp", "XY", 1},
+    }};
+    for (const auto &[keys, expected, writes] : puts)
+    {
+        Editing editing;
+        open_vim_document(editing, "abc def");
+        sync_unnamed(editing);
+        editing.clipboard().hold(held("XY"));
+        vim_replay(editing.controller(), keys);
+        expect(whole_vim_body(editing.controller()) == expected,
+               "VISUAL p and P put the clipboard text over the selection");
+        expect(editing.clipboard().reads() == 1, "a VISUAL put reads the clipboard once");
+        expect(editing.clipboard().writes() == writes,
+               "VISUAL p writes the removed text and VISUAL P writes nothing");
+    }
+    Editing removed;
+    open_vim_document(removed, "abc def");
+    sync_unnamed(removed);
+    removed.clipboard().hold(held("XY"));
+    vim_replay(removed.controller(), "wvep");
+    expect(written_text(removed) == "def", "VISUAL p leaves the removed text on the clipboard");
+}
+
+// CRLF の文書の VISUAL の `p` `P`（#1418）。最後の行の `V`（前の行の終わりから置き換え）と行を割る
+// `v` も、本文とキャレットは LF の fixture（visual-put-line-last・lines-split-after）と同じ。
+void verify_visual_put_crlf()
+{
+    using VisualPut = std::tuple<std::string_view, std::string_view, std::size_t, std::size_t>;
+    constexpr std::array<VisualPut, 4> puts{{
+        {"yyGVp", "ab\ncd\nab", 3, 1},
+        {"yyjlvp", "ab\nc\nab\n\nef", 3, 1},
+        {"yyjVp", "ab\nab\nef", 2, 1},
+        {"yiwwvep", "ab\nab\nef", 2, 2},
+    }};
+    for (const auto &[keys, expected, line, column] : puts)
+    {
+        Editing editing;
+        open_vim_document(editing, "ab\r\ncd\r\nef");
+        vim_replay(editing.controller(), keys);
+        expect(whole_vim_body(editing.controller()) == expected,
+               "a CRLF document takes the VISUAL put like an LF one");
+        expect(caret_at(editing.controller().frame(), line, column),
+               "and the caret lands where it lands in an LF document");
+    }
+}
+
 // 読めない・空の OS は無名を空にし、`p` は本文を変えない（決定 D・G）。
 void verify_unnamed_sync_put_refused()
 {
@@ -648,6 +701,8 @@ void verify_vim_clipboard_contracts()
     verify_unnamed_sync_writes();
     verify_unnamed_sync_named();
     verify_unnamed_sync_puts();
+    verify_unnamed_sync_visual_put();
+    verify_visual_put_crlf();
     verify_unnamed_sync_put_refused();
     verify_unnamed_sync_replay();
     verify_unnamed_sync_own_text();

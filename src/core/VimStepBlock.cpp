@@ -846,19 +846,20 @@ namespace
     }
     return true;
 }
+} // namespace
 
+namespace detail
+{
 // 貼れないレジスタ（E353）。未使用と空のクリップボードだけ（ADR 0051 の B6）。空の本文で書かれた
-// レジスタ（空行の `C`・#960）は Vim の do_put の y_size が 1 なので拒まない（実測）。
+// レジスタ（空行の `C`・#960）は Vim の do_put の y_size が 1 なので拒まない（実測）。NORMAL の
+// `p` `P` と VISUAL の `p` `P`（#1418）が共用する。
 [[nodiscard]] bool refuses_put(const VimState &state, const VimRegister &source)
 {
     const bool clipboard = state.selected_register.has_value() &&
                            state.selected_register.value().target == VimRegisterTarget::clipboard;
     return source.kind == VimRegisterKind::uninitialized || (source.text.empty() && clipboard);
 }
-} // namespace
 
-namespace detail
-{
 [[nodiscard]] VimStep put_step(const VimState &state, const VimEditorView &view, VimPutSide side)
 {
     const TextBuffer &text = view.text;

@@ -134,7 +134,7 @@ ADR 0009（選択と undo）・ADR 0012（engine の形）・ADR 0014（IME と 
 - **読み替えの 1 本 `operated_mode`。** 大文字の `X` `D` `Y` `C` `I` `A` は矩形でなければ行単位、`R` は矩形も行単位（`nv_Replace` は種類を問わず `'V'`）、`s` は種類のまま（`nv_subst`・矩形の `s` は矩形の `c`）。前の選択（`gv`）は鍵の前の種類のまま（`VIsual_mode_orig`・`l<C-v>jRX<Esc>gv` は矩形）。回数は使わない（`v2C` `v3R` `v2s`）。
 - **`C` `R` `s`。** `C` `R` は行単位の VISUAL の `c`（`visual_linewise_changed`・範囲・レジスタ・`"1` の規則・u の戻り先は `Vc` と同じ道）、`s` は `visual_changed`。
 - **`I` `A` の位置（`do_pending_operator` と `op_insert`）。** 範囲の両端は「選択の始めの端（`VIsual`）の桁を 0 にしてからカーソルと並べる」（`oap->start = VIsual; if 'V' start.col = 0`）。`I` は始まり（`jlvkIX` はカーソルの 2 桁目・`lvjIX` は 1 行目の頭）、`A` は終わりを行の内容の中へ寄せ（`check_cursor_col`）、行が空でなく `oap->start_vcol != oap->end_vcol` のときだけ終わりの文字の後ろ（`inc_cursor`）。ほかの行へは写さない（矩形の `I` `A` は従来どおり・ADR 0035 の追補 #1042）。回数は INSERT の回数（`lv3AX` は 3 回・NORMAL の `3A` と同じ）。u の戻り先は打ち始める所。
-- **`start_vcol` `end_vcol` は前のオペレータの値を残す。** Vim はこの 2 つを `$` でないときに終わりの最後の桁、1 行だけなら始まりの最初の桁も書き直し、ほかは前の VISUAL のオペレータの値のまま残す（`lvldvjAX` は 2 行目の 1 文字目の後ろ・`lvjdvjAX` は後ろ・`vj$AX` は手前・実測）。矩形は `get_op_vcol` が左右の桁にする。矩形の `C` `D` は `v_visop` が curswant を MAXCOL にしてから流すので、終わりは一番長い行の行末の桁（`l<C-v>jCX<Esc>0vj$AY` は `gXY`・実測・前の選択の欲しい列と同じ `block_line_end_state` の 1 本を読む）。Nib は `VimState.operator_columns`（`VimOperatorColumns`）に持ち、書くのは VISUAL をオペレータで抜けた歩の 1 か所（`visual_operation_noted`・`visual_acted` の範囲の変更・`u` `U`・`Ctrl-a` `Ctrl-x`・行に効く命令の群と `r{char}`）。VISUAL の `p` `P` も `nv_put_opt` が選択を消すために `do_pending_operator` を通すので書き直す（`operates()` は put を外さない・Nib の VISUAL の `p` `P` は #1418 で入り、それまでは VISUAL に残るので書かない・`lyllvlp0vj$AY` は Vim `ghijklY`・対照の `llvlo<Esc>0vj$AY` は `ghijkYl`。fixture は #1418 と合わせた木で足す）。
+- **`start_vcol` `end_vcol` は前のオペレータの値を残す。** Vim はこの 2 つを `$` でないときに終わりの最後の桁、1 行だけなら始まりの最初の桁も書き直し、ほかは前の VISUAL のオペレータの値のまま残す（`lvldvjAX` は 2 行目の 1 文字目の後ろ・`lvjdvjAX` は後ろ・`vj$AX` は手前・実測）。矩形は `get_op_vcol` が左右の桁にする。矩形の `C` `D` は `v_visop` が curswant を MAXCOL にしてから流すので、終わりは一番長い行の行末の桁（`l<C-v>jCX<Esc>0vj$AY` は `gXY`・実測・前の選択の欲しい列と同じ `block_line_end_state` の 1 本を読む）。Nib は `VimState.operator_columns`（`VimOperatorColumns`）に持ち、書くのは VISUAL をオペレータで抜けた歩の 1 か所（`visual_operation_noted`・`visual_acted` の範囲の変更・`u` `U`・`Ctrl-a` `Ctrl-x`・行に効く命令の群と `r{char}`）。VISUAL の `p` `P` も `nv_put_opt` が選択を消すために `do_pending_operator` を通すので書き直す（`operates()` は put を外さない・Nib の VISUAL の `p` `P` は #1418 で入った・`lyllvlp0vj$AY` は Vim `ghijklY`・対照の `llvlo<Esc>0vj$AY` は `ghijkYl`。fixture は #1418 の `visual-put-columns-`）。
 - **`.`（ADR 0033）。** 大文字の鍵は Vim の `resel_VIsual_mode` が読み替えた種類なので、記録の大きさも読み替えた種類で測る（`measured_state`・`vlAX<Esc>j0.` は 1 行を選び直す）。#1417 の `X` `D` `Y` の大きさもこの形になる（結果は同じ）。再生の中の行単位は `oap->start` がカーソルで、終わりは同じバイトの桁のまま行数ぶん下（coladvance しない）。ただし記録が `$` で選んだ大きさ（`rv_vcol == MAXCOL`）なら coladvance(MAXCOL) で行の最後の文字（`v$AX<Esc>j0.` は `ghijkXl`・`VimLineExtent` が `$` の印を持ち、再生の欲しい列を行末にする）。`start_vcol` `end_vcol` は書き直さない（`lVjAX<Esc>j0.` は 4 行目の 1 文字目の後ろ・実測）。
 - **`S` は入れない（設計席の判断・候補 B）。** Vim の VISUAL の `S` は行単位の `c`（`vjSX` `VjSX` `l<C-v>jSX` は `X/ef`・実測）だが、ADR 0165 の決定 5（施主決定 D67）が VISUAL の `S{char}` を surround に充てるので、surround（#1001）まで何もしない。
 - **測った（変えない・後続）。** `'^` の桁（`lvjIX<Esc>`^` は Vim 1,2・Nib 1,1）は NORMAL の `lIX<Esc>`^` も同じ違いで本件の外（#1448）。空の文書の `VcX<Esc>`（`vCX` `vRX` も）で Nib は無名へ `\n` 行単位を書く（Vim は書かない）のも NORMAL の `Vc` と同じ根（ML_EMPTY・#980 にコメントで足した）。
@@ -143,10 +143,25 @@ ADR 0009（選択と undo）・ADR 0012（engine の形）・ADR 0014（IME と 
 | 鍵 | Vim 9.1 | Nib | 後続 |
 |---|---|---|---|
 | `S` | 行単位の `c`（`nv_subst`） | 何もしない | surround に充てる（ADR 0165 決定 5）ので入れない・#1001 |
-| `p` `P` | 選択を置き換える（`nv_put`） | 何もしない | #1418 |
+| `p` `P`（矩形） | 矩形を消して貼る（`nv_put`） | 何もしない（文字単位と行単位は #1418 で入った） | #1461 |
 | `=` | 字下げのオペレータ | 何もしない | 未起票 |
 | `gq` `gw` | 整形のオペレータ | 何もしない | 未起票 |
 | `g?` | rot13 のオペレータ | 何もしない | 未起票 |
 | `:'<,'>` | 選択の行の範囲で Ex | 何もしない（一般 Ex は後続） | 未起票 |
 
 - fixture は `visual-change-key-` の 137 件（修正前の再生器で 135 件が落ちる。通る 2 件は `l<C-v>jsX<Esc>u` と `vjA<Esc>`＝本文が戻る・変わらない形）。
+
+## 追補（2026-11-11・#1418）: 文字単位と行単位の VISUAL の `p` `P`
+
+決定 7 の「効かない鍵」のうち、文字単位と行単位の VISUAL の `p` `P` を Vim 9.1 の実測（`-es -u NONE`・下ごしらえの probe 160 件と fixture `visual-put-`）と `normal.c` の `nv_put_opt`・`register.c` の `do_put` の読みどおりに入れる。矩形の VISUAL の `p` `P`（Vim は矩形を消してから行単位の本文を矩形の下へ貼る `PUT_LINE_FORWARD`・単一行の文字単位の本文は各行へ貼る）は後続で、今は効かないまま。
+
+- **消してから貼る。** 貼る本文は消す前に読む（Vim は消す前のレジスタを `reg1` に取り、消した後に戻して貼る・`"1p` `"-p` も消す前の本文）。消すのは VISUAL の `d` と同じ道（`removed_exactly`）で、`p` は名前なしの `d`（無名・`"1`・`"-` を `registers_written` の規則どおりに書く）、`P` は `"_d`（Vim の `keep_registers`・レジスタを変えない）。`"a` の名前は貼る側だけに効く。読みは `register_read` の 1 本。
+- **行単位の VISUAL（`PUT_LINE`）。** 本文の種類を問わず行として貼り（文字単位と矩形は末尾に改行を足す）、選んだ行を貼った行で置き換える。最後の行まで選んだときは上の行の下へ貼り、全部の行なら本文の終わりの空の行を残さない（`nv_put_opt` の empty の後始末）。キャレットは貼った最初の行の最初の非空白。`"_` は空の文字単位（`get_spec_reg` の `""`）なので空の行が 1 行（回数ぶん）入る。
+- **文字単位の VISUAL。** 行単位の本文は消した所で行を割ってその間に貼る（`PUT_LINE_SPLIT`・キャレットは貼った最初の行の最初の非空白）。文字単位と矩形の本文は消した後の本文の消した所へ NORMAL の `P` と同じ `put_step` で貼る（消して行末に残るときの Vim の `p` も同じ所へ入る）。効果は消す範囲と貼る本文を 1 つの置き換え（矩形は最初の行の編集が消す範囲を含む行ごとの編集）に畳むので undo 1 単位で、`u` の戻り先は VISUAL の `d` と同じ `visual_restore`。空の本文（`"_` と空の文字単位）は消すだけ。
+- **貼れないレジスタ（E353）。** Vim は先に消してから鳴らす（`lvp` は `b` を消して `"` に入れる・実測）。Nib も消した効果に `refused` の失敗を添える（oracle は E353 で測れないので fixture は無い）。
+- **`gv`。** Vim は貼った後に `b_visual` の両端だけを貼った本文の両端（`b_op_start`・`b_op_end`）へ置き直し、種類と欲しい列は鍵の前のまま。両端は効果を写した後の位置なので、engine は `VimStep.visual_after` に返し、controller が効果を写した後に前の選択へ置く（`insert_left` と同じ形）。
+- **`.`（ADR 0033）。** `nv_put_opt` が流す VISUAL の `d` の `prep_redo` が put の記録を上書きするので、`.` は同じ大きさを選び直して `d`（`P` は `"_d`）を流すだけ（`vp` の後の `w.` は貼らない・実測）。回数と `"a` は記録に載らない。
+- **`:set clipboard=unnamed`。** 文字単位と行単位の VISUAL の `p` `P` もクリップボードを無名へ読む（`vim_reads_unnamed_clipboard`）。
+- **巨大な回数。** `v999999999p` は貼る本文が文書の上限を超えるので、消す前に断って選択も本文も変えない（#1341 の方針・`failed(cancelled(state))`）。Vim は先に消してから貼れずに終わる。
+- **測った（変えない・後続）。** 矩形の VISUAL の `p` `P`（`abc⏎def` の `yy<C-v>jp` は Vim では矩形を消して下へ行を貼り `bc⏎ef⏎abc`・Nib は何もしない・#1461）。`'.`（`` `. `` `g;`）は、消して貼る全体を 1 つの置き換えに畳むので消した所になる。Vim は行を貼ったら貼った最初の行の行頭で、行単位の本文を貼る 2 つの形で違う: 文字単位の VISUAL に行単位の本文（`ab⏎cd⏎ef⏎gh` の ``yyjlvpgg`.`` は Vim 3,1・Nib 2,1。``yjjvpgg`.`` ``yyjlv2pgg`.`` `yyjlvpggg;` も同じ）と、最後の行まで選んだ `V`（``yyGVpgg`.`` は Vim 4,1・Nib 3,2）。文字単位の本文を貼る形と最後の行でない `V` は一致する。直し方は操作の種類を渡す #793 の形（レビュー V-1460）。
+- fixture は `visual-put-` の 149 件（修正前の再生器で最初の 143 件がすべて落ちる。#1436 と合わせた木で足した `visual-put-columns-` の 6 件は、VISUAL の `p` `P` が `visual_operation_noted` を通って `start_vcol` `end_vcol` を書き直すことを測る・`lyllvlp0vj$AY` は `ghijklY`・対照の `llvlo<Esc>0vj$AY` は `ghijkYl`）。

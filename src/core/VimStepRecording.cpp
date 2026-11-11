@@ -784,6 +784,48 @@ namespace
     std::unreachable();
 }
 
+// 文字単位と行単位の VISUAL の `p` `P` か（#1418）。1 鍵の引数を待つ鍵（`r` `f` `"` の次）は除く。
+[[nodiscard]] std::optional<VimPutSide> visual_put_side(const VimState &before, const VimKey &key)
+{
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    if (before.mode == VimMode::visual_block || before.input_wait.has_value() ||
+        character == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto action = vim_action_for(character->code);
+    if (action == VimAction::put_after)
+    {
+        return VimPutSide::after;
+    }
+    return action == VimAction::put_before ? std::optional{VimPutSide::before} : std::nullopt;
+}
+
+// VISUAL の `p` `P` の `.`（#1418）。Vim の nv_put_opt は選択を消すために VISUAL の `d`（`P` は
+// `"_d`）を do_pending_operator へ流し、その prep_redo が put の記録を上書きするので、`.` は同じ
+// 大きさを選び直して消すだけ（`vp` の後の `w.` は貼らない・`vP` の後の `.` は `"1` を書かない・
+// 実測）。回数と `"a` の名前は記録に載らない。大きさは記録を始めた鍵（`"a` の `"`）で測った値。
+[[nodiscard]] VimStep visual_put_recorded(const VimState &before, const VimEditorView &view,
+                                          VimStep step, VimPutSide side)
+{
+    if (!changes_text(step.effect))
+    {
+        return step;
+    }
+    const VimVisualExtent extent =
+        before.recording.has_value() && before.recording.value().visual.has_value()
+            ? before.recording.value().visual.value()
+            : visual_extent_of(before, view);
+    std::vector<VimKey> keys;
+    if (side == VimPutSide::before)
+    {
+        keys = {VimKey{VimCharacter{U'"'}}, VimKey{VimCharacter{U'_'}}};
+    }
+    keys.emplace_back(VimCharacter{U'd'});
+    step.next.last_change = VimRepeatRecord{std::nullopt, VimRecordedKeys::from(keys), extent};
+    return step;
+}
+
 // 大きさを測る種類。大文字の鍵（`X` `D` `Y` `C` `I` `A` と `R`）は Vim の v_visop が行単位へ
 // 読み替えた種類で覚える（do_pending_operator の resel_VIsual_mode・#1436）。`vlAX<Esc>j0.` は
 // 1 行を選び直して打つ（2 文字ではない・実測）。
@@ -811,6 +853,10 @@ namespace
 [[nodiscard]] VimStep visual_recorded(const VimState &before, const VimEditorView &view,
                                       VimStep step, VimKey key)
 {
+    if (const auto side = visual_put_side(before, key); side.has_value())
+    {
+        return visual_put_recorded(before, view, std::move(step), side.value());
+    }
     // `"a` の後ろも次の鍵待ちと同じく記録を続ける（ADR 0048 の決定 10）。
     const bool waiting =
         step.next.input_wait.has_value() || step.next.selected_register.has_value();

@@ -8,6 +8,7 @@
 #include "VimMarkEdits.hpp"
 #include "VimMotionRange.hpp"
 #include "VimOperatorColumns.hpp"
+#include "VimPutSide.hpp"
 #include "VimVisualRange.hpp"
 #include "VirtualColumn.hpp"
 
@@ -65,6 +66,7 @@ using detail::visual_acted;
 using detail::visual_character;
 using detail::visual_left;
 using detail::visual_numbered;
+using detail::visual_put;
 using detail::visual_resting;
 using detail::visual_restore;
 using detail::visual_special;
@@ -429,7 +431,8 @@ namespace
 
 // 行に効く鍵（`I` `A` `C` `gi` `gI`）。矩形の `I` `A` `C` は ADR 0035 の追補 #1042、文字単位と
 // 行単位の `I` `A` `C` は #1436。`gi` は VISUAL では失敗する（実測・#1039）。`J` `gJ` `X` `D` `Y`
-// `s` `R` は visual_edit_line が先に振り分ける（`p` `P` は後続・#1418）。
+// `s` `R` と文字単位・行単位の `p` `P`（#1418）は visual_edit_line が先に振り分ける（矩形の `p` `P`
+// は後続で、ここで効かない）。
 [[nodiscard]] VimStep visual_line_command(const VimState &state, const VimEditorView &view,
                                           VimAction action)
 {
@@ -466,6 +469,20 @@ namespace
     return visual_unchanged(state);
 }
 
+// 文字単位と行単位の `p` `P`（#1418）と、行に効くほかの鍵。矩形の `p` `P` は後続（#1461・
+// visual_line_command で効かない）。
+[[nodiscard]] VimStep visual_put_or_command(const VimState &state, const VimEditorView &view,
+                                            VimAction action)
+{
+    if ((action == VimAction::put_after || action == VimAction::put_before) &&
+        state.mode != VimMode::visual_block)
+    {
+        return visual_put(state, view,
+                          action == VimAction::put_after ? VimPutSide::after : VimPutSide::before);
+    }
+    return visual_line_command(state, view, action);
+}
+
 // 行に効く本文の変更の群（NORMAL の normal_line_action と同じ群）の VISUAL の写し先（#1417）。
 [[nodiscard]] VimStep visual_edit_line(const VimState &state, const VimEditorView &view,
                                        VimAction action)
@@ -488,7 +505,7 @@ namespace
     {
         return visual_linewise_changed(state, view);
     }
-    return visual_line_command(state, view, action);
+    return visual_put_or_command(state, view, action);
 }
 
 // VISUAL の `o` `O`。矩形の `O` だけが行を変えずに左右の桁を使い直し、ほかは対角の角へ移る
@@ -575,8 +592,8 @@ namespace
 
 // VISUAL を抜ける鍵がオペレータか（Vim では do_pending_operator を通る鍵・#1436）。範囲の変更・
 // `u` `U`・`Ctrl-a` `Ctrl-x`・行に効く命令がそう。VISUAL の `p` `P` も nv_put_opt が選択を消す
-// ために do_pending_operator を通すので含む（#1418 で VISUAL を抜けるようになったら書く）。
-// 移動・選択・検索・タブは違う。
+// ために do_pending_operator を通すので含む（#1418・文字単位と行単位の `p` `P` は VISUAL
+// を抜ける）。 移動・選択・検索・タブは違う。
 [[nodiscard]] bool operates(VimActionGroup group) noexcept
 {
     switch (group)
