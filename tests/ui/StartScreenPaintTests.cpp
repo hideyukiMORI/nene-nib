@@ -1,7 +1,9 @@
 // #1455（ADR 0172 の決定 5・#1018 の段 2）: 起動画面の画素。WIC の bitmap（SoftwareTarget）に
 // StartScreenPainter で描き、題と節の見出しの墨・選んだ行の地（current_line）・選んでいない行の地
-// （本文の background）・鍵の枠の面（panel）・長いパスが列の右の余白の手前で切れること・行の
-// 文字組みの保持（最初の frame の数と、次の frame で増えないこと）を、ダークとライトで確かめる。
+// （本文の background）・鍵の枠の面（panel）・名前と場所（場所は頭側を切って列の右の余白の手前で
+// 終わる）・「はじめる」の補足は名前のすぐ後ろ・ショートカットの鍵の枠は項目の左端に揃うこと・行の
+// 文字組みの保持（最初の frame の数と、次の frame で増えないこと）を、ダークとライトで確かめる
+// （追補 2026-11-11 の 17〜19）。
 // 配置は製品と同じ core::start_screen_layout。bitmap は 80 画素の高さなので、平行移動で見たい行を
 // bitmap に入れて描く。窓・device は作らない。字の画素は字体に依るので、Segoe UI が無い機械では
 // 測らない（QLT-013）。
@@ -42,12 +44,12 @@ using nenenib::ui::win32::StartScreenText;
 using Format = Microsoft::WRL::ComPtr<IDWriteTextFormat>;
 
 constexpr std::uint32_t dpi = 96;
-// 最初の frame（履歴とブックマークを読む前）の文字組みの数: 題 1・見出し 2（はじめる・鍵）・
-// 「はじめる」の名前 3 と補足 2 と鍵の枠 1・鍵の案内の枠 3 と説明 3。
+// 最初の frame（履歴とブックマークを読む前）の文字組みの数: 題 1・見出し 2（はじめる・
+// ショートカット）・「はじめる」の名前 3 と補足 2 と鍵の枠 1・ショートカットの枠 3 と説明 3。
 constexpr std::size_t first_frame_layouts = 15;
-// 最近 2・ブックマーク 1 を読み、最初の行を選んだ frame: 見出しが 2 つ・名前が 3 つ・印が 1
-// つ増える。
-constexpr std::size_t listed_layouts = first_frame_layouts + 2 + 3 + 1;
+// 最近 2・ブックマーク 1 を読み、最初の行を選んだ frame: 見出し 2・印 1・「…」1 と、パスの行ごとに
+// 名前・場所の全文（幅を測る）・描いた場所の 3 つが増える。
+constexpr std::size_t listed_layouts = first_frame_layouts + 2 + 1 + 1 + (3 * 3);
 
 // 試験の書式（製品の renderer と同じ並び: 段落の中央・折り返さない）。
 [[nodiscard]] Format format_of(IDWriteFactory2 &factory, const wchar_t *family, float size,
@@ -66,15 +68,14 @@ constexpr std::size_t listed_layouts = first_frame_layouts + 2 + 3 + 1;
     return format;
 }
 
-// 書式 6 つ（題・項目・見出し・補足・鍵・鍵の説明）。
+// 書式 5 つ（題・行の字・見出し・鍵・鍵の説明）。
 using Formats = std::vector<Format>;
 
 [[nodiscard]] Formats formats_of(IDWriteFactory2 &factory)
 {
     return {format_of(factory, L"Segoe UI", 22.5F, DWRITE_TEXT_ALIGNMENT_LEADING),
-            format_of(factory, L"Consolas", 15.0F, DWRITE_TEXT_ALIGNMENT_LEADING),
             format_of(factory, L"Segoe UI", 12.0F, DWRITE_TEXT_ALIGNMENT_LEADING),
-            format_of(factory, L"Segoe UI", 12.0F, DWRITE_TEXT_ALIGNMENT_TRAILING),
+            format_of(factory, L"Segoe UI", 12.0F, DWRITE_TEXT_ALIGNMENT_LEADING),
             format_of(factory, L"Consolas", 12.5F, DWRITE_TEXT_ALIGNMENT_LEADING),
             format_of(factory, L"Segoe UI", 13.5F, DWRITE_TEXT_ALIGNMENT_LEADING)};
 }
@@ -89,7 +90,6 @@ using Formats = std::vector<Format>;
         formats.at(2).Get(),
         formats.at(3).Get(),
         formats.at(4).Get(),
-        formats.at(5).Get(),
         KeycapStyle{9.0F, 20.0F, 5.0F, palette.panel, palette.panel_border, palette.text},
         "Ctrl+O",
         dpi};
@@ -100,12 +100,12 @@ using Formats = std::vector<Format>;
     return core::body_layout_in(core::LayoutRect{0, 0, 1300, 900}, dpi, core::default_font_size());
 }
 
-// 最近 2（2 つ目は列に収まらない長いパス）・ブックマーク 1・最初の行を選んだ画面。
+// 最近 2（2 つ目は列に収まらない長い場所と短い名前）・ブックマーク 1・最初の行を選んだ画面。
 [[nodiscard]] application::StartScreenView listed_view()
 {
     const std::vector<core::FilePath> recent{
         core::FilePath::parse("C:\\work\\notes.txt").value(),
-        core::FilePath::parse("C:\\work\\" + std::string(120, 'w') + ".txt").value()};
+        core::FilePath::parse("C:\\" + std::string(120, 'w') + "\\notes2.txt").value()};
     const std::vector<core::FilePath> bookmarks{
         core::FilePath::parse("D:\\NeNeNib\\README.md").value()};
     return application::StartScreenView{core::start_entries(recent, bookmarks), std::size_t{0},
@@ -215,39 +215,59 @@ void verify_rows(const StripPainter &paint, const core::StartScreenLayout &layou
     expect(layout.recent_heading.has_value() &&
                ink_in(rows, shifted(heading, row_top), palette.background) > 0,
            "the recent heading is drawn");
-    // 長いパスは項目の欄の右端まで墨があり、行の右の余白には墨が無い。
+    // 長い場所の行は、項目の左端に名前の墨があり、頭を切った場所が項目の欄の右端まで続き、行の
+    // 右の余白には墨が無い。
     const auto &label = layout.rows.at(1).label;
-    // 見出しと 2 行は bitmap の高さに収まらないので、長いパスの行だけを別に描く。
+    // 見出しと 2 行は bitmap の高さに収まらないので、長い場所の行だけを別に描く。
     const auto path_top = second.top - 20;
     const auto path = paint(view, layout, path_top);
-    expect(ink_in(path,
-                  shifted(core::LayoutRect{label.right - 40, label.top, label.right, label.bottom},
-                          path_top),
-                  palette.background) > 0 &&
-               ink_in(path,
-                      shifted(core::LayoutRect{label.right, label.top, second.right, label.bottom},
-                              path_top),
-                      palette.background) == 0,
-           "a long path is cut before the right padding of the row");
+    expect(
+        ink_in(path,
+               shifted(core::LayoutRect{label.left, label.top, label.left + 20, label.bottom},
+                       path_top),
+               palette.background) > 0 &&
+            ink_in(path,
+                   shifted(core::LayoutRect{label.right - 40, label.top, label.right, label.bottom},
+                           path_top),
+                   palette.background) > 0 &&
+            ink_in(path,
+                   shifted(core::LayoutRect{label.right, label.top, second.right, label.bottom},
+                           path_top),
+                   palette.background) == 0,
+        "a long folder is cut at its head and ends before the right padding");
 }
 
-// 「ファイルを開く」の補足と鍵の案内の枠は、本文の案内と同じ鍵の枠（面は panel）。
+// 「はじめる」の補足は名前のすぐ後ろ（右端は空く）。「ファイルを開く」は右端に、ショートカットは
+// 項目の左端に、本文の案内と同じ鍵の枠（面は panel）。
 void verify_keycaps(const StripPainter &paint, const core::StartScreenLayout &layout,
                     const core::Palette &palette)
 {
     const auto view = listed_view();
-    const auto &open = layout.rows.at(4);
-    const auto open_top = open.line.top - 30;
+    const auto &fresh = layout.rows.at(3).label;
+    const auto &open = layout.rows.at(4).label;
+    const auto open_top = fresh.top - 10;
     const auto opened = paint(view, layout, open_top);
-    expect(pixel_is(opened, open.side.right - 3,
-                    ((open.side.top + open.side.bottom) / 2) - open_top, palette.panel),
-           "the open-file row shows its key in a keycap");
-    const auto &key = layout.keys.at(0);
+    expect(
+        ink_in(
+            opened,
+            shifted(core::LayoutRect{fresh.left + 120, fresh.top, fresh.left + 200, fresh.bottom},
+                    open_top),
+            palette.background) > 0 &&
+            ink_in(opened,
+                   shifted(core::LayoutRect{fresh.right - 60, fresh.top, fresh.right, fresh.bottom},
+                           open_top),
+                   palette.background) == 0,
+        "the new-file note follows its name and leaves the right end empty");
+    expect(
+        pixel_is(opened, open.right - 3, ((open.top + open.bottom) / 2) - open_top, palette.panel),
+        "the open-file row shows its key in a keycap at the right end");
+    const auto &key = layout.keys.at(1);
     const auto key_top = key.key.top - 30;
     const auto keys = paint(view, layout, key_top);
-    expect(pixel_is(keys, key.key.right - 3, ((key.key.top + key.key.bottom) / 2) - key_top,
-                    palette.panel),
-           "the key rows draw the guide keycap");
+    const auto key_middle = ((key.key.top + key.key.bottom) / 2) - key_top;
+    expect(pixel_is(keys, key.key.left + 3, key_middle, palette.panel) &&
+               pixel_is(keys, key.key.right - 3, key_middle, palette.background),
+           "a short shortcut keycap starts at the left axis of the rows");
     expect(ink_in(keys, shifted(key.label, key_top), palette.background) > 0,
            "the key rows carry their names");
 }

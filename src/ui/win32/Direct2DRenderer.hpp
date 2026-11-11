@@ -373,10 +373,9 @@ class Direct2DRenderer final
     // 測り直さない。書式（DPI と字体）を作り直す create_guide_formats で捨てる。
     std::optional<std::array<std::string, 3>> measured_guide_keys_;
     std::int32_t measured_guide_key_width_ = 0;
-    // 起動画面の題（UI の字体・本文の字の 1.5 倍）と項目（本文の字体と大きさ・文字単位の省略
-    // 記号）。本文の書式と一緒に作り直す（ADR 0172 の決定 5）。
+    // 起動画面の題（UI の字体・本文の字の 1.5 倍）。本文の書式と一緒に作り直す（ADR 0172 の
+    // 決定 5）。行の字はエクスプローラーの面の書式を共用する（追補 2026-11-11 の 18）。
     TextFormat start_title_format_;
-    TextFormat start_item_format_;
     // 起動画面の鍵の枠の列の幅（measured_guide_keys_ と同じ形・書式の作り直しで捨てる）。
     std::optional<std::array<std::string, 3>> measured_start_keys_;
     std::int32_t measured_start_key_width_ = 0;

@@ -579,7 +579,6 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     TextFormat key;
     TextFormat explorer;
     TextFormat start_title;
-    TextFormat start_item;
 
     const auto made_gutter =
         make_format(face, gutter_text_dips * ratio, DWRITE_FONT_WEIGHT_NORMAL, gutter);
@@ -591,21 +590,17 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     // 面の行の名前・説明（`command_format_`）と右端の欄（112 DIP）は本文の大きさに追従しないので、
     // 鍵も倍率を掛けない 12 DIP に固定する（ADR 0078 の決定 12・#312）。
     const auto made_key = make_format(face, ui_text_dips, DWRITE_FONT_WEIGHT_NORMAL, key);
-    // 起動画面の題は UI の字体で本文の字の 1.5 倍、項目は本文の字体と大きさ（ADR 0172 の決定 5・
-    // 採用案の表）。
-    const float body_dips = core::font_size_dips(settings.font_size);
-    const auto made_start_title =
-        make_format(family(L"Segoe UI Variable Display", L"Segoe UI"), body_dips * 1.5F,
-                    DWRITE_FONT_WEIGHT_NORMAL, start_title);
-    const auto made_start_item =
-        make_format(face, body_dips, DWRITE_FONT_WEIGHT_NORMAL, start_item);
+    // 起動画面の題は UI の字体で本文の字の 1.5 倍（ADR 0172 の決定 5・採用案の表）。行の字は
+    // エクスプローラーの面の書式を共用する（追補 2026-11-11 の 18）。
+    const auto made_start_title = make_format(family(L"Segoe UI Variable Display", L"Segoe UI"),
+                                              core::font_size_dips(settings.font_size) * 1.5F,
+                                              DWRITE_FONT_WEIGHT_NORMAL, start_title);
     if (FAILED(made_gutter) || FAILED(made_key) || FAILED(made_explorer) ||
-        FAILED(made_start_title) || FAILED(made_start_item) ||
-        FAILED(trim_by_character(explorer.Get())))
+        FAILED(made_start_title) || FAILED(trim_by_character(explorer.Get())))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
-    const std::array<TextFormat, 5> every{gutter, key, explorer, start_title, start_item};
+    const std::array<TextFormat, 4> every{gutter, key, explorer, start_title};
     for (const auto &format : every)
     {
         format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -616,7 +611,6 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     key_format_ = std::move(key);
     explorer_format_ = std::move(explorer);
     start_title_format_ = std::move(start_title);
-    start_item_format_ = std::move(start_item);
     formatted_size_ = settings.font_size;
     formatted_family_ = settings.font_family;
     return {};
@@ -1835,9 +1829,8 @@ void Direct2DRenderer::draw_start_screen(const application::EditorFrame &frame,
         core::operation_guide_entry(core::EditorOperation::open_file, frame.mode).key;
     StartScreenPainter painter(*context_.Get(), *brush_.Get(),
                                StartScreenText{dwrite_.Get(), start_title_format_.Get(),
-                                               start_item_format_.Get(), guide_status_format_.Get(),
-                                               status_format_.Get(), guide_key_format_.Get(),
-                                               guide_label_format_.Get(),
+                                               explorer_format_.Get(), guide_status_format_.Get(),
+                                               guide_key_format_.Get(), guide_label_format_.Get(),
                                                guide_keycap_style(frame.palette), open_key, dpi_},
                                start_layouts_);
     painter.paint(view, layout.value(), frame.palette, body.band);

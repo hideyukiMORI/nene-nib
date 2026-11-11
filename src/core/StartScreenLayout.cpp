@@ -28,26 +28,17 @@ constexpr std::size_t key_gap_at = 4;
             to_pixels(start_mark_gap_dips, dpi), line_height, to_pixels(start_key_gap_dips, dpi)};
 }
 
-// 列の中の 1 行（左右の余白・印の升・項目）。side_split が真なら項目の欄の右半分を右端の補足に
-// 割る（「はじめる」の行）。
+// 列の中の 1 行（左右の余白・印の升・項目の欄）。
 [[nodiscard]] StartRowLayout row_at(const LayoutRect &column, std::int32_t top,
-                                    const RowMetrics &metrics, bool side_split) noexcept
+                                    const RowMetrics &metrics) noexcept
 {
     const LayoutRect line{column.left, top, column.right, top + metrics.at(height_at)};
     const auto mark_left = std::min(line.left + metrics.at(padding_at), line.right);
     const auto mark_right = std::min(mark_left + metrics.at(mark_at), line.right);
     const auto text_left = std::min(mark_right + metrics.at(gap_at), line.right);
     const auto text_right = std::max(text_left, line.right - metrics.at(padding_at));
-    const LayoutRect mark{mark_left, top, mark_right, line.bottom};
-    if (!side_split)
-    {
-        return StartRowLayout{line, mark, LayoutRect{text_left, top, text_right, line.bottom},
-                              LayoutRect{text_right, top, text_right, line.bottom}};
-    }
-    const auto side_left = text_left + ((text_right - text_left) / 2);
-    const auto label_right = std::max(text_left, side_left - metrics.at(gap_at));
-    return StartRowLayout{line, mark, LayoutRect{text_left, top, label_right, line.bottom},
-                          LayoutRect{side_left, top, text_right, line.bottom}};
+    return StartRowLayout{line, LayoutRect{mark_left, top, mark_right, line.bottom},
+                          LayoutRect{text_left, top, text_right, line.bottom}};
 }
 
 // 見出し（行の左右の余白の内側・高さ 20 DIP）。
@@ -64,37 +55,26 @@ constexpr std::size_t key_gap_at = 4;
     return heading.bottom + to_pixels(start_heading_gap_dips, dpi);
 }
 
-// パスの行を count 行 top から置き、最後の行の下端を返す。
-[[nodiscard]] std::int32_t place_paths(StartScreenLayout &layout, std::int32_t top,
-                                       std::size_t count, const RowMetrics &metrics)
+// 選べる行を count 行 top から置き、最後の行の下端を返す。
+[[nodiscard]] std::int32_t place_rows(StartScreenLayout &layout, std::int32_t top,
+                                      std::size_t count, const RowMetrics &metrics)
 {
     for (std::size_t index = 0; index < count; ++index)
     {
-        layout.rows.push_back(row_at(layout.column, top, metrics, false));
+        layout.rows.push_back(row_at(layout.column, top, metrics));
         top += metrics.at(height_at);
     }
     return top;
 }
 
-// 「はじめる」の 3 行（右端に補足の欄）を top から置き、最後の行の下端を返す。
-[[nodiscard]] std::int32_t place_starts(StartScreenLayout &layout, std::int32_t top,
-                                        const RowMetrics &metrics)
-{
-    for (std::size_t index = 0; index < 3; ++index)
-    {
-        layout.rows.push_back(row_at(layout.column, top, metrics, true));
-        top += metrics.at(height_at);
-    }
-    return top;
-}
-
-// 鍵の案内の 3 行。鍵の枠の欄は項目の左端から key_width、説明は枠の右から 12 DIP の後。
+// 鍵の案内の 3 行。鍵の枠の列はほかの行の項目と同じ左端から key_width、説明はその右から
+// 12 DIP の後。
 void place_keys(StartScreenLayout &layout, std::int32_t top, const RowMetrics &metrics,
                 std::int32_t key_width) noexcept
 {
     for (auto &key : layout.keys)
     {
-        const auto row = row_at(layout.column, top, metrics, false);
+        const auto row = row_at(layout.column, top, metrics);
         const auto key_right = std::min(row.label.left + key_width, row.label.right);
         const auto label_left = std::min(key_right + metrics.at(key_gap_at), row.label.right);
         key = GuideRowLayout{LayoutRect{row.label.left, top, key_right, row.line.bottom},
@@ -138,15 +118,15 @@ std::optional<StartScreenLayout> start_screen_layout(const BodyLayout &body, std
     if (shape.recent > 0)
     {
         layout.recent_heading = heading_at(layout.column, next, dpi);
-        next = place_paths(layout, after_heading(layout.recent_heading.value(), dpi), shape.recent,
-                           metrics) +
+        next = place_rows(layout, after_heading(layout.recent_heading.value(), dpi), shape.recent,
+                          metrics) +
                gap;
     }
     if (shape.bookmarks > 0)
     {
         layout.bookmark_heading = heading_at(layout.column, next, dpi);
-        next = place_paths(layout, after_heading(layout.bookmark_heading.value(), dpi),
-                           shape.bookmarks, metrics) +
+        next = place_rows(layout, after_heading(layout.bookmark_heading.value(), dpi),
+                          shape.bookmarks, metrics) +
                gap;
     }
     if (shape.empty_note)
@@ -157,7 +137,7 @@ std::optional<StartScreenLayout> start_screen_layout(const BodyLayout &body, std
         next += height + gap;
     }
     layout.start_heading = heading_at(layout.column, next, dpi);
-    next = place_starts(layout, after_heading(layout.start_heading, dpi), metrics) + gap;
+    next = place_rows(layout, after_heading(layout.start_heading, dpi), 3, metrics) + gap;
     layout.key_heading = heading_at(layout.column, next, dpi);
     const auto keys_top = after_heading(layout.key_heading, dpi);
     place_keys(layout, keys_top, metrics,

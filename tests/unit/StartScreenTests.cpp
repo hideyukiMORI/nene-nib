@@ -428,9 +428,10 @@ void verify_rows(const core::StartScreenLayout &layout, const core::BodyLayout &
     expect(!layout.empty_note.has_value() && layout.start_heading.bottom <= rows.at(3).line.top &&
                layout.key_heading.top >= rows.at(5).line.bottom,
            "the start rows sit under their heading and above the key heading");
-    expect(core::width_of(rows.at(0).side) == 0 && core::width_of(rows.at(3).side) > 0 &&
-               rows.at(3).label.right <= rows.at(3).side.left,
-           "only the start rows split off a right-hand note");
+    expect(rows.at(3).label.left == rows.at(0).label.left &&
+               rows.at(3).label.right == rows.at(0).label.right &&
+               layout.keys.at(0).key.left == rows.at(0).label.left,
+           "path rows, start rows and the shortcut keys share one left axis");
 }
 
 // 列の中央・幅・行の高さと並び・見出しの有無・鍵の行を、DPI ごとに確かめる。

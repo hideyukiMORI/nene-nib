@@ -37,7 +37,7 @@ struct StartScreenLayout
 
 // 寸法の採用値（DIP・PR の表に凍結する値）。列の幅・列の左右に残す余白・本文の上端から題までの
 // 余白・題の後と節の間の余白・見出しの高さと見出しの後の余白・行の左右の余白・印の升・印と項目の
-// 間・鍵の枠と説明の間。
+// 間・鍵の枠の列と説明の間。
 inline constexpr std::int32_t start_column_dips = 480;
 inline constexpr std::int32_t start_column_margin_dips = 16;
 inline constexpr std::int32_t start_top_dips = 36;
@@ -49,6 +49,9 @@ inline constexpr std::int32_t start_row_padding_dips = 6;
 inline constexpr std::int32_t start_mark_dips = 18;
 inline constexpr std::int32_t start_mark_gap_dips = 8;
 inline constexpr std::int32_t start_key_gap_dips = 12;
+// 名前と場所の間・「はじめる」の名前と補足の間（Ctrl+P の面の題名と場所の間と同じ 12 DIP・
+// 追補 2026-11-11 の 17）。描画が名前の幅を測ってから置く。
+inline constexpr std::int32_t start_detail_gap_dips = 12;
 
 // 選べる行の列から節の形を数える。lists_read は履歴とブックマークを読み終えたか（偽なら空の知らせを
 // 出さない・ADR 0172 の追補 2026-11-11 の 7）。
@@ -58,8 +61,9 @@ inline constexpr std::int32_t start_key_gap_dips = 12;
 // 本文の枠 body に起動画面を置く。列の幅は 480 DIP で、本文の欄（行番号の右）が狭ければ本文の欄の
 // 幅から左右 16 DIP を引いた幅。列は本文の欄の中央。行の高さは本文の行の高さ、題は 1.5 倍。
 // key_width は鍵の枠の列の幅（物理画素・描画は測った値、当たりは 0 でよい・鍵の行は選べない）で、
-// 64 DIP より狭ければ 64 DIP。列の幅が 0 以下なら値なし（描かない・当たらない）。縦は本文の帯の
-// 下端を越えてもそのまま置き、描画が帯で切る。
+// 64 DIP より狭ければ 64 DIP。鍵の枠の列はほかの行の項目と同じ左端から始まる（追補 2026-11-11 の
+// 19）。列の幅が 0 以下なら値なし（描かない・当たらない）。縦は本文の帯の下端を越えてもそのまま
+// 置き、描画が帯で切る。
 [[nodiscard]] std::optional<StartScreenLayout> start_screen_layout(const BodyLayout &body,
                                                                    std::uint32_t dpi,
                                                                    StartScreenShape shape,
