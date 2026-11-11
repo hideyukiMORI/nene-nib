@@ -121,6 +121,13 @@ namespace
                             newline ? carriage_return_character : target, view.text.line_ending());
 }
 
+// NORMAL の r<CR> は行を割る（Vim の nv_replace は改行を入れて mark_adjust が行をずらす）。ほかの
+// r は行の中だけを書き換える op_replace で、マークの行を動かさない（#1360）。
+[[nodiscard]] VimLineMarks replacement_lines(bool splits_line) noexcept
+{
+    return splits_line ? VimLineMarks::shifted : VimLineMarks::kept;
+}
+
 [[nodiscard]] VimStep replaced_character(const VimState &state, const VimEditorView &view,
                                          char32_t target)
 {
@@ -153,7 +160,8 @@ namespace
             splits_line ? body.size() : previous_code_point(body, Offset{body.size()}).value;
     }
     VimStep step{vim_resting_from(state, state.unnamed_register),
-                 VimReplaceRange{selected, std::move(body), caret, EditBoundary::separate}};
+                 VimReplaceRange{selected, std::move(body), caret, EditBoundary::separate,
+                                 replacement_lines(splits_line)}};
     // NORMAL の r は engine が書かない（ADR 0052 の決定 11）。VISUAL は決定 10。
     if (state.mode != VimMode::normal)
     {

@@ -115,6 +115,12 @@ std::optional<std::string> searched_text(const core::SearchLine &line)
     {
         views.push_back(active);
     }
+    // プレビューのタブの印は窓に 1 つで、束には持たない（ADR 0179 の決定 1・10）。
+    const auto transient = state.transient_tab();
+    if (transient.has_value())
+    {
+        views.at(transient.value()).transient = true;
+    }
     return views;
 }
 
@@ -182,14 +188,15 @@ composition_view_of(const std::optional<core::Composition> &composition)
                            core::composition_underlines(composition.value()),
                            composition.value().cursor};
 }
-// 合図（ADR 0062 の決定 7・ADR 0137 の決定 1・ADR 0155 の決定 8・ADR 0160 の決定 6・ADR 0176 の
-// 決定 4）。「合図か」を決めるのはここの 1 か所（ADR 0062 の追補・#1296）。
 bool untouched_untitled(const EditorState &state) noexcept
 {
     return !state.document().path.has_value() && state.text().size_bytes() == 0 &&
            state.history().size() == 0;
 }
 
+// 合図（ADR 0062 の決定 7・ADR 0137 の決定 1・ADR 0155 の決定 8・ADR 0160 の決定 6・ADR 0176 の
+// 決定 4）。「合図か」を決めるのはここの 1 か所（ADR 0062 の追補・#1296）。題名のダブルクリックの
+// PinTab は使う人の操作なので合図ではない（ADR 0179 の決定 4-4）。
 bool is_signal(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<WorkCompleted>(intent) ||
@@ -200,14 +207,16 @@ bool is_signal(const EditorIntent &intent) noexcept
            std::holds_alternative<FirstFramePresented>(intent);
 }
 
-// 使う人の操作ではない意図。合図（is_signal）と、窓の寸法・外観・帯の hover。keeps_tab_walk と
-// begin_intent と `map` の待ちを保つ側と全面プレビューの振り分けが共用する。
+// 使う人の操作ではない意図。合図（is_signal）と、窓の寸法・外観・帯とエクスプローラーの
+// hover。keeps_tab_walk と begin_intent と `map`
+// の待ちを保つ側と全面プレビューの振り分けが共用する。
 bool not_user_operation(const EditorIntent &intent) noexcept
 {
     return is_signal(intent) || std::holds_alternative<VisibleLines>(intent) ||
            std::holds_alternative<TitleBarWidth>(intent) ||
            std::holds_alternative<RefreshAppearance>(intent) ||
-           std::holds_alternative<PointTitleBar>(intent);
+           std::holds_alternative<PointTitleBar>(intent) ||
+           std::holds_alternative<HoverExplorer>(intent);
 }
 
 } // namespace nenenib::application::detail

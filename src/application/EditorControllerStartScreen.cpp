@@ -256,8 +256,10 @@ void EditorController::run_start_entry(const core::StartEntry &entry)
         const bool recent = entry.kind == core::StartEntryKind::recent;
         // 開けずに履歴から外すと、forget が読んだ列からも外す（同期と裏の読みの両方・ADR 0172
         // の追補 11）。
+        // 起動画面から開くタブはプレビューのタブにしない（Enter と同じ pinned・ADR 0179）。
         open_listed(path.value(),
-                    recent ? core::PaletteOrigin::history : core::PaletteOrigin::bookmark);
+                    recent ? core::PaletteOrigin::history : core::PaletteOrigin::bookmark,
+                    OpenedAs::pinned);
         return;
     }
     switch (entry.kind)

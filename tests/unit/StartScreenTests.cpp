@@ -203,8 +203,9 @@ void verify_running_rows()
     applied(controller, app::NewLine{});
     const auto opened = controller.frame();
     expect(!opened.start_screen.has_value() && opened.document.path == path_named("recent0.txt") &&
-               opened.lines.size() == 1 && opened.lines.at(0).text == "first",
-           "Enter on a recent row opens that file and the start screen goes away");
+               opened.lines.size() == 1 && opened.lines.at(0).text == "first" &&
+               !opened.document.transient,
+           "Enter on a recent row opens that file as a pinned tab and the start screen goes away");
 }
 
 void verify_failed_rows()

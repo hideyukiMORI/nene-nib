@@ -30,6 +30,11 @@ using Side = std::pair<std::size_t, Rows>;
 using Halves = std::pair<Side, Side>;
 // 読む窓・行数・載っていなくて最初に読んだ行（問いとして返す）。
 using Lookup = std::tuple<const VimToplineWindow &, std::size_t, std::optional<std::size_t>>;
+// 答えの先頭と、送った論理行（scroll_cursor_bot の scrollup の line_count・送らなければ 0）。
+using Scrolled = std::pair<std::size_t, std::size_t>;
+// update_topline の 1 回の答え: 先頭・Vim の w_botline を数えた窓の先頭・その後に scrollup が
+// w_botline へ足した行（win_update が描いた窓の下の行と比べる値は、この 2 つから決まる）。
+using Settled = std::tuple<std::size_t, std::size_t, std::size_t>;
 
 [[nodiscard]] Rows height_of(const Lookup &lookup) noexcept
 {
@@ -262,6 +267,52 @@ using Lookup = std::tuple<const VimToplineWindow &, std::size_t, std::optional<s
     return below < margin;
 }
 
+// INSERT で打った本文を 1 文字ずつ下へ歩いたキャレットの先頭か（#1363）。Vim の edit は 1 文字
+// ごとに update_topline を呼ぶので、キャレットは窓の下の行を 1 行ずつ越え、そのたびに
+// scroll_cursor_bot が窓を最小の行だけ送る。余白が窓の半分より小さければ、送りの後の先頭は
+// 「キャレットと下の余白の行（本文の末尾で切る）が窓に入る最小の先頭」（scroll_cursor_bot の
+// set_topbot と同じ形）で、何行歩いても同じになる。余白が窓の半分以上なら上側の余白と組み合って
+// 中央へ寄るので、1 回の追従と同じ scroll_cursor_halfway のまま。
+[[nodiscard]] bool walked(const Lookup &lookup) noexcept
+{
+    return std::get<0>(lookup).walks && margin_of(lookup) * 2 < height_of(lookup);
+}
+
+// walked の先頭: キャレットの行と下の余白の行を数えてから、窓に入るだけ上の行を足す。
+[[nodiscard]] std::size_t walked_bottom(Lookup &lookup, std::size_t cursor) noexcept
+{
+    Rows used = plines(lookup, cursor);
+    const std::size_t last =
+        std::min(cursor + static_cast<std::size_t>(margin_of(lookup)), count_of(lookup));
+    for (std::size_t line = cursor + 1; line <= last; ++line)
+    {
+        used += plines(lookup, line);
+    }
+    std::size_t top = cursor;
+    while (top > 1)
+    {
+        const Rows rows = back_plines(lookup, top - 1);
+        if (used + rows > height_of(lookup))
+        {
+            break;
+        }
+        used += rows;
+        --top;
+    }
+    return top;
+}
+
+// walked の先頭と、送った論理行として先頭の差（#1300）。Vim は 1 文字ごとの scroll_cursor_bot が
+// 入口の validate_botline で w_botline を数え直してから scrollup(line_count) で line_count を足す
+// ので、歩き終わったときに持っている値は「最後の送りの前の窓で数えた値 ＋ 最後の送り」。折り返さ
+// ない窓ではこれは歩いた先頭 ＋ 窓の行数で、数えた窓の w_botline ＋ 先頭の差と同じなので、ここでは
+// 後者で数える（描いた w_botline と同じになり 2 回目は走らない）。
+[[nodiscard]] Scrolled walked_scrolled(Lookup &lookup, std::size_t top, std::size_t cursor) noexcept
+{
+    const std::size_t first = walked_bottom(lookup, cursor);
+    return Scrolled{first, first > top ? first - top : 0};
+}
+
 // 窓の下の行から下の段（scroll_cursor_bot の scrolled・窓の下の行は空き段を引く）。
 [[nodiscard]] Rows past_window(std::size_t line, const Shown &shown, Rows rows) noexcept
 {
@@ -339,8 +390,7 @@ using Lookup = std::tuple<const VimToplineWindow &, std::size_t, std::optional<s
 
 // scroll_cursor_bot（set_topbot は偽）: 窓の下に余白の行が残るように送る。送りが窓の高さ以上なら
 // 上を先に足す scroll_cursor_halfway。
-[[nodiscard]] std::size_t cursor_bot(Lookup &lookup, const Shown &shown,
-                                     std::size_t cursor) noexcept
+[[nodiscard]] Scrolled cursor_bot(Lookup &lookup, const Shown &shown, std::size_t cursor) noexcept
 {
     const Rows used = plines(lookup, cursor);
     Walk walk{cursor, cursor, used, past_window(cursor, shown, used), 0};
@@ -355,9 +405,11 @@ using Lookup = std::tuple<const VimToplineWindow &, std::size_t, std::optional<s
     const Rows lines = lines_to_scroll(lookup, shown, walk);
     if (lines >= height_of(lookup) && lines > scroll_jump)
     {
-        return cursor_halfway(lookup, cursor, true);
+        return walked(lookup) ? walked_scrolled(lookup, std::get<0>(shown), cursor)
+                              : Scrolled{cursor_halfway(lookup, cursor, true), 0};
     }
-    return std::min(std::get<0>(shown) + static_cast<std::size_t>(lines), count_of(lookup));
+    const auto sent = static_cast<std::size_t>(lines);
+    return Scrolled{std::min(std::get<0>(shown) + sent, count_of(lookup)), sent};
 }
 
 // 先頭から行 last（本文の末尾で切る）までが窓に全部入るか。入れば w_botline は last より下で、
@@ -379,22 +431,25 @@ using Lookup = std::tuple<const VimToplineWindow &, std::size_t, std::optional<s
 
 // update_topline の下側: check_botline が要れば、近ければ scroll_cursor_bot、遠ければ
 // scroll_cursor_halfway。
-[[nodiscard]] std::size_t bottom_checked(Lookup &lookup, std::size_t top,
-                                         std::size_t cursor) noexcept
+[[nodiscard]] Scrolled bottom_checked(Lookup &lookup, std::size_t top, std::size_t cursor) noexcept
 {
     if (fits_through(lookup, top, cursor + static_cast<std::size_t>(margin_of(lookup))))
     {
-        return top;
+        return Scrolled{top, 0};
     }
     const Shown shown = shown_from(lookup, top);
     if (!bottom_short(lookup, shown, cursor))
     {
-        return top;
+        return Scrolled{top, 0};
     }
     const std::size_t lines =
         cursor + 1 + static_cast<std::size_t>(margin_of(lookup)) - std::get<1>(shown);
-    return lines <= std::get<0>(lookup).height + 1 ? cursor_bot(lookup, shown, cursor)
-                                                   : cursor_halfway(lookup, cursor, false);
+    if (lines <= std::get<0>(lookup).height + 1)
+    {
+        return cursor_bot(lookup, shown, cursor);
+    }
+    return walked(lookup) ? walked_scrolled(lookup, top, cursor)
+                          : Scrolled{cursor_halfway(lookup, cursor, false), 0};
 }
 
 // update_topline の上側が要るか（先頭が 1 行目でなく、キャレットが先頭より上か上の余白が無い）。
@@ -423,28 +478,52 @@ using Lookup = std::tuple<const VimToplineWindow &, std::size_t, std::optional<s
            far_from_top(lookup, top, cursor);
 }
 
-// update_topline の全体（上側の後に下側・上側が中央へ寄せたら下側は見ない）。
-[[nodiscard]] std::size_t updated_top(Lookup &lookup, std::size_t top, std::size_t cursor) noexcept
+// update_topline の全体（上側の後に下側・上側が中央へ寄せたら下側は見ない）。中央へ寄せる
+// scroll_cursor_halfway は w_botline を数え直さない（鍵の前の窓の値が残る）。scroll_cursor_top の
+// 後の check_botline は動いた窓で数え直し、scroll_cursor_bot の scrollup は送った行を足す。
+[[nodiscard]] Settled updated_top(Lookup &lookup, std::size_t top, std::size_t cursor) noexcept
 {
     if (halfway_either_way(lookup, top, cursor))
     {
-        return cursor_halfway(lookup, cursor, false);
+        return Settled{cursor_halfway(lookup, cursor, false), top, 0};
     }
     if (top_needed(lookup, top, cursor))
     {
         if (far_from_top(lookup, top, cursor))
         {
-            return cursor_halfway(lookup, cursor, false);
+            return Settled{cursor_halfway(lookup, cursor, false), top, 0};
         }
         top = cursor_top(lookup, top, cursor);
     }
-    return bottom_checked(lookup, top, cursor);
+    const auto [first, sent] = bottom_checked(lookup, top, cursor);
+    return Settled{first, top, sent};
+}
+
+// win_update の終わりの確かめ（Vim 9.1 の drawscreen.c・dollar_vcol が -1 のとき）:
+// 答えの窓を描いた w_botline が update_topline の終わりに持っていた値と違えば、update_topline
+// をもう 1 回だけ呼ぶ （recursive で 1 回）。持っていた値は数えた窓の w_botline に scrollup
+// の行を足したもの（本文の 末尾 + 1
+// で切る）。答えが数えた窓のままで送っていなければ同じ値なので数えない。
+[[nodiscard]] bool redraw_rechecks(Lookup &lookup, const Settled &settled) noexcept
+{
+    const auto [first, counted, sent] = settled;
+    if (first == counted && sent == 0)
+    {
+        return false;
+    }
+    const std::size_t held =
+        std::min(std::get<1>(shown_from(lookup, counted)) + sent, count_of(lookup) + 1);
+    return std::get<1>(shown_from(lookup, first)) != held;
 }
 } // namespace
 
-std::expected<LineNumber, VimRowsNeeded> vim_topline_updated(const VimToplineWindow &window,
-                                                             LineNumber caret,
-                                                             std::size_t line_count) noexcept
+namespace
+{
+// 2 つの入口の共通（redrawn が真なら win_update の確かめも流す）。
+[[nodiscard]] std::expected<LineNumber, VimRowsNeeded> topline_of(const VimToplineWindow &window,
+                                                                  LineNumber caret,
+                                                                  std::size_t line_count,
+                                                                  bool redrawn) noexcept
 {
     const std::size_t count = std::max<std::size_t>(line_count, 1);
     const std::size_t cursor = std::clamp<std::size_t>(caret.value, 1, count);
@@ -457,12 +536,31 @@ std::expected<LineNumber, VimRowsNeeded> vim_topline_updated(const VimToplineWin
         return LineNumber{cursor};
     }
     Lookup lookup{window, count, std::nullopt};
-    const std::size_t updated = updated_top(lookup, top, cursor);
+    const Settled settled = updated_top(lookup, top, cursor);
+    const std::size_t first = std::get<0>(settled);
+    const std::size_t updated = redrawn && redraw_rechecks(lookup, settled)
+                                    ? std::get<0>(updated_top(lookup, first, cursor))
+                                    : first;
     const std::optional<std::size_t> &wanted = std::get<2>(lookup);
     if (wanted.has_value())
     {
         return std::unexpected(VimRowsNeeded{LineNumber{wanted.value()}});
     }
     return LineNumber{updated};
+}
+} // namespace
+
+std::expected<LineNumber, VimRowsNeeded> vim_topline_updated(const VimToplineWindow &window,
+                                                             LineNumber caret,
+                                                             std::size_t line_count) noexcept
+{
+    return topline_of(window, caret, line_count, false);
+}
+
+std::expected<LineNumber, VimRowsNeeded> vim_topline_redrawn(const VimToplineWindow &window,
+                                                             LineNumber caret,
+                                                             std::size_t line_count) noexcept
+{
+    return topline_of(window, caret, line_count, true);
 }
 } // namespace nenenib::core

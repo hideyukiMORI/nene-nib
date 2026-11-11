@@ -232,6 +232,28 @@ using BytePredicate = bool (*)(char) noexcept;
     const auto separator = last_where(path, is_separator);
     return separator.has_value() ? path.substr(separator.value() + 1) : path;
 }
+
+// C と C++ のヘッダの拡張子（#1390・エクスプローラーの印の色がソースと分ける）。どれも拡張子の表で
+// c か cpp の行にあることを下の static_assert が守る（表の外の拡張子をヘッダと呼ばない）。
+constexpr std::array<std::string_view, 4> header_extensions{"h", "hh", "hpp", "hxx"};
+
+[[nodiscard]] consteval bool headers_are_c_or_cpp() noexcept
+{
+    return std::ranges::all_of(header_extensions,
+                               [](std::string_view header)
+                               {
+                                   return std::ranges::any_of(
+                                       language_extensions,
+                                       [header](const LanguageExtension &row)
+                                       {
+                                           return row.first == header &&
+                                                  (row.second == Language::c ||
+                                                   row.second == Language::cpp);
+                                       });
+                               });
+}
+
+static_assert(headers_are_c_or_cpp(), "every header extension is a C or C++ row of the table");
 } // namespace
 
 Language language_of_path(std::string_view path) noexcept
@@ -262,6 +284,19 @@ Language language_of_path(std::string_view path) noexcept
         std::ranges::any_of(dockerfile_prefixes, [name](std::string_view prefix)
                             { return ascii_prefix_ignoring_case(name, prefix); });
     return dockerfile ? Language::dockerfile : Language::plain;
+}
+
+bool header_of_path(std::string_view path) noexcept
+{
+    const auto name = file_name_of(path);
+    const auto dot = last_where(name, is_dot);
+    if (!dot.has_value())
+    {
+        return false;
+    }
+    const auto extension = name.substr(dot.value() + 1);
+    return std::ranges::any_of(header_extensions, [extension](std::string_view header)
+                               { return same_ignoring_case(extension, header); });
 }
 
 std::string_view language_name(Language language) noexcept

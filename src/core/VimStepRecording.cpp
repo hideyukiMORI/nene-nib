@@ -74,7 +74,8 @@ namespace detail
     const auto index = vim_register_index(name);
     if (!index.has_value())
     {
-        return failed(VimStep{std::move(next), VimNoEffect{}}, VimRepeatFailure::refused);
+        // Esc は鳴らさずに打ち消す（`q<Esc>x` は x が効く・#1369）。
+        return escaped_or_refused(state, key);
     }
     next.macro_recording =
         VimMacroRecording{static_cast<char>(U'a' + index.value()), VimRecordedKeys::from({}),
@@ -191,7 +192,9 @@ namespace detail
     const auto selection = replayed_selection(state, key);
     if (!selection.has_value())
     {
-        return failed(VimStep{std::move(next), VimNoEffect{}}, VimRepeatFailure::refused);
+        // Esc は鳴らさずに打ち消す（`@<Esc>x` は x が効く・#1369）。`.` の記録は vim_recorded が
+        // 決め直すので、上の記録を消した next と同じ答えになる。
+        return escaped_or_refused(state, key);
     }
     next.last_macro = selection.value().name;
     const VimRegister source = register_read(state, selection);

@@ -12,6 +12,7 @@
 #include "OpenDocumentFormatList.hpp"
 #include "PaletteLayout.hpp"
 #include "PaneLayouts.hpp"
+#include "PinTab.hpp"
 #include "PointTitleBar.hpp"
 #include "PointerPress.hpp"
 #include "ScrollPaletteList.hpp"
@@ -130,10 +131,12 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         drag_explorer_divider(data);
         hover_explorer_divider(data);
         drag_selection(data);
+        hover_explorer_row(data);
         point_at(data);
         return 0;
     case WM_MOUSELEAVE:
         over_explorer_divider_ = false;
+        hover_explorer_line(std::nullopt);
         hover(std::nullopt);
         return 0;
     case WM_MOUSEWHEEL:
@@ -177,13 +180,21 @@ core::TitleBarTarget EditorWindow::title_bar_target_at(LPARAM data) const
     return core::title_bar_target(title_bar(), low_word_of(data), high_word_of(data));
 }
 
-bool EditorWindow::click_title_bar(LPARAM data)
+bool EditorWindow::click_title_bar(LPARAM data, application::PointerClicks clicks)
 {
     const auto target = title_bar_target_at(data);
     left_pressed_ = target;
     switch (target.hit)
     {
     case core::TitleBarHit::tab:
+        // 題名のダブルクリックは、切り替えと固定を 1 意図で送る（ADR 0179 の決定 4-4）。controller
+        // が 切り替えの成ったタブだけを固定するので、読めないタブが外れても隣を固定しない（#1427
+        // L1）。
+        if (clicks != application::PointerClicks::single)
+        {
+            send(application::PinTab{target.tab});
+            return true;
+        }
         send(application::SwitchTab{target.tab});
         return true;
     // ×・「＋」・「∨」は離したときに動かす（窓の操作と同じ）。
@@ -342,7 +353,7 @@ void EditorWindow::click_client(LPARAM data, application::PointerClicks clicks)
         click_palette(data);
         return;
     }
-    if (click_title_bar(data))
+    if (click_title_bar(data, clicks))
     {
         return;
     }

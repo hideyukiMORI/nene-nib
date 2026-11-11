@@ -51,6 +51,11 @@ class CountingTarget final
     {
         ++text_layouts_;
     }
+    void DrawBitmap(ID2D1Bitmap * /*bitmap*/, const D2D1_RECT_F & /*rect*/, FLOAT /*opacity*/,
+                    D2D1_BITMAP_INTERPOLATION_MODE /*mode*/) noexcept
+    {
+        ++bitmaps_;
+    }
     void PushAxisAlignedClip(const D2D1_RECT_F & /*clip*/, D2D1_ANTIALIAS_MODE /*mode*/) noexcept
     {
         ++clips_;
@@ -80,6 +85,10 @@ class CountingTarget final
     {
         return glyph_runs_;
     }
+    [[nodiscard]] std::size_t bitmaps() const noexcept
+    {
+        return bitmaps_;
+    }
     [[nodiscard]] std::size_t text_layouts() const noexcept
     {
         return text_layouts_;
@@ -101,6 +110,7 @@ class CountingTarget final
     std::size_t lines_ = 0;
     std::size_t glyph_runs_ = 0;
     std::size_t text_layouts_ = 0;
+    std::size_t bitmaps_ = 0;
     std::size_t clips_ = 0;
     std::ptrdiff_t depth_ = 0;
 };

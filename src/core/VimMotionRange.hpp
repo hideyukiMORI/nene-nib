@@ -5,6 +5,7 @@
 #include "VimEmptyChange.hpp"
 #include "VimNumberedRule.hpp"
 #include "VimRegisterKind.hpp"
+#include "VimYankShape.hpp"
 
 #include <optional>
 
@@ -20,6 +21,8 @@ namespace nenenib::core
 // 作る所（キャレットと着地を知っている所）だけで、範囲を作り直す所は numbered と同じく引き継ぐ。
 // empty_change は空の文字単位の範囲を `c` がレジスタへ書くか（#960）。立てるのは行末への移動と
 // 語のテキストオブジェクト（#979）だけ。
+// yank_shape は文字単位の範囲をレジスタへ行単位で書くかの印（#1364）。立てるのは 1 桁目から
+// 1 桁目までの d<BS> c<BS> だけ。
 struct VimMotionRange
 {
     OffsetRange range;
@@ -27,5 +30,6 @@ struct VimMotionRange
     VimNumberedRule numbered = VimNumberedRule::by_extent;
     std::optional<Offset> restore = std::nullopt;
     VimEmptyChange empty_change = VimEmptyChange::keeps_registers;
+    VimYankShape yank_shape = VimYankShape::by_kind;
 };
 } // namespace nenenib::core

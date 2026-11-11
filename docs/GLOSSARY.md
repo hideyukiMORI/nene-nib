@@ -75,6 +75,7 @@
 | エディタの依存 | controller へ注入する外観・clipboard・file・code page・設定ポートの名前付き参照 | `EditorPorts`（application / 合成は app、ADR 0020） |
 | エディタ状態 | 表示文字列と外観の唯一の所有者。不変で、次状態を返す | `EditorState`（application） |
 | 通常の結合文字境界 | 基底・後続の幅 0 の文字・共通の VS までの移動単位。Backspace は mark 一つ、VS は直前の code point と消す。完全な書記素クラスタではない（D38 / ADR 0065） | `ordinary_character_boundary` / `CaretMoveRequest`（core） |
+| 通常の語の境 | 通常モードの Ctrl+← → と Ctrl+Backspace / Ctrl+Delete の止まり。同じ種類の文字の連なり＋後ろの空白が 1 語。種類は Vim の語の分類の表を 4 か所読み替えて引く。メモ帳（Office RichEdit）の実測に合わせ、漢字の辞書の切れ方は写さない（D82 / ADR 0009 の追補 #1394） | `ordinary_word_boundary`（core） |
 | エディタフレーム | 表示文字列と配色の表示値。UI はこれを写すだけ | `EditorFrame`（application） |
 | 見た目のトークン | 採用案の寸法と配色。`core::Palette` が持ち、UI が写す | `docs/design/2026-09-15-look.md`（ADR 0008） |
 | 矩形 VISUAL | `Ctrl-v` で入る 3 つめの VISUAL。選択の 2 つの角を仮想桁の矩形と読み、行ごとの範囲で編集する（ADR 0035） | `VimMode::visual_block` / `vim_block_range`（core） |

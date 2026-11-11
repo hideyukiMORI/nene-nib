@@ -15,18 +15,21 @@
 #include "EditorPorts.hpp"
 #include "EditorSettings.hpp"
 #include "EndSession.hpp"
+#include "ExplorerPointing.hpp"
 #include "FileHistory.hpp"
 #include "FileHistoryEdit.hpp"
 #include "FileHistoryFailure.hpp"
 #include "FilePath.hpp"
 #include "FirstFramePresented.hpp"
 #include "FolderBatch.hpp"
+#include "FolderEntry.hpp"
 #include "FolderProgress.hpp"
 #include "InsertText.hpp"
 #include "LineNumber.hpp"
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
+#include "PointExplorer.hpp"
 #include "SaveDocument.hpp"
 #include "Scopes.hpp"
 #include "ScriptedAppearance.hpp"
@@ -450,6 +453,43 @@ void verify_quiet_explorer()
            "the waiting folder is listed again on the next work signal");
 }
 
+// エクスプローラーの面のクリック 1 回で開いたプレビューのタブの置き換え（ADR 0179 の決定 5）は、
+// 履歴を読まない・書かない・ファイルに書かない・自動退避に触れない。読みの port を頼むのは開く
+// ファイルの 1 回ずつだけ。
+void verify_quiet_transient_clicks()
+{
+    auto settings = nenenib::core::default_editor_settings();
+    settings.explorer = true;
+    settings.root = path_of("C:\\proj");
+    Editing editing(settings);
+    auto &controller = editing.controller();
+    applied(controller, VisibleLines{10});
+    nenenib::application::FolderBatch batch{editing.folders().requests().back().ticket,
+                                            {},
+                                            nenenib::application::FolderProgress::complete};
+    for (const char name : std::string_view{"abc"})
+    {
+        const std::string file = std::string("C:\\proj\\") + name + ".txt";
+        editing.files().hold_at(file, Bytes{std::string(1, name)});
+        batch.entries.push_back(nenenib::application::FolderEntry{path_of(file), false, false});
+    }
+    editing.folders().serve(std::move(batch));
+    applied(controller, nenenib::application::WorkCompleted{});
+    const auto touched = editing.autosave().touches();
+    for (const std::size_t row : {0U, 1U, 2U, 1U})
+    {
+        applied(controller, nenenib::application::PointExplorer{
+                                row, nenenib::application::ExplorerPointing::pressed});
+        applied(controller, nenenib::application::PointExplorer{
+                                row, nenenib::application::ExplorerPointing::released});
+    }
+    expect(controller.frame().tabs.size() == 1 && editing.history().reads() == 0 &&
+               editing.history().writes() == 0 && editing.files().written_path().empty() &&
+               editing.autosave().touches() == touched && editing.reads().requests().size() == 4,
+           "replacing the transient tab by clicks never touches the history, writes no file, "
+           "leaves autosave alone and reads each opened file once");
+}
+
 // 起動・開く・切り替え・新しいタブ・保存・打鍵の道では、履歴を読まない・書かない（D24・決定 8）。
 void verify_quiet_paths()
 {
@@ -509,6 +549,7 @@ void verify_quiet_paths()
            "autosave, the bell, the clipboard, the language server (lsp off), the clock, the "
            "printer nor the preview images, and only opening asks the read port");
     verify_quiet_explorer();
+    verify_quiet_transient_clicks();
 }
 } // namespace
 

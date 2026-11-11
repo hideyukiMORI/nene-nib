@@ -546,8 +546,8 @@ void verify_edit_adjusts_other_caret()
            "redo moves it again");
     applied(controller, place(1, 2));
     applied(controller, place(1, 5, core::SelectionAnchoring::extend));
-    const EditorFrame removed =
-        controller.apply_frame(app::DeleteText{core::DeleteDirection::backward});
+    const EditorFrame removed = controller.apply_frame(
+        app::DeleteText{core::DeleteDirection::backward, nenenib::core::DeleteUnit::character});
     expect(joined_lines(removed.lines) == "Pc|Qdef" && other_caret_at(removed, 1, 2),
            "removing text around the other caret folds it to the start of the removal");
     const EditorFrame restored =
@@ -593,8 +593,8 @@ void verify_edit_adjusts_other_first_line()
            "typing inside the first line keeps it");
     applied(controller, place(1, 1));
     applied(controller, place(2, 1, core::SelectionAnchoring::extend));
-    const EditorFrame removed =
-        controller.apply_frame(app::DeleteText{core::DeleteDirection::backward});
+    const EditorFrame removed = controller.apply_frame(
+        app::DeleteText{core::DeleteDirection::backward, nenenib::core::DeleteUnit::character});
     expect(other_first(removed) == 4 && other_lines(removed) == "lz4|l5|l6",
            "removing a line above the first line pulls it up by one");
 }
