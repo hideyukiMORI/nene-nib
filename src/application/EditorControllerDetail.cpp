@@ -190,7 +190,8 @@ bool is_signal(const EditorIntent &intent) noexcept
            std::holds_alternative<AutosaveTick>(intent) ||
            std::holds_alternative<PreviewTick>(intent) ||
            std::holds_alternative<LanguageServerTick>(intent) ||
-           std::holds_alternative<MapTimeout>(intent);
+           std::holds_alternative<MapTimeout>(intent) ||
+           std::holds_alternative<FirstFramePresented>(intent);
 }
 
 // 使う人の操作ではない意図。合図（is_signal）と、窓の寸法・外観・帯の hover。keeps_tab_walk と

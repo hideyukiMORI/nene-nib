@@ -431,13 +431,15 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 見せ方の SetPreviewPlacement と全面のマウスの PointPreview も使う人の操作の側（ADR 0155 の
     // 改訂 16・18）。全面プレビューの間の
     // 鍵の振り分けはここの 1 か所（改訂 17・route_full_preview）で、受けた意図は写さない。
-    if (!route_full_preview(intent))
+    // 起動画面の鍵の振り分けも入口のここの 1 か所（ADR 0172 の決定 4）。
+    if (!route_full_preview(intent) && !route_start_screen(intent))
     {
         std::visit([this](const auto &value) { this->accept(value); }, intent);
     }
     // 閉じたタブの読みの取消と、歩き・入力行・面の終わりで留めた読みの採用（ADR 0159 の追補
     // 1・2）。
     follow_reads();
+    settle_start_screen();
     keep_vim_character(intent);
     if (is_signal(intent) && caret_anchor_of(state_) != anchor)
     {
@@ -616,6 +618,8 @@ void EditorController::accept(const WorkCompleted &)
     collect_preview_images();
     // 言語サーバー（ADR 0160 の決定 1）。子が居なければ呼ばない。
     collect_language_server();
+    // 起動画面の履歴とブックマーク（ADR 0172 の決定 3）。頼んでいなければ呼ばない。
+    collect_start_lists();
     const auto &input = state_.command_input();
     const auto *palette =
         input.has_value() ? std::get_if<core::CommandPalette>(&input.value()) : nullptr;
@@ -1098,6 +1102,7 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     add_other_pane(result, source.pattern);
     result.explorer = explorer_view();
     add_diagnostics(result);
+    result.start_screen = start_screen_view();
 }
 
 std::optional<SyntaxStateCache> &EditorController::syntax_cache(core::PaneSide side) noexcept

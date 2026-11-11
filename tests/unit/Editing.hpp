@@ -23,6 +23,7 @@
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedShellRegistration.hpp"
+#include "ScriptedStartLists.hpp"
 #include "ScriptedTextLayouts.hpp"
 #include "ScriptedThemes.hpp"
 #include "ThemeCatalog.hpp"
@@ -48,7 +49,7 @@ class Editing final
               themes_,       session_,         history_,    folders_,    bookmarks_,
               text_layouts_, autosave_,        fonts_,      bell_,       markdown_,
               reads_,        language_server_, wall_clock_, printer_,    shell_registration_,
-              images_})
+              images_,       start_lists_})
     {
     }
 
@@ -161,6 +162,11 @@ class Editing final
         return images_;
     }
 
+    [[nodiscard]] ScriptedStartLists &start_lists() noexcept
+    {
+        return start_lists_;
+    }
+
     [[nodiscard]] ScriptedPrinter &printer() noexcept
     {
         return printer_;
@@ -187,7 +193,7 @@ class Editing final
             themes_,       session_,         history_,    folders_,    bookmarks_,
             text_layouts_, autosave_,        fonts_,      bell_,       markdown_,
             reads_,        language_server_, wall_clock_, printer_,    shell_registration_,
-            images_};
+            images_,       start_lists_};
     }
 
     ScriptedAppearance appearance_{Reading{Appearance::dark}};
@@ -211,6 +217,7 @@ class Editing final
     ScriptedPrinter printer_;
     ScriptedShellRegistration shell_registration_;
     ScriptedImages images_;
+    ScriptedStartLists start_lists_;
     EditorController controller_;
 };
 } // namespace nenenib::tests

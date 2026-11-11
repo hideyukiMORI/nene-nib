@@ -191,6 +191,9 @@ void verify_pointer_scope();
 // PreviewFullTests.cpp（ADR 0155 の改訂 15〜17・20・全面プレビューの見せ方と鍵の振り分け）
 void verify_preview_full_scope();
 
+// StartScreenTests.cpp（ADR 0172・#1018 の段 1・起動画面の条件と鍵と 1 回の読み）
+void verify_start_screen_scope();
+
 // ExitPlanTests.cpp（ADR 0133）
 void verify_exit_plan_scope();
 
