@@ -110,8 +110,8 @@ void vim_macro_typed(VimState &state, std::span<const VimKey> keys);
 [[nodiscard]] bool vim_continues_count(const VimState &state, const VimKey &key) noexcept;
 
 // 読んだ本文を無名へ置く側か（追補（#848）の決定 D）。`:set clipboard=unnamed` で、レジスタを
-// 選ばず・オペレータも次の鍵の待ちも無い NORMAL と文字単位・行単位の VISUAL の `p` `P`（回数の
-// 後でも・#1418）のとき真。
+// 選ばず・オペレータも次の鍵の待ちも無い NORMAL と VISUAL の `p` `P`（回数の後でも・#1418・
+// 矩形は #1461）のとき真。
 // 真なら controller は vim_unnamed_loaded、偽なら vim_clipboard_loaded で置く（2
 // つの側は重ならない）。
 [[nodiscard]] bool vim_reads_unnamed_clipboard(const VimState &state, const VimKey &key) noexcept;

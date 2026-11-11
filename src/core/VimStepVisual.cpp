@@ -431,8 +431,7 @@ namespace
 
 // 行に効く鍵（`I` `A` `C` `gi` `gI`）。矩形の `I` `A` `C` は ADR 0035 の追補 #1042、文字単位と
 // 行単位の `I` `A` `C` は #1436。`gi` は VISUAL では失敗する（実測・#1039）。`J` `gJ` `X` `D` `Y`
-// `s` `R` と文字単位・行単位の `p` `P`（#1418）は visual_edit_line が先に振り分ける（矩形の `p` `P`
-// は後続で、ここで効かない）。
+// `s` `R` と `p` `P`（#1418・#1461）は visual_edit_line が先に振り分ける。
 [[nodiscard]] VimStep visual_line_command(const VimState &state, const VimEditorView &view,
                                           VimAction action)
 {
@@ -469,13 +468,11 @@ namespace
     return visual_unchanged(state);
 }
 
-// 文字単位と行単位の `p` `P`（#1418）と、行に効くほかの鍵。矩形の `p` `P` は後続（#1461・
-// visual_line_command で効かない）。
+// `p` `P`（文字単位と行単位は #1418・矩形は #1461）と、行に効くほかの鍵。
 [[nodiscard]] VimStep visual_put_or_command(const VimState &state, const VimEditorView &view,
                                             VimAction action)
 {
-    if ((action == VimAction::put_after || action == VimAction::put_before) &&
-        state.mode != VimMode::visual_block)
+    if (action == VimAction::put_after || action == VimAction::put_before)
     {
         return visual_put(state, view,
                           action == VimAction::put_after ? VimPutSide::after : VimPutSide::before);

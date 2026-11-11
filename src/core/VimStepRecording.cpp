@@ -784,12 +784,11 @@ namespace
     std::unreachable();
 }
 
-// 文字単位と行単位の VISUAL の `p` `P` か（#1418）。1 鍵の引数を待つ鍵（`r` `f` `"` の次）は除く。
+// VISUAL の `p` `P` か（#1418・矩形は #1461）。1 鍵の引数を待つ鍵（`r` `f` `"` の次）は除く。
 [[nodiscard]] std::optional<VimPutSide> visual_put_side(const VimState &before, const VimKey &key)
 {
     const auto *const character = std::get_if<VimCharacter>(&key);
-    if (before.mode == VimMode::visual_block || before.input_wait.has_value() ||
-        character == nullptr)
+    if (before.input_wait.has_value() || character == nullptr)
     {
         return std::nullopt;
     }
