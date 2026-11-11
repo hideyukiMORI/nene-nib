@@ -27,9 +27,10 @@ TRANSIENT_MERGE_FAILURE = re.compile(r"(?i)\b5\d\d (?:bad gateway|service unavai
                                      r"internal server error)\b|merge already in progress")
 # #1345: after the merge, a read (compare, PR view) or a close can time out or get a 5xx while the merge
 # has already landed (#1339's compare timed out after 60 s). Those calls wait on the same table as the merge
-# call (MERGE_RETRIES x MERGE_RETRY_SECONDS); reads before the merge are not retried (nothing is done yet).
+# call (MERGE_RETRIES x MERGE_RETRY_SECONDS). #1501: the reads before the merge (GETs, nothing done yet) wait
+# on the same table too (#1500's read during the wait for CI got a cut body); the CI dispatch POST never does.
 TRANSIENT_GITHUB_FAILURE = re.compile(r"(?i)\bHTTP 5\d\d\b|\b5\d\d (?:bad gateway|service unavailable|"
-                                      r"gateway time-?out|internal server error)\b")
+                                      r"gateway time-?out|internal server error)\b|unexpected end of JSON input")
 # GitHub's pulls/<n>/commits and compare list at most 250 commits (ADR 0021 追補 決定 6).
 COMMIT_LIMIT = 250
 # GitHub closes the referenced Issue for any of these keywords, in any case (#1223).
@@ -59,14 +60,19 @@ def run_gh(arguments: list[str], timeout: float | None = None) -> subprocess.Com
 
 
 def read_json(arguments: list[str], runner) -> object:
+    """Call once: the CI dispatch POST and the squash path after the merge call (unchanged by #1345 / #1501)."""
     result = runner(arguments)
     if result.returncode:
         raise MergeRefused(f"GitHub read failed ({result.returncode}): {result.stderr.strip()}")
     return json.loads(result.stdout)
 
 
-def read_after_merge(arguments: list[str], runner) -> object:
-    """Read once the merge may have landed; wait on a timeout or a 5xx (#1345, same table as #1223)."""
+def read_waiting(arguments: list[str], runner) -> object:
+    """Read (a GET) and wait on a transient failure: a timeout, a 5xx, a cut body, or exit 0 with a body that
+    is not JSON (#1345 after the merge, #1501 before it; same table as the merge call, #1223).
+
+    Any other failure (404, permission, a refusal) stops at once.
+    """
     retried = 0
     while True:
         try:
@@ -74,16 +80,20 @@ def read_after_merge(arguments: list[str], runner) -> object:
         except subprocess.TimeoutExpired as error:
             failure = f"TimeoutExpired: {error}"
         else:
-            if not result.returncode:
-                return json.loads(result.stdout)
-            failure = f"GitHub read failed ({result.returncode}): {result.stderr.strip()}"
-            if TRANSIENT_GITHUB_FAILURE.search(f"{result.stderr}\n{result.stdout}") is None:
-                raise MergeRefused(failure)
+            if result.returncode:
+                failure = f"GitHub read failed ({result.returncode}): {result.stderr.strip()}"
+                if TRANSIENT_GITHUB_FAILURE.search(f"{result.stderr}\n{result.stdout}") is None:
+                    raise MergeRefused(failure)
+            else:
+                try:
+                    return json.loads(result.stdout)
+                except json.JSONDecodeError as error:
+                    failure = f"GitHub read is not JSON: {error}"
         if retried == MERGE_RETRIES:
             raise StillFailing(f"GitHub read still failing after {MERGE_RETRIES} retries: {failure}")
         retried += 1
         print(json.dumps({"readRetry": retried, "waitSeconds": MERGE_RETRY_SECONDS,
-                          "read": " ".join(arguments[:4])}, ensure_ascii=False), flush=True)
+                          "read": " ".join(arguments[:4]), "reason": failure}, ensure_ascii=False), flush=True)
         time.sleep(MERGE_RETRY_SECONDS)
 
 
@@ -215,7 +225,7 @@ def close_once(source: dict, comment: str, runner) -> str | None:
             failure = f"close failed: {result.stderr.strip()}"
             if TRANSIENT_GITHUB_FAILURE.search(f"{result.stderr}\n{result.stdout}") is None:
                 return failure
-        state = read_after_merge(pr_command("view", source["number"], "--json", "headRefOid,state"), runner)
+        state = read_waiting(pr_command("view", source["number"], "--json", "headRefOid,state"), runner)
         if not isinstance(state, dict) or state.get("headRefOid") != source["head"]:
             return f"{failure}; head differs after the failed close"
         if state.get("state") == "CLOSED":
@@ -254,7 +264,7 @@ def close_sources(number: int, commits: list[dict], landed: list, runner,
                                "reason": f"main commit {position + 1} is missing or has another subject"})
             continue
         try:
-            state = read_after_merge(pr_command("view", source["number"], "--json", "headRefOid,state"), runner)
+            state = read_waiting(pr_command("view", source["number"], "--json", "headRefOid,state"), runner)
             if resume and isinstance(state, dict) and state.get("state") == "CLOSED" and \
                     state.get("headRefOid") == source["head"]:
                 closed.append({"number": source["number"], "mainCommit": sha, "alreadyClosed": True})
@@ -363,16 +373,16 @@ def resume_after_merge(options, runner) -> int:
 
     Never merges, never starts CI, and closes nothing unless main holds the stacked commits exactly.
     """
-    merged = read_after_merge(pr_command("view", options.number, "--json",
+    merged = read_waiting(pr_command("view", options.number, "--json",
                                          "number,headRefOid,state,mergeCommit,url"), runner)
     print(json.dumps({"observedAfterMerge": merged}, ensure_ascii=False), flush=True)
     merge_commit = observed_merge(merged, options.number, options.expected_head)
-    commits = integration_commits(read_after_merge(api_command(
+    commits = integration_commits(read_waiting(api_command(
         f"pulls/{options.number}/commits?per_page=100", "--paginate", "--slurp"), runner))
-    on_main = read_after_merge(api_command(f"compare/{merge_commit}...main"), runner)
+    on_main = read_waiting(api_command(f"compare/{merge_commit}...main"), runner)
     if not isinstance(on_main, dict) or type(on_main.get("behind_by")) is not int or on_main["behind_by"] != 0:
         raise MergeRefused("The merge commit is not on main")
-    landed = read_after_merge(api_command(f"compare/{options.merge_base}...{merge_commit}"), runner)
+    landed = read_waiting(api_command(f"compare/{options.merge_base}...{merge_commit}"), runner)
     check_landed_exactly(landed, commits, merge_commit)
     sources = [commit["source"]["number"] for commit in commits if commit["source"] is not None]
     print(json.dumps({"resume": True, "mergeCommit": merge_commit, "verified": True, "sources": sources},
@@ -432,7 +442,7 @@ def watch_run(run_id: int, runner) -> None:
         if not result.returncode:
             break
         failure = f"CI did not succeed: {result.stderr.strip()} {result.stdout.strip()}"
-        state = read_json(["run", "view", str(run_id), "--repo", REPOSITORY, "--json", "status,conclusion"], runner)
+        state = read_waiting(["run", "view", str(run_id), "--repo", REPOSITORY, "--json", "status,conclusion"], runner)
         if not isinstance(state, dict):
             raise MergeRefused(failure)
         if state.get("status") == "completed" and state.get("conclusion") == "success":
@@ -456,7 +466,7 @@ def run_ci(number: int, head: str, record: dict, runner, run_id: int | None) -> 
             raise MergeRefused("CI dispatch outcome unknown: inspect Actions before dispatching again")
         run_id = response["workflow_run_id"]
     print(json.dumps({"ciRun": run_id, "resume": f"--ci-run {run_id}"}), flush=True)
-    run = read_json(api_command(f"actions/runs/{run_id}"), runner)
+    run = read_waiting(api_command(f"actions/runs/{run_id}"), runner)
     # ADR 0143: the definition is main's check.yml; the PR head is proven by the input-based run name.
     expected = {"event": "workflow_dispatch", "path": ".github/workflows/check.yml",
                 "head_branch": "main", "display_title": f"Merge PR #{number} at {head}"}
@@ -466,7 +476,7 @@ def run_ci(number: int, head: str, record: dict, runner, run_id: int | None) -> 
     # Observe completion before validating the final run identity.
     if run.get("status") != "completed":
         watch_run(run_id, runner)
-        run = read_json(api_command(f"actions/runs/{run_id}"), runner)
+        run = read_waiting(api_command(f"actions/runs/{run_id}"), runner)
     if not isinstance(run, dict) or run.get("status") != "completed" or run.get("conclusion") != "success" or \
             any(run.get(key) != value for key, value in expected.items()) or \
             not isinstance(run.get("repository"), dict) or run["repository"].get("full_name") != REPO_NAME:
@@ -516,16 +526,16 @@ def main(argv=None, runner=run_gh) -> int:
     progress = {"number": options.number, "mergeBase": None, "merged": "unknown", "mergeCommit": None,
                 "mainChecked": False}
     try:
-        record = read_json(pr_command("view", options.number, "--json", PR_FIELDS), runner)
-        rules = read_json(api_command("rules/branches/main"), runner)
+        record = read_waiting(pr_command("view", options.number, "--json", PR_FIELDS), runner)
+        rules = read_waiting(api_command("rules/branches/main"), runner)
         command = merge_command(options.number, options.expected_head, record, rules, options.integration)
         commits = []
         if options.integration:
-            commits = integration_commits(read_json(api_command(
+            commits = integration_commits(read_waiting(api_command(
                 f"pulls/{options.number}/commits?per_page=100", "--paginate", "--slurp"), runner))
-            check_contains_main(read_json(api_command(f"compare/main...{options.expected_head}"), runner),
+            check_contains_main(read_waiting(api_command(f"compare/main...{options.expected_head}"), runner),
                                 len(commits))
-        pages = read_json(api_command(f"pulls/{options.number}/files?per_page=100", "--paginate", "--slurp"), runner)
+        pages = read_waiting(api_command(f"pulls/{options.number}/files?per_page=100", "--paginate", "--slurp"), runner)
         docs_only = documentation_only(pages, record.get("changedFiles"))
         if docs_only and any(rule["type"] == "required_status_checks" for rule in rules):
             raise MergeRefused("Documentation-only merge is still blocked by required status checks in the ruleset")
@@ -545,20 +555,20 @@ def main(argv=None, runner=run_gh) -> int:
         if not docs_only:
             print(json.dumps({"verifiedCI": run_ci(options.number, options.expected_head, record,
                                                   runner, options.ci_run)}), flush=True)
-        latest = read_json(pr_command("view", options.number, "--json", PR_FIELDS), runner)
+        latest = read_waiting(pr_command("view", options.number, "--json", PR_FIELDS), runner)
         if latest != record:
             raise MergeRefused("PR changed during merge preparation; inspect it before continuing")
-        latest_rules = read_json(api_command("rules/branches/main"), runner)
+        latest_rules = read_waiting(api_command("rules/branches/main"), runner)
         if latest_rules != rules:
             raise MergeRefused("Branch rules changed during merge preparation")
         if options.integration:
             # main can move while CI runs; the rebased tree must still be the tree CI passed.
-            merge_base = check_contains_main(read_json(api_command(f"compare/main...{options.expected_head}"),
+            merge_base = check_contains_main(read_waiting(api_command(f"compare/main...{options.expected_head}"),
                                                        runner), len(commits))
             progress["mergeBase"] = merge_base
         executing = True
         # The squash path reads as before; the integration path waits on post-merge reads (#1345).
-        reader = read_after_merge if options.integration else read_json
+        reader = read_waiting if options.integration else read_json
         # V-1263 F-3: main must not move while waiting; keep the window to seconds as before the wait.
         before_retry = (lambda: check_contains_main(reader(api_command(f"compare/main...{options.expected_head}"),
                                                            runner), len(commits))) \
