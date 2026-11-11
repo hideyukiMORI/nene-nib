@@ -604,7 +604,12 @@ void EditorWindow::change_dpi(WPARAM word, LPARAM data)
 std::expected<void, RenderFailure> EditorWindow::draw_frame()
 {
     text_layouts_.begin_frame();
-    const auto frame = controller_.frame();
+    auto frame = controller_.frame();
+    // ミニマップを押している間は見えている範囲の面を濃くする（#1487・押しの覚えは窓が持つ）。
+    if (frame.minimap.has_value())
+    {
+        frame.minimap.value().pressed = minimap_grab_.has_value();
+    }
     // 打鍵の道の段（#844）。frame を作り終えた直後・描く前。
     timing_.mark(core::Milestone::frame_built);
     const auto drawn =
