@@ -472,7 +472,7 @@ void EditorWindow::end_window(application::ExitCause cause, application::Session
     {
         // 失敗（属性の無い Windows 10 と 11 21H2）でも箱は出す。
         // 下地は見た目だけで、未保存の本文を守る問い（ADR 0133）を止めない。
-        [[maybe_unused]] const HRESULT shown = show_question_backdrop(window_);
+        static_cast<void>(show_question_backdrop(window_));
     }
     switch (plan)
     {
