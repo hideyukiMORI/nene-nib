@@ -2,6 +2,10 @@
 // （ADR 0151 の決定 18・#784）。製品の旗は足さず、窓・device・swap chain を作らない。
 // 描く経路は製品と同じ PreviewTextLayouts・PreviewBlockTops・PreviewPainter・PreviewBrushes で、
 // 描画先の DPI は core::reference_dpi（座標は物理画素・本文と同じ）。
+// ローカルの画像（施主決定 D79・ADR 0155 の追補 62〜65・#1439）は、製品と同じ
+// PreviewImages の決まりで頼まれた順に adapter の読み（image_file_bytes）と復号
+// （decoded_image）を同じスレッドで通して持ち（ワーカーは使わない・COM の STA を始める前に
+// 読む）、製品と同じ PreviewBitmaps で描く。
 //
 //   nib_preview_capture --in <md> --out <png> [--width <DIP>] [--height <DIP>] [--dpi <96|144>]
 //                       [--theme <name>] [--font-size <pt>] [--scroll <DIP>] [--font <family>]
@@ -9,10 +13,18 @@
 
 #include "DevicePixels.hpp"
 #include "EditorSettings.hpp"
+#include "FilePath.hpp"
 #include "FontSize.hpp"
+#include "ImageDecode.hpp"
+#include "ImageFileRead.hpp"
+#include "ImageFormat.hpp"
+#include "ImageOutcome.hpp"
 #include "MarkdownParse.hpp"
+#include "PreviewBitmaps.hpp"
 #include "PreviewBlockTops.hpp"
 #include "PreviewBrushes.hpp"
+#include "PreviewImageWindow.hpp"
+#include "PreviewImages.hpp"
 #include "PreviewPainter.hpp"
 #include "PreviewScene.hpp"
 #include "PreviewTextLayouts.hpp"
@@ -22,13 +34,16 @@
 #include "ThemeName.hpp"
 #include "Utf16.hpp"
 
+#include <algorithm>
 #include <array>
 #include <charconv>
 #include <cstdint>
 #include <cstdio>
 #include <d2d1.h>
+#include <d2d1_1.h>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <objbase.h>
 #include <optional>
 #include <span>
@@ -43,6 +58,10 @@ namespace
 {
 namespace core = nenenib::core;
 namespace win32 = nenenib::ui::win32;
+namespace app = nenenib::application;
+namespace adapters = nenenib::adapters::win32;
+using Document = std::expected<core::MarkdownDocument, core::MarkdownFailure>;
+using Images = std::shared_ptr<const app::PreviewImages>;
 using nenenib::tests::preview::CaptureOptions;
 using Bitmap = Microsoft::WRL::ComPtr<IWICBitmap>;
 using Imaging = Microsoft::WRL::ComPtr<IWICImagingFactory>;
@@ -196,10 +215,74 @@ constexpr float default_height = 900.0F;
     return found ? std::optional<core::Theme>{found.value().view()} : std::nullopt;
 }
 
+// 1 枚を読んで復号する（adapter の 2 つの関数・失敗は閉じた enum）。
+[[nodiscard]] app::ImageOutcome outcome_of(const app::ImageRequest &request)
+{
+    auto bytes = adapters::image_file_bytes(request.path);
+    if (!bytes)
+    {
+        return app::ImageOutcome{request.ticket, std::unexpected(bytes.error())};
+    }
+    const auto head =
+        std::string_view(bytes.value())
+            .substr(0, std::min(bytes.value().size(), core::image_format_probe_bytes));
+    return app::ImageOutcome{request.ticket, adapters::decoded_image(std::span<char>(bytes.value()),
+                                                                     core::image_format_of(head))};
+}
+
+// 文書の画像を製品と同じ決まりで読む（文書の全部を見える範囲として、頼めなくなるまで 1 枚ずつ）。
+// 文書の場所は input（ドライブの絶対パス・区切りは \ に揃える）。画像の節が無ければ null。
+[[nodiscard]] Images images_of(const core::MarkdownDocument &document, std::string input)
+{
+    if (document.images.empty())
+    {
+        return nullptr;
+    }
+    std::ranges::replace(input, '/', '\\');
+    const auto base = core::FilePath::parse(input);
+    auto images = std::make_shared<app::PreviewImages>(app::PreviewImages::of(
+        document, base ? std::optional<core::FilePath>{base.value()} : std::nullopt, nullptr));
+    const app::PreviewImageWindow window{0, document.blocks.size()};
+    std::uint64_t tickets = 0;
+    for (auto request = images->claim(document, window, true, tickets); request.has_value();
+         request = images->claim(document, window, true, tickets))
+    {
+        static_cast<void>(images->received(outcome_of(request.value())));
+    }
+    std::printf("preview: %zu images, %zu bytes held\n", images->count(), images->held_bytes());
+    return images;
+}
+
+// 読めた画像の bitmap を target に作る（製品の PreviewPane::hold_bitmaps と同じ）。
+[[nodiscard]] bool hold_all(ID2D1RenderTarget &target, const core::MarkdownDocument &document,
+                            const app::PreviewImages *images, win32::PreviewBitmaps &bitmaps)
+{
+    Microsoft::WRL::ComPtr<ID2D1DeviceContext> context;
+    if (images == nullptr)
+    {
+        return true;
+    }
+    if (FAILED(target.QueryInterface(IID_PPV_ARGS(&context))))
+    {
+        return false;
+    }
+    bitmaps.begin(*context.Get());
+    for (std::size_t ordinal = 0; ordinal < document.images.size(); ++ordinal)
+    {
+        const auto pixels = images->pixels_of(ordinal);
+        if (pixels != nullptr && FAILED(bitmaps.hold(*context.Get(), pixels)))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 // 描いて画素を bitmap に残す。失敗は 1 行言って false。
 [[nodiscard]] bool paint(ID2D1RenderTarget &target, const core::MarkdownDocument &document,
-                         const CaptureOptions &options, const core::Theme &theme)
+                         const CaptureOptions &options, const std::pair<core::Theme, Images> &look)
 {
+    const auto &[theme, images] = look;
     const win32::PreviewTextStyle style{options.font, options.points,
                                         static_cast<std::uint32_t>(options.dpi)};
     const core::LayoutRect frame{0, 0, pixels_of(options.width, style.dpi),
@@ -210,8 +293,11 @@ constexpr float default_height = 900.0F;
         document, layouts, style,
         win32::PreviewViewport{0, static_cast<float>(frame.right),
                                static_cast<float>(frame.bottom) +
-                                   win32::preview_pixels(options.scroll, style.dpi)});
-    if (!tops || FAILED(brushes.prepare(target, theme)))
+                                   win32::preview_pixels(options.scroll, style.dpi),
+                               images.get()});
+    win32::PreviewBitmaps bitmaps;
+    if (!tops || FAILED(brushes.prepare(target, theme)) ||
+        !hold_all(target, document, images.get(), bitmaps))
     {
         std::fputs("preview: measuring or brushes failed\n", stderr);
         return false;
@@ -221,19 +307,23 @@ constexpr float default_height = 900.0F;
     target.BeginDraw();
     painter.paint(win32::PreviewScene{document, tops.value(), style, frame,
                                       win32::preview_pixels(options.scroll, style.dpi),
-                                      std::nullopt});
+                                      std::nullopt, images.get(), &bitmaps});
     const bool drawn = SUCCEEDED(target.EndDraw()) && !failure.has_value();
     std::printf("preview: %zu blocks, %zu measured, %zu layouts held, %zu created\n",
                 document.blocks.size(), tops.value().size(), layouts.held(), layouts.created());
     return drawn;
 }
 
-[[nodiscard]] int capture(const CaptureOptions &options)
+[[nodiscard]] Document document_of(const CaptureOptions &options)
 {
     const auto text = read_text(options.input);
-    const auto document = text ? core::parse_markdown(text.value(), core::MarkdownStop::never())
-                               : std::expected<core::MarkdownDocument, core::MarkdownFailure>(
-                                     std::unexpected(core::MarkdownFailure::parser_rejected));
+    return text ? core::parse_markdown(text.value(), core::MarkdownStop::never())
+                : Document(std::unexpected(core::MarkdownFailure::parser_rejected));
+}
+
+[[nodiscard]] int capture(const CaptureOptions &options, const Document &document,
+                          const Images &images)
+{
     const auto catalog = core::ThemeCatalog::builtins();
     const auto theme = theme_of(catalog, options.theme);
     Imaging imaging;
@@ -250,7 +340,7 @@ constexpr float default_height = 900.0F;
         std::fputs("preview: input, theme or target is unavailable\n", stderr);
         return 1;
     }
-    if (!paint(*target.Get(), document.value(), options, theme.value()) ||
+    if (!paint(*target.Get(), document.value(), options, std::pair{theme.value(), images}) ||
         FAILED(save_png(*imaging.Get(), *bitmap.Get(), options.output)))
     {
         return 1;
@@ -272,11 +362,14 @@ int main(int argc, char **argv)
                    stderr);
         return 2;
     }
+    // 画像の復号は呼んだスレッドで MTA を始めて解くので、STA を始める前に読む。
+    const auto document = document_of(options.value());
+    const auto images = document ? images_of(document.value(), options.value().input) : nullptr;
     if (FAILED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)))
     {
         return 1;
     }
-    const int result = capture(options.value());
+    const int result = capture(options.value(), document, images);
     CoUninitialize();
     return result;
 }

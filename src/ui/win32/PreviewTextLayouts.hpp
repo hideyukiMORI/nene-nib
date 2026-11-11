@@ -1,14 +1,17 @@
 #pragma once
 
 #include "PreviewBlock.hpp"
+#include "PreviewInlineImage.hpp"
 #include "PreviewTextLayout.hpp"
 #include "PreviewTextStyle.hpp"
 #include "RenderFailure.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <dwrite.h>
 #include <expected>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -28,12 +31,23 @@ class PreviewTextLayouts final
     using TextLayout = Microsoft::WRL::ComPtr<IDWriteTextLayout>;
     static constexpr std::size_t capacity = 256;
 
-    // 保持から引き、無ければ作って保持する。width は layout の幅（物理画素）。
+    // 保持から引き、無ければ作って保持する。width は layout の幅（物理画素）。inlines は
+    // 要素の中で読めた画像（ADR 0155 の追補 62）で、箱の範囲を同じ大きさの inline の物にし、
+    // 行の高さは字と箱の自然な高さにする（箱の無い layout は今の固定の行高）。箱は保持の鍵に
+    // 入る（画素は入れない）。
     [[nodiscard]] std::expected<TextLayout, RenderFailure>
-    get(const core::PreviewBlock &block, float width, const PreviewTextStyle &style);
+    get(const core::PreviewBlock &block, float width, const PreviewTextStyle &style,
+        std::span<const PreviewInlineImage> inlines = {});
     // 高さ（GetMetrics().height・物理画素）だけを測る。保持に無ければ作って保持しない。
     [[nodiscard]] std::expected<float, RenderFailure>
-    measure(const core::PreviewBlock &block, float width, const PreviewTextStyle &style);
+    measure(const core::PreviewBlock &block, float width, const PreviewTextStyle &style,
+            std::span<const PreviewInlineImage> inlines = {});
+    // 箱のある layout の 1 行目の baseline が、固定の行高の layout（記号の layout）の 1 行目の
+    // baseline からどれだけ下にあるか（物理画素・ADR 0155 の追補 68）。記号とチェックボックスを
+    // 1 行目の文字に揃えるために足す。inlines が空なら 0（layout を引かない）。
+    [[nodiscard]] std::expected<float, RenderFailure>
+    first_line_shift(const core::PreviewBlock &block, float width, const PreviewTextStyle &style,
+                     std::span<const PreviewInlineImage> inlines);
     // get の layout の送りの幅（widthIncludingTrailingWhitespace・物理画素）。記号の列の幅に使う。
     [[nodiscard]] std::expected<float, RenderFailure>
     advance(const core::PreviewBlock &block, float width, const PreviewTextStyle &style);
@@ -52,13 +66,19 @@ class PreviewTextLayouts final
     [[nodiscard]] bool monospaced(const std::wstring &name) const;
     [[nodiscard]] std::wstring code_family(const std::wstring &requested) const;
     [[nodiscard]] std::expected<PreviewTextLayout, RenderFailure>
-    make(const core::PreviewBlock &block, float width, const PreviewTextStyle &style);
+    make(const core::PreviewBlock &block, float width, const PreviewTextStyle &style,
+         std::span<const PreviewInlineImage> inlines);
+    // 箱の範囲を inline の物にして、行の高さを自然な高さにする。
+    [[nodiscard]] static HRESULT place(IDWriteTextLayout &layout,
+                                       std::span<const PreviewInlineImage> inlines,
+                                       std::uint32_t dpi);
     [[nodiscard]] HRESULT space(IDWriteTextLayout &layout, bool mono, float size, float line);
     [[nodiscard]] std::optional<std::pair<float, float>> natural(bool mono, float size);
     [[nodiscard]] HRESULT decorate(IDWriteTextLayout &layout, const core::PreviewBlock &block,
                                    std::string_view shown);
     [[nodiscard]] std::vector<PreviewTextLayout>::iterator
-    find(const core::PreviewBlock &block, float width, const PreviewTextStyle &style);
+    find(const core::PreviewBlock &block, float width, const PreviewTextStyle &style,
+         std::span<const PreviewInlineImage> inlines);
 
     Microsoft::WRL::ComPtr<IDWriteFactory> factory_;
     std::optional<PreviewTextStyle> style_;
