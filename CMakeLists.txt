@@ -113,6 +113,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/ApplicationTests.cpp
     tests/unit/WrappedViewTests.cpp
     tests/unit/EdgeArrowTests.cpp
+    tests/unit/SelectionArrowTests.cpp
     tests/unit/VimWrappedTests.cpp
     tests/unit/EditorDeliveryTests.cpp
     tests/unit/VimEngineTests.cpp
