@@ -427,6 +427,61 @@ class RepositoryChecks(unittest.TestCase):
     def test_cnf010_missing_files(self):
         self.assertTrue(any("missing" in detail for detail in self.fixture_details()))
 
+    # CNF-010 — 折り返す窓の生成物 VimWrapFixtures.hpp は、測った入力 3 つ（wrap-fixtures.json・
+    # 測定のコード・共有の oracle）の SHA-256 の行を持ち、木のファイルと一致する（Issue #1431）。
+    # 正例は生成器の provenance() が書く行と保存されている生成物をそのまま読ませる。
+    WRAP_INPUTS = ("tests/vim/wrap-fixtures.json", "eng/vim-wrap-oracle.py", "eng/vim-oracle.py")
+
+    def wrap_details(self):
+        return [f"{f.rule}: {f.detail}" for f in cnf.wrap_fixture_provenance_checks(self.root, RULES)]
+
+    def seed_wrap(self, header):
+        for relative in self.WRAP_INPUTS:
+            self.write_bytes(relative, (ROOT / relative).read_bytes())
+        self.write_bytes("tests/vim/VimWrapFixtures.hpp", header)
+
+    def write_bytes(self, relative, content):
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+    def test_cnf010_wrap_generator_lines_positive(self):
+        spec = importlib.util.spec_from_file_location("vim_wrap_oracle", ROOT / "eng/vim-wrap-oracle.py")
+        wrap_oracle = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(wrap_oracle)
+        self.assertEqual(set(RULES["wrapFixtureProvenance"].values()), set(self.WRAP_INPUTS))
+        self.seed_wrap(("// Generated\n\n" + wrap_oracle.provenance() + "#pragma once\n").encode("utf-8"))
+        self.assertEqual([], self.wrap_details())
+
+    def test_cnf010_wrap_stored_header_positive(self):
+        self.seed_wrap((ROOT / "tests/vim/VimWrapFixtures.hpp").read_bytes())
+        self.assertEqual([], self.wrap_details())
+
+    def test_cnf010_wrap_changed_input_negative(self):
+        labels = {"tests/vim/wrap-fixtures.json": "wrap-fixtures.json",
+                  "eng/vim-wrap-oracle.py": "measurement", "eng/vim-oracle.py": "shared oracle"}
+        for relative, label in labels.items():
+            with self.subTest(input=relative):
+                self.seed_wrap((ROOT / "tests/vim/VimWrapFixtures.hpp").read_bytes())
+                self.write_bytes(relative, (ROOT / relative).read_bytes() + b"\n")
+                details = self.wrap_details()
+                self.assertEqual(1, len(details))
+                self.assertTrue(details[0].startswith(f"CNF-010: recorded {label} digest"))
+                self.assertIn("--regenerate", details[0])
+
+    def test_cnf010_wrap_missing_record_negative(self):
+        stored = (ROOT / "tests/vim/VimWrapFixtures.hpp").read_text(encoding="utf-8")
+        kept = "".join(line for line in stored.splitlines(keepends=True) if not line.startswith("// measurement:"))
+        self.seed_wrap(kept.encode("utf-8"))
+        self.assertEqual(["CNF-010: no measurement digest is recorded; run eng/vim-wrap-oracle.py --regenerate"],
+                         self.wrap_details())
+
+    def test_cnf010_wrap_missing_files_negative(self):
+        self.assertTrue(any("CNF-010" in detail and "missing" in detail for detail in self.wrap_details()))
+        self.seed_wrap((ROOT / "tests/vim/VimWrapFixtures.hpp").read_bytes())
+        (self.root / "eng/vim-oracle.py").unlink()
+        self.assertEqual(["CNF-010: eng/vim-oracle.py (shared oracle) is missing"], self.wrap_details())
+
     # CNF-010 — 生成物 VimKeyNames.hpp は oracle の KEY_TABLE から key_names_header() が作る全文と
     # バイト一致する（ADR 0054 の決定 6）。正例は同じ関数の出力をそのまま読ませる。
     def key_names_details(self):
