@@ -883,7 +883,7 @@ VisualTextView::vim_topline(core::LineNumber caret, core::LineNumber top,
     {
         auto asked = window;
         asked.rows = heights;
-        const auto answer = core::vim_topline_updated(asked, caret, state_.text().line_count());
+        const auto answer = core::vim_topline_redrawn(asked, caret, state_.text().line_count());
         if (answer)
         {
             return answer.value();
