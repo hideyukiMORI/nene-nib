@@ -5,6 +5,7 @@
 // 折り返す行の見えている範囲・全面プレビューの間は出さない・窓より上の編集は窓ごと・別の文書は
 // 窓ごと）。時計・ファイル・乱数の種を読まない。
 #include "Appearance.hpp"
+#include "BuiltinThemes.hpp"
 #include "CancelSelection.hpp"
 #include "ColorSpan.hpp"
 #include "Column.hpp"
@@ -32,6 +33,7 @@
 #include "PaneSide.hpp"
 #include "PlaceCaret.hpp"
 #include "PreviewPlacement.hpp"
+#include "RgbColor.hpp"
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
 #include "SetPreviewPlacement.hpp"
@@ -540,6 +542,47 @@ void verify_frame_rebuilds()
            "another document has its own window");
     verify_minimap_switch(editing);
 }
+// 背景 ground に ink を percent % 重ねた色（整数・四捨五入）。
+[[nodiscard]] core::RgbColor blended(core::RgbColor ground, core::RgbColor ink, int percent)
+{
+    const auto mix = [percent](std::uint8_t under, std::uint8_t over)
+    { return static_cast<std::uint8_t>((under * (100 - percent) + over * percent + 50) / 100); };
+    return core::RgbColor{mix(ground.red, ink.red), mix(ground.green, ink.green),
+                          mix(ground.blue, ink.blue)};
+}
+
+// 面と縁の線の色（ADR 0171 の追補 #1487）: 組み込みの全テーマで、選んだ色の 70% の線が背景と
+// しきい値 1.5 以上離れる。accent が背景に近いテーマだけ text に切り替わる。
+void verify_face_colors()
+{
+    std::vector<std::string_view> switched;
+    std::size_t weak = 0;
+    for (const auto &theme : core::builtin_themes)
+    {
+        const auto ink = core::minimap_face_color(theme.ui);
+        if (ink == theme.ui.text && !(theme.ui.text == theme.ui.accent))
+        {
+            switched.push_back(theme.name);
+        }
+        const auto line = blended(theme.ui.background, ink, 70);
+        weak += core::minimap_contrast_at_least(line, theme.ui.background,
+                                                core::minimap_face_contrast_tenths)
+                    ? 0
+                    : 1;
+    }
+    std::ranges::sort(switched);
+    expect(weak == 0, "every built-in theme draws the minimap edge at a contrast of 1.5 or more");
+    expect(switched ==
+               std::vector<std::string_view>{"cobalt2", "synthwave-84", "tokyo-night-light"},
+           "only the themes whose accent is close to the background use the text colour");
+    expect(
+        core::minimap_contrast_at_least(core::RgbColor{0, 0, 0}, core::RgbColor{255, 255, 255},
+                                        210) &&
+            !core::minimap_contrast_at_least(core::RgbColor{0, 0, 0}, core::RgbColor{255, 255, 255},
+                                             211) &&
+            core::minimap_contrast_at_least(core::RgbColor{9, 9, 9}, core::RgbColor{9, 9, 9}, 10),
+        "the contrast of black and white is 21 and a colour against itself is 1");
+}
 } // namespace
 
 void verify_minimap_scope()
@@ -549,6 +592,7 @@ void verify_minimap_scope()
     verify_window();
     verify_band_join();
     verify_layout();
+    verify_face_colors();
     verify_panel_press_outside_body();
     verify_setting();
     verify_frame_rows();

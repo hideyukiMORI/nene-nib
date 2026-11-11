@@ -83,6 +83,10 @@
 - 押しは捕まえ、離し・捕まえを失う・Esc で終わり、窓の外（`WM_MOUSELEAVE`）では終わらず、× の上の離しで窓の操作が動かず、面の押しが帯の押しの印を消す: **active**（`nib_window_tests --minimap-press`・`minimap_step`・`band_press_after_minimap`・`caption_step` にメッセージの列を流す純関数の試験）。**窓の手続きの順（`click_client` → `click_title_bar` → `press_minimap`・`release_left` の順）は試験が通らない**（読みだけ・窓を出す試験は施主の試用中なので書いていない）。窓そのもの（`SetCapture` の成否・本物のマウス）は実物の確かめ 1 回（記録は PR）。
 - 限界: 押した後に窓の大きさが変わっても、ドラッグの間は押したときの面の上端で段を数える（面の上端は帯の高さで決まり、窓の大きさでは変わらない）。DPI の切り替えはドラッグの間に起きない前提で、確かめていない。折り返しの反例 1 の形（上が 10 画面行に折れる長い行・下が短い行・面 100 段・画面 30 行で、1 行目から段 50 を押すと 505 行目、そこから別の位置へ送った後に同じ段を押すと見えている数 30 で 486 行目）では、押しの間にホイールなどで送ると、同じ点でも前の押しと違う行へ行く（決定 9 の性質が成り立つのは見えている数が変わらない間だけ）。10 万行の文書の端から端のドラッグは面の窓（前後 2,000 行）の作り直しが 30〜50 回起きる見込み（読みだけ・測っていない）。
 
+## 追補（2026-11-11・#1487）: 見えている範囲の面を濃くし、縁の線を付ける
+
+施主の試用で「今の場所の色があまり変わらなくて分かりにくい」。決定 2 の「accent の 10%」を、面は accent の 22%・面の上端と下端に 1 DIP（物理画素へ整数で・1 画素より細くしない）の accent 70% の線・面を押している間は 32% に改める（濃さの定数は `MinimapPicture.cpp` の 1 か所・色のトークンは足さない・面は今までどおり bitmap の外で毎 frame 重ねる `draw_face`）。押しているかは `MinimapFrame.pressed` で、application は置かず ui が描く直前に押しの覚え（`minimap_grab_`）から置き、押しの始まりと終わりで 1 回描き直す（押しの終わりの意図は無いので）。契約: `nib_window_tests --minimap` の `check_face_pixels`（2 テーマで面の中・外・線の画素・DPI 192 の 2 画素の線・押している間の 32%）: **active**。組み込み 125 テーマの計算（`D:/NeNeNib/outputs/20261111/1487/themes.md`）で、accent が背景とほぼ同じ 3 テーマ（`synthwave-84`・`cobalt2`・`tokyo-night-light`）は濃さに依らず面も線も見えない。**設計席の決め**: 面と線の色は core の `minimap_face_color(const Palette &)` の 1 本が選び、`accent` と `background` のコントラスト比がしきい値 1.5（`minimap_face_contrast_tenths` の 1 か所）以上なら `accent`、未満なら `text`（ui は色を選ばない）。core で libm を呼ばないので、比は sRGB の線形化を 2 乗で近づけた整数の輝度（`minimap_contrast_at_least`）で数える。この規則で text に切り替わるのは上の 3 テーマだけで、組み込み 125 テーマ全部で 70% の線が背景と 1.5 以上離れる（最低は ayu-light の 1.67・`nib_tests --minimap` の `verify_face_colors`・**active**）。
+
 ## 却下した選択肢
 
 | 選択肢 | 却下の理由 |
