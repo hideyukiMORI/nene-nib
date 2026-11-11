@@ -2,6 +2,7 @@
 
 #include "RegistryKey.hpp"
 #include "Utf16.hpp"
+#include "WslPlaces.hpp"
 
 #include <windows.h>
 
@@ -18,19 +19,32 @@ namespace
 // 副鍵の名前（GUID）と値の名前の上限。レジストリの鍵の名前は 255 文字まで。
 constexpr DWORD key_name_capacity = 256;
 
-// 副鍵の REG_SZ の値。無い・型が違う・読めないは値なし（その副鍵を外すだけ）。
+// 名前の値の大きさの上限（終端を含むバイト）。core の名前の上限（UTF-8 のバイト）を超える名前は
+// UTF-16 でも同じ単位数を超えないので、それより大きい値は読まずに外す（巨大な REG_SZ
+// を確保しない）。
+constexpr DWORD name_bytes_limit =
+    static_cast<DWORD>((core::wsl_name_limit + 1U) * sizeof(wchar_t));
+
+[[nodiscard]] bool name_bytes_fit(DWORD bytes)
+{
+    return bytes >= sizeof(wchar_t) && bytes <= name_bytes_limit;
+}
+
+// 副鍵の REG_SZ の値。無い・型が違う・読めない・大きすぎるは値なし（その副鍵を外すだけ）。
 [[nodiscard]] std::optional<std::wstring> text_value(HKEY key, const wchar_t *subkey,
                                                      const wchar_t *name)
 {
     DWORD bytes = 0;
     if (RegGetValueW(key, subkey, name, RRF_RT_REG_SZ, nullptr, nullptr, &bytes) != ERROR_SUCCESS ||
-        bytes < sizeof(wchar_t))
+        !name_bytes_fit(bytes))
     {
         return std::nullopt;
     }
     std::wstring text(bytes / sizeof(wchar_t), L'\0');
+    // 2 回の間に値が書き換わっても、2 回目の長さで同じ守りを通す。
     if (RegGetValueW(key, subkey, name, RRF_RT_REG_SZ, nullptr, text.data(), &bytes) !=
-        ERROR_SUCCESS)
+            ERROR_SUCCESS ||
+        !name_bytes_fit(bytes))
     {
         return std::nullopt;
     }

@@ -33,6 +33,7 @@
 #include "Win32TimingAdapter.hpp"
 #include "Win32WslDistributions.hpp"
 #include "WslDistribution.hpp"
+#include "WslPlaces.hpp"
 
 #include <windows.h>
 
@@ -2316,8 +2317,20 @@ void verify_wsl_distributions()
     write_wsl_entry(lxss, L"{1}", L"Ubuntu", 1);
     write_wsl_entry(lxss, L"{2}", L"日本語", 3);
     write_wsl_entry(lxss, L"{3}", nullptr, 1);
+    // 名前が REG_SZ でない副鍵は外す。State が無い副鍵は 0（入れ終わっていない）で返す。
+    const DWORD number = 7;
+    static_cast<void>(RegSetKeyValueW(HKEY_CURRENT_USER, std::format(LR"({}\{{4}})", lxss).c_str(),
+                                      L"DistributionName", REG_DWORD, &number, sizeof(number)));
+    static_cast<void>(RegSetKeyValueW(HKEY_CURRENT_USER, std::format(LR"({}\{{5}})", lxss).c_str(),
+                                      L"DistributionName", REG_SZ, L"NoState",
+                                      static_cast<DWORD>(sizeof(L"NoState"))));
+    // 空の名前はそのまま返す（外すのは core の wsl_places）。長すぎる名前は読まずに外す。
+    write_wsl_entry(lxss, L"{6}", L"", 1);
+    const std::wstring long_name(nenenib::core::wsl_name_limit + 1, L'a');
+    write_wsl_entry(lxss, L"{7}", long_name.c_str(), 1);
     const auto listed = distributions.distributions();
-    const std::vector<std::pair<std::string, std::uint32_t>> expected{{"Ubuntu", 1}, {"日本語", 3}};
+    const std::vector<std::pair<std::string, std::uint32_t>> expected{
+        {"Ubuntu", 1}, {"日本語", 3}, {"NoState", 0}, {"", 1}};
     std::vector<std::pair<std::string, std::uint32_t>> actual;
     if (listed.has_value())
     {
@@ -2327,7 +2340,8 @@ void verify_wsl_distributions()
         }
     }
     expect(listed.has_value() && actual == expected,
-           "named distributions are read in the key order with their state");
+           "named distributions are read in the key order with their state, non-text and too "
+           "long names are left out and a missing state is 0");
     RegDeleteTreeW(HKEY_CURRENT_USER, root.c_str());
     if (shell_test_values(HKEY_CURRENT_USER, shell_test_parent) == 0)
     {

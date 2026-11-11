@@ -401,7 +401,8 @@ nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
 # ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。
 # imm32: IMM32 の変換文字列と候補窓（ADR 0014 の決定 1）。IME は窓への入力なので ui/win32 に置く。
-# shell32: WM_DROPFILES の名前と転送メモリだけを扱う（ADR 0116）。
+# shell32: WM_DROPFILES の名前と転送メモリだけを扱う（ADR 0116）と、フォルダ選びの箱の場所の
+# SHCreateItemFromParsingName（ADR 0162 の追補 #1450）。
 # comdlg32: 印刷のダイアログ PrintDlgExW、prntvpt: その DEVMODE を print ticket に写す（ADR 0177 の決定 6）。
 # comctl32: 「保存しますか」の TaskDialogIndirect（v6・ADR 0133 の追補 #1282）。
 foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp dwmapi imm32 ole32 shell32 comdlg32 prntvpt comctl32)
