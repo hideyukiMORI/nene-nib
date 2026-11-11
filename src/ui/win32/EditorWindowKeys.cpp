@@ -3,6 +3,8 @@
 
 #include "BookmarkKey.hpp"
 #include "CaretMotion.hpp"
+#include "ClipboardAction.hpp"
+#include "ClipboardKeys.hpp"
 #include "EditMode.hpp"
 #include "EditorIntent.hpp"
 #include "KeyChord.hpp"
@@ -116,22 +118,6 @@ constexpr char32_t tab_character = U'\t';
     return held(VK_SHIFT) ? core::SelectionAnchoring::extend : core::SelectionAnchoring::collapse;
 }
 
-// Ctrl+V を矩形の鍵として送るモード（ADR 0035 の決定 9）。INSERT だけは OS の貼付に譲る。
-[[nodiscard]] bool vim_block_key(core::VimMode vim) noexcept
-{
-    switch (vim)
-    {
-    case core::VimMode::insert:
-        return false;
-    case core::VimMode::normal:
-    case core::VimMode::visual:
-    case core::VimMode::visual_line:
-    case core::VimMode::visual_block:
-        return true;
-    }
-    std::unreachable();
-}
-
 // Vim モードで Ctrl と一緒に押された鍵（ADR 0019 / ADR 0035 の決定 9）。表に無い鍵と、
 // INSERT の Ctrl+V（OS の貼付）・Ctrl+A・Ctrl+X・Ctrl+E・Ctrl+Y は空を返し、呼ぶ側の通常モードの
 // 表へ落ちる。Ctrl+A / Ctrl+X は NORMAL と VISUAL で数の増減（ADR 0015 の決定 14）、Ctrl+E /
@@ -145,7 +131,8 @@ constexpr char32_t tab_character = U'\t';
                                                          {'E', core::VimSpecialKey::control_e},
                                                          {'Y', core::VimSpecialKey::control_y}}};
     const auto special = vim_control_special_for(word);
-    if (special.has_value() || !vim_block_key(vim))
+    // Ctrl+V を矩形の鍵として送るのは、OS の貼り付けをしないモード（INSERT は OS の貼付に譲る）。
+    if (special.has_value() || takes_os_clipboard_keys(core::EditMode::vim, vim))
     {
         return special;
     }
@@ -349,6 +336,14 @@ void EditorWindow::press_key(WPARAM word)
         press_explorer_key(word);
         return;
     }
+    // Ctrl+Insert / Shift+Insert / Shift+Delete は Ctrl+C / V / X と同じ規則（D82・#1395）。
+    const auto clipboard = clipboard_key_for(word, held(VK_CONTROL), held(VK_SHIFT),
+                                             takes_os_clipboard_keys(mode_, vim_mode_));
+    if (clipboard.has_value())
+    {
+        send(application::ClipboardAction{clipboard.value()});
+        return;
+    }
     if (held(VK_CONTROL))
     {
         press_control_key(word);
@@ -369,8 +364,9 @@ void EditorWindow::press_key(WPARAM word)
 // paste_plain（ADR 0157 の決定 2）より先に、Vim の Ctrl の表へ流す。
 bool EditorWindow::keeps_block_key(core::EditorOperation operation) const noexcept
 {
-    return operation == core::EditorOperation::paste_plain && mode_ == core::EditMode::vim &&
-           vim_block_key(vim_mode_);
+    // 通常モードは takes_os_clipboard_keys が真なので、偽は Vim の NORMAL / VISUAL だけ。
+    return operation == core::EditorOperation::paste_plain &&
+           !takes_os_clipboard_keys(mode_, vim_mode_);
 }
 
 // タブの鍵は Vim の Ctrl の表より先に引く。扱ったら true。値なしの鍵（Vim の Ctrl+W）は false で
