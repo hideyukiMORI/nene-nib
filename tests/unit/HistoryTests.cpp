@@ -55,6 +55,7 @@
 #include "SessionTab.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
+#include "StartLists.hpp"
 #include "SwitchPane.hpp"
 #include "SwitchTab.hpp"
 #include "TestSupport.hpp"
@@ -490,6 +491,38 @@ void verify_quiet_transient_clicks()
            "leaves autosave alone and reads each opened file once");
 }
 
+// レビュー V-1486 の L1（#1495）: 起動画面の読みを届けて走っていない形にしてから、開く・切り替え・
+// 新しいタブ・打鍵・保存・枠の道を流す。新しいタブで起動画面は出直すが、前の読みから履歴も
+// ブックマークも書いていないので StartListPort を呼ばない（ADR 0172 の追補 25）。
+void verify_quiet_after_start_lists()
+{
+    Editing editing;
+    hold_work(editing.files());
+    auto &controller = editing.controller();
+    applied(controller, nenenib::application::FirstFramePresented{});
+    editing.start_lists().serve(nenenib::application::StartLists{});
+    applied(controller, nenenib::application::WorkCompleted{});
+    expect(editing.start_lists().requests() == 1 && editing.start_lists().collects() == 1,
+           "the start lists are asked once and arrive before the quiet paths");
+    applied(controller, VisibleLines{3});
+    open_work(editing, "ab");
+    applied(controller, SwitchTab{1});
+    applied(controller, NewTab{});
+    applied(controller, SwitchTab{0});
+    applied(controller, SwitchTab{2});
+    applied(controller, InsertText{"typed"});
+    applied(controller,
+            SaveDocument{path_of("C:\\work\\new.txt"), nenenib::core::TextEncoding::utf8});
+    applied(controller, InsertText{"more"});
+    applied(controller, nenenib::application::SplitPane{nenenib::core::SplitLayout::vertical});
+    applied(controller, nenenib::application::SwitchPane{});
+    applied(controller, nenenib::application::ClosePane{});
+    expect(editing.history().writes() == 0 && editing.start_lists().requests() == 1 &&
+               editing.start_lists().collects() == 1,
+           "with the read finished, opening, switching, new tabs, typing, saving and panes never "
+           "touch the start lists");
+}
+
 // 起動・開く・切り替え・新しいタブ・保存・打鍵の道では、履歴を読まない・書かない（D24・決定 8）。
 void verify_quiet_paths()
 {
@@ -551,6 +584,7 @@ void verify_quiet_paths()
            "printer nor the preview images, and only opening asks the read port");
     verify_quiet_explorer();
     verify_quiet_transient_clicks();
+    verify_quiet_after_start_lists();
 }
 } // namespace
 

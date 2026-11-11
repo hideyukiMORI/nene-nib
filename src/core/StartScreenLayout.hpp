@@ -35,10 +35,11 @@ struct StartScreenLayout
     std::array<GuideRowLayout, 3> keys;
 };
 
-// 寸法の採用値（DIP・PR の表に凍結する値）。列の幅・列の左右に残す余白・本文の上端から題までの
-// 最小の余白（上下の中央に寄せる前・追補
-// 26）・題の後と節の間の余白・見出しの高さと見出しの後の余白・行の左右の余白・印の升・印と項目の
-// 間・鍵の枠の列と説明の間。
+// 寸法の採用値（DIP・PR の表に凍結する値）。
+// - 列の幅・列の左右に残す余白
+// - 本文の上端から題までの最小の余白（上下の中央に寄せる前・ADR 0172 の追補 26）
+// - 題の後と節の間の余白・見出しの高さと見出しの後の余白
+// - 行の左右の余白・印の升・印と項目の間・鍵の枠の列と説明の間
 inline constexpr std::int32_t start_column_dips = 480;
 inline constexpr std::int32_t start_column_margin_dips = 16;
 inline constexpr std::int32_t start_top_dips = 36;

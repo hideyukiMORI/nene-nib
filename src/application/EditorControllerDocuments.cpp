@@ -1210,10 +1210,7 @@ void EditorController::remember(const std::vector<core::FilePath> &paths)
 void EditorController::forget(const core::FilePath &path)
 {
     // 起動画面が読んだ列からも外す（ADR 0172 の追補 11・同期の失敗も裏の読みの失敗もここを通る）。
-    if (start_lists_.has_value())
-    {
-        std::erase(start_lists_.value().recent, path);
-    }
+    drop_start_entry(path);
     auto history = ports_.history.read();
     if (!history)
     {

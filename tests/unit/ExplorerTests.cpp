@@ -62,7 +62,9 @@
 #include "TitleBarTarget.hpp"
 #include "TitleBarWidth.hpp"
 #include "ToggleExplorer.hpp"
+#include "VimKeyPress.hpp"
 #include "VimMode.hpp"
+#include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 #include "WalkRecentTab.hpp"
 #include "WorkCompleted.hpp"
@@ -839,6 +841,49 @@ void verify_root_requests()
     expect(!view_of(controller.frame()).focused, "hiding the panel from Ex gave the focus back");
 }
 
+// Ctrl+Shift+R（#1495）の後に controller へ届くのは ExplorerRootChosen だけ（窓が表で拾い、Vim の
+// 鍵として送らない）。Vim の `u` の後に選んでも redo にならず、INSERT の `Ctrl-r` の待ちの途中に
+// 選んでもレジスタを挿入しない。どちらも Ctrl+Shift+E の ToggleExplorer と同じく本文とモードを
+// 変えない。
+void verify_root_choice_in_vim(const app::EditorIntent &chosen, const char *after_undo,
+                               const char *during_wait)
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.files().hold_at("C:\\work\\a.txt", Bytes{"abc"});
+    applied(controller, app::OpenDocument{path_of("C:\\work\\a.txt")});
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    for (const auto &key : vim_keys_of("xu"))
+    {
+        applied(controller, app::VimKeyPress{key});
+    }
+    applied(controller, chosen);
+    const auto undone = controller.frame();
+    expect(!undone.lines.empty() && undone.lines.front().text == "abc" &&
+               controller.vim_state().mode == core::VimMode::normal,
+           after_undo);
+    for (const auto &key : vim_keys_of("\"ayyi<C-r>"))
+    {
+        applied(controller, app::VimKeyPress{key});
+    }
+    applied(controller, chosen);
+    const auto waiting = controller.frame();
+    expect(!waiting.lines.empty() && waiting.lines.front().text == "abc" &&
+               controller.vim_state().mode == core::VimMode::insert,
+           during_wait);
+}
+
+void verify_root_choice_keeps_vim()
+{
+    verify_root_choice_in_vim(
+        app::ExplorerRootChosen{path_of("D:\\picked")},
+        "choosing the root after u in NORMAL does not redo",
+        "choosing the root during the INSERT Ctrl-r wait inserts no register");
+    verify_root_choice_in_vim(
+        app::ToggleExplorer{}, "toggling the explorer after u in NORMAL does not redo",
+        "toggling the explorer during the INSERT Ctrl-r wait inserts nothing");
+}
+
 void verify_palette_shares_port()
 {
     Editing editing(shown_at(project));
@@ -1244,6 +1289,7 @@ void verify_explorer_contracts()
     verify_unreadable();
     verify_truncated();
     verify_root_requests();
+    verify_root_choice_keeps_vim();
     verify_palette_shares_port();
     verify_resize_writes_on_release();
     verify_resize_remembered_and_hidden();

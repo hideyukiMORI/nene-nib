@@ -201,7 +201,7 @@ records in `docs/quality/`.
   [ADR 0161](docs/adr/0161-language-server-diagnostics-are-document-values-drawn-as-underlines.md)).
   Completion, hover and go-to-definition are planned.
 - **FR-022 file explorer** — Ctrl+Shift+E or `:set explorer` / `:set noexplorer` show a folder tree left of the
-  body; `:set root=<path>`, `:set root=.` or F1 choose its root, and both are saved in the settings. Keys, mouse
+  body; `:set root=<path>`, `:set root=.`, Ctrl+Shift+R or F1 choose its root, and both are saved in the settings. Keys, mouse
   and a filter work; a single click opens a file or opens / closes a folder (D80), double-click or Enter also moves the focus to
   the body, and dragging the boundary changes the width, which is remembered (D78)
   ([ADR 0162](docs/adr/0162-file-explorer-is-a-side-panel-fed-by-the-folder-port.md)).

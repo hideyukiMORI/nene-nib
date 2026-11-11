@@ -44,7 +44,7 @@ constexpr KeyChord ctrl_shift(OperationKey key)
 
 // 鍵 → 通常モードの操作・Vim の操作。表の全行の鍵と、表に無い鍵の組み合わせ。
 using ChordRow = std::tuple<KeyChord, Operation, Operation>;
-constexpr std::array<ChordRow, 56> chord_rows{{
+constexpr std::array<ChordRow, 58> chord_rows{{
     // Vim の Ctrl+O はジャンプの戻り（D71・#1037）。Vim の開くは Ctrl+Shift+O。
     {ctrl(OperationKey::o), EditorOperation::open_file, std::nullopt},
     {ctrl(OperationKey::s), EditorOperation::save, EditorOperation::save},
@@ -121,6 +121,11 @@ constexpr std::array<ChordRow, 56> chord_rows{{
     // メモ帳の新しいタブ Ctrl+N（D82・#1395）。通常モードだけで、Vim と Ctrl+Shift+N は値なし。
     {ctrl(OperationKey::n), EditorOperation::new_tab, std::nullopt},
     {ctrl_shift(OperationKey::n), std::nullopt, std::nullopt},
+    // ルートのフォルダを選ぶ Ctrl+Shift+R（#1495）。Ctrl+R（Shift なし）は Vim の redo とレジスタの
+    // 挿入に残すので割り当てない。
+    {ctrl_shift(OperationKey::r), EditorOperation::choose_explorer_root,
+     EditorOperation::choose_explorer_root},
+    {ctrl(OperationKey::r), std::nullopt, std::nullopt},
 }};
 
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
@@ -153,7 +158,7 @@ constexpr std::array<ShownRow, 37> shown_rows{{
     {EditorOperation::paste_html, "", "", true, true},
     {EditorOperation::toggle_explorer, "Ctrl+Shift+E", "Ctrl+Shift+E", true, true},
     // 鍵なし。F1 の一覧からだけ（ADR 0162 の決定 7）。
-    {EditorOperation::choose_explorer_root, "", "", true, true},
+    {EditorOperation::choose_explorer_root, "Ctrl+Shift+R", "Ctrl+Shift+R", true, true},
     // F5 の日時の挿入（ADR 0175 の決定 3）。
     {EditorOperation::insert_date_time, "F5", "F5", true, true},
     // 鍵なし。F1 の一覧からだけ（ADR 0010 の追補 #1049 の決定 2 の (c)）。
@@ -176,7 +181,7 @@ constexpr std::array<ShownRow, 37> shown_rows{{
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
 using LabelRow = std::pair<KeyChord, std::string_view>;
-constexpr std::array<LabelRow, 33> label_rows{{
+constexpr std::array<LabelRow, 34> label_rows{{
     {ctrl(OperationKey::o), "Ctrl+O"},
     {ctrl(OperationKey::s), "Ctrl+S"},
     {ctrl(OperationKey::t), "Ctrl+T"},
@@ -210,6 +215,7 @@ constexpr std::array<LabelRow, 33> label_rows{{
     {KeyChord{false, false, OperationKey::f3}, "F3"},
     {KeyChord{false, true, OperationKey::f3}, "Shift+F3"},
     {ctrl(OperationKey::n), "Ctrl+N"},
+    {ctrl_shift(OperationKey::r), "Ctrl+Shift+R"},
 }};
 
 std::string shown_label(EditorOperation operation, EditMode mode)
