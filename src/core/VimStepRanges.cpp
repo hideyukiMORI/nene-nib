@@ -552,6 +552,26 @@ namespace detail
     return false;
 }
 
+// keeps_the_line_break が残した範囲のレジスタの形（#1364）。Vim の op_yank は
+// exclusive の文字単位で始まりも終わりも 1 桁目の 2 行以上の範囲を行単位で yank する
+// （register.c の「the yank is always linewise」）。ふつうの exclusive な移動では
+// 言い換え（exclusive_range）が先に終わりを前の行へ戻すのでこの形は残らず、
+// CA_NO_ADJ_OP_END の d<BS> c<BS> だけが残す。消す本文は文字単位のまま
+// （`c` は行を残さない・キャレットは範囲の先頭）。
+[[nodiscard]] VimMotionRange column_one_yank(const TextBuffer &text, const VimMotionRange &range)
+{
+    const LineNumber first = line_of(text, range.range.begin);
+    const LineNumber last = line_of(text, range.range.end);
+    if (range.kind != VimRegisterKind::characters || first.value >= last.value ||
+        range.range.begin != text.line_start(first) || range.range.end != text.line_start(last))
+    {
+        return range;
+    }
+    VimMotionRange shaped = range;
+    shaped.yank_shape = VimYankShape::whole_lines;
+    return shaped;
+}
+
 // op_delete の「奇妙な Vi の振る舞い」。複数行にまたがる文字単位の削除で、終わりの後ろが空白だけ
 // かつ始まりが字下げの中なら行単位になる（2D と de の行またぎ）。d だけで、c と y には無い。
 [[nodiscard]] VimMotionRange whole_lines_for_delete(const TextBuffer &text,

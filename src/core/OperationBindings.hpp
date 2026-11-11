@@ -21,13 +21,17 @@ namespace nenenib::core
 // 「Shift を見ていなかった今の振る舞いを保つ行」は Shift なしの行のすぐ後ろに置く。見せる鍵は
 // そのモードで最初に当たる行なので、一覧に見える鍵は Shift なしのまま（Vim の開くは
 // Ctrl+Shift+O）。
-inline constexpr std::array<OperationBinding, 52> operation_bindings{{
+// 通常モードの Windows の標準の鍵（施主決定 D82・#1395・ADR 0009 の追補）: Ctrl+N も新しいタブ、
+// Ctrl+Shift+Z はやり直す。どちらも見せる鍵は今までどおり Ctrl+T と Ctrl+Y（先の行）。
+inline constexpr std::array<OperationBinding, 53> operation_bindings{{
     {EditorOperation::open_file, OperationModes::ordinary, KeyChord{true, false, OperationKey::o}},
     // 通常モードでは Shift を見ていなかった今の振る舞いを保つ行で、Vim では開くの鍵（D71）。
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, true, OperationKey::o}},
     {EditorOperation::save, OperationModes::both, KeyChord{true, false, OperationKey::s}},
     {EditorOperation::save_as, OperationModes::both, KeyChord{true, true, OperationKey::s}},
     {EditorOperation::new_tab, OperationModes::both, KeyChord{true, false, OperationKey::t}},
+    // メモ帳の新しいタブ（D82）。Vim の Ctrl-n は譲らない（D71）ので通常モードだけ。
+    {EditorOperation::new_tab, OperationModes::ordinary, KeyChord{true, false, OperationKey::n}},
     // 枠の操作（ADR 0148 の決定 6）。Ctrl+Shift+F4 の枠を閉じる行は Ctrl+F4 のタブを閉じる行より
     // 前に置く（鍵は Shift の有無まで照合するので当たりは変わらないが、表の上から読む人が F4 の
     // 2 行を取り違えないように）。
@@ -55,11 +59,12 @@ inline constexpr std::array<OperationBinding, 52> operation_bindings{{
      KeyChord{true, false, OperationKey::d}},
     {EditorOperation::toggle_bookmark, OperationModes::vim, KeyChord{true, true, OperationKey::d}},
     {EditorOperation::undo, OperationModes::ordinary, KeyChord{true, false, OperationKey::z}},
-    // Shift を見ていなかった今の振る舞いを保つ行。
-    {EditorOperation::undo, OperationModes::ordinary, KeyChord{true, true, OperationKey::z}},
     {EditorOperation::redo, OperationModes::ordinary, KeyChord{true, false, OperationKey::y}},
     // Shift を見ていなかった今の振る舞いを保つ行。
     {EditorOperation::redo, OperationModes::ordinary, KeyChord{true, true, OperationKey::y}},
+    // Ctrl+Shift+Z はやり直す（ブラウザの入力欄と VS Code・D82・#1395）。以前は Shift を
+    // 見ていなかった元に戻すの行だった。
+    {EditorOperation::redo, OperationModes::ordinary, KeyChord{true, true, OperationKey::z}},
     {EditorOperation::font_larger, OperationModes::both, KeyChord{true, false, OperationKey::plus}},
     // Shift を見ていなかった今の振る舞いを保つ行。
     {EditorOperation::font_larger, OperationModes::both, KeyChord{true, true, OperationKey::plus}},

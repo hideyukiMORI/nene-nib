@@ -262,6 +262,41 @@ using Lookup = std::tuple<const VimToplineWindow &, std::size_t, std::optional<s
     return below < margin;
 }
 
+// INSERT で打った本文を 1 文字ずつ下へ歩いたキャレットの先頭か（#1363）。Vim の edit は 1 文字
+// ごとに update_topline を呼ぶので、キャレットは窓の下の行を 1 行ずつ越え、そのたびに
+// scroll_cursor_bot が窓を最小の行だけ送る。余白が窓の半分より小さければ、送りの後の先頭は
+// 「キャレットと下の余白の行（本文の末尾で切る）が窓に入る最小の先頭」（scroll_cursor_bot の
+// set_topbot と同じ形）で、何行歩いても同じになる。余白が窓の半分以上なら上側の余白と組み合って
+// 中央へ寄るので、1 回の追従と同じ scroll_cursor_halfway のまま。
+[[nodiscard]] bool walked(const Lookup &lookup) noexcept
+{
+    return std::get<0>(lookup).walks && margin_of(lookup) * 2 < height_of(lookup);
+}
+
+// walked の先頭: キャレットの行と下の余白の行を数えてから、窓に入るだけ上の行を足す。
+[[nodiscard]] std::size_t walked_bottom(Lookup &lookup, std::size_t cursor) noexcept
+{
+    Rows used = plines(lookup, cursor);
+    const std::size_t last =
+        std::min(cursor + static_cast<std::size_t>(margin_of(lookup)), count_of(lookup));
+    for (std::size_t line = cursor + 1; line <= last; ++line)
+    {
+        used += plines(lookup, line);
+    }
+    std::size_t top = cursor;
+    while (top > 1)
+    {
+        const Rows rows = back_plines(lookup, top - 1);
+        if (used + rows > height_of(lookup))
+        {
+            break;
+        }
+        used += rows;
+        --top;
+    }
+    return top;
+}
+
 // 窓の下の行から下の段（scroll_cursor_bot の scrolled・窓の下の行は空き段を引く）。
 [[nodiscard]] Rows past_window(std::size_t line, const Shown &shown, Rows rows) noexcept
 {
@@ -355,7 +390,8 @@ using Lookup = std::tuple<const VimToplineWindow &, std::size_t, std::optional<s
     const Rows lines = lines_to_scroll(lookup, shown, walk);
     if (lines >= height_of(lookup) && lines > scroll_jump)
     {
-        return cursor_halfway(lookup, cursor, true);
+        return walked(lookup) ? walked_bottom(lookup, cursor)
+                              : cursor_halfway(lookup, cursor, true);
     }
     return std::min(std::get<0>(shown) + static_cast<std::size_t>(lines), count_of(lookup));
 }
@@ -393,8 +429,11 @@ using Lookup = std::tuple<const VimToplineWindow &, std::size_t, std::optional<s
     }
     const std::size_t lines =
         cursor + 1 + static_cast<std::size_t>(margin_of(lookup)) - std::get<1>(shown);
-    return lines <= std::get<0>(lookup).height + 1 ? cursor_bot(lookup, shown, cursor)
-                                                   : cursor_halfway(lookup, cursor, false);
+    if (lines <= std::get<0>(lookup).height + 1)
+    {
+        return cursor_bot(lookup, shown, cursor);
+    }
+    return walked(lookup) ? walked_bottom(lookup, cursor) : cursor_halfway(lookup, cursor, false);
 }
 
 // update_topline の上側が要るか（先頭が 1 行目でなく、キャレットが先頭より上か上の余白が無い）。

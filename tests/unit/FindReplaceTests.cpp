@@ -7,6 +7,8 @@
 #include "CancelCommand.hpp"
 #include "CommandEdit.hpp"
 #include "CommandText.hpp"
+#include "DisplayText.hpp"
+#include "DocumentByteLimit.hpp"
 #include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -27,6 +29,7 @@
 #include "SelectEditMode.hpp"
 #include "SubmitCommand.hpp"
 #include "SubstituteAll.hpp"
+#include "SubstituteFailure.hpp"
 #include "TestSupport.hpp"
 #include "VimMode.hpp"
 #include "VimPattern.hpp"
@@ -373,10 +376,11 @@ void verify_vim_alternatives()
 }
 
 // 全件の置換の純関数（決定 7）。最初の当たりから最後の当たりまでの Edit 1 つ・重なりは飛ばす・
-// 当たりが無ければ値なし・置換語は literal。
+// 当たりが無ければ no_match・置換語は literal。
 void verify_substituted_all()
 {
     using nenenib::core::substituted_all;
+    constexpr std::size_t unlimited = nenenib::core::maximum_document_bytes;
     const auto text = buffer_of("say abc\nabc\nxabc tail");
     const auto abc = literal_of("abc");
     if (!abc.has_value())
@@ -384,24 +388,67 @@ void verify_substituted_all()
         expect(false, "the word parses");
         return;
     }
-    const auto edit = substituted_all(text, abc.value(), "&\\n");
+    const auto edit = substituted_all(text, abc.value(), "&\\n", unlimited);
     expect(edit.has_value() && edit.value().at.value == 4 &&
                edit.value().removed == "abc\nabc\nxabc" &&
                edit.value().inserted == "&\\n\n&\\n\nx&\\n" && edit.value().restore.value == 4,
            "every match from the first to the last is one edit and the replacement is literal");
     const auto overlapping = literal_of("aa");
-    const auto pairs = substituted_all(buffer_of("aaaaa"), overlapping.value_or(abc.value()), "b");
+    const auto pairs =
+        substituted_all(buffer_of("aaaaa"), overlapping.value_or(abc.value()), "b", unlimited);
     expect(pairs.has_value() && pairs.value().removed == "aaaa" && pairs.value().inserted == "bb",
            "overlapping matches are skipped like :s///g");
     const auto japanese = literal_of("日本");
     const auto wide =
-        substituted_all(buffer_of("日本語と日本"), japanese.value_or(abc.value()), "");
+        substituted_all(buffer_of("日本語と日本"), japanese.value_or(abc.value()), "", unlimited);
     expect(wide.has_value() && wide.value().removed == "日本語と日本" &&
                wide.value().inserted == "語と",
            "multibyte matches are replaced by their bytes and an empty replacement deletes");
     const auto missing = literal_of("zzz");
-    expect(!substituted_all(text, missing.value_or(abc.value()), "x").has_value(),
+    const auto none = substituted_all(text, missing.value_or(abc.value()), "x", unlimited);
+    expect(!none.has_value() && none.error() == nenenib::core::SubstituteFailure::no_match,
            "a word that never matches has no edit");
+}
+
+// 全件の置換の上限（#1376）。置き換えた後の文書（本文 - 当たりの和 + 当たりの数 × 置換語）が
+// 上限に等しければ通り、1 バイトでも超えれば確保の前に too_large。上限は試験だけが小さな値を渡す。
+void verify_substituted_all_limit()
+{
+    using nenenib::core::substituted_all;
+    using nenenib::core::SubstituteFailure;
+    // 21 バイトの本文に abc が 3 つ。置換語 r の後は 21 - 9 + 3 × |r| バイト。
+    const auto text = buffer_of("say abc\nabc\nxabc tail");
+    const auto abc = literal_of("abc");
+    if (!abc.has_value())
+    {
+        expect(false, "the word parses");
+        return;
+    }
+    const auto exact = substituted_all(text, abc.value(), "ABCDE", 27);
+    expect(exact.has_value() && exact.value().inserted == "ABCDE\nABCDE\nxABCDE",
+           "a result exactly at the limit is replaced");
+    const auto over = substituted_all(text, abc.value(), "ABCDE", 26);
+    expect(!over.has_value() && over.error() == SubstituteFailure::too_large,
+           "a result one byte over the limit is refused before it is built");
+    const auto shrunk = substituted_all(text, abc.value(), "", 12);
+    expect(shrunk.has_value() && shrunk.value().inserted == "\n\nx",
+           "a shrinking replacement fits a limit as small as the text outside the matches");
+    const auto still_over = substituted_all(text, abc.value(), "", 11);
+    expect(!still_over.has_value() && still_over.error() == SubstituteFailure::too_large,
+           "a text whose kept bytes exceed the limit is refused even when it shrinks");
+    const auto widest =
+        substituted_all(text, abc.value(), "x", std::numeric_limits<std::size_t>::max());
+    expect(widest.has_value(), "the largest limit does not overflow");
+    const auto missing = literal_of("zzz");
+    const auto none = substituted_all(text, missing.value_or(abc.value()), "x", 0);
+    expect(!none.has_value() && none.error() == SubstituteFailure::no_match,
+           "no match is reported before the limit");
+    // 10 バイトの CRLF の本文。abc 2 つを abcd にすると 4 + 2 × 4 = 12 バイト。
+    const auto crlf = buffer_of("abc\r\nabc\r\n");
+    const auto bytes = substituted_all(crlf, abc.value(), "abcd", 12);
+    const auto crlf_over = substituted_all(crlf, abc.value(), "abcd", 11);
+    expect(bytes.has_value() && !crlf_over.has_value(),
+           "a CRLF text counts its line endings as the bytes it holds");
 }
 
 [[nodiscard]] std::string detail_of(const EditorFrame &frame)
@@ -535,6 +582,39 @@ void verify_replace_all()
     expect(vim_body(again) == vim_body(all), "one redo replays them");
 }
 
+// Ctrl+Enter の全件の後の文書が開ける上限（1 GiB）を超えるなら、置き換えた本文を作らずに断り、
+// 1 行知らせて 1 回鳴らす（#1376・ADR 0153 の決定 1）。置換語は入力行の上限（256 バイト）まで
+// なので、64 個の a の行 2^16 本（2^22 個の当たり）を 256 バイトの語にして 2^30 + 2^16
+// バイトにする。 確保は当たりを数える分だけ（1 GiB を確保しない）。
+void verify_replace_all_too_large()
+{
+    constexpr std::size_t lines = std::size_t{1} << 16U;
+    constexpr std::size_t width = 64;
+    std::string text;
+    for (std::size_t line = 0; line < lines; ++line)
+    {
+        text.append(width, 'a');
+        text.push_back('\n');
+    }
+    Editing session;
+    open_ordinary_document(session, text);
+    EditorController &controller = session.controller();
+    static_cast<void>(controller.apply_frame(BeginReplace{}));
+    static_cast<void>(typed(controller, "a"));
+    static_cast<void>(controller.apply_frame(SubmitCommand{}));
+    static_cast<void>(
+        typed(controller, std::string(nenenib::core::DisplayText::maximum_bytes, 'b')));
+    const auto refused = controller.apply_frame(SubmitCommand{true});
+    expect(controller.text().text() == text &&
+               message_of(refused) == "置換の結果は 1 GiB までです" &&
+               prompt_of(refused) == InputLinePrompt::replace_with && session.bell().rings() == 1,
+           "Ctrl+Enter over the document limit keeps the text, says so and rings once");
+    static_cast<void>(controller.apply_frame(CancelCommand{}));
+    const auto undone = controller.apply_frame(HistoryAction{HistoryDirection::undo});
+    expect(controller.text().text() == text && !undone.command_line.has_value(),
+           "a refused replacement leaves no undo step");
+}
+
 // 通常モードの検索と Vim の `/` は同じ最後の検索で、塗りもモードをまたいで続く（決定 5）。
 void verify_shared_last_search()
 {
@@ -563,9 +643,11 @@ void verify_find_replace_scope()
     verify_vim_alternatives();
     verify_shared_last_search();
     verify_substituted_all();
+    verify_substituted_all_limit();
     verify_replace_one();
     verify_replace_edges();
     verify_replace_seen_match();
     verify_replace_all();
+    verify_replace_all_too_large();
 }
 } // namespace nenenib::tests

@@ -380,8 +380,8 @@ void replaced_range(Session &session, std::size_t begin, std::size_t end, std::s
     forget_before(session, lines, begin);
     if (inserted.empty())
     {
-        static_cast<void>(
-            session.controller.apply(app::DeleteText{core::DeleteDirection::backward}));
+        static_cast<void>(session.controller.apply(app::DeleteText{
+            core::DeleteDirection::backward, nenenib::core::DeleteUnit::character}));
         pushed(session.history, ModelEntry{begin, end - begin, 0}, false);
         return;
     }

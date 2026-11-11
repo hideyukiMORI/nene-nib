@@ -7,7 +7,7 @@
 #include "OffsetRange.hpp"
 #include "Selection.hpp"
 #include "Utf8.hpp"
-#include "VimCharacterBoundary.hpp"
+#include "VimCaret.hpp"
 #include "VimMode.hpp"
 #include "VimMotionRange.hpp"
 #include "VimRegisterKind.hpp"
@@ -35,8 +35,6 @@ namespace
 {
 // 一度に読む窓の大きさ。読む位置を中心に取り直す。行全体は写さない。
 constexpr std::size_t window_bytes = 4096;
-// 1 文字を歩く窓の最初の大きさ。結合文字の列が長ければ倍にして読み直す。
-constexpr std::size_t character_window_bytes = 64;
 constexpr std::size_t code_point_bytes = 4;
 // Vim の vim_iswordc（utf_class が 2 以上なら語の文字）。
 constexpr std::uint32_t word_class = 2;
@@ -124,53 +122,19 @@ using Start = std::tuple<std::size_t, std::size_t, std::size_t>;
 
 // ------------------------------------------------------------------ 1 文字を歩く（ADR 0053）
 
-// 窓の先頭の続きのバイトを飛ばした数。
-[[nodiscard]] std::size_t leading_continuations(std::string_view window)
-{
-    std::size_t skipped = 0;
-    while (skipped < window.size() &&
-           (static_cast<unsigned char>(window.at(skipped)) & 0xC0U) == 0x80U)
-    {
-        ++skipped;
-    }
-    return skipped;
-}
-
 // 行の中で次の文字の先頭。at は行の内容の終わりより前。
 [[nodiscard]] std::size_t next_in_line(const TextBuffer &text, std::size_t at)
 {
-    const std::size_t end = text.line_end(text.position_of(Offset{at}).line).value;
-    for (std::size_t width = character_window_bytes;; width *= 2)
-    {
-        const std::size_t until = std::min(end, at + width);
-        const std::string window = text.text_range(Offset{at}, Offset{until});
-        const std::string_view whole =
-            until == end ? std::string_view{window}
-                         : std::string_view{window}.substr(0, whole_code_points(window));
-        const Offset next = vim_character_end(whole, Offset{0});
-        if (until == end || next.value < whole.size())
-        {
-            return at + next.value;
-        }
-    }
+    return vim_character_after(text, Offset{at}, text.line_end(text.position_of(Offset{at}).line))
+        .value;
 }
 
 // 行の中で手前の文字の先頭。at は行頭より後ろ。
 [[nodiscard]] std::size_t previous_in_line(const TextBuffer &text, std::size_t at)
 {
-    const std::size_t start = text.line_start(text.position_of(Offset{at}).line).value;
-    for (std::size_t width = character_window_bytes;; width *= 2)
-    {
-        const std::size_t from = at - std::min(at - start, width);
-        const std::string window = text.text_range(Offset{from}, Offset{at});
-        const std::size_t skipped = from == start ? 0 : leading_continuations(window);
-        const std::string_view whole = std::string_view{window}.substr(skipped);
-        const Offset found = vim_character_start(whole, Offset{whole.size()});
-        if (from == start || found.value > 0)
-        {
-            return from + skipped + found.value;
-        }
-    }
+    return vim_character_before(text, Offset{at},
+                                text.line_start(text.position_of(Offset{at}).line))
+        .value;
 }
 
 // Vim の inc() の答えの位置。行の内容の終わり（NUL の桁）へ、そこからは次の行の先頭へ。

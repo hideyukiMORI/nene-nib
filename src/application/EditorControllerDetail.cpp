@@ -200,14 +200,16 @@ bool is_signal(const EditorIntent &intent) noexcept
            std::holds_alternative<MapTimeout>(intent);
 }
 
-// 使う人の操作ではない意図。合図（is_signal）と、窓の寸法・外観・帯の hover。keeps_tab_walk と
-// begin_intent と `map` の待ちを保つ側と全面プレビューの振り分けが共用する。
+// 使う人の操作ではない意図。合図（is_signal）と、窓の寸法・外観・帯とエクスプローラーの
+// hover。keeps_tab_walk と begin_intent と `map`
+// の待ちを保つ側と全面プレビューの振り分けが共用する。
 bool not_user_operation(const EditorIntent &intent) noexcept
 {
     return is_signal(intent) || std::holds_alternative<VisibleLines>(intent) ||
            std::holds_alternative<TitleBarWidth>(intent) ||
            std::holds_alternative<RefreshAppearance>(intent) ||
-           std::holds_alternative<PointTitleBar>(intent);
+           std::holds_alternative<PointTitleBar>(intent) ||
+           std::holds_alternative<HoverExplorer>(intent);
 }
 
 } // namespace nenenib::application::detail

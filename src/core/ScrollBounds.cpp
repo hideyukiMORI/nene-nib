@@ -31,6 +31,7 @@ namespace
     case ScrollFollow::minimal:
         return false;
     case ScrollFollow::vim:
+    case ScrollFollow::vim_typed:
         return outside >= threshold;
     }
     std::unreachable();

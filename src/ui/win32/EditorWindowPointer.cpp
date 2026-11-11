@@ -131,10 +131,12 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         drag_explorer_divider(data);
         hover_explorer_divider(data);
         drag_selection(data);
+        hover_explorer_row(data);
         point_at(data);
         return 0;
     case WM_MOUSELEAVE:
         over_explorer_divider_ = false;
+        hover_explorer_line(std::nullopt);
         hover(std::nullopt);
         return 0;
     case WM_MOUSEWHEEL:
