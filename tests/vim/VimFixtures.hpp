@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 f07a4f1b5c1ef498aacab9e79ae510d714260b0847269ecace82ed104e7f118f / 3923 fixtures
+// fixtures.json: sha256 65e9ef1f8b66ad9c461c097185b337971d65586575f03d2836de914ad8a8bfc9 / 3937 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3923> vim_fixtures{{
+constexpr std::array<VimFixture, 3937> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1741,6 +1741,20 @@ constexpr std::array<VimFixture, 3923> vim_fixtures{{
     {"space-d-bs-at-the-line-start-joins", "ab\ncd", "jd<BS>", "abcd", 1, 3, "\n", "v", std::nullopt},
     {"space-d-bs-count-keeps-the-line-break", "abc\nd", "j2d<BS>", "abd", 1, 3, "c\n", "v", std::nullopt},
     {"space-d-bs-after-an-empty-line", "\ncd", "jd<BS>", "cd", 1, 1, "\n", "V", std::nullopt},
+    {"exclusive-linewise-blank-d-bs-from-column-one", "x\n  \nab", "Gd3<BS>", "x\nab", 2, 1, "  \n", "V", std::nullopt},
+    {"exclusive-linewise-blank-d-bs-two-lines", "x\n  \nab", "Gd5<BS>", "ab", 1, 1, "x\n  \n", "V", std::nullopt},
+    {"exclusive-linewise-blank-d-bs-inside-the-indent", "x\n  \nab", "Gd2<BS>", "x\n ab", 2, 2, " \n", "v", std::nullopt},
+    {"exclusive-linewise-blank-d-bs-after-the-line-end", "x\n  \nab", "Gd4<BS>", "xab", 1, 2, "\n  \n", "v", std::nullopt},
+    {"exclusive-linewise-blank-d-bs-over-an-empty-line", "x\n\nab", "Gd3<BS>", "ab", 1, 1, "x\n\n", "V", std::nullopt},
+    {"exclusive-linewise-blank-d-bs-tab-line", "x\n\t\nab", "Gd2<BS>", "x\nab", 2, 1, "\t\n", "V", std::nullopt},
+    {"exclusive-linewise-blank-d-bs-two-blank-lines", "x\n  \n  \nab", "Gd6<BS>", "x\nab", 2, 1, "  \n  \n", "V", std::nullopt},
+    {"exclusive-linewise-blank-d-bs-text-line-from-the-line-end", "x\n y\n  ab", "G0d4<BS>", "x  ab", 1, 2, "\n y\n", "v", std::nullopt},
+    {"exclusive-linewise-blank-d-bs-keeps-the-caret", "x\n y\n  ab", "G0d3<BS>", "x\n  ab", 2, 1, " y\n", "V", std::nullopt},
+    {"exclusive-linewise-blank-c-bs-from-column-one", "x\n  \nab", "Gc3<BS>X<Esc>", "x\nXab", 2, 1, "  \n", "V", std::nullopt},
+    {"exclusive-linewise-blank-c-bs-text-line", "x\n y\n  ab", "G0c3<BS>Z<Esc>", "x\nZ  ab", 2, 1, " y\n", "V", std::nullopt},
+    {"exclusive-linewise-blank-d-bs-named-paste", "x\n  \nab", "G\"ad3<BS>\"ap", "x\nab\n  ", 3, 2, "  \n", "V", std::nullopt},
+    {"exclusive-linewise-blank-d-bs-numbered", "x\n  \nab", "Gd3<BS>\"1p", "x\nab\n  ", 3, 2, "  \n", "V", std::nullopt},
+    {"exclusive-linewise-blank-d-bs-ending-mid-line", "x\n  \nab", "G$d4<BS>", "x\nb", 2, 1, "  \na", "v", std::nullopt},
     {"space-y-bs-at-the-line-start", "ab\ncd", "jy<BS>", "ab\ncd", 1, 2, "b", "v", std::nullopt},
     {"space-y-bs-count", "abc\nd", "j2y<BS>", "abc\nd", 1, 2, "bc", "v", std::nullopt},
     {"space-y-count-at-the-line-end", "ab\ncd", "l2y<Space>", "ab\ncd", 1, 2, "b", "v", std::nullopt},
