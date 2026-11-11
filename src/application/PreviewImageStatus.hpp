@@ -10,8 +10,9 @@ namespace nenenib::application
 // - requested: 頼んで結果を待っている。
 // - loaded: 読めた（画素を持つ）。
 // - failed: 読めなかった（同じ文書の同じ経路の間は、再解析でも範囲の出入りでも頼み直さない）。
-// - evicted: 読めたが、錨に近い画像を持つために見える範囲の中で捨てた。範囲の中にある間は（再解析の
-//   後も）頼み直さず、範囲を出ると waiting に戻る（範囲の外で捨てたものは初めから waiting）。
+// - evicted: 読めたが、錨に近い画像を持つために見える範囲の中で捨てた。範囲の中にある間は、錨から
+//   厳密に遠い loaded を捨てずに収まるとき（空きがあるとき）だけ waiting と同じく頼み直し（候補 B・
+//   #1412）、範囲を出ると waiting に戻る（範囲の外で捨てたものは初めから waiting）。
 enum class PreviewImageStatus : std::uint8_t
 {
     waiting,
