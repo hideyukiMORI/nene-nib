@@ -309,6 +309,25 @@ void verify_window_walks_match_the_copied_line()
     expect(compared > 10'000, "the window property compares more than 10000 answers");
 }
 
+// 行の内容の終わりより後ろ（CRLF の CR と LF の間）の at は、1 文字の終わりも code point も行の
+// 外を読まない（#1424・語・引用符・括弧のテキストオブジェクトの next_in_line の守り）。
+void verify_window_walks_past_the_line_end()
+{
+    const auto buffer = TextBuffer::from_utf8("ab\r\ncd\xF0\x9F\x98\x80");
+    expect(buffer.has_value(), "the CRLF text is valid UTF-8");
+    const TextBuffer &text = buffer.value();
+    const Offset line_end = text.line_end(LineNumber{1});
+    expect(line_end == Offset{2}, "the CRLF line content ends before the CR");
+    expect(core::vim_character_after(text, Offset{3}, line_end) == Offset{3} &&
+               core::vim_code_point_at(text, Offset{3}, line_end) == 0,
+           "a position between CR and LF stays put and reads as the line end");
+    const Offset last_end = text.line_end(LineNumber{2});
+    expect(core::vim_code_point_at(text, Offset{0}, line_end) == U'a' &&
+               core::vim_code_point_at(text, Offset{6}, last_end) == U'\U0001F600' &&
+               core::vim_code_point_at(text, last_end, last_end) == 0,
+           "the code point reads one character up to the line end and NUL at the end");
+}
+
 // 語の種類の表は Vim 9.1.0004 の src/mbyte.c（SHA-256
 // 5d56d30e6a5cab9b8dc1460d5995a8a53077924f26c056091825c1bb600f4a8b）の classes[] 71 区間と
 // emoji_all[] 146 区間の写し（Issue #985・ADR 0031 の補足）。値は oracle の Vim の charclass()。
@@ -372,6 +391,7 @@ void verify_vim_character_contracts()
     verify_resting_caret_across_a_window_end();
     verify_window_walks_across_a_window_end();
     verify_window_walks_match_the_copied_line();
+    verify_window_walks_past_the_line_end();
     verify_vim_word_class_table();
     verify_vim_external_caret();
     verify_vim_window_path();

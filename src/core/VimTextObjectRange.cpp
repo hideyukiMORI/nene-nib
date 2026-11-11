@@ -22,7 +22,6 @@
 #include "VimWordClass.hpp"
 #include "VimWordMotion.hpp"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -35,8 +34,6 @@ namespace nenenib::core
 namespace
 {
 constexpr std::uint32_t blank_group = 0;
-// UTF-8 の 1 code point の最長のバイト数（code_at が読む窓）。
-constexpr std::size_t code_point_bytes = 4;
 constexpr char32_t escape_character = U'\\';
 
 // ------------------------------------------------------------------ 位置の道具（Vim の inc / dec）
@@ -69,15 +66,10 @@ constexpr char32_t escape_character = U'\\';
 }
 
 // その位置の code point（end は at の行の内容の終わり）。行の内容の終わりは 0（Vim の NUL）。
-// 読むのは at から 1 code point の最長のバイト数だけ（文の code_at と同じ形）。
+// 読むのは at から 1 code point ぶんだけ（文と同じ VimCaret の 1 本）。
 [[nodiscard]] char32_t code_in_line(const TextBuffer &text, Offset at, Offset end)
 {
-    if (!(at < end))
-    {
-        return 0;
-    }
-    const Offset until{std::min(end.value, at.value + code_point_bytes)};
-    return code_point_at(text.text_range(at, until), Offset{0});
+    return vim_code_point_at(text, at, end);
 }
 
 [[nodiscard]] char32_t code_at(const TextBuffer &text, Offset at)

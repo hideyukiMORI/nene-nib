@@ -74,6 +74,10 @@ constexpr std::size_t longest_code_point_bytes = 4;
 
 Offset vim_character_after(const TextBuffer &text, Offset at, Offset line_end)
 {
+    if (!(at < line_end))
+    {
+        return at;
+    }
     std::size_t window = caret_window_bytes;
     for (;;)
     {
@@ -89,6 +93,16 @@ Offset vim_character_after(const TextBuffer &text, Offset at, Offset line_end)
         }
         window *= 2;
     }
+}
+
+char32_t vim_code_point_at(const TextBuffer &text, Offset at, Offset line_end)
+{
+    if (!(at < line_end))
+    {
+        return 0;
+    }
+    const Offset until{std::min(line_end.value, at.value + longest_code_point_bytes)};
+    return code_point_at(text.text_range(at, until), Offset{0});
 }
 
 Offset vim_character_before(const TextBuffer &text, Offset at, Offset line_start)

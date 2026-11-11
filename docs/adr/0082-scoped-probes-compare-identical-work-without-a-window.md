@@ -220,4 +220,4 @@ checksum は `checksum_of(input)` に、範囲なら各結果の 1 + begin + end
 | text-object-iparen-1line | `i(` | [1, 16383) / [1, 16777215) |
 | double-click-word-solid-1line-16384（1 本だけ） | ダブルクリック | 選択は行の全体（Ctrl+C の写しが本文と同じ） |
 
-checksum は `checksum_of(input)` に 1 + begin + end（ダブルクリックは写しの長さ）を足す。16 MiB の `solid` の 2 本は Debug（ASan 付き）で 1 回が約 1 分かかる（語が行の全体で、1 文字ずつ後ろへ歩く・#1424 の報告）。`eng/compare-probes.py` の名前の表には足していない。
+checksum は `checksum_of(input)` に 1 + begin + end（ダブルクリックは写しの長さ）を足す。16 MiB の `solid` の 2 本は Debug（ASan 付き）で 1 回が読みで約 1 分（16,384・163,840・1,638,400 の段から線形に外挿した約 56 秒。実測は warmup と sample の 2 回が 120 秒の上限で打ち切り・語が行の全体で、1 文字ずつ後ろへ歩く・#1424 の報告）。`eng/compare-probes.py` の名前の表には足していない。
