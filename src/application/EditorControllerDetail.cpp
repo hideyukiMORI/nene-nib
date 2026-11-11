@@ -188,6 +188,12 @@ composition_view_of(const std::optional<core::Composition> &composition)
                            core::composition_underlines(composition.value()),
                            composition.value().cursor};
 }
+bool untouched_untitled(const EditorState &state) noexcept
+{
+    return !state.document().path.has_value() && state.text().size_bytes() == 0 &&
+           state.history().size() == 0;
+}
+
 // 合図（ADR 0062 の決定 7・ADR 0137 の決定 1・ADR 0155 の決定 8・ADR 0160 の決定 6・ADR 0176 の
 // 決定 4）。「合図か」を決めるのはここの 1 か所（ADR 0062 の追補・#1296）。題名のダブルクリックの
 // PinTab は使う人の操作なので合図ではない（ADR 0179 の決定 4-4）。
@@ -197,7 +203,8 @@ bool is_signal(const EditorIntent &intent) noexcept
            std::holds_alternative<AutosaveTick>(intent) ||
            std::holds_alternative<PreviewTick>(intent) ||
            std::holds_alternative<LanguageServerTick>(intent) ||
-           std::holds_alternative<MapTimeout>(intent);
+           std::holds_alternative<MapTimeout>(intent) ||
+           std::holds_alternative<FirstFramePresented>(intent);
 }
 
 // 使う人の操作ではない意図。合図（is_signal）と、窓の寸法・外観・帯とエクスプローラーの

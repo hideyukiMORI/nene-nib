@@ -43,6 +43,7 @@
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPrinter.hpp"
 #include "ScriptedShellRegistration.hpp"
+#include "ScriptedStartLists.hpp"
 #include "ScriptedTextLayouts.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
@@ -228,6 +229,7 @@ void verify_startup_question()
     ScriptedPrinter printer;
     ScriptedShellRegistration shell_registration;
     ScriptedImages images;
+    ScriptedStartLists start_lists;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -238,7 +240,7 @@ void verify_startup_question()
                          themes,       session,         history,    folders,    bookmarks,
                          text_layouts, autosave,        fonts,      bell,       markdown,
                          reads,        language_server, wall_clock, printer,    shell_registration,
-                         images},
+                         images,       start_lists},
         {open_of(giant_path), open_of(small_path)});
     expect(!controller.delivery().display_question,
            "starting with a small file last does not ask about the giant one yet");
@@ -636,6 +638,7 @@ void verify_startup_before_layout()
     ScriptedPrinter printer;
     ScriptedShellRegistration shell_registration;
     ScriptedImages images;
+    ScriptedStartLists start_lists;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -646,7 +649,7 @@ void verify_startup_before_layout()
                                  folders,         bookmarks,  text_layouts, autosave,
                                  fonts,           bell,       markdown,     reads,
                                  language_server, wall_clock, printer,      shell_registration,
-                                 images};
+                                 images,          start_lists};
     app::EditorController started(ports, {open_of(giant_path)});
     expect(started.delivery().display_question, "starting with a giant line asks");
     const auto first = started.apply(app::VisibleLines{10, grid_geometry});

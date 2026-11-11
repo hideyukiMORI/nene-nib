@@ -18,6 +18,7 @@
 #include "ClipboardOperation.hpp"
 #include "Column.hpp"
 #include "DeleteDirection.hpp"
+#include "DeleteUnit.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -167,10 +168,10 @@ void edit_step(app::EditorController &controller, Random &random)
         },
         [](app::EditorController &target, Random &chance)
         {
-            static_cast<void>(target.apply(app::DeleteText{
-                below(chance, 2U) == 0U ? core::DeleteDirection::backward
-                                        : core::DeleteDirection::forward,
-                core::DeleteUnit::character}));
+            static_cast<void>(target.apply(app::DeleteText{below(chance, 2U) == 0U
+                                                               ? core::DeleteDirection::backward
+                                                               : core::DeleteDirection::forward,
+                                                           core::DeleteUnit::character}));
         },
         [](app::EditorController &target, Random &chance)
         {
