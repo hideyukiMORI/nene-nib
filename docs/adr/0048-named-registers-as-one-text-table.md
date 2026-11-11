@@ -81,3 +81,9 @@ Nib の今の形: 無名レジスタ `VimRegister { text; kind; width }` は eng
 ## 追補（2026-11-10・#1337）: `.` は名前が残るあいだ回数も持ち越す
 
 16. **追補 13 の例外。** 追補 13 の「`"{name}` の後の移動の後は `opcount` が 0 に戻る」は、`.` では起きない。`nv_dot` は `oap->regname` を消さないので、`normal_cmd` は名前が残るあいだ `opcount`（`.` の回数）を持ち越し、`.` が積んだ再生の桁に掛ける。`"a3.` は記録を `a` へ回数 9 で再生し、`"a.` は記録の回数のまま `a` へ書く。記録の頭の `"{name}`（決定 10）は `.` の名前に勝つ。規則と Nib の形は [ADR 0030](0030-vim-dot-repeat-as-key-replay.md) の追補（#1337）。
+
+## 追補（2026-11-11・#1369）: `"` `q` `@` の後の Esc は取り消し
+
+17. **規則（Vim 9.1 の `normal.c`）。** `normal_cmd` は次の 1 鍵を読んだ後、命令の関数を呼ぶ前に `ca.nchar == ESC` を見て `clearop` してから `normal_end` へ行く。`nv_regname` `nv_record` `nv_at` には届かないので鳴らず（失敗ではない）、後ろの鍵が効く。`clearop` はオペレータと名前（`oap->regname`）を消し、回数は `ca` ごと捨てる。モード（VISUAL）と欲しい列は変えない。
+18. **Nib の形。** `"`（`selected_register`）・`q`（`started_macro`）・`@`（`replayed_macro`）は、名前にならない鍵の判定を `m` `'` `` ` `` `[` `]` と同じ `escaped_or_refused` の 1 本に通す（`detail` へ移した・`VimStep.cpp`）。Esc は `finished_input_wait`（回数・保留・待ち・選んだレジスタを消す）だけで失敗の印を付けない。Esc 以外の名前にならない鍵は今どおり失敗（`"` は `refused_register` のまま）。録画中の `q`（待たずに録画を止める）は変えない。
+19. **実測と契約。** oracle の fixture `prefix-escape-` 11 件（`"<Esc>x` `@<Esc>x`・回数を捨てる `3"<Esc>x` `3@<Esc>x`・名前を捨てる `"ayllyl"a"<Esc>p`・欲しい列 `$j"<Esc>j` `$j@<Esc>j`・VISUAL のまま `v"<Esc>ld` `vl@<Esc>d`・`x@<Esc>.`・`@a@<Esc>@@`）。`q` は fixture に書けない（oracle の `records_a_macro` が拒む）ので、同じ `run_vim` で測った値（`q<Esc>x` `3q<Esc>x` `vq<Esc>ld` `$jq<Esc>j` `"ayllyl"aq<Esc>p` `xq<Esc>.`・`D:/NeNeNib/outputs/20261111/1369-q-escape/result.json`）を契約 `--vim-macro` の `verify_macro_escape_cancels` に写した。

@@ -58,6 +58,9 @@ requested_viewport(const VimState &state, const VimEditorView &view, VimAction a
 // 回数の最後の桁を消す（`12<Del>` は 1・`3<Del>` は回数なし）。
 [[nodiscard]] VimStep count_digit_dropped(const VimState &state);
 [[nodiscard]] VimStep window_started(const VimState &state);
+// 1 鍵を待つ接頭辞の後ろの Esc は打ち消し、ほかの鍵は refused（#1369・VimStep.cpp）。
+[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key, VimStep refused);
+[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key);
 [[nodiscard]] bool searches_forward(VimCharacterSearchKind kind) noexcept;
 [[nodiscard]] VimCharacterSearchKind opposite(VimCharacterSearchKind kind) noexcept;
 [[nodiscard]] std::optional<Offset>
