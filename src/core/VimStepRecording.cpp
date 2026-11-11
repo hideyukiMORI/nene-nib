@@ -42,6 +42,7 @@ using detail::single_step;
 using detail::started_macro;
 using detail::started_prefix;
 using detail::vim_recorded;
+using detail::visual_operated_mode;
 using detail::wanted_column_of;
 
 namespace detail
@@ -333,11 +334,19 @@ namespace
 }
 
 // `$` で取った矩形は「各行の内容の終わりまで」を覚え直す（ADR 0035 の決定 7・実測）。
-// 桁で覚えた矩形は選び直した両端の桁がそのまま幅になるので、欲しい列は空のままでよい。
+// 桁で覚えた矩形は選び直した両端の桁がそのまま幅になるので、欲しい列は空のままでよい。`$` で
+// 選んだ行単位と文字単位も行末の印を持つ（Vim の rv_vcol == MAXCOL の coladvance・`A`
+// の終わり・#1436）。
 [[nodiscard]] std::optional<VimWantedColumn> replayed_wanted(const VimVisualExtent &extent) noexcept
 {
     const auto *block = std::get_if<VimBlockExtent>(&extent);
-    if (block == nullptr || block->wish == VimColumnWish::at_column)
+    const auto *line = std::get_if<VimLineExtent>(&extent);
+    const auto *character = std::get_if<VimCharacterExtent>(&extent);
+    const bool at_line_end =
+        (block != nullptr && block->wish == VimColumnWish::at_line_end) ||
+        (line != nullptr && line->wish == VimColumnWish::at_line_end) ||
+        (character != nullptr && character->wish == VimColumnWish::at_line_end);
+    if (!at_line_end)
     {
         return std::nullopt;
     }
@@ -758,7 +767,7 @@ namespace
         // 記録は VISUAL の鍵からしか始まらない（決定 2）。
         std::unreachable();
     case VimMode::visual_line:
-        return VimLineExtent{lines};
+        return VimLineExtent{lines, wanted_column_of(view.text, state, view.selection.caret).wish};
     case VimMode::visual_block:
         // 幅だけを引き、行ごとの形は作らない（#1198）。`.` の再生の中は記録の大きさから決め直す
         // 矩形（block_of と同じ vim_replayed_block_range）の幅だけを引く（#1237）。
@@ -773,6 +782,26 @@ namespace
         return character_extent_of(view.text, state, view.selection, lines);
     }
     std::unreachable();
+}
+
+// 大きさを測る種類。大文字の鍵（`X` `D` `Y` `C` `I` `A` と `R`）は Vim の v_visop が行単位へ
+// 読み替えた種類で覚える（do_pending_operator の resel_VIsual_mode・#1436）。`vlAX<Esc>j0.` は
+// 1 行を選び直して打つ（2 文字ではない・実測）。
+[[nodiscard]] VimState measured_state(const VimState &before, const VimKey &key)
+{
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    if (character == nullptr || before.input_wait.has_value())
+    {
+        return before;
+    }
+    const auto action = vim_action_for(character->code);
+    if (!action.has_value())
+    {
+        return before;
+    }
+    VimState measured = before;
+    measured.mode = visual_operated_mode(before.mode, action.value());
+    return measured;
 }
 
 // VISUAL の記録（ADR 0033 の決定 2・3）。移動・選択の伸縮・`o`・種類の切替・yank は記録を
@@ -797,8 +826,9 @@ namespace
     // 11）。 回数を使わない VISUAL の鍵（d x c y r ~ u U）は流しても同じ。
     const std::vector<VimKey> counted =
         before.count.has_value() ? count_keys(before.count.value()) : std::vector<VimKey>{};
-    VimRepeatRecord record = before.recording.value_or(VimRepeatRecord{
-        std::nullopt, VimRecordedKeys::from(counted), visual_extent_of(before, view)});
+    VimRepeatRecord record = before.recording.value_or(
+        VimRepeatRecord{std::nullopt, VimRecordedKeys::from(counted),
+                        visual_extent_of(measured_state(before, key), view)});
     record = appended(std::move(record), key);
     if (waiting || inserting)
     {

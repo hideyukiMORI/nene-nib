@@ -23,6 +23,7 @@ using detail::replaced_block;
 using detail::replacement_key;
 using detail::started_prefix;
 using detail::started_replacement;
+using detail::visual_operation_noted;
 using detail::visual_restore;
 
 namespace
@@ -175,9 +176,12 @@ namespace detail
 {
 [[nodiscard]] VimStep replacement_key(const VimState &state, const VimEditorView &view, VimKey key)
 {
+    // VISUAL の `r{char}` もオペレータとして仮想桁を覚え直す（#1436・Vim の do_pending_operator）。
     if (std::holds_alternative<VimCharacter>(key))
     {
-        return replaced_character(state, view, std::get<VimCharacter>(key).code);
+        return visual_operation_noted(
+            state, view, VimAction::replace_character,
+            replaced_character(state, view, std::get<VimCharacter>(key).code));
     }
     if (!std::holds_alternative<VimSpecialKey>(key))
     {
@@ -186,7 +190,8 @@ namespace detail
     switch (std::get<VimSpecialKey>(key))
     {
     case VimSpecialKey::enter:
-        return replaced_character(state, view, line_feed);
+        return visual_operation_noted(state, view, VimAction::replace_character,
+                                      replaced_character(state, view, line_feed));
     case VimSpecialKey::escape:
     case VimSpecialKey::backspace:
     case VimSpecialKey::arrow_left:
