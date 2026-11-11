@@ -6,6 +6,7 @@
 #include "CommandLayout.hpp"
 #include "CommandPalette.hpp"
 #include "DisplayText.hpp"
+#include "DocumentByteLimit.hpp"
 #include "EditBoundary.hpp"
 #include "EditorSettings.hpp"
 #include "ExEvaluationFailure.hpp"
@@ -29,6 +30,7 @@
 #include "SearchLine.hpp"
 #include "StatusBarLayout.hpp"
 #include "SubstituteAll.hpp"
+#include "SubstituteFailure.hpp"
 #include "TabDestination.hpp"
 #include "TabJump.hpp"
 #include "TabJumpDirection.hpp"
@@ -157,6 +159,9 @@ namespace
 constexpr std::string_view not_a_line_notice = "行番号を入れてください";
 // Vim モードで一覧から「置換」を選んだときの `:` の前置き（ADR 0174 の決定 2）。
 constexpr std::string_view vim_replace_prefix = "%s/";
+// 全件の置換の後の文書が開ける上限を超えるときの知らせ（#1376・印刷の「16 MiB までです」と同じ
+// 流儀）。入力行の確定の断りなので鳴らす（ADR 0153 の決定 1）。
+constexpr std::string_view replace_too_large_notice = "置換の結果は 1 GiB までです";
 // 置換の起点を戻す幅（UTF-8 の 1 コードポイントの最大のバイト数）。
 constexpr std::size_t code_point_bytes = 4;
 } // namespace
@@ -775,10 +780,20 @@ void EditorController::replace_all_matches()
     {
         return;
     }
-    const auto edit = core::substituted_all(state_.text(), pattern.value(), find.replacement);
+    const auto edit = core::substituted_all(state_.text(), pattern.value(), find.replacement,
+                                            core::maximum_document_bytes);
     if (!edit.has_value())
     {
-        static_cast<void>(hop_find(find.pattern, core::VimSearchDirection::forward, true));
+        // 写し先が足りなければここでコンパイルが落ちる（CPP-002）。
+        switch (edit.error())
+        {
+        case core::SubstituteFailure::no_match:
+            static_cast<void>(hop_find(find.pattern, core::VimSearchDirection::forward, true));
+            return;
+        case core::SubstituteFailure::too_large:
+            reject(core::DisplayText::parse(replace_too_large_notice).value());
+            return;
+        }
         return;
     }
     const core::Offset end{edit.value().at.value + edit.value().removed.size()};
