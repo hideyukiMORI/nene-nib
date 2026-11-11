@@ -1017,13 +1017,14 @@ void EditorController::mark_opened(OpenedAs opened_as)
 
 void EditorController::reach_open_tab(std::size_t position, OpenedAs opened_as)
 {
-    accept(SwitchTab{position});
     switch (opened_as)
     {
     case OpenedAs::pinned:
+        // 切り替えと固定を 1 つにする（切り替えが読めないタブを外したら隣を固定しない・#1427 L1）。
         accept(PinTab{position});
         return;
     case OpenedAs::transient:
+        accept(SwitchTab{position});
         return;
     }
     std::unreachable();

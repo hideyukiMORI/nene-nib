@@ -185,13 +185,15 @@ bool EditorWindow::click_title_bar(LPARAM data, application::PointerClicks click
     switch (target.hit)
     {
     case core::TitleBarHit::tab:
-        // 題名のダブルクリックは、1 回目と同じ切り替えに続けてそのタブを固定する（ADR 0179 の
-        // 決定 4-4）。プレビューのタブでなければ controller は何もしない。
-        send(application::SwitchTab{target.tab});
+        // 題名のダブルクリックは、切り替えと固定を 1 意図で送る（ADR 0179 の決定 4-4）。controller
+        // が 切り替えの成ったタブだけを固定するので、読めないタブが外れても隣を固定しない（#1427
+        // L1）。
         if (clicks != application::PointerClicks::single)
         {
             send(application::PinTab{target.tab});
+            return true;
         }
+        send(application::SwitchTab{target.tab});
         return true;
     // ×・「＋」・「∨」は離したときに動かす（窓の操作と同じ）。
     case core::TitleBarHit::tab_close:

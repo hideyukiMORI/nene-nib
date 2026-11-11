@@ -197,18 +197,30 @@ void EditorController::accept(const CloseTab &intent)
     }
 }
 
-// 題名のダブルクリック（ADR 0179 の決定 4-4）。印のタブでなければ何もしない。
+// 題名のダブルクリックと明示の開く（ADR 0179 の決定 4-3〜4-5）。指された位置のタブへ切り替え、
+// 切り替えが成って（アクティブがそのタブの退避番号になって）そのタブが印のタブなら固定する。
+// 位置ではなく番号で比べるのは、切り替えが読めないタブを帯から外すと位置がずれるから（#1427 の
+// L1）。印のタブでなければ切り替えるだけ。
 void EditorController::accept(const PinTab &intent)
 {
-    if (state_.transient_tab() == intent.index)
+    if (intent.index >= state_.tab_count())
     {
-        state_ = state_.without_transient();
+        return;
+    }
+    const AutosaveId pointed = state_.autosave_ids().at(intent.index);
+    accept(SwitchTab{intent.index});
+    if (state_.autosave_ids().at(state_.active_tab()) == pointed)
+    {
+        pin_active_tab();
     }
 }
 
 void EditorController::pin_active_tab()
 {
-    accept(PinTab{state_.active_tab()});
+    if (state_.transient_tab() == state_.active_tab())
+    {
+        state_ = state_.without_transient();
+    }
 }
 
 // ---------------------------------------------------------------- 枠（ADR 0148）

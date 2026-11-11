@@ -1,17 +1,21 @@
 // scope `--transient-tab-property` の単体テスト（#1397・ADR 0179 の決定 2・3・9）。固定 seed の
 // 決定的な操作の列（面のクリック・面のダブルクリック・打鍵・保存・切り替え・閉じる・undo・
-// 題名のダブルクリック・新しいタブ）を、エクスプローラーのクリックで開く controller（A）と、印を
-// 持たない controller（B）の両方に流し、各歩で次を見る。
+// 題名のダブルクリック・新しいタブ・IME の変換中に裏の読みが揃うクリック）を、エクスプローラーの
+// クリックで開く controller（A）と、印を持たない controller（B）の両方に流し、各歩で次を見る。
 //   1. A の印のタブは高々 1 本で、その文書は保存済み（不変条件 2）。
 //   2. A の帯（題名・パス・未保存の印）とアクティブと本文の先頭の行が、B と一致する。B は同じ列を
 //      Ctrl+O の開く（pinned）で流し、A が置き換える場面だけを「印のタブへ切り替える → 開く →
 //      印のタブを閉じる」の合成に読み替えたもの（決定 9）。
 // 生成器は std::mt19937_64 の固定 seed で、分布の型は使わず剰余で範囲に畳む。
 #include "CloseTab.hpp"
+#include "CommitText.hpp"
+#include "ComposeText.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "EditorSettings.hpp"
+#include "ExplorerKey.hpp"
+#include "ExplorerKeyKind.hpp"
 #include "ExplorerPointing.hpp"
 #include "FilePath.hpp"
 #include "FolderBatch.hpp"
@@ -37,6 +41,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <optional>
 #include <random>
 #include <string>
@@ -164,13 +169,13 @@ void double_click(Editing &editing, std::size_t row)
 // 面のクリックを B に写す。A が置き換える場面（読めるファイル・開いていない・印のタブがある）は
 // 「印のタブへ切り替える → 開く → 印のタブを閉じる」の合成。ほかは Ctrl+O と同じ開く道。読めない
 // ファイルは A でも何も変わらないので流さない。返すのは置き換えたか。
-bool mirror_click(Editing &plain, const app::EditorFrame &before, std::size_t row)
+bool mirror_open(Editing &plain, const app::EditorFrame &before,
+                 std::optional<std::size_t> transient, std::size_t row)
 {
     if (row >= readable_files)
     {
         return false;
     }
-    const auto transient = transient_of(before);
     auto &controller = plain.controller();
     if (!open_in(before, row) && transient.has_value())
     {
@@ -183,16 +188,62 @@ bool mirror_click(Editing &plain, const app::EditorFrame &before, std::size_t ro
     return false;
 }
 
+bool mirror_click(Editing &plain, const app::EditorFrame &before, std::size_t row)
+{
+    return mirror_open(plain, before, transient_of(before), row);
+}
+
 void both(Editing &marked, Editing &plain, const app::EditorIntent &intent)
 {
     applied(marked.controller(), intent);
     applied(plain.controller(), intent);
 }
 
+// 面の Esc で焦点を本文へ戻してから変換して確定する（面に焦点がある間の確定は本文に入らない）。
+void composed(Editing &editing)
+{
+    applied(editing.controller(), app::ExplorerKey{app::ExplorerKeyKind::esc});
+    applied(editing.controller(), app::ComposeText{composed_of("y", {}, 0)});
+    applied(editing.controller(), app::CommitText{"y"});
+}
+
+// IME の変換中に揃うクリック（ADR 0179 の決定 2・#1427 の L2）。A は読みを裏へ回し、変換を始めて
+// から揃え（留まる）、確定の意図の follow_reads が置き換えに入る。確定がアクティブな印のタブを
+// 書き換えていれば、守り B が置き換えずに右へ足す。B（plain）は確定してから開く。開いている
+// ファイルと読めないファイルは裏へ回らないので、クリックしてから確定する。
+bool held_click(Editing &marked, Editing &plain, const app::EditorFrame &before, std::size_t row)
+{
+    if (row >= readable_files || open_in(before, row))
+    {
+        click(marked, row);
+        composed(marked);
+        const bool replaced = mirror_click(plain, before, row);
+        composed(plain);
+        return replaced;
+    }
+    auto &reads = marked.reads();
+    reads.defer_above(0);
+    click(marked, row);
+    reads.defer_above(std::numeric_limits<std::size_t>::max());
+    const std::uint64_t ticket = reads.requests().back().ticket;
+    applied(marked.controller(), app::ExplorerKey{app::ExplorerKeyKind::esc});
+    applied(marked.controller(), app::ComposeText{composed_of("y", {}, 0)});
+    reads.finish(ticket);
+    applied(marked.controller(), app::WorkCompleted{});
+    applied(marked.controller(), app::CommitText{"y"});
+    composed(plain);
+    auto transient = transient_of(before);
+    if (transient == before.active_tab)
+    {
+        transient.reset();
+    }
+    return mirror_open(plain, before, transient, row);
+}
+
 // 操作の 1 つを両方に流す。返すのは置き換えの数（0 か 1）。
 std::size_t step(Editing &marked, Editing &plain, Random &random)
 {
-    const std::uint64_t kind = random() % 10U;
+    const std::uint64_t kind = random() % 12U;
     const std::uint64_t value = random();
     const auto before = marked.controller().frame();
     const std::size_t tabs = before.tabs.size();
@@ -225,8 +276,15 @@ std::size_t step(Editing &marked, Editing &plain, Random &random)
     case 8:
         both(marked, plain, app::HistoryAction{core::HistoryDirection::undo});
         return 0U;
+    case 9:
+        both(marked, plain, app::NewTab{});
+        return 0U;
+    case 10:
+        return held_click(marked, plain, before, value % panel_files) ? 1U : 0U;
     default:
+        // 題名のダブルクリックは切り替えてから固定する（#1427 の L1）。B は切り替えるだけ。
         applied(marked.controller(), app::PinTab{value % tabs});
+        applied(plain.controller(), app::SwitchTab{value % tabs});
         return 0U;
     }
 }
@@ -268,11 +326,12 @@ void verify_transient_tab_property_scope()
     {
         broken += broken_case(first_seed + index, replaced, marked_steps);
     }
-    expect(
-        broken == 0U,
-        "after random clicks, edits, saves, switches, closes, undos and pins, at most one tab is "
-        "transient and saved, and the tabs match the same steps with replacing read as closing "
-        "and opening");
+    expect(broken == 0U,
+           "after random clicks, held clicks, edits, saves, switches, closes, undos, new tabs and "
+           "pins, "
+           "at most one tab is "
+           "transient and saved, and the tabs match the same steps with replacing read as closing "
+           "and opening");
     expect(replaced > cases && marked_steps > cases * steps / 10U,
            "the generator replaces transient tabs and keeps a transient tab on many steps");
 }

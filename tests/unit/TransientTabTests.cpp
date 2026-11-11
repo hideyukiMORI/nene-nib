@@ -7,6 +7,10 @@
 #include "Appearance.hpp"
 #include "AutosaveId.hpp"
 #include "CloseTab.hpp"
+#include "Column.hpp"
+#include "CommandText.hpp"
+#include "CommitText.hpp"
+#include "ComposeText.hpp"
 #include "Document.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -25,6 +29,8 @@
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InsertText.hpp"
+#include "LineNumber.hpp"
+#include "MapRow.hpp"
 #include "NewTab.hpp"
 #include "OpenDocument.hpp"
 #include "PinTab.hpp"
@@ -36,22 +42,30 @@
 #include "ScriptedSettings.hpp"
 #include "SelectDocumentFormat.hpp"
 #include "SelectEditMode.hpp"
+#include "Session.hpp"
 #include "SessionEnd.hpp"
+#include "SessionTab.hpp"
 #include "SettleRecentTab.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
+#include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
+#include "TextPosition.hpp"
+#include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
+#include "VimModeSet.hpp"
 #include "VisibleLines.hpp"
 #include "WalkRecentTab.hpp"
 #include "WorkCompleted.hpp"
 
 #include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -133,6 +147,11 @@ app::EditorFrame double_clicked(Editing &editing, std::size_t row)
 {
     return frame.command_message.has_value() ? std::string(frame.command_message.value().text())
                                              : std::string("-");
+}
+
+[[nodiscard]] std::string first_line_of(const app::EditorFrame &frame)
+{
+    return frame.lines.empty() ? std::string{} : frame.lines.front().text;
 }
 
 [[nodiscard]] std::size_t transient_count(const app::EditorFrame &frame)
@@ -324,6 +343,136 @@ void verify_state_replacement()
            "closing the transient tab drops the mark; the last tab is not closed");
 }
 
+// 裏へ回したクリック。読みの券を返す（結果は arrived で揃える）。
+[[nodiscard]] std::uint64_t held_click(Editing &editing, std::size_t row)
+{
+    editing.reads().defer_above(0);
+    static_cast<void>(clicked(editing, row));
+    editing.reads().defer_above(std::numeric_limits<std::size_t>::max());
+    return editing.reads().requests().back().ticket;
+}
+
+app::EditorFrame arrived(Editing &editing, std::uint64_t ticket)
+{
+    editing.reads().finish(ticket);
+    return editing.controller().apply_frame(app::WorkCompleted{});
+}
+
+// 守り B を controller の順で見る（#1427 の L2・ADR 0179 の決定 2 と 4-1）。印のタブ a.txt を見て
+// いる間に b.txt のクリックを裏へ回し、面の Esc で焦点を本文へ戻して（面に焦点がある間の鍵と確定は
+// 本文に入らない）、読みが留まる状態（IME の変換中・`:` の入力行・Vim の
+// オペレータ待ち）の間に揃える。待ちを終える意図が a.txt を書き換え、同じ意図の follow_reads が
+// 置き換えに入る（意図の出口の固定より先）。a.txt は未保存なので置き換えず、右に b.txt を足す。
+void verify_held_read_orders()
+{
+    const auto opened = [](Editing &editing)
+    {
+        load_project(editing);
+        static_cast<void>(clicked(editing, 0));
+    };
+    Editing composing(shown_project());
+    opened(composing);
+    const auto composed = held_click(composing, 1);
+    applied(composing.controller(), app::ExplorerKey{app::ExplorerKeyKind::esc});
+    applied(composing.controller(), app::ComposeText{composed_of("あ", {}, 0)});
+    expect(band(arrived(composing, composed)) == "a.txt~*",
+           "a read that finishes during a composition is held");
+    const auto committed = composing.controller().apply_frame(app::CommitText{"あ"});
+    expect(band(committed) == "● a.txt|b.txt~*" && committed.lines.front().text == "b body",
+           "the commit that edits the transient tab keeps it and opens the held read beside it");
+    Editing commanding(shown_project());
+    opened(commanding);
+    auto &command = commanding.controller();
+    applied(command, app::SelectEditMode{core::EditMode::vim});
+    const auto typed = held_click(commanding, 1);
+    applied(command, app::ExplorerKey{app::ExplorerKeyKind::esc});
+    applied(command, app::VimKeyPress{core::VimKey{core::VimCharacter{U':'}}});
+    expect(band(arrived(commanding, typed)) == "a.txt~*",
+           "a read that finishes while the command line is open is held");
+    applied(command, app::CommandText{"set fenc=cp932"});
+    expect(band(command.apply_frame(app::SubmitCommand{})) == "● a.txt|b.txt~*",
+           "the command that changes the saved form keeps the transient tab");
+    Editing waiting(shown_project());
+    opened(waiting);
+    auto &vim = waiting.controller();
+    applied(vim, app::SelectEditMode{core::EditMode::vim});
+    const auto pending = held_click(waiting, 1);
+    applied(vim, app::ExplorerKey{app::ExplorerKeyKind::esc});
+    applied(vim, app::VimKeyPress{core::VimKey{core::VimCharacter{U'd'}}});
+    expect(band(arrived(waiting, pending)) == "a.txt~*",
+           "a read that finishes while an operator waits is held");
+    expect(band(vim.apply_frame(app::VimKeyPress{core::VimKey{core::VimCharacter{U'w'}}})) ==
+               "● a.txt|b.txt~*",
+           "the key that ends the wait and deletes keeps the transient tab");
+    expect(first_line_of(vim.apply_frame(app::SwitchTab{0})) == "body",
+           "the deletion went into the transient document, which was kept");
+}
+
+// INSERT の map の左辺を待っている間のクリック（#1427 の L2）。入口の flush_key_map_pending
+// が待ちの 文字を印のタブに入れてから開くので、印のタブは置き換えない。
+void verify_mapped_click()
+{
+    auto settings = core::default_editor_settings();
+    settings.explorer = true;
+    settings.root = path_of("C:\\proj");
+    settings.maps = {
+        core::MapRow{core::VimModeSet{false, true, false, false, false}, "jj", "<Esc>", false}};
+    Editing editing(std::optional<core::EditorSettings>{std::move(settings)});
+    load_project(editing);
+    auto &controller = editing.controller();
+    static_cast<void>(clicked(editing, 0));
+    applied(controller, app::ExplorerKey{app::ExplorerKeyKind::esc});
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    applied(controller, app::VimKeyPress{core::VimKey{core::VimCharacter{U'i'}}});
+    applied(controller, app::VimKeyPress{core::VimKey{core::VimCharacter{U'j'}}});
+    expect(band(controller.frame()) == "a.txt~*", "the waiting j has not edited the tab");
+    expect(band(clicked(editing, 1)) == "● a.txt|b.txt~*",
+           "a click flushes the waiting j into the transient tab and keeps it");
+    expect(first_line_of(controller.apply_frame(app::SwitchTab{0})) == "ja body",
+           "the flushed j went into the transient document");
+}
+
+// 読めないタブを外す切り替えは、隣のタブを固定しない（#1427 の L1）。前回のまだ読んでいない
+// タブ（ファイルは消えた）と印のタブが並ぶとき、Ctrl+P の明示の開くと題名のダブルクリックで
+// まだ読んでいないタブを指しても、外れて知らせるだけで印は残る。
+void verify_dropped_pin()
+{
+    const auto tab = [](std::string_view path, std::size_t rank)
+    {
+        return app::SessionTab{path_of(path),
+                               core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                               core::LineNumber{1}, rank};
+    };
+    const SessionReading listed{std::optional<app::Session>{
+        app::Session{{tab("C:\\proj\\gone.txt", 1), tab("C:\\proj\\d.txt", 0)}, 1}}};
+    // 帯を [gone.txt（まだ読んでいない・ファイルは無い）, a.txt（印）] にする。
+    const auto prepared = [&](Editing &editing)
+    {
+        auto &controller = editing.controller();
+        static_cast<void>(run_ex(controller, "set root=C:\\proj"));
+        static_cast<void>(run_ex(controller, "set explorer"));
+        load_project(editing);
+        static_cast<void>(clicked(editing, 0));
+        applied(controller, app::CloseTab{1});
+        expect(band(controller.frame()) == "gone.txt|a.txt~*",
+               "an unread restored tab sits left of the transient tab");
+    };
+    const auto files = [](ScriptedFiles &held) { held.hold_at("C:\\proj\\d.txt", Bytes{"d"}); };
+    Editing opening(listed, files);
+    prepared(opening);
+    const auto explicit_open =
+        opening.controller().apply_frame(app::OpenDocument{path_of("C:\\proj\\gone.txt")});
+    expect(
+        band(explicit_open) == "a.txt~*" &&
+            message_of(explicit_open) == "開けませんでした: gone.txt",
+        "opening an unread tab that cannot be read drops it and keeps the mark on its neighbour");
+    Editing titled(listed, files);
+    prepared(titled);
+    const auto pinned = titled.controller().apply_frame(app::PinTab{0});
+    expect(band(pinned) == "a.txt~*" && message_of(pinned) == "開けませんでした: gone.txt",
+           "a double click on the title of an unread tab that cannot be read pins nothing");
+}
+
 void verify_split_click()
 {
     Editing editing(shown_project());
@@ -346,6 +495,9 @@ void verify_transient_tab_contracts()
     verify_restore();
     verify_state_replacement();
     verify_split_click();
+    verify_held_read_orders();
+    verify_mapped_click();
+    verify_dropped_pin();
 }
 
 void verify_transient_tab_scope()

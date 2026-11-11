@@ -520,7 +520,8 @@ class EditorController final
     void accept(const WalkRecentTab &intent);
     void accept(const SettleRecentTab &);
     void accept(const CloseTab &intent);
-    // 題名のダブルクリック（ADR 0179 の決定 4-4）。そのタブがプレビューのタブなら印を消す。
+    // 題名のダブルクリック（ADR 0179 の決定 4-4）。そのタブへ切り替え、切り替えが成ったタブが
+    // プレビューのタブなら印を消す（通し番号で比べる・#1427 の L1）。
     void accept(const PinTab &intent);
     // 窓が閉じていくときに前回のタブの一覧を書く（ADR 0059 の決定 3）。状態は変えない。
     void accept(const EndSession &intent);
