@@ -31,7 +31,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 | D11 | ダークの配色は Ubuntu をイメージした深い茄子色（施主決定 2026-09-15） | 背景は Ubuntu 端末の #300A24、文字は淡い灰 #EEEEEC。ライトは中立の明るい灰（#F4F5F7 / #1B1F24） |
 | D13 | 有名なカラーテーマ（Solarized 系・Monokai・Dracula・One Dark・Night Owl など）を `:colorscheme <name>` で選べるようにする（施主決定 2026-09-15） | 計画は [docs/plans/2026-09-15-colorschemes.md](docs/plans/2026-09-15-colorschemes.md)。既定は OS 追従（茄子色のダーク・中立のライト）。明示的に選んだテーマは OS の切り替えで変わらない |
 | D15 | 編集中の状態の見た目（キャレットの形・選択・検索の当たり・IME・`:` の行）は [採用案](docs/design/2026-09-15-editing-look.md)。`:` の行は案 A（ステータスバーの左側が置き換わる）（施主決定 2026-09-15） | ADR 0009 |
-| D16 | タイトルバー（タブの帯）の背景は Mica に透かす淡い面ではなく、本文より一段深い不透明の茄子色 #1E0516。アクティブなタブは本文色で本文に繋がる（施主決定 2026-09-17・案 C） | テーマごとの値（`title_bar` / `tab_active`）。ライトは帯 #E1E4E9・タブ #F4F5F7。Mica 自体は起動の面（ADR 0013）と明暗のために残す。案の絵: https://claude.ai/artifact/NsLXAGUtYQnaS788WmFw2G 。実装は Issue #31 |
+| D16 | タイトルバー（タブの帯）の背景は Mica に透かす淡い面ではなく、本文より一段深い不透明の茄子色 #1E0516。アクティブなタブは本文色で本文に繋がる（施主決定 2026-09-17・案 C） | テーマごとの値（`title_bar` / `tab_active`）。ライトは帯 #E1E4E9・タブ #F4F5F7。Mica 自体は起動の面（ADR 0013）と明暗のために残していたが、2026-11-11 に外した（D86）。案の絵: https://claude.ai/artifact/NsLXAGUtYQnaS788WmFw2G 。実装は Issue #31 |
 | D14 | フォントサイズを変更できるようにする（施主決定 2026-09-15） | Ctrl+`+` / Ctrl+`-` / Ctrl+`0`（既定に戻す）と Ctrl+ホイール、Vim では `:set fontsize=<pt>`（`:set guifont` の書式も受ける）。値は設定に保存。計画は docs/plans/2026-09-15-colorschemes.md 第 6 節 |
 | D17 | 検索の当たりの強調（`hlsearch`）は既定オン。全一致は `search` の面、現在の一致は `accent` の 1 DIP の枠（施主決定 2026-09-22・案 A） | ADR 0037・Issue #123。`:noh` `:set (no)hlsearch` で消せる |
 | D18 | 入力中の当たりを見せる `incsearch` は既定オン（施主決定 2026-09-23）。Ctrl-G / Ctrl-T の向きと回数は Vim 準拠（Ctrl-G は本文の下へ・Ctrl-T は上へ・`[count]` は hop にも効く） | ADR 0041 / 0043・Issue #148 / #168。`:set (no)incsearch` で切り替え |
@@ -99,6 +99,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 | D81 | **エクスプローラーの見た目は採用案 B「色の点」**: 面の地はタブの帯と同じ色・本文の左上の角を丸める・UI の字体と 22 DIP の行・丸い行の面と載せた行・幾何の山形とフォルダの絵・ファイルは構文の色のトークンの点・未保存は `accent` の丸。新しい色のトークンは足さない（施主決定 2026-11-10「推しの B」・D66 の採用案 A を改める） | #1390（未実装）・`docs/design/` |
 | D82 | **Vim でないモード（通常モード）の振る舞いは Windows の標準（メモ帳・ブラウザの入力欄）に合わせる。** 最後の行の ↓ は本文の末尾・先頭の行の ↑ は本文の先頭・選択があるときの矢印は選択の端から・語の境・古い鍵など。Vim のモードは本物の Vim が正本のまま（施主決定 2026-11-10「vim じゃないモードは windows の標準に合わせて」） | #1386・#1393・#1394・#1395 |
 | D83 | **エクスプローラーの面のクリック 1 回で開いたタブは、Cursor / VS Code と同じプレビューのタブにする。** 題名は斜体で、次のクリックで同じタブを置き換える。本文の編集・面のダブルクリックと Enter・題名のダブルクリック・保存で普通のタブに固定する。Ctrl+P・Ctrl+O・起動引数・ドロップ・`:e` で開くタブは今までどおり（施主決定 2026-11-10「クリックで開いたタブは Cursor とあわせて」） | #1397（未実装）・ADR 0179 |
+| D86 | **窓の背景に Mica を掛けない。** 窓の左上と右上の角に小さく明るい点が見えていた。実機の切り分け（縁の色を無しにした版 = 点が残る・Mica を外した版 = 点が消える・診断版 = 角を四角にする設定は入っている）で、Windows 11（26H2・build 26300）の DWM が中身の絵だけを角の約 4 px で丸く抜き、下の Mica（#202020）が見えていたと分かった（施主決定 2026-11-11 夜・案 A） | タブの帯は不透明（D16）なので見た目は変わらない。窓を見せてから最初の描画までの約 10 ms と、広げるリサイズの 1 コマは窓の後ろが透ける（施主が広げる・最大化・Snap を確かめて問題なし）。角の約 4 px の丸みは残る（完全な四角は Issue #1496）。本文の面の左上の丸みも外した。Issue #1488・ADR 0008 決定 9 の追記・ADR 0013 の追補 |
 | D70 | ミニマップ（bitmap の保持で打鍵ごとは貼るだけ・既定オフ）と起動画面（引数も前回のタブも無い起動で最近のファイルとブックマークと鍵の案内・既定オン）を実装予定に入れる。スニペット・zen mode は入れない。折りたたみ・rainbow・スペル は検討リスト（施主決定 2026-10-28） | #1017 #1018・計画 `docs/plans/2026-10-28-editing-features-roadmap.md` §3.5 |
 | D12 | 見た目は `/design` で起こした案（[採用案](docs/design/2026-09-15-look.md)・[ADR 0008](docs/adr/0008-adopted-look-tabs-titlebar-statusbar-mica.md)）を採用。アクセントは Ubuntu 橙 #E95420（施主承認 2026-09-15） | 見た目の判断は実装の前に `/design` で画を作って施主が選ぶ（施主指示 2026-09-15） |
 
@@ -109,7 +110,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 - 低遅延: キー入力でその場で描く・DXGI flip model ＋ waitable swap chain・DirectComposition で窓へ結ぶ
 - 起動: 静的リンク（`/MT`）の exe 1 本・ランタイム依存なし
 - 巨大ファイル: メモリマップ ＋ piece table ＋ 行索引の遅延構築（ワーカー・[ADR 0004](docs/adr/0004-ui-thread-plus-one-worker.md)）
-- 見た目: Mica（`DWMWA_SYSTEMBACKDROP_TYPE`）・自前タイトルバー（タブ）・Segoe UI Variable・ライト／ダーク／アクセント色は OS 追従・DirectComposition の滑らかスクロール
+- 見た目: 自前タイトルバー（タブ・不透明の帯。Mica は掛けない・D86）・Segoe UI Variable・ライト／ダーク／アクセント色は OS 追従・DirectComposition の滑らかスクロール
 - 日本語入力: IMM32 / TSF を初版から。**変換中は Vim の鍵を奪わない**
 - 速さの見張り: ベンチ 8 本（起動→最初の描画・窓が見えるまで・1 打鍵・200 打鍵・16 MiB を開く・16 MiB で 200 打鍵・5000 件の面・長い行の 1 打鍵）を `eng/measure-speed.py` が施主の実機の Release で測り、`eng/perf-reference.json` の基準値からの退行でゲートを落とす（[ADR 0006](docs/adr/0006-speed-gate-simd-and-table-driven-dispatch.md)・[ADR 0016](docs/adr/0016-ci-speed-reference-per-host-fingerprint.md)・QLT-014）。CI の必須 check は `validate-git` だけで、ベンチは CI で判定しない（[ADR 0021](docs/adr/0021-diff-scoped-verification-and-result-reuse.md)）。目標値は D51（施主決定 2026-10-16）
 
@@ -127,7 +128,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 | FR-008 | 文字コード: UTF-8 既定・Shift_JIS 自動判別。改行コードは読んだ形を保つ | D8 |
 | FR-009 | タブの復元は保存済みファイルだけ。戻すのはファイルを指定せずに起動したとき・並びと見ていたタブと位置を戻す・ファイルは見るときに読む | D9・D24〜D27・ADR 0059 |
 | FR-010 | ブックマーク: 通常は Ctrl+D・Vim は Ctrl+Shift+D で付け外し（D36）。開けなくても登録を残す（D37）。タスクバーのジャンプリストに履歴とピン留め（`SHAddToRecentDocs` / `ICustomDestinationList`） | |
-| FR-011 | 見た目: Mica・自前タイトルバー・Segoe UI Variable・OS のライト／ダーク／アクセント色に追従・滑らかスクロール | ADR 0002 |
+| FR-011 | 見た目: 自前タイトルバー（Mica は掛けない・D86）・Segoe UI Variable・OS のライト／ダーク／アクセント色に追従・滑らかスクロール | ADR 0002 |
 | FR-012 | 日本語入力（IMM32 / TSF）。変換中は Vim の鍵を奪わない。Ctrl+P の面でも打てる（IME はオフで開く） | D31・D32・ADR 0014 / 0061 |
 | FR-013 | 巨大ファイル（1 GB の UTF-8）を開け、読み込み中も別のタブで打てる。読み込み中は 1 行で知らせる（D63・手段は ADR 0159: worker で揃えてから採用・メモリマップは採らない） | D63・ADR 0121 / 0159・ベンチは任意の `open-large-file-*`（段 6） |
 | FR-014 | 表示は Per-Monitor v2 の DPI で崩れない | マニフェスト |
