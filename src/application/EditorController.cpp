@@ -388,12 +388,17 @@ bool EditorController::persist_settings(core::EditorSettings settings)
         return false;
     }
     const bool reshaped = core::affects_line_height(state_.settings(), settings);
+    const bool margin_changed = settings.scrolloff != state_.settings().scrolloff;
     state_ = state_.with_settings(std::move(settings)).with_settings_failure(std::nullopt);
     // 面の表示とルートは設定の値（ADR 0162 の決定 3）。Ex・面の `:`・意図のどれから書いても同じ 1
     // 本。
     sync_explorer();
     sync_minimap();
     refresh_key_map();
+    if (margin_changed)
+    {
+        follow_changed_margin();
+    }
     if (view_geometry_.width <= 0)
     {
         return true;
@@ -409,6 +414,24 @@ bool EditorController::persist_settings(core::EditorSettings settings)
     clamp_scroll();
     follow_caret();
     return true;
+}
+
+// Vim は `scrolloff` を変えると、次の鍵の前（鍵が無ければ描く前）に今のキャレットで窓を新しい
+// 余白で決め直す（#1432・Vim 9.1 の実測）。追従を頼み、後の鍵の頼みが保留を置き換えても解決は
+// この位置を先に流す印を立てる。文字組みは作らず、解決はスクロールを読む所で 1 回（ADR 0128 /
+// 0129）。幅の決まる前の窓（fixture の再生）でも鍵の追従と同じに頼む。通常モードの追従は
+// 変えない（印を立てず、今までどおり幅の決まった窓の追従だけ）。
+void EditorController::follow_changed_margin()
+{
+    switch (state_.mode())
+    {
+    case core::EditMode::ordinary:
+        return;
+    case core::EditMode::vim:
+        break;
+    }
+    follow_caret();
+    setting_follow_ = pending_follow_;
 }
 
 EditorDelivery EditorController::apply(const EditorIntent &intent)

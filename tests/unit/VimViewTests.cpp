@@ -2,6 +2,7 @@
 // `relativenumber` の行番号の文字は画面の値なので oracle では測れず、ここで契約にする。`scrolloff`
 // の H M L と Ctrl-f / Ctrl-b / Ctrl-d / Ctrl-u の着地（#1099）も窓の高さが要るのでここ。
 #include "Column.hpp"
+#include "CommandText.hpp"
 #include "DisplayForm.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -20,6 +21,7 @@
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "StoreVimRegister.hpp"
+#include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
@@ -48,12 +50,14 @@ namespace nenenib::tests
 {
 namespace
 {
+using nenenib::application::CommandText;
 using nenenib::application::EditorFrame;
 using nenenib::application::InsertText;
 using nenenib::application::PlaceCaret;
 using nenenib::application::ScrollLines;
 using nenenib::application::SelectDisplay;
 using nenenib::application::SelectEditMode;
+using nenenib::application::SubmitCommand;
 using nenenib::application::VimKeyPress;
 using nenenib::application::VisibleLines;
 using nenenib::core::Column;
@@ -972,6 +976,49 @@ void verify_typed_follow_without_frames()
            "#1363 a far move still pending before the insert keeps the one jump to the middle");
 }
 
+// `scrolloff` を変えた後の鍵を frame を挟まずに送る（#1432）。本文と窓は fixture
+// viewport-set-so- の 30 行と同じ（6 行の窓・so=0・先頭 10）。Ex の入力行から余白を確定し、鍵を
+// 意図で送って最後に 1 回だけ frame を読む。
+[[nodiscard]] std::pair<std::size_t, std::size_t>
+margin_changed_then(std::size_t line, std::string_view margin, std::string_view keys)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{6});
+    std::string text;
+    for (std::size_t number = 1; number <= 30; ++number)
+    {
+        text += std::string(number < 10 ? "0" : "") + std::to_string(number) +
+                (number < 30 ? "\n" : "");
+    }
+    static_cast<void>(controller.apply(InsertText{text}));
+    applied(controller, SelectEditMode{EditMode::vim});
+    static_cast<void>(run_ex(controller, "set so=0"));
+    vim_replay(controller, "10Gzt" + std::to_string(line) + "G");
+    static_cast<void>(controller.apply(VimKeyPress{VimCharacter{U':'}}));
+    static_cast<void>(controller.apply(CommandText{"set so=" + std::string(margin)}));
+    static_cast<void>(controller.apply(SubmitCommand{}));
+    for (const VimKey &key : vim_keys_of(keys))
+    {
+        static_cast<void>(controller.apply(VimKeyPress{key}));
+    }
+    return top_and_line(controller.frame());
+}
+
+// Vim は `:set so=N` の後、次の鍵の前に今のキャレットで窓を新しい余白で決め直す（Vim 9.1 の
+// oracle の値・fixture viewport-set-so-top-j / bottom-k / same-value-control）。窓の 1 打鍵の道で
+// 鍵の保留が設定の保留を置き換えても、解決は設定の時点のキャレットを先に流す（印を外した木では
+// 鍵の後のキャレットだけで解き、上の 2 件が落ちる）。
+void verify_margin_change_without_frames()
+{
+    using Seen = std::pair<std::size_t, std::size_t>;
+    expect(margin_changed_then(10, "2", "j") == Seen{8, 11},
+           "#1432 :set so=2 then j re-decides the window at the caret before the key");
+    expect(margin_changed_then(15, "2", "k") == Seen{12, 14},
+           "#1432 the caret on the bottom line is followed with the new margin before k");
+    expect(margin_changed_then(10, "0", "j") == Seen{10, 11},
+           "#1432 setting the same margin does not move the window");
+}
 } // namespace
 
 void verify_vim_view_scope()
@@ -997,5 +1044,6 @@ void verify_vim_view_scope()
     verify_far_jump_with_large_margin();
     verify_scroll_line_in_a_macro();
     verify_typed_follow_without_frames();
+    verify_margin_change_without_frames();
 }
 } // namespace nenenib::tests

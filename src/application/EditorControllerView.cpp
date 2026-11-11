@@ -160,6 +160,7 @@ void EditorController::settle_follow()
     const auto pending = std::exchange(pending_follow_, std::nullopt);
     const bool typed = std::exchange(pending_typed_, false);
     const auto walked = std::exchange(walked_follow_, std::nullopt);
+    const auto setting = std::exchange(setting_follow_, std::nullopt);
     if (clamp)
     {
         clamp_scroll();
@@ -172,6 +173,13 @@ void EditorController::settle_follow()
     // 位置はその後の鍵の編集で行が減っていることがあるので、今の本文の中へ寄せてから解く。
     if (walked.has_value() && !typed &&
         !settled_follow_to(within_text(state_.text(), walked.value()), true))
+    {
+        return;
+    }
+    // `scrolloff` を変えた後に鍵の頼みが保留を置き換えていれば、先に変えた時点のキャレットで
+    // 新しい余白の追従を 1 回流す（#1432）。位置は同じ寄せ方で今の本文の中へ寄せる。
+    if (setting.has_value() && !(setting.value() == pending.value()) &&
+        !settled_follow_to(within_text(state_.text(), setting.value()), false))
     {
         return;
     }
@@ -205,6 +213,7 @@ void EditorController::drop_pending_follow()
         pending_follow_.reset();
         pending_typed_ = false;
         walked_follow_.reset();
+        setting_follow_.reset();
         pending_clamp_ = false;
     }
 }

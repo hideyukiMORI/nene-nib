@@ -838,6 +838,8 @@ class EditorController final
     // 打ち切られたときの 1 行。判断はここだけ（ARC-001）。
     [[nodiscard]] std::optional<core::DisplayText> command_message() const;
     [[nodiscard]] bool persist_settings(core::EditorSettings settings);
+    // Vim の `scrolloff` を変えた時点のキャレットで追従を頼み、印を立てる（#1432）。
+    void follow_changed_margin();
     // IME の 3 つ（ADR 0014 の決定 3）。ComposeText と CancelComposition は本文にも履歴にも
     // 触らず、CommitText だけが既存の 1 本（replace / vim_step）を通って本文に入る。
     void accept(const ComposeText &intent);
@@ -1095,6 +1097,10 @@ class EditorController final
     // 中の NORMAL の移動）が保留を置き換えても残り、解決は先にここまで歩いてから保留を 1 回の
     // 追従で解く（Vim は打つ周ごとに update_topline を終えてから次の鍵を読む）。
     std::optional<core::TextPosition> walked_follow_;
+    // Vim の `scrolloff` を変えた時点のキャレット（#1432・Vim 9.1 の実測）。
+    // 後の鍵の頼みが保留を置き換えても残り、解決は先にここで新しい余白の追従を 1 回流してから
+    // 保留を解く（Vim は次の鍵の前に今のキャレットで update_topline を流す）。
+    std::optional<core::TextPosition> setting_follow_;
     // 鍵の前の保留の追従が無いか打った本文の追従だったか（note_follow_before_key が置く）。
     bool follow_walks_ = false;
     // 鍵の前のキャレット（INSERT へ入る鍵が下へ 1 行より遠く動いたかを見る・#1363）。
