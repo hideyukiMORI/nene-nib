@@ -35,6 +35,8 @@
 #include "RgbColor.hpp"
 #include "SessionEnd.hpp"
 #include "SplitLayout.hpp"
+#include "StartPress.hpp"
+#include "StartScreenView.hpp"
 #include "StatusBarHit.hpp"
 #include "TabCommand.hpp"
 #include "TimingPort.hpp"
@@ -44,6 +46,7 @@
 #include "VimMode.hpp"
 #include "WheelTurn.hpp"
 #include "WindowFailure.hpp"
+#include "WindowPorts.hpp"
 #include "WindowTimer.hpp"
 
 #include <windows.h>
@@ -68,8 +71,8 @@ class EditorWindow final
   public:
     // sources の device の箱は worker が先に作り、最初の renderer が受け取る（ADR 0131）。
     [[nodiscard]] static std::expected<std::unique_ptr<EditorWindow>, WindowFailure>
-    create(HINSTANCE instance, application::EditorController &controller,
-           application::TimingPort &timing, RendererSources sources);
+    create(HINSTANCE instance, application::EditorController &controller, WindowPorts ports,
+           RendererSources sources);
     ~EditorWindow();
     EditorWindow(const EditorWindow &) = delete;
     EditorWindow(EditorWindow &&) = delete;
@@ -91,8 +94,8 @@ class EditorWindow final
     void adopt_device();
 
   private:
-    EditorWindow(HINSTANCE instance, application::EditorController &controller,
-                 application::TimingPort &timing, RendererSources sources);
+    EditorWindow(HINSTANCE instance, application::EditorController &controller, WindowPorts ports,
+                 RendererSources sources);
     [[nodiscard]] std::expected<void, WindowFailure> initialize();
     [[nodiscard]] std::expected<void, WindowFailure> start_rendering();
     // 本物の device がまだなら子窓に仮の renderer を、
@@ -139,6 +142,9 @@ class EditorWindow final
     // 窓の操作の押しを捕まえている間の WM_LBUTTONUP（#1464）。押しを覚えていなければ false。
     [[nodiscard]] bool release_caption(LPARAM data) noexcept;
     void finish_caption(std::optional<WPARAM> button) noexcept;
+    // 左の押し（WM_LBUTTONDOWN と WM_LBUTTONDBLCLK）。起動画面の行で始まった押しの列の 2 回目からは
+    // 何もしない（ADR 0172 の追補 24）。ほかは click_client へ。
+    void press_left(LPARAM data, application::PointerClicks clicks);
     void click_client(LPARAM data, application::PointerClicks clicks);
     void click_palette(LPARAM data);
     void place_caret(LPARAM data, application::PointerClicks clicks);
@@ -294,6 +300,17 @@ class EditorWindow final
     // マウスを載せた面の行（#1390）。点の下の画面の行を送り、窓を出たら値なしを送る。
     void hover_explorer_row(LPARAM data);
     void hover_explorer_line(std::optional<std::size_t> line);
+    // 起動画面の行のクリック（ADR 0172 の決定 4・追補 24・EditorWindowPointer.cpp）。点の下の選べる
+    // 行は描画と同じ core::start_screen_layout の 1 本から引く。押しは行の上なら行の位置と中身を
+    // 覚えて真（本文のキャレットを動かさない）、離しは同じ位置の今の行の中身が押した行と同じときだけ
+    // ChooseStartEntry を送る（ADR 0056 の決定 9・core::start_released）。マウスの動くたびには
+    // 呼ばない。
+    [[nodiscard]] std::optional<std::size_t> start_row_at(const application::StartScreenView &view,
+                                                          LPARAM data) const;
+    [[nodiscard]] bool press_start_entry(LPARAM data);
+    void release_start_entry(LPARAM data);
+    // 最初の frame を画面に出した直後に FirstFramePresented を 1 回だけ送る（ADR 0172 の決定 3）。
+    void signal_first_frame();
     // 面と本文の境のドラッグ（ADR 0162 の追補 D78）。押す・動かす・離す・捕まえを失う・ダブル
     // クリック・カーソル。
     [[nodiscard]] bool explorer_divider_at(std::int32_t x, std::int32_t y) const;
@@ -361,6 +378,8 @@ class EditorWindow final
     HINSTANCE instance_;
     application::EditorController &controller_;
     application::TimingPort &timing_;
+    // フォルダ選びの箱の WSL の場所（ADR 0162 の追補 #1450）。箱を出すときだけ読む。
+    application::WslDistributionPort &wsl_;
     BodyTextLayouts &text_layouts_;
     DeviceWarmup &warmup_;
     // present が返った frame の節目（frame_presented と本文の最初の body_presented・#546）。
@@ -404,6 +423,13 @@ class EditorWindow final
     // 消す（ADR 0056 の決定 9）。
     std::optional<core::TitleBarTarget> left_pressed_;
     std::optional<core::TitleBarTarget> middle_pressed_;
+    // 起動画面で押した行の位置と中身（離した行と同じときだけ実行し、離したら消す・窓の外へ出た・
+    // 捕まえが変わった・起動画面が消えたときも消す・ADR 0172 の決定 4・追補 24）。
+    std::optional<core::StartPress> start_pressed_;
+    // 起動画面の行で始まった押しの列か（2 回目・3 回目の押しを本文へ渡さない・追補 24）。
+    bool start_click_began_ = false;
+    // FirstFramePresented を送ったか（窓で 1 回だけ・ADR 0172 の決定 3）。
+    bool first_frame_signaled_ = false;
     // プレビューの枠で押したチェックボックス（離したとき・次に押したときに消す）。
     PreviewTaskPress preview_task_press_;
     // OSの捕捉の寿命だけ。選択のanchor/caretの正本はcontrollerにある。

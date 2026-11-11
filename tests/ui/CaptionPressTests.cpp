@@ -84,6 +84,14 @@ void verify_release_without_press()
         // client の本文やミニマップの押し（click_client が覚えるのは帯の外 = none）の後。
         expect(run(up, nothing).empty(),
                "a press in the client released over a window button does nothing");
+        // 帯のタブの押しの後の窓の操作の離し（レビュー L-3）。
+        expect(run(up, TitleBarTarget{TitleBarHit::tab, 1}).empty(),
+               "a press on a tab released over a window button does nothing");
+        // 縁の押し（HTLEFT）は窓の操作の押しの覚えを消す（レビュー L-3）。
+        const std::array border{nc(WM_NCLBUTTONDOWN, hit), nc(WM_NCLBUTTONDOWN, HTLEFT),
+                                nc(WM_NCLBUTTONUP, hit)};
+        expect(run(border, std::nullopt).empty(),
+               "a press on the border forgets an earlier window button press");
         const std::array caption{nc(WM_NCLBUTTONDOWN, HTCAPTION), nc(WM_NCLBUTTONUP, hit)};
         expect(run(caption, std::nullopt).empty(),
                "a press on the caption released over a window button does nothing");

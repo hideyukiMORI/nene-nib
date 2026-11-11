@@ -7,6 +7,7 @@
 #include "EndSession.hpp"
 #include "ExitCause.hpp"
 #include "ExitPlan.hpp"
+#include "FirstFramePresented.hpp"
 #include "Milestone.hpp"
 #include "PointerPress.hpp"
 #include "RgbColor.hpp"
@@ -60,8 +61,8 @@ constexpr std::array<UINT, 10> pointer_messages{
 } // namespace
 
 EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &controller,
-                           application::TimingPort &timing, RendererSources sources)
-    : instance_(instance), controller_(controller), timing_(timing),
+                           WindowPorts ports, RendererSources sources)
+    : instance_(instance), controller_(controller), timing_(ports.timing), wsl_(ports.wsl),
       text_layouts_(sources.text_layouts), warmup_(sources.warmup)
 {
 }
@@ -81,10 +82,10 @@ EditorWindow::~EditorWindow()
 
 std::expected<std::unique_ptr<EditorWindow>, WindowFailure>
 EditorWindow::create(HINSTANCE instance, application::EditorController &controller,
-                     application::TimingPort &timing, RendererSources sources)
+                     WindowPorts ports, RendererSources sources)
 {
     auto window =
-        std::unique_ptr<EditorWindow>(new EditorWindow(instance, controller, timing, sources));
+        std::unique_ptr<EditorWindow>(new EditorWindow(instance, controller, ports, sources));
     const auto ready = window->initialize();
     if (!ready)
     {
@@ -617,8 +618,20 @@ std::expected<void, RenderFailure> EditorWindow::draw_frame()
         {
             place_candidate_window();
         }
+        signal_first_frame();
     }
     return drawn;
+}
+
+void EditorWindow::signal_first_frame()
+{
+    // 節目 frame_presented を打った後（起動の速さの節目の外）に 1 回だけ。2 回目からは何もしない
+    // （device lost の作り直しと本物の device の採用の後の frame でも送らない）。
+    if (std::exchange(first_frame_signaled_, true))
+    {
+        return;
+    }
+    send(application::FirstFramePresented{});
 }
 
 void EditorWindow::present()

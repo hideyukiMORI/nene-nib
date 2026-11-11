@@ -9,6 +9,7 @@
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
+#include "ChooseStartEntry.hpp"
 #include "ClipboardAction.hpp"
 #include "ClosePane.hpp"
 #include "CloseTab.hpp"
@@ -21,6 +22,7 @@
 #include "EndSession.hpp"
 #include "ExplorerKey.hpp"
 #include "ExplorerRootChosen.hpp"
+#include "FirstFramePresented.hpp"
 #include "HistoryAction.hpp"
 #include "HoverExplorer.hpp"
 #include "InsertDateTime.hpp"
@@ -99,5 +101,6 @@ using EditorIntent = std::variant<
     ToggleExplorer, ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen, ResizeExplorer,
     HoverExplorer, LanguageServerTick, MapTimeout, InsertDateTime, SelectDocumentFormat,
     OpenDocumentFormatList, BeginFind, BeginGoToLine, BeginReplace, SetPreviewPlacement,
-    PointPreview, PrintDocument, RegisterShell, UnregisterShell, PinTab>;
+    PointPreview, PrintDocument, RegisterShell, UnregisterShell, PinTab, FirstFramePresented,
+    ChooseStartEntry>;
 } // namespace nenenib::application

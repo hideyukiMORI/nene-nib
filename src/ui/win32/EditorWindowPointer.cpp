@@ -3,6 +3,7 @@
 
 #include "BodyLayout.hpp"
 #include "CaptionPress.hpp"
+#include "ChooseStartEntry.hpp"
 #include "DevicePixels.hpp"
 #include "DocumentFormatKind.hpp"
 #include "EditMode.hpp"
@@ -21,6 +22,9 @@
 #include "ScrollTabs.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
+#include "StartPress.hpp"
+#include "StartScreenLayout.hpp"
+#include "StartScreenView.hpp"
 #include "StatusBarLayout.hpp"
 #include "SwitchPane.hpp"
 #include "SwitchTab.hpp"
@@ -74,7 +78,7 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
     switch (message)
     {
     case WM_LBUTTONDOWN:
-        click_client(data, counted_clicks(application::PointerClicks::single, data));
+        press_left(data, counted_clicks(application::PointerClicks::single, data));
         return 0;
     case WM_LBUTTONDBLCLK:
         // 境の上は既定の幅へ戻す（D78）。面の上は面のダブルクリック（ADR 0162）。ほかは 2
@@ -84,7 +88,7 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
             last_clicks_ = application::PointerClicks::single;
             return 0;
         }
-        click_client(data, counted_clicks(application::PointerClicks::double_, data));
+        press_left(data, counted_clicks(application::PointerClicks::double_, data));
         return 0;
     case WM_LBUTTONUP:
         release_left(data);
@@ -103,6 +107,8 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         point_at(data);
         return 0;
     case WM_MOUSELEAVE:
+        // 窓の外で離した押しは残さない（捕まえを取らないので離しが届かない・追補 24）。
+        start_pressed_ = std::nullopt;
         over_explorer_divider_ = false;
         hover_explorer_line(std::nullopt);
         hover(std::nullopt);
@@ -114,6 +120,7 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         left_pressed_ =
             caption_step(message, core::TitleBarTarget{core::TitleBarHit::none, 0}, left_pressed_)
                 .first;
+        start_pressed_ = std::nullopt;
         lose_explorer_divider();
         end_selection_drag();
         return 0;
@@ -140,6 +147,7 @@ void EditorWindow::release_left(LPARAM data)
     drag_selection(data);
     end_selection_drag();
     release_preview_task(data);
+    release_start_entry(data);
     release_title_bar(data);
     static_cast<void>(point_explorer(WM_LBUTTONUP, data));
 }
@@ -296,6 +304,8 @@ LRESULT EditorWindow::press_caption(UINT message, WPARAM word, LPARAM data) noex
     const auto at = caption_target_of(word);
     const auto [pressed, button] = caption_step(message, at, left_pressed_);
     left_pressed_ = pressed;
+    // 起動画面の行の押しは非クライアントの押しと離しで消す（窓の操作の上で離して行を開かない）。
+    start_pressed_ = std::nullopt;
     if (!window_button(at.hit))
     {
         return DefWindowProcW(window_, message, word, data);
@@ -305,6 +315,11 @@ LRESULT EditorWindow::press_caption(UINT message, WPARAM word, LPARAM data) noex
     if (message != WM_NCLBUTTONUP)
     {
         SetCapture(window_);
+        // 捕まえられなければ覚えない（離しが届かず古い押しが残る・選択と境のドラッグと同じ）。
+        if (GetCapture() != window_)
+        {
+            left_pressed_ = std::nullopt;
+        }
         return 0;
     }
     finish_caption(button);
@@ -354,9 +369,22 @@ void EditorWindow::activate_caption(WPARAM word) noexcept
     }
 }
 
+void EditorWindow::press_left(LPARAM data, application::PointerClicks clicks)
+{
+    // 起動画面の行で始まった押しの列（ダブル・トリプルクリック）は本文へ渡さない。1 回目の離しで
+    // 開いた文書の語を 2 回目の押しが選ばない（ADR 0172 の追補 24）。
+    if (clicks != application::PointerClicks::single && start_click_began_)
+    {
+        return;
+    }
+    start_click_began_ = false;
+    click_client(data, clicks);
+}
+
 void EditorWindow::click_client(LPARAM data, application::PointerClicks clicks)
 {
     left_pressed_ = std::nullopt;
+    start_pressed_ = std::nullopt;
     preview_task_press_.forget();
     if (controller_.command_palette_active())
     {
@@ -433,6 +461,11 @@ void EditorWindow::click_body(LPARAM data, application::PointerClicks clicks)
         }
         return;
     }
+    // 起動画面の行の上の押しは行を覚えるだけ（本文のキャレットを動かさない・ADR 0172 の決定 4）。
+    if (press_start_entry(data))
+    {
+        return;
+    }
     const auto settings = controller_.delivery().settings;
     const auto other =
         core::other_pane_layout(body_panes(settings), controller_.split().active_side);
@@ -449,6 +482,53 @@ void EditorWindow::click_body(LPARAM data, application::PointerClicks clicks)
     if (core::contains(active_body(settings).band, low_word_of(data), high_word_of(data)))
     {
         place_caret(data, clicks);
+    }
+}
+
+std::optional<std::size_t> EditorWindow::start_row_at(const application::StartScreenView &view,
+                                                      LPARAM data) const
+{
+    // 描画と同じ操作中の枠（面とミニマップを除いた client の pane_layouts の active_side・
+    // body_panes の 1 本）。鍵の行は選べないので、鍵の枠の幅は当たりに効かない（0 を渡す）。
+    const auto body = active_body(controller_.delivery().settings);
+    const auto layout = core::start_screen_layout(
+        body, dpi_, core::start_screen_shape(view.entries, view.lists_read), 0);
+    if (!layout.has_value())
+    {
+        return std::nullopt;
+    }
+    return core::start_screen_row_at(layout.value(), body, low_word_of(data), high_word_of(data));
+}
+
+bool EditorWindow::press_start_entry(LPARAM data)
+{
+    const auto view = controller_.start_screen();
+    start_pressed_ = view.has_value() ? core::start_pressed(view.value().entries,
+                                                            start_row_at(view.value(), data))
+                                      : std::nullopt;
+    start_click_began_ = start_pressed_.has_value();
+    return start_pressed_.has_value();
+}
+
+void EditorWindow::release_start_entry(LPARAM data)
+{
+    const auto pressed = std::exchange(start_pressed_, std::nullopt);
+    if (!pressed.has_value())
+    {
+        return;
+    }
+    // 押して離すまでの間に行の列が変わったら（読みが届いた・行が外れた）、同じ位置の行の中身が
+    // 違うので実行しない。起動画面が消えていれば何もしない（レビュー M3・追補 24）。
+    const auto view = controller_.start_screen();
+    if (!view.has_value())
+    {
+        return;
+    }
+    const auto chosen =
+        core::start_released(pressed, view.value().entries, start_row_at(view.value(), data));
+    if (chosen.has_value())
+    {
+        send(application::ChooseStartEntry{chosen.value()});
     }
 }
 

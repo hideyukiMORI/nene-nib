@@ -92,6 +92,8 @@ void verify_substitute_property_scope();
 void verify_matchparen_scope();
 // MinimapTests.cpp（ADR 0171・ミニマップの段 1）
 void verify_minimap_scope();
+// MinimapPropertyTests.cpp（#1449・ミニマップを出したままの意図の列の性質の試験）
+void verify_minimap_property_scope();
 
 // GuideTests.cpp
 void verify_guide_scope();
@@ -197,6 +199,9 @@ void verify_pointer_scope();
 
 // PreviewFullTests.cpp（ADR 0155 の改訂 15〜17・20・全面プレビューの見せ方と鍵の振り分け）
 void verify_preview_full_scope();
+
+// StartScreenTests.cpp（ADR 0172・#1018 の段 1・起動画面の条件と鍵と 1 回の読み）
+void verify_start_screen_scope();
 
 // ExitPlanTests.cpp（ADR 0133）
 void verify_exit_plan_scope();
@@ -385,6 +390,9 @@ void verify_print_contracts();
 
 // ShellRegistrationTests.cpp（ADR 0178・エクスプローラーへの登録）
 void verify_shell_registration_contracts();
+
+// WslPlacesTests.cpp（ADR 0162 の追補 #1450・フォルダ選びの箱の WSL の場所）
+void verify_wsl_places_scope();
 
 // VimEngineTests.cpp
 void verify_vim_fixture(const VimFixture &fixture);

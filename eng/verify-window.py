@@ -198,6 +198,9 @@ api(gdi, "GetPixel", w.DWORD, w.HDC, c.c_int, c.c_int)
 # IME の開閉は、その窓の既定 IME 窓に WM_IME_CONTROL を送れば外から読める（ADR 0014 の決定 5）。
 api(user, "GetKeyboardLayout", c.c_ssize_t, w.DWORD)
 api(imm, "ImmGetDefaultIMEWnd", w.HWND, w.HWND)
+api(user, "IsIconic", w.BOOL, w.HWND)
+api(user, "IsZoomed", w.BOOL, w.HWND)
+api(user, "ShowWindow", w.BOOL, w.HWND, c.c_int)
 
 CLR_INVALID = 0xFFFFFFFF
 # ADR 0013: 窓は device の生成より前に見える。その間のクライアント領域は DWM の Mica の面で、
@@ -3396,6 +3399,271 @@ def verify_find(executable: Path, environment: dict, output: Path, frames: Path 
     return record
 
 
+VK_DOWN = 0x28
+# 起動画面の寸法（DIP）。core の start_screen_layout（src/core/StartScreenLayout.hpp の採用値）の写し。
+START_COLUMN_DIPS = 480
+START_COLUMN_MARGIN_DIPS = 16
+START_TOP_DIPS = 36
+START_TITLE_GAP_DIPS = 22
+START_SECTION_GAP_DIPS = 16
+START_HEADING_DIPS = 20
+START_HEADING_GAP_DIPS = 4
+
+
+def start_screen_boxes(body: dict, width: int, dpi: int) -> dict:
+    """The column's title and first start row for a profile without history or bookmarks (the
+    empty note sits above はじめる), mirroring core::start_screen_layout."""
+    content = width - body["contentLeft"]
+    column = min(to_pixels(START_COLUMN_DIPS, dpi),
+                 content - 2 * to_pixels(START_COLUMN_MARGIN_DIPS, dpi))
+    left = body["contentLeft"] + (content - column) // 2
+    top = body["firstRowTop"] + to_pixels(START_TOP_DIPS, dpi)
+    line = body["lineHeight"]
+    title_bottom = top + (line * 3) // 2
+    note = title_bottom + to_pixels(START_TITLE_GAP_DIPS, dpi)
+    heading = note + line + to_pixels(START_SECTION_GAP_DIPS, dpi)
+    row = heading + to_pixels(START_HEADING_DIPS, dpi) + to_pixels(START_HEADING_GAP_DIPS, dpi)
+    return {"title": (left, top, left + column, title_bottom),
+            "firstRow": (left, row, left + column, row + line)}
+
+
+def verify_start_screen(executable: Path, environment: dict, frames: Path | None) -> dict:
+    """Issue #1455 (#1018 stage 2, ADR 0172 decisions 4 and 5): the start screen of a start
+    without arguments or a previous tab list.
+
+    The fresh profile has no history and no bookmarks, so the screen shows the title, the empty note,
+    はじめる and the keys. Down (posted) selects 新しいファイル (current_line across the row), a
+    posted click on that row runs it (the selection goes away), Down and Esc select and clear again,
+    and a typed character hides the whole screen. No key takes the foreground."""
+    process, window, _ = start(executable, environment)
+    try:
+        raise_window(window)
+        time.sleep(0.6)
+        assert await_cover_gone(window), "the WARP cover child is still over the window"
+        assert_uncovered(window)
+        dpi = user.GetDpiForWindow(window)
+        client = rectangle(window, user.GetClientRect)
+        width, height = client[2] - client[0], client[3] - client[1]
+        size = (width, height)
+        boxes = start_screen_boxes(body_points(width, height, dpi), width, dpi)
+        shown = capture(window, width, height)
+        snapshot(frames, window, "start-screen")
+        press(window, VK_DOWN)
+        selected = await_new_frame(window, shown, size)
+        snapshot(frames, window, "start-screen-selected")
+        left, top, right, bottom = boxes["firstRow"]
+        click(window, (left + right) // 2, (top + bottom) // 2)
+        clicked = await_new_frame(window, selected, size)
+        press(window, VK_DOWN)
+        again = await_new_frame(window, clicked, size)
+        press(window, VK_ESCAPE)
+        cleared = await_new_frame(window, again, size)
+        write_text(window, "a")
+        typed = await_new_frame(window, cleared, size)
+        snapshot(frames, window, "start-screen-typed")
+
+        def box(pixels: bytes, area: tuple) -> list:
+            return box_pixels(pixels, width, area)
+
+        title = box(shown, boxes["title"])
+        record = {
+            "driven": True, "dpi": dpi,
+            "titleDrawn": len({tuple(value) for value in title}) > 1,
+            "downSelected": box(selected, boxes["firstRow"]) != box(shown, boxes["firstRow"]),
+            "clickRan": box(clicked, boxes["firstRow"]) == box(shown, boxes["firstRow"]),
+            "escapeCleared": box(cleared, boxes["firstRow"]) == box(shown, boxes["firstRow"]),
+            "typingHid": box(typed, boxes["title"]) != title,
+        }
+        print(json.dumps(record, ensure_ascii=False), file=sys.stderr)
+        for name in ("titleDrawn", "downSelected", "clickRan", "escapeCleared", "typingHid"):
+            assert record[name], f"start screen: {name} did not hold"
+        close(window)
+        dismiss_dialog(process, IDNO)
+        record["exitCode"] = process.wait(timeout=5)
+        assert record["exitCode"] == 0, record["exitCode"]
+    finally:
+        stop(process)
+    return record
+
+
+# Issue #1464: 窓の操作（＿ □ ×）は押した要素と離した要素が同じときだけ動かす（ADR 0056 の決定 9
+# の追補）。送るのは窓の手続きが受ける非クライアントと client のメッセージだけ（前面を取らない）。
+WM_NCLBUTTONDOWN = 0x00A1
+WM_NCLBUTTONUP = 0x00A2
+WM_CAPTURECHANGED = 0x0215
+WM_LBUTTONDOWN = 0x0201
+WM_LBUTTONUP = 0x0202
+HTMINBUTTON = 8
+HTMAXBUTTON = 9
+SW_RESTORE = 9
+CAPTION_SETTLE_SECONDS = 0.5
+CAPTION_DOCUMENT = "caption\n"
+
+
+def packed_point(x: int, y: int) -> int:
+    """An lParam of two signed 16-bit words (a point left of or above the client is negative)."""
+    return ((y & 0xFFFF) << 16) | (x & 0xFFFF)
+
+
+def caption_buttons(window) -> dict:
+    """Client points in the middle of ＿ □ ×, found by asking WM_NCHITTEST along the top rows."""
+    dpi = user.GetDpiForWindow(window)
+    client = rectangle(window, user.GetClientRect)
+    width = client[2] - client[0]
+    found = {}
+    for code in (HTCLOSE, HTMAXBUTTON, HTMINBUTTON):
+        hits = [(x, y) for y in range(2, to_pixels(30, dpi), 2) for x in range(width - 1, 0, -2)
+                if ask_hit(window, x, y) == code]
+        assert hits, f"no window button answered {code}"
+        xs = [x for x, _ in hits]
+        ys = [y for _, y in hits]
+        found[code] = ((min(xs) + max(xs)) // 2, (min(ys) + max(ys)) // 2)
+    return found
+
+
+def post_nc(window, message: int, code: int, point: tuple) -> None:
+    screen = w.POINT(point[0], point[1])
+    assert user.ClientToScreen(window, c.byref(screen))
+    assert user.PostMessageW(window, message, code, packed_point(screen.x, screen.y))
+
+
+def post_client(window, message: int, point: tuple) -> None:
+    assert user.PostMessageW(window, message, 1 if message == WM_LBUTTONDOWN else 0,
+                             packed_point(point[0], point[1]))
+
+
+def caption_state(window) -> str:
+    # 閉じる道は先に窓を隠す（#1340）。隠れた窓は閉じたものとして読む。
+    if not user.IsWindow(window) or not user.IsWindowVisible(window):
+        return "closed"
+    if user.IsIconic(window):
+        return "minimized"
+    if user.IsZoomed(window):
+        return "maximized"
+    return "normal"
+
+
+def drive_caption_case(window, steps: list) -> str:
+    """Post the steps, let the window take them, and read what the window became."""
+    buttons = caption_buttons(window)
+    client = rectangle(window, user.GetClientRect)
+    body = ((client[2] - client[0]) // 2, (client[3] - client[1]) // 2)
+    places = {"close": buttons[HTCLOSE], "max": buttons[HTMAXBUTTON],
+              "min": buttons[HTMINBUTTON], "body": body, "outside": (-60, -60),
+              "tab": tuple(active_tab_point(user.GetDpiForWindow(window)))}
+    codes = {"close": HTCLOSE, "max": HTMAXBUTTON, "min": HTMINBUTTON}
+    for message, place in steps:
+        # 間違えて閉じた窓（直す前の振る舞い）には残りを送らない。
+        if caption_state(window) == "closed":
+            break
+        if message == WM_CAPTURECHANGED:
+            assert user.PostMessageW(window, WM_CAPTURECHANGED, 0, 0)
+        elif message in (WM_NCLBUTTONDOWN, WM_NCLBUTTONUP):
+            post_nc(window, message, codes[place], places[place])
+        else:
+            post_client(window, message, places[place])
+        time.sleep(0.05)
+    time.sleep(CAPTION_SETTLE_SECONDS)
+    return caption_state(window)
+
+
+# 名前・送る列・窓の答え。client の押し（本文・タブ）の後の × の WM_NCLBUTTONUP、違うボタン、外の
+# 離し、捕まえの喪失は何もしない。同じボタンの押しと離し（捕まえの下では WM_LBUTTONUP）は動かす。
+DOWN, UP, NC_DOWN, NC_UP, LOST = (WM_LBUTTONDOWN, WM_LBUTTONUP, WM_NCLBUTTONDOWN, WM_NCLBUTTONUP,
+                                  WM_CAPTURECHANGED)
+CAPTION_CASES = [
+    ("body press, release over close", [(DOWN, "body"), (NC_UP, "close"), (UP, "body")], "normal"),
+    ("tab press, release over close", [(DOWN, "tab"), (NC_UP, "close")], "normal"),
+    ("release alone over close", [(NC_UP, "close")], "normal"),
+    ("release alone over maximize", [(NC_UP, "max")], "normal"),
+    ("release alone over minimize", [(NC_UP, "min")], "normal"),
+    ("close press, release over maximize", [(NC_DOWN, "close"), (NC_UP, "max")], "normal"),
+    ("close press, captured release over maximize", [(NC_DOWN, "close"), (UP, "max")], "normal"),
+    ("maximize press, captured release over close", [(NC_DOWN, "max"), (UP, "close")], "normal"),
+    ("minimize press, captured release over close", [(NC_DOWN, "min"), (UP, "close")], "normal"),
+    ("close press, captured release on the body", [(NC_DOWN, "close"), (UP, "body")], "normal"),
+    ("close press, captured release outside", [(NC_DOWN, "close"), (UP, "outside"),
+                                               (NC_UP, "close")], "normal"),
+    ("close press, capture lost", [(NC_DOWN, "close"), (LOST, "close"), (NC_UP, "close")],
+     "normal"),
+    ("maximize press and release", [(NC_DOWN, "max"), (UP, "max")], "maximized"),
+    ("maximize press and release again", [(NC_DOWN, "max"), (UP, "max")], "normal"),
+    ("minimize press and release", [(NC_DOWN, "min"), (UP, "min")], "minimized"),
+    ("close press and release", [(NC_DOWN, "close"), (UP, "close")], "closed"),
+]
+
+
+def await_exit(process) -> int:
+    """The exit code of a window that is closing (it may still be writing its lists)."""
+    try:
+        return process.wait(timeout=5)
+    finally:
+        stop(process)
+
+
+def start_caption_window(executable: Path, environment: dict, arguments: list[str]):
+    process, window, _ = start(executable, environment, arguments)
+    time.sleep(0.6)
+    assert await_cover_gone(window), "the WARP cover child is still over the window"
+    return process, window
+
+
+def verify_start_row_caption(executable: Path, environment: dict) -> dict:
+    """A press on a start screen row (press_start_entry) released over close does not close it."""
+    process, window = start_caption_window(executable, environment, [])
+    try:
+        dpi = user.GetDpiForWindow(window)
+        client = rectangle(window, user.GetClientRect)
+        width, height = client[2] - client[0], client[3] - client[1]
+        left, top, right, bottom = start_screen_boxes(body_points(width, height, dpi), width,
+                                                      dpi)["firstRow"]
+        row = ((left + right) // 2, (top + bottom) // 2)
+        post_client(window, WM_LBUTTONDOWN, row)
+        time.sleep(0.05)
+        post_nc(window, WM_NCLBUTTONUP, HTCLOSE, caption_buttons(window)[HTCLOSE])
+        time.sleep(CAPTION_SETTLE_SECONDS)
+        state = caption_state(window)
+        if state != "closed":
+            close(window)
+            dismiss_dialog(process, IDNO, 1.0)
+            process.wait(timeout=5)
+    finally:
+        stop(process)
+    return {"name": "start screen row press, release over close", "state": state,
+            "held": state == "normal"}
+
+
+def verify_caption(executable: Path, environment: dict, output: Path) -> dict:
+    """Issue #1464: drive the window procedure with posted messages only (no foreground, no real
+    pointer). A window that closed by mistake is started again, so every case is judged."""
+    opened = output / "caption-sample.txt"
+    opened.write_text(CAPTION_DOCUMENT, encoding="utf-8", newline="\n")
+    results = []
+    process, window = start_caption_window(executable, environment, [str(opened)])
+    try:
+        for name, steps, wanted in CAPTION_CASES:
+            if caption_state(window) == "closed":
+                await_exit(process)
+                process, window = start_caption_window(executable, environment, [str(opened)])
+            # 前の件の最小化と最大化は戻す（「もう一度 □」の件だけ最大化のまま始める）。
+            keeps_zoom = name == "maximize press and release again"
+            if user.IsIconic(window) or (user.IsZoomed(window) and not keeps_zoom):
+                user.ShowWindow(window, SW_RESTORE)
+                time.sleep(CAPTION_SETTLE_SECONDS)
+            state = drive_caption_case(window, steps)
+            results.append({"name": name, "state": state, "held": state == wanted})
+        closed_code = await_exit(process) if caption_state(window) == "closed" else None
+    finally:
+        stop(process)
+    results.append(verify_start_row_caption(executable, environment))
+    failures = [result["name"] for result in results if not result["held"]]
+    record = {"driven": True, "cases": results, "closeExitCode": closed_code,
+              "failures": len(failures)}
+    print(json.dumps(record, ensure_ascii=False), file=sys.stderr)
+    assert not failures, f"caption: {failures}"
+    assert closed_code == 0, f"caption: the close button exited with {closed_code}"
+    return record
+
 DOUBLE_CLICK_DOCUMENT = "wwwwwwwwwwwwwwwwwwww tail\nsecond\n"
 DOUBLE_CLICKED_DOCUMENT = "X tail\nY"
 
@@ -3499,9 +3767,21 @@ def main() -> None:
     parser.add_argument("--double-click", action="store_true",
                         help="run the body double/triple click section alone (Issue #1250); it "
                         "sends Ctrl+S")
+    parser.add_argument("--caption", action="store_true",
+                        help="run the window button press and release section alone (Issue #1464); "
+                        "posted messages only")
     parser.add_argument("--find", action="store_true",
                         help="run the ordinary find section alone (Issue #1127); it sends Ctrl+F")
+    parser.add_argument("--start-screen", action="store_true",
+                        help="run the start screen section alone (Issue #1455); posted messages only")
     arguments = parser.parse_args()
+    if arguments.start_screen and (arguments.tabs or arguments.split or arguments.preview
+                                   or arguments.restore or arguments.grid or arguments.giant_text
+                                   or arguments.autosave or arguments.palette or arguments.syntax
+                                   or arguments.gutter or arguments.explorer or arguments.find
+                                   or arguments.double_click
+                                   or arguments.keys is not None or arguments.open is not None):
+        parser.error("--start-screen runs alone")
     if arguments.keys is not None and arguments.capture is None:
         parser.error("--keys needs --capture <dir>")
     if arguments.open is not None and arguments.capture is None:
@@ -3610,6 +3890,22 @@ def main() -> None:
     if arguments.explorer:
         try:
             record = verify_explorer(executable, environment, output, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.start_screen:
+        try:
+            record = verify_start_screen(executable, environment, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.caption:
+        try:
+            record = verify_caption(executable, environment, output)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)

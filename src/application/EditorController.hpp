@@ -98,6 +98,9 @@
 #include "ServerStarted.hpp"
 #include "Session.hpp"
 #include "SplitState.hpp"
+#include "StartEntry.hpp"
+#include "StartLists.hpp"
+#include "StartScreenView.hpp"
 #include "SyntaxStateCache.hpp"
 #include "TabReach.hpp"
 #include "TextBuffer.hpp"
@@ -182,6 +185,10 @@ class EditorController final
     // 面の表示値（決定 3・8）。窓が押した行の木の位置（first_visible を足す）を決めるための口で、
     // frame の本文の行は作らない（command_palette_view と同じ形）。面が消えていれば値なし。
     [[nodiscard]] std::optional<ExplorerView> explorer_view() const;
+    // 起動画面の表示値（ADR 0172 の決定 4・5）。窓が押した行と離した行を決める口で、
+    // frame の本文の行は作らない（explorer_view と同じ形・押しと離しのときだけ呼ぶ）。
+    // 出ていなければ値なし。
+    [[nodiscard]] std::optional<StartScreenView> start_screen() const;
     // 出ている面の幅の求め（ADR 0162 の追補 D78）。ドラッグの間はその幅、ほかは設定
     // explorer_width。
     // 面が消えていれば値なし。窓が境の当たり・面と本文の配置を引く安い読みで、frame を作らない
@@ -840,6 +847,28 @@ class EditorController final
     // 登録の結果の 1 行（鳴らさない）。
     void show_shell_notice(const std::string &text);
 
+    // ---------------------------------------------------------------- 起動画面（ADR 0172）
+    // EditorControllerStartScreen.cpp の群だけが読み書きする。
+    // 最初の frame の合図（決定 3）。起動画面が出ていれば履歴とブックマークの読みを 1 回だけ頼み、
+    // 以後は起動画面の鍵を受ける。
+    void accept(const FirstFramePresented &);
+    // 行のクリック（決定 4）。選びの有無に依らず押した行を実行する。
+    void accept(const ChooseStartEntry &intent);
+    // 起動画面が出る条件（決定 1・追補 2026-11-11）。状態は持たず、毎回アクティブな文書と入力の
+    // 状態から決める。
+    [[nodiscard]] bool start_screen_shown() const noexcept;
+    // 起動画面の選べる行の列（読んだ履歴とブックマーク・「はじめる」の 3 行）。
+    [[nodiscard]] std::vector<core::StartEntry> start_screen_entries() const;
+    [[nodiscard]] std::optional<StartScreenView> start_screen_view() const;
+    // 起動画面の鍵の振り分け（決定 4・追補の 5）。受けた意図は写さない。
+    [[nodiscard]] bool route_start_screen(const EditorIntent &intent);
+    // 行 1 つの実行（open_listed の 1 本か、操作の頼み）。
+    void run_start_entry(const core::StartEntry &entry);
+    // 合図の道で届いた読みを採る（決定 3）。頼んでいなければ port を呼ばない。
+    void collect_start_lists();
+    // 意図の後に、条件が偽なら選びを消す（追補の 5）。
+    void settle_start_screen() noexcept;
+
     // VimEffect の写し先。選択肢が増えたら std::visit がここで足りずコンパイルが落ちる
     // （CPP-002 / ADR 0012 の決定 3）。どれも既存の 1 本の経路を呼ぶだけ（ARC-001）。
     void perform(const core::VimNoEffect &);
@@ -1158,6 +1187,13 @@ class EditorController final
     // 全面の間に Vim の `g` を受けて次の鍵を待っているか（`gg` `gt` `gT`・ADR 0155 の改訂 17）。
     // 読み書きは route_full_preview の 1 か所。
     bool preview_vim_g_ = false;
+    // 起動画面（ADR 0172）。最初の frame を出したか（以後だけ鍵を受ける）・読みを頼んだか（1 回
+    // だけ）・読んだ履歴とブックマーク・選んだ行（追補 2026-11-11 の 5・条件が偽になったら消す）。
+    // 読み書きは EditorControllerStartScreen.cpp の群だけ。
+    bool first_frame_presented_ = false;
+    bool start_lists_requested_ = false;
+    std::optional<StartLists> start_lists_;
+    std::optional<std::size_t> start_selection_;
     // 自動退避の帳面（ADR 0137 の決定 2）。AutosaveTick の道だけが読み書きする。
     AutosaveLedger autosave_ledger_;
     // 「自動退避できませんでした」を出したか。次に成功するまで 2 回目を出さない（決定 4）。
