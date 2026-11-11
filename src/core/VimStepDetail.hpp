@@ -150,6 +150,10 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
 [[nodiscard]] bool range_shift_fits(const TextBuffer &text, const VimMotionRange &range,
                                     ShiftBy shift, std::size_t limit) noexcept;
 [[nodiscard]] VimStep joined(const VimState &state, const VimEditorView &view, bool inserts_space);
+// つなぐ最初の行と最後の行（J と gJ・NORMAL は回数から・VISUAL は選択の行から・#1417）。
+using JoinedLines = std::pair<LineNumber, LineNumber>;
+[[nodiscard]] VimStep lines_joined(const VimState &state, const TextBuffer &text, JoinedLines lines,
+                                   bool inserts_space);
 [[nodiscard]] VimStep swapped_characters(const VimState &state, const TextBuffer &text,
                                          Offset caret);
 [[nodiscard]] VimOperator operation_of(const VimState &state) noexcept;
@@ -194,6 +198,8 @@ repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::
 [[nodiscard]] VimBlockRange block_of(const VimState &state, const VimEditorView &view);
 [[nodiscard]] VimStep block_operated(const VimState &state, const VimEditorView &view,
                                      VimOperator operation);
+// 矩形の `D`。選んだ矩形を `$` で取り直して消す（`C` と同じ取り直し・#1417）。
+[[nodiscard]] VimStep block_removed_to_line_end(const VimState &state, const VimEditorView &view);
 [[nodiscard]] VimStep replaced_block(const VimState &state, const VimEditorView &view,
                                      char32_t target);
 [[nodiscard]] VimStep cased_block(const VimState &state, const VimEditorView &view,

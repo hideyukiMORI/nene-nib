@@ -2283,12 +2283,18 @@ namespace
 // VISUAL にいるあいだ印を持ち越す（Vim の redo_VIsual_busy・実測）。
 // 前の選択に置く欲しい列（#1361）。矩形の `C` は Vim の v_visop が curswant を MAXCOL にしてから
 // `c` を流し、do_pending_operator がその curswant を b_visual.vi_curswant に置くので行末の印に
-// なる。ほかの鍵は鍵の前の欲しい列（引数を待つ鍵の `C` は文字なので除く）。
-[[nodiscard]] VimState visual_left_state(const VimState &state, const VimKey &key)
+// なる。矩形の `D` も同じ（v_visop の同じ枝・#1417）。ほかの鍵は鍵の前の欲しい列（引数を待つ鍵の
+// `C` `D` は文字なので除く）。
+[[nodiscard]] bool takes_line_end(const VimKey &key) noexcept
 {
     const auto *const character = std::get_if<VimCharacter>(&key);
-    if (state.mode != VimMode::visual_block || state.input_wait.has_value() ||
-        character == nullptr || vim_action_for(character->code) != VimAction::change_to_line_end)
+    const auto action = character == nullptr ? std::nullopt : vim_action_for(character->code);
+    return action == VimAction::change_to_line_end || action == VimAction::remove_to_line_end;
+}
+
+[[nodiscard]] VimState visual_left_state(const VimState &state, const VimKey &key)
+{
+    if (state.mode != VimMode::visual_block || state.input_wait.has_value() || !takes_line_end(key))
     {
         return state;
     }
