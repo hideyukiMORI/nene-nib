@@ -16,8 +16,16 @@ namespace nenenib::core
 // plines。読んだ行の高さが載っていなければ（window.asks が真の道）その行を VimRowsNeeded で返す。
 // 読むのは Vim の update_topline が読む行だけ（窓が動かなければ窓に描く行とキャレットの下の余白の
 // 行・動けば上と下へ足す行）。キャレットは動かさない（Vim の cursor_correct は画面移動の着地だけ・
-// vim_cursor_corrected）。
+// vim_cursor_corrected）。描かずに 1 回だけ流す（z^ の回数つきの scroll_cursor_bot の送り）。
 [[nodiscard]] std::expected<LineNumber, VimRowsNeeded>
 vim_topline_updated(const VimToplineWindow &window, LineNumber caret,
+                    std::size_t line_count) noexcept;
+
+// 鍵の後の追従（描く前の update_topline と描いた後の確かめ）。vim_topline_updated の答えの窓を
+// 描いた w_botline が update_topline の終わりの値と違えば、Vim の win_update と同じに
+// update_topline をもう 1 回だけ流す（#1300・ADR 0019 の追補）。比べるために、窓が動いたときだけ
+// 数えた窓と答えの窓に描く行も読む（動かなければ読み足さない）。
+[[nodiscard]] std::expected<LineNumber, VimRowsNeeded>
+vim_topline_redrawn(const VimToplineWindow &window, LineNumber caret,
                     std::size_t line_count) noexcept;
 } // namespace nenenib::core

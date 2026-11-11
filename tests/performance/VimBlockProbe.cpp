@@ -14,6 +14,7 @@
 #include "VimBlockWidth.hpp"
 #include "VimCharacter.hpp"
 #include "VimEditorView.hpp"
+#include "VimFollowProbe.hpp"
 #include "VimInsertBlock.hpp"
 #include "VimInsertString.hpp"
 #include "VimKey.hpp"
@@ -151,6 +152,9 @@ std::string vim_block_input(VimBlockWorkload workload)
         return giant_line();
     case VimBlockWorkload::sentence_motion_giant_1line:
         return text_object_input(TextObjectWorkload::sentence_giant);
+    case VimBlockWorkload::insert_scroll_wrapped:
+    case VimBlockWorkload::insert_scroll_unwrapped:
+        return vim_follow_input();
     }
     std::unreachable();
 }

@@ -12,6 +12,8 @@ namespace nenenib::tests::performance
 // 1 行（`.` `!` `?` を含まない）の真ん中から `)` の鍵を 1 回流す（#1316・#751 の塊の走査）。
 // 通常モードの語の境の 1 本は、矩形の 1 本と同じ 16 MiB の 1 行の真ん中で、Ctrl+Backspace と
 // Ctrl+Delete が消す範囲の端（ordinary_word_boundary の後ろ向きと前向き）を 1 回ずつ引く（#1394）。
+// 最後の 2 本は 120 行の文書の末尾で INSERT の `<CR>` と 1 文字を 100 組打ち、窓を 1 行ずつ送る
+// （折り返す窓と折り返さない窓・鍵ごとに frame を読む・#1300 の追従の確かめの費用）。
 enum class VimBlockWorkload : std::uint8_t
 {
     insert_giant_1line,
@@ -22,6 +24,8 @@ enum class VimBlockWorkload : std::uint8_t
     count_h_giant_1line,
     count_l_giant_1line,
     sentence_motion_giant_1line,
-    ordinary_word_giant_1line
+    ordinary_word_giant_1line,
+    insert_scroll_wrapped,
+    insert_scroll_unwrapped
 };
 } // namespace nenenib::tests::performance
