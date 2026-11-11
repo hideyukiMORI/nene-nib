@@ -43,6 +43,9 @@ enum class OperationKey : std::uint8_t
     f3,
     // 通常モードの Ctrl+N の新しいタブ（メモ帳の鍵・施主決定 D82・#1395）。Vim では表に行を
     // 置かない（Vim の Ctrl-n とは別のモード）。
-    n
+    n,
+    // Ctrl+Shift+R のルートのフォルダを選ぶ（施主決定 2026-11-11・#1495・ADR 0162 の追補）。
+    // Shift なしの Ctrl+R は表に行を置かない（Vim の redo と INSERT・入力行のレジスタの挿入）。
+    r
 };
 } // namespace nenenib::core

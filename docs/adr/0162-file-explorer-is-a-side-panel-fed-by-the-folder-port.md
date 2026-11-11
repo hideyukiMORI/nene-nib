@@ -137,3 +137,7 @@ PR #1121 の独立レビュー（R6-2 / R4-1）の後続。設計席の判断（
 4. **OS に触れる所。** レジストリは adapters（`advapi32` は adapters だけ・ARC-007）、`SHCreateItemFromParsingName` と `AddPlace` は ui の `FileDialog` の `choose_folder(owner, places)`（COM は `ComPtr`・CPP-017）。
 5. **契約。** core: `nib_tests --wsl-places`（入れ終わったものだけ・登録の順・使えない名前・同じ名前・UTF-8 の名前・空）。adapters: `nib_adapter_tests --wsl`（試験の根 `Software\NeNeNib\test-<pid>\Lxss` に同じ形の鍵を書いて読む・鍵が無ければ空・名前の無い副鍵は外す・本当の `Lxss` は読まない）。箱の左の一覧に実際に出るか・名前とアイコン・クリックで VM が起きるかは箱を出さないと見えないので、施主の試用で確かめる（自動の試験は無い）。
 6. **限界。** Windows 11 が箱の左の一覧に自分で「Linux」を出さない理由は確かめていない。古い Windows 10 で `\\wsl.localhost` が無い（`\\wsl$` だけの）機械は考えない。候補 B（最近のルート・フォルダを窓に落とす）と C（`:set root=` に Linux の書き方）は後続。
+
+## 追補（2026-11-11・#1495・施主決定）ルートのフォルダを選ぶ鍵は Ctrl+Shift+R
+
+決定 7 の「ルートのフォルダを選ぶのは鍵なしで F1 の一覧から」を改め、`choose_explorer_root` に **Ctrl+Shift+R**（通常 / Vim の両モード）を割り当てる。行は `operation_bindings` の 1 行（`OperationKey::r` を足した）で、F1 の一覧と起動画面の「フォルダを開く」の行（ADR 0172 の追補 27）は表から鍵を引く。窓は Vim の鍵の前に操作の表を引くので、Vim の NORMAL / INSERT / VISUAL と INSERT の `Ctrl-r` の待ちでも Ctrl+Shift+R は engine に流れず、Shift なしの Ctrl+R は表に行が無いので Vim の redo とレジスタの挿入のまま（Ctrl+Shift+E の `toggle_explorer` と同じ道）。入力行の間は入力行の鍵（`press_command_control_key`）が先に受け、Ctrl+Shift+E と同じく何もしない。契約: `nib_tests --operations` の表・`--vim-fixture-window-path` の Ctrl+R の素通し・`--explorer` の `verify_root_choice_keeps_vim`・`nib_window_tests --standard-keys` の `verify_folder_root_key`・`--start-screen`。

@@ -19,6 +19,7 @@
 #include <span>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -188,6 +189,11 @@ void EditorController::collect_start_lists()
         return;
     }
     start_lists_reading_ = false;
+    // 読みを頼んだ後に外した行は、古い読みが届いても戻さない（#1495）。
+    for (const core::FilePath &path : std::exchange(start_forgotten_, {}))
+    {
+        std::erase(lists.value().recent, path);
+    }
     // 前の一覧を見せたまま読み直したので、中身が同じなら何も変えない（選びも保つ・追補 25）。
     const bool same = start_lists_.has_value() &&
                       start_lists_.value().recent == lists.value().recent &&
@@ -204,6 +210,18 @@ void EditorController::collect_start_lists()
 void EditorController::mark_start_lists_stale() noexcept
 {
     start_lists_stale_ = true;
+}
+
+void EditorController::drop_start_entry(const core::FilePath &path)
+{
+    if (start_lists_.has_value())
+    {
+        std::erase(start_lists_.value().recent, path);
+    }
+    if (start_lists_reading_)
+    {
+        start_forgotten_.push_back(path);
+    }
 }
 
 bool EditorController::route_start_screen(const EditorIntent &intent)
@@ -306,6 +324,7 @@ void EditorController::settle_start_screen()
     }
     start_lists_stale_ = false;
     start_lists_reading_ = true;
+    start_forgotten_.clear();
     ports_.start_lists.request();
 }
 } // namespace nenenib::application
