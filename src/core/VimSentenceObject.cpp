@@ -26,7 +26,6 @@ namespace nenenib::core
 {
 namespace
 {
-constexpr std::size_t code_point_bytes = 4;
 constexpr std::u32string_view sentence_ends = U".!?";
 constexpr std::u32string_view closers = U")]\"'";
 constexpr std::u32string_view punctuation = U".!?)]\"'";
@@ -73,13 +72,7 @@ using Units = std::pair<std::size_t, bool>;
 // その位置の code point（Vim の gchar_pos）。行の内容の終わりは 0（Vim の NUL）。
 [[nodiscard]] char32_t code_at(const TextBuffer &text, Offset at)
 {
-    const Offset end = end_of_line(text, at);
-    if (!(at < end))
-    {
-        return 0;
-    }
-    const Offset until{std::min(end.value, at.value + code_point_bytes)};
-    return code_point_at(text.text_range(at, until), Offset{0});
+    return vim_code_point_at(text, at, end_of_line(text, at));
 }
 
 // 行の中で次の文字の先頭（ADR 0053）。at は行の内容の終わりより前。
