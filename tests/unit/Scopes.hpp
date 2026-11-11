@@ -11,6 +11,7 @@ namespace nenenib::tests
 void verify_body_layout_scope();
 void verify_wrapped_view_scope();
 void verify_edge_arrows_scope();
+void verify_selection_arrows_scope();
 void verify_vim_wrapped_scope();
 void verify_vim_wrapped_contracts();
 // UTF 検証と表示値/UTF-16の直接の境界（ADR 0086）。
@@ -85,6 +86,8 @@ void verify_find_replace_scope();
 void verify_substitute_property_scope();
 // MatchParenTests.cpp（ADR 0164・matchparen）
 void verify_matchparen_scope();
+// MinimapTests.cpp（ADR 0171・ミニマップの段 1）
+void verify_minimap_scope();
 
 // GuideTests.cpp
 void verify_guide_scope();
@@ -327,6 +330,7 @@ void verify_vim_block_scope();
 // OrdinaryCharacterTests.cpp
 void verify_ordinary_character_contracts();
 void verify_ordinary_character_scope();
+void verify_ordinary_word_contracts();
 
 // CoreTests.cpp
 void verify_buffer_scope();

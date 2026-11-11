@@ -331,7 +331,8 @@ void verify_edit_boundary()
     static_cast<void>(
         joining.apply(app::PlaceCaret{core::TextPosition{core::LineNumber{305}, core::Column{1}},
                                       core::SelectionAnchoring::collapse}));
-    static_cast<void>(joining.apply(app::DeleteText{core::DeleteDirection::backward}));
+    static_cast<void>(joining.apply(
+        app::DeleteText{core::DeleteDirection::backward, nenenib::core::DeleteUnit::character}));
     scrolled(joining, 1);
     const auto joined = joining.frame();
     expect(joined.first_visible.value == 305 && joined.syntax_lexed == 200 + shown_lines,

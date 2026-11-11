@@ -74,6 +74,10 @@ constexpr std::size_t longest_code_point_bytes = 4;
 
 Offset vim_character_after(const TextBuffer &text, Offset at, Offset line_end)
 {
+    if (!(at < line_end))
+    {
+        return at;
+    }
     std::size_t window = caret_window_bytes;
     for (;;)
     {
@@ -88,6 +92,32 @@ Offset vim_character_after(const TextBuffer &text, Offset at, Offset line_end)
             return Offset{at.value + next.value};
         }
         window *= 2;
+    }
+}
+
+char32_t vim_code_point_at(const TextBuffer &text, Offset at, Offset line_end)
+{
+    if (!(at < line_end))
+    {
+        return 0;
+    }
+    const Offset until{std::min(line_end.value, at.value + longest_code_point_bytes)};
+    return code_point_at(text.text_range(at, until), Offset{0});
+}
+
+Offset vim_character_before(const TextBuffer &text, Offset at, Offset line_start)
+{
+    for (std::size_t window = caret_window_bytes;; window *= 2)
+    {
+        const Offset from{at.value - std::min(at.value - line_start.value, window)};
+        const std::string content = text.text_range(from, at);
+        const std::size_t skipped = from == line_start ? 0 : leading_continuations(content);
+        const std::string_view whole = std::string_view{content}.substr(skipped);
+        const Offset found = vim_character_start(whole, Offset{whole.size()});
+        if (from == line_start || found.value > 0)
+        {
+            return Offset{from.value + skipped + found.value};
+        }
     }
 }
 

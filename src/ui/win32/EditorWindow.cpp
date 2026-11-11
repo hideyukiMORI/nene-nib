@@ -9,6 +9,7 @@
 #include "ExplorerLayout.hpp"
 #include "LanguageServerTick.hpp"
 #include "MapTimeout.hpp"
+#include "MinimapLayout.hpp"
 #include "PaneLayouts.hpp"
 #include "PreviewTick.hpp"
 #include "SplitLayout.hpp"
@@ -89,21 +90,24 @@ void EditorWindow::resize()
 
 // 本文の枠の配置（ADR 0148 の決定 8）。窓の行数・マウス・描画が同じ pane_layouts の 1 本を引く。
 // エクスプローラーの面が出ていれば、面の幅だけ右へ縮めた client から求める（ADR 0162 の決定 2）。
+// ミニマップが出ていれば、さらに右端を縮める（ADR 0171 の決定 2・出ていなければ minimap_layout
+// は最初の 1 行で返る）。
 core::PaneLayouts EditorWindow::body_panes(const core::EditorSettings &settings) const
 {
-    return core::pane_layouts(explorer_frame(settings.font_size).body, dpi_, settings.font_size,
-                              controller_.split().layout);
+    const auto minimap = core::minimap_layout(explorer_frame().body, dpi_, settings.font_size,
+                                              controller_.minimap_shown());
+    return core::pane_layouts(minimap.body, dpi_, settings.font_size, controller_.split().layout);
 }
 
 // 面の配置。出ているかと幅は controller の explorer_width（面の表示値が frame に載るのと同じ値・
-// ドラッグの間はその幅・ADR 0162 の追補 D78）が決める。引数は字の大きさだけ（マウスの道は
-// controller_.font_size() の安い読みを渡し、delivery を作らない・Issue #1380 の R-2）。
-core::ExplorerLayout EditorWindow::explorer_frame(core::FontSize font_size) const
+// ドラッグの間はその幅・ADR 0162 の追補 D78）が決める。寸法は字の大きさに依らない（#1390）ので、
+// マウスの道も delivery を作らない（Issue #1380 の R-2）。
+core::ExplorerLayout EditorWindow::explorer_frame() const
 {
     RECT client{};
     GetClientRect(window_, &client);
     return core::explorer_layout(core::LayoutRect{0, 0, client.right, client.bottom}, dpi_,
-                                 font_size, controller_.explorer_width());
+                                 controller_.explorer_width());
 }
 
 core::BodyLayout EditorWindow::active_body(const core::EditorSettings &settings) const
@@ -127,8 +131,7 @@ application::VisibleLines EditorWindow::body_view() const
     RECT client{};
     GetClientRect(window_, &client);
     // 面の行数も窓全体の高さから数える（分割の枠の高さではない・#1125・ADR 0162 の追補）。
-    auto sent = window_lines(body, core::LayoutRect{0, 0, client.right, client.bottom}, dpi_,
-                             delivered.settings.font_size);
+    auto sent = window_lines(body, core::LayoutRect{0, 0, client.right, client.bottom}, dpi_);
     sent.geometry = geometry;
     return sent;
 }
@@ -260,6 +263,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     delivery = follow_look(std::move(delivery));
     follow_split(previous_layout, delivery);
     follow_explorer(delivery);
+    follow_minimap(delivery);
     follow_ime(delivery);
     mode_ = delivery.mode;
     vim_mode_ = delivery.vim_mode;
@@ -341,6 +345,18 @@ void EditorWindow::follow_explorer(application::EditorDelivery &delivery)
     {
         end_hidden_explorer_drag();
     }
+    delivery = controller_.apply(body_view());
+}
+
+// ミニマップを出した・消した（`set minimap`・全面プレビューの出入り）ら、同じく送り直す（ADR 0171
+// の決定 2）。follow_explorer と同じ形で、出ていないままの打鍵の道は比べるだけ。
+void EditorWindow::follow_minimap(application::EditorDelivery &delivery)
+{
+    if (controller_.minimap_shown() == shown_minimap_)
+    {
+        return;
+    }
+    shown_minimap_ = controller_.minimap_shown();
     delivery = controller_.apply(body_view());
 }
 } // namespace nenenib::ui::win32

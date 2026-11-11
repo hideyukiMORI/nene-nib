@@ -6,8 +6,8 @@ A fast single-executable text editor for Windows 11 that toggles between ordinar
 
 C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
 
-> **Status (2026-11-10):** [v0.1.0-beta.8](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.8)
-> (2026-11-04) is the published build for Windows 11 x64. It has ordinary editing with Notepad-style find,
+> **Status (2026-11-11):** [v0.1.0-beta.9](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.9)
+> (2026-11-11) is the published build for Windows 11 x64. It has ordinary editing with Notepad-style find,
 > replace, go to line, printing and date insertion; UTF-8, Shift_JIS and UTF-16 files (UTF-8 up to 1 GiB, read
 > in the background); Japanese IME; 125 built-in themes; syntax colors for 25 languages; a Markdown preview with
 > clickable task-list checkboxes; a side file explorer; two split panes; opt-in language-server diagnostics; and
@@ -15,9 +15,9 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > repeat, macros, registers, blockwise VISUAL and `map`). Tabs in the title bar come back on the next start,
 > Ctrl+P lists open tabs, bookmarks, recently closed files and files in the current folder, and F1 lists every
 > operation. It starts in about 45 ms on the owner's machine, autosaves every 30 seconds and offers a grid display
-> for giant lines. Since beta.8, main also has a save prompt with its own button labels, a window that disappears
-> as soon as it is closed, Ctrl+Shift+M cycling the preview through side pane and full view, and Vim
-> `Ctrl-e` `Ctrl-y`, `{ } ( )` and the Delete key.
+> for giant lines. New in beta.9: the explorer opens a file with one click and its width can be dragged, Esc cancels the drag,
+> the save prompt has its own button labels, the window disappears as soon as it is closed, Ctrl+Shift+M cycles the
+> preview through side pane and full view, and Vim has `Ctrl-e` `Ctrl-y`, `{ } ( )` and the Delete key.
 
 <p>
   <img src="docs/images/nib-palette.png" width="49%" alt="NeNe Nib lists open tabs, bookmarks, recently closed files and folder files in Ctrl+P.">
@@ -38,13 +38,13 @@ Compare all 125 themes, filter by name or appearance, and select a card for a la
 The image and gallery show color samples, not application screenshots. The gallery works offline and starts
 with the plain-text colors; its syntax colors are design samples, not the editor's syntax coloring.
 [Theme names and sources](docs/design/2026-10-12-colorschemes.md) are also available as a text list.
-All 125 themes are included in the published v0.1.0-beta.8.
+All 125 themes are included in the published v0.1.0-beta.9.
 
 ## What works today
 
 Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); the decisions behind it are in
-[`docs/adr/`](docs/adr/README.md). Everything below is in the published v0.1.0-beta.8 unless it says
-*since beta.8* (on main, not yet published) or *in review* (an open pull request, not on main). The current
+[`docs/adr/`](docs/adr/README.md). Everything below is in the published v0.1.0-beta.9 unless it says
+*since beta.9* (on main, not yet published) or *in review* (an open pull request, not on main). The current
 tasks are in `docs/todo/current.md`; the measurements are in `docs/quality/gate-proofs.md` and the dated
 records in `docs/quality/`.
 
@@ -56,16 +56,18 @@ records in `docs/quality/`.
   preceding code point ([ADR 0065](docs/adr/0065-ordinary-combining-character-boundaries.md)). Ctrl+V pastes HTML
   from the clipboard as Markdown into a Markdown document and as HTML into an HTML document; Ctrl+Shift+V always
   pastes plain text ([ADR 0157](docs/adr/0157-clipboard-html-pastes-by-document-language-through-one-core-converter.md)).
-  Following the Windows standard for arrows at the first and last line (decision D82) is in review.
+  Ordinary mode follows the Windows standard (decision D82): ↓ on the last screen row goes to the end of the
+  text and ↑ on the first screen row to its start. Word stops for Ctrl+← →, Ctrl+Backspace / Ctrl+Delete and
+  arrows over a selection are in review.
 - **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 3906
   oracle-generated fixtures in `tests/vim/fixtures.json` and 332 wrapped-viewport fixtures in
   `tests/vim/wrap-fixtures.json` are checked by CTest, and a differential fuzzer (`eng/vim-fuzz.py`, fixed seeds)
   compares generated key sequences with Vim. Implemented:
   - motions `h j k l 0 $ ^ _ w b e W B E ge gE gg G {N}|`, `f F t T ; ,`, `%` and `{N}%`, `H M L`, Home / End
     (a character includes its combining marks); screen-row motions `gj gk g0 g$ gm gM` and `g_ g^`;
-    *since beta.8* `{ } ( )`;
+    `{ } ( )`;
   - scrolling Ctrl-d/u/f/b, PgUp / PgDn, `zt zz zb z<CR> z. z- z+ z^`, horizontal `zl zh zL zH zs ze` without
-    wrapping; *since beta.8* `Ctrl-e` `Ctrl-y`;
+    wrapping; `Ctrl-e` `Ctrl-y`;
   - operators `d c y` + motion, `dd cc yy`, `D C Y`, `x X r`, `J gJ`, `~ g~ gu gU` (including non-ASCII letters),
     `> <` (shiftwidth 8, noexpandtab), `p P`, `Ctrl-a Ctrl-x` and VISUAL `g Ctrl-a`; counts multiply
     (operator × motion);
@@ -116,16 +118,17 @@ records in `docs/quality/`.
   to choose a result. See [ADR 0064](docs/adr/0064-ex-file-commands-open-the-shared-palette.md).
 - **FR-007 Markdown preview** — Ctrl+Shift+M shows the rendered Markdown document in the other pane and hides it
   again; the F1 operation 「Markdown プレビュー（全面）」 or `:preview full` shows it over the whole body, where
-  text can be selected and copied but not edited (`:preview side`, `:preview off`). *Since beta.8* Ctrl+Shift+M
+  text can be selected and copied but not edited (`:preview side`, `:preview off`). Ctrl+Shift+M
   cycles closed → side pane → full view → closed (D77). Parsing uses md4c 0.5.2 (CommonMark) and the drawing is
   the editor's own ([look](docs/design/2026-10-21-markdown-preview-look.md),
   [ADR 0155](docs/adr/0155-markdown-preview-sits-in-the-other-pane-with-ticketed-port-and-tick.md)).
-  Local images (PNG, JPEG, the first frame of a GIF, BMP; D79) are drawn in the text flow, shrunk to the pane
-  width but never enlarged; web images stay as `[画像: alt]`.
+  *Since beta.9* local images (PNG, JPEG, the first frame of a GIF, BMP; D79) are drawn in the text flow,
+  shrunk to the pane width but never enlarged; web images and images that cannot be read stay as
+  `[画像: alt]`.
 - **FR-008 encodings and line endings** — UTF-8, UTF-8 BOM, Shift_JIS and UTF-16 LE / BE with BOM
   ([ADR 0149](docs/adr/0149-utf16-with-bom-is-read-and-written-back.md)); UTF-32 is refused. CRLF / LF are kept as
   read. The encoding and line ending for saving can be chosen by clicking them in the status bar, with
-  `:set fenc=` / `:set ff=`, or from F1. Unsaved mark and "save?" prompt; *since beta.8* the prompt has its own
+  `:set fenc=` / `:set ff=`, or from F1. Unsaved mark and "save?" prompt; the prompt has its own
   button labels. Unsaved edits are autosaved every 30 seconds and offered back once on the next start after the
   process ends abnormally ([ADR 0137](docs/adr/0137-autosave-every-30-seconds.md)). Done.
 - **FR-009 tab restore** — starting without a file argument brings back the previous tabs (saved files only): their
@@ -193,14 +196,16 @@ records in `docs/quality/`.
   Completion, hover and go-to-definition are planned.
 - **FR-022 file explorer** — Ctrl+Shift+E or `:set explorer` / `:set noexplorer` show a folder tree left of the
   body; `:set root=<path>`, `:set root=.` or F1 choose its root, and both are saved in the settings. Keys, mouse
-  and a filter work; a click selects a row (and opens or closes a folder), double-click or Enter opens a file
+  and a filter work; a single click opens a file or opens / closes a folder (D80), double-click or Enter also moves the focus to
+  the body, and dragging the boundary changes the width, which is remembered (D78)
   ([ADR 0162](docs/adr/0162-file-explorer-is-a-side-panel-fed-by-the-folder-port.md)).
-  Dragging its width (D78) and opening a file with one click (D80) are in review; a new look (D81) is planned.
+  A new look (D81) and preview tabs that the next click replaces (D83) are planned.
 - **FR-023 – FR-027 editing features** — matchparen (FR-024) is done and on by default. Planned: easymotion
   (FR-023), commentary, surround, autopairs and INSERT completion (FR-024), changed-line markers, indent guides
   and a yank flash (FR-025), project-wide search (FR-026) and the `:s` family (FR-027).
 - **FR-028 – FR-030** — a settings dialog with measured speed costs, six display languages, a minimap and a
-  start screen are planned; the minimap is in review.
+  start screen are planned. A first minimap (a retained bitmap at the right edge, `:set minimap`, off by
+  default) is in beta.9; clicking and dragging it are planned.
 - **FR-031 Notepad's operations** — in ordinary mode Ctrl+F finds, F3 / Shift+F3 move to the next or previous
   match, Ctrl+H replaces (Enter one, Ctrl+Enter all) and Ctrl+G goes to a line; Vim mode keeps its own keys and
   reaches the same features from F1 through its `/` and `:` lines
@@ -208,7 +213,8 @@ records in `docs/quality/`.
   Printing from F1 or `:hardcopy` draws the body layout
   ([ADR 0177](docs/adr/0177-printing-is-one-port-that-draws-the-body-layout-into-an-xps-print-control.md)).
   F5 inserts the date and time. Ctrl + wheel, the encoding choice and the full Markdown preview are listed
-  above. The right-click menu is planned.
+  above. Ordinary mode also takes Ctrl+N (new tab), Ctrl+Insert / Shift+Insert / Shift+Delete (copy / paste /
+  cut) and Ctrl+Shift+Z (redo). The right-click menu is planned.
 - **FR-032 Vim `map`** — `:map`, `:nmap`, `:imap`, `:vmap`, `:xmap`, `:omap`, the `noremap` and `unmap` forms and
   `:let mapleader=` are stored as `map.<mode>.<lhs>=` and `mapleader` lines in `settings.v4` and applied at the
   window entry, in Vim mode only

@@ -183,6 +183,38 @@ void verify_macro_waiting()
            "q in VISUAL stops the recording and keeps the selection");
 }
 
+// `q` の後の Esc は鳴らさずに打ち消し、後ろの鍵が効く（#1369・ADR 0048 の追補 17〜19）。oracle は
+// `q` を fixture に入れられないので、同じ run_vim で測った値（Vim 9.1・`-es -u NONE`・
+// D:/NeNeNib/outputs/20261111/1369-q-escape/result.json）を :normal! の意味（vim_normal）で流す。
+using QEscapeCase =
+    std::tuple<std::string_view, std::string_view, std::string_view, std::size_t, std::size_t>;
+constexpr std::array<QEscapeCase, 6> q_escape_cases{{
+    {"abcdef", "q<Esc>x", "bcdef", 1, 1},
+    {"abcdef", "3q<Esc>x", "bcdef", 1, 1},
+    {"abcdef", "vq<Esc>ld", "cdef", 1, 1},
+    {"abcdef\nab\nabcdef", "$jq<Esc>j", "abcdef\nab\nabcdef", 3, 6},
+    {"abc", "\"ayllyl\"aq<Esc>p", "abbc", 1, 3},
+    {"abcdef", "xq<Esc>.", "cdef", 1, 1},
+}};
+
+void verify_macro_escape_cancels()
+{
+    for (const auto &[text, keys, body, line, column] : q_escape_cases)
+    {
+        Editing editing;
+        open_vim_document(editing, std::string(text));
+        EditorController &controller = editing.controller();
+        vim_normal(controller, keys);
+        const auto frame = controller.frame();
+        const std::string name = "q<Esc> cancels and the next key runs: " + std::string(keys);
+        expect(whole_vim_body(controller) == body && frame.caret.position.line.value == line &&
+                   vim_byte_column(std::string(body), frame.caret.position) == column &&
+                   !controller.vim_state().macro_recording.has_value() &&
+                   !controller.vim_state().input_wait.has_value(),
+               name.c_str());
+    }
+}
+
 // 空のレジスタと直前の無い `@@` は何もしない（決定 3）。
 void verify_macro_empty_registers()
 {
@@ -1258,6 +1290,7 @@ void verify_vim_macro_contracts()
 {
     verify_macro_round_trips();
     verify_macro_waiting();
+    verify_macro_escape_cancels();
     verify_macro_empty_registers();
     verify_macro_records_typed_keys_only();
     verify_macro_q_inside_replay();
@@ -1301,8 +1334,8 @@ void verify_vim_macro_scope()
     {
         // macro 欄はほかの族の fixture も持つ（#1246 の insert-page-edge-・#1232 の
         // viewport-ctrl-e-・#1325 の del-key-・#1337 の dot-register-count-・#1341 の
-        // huge-count-macro-）。名前で守るのは逆の向き: macro- の fixture は必ず macro 欄を
-        // 持つ（#1324）。
+        // huge-count-macro-・#1369 の prefix-escape-・#1363 の viewport-insert-follow-replay-）。
+        // 名前で守るのは逆の向き: macro- の fixture は必ず macro 欄を持つ（#1324）。
         named &= !fixture.name.starts_with("macro-") || fixture.macro.has_value();
         if (macro_fixture(fixture))
         {
@@ -1310,7 +1343,7 @@ void verify_vim_macro_scope()
             ++selected;
         }
     }
-    expect(selected == 170, "the scope replays the 42 macro, 108 register and 20 other "
+    expect(selected == 174, "the scope replays the 42 macro, 108 register and 24 other "
                             "fixtures with a macro register");
     expect(named, "every macro- fixture carries a macro register");
     verify_vim_macro_contracts();

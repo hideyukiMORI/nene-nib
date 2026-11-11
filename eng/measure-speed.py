@@ -92,6 +92,17 @@ when --bench names it and is never compared with the reference or adopted into i
                             document starts with `{`, so every typed character leaves the caret
                             on that brace and every frame searches its partner 24 lines below
 
+Two more optional benches record the minimap (#1017, ADR 0171 decision 6) the same way: they run
+only when --bench names them and are never compared with the reference or adopted into it:
+
+  minimap-single-key        the key-to-frame-single-cpp trial over single-cpp-1000.cpp with
+                            settings.v4 features=minimap written into its own profile
+                            (out/speed/profile-minimap), so every frame copies the held minimap
+                            bitmap once and redraws the band of the typed row
+  minimap-burst-200         the key-to-frame-burst-200 trial over the same document and profile:
+                            200 keystrokes posted together, repeated and recorded missing the way
+                            key-to-frame-burst-200 is (Issue #30 / #36)
+
 Five more optional benches measure split (ADR 0120 decisions 2-7, ADR 0148 decision 14) and are
 never compared with the reference: split-single-key-100 (S, one pane) and
 split-pane-key-100-{same,other}-{vertical,horizontal} (P, two panes made with Ctrl+backslash or
@@ -296,8 +307,16 @@ LSP_BENCHES = (LSP_SINGLE_BENCH, LSP_BURST_BENCH, LSP_READY_BENCH)
 # 括弧の上のキャレットの 1 打鍵（#999・ADR 0164 の決定 5）。--bench で名指ししたときだけ測り、
 # 基準値に載せない（+1% の線は設計席が空の文書の 1 打鍵の A/B で見る）。
 MATCHPAREN_BENCH = "matchparen-single-key"
+# ミニマップをオンにした C++ の文書の 1 打鍵（#1017・ADR 0171 の決定 6）。--bench で名指ししたときだけ
+# 測り、基準値に載せない（+1% の線は設計席がオフの空の文書の 1 打鍵の A/B で見る）。
+MINIMAP_BENCH = "minimap-single-key"
+# 同じ文書と profile の 200 打鍵（#1017・ADR 0171 の決定 6）。同じく --bench で名指ししたときだけ。
+MINIMAP_BURST_BENCH = "minimap-burst-200"
+# 道具の profile を分ける。features=minimap の settings.v4 がほかのベンチの profile に残らないように。
+MINIMAP_PROFILE = "profile-minimap"
 OPTIONAL_BENCHES = (*GIANT_BENCHES, *SPLIT_BENCHES, PREVIEW_BENCH, CPP_BENCH,
-                    *LARGE_FILE_BENCHES, *LSP_BENCHES, MATCHPAREN_BENCH)
+                    *LARGE_FILE_BENCHES, *LSP_BENCHES, MATCHPAREN_BENCH, MINIMAP_BENCH,
+                    MINIMAP_BURST_BENCH)
 # 替え玉のサーバーは測る exe と同じ build の中のもの（tests/adapters/FakeLanguageServerMain.cpp）。
 LSP_SERVER = "nib_fake_language_server.exe"
 LSP_DIAGNOSTICS = 100
@@ -352,7 +371,7 @@ STARTUP_BENCHES = ("startup-first-frame", "open-large-file-16mib", GIANT_OPEN_BE
 # 返った）-> frame_presented（Present が返った）。区間名は起動の内訳と同じく「到達する節目の名前」。
 KEY_MILESTONES = ("frame_built", "frame_drawn", "frame_presented")
 SINGLE_BENCHES = ("key-to-frame-single", LONG_LINE_BENCH, CPP_BENCH, PREVIEW_BENCH,
-                  GIANT_SINGLE_BENCH, LSP_SINGLE_BENCH, MATCHPAREN_BENCH)
+                  GIANT_SINGLE_BENCH, LSP_SINGLE_BENCH, MATCHPAREN_BENCH, MINIMAP_BENCH)
 # 記録の breakdown には 16 MiB の打鍵の到着の幅（ARRIVAL_SEGMENT）も同じ形で載せる（#179）。
 BREAKDOWN_BENCHES = (*STARTUP_BENCHES, LARGE_BURST_BENCH, *SINGLE_BENCHES, *LARGE_FILE_BENCHES)
 
@@ -769,7 +788,8 @@ def burst_failure(burst: float | None, span: float, delivered: int,
         return f"only {delivered} of {BURST_KEYS + 2} keystrokes were measured by the window"
     if burst is None:
         return "no frame was presented after the 200 keystrokes"
-    if name in (EMPTY_BURST_BENCH, LSP_BURST_BENCH) and span > BURST_SPAN_LIMIT_MS:
+    if name in (EMPTY_BURST_BENCH, LSP_BURST_BENCH, MINIMAP_BURST_BENCH) and \
+            span > BURST_SPAN_LIMIT_MS:
         return f"the 200 keystrokes reached the window over {span:.1f} ms, not together"
     return None
 
@@ -876,6 +896,49 @@ def bench_cpp(executable: Path, environment: dict, folder: Path,
     Every frame lexes the visible lines (ADR 0156), so the single keystroke carries the colouring.
     """
     return bench_long_line(executable, environment, folder, document, CPP_BENCH)
+
+
+def bench_minimap(executable: Path, environment: dict, folder: Path,
+                  document: Path) -> tuple[dict, dict]:
+    """key-to-frame-single over the C++ document with the minimap on (#1017, ADR 0171 decision 6).
+
+    The trial is bench_cpp's over its own profile, whose settings.v4 turns the minimap on; every
+    frame copies the held bitmap once and redraws the band of the typed row.
+    """
+    return bench_long_line(executable, minimap_environment(environment), folder, document,
+                           MINIMAP_BENCH)
+
+
+def minimap_environment(environment: dict) -> dict:
+    """The minimap profile's environment, its settings.v4 written for this trial (features=minimap)."""
+    profile = OUTPUT / MINIMAP_PROFILE
+    profile.mkdir(parents=True, exist_ok=True)
+    minimap = dict(environment, LOCALAPPDATA=str(profile), APPDATA=str(profile))
+    write_settings(minimap, {"features": "minimap"})
+    return minimap
+
+
+def bench_minimap_burst(executable: Path, environment: dict, folder: Path,
+                        document: Path) -> tuple[dict, dict]:
+    """key-to-frame-burst-200 over the C++ document with the minimap on (#1017, ADR 0171 decision 6).
+
+    The trial is keys_trial over the minimap profile; it is repeated and recorded missing the way
+    bench_keys repeats key-to-frame-burst-200 (Issue #30 / #36), with the same arrival span.
+    """
+    minimap = minimap_environment(environment)
+    for attempt in range(BURST_ATTEMPTS):
+        try:
+            _, burst, span, delivered, _ = keys_trial(executable, minimap, folder, document)
+        except TrialNotObserved as unobserved:
+            reason = str(unobserved)
+        else:
+            reason = burst_failure(burst, span, delivered, MINIMAP_BURST_BENCH)
+            if reason is None:
+                return {MINIMAP_BURST_BENCH: burst}, {}
+        print(f"Speed: {reason}; repeating the trial ({attempt + 1}/{BURST_ATTEMPTS})")
+    print(f"Speed: no trial delivered the stimulus as specified in {BURST_ATTEMPTS} attempts;"
+          f" this trial of {MINIMAP_BURST_BENCH} is missing")
+    return {MINIMAP_BURST_BENCH: None}, {}
 
 
 def bench_matchparen(executable: Path, environment: dict, folder: Path,
@@ -1784,6 +1847,10 @@ def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
         yield bench_lsp_ready(executable, environment, folder, cpp, server)
     if MATCHPAREN_BENCH in names:
         yield bench_matchparen(executable, environment, folder, matchparen)
+    if MINIMAP_BENCH in names:
+        yield bench_minimap(executable, environment, folder, cpp)
+    if MINIMAP_BURST_BENCH in names:
+        yield bench_minimap_burst(executable, environment, folder, cpp)
     for bench, path in (large_files or {}).items():
         yield bench_large_file_async(executable, environment, folder, path, bench)
 
@@ -1804,7 +1871,8 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     preview = preview_document(folder) if PREVIEW_BENCH in names else None
     lsp = any(name in names for name in LSP_BENCHES)
     # LSP の 3 本も構文の色分けと同じ C++ の文書（#995 L1d）。替え玉は測る exe と同じ build から。
-    cpp = cpp_document(folder) if CPP_BENCH in names or lsp else None
+    minimap = any(name in names for name in (MINIMAP_BENCH, MINIMAP_BURST_BENCH))
+    cpp = cpp_document(folder) if CPP_BENCH in names or minimap or lsp else None
     server = language_server_of(build) if lsp else None
     matchparen = matchparen_document(folder) if MATCHPAREN_BENCH in names else None
     # 512 MiB と 1 GiB の文書は大きいので、置き場を --large-folder で選べる（既定は out/speed）。
@@ -2119,6 +2187,10 @@ def main() -> int:
     if arguments.bench in LSP_BENCHES and (arguments.adopt or arguments.check or arguments.values):
         parser.error(f"{arguments.bench} is recorded with --record only; its reference is adopted"
                      " by hide after the L1 trial (ADR 0161 decision 7, D60)")
+    if arguments.bench in (MINIMAP_BENCH, MINIMAP_BURST_BENCH) and (arguments.adopt or arguments.check
+                                                                   or arguments.values):
+        parser.error(f"{arguments.bench} is recorded with --record only; it has no reference"
+                     " (#1017)")
     if arguments.bench == MATCHPAREN_BENCH and (arguments.adopt or arguments.check
                                                 or arguments.values):
         parser.error(f"{MATCHPAREN_BENCH} is recorded with --record only; it has no reference"

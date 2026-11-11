@@ -63,6 +63,7 @@ using detail::counts_as_digit;
 using detail::decimal_base;
 using detail::display_view;
 using detail::drops_count_digit;
+using detail::escaped_or_refused;
 using detail::failed;
 using detail::finished_input_wait;
 using detail::forward_characters;
@@ -1914,15 +1915,29 @@ namespace
     const auto *const special = std::get_if<VimSpecialKey>(&key);
     return special != nullptr && *special == VimSpecialKey::escape;
 }
+} // namespace
 
-// 待っていた鍵にならなかったとき。Esc は何もせずに打ち消し、ほかは受けない（Vim の `m<Esc>`
-// `'<Esc>` と `[<Esc>` `]<Esc>`）。
-[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key)
+namespace detail
 {
-    VimStep step{finished_input_wait(state), VimNoEffect{}};
-    return is_escape(key) ? step : failed(std::move(step), VimRepeatFailure::refused);
+// 待っていた鍵にならなかったときの判定の 1 本。Esc は回数・保留・待ち・選んだレジスタを消すだけで
+// 失敗にせず（Vim の normal_cmd は 2 鍵目が ESC なら命令を呼ばずに clearop して終わる・鳴らない・
+// 後ろの鍵が効く）、ほかは refused を返す（`m` `'` `` ` `` `[` `]` `"` `q` `@`・#1369）。
+[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key, VimStep refused)
+{
+    return is_escape(key) ? VimStep{finished_input_wait(state), VimNoEffect{}} : std::move(refused);
 }
 
+// ほかの鍵は待ちだけを消して失敗にする形。
+[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key)
+{
+    return escaped_or_refused(
+        state, key,
+        failed(VimStep{finished_input_wait(state), VimNoEffect{}}, VimRepeatFailure::refused));
+}
+} // namespace detail
+
+namespace
+{
 // `m{name}`（ADR 0152 の決定 3）。今のキャレットを置いた新しい値を添え、本文も選択も動かさない
 // （VISUAL のまま）。オペレータの後ろへは来ない（pending_step が打ち消す）。
 [[nodiscard]] VimStep mark_set_step(const VimState &state, const VimEditorView &view,
@@ -2283,12 +2298,18 @@ namespace
 // VISUAL にいるあいだ印を持ち越す（Vim の redo_VIsual_busy・実測）。
 // 前の選択に置く欲しい列（#1361）。矩形の `C` は Vim の v_visop が curswant を MAXCOL にしてから
 // `c` を流し、do_pending_operator がその curswant を b_visual.vi_curswant に置くので行末の印に
-// なる。ほかの鍵は鍵の前の欲しい列（引数を待つ鍵の `C` は文字なので除く）。
-[[nodiscard]] VimState visual_left_state(const VimState &state, const VimKey &key)
+// なる。矩形の `D` も同じ（v_visop の同じ枝・#1417）。ほかの鍵は鍵の前の欲しい列（引数を待つ鍵の
+// `C` `D` は文字なので除く）。
+[[nodiscard]] bool takes_line_end(const VimKey &key) noexcept
 {
     const auto *const character = std::get_if<VimCharacter>(&key);
-    if (state.mode != VimMode::visual_block || state.input_wait.has_value() ||
-        character == nullptr || vim_action_for(character->code) != VimAction::change_to_line_end)
+    const auto action = character == nullptr ? std::nullopt : vim_action_for(character->code);
+    return action == VimAction::change_to_line_end || action == VimAction::remove_to_line_end;
+}
+
+[[nodiscard]] VimState visual_left_state(const VimState &state, const VimKey &key)
+{
+    if (state.mode != VimMode::visual_block || state.input_wait.has_value() || !takes_line_end(key))
     {
         return state;
     }

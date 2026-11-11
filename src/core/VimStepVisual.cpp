@@ -18,6 +18,7 @@ using detail::aligned_screen;
 using detail::block_changed;
 using detail::block_inserted;
 using detail::block_operated;
+using detail::block_removed_to_line_end;
 using detail::cancelled;
 using detail::case_changed;
 using detail::cased_block;
@@ -31,17 +32,20 @@ using detail::drops_count_digit;
 using detail::failed;
 using detail::horizontal_action;
 using detail::input_action;
+using detail::JoinedLines;
 using detail::jumped_by;
 using detail::laid_out_motion;
 using detail::landed_column;
 using detail::landing_of;
 using detail::line_of;
+using detail::lines_joined;
 using detail::moved_or_failed;
 using detail::range_shift_fits;
 using detail::removed_exactly;
 using detail::requested_layout;
 using detail::requested_viewport;
 using detail::reselected_visual;
+using detail::restored_at;
 using detail::scroll_action;
 using detail::search_action;
 using detail::ShiftBy;
@@ -249,8 +253,52 @@ namespace
                : visual_operated(state, view, VimOperator::change);
 }
 
-// 行に効く鍵（`I` `A` `C` `D` `Y` `gi` `gI`）。VISUAL では矩形の `I` `A` `C` だけが効く（ADR 0035
-// の 追補 #1042・`D` `Y` と文字単位・行単位は後続）。`gi` は VISUAL では失敗する（実測・#1039）。
+// VISUAL の `J` `gJ`（#1417・Vim の nv_join が VISUAL では nv_operator へ流す OP_JOIN）。選んだ行を
+// つなぎ、1 行だけなら次の行までの 2 行（回数は使わない・`V3J` も 2 行）。種類を問わない。2 行目が
+// 本文の外なら鳴らして VISUAL を抜け、選択の始めに残る（`GVJ`）。つなぐ本体は NORMAL の `J` と
+// 同じ lines_joined で、u の戻り先は VISUAL の `d` と同じ visual_restore（`lVjJu` は行頭・
+// `jlVkJu` はキャレット・実測）。
+[[nodiscard]] VimStep visual_joined(const VimState &state, const VimEditorView &view,
+                                    bool inserts_space)
+{
+    const TextBuffer &text = view.text;
+    const LineNumber anchor = line_of(text, view.selection.anchor);
+    const LineNumber caret = line_of(text, view.selection.caret);
+    const LineNumber first{std::min(anchor.value, caret.value)};
+    // 初期化子並びの std::max は MSVC STL の __std_max_8u を core の外へ出す（ARC-003）ので 2
+    // 引数で。
+    const LineNumber last{std::max(std::max(anchor.value, caret.value), first.value + 1)};
+    const Offset restore = visual_restore(state, text, view.selection);
+    if (last.value > text.line_count())
+    {
+        return failed(VimStep{vim_resting_from(state, state.unnamed_register), VimMoveTo{restore}},
+                      VimRepeatFailure::not_moved);
+    }
+    return restored_at(lines_joined(state, text, JoinedLines{first, last}, inserts_space), restore);
+}
+
+// VISUAL の `X` `D` `Y`（#1417・Vim の v_visop）。文字単位と行単位は行単位の `d` `y`（種類だけを
+// 行単位に読み替える。前の選択は鍵の前の種類のまま＝visual_remembered が読むのは鍵の前の状態・
+// Vim の VIsual_mode_orig）。矩形の `X` `Y` は矩形の `d` `y`、矩形の `D` は行末まで取り直して消す。
+// 回数は使わない（`v2X` も選んだ行だけ・実測）。
+[[nodiscard]] VimStep visual_linewise_operated(const VimState &state, const VimEditorView &view,
+                                               VimAction action)
+{
+    const VimOperator operation =
+        action == VimAction::yank_line ? VimOperator::yank : VimOperator::remove;
+    if (state.mode == VimMode::visual_block)
+    {
+        return action == VimAction::remove_to_line_end ? block_removed_to_line_end(state, view)
+                                                       : block_operated(state, view, operation);
+    }
+    VimState linewise = state;
+    linewise.mode = VimMode::visual_line;
+    return visual_operated(linewise, view, operation);
+}
+
+// 行に効く鍵（`I` `A` `C` `gi` `gI` `p` `P`）。VISUAL では矩形の `I` `A` `C` だけが効く（ADR 0035
+// の追補 #1042・文字単位と行単位の `C` と `p` `P` は後続・#1418）。`gi` は VISUAL では失敗する
+// （実測・#1039）。`J` `gJ` `X` `D` `Y` は visual_edit_line が先に振り分ける。
 [[nodiscard]] VimStep visual_line_command(const VimState &state, const VimEditorView &view,
                                           VimAction action)
 {
@@ -278,6 +326,22 @@ namespace
         return block_changed(state, view, VimColumnWish::at_line_end);
     }
     return visual_unchanged(state);
+}
+
+// 行に効く本文の変更の群（NORMAL の normal_line_action と同じ群）の VISUAL の写し先（#1417）。
+[[nodiscard]] VimStep visual_edit_line(const VimState &state, const VimEditorView &view,
+                                       VimAction action)
+{
+    if (action == VimAction::join_lines || action == VimAction::join_lines_raw)
+    {
+        return visual_joined(state, view, action == VimAction::join_lines);
+    }
+    if (action == VimAction::remove_character_before || action == VimAction::remove_to_line_end ||
+        action == VimAction::yank_line)
+    {
+        return visual_linewise_operated(state, view, action);
+    }
+    return visual_line_command(state, view, action);
 }
 
 // VISUAL の `o` `O`。矩形の `O` だけが行を変えずに左右の桁を使い直し、ほかは対角の角へ移る
@@ -417,8 +481,9 @@ namespace detail
     case VimActionGroup::number:
         return visual_numbered(state, view, action);
     case VimActionGroup::insert_line:
-    case VimActionGroup::edit_line:
         return visual_line_command(state, view, action);
+    case VimActionGroup::edit_line:
+        return visual_edit_line(state, view, action);
     case VimActionGroup::ex_line:
         return visual_unchanged(state);
     }
