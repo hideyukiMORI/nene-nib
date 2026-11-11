@@ -2,6 +2,7 @@
 
 #include "LineNumber.hpp"
 #include "Selection.hpp"
+#include "VimToplineSettle.hpp"
 
 #include <cstddef>
 #include <optional>
@@ -19,9 +20,9 @@ struct VimNavigate
     LineNumber first_visible;
     std::size_t first_row = 0;
     std::optional<std::size_t> first_column = std::nullopt;
-    // 先頭を scrolloff の追従に掛けずにそのまま置く（Vim の scroll_redraw が立てる VALID_TOPLINE・
-    // Ctrl-e Ctrl-y だけ・ADR 0019 の追補 #1232）。余白の寄せは engine が cursor_correct
-    // で済ませた。
-    bool keeps_top = false;
+    // 先頭の決め直し（VimToplineSettle）。kept は scrolloff の追従に掛けずにそのまま置く（Vim の
+    // VALID_TOPLINE・Ctrl-e Ctrl-y の scroll_redraw と 1 画面の送りの FAIL・ADR 0019 の追補
+    // #1232 / #1362）。余白の寄せは engine が cursor_correct で済ませた。
+    VimToplineSettle topline = VimToplineSettle::margin_followed;
 };
 } // namespace nenenib::core

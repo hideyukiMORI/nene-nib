@@ -94,18 +94,20 @@ void EditorWindow::resize()
 // は最初の 1 行で返る）。
 core::PaneLayouts EditorWindow::body_panes(const core::EditorSettings &settings) const
 {
-    const auto minimap = core::minimap_layout(explorer_frame(settings).body, dpi_,
+    const auto minimap = core::minimap_layout(explorer_frame(settings.font_size).body, dpi_,
                                               settings.font_size, controller_.minimap_shown());
     return core::pane_layouts(minimap.body, dpi_, settings.font_size, controller_.split().layout);
 }
 
-// 面の配置。出ているかは設定 explorer（面の表示値が frame に載るのと同じ値）が決める。
-core::ExplorerLayout EditorWindow::explorer_frame(const core::EditorSettings &settings) const
+// 面の配置。出ているかと幅は controller の explorer_width（面の表示値が frame に載るのと同じ値・
+// ドラッグの間はその幅・ADR 0162 の追補 D78）が決める。引数は字の大きさだけ（マウスの道は
+// controller_.font_size() の安い読みを渡し、delivery を作らない・Issue #1380 の R-2）。
+core::ExplorerLayout EditorWindow::explorer_frame(core::FontSize font_size) const
 {
     RECT client{};
     GetClientRect(window_, &client);
     return core::explorer_layout(core::LayoutRect{0, 0, client.right, client.bottom}, dpi_,
-                                 settings.font_size, settings.explorer);
+                                 font_size, controller_.explorer_width());
 }
 
 core::BodyLayout EditorWindow::active_body(const core::EditorSettings &settings) const
@@ -332,6 +334,7 @@ void EditorWindow::follow_split(core::SplitLayout previous, application::EditorD
 
 // エクスプローラーの面を出した・消した（鍵・一覧・Ex の `set explorer`）ら、本文の幅が変わるので
 // 操作中の枠の行数と幅を送り直す（ADR 0162 の決定 2）。面が消えたままの打鍵の道は比べるだけ。
+// 消えたら境のドラッグも終える（幅は送らない・ADR 0162 の追補 D78）。
 void EditorWindow::follow_explorer(application::EditorDelivery &delivery)
 {
     if (delivery.settings.explorer == shown_explorer_)
@@ -339,6 +342,10 @@ void EditorWindow::follow_explorer(application::EditorDelivery &delivery)
         return;
     }
     shown_explorer_ = delivery.settings.explorer;
+    if (!shown_explorer_)
+    {
+        end_hidden_explorer_drag();
+    }
     delivery = controller_.apply(body_view());
 }
 

@@ -1484,7 +1484,7 @@ class LanguageServerBenchTests(unittest.TestCase):
             self.assertTrue(text.startswith("version=4\ncolorscheme=system\n"))
             self.assertIn("\nlsp=on\n", text)
             self.assertTrue(text.endswith(
-                'scrolloff=0\nlsp.cpp.command="C:\\b\\nib_fake_language_server.exe" --silent\n'))
+                'scrolloff=0\nexplorer_width=\nlsp.cpp.command="C:\\b\\nib_fake_language_server.exe" --silent\n'))
             with self.assertRaises(AssertionError):
                 speed.write_settings(environment, {"nosuch": "x"})
             with mock.patch.dict(speed.os.environ, {"LOCALAPPDATA": str(work / "profile")}), \

@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -122,6 +123,7 @@ constexpr std::size_t erase_window_bytes = 64;
     case VimSpecialKey::control_o:
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
+    case VimSpecialKey::delete_key:
         return false;
     }
     std::unreachable();
@@ -234,6 +236,28 @@ constexpr std::size_t erase_window_bytes = 64;
     }
     return VimStep{
         state, VimRemoveRange{OffsetRange{backward_characters(text, caret, single_step), caret}}};
+}
+
+// INSERT の `<Del>`（Vim の ins_del・#1325）。行の内容の終わりでは次の行とつなぎ（backspace の
+// eol・do_join の insert_space は FALSE なので `gJ` と同じく空白を足さず、次の行の字下げも残す）、
+// 最後の行の終わりでは何も消さない（vim_beep で、鍵は redo に載る）。ほかはキャレットの下の Vim の
+// 1 文字（del_char → del_chars の utfc_ptr2len・結合文字を含む）を消し、キャレットは動かない。
+[[nodiscard]] VimStep insert_deleted_forward(const VimState &state, const TextBuffer &text,
+                                             Offset caret)
+{
+    const LineNumber line = line_of(text, caret);
+    const Offset line_end = text.line_end(line);
+    if (caret.value < line_end.value)
+    {
+        return VimStep{
+            state, VimRemoveRange{OffsetRange{caret, vim_character_after(text, caret, line_end)}}};
+    }
+    if (line.value >= text.line_count())
+    {
+        return VimStep{state, VimNoEffect{}};
+    }
+    return VimStep{
+        state, VimRemoveRange{OffsetRange{line_end, text.line_start(LineNumber{line.value + 1})}}};
 }
 
 // 始めの桁が今の本文で 1 文字の頭か（#1234）。Vim の ins_bs は 1 文字ずつ dec_cursor で戻り、
@@ -462,7 +486,9 @@ constexpr std::size_t erase_window_bytes = 64;
 }
 
 // 鍵の列を残りの周だけ本文の写しへ流し直した本文・キャレット・消した手前の端（#1093）。
-[[nodiscard]] std::tuple<TextBuffer, Offset, Offset>
+// 周の終わりに本文が文書の上限（view.document_limit）を超えたら、残りの周を流さずに too_large
+// （#1341）。写しの本文は文書の改行の形で入るので、CRLF の改行も 2 バイトに数える。
+[[nodiscard]] std::expected<std::tuple<TextBuffer, Offset, Offset>, VimRepeatFailure>
 replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t remaining,
                 const std::vector<VimKey> &keys)
 {
@@ -476,7 +502,8 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
         for (const VimKey &key : keys)
         {
             const Selection here = collapsed_at(caret);
-            const VimEditorView replay_view{text, here, view.viewport};
+            VimEditorView replay_view{text, here, view.viewport};
+            replay_view.document_limit = view.document_limit;
             VimStep keyed = replayed_key(replaying, replay_view, key);
             replaying = std::move(keyed.next);
             auto replayed = replayed_effect(text, caret, keyed.effect);
@@ -484,8 +511,12 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
             caret = replayed.second;
             low = Offset{std::min(low.value, caret.value)};
         }
+        if (text.size_bytes() > view.document_limit)
+        {
+            return std::unexpected(VimRepeatFailure::too_large);
+        }
     }
-    return {std::move(text), caret, low};
+    return std::tuple{std::move(text), caret, low};
 }
 
 // 回数の残りの周で鍵の列を流し直す（#1093・Vim の start_redo_ins）。2 周目からの消す鍵は前の周
@@ -498,8 +529,11 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
 {
     const Offset escaped = view.selection.caret;
     const auto &[text, caret, low] = replayed;
-    // 流し直しが手前を消さず何も残さなければ、本文は Esc の前のまま（`2o<C-w>`）。
-    if (low == escaped && caret == escaped)
+    // 流し直しのキャレットの後ろは手を付けていない元の本文の尾で、`<Del>` が前方を消した周の分
+    // だけ元の本文の Esc の位置より先まで食う（#1325）。置き換えの終わりは尾の長さから決める。
+    const Offset consumed{view.text.size_bytes() - (text.size_bytes() - caret.value)};
+    // 流し直しが手前も前方も消さず何も残さなければ、本文は Esc の前のまま（`2o<C-w>`）。
+    if (low == escaped && caret == escaped && consumed == escaped)
     {
         return step;
     }
@@ -511,7 +545,7 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
     const Offset rest{begin.value + body.size() - retreat};
     step.insert_left = retreat;
     step.effect =
-        VimReplaceRange{OffsetRange{begin, escaped}, std::move(body), rest, EditBoundary::absorb};
+        VimReplaceRange{OffsetRange{begin, consumed}, std::move(body), rest, EditBoundary::absorb};
     return step;
 }
 
@@ -535,14 +569,20 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
     auto typed = typed_text(keys);
     if (!typed.has_value())
     {
-        return replayed_insert(view, std::move(step),
-                               replayed_rounds(state, view, repeat.remaining, keys));
+        auto replayed = replayed_rounds(state, view, repeat.remaining, keys);
+        if (!replayed.has_value())
+        {
+            return failed(std::move(step), replayed.error());
+        }
+        return replayed_insert(view, std::move(step), replayed.value());
     }
     // 打った本文だけの列は、流し直しても本文を残りの回数だけ続けたものと同じなので 1 回で作る。
-    auto result = repeated(typed.value(), repeat.remaining);
+    auto result = repeated(typed.value(), repeat.remaining, view.text, view.document_limit);
     if (!result.has_value())
     {
-        return step;
+        // 残りの周の本文が文書の上限を超える（`999999999ix<Esc>` の 1 GB 超）。1 周目の本文は
+        // 残し、残りは確保せずに断る（#1341）。
+        return failed(std::move(step), result.error());
     }
     std::string body = std::move(result).value();
     const std::size_t retreat = body.back() == '\n' ? 0 : last_code_point_size(body);
@@ -686,14 +726,37 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     return edits;
 }
 
+// 写す本文を矩形の行へ写した後も文書が上限に収まるか（PR #1348 の再レビュー M1）。1 行に足すのは
+// 写す本文と多くとも max(桁, tabstop) の空白（`A` が届かない行の手前の埋めと、桁の途中で割る
+// Tab）で、1 行目の回数の繰り返しも写す本文より長くないので、行の数（1 行目を含む）を掛けて比べる。
+[[nodiscard]] bool block_copy_fits(const TextBuffer &text, const VimBlockInsert &insert,
+                                   std::string_view body, std::size_t limit) noexcept
+{
+    const std::size_t last = std::min(insert.first.value + insert.lines, text.line_count() + 1);
+    const std::size_t piece =
+        detail::written_bytes(body, text) + std::max(insert.column.value, vim_tab_stop);
+    return detail::fits_repeated(piece, last - insert.first.value, detail::count_room(text, limit));
+}
+
+// 写すのが上限を超えたときの Esc（#1341）。1 行目は 1 周目の本文だけを残して 1 文字左へ戻り
+// （plain_left_insert が断ったときと同じ）、断った印を添える。
+[[nodiscard]] VimStep first_round_only(const VimEditorView &view, VimStep step)
+{
+    const Offset caret = view.selection.caret;
+    const Offset back = backward_characters(view.text, caret, single_step);
+    step.effect = VimMoveTo{back};
+    step.insert_left = caret.value - back.value;
+    return failed(std::move(step), VimRepeatFailure::too_large);
+}
+
 // 矩形の INSERT の Esc（ADR 0035 の追補 #1042）。1 行目が入る前より伸びたぶんを打った本文として
 // 読み（回数の繰り返しもその後ろに足す）、残りの行の同じ桁へ写して 1 行目の INSERT と 1 つの undo
 // 単位にする。何も打たなかったら写さない。`I` `A` は Esc の行が 1 行目でなければ（改行を打った）
 // 写さず（固定 Vim の op_insert）、`c` `C` は行を問わず今の行番号の行へ写す（op_change・どちらも
 // 実測）。キャレットは `I` `A` なら矩形の左上（Esc の位置が手前ならそこ）、`c` `C` なら Esc
 // のふつうの位置で、`'^` は打ち終えた 所のまま。
-[[nodiscard]] VimStep block_copied(const VimBlockInsert &insert, const VimEditorView &view,
-                                   VimStep step)
+[[nodiscard]] std::optional<VimStep> block_copied(const VimBlockInsert &insert,
+                                                  const VimEditorView &view, VimStep step)
 {
     const TextBuffer &text = view.text;
     const bool left_first_line = line_of(text, view.selection.caret) != insert.first;
@@ -709,6 +772,10 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     std::string body = block_carried_text(text, insert);
     body += growth.value().first;
     body = block_copied_body(insert, std::move(body));
+    if (!block_copy_fits(text, insert, body, view.document_limit))
+    {
+        return std::nullopt;
+    }
     std::vector<VimBlockEdit> edits = std::move(growth.value().second);
     Offset resting = view.selection.caret;
     // ここへ来る繰り返しの本文は改行を含まない（改行を含む `I` `A` は上の問いで返り、VISUAL の `c`
@@ -746,7 +813,15 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     {
         return step;
     }
-    return block_copied(state.block_insert.value(), view, std::move(step));
+    const VimBlockInsert &insert = state.block_insert.value();
+    if (auto copied = block_copied(insert, view, step))
+    {
+        return std::move(copied).value();
+    }
+    // 回数ぶんの本文を全部の行へ写すと上限を超える（`<C-v>G600000Ix<Esc>`）。1 周目だけを写し
+    // 直し、それも超えれば写さない（#1341）。
+    VimStep first = first_round_only(view, std::move(step));
+    return block_copied(insert, view, first).value_or(first);
 }
 
 [[nodiscard]] VimStep insert_page_moved(const VimState &state, const VimEditorView &view,
@@ -815,6 +890,14 @@ namespace detail
         return erase_recorded(insert_cut(state, text, caret, true), key);
     case VimSpecialKey::control_u:
         return erase_recorded(insert_cut(state, text, caret, false), key);
+    // `<Del>` は何も消せなくても redo に載る（ins_del の AppendCharToRedobuff）ので、回数の鍵の列
+    // にも必ず足す（erase_recorded の「止まった鍵は足さない」を通さない）。
+    case VimSpecialKey::delete_key:
+    {
+        VimStep step = insert_deleted_forward(state, text, caret);
+        step.next = insert_recorded(step.next, VimKey{key});
+        return step;
+    }
     case VimSpecialKey::control_r:
         return started_prefix(state, VimPrefix::insert_register);
     case VimSpecialKey::control_d:
@@ -922,6 +1005,7 @@ namespace
     case VimSpecialKey::control_o:
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
+    case VimSpecialKey::delete_key:
         return false;
     }
     std::unreachable();
@@ -980,6 +1064,7 @@ namespace
     case VimSpecialKey::control_o:
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
+    case VimSpecialKey::delete_key:
         return false;
     }
     std::unreachable();

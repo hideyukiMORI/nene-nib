@@ -105,3 +105,12 @@ ADR 0009（選択と undo）・ADR 0012（engine の形）・ADR 0014（IME と 
 - **編集の行のずれ。** `marks_adjusted` が両端を Vim の `one_adjust_nodel` と同じに動かす。消えた行の端は消さずに消えた範囲の最初の行へ寄せ（`vl<Esc>ddgvy` は新しい 1 行目を選ぶ）、文字単位の削除でつながった行の端は最初の行へ桁を足してつなぐ（`lvjld0gvy` は `jkl` を選ぶ）。近似の限界は ADR 0152 の決定 6 と同じ。
 - **やらないこと。** `'<` `'>` のマークの読み（`` `< `` `'>` など）・`gv` の後の `:` の範囲・クリックで VISUAL を抜けたとき（controller の割り込み）の前の選択は後続。
 - fixture は `gv-gi-` の 19 件（`gv` の側）。
+
+## 追補（2026-11-10・#1361）: 矩形のオペレータの後の前の選択
+
+- **前の選択は操作の前の選択のまま。** Vim は `do_pending_operator`（ops.c）の `VIsual_active` の枝で、オペレータを流す前に `b_visual` の `vi_start`（`VIsual`）・`vi_end`（カーソル）・`vi_mode`・`vi_curswant` を置き、`op_shift` `op_change` `op_insert` `op_delete` `op_replace` `op_tilde` の矩形の道はどれも `b_visual` も `b_op_start` も書き直さない（`gv` が読むのは `nv_gv_cmd`（normal.c）の `b_visual` だけ・`b_op_start` へ寄せるのは VISUAL の `p` の `nv_put_opt` だけ）。Nib も `visual_remembered` の 1 か所が鍵の前の選択を置く形のままで、`c` `C` `I` `A` `>` `<` `r` `d` `y` `~` の後で両端を書き直さない。
+- **矩形の編集はマークを動かさない。** 矩形のオペレータは行の中だけを書き換えて `mark_adjust` を呼ばない（行のずれが無い・桁も動かさない・`mark_col_adjust` を呼ぶのは `do_join` だけ）。controller の `apply_block` は行ごとの置き換えを上から下までを覆う 1 つの Edit に畳んで履歴へ積む（ADR 0035 の決定 3）が、その畳んだ Edit を `marks_adjusted` に通すと改行を含む置き換えとして行が消えた形に読まれ、前の選択の端と名前つきのマークが 1 行目へ寄っていた（`gg<C-v>jj>gv<Esc>` が 1 行目・`Gma<C-v>ggl>'a` が 1 行目）。`replace` に行ごとの置き換えを渡し、マークは core の `marks_block_adjusted`（行ごとの置き換えを下の行から `marks_adjusted` に通す・ADR 0152 の決定 6 の追補）で直す。改行を含まない行の置き換えはマークを動かさず、本文の終わりに行を足す矩形の貼付だけが行を足す。
+- **矩形の `C` の欲しい列は行末。** Vim の `v_visop`（normal.c）は矩形の `C` と `D` で `curwin->w_curswant = MAXCOL` にしてから `c` を流すので、`do_pending_operator` が置く `vi_curswant` は MAXCOL（`ggl<C-v>jjCXY<Esc>gvd` は行末まで消す・実測）。`visual_remembered` は矩形の `C`（引数を待つ鍵の文字を除く）の前の選択の欲しい列を行末の印にする。矩形の `D` はまだ効かない（ADR 0035 の追補 #1042）。
+- **`$` の矩形の後の `>`。** `gg<C-v>$G>gvd` は行末まで選び直さず左の 1 桁（Tab）だけを消す（実測）。`G` が欲しい列を桁へ戻すので、`$G<Esc>gvd`（既存の振る舞いと一致）と同じく鍵の前の欲しい列のまま置けば Vim と一致する。
+- **測った（変えない・後続）。** 行単位と文字単位の行を保つ書き換え（`Vj>` `Vj~` `vjl~` `vjlr`）の後の `gv` と `'a`、矩形の `>` と `d` の後の `u` の後の `gv` も、Vim はマークを動かさないが Nib は 1 行目へ寄せる（同じ根: 改行を含む 1 つの置き換えを `marks_adjusted` が行の消えた形に読む）。直し方は設計の判断（後続の Issue）。文字単位の `vjcX<Esc>gvd` は一致。
+- fixture は `gv-after-block-` の 22 件（修正前の再生器で 21 件が落ちる・`char-change` は文字単位の一致の確認）。

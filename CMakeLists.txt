@@ -64,12 +64,13 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimStep.cpp src/core/VimStepBlock.cpp src/core/VimStepDetail.cpp src/core/VimStepInsert.cpp src/core/VimStepMotions.cpp src/core/VimStepOperators.cpp src/core/VimStepPut.cpp
     src/core/VimStepRanges.cpp src/core/VimStepRecording.cpp src/core/VimStepReplace.cpp src/core/VimStepSearch.cpp src/core/VimStepTextObjects.cpp src/core/VimStepVisual.cpp src/core/VimStepNumbers.cpp
     src/core/VimScreenGeometry.cpp src/core/VimCursorCorrect.cpp src/core/VimScreenLine.cpp src/core/VimToplineUpdate.cpp src/core/VimScreenRows.cpp src/core/VimHorizontalScroll.cpp
-    src/core/VimTextObjectRange.cpp src/core/VimParagraphObject.cpp src/core/VimSentenceObject.cpp src/core/VimTagObject.cpp
+    src/core/VimTextObjectRange.cpp src/core/VimParagraphObject.cpp src/core/VimParagraphStart.cpp src/core/VimSentenceObject.cpp src/core/VimTagObject.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
     src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
     src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp src/core/SaveQuestionText.cpp src/core/LanguageTable.cpp
     src/core/Lexer.cpp src/core/LexCpp.cpp src/core/LexCursor.cpp
     src/core/MarkdownParse.cpp src/core/MarkdownBuilder.cpp src/core/MarkdownEntity.cpp src/core/PreviewSelectionText.cpp
+    src/core/ImageFormat.cpp src/core/ImageGeometry.cpp src/core/ImageReference.cpp
     src/core/HtmlAttribute.cpp src/core/HtmlMarkdownWriter.cpp src/core/HtmlToMarkdown.cpp
     src/core/Lexer.cpp src/core/LexCpp.cpp src/core/LexCursor.cpp src/core/LexJson.cpp src/core/LexPython.cpp src/core/LexMarkdown.cpp src/core/LexJavaScript.cpp src/core/LexHtml.cpp src/core/LexCss.cpp src/core/LexYaml.cpp src/core/LexToml.cpp src/core/LexGdscript.cpp src/core/LexIni.cpp src/core/LexCsharp.cpp src/core/LexRust.cpp src/core/LexGo.cpp src/core/LexPhp.cpp src/core/LexSql.cpp src/core/LexLua.cpp src/core/LexDockerfile.cpp src/core/LexPowershell.cpp src/core/LexShell.cpp src/core/LexCmake.cpp src/core/SyntaxColor.cpp
     src/core/JsonNumber.cpp src/core/JsonValue.cpp src/core/JsonParse.cpp src/core/JsonWrite.cpp
@@ -87,6 +88,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/EditorControllerEditing.cpp src/application/EditorControllerVim.cpp src/application/EditorControllerDocuments.cpp
     src/application/EditorControllerTabs.cpp src/application/EditorControllerCommand.cpp src/application/EditorControllerPalette.cpp
     src/application/EditorControllerAutosave.cpp src/application/EditorControllerPreview.cpp src/application/EditorControllerDetail.cpp
+    src/application/PreviewImages.cpp
     src/application/EditorControllerExplorer.cpp src/application/EditorControllerShell.cpp
     src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
     src/application/AutosavePlan.cpp src/application/PasteKind.cpp
@@ -110,6 +112,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimRecordedKeysTests.cpp
     tests/unit/ApplicationTests.cpp
     tests/unit/WrappedViewTests.cpp
+    tests/unit/EdgeArrowTests.cpp
     tests/unit/VimWrappedTests.cpp
     tests/unit/EditorDeliveryTests.cpp
     tests/unit/VimEngineTests.cpp
@@ -139,6 +142,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimVirtualColumnTests.cpp
     tests/unit/VimCharacterBoundaryTests.cpp
     tests/unit/VimExternalCaretTests.cpp
+    tests/unit/VimFixtureWindowPathTests.cpp
     tests/unit/VimWindowPathTests.cpp
     tests/unit/VimCaseTests.cpp
     tests/unit/VimNumberPropertyTests.cpp
@@ -178,6 +182,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/LexerTests.cpp
     tests/unit/LexerPropertyTests.cpp
     tests/unit/PreviewTests.cpp
+    tests/unit/PreviewImageTests.cpp
     tests/unit/PreviewTaskTests.cpp
     tests/unit/PointerTests.cpp
     tests/unit/PreviewFullTests.cpp
@@ -194,6 +199,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/JsonTests.cpp
     tests/unit/JsonPropertyTests.cpp
     tests/unit/KeyMapTests.cpp
+    tests/unit/VimDeleteKeyTests.cpp
     tests/unit/LspFramesTests.cpp
     tests/unit/LspMessagesTests.cpp
     tests/unit/LspFramesPropertyTests.cpp
@@ -240,6 +246,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/FolderShelf.cpp
     src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
     src/adapters/win32/MarkdownShelf.cpp src/adapters/win32/Win32MarkdownAdapter.cpp
+    src/adapters/win32/Win32ImageAdapter.cpp
     src/adapters/win32/AutosaveCodec.cpp src/adapters/win32/AutosaveFolder.cpp
     src/adapters/win32/AutosaveShelf.cpp
     src/adapters/win32/Win32AutosaveAdapter.cpp
@@ -416,7 +423,9 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/StatusDemandTests.cpp tests/ui/SyntaxRenderTests.cpp tests/ui/DiagnosticWaveTests.cpp
     tests/ui/PaletteLayoutTests.cpp tests/ui/ExplorerPaintTests.cpp tests/ui/PointerPressTests.cpp tests/ui/GuideKeyWidthTests.cpp
     tests/ui/PrintRenderTests.cpp tests/ui/MemoryXpsTarget.cpp tests/ui/MemoryPackageTarget.cpp
-    tests/ui/MatchParenOutlineTests.cpp tests/ui/SaveQuestionTests.cpp tests/ui/MinimapPaintTests.cpp)
+    tests/ui/MatchParenOutlineTests.cpp tests/ui/SaveQuestionTests.cpp
+    tests/ui/VimSpecialKeyTests.cpp tests/ui/ClosingStepsTests.cpp
+    tests/ui/PreviewCycleKeyTests.cpp tests/ui/MinimapPaintTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)

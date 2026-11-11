@@ -148,10 +148,10 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0130](0130-graphics-dlls-are-delay-loaded.md) | 描画と文字組みの DLL は遅延読み込みにする | 提案・#479、窓が見えるまでを 2〜4 ms 縮める |
 | [0131](0131-d3d-device-is-warmed-up-on-the-worker.md) | D3D11 の device は worker で先に作り始め、窓を見せてから受け取る | 提案・#481、起動 −15 ms / 16 MiB −29 ms の実験 |
 | [0136](0136-ci-builds-product-and-tests-in-release.md) | マージ直前のCIは製品と単体テストをReleaseでビルドして回す | 提案・#514、初回のrunの成功で受理 |
-| [0137](0137-autosave-every-30-seconds.md) | 未保存の編集は30秒ごとに裏で退避し、正常に閉じたら消し、起動で残っていれば1回聞く | 提案・#515、application→adapters→uiの3工程で実装中 |
+| [0137](0137-autosave-every-30-seconds.md) | 未保存の編集は30秒ごとに裏で退避し、正常に閉じたら消し、起動で残っていれば1回聞く | 受理（D47・main 2026-10-17）・#515 |
 | [0138](0138-giant-line-bench.md) | 1 行が 16 MiB の文書のベンチ | 受理・#513、基準値は #644（2026-10-18）で「はい」の 2 本を採用・判定の 8 本には入れない |
 | [0139](0139-giant-lines-in-text-form-use-a-window.md) | text の表示では、巨大な行を折り返さず、キャレットの周りの窓だけを文字組みして印を付ける | 提案・#547（土台は #544）・D53 |
-| [0140](0140-giant-lines-open-as-grid-after-asking.md) | 巨大な行を含む文書は、聞いてから格子表示で開く | 提案・#544・D53 |
+| [0140](0140-giant-lines-open-as-grid-after-asking.md) | 巨大な行を含む文書は、聞いてから格子表示で開く | 受理（D53・main 2026-10-16〜17）・#544 |
 | [0141](0141-file-read-arrives-as-sealed-bytes.md) | ファイルの読みは core が予約した封印済みの列で届き、判定と本文へ複写なしで移る | 提案・#581、正式ゲートと独立レビューで受理 |
 | [0142](0142-preassign-fallback-fonts-to-missing-runs.md) | 主字体に無い文字の連続区間には、OS の MapCharacters が選ぶ字体を layout の範囲に先に当てる | 提案・#586（採用は決定 6 の一致） |
 | [0143](0143-merge-ci-dispatches-main-definition.md) | マージ直前の CI は main の workflow 定義で起動し、PR の head は入力で checkout する | 提案・#599 |
@@ -166,9 +166,9 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0152](0152-vim-marks-are-document-values-adjusted-by-edits.md) | Vim のマークは文書の値で、engine は借りて読み、変更を `VimStep` に添えて返す。編集で行がずれたら純関数で直す（`%` は移動の表の 1 行） | 提案・#767 |
 | [0153](0153-refusal-bell-through-typed-bell-port.md) | 断りの音は型のある `BellPort` で鳴らし、鳴らすかは application の 1 か所（`reject`）が決める（入力行の確定とファイル操作の失敗だけ・鍵の失敗は鳴らさない） | 提案・#789 |
 | [0154](0154-document-language-is-a-document-value-with-one-core-table.md) | 文書の言語は文書の値で、表は core に 1 つ。設定とセッションには入れない | 提案（hide の試用の後に受理）・#776 |
-| [0155](0155-markdown-preview-sits-in-the-other-pane-with-ticketed-port-and-tick.md) | Markdown プレビューは split の other の枠に置き、更新は券つきの `MarkdownPort` と 200 ms の tick の間引きで行う | 提案（段 5 の ui と hide の試用の後に受理）・#800 #801 |
-| [0156](0156-syntax-colors-are-column-spans-lexed-from-200-lines-above-and-drawn-by-cutting-glyph-runs.md) | 構文の色は本文の桁の区間で、見えている行の 200 行前から走らせ、保持した字形 run を cluster で切って描く | 提案（hide の試用の後に受理）・#815 #816 |
-| [0157](0157-clipboard-html-pastes-by-document-language-through-one-core-converter.md) | クリップボードの HTML は文書の言語で貼り方が決まり、変換は core の純関数 1 本 | 提案（hide の試用の後に受理）・#774 |
+| [0155](0155-markdown-preview-sits-in-the-other-pane-with-ticketed-port-and-tick.md) | Markdown プレビューは split の other の枠に置き、更新は券つきの `MarkdownPort` と 200 ms の tick の間引きで行う | 受理（試用 OK 2026-10-22）・#800 #801 |
+| [0156](0156-syntax-colors-are-column-spans-lexed-from-200-lines-above-and-drawn-by-cutting-glyph-runs.md) | 構文の色は本文の桁の区間で、見えている行の 200 行前から走らせ、保持した字形 run を cluster で切って描く | 受理（試用 OK 2026-10-22）・#815 #816 |
+| [0157](0157-clipboard-html-pastes-by-document-language-through-one-core-converter.md) | クリップボードの HTML は文書の言語で貼り方が決まり、変換は core の純関数 1 本 | 受理（試用 OK 2026-10-22）・#774 |
 | [0158](0158-split-editor-controller-and-vim-step-by-meaning-without-behavior-change.md) | `EditorController.cpp` と `VimStep.cpp` を意味の単位で複数の翻訳単位に分ける（振る舞いを変えない） | 受理（D48・2026-10-28）・#992 |
 | [0159](0159-documents-open-through-one-read-port-that-completes-on-the-worker.md) | 文書を開く道は 1 本の読みの port を通り、大きなファイルは worker で読んで揃ってから採用する | 受理（D63・2026-10-28）・#993 |
 | [0160](0160-language-server-io-is-one-port-with-overlapped-pipes-and-a-core-json-rpc-framer.md) | 言語サーバーの入出力は 1 本の port（OVERLAPPED のパイプと子プロセス）で、JSON-RPC の枠と JSON は core の純関数 | 受理（D60 / D65・2026-10-28）・#994 |
@@ -190,3 +190,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0176](0176-vim-map-is-a-settings-row-applied-by-one-key-table-at-the-window-entry.md) | Vim の `map` は設定 v4 の行で、置き換えは窓の入口の鍵の表 1 つが行い、engine は知らない | 受理（D72・2026-10-29）・#1058 |
 | [0177](0177-printing-is-one-port-that-draws-the-body-layout-into-an-xps-print-control.md) | 印刷は port 1 本で、本文と同じ DirectWrite の layout を XPS の print control に描く | 受理（D71・2026-10-29）・#1047 |
 | [0178](0178-shell-registration-is-one-port-written-only-by-an-explicit-operation-under-hkcu.md) | Windows のエクスプローラーへの登録は port 1 本で、HKCU だけに、明示の操作のときだけ書く（段 1・段 2 は Store の段階） | 受理（D73・2026-10-30）・#1087 |
+| [0179](0179-the-transient-tab-is-one-window-mark-replaced-by-opening-in-place.md) | プレビューのタブは窓に 1 つの印で、置き換えは「同じ位置に開いて前の文書を外す」の 1 本 | 受理（D83・2026-11-11）・#1397 |

@@ -1,6 +1,8 @@
 #include "VimStepDetail.hpp"
 
 #include "Utf8.hpp"
+#include "VimCount.hpp"
+#include "VimRegisterSelection.hpp"
 #include "VimRegisterText.hpp"
 
 #include <cstddef>
@@ -21,6 +23,7 @@ using detail::combined_count;
 using detail::counted;
 using detail::counts_as_digit;
 using detail::decimal_base;
+using detail::drops_count_digit;
 using detail::erased_nothing;
 using detail::failed;
 using detail::finished_input_wait;
@@ -35,6 +38,7 @@ using detail::repeated_change;
 using detail::replayed_macro;
 using detail::resolved_count;
 using detail::restarts_insert;
+using detail::single_step;
 using detail::started_macro;
 using detail::started_prefix;
 using detail::vim_recorded;
@@ -176,8 +180,9 @@ namespace
 namespace detail
 {
 // `[count]@{a-z}` と `@"` と `@@`（ADR 0046 の決定 3・ADR 0048 の決定 6）。レジスタの本文を
-// vim_keys_of_text で鍵列にして回数ぶん繋いだ VimReplay を返し、controller が `.` と同じ経路で
-// 1 鍵ずつ流す。名前が無い・未使用か空のレジスタはビープして何もしない。
+// vim_keys_of_text で鍵列にして回数を周の数に載せた VimReplay を返し、controller が `.` と同じ
+// 経路で 1 鍵ずつ・1 周ずつ流す（鍵の列を回数ぶん並べない・#1341）。名前が無い・未使用か空の
+// レジスタはビープして何もしない。
 [[nodiscard]] VimStep replayed_macro(const VimState &state, const VimKey &key)
 {
     VimState next = finished_input_wait(state);
@@ -190,26 +195,15 @@ namespace detail
     }
     next.last_macro = selection.value().name;
     const VimRegister source = register_read(state, selection);
-    const std::vector<VimKey> keys = source.kind == VimRegisterKind::uninitialized
-                                         ? std::vector<VimKey>{}
-                                         : vim_keys_of_text(source.text);
-    const std::size_t count = resolved_count(state);
+    std::vector<VimKey> keys = source.kind == VimRegisterKind::uninitialized
+                                   ? std::vector<VimKey>{}
+                                   : vim_keys_of_text(source.text);
     if (keys.empty())
     {
         return failed(VimStep{std::move(next), VimNoEffect{}}, VimRepeatFailure::refused);
     }
-    if (count > std::vector<VimKey>{}.max_size() / keys.size())
-    {
-        return failed(VimStep{std::move(next), VimNoEffect{}}, VimRepeatFailure::too_large);
-    }
-    std::vector<VimKey> replayed;
-    replayed.reserve(keys.size() * count);
-    for (std::size_t round = 0; round < count; ++round)
-    {
-        replayed.insert(replayed.end(), keys.begin(), keys.end());
-    }
-    return VimStep{std::move(next),
-                   VimReplay{std::move(replayed), std::nullopt, VimReplayKind::macro}};
+    return VimStep{std::move(next), VimReplay{std::move(keys), std::nullopt, VimReplayKind::macro,
+                                              resolved_count(state)}};
 }
 } // namespace detail
 
@@ -237,6 +231,52 @@ namespace
         count.has_value() ? count_keys(count.value()) : std::vector<VimKey>{};
     result.insert(result.end(), keys.begin(), keys.end());
     return result;
+}
+
+// `"{name}.` の再生の回数（ADR 0030 の追補 #1337）。Vim 9.1 の nv_dot は名前を消さないので、
+// normal_cmd は名前が残るあいだ opcount（`.` の回数）を持ち越し、start_redo が積んだ同じ回数の
+// 桁に掛ける。`:help .` の文には無い振る舞いで、実測のまま写す。2 乗をやめるならここだけを
+// 変える。積は normal_cmd と同じく vim_count_limit に貼り付ける。
+[[nodiscard]] VimCount register_dot_count(VimCount count) noexcept
+{
+    if (count.value != 0 && count.value > vim_count_limit / count.value)
+    {
+        return VimCount{vim_count_limit};
+    }
+    return VimCount{count.value * count.value};
+}
+
+// 再生の回数（決定 6）。`.` に回数が無ければ記録の回数、あれば `.` の回数（#1319 の積）で
+// 置き換え、`"{name}` が残っていれば register_dot_count を通す（#1337）。
+[[nodiscard]] std::optional<VimCount> replayed_count(const VimState &state,
+                                                     const VimRepeatRecord &record) noexcept
+{
+    if (!state.count.has_value())
+    {
+        return record.count;
+    }
+    if (!state.selected_register.has_value())
+    {
+        return state.count;
+    }
+    return register_dot_count(state.count.value());
+}
+
+// `"{name}.` の名前を再生の鍵の頭に置く（ADR 0030 の追補 #1337）。記録の頭が `"` なら
+// start_redo の積む記録の名前が後から選び直すので置かない（番号送りもその名前の上で進む）。
+// 再生した鍵は名前ごと記録し直されるので、続く `.` も同じ名前へ書く。
+[[nodiscard]] std::vector<VimKey> register_prefixed(const VimState &state, std::vector<VimKey> keys)
+{
+    const VimKey quote{VimCharacter{U'"'}};
+    if (!state.selected_register.has_value() || (!keys.empty() && keys.front() == quote))
+    {
+        return keys;
+    }
+    const VimRegisterSelection selection = state.selected_register.value();
+    const char32_t name = selection.append ? static_cast<char32_t>(selection.name) - (U'a' - U'A')
+                                           : static_cast<char32_t>(selection.name);
+    keys.insert(keys.begin(), {quote, VimKey{VimCharacter{name}}});
+    return keys;
 }
 
 // `.` の番号送り（ADR 0050 の決定 8）。記録の先頭に並ぶ `"{名前}` の組の最後の組の名前が
@@ -303,7 +343,8 @@ namespace
 
 // VISUAL の記録の再生（ADR 0033 の決定 4・6）。step が記録の種類の VISUAL へ切り替えて大きさを
 // 効果に載せ、controller が選び直してから鍵を流す。回数は使わない（固定 Vim も `2.` で大きさを
-// 変えない・実測）。組み立て中の記録に同じ大きさを先に置くので、再生した鍵はこの大きさをその
+// 変えない・実測）が、`"{name}.`
+// の名前へは書く（register_prefixed・#1337）。組み立て中の記録に同じ大きさを先に置くので、再生した鍵はこの大きさをその
 // まま記録し直す＝桁や行が足りずに畳まれても次の `.` は元の大きさで繰り返す（Vim も同じ・実測）。
 [[nodiscard]] VimStep replayed_visual(const VimState &state, const VimRepeatRecord &record,
                                       const VimVisualExtent &extent)
@@ -314,14 +355,16 @@ namespace
     next.replayed_block = replayed_extent(extent);
     next.redoing_visual = true;
     next.recording = VimRepeatRecord{std::nullopt, VimRecordedKeys::from({}), extent};
-    return VimStep{std::move(next), VimReplay{numbered_advanced(record.keys.owned_keys()), extent,
-                                              VimReplayKind::repeat}};
+    return VimStep{std::move(next),
+                   VimReplay{register_prefixed(state, numbered_advanced(record.keys.owned_keys())),
+                             extent, VimReplayKind::repeat, single_step}};
 }
 } // namespace
 
 namespace detail
 {
-// `.`。直前の変更が無ければ何も起きない。回数は `.` に付いた回数が優先で、無ければ記録の回数。
+// `.`。直前の変更が無ければ何も起きない。回数は replayed_count、`"{name}` は register_prefixed が
+// 鍵の列に載せる（vim_resting_from が選んだレジスタを捨てても名前は鍵が運ぶ・#1337）。
 [[nodiscard]] VimStep repeated_change(const VimState &state)
 {
     if (!state.last_change.has_value())
@@ -333,10 +376,11 @@ namespace detail
     {
         return replayed_visual(state, record, record.visual.value());
     }
-    const std::optional<VimCount> count = state.count.has_value() ? state.count : record.count;
     return VimStep{vim_resting_from(state, state.unnamed_register),
-                   VimReplay{replayed_keys(count, numbered_advanced(record.keys.owned_keys())),
-                             std::nullopt, VimReplayKind::repeat}};
+                   VimReplay{replayed_keys(replayed_count(state, record),
+                                           register_prefixed(
+                                               state, numbered_advanced(record.keys.owned_keys()))),
+                             std::nullopt, VimReplayKind::repeat, single_step}};
 }
 } // namespace detail
 
@@ -478,6 +522,16 @@ namespace
            !next.selected_register.has_value();
 }
 
+// NORMAL で `x` として効く `<Del>` か（回数の桁を消す `<Del>` と 1 鍵の待ちの `<Del>`
+// を除く・#1325）。
+[[nodiscard]] bool deletes_like_x(const VimState &before, const VimKey &key) noexcept
+{
+    const auto *const special = std::get_if<VimSpecialKey>(&key);
+    return special != nullptr && *special == VimSpecialKey::delete_key &&
+           before.mode == VimMode::normal && !before.input_wait.has_value() &&
+           !drops_count_digit(before, key);
+}
+
 // NORMAL の鍵を記録へ（決定 2）。回数の桁は記録せず、回数はそのときの積を 1 つだけ残す。
 // 次の 1 鍵を待つ状態（`"` の名前・`r` の文字・`f F t T` の対象など）の数字は回数の桁ではなく
 // 引数なので記録に残す（ADR 0050 の決定 9 を待ち全体へ・Issue #209）。オペレータ待ちは待ちでは
@@ -496,6 +550,20 @@ namespace
         counts_as_digit(before, std::get<VimCharacter>(key).code))
     {
         return record;
+    }
+    // 回数の桁を消す `<Del>` も回数の桁と同じく記録しない（#1325）。
+    if (drops_count_digit(before, key))
+    {
+        return record;
+    }
+    // `x` として効く `<Del>` は Vim の redo に積まれた "dl" と同じく `x` で記録し、前の `"a`
+    // も捨てる （nv_optrans の "dl" は名前を持たない・#1325）。`<Del>` のまま残すと `3.`
+    // が前に置く回数の 桁を消してしまう。
+    if (deletes_like_x(before, key))
+    {
+        VimRepeatRecord plain{};
+        plain.count = combined_count(before);
+        return appended(std::move(plain), VimKey{VimCharacter{U'x'}});
     }
     record.count = combined_count(before);
     return appended(std::move(record), key);

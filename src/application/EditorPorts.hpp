@@ -12,6 +12,7 @@
 #include "FolderPort.hpp"
 #include "FontFamilyPort.hpp"
 #include "HistoryPort.hpp"
+#include "ImagePort.hpp"
 #include "LanguageServerPort.hpp"
 #include "MarkdownPort.hpp"
 #include "PrintPort.hpp"
@@ -58,5 +59,8 @@ struct EditorPorts
     // Windows のエクスプローラーへの登録（ADR 0178 の決定 1）。登録の 2 つの操作だけが呼び、起動と
     // 静かな道では呼ばない（決定 4）。
     ShellRegistrationPort &shell_registration;
+    // Markdown プレビューの画像を裏で読む（ADR 0155 の追補 53・施主決定 D79）。プレビューが開いてい
+    // る間だけ呼ぶ。
+    ImagePort &images;
 };
 } // namespace nenenib::application

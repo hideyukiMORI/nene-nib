@@ -53,6 +53,10 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
 requested_viewport(const VimState &state, const VimEditorView &view, VimAction action);
 [[nodiscard]] bool counts_as_digit(const VimState &state, char32_t key) noexcept;
 [[nodiscard]] VimStep counted(const VimState &state, char32_t key);
+// `<Del>` が回数の最後の桁を消す鍵か（Vim の normal_cmd_get_count の `count0 != 0`・#1325）。
+[[nodiscard]] bool drops_count_digit(const VimState &state, const VimKey &key) noexcept;
+// 回数の最後の桁を消す（`12<Del>` は 1・`3<Del>` は回数なし）。
+[[nodiscard]] VimStep count_digit_dropped(const VimState &state);
 [[nodiscard]] VimStep window_started(const VimState &state);
 [[nodiscard]] bool searches_forward(VimCharacterSearchKind kind) noexcept;
 [[nodiscard]] VimCharacterSearchKind opposite(VimCharacterSearchKind kind) noexcept;
@@ -72,6 +76,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
 [[nodiscard]] Offset column_landing(const TextBuffer &text, LineNumber line, std::size_t count,
                                     VimMode mode);
 [[nodiscard]] std::optional<LineNumber> percent_line(const TextBuffer &text, std::size_t count);
+[[nodiscard]] std::optional<Offset> paragraph_or_sentence(const TextBuffer &text, Offset caret,
+                                                          VimMotion motion, std::size_t count);
 [[nodiscard]] Offset mark_landing_of(const VimEditorView &view, VimMotion motion, VimMode mode);
 [[nodiscard]] Offset moved_by(const VimEditorView &view, const VimState &state, VimMotion motion);
 [[nodiscard]] VimMotionLanding landing_of(const VimEditorView &view, const VimState &state,
@@ -136,6 +142,13 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 using ShiftBy = std::pair<VimOperator, std::size_t>;
 [[nodiscard]] VimStep shifted(const VimState &state, const TextBuffer &text,
                               const VimMotionRange &range, ShiftBy shift);
+// `>` が lines 行（または range の覆う行）の字下げを作り直した後も文書が limit に収まるか
+// （#1341）。1 行に足すのは多くとも回数 + 9 バイト（shiftwidth × 回数 / tabstop + tabstop + 1）で、
+// `<` は本文を増やさない。NORMAL の `>>` は 1 段だけなので見ない。
+[[nodiscard]] bool shift_fits(const TextBuffer &text, std::size_t lines, ShiftBy shift,
+                              std::size_t limit) noexcept;
+[[nodiscard]] bool range_shift_fits(const TextBuffer &text, const VimMotionRange &range,
+                                    ShiftBy shift, std::size_t limit) noexcept;
 [[nodiscard]] VimStep joined(const VimState &state, const VimEditorView &view, bool inserts_space);
 [[nodiscard]] VimStep swapped_characters(const VimState &state, const TextBuffer &text,
                                          Offset caret);
@@ -158,8 +171,19 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
                                         VimOperator operation);
 [[nodiscard]] VimStep operated_to_line_end(const VimState &state, const TextBuffer &text,
                                            Offset caret, VimOperator operation);
-[[nodiscard]] std::expected<std::string, VimRepeatFailure> repeated(std::string_view body,
-                                                                    std::size_t count);
+// 回数で本文を増やす編集（`p` `P` の回数・INSERT の回数の反復・`o` の回数・矩形の `p`・矩形の
+// `I` `A` `c` `C` の写し・VISUAL と矩形の `>`）が、編集の後も文書の上限 limit（製品は
+// maximum_document_bytes・ADR 0159 の決定 7・VimEditorView.document_limit）に収まる残りの
+// バイト数と、piece を count 個並べた量が room に収まるか（#1341）。確保の前に掛け算をせずに
+// 判定する。
+[[nodiscard]] std::size_t count_room(const TextBuffer &text, std::size_t limit) noexcept;
+[[nodiscard]] bool fits_repeated(std::size_t piece, std::size_t count, std::size_t room) noexcept;
+// LF で数えた効果の本文を文書へ写した後のバイト数。controller が `\n` を文書の改行の形へ直すので、
+// CRLF の文書では改行 1 つが 2 バイトになる（#1341）。
+[[nodiscard]] std::size_t written_bytes(std::string_view body, const TextBuffer &text) noexcept;
+// body を count 個並べた本文。文書へ写した後に limit を超えるなら確保せずに too_large。
+[[nodiscard]] std::expected<std::string, VimRepeatFailure>
+repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::size_t limit);
 [[nodiscard]] std::size_t last_code_point_size(std::string_view body);
 [[nodiscard]] VimInsertAt put_characters(const TextBuffer &text, Offset caret, std::string body,
                                          VimPutSide side);
@@ -188,8 +212,7 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
                                     ShiftBy shift);
 [[nodiscard]] VimRegister register_read(const VimState &state,
                                         const std::optional<VimRegisterSelection> &chosen);
-[[nodiscard]] VimStep put_step(const VimState &state, const TextBuffer &text, Offset caret,
-                               VimPutSide side);
+[[nodiscard]] VimStep put_step(const VimState &state, const VimEditorView &view, VimPutSide side);
 [[nodiscard]] VimStep started_replacement(const VimState &state);
 [[nodiscard]] VimStep replacement_key(const VimState &state, const VimEditorView &view, VimKey key);
 [[nodiscard]] VimMode rested_mode(VimMode mode);

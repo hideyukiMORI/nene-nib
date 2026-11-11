@@ -1,6 +1,7 @@
 // Issue #997（ADR 0162 の決定 3〜6・9）: エクスプローラーの application の契約 `--explorer`。
 // 意図 4 つと焦点の 3 状態、FolderPort の entries の往復と古い券、読めないフォルダの 1 行、
 // ファイルを開く open_listed の道、設定の保存、Ctrl+P の面と port を分け合う順番を見る。
+// 面の幅のドラッグ（ResizeExplorer・追補 D78）は動かす間は書かず、離したときと戻したときだけ書く。
 // port はどれも替え玉で、時刻・スレッド・OS には触れない。
 #include "CommandInput.hpp"
 #include "CommandLine.hpp"
@@ -8,6 +9,7 @@
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
 #include "Composition.hpp"
+#include "DisplayForm.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -16,37 +18,48 @@
 #include "ExplorerKey.hpp"
 #include "ExplorerKeyKind.hpp"
 #include "ExplorerPointing.hpp"
+#include "ExplorerResizing.hpp"
 #include "ExplorerRootChosen.hpp"
 #include "ExplorerRowView.hpp"
 #include "ExplorerTree.hpp"
 #include "ExplorerView.hpp"
+#include "ExplorerWidth.hpp"
 #include "FilePath.hpp"
 #include "FolderBatch.hpp"
 #include "FolderEntry.hpp"
 #include "FolderListingKind.hpp"
 #include "FolderProgress.hpp"
+#include "GiantLine.hpp"
 #include "ImeStance.hpp"
+#include "InsertText.hpp"
+#include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "PointExplorer.hpp"
+#include "ResizeExplorer.hpp"
 #include "Scopes.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScriptedFolders.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScrollExplorer.hpp"
+#include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
 #include "SettingsFailure.hpp"
+#include "SettleRecentTab.hpp"
+#include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "ToggleExplorer.hpp"
 #include "VimMode.hpp"
 #include "VisibleLines.hpp"
+#include "WalkRecentTab.hpp"
 #include "WorkCompleted.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <format>
 #include <initializer_list>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -247,11 +260,13 @@ void verify_enter_opens_file()
     static_cast<void>(loaded_project(editing));
     editing.files().hold_at("C:\\proj\\README.md", Bytes{"read me"});
     static_cast<void>(editing.controller().apply_frame(app::ToggleExplorer{}));
-    static_cast<void>(
-        editing.controller().apply_frame(PointExplorer{2, ExplorerPointing::pressed}));
-    static_cast<void>(
-        editing.controller().apply_frame(PointExplorer{2, ExplorerPointing::released}));
+    static_cast<void>(key(editing, ExplorerKeyKind::down));
+    static_cast<void>(key(editing, ExplorerKeyKind::down));
+    const auto walked = key(editing, ExplorerKeyKind::down);
     const auto reads = editing.reads().requests().size();
+    expect(printed(walked) == ".git/+~;src/+;README.md;sel 2 first 0 focus 1" && reads == 0 &&
+               walked.document.title.text() != "README.md",
+           "walking onto a file with the arrow keys does not open it (#1388)");
     const auto opened = key(editing, ExplorerKeyKind::enter);
     expect(opened.document.title.text() == "README.md" && !opened.lines.empty() &&
                opened.lines.front().text == "read me" &&
@@ -294,11 +309,237 @@ void verify_pointing()
            "a second click closes it");
     const auto twice = controller.apply_frame(PointExplorer{1, ExplorerPointing::double_click});
     const auto after = controller.apply_frame(PointExplorer{1, ExplorerPointing::released});
-    expect(printed(twice) == ".git/+~;src/-;README.md;sel 1 first 0 focus 1" &&
-               printed(after) == printed(twice),
-           "a double click opens the folder and its release does nothing");
+    expect(printed(twice) == printed(again) && printed(after) == printed(twice),
+           "the second press of a double click after a click on the folder does not toggle it "
+           "again and its release does nothing (#1388)");
     const auto outside = controller.apply_frame(PointExplorer{9, ExplorerPointing::double_click});
     expect(printed(outside) == printed(twice), "a row outside the rows does nothing");
+}
+
+// 1 回のクリック（ADR 0162 の決定 4 の改め・#1388）。窓は面の上の速い 2 回の押しを
+// 「押す → 離す → DBLCLK → 離す」と送る（nib_window_tests --explorer の verify_click_messages）。
+app::EditorFrame clicked(Editing &editing, std::size_t row)
+{
+    static_cast<void>(
+        editing.controller().apply_frame(PointExplorer{row, ExplorerPointing::pressed}));
+    return editing.controller().apply_frame(PointExplorer{row, ExplorerPointing::released});
+}
+
+app::EditorFrame double_clicked(Editing &editing, std::size_t row)
+{
+    static_cast<void>(clicked(editing, row));
+    static_cast<void>(
+        editing.controller().apply_frame(PointExplorer{row, ExplorerPointing::double_click}));
+    return editing.controller().apply_frame(PointExplorer{row, ExplorerPointing::released});
+}
+
+void verify_click_opens_file()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    editing.files().hold_at("C:\\proj\\README.md", Bytes{"read me"});
+    static_cast<void>(editing.controller().apply_frame(app::ToggleExplorer{}));
+    const auto opened = clicked(editing, 2);
+    expect(opened.document.title.text() == "README.md" && !opened.lines.empty() &&
+               opened.lines.front().text == "read me" && editing.reads().requests().size() == 1,
+           "a click on a file opens it through the read port");
+    expect(printed(opened) == ".git/+~;src/+;README.md;sel 2 first 0 focus 1",
+           "a click on a file selects it and keeps the focus in the panel");
+    expect(editing.history().reads() == 0 && editing.history().writes() == 0,
+           "a click on a file never touches the history");
+    const auto walked = key(editing, ExplorerKeyKind::k);
+    expect(printed(walked) == ".git/+~;src/+;README.md;sel 1 first 0 focus 1",
+           "after a click the arrow keys still walk the panel");
+    static_cast<void>(editing.controller().apply_frame(app::NewTab{}));
+    const auto switched = clicked(editing, 2);
+    expect(switched.document.title.text() == "README.md" && switched.tabs.size() == 2 &&
+               editing.reads().requests().size() == 1 && message_of(switched) == "-",
+           "a click on a file already open switches to its tab without reading it again");
+    expect(clicked(editing, 9).document.title.text() == "README.md",
+           "a click outside the rows does nothing");
+
+    Editing missing(shown_at(project));
+    static_cast<void>(loaded_project(missing));
+    static_cast<void>(missing.controller().apply_frame(app::ToggleExplorer{}));
+    const auto notice = clicked(missing, 2);
+    expect(message_of(notice) == "開けませんでした: README.md" &&
+               printed(notice) == ".git/+~;src/+;README.md;sel 2 first 0 focus 1" &&
+               missing.history().reads() == 0 && missing.history().writes() == 0,
+           "a click on a file that cannot be opened leaves one notice line and the focus");
+}
+
+// ダブルクリック（#1388）。1 打目のクリックで開いているので、2 打目は焦点を本文へ移すだけ。
+// 2 回は読まない。
+void verify_double_click_reads_once()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    editing.files().hold_at("C:\\proj\\README.md", Bytes{"read me"});
+    static_cast<void>(editing.controller().apply_frame(app::ToggleExplorer{}));
+    const auto opened = double_clicked(editing, 2);
+    expect(opened.document.title.text() == "README.md" && editing.reads().requests().size() == 1,
+           "a double click on a file reads it once");
+    expect(printed(opened) == ".git/+~;src/+;README.md;sel 2 first 0 focus 0",
+           "a double click on a file gives the focus to the text and keeps the panel");
+    Editing missing(shown_at(project));
+    static_cast<void>(loaded_project(missing));
+    static_cast<void>(missing.controller().apply_frame(app::ToggleExplorer{}));
+    const auto first = clicked(missing, 2);
+    const auto tried = missing.reads().requests().size();
+    static_cast<void>(
+        missing.controller().apply_frame(PointExplorer{2, ExplorerPointing::double_click}));
+    const auto notice =
+        missing.controller().apply_frame(PointExplorer{2, ExplorerPointing::released});
+    expect(message_of(first) == "開けませんでした: README.md" &&
+               missing.reads().requests().size() == tried && missing.history().writes() == 0 &&
+               printed(notice) == ".git/+~;src/+;README.md;sel 2 first 0 focus 0",
+           "a double click on a file that cannot be opened tries once and leaves one line");
+    // 1 打目が効かなかった（押した行と離した行が違った）2 打目は、1 回のクリックと Enter と同じ。
+    Editing late(shown_at(project));
+    static_cast<void>(loaded_project(late));
+    late.files().hold_at("C:\\proj\\README.md", Bytes{"read me"});
+    static_cast<void>(late.controller().apply_frame(PointExplorer{1, ExplorerPointing::pressed}));
+    static_cast<void>(late.controller().apply_frame(PointExplorer{2, ExplorerPointing::released}));
+    const auto second =
+        late.controller().apply_frame(PointExplorer{2, ExplorerPointing::double_click});
+    expect(second.document.title.text() == "README.md" && late.reads().requests().size() == 1 &&
+               printed(second) == ".git/+~;src/+;README.md;sel 2 first 0 focus 0",
+           "a second press whose first click did not count opens the file once like Enter");
+}
+
+// フォルダはクリック 1 回で開閉し、ダブルクリックでも 1 回だけ（開いて閉じる、にしない・#1388）。
+void verify_folder_double_click_toggles_once()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    static_cast<void>(editing.controller().apply_frame(app::ToggleExplorer{}));
+    const auto opened = double_clicked(editing, 1);
+    expect(printed(opened) == ".git/+~;src/-;README.md;sel 1 first 0 focus 1" &&
+               editing.folders().entry_requests() == 2,
+           "a double click on a closed folder opens it once and keeps the focus in the panel");
+    static_cast<void>(
+        deliver(editing, {entry_of("C:\\proj\\src\\main.cpp", false)}, FolderProgress::complete));
+    const auto closed = double_clicked(editing, 1);
+    expect(printed(closed) == ".git/+~;src/+;README.md;sel 1 first 0 focus 1" &&
+               editing.folders().entry_requests() == 2,
+           "a double click on an open folder closes it once");
+    const auto reopened = clicked(editing, 1);
+    expect(printed(reopened) == ".git/+~;src/-;.main.cpp;README.md;sel 1 first 0 focus 1",
+           "a single click opens the folder again");
+    expect(editing.reads().requests().empty(), "clicking folders reads no file");
+}
+
+// ファイル path を読んだ回数（読みの port の要求の数）。
+[[nodiscard]] std::size_t reads_of(Editing &editing, std::string_view path)
+{
+    std::size_t count = 0;
+    for (const auto &request : editing.reads().requests())
+    {
+        count += request.path == path_of(path) ? 1U : 0U;
+    }
+    return count;
+}
+
+// 2 打目の 1 通（DBLCLK と離し）。
+app::EditorFrame second_press(Editing &editing, std::size_t row)
+{
+    static_cast<void>(
+        editing.controller().apply_frame(PointExplorer{row, ExplorerPointing::double_click}));
+    return editing.controller().apply_frame(PointExplorer{row, ExplorerPointing::released});
+}
+
+// 1 打目と 2 打目の間に裏の列挙で上に行が足され、2 打目の画面の行が別の節を指しても、2 打目は
+// 1 打目の節として扱う（レビュー V-1391 の M-1 の (b)）。
+void verify_double_click_across_arrival()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    editing.files().hold_at("C:\\proj\\README.md", Bytes{"read me"});
+    editing.files().hold_at("C:\\proj\\src\\main.cpp", Bytes{"int main"});
+    static_cast<void>(clicked(editing, 1));
+    static_cast<void>(clicked(editing, 2));
+    static_cast<void>(
+        deliver(editing, {entry_of("C:\\proj\\src\\main.cpp", false)}, FolderProgress::complete));
+    const auto second = second_press(editing, 2);
+    expect(printed(second) == ".git/+~;src/-;.main.cpp;README.md;sel 3 first 0 focus 0",
+           "a second press after children arrived above stays on the clicked file");
+    expect(second.document.title.text() == "README.md" &&
+               reads_of(editing, "C:\\proj\\README.md") == 1 &&
+               reads_of(editing, "C:\\proj\\src\\main.cpp") == 0,
+           "the clicked file is read once and the row moved under the pointer is not read");
+}
+
+// 末尾までスクロールした面で開いたフォルダをダブルクリックすると、1 打目の畳みで先頭が切り詰め
+// られて行が画面上でずれる。2 打目は 1 打目の節として扱い、ほかの行を開閉しない（M-1 の (a)）。
+void verify_double_click_collapse_at_bottom()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    auto &controller = editing.controller();
+    static_cast<void>(clicked(editing, 1));
+    static_cast<void>(
+        deliver(editing, {entry_of("C:\\proj\\src\\main.cpp", false)}, FolderProgress::complete));
+    // 面は窓の 4 行 − ルート名の 1 行 = 3 行。見えている行は 4 行なので、末尾の先頭は 1。
+    applied(controller, app::VisibleLines{10, {}, 0, 0, 4});
+    const auto bottom = controller.apply_frame(app::ScrollExplorer{100});
+    expect(printed(bottom) == "src/-;.main.cpp;README.md;sel 1 first 1 focus 1",
+           "the panel is scrolled to its last rows with the open folder on the first line");
+    const auto requests = editing.folders().entry_requests();
+    static_cast<void>(clicked(editing, 1));
+    const auto collapsed = controller.frame();
+    expect(printed(collapsed) == ".git/+~;src/+;README.md;sel 1 first 0 focus 1",
+           "the first press closes the folder and the first row is pulled up");
+    // 2 打目は同じ画面の点。先頭が 0 になったので、画面の行は .git を指す。
+    const auto second = second_press(editing, 0);
+    expect(printed(second) == printed(collapsed) &&
+               editing.folders().entry_requests() == requests && editing.reads().requests().empty(),
+           "the second press closes nothing else, opens nothing and reads no file");
+}
+
+// 1 打目と 2 打目の間に使う人の操作（タブの切り替え）が入ったら、2 打目は画面の行を引いて 1 回の
+// クリックとして効かせ、そのファイルをアクティブにする。読みは増えない（レビュー V-1391 の R-1）。
+void verify_double_click_after_tab_switch()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    editing.files().hold_at("C:\\proj\\README.md", Bytes{"read me"});
+    editing.files().hold_at("C:\\work\\b.txt", Bytes{"bee"});
+    auto &controller = editing.controller();
+    applied(controller, app::OpenDocument{path_of("C:\\work\\b.txt")});
+    const auto opened = clicked(editing, 2);
+    expect(opened.document.title.text() == "README.md" && opened.tabs.size() == 2,
+           "a click opens the file in a second tab");
+    applied(controller, app::WalkRecentTab{core::TabStep::next});
+    const auto walked = controller.apply_frame(app::SettleRecentTab{});
+    expect(walked.document.title.text() == "b.txt", "Ctrl+Tab goes back to the other tab");
+    const auto second = second_press(editing, 2);
+    expect(second.document.title.text() == "README.md" && second.tabs.size() == 2 &&
+               reads_of(editing, "C:\\proj\\README.md") == 1 &&
+               printed(second) == ".git/+~;src/+;README.md;sel 2 first 0 focus 0",
+           "a second press after a tab switch makes the clicked file active without reading it");
+}
+
+// 1 打目で開いたファイルが巨大な行の問いを出したとき（ADR 0140 の決定 2）。窓は同じ配達の中で
+// モーダルに聞いて答えを意図で返すので、2 打目は答えの後に来る。2 打目は読み直さず、もう一度
+// 聞かない（レビュー V-1391 の F-1）。
+void verify_double_click_after_question()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    const std::string giant = "head\n" + std::string(core::giant_line_threshold + 1, 'x') + "\n";
+    editing.files().hold_at("C:\\proj\\README.md", Bytes{giant});
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(PointExplorer{2, ExplorerPointing::pressed}));
+    const auto asked = controller.apply(PointExplorer{2, ExplorerPointing::released});
+    expect(asked.display_question, "a click on a giant line file raises the question");
+    static_cast<void>(controller.apply(app::SelectDisplay{core::DisplayForm::text}));
+    const auto pressed = controller.apply(PointExplorer{2, ExplorerPointing::double_click});
+    const auto second = controller.apply_frame(PointExplorer{2, ExplorerPointing::released});
+    expect(!pressed.display_question && second.document.title.text() == "README.md" &&
+               reads_of(editing, "C:\\proj\\README.md") == 1 && second.tabs.size() == 1 &&
+               second.display == core::DisplayForm::text &&
+               printed(second) == ".git/+~;src/+;README.md;sel 2 first 0 focus 0",
+           "a second press after the answer reads nothing, asks nothing and gives the focus");
 }
 
 // 押してから離すまでに子が届いて行がずれても、押した節と離した節が違えば何もしない（ADR 0056 の
@@ -610,6 +851,173 @@ void verify_palette_shares_port()
     const auto frame = deliver(editing, {entry_of("C:\\proj\\a", false)}, FolderProgress::complete);
     expect(printed(frame).starts_with("a;"), "the panel loads after the palette");
 }
+[[nodiscard]] app::ResizeExplorer resized(app::ExplorerResizing resizing, std::int32_t dips)
+{
+    return app::ResizeExplorer{resizing, dips};
+}
+
+// 窓の読み（explorer_width）と frame の面の幅（ExplorerView.width）の DIP。面が消えていれば -1、
+// 既定の式なら 0。
+[[nodiscard]] std::int32_t width_of(const app::EditorController &controller)
+{
+    const auto width = controller.explorer_width();
+    return width.has_value() ? width.value().dips.value_or(0) : -1;
+}
+
+[[nodiscard]] std::int32_t width_of(const app::EditorFrame &frame)
+{
+    return frame.explorer.has_value() ? view_of(frame).width.dips.value_or(0) : -1;
+}
+
+// 面の幅のドラッグ（追補 D78）。動かしている間は状態だけ、離したら 1 回書く、ダブルクリックは
+// 既定の式へ戻して書く。動かさずに離したら書かない。
+void verify_resize_writes_on_release()
+{
+    Editing editing(shown_at(project));
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    expect(width_of(controller) == 0 && width_of(controller.frame()) == 0,
+           "a settings file without explorer_width uses the default formula");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 300)));
+    expect(editing.settings().writes() == 0 && width_of(controller) == 0,
+           "releasing the divider without dragging writes nothing");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 300)));
+    const auto dragging = controller.apply_frame(resized(app::ExplorerResizing::dragged, 320));
+    expect(editing.settings().writes() == 0 && width_of(controller) == 320 &&
+               width_of(dragging) == 320 && !dragging.settings.explorer_width.has_value(),
+           "dragging shows the width without writing the settings");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 330)));
+    expect(editing.settings().writes() == 1 && saved(editing).explorer_width == 330 &&
+               width_of(controller) == 330 && width_of(controller.frame()) == 330,
+           "releasing writes the released width once");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 330)));
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 330)));
+    expect(editing.settings().writes() == 1, "the same width is not written again");
+    const auto reset = controller.apply_frame(resized(app::ExplorerResizing::reset, 0));
+    expect(editing.settings().writes() == 2 && !saved(editing).explorer_width.has_value() &&
+               width_of(reset) == 0,
+           "a double click goes back to the default formula and writes once");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::reset, 0)));
+    expect(editing.settings().writes() == 2, "resetting the default again writes nothing");
+}
+
+// 覚えた幅で起動する・面が消えていれば何もしない・書けなければ覚えた幅へ戻して知らせる（D78）。
+void verify_resize_remembered_and_hidden()
+{
+    auto remembered = core::default_editor_settings();
+    remembered.explorer = true;
+    remembered.explorer_width = 400;
+    Editing editing(SettingsReading{remembered});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    expect(width_of(controller) == 400 && width_of(controller.frame()) == 400,
+           "the remembered width is used at start");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 250)));
+    editing.settings().fail(app::SettingsFailure::unwritable);
+    const auto failed = controller.apply_frame(resized(app::ExplorerResizing::released, 250));
+    expect(message_of(failed) == "Settings could not be saved" && width_of(controller) == 400,
+           "a width that cannot be written is told and the remembered width stays");
+    editing.settings().fail(std::nullopt);
+    const auto cleared = controller.apply_frame(resized(app::ExplorerResizing::dragged, 260));
+    expect(message_of(cleared) == "-",
+           "dragging is a user operation and clears the one-intent message");
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    const auto writes = editing.settings().writes();
+    expect(width_of(controller) == -1 && width_of(controller.frame()) == -1,
+           "a hidden panel has no width");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 300)));
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 300)));
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::reset, 0)));
+    expect(editing.settings().writes() == writes && width_of(controller) == -1,
+           "a hidden panel ignores the divider");
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    expect(width_of(controller) == 400, "a panel shown again has the remembered width");
+}
+
+// controller の入口で幅を [120, 9999] に収める（#1380 の R-1）。窓を経ない送り手でも、書いた値を
+// 自分の読みで既定に戻さず、INT32_MAX や負の値で溢れない。
+void verify_resize_clamped()
+{
+    Editing editing(shown_at(project));
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 50)));
+    expect(width_of(controller) == 120 && width_of(controller.frame()) == 120,
+           "a width below the minimum drags as 120");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 50)));
+    expect(editing.settings().writes() == 1 && saved(editing).explorer_width == 120,
+           "a width below the minimum is written as 120");
+    constexpr auto largest = std::numeric_limits<std::int32_t>::max();
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, largest)));
+    const auto widest = controller.frame();
+    expect(width_of(controller) == 9999 && width_of(widest) == 9999,
+           "INT32_MAX drags as 9999 and the frame is built");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, largest)));
+    expect(editing.settings().writes() == 2 && saved(editing).explorer_width == 9999,
+           "INT32_MAX is written as 9999");
+    constexpr auto smallest = std::numeric_limits<std::int32_t>::min();
+    for (const std::int32_t negative : {-5, smallest})
+    {
+        static_cast<void>(
+            controller.apply_frame(resized(app::ExplorerResizing::dragged, negative)));
+        expect(width_of(controller) == 120, "a negative width drags as 120");
+    }
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, smallest)));
+    expect(editing.settings().writes() == 3 && saved(editing).explorer_width == 120,
+           "a negative width is written as 120");
+}
+
+// Ctrl+Tab の歩きの途中のドラッグは使う人の操作で、歩きを確定する（#1380 の T-2・ADR 0058）。
+void verify_resize_settles_tab_walk()
+{
+    Editing editing(shown_at(project));
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    applied(controller, app::InsertText{"a"});
+    for (const std::string_view body : {"b", "c", "d"})
+    {
+        applied(controller, app::NewTab{});
+        applied(controller, app::InsertText{std::string(body)});
+    }
+    applied(controller, app::WalkRecentTab{core::TabStep::next});
+    expect(controller.tab_walking(), "the walk is open before the drag");
+    const auto dragged = controller.apply_frame(resized(app::ExplorerResizing::dragged, 300));
+    expect(!controller.tab_walking() && width_of(dragged) == 300 && !dragged.lines.empty() &&
+               dragged.lines.front().text == "c",
+           "dragging the divider settles the walk on the walked tab");
+    const auto walked = controller.apply_frame(app::WalkRecentTab{core::TabStep::next});
+    expect(!walked.lines.empty() && walked.lines.front().text == "d",
+           "the settled walk put the walked tab first in the order");
+}
+
+// ドラッグの途中で面が閉じたら、ドラッグは終わりで幅は書かない（Issue #1380 の設計席の決め）。
+// 次に開いたときは覚えた幅で、開き直した後に離しても書かない。
+void verify_resize_hidden_while_dragging()
+{
+    auto remembered = core::default_editor_settings();
+    remembered.explorer = true;
+    remembered.explorer_width = 400;
+    Editing editing(SettingsReading{remembered});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 250)));
+    expect(width_of(controller) == 250, "the drag shows its width");
+    for (std::size_t toggles = 0; toggles < 2 && width_of(controller) != -1; ++toggles)
+    {
+        static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    }
+    expect(width_of(controller) == -1 && saved(editing).explorer_width == 400,
+           "closing the panel during a drag keeps the remembered width in the settings");
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    const auto writes = editing.settings().writes();
+    expect(width_of(controller) == 400 && width_of(controller.frame()) == 400,
+           "the panel shown again has the remembered width, not the dropped drag");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 250)));
+    expect(editing.settings().writes() == writes && width_of(controller) == 400 &&
+               saved(editing).explorer_width == 400,
+           "a release after the panel came back writes nothing");
+}
 } // namespace
 
 void verify_explorer_contracts()
@@ -620,6 +1028,13 @@ void verify_explorer_contracts()
     verify_enter_opens_file();
     verify_pointing();
     verify_pointing_across_arrival();
+    verify_click_opens_file();
+    verify_double_click_reads_once();
+    verify_folder_double_click_toggles_once();
+    verify_double_click_across_arrival();
+    verify_double_click_collapse_at_bottom();
+    verify_double_click_after_tab_switch();
+    verify_double_click_after_question();
     verify_scroll();
     verify_panel_rows();
     verify_panel_rows_from_window();
@@ -631,6 +1046,11 @@ void verify_explorer_contracts()
     verify_truncated();
     verify_root_requests();
     verify_palette_shares_port();
+    verify_resize_writes_on_release();
+    verify_resize_remembered_and_hidden();
+    verify_resize_clamped();
+    verify_resize_settles_tab_walk();
+    verify_resize_hidden_while_dragging();
 }
 
 void verify_explorer_scope()

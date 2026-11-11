@@ -20,9 +20,10 @@ namespace
 // 契約を持たない scope（--vim-visual-yank）と、既に載っている契約を別の切り口で束ねただけの scope
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 // 表は関数の外に置く（CPP-012・関数長の上限は表の行を数えない形で守る）。
-constexpr std::array<std::pair<std::string_view, void (*)()>, 91> contracts{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 95> contracts{{
     {"--vim-wrapped", verify_vim_wrapped_contracts},
     {"--wrapped-view", verify_wrapped_view_scope},
+    {"--edge-arrows", verify_edge_arrows_scope},
     {"--vim-dot", verify_vim_dot_contracts},
     {"--vim-register-snapshot", verify_vim_register_snapshot_contracts},
     {"--vim-macro", verify_vim_macro_contracts},
@@ -42,6 +43,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 91> contracts{{
     {"--vim-line-jumps", verify_vim_line_jump_contracts},
     {"--vim-virtual-column", verify_vim_virtual_column_contracts},
     {"--vim-characters", verify_vim_character_contracts},
+    {"--vim-fixture-window-path", verify_vim_fixture_window_path_sample},
     {"--vim-case", verify_vim_case_contracts},
     {"--vim-visual-block", verify_vim_block_contracts},
     {"--tabs", verify_tabs_contracts},
@@ -74,6 +76,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 91> contracts{{
     {"--markdown", verify_markdown_scope},
     {"--language", verify_language_scope},
     {"--preview", verify_preview_contracts},
+    {"--preview-image", verify_preview_image_contracts},
     {"--preview-task", verify_preview_task_scope},
     {"--pointer", verify_pointer_scope},
     {"--preview-full", verify_preview_full_scope},
@@ -105,6 +108,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 91> contracts{{
     {"--lsp-frames-property", verify_lsp_frames_property_scope},
     {"--lsp-diagnostics", verify_lsp_diagnostics_scope},
     {"--key-map", verify_key_map_scope},
+    {"--vim-del", verify_vim_delete_key_scope},
     {"--find-replace", verify_find_replace_scope},
     {"--substitute-property", verify_substitute_property_scope},
     {"--matchparen", verify_matchparen_scope},
@@ -129,10 +133,11 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 114> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 119> scopes{{
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
+    {"--edge-arrows", verify_edge_arrows_scope},
     {"--utf8", verify_utf8_scope},
     {"--status-items", verify_status_items_scope},
     {"--file-path", verify_file_path_scope},
@@ -169,6 +174,8 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 114> scopes{{
     {"--vim-line-jump-recovery", verify_vim_line_jump_recovery},
     {"--vim-virtual-column", verify_vim_virtual_column_scope},
     {"--vim-characters", verify_vim_character_scope},
+    {"--vim-fixture-window-path", verify_vim_fixture_window_path_sample},
+    {"--vim-window-path-all", verify_vim_fixture_window_path_all},
     {"--vim-case", verify_vim_case_scope},
     {"--themes", verify_theme_scope},
     {"--user-theme-selection", verify_user_theme_selection},
@@ -206,6 +213,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 114> scopes{{
     {"--markdown", verify_markdown_scope},
     {"--language", verify_language_scope},
     {"--preview", verify_preview_scope},
+    {"--preview-image", verify_preview_image_scope},
     {"--preview-task", verify_preview_task_scope},
     {"--pointer", verify_pointer_scope},
     {"--preview-full", verify_preview_full_scope},
@@ -237,6 +245,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 114> scopes{{
     {"--lsp-frames-property", verify_lsp_frames_property_scope},
     {"--lsp-diagnostics", verify_lsp_diagnostics_scope},
     {"--key-map", verify_key_map_scope},
+    {"--vim-del", verify_vim_delete_key_scope},
     {"--find-replace", verify_find_replace_scope},
     {"--substitute-property", verify_substitute_property_scope},
     {"--matchparen", verify_matchparen_scope},

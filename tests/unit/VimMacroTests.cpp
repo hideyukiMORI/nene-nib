@@ -12,12 +12,17 @@
 #include "StoreVimRegister.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
+#include "VimBlockEdit.hpp"
 #include "VimCharacter.hpp"
 #include "VimClipboardText.hpp"
 #include "VimEditorView.hpp"
+#include "VimEffect.hpp"
 #include "VimInsertAt.hpp"
+#include "VimInsertBlock.hpp"
+#include "VimInsertString.hpp"
 #include "VimKey.hpp"
 #include "VimMode.hpp"
+#include "VimMoveTo.hpp"
 #include "VimNamedRegisters.hpp"
 #include "VimNoEffect.hpp"
 #include "VimNumberedRegisters.hpp"
@@ -28,6 +33,7 @@
 #include "VimReplay.hpp"
 #include "VimSearchDirection.hpp"
 #include "VimSearchPattern.hpp"
+#include "VimSelect.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
 #include "VimStep.hpp"
@@ -36,6 +42,7 @@
 
 #include "../vim/VimFixtures.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <optional>
@@ -62,10 +69,14 @@ using nenenib::core::vim_clipboard_loaded;
 using nenenib::core::vim_reads_clipboard;
 using nenenib::core::vim_register_of_clipboard;
 using nenenib::core::vim_step;
+using nenenib::core::VimBlockEdit;
 using nenenib::core::VimEditorView;
 using nenenib::core::VimInsertAt;
+using nenenib::core::VimInsertBlock;
+using nenenib::core::VimInsertString;
 using nenenib::core::VimKey;
 using nenenib::core::VimMode;
+using nenenib::core::VimMoveTo;
 using nenenib::core::VimNoEffect;
 using nenenib::core::VimPrefix;
 using nenenib::core::VimRegister;
@@ -73,6 +84,7 @@ using nenenib::core::VimRegisterKind;
 using nenenib::core::VimReplay;
 using nenenib::core::VimSearchDirection;
 using nenenib::core::VimSearchPattern;
+using nenenib::core::VimSelect;
 using nenenib::core::VimSpecialKey;
 using nenenib::core::VimState;
 using nenenib::core::VimStep;
@@ -262,6 +274,63 @@ void verify_macro_depth_limit()
            "an endless recursion stops at the depth limit");
     vim_replay(controller, "x");
     expect(whole_vim_body(controller) == "bcdef", "the next typed key runs normally");
+}
+
+// 巨大な回数の `@`（#1341・ADR 0046 の決定 3 の追補）。鍵の列を回数ぶん並べず 1 周ずつ積むので、
+// 鍵が失敗した周で止まり、積んだ周の数は回数に比例しない（時計は読まない）。b は `xl`。
+[[nodiscard]] std::size_t huge_rounds(std::string text, std::string_view macro,
+                                      std::string_view keys, std::string_view body)
+{
+    Editing editing;
+    open_vim_document(editing, std::move(text));
+    EditorController &controller = editing.controller();
+    applied(controller, stored_text('a', macro));
+    applied(controller, stored_text('b', "xl"));
+    const std::size_t before = controller.replay_rounds();
+    vim_replay(controller, keys);
+    expect(whole_vim_body(controller) == body, "the huge count stops at the failing round");
+    return controller.replay_rounds() - before;
+}
+
+// 周の最後の鍵を流す前に次の周を積むので、数は流した周より 1 つ多い。`xl` の `l` は 3 周目の
+// 行末で失敗する（`x` は空の行でも失敗しないので、`x` だけのマクロは Vim も回数ぶん回る・実測）。
+void verify_macro_huge_count_stops()
+{
+    expect(huge_rounds("abcdef\nghi", "xl", "999999999@a", "bdf\nghi") == 4U,
+           "999999999@a of xl stops at the line end in the third round");
+    expect(huge_rounds("a\nb\nc", "j", "999999999@a", "a\nb\nc") == 4U,
+           "999999999@a of j stops at the last line");
+    expect(huge_rounds("abcdef", "xl", "@a999999999@@", "bdf") == 4U,
+           "999999999@@ repeats the rounds of the last macro");
+    // 入れ子の `2@b` は a の周ごとに b の 2 周を積む。a の 2 周目の b の 1 周目で `l` が失敗する
+    // （a の 3 周・b の 4 周を積む）。
+    expect(huge_rounds("abcdef", "2@b", "999999999@a", "bdf") == 7U,
+           "a nested 2@b inside 999999999@a stops with the outer rounds");
+}
+
+// 周を 1 つずつ積んでも、流れる順は回数ぶん繋いだ鍵の列と同じ（入れ子の再生は周の続きより前）。
+void verify_macro_rounds_keep_the_order()
+{
+    const std::array<std::array<std::string_view, 3>, 3> cases{{
+        {"@bl", "4@a", "xlxlxlxl"},
+        {"lx", "3@a", "lxlxlx"},
+        {"2@bj", "2@a", "xxjxxj"},
+    }};
+    for (const auto &[macro, keys, flat] : cases)
+    {
+        Editing rounds;
+        open_vim_document(rounds, "abcdefgh\nijklmnop\nqrstuvwx");
+        applied(rounds.controller(), stored_text('a', macro));
+        applied(rounds.controller(), stored_text('b', "x"));
+        vim_replay(rounds.controller(), keys);
+        Editing typed;
+        open_vim_document(typed, "abcdefgh\nijklmnop\nqrstuvwx");
+        vim_replay(typed.controller(), flat);
+        expect(whole_vim_body(rounds.controller()) == whole_vim_body(typed.controller()) &&
+                   rounds.controller().frame().caret.position ==
+                       typed.controller().frame().caret.position,
+               "the rounds run in the order of the keys repeated");
+    }
 }
 
 // 大文字の名前は追記（決定 2）。StoreVimRegister も録画の追記と同じ規則（ADR 0048 の決定 4）。
@@ -907,6 +976,277 @@ void verify_clipboard_block_written()
            "a block \"+y writes the block text to the clipboard");
 }
 
+// 回数で本文を増やす編集は、編集の後の文書が開ける上限（1 GiB・ADR 0159 の決定 7）を超えると
+// 確保の前に too_large で断る（#1341）。断った鍵は本文を変えず、`@` の残りも捨てる。
+void verify_huge_count_put_refused()
+{
+    const TextBuffer text = buffer_of("abc\ndef");
+    const Selection caret = collapsed_at(Offset{0});
+    const std::array<std::string_view, 3> refused{"yiw999999999p", "yiw999999999P", "yy999999999p"};
+    for (const std::string_view keys : refused)
+    {
+        const VimStep step = core_steps(empty_vim_state(), text, caret, keys);
+        expect(step.failure == std::optional{nenenib::core::VimRepeatFailure::too_large} &&
+                   std::holds_alternative<VimNoEffect>(step.effect),
+               "a put past the document limit is refused before it is built");
+    }
+    // 矩形は選択を写す controller で確かめる（2 行 x 幅 2 の 999999999 個は 1 行 2 GB）。
+    const std::array<std::string_view, 2> blocks{"<C-v>jly999999999p", "<C-v>jly999999999P"};
+    for (const std::string_view keys : blocks)
+    {
+        Editing block;
+        open_vim_document(block, "abc\ndef");
+        vim_replay(block.controller(), keys);
+        expect(whole_vim_body(block.controller()) == "abc\ndef",
+               "a block put past the document limit is refused");
+    }
+    const VimStep small = core_steps(empty_vim_state(), text, caret, "yiw3p");
+    expect(!small.failure.has_value(), "a put inside the limit is not refused");
+    Editing editing;
+    open_vim_document(editing, "abc\ndef");
+    EditorController &controller = editing.controller();
+    applied(controller, stored_text('a', "yiw999999999px"));
+    vim_replay(controller, "@a");
+    expect(whole_vim_body(controller) == "abc\ndef", "a refused put stops the rest of @a");
+}
+
+// INSERT の回数の反復と `o` の回数も同じ上限。1 周目の本文は残り、残りの周は確保しない。
+void verify_huge_count_insert_refused()
+{
+    const std::array<std::array<std::string_view, 2>, 2> cases{{
+        {"999999999ixy<Esc>", "xyabc\ndef"},
+        {"999999999oab<Esc>", "abc\nab\ndef"},
+    }};
+    for (const auto &[keys, body] : cases)
+    {
+        Editing editing;
+        open_vim_document(editing, "abc\ndef");
+        vim_replay(editing.controller(), keys);
+        expect(whole_vim_body(editing.controller()) == body,
+               "the insert count past the document limit keeps only the first round");
+    }
+}
+
+// 文書の上限を小さな値に置いた core の vim_step（#1341）。1 GiB を確保せずに上限の境を見る。
+// 効果は本文へ写さないので、最後の鍵の失敗だけを見る。
+// 本文とキャレット。
+using LimitedText = std::pair<std::string_view, Offset>;
+
+[[nodiscard]] std::optional<nenenib::core::VimRepeatFailure>
+limited_failure(const VimState &state, LimitedText text, std::string_view keys, std::size_t limit)
+{
+    const TextBuffer buffer = buffer_of(text.first);
+    const Selection selection = collapsed_at(text.second);
+    VimEditorView view{buffer, selection, VimViewport{LineNumber{1}, vim_visible_lines, 0}};
+    view.document_limit = limit;
+    VimStep step{state, VimNoEffect{}};
+    for (const VimKey &key : vim_keys_of(keys))
+    {
+        step = vim_step(step.next, view, key);
+    }
+    return step.failure;
+}
+
+// 効果の本文は LF で数え controller が判定の後で文書の改行へ写すので、CRLF の文書では改行を
+// 2 バイトに数える（#1341）。同じ回数が LF の文書では通り、CRLF の文書では断られる境。
+void verify_huge_count_crlf_boundary()
+{
+    const std::optional<nenenib::core::VimRepeatFailure> refused{
+        nenenib::core::VimRepeatFailure::too_large};
+    const VimState rest = empty_vim_state();
+    // 空行の `yy` は "\n"。上限 304: LF は 4 バイトの文書に 300 個、CRLF は 6 バイトに 149 個。
+    expect(!limited_failure(rest, {"a\n\nb", Offset{2}}, "yy300p", 304).has_value() &&
+               limited_failure(rest, {"a\n\nb", Offset{2}}, "yy301p", 304) == refused,
+           "a line put fills the limit of an LF document exactly");
+    expect(!limited_failure(rest, {"a\r\n\r\nb", Offset{3}}, "yy149p", 304).has_value() &&
+               limited_failure(rest, {"a\r\n\r\nb", Offset{3}}, "yy150p", 304) == refused,
+           "a line put counts two bytes for each CRLF newline");
+    // INSERT の回数の残りの周（"\n" を 51 回）。上限 104 で LF の 3 バイトの文書は 101 まで、CRLF
+    // の 4 バイトの文書は 2 バイト × 50 まで。
+    expect(!limited_failure(rest, {"a\nb", Offset{0}}, "52i<CR><Esc>", 104).has_value() &&
+               limited_failure(rest, {"a\r\nb", Offset{0}}, "52i<CR><Esc>", 104) == refused,
+           "the insert count counts two bytes for each CRLF newline");
+    // `o` の回数の残りの周（"\nab"）。上限 103 で LF は 3 バイト × 33、CRLF は 4 バイト × 24 まで。
+    expect(!limited_failure(rest, {"a\nb", Offset{0}}, "34oab<Esc>", 103).has_value() &&
+               limited_failure(rest, {"a\r\nb", Offset{0}}, "34oab<Esc>", 103) == refused,
+           "the o count counts two bytes for each CRLF newline");
+    // 矩形の `p`（幅 2 の 2 行・25 個）。1 行は手前の空白の上界 max(桁 2, tabstop 8) と改行と本文
+    // 50 バイトで、上限 125 では LF の 7 バイトの文書は 118 で通り、CRLF の 8 バイトの文書は 120 で
+    // 断る。
+    const VimState block = nenenib::core::vim_resting_state(
+        VimRegister{"ab\ncd", VimRegisterKind::block, nenenib::core::VimBlockWidth{2}});
+    expect(!limited_failure(block, {"abc\ndef", Offset{0}}, "25p", 125).has_value() &&
+               limited_failure(block, {"abc\r\ndef", Offset{0}}, "25p", 125) == refused,
+           "a block put counts the newline of the document for each line");
+}
+
+// VISUAL の回数つきの `>` と矩形の `>` も同じ上限（#1341）。1 行に足すのは多くとも回数 + 9 バイト
+// （shiftwidth 8・tabstop 8）で、上限 103 の 3 バイトの文書は 91 段まで。`<` は増やさない。
+void verify_huge_count_shift_refused()
+{
+    const std::optional<nenenib::core::VimRepeatFailure> refused{
+        nenenib::core::VimRepeatFailure::too_large};
+    const VimState rest = empty_vim_state();
+    expect(!limited_failure(rest, {"a\nb", Offset{0}}, "V91>", 103).has_value() &&
+               limited_failure(rest, {"a\nb", Offset{0}}, "V92>", 103) == refused,
+           "a counted visual > past the document limit is refused");
+    expect(!limited_failure(rest, {"a\nb", Offset{0}}, "<C-v>91>", 103).has_value() &&
+               limited_failure(rest, {"a\nb", Offset{0}}, "<C-v>92>", 103) == refused,
+           "a counted block > past the document limit is refused");
+    expect(!limited_failure(rest, {"\ta\nb", Offset{1}}, "V92<", 103).has_value(),
+           "a counted visual < never grows the document");
+}
+
+// 小さな上限の試験の中で効果を本文と選択へ写す（controller の写しの小さな替え玉・#1341）。矩形の
+// INSERT と矩形の `p` が通る効果だけ。本文は LF。
+[[nodiscard]] std::pair<TextBuffer, Selection>
+limited_applied(const TextBuffer &text, const Selection &selection,
+                const nenenib::core::VimEffect &effect)
+{
+    if (const auto *moved = std::get_if<VimMoveTo>(&effect))
+    {
+        return {text, collapsed_at(moved->caret)};
+    }
+    if (const auto *selected = std::get_if<VimSelect>(&effect))
+    {
+        return {text, selected->selection};
+    }
+    if (const auto *typed = std::get_if<VimInsertString>(&effect))
+    {
+        return {text.insert(selection.caret, typed->utf8),
+                collapsed_at(Offset{selection.caret.value + typed->utf8.size()})};
+    }
+    if (const auto *repeat = std::get_if<VimInsertAt>(&effect))
+    {
+        return {text.insert(repeat->at, repeat->utf8), collapsed_at(repeat->caret)};
+    }
+    if (const auto *inserted = std::get_if<VimInsertBlock>(&effect))
+    {
+        std::vector<VimBlockEdit> edits = inserted->edits;
+        std::ranges::sort(edits, [](const VimBlockEdit &one, const VimBlockEdit &other)
+                          { return other.range.begin < one.range.begin; });
+        TextBuffer next = text;
+        for (const VimBlockEdit &edit : edits)
+        {
+            next = next.replaced(edit.range.begin, edit.range.end, edit.utf8);
+        }
+        return {next, collapsed_at(inserted->caret)};
+    }
+    return {text, selection};
+}
+
+// 断ったか（どれかの鍵が too_large）と、効果を写した後の本文。
+using LimitedRun = std::pair<bool, std::string>;
+
+// 小さな上限で鍵を流し、効果を本文へ写す（#1341）。実際の大きさは写した後の本文で数える。
+[[nodiscard]] LimitedRun limited_run(std::string_view body, std::string_view keys,
+                                     std::size_t limit)
+{
+    const std::optional<nenenib::core::VimRepeatFailure> too_large{
+        nenenib::core::VimRepeatFailure::too_large};
+    TextBuffer text = buffer_of(body);
+    Selection selection = collapsed_at(Offset{0});
+    VimState state = empty_vim_state();
+    bool refused = false;
+    for (const VimKey &key : vim_keys_of(keys))
+    {
+        VimEditorView view{text, selection, VimViewport{LineNumber{1}, vim_visible_lines, 0}};
+        view.document_limit = limit;
+        VimStep step = vim_step(state, view, key);
+        refused = refused || step.failure == too_large;
+        auto [next_text, next_selection] = limited_applied(text, selection, step.effect);
+        text = std::move(next_text);
+        selection = next_selection;
+        state = std::move(step.next);
+    }
+    return {refused, text.text()};
+}
+
+// 断らなかった鍵の後の本文は上限に収まる（見積もりが上界）。keys の `%` に 1 から counts までの
+// 回数を入れて流す。
+[[nodiscard]] bool limited_estimates_hold(std::string_view body, std::string_view keys,
+                                          std::size_t limit, std::size_t counts)
+{
+    bool held = true;
+    for (std::size_t count = 1; count <= counts; ++count)
+    {
+        std::string typed(keys);
+        typed.replace(typed.find('%'), 1, std::to_string(count));
+        const auto [refused, after] = limited_run(body, typed, limit);
+        held = held && (refused || after.size() <= limit);
+    }
+    return held;
+}
+
+// 矩形の `I` `A` の回数は、写す本文 × 行の数で上限を見る（PR #1348 の再レビュー M1）。1 行は写す
+// 本文と多くとも max(桁, tabstop) の空白なので、上限 300 で `a` の 3 行（Esc で 6 バイト）は
+// 3 × (N + 8) ≤ 294 の N = 90 まで、10 行（Esc で 20 バイト）は 10 × (N + 8) ≤ 280 の N = 20 まで。
+// 断った鍵は 1 周目の本文だけを全部の行へ写す。
+void verify_huge_count_block_insert_refused()
+{
+    const std::string_view three = "a\na\na";
+    const std::string_view ten = "a\na\na\na\na\na\na\na\na\na";
+    expect(!limited_run(three, "<C-v>G90Ix<Esc>", 300).first &&
+               limited_run(three, "<C-v>G91Ix<Esc>", 300) == LimitedRun{true, "xa\nxa\nxa"},
+           "a counted block I over 3 lines is refused past the copied lines");
+    expect(!limited_run(ten, "<C-v>G20Ix<Esc>", 300).first &&
+               limited_run(ten, "<C-v>G21Ix<Esc>", 300).first,
+           "a counted block I over 10 lines is refused past the copied lines");
+    // 1 行目だけなら収まる回数（10 行の 50 個は 1 行目で 49 バイト・全部で 519 バイト）も断る。
+    expect(limited_run(ten, "<C-v>G50Ix<Esc>", 300).first,
+           "the copied lines count against the limit, not only the first line");
+    const std::array<std::string_view, 4> forms{"<C-v>G%Ix<Esc>", "2l<C-v>G%Ix<Esc>",
+                                                "5l<C-v>G%Ayz<Esc>", "l<C-v>Glcw%<Esc>"};
+    for (const std::string_view keys : forms)
+    {
+        expect(limited_estimates_hold("abcdef\na\n\tbc\nabcdefgh", keys, 200, 60),
+               "a block insert that is not refused stays inside the limit");
+    }
+}
+
+// 矩形の `p` の 1 行の余分は多くとも max(桁, tabstop) と改行（PR #1348 の再レビュー M2）。桁の途中
+// で割る Tab（`abc` `\tx` `\ty` の `0p` は 2 行目が +9 バイト・Vim と同じ）・全角の途中・行末より
+// 右・足す行のどれも、断らなかった貼り付けの後の本文は上限に収まる。
+void verify_huge_count_block_put_estimate()
+{
+    const std::array<std::array<std::string_view, 2>, 4> cases{{
+        {"abc\n\tx\n\ty", "<C-v>jjly0%p"},
+        {"abc\n\xE5\x85\xA8x\n\xE5\x85\xA8y", "<C-v>jjly0%p"},
+        {"abcdef\na\nb", "<C-v>jjly$%p"},
+        {"abcdef\nab\ncd", "<C-v>jjlyG$%p"},
+    }};
+    for (const auto &[body, keys] : cases)
+    {
+        bool held = true;
+        for (std::size_t limit = body.size(); limit < body.size() + 80; ++limit)
+        {
+            held = held && limited_estimates_hold(body, keys, limit, 4);
+        }
+        expect(held, "a block put that is not refused stays inside the limit");
+    }
+}
+
+// 断った鍵は E1240 を 1 行出し、鳴らさない（#1341・ADR 0153 の決定 2）。`@` の中で断っても同じ。
+void verify_huge_count_notice()
+{
+    for (const std::string_view keys : {std::string_view{"yiw999999999p"}, std::string_view{"@a"}})
+    {
+        Editing editing;
+        open_vim_document(editing, "abc\ndef");
+        EditorController &controller = editing.controller();
+        applied(controller, stored_text('a', "yiw999999999px"));
+        vim_replay(controller, keys);
+        const auto frame = controller.frame();
+        expect(frame.command_message.has_value() &&
+                   frame.command_message.value().text() == "E1240: Resulting text too long" &&
+                   editing.bell().rings() == 0U,
+               "a put refused at the document limit shows E1240 without the bell");
+        // `@a` の残りの `x` も流れない（再生の残りを捨てる）。
+        expect(whole_vim_body(controller) == "abc\ndef",
+               "a refused put leaves the text and the rest of the macro does not run");
+    }
+}
+
 // 録画を経る fixture と `"` の fixture は同じレジスタの表を通るので 1 scope（ADR 0048 の決定 11）。
 [[nodiscard]] bool macro_fixture(const VimFixture &fixture) noexcept
 {
@@ -924,6 +1264,15 @@ void verify_vim_macro_contracts()
     verify_macro_failure_stops_the_rest();
     verify_macro_records_failed_replace();
     verify_macro_depth_limit();
+    verify_macro_huge_count_stops();
+    verify_macro_rounds_keep_the_order();
+    verify_huge_count_put_refused();
+    verify_huge_count_insert_refused();
+    verify_huge_count_crlf_boundary();
+    verify_huge_count_shift_refused();
+    verify_huge_count_block_insert_refused();
+    verify_huge_count_block_put_estimate();
+    verify_huge_count_notice();
     verify_macro_append();
     verify_macro_numbered_recording();
     verify_macro_numbered_stored();
@@ -950,8 +1299,10 @@ void verify_vim_macro_scope()
     bool named = true;
     for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
     {
-        // macro 欄はほかの族の fixture も持つ（#1246 の insert-page-edge-・viewport-ctrl-e-）。
-        // 名前で守るのは逆の向き: macro- の fixture は必ず macro 欄を持つ（#1324）。
+        // macro 欄はほかの族の fixture も持つ（#1246 の insert-page-edge-・#1232 の
+        // viewport-ctrl-e-・#1325 の del-key-・#1337 の dot-register-count-・#1341 の
+        // huge-count-macro-）。名前で守るのは逆の向き: macro- の fixture は必ず macro 欄を
+        // 持つ（#1324）。
         named &= !fixture.name.starts_with("macro-") || fixture.macro.has_value();
         if (macro_fixture(fixture))
         {
@@ -959,7 +1310,7 @@ void verify_vim_macro_scope()
             ++selected;
         }
     }
-    expect(selected == 156, "the scope replays the 42 macro, 108 register and 6 other "
+    expect(selected == 170, "the scope replays the 42 macro, 108 register and 20 other "
                             "fixtures with a macro register");
     expect(named, "every macro- fixture carries a macro register");
     verify_vim_macro_contracts();

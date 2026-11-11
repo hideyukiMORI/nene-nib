@@ -2463,6 +2463,16 @@ void verify_history_absorbing()
                          Edit{Offset{3}, "xyab", "Z", Offset{3}}) ==
                Edit{Offset{3}, "xyq", "Z", Offset{5}},
            "what the unit replaced stays after the text the replacement took from before it");
+    expect(absorbed_edit(Edit{Offset{5}, "q", "ab", Offset{5}},
+                         Edit{Offset{7}, "rs", "", Offset{7}}) ==
+               Edit{Offset{5}, "qrs", "ab", Offset{5}},
+           "a deletion from the end of the inserted text forward joins what the unit replaced "
+           "(#1325)");
+    expect(absorbed_edit(typed, Edit{Offset{7}, "c", "Z", Offset{7}}) ==
+               Edit{Offset{5}, "c", "abZ", Offset{5}},
+           "a replacement from the end of the inserted text forward appends to the unit");
+    expect(!absorbed(typed, Edit{Offset{8}, "c", "", Offset{8}}).has_value(),
+           "a deletion that starts after the end of the inserted text does not join");
     expect(!absorbed(typed, Edit{Offset{2}, "x", "Z", Offset{2}}).has_value(),
            "a replacement that ends before the head of the insert does not join");
     expect(!absorbed(typed, Edit{Offset{4}, "yabq", "Z", Offset{4}}).has_value(),

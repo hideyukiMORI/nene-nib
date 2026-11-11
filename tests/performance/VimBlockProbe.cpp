@@ -5,6 +5,8 @@
 #include "ProbeWorkload.hpp"
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
+#include "TextObjectProbe.hpp"
+#include "TextObjectWorkload.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
 #include "VimBlockWidth.hpp"
@@ -144,6 +146,8 @@ std::string vim_block_input(VimBlockWorkload workload)
     case VimBlockWorkload::count_h_giant_1line:
     case VimBlockWorkload::count_l_giant_1line:
         return giant_line();
+    case VimBlockWorkload::sentence_motion_giant_1line:
+        return text_object_input(TextObjectWorkload::sentence_giant);
     }
     std::unreachable();
 }
@@ -393,5 +397,33 @@ std::expected<std::uint64_t, ProbeFailure> vim_counted_right(VimBlockWorkload wo
         return std::unexpected(ProbeFailure::wrong_result);
     }
     return checksum_of(input) + giant_middle().value + moved->caret.value;
+}
+// `)` の 1 鍵（#1316）。文の終わりの無い巨大な 1 行の真ん中から、文の終わりを探す歩きは本文の
+// 終わりで尽き（回数 1 の最後なので失敗しない）、NORMAL の寄せで最後の文字へ着く（Vim 9.1 の
+// findsent と adjust_cursor）。歩きは #751 の塊の走査で行の終わりまで飛ぶ。
+std::expected<std::uint64_t, ProbeFailure> vim_sentence_moved(VimBlockWorkload workload,
+                                                              const std::string &input,
+                                                              application::TimingPort &timing)
+{
+    const auto prepared = indexed_giant(workload, input);
+    if (!prepared.has_value())
+    {
+        return std::unexpected(prepared.error());
+    }
+    const core::TextBuffer &text = prepared.value();
+    const core::Offset middle{text.size_bytes() / 2U};
+    const core::VimState state = core::vim_resting_state(
+        core::VimRegister{std::string{}, core::VimRegisterKind::characters});
+    timing.mark(core::Milestone::probe_started);
+    const core::VimStep moved_step =
+        stepped(state, text, core::collapsed_at(middle), core::VimCharacter{U')'});
+    timing.mark(core::Milestone::probe_finished);
+    const auto *moved = std::get_if<core::VimMoveTo>(&moved_step.effect);
+    const core::Offset last{text.size_bytes() - 1U};
+    if (moved == nullptr || moved->caret != last || moved_step.failure.has_value())
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return checksum_of(input) + middle.value + moved->caret.value;
 }
 } // namespace nenenib::tests::performance

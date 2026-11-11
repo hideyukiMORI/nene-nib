@@ -10,6 +10,7 @@ namespace nenenib::tests
 {
 void verify_body_layout_scope();
 void verify_wrapped_view_scope();
+void verify_edge_arrows_scope();
 void verify_vim_wrapped_scope();
 void verify_vim_wrapped_contracts();
 // UTF 検証と表示値/UTF-16の直接の境界（ADR 0086）。
@@ -104,6 +105,9 @@ void verify_vim_pattern_property_scope();
 // KeyMapTests.cpp（#1081・ADR 0176・Vim の map の表と設定の行の契約と性質）
 void verify_key_map_scope();
 
+// VimDeleteKeyTests.cpp（#1325・Vim モードの Delete キー `<Del>` の controller の道）
+void verify_vim_delete_key_scope();
+
 // JsonTests.cpp / JsonPropertyTests.cpp（#994・ADR 0160 の決定 4・core の JSON の契約と性質）
 void verify_json_scope();
 void verify_json_property_scope();
@@ -176,6 +180,8 @@ void verify_language_scope();
 // PreviewTests.cpp（ADR 0155・Markdown のプレビューの application の側）
 void verify_preview_contracts();
 void verify_preview_scope();
+void verify_preview_image_contracts();
+void verify_preview_image_scope();
 
 // PreviewTaskTests.cpp（ADR 0155 の追補 24〜26・タスクリストの切り替えの application の側）
 void verify_preview_task_scope();
@@ -286,6 +292,10 @@ void verify_vim_external_caret();
 
 // VimWindowPathTests.cpp
 void verify_vim_window_path();
+
+// VimFixtureWindowPathTests.cpp
+void verify_vim_fixture_window_path_sample();
+void verify_vim_fixture_window_path_all();
 
 // VimCaseTests.cpp
 void verify_vim_case_contracts();

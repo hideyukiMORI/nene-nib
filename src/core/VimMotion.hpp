@@ -68,6 +68,13 @@ enum class VimMotion : std::uint8_t
     // マークの位置（exclusive の文字単位）。着地は engine が鍵を写す前に VimEditorView.mark_landing
     // に置く（ADR 0152 の決定 3）。
     mark_line,
-    mark_exact
+    mark_exact,
+    // `{` `}`。空の行への段落の移動（exclusive の文字単位・前向きに最後の行へ着いたら最後の文字まで
+    // inclusive）と、`(` `)`。文の移動（exclusive の文字単位・本文の終わりで尽きたら最後の文字まで
+    // inclusive）。どれも飛ぶ移動で、1 行の中でも `"1` へ行く（Vim の use_reg_one・Issue #1316）。
+    paragraph_backward,
+    paragraph_forward,
+    sentence_backward,
+    sentence_forward
 };
 } // namespace nenenib::core

@@ -41,4 +41,10 @@ void verify_matchparen_outline();
 // ミニマップの絵（ADR 0171 の決定 4・7・#1017 の段 1）。
 void verify_minimap_paint();
 void verify_save_question();
+// Vim モードの仮想キー → 特別な鍵の表（#1325・Delete は `<Del>`）。
+void verify_vim_special_keys();
+// 閉じる手順の列（ADR 0133 の追補 #1340）。
+void verify_closing_steps();
+// Ctrl+Shift+M はどのモードでも操作 toggle_preview（施主決定 D77・#1354）。
+void verify_preview_cycle_key();
 } // namespace nenenib::tests::ui

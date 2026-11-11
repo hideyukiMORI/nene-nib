@@ -2,6 +2,8 @@
 
 #include "Appearance.hpp"
 #include "BodyLayout.hpp"
+#include "ClosingRoute.hpp"
+#include "ClosingStep.hpp"
 #include "CommandEdit.hpp"
 #include "Composition.hpp"
 #include "CoverWindow.hpp"
@@ -245,9 +247,15 @@ class EditorWindow final
     void end_window(application::ExitCause cause, application::SessionEnd reason);
     // 未保存のタブを帯の左から順に映して confirm で確かめる（#237）。止められたら false。
     [[nodiscard]] bool confirm_unsaved_tabs(bool (EditorWindow::*confirm)());
-    // 窓を壊す唯一の口（ADR 0059 の決定 3・ADR 0133 の決定 1）。前回のタブの一覧を書いてから壊す。
-    // end_window と、最後の 1 つを閉じる close_tab が通る。デストラクタは作りかけの窓の後始末だけ。
+    // 窓を壊す唯一の口（ADR 0059 の決定 3・ADR 0133 の決定 1）。先に窓を隠し、前回のタブの一覧を
+    // 書いてから壊す（closing_steps(window_closes)・追補 #1340）。end_window と、最後の 1 つを
+    // 閉じる close_tab が通る。デストラクタは作りかけの窓の後始末だけ。
     void leave(application::SessionEnd reason);
+    // 閉じる手順の列を 1 段ずつ写す（ADR 0133 の追補 #1340）。destroy_window の段を持つ道は
+    // window_closes だけで、それを渡すのは leave だけ。WM_ENDSESSION は session_ends を渡す。
+    void close_through(ClosingRoute route, const application::EndSession &intent);
+    // 閉じる手順の 1 段を写す。close_through だけが呼ぶ。
+    void close_step(ClosingStep step, const application::EndSession &intent);
     // OS の終了を問われたら exit_plan(session_end) に従って止めるか通すかを返す（ADR 0133）。
     // end_window を通らず、leave_now でも窓を壊さない（確定の WM_ENDSESSION は一覧を書くだけ）。
     [[nodiscard]] LRESULT query_session_end();
@@ -277,9 +285,20 @@ class EditorWindow final
     [[nodiscard]] bool over_explorer(LPARAM data) const;
     void press_explorer_key(WPARAM word);
     [[nodiscard]] std::optional<std::size_t> explorer_row_at(LPARAM data) const;
-    [[nodiscard]] bool press_explorer(LPARAM data);
-    void release_explorer(LPARAM data);
-    [[nodiscard]] bool double_click_explorer(LPARAM data);
+    [[nodiscard]] bool point_explorer(UINT message, LPARAM data);
+    // 面と本文の境のドラッグ（ADR 0162 の追補 D78）。押す・動かす・離す・捕まえを失う・ダブル
+    // クリック・カーソル。
+    [[nodiscard]] bool explorer_divider_at(std::int32_t x, std::int32_t y) const;
+    [[nodiscard]] bool press_explorer_divider(LPARAM data);
+    void drag_explorer_divider(LPARAM data);
+    [[nodiscard]] bool release_explorer_divider(LPARAM data);
+    void lose_explorer_divider();
+    [[nodiscard]] bool reset_explorer_width(LPARAM data);
+    void hover_explorer_divider(LPARAM data);
+    void end_hidden_explorer_drag();
+    void release_left(LPARAM data);
+    [[nodiscard]] bool explorer_divider_cursor(LPARAM data) const;
+    [[nodiscard]] std::int32_t explorer_width_at(std::int32_t x) const;
     // 操作 → メンバ関数の表を引く（EditorWindowOperations.cpp・ADR 0078 の追補 #1188）。操作ごとの
     // 関数は引数なしで、本体は前の run_operation の case のまま。
     using OperationFunction = void (EditorWindow::*)();
@@ -324,7 +343,7 @@ class EditorWindow final
     void read_wheel_setting();
     [[nodiscard]] application::VisibleLines body_view() const;
     [[nodiscard]] core::PaneLayouts body_panes(const core::EditorSettings &settings) const;
-    [[nodiscard]] core::ExplorerLayout explorer_frame(const core::EditorSettings &settings) const;
+    [[nodiscard]] core::ExplorerLayout explorer_frame(core::FontSize font_size) const;
     [[nodiscard]] core::BodyLayout active_body(const core::EditorSettings &settings) const;
 
     HINSTANCE instance_;
@@ -355,6 +374,14 @@ class EditorWindow final
     std::int32_t explorer_wheel_remainder_ = 0;
     // 面の上で左を押して、まだ離していない（離したときにだけ PointExplorer の released を送る）。
     bool explorer_pressed_ = false;
+    // 境を押してから離すまで（D78）。値は押した点と面の右端のずれ（物理画素）で、動かした点から
+    // ずれを引いた所を面の右端にする。grab_x は押した点の x（同じ点の WM_MOUSEMOVE を幅の変更に
+    // しない）、dragged は最後に送った幅（DIP・捕まえを失ったときに離したのと同じに送る）。
+    std::optional<std::int32_t> explorer_grab_offset_;
+    std::int32_t explorer_grab_x_ = 0;
+    std::optional<std::int32_t> explorer_dragged_;
+    // 最後の WM_MOUSEMOVE の点が境の上だったか（カーソルを左右の矢印にする・D78）。
+    bool over_explorer_divider_ = false;
     UINT wheel_setting_ = default_wheel_scroll_lines;
     // 帯で押した要素（左ボタンと中ボタンで 1 つずつ）。離した要素と同じときだけ動かし、離したら
     // 消す（ADR 0056 の決定 9）。

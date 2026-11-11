@@ -18,10 +18,16 @@ inline constexpr std::size_t vim_replay_depth_limit = 100;
 // 桁を先頭に展開した鍵の列と、VISUAL の記録なら選び直す範囲の大きさを運び、controller が選択を
 // 置いてから同じ accept の経路へ鍵を 1 つずつ流す。kind が macro なら鍵は流す時点の `map` の表で
 // 引く（#1312）。効果は 1 つのまま（VimSelect と 2 つ返さない）。本文は持たない。
+//
+// rounds は keys を流す周の数（`[count]@a` の回数・`.` は 1・#1341）。engine は鍵の列を回数ぶん
+// 先に並べず、controller が 1 周を流し終えるたびに次の周を列の頭へ積み、鍵が失敗したら残りの周
+// を捨てる（Vim の nv_at の回数のループと do_execreg の「失敗で残りを捨てる」）。並べる量は 1 周
+// ぶんだけなので、`999999999@a` も確保は回数に比例しない。
 struct VimReplay
 {
     std::vector<VimKey> keys;
     std::optional<VimVisualExtent> reselect;
     VimReplayKind kind;
+    std::size_t rounds;
 };
 } // namespace nenenib::core

@@ -6,9 +6,12 @@
 #include "DirectWriteFactory.hpp"
 #include "ExplorerLayout.hpp"
 #include "ExplorerPainter.hpp"
+#include "ExplorerPointer.hpp"
+#include "ExplorerPointing.hpp"
 #include "ExplorerRowView.hpp"
 #include "ExplorerText.hpp"
 #include "ExplorerView.hpp"
+#include "ExplorerWidth.hpp"
 #include "FilePath.hpp"
 #include "FontSize.hpp"
 #include "LayoutRect.hpp"
@@ -22,6 +25,7 @@
 #include "WindowLines.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -47,8 +51,9 @@ constexpr std::uint32_t dpi = 96;
 
 [[nodiscard]] core::ExplorerLayout layout_of(bool shown)
 {
-    auto layout = core::explorer_layout(core::LayoutRect{0, 0, 1300, 800}, dpi,
-                                        core::default_font_size(), shown);
+    auto layout =
+        core::explorer_layout(core::LayoutRect{0, 0, 1300, 800}, dpi, core::default_font_size(),
+                              shown ? std::optional{core::ExplorerWidth{}} : std::nullopt);
     if (shown)
     {
         layout.panel = panel;
@@ -232,7 +237,7 @@ void verify_split_rows(SoftwareTarget &target, IDWriteFactory2 &factory, IDWrite
     const auto palette = core::palette_for(core::Appearance::dark);
     const core::LayoutRect client{0, 0, 1300, 900};
     const auto font = core::default_font_size();
-    const auto layout = core::explorer_layout(client, dpi, font, true);
+    const auto layout = core::explorer_layout(client, dpi, font, core::ExplorerWidth{});
     const auto lines = core::explorer_panel_lines(client, dpi, font);
     const auto split = core::active_pane_layout(
         core::pane_layouts(layout.body, dpi, font, core::SplitLayout::horizontal),
@@ -295,8 +300,8 @@ void verify_window_lines()
     {
         const core::LayoutRect client{0, 0, 1300, height};
         const auto body = core::active_pane_layout(
-            core::pane_layouts(core::explorer_layout(client, dpi, font, true).body, dpi, font,
-                               core::SplitLayout::horizontal),
+            core::pane_layouts(core::explorer_layout(client, dpi, font, core::ExplorerWidth{}).body,
+                               dpi, font, core::SplitLayout::horizontal),
             core::PaneSide::first);
         const auto sent = nenenib::ui::win32::window_lines(body, client, dpi, font);
         expect(sent.lines == body.visible_lines && sent.window_height == height,
@@ -310,11 +315,77 @@ void verify_window_lines()
     };
     expect(lines_at(600) < lines_at(900), "a taller window sends more panel lines");
 }
+// 面の幅のドラッグ（ADR 0162 の追補 D78）。窓の境の当たりは面の右端の境界の画素と本文の左端の
+// 画素を含み、面の行の当たり（panel の中）と重なる（窓は境を面の行より先に引く・押した要素と離した
+// 要素が面の行の規則に混ざらない）。描く面は使う人が決めた幅（切り詰めた後）で、境界はその右端に
+// 描かれる。
+void verify_chosen_width_pixels(SoftwareTarget &target, IDWriteFactory2 &factory,
+                                IDWriteTextFormat &format)
+{
+    const auto palette = core::palette_for(core::Appearance::dark);
+    auto layout = core::explorer_layout(core::LayoutRect{0, 0, 1300, 800}, dpi,
+                                        core::default_font_size(), core::ExplorerWidth{400});
+    expect(layout.panel.has_value() && core::width_of(layout.panel.value()) == 400 &&
+               layout.body.left == 400,
+           "a chosen 400 DIP width lays the panel out at 400 pixels at 96 DPI");
+    layout.panel = core::LayoutRect{0, 0, 400, 80};
+    layout.line_height = line_height;
+    const auto border_x = 400 - layout.border;
+    expect(core::explorer_divider_hit(layout, dpi, border_x, 10) &&
+               core::explorer_divider_hit(layout, dpi, 400, 10) &&
+               core::contains(layout.panel.value(), border_x, 10),
+           "the divider covers the border pixel, which is also inside the panel rows");
+    expect(!core::explorer_divider_hit(layout, dpi, 300, 10) &&
+               core::contains(layout.panel.value(), 300, 10),
+           "a row away from the edge is not the divider");
+    PaletteRowLayouts layouts(ExplorerPainter::retained);
+    const auto painted = painter_of(target, ExplorerText{&factory, &format, dpi}, layouts, palette);
+    const auto pixels = painted(view_of(false), layout);
+    expect(pixel_is(pixels, border_x, 10, palette.panel_border) &&
+               pixel_is(pixels, border_x - 2, 30, palette.panel) &&
+               pixel_is(pixels, 404, 30, core::RgbColor{0, 0, 0}),
+           "the panel is painted at the chosen width with its border at the right edge");
+}
+// 面の行の上の左ボタン（ADR 0162 の決定 4 の改め・#1388）。窓は面の上の速い 2 回の押しを、OS の
+// 「押す → 離す → DBLCLK → 離す」のまま pressed → released → double_click → released と送る。
+// 押していない離しは送らない。2 打目の意味（読まない・開閉しない）は application が決める。
+// 契約は --explorer の verify_double_click_reads_once と verify_folder_double_click_toggles_once。
+void verify_click_messages()
+{
+    using application::ExplorerPointing;
+    using nenenib::ui::win32::explorer_pointing_of;
+    using nenenib::ui::win32::explorer_pressed_after;
+    constexpr std::array<UINT, 4> twice{WM_LBUTTONDOWN, WM_LBUTTONUP, WM_LBUTTONDBLCLK,
+                                        WM_LBUTTONUP};
+    constexpr std::array<ExplorerPointing, 4> sent{
+        ExplorerPointing::pressed, ExplorerPointing::released, ExplorerPointing::double_click,
+        ExplorerPointing::released};
+    bool pressed = false;
+    std::size_t matched = 0;
+    for (std::size_t at = 0; at < twice.size(); ++at)
+    {
+        const auto pointing = explorer_pointing_of(twice.at(at), pressed);
+        if (pointing.has_value() && pointing.value() == sent.at(at))
+        {
+            ++matched;
+            pressed = explorer_pressed_after(pointing.value());
+        }
+    }
+    expect(matched == twice.size() && !pressed,
+           "a double click on the panel sends press, release, double click and release");
+    expect(!explorer_pointing_of(WM_LBUTTONUP, false).has_value(),
+           "a release without a press on the panel sends nothing");
+    expect(!explorer_pointing_of(WM_RBUTTONDOWN, false).has_value() &&
+               !explorer_pointing_of(WM_MOUSEMOVE, true).has_value() &&
+               !explorer_pointing_of(WM_MBUTTONDBLCLK, false).has_value(),
+           "other buttons and moves are not presses on the panel rows");
+}
 } // namespace
 
 void verify_explorer_paint()
 {
     verify_window_lines();
+    verify_click_messages();
     SoftwareTarget target;
     const auto factory = directwrite_factory();
     if (!target.ready() || factory == nullptr)
@@ -336,5 +407,6 @@ void verify_explorer_paint()
     verify_panel_pixels(target, *factory.Get(), *format.Get());
     verify_focus_and_hidden(target, *factory.Get(), *format.Get());
     verify_split_rows(target, *factory.Get(), *format.Get());
+    verify_chosen_width_pixels(target, *factory.Get(), *format.Get());
 }
 } // namespace nenenib::tests::ui

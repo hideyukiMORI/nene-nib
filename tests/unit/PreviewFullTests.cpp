@@ -13,6 +13,10 @@
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "EditorSettings.hpp"
+#include "ExplorerResizing.hpp"
+#include "ExplorerView.hpp"
+#include "FilePath.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InsertDateTime.hpp"
@@ -37,6 +41,7 @@
 #include "PreviewSelection.hpp"
 #include "PreviewSelectionText.hpp"
 #include "PreviewTick.hpp"
+#include "ResizeExplorer.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
 #include "ScriptedFiles.hpp"
@@ -62,10 +67,14 @@
 #include "VisibleLines.hpp"
 #include "WorkCompleted.hpp"
 
+#include <array>
 #include <cstddef>
+#include <cstdint>
+#include <cstdio>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <variant>
 
@@ -205,10 +214,6 @@ void verify_side_full_side()
                back.layout == core::SplitLayout::vertical && side_of(back) != nullptr &&
                side_of(back)->document == shown,
            "Esc from full goes back to the side pane with the same result");
-    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
-    applied(controller, app::TogglePreview{});
-    expect(controller.preview_placement() == PreviewPlacement::side,
-           "the side key in full goes back to the side pane");
     applied(controller, app::SetPreviewPlacement{PreviewPlacement::off});
     expect(controller.preview_placement() == PreviewPlacement::off, "off closes the side pane");
 }
@@ -583,7 +588,8 @@ void verify_selection_keys()
     applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
     serve_parsed(editing);
     applied(controller, app::SelectAll{});
-    applied(controller, app::TogglePreview{});
+    // 全面から側へ移すのは `:preview side`（Ctrl+Shift+M は全面から閉じる・D77）。
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::side});
     const EditorFrame side = controller.frame();
     applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
     expect(side_of(side) != nullptr && !side_of(side)->selection.has_value() &&
@@ -640,6 +646,222 @@ void verify_selection_dropped_on_result()
                message_of(replaced).empty(),
            "a replaced result drops the selection and says nothing");
 }
+
+// 16〜19 の起点の見せ方（施主決定 D77・ADR 0155 の追補 #1354）。"side full" は側から全面へ入った
+// 全面（Esc の戻り先が side）、"full" は off から入った全面（戻り先が off）。
+void reach_placement(app::EditorController &controller, std::string_view start)
+{
+    if (start == "side" || start == "side full")
+    {
+        applied(controller, app::SetPreviewPlacement{PreviewPlacement::side});
+    }
+    if (start == "full" || start == "side full")
+    {
+        applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    }
+}
+
+// 巡回の表の入力 1 つ。"toggle" は Ctrl+Shift+M（操作 toggle_preview）、"full operation" は F1 の
+// 「Markdown プレビュー（全面）」、"esc" は全面の間の Esc、ほかは Vim の Ex。
+void give_input(app::EditorController &controller, std::string_view input)
+{
+    if (input == "toggle")
+    {
+        applied(controller, app::TogglePreview{});
+        return;
+    }
+    if (input == "full operation")
+    {
+        applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+        return;
+    }
+    if (input == "esc")
+    {
+        static_cast<void>(vim_keys(controller, "<Esc>"));
+        return;
+    }
+    static_cast<void>(run_ex(controller, std::string(input)));
+}
+
+[[nodiscard]] core::FilePath markdown_path()
+{
+    return core::FilePath::parse("C:\\work\\note.md").value();
+}
+
+using CycleRow = std::tuple<std::string_view, std::string_view, PreviewPlacement>;
+
+// 表の 1 行: 起点の見せ方へ行き、入力を 1 つ与えて、着いた見せ方が期待と違えばその行の名前を
+// 返す（Vim モード）。合っていれば空。
+[[nodiscard]] std::string cycle_row_mismatch(bool markdown, const CycleRow &row)
+{
+    const auto &[start, input, expected] = row;
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.files().hold(Bytes{std::string{"# title\n\ntext"}});
+    applied(controller, app::VisibleLines{4});
+    applied(controller, app::OpenDocument{markdown ? markdown_path() : sample_path()});
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    reach_placement(controller, start);
+    give_input(controller, input);
+    if (controller.preview_placement() == expected)
+    {
+        return {};
+    }
+    return std::string(markdown ? "markdown: " : "text: ") + std::string(start) + " + " +
+           std::string(input) + "\n";
+}
+
+// 16. 巡回の表（3 つの見せ方 × 入力）。Ctrl+Shift+M は off → side → full → off と巡り、`:preview`
+// （問い）・`:preview full`・F1 の全面・全面の間の Esc は今の意味のまま。Markdown の文書でも
+// Markdown でない文書（note.txt）でも同じ。
+void verify_toggle_cycle_table()
+{
+    expect(app::cycled_preview_placement(PreviewPlacement::off) == PreviewPlacement::side &&
+               app::cycled_preview_placement(PreviewPlacement::side) == PreviewPlacement::full &&
+               app::cycled_preview_placement(PreviewPlacement::full) == PreviewPlacement::off,
+           "the cycle is off, side, full and off again");
+    constexpr std::array<CycleRow, 20> rows{{
+        {"off", "toggle", PreviewPlacement::side},
+        {"side", "toggle", PreviewPlacement::full},
+        {"full", "toggle", PreviewPlacement::off},
+        {"side full", "toggle", PreviewPlacement::off},
+        {"off", "preview", PreviewPlacement::off},
+        {"side", "preview", PreviewPlacement::side},
+        {"full", "preview", PreviewPlacement::full},
+        {"side full", "preview", PreviewPlacement::full},
+        {"off", "preview full", PreviewPlacement::full},
+        {"side", "preview full", PreviewPlacement::full},
+        {"full", "preview full", PreviewPlacement::full},
+        {"side full", "preview full", PreviewPlacement::full},
+        {"off", "full operation", PreviewPlacement::full},
+        {"side", "full operation", PreviewPlacement::full},
+        {"full", "full operation", PreviewPlacement::full},
+        {"side full", "full operation", PreviewPlacement::full},
+        {"off", "esc", PreviewPlacement::off},
+        {"side", "esc", PreviewPlacement::side},
+        {"full", "esc", PreviewPlacement::off},
+        {"side full", "esc", PreviewPlacement::side},
+    }};
+    std::string mismatches;
+    for (const bool markdown : {true, false})
+    {
+        for (const CycleRow &row : rows)
+        {
+            mismatches += cycle_row_mismatch(markdown, row);
+        }
+    }
+    std::fputs(mismatches.c_str(), stderr);
+    expect(mismatches.empty(),
+           "every row of the cycle table lands on its placement, Markdown or not");
+}
+
+// 17. 3 回押すと元に戻る。頼むのは off から側を開くときの 1 回だけで、側 → 全面 → off は券を
+// 進めない。全面の間に押しても本文の先頭行は錨の行に揃う（追補 31）。通常モードでも Vim でも同じ。
+void verify_toggle_round_trip()
+{
+    for (const auto mode : {core::EditMode::ordinary, core::EditMode::vim})
+    {
+        Editing editing;
+        auto &controller = editing.controller();
+        open_text(editing, "# title\n\ntext");
+        applied(controller, app::SelectEditMode{mode});
+        const EditorFrame side = controller.apply_frame(app::TogglePreview{});
+        const EditorFrame full = controller.apply_frame(app::TogglePreview{});
+        const EditorFrame off = controller.apply_frame(app::TogglePreview{});
+        expect(side_of(side) != nullptr && !side.full_preview.has_value() &&
+                   full.full_preview.has_value() && !full.other.has_value() &&
+                   !off.full_preview.has_value() && !off.other.has_value() &&
+                   off.layout == core::SplitLayout::none && body_of(off) == "# title\n\ntext",
+               "three presses go side, full and back to one body pane");
+        expect(editing.markdown().requests().size() == 1,
+               "only opening the side pane requests a parse");
+        applied(controller, app::TogglePreview{});
+        expect(controller.preview_placement() == PreviewPlacement::side &&
+                   editing.markdown().requests().size() == 2,
+               "the fourth press opens the side pane again with a fresh request");
+    }
+}
+
+// 18. 本文の 2 枠のとき。側を開くと本文の枠を置き換え、全面 → off で 1 枠になる。2 枠のまま
+// `:preview full`（F1 の全面）で入った全面から押すと、隠した 2 枠が配置と側ごと戻る。
+void verify_toggle_with_split()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    open_text(editing, "text");
+    applied(controller, app::SplitPane{core::SplitLayout::vertical});
+    const EditorFrame side = controller.apply_frame(app::TogglePreview{});
+    const EditorFrame full = controller.apply_frame(app::TogglePreview{});
+    const EditorFrame off = controller.apply_frame(app::TogglePreview{});
+    expect(side.layout == core::SplitLayout::vertical && side_of(side) != nullptr &&
+               full.full_preview.has_value() && off.layout == core::SplitLayout::none &&
+               !off.other.has_value(),
+           "with two body panes the cycle replaces the other pane and ends in one pane");
+
+    Editing hidden;
+    auto &split = hidden.controller();
+    open_text(hidden, "text");
+    applied(split, app::SplitPane{core::SplitLayout::horizontal});
+    applied(split, app::SwitchPane{});
+    applied(split, app::SetPreviewPlacement{PreviewPlacement::full});
+    const EditorFrame back = split.apply_frame(app::TogglePreview{});
+    expect(split.preview_placement() == PreviewPlacement::off &&
+               back.layout == core::SplitLayout::horizontal &&
+               back.active_side == core::PaneSide::second && back.other.has_value() &&
+               std::holds_alternative<app::PaneFrame>(back.other.value()),
+           "the key in full entered from two body panes brings both panes back");
+}
+
+// 19. タブを切り替えても見せ方は窓の値のまま巡る。側を開いたまま新しいタブへ行き、そこで全面へ、
+// 全面の間に前のタブへ行って戻り、もう一度押すと閉じる。
+void verify_toggle_across_tabs()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    open_text(editing, "# title\n\ntext");
+    applied(controller, app::TogglePreview{});
+    applied(controller, app::NewTab{});
+    expect(controller.preview_placement() == PreviewPlacement::side,
+           "the side pane stays open on a new tab");
+    applied(controller, app::TogglePreview{});
+    expect(controller.preview_placement() == PreviewPlacement::full,
+           "the key on the new tab moves the preview to full");
+    applied(controller, app::SwitchTab{0});
+    applied(controller, app::SwitchTab{1});
+    const EditorFrame returned = controller.frame();
+    expect(returned.active_tab == 1 && returned.full_preview.has_value(),
+           "going to another tab and back keeps the full preview");
+    applied(controller, app::TogglePreview{});
+    expect(controller.preview_placement() == PreviewPlacement::off &&
+               !controller.frame().other.has_value(),
+           "the next press after the tab round trip closes the preview");
+}
+
+// 全面の間も面の幅のドラッグは通る（ADR 0162 の追補 D78・ADR 0155 の改訂 17 の route_full_preview・
+// #1380 の T-3）。全面は面の右の本文の帯に描かれ、幅を変えても拒否の知らせは出ない。
+void verify_full_preview_resize()
+{
+    auto shown = core::default_editor_settings();
+    shown.explorer = true;
+    Editing editing(SettingsReading{shown});
+    auto &controller = editing.controller();
+    open_text(editing, "text");
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    serve_parsed(editing);
+    const EditorFrame dragged =
+        controller.apply_frame(app::ResizeExplorer{app::ExplorerResizing::dragged, 300});
+    expect(dragged.full_preview.has_value() && dragged.explorer.has_value() &&
+               dragged.explorer.value().width.dips == std::optional<std::int32_t>{300} &&
+               message_of(dragged).empty(),
+           "dragging the divider during the full preview changes the width without a refusal");
+    const EditorFrame released =
+        controller.apply_frame(app::ResizeExplorer{app::ExplorerResizing::released, 300});
+    expect(
+        released.full_preview.has_value() && message_of(released).empty() &&
+            editing.settings().written().value_or(core::default_editor_settings()).explorer_width ==
+                std::optional<std::int32_t>{300},
+        "releasing during the full preview writes the width and stays in full");
+}
 } // namespace
 
 void verify_preview_full_scope()
@@ -659,5 +881,10 @@ void verify_preview_full_scope()
     verify_selection_keys();
     verify_vim_selection();
     verify_selection_dropped_on_result();
+    verify_toggle_cycle_table();
+    verify_toggle_round_trip();
+    verify_toggle_with_split();
+    verify_toggle_across_tabs();
+    verify_full_preview_resize();
 }
 } // namespace nenenib::tests

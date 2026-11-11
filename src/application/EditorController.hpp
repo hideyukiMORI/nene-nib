@@ -45,6 +45,7 @@
 #include "ExplorerEntry.hpp"
 #include "ExplorerFolder.hpp"
 #include "ExplorerView.hpp"
+#include "ExplorerWidth.hpp"
 #include "FileBookmarks.hpp"
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
@@ -52,9 +53,11 @@
 #include "FindPhase.hpp"
 #include "FolderBatch.hpp"
 #include "FontFamilies.hpp"
+#include "FontSize.hpp"
 #include "GridLineMarks.hpp"
 #include "GridRowView.hpp"
 #include "GridTally.hpp"
+#include "ImageOutcome.hpp"
 #include "JsonValue.hpp"
 #include "KeyMap.hpp"
 #include "LanguageServerLink.hpp"
@@ -80,6 +83,7 @@
 #include "PreviewFullRoute.hpp"
 #include "PreviewPlacement.hpp"
 #include "ReplayLevel.hpp"
+#include "ReplayRounds.hpp"
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
 #include "ServerEvent.hpp"
@@ -172,6 +176,15 @@ class EditorController final
     // 面の表示値（決定 3・8）。窓が押した行の木の位置（first_visible を足す）を決めるための口で、
     // frame の本文の行は作らない（command_palette_view と同じ形）。面が消えていれば値なし。
     [[nodiscard]] std::optional<ExplorerView> explorer_view() const;
+    // 出ている面の幅の求め（ADR 0162 の追補 D78）。ドラッグの間はその幅、ほかは設定
+    // explorer_width。
+    // 面が消えていれば値なし。窓が境の当たり・面と本文の配置を引く安い読みで、frame を作らない
+    // （マウスの動くたびに呼ばれる）。frame の ExplorerView.width と同じ値。
+    [[nodiscard]] std::optional<core::ExplorerWidth> explorer_width() const noexcept;
+    // 字の大きさ（保存した値・配色の重ねは字の大きさを変えないので delivery().settings と同じ値）。
+    // 窓がマウスの動くたびに面の配置を引く安い読みで、delivery を作らない（title_bar_input と同じ
+    // 形・Issue #1380 の R-2）。
+    [[nodiscard]] core::FontSize font_size() const noexcept;
     // 帯の配置の入力を状態の 4 つの値（タブの本数・アクティブの位置・送り量・マウスを載せた要素）
     // から読むだけの口。行も題名も作らない（ADR 0056 の決定 9）。窓の hit test と hover が
     // マウスの動くたびに呼ぶ。width は帯の幅（物理画素）。値は title_bar_input(frame(), ...)
@@ -190,6 +203,10 @@ class EditorController final
     // `@` の再生の中で `map` の左辺の途中まで読んで待った回数（起動からの累計・#1312）。性質の
     // 試験が待ちと flush の道を通ったことを確かめるための口で、状態を変えない。
     [[nodiscard]] std::size_t replay_waits() const noexcept;
+    // 再生の列へ積んだ周の数（起動からの累計・#1341・`.` の再生も 1 周に数える）。`[count]@a` は
+    // 1 周ずつ積むので、巨大な回数でも鍵が失敗した所で止まったことを、時計を読まずに数で確かめる
+    // ための口。
+    [[nodiscard]] std::size_t replay_rounds() const noexcept;
     // Ctrl+Tab で歩いている間だけ真（ADR 0058 の決定 4）。窓が Ctrl を離したとき・フォーカスを
     // 失ったときに SettleRecentTab を送るかを決めるための口で、状態の 1 欄を読むだけ。
     [[nodiscard]] bool tab_walking() const noexcept;
@@ -214,6 +231,7 @@ class EditorController final
   private:
     // 意図の前に 1 意図ぶんだけの表示（失敗・報せ）を消す。keeps_message は報せを残す意図。
     void begin_intent(bool keeps_message);
+    void forget_unkept_marks(const EditorIntent &intent);
     // Ctrl+Tab の歩きの途中に歩きを続けない入口が来たら、写す前に確定する（ADR 0058 の決定 4）。
     // keeps_walk は歩きを続ける意図か。Vim の鍵は歩きを続けない。
     void settle_tab_walk_before(bool keeps_walk);
@@ -318,9 +336,15 @@ class EditorController final
     // 文書ごとで、再生の外では何もしない。
     void close_replayed_unit();
     void reopen_replayed_unit();
-    // 再生の中の再生の鍵を列の先頭へ差し込む。深さが上限を超えたら残りを捨てる（決定 4）。
-    void queue_nested_replay(const std::vector<core::VimKey> &keys, std::size_t depth,
-                             core::VimReplayKind kind);
+    // 再生の最初の周を列の先頭へ差し込み、残りの周を replay_rounds_ に置く（#1341）。深さが
+    // 上限を超えたら何も差し込まず残りを捨てる（決定 4）。
+    void queue_replay(const core::VimReplay &effect, std::size_t depth);
+    // 1 周ぶんの鍵を列の先頭へ差し込む。more なら最後の鍵に round_end を立てる。
+    void queued_round(std::span<const core::VimKey> keys, ReplayLevel level, bool more);
+    // round_end の鍵を取り出したとき、replay_rounds_ の頂の次の周を積む。
+    void next_replay_round();
+    // 鍵の失敗と深さの上限で、列・周・待ちを全部捨てる。
+    void dropped_replay();
     // 再生の列を先頭から流す 2 本（#1312）。表が空なら plain（今までの道のまま・鍵ごとの分岐と
     // 割り当てを足さない）、表に行があれば mapped（`@` の鍵は流す時点の表で引く・`.` の鍵は
     // 引かない）。どちらも失敗した鍵で列の残りを捨てる。
@@ -493,6 +517,7 @@ class EditorController final
     void accept(const PointExplorer &intent);
     void accept(const ScrollExplorer &intent);
     void accept(const ExplorerRootChosen &intent);
+    void accept(const ResizeExplorer &intent);
     // `:set root=.` の要求（決定 7）。
     void run_root_request(core::ExRootRequest request);
     // 設定 root へ書いて「root=<path>」を知らせる。書けなければ失敗の 1 行。
@@ -505,6 +530,8 @@ class EditorController final
     void select_explorer_row(std::size_t row);
     void release_explorer(const std::optional<core::FilePath> &released, std::size_t row);
     void click_explorer_row(std::size_t row);
+    void double_click_explorer(std::size_t row);
+    void second_click_explorer(const core::FilePath &path);
     void open_explorer_folder(std::optional<std::size_t> row);
     void enter_explorer_row(std::optional<std::size_t> row);
     void collapse_explorer_row();
@@ -543,8 +570,8 @@ class EditorController final
     void accept(const SwitchPane &);
     void accept(const ClosePane &);
     void accept(const ScrollPane &intent);
-    // Markdown のプレビュー（ADR 0155）。開く・閉じるは使う人の操作（決定 3）、tick は間引きの
-    // 合図で使う人の操作ではない（決定 8）。
+    // Markdown のプレビュー（ADR 0155）。見せ方の巡回は使う人の操作（決定 3・追補 #1354）、tick
+    // は間引きの合図で使う人の操作ではない（決定 8）。
     void accept(const TogglePreview &);
     void accept(const PreviewTick &);
     // チェックボックスの切り替え（ADR 0155 の追補 24）。使う人の操作で、本文の編集 1 回。
@@ -552,6 +579,8 @@ class EditorController final
     // 見せ方を選ぶ（ADR 0155 の改訂 16）。F1 の一覧と `:preview` の 1 本。
     void accept(const SetPreviewPlacement &intent);
     void place_preview(PreviewPlacement placement);
+    // off から側の枠を開く（決定 3）。place_preview の side の 1 か所から呼ぶ。
+    void open_side_preview();
     // 全面をやめて placement（off か side）へ。本文の見える位置を錨の行に揃える（改訂 17）。
     void leave_full_preview(PreviewPlacement placement);
     // `:preview?` と `:preview full|side|off` の答え（今の見せ方を 1 行）。
@@ -579,6 +608,15 @@ class EditorController final
     void request_preview(bool fresh);
     // プレビューが開いていれば今の券の結果を引く（決定 6・10）。WorkCompleted の道だけが呼ぶ。
     void collect_preview();
+    // プレビューが開いていれば、錨の要素から見える範囲の画像を錨に近い順に 1 つ頼む（ADR 0155 の追
+    // 補 50・51）。口に頼み中があれば頼まない。解析の結果が届いたとき・画像の結果を引いたとき・
+    // PreviewTick・錨を送ったときだけ呼ぶ。画像の節が無ければ何もしない。
+    void request_preview_images();
+    // プレビューが開いていれば画像の結果を引き、次の 1 つを頼む（追補 50）。WorkCompleted の道だけ
+    // が呼ぶ。
+    void collect_preview_images();
+    // 画像の口の結果を全部引き、頼み中の券の結果があれば頼み中を解く（引く所はここの 1 本）。
+    [[nodiscard]] std::vector<ImageOutcome> take_preview_images();
     // 本文が送られたら（前の frame と先頭行が違えば）プレビューを追従に戻す（決定 7）。frame の 1
     // か所。
     void follow_preview_on_scroll(core::LineNumber first_visible);
@@ -797,8 +835,10 @@ class EditorController final
     // INSERT にいるあいだの編集は 1 つの undo 単位に吸収する（ADR 0015 の決定 5）。
     [[nodiscard]] core::EditBoundary vim_boundary() const noexcept;
 
-    void replace(const core::OffsetRange &range, std::string_view text,
-                 core::EditBoundary boundary);
+    // block_lines は矩形の行ごとの置き換え（apply_block だけが渡す）。渡すとマークは行ごとに直す
+    // （marks_block_adjusted・#1361）。
+    void replace(const core::OffsetRange &range, std::string_view text, core::EditBoundary boundary,
+                 std::span<const core::VimBlockEdit> block_lines = {});
     void move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring,
                        core::CaretAffinity affinity = core::CaretAffinity::leading);
     void accept(const PointText &intent);
@@ -811,6 +851,10 @@ class EditorController final
     void select_clicked(core::Offset pointed, PointerClicks clicks);
     void select_clicked_in_vim(core::Offset pointed, PointerClicks clicks);
     [[nodiscard]] bool move_visual(const MoveCaret &intent);
+    // 上下の移動が本文の最初か最後の画面行で止まったときの着地（本文の先頭か末尾・#1386）。
+    void move_to_text_edge(VisualTextView &view, const MoveCaret &intent, std::int64_t rows);
+    // PgDn / PgUp の画面の先頭の送り。文字組みに失敗したら false。
+    [[nodiscard]] bool page_top_shifted(VisualTextView &view, std::int64_t rows);
     // 画面を動かさずにキャレットを見えている範囲へ入れた位置（#785）。
     [[nodiscard]] std::expected<core::TextCaret, TextLayoutFailure> caret_in_view();
     [[nodiscard]] VisualTextView visual_view();
@@ -957,9 +1001,14 @@ class EditorController final
     std::optional<float> wanted_x_;
     // `.` と `@` の再生で流す鍵の列と、それぞれの鍵の入れ子の深さと種類（ADR 0046 の決定 3・4・
     // #1312）。replay_depth_ はいま流している鍵の深さで、再生の外（打った鍵）では空。どれも
-    // perform(VimReplay) と queue_nested_replay と replayed_mapped_queue の群だけが書く。
+    // perform(VimReplay) と queue_replay と replayed_mapped_queue の群だけが書く。
     std::deque<core::VimKey> replay_queue_;
     std::deque<ReplayLevel> replay_levels_;
+    // `[count]@a` のまだ積んでいない周（#1341）。queue_replay が置き、next_replay_round が減らし、
+    // dropped_replay が捨てる。
+    std::vector<ReplayRounds> replay_rounds_;
+    // replay_rounds の数（queued_round だけが足す・`.` の 1 周も数える）。
+    std::size_t replay_round_count_ = 0;
     std::optional<std::size_t> replay_depth_;
     // `@` の再生の中で `map` の左辺の途中まで読んだ鍵（#1312）。再生の中だけで持ち、列が尽きたら
     // 待たずに流す。state_ の待ち（打った鍵の分）へ持ち越さない。
@@ -975,7 +1024,7 @@ class EditorController final
     // 再生を打ち切った鍵の失敗（Issue #983）。perform(VimReplay) が置き、`.` や `@` を打った鍵の
     // deliver_vim_key が自分の失敗として返して消す（Vim の :normal! は残りの鍵を捨てる）。
     std::optional<core::VimRepeatFailure> replay_failure_;
-    // 最後に流した Vim の鍵が窓の先頭を確かめ済みで終えたか（Ctrl-e Ctrl-y の keeps_top・Vim の
+    // 最後に流した Vim の鍵が窓の先頭を確かめ済みで終えたか（VimNavigate の topline が kept・Vim の
     // VALID_TOPLINE・ADR 0019 の追補 #1232）。stepped_vim が鍵ごとに置き、再生を返した外側の鍵は
     // 中の最後の鍵の値を引き継いで、鍵の終わりの寄せ（追従）を頼まない。perform(VimReplay) が
     // 再生の始めに消す。
@@ -1002,11 +1051,23 @@ class EditorController final
     // 面の上で押した行の節の経路（決定 4・ADR 0056 の決定 9）。離したときに同じ節かを比べて消す。
     // 「…」の行と行の外を押したときは値なし（離しても何もしない）。
     std::optional<core::FilePath> explorer_pressed_;
+    // 直前の 1 回のクリックが効いた節の経路（決定 4 の改め #1388）。ダブルクリックの 2 打目は画面の
+    // 行を引き直さずにこの節として扱い、2 回読まず・2 回開閉しない。消すのは次の押し・2 打目・
+    // 面のマウス以外の使う人の操作（apply の入口の 1 か所）・面を消す / ルートを替える
+    // （sync_explorer）。
+    std::optional<core::FilePath> explorer_clicked_;
+    // 境をドラッグしている間の面の幅（DIP・ADR 0162 の追補 D78）。設定には離したときにだけ書く。
+    std::optional<std::int32_t> explorer_dragged_;
     // 字体の一覧（#597・D58）。補完が求めた最初の 1 回だけ読み、読めなくても再読しない。
     std::optional<core::FontFamilies> font_families_;
     // プレビューの券（ADR 0155 の決定 6）。要求ごとに 1 つ進み、閉じて開き直しても戻さない
     // （閉じる前の要求の結果を開き直した後の券と取り違えない）。
     std::uint64_t preview_tickets_ = 0;
+    // プレビューの画像の券（ADR 0155 の追補 50）。画像の要求ごとに 1 つ進み、戻さない。
+    std::uint64_t preview_image_tickets_ = 0;
+    // 画像の口に頼んで結果をまだ引いていない券（追補 51・高々 1 つ）。文書が替わっても結果を引くま
+    // で次を頼まない（ワーカーを待たせるのは最大 1 枚の復号の時間）。
+    std::optional<std::uint64_t> preview_image_pending_;
     // 読みの port の券（ADR 0159 の決定 5）。プロセスで 1 つの通し番号で、頼むたびに進む。
     std::uint64_t read_tickets_ = 0;
     // 揃ったがまだ採っていない読みの結果（ADR 0159 の追補 2）。歩き・入力行・面の最中は留め、

@@ -29,6 +29,7 @@
 #include "VimTextObjectOutcome.hpp"
 #include "VimTextObjectRange.hpp"
 #include "VimTextObjectRequest.hpp"
+#include "VimToplineSettle.hpp"
 #include "VimToplineUpdate.hpp"
 #include "VimToplineWindow.hpp"
 #include "VisualPosition.hpp"
@@ -55,11 +56,13 @@ using detail::characters_between;
 using detail::combined_count;
 using detail::completed_character_search;
 using detail::completed_text_object;
+using detail::count_digit_dropped;
 using detail::count_of;
 using detail::counted;
 using detail::counts_as_digit;
 using detail::decimal_base;
 using detail::display_view;
+using detail::drops_count_digit;
 using detail::failed;
 using detail::finished_input_wait;
 using detail::forward_characters;
@@ -313,17 +316,20 @@ namespace
     return {top, caret};
 }
 
-// 回数ぶん前へ送った先頭（Vim の onepage の FORWARD の周）。周ごとに FAIL（末尾が見えていて先頭が
-// 末尾から余白の内側・#1099）を確かめて止まり、末尾が見えている周（`w_botline > line_count`）は
-// 先頭を最終行にし、ほかの周は窓の下の行から重なりを上へ数えた行（先頭 + page_advance）へ送る。
-// 2 周目以降も末尾が見えたら最終行へ行く（回数を掛けた送りの量で止めない・#1261）。
-[[nodiscard]] LineNumber pages_forward(const VimEditorView &view, std::size_t pages) noexcept
+// 回数ぶん前へ送った先頭と、最後に重なりの周が置いたキャレットの行（Vim の onepage の FORWARD の
+// 周）。周ごとに FAIL（末尾が見えていて先頭が末尾から余白の内側・#1099）を確かめて止まり、末尾が
+// 見えている周（`w_botline > line_count`）は先頭を最終行にしてキャレットを置かず、ほかの周は窓の
+// 下の行から重なりを上へ数えた行（先頭 + page_advance）を先頭とキャレットにする。2 周目以降も
+// 末尾が見えたら最終行へ行く（回数を掛けた送りの量で止めない・#1261）。
+[[nodiscard]] std::pair<LineNumber, std::optional<LineNumber>>
+pages_forward(const VimEditorView &view, std::size_t pages) noexcept
 {
     const std::size_t total = view.text.line_count();
     const std::size_t height =
         std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
     const std::size_t one_page = page_advance(view);
     LineNumber top = vim_viewport_of(view).first_visible;
+    std::optional<LineNumber> caret = std::nullopt;
     for (std::size_t page = 0; page < pages; ++page)
     {
         const bool end_shown = top.value + height - single_step >= total;
@@ -332,8 +338,9 @@ namespace
             break;
         }
         top = end_shown ? LineNumber{total} : LineNumber{top.value + one_page};
+        caret = end_shown ? caret : std::optional{top};
     }
-    return top;
+    return {top, caret};
 }
 
 // 後ろへの最後の周のキャレットの行。窓の外なら呼び手が窓の中へ入れる。
@@ -348,9 +355,28 @@ namespace
     switch (direction)
     {
     case VimScrollDirection::down:
-        return pages_forward(view, pages);
+        return pages_forward(view, pages).first;
     case VimScrollDirection::up:
         return pages_back(view, pages).first;
+    }
+    std::unreachable();
+}
+
+// 回数ぶんの周の後で cursor_correct の前のキャレットの行（Vim の onepage の周が置いた行・周が
+// 置かなければ鍵の前の行）。前へは最後の重なりの周の先頭、後ろへは最後に送れた周の行（#1362）。
+[[nodiscard]] LineNumber paged_caret(const VimEditorView &view, std::size_t pages,
+                                     VimScrollDirection direction)
+{
+    const LineNumber before = line_of(view.text, view.selection.caret);
+    switch (direction)
+    {
+    case VimScrollDirection::down:
+        return pages_forward(view, pages).second.value_or(before);
+    case VimScrollDirection::up:
+    {
+        const auto [top, caret] = pages_back(view, pages);
+        return top == vim_viewport_of(view).first_visible ? before : caret;
+    }
     }
     std::unreachable();
 }
@@ -446,12 +472,31 @@ namespace
     return step;
 }
 
+// 先頭 first の窓の最後の行（文字組みの無い道は 1 論理行 = 1 画面行）。
+[[nodiscard]] LineNumber window_last(const VimEditorView &view, LineNumber first) noexcept
+{
+    const std::size_t height =
+        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
+    return LineNumber{first.value +
+                      std::min(height - single_step, view.text.line_count() - first.value)};
+}
+
+// 画面移動の効果に先頭の決め直しを載せる（VimToplineSettle・#1232 / #1362）。
+[[nodiscard]] VimStep with_topline(VimStep step, VimToplineSettle settle)
+{
+    if (auto *const navigate = std::get_if<VimNavigate>(&step.effect); navigate != nullptr)
+    {
+        navigate->topline = settle;
+    }
+    return step;
+}
+
 // 文字組みの道の画面移動。端で失敗した送りは窓とキャレットを解いたとおりに動かし、失敗の印を
-// 添える（Vim の onepage の FAIL・#1228）。
+// 添える（Vim の onepage の FAIL・#1228）。先頭の決め直しも写す（#1362）。
 [[nodiscard]] VimStep displayed_navigation(const VimState &state, const VimEditorView &view,
                                            const VimDisplayNavigation &target)
 {
-    auto step = displayed_moved(state, view, target);
+    auto step = with_topline(displayed_moved(state, view, target), target.topline);
     if (!target.failure.has_value())
     {
         return step;
@@ -461,15 +506,58 @@ namespace
 
 // 新しい窓の先頭 first でキャレットの行を余白の内側へ寄せる（Vim の onepage と halfpage の最後の
 // cursor_correct・#1099・ADR 0019 の追補）。文字組みの無い道の窓は 1 論理行 = 1 画面行。
-[[nodiscard]] LineNumber corrected_in(const VimEditorView &view, LineNumber first,
-                                      LineNumber caret_line) noexcept
+[[nodiscard]] VimCursorWindow correction_window(const VimEditorView &view,
+                                                LineNumber first) noexcept
 {
     const std::size_t height = vim_viewport_of(view).visible_lines;
     const std::size_t total = view.text.line_count();
     const LineNumber below{first.value + std::min(std::max<std::size_t>(height, single_step),
                                                   total + single_step - first.value)};
-    return vim_cursor_corrected(VimCursorWindow{first, below, height, view.scroll_margin},
-                                caret_line, total);
+    return VimCursorWindow{first, below, height, view.scroll_margin};
+}
+
+[[nodiscard]] LineNumber corrected_in(const VimEditorView &view, LineNumber first,
+                                      LineNumber caret_line) noexcept
+{
+    return vim_cursor_corrected(correction_window(view, first), caret_line, view.text.line_count());
+}
+
+// 1 画面の送りが FAIL で返った着地（Vim の onepage の FAIL）。キャレットは cursor_correct が置いた
+// 行へ同じバイトの桁で入り（beginline を飛ばす・#411）、窓は送った所まで動いたまま、beep_flush
+// が残りの鍵を打ち切る（#1228）。先頭の決め直しは vim_failed_page_topline（#1362）。最初の周の
+// FAIL で行が動かなければ選択もそのまま置く。
+[[nodiscard]] VimToplineSettle failed_page_topline(const VimEditorView &view, LineNumber first,
+                                                   LineNumber paged, LineNumber caret_line)
+{
+    const bool within =
+        vim_cursor_within_margins(correction_window(view, first), paged, view.text.line_count());
+    return vim_failed_page_topline(line_of(view.text, view.selection.caret), paged, caret_line,
+                                   within);
+}
+
+[[nodiscard]] VimStep page_failed(const VimState &state, const VimEditorView &view,
+                                  LineNumber first, LineNumber paged)
+{
+    const Offset caret = view.selection.caret;
+    const LineNumber before = line_of(view.text, caret);
+    const LineNumber caret_line = corrected_in(
+        view, first, LineNumber{std::min(paged.value, window_last(view, first).value)});
+    const VimToplineSettle settle = failed_page_topline(view, first, paged, caret_line);
+    if (first == vim_viewport_of(view).first_visible && caret_line == before)
+    {
+        return failed(with_topline(VimStep{navigated_state(state, view, caret),
+                                           VimNavigate{view.selection, first}},
+                                   settle),
+                      VimRepeatFailure::not_moved);
+    }
+    const std::size_t column = caret.value - view.text.line_start(before).value;
+    return failed(
+        with_topline(
+            navigated_at(state, view, first,
+                         rested_in(view.text, vim_line_and_column(view.text, caret_line, column),
+                                   state.mode)),
+            settle),
+        VimRepeatFailure::not_moved);
 }
 
 // 半画面の送りが端で失敗するか（Vim の nv_halfpage は CTRL-U でカーソルが 1 行目・CTRL-D で
@@ -558,40 +646,25 @@ namespace detail
     if (first == vim_viewport_of(view).first_visible)
     {
         // 最初の周で端に当たった（Vim の onepage の FAIL・後ろへは先頭行が 1・前へは末尾が見えて
-        // 先頭が末尾から余白の内側）。beep_flush が残りの鍵を打ち切る（#1228）。
-        const Offset caret = view.selection.caret;
-        return failed(
-            VimStep{navigated_state(state, view, caret), VimNavigate{view.selection, first}},
-            VimRepeatFailure::not_moved);
+        // 先頭が末尾から余白の内側）。窓は動かず、キャレットは cursor_correct だけを受ける。
+        return page_failed(state, view, first, line_of(view.text, view.selection.caret));
     }
-    const std::size_t height =
-        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
-    const std::size_t last =
-        first.value + std::min(height - single_step, view.text.line_count() - first.value);
+    if (page_count_reached_the_end(view, count_of(state.count), direction))
+    {
+        // 回数の途中で端に当たった周は Vim の onepage が FAIL を返し、beginline を飛ばす（#411）。
+        return page_failed(state, view, first, paged_caret(view, count_of(state.count), direction));
+    }
     LineNumber caret_line = first;
     switch (direction)
     {
     case VimScrollDirection::down:
         break;
     case VimScrollDirection::up:
-        caret_line = LineNumber{std::min(last, page_back_caret(view, count_of(state.count)).value)};
+        caret_line = LineNumber{std::min(window_last(view, first).value,
+                                         page_back_caret(view, count_of(state.count)).value)};
         break;
     }
-    caret_line = corrected_in(view, first, caret_line);
-    if (!page_count_reached_the_end(view, count_of(state.count), direction))
-    {
-        return navigated(state, view, first, caret_line);
-    }
-    // 回数の途中で端に当たった周は Vim の onepage が FAIL を返し、beginline を飛ばす。キャレットは
-    // 行だけ画面へ入り、同じバイトの桁を保つ（check_cursor_col・Issue #411）。窓は送った所まで
-    // 動いたまま、beep_flush が残りの鍵を打ち切る（#1228）。
-    const Offset caret = view.selection.caret;
-    const std::size_t column = caret.value - view.text.line_start(line_of(view.text, caret)).value;
-    return failed(
-        navigated_at(
-            state, view, first,
-            rested_in(view.text, vim_line_and_column(view.text, caret_line, column), state.mode)),
-        VimRepeatFailure::not_moved);
+    return navigated(state, view, first, corrected_in(view, first, caret_line));
 }
 
 // 1 画面の送りが端で動かないか（Vim の ins_pageup / ins_pagedown が呼ぶ onepage(dir, 1) の
@@ -671,11 +744,7 @@ namespace
 // Ctrl-e Ctrl-y の先頭は scrolloff の追従に掛けない（Vim の VALID_TOPLINE・追補 #1232）。
 [[nodiscard]] VimStep kept_top(VimStep step)
 {
-    if (auto *const navigate = std::get_if<VimNavigate>(&step.effect); navigate != nullptr)
-    {
-        navigate->keeps_top = true;
-    }
-    return step;
+    return with_topline(std::move(step), VimToplineSettle::kept);
 }
 
 // Ctrl-e Ctrl-y（ADR 0019 の追補 #1232・Vim の scroll_redraw）。窓は engine が決めた先頭へ送る。
@@ -743,7 +812,7 @@ namespace
 [[nodiscard]] VimStep put_action(const VimState &state, const VimEditorView &view, VimAction action)
 {
     const VimPutSide side = action == VimAction::put_after ? VimPutSide::after : VimPutSide::before;
-    return put_step(state, view.text, view.selection.caret, side);
+    return put_step(state, view, side);
 }
 
 [[nodiscard]] VimStep line_end_action(const VimState &state, const VimEditorView &view,
@@ -963,17 +1032,19 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     std::unreachable();
 }
 
-// 次の 1 鍵を待つ接頭辞の動作 → 接頭辞（g z @ " と m ' `・ADR 0152 の決定 3）。ほかは nullopt。
+// 次の 1 鍵を待つ接頭辞の動作 → 接頭辞（g z @ " と m ' `・ADR 0152 の決定 3・[ ]）。ほかは
+// nullopt。
 [[nodiscard]] std::optional<VimPrefix> prefix_of(VimAction action) noexcept
 {
-    constexpr std::array<std::pair<VimAction, VimPrefix>, 7> prefixes{
+    constexpr std::array<std::pair<VimAction, VimPrefix>, 8> prefixes{
         {{VimAction::prefix_g, VimPrefix::g},
          {VimAction::prefix_z, VimPrefix::z},
          {VimAction::replay_macro, VimPrefix::at},
          {VimAction::select_register, VimPrefix::quote},
          {VimAction::set_mark, VimPrefix::mark},
          {VimAction::prefix_mark_line, VimPrefix::mark_line},
-         {VimAction::prefix_mark_exact, VimPrefix::mark_exact}}};
+         {VimAction::prefix_mark_exact, VimPrefix::mark_exact},
+         {VimAction::prefix_bracket, VimPrefix::bracket}}};
     for (const auto &[from, prefix] : prefixes)
     {
         if (from == action)
@@ -1265,7 +1336,8 @@ namespace
     // `'` `` ` `` も次の鍵（マークの名前）まで読む（ADR 0152 の決定 3）。`m` は Vim の nv_mark
     // と同じに オペレータを打ち消す（下の移動にならない鍵の道）。
     if (action == VimAction::prefix_g || action == VimAction::prefix_z ||
-        action == VimAction::prefix_mark_line || action == VimAction::prefix_mark_exact)
+        action == VimAction::prefix_mark_line || action == VimAction::prefix_mark_exact ||
+        action == VimAction::prefix_bracket)
     {
         return started_prefix(state, prefix_of(action).value_or(VimPrefix::g));
     }
@@ -1509,6 +1581,25 @@ namespace detail
     next.count = typed;
     return VimStep{std::move(next), VimNoEffect{}};
 }
+
+// Vim の normal_cmd_get_count は回数を打っている途中（count0 が 0 でない）の K_DEL を
+// `count0 /= 10` に読み、命令にしない（#1325）。NORMAL と VISUAL とオペレータの後の回数で同じで、
+// 次の 1 鍵を待つ状態（`r` `f` `"` など）と INSERT では回数を読まない。
+[[nodiscard]] bool drops_count_digit(const VimState &state, const VimKey &key) noexcept
+{
+    const auto *const special = std::get_if<VimSpecialKey>(&key);
+    return special != nullptr && *special == VimSpecialKey::delete_key &&
+           state.mode != VimMode::insert && !state.input_wait.has_value() &&
+           state.count.has_value();
+}
+
+[[nodiscard]] VimStep count_digit_dropped(const VimState &state)
+{
+    VimState next = state;
+    const std::size_t rest = state.count.value_or(VimCount{0}).value / decimal_base;
+    next.count = rest == 0 ? std::nullopt : std::optional{VimCount{rest}};
+    return VimStep{std::move(next), VimNoEffect{}};
+}
 } // namespace detail
 
 namespace
@@ -1545,6 +1636,22 @@ namespace detail
 
 namespace
 {
+// NORMAL の `<Del>` は `x`（Vim の nv_abbrev が cmdchar を 'x' に替えて nv_optrans
+// へ渡す・#1325）。 オペレータの後は x と同じく checkclearopq
+// で失敗する。回数の途中は桁を消す。nv_cmds の K_DEL の 行は NV_KEEPREG を持たないので、normal_cmd
+// が命令の後に `"a` を捨て、nv_optrans が積んだ "dl" は無名へ書く（`"a<Del>` は `x`
+// と同じ範囲を無名へ・実測）。
+[[nodiscard]] VimStep normal_deleted(const VimState &state, const VimEditorView &view)
+{
+    if (drops_count_digit(state, VimKey{VimSpecialKey::delete_key}))
+    {
+        return count_digit_dropped(state);
+    }
+    VimState unnamed = state;
+    unnamed.selected_register = std::nullopt;
+    return normal_character(unnamed, view, VimCharacter{U'x'});
+}
+
 // NORMAL の特別な鍵。矢印は h j k l と同じ動作で、Home / End は 0 と $（ADR 0015 の決定 6）。
 // Esc は保留を捨てるだけ（ADR 0012 の決定 5）。Backspace は行をまたぐ h（ADR 0049 の決定 1）。
 [[nodiscard]] VimStep normal_special(const VimState &state, const VimEditorView &view,
@@ -1596,6 +1703,8 @@ namespace
         return acted(state, view, VimAction::scroll_line_down);
     case VimSpecialKey::control_y:
         return acted(state, view, VimAction::scroll_line_up);
+    case VimSpecialKey::delete_key:
+        return normal_deleted(state, view);
     }
     std::unreachable();
 }
@@ -1637,6 +1746,7 @@ namespace
     case VimSpecialKey::page_down:
     case VimSpecialKey::control_v:
     case VimSpecialKey::control_o:
+    case VimSpecialKey::delete_key:
         return std::nullopt;
     }
     std::unreachable();
@@ -1805,9 +1915,9 @@ namespace
     return special != nullptr && *special == VimSpecialKey::escape;
 }
 
-// 名前の鍵にならなかったとき。Esc は何もせずに打ち消し、ほかは受けない（Vim の `m<Esc>`
-// `'<Esc>`）。
-[[nodiscard]] VimStep unnamed_mark(const VimState &state, const VimKey &key)
+// 待っていた鍵にならなかったとき。Esc は何もせずに打ち消し、ほかは受けない（Vim の `m<Esc>`
+// `'<Esc>` と `[<Esc>` `]<Esc>`）。
+[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key)
 {
     VimStep step{finished_input_wait(state), VimNoEffect{}};
     return is_escape(key) ? step : failed(std::move(step), VimRepeatFailure::refused);
@@ -1821,7 +1931,7 @@ namespace
     const auto *const character = std::get_if<VimCharacter>(&key);
     if (character == nullptr)
     {
-        return unnamed_mark(state, key);
+        return escaped_or_refused(state, key);
     }
     VimStep step{finished_input_wait(state), VimNoEffect{}};
     const auto marks = vim_mark_set(*view.marks, character->code,
@@ -1842,7 +1952,7 @@ namespace
     const auto *const character = std::get_if<VimCharacter>(&key);
     if (character == nullptr)
     {
-        return unnamed_mark(state, key);
+        return escaped_or_refused(state, key);
     }
     VimStep unmoved{finished_input_wait(state), VimNoEffect{}};
     const auto mark = vim_mark_named(*view.marks, character->code);
@@ -1860,6 +1970,14 @@ namespace
     return completed_prefix(state, marked,
                             prefix == VimPrefix::mark_line ? VimAction::move_mark_line
                                                            : VimAction::move_mark_exact);
+}
+
+// `[` `]` の後ろの 1 鍵。族は未実装なので、どの鍵でも何も動かさずに失敗する（`[{` の `{` を
+// 段落の移動として流さない・保留中のオペレータも打ち消す・#1334）。Esc は鳴らさずに打ち消すだけで
+// 後ろの鍵が効く（`[<Esc>x` `d[<Esc>x` は x が消す・`z<Esc>` と同じ・実測・#1344）。
+[[nodiscard]] VimStep bracket_step(const VimState &state, const VimKey &key)
+{
+    return escaped_or_refused(state, key);
 }
 
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,
@@ -1888,6 +2006,8 @@ namespace
         return mark_jump_step(state, view, prefix, key);
     case VimPrefix::insert_register:
         return insert_register_step(state, view, key);
+    case VimPrefix::bracket:
+        return bracket_step(state, key);
     }
     std::unreachable();
 }
@@ -1897,6 +2017,20 @@ namespace
     if (!state.input_wait.has_value())
     {
         std::unreachable();
+    }
+    // 1 鍵を待つ NORMAL / VISUAL の命令（`r` `f` `t` `g` `z` `"` `q` `@` `m` `'` `Ctrl-w`
+    // とテキスト オブジェクト）は K_DEL を名前にも対象にも読まず、Vim の clearopbeep
+    // で失敗して後ろを打ち切る （`r<Del>x` `f<Del>x` `g<Del>x`
+    // は本文を変えない・実測・#1325）。INSERT の `Ctrl-r` の待ちは除く。
+    if (const auto *const special = std::get_if<VimSpecialKey>(&key);
+        special != nullptr && *special == VimSpecialKey::delete_key &&
+        state.mode != VimMode::insert)
+    {
+        // VISUAL は clearop が選択を残すので待ちだけを消し、NORMAL はオペレータと回数も捨てる。
+        VimStep refused = is_visual_mode(state.mode)
+                              ? VimStep{finished_input_wait(state), VimNoEffect{}}
+                              : cancelled(state);
+        return failed(std::move(refused), VimRepeatFailure::refused);
     }
     return std::visit([&](const auto wait) { return awaited_step(state, view, wait, key); },
                       state.input_wait.value());
@@ -2147,8 +2281,24 @@ namespace
 // INSERT へ入る道を区別せず、鍵の前が VISUAL で後が VISUAL でなければ鍵の前の選択を覚える
 // （Vim の end_visual_mode と do_pending_operator）。`.` の VISUAL の再生は置かず、再生の鍵が
 // VISUAL にいるあいだ印を持ち越す（Vim の redo_VIsual_busy・実測）。
+// 前の選択に置く欲しい列（#1361）。矩形の `C` は Vim の v_visop が curswant を MAXCOL にしてから
+// `c` を流し、do_pending_operator がその curswant を b_visual.vi_curswant に置くので行末の印に
+// なる。ほかの鍵は鍵の前の欲しい列（引数を待つ鍵の `C` は文字なので除く）。
+[[nodiscard]] VimState visual_left_state(const VimState &state, const VimKey &key)
+{
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    if (state.mode != VimMode::visual_block || state.input_wait.has_value() ||
+        character == nullptr || vim_action_for(character->code) != VimAction::change_to_line_end)
+    {
+        return state;
+    }
+    VimState left = state;
+    left.wanted_column = VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
+    return left;
+}
+
 [[nodiscard]] VimStep visual_remembered(const VimState &state, const VimEditorView &view,
-                                        VimStep step)
+                                        const VimKey &key, VimStep step)
 {
     if (!is_visual_mode(state.mode))
     {
@@ -2165,7 +2315,7 @@ namespace
         return step;
     }
     VimMarks marks = step.marks.value_or(*view.marks);
-    marks.last_visual = visual_left(state, view);
+    marks.last_visual = visual_left(visual_left_state(state, key), view);
     step.marks = std::move(marks);
     return step;
 }
@@ -2190,7 +2340,8 @@ VimStep vim_pointer_selected(const VimState &state, const VimEditorView &view, S
     // とレジスタとマクロの録画を保つ。
     VimState left = input_discarded(state);
     left.mode = VimMode::normal;
-    VimStep step = visual_remembered(state, view, VimStep{std::move(left), VimNoEffect{}});
+    VimStep step = visual_remembered(state, view, VimKey{VimSpecialKey::escape},
+                                     VimStep{std::move(left), VimNoEffect{}});
     step.next.mode = mode;
     step.next.wanted_column = std::nullopt;
     step.next.redoing_visual = false;
@@ -2206,7 +2357,7 @@ VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
     {
         return step;
     }
-    step = visual_remembered(state, view, std::move(step));
+    step = visual_remembered(state, view, key, std::move(step));
     return macro_recorded(state, view, vim_recorded(state, view, std::move(step), key), key);
 }
 } // namespace nenenib::core

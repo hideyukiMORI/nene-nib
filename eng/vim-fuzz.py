@@ -36,6 +36,22 @@ number) and `d y v` with `H M L`, mixed into generator 4's words. `<C-e>` `<C-y>
 the key notation table yet, so they stay out. The shrinker deletes only words in generator 5 (deleting
 a line would move the window). Generators 3 and 4 never reach this table or its draws.
 
+Generator 6 (Issue #1353) adds the keys that came after generator 5: `<C-e>` `<C-y>` (#1232), the
+paragraph and sentence motions `{` `}` `(` `)` (#1316) alone and with `d y c v V`, `<Del>` (#1325) in
+NORMAL, VISUAL and INSERT and in a count (`12<Del>x` is `1x`), and a register with counts on both
+sides of it (`2"a3dd` `"a2p` `2"ayy` `2"a3.`, #1319). The counts of `<C-e>` `<C-y>` `{ } ( )` reach 40,
+past the end of the 30 to 60 lines (`LONG_COUNTS`); no count goes past 200 (#1341: a huge `@` or `p`
+count is not measured). Half of its buffers are generator 5's numbered lines, the other half prose
+(`generate_prose_text`): paragraphs split by one or two empty lines (sometimes a line of blanks, which
+is not a split, or a `.PP` macro line, which is), of sentences that end with `.` `!` `?` and closing
+`) ] " '`, or with the full-width `。` `！` `？` and `」` `）` (not sentence ends to Vim). It keeps
+generator 5's window and draws, and counts `dS` `yS` `vS` (and the new paragraph words) as jumps while
+generating (#1233). It never makes `[` or `]` (#1342: Nib refuses every `[` key, so each case would be
+the same known difference), `"+` `"*`, `q` or a macro. With generator 6, `DEFAULT_KNOWN` sorts the
+differences that have an open Issue (#1310 #1344) as known unless `--no-known-defaults`: #1310 only
+for a shrunk case of exactly a `<C-e>` / `<C-y>` word and one word after it that differs on
+`first_visible`. `summary.md` lists each rule's known cases with their minimal keys.
+
 The buffer has 1 to 12 lines mixing ASCII words, spaces, tabs, bracket and quote pairs, punctuation,
 Japanese (kana, kanji, full-width letters), empty lines and trailing spaces. It never ends with a
 newline and never holds a CR. Generator 4 adds a combining acute (`e` U+0301), a combining voiced
@@ -86,6 +102,7 @@ Usage:
     python eng/vim-fuzz.py --seeds 1-5 --count 300 --shrink --known 781:~,g~ --out D:/NeNeNib/outputs/<date>/vim-fuzz-seeds
     python eng/vim-fuzz.py --from-fixtures 50 --out D:/NeNeNib/outputs/<date>/vim-fuzz-fixtures
     python eng/vim-fuzz.py --generator 5 --seeds 1-5 --count 300 --shrink --out D:/NeNeNib/outputs/<date>/vim-fuzz-gen5
+    python eng/vim-fuzz.py --generator 6 --seeds 1-10 --count 300 --shrink --out D:/NeNeNib/outputs/<date>/vim-fuzz-gen6
 
 Python standard library only. Nothing here reads the clock or the environment; the order of the
 cases is the seed's order (no parallelism).
@@ -175,6 +192,37 @@ WORDS_5 = (
     ("<C-b>", 3, "{n}<C-b>"), ("<PageUp>", 1, "<PageUp>"), ("<PageDown>", 1, "<PageDown>"),
     ("dS", 2, "{r}{n}d{S}"), ("yS", 2, "{r}{n}y{S}"), ("vS", 2, "v{S}{V}"),
 )
+# 生成器 6 の語（Issue #1353）。`{L}` は本文の終わりを越えうる回数（LONG_COUNTS）、`{G}` は回数つきの
+# `{ } ( )`、`{R}` は必ず付くレジスタ（REGISTERS_6）、`{D}` は 2 桁の回数（`<Del>` が 1 桁を消す）、
+# `{Z}` はその後の 1 命令。`--generator 3` `4` `5` は外す（WORDS〜WORDS_5 は変えない）。
+# 重みは前の語の合計に対して約 3 割（新しい鍵を厚く引く）。
+WORDS_6 = (
+    ("<C-e>", 10, "{L}<C-e>"), ("<C-y>", 10, "{L}<C-y>"),
+    ("{", 6, "{L}{"), ("}", 6, "{L}}"), ("(", 6, "{L}("), (")", 6, "{L})"),
+    ("d{", 5, "{r}{n}d{G}"), ("y{", 5, "{r}{n}y{G}"), ("c{", 5, "{r}{n}c{G}{i}<Esc>"),
+    ("v{", 5, "v{G}{V}"), ("V{", 3, "V{G}{V}"),
+    ("<Del>", 5, "{r}{n}<Del>"), ("v<Del>", 3, "v{w}<Del>"), ("i<Del>", 5, "i{i}<Del>{i}<Esc>"),
+    ("N<Del>", 5, "{D}<Del>{Z}"),
+    ('"dd', 5, "{n}{R}{n}dd"), ('"yy', 5, "{n}{R}{n}yy"), ('"p', 5, "{R}{n}p"), ('"P', 3, "{R}{n}P"),
+    ('".', 2, "{n}{R}{n}."),
+)
+PARAGRAPH_KEYS = ("{", "}", "(", ")")
+# 回数の上限は 40（30〜60 行の本文の終わりを越える・#1341 の 200 より小さい）。
+LONG_COUNTS = (5, 40)
+# `"+` `"*` と数字（読みの依存がある）は入れない。
+REGISTERS_6 = tuple('"' + name for name in "abcdefghijklmnopqrstuvwxyz") + (
+    '"A', '"B', '"-', '"_', '""')
+AFTER_DIGITS = ("x", "l", "j", "w", "dd", "yy", "p", "J", "<Del>")
+# 生成器 6 の散文の本文（#1353）。文の終わりは Vim の `.` `!` `?` と閉じの `) ] " '`、全角は文の終わりでない。
+PROSE_WORDS = ("alpha", "beta", "gamma", "word", "Hello", "foo_bar", "x1", "a.b", "e.g.", "(paren)",
+               "[sq]", "{br}", '"dq"', "'sq'", "日本語", "かな", "漢字", "ＡＢＣ", "１２")
+SENTENCE_ENDS = (".", ".", ".", "!", "?", ".)", '."', "!'", "?]", '.)"', "。", "。」", "！", "？",
+                 "）。")
+PROSE_SPACES = (" ", " ", " ", "  ", "\t")
+# 段落の区切り: 空行 1 つ・2 つ・空白だけの行（区切りでない）・nroff のマクロの行（区切り）。
+PARAGRAPH_BREAKS = (("",), ("",), ("",), ("",), ("", ""), ("  ",), (".PP",))
+PROSE_FAMILY = 0.5
+PROSE_OPEN = 0.25
 # 生成器 5 の `{S}`（H M L）。
 SCREEN_MOTIONS = ("{n}H", "M", "{n}L")
 # 生成器 5 の本文と窓（#1224）。行は 2 桁の番号で始まり、本文の材料を 0〜4 個続ける。
@@ -218,17 +266,19 @@ FULL_WIDTH_ENDS = ("全", "角", "Ｚ")
 ZERO_WIDTH = frozenset("\u0301\u3099\ufe0f\u200d")
 # 語の依存（Issue #963）。生成器の版は summary.md に書く（固定 seed の順が変わったら上げる）。
 GENERATOR_VERSION = 4
-GENERATORS = (3, 4, 5)
+GENERATORS = (3, 4, 5, 6)
 # Vim に置く設定。Nib の `nrformats` は `bin,hex` の固定で、`-u NONE` の Vim の既定 `bin,octal,hex` の
 # ままだと `07<C-a>` が 8 進で測られる（ADR 0015 の決定 14）。fixture へ写すときも同じ設定を書く。
 ORACLE_SETTINGS = ["set nrformats=bin,hex"]
-WORD_NAMES = tuple(kind for kind, _, _ in WORDS + WORDS_4 + WORDS_5)
+WORD_NAMES = tuple(kind for kind, _, _ in WORDS + WORDS_4 + WORDS_5 + WORDS_6)
 # `H M L` も Vim の jump-motions（生成器 3 / 4 は作らないので、その列は変わらない）。オペレータと
 # VISUAL の中の `H M L`（`dS` `yS` `vS`）も Vim の nv_scroll が setpcmark を呼ぶので跳び（#1233）。
+# `{ } ( )` も jump-motions（Vim の nv_findpar と nv_brace が setpcmark を呼ぶ・オペレータつきも）。
 JUMP_WORDS = frozenset(("G", "gg", "NG", "Ngg", "N%", "/", "?", "*", "#", "%", "n", "N", "'", "`",
-                        "''", "``", "H", "M", "L", "dS", "yS", "vS"))
-# 生成が引く跳びの集合。生成器 5 の固定 seed の列を変えないため、`dS` `yS` `vS` を跳びと数えるのは
-# 依存の検査（shrink の候補）だけで、生成は前の集合で引く。生成で数えるのは次の版（生成器 6）。
+                        "''", "``", "H", "M", "L", "dS", "yS", "vS",
+                        "{", "}", "(", ")", "d{", "y{", "c{", "v{", "V{"))
+# 生成器 5 までが引く跳びの集合。生成器 5 の固定 seed の列を変えないため、`dS` `yS` `vS` を跳びと
+# 数えるのは依存の検査（shrink の候補）だけで、生成は前の集合で引く。生成器 6 は JUMP_WORDS で引く。
 GENERATION_JUMP_WORDS = JUMP_WORDS - {"dS", "yS", "vS"}
 SEARCH_WORDS = frozenset(("/", "?", "*", "#"))
 NUMBERED_WRITERS = frozenset(("dd", "cc"))
@@ -277,7 +327,41 @@ def insert_pieces(generator: int) -> tuple[str, ...]:
 
 
 def words_of(generator: int) -> tuple[tuple[str, int, str], ...]:
-    return WORDS + (WORDS_4 if generator >= 4 else ()) + (WORDS_5 if generator >= 5 else ())
+    return (WORDS + (WORDS_4 if generator >= 4 else ()) + (WORDS_5 if generator >= 5 else ())
+            + (WORDS_6 if generator >= 6 else ()))
+
+
+def generation_jumps(generator: int) -> frozenset[str]:
+    """The jump words the generator counts: generator 6 counts `dS yS vS` too (#1233・#1353)."""
+    return JUMP_WORDS if generator >= 6 else GENERATION_JUMP_WORDS
+
+
+def prose_sentence(rng: random.Random) -> str:
+    words = [rng.choice(PROSE_WORDS) for _ in range(rng.randint(1, 4))]
+    return " ".join(words) + rng.choice(SENTENCE_ENDS)
+
+
+def prose_line(rng: random.Random) -> str:
+    """One to three sentences; a quarter of the lines go on into the next line (no end)."""
+    parts = [prose_sentence(rng) for _ in range(rng.randint(1, 3))]
+    line = "".join(part + rng.choice(PROSE_SPACES) for part in parts[:-1]) + parts[-1]
+    if rng.random() < PROSE_OPEN:
+        line += " " + " ".join(rng.choice(PROSE_WORDS) for _ in range(rng.randint(1, 2)))
+    return line
+
+
+def generate_prose_text(rng: random.Random) -> str:
+    """Generator 6's prose buffer (#1353): 30 to 60 lines of paragraphs of one to five lines."""
+    target = rng.randint(*NUMBERED_LINES)
+    lines: list[str] = []
+    while len(lines) < target:
+        if lines:
+            lines.extend(rng.choice(PARAGRAPH_BREAKS))
+        lines.extend(prose_line(rng) for _ in range(rng.randint(1, 5)))
+    lines = lines[:target]
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines)
 
 
 def generate_numbered_text(rng: random.Random) -> str:
@@ -318,6 +402,8 @@ def generate_window(rng: random.Random, text: str) -> dict:
 
 
 def generate_text(rng: random.Random, generator: int = GENERATOR_VERSION) -> str:
+    if generator >= 6 and rng.random() < PROSE_FAMILY:
+        return generate_prose_text(rng)
     if generator >= 5:
         return generate_numbered_text(rng)
     table = text_pieces(generator)
@@ -359,6 +445,13 @@ def expand_word(rng: random.Random, template: str, text: str, marks: tuple[str, 
         table = insert_pieces(generator)
         return "".join(rng.choice(table) for _ in range(rng.randint(0, 3)))
 
+    def long_count() -> str:
+        # 生成器 6 だけの回数（#1353）: 半分は無し・多くは 1〜4・ときどき本文の終わりを越える。
+        draw = rng.random()
+        if draw < 0.5:
+            return ""
+        return str(rng.randint(1, COUNT_LIMIT) if draw < 0.85 else rng.randint(*LONG_COUNTS))
+
     def pattern() -> str:
         found = patterns_of(text)
         if not found:
@@ -386,6 +479,10 @@ def expand_word(rng: random.Random, template: str, text: str, marks: tuple[str, 
         # 生成器 5 だけの枠（#1224）。z の回数は本文の行の番号、{S} は H M L。
         "{q}": lambda: "" if rng.random() < 0.6 else str(rng.randint(1, text.count("\n") + 1)),
         "{S}": lambda: expand_word(rng, rng.choice(SCREEN_MOTIONS), text, generator=generator),
+        # 生成器 6 だけの枠（#1353）。
+        "{L}": long_count, "{G}": lambda: long_count() + rng.choice(PARAGRAPH_KEYS),
+        "{R}": lambda: rng.choice(REGISTERS_6), "{D}": lambda: str(rng.randint(10, 99)),
+        "{Z}": lambda: rng.choice(AFTER_DIGITS),
     }
     result = []
     index = 0
@@ -474,7 +571,7 @@ def generate_case(rng: random.Random, excluded: frozenset[str],
         joined = "".join(keys for _, keys in words) + keys
         if unknown_key_name(joined) is None:
             words.append((kind, keys))
-            state = advanced(state, kind, keys, GENERATION_JUMP_WORDS)
+            state = advanced(state, kind, keys, generation_jumps(generator))
     return text, words
 
 
@@ -692,14 +789,56 @@ def known_issue(words: list[tuple[str, str]], known: list[tuple[str, tuple[str, 
     return None
 
 
-def judged_words(entry: dict, by_name: dict, mismatches: list[dict]) -> list[tuple[str, str]]:
-    """The words the known check reads: the minimal ones, the representative's, or all of them."""
+def scrolled_then_one_key(judged: dict) -> bool:
+    """#1310: Vim keeps the window `<C-e>` / `<C-y>` set until the caret's line or the text changes;
+    with `scrolloff` above 0 the next key may set `first_visible` differently. Only a shrunk case
+    whose words are exactly the scroll and one word after it, differing on `first_visible`: an
+    unshrunk case or three words left may hide another cause (#1365 review)."""
+    words, window = judged["words"], judged["window"]
+    return (judged["shrunk"] and window is not None and window["scrolloff"] > 0
+            and len(words) == 2 and words[0][0] in ("<C-e>", "<C-y>")
+            and "first_visible" in judged["fields"])
+
+
+SEARCH_OPERATOR = re.compile(r'^(?:".)?\d*[dcy]\d*[nN*#/?]')
+# 生成器 6 の既定の既知（#1353）。1 行が Issue・説明・判定の述語（`judged_case` の辞書を読む）。
+# 名前の `--known` の後に読む。閉じた Issue と直した Issue の行は置かない（直った後に別の原因を
+# 隠す・#1365 のレビュー: #1231 は閉じ、#1337 は PR #1355 で直した）。
+# #1341（巨大な回数の `@` `p`）は生成しない（回数は LONG_COUNTS の 40 まで）ので行は無い。
+DEFAULT_KNOWN = (
+    ("1310", "so>0 の `<C-e>` `<C-y>` と後の 1 語だけに縮んだ `first_visible` の違い",
+     scrolled_then_one_key),
+    ("1344", "検索つきのオペレータ",
+     lambda judged: any(SEARCH_OPERATOR.match(keys) for _, keys in judged["words"])),
+)
+
+
+def default_known(judged: dict, rules: tuple = DEFAULT_KNOWN) -> str | None:
+    """The first DEFAULT_KNOWN Issue whose rule the judged case matches."""
+    return next((issue for issue, _, rule in rules if rule(judged)), None)
+
+
+def shrunk_of(entry: dict, mismatches: list[dict]) -> dict | None:
+    """The minimal case the known check reads: the entry's own, or its representative's."""
     if "minimal" in entry:
-        return list(zip(entry["minimal"]["words"], entry["minimal"]["word_keys"]))
+        return entry["minimal"]
     if "represented_by" in entry:
         representative = next(e for e in mismatches if e["name"] == entry["represented_by"])
-        return judged_words(representative, by_name, mismatches)
-    return list(by_name[entry["name"]]["words"])
+        return shrunk_of(representative, mismatches)
+    return None
+
+
+def judged_case(entry: dict, by_name: dict, mismatches: list[dict]) -> dict:
+    """What the known checks read: the minimal words and their differing fields when shrunk,
+    otherwise all the words and fields, with the case's window."""
+    minimal = shrunk_of(entry, mismatches)
+    if minimal is not None:
+        words = list(zip(minimal["words"], minimal["word_keys"]))
+        fields = set(minimal.get("nib", {})) or set(entry["fields"])
+    else:
+        words, fields = list(by_name[entry["name"]]["words"]), set(entry["fields"])
+    return {"words": words, "fields": fields, "shrunk": minimal is not None,
+            "window": by_name[entry["name"]]["window"]}
 
 
 def fuzz(args: argparse.Namespace, seed: int, out: Path) -> dict:
@@ -768,8 +907,11 @@ def fuzz(args: argparse.Namespace, seed: int, out: Path) -> dict:
                                       set(entry["fields"]), case["window"])
             entry["minimal"]["name"] = entry["name"] + "-min"
             representatives.append(entry)
+    rules = DEFAULT_KNOWN if args.generator >= 6 and not args.no_known_defaults else ()
     for entry in mismatches:
-        entry["known"] = known_issue(judged_words(entry, by_name, mismatches), args.known)
+        judged = judged_case(entry, by_name, mismatches)
+        entry["known"] = (known_issue(judged["words"], args.known)
+                          or default_known(judged, rules))
     (out / "mismatches.json").write_text(
         json.dumps(mismatches, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
     (out / "rejected.json").write_text(
@@ -793,12 +935,14 @@ def fenced(value: str) -> str:
 def settings_lines(args: argparse.Namespace) -> list[str]:
     known = "; ".join(f"#{issue}: {' '.join(fenced(name) for name in names)}"
                       for issue, names in args.known)
+    defaults = ("; ".join(f"#{issue}: {text}" for issue, text, _ in DEFAULT_KNOWN)
+                if args.generator >= 6 and not args.no_known_defaults else "なし")
     return [f"- generator={args.generator}（語の依存・Issue #963・INSERT の中の鍵と結合文字は 4・"
-            "viewport と画面移動の語は 5）",
+            "viewport と画面移動の語は 5・`<C-e>` `<C-y>` `{ } ( )` `<Del>` とレジスタの回数は 6）",
             f"- Vim: {ORACLE.vim_version()}", f"- replayer: `{args.replay}`",
             f"- shrink: {'on' if args.shrink else 'off'}",
             "- exclude: " + (" ".join(fenced(name) for name in args.exclude) or "なし"),
-            "- known: " + (known or "なし"), ""]
+            "- known: " + (known or "なし"), "- known（既定・生成器 6）: " + defaults, ""]
 
 
 def word_groups(entries: list[dict]) -> list[list[dict]]:
@@ -904,17 +1048,32 @@ def summary_text(args, tally, rejected, skipped, mismatches) -> str:
         lines.append("")
     for group in groups:
         lines.extend(mismatch_lines(group[0], mismatches, "###", [e["name"] for e in group[1:]]))
-    lines.append("## 既知の不一致")
-    lines.append("")
-    known = [e for e in mismatches if e["known"] is not None]
-    lines.extend(f"- {e['name']} → #{e['known']}: {fenced(e.get('minimal', e)['keys'])}"
-                 for e in known)
-    if not known:
-        lines.append("- 0")
-    lines.append("")
+    lines.extend(known_lines([(e, mismatches) for e in mismatches if e["known"] is not None],
+                             "## 既知の不一致（規則ごと・最小の鍵列）"))
     if skipped:
         lines.append(f"skip: {len(skipped)}（{skipped[0]['reason']} ほか）")
     return "\n".join(lines) + "\n"
+
+
+def known_lines(known: list[tuple[dict, list[dict]]], heading: str) -> list[str]:
+    """The known cases by rule, each with the minimal keys and the words the rule read, so what a
+    rule hides stays visible (#1365 review)."""
+    lines = [heading, ""]
+    for issue in sorted({entry["known"] for entry, _ in known}):
+        lines.append(f"### #{issue}")
+        lines.append("")
+        for entry, mismatches in known:
+            if entry["known"] != issue:
+                continue
+            shown = shrunk_of(entry, mismatches) or entry
+            via = f"（{entry['represented_by']} の最小）" if "represented_by" in entry else ""
+            lines.append(f"- {entry['name']}{via}: keys {fenced(shown['keys'])}・語 "
+                         f"{fenced(' '.join(shown['words']))}・欄 "
+                         f"{', '.join(sorted(shown.get('nib', entry['nib'])))}")
+        lines.append("")
+    if not known:
+        lines.extend(["- 0", ""])
+    return lines
 
 
 def fuzz_seeds(args: argparse.Namespace) -> int:
@@ -935,6 +1094,9 @@ def fuzz_seeds(args: argparse.Namespace) -> int:
     lines.append("既知（Issue ごと）: " + (", ".join(f"#{k} {v}" for k, v in sorted(by_issue.items()))
                                          or "0"))
     lines.append("")
+    lines.extend(known_lines([(entry, run["mismatches"]) for run in runs
+                              for entry in run["mismatches"] if entry["known"] is not None],
+                             "## 既知の不一致（全 seed・規則ごと・最小の鍵列）"))
     new = [(entry, run["mismatches"]) for run in runs for entry in run["mismatches"]
            if entry["known"] is None and "represented_by" not in entry]
     run_of = {id(entry): mismatches for entry, mismatches in new}
@@ -1045,10 +1207,13 @@ def main() -> int:
                         metavar="WORD")
     parser.add_argument("--known", type=known_spec, action="append", default=[],
                         metavar="ISSUE:WORD,WORD")
+    parser.add_argument("--no-known-defaults", action="store_true",
+                        help="generator 6: do not sort DEFAULT_KNOWN's differences as known")
     parser.add_argument("--from-fixtures", type=int, metavar="N")
     parser.add_argument("--generator", type=int, choices=GENERATORS, default=GENERATOR_VERSION,
                         help="3 keeps generator 3's tables (its seeds give the same cases); "
-                             "5 adds the viewport and the screen words (#1224)")
+                             "5 adds the viewport and the screen words (#1224); 6 adds <C-e> <C-y>, "
+                             "{ } ( ), <Del> and register counts (#1353)")
     args = parser.parse_args()
     if not args.replay.is_file():
         parser.error(f"no replayer at {args.replay}; build the nib_vim_replay target first")

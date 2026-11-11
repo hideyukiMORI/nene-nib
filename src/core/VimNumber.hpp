@@ -1,5 +1,6 @@
 #pragma once
 
+#include "VimCount.hpp"
 #include "VimNumberMiss.hpp"
 #include "VimNumberSpan.hpp"
 #include "VimNumberWindow.hpp"
@@ -16,7 +17,7 @@ namespace nenenib::core
 // VimNumberMiss::window_short を返し、呼ぶ側が窓を広げる）。
 
 // Vim が数を増減する回数の上限（normal.c は回数を 999999999 に貼り付ける・実測）。
-inline constexpr std::uint64_t vim_number_count_limit = 999'999'999;
+inline constexpr std::uint64_t vim_number_count_limit = vim_count_limit;
 
 // NORMAL の `Ctrl-a`。キャレット（`window.at`）の上か右の最初の数。キャレットが 16 進・2 進の
 // 桁や `0x` の上ならその数、直前の `-` は 10 進の負号。数が無ければ absent。

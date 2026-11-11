@@ -36,6 +36,10 @@ enum class VimSpecialKey : std::uint8_t
     // `Ctrl-e` `Ctrl-y`（窓を 1 行ずつ送る・ADR 0019 の追補 #1232）。窓は Vim の NORMAL / VISUAL
     // でだけ写す。INSERT の「下 / 上の行の文字を写す」は入れない（INSERT では何もしない）。
     control_e,
-    control_y
+    control_y,
+    // `<Del>`（#1325）。NORMAL は `x`・回数を打っている途中は回数の最後の桁を消す（Vim の
+    // normal_cmd_get_count）・VISUAL は `x`・オペレータの後は失敗（nv_abbrev → nv_optrans の
+    // checkclearopq）・INSERT は前方の Vim の 1 文字か行末で次の行とつなぐ（ins_del）。
+    delete_key
 };
 } // namespace nenenib::core

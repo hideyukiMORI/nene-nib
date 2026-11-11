@@ -161,11 +161,12 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // 自動退避の合図（AutosaveTick）も同じ理由で歩きを続ける（ADR 0137 の決定 1）。起動の問いの答え
 // （RestoreAutosave / DiscardAutosave）は使う人の操作なので、ここに書かず歩きを確定する（決定 6）。
 // プレビューの間引きの合図（PreviewTick）も使う人の操作ではないので歩きを続ける（ADR 0155 の
-// 決定 8）。開く・閉じる（TogglePreview）とチェックボックスの切り替え（TogglePreviewTask・ADR 0155
+// 決定 8）。見せ方の巡回（TogglePreview）とチェックボックスの切り替え（TogglePreviewTask・ADR 0155
 // の追補 24）と全面プレビューのマウス（PointPreview・改訂 18）は使う人の操作なので、ここにも
 // begin_intent にも書かない。
 // エクスプローラーの意図（ToggleExplorer・ExplorerKey・PointExplorer・ScrollExplorer・
-// ExplorerRootChosen）も使う人の操作なので、どちらにも書かない（ADR 0162 の決定 4）。
+// ExplorerRootChosen）も使う人の操作なので、どちらにも書かない（ADR 0162 の決定 4）。面の幅の
+// ドラッグ（ResizeExplorer・ADR 0162 の追補 D78）も使う人の操作の側で、どちらにも書かない。
 // 言語サーバーの古さの合図（LanguageServerTick）も使う人の操作ではないので歩きを続ける（ADR 0160
 // の決定 6）。Ctrl つきのホイールは帯の上でも字の大きさ（AdjustFontSize）になり、歩きを確定する
 // （ADR 0150 の追補・#1048）。歩きの間は Ctrl を押しているので、ScrollTabs が歩きの間に来る
@@ -198,6 +199,15 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 {
     return std::holds_alternative<MoveCaret>(intent) || is_signal(intent) ||
            std::holds_alternative<ScrollPane>(intent);
+}
+
+// エクスプローラーのダブルクリックの 2 打目と組む印（explorer_clicked_）を保つ意図（#1388・
+// レビュー V-1391 の R-1）。面のマウスそのもの（押しと 2 打目は accept が印を決める）と、使う人の
+// 操作ではない意図（裏の仕事の合図・窓の寸法など）だけ。鍵・タブの切り替え・ほかの押しなど、
+// 使う人の操作が間に入ったら印を捨て、次の 2 打目は画面の行を引く。
+[[nodiscard]] bool keeps_explorer_click(const EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<PointExplorer>(intent) || not_user_operation(intent);
 }
 
 // 狙いの横位置が指す所（アクティブなタブ・本文の改訂・キャレット）。合図の前後で比べる。
@@ -391,10 +401,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
 {
     layout_failure_.reset();
     repaint_ = true;
-    if (!keeps_wanted_x(intent))
-    {
-        wanted_x_.reset();
-    }
+    forget_unkept_marks(intent);
     const auto anchor = caret_anchor_of(state_);
     settle_tab_walk_before(keeps_tab_walk(intent));
     // 窓の寸法と帯の上のマウスは文書に触れないので、Vim の告知を消さない（ADR 0056 の決定 3）。
@@ -422,7 +429,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     // SelectLanguage も同じ（ADR 0154 の決定 4）。SelectSyntax も同じ（ADR 0156 の追補）。
-    // 面のホイール ScrollPaletteList も使う人の操作の側なので載せない（ADR 0150 の決定 2）。
+    // 面のホイール ScrollPaletteList と幅の ResizeExplorer も使う人の操作の側なので載せない。
     // 見せ方の SetPreviewPlacement と全面のマウスの PointPreview も使う人の操作の側（ADR 0155 の
     // 改訂 16・18）。全面プレビューの間の
     // 鍵の振り分けはここの 1 か所（改訂 17・route_full_preview）で、受けた意図は写さない。
@@ -448,6 +455,21 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 消去に頼らない。layout を作れない失敗は作り直しの apply で消えるまで frame に載る。
     layout_failure_ = drawing_failure(layout_failure_);
     return delivered;
+}
+
+// 写す前に、意図をまたいで覚えた印のうち、この意図が保たないものを捨てる。上下の移動の狙いの
+// 横位置（keeps_wanted_x）と、エクスプローラーのダブルクリックの 2 打目と組む節
+// （keeps_explorer_click・#1388）。
+void EditorController::forget_unkept_marks(const EditorIntent &intent)
+{
+    if (!keeps_wanted_x(intent))
+    {
+        wanted_x_.reset();
+    }
+    if (!keeps_explorer_click(intent))
+    {
+        explorer_clicked_.reset();
+    }
 }
 
 EditorFrame EditorController::apply_frame(const EditorIntent &intent)
@@ -591,6 +613,9 @@ void EditorController::accept(const WorkCompleted &)
     request_explorer_folder();
     // 退避 → フォルダ → Markdown の順（ADR 0155 の決定 6）。プレビューが閉じていれば呼ばない。
     collect_preview();
+    // プレビューの画像は解析の結果の後（新しい結果が引き継いだ entry の券で採る・ADR 0155 の追補 50
+    // ）。
+    collect_preview_images();
     // 言語サーバー（ADR 0160 の決定 1）。子が居なければ呼ばない。
     collect_language_server();
     const auto &input = state_.command_input();
@@ -1115,7 +1140,8 @@ void EditorController::add_other_pane(EditorFrame &result, const core::VimPatter
     {
         const core::Offset anchor =
             full->follows ? state_.text().line_start(result.first_visible) : full->anchor;
-        result.full_preview = PreviewFrame{full->document, anchor, full->notice, full->selection};
+        result.full_preview =
+            PreviewFrame{full->document, anchor, full->notice, full->selection, full->images};
         return;
     }
     const auto &other = state_.split().other;
@@ -1134,7 +1160,7 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
 {
     const core::Offset anchor =
         view.follows ? state_.text().line_start(result.first_visible) : view.anchor;
-    result.other = PreviewFrame{view.document, anchor, view.notice, std::nullopt};
+    result.other = PreviewFrame{view.document, anchor, view.notice, std::nullopt, view.images};
 }
 
 void EditorController::add_other_view(EditorFrame &result, const core::VimPattern *pattern,

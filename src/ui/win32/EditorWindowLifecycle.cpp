@@ -1,6 +1,7 @@
 #include "EditorWindow.hpp"
 #include "EditorWindowDetail.hpp"
 
+#include "ClosingSteps.hpp"
 #include "DevicePixels.hpp"
 #include "EditorSettings.hpp"
 #include "EndSession.hpp"
@@ -16,6 +17,7 @@
 #include <dwmapi.h>
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cstdint>
 #include <functional>
@@ -50,6 +52,11 @@ constexpr UINT work_message = WM_APP + 1;
 
 // 起動の問いを最初の frame の後に出す、自分宛ての合図（ADR 0137 の決定 6）。
 constexpr UINT autosave_question_message = WM_APP + 2;
+
+// pointer_message が受けるマウスの通知とカーソル（面と本文の境のカーソル・ADR 0162 の追補 D78）。
+constexpr std::array<UINT, 10> pointer_messages{
+    WM_LBUTTONDOWN, WM_LBUTTONDBLCLK, WM_LBUTTONUP,  WM_MBUTTONDOWN,    WM_MBUTTONUP,
+    WM_MOUSEMOVE,   WM_MOUSELEAVE,    WM_MOUSEWHEEL, WM_CAPTURECHANGED, WM_SETCURSOR};
 } // namespace
 
 EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &controller,
@@ -267,6 +274,11 @@ LRESULT CALLBACK EditorWindow::procedure(HWND window, UINT message, WPARAM word,
 
 LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
 {
+    // マウスの通知とカーソルは pointer_message の 1 本へ（表は pointer_messages）。
+    if (std::ranges::find(pointer_messages, message) != pointer_messages.end())
+    {
+        return pointer_message(message, word, data);
+    }
     // OS のメッセージ番号は開いた集合なので、既定分岐だけは許される（CPP-017）。
     switch (message)
     {
@@ -282,16 +294,6 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_NCLBUTTONDOWN:
     case WM_NCLBUTTONUP:
         return press_caption(message, word, data);
-    case WM_LBUTTONDOWN:
-    case WM_LBUTTONDBLCLK:
-    case WM_LBUTTONUP:
-    case WM_MBUTTONDOWN:
-    case WM_MBUTTONUP:
-    case WM_MOUSEMOVE:
-    case WM_MOUSELEAVE:
-    case WM_MOUSEWHEEL:
-    case WM_CAPTURECHANGED:
-        return pointer_message(message, word, data);
     case WM_GETMINMAXINFO:
     case WM_SETTINGCHANGE:
     case WM_SIZE:
@@ -345,7 +347,10 @@ LRESULT EditorWindow::lifetime_message(UINT message, WPARAM word, LPARAM data)
         if (word != FALSE)
         {
             // 確かめずに閉じるので、捨てた印は立てない（未保存の退避は残る・ADR 0137 の決定 5）。
-            remember_session(application::EndSession{application::SessionEnd::window_closed});
+            // 窓は隠さない。見える窓の無いアプリは 5 秒で OS に終わらされ、書く時間が縮む
+            // （ADR 0133 の追補 #1340）。
+            close_through(ClosingRoute::session_ends,
+                          application::EndSession{application::SessionEnd::window_closed});
         }
         return 0;
     case WM_DESTROY:
@@ -486,19 +491,50 @@ void EditorWindow::leave(application::SessionEnd reason)
     // 来る道（end_window と最後のタブの close_tab）は未保存のタブをすべて確かめ済み。ここで残る
     // 未保存は使う人が「いいえ」と答えて捨てたもの（ADR 0137 の決定 5）。描画を失った後に箱を
     // 出せなかったタブがあれば、捨てたことにしない（ADR 0133 の追補 #1282）。
-    remember_session(application::EndSession{
-        .reason = reason,
-        .unsaved_discarded =
-            !unsaved_kept_ &&
-            application::next_unsaved_tab(controller_.documents(), 0).has_value()});
-    // 壊す窓に立てた OS の終了を止める理由は、ここで外す（ADR 0133 の決定 4）。確認を通り抜けたので
-    // 残る未保存は捨てると決めたもの。
-    if (shutdown_blocked_)
+    close_through(ClosingRoute::window_closes,
+                  application::EndSession{
+                      .reason = reason,
+                      .unsaved_discarded =
+                          !unsaved_kept_ &&
+                          application::next_unsaved_tab(controller_.documents(), 0).has_value()});
+}
+
+void EditorWindow::close_through(ClosingRoute route, const application::EndSession &intent)
+{
+    run_closing_steps(route, [this, &intent](ClosingStep step) { close_step(step, intent); });
+}
+
+void EditorWindow::close_step(ClosingStep step, const application::EndSession &intent)
+{
+    switch (step)
     {
-        static_cast<void>(ShutdownBlockReasonDestroy(window_));
-        shutdown_blocked_ = false;
+    case ClosingStep::cancel_composition:
+        // 隠すと届く WM_KILLFOCUS で IME が変換を確定すると、確認を通り抜けた本文に CommitText が
+        // 入って未保存が生まれる。IME の側の変換を捨て、写しも消してから隠す。
+        cancel_ime_composition();
+        end_composition();
+        return;
+    case ClosingStep::hide_window:
+        // 書き込みを待つ間に窓とタスクバーのボタンを残さない。子の覆い窓も一緒に消える。
+        ShowWindow(window_, SW_HIDE);
+        return;
+    case ClosingStep::remember_session:
+        remember_session(intent);
+        return;
+    case ClosingStep::release_session_block:
+        // 壊す窓に立てた OS の終了を止める理由は、書き終えてから外す（ADR 0133 の決定 4）。確認を
+        // 通り抜けたので残る未保存は捨てると決めたもの。
+        if (shutdown_blocked_)
+        {
+            static_cast<void>(ShutdownBlockReasonDestroy(window_));
+            shutdown_blocked_ = false;
+        }
+        return;
+    case ClosingStep::destroy_window:
+        DestroyWindow(window_);
+        return;
     }
-    DestroyWindow(window_);
+    std::unreachable();
 }
 
 LRESULT EditorWindow::query_session_end()

@@ -806,6 +806,9 @@ void verify_mode_tables()
            "an omap applies after an operator and not as a motion");
     expect(mapped_body({MapRow{visual_only_set, "q", "d", true}}, "abcdef\n", "vlq") == "cdef\n",
            "an xmap applies in VISUAL");
+    expect(mapped_body({MapRow{normal_only, "<Del>", "dd", true}}, "abc\ndef\n", "<Del>") ==
+               "def\n",
+           "the <Del> key is read as the left side of an nmap (#1325)");
 }
 
 // 通常モード（「通常 | Vim」の通常）には効かない（決定 5）。
@@ -1004,8 +1007,9 @@ void verify_rhs_other_modes()
 }
 
 // 右辺の最後が Ctrl-e でも先頭は scrolloff の追従で戻らない（ADR 0019 の追補 #1232）。右辺は
-// 1 鍵ずつ流すので、最後の鍵の keeps_top がそのまま効く。`<C-e>j` で終われば j の追従が効く。
-// 期待値は同じ本文・窓・余白のマクロの fixture（viewport-ctrl-e-macro-）の Vim 9.1 の値。
+// 1 鍵ずつ流すので、最後の鍵の kept（VimNavigate の topline）がそのまま効く。`<C-e>j` で終われば j
+// の追従が効く。 期待値は同じ本文・窓・余白のマクロの fixture（viewport-ctrl-e-macro-）の Vim 9.1
+// の値。
 [[nodiscard]] std::pair<std::size_t, std::size_t> scrolled_by_right_side(char32_t typed_key)
 {
     Editing editing(mapped_settings(

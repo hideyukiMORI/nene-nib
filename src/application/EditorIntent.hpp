@@ -44,6 +44,7 @@
 #include "PrintDocument.hpp"
 #include "RefreshAppearance.hpp"
 #include "RegisterShell.hpp"
+#include "ResizeExplorer.hpp"
 #include "RestoreAutosave.hpp"
 #include "SaveDocument.hpp"
 #include "ScrollExplorer.hpp"
@@ -93,7 +94,7 @@ using EditorIntent = std::variant<
     EndSession, WorkCompleted, AutosaveTick, RestoreAutosave, DiscardAutosave, ToggleBookmark,
     OpenOperationList, PointText, SelectDisplay, SelectLanguage, SelectSyntax, ScrollPaletteList,
     SplitPane, SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick, TogglePreviewTask,
-    ToggleExplorer, ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen,
+    ToggleExplorer, ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen, ResizeExplorer,
     LanguageServerTick, MapTimeout, InsertDateTime, SelectDocumentFormat, OpenDocumentFormatList,
     BeginFind, BeginGoToLine, BeginReplace, SetPreviewPlacement, PointPreview, PrintDocument,
     RegisterShell, UnregisterShell>;
