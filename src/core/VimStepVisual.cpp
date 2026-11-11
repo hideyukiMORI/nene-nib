@@ -265,7 +265,9 @@ namespace
     const LineNumber anchor = line_of(text, view.selection.anchor);
     const LineNumber caret = line_of(text, view.selection.caret);
     const LineNumber first{std::min(anchor.value, caret.value)};
-    const LineNumber last{std::max({anchor.value, caret.value, first.value + 1})};
+    // 初期化子並びの std::max は MSVC STL の __std_max_8u を core の外へ出す（ARC-003）ので 2
+    // 引数で。
+    const LineNumber last{std::max(std::max(anchor.value, caret.value), first.value + 1)};
     const Offset restore = visual_restore(state, text, view.selection);
     if (last.value > text.line_count())
     {
