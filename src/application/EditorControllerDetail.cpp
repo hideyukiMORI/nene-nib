@@ -184,6 +184,12 @@ composition_view_of(const std::optional<core::Composition> &composition)
 }
 // 合図（ADR 0062 の決定 7・ADR 0137 の決定 1・ADR 0155 の決定 8・ADR 0160 の決定 6・ADR 0176 の
 // 決定 4）。「合図か」を決めるのはここの 1 か所（ADR 0062 の追補・#1296）。
+bool untouched_untitled(const EditorState &state) noexcept
+{
+    return !state.document().path.has_value() && state.text().size_bytes() == 0 &&
+           state.history().size() == 0;
+}
+
 bool is_signal(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<WorkCompleted>(intent) ||

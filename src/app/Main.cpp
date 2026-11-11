@@ -254,9 +254,9 @@ void bind_work_signal(const nenenib::ui::win32::EditorWindow &window, Adapters &
 // device を作り始め、窓を作って見せる間に重ねる（ADR 0131 の決定 2）。
 // Markdown プレビューの画像の口（ADR 0155 の追補 53）は段 1 では口だけで結果を返さない。段 2 が
 // worker を借りて読み、窓ができてから合図を結ぶ（bind_work_signal）。
-// 起動画面の履歴とブックマークの 1 回の読み（ADR 0172 の決定
-// 3）も同じワーカーを借り、頼むのは最初の frame の合図のときだけ。履歴と明示登録（ADR 0063）の
-// adapter はその仕事が借りるので、ワーカーより 先に作って後に壊す。
+// 起動画面の履歴とブックマークの 1 回の読み（ADR 0172 の決定 3）も同じワーカーを借り、
+// 頼むのは最初の frame の合図のときだけ。履歴と明示登録（ADR 0063）の adapter はその仕事が
+// 借りるので、ワーカーより先に作って後に壊す。
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();

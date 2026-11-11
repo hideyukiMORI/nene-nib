@@ -63,8 +63,8 @@ struct EditorPorts
     // Markdown プレビューの画像を裏で読む（ADR 0155 の追補 53・施主決定 D79）。プレビューが開いてい
     // る間だけ呼ぶ。
     ImagePort &images;
-    // 起動画面の履歴とブックマークを裏で 1 回読む（ADR 0172 の決定 3）。最初の frame
-    // の後に起動画面が 出ているときだけ呼ぶ。
+    // 起動画面の履歴とブックマークを裏で 1 回読む（ADR 0172 の決定 3）。
+    // 最初の frame の後に起動画面が出ているときだけ呼ぶ。
     StartListPort &start_lists;
 };
 } // namespace nenenib::application

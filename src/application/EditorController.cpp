@@ -959,8 +959,7 @@ core::GuideContext EditorController::guide_context() const noexcept
     {
         return core::GuideContext::hidden;
     }
-    if (!state_.document().path.has_value() && state_.text().size_bytes() == 0 &&
-        state_.history().size() == 0)
+    if (detail::untouched_untitled(state_))
     {
         return core::GuideContext::untouched_untitled;
     }

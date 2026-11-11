@@ -3,6 +3,7 @@
 // frame の合図（FirstFramePresented）の時点で起動画面が出ているときに 1 回だけ頼む（決定 3・起動と
 // 開く・切り替え・新しいタブ・保存・打鍵の道は呼ばない）。
 #include "EditorController.hpp"
+#include "EditorControllerDetail.hpp"
 
 #include "EditorOperation.hpp"
 #include "GuideVisibility.hpp"
@@ -121,12 +122,8 @@ bool EditorController::start_screen_shown() const noexcept
 {
     if (state_.settings().guide == core::GuideVisibility::hidden ||
         state_.command_input().has_value() || state_.composition().has_value() ||
-        state_.vim().macro_recording.has_value() || state_.full_preview() != nullptr)
-    {
-        return false;
-    }
-    if (state_.document().path.has_value() || state_.text().size_bytes() != 0 ||
-        state_.history().size() != 0)
+        recording_name().has_value() || state_.full_preview() != nullptr ||
+        !detail::untouched_untitled(state_))
     {
         return false;
     }
@@ -257,13 +254,10 @@ void EditorController::run_start_entry(const core::StartEntry &entry)
     if (const auto &path = entry.path; path.has_value())
     {
         const bool recent = entry.kind == core::StartEntryKind::recent;
+        // 開けずに履歴から外すと、forget が読んだ列からも外す（同期と裏の読みの両方・ADR 0172
+        // の追補 11）。
         open_listed(path.value(),
                     recent ? core::PaletteOrigin::history : core::PaletteOrigin::bookmark);
-        // 開けずに履歴から外したファイルは、読んだ列からも外す（起動画面が出たままのとき）。
-        if (recent && start_screen_shown() && start_lists_.has_value())
-        {
-            std::erase(start_lists_.value().recent, path.value());
-        }
         return;
     }
     switch (entry.kind)

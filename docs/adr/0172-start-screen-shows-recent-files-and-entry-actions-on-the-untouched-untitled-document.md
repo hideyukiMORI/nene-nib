@@ -22,7 +22,8 @@ IDE の「ようこそ」の面。Nib は引数も前回のタブも無い起動
 
 ## 強制
 
-- 起動の道に分岐を足さない・履歴は frame の後の 1 回: **active**（`verify_quiet_paths`・QLT-014 の A/B）。
+- 履歴とブックマークは最初の frame の合図の後の 1 回だけ読み、起動・開く・切り替え・新しいタブ・保存・打鍵の道では読まない: **active**（`verify_quiet_paths` が合図を送ってから port の回数を数える・契約 `--start-screen`・#1442）。
+- 起動の道に分岐を足さない（`startup-first-frame` / `startup-window-shown` の A/B・QLT-014）: **未測定**（設計席が段 2 の前後に静かな機械で測る）。
 - 開く道が `open_listed` の 1 本: **active**（契約）。
 
 ## 結果
@@ -60,3 +61,6 @@ IDE の「ようこそ」の面。Nib は引数も前回のタブも無い起動
 8. **行の実行** — 最近使ったファイルは `open_listed`（出どころ = 履歴・開けなければ履歴から外し、読んだ列からも外す）、ブックマークは `open_listed`（出どころ = ブックマーク・知らせて残す・ADR 0063）。「ファイルを開く」は操作 `open_file`、「フォルダを開く」は `choose_explorer_root` を `operation_request` で頼む（ui が `run_operation`・ADR 0078 の決定 8）。「新しいファイル（そのまま打ち始める）」は選びを外すだけ。選びは端で反対の端へ回る（Ctrl+P の面の ↑ ↓ と同じ）。クリックは意図 `ChooseStartEntry{index}`。
 9. **鍵の節** — Ctrl+P（何でも探す）・F1（操作の一覧）・Ctrl+Shift+E（エクスプローラー）の 3 行を操作の表から引く（`operation_guide_entry`）。決定 2 の Ctrl+,（設定）は、設定画面の操作がまだ操作の表に無いので、表に入ったときに行を足す。
 10. **段** — 段 1（#1442・#1018 の前半）は core（`start_entries`・`start_selection_stepped`・`start_key_entries`）・application（条件・選び・鍵の振り分け・行の実行・frame の `start_screen`・契約 `--start-screen`・`verify_quiet_paths` の欄）・adapter（`Win32StartListAdapter`）。ui は合図を送らず frame の `start_screen` も描かないので、段 1 だけでは見た目も鍵も変わらない（今の F1 の案内のまま）。段 2 は ui の描画と hit test と合図の送り・`nib_window_tests` の画素・`eng/verify-window.py --start-screen`。
+11. **裏で読む最近のファイル（2026-11-11・レビュー V-1454 の R-1・設計席の決め）** — 履歴から外すのは `forget` の 1 か所で、そこが起動画面の読んだ列（`start_lists_`）からも外す（同期の失敗も裏の読みの失敗も同じ道）。開く道の結果を `run_start_entry` で推し量らない。64 MiB を超えて裏で読んでいる間（無題のまま `readings` に開く要求がある間）は、条件は状態を持たないので起動画面を出し続ける。読めたら文書が替わって消える。その間に別の行を開くと前の読みは取り消される（`open_document` の規則のまま）。
+12. **map との順（レビューの軽い 1・設計席の決め: そのまま）** — 起動画面の鍵の振り分けは `map` の表を引く前の生の鍵を見る（Ctrl+P の面と同じ「面の鍵は生の鍵」）。`nnoremap j gj` や `nmap <Down> …` があっても、起動画面が出ている間の `j` `k` `<Down>` `<Up>` は選びになり、`j` `k` で始まる左辺（`nnoremap jj …`）は起動画面の間は届かない。
+13. **判定の 1 本（レビューの R-2）** — 「何も書いていない無題」は application の `detail::untouched_untitled` の 1 本で、F1 の案内（`guide_context`）と起動画面（`start_screen_shown`）が同じ述語を呼ぶ。録画中の判定も `recording_name` の 1 つを読む。
