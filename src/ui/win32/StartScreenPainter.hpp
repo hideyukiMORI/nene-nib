@@ -26,7 +26,8 @@ namespace nenenib::ui::win32
 // に、題「NeNe Nib」・節の見出し（muted）・選んだ行（current_line で列の全幅・先頭に ▸ を muted）を
 // 描く。最近使ったファイルとブックマークの行は名前（text）とその右の場所（muted・入り切らなければ
 // 頭側を「…」で切る）で、名前と場所は Ctrl+P の面と同じ tab_title_for / tab_folder_for から作る。
-// 「はじめる」の行は名前のすぐ後ろに補足（muted）、「ファイルを開く」は右端に鍵の枠。ショートカット
+// 「はじめる」の行は名前のすぐ後ろに補足（muted）、鍵のある行（操作の表に鍵がある行・#1480）は
+// 右端に鍵の枠（補足は枠の手前で切る）。ショートカット
 // の節は鍵の枠をほかの行の項目と同じ左端に揃え、説明をその右に置く。
 // 配置は core::start_screen_layout の 1 本（窓のクリックの当たりと同じ）で、名前の幅で決まる
 // 場所と補足の左端だけを測って置く（Ctrl+P の面の場所と同じ）。行の文字組みは
@@ -58,9 +59,14 @@ class StartScreenPainter final
                 core::RgbColor color);
     // 鍵の枠。右寄せは欄の右端に、左寄せは欄の左端に揃える。
     void keycap(std::string_view key, const core::LayoutRect &area, bool from_left);
+    // 鍵の枠の幅（字の幅と左右の余白・物理画素）。測れなければ 0。
+    [[nodiscard]] std::int32_t keycap_width(std::string_view key, const core::LayoutRect &area);
     void paint_headings(const core::StartScreenLayout &layout, const core::Palette &palette);
     void paint_row(const core::StartEntry &entry, const core::StartRowLayout &row, bool selected,
                    const core::Palette &palette);
+    // 鍵が空でなければ行の項目の欄 label の右端に鍵の枠を描き、名前と補足を書く残りの欄（枠の
+    // 12 DIP 手前まで・「ファイルを開く」と同じ並び・#1480）を返す。空なら label のまま。
+    [[nodiscard]] core::LayoutRect keyed(std::string_view key, const core::LayoutRect &label);
     // 名前（text）と、そのすぐ後ろの補足（muted・空なら書かない）。
     void paint_named(std::string_view name, std::string_view detail, const core::LayoutRect &area,
                      const core::Palette &palette);

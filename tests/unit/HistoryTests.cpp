@@ -516,7 +516,8 @@ void verify_quiet_paths()
                editing.autosave().touches() == 1,
            "the start lists the autosave remnants once and touches nothing else");
     // 何も書いていない無題の起動は、最初の frame の合図で起動画面の読みを 1 回だけ頼む。以後の道は
-    // 頼み直さない（ADR 0172 の決定 3）。
+    // 頼み直さない（新しいタブで起動画面が出直しても、読みが走っていて前の読みから履歴もブック
+    // マークも書いていない・ADR 0172 の決定 3 と追補 25）。
     applied(controller, nenenib::application::FirstFramePresented{});
     applied(controller, VisibleLines{3});
     open_work(editing, "ab");

@@ -849,8 +849,7 @@ class EditorController final
 
     // ---------------------------------------------------------------- 起動画面（ADR 0172）
     // EditorControllerStartScreen.cpp の群だけが読み書きする。
-    // 最初の frame の合図（決定 3）。起動画面が出ていれば履歴とブックマークの読みを 1 回だけ頼み、
-    // 以後は起動画面の鍵を受ける。
+    // 最初の frame の合図（決定 3）。以後は起動画面の鍵を受け、出口が起動画面を数え始める。
     void accept(const FirstFramePresented &);
     // 行のクリック（決定 4）。選びの有無に依らず押した行を実行する。
     void accept(const ChooseStartEntry &intent);
@@ -864,10 +863,13 @@ class EditorController final
     [[nodiscard]] bool route_start_screen(const EditorIntent &intent);
     // 行 1 つの実行（open_listed の 1 本か、操作の頼み）。
     void run_start_entry(const core::StartEntry &entry);
-    // 合図の道で届いた読みを採る（決定 3）。頼んでいなければ port を呼ばない。
+    // 合図の道で届いた読みを採る（決定 3・追補 25）。読みが走っていなければ port を呼ばない。
     void collect_start_lists();
-    // 意図の後に、条件が偽なら選びを消す（追補の 5）。
-    void settle_start_screen() noexcept;
+    // 履歴かブックマークを書いた印（追補 25）。次に起動画面が出たときに読み直す。
+    void mark_start_lists_stale() noexcept;
+    // 意図の後に、条件が偽なら選びを消し、出ていない → 出ているに変われば読みを頼む（追補の 5・
+    // 25）。
+    void settle_start_screen();
 
     // VimEffect の写し先。選択肢が増えたら std::visit がここで足りずコンパイルが落ちる
     // （CPP-002 / ADR 0012 の決定 3）。どれも既存の 1 本の経路を呼ぶだけ（ARC-001）。
@@ -1187,11 +1189,15 @@ class EditorController final
     // 全面の間に Vim の `g` を受けて次の鍵を待っているか（`gg` `gt` `gT`・ADR 0155 の改訂 17）。
     // 読み書きは route_full_preview の 1 か所。
     bool preview_vim_g_ = false;
-    // 起動画面（ADR 0172）。最初の frame を出したか（以後だけ鍵を受ける）・読みを頼んだか（1 回
-    // だけ）・読んだ履歴とブックマーク・選んだ行（追補 2026-11-11 の 5・条件が偽になったら消す）。
-    // 読み書きは EditorControllerStartScreen.cpp の群だけ。
+    // 起動画面（ADR 0172）。最初の frame を出したか（以後だけ鍵を受ける）・前の意図の出口で
+    // 出ていたか・読みが走っているか（届くまで 1 本）・前の読みの後に履歴かブックマークを書いたか
+    // （最初は立てておく・追補 25）・読んだ履歴とブックマーク（次に届くまで持つ）・選んだ行（追補
+    // 2026-11-11 の 5・条件が偽になったら消す）。読み書きは EditorControllerStartScreen.cpp の群
+    // だけ（印を立てるのは mark_start_lists_stale）。
     bool first_frame_presented_ = false;
-    bool start_lists_requested_ = false;
+    bool start_screen_was_shown_ = false;
+    bool start_lists_reading_ = false;
+    bool start_lists_stale_ = true;
     std::optional<StartLists> start_lists_;
     std::optional<std::size_t> start_selection_;
     // 自動退避の帳面（ADR 0137 の決定 2）。AutosaveTick の道だけが読み書きする。

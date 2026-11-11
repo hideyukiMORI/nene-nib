@@ -45,8 +45,9 @@ using Format = Microsoft::WRL::ComPtr<IDWriteTextFormat>;
 
 constexpr std::uint32_t dpi = 96;
 // 最初の frame（履歴とブックマークを読む前）の文字組みの数: 題 1・見出し 2（はじめる・
-// ショートカット）・「はじめる」の名前 3 と補足 2 と鍵の枠 1・ショートカットの枠 3 と説明 3。
-constexpr std::size_t first_frame_layouts = 15;
+// ショートカット）・「はじめる」の名前 3 と補足 2 と鍵の枠 2（新しいファイル・ファイルを開く・
+// #1480）・ショートカットの枠 3 と説明 3。
+constexpr std::size_t first_frame_layouts = 16;
 // 最近 2・ブックマーク 1 を読み、最初の行を選んだ frame: 見出し 2・印 1・「…」1 と、パスの行ごとに
 // 名前・場所の全文（幅を測る）・描いた場所の 3 つが増える。
 constexpr std::size_t listed_layouts = first_frame_layouts + 2 + 1 + 1 + (3 * 3);
@@ -107,7 +108,9 @@ using Formats = std::vector<Format>;
         formats.at(3).Get(),
         formats.at(4).Get(),
         KeycapStyle{9.0F, 20.0F, 5.0F, palette.panel, palette.panel_border, palette.text},
+        "Ctrl+T",
         "Ctrl+O",
+        "",
         dpi};
 }
 
@@ -253,8 +256,9 @@ void verify_rows(const StripPainter &paint, const core::StartScreenLayout &layou
         "a long folder is cut at its head and ends before the right padding");
 }
 
-// 「はじめる」の補足は名前のすぐ後ろ（右端は空く）。「ファイルを開く」は右端に、ショートカットは
-// 項目の左端に、本文の案内と同じ鍵の枠（面は panel）。
+// 「はじめる」の補足は名前のすぐ後ろ。鍵のある「新しいファイル」と「ファイルを開く」は右端に
+// （#1480）、ショートカットは項目の左端に、本文の案内と同じ鍵の枠（面は panel）。鍵の無い「フォルダ
+// を開く」の右端は空く。
 void verify_keycaps(const StripPainter &paint, const core::StartScreenLayout &layout,
                     const core::Palette &palette)
 {
@@ -263,17 +267,23 @@ void verify_keycaps(const StripPainter &paint, const core::StartScreenLayout &la
     const auto &open = layout.rows.at(4).label;
     const auto open_top = fresh.top - 10;
     const auto opened = paint(view, layout, open_top);
+    expect(ink_in(opened,
+                  shifted(
+                      core::LayoutRect{fresh.left + 120, fresh.top, fresh.left + 200, fresh.bottom},
+                      open_top),
+                  palette.background) > 0 &&
+               pixel_is(opened, fresh.right - 3, ((fresh.top + fresh.bottom) / 2) - open_top,
+                        palette.panel),
+           "the new-file note follows its name and its key sits in a keycap at the right end");
+    const auto &folder = layout.rows.at(5).label;
+    const auto folder_top = folder.top - 10;
+    const auto folders = paint(view, layout, folder_top);
     expect(
-        ink_in(
-            opened,
-            shifted(core::LayoutRect{fresh.left + 120, fresh.top, fresh.left + 200, fresh.bottom},
-                    open_top),
-            palette.background) > 0 &&
-            ink_in(opened,
-                   shifted(core::LayoutRect{fresh.right - 60, fresh.top, fresh.right, fresh.bottom},
-                           open_top),
-                   palette.background) == 0,
-        "the new-file note follows its name and leaves the right end empty");
+        ink_in(folders,
+               shifted(core::LayoutRect{folder.right - 60, folder.top, folder.right, folder.bottom},
+                       folder_top),
+               palette.background) == 0,
+        "the open-folder row without a key leaves the right end empty");
     expect(
         pixel_is(opened, open.right - 3, ((open.top + open.bottom) / 2) - open_top, palette.panel),
         "the open-file row shows its key in a keycap at the right end");

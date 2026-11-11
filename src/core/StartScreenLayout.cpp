@@ -82,6 +82,52 @@ void place_keys(StartScreenLayout &layout, std::int32_t top, const RowMetrics &m
         top += metrics.at(height_at);
     }
 }
+
+void move_down(LayoutRect &area, std::int32_t delta) noexcept
+{
+    area.top += delta;
+    area.bottom += delta;
+}
+
+void move_down(std::optional<LayoutRect> &area, std::int32_t delta) noexcept
+{
+    if (area.has_value())
+    {
+        move_down(area.value(), delta);
+    }
+}
+
+// 上寄せで置いた画面を、本文の面の上下の中央へ動かす（追補 26・#1480）。上の余白は
+// max(36 DIP, (面の高さ − ブロックの高さ) / 2)。ブロックが面より高ければ動かさない（上寄せのまま
+// 下が切れる）。整数の割り算だけ。
+void centered(StartScreenLayout &layout, const LayoutRect &content, std::uint32_t dpi) noexcept
+{
+    const auto least = to_pixels(start_top_dips, dpi);
+    const auto block = height_of(layout.column);
+    const auto delta = std::max(least, (height_of(content) - block) / 2) - least;
+    if (delta <= 0)
+    {
+        return;
+    }
+    move_down(layout.column, delta);
+    move_down(layout.title, delta);
+    move_down(layout.recent_heading, delta);
+    move_down(layout.bookmark_heading, delta);
+    move_down(layout.empty_note, delta);
+    move_down(layout.start_heading, delta);
+    move_down(layout.key_heading, delta);
+    for (auto &row : layout.rows)
+    {
+        move_down(row.line, delta);
+        move_down(row.mark, delta);
+        move_down(row.label, delta);
+    }
+    for (auto &key : layout.keys)
+    {
+        move_down(key.key, delta);
+        move_down(key.label, delta);
+    }
+}
 } // namespace
 
 StartScreenShape start_screen_shape(std::span<const StartEntry> entries, bool lists_read) noexcept
@@ -143,6 +189,7 @@ std::optional<StartScreenLayout> start_screen_layout(const BodyLayout &body, std
     place_keys(layout, keys_top, metrics,
                std::max(key_width, to_pixels(start_key_minimum_dips, dpi)));
     layout.column.bottom = keys_top + (3 * height);
+    centered(layout, body.content, dpi);
     return layout;
 }
 

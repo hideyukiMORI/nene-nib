@@ -1,7 +1,8 @@
 // 起動画面（ADR 0172・追補 2026-11-11）。出る条件・選べる行・鍵の振り分け・行の実行・履歴と
-// ブックマークの 1 回の読みはこの翻訳単位だけが持つ。StartListPort を呼ぶのはここだけで、最初の
-// frame の合図（FirstFramePresented）の時点で起動画面が出ているときに 1 回だけ頼む（決定 3・起動と
-// 開く・切り替え・新しいタブ・保存・打鍵の道は呼ばない）。
+// ブックマークの裏の読みはこの翻訳単位だけが持つ。StartListPort を呼ぶのはここだけで、意図の出口
+// （settle_start_screen）で起動画面が「出ていない → 出ている」に変わり、前の読みから履歴か
+// ブックマークを書いていて、読みが走っていないときに 1 回だけ頼む（追補 25・最初の frame の前は
+// 出ていない側に数える・起動と開く・切り替え・保存・打鍵の道は呼ばない）。
 #include "EditorController.hpp"
 #include "EditorControllerDetail.hpp"
 
@@ -167,26 +168,17 @@ std::optional<StartScreenView> EditorController::start_screen_view() const
                            core::start_key_entries(state_.mode())};
 }
 
-// 決定 3。最初の 1 回だけ。そのとき起動画面が出ていなければ（引数のファイル・前回のタブで起動した）
-// 読みを頼まない（後で無題のタブを足しても読まない・起動画面は「はじめる」と鍵だけ）。
+// 最初の frame の合図（決定 3）。以後は起動画面の鍵を受け、出口（settle_start_screen）が
+// 起動画面を「出ている」に数え始める（そのとき出ていれば読みを頼む・追補 25）。
 void EditorController::accept(const FirstFramePresented &)
 {
     repaint_ = false;
-    if (first_frame_presented_)
-    {
-        return;
-    }
     first_frame_presented_ = true;
-    if (start_screen_shown() && !start_lists_requested_)
-    {
-        start_lists_requested_ = true;
-        ports_.start_lists.request();
-    }
 }
 
 void EditorController::collect_start_lists()
 {
-    if (!start_lists_requested_ || start_lists_.has_value())
+    if (!start_lists_reading_)
     {
         return;
     }
@@ -195,9 +187,23 @@ void EditorController::collect_start_lists()
     {
         return;
     }
+    start_lists_reading_ = false;
+    // 前の一覧を見せたまま読み直したので、中身が同じなら何も変えない（選びも保つ・追補 25）。
+    const bool same = start_lists_.has_value() &&
+                      start_lists_.value().recent == lists.value().recent &&
+                      start_lists_.value().bookmarks == lists.value().bookmarks;
+    if (same)
+    {
+        return;
+    }
     start_lists_ = std::move(lists);
     // 行の列が変わるので選びは「何も選んでいない」に戻す（位置が別の行を指さない）。
     start_selection_.reset();
+}
+
+void EditorController::mark_start_lists_stale() noexcept
+{
+    start_lists_stale_ = true;
 }
 
 bool EditorController::route_start_screen(const EditorIntent &intent)
@@ -282,11 +288,24 @@ void EditorController::run_start_entry(const core::StartEntry &entry)
     }
 }
 
-void EditorController::settle_start_screen() noexcept
+// 追補の 5 と 25。条件が偽なら選びを消す。最初の frame の後に「出ていない → 出ている」に変わり、
+// 前の読みから履歴かブックマークを書いていて（印・最初は立っている）、読みが走っていなければ
+// 1 回だけ頼む。届くまでは前の一覧を見せたまま。
+void EditorController::settle_start_screen()
 {
-    if (!start_screen_shown())
+    const bool shown = first_frame_presented_ && start_screen_shown();
+    if (!shown)
     {
         start_selection_.reset();
     }
+    const bool appeared = shown && !start_screen_was_shown_;
+    start_screen_was_shown_ = shown;
+    if (!appeared || !start_lists_stale_ || start_lists_reading_)
+    {
+        return;
+    }
+    start_lists_stale_ = false;
+    start_lists_reading_ = true;
+    ports_.start_lists.request();
 }
 } // namespace nenenib::application

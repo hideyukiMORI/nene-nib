@@ -146,18 +146,29 @@ float StartScreenPainter::write(std::string_view text, TextStyle style,
     return metrics.widthIncludingTrailingWhitespace;
 }
 
-void StartScreenPainter::keycap(std::string_view key, const core::LayoutRect &area, bool from_left)
+std::int32_t StartScreenPainter::keycap_width(std::string_view key, const core::LayoutRect &area)
 {
     const auto shown = obtained(key, {text_.key, PaletteTextRole::plain}, area);
     const float scale = static_cast<float>(text_.dpi) / static_cast<float>(core::reference_dpi);
     DWRITE_TEXT_METRICS metrics{};
+    if (!shown || FAILED(shown->GetMetrics(&metrics)))
+    {
+        return 0;
+    }
+    return static_cast<std::int32_t>(
+        std::ceil(metrics.width + (text_.keycap.padding * scale * 2.0F)));
+}
+
+void StartScreenPainter::keycap(std::string_view key, const core::LayoutRect &area, bool from_left)
+{
+    const auto shown = obtained(key, {text_.key, PaletteTextRole::plain}, area);
+    const float scale = static_cast<float>(text_.dpi) / static_cast<float>(core::reference_dpi);
     auto note = area;
-    if (from_left && shown && SUCCEEDED(shown->GetMetrics(&metrics)))
+    if (from_left)
     {
         // 枠の幅（字の幅と左右の余白）だけの欄にして、枠の左端を欄の左端に揃える。
-        const auto box = static_cast<std::int32_t>(
-            std::ceil(metrics.width + (text_.keycap.padding * scale * 2.0F)));
-        note.right = std::min(area.left + box, area.right);
+        const auto box = keycap_width(key, area);
+        note.right = box > 0 ? std::min(area.left + box, area.right) : area.right;
     }
     paint_keycap(KeycapCanvas{target_, brush_, scale}, shown.Get(), note, text_.keycap);
 }
@@ -201,18 +212,31 @@ void StartScreenPainter::paint_row(const core::StartEntry &entry, const core::St
         }
         return;
     case core::StartEntryKind::new_file:
-        paint_named(new_file_text, new_file_detail, row.label, palette);
+        paint_named(new_file_text, new_file_detail, keyed(text_.new_key, row.label), palette);
         return;
     case core::StartEntryKind::open_file:
         // 名前は操作の表から（鍵と同じ正本・ADR 0078）。
-        paint_named(core::operation_text(core::EditorOperation::open_file).name, {}, row.label,
-                    palette);
-        keycap(text_.open_key, row.label, false);
+        paint_named(core::operation_text(core::EditorOperation::open_file).name, {},
+                    keyed(text_.open_key, row.label), palette);
         return;
     case core::StartEntryKind::open_folder:
-        paint_named(open_folder_text, open_folder_detail, row.label, palette);
+        paint_named(open_folder_text, open_folder_detail, keyed(text_.folder_key, row.label),
+                    palette);
         return;
     }
+}
+
+core::LayoutRect StartScreenPainter::keyed(std::string_view key, const core::LayoutRect &label)
+{
+    if (key.empty())
+    {
+        return label;
+    }
+    keycap(key, label, false);
+    const auto gap = core::to_pixels(core::start_detail_gap_dips, text_.dpi);
+    auto area = label;
+    area.right = std::max(area.left, label.right - keycap_width(key, label) - gap);
+    return area;
 }
 
 void StartScreenPainter::paint_named(std::string_view name, std::string_view detail,
