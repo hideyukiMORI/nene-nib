@@ -35,15 +35,6 @@ namespace
 {
 constexpr wchar_t class_name[] = L"NeNeNib.Editor";
 
-// DWM の COLORREF は 0x00BBGGRR（#795・ADR 0008 の決定 9 の追記）。
-[[nodiscard]] constexpr COLORREF colorref_of(core::RgbColor color) noexcept
-{
-    constexpr unsigned green_shift = 8U;
-    constexpr unsigned blue_shift = 16U;
-    return static_cast<COLORREF>(color.red) | (static_cast<COLORREF>(color.green) << green_shift) |
-           (static_cast<COLORREF>(color.blue) << blue_shift);
-}
-
 constexpr wchar_t title_suffix[] = L" - NeNe Nib";
 
 constexpr std::int32_t design_width_dips = 640;
@@ -165,10 +156,11 @@ void EditorWindow::apply_backdrop(const application::EditorDelivery &delivery)
     const BOOL dark = delivery.appearance == core::Appearance::dark ? TRUE : FALSE;
     DwmSetWindowAttribute(window_, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark,
                           static_cast<DWORD>(sizeof(dark)));
-    // 窓の縁（角の 1 px）は帯の地 title_bar で塗る（#795）。最大化では OS が縁を描かない。
-    // Windows 10 には属性が無く失敗を返すだけなので、Mica と同じく戻り値は見ない。
+    // 窓の縁は DWM に描かせない（DWMWA_COLOR_NONE・#1488 の試し）。四角い角でも DWM の縁が角を
+    // 小さく丸めて抜き、下の地が左上と右上に見えた（施主の試用・2026-11-11 23:04 の画素）。
+    // 配色が変われば当て直す判定（shown_border_）はそのまま。Windows 10 は属性が無く失敗するだけ。
     shown_border_ = core::selected_theme(delivery.settings, delivery.appearance).ui.title_bar;
-    const COLORREF border = colorref_of(shown_border_);
+    const COLORREF border = DWMWA_COLOR_NONE;
     DwmSetWindowAttribute(window_, DWMWA_BORDER_COLOR, &border, static_cast<DWORD>(sizeof(border)));
     // 窓の角は四角（#1488）。丸めると左上と右上に小さく明るい点が出た。失敗は無視する（上と同じ）。
     static_cast<void>(square_window_corners(window_));
