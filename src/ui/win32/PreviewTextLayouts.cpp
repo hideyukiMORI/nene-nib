@@ -1,5 +1,7 @@
 #include "PreviewTextLayouts.hpp"
 
+#include "PreviewImageObject.hpp"
+#include "PreviewInlineImages.hpp"
 #include "PreviewMetrics.hpp"
 #include "PreviewSelectionText.hpp"
 #include "Utf16.hpp"
@@ -7,7 +9,10 @@
 #include <algorithm>
 #include <array>
 #include <dwrite_1.h>
+#include <iterator>
+#include <span>
 #include <utility>
+#include <vector>
 
 namespace nenenib::ui::win32
 {
@@ -24,6 +29,20 @@ constexpr float unbounded_height = 1.0e7F;
 {
     return entry.kind == block.kind && entry.level == block.level && entry.width == width &&
            entry.text == block.text && entry.spans == block.spans && entry.style == style;
+}
+
+[[nodiscard]] bool same_boxes(const std::vector<PreviewInlineBox> &held,
+                              std::span<const PreviewInlineImage> inlines)
+{
+    return std::ranges::equal(held, inlines, {}, {}, &PreviewInlineImage::box);
+}
+
+[[nodiscard]] std::vector<PreviewInlineBox> boxes_of(std::span<const PreviewInlineImage> inlines)
+{
+    std::vector<PreviewInlineBox> boxes;
+    boxes.reserve(inlines.size());
+    std::ranges::transform(inlines, std::back_inserter(boxes), &PreviewInlineImage::box);
+    return boxes;
 }
 
 [[nodiscard]] HRESULT styled(IDWriteTextLayout &layout, core::PreviewStyle style,
@@ -189,9 +208,31 @@ HRESULT PreviewTextLayouts::decorate(IDWriteTextLayout &layout, const core::Prev
     return S_OK;
 }
 
+HRESULT PreviewTextLayouts::place(IDWriteTextLayout &layout,
+                                  std::span<const PreviewInlineImage> inlines, std::uint32_t dpi)
+{
+    // 固定の行高（space）では箱が上の行に重なるので、箱のある layout は字と箱の自然な高さにする。
+    auto result = layout.SetLineSpacing(DWRITE_LINE_SPACING_METHOD_DEFAULT, 0.0F, 0.0F);
+    for (const auto &image : inlines)
+    {
+        if (FAILED(result))
+        {
+            return result;
+        }
+        const auto object =
+            Microsoft::WRL::Make<PreviewImageObject>(preview_inline_extent(image.box.width, dpi),
+                                                     preview_inline_extent(image.box.height, dpi));
+        result = object == nullptr
+                     ? E_OUTOFMEMORY
+                     : layout.SetInlineObject(object.Get(),
+                                              DWRITE_TEXT_RANGE{image.box.begin, image.box.length});
+    }
+    return result;
+}
+
 std::expected<PreviewTextLayout, RenderFailure>
 PreviewTextLayouts::make(const core::PreviewBlock &block, float width,
-                         const PreviewTextStyle &style)
+                         const PreviewTextStyle &style, std::span<const PreviewInlineImage> inlines)
 {
     const auto shown = core::preview_shown_text(block);
     const auto wide = core::to_utf16(shown);
@@ -212,39 +253,42 @@ PreviewTextLayouts::make(const core::PreviewBlock &block, float width,
                                           &made)) ||
         (heading && (FAILED(made->SetFontSize(size, whole)) ||
                      FAILED(made->SetFontWeight(DWRITE_FONT_WEIGHT_BOLD, whole)))) ||
-        FAILED(space(*made.Get(), mono, size, preview_line_pixels(style) * scale)) ||
+        FAILED(inlines.empty() ? space(*made.Get(), mono, size, preview_line_pixels(style) * scale)
+                               : place(*made.Get(), inlines, style.dpi)) ||
         FAILED(decorate(*made.Get(), block, shown)) || FAILED(made->GetMetrics(&metrics)))
     {
         return std::unexpected(directwrite);
     }
     ++created_;
-    return PreviewTextLayout{block.text, block.spans, block.kind,      block.level,
-                             width,      style,       std::move(made), metrics.height};
+    return PreviewTextLayout{block.text, block.spans,       block.kind,      block.level,   width,
+                             style,      boxes_of(inlines), std::move(made), metrics.height};
 }
 
-std::vector<PreviewTextLayout>::iterator PreviewTextLayouts::find(const core::PreviewBlock &block,
-                                                                  float width,
-                                                                  const PreviewTextStyle &style)
+std::vector<PreviewTextLayout>::iterator
+PreviewTextLayouts::find(const core::PreviewBlock &block, float width,
+                         const PreviewTextStyle &style, std::span<const PreviewInlineImage> inlines)
 {
-    return std::ranges::find_if(held_, [&](const PreviewTextLayout &entry)
-                                { return same_key(entry, block, width, style); });
+    return std::ranges::find_if(
+        held_, [&](const PreviewTextLayout &entry)
+        { return same_key(entry, block, width, style) && same_boxes(entry.inlines, inlines); });
 }
 
 std::expected<PreviewTextLayouts::TextLayout, RenderFailure>
-PreviewTextLayouts::get(const core::PreviewBlock &block, float width, const PreviewTextStyle &style)
+PreviewTextLayouts::get(const core::PreviewBlock &block, float width, const PreviewTextStyle &style,
+                        std::span<const PreviewInlineImage> inlines)
 {
     if (FAILED(prepare(style)))
     {
         return std::unexpected(directwrite);
     }
-    const auto found = find(block, width, style);
+    const auto found = find(block, width, style, inlines);
     if (found != held_.end())
     {
         // 最近使った順の末尾へ回す（捨てるのは先頭から）。
         std::rotate(found, found + 1, held_.end());
         return held_.back().layout;
     }
-    auto made = make(block, width, style);
+    auto made = make(block, width, style, inlines);
     if (!made)
     {
         return std::unexpected(made.error());
@@ -257,20 +301,21 @@ PreviewTextLayouts::get(const core::PreviewBlock &block, float width, const Prev
     return held_.back().layout;
 }
 
-std::expected<float, RenderFailure> PreviewTextLayouts::measure(const core::PreviewBlock &block,
-                                                                float width,
-                                                                const PreviewTextStyle &style)
+std::expected<float, RenderFailure>
+PreviewTextLayouts::measure(const core::PreviewBlock &block, float width,
+                            const PreviewTextStyle &style,
+                            std::span<const PreviewInlineImage> inlines)
 {
     if (FAILED(prepare(style)))
     {
         return std::unexpected(directwrite);
     }
-    const auto found = find(block, width, style);
+    const auto found = find(block, width, style, inlines);
     if (found != held_.end())
     {
         return found->height;
     }
-    const auto made = make(block, width, style);
+    const auto made = make(block, width, style, inlines);
     if (!made)
     {
         return std::unexpected(made.error());

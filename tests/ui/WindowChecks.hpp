@@ -45,4 +45,5 @@ void verify_vim_special_keys();
 void verify_closing_steps();
 // Ctrl+Shift+M はどのモードでも操作 toggle_preview（施主決定 D77・#1354）。
 void verify_preview_cycle_key();
+void verify_preview_images();
 } // namespace nenenib::tests::ui

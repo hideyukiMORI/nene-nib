@@ -1,7 +1,9 @@
 #include "PreviewPane.hpp"
 
+#include "MarkdownImage.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
+#include "PreviewInlineImages.hpp"
 #include "PreviewMetrics.hpp"
 #include "PreviewPainter.hpp"
 #include "PreviewScene.hpp"
@@ -18,27 +20,32 @@ namespace
 {
 [[nodiscard]] bool same_viewport(const PreviewViewport &left, const PreviewViewport &right) noexcept
 {
-    return left.first == right.first && left.width == right.width && left.height == right.height;
+    return left.first == right.first && left.width == right.width && left.height == right.height &&
+           left.images == right.images;
 }
 } // namespace
 
 std::expected<const PreviewBlockTops *, RenderFailure>
 PreviewPane::remeasure(const std::shared_ptr<const core::MarkdownDocument> &document,
+                       const std::shared_ptr<const application::PreviewImages> &images,
                        const PreviewTextStyle &style, const PreviewViewport &viewport)
 {
-    if (tops_.has_value() && measured_ == document && measured_style_.has_value() &&
-        measured_style_.value() == style && same_viewport(measured_viewport_, viewport))
+    if (tops_.has_value() && measured_ == document && measured_images_ == images &&
+        measured_style_.has_value() && measured_style_.value() == style &&
+        same_viewport(measured_viewport_, viewport))
     {
         return &tops_.value();
     }
     tops_.reset();
     measured_ = nullptr;
+    measured_images_ = nullptr;
     auto tops = PreviewBlockTops::measure(*document, layouts_, style, viewport);
     if (!tops)
     {
         return std::unexpected(tops.error());
     }
     measured_ = document;
+    measured_images_ = images;
     measured_style_ = style;
     measured_viewport_ = viewport;
     return &tops_.emplace(std::move(tops).value());
@@ -60,22 +67,72 @@ std::expected<void, RenderFailure> PreviewPane::draw_scene(ID2D1RenderTarget &ta
                                                            const core::LayoutRect &frame)
 {
     const PreviewViewport viewport{key.anchor, static_cast<float>(key.width),
-                                   static_cast<float>(key.height)};
-    const auto measured = remeasure(key.document, key.style, viewport);
+                                   static_cast<float>(key.height), key.images.get()};
+    const auto measured = remeasure(key.document, key.images, key.style, viewport);
     if (!measured)
     {
         return std::unexpected(measured.error());
     }
+    const auto held = hold_bitmaps(target, key, *measured.value());
+    if (!held)
+    {
+        return held;
+    }
     ++painted_;
     std::optional<RenderFailure> failure;
     PreviewPainter<ID2D1RenderTarget> painter(target, layouts_, brushes_, failure);
-    painter.paint(
-        PreviewScene{*key.document, *measured.value(), key.style, frame, 0.0F, key.selection});
+    painter.paint(PreviewScene{*key.document, *measured.value(), key.style, frame, 0.0F,
+                               key.selection, key.images.get(), &bitmaps_});
     if (failure.has_value())
     {
         return std::unexpected(failure.value());
     }
     return {};
+}
+
+std::expected<void, RenderFailure> PreviewPane::hold_bitmaps(ID2D1RenderTarget &target,
+                                                             const PreviewPictureKey &key,
+                                                             const PreviewBlockTops &tops)
+{
+    if (key.images == nullptr)
+    {
+        bitmaps_.release();
+        return {};
+    }
+    // 製品の描く先（device context）と試験の WIC の描く先は、どちらも ID2D1DeviceContext を持つ。
+    Microsoft::WRL::ComPtr<ID2D1DeviceContext> context;
+    if (FAILED(target.QueryInterface(IID_PPV_ARGS(&context))))
+    {
+        return std::unexpected(RenderFailure::direct2d);
+    }
+    bitmaps_.begin(*context.Get());
+    const auto &all = key.document->images;
+    for (auto at = std::ranges::lower_bound(all, tops.first(), {}, &core::MarkdownImage::block);
+         at != all.end() && at->block < tops.size(); ++at)
+    {
+        const auto pixels =
+            key.images->pixels_of(static_cast<std::size_t>(std::distance(all.begin(), at)));
+        if (pixels != nullptr && FAILED(bitmaps_.hold(*context.Get(), pixels)))
+        {
+            return std::unexpected(RenderFailure::direct2d);
+        }
+    }
+    return {};
+}
+
+void PreviewPane::release() noexcept
+{
+    bitmaps_.release();
+    tops_.reset();
+    measured_ = nullptr;
+    measured_images_ = nullptr;
+    area_.reset();
+    pictured_.reset();
+}
+
+const PreviewBitmaps &PreviewPane::bitmaps() const noexcept
+{
+    return bitmaps_;
 }
 
 ID2D1Bitmap1 *PreviewPane::picture_of(ID2D1DeviceContext &context, std::int32_t width,
@@ -143,9 +200,9 @@ std::expected<void, RenderFailure> PreviewPane::paint(ID2D1RenderTarget &target,
     const auto width = core::width_of(area);
     const auto height = core::height_of(area);
     PreviewPictureKey key{
-        &target, document,       core::preview_anchor_block(*document, frame.anchor),
-        width,   height,         style,
-        theme_,  frame.selection};
+        &target, document,        core::preview_anchor_block(*document, frame.anchor),
+        width,   height,          style,
+        theme_,  frame.selection, frame.images};
     // 座標は物理画素の整数なので、拡大縮小せず最近傍で写せば滲まない。
     const auto destination =
         D2D1::RectF(static_cast<float>(area.left), static_cast<float>(area.top),
@@ -240,7 +297,11 @@ std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops 
         block.kind == core::PreviewBlockKind::code ? preview_code_padding(style.dpi) : 0.0F;
     const auto width = preview_text_width(block, static_cast<float>(core::width_of(area)),
                                           tops.indent(index), style.dpi);
-    const auto layout = layouts_.get(block, width, style);
+    // 描く所と同じ箱で同じ layout を引く（画像の上の点は箱の前か後ろ・画像は 1 つの単位）。
+    const auto layout =
+        layouts_.get(block, width, style,
+                     preview_inline_images(*measured_, measured_images_.get(), index,
+                                           preview_dips_of(width, style.dpi)));
     if (!layout)
     {
         return std::nullopt;

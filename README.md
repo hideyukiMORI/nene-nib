@@ -120,7 +120,8 @@ records in `docs/quality/`.
   cycles closed → side pane → full view → closed (D77). Parsing uses md4c 0.5.2 (CommonMark) and the drawing is
   the editor's own ([look](docs/design/2026-10-21-markdown-preview-look.md),
   [ADR 0155](docs/adr/0155-markdown-preview-sits-in-the-other-pane-with-ticketed-port-and-tick.md)).
-  Images from local files (D79) are in review.
+  Local images (PNG, JPEG, the first frame of a GIF, BMP; D79) are drawn in the text flow, shrunk to the pane
+  width but never enlarged; web images stay as `[画像: alt]`.
 - **FR-008 encodings and line endings** — UTF-8, UTF-8 BOM, Shift_JIS and UTF-16 LE / BE with BOM
   ([ADR 0149](docs/adr/0149-utf16-with-bom-is-read-and-written-back.md)); UTF-32 is refused. CRLF / LF are kept as
   read. The encoding and line ending for saving can be chosen by clicking them in the status bar, with

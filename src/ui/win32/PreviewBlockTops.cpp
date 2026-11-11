@@ -1,6 +1,7 @@
 #include "PreviewBlockTops.hpp"
 
 #include "PreviewBlockKind.hpp"
+#include "PreviewInlineImages.hpp"
 #include "PreviewMetrics.hpp"
 #include "PreviewTaskBox.hpp"
 #include "RenderFailure.hpp"
@@ -93,17 +94,21 @@ void remember(std::vector<MarkerKind> &kinds, const core::PreviewBlock &block)
     return indent;
 }
 
-// 要素の layout の高さ（水平線は文字を持たないので 0）。
+// 要素の layout の幅（物理画素）と、その中で読めた画像の箱（ADR 0155 の追補 62）。
+using SizedText = std::pair<float, std::span<const PreviewInlineImage>>;
+
+// 要素の layout の高さ（水平線は文字を持たないので 0）。読めた画像は箱の大きさで測る（描く所と同じ
+// 箱で同じ layout を引く）。
 [[nodiscard]] std::expected<float, RenderFailure> text_height_of(const core::PreviewBlock &block,
                                                                  PreviewTextLayouts &layouts,
                                                                  const PreviewTextStyle &style,
-                                                                 float width)
+                                                                 SizedText sized)
 {
     if (block.kind == core::PreviewBlockKind::rule)
     {
         return 0.0F;
     }
-    return layouts.measure(block, width, style);
+    return layouts.measure(block, sized.first, style, sized.second);
 }
 
 // タスクの項目（記号を描く項目のうちチェックボックスを持つもの）か。
@@ -165,8 +170,10 @@ std::expected<bool, RenderFailure> PreviewBlockTops::place(const core::MarkdownD
             return false;
         }
         const auto indent = indent_of(block, *columns.value().first, style.dpi);
-        const auto height = text_height_of(
-            block, layouts, style, preview_text_width(block, viewport.width, indent, style.dpi));
+        const auto width = preview_text_width(block, viewport.width, indent, style.dpi);
+        const auto inlines = preview_inline_images(document, viewport.images, index,
+                                                   preview_dips_of(width, style.dpi));
+        const auto height = text_height_of(block, layouts, style, SizedText{width, inlines});
         if (!height)
         {
             return std::unexpected(height.error());

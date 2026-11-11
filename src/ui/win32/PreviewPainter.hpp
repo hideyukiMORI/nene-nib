@@ -4,6 +4,8 @@
 #include "PreviewBlock.hpp"
 #include "PreviewBrushes.hpp"
 #include "PreviewInk.hpp"
+#include "PreviewInlineImage.hpp"
+#include "PreviewInlineImages.hpp"
 #include "PreviewMetrics.hpp"
 #include "PreviewScene.hpp"
 #include "PreviewSelectionText.hpp"
@@ -30,6 +32,7 @@ namespace nenenib::ui::win32
 // で描き、面と線は FillRectangle / FillRoundedRectangle。Target は製品では Direct2D の描画先
 // （ID2D1RenderTarget）で、tests/ui は呼び出しを数える替え玉、tests/preview は WIC の bitmap
 // の描画先を渡す。色は役割（PreviewInk）→ PreviewBrushes の brush だけで、色の値を書かない。
+// 読めた画像（ADR 0155 の追補 62）は layout の箱の場所に、文字を描いた後で DrawBitmap で描く。
 template <typename Target> class PreviewPainter final
 {
   public:
@@ -243,7 +246,9 @@ template <typename Target> class PreviewPainter final
         const auto width =
             preview_text_width(block, static_cast<float>(core::width_of(scene.frame)),
                                scene.tops.indent(index), scene.style.dpi);
-        const auto layout = layouts_.get(block, width, scene.style);
+        const auto inlines = preview_inline_images(scene.document, scene.images, index,
+                                                   preview_dips_of(width, scene.style.dpi));
+        const auto layout = layouts_.get(block, width, scene.style, inlines);
         if (!layout)
         {
             failure_ = layout.error();
@@ -253,6 +258,37 @@ template <typename Target> class PreviewPainter final
         fill_selection(scene, index, *layout.value().Get(), origin);
         target_.DrawTextLayout(origin, layout.value().Get(), brushes_.of(ink_of(block)),
                                D2D1_DRAW_TEXT_OPTIONS_NONE);
+        for (const auto &image : inlines)
+        {
+            draw_image(scene, *layout.value().Get(), image, origin);
+        }
+    }
+
+    // 読めた画像 1 枚（ADR 0155 の追補 62）。layout の箱の左上を物理画素の整数に揃えて、
+    // 箱の大きさに DrawBitmap する（1 画素 = 1 DIP の大きさなら拡大縮小しないので滲まない）。
+    // bitmap が無ければ箱は空のまま（PreviewPane が描く前に作るので、無いのは作れないときだけ）。
+    void draw_image(const PreviewScene &scene, IDWriteTextLayout &layout,
+                    const PreviewInlineImage &image, D2D1_POINT_2F origin)
+    {
+        auto *const bitmap =
+            scene.bitmaps == nullptr ? nullptr : scene.bitmaps->find(image.pixels.get());
+        const auto at = preview_inline_origin(layout, image.box, scene.style.dpi);
+        if (!at.has_value())
+        {
+            failure_ = RenderFailure::directwrite;
+            return;
+        }
+        if (bitmap == nullptr)
+        {
+            return;
+        }
+        const auto left = std::round(origin.x + at.value().x);
+        const auto top = std::round(origin.y + at.value().y);
+        target_.DrawBitmap(
+            bitmap,
+            D2D1::RectF(left, top, left + preview_inline_extent(image.box.width, scene.style.dpi),
+                        top + preview_inline_extent(image.box.height, scene.style.dpi)),
+            1.0F, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
     }
 
     // 装飾の文字の色（行内コードは string・リンクは function・画像の代わりの文字は comment・

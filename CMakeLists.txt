@@ -410,7 +410,8 @@ nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FallbackSegmentMemo.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
     src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp
     src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewMetrics.cpp
-    src/ui/win32/PreviewPane.cpp src/ui/win32/FullPreviewBody.cpp src/ui/win32/SaveQuestion.cpp)
+    src/ui/win32/PreviewPane.cpp src/ui/win32/FullPreviewBody.cpp src/ui/win32/SaveQuestion.cpp
+    src/ui/win32/PreviewInlineImages.cpp src/ui/win32/PreviewImageObject.cpp src/ui/win32/PreviewBitmaps.cpp)
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
 # ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。
@@ -440,7 +441,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/PrintRenderTests.cpp tests/ui/MemoryXpsTarget.cpp tests/ui/MemoryPackageTarget.cpp
     tests/ui/MatchParenOutlineTests.cpp tests/ui/SaveQuestionTests.cpp
     tests/ui/VimSpecialKeyTests.cpp tests/ui/ClosingStepsTests.cpp
-    tests/ui/PreviewCycleKeyTests.cpp)
+    tests/ui/PreviewCycleKeyTests.cpp tests/ui/PreviewImagePaintTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)
@@ -455,6 +456,7 @@ nenenib_target(nib_preview_capture preview_tests EXECUTABLE tests/preview/Previe
 nenenib_link(nib_preview_capture nenenib_core)
 nenenib_link(nib_preview_capture nenenib_application)
 nenenib_link(nib_preview_capture nenenib_window)
+nenenib_link(nib_preview_capture nenenib_adapters)
 foreach(library IN ITEMS ole32 d2d1 dwrite windowscodecs)
     nenenib_system_link(nib_preview_capture ${library})
 endforeach()
