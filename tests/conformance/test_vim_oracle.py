@@ -366,11 +366,53 @@ class VimOracleTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory, \
                 patch.object(vim_oracle.subprocess, "run", fake_run):
-            body, line, column, register, kind, viewport = vim_oracle.run_vim(
+            body, line, column, register, kind, viewport, change = vim_oracle.run_vim(
                 Path(directory), "a\rb\r\nc", "h", [])
         self.assertEqual("a\rb\r\nc", body)
         self.assertEqual((1, 2), (line, column))
-        self.assertEqual(("x\ry", "v", None), (register, kind, viewport))
+        self.assertEqual(("x\ry", "v", None, None), (register, kind, viewport, change))
+
+    def test_run_vim_reads_the_change_marks_only_when_asked(self):
+        """The change line is the last one and reads as three booleans (ADR 0181)."""
+        report = b"abc\ncursor=1,1\nregtype=\nreg=\nchange=0,0,1\n"
+
+        def fake_run(command, **kwargs):
+            (Path(kwargs["cwd"]) / "out.txt").write_bytes(report)
+            return subprocess.CompletedProcess(command, 0, b"", b"")
+
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(vim_oracle.subprocess, "run", fake_run):
+            measured = vim_oracle.run_vim(Path(directory), "abc", "~", [], change=True)
+        self.assertEqual("abc", measured[0])
+        self.assertEqual({"modified": False, "changed": False, "undo": True}, measured[6])
+
+    def test_probe_script_counts_the_change_only_when_asked(self):
+        lines = vim_oracle.probe_script([], "~", change=True).splitlines()
+        before = lines.index("let g:nib_tick = b:changedtick")
+        self.assertLess(before, next(index for index, line in enumerate(lines)
+                                     if line.startswith('execute "normal! "')))
+        self.assertIn("undotree().seq_cur > g:nib_seq", lines[-2])
+        self.assertNotIn("changedtick", vim_oracle.probe_script([], "~"))
+
+    def test_header_row_carries_the_change_only_when_asked(self):
+        record = self.record({"name": "change", "text": "ab", "keys": "~"}, "Ab")
+        marks = {"modified": True, "changed": True, "undo": True}
+        plain = vim_oracle.fixture_row({**record, "viewport": None, "macro": None,
+                                        "change": marks})
+        self.assertTrue(plain.endswith(
+            ', std::nullopt, std::nullopt, VimChangeFixture{true, true, true}},'))
+        macro = vim_oracle.fixture_row({**record, "viewport": None,
+                                        "macro": {"name": "a", "keys": "x"},
+                                        "change": {**marks, "modified": False}})
+        self.assertTrue(macro.endswith(
+            'VimMacroFixture{\'a\', "x"}, VimChangeFixture{false, true, true}},'))
+        self.assertEqual(
+            b'[\n  {"name":"a","text":"b","keys":"x","change":true}\n]\n',
+            vim_oracle.canonical_fixtures_json([{"change": True, "keys": "x", "text": "b",
+                                                 "name": "a"}]))
+        with self.assertRaises(ValueError):
+            vim_oracle.canonical_fixtures_json([{"name": "a", "text": "b", "keys": "x",
+                                                 "change": 1}])
 
     def test_literal_cr_text_is_accepted_only_when_vim_and_we_read_it_the_same_way(self):
         vim_oracle.check_literal_cr("plain", "abcd\nefgh")

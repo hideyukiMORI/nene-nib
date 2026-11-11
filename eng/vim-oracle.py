@@ -55,8 +55,9 @@ keeps them LF, so nothing is normalised here.
 `canonical_fixtures_json` is the one definition of how tests/vim/fixtures.json is written: `[` and
 `]` alone on their own lines, one fixture per line indented by two spaces, compact separators, the
 keys in the order `name`, `text`, `keys`, `settings` (only when it holds something), `register`
-(only when the case has one) and `viewport` (only when the case has one), non-ASCII text as itself, LF endings and a final newline. Both
-writers call it -- `--regenerate` rewrites the file before it measures anything, so the digest it
+(only when the case has one), `viewport` (only when the case has one) and `change` (only
+when the case asks for the change marks, ADR 0181), non-ASCII text as itself, LF endings and a
+final newline. Both writers call it -- `--regenerate` rewrites the file before it measures anything, so the digest it
 records is the digest of the canonical bytes -- and CNF-011 in eng/conformance.py compares the
 stored bytes with what it returns, so the form cannot drift from the check (Issue #98).
 
@@ -198,6 +199,14 @@ def register_of(fixture: dict) -> dict | None:
     return {"name": name, "keys": keys}
 
 
+def change_of(fixture: dict) -> bool:
+    """Whether the fixture asks for the change marks (ADR 0181, #1440): `"change": true` only."""
+    change = fixture.get("change", False)
+    if change is not False and change is not True:
+        raise ValueError(f"{fixture['name']}: change must be true when present")
+    return change
+
+
 # q の拒否の状態機械（ADR 0046 の決定 6・#190）。Vim の文法の写しではなく oracle 側の保守的な検査で、
 # q が NORMAL / VISUAL のコマンドとして届くかだけを見る。迷う位置は拒む側（NORMAL / VISUAL）に倒す。
 RECORDS, NORMAL, INSERT, VISUAL = "records", "normal", "insert", "visual"
@@ -307,13 +316,15 @@ def macro_script(register: dict | None) -> list[str]:
 
 
 def probe_script(settings: list[str], keys: str, viewport: dict | None = None,
-                 register: dict | None = None) -> str:
+                 register: dict | None = None, change: bool = False) -> str:
     # getregtype は "v"（文字単位）/ "V"（行単位）/ 一度も使っていないレジスタでは空を返す
     # (ADR 0015 decision 3). p の貼り方はその種類で決まるので、本文だけでは fixture が足りない。
     report = ("call writefile(getline(1, '$') + ['cursor=' . line('.') . ',' . col('.')]"
               " + ['regtype=' . getregtype('\"')]"
               " + ['reg=' . getreg('\"')]"
               + (" + ['topline=' . line('w0')] + ['scroll=' . &scroll]" if viewport else "")
+              + (" + ['change=' . &modified . ',' . (b:changedtick > g:nib_tick) . ','"
+                 " . (undotree().seq_cur > g:nib_seq)]" if change else "")
               + ", 'out.txt')")
     # Ex モードで開いた直後のカーソルは先頭ではないので、毎回 (1, 1) に置いてから鍵を流す。
     # -es の Vim は開いた直後のカーソル（最終行）をジャンプの列に積み、call cursor は積まない。
@@ -330,22 +341,28 @@ def probe_script(settings: list[str], keys: str, viewport: dict | None = None,
                   " || winsaveview().topline != line('w0')"
                   " | cquit | endif" % (viewport["visible_lines"], viewport["line"],
                                          viewport["column"], viewport["first_visible"])]
+    # 鍵が変更を数えたか（ADR 0181・#1440）。求めた fixture だけで、鍵の前の b:changedtick と
+    # undotree().seq_cur を覚え、鍵の後の &modified・changedtick が進んだか（Vim の changed_*）・
+    # seq_cur が進んだか（u_save が単位を作った）を書く。1 本の :normal! の中は 1 単位に畳まれる
+    # ので、undo は「1 つ以上作ったか」だけを持つ。
+    counted = ["set nomodified", "let g:nib_tick = b:changedtick",
+               "let g:nib_seq = undotree().seq_cur"] if change else []
     settle = []
     if viewport:
         settle = ["redraw!",
                   "if winsaveview().topline != line('w0') || line('w$') < line('w0')"
                   " || line('w$') != min([line('$'), line('w0') + winheight(0) - 1])"
                   " | cquit | endif"]
-    lines = [*DEFAULT_SETTINGS, *settings, *setup, *macro_script(register),
+    lines = [*DEFAULT_SETTINGS, *settings, *setup, *macro_script(register), *counted,
              'execute "normal! " . "%s"' % vim_keys(normal_keys(keys)), *settle, report, "qa!"]
     return "\n".join(lines) + "\n"
 
 
 def run_vim(work: Path, text: str, keys: str, settings: list[str],
-            viewport: dict | None = None,
-            register: dict | None = None) -> tuple[str, int, int, str, str, dict | None]:
+            viewport: dict | None = None, register: dict | None = None,
+            change: bool = False) -> tuple[str, int, int, str, str, dict | None, dict | None]:
     (work / "input.txt").write_bytes(text.encode("utf-8"))
-    (work / "probe.vim").write_text(probe_script(settings, keys, viewport, register),
+    (work / "probe.vim").write_text(probe_script(settings, keys, viewport, register, change),
                                     encoding="utf-8")
     output = work / "out.txt"
     output.unlink(missing_ok=True)
@@ -369,6 +386,11 @@ def run_vim(work: Path, text: str, keys: str, settings: list[str],
     while lines and lines[-1] == "":
         lines.pop()
     # writefile は文字列の中の改行を NUL で書くので、レジスタの改行をここで戻す。
+    measured_change = None
+    if change:
+        modified, changed, undone = (part == "1" for part in
+                                     lines.pop().removeprefix("change=").split(","))
+        measured_change = {"modified": modified, "changed": changed, "undo": undone}
     measured_viewport = None
     if viewport:
         scroll = int(lines.pop().removeprefix("scroll="))
@@ -378,7 +400,7 @@ def run_vim(work: Path, text: str, keys: str, settings: list[str],
     register = lines.pop().removeprefix("reg=").replace("\x00", "\n")
     kind = lines.pop().removeprefix("regtype=")
     line, column = (int(part) for part in lines.pop().removeprefix("cursor=").split(","))
-    return "\n".join(lines), line, column, register, kind, measured_viewport
+    return "\n".join(lines), line, column, register, kind, measured_viewport, measured_change
 
 
 def check_literal_cr(name: str, text: str) -> None:
@@ -410,14 +432,18 @@ def measure(work: Path, fixture: dict) -> dict:
     check_literal_cr(name, text)
     viewport = viewport_of(fixture)
     macro = register_of(fixture)
-    measured = run_vim(work, text, keys, settings, viewport, macro)
+    change = change_of(fixture)
+    measured = run_vim(work, text, keys, settings, viewport, macro, change)
     # NORMAL で終わっていれば、もう 1 つ Esc を足しても何も変わらない（上の注記）。
-    if run_vim(work, text, keys + "<Esc>", settings, viewport, macro) != measured:
+    if run_vim(work, text, keys + "<Esc>", settings, viewport, macro, change) != measured:
         raise ValueError(f"{name}: the keys do not leave Vim in NORMAL mode; end them with <Esc>")
-    body, line, column, register, kind, measured_viewport = measured
-    return {"name": name, "text": text, "keys": keys, "expected": body,
-            "line": line, "column": column, "register": register, "register_kind": kind,
-            "viewport": measured_viewport, "macro": macro}
+    body, line, column, register, kind, measured_viewport, measured_change = measured
+    record = {"name": name, "text": text, "keys": keys, "expected": body,
+              "line": line, "column": column, "register": register, "register_kind": kind,
+              "viewport": measured_viewport, "macro": macro}
+    if measured_change is not None:
+        record["change"] = measured_change
+    return record
 
 
 # Partial regeneration compares every measurement constant and function above this boundary.
@@ -472,11 +498,16 @@ def fixture_row(record: dict) -> str:
     macro = record.get("macro")
     macro_value = "" if macro is None else ", VimMacroFixture{'%s', %s}" % (
         macro["name"], literal(macro["keys"]))
-    return "    {%s, %s, %s, %s, %d, %d, %s, %s, %s%s}," % (
+    # 変更の印は求めた行だけ末尾に足す（ADR 0181）。無い行は前と同じ字面のまま残る。
+    change = record.get("change")
+    change_value = "" if change is None else "%s, VimChangeFixture{%s, %s, %s}" % (
+        ", std::nullopt" if macro is None else "",
+        *("true" if change[key] else "false" for key in ("modified", "changed", "undo")))
+    return "    {%s, %s, %s, %s, %d, %d, %s, %s, %s%s%s}," % (
         literal(record["name"]), literal(record["text"]), literal(record["keys"]),
         literal(record["expected"]), record["line"], record["column"],
         literal(record["register"]), literal(record["register_kind"]), viewport_value,
-        macro_value)
+        macro_value, change_value)
 
 
 def header_from_rows(rows: list[str], version: str, digest: str) -> str:
@@ -690,7 +721,7 @@ def git_output(root: Path, arguments: list[str]) -> bytes:
 
 # tests/vim/fixtures.json の整形を決めるのはここ 1 か所だけである（ARC-001・Issue #98）。
 # 書き戻す側（--format / --regenerate）と検査する側（CNF-011・eng/conformance.py）が同じ関数を呼ぶ。
-FIXTURE_KEYS = ("name", "text", "keys", "settings", "register", "viewport")
+FIXTURE_KEYS = ("name", "text", "keys", "settings", "register", "viewport", "change")
 VIEWPORT_KEYS = ("visible_lines", "first_visible", "line", "column")
 
 
@@ -725,6 +756,8 @@ def canonical_fixture(fixture: dict) -> dict:
     viewport = viewport_of(fixture)
     if viewport is not None:
         canonical["viewport"] = {key: viewport[key] for key in VIEWPORT_KEYS}
+    if change_of(fixture):
+        canonical["change"] = True
     return canonical
 
 
