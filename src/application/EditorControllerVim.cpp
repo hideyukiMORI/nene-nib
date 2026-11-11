@@ -301,6 +301,19 @@ measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &r
     }
     std::unreachable();
 }
+
+// INSERT で本文を打った鍵か（#1363）。Vim の edit は打った文字（`<C-r>` の本文と回数の繰り返しも
+// 1 文字ずつ流す）ごとに update_topline を呼ぶので、追従は 1 行ずつ歩いた答えにする。消す鍵と
+// 動く鍵は 1 回の追従のまま。
+[[nodiscard]] bool types_text(core::VimMode before, const core::VimEffect &effect) noexcept
+{
+    return before == core::VimMode::insert &&
+           (std::holds_alternative<core::VimInsertString>(effect) ||
+            std::holds_alternative<core::VimNewLine>(effect) ||
+            std::holds_alternative<core::VimInsertAt>(effect) ||
+            std::holds_alternative<core::VimReplaceRange>(effect));
+}
+
 // 鍵の終わりにキャレットを寄せて追従を頼むか。入力行が開いていれば寄せない。Ctrl-e Ctrl-y は
 // engine が置いたキャレットと先頭のまま終える。追従（Vim の update_topline の写し）を頼むと
 // scrolloff が先頭を戻すので、Vim の VALID_TOPLINE と同じに飛ばす（キャレットは engine がモードの
@@ -800,11 +813,27 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     {
         state_ = state_.with_history(state_.history().sealed());
     }
-    settle_vim_step(step);
+    settle_vim_step(step, before);
     // 鍵の終わりに、動かなかった・消えた前の位置を戻す（決定 5・Vim の checkpcmark）。
     check_vim_marks();
     // 再生（`.` `@`）の中の鍵が失敗したら、再生を返した鍵の失敗にする（Issue #983）。
     return step_failure(step.failure, replay_failure_);
+}
+
+// 鍵の前の保留の追従が無いか打った本文の追従だけなら、この鍵の追従は歩いた答えにできる
+// （#1363）。打った本文でない保留（INSERT の前の移動）が残っていれば、解決は 1 回の追従のまま
+// （鍵ごとに解決しない・ADR 0128 / 0129 の決定 2。fixture の再生は鍵ごとに解決する）。
+void EditorController::note_follow_before_key()
+{
+    follow_walks_ = !pending_follow_.has_value() || pending_typed_;
+}
+
+void EditorController::mark_typed_follow(core::VimMode before, const core::VimEffect &effect)
+{
+    if (pending_follow_.has_value() && types_text(before, effect))
+    {
+        pending_typed_ = follow_walks_;
+    }
 }
 
 // 飛ぶ鍵の後だけ前の位置を確かめる（決定 5）。飛ばなかった鍵は位置を引かない。
@@ -828,13 +857,15 @@ void EditorController::adopt_vim_marks(const std::optional<core::VimMarks> &mark
 
 // 鍵の終わりの寄せ（keeps_vim_top の判定を覚えてから寄せる・ADR 0019 の追補 #1232）。再生を
 // 返した外側の鍵が引き継ぐのは、再生がいま終わったとき（入れ子なら鍵を積んだだけ）だけ。
-void EditorController::settle_vim_step(const core::VimStep &step)
+// before は鍵の前のモード（INSERT で打った本文の追従の印・#1363）。
+void EditorController::settle_vim_step(const core::VimStep &step, core::VimMode before)
 {
     vim_top_kept_ = keeps_vim_top(step, !replay_depth_.has_value() && vim_top_kept_);
     if (!state_.command_input().has_value() && !vim_top_kept_)
     {
         settle_vim_caret();
     }
+    mark_typed_follow(before, step.effect);
 }
 
 void EditorController::settle_vim_caret()
@@ -1600,6 +1631,7 @@ void EditorController::perform(const core::VimWindowCommand &command)
 std::expected<core::VimStep, TextLayoutFailure>
 EditorController::measured_vim_step(const VimStepSource &source)
 {
+    note_follow_before_key();
     std::vector<core::VimLineRows> rows;
     std::vector<core::VimRowSpan> spans;
     // 表示領域は engine が求めたときだけ渡す（ADR 0129 の決定 2）。追従を解決するのはその時だけ。

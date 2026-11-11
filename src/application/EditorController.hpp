@@ -820,7 +820,11 @@ class EditorController final
     // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();
-    void settle_vim_step(const core::VimStep &step);
+    void settle_vim_step(const core::VimStep &step, core::VimMode before);
+    // INSERT で打った本文の追従（ScrollFollow::vim_typed・#1363）。鍵の前の保留を覚え、鍵の後に
+    // 打った本文の追従の印を立てる。
+    void note_follow_before_key();
+    void mark_typed_follow(core::VimMode before, const core::VimEffect &effect);
     // engine を通らない意図の後に、Vim の NORMAL と VISUAL のキャレットが 1 文字の境（NORMAL は行の
     // 最後の文字の上）から外れていたときだけ寄せる。INSERT は寄せない。入口 apply の終わりの 1 か所
     // から呼ぶ（ADR 0053 の追補 #1309）。
@@ -953,6 +957,11 @@ class EditorController final
     bool repaint_ = true;
     // 頼まれてまだ解決していない追従の位置。後の頼みが前の頼みを置き換える（ADR 0128 の決定 1）。
     std::optional<core::TextPosition> pending_follow_;
+    // 保留の追従が Vim の INSERT で打った本文だけから来たか（ScrollFollow::vim_typed・#1363）。
+    // follow_position が偽に戻し、打った鍵の終わりの stepped_vim だけが真にする。
+    bool pending_typed_ = false;
+    // 鍵の前の保留の追従が無いか打った本文の追従だったか（note_follow_before_key が置く）。
+    bool follow_walks_ = false;
     // 行高を変えた設定が頼んだ clamp。新しい幾何が届いた後のスクロールの読みで、追従より先に
     // 1 回だけ解決する（ADR 0128 の決定 8）。
     bool pending_clamp_ = false;

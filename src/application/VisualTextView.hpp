@@ -153,13 +153,13 @@ class VisualTextView final
     // の追補）。窓の先頭は論理行で、 行の高さは core
     // が問うた行だけを文字組みして借りる（窓が動かなければ描いた行だけ）。格子は
     // 呼ばない。答えの窓でキャレットが見えないとき（窓より高い行）は値が無く、呼び手は画面行の
-    // 追従へ戻る。
+    // 追従へ戻る。walks は INSERT で打った本文の追従（ScrollFollow::vim_typed・#1363）。
     [[nodiscard]] std::expected<std::optional<core::VisualPosition>, TextLayoutFailure>
     vim_followed_first(core::VisualPosition caret, core::VisualPosition first,
-                       core::LineNumber topline);
+                       core::LineNumber topline, bool walks);
     [[nodiscard]] std::expected<core::LineNumber, TextLayoutFailure>
     vim_topline(core::LineNumber caret, core::LineNumber top,
-                std::vector<core::VimLineRows> &heights);
+                std::vector<core::VimLineRows> &heights, bool walks);
     [[nodiscard]] std::expected<bool, TextLayoutFailure>
     vim_caret_shown(std::vector<core::VimLineRows> &heights, core::VisualPosition top,
                     core::VisualPosition caret);

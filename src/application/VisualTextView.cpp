@@ -797,9 +797,10 @@ VisualTextView::followed_first(core::VisualPosition caret, core::ScrollFollow fo
         return std::unexpected(normalized.error());
     }
     const auto first = normalized.value();
-    if (follow == core::ScrollFollow::vim && !gridded())
+    if (follow != core::ScrollFollow::minimal && !gridded())
     {
-        const auto vim = vim_followed_first(caret, first, state_.scroll().first_visible);
+        const auto vim = vim_followed_first(caret, first, state_.scroll().first_visible,
+                                            follow == core::ScrollFollow::vim_typed);
         if (!vim)
         {
             return std::unexpected(vim.error());
@@ -864,11 +865,11 @@ VisualTextView::measured_rows(std::vector<core::VimLineRows> &heights, core::Lin
 // 問わず 1 行 1 画面行。
 std::expected<core::LineNumber, TextLayoutFailure>
 VisualTextView::vim_topline(core::LineNumber caret, core::LineNumber top,
-                            std::vector<core::VimLineRows> &heights)
+                            std::vector<core::VimLineRows> &heights, bool walks)
 {
     const auto height = std::max<std::size_t>(state_.scroll().visible_lines, 1);
     const core::VimToplineWindow window{
-        top, height, state_.settings().scrolloff, {}, geometry_.width > 0};
+        top, height, state_.settings().scrolloff, {}, geometry_.width > 0, walks};
     for (;;)
     {
         auto asked = window;
@@ -921,10 +922,10 @@ VisualTextView::vim_caret_shown(std::vector<core::VimLineRows> &heights, core::V
 // 残った先頭も Vim の w_topline と同じにそのまま数える（#1230・ADR 0019 の追補）。
 std::expected<std::optional<core::VisualPosition>, TextLayoutFailure>
 VisualTextView::vim_followed_first(core::VisualPosition caret, core::VisualPosition first,
-                                   core::LineNumber topline)
+                                   core::LineNumber topline, bool walks)
 {
     std::vector<core::VimLineRows> heights;
-    const auto top = vim_topline(caret.line, topline, heights);
+    const auto top = vim_topline(caret.line, topline, heights, walks);
     if (!top)
     {
         return std::unexpected(top.error());

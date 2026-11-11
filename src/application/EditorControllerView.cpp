@@ -75,14 +75,15 @@ constexpr std::size_t pointed_window_bytes = 64;
     return core::Selection{text.line_start(line), end};
 }
 
-[[nodiscard]] core::ScrollFollow scroll_follow_for(core::EditMode mode) noexcept
+// typed は保留の追従が Vim の INSERT で打った本文だけから来たか（#1363）。
+[[nodiscard]] core::ScrollFollow scroll_follow_for(core::EditMode mode, bool typed) noexcept
 {
     switch (mode)
     {
     case core::EditMode::ordinary:
         return core::ScrollFollow::minimal;
     case core::EditMode::vim:
-        return core::ScrollFollow::vim;
+        return typed ? core::ScrollFollow::vim_typed : core::ScrollFollow::vim;
     }
     std::unreachable();
 }
@@ -134,6 +135,7 @@ void EditorController::follow_caret()
 void EditorController::follow_position(core::TextPosition position)
 {
     pending_follow_ = position;
+    pending_typed_ = false;
 }
 
 // 保留を先に空にしてから view を作るので、visual_view() の先頭の解決へ再入しない。解決はその
@@ -148,6 +150,7 @@ void EditorController::settle_follow()
     }
     const bool clamp = std::exchange(pending_clamp_, false);
     const auto pending = std::exchange(pending_follow_, std::nullopt);
+    const bool typed = std::exchange(pending_typed_, false);
     if (clamp)
     {
         clamp_scroll();
@@ -156,9 +159,9 @@ void EditorController::settle_follow()
     {
         return;
     }
-    const auto followed =
-        visual_view().followed(core::TextCaret{pending.value(), state_.caret_affinity()},
-                               scroll_follow_for(state_.mode()), scroll_extent_for(state_.mode()));
+    const auto followed = visual_view().followed(
+        core::TextCaret{pending.value(), state_.caret_affinity()},
+        scroll_follow_for(state_.mode(), typed), scroll_extent_for(state_.mode()));
     if (!followed)
     {
         layout_failure_ = followed.error();
@@ -178,6 +181,7 @@ void EditorController::drop_pending_follow()
     if (display_pending(state_.display_inquiry()))
     {
         pending_follow_.reset();
+        pending_typed_ = false;
         pending_clamp_ = false;
     }
 }
