@@ -287,6 +287,18 @@ void verify_not_loaded_before_a_request()
            "making and binding the adapter starts no thread and loads no WIC");
 }
 
+// 知らない形式・無いファイルは COM に触れずに返る（V-1426 の軽い 2）。WIC を読む見本の
+// 符号器より前に頼み、windowscodecs.dll がまだ process に無いことを見る。
+void verify_unknown_needs_no_wic()
+{
+    write_file(L"early.png", "plain text, not an image");
+    expect(failed_with(read_one("early.png"), app::ImageFailure::unsupported) &&
+               failed_with(read_one("early-absent.png"), app::ImageFailure::missing),
+           "an unknown format and a missing file are answered");
+    expect(GetModuleHandleW(L"windowscodecs.dll") == nullptr,
+           "an unknown format and a missing file load no WIC");
+}
+
 void verify_formats()
 {
     const Color opaque{10U, 20U, 30U, 255U};
@@ -344,6 +356,15 @@ void verify_content_decides_the_format()
     write_file(L"image.webp", std::string("RIFF\x10\x00\x00\x00WEBPVP8 ", 16));
     expect(failed_with(read_one("image.webp"), app::ImageFailure::unsupported),
            "a WebP is unsupported");
+    const Color jpeg_colour{40U, 80U, 160U, 255U};
+    write_file(L"photo.png", encoded(GUID_ContainerFormatJpeg, 8U, 8U, jpeg_colour));
+    const auto named_png = read_one("photo.png");
+    expect(pixels_of(named_png) != nullptr && filled_with(*pixels_of(named_png), jpeg_colour, 8),
+           "a JPEG named .png is decoded as a JPEG");
+    write_file(L"bitmap.gif", encoded(GUID_ContainerFormatBmp, 2U, 2U, opaque));
+    const auto named_gif = read_one("bitmap.gif");
+    expect(pixels_of(named_gif) != nullptr && filled_with(*pixels_of(named_gif), opaque, 0),
+           "a BMP named .gif is decoded as a BMP");
 }
 
 void verify_broken_files()
@@ -361,12 +382,27 @@ void verify_broken_files()
     const std::string jpeg = encoded(GUID_ContainerFormatJpeg, 64U, 64U, Color{9U, 9U, 9U, 255U});
     write_file(L"cut.jpg", std::string_view(jpeg).substr(0, 40U));
     expect(failed_with(read_one("cut.jpg"), app::ImageFailure::corrupt), "a cut JPEG is corrupt");
+    // 幅か高さが 0 の画像（正しい形の頭）は画素が無いので corrupt。
+    write_file(L"zero-wide.bmp", one_bit_bmp(0U, 4U));
+    expect(failed_with(read_one("zero-wide.bmp"), app::ImageFailure::corrupt),
+           "an image 0 pixels wide is corrupt");
+    write_file(L"zero-high.bmp", one_bit_bmp(4U, 0U));
+    expect(failed_with(read_one("zero-high.bmp"), app::ImageFailure::corrupt),
+           "an image 0 pixels high is corrupt");
 }
 
 void verify_limits_and_missing()
 {
-    std::string large = std::string("\x89PNG\r\n\x1A\n", 8);
-    large.resize(core::image_file_byte_limit + 1U, '\0');
+    // 16 MiB ちょうどは読んで形式の検査へ進み（中身は署名と 0 なので corrupt）、1 バイト超は
+    // 読まずに too_large。見本の列は 1 回だけ確保する。
+    std::string large;
+    large.reserve(core::image_file_byte_limit + 1U);
+    large.append("\x89PNG\r\n\x1A\n", 8);
+    large.resize(core::image_file_byte_limit, '\0');
+    write_file(L"exact.png", large);
+    expect(failed_with(read_one("exact.png"), app::ImageFailure::corrupt),
+           "a file of exactly 16 MiB is read (corrupt, not too large)");
+    large.push_back('\0');
     write_file(L"large.png", large);
     expect(failed_with(read_one("large.png"), app::ImageFailure::too_large),
            "a file over 16 MiB is too large without decoding");
@@ -382,8 +418,26 @@ void verify_limits_and_missing()
            "a reserved device name is not a disk file (unreadable)");
 }
 
+// 共有なしで開いたままのファイルは共有違反で開けず unreadable（ほかの道具が書いている途中など）。
+void verify_locked_file()
+{
+    write_file(L"locked.png", encoded(GUID_ContainerFormatPng, 2U, 2U, Color{5U, 6U, 7U, 255U}));
+    const std::wstring path = inside(L"locked.png");
+    const HANDLE held = CreateFileW(path.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING,
+                                    FILE_ATTRIBUTE_NORMAL, nullptr);
+    expect(held != INVALID_HANDLE_VALUE, "the sample is held without sharing");
+    expect(failed_with(read_one("locked.png"), app::ImageFailure::unreadable),
+           "a file held without sharing is unreadable");
+    if (held != INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(held);
+    }
+    expect(read_one("locked.png").result.has_value(), "the same file is read once it is released");
+}
+
 // 要求ごとに結果がちょうど 1 つ（追補 54・V-1385b の推奨 1）。
-// 読めるものと読めないものを混ぜて一度に頼み、届いた順は要求の順。
+// 読めるものと読めないものを混ぜて一度に頼み、届いた順は要求の順。同じワーカーで 1 枚ごとに
+// MTA を作って壊し、次の 1 枚で作り直す道も通る（試験のスレッドは製品と同じ STA）。
 void verify_one_result_each()
 {
     std::vector<app::ImageRequest> requests;
@@ -424,11 +478,13 @@ int run_tests()
 {
     verify_not_loaded_before_a_request();
     expect(CreateDirectoryW(root, nullptr) != 0, "the sample folder is made");
+    verify_unknown_needs_no_wic();
     verify_formats();
     verify_premultiplied_and_scaled();
     verify_content_decides_the_format();
     verify_broken_files();
     verify_limits_and_missing();
+    verify_locked_file();
     verify_one_result_each();
     verify_destroyed_while_reading();
     std::printf("Image adapter: %zu checks, %zu failures\n", checks(), failures());
@@ -445,8 +501,10 @@ int main()
                      static_cast<unsigned long>(directory.error()));
         return 1;
     }
-    // 見本を作る WIC の符号器のため（adapter はワーカーの仕事の中で自分で初期化する）。
-    if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED)))
+    // 見本を作る WIC の符号器のため。製品の UI スレッド（Main.cpp）と同じ STA にし、プロセスに
+    // 長く生きる MTA を持たない（adapter はワーカーの仕事の中で 1 枚ごとに MTA を作って壊す・
+    // V-1426 の軽い 1）。
+    if (FAILED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)))
     {
         std::fprintf(stderr, "FAIL: COM is not initialised\n");
         return 1;

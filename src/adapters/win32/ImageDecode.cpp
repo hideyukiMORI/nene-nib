@@ -173,13 +173,8 @@ scaled_source(IWICImagingFactory &factory, IWICBitmapFrameDecode &frame, core::I
     return std::make_shared<const application::ImagePixels>(std::move(pixels));
 }
 
-[[nodiscard]] Decoded decoded_in_apartment(std::span<char> bytes, core::ImageFormat format)
+[[nodiscard]] Decoded decoded_in_apartment(std::span<char> bytes, const GUID &container)
 {
-    const GUID *container = container_of(format);
-    if (container == nullptr)
-    {
-        return std::unexpected(Failure::unsupported);
-    }
     ComPtr<IWICImagingFactory> factory;
     const HRESULT made = CoCreateInstance(CLSID_WICImagingFactory2, nullptr, CLSCTX_INPROC_SERVER,
                                           IID_PPV_ARGS(&factory));
@@ -188,7 +183,7 @@ scaled_source(IWICImagingFactory &factory, IWICBitmapFrameDecode &frame, core::I
         return std::unexpected(made == E_OUTOFMEMORY ? Failure::insufficient_memory
                                                      : Failure::unsupported);
     }
-    const Frame frame = first_frame(*factory.Get(), bytes, *container);
+    const Frame frame = first_frame(*factory.Get(), bytes, container);
     if (!frame.has_value())
     {
         return std::unexpected(frame.error());
@@ -199,6 +194,12 @@ scaled_source(IWICImagingFactory &factory, IWICBitmapFrameDecode &frame, core::I
 
 Decoded decoded_image(std::span<char> bytes, core::ImageFormat format) noexcept
 {
+    // 知らない形式は COM に触れずに断る（MTA を作って壊す費用を払わない・V-1426 の軽い 2）。
+    const GUID *container = container_of(format);
+    if (container == nullptr)
+    {
+        return std::unexpected(Failure::unsupported);
+    }
     const HRESULT apartment = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     if (FAILED(apartment))
     {
@@ -209,7 +210,7 @@ Decoded decoded_image(std::span<char> bytes, core::ImageFormat format) noexcept
     Decoded decoded = std::unexpected(Failure::insufficient_memory);
     try
     {
-        decoded = decoded_in_apartment(bytes, format);
+        decoded = decoded_in_apartment(bytes, *container);
     }
     catch (const std::bad_alloc &)
     {

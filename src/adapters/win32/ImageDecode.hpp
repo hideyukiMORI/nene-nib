@@ -19,6 +19,7 @@ namespace nenenib::adapters::win32
 //   大きさで 1 回だけ確保し、CopyPixels の stride は size.width * 4（詰め物なし）。
 // - 復号器が無い（unknown を含む）→ unsupported、壊れている → corrupt、
 //   記憶が足りない → insufficient_memory（std::bad_alloc は外へ出さない）。
+// 形式が unknown なら COM に触れずに unsupported を返す。復号するときだけ、
 // 呼んだスレッドで COM を MTA として初期化し、戻る前に解く（呼ぶのは
 // Win32Worker の仕事の中だけ・ワーカーのほかの仕事は COM を使わない）。
 // windowscodecs.dll は CoCreateInstance が最初の呼び出しで読む

@@ -21,7 +21,8 @@ namespace nenenib::adapters::win32
 // - WIC で復号して長辺 2048 に縮める（decoded_image）。
 // - 結果を棚に置いて合図する。
 // 要求ごとに結果を必ず 1 つ返す。読めない・壊れている・上限超え・記憶が足りないも
-// 失敗の結果で、仕事を載せられないときは request の中で insufficient_memory を置く。
+// 失敗の結果で、仕事を載せられないとき（記憶かスレッドの資源が足りない）は request の中で
+// insufficient_memory を置く。
 // 返さないのは、adapter が壊れた後（窓が閉じる途中）に読み終えた分だけ。
 // 「届いた」の合図は bind で後から受け取る。HWND も窓メッセージの番号も知らない。
 class Win32ImageAdapter final : public application::ImagePort

@@ -14,6 +14,7 @@
 #include <stop_token>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 
 namespace nenenib::adapters::win32
@@ -75,7 +76,10 @@ void Win32ImageAdapter::bind(std::function<void()> arrived)
     shelf_->bind(std::move(arrived));
 }
 
-// 席を先に取ってから仕事を載せる。載せられなければ（記憶が足りない）取った席に失敗を置く。
+// 席を先に取ってから仕事を載せる。載せられなければ取った席に失敗を置き、例外を外へ出さない
+// （要求ごとに結果を必ず 1 つ・V-1426 の軽い 5）。post が投げるのは仕事とキューの確保の
+// std::bad_alloc と、最初の仕事でスレッドを起こせないとき（std::jthread）とロックの
+// std::system_error の 2 種類で、どちらも資源が足りないとして insufficient_memory にする。
 void Win32ImageAdapter::request(application::ImageRequest request)
 {
     shelf_->reserve();
@@ -86,6 +90,11 @@ void Win32ImageAdapter::request(application::ImageRequest request)
                      { read_into(*shelf, request, stop); });
     }
     catch (const std::bad_alloc &)
+    {
+        shelf_->deliver(
+            application::ImageOutcome{ticket, std::unexpected(Failure::insufficient_memory)});
+    }
+    catch (const std::system_error &)
     {
         shelf_->deliver(
             application::ImageOutcome{ticket, std::unexpected(Failure::insufficient_memory)});
