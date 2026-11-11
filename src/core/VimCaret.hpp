@@ -17,6 +17,11 @@ namespace nenenib::core
 // （行の全体は写さない）。横送りの押しと INSERT の <Right> が共用する（#1292）。
 [[nodiscard]] Offset vim_character_after(const TextBuffer &text, Offset at, Offset line_end);
 
+// 行の内容の始まり line_start から、at の手前の Vim の 1 文字の先頭（ADR 0053）。at は line_start
+// より後ろ。at の手前の窓だけを読み、文字の先頭が窓の先頭に当たれば窓を倍にして読み直す。
+// vim_character_after と対で、文とタグのテキストオブジェクトが共用する（#1322）。
+[[nodiscard]] Offset vim_character_before(const TextBuffer &text, Offset at, Offset line_start);
+
 // at の行の最初の非空白。行が空白だけなら行の最後の文字（空行は行頭）。行単位の削除の
 // あとの位置（Vim の規則）。
 [[nodiscard]] Offset vim_first_non_blank(const TextBuffer &text, Offset at);
