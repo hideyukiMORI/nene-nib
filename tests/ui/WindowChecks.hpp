@@ -51,4 +51,5 @@ void verify_preview_cycle_key();
 // #1395）。
 void verify_standard_keys();
 void verify_word_deletion_keys();
+void verify_preview_images();
 } // namespace nenenib::tests::ui

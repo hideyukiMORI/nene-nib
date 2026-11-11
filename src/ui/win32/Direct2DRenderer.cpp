@@ -1653,12 +1653,16 @@ void Direct2DRenderer::draw_other_body(const application::EditorFrame &frame,
         fill(panes.divider.value(), frame.palette.panel_border);
     }
     const auto layout = core::other_pane_layout(panes, frame.active_side);
+    // プレビューを描かない frame は、プレビューの画像の bitmap と画素の参照を放す（ADR 0155 の
+    // 追補 63・分岐は足さず、もともとプレビューでない道で呼ぶ）。
     if (!layout.has_value())
     {
+        preview_.release();
         return;
     }
     if (!frame.other.has_value())
     {
+        preview_.release();
         draw_pane(frame, BodyPane{layout.value(), {}, {}, frame.caret, PaneRole::passive});
         return;
     }
@@ -1669,6 +1673,7 @@ void Direct2DRenderer::draw_other_body(const application::EditorFrame &frame,
 void Direct2DRenderer::draw_other(const application::EditorFrame &frame,
                                   const core::BodyLayout &body, const application::PaneFrame &other)
 {
+    preview_.release();
     const application::CaretView caret{other.caret.position, passive_shape(frame.mode),
                                        other.caret.affinity};
     draw_pane(frame, BodyPane{body, other.lines, other.grid, caret, PaneRole::passive});
