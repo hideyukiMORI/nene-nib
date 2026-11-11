@@ -826,14 +826,42 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
 void EditorController::note_follow_before_key()
 {
     follow_walks_ = !pending_follow_.has_value() || pending_typed_;
+    caret_before_key_ = state_.selection().caret;
 }
 
-void EditorController::mark_typed_follow(core::VimMode before, const core::VimEffect &effect)
+// 打った本文の鍵・キャレットを動かさない鍵（回数の数字や `"a` の待ちなど）・INSERT へ入る近い鍵
+// （`a` `o` `i` `A` など・下へ 1 行まで）は歩きを妨げない（#1363）。Vim は INSERT へ入った後の
+// edit() の最初の周で update_topline を呼ぶので、入る鍵の 1 行の移動は窓を最小だけ送り、歩いた
+// 答えと同じになる。`.` と `@` の中の INSERT もこの道（再生の頭の `10a` の数字も止めない）。
+void EditorController::mark_typed_follow(core::VimMode before, const core::VimStep &step)
 {
-    if (pending_follow_.has_value() && types_text(before, effect))
+    if (!pending_follow_.has_value() || !follow_walks_)
     {
-        pending_typed_ = follow_walks_;
+        return;
     }
+    if (types_text(before, step.effect) || stepped_near(before, step.next.mode))
+    {
+        pending_typed_ = true;
+        walked_follow_ = pending_follow_;
+    }
+}
+
+// キャレットが動かなかったか、INSERT へ入る鍵で鍵の前のキャレットが追従を頼んだ行の 1 行上の
+// 行頭より後ろにあるか（下へ 1 行まで）。上へ動く鍵は歩きの答えを変えない（歩きは窓の下側の
+// 枝だけ）。`gi` の遠い跳びは 1 回の追従のまま。
+bool EditorController::stepped_near(core::VimMode before, core::VimMode after) const
+{
+    if (state_.selection().caret.value == caret_before_key_.value)
+    {
+        return true;
+    }
+    if (before == core::VimMode::insert || after != core::VimMode::insert)
+    {
+        return false;
+    }
+    const std::size_t line = pending_follow_.value().line.value;
+    return caret_before_key_.value >=
+           state_.text().line_start(core::LineNumber{std::max<std::size_t>(line, 2) - 1}).value;
 }
 
 // 飛ぶ鍵の後だけ前の位置を確かめる（決定 5）。飛ばなかった鍵は位置を引かない。
@@ -865,7 +893,7 @@ void EditorController::settle_vim_step(const core::VimStep &step, core::VimMode 
     {
         settle_vim_caret();
     }
-    mark_typed_follow(before, step.effect);
+    mark_typed_follow(before, step);
 }
 
 void EditorController::settle_vim_caret()

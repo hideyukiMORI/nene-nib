@@ -75,6 +75,14 @@ constexpr std::size_t pointed_window_bytes = 64;
     return core::Selection{text.line_start(line), end};
 }
 
+// 前に覚えた位置を今の本文の中へ寄せる（行は本文の行数まで・桁は行の終わりまで・#1363）。
+[[nodiscard]] core::TextPosition within_text(const core::TextBuffer &text,
+                                             core::TextPosition position)
+{
+    const core::LineNumber line{std::clamp<std::size_t>(position.line.value, 1, text.line_count())};
+    return text.position_of(text.offset_of(core::TextPosition{line, position.column}));
+}
+
 // typed は保留の追従が Vim の INSERT で打った本文だけから来たか（#1363）。
 [[nodiscard]] core::ScrollFollow scroll_follow_for(core::EditMode mode, bool typed) noexcept
 {
@@ -151,6 +159,7 @@ void EditorController::settle_follow()
     const bool clamp = std::exchange(pending_clamp_, false);
     const auto pending = std::exchange(pending_follow_, std::nullopt);
     const bool typed = std::exchange(pending_typed_, false);
+    const auto walked = std::exchange(walked_follow_, std::nullopt);
     if (clamp)
     {
         clamp_scroll();
@@ -159,18 +168,31 @@ void EditorController::settle_follow()
     {
         return;
     }
-    const auto followed = visual_view().followed(
-        core::TextCaret{pending.value(), state_.caret_affinity()},
-        scroll_follow_for(state_.mode(), typed), scroll_extent_for(state_.mode()));
+    // 打った本文の後に別の頼みが保留を置き換えていれば、先に打った所まで歩く（#1363）。歩いた
+    // 位置はその後の鍵の編集で行が減っていることがあるので、今の本文の中へ寄せてから解く。
+    if (walked.has_value() && !typed &&
+        !settled_follow_to(within_text(state_.text(), walked.value()), true))
+    {
+        return;
+    }
+    static_cast<void>(settled_follow_to(pending.value(), typed));
+}
+
+bool EditorController::settled_follow_to(core::TextPosition position, bool typed)
+{
+    const auto followed = visual_view().followed(core::TextCaret{position, state_.caret_affinity()},
+                                                 scroll_follow_for(state_.mode(), typed),
+                                                 scroll_extent_for(state_.mode()));
     if (!followed)
     {
         layout_failure_ = followed.error();
-        return;
+        return false;
     }
     if (!(followed.value() == state_.scroll()))
     {
         state_ = state_.with_scroll(followed.value());
     }
+    return true;
 }
 
 // 問いの答えを待つ間の保留は、追従も clamp も、その文書を離れるときに捨てる。問いの答え
@@ -182,6 +204,7 @@ void EditorController::drop_pending_follow()
     {
         pending_follow_.reset();
         pending_typed_ = false;
+        walked_follow_.reset();
         pending_clamp_ = false;
     }
 }

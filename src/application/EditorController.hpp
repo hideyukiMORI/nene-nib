@@ -822,9 +822,10 @@ class EditorController final
     void settle_vim_caret();
     void settle_vim_step(const core::VimStep &step, core::VimMode before);
     // INSERT で打った本文の追従（ScrollFollow::vim_typed・#1363）。鍵の前の保留を覚え、鍵の後に
-    // 打った本文の追従の印を立てる。
+    // 打った本文（と動かない鍵・INSERT へ入る近い鍵）の追従の印を立てる。
     void note_follow_before_key();
-    void mark_typed_follow(core::VimMode before, const core::VimEffect &effect);
+    void mark_typed_follow(core::VimMode before, const core::VimStep &step);
+    [[nodiscard]] bool stepped_near(core::VimMode before, core::VimMode after) const;
     // engine を通らない意図の後に、Vim の NORMAL と VISUAL のキャレットが 1 文字の境（NORMAL は行の
     // 最後の文字の上）から外れていたときだけ寄せる。INSERT は寄せない。入口 apply の終わりの 1 か所
     // から呼ぶ（ADR 0053 の追補 #1309）。
@@ -833,6 +834,8 @@ class EditorController final
     void follow_caret();
     void follow_position(core::TextPosition position);
     void settle_follow();
+    // 保留の追従の 1 段を解決する（typed は打った本文の歩き・#1363）。文字組みの失敗なら偽。
+    [[nodiscard]] bool settled_follow_to(core::TextPosition position, bool typed);
     // 問いの間に文書を離れるときは保留を捨てる（ADR 0128 の決定 7）。
     void drop_pending_follow();
     // controller がスクロールを読む道はこの 1 本（ADR 0128 の決定 2）。
@@ -960,8 +963,14 @@ class EditorController final
     // 保留の追従が Vim の INSERT で打った本文だけから来たか（ScrollFollow::vim_typed・#1363）。
     // follow_position が偽に戻し、打った鍵の終わりの stepped_vim だけが真にする。
     bool pending_typed_ = false;
+    // 打った本文の追従の最後の位置（#1363）。打った後の別の頼み（Esc と `.` の後の寄せ・再生の
+    // 中の NORMAL の移動）が保留を置き換えても残り、解決は先にここまで歩いてから保留を 1 回の
+    // 追従で解く（Vim は打つ周ごとに update_topline を終えてから次の鍵を読む）。
+    std::optional<core::TextPosition> walked_follow_;
     // 鍵の前の保留の追従が無いか打った本文の追従だったか（note_follow_before_key が置く）。
     bool follow_walks_ = false;
+    // 鍵の前のキャレット（INSERT へ入る鍵が下へ 1 行より遠く動いたかを見る・#1363）。
+    core::Offset caret_before_key_{0};
     // 行高を変えた設定が頼んだ clamp。新しい幾何が届いた後のスクロールの読みで、追従より先に
     // 1 回だけ解決する（ADR 0128 の決定 8）。
     bool pending_clamp_ = false;
