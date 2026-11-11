@@ -276,18 +276,19 @@ void verify_macro_depth_limit()
     expect(whole_vim_body(controller) == "bcdef", "the next typed key runs normally");
 }
 
-// 鍵の数の上限（#1351・施主決定 D75）。`@c` の c が `{N}@ax` なら、いちばん外の再生が流す鍵は
-// c の 6 つ（`9993@a` の桁と `@` `a`）と a の N 周（`0` を N 回）と最後の `x`。N = 9993 なら `x` は
-// 10,000 鍵目で流れ、N = 9994 なら上限を超えるので捨てて 1 行知らせる（Vim は止まらず `x` まで流す
-// ので本文が `b` になる・ここが Vim と違う最小の形）。`0` は失敗しない安い鍵で、時計は読まない。
-[[nodiscard]] std::pair<std::string, std::optional<std::string>>
-limited_replay(std::string_view outer)
+// 鍵の数の上限（#1351・施主決定 D75）。製品の上限 100,000 を Debug で流すと 1 件 80 秒
+// かかるので、limit_replay_keys で小さい上限を置いて境を確かめる（製品の値は static_assert）。
+// c が `3@ax` なら、`@c` が流す鍵は `3` `@` `a` と a の 3 周（`0` を 3 回）と最後の `x` で、
+// `x` は 7 鍵目。上限 7 なら流れ、上限 6 なら捨てて 1 行知らせる（Vim は止まらず `x` まで
+// 流すので本文が `b` になる・ここが Vim と違う最小の形）。時計は読まない。
+[[nodiscard]] std::pair<std::string, std::optional<std::string>> limited_replay(std::size_t limit)
 {
     Editing editing;
     open_vim_document(editing, "ab");
     EditorController &controller = editing.controller();
+    controller.limit_replay_keys(limit);
     applied(controller, stored_text('a', "0"));
-    applied(controller, stored_text('c', outer));
+    applied(controller, stored_text('c', "3@ax"));
     vim_replay(controller, "@c");
     const auto message = controller.frame().command_message;
     return {whole_vim_body(controller),
@@ -297,17 +298,18 @@ limited_replay(std::string_view outer)
 
 void verify_macro_key_limit()
 {
-    static_assert(nenenib::core::vim_replay_key_limit == 10000U);
-    const auto [inside, quiet] = limited_replay("9993@ax");
-    expect(inside == "b" && !quiet.has_value(), "the 10000th replayed key still runs");
-    const auto [over, notice] = limited_replay("9994@ax");
+    static_assert(nenenib::core::vim_replay_key_limit == 100000U);
+    const auto [inside, quiet] = limited_replay(7U);
+    expect(inside == "b" && !quiet.has_value(), "the replayed key at the limit still runs");
+    const auto [over, notice] = limited_replay(6U);
     expect(over == "ab" &&
                notice ==
-                   std::optional<std::string>{"再生を 10,000 鍵で止めました（残りは捨てました）"},
-           "the 10001st replayed key is dropped with one notice line");
+                   std::optional<std::string>{"再生を 100,000 鍵で止めました（残りは捨てました）"},
+           "the replayed key past the limit is dropped with one notice line");
     Editing editing;
     open_vim_document(editing, "ab");
     EditorController &controller = editing.controller();
+    controller.limit_replay_keys(6U);
     applied(controller, stored_text('a', "0"));
     vim_replay(controller, "999999999@ax");
     expect(whole_vim_body(controller) == "b", "a typed key after the stopped replay runs normally");

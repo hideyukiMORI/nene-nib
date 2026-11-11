@@ -110,6 +110,7 @@
 #include "VimPattern.hpp"
 #include "VimRegister.hpp"
 #include "VimRepeatFailure.hpp"
+#include "VimReplay.hpp"
 #include "VimReplayKind.hpp"
 #include "VimRowSpan.hpp"
 #include "VimSearchDirection.hpp"
@@ -194,6 +195,10 @@ class EditorController final
     // 1 周ずつ積むので、巨大な回数でも鍵が失敗した所で止まったことを、時計を読まずに数で確かめる
     // ための口。
     [[nodiscard]] std::size_t replay_rounds() const noexcept;
+    // 再生の鍵の数の上限を置き換える試験の口（#1351）。製品は呼ばない（既定は
+    // core::vim_replay_key_limit）。Debug で 100,000 鍵を流すと 1 件 80 秒かかるので、契約は小さい
+    // 上限で境を確かめる。知らせの文は製品の値のまま変えない。
+    void limit_replay_keys(std::size_t limit) noexcept;
     // Ctrl+Tab で歩いている間だけ真（ADR 0058 の決定 4）。窓が Ctrl を離したとき・フォーカスを
     // 失ったときに SettleRecentTab を送るかを決めるための口で、状態の 1 欄を読むだけ。
     [[nodiscard]] bool tab_walking() const noexcept;
@@ -973,6 +978,8 @@ class EditorController final
     // いちばん外の再生で列から流した歩の数（#1351）。perform(VimReplay) が再生の始めに 0 に戻し、
     // replay_step_allowed だけが足す。
     std::size_t replay_steps_ = 0;
+    // 流す歩の上限（既定は core::vim_replay_key_limit・limit_replay_keys だけが置き換える）。
+    std::size_t replay_key_limit_ = core::vim_replay_key_limit;
     std::optional<std::size_t> replay_depth_;
     // `@` の再生の中で `map` の左辺の途中まで読んだ鍵（#1312）。再生の中だけで持ち、列が尽きたら
     // 待たずに流す。state_ の待ち（打った鍵の分）へ持ち越さない。

@@ -206,8 +206,9 @@ constexpr std::string_view inconsistent_layout_notice = "内部の不整合: 画
 // 回数で本文を増やす編集を文書の上限で断った鍵の知らせ（#1341・Vim 9.1 の同じ種類の文）。
 constexpr std::string_view too_long_notice = "E1240: Resulting text too long";
 // 再生を鍵の数の上限で止めた知らせ（#1351・施主決定 D75・値は core::vim_replay_key_limit）。
-constexpr std::string_view replay_limit_notice = "再生を 10,000 鍵で止めました（残りは捨てました）";
-static_assert(core::vim_replay_key_limit == 10000, "replay_limit_notice の数を上限に合わせる");
+constexpr std::string_view replay_limit_notice =
+    "再生を 100,000 鍵で止めました（残りは捨てました）";
+static_assert(core::vim_replay_key_limit == 100000, "replay_limit_notice の数を上限に合わせる");
 // engine を呼ぶ 1 か所の写し（Issue #1023）。鍵は vim_step・`:N` の行は vim_line_jumped・押しの
 // VISUAL は vim_pointer_selected（#1250）。
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
@@ -1308,6 +1309,11 @@ std::size_t EditorController::replay_rounds() const noexcept
     return replay_round_count_;
 }
 
+void EditorController::limit_replay_keys(std::size_t limit) noexcept
+{
+    replay_key_limit_ = limit;
+}
+
 void EditorController::replayed_plain_queue()
 {
     while (!replay_queue_.empty() && replay_step_allowed())
@@ -1520,7 +1526,7 @@ void EditorController::dropped_replay()
 // 上限に達した後に流す歩が残っていれば、残りを捨てて 1 行知らせる（失敗にはしない・鳴らさない）。
 bool EditorController::replay_step_allowed()
 {
-    if (replay_steps_ < core::vim_replay_key_limit)
+    if (replay_steps_ < replay_key_limit_)
     {
         ++replay_steps_;
         return true;
