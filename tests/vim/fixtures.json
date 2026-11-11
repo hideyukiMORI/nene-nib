@@ -3904,5 +3904,20 @@
   {"name":"huge-count-join-stops-at-the-last-line","text":"a\nb\nc","keys":"999999999J"},
   {"name":"huge-count-shift-covers-every-line","text":"a\nb\nc","keys":"999999999>>"},
   {"name":"huge-count-tilde-stops-at-the-line-end","text":"abc\ndef","keys":"999999999~"},
-  {"name":"huge-count-replace-past-the-line-end-fails","text":"abc","keys":"999999999rx"}
+  {"name":"huge-count-replace-past-the-line-end-fails","text":"abc","keys":"999999999rx"},
+  {"name":"prefix-escape-quote-then-x-runs","text":"abc","keys":"\"<Esc>x"},
+  {"name":"prefix-escape-at-then-x-runs","text":"abc","keys":"@<Esc>x"},
+  {"name":"prefix-escape-quote-drops-the-count","text":"abcdef","keys":"3\"<Esc>x"},
+  {"name":"prefix-escape-at-drops-the-count","text":"abcdef","keys":"3@<Esc>x"},
+  {"name":"prefix-escape-quote-drops-the-selected-register","text":"abc","keys":"\"ayllyl\"a\"<Esc>p"},
+  {"name":"prefix-escape-quote-keeps-the-wanted-column","text":"abcdef\nab\nabcdef","keys":"$j\"<Esc>j"},
+  {"name":"prefix-escape-at-keeps-the-wanted-column","text":"abcdef\nab\nabcdef","keys":"$j@<Esc>j"},
+  {"name":"prefix-escape-quote-keeps-visual","text":"abcdef","keys":"v\"<Esc>ld"},
+  {"name":"prefix-escape-at-keeps-visual","text":"abcdef","keys":"vl@<Esc>d"},
+  {"name":"prefix-escape-at-keeps-the-last-change","text":"abcdef","keys":"x@<Esc>."},
+  {"name":"prefix-escape-at-then-at-at-runs-the-last-macro","text":"abcdef","keys":"@a@<Esc>@@","register":{"name":"a","keys":"x"}},
+  {"name":"prefix-escape-search-empty-delete-keeps-numbered-one","text":"abc foo def\nzz","keys":"jdd/foo<CR>d1n\"1p"},
+  {"name":"prefix-escape-search-empty-shift-right-shifts-the-line","text":"abc foo def","keys":"/foo<CR>>1n"},
+  {"name":"prefix-escape-search-empty-shift-left-shifts-the-line","text":"\tabc foo def","keys":"/foo<CR><1n"},
+  {"name":"prefix-escape-search-empty-shift-right-dot-repeats","text":"abc foo def\nxyz","keys":"/foo<CR>>1nj."}
 ]
