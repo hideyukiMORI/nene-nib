@@ -46,10 +46,20 @@ class EditHistory final
   private:
     // 外部 Edit は push で防御コピーし、確定済み本文は私有の const 値として共有する（ADR 0085）。
     using Entry = std::shared_ptr<const Edit>;
-    EditHistory(std::vector<Entry> edits, std::size_t position, EditBoundary tail,
-                std::size_t revision);
-    std::vector<Entry> edits_;
-    // edits_[0, position_) が本文に適用済み。position_ より後ろは redo で戻せる編集。
+    // 履歴は固定の件数の塊の不変の列（ADR 0180 の決定 2・ADR 0044 の chunk の列と同じ考え方）。
+    // 値の写し（状態の with_* のたび）は束の参照を 1 つ増やすだけで、足すときに写すのは塊の列と
+    // 末尾の塊だけ（件数に比例しない）。
+    using Block = std::vector<Entry>;
+    using Blocks = std::vector<std::shared_ptr<const Block>>;
+    EditHistory(std::shared_ptr<const Blocks> blocks, std::size_t size, std::size_t position,
+                EditBoundary tail, std::size_t revision);
+    // 0 から count 件を残し、その後ろに entry を足した次の束。
+    [[nodiscard]] std::shared_ptr<const Blocks> kept_with(std::size_t count, Entry entry) const;
+    [[nodiscard]] const Edit &entry_at(std::size_t index) const;
+    std::shared_ptr<const Blocks> blocks_;
+    // 束の中の編集の数。塊の列は size_ 件ちょうどを持つ。
+    std::size_t size_;
+    // [0, position_) が本文に適用済み。position_ より後ろは redo で戻せる編集。
     std::size_t position_;
     // 末尾の単位がまだ続いているか。separate で閉じた単位には次の入力も混ざらない（ADR 0009）。
     EditBoundary tail_;

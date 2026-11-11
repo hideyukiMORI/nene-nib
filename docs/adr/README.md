@@ -191,3 +191,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0177](0177-printing-is-one-port-that-draws-the-body-layout-into-an-xps-print-control.md) | 印刷は port 1 本で、本文と同じ DirectWrite の layout を XPS の print control に描く | 受理（D71・2026-10-29）・#1047 |
 | [0178](0178-shell-registration-is-one-port-written-only-by-an-explicit-operation-under-hkcu.md) | Windows のエクスプローラーへの登録は port 1 本で、HKCU だけに、明示の操作のときだけ書く（段 1・段 2 は Store の段階） | 受理（D73・2026-10-30）・#1087 |
 | [0179](0179-the-transient-tab-is-one-window-mark-replaced-by-opening-in-place.md) | プレビューのタブは窓に 1 つの印で、置き換えは「同じ位置に開いて前の文書を外す」の 1 本 | 受理（D83・2026-11-11）・#1397 |
+| [0180](0180-state-copies-share-the-history-and-the-piece-list.md) | 状態の写しは undo の履歴と piece の列を複製しない（履歴は塊の不変の列・piece の列は共有の束） | 受理（設計席・2026-11-11）・#1473 |
