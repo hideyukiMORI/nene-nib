@@ -408,6 +408,34 @@ def fixture_digest_checks(root: Path, rules: dict) -> list[Finding]:
     return findings
 
 
+def wrap_fixture_provenance_checks(root: Path, rules: dict) -> list[Finding]:
+    """CNF-010: the wrapped-display fixtures name the inputs they were measured from (Issue #1431).
+
+    `eng/vim-wrap-oracle.py --regenerate` writes one `// <label>: sha256 <hex>` line per input
+    (`wrapFixtureProvenance`: the fixture list, its own measurement code and the shared oracle).
+    Like VimFixtures.hpp the header needs Vim to rebuild, so only those lines are compared with the
+    SHA-256 of the files in the tree; each missing or different line is a finding.
+    """
+    name = "tests/vim/VimWrapFixtures.hpp"
+    generated = root / name
+    if not generated.is_file():
+        return [Finding("CNF-010", name, "the generated wrapped fixtures are missing")]
+    content = generated.read_text(encoding="utf-8")
+    findings = []
+    for label, relative in rules["wrapFixtureProvenance"].items():
+        source = root / relative
+        match = re.search(rf"^// {re.escape(label)}: sha256 ([0-9a-f]{{64}})$", content, re.M)
+        if not source.is_file():
+            findings.append(Finding("CNF-010", name, f"{relative} ({label}) is missing"))
+        elif not match:
+            findings.append(Finding("CNF-010", name, f"no {label} digest is recorded; "
+                                    "run eng/vim-wrap-oracle.py --regenerate"))
+        elif match[1] != (digest := hashlib.sha256(source.read_bytes()).hexdigest()):
+            findings.append(Finding("CNF-010", name, f"recorded {label} digest {match[1]} is not {digest} "
+                                    f"of {relative}; run eng/vim-wrap-oracle.py --regenerate"))
+    return findings
+
+
 def key_names_checks(root: Path) -> list[Finding]:
     """CNF-010: src/core/VimKeyNames.hpp is exactly what eng/vim-oracle.py writes from KEY_TABLE.
 
@@ -645,6 +673,7 @@ def check(root: Path, today: datetime.date, build_dir: Path | None = None) -> li
     findings.extend(configuration_checks(root, paths, rules))
     findings.extend(version_metadata_checks(root))
     findings.extend(fixture_digest_checks(root, rules))
+    findings.extend(wrap_fixture_provenance_checks(root, rules))
     findings.extend(key_names_checks(root))
     findings.extend(case_mapping_checks(root))
     findings.extend(fixture_format_checks(root))
