@@ -51,7 +51,8 @@ the same known difference), `"+` `"*`, `q` or a macro. With generator 6, `DEFAUL
 differences that have an open Issue (#1310 #1344) or that Nib keeps on purpose (#1483) as known
 unless `--no-known-defaults`: #1310 only for a shrunk case of exactly a `<C-e>` / `<C-y>` word and
 one word after it that differs on `first_visible`; #1483 only for a shrunk case of exactly a `zb` /
-`z-` word whose top lands on line 1 and one `<C-b>` `<C-y>` `<C-f>` `L` `M` after it. `summary.md` lists each rule's known cases with their minimal keys.
+`z-` word (no count, or the caret's line) whose top lands on line 1 short of a full window and one
+`<C-b>` `<C-y>` (`scrolloff` above 0) `<C-f>` `L` `M` after it. `summary.md` lists each rule's known cases with their minimal keys.
 
 The buffer has 1 to 12 lines mixing ASCII words, spaces, tabs, bracket and quote pairs, punctuation,
 Japanese (kana, kanji, full-width letters), empty lines and trailing spaces. It never ends with a
@@ -810,10 +811,15 @@ def stale_bottom_after_zb(judged: dict) -> bool:
     keep it when the top lands on line 1 short of a full window; the oracle's single `:normal!` never
     redraws, so the next `<C-b>` `<C-y>` `<C-f>` `L` `M` reads the old bottom (an interactive Vim,
     which redraws between keys, agrees with Nib · ADR 0146). Only a shrunk case of exactly that word
-    and one reader, from a window whose top is not already 1 (else `zb` restores the bottom), whose
-    `zb` line sits above the window's last row (else the top does not land on 1 short of full), and
-    differing on the window and caret only. `j` `k` `l` between them refresh the bottom in Vim, so
-    a case with any third word is not known."""
+    and one reader, differing on the window and caret only, from a window whose top is not already 1
+    (else `zb` restores the bottom), where Vim 9.1 measured the old bottom (PR #1504 review):
+    - the `zb` has no count or a count equal to the caret's line (`5zb` from another line moves the
+      caret first and leaves no old bottom);
+    - the line plus `scrolloff` (capped at `(height - 1) / 2`) fits the window and the line sits
+      above its last row (else the top does not land on 1 short of full);
+    - `<C-b>` `<C-y>` only with `scrolloff` above 0 (`cursor_correct` wants no row below at 0);
+    - `M` only with the line at least two above the last row (one above may round to the same row).
+    `j` `k` `l` between them refresh the bottom in Vim, so a case with any third word is not known."""
     words, window = judged["words"], judged["window"]
     if not (judged["shrunk"] and window is not None and len(words) == 2):
         return False
@@ -821,9 +827,16 @@ def stale_bottom_after_zb(judged: dict) -> bool:
     match = BOTTOM_ALIGN.match(align_keys)
     if align_kind not in ("zb", "z-") or match is None or reader not in STALE_BOTTOM_READERS:
         return False
-    viewport = window["viewport"]
-    line = int(match.group(1)) if match.group(1) else viewport["line"]
-    return (viewport["first_visible"] != 1 and line < viewport["visible_lines"]
+    viewport, scrolloff = window["viewport"], window["scrolloff"]
+    line, height = viewport["line"], viewport["visible_lines"]
+    if match.group(1) and int(match.group(1)) != line:
+        return False
+    margin = min(scrolloff, (height - 1) // 2)
+    if reader in ("<C-b>", "<C-y>") and scrolloff == 0:
+        return False
+    if reader == "M" and line > height - 2:
+        return False
+    return (viewport["first_visible"] != 1 and line < height and line + margin <= height
             and judged["fields"] <= {"line", "column", "first_visible"})
 
 
