@@ -977,7 +977,11 @@ void EditorController::open_read(const core::FilePath &path, OpenedDocument open
         // （ADR 0156 の決定 9）。
         first_syntax_.reset();
         second_syntax_.reset();
-        minimap_.forget();
+        // オフの間は覚えが常に空（sync_minimap が捨てる）ので触れない（ADR 0171 の早い return）。
+        if (minimap_shown_)
+        {
+            minimap_.forget();
+        }
         ask_display();
         // 本文が丸ごと替わるので、プレビューも頼み直す（ADR 0155 の決定 9）。
         request_preview(true);
@@ -1361,7 +1365,10 @@ void EditorController::accept(const SelectSyntax &intent)
     state_ = state_.with_syntax_enabled(intent.enabled);
     first_syntax_.reset();
     second_syntax_.reset();
-    minimap_.forget();
+    if (minimap_shown_)
+    {
+        minimap_.forget();
+    }
 }
 
 // 判定は文書ごとに 1 回で、改行の索引と巨大な行の数えだけ（文字組みに触れない）。巨大な行の
