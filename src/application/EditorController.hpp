@@ -22,6 +22,7 @@
 #include "DocumentView.hpp"
 #include "Edit.hpp"
 #include "EditBoundary.hpp"
+#include "EditHistory.hpp"
 #include "EditorDelivery.hpp"
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
@@ -242,6 +243,10 @@ class EditorController final
     // アクティブな文書の本文を読むだけの口。試験が仮想桁の索引の持ち方（ADR 0140 の決定 4）を
     // 確かめるために読む。状態を変える口はここには無い。
     [[nodiscard]] const core::TextBuffer &text() const noexcept;
+    // アクティブな文書の undo の履歴とマークを読むだけの口。fixture の再生が Vim の変更の印
+    // （ADR 0181）を比べるために読む。
+    [[nodiscard]] const core::EditHistory &history() const noexcept;
+    [[nodiscard]] const core::VimMarks &vim_marks() const noexcept;
     // 前回のプロセスが残した退避（ADR 0137 の決定 6）。ui が窓を見せて最初の frame を描いた後に
     // 1 回だけ呼ぶ。port の remnants() を 1 回呼んで列を覚え、その列を返す（失敗は空）。
     // RestoreAutosave と DiscardAutosave はこの覚えた列を使い、port へもう 1 回聞かない。

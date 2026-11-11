@@ -692,6 +692,16 @@ const core::TextBuffer &EditorController::text() const noexcept
     return state_.text();
 }
 
+const core::EditHistory &EditorController::history() const noexcept
+{
+    return state_.history();
+}
+
+const core::VimMarks &EditorController::vim_marks() const noexcept
+{
+    return state_.vim_marks();
+}
+
 core::TitleBarInput EditorController::title_bar_input(std::int32_t width, std::uint32_t dpi) const
 {
     return core::TitleBarInput{
