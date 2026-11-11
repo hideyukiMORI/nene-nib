@@ -280,6 +280,11 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     finish_tab_action(close_request, closing);
     release_session_block();
     follow_preview_timer();
+    // 起動画面が消えたら押しの記憶を消す（押している間だけ読む・ADR 0172 の追補 24）。
+    if (start_pressed_.has_value() && !controller_.start_screen().has_value())
+    {
+        start_pressed_ = std::nullopt;
+    }
 }
 
 // プレビューの合図は other の枠にプレビューがある間だけ打つ（ADR 0155 の決定 8）。開いているかは

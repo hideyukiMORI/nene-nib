@@ -52,4 +52,6 @@ void verify_preview_cycle_key();
 void verify_standard_keys();
 void verify_word_deletion_keys();
 void verify_preview_images();
+// 起動画面の画素と文字組みの保持（ADR 0172 の決定 5・#1455）。
+void verify_start_screen_paint();
 } // namespace nenenib::tests::ui
