@@ -926,6 +926,52 @@ void verify_scroll_line_in_a_macro()
            "a nested macro ending in <C-e>j follows the caret after j");
 }
 
+// 窓の 1 打鍵の道（frame を挟まない apply）で打った本文の追従の印を受け渡す（#1363 の R2）。
+// 本文と窓は fixture viewport-insert-follow- と同じ（40 行・8 行の窓・so=0・3 行目）。framed は
+// 鍵ごとに frame を読み、unframed は frame を読まずに送ってから最後に 1 回だけ読む。
+[[nodiscard]] std::pair<std::size_t, std::size_t> unframed_after(std::string_view framed,
+                                                                 std::string_view unframed)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{8});
+    std::string text;
+    for (std::size_t line = 1; line <= 40; ++line)
+    {
+        text +=
+            std::string(line < 10 ? "0" : "") + std::to_string(line) + (line < 40 ? " w\n" : " w");
+    }
+    static_cast<void>(controller.apply(InsertText{text}));
+    applied(controller, SelectEditMode{EditMode::vim});
+    static_cast<void>(run_ex(controller, "set so=0"));
+    vim_replay(controller, "3G");
+    vim_replay(controller, framed);
+    for (const VimKey &key : vim_keys_of(unframed))
+    {
+        static_cast<void>(controller.apply(VimKeyPress{key}));
+    }
+    return top_and_line(controller.frame());
+}
+
+// INSERT へ入る `a` の保留も、frame を挟まない 2 回目の `<C-r>"` も歩きを妨げない（Vim は edit() の
+// 周ごとに update_topline を呼ぶ）。窓の下へ遠く跳ぶ移動の保留が残っていれば 1 回の追従のまま
+// （鍵ごとに解決しない・ADR 0128 / 0129 の決定 2）で、キャレットは窓の中央へ寄る。
+void verify_typed_follow_without_frames()
+{
+    const auto each = unframed_after("y9ja<C-r>\"<C-r>\"<Esc>", "");
+    expect(each == std::pair<std::size_t, std::size_t>{16, 23},
+           "#1363 the framed control matches the fixture viewport-insert-follow-register-twice");
+    expect(unframed_after("y9ja", "<C-r>\"<C-r>\"<Esc>") == each,
+           "#1363 a second <C-r>\" without a frame between keeps walking");
+    expect(unframed_after("y9j", "a<C-r>\"<C-r>\"<Esc>") == each,
+           "#1363 the pending follow of the a that enters INSERT does not stop the walk");
+    const auto walked = unframed_after("y9j20ja<C-r>\"<Esc>", "");
+    const auto moved = unframed_after("y9j", "20ja<C-r>\"<Esc>");
+    expect(walked.second == moved.second && walked.first + 7 == walked.second &&
+               moved.second - moved.first >= 3 && moved.second - moved.first <= 4,
+           "#1363 a far move still pending before the insert keeps the one jump to the middle");
+}
+
 } // namespace
 
 void verify_vim_view_scope()
@@ -950,5 +996,6 @@ void verify_vim_view_scope()
     verify_follow_reads_drawn_lines();
     verify_far_jump_with_large_margin();
     verify_scroll_line_in_a_macro();
+    verify_typed_follow_without_frames();
 }
 } // namespace nenenib::tests
