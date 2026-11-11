@@ -56,4 +56,6 @@ void verify_word_deletion_keys();
 void verify_preview_images();
 // 起動画面の画素と文字組みの保持（ADR 0172 の決定 5・#1455）。
 void verify_start_screen_paint();
+// 窓の角は四角（DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_DONOTROUND・#1488）。窓は作らない。
+void verify_window_corners();
 } // namespace nenenib::tests::ui

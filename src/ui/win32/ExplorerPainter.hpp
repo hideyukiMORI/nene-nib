@@ -24,8 +24,8 @@ namespace nenenib::ui::win32
 // エクスプローラーの面を描く経路（ADR 0162 の決定 2・8・採用案 B
 // docs/design/2026-11-10-explorer-look.md・施主決定 D81）。地はタブの帯と同じ title_bar
 // で、帯と面が L 字の枠になる。面の右端の border は panel_border で焦点があれば
-// accent、本文の帯の左上の角は 半径 corner で丸め（角の外は
-// title_bar・角の弧も境界の色）。先頭の行はルート名（text・semibold・ ルートが無ければ案内を
+// accent で、面の上端から下端までの直線（本文の帯の左上の角は直角・2026-11-11 夜に施主が丸みを
+// 外した・#1488）。先頭の行はルート名（text・semibold・ ルートが無ければ案内を
 // muted）、その下に view.rows を 1 行ずつ。行の部品の矩形は core の explorer_row_parts の 1
 // 本で、選んだ行は background の丸い面に 1 DIP の枠（焦点で accent・無ければ panel_border）、
 // 載せた行は tab_hover の丸い面（選んだ行には重ねない）、字下げの縦の線は panel_border、山形と
@@ -33,8 +33,8 @@ namespace nenenib::ui::win32
 // 色（値なしは muted）、名前は text（隠しは muted・アクティブな文書は semibold）、未保存は accent
 // の丸。長い名前は書式に焼いた文字単位の省略記号「…」で切る（タブの題名と同じ規則）。行の文字組みは
 // PaletteRowLayouts の保持から鍵の hash で O(1) に引き（#1125）、同じ行は frame をまたいで作り直さ
-// ない（#904 の形）。線の形（stroke style）と角の形（path geometry）は renderer が持つ
-// ExplorerShapes から借り、factory か角の鍵が変わったときだけ作り直す（V-1428 の L-1）。target
+// ない（#904 の形）。線の形（stroke style）は renderer が持つ ExplorerShapes から借り、factory
+// が変わったときだけ作り直す（V-1428 の L-1）。target
 // は製品では Direct2D の描画先、tests/ui は WIC の bitmap の描画先。色は Palette と SyntaxPalette
 // のトークンだけ（ADR 0008）。
 class ExplorerPainter final
@@ -46,7 +46,7 @@ class ExplorerPainter final
     ExplorerPainter(ID2D1RenderTarget &target, ID2D1SolidColorBrush &brush,
                     const ExplorerText &text, PaletteRowLayouts &layouts,
                     ExplorerShapes &shapes) noexcept;
-    // 面（layout.panel）を描く。面が無ければ何もしない（本文の角も丸めない）。
+    // 面（layout.panel）を描く。面が無ければ何もしない。
     void paint(const application::ExplorerView &view, const core::ExplorerLayout &layout,
                const core::Palette &palette, const core::SyntaxPalette &syntax);
 
@@ -64,8 +64,6 @@ class ExplorerPainter final
                     const core::LayoutRect &mark);
     void stroke_lines(const core::LayoutRect &cell, std::span<const D2D1_POINT_2F> points,
                       bool closed, core::RgbColor color);
-    void paint_corner(const core::ExplorerLayout &layout, core::RgbColor edge,
-                      core::RgbColor ground);
     [[nodiscard]] float scale() const noexcept;
     [[nodiscard]] PaletteRowLayouts::TextLayout
     made(std::string_view text, const core::LayoutRect &area, IDWriteTextFormat *format);

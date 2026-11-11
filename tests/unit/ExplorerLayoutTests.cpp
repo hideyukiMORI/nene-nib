@@ -113,23 +113,22 @@ void verify_steps_and_dpi()
         core::explorer_layout(LayoutRect{0, 0, 1200, 800}, 96, core::ExplorerWidth{});
     expect(plain.line_height == 22 && plain.root_height == 30 && plain.indent == 12 &&
                plain.cell == 16 && plain.inset == 6 && plain.padding == 4 &&
-               plain.root_padding == 12 && plain.gap == 6 && plain.radius == 5 &&
-               plain.corner == 8 && plain.dot == 6 && plain.dot_inset == 14 && plain.border == 1,
+               plain.root_padding == 12 && plain.gap == 6 && plain.radius == 5 && plain.dot == 6 &&
+               plain.dot_inset == 14 && plain.border == 1,
            "at 96 DPI the steps are the table's DIP values");
     const auto scaled =
         core::explorer_layout(LayoutRect{0, 0, 1000, 800}, 144, core::ExplorerWidth{});
     expect(core::width_of(panel_of(scaled)) == 360 && scaled.line_height == 33 &&
                scaled.root_height == 45 && scaled.indent == 18 && scaled.cell == 24 &&
                scaled.inset == 9 && scaled.padding == 6 && scaled.root_padding == 18 &&
-               scaled.gap == 9 && scaled.radius == 8 && scaled.corner == 12 && scaled.dot == 9 &&
-               scaled.dot_inset == 21 && scaled.border == 2,
+               scaled.gap == 9 && scaled.radius == 8 && scaled.dot == 9 && scaled.dot_inset == 21 &&
+               scaled.border == 2,
            "150 percent scales the panel and the steps, rounding halves up");
     const auto doubled =
         core::explorer_layout(LayoutRect{0, 0, 1200, 800}, 192, core::ExplorerWidth{});
     expect(doubled.line_height == 44 && doubled.root_height == 60 && doubled.indent == 24 &&
                doubled.cell == 32 && doubled.inset == 12 && doubled.padding == 8 &&
-               doubled.radius == 10 && doubled.corner == 16 && doubled.dot == 12 &&
-               doubled.border == 2,
+               doubled.radius == 10 && doubled.dot == 12 && doubled.border == 2,
            "200 percent doubles every step");
     const auto capped =
         core::explorer_layout(LayoutRect{0, 0, 600, 800}, 144, core::ExplorerWidth{});

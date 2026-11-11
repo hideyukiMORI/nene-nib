@@ -14,6 +14,7 @@
 #include "TitleBarLayout.hpp"
 #include "TitleBarWidth.hpp"
 #include "UnsavedTab.hpp"
+#include "WindowCorners.hpp"
 
 #include <dwmapi.h>
 
@@ -169,6 +170,8 @@ void EditorWindow::apply_backdrop(const application::EditorDelivery &delivery)
     shown_border_ = core::selected_theme(delivery.settings, delivery.appearance).ui.title_bar;
     const COLORREF border = colorref_of(shown_border_);
     DwmSetWindowAttribute(window_, DWMWA_BORDER_COLOR, &border, static_cast<DWORD>(sizeof(border)));
+    // 窓の角は四角（#1488）。丸めると左上と右上に小さく明るい点が出た。失敗は無視する（上と同じ）。
+    static_cast<void>(square_window_corners(window_));
     // Mica は Windows 11 22H2 以降。掛からない環境でも帯は不透明の title_bar で塗るので（D16）、
     // 掛かったかどうかは誰も読まない。2 属性は最初のフレームまでの面（ADR 0013）と
     // 非クライアントの明暗（ADR 0008 の決定 9）のために掛け続ける。
