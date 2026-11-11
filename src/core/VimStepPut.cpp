@@ -1,10 +1,14 @@
 #include "VimStepDetail.hpp"
 
+#include "DocumentCaret.hpp"
 #include "LineEnding.hpp"
 #include "Utf8.hpp"
+#include "VimBlockRange.hpp"
+#include "VimLineColumns.hpp"
 #include "VimMarkEdits.hpp"
 #include "VimPutSide.hpp"
 #include "VimVisualRange.hpp"
+#include "VirtualColumn.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -12,15 +16,20 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
 
 namespace nenenib::core
 {
+using detail::block_of;
+using detail::block_operated;
 using detail::cancelled;
 using detail::count_of;
+using detail::count_room;
 using detail::failed;
+using detail::fits_repeated;
 using detail::forward_characters;
 using detail::last_code_point_size;
 using detail::line_of;
@@ -417,6 +426,324 @@ using PutRemoval = std::pair<VimStep, OffsetRange>;
                                     EditBoundary::separate};
     return removal;
 }
+
+// ---------------------------------------------------------------- 矩形の VISUAL の p / P（#1461）
+
+// 矩形を消した後の本文。行ごとの置き換えを下の行から写す（上の行の位置を動かさない）。
+[[nodiscard]] TextBuffer block_removed_text(const TextBuffer &text, const VimRemoveBlock &removal)
+{
+    TextBuffer after = text;
+    for (std::size_t index = removal.edits.size(); index > 0; --index)
+    {
+        const VimBlockEdit &edit = removal.edits.at(index - single_step);
+        after = after.replaced(edit.range.begin, edit.range.end, edit.utf8);
+    }
+    return after;
+}
+
+// 貼る所と向き。removed は消した後の本文で、キャレットが消した所。消した所が行末に残ると Vim の
+// check_cursor はキャレットを最後の文字へ寄せ、nv_put_opt はそれが b_op_start（矩形の 1 行目の左の
+// 文字の頭）より左なら前向き（FORWARD）に貼る。左の文字が端で切れた Tab
+// や全角で、寄せたキャレットが その頭に戻るときは後ろ向き（`x<Tab>b` の `fb<C-v>jjp` は Tab
+// の跡の空白の前・実測）。
+using PutPlace = std::pair<Offset, VimPutSide>;
+
+[[nodiscard]] PutPlace block_put_place(const VimState &state, const VimEditorView &view,
+                                       const VimEditorView &removed)
+{
+    const TextBuffer &after = removed.text;
+    const Offset caret = removed.selection.caret;
+    const LineNumber line = line_of(after, caret);
+    const Offset start = after.line_start(line);
+    if (caret.value < after.line_end(line).value || start.value >= after.line_end(line).value)
+    {
+        return PutPlace{caret, VimPutSide::before};
+    }
+    const VimLineColumns columns(after, line);
+    const Offset clamped{start.value + columns.character_start(columns.size(), single_step)};
+    const Offset left = block_of(state, view).lines.front().range.begin;
+    return PutPlace{clamped, clamped.value < left.value ? VimPutSide::after : VimPutSide::before};
+}
+
+// 1 行の文字単位の本文を矩形の各行へ入れる編集（Vim の do_put の VIsual_active の繰り返し）。1
+// 行目は 消した所へ入れ、下の行は 1
+// 行目の桁で始まる文字の前（行の終わりがその桁ならその後ろ）へ入れる。
+// その桁で始まる文字が無い行（短い行・Tab や全角の途中）は飛ばす（getvpos の FAIL・実測）。
+[[nodiscard]] std::vector<VimBlockEdit> block_lines_put(const TextBuffer &after, Offset at,
+                                                        LineNumber last, const std::string &body)
+{
+    const LineNumber first = line_of(after, at);
+    const std::size_t column =
+        VimLineColumns(after, first).column_of(at.value - after.line_start(first).value).value;
+    std::vector<VimBlockEdit> edits{VimBlockEdit{OffsetRange{at, at}, body}};
+    for (std::size_t number = first.value + single_step; number <= last.value; ++number)
+    {
+        const VimLineColumns line(after, LineNumber{number});
+        const std::size_t byte = line.byte_at(VirtualColumn{column});
+        if (line.column_of(byte).value != column)
+        {
+            continue;
+        }
+        const Offset where{line.start().value + byte};
+        edits.push_back(VimBlockEdit{OffsetRange{where, where}, body});
+    }
+    return edits;
+}
+
+// 消した後の本文の上の貼付の編集と、貼った後のキャレット。
+using BlockPut = std::pair<std::vector<VimBlockEdit>, Offset>;
+// それに貼った後の前の選択（gv）を添えたもの。
+using PutResult = std::tuple<std::vector<VimBlockEdit>, Offset, VimLastVisual>;
+
+// 文字単位と行単位の本文を NORMAL の `p` `P` と同じ put_step で貼った効果を、行ごとの編集に直す。
+// キャレットは文書の改行で数える（CRLF の文書では入れた改行のぶん後ろ）。
+[[nodiscard]] BlockPut inserted_put(const VimInsertAt &insert, LineEnding ending)
+{
+    return BlockPut{
+        std::vector<VimBlockEdit>{VimBlockEdit{OffsetRange{insert.at, insert.at}, insert.utf8}},
+        document_caret_after(insert.at, insert.utf8, insert.caret, ending)};
+}
+
+// 行単位の本文の前の選択。貼った最初の行の頭から最後の行の最後の文字まで（Vim の do_put の
+// MLINE）。 leading は最後の行の下へ改行から書いた形（put_lines の最後の行の `p`）。
+[[nodiscard]] VimLastVisual lines_put_visual(const VimState &state, const TextBuffer &after,
+                                             const VimInsertAt &insert, bool leading)
+{
+    const std::string_view body = insert.utf8;
+    const LineNumber first{line_of(after, insert.at).value + (leading ? single_step : 0)};
+    const std::string_view last = leading ? trailing_line_of(body) : last_line_of(body);
+    return put_visual(state, VimMarkPosition{first, 0},
+                      VimMarkPosition{LineNumber{first.value + newlines_in(body) - single_step},
+                                      last_character_byte(last)});
+}
+
+// 改行を含む文字単位の本文の前の選択。入れた所から最後の行の最後の文字まで。
+[[nodiscard]] VimLastVisual characters_put_visual(const VimState &state, const TextBuffer &after,
+                                                  const VimInsertAt &insert)
+{
+    const VimMarkPosition start = vim_mark_position_of(after, insert.at);
+    return put_visual(state, start,
+                      VimMarkPosition{LineNumber{start.line.value + newlines_in(insert.utf8)},
+                                      last_character_byte(trailing_line_of(insert.utf8))});
+}
+
+// 貼った後の本文の上の位置を、消した後の本文の行 line の上の位置として読む（貼付は line より上の
+// 行を変えないので行頭は同じ・行の終わりは伸びている）。
+[[nodiscard]] VimMarkPosition mark_on(const TextBuffer &after, LineNumber line, Offset at)
+{
+    return VimMarkPosition{line, at.value - after.line_start(line).value};
+}
+
+// 改行を含まない文字単位の本文の矩形の各行への貼付。put は消した後の本文で、キャレットが入れる所。
+// キャレットと前の選択の終わりは 1 行目に入れた本文の最後の文字（Vim は 1 行目のキャレットだけを
+// 進める・実測）。
+[[nodiscard]] std::expected<BlockPut, VimRepeatFailure>
+lines_of_block_put(const VimState &state, const VimEditorView &put, LineNumber last,
+                   const VimRegister &source)
+{
+    const TextBuffer &after = put.text;
+    const Offset at = put.selection.caret;
+    auto body = repeated(source.text, count_of(state.count), after, put.document_limit);
+    if (!body.has_value())
+    {
+        return std::unexpected(body.error());
+    }
+    std::vector<VimBlockEdit> edits = block_lines_put(after, at, last, body.value());
+    if (!fits_repeated(body.value().size(), edits.size(), count_room(after, put.document_limit)))
+    {
+        return std::unexpected(VimRepeatFailure::too_large);
+    }
+    const Offset caret{at.value + body.value().size() - last_code_point_size(body.value())};
+    return BlockPut{std::move(edits), caret};
+}
+
+// 矩形を消す行ごとの置き換え（消す前の本文の位置）に、消した後の本文の上の貼付の編集を重ねて、消す前の
+// 本文の上の行ごとの置き換えの列に畳む（上の行から順・重ならない）。消した所に触れる貼付はその行の
+// 置き換えと 1 つに合わせ、触れない貼付は手前の置き換えが伸び縮みしたぶんだけ位置をずらす。
+[[nodiscard]] std::vector<VimBlockEdit> block_put_merged(const TextBuffer &after,
+                                                         const std::vector<VimBlockEdit> &removal,
+                                                         const std::vector<VimBlockEdit> &puts)
+{
+    std::vector<VimBlockEdit> merged;
+    std::size_t next = 0;
+    // 通り過ぎた置き換えの消す前の長さの和と、消した後の長さの和。
+    std::size_t before = 0;
+    std::size_t after_size = 0;
+    for (const VimBlockEdit &put : puts)
+    {
+        while (next < removal.size() && removal.at(next).range.begin.value + after_size - before +
+                                                removal.at(next).utf8.size() <
+                                            put.range.begin.value)
+        {
+            merged.push_back(removal.at(next));
+            before += removal.at(next).range.end.value - removal.at(next).range.begin.value;
+            after_size += removal.at(next).utf8.size();
+            ++next;
+        }
+        if (next >= removal.size() ||
+            removal.at(next).range.begin.value + after_size - before > put.range.end.value)
+        {
+            merged.push_back(
+                VimBlockEdit{OffsetRange{Offset{put.range.begin.value + before - after_size},
+                                         Offset{put.range.end.value + before - after_size}},
+                             put.utf8});
+            continue;
+        }
+        const VimBlockEdit &removed = removal.at(next);
+        const std::size_t span_begin = removed.range.begin.value + after_size - before;
+        const std::size_t span_end = span_begin + removed.utf8.size();
+        const std::size_t window_begin = std::min(span_begin, put.range.begin.value);
+        const std::size_t window_end = std::max(span_end, put.range.end.value);
+        std::string utf8 = after.text_range(Offset{window_begin}, put.range.begin);
+        utf8 += put.utf8;
+        utf8 += after.text_range(put.range.end, Offset{window_end});
+        const std::size_t origin_begin = window_begin + before - after_size;
+        before += removed.range.end.value - removed.range.begin.value;
+        after_size += removed.utf8.size();
+        merged.push_back(VimBlockEdit{
+            OffsetRange{Offset{origin_begin}, Offset{window_end + before - after_size}},
+            std::move(utf8)});
+        ++next;
+    }
+    merged.insert(merged.end(), removal.begin() + static_cast<std::ptrdiff_t>(next), removal.end());
+    return merged;
+}
+
+// NORMAL の `p` `P` と同じ put_step で消した後の本文へ貼った効果を、行ごとの編集とキャレットと前の
+// 選択に直す。put
+// は消した後の本文で、キャレットが貼る所。矩形の本文の前の選択は貼った矩形の左上から
+// 最後の行の最後に入れたバイトまで、文字単位と行単位は characters_put_visual と lines_put_visual。
+// 何も入れない効果なら値が無い。
+[[nodiscard]] std::expected<std::optional<PutResult>, VimRepeatFailure>
+stepped_block_put(const VimState &state, const VimEditorView &put, VimPutSide side,
+                  VimRegisterKind kind)
+{
+    const TextBuffer &after = put.text;
+    const VimStep step = put_step(state, put, side);
+    if (step.failure.has_value())
+    {
+        return std::unexpected(step.failure.value());
+    }
+    if (const auto *const insert = std::get_if<VimInsertAt>(&step.effect))
+    {
+        auto [edits, caret] = inserted_put(*insert, after.line_ending());
+        const bool leading = side == VimPutSide::after &&
+                             line_of(after, put.selection.caret).value >= after.line_count();
+        const VimLastVisual visual = kind == VimRegisterKind::lines
+                                         ? lines_put_visual(state, after, *insert, leading)
+                                         : characters_put_visual(state, after, *insert);
+        return PutResult{std::move(edits), caret, visual};
+    }
+    const auto *const block = std::get_if<VimInsertBlock>(&step.effect);
+    if (block == nullptr || block->edits.empty())
+    {
+        return std::nullopt;
+    }
+    const LineNumber first = line_of(after, block->edits.front().range.begin);
+    return PutResult{block->edits, block->caret,
+                     put_visual(state, mark_on(after, first, block->caret),
+                                block_put_end(after, block->edits.back()))};
+}
+
+// 消した後の本文 after の at
+// にキャレットを置いた見方（貼る一歩に渡す・文書の上限は元の見方のまま）。
+[[nodiscard]] VimEditorView put_view_of(const VimEditorView &view, const TextBuffer &after,
+                                        const Selection &at)
+{
+    VimEditorView put{after, at, std::nullopt};
+    put.document_limit = view.document_limit;
+    return put;
+}
+
+// 矩形を消した後の本文へ貼る一歩（Vim の nv_put_opt の後の do_put）。removed は消した後の本文で、
+// キャレットが消した所。行単位の本文は `p`
+// なら選択の終わりの角（b_visual.vi_end＝キャレット）の行の 下へ（PUT_LINE_FORWARD）、`P`
+// なら消した後のキャレットの向きで行の上か下へ。改行を含まない文字単位の
+// 本文は矩形の各行へ、改行を含む文字単位と矩形の本文は NORMAL の `p` `P` と同じに消した所へ貼る。
+// 値が無ければ何も貼らない（空の本文と `"_`）。
+[[nodiscard]] std::expected<std::optional<PutResult>, VimRepeatFailure>
+block_put_edits(const VimState &state, const VimEditorView &view, const VimEditorView &removed,
+                VimPutSide key)
+{
+    const TextBuffer &after = removed.text;
+    const VimRegister source = visual_put_source(state);
+    if (source.kind == VimRegisterKind::lines && key == VimPutSide::after)
+    {
+        const Selection end =
+            collapsed_at(after.line_start(line_of(view.text, view.selection.caret)));
+        return stepped_block_put(state, put_view_of(view, after, end), VimPutSide::after,
+                                 source.kind);
+    }
+    const auto [place, side] = block_put_place(state, view, removed);
+    if (source.kind != VimRegisterKind::characters || source.text.contains('\n'))
+    {
+        const Selection placed = collapsed_at(place);
+        return stepped_block_put(state, put_view_of(view, after, placed), side, source.kind);
+    }
+    if (source.text.empty())
+    {
+        return std::nullopt;
+    }
+    // 前向きなら寄せた最後の文字の後ろ（行の終わり）へ入れる（do_put の MCHAR の FORWARD）。
+    const Offset at = side == VimPutSide::after ? after.line_end(line_of(after, place)) : place;
+    const VimBlockRange block = block_of(state, view);
+    const LineNumber last{block.first.value + block.lines.size() - single_step};
+    const Selection inserted = collapsed_at(at);
+    auto lines = lines_of_block_put(state, put_view_of(view, after, inserted), last, source);
+    if (!lines.has_value())
+    {
+        return std::unexpected(lines.error());
+    }
+    auto [edits, caret] = std::move(lines).value();
+    const LineNumber first = line_of(after, at);
+    return PutResult{std::move(edits), caret,
+                     put_visual(state, mark_on(after, first, at), mark_on(after, first, caret))};
+}
+
+// 矩形の VISUAL の `p` `P`（#1461・Vim の nv_put_opt）。矩形を VISUAL の `d` と同じ道で消し（`p` は
+// 無名と `"1` `"-` へ、`P` は `"_` へ）、消した後の本文へ block_put_edits
+// で貼り、消す置き換えと貼る 編集を 1 つの矩形の編集に畳む（undo 1 単位・戻り先は矩形の `d`
+// と同じ左上）。貼れないレジスタ （E353）は文字単位の VISUAL と同じく消してから鳴らす。
+[[nodiscard]] VimStep block_visual_put(const VimState &state, const VimEditorView &view,
+                                       VimPutSide side)
+{
+    VimState removing = state;
+    removing.selected_register =
+        side == VimPutSide::before ? register_selection_of(U'_') : std::nullopt;
+    VimStep removal = block_operated(removing, view, VimOperator::remove);
+    const auto *const removed = std::get_if<VimRemoveBlock>(&removal.effect);
+    if (removal.failure.has_value() || removed == nullptr)
+    {
+        return removal;
+    }
+    if (refuses_put(state, visual_put_source(state)))
+    {
+        return failed(std::move(removal), VimRepeatFailure::refused);
+    }
+    const TextBuffer after = block_removed_text(view.text, *removed);
+    const Selection at = collapsed_at(removed->caret);
+    const VimEditorView put_view = put_view_of(view, after, at);
+    auto put = block_put_edits(state, view, put_view, side);
+    if (!put.has_value())
+    {
+        return failed(cancelled(state), put.error());
+    }
+    std::optional<PutResult> found = std::move(put).value();
+    if (!found.has_value())
+    {
+        // 何も貼らないときの前の選択は、消した後に寄せたキャレットの 1 文字（Vim の b_op_start と
+        // b_op_end はどちらもキャレット）。
+        const VimMarkPosition rest =
+            vim_mark_position_of(after, block_put_place(state, view, put_view).first);
+        removal.visual_after = put_visual(state, rest, rest);
+        return removal;
+    }
+    auto [edits, caret, visual] = std::move(found).value();
+    removal.effect = VimInsertBlock{block_put_merged(after, removed->edits, edits), caret,
+                                    EditBoundary::separate};
+    removal.visual_after = visual;
+    return removal;
+}
 } // namespace
 
 namespace detail
@@ -428,6 +755,10 @@ namespace detail
 // 貼れないレジスタ（E353）でも Vim は先に消してから鳴らす（`lvp` は `b` を消す・実測）。
 [[nodiscard]] VimStep visual_put(const VimState &state, const VimEditorView &view, VimPutSide side)
 {
+    if (state.mode == VimMode::visual_block)
+    {
+        return block_visual_put(state, view, side);
+    }
     const VimRegister source = visual_put_source(state);
     VimMotionRange range = vim_visual_range(view.text, view.selection, state.mode);
     range.restore = visual_restore(state, view.text, view.selection);
