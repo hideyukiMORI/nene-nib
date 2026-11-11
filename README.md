@@ -6,7 +6,7 @@ A fast single-executable text editor for Windows 11 that toggles between ordinar
 
 C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
 
-> **Status (2026-11-11):** [v0.1.0-beta.10](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.10)
+> **Status (2026-11-11):** [v0.1.0-beta.11](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.11)
 > (2026-11-11) is the published build for Windows 11 x64. It has ordinary editing with Notepad-style find,
 > replace, go to line, printing and date insertion; UTF-8, Shift_JIS and UTF-16 files (UTF-8 up to 1 GiB, read
 > in the background); Japanese IME; 125 built-in themes; syntax colors for 25 languages; a Markdown preview with
@@ -15,10 +15,10 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > repeat, macros, registers, blockwise VISUAL and `map`). Tabs in the title bar come back on the next start,
 > Ctrl+P lists open tabs, bookmarks, recently closed files and files in the current folder, and F1 lists every
 > operation. It starts in about 45 ms on the owner's machine, autosaves every 30 seconds and offers a grid display
-> for giant lines. New in beta.10: a start screen with recent files and bookmarks, a new explorer look with
-> preview tabs that the next click replaces, local images in the Markdown preview, Notepad-style word stops for
-> Ctrl+← →, VISUAL `J gJ X D Y C R s I A` in Vim, and the window's × □ ＿ act only when pressed and released on
-> the same button (dragging onto × from the body or the minimap closed the window in beta.9).
+> for giant lines. New in beta.11: scrolling with the Markdown preview open no longer freezes the window for
+> tens of seconds on long paragraphs, the minimap scrolls on a click and follows a drag, the start screen also
+> appears on new untitled tabs and sits in the middle of the body, a long editing session no longer slows each
+> keystroke down, and Vim VISUAL `p` `P` replace the selection (characterwise, linewise and blockwise).
 
 <p>
   <img src="docs/images/nib-palette.png" width="49%" alt="NeNe Nib lists open tabs, bookmarks, recently closed files and folder files in Ctrl+P.">
@@ -39,13 +39,13 @@ Compare all 125 themes, filter by name or appearance, and select a card for a la
 The image and gallery show color samples, not application screenshots. The gallery works offline and starts
 with the plain-text colors; its syntax colors are design samples, not the editor's syntax coloring.
 [Theme names and sources](docs/design/2026-10-12-colorschemes.md) are also available as a text list.
-All 125 themes are included in the published v0.1.0-beta.10.
+All 125 themes are included in the published v0.1.0-beta.11.
 
 ## What works today
 
 Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); the decisions behind it are in
-[`docs/adr/`](docs/adr/README.md). Everything below is in the published v0.1.0-beta.10 unless it says
-*since beta.10* (on main, not yet published) or *in review* (an open pull request, not on main). The current
+[`docs/adr/`](docs/adr/README.md). Everything below is in the published v0.1.0-beta.11 unless it says
+*since beta.11* (on main, not yet published) or *in review* (an open pull request, not on main). The current
 tasks are in `docs/todo/current.md`; the measurements are in `docs/quality/gate-proofs.md` and the dated
 records in `docs/quality/`.
 
@@ -62,7 +62,7 @@ records in `docs/quality/`.
   Ctrl+Backspace / Ctrl+Delete remove a word (or the selection). With a selection, an arrow without Shift moves
   from the selection's edge: ← collapses to its start and → to its end. The `:`, search and Ctrl+P lines do not
   yet move or delete by word.
-- **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 4224
+- **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 4486
   oracle-generated fixtures in `tests/vim/fixtures.json` and 335 wrapped-viewport fixtures in
   `tests/vim/wrap-fixtures.json` are checked by CTest, and a differential fuzzer (`eng/vim-fuzz.py`, fixed seeds)
   compares generated key sequences with Vim. Implemented:
@@ -77,7 +77,8 @@ records in `docs/quality/`.
   - text objects `iw aw iW aW`, quotes, brackets (with the `b` / `B` aliases), `ip ap is as` and `it at`;
   - `i a I A gI o O` with counts, INSERT `Ctrl-w Ctrl-u Ctrl-r {register}`, `gi`, `u` / Ctrl-r, `.` (also in VISUAL);
   - `v V` and blockwise `Ctrl-v` (`o O $`, `d x y r`, `I A c C`, `> <`, `~ u U`, block `p P`, `.`), `gv`;
-    VISUAL `J gJ X D Y` and `C R s I A` as in Vim;
+    VISUAL `J gJ X D Y` and `C R s I A` as in Vim; VISUAL `p P` (characterwise, linewise and blockwise) replace
+    the selection with the register text, and `P` leaves the registers unchanged;
   - registers: unnamed, named `"a`-`"z` / `"A`-`"Z`, numbered `"0`-`"9`, small delete `"-`, black hole `"_`,
     clipboard `"+` `"*` (and `:set clipboard=unnamed`); macros `q @ @@` with counts; a replay by `.` or `@`
     stops after 100,000 keys, drops the rest and says so in one line (decision D75);
@@ -128,7 +129,8 @@ records in `docs/quality/`.
   [ADR 0155](docs/adr/0155-markdown-preview-sits-in-the-other-pane-with-ticketed-port-and-tick.md)).
   Local images (PNG, JPEG, the first frame of a GIF, BMP; D79) are drawn in the text flow,
   shrunk to the pane width but never enlarged; web images and images that cannot be read stay as
-  `[画像: alt]`.
+  `[画像: alt]`. A retained paragraph is laid out once and redrawn without changing its formatting, so scrolling
+  with the preview open does not stall; the first display of a very long paragraph still takes a moment.
 - **FR-008 encodings and line endings** — UTF-8, UTF-8 BOM, Shift_JIS and UTF-16 LE / BE with BOM
   ([ADR 0149](docs/adr/0149-utf16-with-bom-is-read-and-written-back.md)); UTF-32 is refused. CRLF / LF are kept as
   read. The encoding and line ending for saving can be chosen by clicking them in the status bar, with
@@ -211,14 +213,16 @@ records in `docs/quality/`.
   (FR-023), commentary, surround, autopairs and INSERT completion (FR-024), changed-line markers, indent guides
   and a yank flash (FR-025), project-wide search (FR-026) and the `:s` family (FR-027).
 - **FR-028 – FR-030** — a settings dialog with measured speed costs and six display languages are planned. A first
-  minimap (a retained bitmap at the right edge, `:set minimap`, off by default) is in beta.9; a click on it scrolls
-  that line to the middle of the screen and a drag follows the pointer, without moving the caret (*since beta.10*,
-  [ADR 0171](docs/adr/0171-minimap-is-a-retained-bitmap-redrawn-only-for-edited-lines.md)). A start without
+  minimap (a retained bitmap at the right edge, `:set minimap`, off by default) shows the document; a click on it
+  scrolls that line to the middle of the screen and a drag follows the pointer, without moving the caret
+  ([ADR 0171](docs/adr/0171-minimap-is-a-retained-bitmap-redrawn-only-for-edited-lines.md)). A start without
   files or previous tabs shows a start screen on the empty untitled document (decision D70,
   [ADR 0172](docs/adr/0172-start-screen-shows-recent-files-and-entry-actions-on-the-untouched-untitled-document.md)):
-  the title, up to 10 recent files and 10 bookmarks as name and folder (read once after the first frame),
-  新しいファイル / ファイルを開く / フォルダを開く and the main shortcuts in one centred column. ↑ ↓ (and `j` `k` in
-  Vim NORMAL) select a row, Enter or a click runs it, and typing or opening a document hides the screen.
+  the title, up to 10 recent files and 10 bookmarks as name and folder (read after the first frame, and read
+  again in the background whenever the screen appears, so a new untitled tab from Ctrl+T shows them too),
+  新しいファイル (with its key Ctrl+T) / ファイルを開く / フォルダを開く and the main shortcuts in one column centred
+  horizontally and vertically. ↑ ↓ (and `j` `k` in Vim NORMAL) select a row, Enter or a click runs it, and
+  typing or opening a document hides the screen.
 - **FR-031 Notepad's operations** — in ordinary mode Ctrl+F finds, F3 / Shift+F3 move to the next or previous
   match, Ctrl+H replaces (Enter one, Ctrl+Enter all) and Ctrl+G goes to a line; Vim mode keeps its own keys and
   reaches the same features from F1 through its `/` and `:` lines
