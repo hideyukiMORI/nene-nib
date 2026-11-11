@@ -550,7 +550,7 @@ nenenib_link(nib_preview_probe nenenib_core)
 nenenib_link(nib_preview_probe nenenib_application)
 nenenib_link(nib_preview_probe nenenib_adapters)
 nenenib_link(nib_preview_probe nenenib_window)
-foreach(library IN ITEMS ole32 d2d1 dwrite)
+foreach(library IN ITEMS ole32 d2d1 dwrite windowscodecs)
     nenenib_system_link(nib_preview_probe ${library})
 endforeach()
 target_compile_definitions(nib_preview_probe PRIVATE

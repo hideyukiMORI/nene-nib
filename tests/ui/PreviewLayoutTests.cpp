@@ -49,6 +49,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 #include <wincodec.h>
@@ -110,7 +111,11 @@ void check_heights()
     expect(paragraph.has_value() && code.has_value() && code.value() < paragraph.value() * 2.5F &&
                code.value() > paragraph.value() * 1.5F,
            "a code block drops its final line feed (two rows)");
-    expect(layouts.held() == 0 && layouts.created() == 3, "measuring does not hold layouts");
+    expect(layouts.held() == 3 && layouts.created() == 3, "measuring holds the layouts");
+    const auto again =
+        layouts.get(block_of(core::PreviewBlockKind::paragraph, "text"), width, style_of());
+    expect(again.has_value() && layouts.created() == 3,
+           "painting a measured block reuses its layout (#1477)");
 }
 
 // "aé😀bcd": a=1・é=2・😀=4 バイト。UTF-16 では a=0・é=1・😀=2,3・b=4・c=5・d=6。
@@ -177,8 +182,9 @@ void check_visible_only()
     PreviewTextLayouts layouts;
     const auto style = style_of();
     const auto tops = win32::PreviewBlockTops::measure(document, layouts, style, whole);
-    expect(tops.has_value() && tops.value().size() == many && layouts.held() == 0,
-           "the preview block tops are measured without holding layouts");
+    expect(tops.has_value() && tops.value().size() == many &&
+               layouts.held() == PreviewTextLayouts::capacity && layouts.created() == many,
+           "the preview block tops hold the measured layouts up to the capacity");
     if (!tops)
     {
         return;
@@ -194,8 +200,8 @@ void check_visible_only()
                                       core::LayoutRect{0, 0, static_cast<std::int32_t>(width), 200},
                                       scroll, std::nullopt});
     expect(!failure.has_value() && target.balanced(), "the preview paints without failure");
-    expect(layouts.held() > 0 && layouts.held() < 10 && target.text_layouts() == layouts.held(),
-           "only the visible preview blocks are created and drawn");
+    expect(layouts.created() == many && target.text_layouts() > 0 && target.text_layouts() < 10,
+           "only the visible preview blocks are drawn and they reuse the measured layouts");
 }
 // メモリの bitmap のソフトウェアの描画先（brush を本物で作るため・SoftwareTarget と同じ作り方）。
 [[nodiscard]] Microsoft::WRL::ComPtr<ID2D1RenderTarget>
@@ -258,7 +264,7 @@ void check_image_span()
     expect(SUCCEEDED(target->EndDraw()) && !failure.has_value(), "the image span is painted");
     const auto layout = layouts.get(document.blocks.front(), width - 32.0F, style);
     DWRITE_FONT_STYLE slanted = DWRITE_FONT_STYLE_NORMAL;
-    expect(layout.has_value() && layouts.created() == 2 &&
+    expect(layout.has_value() && layouts.created() == 1 &&
                SUCCEEDED(layout.value()->GetFontStyle(3, &slanted)) &&
                slanted == DWRITE_FONT_STYLE_ITALIC,
            "the image frame is italic");
@@ -433,6 +439,103 @@ void check_pane_reuse()
         return {};
     }
     return pixels_of(*bitmap.Get());
+}
+
+// 保持した layout は描くときに書式を変えず、位置も問わない（#1477・ADR 0155 の追補）。行内コード・
+// リンク・強調の多い段落と短い段落の文書。
+[[nodiscard]] std::optional<core::MarkdownDocument> repaint_document()
+{
+    std::string text;
+    for (int word = 0; word < 40; ++word)
+    {
+        text += "`code` [link](x) *em* plain ";
+    }
+    auto parsed = core::parse_markdown(text + "\n\nsecond `one`\n", core::MarkdownStop::never());
+    return parsed ? std::optional<core::MarkdownDocument>{std::move(parsed).value()} : std::nullopt;
+}
+
+// layout を作った数・SetDrawingEffect の数・HitTestTextRange の数。
+[[nodiscard]] std::tuple<std::size_t, std::size_t, std::size_t>
+layout_counts(const PreviewTextLayouts &layouts)
+{
+    return {layouts.created(), layouts.inked(), layouts.hit_tests()};
+}
+
+// 測った枠（400 × 200）に 1 回描いた画素（描く先が失敗すれば空・painter の失敗は呼び手が見る）。
+[[nodiscard]] std::vector<std::uint8_t>
+painted_frame(ID2D1RenderTarget &target, IWICBitmap &bitmap,
+              win32::PreviewPainter<ID2D1RenderTarget> &painter, const win32::PreviewScene &scene)
+{
+    target.BeginDraw();
+    painter.paint(scene);
+    return SUCCEEDED(target.EndDraw()) ? pixels_of(bitmap) : std::vector<std::uint8_t>{};
+}
+
+// 最初の要素の layout の行内コード（UTF-16 の 1）に brushes の string の色が置いてあるか。
+[[nodiscard]] bool code_inked(PreviewTextLayouts &layouts, const win32::PreviewScene &scene,
+                              const win32::PreviewBrushes &brushes)
+{
+    const auto &block = scene.document.blocks.front();
+    const auto layout = layouts.get(
+        block, win32::preview_text_width(block, 400.0F, scene.tops.indent(0), scene.style.dpi),
+        scene.style);
+    return layout.has_value() &&
+           effect_is(*layout.value().Get(), 1, brushes.of(win32::PreviewInk::string));
+}
+
+// 2 回描くと 2 回目は layout を作らず SetDrawingEffect も HitTestTextRange も呼ばず、画素は 1
+// 回目と 同じ。brush を作り直す（テーマを変える）と古い brush の色を置いた保持を捨て、新しい brush
+// で色を 置き直す。
+void check_repaint_keeps_layouts_clean()
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    const auto other = catalog.find(core::ThemeName::parse("solarized-light").value());
+    win32::PreviewBrushes brushes;
+    const auto document = repaint_document();
+    if (!document.has_value())
+    {
+        expect(false, "the repaint document parses");
+        return;
+    }
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto tops = win32::PreviewBlockTops::measure(document.value(), layouts, style,
+                                                       win32::PreviewViewport{0, 400.0F, 200.0F});
+    if (target == nullptr || !theme || !other || !tops ||
+        FAILED(brushes.prepare(*target.Get(), theme.value().view())))
+    {
+        expect(false, "the repaint checks prepare a target, brushes and a document");
+        return;
+    }
+    std::optional<win32::RenderFailure> failure;
+    win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
+    const win32::PreviewScene scene{
+        document.value(), tops.value(), style, core::LayoutRect{0, 0, 400, 200}, 0.0F,
+        std::nullopt};
+    const auto measured = layout_counts(layouts);
+    const auto first = painted_frame(*target.Get(), *bitmap.Get(), painter, scene);
+    const auto painted = layout_counts(layouts);
+    const auto second = painted_frame(*target.Get(), *bitmap.Get(), painter, scene);
+    expect(!first.empty() && !failure.has_value() &&
+               std::get<0>(painted) == std::get<0>(measured) &&
+               std::get<1>(painted) > std::get<1>(measured) &&
+               std::get<2>(painted) == std::get<2>(measured),
+           "the first paint reuses the measured layouts and inks them once");
+    expect(layout_counts(layouts) == painted,
+           "a repaint creates no layout, sets no drawing effect and hit-tests nothing");
+    expect(!second.empty() && second == first && code_inked(layouts, scene, brushes),
+           "a repaint has the same pixels and the inline code keeps the string ink");
+    expect(SUCCEEDED(brushes.prepare(*target.Get(), other.value().view())),
+           "the brushes are made again for another theme");
+    const auto recolored = painted_frame(*target.Get(), *bitmap.Get(), painter, scene);
+    expect(!recolored.empty() && recolored != first &&
+               std::get<0>(layout_counts(layouts)) > std::get<0>(painted) &&
+               std::get<1>(layout_counts(layouts)) > std::get<1>(painted) &&
+               code_inked(layouts, scene, brushes),
+           "new brushes drop the layouts inked with the old ones and ink the new ones once");
 }
 
 // 鍵が同じ 2 frame 目は要素を描かず DrawBitmap 1 回・錨が変われば描き直す（bitmap はそのまま）・
@@ -920,6 +1023,7 @@ void verify_preview_layouts()
     check_capacity();
     check_visible_only();
     check_image_span();
+    check_repaint_keeps_layouts_clean();
     check_html_and_style();
     check_markers();
     check_pane_reuse();
