@@ -292,6 +292,7 @@ class EditorWindow final
     void drag_explorer_divider(LPARAM data);
     [[nodiscard]] bool release_explorer_divider(LPARAM data);
     void lose_explorer_divider();
+    [[nodiscard]] bool cancel_explorer_divider();
     [[nodiscard]] bool reset_explorer_width(LPARAM data);
     void hover_explorer_divider(LPARAM data);
     void end_hidden_explorer_drag();

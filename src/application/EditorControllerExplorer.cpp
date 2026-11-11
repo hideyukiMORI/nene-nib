@@ -331,7 +331,8 @@ void EditorController::accept(const ExplorerRootChosen &intent)
 // 数字に変えない）。面が消えていれば何もしない（ドラッグの印だけ消す）。幅は入口で
 // core::explorer_width_clamped の 1 本に収める（窓を経ない送り手でも、書いた値を自分の読みで
 // 既定に戻さない・溢れない）。ドラッグの途中で面が閉じたら、設定の 1 本 sync_explorer がドラッグの
-// 幅を捨てる。
+// 幅を捨てる。ドラッグ中の Esc（cancelled）はドラッグの幅を捨てて押す前の幅へ戻し、書かない
+// （Issue #1413）。
 void EditorController::accept(const ResizeExplorer &intent)
 {
     if (!state_.settings().explorer)
@@ -357,6 +358,9 @@ void EditorController::accept(const ResizeExplorer &intent)
         explorer_dragged_.reset();
         settings.explorer_width = std::nullopt;
         break;
+    case ExplorerResizing::cancelled:
+        explorer_dragged_.reset();
+        return;
     }
     if (!persist_settings(std::move(settings)))
     {

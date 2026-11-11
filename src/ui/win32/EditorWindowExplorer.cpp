@@ -247,6 +247,29 @@ void EditorWindow::lose_explorer_divider()
     }
 }
 
+// ドラッグ中の Esc（Issue #1413・Windows の分割バーの慣習）。押す前の幅へ戻してドラッグを終える
+// （controller はドラッグの幅を捨て、設定に書かない）。境を押していなければ偽で、Esc は鍵の道へ
+// 流れる。押していればその 1 回の Esc を食べる（本文・Vim・面へ流さない）。捕まえを放すと
+// WM_CAPTURECHANGED が lose_explorer_divider へ戻るので、先に印を消す。
+bool EditorWindow::cancel_explorer_divider()
+{
+    if (!std::exchange(explorer_grab_offset_, std::nullopt).has_value())
+    {
+        return false;
+    }
+    const auto dragged = std::exchange(explorer_dragged_, std::nullopt);
+    if (GetCapture() == window_)
+    {
+        ReleaseCapture();
+    }
+    if (dragged.has_value())
+    {
+        send(application::ResizeExplorer{application::ExplorerResizing::cancelled, 0});
+        send(body_view());
+    }
+    return true;
+}
+
 // ドラッグの途中で面が閉じた（ToggleExplorer・`:set noexplorer` など・follow_explorer が呼ぶ）。
 // ドラッグは終わりで、幅は送らない（controller もドラッグの幅を捨て、設定は覚えた値のまま・
 // Issue #1380 の設計席の決め）。捕まえを放すと WM_CAPTURECHANGED が lose_explorer_divider へ戻る

@@ -161,6 +161,11 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
     switch (message)
     {
     case WM_KEYDOWN:
+        // 面の幅のドラッグ中の Esc は押す前の幅へ戻すだけ（Issue #1413）。
+        if (word == VK_ESCAPE && cancel_explorer_divider())
+        {
+            return 0;
+        }
         end_selection_drag();
         timing_.mark(core::Milestone::input_received);
         if (!press_bookmark_key(word, data) && !press_function_key(word, data) &&
