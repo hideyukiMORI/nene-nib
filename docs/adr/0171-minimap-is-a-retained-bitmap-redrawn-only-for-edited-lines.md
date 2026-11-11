@@ -85,7 +85,7 @@
 
 ## 追補（2026-11-11・#1487）: 見えている範囲の面を濃くし、縁の線を付ける
 
-施主の試用で「今の場所の色があまり変わらなくて分かりにくい」。決定 2 の「accent の 10%」を、面は accent の 22%・面の上端と下端に 1 DIP（物理画素へ整数で・1 画素より細くしない）の accent 70% の線・面を押している間は 32% に改める（濃さの定数は `MinimapPicture.cpp` の 1 か所・色のトークンは足さない・面は今までどおり bitmap の外で毎 frame 重ねる `draw_face`）。押しているかは `MinimapFrame.pressed` で、application は置かず ui が描く直前に押しの覚え（`minimap_grab_`）から置き、押しの始まりと終わりで 1 回描き直す（押しの終わりの意図は無いので）。契約: `nib_window_tests --minimap` の `check_face_pixels`（2 テーマで面の中・外・線の画素・DPI 192 の 2 画素の線・押している間の 32%）: **active**。組み込み 125 テーマの計算（`D:/NeNeNib/outputs/20261111/1487/themes.md`）で、accent が背景とほぼ同じ 3 テーマ（`synthwave-84`・`cobalt2`・`tokyo-night-light`）は濃さに依らず面も線も見えない（限界・後続で線の色をそのテーマだけ別のトークンにするか設計席の判断）。ほかの 122 テーマは線のコントラストが 1.75 以上。
+施主の試用で「今の場所の色があまり変わらなくて分かりにくい」。決定 2 の「accent の 10%」を、面は accent の 22%・面の上端と下端に 1 DIP（物理画素へ整数で・1 画素より細くしない）の accent 70% の線・面を押している間は 32% に改める（濃さの定数は `MinimapPicture.cpp` の 1 か所・色のトークンは足さない・面は今までどおり bitmap の外で毎 frame 重ねる `draw_face`）。押しているかは `MinimapFrame.pressed` で、application は置かず ui が描く直前に押しの覚え（`minimap_grab_`）から置き、押しの始まりと終わりで 1 回描き直す（押しの終わりの意図は無いので）。契約: `nib_window_tests --minimap` の `check_face_pixels`（2 テーマで面の中・外・線の画素・DPI 192 の 2 画素の線・押している間の 32%）: **active**。組み込み 125 テーマの計算（`D:/NeNeNib/outputs/20261111/1487/themes.md`）で、accent が背景とほぼ同じ 3 テーマ（`synthwave-84`・`cobalt2`・`tokyo-night-light`）は濃さに依らず面も線も見えない。**設計席の決め**: 面と線の色は core の `minimap_face_color(const Palette &)` の 1 本が選び、`accent` と `background` のコントラスト比がしきい値 1.5（`minimap_face_contrast_tenths` の 1 か所）以上なら `accent`、未満なら `text`（ui は色を選ばない）。core で libm を呼ばないので、比は sRGB の線形化を 2 乗で近づけた整数の輝度（`minimap_contrast_at_least`）で数える。この規則で text に切り替わるのは上の 3 テーマだけで、組み込み 125 テーマ全部で 70% の線が背景と 1.5 以上離れる（最低は ayu-light の 1.67・`nib_tests --minimap` の `verify_face_colors`・**active**）。
 
 ## 却下した選択肢
 

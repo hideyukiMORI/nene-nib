@@ -168,7 +168,8 @@ MinimapColors minimap_colors(const core::Palette &palette) noexcept
 {
     MinimapColors colors{};
     colors.at(background_color) = palette.background;
-    colors.at(face_color) = palette.accent;
+    // 面と線の色は core の 1 本が選ぶ（accent が背景に近いテーマは text・#1487）。
+    colors.at(face_color) = core::minimap_face_color(palette);
     colors.at(muted_color) = palette.muted;
     return colors;
 }

@@ -11,9 +11,10 @@
 namespace nenenib::ui::win32
 {
 // ミニマップの色（テーマのトークンだけ・ADR 0171 の決定 2・3）。
-// [0] 面の地（background）、[1] 見えている範囲の面（accent）、[2] 区間の無い文字（muted）。
-// 構文の役割の色は表に写さず、塊ごとに core::syntax_color（default の無い switch の 1 本）で
-// body から引く（役割が増えればそこでコンパイルが落ちる・CPP-002・レビュー M1）。
+// [0] 面の地（background）、[1] 見えている範囲の面と縁の線（core::minimap_face_color・accent か
+// text）、[2] 区間の無い文字（muted）。 構文の役割の色は表に写さず、塊ごとに
+// core::syntax_color（default の無い switch の 1 本）で body
+// から引く（役割が増えればそこでコンパイルが落ちる・CPP-002・レビュー M1）。
 inline constexpr std::size_t minimap_color_count = 3;
 using MinimapColors = std::array<core::RgbColor, minimap_color_count>;
 
