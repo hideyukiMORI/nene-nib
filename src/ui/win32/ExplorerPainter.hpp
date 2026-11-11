@@ -2,6 +2,7 @@
 
 #include "ExplorerLayout.hpp"
 #include "ExplorerRowView.hpp"
+#include "ExplorerShapes.hpp"
 #include "ExplorerText.hpp"
 #include "ExplorerView.hpp"
 #include "LayoutRect.hpp"
@@ -26,15 +27,16 @@ namespace nenenib::ui::win32
 // accent、本文の帯の左上の角は 半径 corner で丸め（角の外は
 // title_bar・角の弧も境界の色）。先頭の行はルート名（text・semibold・ ルートが無ければ案内を
 // muted）、その下に view.rows を 1 行ずつ。行の部品の矩形は core の explorer_row_parts の 1
-// 本で、選んだ行は background の丸い面（焦点があれば accent の 1 DIP の枠）、 載せた行は tab_hover
-// の丸い面（選んだ行には重ねない）、字下げの縦の線は panel_border、山形と フォルダの絵は muted
-// の線（1.25 DIP）、ファイルの印は 6 DIP の角丸の四角で色は行の mark の構文の 色（値なしは
-// muted）、名前は text（隠しは muted・アクティブな文書は semibold）、未保存は accent
+// 本で、選んだ行は background の丸い面に 1 DIP の枠（焦点で accent・無ければ panel_border）、
+// 載せた行は tab_hover の丸い面（選んだ行には重ねない）、字下げの縦の線は panel_border、山形と
+// フォルダの絵は muted の線（1.25 DIP）、ファイルの印は 6 DIP の角丸の四角で色は行の mark の構文の
+// 色（値なしは muted）、名前は text（隠しは muted・アクティブな文書は semibold）、未保存は accent
 // の丸。長い名前は書式に焼いた文字単位の省略記号「…」で切る（タブの題名と同じ規則）。行の文字組みは
 // PaletteRowLayouts の保持から鍵の hash で O(1) に引き（#1125）、同じ行は frame をまたいで作り直さ
-// ない（#904 の形）。線の形（stroke style）と角の形（path geometry）は描画先の factory から 1 frame
-// に 1 回だけ作る。target は製品では Direct2D の描画先、tests/ui は WIC の bitmap の描画先。色は
-// Palette と SyntaxPalette のトークンだけ（ADR 0008）。
+// ない（#904 の形）。線の形（stroke style）と角の形（path geometry）は renderer が持つ
+// ExplorerShapes から借り、factory か角の鍵が変わったときだけ作り直す（V-1428 の L-1）。target
+// は製品では Direct2D の描画先、tests/ui は WIC の bitmap の描画先。色は Palette と SyntaxPalette
+// のトークンだけ（ADR 0008）。
 class ExplorerPainter final
 {
   public:
@@ -42,7 +44,8 @@ class ExplorerPainter final
     static constexpr std::size_t retained = 512;
 
     ExplorerPainter(ID2D1RenderTarget &target, ID2D1SolidColorBrush &brush,
-                    const ExplorerText &text, PaletteRowLayouts &layouts) noexcept;
+                    const ExplorerText &text, PaletteRowLayouts &layouts,
+                    ExplorerShapes &shapes) noexcept;
     // 面（layout.panel）を描く。面が無ければ何もしない（本文の角も丸めない）。
     void paint(const application::ExplorerView &view, const core::ExplorerLayout &layout,
                const core::Palette &palette, const core::SyntaxPalette &syntax);
@@ -71,8 +74,10 @@ class ExplorerPainter final
     ID2D1SolidColorBrush &brush_;
     ExplorerText text_;
     PaletteRowLayouts &layouts_;
+    ExplorerShapes &shapes_;
     Microsoft::WRL::ComPtr<ID2D1Factory> factory_;
-    Microsoft::WRL::ComPtr<ID2D1StrokeStyle> stroke_;
+    // shapes_ から借りた線の形（1 回の描画の間だけ・作れなければ nullptr）。
+    ID2D1StrokeStyle *stroke_ = nullptr;
     // paint が受けた色（1 回の描画の間だけ・行ごとの関数へ引数で回さない）。
     core::Palette palette_{};
     core::SyntaxPalette syntax_{};

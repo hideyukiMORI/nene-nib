@@ -379,6 +379,9 @@ class Direct2DRenderer final
     // エクスプローラーの面の行の文字組み。同じ型で上限だけ大きい。書式の作り直しと面を消した
     // ときに捨てる（ADR 0162 の決定 8）。
     PaletteRowLayouts explorer_layouts_{ExplorerPainter::retained};
+    // エクスプローラーの線の形と本文の角の形（V-1428 の L-1）。捨てる時は explorer_layouts_
+    // と同じ。
+    ExplorerShapes explorer_shapes_;
     // other の枠のプレビュー。要素の layout の保持は frame をまたいで再利用する（ADR 0155）。
     PreviewPane preview_;
     // 通常7枠と案内4枠。録画時は案内が無く8枠（ADR 0079・言語の項目で 11・ADR 0154 の決定 6）。

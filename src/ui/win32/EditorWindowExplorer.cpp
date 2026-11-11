@@ -96,12 +96,15 @@ std::optional<std::size_t> EditorWindow::explorer_row_at(LPARAM data) const
 }
 
 // WM_MOUSEMOVE の点の下の面の画面の行（#1390・帯の hover と同じ形）。ルート名の行・面の外・境の
-// ドラッグの間・Ctrl+P の面が開いている間は値なし。面が消えていれば controller の 1 欄を読むだけで
-// 配置を引かない。行の数は見ない（見えている行の外は controller が値なしとして写す）。
+// ドラッグの間・境の上（左右の矢印のカーソル・hover_explorer_divider が先に決める）・本文と全面
+// プレビューの選択のドラッグの間・Ctrl+P の面が開いている間は値なし（レビュー V-1428 の L-4）。
+// 面が消えていれば controller の 1 欄を読むだけで配置を引かない。行の数は見ない（見えている行の
+// 外は controller が値なしとして写す）。
 void EditorWindow::hover_explorer_row(LPARAM data)
 {
     std::optional<std::size_t> line;
     if (controller_.explorer_width().has_value() && !explorer_grab_offset_.has_value() &&
+        !over_explorer_divider_ && !selecting_ && !preview_dragging_ &&
         !controller_.command_palette_active())
     {
         const auto at =

@@ -491,6 +491,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     palette_layouts_.clear();
     tab_layouts_.clear();
     explorer_layouts_.clear();
+    explorer_shapes_.clear();
     Microsoft::WRL::ComPtr<IUnknown> unknown;
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory7),
                                    unknown.GetAddressOf())) ||
@@ -2403,14 +2404,15 @@ void Direct2DRenderer::draw_explorer(const application::EditorFrame &frame,
 {
     if (!frame.explorer.has_value())
     {
-        // 面を消したら行の文字組みを捨てる。出すたびに作り直す（Ctrl+P の面と同じ・#900）。
+        // 面を消したら行の文字組みと形を捨てる。出すたびに作り直す（Ctrl+P の面と同じ・#900）。
         explorer_layouts_.clear();
+        explorer_shapes_.clear();
         return;
     }
     ExplorerPainter painter(
         *context_.Get(), *brush_.Get(),
         ExplorerText{dwrite_.Get(), explorer_format_.Get(), explorer_strong_format_.Get(), dpi_},
-        explorer_layouts_);
+        explorer_layouts_, explorer_shapes_);
     painter.paint(frame.explorer.value(), layout, frame.palette, frame.body);
 }
 

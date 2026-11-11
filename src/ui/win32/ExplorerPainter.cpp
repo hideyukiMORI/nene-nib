@@ -79,8 +79,9 @@ constexpr std::array<D2D1_POINT_2F, 4> open_folder_front{
 } // namespace
 
 ExplorerPainter::ExplorerPainter(ID2D1RenderTarget &target, ID2D1SolidColorBrush &brush,
-                                 const ExplorerText &text, PaletteRowLayouts &layouts) noexcept
-    : target_(target), brush_(brush), text_(text), layouts_(layouts)
+                                 const ExplorerText &text, PaletteRowLayouts &layouts,
+                                 ExplorerShapes &shapes) noexcept
+    : target_(target), brush_(brush), text_(text), layouts_(layouts), shapes_(shapes)
 {
 }
 
@@ -100,13 +101,7 @@ void ExplorerPainter::paint(const application::ExplorerView &view,
     palette_ = palette;
     syntax_ = syntax;
     target_.GetFactory(factory_.ReleaseAndGetAddressOf());
-    const auto round = D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND,
-                                                   D2D1_CAP_STYLE_ROUND, D2D1_LINE_JOIN_ROUND);
-    if (factory_ == nullptr ||
-        FAILED(factory_->CreateStrokeStyle(&round, nullptr, 0, stroke_.ReleaseAndGetAddressOf())))
-    {
-        stroke_.Reset();
-    }
+    stroke_ = factory_ == nullptr ? nullptr : shapes_.stroke(*factory_.Get());
     fill(panel, palette.title_bar);
     target_.PushAxisAlignedClip(to_rect(panel), D2D1_ANTIALIAS_MODE_ALIASED);
     paint_root(view, layout);
@@ -205,8 +200,9 @@ void ExplorerPainter::paint_row(const application::ExplorerView &view, std::size
     }
 }
 
-// 行の丸い面。選んだ行は本文の色（焦点があれば accent の枠を重ねる）、載せた行は tab_hover（選んだ
-// 行には重ねない）。ほかの行は面の地のまま。
+// 行の丸い面。選んだ行は本文の色に 1 DIP の枠（焦点があれば accent・無ければ panel_border。背景が
+// 黒のテーマでは面の地と本文の色が同じなので、枠が無いと見えない・V-1428 の F-1）、載せた行は
+// tab_hover（選んだ行には重ねない）。ほかの行は面の地のまま。
 void ExplorerPainter::paint_surface(const application::ExplorerView &view, std::size_t index,
                                     const core::LayoutRect &surface,
                                     const core::ExplorerLayout &layout)
@@ -217,13 +213,9 @@ void ExplorerPainter::paint_surface(const application::ExplorerView &view, std::
     if (view.selected == row)
     {
         fill_round(surface, radius, palette.background);
-        if (!view.focused)
-        {
-            return;
-        }
         const auto half = static_cast<float>(layout.border) / 2.0F;
         const auto area = to_rect(surface);
-        brush_.SetColor(to_color(palette.accent));
+        brush_.SetColor(to_color(view.focused ? palette.accent : palette.panel_border));
         target_.DrawRoundedRectangle(
             D2D1::RoundedRect(D2D1::RectF(area.left + half, area.top + half, area.right - half,
                                           area.bottom - half),
@@ -276,58 +268,28 @@ void ExplorerPainter::stroke_lines(const core::LayoutRect &cell,
     for (std::size_t at = 0; at + 1 < points.size(); ++at)
     {
         target_.DrawLine(placed(cell, points[at]), placed(cell, points[at + 1]), &brush_, width,
-                         stroke_.Get());
+                         stroke_);
     }
     if (closed)
     {
         target_.DrawLine(placed(cell, points.back()), placed(cell, points.front()), &brush_, width,
-                         stroke_.Get());
+                         stroke_);
     }
 }
 
 // 本文の帯の左上の角（半径 corner）。角の外を面の地 ground で塗り、弧を境界の色 edge で引く（面の
-// 右端の境界の続き）。描画先の factory が無ければ丸めない。
+// 右端の境界の続き）。形は保持（ExplorerShapes）から借りる。描画先の factory が無ければ丸めない。
 void ExplorerPainter::paint_corner(const core::ExplorerLayout &layout, core::RgbColor edge,
                                    core::RgbColor ground)
 {
-    const core::LayoutRect panel = layout.panel.value_or(core::LayoutRect{0, 0, 0, 0});
-    const auto radius = static_cast<float>(std::min(layout.corner, core::height_of(panel)));
-    Microsoft::WRL::ComPtr<ID2D1PathGeometry> outside;
-    Microsoft::WRL::ComPtr<ID2D1PathGeometry> arc;
-    Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
-    if (factory_ == nullptr || radius <= 0.0F ||
-        FAILED(factory_->CreatePathGeometry(outside.GetAddressOf())) ||
-        FAILED(outside->Open(sink.GetAddressOf())))
-    {
-        return;
-    }
-    const auto left = static_cast<float>(panel.right);
-    const auto top = static_cast<float>(panel.top);
-    const float half = static_cast<float>(layout.border) / 2.0F;
-    sink->BeginFigure(D2D1::Point2F(left, top), D2D1_FIGURE_BEGIN_FILLED);
-    sink->AddLine(D2D1::Point2F(left + radius, top));
-    sink->AddArc(D2D1::ArcSegment(D2D1::Point2F(left, top + radius), D2D1::SizeF(radius, radius),
-                                  0.0F, D2D1_SWEEP_DIRECTION_COUNTER_CLOCKWISE,
-                                  D2D1_ARC_SIZE_SMALL));
-    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
-    if (FAILED(sink->Close()) || FAILED(factory_->CreatePathGeometry(arc.GetAddressOf())) ||
-        FAILED(arc->Open(sink.ReleaseAndGetAddressOf())))
-    {
-        return;
-    }
-    sink->BeginFigure(D2D1::Point2F(left - half, top + radius), D2D1_FIGURE_BEGIN_HOLLOW);
-    sink->AddArc(D2D1::ArcSegment(D2D1::Point2F(left + radius, top - half),
-                                  D2D1::SizeF(radius + half, radius + half), 0.0F,
-                                  D2D1_SWEEP_DIRECTION_CLOCKWISE, D2D1_ARC_SIZE_SMALL));
-    sink->EndFigure(D2D1_FIGURE_END_OPEN);
-    if (FAILED(sink->Close()))
+    if (factory_ == nullptr || !shapes_.corner(*factory_.Get(), layout))
     {
         return;
     }
     brush_.SetColor(to_color(ground));
-    target_.FillGeometry(outside.Get(), &brush_);
+    target_.FillGeometry(shapes_.outside(), &brush_);
     brush_.SetColor(to_color(edge));
-    target_.DrawGeometry(arc.Get(), &brush_, static_cast<float>(layout.border));
+    target_.DrawGeometry(shapes_.arc(), &brush_, static_cast<float>(layout.border));
 }
 
 float ExplorerPainter::scale() const noexcept

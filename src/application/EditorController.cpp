@@ -197,10 +197,17 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // apply が捨てる。
 // 枠の意図（SplitPane / SwitchPane / ClosePane / ScrollPane）は使う人の操作なので、
 // keeps_tab_walk と begin_intent の表には載せない（歩きを終え、告知を消す）。
+// マウスを動かすだけの意図（帯の載せた要素 PointTitleBar・面の載せた行 HoverExplorer）と帯の幅の
+// 知らせ（TitleBarWidth）も本文とキャレットに触れないので保つ（メモ帳はマウスを動かしても狙いの桁を
+// 変えない・D82・レビュー V-1428 の M-1 と F-3）。本文の寸法と DPI を運ぶ VisibleLines と外観の
+// 読み直し RefreshAppearance は、画素で持つ狙いの意味を変え得るので保たない（捨てる側のまま）。
 [[nodiscard]] bool keeps_wanted_x(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<MoveCaret>(intent) || is_signal(intent) ||
-           std::holds_alternative<ScrollPane>(intent);
+           std::holds_alternative<ScrollPane>(intent) ||
+           std::holds_alternative<PointTitleBar>(intent) ||
+           std::holds_alternative<HoverExplorer>(intent) ||
+           std::holds_alternative<TitleBarWidth>(intent);
 }
 
 // エクスプローラーのダブルクリックの 2 打目と組む印（explorer_clicked_）を保つ意図（#1388・

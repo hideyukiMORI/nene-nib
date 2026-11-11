@@ -348,6 +348,8 @@ void EditorController::accept(const ScrollExplorer &intent)
 
 // マウスを載せた面の行（#1390・ADR 0056 の決定 3 の帯と同じ形）。画面の行のまま覚えるので、ホイール
 // で行が送られると載った行も変わる。面が消えていれば何もしない（sync_explorer が消してある）。
+// 見えている行の外（行の無い所）は explorer_view が値なしとして写すので、外から外へ動いただけなら
+// 描き直さない（レビュー V-1428 の L-3）。画面の行のまま覚えるのは、窓が同じ値を送り直さないため。
 void EditorController::accept(const HoverExplorer &intent)
 {
     if (!state_.settings().explorer || state_.explorer().hovered == intent.line)
@@ -355,6 +357,15 @@ void EditorController::accept(const HoverExplorer &intent)
         return;
     }
     ExplorerState explorer = state_.explorer();
+    const std::size_t rows = explorer.tree.visible_rows().size();
+    const std::size_t first = std::min(explorer.first_visible, rows);
+    const std::size_t shown = std::min(first + explorer_page(), rows) - first;
+    const auto on_row = [shown](std::optional<std::size_t> line)
+    { return line.has_value() && line.value() < shown ? line : std::nullopt; };
+    if (on_row(explorer.hovered) == on_row(intent.line))
+    {
+        repaint_ = false;
+    }
     explorer.hovered = intent.line;
     state_ = state_.with_explorer(std::move(explorer));
 }

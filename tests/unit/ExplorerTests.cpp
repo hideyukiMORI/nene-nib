@@ -3,6 +3,7 @@
 // ファイルを開く open_listed の道、設定の保存、Ctrl+P の面と port を分け合う順番を見る。
 // 面の幅のドラッグ（ResizeExplorer・追補 D78）は動かす間は書かず、離したときと戻したときだけ書く。
 // port はどれも替え玉で、時刻・スレッド・OS には触れない。
+#include "CaretMotion.hpp"
 #include "CommandInput.hpp"
 #include "CommandLine.hpp"
 #include "CommandText.hpp"
@@ -33,11 +34,14 @@
 #include "HoverExplorer.hpp"
 #include "ImeStance.hpp"
 #include "InsertText.hpp"
+#include "MoveCaret.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
+#include "PlaceCaret.hpp"
 #include "PointExplorer.hpp"
+#include "PointTitleBar.hpp"
 #include "ResizeExplorer.hpp"
 #include "Scopes.hpp"
 #include "ScriptedFiles.hpp"
@@ -46,11 +50,17 @@
 #include "ScrollExplorer.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
+#include "SelectionAnchoring.hpp"
 #include "SettingsFailure.hpp"
 #include "SettleRecentTab.hpp"
 #include "SyntaxRole.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
+#include "TextPosition.hpp"
+#include "TextViewGeometry.hpp"
+#include "TitleBarHit.hpp"
+#include "TitleBarTarget.hpp"
+#include "TitleBarWidth.hpp"
 #include "ToggleExplorer.hpp"
 #include "VimMode.hpp"
 #include "VisibleLines.hpp"
@@ -1047,7 +1057,11 @@ void verify_hover()
            "after the wheel the row under the pointer is the hovered one");
     const auto past = controller.apply_frame(app::HoverExplorer{5});
     expect(!view_of(past).hovered.has_value(), "a line below the rows hovers nothing");
-    static_cast<void>(controller.apply_frame(app::HoverExplorer{0}));
+    const auto below = controller.apply(app::HoverExplorer{6});
+    expect(!below.repaint && controller.explorer_hovered() == std::optional<std::size_t>{6},
+           "moving between lines below the rows keeps the line but does not repaint");
+    expect(controller.apply(app::HoverExplorer{0}).repaint,
+           "moving from below the rows onto a row repaints");
     const auto left = controller.apply_frame(app::HoverExplorer{std::nullopt});
     expect(!view_of(left).hovered.has_value() && !controller.explorer_hovered().has_value(),
            "leaving the panel clears the hovered row");
@@ -1073,6 +1087,35 @@ void verify_hover()
     const auto second = second_press(folder, 1);
     expect(printed(second) == ".git/+~;src/-;README.md;sel 1 first 0 focus 1",
            "a hover between the clicks of a double click does not toggle the folder back");
+}
+
+// マウスを動かすだけの意図（面の載せた行・帯の載せた要素）と帯の幅の知らせは、通常モードの ↑ ↓ が
+// 狙う横位置を捨てない（レビュー V-1428 の M-1・F-3・D82: メモ帳はマウスを動かしても狙いの桁を
+// 変えない）。2 行目の短い行を通っても 3 行目は 1 行目と同じ桁に着く。
+void verify_pointer_keeps_wanted_column()
+{
+    const auto down =
+        app::MoveCaret{core::CaretMotion::next_line, core::SelectionAnchoring::collapse};
+    const auto moved_after = [&](const app::EditorIntent &between)
+    {
+        Editing editing(shown_at(project));
+        auto &controller = editing.controller();
+        applied(controller, app::InsertText{"abcdef\nx\nabcdef"});
+        applied(controller, app::VisibleLines{10, core::TextViewGeometry{400, 20, 96}, 0, 0, 4});
+        applied(controller,
+                app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{5}},
+                                core::SelectionAnchoring::collapse});
+        applied(controller, down);
+        applied(controller, between);
+        return controller.apply_frame(down).caret.position ==
+               core::TextPosition{core::LineNumber{3}, core::Column{5}};
+    };
+    expect(moved_after(app::HoverExplorer{1}),
+           "hovering a panel row between two downward moves keeps the wanted x");
+    expect(moved_after(app::PointTitleBar{core::TitleBarTarget{core::TitleBarHit::tab, 0}}),
+           "hovering the tab band between two downward moves keeps the wanted x");
+    expect(moved_after(app::TitleBarWidth{800}),
+           "the band width notice between two downward moves keeps the wanted x");
 }
 
 // アクティブな文書の行と未保存の印の出どころ（#1390）。アクティブは今の文書と同じファイル、未保存は
@@ -1171,6 +1214,7 @@ void verify_explorer_contracts()
     verify_resize_settles_tab_walk();
     verify_resize_hidden_while_dragging();
     verify_hover();
+    verify_pointer_keeps_wanted_column();
     verify_row_marks();
     verify_double_click_across_wheel();
     verify_double_click_keeps_notice();

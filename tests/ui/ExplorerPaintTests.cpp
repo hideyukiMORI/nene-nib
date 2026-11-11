@@ -1,7 +1,7 @@
 // #997（ADR 0162 の決定 2・8・9）と採用案 B（#1390・施主決定 D81）: エクスプローラーの面の画素。
 // WIC の bitmap（SoftwareTarget）に ExplorerPainter で描き、地（title_bar）・境界（焦点で
-// accent）・ 本文の左上の丸めた角・選んだ行の丸い面（background・焦点で accent
-// の枠）・載せた行（tab_hover・
+// accent）・ 本文の左上の丸めた角・選んだ行の丸い面（background・焦点で accent、無ければ
+// panel_border の枠）・線と角の形の保持・載せた行（tab_hover・
 // 選んだ行には重ねない）・ファイルの印の色（構文の色のトークン）・未保存の丸（accent）・アクティブの
 // semibold・山形とフォルダの絵・字下げの縦の線・名前の右端・面が無いときの不変・行の文字組みの保持と、
 // 上下の分割でも面の行が窓の全高に並ぶこと（#1125）を確かめる。窓・device は作らない。字の画素は
@@ -14,6 +14,7 @@
 #include "ExplorerPointer.hpp"
 #include "ExplorerPointing.hpp"
 #include "ExplorerRowView.hpp"
+#include "ExplorerShapes.hpp"
 #include "ExplorerText.hpp"
 #include "ExplorerView.hpp"
 #include "ExplorerWidth.hpp"
@@ -38,6 +39,7 @@
 #include <format>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace nenenib::tests::ui
@@ -47,6 +49,7 @@ namespace
 namespace core = nenenib::core;
 namespace application = nenenib::application;
 using nenenib::ui::win32::ExplorerPainter;
+using nenenib::ui::win32::ExplorerShapes;
 using nenenib::ui::win32::ExplorerText;
 using nenenib::ui::win32::PaletteRowLayouts;
 using Format = Microsoft::WRL::ComPtr<IDWriteTextFormat>;
@@ -155,16 +158,19 @@ constexpr std::uint32_t dpi = 96;
 }
 
 // 面を WIC の bitmap に描く口。テーマと保持を束ねて、描く面と配置だけを受ける。
-[[nodiscard]] auto painter_of(SoftwareTarget &target, const ExplorerText &text,
-                              PaletteRowLayouts &layouts, const core::Theme &theme)
+// 保持は行の文字組みと線と角の形の組（renderer の 2 つの欄と同じ）。
+using Held = std::pair<PaletteRowLayouts &, ExplorerShapes &>;
+
+[[nodiscard]] auto painter_of(SoftwareTarget &target, const ExplorerText &text, Held held,
+                              const core::Theme &theme)
 {
-    return [&target, text, &layouts, theme](const application::ExplorerView &view,
-                                            const core::ExplorerLayout &layout)
+    return [&target, text, held, theme](const application::ExplorerView &view,
+                                        const core::ExplorerLayout &layout)
     {
         return target.painted(
             [&](ID2D1RenderTarget &surface, ID2D1SolidColorBrush *brush)
             {
-                ExplorerPainter painter(surface, *brush, text, layouts);
+                ExplorerPainter painter(surface, *brush, text, held.first, held.second);
                 painter.paint(view, layout, theme.ui, theme.body);
             });
     };
@@ -180,7 +186,8 @@ void verify_panel_pixels(SoftwareTarget &target, const ExplorerText &text)
            "the dark palette tells the panel tokens apart");
     const auto layout = layout_of(true);
     PaletteRowLayouts layouts(ExplorerPainter::retained);
-    const auto painted = painter_of(target, text, layouts, theme);
+    ExplorerShapes shapes;
+    const auto painted = painter_of(target, text, Held{layouts, shapes}, theme);
     const auto pixels = painted(view_of(false), layout);
     expect(pixels.size() ==
                static_cast<std::size_t>(SoftwareTarget::width) * SoftwareTarget::height * 4,
@@ -228,13 +235,40 @@ void verify_panel_pixels(SoftwareTarget &target, const ExplorerText &text)
            "a long name is cut before the right padding");
 }
 
+// 焦点の無いときの選んだ行の panel_border の枠（V-1428 の F-1・背景が黒のテーマでは面の地と本文の
+// 色が同じなので、枠が無いと見えない）と、線と角の形の保持（L-1・作り直すのは角の鍵が変わったとき
+// だけ）。
+void verify_unfocused_frame_and_shapes(SoftwareTarget &target, const ExplorerText &text)
+{
+    const auto theme = theme_of(core::Appearance::dark);
+    const auto &palette = theme.ui;
+    const auto layout = layout_of(true);
+    PaletteRowLayouts layouts(ExplorerPainter::retained);
+    ExplorerShapes shapes;
+    const auto painted = painter_of(target, text, Held{layouts, shapes}, theme);
+    const auto pixels = painted(view_of(false), layout);
+    expect(palette.panel_border != palette.background &&
+               pixel_is(pixels, 120, 52, palette.panel_border) &&
+               pixel_is(pixels, 120, 63, palette.background),
+           "the selected row without focus has a 1 DIP panel_border frame over its surface");
+    expect(shapes.made() == 2, "the stroke style and the corner are made for the first frame");
+    static_cast<void>(painted(view_of(true), layout));
+    expect(shapes.made() == 2, "the next frame on the same panel makes no shape");
+    auto wider = layout;
+    wider.panel = core::LayoutRect{0, 0, 260, 80};
+    const auto moved = painted(view_of(false), wider);
+    expect(shapes.made() == 3 && pixel_is(moved, 260 - layout.border, 10, palette.panel_border),
+           "a moved panel edge makes the corner again and paints the border there");
+}
+
 void verify_focus_and_hidden(SoftwareTarget &target, const ExplorerText &text)
 {
     const auto theme = theme_of(core::Appearance::light);
     const auto &palette = theme.ui;
     const auto layout = layout_of(true);
     PaletteRowLayouts layouts(ExplorerPainter::retained);
-    const auto painted = painter_of(target, text, layouts, theme);
+    ExplorerShapes shapes;
+    const auto painted = painter_of(target, text, Held{layouts, shapes}, theme);
     const auto focused = painted(view_of(true), layout);
     const auto border_x = panel.right - layout.border;
     expect(pixel_is(focused, border_x, 10, palette.accent) &&
@@ -270,7 +304,8 @@ void verify_file_rows(SoftwareTarget &target, const ExplorerText &text)
            "the dark theme tells the mark tokens apart");
     const auto layout = layout_of(true);
     PaletteRowLayouts layouts(ExplorerPainter::retained);
-    const auto painted = painter_of(target, text, layouts, theme);
+    ExplorerShapes shapes;
+    const auto painted = painter_of(target, text, Held{layouts, shapes}, theme);
     const auto pixels = painted(files_of(), layout);
     expect(pixel_is(pixels, 34, 41, theme.body.string) &&
                pixel_is(pixels, 34, 63, theme.body.function),
@@ -336,13 +371,14 @@ void verify_split_rows(SoftwareTarget &target, const ExplorerText &text)
                                          false,
                                          0};
     PaletteRowLayouts layouts(ExplorerPainter::retained);
+    ExplorerShapes shapes;
     const auto shift =
         static_cast<float>(panel_area.bottom) - static_cast<float>(SoftwareTarget::height);
     const auto pixels = target.painted(
         [&](ID2D1RenderTarget &surface, ID2D1SolidColorBrush *brush)
         {
             surface.SetTransform(D2D1::Matrix3x2F::Translation(0.0F, -shift));
-            ExplorerPainter painter(surface, *brush, text, layouts);
+            ExplorerPainter painter(surface, *brush, text, layouts, shapes);
             painter.paint(view, layout, theme.ui, theme.body);
             surface.SetTransform(D2D1::Matrix3x2F::Identity());
         });
@@ -408,7 +444,8 @@ void verify_chosen_width_pixels(SoftwareTarget &target, const ExplorerText &text
                core::contains(layout.panel.value(), 300, 10),
            "a row away from the edge is not the divider");
     PaletteRowLayouts layouts(ExplorerPainter::retained);
-    const auto painted = painter_of(target, text, layouts, theme);
+    ExplorerShapes shapes;
+    const auto painted = painter_of(target, text, Held{layouts, shapes}, theme);
     const auto pixels = painted(view_of(false), layout);
     expect(pixel_is(pixels, border_x, 10, theme.ui.panel_border) &&
                pixel_is(pixels, border_x - 2, 41, theme.ui.title_bar) &&
@@ -476,6 +513,7 @@ void verify_explorer_paint()
     }
     const ExplorerText text{factory.Get(), format.Get(), strong.Get(), dpi};
     verify_panel_pixels(target, text);
+    verify_unfocused_frame_and_shapes(target, text);
     verify_focus_and_hidden(target, text);
     verify_file_rows(target, text);
     verify_split_rows(target, text);
