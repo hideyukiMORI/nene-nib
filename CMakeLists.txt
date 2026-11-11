@@ -246,7 +246,8 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/FolderShelf.cpp
     src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
     src/adapters/win32/MarkdownShelf.cpp src/adapters/win32/Win32MarkdownAdapter.cpp
-    src/adapters/win32/Win32ImageAdapter.cpp
+    src/adapters/win32/ImageShelf.cpp src/adapters/win32/ImageFileRead.cpp
+    src/adapters/win32/ImageDecode.cpp src/adapters/win32/Win32ImageAdapter.cpp
     src/adapters/win32/AutosaveCodec.cpp src/adapters/win32/AutosaveFolder.cpp
     src/adapters/win32/AutosaveShelf.cpp
     src/adapters/win32/Win32AutosaveAdapter.cpp
@@ -262,6 +263,9 @@ nenenib_system_link(nenenib_adapters advapi32)
 nenenib_system_link(nenenib_adapters shell32)
 # クリップボード（OpenClipboard / SetClipboardData）と断りの音（MessageBeep・ADR 0153）は user32。
 nenenib_system_link(nenenib_adapters user32)
+# プレビューの画像の WIC（CoInitializeEx / CoCreateInstance・ADR 0155 の追補 59・#1412）は ole32。
+# windowscodecs.lib は結ばない（CLSID は INITGUID で定義し、exe は windowscodecs.dll を import しない）。
+nenenib_system_link(nenenib_adapters ole32)
 
 # QLT-013: adapters/win32 のファイル読み書きは、GetTempPathW の下の試験ごとの一時フォルダ
 # （tests/adapters/TemporaryTestDirectory・#1103）で往復させる（ADR 0010）。中核の分岐カバレッジ（coverage-policy.json）の対象には入れない。
@@ -329,6 +333,17 @@ nenenib_link(nib_long_path_tests nenenib_application)
 nenenib_link(nib_long_path_tests nenenib_adapters)
 add_test(NAME nib_adapters_long_paths COMMAND nib_long_path_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(nib_adapters_long_paths PROPERTIES TIMEOUT 60)
+
+# Issue #1412（親 #1381）: プレビューの画像の読み（Win32ImageAdapter）を本物のファイル・ワーカー 1 本・WIC
+# で測る（ADR 0155 の追補 54）。時刻は読まず、合図の受け皿だけを待つので、止まらないときはこの制限時間で
+# 落ちる。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
+nenenib_target(nib_image_adapter_tests adapter_tests EXECUTABLE tests/adapters/ImageAdapterTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
+nenenib_link(nib_image_adapter_tests nenenib_core)
+nenenib_link(nib_image_adapter_tests nenenib_application)
+nenenib_link(nib_image_adapter_tests nenenib_adapters)
+add_test(NAME nib_adapters_images COMMAND nib_image_adapter_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_adapters_images PROPERTIES TIMEOUT 60)
 
 # Issue #993: 開く道の読み（Win32DocumentReader）を本物のファイルとワーカー 1 本で測る（ADR 0159）。
 # 65 MiB の見本を書いて塊の仕事で読む。時刻は読まず、合図の受け皿だけを待つので、止まらないときは

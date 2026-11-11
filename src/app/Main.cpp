@@ -238,7 +238,8 @@ void bind_window_handle(const nenenib::ui::win32::EditorWindow &window,
 
 // 「届いた」の合図は窓ができてから渡す。番号と HWND は ui が持ち、adapters は知らない（ADR 0062
 // の決定 7）。同じフォルダ・自動退避・Markdown のプレビュー（ADR 0155 の決定 5）・開く道の読み
-// （ADR 0159 の決定 9）の adapter が同じワーカーを借りる。起動の引数の読みは窓より先に頼まれる
+// （ADR 0159 の決定 9）・プレビューの画像（ADR 0155 の追補 54）の
+// adapter が同じワーカーを借りる。起動の引数の読みは窓より先に頼まれる
 // ので、開く道の読みはそれより前に届いた結果を bind のときに 1 回知らせる。
 template <typename... Adapters>
 void bind_work_signal(const nenenib::ui::win32::EditorWindow &window, Adapters &...adapters)
@@ -251,8 +252,9 @@ void bind_work_signal(const nenenib::ui::win32::EditorWindow &window, Adapters &
 // （壊れる順は 窓 → controller → adapter → ワーカー → device の箱）。
 // device の箱は仕事に借りられるので worker より先に宣言して後に壊す。最初の仕事として
 // device を作り始め、窓を作って見せる間に重ねる（ADR 0131 の決定 2）。
-// Markdown プレビューの画像の口（ADR 0155 の追補 53）は段 1 では口だけで結果を返さない。段 2 が
-// worker を借りて読み、窓ができてから合図を結ぶ（bind_work_signal）。
+// Markdown プレビューの画像の口（ADR 0155 の追補 53・54）も同じ worker を
+// 借りてファイルを読み WIC で復号し（壊れる順は folders と同じ）、
+// 窓ができてから合図を結ぶ（bind_work_signal）。
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
@@ -290,7 +292,7 @@ int run(HINSTANCE instance)
     nib_adapters::Win32ShellRegistration shell_registration(L"Software");
     nenenib::adapters::win32::Win32DocumentReader reads(worker, files, code_pages);
     nenenib::adapters::win32::Win32LanguageServer language_server({});
-    nenenib::adapters::win32::Win32ImageAdapter images;
+    nenenib::adapters::win32::Win32ImageAdapter images(worker);
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{
             appearance,   clipboard,       files,      code_pages, settings,
@@ -309,7 +311,7 @@ int run(HINSTANCE instance)
         return report(reason_of(window.error()));
     }
     bind_window_handle(*window.value(), clipboard, language_server);
-    bind_work_signal(*window.value(), folders, autosave, markdown, reads);
+    bind_work_signal(*window.value(), folders, autosave, markdown, reads, images);
     pump_messages(*window.value(), warmup, language_server);
     return window.value()->rendering_failed() ? 1 : 0;
 }
