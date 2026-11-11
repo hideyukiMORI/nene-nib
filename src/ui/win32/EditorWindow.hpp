@@ -278,6 +278,7 @@ class EditorWindow final
     [[nodiscard]] bool over_other_pane(LPARAM data) const;
     void follow_split(core::SplitLayout previous, application::EditorDelivery &delivery);
     void follow_explorer(application::EditorDelivery &delivery);
+    void follow_minimap(application::EditorDelivery &delivery);
     void choose_explorer_root();
     // エクスプローラーの面の群（EditorWindowExplorer.cpp・ADR 0162 の決定 4）。
     void scroll_explorer(std::int32_t delta);
@@ -406,6 +407,8 @@ class EditorWindow final
     bool preview_ticking_ = false;
     // 最後に本文の寸法を送ったときにエクスプローラーの面が出ていたか（ADR 0162 の決定 2）。
     bool shown_explorer_ = false;
+    // 同じくミニマップが出ていたか（ADR 0171 の決定 2・controller の minimap_shown の写し）。
+    bool shown_minimap_ = false;
     // いまの編集モード。鍵をどちらの表で引くかを決めるだけで、正本は EditorState（ARC-004）。
     core::EditMode mode_ = core::EditMode::ordinary;
     // Ctrl+V を矩形の鍵に写すかどうかを決めるのに要る（ADR 0035 の決定 9）。
