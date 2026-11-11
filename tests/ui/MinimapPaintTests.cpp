@@ -9,28 +9,44 @@
 // - どの core::SyntaxRole の値の塊も core::syntax_color の色で描く（色の表の位置を数えない）。
 #include "WindowChecks.hpp"
 
+#include "AutosaveId.hpp"
+#include "Edit.hpp"
+#include "Language.hpp"
 #include "LayoutRect.hpp"
 #include "LineNumber.hpp"
 #include "Minimap.hpp"
 #include "MinimapBand.hpp"
 #include "MinimapBlock.hpp"
+#include "MinimapCache.hpp"
+#include "MinimapFlush.hpp"
 #include "MinimapFrame.hpp"
 #include "MinimapPen.hpp"
 #include "MinimapPicture.hpp"
 #include "MinimapRows.hpp"
+#include "MinimapSource.hpp"
 #include "MinimapWindow.hpp"
+#include "Offset.hpp"
 #include "SyntaxColor.hpp"
 #include "SyntaxPalette.hpp"
 #include "SyntaxRole.hpp"
+#include "TextBuffer.hpp"
 #include "Theme.hpp"
 #include "ThemeCatalog.hpp"
 #include "ThemeName.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <d2d1.h>
+#include <dxgi.h>
 #include <memory>
 #include <optional>
+#include <random>
+#include <string>
+#include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 #include <wincodec.h>
@@ -323,6 +339,178 @@ void check_every_role(Canvas &canvas, const Ink &colors)
                pixel_at(pixels, static_cast<UINT>(panel.left) + 5, muted_y) == colors.first.at(2),
            "every syntax role paints in its syntax_color and a block without one in muted");
 }
+
+// ミニマップの失敗の読み（#1449）: 成功は kept、device lost は tag に依らず device_lost、ほかの
+// 失敗は minimap_tag ならミニマップ・それ以外は frame。bitmap の上限を超える面は bitmap
+// を作らない。
+void check_failure_reading()
+{
+    expect(win32::minimap_flush_of(S_OK, 0) == win32::MinimapFlush::kept &&
+               win32::minimap_flush_of(E_INVALIDARG, win32::minimap_tag) ==
+                   win32::MinimapFlush::minimap &&
+               win32::minimap_flush_of(E_INVALIDARG, 0) == win32::MinimapFlush::frame &&
+               win32::minimap_flush_of(D2DERR_WRONG_STATE, win32::minimap_tag) ==
+                   win32::MinimapFlush::minimap &&
+               win32::minimap_flush_of(D2DERR_RECREATE_TARGET, win32::minimap_tag) ==
+                   win32::MinimapFlush::device_lost &&
+               win32::minimap_flush_of(DXGI_ERROR_DEVICE_REMOVED, 0) ==
+                   win32::MinimapFlush::device_lost,
+           "a failure tagged by the minimap is the minimap's and device lost stays device lost");
+    // 5,000 行の窓は 5,120 行刻み = 10,240 画素。FL 11 の 16,384 には入り、FL 10 の 8,192・FL 9 の
+    // 4,096 には入らない（直接描く）。幅 0 も作らない。
+    expect(win32::minimap_bitmap_fits(80, 5'000, 16'384) &&
+               !win32::minimap_bitmap_fits(80, 5'000, 8'192) &&
+               !win32::minimap_bitmap_fits(80, 3'000, 4'096) &&
+               win32::minimap_bitmap_fits(80, 2'000, 4'096) &&
+               !win32::minimap_bitmap_fits(0, 10, 16'384) &&
+               !win32::minimap_bitmap_fits(20'000, 10, 16'384),
+           "a minimap bitmap over the device's maximum bitmap size is not made");
+}
+
+// bitmap の道を捨てた絵は直接描き（DrawBitmap を数えない）、画素は直接の画素と同じ。
+void check_abandoned_bitmap(Canvas &canvas, Canvas &reference, const Ink &colors)
+{
+    win32::MinimapPicture picture;
+    const auto rows = rows_of(window_rows);
+    static_cast<void>(canvas.held(picture, frame_of(rows, 1, 0, std::nullopt), colors));
+    picture.abandon_bitmap();
+    const auto frame = frame_of(rows, 20, 1, std::nullopt);
+    const auto direct = canvas.held(picture, frame, colors);
+    expect(picture.bitmap_abandoned() && picture.copies() == 1 && !direct.empty() &&
+               direct == reference.direct(frame, colors),
+           "an abandoned minimap bitmap paints directly with the same pixels");
+}
+
+// ---------------------------------------------------------------- 固定 seed の帯の列（#1449）
+
+using Random = std::mt19937_64;
+
+constexpr std::array<std::string_view, 9> edit_texts{"x",  "\n",       "\n\n", "/*", "*/",
+                                                     "あ", "int y;\n", "",     "\t"};
+// 面の寸法: 普通・幅 0・高さ 0・高さ 1 画素・狭い（bitmap を作り直す）・低い。
+constexpr std::array<core::LayoutRect, 6> random_panels{{{100, 10, 180, 300},
+                                                         {100, 10, 100, 300},
+                                                         {100, 10, 180, 10},
+                                                         {100, 10, 180, 11},
+                                                         {120, 10, 180, 300},
+                                                         {100, 10, 180, 60}}};
+
+[[nodiscard]] std::size_t below(Random &random, std::size_t bound)
+{
+    return static_cast<std::size_t>(random() % bound);
+}
+
+[[nodiscard]] core::TextBuffer numbered_text(std::size_t count)
+{
+    std::string text;
+    for (std::size_t line = 1; line <= count; ++line)
+    {
+        text += line % 11 == 0 ? "/* note\n" : "";
+        text += "int value_" + std::to_string(line) + " = " + std::to_string(line) + ";\n";
+        text += line % 11 == 0 ? "*/\n" : "";
+    }
+    auto made = core::TextBuffer::from_utf8(text);
+    return made.has_value() ? std::move(made).value() : core::TextBuffer::empty();
+}
+
+// 本文の任意の位置の置き換え（UTF-8 の途中も含む）を 1 つ当てて覚えに知らせる。
+void edit_randomly(application::MinimapCache &cache, core::TextBuffer &text, Random &random)
+{
+    const std::size_t size = text.size_bytes();
+    const core::Offset at{below(random, size + 1)};
+    const core::Offset end{std::min(size, at.value + below(random, 3) * below(random, 40))};
+    const std::string inserted(edit_texts.at(below(random, edit_texts.size())));
+    const core::Edit edit{at, text.text_range(at, end), inserted, at};
+    auto after = text.replaced(at, end, inserted);
+    cache.edited(text, after, edit, application::AutosaveId{1});
+    text = std::move(after);
+}
+
+// controller の add_minimap と同じ手順で frame を作る。
+[[nodiscard]] application::MinimapFrame framed_randomly(application::MinimapCache &cache,
+                                                        const core::TextBuffer &text,
+                                                        core::LineNumber first_visible,
+                                                        std::size_t panel_rows)
+{
+    const application::MinimapSource source{application::AutosaveId{1}, core::Language::cpp, true};
+    const std::size_t total = text.line_count();
+    const auto top = core::minimap_top(first_visible, 30, total, panel_rows);
+    const auto window = core::minimap_window(cache.window_of(source), top, panel_rows, total);
+    if (!cache.holds(source, window))
+    {
+        cache.rebuild(text, source, window);
+    }
+    return cache.framed(top, first_visible, 30);
+}
+
+// 1 本の走りの状態: 行の塊の覚え・絵・本文・見えている最初の行・乱数。
+using Run = std::tuple<application::MinimapCache, win32::MinimapPicture, core::TextBuffer,
+                       std::size_t, Random>;
+// 描く先と比べる相手の組。
+using Canvases = std::pair<Canvas &, Canvas &>;
+
+// 0〜2 個の編集・ときどき送り・面の寸法を選んで frame を作る。
+[[nodiscard]] std::pair<application::MinimapFrame, core::LayoutRect> next_frame(Run &run)
+{
+    auto &[cache, picture, text, first, random] = run;
+    for (std::size_t edits = below(random, 3); edits > 0; --edits)
+    {
+        edit_randomly(cache, text, random);
+    }
+    first = below(random, 4) == 0 ? 1 + below(random, text.line_count()) : first;
+    first = std::min(first, text.line_count());
+    const auto area = random_panels.at(below(random, random_panels.size()));
+    const auto rows = static_cast<std::size_t>(std::max(core::height_of(area), 0) / 2);
+    return {framed_randomly(cache, text, core::LineNumber{first}, rows), area};
+}
+
+// 1 歩。4 回に 3 回は描いて直接の画素と比べる。違うか描画が失敗したら偽。
+[[nodiscard]] bool painted_step(Canvases canvases, const std::array<Ink, 2> &inks, Run &run)
+{
+    const auto [frame, area] = next_frame(run);
+    auto &random = std::get<Random>(run);
+    if (below(random, 4) == 0)
+    {
+        return true;
+    }
+    const Ink &ink = inks.at(below(random, 8) == 0 ? 1 : 0);
+    const auto through =
+        canvases.first.held(std::get<win32::MinimapPicture>(run), frame, ink, area);
+    return !through.empty() && through == canvases.second.direct(frame, ink, area);
+}
+
+[[nodiscard]] std::size_t broken_seed(Canvases canvases, const std::array<Ink, 2> &inks,
+                                      std::uint64_t seed)
+{
+    Run run{application::MinimapCache{}, win32::MinimapPicture{},
+            numbered_text(seed == 3 ? 4'600 : 200), std::size_t{1}, Random{seed}};
+    // 窓より長い文書（seed 3）は窓ごとの描き直しが重いので歩を減らす（Debug で数秒に収める）。
+    const std::size_t steps = seed == 3 ? 40 : 200;
+    for (std::size_t step = 0; step < steps; ++step)
+    {
+        if (!painted_step(canvases, inks, run))
+        {
+            std::fprintf(stderr, "minimap paint: seed %llu step %zu differs\n",
+                         static_cast<unsigned long long>(seed), step);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// 編集・送り・面の寸法とテーマの切り替えを混ぜ、bitmap を経た画素が直接の画素と同じで、描画が
+// 失敗しない（EndDraw が成功する）。frame を作っても描かない歩を挟む。
+void check_random_frames(Canvas &canvas, Canvas &reference, const Ink &colors, const Ink &other)
+{
+    const std::array<Ink, 2> inks{colors, other};
+    std::size_t broken = 0;
+    for (std::uint64_t seed = 1; seed <= 3; ++seed)
+    {
+        broken += broken_seed(Canvases{canvas, reference}, inks, seed);
+    }
+    expect(broken == 0,
+           "random bands, panels and themes paint the same pixels as painting directly");
+}
 } // namespace
 
 void verify_minimap_paint()
@@ -340,5 +528,8 @@ void verify_minimap_paint()
     check_bands(canvas, reference, colors.value());
     check_rebuilds(canvas, reference, colors.value(), other.value());
     check_every_role(canvas, colors.value());
+    check_random_frames(canvas, reference, colors.value(), other.value());
+    check_failure_reading();
+    check_abandoned_bitmap(canvas, reference, colors.value());
 }
 } // namespace nenenib::tests::ui

@@ -179,6 +179,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/AutosaveRestorePropertyTests.cpp
     tests/unit/OperationsTests.cpp
     tests/unit/FindReplaceTests.cpp tests/unit/MatchParenTests.cpp tests/unit/MinimapTests.cpp
+    tests/unit/MinimapPropertyTests.cpp
     tests/unit/GuideTests.cpp
     tests/unit/ExitPlanTests.cpp
     tests/unit/DisplayTests.cpp
