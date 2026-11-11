@@ -219,8 +219,9 @@ PR #1306（#1293）の独立レビューの後続 1。折り返す窓で、窓�
 `so` が窓の高さちょうどで折り返す行を含む下への跳び（15 行・9 行目 21 字・20 桁・高さ 3・先頭 8・行 8・`:set so=3<CR>10G`）で、Vim の先頭 10・Nib 9。#1307 の追補 4 で根を見つけて残した件。設計席の判断で候補 A（鍵ごとに確かめる）を採った。
 
 1. **Vim の規則。** `move.c` の `update_topline` の 1 回目は Nib と同じ 9（`check_botline` → `line_count = 4 = 高さ + 1` → `scroll_cursor_bot` → 送りの `line_count` 4 が高さ以上 → `scroll_cursor_halfway(FALSE, TRUE)`）。`scroll_cursor_halfway` は `VALID_BOTLINE` を落とすだけで `w_botline` の値（9 より前の窓の 10）を数え直さない。`drawscreen.c` の `win_update` は描き終わると（`dollar_vcol == -1`）、描いた `w_botline`（9 から 11）が描く前の値（10）と違えば `VALID_TOPLINE` を落として `update_topline` をもう 1 回だけ呼ぶ（`recursive`）。2 回目は先頭 9・行 10 で `check_top_offset` が真（上の画面行 2 < 3）、`n = 9 + 3 − 10 = 2` が `halfheight` 2 以上で `scroll_cursor_halfway(FALSE, FALSE)` の 10。描く前の値は、`scroll_cursor_top` の後の `check_botline` が動いた窓で数え直し、`scroll_cursor_bot` の `scrollup(line_count)` は `w_botline += line_count`（本文の末尾 + 1 で切る）にする。
-2. **Nib の写し。** `VimToplineUpdate` の入口を 2 本にした。`vim_topline_updated` は描かずに 1 回（z^ の回数つきの `scroll_cursor_bot` の送り・`counted_above_line`）、`vim_topline_redrawn` は鍵の後の追従（`VisualTextView::vim_topline`）で、1 回目の答え（`Settled`: 先頭・`w_botline` を数えた窓の先頭・`scrollup` の行）から描く前の値を作り、答えの窓の `w_botline`（`shown_from`）と違えば `updated_top` をもう 1 回流す。窓が動かず送ってもいなければ数え直さない（打鍵の道の費用は増えない）。動いたときだけ数えた窓と答えの窓の行の高さを読む（文字組みの道では `VimRowsNeeded` の問いが増えうる）。
-3. **限界（oracle の側の差）。** Vim の 2 回目は描くときだけ走る。fixture の oracle は鍵の列を 1 本の `:normal!` に流して最後に 1 回描くので、`10G` の後に鍵が続く形は 2 回目が走らない。Nib は鍵ごとに追従するので、鍵ごとに描く対話の Vim と同じになり、束ねた形とは 1 行違う。実測（同じ本文と窓・`D:/NeNeNib/scripts/20261111/1300/probe4.py`・「先頭 / 行」）:
+2. **Nib の写し。** `VimToplineUpdate` の入口を 2 本にした。`vim_topline_updated` は描かずに 1 回（z^ の回数つきの `scroll_cursor_bot` の送り・`counted_above_line`）、`vim_topline_redrawn` は鍵の後の追従（`VisualTextView::vim_topline`）で、1 回目の答え（`Settled`: 先頭・`w_botline` を数えた窓の先頭・`scrollup` の行）から描く前の値を作り、答えの窓の `w_botline`（`shown_from`）と違えば `updated_top` をもう 1 回流す。窓が動かず送ってもいなければ数え直さない。動いたときだけ数えた窓と答えの窓の行の高さを読む（文字組みの道では `VimRowsNeeded` の問いが増えうる）。
+3. **折り返さない窓でも走る。** `scroll_cursor_halfway` が `w_botline` を数え直さないのは折り返しに依らないので、nowrap でも halfway の後は描いた値と違い、Vim も Nib も 2 回目を流す（行が全部 1 段でも `first != counted` なら `held` は元の窓の下）。独立レビュー V-1429 が nowrap の再生器で直す前と比べた（乱数の鍵列 1500 列・編集なしの鍵 23 種・2〜4 鍵）: 13 列で先頭が変わり、7 列は Vim の対話と束ねた形の両方に一致するようになった（例: 高さ 6・`so=5`・先頭 3・行 8 の `27G5j` は 30・直す前 29）、2 列は対話とだけ一致（`/L20<CR> 5j L <C-d>`・`5j L` の族）、2 列は失敗の打ち切りの後で束ねた形と一致、3 列は前からの差のまま。編集を含む 226 列は Vim の対話との一致が 214 → 216。悪くなった列は 0（`D:/NeNeNib/outputs/20261111/review-1429/review.md` の R0-3）。nowrap の fixture `viewport-so-full-recheck-` 2 件（60 行・先頭 1・行 1・`so` = 高さの `5j`: 高さ 6 は先頭 4・高さ 8 は先頭 3・束ねた形と対話の形が同じ値・直す前は 3 と 2）で守る。
+4. **限界（oracle の側の差）。** Vim の 2 回目は描くときだけ走る。fixture の oracle は鍵の列を 1 本の `:normal!` に流して最後に 1 回描くので、跳びの後に鍵が続く形は 2 回目が走らない。Nib は鍵ごとに追従するので、鍵ごとに描く対話の Vim と同じになり、束ねた形とは 1 行違うことがある。実測（#1300 の本文と窓・`D:/NeNeNib/scripts/20261111/1300/probe4.py`・「先頭 / 行」）:
 
    | 鍵 | 1 本の `:normal!` | 鍵の間に `redraw!` |
    |---|---|---|
@@ -231,6 +232,17 @@ PR #1306（#1293）の独立レビューの後続 1。折り返す窓で、窓�
    | `10G` `k` | 9 / 9 | 9 / 9 |
    | `10G` `<C-e>` | 10 / 11 | 11 / 12 |
 
-   束ねた形の fixture は入れない。Nib が鍵の間に `redraw!` を挟んだ列と一致することは、上の表の値を読んだだけで、Nib の再生で確かめていない。前例は #1231 の `z-` `zb` の直後の頁移動（#1362 の追補 5）。マクロと `.` の再生（1 回の apply で鍵を流す・Vim も再生の間は描かない）の中で 2 回目を止める形は入れていない（追従は保留して読むときに解く形で、再生の途中の鍵が窓を読めばその時点で解く。折り返す窓の oracle に `register` 欄が無く、再生の中の形を測って確かめる道が無いため）。
-4. **確かめ。** Python の写し（`D:/NeNeNib/scripts/20261111/1300/compare.py`）で、折り返す窓・高さ 1〜10・`so` 0〜999・`{N}G` `j` `k` `3j` `3k` の 1 動作を Vim 9.1 と比べた（有効 929 件）: 1 回だけ 910・いつも 2 回 920・本件の形 923。残る 6 件は `so=1` / `so=3` の別の根で、本件では直さない。
-5. **検証。** fixture `wrap-so-full-` 3 件（`:set so=3<CR>` の後の `10G` 10 / 10・`2j` 10 / 10・`j` 9 / 9・`eng/vim-wrap-oracle.py` が Vim 9.1 で測った値）。直す前の再生（追従を `vim_topline_updated` に戻した木）では `10G` と `2j` の 2 件が落ちる。
+   同じ族は `10G` の後の `H` `L` `M` に限らない。V-1429 の Vim だけの探索（20 桁・高さ 3〜8・`so` 0〜999・2 鍵・300 列）で束ねた形と対話の形が違ったのは 7 件・6 種で、跳び（`{N}G`・検索）の後の `H` `M` `<C-e>` `<C-y>` と、`<C-f>` `zz` の後の `<C-e>` `<C-y>` も同じ族だった（「束ねた形の最後 / 対話の形の最後」）:
+
+   | 鍵（高さ・`so`・先頭） | 1 本の `:normal!` | 鍵の間に `redraw!` |
+   |---|---|---|
+   | `/L20x<CR>` `M`（5・1・4） | 20 / 20 | 18 / 19 |
+   | `/L10x<CR>` `H`（6・3・4） | 9 / 9 | 10 / 10 |
+   | `29G` `<C-y>`（3・1・24） | 28 / 28 | 27 / 27 |
+   | `<C-f>` `<C-e>`（8・7・13） | 12 / 14 | 13 / 14 |
+   | `zz` `<C-y>`（3・1・20） | 19 / 19 | 18 / 18 |
+
+   折り返さない窓でも出る（追補 3 の `/L20<CR> 5j L <C-d>`・`5j L`）。束ねた形とだけ違う形は fixture に入れない。fuzz の生成器 5 / 6 も鍵の列を 1 本の `:normal!` で測るので、跳びの後に `H` `L` `M` `<C-e>` `<C-y>` が続く件をこれから「違い」として出しうる（oracle の側の差・#1300 の席の seed 1〜3 × 300 では 0 件だったのは形が少ないからで、出ないことの保証ではない）。nowrap では Nib の再生器の先頭が Vim の鍵ごとに描く形と段ごとに一致することを V-1429 が接頭辞の再生で確かめた（`18G` → 16 など）。折り返す窓は再生の道具が無く、core の写しと Vim の行の比べだけ。`<C-f>` `zz` `<C-e>` は Nib では追従を飛ばす（`kept`）道なので Nib の 2 回目は走らず、対話の Vim とも違いうる（確かめていない）。前例は #1231 の `z-` `zb` の直後の頁移動（#1362 の追補 5）。マクロと `.` の再生（1 回の apply で鍵を流す・Vim も再生の間は描かない）の中で 2 回目を止める形は入れていない（追従は保留して読むときに解く形で、再生の途中の鍵が窓を読めばその時点で解く。折り返す窓の oracle に `register` 欄が無く、再生の中の形を測って確かめる道が無いため）。
+5. **確かめ。** Python の写し（`D:/NeNeNib/scripts/20261111/1300/compare.py`）で、折り返す窓・高さ 1〜10・`so` 0〜999・`{N}G` `j` `k` `3j` `3k` の 1 動作を Vim 9.1 と比べた（有効 929 件）: 1 回だけ 910・いつも 2 回 920・本件の形 923。残る 6 件は本件の差ではなく、`:set so=N` の後に Vim が鍵の前のキャレットで窓を新しい余白で決め直す（描く前・`:normal!` の中では次の鍵の前の `update_topline_cursor`）のに、Nib は次の鍵の後のキャレットで追従するだけで決め直さないことによる（V-1429 の R0-5・6 件すべてで「鍵の前のキャレットで新しい `so` の `update_topline` を 1 回 → 鍵の後」を写すと Vim と一致）。直す前からある差で、#1432 に残す。
+6. **費用。** 窓を 1 行ずつ送る打鍵（`scroll_cursor_bot` の `scrollup` で `sent = 1`）では毎回 `redraw_rechecks` が数える。probe `vim-insert-scroll-wrapped-200` / `-unwrapped-200`（`nib_perf_probes`・120 行の文書の末尾で INSERT の `<CR>` と 1 文字を 100 組・窓 20 行・20 桁・鍵ごとに frame を読む）を直す前（追従を `vim_topline_updated` に戻した木）と後で測った（Debug・機械の負荷 60〜79% の中・20 回の中央値・200 打鍵の区間）: 文字組みの問いの数は前後とも同じ（折り返す窓 9724・折り返さない窓 8920）、時間は折り返す窓 860 ms → 954 / 883 ms（後を 2 回）、折り返さない窓 1073 ms → 1095 / 1055 ms。差は揺れの中（+3〜11% / −2〜+2%）で、この形では問いの数は増えなかった（なぜ増えないかは確かめていない）。正式な速さのゲートは測っていない。
+7. **検証。** fixture `wrap-so-full-` 3 件（`:set so=3<CR>` の後の `10G` 10 / 10・`2j` 10 / 10・`j` 9 / 9・`eng/vim-wrap-oracle.py` が Vim 9.1 で測った値）と `viewport-so-full-recheck-` 2 件（`eng/vim-oracle.py`）。直す前の再生（追従を `vim_topline_updated` に戻した木）では `wrap-so-full-` の `10G` と `2j` の 2 件が落ちる。

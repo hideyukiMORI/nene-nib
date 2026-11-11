@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 ea3160584d565d15e192ec0b32d07df70b03823458aef8dc4b0cc60916db602f / 3906 fixtures
+// fixtures.json: sha256 b8d07443584c0e9efd357dfd95d03deed99e30f5f8dbc45718d875985e8e4262 / 3908 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3906> vim_fixtures{{
+constexpr std::array<VimFixture, 3908> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3918,6 +3918,8 @@ constexpr std::array<VimFixture, 3906> vim_fixtures{{
     {"huge-count-shift-covers-every-line", "a\nb\nc", "999999999>>", "\ta\n\tb\n\tc", 1, 2, "", "", std::nullopt},
     {"huge-count-tilde-stops-at-the-line-end", "abc\ndef", "999999999~", "ABC\ndef", 1, 3, "", "", std::nullopt},
     {"huge-count-replace-past-the-line-end-fails", "abc", "999999999rx", "abc", 1, 1, "", "", std::nullopt},
+    {"viewport-so-full-recheck-5j-height-6", "001\n002\n003\n004\n005\n006\n007\n008\n009\n010\n011\n012\n013\n014\n015\n016\n017\n018\n019\n020\n021\n022\n023\n024\n025\n026\n027\n028\n029\n030\n031\n032\n033\n034\n035\n036\n037\n038\n039\n040\n041\n042\n043\n044\n045\n046\n047\n048\n049\n050\n051\n052\n053\n054\n055\n056\n057\n058\n059\n060", "5j", "001\n002\n003\n004\n005\n006\n007\n008\n009\n010\n011\n012\n013\n014\n015\n016\n017\n018\n019\n020\n021\n022\n023\n024\n025\n026\n027\n028\n029\n030\n031\n032\n033\n034\n035\n036\n037\n038\n039\n040\n041\n042\n043\n044\n045\n046\n047\n048\n049\n050\n051\n052\n053\n054\n055\n056\n057\n058\n059\n060", 6, 1, "", "", VimViewportFixture{6, 1, 1, 1, 4, 3, 0, 0, 0, 0, 0, 0, 6}},
+    {"viewport-so-full-recheck-5j-height-8", "001\n002\n003\n004\n005\n006\n007\n008\n009\n010\n011\n012\n013\n014\n015\n016\n017\n018\n019\n020\n021\n022\n023\n024\n025\n026\n027\n028\n029\n030\n031\n032\n033\n034\n035\n036\n037\n038\n039\n040\n041\n042\n043\n044\n045\n046\n047\n048\n049\n050\n051\n052\n053\n054\n055\n056\n057\n058\n059\n060", "5j", "001\n002\n003\n004\n005\n006\n007\n008\n009\n010\n011\n012\n013\n014\n015\n016\n017\n018\n019\n020\n021\n022\n023\n024\n025\n026\n027\n028\n029\n030\n031\n032\n033\n034\n035\n036\n037\n038\n039\n040\n041\n042\n043\n044\n045\n046\n047\n048\n049\n050\n051\n052\n053\n054\n055\n056\n057\n058\n059\n060", 6, 1, "", "", VimViewportFixture{8, 1, 1, 1, 3, 4, 0, 0, 0, 0, 0, 0, 8}},
 }};
 } // namespace nenenib::tests
 // clang-format on
