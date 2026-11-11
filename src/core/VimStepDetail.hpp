@@ -124,6 +124,14 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 [[nodiscard]] VimStep with_clipboard(VimStep step, std::optional<VimRegister> clipboard);
 [[nodiscard]] VimStep refused_register(const VimState &state);
 [[nodiscard]] VimStep restored_at(VimStep step, Offset restore);
+// VISUAL をオペレータで抜けた歩に覚え直した仮想桁を置く（Vim の oap->start_vcol / end_vcol・
+// #1436）。`mode` は鍵が範囲を取る種類。
+// VISUAL の鍵が範囲を取る種類（Vim の v_visop・nv_subst・nv_Replace の読み替え・#1436）。
+[[nodiscard]] VimMode visual_operated_mode(VimMode mode, VimAction action) noexcept;
+[[nodiscard]] VimStep visual_operation_noted(const VimState &state, const VimEditorView &view,
+                                             VimMode mode, VimStep step);
+// i a I A の入口（回数は Esc で繰り返す・VISUAL の文字単位と行単位の `I` `A` も通る・#1436）。
+[[nodiscard]] VimStep entered_insert(const VimState &state, Offset caret);
 [[nodiscard]] Offset visual_restore(const VimState &state, const TextBuffer &text,
                                     const Selection &selection);
 [[nodiscard]] VimStep removed_exactly(const VimState &state, const TextBuffer &text,

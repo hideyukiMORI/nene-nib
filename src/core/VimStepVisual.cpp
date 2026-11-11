@@ -3,10 +3,13 @@
 #include "VimAction.hpp"
 #include "VimActionGroup.hpp"
 #include "VimCaret.hpp"
+#include "VimKeySource.hpp"
 #include "VimKeyTable.hpp"
 #include "VimMarkEdits.hpp"
 #include "VimMotionRange.hpp"
+#include "VimOperatorColumns.hpp"
 #include "VimVisualRange.hpp"
+#include "VirtualColumn.hpp"
 
 #include <algorithm>
 #include <optional>
@@ -15,8 +18,10 @@
 namespace nenenib::core
 {
 using detail::aligned_screen;
+using detail::backward_characters;
 using detail::block_changed;
 using detail::block_inserted;
+using detail::block_of;
 using detail::block_operated;
 using detail::block_removed_to_line_end;
 using detail::cancelled;
@@ -29,7 +34,9 @@ using detail::counted;
 using detail::counts_as_digit;
 using detail::display_view;
 using detail::drops_count_digit;
+using detail::entered_insert;
 using detail::failed;
+using detail::forward_characters;
 using detail::horizontal_action;
 using detail::input_action;
 using detail::JoinedLines;
@@ -51,6 +58,7 @@ using detail::search_action;
 using detail::ShiftBy;
 using detail::shifted;
 using detail::shifted_block;
+using detail::single_step;
 using detail::tab_action;
 using detail::visual_acted;
 using detail::visual_character;
@@ -296,9 +304,122 @@ namespace
     return visual_operated(linewise, view, operation);
 }
 
-// 行に効く鍵（`I` `A` `C` `gi` `gI` `p` `P`）。VISUAL では矩形の `I` `A` `C` だけが効く（ADR 0035
-// の追補 #1042・文字単位と行単位の `C` と `p` `P` は後続・#1418）。`gi` は VISUAL では失敗する
-// （実測・#1039）。`J` `gJ` `X` `D` `Y` は visual_edit_line が先に振り分ける。
+// VISUAL の鍵が範囲を取るときの種類（Vim の v_visop・nv_subst・nv_Replace・#1417・#1436）。大文字の
+// `X` `D` `Y` `C` `I` `A` は矩形でなければ行単位へ、`R` は矩形も行単位へ読み替える。ほかの鍵は
+// 種類のまま（`s` は `c`・矩形の大文字は矩形のまま）。前の選択（`gv`）は鍵の前の種類のまま
+// （visual_remembered・Vim の VIsual_mode_orig）。
+[[nodiscard]] VimMode operated_mode(VimMode mode, VimAction action) noexcept
+{
+    if (action == VimAction::replace_mode)
+    {
+        return VimMode::visual_line;
+    }
+    const bool upper =
+        action == VimAction::remove_character_before || action == VimAction::remove_to_line_end ||
+        action == VimAction::yank_line || action == VimAction::change_to_line_end ||
+        action == VimAction::insert_at_line_start || action == VimAction::insert_at_line_end;
+    return upper && mode != VimMode::visual_block ? VimMode::visual_line : mode;
+}
+
+// `.` が VISUAL の変更を再生している鍵か（Vim の redo_VIsual_busy・visual_remembered と同じ問い）。
+[[nodiscard]] bool redoing(const VimState &state, const VimEditorView &view) noexcept
+{
+    return state.redoing_visual && vim_key_replayed(view.source);
+}
+
+// オペレータが取る範囲の両端（Vim の do_pending_operator）。行単位なら `oap->start = VIsual` の桁を
+// 0 にしてからカーソルと並べる（選択の始めの端だけを行頭へ寄せ、カーソルの桁は残す・`jlvkIX` は
+// 1 行目の 2 桁目に打つ）。`.` の再生の中は `oap->start` がカーソル（選び直した始めの端）で、
+// 終わりは同じ桁（バイト）のまま行数ぶん下（coladvance しない・`lVjIX<Esc>jl.` は 2 行目の 2 桁目・
+// `vlAX<Esc>j0.` は 2 行目の 1 文字目の後ろ・実測）。
+[[nodiscard]] OffsetRange operated_ends(const VimState &state, const VimEditorView &view,
+                                        VimMode mode)
+{
+    const TextBuffer &text = view.text;
+    Offset anchor = view.selection.anchor;
+    if (mode == VimMode::visual_line && redoing(state, view))
+    {
+        const std::size_t byte = anchor.value - text.line_start(line_of(text, anchor)).value;
+        return OffsetRange{anchor,
+                           vim_line_and_column(text, line_of(text, view.selection.caret), byte)};
+    }
+    if (mode == VimMode::visual_line)
+    {
+        anchor = text.line_start(line_of(text, anchor));
+    }
+    const Offset caret = view.selection.caret;
+    return caret < anchor ? OffsetRange{caret, anchor} : OffsetRange{anchor, caret};
+}
+
+// VISUAL のオペレータが覚え直す仮想桁（#1436・Vim の do_pending_operator）。矩形は左右の桁（再生の
+// 中も get_op_vcol が取り直す）。ほかは `$` でなく再生の中でもなければ、終わりの文字の最後の桁を、
+// 1 行だけなら始まりの最初の桁も書き直し、残りは前のオペレータの値のまま（resel_VIsual_vcol を
+// 測る枝）。
+[[nodiscard]] VimOperatorColumns operator_columns_of(const VimState &state,
+                                                     const VimEditorView &view, VimMode mode)
+{
+    if (mode == VimMode::visual_block)
+    {
+        const VimBlockRange block = block_of(state, view);
+        return VimOperatorColumns{
+            block.left, VirtualColumn{block.left.value + block.width.columns - single_step}};
+    }
+    VimOperatorColumns columns = state.operator_columns;
+    const bool at_line_end = state.wanted_column.has_value() &&
+                             state.wanted_column.value().wish == VimColumnWish::at_line_end;
+    if (redoing(state, view) || at_line_end)
+    {
+        return columns;
+    }
+    const OffsetRange ends = operated_ends(state, view, mode);
+    columns.end = virtual_column_end(view.text, ends.end);
+    if (line_of(view.text, ends.begin) == line_of(view.text, ends.end))
+    {
+        columns.start = virtual_column(view.text, ends.begin);
+    }
+    return columns;
+}
+
+// 文字単位と行単位の VISUAL の `C` と、全部の種類の `R`（#1436・Vim の v_visop と nv_Replace）。
+// 種類だけを行単位に読み替えて VISUAL の `c` へ流す（範囲・レジスタ・`"1` の規則・u の戻り先は
+// `Vc` と同じ道）。回数は使わない（`v2C` `v3R` も選んだ行だけ・実測）。
+[[nodiscard]] VimStep visual_linewise_changed(const VimState &state, const VimEditorView &view)
+{
+    VimState linewise = state;
+    linewise.mode = VimMode::visual_line;
+    return visual_operated(linewise, view, VimOperator::change);
+}
+
+// 文字単位と行単位の VISUAL の `I` `A`（#1436・Vim の nv_edit → v_visop → op_insert）。行単位へ
+// 読み替えた範囲の始まりで `I`、終わりで `A` の INSERT に入る（ほかの行へは写さない・回数は Esc で
+// 繰り返す＝NORMAL の `I` `A` と同じ入口）。`A` は終わりを行の内容の中へ寄せ（check_cursor_col）、
+// 行が空でなく覚え直した 2 つの桁が違うときだけ終わりの文字の後ろに打つ（inc_cursor・`vjAX` は
+// 2 行目の頭・`lvjAX` は 2 行目の 2 文字目の後ろ・実測）。u の戻り先は打ち始める所。
+[[nodiscard]] VimStep visual_line_inserted(const VimState &state, const VimEditorView &view,
+                                           VimAction action)
+{
+    const OffsetRange ends = operated_ends(state, view, VimMode::visual_line);
+    if (action == VimAction::insert_at_line_start)
+    {
+        return restored_at(entered_insert(state, ends.begin), ends.begin);
+    }
+    const TextBuffer &text = view.text;
+    const LineNumber line = line_of(text, ends.end);
+    const bool empty = text.line_start(line) == text.line_end(line);
+    Offset end = ends.end;
+    if (!empty && end == text.line_end(line))
+    {
+        end = backward_characters(text, end, single_step);
+    }
+    const VimOperatorColumns columns = operator_columns_of(state, view, VimMode::visual_line);
+    const Offset at =
+        empty || columns.start == columns.end ? end : forward_characters(text, end, single_step);
+    return restored_at(entered_insert(state, at), at);
+}
+
+// 行に効く鍵（`I` `A` `C` `gi` `gI`）。矩形の `I` `A` `C` は ADR 0035 の追補 #1042、文字単位と
+// 行単位の `I` `A` `C` は #1436。`gi` は VISUAL では失敗する（実測・#1039）。`J` `gJ` `X` `D` `Y`
+// `s` `R` は visual_edit_line が先に振り分ける（`p` `P` は後続・#1418）。
 [[nodiscard]] VimStep visual_line_command(const VimState &state, const VimEditorView &view,
                                           VimAction action)
 {
@@ -313,11 +434,18 @@ namespace
         return failed(visual_moved(state, view, VimAction::move_line_start),
                       VimRepeatFailure::refused);
     }
+    const bool inserts =
+        action == VimAction::insert_at_line_start || action == VimAction::insert_at_line_end;
     if (state.mode != VimMode::visual_block)
     {
-        return visual_unchanged(state);
+        if (inserts)
+        {
+            return visual_line_inserted(state, view, action);
+        }
+        return action == VimAction::change_to_line_end ? visual_linewise_changed(state, view)
+                                                       : visual_unchanged(state);
     }
-    if (action == VimAction::insert_at_line_start || action == VimAction::insert_at_line_end)
+    if (inserts)
     {
         return block_inserted(state, view, action);
     }
@@ -340,6 +468,15 @@ namespace
         action == VimAction::yank_line)
     {
         return visual_linewise_operated(state, view, action);
+    }
+    // `s` は種類のまま `c`、`R` は行単位の `c`（Vim の nv_subst と nv_Replace・#1436）。
+    if (action == VimAction::substitute)
+    {
+        return visual_changed(state, view);
+    }
+    if (action == VimAction::replace_mode)
+    {
+        return visual_linewise_changed(state, view);
     }
     return visual_line_command(state, view, action);
 }
@@ -425,30 +562,41 @@ namespace
     }
     return visual_unchanged(state);
 }
-} // namespace
 
-namespace detail
+// VISUAL を抜ける鍵がオペレータか（Vim では do_pending_operator を通る鍵・#1436）。範囲の変更・
+// `u` `U`・`Ctrl-a` `Ctrl-x`・行に効く命令がそう。`p` `P`（nv_put）と移動・選択・検索・タブは違う。
+[[nodiscard]] bool operates(VimActionGroup group, VimAction action) noexcept
 {
-// VISUAL の写し先（決定 7・決定 8）。行に効く命令・挿入・Ex は VISUAL では効かない。
-[[nodiscard]] VimStep visual_acted(const VimState &state, const VimEditorView &input,
-                                   VimAction action)
+    switch (group)
+    {
+    case VimActionGroup::edit_range:
+    case VimActionGroup::history:
+    case VimActionGroup::number:
+    case VimActionGroup::insert_line:
+        return true;
+    case VimActionGroup::edit_line:
+        return action != VimAction::put_after && action != VimAction::put_before;
+    case VimActionGroup::motion:
+    case VimActionGroup::scroll:
+    case VimActionGroup::enter_visual:
+    case VimActionGroup::insert_object:
+    case VimActionGroup::input_wait:
+    case VimActionGroup::search:
+    case VimActionGroup::tab:
+    case VimActionGroup::horizontal_scroll:
+    case VimActionGroup::screen_alignment:
+    case VimActionGroup::jump_list:
+    case VimActionGroup::ex_line:
+        return false;
+    }
+    std::unreachable();
+}
+
+// 分類ごとの写し先（CPP-012 / ADR 0006）。分類が増えたらここで落ちる。
+[[nodiscard]] VimStep visual_grouped(const VimState &state, const VimEditorView &view,
+                                     VimAction action, VimActionGroup group)
 {
-    if (auto request = requested_viewport(state, input, action))
-    {
-        return std::move(request).value();
-    }
-    const auto displayed = display_view(state, input, action);
-    if (!displayed)
-    {
-        return requested_layout(state, displayed.error());
-    }
-    const auto &view = displayed.value();
-    const auto group = vim_group_for(action);
-    if (!group.has_value())
-    {
-        return visual_unchanged(state);
-    }
-    switch (group.value())
+    switch (group)
     {
     case VimActionGroup::motion:
         return visual_moved(state, view, action);
@@ -488,6 +636,55 @@ namespace detail
         return visual_unchanged(state);
     }
     std::unreachable();
+}
+} // namespace
+
+namespace detail
+{
+[[nodiscard]] VimMode visual_operated_mode(VimMode mode, VimAction action) noexcept
+{
+    return operated_mode(mode, action);
+}
+
+// VISUAL をオペレータで抜けた歩に、覚え直した仮想桁を置く 1 か所（#1436・Vim の
+// do_pending_operator）。`mode` は鍵が範囲を取る種類（operated_mode）。VISUAL に残る歩と、VISUAL
+// でない鍵の前の状態は変えない。`r{char}` の道（VimStepReplace）もここを通す。
+[[nodiscard]] VimStep visual_operation_noted(const VimState &state, const VimEditorView &view,
+                                             VimMode mode, VimStep step)
+{
+    if (!is_visual_mode(state.mode) || is_visual_mode(step.next.mode))
+    {
+        return step;
+    }
+    step.next.operator_columns = operator_columns_of(state, view, mode);
+    return step;
+}
+
+// VISUAL の写し先（決定 7・決定 8）。行に効く命令・挿入・Ex は VISUAL では効かない。
+[[nodiscard]] VimStep visual_acted(const VimState &state, const VimEditorView &input,
+                                   VimAction action)
+{
+    if (auto request = requested_viewport(state, input, action))
+    {
+        return std::move(request).value();
+    }
+    const auto displayed = display_view(state, input, action);
+    if (!displayed)
+    {
+        return requested_layout(state, displayed.error());
+    }
+    const auto &view = displayed.value();
+    const auto group = vim_group_for(action);
+    if (!group.has_value())
+    {
+        return visual_unchanged(state);
+    }
+    VimStep step = visual_grouped(state, view, action, group.value());
+    if (!operates(group.value(), action))
+    {
+        return step;
+    }
+    return visual_operation_noted(state, view, operated_mode(state.mode, action), std::move(step));
 }
 
 [[nodiscard]] VimStep visual_character(const VimState &state, const VimEditorView &view,

@@ -125,3 +125,28 @@ ADR 0009（選択と undo）・ADR 0012（engine の形）・ADR 0014（IME と 
 - **`.`（ADR 0033）。** 記録は既存の `visual_recorded` のまま（範囲の大きさは鍵の前の種類で測り、再生は選び直してから同じ鍵を流す）。`vjX.` は 2 行ずつ、`l<C-v>jDj.` は記録の矩形の左上から行末まで、`Y` は本文を変えないので記録しない（`l<C-v>jYjj.` は何もしない）。
 - **測った（変えない・後続）。** 3 行以上をつなぐ `J` の中の行のマーク（`jlmaggVjjJ`a` は Vim 1,5・Nib はマークが消えて `` `a `` が効かず 1,6 に残る）は NORMAL の `3J` と同じ根（PR #1408 のレビューの後続 1・#793）。
 - fixture は `visual-line-command-` の 93 件（修正前の再生器で 88 件が落ちる。通る 5 件は `GVJ` と `J` `gJ` の後の `u`＝本文が戻るだけの形）。
+
+## 追補（2026-11-11・#1436）: VISUAL の `C` `R` `s` `I` `A`
+
+決定 7 の「効かない鍵」のうち、文字単位と行単位の `C` `I` `A`、全部の種類の `R`、文字単位と矩形の `s` を Vim 9.1 の実測（`-es -u NONE`・下ごしらえの probe 約 200 件と fixture 137 件）と source（normal.c の `v_visop` `nv_subst` `nv_Replace` `nv_edit`・ops.c の `do_pending_operator` `op_insert` `get_op_vcol`）どおりに入れる。どれも種類だけを読み替えて既存の `c` と INSERT の入口（`entered_insert`・NORMAL の `i a I A` と同じ）へ流し、第 2 の経路は作らない。
+
+- **鍵 → 動作。** `s` と `R` は鍵の表に `VimAction::substitute` と `VimAction::replace_mode` の 2 値を足す（群は `edit_line`）。NORMAL の `s`（`cl`）と REPLACE モードの `R` は未実装のままで、表に無い鍵と同じに打ち消す（`U` の先例・ADR 0015 の決定 10）。
+- **読み替えの 1 本 `operated_mode`。** 大文字の `X` `D` `Y` `C` `I` `A` は矩形でなければ行単位、`R` は矩形も行単位（`nv_Replace` は種類を問わず `'V'`）、`s` は種類のまま（`nv_subst`・矩形の `s` は矩形の `c`）。前の選択（`gv`）は鍵の前の種類のまま（`VIsual_mode_orig`・`l<C-v>jRX<Esc>gv` は矩形）。回数は使わない（`v2C` `v3R` `v2s`）。
+- **`C` `R` `s`。** `C` `R` は行単位の VISUAL の `c`（`visual_linewise_changed`・範囲・レジスタ・`"1` の規則・u の戻り先は `Vc` と同じ道）、`s` は `visual_changed`。
+- **`I` `A` の位置（`do_pending_operator` と `op_insert`）。** 範囲の両端は「選択の始めの端（`VIsual`）の桁を 0 にしてからカーソルと並べる」（`oap->start = VIsual; if 'V' start.col = 0`）。`I` は始まり（`jlvkIX` はカーソルの 2 桁目・`lvjIX` は 1 行目の頭）、`A` は終わりを行の内容の中へ寄せ（`check_cursor_col`）、行が空でなく `oap->start_vcol != oap->end_vcol` のときだけ終わりの文字の後ろ（`inc_cursor`）。ほかの行へは写さない（矩形の `I` `A` は従来どおり・ADR 0035 の追補 #1042）。回数は INSERT の回数（`lv3AX` は 3 回・NORMAL の `3A` と同じ）。u の戻り先は打ち始める所。
+- **`start_vcol` `end_vcol` は前のオペレータの値を残す。** Vim はこの 2 つを `$` でないときに終わりの最後の桁、1 行だけなら始まりの最初の桁も書き直し、ほかは前の VISUAL のオペレータの値のまま残す（`lvldvjAX` は 2 行目の 1 文字目の後ろ・`lvjdvjAX` は後ろ・`vj$AX` は手前・実測）。矩形は `get_op_vcol` が左右の桁にする。Nib は `VimState.operator_columns`（`VimOperatorColumns`）に持ち、書くのは VISUAL をオペレータで抜けた歩の 1 か所（`visual_operation_noted`・`visual_acted` の範囲の変更・`u` `U`・`Ctrl-a` `Ctrl-x`・行に効く命令の群と `r{char}`・`p` `P` は `nv_put` なので書かない）。
+- **`.`（ADR 0033）。** 大文字の鍵は Vim の `resel_VIsual_mode` が読み替えた種類なので、記録の大きさも読み替えた種類で測る（`measured_state`・`vlAX<Esc>j0.` は 1 行を選び直す）。#1417 の `X` `D` `Y` の大きさもこの形になる（結果は同じ）。再生の中の行単位は `oap->start` がカーソルで、終わりは同じバイトの桁のまま行数ぶん下（coladvance しない）、`start_vcol` `end_vcol` は書き直さない（`lVjAX<Esc>j0.` は 4 行目の 1 文字目の後ろ・実測）。
+- **`S` は止めた（設計の判断）。** Vim の VISUAL の `S` は行単位の `c`（`vjSX` `VjSX` `l<C-v>jSX` は `X/ef`・実測）だが、ADR 0165 の決定 5（施主決定 D67）が VISUAL の `S{char}` を surround に充てている。どちらにするかは設計席の判断で、この追補では入れない。
+- **測った（変えない・後続）。** `'^` の桁（`lvjIX<Esc>`^` は Vim 1,2・Nib 1,1）は NORMAL の `lIX<Esc>`^` も同じ違いで本件の外。空の文書の `VcX<Esc>`（`vCX` `vRX` も）で Nib は無名へ `\n` 行単位を書く（Vim は書かない）のも NORMAL の `Vc` と同じ根。
+- **まだ何もしない VISUAL の鍵（後続）。**
+
+| 鍵 | Vim 9.1 | Nib | 後続 |
+|---|---|---|---|
+| `S` | 行単位の `c`（`nv_subst`） | 何もしない | 上の判断（ADR 0165 の surround と衝突） |
+| `p` `P` | 選択を置き換える（`nv_put`） | 何もしない | #1418 |
+| `=` | 字下げのオペレータ | 何もしない | 未起票 |
+| `gq` `gw` | 整形のオペレータ | 何もしない | 未起票 |
+| `g?` | rot13 のオペレータ | 何もしない | 未起票 |
+| `:'<,'>` | 選択の行の範囲で Ex | 何もしない（一般 Ex は後続） | 未起票 |
+
+- fixture は `visual-change-key-` の 137 件（修正前の再生器で 135 件が落ちる。通る 2 件は `l<C-v>jsX<Esc>u` と `vjA<Esc>`＝本文が戻る・変わらない形）。

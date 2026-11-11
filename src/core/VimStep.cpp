@@ -63,6 +63,7 @@ using detail::counts_as_digit;
 using detail::decimal_base;
 using detail::display_view;
 using detail::drops_count_digit;
+using detail::entered_insert;
 using detail::failed;
 using detail::finished_input_wait;
 using detail::forward_characters;
@@ -144,8 +145,13 @@ constexpr char32_t control_u_character = 0x15;
 
 // ---------------------------------------------------------------- 鍵から動作へ
 
+} // namespace
+
+namespace detail
+{
 // i a I A。回数は o / O と同じで、Esc のときに入力を残りの回数だけ繰り返す（ADR 0028 の
-// 決定 2 の機構をそのまま使う。`3ifoo<Esc>` が foofoofoo になるのは Vim も同じ）。
+// 決定 2 の機構をそのまま使う。`3ifoo<Esc>` が foofoofoo になるのは Vim も同じ）。VISUAL の
+// 文字単位と行単位の `I` `A`（#1436）も同じ入口を通る。
 [[nodiscard]] VimStep entered_insert(const VimState &state, Offset caret)
 {
     VimState next = vim_resting_from(state, state.unnamed_register);
@@ -157,7 +163,10 @@ constexpr char32_t control_u_character = 0x15;
     }
     return VimStep{std::move(next), VimMoveTo{caret}};
 }
+} // namespace detail
 
+namespace
+{
 // x。保留中のオペレータの無い削除なので、範囲を作って同じ 1 本（performed）に流す。
 [[nodiscard]] VimStep removed_character(const VimState &state, const TextBuffer &text, Offset caret)
 {
@@ -1028,6 +1037,11 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     if (action == VimAction::yank_line)
     {
         return operated_on_lines(state, view.text, view.selection.caret, VimOperator::yank);
+    }
+    if (action == VimAction::substitute || action == VimAction::replace_mode)
+    {
+        // NORMAL の `s` と `R` は未実装。表に無い鍵と同じに打ち消す（VISUAL だけ効く・#1436）。
+        return failed(cancelled(state), VimRepeatFailure::refused);
     }
     std::unreachable();
 }
