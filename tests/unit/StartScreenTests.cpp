@@ -38,6 +38,7 @@
 #include "SplitPane.hpp"
 #include "StartEntryKind.hpp"
 #include "StartLists.hpp"
+#include "StartPress.hpp"
 #include "StartScreen.hpp"
 #include "StartScreenLayout.hpp"
 #include "StartScreenShape.hpp"
@@ -584,11 +585,115 @@ void verify_layout()
     verify_shape();
     verify_hits();
 }
+
+// 窓と同じ押しと離しの道（core::start_screen_layout と start_screen_row_at・start_pressed・
+// start_released）。点 (x, y) は 96 DPI の広い本文の上。離しが行を選べば ChooseStartEntry を送る。
+[[nodiscard]] std::optional<std::size_t> row_under(app::EditorController &controller,
+                                                   std::pair<std::int32_t, std::int32_t> point)
+{
+    const auto view = shown(controller);
+    if (!view.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto body = wide_body(96);
+    const auto layout = core::start_screen_layout(
+        body, 96, core::start_screen_shape(view.value().entries, view.value().lists_read), 0);
+    return layout.has_value()
+               ? core::start_screen_row_at(layout.value(), body, point.first, point.second)
+               : std::nullopt;
+}
+
+[[nodiscard]] std::optional<core::StartPress> press_at(app::EditorController &controller,
+                                                       std::pair<std::int32_t, std::int32_t> point)
+{
+    const auto view = shown(controller);
+    return view.has_value()
+               ? core::start_pressed(view.value().entries, row_under(controller, point))
+               : std::nullopt;
+}
+
+void release_at(app::EditorController &controller, const std::optional<core::StartPress> &press,
+                std::pair<std::int32_t, std::int32_t> point)
+{
+    const auto view = shown(controller);
+    if (!view.has_value())
+    {
+        return;
+    }
+    const auto chosen =
+        core::start_released(press, view.value().entries, row_under(controller, point));
+    if (chosen.has_value())
+    {
+        applied(controller, app::ChooseStartEntry{chosen.value()});
+    }
+}
+
+// レビュー M3 の反例 1: 「新しいファイル」を押したまま履歴の読みが届き、同じ点で離す。読みの後は
+// 同じ点の下が最近の 1 件目（同じ番号 0）になるが、押した行と中身が違うので何も開かない。
+void verify_press_across_read()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.files().hold_at("C:\\work\\recent0.txt", Bytes{std::string("zero")});
+    applied(controller, app::FirstFramePresented{});
+    const auto before = core::start_screen_layout(wide_body(96), 96, core::StartScreenShape{}, 0);
+    if (!before.has_value())
+    {
+        expect(false, "the first frame places the start screen");
+        return;
+    }
+    const auto point = middle_of(before.value().rows.at(0).line);
+    const auto press = press_at(controller, point);
+    expect(press.has_value() && press.value().entry.kind == core::StartEntryKind::new_file,
+           "the press lands on the new-file row");
+    editing.start_lists().serve(app::StartLists{paths_named("recent", 2), {}});
+    applied(controller, app::WorkCompleted{});
+    expect(row_under(controller, point) == std::optional<std::size_t>{0},
+           "after the read the same point is over the first recent row");
+    release_at(controller, press, point);
+    expect(shown(controller).has_value() && !controller.frame().document.path.has_value(),
+           "a press that the read moved under another row opens nothing");
+}
+
+// レビュー M3 の反例 2: 3 件目を押したまま、2 件目が開けずに行から外れ、同じ点で離す。同じ番号の
+// 行は元の 4 件目だが、押した行と中身が違うので何も開かない。押したままの行で離せば開く。
+void verify_press_across_forget()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.files().hold_at("C:\\work\\recent2.txt", Bytes{std::string("two")});
+    editing.files().hold_at("C:\\work\\recent3.txt", Bytes{std::string("three")});
+    editing.history().serve(app::FileHistory{paths_named("recent", 4)});
+    present_with(editing, app::StartLists{paths_named("recent", 4), {}});
+    const auto layout =
+        core::start_screen_layout(wide_body(96), 96, core::StartScreenShape{4, 0, false}, 0);
+    if (!layout.has_value())
+    {
+        expect(false, "the read lists place the start screen");
+        return;
+    }
+    const auto point = middle_of(layout.value().rows.at(2).line);
+    const auto press = press_at(controller, point);
+    applied(controller, app::ChooseStartEntry{1});
+    const auto dropped = shown(controller);
+    expect(dropped.has_value() && dropped.value().entries.size() == 3 + 3,
+           "the missing second file drops out of the rows");
+    release_at(controller, press, point);
+    expect(shown(controller).has_value() && !controller.frame().document.path.has_value(),
+           "a press whose row was dropped before the release opens nothing");
+    const auto again = press_at(controller, point);
+    release_at(controller, again, point);
+    expect(controller.frame().document.path == path_named("recent3.txt"),
+           "a press and a release on the same row still open it");
+}
 } // namespace
 
 void verify_start_screen_scope()
 {
     verify_layout();
+    verify_press_across_read();
+    verify_press_across_forget();
     verify_selection_steps();
     verify_first_frame_and_one_read();
     verify_ordinary_selection();

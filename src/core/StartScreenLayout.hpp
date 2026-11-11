@@ -54,7 +54,7 @@ inline constexpr std::int32_t start_key_gap_dips = 12;
 inline constexpr std::int32_t start_detail_gap_dips = 12;
 
 // 選べる行の列から節の形を数える。lists_read は履歴とブックマークを読み終えたか（偽なら空の知らせを
-// 出さない・ADR 0172 の追補 2026-11-11 の 7）。
+// 出さない・ADR 0172 の段 2 の追補 14）。
 [[nodiscard]] StartScreenShape start_screen_shape(std::span<const StartEntry> entries,
                                                   bool lists_read) noexcept;
 
