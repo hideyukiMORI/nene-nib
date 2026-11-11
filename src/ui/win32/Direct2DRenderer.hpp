@@ -16,11 +16,13 @@
 #include "ExplorerPainter.hpp"
 #include "GridRowPainter.hpp"
 #include "GridRowView.hpp"
+#include "GuideRequest.hpp"
 #include "GutterTextLayouts.hpp"
 #include "KeycapStyle.hpp"
 #include "LayoutRect.hpp"
 #include "LineUtf16Evaluation.hpp"
 #include "LineView.hpp"
+#include "MinimapPicture.hpp"
 #include "OperationGuideLayout.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteRowLayouts.hpp"
@@ -124,6 +126,7 @@ class Direct2DRenderer final
     [[nodiscard]] std::expected<void, RenderFailure> acquire_surface();
     [[nodiscard]] std::expected<void, RenderFailure> create_text_formats();
     [[nodiscard]] std::expected<void, RenderFailure> create_guide_formats(const wchar_t *face);
+    [[nodiscard]] bool create_explorer_formats(const wchar_t *face);
     [[nodiscard]] std::expected<void, RenderFailure>
     create_body_formats(const core::EditorSettings &settings);
     void align_text_formats();
@@ -134,6 +137,9 @@ class Direct2DRenderer final
     [[nodiscard]] const wchar_t *family(const wchar_t *preferred, const wchar_t *fallback) const;
     [[nodiscard]] HRESULT make_format(const wchar_t *face, float size_dips,
                                       DWRITE_FONT_WEIGHT weight, TextFormat &format);
+    // 斜体の書式（プレビューのタブの題名・ADR 0179 の決定 10）。ほかは make_format と同じ。
+    [[nodiscard]] HRESULT make_italic_format(const wchar_t *face, float size_dips,
+                                             DWRITE_FONT_WEIGHT weight, TextFormat &format);
     [[nodiscard]] float scaled(float dips) const noexcept;
     void fill(const core::LayoutRect &area, core::RgbColor color);
     void fill_rounded(const core::LayoutRect &area, core::RgbColor color, float radius);
@@ -157,8 +163,8 @@ class Direct2DRenderer final
                        core::RgbColor color);
     void draw_button_face(const application::EditorFrame &frame, const core::TitleBarLayout &layout,
                           const core::LayoutRect &box, core::TitleBarTarget target);
-    void write_tab_title(std::string_view text, const core::LayoutRect &title,
-                         core::RgbColor color);
+    void write_tab_title(std::string_view text, IDWriteTextFormat *format,
+                         const core::LayoutRect &title, core::RgbColor color);
     void draw_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout,
                   std::size_t index);
     void draw_tabs(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
@@ -284,6 +290,8 @@ class Direct2DRenderer final
                        const BodyPane &pane, const application::GridRowView &row);
     [[nodiscard]] std::int32_t gutter_padding(const core::EditorSettings &settings) const;
     [[nodiscard]] std::int32_t body_guide_key_width(const application::EditorFrame &frame);
+    // 案内の文脈と鍵の幅（起動画面が出ている frame は hidden・ADR 0172 の決定 1）。
+    [[nodiscard]] core::GuideRequest guide_request(const application::EditorFrame &frame);
     void draw_body_guide(const application::EditorFrame &frame,
                          const core::OperationGuideLayout &guide);
     // 本文の案内の鍵の枠の寸法と色（docs/design/2026-10-06-guide.md の 2 節）。起動画面の鍵も
@@ -340,8 +348,14 @@ class Direct2DRenderer final
     void draw_palette_footer(const application::EditorFrame &frame, const core::LayoutRect &area);
     // エクスプローラーの面（ADR 0162 の決定 8）。面が無い frame は保持を捨てるだけ。
     void draw_explorer(const application::EditorFrame &frame, const core::ExplorerLayout &layout);
+    // ミニマップ（ADR 0171 の決定 1・2）。面が無い frame は最初の 1 行で返る。
+    void draw_minimap(const application::EditorFrame &frame, const core::LayoutRect &panel);
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);
+    // ミニマップの命令の失敗で落ちた frame を描き直す（1 度目は bitmap を捨てて直接、それでも
+    // ミニマップの失敗なら面を出さずに）。
+    [[nodiscard]] std::expected<void, RenderFailure>
+    redraw_without_minimap_bitmap(const application::EditorFrame &frame);
 
     Microsoft::WRL::ComPtr<ID3D11Device> device_;
     Microsoft::WRL::ComPtr<IDXGIDevice> dxgi_device_;
@@ -356,6 +370,9 @@ class Direct2DRenderer final
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush_;
     Microsoft::WRL::ComPtr<IDWriteFactory7> dwrite_;
     TextFormat tab_format_;
+    // プレビューのタブの題名（ADR 0179 の決定 10）。tab_format_ と同じ字体・大きさ・省略記号の
+    // 斜体。色は変えない。帯の保持は書式の同一性を鍵に含むので、普通の題名と分かれる。
+    TextFormat tab_transient_format_;
     TextFormat toggle_format_;
     TextFormat status_format_;
     TextFormat mode_format_;
@@ -363,8 +380,11 @@ class Direct2DRenderer final
     TextFormat gutter_format_;
     // 面の行の右端の鍵。本文の字体・UI の大きさ・左寄せ（幅を測るので右寄せにしない）。
     TextFormat key_format_;
-    // エクスプローラーの面の名前。UI の字体・本文の大きさ・文字単位の省略記号（ADR 0162）。
+    // エクスプローラーの面の名前。UI
+    // の字体・タブの題名と同じ大きさ（本文の字の大きさに追従しない）・ 文字単位の省略記号（ADR
+    // 0162・#1390）。strong は semibold（ルート名とアクティブな文書）。
     TextFormat explorer_format_;
+    TextFormat explorer_strong_format_;
     TextFormat guide_key_format_;
     TextFormat guide_label_format_;
     TextFormat guide_note_format_;
@@ -374,7 +394,7 @@ class Direct2DRenderer final
     std::optional<std::array<std::string, 3>> measured_guide_keys_;
     std::int32_t measured_guide_key_width_ = 0;
     // 起動画面の題（UI の字体・本文の字の 1.5 倍）。本文の書式と一緒に作り直す（ADR 0172 の
-    // 決定 5）。行の字はエクスプローラーの面の書式を共用する（追補 2026-11-11 の 18）。
+    // 決定 5）。行の字はエクスプローラーの面の書式を共用する（追補 2026-11-11 の 21）。
     TextFormat start_title_format_;
     // 起動画面の鍵の枠の列の幅（measured_guide_keys_ と同じ形・書式の作り直しで捨てる）。
     std::optional<std::array<std::string, 3>> measured_start_keys_;
@@ -390,11 +410,19 @@ class Direct2DRenderer final
     // エクスプローラーの面の行の文字組み。同じ型で上限だけ大きい。書式の作り直しと面を消した
     // ときに捨てる（ADR 0162 の決定 8）。
     PaletteRowLayouts explorer_layouts_{ExplorerPainter::retained};
+    // エクスプローラーの線の形と本文の角の形（V-1428 の L-1）。捨てる時は explorer_layouts_
+    // と同じ。
+    ExplorerShapes explorer_shapes_;
     // 起動画面の文字組み。同じ型で、書式の作り直しと起動画面が消えたときに捨てる（ADR 0172 の
     // 決定 5）。
     PaletteRowLayouts start_layouts_{StartScreenPainter::retained};
     // other の枠のプレビュー。要素の layout の保持は frame をまたいで再利用する（ADR 0155）。
     PreviewPane preview_;
+    MinimapPicture minimap_;
+    // この frame の EndDraw の失敗がミニマップの命令（minimap_tag）のものだったか。描き直しで
+    // bitmap の道を捨て、2 度目は面を出さない（窓を閉じない・ADR 0171 の追補 #1449）。
+    bool minimap_failed_ = false;
+    bool minimap_hidden_ = false;
     // 通常7枠と案内4枠。録画時は案内が無く8枠（ADR 0079・言語の項目で 11・ADR 0154 の決定 6）。
     // 長さは StatusLayoutDemand.hpp の 1 つで、frame ごとの数は status_layout_demand が数える。
     std::array<StatusTextLayout, status_layout_capacity> status_layouts_{};

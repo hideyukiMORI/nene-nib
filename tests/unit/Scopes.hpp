@@ -11,6 +11,7 @@ namespace nenenib::tests
 void verify_body_layout_scope();
 void verify_wrapped_view_scope();
 void verify_edge_arrows_scope();
+void verify_selection_arrows_scope();
 void verify_vim_wrapped_scope();
 void verify_vim_wrapped_contracts();
 // UTF 検証と表示値/UTF-16の直接の境界（ADR 0086）。
@@ -43,6 +44,10 @@ void verify_delivery_contracts();
 // TabsTests.cpp
 void verify_tabs_contracts();
 void verify_tabs_scope();
+// TransientTabTests.cpp / TransientTabPropertyTests.cpp（#1397・ADR 0179 のプレビューのタブ）
+void verify_transient_tab_contracts();
+void verify_transient_tab_scope();
+void verify_transient_tab_property_scope();
 // SplitTests.cpp
 void verify_split_contracts();
 void verify_split_scope();
@@ -85,6 +90,10 @@ void verify_find_replace_scope();
 void verify_substitute_property_scope();
 // MatchParenTests.cpp（ADR 0164・matchparen）
 void verify_matchparen_scope();
+// MinimapTests.cpp（ADR 0171・ミニマップの段 1）
+void verify_minimap_scope();
+// MinimapPropertyTests.cpp（#1449・ミニマップを出したままの意図の列の性質の試験）
+void verify_minimap_property_scope();
 
 // GuideTests.cpp
 void verify_guide_scope();
@@ -330,6 +339,7 @@ void verify_vim_block_scope();
 // OrdinaryCharacterTests.cpp
 void verify_ordinary_character_contracts();
 void verify_ordinary_character_scope();
+void verify_ordinary_word_contracts();
 
 // CoreTests.cpp
 void verify_buffer_scope();
@@ -380,6 +390,9 @@ void verify_print_contracts();
 
 // ShellRegistrationTests.cpp（ADR 0178・エクスプローラーへの登録）
 void verify_shell_registration_contracts();
+
+// WslPlacesTests.cpp（ADR 0162 の追補 #1450・フォルダ選びの箱の WSL の場所）
+void verify_wsl_places_scope();
 
 // VimEngineTests.cpp
 void verify_vim_fixture(const VimFixture &fixture);

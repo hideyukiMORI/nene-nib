@@ -31,12 +31,16 @@
 #include "Win32SettingsAdapter.hpp"
 #include "Win32ShellRegistration.hpp"
 #include "Win32TimingAdapter.hpp"
+#include "Win32WslDistributions.hpp"
+#include "WslDistribution.hpp"
+#include "WslPlaces.hpp"
 
 #include <windows.h>
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <expected>
@@ -71,6 +75,7 @@ using nenenib::adapters::win32::Win32FileAdapter;
 using nenenib::adapters::win32::Win32SettingsAdapter;
 using nenenib::adapters::win32::Win32ShellRegistration;
 using nenenib::adapters::win32::Win32TimingAdapter;
+using nenenib::adapters::win32::Win32WslDistributions;
 using nenenib::application::ClipboardFailure;
 using nenenib::application::CodePageFailure;
 using nenenib::application::FileFailure;
@@ -2284,11 +2289,71 @@ void verify_shell_registration()
     }
 }
 
+// WSL のディストリの一覧（ADR 0162 の追補 #1450）。本当の `Lxss` は読まず、試験の根の下に
+// 同じ形の鍵を書いて読む。鍵が無ければ空・名前の無い副鍵は外す・State は値のまま返す。
+void write_wsl_entry(const std::wstring &lxss, const wchar_t *guid, const wchar_t *name,
+                     DWORD state)
+{
+    const auto key = std::format(LR"({}\{})", lxss, guid);
+    if (name != nullptr)
+    {
+        static_cast<void>(RegSetKeyValueW(
+            HKEY_CURRENT_USER, key.c_str(), L"DistributionName", REG_SZ, name,
+            static_cast<DWORD>((std::wstring_view(name).size() + 1) * sizeof(wchar_t))));
+    }
+    static_cast<void>(RegSetKeyValueW(HKEY_CURRENT_USER, key.c_str(), L"State", REG_DWORD, &state,
+                                      sizeof(state)));
+}
+
+void verify_wsl_distributions()
+{
+    reclaim_shell_test_roots();
+    const auto root = shell_test_root(GetCurrentProcessId());
+    const auto lxss = root + LR"(\Lxss)";
+    RegDeleteTreeW(HKEY_CURRENT_USER, root.c_str());
+    const Win32WslDistributions distributions(lxss);
+    const auto absent = distributions.distributions();
+    expect(absent.has_value() && absent.value().empty(), "no Lxss key is an empty list");
+    write_wsl_entry(lxss, L"{1}", L"Ubuntu", 1);
+    write_wsl_entry(lxss, L"{2}", L"日本語", 3);
+    write_wsl_entry(lxss, L"{3}", nullptr, 1);
+    // 名前が REG_SZ でない副鍵は外す。State が無い副鍵は 0（入れ終わっていない）で返す。
+    const DWORD number = 7;
+    static_cast<void>(RegSetKeyValueW(HKEY_CURRENT_USER, std::format(LR"({}\{{4}})", lxss).c_str(),
+                                      L"DistributionName", REG_DWORD, &number, sizeof(number)));
+    static_cast<void>(RegSetKeyValueW(HKEY_CURRENT_USER, std::format(LR"({}\{{5}})", lxss).c_str(),
+                                      L"DistributionName", REG_SZ, L"NoState",
+                                      static_cast<DWORD>(sizeof(L"NoState"))));
+    // 空の名前はそのまま返す（外すのは core の wsl_places）。長すぎる名前は読まずに外す。
+    write_wsl_entry(lxss, L"{6}", L"", 1);
+    const std::wstring long_name(nenenib::core::wsl_name_limit + 1, L'a');
+    write_wsl_entry(lxss, L"{7}", long_name.c_str(), 1);
+    const auto listed = distributions.distributions();
+    const std::vector<std::pair<std::string, std::uint32_t>> expected{
+        {"Ubuntu", 1}, {"日本語", 3}, {"NoState", 0}, {"", 1}};
+    std::vector<std::pair<std::string, std::uint32_t>> actual;
+    if (listed.has_value())
+    {
+        for (const auto &distribution : listed.value())
+        {
+            actual.emplace_back(distribution.name, distribution.state);
+        }
+    }
+    expect(listed.has_value() && actual == expected,
+           "named distributions are read in the key order with their state, non-text and too "
+           "long names are left out and a missing state is 0");
+    RegDeleteTreeW(HKEY_CURRENT_USER, root.c_str());
+    if (shell_test_values(HKEY_CURRENT_USER, shell_test_parent) == 0)
+    {
+        RegDeleteKeyW(HKEY_CURRENT_USER, shell_test_parent);
+    }
+}
+
 bool known_scope(std::string_view scope)
 {
     return scope == "--settings-codec" || scope == "--settings" || scope == "--files" ||
            scope == "--code-pages" || scope == "--clipboard" || scope == "--fonts" ||
-           scope == "--shell-registration";
+           scope == "--shell-registration" || scope == "--wsl";
 }
 
 int run_memory_tests(std::string_view scope)
@@ -2322,11 +2387,18 @@ int run_memory_tests(std::string_view scope)
 // 一時フォルダを使わない、OS の共有の状態（クリップボード・HKCU の試験の根）の scope。
 bool system_scope(std::string_view scope)
 {
-    return scope == "--clipboard" || scope == "--shell-registration";
+    return scope == "--clipboard" || scope == "--shell-registration" || scope == "--wsl";
 }
 
 int run_system_tests(std::string_view scope)
 {
+    if (scope == "--wsl")
+    {
+        verify_wsl_distributions();
+        std::printf("WSL distributions adapter: %zu checks, %zu failures\n", check_count(),
+                    failure_count());
+        return test_result();
+    }
     if (scope == "--shell-registration")
     {
         verify_shell_registration();
@@ -2388,6 +2460,7 @@ int run_tests(int argc, char **argv)
     verify_clipboard();
     verify_font_collation();
     verify_shell_registration();
+    verify_wsl_distributions();
     if (failure_count() != 0)
     {
         std::fprintf(stderr, "Nib adapter tests: %zu of %zu checks failed\n", failure_count(),

@@ -33,6 +33,7 @@
 #include "Win32ThemeAdapter.hpp"
 #include "Win32TimingAdapter.hpp"
 #include "Win32Worker.hpp"
+#include "Win32WslDistributions.hpp"
 #include "WindowFailure.hpp"
 
 #include <windows.h>
@@ -239,7 +240,8 @@ void bind_window_handle(const nenenib::ui::win32::EditorWindow &window,
 
 // 「届いた」の合図は窓ができてから渡す。番号と HWND は ui が持ち、adapters は知らない（ADR 0062
 // の決定 7）。同じフォルダ・自動退避・Markdown のプレビュー（ADR 0155 の決定 5）・開く道の読み
-// （ADR 0159 の決定 9）の adapter が同じワーカーを借りる。起動の引数の読みは窓より先に頼まれる
+// （ADR 0159 の決定 9）・プレビューの画像（ADR 0155 の追補 54）の
+// adapter が同じワーカーを借りる。起動の引数の読みは窓より先に頼まれる
 // ので、開く道の読みはそれより前に届いた結果を bind のときに 1 回知らせる。
 template <typename... Adapters>
 void bind_work_signal(const nenenib::ui::win32::EditorWindow &window, Adapters &...adapters)
@@ -252,11 +254,12 @@ void bind_work_signal(const nenenib::ui::win32::EditorWindow &window, Adapters &
 // （壊れる順は 窓 → controller → adapter → ワーカー → device の箱）。
 // device の箱は仕事に借りられるので worker より先に宣言して後に壊す。最初の仕事として
 // device を作り始め、窓を作って見せる間に重ねる（ADR 0131 の決定 2）。
-// Markdown プレビューの画像の口（ADR 0155 の追補 53）は段 1 では口だけで結果を返さない。段 2 が
-// worker を借りて読み、窓ができてから合図を結ぶ（bind_work_signal）。
-// 起動画面の履歴とブックマークの 1 回の読み（ADR 0172 の決定
-// 3）も同じワーカーを借り、頼むのは最初の frame の合図のときだけ。履歴と明示登録（ADR 0063）の
-// adapter はその仕事が借りるので、ワーカーより 先に作って後に壊す。
+// Markdown プレビューの画像の口（ADR 0155 の追補 53・54）も同じ worker を
+// 借りてファイルを読み WIC で復号し（壊れる順は folders と同じ）、
+// 窓ができてから合図を結ぶ（bind_work_signal）。
+// 起動画面の履歴とブックマークの 1 回の読み（ADR 0172 の決定 3）も同じワーカーを借り、
+// 頼むのは最初の frame の合図のときだけ。履歴と明示登録（ADR 0063）の adapter はその仕事が
+// 借りるので、ワーカーより先に作って後に壊す。
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
@@ -292,9 +295,10 @@ int run(HINSTANCE instance)
     nib_adapters::Win32Clock wall_clock;
     nenenib::ui::win32::Win32Printer printer;
     nib_adapters::Win32ShellRegistration shell_registration(L"Software");
+    nib_adapters::Win32WslDistributions wsl(nib_adapters::wsl_lxss_key);
     nenenib::adapters::win32::Win32DocumentReader reads(worker, files, code_pages);
     nenenib::adapters::win32::Win32LanguageServer language_server({});
-    nenenib::adapters::win32::Win32ImageAdapter images;
+    nenenib::adapters::win32::Win32ImageAdapter images(worker);
     nenenib::adapters::win32::Win32StartListAdapter start_lists(worker, history, bookmarks);
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{
@@ -307,14 +311,14 @@ int run(HINSTANCE instance)
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);
-    const auto window = nenenib::ui::win32::EditorWindow::create(instance, controller, timing,
-                                                                 {text_layouts, warmup});
+    const auto window = nenenib::ui::win32::EditorWindow::create(
+        instance, controller, {timing, wsl}, {text_layouts, warmup});
     if (!window)
     {
         return report(reason_of(window.error()));
     }
     bind_window_handle(*window.value(), clipboard, language_server);
-    bind_work_signal(*window.value(), folders, autosave, markdown, reads, start_lists);
+    bind_work_signal(*window.value(), folders, autosave, markdown, reads, images, start_lists);
     pump_messages(*window.value(), warmup, language_server);
     return window.value()->rendering_failed() ? 1 : 0;
 }

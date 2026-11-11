@@ -205,3 +205,19 @@ frame の 5 本は 1 行を巨大な行のしきい値（16,384 コードポイ�
 | text-object-tag-unclosed-4096 | `<a>` を 500 回・`x` を 2,596 字（閉じ無し） | 4095・`at` | 1 | 取消・選択はキャレット 4095 に畳んだまま |
 
 checksum は `checksum_of(input)` に、範囲なら各結果の 1 + begin + end、取消なら残るキャレットを足す。重い 2 本（巨大な行の `is`・閉じの無い `at`）の区間は 1 回にした。初回の Debug（ASan 付き）で 16 回の区間が `is` 265.8 秒・`at` 9.3 秒になり、`eng/probe-smoke.ps1` が 1 本で数分かかるため。回数は本測定より前に固定し、測った値に合わせて変えない。`eng/compare-probes.py` の名前の表（148〜151）と固定入力も同じ生成式で足した。本測定（warmup 1 + sample 5）と最適化の要否は設計席が決める。
+
+## 追補（2026-11-11・#1424）— 語・引用符・括弧のテキストオブジェクトの巨大な 1 行の 13 本
+
+#1424 の費用を測るため、範囲関数 `vim_text_object_range` を NORMAL の畳んだキャレット（行の真ん中の 2 バイト後ろ）・回数 1 で 1 回引く 12 本と、通常モードのダブルクリック（`PointText` の `PointerClicks::double_`・#1250）を controller に 1 回流す 1 本を `WordObjectWorkload` として足す（`tests/performance/WordObjectProbe.cpp`）。行は改行なしで、`giant_line_threshold`（16,384）と 16 MiB の 2 つの大きさ。`solid` は `abcdefgh` の繰り返し（空白なし）、`spaced` は `lorem ipsum dolor sit amet ` の繰り返し、`iquote` と `iparen` は spaced の本文を `"` `"` と `(` `)` で囲む。期待の範囲は同じ本文に Vim 9.1 で `y{オブジェクト}` を打って測った値（`'[` と無名レジスタの長さ）。
+
+| 固定名（`-16384` と `-16mib` の 2 本ずつ） | 鍵 | 期待（16384 / 16 MiB） |
+| --- | --- | --- |
+| text-object-iw-solid-1line | `iw` | [0, 16384) / [0, 16777216) |
+| text-object-aw-solid-1line | `aw` | [0, 16384) / [0, 16777216) |
+| text-object-iw-spaced-1line | `iw` | [8193, 8198) / [8388609, 8388614) |
+| text-object-aw-spaced-1line | `aw` | [8193, 8199) / [8388609, 8388615) |
+| text-object-iquote-1line | `i"` | [1, 16383) / [1, 16777215) |
+| text-object-iparen-1line | `i(` | [1, 16383) / [1, 16777215) |
+| double-click-word-solid-1line-16384（1 本だけ） | ダブルクリック | 選択は行の全体（Ctrl+C の写しが本文と同じ） |
+
+checksum は `checksum_of(input)` に 1 + begin + end（ダブルクリックは写しの長さ）を足す。16 MiB の `solid` の 2 本は Debug（ASan 付き）で 1 回が読みで約 1 分（16,384・163,840・1,638,400 の段から線形に外挿した約 56 秒。実測は warmup と sample の 2 回が 120 秒の上限で打ち切り・語が行の全体で、1 文字ずつ後ろへ歩く・#1424 の報告）。`eng/compare-probes.py` の名前の表には足していない。

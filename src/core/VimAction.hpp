@@ -181,10 +181,15 @@ enum class VimAction : std::uint8_t
     move_sentence_forward,
     // `[` `]`。次の 1 鍵を取って失敗する（族の `[{` `]}` `[(` `])` `[[` `]]` などは未実装・
     // 次の鍵を別の命令として流さない・#1334）。
-    prefix_bracket
+    prefix_bracket,
+    // `s` と `R`（#1436）。VISUAL では Vim の nv_subst と nv_Replace のとおり `c` に流す（`s` は
+    // 種類のまま・`R` は行単位へ読み替え）。NORMAL の `s`（`cl`）と REPLACE モードの `R`
+    // は未実装で、表に無い鍵と同じに打ち消す。
+    substitute,
+    replace_mode
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::prefix_bracket) + 1;
+constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::replace_mode) + 1;
 } // namespace nenenib::core

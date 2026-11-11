@@ -11,8 +11,11 @@
 //   2. magic の部分集合（`.` `*` `[ab]` `[^a]` `^` `$` `\<` `\>` `\s` `\d` の断片の列）の
 //      substituted_all が、行ごとに VimPattern::matched を左から歩いた当たりの列（長さ 0 の当たりは
 //      置き換えずに 1 code point 進む・vim_line_matches の注記）を素朴に置き換えた再構成と同じで、
-//      長さ 0 の当たりで止まる（返ってくる）。当たりが無ければ値なし。Edit の removed は本文の
+//      長さ 0 の当たりで止まる（返ってくる）。当たりが無ければ no_match。Edit の removed は本文の
 //      その位置のバイト列で、restore は at。
+//      1 と 2 の上限の模型（#1376）: 上限は置き換えた後の本文の大きさの 1 つ下・ちょうど・1 つ上・
+//      製品の上限を本文の長さの 4 の剰余で選び、模型の本文が上限を超える件（当たりがあるとき）だけ
+//      too_large。当たりが無ければ上限に依らず no_match。
 //   3. 通常モードの入口（Ctrl+H → 語 → Enter → 置換文字列 → Ctrl+Enter）で全件を置き換えた本文が
 //      1 の模型と同じで、undo 1 回で開いた本文に、続く redo 1 回で置換後の本文に戻る。
 // 回数は Debug（ASan）で scope 全体が 1 秒程度に終わる値。生成器は std::mt19937_64 の剰余だけを
@@ -20,6 +23,7 @@
 #include "BeginReplace.hpp"
 #include "CancelCommand.hpp"
 #include "CommandText.hpp"
+#include "DocumentByteLimit.hpp"
 #include "Edit.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -31,6 +35,7 @@
 #include "Scopes.hpp"
 #include "SubmitCommand.hpp"
 #include "SubstituteAll.hpp"
+#include "SubstituteFailure.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
 #include "Utf8.hpp"
@@ -326,20 +331,38 @@ template <typename Find>
            std::string{text.substr(at + edit.removed.size())};
 }
 
-// substituted_all の答えが当たりの列 spans の再構成と同じか。
+// 件 input の上限（#1376）。置き換えた後の本文の大きさ expected の 1 つ下・ちょうど・1 つ上・
+// 製品の上限を本文の長さの 4 の剰余で選ぶ。生成器の乱数は使わない（ほかの件の列を変えない）。
+[[nodiscard]] std::size_t limit_for(const Case &input, std::size_t expected)
+{
+    const std::array<std::size_t, 4> limits{expected > 0 ? expected - 1U : 0U, expected,
+                                            expected + 1U, core::maximum_document_bytes};
+    return limits.at(input.first.size() % limits.size());
+}
+
+// substituted_all の答えが当たりの列 spans の再構成と同じか。上限は limit_for で、模型の本文が
+// 上限を超えるなら too_large、当たりが無ければ no_match。
 [[nodiscard]] bool substitution_matches(const Case &input, const core::TextBuffer &buffer,
                                         const VimPattern &pattern, const Spans &spans)
 {
     const std::string &text = input.first;
     const std::string &replacement = input.second.second;
-    const auto edit = core::substituted_all(buffer, pattern, replacement);
-    if (!edit.has_value() || spans.empty())
+    const std::string expected = rebuilt(text, spans, replacement);
+    const std::size_t limit = limit_for(input, expected.size());
+    const auto edit = core::substituted_all(buffer, pattern, replacement, limit);
+    if (spans.empty() || expected.size() > limit)
     {
-        return !edit.has_value() && spans.empty();
+        const core::SubstituteFailure failure =
+            spans.empty() ? core::SubstituteFailure::no_match : core::SubstituteFailure::too_large;
+        return !edit.has_value() && edit.error() == failure;
+    }
+    if (!edit.has_value())
+    {
+        return false;
     }
     const std::optional<std::string> result = edited(text, edit.value());
     return result.has_value() && edit.value().at.value == spans.front().first &&
-           result.value() == rebuilt(text, spans, replacement);
+           result.value() == expected;
 }
 
 void print_bytes(const char *label, std::string_view input)

@@ -2,6 +2,7 @@
 // が数える。 layout は本物の DirectWrite で作る（窓・device は作らない）。
 #include "DirectWriteFactory.hpp"
 #include "PaletteRowLayouts.hpp"
+#include "SoftwareTarget.hpp"
 #include "WindowChecks.hpp"
 
 #include <array>
@@ -195,14 +196,53 @@ void verify_tab_titles(CountingMake &counting, IDWriteTextFormat *format)
     expect(counting.take() == 0, "the switched titles are then reused");
 }
 
-[[nodiscard]] Format make_format(IDWriteFactory2 &factory, float size)
+[[nodiscard]] Format make_format(IDWriteFactory2 &factory, float size,
+                                 DWRITE_FONT_STYLE style = DWRITE_FONT_STYLE_NORMAL)
 {
     Format format;
-    const auto made = factory.CreateTextFormat(L"Consolas", nullptr, DWRITE_FONT_WEIGHT_NORMAL,
-                                               DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
-                                               size, L"", &format);
+    const auto made =
+        factory.CreateTextFormat(L"Consolas", nullptr, DWRITE_FONT_WEIGHT_NORMAL, style,
+                                 DWRITE_FONT_STRETCH_NORMAL, size, L"", &format);
     expect(SUCCEEDED(made), "the palette contract format is created");
     return format;
+}
+
+// プレビューのタブの題名（#1397・ADR 0179 の決定 10）。renderer は印のタブの題名を斜体の書式で
+// 描き、保持の鍵は書式の同一性を含むので普通の題名と分かれる。固定すると普通の書式へ戻る 1 本
+// だけを作る。斜体の題名は WIC の描画先で普通の題名と違う画素になる（色は同じ）。
+void verify_transient_titles(CountingMake &counting, IDWriteTextFormat *format,
+                             IDWriteTextFormat *italic)
+{
+    PaletteRowLayouts layouts;
+    const auto make = [&] { return counting.make(); };
+    const auto draw = [&](std::size_t transient)
+    {
+        for (std::size_t index = 0; index < names.size(); ++index)
+        {
+            const auto key =
+                title_key(index == transient ? italic : format, names.at(index), index, 0);
+            expect(layouts.obtain(key, make) != nullptr, "a tab title gets its layout");
+        }
+    };
+    draw(names.size());
+    expect(counting.take() == names.size(), "the first frame creates every tab title");
+    draw(3);
+    expect(counting.take() == 1, "marking a tab transient creates only its italic title");
+    draw(3);
+    expect(counting.take() == 0, "the italic title is then reused");
+    draw(names.size());
+    expect(counting.take() == 0, "pinning it reuses the plain title that is still held");
+    SoftwareTarget target;
+    if (!target.ready())
+    {
+        unmeasured("transient tab title pixels: WIC target unavailable");
+        return;
+    }
+    const core::LayoutRect area{8, 0, 200, 36};
+    const auto plain = target.text_w(L"alpha.txt", format, area);
+    const auto slanted = target.text_w(L"alpha.txt", italic, area);
+    expect(!plain.empty() && !slanted.empty() && plain != slanted,
+           "the transient tab title is drawn in italics, unlike the plain title");
 }
 } // namespace
 
@@ -216,7 +256,8 @@ void verify_palette_layouts()
     }
     const auto format = make_format(*factory.Get(), 12.0F);
     const auto other = make_format(*factory.Get(), 14.0F);
-    if (!format || !other)
+    const auto italic = make_format(*factory.Get(), 12.0F, DWRITE_FONT_STYLE_ITALIC);
+    if (!format || !other || !italic)
     {
         return;
     }
@@ -232,5 +273,6 @@ void verify_palette_layouts()
     verify_keys(counting, format.Get(), other.Get());
     verify_capacity(counting, format.Get());
     verify_tab_titles(counting, format.Get());
+    verify_transient_titles(counting, format.Get(), italic.Get());
 }
 } // namespace nenenib::tests::ui

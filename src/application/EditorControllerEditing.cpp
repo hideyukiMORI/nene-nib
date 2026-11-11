@@ -5,12 +5,14 @@
 #include "ClipboardText.hpp"
 #include "DateTimeText.hpp"
 #include "DeleteDirection.hpp"
+#include "DeleteUnit.hpp"
 #include "DisplayInquiry.hpp"
 #include "DisplayText.hpp"
 #include "Edit.hpp"
 #include "HtmlToMarkdown.hpp"
 #include "Language.hpp"
 #include "OrdinaryCharacterBoundary.hpp"
+#include "OrdinaryWordBoundary.hpp"
 #include "PasteKind.hpp"
 #include "Selection.hpp"
 #include "Utf8.hpp"
@@ -19,7 +21,9 @@
 #include "VimCharacter.hpp"
 #include "VimJumpLists.hpp"
 #include "VimKey.hpp"
+#include "VimLineMarks.hpp"
 #include "VimMarkEdits.hpp"
+#include "VimMarks.hpp"
 #include "VimMode.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
@@ -28,9 +32,11 @@
 #include <algorithm>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 
 namespace nenenib::application
 {
@@ -53,6 +59,56 @@ constexpr std::size_t single_page_line = 1;
         return anchoring;
     }
     std::unreachable();
+}
+
+// 通常モードで選択があるときの Shift なしの移動の起点（Windows の標準・施主決定 D82・#1393・
+// ADR 0009 の追補）。← ↑ Home PgUp は選択の先頭、→ ↓ End PgDn は選択の末尾から動く。語と文書の
+// 端の移動はキャレットのまま（Ctrl+← → の起点は語の境 #1394 の後で決める）。Vim のモード・Shift
+// つき・選択が無いときはキャレット。
+// 選択の端からの規則（#1393）が効くか: 通常モード・Shift なし・選択あり。判定はここ 1 か所。
+[[nodiscard]] bool moves_from_selection(const EditorState &state, const MoveCaret &intent)
+{
+    const core::Selection selection = state.selection();
+    return state.mode() == core::EditMode::ordinary &&
+           intent.anchoring == core::SelectionAnchoring::collapse &&
+           selection.anchor != selection.caret;
+}
+
+[[nodiscard]] core::Offset motion_origin(const EditorState &state, const MoveCaret &intent)
+{
+    const core::Selection selection = state.selection();
+    if (!moves_from_selection(state, intent))
+    {
+        return selection.caret;
+    }
+    const auto range = core::selection_range(selection);
+    switch (intent.motion)
+    {
+    case core::CaretMotion::previous_character:
+    case core::CaretMotion::previous_line:
+    case core::CaretMotion::line_start:
+    case core::CaretMotion::page_up:
+        return range.begin;
+    case core::CaretMotion::next_character:
+    case core::CaretMotion::next_line:
+    case core::CaretMotion::line_end:
+    case core::CaretMotion::page_down:
+        return range.end;
+    case core::CaretMotion::previous_word:
+    case core::CaretMotion::next_word:
+    case core::CaretMotion::document_start:
+    case core::CaretMotion::document_end:
+        return selection.caret;
+    }
+    std::unreachable();
+}
+
+// 選択があるときの ← → は起点（選択の端）へ畳むだけで、そこから動かない（#1393）。
+[[nodiscard]] bool collapses_in_place(const EditorState &state, const MoveCaret &intent)
+{
+    return moves_from_selection(state, intent) &&
+           (intent.motion == core::CaretMotion::previous_character ||
+            intent.motion == core::CaretMotion::next_character);
 }
 
 [[nodiscard]] core::Offset anchor_for(core::SelectionAnchoring anchoring, core::Offset anchor,
@@ -98,10 +154,37 @@ constexpr std::size_t single_page_line = 1;
     std::unreachable();
 }
 
+// 選択が空のときの Ctrl+Backspace / Ctrl+Delete。Ctrl+← → と同じ境の 1 本の着地までを消す
+// （メモ帳の実測・ADR 0009 の追補 #1394）。窓は通常モードでだけ送る。
+[[nodiscard]] core::OffsetRange word_deletion_range(const core::TextBuffer &text,
+                                                    core::Offset caret,
+                                                    core::DeleteDirection direction)
+{
+    switch (direction)
+    {
+    case core::DeleteDirection::backward:
+        return core::OffsetRange{
+            core::ordinary_word_boundary(text, caret, core::OrdinaryWordDirection::backward),
+            caret};
+    case core::DeleteDirection::forward:
+        return core::OffsetRange{
+            caret, core::ordinary_word_boundary(text, caret, core::OrdinaryWordDirection::forward)};
+    }
+    std::unreachable();
+}
+
 // 選択が空のときの Backspace / Delete。外部から来る Vim の意図は既存の単位を保つ。
 [[nodiscard]] core::OffsetRange deletion_range(const core::TextBuffer &text, core::Offset caret,
-                                               core::DeleteDirection direction, core::EditMode mode)
+                                               const DeleteText &intent, core::EditMode mode)
 {
+    const core::DeleteDirection direction = intent.direction;
+    switch (intent.unit)
+    {
+    case core::DeleteUnit::word:
+        return word_deletion_range(text, caret, direction);
+    case core::DeleteUnit::character:
+        break;
+    }
     switch (mode)
     {
     case core::EditMode::ordinary:
@@ -153,11 +236,31 @@ constexpr std::string_view date_time_insert_only_notice = "INSERT モードで F
 // 貼り付けの知らせ（ADR 0157 の決定 3・7）。鳴らさない情報の 1 行。
 constexpr std::string_view html_missing_notice = "HTML が無いので文字だけを貼りました";
 constexpr std::string_view html_unconverted_notice = "HTML を変換できないので文字だけを貼りました";
+
+// 編集で行がずれたマーク（ADR 0152 の決定 6）。行をその場で書き換えた置き換え（kept）は Vim が
+// mark_adjust を呼ばないので動かさない（#1360）。矩形は行ごとの置き換えで直す（#1361）。
+[[nodiscard]] core::VimMarks
+edited_marks(const core::VimMarks &marks, const core::TextBuffer &before, const core::Edit &edit,
+             const std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> &lines)
+{
+    if (const auto *const block_lines = std::get_if<std::span<const core::VimBlockEdit>>(&lines))
+    {
+        return core::marks_block_adjusted(marks, before, *block_lines);
+    }
+    switch (std::get<core::VimLineMarks>(lines))
+    {
+    case core::VimLineMarks::kept:
+        return marks;
+    case core::VimLineMarks::shifted:
+        return core::marks_adjusted(marks, before, edit);
+    }
+    std::unreachable();
+}
 } // namespace
 
-void EditorController::replace(const core::OffsetRange &range, std::string_view text,
-                               core::EditBoundary boundary,
-                               std::span<const core::VimBlockEdit> block_lines)
+void EditorController::replace(
+    const core::OffsetRange &range, std::string_view text, core::EditBoundary boundary,
+    std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> lines)
 {
     // 編集を始める瞬間のキャレット。Vim の u と Ctrl-r の戻り先で、書くのはここだけ（ADR 0052 の
     // 決定 2）。
@@ -183,14 +286,13 @@ void EditorController::replace(const core::OffsetRange &range, std::string_view 
     const bool started =
         history.position() != before &&
         (!replay_history_.has_value() || before == replay_history_.value().position());
-    auto marks = block_lines.empty()
-                     ? core::marks_adjusted(state_.vim_marks(), state_.text(), edit)
-                     : core::marks_block_adjusted(state_.vim_marks(), state_.text(), block_lines);
+    auto marks = edited_marks(state_.vim_marks(), state_.text(), edit, lines);
     marks.last_change = core::vim_last_change_of(state_.text(), edit);
     marks = core::vim_change_recorded(marks, marks.last_change.value(), started);
     state_ = state_.with_vim_marks(std::move(marks));
     auto document = after_edit_at(state_.document(), before);
     forget_syntax_before(edit);
+    note_minimap_edit(next, edit);
     language_server_edit(edit);
     adjust_other(edit, next);
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), std::move(history),
@@ -236,12 +338,20 @@ void EditorController::accept(const InsertText &intent)
 void EditorController::accept(const MoveCaret &intent)
 {
     interrupt_vim_insert();
-    if (move_visual(intent))
+    const core::Offset origin = motion_origin(state_, intent);
+    if (collapses_in_place(state_, intent))
+    {
+        wanted_x_.reset();
+        // 畳んだキャレットは選択を描いていた側の画面行に留まる（折り返しの境目・#1393）。
+        move_caret_to(origin, core::SelectionAnchoring::collapse, origin_affinity(origin));
+        return;
+    }
+    if (move_visual(intent, origin))
     {
         return;
     }
     const core::Offset caret =
-        core::moved_caret(state_.text(), state_.selection().caret,
+        core::moved_caret(state_.text(), origin,
                           core::CaretMoveRequest{intent.motion, settled_scroll().visible_lines,
                                                  caret_unit(state_.mode())});
     move_caret_to(caret, anchoring_in(state_.mode(), intent.anchoring));
@@ -272,9 +382,9 @@ void EditorController::accept(const CancelSelection &)
 void EditorController::accept(const DeleteText &intent)
 {
     const auto selected = core::selection_range(state_.selection());
-    const auto range = core::is_empty(selected) ? deletion_range(state_.text(), selected.begin,
-                                                                 intent.direction, state_.mode())
-                                                : selected;
+    const auto range = core::is_empty(selected)
+                           ? deletion_range(state_.text(), selected.begin, intent, state_.mode())
+                           : selected;
     replace(range, std::string_view{}, core::EditBoundary::separate);
 }
 
@@ -523,6 +633,7 @@ void EditorController::undo_edit()
     // undo は編集の逆向き（inserted を removed に戻す）。
     forget_syntax_before(edit.value());
     const core::Edit undone{at, edit.value().inserted, edit.value().removed, at};
+    note_minimap_edit(next, undone);
     language_server_edit(undone);
     adjust_other(undone, next);
     undone_marks(undone);
@@ -543,6 +654,7 @@ void EditorController::redo_edit()
     auto next = state_.text().replaced(at, end, edit.value().inserted);
     const core::Offset caret{at.value + edit.value().inserted.size()};
     forget_syntax_before(edit.value());
+    note_minimap_edit(next, edit.value());
     language_server_edit(edit.value());
     adjust_other(core::Edit{at, edit.value().removed, edit.value().inserted, at}, next);
     undone_marks(edit.value());

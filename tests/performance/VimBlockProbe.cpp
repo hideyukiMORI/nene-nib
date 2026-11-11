@@ -2,6 +2,8 @@
 
 #include "Milestone.hpp"
 #include "Offset.hpp"
+#include "OrdinaryWordBoundary.hpp"
+#include "OrdinaryWordDirection.hpp"
 #include "ProbeWorkload.hpp"
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
@@ -12,6 +14,7 @@
 #include "VimBlockWidth.hpp"
 #include "VimCharacter.hpp"
 #include "VimEditorView.hpp"
+#include "VimFollowProbe.hpp"
 #include "VimInsertBlock.hpp"
 #include "VimInsertString.hpp"
 #include "VimKey.hpp"
@@ -145,9 +148,13 @@ std::string vim_block_input(VimBlockWorkload workload)
     case VimBlockWorkload::insert_ctrl_w_giant_1line:
     case VimBlockWorkload::count_h_giant_1line:
     case VimBlockWorkload::count_l_giant_1line:
+    case VimBlockWorkload::ordinary_word_giant_1line:
         return giant_line();
     case VimBlockWorkload::sentence_motion_giant_1line:
         return text_object_input(TextObjectWorkload::sentence_giant);
+    case VimBlockWorkload::insert_scroll_wrapped:
+    case VimBlockWorkload::insert_scroll_unwrapped:
+        return vim_follow_input();
     }
     std::unreachable();
 }
@@ -425,5 +432,32 @@ std::expected<std::uint64_t, ProbeFailure> vim_sentence_moved(VimBlockWorkload w
         return std::unexpected(ProbeFailure::wrong_result);
     }
     return checksum_of(input) + middle.value + moved->caret.value;
+}
+
+// 通常モードの Ctrl+Backspace と Ctrl+Delete が消す範囲の端（#1394）。真ん中の `a` の前から、
+// 後ろ向きは手前の語 `abcdefg ` の頭へ、前向きは今の語と後ろの空白を越えて次の語の頭へ着く。
+// 区間は ordinary_word_boundary の 2 回だけ（本文を書き換える replace は入れない）。
+std::expected<std::uint64_t, ProbeFailure> ordinary_word_bounded(VimBlockWorkload workload,
+                                                                 const std::string &input,
+                                                                 application::TimingPort &timing)
+{
+    const auto prepared = indexed_giant(workload, input);
+    if (!prepared.has_value())
+    {
+        return std::unexpected(prepared.error());
+    }
+    const core::TextBuffer &text = prepared.value();
+    timing.mark(core::Milestone::probe_started);
+    const core::Offset backward =
+        core::ordinary_word_boundary(text, giant_middle(), core::OrdinaryWordDirection::backward);
+    const core::Offset forward =
+        core::ordinary_word_boundary(text, giant_middle(), core::OrdinaryWordDirection::forward);
+    timing.mark(core::Milestone::probe_finished);
+    if (backward != core::Offset{giant_middle().value - giant_unit.size()} ||
+        forward != core::Offset{giant_middle().value + giant_unit.size()})
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return checksum_of(input) + backward.value + forward.value;
 }
 } // namespace nenenib::tests::performance

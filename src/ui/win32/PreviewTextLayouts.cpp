@@ -1,5 +1,7 @@
 #include "PreviewTextLayouts.hpp"
 
+#include "PreviewImageObject.hpp"
+#include "PreviewInlineImages.hpp"
 #include "PreviewMetrics.hpp"
 #include "PreviewSelectionText.hpp"
 #include "Utf16.hpp"
@@ -7,7 +9,10 @@
 #include <algorithm>
 #include <array>
 #include <dwrite_1.h>
+#include <iterator>
+#include <span>
 #include <utility>
+#include <vector>
 
 namespace nenenib::ui::win32
 {
@@ -26,6 +31,20 @@ constexpr float unbounded_height = 1.0e7F;
            entry.text == block.text && entry.spans == block.spans && entry.style == style;
 }
 
+[[nodiscard]] bool same_boxes(const std::vector<PreviewInlineBox> &held,
+                              std::span<const PreviewInlineImage> inlines)
+{
+    return std::ranges::equal(held, inlines, {}, {}, &PreviewInlineImage::box);
+}
+
+[[nodiscard]] std::vector<PreviewInlineBox> boxes_of(std::span<const PreviewInlineImage> inlines)
+{
+    std::vector<PreviewInlineBox> boxes;
+    boxes.reserve(inlines.size());
+    std::ranges::transform(inlines, std::back_inserter(boxes), &PreviewInlineImage::box);
+    return boxes;
+}
+
 [[nodiscard]] HRESULT styled(IDWriteTextLayout &layout, core::PreviewStyle style,
                              DWRITE_TEXT_RANGE range, const std::wstring &code_family)
 {
@@ -42,6 +61,22 @@ constexpr float unbounded_height = 1.0e7F;
         return layout.SetUnderline(TRUE, range);
     }
     std::unreachable();
+}
+// layout の 1 行目の baseline（GetLineMetrics は欄が足りないと何も書かないので、全部の行を引く）。
+[[nodiscard]] std::optional<float> first_baseline(IDWriteTextLayout &layout)
+{
+    UINT32 count = 0;
+    const auto counted = layout.GetLineMetrics(nullptr, 0, &count);
+    if ((FAILED(counted) && counted != E_NOT_SUFFICIENT_BUFFER) || count == 0)
+    {
+        return std::nullopt;
+    }
+    std::vector<DWRITE_LINE_METRICS> lines(count);
+    if (FAILED(layout.GetLineMetrics(lines.data(), count, &count)))
+    {
+        return std::nullopt;
+    }
+    return lines.front().baseline;
 }
 } // namespace
 
@@ -189,9 +224,31 @@ HRESULT PreviewTextLayouts::decorate(IDWriteTextLayout &layout, const core::Prev
     return S_OK;
 }
 
+HRESULT PreviewTextLayouts::place(IDWriteTextLayout &layout,
+                                  std::span<const PreviewInlineImage> inlines, std::uint32_t dpi)
+{
+    // 固定の行高（space）では箱が上の行に重なるので、箱のある layout は字と箱の自然な高さにする。
+    auto result = layout.SetLineSpacing(DWRITE_LINE_SPACING_METHOD_DEFAULT, 0.0F, 0.0F);
+    for (const auto &image : inlines)
+    {
+        if (FAILED(result))
+        {
+            return result;
+        }
+        const auto object =
+            Microsoft::WRL::Make<PreviewImageObject>(preview_inline_extent(image.box.width, dpi),
+                                                     preview_inline_extent(image.box.height, dpi));
+        result = object == nullptr
+                     ? E_OUTOFMEMORY
+                     : layout.SetInlineObject(object.Get(),
+                                              DWRITE_TEXT_RANGE{image.box.begin, image.box.length});
+    }
+    return result;
+}
+
 std::expected<PreviewTextLayout, RenderFailure>
 PreviewTextLayouts::make(const core::PreviewBlock &block, float width,
-                         const PreviewTextStyle &style)
+                         const PreviewTextStyle &style, std::span<const PreviewInlineImage> inlines)
 {
     const auto shown = core::preview_shown_text(block);
     const auto wide = core::to_utf16(shown);
@@ -212,39 +269,42 @@ PreviewTextLayouts::make(const core::PreviewBlock &block, float width,
                                           &made)) ||
         (heading && (FAILED(made->SetFontSize(size, whole)) ||
                      FAILED(made->SetFontWeight(DWRITE_FONT_WEIGHT_BOLD, whole)))) ||
-        FAILED(space(*made.Get(), mono, size, preview_line_pixels(style) * scale)) ||
+        FAILED(inlines.empty() ? space(*made.Get(), mono, size, preview_line_pixels(style) * scale)
+                               : place(*made.Get(), inlines, style.dpi)) ||
         FAILED(decorate(*made.Get(), block, shown)) || FAILED(made->GetMetrics(&metrics)))
     {
         return std::unexpected(directwrite);
     }
     ++created_;
-    return PreviewTextLayout{block.text, block.spans, block.kind,      block.level,
-                             width,      style,       std::move(made), metrics.height};
+    return PreviewTextLayout{block.text, block.spans,       block.kind,      block.level,   width,
+                             style,      boxes_of(inlines), std::move(made), metrics.height};
 }
 
-std::vector<PreviewTextLayout>::iterator PreviewTextLayouts::find(const core::PreviewBlock &block,
-                                                                  float width,
-                                                                  const PreviewTextStyle &style)
+std::vector<PreviewTextLayout>::iterator
+PreviewTextLayouts::find(const core::PreviewBlock &block, float width,
+                         const PreviewTextStyle &style, std::span<const PreviewInlineImage> inlines)
 {
-    return std::ranges::find_if(held_, [&](const PreviewTextLayout &entry)
-                                { return same_key(entry, block, width, style); });
+    return std::ranges::find_if(
+        held_, [&](const PreviewTextLayout &entry)
+        { return same_key(entry, block, width, style) && same_boxes(entry.inlines, inlines); });
 }
 
 std::expected<PreviewTextLayouts::TextLayout, RenderFailure>
-PreviewTextLayouts::get(const core::PreviewBlock &block, float width, const PreviewTextStyle &style)
+PreviewTextLayouts::get(const core::PreviewBlock &block, float width, const PreviewTextStyle &style,
+                        std::span<const PreviewInlineImage> inlines)
 {
     if (FAILED(prepare(style)))
     {
         return std::unexpected(directwrite);
     }
-    const auto found = find(block, width, style);
+    const auto found = find(block, width, style, inlines);
     if (found != held_.end())
     {
         // 最近使った順の末尾へ回す（捨てるのは先頭から）。
         std::rotate(found, found + 1, held_.end());
         return held_.back().layout;
     }
-    auto made = make(block, width, style);
+    auto made = make(block, width, style, inlines);
     if (!made)
     {
         return std::unexpected(made.error());
@@ -257,25 +317,46 @@ PreviewTextLayouts::get(const core::PreviewBlock &block, float width, const Prev
     return held_.back().layout;
 }
 
-std::expected<float, RenderFailure> PreviewTextLayouts::measure(const core::PreviewBlock &block,
-                                                                float width,
-                                                                const PreviewTextStyle &style)
+std::expected<float, RenderFailure>
+PreviewTextLayouts::measure(const core::PreviewBlock &block, float width,
+                            const PreviewTextStyle &style,
+                            std::span<const PreviewInlineImage> inlines)
 {
     if (FAILED(prepare(style)))
     {
         return std::unexpected(directwrite);
     }
-    const auto found = find(block, width, style);
+    const auto found = find(block, width, style, inlines);
     if (found != held_.end())
     {
         return found->height;
     }
-    const auto made = make(block, width, style);
+    const auto made = make(block, width, style, inlines);
     if (!made)
     {
         return std::unexpected(made.error());
     }
     return made.value().height;
+}
+
+std::expected<float, RenderFailure>
+PreviewTextLayouts::first_line_shift(const core::PreviewBlock &block, float width,
+                                     const PreviewTextStyle &style,
+                                     std::span<const PreviewInlineImage> inlines)
+{
+    if (inlines.empty())
+    {
+        return 0.0F;
+    }
+    const auto boxed = get(block, width, style, inlines);
+    const auto fixed = get(preview_marker_block(block), preview_marker_layout_width(), style);
+    const auto boxed_line = boxed ? first_baseline(*boxed.value().Get()) : std::nullopt;
+    const auto fixed_line = fixed ? first_baseline(*fixed.value().Get()) : std::nullopt;
+    if (!boxed_line.has_value() || !fixed_line.has_value())
+    {
+        return std::unexpected(directwrite);
+    }
+    return boxed_line.value() - fixed_line.value();
 }
 
 std::expected<float, RenderFailure> PreviewTextLayouts::advance(const core::PreviewBlock &block,

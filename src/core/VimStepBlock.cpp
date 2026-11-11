@@ -129,14 +129,12 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     }
     return edits;
 }
-} // namespace
 
-namespace detail
+// 取った矩形の `d` `y`。VISUAL の `d x y` と `X` `Y`（block_of）・`D`（行末まで取り直した矩形・
+// #1417）が共用する。
+[[nodiscard]] VimStep operated_block(const VimState &state, const VimEditorView &view,
+                                     const VimBlockRange &block, VimOperator operation)
 {
-[[nodiscard]] VimStep block_operated(const VimState &state, const VimEditorView &view,
-                                     VimOperator operation)
-{
-    const VimBlockRange block = block_of(state, view);
     auto written = registers_written(state, block_register(view.text, block), operation,
                                      VimNumberedRule::by_extent);
     if (!written.has_value())
@@ -164,6 +162,15 @@ namespace detail
         break;
     }
     std::unreachable();
+}
+} // namespace
+
+namespace detail
+{
+[[nodiscard]] VimStep block_operated(const VimState &state, const VimEditorView &view,
+                                     VimOperator operation)
+{
+    return operated_block(state, view, block_of(state, view), operation);
 }
 
 [[nodiscard]] VimStep replaced_block(const VimState &state, const VimEditorView &view,
@@ -562,6 +569,13 @@ namespace detail
     return restored_at(
         with_clipboard(VimStep{std::move(entered), std::move(removal)}, std::move(clipboard)),
         block_caret(block));
+}
+
+// 矩形の `D`。Vim の v_visop は矩形の `D` でも `C` と同じく curswant を MAXCOL にしてから `d` を
+// 流す（#1417・`l<C-v>jD` と `.` の再生を実測）。
+[[nodiscard]] VimStep block_removed_to_line_end(const VimState &state, const VimEditorView &view)
+{
+    return operated_block(state, view, line_end_block_of(state, view), VimOperator::remove);
 }
 } // namespace detail
 

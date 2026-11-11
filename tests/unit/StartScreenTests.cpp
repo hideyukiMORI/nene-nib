@@ -9,12 +9,15 @@
 #include "CaretMotion.hpp"
 #include "ChooseStartEntry.hpp"
 #include "DevicePixels.hpp"
+#include "DocumentReadFinished.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "EditorOperation.hpp"
 #include "EditorSettings.hpp"
+#include "FileFailure.hpp"
+#include "FileHistory.hpp"
 #include "FilePath.hpp"
 #include "FirstFramePresented.hpp"
 #include "FontSize.hpp"
@@ -50,6 +53,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -208,8 +212,9 @@ void verify_running_rows()
     applied(controller, app::NewLine{});
     const auto opened = controller.frame();
     expect(!opened.start_screen.has_value() && opened.document.path == path_named("recent0.txt") &&
-               opened.lines.size() == 1 && opened.lines.at(0).text == "first",
-           "Enter on a recent row opens that file and the start screen goes away");
+               opened.lines.size() == 1 && opened.lines.at(0).text == "first" &&
+               !opened.document.transient,
+           "Enter on a recent row opens that file as a pinned tab and the start screen goes away");
 }
 
 void verify_failed_rows()
@@ -236,6 +241,52 @@ void verify_failed_rows()
            "a missing bookmark notices one line and stays (ADR 0063)");
     applied(controller, app::ChooseStartEntry{99});
     expect(shown(controller).has_value(), "a click outside the rows does nothing");
+}
+
+[[nodiscard]] std::uint64_t last_ticket(Editing &editing)
+{
+    const auto &requests = editing.reads().requests();
+    return requests.empty() ? 0 : requests.back().ticket;
+}
+
+// 追補 11: 裏で読む最近のファイル。読んでいる間は起動画面を出し続け、読めたら文書が替わって消える。
+// 開けたファイルは行に残る。裏の読みが「無い」で終われば履歴から外し、行からも外す（forget の 1
+// 本）。
+void verify_background_rows()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.files().hold_at("C:\\work\\recent0.txt", Bytes{std::string("zero")});
+    editing.files().hold_at("C:\\work\\recent1.txt", Bytes{std::string("one")});
+    editing.reads().defer_above(0);
+    editing.history().serve(app::FileHistory{paths_named("recent", 2)});
+    present_with(editing, app::StartLists{paths_named("recent", 2), {}});
+    press_down(controller);
+    applied(controller, app::NewLine{});
+    const auto reading = shown(controller);
+    expect(reading.has_value() && reading.value().entries.size() == 2 + 3 &&
+               !reading.value().selected.has_value(),
+           "while the recent file is read in the background the start screen stays");
+    editing.reads().finish(last_ticket(editing));
+    applied(controller, app::WorkCompleted{});
+    expect(!shown(controller).has_value() &&
+               controller.frame().document.path == path_named("recent0.txt"),
+           "the background read opens the file and the start screen goes away");
+    applied(controller, app::NewTab{});
+    expect(view_of(controller).entries.size() == 2 + 3 &&
+               view_of(controller).entries.at(0).path == path_named("recent0.txt"),
+           "a file opened in the background stays in the recent rows");
+    const auto writes = editing.history().writes();
+    applied(controller, app::ChooseStartEntry{1});
+    editing.reads().serve(app::DocumentReadFinished{last_ticket(editing),
+                                                    std::unexpected(app::FileFailure::not_found)});
+    applied(controller, app::WorkCompleted{});
+    const auto failed = view_of(controller);
+    expect(shown(controller).has_value() && failed.entries.size() == 1 + 3 &&
+               failed.entries.at(0).path == path_named("recent0.txt") &&
+               controller.frame().command_message.has_value() &&
+               editing.history().writes() == writes + 1,
+           "a background read that finds no file forgets it in the history and in the rows");
 }
 
 void verify_start_rows()
@@ -543,6 +594,7 @@ void verify_start_screen_scope()
     verify_ordinary_selection();
     verify_running_rows();
     verify_failed_rows();
+    verify_background_rows();
     verify_start_rows();
     verify_conditions();
     verify_tabs_and_quiet_start();

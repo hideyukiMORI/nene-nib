@@ -44,6 +44,11 @@ namespace nenenib::core
 // 不正な列でも code_point_at が text の外を読まないので、窓の外は読まない。
 [[nodiscard]] std::size_t whole_code_points(std::string_view window) noexcept;
 
+// 行を途中のバイトから読んだ窓 window の先頭に並ぶ継続バイトの数（窓の先頭で切れた code point
+// の残り）。窓を手前へ読む道はこれを飛ばしてから decode する。継続バイトを数えるのはここだけ
+// （#1322・ARC-001）。
+[[nodiscard]] std::size_t leading_continuations(std::string_view window) noexcept;
+
 // at が code point の先頭（または末尾の直後）か。
 [[nodiscard]] bool is_boundary(std::string_view text, Offset at) noexcept;
 

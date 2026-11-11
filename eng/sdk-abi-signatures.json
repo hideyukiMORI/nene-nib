@@ -4,6 +4,7 @@
     {"interface": "IDWriteTextRenderer", "method": "DrawGlyphRun", "parameters": 7, "header": "dwrite.h"},
     {"interface": "IDWriteTextRenderer", "method": "DrawUnderline", "parameters": 5, "header": "dwrite.h"},
     {"interface": "IDWriteTextRenderer", "method": "DrawStrikethrough", "parameters": 5, "header": "dwrite.h"},
-    {"interface": "IDWriteTextRenderer", "method": "DrawInlineObject", "parameters": 7, "header": "dwrite.h"}
+    {"interface": "IDWriteTextRenderer", "method": "DrawInlineObject", "parameters": 7, "header": "dwrite.h"},
+    {"interface": "IDWriteInlineObject", "method": "Draw", "parameters": 7, "header": "dwrite.h"}
   ]
 }

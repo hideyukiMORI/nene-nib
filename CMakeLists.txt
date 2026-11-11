@@ -51,11 +51,11 @@ nenenib_target(nenenib_core core STATIC
     src/core/ThemeCatalog.cpp src/core/ThemeLookupFailure.cpp src/core/ExEvaluationFailure.cpp
     src/core/BookmarkKey.cpp src/core/BodyLayout.cpp src/core/PaneLayouts.cpp src/core/EditAdjust.cpp src/core/CaretMove.cpp src/core/ClipboardText.cpp src/core/CommandLayout.cpp
     src/core/CommandLine.cpp src/core/FontFamilies.cpp src/core/CommandChoice.cpp src/core/SubsequenceScore.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
-    src/core/BytesReservation.cpp src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExplorerLayout.cpp src/core/ExplorerTree.cpp src/core/ExMapCommand.cpp src/core/ExResult.cpp src/core/FontSize.cpp
+    src/core/BytesReservation.cpp src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExplorerLayout.cpp src/core/ExplorerMark.cpp src/core/Minimap.cpp src/core/MinimapLayout.cpp src/core/ExplorerTree.cpp src/core/ExMapCommand.cpp src/core/ExResult.cpp src/core/FontSize.cpp
     src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp src/core/InputHistory.cpp
-    src/core/DateTimeText.cpp src/core/PrintPages.cpp src/core/KeyChord.cpp src/core/KeyMap.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/StartScreen.cpp src/core/StartScreenLayout.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
+    src/core/DateTimeText.cpp src/core/PrintPages.cpp src/core/KeyChord.cpp src/core/KeyMap.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/StartScreen.cpp src/core/StartScreenLayout.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/OrdinaryWordBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
     src/core/NewlineIndex.cpp src/core/ScrollBounds.cpp src/core/GutterLabels.cpp src/core/SearchLine.cpp
-    src/core/LiteralPattern.cpp src/core/GoToLineInput.cpp src/core/SubstituteAll.cpp src/core/ShellRegistration.cpp
+    src/core/LiteralPattern.cpp src/core/GoToLineInput.cpp src/core/SubstituteAll.cpp src/core/ShellRegistration.cpp src/core/WslPlaces.cpp
     src/core/StatusBarLayout.cpp src/core/StatusItems.cpp src/core/LineEndingConversion.cpp
     src/core/TabDestination.cpp src/core/TabKeyTable.cpp src/core/TabRecency.cpp src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
     src/core/TitleBarLayout.cpp src/core/UnlistedExtensions.cpp src/core/Utf16.cpp src/core/Utf8.cpp
@@ -82,7 +82,7 @@ nenenib_link(nenenib_core nenenib_md4c)
 
 nenenib_target(nenenib_application application STATIC
     src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp
-    src/application/FindState.cpp src/application/MatchParen.cpp
+    src/application/FindState.cpp src/application/MatchParen.cpp src/application/MinimapCache.cpp src/application/EditorControllerMinimap.cpp
     src/application/FileBookmarkEdit.cpp src/application/FileHistoryEdit.cpp src/application/ImeStance.cpp src/application/ExitPlan.cpp
     src/application/LineSpanEvaluation.cpp src/application/ComposedLine.cpp src/application/VisualTextView.cpp src/application/GiantLineWindow.cpp src/application/EditorControllerView.cpp
     src/application/EditorControllerEditing.cpp src/application/EditorControllerVim.cpp src/application/EditorControllerDocuments.cpp
@@ -113,6 +113,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/ApplicationTests.cpp
     tests/unit/WrappedViewTests.cpp
     tests/unit/EdgeArrowTests.cpp
+    tests/unit/SelectionArrowTests.cpp
     tests/unit/VimWrappedTests.cpp
     tests/unit/EditorDeliveryTests.cpp
     tests/unit/VimEngineTests.cpp
@@ -155,11 +156,15 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/ExDocumentTests.cpp
     tests/unit/ExWritePathTests.cpp tests/unit/BellTests.cpp tests/unit/ClockTests.cpp tests/unit/PrintTests.cpp tests/unit/ShellRegistrationTests.cpp
     tests/unit/OrdinaryCharacterTests.cpp
+    tests/unit/OrdinaryWordTests.cpp
     tests/unit/VimVisualBlockTests.cpp
     tests/unit/TabsTests.cpp
     tests/unit/TabsPropertyTests.cpp
+    tests/unit/TransientTabTests.cpp
+    tests/unit/TransientTabPropertyTests.cpp
     tests/unit/ExplorerTreeTests.cpp
     tests/unit/ExplorerLayoutTests.cpp
+    tests/unit/WslPlacesTests.cpp
     tests/unit/ExplorerTests.cpp
     tests/unit/EditingPropertyTests.cpp
     tests/unit/ControllerMixedPropertyTests.cpp
@@ -173,7 +178,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/AutosavePlanPropertyTests.cpp
     tests/unit/AutosaveRestorePropertyTests.cpp
     tests/unit/OperationsTests.cpp
-    tests/unit/FindReplaceTests.cpp tests/unit/MatchParenTests.cpp
+    tests/unit/FindReplaceTests.cpp tests/unit/MatchParenTests.cpp tests/unit/MinimapTests.cpp
+    tests/unit/MinimapPropertyTests.cpp
     tests/unit/GuideTests.cpp
     tests/unit/ExitPlanTests.cpp
     tests/unit/DisplayTests.cpp
@@ -239,7 +245,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/SynchronousDocumentReader.cpp src/adapters/win32/Win32DocumentReader.cpp
     src/adapters/win32/DocumentReadShelf.cpp src/adapters/win32/DocumentChunkRead.cpp
     src/adapters/win32/HistoryCodec.cpp src/adapters/win32/Win32HistoryAdapter.cpp
-    src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32Bell.cpp src/adapters/win32/Win32Clock.cpp src/adapters/win32/Win32ShellRegistration.cpp
+    src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32Bell.cpp src/adapters/win32/Win32Clock.cpp src/adapters/win32/Win32ShellRegistration.cpp src/adapters/win32/Win32WslDistributions.cpp
     src/adapters/win32/ClipboardCalls.cpp src/adapters/win32/HtmlClipboardFormat.cpp src/adapters/win32/Win32ClipboardAdapter.cpp
     src/adapters/win32/Win32CodePageAdapter.cpp src/adapters/win32/Win32FontCollationAdapter.cpp
     src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/TemporaryFiles.cpp
@@ -247,7 +253,9 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/FolderShelf.cpp
     src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
     src/adapters/win32/MarkdownShelf.cpp src/adapters/win32/Win32MarkdownAdapter.cpp
-    src/adapters/win32/Win32ImageAdapter.cpp src/adapters/win32/StartListShelf.cpp src/adapters/win32/Win32StartListAdapter.cpp
+    src/adapters/win32/ImageShelf.cpp src/adapters/win32/ImageFileRead.cpp
+    src/adapters/win32/ImageDecode.cpp src/adapters/win32/Win32ImageAdapter.cpp
+    src/adapters/win32/StartListShelf.cpp src/adapters/win32/Win32StartListAdapter.cpp
     src/adapters/win32/AutosaveCodec.cpp src/adapters/win32/AutosaveFolder.cpp
     src/adapters/win32/AutosaveShelf.cpp
     src/adapters/win32/Win32AutosaveAdapter.cpp
@@ -263,6 +271,9 @@ nenenib_system_link(nenenib_adapters advapi32)
 nenenib_system_link(nenenib_adapters shell32)
 # クリップボード（OpenClipboard / SetClipboardData）と断りの音（MessageBeep・ADR 0153）は user32。
 nenenib_system_link(nenenib_adapters user32)
+# プレビューの画像の WIC（CoInitializeEx / CoCreateInstance・ADR 0155 の追補 59・#1412）は ole32。
+# windowscodecs.lib は結ばない（CLSID は INITGUID で定義し、exe は windowscodecs.dll を import しない）。
+nenenib_system_link(nenenib_adapters ole32)
 
 # QLT-013: adapters/win32 のファイル読み書きは、GetTempPathW の下の試験ごとの一時フォルダ
 # （tests/adapters/TemporaryTestDirectory・#1103）で往復させる（ADR 0010）。中核の分岐カバレッジ（coverage-policy.json）の対象には入れない。
@@ -342,6 +353,17 @@ nenenib_link(nib_long_path_tests nenenib_adapters)
 add_test(NAME nib_adapters_long_paths COMMAND nib_long_path_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(nib_adapters_long_paths PROPERTIES TIMEOUT 60)
 
+# Issue #1412（親 #1381）: プレビューの画像の読み（Win32ImageAdapter）を本物のファイル・ワーカー 1 本・WIC
+# で測る（ADR 0155 の追補 54）。時刻は読まず、合図の受け皿だけを待つので、止まらないときはこの制限時間で
+# 落ちる。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
+nenenib_target(nib_image_adapter_tests adapter_tests EXECUTABLE tests/adapters/ImageAdapterTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
+nenenib_link(nib_image_adapter_tests nenenib_core)
+nenenib_link(nib_image_adapter_tests nenenib_application)
+nenenib_link(nib_image_adapter_tests nenenib_adapters)
+add_test(NAME nib_adapters_images COMMAND nib_image_adapter_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_adapters_images PROPERTIES TIMEOUT 60)
+
 # Issue #993: 開く道の読み（Win32DocumentReader）を本物のファイルとワーカー 1 本で測る（ADR 0159）。
 # 65 MiB の見本を書いて塊の仕事で読む。時刻は読まず、合図の受け皿だけを待つので、止まらないときは
 # この制限時間で落ちる。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
@@ -405,14 +427,16 @@ nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorWindowDetail.cpp src/ui/win32/EditorWindowLifecycle.cpp src/ui/win32/EditorWindowPointer.cpp src/ui/win32/EditorWindowKeys.cpp
     src/ui/win32/EditorWindowOperations.cpp src/ui/win32/EditorWindowIme.cpp src/ui/win32/EditorWindowExplorer.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FallbackSegmentMemo.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
-    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/KeycapPainter.cpp src/ui/win32/StartScreenPainter.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp
+    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/KeycapPainter.cpp src/ui/win32/StartScreenPainter.cpp src/ui/win32/ExplorerShapes.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp
     src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewMetrics.cpp
-    src/ui/win32/PreviewPane.cpp src/ui/win32/FullPreviewBody.cpp src/ui/win32/SaveQuestion.cpp)
+    src/ui/win32/PreviewPane.cpp src/ui/win32/MinimapPicture.cpp src/ui/win32/FullPreviewBody.cpp src/ui/win32/SaveQuestion.cpp
+    src/ui/win32/PreviewInlineImages.cpp src/ui/win32/PreviewImageObject.cpp src/ui/win32/PreviewBitmaps.cpp)
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
 # ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。
 # imm32: IMM32 の変換文字列と候補窓（ADR 0014 の決定 1）。IME は窓への入力なので ui/win32 に置く。
-# shell32: WM_DROPFILES の名前と転送メモリだけを扱う（ADR 0116）。
+# shell32: WM_DROPFILES の名前と転送メモリだけを扱う（ADR 0116）と、フォルダ選びの箱の場所の
+# SHCreateItemFromParsingName（ADR 0162 の追補 #1450）。
 # comdlg32: 印刷のダイアログ PrintDlgExW、prntvpt: その DEVMODE を print ticket に写す（ADR 0177 の決定 6）。
 # comctl32: 「保存しますか」の TaskDialogIndirect（v6・ADR 0133 の追補 #1282）。
 foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp dwmapi imm32 ole32 shell32 comdlg32 prntvpt comctl32)
@@ -437,7 +461,10 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/PrintRenderTests.cpp tests/ui/MemoryXpsTarget.cpp tests/ui/MemoryPackageTarget.cpp
     tests/ui/MatchParenOutlineTests.cpp tests/ui/SaveQuestionTests.cpp
     tests/ui/VimSpecialKeyTests.cpp tests/ui/ClosingStepsTests.cpp
-    tests/ui/PreviewCycleKeyTests.cpp tests/ui/StartScreenPaintTests.cpp)
+    tests/ui/PreviewCycleKeyTests.cpp tests/ui/MinimapPaintTests.cpp
+    tests/ui/StandardKeyTests.cpp
+    tests/ui/WordDeletionKeyTests.cpp tests/ui/PreviewImagePaintTests.cpp
+    tests/ui/StartScreenPaintTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)
@@ -452,6 +479,7 @@ nenenib_target(nib_preview_capture preview_tests EXECUTABLE tests/preview/Previe
 nenenib_link(nib_preview_capture nenenib_core)
 nenenib_link(nib_preview_capture nenenib_application)
 nenenib_link(nib_preview_capture nenenib_window)
+nenenib_link(nib_preview_capture nenenib_adapters)
 foreach(library IN ITEMS ole32 d2d1 dwrite windowscodecs)
     nenenib_system_link(nib_preview_capture ${library})
 endforeach()
@@ -496,7 +524,9 @@ nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/SearchSpanProbe.cpp tests/performance/TextObjectProbe.cpp
     tests/performance/MarkdownProbe.cpp tests/performance/NewlineIndexProbe.cpp
     tests/performance/CountedHeap.cpp tests/performance/LexerProbe.cpp
-    tests/performance/ExplorerFrameProbe.cpp tests/performance/VimBlockProbe.cpp)
+    tests/performance/ExplorerFrameProbe.cpp tests/performance/VimBlockProbe.cpp
+    tests/performance/WordObjectProbe.cpp
+    tests/performance/VimFollowProbe.cpp)
 nenenib_link(nib_perf_probes nenenib_core)
 nenenib_link(nib_perf_probes nenenib_application)
 nenenib_link(nib_perf_probes nenenib_adapters)

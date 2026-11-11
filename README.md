@@ -15,8 +15,8 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > repeat, macros, registers, blockwise VISUAL and `map`). Tabs in the title bar come back on the next start,
 > Ctrl+P lists open tabs, bookmarks, recently closed files and files in the current folder, and F1 lists every
 > operation. It starts in about 45 ms on the owner's machine, autosaves every 30 seconds and offers a grid display
-> for giant lines. New in beta.9: the explorer opens a file with one click and its width can be dragged, the save
-> prompt has its own button labels, the window disappears as soon as it is closed, Ctrl+Shift+M cycles the
+> for giant lines. New in beta.9: the explorer opens a file with one click and its width can be dragged, Esc cancels the drag,
+> the save prompt has its own button labels, the window disappears as soon as it is closed, Ctrl+Shift+M cycles the
 > preview through side pane and full view, and Vim has `Ctrl-e` `Ctrl-y`, `{ } ( )` and the Delete key.
 
 <p>
@@ -122,7 +122,9 @@ records in `docs/quality/`.
   cycles closed → side pane → full view → closed (D77). Parsing uses md4c 0.5.2 (CommonMark) and the drawing is
   the editor's own ([look](docs/design/2026-10-21-markdown-preview-look.md),
   [ADR 0155](docs/adr/0155-markdown-preview-sits-in-the-other-pane-with-ticketed-port-and-tick.md)).
-  Images from local files (D79) are in progress: the parsing stage is on main and nothing is drawn yet.
+  *Since beta.9* local images (PNG, JPEG, the first frame of a GIF, BMP; D79) are drawn in the text flow,
+  shrunk to the pane width but never enlarged; web images and images that cannot be read stay as
+  `[画像: alt]`.
 - **FR-008 encodings and line endings** — UTF-8, UTF-8 BOM, Shift_JIS and UTF-16 LE / BE with BOM
   ([ADR 0149](docs/adr/0149-utf16-with-bom-is-read-and-written-back.md)); UTF-32 is refused. CRLF / LF are kept as
   read. The encoding and line ending for saving can be chosen by clicking them in the status bar, with
@@ -201,13 +203,14 @@ records in `docs/quality/`.
 - **FR-023 – FR-027 editing features** — matchparen (FR-024) is done and on by default. Planned: easymotion
   (FR-023), commentary, surround, autopairs and INSERT completion (FR-024), changed-line markers, indent guides
   and a yank flash (FR-025), project-wide search (FR-026) and the `:s` family (FR-027).
-- **FR-028 – FR-030** — a settings dialog with measured speed costs, six display languages and a minimap are
-  planned; the minimap is in review. *Since beta.9*: a start without files or previous tabs shows a start screen
-  on the empty untitled document (decision D70,
+- **FR-028 – FR-030** — a settings dialog with measured speed costs and six display languages are planned. A first
+  minimap (a retained bitmap at the right edge, `:set minimap`, off by default) is in beta.9; clicking and dragging
+  it are planned. *Since beta.9*: a start without files or previous tabs shows a start screen on the empty
+  untitled document (decision D70,
   [ADR 0172](docs/adr/0172-start-screen-shows-recent-files-and-entry-actions-on-the-untouched-untitled-document.md)):
-  the title, up to 10 recent files and 10 bookmarks (read once after the first frame), 新しいファイル /
-  ファイルを開く / フォルダを開く and the main keys in one centred column. ↑ ↓ (and `j` `k` in Vim NORMAL)
-  select a row, Enter or a click runs it, and typing or opening a document hides the screen.
+  the title, up to 10 recent files and 10 bookmarks as name and folder (read once after the first frame),
+  新しいファイル / ファイルを開く / フォルダを開く and the main shortcuts in one centred column. ↑ ↓ (and `j` `k` in
+  Vim NORMAL) select a row, Enter or a click runs it, and typing or opening a document hides the screen.
 - **FR-031 Notepad's operations** — in ordinary mode Ctrl+F finds, F3 / Shift+F3 move to the next or previous
   match, Ctrl+H replaces (Enter one, Ctrl+Enter all) and Ctrl+G goes to a line; Vim mode keeps its own keys and
   reaches the same features from F1 through its `/` and `:` lines
@@ -215,7 +218,8 @@ records in `docs/quality/`.
   Printing from F1 or `:hardcopy` draws the body layout
   ([ADR 0177](docs/adr/0177-printing-is-one-port-that-draws-the-body-layout-into-an-xps-print-control.md)).
   F5 inserts the date and time. Ctrl + wheel, the encoding choice and the full Markdown preview are listed
-  above. The right-click menu is planned.
+  above. Ordinary mode also takes Ctrl+N (new tab), Ctrl+Insert / Shift+Insert / Shift+Delete (copy / paste /
+  cut) and Ctrl+Shift+Z (redo). The right-click menu is planned.
 - **FR-032 Vim `map`** — `:map`, `:nmap`, `:imap`, `:vmap`, `:xmap`, `:omap`, the `noremap` and `unmap` forms and
   `:let mapleader=` are stored as `map.<mode>.<lhs>=` and `mapleader` lines in `settings.v4` and applied at the
   window entry, in Vim mode only

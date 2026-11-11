@@ -38,7 +38,10 @@ class TextBuffer final
     [[nodiscard]] TextBuffer insert(Offset at, std::string_view text) const;
     [[nodiscard]] TextBuffer erase(Offset begin, Offset end) const;
     // 編集の原始で、insert / erase はその薄い口。application からも直接呼ぶ（ARC-001）。
-    // 範囲は本文の中へ丸める（begin は size まで、end は begin と size の間）。
+    // 範囲は本文の中へ丸める（begin は size まで、end は begin と size の間）。位置が文字（code
+    // point）の境であることと text が正しい UTF-8 であることは呼び出し側の責任で、ここでは
+    // 確かめない（窓を読む道の whole_code_points と leading_continuations はこれを前提にする・
+    // #1322）。
     [[nodiscard]] TextBuffer replaced(Offset begin, Offset end, std::string_view text) const;
 
     // 本文の改行の形（ADR 0036 の決定 1）。読んだときに 1 度だけ判別し、編集では変わらない。

@@ -50,7 +50,7 @@ inline constexpr std::int32_t start_mark_dips = 18;
 inline constexpr std::int32_t start_mark_gap_dips = 8;
 inline constexpr std::int32_t start_key_gap_dips = 12;
 // 名前と場所の間・「はじめる」の名前と補足の間（Ctrl+P の面の題名と場所の間と同じ 12 DIP・
-// 追補 2026-11-11 の 17）。描画が名前の幅を測ってから置く。
+// 追補 2026-11-11 の 20）。描画が名前の幅を測ってから置く。
 inline constexpr std::int32_t start_detail_gap_dips = 12;
 
 // 選べる行の列から節の形を数える。lists_read は履歴とブックマークを読み終えたか（偽なら空の知らせを
@@ -62,7 +62,7 @@ inline constexpr std::int32_t start_detail_gap_dips = 12;
 // 幅から左右 16 DIP を引いた幅。列は本文の欄の中央。行の高さは本文の行の高さ、題は 1.5 倍。
 // key_width は鍵の枠の列の幅（物理画素・描画は測った値、当たりは 0 でよい・鍵の行は選べない）で、
 // 64 DIP より狭ければ 64 DIP。鍵の枠の列はほかの行の項目と同じ左端から始まる（追補 2026-11-11 の
-// 19）。列の幅が 0 以下なら値なし（描かない・当たらない）。縦は本文の帯の下端を越えてもそのまま
+// 22）。列の幅が 0 以下なら値なし（描かない・当たらない）。縦は本文の帯の下端を越えてもそのまま
 // 置き、描画が帯で切る。
 [[nodiscard]] std::optional<StartScreenLayout> start_screen_layout(const BodyLayout &body,
                                                                    std::uint32_t dpi,

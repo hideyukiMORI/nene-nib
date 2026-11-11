@@ -14,6 +14,8 @@ namespace nenenib::core
 // （文字組みの道）では、載っていない行を読むと vim_topline_updated がその行を問いとして返す。偽の道
 // （文字組みの無い道）では載っていない行は 1 論理行 = 1 画面行。
 // top は本文の行数を越えてよい（行単位の削除の後に残る Vim の w_topline・#1230）。
+// walks が真なら、キャレットは INSERT で打った本文を 1 文字ずつ下へ歩いて来た（Vim の edit は
+// 1 文字ごとに update_topline を呼ぶ・#1363）。
 struct VimToplineWindow
 {
     LineNumber top;
@@ -21,5 +23,6 @@ struct VimToplineWindow
     std::size_t margin;
     std::span<const VimLineRows> rows{};
     bool asks = false;
+    bool walks = false;
 };
 } // namespace nenenib::core
