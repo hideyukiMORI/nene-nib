@@ -5,7 +5,7 @@
 #include "OffsetRange.hpp"
 #include "Selection.hpp"
 #include "Utf8.hpp"
-#include "VimCharacterBoundary.hpp"
+#include "VimCaret.hpp"
 #include "VimMode.hpp"
 #include "VimMotionRange.hpp"
 #include "VimParagraphStart.hpp"
@@ -26,8 +26,6 @@ namespace nenenib::core
 {
 namespace
 {
-// 1 文字を読む窓の最初の大きさ。結合文字の列が長ければ倍にして読み直す。行全体は写さない。
-constexpr std::size_t window_bytes = 64;
 constexpr std::size_t code_point_bytes = 4;
 constexpr std::u32string_view sentence_ends = U".!?";
 constexpr std::u32string_view closers = U")]\"'";
@@ -87,50 +85,13 @@ using Units = std::pair<std::size_t, bool>;
 // 行の中で次の文字の先頭（ADR 0053）。at は行の内容の終わりより前。
 [[nodiscard]] Offset next_in_line(const TextBuffer &text, Offset at)
 {
-    const Offset end = end_of_line(text, at);
-    for (std::size_t width = window_bytes;; width *= 2)
-    {
-        const Offset until{std::min(end.value, at.value + width)};
-        const std::string window = text.text_range(at, until);
-        const std::string_view whole =
-            until == end ? std::string_view{window}
-                         : std::string_view{window}.substr(0, whole_code_points(window));
-        const Offset next = vim_character_end(whole, Offset{0});
-        if (until == end || next.value < whole.size())
-        {
-            return Offset{at.value + next.value};
-        }
-    }
-}
-
-// 窓の先頭の続きのバイトを飛ばした数。
-[[nodiscard]] std::size_t leading_continuations(std::string_view window)
-{
-    std::size_t skipped = 0;
-    while (skipped < window.size() &&
-           (static_cast<unsigned char>(window.at(skipped)) & 0xC0U) == 0x80U)
-    {
-        ++skipped;
-    }
-    return skipped;
+    return vim_character_after(text, at, end_of_line(text, at));
 }
 
 // 行の中で手前の文字の先頭。at は行頭より後ろ。
 [[nodiscard]] Offset previous_in_line(const TextBuffer &text, Offset at)
 {
-    const Offset start = text.line_start(line_of(text, at));
-    for (std::size_t width = window_bytes;; width *= 2)
-    {
-        const Offset from{at.value - std::min(at.value - start.value, width)};
-        const std::string window = text.text_range(from, at);
-        const std::size_t skipped = from == start ? 0 : leading_continuations(window);
-        const std::string_view whole = std::string_view{window}.substr(skipped);
-        const Offset found = vim_character_start(whole, Offset{whole.size()});
-        if (from == start || found.value > 0)
-        {
-            return Offset{from.value + skipped + found.value};
-        }
-    }
+    return vim_character_before(text, at, text.line_start(line_of(text, at)));
 }
 
 // ------------------------------------------------------------------ Vim の inc / dec / incl / decl

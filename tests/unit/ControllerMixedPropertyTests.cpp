@@ -477,7 +477,8 @@ void append_band(std::string &out, const app::EditorFrame &frame)
     }
     if (key == "<BS>")
     {
-        return app::DeleteText{core::DeleteDirection::backward};
+        return app::DeleteText{core::DeleteDirection::backward,
+                               nenenib::core::DeleteUnit::character};
     }
     if (key == "<Tab>")
     {
@@ -830,7 +831,8 @@ void make_edit(Random &random, Steps &steps)
                                                            ? core::SelectionAnchoring::extend
                                                            : core::SelectionAnchoring::collapse}),
         intent_step("delete", app::DeleteText{extend ? core::DeleteDirection::backward
-                                                     : core::DeleteDirection::forward}),
+                                                     : core::DeleteDirection::forward,
+                                              core::DeleteUnit::character}),
         intent_step("select_all", app::SelectAll{}),
         intent_step(extend ? "copy" : "cut",
                     app::ClipboardAction{extend ? app::ClipboardOperation::copy

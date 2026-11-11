@@ -22,6 +22,7 @@
 #include "GutterMetrics.hpp"
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
+#include "MinimapLayout.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteOrigin.hpp"
 #include "PaneLayouts.hpp"
@@ -491,6 +492,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     palette_layouts_.clear();
     tab_layouts_.clear();
     explorer_layouts_.clear();
+    explorer_shapes_.clear();
     Microsoft::WRL::ComPtr<IUnknown> unknown;
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory7),
                                    unknown.GetAddressOf())) ||
@@ -521,12 +523,36 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     {
         return guide;
     }
-    if (FAILED(trim_by_character(tab_format_.Get())))
+    if (FAILED(trim_by_character(tab_format_.Get())) || !create_explorer_formats(interface_face))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
     return create_body_formats(core::EditorSettings{formatted_size_, formatted_family_,
                                                     std::nullopt, core::GuideVisibility::shown});
+}
+
+// エクスプローラーの面の名前（採用案 B・#1390）。タブの帯の題名と同じ UI の字体と大きさで、本文の
+// 字の大きさに追従しない。長い名前は文字単位の省略記号で切る（タブの題名と同じ規則）。semibold は
+// ルート名とアクティブな文書の行。作れなければ偽。
+bool Direct2DRenderer::create_explorer_formats(const wchar_t *face)
+{
+    if (FAILED(make_format(face, tab_text_dips, DWRITE_FONT_WEIGHT_NORMAL, explorer_format_)) ||
+        FAILED(make_format(face, tab_text_dips, DWRITE_FONT_WEIGHT_SEMI_BOLD,
+                           explorer_strong_format_)))
+    {
+        return false;
+    }
+    const std::array<TextFormat, 2> every{explorer_format_, explorer_strong_format_};
+    for (const auto &format : every)
+    {
+        format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        if (FAILED(trim_by_character(format.Get())))
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::create_guide_formats(const wchar_t *face)
@@ -562,30 +588,22 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     gutter_layouts_.clear();
     palette_layouts_.clear();
     tab_layouts_.clear();
-    explorer_layouts_.clear();
     const std::wstring requested = core::to_utf16(settings.font_family.text()).value();
     const wchar_t *face = family(requested.c_str(), L"Consolas");
     const float ratio = core::font_size_ratio(settings.font_size);
     TextFormat gutter;
     TextFormat key;
-    TextFormat explorer;
 
     const auto made_gutter =
         make_format(face, gutter_text_dips * ratio, DWRITE_FONT_WEIGHT_NORMAL, gutter);
-    // エクスプローラーの面の名前は UI の字体で、本文の大きさに追従する（行の高さが本文と同じ・
-    // ADR 0162 の決定 2）。長い名前は文字単位の省略記号で切る（タブの題名と同じ規則）。
-    const auto made_explorer =
-        make_format(family(L"Segoe UI Variable Text", L"Segoe UI"), ui_text_dips * ratio,
-                    DWRITE_FONT_WEIGHT_NORMAL, explorer);
     // 面の行の名前・説明（`command_format_`）と右端の欄（112 DIP）は本文の大きさに追従しないので、
     // 鍵も倍率を掛けない 12 DIP に固定する（ADR 0078 の決定 12・#312）。
     const auto made_key = make_format(face, ui_text_dips, DWRITE_FONT_WEIGHT_NORMAL, key);
-    if (FAILED(made_gutter) || FAILED(made_key) || FAILED(made_explorer) ||
-        FAILED(trim_by_character(explorer.Get())))
+    if (FAILED(made_gutter) || FAILED(made_key))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
-    const std::array<TextFormat, 3> every{gutter, key, explorer};
+    const std::array<TextFormat, 2> every{gutter, key};
     for (const auto &format : every)
     {
         format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -594,7 +612,6 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     gutter->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
     gutter_format_ = std::move(gutter);
     key_format_ = std::move(key);
-    explorer_format_ = std::move(explorer);
     formatted_size_ = settings.font_size;
     formatted_family_ = settings.font_family;
     return {};
@@ -2347,16 +2364,21 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     // 面が出ていれば本文の枠は面の幅だけ右へ縮めた client から求める（ADR 0162 の決定 2・
     // ADR 0148 の 1 本はそのまま）。面が消えていれば body は client のまま。
     const auto explorer = core::explorer_layout(
-        core::LayoutRect{0, 0, width, height}, dpi_, frame.settings.font_size,
+        core::LayoutRect{0, 0, width, height}, dpi_,
         frame.explorer.transform([](const application::ExplorerView &view) { return view.width; }));
+    // ミニマップは面を除いた client の右端を縮める（ADR 0171 の決定 2）。出ていなければ
+    // minimap_layout は最初の 1 行で返り、配置を計算しない（決定 1 の追補・早い return）。
+    const auto minimap = core::minimap_layout(explorer.body, dpi_, frame.settings.font_size,
+                                              frame.minimap.has_value());
     const auto panes =
-        core::pane_layouts(explorer.body, dpi_, frame.settings.font_size, frame.layout);
+        core::pane_layouts(minimap.body, dpi_, frame.settings.font_size, frame.layout);
     const auto body = core::active_pane_layout(panes, frame.active_side);
     const auto guide = core::operation_guide_layout(
         core::GuideRequest{frame.guide.context, body_guide_key_width(frame)}, body, status, dpi_);
     draw_title_bar(frame, title);
-    draw_body_area(frame, explorer.body, panes, guide);
+    draw_body_area(frame, minimap.body, panes, guide);
     draw_explorer(frame, explorer);
+    draw_minimap(frame, minimap.panel);
     draw_status_bar(frame, status);
     draw_status_guide(frame, guide);
     if (frame.command_palette.has_value())
@@ -2388,14 +2410,34 @@ void Direct2DRenderer::draw_explorer(const application::EditorFrame &frame,
 {
     if (!frame.explorer.has_value())
     {
-        // 面を消したら行の文字組みを捨てる。出すたびに作り直す（Ctrl+P の面と同じ・#900）。
+        // 面を消したら行の文字組みと形を捨てる。出すたびに作り直す（Ctrl+P の面と同じ・#900）。
         explorer_layouts_.clear();
+        explorer_shapes_.clear();
         return;
     }
-    ExplorerPainter painter(*context_.Get(), *brush_.Get(),
-                            ExplorerText{dwrite_.Get(), explorer_format_.Get(), dpi_},
-                            explorer_layouts_);
-    painter.paint(frame.explorer.value(), layout, frame.palette);
+    ExplorerPainter painter(
+        *context_.Get(), *brush_.Get(),
+        ExplorerText{dwrite_.Get(), explorer_format_.Get(), explorer_strong_format_.Get(), dpi_},
+        explorer_layouts_, explorer_shapes_);
+    painter.paint(frame.explorer.value(), layout, frame.palette, frame.body);
+}
+
+void Direct2DRenderer::draw_minimap(const application::EditorFrame &frame,
+                                    const core::LayoutRect &panel)
+{
+    // オフの frame はここの 1 行で返る（決定 1 の追補・explorer と同じ形）。
+    if (!frame.minimap.has_value())
+    {
+        return;
+    }
+    const auto colors = minimap_colors(frame.palette);
+    const auto painted =
+        minimap_.paint(MinimapPen{*context_.Get(), *brush_.Get(), colors, frame.body},
+                       frame.minimap.value(), panel);
+    if (!painted && !text_failure_.has_value())
+    {
+        text_failure_ = painted.error();
+    }
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::acquire_surface()

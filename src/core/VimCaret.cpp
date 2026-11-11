@@ -91,6 +91,22 @@ Offset vim_character_after(const TextBuffer &text, Offset at, Offset line_end)
     }
 }
 
+Offset vim_character_before(const TextBuffer &text, Offset at, Offset line_start)
+{
+    for (std::size_t window = caret_window_bytes;; window *= 2)
+    {
+        const Offset from{at.value - std::min(at.value - line_start.value, window)};
+        const std::string content = text.text_range(from, at);
+        const std::size_t skipped = from == line_start ? 0 : leading_continuations(content);
+        const std::string_view whole = std::string_view{content}.substr(skipped);
+        const Offset found = vim_character_start(whole, Offset{whole.size()});
+        if (from == line_start || found.value > 0)
+        {
+            return Offset{from.value + skipped + found.value};
+        }
+    }
+}
+
 Offset vim_resting_caret(const TextBuffer &text, Offset caret)
 {
     const LineNumber line = text.position_of(caret).line;

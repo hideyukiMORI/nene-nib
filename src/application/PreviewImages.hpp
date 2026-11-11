@@ -56,8 +56,8 @@ class PreviewImages final
     [[nodiscard]] bool wants(const core::MarkdownDocument &document, PreviewImageWindow window,
                              bool idle) const;
     // 見える範囲の外の evicted を waiting に戻す。idle で、この状態に requested が無く、範囲の中に
-    // waiting があれば、錨に最も近い 1 つを requested にして要求を返す（収めるために遠い loaded を
-    // 捨てる）。券は tickets を 1 つ進めた値（controller の数）。頼めなければ nullopt。
+    // waiting か evicted があれば、錨に最も近い 1 つを requested にして要求を返す（収めるために遠い
+    // loaded を捨てる）。券は tickets を 1 つ進めた値（controller の数）。頼めなければ nullopt。
     [[nodiscard]] std::optional<ImageRequest> claim(const core::MarkdownDocument &document,
                                                     PreviewImageWindow window, bool idle,
                                                     std::uint64_t &tickets);

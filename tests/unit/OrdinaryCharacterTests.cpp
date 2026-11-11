@@ -217,8 +217,10 @@ void verify_controller_deletion()
                                                core::SelectionAnchoring::collapse});
         }
         const std::string expected = direction == core::DeleteDirection::forward ? "" : "e";
-        expect(applied(controller, app::DeleteText{direction}) == expected,
-               "controller uses the direction's ordinary deletion unit");
+        expect(
+            applied(controller, app::DeleteText{direction, nenenib::core::DeleteUnit::character}) ==
+                expected,
+            "controller uses the direction's ordinary deletion unit");
         expect(applied(controller, app::HistoryAction{core::HistoryDirection::undo}) == "e\u0301",
                "undo restores the whole deletion once");
         expect(applied(controller, app::HistoryAction{core::HistoryDirection::redo}) == expected,
@@ -231,7 +233,8 @@ void verify_controller_deletion()
             app::MoveCaret{core::CaretMotion::next_character, core::SelectionAnchoring::extend});
     expect(controller.frame().caret.position.column == core::Column{3},
            "Shift+Right extends across the selector");
-    expect(applied(controller, app::DeleteText{core::DeleteDirection::backward}) == "x",
+    expect(applied(controller, app::DeleteText{core::DeleteDirection::backward,
+                                               nenenib::core::DeleteUnit::character}) == "x",
            "a selected group is deleted as the exact selection");
     expect(applied(controller, app::HistoryAction{core::HistoryDirection::undo}) == "葛\U000E0100x",
            "undo restores the selected group");
@@ -275,7 +278,8 @@ void verify_vim_insert_boundary()
     expect(vim_body(controller.frame()) == "e\u0301x",
            "Vim insert movement does not edit the text");
     vim_replay(controller, "<Esc>0");
-    expect(applied(controller, app::DeleteText{core::DeleteDirection::forward}) == "\u0301x",
+    expect(applied(controller, app::DeleteText{core::DeleteDirection::forward,
+                                               nenenib::core::DeleteUnit::character}) == "\u0301x",
            "an external Vim DeleteText keeps its existing code-point meaning");
     expect(applied(controller, app::HistoryAction{core::HistoryDirection::undo}) == "e\u0301x",
            "that external deletion still uses the common undo path");

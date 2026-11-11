@@ -3,6 +3,7 @@
 // ファイルを開く open_listed の道、設定の保存、Ctrl+P の面と port を分け合う順番を見る。
 // 面の幅のドラッグ（ResizeExplorer・追補 D78）は動かす間は書かず、離したときと戻したときだけ書く。
 // port はどれも替え玉で、時刻・スレッド・OS には触れない。
+#include "CaretMotion.hpp"
 #include "CommandInput.hpp"
 #include "CommandLine.hpp"
 #include "CommandText.hpp"
@@ -30,13 +31,17 @@
 #include "FolderListingKind.hpp"
 #include "FolderProgress.hpp"
 #include "GiantLine.hpp"
+#include "HoverExplorer.hpp"
 #include "ImeStance.hpp"
 #include "InsertText.hpp"
+#include "MoveCaret.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
+#include "PlaceCaret.hpp"
 #include "PointExplorer.hpp"
+#include "PointTitleBar.hpp"
 #include "ResizeExplorer.hpp"
 #include "Scopes.hpp"
 #include "ScriptedFiles.hpp"
@@ -45,10 +50,17 @@
 #include "ScrollExplorer.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
+#include "SelectionAnchoring.hpp"
 #include "SettingsFailure.hpp"
 #include "SettleRecentTab.hpp"
+#include "SyntaxRole.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
+#include "TextPosition.hpp"
+#include "TextViewGeometry.hpp"
+#include "TitleBarHit.hpp"
+#include "TitleBarTarget.hpp"
+#include "TitleBarWidth.hpp"
 #include "ToggleExplorer.hpp"
 #include "VimMode.hpp"
 #include "VisibleLines.hpp"
@@ -1018,6 +1030,193 @@ void verify_resize_hidden_while_dragging()
                saved(editing).explorer_width == 400,
            "a release after the panel came back writes nothing");
 }
+
+// ドラッグ中の Esc（cancelled・Issue #1413）は押す前の幅へ戻し、設定に書かない。後から来る離し
+// （窓は Esc で捕まえを離すので送らないが、ほかの送り手でも）も書かない。既定の式のままの面でも、
+// 覚えた幅の面でも同じ。ドラッグしていなければ何もしない。
+void verify_resize_cancelled()
+{
+    auto remembered = core::default_editor_settings();
+    remembered.explorer = true;
+    remembered.explorer_width = 400;
+    Editing editing(SettingsReading{remembered});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 250)));
+    expect(width_of(controller) == 250, "the drag shows its width before Esc");
+    const auto cancelled = controller.apply_frame(resized(app::ExplorerResizing::cancelled, 0));
+    expect(editing.settings().writes() == 0 && width_of(controller) == 400 &&
+               width_of(cancelled) == 400,
+           "Esc during a drag goes back to the width before the press without writing");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 250)));
+    expect(editing.settings().writes() == 0 && width_of(controller) == 400,
+           "a release after Esc writes nothing");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::cancelled, 0)));
+    expect(editing.settings().writes() == 0 && width_of(controller) == 400,
+           "Esc without a drag changes nothing");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 300)));
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 300)));
+    expect(editing.settings().writes() == 1 && saved(editing).explorer_width == 300,
+           "the next drag after Esc writes its released width once");
+
+    Editing formula(shown_at(project));
+    auto &fresh = formula.controller();
+    applied(fresh, app::VisibleLines{10});
+    static_cast<void>(fresh.apply_frame(resized(app::ExplorerResizing::dragged, 320)));
+    const auto back = fresh.apply_frame(resized(app::ExplorerResizing::cancelled, 0));
+    expect(formula.settings().writes() == 0 && width_of(fresh) == 0 && width_of(back) == 0,
+           "Esc on a panel at the default formula keeps the formula and writes nothing");
+}
+
+// マウスを載せた行（#1390・ADR 0056 の決定 3 の帯と同じ形）。画面の行で覚えるので、ホイールで行が
+// 送られると載った木の行も変わる。見えている行の外・面の外（値なし）・面を消したときは消える。
+// 使う人の操作ではないので、知らせとダブルクリックの 2 打目と組む印を消さない。
+void verify_hover()
+{
+    Editing editing(shown_at(project));
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10, {}, 0, 0, 4});
+    app::FolderBatch batch{
+        editing.folders().requests().back().ticket, {}, FolderProgress::complete};
+    for (std::size_t index = 0; index < 6; ++index)
+    {
+        batch.entries.push_back(entry_of(std::format("C:\\proj\\f{}.txt", index), false));
+    }
+    editing.folders().serve(std::move(batch));
+    static_cast<void>(controller.apply_frame(app::WorkCompleted{}));
+    const auto over = controller.apply_frame(app::HoverExplorer{1});
+    expect(view_of(over).hovered == std::optional<std::size_t>{1} &&
+               controller.explorer_hovered() == std::optional<std::size_t>{1},
+           "the hovered screen line is the tree row under it");
+    const auto scrolled = controller.apply_frame(app::ScrollExplorer{2});
+    expect(view_of(scrolled).first_visible == 2 &&
+               view_of(scrolled).hovered == std::optional<std::size_t>{3},
+           "after the wheel the row under the pointer is the hovered one");
+    const auto past = controller.apply_frame(app::HoverExplorer{5});
+    expect(!view_of(past).hovered.has_value(), "a line below the rows hovers nothing");
+    const auto below = controller.apply(app::HoverExplorer{6});
+    expect(!below.repaint && controller.explorer_hovered() == std::optional<std::size_t>{6},
+           "moving between lines below the rows keeps the line but does not repaint");
+    expect(controller.apply(app::HoverExplorer{0}).repaint,
+           "moving from below the rows onto a row repaints");
+    const auto left = controller.apply_frame(app::HoverExplorer{std::nullopt});
+    expect(!view_of(left).hovered.has_value() && !controller.explorer_hovered().has_value(),
+           "leaving the panel clears the hovered row");
+    static_cast<void>(controller.apply_frame(app::HoverExplorer{0}));
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    expect(!controller.explorer_hovered().has_value(), "hiding the panel clears the hovered row");
+    const auto hidden = controller.apply_frame(app::HoverExplorer{1});
+    expect(!hidden.explorer.has_value() && !controller.explorer_hovered().has_value(),
+           "a hidden panel ignores the pointer");
+
+    Editing missing(shown_at(project));
+    static_cast<void>(loaded_project(missing));
+    static_cast<void>(missing.controller().apply_frame(app::ToggleExplorer{}));
+    static_cast<void>(clicked(missing, 2));
+    const auto kept = missing.controller().apply_frame(app::HoverExplorer{0});
+    expect(message_of(kept) == "開けませんでした: README.md",
+           "hovering a row keeps the notice of the last click");
+    Editing folder(shown_at(project));
+    static_cast<void>(loaded_project(folder));
+    static_cast<void>(clicked(folder, 1));
+    static_cast<void>(folder.controller().apply_frame(app::HoverExplorer{2}));
+    const auto second = second_press(folder, 1);
+    expect(printed(second) == ".git/+~;src/-;README.md;sel 1 first 0 focus 1",
+           "a hover between the clicks of a double click does not toggle the folder back");
+}
+
+// マウスを動かすだけの意図（面の載せた行・帯の載せた要素）と帯の幅の知らせは、通常モードの ↑ ↓ が
+// 狙う横位置を捨てない（レビュー V-1428 の M-1・F-3・D82: メモ帳はマウスを動かしても狙いの桁を
+// 変えない）。2 行目の短い行を通っても 3 行目は 1 行目と同じ桁に着く。
+void verify_pointer_keeps_wanted_column()
+{
+    const auto down =
+        app::MoveCaret{core::CaretMotion::next_line, core::SelectionAnchoring::collapse};
+    const auto moved_after = [&](const app::EditorIntent &between)
+    {
+        Editing editing(shown_at(project));
+        auto &controller = editing.controller();
+        applied(controller, app::InsertText{"abcdef\nx\nabcdef"});
+        applied(controller, app::VisibleLines{10, core::TextViewGeometry{400, 20, 96}, 0, 0, 4});
+        applied(controller,
+                app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{5}},
+                                core::SelectionAnchoring::collapse});
+        applied(controller, down);
+        applied(controller, between);
+        return controller.apply_frame(down).caret.position ==
+               core::TextPosition{core::LineNumber{3}, core::Column{5}};
+    };
+    expect(moved_after(app::HoverExplorer{1}),
+           "hovering a panel row between two downward moves keeps the wanted x");
+    expect(moved_after(app::PointTitleBar{core::TitleBarTarget{core::TitleBarHit::tab, 0}}),
+           "hovering the tab band between two downward moves keeps the wanted x");
+    expect(moved_after(app::TitleBarWidth{800}),
+           "the band width notice between two downward moves keeps the wanted x");
+}
+
+// アクティブな文書の行と未保存の印の出どころ（#1390）。アクティブは今の文書と同じファイル、未保存は
+// 開いているタブのどれか（アクティブか脇の束）が未保存のファイル。印の色の役割は名前の言語。
+void verify_row_marks()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    editing.files().hold_at("C:\\proj\\README.md", Bytes{"read me"});
+    auto &controller = editing.controller();
+    const auto before = view_of(controller.frame());
+    expect(before.rows.size() == 3 && !before.rows.at(2).active && !before.rows.at(2).unsaved &&
+               before.rows.at(2).mark == std::optional{core::SyntaxRole::string} &&
+               !before.rows.at(1).mark.has_value() && !before.rows.at(0).mark.has_value(),
+           "a Markdown file is the string mark and folders carry none");
+    static_cast<void>(key(editing, ExplorerKeyKind::down));
+    static_cast<void>(key(editing, ExplorerKeyKind::down));
+    static_cast<void>(key(editing, ExplorerKeyKind::down));
+    const auto opened = view_of(key(editing, ExplorerKeyKind::enter));
+    expect(opened.rows.at(2).active && !opened.rows.at(2).unsaved && !opened.rows.at(1).active,
+           "the active document's row is active and saved");
+    applied(controller, app::InsertText{"a"});
+    const auto typed = view_of(controller.frame());
+    expect(typed.rows.at(2).active && typed.rows.at(2).unsaved,
+           "typing into the active document marks its row unsaved");
+    applied(controller, app::NewTab{});
+    const auto parked = view_of(controller.frame());
+    expect(!parked.rows.at(2).active && parked.rows.at(2).unsaved,
+           "a parked unsaved tab keeps the unsaved mark and is no longer active");
+}
+
+// 1 打目と 2 打目の間の面のホイールは、2 打目と組む印を消さない（レビュー V-1391b の R-a）。
+// フォルダは 1 回開くだけで、開いて閉じる、にしない。
+void verify_double_click_across_wheel()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    auto &controller = editing.controller();
+    static_cast<void>(clicked(editing, 1));
+    static_cast<void>(controller.apply_frame(app::ScrollExplorer{1}));
+    const auto second = second_press(editing, 1);
+    expect(printed(second) == ".git/+~;src/-;README.md;sel 1 first 0 focus 1" &&
+               editing.folders().entry_requests() == 2,
+           "a wheel notch between the clicks keeps the folder open after the double click");
+}
+
+// 1 打目で開けなかったファイルのダブルクリックは、2 打目（DBLCLK と続く離し）の後も「開けません
+// でした」の 1 行を残す（レビュー V-1391b の R-b）。押しは新しいクリックなので消す。
+void verify_double_click_keeps_notice()
+{
+    Editing missing(shown_at(project));
+    static_cast<void>(loaded_project(missing));
+    static_cast<void>(missing.controller().apply_frame(app::ToggleExplorer{}));
+    const auto first = clicked(missing, 2);
+    const auto tried = missing.reads().requests().size();
+    const auto second = second_press(missing, 2);
+    expect(message_of(first) == "開けませんでした: README.md" &&
+               message_of(second) == "開けませんでした: README.md" &&
+               missing.reads().requests().size() == tried,
+           "the notice of a file that cannot be opened survives the second press");
+    const auto pressed =
+        missing.controller().apply_frame(PointExplorer{1, ExplorerPointing::pressed});
+    expect(message_of(pressed) == "-", "a new press clears the notice");
+}
 } // namespace
 
 void verify_explorer_contracts()
@@ -1051,6 +1250,12 @@ void verify_explorer_contracts()
     verify_resize_clamped();
     verify_resize_settles_tab_walk();
     verify_resize_hidden_while_dragging();
+    verify_resize_cancelled();
+    verify_hover();
+    verify_pointer_keeps_wanted_column();
+    verify_row_marks();
+    verify_double_click_across_wheel();
+    verify_double_click_keeps_notice();
 }
 
 void verify_explorer_scope()

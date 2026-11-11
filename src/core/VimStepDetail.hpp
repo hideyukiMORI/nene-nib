@@ -58,6 +58,9 @@ requested_viewport(const VimState &state, const VimEditorView &view, VimAction a
 // 回数の最後の桁を消す（`12<Del>` は 1・`3<Del>` は回数なし）。
 [[nodiscard]] VimStep count_digit_dropped(const VimState &state);
 [[nodiscard]] VimStep window_started(const VimState &state);
+// 1 鍵を待つ接頭辞の後ろの Esc は打ち消し、ほかの鍵は refused（#1369・VimStep.cpp）。
+[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key, VimStep refused);
+[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key);
 [[nodiscard]] bool searches_forward(VimCharacterSearchKind kind) noexcept;
 [[nodiscard]] VimCharacterSearchKind opposite(VimCharacterSearchKind kind) noexcept;
 [[nodiscard]] std::optional<Offset>
@@ -112,6 +115,7 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
                                                     const VimMotionRange &range, VimMotion motion);
 [[nodiscard]] bool keeps_the_line_break(const TextBuffer &text, const VimMotionRange &range,
                                         VimMotion motion, VimOperator operation);
+[[nodiscard]] VimMotionRange column_one_yank(const TextBuffer &text, const VimMotionRange &range);
 [[nodiscard]] VimMotionRange whole_lines_for_delete(const TextBuffer &text,
                                                     const VimMotionRange &range);
 // 書き手の結果（ADR 0051 の決定 6・追補（#848）の決定 C）。first は命令が完了した状態、second は
@@ -150,6 +154,10 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
 [[nodiscard]] bool range_shift_fits(const TextBuffer &text, const VimMotionRange &range,
                                     ShiftBy shift, std::size_t limit) noexcept;
 [[nodiscard]] VimStep joined(const VimState &state, const VimEditorView &view, bool inserts_space);
+// つなぐ最初の行と最後の行（J と gJ・NORMAL は回数から・VISUAL は選択の行から・#1417）。
+using JoinedLines = std::pair<LineNumber, LineNumber>;
+[[nodiscard]] VimStep lines_joined(const VimState &state, const TextBuffer &text, JoinedLines lines,
+                                   bool inserts_space);
 [[nodiscard]] VimStep swapped_characters(const VimState &state, const TextBuffer &text,
                                          Offset caret);
 [[nodiscard]] VimOperator operation_of(const VimState &state) noexcept;
@@ -194,6 +202,8 @@ repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::
 [[nodiscard]] VimBlockRange block_of(const VimState &state, const VimEditorView &view);
 [[nodiscard]] VimStep block_operated(const VimState &state, const VimEditorView &view,
                                      VimOperator operation);
+// 矩形の `D`。選んだ矩形を `$` で取り直して消す（`C` と同じ取り直し・#1417）。
+[[nodiscard]] VimStep block_removed_to_line_end(const VimState &state, const VimEditorView &view);
 [[nodiscard]] VimStep replaced_block(const VimState &state, const VimEditorView &view,
                                      char32_t target);
 [[nodiscard]] VimStep cased_block(const VimState &state, const VimEditorView &view,

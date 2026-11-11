@@ -267,6 +267,51 @@ using Settled = std::tuple<std::size_t, std::size_t, std::size_t>;
     return below < margin;
 }
 
+// INSERT で打った本文を 1 文字ずつ下へ歩いたキャレットの先頭か（#1363）。Vim の edit は 1 文字
+// ごとに update_topline を呼ぶので、キャレットは窓の下の行を 1 行ずつ越え、そのたびに
+// scroll_cursor_bot が窓を最小の行だけ送る。余白が窓の半分より小さければ、送りの後の先頭は
+// 「キャレットと下の余白の行（本文の末尾で切る）が窓に入る最小の先頭」（scroll_cursor_bot の
+// set_topbot と同じ形）で、何行歩いても同じになる。余白が窓の半分以上なら上側の余白と組み合って
+// 中央へ寄るので、1 回の追従と同じ scroll_cursor_halfway のまま。
+[[nodiscard]] bool walked(const Lookup &lookup) noexcept
+{
+    return std::get<0>(lookup).walks && margin_of(lookup) * 2 < height_of(lookup);
+}
+
+// walked の先頭: キャレットの行と下の余白の行を数えてから、窓に入るだけ上の行を足す。
+[[nodiscard]] std::size_t walked_bottom(Lookup &lookup, std::size_t cursor) noexcept
+{
+    Rows used = plines(lookup, cursor);
+    const std::size_t last =
+        std::min(cursor + static_cast<std::size_t>(margin_of(lookup)), count_of(lookup));
+    for (std::size_t line = cursor + 1; line <= last; ++line)
+    {
+        used += plines(lookup, line);
+    }
+    std::size_t top = cursor;
+    while (top > 1)
+    {
+        const Rows rows = back_plines(lookup, top - 1);
+        if (used + rows > height_of(lookup))
+        {
+            break;
+        }
+        used += rows;
+        --top;
+    }
+    return top;
+}
+
+// walked の先頭と、歩くあいだの scrollup が w_botline に足した行（#1300）。Vim は 1 文字ごとの
+// scroll_cursor_bot の scrollup(line_count) で w_botline += line_count とするので、歩き終わった
+// ときに持っている値は「数えた窓の w_botline ＋ 送った論理行の和」で、送った論理行の和は先頭の
+// 差になる。折り返さない窓ではこれが描いた w_botline と同じなので 2 回目は走らない。
+[[nodiscard]] Scrolled walked_scrolled(Lookup &lookup, std::size_t top, std::size_t cursor) noexcept
+{
+    const std::size_t first = walked_bottom(lookup, cursor);
+    return Scrolled{first, first > top ? first - top : 0};
+}
+
 // 窓の下の行から下の段（scroll_cursor_bot の scrolled・窓の下の行は空き段を引く）。
 [[nodiscard]] Rows past_window(std::size_t line, const Shown &shown, Rows rows) noexcept
 {
@@ -359,7 +404,8 @@ using Settled = std::tuple<std::size_t, std::size_t, std::size_t>;
     const Rows lines = lines_to_scroll(lookup, shown, walk);
     if (lines >= height_of(lookup) && lines > scroll_jump)
     {
-        return Scrolled{cursor_halfway(lookup, cursor, true), 0};
+        return walked(lookup) ? walked_scrolled(lookup, std::get<0>(shown), cursor)
+                              : Scrolled{cursor_halfway(lookup, cursor, true), 0};
     }
     const auto sent = static_cast<std::size_t>(lines);
     return Scrolled{std::min(std::get<0>(shown) + sent, count_of(lookup)), sent};
@@ -397,9 +443,12 @@ using Settled = std::tuple<std::size_t, std::size_t, std::size_t>;
     }
     const std::size_t lines =
         cursor + 1 + static_cast<std::size_t>(margin_of(lookup)) - std::get<1>(shown);
-    return lines <= std::get<0>(lookup).height + 1
-               ? cursor_bot(lookup, shown, cursor)
-               : Scrolled{cursor_halfway(lookup, cursor, false), 0};
+    if (lines <= std::get<0>(lookup).height + 1)
+    {
+        return cursor_bot(lookup, shown, cursor);
+    }
+    return walked(lookup) ? walked_scrolled(lookup, top, cursor)
+                          : Scrolled{cursor_halfway(lookup, cursor, false), 0};
 }
 
 // update_topline の上側が要るか（先頭が 1 行目でなく、キャレットが先頭より上か上の余白が無い）。

@@ -604,6 +604,31 @@ void verify_nearest_kept()
            "a new parse requests none of the 41 again (M1)");
 }
 
+// 候補 B（#1412・V-1385b の 5）: 範囲の中で捨てた evicted も、遠いものを
+// 捨てずに収まる空きがあれば、範囲の中の waiting と同じく錨に近い順に
+// 頼み直す（24 MiB 空いていても画面の画像が文字のままにならない）。
+void verify_evicted_read_again()
+{
+    const auto document = parsed_document(paragraphs(4U));
+    auto images = app::PreviewImages::of(document, path_of(readme), nullptr);
+    std::uint64_t tickets = 0;
+    const auto p1 = images.claim(document, {1U, 4U}, true, tickets);
+    const bool p1_taken = images.received(loaded(ticket_of(p1), ImageSize{1920U, 1080U}));
+    const auto p2 = images.claim(document, {1U, 4U}, true, tickets);
+    const bool p2_taken = images.received(loaded(ticket_of(p2), ImageSize{2048U, 2048U}));
+    expect(p1_taken && p2_taken && requested_path(p2) == "C:\\docs\\p2.png" &&
+               !images.claim(document, {1U, 4U}, true, tickets).has_value(),
+           "from block 1 a screenshot and a 2048 x 2048 image are held and p3 does not fit");
+    const auto p0 = images.claim(document, {0U, 4U}, true, tickets);
+    expect(requested_path(p0) == "C:\\docs\\p0.png" && images.status_of(2) == Status::evicted,
+           "a nearer image drops the farthest one in the window");
+    const bool p0_taken = images.received(loaded(ticket_of(p0), ImageSize{1U, 1U}));
+    const auto again = images.claim(document, {0U, 4U}, true, tickets);
+    expect(p0_taken && requested_path(again) == "C:\\docs\\p2.png" &&
+               images.status_of(3) == Status::waiting,
+           "with room left the evicted image in the window is read again before a farther one");
+}
+
 void verify_carried()
 {
     const auto first = parsed_document("![a](a.png)\n\n![b](b.png)\n\n![c](c.png)\n");
@@ -850,6 +875,60 @@ void verify_one_request_across_switch()
            "the old result is dropped and then the new document asks with the next ticket");
 }
 
+// V-1385b の推奨 3: 閉じる前に頼んだ券の結果が開き直した後に届いても、頼み中を解いて次を頼む。
+void verify_pending_result_after_reopen()
+{
+    Editing editing;
+    open_readme(editing, "![a](a.png)\n", 10U);
+    auto &controller = editing.controller();
+    applied(controller, app::TogglePreview{});
+    static_cast<void>(parsed_back(editing));
+    // 巡回は 側 → 全面 → 閉じる（D77）なので、2 回で閉じて 1 回で開き直す。
+    applied(controller, app::TogglePreview{});
+    applied(controller, app::TogglePreview{});
+    expect(preview_of(controller.frame()) == nullptr, "the preview is closed with a request out");
+    applied(controller, app::TogglePreview{});
+    const app::EditorFrame reopened = parsed_back(editing);
+    const auto *shown = preview_of(reopened);
+    expect(editing.images().requests().size() == 1U && shown != nullptr &&
+               shown->images->status_of(0) == Status::waiting,
+           "the reopened preview waits while the request from before closing is in the worker");
+    editing.images().serve(loaded(1U, ImageSize{2U, 2U}));
+    const app::EditorFrame settled = controller.apply_frame(app::WorkCompleted{});
+    expect(
+        editing.images().requests().size() == 2U &&
+            editing.images().requests().back().ticket == 2U &&
+            preview_of(settled)->images->status_of(0) == Status::requested,
+        "the late result settles the request and the reopened preview asks with the next ticket");
+}
+
+// V-1385b の推奨 3: 画像が全部読めない文書でも頼み中は残らず、後から足した画像を頼む。
+void verify_all_failed_leaves_nothing_pending()
+{
+    Editing editing;
+    open_readme(editing, "![a](a.png)\n\n![b](b.png)\n", 10U);
+    auto &controller = editing.controller();
+    applied(controller, app::TogglePreview{});
+    static_cast<void>(parsed_back(editing));
+    editing.images().serve(failed(1U, app::ImageFailure::missing));
+    applied(controller, app::WorkCompleted{});
+    editing.images().serve(failed(2U, app::ImageFailure::corrupt));
+    const app::EditorFrame failed_all = controller.apply_frame(app::WorkCompleted{});
+    expect(requested_paths(editing.images()) ==
+                   std::vector<std::string>{"C:\\docs\\a.png", "C:\\docs\\b.png"} &&
+               preview_of(failed_all)->images->status_of(0) == Status::failed &&
+               preview_of(failed_all)->images->status_of(1) == Status::failed,
+           "both images fail one after the other and nothing more is requested");
+    applied(controller, app::InsertText{"![c](c.png)\n\n"});
+    applied(controller, app::PreviewTick{});
+    applied(controller, app::PreviewTick{});
+    static_cast<void>(parsed_back(editing));
+    expect(editing.images().requests().size() == 3U &&
+               editing.images().requests().back().path.text() == "C:\\docs\\c.png" &&
+               editing.images().requests().back().ticket == 3U,
+           "no request is left pending, so an image typed later is requested");
+}
+
 void verify_untitled_relative_stays_text()
 {
     Editing editing;
@@ -906,12 +985,15 @@ void verify_preview_image_contracts()
     verify_held_limit();
     verify_evicted();
     verify_nearest_kept();
+    verify_evicted_read_again();
     verify_carried();
     verify_requests_visible_images();
     verify_one_request_at_a_time();
     verify_results_reach_the_frame();
     verify_switch_drops_images();
     verify_one_request_across_switch();
+    verify_pending_result_after_reopen();
+    verify_all_failed_leaves_nothing_pending();
     verify_untitled_relative_stays_text();
     verify_closed_preview_is_quiet();
 }
