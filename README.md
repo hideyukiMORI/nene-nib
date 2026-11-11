@@ -15,8 +15,8 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > repeat, macros, registers, blockwise VISUAL and `map`). Tabs in the title bar come back on the next start,
 > Ctrl+P lists open tabs, bookmarks, recently closed files and files in the current folder, and F1 lists every
 > operation. It starts in about 45 ms on the owner's machine, autosaves every 30 seconds and offers a grid display
-> for giant lines. New in beta.9: the explorer opens a file with one click and its width can be dragged, the save
-> prompt has its own button labels, the window disappears as soon as it is closed, Ctrl+Shift+M cycles the
+> for giant lines. New in beta.9: the explorer opens a file with one click and its width can be dragged, Esc cancels the drag,
+> the save prompt has its own button labels, the window disappears as soon as it is closed, Ctrl+Shift+M cycles the
 > preview through side pane and full view, and Vim has `Ctrl-e` `Ctrl-y`, `{ } ( )` and the Delete key.
 
 <p>
@@ -202,7 +202,8 @@ records in `docs/quality/`.
   (FR-023), commentary, surround, autopairs and INSERT completion (FR-024), changed-line markers, indent guides
   and a yank flash (FR-025), project-wide search (FR-026) and the `:s` family (FR-027).
 - **FR-028 – FR-030** — a settings dialog with measured speed costs, six display languages, a minimap and a
-  start screen are planned; the minimap is in review.
+  start screen are planned. A first minimap (a retained bitmap at the right edge, `:set minimap`, off by
+  default) is in beta.9; clicking and dragging it are planned.
 - **FR-031 Notepad's operations** — in ordinary mode Ctrl+F finds, F3 / Shift+F3 move to the next or previous
   match, Ctrl+H replaces (Enter one, Ctrl+Enter all) and Ctrl+G goes to a line; Vim mode keeps its own keys and
   reaches the same features from F1 through its `/` and `:` lines
@@ -210,7 +211,8 @@ records in `docs/quality/`.
   Printing from F1 or `:hardcopy` draws the body layout
   ([ADR 0177](docs/adr/0177-printing-is-one-port-that-draws-the-body-layout-into-an-xps-print-control.md)).
   F5 inserts the date and time. Ctrl + wheel, the encoding choice and the full Markdown preview are listed
-  above. The right-click menu is planned.
+  above. Ordinary mode also takes Ctrl+N (new tab), Ctrl+Insert / Shift+Insert / Shift+Delete (copy / paste /
+  cut) and Ctrl+Shift+Z (redo). The right-click menu is planned.
 - **FR-032 Vim `map`** — `:map`, `:nmap`, `:imap`, `:vmap`, `:xmap`, `:omap`, the `noremap` and `unmap` forms and
   `:let mapleader=` are stored as `map.<mode>.<lhs>=` and `mapleader` lines in `settings.v4` and applied at the
   window entry, in Vim mode only
