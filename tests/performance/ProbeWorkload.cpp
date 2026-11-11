@@ -26,6 +26,7 @@
 #include "TabDisplayProbe.hpp"
 #include "TextObjectProbe.hpp"
 #include "VimBlockProbe.hpp"
+#include "WordObjectProbe.hpp"
 
 #include "DeleteText.hpp"
 #include "DisplayLine.hpp"
@@ -945,6 +946,28 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(WordObjectWorkload workload)
+{
+    switch (workload)
+    {
+    case WordObjectWorkload::iw_solid_16384:
+    case WordObjectWorkload::aw_solid_16384:
+    case WordObjectWorkload::iw_spaced_16384:
+    case WordObjectWorkload::aw_spaced_16384:
+    case WordObjectWorkload::iquote_16384:
+    case WordObjectWorkload::iparen_16384:
+    case WordObjectWorkload::iw_solid_16mib:
+    case WordObjectWorkload::aw_solid_16mib:
+    case WordObjectWorkload::iw_spaced_16mib:
+    case WordObjectWorkload::aw_spaced_16mib:
+    case WordObjectWorkload::iquote_16mib:
+    case WordObjectWorkload::iparen_16mib:
+    case WordObjectWorkload::double_click_solid_16384:
+        return 214U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -960,7 +983,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 214> dispatches{{
+constexpr std::array<ProbeDispatch, 227> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1395,6 +1418,32 @@ constexpr std::array<ProbeDispatch, 214> dispatches{{
                      vim_block_input, vim_counted_right},
     ProbeDispatchRow{VimBlockWorkload::sentence_motion_giant_1line,
                      "sentence-motion-giant-1line-16384", vim_block_input, vim_sentence_moved},
+    ProbeDispatchRow{WordObjectWorkload::iw_solid_16384, "text-object-iw-solid-1line-16384",
+                     word_object_input, word_object_ranges},
+    ProbeDispatchRow{WordObjectWorkload::aw_solid_16384, "text-object-aw-solid-1line-16384",
+                     word_object_input, word_object_ranges},
+    ProbeDispatchRow{WordObjectWorkload::iw_spaced_16384, "text-object-iw-spaced-1line-16384",
+                     word_object_input, word_object_ranges},
+    ProbeDispatchRow{WordObjectWorkload::aw_spaced_16384, "text-object-aw-spaced-1line-16384",
+                     word_object_input, word_object_ranges},
+    ProbeDispatchRow{WordObjectWorkload::iquote_16384, "text-object-iquote-1line-16384",
+                     word_object_input, word_object_ranges},
+    ProbeDispatchRow{WordObjectWorkload::iparen_16384, "text-object-iparen-1line-16384",
+                     word_object_input, word_object_ranges},
+    ProbeDispatchRow{WordObjectWorkload::iw_solid_16mib, "text-object-iw-solid-1line-16mib",
+                     word_object_input, word_object_ranges},
+    ProbeDispatchRow{WordObjectWorkload::aw_solid_16mib, "text-object-aw-solid-1line-16mib",
+                     word_object_input, word_object_ranges},
+    ProbeDispatchRow{WordObjectWorkload::iw_spaced_16mib, "text-object-iw-spaced-1line-16mib",
+                     word_object_input, word_object_ranges},
+    ProbeDispatchRow{WordObjectWorkload::aw_spaced_16mib, "text-object-aw-spaced-1line-16mib",
+                     word_object_input, word_object_ranges},
+    ProbeDispatchRow{WordObjectWorkload::iquote_16mib, "text-object-iquote-1line-16mib",
+                     word_object_input, word_object_ranges},
+    ProbeDispatchRow{WordObjectWorkload::iparen_16mib, "text-object-iparen-1line-16mib",
+                     word_object_input, word_object_ranges},
+    ProbeDispatchRow{WordObjectWorkload::double_click_solid_16384,
+                     "double-click-word-solid-1line-16384", word_object_input, word_double_clicked},
 }};
 
 constexpr auto dispatch_names = []
@@ -1437,7 +1486,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 214U);
+static_assert(dispatches.size() == 227U);
 static_assert(dispatch_is_complete());
 
 } // namespace

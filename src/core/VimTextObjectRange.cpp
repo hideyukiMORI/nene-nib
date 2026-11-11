@@ -7,6 +7,7 @@
 #include "TextPosition.hpp"
 #include "Utf8.hpp"
 #include "VimBracketPair.hpp"
+#include "VimCaret.hpp"
 #include "VimCharacterBoundary.hpp"
 #include "VimMode.hpp"
 #include "VimMotionRange.hpp"
@@ -21,6 +22,7 @@
 #include "VimWordClass.hpp"
 #include "VimWordMotion.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -33,53 +35,66 @@ namespace nenenib::core
 namespace
 {
 constexpr std::uint32_t blank_group = 0;
+// UTF-8 の 1 code point の最長のバイト数（code_at が読む窓）。
+constexpr std::size_t code_point_bytes = 4;
 constexpr char32_t escape_character = U'\\';
 
 // ------------------------------------------------------------------ 位置の道具（Vim の inc / dec）
 
+// position_of は行頭から桁を数えるので、行の中を 1 文字ずつ歩くループは行の両端を最初に 1 回だけ
+// 引き、歩きの 1 歩では引き直さない（#1424・1 歩ごとに引くと語の長さ × 行の大きさになる）。
 [[nodiscard]] LineNumber line_of(const TextBuffer &text, Offset at)
 {
     return text.position_of(at).line;
 }
 
-// 行の中で次の文字（ADR 0053）。行の内容の終わり（Vim が NUL を置く桁）では動かない。
+// at の行の内容 [行頭, 行の内容の終わり)。
+[[nodiscard]] OffsetRange line_bounds(const TextBuffer &text, Offset at)
+{
+    const LineNumber line = line_of(text, at);
+    return OffsetRange{text.line_start(line), text.line_end(line)};
+}
+
+// 行の中で次の文字（ADR 0053）。行の内容の終わり（Vim が NUL を置く桁）では動かない。読むのは
+// at の後ろの窓だけ（行を写さない・#1424・文とタグと同じ VimCaret の 1 対）。
 [[nodiscard]] Offset next_in_line(const TextBuffer &text, Offset at)
 {
-    const Offset end = text.line_end(line_of(text, at));
-    if (!(at < end))
-    {
-        return at;
-    }
-    const std::string rest = text.text_range(at, end);
-    return Offset{at.value + vim_character_end(rest, Offset{0}).value};
+    return vim_character_after(text, at, text.line_end(line_of(text, at)));
 }
 
+// 行の中で手前の文字の先頭。行頭では動かない。読むのは at の手前の窓だけ。
 [[nodiscard]] Offset previous_in_line(const TextBuffer &text, Offset at)
 {
-    const Offset start = text.line_start(line_of(text, at));
-    if (!(start < at))
-    {
-        return at;
-    }
-    const std::string head = text.text_range(start, at);
-    return Offset{start.value + vim_character_start(head, Offset{head.size()}).value};
+    return vim_character_before(text, at, text.line_start(line_of(text, at)));
 }
 
-// その位置の code point。行の内容の終わりは 0（Vim の NUL）。
-[[nodiscard]] char32_t code_at(const TextBuffer &text, Offset at)
+// その位置の code point（end は at の行の内容の終わり）。行の内容の終わりは 0（Vim の NUL）。
+// 読むのは at から 1 code point の最長のバイト数だけ（文の code_at と同じ形）。
+[[nodiscard]] char32_t code_in_line(const TextBuffer &text, Offset at, Offset end)
 {
-    const Offset end = text.line_end(line_of(text, at));
     if (!(at < end))
     {
         return 0;
     }
-    return code_point_at(text.text_range(at, end), Offset{0});
+    const Offset until{std::min(end.value, at.value + code_point_bytes)};
+    return code_point_at(text.text_range(at, until), Offset{0});
+}
+
+[[nodiscard]] char32_t code_at(const TextBuffer &text, Offset at)
+{
+    return code_in_line(text, at, text.line_end(line_of(text, at)));
+}
+
+[[nodiscard]] std::uint32_t class_in_line(const TextBuffer &text, Offset at, Offset end,
+                                          VimWordClass kind)
+{
+    const char32_t code = code_in_line(text, at, end);
+    return code == 0 ? blank_group : vim_character_class(code, kind);
 }
 
 [[nodiscard]] std::uint32_t class_at(const TextBuffer &text, Offset at, VimWordClass kind)
 {
-    const char32_t code = code_at(text, at);
-    return code == 0 ? blank_group : vim_character_class(code, kind);
+    return class_in_line(text, at, text.line_end(line_of(text, at)), kind);
 }
 
 // 本文の終わり（最後の行の内容の終わり）。前向きの走査が尽きるのはここだけで、回数が尽きた
@@ -204,12 +219,13 @@ constexpr char32_t escape_character = U'\\';
 // Vim の back_in_line()。行の中だけで、同じ種類の並びの先頭へ戻る。
 [[nodiscard]] Offset run_start_in_line(const TextBuffer &text, Offset at, VimWordClass kind)
 {
-    const std::uint32_t group = class_at(text, at, kind);
+    const OffsetRange line = line_bounds(text, at);
+    const std::uint32_t group = class_in_line(text, at, line.end, kind);
     Offset here = at;
-    while (!(here == text.line_start(line_of(text, here))))
+    while (line.begin < here)
     {
-        const Offset previous = previous_in_line(text, here);
-        if (class_at(text, previous, kind) != group)
+        const Offset previous = vim_character_before(text, here, line.begin);
+        if (class_in_line(text, previous, line.end, kind) != group)
         {
             break;
         }
@@ -294,11 +310,12 @@ constexpr char32_t escape_character = U'\\';
     {
         return begin;
     }
+    const OffsetRange line = line_bounds(text, begin);
     Offset here = begin;
-    while (!(here == text.line_start(line_of(text, here))))
+    while (line.begin < here)
     {
-        const Offset previous = previous_in_line(text, here);
-        if (class_at(text, previous, kind) != blank_group)
+        const Offset previous = vim_character_before(text, here, line.begin);
+        if (class_in_line(text, previous, line.end, kind) != blank_group)
         {
             return here;
         }
@@ -627,29 +644,32 @@ constexpr char32_t escape_character = U'\\';
                        Offset{start.value + pair.value().end.value}};
 }
 
-[[nodiscard]] bool blank_at(const TextBuffer &text, Offset at)
+// end は at の行の内容の終わり。
+[[nodiscard]] bool blank_in_line(const TextBuffer &text, Offset at, Offset end)
 {
-    const char32_t code = code_at(text, at);
+    const char32_t code = code_in_line(text, at, end);
     return code == U' ' || code == U'\t';
 }
 
-// a" の空白。後ろに空白があればそちら、無ければ前の空白（どちらも行の中だけ・実測）。
+// a" の空白。後ろに空白があればそちら、無ければ前の空白（どちらも行の中だけ・実測）。対の両端は
+// 同じ行にある。
 [[nodiscard]] OffsetRange quote_with_blanks(const TextBuffer &text, const OffsetRange &pair)
 {
-    Offset end = next_in_line(text, pair.end);
-    if (blank_at(text, end))
+    const OffsetRange line = line_bounds(text, pair.end);
+    Offset end = vim_character_after(text, pair.end, line.end);
+    if (blank_in_line(text, end, line.end))
     {
-        while (blank_at(text, end))
+        while (blank_in_line(text, end, line.end))
         {
-            end = next_in_line(text, end);
+            end = vim_character_after(text, end, line.end);
         }
         return OffsetRange{pair.begin, end};
     }
     Offset begin = pair.begin;
-    while (!(begin == text.line_start(line_of(text, begin))) &&
-           blank_at(text, previous_in_line(text, begin)))
+    while (line.begin < begin &&
+           blank_in_line(text, vim_character_before(text, begin, line.begin), line.end))
     {
-        begin = previous_in_line(text, begin);
+        begin = vim_character_before(text, begin, line.begin);
     }
     return OffsetRange{begin, end};
 }
@@ -689,14 +709,15 @@ constexpr char32_t escape_character = U'\\';
                                        char32_t quote)
 {
     const OffsetRange ordered = selection_range(selection);
+    const Offset end = line_bounds(text, ordered.begin).end;
     Offset here = ordered.begin;
     while (!(ordered.end < here))
     {
-        if (code_at(text, here) == quote)
+        if (code_in_line(text, here, end) == quote)
         {
             return true;
         }
-        const Offset next = next_in_line(text, here);
+        const Offset next = vim_character_after(text, here, end);
         if (next == here)
         {
             return false;
@@ -970,14 +991,15 @@ constexpr char32_t escape_character = U'\\';
     {
         return false;
     }
+    const Offset end = text.line_end(line);
     Offset at = text.line_start(line);
     while (at < close_at)
     {
-        if (!blank_at(text, at))
+        if (!blank_in_line(text, at, end))
         {
             return false;
         }
-        at = next_in_line(text, at);
+        at = vim_character_after(text, at, end);
     }
     return true;
 }
