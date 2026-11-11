@@ -7,6 +7,7 @@
 #include "EndSession.hpp"
 #include "ExitCause.hpp"
 #include "ExitPlan.hpp"
+#include "FirstFramePresented.hpp"
 #include "Milestone.hpp"
 #include "PointerPress.hpp"
 #include "RgbColor.hpp"
@@ -614,8 +615,20 @@ std::expected<void, RenderFailure> EditorWindow::draw_frame()
         {
             place_candidate_window();
         }
+        signal_first_frame();
     }
     return drawn;
+}
+
+void EditorWindow::signal_first_frame()
+{
+    // 節目 frame_presented を打った後（起動の速さの節目の外）に 1 回だけ。2 回目からは何もしない
+    // （device lost の作り直しと本物の device の採用の後の frame でも送らない）。
+    if (std::exchange(first_frame_signaled_, true))
+    {
+        return;
+    }
+    send(application::FirstFramePresented{});
 }
 
 void EditorWindow::present()

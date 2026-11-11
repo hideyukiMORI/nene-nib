@@ -45,4 +45,6 @@ void verify_vim_special_keys();
 void verify_closing_steps();
 // Ctrl+Shift+M はどのモードでも操作 toggle_preview（施主決定 D77・#1354）。
 void verify_preview_cycle_key();
+// 起動画面の画素と文字組みの保持（ADR 0172 の決定 5・#1455）。
+void verify_start_screen_paint();
 } // namespace nenenib::tests::ui

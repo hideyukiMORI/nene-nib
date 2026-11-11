@@ -11,6 +11,7 @@
 #include "DisplayFormLabel.hpp"
 #include "DisplayLine.hpp"
 #include "EditMode.hpp"
+#include "EditorOperation.hpp"
 #include "EditorSettings.hpp"
 #include "ExplorerView.hpp"
 #include "ExplorerWidth.hpp"
@@ -21,7 +22,9 @@
 #include "GutterLabels.hpp"
 #include "GutterMetrics.hpp"
 #include "InputLinePrompt.hpp"
+#include "KeycapPainter.hpp"
 #include "Milestone.hpp"
+#include "OperationGuide.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteOrigin.hpp"
 #include "PaneLayouts.hpp"
@@ -30,6 +33,8 @@
 #include "PreviewTextStyle.hpp"
 #include "ReplacedTints.hpp"
 #include "RgbaColor.hpp"
+#include "StartScreenLayout.hpp"
+#include "StartScreenText.hpp"
 #include "SyntaxColor.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
@@ -491,6 +496,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     palette_layouts_.clear();
     tab_layouts_.clear();
     explorer_layouts_.clear();
+    start_layouts_.clear();
     Microsoft::WRL::ComPtr<IUnknown> unknown;
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory7),
                                    unknown.GetAddressOf())) ||
@@ -534,6 +540,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_guide_formats(const 
     // 鍵の箱の幅は書式で測ったものなので、書式と一緒に捨てる（#1122）。
     measured_guide_keys_.reset();
     measured_guide_key_width_ = 0;
+    measured_start_keys_.reset();
+    measured_start_key_width_ = 0;
     const auto key = make_format(family(L"Cascadia Code", L"Consolas"), 12.5F,
                                  DWRITE_FONT_WEIGHT_NORMAL, guide_key_format_);
     const auto label = make_format(face, 13.5F, DWRITE_FONT_WEIGHT_NORMAL, guide_label_format_);
@@ -563,12 +571,15 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     palette_layouts_.clear();
     tab_layouts_.clear();
     explorer_layouts_.clear();
+    start_layouts_.clear();
     const std::wstring requested = core::to_utf16(settings.font_family.text()).value();
     const wchar_t *face = family(requested.c_str(), L"Consolas");
     const float ratio = core::font_size_ratio(settings.font_size);
     TextFormat gutter;
     TextFormat key;
     TextFormat explorer;
+    TextFormat start_title;
+    TextFormat start_item;
 
     const auto made_gutter =
         make_format(face, gutter_text_dips * ratio, DWRITE_FONT_WEIGHT_NORMAL, gutter);
@@ -580,12 +591,21 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     // 面の行の名前・説明（`command_format_`）と右端の欄（112 DIP）は本文の大きさに追従しないので、
     // 鍵も倍率を掛けない 12 DIP に固定する（ADR 0078 の決定 12・#312）。
     const auto made_key = make_format(face, ui_text_dips, DWRITE_FONT_WEIGHT_NORMAL, key);
+    // 起動画面の題は UI の字体で本文の字の 1.5 倍、項目は本文の字体と大きさ（ADR 0172 の決定 5・
+    // 採用案の表）。
+    const float body_dips = core::font_size_dips(settings.font_size);
+    const auto made_start_title =
+        make_format(family(L"Segoe UI Variable Display", L"Segoe UI"), body_dips * 1.5F,
+                    DWRITE_FONT_WEIGHT_NORMAL, start_title);
+    const auto made_start_item =
+        make_format(face, body_dips, DWRITE_FONT_WEIGHT_NORMAL, start_item);
     if (FAILED(made_gutter) || FAILED(made_key) || FAILED(made_explorer) ||
+        FAILED(made_start_title) || FAILED(made_start_item) ||
         FAILED(trim_by_character(explorer.Get())))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
-    const std::array<TextFormat, 3> every{gutter, key, explorer};
+    const std::array<TextFormat, 5> every{gutter, key, explorer, start_title, start_item};
     for (const auto &format : every)
     {
         format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -595,6 +615,8 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     gutter_format_ = std::move(gutter);
     key_format_ = std::move(key);
     explorer_format_ = std::move(explorer);
+    start_title_format_ = std::move(start_title);
+    start_item_format_ = std::move(start_item);
     formatted_size_ = settings.font_size;
     formatted_family_ = settings.font_family;
     return {};
@@ -1684,8 +1706,12 @@ void Direct2DRenderer::draw_body_area(const application::EditorFrame &frame,
                    frame.full_preview.value());
         return;
     }
-    draw_body(frame, core::active_pane_layout(panes, frame.active_side));
+    const auto body = core::active_pane_layout(panes, frame.active_side);
+    draw_body(frame, body);
     draw_other_body(frame, panes);
+    // 起動画面は操作中の枠に描く。出ている frame の案内は draw の入口で hidden にしてあるので、
+    // 2 つを同時には描かない（ADR 0172 の決定 1）。
+    draw_start_screen(frame, body);
     draw_body_guide(frame, guide);
 }
 
@@ -1722,8 +1748,10 @@ void Direct2DRenderer::draw_pane(const application::EditorFrame &frame, const Bo
 
 std::int32_t Direct2DRenderer::body_guide_key_width(const application::EditorFrame &frame)
 {
-    // 本文の案内が出うる文脈だけで測る（ふだんの frame は layout を作らない・#1122）。
-    if (frame.guide.context != core::GuideContext::untouched_untitled)
+    // 本文の案内が出うる文脈だけで測る（ふだんの frame は layout を作らない・#1122）。起動画面が
+    // 出ている frame は案内を出さないので測らない（ADR 0172 の決定 1）。
+    if (frame.guide.context != core::GuideContext::untouched_untitled ||
+        frame.start_screen.has_value())
     {
         return 0;
     }
@@ -1749,9 +1777,7 @@ void Direct2DRenderer::draw_body_guide(const application::EditorFrame &frame,
     {
         return;
     }
-    const KeycapStyle style{
-        guide_key_padding_dips, 20.0F, 5.0F, frame.palette.panel, frame.palette.panel_border,
-        frame.palette.text};
+    const auto style = guide_keycap_style(frame.palette);
     for (std::size_t index = 0; index < body->rows.size(); ++index)
     {
         const auto &row = body->rows.at(index);
@@ -1766,6 +1792,55 @@ void Direct2DRenderer::draw_body_guide(const application::EditorFrame &frame,
     context_->PushAxisAlignedClip(to_rect(body->note), D2D1_ANTIALIAS_MODE_ALIASED);
     write("打ち始めると消えます", guide_note_format_.Get(), body->note, frame.palette.muted);
     context_->PopAxisAlignedClip();
+}
+
+KeycapStyle Direct2DRenderer::guide_keycap_style(const core::Palette &palette) noexcept
+{
+    return KeycapStyle{guide_key_padding_dips, 20.0F,       5.0F, palette.panel,
+                       palette.panel_border,   palette.text};
+}
+
+std::int32_t Direct2DRenderer::start_key_width(const std::array<core::GuideEntry, 3> &keys)
+{
+    const std::array<std::string, 3> shown{keys.at(0).key, keys.at(1).key, keys.at(2).key};
+    if (measured_start_keys_.has_value() && measured_start_keys_.value() == shown)
+    {
+        return measured_start_key_width_;
+    }
+    measured_start_key_width_ = guide_key_width(*dwrite_.Get(), *guide_key_format_.Get(), keys,
+                                                scaled(guide_key_padding_dips));
+    measured_start_keys_ = shown;
+    return measured_start_key_width_;
+}
+
+void Direct2DRenderer::draw_start_screen(const application::EditorFrame &frame,
+                                         const core::BodyLayout &body)
+{
+    if (!frame.start_screen.has_value())
+    {
+        // 消えたら文字組みを捨てる。また出たら作り直す（Ctrl+P の面と同じ・#900）。
+        start_layouts_.clear();
+        return;
+    }
+    const auto &view = frame.start_screen.value();
+    const auto layout = core::start_screen_layout(
+        body, dpi_, core::start_screen_shape(view.entries, view.lists_read),
+        start_key_width(view.keys));
+    if (!layout.has_value())
+    {
+        return;
+    }
+    // 「ファイルを開く」の鍵は操作の表から（Vim では Ctrl+Shift+O・D71）。
+    const auto open_key =
+        core::operation_guide_entry(core::EditorOperation::open_file, frame.mode).key;
+    StartScreenPainter painter(*context_.Get(), *brush_.Get(),
+                               StartScreenText{dwrite_.Get(), start_title_format_.Get(),
+                                               start_item_format_.Get(), guide_status_format_.Get(),
+                                               status_format_.Get(), guide_key_format_.Get(),
+                                               guide_label_format_.Get(),
+                                               guide_keycap_style(frame.palette), open_key, dpi_},
+                               start_layouts_);
+    painter.paint(view, layout.value(), frame.palette, body.band);
 }
 
 void Direct2DRenderer::draw_status_guide(const application::EditorFrame &frame,
@@ -2171,31 +2246,8 @@ void Direct2DRenderer::draw_keycap(std::string_view key, IDWriteTextFormat *form
 void Direct2DRenderer::draw_keycap_layout(IDWriteTextLayout *shown, const core::LayoutRect &note,
                                           const KeycapStyle &style)
 {
-    DWRITE_TEXT_METRICS metrics{};
-    if (core::width_of(note) <= 0 || core::height_of(note) <= 0 || shown == nullptr ||
-        FAILED(shown->GetMetrics(&metrics)))
-    {
-        return;
-    }
-    const float padding = scaled(style.padding);
-    const float stroke = scaled(1.0F);
-    const auto right = static_cast<float>(note.right);
-    const float width =
-        std::min(metrics.width + (padding * 2.0F), static_cast<float>(core::width_of(note)));
-    const float middle = static_cast<float>(note.top + note.bottom) / 2.0F;
-    const float half_height = scaled(style.height) / 2.0F;
-    const D2D1_RECT_F box{right - width + (stroke / 2.0F), middle - half_height,
-                          right - (stroke / 2.0F), middle + half_height};
-    const float radius = scaled(style.radius);
-    brush_->SetColor(to_color(style.face));
-    context_->FillRoundedRectangle(D2D1::RoundedRect(box, radius, radius), brush_.Get());
-    brush_->SetColor(to_color(style.border));
-    context_->DrawRoundedRectangle(D2D1::RoundedRect(box, radius, radius), brush_.Get(), stroke);
-    brush_->SetColor(to_color(style.text));
-    context_->PushAxisAlignedClip(box, D2D1_ANTIALIAS_MODE_ALIASED);
-    context_->DrawTextLayout(D2D1::Point2F(right - width + padding, static_cast<float>(note.top)),
-                             shown, brush_.Get());
-    context_->PopAxisAlignedClip();
+    // 枠を描くのは paint_keycap の 1 本（起動画面の鍵も同じ・ADR 0172 の決定 5）。
+    paint_keycap(KeycapCanvas{*context_.Get(), *brush_.Get(), scaled(1.0F)}, shown, note, style);
 }
 
 void Direct2DRenderer::draw_palette_label(const application::EditorFrame &frame,
@@ -2352,8 +2404,12 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     const auto panes =
         core::pane_layouts(explorer.body, dpi_, frame.settings.font_size, frame.layout);
     const auto body = core::active_pane_layout(panes, frame.active_side);
+    // 起動画面が出ている frame は本文とステータスバーの案内を出さない（ADR 0172 の決定 1）。
     const auto guide = core::operation_guide_layout(
-        core::GuideRequest{frame.guide.context, body_guide_key_width(frame)}, body, status, dpi_);
+        core::GuideRequest{frame.start_screen.has_value() ? core::GuideContext::hidden
+                                                          : frame.guide.context,
+                           body_guide_key_width(frame)},
+        body, status, dpi_);
     draw_title_bar(frame, title);
     draw_body_area(frame, explorer.body, panes, guide);
     draw_explorer(frame, explorer);

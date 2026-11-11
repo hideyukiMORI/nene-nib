@@ -24,6 +24,10 @@ IDE の「ようこそ」の面。Nib は引数も前回のタブも無い起動
 
 - 起動の道に分岐を足さない・履歴は frame の後の 1 回: **active**（`verify_quiet_paths`・QLT-014 の A/B）。
 - 開く道が `open_listed` の 1 本: **active**（契約）。
+- 描画と窓のクリックの当たりが同じ配置 `core::start_screen_layout` の 1 本を読む（列の幅・中央寄せ・DPI 100 / 150 / 200%・狭い窓・当たりは行の中だけ）: **active**（`nib_tests --start-screen` の配置の契約・#1455）。
+- 題と見出しの墨・選んだ行の `current_line`・選んでいない行の本文の地・鍵の枠の `panel`・長いパスの切れ・行の文字組みの保持（最初の frame 15 個・読みの後に増えるのは自分の行だけ）: **active**（`nib_window_tests --start-screen`・ダークとライト・#1455）。
+- 起動画面が出ている frame で本文とステータスバーの F1 の案内を描かない: **planned**（renderer の `draw` の 1 か所で案内の文脈を `hidden` にする実装はあるが、frame を描いて見る機械の検査は無い）。
+- 窓の確かめ `eng/verify-window.py --start-screen`（↓ で選ぶ・行のクリックで実行・Esc・打鍵で消える）: **planned**（節は書いたが、窓を前面に出す道具なので段 2 の席は回していない）。
 
 ## 結果
 
@@ -60,3 +64,14 @@ IDE の「ようこそ」の面。Nib は引数も前回のタブも無い起動
 8. **行の実行** — 最近使ったファイルは `open_listed`（出どころ = 履歴・開けなければ履歴から外し、読んだ列からも外す）、ブックマークは `open_listed`（出どころ = ブックマーク・知らせて残す・ADR 0063）。「ファイルを開く」は操作 `open_file`、「フォルダを開く」は `choose_explorer_root` を `operation_request` で頼む（ui が `run_operation`・ADR 0078 の決定 8）。「新しいファイル（そのまま打ち始める）」は選びを外すだけ。選びは端で反対の端へ回る（Ctrl+P の面の ↑ ↓ と同じ）。クリックは意図 `ChooseStartEntry{index}`。
 9. **鍵の節** — Ctrl+P（何でも探す）・F1（操作の一覧）・Ctrl+Shift+E（エクスプローラー）の 3 行を操作の表から引く（`operation_guide_entry`）。決定 2 の Ctrl+,（設定）は、設定画面の操作がまだ操作の表に無いので、表に入ったときに行を足す。
 10. **段** — 段 1（#1442・#1018 の前半）は core（`start_entries`・`start_selection_stepped`・`start_key_entries`）・application（条件・選び・鍵の振り分け・行の実行・frame の `start_screen`・契約 `--start-screen`・`verify_quiet_paths` の欄）・adapter（`Win32StartListAdapter`）。ui は合図を送らず frame の `start_screen` も描かないので、段 1 だけでは見た目も鍵も変わらない（今の F1 の案内のまま）。段 2 は ui の描画と hit test と合図の送り・`nib_window_tests` の画素・`eng/verify-window.py --start-screen`。
+
+## 追補 2026-11-11（段 2・#1455・ui の描画と hit test と合図）
+
+段 2 の席（#1455）が決定 5 の見せ方を次の形にした。採用案（`docs/design/2026-10-28-start-screen-look.md`）に無い寸法は、F1 の案内と Ctrl+P の面の値に合わせて席が決めた（試用で直す）。
+
+11. **配置は core の 1 本** — `core::start_screen_layout(body, dpi, shape, key_width)` が列・題・見出し・選べる行（`StartRowLayout`: 全幅の行・印 ▸ の升・項目・右端の補足）・鍵の 3 行を物理画素で返し、`core::start_screen_row_at` が点の下の行を返す。renderer の描画と窓のクリック（押した行と離した行が同じときだけ `ChooseStartEntry`・ADR 0056 の決定 9）が同じ 1 本を読む。窓はマウスの動くたびには読まない（押しと離しのときだけ `EditorController::start_screen()` を引く）。節の形は `start_screen_shape(entries, lists_read)`（空の知らせは読み終えて両方空のときだけ）。
+12. **凍結した寸法（DIP）** — 列の幅 480（本文の欄の幅 − 32 が狭ければそちら）・列は本文の欄（行番号の右）の中央・本文の上端から題まで 36・題の高さは本文の行の 1.5 倍・題の後 22・節の間 16・見出しの高さ 20 と後 4・行の高さは本文の行の高さ・行の左右の余白 6・印の升 18・印と項目の間 8・「はじめる」の行は項目の欄の右半分を補足に割る・鍵の枠の列は測った幅（最小 64）・鍵の枠と説明の間 12。採用案の HTML（`docs/design/2026-10-28-start-screen.html`）の値を 1 DIP = 1 px で写した。
+13. **字と色** — 題は UI の字体（Segoe UI Variable Display）で本文の字の 1.5 倍・`muted`。節の見出しと空の知らせは UI の字体 12 DIP・`muted`。項目（パスと「はじめる」の名前）は本文の字体と大きさ・`text`・末尾を文字単位の「…」で切る。選んだ行は列の全幅を `current_line` で塗り、先頭に ▸ を `muted`。「はじめる」の補足は UI の字体 12 DIP の右寄せ・`muted`、「ファイルを開く」の補足は鍵の枠（鍵は操作の表の `open_file`・Vim では Ctrl+Shift+O）。鍵の案内は本文の案内と同じ鍵の枠（面 `panel`・縁 `panel_border`・字 `text`）と説明（UI の字体 13.5 DIP・`muted`）。色のトークンは足していない。枠を描くのは `paint_keycap` の 1 本（本文の案内・Ctrl+P の面の鍵と共用）。
+14. **案内と同時に出さない** — 起動画面のある frame では、renderer が本文とステータスバーの F1 の案内の文脈を `hidden` にして描かず、案内の鍵の幅も測らない（決定 1）。全面プレビューの間は起動画面も出ない（application の条件）。
+15. **文字組みの保持** — 行の layout は `PaletteRowLayouts`（上限 64）の別の実体に持ち、書式の作り直しと起動画面が消えた frame で捨てる。最初の frame（読みの前）は 15 個（題 1・見出し 2・「はじめる」の名前 3・補足 2・鍵の枠 1・鍵の案内の枠 3 と説明 3）と、鍵の枠の列の幅を測る 3 個（`guide_key_width`・鍵が同じなら測り直さない）。今までの F1 の案内（鍵の枠 3・説明 3・注 1・幅を測る 3）より最初の frame で 8 個多い。書式は題と項目の 2 つを本文の書式と一緒に作る（renderer の作成で 2 つ増える）。
+16. **合図** — ui は最初の frame の present が返り、節目 `frame_presented` を打った後に `FirstFramePresented` を 1 回だけ送る（`EditorWindow::draw_frame` の成功の後・WARP の覆いの子窓の frame が最初・本物の device の採用と device lost の作り直しの後の frame では送らない）。起動の節目の前の道は変えていない。

@@ -2,6 +2,7 @@
 #include "EditorWindowDetail.hpp"
 
 #include "BodyLayout.hpp"
+#include "ChooseStartEntry.hpp"
 #include "DevicePixels.hpp"
 #include "DocumentFormatKind.hpp"
 #include "EditMode.hpp"
@@ -19,6 +20,8 @@
 #include "ScrollTabs.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
+#include "StartScreenLayout.hpp"
+#include "StartScreenView.hpp"
 #include "StatusBarLayout.hpp"
 #include "SwitchPane.hpp"
 #include "SwitchTab.hpp"
@@ -161,6 +164,7 @@ void EditorWindow::release_left(LPARAM data)
     drag_selection(data);
     end_selection_drag();
     release_preview_task(data);
+    release_start_entry(data);
     release_title_bar(data);
     static_cast<void>(point_explorer(WM_LBUTTONUP, data));
 }
@@ -336,6 +340,7 @@ void EditorWindow::activate_caption(WPARAM word) noexcept
 void EditorWindow::click_client(LPARAM data, application::PointerClicks clicks)
 {
     left_pressed_ = std::nullopt;
+    start_pressed_ = std::nullopt;
     preview_task_press_.forget();
     if (controller_.command_palette_active())
     {
@@ -412,6 +417,11 @@ void EditorWindow::click_body(LPARAM data, application::PointerClicks clicks)
         }
         return;
     }
+    // 起動画面の行の上の押しは行を覚えるだけ（本文のキャレットを動かさない・ADR 0172 の決定 4）。
+    if (press_start_entry(data))
+    {
+        return;
+    }
     const auto settings = controller_.delivery().settings;
     const auto other =
         core::other_pane_layout(body_panes(settings), controller_.split().active_side);
@@ -428,6 +438,50 @@ void EditorWindow::click_body(LPARAM data, application::PointerClicks clicks)
     if (core::contains(active_body(settings).band, low_word_of(data), high_word_of(data)))
     {
         place_caret(data, clicks);
+    }
+}
+
+std::optional<std::size_t> EditorWindow::start_row_at(LPARAM data) const
+{
+    const auto view = controller_.start_screen();
+    if (!view.has_value())
+    {
+        return std::nullopt;
+    }
+    // 描画と同じ操作中の枠（面を除いた client の pane_layouts の active_side）。鍵の行は選べない
+    // ので、鍵の枠の幅は当たりに効かない（0 を渡す）。
+    const auto font_size = controller_.font_size();
+    const auto body =
+        core::active_pane_layout(core::pane_layouts(explorer_frame(font_size).body, dpi_, font_size,
+                                                    controller_.split().layout),
+                                 controller_.split().active_side);
+    const auto layout = core::start_screen_layout(
+        body, dpi_, core::start_screen_shape(view.value().entries, view.value().lists_read), 0);
+    if (!layout.has_value())
+    {
+        return std::nullopt;
+    }
+    return core::start_screen_row_at(layout.value(), body, low_word_of(data), high_word_of(data));
+}
+
+bool EditorWindow::press_start_entry(LPARAM data)
+{
+    start_pressed_ = start_row_at(data);
+    return start_pressed_.has_value();
+}
+
+void EditorWindow::release_start_entry(LPARAM data)
+{
+    const auto pressed = std::exchange(start_pressed_, std::nullopt);
+    if (!pressed.has_value())
+    {
+        return;
+    }
+    // 押して離すまでの間に行の列が変わっても（読みが届いた・消えた）、離した点の今の行で比べる。
+    const auto released = start_row_at(data);
+    if (released.has_value() && released.value() == pressed.value())
+    {
+        send(application::ChooseStartEntry{released.value()});
     }
 }
 

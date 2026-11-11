@@ -53,7 +53,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/CommandLine.cpp src/core/FontFamilies.cpp src/core/CommandChoice.cpp src/core/SubsequenceScore.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
     src/core/BytesReservation.cpp src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExplorerLayout.cpp src/core/ExplorerTree.cpp src/core/ExMapCommand.cpp src/core/ExResult.cpp src/core/FontSize.cpp
     src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp src/core/InputHistory.cpp
-    src/core/DateTimeText.cpp src/core/PrintPages.cpp src/core/KeyChord.cpp src/core/KeyMap.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/StartScreen.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
+    src/core/DateTimeText.cpp src/core/PrintPages.cpp src/core/KeyChord.cpp src/core/KeyMap.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/StartScreen.cpp src/core/StartScreenLayout.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
     src/core/NewlineIndex.cpp src/core/ScrollBounds.cpp src/core/GutterLabels.cpp src/core/SearchLine.cpp
     src/core/LiteralPattern.cpp src/core/GoToLineInput.cpp src/core/SubstituteAll.cpp src/core/ShellRegistration.cpp
     src/core/StatusBarLayout.cpp src/core/StatusItems.cpp src/core/LineEndingConversion.cpp
@@ -405,7 +405,7 @@ nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorWindowDetail.cpp src/ui/win32/EditorWindowLifecycle.cpp src/ui/win32/EditorWindowPointer.cpp src/ui/win32/EditorWindowKeys.cpp
     src/ui/win32/EditorWindowOperations.cpp src/ui/win32/EditorWindowIme.cpp src/ui/win32/EditorWindowExplorer.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FallbackSegmentMemo.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
-    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp
+    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/KeycapPainter.cpp src/ui/win32/StartScreenPainter.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp
     src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewMetrics.cpp
     src/ui/win32/PreviewPane.cpp src/ui/win32/FullPreviewBody.cpp src/ui/win32/SaveQuestion.cpp)
 nenenib_link(nenenib_window nenenib_core)
@@ -437,7 +437,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/PrintRenderTests.cpp tests/ui/MemoryXpsTarget.cpp tests/ui/MemoryPackageTarget.cpp
     tests/ui/MatchParenOutlineTests.cpp tests/ui/SaveQuestionTests.cpp
     tests/ui/VimSpecialKeyTests.cpp tests/ui/ClosingStepsTests.cpp
-    tests/ui/PreviewCycleKeyTests.cpp)
+    tests/ui/PreviewCycleKeyTests.cpp tests/ui/StartScreenPaintTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)

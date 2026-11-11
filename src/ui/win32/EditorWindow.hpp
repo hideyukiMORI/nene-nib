@@ -285,6 +285,15 @@ class EditorWindow final
     void press_explorer_key(WPARAM word);
     [[nodiscard]] std::optional<std::size_t> explorer_row_at(LPARAM data) const;
     [[nodiscard]] bool point_explorer(UINT message, LPARAM data);
+    // 起動画面の行のクリック（ADR 0172 の決定 4・EditorWindowPointer.cpp）。点の下の選べる行は
+    // 描画と同じ core::start_screen_layout の 1 本から引く。押しは行の上なら覚えて真（本文の
+    // キャレットを動かさない）、離しは押した行と離した行が同じときだけ ChooseStartEntry を送る
+    // （ADR 0056 の決定 9）。マウスの動くたびには呼ばない。
+    [[nodiscard]] std::optional<std::size_t> start_row_at(LPARAM data) const;
+    [[nodiscard]] bool press_start_entry(LPARAM data);
+    void release_start_entry(LPARAM data);
+    // 最初の frame を画面に出した直後に FirstFramePresented を 1 回だけ送る（ADR 0172 の決定 3）。
+    void signal_first_frame();
     // 面と本文の境のドラッグ（ADR 0162 の追補 D78）。押す・動かす・離す・捕まえを失う・ダブル
     // クリック・カーソル。
     [[nodiscard]] bool explorer_divider_at(std::int32_t x, std::int32_t y) const;
@@ -386,6 +395,10 @@ class EditorWindow final
     // 消す（ADR 0056 の決定 9）。
     std::optional<core::TitleBarTarget> left_pressed_;
     std::optional<core::TitleBarTarget> middle_pressed_;
+    // 起動画面で押した行（離した行と同じときだけ実行し、離したら消す・ADR 0172 の決定 4）。
+    std::optional<std::size_t> start_pressed_;
+    // FirstFramePresented を送ったか（窓で 1 回だけ・ADR 0172 の決定 3）。
+    bool first_frame_signaled_ = false;
     // プレビューの枠で押したチェックボックス（離したとき・次に押したときに消す）。
     PreviewTaskPress preview_task_press_;
     // OSの捕捉の寿命だけ。選択のanchor/caretの正本はcontrollerにある。

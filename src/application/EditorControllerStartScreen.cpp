@@ -151,6 +151,11 @@ std::vector<core::StartEntry> EditorController::start_screen_entries() const
                                std::span<const core::FilePath>(lists.bookmarks));
 }
 
+std::optional<StartScreenView> EditorController::start_screen() const
+{
+    return start_screen_view();
+}
+
 std::optional<StartScreenView> EditorController::start_screen_view() const
 {
     if (!start_screen_shown())
