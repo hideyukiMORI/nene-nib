@@ -41,6 +41,7 @@
 #include "PinTab.hpp"
 #include "PlaceCaret.hpp"
 #include "PointExplorer.hpp"
+#include "PointMinimap.hpp"
 #include "PointPreview.hpp"
 #include "PointText.hpp"
 #include "PointTitleBar.hpp"
@@ -102,5 +103,5 @@ using EditorIntent = std::variant<
     HoverExplorer, LanguageServerTick, MapTimeout, InsertDateTime, SelectDocumentFormat,
     OpenDocumentFormatList, BeginFind, BeginGoToLine, BeginReplace, SetPreviewPlacement,
     PointPreview, PrintDocument, RegisterShell, UnregisterShell, PinTab, FirstFramePresented,
-    ChooseStartEntry>;
+    ChooseStartEntry, PointMinimap>;
 } // namespace nenenib::application

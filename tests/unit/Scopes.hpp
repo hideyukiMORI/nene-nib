@@ -94,6 +94,8 @@ void verify_matchparen_scope();
 void verify_minimap_scope();
 // MinimapPropertyTests.cpp（#1449・ミニマップを出したままの意図の列の性質の試験）
 void verify_minimap_property_scope();
+// MinimapPointerTests.cpp（#1371・ミニマップのクリックとドラッグ）
+void verify_minimap_pointer_scope();
 
 // GuideTests.cpp
 void verify_guide_scope();

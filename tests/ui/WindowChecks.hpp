@@ -41,6 +41,7 @@ void verify_diagnostic_waves();
 void verify_matchparen_outline();
 // ミニマップの絵（ADR 0171 の決定 4・7・#1017 の段 1）。
 void verify_minimap_paint();
+void verify_minimap_presses();
 void verify_save_question();
 // Vim モードの仮想キー → 特別な鍵の表（#1325・Delete は `<Del>`）。
 void verify_vim_special_keys();

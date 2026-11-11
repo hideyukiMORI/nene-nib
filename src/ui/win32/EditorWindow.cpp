@@ -362,6 +362,12 @@ void EditorWindow::follow_minimap(application::EditorDelivery &delivery)
         return;
     }
     shown_minimap_ = controller_.minimap_shown();
+    // 押している間に面が消えた（`:set nominimap`・全面プレビュー）らドラッグは終わり（ADR 0171 の
+    // 決定 5 の追補・end_hidden_explorer_drag と同じ）。
+    if (!shown_minimap_)
+    {
+        end_minimap_drag(WM_CAPTURECHANGED);
+    }
     delivery = controller_.apply(body_view());
 }
 } // namespace nenenib::ui::win32

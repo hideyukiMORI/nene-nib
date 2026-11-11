@@ -47,6 +47,19 @@ inline constexpr std::size_t minimap_line_bytes = 4'096;
 [[nodiscard]] LineNumber minimap_top(LineNumber first_visible, std::size_t visible,
                                      std::size_t total, std::size_t rows) noexcept;
 
+// 面の上の点 y（物理画素）が指す面の段（0 始まり・面の上端 panel_top から 1 段 =
+// minimap_row_pixels）。面の外（ドラッグで上下へ出た点）は負か rows 以上のまま返す（切り詰めは
+// minimap_pointed_first）。
+[[nodiscard]] std::int32_t minimap_pointed_row(std::int32_t y, std::int32_t panel_top) noexcept;
+
+// 面の段 row を押した・ドラッグした後の、見えている最初の行（ADR 0171 の決定 5 の追補）。見えて
+// いる範囲の面（visible 段）の中央が row に来る所（VS Code と同じ「押した所へ跳ぶ・ドラッグで
+// 追従」）。結果は今のスクロールに依らず（同じ段を 2 回押しても動かない）、row について単調で、
+// [1, total - visible + 1] の中。文書が面に収まれば押した段の行を中央に、面が見えている行より
+// 短ければ面の段の割合を文書に写す。見えている行の数以下の文書は 1 行目。
+[[nodiscard]] LineNumber minimap_pointed_first(std::int32_t row, std::size_t visible,
+                                               std::size_t total, std::size_t rows) noexcept;
+
 // 面に出す行 [top, top + rows) を含む窓（決定 4）。held がそれを含み、大きさが
 // minimap_window_limit 以内で文書の中にあれば held のまま。そうでなければ top の周りの前後
 // minimap_reach 行（文書の端では寄せる）。

@@ -211,9 +211,10 @@ records in `docs/quality/`.
   (FR-023), commentary, surround, autopairs and INSERT completion (FR-024), changed-line markers, indent guides
   and a yank flash (FR-025), project-wide search (FR-026) and the `:s` family (FR-027).
 - **FR-028 – FR-030** — a settings dialog with measured speed costs and six display languages are planned. A first
-  minimap (a retained bitmap at the right edge, `:set minimap`, off by default) is in beta.9; clicking and dragging
-  it are planned. A start without files or previous tabs shows a start screen on the empty
-  untitled document (decision D70,
+  minimap (a retained bitmap at the right edge, `:set minimap`, off by default) is in beta.9; a click on it scrolls
+  that line to the middle of the screen and a drag follows the pointer, without moving the caret (*since beta.10*,
+  [ADR 0171](docs/adr/0171-minimap-is-a-retained-bitmap-redrawn-only-for-edited-lines.md)). A start without
+  files or previous tabs shows a start screen on the empty untitled document (decision D70,
   [ADR 0172](docs/adr/0172-start-screen-shows-recent-files-and-entry-actions-on-the-untouched-untitled-document.md)):
   the title, up to 10 recent files and 10 bookmarks as name and folder (read once after the first frame),
   新しいファイル / ファイルを開く / フォルダを開く and the main shortcuts in one centred column. ↑ ↓ (and `j` `k` in

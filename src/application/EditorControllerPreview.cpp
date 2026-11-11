@@ -260,8 +260,10 @@ template <typename Row, typename Key>
     {
         return PreviewFullRoute::select;
     }
-    const bool body_pointer =
-        std::holds_alternative<PlaceCaret>(intent) || std::holds_alternative<PointText>(intent);
+    // ミニマップの押し（PointMinimap）も、全面の間は面が無いので ui が送らず、届いても何もしない。
+    const bool body_pointer = std::holds_alternative<PlaceCaret>(intent) ||
+                              std::holds_alternative<PointText>(intent) ||
+                              std::holds_alternative<PointMinimap>(intent);
     return body_pointer ? PreviewFullRoute::ignore : PreviewFullRoute::refuse;
 }
 
