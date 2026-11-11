@@ -953,10 +953,11 @@ void verify_vim_visual_step_edges()
     // `+` と同じ移動に、`<BS>` は ADR 0049 で行をまたぐ h に、`u` は ADR 0015 の決定 10 で
     // 小文字化になったので、ここには効かない文字 `Z` `Q` と `.` を置く。`D` は #1417 で行単位の
     // 削除になった（fixture visual-line-command- が測る）。`A` は #1436 で選択の終わりの INSERT に
-    // なった（fixture visual-change-key- が測る）。
+    // なった（fixture visual-change-key- が測る）。`p` は #1418 で選択の置き換えになった（fixture
+    // visual-put- が測る）。
     for (const VimKey &key :
-         {VimKey{VimCharacter{U'p'}}, VimKey{VimCharacter{U'.'}}, VimKey{VimCharacter{U'Z'}},
-          VimKey{VimCharacter{U'Q'}}, VimKey{VimSpecialKey::control_r}, VimKey{VimCharacter{U'z'}}})
+         {VimKey{VimCharacter{U'.'}}, VimKey{VimCharacter{U'Z'}}, VimKey{VimCharacter{U'Q'}},
+          VimKey{VimSpecialKey::control_r}, VimKey{VimCharacter{U'z'}}})
     {
         const auto step = vim_step(
             visual, VimEditorView{buffer, selection, VimViewport{LineNumber{1}, 64, 0}}, key);

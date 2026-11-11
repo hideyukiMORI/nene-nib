@@ -140,6 +140,7 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 [[nodiscard]] VimStep entered_insert(const VimState &state, Offset caret);
 [[nodiscard]] Offset visual_restore(const VimState &state, const TextBuffer &text,
                                     const Selection &selection);
+[[nodiscard]] OffsetRange removed_lines_range(const TextBuffer &text, const VimMotionRange &range);
 [[nodiscard]] VimStep removed_exactly(const VimState &state, const TextBuffer &text,
                                       const VimMotionRange &range);
 [[nodiscard]] VimStep changed(const VimState &state, const TextBuffer &text,
@@ -232,7 +233,11 @@ repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::
                                     ShiftBy shift);
 [[nodiscard]] VimRegister register_read(const VimState &state,
                                         const std::optional<VimRegisterSelection> &chosen);
+[[nodiscard]] bool refuses_put(const VimState &state, const VimRegister &source);
 [[nodiscard]] VimStep put_step(const VimState &state, const VimEditorView &view, VimPutSide side);
+// 文字単位と行単位の VISUAL の `p` `P`（#1418・Vim の nv_put_opt）。
+// 選択を消してからレジスタの本文で置き換える。
+[[nodiscard]] VimStep visual_put(const VimState &state, const VimEditorView &view, VimPutSide side);
 [[nodiscard]] VimStep started_replacement(const VimState &state);
 [[nodiscard]] VimStep replacement_key(const VimState &state, const VimEditorView &view, VimKey key);
 [[nodiscard]] VimMode rested_mode(VimMode mode);

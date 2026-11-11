@@ -396,9 +396,10 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 }
 } // namespace detail
 
-namespace
+namespace detail
 {
 // 行を消す範囲。最終行を消すときだけ 1 つ前の行の末尾から始める（改行を 1 つだけ消すため）。
+// 行単位の `d` と VISUAL の `p` `P`（#1418）が共用する。
 [[nodiscard]] OffsetRange removed_lines_range(const TextBuffer &text, const VimMotionRange &range)
 {
     const LineNumber first = line_of(text, range.range.begin);
@@ -408,7 +409,7 @@ namespace
                                                         : range.range.begin;
     return OffsetRange{begin, text.line_terminator_end(last)};
 }
-} // namespace
+} // namespace detail
 
 namespace detail
 {

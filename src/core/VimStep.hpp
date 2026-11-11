@@ -6,6 +6,7 @@
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
+#include "VimLastVisual.hpp"
 #include "VimMarks.hpp"
 #include "VimMode.hpp"
 #include "VimRepeatFailure.hpp"
@@ -57,6 +58,11 @@ struct VimStep
     // なので marks には入れず、controller が効果を写した後のキャレットから文書のマークへ置く
     // （CRLF の文書で入れた本文の改行が長くなっても同じ行の中の差は変わらない）。
     std::optional<std::size_t> insert_left = std::nullopt;
+    // VISUAL の `p` `P` の後の前の選択（`gv`・ADR 0018 の追補 #1418）。Vim の nv_put_opt は貼った
+    // 後に b_visual の両端を貼った本文の両端（b_op_start・b_op_end）へ置き直す。写した編集の後の
+    // 位置なので marks には入れず、controller が効果を写した後に文書の前の選択へ置く
+    // （insert_left と同じ形・行のずれは掛けない）。
+    std::optional<VimLastVisual> visual_after = std::nullopt;
 };
 
 // 入力行の取消のあとの状態（ADR 0032 の決定 1）。保留中のオペレータと回数と組み立て中の
@@ -104,7 +110,8 @@ void vim_macro_typed(VimState &state, std::span<const VimKey> keys);
 [[nodiscard]] bool vim_continues_count(const VimState &state, const VimKey &key) noexcept;
 
 // 読んだ本文を無名へ置く側か（追補（#848）の決定 D）。`:set clipboard=unnamed` で、レジスタを
-// 選ばず・オペレータも次の鍵の待ちも無い NORMAL の `p` `P`（回数の後でも）のとき真。
+// 選ばず・オペレータも次の鍵の待ちも無い NORMAL と文字単位・行単位の VISUAL の `p` `P`（回数の
+// 後でも・#1418）のとき真。
 // 真なら controller は vim_unnamed_loaded、偽なら vim_clipboard_loaded で置く（2
 // つの側は重ならない）。
 [[nodiscard]] bool vim_reads_unnamed_clipboard(const VimState &state, const VimKey &key) noexcept;

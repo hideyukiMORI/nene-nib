@@ -106,6 +106,26 @@ void place_insert_left(EditorState &state, std::optional<std::size_t> left)
     state = state.with_vim_marks(std::move(marks));
 }
 
+// VISUAL の `p` `P` の後の前の選択を置く（ADR 0018 の追補 #1418）。engine は貼った本文の両端を
+// 効果を写した後の位置で返すので、place_insert_left と同じく効果を写した後に置く。
+void place_visual_after(EditorState &state, const std::optional<core::VimLastVisual> &visual)
+{
+    if (!visual.has_value())
+    {
+        return;
+    }
+    core::VimMarks marks = state.vim_marks();
+    marks.last_visual = visual;
+    state = state.with_vim_marks(std::move(marks));
+}
+
+// 効果を写した後の位置で engine が返すマーク（`'^` と VISUAL の `p` `P` の後の前の選択）を置く。
+void placed_after_effect(EditorState &state, const core::VimStep &step)
+{
+    place_insert_left(state, step.insert_left);
+    place_visual_after(state, step.visual_after);
+}
+
 // 確定の検索の鍵と同じ vim_find_match 1 本で探した当たりの位置（ADR 0041 の決定 1）。
 // 不一致は当たり無しで、報せは出さない。
 [[nodiscard]] std::optional<core::TextPosition> found_match(const core::TextBuffer &text,
@@ -799,7 +819,7 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     adopt_vim_marks(step.marks);
     // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->perform(value); }, step.effect);
-    place_insert_left(state_, step.insert_left);
+    placed_after_effect(state_, step);
     // 検索の報せは Ex の結果と同じ 1 本に出し、次の入力で消える（ADR 0032 の決定 5）。
     if (step.notice.has_value())
     {
