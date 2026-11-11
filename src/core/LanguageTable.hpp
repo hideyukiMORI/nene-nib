@@ -15,6 +15,9 @@ namespace nenenib::core
 // ほかは最後の '.' の後ろの拡張子を ASCII の大文字小文字を区別せずに表で引き、無ければ plain。
 // 拡張子の無い名前・空のパスも plain（決定 8・中身や shebang は見ない）。
 [[nodiscard]] Language language_of_path(std::string_view path) noexcept;
+// C と C++ のヘッダか（#1390）。名前の最後の '.' の後ろの拡張子が h・hh・hpp・hxx（ASCII の大文字
+// 小文字を畳む）。どれも拡張子の表の c か cpp の行で、言語は language_of_path が決める。
+[[nodiscard]] bool header_of_path(std::string_view path) noexcept;
 // Vim の filetype 名（plain は "text"）。
 [[nodiscard]] std::string_view language_name(Language language) noexcept;
 // language_name の逆引き。名前は小文字だけを受け、引けなければ空（決定 4）。

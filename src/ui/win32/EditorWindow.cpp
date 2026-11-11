@@ -94,20 +94,20 @@ void EditorWindow::resize()
 // は最初の 1 行で返る）。
 core::PaneLayouts EditorWindow::body_panes(const core::EditorSettings &settings) const
 {
-    const auto minimap = core::minimap_layout(explorer_frame(settings.font_size).body, dpi_,
-                                              settings.font_size, controller_.minimap_shown());
+    const auto minimap = core::minimap_layout(explorer_frame().body, dpi_, settings.font_size,
+                                              controller_.minimap_shown());
     return core::pane_layouts(minimap.body, dpi_, settings.font_size, controller_.split().layout);
 }
 
 // 面の配置。出ているかと幅は controller の explorer_width（面の表示値が frame に載るのと同じ値・
-// ドラッグの間はその幅・ADR 0162 の追補 D78）が決める。引数は字の大きさだけ（マウスの道は
-// controller_.font_size() の安い読みを渡し、delivery を作らない・Issue #1380 の R-2）。
-core::ExplorerLayout EditorWindow::explorer_frame(core::FontSize font_size) const
+// ドラッグの間はその幅・ADR 0162 の追補 D78）が決める。寸法は字の大きさに依らない（#1390）ので、
+// マウスの道も delivery を作らない（Issue #1380 の R-2）。
+core::ExplorerLayout EditorWindow::explorer_frame() const
 {
     RECT client{};
     GetClientRect(window_, &client);
     return core::explorer_layout(core::LayoutRect{0, 0, client.right, client.bottom}, dpi_,
-                                 font_size, controller_.explorer_width());
+                                 controller_.explorer_width());
 }
 
 core::BodyLayout EditorWindow::active_body(const core::EditorSettings &settings) const
@@ -131,8 +131,7 @@ application::VisibleLines EditorWindow::body_view() const
     RECT client{};
     GetClientRect(window_, &client);
     // 面の行数も窓全体の高さから数える（分割の枠の高さではない・#1125・ADR 0162 の追補）。
-    auto sent = window_lines(body, core::LayoutRect{0, 0, client.right, client.bottom}, dpi_,
-                             delivered.settings.font_size);
+    auto sent = window_lines(body, core::LayoutRect{0, 0, client.right, client.bottom}, dpi_);
     sent.geometry = geometry;
     return sent;
 }

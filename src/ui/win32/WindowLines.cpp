@@ -5,12 +5,12 @@
 namespace nenenib::ui::win32
 {
 application::VisibleLines window_lines(const core::BodyLayout &body, core::LayoutRect client,
-                                       std::uint32_t dpi, core::FontSize font_size) noexcept
+                                       std::uint32_t dpi) noexcept
 {
     return application::VisibleLines{body.visible_lines,
                                      {},
                                      core::width_of(client),
                                      core::height_of(client),
-                                     core::explorer_panel_lines(client, dpi, font_size)};
+                                     core::explorer_panel_lines(client, dpi)};
 }
 } // namespace nenenib::ui::win32
