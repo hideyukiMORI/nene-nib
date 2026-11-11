@@ -282,6 +282,8 @@ class EditorController final
     void flush_key_map_pending();
     // 積んだ鍵を流さずに捨てる（窓が閉じていく EndSession だけ）。
     void discard_key_map_pending();
+    // 入口で、意図を写す前に待ちの鍵を流すか捨て、Vim の先頭の判定を捨てる（#1374）。
+    void settle_pending_keys(const EditorIntent &intent);
     // 待ちの合図（決定 4）。積んだ鍵が無ければ何も変えない（描き直さない）。
     void accept(const MapTimeout &);
     // 設定の `maps` と `mapleader` から表を作り直す。設定を置く 2 か所（起動・persist_settings）
@@ -301,6 +303,8 @@ class EditorController final
     // engine の 1 歩（鍵の vim_step か `:N` の vim_line_jumped）を測って写す 1 本。
     // 要求の往復・マーク・効果・キャレットの寄せは鍵と同じ（Issue #847）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> stepped_vim(const VimStepSource &source);
+    // stepped_vim が測った 1 歩を状態へ写す（寄せと先頭の判定の前まで）。
+    void applied_vim_step(const core::VimStep &step, core::VimMode before);
     [[nodiscard]] std::expected<core::VimStep, TextLayoutFailure>
     measured_vim_step(const VimStepSource &source);
     // engine の要求（表示領域・行の画面行数・行の中の画面行）に 1 つ応えて view へ置く（ADR 0129 の
@@ -820,7 +824,7 @@ class EditorController final
     // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();
-    void settle_vim_step(const core::VimStep &step);
+    void settle_vim_step(const core::VimStep &step, const std::optional<ScrollState> &held);
     // engine を通らない意図の後に、Vim の NORMAL と VISUAL のキャレットが 1 文字の境（NORMAL は行の
     // 最後の文字の上）から外れていたときだけ寄せる。INSERT は寄せない。入口 apply の終わりの 1 か所
     // から呼ぶ（ADR 0053 の追補 #1309）。
