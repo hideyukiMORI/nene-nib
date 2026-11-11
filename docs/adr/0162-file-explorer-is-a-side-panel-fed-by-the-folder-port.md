@@ -111,3 +111,14 @@ PR #1121 の独立レビュー（R6-2 / R4-1）の後続。設計席の判断（
 6. **やらないこと。** プレビューのタブ（クリックで開いたタブを次のクリックで置き換える形）は施主の判断の後で別の Issue。
 7. **問いとの順。** 1 打目で開いたファイルが巨大な行の問い（ADR 0140 の決定 2）を出したとき、窓は同じ配達の中でモーダルに聞いて答えを意図 `SelectDisplay` で返す。2 打目はその後に来るので、答え（使う人の操作）が印を消し、2 打目は画面の行を引く 1 回のクリック（開いているので切り替えるだけ・読まない・もう一度聞かない）になる。問いの窓が出ている間の実機の押し（本窓は使えないので届かない、と読んでいる）は確かめていない（施主の試用・レビュー V-1391 の F-1）。
 8. **限界。** 製品の読みは worker なので、1 打目の読みが裏で失敗したときも 2 打目は焦点を本文へ移す（読みの結果を待たない・失敗の 1 行は出る・本文は前の文書のまま）。害は小さいので直さない（レビュー V-1391 の F-2）。
+
+## 追補（2026-11-11・#1450・施主の報告）ルートのフォルダ選びの箱に WSL のディストリを場所として足す
+
+施主の報告（2026-11-11）: 決定 7 の `FOS_PICKFOLDERS` の箱の左の一覧に WSL の場所（`\wsl.localhost\<distro>`）が出ず、アドレス欄に直打ちしないと選べない。Issue #1450 の候補 A（`IFileDialog::AddPlace`）を、箱を出さない実測（`D:/NeNeNib/outputs/20261111/wsl-root-probe.md`）で確かめてから採る。
+
+1. **場所はディストリごと。** 入れ終わったディストリ（レジストリの `State` が 1）ごとに `\wsl.localhost\<名前>` を登録の順で箱の左の一覧の下（`FDAP_BOTTOM`）に足す。どれを足すかは core の純関数 `wsl_places(span<const WslDistribution>)` の 1 本（名前が空・`.` `..`・`\ / : * ? " < > |`・制御文字を含むものと同じ名前の 2 つ目は外す）。`\wsl.localhost` の 1 つ（Linux の名前空間・非ファイルシステム）は、`FOS_FORCEFILESYSTEM` の箱で歩けるかを `Show` を呼ばずに確かめられないので採らない。ディストリの item は `SFGAO_FILESYSTEM` を持ち、そのまま選べる（実測）。`docker-desktop` も入れ終わったディストリとして並ぶ（外す規則は置かない）。
+2. **一覧はレジストリから・箱を出すときだけ。** application の `WslDistributionPort`（`distributions()` → `expected<vector<core::WslDistribution>, WslListFailure>`）を adapters の `Win32WslDistributions` が `HKCU\Software\Microsoft\Windows\CurrentVersion\Lxss` の副鍵の `DistributionName` と `State` から読む（実測 0.13 ms・`wsl.exe -l -q` は process を起こして 272 ms）。鍵が無いのは失敗ではなく空の一覧。合成ルートが `TimingPort` と束ねた `WindowPorts` で ui の `EditorWindow` に渡し（引数は 4 つまで・`readability-function-size`）、ui は操作 `choose_explorer_root` の中でだけ読む。起動・開く・打鍵の道では読まない。
+3. **失敗は黙って足さない。** 一覧が読めない・UTF-16 に戻せない・`SHCreateItemFromParsingName` か `AddPlace` が失敗した場所は外して箱を出す（知らせない）。箱を出す前に待つ形にしない。`SHCreateItemFromParsingName` は経路を解くだけで中身を列挙せず、WSL の VM が止まっていても起こさなかった（実測・無いディストリの名前でも S_OK になるので「あるか」はレジストリで決める）。process で最初の UNC の解決に約 65 ms（2 回目から 0.1〜0.3 ms・`Show` の中で同じ費用が出るかは未確認）。
+4. **OS に触れる所。** レジストリは adapters（`advapi32` は adapters だけ・ARC-007）、`SHCreateItemFromParsingName` と `AddPlace` は ui の `FileDialog` の `choose_folder(owner, places)`（COM は `ComPtr`・CPP-017）。
+5. **契約。** core: `nib_tests --wsl-places`（入れ終わったものだけ・登録の順・使えない名前・同じ名前・UTF-8 の名前・空）。adapters: `nib_adapter_tests --wsl`（試験の根 `Software\NeNeNib\test-<pid>\Lxss` に同じ形の鍵を書いて読む・鍵が無ければ空・名前の無い副鍵は外す・本当の `Lxss` は読まない）。箱の左の一覧に実際に出るか・名前とアイコン・クリックで VM が起きるかは箱を出さないと見えないので、施主の試用で確かめる（自動の試験は無い）。
+6. **限界。** Windows 11 が箱の左の一覧に自分で「Linux」を出さない理由は確かめていない。古い Windows 10 で `\wsl.localhost` が無い（`\wsl$` だけの）機械は考えない。候補 B（最近のルート・フォルダを窓に落とす）と C（`:set root=` に Linux の書き方）は後続。
