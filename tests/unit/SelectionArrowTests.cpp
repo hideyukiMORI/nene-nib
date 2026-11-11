@@ -2,6 +2,7 @@
 // 通常モードで選択があるときの Shift なしの移動は Windows の標準（メモ帳の RichEdit の実測）どおり
 // 選択の端から動く: ← → は先頭 / 末尾へ畳むだけ、↑ Home PgUp は先頭の側、↓ End PgDn は末尾の側の
 // 画面行から、上下の横位置はキャレット（動く端）のもの。Vim のモードと Shift つきは変えない。
+#include "CaretAffinity.hpp"
 #include "CaretMotion.hpp"
 #include "DisplayForm.hpp"
 #include "EditMode.hpp"
@@ -205,6 +206,61 @@ void verify_wrapped_origin()
            "wrapped End goes to the end of the end's screen row");
 }
 
+// 畳んだ後のキャレットの位置と画面行の側。
+[[nodiscard]] bool rests(const app::EditorFrame &frame, core::TextPosition position,
+                         core::CaretAffinity affinity)
+{
+    return frame.caret.position == position && frame.caret.affinity == affinity &&
+           !selected(frame) && !frame.layout_failure.has_value();
+}
+
+// 6b. 折り返しの境目で ← → で畳んだキャレットは、選択を描いていた側の画面行に留まる（末尾へ畳めば
+// 前の画面行の行末＝trailing・先頭へ畳めば後ろの画面行の行頭＝leading）。その後の ↓ ↑ もその画面行
+// から動く（Windows の実測なし・設計席の決め・ADR 0009 の追補）。
+void verify_wrapped_collapse_row()
+{
+    Editing editing;
+    prepare(editing, "abcdefghijklmnop", narrow);
+    auto &controller = editing.controller();
+    // 前向き: Shift+End の末尾（1 つ目の画面行の右端）へ → で畳み、↓ は → を押さない ↓ と同じ所。
+    applied(controller, app::PlaceCaret{at(1, 2), SelectionAnchoring::collapse});
+    applied(controller, move(CaretMotion::line_end, SelectionAnchoring::extend));
+    const auto direct = controller.apply_frame(move(CaretMotion::next_line));
+    applied(controller, app::PlaceCaret{at(1, 2), SelectionAnchoring::collapse});
+    applied(controller, move(CaretMotion::line_end, SelectionAnchoring::extend));
+    expect(rests(controller.apply_frame(move(CaretMotion::next_character)), at(1, 5),
+                 core::CaretAffinity::trailing),
+           "wrapped Right collapses at the end of the screen row the selection was drawn on");
+    expect(rests(controller.apply_frame(move(CaretMotion::next_line)), direct.caret.position,
+                 direct.caret.affinity) &&
+               direct.caret.position == at(1, 9) &&
+               direct.caret.affinity == core::CaretAffinity::trailing,
+           "wrapped Down after collapsing with Right leaves the selection's screen row");
+    // 前向き: 2 つ目の画面行の右端へ畳んだ後の ↑ は 1 つ目の画面行の右端へ。
+    applied(controller, app::PlaceCaret{at(1, 6), SelectionAnchoring::collapse});
+    applied(controller, move(CaretMotion::line_end, SelectionAnchoring::extend));
+    applied(controller, move(CaretMotion::next_character));
+    expect(rests(controller.apply_frame(move(CaretMotion::previous_line)), at(1, 5),
+                 core::CaretAffinity::trailing),
+           "wrapped Up after collapsing with Right goes up from the selection's screen row");
+    // 後ろ向き: 錨（末尾）が境目なら → は前の画面行の行末に畳み、↓ はそこから。
+    select(controller, at(1, 9), at(1, 7));
+    expect(rests(controller.apply_frame(move(CaretMotion::next_character)), at(1, 9),
+                 core::CaretAffinity::trailing),
+           "wrapped Right with a backward selection collapses on the row it was drawn on");
+    expect(rests(controller.apply_frame(move(CaretMotion::next_line)), at(1, 13),
+                 core::CaretAffinity::trailing),
+           "wrapped Down after the backward collapse goes down from that row");
+    // 前向き: 錨（先頭）が境目なら ← は後ろの画面行の行頭に畳み、↓ はそこから。
+    select(controller, at(1, 5), at(1, 7));
+    expect(rests(controller.apply_frame(move(CaretMotion::previous_character)), at(1, 5),
+                 core::CaretAffinity::leading),
+           "wrapped Left collapses at the head of the row the selection starts on");
+    expect(rests(controller.apply_frame(move(CaretMotion::next_line)), at(1, 9),
+                 core::CaretAffinity::leading),
+           "wrapped Down after collapsing with Left goes down from that row");
+}
+
 // 7. 格子（巨大な行の表示・1 画面行 8 升）でも同じ起点。
 void verify_grid_origin()
 {
@@ -275,6 +331,7 @@ void verify_selection_arrows_scope()
     verify_page_origin();
     verify_edges_combined();
     verify_wrapped_origin();
+    verify_wrapped_collapse_row();
     verify_grid_origin();
     verify_document_edges();
     verify_shifted_unchanged();

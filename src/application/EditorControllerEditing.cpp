@@ -59,12 +59,19 @@ constexpr std::size_t single_page_line = 1;
 // ADR 0009 の追補）。← ↑ Home PgUp は選択の先頭、→ ↓ End PgDn は選択の末尾から動く。語と文書の
 // 端の移動はキャレットのまま（Ctrl+← → の起点は語の境 #1394 の後で決める）。Vim のモード・Shift
 // つき・選択が無いときはキャレット。
+// 選択の端からの規則（#1393）が効くか: 通常モード・Shift なし・選択あり。判定はここ 1 か所。
+[[nodiscard]] bool moves_from_selection(const EditorState &state, const MoveCaret &intent)
+{
+    const core::Selection selection = state.selection();
+    return state.mode() == core::EditMode::ordinary &&
+           intent.anchoring == core::SelectionAnchoring::collapse &&
+           selection.anchor != selection.caret;
+}
+
 [[nodiscard]] core::Offset motion_origin(const EditorState &state, const MoveCaret &intent)
 {
     const core::Selection selection = state.selection();
-    if (state.mode() != core::EditMode::ordinary ||
-        intent.anchoring != core::SelectionAnchoring::collapse ||
-        selection.anchor == selection.caret)
+    if (!moves_from_selection(state, intent))
     {
         return selection.caret;
     }
@@ -93,10 +100,7 @@ constexpr std::size_t single_page_line = 1;
 // 選択があるときの ← → は起点（選択の端）へ畳むだけで、そこから動かない（#1393）。
 [[nodiscard]] bool collapses_in_place(const EditorState &state, const MoveCaret &intent)
 {
-    const core::Selection selection = state.selection();
-    return state.mode() == core::EditMode::ordinary &&
-           intent.anchoring == core::SelectionAnchoring::collapse &&
-           selection.anchor != selection.caret &&
+    return moves_from_selection(state, intent) &&
            (intent.motion == core::CaretMotion::previous_character ||
             intent.motion == core::CaretMotion::next_character);
 }
@@ -286,7 +290,8 @@ void EditorController::accept(const MoveCaret &intent)
     if (collapses_in_place(state_, intent))
     {
         wanted_x_.reset();
-        move_caret_to(origin, core::SelectionAnchoring::collapse);
+        // 畳んだキャレットは選択を描いていた側の画面行に留まる（折り返しの境目・#1393）。
+        move_caret_to(origin, core::SelectionAnchoring::collapse, origin_affinity(origin));
         return;
     }
     if (move_visual(intent, origin))

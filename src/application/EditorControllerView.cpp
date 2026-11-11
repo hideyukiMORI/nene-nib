@@ -276,19 +276,29 @@ bool EditorController::move_visual(const MoveCaret &intent, core::Offset origin)
 }
 
 // 上下の移動の起点の位置（#1393）。起点がキャレットならキャレットの位置（at_caret）のまま。
-// 選択の端なら、折り返しの境目では先頭は後ろの画面行、末尾は前の画面行（選択を描く側）。
 std::expected<core::TextLocation, TextLayoutFailure>
 EditorController::origin_location(VisualTextView &view, const core::TextLocation &at_caret,
                                   core::Offset origin) const
 {
-    const core::Offset caret = state_.selection().caret;
-    if (origin == caret)
+    if (origin == state_.selection().caret)
     {
         return at_caret;
     }
-    return view.location(core::TextCaret{state_.text().position_of(origin),
-                                         origin < caret ? core::CaretAffinity::leading
-                                                        : core::CaretAffinity::trailing});
+    return view.location(
+        core::TextCaret{state_.text().position_of(origin), origin_affinity(origin)});
+}
+
+// 起点の画面行の側（#1393）。起点がキャレットならキャレットの affinity のまま。キャレットでない側の
+// 端なら、折り返しの境目では先頭は後ろの画面行（leading）、末尾は前の画面行（trailing）＝選択を
+// 描いていた側。
+core::CaretAffinity EditorController::origin_affinity(core::Offset origin) const noexcept
+{
+    const core::Offset caret = state_.selection().caret;
+    if (origin == caret)
+    {
+        return state_.caret_affinity();
+    }
+    return origin < caret ? core::CaretAffinity::leading : core::CaretAffinity::trailing;
 }
 
 // 本文の最初か最後の画面行で止まった上下の移動（↑ ↓ PgUp PgDn）は、本文の先頭か末尾へ着く
