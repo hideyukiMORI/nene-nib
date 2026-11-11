@@ -2,6 +2,7 @@
 
 #include "CommandInputWorkload.hpp"
 #include "CompletionPrefixWorkload.hpp"
+#include "EditedHistoryWorkload.hpp"
 #include "ExCompletionWorkload.hpp"
 #include "ExplorerFrameWorkload.hpp"
 #include "FileNameWorkload.hpp"
@@ -32,7 +33,8 @@ using ProbeSelection =
                  CommandInputWorkload, ExCompletionWorkload, CompletionPrefixWorkload,
                  PaletteChoiceWorkload, OperationChoiceWorkload, SearchSpanWorkload,
                  TextObjectWorkload, MarkdownWorkload, NewlineIndexWorkload, LexerWorkload,
-                 ExplorerFrameWorkload, VimBlockWorkload, WordObjectWorkload>;
+                 ExplorerFrameWorkload, VimBlockWorkload, WordObjectWorkload,
+                 EditedHistoryWorkload>;
 
 [[nodiscard]] std::optional<ProbeSelection> workload_of(std::string_view name) noexcept;
 [[nodiscard]] std::string input_of(ProbeSelection workload);

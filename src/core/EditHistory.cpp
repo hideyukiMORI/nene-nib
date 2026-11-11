@@ -1,12 +1,17 @@
 #include "EditHistory.hpp"
 
 #include <cstddef>
+#include <memory>
 #include <utility>
+#include <vector>
 
 namespace nenenib::core
 {
 namespace
 {
+// 履歴の塊の件数（ADR 0180 の決定 2）。足すときに写す末尾の塊はこれ未満の参照。
+constexpr std::size_t history_block_entries = 256;
+
 // まとめてよいのは「削除を伴わない入力が、直前の入力の直後に続いたとき」だけ。
 // 移動・削除・貼り付け・改行は EditBoundary::separate で来て単位を閉じる（ADR 0009 の決定 3）。
 [[nodiscard]] bool joinable(const Edit &previous, const Edit &edit) noexcept
@@ -71,34 +76,58 @@ std::optional<Edit> absorbed(const Edit &previous, const Edit &edit)
     return std::nullopt;
 }
 
-EditHistory::EditHistory(std::vector<Entry> edits, std::size_t position, EditBoundary tail,
-                         std::size_t revision)
-    : edits_(std::move(edits)), position_(position), tail_(tail), revision_(revision)
+EditHistory::EditHistory(std::shared_ptr<const Blocks> blocks, std::size_t size,
+                         std::size_t position, EditBoundary tail, std::size_t revision)
+    : blocks_(std::move(blocks)), size_(size), position_(position), tail_(tail), revision_(revision)
 {
 }
 
 EditHistory EditHistory::empty()
 {
-    return EditHistory(std::vector<Entry>{}, 0, EditBoundary::separate, 0);
+    return EditHistory(std::make_shared<const Blocks>(), 0, 0, EditBoundary::separate, 0);
+}
+
+// 写すのは塊の列（count / 塊の件数 + 1 個の参照）と、残す件数が割り切れなければ末尾の塊の頭
+// （塊の件数未満の参照）だけ（ADR 0180 の決定 2）。
+std::shared_ptr<const EditHistory::Blocks> EditHistory::kept_with(std::size_t count,
+                                                                  Entry entry) const
+{
+    const std::size_t full = count / history_block_entries;
+    const std::size_t rest = count % history_block_entries;
+    Blocks blocks(blocks_->begin(), blocks_->begin() + static_cast<std::ptrdiff_t>(full));
+    Block last;
+    last.reserve(rest + 1);
+    if (rest > 0)
+    {
+        const Block &partial = *blocks_->at(full);
+        last.assign(partial.begin(), partial.begin() + static_cast<std::ptrdiff_t>(rest));
+    }
+    last.push_back(std::move(entry));
+    blocks.push_back(std::make_shared<const Block>(std::move(last)));
+    return std::make_shared<const Blocks>(std::move(blocks));
+}
+
+const Edit &EditHistory::entry_at(std::size_t index) const
+{
+    return *blocks_->at(index / history_block_entries)->at(index % history_block_entries);
 }
 
 EditHistory EditHistory::pushed(const Edit &edit, EditBoundary boundary) const
 {
-    std::vector<Entry> next(edits_.begin(),
-                            edits_.begin() + static_cast<std::ptrdiff_t>(position_));
-    if (tail_ == boundary && !next.empty())
+    if (tail_ == boundary && position_ > 0)
     {
-        auto merged = folded(*next.back(), edit, boundary);
+        auto merged = folded(entry_at(position_ - 1), edit, boundary);
         if (merged.has_value())
         {
-            next.back() = std::make_shared<const Edit>(std::move(merged.value()));
-            return EditHistory(std::move(next), position_, boundary, revision_ + 1);
+            auto blocks =
+                kept_with(position_ - 1, std::make_shared<const Edit>(std::move(merged.value())));
+            return EditHistory(std::move(blocks), position_, position_, boundary, revision_ + 1);
         }
     }
     // raw 入力の所有移管は受けない。呼出元に残る可変 alias からこの entry を隔離する。
-    next.push_back(std::make_shared<const Edit>(edit));
-    const std::size_t size = next.size();
-    return EditHistory(std::move(next), size, boundary, revision_ + 1);
+    auto blocks = kept_with(position_, std::make_shared<const Edit>(edit));
+    const std::size_t size = position_ + 1;
+    return EditHistory(std::move(blocks), size, size, boundary, revision_ + 1);
 }
 
 std::expected<Edit, HistoryFailure> EditHistory::undo() const
@@ -107,16 +136,16 @@ std::expected<Edit, HistoryFailure> EditHistory::undo() const
     {
         return std::unexpected(HistoryFailure::nothing_to_undo);
     }
-    return *edits_.at(position_ - 1);
+    return entry_at(position_ - 1);
 }
 
 std::expected<Edit, HistoryFailure> EditHistory::redo() const
 {
-    if (position_ >= edits_.size())
+    if (position_ >= size_)
     {
         return std::unexpected(HistoryFailure::nothing_to_redo);
     }
-    return *edits_.at(position_);
+    return entry_at(position_);
 }
 
 std::optional<Edit> EditHistory::applied(std::size_t index) const
@@ -125,30 +154,31 @@ std::optional<Edit> EditHistory::applied(std::size_t index) const
     {
         return std::nullopt;
     }
-    return *edits_.at(index);
+    return entry_at(index);
 }
 
+// 封じる・戻す・やり直すは束を共有したまま位置と区切りだけを変える（列を写さない・決定 2）。
 EditHistory EditHistory::sealed() const
 {
-    return EditHistory(edits_, position_, EditBoundary::separate, revision_);
+    return EditHistory(blocks_, size_, position_, EditBoundary::separate, revision_);
 }
 
 EditHistory EditHistory::undone() const
 {
     // 履歴を動かしたら単位は閉じる。戻したあとの入力が、戻す前の入力に混ざらないようにする。
-    return EditHistory(edits_, position_ == 0 ? 0 : position_ - 1, EditBoundary::separate,
+    return EditHistory(blocks_, size_, position_ == 0 ? 0 : position_ - 1, EditBoundary::separate,
                        revision_ + 1);
 }
 
 EditHistory EditHistory::redone() const
 {
-    return EditHistory(edits_, position_ >= edits_.size() ? edits_.size() : position_ + 1,
+    return EditHistory(blocks_, size_, position_ >= size_ ? size_ : position_ + 1,
                        EditBoundary::separate, revision_ + 1);
 }
 
 std::size_t EditHistory::size() const noexcept
 {
-    return edits_.size();
+    return size_;
 }
 
 std::size_t EditHistory::position() const noexcept
