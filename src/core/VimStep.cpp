@@ -2169,8 +2169,12 @@ VimState vim_register_stored(const VimState &state, char name, const VimRegister
 
 bool vim_reads_unnamed_clipboard(const VimState &state, const VimKey &key) noexcept
 {
+    // 文字単位と行単位の VISUAL の `p` `P` も読む（Vim の nv_put_opt の adjust_clip_reg・#1418）。
+    // 矩形の VISUAL の `p` `P` はまだ効かないので読まない。
+    const bool puts = state.mode == VimMode::normal || state.mode == VimMode::visual ||
+                      state.mode == VimMode::visual_line;
     if (!state.clipboard_unnamed || state.selected_register.has_value() ||
-        state.pending.has_value() || state.input_wait.has_value() || state.mode != VimMode::normal)
+        state.pending.has_value() || state.input_wait.has_value() || !puts)
     {
         return false;
     }

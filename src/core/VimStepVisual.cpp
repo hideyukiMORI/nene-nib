@@ -6,6 +6,7 @@
 #include "VimKeyTable.hpp"
 #include "VimMarkEdits.hpp"
 #include "VimMotionRange.hpp"
+#include "VimPutSide.hpp"
 #include "VimVisualRange.hpp"
 
 #include <algorithm>
@@ -56,6 +57,7 @@ using detail::visual_acted;
 using detail::visual_character;
 using detail::visual_left;
 using detail::visual_numbered;
+using detail::visual_put;
 using detail::visual_resting;
 using detail::visual_restore;
 using detail::visual_special;
@@ -297,8 +299,9 @@ namespace
 }
 
 // 行に効く鍵（`I` `A` `C` `gi` `gI` `p` `P`）。VISUAL では矩形の `I` `A` `C` だけが効く（ADR 0035
-// の追補 #1042・文字単位と行単位の `C` と `p` `P` は後続・#1418）。`gi` は VISUAL では失敗する
-// （実測・#1039）。`J` `gJ` `X` `D` `Y` は visual_edit_line が先に振り分ける。
+// の追補 #1042・文字単位と行単位の `C` と矩形の `p` `P` は後続）。`gi` は VISUAL では失敗する
+// （実測・#1039）。`J` `gJ` `X` `D` `Y` と文字単位・行単位の `p` `P` は visual_edit_line が先に
+// 振り分ける。
 [[nodiscard]] VimStep visual_line_command(const VimState &state, const VimEditorView &view,
                                           VimAction action)
 {
@@ -340,6 +343,14 @@ namespace
         action == VimAction::yank_line)
     {
         return visual_linewise_operated(state, view, action);
+    }
+    // 文字単位と行単位の `p` `P`（#1418）。矩形の `p` `P` は後続（visual_line_command
+    // で効かない）。
+    if ((action == VimAction::put_after || action == VimAction::put_before) &&
+        state.mode != VimMode::visual_block)
+    {
+        return visual_put(state, view,
+                          action == VimAction::put_after ? VimPutSide::after : VimPutSide::before);
     }
     return visual_line_command(state, view, action);
 }

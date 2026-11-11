@@ -218,7 +218,11 @@ repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::
                                     ShiftBy shift);
 [[nodiscard]] VimRegister register_read(const VimState &state,
                                         const std::optional<VimRegisterSelection> &chosen);
+[[nodiscard]] bool refuses_put(const VimState &state, const VimRegister &source);
 [[nodiscard]] VimStep put_step(const VimState &state, const VimEditorView &view, VimPutSide side);
+// 文字単位と行単位の VISUAL の `p` `P`（#1418・Vim の nv_put_opt）。
+// 選択を消してからレジスタの本文で置き換える。
+[[nodiscard]] VimStep visual_put(const VimState &state, const VimEditorView &view, VimPutSide side);
 [[nodiscard]] VimStep started_replacement(const VimState &state);
 [[nodiscard]] VimStep replacement_key(const VimState &state, const VimEditorView &view, VimKey key);
 [[nodiscard]] VimMode rested_mode(VimMode mode);
