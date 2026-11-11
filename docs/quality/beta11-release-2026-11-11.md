@@ -50,13 +50,13 @@
 
 ## 公開の結果
 
-<!-- TODO(設計席): 公開の日時（JST）と、手順 1〜4 を誰が行ったか -->
+2026-11-11 23:34（JST）に公開した。手順 1〜4 はすべて設計席が行った（tag と pre-release は `D:/NeNeNib/evidence/beta11-release/publish.ps1`・1 回で成功）。
 
-- URL: <!-- TODO(設計席): release の URL・release id・published の時刻 -->
-- tag `v0.1.0-beta.11`（annotated）→ <!-- TODO(設計席): 公開元の commit の SHA（main・梱包の commit と同じか） -->
-- 梱包: <!-- TODO(設計席): package-release.ps1 の結果・package.json の所在・exe の SHA-256 と bytes -->
-- 起動・描画: <!-- TODO(設計席): release-smoke.py の結果 -->
-- 速さ: 梱包の exe では測っていない。同じ中身の木（まとめ枝 21 の `47ab0141`）の Release の 1 回（8 本 0 regression）を再利用した（QLT-012）。記録 `D:/NeNeNib/outputs/20261111/gate-integration21-47ab0141.log`。main `17f0d960` と `47ab0141` は `git diff` が空（同じ tree）。<!-- TODO(設計席): 公開元が 17f0d960 の上の文書だけの commit であることの確かめ -->
-- 添付: <!-- TODO(設計席): zip の bytes と SHA-256・SHA256SUMS の bytes -->
-- 照合（`verify-publication.py`・`gh release download` で再取得）: <!-- TODO(設計席): 結果と写しの所在 -->
-- hide の試用: 公開の前（2026-11-11 夜）に起動画面・プレビューの固まり・ミニマップのクリックとドラッグ。試用前のもの（矩形の VISUAL の `p` `P`・長い編集の直し）は公開の文に書いた。<!-- TODO(設計席): 公開の後に試用があれば追記 -->
+- URL: https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.11（pre-release・release id 441810419・published 2026-11-11T14:34:24Z）
+- tag `v0.1.0-beta.11`（annotated）→ `0398365468f22bb3dfb0a4934d53194cf52a8757`（main・梱包の commit と同じ・この記録の文書 PR #1494 の merge）
+- 梱包: `pwsh -NoProfile -File eng/package-release.ps1 -Beta 11 ...` が `D:/NeNeNib/worktrees/beta11`（detached・origin/main と一致）で成功。記録 `D:/NeNeNib/releases/v0.1.0-beta.11/package.json`（recordedAt 2026-11-11T14-27-38Z）。exe の SHA-256 `b77cf0a92238173d66a6030fa486a83a9ca177587afb4c7844db2f8a27315194`（3,319,808 bytes）。
+- 起動・描画: `python D:/NeNeNib/evidence/beta11-release/release-smoke.py` が pass（release-smoke-01・隔離 profile・DPI 120・正常終了 0・本文不変）。施主が机にいたので、窓を出す smoke は施主の了承の後に回した。
+- 速さ: 梱包の exe では測っていない。同じ中身の木（まとめ枝 21 の `47ab0141`）の Release の 1 回（8 本 0 regression）を再利用した（QLT-012）。記録 `D:/NeNeNib/outputs/20261111/gate-integration21-47ab0141.log`。main `17f0d960` と `47ab0141` は `git diff` が空（同じ tree）。公開元は `17f0d960` の上の文書だけの commit（`git diff 17f0d960 03983654` は README.md とこの記録の 2 ファイル）。
+- 添付: `NeNeNib-0.1.0-beta.11-windows-x64.zip` 1,382,247 bytes・SHA-256 `52b017461af27d0a731d3d713a18af03e9bda1876079e9e6304f1c161b5c5a01`、`SHA256SUMS` 105 bytes
+- 照合（`verify-publication.py`・`gh release download` で再取得）: bytes 一致・zip の中身一致・tag の commit 一致・展開した exe の起動 pass（release-smoke-01）→ `result: pass`。写しは `D:/NeNeNib/releases/v0.1.0-beta.11/publication-verification.json` と `github-release.json`。
+- hide の試用: 公開の前（2026-11-11 夜）に起動画面・プレビューの固まり・ミニマップのクリックとドラッグ。試用前のもの（矩形の VISUAL の `p` `P`・長い編集の直し）は公開の文に書いた。公開の後は、まとめ枝 22 の試用の exe で本文の面の角・ミニマップの色・Mica を外した窓のリサイズを見た（[quality-day-2026-11-11.md](quality-day-2026-11-11.md) の実機の試用の章）。
