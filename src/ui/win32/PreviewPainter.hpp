@@ -11,6 +11,7 @@
 #include "PreviewSelectionText.hpp"
 #include "PreviewStyle.hpp"
 #include "PreviewTaskBox.hpp"
+#include "PreviewTextLayout.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "RenderFailure.hpp"
 
@@ -46,6 +47,7 @@ template <typename Target> class PreviewPainter final
     {
         const auto frame = rect_of(scene.frame);
         target_.FillRectangle(frame, brushes_.of(PreviewInk::background));
+        layouts_.bind(brushes_);
         target_.PushAxisAlignedClip(frame, D2D1_ANTIALIAS_MODE_ALIASED);
         const auto height = static_cast<float>(core::height_of(scene.frame));
         for (auto index = scene.tops.first_visible(scene.scroll);
@@ -253,6 +255,9 @@ template <typename Target> class PreviewPainter final
                          brushes_.of(PreviewInk::accent), mark);
     }
 
+    // 保持した layout は描くときに書式を変えず、位置も問わない（#1477・ADR 0155 の追補）。色と
+    // 行内コードの面の矩形と画像の箱の左上は保持の entry が 1 回だけ置いて持ち、ここは原点を足して
+    // 描くだけ。
     void draw_text(const PreviewScene &scene, std::size_t index, D2D1_POINT_2F origin)
     {
         const auto &block = scene.document.blocks.at(index);
@@ -261,31 +266,31 @@ template <typename Target> class PreviewPainter final
                                scene.tops.indent(index), scene.style.dpi);
         const auto inlines = preview_inline_images(scene.document, scene.images, index,
                                                    preview_dips_of(width, scene.style.dpi));
-        const auto layout = layouts_.get(block, width, scene.style, inlines);
-        if (!layout)
+        const auto held = layouts_.paintable(block, width, scene.style, inlines);
+        if (!held)
         {
-            failure_ = layout.error();
+            failure_ = held.error();
             return;
         }
-        paint_spans(scene, block, *layout.value().Get(), origin);
-        fill_selection(scene, index, *layout.value().Get(), origin);
-        target_.DrawTextLayout(origin, layout.value().Get(), brushes_.of(ink_of(block)),
+        const auto &entry = *held.value();
+        fill_inline_code(scene, entry, origin);
+        fill_selection(scene, index, *entry.layout.Get(), origin);
+        target_.DrawTextLayout(origin, entry.layout.Get(), brushes_.of(ink_of(block)),
                                D2D1_DRAW_TEXT_OPTIONS_NONE);
-        for (const auto &image : inlines)
+        for (std::size_t at = 0; at < inlines.size() && at < entry.image_origins.size(); ++at)
         {
-            draw_image(scene, *layout.value().Get(), image, origin);
+            draw_image(scene, inlines.at(at), entry.image_origins.at(at), origin);
         }
     }
 
     // 読めた画像 1 枚（ADR 0155 の追補 62）。layout の箱の左上を物理画素の整数に揃えて、
     // 箱の大きさに DrawBitmap する（1 画素 = 1 DIP の大きさなら拡大縮小しないので滲まない）。
     // bitmap が無ければ箱は空のまま（PreviewPane が描く前に作るので、無いのは作れないときだけ）。
-    void draw_image(const PreviewScene &scene, IDWriteTextLayout &layout,
-                    const PreviewInlineImage &image, D2D1_POINT_2F origin)
+    void draw_image(const PreviewScene &scene, const PreviewInlineImage &image,
+                    const std::optional<D2D1_POINT_2F> &at, D2D1_POINT_2F origin)
     {
         auto *const bitmap =
             scene.bitmaps == nullptr ? nullptr : scene.bitmaps->find(image.pixels.get());
-        const auto at = preview_inline_origin(layout, image.box, scene.style.dpi);
         // 位置を引けない・bitmap が無い画像は描かず、箱は空のまま（ADR 0155 の追補 67・画像の
         // ために frame を失敗にしない）。
         if (!at.has_value() || bitmap == nullptr)
@@ -301,51 +306,9 @@ template <typename Target> class PreviewPainter final
             1.0F, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
     }
 
-    // 装飾の文字の色（行内コードは string・リンクは function・画像の代わりの文字は comment・
-    // 強調と太字は周りの色のまま）。
-    [[nodiscard]] static std::optional<PreviewInk> span_ink(core::PreviewStyle style) noexcept
-    {
-        switch (style)
-        {
-        case core::PreviewStyle::code:
-            return PreviewInk::string;
-        case core::PreviewStyle::link:
-            return PreviewInk::function;
-        case core::PreviewStyle::image:
-            return PreviewInk::comment;
-        case core::PreviewStyle::emphasis:
-        case core::PreviewStyle::strong:
-            return std::nullopt;
-        }
-        std::unreachable();
-    }
-
-    // 行の中の装飾の色（行内コードは string と panel の面・リンクは function・画像は
-    // comment）。layout の drawing effect は描くたびに置き直す（保持の鍵にテーマを入れない）。
-    void paint_spans(const PreviewScene &scene, const core::PreviewBlock &block,
-                     IDWriteTextLayout &layout, D2D1_POINT_2F origin)
-    {
-        const auto shown = core::preview_shown_text(block);
-        for (const auto &span : block.spans)
-        {
-            const auto begin = preview_units(shown, span.begin.value);
-            const auto end = preview_units(shown, span.end.value);
-            const DWRITE_TEXT_RANGE range{begin, end > begin ? end - begin : 0};
-            if (span.style == core::PreviewStyle::code)
-            {
-                fill_inline_code(scene, layout, range, origin);
-            }
-            const auto ink = span_ink(span.style);
-            if (ink.has_value() && FAILED(layout.SetDrawingEffect(brushes_.of(ink.value()), range)))
-            {
-                failure_ = RenderFailure::directwrite;
-                return;
-            }
-        }
-    }
-
     // 全面プレビューの選択の面（selection・ADR 0155 の改訂 18）。文字の下に、選ばれた範囲の画面行
-    // ごとの矩形を塗る。範囲は core の preview_selected_bytes の 1 本で決める。
+    // ごとの矩形を塗る。範囲は core の preview_selected_bytes の 1 本で決める。選択は描くたびに
+    // 変わるので、ここだけが位置を問う（HitTestTextRange は layout を汚さない）。
     void fill_selection(const PreviewScene &scene, std::size_t index, IDWriteTextLayout &layout,
                         D2D1_POINT_2F origin)
     {
@@ -362,53 +325,39 @@ template <typename Target> class PreviewPainter final
         const auto shown = core::preview_shown_text(scene.document.blocks.at(index));
         const auto begin = preview_units(shown, bytes.value().first);
         const auto end = preview_units(shown, bytes.value().second);
-        for (const auto &run :
-             runs_of(layout, DWRITE_TEXT_RANGE{begin, end > begin ? end - begin : 0}, origin))
+        const auto runs =
+            layouts_.hit_runs(layout, DWRITE_TEXT_RANGE{begin, end > begin ? end - begin : 0});
+        if (!runs)
         {
-            target_.FillRectangle(
-                D2D1::RectF(run.left, run.top, run.left + run.width, run.top + run.height),
-                brushes_.of(PreviewInk::selection));
+            failure_ = runs.error();
+            return;
+        }
+        for (const auto &run : runs.value())
+        {
+            const auto left = origin.x + run.left;
+            const auto top = origin.y + run.top;
+            target_.FillRectangle(D2D1::RectF(left, top, left + run.width, top + run.height),
+                                  brushes_.of(PreviewInk::selection));
         }
     }
 
     // 行内コードの面（panel・角丸 3・左右 4 DIP）。折り返した範囲は画面行ごとの矩形。
-    void fill_inline_code(const PreviewScene &scene, IDWriteTextLayout &layout,
-                          DWRITE_TEXT_RANGE range, D2D1_POINT_2F origin)
+    void fill_inline_code(const PreviewScene &scene, const PreviewTextLayout &entry,
+                          D2D1_POINT_2F origin)
     {
         const auto dpi = scene.style.dpi;
         const auto padding = preview_pixels(inline_padding_dips, dpi);
         const auto radius = preview_pixels(inline_radius_dips, dpi);
-        for (const auto &run : runs_of(layout, range, origin))
+        for (const auto &run : entry.code_runs)
         {
             const auto inset = run.height * inline_inset_ratio;
-            const auto rect =
-                D2D1::RectF(run.left - padding, run.top + inset, run.left + run.width + padding,
-                            run.top + run.height - inset);
+            const auto left = origin.x + run.left;
+            const auto top = origin.y + run.top;
+            const auto rect = D2D1::RectF(left - padding, top + inset, left + run.width + padding,
+                                          top + run.height - inset);
             target_.FillRoundedRectangle(D2D1::RoundedRect(rect, radius, radius),
                                          brushes_.of(PreviewInk::panel));
         }
-    }
-
-    [[nodiscard]] std::vector<DWRITE_HIT_TEST_METRICS>
-    runs_of(IDWriteTextLayout &layout, DWRITE_TEXT_RANGE range, D2D1_POINT_2F origin)
-    {
-        if (range.length == 0)
-        {
-            return {};
-        }
-        UINT32 count = 0;
-        const auto counted = layout.HitTestTextRange(range.startPosition, range.length, origin.x,
-                                                     origin.y, nullptr, 0, &count);
-        std::vector<DWRITE_HIT_TEST_METRICS> runs(count);
-        if ((FAILED(counted) && counted != E_NOT_SUFFICIENT_BUFFER) ||
-            FAILED(layout.HitTestTextRange(range.startPosition, range.length, origin.x, origin.y,
-                                           runs.data(), count, &count)))
-        {
-            failure_ = RenderFailure::directwrite;
-            return {};
-        }
-        runs.resize(count);
-        return runs;
     }
 
     Target &target_;
