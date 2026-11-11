@@ -64,3 +64,16 @@ CPP-014 は「内部表現は Phase 3 の piece table の ADR で決める」と
 
 - [ADR 0004](0004-ui-thread-plus-one-worker.md)・[ADR 0005](0005-own-vim-engine-verified-against-real-vim.md)・[ADR 0008](0008-adopted-look-tabs-titlebar-statusbar-mica.md)
 - SPECIFICATION 第 3 節・FR-002 / FR-008 / FR-013
+
+## 追補（#1395・2026-11-11）: 通常モードの Windows の標準の鍵（施主決定 D82）
+
+通常モード（Vim でないモード）の振る舞いは Windows の標準（メモ帳・ブラウザの入力欄）に合わせる（D82）。既存の意図に鍵を写すだけで済む 5 つを足す。Vim のモードの鍵は変えない（D71: 同じ鍵が Vim で別の意味を持つ所は Vim 優先）。
+
+1. **Ctrl+N は新しいタブ**（メモ帳）。操作の表 `operation_bindings`（ADR 0078）に通常モードだけの行を 1 つ足し、`OperationKey` に `n` を足す。Vim の Ctrl-n には譲らないので Vim では行を置かない。一覧（F1）に見せる鍵は表の最初の行の Ctrl+T のまま。
+2. **Ctrl+Shift+Z はやり直す**（ブラウザの入力欄と VS Code）。表の「Shift を見ていなかった今の振る舞いを保つ行」（元に戻す）を、やり直すの行に替えて Ctrl+Y の 2 行の後ろへ置く。見せる鍵は Ctrl+Y のまま。Vim では今までどおり値なし（`u` と Ctrl-r）。
+3. **Ctrl+Insert はコピー・Shift+Insert は貼り付け・Shift+Delete は切り取り**。クリップボードの鍵は操作の表の外（Ctrl+C / V / X の写しの道）なので、ui の写し `clipboard_key_for`（`src/ui/win32/ClipboardKeys.hpp`）の 1 本で意図 `ClipboardAction` に写す。規則は Ctrl+C / V / X と同じ: コピーはどのモードでも、貼り付けと切り取りは通常モードと Vim の INSERT だけ（Vim の NORMAL / VISUAL では OS の貼り付けをしない・ADR 0035 の決定 9）。Vim の NORMAL / VISUAL の Shift+Delete は今までどおり何も送らない（ADR 0053 の Delete の節・#1325 のレビュー L2）。修飾なしの Insert と Delete・Ctrl+Delete・Ctrl+Shift の組みは今までの道のまま。この規則は本文の鍵の話で、入力行（`:`・検索・Ctrl+P の面）の Shift+Insert は後続。
+   - Vim のモードでも Ctrl+Insert のコピーが効き、Vim の INSERT で Shift+Insert / Shift+Delete が効くのは、Ctrl+C / V / X と同じ規則にそろえる（設計席の決め・2026-11-11）。
+   - 選択の無い Shift+Delete は切り取る本文が無いので何もしない。メモ帳の engine（RichEdit・RICHEDIT50W とメモ帳の package の riched20.dll）の実測と同じ（EDIT は右の 1 文字を消し、割れる。実機のクリップボードを別スレッドが握って書けないようにして測った・通し番号は前後で不変・2026-11-11）。
+   - 「OS の貼り付けは通常モードと Vim の INSERT だけ」は ui では `takes_os_clipboard_keys` の 1 本で、Ctrl+V / Ctrl+Shift+V を Vim の矩形の鍵として送るかも同じ関数で決める。
+4. 窓は鍵を意図に写すだけ（ARC-011）。契約は `nib_window_tests --standard-keys`（写しの関数と表）と `nib_tests` の操作の表の検査。実機のクリップボードには触れない。
+5. 順の前提: `press_key` は入力行（`:`・検索・Ctrl+P の面）→ タブの鍵 → 操作の表 → エクスプローラーの焦点 → `clipboard_key_for` → Ctrl の表 → Vim / 通常の表の順に引く。面が開いている間の Ctrl+N は次の候補のまま、入力行の Shift+Delete は 1 文字の削除のまま。古いクリップボードの 3 つの鍵がタブの鍵と操作の表に当たらないことは `--standard-keys` が守る（入力行が先であることは窓の中の順で、試験は無い）。
