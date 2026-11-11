@@ -28,5 +28,8 @@ struct ExplorerView
     // 面の幅の求め（ADR 0162 の追補 D78）。ドラッグの間はその幅、ほかは設定 explorer_width。描画は
     // これを core::explorer_layout へ渡す（窓の explorer_width() と同じ値）。
     core::ExplorerWidth width = {};
+    // マウスを載せた行（木の行の位置・#1390・ADR 0056 の決定 3 と同じく application の状態）。
+    // 載せた画面の行が見えている行の外なら値なし。renderer は選んだ行には重ねない。
+    std::optional<std::size_t> hovered = std::nullopt;
 };
 } // namespace nenenib::application

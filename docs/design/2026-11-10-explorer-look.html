@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NeNe Nib — エクスプローラーの見た目（案 A / B / C・2026-11-10）</title>
+<style>
+/* 静的な設計案。色は core::Palette と SyntaxPalette のトークンの値をそのまま写した（ubuntu-aubergine / neutral-light）。 */
+:root{color-scheme:dark;--background:#300a24;--text:#eeeeec;--muted:#b8a9b3;--gutter:#7a6675;--current_line:#3e1a32;--title_bar:#1e0516;--tab_hover:#27071d;--status:#26071d;--accent:#e95420;--panel:#3b1430;--panel_border:#5a2a4c;--selection:rgba(233,84,32,.28);
+--keyword:#fcaf3e;--string:#8ae234;--number:#ad7fa8;--type:#fce94f;--function:#729fcf;--operators:#34e2e2;--page:#14030f}
+:root.light{color-scheme:light;--background:#f4f5f7;--text:#1b1f24;--muted:#5c6570;--gutter:#9aa3ad;--current_line:#e6e8ec;--title_bar:#e1e4e9;--tab_hover:#eaecf0;--status:#e9ebef;--accent:#e95420;--panel:#ffffff;--panel_border:#d5d9e0;--selection:rgba(233,84,32,.22);
+--keyword:#ce5c00;--string:#4e9a06;--number:#75507b;--type:#c4a000;--function:#3465a4;--operators:#06989a;--page:#c9ced6}
+*{box-sizing:border-box}
+body{margin:0;padding:20px 16px 40px;background:var(--page);color:var(--text);font-family:'Segoe UI Variable Text','Segoe UI','Yu Gothic UI',sans-serif;font-size:13px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:0 4px 16px}
+h1{font-size:16px;font-weight:600;margin:0;flex:1 1 260px}
+button{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--panel_border);border-radius:6px;padding:5px 12px;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:20px}
+figure{margin:0}
+figcaption{margin:10px 4px 0;line-height:1.6;color:var(--muted)}
+figcaption b{color:var(--text);font-weight:600}
+figcaption .pick{color:var(--accent);font-weight:600}
+.win{height:440px;display:grid;grid-template-rows:36px 1fr 24px;border-radius:8px;overflow:hidden;border:1px solid var(--panel_border);background:var(--background)}
+.caption{display:flex;align-items:end;gap:2px;padding-left:8px;background:var(--title_bar)}
+.tab{display:flex;gap:8px;align-items:center;padding:0 12px;height:28px;font-size:12px;color:var(--muted);border-radius:6px 6px 0 0}
+.tab.on{background:var(--background);color:var(--text)}
+.tab i{color:var(--accent);font-style:normal;font-size:9px}
+.mid{display:grid;grid-template-columns:200px 1fr;min-height:0}
+.body{font-family:'Cascadia Code','Consolas','Yu Gothic UI',monospace;font-size:13px;line-height:21px;padding:6px 0;overflow:hidden;white-space:pre}
+.body .n{display:inline-block;width:34px;text-align:right;margin-right:14px;color:var(--gutter)}
+.body .cur{background:var(--current_line);display:block}
+.k{color:var(--keyword)}.s{color:var(--string)}.t{color:var(--type)}.f{color:var(--function)}.c{color:var(--muted)}
+.status{display:flex;gap:14px;align-items:center;padding:0 10px;background:var(--status);font-size:11px;color:var(--muted)}
+.status .sp{flex:1}
+
+/* 面の共通 */
+.panel{overflow:hidden;font-size:12.5px;user-select:none;position:relative}
+.row{display:flex;align-items:center;height:22px;white-space:nowrap;position:relative}
+.row .name{overflow:hidden;text-overflow:ellipsis}
+.row.dim .name{color:var(--muted)}
+.chev{width:16px;flex:none;display:grid;place-items:center}
+.chev svg{width:10px;height:10px;stroke:var(--muted);fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.ico{width:16px;height:16px;flex:none;margin-right:6px;display:grid;place-items:center}
+.ico svg{width:14px;height:14px;fill:none;stroke-width:1.3;stroke-linejoin:round;stroke-linecap:round}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--accent);margin-left:auto;margin-right:10px;flex:none}
+.guide{position:absolute;top:0;bottom:0;width:1px;background:var(--panel_border);opacity:.7}
+
+/* 案 A: 静かな線 */
+.A{background:var(--panel);border-right:1px solid var(--panel_border)}
+.A .head{height:28px;display:flex;align-items:center;padding:0 12px;color:var(--muted);font-size:11px;letter-spacing:.08em}
+.A .row{padding-right:6px}
+.A .row.hover{background:var(--tab_hover)}
+.A .row.sel{background:var(--current_line)}
+.A .row.sel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent)}
+
+/* 案 B: 色の点（帯とつながる面） */
+.B{background:var(--title_bar)}
+.B .head{height:30px;display:flex;align-items:center;gap:8px;padding:0 12px;color:var(--text);font-size:12px;font-weight:600}
+.B .head span{color:var(--muted);font-weight:400;margin-left:auto;font-size:11px}
+.B .row{margin:0 6px;border-radius:5px;padding-right:4px}
+.B .row.hover{background:var(--tab_hover)}
+.B .row.sel{background:var(--background);color:var(--text)}
+.B .row.sel .name{font-weight:600}
+.B .row.focus{box-shadow:inset 0 0 0 1px var(--accent)}
+.B .guide{background:var(--panel_border);opacity:.55}
+.Bwrap{border-right:0}
+.B + .body{border-top-left-radius:8px;box-shadow:-1px 0 0 var(--panel_border),0 -1px 0 var(--panel_border)}
+
+/* 案 C: 札 */
+.C{background:var(--panel);border-right:1px solid var(--panel_border)}
+.C .head{height:30px;display:flex;align-items:center;padding:0 12px;color:var(--muted);font-size:11px;letter-spacing:.08em}
+.C .row{margin:0 6px;border-radius:5px;padding-right:4px}
+.C .row.hover{background:var(--tab_hover)}
+.C .row.sel{background:var(--selection)}
+.badge{flex:none;width:20px;height:14px;margin-right:6px;border-radius:3px;font-size:8.5px;font-weight:700;line-height:14px;text-align:center;letter-spacing:.02em;color:var(--title_bar);font-family:'Segoe UI','Yu Gothic UI',sans-serif}
+:root.light .badge{color:#fff}
+</style>
+</head>
+<body>
+<header>
+  <h1>エクスプローラーの見た目 — 案 A / B / C</h1>
+  <button id="theme">ライトに切り替える</button>
+</header>
+<div class="grid" id="grid"></div>
+<script>
+const tree = [
+  {d:0,n:'docs',dir:1,open:1},
+  {d:1,n:'adr',dir:1,open:1},
+  {d:2,n:'0162-file-explorer.md',k:'md'},
+  {d:2,n:'0170-settings-v4.md',k:'md'},
+  {d:1,n:'plans',dir:1},
+  {d:0,n:'src',dir:1,open:1},
+  {d:1,n:'core',dir:1,open:1},
+  {d:2,n:'ExplorerLayout.cpp',k:'cpp',hover:1},
+  {d:2,n:'ExplorerLayout.hpp',k:'hpp',sel:1,mod:1},
+  {d:2,n:'Palette.hpp',k:'hpp'},
+  {d:1,n:'ui',dir:1},
+  {d:0,n:'tests',dir:1},
+  {d:0,n:'.gitignore',k:'txt',dim:1},
+  {d:0,n:'CLAUDE.md',k:'md'},
+  {d:0,n:'CMakeLists.txt',k:'cmake'},
+  {d:0,n:'settings.json',k:'json'},
+];
+const kind = {cpp:['function','C+'],hpp:['type','H'],md:['string','MD'],json:['keyword','{}'],cmake:['operators','CM'],txt:['muted','TX']};
+const chev = o => `<span class="chev"><svg viewBox="0 0 10 10"><path d="${o?'M2 3.5 5 6.5 8 3.5':'M3.5 2 6.5 5 3.5 8'}"/></svg></span>`;
+const folder = o => `<span class="ico"><svg viewBox="0 0 14 14" stroke="var(--muted)"><path d="${o?'M1.5 11.5V3h3.6l1.2 1.5h6.2v1.6M1.5 11.5l1.8-5.4h9.9l-1.8 5.4z':'M1.5 3h3.6l1.2 1.5h6.2v7H1.5z'}"/></svg></span>`;
+const file = c => `<span class="ico"><svg viewBox="0 0 14 14" stroke="var(--${c})"><path d="M3 1.5h5.2L11 4.3v8.2H3z"/><path d="M8 1.6v2.9h2.9" opacity=".7"/></svg></span>`;
+const mark = c => `<span class="ico"><svg viewBox="0 0 14 14"><rect x="4" y="4" width="6" height="6" rx="1.6" fill="var(--${c})"/></svg></span>`;
+function rows(v){
+  return tree.map(r=>{
+    const pad = (v==='A'?8:4) + r.d*12;
+    let guides='';
+    if(v!=='C') for(let i=0;i<r.d;i++) guides+=`<span class="guide" style="left:${(v==='A'?8:10)+i*12+7}px"></span>`;
+    const cls=['row',r.sel?'sel':'',r.hover?'hover':'',r.dim?'dim':''].join(' ');
+    let lead;
+    if(r.dir) lead = chev(r.open) + (v==='A'?'':folder(r.open));
+    else {
+      const [c,b]=kind[r.k];
+      lead = `<span class="chev"></span>` + (v==='A'?'':v==='B'?mark(c):`<span class="badge" style="background:var(--${c})">${b}</span>`);
+    }
+    return `<div class="${cls}" style="padding-left:${pad}px">${guides}${lead}<span class="name">${r.n}</span>${r.mod?'<span class="dot"></span>':''}</div>`;
+  }).join('');
+}
+const head = v => v==='B' ? `<div class="head">NeNeNib<span>main</span></div>` : `<div class="head">NENENIB</div>`;
+const code = `<span class="n">1</span><span class="k">#pragma</span> once
+<span class="n">2</span>
+<span class="n">3</span><span class="k">#include</span> <span class="s">"LayoutRect.hpp"</span>
+<span class="n">4</span>
+<span class="n">5</span><span class="k">namespace</span> nenenib::core
+<span class="n">6</span>{
+<span class="cur"><span class="n">7</span><span class="k">struct</span> <span class="t">ExplorerLayout</span></span><span class="n">8</span>{
+<span class="n">9</span>    <span class="t">LayoutRect</span> body;
+<span class="n">10</span>    std::<span class="t">int32_t</span> line_height;
+<span class="n">11</span>    std::<span class="t">int32_t</span> indent;
+<span class="n">12</span>};
+<span class="n">13</span>
+<span class="n">14</span><span class="c">// 面の幅は覚えた値を切り詰める</span>
+<span class="n">15</span><span class="t">ExplorerLayout</span> <span class="f">explorer_layout</span>(…);`;
+const notes = {
+  A:`<b>案 A「静かな線」</b> — 絵は足さない。字は UI の字体（今は本文の等幅）・行は 22 DIP・三角は細い線の山形・字下げの縦の線・マウスを載せた行の面・開いているファイルは左に橙の 2 DIP の線。いちばん軽く、今の Nib に近い。`,
+  B:`<b>案 B「色の点」</b> <span class="pick">（推し）</span> — 面の地をタブの帯と同じ深い色にして、帯と面が L 字の枠になり、本文が角の丸い紙のように載る。ファイルは小さな色の点、フォルダは細い線の絵。点の色は<b>構文の色のトークン</b>（C++ は関数の色・Markdown は文字列の色…）なので、125 のテーマ全部で勝手に似合う。開いているファイルは本文と同じ色の丸い行でタブとつながって見える。未保存は橙の●（タブと同じ印）。`,
+  C:`<b>案 C「札」</b> — ファイルの種類を 2 文字の札（C+ / H / MD）で見せる。選んだ行は橙の薄い面。情報は多いが、にぎやかで、札の字が小さい画面では読みにくい。`,
+};
+document.getElementById('grid').innerHTML = ['A','B','C'].map(v=>`
+<figure>
+  <div class="win">
+    <div class="caption"><div class="tab on"><i>●</i>ExplorerLayout.hpp</div><div class="tab">CLAUDE.md</div><div class="tab">＋</div></div>
+    <div class="mid"><div class="panel ${v}">${head(v)}${rows(v)}</div><div class="body">${code}</div></div>
+    <div class="status"><span>通常 | Vim</span><span>NORMAL</span><span class="sp"></span><span>行 7, 桁 1</span><span>UTF-8</span><span>LF</span><span>C++</span></div>
+  </div>
+  <figcaption>${notes[v]}</figcaption>
+</figure>`).join('');
+const b=document.getElementById('theme');
+b.onclick=()=>{const l=document.documentElement.classList.toggle('light');b.textContent=l?'ダークに切り替える':'ライトに切り替える'};
+</script>
+</body>
+</html>

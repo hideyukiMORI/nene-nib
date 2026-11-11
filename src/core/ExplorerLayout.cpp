@@ -2,7 +2,6 @@
 
 #include "BodyLayout.hpp"
 #include "DevicePixels.hpp"
-#include "VirtualColumn.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -18,20 +17,27 @@ constexpr std::int32_t chosen_width_percent = 60;
 constexpr std::int32_t body_reserve_dips = 200;
 // 境の当たりの片側（D78）。
 constexpr std::int32_t divider_grab_dips = 3;
+// 行と部品の寸法（採用案 B・#1390・施主決定 D81）。どれも DIP の固定値で、字の大きさに依らない。
+constexpr std::int32_t line_height_dips = 22;
+constexpr std::int32_t root_height_dips = 30;
 constexpr std::int32_t indent_dips = 12;
-constexpr std::int32_t padding_dips = 8;
+constexpr std::int32_t cell_dips = 16;
+constexpr std::int32_t inset_dips = 6;
+constexpr std::int32_t padding_dips = 4;
+constexpr std::int32_t root_padding_dips = 12;
+constexpr std::int32_t gap_dips = 6;
+constexpr std::int32_t radius_dips = 5;
+constexpr std::int32_t corner_dips = 8;
+constexpr std::int32_t dot_dips = 6;
+// 未保存の丸の右端と行の丸い面の右端の間（採用案のモックの右の余白 4 DIP と丸の外の 10 DIP）。
+constexpr std::int32_t dot_inset_dips = 14;
 constexpr std::int32_t border_dips = 1;
-// 印の字（字体に依らない幾何学の三角・ADR 0162 の決定 2）。
-constexpr char32_t closed_marker = U'▸';
-constexpr char32_t open_marker = U'▾';
 
-// 印の升の幅。2 つの印の桁の多い方 × 字の大きさ（DIP を四捨五入）。
-[[nodiscard]] std::int32_t marker_width(std::uint32_t dpi, FontSize font_size) noexcept
+// 区間 [left, right] に収めた値（right が left より小さければ left）。
+[[nodiscard]] constexpr std::int32_t within(std::int32_t value, std::int32_t left,
+                                            std::int32_t right) noexcept
 {
-    const auto columns = static_cast<std::int32_t>(
-        std::max(column_advance(closed_marker, 0), column_advance(open_marker, 0)));
-    const auto em_dips = static_cast<std::int32_t>(font_size_dips(font_size) + 0.5F);
-    return columns * to_pixels(em_dips, dpi);
+    return std::max(std::min(value, right), left);
 }
 
 // 使う人が決めた幅（物理画素）を範囲に切り詰める 1 本（D78）。explorer_panel_width と
@@ -107,36 +113,130 @@ std::optional<std::int32_t> explorer_width_of(std::string_view text) noexcept
     return value;
 }
 
-ExplorerLayout explorer_layout(LayoutRect client, std::uint32_t dpi, FontSize font_size,
+ExplorerLayout explorer_layout(LayoutRect client, std::uint32_t dpi,
                                std::optional<ExplorerWidth> shown) noexcept
 {
-    const BodyLayout whole = body_layout(width_of(client), height_of(client), dpi, font_size);
     ExplorerLayout layout{.panel = std::nullopt,
                           .body = client,
-                          .line_height = whole.line_height,
+                          .line_height = to_pixels(line_height_dips, dpi),
+                          .root_height = to_pixels(root_height_dips, dpi),
                           .indent = to_pixels(indent_dips, dpi),
-                          .marker = marker_width(dpi, font_size),
+                          .cell = to_pixels(cell_dips, dpi),
+                          .inset = to_pixels(inset_dips, dpi),
                           .padding = to_pixels(padding_dips, dpi),
+                          .root_padding = to_pixels(root_padding_dips, dpi),
+                          .gap = to_pixels(gap_dips, dpi),
+                          .radius = to_pixels(radius_dips, dpi),
+                          .corner = to_pixels(corner_dips, dpi),
+                          .dot = to_pixels(dot_dips, dpi),
+                          .dot_inset = to_pixels(dot_inset_dips, dpi),
                           .border = std::max(to_pixels(border_dips, dpi), 1)};
     if (!shown.has_value())
     {
         return layout;
     }
+    const LayoutRect band = body_band(width_of(client), height_of(client), dpi);
     const std::int32_t width = explorer_panel_width(width_of(client), dpi, shown.value());
-    layout.panel = LayoutRect{client.left, client.top + whole.band.top, client.left + width,
-                              client.top + whole.band.bottom};
+    layout.panel = LayoutRect{client.left, client.top + band.top, client.left + width,
+                              client.top + band.bottom};
     layout.body.left = client.left + width;
     return layout;
 }
 
-std::size_t explorer_panel_lines(LayoutRect client, std::uint32_t dpi, FontSize font_size) noexcept
+std::size_t explorer_panel_lines(LayoutRect client, std::uint32_t dpi) noexcept
 {
-    const ExplorerLayout layout = explorer_layout(client, dpi, font_size, ExplorerWidth{});
+    const ExplorerLayout layout = explorer_layout(client, dpi, ExplorerWidth{});
     if (!layout.panel.has_value() || layout.line_height <= 0)
     {
         return 0;
     }
-    return static_cast<std::size_t>(std::max(height_of(layout.panel.value()), 0) /
-                                    layout.line_height);
+    const std::int32_t height = height_of(layout.panel.value());
+    if (height < layout.root_height)
+    {
+        return 0;
+    }
+    return 1 + static_cast<std::size_t>((height - layout.root_height) / layout.line_height);
+}
+
+LayoutRect explorer_line(const ExplorerLayout &layout, std::size_t index) noexcept
+{
+    if (!layout.panel.has_value())
+    {
+        return LayoutRect{0, 0, 0, 0};
+    }
+    const LayoutRect &panel = layout.panel.value();
+    const std::int32_t right = std::max(panel.left, panel.right - layout.border);
+    if (index == 0)
+    {
+        return LayoutRect{panel.left, panel.top, right, panel.top + layout.root_height};
+    }
+    // 行の番号は面の高さを超えて数えない（桁あふれしない・面の下の行は描かない）。
+    const auto rows = static_cast<std::int32_t>(
+        std::min<std::size_t>(index - 1, static_cast<std::size_t>(std::max(height_of(panel), 0))));
+    const std::int32_t top = panel.top + layout.root_height + (rows * layout.line_height);
+    return LayoutRect{panel.left, top, right, top + layout.line_height};
+}
+
+std::optional<std::size_t> explorer_line_at(const ExplorerLayout &layout, std::int32_t x,
+                                            std::int32_t y) noexcept
+{
+    if (!layout.panel.has_value() || !contains(layout.panel.value(), x, y) ||
+        layout.line_height <= 0)
+    {
+        return std::nullopt;
+    }
+    const std::int32_t below = y - layout.panel.value().top - layout.root_height;
+    if (below < 0)
+    {
+        return std::size_t{0};
+    }
+    return 1 + static_cast<std::size_t>(below / layout.line_height);
+}
+
+LayoutRect explorer_root_name(const ExplorerLayout &layout, const LayoutRect &line) noexcept
+{
+    const std::int32_t left = within(line.left + layout.root_padding, line.left, line.right);
+    return LayoutRect{left, line.top, within(line.right - layout.root_padding, left, line.right),
+                      line.bottom};
+}
+
+ExplorerRowParts explorer_row_parts(const ExplorerLayout &layout, const LayoutRect &line,
+                                    std::size_t depth, bool unsaved) noexcept
+{
+    const std::int32_t surface_left = within(line.left + layout.inset, line.left, line.right);
+    const std::int32_t right = within(line.right - layout.inset, surface_left, line.right);
+    // 深さは面の幅を超えて数えない（深い木で桁あふれしない）。
+    const auto steps = static_cast<std::int32_t>(
+        std::min<std::size_t>(depth, static_cast<std::size_t>(std::max(right - surface_left, 0))));
+    const std::int32_t chevron_left =
+        within(surface_left + layout.padding + (steps * layout.indent), surface_left, right);
+    const std::int32_t cell_top = line.top + ((height_of(line) - layout.cell) / 2);
+    const auto cell_at = [&](std::int32_t left)
+    {
+        return LayoutRect{left, cell_top, within(left + layout.cell, left, right),
+                          cell_top + layout.cell};
+    };
+    const LayoutRect chevron = cell_at(chevron_left);
+    const LayoutRect mark = cell_at(chevron.right);
+    const std::int32_t name_left = within(mark.right + layout.gap, mark.right, right);
+    LayoutRect dot{right, line.top, right, line.top};
+    std::int32_t name_right = within(right - layout.padding, name_left, right);
+    if (unsaved)
+    {
+        const std::int32_t dot_right = within(right - layout.dot_inset, name_left, right);
+        const std::int32_t dot_left = within(dot_right - layout.dot, name_left, dot_right);
+        const std::int32_t dot_top = line.top + ((height_of(line) - layout.dot) / 2);
+        dot = LayoutRect{dot_left, dot_top, dot_right, dot_top + layout.dot};
+        name_right = within(dot_left - layout.gap, name_left, dot_left);
+    }
+    return ExplorerRowParts{LayoutRect{surface_left, line.top, right, line.bottom}, chevron, mark,
+                            LayoutRect{name_left, line.top, name_right, line.bottom}, dot};
+}
+
+std::int32_t explorer_guide_x(const ExplorerLayout &layout, const LayoutRect &line,
+                              std::size_t level) noexcept
+{
+    const LayoutRect chevron = explorer_row_parts(layout, line, level, false).chevron;
+    return chevron.left + ((width_of(chevron) - layout.border) / 2);
 }
 } // namespace nenenib::core
