@@ -110,7 +110,18 @@ ADR 0009（選択と undo）・ADR 0012（engine の形）・ADR 0014（IME と 
 
 - **前の選択は操作の前の選択のまま。** Vim は `do_pending_operator`（ops.c）の `VIsual_active` の枝で、オペレータを流す前に `b_visual` の `vi_start`（`VIsual`）・`vi_end`（カーソル）・`vi_mode`・`vi_curswant` を置き、`op_shift` `op_change` `op_insert` `op_delete` `op_replace` `op_tilde` の矩形の道はどれも `b_visual` も `b_op_start` も書き直さない（`gv` が読むのは `nv_gv_cmd`（normal.c）の `b_visual` だけ・`b_op_start` へ寄せるのは VISUAL の `p` の `nv_put_opt` だけ）。Nib も `visual_remembered` の 1 か所が鍵の前の選択を置く形のままで、`c` `C` `I` `A` `>` `<` `r` `d` `y` `~` の後で両端を書き直さない。
 - **矩形の編集はマークを動かさない。** 矩形のオペレータは行の中だけを書き換えて `mark_adjust` を呼ばない（行のずれが無い・桁も動かさない・`mark_col_adjust` を呼ぶのは `do_join` だけ）。controller の `apply_block` は行ごとの置き換えを上から下までを覆う 1 つの Edit に畳んで履歴へ積む（ADR 0035 の決定 3）が、その畳んだ Edit を `marks_adjusted` に通すと改行を含む置き換えとして行が消えた形に読まれ、前の選択の端と名前つきのマークが 1 行目へ寄っていた（`gg<C-v>jj>gv<Esc>` が 1 行目・`Gma<C-v>ggl>'a` が 1 行目）。`replace` に行ごとの置き換えを渡し、マークは core の `marks_block_adjusted`（行ごとの置き換えを下の行から `marks_adjusted` に通す・ADR 0152 の決定 6 の追補）で直す。改行を含まない行の置き換えはマークを動かさず、本文の終わりに行を足す矩形の貼付だけが行を足す。
-- **矩形の `C` の欲しい列は行末。** Vim の `v_visop`（normal.c）は矩形の `C` と `D` で `curwin->w_curswant = MAXCOL` にしてから `c` を流すので、`do_pending_operator` が置く `vi_curswant` は MAXCOL（`ggl<C-v>jjCXY<Esc>gvd` は行末まで消す・実測）。`visual_remembered` は矩形の `C`（引数を待つ鍵の文字を除く）の前の選択の欲しい列を行末の印にする。矩形の `D` はまだ効かない（ADR 0035 の追補 #1042）。
+- **矩形の `C` の欲しい列は行末。** Vim の `v_visop`（normal.c）は矩形の `C` と `D` で `curwin->w_curswant = MAXCOL` にしてから `c` を流すので、`do_pending_operator` が置く `vi_curswant` は MAXCOL（`ggl<C-v>jjCXY<Esc>gvd` は行末まで消す・実測）。`visual_remembered` は矩形の `C`（引数を待つ鍵の文字を除く）の前の選択の欲しい列を行末の印にする。矩形の `D` も同じ（#1417 で入った・下の追補）。
 - **`$` の矩形の後の `>`。** `gg<C-v>$G>gvd` は行末まで選び直さず左の 1 桁（Tab）だけを消す（実測）。`G` が欲しい列を桁へ戻すので、`$G<Esc>gvd`（既存の振る舞いと一致）と同じく鍵の前の欲しい列のまま置けば Vim と一致する。
 - **測った（変えない・後続）。** 行単位と文字単位の行を保つ書き換え（`Vj>` `Vj~` `vjl~` `vjlr`）の後の `gv` と `'a`、矩形の `>` と `d` の後の `u` の後の `gv` も、Vim はマークを動かさないが Nib は 1 行目へ寄せる（同じ根: 改行を含む 1 つの置き換えを `marks_adjusted` が行の消えた形に読む）。直し方は設計の判断（後続の Issue）。文字単位の `vjcX<Esc>gvd` は一致。
 - fixture は `gv-after-block-` の 22 件（修正前の再生器で 21 件が落ちる・`char-change` は文字単位の一致の確認）。
+
+## 追補（2026-11-11・#1417）: VISUAL の `J` `gJ` `X` `D` `Y`
+
+決定 7 の「効かない鍵」のうち、`J` `gJ` `X` `D` `Y` を Vim 9.1 の実測（`-es -u NONE`・下ごしらえの probe 96 件と fixture 93 件）どおりに入れる。`p` `P` は #1418、文字単位と行単位の `C`（`vjC` は行単位の変更・実測）は後続。
+
+- **`J` `gJ`（Vim の `nv_join` は VISUAL では `nv_operator` へ流す・`OP_JOIN`）。** 選んだ行の最初から最後までをつなぐ。種類（文字単位・行単位・矩形）を問わず、1 行だけなら次の行までの 2 行。回数は使わない（`V2J` `V3J` は 2 行・`3VJ` は `V` の回数で 3 行を選ぶ）。2 行目が本文の外なら鳴らして VISUAL を抜け、選択の始めに残る（`GVJ`）。つなぐ本体は NORMAL の `J` `gJ` と同じ `lines_joined`（空白の規則・joinspaces・`)`・キャレットはそのまま）で、NORMAL の `joined` は回数から、VISUAL の `visual_joined` は選択の行から最初と最後の行を決めるだけ。レジスタは書かない（`"aJ` の名前も使わない）。
+- **`J` の u の戻り先は VISUAL の `d` と同じ `visual_restore`。** 行単位は始めの端が上の行なら行頭、下の行ならキャレット（`lVjJu` は 1,1・`jlVkJu` は 1,2）、文字単位は小さいほうの位置（`lvjgJu` は 1,2）。
+- **`X` `D` `Y`（Vim の `v_visop`）。** 文字単位と行単位は種類を行単位に読み替えて VISUAL の `d` `y` へ流す（`visual_operated` に種類だけ `visual_line` にした状態を渡す・範囲・レジスタ・`"1` の規則・キャレット・u の戻り先は `Vd` `Vy` と同じ道）。前の選択は鍵の前の種類のまま（`lvjYgv<Esc>` は文字単位の 2,2・Vim の `VIsual_mode_orig`）。矩形の `X` `Y` は矩形の `d` `y`（`block_operated`）、矩形の `D` は `C` と同じく行末まで取り直して消す（`line_end_block_of`・`block_removed_to_line_end`）。矩形の `D` の後の前の選択は `C` と同じく欲しい列が行末（`visual_left_state`）。回数は使わない（`v2X` `v3Y` は選んだ行だけ）。
+- **`.`（ADR 0033）。** 記録は既存の `visual_recorded` のまま（範囲の大きさは鍵の前の種類で測り、再生は選び直してから同じ鍵を流す）。`vjX.` は 2 行ずつ、`l<C-v>jDj.` は記録の矩形の左上から行末まで、`Y` は本文を変えないので記録しない（`l<C-v>jYjj.` は何もしない）。
+- **測った（変えない・後続）。** 3 行以上をつなぐ `J` の中の行のマーク（`jlmaggVjjJ`a` は Vim 1,5・Nib はマークが消えて `` `a `` が効かず 1,6 に残る）は NORMAL の `3J` と同じ根（PR #1408 のレビューの後続 1・#793）。
+- fixture は `visual-line-command-` の 93 件（修正前の再生器で 88 件が落ちる。通る 5 件は `GVJ` と `J` `gJ` の後の `u`＝本文が戻るだけの形）。

@@ -208,14 +208,14 @@ void verify_vim_block_line_endings()
 }
 
 // 矩形では範囲外の鍵（決定 5）。どれも本文を変えず、矩形のまま残る。`~` `u` `U` は追補
-// （#959）、`c` `I` `A` `C` `>` `<` は追補（#1042）で効くので block-case- と block-insert- の
-// fixture が測る。
+// （#959）、`c` `I` `A` `C` `>` `<` は追補（#1042）、`J` `gJ` `X` `D` `Y` は #1417 で効くので
+// block-case- と block-insert- と visual-line-command- の fixture が測る。
 void verify_vim_block_unsupported_keys()
 {
     Editing editing;
     EditorController &controller = vim_block_editor(editing, "abcdef\nghijkl\nmnopqr");
     vim_replay(controller, "yy<C-v>jl");
-    constexpr std::array<std::string_view, 2> keys{"J", "p"};
+    constexpr std::array<std::string_view, 1> keys{"p"};
     for (const std::string_view key : keys)
     {
         vim_replay(controller, key);
