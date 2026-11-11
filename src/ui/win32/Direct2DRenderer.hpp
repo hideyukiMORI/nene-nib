@@ -21,6 +21,7 @@
 #include "LayoutRect.hpp"
 #include "LineUtf16Evaluation.hpp"
 #include "LineView.hpp"
+#include "MinimapPicture.hpp"
 #include "OperationGuideLayout.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteRowLayouts.hpp"
@@ -331,6 +332,8 @@ class Direct2DRenderer final
     void draw_palette_footer(const application::EditorFrame &frame, const core::LayoutRect &area);
     // エクスプローラーの面（ADR 0162 の決定 8）。面が無い frame は保持を捨てるだけ。
     void draw_explorer(const application::EditorFrame &frame, const core::ExplorerLayout &layout);
+    // ミニマップ（ADR 0171 の決定 1・2）。面が無い frame は最初の 1 行で返る。
+    void draw_minimap(const application::EditorFrame &frame, const core::LayoutRect &panel);
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);
 
@@ -377,6 +380,7 @@ class Direct2DRenderer final
     PaletteRowLayouts explorer_layouts_{ExplorerPainter::retained};
     // other の枠のプレビュー。要素の layout の保持は frame をまたいで再利用する（ADR 0155）。
     PreviewPane preview_;
+    MinimapPicture minimap_;
     // 通常7枠と案内4枠。録画時は案内が無く8枠（ADR 0079・言語の項目で 11・ADR 0154 の決定 6）。
     // 長さは StatusLayoutDemand.hpp の 1 つで、frame ごとの数は status_layout_demand が数える。
     std::array<StatusTextLayout, status_layout_capacity> status_layouts_{};

@@ -1,5 +1,7 @@
 #include "ExResult.hpp"
+
 #include "ExDocumentName.hpp"
+#include "Minimap.hpp"
 
 #include "AsciiCase.hpp"
 #include "BuiltinThemes.hpp"
@@ -699,7 +701,31 @@ scrolloff_option(std::string_view option, const EditorSettings &settings)
     return std::nullopt;
 }
 
-// 画面の見え方の option（行番号の相対表示と追従の余白・#1041）。どちらにも当たらなければ無し。
+// ミニマップ（ADR 0171 の決定 1）。`set minimap` `set nominimap` `set minimap?`。設定 v4 の
+// features の名前を足す・外すだけで、文言は `minimap=on` の形（Vim
+// に無い名前なので短い名前は無い）。
+constexpr std::array<std::string_view, 1> minimap_names{minimap_feature};
+
+[[nodiscard]] std::optional<ExResult> minimap_option(std::string_view option,
+                                                     const EditorSettings &settings)
+{
+    const auto request = switch_request(option, minimap_names);
+    if (!request.has_value())
+    {
+        return std::nullopt;
+    }
+    if (!request.value().has_value())
+    {
+        return ExResult{std::nullopt, std::nullopt, std::nullopt,
+                        switch_message(minimap_feature, minimap_shown(settings))};
+    }
+    const bool wanted = request.value().value();
+    return ExResult{minimap_set(settings, wanted), std::nullopt, std::nullopt,
+                    switch_message(minimap_feature, wanted)};
+}
+
+// 画面の見え方の option（行番号の相対表示と追従の余白・#1041、ミニマップ・ADR 0171）。どれにも
+// 当たらなければ無し。
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
 view_option(std::string_view option, const EditorSettings &settings)
 {
@@ -707,6 +733,11 @@ view_option(std::string_view option, const EditorSettings &settings)
     if (relative.has_value())
     {
         return std::expected<ExResult, ExEvaluationFailure>{std::move(relative).value()};
+    }
+    auto minimap = minimap_option(option, settings);
+    if (minimap.has_value())
+    {
+        return std::expected<ExResult, ExEvaluationFailure>{std::move(minimap).value()};
     }
     return scrolloff_option(option, settings);
 }
@@ -1222,7 +1253,7 @@ constexpr std::array<ExCommandParser, 10> command_parsers{
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
 // 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
-constexpr std::array<std::string_view, 43> fixed_candidates{"colorscheme",
+constexpr std::array<std::string_view, 45> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -1261,6 +1292,8 @@ constexpr std::array<std::string_view, 43> fixed_candidates{"colorscheme",
                                                             "set relativenumber",
                                                             "set norelativenumber",
                                                             "set scrolloff=",
+                                                            "set minimap",
+                                                            "set nominimap",
                                                             "preview full",
                                                             "preview side",
                                                             "preview off",

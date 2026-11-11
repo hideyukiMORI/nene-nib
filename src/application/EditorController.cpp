@@ -322,6 +322,7 @@ EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocu
     }
     // 面が出ている設定ならルートの木を作って読み始める（ADR 0162 の決定 3・5）。
     sync_explorer();
+    sync_minimap();
     refresh_key_map();
     // 起動引数のファイルは順にタブで開き、最後に開けたものがアクティブになる（ADR 0056 の決定
     // 13）。失敗は 1 意図だけの値なので、後の引数が消さないよう最後の失敗を控えて載せ直す。
@@ -377,6 +378,7 @@ bool EditorController::persist_settings(core::EditorSettings settings)
     // 面の表示とルートは設定の値（ADR 0162 の決定 3）。Ex・面の `:`・意図のどれから書いても同じ 1
     // 本。
     sync_explorer();
+    sync_minimap();
     refresh_key_map();
     if (view_geometry_.width <= 0)
     {
@@ -1097,6 +1099,7 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     mark_bracket(state_, state_.scroll().visible_lines, result.lines);
     add_other_pane(result, source.pattern);
     result.explorer = explorer_view();
+    add_minimap(result);
     add_diagnostics(result);
 }
 

@@ -85,6 +85,8 @@ void verify_find_replace_scope();
 void verify_substitute_property_scope();
 // MatchParenTests.cpp（ADR 0164・matchparen）
 void verify_matchparen_scope();
+// MinimapTests.cpp（ADR 0171・ミニマップの段 1）
+void verify_minimap_scope();
 
 // GuideTests.cpp
 void verify_guide_scope();

@@ -22,6 +22,7 @@
 #include "GutterMetrics.hpp"
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
+#include "MinimapLayout.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteOrigin.hpp"
 #include "PaneLayouts.hpp"
@@ -2349,14 +2350,19 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     const auto explorer = core::explorer_layout(
         core::LayoutRect{0, 0, width, height}, dpi_, frame.settings.font_size,
         frame.explorer.transform([](const application::ExplorerView &view) { return view.width; }));
+    // ミニマップは面を除いた client の右端を縮める（ADR 0171 の決定 2）。出ていなければ
+    // minimap_layout は最初の 1 行で返り、配置を計算しない（決定 1 の追補・早い return）。
+    const auto minimap = core::minimap_layout(explorer.body, dpi_, frame.settings.font_size,
+                                              frame.minimap.has_value());
     const auto panes =
-        core::pane_layouts(explorer.body, dpi_, frame.settings.font_size, frame.layout);
+        core::pane_layouts(minimap.body, dpi_, frame.settings.font_size, frame.layout);
     const auto body = core::active_pane_layout(panes, frame.active_side);
     const auto guide = core::operation_guide_layout(
         core::GuideRequest{frame.guide.context, body_guide_key_width(frame)}, body, status, dpi_);
     draw_title_bar(frame, title);
-    draw_body_area(frame, explorer.body, panes, guide);
+    draw_body_area(frame, minimap.body, panes, guide);
     draw_explorer(frame, explorer);
+    draw_minimap(frame, minimap.panel);
     draw_status_bar(frame, status);
     draw_status_guide(frame, guide);
     if (frame.command_palette.has_value())
@@ -2396,6 +2402,24 @@ void Direct2DRenderer::draw_explorer(const application::EditorFrame &frame,
                             ExplorerText{dwrite_.Get(), explorer_format_.Get(), dpi_},
                             explorer_layouts_);
     painter.paint(frame.explorer.value(), layout, frame.palette);
+}
+
+void Direct2DRenderer::draw_minimap(const application::EditorFrame &frame,
+                                    const core::LayoutRect &panel)
+{
+    // オフの frame はここの 1 行で返る（決定 1 の追補・explorer と同じ形）。
+    if (!frame.minimap.has_value())
+    {
+        return;
+    }
+    const auto colors = minimap_colors(frame.palette);
+    const auto painted =
+        minimap_.paint(MinimapPen{*context_.Get(), *brush_.Get(), colors, frame.body},
+                       frame.minimap.value(), panel);
+    if (!painted && !text_failure_.has_value())
+    {
+        text_failure_ = painted.error();
+    }
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::acquire_surface()
