@@ -218,7 +218,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/UtfPropertyTests.cpp
     tests/unit/PrintPagesPropertyTests.cpp
     tests/unit/ShellRegistrationPropertyTests.cpp
-    tests/unit/DocumentFormatTests.cpp)
+    tests/unit/DocumentFormatTests.cpp tests/unit/EditHistoryPropertyTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)
@@ -527,7 +527,7 @@ nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/CountedHeap.cpp tests/performance/LexerProbe.cpp
     tests/performance/ExplorerFrameProbe.cpp tests/performance/VimBlockProbe.cpp
     tests/performance/WordObjectProbe.cpp
-    tests/performance/VimFollowProbe.cpp)
+    tests/performance/VimFollowProbe.cpp tests/performance/EditedHistoryProbe.cpp)
 nenenib_link(nib_perf_probes nenenib_core)
 nenenib_link(nib_perf_probes nenenib_application)
 nenenib_link(nib_perf_probes nenenib_adapters)

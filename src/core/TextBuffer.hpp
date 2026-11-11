@@ -130,7 +130,9 @@ class TextBuffer final
     Chunks add_;
     // 末尾の chunk の、この値が知っている書き込み済みの長さ（ADR 0044 の決定 2）。
     std::size_t add_fill_;
-    std::vector<Piece> pieces_;
+    // piece の列は不変の束で、値の写し（状態の with_* のたび）では複製しない。新しい列を作るのは
+    // 編集（replaced）の 1 回だけ（ADR 0180 の決定 1・3）。
+    std::shared_ptr<const std::vector<Piece>> pieces_;
     std::size_t size_bytes_;
     std::size_t newline_count_;
     LineEnding ending_;

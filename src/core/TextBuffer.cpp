@@ -135,8 +135,9 @@ Piece TextBuffer::appended(Chunks &chunks, std::size_t &fill, std::string_view t
 TextBuffer::TextBuffer(Buffer original, Index original_newlines, Columns columns,
                        std::vector<Piece> pieces, LineEnding ending)
     : original_(std::move(original)), original_newlines_(std::move(original_newlines)),
-      columns_(std::move(columns)), column_rebuilds_(0), add_fill_(0), pieces_(std::move(pieces)),
-      size_bytes_(total_length(pieces_)), newline_count_(total_newlines(pieces_)), ending_(ending)
+      columns_(std::move(columns)), column_rebuilds_(0), add_fill_(0),
+      pieces_(std::make_shared<const std::vector<Piece>>(std::move(pieces))),
+      size_bytes_(total_length(*pieces_)), newline_count_(total_newlines(*pieces_)), ending_(ending)
 {
 }
 
@@ -248,7 +249,7 @@ Piece TextBuffer::clipped(const Piece &piece, std::size_t from, std::size_t leng
 
 void TextBuffer::collect(std::vector<Piece> &out, std::size_t from, std::size_t to) const
 {
-    visit_text_range(pieces_, Offset{from}, Offset{to},
+    visit_text_range(*pieces_, Offset{from}, Offset{to},
                      [this, &out](const Piece &piece, std::size_t offset, std::size_t length)
                      {
                          out.push_back(clipped(piece, offset, length));
@@ -344,14 +345,14 @@ std::size_t TextBuffer::line_count() const noexcept
 
 std::size_t TextBuffer::piece_count() const noexcept
 {
-    return pieces_.size();
+    return pieces_->size();
 }
 
 // piece の窓の要約を本文の順に畳む。piece をまたぐ行は前の tail と後の head を足す（Issue #553）。
 std::size_t TextBuffer::longest_line_bytes() const noexcept
 {
     LineLengths lengths{};
-    for (const auto &piece : pieces_)
+    for (const auto &piece : *pieces_)
     {
         lengths = joined(
             lengths, index_of(piece).lengths(piece.start.value, piece.start.value + piece.length));
@@ -362,8 +363,8 @@ std::size_t TextBuffer::longest_line_bytes() const noexcept
 std::vector<std::string_view> TextBuffer::segments() const &
 {
     std::vector<std::string_view> result;
-    result.reserve(pieces_.size());
-    for (const auto &piece : pieces_)
+    result.reserve(pieces_->size());
+    for (const auto &piece : *pieces_)
     {
         result.push_back(view_of(piece));
     }
@@ -373,7 +374,7 @@ std::vector<std::string_view> TextBuffer::segments() const &
 std::string TextBuffer::text_range(Offset begin, Offset end) const
 {
     std::string result;
-    visit_text_range(pieces_, begin, end,
+    visit_text_range(*pieces_, begin, end,
                      [this, &result](const Piece &piece, std::size_t offset, std::size_t length)
                      {
                          result.append(view_of(piece).substr(offset, length));
@@ -386,7 +387,7 @@ char TextBuffer::byte_at(Offset at) const noexcept
 {
     char result = '\0';
     bool found = false;
-    visit_text_range(pieces_, at, Offset{at.value + 1},
+    visit_text_range(*pieces_, at, Offset{at.value + 1},
                      [this, &result, &found](const Piece &piece, std::size_t offset, std::size_t)
                      {
                          result = view_of(piece)[offset];
@@ -410,7 +411,7 @@ std::size_t TextBuffer::newline_offset(std::size_t index) const noexcept
 {
     std::size_t absolute = 0;
     std::size_t seen = 0;
-    for (const auto &piece : pieces_)
+    for (const auto &piece : *pieces_)
     {
         const std::size_t count = piece.newline_end - piece.newline_begin;
         if (seen + count > index)
@@ -428,7 +429,7 @@ std::size_t TextBuffer::newlines_before(std::size_t at) const noexcept
 {
     std::size_t absolute = 0;
     std::size_t count = 0;
-    for (const auto &piece : pieces_)
+    for (const auto &piece : *pieces_)
     {
         if (absolute + piece.length >= at)
         {
@@ -506,7 +507,7 @@ std::pair<TextPosition, std::size_t> TextBuffer::position_read(Offset at) const
     std::size_t code_points = 0;
     // 非継続 byte の個数は任意の byte 分割で加法的。途中 offset / piece も丸めない。
     visit_text_range(
-        pieces_, start, Offset{clamped},
+        *pieces_, start, Offset{clamped},
         [this, &code_points](const Piece &piece, std::size_t offset, std::size_t length)
         {
             code_points += code_point_count(view_of(piece).substr(offset, length));
@@ -529,7 +530,7 @@ std::pair<Offset, std::size_t> TextBuffer::offset_read(const TextPosition &posit
     std::size_t remaining = position.column.value - 1;
     std::size_t consumed = 0;
     visit_text_range(
-        pieces_, start, line_end(position.line),
+        *pieces_, start, line_end(position.line),
         [this, &remaining, &consumed](const Piece &piece, std::size_t offset, std::size_t length)
         {
             const auto slice = view_of(piece).substr(offset, length);

@@ -2,6 +2,7 @@
 
 #include "CommandInputWorkload.hpp"
 #include "CompletionPrefixWorkload.hpp"
+#include "EditedHistoryWorkload.hpp"
 #include "ExCompletionWorkload.hpp"
 #include "ExplorerFrameWorkload.hpp"
 #include "FileNameWorkload.hpp"
@@ -38,5 +39,6 @@ using ProbeDispatch =
                  ProbeDispatchRow<SearchSpanWorkload>, ProbeDispatchRow<TextObjectWorkload>,
                  ProbeDispatchRow<MarkdownWorkload>, ProbeDispatchRow<NewlineIndexWorkload>,
                  ProbeDispatchRow<LexerWorkload>, ProbeDispatchRow<ExplorerFrameWorkload>,
-                 ProbeDispatchRow<VimBlockWorkload>, ProbeDispatchRow<WordObjectWorkload>>;
+                 ProbeDispatchRow<VimBlockWorkload>, ProbeDispatchRow<WordObjectWorkload>,
+                 ProbeDispatchRow<EditedHistoryWorkload>>;
 } // namespace nenenib::tests::performance

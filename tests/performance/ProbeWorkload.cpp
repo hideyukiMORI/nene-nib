@@ -3,6 +3,7 @@
 #include "BufferProbe.hpp"
 #include "CommandInputProbe.hpp"
 #include "CompletionPrefixProbe.hpp"
+#include "EditedHistoryProbe.hpp"
 #include "ExCompletionProbe.hpp"
 #include "ExplorerFrameProbe.hpp"
 #include "FileNameProbe.hpp"
@@ -972,6 +973,21 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(EditedHistoryWorkload workload)
+{
+    switch (workload)
+    {
+    case EditedHistoryWorkload::moves_after_1000:
+    case EditedHistoryWorkload::moves_after_4000:
+    case EditedHistoryWorkload::moves_after_16000:
+    case EditedHistoryWorkload::erases_after_1000:
+    case EditedHistoryWorkload::erases_after_4000:
+    case EditedHistoryWorkload::erases_after_16000:
+        return 230U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -987,7 +1003,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 230> dispatches{{
+constexpr std::array<ProbeDispatch, 236> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1454,6 +1470,18 @@ constexpr std::array<ProbeDispatch, 230> dispatches{{
                      word_object_input, word_object_ranges},
     ProbeDispatchRow{WordObjectWorkload::double_click_solid_16384,
                      "double-click-word-solid-1line-16384", word_object_input, word_double_clicked},
+    ProbeDispatchRow{EditedHistoryWorkload::moves_after_1000, "vim-lh-after-1000-edits",
+                     edited_history_input, edited_history_keys},
+    ProbeDispatchRow{EditedHistoryWorkload::moves_after_4000, "vim-lh-after-4000-edits",
+                     edited_history_input, edited_history_keys},
+    ProbeDispatchRow{EditedHistoryWorkload::moves_after_16000, "vim-lh-after-16000-edits",
+                     edited_history_input, edited_history_keys},
+    ProbeDispatchRow{EditedHistoryWorkload::erases_after_1000, "vim-x-after-1000-edits",
+                     edited_history_input, edited_history_keys},
+    ProbeDispatchRow{EditedHistoryWorkload::erases_after_4000, "vim-x-after-4000-edits",
+                     edited_history_input, edited_history_keys},
+    ProbeDispatchRow{EditedHistoryWorkload::erases_after_16000, "vim-x-after-16000-edits",
+                     edited_history_input, edited_history_keys},
 }};
 
 constexpr auto dispatch_names = []
@@ -1496,7 +1524,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 230U);
+static_assert(dispatches.size() == 236U);
 static_assert(dispatch_is_complete());
 
 } // namespace
