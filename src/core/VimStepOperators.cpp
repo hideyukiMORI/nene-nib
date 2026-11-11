@@ -1068,7 +1068,16 @@ namespace detail
         }
         count = remaining;
     }
-    const LineNumber last{first.value + count - single_step};
+    return lines_joined(state, text, JoinedLines{first, LineNumber{first.value + count - 1}},
+                        inserts_space);
+}
+
+// first から last までの行（2 行以上・どちらも本文の中）をつなぐ本体。NORMAL の `J` `gJ` と
+// VISUAL の `J` `gJ`（#1417）が共用する。
+[[nodiscard]] VimStep lines_joined(const VimState &state, const TextBuffer &text, JoinedLines lines,
+                                   bool inserts_space)
+{
+    const auto [first, last] = lines;
     std::string previous = text.line_text(first);
     std::string body = previous;
     std::size_t joint = 0;
