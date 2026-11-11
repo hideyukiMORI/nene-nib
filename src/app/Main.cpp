@@ -32,6 +32,7 @@
 #include "Win32ThemeAdapter.hpp"
 #include "Win32TimingAdapter.hpp"
 #include "Win32Worker.hpp"
+#include "Win32WslDistributions.hpp"
 #include "WindowFailure.hpp"
 
 #include <windows.h>
@@ -290,6 +291,7 @@ int run(HINSTANCE instance)
     nib_adapters::Win32Clock wall_clock;
     nenenib::ui::win32::Win32Printer printer;
     nib_adapters::Win32ShellRegistration shell_registration(L"Software");
+    nib_adapters::Win32WslDistributions wsl(nib_adapters::wsl_lxss_key);
     nenenib::adapters::win32::Win32DocumentReader reads(worker, files, code_pages);
     nenenib::adapters::win32::Win32LanguageServer language_server({});
     nenenib::adapters::win32::Win32ImageAdapter images(worker);
@@ -304,8 +306,8 @@ int run(HINSTANCE instance)
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);
-    const auto window = nenenib::ui::win32::EditorWindow::create(instance, controller, timing,
-                                                                 {text_layouts, warmup});
+    const auto window = nenenib::ui::win32::EditorWindow::create(
+        instance, controller, {timing, wsl}, {text_layouts, warmup});
     if (!window)
     {
         return report(reason_of(window.error()));
