@@ -180,10 +180,17 @@ void verify_window_walks_across_a_window_end()
 }
 
 // 乱数の本文の材料: 1〜4 バイトの code point・Tab・幅 0（U+0301 は 2 バイト・U+20DD と U+FE0F は
-// 3 バイト）・絵文字。
-constexpr std::array<std::string_view, 9> window_pieces{
-    "a",        "\t",           "\xC3\xA9",    "\xE3\x81\x82", "\xE6\xBC\xA2", "\xF0\x9F\x98\x80",
-    "\xCC\x81", "\xE2\x83\x9D", "\xEF\xB8\x8F"};
+// 3 バイト・異体字セレクタ補助の U+E0100 は 4 バイト・#1322）・絵文字。
+constexpr std::array<std::string_view, 10> window_pieces{"a",
+                                                         "\t",
+                                                         "\xC3\xA9",
+                                                         "\xE3\x81\x82",
+                                                         "\xE6\xBC\xA2",
+                                                         "\xF0\x9F\x98\x80",
+                                                         "\xCC\x81",
+                                                         "\xE2\x83\x9D",
+                                                         "\xEF\xB8\x8F",
+                                                         "\xF3\xA0\x84\x80"};
 constexpr std::size_t window_plain_pieces = 6;
 
 // 固定 seed の 1 行（改行を含まない）。幅 0 の材料は 1〜40 個の列で入れ、窓（64 バイト）の境を
@@ -252,8 +259,9 @@ constexpr std::size_t window_plain_pieces = 6;
     return same;
 }
 
-// 窓の道の 4 つの答え（vim_character_after・vim_resting_caret・VimLineColumns の character_end と
-// character_start）を、行の全体を写した素朴な答えと比べる。compared は比べた数。
+// 窓の道の 5 つの答え（vim_character_after・vim_character_before・vim_resting_caret・
+// VimLineColumns の character_end と character_start）を、行の全体を写した素朴な答えと比べる。
+// compared は比べた数。
 [[nodiscard]] bool window_walks_agree(const std::string &line, std::size_t &compared)
 {
     const auto buffer = TextBuffer::from_utf8(line + "\nb");
@@ -275,6 +283,12 @@ constexpr std::size_t window_plain_pieces = 6;
                core::vim_resting_caret(text, Offset{at}).value == start &&
                columns_agree(columns, line, start);
         compared += 8;
+        if (start > 0)
+        {
+            same = same && core::vim_character_before(text, Offset{start}, Offset{0}) ==
+                               vim_character_start(line, Offset{start});
+            ++compared;
+        }
     }
     same = same && core::vim_resting_caret(text, line_end).value ==
                        copied_character_containing(line, line.size());
