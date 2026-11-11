@@ -448,6 +448,8 @@ void EditorController::accept(const ToggleBookmark &)
         reject(core::DisplayText::parse("ブックマークを保存できませんでした").value());
         return;
     }
+    // 次に起動画面が出たら読み直す（ADR 0172 の追補 25）。
+    mark_start_lists_stale();
     close_command_input();
     state_ = state_.with_command_message(
         core::DisplayText::parse(removing ? "ブックマークを解除しました"

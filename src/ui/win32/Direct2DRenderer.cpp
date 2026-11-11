@@ -1867,14 +1867,20 @@ void Direct2DRenderer::draw_start_screen(const application::EditorFrame &frame,
     {
         return;
     }
-    // 「ファイルを開く」の鍵は操作の表から（Vim では Ctrl+Shift+O・D71）。
+    // 「はじめる」の 3 行の鍵は操作の表から今のモードで引く（Vim の「ファイルを開く」は
+    // Ctrl+Shift+O・D71。鍵の無い操作は空で枠を描かない・#1480）。
+    const auto new_key =
+        core::operation_guide_entry(core::EditorOperation::new_tab, frame.mode).key;
     const auto open_key =
         core::operation_guide_entry(core::EditorOperation::open_file, frame.mode).key;
+    const auto folder_key =
+        core::operation_guide_entry(core::EditorOperation::choose_explorer_root, frame.mode).key;
     StartScreenPainter painter(*context_.Get(), *brush_.Get(),
                                StartScreenText{dwrite_.Get(), start_title_format_.Get(),
                                                explorer_format_.Get(), guide_status_format_.Get(),
                                                guide_key_format_.Get(), guide_label_format_.Get(),
-                                               guide_keycap_style(frame.palette), open_key, dpi_},
+                                               guide_keycap_style(frame.palette), new_key, open_key,
+                                               folder_key, dpi_},
                                start_layouts_);
     painter.paint(view, layout.value(), frame.palette, body.band);
 }

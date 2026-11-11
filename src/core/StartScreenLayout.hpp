@@ -36,7 +36,8 @@ struct StartScreenLayout
 };
 
 // 寸法の採用値（DIP・PR の表に凍結する値）。列の幅・列の左右に残す余白・本文の上端から題までの
-// 余白・題の後と節の間の余白・見出しの高さと見出しの後の余白・行の左右の余白・印の升・印と項目の
+// 最小の余白（上下の中央に寄せる前・追補
+// 26）・題の後と節の間の余白・見出しの高さと見出しの後の余白・行の左右の余白・印の升・印と項目の
 // 間・鍵の枠の列と説明の間。
 inline constexpr std::int32_t start_column_dips = 480;
 inline constexpr std::int32_t start_column_margin_dips = 16;
@@ -62,8 +63,9 @@ inline constexpr std::int32_t start_detail_gap_dips = 12;
 // 幅から左右 16 DIP を引いた幅。列は本文の欄の中央。行の高さは本文の行の高さ、題は 1.5 倍。
 // key_width は鍵の枠の列の幅（物理画素・描画は測った値、当たりは 0 でよい・鍵の行は選べない）で、
 // 64 DIP より狭ければ 64 DIP。鍵の枠の列はほかの行の項目と同じ左端から始まる（追補 2026-11-11 の
-// 22）。列の幅が 0 以下なら値なし（描かない・当たらない）。縦は本文の帯の下端を越えてもそのまま
-// 置き、描画が帯で切る。
+// 22）。列の幅が 0 以下なら値なし（描かない・当たらない）。縦はブロック全体（列）を本文の欄の上下の
+// 中央に置き、上の余白は最小 36 DIP（追補 26・#1480）。ブロックが欄より高ければ上から 36 DIP に
+// 置いて本文の帯の下端を越えてもそのまま置き、描画が帯で切る。
 [[nodiscard]] std::optional<StartScreenLayout> start_screen_layout(const BodyLayout &body,
                                                                    std::uint32_t dpi,
                                                                    StartScreenShape shape,

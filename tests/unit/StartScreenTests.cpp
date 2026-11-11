@@ -1,13 +1,16 @@
 // 起動画面の application の契約（ADR 0172・追補 2026-11-11・#1018 の段 1）。出る条件・節と 10 件・
 // 選びの鍵（通常モードの ↑ ↓ と Vim の NORMAL の j k）・Enter とクリックの実行（open_listed
-// と操作の 頼み）・消える条件・guide=hidden・最初の frame の後の 1 回の読み・静かな道。
+// と操作の 頼み）・消える条件・guide=hidden・起動画面が出るたびの裏の読み（前の読みから履歴か
+// ブックマークを書いたときだけ・届くまで 1 本・前の一覧を見せたまま・#1480）・静かな道。
 // 段 2（#1455）: core の配置 start_screen_layout と当たり start_screen_row_at（描画と窓のクリックが
-// 同じ 1 本を読む・中央寄せの 1 列・幅 480 DIP・狭い窓・DPI 100 / 150 / 200%）。
+// 同じ 1 本を読む・中央寄せの 1 列・幅 480 DIP・狭い窓・DPI 100 / 150 / 200%）。#1480: 上下も
+// 本文の欄の中央（面が足りなければ上から 36 DIP）。
 #include "BodyLayout.hpp"
 #include "CancelCommand.hpp"
 #include "CancelSelection.hpp"
 #include "CaretMotion.hpp"
 #include "ChooseStartEntry.hpp"
+#include "CloseTab.hpp"
 #include "DevicePixels.hpp"
 #include "DocumentReadFinished.hpp"
 #include "EditMode.hpp"
@@ -349,7 +352,8 @@ void verify_conditions()
 }
 
 // 追補の 1: 状態は持たない。新しい無題のタブにも出て、別の文書がアクティブなら出ない。引数で
-// 起動したなら読みを頼まず、後で無題のタブを足しても読まない。
+// 起動したなら最初の frame では読みを頼まず、無題のタブを足して起動画面が出たときに 1 回頼む
+// （追補 25）。戻るたびには読まない（前の読みから何も書いていない）。
 void verify_tabs_and_quiet_start()
 {
     Editing editing(SessionReading{std::nullopt},
@@ -359,19 +363,82 @@ void verify_tabs_and_quiet_start()
     auto &controller = editing.controller();
     expect(!shown(controller).has_value(), "a start with a file shows no start screen");
     applied(controller, app::FirstFramePresented{});
+    expect(editing.start_lists().touches() == 0,
+           "the first frame of a start with a file never asks for the lists");
     applied(controller, app::NewTab{});
     const auto added = shown(controller);
     expect(added.has_value() && !added.value().lists_read && added.value().entries.size() == 3 &&
-               editing.start_lists().touches() == 0 && editing.history().reads() == 0,
-           "a new untitled tab shows the start rows without reading the lists");
+               editing.start_lists().requests() == 1 && editing.history().reads() == 0,
+           "a new untitled tab shows the start rows and asks the lists once in the background");
+    editing.start_lists().serve(app::StartLists{paths_named("recent", 2), {}});
+    applied(controller, app::WorkCompleted{});
+    expect(view_of(controller).lists_read && view_of(controller).entries.size() == 2 + 3,
+           "the lists read for the new tab show their rows");
     press_down(controller);
     expect(selected_of(controller) == std::optional<std::size_t>{0},
            "the new tab's start screen takes the keys");
     applied(controller, app::SwitchTab{0});
     expect(!shown(controller).has_value(), "another active document shows no start screen");
     applied(controller, app::SwitchTab{1});
-    expect(shown(controller).has_value() && !selected_of(controller).has_value(),
-           "back on the untitled tab nothing is selected");
+    expect(shown(controller).has_value() && !selected_of(controller).has_value() &&
+               view_of(controller).entries.size() == 2 + 3 && editing.start_lists().requests() == 1,
+           "back on the untitled tab nothing is selected and nothing written means no new read");
+}
+
+// 追補 25: 読みが走っている間に何度出ても重ねて頼まない。前の読みの後に履歴を書いた（タブを
+// 閉じた）なら次に出たときに読み直し、届くまでは前の一覧を見せたまま。中身が同じなら選びを保ち、
+// 違えば選びを外す。
+void verify_reads_on_show()
+{
+    Editing editing(SessionReading{std::nullopt},
+                    std::vector<app::OpenDocument>{app::OpenDocument{path_named("a.txt")},
+                                                   app::OpenDocument{path_named("b.txt")}},
+                    [](ScriptedFiles &files, ScriptedDocumentReads &)
+                    {
+                        files.hold_at("C:\\work\\a.txt", Bytes{std::string("a")});
+                        files.hold_at("C:\\work\\b.txt", Bytes{std::string("b")});
+                    });
+    auto &controller = editing.controller();
+    applied(controller, app::FirstFramePresented{});
+    applied(controller, app::NewTab{});
+    applied(controller, app::CloseTab{0});
+    applied(controller, app::SwitchTab{0});
+    applied(controller, app::SwitchTab{1});
+    expect(editing.start_lists().requests() == 1 && editing.history().writes() == 1,
+           "while the first read runs, showing the start screen again asks nothing more");
+    const auto first = app::StartLists{paths_named("recent", 2), {}};
+    editing.start_lists().serve(first);
+    applied(controller, app::WorkCompleted{});
+    applied(controller, app::WorkCompleted{});
+    expect(editing.start_lists().collects() == 1 && view_of(controller).entries.size() == 2 + 3,
+           "the read arrives once and the signal no longer collects");
+    applied(controller, app::SwitchTab{0});
+    applied(controller, app::SwitchTab{1});
+    expect(editing.start_lists().requests() == 2,
+           "a history written during the read is read again on the next show");
+    press_down(controller);
+    const auto kept = shown(controller);
+    expect(kept.has_value() && kept.value().lists_read && kept.value().entries.size() == 2 + 3 &&
+               selected_of(controller) == std::optional<std::size_t>{0},
+           "while reading again the previous rows stay and take the keys");
+    editing.start_lists().serve(first);
+    applied(controller, app::WorkCompleted{});
+    expect(selected_of(controller) == std::optional<std::size_t>{0} &&
+               view_of(controller).entries.size() == 2 + 3,
+           "the same lists again keep the rows and the selection");
+    applied(controller, app::SwitchTab{0});
+    applied(controller, app::SwitchTab{1});
+    expect(editing.start_lists().requests() == 2,
+           "nothing written since the last read means no new read");
+    applied(controller, app::SwitchTab{0});
+    applied(controller, app::CloseTab{0});
+    expect(shown(controller).has_value() && editing.start_lists().requests() == 3,
+           "closing the last file onto the untitled tab reads the lists again");
+    press_down(controller);
+    editing.start_lists().serve(app::StartLists{paths_named("recent", 3), {}});
+    applied(controller, app::WorkCompleted{});
+    expect(!selected_of(controller).has_value() && view_of(controller).entries.size() == 3 + 3,
+           "different lists replace the rows and clear the selection");
 }
 
 // 決定 4・追補の 5: Vim は NORMAL で次の鍵を待っていないときだけ出し、j k と矢印で選ぶ。INSERT・
@@ -431,6 +498,13 @@ void verify_selection_steps()
     return core::body_layout_in(band, dpi, core::default_font_size());
 }
 
+// 上下の中央に寄せる余地の無い低い本文（ブロックが面より高いので上から 36 DIP）。押しと離しの
+// 反例は、読みや外しで行の位置が半行ずつ動かない形で書く。
+[[nodiscard]] core::BodyLayout short_body()
+{
+    return core::body_layout_in(core::LayoutRect{0, 40, 1300, 300}, 96, core::default_font_size());
+}
+
 [[nodiscard]] std::pair<std::int32_t, std::int32_t> middle_of(const core::LayoutRect &area)
 {
     return {(area.left + area.right) / 2, (area.top + area.bottom) / 2};
@@ -447,10 +521,12 @@ void verify_column(const core::StartScreenLayout &layout, const core::BodyLayout
     expect(left_room >= 0 && right_room >= 0 && right_room - left_room >= 0 &&
                right_room - left_room <= 1,
            "the column sits in the middle of the text area");
-    expect(layout.column.top == body.content.top + core::to_pixels(core::start_top_dips, dpi) &&
-               layout.title.top == layout.column.top &&
+    const auto above = layout.column.top - body.content.top;
+    const auto below = body.content.bottom - layout.column.bottom;
+    expect(above >= core::to_pixels(core::start_top_dips, dpi) && above - below >= -1 &&
+               above - below <= 1 && layout.title.top == layout.column.top &&
                core::height_of(layout.title) == (body.line_height * 3) / 2,
-           "the title opens the column at one and a half rows");
+           "the column sits in the vertical middle and the title opens it at one and a half rows");
 }
 
 // 行は列の全幅で本文の行の高さ。節の見出しは行の上、「はじめる」の行だけ右端に補足の欄を持つ。
@@ -576,18 +652,101 @@ void verify_hits()
            "points left or right of the column or under the band miss");
 }
 
+// 追補 26（#1480）: ブロック全体を本文の欄の上下の中央へ。面が足りれば上と下の余白の差は 1 px
+// 以内、足りなければ上から 36 DIP（下が切れる）。押せる行は描く行と同じ矩形（同じ配置の 1 本）で、
+// 帯の中の行の中央が当たる。
+void verify_centered_at(std::uint32_t dpi, std::size_t recent, std::int32_t band_dips)
+{
+    const core::LayoutRect band{0, 0, core::to_pixels(1300, dpi), core::to_pixels(band_dips, dpi)};
+    const auto body = core::body_layout_in(band, dpi, core::default_font_size());
+    const core::StartScreenShape shape{recent, recent > 0 ? std::size_t{3} : std::size_t{0}, false};
+    const auto placed = core::start_screen_layout(body, dpi, shape, 0);
+    if (!placed.has_value())
+    {
+        expect(false, "a wide body places the start screen at every height");
+        return;
+    }
+    const auto &layout = placed.value();
+    const auto least = core::to_pixels(core::start_top_dips, dpi);
+    const auto block = core::height_of(layout.column);
+    const auto room = core::height_of(body.content);
+    const auto above = layout.column.top - body.content.top;
+    const auto below = body.content.bottom - layout.column.bottom;
+    if (room - block >= 2 * least)
+    {
+        expect(above - below >= -1 && above - below <= 1,
+               "with room the block sits in the vertical middle within one pixel");
+    }
+    else
+    {
+        expect(above == least, "without room the block starts 36 DIP under the top");
+    }
+    bool hits = layout.title.top == layout.column.top &&
+                layout.keys.at(2).key.bottom == layout.column.bottom;
+    for (std::size_t index = 0; index < layout.rows.size(); ++index)
+    {
+        const auto [x, y] = middle_of(layout.rows.at(index).line);
+        const bool inside = core::contains(body.band, x, y);
+        hits = hits && (!inside || core::start_screen_row_at(layout, body, x, y) ==
+                                       std::optional<std::size_t>{index});
+    }
+    expect(hits, "the moved rows are the rows that are hit");
+}
+
+void verify_centered_heights(std::uint32_t dpi)
+{
+    for (const std::size_t recent : {std::size_t{0}, std::size_t{10}, std::size_t{20}})
+    {
+        for (const std::int32_t height : {200, 500, 900, 1400})
+        {
+            verify_centered_at(dpi, recent, height);
+        }
+    }
+}
+
+// ちょうど: 本文の欄の高さがブロックと上下の 36 DIP の和なら、上も下も 36 DIP。
+void verify_centered_exact()
+{
+    const auto open = core::start_screen_layout(wide_body(96), 96, core::StartScreenShape{}, 0);
+    if (!open.has_value())
+    {
+        expect(false, "the exact case is placed");
+        return;
+    }
+    const auto block = core::height_of(open.value().column);
+    const auto least = core::to_pixels(core::start_top_dips, 96);
+    const auto top_gap = wide_body(96).content.top - wide_body(96).band.top;
+    const core::LayoutRect band{0, 0, 1300, top_gap + block + (2 * least)};
+    const auto exact_body = core::body_layout_in(band, 96, core::default_font_size());
+    const auto exact = core::start_screen_layout(exact_body, 96, core::StartScreenShape{}, 0);
+    expect(exact.has_value() && exact.value().column.top == exact_body.content.top + least &&
+               exact.value().column.bottom == exact_body.content.bottom - least,
+           "a body exactly as high as the block and both margins leaves 36 DIP above and below");
+}
+
+void verify_centered()
+{
+    for (const std::uint32_t dpi : {96U, 120U, 144U, 192U})
+    {
+        verify_centered_heights(dpi);
+    }
+    verify_centered_exact();
+}
+
 void verify_layout()
 {
     verify_layout_at(96);
     verify_layout_at(144);
     verify_layout_at(192);
     verify_narrow_layouts();
+    verify_centered();
     verify_shape();
     verify_hits();
 }
 
 // 窓と同じ押しと離しの道（core::start_screen_layout と start_screen_row_at・start_pressed・
-// start_released）。点 (x, y) は 96 DPI の広い本文の上。離しが行を選べば ChooseStartEntry を送る。
+// start_released）。点 (x, y) は 96 DPI の低い本文（short_body・上から 36
+// DIP）の上。離しが行を選べば ChooseStartEntry を送る。
 [[nodiscard]] std::optional<std::size_t> row_under(app::EditorController &controller,
                                                    std::pair<std::int32_t, std::int32_t> point)
 {
@@ -596,7 +755,7 @@ void verify_layout()
     {
         return std::nullopt;
     }
-    const auto body = wide_body(96);
+    const auto body = short_body();
     const auto layout = core::start_screen_layout(
         body, 96, core::start_screen_shape(view.value().entries, view.value().lists_read), 0);
     return layout.has_value()
@@ -637,7 +796,7 @@ void verify_press_across_read()
     auto &controller = editing.controller();
     editing.files().hold_at("C:\\work\\recent0.txt", Bytes{std::string("zero")});
     applied(controller, app::FirstFramePresented{});
-    const auto before = core::start_screen_layout(wide_body(96), 96, core::StartScreenShape{}, 0);
+    const auto before = core::start_screen_layout(short_body(), 96, core::StartScreenShape{}, 0);
     if (!before.has_value())
     {
         expect(false, "the first frame places the start screen");
@@ -667,7 +826,7 @@ void verify_press_across_forget()
     editing.history().serve(app::FileHistory{paths_named("recent", 4)});
     present_with(editing, app::StartLists{paths_named("recent", 4), {}});
     const auto layout =
-        core::start_screen_layout(wide_body(96), 96, core::StartScreenShape{4, 0, false}, 0);
+        core::start_screen_layout(short_body(), 96, core::StartScreenShape{4, 0, false}, 0);
     if (!layout.has_value())
     {
         expect(false, "the read lists place the start screen");
@@ -687,6 +846,74 @@ void verify_press_across_forget()
     expect(controller.frame().document.path == path_named("recent3.txt"),
            "a press and a release on the same row still open it");
 }
+// 最近の 2 件を読んで出した起動画面から recent0 を開き、無題のタブを足して recent0 を閉じる（履歴を
+// 書く）。面を開いて閉じると起動画面が出直し、前の一覧（2 件）を見せたまま 2 回目の読みを頼む。
+void reread_pending(Editing &editing)
+{
+    auto &controller = editing.controller();
+    editing.files().hold_at("C:\\work\\recent0.txt", Bytes{std::string("zero")});
+    present_with(editing, app::StartLists{paths_named("recent", 2), {}});
+    applied(controller, app::ChooseStartEntry{0});
+    applied(controller, app::NewTab{});
+    const auto tabs = controller.frame().tabs.size();
+    applied(controller, app::CloseTab{tabs - 2});
+    applied(controller, app::OpenCommandPalette{});
+    applied(controller, app::CancelCommand{});
+    const auto view = view_of(controller);
+    expect(editing.history().writes() == 1 && editing.start_lists().requests() == 2 &&
+               view.lists_read && view.entries.size() == 2 + 3,
+           "closing a file then showing the start screen reads again with the old rows shown");
+}
+
+[[nodiscard]] std::optional<core::StartScreenLayout> wide_layout_of(app::EditorController &c)
+{
+    const auto view = view_of(c);
+    return core::start_screen_layout(wide_body(96), 96,
+                                     core::start_screen_shape(view.entries, view.lists_read), 0);
+}
+
+// 追補 25 の押しと離し: 読み直しの途中に最近の 1 件目を押す。届いた一覧が同じなら同じ行で離すと
+// 開き、配置も動かない（2 回目以降の読みで画面が上下に動かない）。先頭に別のファイルが入った一覧
+// なら、同じ番号の行の中身が違うので何も開かない（start_pressed / start_released の今の規則）。
+void verify_press_across_reread()
+{
+    {
+        Editing editing;
+        auto &controller = editing.controller();
+        reread_pending(editing);
+        const auto before = wide_layout_of(controller);
+        const auto rows =
+            core::start_screen_layout(short_body(), 96, core::StartScreenShape{2, 0, false}, 0);
+        const auto point =
+            middle_of(rows.has_value() ? rows.value().rows.at(0).line : core::LayoutRect{});
+        const auto press = press_at(controller, point);
+        editing.start_lists().serve(app::StartLists{paths_named("recent", 2), {}});
+        applied(controller, app::WorkCompleted{});
+        const auto after = wide_layout_of(controller);
+        expect(before.has_value() && after.has_value() &&
+                   before.value().column.top == after.value().column.top &&
+                   before.value().rows.at(0).line.top == after.value().rows.at(0).line.top,
+               "the same lists read again keep the block where it was");
+        release_at(controller, press, point);
+        expect(controller.frame().document.path == path_named("recent0.txt"),
+               "a press held across a read of the same lists still opens its row");
+    }
+    Editing editing;
+    auto &controller = editing.controller();
+    reread_pending(editing);
+    const auto rows =
+        core::start_screen_layout(short_body(), 96, core::StartScreenShape{2, 0, false}, 0);
+    const auto point =
+        middle_of(rows.has_value() ? rows.value().rows.at(0).line : core::LayoutRect{});
+    const auto press = press_at(controller, point);
+    auto lists = paths_named("recent", 2);
+    lists.insert(lists.begin(), path_named("fresh.txt"));
+    editing.start_lists().serve(app::StartLists{lists, {}});
+    applied(controller, app::WorkCompleted{});
+    release_at(controller, press, point);
+    expect(shown(controller).has_value() && !controller.frame().document.path.has_value(),
+           "a press held across a read that put another file first opens nothing");
+}
 } // namespace
 
 void verify_start_screen_scope()
@@ -694,6 +921,7 @@ void verify_start_screen_scope()
     verify_layout();
     verify_press_across_read();
     verify_press_across_forget();
+    verify_press_across_reread();
     verify_selection_steps();
     verify_first_frame_and_one_read();
     verify_ordinary_selection();
@@ -703,6 +931,7 @@ void verify_start_screen_scope()
     verify_start_rows();
     verify_conditions();
     verify_tabs_and_quiet_start();
+    verify_reads_on_show();
     verify_vim();
 }
 } // namespace nenenib::tests

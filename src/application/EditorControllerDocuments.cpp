@@ -1202,6 +1202,8 @@ void EditorController::remember(const std::vector<core::FilePath> &paths)
         history = history_recorded(std::move(history), path, ports_.files);
     }
     static_cast<void>(ports_.history.write(history));
+    // 次に起動画面が出たら読み直す（ADR 0172 の追補 25）。
+    mark_start_lists_stale();
 }
 
 // 履歴から外す 1 本（D30）。読めなければ外すものが無いので書かない。結果の失敗は捨てる。
@@ -1219,6 +1221,7 @@ void EditorController::forget(const core::FilePath &path)
     }
     static_cast<void>(
         ports_.history.write(history_forgotten(std::move(history).value(), path, ports_.files)));
+    mark_start_lists_stale();
 }
 
 void EditorController::accept(const SaveDocument &intent)
