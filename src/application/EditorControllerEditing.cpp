@@ -55,6 +55,52 @@ constexpr std::size_t single_page_line = 1;
     std::unreachable();
 }
 
+// 通常モードで選択があるときの Shift なしの移動の起点（Windows の標準・施主決定 D82・#1393・
+// ADR 0009 の追補）。← ↑ Home PgUp は選択の先頭、→ ↓ End PgDn は選択の末尾から動く。語と文書の
+// 端の移動はキャレットのまま（Ctrl+← → の起点は語の境 #1394 の後で決める）。Vim のモード・Shift
+// つき・選択が無いときはキャレット。
+[[nodiscard]] core::Offset motion_origin(const EditorState &state, const MoveCaret &intent)
+{
+    const core::Selection selection = state.selection();
+    if (state.mode() != core::EditMode::ordinary ||
+        intent.anchoring != core::SelectionAnchoring::collapse ||
+        selection.anchor == selection.caret)
+    {
+        return selection.caret;
+    }
+    const auto range = core::selection_range(selection);
+    switch (intent.motion)
+    {
+    case core::CaretMotion::previous_character:
+    case core::CaretMotion::previous_line:
+    case core::CaretMotion::line_start:
+    case core::CaretMotion::page_up:
+        return range.begin;
+    case core::CaretMotion::next_character:
+    case core::CaretMotion::next_line:
+    case core::CaretMotion::line_end:
+    case core::CaretMotion::page_down:
+        return range.end;
+    case core::CaretMotion::previous_word:
+    case core::CaretMotion::next_word:
+    case core::CaretMotion::document_start:
+    case core::CaretMotion::document_end:
+        return selection.caret;
+    }
+    std::unreachable();
+}
+
+// 選択があるときの ← → は起点（選択の端）へ畳むだけで、そこから動かない（#1393）。
+[[nodiscard]] bool collapses_in_place(const EditorState &state, const MoveCaret &intent)
+{
+    const core::Selection selection = state.selection();
+    return state.mode() == core::EditMode::ordinary &&
+           intent.anchoring == core::SelectionAnchoring::collapse &&
+           selection.anchor != selection.caret &&
+           (intent.motion == core::CaretMotion::previous_character ||
+            intent.motion == core::CaretMotion::next_character);
+}
+
 [[nodiscard]] core::Offset anchor_for(core::SelectionAnchoring anchoring, core::Offset anchor,
                                       core::Offset caret) noexcept
 {
@@ -236,12 +282,19 @@ void EditorController::accept(const InsertText &intent)
 void EditorController::accept(const MoveCaret &intent)
 {
     interrupt_vim_insert();
-    if (move_visual(intent))
+    const core::Offset origin = motion_origin(state_, intent);
+    if (collapses_in_place(state_, intent))
+    {
+        wanted_x_.reset();
+        move_caret_to(origin, core::SelectionAnchoring::collapse);
+        return;
+    }
+    if (move_visual(intent, origin))
     {
         return;
     }
     const core::Offset caret =
-        core::moved_caret(state_.text(), state_.selection().caret,
+        core::moved_caret(state_.text(), origin,
                           core::CaretMoveRequest{intent.motion, settled_scroll().visible_lines,
                                                  caret_unit(state_.mode())});
     move_caret_to(caret, anchoring_in(state_.mode(), intent.anchoring));

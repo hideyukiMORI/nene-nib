@@ -220,7 +220,7 @@ VisualTextView EditorController::visual_view()
                                                                     : view_geometry_};
 }
 
-bool EditorController::move_visual(const MoveCaret &intent)
+bool EditorController::move_visual(const MoveCaret &intent, core::Offset origin)
 {
     const auto motion = screen_motion(intent.motion, settled_scroll().visible_lines);
     if (view_geometry_.width <= 0 || state_.mode() != core::EditMode::ordinary ||
@@ -230,16 +230,25 @@ bool EditorController::move_visual(const MoveCaret &intent)
         return false;
     }
     auto view = visual_view();
-    const auto source = state_.text().position_of(state_.selection().caret);
-    const auto point = view.location(core::TextCaret{source, state_.caret_affinity()});
+    const core::Offset caret_offset = state_.selection().caret;
+    const auto point = view.location(
+        core::TextCaret{state_.text().position_of(caret_offset), state_.caret_affinity()});
     if (!point)
     {
         layout_failure_ = point.error();
         return true;
     }
+    // 横位置はキャレット（動く端）のもの、画面行は起点のもの（#1393）。
+    const auto source = state_.text().position_of(origin);
+    const auto from = origin_location(view, point.value(), origin);
+    if (!from)
+    {
+        layout_failure_ = from.error();
+        return true;
+    }
     const float x = motion.value().x.value_or(wanted_x_.value_or(point.value().x));
     const auto moved =
-        view.reached(core::VisualPosition{source.line, point.value().row}, motion.value().rows);
+        view.reached(core::VisualPosition{source.line, from.value().row}, motion.value().rows);
     if (!moved)
     {
         layout_failure_ = moved.error();
@@ -264,6 +273,22 @@ bool EditorController::move_visual(const MoveCaret &intent)
     move_caret_to(state_.text().offset_of(caret.value().position), intent.anchoring,
                   caret.value().affinity);
     return true;
+}
+
+// 上下の移動の起点の位置（#1393）。起点がキャレットならキャレットの位置（at_caret）のまま。
+// 選択の端なら、折り返しの境目では先頭は後ろの画面行、末尾は前の画面行（選択を描く側）。
+std::expected<core::TextLocation, TextLayoutFailure>
+EditorController::origin_location(VisualTextView &view, const core::TextLocation &at_caret,
+                                  core::Offset origin) const
+{
+    const core::Offset caret = state_.selection().caret;
+    if (origin == caret)
+    {
+        return at_caret;
+    }
+    return view.location(core::TextCaret{state_.text().position_of(origin),
+                                         origin < caret ? core::CaretAffinity::leading
+                                                        : core::CaretAffinity::trailing});
 }
 
 // 本文の最初か最後の画面行で止まった上下の移動（↑ ↓ PgUp PgDn）は、本文の先頭か末尾へ着く
