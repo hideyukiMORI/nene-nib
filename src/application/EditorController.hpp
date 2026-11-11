@@ -853,7 +853,13 @@ class EditorController final
     pointed_character(VisualTextView &view, core::TextCaret caret, float x);
     void select_clicked(core::Offset pointed, PointerClicks clicks);
     void select_clicked_in_vim(core::Offset pointed, PointerClicks clicks);
-    [[nodiscard]] bool move_visual(const MoveCaret &intent);
+    // origin は移動の起点（キャレットか、通常モードで選択があるときの選択の端・#1393）。
+    [[nodiscard]] bool move_visual(const MoveCaret &intent, core::Offset origin);
+    [[nodiscard]] std::expected<core::TextLocation, TextLayoutFailure>
+    origin_location(VisualTextView &view, const core::TextLocation &at_caret,
+                    core::Offset origin) const;
+    // 起点の画面行の側（選択を描いていた側・#1393）。← → の畳みと上下の起点が共用する。
+    [[nodiscard]] core::CaretAffinity origin_affinity(core::Offset origin) const noexcept;
     // 上下の移動が本文の最初か最後の画面行で止まったときの着地（本文の先頭か末尾・#1386）。
     void move_to_text_edge(VisualTextView &view, const MoveCaret &intent, std::int64_t rows);
     // PgDn / PgUp の画面の先頭の送り。文字組みに失敗したら false。
