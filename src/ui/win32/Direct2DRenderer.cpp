@@ -2514,7 +2514,7 @@ void Direct2DRenderer::draw_minimap(const application::EditorFrame &frame,
     }
     const auto colors = minimap_colors(frame.palette);
     const auto painted =
-        minimap_.paint(MinimapPen{*context_.Get(), *brush_.Get(), colors, frame.body},
+        minimap_.paint(MinimapPen{*context_.Get(), *brush_.Get(), colors, frame.body, dpi_},
                        frame.minimap.value(), panel);
     if (!painted && !text_failure_.has_value())
     {

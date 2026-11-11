@@ -85,6 +85,34 @@ MinimapRow minimap_row(std::string_view line, std::span<const ColorSpan> colors)
     return row;
 }
 
+namespace
+{
+// 整数の輝度の近似（channel² に WCAG の重みの 10,000 倍）。最大は 10,000 × 255² = 650,250,000。
+[[nodiscard]] std::int64_t approximate_luminance(RgbColor color) noexcept
+{
+    const auto square = [](std::uint8_t value)
+    { return std::int64_t{value} * std::int64_t{value}; };
+    return 2126 * square(color.red) + 7152 * square(color.green) + 722 * square(color.blue);
+}
+} // namespace
+
+bool minimap_contrast_at_least(RgbColor first, RgbColor second, std::int64_t tenths) noexcept
+{
+    // (Y + 0.05) の 0.05 は 10,000 × 255² × 0.05 = 32,512,500。
+    constexpr std::int64_t offset = 32'512'500;
+    const std::int64_t one = approximate_luminance(first) + offset;
+    const std::int64_t other = approximate_luminance(second) + offset;
+    return std::max(one, other) * 10 >= std::min(one, other) * tenths;
+}
+
+RgbColor minimap_face_color(const Palette &palette) noexcept
+{
+    return minimap_contrast_at_least(palette.accent, palette.background,
+                                     minimap_face_contrast_tenths)
+               ? palette.accent
+               : palette.text;
+}
+
 LineNumber minimap_top(LineNumber first_visible, std::size_t visible, std::size_t total,
                        std::size_t rows) noexcept
 {

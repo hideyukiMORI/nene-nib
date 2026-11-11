@@ -5,6 +5,8 @@
 #include "LineNumber.hpp"
 #include "MinimapBlock.hpp"
 #include "MinimapWindow.hpp"
+#include "Palette.hpp"
+#include "RgbColor.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -30,6 +32,18 @@ inline constexpr std::size_t minimap_window_limit = minimap_reach * 2 + minimap_
 // 塊を作るのに 1 行から読むバイトの上限。上限を超える行は先頭だけを読み、色を付けない（巨大な
 // 行の窓と同じく行の全体を写さない・限界）。100 桁は UTF-8 で 400 バイトに収まる。
 inline constexpr std::size_t minimap_line_bytes = 4'096;
+
+// 見えている範囲の面と縁の線の色（ADR 0171 の決定 2 の追補 #1487）を選ぶしきい値（コントラスト比の
+// 10 倍・1.5）。accent が背景からこれだけ離れていなければ本文の字の色 text にする。
+inline constexpr std::int64_t minimap_face_contrast_tenths = 15;
+
+// 2 色のコントラスト比が tenths / 10 以上か。輝度は sRGB の線形化を 2 乗で近づけた整数の近似
+// （Y = 2126·r² + 7152·g² + 722·b²・比は (Y + 0.05) の比・core で libm を呼ばない）。
+[[nodiscard]] bool minimap_contrast_at_least(RgbColor first, RgbColor second,
+                                             std::int64_t tenths) noexcept;
+// 面と縁の線の色。accent と background が minimap_face_contrast_tenths 以上離れていれば accent、
+// 未満なら text（accent が背景とほぼ同じテーマ・synthwave-84 など）。ui は色を選ばない。
+[[nodiscard]] RgbColor minimap_face_color(const Palette &palette) noexcept;
 
 // 設定でミニマップを出すか（features に名前がある）。設定が変わったときだけ読む（決定 1）。
 [[nodiscard]] bool minimap_shown(const EditorSettings &settings) noexcept;
