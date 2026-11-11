@@ -1018,6 +1018,43 @@ void verify_resize_hidden_while_dragging()
                saved(editing).explorer_width == 400,
            "a release after the panel came back writes nothing");
 }
+
+// ドラッグ中の Esc（cancelled・Issue #1413）は押す前の幅へ戻し、設定に書かない。後から来る離し
+// （窓は Esc で捕まえを離すので送らないが、ほかの送り手でも）も書かない。既定の式のままの面でも、
+// 覚えた幅の面でも同じ。ドラッグしていなければ何もしない。
+void verify_resize_cancelled()
+{
+    auto remembered = core::default_editor_settings();
+    remembered.explorer = true;
+    remembered.explorer_width = 400;
+    Editing editing(SettingsReading{remembered});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 250)));
+    expect(width_of(controller) == 250, "the drag shows its width before Esc");
+    const auto cancelled = controller.apply_frame(resized(app::ExplorerResizing::cancelled, 0));
+    expect(editing.settings().writes() == 0 && width_of(controller) == 400 &&
+               width_of(cancelled) == 400,
+           "Esc during a drag goes back to the width before the press without writing");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 250)));
+    expect(editing.settings().writes() == 0 && width_of(controller) == 400,
+           "a release after Esc writes nothing");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::cancelled, 0)));
+    expect(editing.settings().writes() == 0 && width_of(controller) == 400,
+           "Esc without a drag changes nothing");
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::dragged, 300)));
+    static_cast<void>(controller.apply_frame(resized(app::ExplorerResizing::released, 300)));
+    expect(editing.settings().writes() == 1 && saved(editing).explorer_width == 300,
+           "the next drag after Esc writes its released width once");
+
+    Editing formula(shown_at(project));
+    auto &fresh = formula.controller();
+    applied(fresh, app::VisibleLines{10});
+    static_cast<void>(fresh.apply_frame(resized(app::ExplorerResizing::dragged, 320)));
+    const auto back = fresh.apply_frame(resized(app::ExplorerResizing::cancelled, 0));
+    expect(formula.settings().writes() == 0 && width_of(fresh) == 0 && width_of(back) == 0,
+           "Esc on a panel at the default formula keeps the formula and writes nothing");
+}
 } // namespace
 
 void verify_explorer_contracts()
@@ -1051,6 +1088,7 @@ void verify_explorer_contracts()
     verify_resize_clamped();
     verify_resize_settles_tab_walk();
     verify_resize_hidden_while_dragging();
+    verify_resize_cancelled();
 }
 
 void verify_explorer_scope()
