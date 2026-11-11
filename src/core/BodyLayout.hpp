@@ -23,6 +23,11 @@ struct BodyLayout
 [[nodiscard]] BodyLayout body_layout(std::int32_t width, std::int32_t height, std::uint32_t dpi,
                                      FontSize font_size) noexcept;
 
+// 本文の帯（タブの帯の下からステータスバーの上まで・幅は client の全幅）。字の大きさに依らない。
+// body_layout とエクスプローラーの面の縦（ADR 0162 の決定 2）が共用する 1 本。
+[[nodiscard]] LayoutRect body_band(std::int32_t width, std::int32_t height,
+                                   std::uint32_t dpi) noexcept;
+
 // 帯 band の中に行番号の欄・本文・見えている行数を置く。body_layout と枠の配置（pane_layouts・
 // ADR 0148 の決定 1）が共用する 1 本で、帯の左端と幅は band のものを使う。
 [[nodiscard]] BodyLayout body_layout_in(LayoutRect band, std::uint32_t dpi,

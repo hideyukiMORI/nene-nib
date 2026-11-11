@@ -30,6 +30,7 @@
 #include "FolderListingKind.hpp"
 #include "FolderProgress.hpp"
 #include "GiantLine.hpp"
+#include "HoverExplorer.hpp"
 #include "ImeStance.hpp"
 #include "InsertText.hpp"
 #include "NewTab.hpp"
@@ -47,6 +48,7 @@
 #include "SelectEditMode.hpp"
 #include "SettingsFailure.hpp"
 #include "SettleRecentTab.hpp"
+#include "SyntaxRole.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "ToggleExplorer.hpp"
@@ -1018,6 +1020,123 @@ void verify_resize_hidden_while_dragging()
                saved(editing).explorer_width == 400,
            "a release after the panel came back writes nothing");
 }
+
+// マウスを載せた行（#1390・ADR 0056 の決定 3 の帯と同じ形）。画面の行で覚えるので、ホイールで行が
+// 送られると載った木の行も変わる。見えている行の外・面の外（値なし）・面を消したときは消える。
+// 使う人の操作ではないので、知らせとダブルクリックの 2 打目と組む印を消さない。
+void verify_hover()
+{
+    Editing editing(shown_at(project));
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10, {}, 0, 0, 4});
+    app::FolderBatch batch{
+        editing.folders().requests().back().ticket, {}, FolderProgress::complete};
+    for (std::size_t index = 0; index < 6; ++index)
+    {
+        batch.entries.push_back(entry_of(std::format("C:\\proj\\f{}.txt", index), false));
+    }
+    editing.folders().serve(std::move(batch));
+    static_cast<void>(controller.apply_frame(app::WorkCompleted{}));
+    const auto over = controller.apply_frame(app::HoverExplorer{1});
+    expect(view_of(over).hovered == std::optional<std::size_t>{1} &&
+               controller.explorer_hovered() == std::optional<std::size_t>{1},
+           "the hovered screen line is the tree row under it");
+    const auto scrolled = controller.apply_frame(app::ScrollExplorer{2});
+    expect(view_of(scrolled).first_visible == 2 &&
+               view_of(scrolled).hovered == std::optional<std::size_t>{3},
+           "after the wheel the row under the pointer is the hovered one");
+    const auto past = controller.apply_frame(app::HoverExplorer{5});
+    expect(!view_of(past).hovered.has_value(), "a line below the rows hovers nothing");
+    static_cast<void>(controller.apply_frame(app::HoverExplorer{0}));
+    const auto left = controller.apply_frame(app::HoverExplorer{std::nullopt});
+    expect(!view_of(left).hovered.has_value() && !controller.explorer_hovered().has_value(),
+           "leaving the panel clears the hovered row");
+    static_cast<void>(controller.apply_frame(app::HoverExplorer{0}));
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    static_cast<void>(controller.apply_frame(app::ToggleExplorer{}));
+    expect(!controller.explorer_hovered().has_value(), "hiding the panel clears the hovered row");
+    const auto hidden = controller.apply_frame(app::HoverExplorer{1});
+    expect(!hidden.explorer.has_value() && !controller.explorer_hovered().has_value(),
+           "a hidden panel ignores the pointer");
+
+    Editing missing(shown_at(project));
+    static_cast<void>(loaded_project(missing));
+    static_cast<void>(missing.controller().apply_frame(app::ToggleExplorer{}));
+    static_cast<void>(clicked(missing, 2));
+    const auto kept = missing.controller().apply_frame(app::HoverExplorer{0});
+    expect(message_of(kept) == "開けませんでした: README.md",
+           "hovering a row keeps the notice of the last click");
+    Editing folder(shown_at(project));
+    static_cast<void>(loaded_project(folder));
+    static_cast<void>(clicked(folder, 1));
+    static_cast<void>(folder.controller().apply_frame(app::HoverExplorer{2}));
+    const auto second = second_press(folder, 1);
+    expect(printed(second) == ".git/+~;src/-;README.md;sel 1 first 0 focus 1",
+           "a hover between the clicks of a double click does not toggle the folder back");
+}
+
+// アクティブな文書の行と未保存の印の出どころ（#1390）。アクティブは今の文書と同じファイル、未保存は
+// 開いているタブのどれか（アクティブか脇の束）が未保存のファイル。印の色の役割は名前の言語。
+void verify_row_marks()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    editing.files().hold_at("C:\\proj\\README.md", Bytes{"read me"});
+    auto &controller = editing.controller();
+    const auto before = view_of(controller.frame());
+    expect(before.rows.size() == 3 && !before.rows.at(2).active && !before.rows.at(2).unsaved &&
+               before.rows.at(2).mark == std::optional{core::SyntaxRole::string} &&
+               !before.rows.at(1).mark.has_value() && !before.rows.at(0).mark.has_value(),
+           "a Markdown file is the string mark and folders carry none");
+    static_cast<void>(key(editing, ExplorerKeyKind::down));
+    static_cast<void>(key(editing, ExplorerKeyKind::down));
+    static_cast<void>(key(editing, ExplorerKeyKind::down));
+    const auto opened = view_of(key(editing, ExplorerKeyKind::enter));
+    expect(opened.rows.at(2).active && !opened.rows.at(2).unsaved && !opened.rows.at(1).active,
+           "the active document's row is active and saved");
+    applied(controller, app::InsertText{"a"});
+    const auto typed = view_of(controller.frame());
+    expect(typed.rows.at(2).active && typed.rows.at(2).unsaved,
+           "typing into the active document marks its row unsaved");
+    applied(controller, app::NewTab{});
+    const auto parked = view_of(controller.frame());
+    expect(!parked.rows.at(2).active && parked.rows.at(2).unsaved,
+           "a parked unsaved tab keeps the unsaved mark and is no longer active");
+}
+
+// 1 打目と 2 打目の間の面のホイールは、2 打目と組む印を消さない（レビュー V-1391b の R-a）。
+// フォルダは 1 回開くだけで、開いて閉じる、にしない。
+void verify_double_click_across_wheel()
+{
+    Editing editing(shown_at(project));
+    static_cast<void>(loaded_project(editing));
+    auto &controller = editing.controller();
+    static_cast<void>(clicked(editing, 1));
+    static_cast<void>(controller.apply_frame(app::ScrollExplorer{1}));
+    const auto second = second_press(editing, 1);
+    expect(printed(second) == ".git/+~;src/-;README.md;sel 1 first 0 focus 1" &&
+               editing.folders().entry_requests() == 2,
+           "a wheel notch between the clicks keeps the folder open after the double click");
+}
+
+// 1 打目で開けなかったファイルのダブルクリックは、2 打目（DBLCLK と続く離し）の後も「開けません
+// でした」の 1 行を残す（レビュー V-1391b の R-b）。押しは新しいクリックなので消す。
+void verify_double_click_keeps_notice()
+{
+    Editing missing(shown_at(project));
+    static_cast<void>(loaded_project(missing));
+    static_cast<void>(missing.controller().apply_frame(app::ToggleExplorer{}));
+    const auto first = clicked(missing, 2);
+    const auto tried = missing.reads().requests().size();
+    const auto second = second_press(missing, 2);
+    expect(message_of(first) == "開けませんでした: README.md" &&
+               message_of(second) == "開けませんでした: README.md" &&
+               missing.reads().requests().size() == tried,
+           "the notice of a file that cannot be opened survives the second press");
+    const auto pressed =
+        missing.controller().apply_frame(PointExplorer{1, ExplorerPointing::pressed});
+    expect(message_of(pressed) == "-", "a new press clears the notice");
+}
 } // namespace
 
 void verify_explorer_contracts()
@@ -1051,6 +1170,10 @@ void verify_explorer_contracts()
     verify_resize_clamped();
     verify_resize_settles_tab_walk();
     verify_resize_hidden_while_dragging();
+    verify_hover();
+    verify_row_marks();
+    verify_double_click_across_wheel();
+    verify_double_click_keeps_notice();
 }
 
 void verify_explorer_scope()

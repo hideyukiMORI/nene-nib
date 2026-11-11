@@ -44,6 +44,8 @@
 #include "ExWindowCommand.hpp"
 #include "ExplorerEntry.hpp"
 #include "ExplorerFolder.hpp"
+#include "ExplorerRow.hpp"
+#include "ExplorerRowView.hpp"
 #include "ExplorerView.hpp"
 #include "ExplorerWidth.hpp"
 #include "FileBookmarks.hpp"
@@ -180,10 +182,9 @@ class EditorController final
     // 面が消えていれば値なし。窓が境の当たり・面と本文の配置を引く安い読みで、frame を作らない
     // （マウスの動くたびに呼ばれる）。frame の ExplorerView.width と同じ値。
     [[nodiscard]] std::optional<core::ExplorerWidth> explorer_width() const noexcept;
-    // 字の大きさ（保存した値・配色の重ねは字の大きさを変えないので delivery().settings と同じ値）。
-    // 窓がマウスの動くたびに面の配置を引く安い読みで、delivery を作らない（title_bar_input と同じ
-    // 形・Issue #1380 の R-2）。
-    [[nodiscard]] core::FontSize font_size() const noexcept;
+    // マウスを載せた面の画面の行（HoverExplorer.line と同じ値・#1390）。窓がマウスの動くたびに
+    // 「変わったか」を見る安い読みで、frame を作らない（title_bar_input の hovered と同じ形）。
+    [[nodiscard]] std::optional<std::size_t> explorer_hovered() const noexcept;
     // 帯の配置の入力を状態の 4 つの値（タブの本数・アクティブの位置・送り量・マウスを載せた要素）
     // から読むだけの口。行も題名も作らない（ADR 0056 の決定 9）。窓の hit test と hover が
     // マウスの動くたびに呼ぶ。width は帯の幅（物理画素）。値は title_bar_input(frame(), ...)
@@ -227,6 +228,9 @@ class EditorController final
     // 意図の前に 1 意図ぶんだけの表示（失敗・報せ）を消す。keeps_message は報せを残す意図。
     void begin_intent(bool keeps_message);
     void forget_unkept_marks(const EditorIntent &intent);
+    // エクスプローラーのダブルクリックの 2 打目（DBLCLK と続く離し）は 1 打目の知らせを消さない
+    // （レビュー V-1391b の R-b・#1390・EditorControllerExplorer.cpp）。
+    [[nodiscard]] bool keeps_explorer_notice(const EditorIntent &intent) const noexcept;
     // Ctrl+Tab の歩きの途中に歩きを続けない入口が来たら、写す前に確定する（ADR 0058 の決定 4）。
     // keeps_walk は歩きを続ける意図か。Vim の鍵は歩きを続けない。
     void settle_tab_walk_before(bool keeps_walk);
@@ -513,6 +517,11 @@ class EditorController final
     void accept(const ScrollExplorer &intent);
     void accept(const ExplorerRootChosen &intent);
     void accept(const ResizeExplorer &intent);
+    // マウスを載せた面の行（#1390）。使う人の操作ではない（帯の PointTitleBar と同じ側）。
+    void accept(const HoverExplorer &intent);
+    [[nodiscard]] std::vector<core::FilePath> unsaved_files() const;
+    [[nodiscard]] ExplorerRowView explorer_row_view(const core::ExplorerRow &row,
+                                                    std::span<const core::FilePath> unsaved) const;
     // `:set root=.` の要求（決定 7）。
     void run_root_request(core::ExRootRequest request);
     // 設定 root へ書いて「root=<path>」を知らせる。書けなければ失敗の 1 行。

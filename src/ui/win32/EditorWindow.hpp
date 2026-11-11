@@ -285,6 +285,9 @@ class EditorWindow final
     void press_explorer_key(WPARAM word);
     [[nodiscard]] std::optional<std::size_t> explorer_row_at(LPARAM data) const;
     [[nodiscard]] bool point_explorer(UINT message, LPARAM data);
+    // マウスを載せた面の行（#1390）。点の下の画面の行を送り、窓を出たら値なしを送る。
+    void hover_explorer_row(LPARAM data);
+    void hover_explorer_line(std::optional<std::size_t> line);
     // 面と本文の境のドラッグ（ADR 0162 の追補 D78）。押す・動かす・離す・捕まえを失う・ダブル
     // クリック・カーソル。
     [[nodiscard]] bool explorer_divider_at(std::int32_t x, std::int32_t y) const;
@@ -342,7 +345,7 @@ class EditorWindow final
     void read_wheel_setting();
     [[nodiscard]] application::VisibleLines body_view() const;
     [[nodiscard]] core::PaneLayouts body_panes(const core::EditorSettings &settings) const;
-    [[nodiscard]] core::ExplorerLayout explorer_frame(core::FontSize font_size) const;
+    [[nodiscard]] core::ExplorerLayout explorer_frame() const;
     [[nodiscard]] core::BodyLayout active_body(const core::EditorSettings &settings) const;
 
     HINSTANCE instance_;

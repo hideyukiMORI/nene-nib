@@ -521,12 +521,36 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     {
         return guide;
     }
-    if (FAILED(trim_by_character(tab_format_.Get())))
+    if (FAILED(trim_by_character(tab_format_.Get())) || !create_explorer_formats(interface_face))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
     return create_body_formats(core::EditorSettings{formatted_size_, formatted_family_,
                                                     std::nullopt, core::GuideVisibility::shown});
+}
+
+// エクスプローラーの面の名前（採用案 B・#1390）。タブの帯の題名と同じ UI の字体と大きさで、本文の
+// 字の大きさに追従しない。長い名前は文字単位の省略記号で切る（タブの題名と同じ規則）。semibold は
+// ルート名とアクティブな文書の行。作れなければ偽。
+bool Direct2DRenderer::create_explorer_formats(const wchar_t *face)
+{
+    if (FAILED(make_format(face, tab_text_dips, DWRITE_FONT_WEIGHT_NORMAL, explorer_format_)) ||
+        FAILED(make_format(face, tab_text_dips, DWRITE_FONT_WEIGHT_SEMI_BOLD,
+                           explorer_strong_format_)))
+    {
+        return false;
+    }
+    const std::array<TextFormat, 2> every{explorer_format_, explorer_strong_format_};
+    for (const auto &format : every)
+    {
+        format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        if (FAILED(trim_by_character(format.Get())))
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::create_guide_formats(const wchar_t *face)
@@ -562,30 +586,22 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     gutter_layouts_.clear();
     palette_layouts_.clear();
     tab_layouts_.clear();
-    explorer_layouts_.clear();
     const std::wstring requested = core::to_utf16(settings.font_family.text()).value();
     const wchar_t *face = family(requested.c_str(), L"Consolas");
     const float ratio = core::font_size_ratio(settings.font_size);
     TextFormat gutter;
     TextFormat key;
-    TextFormat explorer;
 
     const auto made_gutter =
         make_format(face, gutter_text_dips * ratio, DWRITE_FONT_WEIGHT_NORMAL, gutter);
-    // エクスプローラーの面の名前は UI の字体で、本文の大きさに追従する（行の高さが本文と同じ・
-    // ADR 0162 の決定 2）。長い名前は文字単位の省略記号で切る（タブの題名と同じ規則）。
-    const auto made_explorer =
-        make_format(family(L"Segoe UI Variable Text", L"Segoe UI"), ui_text_dips * ratio,
-                    DWRITE_FONT_WEIGHT_NORMAL, explorer);
     // 面の行の名前・説明（`command_format_`）と右端の欄（112 DIP）は本文の大きさに追従しないので、
     // 鍵も倍率を掛けない 12 DIP に固定する（ADR 0078 の決定 12・#312）。
     const auto made_key = make_format(face, ui_text_dips, DWRITE_FONT_WEIGHT_NORMAL, key);
-    if (FAILED(made_gutter) || FAILED(made_key) || FAILED(made_explorer) ||
-        FAILED(trim_by_character(explorer.Get())))
+    if (FAILED(made_gutter) || FAILED(made_key))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
-    const std::array<TextFormat, 3> every{gutter, key, explorer};
+    const std::array<TextFormat, 2> every{gutter, key};
     for (const auto &format : every)
     {
         format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -594,7 +610,6 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     gutter->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
     gutter_format_ = std::move(gutter);
     key_format_ = std::move(key);
-    explorer_format_ = std::move(explorer);
     formatted_size_ = settings.font_size;
     formatted_family_ = settings.font_family;
     return {};
@@ -2347,7 +2362,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     // 面が出ていれば本文の枠は面の幅だけ右へ縮めた client から求める（ADR 0162 の決定 2・
     // ADR 0148 の 1 本はそのまま）。面が消えていれば body は client のまま。
     const auto explorer = core::explorer_layout(
-        core::LayoutRect{0, 0, width, height}, dpi_, frame.settings.font_size,
+        core::LayoutRect{0, 0, width, height}, dpi_,
         frame.explorer.transform([](const application::ExplorerView &view) { return view.width; }));
     const auto panes =
         core::pane_layouts(explorer.body, dpi_, frame.settings.font_size, frame.layout);
@@ -2392,10 +2407,11 @@ void Direct2DRenderer::draw_explorer(const application::EditorFrame &frame,
         explorer_layouts_.clear();
         return;
     }
-    ExplorerPainter painter(*context_.Get(), *brush_.Get(),
-                            ExplorerText{dwrite_.Get(), explorer_format_.Get(), dpi_},
-                            explorer_layouts_);
-    painter.paint(frame.explorer.value(), layout, frame.palette);
+    ExplorerPainter painter(
+        *context_.Get(), *brush_.Get(),
+        ExplorerText{dwrite_.Get(), explorer_format_.Get(), explorer_strong_format_.Get(), dpi_},
+        explorer_layouts_);
+    painter.paint(frame.explorer.value(), layout, frame.palette, frame.body);
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::acquire_surface()

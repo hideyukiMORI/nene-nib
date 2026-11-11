@@ -167,6 +167,8 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // エクスプローラーの意図（ToggleExplorer・ExplorerKey・PointExplorer・ScrollExplorer・
 // ExplorerRootChosen）も使う人の操作なので、どちらにも書かない（ADR 0162 の決定 4）。面の幅の
 // ドラッグ（ResizeExplorer・ADR 0162 の追補 D78）も使う人の操作の側で、どちらにも書かない。
+// 面の上のマウスを載せた行（HoverExplorer・#1390）は帯の hover と同じく使う人の操作ではなく、
+// not_user_operation の 1 本を経て歩きを続け、報せを消さない。
 // 言語サーバーの古さの合図（LanguageServerTick）も使う人の操作ではないので歩きを続ける（ADR 0160
 // の決定 6）。Ctrl つきのホイールは帯の上でも字の大きさ（AdjustFontSize）になり、歩きを確定する
 // （ADR 0150 の追補・#1048）。歩きの間は Ctrl を押しているので、ScrollTabs が歩きの間に来る
@@ -204,10 +206,12 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // エクスプローラーのダブルクリックの 2 打目と組む印（explorer_clicked_）を保つ意図（#1388・
 // レビュー V-1391 の R-1）。面のマウスそのもの（押しと 2 打目は accept が印を決める）と、使う人の
 // 操作ではない意図（裏の仕事の合図・窓の寸法など）だけ。鍵・タブの切り替え・ほかの押しなど、
-// 使う人の操作が間に入ったら印を捨て、次の 2 打目は画面の行を引く。
+// 使う人の操作が間に入ったら印を捨て、次の 2 打目は画面の行を引く。面のホイールも印を保つ（2 打目
+// は経路で引くので、行が送られても取り違えない・レビュー V-1391b の R-a・#1390）。
 [[nodiscard]] bool keeps_explorer_click(const EditorIntent &intent) noexcept
 {
-    return std::holds_alternative<PointExplorer>(intent) || not_user_operation(intent);
+    return std::holds_alternative<PointExplorer>(intent) ||
+           std::holds_alternative<ScrollExplorer>(intent) || not_user_operation(intent);
 }
 
 // 狙いの横位置が指す所（アクティブなタブ・本文の改訂・キャレット）。合図の前後で比べる。
@@ -411,7 +415,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     begin_intent(not_user_operation(intent) || std::holds_alternative<CancelComposition>(intent) ||
                  std::holds_alternative<ScrollTabs>(intent) ||
                  std::holds_alternative<SettleRecentTab>(intent) ||
-                 std::holds_alternative<EndSession>(intent));
+                 std::holds_alternative<EndSession>(intent) || keeps_explorer_notice(intent));
     // `map` の待ちの鍵は、待ちを保つ意図のほかは受ける前に流す（ADR 0176 の決定 4）。
     // 窓が閉じていく EndSession では流さずに捨てる（保存済みの文書を未保存にしない・#1096 の
     // R1-2）。

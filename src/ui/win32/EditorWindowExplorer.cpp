@@ -11,6 +11,7 @@
 #include "ExplorerPointing.hpp"
 #include "ExplorerResizing.hpp"
 #include "ExplorerView.hpp"
+#include "HoverExplorer.hpp"
 #include "LayoutRect.hpp"
 #include "PointExplorer.hpp"
 #include "ResizeExplorer.hpp"
@@ -72,14 +73,13 @@ void EditorWindow::press_explorer_key(WPARAM word)
 }
 
 // 点の下の面の行（木の行の位置）。面の外なら値なし。面の先頭の行（ルート名）と行の無い所は
-// 木の行の数（行の外・controller は何もしない・押した印は消す）。
+// 木の行の数（行の外・controller は何もしない・押した印は消す）。行の高さは core の
+// explorer_line_at の 1 本が決める（描画の explorer_line と同じ寸法・#1390）。
 std::optional<std::size_t> EditorWindow::explorer_row_at(LPARAM data) const
 {
-    const auto layout = explorer_frame(controller_.font_size());
-    const auto x = low_word_of(data);
-    const auto y = high_word_of(data);
-    if (!layout.panel.has_value() || !core::contains(layout.panel.value(), x, y) ||
-        layout.line_height <= 0)
+    const auto line =
+        core::explorer_line_at(explorer_frame(), low_word_of(data), high_word_of(data));
+    if (!line.has_value())
     {
         return std::nullopt;
     }
@@ -88,12 +88,40 @@ std::optional<std::size_t> EditorWindow::explorer_row_at(LPARAM data) const
     {
         return std::nullopt;
     }
-    const auto line = static_cast<std::size_t>((y - layout.panel.value().top) / layout.line_height);
-    if (line == 0 || line > view.value().rows.size())
+    if (line.value() == 0 || line.value() > view.value().rows.size())
     {
         return view.value().total;
     }
-    return view.value().first_visible + line - 1;
+    return view.value().first_visible + line.value() - 1;
+}
+
+// WM_MOUSEMOVE の点の下の面の画面の行（#1390・帯の hover と同じ形）。ルート名の行・面の外・境の
+// ドラッグの間・Ctrl+P の面が開いている間は値なし。面が消えていれば controller の 1 欄を読むだけで
+// 配置を引かない。行の数は見ない（見えている行の外は controller が値なしとして写す）。
+void EditorWindow::hover_explorer_row(LPARAM data)
+{
+    std::optional<std::size_t> line;
+    if (controller_.explorer_width().has_value() && !explorer_grab_offset_.has_value() &&
+        !controller_.command_palette_active())
+    {
+        const auto at =
+            core::explorer_line_at(explorer_frame(), low_word_of(data), high_word_of(data));
+        if (at.has_value() && at.value() > 0)
+        {
+            line = at.value() - 1;
+        }
+    }
+    hover_explorer_line(line);
+}
+
+// 前の値は application の状態が持つ。変わったときだけ意図を送る（ADR 0056 の決定 3 と同じ）。
+void EditorWindow::hover_explorer_line(std::optional<std::size_t> line)
+{
+    if (controller_.explorer_hovered() == line)
+    {
+        return;
+    }
+    send(application::HoverExplorer{line});
 }
 
 // 面の行の上の左ボタン（ADR 0056 の決定 9・ADR 0162 の決定 4 の改め #1388）。押しと DBLCLK は
@@ -156,7 +184,7 @@ bool EditorWindow::explorer_divider_at(std::int32_t x, std::int32_t y) const
     {
         return false;
     }
-    return core::explorer_divider_hit(explorer_frame(controller_.font_size()), dpi_, x, y);
+    return core::explorer_divider_hit(explorer_frame(), dpi_, x, y);
 }
 
 // 面の右端を点 x に置いたときに覚える幅（DIP）。押した点と右端のずれを引く。
@@ -175,7 +203,7 @@ bool EditorWindow::press_explorer_divider(LPARAM data)
     {
         return false;
     }
-    const auto panel = explorer_frame(controller_.font_size()).panel;
+    const auto panel = explorer_frame().panel;
     SetCapture(window_);
     if (GetCapture() == window_ && panel.has_value())
     {
@@ -316,7 +344,7 @@ bool EditorWindow::over_explorer(LPARAM data) const
     // WM_MOUSEWHEEL の位置は画面の座標なので、クライアントの座標に直してから見る。
     POINT point{low_word_of(data), high_word_of(data)};
     ScreenToClient(window_, &point);
-    const auto panel = explorer_frame(controller_.font_size()).panel;
+    const auto panel = explorer_frame().panel;
     return panel.has_value() && core::contains(panel.value(), point.x, point.y);
 }
 } // namespace nenenib::ui::win32
