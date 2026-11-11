@@ -30,7 +30,7 @@
 - 単体と性質の試験 `--edit-history-property`（`tests/unit/EditHistoryPropertyTests.cpp`・既定実行の契約に載る）。
   - 塊の境（255 / 256 / 257 / 511 / 512 / 513 件）・塊をまたぐ undo / redo・undo の後の別の編集（redo の枝を捨てる）・塊の先頭で畳む打鍵・封じた後の push・空の履歴・古い値が後の push で変わらないこと・本文の写しが piece の列を共有し写した側の編集が元を変えないこと。
   - 固定 seed（1473〜1475・各 3,000 歩）のランダムな push（3 つの区切り）・undo・redo・封じるの列を、毎回 `std::vector` を写す素朴な参照の模型と照合する（件数・位置・改訂番号・undo / redo の答え・適用済みの編集）。
-- probe `vim-lh-after-{1000,4000,16000}-edits` と `vim-x-after-{1000,4000,16000}-edits`（`tests/performance/EditedHistoryProbe.cpp`）。N 回の `x` の後で、`l` `h` を 100 組か `x` を 200 回流す。N を 4 倍にしたときの費用の比で読む（ゲートには載せない）。
+- probe `vim-lh-after-{1000,4000,16000}-edits` と `vim-x-after-{1000,4000,16000}-edits`（`tests/performance/EditedHistoryProbe.cpp`）。712 字の行で `r` を N 回（行の長さは変わらない）流した後で、`l` `h` を 100 組か `x` を 200 回流す。N を 4 倍にしたときの費用の比で読む（ゲートには載せない）。
 - 既存の性質の試験（`--text-buffer-property` の undo / redo の往復・自動退避の改訂番号）と fixture 全件。
 
 ## 結果

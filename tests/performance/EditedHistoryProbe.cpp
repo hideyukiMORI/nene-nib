@@ -22,8 +22,8 @@ namespace nenenib::tests::performance
 {
 namespace
 {
-// 区間の外で消す文字の数より長い 1 行目（消し終えても 1 行目に文字が残る）。
-constexpr std::size_t spare_characters = 512U;
+// 1 行目の長さ（N に依らない・区間の `x` 200 回の後も文字が残る・巨大な行のしきい値より短い）。
+constexpr std::size_t line_characters = 712U;
 // 区間で流す鍵の数（`l` `h` の 100 組か `x` の 200 回）。
 constexpr std::size_t timed_keys = 200U;
 
@@ -65,7 +65,8 @@ void pressed(application::EditorController &controller, char32_t key)
     static_cast<void>(
         controller.apply(application::VimKeyPress{core::VimKey{core::VimCharacter{key}}}));
 }
-// 区間の外: 文書を開いて Vim にし、1 行目の行頭で `x` を N 回（undo の単位が N 個積まれる）。
+// 区間の外: 文書を開いて Vim にし、1 行目の行頭で `rb` と `rc` を交互に N 回（undo の単位が N 個
+// 積まれ、行の長さは変わらない）。
 void prepare_history(Editing &editing, EditedHistoryWorkload workload, const std::string &input)
 {
     auto &controller = editing.controller();
@@ -77,7 +78,8 @@ void prepare_history(Editing &editing, EditedHistoryWorkload workload, const std
     static_cast<void>(controller.apply(application::SelectEditMode{core::EditMode::vim}));
     for (std::size_t edit = 0; edit < edits_of(workload); ++edit)
     {
-        pressed(controller, U'x');
+        pressed(controller, U'r');
+        pressed(controller, edit % 2U == 0U ? U'b' : U'c');
     }
     static_cast<void>(controller.frame());
 }
@@ -99,9 +101,9 @@ void prepare_history(Editing &editing, EditedHistoryWorkload workload, const std
 }
 } // namespace
 
-std::string edited_history_input(EditedHistoryWorkload workload)
+std::string edited_history_input(EditedHistoryWorkload /*workload*/)
 {
-    std::string input(edits_of(workload) + timed_keys + spare_characters, 'a');
+    std::string input(line_characters, 'a');
     input += "\nsecond line\n";
     return input;
 }
