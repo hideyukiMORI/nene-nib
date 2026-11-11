@@ -8,8 +8,10 @@
 #include "VimWordMotion.hpp"
 #include "VirtualColumn.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -29,6 +31,9 @@ constexpr char32_t halfwidth_kana_first = 0xFF66;
 constexpr char32_t halfwidth_kana_last = 0xFF9F;
 constexpr char32_t right_single_quote = 0x2019;
 constexpr char32_t zero_width_joiner = 0x200D;
+// 最初に読む窓（キャレットの前後のバイト数）と、UTF-8 の 1 code point の最長。
+constexpr std::size_t first_window_bytes = 4096;
+constexpr std::size_t longest_code_point_bytes = 4;
 
 // メモ帳（Office RichEdit）の実測に合わせた読み替え（#1394 の実測の記録 §2・§5）。
 [[nodiscard]] std::uint32_t raw_group(char32_t code) noexcept
@@ -165,6 +170,28 @@ constexpr char32_t zero_width_joiner = 0x200D;
     return at;
 }
 
+// 窓の先頭の続きのバイトの数。窓の先頭が code point の途中なら、その code point は窓に入れない。
+[[nodiscard]] std::size_t leading_continuations(std::string_view window) noexcept
+{
+    std::size_t skipped = 0;
+    while (skipped < window.size() &&
+           (static_cast<unsigned char>(window.at(skipped)) & 0xC0U) == 0x80U)
+    {
+        ++skipped;
+    }
+    return skipped;
+}
+
+// 窓の読みのうち、両端で code point を割らない部分の [頭, 終わり)。行の端で切っていない側は削らない
+// （#1292 の whole_code_points）。
+[[nodiscard]] std::pair<std::size_t, std::size_t> whole_part(std::string_view read, bool head_cut,
+                                                             bool tail_cut) noexcept
+{
+    const std::size_t skipped = head_cut ? leading_continuations(read) : 0;
+    const std::size_t kept = tail_cut ? whole_code_points(read) : read.size();
+    return {skipped, std::max(kept, skipped)};
+}
+
 // 字下げの行頭から戻るときの着地（メモ帳の実測・記録 §2.3）。空の行は続けて越える。
 [[nodiscard]] Offset previous_filled_line_end(const TextBuffer &text, LineNumber line)
 {
@@ -176,7 +203,54 @@ constexpr char32_t zero_width_joiner = 0x200D;
     return text.line_end(LineNumber{number});
 }
 
-[[nodiscard]] Offset forward_boundary(const TextBuffer &text, Offset at)
+// 窓 content の中の Ctrl+→ の着地。判断が窓の端に掛かった（前の 1 文字が窓の外から始まるかも
+// しれない・着いた所の 1 文字が窓の終わりで切れるかもしれない）ときは空で、窓を広げて読み直す。
+[[nodiscard]] std::optional<std::size_t>
+forward_in_window(std::string_view content, std::size_t caret, bool head_cut, bool tail_cut)
+{
+    // 前の 1 文字（' の判定が見る）が窓の中で始まっていること。
+    if ((head_cut && atom_begin(content, caret) == 0) || caret >= content.size())
+    {
+        return std::nullopt;
+    }
+    const std::size_t landed = forward_in_line(content, caret);
+    // 着いた所の 1 文字（止まった判断が見た）が窓の中で終わっていること。
+    if (tail_cut && atom_end(content, landed) >= content.size())
+    {
+        return std::nullopt;
+    }
+    return landed;
+}
+
+// 窓 content の中の Ctrl+← の着地。前の空白を越えて窓の頭（= 行頭）に着いたら字下げの印
+// indented_line_start。判断が窓の頭に掛かった（止まった所の手前の 1 文字と、それが ' なら
+// さらに手前の 1 文字が窓の外から始まるかもしれない）ときは空で、窓を広げて読み直す。
+constexpr std::size_t indented_line_start = static_cast<std::size_t>(-1);
+
+[[nodiscard]] std::optional<std::size_t> backward_in_window(std::string_view content,
+                                                            std::size_t caret, bool head_cut)
+{
+    const std::size_t after_blanks = skip_blanks_back(content, caret);
+    if (after_blanks == 0)
+    {
+        return head_cut ? std::nullopt : std::optional<std::size_t>{indented_line_start};
+    }
+    const std::size_t landed = backward_in_line(content, after_blanks);
+    if (!head_cut)
+    {
+        return landed;
+    }
+    const std::size_t before = atom_begin(content, landed);
+    if (landed == 0 || before == 0 || atom_begin(content, before) == 0)
+    {
+        return std::nullopt;
+    }
+    return landed;
+}
+
+// 行の全体は写さず、キャレットの周りの窓だけを読む（1 打鍵ごとに呼ばれる・#1394 のレビュー M1）。
+// 判断が窓の端に掛かったときだけ窓を倍にして読み直すので、答えは行の全体で歩いた答えと同じ。
+[[nodiscard]] Offset forward_boundary(const TextBuffer &text, Offset at, std::size_t window)
 {
     const LineNumber line = text.position_of(at).line;
     const Offset start = text.line_start(line);
@@ -185,11 +259,51 @@ constexpr char32_t zero_width_joiner = 0x200D;
     {
         return line.value < text.line_count() ? text.line_start(LineNumber{line.value + 1}) : end;
     }
-    const std::string content = text.text_range(start, end);
-    return Offset{start.value + forward_in_line(content, at.value - start.value)};
+    for (std::size_t width = window;; width *= 2)
+    {
+        const Offset from{at.value - std::min(width, at.value - start.value)};
+        const Offset until{at.value + std::min(width, end.value - at.value)};
+        const std::string read = text.text_range(from, until);
+        const bool head_cut = !(from == start);
+        const auto [skipped, kept] = whole_part(read, head_cut, !(until == end));
+        const std::string_view content = std::string_view{read}.substr(skipped, kept - skipped);
+        const auto landed =
+            forward_in_window(content, at.value - from.value - skipped, head_cut, !(until == end));
+        if (landed.has_value())
+        {
+            return Offset{from.value + skipped + landed.value()};
+        }
+    }
 }
 
-[[nodiscard]] Offset backward_boundary(const TextBuffer &text, Offset at)
+// 行の中（at は行頭より後ろ）の Ctrl+← の着地。
+[[nodiscard]] Offset backward_windowed(const TextBuffer &text, LineNumber line, Offset at,
+                                       std::size_t window)
+{
+    const Offset start = text.line_start(line);
+    const Offset end = text.line_end(line);
+    // 後ろはキャレットの後の 1 code point だけ（' の判定が見る）。
+    const Offset until{at.value + std::min(longest_code_point_bytes, end.value - at.value)};
+    for (std::size_t width = window;; width *= 2)
+    {
+        const Offset from{at.value - std::min(width, at.value - start.value)};
+        const std::string read = text.text_range(from, until);
+        const bool head_cut = !(from == start);
+        const auto [skipped, kept] = whole_part(read, head_cut, !(until == end));
+        const std::string_view content = std::string_view{read}.substr(skipped, kept - skipped);
+        const auto landed = backward_in_window(content, at.value - from.value - skipped, head_cut);
+        if (landed == indented_line_start)
+        {
+            // 前の空白を越えて行頭に着いた（字下げ）。先頭の行なら行頭で止まる。
+            return line.value > 1 ? previous_filled_line_end(text, line) : start;
+        }
+        if (landed.has_value())
+        {
+            return Offset{from.value + skipped + landed.value()};
+        }
+    }
+}
+[[nodiscard]] Offset backward_boundary(const TextBuffer &text, Offset at, std::size_t window)
 {
     const LineNumber line = text.position_of(at).line;
     const Offset start = text.line_start(line);
@@ -197,25 +311,25 @@ constexpr char32_t zero_width_joiner = 0x200D;
     {
         return line.value > 1 ? text.line_end(LineNumber{line.value - 1}) : start;
     }
-    const std::string content = text.text_range(start, text.line_end(line));
-    const std::size_t after_blanks = skip_blanks_back(content, at.value - start.value);
-    if (after_blanks > 0)
-    {
-        return Offset{start.value + backward_in_line(content, after_blanks)};
-    }
-    // 前の空白を越えて行頭に着いた（字下げ）。先頭の行なら行頭で止まる。
-    return line.value > 1 ? previous_filled_line_end(text, line) : start;
+    return backward_windowed(text, line, at, window);
 }
 } // namespace
 
 Offset ordinary_word_boundary(const TextBuffer &text, Offset at, OrdinaryWordDirection direction)
 {
+    return ordinary_word_boundary(text, at, direction, first_window_bytes);
+}
+
+Offset ordinary_word_boundary(const TextBuffer &text, Offset at, OrdinaryWordDirection direction,
+                              std::size_t window_bytes)
+{
+    const std::size_t window = std::max<std::size_t>(window_bytes, 1);
     switch (direction)
     {
     case OrdinaryWordDirection::backward:
-        return backward_boundary(text, at);
+        return backward_boundary(text, at, window);
     case OrdinaryWordDirection::forward:
-        return forward_boundary(text, at);
+        return forward_boundary(text, at, window);
     }
     std::unreachable();
 }

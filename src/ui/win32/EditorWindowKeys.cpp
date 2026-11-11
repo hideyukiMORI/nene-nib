@@ -32,6 +32,7 @@
 #include "VimSpecialKey.hpp"
 #include "VimSpecialKeys.hpp"
 #include "WalkRecentTab.hpp"
+#include "WordDeletionKey.hpp"
 
 #include <algorithm>
 #include <array>
@@ -671,20 +672,15 @@ void EditorWindow::press_control_key(WPARAM word)
     }
 }
 
-// 通常モードの Ctrl+Backspace / Ctrl+Delete は語の削除（ADR 0009 の追補 #1394）。Vim のモードは
-// 今までどおり何もしない。
+// 通常モードの Ctrl+Backspace / Ctrl+Delete は語の削除（ADR 0009 の追補 #1394）。Vim のモードと
+// Ctrl+Shift+Backspace / Ctrl+Shift+Delete は何もしない（word_deletion_for）。
 void EditorWindow::send_word_deletion(WPARAM word)
 {
-    switch (mode_)
+    const auto direction = word_deletion_for(word, held(VK_SHIFT), mode_);
+    if (direction.has_value())
     {
-    case core::EditMode::vim:
-        return;
-    case core::EditMode::ordinary:
-        break;
+        send(application::DeleteText{direction.value(), core::DeleteUnit::word});
     }
-    const auto direction =
-        word == VK_BACK ? core::DeleteDirection::backward : core::DeleteDirection::forward;
-    send(application::DeleteText{direction, core::DeleteUnit::word});
 }
 
 // 鍵（Ctrl+Tab）は Ctrl を離したときに確定する。一覧から（Ctrl を押していない）は 1 歩で確定する

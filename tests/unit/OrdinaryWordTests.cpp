@@ -12,10 +12,14 @@
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
 #include "TestSupport.hpp"
+#include "TextBuffer.hpp"
+#include "Utf8.hpp"
 #include "VisibleLines.hpp"
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <random>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -167,6 +171,91 @@ void verify_lines()
     expect(word_boundary("", 0, Direction::forward) == Offset{0}, "an empty text stays");
 }
 
+// 窓の大きさを変えても境は同じ（#1394 のレビュー M1）。行の全体を 1 度に読む大きな窓の答えを正に、
+// 1・2・3・7・64 バイトと既定と同じ 4,096 バイトの窓の答えを、固定 seed の本文の全部の code point
+// 境界の両向きで比べる。部品は窓の端で割れやすい多バイト・結合文字・ZWJ・'
+// の挟み・Tab・字下げ・改行。
+constexpr std::array<std::string_view, 30> word_pieces{{
+    "a", "Z",   "9",          "_",  " ",    "  ", "\t",  "　",   " ",    "'",
+    "’", ".",   "!",          "日", "本",   "の", "カ",  "ー",   "ｶ",    "ﾞ",
+    "́",  "‍", "\U0001F44D", "\n", "\r\n", "Ａ", "x'y", "\n  ", "\n\n", "゙",
+}};
+constexpr std::array<std::size_t, 6> compared_windows{1, 2, 3, 7, 64, 4096};
+constexpr std::size_t whole_line_window = std::size_t{1} << 40U;
+constexpr std::size_t random_texts = 400;
+constexpr std::size_t longest_text_pieces = 40;
+
+[[nodiscard]] std::string random_words(std::mt19937_64 &random)
+{
+    std::string text;
+    const std::size_t pieces = random() % (longest_text_pieces + 1);
+    for (std::size_t piece = 0; piece < pieces; ++piece)
+    {
+        text += word_pieces.at(random() % word_pieces.size());
+    }
+    return text;
+}
+
+// at の両向きで、window の答えが行の全体の答えと違った数。
+[[nodiscard]] std::size_t mismatches_at(const core::TextBuffer &text, Offset at, std::size_t window)
+{
+    std::size_t mismatches = 0;
+    for (const Direction direction : {Direction::forward, Direction::backward})
+    {
+        const Offset whole = core::ordinary_word_boundary(text, at, direction, whole_line_window);
+        mismatches += whole == core::ordinary_word_boundary(text, at, direction, window) ? 0U : 1U;
+    }
+    return mismatches;
+}
+
+// 本文の全部の code point 境界で、window の答えが行の全体の答えと違った数。
+[[nodiscard]] std::size_t window_mismatches(const core::TextBuffer &text, std::string_view bytes,
+                                            std::size_t window)
+{
+    std::size_t mismatches = 0;
+    for (std::size_t at = 0; at <= bytes.size(); ++at)
+    {
+        mismatches +=
+            core::is_boundary(bytes, Offset{at}) ? mismatches_at(text, Offset{at}, window) : 0U;
+    }
+    return mismatches;
+}
+
+void verify_window_sizes()
+{
+    std::mt19937_64 random{1394U};
+    std::array<std::size_t, compared_windows.size()> mismatches{};
+    for (std::size_t round = 0; round < random_texts; ++round)
+    {
+        const std::string bytes = random_words(random);
+        const auto text = buffer_of(bytes);
+        for (std::size_t index = 0; index < compared_windows.size(); ++index)
+        {
+            mismatches.at(index) += window_mismatches(text, bytes, compared_windows.at(index));
+        }
+    }
+    for (const std::size_t count : mismatches)
+    {
+        expect(count == 0, "every first window size gives the whole-line word boundary");
+    }
+}
+
+// 窓（4 KiB）より長い語は窓を倍にして読み直す。英数字に挟まれた ' も窓の外まで 1 語のまま。
+void verify_long_words()
+{
+    constexpr std::size_t half = 10'000;
+    const std::string bytes = std::string(half, 'a') + "'" + std::string(half, 'b') + " c";
+    const auto text = buffer_of(bytes);
+    expect(core::ordinary_word_boundary(text, Offset{0}, Direction::forward) ==
+               Offset{(2 * half) + 2},
+           "Ctrl+Right crosses a word longer than the window");
+    expect(core::ordinary_word_boundary(text, Offset{bytes.size() - 1}, Direction::backward) ==
+               Offset{0},
+           "Ctrl+Left crosses a word longer than the window");
+    expect(core::ordinary_word_boundary(text, Offset{half + 1}, Direction::backward) == Offset{0},
+           "the apostrophe before the caret is read from outside the first window");
+}
+
 void verify_caret_move_route()
 {
     const auto text = buffer_of("foo.bar baz");
@@ -242,6 +331,38 @@ void verify_controller_deletion()
            "Ctrl+Backspace at the start of the text does nothing");
 }
 
+// レビュー L6: 選択があるときの Ctrl+Delete・Ctrl+Delete の undo・字下げの行頭からの
+// Ctrl+Backspace。
+void verify_controller_deletion_edges()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    open_ordinary(editing, "foo.bar(baz)");
+    const app::DeleteText word_back{core::DeleteDirection::backward, core::DeleteUnit::word};
+    const app::DeleteText word_forward{core::DeleteDirection::forward, core::DeleteUnit::word};
+    moved(controller, core::CaretMotion::next_word, core::SelectionAnchoring::extend);
+    moved(controller, core::CaretMotion::next_word, core::SelectionAnchoring::extend);
+    expect(applied(controller, word_forward) == "bar(baz)",
+           "Ctrl+Delete with a selection deletes the selection (Issue #1394)");
+    expect(applied(controller, word_forward) == "(baz)", "Ctrl+Delete deletes the next word");
+    expect(applied(controller, app::HistoryAction{core::HistoryDirection::undo}) == "bar(baz)",
+           "undo restores one Ctrl+Delete");
+
+    // 字下げの行頭からの Ctrl+Backspace は、Ctrl+← と同じく字下げ・改行・空の行をまとめて消す
+    // （メモ帳の実測・ADR 0009 の追補 #1394 の決定 5）。
+    Editing indented;
+    auto &lines = indented.controller();
+    open_ordinary(indented, "ab\n\n  cd");
+    moved(lines, core::CaretMotion::document_end, core::SelectionAnchoring::collapse);
+    moved(lines, core::CaretMotion::previous_word, core::SelectionAnchoring::collapse);
+    expect(lines.frame().caret.position.column == core::Column{3},
+           "Ctrl+Left stops after the indentation");
+    expect(applied(lines, word_back) == "abcd",
+           "Ctrl+Backspace at an indented line start deletes the indentation and the empty lines");
+    expect(applied(lines, app::HistoryAction{core::HistoryDirection::undo}) == "ab||  cd",
+           "undo restores the indentation and the empty lines in one unit");
+}
+
 void verify_vim_mode_keeps_words()
 {
     Editing editing;
@@ -264,6 +385,9 @@ void verify_ordinary_word_contracts()
     verify_caret_move_route();
     verify_controller_movement();
     verify_controller_deletion();
+    verify_controller_deletion_edges();
     verify_vim_mode_keeps_words();
+    verify_window_sizes();
+    verify_long_words();
 }
 } // namespace nenenib::tests

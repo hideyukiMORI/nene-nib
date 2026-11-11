@@ -3,6 +3,8 @@
 #include "Offset.hpp"
 #include "OrdinaryWordDirection.hpp"
 
+#include <cstddef>
+
 namespace nenenib::core
 {
 class TextBuffer;
@@ -21,6 +23,13 @@ class TextBuffer;
 // backward（Ctrl+←）: 行頭なら改行 1 つを越えて前の行末。前の空白を越え、そこが行頭なら（字下げ）
 // 改行を越えて前の行末へ着き、空の行が続けば全部越える。そうでなければ Tab 1 つか、同じ種類の
 // 連なりの頭へ戻る。本文の頭と末尾では動かない。
+//
+// 1 打鍵ごとに呼ばれるので行の全体は写さない。キャレットの前後の窓（4 KiB）を読み、判断が窓の端に
+// 掛かれば窓を倍にして読み直す（#1394 のレビュー M1）。
 [[nodiscard]] Offset ordinary_word_boundary(const TextBuffer &text, Offset at,
                                             OrdinaryWordDirection direction);
+// 最初の窓の大きさを決める口（試験が 1 バイトの窓から確かめる）。答えは窓の大きさに依らない。
+[[nodiscard]] Offset ordinary_word_boundary(const TextBuffer &text, Offset at,
+                                            OrdinaryWordDirection direction,
+                                            std::size_t window_bytes);
 } // namespace nenenib::core

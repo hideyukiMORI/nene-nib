@@ -10,6 +10,8 @@ namespace nenenib::tests::performance
 // 本文の真ん中で、INSERT の `<C-w>` と大きな回数の `h`（#1258）と大きな回数の `l`（#1269）。
 // 文の移動の 1 本は `text-object-sentence-giant-1line-16384` と同じ巨大な行のしきい値ちょうどの
 // 1 行（`.` `!` `?` を含まない）の真ん中から `)` の鍵を 1 回流す（#1316・#751 の塊の走査）。
+// 通常モードの語の境の 1 本は、矩形の 1 本と同じ 16 MiB の 1 行の真ん中で、Ctrl+Backspace と
+// Ctrl+Delete が消す範囲の端（ordinary_word_boundary の後ろ向きと前向き）を 1 回ずつ引く（#1394）。
 enum class VimBlockWorkload : std::uint8_t
 {
     insert_giant_1line,
@@ -19,6 +21,7 @@ enum class VimBlockWorkload : std::uint8_t
     insert_ctrl_w_giant_1line,
     count_h_giant_1line,
     count_l_giant_1line,
-    sentence_motion_giant_1line
+    sentence_motion_giant_1line,
+    ordinary_word_giant_1line
 };
 } // namespace nenenib::tests::performance
