@@ -18,7 +18,7 @@ namespace nenenib::core
 // root_height は先頭のルート名の行の高さ（30 DIP）、indent は 1 段の字下げ（12 DIP）、cell は
 // 山形と印の升（16 DIP）、inset は行の丸い面の左右の内側（6 DIP）、padding は丸い面の中の左右の
 // 余白（4 DIP）、root_padding はルート名の左右の余白（12 DIP）、gap は印と名前の間（6 DIP）、
-// radius は行の丸い面の角（5 DIP）、corner は本文の帯の左上の角（8 DIP）、dot は未保存の丸の径
+// radius は行の丸い面の角（5 DIP）、dot は未保存の丸の径
 // （6 DIP）、dot_inset は丸の右端と丸い面の右端の間（14 DIP）、border は面と本文の境界の太さ
 // （1 DIP・1 画素以上）。どの欄も単独で妥当な値なので公開
 // aggregate（CPP-003）。
@@ -35,7 +35,6 @@ struct ExplorerLayout
     std::int32_t root_padding;
     std::int32_t gap;
     std::int32_t radius;
-    std::int32_t corner;
     std::int32_t dot;
     std::int32_t dot_inset;
     std::int32_t border;

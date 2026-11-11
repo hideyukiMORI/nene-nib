@@ -127,6 +127,14 @@ PR #1121 の独立レビュー（R6-2 / R4-1）の後続。設計席の判断（
 9. **契約。** core `--explorer-layout`（`verify_steps_and_dpi` `verify_panel_lines` `verify_rows_and_parts` `verify_line_at` `verify_mark_roles`）・application `--explorer`（`verify_hover` `verify_pointer_keeps_wanted_column` `verify_row_marks` `verify_double_click_across_wheel` `verify_double_click_keeps_notice`）・ui `nib_window_tests --explorer`（WIC の描画先で地・境界・角・選んだ行と焦点の有無の枠・載せた行・印の色・未保存の丸・semibold の画素・線と角の形の保持）。実機の目視は施主の試用。
 10. **やらないこと。** ファイルの種類ごとの絵のアイコン・git の状態の色・右クリックのメニュー・行のドラッグ・git の枝の名前。
 
+## 追補（2026-11-11 夜・#1488・施主の試用）本文の帯の左上の角を直角にする
+
+施主の試用（2026-11-11 夜・まとめ枝 21 の試用 exe）: 「ラウンド要らない」。#1390 の追補の決定 1・6・9 の「本文の左上の角 8 DIP」を外す。
+
+1. **角は直角。** 面の右端の境界（`panel_border`・焦点で `accent`・1 DIP）は面の上端から下端までの直線で、角の外の塗りと弧を描かない。境界の線は残す（L 字の枠の縦の辺）。
+2. **消したもの。** `ExplorerLayout::corner`（と `corner_dips`）・`ExplorerPainter::paint_corner`・`ExplorerShapes` の角の 2 つの path geometry（`corner` `outside` `arc` と角の鍵）。`ExplorerShapes` は stroke style だけを持ち、作り直すのは描画先の factory が変わったときだけ（面の幅が動いても作り直さない）。
+3. **契約。** `nib_window_tests --explorer` の `verify_panel_pixels`（境界は面の上端の画素から panel_border・面の右の 12 × 12 に墨が無い）と `verify_unfocused_frame_and_shapes`（形を作るのは最初の frame の 1 回だけ）。採用案の文書 [`docs/design/2026-11-10-explorer-look.md`](../design/2026-11-10-explorer-look.md) を同じ形に改めた。
+
 ## 追補（2026-11-11・#1450・施主の報告）ルートのフォルダ選びの箱に WSL のディストリを場所として足す
 
 施主の報告（2026-11-11）: 決定 7 の `FOS_PICKFOLDERS` の箱の左の一覧に WSL の場所（`\\wsl.localhost\<distro>`）が出ず、アドレス欄に直打ちしないと選べない。Issue #1450 の候補 A（`IFileDialog::AddPlace`）を、箱を出さない実測（`D:/NeNeNib/outputs/20261111/wsl-root-probe.md`）で確かめてから採る。

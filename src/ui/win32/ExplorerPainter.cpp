@@ -114,13 +114,11 @@ void ExplorerPainter::paint(const application::ExplorerView &view,
         paint_row(view, index, layout);
     }
     const core::RgbColor edge = view.focused ? palette.accent : palette.panel_border;
-    // 境界は角の弧の下から。上の corner の分は弧が受け持つ（paint_corner）。
-    const std::int32_t border_top = std::min(panel.top + layout.corner, panel.bottom);
-    fill(core::LayoutRect{std::max(panel.left, panel.right - layout.border), border_top,
-                          panel.right, panel.bottom},
+    // 境界は面の上端から下端まで直線（本文の帯の左上の角は直角・#1488）。
+    fill(core::LayoutRect{std::max(panel.left, panel.right - layout.border), panel.top, panel.right,
+                          panel.bottom},
          edge);
     target_.PopAxisAlignedClip();
-    paint_corner(layout, edge, palette.title_bar);
 }
 
 void ExplorerPainter::fill(const core::LayoutRect &area, core::RgbColor color)
@@ -275,21 +273,6 @@ void ExplorerPainter::stroke_lines(const core::LayoutRect &cell,
         target_.DrawLine(placed(cell, points.back()), placed(cell, points.front()), &brush_, width,
                          stroke_);
     }
-}
-
-// 本文の帯の左上の角（半径 corner）。角の外を面の地 ground で塗り、弧を境界の色 edge で引く（面の
-// 右端の境界の続き）。形は保持（ExplorerShapes）から借りる。描画先の factory が無ければ丸めない。
-void ExplorerPainter::paint_corner(const core::ExplorerLayout &layout, core::RgbColor edge,
-                                   core::RgbColor ground)
-{
-    if (factory_ == nullptr || !shapes_.corner(*factory_.Get(), layout))
-    {
-        return;
-    }
-    brush_.SetColor(to_color(ground));
-    target_.FillGeometry(shapes_.outside(), &brush_);
-    brush_.SetColor(to_color(edge));
-    target_.DrawGeometry(shapes_.arc(), &brush_, static_cast<float>(layout.border));
 }
 
 float ExplorerPainter::scale() const noexcept

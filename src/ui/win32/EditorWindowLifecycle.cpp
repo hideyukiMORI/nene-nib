@@ -14,6 +14,7 @@
 #include "TitleBarLayout.hpp"
 #include "TitleBarWidth.hpp"
 #include "UnsavedTab.hpp"
+#include "WindowCorners.hpp"
 
 #include <dwmapi.h>
 
@@ -132,7 +133,7 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     shown_font_ = font_of(opened.settings);
     timing_.mark(core::Milestone::backdrop_applied);
     // 配置してから見せる。生成時に (0,0) で見せない（ADR 0008 の決定 7）。device の生成は
-    // ドライバの初期化で 160 ms 掛かるので、その前に Mica の面だけの窓を見せる（ADR 0013）。
+    // ドライバの初期化で 160 ms 掛かるので、その前に窓を見せる（ADR 0013 と追補 #1488）。
     ShowWindow(window_, SW_SHOW);
     timing_.mark(core::Milestone::window_shown);
     // 最初のフレームまで renderer_ は無い。来た入力は門が捨てる（ADR 0013 の決定 5）。
@@ -159,22 +160,22 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
 
 void EditorWindow::apply_backdrop(const application::EditorDelivery &delivery)
 {
-    // Mica の明暗は DWM が持つので、表示値の外観をそのまま伝える。色は渡さない（ADR 0008）。
+    // 非クライアントの明暗は DWM が持つので、表示値の外観をそのまま伝える（ADR 0008 の決定 9）。
     shown_appearance_ = delivery.appearance;
     const BOOL dark = delivery.appearance == core::Appearance::dark ? TRUE : FALSE;
     DwmSetWindowAttribute(window_, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark,
                           static_cast<DWORD>(sizeof(dark)));
     // 窓の縁（角の 1 px）は帯の地 title_bar で塗る（#795）。最大化では OS が縁を描かない。
-    // Windows 10 には属性が無く失敗を返すだけなので、Mica と同じく戻り値は見ない。
+    // Windows 10 には属性が無く失敗を返すだけなので、戻り値は見ない。
     shown_border_ = core::selected_theme(delivery.settings, delivery.appearance).ui.title_bar;
     const COLORREF border = colorref_of(shown_border_);
     DwmSetWindowAttribute(window_, DWMWA_BORDER_COLOR, &border, static_cast<DWORD>(sizeof(border)));
-    // Mica は Windows 11 22H2 以降。掛からない環境でも帯は不透明の title_bar で塗るので（D16）、
-    // 掛かったかどうかは誰も読まない。2 属性は最初のフレームまでの面（ADR 0013）と
-    // 非クライアントの明暗（ADR 0008 の決定 9）のために掛け続ける。
-    constexpr DWM_SYSTEMBACKDROP_TYPE mica = DWMSBT_MAINWINDOW;
-    DwmSetWindowAttribute(window_, DWMWA_SYSTEMBACKDROP_TYPE, &mica,
-                          static_cast<DWORD>(sizeof(mica)));
+    // 窓の角は四角（#1488）。丸めると左上と右上に小さく明るい点が出た。失敗は無視する（上と同じ）。
+    static_cast<void>(square_window_corners(window_));
+    // DWMWA_SYSTEMBACKDROP_TYPE（Mica）は設定しない（#1488・施主の決定 2026-11-11 夜）。build 26300
+    // の DWM は四角い窓でも中身の visual だけを角で約 4 px 丸く抜き、抜けた所から Mica（ダークで
+    // #202020）が左上と右上の点に見えた。帯は不透明の title_bar で塗るので（D16）見た目は Mica に
+    // 依らない。一度も Mica にしないので、DWMSBT_NONE へ戻す呼び出しも要らない。
 }
 
 std::expected<void, WindowFailure> EditorWindow::start_rendering()
@@ -661,7 +662,7 @@ bool EditorWindow::provisional() const noexcept
 
 // ADR 0132 の決定 3: 本窓に本物の renderer を作って同じ frame を出し、その Commit が
 // DWM に取り込まれ、DWM の次の合成が終わるのを待ってから、仮の renderer を解放して
-// 子窓を壊す（子窓が消えた後に Mica が見える余地を塞ぐ）。本窓に作れなければ終了へ
+// 子窓を壊す（子窓が消えた後に何も載らない面が見える余地を塞ぐ）。本窓に作れなければ終了へ
 // （device lost の 2 度目と同じ・ADR 0007）。
 void EditorWindow::adopt_device()
 {

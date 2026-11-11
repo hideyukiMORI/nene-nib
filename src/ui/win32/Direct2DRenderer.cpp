@@ -919,8 +919,7 @@ void Direct2DRenderer::draw_tab_list(const application::EditorFrame &frame,
 void Direct2DRenderer::draw_title_bar(const application::EditorFrame &frame,
                                       const core::TitleBarLayout &layout)
 {
-    // 帯は D16 で不透明。Mica は DWM 側に掛けたままだが、この面で隠れる（最初のフレームまでの
-    // 面と非クライアントの明暗の判定に要るので外さない・ADR 0013 / ADR 0008 の決定 9）。
+    // 帯は D16 で不透明。DWM の Mica は掛けない（#1488）ので、帯の見た目はこの面だけで決まる。
     fill(layout.band, frame.palette.title_bar);
     draw_tabs(frame, layout);
     if (layout.overflowing)
