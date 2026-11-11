@@ -42,6 +42,7 @@
 #include "UnregisterShell.hpp"
 #include "UnsavedTab.hpp"
 #include "VimSearchDirection.hpp"
+#include "WslPlaces.hpp"
 
 #include <array>
 #include <bit>
@@ -51,6 +52,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace nenenib::ui::win32
 {
@@ -605,10 +607,14 @@ void EditorWindow::run_unregister_shell()
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ
-// フォルダを意図にする。取り消しは何も送らない。
+// フォルダを意図にする。取り消しは何も送らない。WSL が入っていれば、ディストリごとの場所を箱の
+// 左の一覧に足す（追補 #1450）。一覧が読めなければ足さずに出す（知らせない）。
 void EditorWindow::choose_explorer_root()
 {
-    auto folder = choose_folder(window_);
+    const auto listed = wsl_.distributions();
+    const auto places =
+        listed.has_value() ? core::wsl_places(listed.value()) : std::vector<std::string>{};
+    auto folder = choose_folder(window_, places);
     if (folder.has_value())
     {
         send(application::ExplorerRootChosen{std::move(folder).value()});

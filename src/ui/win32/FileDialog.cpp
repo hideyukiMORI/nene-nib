@@ -71,6 +71,26 @@ constexpr UINT all_files_index = 2;
     }
     return path_of(*item.Get());
 }
+
+// 場所を箱の左の一覧の下に足す（ADR 0162 の追補 #1450）。SHCreateItemFromParsingName は経路を
+// 解くだけで中身を列挙しない（WSL の VM が止まっていても起こさない・実測）。失敗は黙って外す。
+void add_places(IFileDialog &dialog, std::span<const std::string> places)
+{
+    for (const auto &place : places)
+    {
+        const auto wide = core::to_utf16(place);
+        if (!wide.has_value())
+        {
+            continue;
+        }
+        ComPtr<IShellItem> item;
+        if (SUCCEEDED(SHCreateItemFromParsingName(wide.value().c_str(), nullptr,
+                                                  IID_PPV_ARGS(item.GetAddressOf()))))
+        {
+            static_cast<void>(dialog.AddPlace(item.Get(), FDAP_BOTTOM));
+        }
+    }
+}
 } // namespace
 
 std::optional<core::FilePath> choose_file_to_open(HWND owner)
@@ -98,7 +118,7 @@ std::optional<core::FilePath> choose_file_to_save(HWND owner, const std::wstring
     return shown(*dialog.Get(), owner);
 }
 
-std::optional<core::FilePath> choose_folder(HWND owner)
+std::optional<core::FilePath> choose_folder(HWND owner, std::span<const std::string> places)
 {
     ComPtr<IFileOpenDialog> dialog;
     if (FAILED(CoCreateInstance(__uuidof(FileOpenDialog), nullptr, CLSCTX_INPROC_SERVER,
@@ -113,6 +133,7 @@ std::optional<core::FilePath> choose_folder(HWND owner)
     {
         return std::nullopt;
     }
+    add_places(*dialog.Get(), places);
     if (FAILED(dialog->Show(owner)))
     {
         return std::nullopt;

@@ -60,8 +60,8 @@ constexpr std::array<UINT, 10> pointer_messages{
 } // namespace
 
 EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &controller,
-                           application::TimingPort &timing, RendererSources sources)
-    : instance_(instance), controller_(controller), timing_(timing),
+                           WindowPorts ports, RendererSources sources)
+    : instance_(instance), controller_(controller), timing_(ports.timing), wsl_(ports.wsl),
       text_layouts_(sources.text_layouts), warmup_(sources.warmup)
 {
 }
@@ -81,10 +81,10 @@ EditorWindow::~EditorWindow()
 
 std::expected<std::unique_ptr<EditorWindow>, WindowFailure>
 EditorWindow::create(HINSTANCE instance, application::EditorController &controller,
-                     application::TimingPort &timing, RendererSources sources)
+                     WindowPorts ports, RendererSources sources)
 {
     auto window =
-        std::unique_ptr<EditorWindow>(new EditorWindow(instance, controller, timing, sources));
+        std::unique_ptr<EditorWindow>(new EditorWindow(instance, controller, ports, sources));
     const auto ready = window->initialize();
     if (!ready)
     {
