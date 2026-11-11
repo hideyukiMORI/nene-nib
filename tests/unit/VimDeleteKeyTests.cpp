@@ -119,15 +119,18 @@ void verify_plain_delete_undo_units()
     applied(controller, application::MoveCaret{core::CaretMotion::line_start,
                                                core::SelectionAnchoring::collapse});
     applied(controller, application::InsertText{"x"});
-    applied(controller, application::DeleteText{core::DeleteDirection::forward});
+    applied(controller, application::DeleteText{core::DeleteDirection::forward,
+                                                nenenib::core::DeleteUnit::character});
     expect(applied(controller, application::HistoryAction{core::HistoryDirection::undo}) == "xabc",
            "a plain Delete right after typed text is its own undo unit");
     expect(applied(controller, application::HistoryAction{core::HistoryDirection::undo}) == "abc",
            "and the typed text before it stays a unit of its own");
     applied(controller, application::MoveCaret{core::CaretMotion::line_start,
                                                core::SelectionAnchoring::collapse});
-    applied(controller, application::DeleteText{core::DeleteDirection::forward});
-    applied(controller, application::DeleteText{core::DeleteDirection::forward});
+    applied(controller, application::DeleteText{core::DeleteDirection::forward,
+                                                nenenib::core::DeleteUnit::character});
+    applied(controller, application::DeleteText{core::DeleteDirection::forward,
+                                                nenenib::core::DeleteUnit::character});
     expect(applied(controller, application::HistoryAction{core::HistoryDirection::undo}) == "bc",
            "two plain Deletes in a row stay two undo units");
 }

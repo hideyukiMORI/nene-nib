@@ -20,7 +20,7 @@ namespace
 // 契約を持たない scope（--vim-visual-yank）と、既に載っている契約を別の切り口で束ねただけの scope
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 // 表は関数の外に置く（CPP-012・関数長の上限は表の行を数えない形で守る）。
-constexpr std::array<std::pair<std::string_view, void (*)()>, 95> contracts{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 96> contracts{{
     {"--vim-wrapped", verify_vim_wrapped_contracts},
     {"--wrapped-view", verify_wrapped_view_scope},
     {"--edge-arrows", verify_edge_arrows_scope},
@@ -59,6 +59,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 95> contracts{{
     {"--autosave-restore-property", verify_autosave_restore_property_scope},
     {"--ex-files", verify_ex_files_contracts},
     {"--ordinary-characters", verify_ordinary_character_contracts},
+    {"--ordinary-words", verify_ordinary_word_contracts},
     {"--ex-document", verify_ex_document_contracts},
     {"--ex-write-path", verify_ex_write_path_contracts},
     {"--ex-random", verify_ex_random_scope},
@@ -133,7 +134,7 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 119> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 120> scopes{{
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
@@ -184,6 +185,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 119> scopes{{
     {"--ex-settings", verify_ex_settings},
     {"--ex-files", verify_ex_files_scope},
     {"--ordinary-characters", verify_ordinary_character_scope},
+    {"--ordinary-words", verify_ordinary_word_contracts},
     {"--ex-document", verify_ex_document_scope},
     {"--ex-write-path", verify_ex_write_path_contracts},
     {"--ex-random", verify_ex_random_scope},

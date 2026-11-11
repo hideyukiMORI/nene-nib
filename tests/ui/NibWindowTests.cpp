@@ -17,7 +17,7 @@ namespace
 bool verify_selected(std::string_view selector)
 {
     namespace ui = nenenib::tests::ui;
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 31> groups{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 32> groups{{
         {"", ui::verify_fallback_keys},
         {"", ui::verify_fallback_cache},
         {"--glyphs", ui::verify_glyph_collector},
@@ -49,6 +49,7 @@ bool verify_selected(std::string_view selector)
         {"--closing", ui::verify_closing_steps},
         {"--preview-key", ui::verify_preview_cycle_key},
         {"--standard-keys", ui::verify_standard_keys},
+        {"--word-delete", ui::verify_word_deletion_keys},
     }};
     bool known = false;
     for (const auto &[name, verify] : groups)
