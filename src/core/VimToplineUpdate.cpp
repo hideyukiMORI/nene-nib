@@ -302,10 +302,11 @@ using Settled = std::tuple<std::size_t, std::size_t, std::size_t>;
     return top;
 }
 
-// walked の先頭と、歩くあいだの scrollup が w_botline に足した行（#1300）。Vim は 1 文字ごとの
-// scroll_cursor_bot の scrollup(line_count) で w_botline += line_count とするので、歩き終わった
-// ときに持っている値は「数えた窓の w_botline ＋ 送った論理行の和」で、送った論理行の和は先頭の
-// 差になる。折り返さない窓ではこれが描いた w_botline と同じなので 2 回目は走らない。
+// walked の先頭と、送った論理行として先頭の差（#1300）。Vim は 1 文字ごとの scroll_cursor_bot が
+// 入口の validate_botline で w_botline を数え直してから scrollup(line_count) で line_count を足す
+// ので、歩き終わったときに持っている値は「最後の送りの前の窓で数えた値 ＋ 最後の送り」。折り返さ
+// ない窓ではこれは歩いた先頭 ＋ 窓の行数で、数えた窓の w_botline ＋ 先頭の差と同じなので、ここでは
+// 後者で数える（描いた w_botline と同じになり 2 回目は走らない）。
 [[nodiscard]] Scrolled walked_scrolled(Lookup &lookup, std::size_t top, std::size_t cursor) noexcept
 {
     const std::size_t first = walked_bottom(lookup, cursor);
