@@ -44,6 +44,7 @@
 #include "VimMode.hpp"
 #include "WheelTurn.hpp"
 #include "WindowFailure.hpp"
+#include "WindowPorts.hpp"
 #include "WindowTimer.hpp"
 
 #include <windows.h>
@@ -68,8 +69,8 @@ class EditorWindow final
   public:
     // sources の device の箱は worker が先に作り、最初の renderer が受け取る（ADR 0131）。
     [[nodiscard]] static std::expected<std::unique_ptr<EditorWindow>, WindowFailure>
-    create(HINSTANCE instance, application::EditorController &controller,
-           application::TimingPort &timing, RendererSources sources);
+    create(HINSTANCE instance, application::EditorController &controller, WindowPorts ports,
+           RendererSources sources);
     ~EditorWindow();
     EditorWindow(const EditorWindow &) = delete;
     EditorWindow(EditorWindow &&) = delete;
@@ -91,8 +92,8 @@ class EditorWindow final
     void adopt_device();
 
   private:
-    EditorWindow(HINSTANCE instance, application::EditorController &controller,
-                 application::TimingPort &timing, RendererSources sources);
+    EditorWindow(HINSTANCE instance, application::EditorController &controller, WindowPorts ports,
+                 RendererSources sources);
     [[nodiscard]] std::expected<void, WindowFailure> initialize();
     [[nodiscard]] std::expected<void, WindowFailure> start_rendering();
     // 本物の device がまだなら子窓に仮の renderer を、
@@ -358,6 +359,8 @@ class EditorWindow final
     HINSTANCE instance_;
     application::EditorController &controller_;
     application::TimingPort &timing_;
+    // フォルダ選びの箱の WSL の場所（ADR 0162 の追補 #1450）。箱を出すときだけ読む。
+    application::WslDistributionPort &wsl_;
     BodyTextLayouts &text_layouts_;
     DeviceWarmup &warmup_;
     // present が返った frame の節目（frame_presented と本文の最初の body_presented・#546）。
