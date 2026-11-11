@@ -242,6 +242,28 @@ void verify_vim_block_put_line_endings()
     vim_replay(block, "u");
     expect(vim_body(block.frame()) == "abc\ndef\nghi",
            "one undo takes back the delete and the put");
+    // 行を貼った後の前の選択（gv）も CRLF の文書で同じ列を選ぶ（レビュー V-1478 の軽い指摘 3・
+    // Vim 9.1 の `abc⏎def⏎ghi` の `2yy<C-v>jpgvd` は `bc⏎ef⏎⏎⏎ghi`）。
+    Editing third;
+    EditorController &lines = vim_block_editor(third, "abc\r\ndef\r\nghi");
+    vim_replay(lines, "2yy<C-v>jpgvd");
+    static_cast<void>(lines.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(third.files().written() == "bc\r\nef\r\n\r\n\r\nghi",
+           "gv after the lines put selects the put lines in a CRLF document");
+}
+
+// 巨大な回数の矩形の VISUAL の `p`（レビュー V-1478 の軽い指摘 2・#1341 の方針）。1 行ぶんの本文 ×
+// 回数 × 行の数が文書の上限を超えるので、本文を作る前に断って本文もレジスタも変えない
+// （Debug でもすぐに返る）。Vim は 2 GB を作りにいくので oracle では測らない。
+void verify_vim_block_put_huge_count()
+{
+    Editing editing;
+    EditorController &controller = vim_block_editor(editing, "abc\ndef\nghi");
+    vim_replay(controller, "yl<C-v>j999999999p");
+    expect(vim_body(controller.frame()) == "abc\ndef\nghi",
+           "a block put whose copies exceed the document limit leaves the body alone");
+    expect(controller.vim_state().unnamed_register.value().text == "a",
+           "and leaves the unnamed register alone");
 }
 
 // 矩形の INSERT（ADR 0035 の追補 #1042）。打つのは 1 行目だけで、Esc が CRLF の文書の残りの行へ
@@ -812,6 +834,7 @@ void verify_vim_block_contracts()
     verify_vim_block_line_endings();
     verify_vim_block_unsupported_keys();
     verify_vim_block_put_line_endings();
+    verify_vim_block_put_huge_count();
     verify_vim_block_insert_document_newlines();
     verify_vim_block_insert_interrupted();
     verify_vim_block_range();

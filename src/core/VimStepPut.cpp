@@ -47,6 +47,7 @@ using detail::repeated;
 using detail::selected_register;
 using detail::single_step;
 using detail::visual_restore;
+using detail::written_bytes;
 
 namespace detail
 {
@@ -543,15 +544,26 @@ lines_of_block_put(const VimState &state, const VimEditorView &put, LineNumber l
 {
     const TextBuffer &after = put.text;
     const Offset at = put.selection.caret;
-    auto body = repeated(source.text, count_of(state.count), after, put.document_limit);
+    // 入れる行を先に数え、本文 × 回数 × 行の数が文書の上限に入るかを作る前に見る（#1341 と同じ
+    // fits_repeated・溢れない割り算）。入らなければ 1 行ぶんの本文も作らずに断る（レビュー
+    // V-1478）。
+    std::vector<VimBlockEdit> edits = block_lines_put(after, at, last, source.text);
+    const std::size_t count = count_of(state.count);
+    const std::size_t room = count_room(after, put.document_limit);
+    const std::size_t piece = written_bytes(source.text, after);
+    if (!fits_repeated(piece, edits.size(), room) ||
+        !fits_repeated(piece * edits.size(), count, room))
+    {
+        return std::unexpected(VimRepeatFailure::too_large);
+    }
+    auto body = repeated(source.text, count, after, put.document_limit);
     if (!body.has_value())
     {
         return std::unexpected(body.error());
     }
-    std::vector<VimBlockEdit> edits = block_lines_put(after, at, last, body.value());
-    if (!fits_repeated(body.value().size(), edits.size(), count_room(after, put.document_limit)))
+    for (VimBlockEdit &edit : edits)
     {
-        return std::unexpected(VimRepeatFailure::too_large);
+        edit.utf8 = body.value();
     }
     const Offset caret{at.value + body.value().size() - last_code_point_size(body.value())};
     return BlockPut{std::move(edits), caret};
