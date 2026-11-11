@@ -16,8 +16,8 @@ inline constexpr std::size_t vim_replay_depth_limit = 100;
 
 // いちばん外の再生（`.` `@` を打った 1 鍵）が列から流す鍵の数の上限（#1351・施主決定 D75）。
 // 失敗しない中身の `999999999@a` は Vim と同じく回数ぶん回り窓が固まるので、超えたら controller
-// が残りを捨てて 1 行知らせる。値は Release の nib_vim_replay で「1 回の再生が長くても約 5 秒で
-// 止まる」10 のべき（ADR 0046 の追補 #1351 に測った数）。
+// が残りを捨てて 1 行知らせる。値は静かな機械の Release の nib_vim_replay で `x` や `j` の形の
+// 100,000 鍵が約 1.5 秒で返る 10 のべき（ADR 0046 の追補 #1351 に測った数と理由）。
 inline constexpr std::size_t vim_replay_key_limit = 100000;
 
 // `.` の再生（ADR 0030 の決定 6 / ADR 0033 の決定 4）と `@` の再生（ADR 0046 の決定 3）。回数の

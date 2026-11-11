@@ -280,15 +280,22 @@ void verify_macro_depth_limit()
 // かかるので、limit_replay_keys で小さい上限を置いて境を確かめる（製品の値は static_assert）。
 // c が `3@ax` なら、`@c` が流す鍵は `3` `@` `a` と a の 3 周（`0` を 3 回）と最後の `x` で、
 // `x` は 7 鍵目。上限 7 なら流れ、上限 6 なら捨てて 1 行知らせる（Vim は止まらず `x` まで
-// 流すので本文が `b` になる・ここが Vim と違う最小の形）。時計は読まない。
-[[nodiscard]] std::pair<std::string, std::optional<std::string>> limited_replay(std::size_t limit)
+// 流すので本文が `b` になる・ここが Vim と違う最小の形）。時計は読まない。mapped なら表に
+// `nnoremap Q x` を置いて c を `3@aQ` にし、表に行があるときの 2 本目のループでも同じ境を見る
+// （`Q` は右辺 `x` の 1 歩で 7 歩目）。
+[[nodiscard]] std::pair<std::string, std::optional<std::string>> limited_replay(std::size_t limit,
+                                                                                bool mapped)
 {
     Editing editing;
     open_vim_document(editing, "ab");
     EditorController &controller = editing.controller();
     controller.limit_replay_keys(limit);
+    if (mapped)
+    {
+        static_cast<void>(run_ex(controller, "nnoremap Q x"));
+    }
     applied(controller, stored_text('a', "0"));
-    applied(controller, stored_text('c', "3@ax"));
+    applied(controller, stored_text('c', mapped ? "3@aQ" : "3@ax"));
     vim_replay(controller, "@c");
     const auto message = controller.frame().command_message;
     return {whole_vim_body(controller),
@@ -299,13 +306,16 @@ void verify_macro_depth_limit()
 void verify_macro_key_limit()
 {
     static_assert(nenenib::core::vim_replay_key_limit == 100000U);
-    const auto [inside, quiet] = limited_replay(7U);
-    expect(inside == "b" && !quiet.has_value(), "the replayed key at the limit still runs");
-    const auto [over, notice] = limited_replay(6U);
-    expect(over == "ab" &&
-               notice ==
-                   std::optional<std::string>{"再生を 100,000 鍵で止めました（残りは捨てました）"},
-           "the replayed key past the limit is dropped with one notice line");
+    const std::optional<std::string> expected_notice{
+        "再生を 100,000 鍵で止めました（残りは捨てました）"};
+    for (const bool mapped : {false, true})
+    {
+        const auto [inside, quiet] = limited_replay(7U, mapped);
+        expect(inside == "b" && !quiet.has_value(), "the replayed key at the limit still runs");
+        const auto [over, notice] = limited_replay(6U, mapped);
+        expect(over == "ab" && notice == expected_notice,
+               "the replayed key past the limit is dropped with one notice line");
+    }
     Editing editing;
     open_vim_document(editing, "ab");
     EditorController &controller = editing.controller();
