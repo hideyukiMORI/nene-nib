@@ -143,6 +143,10 @@ FR-003 の T2 に残る VISUAL の 3 つめ、矩形（`Ctrl-v`）を入れる�
 
 矩形の VISUAL の `p` `P` は矩形を消す道（`block_operated`・決定 4）と矩形の貼付（`put_step`・決定 6）の合成で入れた。規則と実測は ADR 0018 の追補 #1461。
 
+## 追補（2026-11-12・#1482 貼る桁が全角の途中に落ちる行）
+
+決定 6 の「貼る桁が Tab の途中に落ちたら、その Tab だけを左右の空白に割る（ほかの文字は割らない）」の **ほかの文字の扱い** を Vim に合わせる。貼る桁が Tab でない文字（全角・幅 2 の絵文字・結合文字つきの全角・`<200b>` のような書式用文字）の途中に落ちる行では、その文字は割らず、**文字の頭の前に「桁 − 文字の最初の桁」個の空白を入れてから本文を入れ、文字は後ろへずれる**（`ab⏎いう` の `<C-v>jyp` は `aabb⏎ いいう`）。右の埋めは本文が続く行の規則（決定 6）のまま付き、文字の後ろには空白を入れない。Vim の出どころは `register.c` の `do_put()` の `MBLOCK` の枝で、桁を越えて止まった（`vcol > col`）行は `bd.endspaces = vcol − col`・`bd.startspaces = incr − bd.endspaces` とし、Tab でなければ `delcount = 0; bd.endspaces = 0` にして `startspaces` 個の空白の後ろへ本文と元の文字を並べる（v9.1.0004 の source で確かめた）。キャレットは 1 行目の本文の頭（`curwin->w_cursor.col += bd.startspaces`）。空白の数は `put_lead` の 1 か所（Tab と同じ数）、置き換えか差し込みかは `put_block_line` の 1 か所で決め、NORMAL の `p` `P`・`.` の再生・回数つき・矩形の VISUAL の `p` `P`（追補 #1461）が同じ 1 本を通る。上限の検査（`block_put_fits`・#1341）の見積もり `max(桁, tabstop)` はこの空白（桁 − 1 個より少ない）も覆うので変えない。根拠は固定 Vim 9.1 の oracle の `block-put-wide-mid-` の fixture 18 件（Issue の NORMAL 3 件と VISUAL 2 件・下の行の `P`・絵文字・結合文字つきの全角・短い行とその回数つき・回数つき `3p`・`.`・`u`・VISUAL の `P` と `.` と `u`・対照の桁 1 の `P` と Tab の途中）。修正前の再生では 14 件が違った。
+
 ## 強制
 
 - モード・効果・レジスタの種類・大きさの和型の写し漏れ: **active**（`switch` / `std::visit` の網羅性・CPP-002）

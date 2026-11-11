@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 10635a0f5fcce466c81ad2d5a803ab537f56e4774450bd6a784cfca9c3fed01f / 4486 fixtures
+// fixtures.json: sha256 323cc4acdbb1656bc5921e3958c609ca637899ca8a2e4097374a44147f625001 / 4504 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4486> vim_fixtures{{
+constexpr std::array<VimFixture, 4504> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3244,6 +3244,24 @@ constexpr std::array<VimFixture, 4486> vim_fixtures{{
     {"block-put-wide-zero-width-space", "a​b\nabcdefghijklmnopqrst\nmnop\nmnop", "<C-v>j19lyjjp", "a​b\nabcdefghijklmnopqrst\nma​b    nop\nmabcdefghijklmnopqrstnop", 3, 2, "a​b\nabcdefghijklmnopqrst", "\02620", std::nullopt},
     {"block-put-wide-c1-control", "ab\nabcdefghijklmnopqrst\nmnop\nmnop", "<C-v>j19lyjjp", "ab\nabcdefghijklmnopqrst\nmab             nop\nmabcdefghijklmnopqrstnop", 3, 2, "ab\nabcdefghijklmnopqrst", "\02620", std::nullopt},
     {"block-put-wide-emoji", "a😀b\nabcdefghijklmnopqrst\nmnop\nmnop", "<C-v>j19lyjjp", "a😀b\nabcdefghijklmnopqrst\nma😀b    nop\nmabcdefghijklmnopqrstnop", 3, 2, "a😀b\nabcdefghijklmnopqrst", "\02620", std::nullopt},
+    {"block-put-wide-mid-p", "ab\nいう", "<C-v>jyp", "aabb\n いいう", 1, 2, "ab\nい", "\0262", std::nullopt},
+    {"block-put-wide-mid-p-after-l", "abc\nいう", "l<C-v>jyp", "aabbc\n いいう", 1, 2, "ab\nい", "\0262", std::nullopt},
+    {"block-put-wide-mid-p-third-line", "ab\ncd\nいう", "<C-v>jyjp", "ab\ncad\n cいう", 2, 2, "a\nc", "\0261", std::nullopt},
+    {"block-put-wide-mid-capital-p-column-one", "ab\nいう", "<C-v>jyP", "abab\nいいう", 1, 1, "ab\nい", "\0262", std::nullopt},
+    {"block-put-wide-mid-capital-p-lower-line", "aab\nいう\nzz\nzz", "jj<C-v>jygglP", "azab\n zいう\nzz\nzz", 1, 2, "z\nz", "\0261", std::nullopt},
+    {"block-put-wide-mid-tab-still-splits", "ab\n\tx", "<C-v>jyp", "aab      b\n \t       x", 1, 2, "ab\n\t", "\0268", std::nullopt},
+    {"block-put-wide-mid-emoji", "ab\n😀x", "<C-v>jyp", "aabb\n 😀😀x", 1, 2, "ab\n😀", "\0262", std::nullopt},
+    {"block-put-wide-mid-combining", "ab\nがう", "<C-v>jyp", "aabb\n ががう", 1, 2, "ab\nが", "\0262", std::nullopt},
+    {"block-put-wide-mid-short-line", "ab\nいう\nx\nP\nQ\nR", "4G<C-v>jjyggp", "aPb\n Qいう\nxR\nP\nQ\nR", 1, 2, "P\nQ\nR", "\0261", std::nullopt},
+    {"block-put-wide-mid-short-line-count", "ab\nいう\nx\nP\nQ\nR", "4G<C-v>jjygg2p", "aPPb\n QQいう\nxRR\nP\nQ\nR", 1, 2, "P\nQ\nR", "\0261", std::nullopt},
+    {"block-put-wide-mid-count", "ab\nいう", "<C-v>jy3p", "aabababb\n いいいいう", 1, 2, "ab\nい", "\0262", std::nullopt},
+    {"block-put-wide-mid-dot", "ab\ncd\nxy\nいう\nzw\nいう", "<C-v>jyjjpjj0.", "ab\ncd\nxay\n cいう\nzaw\n cいう", 5, 2, "a\nc", "\0261", std::nullopt},
+    {"block-put-wide-mid-undo", "ab\nいう", "<C-v>jypu", "ab\nいう", 1, 1, "ab\nい", "\0262", std::nullopt},
+    {"block-put-wide-mid-visual-p", "abc\nいう", "<C-v>jyl<C-v>p", "aabc\n いいう", 1, 2, "b", "\0261", std::nullopt},
+    {"block-put-wide-mid-visual-capital-p", "abc\nいう", "<C-v>jyl<C-v>P", "aabc\n いいう", 1, 2, "ab\nい", "\0262", std::nullopt},
+    {"block-put-wide-mid-visual-two-lines", "aあb\nいう\nabcdef", "<C-v>jjyl<C-v>lp", "aa\n  いう\naabcdef", 1, 2, "あb", "\0263", std::nullopt},
+    {"block-put-wide-mid-visual-two-lines-undo", "aあb\nいう\nabcdef", "<C-v>jjyl<C-v>lpu", "aあb\nいう\nabcdef", 1, 2, "あb", "\0263", std::nullopt},
+    {"block-put-wide-mid-visual-dot", "abc\nいう\nxyz\nいう", "<C-v>jyl<C-v>pjjl.", "aabc\n いいう\nxy\nいう", 3, 2, "z", "\0261", std::nullopt},
     {"block-empty-delete-one-x", "\nword, gamma", "<C-v>$x", "\nword, gamma", 1, 1, "", "", std::nullopt},
     {"block-empty-delete-one-d", "\nword", "<C-v>$d", "\nword", 1, 1, "", "", std::nullopt},
     {"block-empty-delete-one-x-no-dollar", "\nword", "<C-v>x", "\nword", 1, 1, "", "", std::nullopt},

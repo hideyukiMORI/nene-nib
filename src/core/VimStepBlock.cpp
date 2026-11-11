@@ -611,9 +611,10 @@ namespace
                                      : virtual_column(text, caret).value;
 }
 
-// 貼る本文が始まる桁までに入れる空白の数。行が桁より短ければ末尾まで埋め、桁が Tab の途中に
-// 落ちればその Tab の左側ぶんを空白にする（固定 Vim も Tab だけを割る・実測）。桁は VimLineColumns
-// に問う（索引を持つ本文は行を写さない・#1237）。
+// 貼る本文が始まる桁までに入れる空白の数。行が桁より短ければ末尾まで埋め、桁が文字の途中に
+// 落ちればその文字の左側ぶん（桁 − 文字の最初の桁）を空白にする。Tab でも全角でも同じ数で、
+// Tab はその空白で割り、ほかの文字は割らずにその文字の前へ入れる（Vim の do_put の MBLOCK の
+// startspaces・#1482）。桁は VimLineColumns に問う（索引を持つ本文は行を写さない・#1237）。
 [[nodiscard]] std::size_t put_lead(const VimLineColumns &line, std::size_t column)
 {
     const std::size_t columns = line.width();
@@ -621,13 +622,8 @@ namespace
     {
         return column - single_step - columns;
     }
-    const std::size_t byte = line.byte_at(VirtualColumn{column});
-    const std::size_t begins = line.column_of(byte).value;
-    if (begins < column && line.code_point_at(byte) == tab_character)
-    {
-        return column - begins;
-    }
-    return 0;
+    const std::size_t begins = line.column_of(line.byte_at(VirtualColumn{column})).value;
+    return begins < column ? column - begins : 0;
 }
 
 // Vim の do_put が 1 文字の先頭のバイトに数える桁（#1117）。Tab はここに来ない。固定 Vim 9.1 の
@@ -692,7 +688,10 @@ namespace
 }
 
 // 1 行ぶんの貼付。行が桁より短ければ手前を空白で埋め、桁が Tab の途中に落ちればその Tab を
-// 空白に割って置き換える（固定 Vim も Tab だけを割る・実測）。
+// 空白に割って置き換える。Tab でない文字（全角・絵文字・結合文字つきの文字）の途中なら、その
+// 文字は割らずに頭の前へ `put_lead` の空白と本文を入れ、文字は後ろへずれる（Vim の do_put は
+// Tab でなければ delcount と endspaces を 0 にする・実測 #1482）。NORMAL の `p` `P` も矩形の
+// VISUAL の `p` `P`（#1461）もここを通る。
 [[nodiscard]] VimBlockEdit put_block_line(const VimLineColumns &line, std::size_t column,
                                           const std::string &body)
 {
@@ -706,7 +705,7 @@ namespace
         return VimBlockEdit{OffsetRange{end, end}, std::move(utf8)};
     }
     const std::size_t byte = line.byte_at(VirtualColumn{column});
-    if (lead == 0)
+    if (lead == 0 || line.code_point_at(byte) != tab_character)
     {
         return VimBlockEdit{OffsetRange{Offset{start.value + byte}, Offset{start.value + byte}},
                             std::move(utf8)};
@@ -822,7 +821,8 @@ namespace
 // 矩形の `p` `P` の本文が文書の上限に収まるか（#1341）。1 行は回数ぶんの本文と幅までの空白で、
 // 本文の外に足すのは多くとも max(桁, tabstop) と改行（文書の改行の形の幅）: 行末より右の桁は
 // 手前を桁 − 1 個の空白で埋め、足す行は改行と桁 − 1 個の空白、桁の途中で割る Tab（1 バイト）は
-// 多くとも tabstop 個の空白になる（PR #1348 の再レビュー M2）。Vim は行ごとにそのまま確保する
+// 多くとも tabstop 個の空白になる（PR #1348 の再レビュー M2）。全角などの途中の桁で文字の前へ
+// 入れる空白（#1482）は桁 − 1 個より少ない。Vim は行ごとにそのまま確保する
 // （`<C-v>jy999999999p` は 2 GB の 2 行を作る・実測）。
 [[nodiscard]] bool block_put_fits(const VimState &state, const VimEditorView &view, VimPutSide side)
 {
