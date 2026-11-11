@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 65e9ef1f8b66ad9c461c097185b337971d65586575f03d2836de914ad8a8bfc9 / 3937 fixtures
+// fixtures.json: sha256 b91f6e6a9712744ae90f18546ba3de7fbc73241c5b55d3868407fc2cbbb27919 / 3952 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 3937> vim_fixtures{{
+constexpr std::array<VimFixture, 3952> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3949,6 +3949,21 @@ constexpr std::array<VimFixture, 3937> vim_fixtures{{
     {"visual-jump-mark-join-control", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "12jmakkkJ'a", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1 s2\n\nt1", 12, 1, "", "", std::nullopt},
     {"visual-jump-mark-gv-after-line-shift", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "3jVj>ggjgvd", "p1\np2\n\n\nr1\nr2\n\ns1\ns2\n\nt1", 4, 1, "\tq1\n\tq2\n", "V", std::nullopt},
     {"visual-jump-mark-gv-after-char-tilde", "p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1", "3jvjl~ggjgvd", "p1\np2\n\n\n\nr1\nr2\n\ns1\ns2\n\nt1", 4, 1, "Q1\nQ2", "v", std::nullopt},
+    {"prefix-escape-quote-then-x-runs", "abc", "\"<Esc>x", "bc", 1, 1, "a", "v", std::nullopt},
+    {"prefix-escape-at-then-x-runs", "abc", "@<Esc>x", "bc", 1, 1, "a", "v", std::nullopt},
+    {"prefix-escape-quote-drops-the-count", "abcdef", "3\"<Esc>x", "bcdef", 1, 1, "a", "v", std::nullopt},
+    {"prefix-escape-at-drops-the-count", "abcdef", "3@<Esc>x", "bcdef", 1, 1, "a", "v", std::nullopt},
+    {"prefix-escape-quote-drops-the-selected-register", "abc", "\"ayllyl\"a\"<Esc>p", "abbc", 1, 3, "b", "v", std::nullopt},
+    {"prefix-escape-quote-keeps-the-wanted-column", "abcdef\nab\nabcdef", "$j\"<Esc>j", "abcdef\nab\nabcdef", 3, 6, "", "", std::nullopt},
+    {"prefix-escape-at-keeps-the-wanted-column", "abcdef\nab\nabcdef", "$j@<Esc>j", "abcdef\nab\nabcdef", 3, 6, "", "", std::nullopt},
+    {"prefix-escape-quote-keeps-visual", "abcdef", "v\"<Esc>ld", "cdef", 1, 1, "ab", "v", std::nullopt},
+    {"prefix-escape-at-keeps-visual", "abcdef", "vl@<Esc>d", "cdef", 1, 1, "ab", "v", std::nullopt},
+    {"prefix-escape-at-keeps-the-last-change", "abcdef", "x@<Esc>.", "cdef", 1, 1, "b", "v", std::nullopt},
+    {"prefix-escape-at-then-at-at-runs-the-last-macro", "abcdef", "@a@<Esc>@@", "cdef", 1, 1, "b", "v", std::nullopt, VimMacroFixture{'a', "x"}},
+    {"prefix-escape-search-empty-delete-keeps-numbered-one", "abc foo def\nzz", "jdd/foo<CR>d1n\"1p", "abc foo def\nzz", 2, 1, "zz\n", "V", std::nullopt},
+    {"prefix-escape-search-empty-shift-right-shifts-the-line", "abc foo def", "/foo<CR>>1n", "\tabc foo def", 1, 2, "", "", std::nullopt},
+    {"prefix-escape-search-empty-shift-left-shifts-the-line", "\tabc foo def", "/foo<CR><1n", "abc foo def", 1, 1, "", "", std::nullopt},
+    {"prefix-escape-search-empty-shift-right-dot-repeats", "abc foo def\nxyz", "/foo<CR>>1nj.", "\t\tabc foo def\n\txyz", 1, 3, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

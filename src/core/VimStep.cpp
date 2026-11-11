@@ -63,6 +63,7 @@ using detail::counts_as_digit;
 using detail::decimal_base;
 using detail::display_view;
 using detail::drops_count_digit;
+using detail::escaped_or_refused;
 using detail::failed;
 using detail::finished_input_wait;
 using detail::forward_characters;
@@ -1914,15 +1915,29 @@ namespace
     const auto *const special = std::get_if<VimSpecialKey>(&key);
     return special != nullptr && *special == VimSpecialKey::escape;
 }
+} // namespace
 
-// 待っていた鍵にならなかったとき。Esc は何もせずに打ち消し、ほかは受けない（Vim の `m<Esc>`
-// `'<Esc>` と `[<Esc>` `]<Esc>`）。
-[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key)
+namespace detail
 {
-    VimStep step{finished_input_wait(state), VimNoEffect{}};
-    return is_escape(key) ? step : failed(std::move(step), VimRepeatFailure::refused);
+// 待っていた鍵にならなかったときの判定の 1 本。Esc は回数・保留・待ち・選んだレジスタを消すだけで
+// 失敗にせず（Vim の normal_cmd は 2 鍵目が ESC なら命令を呼ばずに clearop して終わる・鳴らない・
+// 後ろの鍵が効く）、ほかは refused を返す（`m` `'` `` ` `` `[` `]` `"` `q` `@`・#1369）。
+[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key, VimStep refused)
+{
+    return is_escape(key) ? VimStep{finished_input_wait(state), VimNoEffect{}} : std::move(refused);
 }
 
+// ほかの鍵は待ちだけを消して失敗にする形。
+[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key)
+{
+    return escaped_or_refused(
+        state, key,
+        failed(VimStep{finished_input_wait(state), VimNoEffect{}}, VimRepeatFailure::refused));
+}
+} // namespace detail
+
+namespace
+{
 // `m{name}`（ADR 0152 の決定 3）。今のキャレットを置いた新しい値を添え、本文も選択も動かさない
 // （VISUAL のまま）。オペレータの後ろへは来ない（pending_step が打ち消す）。
 [[nodiscard]] VimStep mark_set_step(const VimState &state, const VimEditorView &view,
