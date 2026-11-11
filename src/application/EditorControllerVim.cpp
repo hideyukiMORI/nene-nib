@@ -1159,7 +1159,8 @@ void EditorController::perform(const core::VimInsertAt &effect)
 void EditorController::perform(const core::VimReplaceRange &effect)
 {
     const std::string_view newline = core::newline_of(state_.line_ending());
-    replace(effect.range, with_document_newlines(effect.utf8, newline), effect.boundary);
+    replace(effect.range, with_document_newlines(effect.utf8, newline), effect.boundary,
+            effect.lines);
     move_caret_to(core::document_caret_after(effect.range.begin, effect.utf8, effect.caret,
                                              state_.line_ending()),
                   core::SelectionAnchoring::collapse);
@@ -1188,7 +1189,7 @@ void EditorController::apply_block(const std::vector<core::VimBlockEdit> &edits,
         body += with_document_newlines(edit.utf8, newline);
         at = edit.range.end;
     }
-    replace(span, body, boundary, edits);
+    replace(span, body, boundary, std::span<const core::VimBlockEdit>{edits});
     move_caret_to(caret, core::SelectionAnchoring::collapse);
 }
 
