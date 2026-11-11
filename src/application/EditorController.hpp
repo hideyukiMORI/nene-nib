@@ -75,6 +75,8 @@
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "OpenFailureReply.hpp"
+#include "OpenRequest.hpp"
+#include "OpenedAs.hpp"
 #include "OpenedDocument.hpp"
 #include "PaletteFolder.hpp"
 #include "PaletteOrigin.hpp"
@@ -233,6 +235,8 @@ class EditorController final
   private:
     // 意図の前に 1 意図ぶんだけの表示（失敗・報せ）を消す。keeps_message は報せを残す意図。
     void begin_intent(bool keeps_message);
+    // 意図の出口（ADR 0179 の決定 4-1）。プレビューのタブが保存済みでなくなっていれば固定する。
+    void settle_transient();
     void forget_unkept_marks(const EditorIntent &intent);
     // エクスプローラーのダブルクリックの 2 打目（DBLCLK と続く離し）は 1 打目の知らせを消さない
     // （レビュー V-1391b の R-b・#1390・EditorControllerExplorer.cpp）。
@@ -381,8 +385,8 @@ class EditorController final
     // 1・3〜5）。同じファイルの タブへ切り替える → 読みの port に頼む。同期に揃えば adopt_read
     // で続け、裏へ回れば読み込み中の 要求を置いて戻る。同じファイルを読み込み中なら 2
     // 本目を頼まない。ほかの読み込み中の要求は 取り消す。開けなければタブを足さず、reply
-    // の告げ方で告げる。
-    void open_document(const core::FilePath &path, OpenFailureReply reply);
+    // の告げ方で告げる。開けたら opened_as の開き方で開く（ADR 0179 の決定 3）。
+    void open_document(const core::FilePath &path, OpenFailureReply reply, OpenedAs opened_as);
     // 読みの結果を受ける 1 本（決定 3・5）。読み込み中の要求の券のものだけを使う。進み具合は要求に
     // 置き、終わりは採る瞬間まで留める（追補 2）。採るのは settle_reads。
     void adopt_read(DocumentReadOutcome outcome);
@@ -395,15 +399,28 @@ class EditorController final
     // 読みは finish_tab_read へ渡す。
     void settle_reads();
     [[nodiscard]] bool settle_read(std::uint64_t ticket, bool open_waiting);
-    void finish_reading(const core::FilePath &path, OpenFailureReply reply,
+    void finish_reading(const core::FilePath &path, OpenRequest request,
                         std::expected<OpenedDocument, FileFailure> document);
     void finish_reading(const core::FilePath &path, AutosaveId tab,
                         std::expected<OpenedDocument, FileFailure> document);
     void finish_tab_read(AutosaveId tab, std::expected<OpenedDocument, FileFailure> document);
     [[nodiscard]] std::optional<std::size_t> tab_position_of(AutosaveId tab) const;
     // 揃った文書を開く（決定 4）。待っている間に同じファイルのタブができていればそこへ切り替え、
-    // 何も書いていない無題ならそこに開き、ほかは新しいタブを足す。
-    void open_read(const core::FilePath &path, OpenedDocument opened);
+    // 何も書いていない無題ならそこに開き、ほかは新しいタブを足す。transient で開くときは、
+    // プレビューのタブがあれば置き換え、無ければ開いたタブに印を付ける（ADR 0179 の決定 3）。
+    void open_read(const core::FilePath &path, OpenedDocument opened, OpenedAs opened_as);
+    // 既に開いているタブ position へ切り替える（決定 3-1）。pinned ならそのタブの印を消す
+    // （決定 3 の pinned・4-3・4-5）。transient なら印は変えない。
+    void reach_open_tab(std::size_t position, OpenedAs opened_as);
+    // 同じファイルを読み込み中の開く要求があれば、pinned の要求でその開き方を pinned に改める
+    // （揃ったときにプレビューのタブにしない・決定 4-3）。あれば真。
+    [[nodiscard]] bool joined_reading(const core::FilePath &path, OpenedAs opened_as);
+    // path を読み込み中の開く要求があるか。
+    [[nodiscard]] bool opening(const core::FilePath &path) const;
+    // 開いたアクティブなタブに、transient なら印を付ける（決定 3-3）。
+    void mark_opened(OpenedAs opened_as);
+    // アクティブなタブがプレビューのタブなら印を消す（決定 4-2 の保存の成功）。
+    void pin_active_tab();
     // 開けなかったことを呼び手ごとの今の規則で告げる（ADR 0060 の決定 7・ADR 0159 の決定 6）。
     void answer_unopened(const core::FilePath &path, FileFailure failure, OpenFailureReply reply);
     // 読み込み中の要求を取り消す（券の仕事をやめさせて要求と留めた結果を消す・決定 5）。
@@ -420,7 +437,9 @@ class EditorController final
     void accept(const OpenDocument &intent);
     // 一覧から選んだファイルを開く。失敗は 1 行の知らせで、not_found で出どころが履歴の候補の
     // ときだけ履歴から外す（ADR 0062 の決定 18）。
-    void open_listed(const core::FilePath &path, std::optional<core::PaletteOrigin> origin);
+    // opened_as はエクスプローラーの面のクリック 1 回だけが transient（ADR 0179 の決定 3）。
+    void open_listed(const core::FilePath &path, std::optional<core::PaletteOrigin> origin,
+                     OpenedAs opened_as);
     // 閉じたファイルを履歴に記録する（read → history_recorded を順に → write）。空なら何もしない。
     void remember(const std::vector<core::FilePath> &paths);
     void forget(const core::FilePath &path);
@@ -511,6 +530,9 @@ class EditorController final
     void accept(const WalkRecentTab &intent);
     void accept(const SettleRecentTab &);
     void accept(const CloseTab &intent);
+    // 題名のダブルクリック（ADR 0179 の決定 4-4）。そのタブへ切り替え、切り替えが成ったタブが
+    // プレビューのタブなら印を消す（通し番号で比べる・#1427 の L1）。
+    void accept(const PinTab &intent);
     // 窓が閉じていくときに前回のタブの一覧を書く（ADR 0059 の決定 3）。状態は変えない。
     void accept(const EndSession &intent);
     // 裏の仕事の合図（ADR 0062 の決定 7）。使う人の操作の途中の状態を動かさない。
@@ -539,7 +561,8 @@ class EditorController final
     void step_explorer(bool down);
     void select_explorer_row(std::size_t row);
     void release_explorer(const std::optional<core::FilePath> &released, std::size_t row);
-    void click_explorer_row(std::size_t row);
+    // 1 回のクリック（opened_as は transient）と、1 打目が効かなかった 2 打目（pinned）の 1 本。
+    void click_explorer_row(std::size_t row, OpenedAs opened_as);
     void double_click_explorer(std::size_t row);
     void second_click_explorer(const core::FilePath &path);
     void open_explorer_folder(std::optional<std::size_t> row);
