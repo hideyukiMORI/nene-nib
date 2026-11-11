@@ -207,26 +207,63 @@ void verify_vim_block_line_endings()
            "and the line the block paste added came back as CRLF");
 }
 
-// 矩形では範囲外の鍵（決定 5）。どれも本文を変えず、矩形のまま残る。`~` `u` `U` は追補
-// （#959）、`c` `I` `A` `C` `>` `<` は追補（#1042）、`J` `gJ` `X` `D` `Y` は #1417 で効くので
-// block-case- と block-insert- と visual-line-command- の fixture が測る。
+// 矩形でテキストオブジェクトは文字単位の選択にならず、本文も変えない（決定 5）。範囲外だった鍵は
+// どれも効くようになった（`~` `u` `U` は追補 #959、`c` `I` `A` `C` `>` `<` は追補 #1042、`J` `gJ`
+// `X` `D` `Y` は #1417、`p` `P` は #1461）ので block-case- ほかと block-visual-put- の fixture
+// が測る。
 void verify_vim_block_unsupported_keys()
 {
     Editing editing;
     EditorController &controller = vim_block_editor(editing, "abcdef\nghijkl\nmnopqr");
     vim_replay(controller, "yy<C-v>jl");
-    constexpr std::array<std::string_view, 1> keys{"p"};
-    for (const std::string_view key : keys)
-    {
-        vim_replay(controller, key);
-        expect(vim_body(controller.frame()) == "abcdef\nghijkl\nmnopqr",
-               "a key that is out of scope for the block leaves the body alone");
-        expect(controller.frame().mode_label == "VISUAL BLOCK", "and leaves the block selected");
-    }
     vim_replay(controller, "iw");
     expect(controller.frame().mode_label == "VISUAL BLOCK",
            "a text object does not turn the block into a characterwise selection");
     expect(vim_body(controller.frame()) == "abcdef\nghijkl\nmnopqr", "and changes nothing");
+}
+
+// 矩形の VISUAL の `p` `P`（ADR 0018 の追補 #1461）は CRLF の文書でも文書の改行で書き、行を貼った
+// 後のキャレットは入れた改行の長さぶん後ろの最初の行頭に載る。fixture は LF だけなので保存した
+// バイト列と、キャレットの下の文字を消す `x` で測る。
+void verify_vim_block_put_line_endings()
+{
+    Editing editing;
+    EditorController &controller = vim_block_editor(editing, "abc\r\ndef");
+    vim_replay(controller, "yy<C-v>jpx");
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(editing.files().written() == "bc\r\nef\r\nbc",
+           "the lines below the block are written with CRLF and the caret lands on their start");
+    Editing other;
+    EditorController &block = vim_block_editor(other, "abc\r\ndef\r\nghi");
+    vim_replay(block, "l<C-v>jlyG<C-v>p");
+    static_cast<void>(block.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(other.files().written() == "abc\r\ndef\r\nbchi\r\nef",
+           "a block put past the last line adds the line with CRLF");
+    vim_replay(block, "u");
+    expect(vim_body(block.frame()) == "abc\ndef\nghi",
+           "one undo takes back the delete and the put");
+    // 行を貼った後の前の選択（gv）も CRLF の文書で同じ列を選ぶ（レビュー V-1478 の軽い指摘 3・
+    // Vim 9.1 の `abc⏎def⏎ghi` の `2yy<C-v>jpgvd` は `bc⏎ef⏎⏎⏎ghi`）。
+    Editing third;
+    EditorController &lines = vim_block_editor(third, "abc\r\ndef\r\nghi");
+    vim_replay(lines, "2yy<C-v>jpgvd");
+    static_cast<void>(lines.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(third.files().written() == "bc\r\nef\r\n\r\n\r\nghi",
+           "gv after the lines put selects the put lines in a CRLF document");
+}
+
+// 巨大な回数の矩形の VISUAL の `p`（レビュー V-1478 の軽い指摘 2・#1341 の方針）。1 行ぶんの本文 ×
+// 回数 × 行の数が文書の上限を超えるので、本文を作る前に断って本文もレジスタも変えない
+// （Debug でもすぐに返る）。Vim は 2 GB を作りにいくので oracle では測らない。
+void verify_vim_block_put_huge_count()
+{
+    Editing editing;
+    EditorController &controller = vim_block_editor(editing, "abc\ndef\nghi");
+    vim_replay(controller, "yl<C-v>j999999999p");
+    expect(vim_body(controller.frame()) == "abc\ndef\nghi",
+           "a block put whose copies exceed the document limit leaves the body alone");
+    expect(controller.vim_state().unnamed_register.value().text == "a",
+           "and leaves the unnamed register alone");
 }
 
 // 矩形の INSERT（ADR 0035 の追補 #1042）。打つのは 1 行目だけで、Esc が CRLF の文書の残りの行へ
@@ -785,7 +822,7 @@ void verify_vim_block_fixtures()
             ++selected;
         }
     }
-    expect(selected == 431, "the scope replays its 431 blockwise oracle fixtures");
+    expect(selected == 544, "the scope replays its 544 blockwise oracle fixtures");
 }
 } // namespace
 
@@ -796,6 +833,8 @@ void verify_vim_block_contracts()
     verify_vim_block_undo_unit();
     verify_vim_block_line_endings();
     verify_vim_block_unsupported_keys();
+    verify_vim_block_put_line_endings();
+    verify_vim_block_put_huge_count();
     verify_vim_block_insert_document_newlines();
     verify_vim_block_insert_interrupted();
     verify_vim_block_range();
