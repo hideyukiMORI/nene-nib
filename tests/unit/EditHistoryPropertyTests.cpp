@@ -102,7 +102,8 @@ void verify_block_edges()
 
 void verify_folding_and_sealing()
 {
-    // 256 件目（塊の先頭）にまとめた打鍵を畳む。畳んでも件数は増えず、改訂番号は進む。
+    // 255 件の後の 256 件目（index 255・塊 0 の最後）にまとめた打鍵を畳む。畳んでも件数は増えず、
+    // 改訂番号は進む。塊の頭（index 256 / 512）へ畳む形は verify_folding_at_block_heads。
     EditHistory history = separated(255);
     history = history.pushed(Edit{Offset{1000}, "", "a", Offset{1000}}, EditBoundary::coalesce);
     history = history.pushed(Edit{Offset{1001}, "", "b", Offset{1001}}, EditBoundary::coalesce);
@@ -126,6 +127,23 @@ void verify_folding_and_sealing()
                empty.undone().position() == 0 && empty.redone().position() == 0 &&
                !empty.applied(0).has_value(),
            "an empty history has nothing to undo or redo");
+}
+
+// 塊の頭（index 256 / 512・kept_with の rest が 0）へ畳む（レビュー V-1481 の
+// L1）。新しい塊は畳んだ 1 件だけで、前の塊は共有のまま。
+void verify_folding_at_block_heads()
+{
+    for (const std::size_t count : {std::size_t{256}, std::size_t{512}})
+    {
+        const EditHistory before = separated(count);
+        const EditHistory folded =
+            before.pushed(Edit{Offset{1000}, "", "a", Offset{1000}}, EditBoundary::coalesce)
+                .pushed(Edit{Offset{1001}, "", "b", Offset{1001}}, EditBoundary::coalesce);
+        expect(folded.size() == count + 1 && folded.revision() == count + 2 &&
+                   folded.undo() == Edit{Offset{1000}, "", "ab", Offset{1000}} &&
+                   numbered_through(folded.undone(), count) && numbered_through(before, count),
+               "a coalesced unit at the head of a block folds into one entry");
+    }
 }
 
 // 本文の値の写しは piece の列を共有し、写した側の編集は元の値を変えない（ADR 0180 の決定 1・3）。
@@ -179,12 +197,18 @@ void verify_shared_pieces()
 }
 
 // 素朴な参照の模型（古い実装と同じく、足すたびに vector を写す）。edits の [0, 位置) が適用済み。
-// 数の 3 つは位置・改訂番号・末尾の単位の区切り（boundaries の添字）。
-using ModelCounts = std::array<std::size_t, 3>;
+// 数は位置・改訂番号・末尾の単位の区切り（boundaries の添字）・塊の頭へ畳んだ回数・畳む歩の多い
+// 列か（0 / 1）。
+using ModelCounts = std::array<std::size_t, 5>;
 using Model = std::pair<std::vector<Edit>, ModelCounts>;
 constexpr std::size_t model_position = 0;
 constexpr std::size_t model_revision = 1;
 constexpr std::size_t model_tail = 2;
+constexpr std::size_t model_head_folds = 3;
+constexpr std::size_t model_folding = 4;
+// 製品の塊の件数（EditHistory.cpp の history_block_entries）と同じ値。塊の頭へ畳んだ回数を数える
+// ためだけに使い、照合の答えには使わない。
+constexpr std::size_t block_entries = 256;
 constexpr std::array<EditBoundary, 3> boundaries{EditBoundary::separate, EditBoundary::coalesce,
                                                  EditBoundary::absorb};
 
@@ -199,6 +223,8 @@ void model_pushed(Model &model, const Edit &edit, std::size_t boundary)
     if (merged.has_value())
     {
         next.back() = merged.value();
+        counts.at(model_head_folds) +=
+            next.size() - 1 >= block_entries && (next.size() - 1) % block_entries == 0 ? 1U : 0U;
     }
     else
     {
@@ -210,32 +236,61 @@ void model_pushed(Model &model, const Edit &edit, std::size_t boundary)
     counts.at(model_tail) = boundary;
 }
 
-// 1 歩を履歴と模型の両方に施した次の履歴（6 割が push・2 割が undo・1 割ずつ redo と封じる）。
-[[nodiscard]] EditHistory stepped(Random &random, const EditHistory &history, Model &model)
+// 畳む歩の多い列の push: 3 割が区切り（新しい単位）、7 割が前の単位の直後へ続く coalesce（畳む）。
+// 区切りで塊の境を越えた直後の単位にも畳むので、塊の頭への畳みを踏む（レビュー V-1481 の L1）。
+[[nodiscard]] EditHistory folding_pushed(Random &random, const EditHistory &history, Model &model)
+{
+    const std::size_t position = model.second.at(model_position);
+    const bool separate = random() % 10U < 3U || position == 0;
+    const std::size_t at = position == 0 ? 0
+                                         : model.first.at(position - 1).at.value +
+                                               model.first.at(position - 1).inserted.size();
+    const Edit edit{Offset{at}, "", "f", Offset{at}};
+    const std::size_t boundary = separate ? 0U : 1U;
+    model_pushed(model, edit, boundary);
+    return history.pushed(edit, boundaries.at(boundary));
+}
+
+// push でない 1 歩（undo・redo・封じる）。封じるのは畳む歩の多くない列の action 9 だけ。undo は
+// action 6〜7（畳む歩の多い列は 8）、残りは redo。
+[[nodiscard]] EditHistory moved(std::uint64_t action, const EditHistory &history, Model &model)
 {
     auto &[edits, counts] = model;
-    const std::uint64_t action = random() % 10U;
+    const bool folding = counts.at(model_folding) != 0;
     std::size_t &position = counts.at(model_position);
-    if (action < 6U)
-    {
-        const auto boundary = static_cast<std::size_t>(random() % boundaries.size());
-        const Edit edit = drawn_edit(random, edits, position);
-        model_pushed(model, edit, boundary);
-        return history.pushed(edit, boundaries.at(boundary));
-    }
     counts.at(model_tail) = 0;
-    if (action == 9U)
+    if (action == 9U && !folding)
     {
         return history.sealed();
     }
     ++counts.at(model_revision);
-    if (action < 8U)
+    if (action < 8U || (folding && action == 8U))
     {
         position = position == 0 ? 0 : position - 1;
         return history.undone();
     }
     position = position >= edits.size() ? edits.size() : position + 1;
     return history.redone();
+}
+
+// 1 歩を履歴と模型の両方に施した次の履歴（6 割が push・2 割が undo・1 割ずつ redo
+// と封じる。畳む歩の 多い列は 8 割が push・1 割ずつ undo と redo・封じない）。
+[[nodiscard]] EditHistory stepped(Random &random, const EditHistory &history, Model &model)
+{
+    const bool folding = model.second.at(model_folding) != 0;
+    const std::uint64_t action = random() % 10U;
+    if (folding && action < 8U)
+    {
+        return folding_pushed(random, history, model);
+    }
+    if (!folding && action < 6U)
+    {
+        const auto boundary = static_cast<std::size_t>(random() % boundaries.size());
+        const Edit edit = drawn_edit(random, model.first, model.second.at(model_position));
+        model_pushed(model, edit, boundary);
+        return history.pushed(edit, boundaries.at(boundary));
+    }
+    return moved(action, history, model);
 }
 
 // 件数・位置・改訂番号・undo / redo の答え・probe 番目の適用済みの編集が模型と一致するか。
@@ -255,12 +310,39 @@ void model_pushed(Model &model, const Edit &edit, std::size_t boundary)
            applied_agrees;
 }
 
-// seed ごとに steps 歩の列を模型と照合し、最後に適用済みの全件を照合する。
-void verify_against_model(std::uint64_t seed, std::size_t steps)
+// 履歴の適用済みの全件と答えが模型と一致するか。
+[[nodiscard]] bool wholly_agrees(const EditHistory &history, const Model &model)
 {
+    bool agreed = agrees(history, model, 0);
+    for (std::size_t index = 0; index < model.second.at(model_position) && agreed; ++index)
+    {
+        agreed = history.applied(index) == std::optional<Edit>{model.first.at(index)};
+    }
+    return agreed;
+}
+
+// 残した古い値がどれも、その時点の模型の写しと一致するか。
+[[nodiscard]] bool snapshots_agree(const std::vector<std::pair<EditHistory, Model>> &snapshots)
+{
+    bool agreed = true;
+    for (const auto &[old_history, old_model] : snapshots)
+    {
+        agreed = agreed && wholly_agrees(old_history, old_model);
+    }
+    return agreed;
+}
+
+// seed ごとに steps 歩の列を模型と照合し、最後に適用済みの全件を照合する。途中の値（古い履歴）と
+// その時点の模型の写しを 97 歩ごとに残し、最後にもう一度照合する（後の push
+// が古い値の中身を変えない・ aliasing・レビュー V-1481 の L2）。folding は畳む歩の多い列。
+void verify_against_model(std::uint64_t seed, std::size_t steps, bool folding)
+{
+    constexpr std::size_t snapshot_every = 97;
     Random random{seed};
     EditHistory history = EditHistory::empty();
     Model model{};
+    model.second.at(model_folding) = folding ? 1U : 0U;
+    std::vector<std::pair<EditHistory, Model>> snapshots;
     bool agreed = true;
     for (std::size_t step = 0; step < steps && agreed; ++step)
     {
@@ -268,12 +350,15 @@ void verify_against_model(std::uint64_t seed, std::size_t steps)
         const std::size_t size = model.first.size();
         const std::size_t probe = size == 0 ? 0 : static_cast<std::size_t>(random() % size);
         agreed = agrees(history, model, probe);
+        if (step % snapshot_every == 0)
+        {
+            snapshots.emplace_back(history, model);
+        }
     }
-    for (std::size_t index = 0; index < model.second.at(model_position) && agreed; ++index)
-    {
-        agreed = history.applied(index) == std::optional<Edit>{model.first.at(index)};
-    }
+    agreed = agreed && wholly_agrees(history, model) && snapshots_agree(snapshots);
     expect(agreed, "random pushes, undo, redo and sealing agree with the copying model");
+    expect(!folding || model.second.at(model_head_folds) > 0,
+           "the folding walk folds a unit at the head of a block");
 }
 } // namespace
 
@@ -281,10 +366,12 @@ void verify_edit_history_property_scope()
 {
     verify_block_edges();
     verify_folding_and_sealing();
+    verify_folding_at_block_heads();
     verify_shared_pieces();
     for (const std::uint64_t seed : {std::uint64_t{1473}, std::uint64_t{1474}, std::uint64_t{1475}})
     {
-        verify_against_model(seed, 3000);
+        verify_against_model(seed, 3000, false);
+        verify_against_model(seed, 4000, true);
     }
 }
 } // namespace nenenib::tests

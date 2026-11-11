@@ -99,6 +99,21 @@ void prepare_history(Editing &editing, EditedHistoryWorkload workload, const std
 {
     return erases(workload) ? timed_keys : timed_keys / 2U * 3U;
 }
+
+// 区間の後（時間の外）: 積んだ undo の単位が units 個あることを `u` で確かめる（レビュー V-1481 の
+// L4）。units - 1 回戻すと最初の `rb` だけが残り（行頭は b）、もう 1 回で元の行（行頭は
+// a・長さも元） に戻る。単位が畳まれていれば数が合わず、ここで落ちる。
+[[nodiscard]] bool holds_units(application::EditorController &controller, std::size_t units)
+{
+    for (std::size_t undo = 0; undo + 1U < units; ++undo)
+    {
+        pressed(controller, U'u');
+    }
+    const bool first_left = controller.frame().lines.at(0).text.starts_with('b');
+    pressed(controller, U'u');
+    const std::string line = controller.frame().lines.at(0).text;
+    return first_left && line.size() == line_characters && line.starts_with('a');
+}
 } // namespace
 
 std::string edited_history_input(EditedHistoryWorkload /*workload*/)
@@ -128,13 +143,13 @@ std::expected<std::uint64_t, ProbeFailure> edited_history_keys(EditedHistoryWork
     }
     timing.mark(core::Milestone::probe_finished);
     const auto frame = controller.frame();
+    const std::size_t units = edits_of(workload) + (erases(workload) ? timed_keys : 0U);
     if (frame.caret.position.line.value != 1U || frame.total_lines != 3U ||
-        checksum != expected_checksum(workload))
+        checksum != expected_checksum(workload) || !holds_units(controller, units))
     {
         return std::unexpected(ProbeFailure::wrong_result);
     }
-    const std::size_t erased = edits_of(workload) + (erases(workload) ? timed_keys : 0U);
-    std::cerr << "edits=" << erased << '\n';
-    return checksum + erased;
+    std::cerr << "undoUnits=" << units << '\n';
+    return checksum + units;
 }
 } // namespace nenenib::tests::performance
