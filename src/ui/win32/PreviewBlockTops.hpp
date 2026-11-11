@@ -28,7 +28,8 @@ namespace nenenib::ui::win32
 // list_scan_limit 項目・超えたら番号を 5 桁として）測って決めるので、送っても字下げは動かない。
 // 読む量はリストの長さに比例し、文書の長さには依らない。後の項目で列が広がれば、錨から置き
 // 直す（広がるのは記号の組ごとに 1 回だけなので止まる）。
-// 高さを測るときに layout を保持しない（PreviewTextLayouts::measure・記号の layout は保持する）。
+// 高さを測った layout は保持する（PreviewTextLayouts::measure・描く所が同じ entry を引き、初めて
+// 見える要素を 2 回作らない・#1477）。
 // 引く口の要素の番号は文書の中の番号で、測った範囲は [first(), size())。
 class PreviewBlockTops final
 {

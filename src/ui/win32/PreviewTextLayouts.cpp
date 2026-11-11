@@ -276,8 +276,88 @@ PreviewTextLayouts::make(const core::PreviewBlock &block, float width,
         return std::unexpected(directwrite);
     }
     ++created_;
-    return PreviewTextLayout{block.text, block.spans,       block.kind,      block.level,   width,
-                             style,      boxes_of(inlines), std::move(made), metrics.height};
+    PreviewTextLayout entry{
+        block.text,        block.spans,     block.kind,     block.level, width, style,
+        boxes_of(inlines), std::move(made), metrics.height, {},          {},    0};
+    if (FAILED(locate(entry, block, inlines, style.dpi)))
+    {
+        return std::unexpected(directwrite);
+    }
+    return entry;
+}
+
+HRESULT PreviewTextLayouts::locate(PreviewTextLayout &entry, const core::PreviewBlock &block,
+                                   std::span<const PreviewInlineImage> inlines, std::uint32_t dpi)
+{
+    const auto shown = core::preview_shown_text(block);
+    for (const auto &span : block.spans)
+    {
+        const auto begin = preview_units(shown, span.begin.value);
+        const auto end = preview_units(shown, span.end.value);
+        if (span.style != core::PreviewStyle::code || end <= begin)
+        {
+            continue;
+        }
+        auto runs = hit_runs(*entry.layout.Get(), DWRITE_TEXT_RANGE{begin, end - begin});
+        if (!runs)
+        {
+            return E_FAIL;
+        }
+        entry.code_runs.insert(entry.code_runs.end(), runs.value().begin(), runs.value().end());
+    }
+    entry.image_origins.reserve(inlines.size());
+    for (const auto &image : inlines)
+    {
+        entry.image_origins.push_back(preview_inline_origin(*entry.layout.Get(), image.box, dpi));
+    }
+    return S_OK;
+}
+
+HRESULT PreviewTextLayouts::ink(PreviewTextLayout &entry, const core::PreviewBlock &block,
+                                const PreviewBrushes &brushes)
+{
+    const auto shown = core::preview_shown_text(block);
+    for (const auto &span : block.spans)
+    {
+        const auto ink = preview_span_ink(span.style);
+        const auto begin = preview_units(shown, span.begin.value);
+        const auto end = preview_units(shown, span.end.value);
+        if (!ink.has_value() || end <= begin)
+        {
+            continue;
+        }
+        ++inked_;
+        const auto set = entry.layout->SetDrawingEffect(brushes.of(ink.value()),
+                                                        DWRITE_TEXT_RANGE{begin, end - begin});
+        if (FAILED(set))
+        {
+            return set;
+        }
+    }
+    entry.inked = brushes.generation();
+    return S_OK;
+}
+
+std::expected<std::vector<DWRITE_HIT_TEST_METRICS>, RenderFailure>
+PreviewTextLayouts::hit_runs(IDWriteTextLayout &layout, DWRITE_TEXT_RANGE range)
+{
+    if (range.length == 0)
+    {
+        return std::vector<DWRITE_HIT_TEST_METRICS>{};
+    }
+    ++hit_tests_;
+    UINT32 count = 0;
+    const auto counted =
+        layout.HitTestTextRange(range.startPosition, range.length, 0.0F, 0.0F, nullptr, 0, &count);
+    std::vector<DWRITE_HIT_TEST_METRICS> runs(count);
+    if ((FAILED(counted) && counted != E_NOT_SUFFICIENT_BUFFER) ||
+        FAILED(layout.HitTestTextRange(range.startPosition, range.length, 0.0F, 0.0F, runs.data(),
+                                       count, &count)))
+    {
+        return std::unexpected(directwrite);
+    }
+    runs.resize(count);
+    return runs;
 }
 
 std::vector<PreviewTextLayout>::iterator
@@ -289,9 +369,9 @@ PreviewTextLayouts::find(const core::PreviewBlock &block, float width,
         { return same_key(entry, block, width, style) && same_boxes(entry.inlines, inlines); });
 }
 
-std::expected<PreviewTextLayouts::TextLayout, RenderFailure>
-PreviewTextLayouts::get(const core::PreviewBlock &block, float width, const PreviewTextStyle &style,
-                        std::span<const PreviewInlineImage> inlines)
+std::expected<std::vector<PreviewTextLayout>::iterator, RenderFailure>
+PreviewTextLayouts::hold(const core::PreviewBlock &block, float width,
+                         const PreviewTextStyle &style, std::span<const PreviewInlineImage> inlines)
 {
     if (FAILED(prepare(style)))
     {
@@ -302,7 +382,7 @@ PreviewTextLayouts::get(const core::PreviewBlock &block, float width, const Prev
     {
         // 最近使った順の末尾へ回す（捨てるのは先頭から）。
         std::rotate(found, found + 1, held_.end());
-        return held_.back().layout;
+        return std::prev(held_.end());
     }
     auto made = make(block, width, style, inlines);
     if (!made)
@@ -314,7 +394,50 @@ PreviewTextLayouts::get(const core::PreviewBlock &block, float width, const Prev
         held_.erase(held_.begin());
     }
     held_.push_back(std::move(made.value()));
-    return held_.back().layout;
+    return std::prev(held_.end());
+}
+
+std::expected<PreviewTextLayouts::TextLayout, RenderFailure>
+PreviewTextLayouts::get(const core::PreviewBlock &block, float width, const PreviewTextStyle &style,
+                        std::span<const PreviewInlineImage> inlines)
+{
+    const auto held = hold(block, width, style, inlines);
+    if (!held)
+    {
+        return std::unexpected(held.error());
+    }
+    return held.value()->layout;
+}
+
+void PreviewTextLayouts::bind(const PreviewBrushes &brushes)
+{
+    if (inked_by_ == &brushes && inked_generation_ == brushes.generation())
+    {
+        return;
+    }
+    std::erase_if(held_, [](const PreviewTextLayout &entry) { return entry.inked != 0; });
+    inked_by_ = &brushes;
+    inked_generation_ = brushes.generation();
+}
+
+std::expected<const PreviewTextLayout *, RenderFailure>
+PreviewTextLayouts::paintable(const core::PreviewBlock &block, float width,
+                              const PreviewTextStyle &style,
+                              std::span<const PreviewInlineImage> inlines)
+{
+    const auto held = hold(block, width, style, inlines);
+    if (!held)
+    {
+        return std::unexpected(held.error());
+    }
+    auto &entry = *held.value();
+    // brush をまだ作っていない描く先（試験の替え玉）では色を置かない。
+    if (inked_by_ != nullptr && inked_generation_ != 0 && entry.inked != inked_generation_ &&
+        FAILED(ink(entry, block, *inked_by_)))
+    {
+        return std::unexpected(directwrite);
+    }
+    return &entry;
 }
 
 std::expected<float, RenderFailure>
@@ -322,21 +445,12 @@ PreviewTextLayouts::measure(const core::PreviewBlock &block, float width,
                             const PreviewTextStyle &style,
                             std::span<const PreviewInlineImage> inlines)
 {
-    if (FAILED(prepare(style)))
+    const auto held = hold(block, width, style, inlines);
+    if (!held)
     {
-        return std::unexpected(directwrite);
+        return std::unexpected(held.error());
     }
-    const auto found = find(block, width, style, inlines);
-    if (found != held_.end())
-    {
-        return found->height;
-    }
-    const auto made = make(block, width, style, inlines);
-    if (!made)
-    {
-        return std::unexpected(made.error());
-    }
-    return made.value().height;
+    return held.value()->height;
 }
 
 std::expected<float, RenderFailure>
@@ -380,5 +494,15 @@ std::size_t PreviewTextLayouts::held() const noexcept
 std::size_t PreviewTextLayouts::created() const noexcept
 {
     return created_;
+}
+
+std::size_t PreviewTextLayouts::inked() const noexcept
+{
+    return inked_;
+}
+
+std::size_t PreviewTextLayouts::hit_tests() const noexcept
+{
+    return hit_tests_;
 }
 } // namespace nenenib::ui::win32

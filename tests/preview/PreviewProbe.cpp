@@ -4,11 +4,17 @@
 // 時刻は Win32TimingAdapter の節目だけで取る（ARC-007）: parse と measure をそれぞれ
 // probe_started / probe_finished の 1 対で挟み、節目の
 // JSON（<json>.timing.json）を読み戻して差を書く。
+// --long-paragraph（#1477）は行内コードの多い 1 つの長い段落（36 KB 前後・span の数は引数）の
+// 文書を WIC の描画先に製品と同じ PreviewPainter で描く。最初の 1 回（layout を作って色を置く）と、
+// 錨を 0 と 1 で動かしながらの描き直し repaints 回を別の節目の対で測り、描き直しの間に layout を
+// 作った数・SetDrawingEffect・HitTestTextRange の数を書く（保持した layout を汚さないことの数）。
 //
 //   nib_preview_probe <bytes> <head|middle|tail> <json の出力先>
+//   nib_preview_probe --long-paragraph <spans> <repaints> <json の出力先>
 #include "PreviewProbeOutcome.hpp"
 #include "Sha256.hpp"
 
+#include "Appearance.hpp"
 #include "DevicePixels.hpp"
 #include "EditorSettings.hpp"
 #include "FontSize.hpp"
@@ -16,6 +22,9 @@
 #include "MarkdownStop.hpp"
 #include "Milestone.hpp"
 #include "PreviewBlockTops.hpp"
+#include "PreviewBrushes.hpp"
+#include "PreviewPainter.hpp"
+#include "PreviewScene.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "PreviewTextStyle.hpp"
 #include "PreviewViewport.hpp"
@@ -27,15 +36,20 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <d2d1.h>
 #include <format>
 #include <fstream>
+#include <objbase.h>
 #include <optional>
 #include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <tuple>
 #include <vector>
+#include <wincodec.h>
+#include <wrl/client.h>
 
 namespace
 {
@@ -221,6 +235,165 @@ timed_run(const std::string &text, std::size_t anchor, const std::wstring &timin
         viewport_height, viewport_dpi, NIB_PROBE_COMMIT, NIB_PROBE_DIRTY, NIB_PROBE_CONFIGURATION);
 }
 
+// 行内コードの多い長い段落（span 個の行内コードと同じ数のリンク）を見出しと短い段落で挟む。
+[[nodiscard]] std::string long_paragraph_text(std::size_t spans)
+{
+    std::string text = "# Long paragraph\n\n";
+    for (std::size_t index = 0; index < spans; ++index)
+    {
+        text += std::format("\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E\xE3\x81\xAE"
+                            "\xE8\xAA\xAC\xE6\x98\x8E\xE3\x82\x92\xE7\xB6\x9A"
+                            "\xE3\x81\x91\xE3\x82\x8B `span_{}` [link](x/{}) ",
+                            index, index);
+    }
+    text += "\n\n";
+    for (std::size_t index = 0; index < tail_distance; ++index)
+    {
+        text += std::format("short paragraph {}\n\n", index);
+    }
+    return text;
+}
+
+// 描画先の WIC の bitmap と Direct2D のソフトウェアの描画先（DPI は core::reference_dpi）。
+[[nodiscard]] Microsoft::WRL::ComPtr<ID2D1RenderTarget>
+software_target(Microsoft::WRL::ComPtr<IWICBitmap> &bitmap)
+{
+    Microsoft::WRL::ComPtr<ID2D1Factory> factory;
+    Microsoft::WRL::ComPtr<IWICImagingFactory> imaging;
+    Microsoft::WRL::ComPtr<ID2D1RenderTarget> target;
+    const auto properties = D2D1::RenderTargetProperties(
+        D2D1_RENDER_TARGET_TYPE_SOFTWARE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+    if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, factory.GetAddressOf())) ||
+        FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(&imaging))) ||
+        FAILED(imaging->CreateBitmap(static_cast<UINT>(pixels_of(viewport_width)),
+                                     static_cast<UINT>(pixels_of(viewport_height)),
+                                     GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad,
+                                     &bitmap)) ||
+        FAILED(factory->CreateWicBitmapRenderTarget(bitmap.Get(), properties, &target)))
+    {
+        return nullptr;
+    }
+    return target;
+}
+
+// 描く先と色（描き直しの間は同じ）。
+using Canvas = std::pair<ID2D1RenderTarget *, const win32::PreviewBrushes *>;
+
+// 錨 first から測って 1 回描く。失敗は false。
+[[nodiscard]] bool paint_once(const Canvas &canvas, const core::MarkdownDocument &document,
+                              win32::PreviewTextLayouts &layouts, std::size_t first)
+{
+    auto &target = *canvas.first;
+    const win32::PreviewTextStyle style{
+        std::string(core::default_editor_settings().font_family.text()),
+        core::FontSize::default_points, viewport_dpi};
+    const auto width = pixels_of(viewport_width);
+    const auto height = pixels_of(viewport_height);
+    const auto tops = win32::PreviewBlockTops::measure(
+        document, layouts, style, win32::PreviewViewport{first, width, height});
+    if (!tops)
+    {
+        return false;
+    }
+    std::optional<win32::RenderFailure> failure;
+    win32::PreviewPainter<ID2D1RenderTarget> painter(target, layouts, *canvas.second, failure);
+    target.BeginDraw();
+    painter.paint(win32::PreviewScene{
+        document, tops.value(), style,
+        core::LayoutRect{0, 0, static_cast<std::int32_t>(width), static_cast<std::int32_t>(height)},
+        0.0F, std::nullopt});
+    return SUCCEEDED(target.EndDraw()) && !failure.has_value();
+}
+
+using LayoutCounts = std::tuple<std::size_t, std::size_t, std::size_t>;
+
+[[nodiscard]] LayoutCounts counts_of(const win32::PreviewTextLayouts &layouts)
+{
+    return {layouts.created(), layouts.inked(), layouts.hit_tests()};
+}
+
+// 最初の 1 回と描き直しを節目の対で挟む。返すのは最初の 1 回の後と描き直しの後の数。
+[[nodiscard]] std::optional<std::pair<LayoutCounts, LayoutCounts>>
+timed_paints(const core::MarkdownDocument &document, std::size_t repaints,
+             const std::wstring &timing_path)
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = software_target(bitmap);
+    win32::PreviewBrushes brushes;
+    const auto settings = core::default_editor_settings();
+    if (target == nullptr ||
+        FAILED(
+            brushes.prepare(*target.Get(), core::selected_theme(settings, core::Appearance::dark))))
+    {
+        return std::nullopt;
+    }
+    win32::PreviewTextLayouts layouts;
+    nenenib::adapters::win32::Win32TimingAdapter timing;
+    timing.bind(timing_path);
+    timing.mark(core::Milestone::probe_started);
+    const Canvas canvas{target.Get(), &brushes};
+    bool painted = paint_once(canvas, document, layouts, 1);
+    timing.mark(core::Milestone::probe_finished);
+    const auto first = counts_of(layouts);
+    timing.mark(core::Milestone::probe_started);
+    for (std::size_t index = 0; index < repaints && painted; ++index)
+    {
+        painted = paint_once(canvas, document, layouts, index % 2);
+    }
+    timing.mark(core::Milestone::probe_finished);
+    if (!painted)
+    {
+        return std::nullopt;
+    }
+    return std::pair{first, counts_of(layouts)};
+}
+
+// sizes は span の数と描き直しの回数。
+[[nodiscard]] std::string long_report_of(const std::string &text,
+                                         std::pair<std::size_t, std::size_t> sizes,
+                                         const std::pair<LayoutCounts, LayoutCounts> &counts,
+                                         std::span<const std::int64_t> times)
+{
+    const auto &[spans, repaints] = sizes;
+    const auto &[first, last] = counts;
+    return std::format(
+        "{{\"schema\":1,\"probe\":\"nib_preview_probe\",\"mode\":\"long-paragraph\","
+        "\"bytes\":{},\"sha256\":\"{}\",\"spans\":{},\"repaints\":{},\"firstPaintMs\":{},"
+        "\"repaintsMs\":{},\"firstLayoutsCreated\":{},\"firstDrawingEffects\":{},"
+        "\"firstHitTests\":{},\"repaintLayoutsCreated\":{},\"repaintDrawingEffects\":{},"
+        "\"repaintHitTests\":{},\"viewport\":{{\"widthDip\":{},\"heightDip\":{},\"dpi\":{}}},"
+        "\"commit\":\"{}\",\"dirty\":{},\"configuration\":\"{}\"}}\n",
+        text.size(), nenenib::tests::preview::sha256_hex(text), spans, repaints,
+        milliseconds_text(times[1] - times[0]), milliseconds_text(times[3] - times[2]),
+        std::get<0>(first), std::get<1>(first), std::get<2>(first),
+        std::get<0>(last) - std::get<0>(first), std::get<1>(last) - std::get<1>(first),
+        std::get<2>(last) - std::get<2>(first), viewport_width, viewport_height, viewport_dpi,
+        NIB_PROBE_COMMIT, NIB_PROBE_DIRTY, NIB_PROBE_CONFIGURATION);
+}
+
+[[nodiscard]] int long_paragraph_probe(std::size_t spans, std::size_t repaints,
+                                       const std::string &output)
+{
+    const std::string timing_path = output + ".timing.json";
+    const auto wide = core::to_utf16(timing_path);
+    const std::string text = long_paragraph_text(spans);
+    const auto document = core::parse_markdown(text, core::MarkdownStop::never());
+    const auto counts =
+        wide && document ? timed_paints(document.value(), repaints, wide.value()) : std::nullopt;
+    const auto timing = read_text(timing_path);
+    const auto times = timing ? mark_times(timing.value()) : std::vector<std::int64_t>{};
+    if (!counts || times.size() != timing_marks)
+    {
+        std::fputs("preview probe: parsing, painting or the timing file failed\n", stderr);
+        return 1;
+    }
+    std::ofstream file(output, std::ios::binary);
+    file << long_report_of(text, std::pair{spans, repaints}, counts.value(), times);
+    return file ? 0 : 1;
+}
+
 [[nodiscard]] int probe(std::size_t bytes, std::size_t anchor, const std::string &output)
 {
     const std::string timing_path = output + ".timing.json";
@@ -248,6 +421,20 @@ timed_run(const std::string &text, std::size_t anchor, const std::wstring &timin
 int main(int argc, char **argv)
 {
     const auto arguments = std::span(argv, static_cast<std::size_t>(argc));
+    if (arguments.size() == 5 && std::string_view(arguments[1]) == "--long-paragraph")
+    {
+        const auto spans = size_of(arguments[2]);
+        const auto repaints = size_of(arguments[3]);
+        if (!spans || !repaints || FAILED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)))
+        {
+            std::fputs("usage: nib_preview_probe --long-paragraph <spans> <repaints> <json>\n",
+                       stderr);
+            return 2;
+        }
+        const int result = long_paragraph_probe(spans.value(), repaints.value(), arguments[4]);
+        CoUninitialize();
+        return result;
+    }
     const auto bytes = arguments.size() == 4 ? size_of(arguments[1]) : std::nullopt;
     const auto anchor = arguments.size() == 4 ? anchor_of(arguments[2]) : std::nullopt;
     if (!bytes || !anchor)

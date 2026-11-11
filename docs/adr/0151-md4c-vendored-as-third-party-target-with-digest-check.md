@@ -95,3 +95,5 @@ md4c は SAX 型（`enter_block / leave_block / enter_span / leave_span / text` 
 - `eng/targets.cmake` の `nenenib_third_party_target` 以外に C の target を作れない（モジュールの検査）。
 - ARC-003（active）: `eng/symbols.py` の `offered` が、third_party の定義のうち `eng/architecture.json` の `exports`（md4c は `md_parse`）に載るものだけで依存元の未定義を解決する。正例・反例は `tests/conformance/test_symbols.py`（#772）。
 - `md4c.h` の include は `src/core/MarkdownParse.cpp` の 1 か所。CNF-009 と同じ字句検査（`eng/conformance.py` の `concurrency_and_simd`）が `src/` の中のほかのファイルの include を ARC-002 で拒否する。ヘッダ名と許す path は `eng/conformance-rules.json` の `markdownParserHeader` / `markdownParserAllowedPath`、正例・反例は `tests/conformance/test_conformance.py`（#765）。
+
+追補（2026-11-11・#1477）: 決定 16 の「`PreviewTextLayouts::measure` は layout を保持しない」と、決定 17 の「drawing effect は描くたびに置き直す」は、ADR 0155 の追補 69〜72 で改めた（保持した layout は描くときに書式を変えず位置も問わない・色と面の矩形は entry が 1 回だけ置いて持つ・`measure` も保持する）。

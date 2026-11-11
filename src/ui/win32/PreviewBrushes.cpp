@@ -76,11 +76,34 @@ HRESULT PreviewBrushes::prepare(ID2D1RenderTarget &target, const core::Theme &th
     }
     target_ = &target;
     theme_ = theme.name;
+    ++generation_;
     return S_OK;
 }
 
 ID2D1SolidColorBrush *PreviewBrushes::of(PreviewInk ink) const
 {
     return brushes_.at(static_cast<std::size_t>(ink)).Get();
+}
+
+std::uint64_t PreviewBrushes::generation() const noexcept
+{
+    return generation_;
+}
+
+std::optional<PreviewInk> preview_span_ink(core::PreviewStyle style) noexcept
+{
+    switch (style)
+    {
+    case core::PreviewStyle::code:
+        return PreviewInk::string;
+    case core::PreviewStyle::link:
+        return PreviewInk::function;
+    case core::PreviewStyle::image:
+        return PreviewInk::comment;
+    case core::PreviewStyle::emphasis:
+    case core::PreviewStyle::strong:
+        return std::nullopt;
+    }
+    std::unreachable();
 }
 } // namespace nenenib::ui::win32
