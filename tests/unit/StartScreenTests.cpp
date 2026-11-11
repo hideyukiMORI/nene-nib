@@ -1,10 +1,14 @@
 // 起動画面の application の契約（ADR 0172・追補 2026-11-11・#1018 の段 1）。出る条件・節と 10 件・
 // 選びの鍵（通常モードの ↑ ↓ と Vim の NORMAL の j k）・Enter とクリックの実行（open_listed
 // と操作の 頼み）・消える条件・guide=hidden・最初の frame の後の 1 回の読み・静かな道。
+// 段 2（#1455）: core の配置 start_screen_layout と当たり start_screen_row_at（描画と窓のクリックが
+// 同じ 1 本を読む・中央寄せの 1 列・幅 480 DIP・狭い窓・DPI 100 / 150 / 200%）。
+#include "BodyLayout.hpp"
 #include "CancelCommand.hpp"
 #include "CancelSelection.hpp"
 #include "CaretMotion.hpp"
 #include "ChooseStartEntry.hpp"
+#include "DevicePixels.hpp"
 #include "DocumentReadFinished.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -16,8 +20,10 @@
 #include "FileHistory.hpp"
 #include "FilePath.hpp"
 #include "FirstFramePresented.hpp"
+#include "FontSize.hpp"
 #include "GuideVisibility.hpp"
 #include "InsertText.hpp"
+#include "LayoutRect.hpp"
 #include "MoveCaret.hpp"
 #include "NewLine.hpp"
 #include "NewTab.hpp"
@@ -32,7 +38,10 @@
 #include "SplitPane.hpp"
 #include "StartEntryKind.hpp"
 #include "StartLists.hpp"
+#include "StartPress.hpp"
 #include "StartScreen.hpp"
+#include "StartScreenLayout.hpp"
+#include "StartScreenShape.hpp"
 #include "StartScreenView.hpp"
 #include "StartStep.hpp"
 #include "SwitchTab.hpp"
@@ -49,6 +58,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace nenenib::tests
@@ -414,10 +424,276 @@ void verify_selection_steps()
                    std::optional<std::size_t>{2},
            "the selection starts at either end and wraps at the ends");
 }
+[[nodiscard]] core::BodyLayout wide_body(std::uint32_t dpi)
+{
+    const core::LayoutRect band{0, core::to_pixels(40, dpi), core::to_pixels(1300, dpi),
+                                core::to_pixels(800, dpi)};
+    return core::body_layout_in(band, dpi, core::default_font_size());
+}
+
+[[nodiscard]] std::pair<std::int32_t, std::int32_t> middle_of(const core::LayoutRect &area)
+{
+    return {(area.left + area.right) / 2, (area.top + area.bottom) / 2};
+}
+
+// 列の中央・幅・題（段 2 の配置の採用値）。
+void verify_column(const core::StartScreenLayout &layout, const core::BodyLayout &body,
+                   std::uint32_t dpi)
+{
+    expect(core::width_of(layout.column) == core::to_pixels(core::start_column_dips, dpi),
+           "the column is 480 DIP wide");
+    const auto left_room = layout.column.left - body.content.left;
+    const auto right_room = body.content.right - layout.column.right;
+    expect(left_room >= 0 && right_room >= 0 && right_room - left_room >= 0 &&
+               right_room - left_room <= 1,
+           "the column sits in the middle of the text area");
+    expect(layout.column.top == body.content.top + core::to_pixels(core::start_top_dips, dpi) &&
+               layout.title.top == layout.column.top &&
+               core::height_of(layout.title) == (body.line_height * 3) / 2,
+           "the title opens the column at one and a half rows");
+}
+
+// 行は列の全幅で本文の行の高さ。節の見出しは行の上、「はじめる」の行だけ右端に補足の欄を持つ。
+void verify_rows(const core::StartScreenLayout &layout, const core::BodyLayout &body)
+{
+    expect(layout.rows.size() == 2 + 1 + 3, "every selectable entry has a row");
+    bool rows_fit = layout.rows.size() == 6;
+    for (const auto &row : layout.rows)
+    {
+        rows_fit = rows_fit && row.line.left == layout.column.left &&
+                   row.line.right == layout.column.right &&
+                   core::height_of(row.line) == body.line_height &&
+                   row.label.left >= row.mark.right && row.label.right <= row.line.right;
+    }
+    expect(rows_fit, "each row spans the column at the body row height");
+    if (!rows_fit)
+    {
+        return;
+    }
+    const auto &rows = layout.rows;
+    expect(rows.at(1).line.top == rows.at(0).line.bottom && layout.recent_heading.has_value() &&
+               layout.bookmark_heading.has_value() &&
+               layout.recent_heading.value().bottom <= rows.at(0).line.top &&
+               layout.bookmark_heading.value().top >= rows.at(1).line.bottom &&
+               layout.bookmark_heading.value().bottom <= rows.at(2).line.top,
+           "recent rows follow their heading and the bookmark heading follows them");
+    expect(!layout.empty_note.has_value() && layout.start_heading.bottom <= rows.at(3).line.top &&
+               layout.key_heading.top >= rows.at(5).line.bottom,
+           "the start rows sit under their heading and above the key heading");
+    expect(rows.at(3).label.left == rows.at(0).label.left &&
+               rows.at(3).label.right == rows.at(0).label.right &&
+               layout.keys.at(0).key.left == rows.at(0).label.left,
+           "path rows, start rows and the shortcut keys share one left axis");
+}
+
+// 列の中央・幅・行の高さと並び・見出しの有無・鍵の行を、DPI ごとに確かめる。
+void verify_layout_at(std::uint32_t dpi)
+{
+    const auto body = wide_body(dpi);
+    const auto key_width = core::to_pixels(90, dpi);
+    const auto placed =
+        core::start_screen_layout(body, dpi, core::StartScreenShape{2, 1, false}, key_width);
+    expect(placed.has_value(), "a wide body places the start screen");
+    if (!placed.has_value())
+    {
+        return;
+    }
+    const auto &layout = placed.value();
+    verify_column(layout, body, dpi);
+    verify_rows(layout, body);
+    expect(layout.keys.at(0).key.top >= layout.key_heading.bottom &&
+               core::width_of(layout.keys.at(0).key) == key_width &&
+               layout.keys.at(0).label.left > layout.keys.at(0).key.right &&
+               layout.keys.at(2).key.bottom == layout.column.bottom,
+           "the key rows use the measured key width in one column");
+}
+
+void verify_narrow_layouts()
+{
+    const auto body =
+        core::body_layout_in(core::LayoutRect{0, 40, 400, 800}, 96, core::default_font_size());
+    const auto narrow = core::start_screen_layout(body, 96, core::StartScreenShape{}, 0);
+    expect(narrow.has_value() &&
+               core::width_of(narrow.value().column) ==
+                   core::width_of(body.content) - (2 * core::start_column_margin_dips),
+           "a narrow body keeps 16 DIP on both sides of the column");
+    expect(narrow.has_value() && narrow.value().rows.size() == 3 &&
+               !narrow.value().recent_heading.has_value() &&
+               !narrow.value().bookmark_heading.has_value() &&
+               core::width_of(narrow.value().keys.at(0).key) == 64,
+           "without lists only the start rows are placed and the key column is 64 DIP");
+    const auto tiny =
+        core::body_layout_in(core::LayoutRect{0, 40, 90, 800}, 96, core::default_font_size());
+    expect(!core::start_screen_layout(tiny, 96, core::StartScreenShape{}, 0).has_value(),
+           "a body too narrow for the column places nothing");
+    const auto empty = core::start_screen_layout(body, 96, core::StartScreenShape{0, 0, true}, 0);
+    expect(empty.has_value() && empty.value().empty_note.has_value() &&
+               empty.value().empty_note.value().bottom <= empty.value().start_heading.top,
+           "the empty note sits above the start heading");
+}
+
+void verify_shape()
+{
+    const auto entries = core::start_entries(paths_named("recent", 2), paths_named("mark", 1));
+    const auto shape = core::start_screen_shape(entries, true);
+    expect(shape.recent == 2 && shape.bookmarks == 1 && !shape.empty_note,
+           "the shape counts the recent and bookmark rows");
+    const auto none = core::start_entries({}, {});
+    expect(core::start_screen_shape(none, true).empty_note &&
+               !core::start_screen_shape(none, false).empty_note,
+           "the empty note shows only after the lists were read");
+}
+
+// 当たりは行の中だけ（見出し・題・鍵の行・列の左右・帯の下は外れ）。
+void verify_hits()
+{
+    const auto body = wide_body(96);
+    const auto placed = core::start_screen_layout(body, 96, core::StartScreenShape{2, 1, false}, 0);
+    if (!placed.has_value())
+    {
+        expect(false, "the hit layout is placed");
+        return;
+    }
+    const auto &layout = placed.value();
+    bool every = true;
+    for (std::size_t index = 0; index < layout.rows.size(); ++index)
+    {
+        const auto [x, y] = middle_of(layout.rows.at(index).line);
+        every = every && core::start_screen_row_at(layout, body, x, y) == std::optional{index};
+    }
+    expect(every, "the middle of each row hits that row");
+    const auto [heading_x, heading_y] = middle_of(layout.start_heading);
+    const auto [key_x, key_y] = middle_of(layout.keys.at(1).label);
+    const auto [title_x, title_y] = middle_of(layout.title);
+    expect(!core::start_screen_row_at(layout, body, heading_x, heading_y).has_value() &&
+               !core::start_screen_row_at(layout, body, key_x, key_y).has_value() &&
+               !core::start_screen_row_at(layout, body, title_x, title_y).has_value(),
+           "headings, keys and the title are not selectable");
+    const auto [row_x, row_y] = middle_of(layout.rows.at(0).line);
+    expect(!core::start_screen_row_at(layout, body, layout.column.left - 1, row_y).has_value() &&
+               !core::start_screen_row_at(layout, body, layout.column.right, row_y).has_value() &&
+               !core::start_screen_row_at(layout, body, row_x, body.band.bottom).has_value(),
+           "points left or right of the column or under the band miss");
+}
+
+void verify_layout()
+{
+    verify_layout_at(96);
+    verify_layout_at(144);
+    verify_layout_at(192);
+    verify_narrow_layouts();
+    verify_shape();
+    verify_hits();
+}
+
+// 窓と同じ押しと離しの道（core::start_screen_layout と start_screen_row_at・start_pressed・
+// start_released）。点 (x, y) は 96 DPI の広い本文の上。離しが行を選べば ChooseStartEntry を送る。
+[[nodiscard]] std::optional<std::size_t> row_under(app::EditorController &controller,
+                                                   std::pair<std::int32_t, std::int32_t> point)
+{
+    const auto view = shown(controller);
+    if (!view.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto body = wide_body(96);
+    const auto layout = core::start_screen_layout(
+        body, 96, core::start_screen_shape(view.value().entries, view.value().lists_read), 0);
+    return layout.has_value()
+               ? core::start_screen_row_at(layout.value(), body, point.first, point.second)
+               : std::nullopt;
+}
+
+[[nodiscard]] std::optional<core::StartPress> press_at(app::EditorController &controller,
+                                                       std::pair<std::int32_t, std::int32_t> point)
+{
+    const auto view = shown(controller);
+    return view.has_value()
+               ? core::start_pressed(view.value().entries, row_under(controller, point))
+               : std::nullopt;
+}
+
+void release_at(app::EditorController &controller, const std::optional<core::StartPress> &press,
+                std::pair<std::int32_t, std::int32_t> point)
+{
+    const auto view = shown(controller);
+    if (!view.has_value())
+    {
+        return;
+    }
+    const auto chosen =
+        core::start_released(press, view.value().entries, row_under(controller, point));
+    if (chosen.has_value())
+    {
+        applied(controller, app::ChooseStartEntry{chosen.value()});
+    }
+}
+
+// レビュー M3 の反例 1: 「新しいファイル」を押したまま履歴の読みが届き、同じ点で離す。読みの後は
+// 同じ点の下が最近の 1 件目（同じ番号 0）になるが、押した行と中身が違うので何も開かない。
+void verify_press_across_read()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.files().hold_at("C:\\work\\recent0.txt", Bytes{std::string("zero")});
+    applied(controller, app::FirstFramePresented{});
+    const auto before = core::start_screen_layout(wide_body(96), 96, core::StartScreenShape{}, 0);
+    if (!before.has_value())
+    {
+        expect(false, "the first frame places the start screen");
+        return;
+    }
+    const auto point = middle_of(before.value().rows.at(0).line);
+    const auto press = press_at(controller, point);
+    expect(press.has_value() && press.value().entry.kind == core::StartEntryKind::new_file,
+           "the press lands on the new-file row");
+    editing.start_lists().serve(app::StartLists{paths_named("recent", 2), {}});
+    applied(controller, app::WorkCompleted{});
+    expect(row_under(controller, point) == std::optional<std::size_t>{0},
+           "after the read the same point is over the first recent row");
+    release_at(controller, press, point);
+    expect(shown(controller).has_value() && !controller.frame().document.path.has_value(),
+           "a press that the read moved under another row opens nothing");
+}
+
+// レビュー M3 の反例 2: 3 件目を押したまま、2 件目が開けずに行から外れ、同じ点で離す。同じ番号の
+// 行は元の 4 件目だが、押した行と中身が違うので何も開かない。押したままの行で離せば開く。
+void verify_press_across_forget()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.files().hold_at("C:\\work\\recent2.txt", Bytes{std::string("two")});
+    editing.files().hold_at("C:\\work\\recent3.txt", Bytes{std::string("three")});
+    editing.history().serve(app::FileHistory{paths_named("recent", 4)});
+    present_with(editing, app::StartLists{paths_named("recent", 4), {}});
+    const auto layout =
+        core::start_screen_layout(wide_body(96), 96, core::StartScreenShape{4, 0, false}, 0);
+    if (!layout.has_value())
+    {
+        expect(false, "the read lists place the start screen");
+        return;
+    }
+    const auto point = middle_of(layout.value().rows.at(2).line);
+    const auto press = press_at(controller, point);
+    applied(controller, app::ChooseStartEntry{1});
+    const auto dropped = shown(controller);
+    expect(dropped.has_value() && dropped.value().entries.size() == 3 + 3,
+           "the missing second file drops out of the rows");
+    release_at(controller, press, point);
+    expect(shown(controller).has_value() && !controller.frame().document.path.has_value(),
+           "a press whose row was dropped before the release opens nothing");
+    const auto again = press_at(controller, point);
+    release_at(controller, again, point);
+    expect(controller.frame().document.path == path_named("recent3.txt"),
+           "a press and a release on the same row still open it");
+}
 } // namespace
 
 void verify_start_screen_scope()
 {
+    verify_layout();
+    verify_press_across_read();
+    verify_press_across_forget();
     verify_selection_steps();
     verify_first_frame_and_one_read();
     verify_ordinary_selection();

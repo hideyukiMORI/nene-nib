@@ -203,9 +203,14 @@ records in `docs/quality/`.
 - **FR-023 – FR-027 editing features** — matchparen (FR-024) is done and on by default. Planned: easymotion
   (FR-023), commentary, surround, autopairs and INSERT completion (FR-024), changed-line markers, indent guides
   and a yank flash (FR-025), project-wide search (FR-026) and the `:s` family (FR-027).
-- **FR-028 – FR-030** — a settings dialog with measured speed costs, six display languages, a minimap and a
-  start screen are planned. A first minimap (a retained bitmap at the right edge, `:set minimap`, off by
-  default) is in beta.9; clicking and dragging it are planned.
+- **FR-028 – FR-030** — a settings dialog with measured speed costs and six display languages are planned. A first
+  minimap (a retained bitmap at the right edge, `:set minimap`, off by default) is in beta.9; clicking and dragging
+  it are planned. *Since beta.9*: a start without files or previous tabs shows a start screen on the empty
+  untitled document (decision D70,
+  [ADR 0172](docs/adr/0172-start-screen-shows-recent-files-and-entry-actions-on-the-untouched-untitled-document.md)):
+  the title, up to 10 recent files and 10 bookmarks as name and folder (read once after the first frame),
+  新しいファイル / ファイルを開く / フォルダを開く and the main shortcuts in one centred column. ↑ ↓ (and `j` `k` in
+  Vim NORMAL) select a row, Enter or a click runs it, and typing or opening a document hides the screen.
 - **FR-031 Notepad's operations** — in ordinary mode Ctrl+F finds, F3 / Shift+F3 move to the next or previous
   match, Ctrl+H replaces (Enter one, Ctrl+Enter all) and Ctrl+G goes to a line; Vim mode keeps its own keys and
   reaches the same features from F1 through its `/` and `:` lines
