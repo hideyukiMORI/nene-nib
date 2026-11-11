@@ -138,7 +138,7 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 124> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 125> scopes{{
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
@@ -260,6 +260,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 124> scopes{{
     {"--substitute-property", verify_substitute_property_scope},
     {"--matchparen", verify_matchparen_scope},
     {"--minimap", verify_minimap_scope},
+    {"--minimap-property", verify_minimap_property_scope},
     {"--utf-property", verify_utf_property_scope},
     {"--print-pages-property", verify_print_pages_property_scope},
     {"--shell-registration-property", verify_shell_registration_property_scope},
