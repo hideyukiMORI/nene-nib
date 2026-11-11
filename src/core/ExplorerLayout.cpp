@@ -27,7 +27,6 @@ constexpr std::int32_t padding_dips = 4;
 constexpr std::int32_t root_padding_dips = 12;
 constexpr std::int32_t gap_dips = 6;
 constexpr std::int32_t radius_dips = 5;
-constexpr std::int32_t corner_dips = 8;
 constexpr std::int32_t dot_dips = 6;
 // 未保存の丸の右端と行の丸い面の右端の間（採用案のモックの右の余白 4 DIP と丸の外の 10 DIP）。
 constexpr std::int32_t dot_inset_dips = 14;
@@ -127,7 +126,6 @@ ExplorerLayout explorer_layout(LayoutRect client, std::uint32_t dpi,
                           .root_padding = to_pixels(root_padding_dips, dpi),
                           .gap = to_pixels(gap_dips, dpi),
                           .radius = to_pixels(radius_dips, dpi),
-                          .corner = to_pixels(corner_dips, dpi),
                           .dot = to_pixels(dot_dips, dpi),
                           .dot_inset = to_pixels(dot_inset_dips, dpi),
                           .border = std::max(to_pixels(border_dips, dpi), 1)};

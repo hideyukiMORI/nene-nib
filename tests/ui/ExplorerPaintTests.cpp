@@ -1,7 +1,7 @@
 // #997（ADR 0162 の決定 2・8・9）と採用案 B（#1390・施主決定 D81）: エクスプローラーの面の画素。
 // WIC の bitmap（SoftwareTarget）に ExplorerPainter で描き、地（title_bar）・境界（焦点で
-// accent）・ 本文の左上の丸めた角・選んだ行の丸い面（background・焦点で accent、無ければ
-// panel_border の枠）・線と角の形の保持・載せた行（tab_hover・
+// accent・面の上端から下端までの直線）・本文の左上の直角の角（#1488）・選んだ行の丸い面
+// （background・焦点で accent、無ければ panel_border の枠）・線の形の保持・載せた行（tab_hover・
 // 選んだ行には重ねない）・ファイルの印の色（構文の色のトークン）・未保存の丸（accent）・アクティブの
 // semibold・山形とフォルダの絵・字下げの縦の線・名前の右端・面が無いときの不変・行の文字組みの保持と、
 // 上下の分割でも面の行が窓の全高に並ぶこと（#1125）を確かめる。窓・device は作らない。字の画素は
@@ -158,7 +158,7 @@ constexpr std::uint32_t dpi = 96;
 }
 
 // 面を WIC の bitmap に描く口。テーマと保持を束ねて、描く面と配置だけを受ける。
-// 保持は行の文字組みと線と角の形の組（renderer の 2 つの欄と同じ）。
+// 保持は行の文字組みと線の形の組（renderer の 2 つの欄と同じ）。
 using Held = std::pair<PaletteRowLayouts &, ExplorerShapes &>;
 
 [[nodiscard]] auto painter_of(SoftwareTarget &target, const ExplorerText &text, Held held,
@@ -195,19 +195,20 @@ void verify_panel_pixels(SoftwareTarget &target, const ExplorerText &text)
     const auto border_x = panel.right - layout.border;
     expect(pixel_is(pixels, border_x - 2, 2, palette.title_bar),
            "the panel ground is the title bar token");
-    expect(pixel_is(pixels, border_x, 10, palette.panel_border) &&
-               pixel_is(pixels, border_x, 70, palette.panel_border) &&
-               pixel_is(pixels, border_x, 3, palette.title_bar),
-           "the border without focus is panel_border below the rounded corner");
+    expect(pixel_is(pixels, border_x, 0, palette.panel_border) &&
+               pixel_is(pixels, border_x, 3, palette.panel_border) &&
+               pixel_is(pixels, border_x, 10, palette.panel_border) &&
+               pixel_is(pixels, border_x, 70, palette.panel_border),
+           "the border without focus is panel_border from the panel's top to its bottom");
     expect(pixel_is(pixels, 200, 63, palette.background) &&
                pixel_is(pixels, 3, 63, palette.title_bar) &&
                pixel_is(pixels, 236, 63, palette.title_bar),
            "the selected row is a background surface 6 DIP inside the panel");
     expect(pixel_is(pixels, 200, 41, palette.title_bar), "unselected rows keep the panel ground");
-    expect(pixel_is(pixels, 244, 30, core::RgbColor{0, 0, 0}) &&
-               pixel_is(pixels, 246, 6, core::RgbColor{0, 0, 0}) &&
-               pixel_is(pixels, panel.right, 0, palette.title_bar),
-           "only the outside of the body's rounded top left corner is painted right of the panel");
+    // 本文の帯の左上の角は直角（#1488）。面の右には何も描かない（角の外の塗りも弧も無い）。
+    expect(ink_in(pixels, core::LayoutRect{panel.right, 0, panel.right + 12, 12},
+                  core::RgbColor{0, 0, 0}) == 0,
+           "the body's top left corner is square and nothing is painted right of the panel");
     // 山形とフォルダの絵（docs は深さ 0・adr は深さ 1 で選んだ行の面の上）。
     expect(ink_in(pixels, core::LayoutRect{10, 33, 26, 49}, palette.title_bar) > 0 &&
                ink_in(pixels, core::LayoutRect{26, 33, 42, 49}, palette.title_bar) > 0,
@@ -236,8 +237,8 @@ void verify_panel_pixels(SoftwareTarget &target, const ExplorerText &text)
 }
 
 // 焦点の無いときの選んだ行の panel_border の枠（V-1428 の F-1・背景が黒のテーマでは面の地と本文の
-// 色が同じなので、枠が無いと見えない）と、線と角の形の保持（L-1・作り直すのは角の鍵が変わったとき
-// だけ）。
+// 色が同じなので、枠が無いと見えない）と、線の形の保持（L-1・作り直すのは factory が変わったとき
+// だけ・面が動いても作り直さない）。
 void verify_unfocused_frame_and_shapes(SoftwareTarget &target, const ExplorerText &text)
 {
     const auto theme = theme_of(core::Appearance::dark);
@@ -251,14 +252,15 @@ void verify_unfocused_frame_and_shapes(SoftwareTarget &target, const ExplorerTex
                pixel_is(pixels, 120, 52, palette.panel_border) &&
                pixel_is(pixels, 120, 63, palette.background),
            "the selected row without focus has a 1 DIP panel_border frame over its surface");
-    expect(shapes.made() == 2, "the stroke style and the corner are made for the first frame");
+    expect(shapes.made() == 1, "the stroke style is made for the first frame");
     static_cast<void>(painted(view_of(true), layout));
-    expect(shapes.made() == 2, "the next frame on the same panel makes no shape");
+    expect(shapes.made() == 1, "the next frame on the same panel makes no shape");
     auto wider = layout;
     wider.panel = core::LayoutRect{0, 0, 260, 80};
     const auto moved = painted(view_of(false), wider);
-    expect(shapes.made() == 3 && pixel_is(moved, 260 - layout.border, 10, palette.panel_border),
-           "a moved panel edge makes the corner again and paints the border there");
+    expect(shapes.made() == 1 && pixel_is(moved, 260 - layout.border, 0, palette.panel_border) &&
+               pixel_is(moved, 260 - layout.border, 10, palette.panel_border),
+           "a moved panel edge makes no shape and paints the straight border there");
 }
 
 void verify_focus_and_hidden(SoftwareTarget &target, const ExplorerText &text)
@@ -277,7 +279,7 @@ void verify_focus_and_hidden(SoftwareTarget &target, const ExplorerText &text)
     expect(pixel_is(focused, 120, 52, palette.accent) &&
                pixel_is(focused, 120, 63, palette.background),
            "the selected row with focus has a 1 DIP accent frame over its surface");
-    // 面が無い frame は何も描かない（bitmap は黒のまま・本文の角も丸めない）。
+    // 面が無い frame は何も描かない（bitmap は黒のまま）。
     const auto hidden = painted(view_of(true), layout_of(false));
     expect(ink_in(hidden, core::LayoutRect{0, 0, 300, 80}, core::RgbColor{0, 0, 0}) == 0,
            "a frame without the panel leaves every pixel as it was");

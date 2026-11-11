@@ -20,7 +20,8 @@ buffer back. Every one of those keys arrives as WM_CHAR or as Esc, so the whole 
 posted messages too.
 
 Issue #24 adds the first-paint record: ADR 0013 shows the window before the device is created,
-so the client area is the Mica backdrop alone for about 160 ms. This script starts one more editor
+so the client area carries nothing until the first frame (Mica was the backdrop there until #1488
+took it away; ADR 0132 now draws that frame within about 10 ms). This script starts one more editor
 with --measure, samples the centre of the client area every 10 ms until the body background
 appears, and records the pixels it saw in between; a black or a white one is the ADR's rejection
 condition, so it is an assertion here rather than a note.
@@ -203,8 +204,8 @@ api(user, "IsZoomed", w.BOOL, w.HWND)
 api(user, "ShowWindow", w.BOOL, w.HWND, c.c_int)
 
 CLR_INVALID = 0xFFFFFFFF
-# ADR 0013: 窓は device の生成より前に見える。その間のクライアント領域は DWM の Mica の面で、
-# 黒か白が見えたら決定そのものが却下になるので、起動直後の画素の列をここに記録する。
+# ADR 0013: 窓は device の生成より前に見える。その間のクライアント領域には何も載らず（Mica は
+# #1488 で外した）、黒か白が見えたら決定そのものが却下になるので、起動直後の画素の列をここに記録する。
 FIRST_PAINT_SAMPLES = 150
 FIRST_PAINT_INTERVAL = 0.01
 # ADR 0132: 差し替えの標本は子窓が消えた後に 5 つまで読み、最長 3 秒で打ち切る。
@@ -216,8 +217,6 @@ ADOPTION_STEP = 2
 FIRST_PAINT_STEP = 32
 BLACK = [0, 0, 0]
 WHITE = [255, 255, 255]
-# Mica（DWMWA_SYSTEMBACKDROP_TYPE）は Windows 11 22H2 以降でだけ掛かる（ADR 0008）。
-MICA_BUILD = 22621
 # src/core/BuiltinTheme.hpp の正本と同じ値。ここが食い違ったら、どちらかが間違っている。
 PALETTE = {"light": (0xF4, 0xF5, 0xF7), "dark": (0x30, 0x0A, 0x24)}
 # タブの帯は不透明の title_bar で塗り、アクティブなタブは本文の地と同じ tab_active（D16）。
@@ -630,8 +629,9 @@ def empty_surfaces(samples: list, background: list) -> list:
     """Samples after the first frame that are not the body background (ADR 0132).
 
     The point is a flat stretch of body background, so once the first frame is up every sample
-    must stay within ADOPTION_STEP of it on each channel. Mica (e.g. 32,32,32 in dark) showing
-    through for one frame at the swap is an empty surface, as are black and white.
+    must stay within ADOPTION_STEP of it on each channel. Whatever shows through for one frame at
+    the swap (Mica's 32,32,32 before #1488, now what lies behind the window) is an empty surface, as
+    are black and white.
     """
     def empty(value: list) -> bool:
         distance = max(abs(channel - ground) for channel, ground in zip(value, background))
@@ -640,7 +640,7 @@ def empty_surfaces(samples: list, background: list) -> list:
 
 
 def verify_first_paint(executable: Path, environment: dict, appearance: str, output: Path) -> dict:
-    """ADR 0013: between window_shown and the first frame only the Mica backdrop is on screen."""
+    """ADR 0013: between window_shown and the first frame the client carries nothing of ours."""
     marks = output / "first-paint-marks.json"
     marks.unlink(missing_ok=True)
     background = list(PALETTE[appearance])
@@ -1067,7 +1067,6 @@ def verify(window, appearance: str, output: Path) -> dict:
     tab_pixel = pixel(pixels, width, tab[0], tab[1])
     resting_vim = pixel(pixels, width, toggle["vimGround"][0], toggle["vimGround"][1])
     resting_ordinary = pixel(pixels, width, toggle["ordinaryGround"][0], toggle["ordinaryGround"][1])
-    mica_expected = sys.getwindowsversion().build >= MICA_BUILD
     expected_band = list(TITLE_BAR[appearance])
     expected_tab = list(TAB_ACTIVE[appearance])
     hits = {"close": ask_hit(window, width - button // 2, title_bar // 2),
@@ -1079,7 +1078,7 @@ def verify(window, appearance: str, output: Path) -> dict:
     assert hits["caption"] == HTCAPTION, f"the empty title bar answered {hits['caption']}"
     assert resting_ordinary == list(ACCENT), f"the 通常 half starts on the accent: {resting_ordinary}"
     assert resting_vim == list(TOGGLE[appearance]), f"the resting Vim half is {resting_vim}"
-    # D16: 帯は Mica の有無に関わらず不透明の title_bar、アクティブなタブは本文の地。
+    # D16: 帯は不透明の title_bar（Mica は #1488 で外した）、アクティブなタブは本文の地。
     assert title_pixel == expected_band, (f"the title bar band {title_pixel} is not the"
                                           f" {appearance} title_bar {expected_band}")
     assert tab_pixel == expected_tab, (f"the active tab {tab_pixel} is not the {appearance}"
@@ -1119,7 +1118,6 @@ def verify(window, appearance: str, output: Path) -> dict:
         "tabPoint": tab,
         "activeTabPixel": tab_pixel,
         "expectedActiveTab": expected_tab,
-        "micaExpected": mica_expected,
         "windowsBuild": sys.getwindowsversion().build,
         "hitTest": hits,
         "togglePoints": toggle,
