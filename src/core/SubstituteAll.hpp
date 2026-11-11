@@ -21,7 +21,8 @@ namespace nenenib::core
 // 置き換えた後の文書のバイト数（本文 - 当たりの和 + 当たりの数 × replacement）が limit（製品は
 // maximum_document_bytes・試験だけが小さな値を渡す）を超えるなら、当たりを数えるだけの 1 周目の
 // 後、置き換えた本文を確保する前に too_large（#1376・#1341 と同じ上限）。当たりの位置の列は
-// 持たず（本文の 16 倍になり得る）、置き換える 2 周目で最初と最後の当たりの行を照合し直す。
+// 持たず（本文の 16 倍になり得る）、置き換える 2 周目で最初の当たりの行から最後の当たりの行まで
+// の行を全部照合し直す（その外の行は飛ばす）。
 [[nodiscard]] std::expected<Edit, SubstituteFailure> substituted_all(const TextBuffer &text,
                                                                      const VimPattern &pattern,
                                                                      std::string_view replacement,

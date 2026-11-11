@@ -82,7 +82,8 @@ std::expected<Edit, SubstituteFailure> substituted_all(const TextBuffer &text,
     {
         return std::unexpected(SubstituteFailure::too_large);
     }
-    // 2 周目は最初と最後の当たりの行だけを照合し直して置き換える。
+    // 2 周目は最初の当たりの行より前と最後の当たりの行より後を飛ばし、その間の行を全部照合し直して
+    // 置き換える。
     std::string inserted;
     inserted.reserve(end.value - at.value - removed + count * replacement.size());
     Offset copied = at;

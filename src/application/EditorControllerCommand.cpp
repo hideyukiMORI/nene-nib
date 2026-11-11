@@ -162,6 +162,8 @@ constexpr std::string_view vim_replace_prefix = "%s/";
 // 全件の置換の後の文書が開ける上限を超えるときの知らせ（#1376・印刷の「16 MiB までです」と同じ
 // 流儀）。入力行の確定の断りなので鳴らす（ADR 0153 の決定 1）。
 constexpr std::string_view replace_too_large_notice = "置換の結果は 1 GiB までです";
+// 文の「1 GiB」を上限の値に縛る。上限を変えたらここで落ちるので、文も一緒に直す。
+static_assert(core::maximum_document_bytes == std::size_t{1024} * 1024U * 1024U);
 // 置換の起点を戻す幅（UTF-8 の 1 コードポイントの最大のバイト数）。
 constexpr std::size_t code_point_bytes = 4;
 } // namespace
