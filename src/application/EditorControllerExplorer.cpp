@@ -24,6 +24,7 @@
 #include "FolderProgress.hpp"
 #include "FolderRequest.hpp"
 #include "HoverExplorer.hpp"
+#include "OpenedAs.hpp"
 #include "ResizeExplorer.hpp"
 #include "SaveState.hpp"
 
@@ -245,7 +246,7 @@ void EditorController::release_explorer(const std::optional<core::FilePath> &rel
     if (pressed.has_value() && released == pressed)
     {
         explorer_clicked_ = pressed;
-        click_explorer_row(row);
+        click_explorer_row(row, OpenedAs::transient);
     }
 }
 
@@ -272,7 +273,7 @@ void EditorController::double_click_explorer(std::size_t row)
         return;
     }
     const bool file = !rows[row].more && !rows[row].folder;
-    click_explorer_row(row);
+    click_explorer_row(row, OpenedAs::pinned);
     if (file)
     {
         focus_explorer(false);
@@ -303,9 +304,10 @@ bool EditorController::keeps_explorer_notice(const EditorIntent &intent) const n
 
 // 1 打目が効いた節 path への 2 打目。節が見えていれば選ぶ。フォルダは何もしない（開いて閉じる、
 // にしない）。ファイルは焦点を本文へ移し、開いたタブがあれば open_listed の 1 本でそのタブを
-// アクティブにする（開いていれば切り替えるだけで読まない）。タブが無いのは、読み中（揃えば
-// アクティブになる・open_listed も何もしない）か、1 打目で開けなかったとき（試し直さない・
-// 知らせは 1 打目の 1 行で、keeps_explorer_notice が 2 打目の後まで残す）。
+// アクティブにして固定する（開いていれば切り替えるだけで読まない・ADR 0179 の決定 4-3）。
+// 読み中なら open_listed は要求の開き方を pinned に改めるだけ（揃えばアクティブになる）。どちらも
+// 無いのは 1 打目で開けなかったとき（試し直さない・知らせは 1 打目の 1 行で、
+// keeps_explorer_notice が 2 打目の後まで残す）。
 void EditorController::second_click_explorer(const core::FilePath &path)
 {
     const auto &tree = state_.explorer().tree;
@@ -325,9 +327,9 @@ void EditorController::second_click_explorer(const core::FilePath &path)
         return;
     }
     focus_explorer(false);
-    if (open_tab_of(path).has_value())
+    if (open_tab_of(path).has_value() || opening(path))
     {
-        open_listed(path, std::nullopt);
+        open_listed(path, std::nullopt, OpenedAs::pinned);
     }
 }
 
@@ -511,9 +513,10 @@ void EditorController::select_explorer_row(std::size_t row)
 }
 
 // 1 回のクリック（決定 4 の改め #1388）。VS Code や Cursor と同じ手触り。選んで、フォルダなら
-// 開閉する。ファイルなら一覧から開くのと同じ open_listed の道で開く（焦点は面に残す・失敗は
-// 1 行・履歴は触らない・既に開いていればそのタブへ切り替える）。「…」の行は選ぶだけ。
-void EditorController::click_explorer_row(std::size_t row)
+// 開閉する。ファイルなら一覧から開くのと同じ open_listed の道で opened_as の開き方で開く（焦点は
+// 面に残す・失敗は 1 行・履歴は触らない・既に開いていればそのタブへ切り替える）。1 回のクリックは
+// transient（プレビューのタブ・ADR 0179 の決定 3）。「…」の行は選ぶだけ。
+void EditorController::click_explorer_row(std::size_t row, OpenedAs opened_as)
 {
     select_explorer_row(row);
     ExplorerState explorer = state_.explorer();
@@ -527,7 +530,7 @@ void EditorController::click_explorer_row(std::size_t row)
         const auto path = explorer.tree.path_of(rows[row].node);
         if (path.has_value())
         {
-            open_listed(path.value(), std::nullopt);
+            open_listed(path.value(), std::nullopt, opened_as);
         }
         return;
     }
@@ -574,7 +577,7 @@ void EditorController::enter_explorer_row(std::optional<std::size_t> row)
         return;
     }
     focus_explorer(false);
-    open_listed(path.value(), std::nullopt);
+    open_listed(path.value(), std::nullopt, OpenedAs::pinned);
 }
 
 void EditorController::collapse_explorer_row()

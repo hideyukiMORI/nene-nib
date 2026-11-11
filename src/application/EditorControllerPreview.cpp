@@ -106,6 +106,7 @@ constexpr std::string_view preview_no_task_message = "この行にタスクは�
 [[nodiscard]] bool passes_full_preview_window(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<NewTab>(intent) || std::holds_alternative<SwitchTab>(intent) ||
+           std::holds_alternative<PinTab>(intent) ||
            std::holds_alternative<WalkRecentTab>(intent) ||
            std::holds_alternative<SettleRecentTab>(intent) ||
            std::holds_alternative<CloseTab>(intent) || std::holds_alternative<ScrollTabs>(intent) ||

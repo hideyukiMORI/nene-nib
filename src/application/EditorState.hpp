@@ -234,6 +234,26 @@ class EditorState final
     [[nodiscard]] EditorState with_walked(std::size_t position) const;
     // 歩いていれば今のタブを使った順の先頭へ動かして歩きを終える。歩いていなければ同じ状態。
     [[nodiscard]] EditorState with_walk_settled() const;
+    // プレビューのタブの印（ADR 0179 の決定 1）。帯のタブの退避番号（autosave_ids と同じ通し
+    // 番号）で、窓に 1 つ。付けるのは controller の開く道（with_active_transient・
+    // with_transient_replaced）だけで、消すのは固定のきっかけ（without_transient・
+    // controller の意図の出口）と、そのタブを閉じる with_closed。
+    [[nodiscard]] const std::optional<AutosaveId> &transient() const noexcept;
+    // 印のタブの帯の位置。印が無ければ値なし。
+    [[nodiscard]] std::optional<std::size_t> transient_tab() const;
+    // アクティブなタブに印を付ける（決定 3-3）。前の印は消える（窓に 1 つ）。
+    [[nodiscard]] EditorState with_active_transient() const;
+    // 印を消す（決定 4）。文書は変えない。印が無ければ同じ状態。
+    [[nodiscard]] EditorState without_transient() const;
+    // 印のタブの文書が保存済みか（決定 4-1・不変条件 2）。判定は save_state_of の 1 か所。印が
+    // 無ければ偽。
+    [[nodiscard]] bool transient_saved() const;
+    // 置き換え（決定 3-2・9）。「印のタブへ切り替える → その右に新しいタブを足して text と
+    // document で開く → 印のタブを閉じる」の合成で、新しい文書は印のタブの帯の位置に来てアクティブ
+    // になり、新しい通し番号を持ち、印はその番号へ移る。印が無い・印の文書が保存済みでない（守りの
+    // 二重化）なら置き換えず、アクティブの右に新しいタブを足して開き、そのタブに印を付ける。
+    [[nodiscard]] EditorState with_transient_replaced(core::TextBuffer text,
+                                                      Document document) const;
     // 最後の 1 つのタブを閉じる意図の 1 回だけ立つ（D22）。last_failure と同じく次の意図で消す。
     [[nodiscard]] bool closing() const noexcept;
     [[nodiscard]] EditorState with_closing(bool closing) const;
@@ -380,6 +400,7 @@ class EditorState final
     std::vector<AutosaveId> autosave_ids_{AutosaveId{0}};
     std::uint64_t next_autosave_id_ = 1;
     core::TabRecency recency_ = core::TabRecency::single();
+    std::optional<AutosaveId> transient_;
     bool tab_walk_ = false;
     bool closing_ = false;
     std::optional<std::size_t> close_request_;
