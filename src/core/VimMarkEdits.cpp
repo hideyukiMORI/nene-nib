@@ -154,6 +154,13 @@ std::expected<VimMarkPosition, VimRepeatFailure> vim_mark_named(const VimMarks &
     {
         mark = marks.last_change;
     }
+    else if (name == U'^')
+    {
+        // INSERT を最後に抜けた位置（Vim の getmark_buf_fnum の '^' は b_last_insert・#1448）。
+        // 書くのは Esc の insert_left の 1 本で、`gi` と同じ値を読む。`m^` は Vim の setmark_pos
+        // が受けないので vim_mark_set は断ったまま。
+        mark = marks.last_insert;
+    }
     else
     {
         return std::unexpected(VimRepeatFailure::refused);

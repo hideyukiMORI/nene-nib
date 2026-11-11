@@ -147,6 +147,18 @@ void verify_mark_values()
            "a jump that did not move puts the previous context back");
     expect(nenenib::core::vim_mark_named(VimMarks{}, U'a').error() == VimRepeatFailure::not_found,
            "an unset mark is not found (E20)");
+    // `'^` は INSERT を抜けた位置を読み、まだ抜けていなければ E20（#1448・oracle は E20 で
+    // :normal を止めるので fixture にできない）。`m^` は Vim の setmark_pos と同じく断る。
+    expect(nenenib::core::vim_mark_named(VimMarks{}, U'^').error() == VimRepeatFailure::not_found,
+           "'^ before any insert is not found (E20)");
+    VimMarks inserted;
+    inserted.last_insert = VimMarkPosition{LineNumber{2}, 1};
+    expect(nenenib::core::vim_mark_named(inserted, U'^').value() ==
+               VimMarkPosition{LineNumber{2}, 1},
+           "'^ reads the last insert position that gi also reads");
+    expect(nenenib::core::vim_mark_set(VimMarks{}, U'^', {LineNumber{1}, 0}).error() ==
+               VimRepeatFailure::refused,
+           "m^ is refused");
     expect(nenenib::core::vim_mark_set(VimMarks{}, U'.', {LineNumber{1}, 0}).error() ==
                VimRepeatFailure::refused,
            "m. is refused");
@@ -536,8 +548,8 @@ void verify_vim_mark_scope()
             ++selected;
         }
     }
-    expect(selected == 172,
-           "the scope replays the 172 oracle fixtures of %, the marks and the jump lists");
+    expect(selected == 230,
+           "the scope replays the 230 oracle fixtures of %, the marks and the jump lists");
     verify_vim_mark_contracts();
 }
 } // namespace nenenib::tests

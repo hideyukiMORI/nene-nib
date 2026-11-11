@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 10635a0f5fcce466c81ad2d5a803ab537f56e4774450bd6a784cfca9c3fed01f / 4486 fixtures
+// fixtures.json: sha256 d2479e51aa98a95c71390339b8e1baf551e6aa07a4f7b2b89c420e9880cc5b9b / 4544 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4486> vim_fixtures{{
+constexpr std::array<VimFixture, 4544> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2524,6 +2524,64 @@ constexpr std::array<VimFixture, 4486> vim_fixtures{{
     {"change-mark-visual-lines", "ab\ncd\nef", "Vjdgg`.x", "f", 1, 1, "e", "v", std::nullopt},
     {"mark-adjust-visual-delete-lines", "abc\ndef", "lmavG$d`aix<Esc>", "xa", 1, 1, "bc\ndef", "v", std::nullopt},
     {"mark-adjust-visual-delete-across", "abc\ndef\nghi", "lmavjd`aix<Esc>", "axf\nghi", 1, 2, "bc\nde", "v", std::nullopt},
+    {"mark-insert-left-capital-i", "ab\ncd\nef", "lIX<Esc>`^", "Xab\ncd\nef", 1, 2, "", "", std::nullopt},
+    {"mark-insert-left-capital-i-second-line", "ab\ncd\nef", "jIX<Esc>`^", "ab\nXcd\nef", 2, 2, "", "", std::nullopt},
+    {"mark-insert-left-visual-capital-i", "ab\ncd\nef", "lvjIX<Esc>`^", "Xab\ncd\nef", 1, 2, "", "", std::nullopt},
+    {"mark-insert-left-visual-capital-i-back", "ab\ncd\nef", "lvjhIX<Esc>`^", "Xab\ncd\nef", 1, 2, "", "", std::nullopt},
+    {"mark-insert-left-block-capital-i", "ab\ncd\nef", "jl<C-v>kIX<Esc>`^", "aXb\ncXd\nef", 1, 3, "", "", std::nullopt},
+    {"mark-insert-left-block-capital-i-count", "ab\ncd\nef", "<C-v>j2IX<Esc>`^", "XXab\nXXcd\nef", 1, 3, "", "", std::nullopt},
+    {"mark-insert-left-block-capital-a", "ab\ncd\nef", "jl<C-v>jAX<Esc>gg`^", "ab\ncdX\nefX", 2, 3, "", "", std::nullopt},
+    {"mark-insert-left-block-c", "ab\ncd\nef", "jl<C-v>jcX<Esc>gg`^", "ab\ncX\neX", 2, 2, "d\nf", "\0261", std::nullopt},
+    {"mark-insert-left-capital-a", "ab\ncd\nef", "lAX<Esc>`^", "abX\ncd\nef", 1, 3, "", "", std::nullopt},
+    {"mark-insert-left-visual-capital-a", "ab\ncd\nef", "lvjAX<Esc>`^", "ab\ncdX\nef", 2, 3, "", "", std::nullopt},
+    {"mark-insert-left-i-middle", "alpha beta\ngamma delta\n\nzeta", "liX<Esc>0`^", "aXlpha beta\ngamma delta\n\nzeta", 1, 3, "", "", std::nullopt},
+    {"mark-insert-left-a-middle", "alpha beta\ngamma delta\n\nzeta", "laX<Esc>0`^", "alXpha beta\ngamma delta\n\nzeta", 1, 4, "", "", std::nullopt},
+    {"mark-insert-left-i-line-end", "alpha beta\ngamma delta\n\nzeta", "$iX<Esc>0`^", "alpha betXa\ngamma delta\n\nzeta", 1, 11, "", "", std::nullopt},
+    {"mark-insert-left-a-line-end", "alpha beta\ngamma delta\n\nzeta", "$aX<Esc>0`^", "alpha betaX\ngamma delta\n\nzeta", 1, 11, "", "", std::nullopt},
+    {"mark-insert-left-empty-line", "alpha beta\ngamma delta\n\nzeta", "jjiX<Esc>gg`^", "alpha beta\ngamma delta\nX\nzeta", 3, 1, "", "", std::nullopt},
+    {"mark-insert-left-empty-line-nothing-typed", "alpha beta\ngamma delta\n\nzeta", "jji<Esc>gg`^", "alpha beta\ngamma delta\n\nzeta", 3, 1, "", "", std::nullopt},
+    {"mark-insert-left-nothing-typed", "alpha beta\ngamma delta\n\nzeta", "li<Esc>0`^", "alpha beta\ngamma delta\n\nzeta", 1, 2, "", "", std::nullopt},
+    {"mark-insert-left-a-nothing-typed", "alpha beta\ngamma delta\n\nzeta", "la<Esc>0`^", "alpha beta\ngamma delta\n\nzeta", 1, 3, "", "", std::nullopt},
+    {"mark-insert-left-count-i", "alpha beta\ngamma delta\n\nzeta", "l3iX<Esc>0`^", "aXXXlpha beta\ngamma delta\n\nzeta", 1, 5, "", "", std::nullopt},
+    {"mark-insert-left-count-a", "alpha beta\ngamma delta\n\nzeta", "l3aXY<Esc>0`^", "alXYXYXYpha beta\ngamma delta\n\nzeta", 1, 9, "", "", std::nullopt},
+    {"mark-insert-left-count-capital-a", "alpha beta\ngamma delta\n\nzeta", "3AX<Esc>0`^", "alpha betaXXX\ngamma delta\n\nzeta", 1, 13, "", "", std::nullopt},
+    {"mark-insert-left-count-newline", "alpha beta\ngamma delta\n\nzeta", "l2iX<CR>Y<Esc>gg`^", "aX\nYX\nYlpha beta\ngamma delta\n\nzeta", 3, 2, "", "", std::nullopt},
+    {"mark-insert-left-o", "alpha beta\ngamma delta\n\nzeta", "oX<Esc>gg`^", "alpha beta\nX\ngamma delta\n\nzeta", 2, 1, "", "", std::nullopt},
+    {"mark-insert-left-capital-o", "alpha beta\ngamma delta\n\nzeta", "jOX<Esc>gg`^", "alpha beta\nX\ngamma delta\n\nzeta", 2, 1, "", "", std::nullopt},
+    {"mark-insert-left-count-o", "alpha beta\ngamma delta\n\nzeta", "2oX<Esc>gg`^", "alpha beta\nX\nX\ngamma delta\n\nzeta", 3, 1, "", "", std::nullopt},
+    {"mark-insert-left-o-nothing-typed", "alpha beta\ngamma delta\n\nzeta", "o<Esc>gg`^", "alpha beta\n\ngamma delta\n\nzeta", 2, 1, "", "", std::nullopt},
+    {"mark-insert-left-cw", "alpha beta\ngamma delta\n\nzeta", "wcwX<Esc>0`^", "alpha X\ngamma delta\n\nzeta", 1, 7, "beta", "v", std::nullopt},
+    {"mark-insert-left-cw-nothing-typed", "alpha beta\ngamma delta\n\nzeta", "wcw<Esc>0`^", "alpha \ngamma delta\n\nzeta", 1, 6, "beta", "v", std::nullopt},
+    {"mark-insert-left-capital-c", "alpha beta\ngamma delta\n\nzeta", "wCX<Esc>0`^", "alpha X\ngamma delta\n\nzeta", 1, 7, "beta", "v", std::nullopt},
+    {"mark-insert-left-cc", "alpha beta\ngamma delta\n\nzeta", "jccX<Esc>gg`^", "alpha beta\nX\n\nzeta", 2, 1, "gamma delta\n", "V", std::nullopt},
+    {"mark-insert-left-g-capital-i", "alpha beta\ngamma delta\n\nzeta", "wgIX<Esc>$`^", "Xalpha beta\ngamma delta\n\nzeta", 1, 2, "", "", std::nullopt},
+    {"mark-insert-left-gi-reads-the-mark", "ab\ncd\nef", "lIX<Esc>jgiY<Esc>", "XYab\ncd\nef", 1, 2, "", "", std::nullopt},
+    {"mark-insert-left-gi-then-mark", "alpha beta\ngamma delta\n\nzeta", "liX<Esc>jgiY<Esc>0`^", "aXYlpha beta\ngamma delta\n\nzeta", 1, 4, "", "", std::nullopt},
+    {"mark-insert-left-left-arrow", "alpha beta\ngamma delta\n\nzeta", "liXY<Left><Esc>0`^", "aXYlpha beta\ngamma delta\n\nzeta", 1, 3, "", "", std::nullopt},
+    {"mark-insert-left-left-arrow-then-type", "alpha beta\ngamma delta\n\nzeta", "liXY<Left><Left>Z<Esc>0`^", "aZXYlpha beta\ngamma delta\n\nzeta", 1, 3, "", "", std::nullopt},
+    {"mark-insert-left-right-arrow", "alpha beta\ngamma delta\n\nzeta", "liX<Right><Esc>0`^", "aXlpha beta\ngamma delta\n\nzeta", 1, 4, "", "", std::nullopt},
+    {"mark-insert-left-end-key", "alpha beta\ngamma delta\n\nzeta", "liX<End><Esc>0`^", "aXlpha beta\ngamma delta\n\nzeta", 1, 11, "", "", std::nullopt},
+    {"mark-insert-left-home-key", "alpha beta\ngamma delta\n\nzeta", "liX<Home><Esc>$`^", "aXlpha beta\ngamma delta\n\nzeta", 1, 1, "", "", std::nullopt},
+    {"mark-insert-left-dot", "alpha beta\ngamma delta\n\nzeta", "liX<Esc>j.gg`^", "aXlpha beta\ngXamma delta\n\nzeta", 2, 3, "", "", std::nullopt},
+    {"mark-insert-left-dot-line-start", "alpha beta\ngamma delta\n\nzeta", "liX<Esc>j0.gg`^", "aXlpha beta\nXgamma delta\n\nzeta", 2, 2, "", "", std::nullopt},
+    {"mark-insert-left-dot-cw", "alpha beta\ngamma delta\n\nzeta", "wcwX<Esc>j0.gg`^", "alpha X\nX delta\n\nzeta", 2, 2, "gamma", "v", std::nullopt},
+    {"mark-insert-left-wide", "あいう\n\tab\ncde", "liX<Esc>0`^", "あXいう\n\tab\ncde", 1, 5, "", "", std::nullopt},
+    {"mark-insert-left-wide-line-end", "あいう\n\tab\ncde", "$aX<Esc>0`^", "あいうX\n\tab\ncde", 1, 10, "", "", std::nullopt},
+    {"mark-insert-left-wide-typed", "あいう\n\tab\ncde", "liあ<Esc>0`^", "ああいう\n\tab\ncde", 1, 7, "", "", std::nullopt},
+    {"mark-insert-left-tab", "あいう\n\tab\ncde", "jiX<Esc>0`^", "あいう\nX\tab\ncde", 2, 2, "", "", std::nullopt},
+    {"mark-insert-left-after-tab", "あいう\n\tab\ncde", "jlliX<Esc>0`^", "あいう\n\taXb\ncde", 2, 4, "", "", std::nullopt},
+    {"mark-insert-left-tab-line-end", "あいう\n\tab\ncde", "jAX<Esc>0`^", "あいう\n\tabX\ncde", 2, 4, "", "", std::nullopt},
+    {"mark-insert-left-combining", "éx\nab", "liX<Esc>0`^", "éXx\nab", 1, 5, "", "", std::nullopt},
+    {"mark-insert-left-combining-append", "éx\nab", "aX<Esc>0`^", "éXx\nab", 1, 5, "", "", std::nullopt},
+    {"mark-insert-left-line-mark", "ab\ncd\nef", "jIX<Esc>gg'^", "ab\nXcd\nef", 2, 1, "", "", std::nullopt},
+    {"mark-insert-left-delete-to-mark", "ab\ncd\nef", "lIX<Esc>d`^", "ab\ncd\nef", 1, 1, "X", "v", std::nullopt},
+    {"mark-insert-left-yank-to-mark", "ab\ncd\nef", "lIX<Esc>$y`^", "Xab\ncd\nef", 1, 2, "a", "v", std::nullopt},
+    {"mark-insert-left-empty-text", "", "iX<Esc>`^", "X", 1, 1, "", "", std::nullopt},
+    {"mark-insert-left-set-is-refused", "ab\ncd\nef", "lm^`^x", "ab\ncd\nef", 1, 2, "", "", std::nullopt},
+    {"mark-insert-left-join-moves-column", "ab\ncd\nef", "jliX<Esc>ggJ`^", "ab cXd\nef", 1, 6, "", "", std::nullopt},
+    {"mark-insert-left-line-deleted-above", "ab\ncd\nef", "jliX<Esc>ggdd`^", "cXd\nef", 1, 3, "ab\n", "V", std::nullopt},
+    {"mark-insert-left-line-opened-above", "ab\ncd\nef", "liX<Esc>Odd<Esc>`^", "dd\naXb\ncd\nef", 1, 2, "", "", std::nullopt},
+    {"mark-insert-left-macro", "ab\ncd\nef", "j@a`^", "ab\nXcd\nef", 2, 2, "", "", std::nullopt, VimMacroFixture{'a', "lIX<Esc>"}},
     {"empty-delete-register-c-twice", "abc", "C<Esc>C<Esc>", "", 1, 1, "", "v", std::nullopt},
     {"empty-delete-register-c-twice-then-put", "abc", "C<Esc>C<Esc>pix<Esc>", "x", 1, 1, "", "v", std::nullopt},
     {"empty-delete-register-put-keeps-the-caret", "abc\n\ndef", "jC<Esc>kll3pix<Esc>", "abxc\n\ndef", 1, 3, "", "v", std::nullopt},
