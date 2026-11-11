@@ -172,7 +172,8 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // 言語サーバーの古さの合図（LanguageServerTick）も使う人の操作ではないので歩きを続ける（ADR 0160
 // の決定 6）。Ctrl つきのホイールは帯の上でも字の大きさ（AdjustFontSize）になり、歩きを確定する
 // （ADR 0150 の追補・#1048）。歩きの間は Ctrl を押しているので、ScrollTabs が歩きの間に来る
-// ことは無い。
+// ことは無い。題名のダブルクリックの PinTab も使う人の操作なので、ここにも begin_intent にも
+// 書かない（ADR 0179 の決定 4-4）。
 [[nodiscard]] bool keeps_tab_walk(const EditorIntent &intent) noexcept
 {
     return not_user_operation(intent) || std::holds_alternative<WalkRecentTab>(intent) ||
@@ -451,6 +452,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 閉じたタブの読みの取消と、歩き・入力行・面の終わりで留めた読みの採用（ADR 0159 の追補
     // 1・2）。
     follow_reads();
+    settle_transient();
     keep_vim_character(intent);
     if (is_signal(intent) && caret_anchor_of(state_) != anchor)
     {
@@ -507,6 +509,17 @@ void EditorController::settle_tab_walk_before(bool keeps_walk)
     if (state_.tab_walking() && !keeps_walk)
     {
         accept(SettleRecentTab{});
+    }
+}
+
+// 意図の出口（begin_intent と対の終わり）で、プレビューのタブが保存済みでなくなっていれば固定する
+// （ADR 0179 の決定 4-1）。本文の編集・文字コードと改行の形の変更・undo で保存時点から離れる、の
+// 全部をここで拾い、編集の経路ごとに書かない。印が無ければ欄を 1 つ読むだけで抜ける。
+void EditorController::settle_transient()
+{
+    if (state_.transient().has_value() && !state_.transient_saved())
+    {
+        state_ = state_.without_transient();
     }
 }
 

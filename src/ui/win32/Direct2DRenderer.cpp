@@ -460,10 +460,18 @@ HRESULT Direct2DRenderer::make_format(const wchar_t *face, float size_dips,
                                      format.ReleaseAndGetAddressOf());
 }
 
+HRESULT Direct2DRenderer::make_italic_format(const wchar_t *face, float size_dips,
+                                             DWRITE_FONT_WEIGHT weight, TextFormat &format)
+{
+    return dwrite_->CreateTextFormat(face, nullptr, weight, DWRITE_FONT_STYLE_ITALIC,
+                                     DWRITE_FONT_STRETCH_NORMAL, scaled(size_dips), L"",
+                                     format.ReleaseAndGetAddressOf());
+}
+
 void Direct2DRenderer::align_text_formats()
 {
-    const std::array<TextFormat, 5> every{tab_format_, toggle_format_, status_format_, mode_format_,
-                                          command_format_};
+    const std::array<TextFormat, 6> every{tab_format_,    tab_transient_format_, toggle_format_,
+                                          status_format_, mode_format_,          command_format_};
     for (const auto &format : every)
     {
         format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -505,6 +513,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     const wchar_t *interface_face = family(L"Segoe UI Variable Text", L"Segoe UI");
     const HRESULT tab =
         make_format(interface_face, tab_text_dips, DWRITE_FONT_WEIGHT_NORMAL, tab_format_);
+    const HRESULT transient = make_italic_format(interface_face, tab_text_dips,
+                                                 DWRITE_FONT_WEIGHT_NORMAL, tab_transient_format_);
     const HRESULT toggle =
         make_format(interface_face, ui_text_dips, DWRITE_FONT_WEIGHT_SEMI_BOLD, toggle_format_);
     const HRESULT status =
@@ -513,7 +523,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
         make_format(interface_face, ui_text_dips, DWRITE_FONT_WEIGHT_BOLD, mode_format_);
     const HRESULT command = make_format(family(L"Cascadia Code", L"Consolas"), ui_text_dips,
                                         DWRITE_FONT_WEIGHT_NORMAL, command_format_);
-    if (FAILED(tab) || FAILED(toggle) || FAILED(status) || FAILED(mode) || FAILED(command))
+    if (FAILED(tab) || FAILED(transient) || FAILED(toggle) || FAILED(status) || FAILED(mode) ||
+        FAILED(command))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
@@ -523,7 +534,9 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     {
         return guide;
     }
-    if (FAILED(trim_by_character(tab_format_.Get())) || !create_explorer_formats(interface_face))
+    if (FAILED(trim_by_character(tab_format_.Get())) ||
+        FAILED(trim_by_character(tab_transient_format_.Get())) ||
+        !create_explorer_formats(interface_face))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
@@ -807,7 +820,10 @@ void Direct2DRenderer::draw_tab(const application::EditorFrame &frame,
     const auto close = core::tab_close_rect(layout, index);
     const auto right = close.has_value() ? close.value().left : tab.right - layout.tab_padding;
     const core::LayoutRect title{tab.left + layout.tab_padding, tab.top, right, tab.bottom};
-    write_tab_title(frame.tabs.at(index).title.text(), title,
+    // プレビューのタブの題名は斜体（ADR 0179 の決定 10）。色は普通のタブと同じ。
+    const auto &view = frame.tabs.at(index);
+    write_tab_title(view.title.text(),
+                    view.transient ? tab_transient_format_.Get() : tab_format_.Get(), title,
                     lit ? frame.palette.text : frame.palette.muted);
     if (!close.has_value())
     {
@@ -819,14 +835,14 @@ void Direct2DRenderer::draw_tab(const application::EditorFrame &frame,
     draw_cross(close.value(), static_cast<float>(layout.glyph) / 2.0F, scaled(1.0F));
 }
 
-void Direct2DRenderer::write_tab_title(std::string_view text, const core::LayoutRect &title,
-                                       core::RgbColor color)
+void Direct2DRenderer::write_tab_title(std::string_view text, IDWriteTextFormat *format,
+                                       const core::LayoutRect &title, core::RgbColor color)
 {
     // 題名の文字組みは帯の保持から引く（#924）。書式に焼いた文字単位の省略記号ごと保持し、
     // DrawTextW と同じ画素（tests/ui の GutterLayoutTests）。
-    const auto shown = tab_layouts_.obtain(
-        PaletteRowKey{tab_format_.Get(), PaletteTextRole::plain, text, title, dpi_},
-        [&] { return text_layout(text, tab_format_.Get(), title); });
+    const auto shown =
+        tab_layouts_.obtain(PaletteRowKey{format, PaletteTextRole::plain, text, title, dpi_},
+                            [&] { return text_layout(text, format, title); });
     if (!shown)
     {
         return;

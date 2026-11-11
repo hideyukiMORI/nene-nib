@@ -160,6 +160,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimVisualBlockTests.cpp
     tests/unit/TabsTests.cpp
     tests/unit/TabsPropertyTests.cpp
+    tests/unit/TransientTabTests.cpp
+    tests/unit/TransientTabPropertyTests.cpp
     tests/unit/ExplorerTreeTests.cpp
     tests/unit/ExplorerLayoutTests.cpp
     tests/unit/ExplorerTests.cpp

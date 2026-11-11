@@ -118,8 +118,9 @@ class EditorWindow final
     [[nodiscard]] core::TitleBarLayout title_bar() const;
     [[nodiscard]] core::TitleBarTarget title_bar_target_at(LPARAM data) const;
     [[nodiscard]] std::int32_t title_bar_width() const;
-    // 帯の上の押下を扱ったら true（本文とステータスバーへは流さない）。
-    [[nodiscard]] bool click_title_bar(LPARAM data);
+    // 帯の上の押下を扱ったら true（本文とステータスバーへは流さない）。clicks はタブの上の左の
+    // 続けての押し（2 回目以降は SwitchTab の代わりに PinTab の 1 意図・ADR 0179 の決定 4-4）。
+    [[nodiscard]] bool click_title_bar(LPARAM data, application::PointerClicks clicks);
     void release_title_bar(LPARAM data);
     void press_middle(LPARAM data);
     void middle_click(LPARAM data);

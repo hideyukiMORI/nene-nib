@@ -491,7 +491,7 @@ void EditorController::submit_palette(const core::CommandPalette &palette)
         close_command_input();
         if (const auto path = core::FilePath::parse(choice.command); path.has_value())
         {
-            open_listed(path.value(), choice.origin);
+            open_listed(path.value(), choice.origin, OpenedAs::pinned);
         }
         return;
     case core::CommandChoiceKind::operate:
