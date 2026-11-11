@@ -137,3 +137,7 @@ hide の実機（Windows 11 Pro 26300・日本語・試用 exe `NeNeNib-main-b40
   - 逆に、前は書き込みが 5 秒を超えると窓が「応答なし」になり、使う人が殺すと書き込みを失った。隠せばこれは起きない。差し引きで大きくは悪くならないが、「失うものは増えない」とは言えない。後続（#1347）: 前の Nib が書き終わるのを新しい Nib が起動で上限つきで待つ（今は単一起動の確かめが無い・`CreateMutex` / `FindWindow` は 0 件）。書き込み自体の遅さは #424 の領域。
 - 窓を閉じた直後に Windows を終了し、隠れた Nib の書き込みが 5 秒を超えると、OS が Nib を終わらせ一覧と履歴の残りを失う（原子的な改名なので古い版が残るだけで、壊れはしない）。前は「応答なし」の窓が終了の画面に載り、待てた。普段の 0.5 秒では起きない。`WM_ENDSESSION` の道は隠さないので、Nib が開いたまま OS の終了が来た場合は前と同じ。
 - 変換の取り消しは IMM32 の `CPS_CANCEL` に頼る。IME が取り消しを無視して焦点を失うときに確定する形は試験で確かめていない（試用の手順: 変換中に × で閉じ、次の起動で「前回の未保存の編集」が問われないこと）。
+
+## 追補 2026-11-11（#1499）: 描画を失って聞く間だけ窓に下地を掛ける
+
+窓の Mica を外した（#1488・ADR 0008 決定 9 の追記）後、`abandon()` → `end_window` が取消の無い「描画できなくなったので閉じます。保存しますか。」を聞く間、描けない窓は縁と影だけの見えない矩形になった（レビュー V-1497 の L-b）。`end_window` は `exit_plan` の値が `confirm_each_tab_without_cancel` のときだけ（`WindowBackdrop` の `needs_question_backdrop`）、箱を出す前に `show_question_backdrop` で `DWMWA_SYSTEMBACKDROP_TYPE` = `DWMSBT_MAINWINDOW` を掛ける（失敗は無視）。窓はこの後 `leave(SessionEnd::rendering_lost)` で必ず壊れるので外さない。`recover()` が成功した道とすぐ終わる道（`leave_now`）では掛けない。`WS_EX_NOREDIRECTIONBITMAP` の窓では GDI の塗りも class の背景ブラシも画面に出ないので（ADR 0013 の追補 #1488）、下地は Mica だけ。角の約 4 px の点はこの非常時だけ受ける（#1496）。契約は `nib_window_tests --question-backdrop`。

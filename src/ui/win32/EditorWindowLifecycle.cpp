@@ -14,6 +14,7 @@
 #include "TitleBarLayout.hpp"
 #include "TitleBarWidth.hpp"
 #include "UnsavedTab.hpp"
+#include "WindowBackdrop.hpp"
 #include "WindowCorners.hpp"
 
 #include <dwmapi.h>
@@ -465,7 +466,15 @@ void EditorWindow::close_window()
 void EditorWindow::end_window(application::ExitCause cause, application::SessionEnd reason)
 {
     const auto unsaved = application::unsaved_tab_count(controller_.documents());
-    switch (application::exit_plan(cause, unsaved))
+    const auto plan = application::exit_plan(cause, unsaved);
+    // 描けない窓で取消の無い箱を聞く間だけ下地を掛ける（#1499・窓はこの後必ず壊れる）。
+    if (needs_question_backdrop(plan))
+    {
+        // 失敗（属性の無い Windows 10 と 11 21H2）でも箱は出す。
+        // 下地は見た目だけで、未保存の本文を守る問い（ADR 0133）を止めない。
+        [[maybe_unused]] const HRESULT shown = show_question_backdrop(window_);
+    }
+    switch (plan)
     {
     case application::ExitPlan::leave_now:
         break;
