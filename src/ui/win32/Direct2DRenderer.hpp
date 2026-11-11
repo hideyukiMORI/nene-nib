@@ -16,6 +16,7 @@
 #include "ExplorerPainter.hpp"
 #include "GridRowPainter.hpp"
 #include "GridRowView.hpp"
+#include "GuideRequest.hpp"
 #include "GutterTextLayouts.hpp"
 #include "KeycapStyle.hpp"
 #include "LayoutRect.hpp"
@@ -32,6 +33,7 @@
 #include "RenderFailure.hpp"
 #include "RendererSources.hpp"
 #include "RgbColor.hpp"
+#include "StartScreenPainter.hpp"
 #include "StatusBarLayout.hpp"
 #include "StatusLayoutDemand.hpp"
 #include "StatusTextLayout.hpp"
@@ -288,8 +290,18 @@ class Direct2DRenderer final
                        const BodyPane &pane, const application::GridRowView &row);
     [[nodiscard]] std::int32_t gutter_padding(const core::EditorSettings &settings) const;
     [[nodiscard]] std::int32_t body_guide_key_width(const application::EditorFrame &frame);
+    // 案内の文脈と鍵の幅（起動画面が出ている frame は hidden・ADR 0172 の決定 1）。
+    [[nodiscard]] core::GuideRequest guide_request(const application::EditorFrame &frame);
     void draw_body_guide(const application::EditorFrame &frame,
                          const core::OperationGuideLayout &guide);
+    // 本文の案内の鍵の枠の寸法と色（docs/design/2026-10-06-guide.md の 2 節）。起動画面の鍵も
+    // 同じ値（ADR 0172 の決定 5）。
+    [[nodiscard]] static KeycapStyle guide_keycap_style(const core::Palette &palette) noexcept;
+    // 起動画面（ADR 0172 の決定 5）。frame に値があれば本文の案内の代わりに操作中の枠 body に描く。
+    // 値が無い frame は保持を捨てるだけ。
+    void draw_start_screen(const application::EditorFrame &frame, const core::BodyLayout &body);
+    // 起動画面の鍵の枠の列の幅（物理画素）。鍵 3 本の文字列が前と同じなら測り直さない。
+    [[nodiscard]] std::int32_t start_key_width(const std::array<core::GuideEntry, 3> &keys);
     void draw_status_guide(const application::EditorFrame &frame,
                            const core::OperationGuideLayout &guide);
     void draw_status_bar(const application::EditorFrame &frame,
@@ -381,6 +393,12 @@ class Direct2DRenderer final
     // 測り直さない。書式（DPI と字体）を作り直す create_guide_formats で捨てる。
     std::optional<std::array<std::string, 3>> measured_guide_keys_;
     std::int32_t measured_guide_key_width_ = 0;
+    // 起動画面の題（UI の字体・本文の字の 1.5 倍）。本文の書式と一緒に作り直す（ADR 0172 の
+    // 決定 5）。行の字はエクスプローラーの面の書式を共用する（追補 2026-11-11 の 21）。
+    TextFormat start_title_format_;
+    // 起動画面の鍵の枠の列の幅（measured_guide_keys_ と同じ形・書式の作り直しで捨てる）。
+    std::optional<std::array<std::string, 3>> measured_start_keys_;
+    std::int32_t measured_start_key_width_ = 0;
     // 現在と直前の描画の本文資源だけ。前の列の残りは描画終了時に捨てる（ADR 0069）。
     BodyTextLayouts &body_text_;
     std::optional<RenderFailure> text_failure_;
@@ -395,6 +413,9 @@ class Direct2DRenderer final
     // エクスプローラーの線の形と本文の角の形（V-1428 の L-1）。捨てる時は explorer_layouts_
     // と同じ。
     ExplorerShapes explorer_shapes_;
+    // 起動画面の文字組み。同じ型で、書式の作り直しと起動画面が消えたときに捨てる（ADR 0172 の
+    // 決定 5）。
+    PaletteRowLayouts start_layouts_{StartScreenPainter::retained};
     // other の枠のプレビュー。要素の layout の保持は frame をまたいで再利用する（ADR 0155）。
     PreviewPane preview_;
     MinimapPicture minimap_;

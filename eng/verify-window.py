@@ -3396,6 +3396,93 @@ def verify_find(executable: Path, environment: dict, output: Path, frames: Path 
     return record
 
 
+VK_DOWN = 0x28
+# 起動画面の寸法（DIP）。core の start_screen_layout（src/core/StartScreenLayout.hpp の採用値）の写し。
+START_COLUMN_DIPS = 480
+START_COLUMN_MARGIN_DIPS = 16
+START_TOP_DIPS = 36
+START_TITLE_GAP_DIPS = 22
+START_SECTION_GAP_DIPS = 16
+START_HEADING_DIPS = 20
+START_HEADING_GAP_DIPS = 4
+
+
+def start_screen_boxes(body: dict, width: int, dpi: int) -> dict:
+    """The column's title and first start row for a profile without history or bookmarks (the
+    empty note sits above はじめる), mirroring core::start_screen_layout."""
+    content = width - body["contentLeft"]
+    column = min(to_pixels(START_COLUMN_DIPS, dpi),
+                 content - 2 * to_pixels(START_COLUMN_MARGIN_DIPS, dpi))
+    left = body["contentLeft"] + (content - column) // 2
+    top = body["firstRowTop"] + to_pixels(START_TOP_DIPS, dpi)
+    line = body["lineHeight"]
+    title_bottom = top + (line * 3) // 2
+    note = title_bottom + to_pixels(START_TITLE_GAP_DIPS, dpi)
+    heading = note + line + to_pixels(START_SECTION_GAP_DIPS, dpi)
+    row = heading + to_pixels(START_HEADING_DIPS, dpi) + to_pixels(START_HEADING_GAP_DIPS, dpi)
+    return {"title": (left, top, left + column, title_bottom),
+            "firstRow": (left, row, left + column, row + line)}
+
+
+def verify_start_screen(executable: Path, environment: dict, frames: Path | None) -> dict:
+    """Issue #1455 (#1018 stage 2, ADR 0172 decisions 4 and 5): the start screen of a start
+    without arguments or a previous tab list.
+
+    The fresh profile has no history and no bookmarks, so the screen shows the title, the empty note,
+    はじめる and the keys. Down (posted) selects 新しいファイル (current_line across the row), a
+    posted click on that row runs it (the selection goes away), Down and Esc select and clear again,
+    and a typed character hides the whole screen. No key takes the foreground."""
+    process, window, _ = start(executable, environment)
+    try:
+        raise_window(window)
+        time.sleep(0.6)
+        assert await_cover_gone(window), "the WARP cover child is still over the window"
+        assert_uncovered(window)
+        dpi = user.GetDpiForWindow(window)
+        client = rectangle(window, user.GetClientRect)
+        width, height = client[2] - client[0], client[3] - client[1]
+        size = (width, height)
+        boxes = start_screen_boxes(body_points(width, height, dpi), width, dpi)
+        shown = capture(window, width, height)
+        snapshot(frames, window, "start-screen")
+        press(window, VK_DOWN)
+        selected = await_new_frame(window, shown, size)
+        snapshot(frames, window, "start-screen-selected")
+        left, top, right, bottom = boxes["firstRow"]
+        click(window, (left + right) // 2, (top + bottom) // 2)
+        clicked = await_new_frame(window, selected, size)
+        press(window, VK_DOWN)
+        again = await_new_frame(window, clicked, size)
+        press(window, VK_ESCAPE)
+        cleared = await_new_frame(window, again, size)
+        write_text(window, "a")
+        typed = await_new_frame(window, cleared, size)
+        snapshot(frames, window, "start-screen-typed")
+
+        def box(pixels: bytes, area: tuple) -> list:
+            return box_pixels(pixels, width, area)
+
+        title = box(shown, boxes["title"])
+        record = {
+            "driven": True, "dpi": dpi,
+            "titleDrawn": len({tuple(value) for value in title}) > 1,
+            "downSelected": box(selected, boxes["firstRow"]) != box(shown, boxes["firstRow"]),
+            "clickRan": box(clicked, boxes["firstRow"]) == box(shown, boxes["firstRow"]),
+            "escapeCleared": box(cleared, boxes["firstRow"]) == box(shown, boxes["firstRow"]),
+            "typingHid": box(typed, boxes["title"]) != title,
+        }
+        print(json.dumps(record, ensure_ascii=False), file=sys.stderr)
+        for name in ("titleDrawn", "downSelected", "clickRan", "escapeCleared", "typingHid"):
+            assert record[name], f"start screen: {name} did not hold"
+        close(window)
+        dismiss_dialog(process, IDNO)
+        record["exitCode"] = process.wait(timeout=5)
+        assert record["exitCode"] == 0, record["exitCode"]
+    finally:
+        stop(process)
+    return record
+
+
 DOUBLE_CLICK_DOCUMENT = "wwwwwwwwwwwwwwwwwwww tail\nsecond\n"
 DOUBLE_CLICKED_DOCUMENT = "X tail\nY"
 
@@ -3501,7 +3588,16 @@ def main() -> None:
                         "sends Ctrl+S")
     parser.add_argument("--find", action="store_true",
                         help="run the ordinary find section alone (Issue #1127); it sends Ctrl+F")
+    parser.add_argument("--start-screen", action="store_true",
+                        help="run the start screen section alone (Issue #1455); posted messages only")
     arguments = parser.parse_args()
+    if arguments.start_screen and (arguments.tabs or arguments.split or arguments.preview
+                                   or arguments.restore or arguments.grid or arguments.giant_text
+                                   or arguments.autosave or arguments.palette or arguments.syntax
+                                   or arguments.gutter or arguments.explorer or arguments.find
+                                   or arguments.double_click
+                                   or arguments.keys is not None or arguments.open is not None):
+        parser.error("--start-screen runs alone")
     if arguments.keys is not None and arguments.capture is None:
         parser.error("--keys needs --capture <dir>")
     if arguments.open is not None and arguments.capture is None:
@@ -3610,6 +3706,14 @@ def main() -> None:
     if arguments.explorer:
         try:
             record = verify_explorer(executable, environment, output, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.start_screen:
+        try:
+            record = verify_start_screen(executable, environment, frames)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)

@@ -185,6 +185,10 @@ class EditorController final
     // 面の表示値（決定 3・8）。窓が押した行の木の位置（first_visible を足す）を決めるための口で、
     // frame の本文の行は作らない（command_palette_view と同じ形）。面が消えていれば値なし。
     [[nodiscard]] std::optional<ExplorerView> explorer_view() const;
+    // 起動画面の表示値（ADR 0172 の決定 4・5）。窓が押した行と離した行を決める口で、
+    // frame の本文の行は作らない（explorer_view と同じ形・押しと離しのときだけ呼ぶ）。
+    // 出ていなければ値なし。
+    [[nodiscard]] std::optional<StartScreenView> start_screen() const;
     // 出ている面の幅の求め（ADR 0162 の追補 D78）。ドラッグの間はその幅、ほかは設定
     // explorer_width。
     // 面が消えていれば値なし。窓が境の当たり・面と本文の配置を引く安い読みで、frame を作らない
