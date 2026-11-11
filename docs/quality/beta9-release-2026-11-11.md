@@ -34,4 +34,16 @@
 
 ## 公開の結果
 
-（公開の後に埋める）
+2026-11-11 13:41（JST）に公開した。手順 1〜4 はすべて設計席が行った（tag と pre-release は `D:/NeNeNib/evidence/beta9-release/publish.ps1`・施主の指示 2026-11-10 夜）。
+
+- URL: https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.9（pre-release・release id 441246953・published 2026-11-11T04:41:44Z）
+- tag `v0.1.0-beta.9`（annotated）→ `5cc9ffade3a61dac7a19ebc99fc0d97ca6f992d3`（main・梱包の commit と同じ・この記録の 2 本目の文書 PR #1443 の merge）
+- 梱包: `pwsh -NoProfile -File eng/package-release.ps1 -Beta 9 ...` が `D:/NeNeNib/worktrees/beta9`（detached・origin/main `5cc9ffad`・未追跡 0）で成功。記録 `D:/NeNeNib/releases/v0.1.0-beta.9/package.json`。exe の SHA-256 `f84a12a7629bc77fc66eb4253ed779b675187f5879abaef054df73cba873df42`（3,153,408 bytes）。
+- 起動・描画: `python D:/NeNeNib/evidence/beta9-release/release-smoke.py` が pass（隔離 profile・DPI 120・正常終了 0・本文不変・PNG を設計席が見た）。
+- 速さ: 梱包の exe では測っていない。同じ中身の木（まとめ枝 16 の `7eb8d4cc`）の Release の 1 回（12:48〜12:50・8 本 0 regression・席のビルドと試験を止めた機械）を再利用した（QLT-012）。記録 `D:/NeNeNib/outputs/20261111/gate-integration16-7eb8d4cc.log`。
+- 添付: `NeNeNib-0.1.0-beta.9-windows-x64.zip` 1,313,735 bytes・SHA-256 `0f690aa71474e733279f2ec9f3522e65ee89146b9c400fd63a7bb5938d2f7d67`、`SHA256SUMS` 104 bytes
+- 照合（`verify-publication.py`・`gh release download` で再取得）: bytes 一致・zip の中身一致・tag の commit 一致・展開した exe の起動 pass（release-smoke-01）→ `result: pass`。写しは `D:/NeNeNib/releases/v0.1.0-beta.9/publication-verification.json` と `github-release.json`。
+- 1 回目の梱包（main `7ceb2bdd`・まとめ枝 15 まで・09:47）は tag を打たずに捨てた（`D:/NeNeNib/releases/v0.1.0-beta.9-rc-7ceb2bdd/`・証跡 `release-smoke-rc-7ceb2bdd/`）。独立レビュー V-1421 が幅のドラッグの後にカーソルが残る穴を読みで見つけ、直し（#1413）を入れてから出し直した。
+- hide の試用（公開の前・2026-11-10 夜）: 保存の箱・閉じるとすぐ消える・復元を聞かれない・Ctrl+Shift+M の巡回・幅のドラッグ。公開の時点で試用前のもの（クリック 1 回で開く・端の行の ↑ ↓・幅のドラッグ中の Esc とカーソルの直し・Ctrl+N ほか・ミニマップ）は公開の文に書いた。
+
+教訓: `publish.ps1` の 1 回目は、ancestor の確かめの行が PowerShell の構文として誤りで落ちた（tag を打つ前）。外へ出る命令のスクリプトは、打つ前に構文だけ先に確かめる。速さのゲートは席が走っていると静かにならないので、席に「今の 1 本が終わったら次を始めずに待って」と送ってから測る（待ちの上限で勝手に測る形にしない）。止めた背景のスクリプトは子が生き残ることがある（1 回目のゲートのスクリプトが生き残って測った）。
