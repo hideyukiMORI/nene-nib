@@ -22,17 +22,22 @@
 #include "Offset.hpp"
 #include "PreviewBitmaps.hpp"
 #include "PreviewBlockTops.hpp"
+#include "PreviewBrushes.hpp"
 #include "PreviewFrame.hpp"
 #include "PreviewImageWindow.hpp"
 #include "PreviewImages.hpp"
 #include "PreviewInlineImages.hpp"
 #include "PreviewMetrics.hpp"
+#include "PreviewPainter.hpp"
 #include "PreviewPane.hpp"
 #include "PreviewPoint.hpp"
+#include "PreviewScene.hpp"
 #include "PreviewSelectionText.hpp"
+#include "PreviewTaskBox.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "PreviewTextStyle.hpp"
 #include "PreviewViewport.hpp"
+#include "RenderFailure.hpp"
 #include "Theme.hpp"
 #include "ThemeCatalog.hpp"
 #include "ThemeChoice.hpp"
@@ -44,6 +49,7 @@
 #include <cstdint>
 #include <d2d1.h>
 #include <d2d1_1.h>
+#include <dxgi.h>
 #include <expected>
 #include <limits>
 #include <memory>
@@ -214,6 +220,23 @@ class Canvas final
             return nullptr;
         }
         return context;
+    }
+
+    // draw() を透明に塗った描く先の上で通した画素（失敗したら空）。
+    template <typename Draw> [[nodiscard]] std::vector<std::uint8_t> painted(Draw &&draw)
+    {
+        if (!ready())
+        {
+            return {};
+        }
+        target_->BeginDraw();
+        target_->Clear(D2D1::ColorF(0.0F, 0.0F, 0.0F, 0.0F));
+        draw();
+        if (FAILED(target_->EndDraw()))
+        {
+            return {};
+        }
+        return pixels_of(*bitmap_.Get());
     }
 
   private:
@@ -457,6 +480,122 @@ void check_held_limit(Canvas &canvas)
                pane.bitmaps().bytes() == core::preview_image_held_byte_limit,
            "#1439 the image bitmaps are held up to 32 MiB and the oldest goes first");
 }
+
+// 作れない bitmap と引けない位置（ADR 0155 の追補 67）: device lost だけが失敗で、GPU の記憶の
+// 不足などは画像を描かないだけ。作ってはいけない画素（大きさ 0・列の長さが合わない・device の上限を
+// 超える）は CreateBitmap に渡さずに断り、持っている bitmap は使えるまま。
+void check_unmade_bitmaps(Canvas &canvas)
+{
+    expect(win32::preview_bitmap_lost(D2DERR_RECREATE_TARGET) &&
+               win32::preview_bitmap_lost(DXGI_ERROR_DEVICE_REMOVED) &&
+               !win32::preview_bitmap_lost(E_OUTOFMEMORY) &&
+               !win32::preview_bitmap_lost(E_INVALIDARG),
+           "#1439 only a lost device fails the preview when an image bitmap is not made");
+    const auto context = canvas.context();
+    if (context == nullptr)
+    {
+        expect(false, "#1439 the software target has a device context");
+        return;
+    }
+    const auto good = pattern(ImageSize{3, 5});
+    const auto limit = context->GetMaximumBitmapSize();
+    const auto empty = std::make_shared<const app::ImagePixels>(
+        app::ImagePixels{ImageSize{0, 0}, ImageSize{0, 0}, {}});
+    const auto short_row = std::make_shared<const app::ImagePixels>(
+        app::ImagePixels{ImageSize{4, 4}, ImageSize{4, 4}, std::vector<std::uint8_t>(12)});
+    const auto beyond = std::make_shared<const app::ImagePixels>(app::ImagePixels{
+        ImageSize{limit + 1, 1}, ImageSize{limit + 1, 1},
+        std::vector<std::uint8_t>(std::size_t{limit + 1} * core::image_pixel_bytes)});
+    win32::PreviewBitmaps bitmaps;
+    bitmaps.begin(*context.Get());
+    const bool made = SUCCEEDED(bitmaps.hold(*context.Get(), good));
+    const bool refused = FAILED(bitmaps.hold(*context.Get(), empty)) &&
+                         FAILED(bitmaps.hold(*context.Get(), short_row)) &&
+                         FAILED(bitmaps.hold(*context.Get(), beyond));
+    expect(made && refused && bitmaps.count() == 1 && bitmaps.created() == 1 &&
+               bitmaps.find(good.get()) != nullptr && bitmaps.find(empty.get()) == nullptr,
+           "#1439 pixels that cannot become a bitmap are refused without touching the held ones");
+}
+
+// bitmap の無い画像は箱が空のまま描かれ、frame は失敗にならず、ほかの画像と本文は出る（作れなかった
+// 画像の形・PreviewPane の hold_bitmaps は device lost でない失敗を飛ばす）。
+void check_missing_bitmap_paints(Canvas &canvas)
+{
+    const auto document = document_of("![one](a.png) and ![two](b.png)\n\nafter\n");
+    const auto first = pattern(ImageSize{6, 4});
+    const auto second = pattern(ImageSize{3, 5});
+    const auto images = images_of(*document, {first, second});
+    const auto context = canvas.context();
+    win32::PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto tops = win32::PreviewBlockTops::measure(
+        *document, layouts, style,
+        win32::PreviewViewport{0, static_cast<float>(target_width),
+                               static_cast<float>(target_height), images.get()});
+    win32::PreviewBitmaps bitmaps;
+    win32::PreviewBrushes brushes;
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    if (context == nullptr || !tops || !theme ||
+        FAILED(brushes.prepare(*context.Get(), theme.value().view())))
+    {
+        expect(false, "#1439 the painter checks have a target, the heights and the brushes");
+        return;
+    }
+    bitmaps.begin(*context.Get());
+    // 1 枚目は作れなかった形（持たない）、2 枚目だけを持つ。
+    const bool held = SUCCEEDED(bitmaps.hold(*context.Get(), second));
+    std::optional<win32::RenderFailure> failure;
+    win32::PreviewPainter<ID2D1RenderTarget> painter(*context.Get(), layouts, brushes, failure);
+    const auto drawn = canvas.painted(
+        [&]
+        {
+            painter.paint(win32::PreviewScene{*document, tops.value(), style, area, 0.0F,
+                                              std::nullopt, images.get(), &bitmaps});
+        });
+    expect(held && !failure.has_value() && !drawn.empty() &&
+               find_exact(drawn, *second).has_value() && !find_exact(drawn, *first).has_value(),
+           "#1439 an image without a bitmap leaves its box empty and the frame still paints");
+}
+
+// 箱のあるタスクの項目は、チェックボックスを 1 行目の文字の baseline の下がりだけ下げる（描く所と
+// 押す所が同じ矩形・ADR 0155 の追補 68）。折り返す項目でも 1
+// 行目に揃え、箱の無い項目は今のまま（下がり 0）。
+void check_task_box_follows_image()
+{
+    const auto document =
+        document_of("- [ ] ![tall](t.png) a note long enough to wrap onto a second line in the "
+                    "frame of four hundred pixels\n- [ ] plain\n");
+    const auto tall = solid(ImageSize{30, 60});
+    const auto images = images_of(*document, {tall});
+    win32::PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto width = static_cast<float>(target_width);
+    const auto tops = win32::PreviewBlockTops::measure(
+        *document, layouts, style,
+        win32::PreviewViewport{0, width, std::numeric_limits<float>::max(), images.get()});
+    if (!tops)
+    {
+        expect(false, "#1439 the task items are measured");
+        return;
+    }
+    const auto &measured = tops.value();
+    const auto text_width =
+        win32::preview_text_width(document->blocks.at(0), width, measured.indent(0), style.dpi);
+    const auto shift = layouts.first_line_shift(
+        document->blocks.at(0), text_width, style,
+        win32::preview_inline_images(*document, images.get(), 0,
+                                     win32::preview_dips_of(text_width, style.dpi)));
+    const auto expected_box =
+        win32::preview_task_box(measured.indent(0), measured.top(0) + shift.value_or(0.0F), style);
+    const auto plain = win32::preview_task_box(measured.indent(1), measured.top(1), style);
+    const auto boxed = measured.task_box(0);
+    const auto unboxed = measured.task_box(1);
+    expect(shift.has_value() && shift.value_or(0.0F) > 30.0F && boxed.has_value() &&
+               unboxed.has_value() && boxed.value().square == expected_box.square &&
+               unboxed.value().square == plain.square,
+           "#1439 a task box moves down to the first line of an item with a loaded image");
+}
 } // namespace
 
 void verify_preview_images()
@@ -480,5 +619,8 @@ void verify_preview_images()
     check_picture_key(canvas);
     check_released(canvas);
     check_held_limit(canvas);
+    check_unmade_bitmaps(canvas);
+    check_missing_bitmap_paints(canvas);
+    check_task_box_follows_image();
 }
 } // namespace nenenib::tests::ui

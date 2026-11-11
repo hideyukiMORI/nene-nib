@@ -207,7 +207,20 @@ template <typename Target> class PreviewPainter final
         const auto &box = scene.tops.task_box(index);
         if (!box.has_value() || !block.task.has_value())
         {
-            draw_marker(scene, block, origin);
+            // 箱のある項目は 1 行目の baseline が下がるので、記号もその分だけ下げる（追補 68）。
+            const auto width =
+                preview_text_width(block, static_cast<float>(core::width_of(scene.frame)),
+                                   scene.tops.indent(index), scene.style.dpi);
+            const auto shift = layouts_.first_line_shift(
+                block, width, scene.style,
+                preview_inline_images(scene.document, scene.images, index,
+                                      preview_dips_of(width, scene.style.dpi)));
+            if (!shift)
+            {
+                failure_ = shift.error();
+                return;
+            }
+            draw_marker(scene, block, D2D1::Point2F(origin.x, origin.y + shift.value()));
             return;
         }
         draw_task(scene, box.value(), block.task.value().checked);
@@ -273,12 +286,9 @@ template <typename Target> class PreviewPainter final
         auto *const bitmap =
             scene.bitmaps == nullptr ? nullptr : scene.bitmaps->find(image.pixels.get());
         const auto at = preview_inline_origin(layout, image.box, scene.style.dpi);
-        if (!at.has_value())
-        {
-            failure_ = RenderFailure::directwrite;
-            return;
-        }
-        if (bitmap == nullptr)
+        // 位置を引けない・bitmap が無い画像は描かず、箱は空のまま（ADR 0155 の追補 67・画像の
+        // ために frame を失敗にしない）。
+        if (!at.has_value() || bitmap == nullptr)
         {
             return;
         }

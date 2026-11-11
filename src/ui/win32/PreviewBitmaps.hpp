@@ -24,7 +24,8 @@ class PreviewBitmaps final
   public:
     // 1 回の描画の始め。context が前と違えば全部捨て、画素が放たれたものを捨てる。
     void begin(const ID2D1DeviceContext &context);
-    // pixels の bitmap を今の描画で使う（無ければ context に作る）。作れなければ失敗の HRESULT。
+    // pixels の bitmap を今の描画で使う（無ければ context に作る）。作れなければ失敗の HRESULT
+    // （大きさが 0・画素の列の長さが合わない・device の上限を超える画素は作らずに E_INVALIDARG）。
     [[nodiscard]] HRESULT hold(ID2D1DeviceContext &context,
                                const std::shared_ptr<const application::ImagePixels> &pixels);
     // pixels の bitmap（無ければ nullptr）。画素が生きている間だけ答える。
@@ -41,6 +42,9 @@ class PreviewBitmaps final
     using Entry =
         std::tuple<std::weak_ptr<const application::ImagePixels>, const application::ImagePixels *,
                    Microsoft::WRL::ComPtr<ID2D1Bitmap1>, std::size_t, std::uint64_t>;
+    // context に作ってよい画素か。
+    [[nodiscard]] static bool fits(const ID2D1DeviceContext &context,
+                                   const application::ImagePixels &pixels) noexcept;
     // 合計が上限を超える間、今の描画で使わないものを古い順に捨てる。
     void trim();
 
@@ -50,4 +54,9 @@ class PreviewBitmaps final
     std::size_t created_ = 0;
     std::uint64_t paint_ = 0;
 };
+
+// hold の失敗が device lost か（D2DERR_RECREATE_TARGET・DXGI_ERROR_DEVICE_REMOVED / RESET・
+// Direct2DRenderer の classify と同じ値）。ほかの失敗はその画像を描かないだけ（ADR 0155 の追補
+// 67）。
+[[nodiscard]] bool preview_bitmap_lost(HRESULT result) noexcept;
 } // namespace nenenib::ui::win32

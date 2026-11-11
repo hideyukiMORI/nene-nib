@@ -42,6 +42,12 @@ class PreviewTextLayouts final
     [[nodiscard]] std::expected<float, RenderFailure>
     measure(const core::PreviewBlock &block, float width, const PreviewTextStyle &style,
             std::span<const PreviewInlineImage> inlines = {});
+    // 箱のある layout の 1 行目の baseline が、固定の行高の layout（記号の layout）の 1 行目の
+    // baseline からどれだけ下にあるか（物理画素・ADR 0155 の追補 68）。記号とチェックボックスを
+    // 1 行目の文字に揃えるために足す。inlines が空なら 0（layout を引かない）。
+    [[nodiscard]] std::expected<float, RenderFailure>
+    first_line_shift(const core::PreviewBlock &block, float width, const PreviewTextStyle &style,
+                     std::span<const PreviewInlineImage> inlines);
     // get の layout の送りの幅（widthIncludingTrailingWhitespace・物理画素）。記号の列の幅に使う。
     [[nodiscard]] std::expected<float, RenderFailure>
     advance(const core::PreviewBlock &block, float width, const PreviewTextStyle &style);

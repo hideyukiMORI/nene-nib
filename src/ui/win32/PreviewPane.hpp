@@ -84,9 +84,10 @@ class PreviewPane final
               const PreviewTextStyle &style, const PreviewViewport &viewport);
     // 測った要素 [tops.first(), tops.size()) の読めた画像の bitmap を target に作る（画像の状態が
     // null なら bitmap を全部放す）。
-    [[nodiscard]] std::expected<void, RenderFailure> hold_bitmaps(ID2D1RenderTarget &target,
-                                                                  const PreviewPictureKey &key,
-                                                                  const PreviewBlockTops &tops);
+    // 作れない画像（device lost でない失敗）は飛ばし、箱は空のまま描く（ADR 0155 の追補 67）。
+    [[nodiscard]] std::expected<void, RenderFailure>
+    hold_bitmaps(ID2D1RenderTarget &target, const core::MarkdownDocument &document,
+                 const application::PreviewImages *images, const PreviewBlockTops &tops);
     // 要素を描く唯一の関数（直接の道と bitmap の道が共用する）。frame は描く先の座標の枠。
     [[nodiscard]] std::expected<void, RenderFailure> draw_scene(ID2D1RenderTarget &target,
                                                                 const PreviewPictureKey &key,
@@ -107,7 +108,8 @@ class PreviewPane final
     PreviewTextLayouts layouts_;
     PreviewBrushes brushes_;
     std::shared_ptr<const core::MarkdownDocument> measured_;
-    std::shared_ptr<const application::PreviewImages> measured_images_;
+    // 測った画像の状態（弱い参照・ADR 0155 の追補 63）。
+    std::weak_ptr<const application::PreviewImages> measured_images_;
     std::optional<PreviewTextStyle> measured_style_;
     PreviewViewport measured_viewport_{0, 0.0F, 0.0F};
     std::optional<PreviewBlockTops> tops_;

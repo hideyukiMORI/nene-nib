@@ -62,6 +62,22 @@ constexpr float unbounded_height = 1.0e7F;
     }
     std::unreachable();
 }
+// layout の 1 行目の baseline（GetLineMetrics は欄が足りないと何も書かないので、全部の行を引く）。
+[[nodiscard]] std::optional<float> first_baseline(IDWriteTextLayout &layout)
+{
+    UINT32 count = 0;
+    const auto counted = layout.GetLineMetrics(nullptr, 0, &count);
+    if ((FAILED(counted) && counted != E_NOT_SUFFICIENT_BUFFER) || count == 0)
+    {
+        return std::nullopt;
+    }
+    std::vector<DWRITE_LINE_METRICS> lines(count);
+    if (FAILED(layout.GetLineMetrics(lines.data(), count, &count)))
+    {
+        return std::nullopt;
+    }
+    return lines.front().baseline;
+}
 } // namespace
 
 bool PreviewTextLayouts::exists(const std::wstring &name) const
@@ -321,6 +337,26 @@ PreviewTextLayouts::measure(const core::PreviewBlock &block, float width,
         return std::unexpected(made.error());
     }
     return made.value().height;
+}
+
+std::expected<float, RenderFailure>
+PreviewTextLayouts::first_line_shift(const core::PreviewBlock &block, float width,
+                                     const PreviewTextStyle &style,
+                                     std::span<const PreviewInlineImage> inlines)
+{
+    if (inlines.empty())
+    {
+        return 0.0F;
+    }
+    const auto boxed = get(block, width, style, inlines);
+    const auto fixed = get(preview_marker_block(block), preview_marker_layout_width(), style);
+    const auto boxed_line = boxed ? first_baseline(*boxed.value().Get()) : std::nullopt;
+    const auto fixed_line = fixed ? first_baseline(*fixed.value().Get()) : std::nullopt;
+    if (!boxed_line.has_value() || !fixed_line.has_value())
+    {
+        return std::unexpected(directwrite);
+    }
+    return boxed_line.value() - fixed_line.value();
 }
 
 std::expected<float, RenderFailure> PreviewTextLayouts::advance(const core::PreviewBlock &block,

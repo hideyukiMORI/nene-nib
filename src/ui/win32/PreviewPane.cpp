@@ -20,8 +20,7 @@ namespace
 {
 [[nodiscard]] bool same_viewport(const PreviewViewport &left, const PreviewViewport &right) noexcept
 {
-    return left.first == right.first && left.width == right.width && left.height == right.height &&
-           left.images == right.images;
+    return left.first == right.first && left.width == right.width && left.height == right.height;
 }
 } // namespace
 
@@ -30,15 +29,16 @@ PreviewPane::remeasure(const std::shared_ptr<const core::MarkdownDocument> &docu
                        const std::shared_ptr<const application::PreviewImages> &images,
                        const PreviewTextStyle &style, const PreviewViewport &viewport)
 {
-    if (tops_.has_value() && measured_ == document && measured_images_ == images &&
-        measured_style_.has_value() && measured_style_.value() == style &&
-        same_viewport(measured_viewport_, viewport))
+    const bool same_images =
+        !measured_images_.owner_before(images) && !images.owner_before(measured_images_);
+    if (tops_.has_value() && measured_ == document && same_images && measured_style_.has_value() &&
+        measured_style_.value() == style && same_viewport(measured_viewport_, viewport))
     {
         return &tops_.value();
     }
     tops_.reset();
     measured_ = nullptr;
-    measured_images_ = nullptr;
+    measured_images_.reset();
     auto tops = PreviewBlockTops::measure(*document, layouts_, style, viewport);
     if (!tops)
     {
@@ -66,14 +66,16 @@ std::expected<void, RenderFailure> PreviewPane::draw_scene(ID2D1RenderTarget &ta
                                                            const PreviewPictureKey &key,
                                                            const core::LayoutRect &frame)
 {
+    // 鍵は弱い参照で覚えるので、描く間だけ強い参照にする（frame が持っているので消えていない）。
+    const auto images = key.images.lock();
     const PreviewViewport viewport{key.anchor, static_cast<float>(key.width),
-                                   static_cast<float>(key.height), key.images.get()};
-    const auto measured = remeasure(key.document, key.images, key.style, viewport);
+                                   static_cast<float>(key.height), images.get()};
+    const auto measured = remeasure(key.document, images, key.style, viewport);
     if (!measured)
     {
         return std::unexpected(measured.error());
     }
-    const auto held = hold_bitmaps(target, key, *measured.value());
+    const auto held = hold_bitmaps(target, *key.document, images.get(), *measured.value());
     if (!held)
     {
         return held;
@@ -82,7 +84,7 @@ std::expected<void, RenderFailure> PreviewPane::draw_scene(ID2D1RenderTarget &ta
     std::optional<RenderFailure> failure;
     PreviewPainter<ID2D1RenderTarget> painter(target, layouts_, brushes_, failure);
     painter.paint(PreviewScene{*key.document, *measured.value(), key.style, frame, 0.0F,
-                               key.selection, key.images.get(), &bitmaps_});
+                               key.selection, images.get(), &bitmaps_});
     if (failure.has_value())
     {
         return std::unexpected(failure.value());
@@ -90,31 +92,30 @@ std::expected<void, RenderFailure> PreviewPane::draw_scene(ID2D1RenderTarget &ta
     return {};
 }
 
-std::expected<void, RenderFailure> PreviewPane::hold_bitmaps(ID2D1RenderTarget &target,
-                                                             const PreviewPictureKey &key,
-                                                             const PreviewBlockTops &tops)
+std::expected<void, RenderFailure>
+PreviewPane::hold_bitmaps(ID2D1RenderTarget &target, const core::MarkdownDocument &document,
+                          const application::PreviewImages *images, const PreviewBlockTops &tops)
 {
-    if (key.images == nullptr)
+    // 製品の描く先（device context）と試験の WIC の描く先は、どちらも ID2D1DeviceContext を持つ。
+    // 持たない描く先では bitmap を作らず、箱は空のまま描く（画像のために窓を閉じる道へ行かない）。
+    Microsoft::WRL::ComPtr<ID2D1DeviceContext> context;
+    if (images == nullptr || FAILED(target.QueryInterface(IID_PPV_ARGS(&context))))
     {
         bitmaps_.release();
         return {};
     }
-    // 製品の描く先（device context）と試験の WIC の描く先は、どちらも ID2D1DeviceContext を持つ。
-    Microsoft::WRL::ComPtr<ID2D1DeviceContext> context;
-    if (FAILED(target.QueryInterface(IID_PPV_ARGS(&context))))
-    {
-        return std::unexpected(RenderFailure::direct2d);
-    }
     bitmaps_.begin(*context.Get());
-    const auto &all = key.document->images;
+    const auto &all = document.images;
     for (auto at = std::ranges::lower_bound(all, tops.first(), {}, &core::MarkdownImage::block);
          at != all.end() && at->block < tops.size(); ++at)
     {
         const auto pixels =
-            key.images->pixels_of(static_cast<std::size_t>(std::distance(all.begin(), at)));
-        if (pixels != nullptr && FAILED(bitmaps_.hold(*context.Get(), pixels)))
+            images->pixels_of(static_cast<std::size_t>(std::distance(all.begin(), at)));
+        // device lost だけを返す。ほかの失敗（GPU の記憶の不足など）はその画像を飛ばし、箱は空の
+        // まま描いて、次に描き直すときにまた作るのを試す。
+        if (pixels != nullptr && preview_bitmap_lost(bitmaps_.hold(*context.Get(), pixels)))
         {
-            return std::unexpected(RenderFailure::direct2d);
+            return std::unexpected(RenderFailure::device_lost);
         }
     }
     return {};
@@ -125,7 +126,7 @@ void PreviewPane::release() noexcept
     bitmaps_.release();
     tops_.reset();
     measured_ = nullptr;
-    measured_images_ = nullptr;
+    measured_images_.reset();
     area_.reset();
     pictured_.reset();
 }
@@ -300,7 +301,7 @@ std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops 
     // 描く所と同じ箱で同じ layout を引く（画像の上の点は箱の前か後ろ・画像は 1 つの単位）。
     const auto layout =
         layouts_.get(block, width, style,
-                     preview_inline_images(*measured_, measured_images_.get(), index,
+                     preview_inline_images(*measured_, measured_images_.lock().get(), index,
                                            preview_dips_of(width, style.dpi)));
     if (!layout)
     {
