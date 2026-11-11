@@ -26,6 +26,7 @@
 #include "MinimapSource.hpp"
 #include "MinimapWindow.hpp"
 #include "Offset.hpp"
+#include "RgbColor.hpp"
 #include "SyntaxColor.hpp"
 #include "SyntaxPalette.hpp"
 #include "SyntaxRole.hpp"
@@ -36,6 +37,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -511,6 +513,77 @@ void check_random_frames(Canvas &canvas, Canvas &reference, const Ink &colors, c
     expect(broken == 0,
            "random bands, panels and themes paint the same pixels as painting directly");
 }
+// 面の中ほどの列（x = 140）の点 y の色（BGRA の B・G・R）が want か（±2）。
+[[nodiscard]] bool colored_at(const std::vector<std::uint8_t> &pixels, UINT y, core::RgbColor want)
+{
+    const std::size_t at = (static_cast<std::size_t>(y) * target_width + 140) * 4;
+    if (pixels.size() < at + 3)
+    {
+        return false;
+    }
+    const auto close = [](std::uint8_t got, std::uint8_t expected)
+    { return std::abs(static_cast<int>(got) - static_cast<int>(expected)) <= 2; };
+    return close(pixels.at(at), want.blue) && close(pixels.at(at + 1), want.green) &&
+           close(pixels.at(at + 2), want.red);
+}
+
+[[nodiscard]] core::RgbColor over_color(core::RgbColor ground, core::RgbColor ink, float alpha)
+{
+    const auto mix = [alpha](std::uint8_t under, std::uint8_t over)
+    {
+        return static_cast<std::uint8_t>(std::lround(static_cast<float>(under) * (1.0F - alpha) +
+                                                     static_cast<float>(over) * alpha));
+    };
+    return core::RgbColor{mix(ground.red, ink.red), mix(ground.green, ink.green),
+                          mix(ground.blue, ink.blue)};
+}
+
+// 見えている範囲の面（#1487・案 B）: 面の中は accent の 22%、押している間は 32%、上端と下端の 1 DIP
+// の線は accent の 70%（DPI 192 では 2 物理画素）、面の外は地のまま。空の行だけの窓で描く。
+void check_face_pixels(Canvas &canvas, const Ink &colors)
+{
+    const auto rows = std::make_shared<application::MinimapRows>(
+        application::MinimapRows{core::MinimapWindow{core::LineNumber{1}, window_rows},
+                                 std::vector<core::MinimapRow>(window_rows), 1});
+    // 面の段は 10〜40（panel.top 10 から y = 30〜90）。
+    auto frame = frame_of(rows, 1, 0, std::nullopt);
+    const auto paint_at = [&](std::uint32_t dpi)
+    {
+        return canvas.paint(
+            [&](ID2D1RenderTarget &target, ID2D1SolidColorBrush &brush)
+            {
+                win32::MinimapPicture picture;
+                picture.paint_directly(
+                    win32::MinimapPen{target, brush, colors.first, colors.second, dpi}, frame,
+                    panel);
+                return true;
+            });
+    };
+    const auto ground = colors.first.at(0);
+    const auto accent = colors.first.at(1);
+    const auto face = over_color(ground, accent, 0.22F);
+    const auto plain = paint_at(96);
+    expect(colored_at(plain, 60, over_color(ground, accent, 0.22F)),
+           "the visible face is the accent at 22 percent");
+    expect(colored_at(plain, 20, over_color(ground, accent, 0.0F)) &&
+               colored_at(plain, 100, over_color(ground, accent, 0.0F)),
+           "the minimap outside the visible face is its ground");
+    expect(colored_at(plain, 30, over_color(face, accent, 0.7F)) &&
+               colored_at(plain, 89, over_color(face, accent, 0.7F)) &&
+               colored_at(plain, 31, over_color(ground, accent, 0.22F)) &&
+               colored_at(plain, 88, over_color(ground, accent, 0.22F)),
+           "the top and bottom edges of the face are one pixel of the accent at 70 percent");
+    const auto doubled = paint_at(192);
+    expect(colored_at(doubled, 31, over_color(face, accent, 0.7F)) &&
+               colored_at(doubled, 88, over_color(face, accent, 0.7F)) &&
+               colored_at(doubled, 32, over_color(ground, accent, 0.22F)),
+           "at 192 DPI the edges are two physical pixels");
+    frame.pressed = true;
+    const auto pressed = paint_at(96);
+    expect(colored_at(pressed, 60, over_color(ground, accent, 0.32F)),
+           "the face is the accent at 32 percent while the minimap is pressed");
+}
+
 } // namespace
 
 void verify_minimap_paint()
@@ -531,5 +604,7 @@ void verify_minimap_paint()
     check_random_frames(canvas, reference, colors.value(), other.value());
     check_failure_reading();
     check_abandoned_bitmap(canvas, reference, colors.value());
+    check_face_pixels(canvas, colors.value());
+    check_face_pixels(canvas, other.value());
 }
 } // namespace nenenib::tests::ui

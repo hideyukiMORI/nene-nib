@@ -1,5 +1,6 @@
 #include "MinimapPicture.hpp"
 
+#include "DevicePixels.hpp"
 #include "Minimap.hpp"
 #include "RenderFailure.hpp"
 #include "RenderFailureOf.hpp"
@@ -10,6 +11,7 @@
 #include <array>
 #include <bit>
 #include <cstddef>
+#include <cstdint>
 #include <type_traits>
 #include <utility>
 
@@ -18,8 +20,13 @@ namespace nenenib::ui::win32
 namespace
 {
 constexpr float full_channel = 255.0F;
-// 見えている範囲の面の不透明度（決定 2・色のトークンは足さない）。
-constexpr float face_opacity = 0.1F;
+// 見えている範囲の面と縁の線の濃さ（決定 2 の追補・#1487 の案 B・色のトークンは足さず accent を
+// brush の不透明度で重ねる）。面は accent の 22%、押している間は 32%、上端と下端の線は 1 DIP の
+// accent を 70%。濃さを変えるのはここの 1 か所。
+constexpr float face_opacity = 0.22F;
+constexpr float pressed_face_opacity = 0.32F;
+constexpr float edge_opacity = 0.7F;
+constexpr std::int32_t edge_dips = 1;
 // bitmap の行の数はこの刻みで切り上げる（打鍵で行が増えるたびに作り直さない）。
 constexpr std::size_t picture_row_step = 512;
 constexpr std::size_t background_color = 0;
@@ -185,11 +192,23 @@ void MinimapPicture::draw_face(const MinimapPen &pen, const application::Minimap
         frame.first_visible.value - std::min(frame.first_visible.value, frame.top.value), shown);
     const std::size_t to = std::min(from + frame.visible, shown);
     pen.brush.SetColor(to_color(pen.colors.at(face_color)));
-    pen.brush.SetOpacity(face_opacity);
+    pen.brush.SetOpacity(frame.pressed ? pressed_face_opacity : face_opacity);
     const auto top = static_cast<float>(panel.top);
-    pen.target.FillRectangle(D2D1::RectF(static_cast<float>(panel.left), top + row_y(from),
-                                         static_cast<float>(panel.right), top + row_y(to)),
-                             &pen.brush);
+    const auto left = static_cast<float>(panel.left);
+    const auto right = static_cast<float>(panel.right);
+    const float upper = top + row_y(from);
+    const float lower = top + row_y(to);
+    pen.target.FillRectangle(D2D1::RectF(left, upper, right, lower), &pen.brush);
+    // 上端と下端の線（1 DIP を物理画素へ整数で・1 画素より細くしない）。面が線 2 本より低ければ
+    // 面の全部が線になる。
+    if (to > from)
+    {
+        const auto edge = static_cast<float>(std::max(core::to_pixels(edge_dips, pen.dpi), 1));
+        const float thick = std::min(edge, (lower - upper) / 2.0F);
+        pen.brush.SetOpacity(edge_opacity);
+        pen.target.FillRectangle(D2D1::RectF(left, upper, right, upper + thick), &pen.brush);
+        pen.target.FillRectangle(D2D1::RectF(left, lower - thick, right, lower), &pen.brush);
+    }
     pen.brush.SetOpacity(1.0F);
 }
 
@@ -249,7 +268,7 @@ void MinimapPicture::record(ID2D1DeviceContext &context, const MinimapPen &pen,
     context.GetTarget(&previous);
     context.SetTarget(picture_.Get());
     context.Clear(D2D1::ColorF(0.0F, 0.0F, 0.0F, 0.0F));
-    draw_rows(MinimapPen{context, pen.brush, pen.colors, pen.body}, rows.rows,
+    draw_rows(MinimapPen{context, pen.brush, pen.colors, pen.body, pen.dpi}, rows.rows,
               D2D1::Point2F(0.0F, 0.0F));
     context.SetTarget(previous.Get());
     painted_rows_ += rows.rows.size();
@@ -320,7 +339,7 @@ bool MinimapPicture::redraw_band(ID2D1DeviceContext &context, const MinimapPen &
     clear_rows(context, width, band.begin, band.begin + band.inserted);
     // 行が減ったら、ずらした後の下に残った前の行を消す。
     clear_rows(context, width, now, std::max(now, before));
-    draw_rows(MinimapPen{context, pen.brush, pen.colors, pen.body},
+    draw_rows(MinimapPen{context, pen.brush, pen.colors, pen.body, pen.dpi},
               std::span(rows.rows).subspan(band.begin, band.inserted),
               D2D1::Point2F(0.0F, row_y(band.begin)));
     context.SetTarget(previous.Get());

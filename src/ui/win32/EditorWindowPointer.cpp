@@ -203,6 +203,8 @@ bool EditorWindow::press_minimap(LPARAM data)
     left_pressed_ = band_press_after_minimap(grab, left_pressed_);
     SetCapture(window_);
     minimap_grab_ = GetCapture() == window_ ? grab : std::nullopt;
+    // 押しの始まりで面を濃くする（送りが無い押しでも 1 回描く・#1487）。
+    invalidate();
     if (sent.has_value())
     {
         send(sent.value());
@@ -246,6 +248,8 @@ bool EditorWindow::release_minimap(LPARAM data)
     {
         send(sent.value());
     }
+    // 押しの終わりで面の濃さを戻す（#1487）。
+    invalidate();
     return true;
 }
 
@@ -263,6 +267,7 @@ void EditorWindow::end_minimap_drag(UINT message)
     {
         ReleaseCapture();
     }
+    invalidate();
 }
 
 // WM_KEYDOWN の Esc（take_explorer_escape と同じ形）。押している間の Esc はドラッグを終えるだけで
