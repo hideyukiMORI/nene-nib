@@ -249,7 +249,7 @@ void verify_ordinary_refusals()
     const std::size_t clock_calls = editing.wall_clock().calls();
     const app::EditorIntent edits[] = {
         app::InsertText{"x"},
-        app::DeleteText{core::DeleteDirection::backward},
+        app::DeleteText{core::DeleteDirection::backward, nenenib::core::DeleteUnit::character},
         app::NewLine{},
         app::ClipboardAction{app::ClipboardOperation::paste},
         app::ClipboardAction{app::ClipboardOperation::cut},

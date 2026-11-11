@@ -568,23 +568,29 @@ void verify_controller_deletion()
     EditorController &controller = editing.controller();
     applied(controller, VisibleLines{10});
     applied(controller, InsertText{"abc"});
-    expect(applied(controller, DeleteText{DeleteDirection::backward}) == "ab",
+    expect(applied(controller, DeleteText{DeleteDirection::backward,
+                                          nenenib::core::DeleteUnit::character}) == "ab",
            "Backspace removes the code point before the caret");
     applied(controller, MoveCaret{CaretMotion::line_start, SelectionAnchoring::collapse});
-    expect(applied(controller, DeleteText{DeleteDirection::backward}) == "ab",
+    expect(applied(controller, DeleteText{DeleteDirection::backward,
+                                          nenenib::core::DeleteUnit::character}) == "ab",
            "Backspace at the start of the buffer does nothing");
-    expect(applied(controller, DeleteText{DeleteDirection::forward}) == "b",
+    expect(applied(controller, DeleteText{DeleteDirection::forward,
+                                          nenenib::core::DeleteUnit::character}) == "b",
            "Delete removes the code point after the caret");
     applied(controller, MoveCaret{CaretMotion::document_end, SelectionAnchoring::collapse});
-    expect(applied(controller, DeleteText{DeleteDirection::forward}) == "b",
+    expect(applied(controller, DeleteText{DeleteDirection::forward,
+                                          nenenib::core::DeleteUnit::character}) == "b",
            "Delete at the end of the buffer does nothing");
     applied(controller, NewLine{});
     applied(controller, InsertText{"c"});
     applied(controller, MoveCaret{CaretMotion::line_start, SelectionAnchoring::collapse});
-    expect(applied(controller, DeleteText{DeleteDirection::backward}) == "bc",
+    expect(applied(controller, DeleteText{DeleteDirection::backward,
+                                          nenenib::core::DeleteUnit::character}) == "bc",
            "Backspace at a line start removes the whole CRLF");
     applied(controller, InsertText{"\xE6\x97\xA5"});
-    expect(applied(controller, DeleteText{DeleteDirection::backward}) == "bc",
+    expect(applied(controller, DeleteText{DeleteDirection::backward,
+                                          nenenib::core::DeleteUnit::character}) == "bc",
            "Backspace removes a whole multibyte code point");
 }
 
@@ -605,7 +611,9 @@ void verify_controller_selection()
     expect(controller.frame().lines.at(0).selection.presence == SelectionPresence::absent,
            "the replacement collapses the selection");
     applied(controller, SelectAll{});
-    expect(applied(controller, DeleteText{DeleteDirection::forward}).empty(),
+    expect(applied(controller,
+                   DeleteText{DeleteDirection::forward, nenenib::core::DeleteUnit::character})
+               .empty(),
            "Ctrl+A then Delete empties the buffer");
     applied(controller, InsertText{"ab"});
     applied(controller, NewLine{});

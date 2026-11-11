@@ -132,7 +132,8 @@ void verify_wrapped_selection()
                reverse.lines.front().selection.begin == Column{2} &&
                reverse.lines.front().selection.end == Column{11},
            "reverse drag retains the original anchor across wrapped rows");
-    const auto erased = controller.apply_frame(DeleteText{DeleteDirection::backward});
+    const auto erased = controller.apply_frame(
+        DeleteText{DeleteDirection::backward, nenenib::core::DeleteUnit::character});
     expect(erased.lines.front().text == "a", "Backspace removes exactly the dragged source range");
     const auto restored = controller.apply_frame(HistoryAction{HistoryDirection::undo});
     expect(restored.lines.front().text == "abcdefghij", "undo restores the selected logical text");

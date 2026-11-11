@@ -693,12 +693,12 @@ void verify_diagnostics_follow_edits()
     const auto stale = editing.controller().apply_frame(app::WorkCompleted{});
     expect(underlined(stale.lines.at(0), 3, 6, core::DiagnosticSeverity::warning),
            "a diagnostic for an older version is placed through the later edits");
-    const auto before =
-        editing.controller().apply_frame(app::DeleteText{core::DeleteDirection::backward});
+    const auto before = editing.controller().apply_frame(
+        app::DeleteText{core::DeleteDirection::backward, nenenib::core::DeleteUnit::character});
     expect(underlined(before.lines.at(0), 2, 5, core::DiagnosticSeverity::warning),
            "deleting before a diagnostic moves it back");
-    const auto inside =
-        editing.controller().apply_frame(app::DeleteText{core::DeleteDirection::forward});
+    const auto inside = editing.controller().apply_frame(
+        app::DeleteText{core::DeleteDirection::forward, nenenib::core::DeleteUnit::character});
     expect(inside.lines.at(0).diagnostics.empty(),
            "an edit inside the range drops the diagnostic until the server publishes again");
 }

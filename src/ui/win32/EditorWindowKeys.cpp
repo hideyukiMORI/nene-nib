@@ -608,10 +608,10 @@ void EditorWindow::press_plain_key(WPARAM word)
     switch (word)
     {
     case VK_BACK:
-        send(application::DeleteText{core::DeleteDirection::backward});
+        send(application::DeleteText{core::DeleteDirection::backward, core::DeleteUnit::character});
         return;
     case VK_DELETE:
-        send(application::DeleteText{core::DeleteDirection::forward});
+        send(application::DeleteText{core::DeleteDirection::forward, core::DeleteUnit::character});
         return;
     case VK_RETURN:
         send(application::NewLine{});
@@ -662,9 +662,29 @@ void EditorWindow::press_control_key(WPARAM word)
     case 'R':
         send_vim_redo();
         return;
+    case VK_BACK:
+    case VK_DELETE:
+        send_word_deletion(word);
+        return;
     default:
         break;
     }
+}
+
+// 通常モードの Ctrl+Backspace / Ctrl+Delete は語の削除（ADR 0009 の追補 #1394）。Vim のモードは
+// 今までどおり何もしない。
+void EditorWindow::send_word_deletion(WPARAM word)
+{
+    switch (mode_)
+    {
+    case core::EditMode::vim:
+        return;
+    case core::EditMode::ordinary:
+        break;
+    }
+    const auto direction =
+        word == VK_BACK ? core::DeleteDirection::backward : core::DeleteDirection::forward;
+    send(application::DeleteText{direction, core::DeleteUnit::word});
 }
 
 // 鍵（Ctrl+Tab）は Ctrl を離したときに確定する。一覧から（Ctrl を押していない）は 1 歩で確定する

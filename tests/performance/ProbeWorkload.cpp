@@ -232,8 +232,8 @@ inserted_after_delete(const std::string &input, application::TimingPort &timing)
         return std::unexpected(ProbeFailure::wrong_result);
     }
     static_cast<void>(editing.controller().apply(application::SelectAll{}));
-    static_cast<void>(
-        editing.controller().apply(application::DeleteText{core::DeleteDirection::backward}));
+    static_cast<void>(editing.controller().apply(application::DeleteText{
+        core::DeleteDirection::backward, nenenib::core::DeleteUnit::character}));
     const auto frame = editing.controller().frame();
     if (frame.total_lines != 1 || frame.caret.position.column.value != 1 ||
         !saved_equals(editing, ""))

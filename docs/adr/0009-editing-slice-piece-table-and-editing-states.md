@@ -64,3 +64,16 @@ CPP-014 は「内部表現は Phase 3 の piece table の ADR で決める」と
 
 - [ADR 0004](0004-ui-thread-plus-one-worker.md)・[ADR 0005](0005-own-vim-engine-verified-against-real-vim.md)・[ADR 0008](0008-adopted-look-tabs-titlebar-statusbar-mica.md)
 - SPECIFICATION 第 3 節・FR-002 / FR-008 / FR-013
+
+## 追補（2026-11-11・#1394・施主決定 D82）: 通常モードの語の境と Ctrl+Backspace / Ctrl+Delete
+
+「語の区切りは空白だけ」（結果の節）を通常モードについて改める。Vim のモードは変えない。
+
+1. **語の境は core の `ordinary_word_boundary` の 1 本**。通常モードの Ctrl+← →（Shift つきも・`moved_caret` の `CaretUnit::ordinary`）と、Ctrl+Backspace / Ctrl+Delete が消す範囲の端はこれだけで決める。`CaretUnit::code_point`（Vim のモードの Ctrl+← →）は空白だけの区切りのまま。
+2. **規則は Windows のメモ帳の engine の実測に合わせる**。見えない `EDIT`・`RICHEDIT50W`（msftedit）・メモ帳の package の Office RichEdit（`RICHEDIT60W`）を probe のプロセスの中に作って測った（記録 `D:\NeNeNib\outputs\20261111\windows-standard-probe.md`・EDIT は語の区切りが空白で Ctrl+Backspace が無いので、メモ帳と同じ RichEdit を正にした）。語は同じ種類の文字の連なりで、後ろの空白は前の語に付く。Ctrl+→ は語と後ろの空白を越えて次の語の頭へ、行末では改行の前で 1 回止まる。Ctrl+← はその鏡で、行頭からは改行 1 つ、字下げの行頭（前の空白を越えて行頭に着いたとき）は止まらずに前の行末（空の行が続けば全部越える）へ戻る。
+3. **文字の種類は Vim の語の分類の表（`vim_character_class` の word）を引き、表を 2 つ作らない**。メモ帳と違う 4 か所だけを読み替える: `_` は記号、Tab は 1 つずつ別の語（空白に数えない）、半角カタカナ（U+FF66〜U+FF9F）は英数字と別の種類、英数字に挟まれた `'` と U+2019 は語の中。幅 0 の文字（結合文字・ZWJ）は前の文字に付く。
+4. **漢字の連なりは 1 語**。メモ帳は漢字を辞書（文脈）で切る（`東|京|都` `日本語　|全角|空白` `飲む`）ので表では写せない。Issue #1394 の「文字の種類の切れ目で止まる」を正にした。照合（`model.py`）は試験の 64 文字列のうち 52 が全位置で一致し、残りは辞書の切れ方・サロゲートの途中・記号の後ろの結合文字・`あ'い` だけ。
+5. **Ctrl+Backspace / Ctrl+Delete は意図 `DeleteText` の `unit = word`**（`core::DeleteUnit`）。選択が空なら Ctrl+← / Ctrl+→ の着地までを `replace` で消す（undo 1 単位・行頭 / 行末では改行を消す）。選択があれば向きに関わらず選択を消す（Issue の決めた形・Backspace と同じ）。メモ帳の engine は選択を残して選択の始まりから語を消すが、Issue と標準のブラウザの入力欄に合わせた。窓は通常モードでだけ送り（`send_word_deletion`）、Vim のモードの Ctrl+Backspace / Ctrl+Delete は今までどおり何もしない。
+6. ダブルクリックの語の選択は Vim の `iw` の範囲（#1250）のままで、この境を使わない。
+
+検証は `--ordinary-words`（英文・記号・Tab・空白・日本語・混在・結合文字・行をまたぐ・行頭行末・CRLF・Vim のモードの不変・controller の移動と削除と undo）。fixture は変えない。

@@ -220,6 +220,7 @@ class EditorWindow final
     void press_plain_key(WPARAM word);
     void press_vim_key(WPARAM word);
     void press_control_key(WPARAM word);
+    void send_word_deletion(WPARAM word);
     // IMM32（ADR 0014）。WM_IME_STARTCOMPOSITION / WM_IME_COMPOSITION は DefWindowProcW へ
     // 渡さないので、IME の既定の変換窓は出ず、確定文字も WM_CHAR には流れない（決定 3）。
     [[nodiscard]] LRESULT compose_message(UINT message, WPARAM word, LPARAM data);
