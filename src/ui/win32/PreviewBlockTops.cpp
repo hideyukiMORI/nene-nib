@@ -1,6 +1,7 @@
 #include "PreviewBlockTops.hpp"
 
 #include "PreviewBlockKind.hpp"
+#include "PreviewInlineImages.hpp"
 #include "PreviewMetrics.hpp"
 #include "PreviewTaskBox.hpp"
 #include "RenderFailure.hpp"
@@ -93,17 +94,28 @@ void remember(std::vector<MarkerKind> &kinds, const core::PreviewBlock &block)
     return indent;
 }
 
-// 要素の layout の高さ（水平線は文字を持たないので 0）。
-[[nodiscard]] std::expected<float, RenderFailure> text_height_of(const core::PreviewBlock &block,
-                                                                 PreviewTextLayouts &layouts,
-                                                                 const PreviewTextStyle &style,
-                                                                 float width)
+// 要素の layout の幅（物理画素）と、その中で読めた画像の箱（ADR 0155 の追補 62）。
+using SizedText = std::pair<float, std::span<const PreviewInlineImage>>;
+
+// 要素の layout の高さ（水平線は文字を持たないので 0）と、1 行目の baseline の下がり（箱のある
+// layout だけ・チェックボックスを 1 行目の文字に揃える・ADR 0155 の追補 68）。読めた画像は箱の
+// 大きさで測る（描く所と同じ箱で同じ layout を引く）。
+[[nodiscard]] std::expected<std::pair<float, float>, RenderFailure>
+text_height_of(const core::PreviewBlock &block, PreviewTextLayouts &layouts,
+               const PreviewTextStyle &style, SizedText sized)
 {
     if (block.kind == core::PreviewBlockKind::rule)
     {
-        return 0.0F;
+        return std::pair{0.0F, 0.0F};
     }
-    return layouts.measure(block, width, style);
+    const auto height = layouts.measure(block, sized.first, style, sized.second);
+    const auto shift = height ? layouts.first_line_shift(block, sized.first, style, sized.second)
+                              : std::expected<float, RenderFailure>(0.0F);
+    if (!height || !shift)
+    {
+        return std::unexpected(height ? shift.error() : height.error());
+    }
+    return std::pair{height.value(), shift.value()};
 }
 
 // タスクの項目（記号を描く項目のうちチェックボックスを持つもの）か。
@@ -165,17 +177,21 @@ std::expected<bool, RenderFailure> PreviewBlockTops::place(const core::MarkdownD
             return false;
         }
         const auto indent = indent_of(block, *columns.value().first, style.dpi);
-        const auto height = text_height_of(
-            block, layouts, style, preview_text_width(block, viewport.width, indent, style.dpi));
+        const auto width = preview_text_width(block, viewport.width, indent, style.dpi);
+        const auto inlines = preview_inline_images(document, viewport.images, index,
+                                                   preview_dips_of(width, style.dpi));
+        const auto height = text_height_of(block, layouts, style, SizedText{width, inlines});
         if (!height)
         {
             return std::unexpected(height.error());
         }
         indents_.push_back(indent);
-        task_boxes_.push_back(task_item(block) ? std::optional(preview_task_box(indent, y, style))
-                                               : std::nullopt);
+        const auto [extent, shift] = height.value();
+        task_boxes_.push_back(task_item(block)
+                                  ? std::optional(preview_task_box(indent, y + shift, style))
+                                  : std::nullopt);
         tops_.push_back(y);
-        y += preview_extent(block.kind, height.value(), style.dpi);
+        y += preview_extent(block.kind, extent, style.dpi);
         bottoms_.push_back(y);
     }
     return true;

@@ -3,9 +3,11 @@
 #include "LayoutRect.hpp"
 #include "MarkdownDocument.hpp"
 #include "Offset.hpp"
+#include "PreviewBitmaps.hpp"
 #include "PreviewBlockTops.hpp"
 #include "PreviewBrushes.hpp"
 #include "PreviewFrame.hpp"
+#include "PreviewImages.hpp"
 #include "PreviewPictureKey.hpp"
 #include "PreviewPoint.hpp"
 #include "PreviewTextLayouts.hpp"
@@ -35,6 +37,8 @@ namespace nenenib::ui::win32
 // 描いた枠の絵は枠の大きさのオフスクリーンの bitmap に持ち、鍵（PreviewPictureKey）が前の frame と
 // 同じなら DrawBitmap 1 回で枠を描く（#903・ADR 0155 の追補）。bitmap を作れない描く先では
 // 今までどおり直接描く。
+// 読めた画像（ADR 0155 の追補 62・63）は、画像の状態（frame.images の指す先）が替わると錨から測り
+// 直して描き直し（鍵に入る）、見えている要素の画像の bitmap を描く前に PreviewBitmaps に作る。
 class PreviewPane final
 {
   public:
@@ -48,6 +52,11 @@ class PreviewPane final
                                                            const application::PreviewFrame &frame,
                                                            const PreviewTextStyle &style,
                                                            const core::LayoutRect &area);
+    // プレビューを描かない frame で renderer が呼ぶ。画像の bitmap と、測った文書・画像の状態の
+    // 参照を放す（閉じたプレビューの画素と bitmap を持ち続けない・ADR 0155 の追補 63）。
+    void release() noexcept;
+    // 持っている画像の bitmap（試験が数える）。
+    [[nodiscard]] const PreviewBitmaps &bitmaps() const noexcept;
     // 最後に描いた枠の中の点 (x, y)（描画先の物理画素）を押す範囲に含むチェックボックスの要素の
     // 番号（ADR 0155 の追補
     // 24）。保持の縦の位置（PreviewBlockTops::task_box）を読むだけで測らない。
@@ -71,7 +80,14 @@ class PreviewPane final
     // 保持の縦の位置（測り直したなら新しいもの）。
     [[nodiscard]] std::expected<const PreviewBlockTops *, RenderFailure>
     remeasure(const std::shared_ptr<const core::MarkdownDocument> &document,
+              const std::shared_ptr<const application::PreviewImages> &images,
               const PreviewTextStyle &style, const PreviewViewport &viewport);
+    // 測った要素 [tops.first(), tops.size()) の読めた画像の bitmap を target に作る（画像の状態が
+    // null なら bitmap を全部放す）。
+    // 作れない画像（device lost でない失敗）は飛ばし、箱は空のまま描く（ADR 0155 の追補 67）。
+    [[nodiscard]] std::expected<void, RenderFailure>
+    hold_bitmaps(ID2D1RenderTarget &target, const core::MarkdownDocument &document,
+                 const application::PreviewImages *images, const PreviewBlockTops &tops);
     // 要素を描く唯一の関数（直接の道と bitmap の道が共用する）。frame は描く先の座標の枠。
     [[nodiscard]] std::expected<void, RenderFailure> draw_scene(ID2D1RenderTarget &target,
                                                                 const PreviewPictureKey &key,
@@ -92,6 +108,8 @@ class PreviewPane final
     PreviewTextLayouts layouts_;
     PreviewBrushes brushes_;
     std::shared_ptr<const core::MarkdownDocument> measured_;
+    // 測った画像の状態（弱い参照・ADR 0155 の追補 63）。
+    std::weak_ptr<const application::PreviewImages> measured_images_;
     std::optional<PreviewTextStyle> measured_style_;
     PreviewViewport measured_viewport_{0, 0.0F, 0.0F};
     std::optional<PreviewBlockTops> tops_;
@@ -100,6 +118,7 @@ class PreviewPane final
     std::string theme_;
     Microsoft::WRL::ComPtr<ID2D1Bitmap1> picture_;
     std::optional<PreviewPictureKey> pictured_;
+    PreviewBitmaps bitmaps_;
     std::size_t painted_ = 0;
     std::size_t reused_ = 0;
     std::size_t pictures_ = 0;
