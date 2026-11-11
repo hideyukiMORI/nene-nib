@@ -27,6 +27,7 @@
 #include "PointMinimap.hpp"
 #include "PreviewPlacement.hpp"
 #include "Scopes.hpp"
+#include "ScrollLines.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "SetPreviewPlacement.hpp"
@@ -45,6 +46,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -56,6 +58,7 @@ using core::LineNumber;
 using Random = std::mt19937_64;
 
 constexpr std::string_view code_path = "C:\\work\\pointer.cpp";
+constexpr std::string_view other_path = "C:\\work\\other.cpp";
 constexpr std::int32_t window_width = 1000;
 constexpr std::int32_t window_height = 700;
 
@@ -271,6 +274,92 @@ void verify_vim_mode()
     expect(repeated.lines.front().text == "t value_1 = 1;",
            "dot repeats the change made before the press");
 }
+
+// 折り返す本文（1 画面行 10 升）を開く。lines は行ごとの文字の数（100 なら 10 画面行に折れる）。
+void open_wrapped(Editing &editing, std::string_view path, const std::vector<std::size_t> &lines)
+{
+    std::string text;
+    for (const std::size_t length : lines)
+    {
+        text += std::string(length, 'a') + "\n";
+    }
+    editing.files().hold_at(std::string(path), Bytes{std::move(text)});
+    applied(editing.controller(), app::VisibleLines{30, core::TextViewGeometry{100, 20, 96},
+                                                    window_width, window_height});
+    applied(editing.controller(), app::OpenDocument{core::FilePath::parse(path).value()});
+}
+
+[[nodiscard]] std::vector<std::size_t> lengths(std::size_t first, std::size_t first_length,
+                                               std::size_t second, std::size_t second_length)
+{
+    std::vector<std::size_t> result(first, first_length);
+    result.insert(result.end(), second, second_length);
+    return result;
+}
+
+// レビュー V-1476 の反例 1: 上が折り返す長い行・下が短い行。同じ点を押すたびに見えている論理行の
+// 数が変わっても、2
+// 回目以降は動かない（最後に面が送った先頭のままなら押したときの数を使い続ける）。
+void verify_wrapped_press_stays()
+{
+    Editing editing{SettingsReading{std::optional{minimap_settings()}}};
+    auto &controller = editing.controller();
+    open_wrapped(editing, code_path, lengths(500, 100, 500, 1));
+    static_cast<void>(controller.frame());
+    const auto first = pointed(controller, app::MinimapPointing::pressed, 200);
+    const auto second = pointed(controller, app::MinimapPointing::pressed, 200);
+    const auto third = pointed(controller, app::MinimapPointing::pressed, 200);
+    expect(first.first_visible.value > 500 && second.first_visible == first.first_visible &&
+               third.first_visible == first.first_visible,
+           "pressing the same row again stays put across wrapped and short lines");
+}
+
+// 反例 2: 上が短い行・下が折り返す長い行。面の下の外までドラッグすると、ホイールで行ける最後の
+// 位置（clamp_scroll の上限）まで届く。
+void verify_wrapped_drag_reaches_end()
+{
+    Editing editing{SettingsReading{std::optional{minimap_settings()}}};
+    auto &controller = editing.controller();
+    open_wrapped(editing, code_path, lengths(1000, 1, 100, 100));
+    static_cast<void>(controller.frame());
+    static_cast<void>(pointed(controller, app::MinimapPointing::pressed, 5));
+    const auto dragged = pointed(controller, app::MinimapPointing::dragged, 100'000);
+    static_cast<void>(controller.apply(app::ScrollLines{1'000'000}));
+    const auto wheeled = controller.frame();
+    expect(dragged.first_visible == wheeled.first_visible &&
+               dragged.lines.front().screen_row == wheeled.lines.front().screen_row,
+           "dragging below the panel reaches the last position the wheel reaches");
+}
+
+// 面に収まる 1 本の折り返す行の奥まで送った後に面を押しても、行の先頭へ戻らない（レビュー L-5）。
+void verify_pressed_line_keeps_row()
+{
+    Editing editing{SettingsReading{std::optional{minimap_settings()}}};
+    auto &controller = editing.controller();
+    open_wrapped(editing, code_path, lengths(1, 3000, 0, 0));
+    static_cast<void>(controller.apply(app::ScrollLines{50}));
+    const auto scrolled = controller.frame();
+    const auto pressed = pointed(controller, app::MinimapPointing::pressed, 0);
+    expect(scrolled.lines.front().screen_row == pressed.lines.front().screen_row &&
+               pressed.first_visible == scrolled.first_visible,
+           "pressing the line already shown keeps the row inside it");
+}
+
+// ドラッグの間にタブが替わったら、その後のドラッグは新しいタブを送らない（レビュー L-6）。
+void verify_tab_change_ends_drag()
+{
+    Editing editing{SettingsReading{std::optional{minimap_settings()}}};
+    auto &controller = editing.controller();
+    open_numbered(editing, 6000);
+    static_cast<void>(controller.frame());
+    static_cast<void>(pointed(controller, app::MinimapPointing::pressed, 150));
+    editing.files().hold_at(std::string(other_path), Bytes{numbered_lines(6000)});
+    applied(controller, app::OpenDocument{core::FilePath::parse(other_path).value()});
+    const auto opened = controller.frame();
+    const auto dragged = pointed(controller, app::MinimapPointing::dragged, 200);
+    expect(dragged.first_visible == opened.first_visible,
+           "a drag begun on another tab does not scroll this one");
+}
 } // namespace
 
 void verify_minimap_pointer_scope()
@@ -281,5 +370,9 @@ void verify_minimap_pointer_scope()
     verify_press_and_drag();
     verify_history_and_off();
     verify_vim_mode();
+    verify_wrapped_press_stays();
+    verify_wrapped_drag_reaches_end();
+    verify_pressed_line_keeps_row();
+    verify_tab_change_ends_drag();
 }
 } // namespace nenenib::tests

@@ -5,6 +5,7 @@
 #include "MinimapGrab.hpp"
 #include "MinimapPointing.hpp"
 #include "PointMinimap.hpp"
+#include "TitleBarTarget.hpp"
 
 #include <windows.h>
 
@@ -54,6 +55,16 @@ minimap_pressed(std::int32_t y, const std::optional<core::LayoutRect> &panel) no
                        application::PointMinimap{application::MinimapPointing::pressed, row}};
 }
 
+// 面の押しの後の帯の押しの印（窓の left_pressed_）。click_client は面の押しの前に click_title_bar
+// を 通り、帯の外でも {none} を置く。面の離しは release_title_bar を通らないので、面を押したら消す
+// （残すと次のクリックまで境の hover とカーソルが止まる・#1413 と同じ穴・レビュー V-1476 の M-1）。
+[[nodiscard]] inline std::optional<core::TitleBarTarget>
+band_press_after_minimap(const std::optional<MinimapGrab> &pressed,
+                         const std::optional<core::TitleBarTarget> &band) noexcept
+{
+    return pressed.has_value() ? std::nullopt : band;
+}
+
 // 窓のメッセージ 1 通の後。y は点の y（client の物理画素）、panel は押しの点の下の面（面が出ていて
 // 点がその上のときだけ値・WM_LBUTTONDOWN / WM_LBUTTONDBLCLK だけが読む）。
 // - WM_LBUTTONDOWN / WM_LBUTTONDBLCLK: 面の上なら覚えて pressed を送る（2 回目の押しも同じ押し）。
@@ -61,8 +72,9 @@ minimap_pressed(std::int32_t y, const std::optional<core::LayoutRect> &panel) no
 // - WM_MOUSEMOVE: 押していれば、段が変わったときだけ dragged を送る（面の外へ出た点も段のまま・
 //   切り詰めは application）。
 // - WM_LBUTTONUP: 押していれば、段が変わっていれば dragged を送り、覚えを消す。
-// - WM_CAPTURECHANGED / WM_MOUSELEAVE / WM_KEYDOWN（Esc のときだけ渡す）: 覚えを消す。窓はその時点
-//   の位置のまま（何も送らない）。
+// - WM_CAPTURECHANGED / WM_KEYDOWN（Esc のときだけ渡す）: 覚えを消す。窓はその時点の位置のまま
+//   （何も送らない）。WM_MOUSELEAVE は選択と境のドラッグと同じく終えない（捕まえている間は届かない
+//   見込みで、届いても窓の下の外へ引く操作を切らない・レビュー V-1476 の L-2）。
 // - ほかは変えない（OS のメッセージは開いた集合なので既定分岐を置く・CPP-017）。
 [[nodiscard]] inline MinimapStep minimap_step(UINT message, std::int32_t y,
                                               const std::optional<core::LayoutRect> &panel,
@@ -78,7 +90,6 @@ minimap_pressed(std::int32_t y, const std::optional<core::LayoutRect> &panel) no
     case WM_LBUTTONUP:
         return minimap_followed(y, held, false);
     case WM_CAPTURECHANGED:
-    case WM_MOUSELEAVE:
     case WM_KEYDOWN:
         return MinimapStep{std::nullopt, std::nullopt};
     default:

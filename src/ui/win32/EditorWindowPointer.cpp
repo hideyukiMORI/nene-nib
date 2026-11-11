@@ -108,7 +108,6 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
     case WM_MOUSELEAVE:
         // 窓の外で離した押しは残さない（捕まえを取らないので離しが届かない・追補 24）。
         start_pressed_ = std::nullopt;
-        end_minimap_drag(message);
         over_explorer_divider_ = false;
         hover_explorer_line(std::nullopt);
         hover(std::nullopt);
@@ -201,6 +200,7 @@ bool EditorWindow::press_minimap(LPARAM data)
     {
         return false;
     }
+    left_pressed_ = band_press_after_minimap(grab, left_pressed_);
     SetCapture(window_);
     minimap_grab_ = GetCapture() == window_ ? grab : std::nullopt;
     if (sent.has_value())
@@ -249,8 +249,8 @@ bool EditorWindow::release_minimap(LPARAM data)
     return true;
 }
 
-// ドラッグを終える（message は終えたメッセージ: 捕まえを失った WM_CAPTURECHANGED・窓の外の
-// WM_MOUSELEAVE・Esc の WM_KEYDOWN。面が消えたときは WM_CAPTURECHANGED と同じ）。窓はその時点の
+// ドラッグを終える（message は終えたメッセージ: 捕まえを失った WM_CAPTURECHANGED・Esc の
+// WM_KEYDOWN。面が消えたときは WM_CAPTURECHANGED と同じ）。窓はその時点の
 // 位置のまま。まだ捕まえていれば放す（覚えを先に消すので、戻る WM_CAPTURECHANGED は何もしない）。
 void EditorWindow::end_minimap_drag(UINT message)
 {

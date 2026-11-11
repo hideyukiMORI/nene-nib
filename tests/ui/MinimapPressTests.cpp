@@ -102,9 +102,25 @@ void verify_outside_and_beyond()
            "a double click on the panel is two presses of the same row");
 }
 
+// 面の押しは帯の押しの印（click_title_bar が帯の外でも置く {none}）を消し、面の外の押しは残す
+// （V-1476 の M-1・離しは release_title_bar を通らない）。
+void verify_band_press_cleared()
+{
+    using nenenib::core::TitleBarHit;
+    using nenenib::core::TitleBarTarget;
+    using nenenib::ui::win32::band_press_after_minimap;
+    const std::optional band{TitleBarTarget{TitleBarHit::none, 0}};
+    const auto on = minimap_step(WM_LBUTTONDOWN, 160, std::optional{panel}, std::nullopt).first;
+    const auto off = minimap_step(WM_LBUTTONDOWN, 160, std::nullopt, std::nullopt).first;
+    expect(!band_press_after_minimap(on, band).has_value(),
+           "a press on the minimap clears the band press mark");
+    expect(band_press_after_minimap(off, band) == band,
+           "a press beside the minimap keeps the band press mark for release_title_bar");
+}
+
 void verify_ended()
 {
-    for (const UINT ending : std::array<UINT, 3>{WM_CAPTURECHANGED, WM_MOUSELEAVE, WM_KEYDOWN})
+    for (const UINT ending : std::array<UINT, 2>{WM_CAPTURECHANGED, WM_KEYDOWN})
     {
         Held held;
         const std::array messages{Message{WM_LBUTTONDOWN, 160, true}, Message{ending, 0, false},
@@ -113,8 +129,16 @@ void verify_ended()
         const auto sent = run(messages, held);
         expect(sent.size() == 1 && is(sent.front(), MinimapPointing::pressed, 50) &&
                    !held.has_value(),
-               "losing the capture, leaving the window or Esc ends the drag where it is");
+               "losing the capture or Esc ends the drag where it is");
     }
+    // 窓の外へ出た WM_MOUSELEAVE はドラッグを終えない（選択と境のドラッグと同じ・V-1476 の L-2）。
+    Held left;
+    const std::array leaving{Message{WM_LBUTTONDOWN, 160, true}, Message{WM_MOUSELEAVE, 0, false},
+                             Message{WM_MOUSEMOVE, 300, false}};
+    const auto followed = run(leaving, left);
+    expect(followed.size() == 2 && is(followed.at(1), MinimapPointing::dragged, 120) &&
+               left.has_value(),
+           "leaving the window keeps the drag");
     Held held{MinimapGrab{60, 50}};
     const std::array other{Message{WM_TIMER, 300, false}};
     expect(run(other, held).empty() && held == Held{MinimapGrab{60, 50}},
@@ -127,5 +151,6 @@ void verify_minimap_presses()
     verify_press_drag_release();
     verify_outside_and_beyond();
     verify_ended();
+    verify_band_press_cleared();
 }
 } // namespace nenenib::tests::ui
