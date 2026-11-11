@@ -49,6 +49,7 @@
 #include "ScriptedPrinter.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
+#include "ScriptedStartLists.hpp"
 #include "ScriptedThemes.hpp"
 #include "ScrollLines.hpp"
 #include "SelectEditMode.hpp"
@@ -536,6 +537,7 @@ void verify_recency_ranked()
     ScriptedPrinter printer;
     ScriptedShellRegistration shell_registration;
     ScriptedImages images;
+    ScriptedStartLists start_lists;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -546,7 +548,7 @@ void verify_recency_ranked()
                     themes,       session,         history,    folders,    bookmarks,
                     text_layouts, autosave,        fonts,      bell,       markdown,
                     reads,        language_server, wall_clock, printer,    shell_registration,
-                    images},
+                    images,       start_lists},
         initial);
     return controller.frame();
 }

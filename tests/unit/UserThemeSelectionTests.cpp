@@ -43,6 +43,7 @@
 #include "ScriptedPrinter.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
+#include "ScriptedStartLists.hpp"
 #include "ScriptedThemes.hpp"
 #include "SettingsFailure.hpp"
 #include "SettingsIssue.hpp"
@@ -252,6 +253,7 @@ void verify_theme_startup_notice()
     ScriptedPrinter printer;
     ScriptedShellRegistration shell_registration;
     ScriptedImages images;
+    ScriptedStartLists start_lists;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -263,7 +265,7 @@ void verify_theme_startup_notice()
                          themes,       session,         history,    folders, bookmarks,
                          text_layouts, autosave,        fonts,      bell,    markdown,
                          reads,        language_server, wall_clock, printer, shell_registration,
-                         images},
+                         images,       start_lists},
         initial};
     auto frame = controller.frame();
     expect(frame.lines.front().text == "initial body", "initial document uses normal file load");
@@ -281,7 +283,7 @@ void verify_theme_startup_notice()
                          themes,       session,         history,    folders, bookmarks,
                          text_layouts, autosave,        fonts,      bell,    markdown,
                          reads,        language_server, wall_clock, printer, shell_registration,
-                         images},
+                         images,       start_lists},
         initial};
     expect(unreadable.frame().lines.front().text == "initial body" &&
                unreadable.frame().settings_failure == app::SettingsFailure::malformed,

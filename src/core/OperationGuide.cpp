@@ -9,8 +9,9 @@ namespace
 {
 constexpr std::array<EditorOperation, 3> guide_operations{
     EditorOperation::list_files, EditorOperation::open_file, EditorOperation::list_operations};
+} // namespace
 
-[[nodiscard]] GuideEntry guide_entry(EditorOperation operation, EditMode mode)
+GuideEntry operation_guide_entry(EditorOperation operation, EditMode mode)
 {
     const auto &text = operation_text(operation);
     const auto short_name = text.short_name.empty() ? text.name : text.short_name;
@@ -19,7 +20,6 @@ constexpr std::array<EditorOperation, 3> guide_operations{
     return GuideEntry{chord.has_value() ? key_chord_label(chord.value()) : std::string{}, body_name,
                       short_name};
 }
-} // namespace
 
 OperationGuide operation_guide(GuideContext context, EditMode mode)
 {
@@ -32,7 +32,7 @@ OperationGuide operation_guide(GuideContext context, EditMode mode)
     case GuideContext::other:
         for (std::size_t index = 0; index < guide_operations.size(); ++index)
         {
-            result.entries.at(index) = guide_entry(guide_operations.at(index), mode);
+            result.entries.at(index) = operation_guide_entry(guide_operations.at(index), mode);
         }
         return result;
     }
