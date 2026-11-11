@@ -544,8 +544,8 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
     std::string body = lf_text(text, begin, caret);
     const Offset rest{begin.value + body.size() - retreat};
     step.insert_left = retreat;
-    step.effect =
-        VimReplaceRange{OffsetRange{begin, consumed}, std::move(body), rest, EditBoundary::absorb};
+    step.effect = VimReplaceRange{OffsetRange{begin, consumed}, std::move(body), rest,
+                                  EditBoundary::absorb, VimLineMarks::shifted};
     return step;
 }
 

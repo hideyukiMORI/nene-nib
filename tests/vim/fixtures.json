@@ -3904,5 +3904,22 @@
   {"name":"huge-count-join-stops-at-the-last-line","text":"a\nb\nc","keys":"999999999J"},
   {"name":"huge-count-shift-covers-every-line","text":"a\nb\nc","keys":"999999999>>"},
   {"name":"huge-count-tilde-stops-at-the-line-end","text":"abc\ndef","keys":"999999999~"},
-  {"name":"huge-count-replace-past-the-line-end-fails","text":"abc","keys":"999999999rx"}
+  {"name":"huge-count-replace-past-the-line-end-fails","text":"abc","keys":"999999999rx"},
+  {"name":"visual-jump-mark-line-shift-right","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"12jV2{>''"},
+  {"name":"visual-jump-mark-char-shift-right","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"12jv2{>''"},
+  {"name":"visual-jump-mark-line-shift-left","text":"\tp1\n\tp2\n\n\tq1\n\tq2\n\n\tr1\n\tr2\n\n\ts1\n\ts2\n\n\tt1","keys":"12jV2{<''"},
+  {"name":"visual-jump-mark-line-tilde","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"12jV2{~''"},
+  {"name":"visual-jump-mark-char-tilde","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"12jv2{~''"},
+  {"name":"visual-jump-mark-char-upper","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"12jv2{U''"},
+  {"name":"visual-jump-mark-char-lower","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"12jv2{u''"},
+  {"name":"visual-jump-mark-gg-shift","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"12jVgg>''"},
+  {"name":"visual-jump-mark-char-replace","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"12jv2{rx''"},
+  {"name":"visual-jump-mark-named-shift","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"12jmaV2{>'a"},
+  {"name":"visual-jump-mark-named-tilde","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"12jmav2{~'a"},
+  {"name":"visual-jump-mark-operator-shift","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"12jma>gg'a"},
+  {"name":"visual-jump-mark-operator-case","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"12jmagUgg'a"},
+  {"name":"visual-jump-mark-escape-control","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"12jV2{<Esc>''"},
+  {"name":"visual-jump-mark-join-control","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"12jmakkkJ'a"},
+  {"name":"visual-jump-mark-gv-after-line-shift","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"3jVj>ggjgvd"},
+  {"name":"visual-jump-mark-gv-after-char-tilde","text":"p1\np2\n\nq1\nq2\n\nr1\nr2\n\ns1\ns2\n\nt1","keys":"3jvjl~ggjgvd"}
 ]
