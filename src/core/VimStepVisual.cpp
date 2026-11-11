@@ -21,6 +21,7 @@ using detail::aligned_screen;
 using detail::backward_characters;
 using detail::block_changed;
 using detail::block_inserted;
+using detail::block_line_end_state;
 using detail::block_of;
 using detail::block_operated;
 using detail::block_removed_to_line_end;
@@ -321,6 +322,13 @@ namespace
     return upper && mode != VimMode::visual_block ? VimMode::visual_line : mode;
 }
 
+// 欲しい列が行末（`$`・Vim の curswant == MAXCOL）か。
+[[nodiscard]] bool at_line_end(const VimState &state) noexcept
+{
+    return state.wanted_column.has_value() &&
+           state.wanted_column.value().wish == VimColumnWish::at_line_end;
+}
+
 // `.` が VISUAL の変更を再生している鍵か（Vim の redo_VIsual_busy・visual_remembered と同じ問い）。
 [[nodiscard]] bool redoing(const VimState &state, const VimEditorView &view) noexcept
 {
@@ -339,9 +347,13 @@ namespace
     Offset anchor = view.selection.anchor;
     if (mode == VimMode::visual_line && redoing(state, view))
     {
-        const std::size_t byte = anchor.value - text.line_start(line_of(text, anchor)).value;
-        return OffsetRange{anchor,
-                           vim_line_and_column(text, line_of(text, view.selection.caret), byte)};
+        // 記録が `$` で選んだ大きさなら Vim は coladvance(MAXCOL) で行の最後の文字へ置く
+        // （rv_vcol == MAXCOL・`v$AX<Esc>j0.`・#1436）。
+        const LineNumber last = line_of(text, view.selection.caret);
+        const std::size_t byte = at_line_end(state)
+                                     ? text.line_end(last).value - text.line_start(last).value
+                                     : anchor.value - text.line_start(line_of(text, anchor)).value;
+        return OffsetRange{anchor, vim_line_and_column(text, last, byte)};
     }
     if (mode == VimMode::visual_line)
     {
@@ -365,9 +377,7 @@ namespace
             block.left, VirtualColumn{block.left.value + block.width.columns - single_step}};
     }
     VimOperatorColumns columns = state.operator_columns;
-    const bool at_line_end = state.wanted_column.has_value() &&
-                             state.wanted_column.value().wish == VimColumnWish::at_line_end;
-    if (redoing(state, view) || at_line_end)
+    if (redoing(state, view) || at_line_end(state))
     {
         return columns;
     }
@@ -564,8 +574,10 @@ namespace
 }
 
 // VISUAL を抜ける鍵がオペレータか（Vim では do_pending_operator を通る鍵・#1436）。範囲の変更・
-// `u` `U`・`Ctrl-a` `Ctrl-x`・行に効く命令がそう。`p` `P`（nv_put）と移動・選択・検索・タブは違う。
-[[nodiscard]] bool operates(VimActionGroup group, VimAction action) noexcept
+// `u` `U`・`Ctrl-a` `Ctrl-x`・行に効く命令がそう。VISUAL の `p` `P` も nv_put_opt が選択を消す
+// ために do_pending_operator を通すので含む（#1418 で VISUAL を抜けるようになったら書く）。
+// 移動・選択・検索・タブは違う。
+[[nodiscard]] bool operates(VimActionGroup group) noexcept
 {
     switch (group)
     {
@@ -573,9 +585,8 @@ namespace
     case VimActionGroup::history:
     case VimActionGroup::number:
     case VimActionGroup::insert_line:
-        return true;
     case VimActionGroup::edit_line:
-        return action != VimAction::put_after && action != VimAction::put_before;
+        return true;
     case VimActionGroup::motion:
     case VimActionGroup::scroll:
     case VimActionGroup::enter_visual:
@@ -650,13 +661,14 @@ namespace detail
 // do_pending_operator）。`mode` は鍵が範囲を取る種類（operated_mode）。VISUAL に残る歩と、VISUAL
 // でない鍵の前の状態は変えない。`r{char}` の道（VimStepReplace）もここを通す。
 [[nodiscard]] VimStep visual_operation_noted(const VimState &state, const VimEditorView &view,
-                                             VimMode mode, VimStep step)
+                                             VimAction action, VimStep step)
 {
     if (!is_visual_mode(state.mode) || is_visual_mode(step.next.mode))
     {
         return step;
     }
-    step.next.operator_columns = operator_columns_of(state, view, mode);
+    step.next.operator_columns = operator_columns_of(block_line_end_state(state, action), view,
+                                                     operated_mode(state.mode, action));
     return step;
 }
 
@@ -680,11 +692,11 @@ namespace detail
         return visual_unchanged(state);
     }
     VimStep step = visual_grouped(state, view, action, group.value());
-    if (!operates(group.value(), action))
+    if (!operates(group.value()))
     {
         return step;
     }
-    return visual_operation_noted(state, view, operated_mode(state.mode, action), std::move(step));
+    return visual_operation_noted(state, view, action, std::move(step));
 }
 
 [[nodiscard]] VimStep visual_character(const VimState &state, const VimEditorView &view,

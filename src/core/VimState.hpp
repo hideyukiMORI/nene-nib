@@ -101,7 +101,7 @@ struct VimState
     std::optional<VimRegisterCount> register_count = std::nullopt;
     // VISUAL のオペレータが最後に覚えた範囲の仮想桁（Vim の oap->start_vcol / end_vcol・#1436）。
     // 文字単位と行単位の VISUAL の `A` が読む。書くのは VISUAL のオペレータの 1 か所
-    // （operator_columns_noted）で、鍵を食べ終わっても（vim_resting_from）残す。
+    // （visual_operation_noted）で、鍵を食べ終わっても（vim_resting_from）残す。
     VimOperatorColumns operator_columns{};
 };
 

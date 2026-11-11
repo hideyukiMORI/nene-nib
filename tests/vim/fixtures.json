@@ -4134,5 +4134,19 @@
   {"name":"visual-change-key-I-line-undo-backward","text":"ab\ncd\nef","keys":"jlVkIX<Esc>u"},
   {"name":"visual-change-key-I-gv-delete","text":"ab\ncd\nef","keys":"lvjIX<Esc>gvd"},
   {"name":"visual-change-key-I-keeps-register","text":"ab\ncd\nef","keys":"yylvj\"aIX<Esc>p"},
-  {"name":"visual-change-key-I-empty-document","text":"","keys":"vIX<Esc>"}
+  {"name":"visual-change-key-I-empty-document","text":"","keys":"vIX<Esc>"},
+  {"name":"visual-change-key-block-C-then-dollar-A","text":"abcdef\nghijkl\nmnopqr\nstuvwx","keys":"l<C-v>jCX<Esc>0vj$AY<Esc>"},
+  {"name":"visual-change-key-block-D-then-dollar-A","text":"abcdef\nghijkl\nmnopqr\nstuvwx","keys":"l<C-v>jDj0vj$AY<Esc>"},
+  {"name":"visual-change-key-block-C-then-dollar-A-dot","text":"abcdef\nghijkl\nmnopqr\nstuvwx","keys":"l<C-v>jCX<Esc>0vj$AY<Esc>jj0."},
+  {"name":"visual-change-key-block-C-uneven-then-dollar-A","text":"abcdef\nghi\nmnopqr\nstuvwx","keys":"l<C-v>jCX<Esc>0vj$AY<Esc>"},
+  {"name":"visual-change-key-block-dollar-d-then-dollar-A","text":"abcdef\nghijkl\nmnopqr\nstuvwx","keys":"l<C-v>j$dj0vj$AY<Esc>"},
+  {"name":"visual-change-key-block-c-then-dollar-A","text":"abcdef\nghijkl\nmnopqr\nstuvwx","keys":"l<C-v>jlcX<Esc>0vj$AY<Esc>"},
+  {"name":"visual-change-key-dollar-A-dot","text":"abcdef\nghijkl\nmnopqr\nstuvwx","keys":"v$AX<Esc>j0."},
+  {"name":"visual-change-key-dollar-A-two-lines-dot","text":"abcdef\nghijkl\nmnopqr\nstuvwx","keys":"lvj$AX<Esc>jj0."},
+  {"name":"visual-change-key-dollar-A-register-dot","text":"abcdef\nghijkl\nmnopqr\nstuvwx","keys":"lvj$\"aAX<Esc>jj0."},
+  {"name":"visual-change-key-dollar-A-blackhole-dot","text":"abcdef\nghijkl\nmnopqr\nstuvwx","keys":"lvj$\"_AX<Esc>jj0."},
+  {"name":"visual-change-key-dollar-backward-A-dot","text":"abcdef\nghijkl\nmnopqr\nstuvwx","keys":"jj$vkAX<Esc>j0."},
+  {"name":"visual-change-key-dollar-I-register-dot","text":"abcdef\nghijkl\nmnopqr\nstuvwx","keys":"lvj$\"aIX<Esc>jj0."},
+  {"name":"visual-change-key-line-dollar-A-dot","text":"abcdef\nghijkl\nmnopqr\nstuvwx","keys":"V$AX<Esc>j0."},
+  {"name":"visual-change-key-dollar-A-short-line-dot","text":"abcdef\nghijkl\nmn\nstuvwx","keys":"v$AX<Esc>jj0."}
 ]

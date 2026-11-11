@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 19191de46ca12c5ec56a6bb5a7a37ab3b00e7e6870d7b31f9ba4ecbedc7c2e78 / 4136 fixtures
+// fixtures.json: sha256 474f053434fffd3209ef3e3ca0a3b82ab20b71234100a14ab27d1925892b66bf / 4150 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4136> vim_fixtures{{
+constexpr std::array<VimFixture, 4150> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4148,6 +4148,20 @@ constexpr std::array<VimFixture, 4136> vim_fixtures{{
     {"visual-change-key-I-gv-delete", "ab\ncd\nef", "lvjIX<Esc>gvd", "X\nef", 1, 1, "ab\ncd", "v", std::nullopt},
     {"visual-change-key-I-keeps-register", "ab\ncd\nef", "yylvj\"aIX<Esc>p", "Xab\nab\ncd\nef", 2, 1, "ab\n", "V", std::nullopt},
     {"visual-change-key-I-empty-document", "", "vIX<Esc>", "X", 1, 1, "", "", std::nullopt},
+    {"visual-change-key-block-C-then-dollar-A", "abcdef\nghijkl\nmnopqr\nstuvwx", "l<C-v>jCX<Esc>0vj$AY<Esc>", "aX\ngXY\nmnopqr\nstuvwx", 2, 3, "bcdef\nhijkl", "\0265", std::nullopt},
+    {"visual-change-key-block-D-then-dollar-A", "abcdef\nghijkl\nmnopqr\nstuvwx", "l<C-v>jDj0vj$AY<Esc>", "a\ng\nmnopqrY\nstuvwx", 3, 7, "bcdef\nhijkl", "\0265", std::nullopt},
+    {"visual-change-key-block-C-then-dollar-A-dot", "abcdef\nghijkl\nmnopqr\nstuvwx", "l<C-v>jCX<Esc>0vj$AY<Esc>jj0.", "aX\ngXY\nmnopqr\nstuvwxY", 4, 7, "bcdef\nhijkl", "\0265", std::nullopt},
+    {"visual-change-key-block-C-uneven-then-dollar-A", "abcdef\nghi\nmnopqr\nstuvwx", "l<C-v>jCX<Esc>0vj$AY<Esc>", "aX\ngXY\nmnopqr\nstuvwx", 2, 3, "bcdef\nhi", "\0265", std::nullopt},
+    {"visual-change-key-block-dollar-d-then-dollar-A", "abcdef\nghijkl\nmnopqr\nstuvwx", "l<C-v>j$dj0vj$AY<Esc>", "a\ng\nmnopqrY\nstuvwx", 3, 7, "bcdef\nhijkl", "\0265", std::nullopt},
+    {"visual-change-key-block-c-then-dollar-A", "abcdef\nghijkl\nmnopqr\nstuvwx", "l<C-v>jlcX<Esc>0vj$AY<Esc>", "aXdef\ngXjklY\nmnopqr\nstuvwx", 2, 6, "bc\nhi", "\0262", std::nullopt},
+    {"visual-change-key-dollar-A-dot", "abcdef\nghijkl\nmnopqr\nstuvwx", "v$AX<Esc>j0.", "abcdeXf\nghijkXl\nmnopqr\nstuvwx", 2, 6, "", "", std::nullopt},
+    {"visual-change-key-dollar-A-two-lines-dot", "abcdef\nghijkl\nmnopqr\nstuvwx", "lvj$AX<Esc>jj0.", "abcdef\nghijkXl\nmnopqr\nstuvwXx", 4, 6, "", "", std::nullopt},
+    {"visual-change-key-dollar-A-register-dot", "abcdef\nghijkl\nmnopqr\nstuvwx", "lvj$\"aAX<Esc>jj0.", "abcdef\nghijkXl\nmnopqr\nstuvwXx", 4, 6, "", "", std::nullopt},
+    {"visual-change-key-dollar-A-blackhole-dot", "abcdef\nghijkl\nmnopqr\nstuvwx", "lvj$\"_AX<Esc>jj0.", "abcdef\nghijkXl\nmnopqr\nstuvwXx", 4, 6, "", "", std::nullopt},
+    {"visual-change-key-dollar-backward-A-dot", "abcdef\nghijkl\nmnopqr\nstuvwx", "jj$vkAX<Esc>j0.", "abcdef\nghijkl\nXmnopqr\nstuvwXx", 4, 6, "", "", std::nullopt},
+    {"visual-change-key-dollar-I-register-dot", "abcdef\nghijkl\nmnopqr\nstuvwx", "lvj$\"aIX<Esc>jj0.", "Xabcdef\nghijkl\nXmnopqr\nstuvwx", 3, 1, "", "", std::nullopt},
+    {"visual-change-key-line-dollar-A-dot", "abcdef\nghijkl\nmnopqr\nstuvwx", "V$AX<Esc>j0.", "abcdeXf\nghijkXl\nmnopqr\nstuvwx", 2, 6, "", "", std::nullopt},
+    {"visual-change-key-dollar-A-short-line-dot", "abcdef\nghijkl\nmn\nstuvwx", "v$AX<Esc>jj0.", "abcdeXf\nghijkl\nmXn\nstuvwx", 3, 2, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

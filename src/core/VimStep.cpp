@@ -49,6 +49,7 @@ namespace nenenib::core
 {
 using detail::aligned_screen;
 using detail::appended_recording;
+using detail::block_line_end_state;
 using detail::cancelled;
 using detail::caret_on_line;
 using detail::carriage_return_character;
@@ -2289,32 +2290,41 @@ VimStep vim_line_jumped(const VimState &state, const VimEditorView &view,
     return landed_step(counted, view, VimMotion::document_last);
 }
 
-namespace
+namespace detail
 {
-// VISUAL を抜けた鍵が前の選択を置く 1 か所（ADR 0018 の追補・#1039）。Esc・オペレータ・`c` で
-// INSERT へ入る道を区別せず、鍵の前が VISUAL で後が VISUAL でなければ鍵の前の選択を覚える
-// （Vim の end_visual_mode と do_pending_operator）。`.` の VISUAL の再生は置かず、再生の鍵が
-// VISUAL にいるあいだ印を持ち越す（Vim の redo_VIsual_busy・実測）。
-// 前の選択に置く欲しい列（#1361）。矩形の `C` は Vim の v_visop が curswant を MAXCOL にしてから
-// `c` を流し、do_pending_operator がその curswant を b_visual.vi_curswant に置くので行末の印に
-// なる。矩形の `D` も同じ（v_visop の同じ枝・#1417）。ほかの鍵は鍵の前の欲しい列（引数を待つ鍵の
-// `C` `D` は文字なので除く）。
-[[nodiscard]] bool takes_line_end(const VimKey &key) noexcept
+// 矩形の `C` `D` は Vim の v_visop が curswant を MAXCOL にしてから流す（#1361・#1417）。
+// do_pending_operator はその curswant を前の選択（b_visual.vi_curswant）に置き、get_op_vcol は
+// 終わりの桁を一番長い行の行末にする（#1436）。前の選択と覚え直す仮想桁の両方がここを読む。
+[[nodiscard]] VimState block_line_end_state(const VimState &state, VimAction action)
 {
-    const auto *const character = std::get_if<VimCharacter>(&key);
-    const auto action = character == nullptr ? std::nullopt : vim_action_for(character->code);
-    return action == VimAction::change_to_line_end || action == VimAction::remove_to_line_end;
-}
-
-[[nodiscard]] VimState visual_left_state(const VimState &state, const VimKey &key)
-{
-    if (state.mode != VimMode::visual_block || state.input_wait.has_value() || !takes_line_end(key))
+    if (state.mode != VimMode::visual_block ||
+        (action != VimAction::change_to_line_end && action != VimAction::remove_to_line_end))
     {
         return state;
     }
     VimState left = state;
     left.wanted_column = VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
     return left;
+}
+} // namespace detail
+
+namespace
+{
+// VISUAL を抜けた鍵が前の選択を置く 1 か所（ADR 0018 の追補・#1039）。Esc・オペレータ・`c` で
+// INSERT へ入る道を区別せず、鍵の前が VISUAL で後が VISUAL でなければ鍵の前の選択を覚える
+// （Vim の end_visual_mode と do_pending_operator）。`.` の VISUAL の再生は置かず、再生の鍵が
+// VISUAL にいるあいだ印を持ち越す（Vim の redo_VIsual_busy・実測）。
+// 前の選択に置く欲しい列（#1361）は block_line_end_state の 1 本（引数を待つ鍵の `C` `D` は
+// 文字なので除く）。
+[[nodiscard]] VimState visual_left_state(const VimState &state, const VimKey &key)
+{
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    if (state.input_wait.has_value() || character == nullptr)
+    {
+        return state;
+    }
+    const auto action = vim_action_for(character->code);
+    return action.has_value() ? block_line_end_state(state, action.value()) : state;
 }
 
 [[nodiscard]] VimStep visual_remembered(const VimState &state, const VimEditorView &view,

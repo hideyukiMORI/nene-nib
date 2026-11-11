@@ -172,7 +172,7 @@ namespace detail
     if (std::holds_alternative<VimCharacter>(key))
     {
         return visual_operation_noted(
-            state, view, state.mode,
+            state, view, VimAction::replace_character,
             replaced_character(state, view, std::get<VimCharacter>(key).code));
     }
     if (!std::holds_alternative<VimSpecialKey>(key))
@@ -182,7 +182,7 @@ namespace detail
     switch (std::get<VimSpecialKey>(key))
     {
     case VimSpecialKey::enter:
-        return visual_operation_noted(state, view, state.mode,
+        return visual_operation_noted(state, view, VimAction::replace_character,
                                       replaced_character(state, view, line_feed));
     case VimSpecialKey::escape:
     case VimSpecialKey::backspace:
