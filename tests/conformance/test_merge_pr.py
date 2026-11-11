@@ -79,7 +79,7 @@ TRANSIENT_READS = {"cut body": CUT_BODY,
                    "timeout": subprocess.TimeoutExpired(["gh"], 60),
                    "not JSON": (0, '[[{"filename": "eng/merge-pr.py", "sta')}
 NOT_FOUND = (1, "HTTP 404: Not Found (https://api.github.com/repos/hideyukiMORI/nene-nib/rules/branches/main)\n")
-UNSOURCED = {"subject":"feat(eng): merge-pr.py にまとめ枝の口を足す (#1220)", "reason": "no PR #K（head <sha>） line"}
+UNSOURCED = {"subject": "feat(eng): merge-pr.py にまとめ枝の口を足す (#1220)", "reason": "no PR #K（head <sha>） line"}
 
 
 class MergeBoundary(unittest.TestCase):
@@ -92,7 +92,8 @@ class MergeBoundary(unittest.TestCase):
         calls = []
         landed_failures = list(landed_failures)
         # #1501: {marker: [failure, ...]}; the first calls whose API path or "pr view" / "run view" contains
-        # the marker get the failures in order: (code, stderr), (0, stdout) for an unreadable body, or raised.
+        # the marker get the failures in order: (code, stderr), (0, stdout) for an unreadable body, or raised;
+        # None lets that call through (#1503 L1: to fail the reads just before the merge, not the first ones).
         read_failures = {marker: list(failures) for marker, failures in (read_failures or {}).items()}
         close_exits = list(close_exit) if isinstance(close_exit, list) else None
         compare_responses = copy.deepcopy(compare) if isinstance(compare, list) else None
@@ -110,6 +111,8 @@ class MergeBoundary(unittest.TestCase):
             for marker, failures in read_failures.items():
                 if marker in target and failures:
                     failure = failures.pop(0)
+                    if failure is None:
+                        break
                     if isinstance(failure, Exception):
                         raise failure
                     code, text = failure
@@ -582,6 +585,41 @@ class MergeBoundary(unittest.TestCase):
                 self.assertNotIn("merge", [call[1] for call in calls])
                 self.assertIn(failure[1].strip(), error)
 
+    def test_a_wait_in_the_last_reads_reads_them_again_before_the_merge(self):
+        # #1503 L1: a wait leaves the other copies minutes old; the PR and the rules are read again from the start.
+        for marker in ("pr view", "rules/branches/main"):
+            with self.subTest(marker=marker):
+                result, calls, output, error = self.invoke(execute=True, read_failures={marker: [None, CUT_BODY]})
+                self.assert_read_waited_once(result, calls, output, error, "unexpected end of JSON input")
+                self.assertEqual(sum(call[-1].endswith("rules/branches/main") for call in calls),
+                                 3 + (marker == "rules/branches/main"))
+                self.assertEqual(sum(call[:2] == ["pr", "view"] and MERGE.PR_FIELDS in call for call in calls),
+                                 3 + (marker == "pr view"))
+                self.assertIn({"readAgainBeforeMerge": 1, "waits": 1}, [json.loads(line) for line in output.splitlines()])
+
+    def test_the_last_reads_without_a_wait_are_read_once(self):
+        result, calls, output, error = self.invoke(execute=True)
+        self.assertEqual(result, 0, error)
+        self.assertEqual(sum(call[-1].endswith("rules/branches/main") for call in calls), 2)
+        self.assertEqual(sum(call[:2] == ["pr", "view"] and MERGE.PR_FIELDS in call for call in calls), 2)
+        self.assertNotIn("readAgainBeforeMerge", output)
+
+    def test_the_last_reads_are_read_again_at_most_twice(self):
+        # A wait in the re-read is allowed once more; a wait in that round too stops before the merge.
+        result, calls, output, error = self.invoke(
+            execute=True, read_failures={"rules/branches/main": [None, CUT_BODY, None, CUT_BODY]})
+        self.assertEqual(result, 0, error)
+        self.assertEqual([call[1] for call in calls].count("merge"), 1)
+        self.assertEqual(sum(call[-1].endswith("rules/branches/main") for call in calls), 6)
+        result, calls, output, error = self.invoke(
+            execute=True, read_failures={"rules/branches/main": [None, CUT_BODY, None, CUT_BODY, None, CUT_BODY]})
+        self.assertEqual(result, 2)
+        self.assertNotIn("merge", [call[1] for call in calls])
+        self.assertEqual(sum(call[-1].endswith("rules/branches/main") for call in calls), 7)
+        self.assertEqual(sum("POST" in call for call in calls), 1)
+        self.assertIn("run again with --ci-run 101", error)
+        self.assertNotIn("outcome unknown", error)
+
     def test_ci_dispatch_is_never_called_again(self):
         # The POST that starts CI is not a read: a cut or unreadable answer stops without a second run.
         for failure in (CUT_BODY, (0, '{"workflow_run_id": 10'), subprocess.TimeoutExpired(["gh"], 60)):
@@ -719,6 +757,15 @@ class IntegrationMerge(unittest.TestCase):
                 self.assertEqual(json.loads(output.splitlines()[-1])["closed"],
                                  [{"number": 1157, "mainCommit": MAIN_SHAS[0]},
                                   {"number": 1160, "mainCommit": MAIN_SHAS[1]}])
+
+    def test_a_wait_in_the_last_compare_reads_the_pr_and_rules_again(self):
+        # #1503 L1: the compare just before the merge waited, so the PR and the rules are read again too.
+        result, calls, output, error = self.integrate(execute=True,
+                                                      read_failures={f"/compare/main...{HEAD}": [None, CUT_BODY]})
+        MergeBoundary.assert_read_waited_once(self, result, calls, output, error, "unexpected end of JSON input")
+        self.assertEqual(sum(call[-1].endswith(f"/compare/main...{HEAD}") for call in calls), 4)
+        self.assertEqual(sum(call[-1].endswith("rules/branches/main") for call in calls), 3)
+        self.assertEqual(sum(call[:2] == ["pr", "view"] and MERGE.PR_FIELDS in call for call in calls), 3)
 
     def test_ci_failure_never_merges(self):
         result, calls, output, error = self.integrate(run=dict(RUN, conclusion="failure"), execute=True)

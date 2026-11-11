@@ -31,6 +31,9 @@ TRANSIENT_MERGE_FAILURE = re.compile(r"(?i)\b5\d\d (?:bad gateway|service unavai
 # on the same table too (#1500's read during the wait for CI got a cut body); the CI dispatch POST never does.
 TRANSIENT_GITHUB_FAILURE = re.compile(r"(?i)\bHTTP 5\d\d\b|\b5\d\d (?:bad gateway|service unavailable|"
                                       r"gateway time-?out|internal server error)\b|unexpected end of JSON input")
+# #1503 L1: the last reads before the merge (PR, rules, compare) are read again from the start when one of them
+# waited, so the copies compared just before the merge are seconds old; the first round and two re-reads at most.
+FINAL_READ_ROUNDS = 3
 # GitHub's pulls/<n>/commits and compare list at most 250 commits (ADR 0021 追補 決定 6).
 COMMIT_LIMIT = 250
 # GitHub closes the referenced Issue for any of these keywords, in any case (#1223).
@@ -67,11 +70,11 @@ def read_json(arguments: list[str], runner) -> object:
     return json.loads(result.stdout)
 
 
-def read_waiting(arguments: list[str], runner) -> object:
+def read_waiting(arguments: list[str], runner, waits: list[str] | None = None) -> object:
     """Read (a GET) and wait on a transient failure: a timeout, a 5xx, a cut body, or exit 0 with a body that
     is not JSON (#1345 after the merge, #1501 before it; same table as the merge call, #1223).
 
-    Any other failure (404, permission, a refusal) stops at once.
+    Any other failure (404, permission, a refusal) stops at once. Each wait's reason is added to `waits`.
     """
     retried = 0
     while True:
@@ -92,6 +95,8 @@ def read_waiting(arguments: list[str], runner) -> object:
         if retried == MERGE_RETRIES:
             raise StillFailing(f"GitHub read still failing after {MERGE_RETRIES} retries: {failure}")
         retried += 1
+        if waits is not None:
+            waits.append(failure)
         print(json.dumps({"readRetry": retried, "waitSeconds": MERGE_RETRY_SECONDS,
                           "read": " ".join(arguments[:4]), "reason": failure}, ensure_ascii=False), flush=True)
         time.sleep(MERGE_RETRY_SECONDS)
@@ -374,7 +379,7 @@ def resume_after_merge(options, runner) -> int:
     Never merges, never starts CI, and closes nothing unless main holds the stacked commits exactly.
     """
     merged = read_waiting(pr_command("view", options.number, "--json",
-                                         "number,headRefOid,state,mergeCommit,url"), runner)
+                                     "number,headRefOid,state,mergeCommit,url"), runner)
     print(json.dumps({"observedAfterMerge": merged}, ensure_ascii=False), flush=True)
     merge_commit = observed_merge(merged, options.number, options.expected_head)
     commits = integration_commits(read_waiting(api_command(
@@ -484,6 +489,35 @@ def run_ci(number: int, head: str, record: dict, runner, run_id: int | None) -> 
     return {"id": run_id, "url": run.get("html_url"), "conclusion": "success"}
 
 
+def read_final(options, record: dict, rules: object, commits: list, ci_run: int | None, runner) -> str | None:
+    """Read the PR, the rules and (for a stack) the compare just before the merge; return the merge base.
+
+    #1503 L1: a wait can make the earlier copies minutes old, so a round with a wait is read again from the
+    start (FINAL_READ_ROUNDS in all); a round without a wait reads each once, as before.
+    """
+    for round_number in range(1, FINAL_READ_ROUNDS + 1):
+        waits: list[str] = []
+        latest = read_waiting(pr_command("view", options.number, "--json", PR_FIELDS), runner, waits)
+        if latest != record:
+            raise MergeRefused("PR changed during merge preparation; inspect it before continuing")
+        latest_rules = read_waiting(api_command("rules/branches/main"), runner, waits)
+        if latest_rules != rules:
+            raise MergeRefused("Branch rules changed during merge preparation")
+        merge_base = None
+        if options.integration:
+            # main can move while CI runs; the rebased tree must still be the tree CI passed.
+            merge_base = check_contains_main(read_waiting(api_command(f"compare/main...{options.expected_head}"),
+                                                          runner, waits), len(commits))
+        if not waits:
+            return merge_base
+        if round_number < FINAL_READ_ROUNDS:
+            print(json.dumps({"readAgainBeforeMerge": round_number, "waits": len(waits)}, ensure_ascii=False),
+                  flush=True)
+    again = f"run again with --ci-run {ci_run}" if ci_run is not None else "run again"
+    raise StillFailing(f"the reads before the merge waited in each of {FINAL_READ_ROUNDS} rounds; "
+                       f"nothing was merged: {again}")
+
+
 def positive_number(value: str) -> int:
     if not re.fullmatch(r"[1-9][0-9]*", value):
         raise argparse.ArgumentTypeError("PR number must be a positive integer")
@@ -552,20 +586,13 @@ def main(argv=None, runner=run_gh) -> int:
             return 0
         if docs_only and not recorded:
             raise MergeRefused("Documentation-only merge requires a recorded eng/conformance.py result with 0 violation(s)")
+        ci_run = None
         if not docs_only:
-            print(json.dumps({"verifiedCI": run_ci(options.number, options.expected_head, record,
-                                                  runner, options.ci_run)}), flush=True)
-        latest = read_waiting(pr_command("view", options.number, "--json", PR_FIELDS), runner)
-        if latest != record:
-            raise MergeRefused("PR changed during merge preparation; inspect it before continuing")
-        latest_rules = read_waiting(api_command("rules/branches/main"), runner)
-        if latest_rules != rules:
-            raise MergeRefused("Branch rules changed during merge preparation")
-        if options.integration:
-            # main can move while CI runs; the rebased tree must still be the tree CI passed.
-            merge_base = check_contains_main(read_waiting(api_command(f"compare/main...{options.expected_head}"),
-                                                       runner), len(commits))
-            progress["mergeBase"] = merge_base
+            verified = run_ci(options.number, options.expected_head, record, runner, options.ci_run)
+            ci_run = verified["id"]
+            print(json.dumps({"verifiedCI": verified}), flush=True)
+        merge_base = read_final(options, record, rules, commits, ci_run, runner)
+        progress["mergeBase"] = merge_base
         executing = True
         # The squash path reads as before; the integration path waits on post-merge reads (#1345).
         reader = read_waiting if options.integration else read_json

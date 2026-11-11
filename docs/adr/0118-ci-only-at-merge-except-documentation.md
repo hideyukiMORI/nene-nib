@@ -19,7 +19,7 @@ PR作成・Ready・push・本文編集・merge後のイベントでは起動し�
 
 非文書変更では`check.yml`を`workflow_dispatch`で起動する。PR番号と期待headを渡し、workflow自身も取得したPRとcheckoutの一致を確認する。
 統合道具は返されたrun ID、repository、workflow、イベント、PR番号、head、成功を照合し、実行前後のPRとrulesも比較する。
-planは読み取りのみ。失敗・成否不明を自動再試行しない（`gh run watch`の中断は同じrunの待ち直し（最大3回）で、新しいrunは起こさない（#667）。mergeの呼び出しがGitHubの5xx / `Merge already in progress`で落ちPRがOPENかつhead不変なら、同じ命令を30秒ごとに最大10回呼び直す（ADR 0021 追補 決定 8・#1223）。副作用の無い読みは timeout・5xx・途中で切れた本文を同じ表で待ち直し、CI を起動する POST は待ち直さない（同 決定 9・10・#1345・#1501））。待機が切れたら表示済みの`--ci-run`で同じrunを確認し、新しいCIを起動しない。
+planは読み取りのみ。失敗・成否不明を自動再試行しない（`gh run watch`の中断は同じrunの待ち直し（最大3回）で、新しいrunは起こさない（#667）。mergeの呼び出しがGitHubの5xx / `Merge already in progress`で落ちPRがOPENかつhead不変なら、同じ命令を30秒ごとに最大10回呼び直す（ADR 0021 追補 決定 8・#1223）。mergeの前の読みとまとめ枝のmergeの後の読み（副作用の無いGET）は、timeout・5xx・途中で切れた本文・終了0でJSONとして読めない本文を同じ表で待ち直し、mergeの直前の読みで待ち直しが起きたらその読みを最初から読み直す。旗なし（squash）のmergeの後の読みとCIを起動するPOSTは待ち直さない（同 決定 9・10・#1345・#1501））。待機が切れたら表示済みの`--ci-run`で同じrunを確認し、新しいCIを起動しない。
 CIの中身は既存のGit規約・検証記録・差分空白の確認と木の conformance（`python eng/conformance.py`・#648）だけ。製品テストの成功結果を工程のために測り直さない。
 
 ## 強制と制限
