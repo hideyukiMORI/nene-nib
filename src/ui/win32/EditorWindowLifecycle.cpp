@@ -292,6 +292,7 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_NCHITTEST:
         return hit_test(data);
     case WM_NCLBUTTONDOWN:
+    case WM_NCLBUTTONDBLCLK:
     case WM_NCLBUTTONUP:
         return press_caption(message, word, data);
     case WM_GETMINMAXINFO:

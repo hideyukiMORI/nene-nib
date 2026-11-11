@@ -2,6 +2,7 @@
 #include "EditorWindowDetail.hpp"
 
 #include "BodyLayout.hpp"
+#include "CaptionPress.hpp"
 #include "DevicePixels.hpp"
 #include "DocumentFormatKind.hpp"
 #include "EditMode.hpp"
@@ -49,44 +50,11 @@ constexpr std::array<LRESULT, 9> border_codes{HTNOWHERE, HTLEFT,       HTRIGHT,
                                               HTTOP,     HTTOPLEFT,    HTTOPRIGHT,
                                               HTBOTTOM,  HTBOTTOMLEFT, HTBOTTOMRIGHT};
 
-[[nodiscard]] bool caption_button(WPARAM word) noexcept
-{
-    return word == HTMINBUTTON || word == HTMAXBUTTON || word == HTCLOSE;
-}
-
-[[nodiscard]] bool window_button(core::TitleBarHit hit) noexcept
-{
-    return hit == core::TitleBarHit::minimize || hit == core::TitleBarHit::maximize ||
-           hit == core::TitleBarHit::close;
-}
-
 [[nodiscard]] LRESULT border_hit(POINT point, const RECT &client, std::int32_t margin) noexcept
 {
     const std::size_t row = point.y < margin ? 1U : (point.y >= client.bottom - margin ? 2U : 0U);
     const std::size_t column = point.x < margin ? 1U : (point.x >= client.right - margin ? 2U : 0U);
     return border_codes.at(row * 3U + column);
-}
-
-[[nodiscard]] LRESULT caption_code(core::TitleBarHit hit) noexcept
-{
-    switch (hit)
-    {
-    case core::TitleBarHit::minimize:
-        return HTMINBUTTON;
-    case core::TitleBarHit::maximize:
-        return HTMAXBUTTON;
-    case core::TitleBarHit::close:
-        return HTCLOSE;
-    case core::TitleBarHit::caption:
-        return HTCAPTION;
-    case core::TitleBarHit::tab:
-    case core::TitleBarHit::tab_close:
-    case core::TitleBarHit::add_tab:
-    case core::TitleBarHit::tab_list:
-    case core::TitleBarHit::none:
-        return HTCLIENT;
-    }
-    std::unreachable();
 }
 
 // 診断の文がトグルの位置を覆っている間（covered）はトグルを押さない（command_message のときと
@@ -143,6 +111,9 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         turn_wheel(word, data);
         return 0;
     case WM_CAPTURECHANGED:
+        left_pressed_ =
+            caption_step(message, core::TitleBarTarget{core::TitleBarHit::none, 0}, left_pressed_)
+                .first;
         lose_explorer_divider();
         end_selection_drag();
         return 0;
@@ -156,6 +127,11 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
 
 void EditorWindow::release_left(LPARAM data)
 {
+    // 窓の操作を押して捕まえていたら、離したのはその押しの終わりだけ（#1464）。
+    if (release_caption(data))
+    {
+        return;
+    }
     // 境を押していたら、離したのは境のドラッグの終わりだけ（面の行・帯・本文の離しにしない・D78）。
     if (release_explorer_divider(data))
     {
@@ -315,16 +291,50 @@ LRESULT EditorWindow::hit_test(LPARAM data) noexcept
 
 LRESULT EditorWindow::press_caption(UINT message, WPARAM word, LPARAM data) noexcept
 {
-    if (!caption_button(word))
+    // 押した窓の操作は帯と同じ left_pressed_ に覚え、離した要素と同じときだけ動かす（ADR 0056 の
+    // 決定 9・#1464）。client で押して × の上で離した WM_NCLBUTTONUP だけでは閉じない。
+    const auto at = caption_target_of(word);
+    const auto [pressed, button] = caption_step(message, at, left_pressed_);
+    left_pressed_ = pressed;
+    if (!window_button(at.hit))
     {
         return DefWindowProcW(window_, message, word, data);
     }
-    // 押下は飲み込み、離したときに動かす。DefWindowProcW に任せると OS の描画が混ざる。
-    if (message == WM_NCLBUTTONUP)
+    // 押下は飲み込み、離したときに動かす。DefWindowProcW に任せると OS の描画が混ざる。押した後は
+    // 捕まえて、窓の外の離しも WM_LBUTTONUP で受ける（release_caption）。
+    if (message != WM_NCLBUTTONUP)
     {
-        activate_caption(word);
+        SetCapture(window_);
+        return 0;
     }
+    finish_caption(button);
     return 0;
+}
+
+bool EditorWindow::release_caption(LPARAM data) noexcept
+{
+    if (!holds_caption_press(left_pressed_))
+    {
+        return false;
+    }
+    const auto [pressed, button] =
+        caption_step(WM_LBUTTONUP, title_bar_target_at(data), left_pressed_);
+    left_pressed_ = pressed;
+    finish_caption(button);
+    return true;
+}
+
+void EditorWindow::finish_caption(std::optional<WPARAM> button) noexcept
+{
+    // 覚えは先に消してある。捕まえを放すと WM_CAPTURECHANGED が戻るが、消す押しはもう無い。
+    if (GetCapture() == window_)
+    {
+        ReleaseCapture();
+    }
+    if (button.has_value())
+    {
+        activate_caption(button.value());
+    }
 }
 
 void EditorWindow::activate_caption(WPARAM word) noexcept

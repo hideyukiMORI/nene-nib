@@ -136,6 +136,9 @@ class EditorWindow final
     void finish_display_question(bool question);
     [[nodiscard]] LRESULT press_caption(UINT message, WPARAM word, LPARAM data) noexcept;
     void activate_caption(WPARAM word) noexcept;
+    // 窓の操作の押しを捕まえている間の WM_LBUTTONUP（#1464）。押しを覚えていなければ false。
+    [[nodiscard]] bool release_caption(LPARAM data) noexcept;
+    void finish_caption(std::optional<WPARAM> button) noexcept;
     void click_client(LPARAM data, application::PointerClicks clicks);
     void click_palette(LPARAM data);
     void place_caret(LPARAM data, application::PointerClicks clicks);
