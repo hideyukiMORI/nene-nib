@@ -10,9 +10,13 @@
 #include "LineNumber.hpp"
 #include "Minimap.hpp"
 #include "MinimapLayout.hpp"
+#include "MinimapPointing.hpp"
 #include "MinimapSource.hpp"
+#include "PointMinimap.hpp"
+#include "ScrollState.hpp"
 #include "TextBuffer.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <optional>
 
@@ -94,6 +98,7 @@ void EditorController::add_minimap(EditorFrame &result)
             .rows;
     const std::size_t total = text.line_count();
     const std::size_t visible = visible_line_count(result, state_.scroll().visible_lines);
+    minimap_visible_ = visible;
     const auto top = core::minimap_top(result.first_visible, visible, total, rows);
     const auto window = core::minimap_window(minimap_.window_of(source), top, rows, total);
     if (!minimap_.holds(source, window))
@@ -101,5 +106,47 @@ void EditorController::add_minimap(EditorFrame &result)
         minimap_.rebuild(text, source, window);
     }
     result.minimap = minimap_.framed(top, result.first_visible, visible);
+}
+
+// 面の上の押しとドラッグ（決定 5 の追補）。押した段が見えている範囲の面の中央に来るように、本文の
+// 窓だけを送る（キャレット・選択・Vim の待ちと録画・`.`・undo は動かさない）。送り方はホイールの
+// ScrollLines と同じく ScrollState を置いて clamp_scroll で収める 1 本で、Vim のモードでも
+// キャレットを寄せない（ホイールと同じ）。面の段の数は frame と同じ core::minimap_layout の 1 本、
+// 見えている行の数は最後の frame
+// の値（ドラッグの間は押したときの値）。面が出ていなければ何もしない。
+void EditorController::accept(const PointMinimap &intent)
+{
+    if (!minimap_shown())
+    {
+        return;
+    }
+    const std::size_t framed = minimap_visible_ > 0
+                                   ? minimap_visible_
+                                   : std::max<std::size_t>(state_.scroll().visible_lines, 1);
+    switch (intent.pointing)
+    {
+    case MinimapPointing::pressed:
+        minimap_grab_visible_ = framed;
+        break;
+    case MinimapPointing::dragged:
+        if (minimap_grab_visible_ == 0)
+        {
+            minimap_grab_visible_ = framed;
+        }
+        break;
+    }
+    const std::size_t rows =
+        core::minimap_layout(core::LayoutRect{0, 0, window_width_, window_height_},
+                             view_geometry_.dpi, state_.settings().font_size, true)
+            .rows;
+    const auto first = core::minimap_pointed_first(intent.row, minimap_grab_visible_,
+                                                   state_.text().line_count(), rows);
+    const auto &scroll = settled_scroll();
+    if (scroll.first_visible == first && scroll.first_row == 0)
+    {
+        return;
+    }
+    state_ = state_.with_scroll(ScrollState{first, scroll.visible_lines, 0, scroll.horizontal});
+    clamp_scroll();
 }
 } // namespace nenenib::application

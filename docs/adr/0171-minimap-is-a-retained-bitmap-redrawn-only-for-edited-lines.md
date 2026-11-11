@@ -68,6 +68,21 @@
 - 契約: `nib_tests --minimap-property`（ミニマップを出したまま打鍵・削除・切り取りと貼り付け・全選択・undo / redo・行への移動・ホイール・窓の寸法（0 × 0・縦か横だけ 0・面より狭い）・`set minimap` / `nominimap`・`syntax on|off`・タブの開く / 切り替え / 閉じる / 新規・2 枠・全面プレビューを 2 seed × 2,000 歩。frame ごとに窓が文書の中・塊の行の数・最上段が窓の中・塊の桁が今の本文から作った塊と同じ・renderer と同じ規則で積んだ写しが今の塊と同じ。わざと帯の行の数を壊すと落ちることを確かめた（4 seed の版で 4 本とも））・`nib_window_tests --minimap` の `check_random_frames`（`MinimapCache` の乱数の編集と面の寸法（幅 0・高さ 0・1 画素・狭い）とテーマの切り替えで、bitmap を経た画素が直接の画素と同じで EndDraw が成功する）・`check_failure_reading`（tag の読みと bitmap の上限）・`check_abandoned_bitmap`。
 - 限界: 実機の GPU での失敗は WIC の描画先では起こせないので、描き直しの道（`redraw_without_minimap_bitmap`）は試験が通っていない（読みだけ）。落ちた原因がミニマップの外（窓の寸法の変更の `ResizeBuffers` など）なら、この直しでは止まらない。施主に聞くこと: 落ちたときに「描画できなくなったので閉じます」の箱が出たか・窓がすぐ消えたか／落ちる直前の操作（ホイール・窓の大きさ・`:set minimap`・タブ）／文書の大きさと GPU（内蔵か）。
 
+## 追補（2026-11-11・#1472・#1371 の段 2 の 1 本目）: 面のクリックとドラッグ
+
+施主が面をドラッグしようとした（段 1 は面の上の押しが何もせず、押して × の上で離すと窓が閉じた・#1464 で直した）。段 2 のうち決定 5 の「クリック・ドラッグ」だけを入れる。ホイール（決定 5 の 3 つ目）は段 1 から本文と同じ（面の上のホイールも `ScrollLines`）。帯の描き足し・窓の外の色の tick・枠ごとの面・`EditorFeature` の表は段 2 の残り（#1371）。
+
+9. **押した所へ跳び、ドラッグで追従する（VS Code と同じ）。** 押した点の段（`core::minimap_pointed_row`・面の上端から 1 段 2 物理画素・面の外は負か段の数以上）を、見えている範囲の面の中央に来る「見えている最初の行」に写すのは `core::minimap_pointed_first(row, visible, total, rows)` の 1 本。面が送られる文書では、見えている範囲の面の上端は `minimap_top` の比例の送りで `first × (rows − visible) ÷ (total − visible)` 段目に来るので、その逆で上端 `row − visible ÷ 2`（`[0, rows − visible]` に切り詰め）から first を四捨五入で求める。結果は今のスクロールに依らない（同じ点を 2 回押しても動かない）・段について単調・`[1, total − visible + 1]` の中。文書が面に収まるときは押した段の行を中央に、面が見えている行より短いときは段の割合を文書に写す。
+10. **意図は 1 つ・送りはホイールと同じ道。** `PointMinimap{MinimapPointing(pressed | dragged), row}`（閉じた enum）。application は `minimap_shown()` が偽なら何もせず、面の段の数は frame と同じ `core::minimap_layout`、見えている行の数は最後の frame の値（`add_minimap` が置く）。押したときにその値を覚え、ドラッグの間は押したときの値で送る（折り返す行で見えている論理行の数が変わってもドラッグが単調）。送りは `ScrollLines` と同じく `ScrollState` を置いて `clamp_scroll` で収める（第 2 の送りの道を作らない・ARC-001）。キャレット・選択・本文・undo・`.`・Vim の録画は動かさず、Vim のモードでもキャレットを寄せない（ホイールと同じ）。使う人の操作の側で、`keeps_tab_walk`・`begin_intent`・`keeps_wanted_x` のどれにも書かない（ホイールと同じ側）。全面プレビューの間は面が無く、届いても本文のマウスと同じく何もしない（`pointer_route` の ignore）。
+11. **窓は押したら捕まえる。** 面の上の押し（`click_client` の中・エクスプローラーの境と面の行の後・状態バーの前）は `SetCapture` し、捕まえたときだけ覚え（`MinimapGrab`: 押したときの面の上端と最後に送った段）を持つ。覚えの次の値と送る意図は `minimap_step(message, y, panel, held)` の 1 本（`MinimapPress.hpp`・窓の試験もこれに列を流す）: 押しは `pressed`、`WM_MOUSEMOVE` は段が変わったときだけ `dragged`、`WM_LBUTTONUP` は段が変わっていれば `dragged` を送って終わり、`WM_CAPTURECHANGED`・`WM_MOUSELEAVE`・Esc（`WM_KEYDOWN`）はその位置のまま終わる。Esc はその 1 回と押し続けた繰り返しを食べる（`take_explorer_escape` と同じ形）。ドラッグの間の `WM_MOUSEMOVE` は面の送りだけで（帯の hover・境のカーソル・選択のドラッグへ流さない）、`controller_.frame()` を呼ばない。離しは `release_left` で窓の操作と境の次に引くので、× の上で離しても閉じない。押している間に面が消えたら（`:set nominimap`・全面プレビュー）`follow_minimap` がドラッグを終える。
+12. **配置は 1 本。** 押しの点が面の上かは、描画と本文の枠と同じ `core::minimap_layout(explorer_frame().body, …)`（エクスプローラーの面の右の client）で引く。面は client の右端に 1 つなので、2 枠（操作中の枠の文書だけが載る）・折り返し・格子表示でも同じ配置で、送るのは操作中の枠。オフのときの費用は今のまま（`minimap_layout` と `add_minimap` は最初の 1 行で返り、押しの道は `minimap_shown()` の比べ 1 つ・打鍵の道には何も足さない）。
+
+強制（この追補で足したもの）:
+
+- 段 → 行の純関数は 1 本で、端・丸め・性質（文書の中・単調・同じ段で同じ行・送った後の面が押した段の中央から 1 段以内・固定 seed 4,000 件）と application の契約（押した段の行・同じ段の 2 回目・ドラッグの単調と端・キャレットと本文が不変・undo と `.` と録画・オフと全面プレビューでは何もしない）: **active**（`nib_tests --minimap-pointer`・既定実行の契約にも載せた）。`--minimap-property` の意図の列にも押しとドラッグを足した。
+- 押しは捕まえ、離し・捕まえを失う・窓の外・Esc で終わり、× の上の離しで窓の操作が動かない: **active**（`nib_window_tests --minimap-press`・`minimap_step` と `caption_step` にメッセージの列を流す）。窓そのもの（`SetCapture` の成否・本物のマウス）は実物の確かめ 1 回（記録は PR）。
+- 限界: 押した後に窓の大きさが変わっても、ドラッグの間は押したときの面の上端で段を数える（面の上端は帯の高さで決まり、窓の大きさでは変わらない）。DPI の切り替えはドラッグの間に起きない前提で、確かめていない。
+
 ## 却下した選択肢
 
 | 選択肢 | 却下の理由 |

@@ -1,7 +1,8 @@
 // scope `--minimap-property` の単体テスト（#1449・ADR 0171 の追補・ADR 0042 決定 2）。ミニマップを
 // 出したまま、固定 seed の決定的な意図の列（打鍵・削除・貼り付け・全選択・undo / redo・行への移動・
-// ホイールの送り・窓の寸法（0 × 0 を含む）・`:set minimap` の切り替え・`:syntax` の切り替え・タブの
-// 開く / 切り替え / 閉じる・新しいタブ・枠の分割と切り替えと閉じる・全面プレビュー）を
+// ホイールの送り・面の押しとドラッグ（#1371）・窓の寸法（0 × 0 を含む）・`:set minimap` の
+// 切り替え・`:syntax` の切り替え・タブの開く / 切り替え / 閉じる・新しいタブ・枠の分割と切り替えと
+// 閉じる・全面プレビュー）を
 // EditorController に流し、frame を作るたびに次を見る。
 //   1. frame の minimap は controller の minimap_shown と同じときにだけ値を持ち、値があれば行の塊を
 //      借りている。
@@ -31,9 +32,11 @@
 #include "MinimapBand.hpp"
 #include "MinimapBlock.hpp"
 #include "MinimapFrame.hpp"
+#include "MinimapPointing.hpp"
 #include "MinimapRows.hpp"
 #include "Offset.hpp"
 #include "PlaceCaret.hpp"
+#include "PointMinimap.hpp"
 #include "PreviewPlacement.hpp"
 #include "Scopes.hpp"
 #include "SelectionAnchoring.hpp"
@@ -219,7 +222,7 @@ void tab_step(app::EditorController &controller, Random &random)
 
 void view_step(app::EditorController &controller, Random &random)
 {
-    static constexpr std::array<Act, 9> acts{
+    static constexpr std::array<Act, 10> acts{
         [](app::EditorController &target, Random &chance) { resize(target, chance); },
         [](app::EditorController &target, Random &chance)
         { toggle_by_ex(target, below(chance, 4U) == 0U ? "set nominimap" : "set minimap"); },
@@ -243,6 +246,14 @@ void view_step(app::EditorController &controller, Random &random)
         {
             static_cast<void>(target.apply(
                 app::ScrollLines{static_cast<std::int32_t>(below(chance, 400U)) - 200}));
+        },
+        // 面の押しとドラッグ（ADR 0171 の決定 5 の追補・面の外の段も）。
+        [](app::EditorController &target, Random &chance)
+        {
+            const auto pointing = below(chance, 2U) == 0U ? app::MinimapPointing::pressed
+                                                          : app::MinimapPointing::dragged;
+            static_cast<void>(target.apply(
+                app::PointMinimap{pointing, static_cast<std::int32_t>(below(chance, 440U)) - 20}));
         }};
     run_one(controller, random, acts);
 }

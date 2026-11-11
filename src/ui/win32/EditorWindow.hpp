@@ -25,7 +25,9 @@
 #include "ImeOpenState.hpp"
 #include "ImeStance.hpp"
 #include "InputLinePrompt.hpp"
+#include "LayoutRect.hpp"
 #include "Milestone.hpp"
+#include "MinimapGrab.hpp"
 #include "PaneLayouts.hpp"
 #include "PointerClicks.hpp"
 #include "PresentedMilestones.hpp"
@@ -326,6 +328,15 @@ class EditorWindow final
     void hover_explorer_divider(LPARAM data);
     void end_hidden_explorer_drag();
     void release_left(LPARAM data);
+    void move_pointer(LPARAM data);
+    // ミニマップの面の押し・ドラッグ・離し（ADR 0171 の決定 5 の追補・EditorWindowPointer.cpp）。
+    // 覚えの次の値と送る意図は minimap_step の 1 本。面は描画と同じ core::minimap_layout から引く。
+    [[nodiscard]] std::optional<core::LayoutRect> minimap_panel_under(LPARAM data) const;
+    [[nodiscard]] bool press_minimap(LPARAM data);
+    [[nodiscard]] bool drag_minimap(LPARAM data);
+    [[nodiscard]] bool release_minimap(LPARAM data);
+    void end_minimap_drag(UINT message);
+    [[nodiscard]] bool take_minimap_escape(LPARAM data);
     [[nodiscard]] bool explorer_divider_cursor(LPARAM data) const;
     [[nodiscard]] std::int32_t explorer_width_at(std::int32_t x) const;
     // 操作 → メンバ関数の表を引く（EditorWindowOperations.cpp・ADR 0078 の追補 #1188）。操作ごとの
@@ -416,6 +427,11 @@ class EditorWindow final
     LPARAM explorer_drag_point_ = 0;
     // Esc で取り消した後、その Esc の繰り返し（lParam の bit 30）を食べている間（#1413 の L-1）。
     bool explorer_escape_held_ = false;
+    // ミニマップの面を押してから離すまで（ADR 0171 の決定 5 の追補）。値があるのは窓が捕まえて
+    // いる間だけ。Esc で終えた後、その Esc の繰り返しを食べている間（explorer_escape_held_
+    // と同じ）。
+    std::optional<MinimapGrab> minimap_grab_;
+    bool minimap_escape_held_ = false;
     // 最後の WM_MOUSEMOVE の点が境の上だったか（カーソルを左右の矢印にする・D78）。
     bool over_explorer_divider_ = false;
     UINT wheel_setting_ = default_wheel_scroll_lines;

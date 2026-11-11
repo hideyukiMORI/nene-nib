@@ -179,7 +179,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/AutosaveRestorePropertyTests.cpp
     tests/unit/OperationsTests.cpp
     tests/unit/FindReplaceTests.cpp tests/unit/MatchParenTests.cpp tests/unit/MinimapTests.cpp
-    tests/unit/MinimapPropertyTests.cpp
+    tests/unit/MinimapPropertyTests.cpp tests/unit/MinimapPointerTests.cpp
     tests/unit/GuideTests.cpp
     tests/unit/ExitPlanTests.cpp
     tests/unit/DisplayTests.cpp
@@ -462,7 +462,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/PrintRenderTests.cpp tests/ui/MemoryXpsTarget.cpp tests/ui/MemoryPackageTarget.cpp
     tests/ui/MatchParenOutlineTests.cpp tests/ui/SaveQuestionTests.cpp
     tests/ui/VimSpecialKeyTests.cpp tests/ui/ClosingStepsTests.cpp
-    tests/ui/PreviewCycleKeyTests.cpp tests/ui/MinimapPaintTests.cpp
+    tests/ui/PreviewCycleKeyTests.cpp tests/ui/MinimapPaintTests.cpp tests/ui/MinimapPressTests.cpp
     tests/ui/StandardKeyTests.cpp
     tests/ui/WordDeletionKeyTests.cpp tests/ui/PreviewImagePaintTests.cpp
     tests/ui/StartScreenPaintTests.cpp)

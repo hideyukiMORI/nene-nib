@@ -10,6 +10,9 @@
 #include "EditorOperation.hpp"
 #include "ExplorerKey.hpp"
 #include "ExplorerKeyKind.hpp"
+#include "LayoutRect.hpp"
+#include "MinimapLayout.hpp"
+#include "MinimapPress.hpp"
 #include "NewTab.hpp"
 #include "OpenDocumentFormatList.hpp"
 #include "PaletteLayout.hpp"
@@ -100,15 +103,12 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         middle_click(data);
         return 0;
     case WM_MOUSEMOVE:
-        drag_explorer_divider(data);
-        hover_explorer_divider(data);
-        drag_selection(data);
-        hover_explorer_row(data);
-        point_at(data);
+        move_pointer(data);
         return 0;
     case WM_MOUSELEAVE:
         // 窓の外で離した押しは残さない（捕まえを取らないので離しが届かない・追補 24）。
         start_pressed_ = std::nullopt;
+        end_minimap_drag(message);
         over_explorer_divider_ = false;
         hover_explorer_line(std::nullopt);
         hover(std::nullopt);
@@ -121,6 +121,7 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
             caption_step(message, core::TitleBarTarget{core::TitleBarHit::none, 0}, left_pressed_)
                 .first;
         start_pressed_ = std::nullopt;
+        end_minimap_drag(message);
         lose_explorer_divider();
         end_selection_drag();
         return 0;
@@ -130,6 +131,20 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         break;
     }
     return DefWindowProcW(window_, message, word, data);
+}
+
+void EditorWindow::move_pointer(LPARAM data)
+{
+    // ミニマップを押している間の動きは面の送りだけ（帯の hover・境のカーソルを動かさない）。
+    if (drag_minimap(data))
+    {
+        return;
+    }
+    drag_explorer_divider(data);
+    hover_explorer_divider(data);
+    drag_selection(data);
+    hover_explorer_row(data);
+    point_at(data);
 }
 
 void EditorWindow::release_left(LPARAM data)
@@ -144,12 +159,124 @@ void EditorWindow::release_left(LPARAM data)
     {
         return;
     }
+    // ミニマップを押していたら、離したのはそのドラッグの終わりだけ（窓の操作の上で離しても閉じない・
+    // #1464 と同じ）。
+    if (release_minimap(data))
+    {
+        return;
+    }
     drag_selection(data);
     end_selection_drag();
     release_preview_task(data);
     release_start_entry(data);
     release_title_bar(data);
     static_cast<void>(point_explorer(WM_LBUTTONUP, data));
+}
+
+// 点の下のミニマップの面（面が出ていて点がその上のときだけ値）。面は描画・本文の枠と同じ
+// core::minimap_layout の 1 本（エクスプローラーの面の右の client から）。押しのときだけ引く。
+std::optional<core::LayoutRect> EditorWindow::minimap_panel_under(LPARAM data) const
+{
+    if (!controller_.minimap_shown())
+    {
+        return std::nullopt;
+    }
+    const auto panel = core::minimap_layout(explorer_frame().body, dpi_,
+                                            controller_.delivery().settings.font_size, true)
+                           .panel;
+    if (!core::contains(panel, low_word_of(data), high_word_of(data)))
+    {
+        return std::nullopt;
+    }
+    return panel;
+}
+
+// 面の上の押し（ADR 0171 の決定 5 の追補）。押した所へ跳び、窓が捕まえたときだけドラッグを覚える
+// （捕まえの無い押しを残さない・#1464）。面の外なら偽。
+bool EditorWindow::press_minimap(LPARAM data)
+{
+    const auto [grab, sent] =
+        minimap_step(WM_LBUTTONDOWN, high_word_of(data), minimap_panel_under(data), std::nullopt);
+    if (!grab.has_value())
+    {
+        return false;
+    }
+    SetCapture(window_);
+    minimap_grab_ = GetCapture() == window_ ? grab : std::nullopt;
+    if (sent.has_value())
+    {
+        send(sent.value());
+    }
+    return true;
+}
+
+// 押したまま動かした。段が変わったときだけ送る。押していなければ偽（ほかの WM_MOUSEMOVE の道へ）。
+// controller_.frame() は呼ばない（面の上端は押したときの値）。
+bool EditorWindow::drag_minimap(LPARAM data)
+{
+    if (!minimap_grab_.has_value())
+    {
+        return false;
+    }
+    const auto [grab, sent] =
+        minimap_step(WM_MOUSEMOVE, high_word_of(data), std::nullopt, minimap_grab_);
+    minimap_grab_ = grab;
+    if (sent.has_value())
+    {
+        send(sent.value());
+    }
+    return true;
+}
+
+// 離した。押していなければ偽。捕まえを放すと WM_CAPTURECHANGED がここへ戻るので、先に覚えを消す。
+bool EditorWindow::release_minimap(LPARAM data)
+{
+    if (!minimap_grab_.has_value())
+    {
+        return false;
+    }
+    const auto [grab, sent] =
+        minimap_step(WM_LBUTTONUP, high_word_of(data), std::nullopt, minimap_grab_);
+    minimap_grab_ = grab;
+    if (GetCapture() == window_)
+    {
+        ReleaseCapture();
+    }
+    if (sent.has_value())
+    {
+        send(sent.value());
+    }
+    return true;
+}
+
+// ドラッグを終える（message は終えたメッセージ: 捕まえを失った WM_CAPTURECHANGED・窓の外の
+// WM_MOUSELEAVE・Esc の WM_KEYDOWN。面が消えたときは WM_CAPTURECHANGED と同じ）。窓はその時点の
+// 位置のまま。まだ捕まえていれば放す（覚えを先に消すので、戻る WM_CAPTURECHANGED は何もしない）。
+void EditorWindow::end_minimap_drag(UINT message)
+{
+    if (!minimap_grab_.has_value())
+    {
+        return;
+    }
+    minimap_grab_ = minimap_step(message, 0, std::nullopt, minimap_grab_).first;
+    if (GetCapture() == window_)
+    {
+        ReleaseCapture();
+    }
+}
+
+// WM_KEYDOWN の Esc（take_explorer_escape と同じ形）。押している間の Esc はドラッグを終えるだけで
+// 本文・Vim・面へ流さず、その Esc を押し続けた繰り返し（bit 30）も離して押し直すまで食べる。
+bool EditorWindow::take_minimap_escape(LPARAM data)
+{
+    constexpr LPARAM repeated_key_bit = LPARAM{1} << 30;
+    if ((data & repeated_key_bit) != 0 && minimap_escape_held_)
+    {
+        return true;
+    }
+    minimap_escape_held_ = minimap_grab_.has_value();
+    end_minimap_drag(WM_KEYDOWN);
+    return minimap_escape_held_;
 }
 
 core::TitleBarLayout EditorWindow::title_bar() const
@@ -413,7 +540,7 @@ void EditorWindow::click_client(LPARAM data, application::PointerClicks clicks)
         send(application::CancelCommand{});
         return;
     }
-    if (press_explorer_divider(data) || point_explorer(WM_LBUTTONDOWN, data))
+    if (press_explorer_divider(data) || point_explorer(WM_LBUTTONDOWN, data) || press_minimap(data))
     {
         return;
     }
