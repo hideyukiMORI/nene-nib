@@ -1,9 +1,12 @@
 #include "EditorController.hpp"
 
+#include "Document.hpp"
+#include "DocumentView.hpp"
 #include "EditorControllerDetail.hpp"
 #include "ExplorerEntry.hpp"
 #include "ExplorerFolder.hpp"
 #include "ExplorerLayout.hpp"
+#include "ExplorerMark.hpp"
 #include "ExplorerNode.hpp"
 #include "ExplorerResizing.hpp"
 #include "ExplorerRow.hpp"
@@ -20,8 +23,9 @@
 #include "FolderListingKind.hpp"
 #include "FolderProgress.hpp"
 #include "FolderRequest.hpp"
-#include "FontSize.hpp"
+#include "HoverExplorer.hpp"
 #include "ResizeExplorer.hpp"
+#include "SaveState.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -31,6 +35,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace nenenib::application
@@ -274,11 +279,33 @@ void EditorController::double_click_explorer(std::size_t row)
     }
 }
 
+// 2 打目（DBLCLK）と、押した印の無い離し（DBLCLK の後の離し・何もしない）は、1 打目の知らせを
+// 消さない（1 打目で開けなかった「開けませんでした」の 1 行がダブルクリックで消えない・レビュー
+// V-1391b の R-b）。2 打目は 1 打目の節を開き直さないので、知らせが 2 回出ることも無い。押しは
+// 新しいクリックの始まりなので、ほかの意図と同じに知らせを消す。
+bool EditorController::keeps_explorer_notice(const EditorIntent &intent) const noexcept
+{
+    if (!std::holds_alternative<PointExplorer>(intent))
+    {
+        return false;
+    }
+    switch (std::get<PointExplorer>(intent).pointing)
+    {
+    case ExplorerPointing::pressed:
+        return false;
+    case ExplorerPointing::released:
+        return !explorer_pressed_.has_value();
+    case ExplorerPointing::double_click:
+        return true;
+    }
+    std::unreachable();
+}
+
 // 1 打目が効いた節 path への 2 打目。節が見えていれば選ぶ。フォルダは何もしない（開いて閉じる、
 // にしない）。ファイルは焦点を本文へ移し、開いたタブがあれば open_listed の 1 本でそのタブを
 // アクティブにする（開いていれば切り替えるだけで読まない）。タブが無いのは、読み中（揃えば
 // アクティブになる・open_listed も何もしない）か、1 打目で開けなかったとき（試し直さない・
-// 知らせは 1 打目の 1 行だけ）。
+// 知らせは 1 打目の 1 行で、keeps_explorer_notice が 2 打目の後まで残す）。
 void EditorController::second_click_explorer(const core::FilePath &path)
 {
     const auto &tree = state_.explorer().tree;
@@ -317,6 +344,35 @@ void EditorController::accept(const ScrollExplorer &intent)
     const auto moved = static_cast<std::int64_t>(explorer.first_visible) + intent.lines;
     explorer.first_visible = static_cast<std::size_t>(std::clamp<std::int64_t>(moved, 0, last));
     state_ = state_.with_explorer(std::move(explorer));
+}
+
+// マウスを載せた面の行（#1390・ADR 0056 の決定 3 の帯と同じ形）。画面の行のまま覚えるので、ホイール
+// で行が送られると載った行も変わる。面が消えていれば何もしない（sync_explorer が消してある）。
+// 見えている行の外（行の無い所）は explorer_view が値なしとして写すので、外から外へ動いただけなら
+// 描き直さない（レビュー V-1428 の L-3）。画面の行のまま覚えるのは、窓が同じ値を送り直さないため。
+void EditorController::accept(const HoverExplorer &intent)
+{
+    if (!state_.settings().explorer || state_.explorer().hovered == intent.line)
+    {
+        return;
+    }
+    ExplorerState explorer = state_.explorer();
+    const std::size_t rows = explorer.tree.visible_rows().size();
+    const std::size_t first = std::min(explorer.first_visible, rows);
+    const std::size_t shown = std::min(first + explorer_page(), rows) - first;
+    const auto on_row = [shown](std::optional<std::size_t> line)
+    { return line.has_value() && line.value() < shown ? line : std::nullopt; };
+    if (on_row(explorer.hovered) == on_row(intent.line))
+    {
+        repaint_ = false;
+    }
+    explorer.hovered = intent.line;
+    state_ = state_.with_explorer(std::move(explorer));
+}
+
+std::optional<std::size_t> EditorController::explorer_hovered() const noexcept
+{
+    return state_.explorer().hovered;
 }
 
 // 操作「ルートのフォルダを選ぶ」の答え（決定 7）。`:set root=<path>` と同じく設定へ書く。
@@ -366,11 +422,6 @@ void EditorController::accept(const ResizeExplorer &intent)
     {
         reject(core::DisplayText::parse("Settings could not be saved").value());
     }
-}
-
-core::FontSize EditorController::font_size() const noexcept
-{
-    return state_.settings().font_size;
 }
 
 std::optional<core::ExplorerWidth> EditorController::explorer_width() const noexcept
@@ -567,6 +618,12 @@ void EditorController::sync_explorer()
         explorer_dragged_.reset();
         explorer_clicked_.reset();
     }
+    // 面が消えたら載せた行も消す（次に出したとき、マウスが動くまで古い行を塗らない・#1390）。
+    if (!settings.explorer && explorer.hovered.has_value())
+    {
+        explorer.hovered.reset();
+        changed = true;
+    }
     if (!settings.explorer && explorer.focused)
     {
         explorer.focused = false;
@@ -689,6 +746,57 @@ void EditorController::place_explorer_entries(const core::FilePath &folder,
     state_ = state_.with_explorer(clamped(std::move(explorer), rows.size(), explorer_page()));
 }
 
+// 未保存のタブのファイル（アクティブと脇の束・#1390）。面の行の未保存の印の出どころで、判定は
+// save_state_of と脇の束の表示値（タブの「● 」と同じ値）。まだ読んでいない文書は未保存にならない。
+std::vector<core::FilePath> EditorController::unsaved_files() const
+{
+    std::vector<core::FilePath> files;
+    const auto &active = state_.document().path;
+    if (active.has_value() &&
+        save_state_of(state_.document(), state_.history().position()) != core::SaveState::saved)
+    {
+        files.push_back(active.value());
+    }
+    for (const auto &tab : state_.parked())
+    {
+        const DocumentView &view = detail::parked_view(tab);
+        if (view.path.has_value() && view.save_state != core::SaveState::saved)
+        {
+            files.push_back(view.path.value());
+        }
+    }
+    return files;
+}
+
+// 面の 1 行の表示値。ファイルの行だけが印の色・アクティブ・未保存を持つ（同じファイルかは
+// open_tab_of と同じ FilePort::same_file）。
+ExplorerRowView EditorController::explorer_row_view(const core::ExplorerRow &row,
+                                                    std::span<const core::FilePath> unsaved) const
+{
+    const auto &tree = state_.explorer().tree;
+    ExplorerRowView view{row.more ? std::string{} : tree.nodes()[row.node].name,
+                         row.depth,
+                         row.folder,
+                         row.open,
+                         row.hidden,
+                         row.more};
+    if (row.more || row.folder)
+    {
+        return view;
+    }
+    view.mark = core::explorer_mark_role(view.name);
+    const auto path = tree.path_of(row.node);
+    if (!path.has_value())
+    {
+        return view;
+    }
+    const auto &active = state_.document().path;
+    view.active = active.has_value() && ports_.files.same_file(active.value(), path.value());
+    view.unsaved = std::ranges::any_of(unsaved, [&](const core::FilePath &file)
+                                       { return ports_.files.same_file(file, path.value()); });
+    return view;
+}
+
 // 面の表示値（決定 3・8）。面が消えていれば値なし（分岐 1 つ）。名前を写すのは first_visible から
 // 面の行数（explorer_page）ぶんだけで、frame の費用は木の大きさではなく画面の行数に依る。
 std::optional<ExplorerView> EditorController::explorer_view() const
@@ -698,17 +806,21 @@ std::optional<ExplorerView> EditorController::explorer_view() const
         return std::nullopt;
     }
     const ExplorerState &explorer = state_.explorer();
-    const auto nodes = explorer.tree.nodes();
     const auto rows = explorer.tree.visible_rows();
     const std::size_t first = std::min(explorer.first_visible, rows.size());
     const std::size_t last = std::min(first + explorer_page(), rows.size());
+    const auto unsaved = unsaved_files();
     std::vector<ExplorerRowView> views;
     views.reserve(last - first);
     for (std::size_t index = first; index < last; ++index)
     {
-        const core::ExplorerRow &row = rows[index];
-        views.push_back(ExplorerRowView{row.more ? std::string{} : nodes[row.node].name, row.depth,
-                                        row.folder, row.open, row.hidden, row.more});
+        views.push_back(explorer_row_view(rows[index], unsaved));
+    }
+    // 載せた画面の行が見えている行の外（行の無い所）なら値なし。
+    std::optional<std::size_t> hovered;
+    if (explorer.hovered.has_value() && explorer.hovered.value() < views.size())
+    {
+        hovered = first + explorer.hovered.value();
     }
     return ExplorerView{explorer.tree.root(),
                         std::move(views),
@@ -716,6 +828,7 @@ std::optional<ExplorerView> EditorController::explorer_view() const
                         explorer.selected,
                         explorer.focused,
                         first,
-                        explorer_width().value_or(core::ExplorerWidth{})};
+                        explorer_width().value_or(core::ExplorerWidth{}),
+                        hovered};
 }
 } // namespace nenenib::application
