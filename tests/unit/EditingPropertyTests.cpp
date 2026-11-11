@@ -920,9 +920,10 @@ template <std::size_t N>
 [[nodiscard]] Step make_delete(Random &random, std::size_t)
 {
     const bool backward = below(random, 2U) == 0U;
-    return intent_step(backward ? "backspace" : "delete",
-                       app::DeleteText{backward ? core::DeleteDirection::backward
-                                                : core::DeleteDirection::forward});
+    return intent_step(
+        backward ? "backspace" : "delete",
+        app::DeleteText{backward ? core::DeleteDirection::backward : core::DeleteDirection::forward,
+                        core::DeleteUnit::character});
 }
 
 [[nodiscard]] Step make_select_all(Random &, std::size_t)
@@ -1137,7 +1138,7 @@ void verify_determinism()
 
 [[nodiscard]] Step erased(core::DeleteDirection direction)
 {
-    return intent_step("delete", app::DeleteText{direction});
+    return intent_step("delete", app::DeleteText{direction, nenenib::core::DeleteUnit::character});
 }
 
 [[nodiscard]] std::string last_text(const Case &input)

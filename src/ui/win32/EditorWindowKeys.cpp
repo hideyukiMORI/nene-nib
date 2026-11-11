@@ -34,6 +34,7 @@
 #include "VimSpecialKey.hpp"
 #include "VimSpecialKeys.hpp"
 #include "WalkRecentTab.hpp"
+#include "WordDeletionKey.hpp"
 
 #include <algorithm>
 #include <array>
@@ -609,10 +610,10 @@ void EditorWindow::press_plain_key(WPARAM word)
     switch (word)
     {
     case VK_BACK:
-        send(application::DeleteText{core::DeleteDirection::backward});
+        send(application::DeleteText{core::DeleteDirection::backward, core::DeleteUnit::character});
         return;
     case VK_DELETE:
-        send(application::DeleteText{core::DeleteDirection::forward});
+        send(application::DeleteText{core::DeleteDirection::forward, core::DeleteUnit::character});
         return;
     case VK_RETURN:
         send(application::NewLine{});
@@ -663,8 +664,23 @@ void EditorWindow::press_control_key(WPARAM word)
     case 'R':
         send_vim_redo();
         return;
+    case VK_BACK:
+    case VK_DELETE:
+        send_word_deletion(word);
+        return;
     default:
         break;
+    }
+}
+
+// 通常モードの Ctrl+Backspace / Ctrl+Delete は語の削除（ADR 0009 の追補 #1394）。Vim のモードと
+// Ctrl+Shift+Backspace / Ctrl+Shift+Delete は何もしない（word_deletion_for）。
+void EditorWindow::send_word_deletion(WPARAM word)
+{
+    const auto direction = word_deletion_for(word, held(VK_SHIFT), mode_);
+    if (direction.has_value())
+    {
+        send(application::DeleteText{direction.value(), core::DeleteUnit::word});
     }
 }
 

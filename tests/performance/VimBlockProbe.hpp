@@ -34,4 +34,7 @@ vim_counted_right(VimBlockWorkload workload, const std::string &input,
 [[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
 vim_sentence_moved(VimBlockWorkload workload, const std::string &input,
                    application::TimingPort &timing);
+[[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
+ordinary_word_bounded(VimBlockWorkload workload, const std::string &input,
+                      application::TimingPort &timing);
 } // namespace nenenib::tests::performance

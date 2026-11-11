@@ -329,6 +329,7 @@ void verify_vim_block_scope();
 // OrdinaryCharacterTests.cpp
 void verify_ordinary_character_contracts();
 void verify_ordinary_character_scope();
+void verify_ordinary_word_contracts();
 
 // CoreTests.cpp
 void verify_buffer_scope();

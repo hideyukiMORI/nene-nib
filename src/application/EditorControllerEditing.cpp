@@ -5,12 +5,14 @@
 #include "ClipboardText.hpp"
 #include "DateTimeText.hpp"
 #include "DeleteDirection.hpp"
+#include "DeleteUnit.hpp"
 #include "DisplayInquiry.hpp"
 #include "DisplayText.hpp"
 #include "Edit.hpp"
 #include "HtmlToMarkdown.hpp"
 #include "Language.hpp"
 #include "OrdinaryCharacterBoundary.hpp"
+#include "OrdinaryWordBoundary.hpp"
 #include "PasteKind.hpp"
 #include "Selection.hpp"
 #include "Utf8.hpp"
@@ -102,10 +104,37 @@ constexpr std::size_t single_page_line = 1;
     std::unreachable();
 }
 
+// 選択が空のときの Ctrl+Backspace / Ctrl+Delete。Ctrl+← → と同じ境の 1 本の着地までを消す
+// （メモ帳の実測・ADR 0009 の追補 #1394）。窓は通常モードでだけ送る。
+[[nodiscard]] core::OffsetRange word_deletion_range(const core::TextBuffer &text,
+                                                    core::Offset caret,
+                                                    core::DeleteDirection direction)
+{
+    switch (direction)
+    {
+    case core::DeleteDirection::backward:
+        return core::OffsetRange{
+            core::ordinary_word_boundary(text, caret, core::OrdinaryWordDirection::backward),
+            caret};
+    case core::DeleteDirection::forward:
+        return core::OffsetRange{
+            caret, core::ordinary_word_boundary(text, caret, core::OrdinaryWordDirection::forward)};
+    }
+    std::unreachable();
+}
+
 // 選択が空のときの Backspace / Delete。外部から来る Vim の意図は既存の単位を保つ。
 [[nodiscard]] core::OffsetRange deletion_range(const core::TextBuffer &text, core::Offset caret,
-                                               core::DeleteDirection direction, core::EditMode mode)
+                                               const DeleteText &intent, core::EditMode mode)
 {
+    const core::DeleteDirection direction = intent.direction;
+    switch (intent.unit)
+    {
+    case core::DeleteUnit::word:
+        return word_deletion_range(text, caret, direction);
+    case core::DeleteUnit::character:
+        break;
+    }
     switch (mode)
     {
     case core::EditMode::ordinary:
@@ -295,9 +324,9 @@ void EditorController::accept(const CancelSelection &)
 void EditorController::accept(const DeleteText &intent)
 {
     const auto selected = core::selection_range(state_.selection());
-    const auto range = core::is_empty(selected) ? deletion_range(state_.text(), selected.begin,
-                                                                 intent.direction, state_.mode())
-                                                : selected;
+    const auto range = core::is_empty(selected)
+                           ? deletion_range(state_.text(), selected.begin, intent, state_.mode())
+                           : selected;
     replace(range, std::string_view{}, core::EditBoundary::separate);
 }
 

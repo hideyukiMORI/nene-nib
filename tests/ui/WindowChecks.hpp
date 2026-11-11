@@ -50,4 +50,5 @@ void verify_preview_cycle_key();
 // 通常モードの Windows の標準の鍵（Ctrl+N・Ctrl+Shift+Z・Ctrl / Shift+Insert・Shift+Delete・D82・
 // #1395）。
 void verify_standard_keys();
+void verify_word_deletion_keys();
 } // namespace nenenib::tests::ui
