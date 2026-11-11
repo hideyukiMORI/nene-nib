@@ -2,7 +2,9 @@
 
 #include "DevicePixels.hpp"
 #include "DisplayText.hpp"
+#include "EditorOperation.hpp"
 #include "KeycapPainter.hpp"
+#include "OperationTexts.hpp"
 #include "PaletteRowKey.hpp"
 #include "SaveState.hpp"
 #include "StartEntryKind.hpp"
@@ -32,10 +34,10 @@ constexpr std::string_view selected_mark = "▸";
 constexpr std::string_view ellipsis = "…";
 constexpr std::string_view new_file_text = "新しいファイル";
 constexpr std::string_view new_file_detail = "そのまま打ち始める";
-constexpr std::string_view open_file_text = "ファイルを開く";
 constexpr std::string_view open_folder_text = "フォルダを開く";
 constexpr std::string_view open_folder_detail = "ルートを選んでエクスプローラーを出す";
-// 場所の全文の幅を測る欄の幅（物理画素・行に収まらない長さを測れればよい）。
+// 場所の全文の幅を測る欄の幅（物理画素）。測る文字組みは省略の印を外すので、この幅を超える
+// 全文も尻まで並び、幅と当たりは全文のもの（レビュー M2）。
 constexpr std::int32_t measured_width = 8192;
 
 [[nodiscard]] D2D1_COLOR_F to_color(core::RgbColor color) noexcept
@@ -202,7 +204,9 @@ void StartScreenPainter::paint_row(const core::StartEntry &entry, const core::St
         paint_named(new_file_text, new_file_detail, row.label, palette);
         return;
     case core::StartEntryKind::open_file:
-        paint_named(open_file_text, {}, row.label, palette);
+        // 名前は操作の表から（鍵と同じ正本・ADR 0078）。
+        paint_named(core::operation_text(core::EditorOperation::open_file).name, {}, row.label,
+                    palette);
         keycap(text_.open_key, row.label, false);
         return;
     case core::StartEntryKind::open_folder:
@@ -244,19 +248,36 @@ void StartScreenPainter::paint_path(const core::FilePath &path, const core::Layo
     write(shown, {text_.item, PaletteTextRole::plain}, rest, palette.muted);
 }
 
+PaletteRowLayouts::TextLayout StartScreenPainter::measured(std::string_view text)
+{
+    // 行の字の書式は書式そのものに文字単位の省略の印を持つので、測る文字組みだけ外す。鍵の欄は
+    // 広い欄で、描く文字組み（行の欄の大きさ）とは別の保持になる。
+    const core::LayoutRect wide{0, 0, measured_width, measured_width};
+    return layouts_.obtain(PaletteRowKey{text_.item, PaletteTextRole::plain, text, wide, text_.dpi},
+                           [&]
+                           {
+                               auto layout = made(text, {text_.item, PaletteTextRole::plain}, wide);
+                               const DWRITE_TRIMMING none{DWRITE_TRIMMING_GRANULARITY_NONE, 0, 0};
+                               return layout && SUCCEEDED(layout->SetTrimming(&none, nullptr))
+                                          ? layout
+                                          : nullptr;
+                           });
+}
+
 std::string StartScreenPainter::head_trimmed(std::string_view text, const core::LayoutRect &area)
 {
-    // 全文の幅を広い欄の文字組みで測り、入らなければ「…」の幅を残して頭側を落とす位置を、同じ
-    // 文字組みの当たり（HitTestPoint）で引く。どちらの文字組みも保持から引く。
-    const TextStyle plain{text_.item, PaletteTextRole::plain};
-    const core::LayoutRect wide{0, area.top, measured_width, area.bottom};
-    const auto full = obtained(text, plain, wide);
-    const auto mark = obtained(ellipsis, plain, wide);
+    // 全文の幅を測り、入らなければ「…」の幅を残して頭側を落とす位置を、同じ文字組みの当たり
+    // （HitTestPoint）で引く。どちらの文字組みも保持から引く。
+    const auto full = measured(text);
     DWRITE_TEXT_METRICS whole{};
-    DWRITE_TEXT_METRICS sign{};
     const auto room = static_cast<float>(core::width_of(area));
-    if (!full || !mark || FAILED(full->GetMetrics(&whole)) || FAILED(mark->GetMetrics(&sign)) ||
-        whole.width <= room)
+    if (!full || FAILED(full->GetMetrics(&whole)) || whole.width <= room)
+    {
+        return std::string(text);
+    }
+    const auto mark = measured(ellipsis);
+    DWRITE_TEXT_METRICS sign{};
+    if (!mark || FAILED(mark->GetMetrics(&sign)))
     {
         return std::string(text);
     }

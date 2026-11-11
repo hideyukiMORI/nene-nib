@@ -45,6 +45,9 @@ class StartScreenPainter final
     // 画面を描く。clip は本文の帯（列が帯の下へはみ出す分を切る）。
     void paint(const application::StartScreenView &view, const core::StartScreenLayout &layout,
                const core::Palette &palette, const core::LayoutRect &clip);
+    // 欄に入るように頭側を「…」で切った文（入れば全文）。全文の幅は省略の印を外した文字組みで
+    // 測り、落とす位置はその文字組みの当たりで引く（PR #1459 のレビュー M1 / M2・試験も読む）。
+    [[nodiscard]] std::string head_trimmed(std::string_view text, const core::LayoutRect &area);
 
   private:
     void fill(const core::LayoutRect &area, core::RgbColor color);
@@ -64,8 +67,8 @@ class StartScreenPainter final
     // ファイルの名前（text）とその右の場所（muted・頭側を切る）。
     void paint_path(const core::FilePath &path, const core::LayoutRect &area,
                     const core::Palette &palette);
-    // 欄に入るように頭側を「…」で切った文（入れば全文）。
-    [[nodiscard]] std::string head_trimmed(std::string_view text, const core::LayoutRect &area);
+    // 全文の幅を測る文字組み（書式の省略の印を外す・広い欄）。
+    [[nodiscard]] PaletteRowLayouts::TextLayout measured(std::string_view text);
     void paint_keys(const application::StartScreenView &view, const core::StartScreenLayout &layout,
                     const core::Palette &palette);
     [[nodiscard]] PaletteRowLayouts::TextLayout made(std::string_view text, TextStyle style,

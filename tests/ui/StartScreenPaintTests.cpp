@@ -71,10 +71,26 @@ constexpr std::size_t listed_layouts = first_frame_layouts + 2 + 1 + 1 + (3 * 3)
 // 書式 5 つ（題・行の字・見出し・鍵・鍵の説明）。
 using Formats = std::vector<Format>;
 
+// 行の字の書式は、製品（エクスプローラーの面の書式）と同じく書式に文字単位の省略の印を持つ
+// （レビュー M2 の条件）。
+[[nodiscard]] Format trimmed_format_of(IDWriteFactory2 &factory)
+{
+    auto format = format_of(factory, L"Segoe UI", 12.0F, DWRITE_TEXT_ALIGNMENT_LEADING);
+    Microsoft::WRL::ComPtr<IDWriteInlineObject> sign;
+    const DWRITE_TRIMMING trimming{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+    if (format == nullptr ||
+        FAILED(factory.CreateEllipsisTrimmingSign(format.Get(), sign.GetAddressOf())) ||
+        FAILED(format->SetTrimming(&trimming, sign.Get())))
+    {
+        return nullptr;
+    }
+    return format;
+}
+
 [[nodiscard]] Formats formats_of(IDWriteFactory2 &factory)
 {
     return {format_of(factory, L"Segoe UI", 22.5F, DWRITE_TEXT_ALIGNMENT_LEADING),
-            format_of(factory, L"Segoe UI", 12.0F, DWRITE_TEXT_ALIGNMENT_LEADING),
+            trimmed_format_of(factory),
             format_of(factory, L"Segoe UI", 12.0F, DWRITE_TEXT_ALIGNMENT_LEADING),
             format_of(factory, L"Consolas", 12.5F, DWRITE_TEXT_ALIGNMENT_LEADING),
             format_of(factory, L"Segoe UI", 13.5F, DWRITE_TEXT_ALIGNMENT_LEADING)};
@@ -303,6 +319,39 @@ void verify_palette(SoftwareTarget &target, IDWriteFactory2 &factory, const Form
     expect(layouts.size() == listed_layouts,
            "the read lists add only their own layouts and repaints create none");
 }
+// 場所の頭側の切り方（レビュー M1 / M2）。頭と尻で違う字の場所を、欄に入るように頭側を「…」で
+// 切ると、先頭が「…」で尻（`\tail`）が残る。尻を切る実装なら尻が消えて落ちる。測る欄（8192 物理
+// 画素）を超える長さでも尻が残る。入る場所は全文のまま。
+void verify_head_trimming(SoftwareTarget &target, IDWriteFactory2 &factory, const Formats &formats)
+{
+    const auto palette = core::palette_for(core::Appearance::dark);
+    const auto text = text_of(factory, formats, palette);
+    PaletteRowLayouts layouts(StartScreenPainter::retained);
+    const core::LayoutRect area{0, 0, 200, 24};
+    const std::string tail = "\\tail";
+    const std::string longer = "C:\\head" + std::string(100, 'm') + tail;
+    const std::string longest = "C:\\head" + std::string(2000, 'm') + tail;
+    const std::string fitting = "C:\\head\\tail";
+    std::string cut;
+    std::string cut_longest;
+    std::string kept;
+    static_cast<void>(target.painted(
+        [&](ID2D1RenderTarget &surface, ID2D1SolidColorBrush *brush)
+        {
+            StartScreenPainter painter(surface, *brush, text, layouts);
+            cut = painter.head_trimmed(longer, area);
+            cut_longest = painter.head_trimmed(longest, area);
+            kept = painter.head_trimmed(fitting, area);
+        }));
+    const std::string ellipsis = "…";
+    expect(cut.starts_with(ellipsis) && cut.ends_with(tail) && cut.size() < longer.size() &&
+               cut.find("head") == std::string::npos,
+           "a long folder loses its head behind an ellipsis and keeps its tail");
+    expect(cut_longest.starts_with(ellipsis) && cut_longest.ends_with(tail) &&
+               cut_longest.size() < cut.size() + 40,
+           "a folder wider than the measuring box still keeps its tail");
+    expect(kept == fitting, "a folder that fits is kept whole");
+}
 } // namespace
 
 void verify_start_screen_paint()
@@ -330,5 +379,6 @@ void verify_start_screen_paint()
     }
     verify_palette(target, *factory.Get(), formats, core::palette_for(core::Appearance::dark));
     verify_palette(target, *factory.Get(), formats, core::palette_for(core::Appearance::light));
+    verify_head_trimming(target, *factory.Get(), formats);
 }
 } // namespace nenenib::tests::ui
