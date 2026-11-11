@@ -4,6 +4,7 @@
 #include "EditorOperation.hpp"
 #include "OperationBindings.hpp"
 #include "OperationShortcut.hpp"
+#include "TabShortcut.hpp"
 #include "VimMode.hpp"
 #include "VimSpecialKeys.hpp"
 #include "WindowChecks.hpp"
@@ -72,6 +73,29 @@ void verify_clipboard_keys()
            "Shift+Delete still sends no Vim key in Vim NORMAL");
 }
 
+// press_key の順（入力行 → タブの鍵 → 操作の表 → エクスプローラーの焦点 → clipboard_key_for →
+// Ctrl の表 → Vim / 通常の表）の前提: 古いクリップボードの 3 つの鍵は、写しより前にあるタブの鍵と
+// 操作の表のどのモードの行にも当たらない（当たると写しへ届かない・PR #1422 のレビュー L5）。
+void verify_clipboard_keys_reach_their_turn()
+{
+    using nenenib::core::operation_for;
+    using nenenib::ui::win32::operation_chord;
+    using nenenib::ui::win32::tab_shortcut;
+    using OldKey = std::tuple<WPARAM, bool, bool>;
+    constexpr std::array<OldKey, 3> old_keys{
+        {{VK_INSERT, true, false}, {VK_INSERT, false, true}, {VK_DELETE, false, true}}};
+    for (const auto &[key, control, shifted] : old_keys)
+    {
+        const auto chord = operation_chord(key, control, shifted);
+        expect(!chord.has_value() ||
+                   (!operation_for(chord.value(), EditMode::ordinary).has_value() &&
+                    !operation_for(chord.value(), EditMode::vim).has_value()),
+               "no operation row catches an old clipboard key before clipboard_key_for");
+        expect(!control || !tab_shortcut(key, shifted).has_value(),
+               "no tab key catches an old clipboard key before clipboard_key_for");
+    }
+}
+
 void verify_new_tab_and_redo_keys()
 {
     using nenenib::core::EditorOperation;
@@ -108,6 +132,7 @@ void verify_new_tab_and_redo_keys()
 void verify_standard_keys()
 {
     verify_clipboard_keys();
+    verify_clipboard_keys_reach_their_turn();
     verify_new_tab_and_redo_keys();
 }
 } // namespace nenenib::tests::ui
