@@ -32,6 +32,7 @@
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
+#include "OperationGuide.hpp"
 #include "PreviewPlacement.hpp"
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
@@ -748,14 +749,14 @@ void verify_layout()
 // start_released）。点 (x, y) は 96 DPI の低い本文（short_body・上から 36
 // DIP）の上。離しが行を選べば ChooseStartEntry を送る。
 [[nodiscard]] std::optional<std::size_t> row_under(app::EditorController &controller,
-                                                   std::pair<std::int32_t, std::int32_t> point)
+                                                   std::pair<std::int32_t, std::int32_t> point,
+                                                   const core::BodyLayout &body = short_body())
 {
     const auto view = shown(controller);
     if (!view.has_value())
     {
         return std::nullopt;
     }
-    const auto body = short_body();
     const auto layout = core::start_screen_layout(
         body, 96, core::start_screen_shape(view.value().entries, view.value().lists_read), 0);
     return layout.has_value()
@@ -764,16 +765,18 @@ void verify_layout()
 }
 
 [[nodiscard]] std::optional<core::StartPress> press_at(app::EditorController &controller,
-                                                       std::pair<std::int32_t, std::int32_t> point)
+                                                       std::pair<std::int32_t, std::int32_t> point,
+                                                       const core::BodyLayout &body = short_body())
 {
     const auto view = shown(controller);
     return view.has_value()
-               ? core::start_pressed(view.value().entries, row_under(controller, point))
+               ? core::start_pressed(view.value().entries, row_under(controller, point, body))
                : std::nullopt;
 }
 
 void release_at(app::EditorController &controller, const std::optional<core::StartPress> &press,
-                std::pair<std::int32_t, std::int32_t> point)
+                std::pair<std::int32_t, std::int32_t> point,
+                const core::BodyLayout &body = short_body())
 {
     const auto view = shown(controller);
     if (!view.has_value())
@@ -781,7 +784,7 @@ void release_at(app::EditorController &controller, const std::optional<core::Sta
         return;
     }
     const auto chosen =
-        core::start_released(press, view.value().entries, row_under(controller, point));
+        core::start_released(press, view.value().entries, row_under(controller, point, body));
     if (chosen.has_value())
     {
         applied(controller, app::ChooseStartEntry{chosen.value()});
@@ -914,6 +917,112 @@ void verify_press_across_reread()
     expect(shown(controller).has_value() && !controller.frame().document.path.has_value(),
            "a press held across a read that put another file first opens nothing");
 }
+// レビュー V-1486 の L2: 製品の形（ブロックが面に収まり上下の中央に寄る広い本文）で、最初の
+// frame の「新しいファイル」を押したまま最近 2 件が届き、ブロックが上へ動いてから同じ点で離す。
+// 押した行と同じ中身の行が点の下に無いので何も開かず、タブも足さない。
+void verify_press_across_read_centered()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.files().hold_at("C:\\work\\recent0.txt", Bytes{std::string("zero")});
+    applied(controller, app::FirstFramePresented{});
+    const auto body = wide_body(96);
+    const auto before = core::start_screen_layout(body, 96, core::StartScreenShape{}, 0);
+    if (!before.has_value())
+    {
+        expect(false, "the first frame places the centered start screen");
+        return;
+    }
+    const auto point = middle_of(before.value().rows.at(0).line);
+    const auto press = press_at(controller, point, body);
+    expect(press.has_value() && press.value().entry.kind == core::StartEntryKind::new_file,
+           "the press lands on the centered new-file row");
+    editing.start_lists().serve(app::StartLists{paths_named("recent", 2), {}});
+    applied(controller, app::WorkCompleted{});
+    const auto after = core::start_screen_layout(body, 96, core::StartScreenShape{2, 0, false}, 0);
+    expect(after.has_value() && after.value().column.top < before.value().column.top,
+           "the arrived rows make the block taller and move it up");
+    release_at(controller, press, point, body);
+    expect(shown(controller).has_value() && !controller.frame().document.path.has_value() &&
+               controller.frame().tabs.size() == 1,
+           "a press the read moved away from its row opens nothing and adds no tab");
+}
+
+// レビュー V-1486 の L3（#1495）:
+// 読み直しの間に前の一覧の行を押して開けず外すと、古い読みが届いても
+// 外した行は戻らない。外した覚えは届いたら捨てるので、次の読みの行はそのまま出る。
+void verify_forget_during_reread()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    reread_pending(editing);
+    editing.history().serve(app::FileHistory{paths_named("recent", 2)});
+    applied(controller, app::ChooseStartEntry{1});
+    const auto dropped = view_of(controller);
+    expect(dropped.entries.size() == 1 + 3 &&
+               dropped.entries.at(0).path == path_named("recent0.txt"),
+           "the missing file drops out of the rows shown during the read");
+    editing.start_lists().serve(app::StartLists{paths_named("recent", 2), {}});
+    applied(controller, app::WorkCompleted{});
+    const auto arrived = view_of(controller);
+    expect(arrived.entries.size() == 1 + 3 &&
+               arrived.entries.at(0).path == path_named("recent0.txt"),
+           "an old read that still lists the dropped file does not bring it back");
+    applied(controller, app::OpenCommandPalette{});
+    applied(controller, app::CancelCommand{});
+    editing.start_lists().serve(app::StartLists{paths_named("recent", 2), {}});
+    applied(controller, app::WorkCompleted{});
+    expect(editing.start_lists().requests() == 3 && view_of(controller).entries.size() == 2 + 3,
+           "the next read is taken as it arrives once the dropped path was forgotten");
+}
+
+// レビュー V-1486 の L4: Vim の `i` / `<Esc>`
+// で起動画面は出直すが、前の読みから何も書いていなければ 読まない。書いた後は次の出直しで 1
+// 回だけ読み、走っている間と届いた後の出直しは読まない。
+void verify_vim_insert_cycles()
+{
+    Editing editing(SessionReading{std::nullopt},
+                    std::vector<app::OpenDocument>{app::OpenDocument{path_named("given.txt")}},
+                    [](ScriptedFiles &files, ScriptedDocumentReads &)
+                    { files.hold_at("C:\\work\\given.txt", Bytes{std::string("given")}); });
+    auto &controller = editing.controller();
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    applied(controller, app::FirstFramePresented{});
+    applied(controller, app::NewTab{});
+    editing.start_lists().serve(app::StartLists{paths_named("recent", 1), {}});
+    applied(controller, app::WorkCompleted{});
+    vim_press(controller, "i<Esc>i<Esc>i<Esc>");
+    expect(shown(controller).has_value() && editing.start_lists().requests() == 1,
+           "i and Esc again and again read nothing while nothing was written");
+    applied(controller, app::CloseTab{0});
+    expect(editing.history().writes() == 1 && editing.start_lists().requests() == 1,
+           "closing the other file writes the history while the start screen stays shown");
+    vim_press(controller, "i<Esc>");
+    vim_press(controller, "i<Esc>");
+    expect(editing.start_lists().requests() == 2,
+           "after the write the next show reads once and the read in flight is not repeated");
+    editing.start_lists().serve(app::StartLists{paths_named("recent", 2), {}});
+    applied(controller, app::WorkCompleted{});
+    vim_press(controller, "i<Esc>");
+    expect(editing.start_lists().requests() == 2 && view_of(controller).entries.size() == 2 + 3,
+           "after the read arrived another i and Esc read nothing");
+}
+
+// 「フォルダを開く」の行の鍵（#1495・施主決定 2026-11-11）。表の Ctrl+Shift+R
+// を、起動画面が描く鍵と 同じ operation_guide_entry で両モードとも引ける。
+void verify_folder_row_key()
+{
+    expect(
+        core::operation_guide_entry(core::EditorOperation::choose_explorer_root,
+                                    core::EditMode::ordinary)
+                    .key == "Ctrl+Shift+R" &&
+            core::operation_guide_entry(core::EditorOperation::choose_explorer_root,
+                                        core::EditMode::vim)
+                    .key == "Ctrl+Shift+R" &&
+            core::operation_guide_entry(core::EditorOperation::new_tab, core::EditMode::vim).key ==
+                "Ctrl+T",
+        "the start rows read Ctrl+Shift+R for the folder and Ctrl+T for the new file");
+}
 } // namespace
 
 void verify_start_screen_scope()
@@ -922,6 +1031,9 @@ void verify_start_screen_scope()
     verify_press_across_read();
     verify_press_across_forget();
     verify_press_across_reread();
+    verify_press_across_read_centered();
+    verify_forget_during_reread();
+    verify_folder_row_key();
     verify_selection_steps();
     verify_first_frame_and_one_read();
     verify_ordinary_selection();
@@ -932,6 +1044,7 @@ void verify_start_screen_scope()
     verify_conditions();
     verify_tabs_and_quiet_start();
     verify_reads_on_show();
+    verify_vim_insert_cycles();
     verify_vim();
 }
 } // namespace nenenib::tests

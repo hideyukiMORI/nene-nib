@@ -21,6 +21,8 @@ namespace nenenib::ui::win32
 // 検索・置換・行へ移動の Ctrl つきの F H G と、Ctrl なしの F3（Shift はそのまま入れる）も写す
 // （ADR 0174 の決定 1・Vim モードでは表に鍵の行が無いので今までどおり Vim の鍵へ流れる）。
 // 通常モードの新しいタブの Ctrl+N も写す（D82・#1395・Vim では表に行が無く今までどおり）。
+// ルートのフォルダを選ぶ Ctrl+Shift+R の R も写す（#1495・Shift なしは表に行が無く Vim の
+// Ctrl-r のまま）。
 [[nodiscard]] inline std::optional<core::KeyChord> function_chord(WPARAM key, bool control,
                                                                   bool shift)
 {
@@ -87,6 +89,8 @@ namespace nenenib::ui::win32
         return chord(core::OperationKey::g);
     case 'N':
         return chord(core::OperationKey::n);
+    case 'R':
+        return chord(core::OperationKey::r);
     case VK_OEM_PLUS:
     case VK_ADD:
         return chord(core::OperationKey::plus);

@@ -81,9 +81,11 @@ inline constexpr std::array<OperationBinding, 53> operation_bindings{{
     // 「HTML のまま貼り付け」は KeyChord に Alt が無いので鍵なしで、F1 の一覧からだけ。
     {EditorOperation::paste_plain, OperationModes::both, KeyChord{true, true, OperationKey::v}},
     {EditorOperation::paste_html, OperationModes::both, std::nullopt},
-    // エクスプローラー（ADR 0162 の決定 7）。ルートのフォルダを選ぶのは鍵なしで F1 の一覧から。
+    // エクスプローラー（ADR 0162 の決定 7）。ルートのフォルダを選ぶのは Ctrl+Shift+R で両モード
+    // （施主決定 2026-11-11・#1495）。Shift なしの Ctrl+R は Vim の redo とレジスタの挿入に残す。
     {EditorOperation::toggle_explorer, OperationModes::both, KeyChord{true, true, OperationKey::e}},
-    {EditorOperation::choose_explorer_root, OperationModes::both, std::nullopt},
+    {EditorOperation::choose_explorer_root, OperationModes::both,
+     KeyChord{true, true, OperationKey::r}},
     // 日時の挿入（ADR 0175 の決定 3）。Vim の NORMAL / VISUAL では controller が知らせだけを出す。
     {EditorOperation::insert_date_time, OperationModes::both,
      KeyChord{false, false, OperationKey::f5}},

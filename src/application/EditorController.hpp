@@ -873,6 +873,9 @@ class EditorController final
     void collect_start_lists();
     // 履歴かブックマークを書いた印（追補 25）。次に起動画面が出たときに読み直す。
     void mark_start_lists_stale() noexcept;
+    // 履歴から外した path を起動画面の読んだ列から外す（追補 11）。読みが走っていれば覚えて、届いた
+    // 列からも外す（読み直しの間に外した行が戻らない・#1495）。
+    void drop_start_entry(const core::FilePath &path);
     // 意図の後に、条件が偽なら選びを消し、出ていない → 出ているに変われば読みを頼む（追補の 5・
     // 25）。
     void settle_start_screen();
@@ -1205,6 +1208,8 @@ class EditorController final
     bool start_lists_reading_ = false;
     bool start_lists_stale_ = true;
     std::optional<StartLists> start_lists_;
+    // 読みを頼んだ後に履歴から外した path（届いた列から外す・届いたら捨てる・#1495）。
+    std::vector<core::FilePath> start_forgotten_;
     std::optional<std::size_t> start_selection_;
     // 自動退避の帳面（ADR 0137 の決定 2）。AutosaveTick の道だけが読み書きする。
     AutosaveLedger autosave_ledger_;

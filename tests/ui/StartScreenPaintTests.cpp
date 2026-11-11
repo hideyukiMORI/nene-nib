@@ -45,9 +45,9 @@ using Format = Microsoft::WRL::ComPtr<IDWriteTextFormat>;
 
 constexpr std::uint32_t dpi = 96;
 // 最初の frame（履歴とブックマークを読む前）の文字組みの数: 題 1・見出し 2（はじめる・
-// ショートカット）・「はじめる」の名前 3 と補足 2 と鍵の枠 2（新しいファイル・ファイルを開く・
-// #1480）・ショートカットの枠 3 と説明 3。
-constexpr std::size_t first_frame_layouts = 16;
+// ショートカット）・「はじめる」の名前 3 と補足 2 と鍵の枠 3（新しいファイル・ファイルを開く・
+// フォルダを開く・#1480 / #1495）・ショートカットの枠 3 と説明 3。
+constexpr std::size_t first_frame_layouts = 17;
 // 最近 2・ブックマーク 1 を読み、最初の行を選んだ frame: 見出し 2・印 1・「…」1 と、パスの行ごとに
 // 名前・場所の全文（幅を測る）・描いた場所の 3 つが増える。
 constexpr std::size_t listed_layouts = first_frame_layouts + 2 + 1 + 1 + (3 * 3);
@@ -110,7 +110,7 @@ using Formats = std::vector<Format>;
         KeycapStyle{9.0F, 20.0F, 5.0F, palette.panel, palette.panel_border, palette.text},
         "Ctrl+T",
         "Ctrl+O",
-        "",
+        "Ctrl+Shift+R",
         dpi};
 }
 
@@ -257,8 +257,8 @@ void verify_rows(const StripPainter &paint, const core::StartScreenLayout &layou
 }
 
 // 「はじめる」の補足は名前のすぐ後ろ。鍵のある「新しいファイル」と「ファイルを開く」は右端に
-// （#1480）、ショートカットは項目の左端に、本文の案内と同じ鍵の枠（面は panel）。鍵の無い「フォルダ
-// を開く」の右端は空く。
+// （#1480）、「フォルダを開く」も Ctrl+Shift+R の枠を右端に置き補足はその手前（#1495）、ショート
+// カットは項目の左端に、本文の案内と同じ鍵の枠（面は panel）。
 void verify_keycaps(const StripPainter &paint, const core::StartScreenLayout &layout,
                     const core::Palette &palette)
 {
@@ -278,12 +278,14 @@ void verify_keycaps(const StripPainter &paint, const core::StartScreenLayout &la
     const auto &folder = layout.rows.at(5).label;
     const auto folder_top = folder.top - 10;
     const auto folders = paint(view, layout, folder_top);
-    expect(
-        ink_in(folders,
-               shifted(core::LayoutRect{folder.right - 60, folder.top, folder.right, folder.bottom},
-                       folder_top),
-               palette.background) == 0,
-        "the open-folder row without a key leaves the right end empty");
+    const auto folder_middle = ((folder.top + folder.bottom) / 2) - folder_top;
+    expect(pixel_is(folders, folder.right - 3, folder_middle, palette.panel) &&
+               ink_in(folders,
+                      shifted(core::LayoutRect{folder.left + 120, folder.top, folder.left + 200,
+                                               folder.bottom},
+                              folder_top),
+                      palette.background) > 0,
+           "the open-folder row keeps its note and shows Ctrl+Shift+R at the right end");
     expect(
         pixel_is(opened, open.right - 3, ((open.top + open.bottom) / 2) - open_top, palette.panel),
         "the open-file row shows its key in a keycap at the right end");
