@@ -14,6 +14,8 @@
 #include "Win32StartListAdapter.hpp"
 #include "Win32Worker.hpp"
 
+#include <windows.h>
+
 #include <cstddef>
 #include <cstdio>
 #include <semaphore>
@@ -103,6 +105,8 @@ void verify_missing_lists(adapters::Win32FileAdapter &files)
 
 int run_tests()
 {
+    // adapter が作るのは置き場の最後の 1 段だけ（設定の親のフォルダは既にある）。
+    expect(CreateDirectoryW(L"nib-start-lists", nullptr) != 0, "the temporary folder is created");
     adapters::Win32FileAdapter files;
     verify_written_lists(files);
     verify_missing_lists(files);
