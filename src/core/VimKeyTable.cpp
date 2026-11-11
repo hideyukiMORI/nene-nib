@@ -46,7 +46,7 @@ constexpr char32_t tab_character = 0x09;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 79> normal_bindings{
+constexpr std::array<VimBinding, 81> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {line_feed, VimAction::move_down},
@@ -125,7 +125,9 @@ constexpr std::array<VimBinding, 79> normal_bindings{
      {U'(', VimAction::move_sentence_backward},
      {U')', VimAction::move_sentence_forward},
      {U'[', VimAction::prefix_bracket},
-     {U']', VimAction::prefix_bracket}}};
+     {U']', VimAction::prefix_bracket},
+     {U's', VimAction::substitute},
+     {U'R', VimAction::replace_mode}}};
 
 // 動作 → 大分類の表（CPP-012 / ADR 0006）。NORMAL と VISUAL の写し先はこの分類で分かれる。
 // 行の欠落と重複は下の static_assert で落ちる（動作を足したら、この表に行を足すまで通らない）。
@@ -167,6 +169,8 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::change_to_line_end, VimActionGroup::edit_line},
      {VimAction::yank_line, VimActionGroup::edit_line},
      {VimAction::remove_character_before, VimActionGroup::edit_line},
+     {VimAction::substitute, VimActionGroup::edit_line},
+     {VimAction::replace_mode, VimActionGroup::edit_line},
      {VimAction::insert_before, VimActionGroup::insert_object},
      {VimAction::insert_after, VimActionGroup::insert_object},
      {VimAction::insert_at_line_start, VimActionGroup::insert_line},
