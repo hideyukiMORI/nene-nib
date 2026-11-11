@@ -48,7 +48,8 @@ using Reach = std::pair<std::vector<bool>, std::vector<std::size_t>>;
 }
 
 // 前の解析の同じ経路の entry を引き継いだ値（無ければ waiting の新しい entry）。状態は evicted も含
-// めてそのまま（範囲の中の evicted を再解析で頼み直さない・追補 51）。
+// めてそのまま（再解析は状態も錨からの差も変えないので、範囲の中の
+// evicted を頼み直さない・追補 51）。
 [[nodiscard]] PreviewImageEntry carried(const std::vector<PreviewImageEntry> &previous,
                                         const std::vector<std::size_t> &sorted,
                                         const core::FilePath &path)
@@ -242,7 +243,9 @@ PreviewImages::Reach PreviewImages::reach(const core::MarkdownDocument &document
     return result;
 }
 
-// 範囲の中の waiting のうち錨に最も近いもの（同じ差なら本文の順で先のもの）。
+// 範囲の中の waiting と evicted のうち錨に最も近いもの（同じ差なら本文の順で先のもの）。範囲の中の
+// evicted も候補にする（候補 B・#1412）。頼むのは錨から厳密に遠い loaded だけを捨てて収まるときなの
+// で、同じ窓で読む → 捨てるの輪にはならず、空きがあれば画面の evicted を読み直す。
 std::optional<std::size_t> PreviewImages::nearest_waiting(const Reach &reach) const
 {
     std::optional<std::size_t> nearest;
@@ -250,8 +253,10 @@ std::optional<std::size_t> PreviewImages::nearest_waiting(const Reach &reach) co
     {
         const bool nearer =
             !nearest.has_value() || reach.second.at(index) < reach.second.at(nearest.value());
-        if (entries_.at(index).status == PreviewImageStatus::waiting && reach.first.at(index) &&
-            nearer)
+        const PreviewImageStatus status = entries_.at(index).status;
+        const bool candidate =
+            status == PreviewImageStatus::waiting || status == PreviewImageStatus::evicted;
+        if (candidate && reach.first.at(index) && nearer)
         {
             nearest = index;
         }
@@ -359,7 +364,8 @@ void PreviewImages::release_outside(const Reach &reach)
 }
 
 // indices の loaded の画素を捨てる。範囲の外で捨てたものは waiting（戻れば頼む）、範囲の中で捨てた
-// ものは evicted（範囲を出るまで頼み直さない・追補 51）。
+// ものは evicted（範囲の中では遠いものを捨てずに収まるときだけ頼み直す・
+// 追補 51 と #1412 の候補 B）。
 void PreviewImages::drop(const Reach &reach, const std::vector<std::size_t> &indices)
 {
     for (const std::size_t index : indices)

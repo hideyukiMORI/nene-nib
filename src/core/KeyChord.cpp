@@ -61,6 +61,8 @@ namespace
         return "G";
     case OperationKey::f3:
         return "F3";
+    case OperationKey::n:
+        return "N";
     }
     std::unreachable();
 }

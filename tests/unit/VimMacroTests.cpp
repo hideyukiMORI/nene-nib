@@ -183,6 +183,38 @@ void verify_macro_waiting()
            "q in VISUAL stops the recording and keeps the selection");
 }
 
+// `q` の後の Esc は鳴らさずに打ち消し、後ろの鍵が効く（#1369・ADR 0048 の追補 17〜19）。oracle は
+// `q` を fixture に入れられないので、同じ run_vim で測った値（Vim 9.1・`-es -u NONE`・
+// D:/NeNeNib/outputs/20261111/1369-q-escape/result.json）を :normal! の意味（vim_normal）で流す。
+using QEscapeCase =
+    std::tuple<std::string_view, std::string_view, std::string_view, std::size_t, std::size_t>;
+constexpr std::array<QEscapeCase, 6> q_escape_cases{{
+    {"abcdef", "q<Esc>x", "bcdef", 1, 1},
+    {"abcdef", "3q<Esc>x", "bcdef", 1, 1},
+    {"abcdef", "vq<Esc>ld", "cdef", 1, 1},
+    {"abcdef\nab\nabcdef", "$jq<Esc>j", "abcdef\nab\nabcdef", 3, 6},
+    {"abc", "\"ayllyl\"aq<Esc>p", "abbc", 1, 3},
+    {"abcdef", "xq<Esc>.", "cdef", 1, 1},
+}};
+
+void verify_macro_escape_cancels()
+{
+    for (const auto &[text, keys, body, line, column] : q_escape_cases)
+    {
+        Editing editing;
+        open_vim_document(editing, std::string(text));
+        EditorController &controller = editing.controller();
+        vim_normal(controller, keys);
+        const auto frame = controller.frame();
+        const std::string name = "q<Esc> cancels and the next key runs: " + std::string(keys);
+        expect(whole_vim_body(controller) == body && frame.caret.position.line.value == line &&
+                   vim_byte_column(std::string(body), frame.caret.position) == column &&
+                   !controller.vim_state().macro_recording.has_value() &&
+                   !controller.vim_state().input_wait.has_value(),
+               name.c_str());
+    }
+}
+
 // 空のレジスタと直前の無い `@@` は何もしない（決定 3）。
 void verify_macro_empty_registers()
 {
@@ -274,6 +306,55 @@ void verify_macro_depth_limit()
            "an endless recursion stops at the depth limit");
     vim_replay(controller, "x");
     expect(whole_vim_body(controller) == "bcdef", "the next typed key runs normally");
+}
+
+// 鍵の数の上限（#1351・施主決定 D75）。製品の上限 100,000 を Debug で流すと 1 件 80 秒
+// かかるので、limit_replay_keys で小さい上限を置いて境を確かめる（製品の値は static_assert）。
+// c が `3@ax` なら、`@c` が流す鍵は `3` `@` `a` と a の 3 周（`0` を 3 回）と最後の `x` で、
+// `x` は 7 鍵目。上限 7 なら流れ、上限 6 なら捨てて 1 行知らせる（Vim は止まらず `x` まで
+// 流すので本文が `b` になる・ここが Vim と違う最小の形）。時計は読まない。mapped なら表に
+// `nnoremap Q x` を置いて c を `3@aQ` にし、表に行があるときの 2 本目のループでも同じ境を見る
+// （`Q` は右辺 `x` の 1 歩で 7 歩目）。
+[[nodiscard]] std::pair<std::string, std::optional<std::string>> limited_replay(std::size_t limit,
+                                                                                bool mapped)
+{
+    Editing editing;
+    open_vim_document(editing, "ab");
+    EditorController &controller = editing.controller();
+    controller.limit_replay_keys(limit);
+    if (mapped)
+    {
+        static_cast<void>(run_ex(controller, "nnoremap Q x"));
+    }
+    applied(controller, stored_text('a', "0"));
+    applied(controller, stored_text('c', mapped ? "3@aQ" : "3@ax"));
+    vim_replay(controller, "@c");
+    const auto message = controller.frame().command_message;
+    return {whole_vim_body(controller),
+            message.has_value() ? std::optional<std::string>{std::string{message.value().text()}}
+                                : std::nullopt};
+}
+
+void verify_macro_key_limit()
+{
+    static_assert(nenenib::core::vim_replay_key_limit == 100000U);
+    const std::optional<std::string> expected_notice{
+        "再生を 100,000 鍵で止めました（残りは捨てました）"};
+    for (const bool mapped : {false, true})
+    {
+        const auto [inside, quiet] = limited_replay(7U, mapped);
+        expect(inside == "b" && !quiet.has_value(), "the replayed key at the limit still runs");
+        const auto [over, notice] = limited_replay(6U, mapped);
+        expect(over == "ab" && notice == expected_notice,
+               "the replayed key past the limit is dropped with one notice line");
+    }
+    Editing editing;
+    open_vim_document(editing, "ab");
+    EditorController &controller = editing.controller();
+    controller.limit_replay_keys(6U);
+    applied(controller, stored_text('a', "0"));
+    vim_replay(controller, "999999999@ax");
+    expect(whole_vim_body(controller) == "b", "a typed key after the stopped replay runs normally");
 }
 
 // 巨大な回数の `@`（#1341・ADR 0046 の決定 3 の追補）。鍵の列を回数ぶん並べず 1 周ずつ積むので、
@@ -1263,12 +1344,14 @@ void verify_vim_macro_contracts()
 {
     verify_macro_round_trips();
     verify_macro_waiting();
+    verify_macro_escape_cancels();
     verify_macro_empty_registers();
     verify_macro_records_typed_keys_only();
     verify_macro_q_inside_replay();
     verify_macro_failure_stops_the_rest();
     verify_macro_records_failed_replace();
     verify_macro_depth_limit();
+    verify_macro_key_limit();
     verify_macro_huge_count_stops();
     verify_macro_rounds_keep_the_order();
     verify_huge_count_put_refused();
@@ -1306,8 +1389,8 @@ void verify_vim_macro_scope()
     {
         // macro 欄はほかの族の fixture も持つ（#1246 の insert-page-edge-・#1232 の
         // viewport-ctrl-e-・#1325 の del-key-・#1337 の dot-register-count-・#1341 の
-        // huge-count-macro-）。名前で守るのは逆の向き: macro- の fixture は必ず macro 欄を
-        // 持つ（#1324）。
+        // huge-count-macro-・#1369 の prefix-escape-・#1363 の viewport-insert-follow-replay-）。
+        // 名前で守るのは逆の向き: macro- の fixture は必ず macro 欄を持つ（#1324）。
         named &= !fixture.name.starts_with("macro-") || fixture.macro.has_value();
         if (macro_fixture(fixture))
         {
@@ -1315,7 +1398,7 @@ void verify_vim_macro_scope()
             ++selected;
         }
     }
-    expect(selected == 170, "the scope replays the 42 macro, 108 register and 20 other "
+    expect(selected == 174, "the scope replays the 42 macro, 108 register and 24 other "
                             "fixtures with a macro register");
     expect(named, "every macro- fixture carries a macro register");
     verify_vim_macro_contracts();

@@ -49,6 +49,7 @@ namespace nenenib::core
 {
 using detail::aligned_screen;
 using detail::appended_recording;
+using detail::block_line_end_state;
 using detail::cancelled;
 using detail::caret_on_line;
 using detail::carriage_return_character;
@@ -63,6 +64,8 @@ using detail::counts_as_digit;
 using detail::decimal_base;
 using detail::display_view;
 using detail::drops_count_digit;
+using detail::entered_insert;
+using detail::escaped_or_refused;
 using detail::failed;
 using detail::finished_input_wait;
 using detail::forward_characters;
@@ -144,8 +147,13 @@ constexpr char32_t control_u_character = 0x15;
 
 // ---------------------------------------------------------------- 鍵から動作へ
 
+} // namespace
+
+namespace detail
+{
 // i a I A。回数は o / O と同じで、Esc のときに入力を残りの回数だけ繰り返す（ADR 0028 の
-// 決定 2 の機構をそのまま使う。`3ifoo<Esc>` が foofoofoo になるのは Vim も同じ）。
+// 決定 2 の機構をそのまま使う。`3ifoo<Esc>` が foofoofoo になるのは Vim も同じ）。VISUAL の
+// 文字単位と行単位の `I` `A`（#1436）も同じ入口を通る。
 [[nodiscard]] VimStep entered_insert(const VimState &state, Offset caret)
 {
     VimState next = vim_resting_from(state, state.unnamed_register);
@@ -157,7 +165,10 @@ constexpr char32_t control_u_character = 0x15;
     }
     return VimStep{std::move(next), VimMoveTo{caret}};
 }
+} // namespace detail
 
+namespace
+{
 // x。保留中のオペレータの無い削除なので、範囲を作って同じ 1 本（performed）に流す。
 [[nodiscard]] VimStep removed_character(const VimState &state, const TextBuffer &text, Offset caret)
 {
@@ -1028,6 +1039,11 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     if (action == VimAction::yank_line)
     {
         return operated_on_lines(state, view.text, view.selection.caret, VimOperator::yank);
+    }
+    if (action == VimAction::substitute || action == VimAction::replace_mode)
+    {
+        // NORMAL の `s` と `R` は未実装。表に無い鍵と同じに打ち消す（VISUAL だけ効く・#1436）。
+        return failed(cancelled(state), VimRepeatFailure::refused);
     }
     std::unreachable();
 }
@@ -1914,15 +1930,29 @@ namespace
     const auto *const special = std::get_if<VimSpecialKey>(&key);
     return special != nullptr && *special == VimSpecialKey::escape;
 }
+} // namespace
 
-// 待っていた鍵にならなかったとき。Esc は何もせずに打ち消し、ほかは受けない（Vim の `m<Esc>`
-// `'<Esc>` と `[<Esc>` `]<Esc>`）。
-[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key)
+namespace detail
 {
-    VimStep step{finished_input_wait(state), VimNoEffect{}};
-    return is_escape(key) ? step : failed(std::move(step), VimRepeatFailure::refused);
+// 待っていた鍵にならなかったときの判定の 1 本。Esc は回数・保留・待ち・選んだレジスタを消すだけで
+// 失敗にせず（Vim の normal_cmd は 2 鍵目が ESC なら命令を呼ばずに clearop して終わる・鳴らない・
+// 後ろの鍵が効く）、ほかは refused を返す（`m` `'` `` ` `` `[` `]` `"` `q` `@`・#1369）。
+[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key, VimStep refused)
+{
+    return is_escape(key) ? VimStep{finished_input_wait(state), VimNoEffect{}} : std::move(refused);
 }
 
+// ほかの鍵は待ちだけを消して失敗にする形。
+[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key)
+{
+    return escaped_or_refused(
+        state, key,
+        failed(VimStep{finished_input_wait(state), VimNoEffect{}}, VimRepeatFailure::refused));
+}
+} // namespace detail
+
+namespace
+{
 // `m{name}`（ADR 0152 の決定 3）。今のキャレットを置いた新しい値を添え、本文も選択も動かさない
 // （VISUAL のまま）。オペレータの後ろへは来ない（pending_step が打ち消す）。
 [[nodiscard]] VimStep mark_set_step(const VimState &state, const VimEditorView &view,
@@ -2279,32 +2309,43 @@ VimStep vim_line_jumped(const VimState &state, const VimEditorView &view,
     return landed_step(counted, view, VimMotion::document_last);
 }
 
-namespace
+namespace detail
 {
-// VISUAL を抜けた鍵が前の選択を置く 1 か所（ADR 0018 の追補・#1039）。Esc・オペレータ・`c` で
-// INSERT へ入る道を区別せず、鍵の前が VISUAL で後が VISUAL でなければ鍵の前の選択を覚える
-// （Vim の end_visual_mode と do_pending_operator）。`.` の VISUAL の再生は置かず、再生の鍵が
-// VISUAL にいるあいだ印を持ち越す（Vim の redo_VIsual_busy・実測）。
-// 前の選択に置く欲しい列（#1361）。矩形の `C` は Vim の v_visop が curswant を MAXCOL にしてから
-// `c` を流し、do_pending_operator がその curswant を b_visual.vi_curswant に置くので行末の印に
-// なる。矩形の `D` も同じ（v_visop の同じ枝・#1417）。ほかの鍵は鍵の前の欲しい列（引数を待つ鍵の
-// `C` `D` は文字なので除く）。
-[[nodiscard]] bool takes_line_end(const VimKey &key) noexcept
+// 矩形の `C` `D` は Vim の v_visop が curswant を MAXCOL にしてから流す（#1361・#1417）。
+// do_pending_operator はその curswant を前の選択（b_visual.vi_curswant）に置き、get_op_vcol は
+// 終わりの桁を一番長い行の行末にする（#1436）。前の選択と覚え直す仮想桁の両方がここを読む。
+[[nodiscard]] VimState block_line_end_state(const VimState &state, VimAction action)
 {
-    const auto *const character = std::get_if<VimCharacter>(&key);
-    const auto action = character == nullptr ? std::nullopt : vim_action_for(character->code);
-    return action == VimAction::change_to_line_end || action == VimAction::remove_to_line_end;
-}
-
-[[nodiscard]] VimState visual_left_state(const VimState &state, const VimKey &key)
-{
-    if (state.mode != VimMode::visual_block || state.input_wait.has_value() || !takes_line_end(key))
+    if (state.mode != VimMode::visual_block ||
+        (action != VimAction::change_to_line_end && action != VimAction::remove_to_line_end))
     {
         return state;
     }
     VimState left = state;
     left.wanted_column = VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
     return left;
+}
+} // namespace detail
+
+namespace
+{
+// VISUAL を抜けた鍵が前の選択を置く 1 か所（ADR 0018 の追補・#1039）。Esc・オペレータ・`c` で
+// INSERT へ入る道を区別せず、鍵の前が VISUAL で後が VISUAL でなければ鍵の前の選択を覚える
+// （Vim の end_visual_mode と do_pending_operator）。`.` の VISUAL の再生は置かず、再生の鍵が
+// VISUAL にいるあいだ印を持ち越す（Vim の redo_VIsual_busy・実測）。
+// 文字単位と行単位の VISUAL の `p` `P` だけは、ここで置いた値を VimStep.visual_after が効果の後に
+// 貼った本文の両端で置き直す（ADR 0018 の追補 #1418・Vim の nv_put_opt）。
+// 前の選択に置く欲しい列（#1361）は block_line_end_state の 1 本（引数を待つ鍵の `C` `D` は
+// 文字なので除く）。
+[[nodiscard]] VimState visual_left_state(const VimState &state, const VimKey &key)
+{
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    if (state.input_wait.has_value() || character == nullptr)
+    {
+        return state;
+    }
+    const auto action = vim_action_for(character->code);
+    return action.has_value() ? block_line_end_state(state, action.value()) : state;
 }
 
 [[nodiscard]] VimStep visual_remembered(const VimState &state, const VimEditorView &view,

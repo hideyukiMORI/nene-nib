@@ -32,6 +32,7 @@ using detail::cased_text;
 using detail::changed;
 using detail::character_search_position;
 using detail::characters_between;
+using detail::column_one_yank;
 using detail::completed_character_search;
 using detail::count_of;
 using detail::failed;
@@ -133,7 +134,15 @@ constexpr char line_feed_byte = '\n';
         body.push_back('\n');
         return VimRegister{std::move(body), VimRegisterKind::lines};
     case VimRegisterKind::characters:
+        break;
+    }
+    switch (range.yank_shape)
+    {
+    case VimYankShape::by_kind:
         return VimRegister{std::move(body), VimRegisterKind::characters};
+    case VimYankShape::whole_lines:
+        // 1 桁目から 1 桁目までの範囲の本文は、終わりの行の手前までの行を改行ごと持つ（#1364）。
+        return VimRegister{std::move(body), VimRegisterKind::lines};
     }
     std::unreachable();
 }
@@ -387,9 +396,10 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 }
 } // namespace detail
 
-namespace
+namespace detail
 {
 // 行を消す範囲。最終行を消すときだけ 1 つ前の行の末尾から始める（改行を 1 つだけ消すため）。
+// 行単位の `d` と VISUAL の `p` `P`（#1418）が共用する。
 [[nodiscard]] OffsetRange removed_lines_range(const TextBuffer &text, const VimMotionRange &range)
 {
     const LineNumber first = line_of(text, range.range.begin);
@@ -399,7 +409,7 @@ namespace
                                                         : range.range.begin;
     return OffsetRange{begin, text.line_terminator_end(last)};
 }
-} // namespace
+} // namespace detail
 
 namespace detail
 {
@@ -712,10 +722,10 @@ namespace detail
         without_newline_carriage_returns(text.text_range(span.begin, span.end), text.line_ending()),
         operation);
     const Offset landing = cased_caret(text, span, body, caret);
-    return restored_at(
-        VimStep{vim_resting_from(state, state.unnamed_register),
-                VimReplaceRange{span, std::move(body), landing, EditBoundary::separate}},
-        caret);
+    return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
+                               VimReplaceRange{span, std::move(body), landing,
+                                               EditBoundary::separate, VimLineMarks::kept}},
+                       caret);
 }
 } // namespace detail
 
@@ -837,10 +847,10 @@ namespace detail
     }
     const OffsetRange span{text.line_start(first), text.line_end(last)};
     const Offset caret{span.begin.value + first_line_first_non_blank(body)};
-    return restored_at(
-        VimStep{vim_resting_from(state, state.unnamed_register),
-                VimReplaceRange{span, std::move(body), caret, EditBoundary::separate}},
-        range.restore.value_or(range.range.begin));
+    return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
+                               VimReplaceRange{span, std::move(body), caret, EditBoundary::separate,
+                                               VimLineMarks::kept}},
+                       range.restore.value_or(range.range.begin));
 }
 } // namespace detail
 
@@ -1093,7 +1103,7 @@ namespace detail
     const OffsetRange span{text.line_start(first), text.line_end(last)};
     return VimStep{vim_resting_from(state, state.unnamed_register),
                    VimReplaceRange{span, std::move(body), Offset{span.begin.value + joint},
-                                   EditBoundary::separate}};
+                                   EditBoundary::separate, VimLineMarks::shifted}};
 }
 
 // `~`（決定 10・tildeop off）。キャレットから回数の文字（結合文字ごと）を反転し、行末で止まる。
@@ -1113,9 +1123,9 @@ namespace detail
                                    ? vim_character_start(body, Offset{body.size()}).value
                                    : body.size();
     const Offset landing{caret.value + landed};
-    return VimStep{
-        vim_resting_from(state, state.unnamed_register),
-        VimReplaceRange{OffsetRange{caret, end}, std::move(body), landing, EditBoundary::separate}};
+    return VimStep{vim_resting_from(state, state.unnamed_register),
+                   VimReplaceRange{OffsetRange{caret, end}, std::move(body), landing,
+                                   EditBoundary::separate, VimLineMarks::kept}};
 }
 
 // いま効かせるオペレータ。保留が無ければ「消す」＝ x が通る道（x は保留を立てずにここへ来る）。
@@ -1359,7 +1369,7 @@ namespace detail
     // 見る）。y 以外のオペレータは caret を読まない。
     const VimMotionRange operated_range =
         keeps_the_line_break(view.text, range.value(), wanted, operation)
-            ? range.value()
+            ? column_one_yank(view.text, range.value())
             : adjusted_for_exclusive(view.text, landed(view, state, wanted, range.value()), wanted);
     Offset yanked_from = view.selection.caret;
     if (operation == VimOperator::yank && operated_range.kind == VimRegisterKind::lines)

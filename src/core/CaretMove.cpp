@@ -1,6 +1,7 @@
 #include "CaretMove.hpp"
 
 #include "OrdinaryCharacterBoundary.hpp"
+#include "OrdinaryWordBoundary.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
@@ -12,7 +13,8 @@ namespace nenenib::core
 {
 namespace
 {
-// 語の区切りは空白だけで見る。記号ごとの区切りは Vim エンジンの縦切りで語の定義と一緒に入れる。
+// code_point の単位（Vim のモードの Ctrl+← →）の語の区切りは空白だけで見る。通常モードの語の境は
+// ordinary_word_boundary の 1 本（ADR 0009 の追補 #1394）。
 [[nodiscard]] bool space_byte(char value) noexcept
 {
     return value == ' ' || value == '\t';
@@ -162,7 +164,9 @@ namespace
     case CaretMotion::next_character:
         return ordinary_character_boundary(text, caret, OrdinaryCharacterAction::next);
     case CaretMotion::previous_word:
+        return ordinary_word_boundary(text, caret, OrdinaryWordDirection::backward);
     case CaretMotion::next_word:
+        return ordinary_word_boundary(text, caret, OrdinaryWordDirection::forward);
     case CaretMotion::previous_line:
     case CaretMotion::next_line:
     case CaretMotion::line_start:

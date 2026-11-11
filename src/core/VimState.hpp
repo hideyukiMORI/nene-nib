@@ -11,6 +11,7 @@
 #include "VimMode.hpp"
 #include "VimNamedRegisters.hpp"
 #include "VimNumberedRegisters.hpp"
+#include "VimOperatorColumns.hpp"
 #include "VimPendingOperator.hpp"
 #include "VimRegisterCount.hpp"
 #include "VimRegisterSelection.hpp"
@@ -98,6 +99,10 @@ struct VimState
     // あいだだけ値を持ち、`"` の後の桁は数え直して掛ける（`5"a0` の `0` は桁でなく行頭・
     // `2"a3dd` は 6 行）。置くのは selected_register、消すのは vim_step の 1 か所。
     std::optional<VimRegisterCount> register_count = std::nullopt;
+    // VISUAL のオペレータが最後に覚えた範囲の仮想桁（Vim の oap->start_vcol / end_vcol・#1436）。
+    // 文字単位と行単位の VISUAL の `A` が読む。書くのは VISUAL のオペレータの 1 か所
+    // （visual_operation_noted）で、鍵を食べ終わっても（vim_resting_from）残す。
+    VimOperatorColumns operator_columns{};
 };
 
 // 鍵を 1 つ食べ終わったあとの NORMAL。回数・オペレータ・欲しい列は空で、無名レジスタだけ残る。
@@ -152,6 +157,7 @@ struct VimState
     next.small_delete = state.small_delete;
     next.macro_recording = state.macro_recording;
     next.last_macro = state.last_macro;
+    next.operator_columns = state.operator_columns;
     return next;
 }
 

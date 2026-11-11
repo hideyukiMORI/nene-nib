@@ -58,6 +58,9 @@ requested_viewport(const VimState &state, const VimEditorView &view, VimAction a
 // 回数の最後の桁を消す（`12<Del>` は 1・`3<Del>` は回数なし）。
 [[nodiscard]] VimStep count_digit_dropped(const VimState &state);
 [[nodiscard]] VimStep window_started(const VimState &state);
+// 1 鍵を待つ接頭辞の後ろの Esc は打ち消し、ほかの鍵は refused（#1369・VimStep.cpp）。
+[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key, VimStep refused);
+[[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key);
 [[nodiscard]] bool searches_forward(VimCharacterSearchKind kind) noexcept;
 [[nodiscard]] VimCharacterSearchKind opposite(VimCharacterSearchKind kind) noexcept;
 [[nodiscard]] std::optional<Offset>
@@ -112,6 +115,7 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
                                                     const VimMotionRange &range, VimMotion motion);
 [[nodiscard]] bool keeps_the_line_break(const TextBuffer &text, const VimMotionRange &range,
                                         VimMotion motion, VimOperator operation);
+[[nodiscard]] VimMotionRange column_one_yank(const TextBuffer &text, const VimMotionRange &range);
 [[nodiscard]] VimMotionRange whole_lines_for_delete(const TextBuffer &text,
                                                     const VimMotionRange &range);
 // 書き手の結果（ADR 0051 の決定 6・追補（#848）の決定 C）。first は命令が完了した状態、second は
@@ -124,8 +128,19 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 [[nodiscard]] VimStep with_clipboard(VimStep step, std::optional<VimRegister> clipboard);
 [[nodiscard]] VimStep refused_register(const VimState &state);
 [[nodiscard]] VimStep restored_at(VimStep step, Offset restore);
+// VISUAL の鍵が範囲を取る種類（Vim の v_visop・nv_subst・nv_Replace の読み替え・#1436）。
+[[nodiscard]] VimMode visual_operated_mode(VimMode mode, VimAction action) noexcept;
+// VISUAL をオペレータで抜けた歩に覚え直した仮想桁を置く（Vim の oap->start_vcol / end_vcol・
+// #1436）。`action` は抜けた鍵の動作（種類の読み替えと矩形の `C` `D` の行末を決める）。
+[[nodiscard]] VimStep visual_operation_noted(const VimState &state, const VimEditorView &view,
+                                             VimAction action, VimStep step);
+// 矩形の `C` `D` の行末の状態（Vim の v_visop の curswant = MAXCOL・#1361・#1436）。
+[[nodiscard]] VimState block_line_end_state(const VimState &state, VimAction action);
+// i a I A の入口（回数は Esc で繰り返す・VISUAL の文字単位と行単位の `I` `A` も通る・#1436）。
+[[nodiscard]] VimStep entered_insert(const VimState &state, Offset caret);
 [[nodiscard]] Offset visual_restore(const VimState &state, const TextBuffer &text,
                                     const Selection &selection);
+[[nodiscard]] OffsetRange removed_lines_range(const TextBuffer &text, const VimMotionRange &range);
 [[nodiscard]] VimStep removed_exactly(const VimState &state, const TextBuffer &text,
                                       const VimMotionRange &range);
 [[nodiscard]] VimStep changed(const VimState &state, const TextBuffer &text,

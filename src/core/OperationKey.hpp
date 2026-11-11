@@ -40,6 +40,9 @@ enum class OperationKey : std::uint8_t
     f,
     h,
     g,
-    f3
+    f3,
+    // 通常モードの Ctrl+N の新しいタブ（メモ帳の鍵・施主決定 D82・#1395）。Vim では表に行を
+    // 置かない（Vim の Ctrl-n とは別のモード）。
+    n
 };
 } // namespace nenenib::core

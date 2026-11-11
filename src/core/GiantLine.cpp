@@ -17,19 +17,6 @@ namespace
 {
 // Vim の 1 文字を確かめるために最初に読む前後のバイト数。足りなければ倍にして読み直す。
 constexpr std::size_t first_margin = 64;
-constexpr unsigned char continuation_mask = 0xC0;
-constexpr unsigned char continuation_bits = 0x80;
-
-[[nodiscard]] std::size_t leading_continuations(std::string_view bytes) noexcept
-{
-    std::size_t count = 0;
-    while (count < bytes.size() &&
-           (static_cast<unsigned char>(bytes[count]) & continuation_mask) == continuation_bits)
-    {
-        ++count;
-    }
-    return count;
-}
 
 [[nodiscard]] std::size_t code_point_floor(std::string_view bytes, std::size_t at) noexcept
 {

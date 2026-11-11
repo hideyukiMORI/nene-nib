@@ -985,6 +985,81 @@ EditorState EditorState::with_walk_settled() const
     return next;
 }
 
+// ---------------------------------------------------------------- プレビューのタブ（ADR 0179）
+
+const std::optional<AutosaveId> &EditorState::transient() const noexcept
+{
+    return transient_;
+}
+
+std::optional<std::size_t> EditorState::transient_tab() const
+{
+    if (!transient_.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto found = std::ranges::find(autosave_ids_, transient_.value());
+    if (found == autosave_ids_.end())
+    {
+        return std::nullopt;
+    }
+    return static_cast<std::size_t>(std::distance(autosave_ids_.begin(), found));
+}
+
+EditorState EditorState::with_active_transient() const
+{
+    EditorState next(*this);
+    next.transient_ = autosave_ids_.at(active_);
+    return next;
+}
+
+EditorState EditorState::without_transient() const
+{
+    if (!transient_.has_value())
+    {
+        return *this;
+    }
+    EditorState next(*this);
+    next.transient_.reset();
+    return next;
+}
+
+bool EditorState::transient_saved() const
+{
+    const auto position = transient_tab();
+    if (!position.has_value())
+    {
+        return false;
+    }
+    if (position.value() == active_)
+    {
+        return save_state_of(document_, history_.position()) == core::SaveState::saved;
+    }
+    const auto bundle = loaded_at(position.value());
+    return bundle.has_value() &&
+           save_state_of(bundle.value()->document, bundle.value()->history.position()) ==
+               core::SaveState::saved;
+}
+
+EditorState EditorState::with_transient_replaced(core::TextBuffer text, Document document) const
+{
+    const auto position = transient_tab();
+    if (!position.has_value() || !transient_saved())
+    {
+        return with_new_tab()
+            .with_opened(std::move(text), std::move(document))
+            .with_active_transient();
+    }
+    // 切り替え → 右に足して開く → 印のタブ（もうアクティブではない）を閉じる。閉じた後は新しい
+    // タブが印のタブの帯の位置に来て、使った順の先頭にいる（決定 6）。もう 1 つの枠が印の文書を
+    // 見ていれば、閉じる道がアクティブ（新しい文書）の先頭へ向け直す（決定 9）。
+    return with_switched(position.value())
+        .with_new_tab()
+        .with_opened(std::move(text), std::move(document))
+        .with_closed(position.value())
+        .with_active_transient();
+}
+
 const core::TabRecency &EditorState::recency() const noexcept
 {
     return recency_;
@@ -1018,6 +1093,11 @@ EditorState EditorState::with_closed(std::size_t position) const
     }
     EditorState next(*this);
     next.recency_ = core::tab_recency_closed(recency_, position);
+    // 閉じたタブが印のタブなら印も消える（ADR 0179 の決定 1・通し番号は再利用しない）。
+    if (transient_.has_value() && transient_.value() == autosave_ids_.at(position))
+    {
+        next.transient_.reset();
+    }
     next.autosave_ids_.erase(std::next(next.autosave_ids_.begin(), distance_of(position)));
     if (position != active_)
     {

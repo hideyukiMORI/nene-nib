@@ -187,12 +187,14 @@ using Place = std::pair<std::size_t, std::size_t>;
 
 [[nodiscard]] Step forward()
 {
-    return intent("delete", app::DeleteText{core::DeleteDirection::forward});
+    return intent("delete", app::DeleteText{core::DeleteDirection::forward,
+                                            nenenib::core::DeleteUnit::character});
 }
 
 [[nodiscard]] Step backward()
 {
-    return intent("backspace", app::DeleteText{core::DeleteDirection::backward});
+    return intent("backspace", app::DeleteText{core::DeleteDirection::backward,
+                                               nenenib::core::DeleteUnit::character});
 }
 
 [[nodiscard]] Step history(core::HistoryDirection direction)

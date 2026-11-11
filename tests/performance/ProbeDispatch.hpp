@@ -21,6 +21,7 @@
 #include "TabDisplayWorkload.hpp"
 #include "TextObjectWorkload.hpp"
 #include "VimBlockWorkload.hpp"
+#include "WordObjectWorkload.hpp"
 
 #include <variant>
 
@@ -37,5 +38,5 @@ using ProbeDispatch =
                  ProbeDispatchRow<SearchSpanWorkload>, ProbeDispatchRow<TextObjectWorkload>,
                  ProbeDispatchRow<MarkdownWorkload>, ProbeDispatchRow<NewlineIndexWorkload>,
                  ProbeDispatchRow<LexerWorkload>, ProbeDispatchRow<ExplorerFrameWorkload>,
-                 ProbeDispatchRow<VimBlockWorkload>>;
+                 ProbeDispatchRow<VimBlockWorkload>, ProbeDispatchRow<WordObjectWorkload>>;
 } // namespace nenenib::tests::performance

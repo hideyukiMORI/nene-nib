@@ -44,6 +44,8 @@
 #include "ExWindowCommand.hpp"
 #include "ExplorerEntry.hpp"
 #include "ExplorerFolder.hpp"
+#include "ExplorerRow.hpp"
+#include "ExplorerRowView.hpp"
 #include "ExplorerView.hpp"
 #include "ExplorerWidth.hpp"
 #include "FileBookmarks.hpp"
@@ -69,9 +71,12 @@
 #include "LspRequestKind.hpp"
 #include "LspResponse.hpp"
 #include "MapTimer.hpp"
+#include "MinimapCache.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "OpenFailureReply.hpp"
+#include "OpenRequest.hpp"
+#include "OpenedAs.hpp"
 #include "OpenedDocument.hpp"
 #include "PaletteFolder.hpp"
 #include "PaletteOrigin.hpp"
@@ -108,11 +113,13 @@
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
 #include "VimKeySource.hpp"
+#include "VimLineMarks.hpp"
 #include "VimMapMode.hpp"
 #include "VimMarks.hpp"
 #include "VimPattern.hpp"
 #include "VimRegister.hpp"
 #include "VimRepeatFailure.hpp"
+#include "VimReplay.hpp"
 #include "VimReplayKind.hpp"
 #include "VimRowSpan.hpp"
 #include "VimSearchDirection.hpp"
@@ -180,10 +187,9 @@ class EditorController final
     // 面が消えていれば値なし。窓が境の当たり・面と本文の配置を引く安い読みで、frame を作らない
     // （マウスの動くたびに呼ばれる）。frame の ExplorerView.width と同じ値。
     [[nodiscard]] std::optional<core::ExplorerWidth> explorer_width() const noexcept;
-    // 字の大きさ（保存した値・配色の重ねは字の大きさを変えないので delivery().settings と同じ値）。
-    // 窓がマウスの動くたびに面の配置を引く安い読みで、delivery を作らない（title_bar_input と同じ
-    // 形・Issue #1380 の R-2）。
-    [[nodiscard]] core::FontSize font_size() const noexcept;
+    // マウスを載せた面の画面の行（HoverExplorer.line と同じ値・#1390）。窓がマウスの動くたびに
+    // 「変わったか」を見る安い読みで、frame を作らない（title_bar_input の hovered と同じ形）。
+    [[nodiscard]] std::optional<std::size_t> explorer_hovered() const noexcept;
     // 帯の配置の入力を状態の 4 つの値（タブの本数・アクティブの位置・送り量・マウスを載せた要素）
     // から読むだけの口。行も題名も作らない（ADR 0056 の決定 9）。窓の hit test と hover が
     // マウスの動くたびに呼ぶ。width は帯の幅（物理画素）。値は title_bar_input(frame(), ...)
@@ -206,6 +212,10 @@ class EditorController final
     // 1 周ずつ積むので、巨大な回数でも鍵が失敗した所で止まったことを、時計を読まずに数で確かめる
     // ための口。
     [[nodiscard]] std::size_t replay_rounds() const noexcept;
+    // 再生の鍵の数の上限を置き換える試験の口（#1351）。製品は呼ばない（既定は
+    // core::vim_replay_key_limit）。Debug で 100,000 鍵を流すと 1 件 80 秒かかるので、契約は小さい
+    // 上限で境を確かめる。知らせの文は製品の値のまま変えない。
+    void limit_replay_keys(std::size_t limit) noexcept;
     // Ctrl+Tab で歩いている間だけ真（ADR 0058 の決定 4）。窓が Ctrl を離したとき・フォーカスを
     // 失ったときに SettleRecentTab を送るかを決めるための口で、状態の 1 欄を読むだけ。
     [[nodiscard]] bool tab_walking() const noexcept;
@@ -215,6 +225,10 @@ class EditorController final
     // プレビューの見せ方（ADR 0155 の改訂 15）。窓が tick
     // のタイマー・クリック・ホイールを決める口で、 状態を読むだけ。
     [[nodiscard]] PreviewPlacement preview_placement() const noexcept;
+    // ミニマップを出すか（ADR 0171 の決定 1）。窓が本文の枠の幅を数えるのと、出した・消したときに
+    // 寸法を送り直すのに読む口。設定（sync_minimap が置いた 1 欄）がオンで、全面プレビューでない
+    // とき（本文が隠れている間は面を出さない・レビュー L6）。frame の minimap と同じ条件。
+    [[nodiscard]] bool minimap_shown() const noexcept;
     // アクティブな文書の本文を読むだけの口。試験が仮想桁の索引の持ち方（ADR 0140 の決定 4）を
     // 確かめるために読む。状態を変える口はここには無い。
     [[nodiscard]] const core::TextBuffer &text() const noexcept;
@@ -226,7 +240,12 @@ class EditorController final
   private:
     // 意図の前に 1 意図ぶんだけの表示（失敗・報せ）を消す。keeps_message は報せを残す意図。
     void begin_intent(bool keeps_message);
+    // 意図の出口（ADR 0179 の決定 4-1）。プレビューのタブが保存済みでなくなっていれば固定する。
+    void settle_transient();
     void forget_unkept_marks(const EditorIntent &intent);
+    // エクスプローラーのダブルクリックの 2 打目（DBLCLK と続く離し）は 1 打目の知らせを消さない
+    // （レビュー V-1391b の R-b・#1390・EditorControllerExplorer.cpp）。
+    [[nodiscard]] bool keeps_explorer_notice(const EditorIntent &intent) const noexcept;
     // Ctrl+Tab の歩きの途中に歩きを続けない入口が来たら、写す前に確定する（ADR 0058 の決定 4）。
     // keeps_walk は歩きを続ける意図か。Vim の鍵は歩きを続けない。
     void settle_tab_walk_before(bool keeps_walk);
@@ -340,6 +359,9 @@ class EditorController final
     void next_replay_round();
     // 鍵の失敗と深さの上限で、列・周・待ちを全部捨てる。
     void dropped_replay();
+    // 再生の列から次の 1 歩を流してよいか（#1351・施主決定 D75）。いちばん外の再生で流した歩が
+    // core::vim_replay_key_limit に達していたら、列・周・待ちを捨てて 1 行知らせ、偽を返す。
+    [[nodiscard]] bool replay_step_allowed();
     // 再生の列を先頭から流す 2 本（#1312）。表が空なら plain（今までの道のまま・鍵ごとの分岐と
     // 割り当てを足さない）、表に行があれば mapped（`@` の鍵は流す時点の表で引く・`.` の鍵は
     // 引かない）。どちらも失敗した鍵で列の残りを捨てる。
@@ -371,8 +393,8 @@ class EditorController final
     // 1・3〜5）。同じファイルの タブへ切り替える → 読みの port に頼む。同期に揃えば adopt_read
     // で続け、裏へ回れば読み込み中の 要求を置いて戻る。同じファイルを読み込み中なら 2
     // 本目を頼まない。ほかの読み込み中の要求は 取り消す。開けなければタブを足さず、reply
-    // の告げ方で告げる。
-    void open_document(const core::FilePath &path, OpenFailureReply reply);
+    // の告げ方で告げる。開けたら opened_as の開き方で開く（ADR 0179 の決定 3）。
+    void open_document(const core::FilePath &path, OpenFailureReply reply, OpenedAs opened_as);
     // 読みの結果を受ける 1 本（決定 3・5）。読み込み中の要求の券のものだけを使う。進み具合は要求に
     // 置き、終わりは採る瞬間まで留める（追補 2）。採るのは settle_reads。
     void adopt_read(DocumentReadOutcome outcome);
@@ -385,15 +407,28 @@ class EditorController final
     // 読みは finish_tab_read へ渡す。
     void settle_reads();
     [[nodiscard]] bool settle_read(std::uint64_t ticket, bool open_waiting);
-    void finish_reading(const core::FilePath &path, OpenFailureReply reply,
+    void finish_reading(const core::FilePath &path, OpenRequest request,
                         std::expected<OpenedDocument, FileFailure> document);
     void finish_reading(const core::FilePath &path, AutosaveId tab,
                         std::expected<OpenedDocument, FileFailure> document);
     void finish_tab_read(AutosaveId tab, std::expected<OpenedDocument, FileFailure> document);
     [[nodiscard]] std::optional<std::size_t> tab_position_of(AutosaveId tab) const;
     // 揃った文書を開く（決定 4）。待っている間に同じファイルのタブができていればそこへ切り替え、
-    // 何も書いていない無題ならそこに開き、ほかは新しいタブを足す。
-    void open_read(const core::FilePath &path, OpenedDocument opened);
+    // 何も書いていない無題ならそこに開き、ほかは新しいタブを足す。transient で開くときは、
+    // プレビューのタブがあれば置き換え、無ければ開いたタブに印を付ける（ADR 0179 の決定 3）。
+    void open_read(const core::FilePath &path, OpenedDocument opened, OpenedAs opened_as);
+    // 既に開いているタブ position へ切り替える（決定 3-1）。pinned ならそのタブの印を消す
+    // （決定 3 の pinned・4-3・4-5）。transient なら印は変えない。
+    void reach_open_tab(std::size_t position, OpenedAs opened_as);
+    // 同じファイルを読み込み中の開く要求があれば、pinned の要求でその開き方を pinned に改める
+    // （揃ったときにプレビューのタブにしない・決定 4-3）。あれば真。
+    [[nodiscard]] bool joined_reading(const core::FilePath &path, OpenedAs opened_as);
+    // path を読み込み中の開く要求があるか。
+    [[nodiscard]] bool opening(const core::FilePath &path) const;
+    // 開いたアクティブなタブに、transient なら印を付ける（決定 3-3）。
+    void mark_opened(OpenedAs opened_as);
+    // アクティブなタブがプレビューのタブなら印を消す（決定 4-2 の保存の成功）。
+    void pin_active_tab();
     // 開けなかったことを呼び手ごとの今の規則で告げる（ADR 0060 の決定 7・ADR 0159 の決定 6）。
     void answer_unopened(const core::FilePath &path, FileFailure failure, OpenFailureReply reply);
     // 読み込み中の要求を取り消す（券の仕事をやめさせて要求と留めた結果を消す・決定 5）。
@@ -410,7 +445,9 @@ class EditorController final
     void accept(const OpenDocument &intent);
     // 一覧から選んだファイルを開く。失敗は 1 行の知らせで、not_found で出どころが履歴の候補の
     // ときだけ履歴から外す（ADR 0062 の決定 18）。
-    void open_listed(const core::FilePath &path, std::optional<core::PaletteOrigin> origin);
+    // opened_as はエクスプローラーの面のクリック 1 回だけが transient（ADR 0179 の決定 3）。
+    void open_listed(const core::FilePath &path, std::optional<core::PaletteOrigin> origin,
+                     OpenedAs opened_as);
     // 閉じたファイルを履歴に記録する（read → history_recorded を順に → write）。空なら何もしない。
     void remember(const std::vector<core::FilePath> &paths);
     void forget(const core::FilePath &path);
@@ -501,6 +538,9 @@ class EditorController final
     void accept(const WalkRecentTab &intent);
     void accept(const SettleRecentTab &);
     void accept(const CloseTab &intent);
+    // 題名のダブルクリック（ADR 0179 の決定 4-4）。そのタブへ切り替え、切り替えが成ったタブが
+    // プレビューのタブなら印を消す（通し番号で比べる・#1427 の L1）。
+    void accept(const PinTab &intent);
     // 窓が閉じていくときに前回のタブの一覧を書く（ADR 0059 の決定 3）。状態は変えない。
     void accept(const EndSession &intent);
     // 裏の仕事の合図（ADR 0062 の決定 7）。使う人の操作の途中の状態を動かさない。
@@ -513,6 +553,11 @@ class EditorController final
     void accept(const ScrollExplorer &intent);
     void accept(const ExplorerRootChosen &intent);
     void accept(const ResizeExplorer &intent);
+    // マウスを載せた面の行（#1390）。使う人の操作ではない（帯の PointTitleBar と同じ側）。
+    void accept(const HoverExplorer &intent);
+    [[nodiscard]] std::vector<core::FilePath> unsaved_files() const;
+    [[nodiscard]] ExplorerRowView explorer_row_view(const core::ExplorerRow &row,
+                                                    std::span<const core::FilePath> unsaved) const;
     // `:set root=.` の要求（決定 7）。
     void run_root_request(core::ExRootRequest request);
     // 設定 root へ書いて「root=<path>」を知らせる。書けなければ失敗の 1 行。
@@ -524,7 +569,8 @@ class EditorController final
     void step_explorer(bool down);
     void select_explorer_row(std::size_t row);
     void release_explorer(const std::optional<core::FilePath> &released, std::size_t row);
-    void click_explorer_row(std::size_t row);
+    // 1 回のクリック（opened_as は transient）と、1 打目が効かなかった 2 打目（pinned）の 1 本。
+    void click_explorer_row(std::size_t row, OpenedAs opened_as);
     void double_click_explorer(std::size_t row);
     void second_click_explorer(const core::FilePath &path);
     void open_explorer_folder(std::optional<std::size_t> row);
@@ -532,6 +578,14 @@ class EditorController final
     void collapse_explorer_row();
     // 設定が変わった後（persist_settings）と起動の 1 か所。木をルートに揃え、読むものを頼む。
     void sync_explorer();
+    // ミニマップ（ADR 0171 の決定 1 と追補）。設定が変わった後（persist_settings）と起動の 1 か所
+    // だけが sync_minimap で minimap_shown_ を置く。編集の 3 か所（replace・undo・redo）の
+    // note_minimap_edit と frame の 1 か所の add_minimap は、オフなら最初の 1 行で返る
+    // （forget_syntax_before・explorer_view と同じ早い return）。本体は
+    // EditorControllerMinimap.cpp。
+    void sync_minimap();
+    void note_minimap_edit(const core::TextBuffer &after, const core::Edit &edit);
+    void add_minimap(EditorFrame &result);
     // FolderPort が今の誰かの仕事を走らせているか（エクスプローラーは 1 つずつ頼む）。
     [[nodiscard]] bool folder_busy() const noexcept;
     void request_explorer_folder();
@@ -822,10 +876,12 @@ class EditorController final
     // INSERT にいるあいだの編集は 1 つの undo 単位に吸収する（ADR 0015 の決定 5）。
     [[nodiscard]] core::EditBoundary vim_boundary() const noexcept;
 
-    // block_lines は矩形の行ごとの置き換え（apply_block だけが渡す）。渡すとマークは行ごとに直す
-    // （marks_block_adjusted・#1361）。
+    // lines はマークの行の直し方。矩形の行ごとの置き換え（apply_block だけが渡す）ならマークは
+    // 行ごとに直し（marks_block_adjusted・#1361）、VimLineMarks::kept（VimReplaceRange が渡す）なら
+    // 行をその場で書き換えた置き換えでマークの行を動かさない（#1360）。
     void replace(const core::OffsetRange &range, std::string_view text, core::EditBoundary boundary,
-                 std::span<const core::VimBlockEdit> block_lines = {});
+                 std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> lines =
+                     core::VimLineMarks::shifted);
     void move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring,
                        core::CaretAffinity affinity = core::CaretAffinity::leading);
     void accept(const PointText &intent);
@@ -837,7 +893,13 @@ class EditorController final
     pointed_character(VisualTextView &view, core::TextCaret caret, float x);
     void select_clicked(core::Offset pointed, PointerClicks clicks);
     void select_clicked_in_vim(core::Offset pointed, PointerClicks clicks);
-    [[nodiscard]] bool move_visual(const MoveCaret &intent);
+    // origin は移動の起点（キャレットか、通常モードで選択があるときの選択の端・#1393）。
+    [[nodiscard]] bool move_visual(const MoveCaret &intent, core::Offset origin);
+    [[nodiscard]] std::expected<core::TextLocation, TextLayoutFailure>
+    origin_location(VisualTextView &view, const core::TextLocation &at_caret,
+                    core::Offset origin) const;
+    // 起点の画面行の側（選択を描いていた側・#1393）。← → の畳みと上下の起点が共用する。
+    [[nodiscard]] core::CaretAffinity origin_affinity(core::Offset origin) const noexcept;
     // 上下の移動が本文の最初か最後の画面行で止まったときの着地（本文の先頭か末尾・#1386）。
     void move_to_text_edge(VisualTextView &view, const MoveCaret &intent, std::int64_t rows);
     // PgDn / PgUp の画面の先頭の送り。文字組みに失敗したら false。
@@ -849,7 +911,12 @@ class EditorController final
     // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();
-    void settle_vim_step(const core::VimStep &step);
+    void settle_vim_step(const core::VimStep &step, core::VimMode before);
+    // INSERT で打った本文の追従（ScrollFollow::vim_typed・#1363）。鍵の前の保留を覚え、鍵の後に
+    // 打った本文（と動かない鍵・INSERT へ入る近い鍵）の追従の印を立てる。
+    void note_follow_before_key();
+    void mark_typed_follow(core::VimMode before, const core::VimStep &step);
+    [[nodiscard]] bool stepped_near(core::VimMode before, core::VimMode after) const;
     // engine を通らない意図の後に、Vim の NORMAL と VISUAL のキャレットが 1 文字の境（NORMAL は行の
     // 最後の文字の上）から外れていたときだけ寄せる。INSERT は寄せない。入口 apply の終わりの 1 か所
     // から呼ぶ（ADR 0053 の追補 #1309）。
@@ -858,6 +925,8 @@ class EditorController final
     void follow_caret();
     void follow_position(core::TextPosition position);
     void settle_follow();
+    // 保留の追従の 1 段を解決する（typed は打った本文の歩き・#1363）。文字組みの失敗なら偽。
+    [[nodiscard]] bool settled_follow_to(core::TextPosition position, bool typed);
     // 問いの間に文書を離れるときは保留を捨てる（ADR 0128 の決定 7）。
     void drop_pending_follow();
     // controller がスクロールを読む道はこの 1 本（ADR 0128 の決定 2）。
@@ -982,6 +1051,17 @@ class EditorController final
     bool repaint_ = true;
     // 頼まれてまだ解決していない追従の位置。後の頼みが前の頼みを置き換える（ADR 0128 の決定 1）。
     std::optional<core::TextPosition> pending_follow_;
+    // 保留の追従が Vim の INSERT で打った本文だけから来たか（ScrollFollow::vim_typed・#1363）。
+    // follow_position が偽に戻し、打った鍵の終わりの stepped_vim だけが真にする。
+    bool pending_typed_ = false;
+    // 打った本文の追従の最後の位置（#1363）。打った後の別の頼み（Esc と `.` の後の寄せ・再生の
+    // 中の NORMAL の移動）が保留を置き換えても残り、解決は先にここまで歩いてから保留を 1 回の
+    // 追従で解く（Vim は打つ周ごとに update_topline を終えてから次の鍵を読む）。
+    std::optional<core::TextPosition> walked_follow_;
+    // 鍵の前の保留の追従が無いか打った本文の追従だったか（note_follow_before_key が置く）。
+    bool follow_walks_ = false;
+    // 鍵の前のキャレット（INSERT へ入る鍵が下へ 1 行より遠く動いたかを見る・#1363）。
+    core::Offset caret_before_key_{0};
     // 行高を変えた設定が頼んだ clamp。新しい幾何が届いた後のスクロールの読みで、追従より先に
     // 1 回だけ解決する（ADR 0128 の決定 8）。
     bool pending_clamp_ = false;
@@ -996,6 +1076,11 @@ class EditorController final
     std::vector<ReplayRounds> replay_rounds_;
     // replay_rounds の数（queued_round だけが足す・`.` の 1 周も数える）。
     std::size_t replay_round_count_ = 0;
+    // いちばん外の再生で列から流した歩の数（#1351）。perform(VimReplay) が再生の始めに 0 に戻し、
+    // replay_step_allowed だけが足す。
+    std::size_t replay_steps_ = 0;
+    // 流す歩の上限（既定は core::vim_replay_key_limit・limit_replay_keys だけが置き換える）。
+    std::size_t replay_key_limit_ = core::vim_replay_key_limit;
     std::optional<std::size_t> replay_depth_;
     // `@` の再生の中で `map` の左辺の途中まで読んだ鍵（#1312）。再生の中だけで持ち、列が尽きたら
     // 待たずに流す。state_ の待ち（打った鍵の分）へ持ち越さない。
@@ -1086,6 +1171,10 @@ class EditorController final
     // 読み書きする。
     std::optional<SyntaxStateCache> first_syntax_;
     std::optional<SyntaxStateCache> second_syntax_;
+    // ミニマップの窓の行の塊（ADR 0171 の決定 4）と設定の値（決定 1）。minimap_shown_ を置くのは
+    // sync_minimap だけ。
+    MinimapCache minimap_;
+    bool minimap_shown_ = false;
     // 言語サーバーとのつながり（ADR 0160 の決定 5・6）。EditorControllerLanguageServer.cpp の群
     // だけが読み書きする。
     LanguageServerLink language_server_;

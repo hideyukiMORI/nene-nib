@@ -167,10 +167,13 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // エクスプローラーの意図（ToggleExplorer・ExplorerKey・PointExplorer・ScrollExplorer・
 // ExplorerRootChosen）も使う人の操作なので、どちらにも書かない（ADR 0162 の決定 4）。面の幅の
 // ドラッグ（ResizeExplorer・ADR 0162 の追補 D78）も使う人の操作の側で、どちらにも書かない。
+// 面の上のマウスを載せた行（HoverExplorer・#1390）は帯の hover と同じく使う人の操作ではなく、
+// not_user_operation の 1 本を経て歩きを続け、報せを消さない。
 // 言語サーバーの古さの合図（LanguageServerTick）も使う人の操作ではないので歩きを続ける（ADR 0160
 // の決定 6）。Ctrl つきのホイールは帯の上でも字の大きさ（AdjustFontSize）になり、歩きを確定する
 // （ADR 0150 の追補・#1048）。歩きの間は Ctrl を押しているので、ScrollTabs が歩きの間に来る
-// ことは無い。
+// ことは無い。題名のダブルクリックの PinTab も使う人の操作なので、ここにも begin_intent にも
+// 書かない（ADR 0179 の決定 4-4）。
 [[nodiscard]] bool keeps_tab_walk(const EditorIntent &intent) noexcept
 {
     return not_user_operation(intent) || std::holds_alternative<WalkRecentTab>(intent) ||
@@ -195,19 +198,28 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // apply が捨てる。
 // 枠の意図（SplitPane / SwitchPane / ClosePane / ScrollPane）は使う人の操作なので、
 // keeps_tab_walk と begin_intent の表には載せない（歩きを終え、告知を消す）。
+// マウスを動かすだけの意図（帯の載せた要素 PointTitleBar・面の載せた行 HoverExplorer）と帯の幅の
+// 知らせ（TitleBarWidth）も本文とキャレットに触れないので保つ（メモ帳はマウスを動かしても狙いの桁を
+// 変えない・D82・レビュー V-1428 の M-1 と F-3）。本文の寸法と DPI を運ぶ VisibleLines と外観の
+// 読み直し RefreshAppearance は、画素で持つ狙いの意味を変え得るので保たない（捨てる側のまま）。
 [[nodiscard]] bool keeps_wanted_x(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<MoveCaret>(intent) || is_signal(intent) ||
-           std::holds_alternative<ScrollPane>(intent);
+           std::holds_alternative<ScrollPane>(intent) ||
+           std::holds_alternative<PointTitleBar>(intent) ||
+           std::holds_alternative<HoverExplorer>(intent) ||
+           std::holds_alternative<TitleBarWidth>(intent);
 }
 
 // エクスプローラーのダブルクリックの 2 打目と組む印（explorer_clicked_）を保つ意図（#1388・
 // レビュー V-1391 の R-1）。面のマウスそのもの（押しと 2 打目は accept が印を決める）と、使う人の
 // 操作ではない意図（裏の仕事の合図・窓の寸法など）だけ。鍵・タブの切り替え・ほかの押しなど、
-// 使う人の操作が間に入ったら印を捨て、次の 2 打目は画面の行を引く。
+// 使う人の操作が間に入ったら印を捨て、次の 2 打目は画面の行を引く。面のホイールも印を保つ（2 打目
+// は経路で引くので、行が送られても取り違えない・レビュー V-1391b の R-a・#1390）。
 [[nodiscard]] bool keeps_explorer_click(const EditorIntent &intent) noexcept
 {
-    return std::holds_alternative<PointExplorer>(intent) || not_user_operation(intent);
+    return std::holds_alternative<PointExplorer>(intent) ||
+           std::holds_alternative<ScrollExplorer>(intent) || not_user_operation(intent);
 }
 
 // 狙いの横位置が指す所（アクティブなタブ・本文の改訂・キャレット）。合図の前後で比べる。
@@ -322,6 +334,7 @@ EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocu
     }
     // 面が出ている設定ならルートの木を作って読み始める（ADR 0162 の決定 3・5）。
     sync_explorer();
+    sync_minimap();
     refresh_key_map();
     // 起動引数のファイルは順にタブで開き、最後に開けたものがアクティブになる（ADR 0056 の決定
     // 13）。失敗は 1 意図だけの値なので、後の引数が消さないよう最後の失敗を控えて載せ直す。
@@ -377,6 +390,7 @@ bool EditorController::persist_settings(core::EditorSettings settings)
     // 面の表示とルートは設定の値（ADR 0162 の決定 3）。Ex・面の `:`・意図のどれから書いても同じ 1
     // 本。
     sync_explorer();
+    sync_minimap();
     refresh_key_map();
     if (view_geometry_.width <= 0)
     {
@@ -411,7 +425,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     begin_intent(not_user_operation(intent) || std::holds_alternative<CancelComposition>(intent) ||
                  std::holds_alternative<ScrollTabs>(intent) ||
                  std::holds_alternative<SettleRecentTab>(intent) ||
-                 std::holds_alternative<EndSession>(intent));
+                 std::holds_alternative<EndSession>(intent) || keeps_explorer_notice(intent));
     // `map` の待ちの鍵は、待ちを保つ意図のほかは受ける前に流す（ADR 0176 の決定 4）。
     // 窓が閉じていく EndSession では流さずに捨てる（保存済みの文書を未保存にしない・#1096 の
     // R1-2）。
@@ -438,6 +452,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 閉じたタブの読みの取消と、歩き・入力行・面の終わりで留めた読みの採用（ADR 0159 の追補
     // 1・2）。
     follow_reads();
+    settle_transient();
     keep_vim_character(intent);
     if (is_signal(intent) && caret_anchor_of(state_) != anchor)
     {
@@ -494,6 +509,17 @@ void EditorController::settle_tab_walk_before(bool keeps_walk)
     if (state_.tab_walking() && !keeps_walk)
     {
         accept(SettleRecentTab{});
+    }
+}
+
+// 意図の出口（begin_intent と対の終わり）で、プレビューのタブが保存済みでなくなっていれば固定する
+// （ADR 0179 の決定 4-1）。本文の編集・文字コードと改行の形の変更・undo で保存時点から離れる、の
+// 全部をここで拾い、編集の経路ごとに書かない。印が無ければ欄を 1 つ読むだけで抜ける。
+void EditorController::settle_transient()
+{
+    if (state_.transient().has_value() && !state_.transient_saved())
+    {
+        state_ = state_.without_transient();
     }
 }
 
@@ -1097,6 +1123,7 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     mark_bracket(state_, state_.scroll().visible_lines, result.lines);
     add_other_pane(result, source.pattern);
     result.explorer = explorer_view();
+    add_minimap(result);
     add_diagnostics(result);
 }
 

@@ -106,6 +106,7 @@ constexpr std::string_view preview_no_task_message = "この行にタスクは�
 [[nodiscard]] bool passes_full_preview_window(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<NewTab>(intent) || std::holds_alternative<SwitchTab>(intent) ||
+           std::holds_alternative<PinTab>(intent) ||
            std::holds_alternative<WalkRecentTab>(intent) ||
            std::holds_alternative<SettleRecentTab>(intent) ||
            std::holds_alternative<CloseTab>(intent) || std::holds_alternative<ScrollTabs>(intent) ||
@@ -359,11 +360,14 @@ void EditorController::accept(const TogglePreviewTask &intent)
     const core::Offset at{mark.value()};
     const bool checked = state_.text().text_range(at, core::Offset{at.value + 1U}) != " ";
     const auto selection = state_.selection();
+    // 保留の追従は打った本文の印（#1363）ごと戻す。1 文字を同じ桁で置き換えるので位置は変わらない。
     const auto follow = pending_follow_;
+    const bool typed = pending_typed_;
     replace(core::OffsetRange{at, core::Offset{at.value + 1U}}, checked ? " " : "x",
             core::EditBoundary::separate);
     state_ = state_.with_selection(selection);
     pending_follow_ = follow;
+    pending_typed_ = typed;
 }
 
 // 打つのを止めてから 1 tick 以上たった本文だけを頼む（決定 8）。比べるのは履歴の位置ではなく改訂番

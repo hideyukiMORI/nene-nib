@@ -138,3 +138,10 @@ Vim 9.1 の `:help jump-motions` は跳びを `'` `` ` `` `G` `/` `?` `n` `N` `%
 
 - 決定 6 の `replace` の呼び出しのうち、矩形の効果（`VimRemoveBlock` `VimReplaceBlock` `VimInsertBlock`）を写す `apply_block` だけは、畳んだ 1 つの Edit ではなく行ごとの置き換えを `marks_block_adjusted(marks, 編集の前の本文, 行ごとの置き換え)` に渡す（下の行から `marks_adjusted` に通す）。Vim の矩形のオペレータ（`shift_block`・矩形の `op_delete` `op_change`・`block_insert`・`op_replace` `op_tilde` の矩形）は `mark_adjust` を呼ばないので、改行を含まない行の置き換えはマークを動かさない。最後の変更（`'.`）と変更の列は今までどおり畳んだ Edit から置く。
 - 行単位・文字単位の行を保つ置き換え（`>` `<` `~` `r` の行単位と文字単位）と、undo / redo の行数の変わらない編集は同じ近似のまま（ADR 0018 の追補 #1361 の「測った」）。
+
+## 追補（2026-11-11・#1360）: 行をその場で書き換える置き換えはマークを動かさない
+
+- 行単位と文字単位の行を保つ置き換え（`>` `<`・`~` `u` `U` `g~` `gu` `gU`・VISUAL の `r`・`Ctrl-a` `Ctrl-x`）は、改行を含む 1 つの `VimReplaceRange` を `marks_adjusted` に通すと行が消えた形に読まれ、範囲の中のマーク（`''` `'a`・前の選択の端・ジャンプの列）が範囲の 1 行目へ寄っていた（`12jV2{>''` が 10 行目・`12jVgg>''` が 1 行目。Vim はどちらも 13 行目）。Vim の `op_shift` `op_tilde` `op_replace` `op_addsub` は行の中だけを書き換えて `mark_adjust` を呼ばない（矩形の #1361 と同じ根。Vim のソースのこの 4 関数は手元に無く、読みではなく fixture の実測で確かめた）。
+- `VimReplaceRange` に閉じた enum `VimLineMarks`（`shifted` | `kept`）を足し、どちらかを engine が置く（既定値なし）。`kept` は上の置き換え、`shifted` は Vim が `mark_adjust` を呼ぶ置き換え（`J` `gJ` の `do_join`・NORMAL の `r<CR>`・回数つき INSERT の流し直し）。controller の `replace` は `kept` ならマークを動かさず、`shifted` なら今までどおり `marks_adjusted`（矩形は `marks_block_adjusted`）で直す。分岐は `EditorControllerEditing.cpp` の `edited_marks` の 1 か所。最後の変更（`'.`）と変更の列は今までどおり畳んだ Edit から置く。
+- fixture `visual-jump-mark-` 17 件（VISUAL の跳びの後の `>` `<` `~` `u` `U` `r` と `''` `'a`・オペレータの `>gg` `gUgg`・`gv` の 2 件・`<Esc>` と `J` の一致の確認 2 件）。
+- 後続（変えない）: undo / redo の行数の変わらない編集（矩形の `>` の後の `u` の後の `gv` など・ADR 0018 の追補 #1361 の「測った」）は同じ近似のまま。Vim の `u_undoredo` は行数が変わらなければ `mark_adjust` を呼ばない（読み・確かめていない）。

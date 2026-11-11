@@ -33,6 +33,7 @@ using detail::refuses_put;
 using detail::register_read;
 using detail::register_selection_of;
 using detail::removed_exactly;
+using detail::removed_lines_range;
 using detail::repeated;
 using detail::selected_register;
 using detail::single_step;
@@ -182,14 +183,15 @@ namespace detail
 // ---------------------------------------------------------------- `"`（ADR 0048）
 
 // `"{name}`（決定 2）。選んだレジスタを置いて次の命令を待つ。回数は消さず（`3"ayy` と `"a3yy` は
-// 同じ）、`"a"b` は後勝ち。名前にならない鍵は回数ごと捨ててビープする。それまでの回数は
-// `"` の前の回数として覚え、後に打つ桁はそれに掛ける（Vim の nv_regname の opcount・#1319）。
+// 同じ）、`"a"b` は後勝ち。名前にならない鍵は回数ごと捨ててビープする（Esc は鳴らさずに打ち消す・
+// `"<Esc>x` は x が効く・#1369）。それまでの回数は `"` の前の回数として覚え、後に打つ桁はそれに
+// 掛ける（Vim の nv_regname の opcount・#1319）。
 [[nodiscard]] VimStep selected_register(const VimState &state, const VimKey &key)
 {
     const auto selection = register_selection_of(macro_name_of(key).value_or(char32_t{}));
     if (!selection.has_value())
     {
-        return refused_register(state);
+        return escaped_or_refused(state, key, refused_register(state));
     }
     VimState next = state;
     next.input_wait = std::nullopt;
@@ -219,13 +221,11 @@ namespace
 // 選択を消す一歩。`p` は名前なしの VISUAL の `d`（無名・`"1`・`"-` を書く）、`P` は `"_d`
 // （レジスタを変えない・Vim の keep_registers）。範囲・戻り先・書き手は VISUAL の `d` と同じ道。
 [[nodiscard]] VimStep visual_put_removal(const VimState &state, const VimEditorView &view,
-                                         VimPutSide side)
+                                         const VimMotionRange &range, VimPutSide side)
 {
     VimState removing = state;
     removing.selected_register =
         side == VimPutSide::before ? register_selection_of(U'_') : std::nullopt;
-    VimMotionRange range = vim_visual_range(view.text, view.selection, state.mode);
-    range.restore = visual_restore(state, view.text, view.selection);
     return removed_exactly(removing, view.text, range);
 }
 
@@ -275,12 +275,16 @@ namespace
     return VimLastVisual{state.mode, start, end, state.wanted_column};
 }
 
+// 選択を消す一歩と、その範囲（行単位は最後の行の改行を前の行から消す範囲）。
+using PutRemoval = std::pair<VimStep, OffsetRange>;
+
 // 行単位の VISUAL（Vim の PUT_LINE）。選んだ行を本文の行で置き換える。最後の行まで選んだときは
 // 前の行の終わりから置き換え（消すと上の行の下へ貼る）、全部の行なら本文の終わりの空の行を残さない
 // （nv_put_opt の empty の後始末・実測）。キャレットは貼った最初の行の最初の非空白。
 [[nodiscard]] VimStep lines_replaced(const VimState &state, const VimEditorView &view,
-                                     const VimRegister &source, VimStep removal)
+                                     const VimRegister &source, PutRemoval put_removal)
 {
+    auto [removal, removed] = std::move(put_removal);
     const TextBuffer &text = view.text;
     const std::string line_body = as_lines(source);
     auto body = repeated(line_body, count_of(state.count), text, view.document_limit);
@@ -290,7 +294,6 @@ namespace
     }
     const OffsetRange ordered = selection_range(view.selection);
     const LineNumber first = line_of(text, ordered.begin);
-    const OffsetRange removed = std::get<VimRemoveLines>(removal.effect).range;
     const std::size_t lines = newlines_in(body.value());
     std::string utf8 = std::move(body).value();
     Offset start = removed.begin;
@@ -304,7 +307,8 @@ namespace
         }
     }
     const Offset caret{start.value + first_non_blank_index(line_body)};
-    removal.effect = VimReplaceRange{removed, std::move(utf8), caret, EditBoundary::separate};
+    removal.effect = VimReplaceRange{removed, std::move(utf8), caret, EditBoundary::separate,
+                                     VimLineMarks::shifted};
     removal.visual_after =
         put_visual(state, VimMarkPosition{first, 0},
                    VimMarkPosition{LineNumber{first.value + lines - single_step},
@@ -315,21 +319,22 @@ namespace
 // 文字単位の VISUAL に行単位のレジスタ（Vim の PUT_LINE_SPLIT）。消した所で行を割り、その間に行を
 // 貼る。キャレットは貼った最初の行の最初の非空白。
 [[nodiscard]] VimStep line_split(const VimState &state, const VimEditorView &view,
-                                 const VimRegister &source, VimStep removal)
+                                 const VimRegister &source, PutRemoval put_removal)
 {
+    auto [removal, removed] = std::move(put_removal);
     const TextBuffer &text = view.text;
     auto body = repeated(source.text, count_of(state.count), text, view.document_limit);
     if (!body.has_value())
     {
         return failed(cancelled(state), body.error());
     }
-    const OffsetRange removed = std::get<VimRemoveRange>(removal.effect).range;
     const LineNumber line = line_of(text, removed.begin);
     const std::size_t lines = newlines_in(body.value());
     std::string utf8 = "\n";
     utf8 += body.value();
     const Offset caret{removed.begin.value + single_step + first_non_blank_index(source.text)};
-    removal.effect = VimReplaceRange{removed, std::move(utf8), caret, EditBoundary::separate};
+    removal.effect = VimReplaceRange{removed, std::move(utf8), caret, EditBoundary::separate,
+                                     VimLineMarks::shifted};
     removal.visual_after =
         put_visual(state, VimMarkPosition{LineNumber{line.value + single_step}, 0},
                    VimMarkPosition{LineNumber{line.value + lines},
@@ -374,10 +379,9 @@ namespace
 // put_step で貼り（消したら行末に残るときの Vim の `p` も同じ所へ入る）、その効果を消す前の本文の
 // 位置へ戻して消す範囲と 1 つの編集に畳む。
 [[nodiscard]] VimStep characters_put(const VimState &state, const VimEditorView &view,
-                                     VimStep removal)
+                                     VimStep removal, OffsetRange removed)
 {
     const TextBuffer &text = view.text;
-    const OffsetRange removed = std::get<VimRemoveRange>(removal.effect).range;
     const TextBuffer after = text.replaced(removed.begin, removed.end, std::string_view{});
     const Selection at = collapsed_at(removed.begin);
     VimEditorView put_view{after, at, std::nullopt};
@@ -398,8 +402,8 @@ namespace
                        : last_character_byte(tail);
         removal.visual_after.value().caret =
             VimMarkPosition{LineNumber{start.line.value + lines}, end};
-        removal.effect =
-            VimReplaceRange{removed, insert->utf8, insert->caret, EditBoundary::separate};
+        removal.effect = VimReplaceRange{removed, insert->utf8, insert->caret,
+                                         EditBoundary::separate, VimLineMarks::shifted};
         return removal;
     }
     const auto *const block = std::get_if<VimInsertBlock>(&put.effect);
@@ -425,7 +429,9 @@ namespace detail
 [[nodiscard]] VimStep visual_put(const VimState &state, const VimEditorView &view, VimPutSide side)
 {
     const VimRegister source = visual_put_source(state);
-    VimStep removal = visual_put_removal(state, view, side);
+    VimMotionRange range = vim_visual_range(view.text, view.selection, state.mode);
+    range.restore = visual_restore(state, view.text, view.selection);
+    VimStep removal = visual_put_removal(state, view, range, side);
     if (removal.failure.has_value())
     {
         return removal;
@@ -436,13 +442,15 @@ namespace detail
     }
     if (state.mode == VimMode::visual_line)
     {
-        return lines_replaced(state, view, source, std::move(removal));
+        return lines_replaced(
+            state, view, source,
+            PutRemoval{std::move(removal), removed_lines_range(view.text, range)});
     }
     if (source.kind == VimRegisterKind::lines)
     {
-        return line_split(state, view, source, std::move(removal));
+        return line_split(state, view, source, PutRemoval{std::move(removal), range.range});
     }
-    return characters_put(state, view, std::move(removal));
+    return characters_put(state, view, std::move(removal), range.range);
 }
 } // namespace detail
 } // namespace nenenib::core

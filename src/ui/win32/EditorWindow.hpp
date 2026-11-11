@@ -44,6 +44,7 @@
 #include "VimMode.hpp"
 #include "WheelTurn.hpp"
 #include "WindowFailure.hpp"
+#include "WindowPorts.hpp"
 #include "WindowTimer.hpp"
 
 #include <windows.h>
@@ -68,8 +69,8 @@ class EditorWindow final
   public:
     // sources の device の箱は worker が先に作り、最初の renderer が受け取る（ADR 0131）。
     [[nodiscard]] static std::expected<std::unique_ptr<EditorWindow>, WindowFailure>
-    create(HINSTANCE instance, application::EditorController &controller,
-           application::TimingPort &timing, RendererSources sources);
+    create(HINSTANCE instance, application::EditorController &controller, WindowPorts ports,
+           RendererSources sources);
     ~EditorWindow();
     EditorWindow(const EditorWindow &) = delete;
     EditorWindow(EditorWindow &&) = delete;
@@ -91,8 +92,8 @@ class EditorWindow final
     void adopt_device();
 
   private:
-    EditorWindow(HINSTANCE instance, application::EditorController &controller,
-                 application::TimingPort &timing, RendererSources sources);
+    EditorWindow(HINSTANCE instance, application::EditorController &controller, WindowPorts ports,
+                 RendererSources sources);
     [[nodiscard]] std::expected<void, WindowFailure> initialize();
     [[nodiscard]] std::expected<void, WindowFailure> start_rendering();
     // 本物の device がまだなら子窓に仮の renderer を、
@@ -118,8 +119,9 @@ class EditorWindow final
     [[nodiscard]] core::TitleBarLayout title_bar() const;
     [[nodiscard]] core::TitleBarTarget title_bar_target_at(LPARAM data) const;
     [[nodiscard]] std::int32_t title_bar_width() const;
-    // 帯の上の押下を扱ったら true（本文とステータスバーへは流さない）。
-    [[nodiscard]] bool click_title_bar(LPARAM data);
+    // 帯の上の押下を扱ったら true（本文とステータスバーへは流さない）。clicks はタブの上の左の
+    // 続けての押し（2 回目以降は SwitchTab の代わりに PinTab の 1 意図・ADR 0179 の決定 4-4）。
+    [[nodiscard]] bool click_title_bar(LPARAM data, application::PointerClicks clicks);
     void release_title_bar(LPARAM data);
     void press_middle(LPARAM data);
     void middle_click(LPARAM data);
@@ -220,6 +222,7 @@ class EditorWindow final
     void press_plain_key(WPARAM word);
     void press_vim_key(WPARAM word);
     void press_control_key(WPARAM word);
+    void send_word_deletion(WPARAM word);
     // IMM32（ADR 0014）。WM_IME_STARTCOMPOSITION / WM_IME_COMPOSITION は DefWindowProcW へ
     // 渡さないので、IME の既定の変換窓は出ず、確定文字も WM_CHAR には流れない（決定 3）。
     [[nodiscard]] LRESULT compose_message(UINT message, WPARAM word, LPARAM data);
@@ -278,6 +281,7 @@ class EditorWindow final
     [[nodiscard]] bool over_other_pane(LPARAM data) const;
     void follow_split(core::SplitLayout previous, application::EditorDelivery &delivery);
     void follow_explorer(application::EditorDelivery &delivery);
+    void follow_minimap(application::EditorDelivery &delivery);
     void choose_explorer_root();
     // エクスプローラーの面の群（EditorWindowExplorer.cpp・ADR 0162 の決定 4）。
     void scroll_explorer(std::int32_t delta);
@@ -285,6 +289,9 @@ class EditorWindow final
     void press_explorer_key(WPARAM word);
     [[nodiscard]] std::optional<std::size_t> explorer_row_at(LPARAM data) const;
     [[nodiscard]] bool point_explorer(UINT message, LPARAM data);
+    // マウスを載せた面の行（#1390）。点の下の画面の行を送り、窓を出たら値なしを送る。
+    void hover_explorer_row(LPARAM data);
+    void hover_explorer_line(std::optional<std::size_t> line);
     // 面と本文の境のドラッグ（ADR 0162 の追補 D78）。押す・動かす・離す・捕まえを失う・ダブル
     // クリック・カーソル。
     [[nodiscard]] bool explorer_divider_at(std::int32_t x, std::int32_t y) const;
@@ -292,6 +299,10 @@ class EditorWindow final
     void drag_explorer_divider(LPARAM data);
     [[nodiscard]] bool release_explorer_divider(LPARAM data);
     void lose_explorer_divider();
+    [[nodiscard]] bool cancel_explorer_divider();
+    [[nodiscard]] bool take_explorer_escape(LPARAM data);
+    void settle_explorer_divider(LPARAM point);
+    [[nodiscard]] bool explorer_divider_under(LPARAM point) const;
     [[nodiscard]] bool reset_explorer_width(LPARAM data);
     void hover_explorer_divider(LPARAM data);
     void end_hidden_explorer_drag();
@@ -342,12 +353,14 @@ class EditorWindow final
     void read_wheel_setting();
     [[nodiscard]] application::VisibleLines body_view() const;
     [[nodiscard]] core::PaneLayouts body_panes(const core::EditorSettings &settings) const;
-    [[nodiscard]] core::ExplorerLayout explorer_frame(core::FontSize font_size) const;
+    [[nodiscard]] core::ExplorerLayout explorer_frame() const;
     [[nodiscard]] core::BodyLayout active_body(const core::EditorSettings &settings) const;
 
     HINSTANCE instance_;
     application::EditorController &controller_;
     application::TimingPort &timing_;
+    // フォルダ選びの箱の WSL の場所（ADR 0162 の追補 #1450）。箱を出すときだけ読む。
+    application::WslDistributionPort &wsl_;
     BodyTextLayouts &text_layouts_;
     DeviceWarmup &warmup_;
     // present が返った frame の節目（frame_presented と本文の最初の body_presented・#546）。
@@ -379,6 +392,11 @@ class EditorWindow final
     std::optional<std::int32_t> explorer_grab_offset_;
     std::int32_t explorer_grab_x_ = 0;
     std::optional<std::int32_t> explorer_dragged_;
+    // 捕まえている間の最後の点（押した点か WM_MOUSEMOVE の点）。Esc で取り消した時点のカーソルを
+    // この点で決め直す（#1413・OS のカーソルの位置は読まない）。
+    LPARAM explorer_drag_point_ = 0;
+    // Esc で取り消した後、その Esc の繰り返し（lParam の bit 30）を食べている間（#1413 の L-1）。
+    bool explorer_escape_held_ = false;
     // 最後の WM_MOUSEMOVE の点が境の上だったか（カーソルを左右の矢印にする・D78）。
     bool over_explorer_divider_ = false;
     UINT wheel_setting_ = default_wheel_scroll_lines;
@@ -406,6 +424,8 @@ class EditorWindow final
     bool preview_ticking_ = false;
     // 最後に本文の寸法を送ったときにエクスプローラーの面が出ていたか（ADR 0162 の決定 2）。
     bool shown_explorer_ = false;
+    // 同じくミニマップが出ていたか（ADR 0171 の決定 2・controller の minimap_shown の写し）。
+    bool shown_minimap_ = false;
     // いまの編集モード。鍵をどちらの表で引くかを決めるだけで、正本は EditorState（ARC-004）。
     core::EditMode mode_ = core::EditMode::ordinary;
     // Ctrl+V を矩形の鍵に写すかどうかを決めるのに要る（ADR 0035 の決定 9）。
