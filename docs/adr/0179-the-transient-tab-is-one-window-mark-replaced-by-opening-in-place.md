@@ -46,9 +46,9 @@ D80（#1388）でエクスプローラーの面のファイルの行はクリッ
 
 ## 強制
 
-- 不変条件 2（印の文書は保存済み・置き換えで未保存を失わない）: **planned**（application の契約 `--transient-tab` と、固定 seed の性質の試験「クリック・編集・保存・切り替え・閉じるのランダムな列の後、印のタブは高々 1 本で保存済み」。実装の PR で active）。
-- 開き方の閉じた enum と意図 `PinTab` の写し漏れ: **planned**（`switch` と `std::visit` の網羅性・実装の PR で active）。
-- クリックの道でファイルに書かない: **planned**（`verify_quiet_paths` の欄・実装の PR で active）。
+- 不変条件 2（印の文書は保存済み・置き換えで未保存を失わない）: **active**（#1397。application の契約 `nib_tests --transient-tab`（`tests/unit/TransientTabTests.cpp`・置き換え・固定の 5 つ・既に開いているファイル・保存済みでない印は置き換えない・復元・最近使った順・履歴に書かない）と、固定 seed の性質の試験 `--transient-tab-property`（`tests/unit/TransientTabPropertyTests.cpp`・クリック・ダブルクリック・編集・保存・切り替え・閉じる・undo・題名のダブルクリック・新しいタブのランダムな列の後、印のタブは高々 1 本で保存済み、かつ帯と本文が「印なしで同じ列を流して置き換えを閉じる＋開くに読み替えた」結果と一致）。どちらも既定実行の契約に載る）。
+- 開き方の閉じた enum と意図 `PinTab` の写し漏れ: **active**（#1397。`OpenedAs` は `mark_opened` と `reach_open_tab` の `default` の無い `switch`、`PinTab` は `EditorIntent` の `std::visit` の網羅性で、値が増えるとコンパイルが落ちる・CPP-002）。
+- クリックの道でファイルに書かない: **active**（#1397。`verify_quiet_paths` の欄 `verify_quiet_transient_clicks`（`tests/unit/HistoryTests.cpp`）が、クリックで置き換える列の後に履歴の読み書き 0・ファイルの書き込み 0・自動退避に触れない・読みの port は開いたファイルの数だけ、を見る）。
 - 8 本の速さに退行なし（1 打鍵の道に足すのは決定 4-1 の比較 1 つ）: **active**（QLT-014）。
 
 ## 結果

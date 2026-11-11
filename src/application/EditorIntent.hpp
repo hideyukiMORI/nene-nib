@@ -35,6 +35,7 @@
 #include "OpenOperationList.hpp"
 #include "OpenTabList.hpp"
 #include "PasteCommand.hpp"
+#include "PinTab.hpp"
 #include "PlaceCaret.hpp"
 #include "PointExplorer.hpp"
 #include "PointPreview.hpp"
@@ -97,5 +98,5 @@ using EditorIntent = std::variant<
     ToggleExplorer, ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen, ResizeExplorer,
     LanguageServerTick, MapTimeout, InsertDateTime, SelectDocumentFormat, OpenDocumentFormatList,
     BeginFind, BeginGoToLine, BeginReplace, SetPreviewPlacement, PointPreview, PrintDocument,
-    RegisterShell, UnregisterShell>;
+    RegisterShell, UnregisterShell, PinTab>;
 } // namespace nenenib::application

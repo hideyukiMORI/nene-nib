@@ -25,7 +25,10 @@
 #include "Language.hpp"
 #include "LanguageTable.hpp"
 #include "LineEndingConversion.hpp"
+#include "OpenRequest.hpp"
+#include "OpenedAs.hpp"
 #include "PaletteOrigin.hpp"
+#include "PinTab.hpp"
 #include "PrintDocument.hpp"
 #include "PrintFailure.hpp"
 #include "PrintJob.hpp"
@@ -328,7 +331,7 @@ constexpr std::string_view reading_prefix = "読み込み中: ";
 
 [[nodiscard]] bool opens(const DocumentReading &reading) noexcept
 {
-    return std::holds_alternative<OpenFailureReply>(reading.target);
+    return std::holds_alternative<OpenRequest>(reading.target);
 }
 
 [[nodiscard]] core::DisplayText unreached_message(const core::FilePath &path, std::size_t others)
@@ -753,13 +756,12 @@ bool EditorController::blank_untitled() const
 // （読み直さない）→ 読みの port に頼む。同じファイルを読み込み中なら 2 本目を頼まず今の要求を
 // 続ける。使う人の開く意図はほかの開く要求を取り消し、起動の引数は券ごとに並べて順に採る。
 // 揃ったら (b) 何も書いていない無題に開く → (c) アクティブの右に新しいタブを足して開く
-// （open_read）。開けなかったらタブを足さず、呼び手の告げ方で告げる。
-void EditorController::open_document(const core::FilePath &path, OpenFailureReply reply)
+// （open_read）。開けなかったらタブを足さず、呼び手の告げ方で告げる。開き方 opened_as は要求に
+// 添えて覚える（ADR 0179 の決定 3）。
+void EditorController::open_document(const core::FilePath &path, OpenFailureReply reply,
+                                     OpenedAs opened_as)
 {
-    const auto &readings = state_.readings();
-    if (std::ranges::any_of(
-            readings, [&](const DocumentReading &reading)
-            { return opens(reading) && ports_.files.same_file(reading.path, path); }))
+    if (joined_reading(path, opened_as))
     {
         return;
     }
@@ -770,15 +772,15 @@ void EditorController::open_document(const core::FilePath &path, OpenFailureRepl
     const auto open = open_tab_of(path);
     if (open.has_value())
     {
-        accept(SwitchTab{open.value()});
+        reach_open_tab(open.value(), opened_as);
         return;
     }
     // ファイルが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
     state_ = state_.with_composition(std::nullopt);
     const std::uint64_t ticket = ++read_tickets_;
     // 要求を先に置き、同期に揃った結果も裏で揃った結果と同じ adopt_read の 1 本で採る（決定 3）。
-    state_ = state_.with_readings(
-        with_appended(state_.readings(), DocumentReading{path, ticket, 0, 0, reply}));
+    state_ = state_.with_readings(with_appended(
+        state_.readings(), DocumentReading{path, ticket, 0, 0, OpenRequest{reply, opened_as}}));
     auto outcome = ports_.reads.request(DocumentReadRequest{path, ticket, maximum_file_bytes});
     if (outcome.has_value())
     {
@@ -898,15 +900,15 @@ bool EditorController::settle_read(std::uint64_t ticket, bool open_waiting)
     return open_waiting;
 }
 
-void EditorController::finish_reading(const core::FilePath &path, OpenFailureReply reply,
+void EditorController::finish_reading(const core::FilePath &path, OpenRequest request,
                                       std::expected<OpenedDocument, FileFailure> document)
 {
     if (!document)
     {
-        answer_unopened(path, document.error(), reply);
+        answer_unopened(path, document.error(), request.reply);
         return;
     }
-    open_read(path, std::move(document).value());
+    open_read(path, std::move(document).value(), request.opened_as);
 }
 
 void EditorController::finish_reading(const core::FilePath &, AutosaveId tab,
@@ -958,16 +960,26 @@ std::optional<std::size_t> EditorController::tab_position_of(AutosaveId tab) con
     return static_cast<std::size_t>(std::distance(ids.begin(), found));
 }
 
-void EditorController::open_read(const core::FilePath &path, OpenedDocument opened)
+void EditorController::open_read(const core::FilePath &path, OpenedDocument opened,
+                                 OpenedAs opened_as)
 {
     const auto open = open_tab_of(path);
     if (open.has_value())
     {
-        accept(SwitchTab{open.value()});
+        reach_open_tab(open.value(), opened_as);
         return;
     }
     state_ = state_.with_composition(std::nullopt);
     Document document{path, opened.encoding, std::size_t{0}};
+    // プレビューのタブがあれば置き換える（ADR 0179 の決定 3-2）。前の文書は閉じる道で外れるが、
+    // 使う人が閉じたのではないので履歴に書かない（決定 5）。
+    if (opened_as == OpenedAs::transient && state_.transient().has_value())
+    {
+        leave_document();
+        state_ = state_.with_transient_replaced(std::move(opened.text), std::move(document));
+        enter_document();
+        return;
+    }
     if (blank_untitled())
     {
         drop_pending_follow();
@@ -980,11 +992,68 @@ void EditorController::open_read(const core::FilePath &path, OpenedDocument open
         ask_display();
         // 本文が丸ごと替わるので、プレビューも頼み直す（ADR 0155 の決定 9）。
         request_preview(true);
+        mark_opened(opened_as);
         return;
     }
     leave_document();
     state_ = state_.with_new_tab().with_opened(std::move(opened.text), std::move(document));
     enter_document();
+    mark_opened(opened_as);
+}
+
+// 開いたアクティブなタブに、transient なら印を付ける（ADR 0179 の決定 3-3）。
+void EditorController::mark_opened(OpenedAs opened_as)
+{
+    switch (opened_as)
+    {
+    case OpenedAs::pinned:
+        return;
+    case OpenedAs::transient:
+        state_ = state_.with_active_transient();
+        return;
+    }
+    std::unreachable();
+}
+
+void EditorController::reach_open_tab(std::size_t position, OpenedAs opened_as)
+{
+    accept(SwitchTab{position});
+    switch (opened_as)
+    {
+    case OpenedAs::pinned:
+        accept(PinTab{position});
+        return;
+    case OpenedAs::transient:
+        return;
+    }
+    std::unreachable();
+}
+
+bool EditorController::opening(const core::FilePath &path) const
+{
+    return std::ranges::any_of(
+        state_.readings(), [&](const DocumentReading &reading)
+        { return opens(reading) && ports_.files.same_file(reading.path, path); });
+}
+
+bool EditorController::joined_reading(const core::FilePath &path, OpenedAs opened_as)
+{
+    auto readings = state_.readings();
+    const auto found = std::ranges::find_if(
+        readings, [&](const DocumentReading &reading)
+        { return opens(reading) && ports_.files.same_file(reading.path, path); });
+    if (found == readings.end())
+    {
+        return false;
+    }
+    auto *request = std::get_if<OpenRequest>(&found->target);
+    if (request != nullptr && opened_as == OpenedAs::pinned &&
+        request->opened_as == OpenedAs::transient)
+    {
+        request->opened_as = OpenedAs::pinned;
+        state_ = state_.with_readings(std::move(readings));
+    }
+    return true;
 }
 
 // Ctrl+O と起動引数は失敗をダイアログで（ADR 0010 の決定 9）。一覧から選んだファイルは 1 行の
@@ -1098,17 +1167,19 @@ std::optional<core::DisplayText> EditorController::reading_message() const
 // Ctrl+O と起動引数の開く。失敗はダイアログ（ADR 0010 の決定 9）。
 void EditorController::accept(const OpenDocument &intent)
 {
-    open_document(intent.path, OpenFailureReply::dialog);
+    open_document(intent.path, OpenFailureReply::dialog, OpenedAs::pinned);
 }
 
 // 一覧から選んだファイルを開く（ADR 0060 の決定 7）。失敗はダイアログではなく 1 行の知らせ
 // （answer_unopened）。履歴から外すのは出どころが履歴の候補のときだけで、同じフォルダの候補では
 // 履歴を読み書きしない（ADR 0062 の決定 18）。
 void EditorController::open_listed(const core::FilePath &path,
-                                   std::optional<core::PaletteOrigin> origin)
+                                   std::optional<core::PaletteOrigin> origin, OpenedAs opened_as)
 {
-    open_document(path, origin == core::PaletteOrigin::history ? OpenFailureReply::notice_forgetting
-                                                               : OpenFailureReply::notice);
+    open_document(path,
+                  origin == core::PaletteOrigin::history ? OpenFailureReply::notice_forgetting
+                                                         : OpenFailureReply::notice,
+                  opened_as);
 }
 
 // 履歴に記録する 1 本（ADR 0060 の決定 8）。書くたびに読んで足す（ほかの窓の分を失わない）。
@@ -1156,6 +1227,8 @@ std::expected<void, FileFailure> EditorController::save_document(const SaveDocum
     {
         return std::unexpected(written.error());
     }
+    // 保存したプレビューのタブは固定する（ADR 0179 の決定 4-2）。保存の成功はこの 1 か所。
+    pin_active_tab();
     if (intent.identity == SaveIdentity::retain_document)
     {
         return {};

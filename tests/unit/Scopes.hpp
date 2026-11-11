@@ -43,6 +43,10 @@ void verify_delivery_contracts();
 // TabsTests.cpp
 void verify_tabs_contracts();
 void verify_tabs_scope();
+// TransientTabTests.cpp / TransientTabPropertyTests.cpp（#1397・ADR 0179 のプレビューのタブ）
+void verify_transient_tab_contracts();
+void verify_transient_tab_scope();
+void verify_transient_tab_property_scope();
 // SplitTests.cpp
 void verify_split_contracts();
 void verify_split_scope();

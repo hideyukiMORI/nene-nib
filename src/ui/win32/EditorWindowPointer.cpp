@@ -12,6 +12,7 @@
 #include "OpenDocumentFormatList.hpp"
 #include "PaletteLayout.hpp"
 #include "PaneLayouts.hpp"
+#include "PinTab.hpp"
 #include "PointTitleBar.hpp"
 #include "PointerPress.hpp"
 #include "ScrollPaletteList.hpp"
@@ -177,14 +178,20 @@ core::TitleBarTarget EditorWindow::title_bar_target_at(LPARAM data) const
     return core::title_bar_target(title_bar(), low_word_of(data), high_word_of(data));
 }
 
-bool EditorWindow::click_title_bar(LPARAM data)
+bool EditorWindow::click_title_bar(LPARAM data, application::PointerClicks clicks)
 {
     const auto target = title_bar_target_at(data);
     left_pressed_ = target;
     switch (target.hit)
     {
     case core::TitleBarHit::tab:
+        // 題名のダブルクリックは、1 回目と同じ切り替えに続けてそのタブを固定する（ADR 0179 の
+        // 決定 4-4）。プレビューのタブでなければ controller は何もしない。
         send(application::SwitchTab{target.tab});
+        if (clicks != application::PointerClicks::single)
+        {
+            send(application::PinTab{target.tab});
+        }
         return true;
     // ×・「＋」・「∨」は離したときに動かす（窓の操作と同じ）。
     case core::TitleBarHit::tab_close:
@@ -342,7 +349,7 @@ void EditorWindow::click_client(LPARAM data, application::PointerClicks clicks)
         click_palette(data);
         return;
     }
-    if (click_title_bar(data))
+    if (click_title_bar(data, clicks))
     {
         return;
     }

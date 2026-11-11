@@ -133,6 +133,9 @@ class Direct2DRenderer final
     [[nodiscard]] const wchar_t *family(const wchar_t *preferred, const wchar_t *fallback) const;
     [[nodiscard]] HRESULT make_format(const wchar_t *face, float size_dips,
                                       DWRITE_FONT_WEIGHT weight, TextFormat &format);
+    // 斜体の書式（プレビューのタブの題名・ADR 0179 の決定 10）。ほかは make_format と同じ。
+    [[nodiscard]] HRESULT make_italic_format(const wchar_t *face, float size_dips,
+                                             DWRITE_FONT_WEIGHT weight, TextFormat &format);
     [[nodiscard]] float scaled(float dips) const noexcept;
     void fill(const core::LayoutRect &area, core::RgbColor color);
     void fill_rounded(const core::LayoutRect &area, core::RgbColor color, float radius);
@@ -156,8 +159,8 @@ class Direct2DRenderer final
                        core::RgbColor color);
     void draw_button_face(const application::EditorFrame &frame, const core::TitleBarLayout &layout,
                           const core::LayoutRect &box, core::TitleBarTarget target);
-    void write_tab_title(std::string_view text, const core::LayoutRect &title,
-                         core::RgbColor color);
+    void write_tab_title(std::string_view text, IDWriteTextFormat *format,
+                         const core::LayoutRect &title, core::RgbColor color);
     void draw_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout,
                   std::size_t index);
     void draw_tabs(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
@@ -347,6 +350,9 @@ class Direct2DRenderer final
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush_;
     Microsoft::WRL::ComPtr<IDWriteFactory7> dwrite_;
     TextFormat tab_format_;
+    // プレビューのタブの題名（ADR 0179 の決定 10）。tab_format_ と同じ字体・大きさ・省略記号の
+    // 斜体。色は変えない。帯の保持は書式の同一性を鍵に含むので、普通の題名と分かれる。
+    TextFormat tab_transient_format_;
     TextFormat toggle_format_;
     TextFormat status_format_;
     TextFormat mode_format_;

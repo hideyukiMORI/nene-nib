@@ -7,6 +7,7 @@
 #include "Edit.hpp"
 #include "ExWindowCommand.hpp"
 #include "PaneView.hpp"
+#include "PinTab.hpp"
 #include "PreviewView.hpp"
 #include "SplitLayout.hpp"
 #include "TabReach.hpp"
@@ -194,6 +195,20 @@ void EditorController::accept(const CloseTab &intent)
     {
         remember({closed.value()});
     }
+}
+
+// 題名のダブルクリック（ADR 0179 の決定 4-4）。印のタブでなければ何もしない。
+void EditorController::accept(const PinTab &intent)
+{
+    if (state_.transient_tab() == intent.index)
+    {
+        state_ = state_.without_transient();
+    }
+}
+
+void EditorController::pin_active_tab()
+{
+    accept(PinTab{state_.active_tab()});
 }
 
 // ---------------------------------------------------------------- 枠（ADR 0148）
