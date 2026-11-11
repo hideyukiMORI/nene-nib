@@ -109,3 +109,5 @@ IDE の「ようこそ」の面。Nib は引数も前回のタブも無い起動
 - 起動画面が出るたびの読み（出ていない → 出ている・前の読みから書いたときだけ・走っている間は 1 本・前の一覧を見せたまま・同じなら選びを保つ・違えば外す）: **active**（`nib_tests --start-screen` の `verify_tabs_and_quiet_start`・`verify_reads_on_show`・`verify_press_across_reread`、`verify_quiet_paths` の欄・#1480）。
 - 上下の中央（足りるとき上下の余白の差 1 px 以内・足りないとき上から 36 DIP・ちょうど・行 0 / 10 / 20・DPI 96 / 120 / 144 / 192・押せる行は描く行と同じ矩形）: **active**（`nib_tests --start-screen` の `verify_centered`・#1480）。
 - 「はじめる」の行の鍵の枠（鍵がある行は右端に `panel` の枠・名前と補足は枠の手前）: **active**（`nib_window_tests --start-screen`・#1480）。
+
+追補 25 の細部（#1495・レビュー V-1486 の L3）: 読みが走っている間に前の一覧の行を開けずに外した（`forget`）path は、application が届くまで覚え（`start_forgotten_`・頼むときに空にする）、届いた一覧からも外す（古い読みで外した行が戻らない）。外すのは `drop_start_entry` の 1 か所。「フォルダを開く」の鍵は Ctrl+Shift+R に決まった（ADR 0162 の追補 #1495）。契約: `nib_tests --start-screen` の `verify_forget_during_reread`・`verify_press_across_read_centered`（製品の中央寄せの形）・`verify_vim_insert_cycles`・`verify_folder_row_key`、`verify_quiet_paths` の `verify_quiet_after_start_lists`（読みを届けてから静かな道）。

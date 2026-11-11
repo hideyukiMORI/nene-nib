@@ -196,14 +196,16 @@ constexpr std::array<std::string_view, 2> skip_reasons{
 
 // 窓は Vim の鍵の前に操作の表・ブックマーク・タブの鍵を引く（press_key）。fixture の鍵に当たる
 // 和音が Vim モードで表に無いことを確かめ、上の写しが窓の順と同じであることを機械で守る。
-// Ctrl+A / X / R / B / U と Delete・Esc・Enter・矢印は OperationKey に値が無く、表に行を置けない
-// （値を足すと OperationKey の switch が落ちる）。値を持つ鍵だけをここで引く。
+// Ctrl+A / X / B / U と Delete・Esc・Enter・矢印は OperationKey に値が無く、表に行を置けない
+// （値を足すと OperationKey の switch が落ちる）。値を持つ鍵だけをここで引く。R は Ctrl+Shift+R の
+// ルートを選ぶ操作のために値を持つ（#1495）ので、Shift なしの Ctrl+R（redo・レジスタの挿入）が
+// Vim の鍵へ流れることもここで守る。
 void verify_window_tables_pass_vim_keys()
 {
     using core::OperationKey;
-    constexpr std::array<OperationKey, 7> controlled{
+    constexpr std::array<OperationKey, 8> controlled{
         OperationKey::d, OperationKey::w, OperationKey::y, OperationKey::f,
-        OperationKey::o, OperationKey::e, OperationKey::v};
+        OperationKey::o, OperationKey::e, OperationKey::v, OperationKey::r};
     bool passes =
         !core::operation_for(core::KeyChord{false, false, OperationKey::tab}, core::EditMode::vim)
              .has_value() &&

@@ -125,6 +125,44 @@ void verify_new_tab_and_redo_keys()
                "Ctrl+Shift+Z runs no operation in the Vim mode");
     }
 }
+// ルートのフォルダを選ぶ Ctrl+Shift+R（施主決定 2026-11-11・#1495）。窓は Vim の鍵の前に操作の表を
+// 引く（press_key）ので、表が Ctrl+Shift+R を両モードで拾えば Vim の NORMAL / INSERT / VISUAL と
+// INSERT の `Ctrl-r` の待ちでも engine へ流れない。Shift なしの Ctrl+R は表・タブ・クリップボードの
+// どれも拾わず、Vim の redo とレジスタの挿入のまま。エクスプローラーの Ctrl+Shift+E と同じ形。
+void verify_folder_root_key()
+{
+    using nenenib::core::EditorOperation;
+    using nenenib::core::operation_for;
+    using nenenib::ui::win32::clipboard_key_for;
+    using nenenib::ui::win32::operation_chord;
+    using nenenib::ui::win32::tab_shortcut;
+    const auto chosen = operation_chord('R', true, true);
+    const auto explorer = operation_chord('E', true, true);
+    expect(chosen.has_value() && explorer.has_value(), "Ctrl+Shift+R and E are operation chords");
+    if (!chosen.has_value() || !explorer.has_value())
+    {
+        return;
+    }
+    expect(operation_for(chosen.value(), EditMode::ordinary) ==
+                   EditorOperation::choose_explorer_root &&
+               operation_for(chosen.value(), EditMode::vim) ==
+                   EditorOperation::choose_explorer_root,
+           "Ctrl+Shift+R chooses the explorer root in both modes before the Vim keys");
+    expect(operation_for(explorer.value(), EditMode::vim) == EditorOperation::toggle_explorer &&
+               !tab_shortcut('R', true).has_value() && !tab_shortcut('E', true).has_value(),
+           "Ctrl+Shift+R takes the same path as Ctrl+Shift+E (no tab key catches either first)");
+    const auto plain = operation_chord('R', true, false);
+    bool passes =
+        !plain.has_value() || (!operation_for(plain.value(), EditMode::ordinary).has_value() &&
+                               !operation_for(plain.value(), EditMode::vim).has_value());
+    passes = passes && !tab_shortcut('R', false).has_value();
+    for (const bool os_keys : {true, false})
+    {
+        passes = passes && !clipboard_key_for('R', true, false, os_keys).has_value() &&
+                 !clipboard_key_for('R', true, true, os_keys).has_value();
+    }
+    expect(passes, "Ctrl+R without Shift stays the Vim redo and register insertion");
+}
 } // namespace
 
 // 通常モードの Windows の標準の鍵（施主決定 D82・#1395・ADR 0009 の追補）。窓は鍵を意図に写すだけ
@@ -134,5 +172,6 @@ void verify_standard_keys()
     verify_clipboard_keys();
     verify_clipboard_keys_reach_their_turn();
     verify_new_tab_and_redo_keys();
+    verify_folder_root_key();
 }
 } // namespace nenenib::tests::ui
