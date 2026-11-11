@@ -1301,8 +1301,8 @@ void verify_vim_macro_scope()
     {
         // macro 欄はほかの族の fixture も持つ（#1246 の insert-page-edge-・#1232 の
         // viewport-ctrl-e-・#1325 の del-key-・#1337 の dot-register-count-・#1341 の
-        // huge-count-macro-・#1363 の viewport-insert-follow-replay-）。名前で守るのは逆の向き: macro- の fixture は必ず macro 欄を
-        // 持つ（#1324）。
+        // huge-count-macro-・#1363 の viewport-insert-follow-replay-）。名前で守るのは逆の向き:
+        // macro- の fixture は必ず macro 欄を持つ（#1324）。
         named &= !fixture.name.starts_with("macro-") || fixture.macro.has_value();
         if (macro_fixture(fixture))
         {
