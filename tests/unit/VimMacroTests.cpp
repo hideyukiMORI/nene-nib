@@ -308,6 +308,55 @@ void verify_macro_depth_limit()
     expect(whole_vim_body(controller) == "bcdef", "the next typed key runs normally");
 }
 
+// 鍵の数の上限（#1351・施主決定 D75）。製品の上限 100,000 を Debug で流すと 1 件 80 秒
+// かかるので、limit_replay_keys で小さい上限を置いて境を確かめる（製品の値は static_assert）。
+// c が `3@ax` なら、`@c` が流す鍵は `3` `@` `a` と a の 3 周（`0` を 3 回）と最後の `x` で、
+// `x` は 7 鍵目。上限 7 なら流れ、上限 6 なら捨てて 1 行知らせる（Vim は止まらず `x` まで
+// 流すので本文が `b` になる・ここが Vim と違う最小の形）。時計は読まない。mapped なら表に
+// `nnoremap Q x` を置いて c を `3@aQ` にし、表に行があるときの 2 本目のループでも同じ境を見る
+// （`Q` は右辺 `x` の 1 歩で 7 歩目）。
+[[nodiscard]] std::pair<std::string, std::optional<std::string>> limited_replay(std::size_t limit,
+                                                                                bool mapped)
+{
+    Editing editing;
+    open_vim_document(editing, "ab");
+    EditorController &controller = editing.controller();
+    controller.limit_replay_keys(limit);
+    if (mapped)
+    {
+        static_cast<void>(run_ex(controller, "nnoremap Q x"));
+    }
+    applied(controller, stored_text('a', "0"));
+    applied(controller, stored_text('c', mapped ? "3@aQ" : "3@ax"));
+    vim_replay(controller, "@c");
+    const auto message = controller.frame().command_message;
+    return {whole_vim_body(controller),
+            message.has_value() ? std::optional<std::string>{std::string{message.value().text()}}
+                                : std::nullopt};
+}
+
+void verify_macro_key_limit()
+{
+    static_assert(nenenib::core::vim_replay_key_limit == 100000U);
+    const std::optional<std::string> expected_notice{
+        "再生を 100,000 鍵で止めました（残りは捨てました）"};
+    for (const bool mapped : {false, true})
+    {
+        const auto [inside, quiet] = limited_replay(7U, mapped);
+        expect(inside == "b" && !quiet.has_value(), "the replayed key at the limit still runs");
+        const auto [over, notice] = limited_replay(6U, mapped);
+        expect(over == "ab" && notice == expected_notice,
+               "the replayed key past the limit is dropped with one notice line");
+    }
+    Editing editing;
+    open_vim_document(editing, "ab");
+    EditorController &controller = editing.controller();
+    controller.limit_replay_keys(6U);
+    applied(controller, stored_text('a', "0"));
+    vim_replay(controller, "999999999@ax");
+    expect(whole_vim_body(controller) == "b", "a typed key after the stopped replay runs normally");
+}
+
 // 巨大な回数の `@`（#1341・ADR 0046 の決定 3 の追補）。鍵の列を回数ぶん並べず 1 周ずつ積むので、
 // 鍵が失敗した周で止まり、積んだ周の数は回数に比例しない（時計は読まない）。b は `xl`。
 [[nodiscard]] std::size_t huge_rounds(std::string text, std::string_view macro,
@@ -1297,6 +1346,7 @@ void verify_vim_macro_contracts()
     verify_macro_failure_stops_the_rest();
     verify_macro_records_failed_replace();
     verify_macro_depth_limit();
+    verify_macro_key_limit();
     verify_macro_huge_count_stops();
     verify_macro_rounds_keep_the_order();
     verify_huge_count_put_refused();

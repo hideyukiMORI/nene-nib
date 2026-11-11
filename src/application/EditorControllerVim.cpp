@@ -205,6 +205,10 @@ void place_insert_left(EditorState &state, std::optional<std::size_t> left)
 constexpr std::string_view inconsistent_layout_notice = "内部の不整合: 画面行の問い（鍵は無効）";
 // 回数で本文を増やす編集を文書の上限で断った鍵の知らせ（#1341・Vim 9.1 の同じ種類の文）。
 constexpr std::string_view too_long_notice = "E1240: Resulting text too long";
+// 再生を鍵の数の上限で止めた知らせ（#1351・施主決定 D75・値は core::vim_replay_key_limit）。
+constexpr std::string_view replay_limit_notice =
+    "再生を 100,000 鍵で止めました（残りは捨てました）";
+static_assert(core::vim_replay_key_limit == 100000, "replay_limit_notice の数を上限に合わせる");
 // engine を呼ぶ 1 か所の写し（Issue #1023）。鍵は vim_step・`:N` の行は vim_line_jumped・押しの
 // VISUAL は vim_pointer_selected（#1250）。
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
@@ -1336,6 +1340,7 @@ void EditorController::perform(const core::VimReplay &effect)
     replay_history_ = state_.history();
     replay_text_ = state_.text();
     vim_top_kept_ = false;
+    replay_steps_ = 0;
     dropped_replay();
     queue_replay(effect, 1U);
     // 表は再生を始めるときに 1 回だけ見る（表が空なら鍵ごとに表を見ない・#1312）。
@@ -1364,9 +1369,14 @@ std::size_t EditorController::replay_rounds() const noexcept
     return replay_round_count_;
 }
 
+void EditorController::limit_replay_keys(std::size_t limit) noexcept
+{
+    replay_key_limit_ = limit;
+}
+
 void EditorController::replayed_plain_queue()
 {
-    while (!replay_queue_.empty())
+    while (!replay_queue_.empty() && replay_step_allowed())
     {
         const core::VimKey key = replay_queue_.front();
         const ReplayLevel level = replay_levels_.front();
@@ -1390,7 +1400,7 @@ void EditorController::replayed_plain_queue()
 // 待ちは再生の中だけで持ち、列が尽きたらタイマーを待たずに流す。失敗した鍵で列も待ちも捨てる。
 void EditorController::replayed_mapped_queue()
 {
-    while (!replay_queue_.empty() || !replay_pending_.empty())
+    while ((!replay_queue_.empty() || !replay_pending_.empty()) && replay_step_allowed())
     {
         const auto failure = replay_queue_.empty() ? flushed_replay() : replayed_front();
         if (failure.has_value())
@@ -1568,6 +1578,22 @@ void EditorController::dropped_replay()
     replay_levels_.clear();
     replay_pending_.clear();
     replay_rounds_.clear();
+}
+
+// 流す歩を数えるのは、列の頭を取り出す 2 本のループの 1 か所（#1351・施主決定 D75）。表が空なら
+// 歩は鍵 1 つ、表に行があれば列から取り出す 1 回か待ちを流す 1 回（待ちから列へ戻した鍵は取り出す
+// たびに数える）。入れ子の再生の鍵も、まだ積んでいない周の鍵も、いちばん外の 1 つの数に入る。
+// 上限に達した後に流す歩が残っていれば、残りを捨てて 1 行知らせる（失敗にはしない・鳴らさない）。
+bool EditorController::replay_step_allowed()
+{
+    if (replay_steps_ < replay_key_limit_)
+    {
+        ++replay_steps_;
+        return true;
+    }
+    dropped_replay();
+    state_ = state_.with_command_message(core::DisplayText::parse(replay_limit_notice).value());
+    return false;
 }
 
 // 再生は命令ごとに編集を積むが、`[count]@a` と `.` の全体を 1 回の `u` で戻すのが Vim と同じ
