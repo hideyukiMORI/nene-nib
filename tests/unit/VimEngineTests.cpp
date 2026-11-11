@@ -955,8 +955,8 @@ void verify_vim_visual_step_edges()
     // 削除になった（fixture visual-line-command- が測る）。
     for (const VimKey &key :
          {VimKey{VimCharacter{U'p'}}, VimKey{VimCharacter{U'.'}}, VimKey{VimCharacter{U'A'}},
-          VimKey{VimCharacter{U'Z'}}, VimKey{VimCharacter{U'Q'}},
-          VimKey{VimSpecialKey::control_r}, VimKey{VimCharacter{U'z'}}})
+          VimKey{VimCharacter{U'Z'}}, VimKey{VimCharacter{U'Q'}}, VimKey{VimSpecialKey::control_r},
+          VimKey{VimCharacter{U'z'}}})
     {
         const auto step = vim_step(
             visual, VimEditorView{buffer, selection, VimViewport{LineNumber{1}, 64, 0}}, key);
