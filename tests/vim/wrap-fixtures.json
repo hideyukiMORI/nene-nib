@@ -4062,5 +4062,41 @@
       "line": 10,
       "column": 1
     }
+  },
+  {
+    "name": "wrap-so-full-G-below-wrapped",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09xxxxxxxxxxxxxxxxxxx\n10\n11\n12\n13\n14\n15",
+    "keys": ":set so=3<CR>10G",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 3,
+      "first_visible": 8,
+      "line": 8,
+      "column": 1
+    }
+  },
+  {
+    "name": "wrap-so-full-2j-below-wrapped",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09xxxxxxxxxxxxxxxxxxx\n10\n11\n12\n13\n14\n15",
+    "keys": ":set so=3<CR>2j",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 3,
+      "first_visible": 8,
+      "line": 8,
+      "column": 1
+    }
+  },
+  {
+    "name": "wrap-so-full-j-onto-wrapped",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09xxxxxxxxxxxxxxxxxxx\n10\n11\n12\n13\n14\n15",
+    "keys": ":set so=3<CR>j",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 3,
+      "first_visible": 8,
+      "line": 8,
+      "column": 1
+    }
   }
 ]

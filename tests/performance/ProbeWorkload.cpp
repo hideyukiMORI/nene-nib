@@ -27,6 +27,7 @@
 #include "TextObjectProbe.hpp"
 #include "VimBlockProbe.hpp"
 #include "WordObjectProbe.hpp"
+#include "VimFollowProbe.hpp"
 
 #include "DeleteText.hpp"
 #include "DisplayLine.hpp"
@@ -942,6 +943,8 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     case VimBlockWorkload::count_l_giant_1line:
     case VimBlockWorkload::sentence_motion_giant_1line:
     case VimBlockWorkload::ordinary_word_giant_1line:
+    case VimBlockWorkload::insert_scroll_wrapped:
+    case VimBlockWorkload::insert_scroll_unwrapped:
         return 206U + static_cast<std::size_t>(workload);
     }
     std::unreachable();
@@ -964,7 +967,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     case WordObjectWorkload::iquote_16mib:
     case WordObjectWorkload::iparen_16mib:
     case WordObjectWorkload::double_click_solid_16384:
-        return 215U + static_cast<std::size_t>(workload);
+        return 217U + static_cast<std::size_t>(workload);
     }
     std::unreachable();
 }
@@ -984,7 +987,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 228> dispatches{{
+constexpr std::array<ProbeDispatch, 230> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1421,6 +1424,10 @@ constexpr std::array<ProbeDispatch, 228> dispatches{{
                      "sentence-motion-giant-1line-16384", vim_block_input, vim_sentence_moved},
     ProbeDispatchRow{VimBlockWorkload::ordinary_word_giant_1line,
                      "ordinary-word-boundary-giant-1line", vim_block_input, ordinary_word_bounded},
+    ProbeDispatchRow{VimBlockWorkload::insert_scroll_wrapped, "vim-insert-scroll-wrapped-200",
+                     vim_block_input, vim_insert_scrolled},
+    ProbeDispatchRow{VimBlockWorkload::insert_scroll_unwrapped, "vim-insert-scroll-unwrapped-200",
+                     vim_block_input, vim_insert_scrolled},
     ProbeDispatchRow{WordObjectWorkload::iw_solid_16384, "text-object-iw-solid-1line-16384",
                      word_object_input, word_object_ranges},
     ProbeDispatchRow{WordObjectWorkload::aw_solid_16384, "text-object-aw-solid-1line-16384",
@@ -1489,7 +1496,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 228U);
+static_assert(dispatches.size() == 230U);
 static_assert(dispatch_is_complete());
 
 } // namespace

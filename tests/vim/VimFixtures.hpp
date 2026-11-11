@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 4b2872cfb65d8de359447271e9799c25e654c914d0e581b057ae6ad4964784bc / 4068 fixtures
+// fixtures.json: sha256 512240d64bf4e1cd0d213eabd859779ea059ffd10e4ff9fd2de13df63cc6283c / 4073 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4068> vim_fixtures{{
+constexpr std::array<VimFixture, 4073> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4080,6 +4080,11 @@ constexpr std::array<VimFixture, 4068> vim_fixtures{{
     {"visual-line-command-y-block-named", "abc\ndef\nghi", "l<C-v>jl\"aY\"ap", "abbcc\ndeeff\nghi", 1, 3, "bc\nef", "\0262", std::nullopt},
     {"visual-line-command-y-block-undo", "ab\ncd\nef", "l<C-v>jYu", "ab\ncd\nef", 1, 2, "b\nd", "\0261", std::nullopt},
     {"visual-line-command-y-block-dot-repeats-nothing", "abc\ndef\nghi\njkl", "l<C-v>jYjj.", "abc\ndef\nghi\njkl", 3, 2, "b\ne", "\0261", std::nullopt},
+    {"viewport-so-full-recheck-5j-height-6", "001\n002\n003\n004\n005\n006\n007\n008\n009\n010\n011\n012\n013\n014\n015\n016\n017\n018\n019\n020\n021\n022\n023\n024\n025\n026\n027\n028\n029\n030\n031\n032\n033\n034\n035\n036\n037\n038\n039\n040\n041\n042\n043\n044\n045\n046\n047\n048\n049\n050\n051\n052\n053\n054\n055\n056\n057\n058\n059\n060", "5j", "001\n002\n003\n004\n005\n006\n007\n008\n009\n010\n011\n012\n013\n014\n015\n016\n017\n018\n019\n020\n021\n022\n023\n024\n025\n026\n027\n028\n029\n030\n031\n032\n033\n034\n035\n036\n037\n038\n039\n040\n041\n042\n043\n044\n045\n046\n047\n048\n049\n050\n051\n052\n053\n054\n055\n056\n057\n058\n059\n060", 6, 1, "", "", VimViewportFixture{6, 1, 1, 1, 4, 3, 0, 0, 0, 0, 0, 0, 6}},
+    {"viewport-so-full-recheck-5j-height-8", "001\n002\n003\n004\n005\n006\n007\n008\n009\n010\n011\n012\n013\n014\n015\n016\n017\n018\n019\n020\n021\n022\n023\n024\n025\n026\n027\n028\n029\n030\n031\n032\n033\n034\n035\n036\n037\n038\n039\n040\n041\n042\n043\n044\n045\n046\n047\n048\n049\n050\n051\n052\n053\n054\n055\n056\n057\n058\n059\n060", "5j", "001\n002\n003\n004\n005\n006\n007\n008\n009\n010\n011\n012\n013\n014\n015\n016\n017\n018\n019\n020\n021\n022\n023\n024\n025\n026\n027\n028\n029\n030\n031\n032\n033\n034\n035\n036\n037\n038\n039\n040\n041\n042\n043\n044\n045\n046\n047\n048\n049\n050\n051\n052\n053\n054\n055\n056\n057\n058\n059\n060", 6, 1, "", "", VimViewportFixture{8, 1, 1, 1, 3, 4, 0, 0, 0, 0, 0, 0, 8}},
+    {"viewport-so-full-walk-typed-lines-so0", "01\n02\n03\n04\n05\n06", "6ifoo<CR><Esc>", "01\n02\nfoo\nfoo\nfoo\nfoo\nfoo\nfoo\n03\n04\n05\n06", 9, 1, "", "", VimViewportFixture{8, 1, 3, 1, 2, 4}},
+    {"viewport-so-full-walk-typed-lines-so3", "01\n02\n03\n04\n05\n06", "6ifoo<CR><Esc>", "01\n02\nfoo\nfoo\nfoo\nfoo\nfoo\nfoo\n03\n04\n05\n06", 9, 1, "", "", VimViewportFixture{8, 1, 3, 1, 5, 4, 0, 0, 0, 0, 0, 0, 3}},
+    {"viewport-so-full-walk-typed-lines-so-height", "01\n02\n03\n04\n05\n06", "6ifoo<CR><Esc>", "01\n02\nfoo\nfoo\nfoo\nfoo\nfoo\nfoo\n03\n04\n05\n06", 9, 1, "", "", VimViewportFixture{8, 1, 3, 1, 5, 4, 0, 0, 0, 0, 0, 0, 8}},
 }};
 } // namespace nenenib::tests
 // clang-format on
