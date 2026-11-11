@@ -2,7 +2,7 @@
 // oracle: C:\Program Files\Vim\vim91\vim.exe - VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3
 // 2024 23:53:58)
 
-// wrap-fixtures.json: sha256 c6d84af34ad0ee6cf076b6b7fd6e31fe221a282dd1aa6c4e15ffaaf4fdcf6813
+// wrap-fixtures.json: sha256 947d67de17d5117c4304e1ac5c815386915c8e3d872f30ecb23b486a0b29dfb6
 
 // measurement: sha256 f5575ceedf89a39e13a4fcf6b43b23ded17ece3a9573e12f094bb0aa686024f8
 
@@ -16,7 +16,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 340> vim_wrap_fixtures{{
+constexpr std::array<VimFixture, 346> vim_wrap_fixtures{{
     {"wrap-top-00",
      "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
      "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
@@ -4084,5 +4084,51 @@ constexpr std::array<VimFixture, 340> vim_wrap_fixtures{{
      "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47"
      "\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60",
      60, 1, "", "", VimViewportFixture{8, 53, 57, 1, 56, 2, 20, 0, 0, 0, 0, 0, 4}},
+    {"wrap-half-tall-top-ctrl-e-gj-gj",
+     "01\n02xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxx\n03\n04\n05\n06\n07\n08\n09\n10",
+     "<C-e>gjgj",
+     "01\n02xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxx\n03\n04\n05\n06\n07\n08\n09\n10",
+     2, 41, "", "", VimViewportFixture{2, 1, 1, 1, 2, 1, 20, 1}},
+    {"wrap-half-tall-top-ctrl-e-dollar",
+     "01\n02xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxx\n03\n04\n05\n06\n07\n08\n09\n10",
+     "<C-e>$",
+     "01\n02xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxx\n03\n04\n05\n06\n07\n08\n09\n10",
+     2, 97, "", "", VimViewportFixture{2, 1, 1, 1, 2, 1, 20, 3}},
+    {"wrap-half-tall-top-ctrl-e-gj-x4",
+     "01\n02xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxx\n03\n04\n05\n06\n07\n08\n09\n10",
+     "<C-e>gjgjgjgj",
+     "01\n02xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxx\n03\n04\n05\n06\n07\n08\n09\n10",
+     2, 81, "", "", VimViewportFixture{2, 1, 1, 1, 2, 1, 20, 3}},
+    {"wrap-half-tall-top-ctrl-e-gj-gj-zero",
+     "01\n02xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxx\n03\n04\n05\n06\n07\n08\n09\n10",
+     "<C-e>gjgj0",
+     "01\n02xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxx\n03\n04\n05\n06\n07\n08\n09\n10",
+     2, 1, "", "", VimViewportFixture{2, 1, 1, 1, 2, 1, 20, 0}},
+    {"wrap-half-scroll-same-line-ctrl-d-so4",
+     "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
+     "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47"
+     "\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60",
+     "3<C-e>0$l<C-d>",
+     "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
+     "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47"
+     "\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60",
+     59, 2, "", "", VimViewportFixture{8, 53, 57, 1, 56, 4, 20, 0, 0, 0, 0, 0, 4}},
+    {"wrap-half-scroll-tilde-ctrl-d-so4",
+     "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
+     "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47"
+     "\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60",
+     "3<C-e>~<C-d>",
+     "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
+     "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47"
+     "\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60",
+     60, 1, "", "", VimViewportFixture{8, 53, 57, 1, 56, 4, 20, 0, 0, 0, 0, 0, 4}},
 }};
 } // namespace nenenib::tests

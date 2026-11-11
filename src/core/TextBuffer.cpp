@@ -486,6 +486,11 @@ TextPosition TextBuffer::position_of(Offset at) const
     return position_read(at).first;
 }
 
+LineNumber TextBuffer::line_containing(Offset at) const noexcept
+{
+    return LineNumber{newlines_before(std::min(at.value, size_bytes_)) + 1};
+}
+
 Offset TextBuffer::offset_of(const TextPosition &position) const
 {
     return offset_read(position).first;

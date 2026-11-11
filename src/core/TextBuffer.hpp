@@ -73,6 +73,8 @@ class TextBuffer final
     // 決定 6）。TextPosition の桁はコードポイントの序数＋1 で、索引の序数と同じ単位。
     [[nodiscard]] Offset offset_of(const TextPosition &position) const;
     [[nodiscard]] TextPosition position_of(Offset at) const;
+    // at を含む行の番号だけ（桁を数えない・改行の索引で O(塊)）。
+    [[nodiscard]] LineNumber line_containing(Offset at) const noexcept;
     // 上の 2 つと同じ答えに、答えるために文字を読んだ本文のバイト数を添える（契約が O(塊) を
     // 確かめる読む口）。position_of / offset_of はこの答えの first だけを返す。
     [[nodiscard]] std::pair<Offset, std::size_t> offset_read(const TextPosition &position) const;
