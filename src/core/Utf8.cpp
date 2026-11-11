@@ -339,6 +339,16 @@ std::size_t whole_code_points(std::string_view window) noexcept
     return lead + length <= window.size() ? window.size() : lead;
 }
 
+std::size_t leading_continuations(std::string_view window) noexcept
+{
+    std::size_t skipped = 0;
+    while (skipped < window.size() && continuation(byte_at(window, skipped)))
+    {
+        ++skipped;
+    }
+    return skipped;
+}
+
 bool is_boundary(std::string_view text, Offset at) noexcept
 {
     return at.value >= text.size() || !continuation(byte_at(text, at.value));
