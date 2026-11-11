@@ -1111,8 +1111,9 @@ void verify_clamp_dropped_on_leaving_question()
 
 // Vim の INSERT の文字は表示領域を読まないので、鍵ごとに追従を解決せず layout も作らない
 // （ADR 0129 の決定 2・#476 の速さの根拠）。frame を 1 回読むと、1
-// 鍵ごとに読んだときと同じ所が見える。
-[[nodiscard]] EditorFrame vim_typed_burst(Editing &editing, bool framed_each)
+// 鍵ごとに読んだときと同じ所が見える。far は 1 文字ごとに Enter を打つ遠い形で、打った本文の
+// 追従は 1 行ずつ歩いた答えなので連打でも同じ（#1363・前は 1 回の追従で分かれた・#1154）。
+[[nodiscard]] EditorFrame vim_typed_burst(Editing &editing, bool framed_each, bool far = false)
 {
     EditorController &controller = editing.controller();
     applied(controller, VisibleLines{3, nenenib::core::TextViewGeometry{40, 20, 96}});
@@ -1122,7 +1123,7 @@ void verify_clamp_dropped_on_leaving_question()
     for (std::size_t typed = 1; typed <= 200; ++typed)
     {
         send_intent(controller, framed_each, VimKeyPress{VimKey{VimCharacter{U'x'}}});
-        if (typed % 50 == 25)
+        if (far || typed % 50 == 25)
         {
             send_intent(controller, framed_each,
                         VimKeyPress{VimKey{nenenib::core::VimSpecialKey::enter}});
@@ -1147,6 +1148,13 @@ void verify_vim_insert_follow_settles_at_frame()
     expect(framed.first_visible == settled.first_visible &&
                framed.lines.front().screen_row == settled.lines.front().screen_row,
            "one frame after 200 Vim keys shows what a frame after every key shows");
+    Editing far_each;
+    Editing far_burst;
+    const auto far_framed = vim_typed_burst(far_each, true, true);
+    const auto far_settled = vim_typed_burst(far_burst, false, true);
+    expect(far_settled.first_visible.value > 100 &&
+               far_framed.first_visible == far_settled.first_visible,
+           "#1363 typing 200 lines without a frame walks to the same top as a frame every key");
 }
 
 // 画面を読む鍵（H）は、頼まれた追従をその鍵の前に解決した表示領域を読む（ADR 0129 の決定 2）。
