@@ -20,6 +20,7 @@
 #include "FileHistoryEdit.hpp"
 #include "FileHistoryFailure.hpp"
 #include "FilePath.hpp"
+#include "FirstFramePresented.hpp"
 #include "FolderBatch.hpp"
 #include "FolderEntry.hpp"
 #include "FolderProgress.hpp"
@@ -47,6 +48,7 @@
 #include "ScriptedPrinter.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
+#include "ScriptedStartLists.hpp"
 #include "ScriptedThemes.hpp"
 #include "Session.hpp"
 #include "SessionEnd.hpp"
@@ -392,6 +394,7 @@ void verify_quiet_start_with_files()
     ScriptedPrinter printer;
     ScriptedShellRegistration shell_registration;
     ScriptedImages images;
+    ScriptedStartLists start_lists;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -402,16 +405,21 @@ void verify_quiet_start_with_files()
                     themes,       session,         history,    folders,    bookmarks,
                     text_layouts, autosave,        fonts,      bell,       markdown,
                     reads,        language_server, wall_clock, printer,    shell_registration,
-                    images},
+                    images,       start_lists},
         {work_open('a'), work_open('b')});
+    // 最初の frame の合図でも、起動画面が出ていなければ起動画面の読みを頼まない（ADR 0172 の決定
+    // 3）。
+    applied(controller, nenenib::application::FirstFramePresented{});
     expect(controller.frame().tabs.size() == 2 && history.reads() == 0 && history.writes() == 0 &&
                folders.requests().empty() && folders.collects() == 0 && autosave.touches() == 0 &&
                fonts.lists() == 0 && bell.rings() == 0 && markdown.requests().empty() &&
                markdown.collects() == 0 && language_server.touches() == 0 &&
                wall_clock.calls() == 0 && printer.jobs().empty() &&
-               shell_registration.touches() == 0 && images.touches() == 0,
+               shell_registration.touches() == 0 && images.touches() == 0 &&
+               start_lists.touches() == 0,
            "starting with file arguments never touches the history, the folder, autosave, the "
-           "bell, the clock, the printer, the shell registration nor the preview images");
+           "bell, the clock, the printer, the shell registration, the preview images nor the "
+           "start screen lists");
 }
 
 // 面が出ていても、開く・切り替え・新しいタブ・打鍵・保存はフォルダの entries を頼まない
@@ -487,6 +495,9 @@ void verify_quiet_paths()
 {
     verify_quiet_start_with_files();
     Editing restored(three_listed(), hold_work);
+    // 前回のタブを戻した起動は、最初の frame の合図でも起動画面の読みを頼まない（ADR 0172 の決定
+    // 3）。
+    applied(restored.controller(), nenenib::application::FirstFramePresented{});
     expect(restored.controller().frame().tabs.size() == 3 && restored.history().reads() == 0 &&
                restored.history().writes() == 0 && restored.folders().requests().empty() &&
                restored.folders().collects() == 0 && restored.autosave().touches() == 0 &&
@@ -494,7 +505,7 @@ void verify_quiet_paths()
                restored.markdown().requests().empty() && restored.markdown().collects() == 0 &&
                restored.language_server().touches() == 0 && restored.wall_clock().calls() == 0 &&
                restored.printer().jobs().empty() && restored.shell_registration().touches() == 0 &&
-               restored.images().touches() == 0,
+               restored.images().touches() == 0 && restored.start_lists().touches() == 0,
            "restoring the last tabs never touches the history, the folder, autosave, the bell, "
            "the clock, the printer, the shell registration nor the preview images");
     Editing editing;
@@ -504,6 +515,9 @@ void verify_quiet_paths()
     expect(controller.autosave_remnants().empty() && editing.autosave().remnant_reads() == 1 &&
                editing.autosave().touches() == 1,
            "the start lists the autosave remnants once and touches nothing else");
+    // 何も書いていない無題の起動は、最初の frame の合図で起動画面の読みを 1 回だけ頼む。以後の道は
+    // 頼み直さない（ADR 0172 の決定 3）。
+    applied(controller, nenenib::application::FirstFramePresented{});
     applied(controller, VisibleLines{3});
     open_work(editing, "ab");
     applied(controller, work_open('a'));
@@ -529,7 +543,8 @@ void verify_quiet_paths()
                read_requests == 2 && editing.reads().requests().size() == read_requests &&
                editing.language_server().touches() == 0 && editing.wall_clock().calls() == 0 &&
                editing.printer().jobs().empty() && editing.shell_registration().touches() == 0 &&
-               editing.images().touches() == 0,
+               editing.images().touches() == 0 && editing.start_lists().requests() == 1 &&
+               editing.start_lists().collects() == 0,
            "opening, switching, new tabs, saving and typing never touch the history, the folder, "
            "autosave, the bell, the clipboard, the language server (lsp off), the clock, the "
            "printer nor the preview images, and only opening asks the read port");

@@ -82,6 +82,7 @@
 #include "ScriptedPrinter.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
+#include "ScriptedStartLists.hpp"
 #include "ScriptedThemes.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollState.hpp"
@@ -422,6 +423,7 @@ void verify_controller_initial_appearance()
     ScriptedPrinter printer;
     ScriptedShellRegistration shell_registration;
     ScriptedImages images;
+    ScriptedStartLists start_lists;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -432,7 +434,7 @@ void verify_controller_initial_appearance()
         themes,       session,         history,    folders,    bookmarks,
         text_layouts, autosave,        fonts,      bell,       markdown,
         reads,        language_server, wall_clock, printer,    shell_registration,
-        images});
+        images,       start_lists});
     expect(from_light.frame().palette.background == RgbColor{0xF4, 0xF5, 0xF7},
            "a readable light setting is used");
     ScriptedAppearance dark{Reading{Appearance::dark}};
@@ -441,7 +443,7 @@ void verify_controller_initial_appearance()
         themes,       session,         history,    folders,    bookmarks,
         text_layouts, autosave,        fonts,      bell,       markdown,
         reads,        language_server, wall_clock, printer,    shell_registration,
-        images});
+        images,       start_lists});
     expect(from_dark.frame().palette.background == RgbColor{0x30, 0x0A, 0x24},
            "a readable dark setting is used");
 }
@@ -464,6 +466,7 @@ void verify_controller_read_failures()
     ScriptedPrinter printer;
     ScriptedShellRegistration shell_registration;
     ScriptedImages images;
+    ScriptedStartLists start_lists;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -478,7 +481,7 @@ void verify_controller_read_failures()
             themes,       session,         history,    folders,    bookmarks,
             text_layouts, autosave,        fonts,      bell,       markdown,
             reads,        language_server, wall_clock, printer,    shell_registration,
-            images});
+            images,       start_lists});
         expect(controller.frame().palette.background == dark.background,
                "an unreadable setting falls back to dark");
     }
@@ -502,6 +505,7 @@ void verify_controller_refresh()
     ScriptedPrinter printer;
     ScriptedShellRegistration shell_registration;
     ScriptedImages images;
+    ScriptedStartLists start_lists;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -512,7 +516,7 @@ void verify_controller_refresh()
         themes,       session,         history,    folders,    bookmarks,
         text_layouts, autosave,        fonts,      bell,       markdown,
         reads,        language_server, wall_clock, printer,    shell_registration,
-        images});
+        images,       start_lists});
     port.script(Reading{Appearance::dark});
     const auto frame = controller.apply_frame(RefreshAppearance{});
     expect(frame.palette.background == RgbColor{0x30, 0x0A, 0x24},

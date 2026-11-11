@@ -26,6 +26,7 @@
 #include "PreviewFrame.hpp"
 #include "SettingsIssue.hpp"
 #include "SplitLayout.hpp"
+#include "StartScreenView.hpp"
 #include "StatusItems.hpp"
 #include "SyntaxPalette.hpp"
 #include "TextLayoutFailure.hpp"
@@ -144,6 +145,9 @@ struct EditorFrame
     // キャレットの上の診断の文（決定 4・core::diagnostic_notice）。command_message があれば値なし
     // （ほかの知らせが勝つ）で、renderer は知らせの欄に同じ描き方で書く。状態に積まない。
     std::optional<core::DisplayText> diagnostic_message{};
+    // 起動画面（ADR 0172 の決定 1・2）。出る条件（start_screen_shown）が真のときだけ値を持つ。
+    // renderer は値があれば本文の案内の代わりにこれを操作中の枠に描く（段 2・#1018）。
+    std::optional<StartScreenView> start_screen{};
 };
 
 // 変換中か（本文と入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは
