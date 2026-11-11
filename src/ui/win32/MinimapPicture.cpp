@@ -1,6 +1,8 @@
 #include "MinimapPicture.hpp"
 
 #include "Minimap.hpp"
+#include "RenderFailure.hpp"
+#include "RenderFailureOf.hpp"
 #include "SyntaxColor.hpp"
 #include "SyntaxRole.hpp"
 
@@ -112,6 +114,13 @@ void draw_row(const MinimapPen &pen, const core::MinimapRow &row, D2D1_POINT_2F 
     }
 }
 
+// bitmap の行の数（picture_row_step 刻みに切り上げ・0 行でも 1 刻み）。
+[[nodiscard]] std::size_t picture_capacity(std::size_t rows) noexcept
+{
+    return (std::max<std::size_t>(rows, 1) + picture_row_step - 1) / picture_row_step *
+           picture_row_step;
+}
+
 // 帯が前の行の数と今の行の数と bitmap の高さに収まるか。
 [[nodiscard]] bool band_fits(const core::MinimapBand &band, std::size_t now, std::size_t before,
                              UINT32 height) noexcept
@@ -120,6 +129,33 @@ void draw_row(const MinimapPen &pen, const core::MinimapRow &row, D2D1_POINT_2F 
            band.begin + band.removed <= before;
 }
 } // namespace
+
+MinimapFlush minimap_flush_of(HRESULT result, D2D1_TAG failed) noexcept
+{
+    if (SUCCEEDED(result))
+    {
+        return MinimapFlush::kept;
+    }
+    switch (render_failure_of(result))
+    {
+    case RenderFailure::device_lost:
+        return MinimapFlush::device_lost;
+    case RenderFailure::device_creation:
+    case RenderFailure::swap_chain:
+    case RenderFailure::composition:
+    case RenderFailure::direct2d:
+    case RenderFailure::directwrite:
+        break;
+    }
+    return failed == minimap_tag ? MinimapFlush::minimap : MinimapFlush::frame;
+}
+
+bool minimap_bitmap_fits(std::int32_t width, std::size_t rows, UINT32 maximum) noexcept
+{
+    const std::size_t capacity = picture_capacity(rows);
+    return width > 0 && static_cast<UINT32>(width) <= maximum &&
+           capacity <= std::size_t{maximum} / static_cast<std::size_t>(core::minimap_row_pixels);
+}
 
 MinimapColors minimap_colors(const core::Palette &palette) noexcept
 {
@@ -177,7 +213,7 @@ void MinimapPicture::paint_directly(const MinimapPen &pen, const application::Mi
 ID2D1Bitmap1 *MinimapPicture::picture_of(ID2D1DeviceContext &context, std::int32_t width,
                                          std::size_t rows)
 {
-    if (width <= 0)
+    if (!minimap_bitmap_fits(width, rows, context.GetMaximumBitmapSize()))
     {
         return nullptr;
     }
@@ -189,8 +225,7 @@ ID2D1Bitmap1 *MinimapPicture::picture_of(ID2D1DeviceContext &context, std::int32
     picture_.Reset();
     scratch_.Reset();
     held_.reset();
-    const std::size_t capacity = (std::max<std::size_t>(rows, 1) + picture_row_step - 1) /
-                                 picture_row_step * picture_row_step;
+    const std::size_t capacity = picture_capacity(rows);
     float dpi_x = 0.0F;
     float dpi_y = 0.0F;
     context.GetDpi(&dpi_x, &dpi_y);
@@ -273,7 +308,7 @@ bool MinimapPicture::redraw_band(ID2D1DeviceContext &context, const MinimapPen &
     if (band.removed != band.inserted)
     {
         ++flushes_;
-        if (FAILED(context.Flush()) || !shift_rows(context, band, before))
+        if (!flushed(context) || !shift_rows(context, band, before))
         {
             return false;
         }
@@ -312,13 +347,49 @@ void MinimapPicture::bring_up(ID2D1DeviceContext &context, const MinimapPen &pen
     held_body_ = pen.body;
 }
 
+bool MinimapPicture::flushed(ID2D1DeviceContext &context)
+{
+    D2D1_TAG first = 0;
+    D2D1_TAG second = 0;
+    const HRESULT result = context.Flush(&first, &second);
+    if (FAILED(result) && !flush_failure_.has_value())
+    {
+        flush_failure_.emplace(result, first);
+    }
+    return SUCCEEDED(result);
+}
+
+void MinimapPicture::abandon_bitmap() noexcept
+{
+    picture_.Reset();
+    scratch_.Reset();
+    held_.reset();
+    abandoned_ = true;
+}
+
+// 面を描く。ミニマップの命令には minimap_tag を付け、描く先の tag は戻す（renderer は EndDraw の
+// 失敗の tag でミニマップの失敗を見分ける・ADR 0171 の追補 #1449）。
 std::expected<void, RenderFailure> MinimapPicture::paint(const MinimapPen &pen,
                                                          const application::MinimapFrame &frame,
                                                          const core::LayoutRect &panel)
 {
+    D2D1_TAG first = 0;
+    D2D1_TAG second = 0;
+    pen.target.GetTags(&first, &second);
+    pen.target.SetTags(minimap_tag, 0);
+    auto painted = paint_tagged(pen, frame, panel);
+    pen.target.SetTags(first, second);
+    return painted;
+}
+
+std::expected<void, RenderFailure>
+MinimapPicture::paint_tagged(const MinimapPen &pen, const application::MinimapFrame &frame,
+                             const core::LayoutRect &panel)
+{
     Microsoft::WRL::ComPtr<ID2D1DeviceContext> context;
     auto *const picture =
-        frame.rows != nullptr && SUCCEEDED(pen.target.QueryInterface(IID_PPV_ARGS(&context)))
+        !abandoned_ && frame.rows != nullptr &&
+                SUCCEEDED(pen.target.QueryInterface(IID_PPV_ARGS(&context)))
             ? picture_of(*context.Get(), core::width_of(panel), frame.rows->rows.size())
             : nullptr;
     if (picture == nullptr)
@@ -327,7 +398,25 @@ std::expected<void, RenderFailure> MinimapPicture::paint(const MinimapPen &pen,
         paint_directly(pen, frame, panel);
         return {};
     }
+    flush_failure_.reset();
     bring_up(*context.Get(), pen, frame);
+    // 行をずらす前の Flush が失敗した: その Flush が描く先の失敗の状態を戻したので、ここで読む。
+    const auto failure = std::exchange(flush_failure_, std::nullopt);
+    switch (failure.has_value() ? minimap_flush_of(failure.value().first, failure.value().second)
+                                : MinimapFlush::kept)
+    {
+    case MinimapFlush::kept:
+        break;
+    case MinimapFlush::minimap:
+        // ミニマップの命令だけが失敗した。窓を閉じず、以後は bitmap を使わずに直接描く。
+        abandon_bitmap();
+        paint_directly(pen, frame, panel);
+        return {};
+    case MinimapFlush::frame:
+        return std::unexpected(RenderFailure::direct2d);
+    case MinimapFlush::device_lost:
+        return std::unexpected(RenderFailure::device_lost);
+    }
     fill_ground(pen, panel);
     const auto [offset, shown] = shown_rows(frame, panel);
     const auto width = static_cast<float>(core::width_of(panel));
@@ -366,5 +455,10 @@ std::size_t MinimapPicture::shifts() const noexcept
 std::size_t MinimapPicture::flushes() const noexcept
 {
     return flushes_;
+}
+
+bool MinimapPicture::bitmap_abandoned() const noexcept
+{
+    return abandoned_;
 }
 } // namespace nenenib::ui::win32

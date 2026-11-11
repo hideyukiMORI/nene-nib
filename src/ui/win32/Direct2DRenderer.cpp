@@ -22,6 +22,7 @@
 #include "GutterMetrics.hpp"
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
+#include "MinimapFlush.hpp"
 #include "MinimapLayout.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteOrigin.hpp"
@@ -29,6 +30,7 @@
 #include "PaneRole.hpp"
 #include "PreviewMetrics.hpp"
 #include "PreviewTextStyle.hpp"
+#include "RenderFailureOf.hpp"
 #include "ReplacedTints.hpp"
 #include "RgbaColor.hpp"
 #include "SyntaxColor.hpp"
@@ -92,12 +94,7 @@ constexpr float full_channel = 255.0F;
 
 [[nodiscard]] RenderFailure classify(HRESULT result) noexcept
 {
-    if (result == D2DERR_RECREATE_TARGET || result == DXGI_ERROR_DEVICE_REMOVED ||
-        result == DXGI_ERROR_DEVICE_RESET)
-    {
-        return RenderFailure::device_lost;
-    }
-    return RenderFailure::direct2d;
+    return render_failure_of(result);
 }
 
 [[nodiscard]] D2D1_COLOR_F to_color(core::RgbColor color) noexcept
@@ -2336,6 +2333,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
                                                           ID2D1Bitmap1 *surface)
 {
     text_failure_.reset();
+    minimap_failed_ = false;
     gutter_layouts_.begin();
     context_->SetTarget(surface);
     context_->BeginDraw();
@@ -2376,8 +2374,13 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
         palette_layouts_.clear();
     }
     gutter_layouts_.end();
-    const auto ended = context_->EndDraw();
+    D2D1_TAG failed_first = 0;
+    D2D1_TAG failed_second = 0;
+    const auto ended = context_->EndDraw(&failed_first, &failed_second);
     context_->SetTarget(nullptr);
+    // ミニマップの命令の失敗は窓を閉じる道へ返さず、render が描き直す（ADR 0171 の追補 #1449）。
+    minimap_failed_ =
+        frame.minimap.has_value() && minimap_flush_of(ended, failed_first) == MinimapFlush::minimap;
     if (text_failure_.has_value())
     {
         return std::unexpected(text_failure_.value());
@@ -2407,8 +2410,9 @@ void Direct2DRenderer::draw_explorer(const application::EditorFrame &frame,
 void Direct2DRenderer::draw_minimap(const application::EditorFrame &frame,
                                     const core::LayoutRect &panel)
 {
-    // オフの frame はここの 1 行で返る（決定 1 の追補・explorer と同じ形）。
-    if (!frame.minimap.has_value())
+    // オフの frame はここの 1 行で返る（決定 1 の追補・explorer と同じ形）。ミニマップの命令が 2 度
+    // 失敗した renderer は面を出さない（本文の枠は frame のまま・ADR 0171 の追補 #1449）。
+    if (!frame.minimap.has_value() || minimap_hidden_)
     {
         return;
     }
@@ -2467,7 +2471,11 @@ std::expected<void, RenderFailure> Direct2DRenderer::render(const application::E
     {
         return acquired;
     }
-    const auto drawn = draw(frame, surface_.Get());
+    auto drawn = draw(frame, surface_.Get());
+    if (!drawn && minimap_failed_)
+    {
+        drawn = redraw_without_minimap_bitmap(frame);
+    }
     if (!drawn)
     {
         return drawn;
@@ -2481,6 +2489,19 @@ std::expected<void, RenderFailure> Direct2DRenderer::render(const application::E
         return std::unexpected(classify(presented));
     }
     return {};
+}
+
+std::expected<void, RenderFailure>
+Direct2DRenderer::redraw_without_minimap_bitmap(const application::EditorFrame &frame)
+{
+    minimap_.abandon_bitmap();
+    auto drawn = draw(frame, surface_.Get());
+    if (!drawn && minimap_failed_)
+    {
+        minimap_hidden_ = true;
+        drawn = draw(frame, surface_.Get());
+    }
+    return drawn;
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::resize(UINT width, UINT height)

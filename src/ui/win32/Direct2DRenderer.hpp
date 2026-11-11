@@ -336,6 +336,10 @@ class Direct2DRenderer final
     void draw_minimap(const application::EditorFrame &frame, const core::LayoutRect &panel);
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);
+    // ミニマップの命令の失敗で落ちた frame を描き直す（1 度目は bitmap を捨てて直接、それでも
+    // ミニマップの失敗なら面を出さずに）。
+    [[nodiscard]] std::expected<void, RenderFailure>
+    redraw_without_minimap_bitmap(const application::EditorFrame &frame);
 
     Microsoft::WRL::ComPtr<ID3D11Device> device_;
     Microsoft::WRL::ComPtr<IDXGIDevice> dxgi_device_;
@@ -381,6 +385,10 @@ class Direct2DRenderer final
     // other の枠のプレビュー。要素の layout の保持は frame をまたいで再利用する（ADR 0155）。
     PreviewPane preview_;
     MinimapPicture minimap_;
+    // この frame の EndDraw の失敗がミニマップの命令（minimap_tag）のものだったか。描き直しで
+    // bitmap の道を捨て、2 度目は面を出さない（窓を閉じない・ADR 0171 の追補 #1449）。
+    bool minimap_failed_ = false;
+    bool minimap_hidden_ = false;
     // 通常7枠と案内4枠。録画時は案内が無く8枠（ADR 0079・言語の項目で 11・ADR 0154 の決定 6）。
     // 長さは StatusLayoutDemand.hpp の 1 つで、frame ごとの数は status_layout_demand が数える。
     std::array<StatusTextLayout, status_layout_capacity> status_layouts_{};
