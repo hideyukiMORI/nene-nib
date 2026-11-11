@@ -293,6 +293,9 @@ class EditorWindow final
     [[nodiscard]] bool release_explorer_divider(LPARAM data);
     void lose_explorer_divider();
     [[nodiscard]] bool cancel_explorer_divider();
+    [[nodiscard]] bool take_explorer_escape(LPARAM data);
+    void settle_explorer_divider(LPARAM point);
+    [[nodiscard]] bool explorer_divider_under(LPARAM point) const;
     [[nodiscard]] bool reset_explorer_width(LPARAM data);
     void hover_explorer_divider(LPARAM data);
     void end_hidden_explorer_drag();
@@ -380,6 +383,11 @@ class EditorWindow final
     std::optional<std::int32_t> explorer_grab_offset_;
     std::int32_t explorer_grab_x_ = 0;
     std::optional<std::int32_t> explorer_dragged_;
+    // 捕まえている間の最後の点（押した点か WM_MOUSEMOVE の点）。Esc で取り消した時点のカーソルを
+    // この点で決め直す（#1413・OS のカーソルの位置は読まない）。
+    LPARAM explorer_drag_point_ = 0;
+    // Esc で取り消した後、その Esc の繰り返し（lParam の bit 30）を食べている間（#1413 の L-1）。
+    bool explorer_escape_held_ = false;
     // 最後の WM_MOUSEMOVE の点が境の上だったか（カーソルを左右の矢印にする・D78）。
     bool over_explorer_divider_ = false;
     UINT wheel_setting_ = default_wheel_scroll_lines;

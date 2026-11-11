@@ -181,6 +181,7 @@ bool EditorWindow::press_explorer_divider(LPARAM data)
     {
         explorer_grab_offset_ = x - panel.value().right;
         explorer_grab_x_ = x;
+        explorer_drag_point_ = data;
         explorer_dragged_.reset();
     }
     return true;
@@ -196,6 +197,7 @@ void EditorWindow::drag_explorer_divider(LPARAM data)
     {
         return;
     }
+    explorer_drag_point_ = data;
     const auto width = explorer_width_at(x);
     if (explorer_dragged_ == width)
     {
@@ -229,16 +231,20 @@ bool EditorWindow::release_explorer_divider(LPARAM data)
         send(application::ResizeExplorer{application::ExplorerResizing::released, width});
         send(body_view());
     }
+    settle_explorer_divider(data);
     return true;
 }
 
 // 離す前に捕まえを失った（別の窓へ移った・Alt+Tab）。最後に送った幅を離したのと同じに送る。
+// 帯の印と境のカーソルの印も消す（点は別の窓の上かもしれないので、カーソルは置かない）。
 void EditorWindow::lose_explorer_divider()
 {
     if (!std::exchange(explorer_grab_offset_, std::nullopt).has_value())
     {
         return;
     }
+    left_pressed_.reset();
+    over_explorer_divider_ = false;
     const auto dragged = std::exchange(explorer_dragged_, std::nullopt);
     if (dragged.has_value())
     {
@@ -267,7 +273,41 @@ bool EditorWindow::cancel_explorer_divider()
         send(application::ResizeExplorer{application::ExplorerResizing::cancelled, 0});
         send(body_view());
     }
+    // 離すまで待たず、戻った境と最後の点でカーソルを決め直す（レビュー V-1421 の L-3）。
+    settle_explorer_divider(explorer_drag_point_);
     return true;
+}
+
+// WM_KEYDOWN の Esc。取り消した Esc を押し続けた繰り返し（bit 30 が立つ）は、離して押し直すまで
+// 食べる（レビュー V-1421 の L-1・Vim の Esc・面を閉じる・通知を消すへ流さない）。繰り返しでない
+// Esc は印を消してから、境を押していれば取り消す。食べたら真。
+bool EditorWindow::take_explorer_escape(LPARAM data)
+{
+    constexpr LPARAM repeated_key_bit = LPARAM{1} << 30;
+    if ((data & repeated_key_bit) != 0 && explorer_escape_held_)
+    {
+        return true;
+    }
+    explorer_escape_held_ = cancel_explorer_divider();
+    return explorer_escape_held_;
+}
+
+// 境の捕まえが終わった（離した・Esc）。押しで click_title_bar が置いた帯の印（帯の外でも
+// {none}）を消す。境の離しは release_title_bar を通らないので、消さないと hover が次のクリック
+// まで止まり、左右の矢印が client 全体に残る（#1380 から・#1413 で直す）。捕まえの間は
+// WM_SETCURSOR が来ないので、カーソルは点で今決め直す。
+void EditorWindow::settle_explorer_divider(LPARAM point)
+{
+    left_pressed_.reset();
+    over_explorer_divider_ = explorer_divider_under(point);
+    SetCursor(LoadCursorW(nullptr, over_explorer_divider_ ? IDC_SIZEWE : IDC_ARROW));
+}
+
+// 点が境の上か（Ctrl+P の面が開いている間は境を出さない）。
+bool EditorWindow::explorer_divider_under(LPARAM point) const
+{
+    return !controller_.command_palette_active() &&
+           explorer_divider_at(low_word_of(point), high_word_of(point));
 }
 
 // ドラッグの途中で面が閉じた（ToggleExplorer・`:set noexplorer` など・follow_explorer が呼ぶ）。
@@ -312,8 +352,7 @@ void EditorWindow::hover_explorer_divider(LPARAM data)
     {
         return;
     }
-    const bool over = !controller_.command_palette_active() &&
-                      explorer_divider_at(low_word_of(data), high_word_of(data));
+    const bool over = explorer_divider_under(data);
     if (over == std::exchange(over_explorer_divider_, over))
     {
         return;
