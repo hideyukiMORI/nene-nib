@@ -92,6 +92,8 @@ void verify_substitute_property_scope();
 void verify_matchparen_scope();
 // MinimapTests.cpp（ADR 0171・ミニマップの段 1）
 void verify_minimap_scope();
+// MinimapPropertyTests.cpp（#1449・ミニマップを出したままの意図の列の性質の試験）
+void verify_minimap_property_scope();
 
 // GuideTests.cpp
 void verify_guide_scope();
