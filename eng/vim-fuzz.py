@@ -48,9 +48,11 @@ is not a split, or a `.PP` macro line, which is), of sentences that end with `.`
 generator 5's window and draws, and counts `dS` `yS` `vS` (and the new paragraph words) as jumps while
 generating (#1233). It never makes `[` or `]` (#1342: Nib refuses every `[` key, so each case would be
 the same known difference), `"+` `"*`, `q` or a macro. With generator 6, `DEFAULT_KNOWN` sorts the
-differences that have an open Issue (#1310 #1344) as known unless `--no-known-defaults`: #1310 only
-for a shrunk case of exactly a `<C-e>` / `<C-y>` word and one word after it that differs on
-`first_visible`. `summary.md` lists each rule's known cases with their minimal keys.
+differences that have an open Issue (#1310 #1344) or that Nib keeps on purpose (#1483) as known
+unless `--no-known-defaults`: #1310 only for a shrunk case of exactly a `<C-e>` / `<C-y>` word and
+one word after it that differs on `first_visible`; #1483 only for a shrunk case of exactly a `zb` /
+`z-` word (no count, or the caret's line) whose top lands on line 1 short of a full window and one
+`<C-b>` `<C-y>` (`scrolloff` above 0) `<C-f>` `L` `M` after it. `summary.md` lists each rule's known cases with their minimal keys.
 
 The buffer has 1 to 12 lines mixing ASCII words, spaces, tabs, bracket and quote pairs, punctuation,
 Japanese (kana, kanji, full-width letters), empty lines and trailing spaces. It never ends with a
@@ -800,16 +802,58 @@ def scrolled_then_one_key(judged: dict) -> bool:
             and "first_visible" in judged["fields"])
 
 
+BOTTOM_ALIGN = re.compile(r"^(\d*)z[b-]$")
+STALE_BOTTOM_READERS = ("<C-b>", "<C-y>", "<C-f>", "L", "M")
+
+
+def stale_bottom_after_zb(judged: dict) -> bool:
+    """#1483: `zb` / `z-` (`scroll_cursor_bot(0, TRUE)`) set `w_botline` to the caret's line + 1 and
+    keep it when the top lands on line 1 short of a full window; the oracle's single `:normal!` never
+    redraws, so the next `<C-b>` `<C-y>` `<C-f>` `L` `M` reads the old bottom (an interactive Vim,
+    which redraws between keys, agrees with Nib · ADR 0146). Only a shrunk case of exactly that word
+    and one reader, differing on the window and caret only, from a window whose top is not already 1
+    (else `zb` restores the bottom), where Vim 9.1 measured the old bottom (PR #1504 review):
+    - the `zb` has no count or a count equal to the caret's line (`5zb` from another line moves the
+      caret first and leaves no old bottom);
+    - the line plus `scrolloff` (capped at `(height - 1) / 2`) fits the window and the line sits
+      above its last row (else the top does not land on 1 short of full);
+    - `<C-b>` `<C-y>` only with `scrolloff` above 0 (`cursor_correct` wants no row below at 0);
+    - `M` only with the line at least two above the last row (one above may round to the same row).
+    `j` `k` `l` between them refresh the bottom in Vim, so a case with any third word is not known."""
+    words, window = judged["words"], judged["window"]
+    if not (judged["shrunk"] and window is not None and len(words) == 2):
+        return False
+    (align_kind, align_keys), (reader, _) = words
+    match = BOTTOM_ALIGN.match(align_keys)
+    if align_kind not in ("zb", "z-") or match is None or reader not in STALE_BOTTOM_READERS:
+        return False
+    viewport, scrolloff = window["viewport"], window["scrolloff"]
+    line, height = viewport["line"], viewport["visible_lines"]
+    if match.group(1) and int(match.group(1)) != line:
+        return False
+    margin = min(scrolloff, (height - 1) // 2)
+    if reader in ("<C-b>", "<C-y>") and scrolloff == 0:
+        return False
+    if reader == "M" and line > height - 2:
+        return False
+    return (viewport["first_visible"] != 1 and line < height and line + margin <= height
+            and judged["fields"] <= {"line", "column", "first_visible"})
+
+
 SEARCH_OPERATOR = re.compile(r'^(?:".)?\d*[dcy]\d*[nN*#/?]')
 # 生成器 6 の既定の既知（#1353）。1 行が Issue・説明・判定の述語（`judged_case` の辞書を読む）。
 # 名前の `--known` の後に読む。閉じた Issue と直した Issue の行は置かない（直った後に別の原因を
 # 隠す・#1365 のレビュー: #1231 は閉じ、#1337 は PR #1355 で直した）。
 # #1341（巨大な回数の `@` `p`）は生成しない（回数は LONG_COUNTS の 40 まで）ので行は無い。
+# #1483 は閉じるが直さない違い（oracle の 1 本の `:normal!` だけの形・Nib は対話の Vim と同じ・
+# ADR 0146 の #1483 の追補）なので、閉じた後も行を残す。述語は最小の 2 語に狭めてある。
 DEFAULT_KNOWN = (
     ("1310", "so>0 の `<C-e>` `<C-y>` と後の 1 語だけに縮んだ `first_visible` の違い",
      scrolled_then_one_key),
     ("1344", "検索つきのオペレータ",
      lambda judged: any(SEARCH_OPERATOR.match(keys) for _, keys in judged["words"])),
+    ("1483", "先頭が 1 行目に詰まった `zb` `z-` と古い下端を読む 1 語（`:normal!` の中だけの違い）",
+     stale_bottom_after_zb),
 )
 
 
