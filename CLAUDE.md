@@ -104,9 +104,9 @@ clang-tidy が一律に拒否する。HWND ↔ `this` と `LPARAM` の読み替�
 
 色は `core::Palette` のトークンだけ（テーマ拡張の前提・ADR 0008 決定 8）。足りない色はトークンを 1 つ足して採用案の表に書く。
 
-### Mica には `WS_EX_NOREDIRECTIONBITMAP` と `DWMWA_USE_IMMERSIVE_DARK_MODE` が要る
+### 窓の背景に Mica を掛けない（D86）。`DWMWA_SYSTEMBACKDROP_TYPE` を足さない
 
-無いとタイトルバーに透けない・ダークでも明るいままになる（Issue #5 で実測。ADR 0008 決定 9）。
+Windows 11 build 26300 では DWM が窓の中身の visual だけを約 4 px 丸く抜き、抜けた所から Mica が明るい点に見えた（#1488・実機の切り分け a / b / c）。窓は `WS_EX_NOREDIRECTIONBITMAP`（DirectComposition の絵だけ）と `DWMWA_USE_IMMERSIVE_DARK_MODE`（縁と影の色）と `DWMWCP_DONOTROUND` のままで、下地は無い。renderer が無い間（最初の frame の前・device の差し替え）は窓の後ろが透ける。描画を失って「保存しますか」を聞く間の下地は #1499、残る約 4 px の丸みは #1496（ADR 0008 / 0013 の追補）。
 
 ### core で `std::lround` を呼ばない
 
