@@ -7,6 +7,8 @@ A viewport with "leftcol" is the nowrap form (ADR 0145): the window is "columns"
 starts scrolled to "leftcol", and the snapshot records winsaveview().leftcol.
 A wrapped viewport with "first_row" starts with that many screen rows of "first_visible" hidden
 (winsaveview().skipcol = first_row * columns; ADR 0146 decision 5).
+A viewport with "scrolloff" sets that 'scrolloff' before the window is placed (0 when absent,
+the value every earlier fixture was measured with; #1374). The replay sets it after the window.
 """
 
 from __future__ import annotations
@@ -51,7 +53,7 @@ def script(fixture: dict, keys: str) -> str:
     commands = [*oracle.DEFAULT_SETTINGS,
                 f"set columns={view['columns']} lines={view['visible_lines'] + 4}",
                 f"{wrapping} nonumber norelativenumber foldcolumn=0",
-                "set noshowcmd noruler scrolloff=0 scrolljump=1",
+                f"set noshowcmd noruler scrolloff={view.get('scrolloff', 0)} scrolljump=1",
                 f"resize {view['visible_lines']}",
                 f"call cursor({view['line']}, {view['column']})",
                 "call winrestview({'lnum': %d, 'col': %d, 'topline': %d, 'leftcol': %d, "
@@ -119,8 +121,12 @@ def row(record: dict) -> str:
                     (view['visible_lines'], view['first_visible'], view['line'], view['column'],
                      result['first'], result['scroll'], view['columns'],
                      result['skipcol'] // view['columns']))
-        # 鍵の前に隠れている画面行は、ある fixture だけ書く（無い行は前の形のまま）。
-        viewport += (", 0, 0, 0, %d}" % view['first_row']) if view.get('first_row') else "}"
+        # 鍵の前に隠れている画面行と余白は、ある fixture だけ書く（無い行は前の形のまま）。
+        if view.get('first_row') or view.get('scrolloff'):
+            viewport += ", 0, 0, 0, %d" % view.get('first_row', 0)
+        if view.get('scrolloff'):
+            viewport += ", %d" % view['scrolloff']
+        viewport += "}"
     values = [oracle.literal(fixture[key]) for key in ('name', 'text', 'keys')]
     values += [oracle.literal(result['text']), str(result['line']), str(result['column']),
                oracle.literal(result['register']), oracle.literal(result['register_kind']), viewport]

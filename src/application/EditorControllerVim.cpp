@@ -306,12 +306,20 @@ measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &r
 // scrolloff が先頭を戻すので、Vim の VALID_TOPLINE と同じに飛ばす（キャレットは engine がモードの
 // 寄せまで済ませた・ADR 0019 の追補 #1232）。再生（`.` `@`）を返した鍵は、中で最後に流した鍵が
 // 先頭を確かめ済みで終えたか（replayed_top_kept）を引き継ぐ。入れ子の再生は鍵を積むだけで、
-// 積んだ鍵が後から流れるので引き継がない。
-[[nodiscard]] bool keeps_vim_top(const core::VimStep &step, bool replayed_top_kept)
+// 積んだ鍵が後から流れるので引き継がない。本文もキャレットも動かさない鍵（回数の桁・`"x` の
+// 接頭辞・オペレータ待ち・失敗した鍵・Esc）は、前の鍵の判定を引き継ぐ（previous_top_kept）。
+// Vim の update_topline は check_cursor_moved がカーソルの動きを見たときだけ VALID_TOPLINE を
+// 落とすので、カーソルの動かない鍵の後は前の鍵が置いた先頭のまま抜ける（#1374）。
+[[nodiscard]] bool keeps_vim_top(const core::VimStep &step, bool replayed_top_kept,
+                                 bool previous_top_kept)
 {
     if (const auto *const navigate = std::get_if<core::VimNavigate>(&step.effect))
     {
         return navigate->topline == core::VimToplineSettle::kept;
+    }
+    if (std::holds_alternative<core::VimNoEffect>(step.effect))
+    {
+        return previous_top_kept;
     }
     return std::holds_alternative<core::VimReplay>(step.effect) && replayed_top_kept;
 }
@@ -828,9 +836,15 @@ void EditorController::adopt_vim_marks(const std::optional<core::VimMarks> &mark
 
 // 鍵の終わりの寄せ（keeps_vim_top の判定を覚えてから寄せる・ADR 0019 の追補 #1232）。再生を
 // 返した外側の鍵が引き継ぐのは、再生がいま終わったとき（入れ子なら鍵を積んだだけ）だけ。
+// 動かさない鍵が前の判定を引き継ぐのは、寄せでキャレットが動かないときだけ（NORMAL の寄せが
+// キャレットを動かすなら Vim でもカーソルが動き、先頭を確かめ直す・#1374）。
 void EditorController::settle_vim_step(const core::VimStep &step)
 {
-    vim_top_kept_ = keeps_vim_top(step, !replay_depth_.has_value() && vim_top_kept_);
+    const core::Offset caret = state_.selection().caret;
+    const bool rested = state_.vim().mode != core::VimMode::normal ||
+                        core::vim_resting_caret(state_.text(), caret) == caret;
+    vim_top_kept_ =
+        keeps_vim_top(step, !replay_depth_.has_value() && vim_top_kept_, vim_top_kept_ && rested);
     if (!state_.command_input().has_value() && !vim_top_kept_)
     {
         settle_vim_caret();
