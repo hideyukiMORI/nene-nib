@@ -47,3 +47,12 @@ C2の設定保存に対話的な入口を足す。画面はhideが採用したEx
 - UIにコマンド解析と保存を持つ: 状態の正本と検証が分裂する。
 - コマンド文字列を本文へ一度入力して戻す: undoと選択を壊す。
 - 設定変更ごとに保存処理を複製する: C2と競合保護が分裂する。
+
+## 追補（2026-11-12・#1525）`:set {name}&` と真偽の反転
+
+Vim 9.1 の実測（道具 `D:/NeNeNib/scripts/20261111/c10/gen4.py`）: `{name}&` `{name}&vim` `{name}&vi` は既定値へ戻す。真偽の option の `{name}!` `inv{name}` `no{name}!` は反転する。数の option の `{name}!` は E488、`inv{name}` と `no{name}` と `no{name}&` は E474、`invno{name}` は E518、`{name}!?` `{name}&?` は E488。
+
+1. `set_option` は読む前に `toggled_text`（反転）と `reset_text`（既定値）で今の読みの形（`wrap` / `nowrap`・`scrolloff=0` など）へ 1 段だけ写す。写した形は `&` `!` `inv` を持たない。
+2. 真偽の option の表は 1 つ（`switch_options`・wrap guide ignorecase/ic smartcase/scs relativenumber/rnu minimap explorer lsp）で、今の値は `EditorSettings` の欄から読む。
+3. 既定値は保存する設定の正本 `default_editor_settings()` の 1 か所から読む（scrolloff・真偽の 8 つ・fontsize・guifont（字体と大きさ）・root（決めていない））。設定に無い hlsearch と incsearch は `vim_default_highlight` `vim_default_incsearch`（`VimSearchHighlight.hpp`・VimState の始まりの形と共用・施主決定 D17 / D18 なので Vim の既定 off とは違う）、clipboard は外す。
+4. 受けないもの（残る違い）: 文書の値（filetype / ft・fileencoding / fenc・fileformat / ff・display）の `&`（文書ごとの値で、Vim の既定の意味（空・unix）を Nib の閉じた値に写す決めが要る）。hlsearch と incsearch の反転（今の値が設定でなく Vim の状態にあり、`evaluate_ex` の引数に無い）。`:set` の複数の引数（`:set so=3 so&`）は今どおり受けない。

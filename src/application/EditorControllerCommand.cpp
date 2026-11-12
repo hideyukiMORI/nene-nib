@@ -389,10 +389,18 @@ void EditorController::accept(const PasteCommand &)
     accept(CommandText{text.value()});
 }
 
+// Ex の行が断られたら（鳴らした拒否が 1 つでもあれば）再生と fixture の鍵の列を打ち切る（#1525・
+// Vim 9.1 の実測: E488 E474 E518 E492 E481 E521 E185 E475 など Ex のエラーはどれも `@a` と
+// `:normal!` の残りを流さない。成功（`:noh` `:set so?` `:set wrap!`）は流す）。
 std::optional<core::VimRepeatFailure> EditorController::submit(const core::CommandLine &line)
 {
+    const std::size_t before = rejections_;
     evaluate_command(std::string(line.text()));
-    return std::nullopt;
+    if (rejections_ == before)
+    {
+        return std::nullopt;
+    }
+    return core::VimRepeatFailure::refused;
 }
 
 std::optional<core::VimRepeatFailure> EditorController::submit(const core::CommandPalette &palette)
@@ -516,6 +524,7 @@ std::optional<core::VimRepeatFailure> EditorController::submitted_command()
 // 鳴らすかは呼んだ道で決め、文字列（E で始まるか）では決めない（ADR 0153 の決定 3）。
 void EditorController::reject(core::DisplayText message)
 {
+    ++rejections_;
     state_ = state_.with_command_message(std::move(message));
     ports_.bell.ring();
 }

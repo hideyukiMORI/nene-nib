@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 59d0b5e7843aabbd888623cc18ed3bf235139cadcca2eb05156e60b88213826c / 4730 fixtures
+// fixtures.json: sha256 295c85ed8fdb36842c8b37341e26816605479bc58ac0b63b133a53addbc8fd25 / 4747 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4730> vim_fixtures{{
+constexpr std::array<VimFixture, 4747> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4742,6 +4742,23 @@ constexpr std::array<VimFixture, 4730> vim_fixtures{{
     {"macro-ex-noh-then-x", "abc def", "@a", "bc def", 1, 1, "a", "v", std::nullopt, VimMacroFixture{'a', ":noh<CR>x"}},
     {"macro-ex-ignorecase-then-search", "x\nabc", "@a", "x\nbc", 2, 1, "a", "v", std::nullopt, VimMacroFixture{'a', ":set ic<CR>/ABC<CR>x"}},
     {"macro-ex-line-number-then-x", "abc\ndef\nghi", "@a", "abc\ndef\nhi", 3, 1, "g", "v", std::nullopt, VimMacroFixture{'a', ":3<CR>x"}},
+    {"ex-failure-noh-continues", "abc\ndef\nghi", ":noh<CR>j", "abc\ndef\nghi", 2, 1, "", "", std::nullopt},
+    {"ex-failure-query-continues", "abc\ndef\nghi", ":set so?<CR>j", "abc\ndef\nghi", 2, 1, "", "", std::nullopt},
+    {"ex-failure-wrap-bang-continues", "abc\ndef\nghi", ":set wrap!<CR>j", "abc\ndef\nghi", 2, 1, "", "", std::nullopt},
+    {"ex-failure-invwrap-continues", "abc\ndef\nghi", ":set invwrap<CR>j", "abc\ndef\nghi", 2, 1, "", "", std::nullopt},
+    {"ex-failure-rnu-bang-continues", "abc\ndef\nghi", ":set rnu!<CR>j", "abc\ndef\nghi", 2, 1, "", "", std::nullopt},
+    {"ex-failure-ic-bang", "x\nabc", ":set ic!<CR>/ABC<CR>", "x\nabc", 2, 1, "", "", std::nullopt},
+    {"ex-failure-invic", "x\nabc", ":set invic<CR>/ABC<CR>", "x\nabc", 2, 1, "", "", std::nullopt},
+    {"ex-failure-noic-bang", "x\nabc", ":set noic!<CR>/ABC<CR>", "x\nabc", 2, 1, "", "", std::nullopt},
+    {"ex-failure-ignorecase-bang-twice", "x\nABC\nabc", ":set ignorecase!<CR>:set ignorecase!<CR>/abc<CR>", "x\nABC\nabc", 3, 1, "", "", std::nullopt},
+    {"ex-failure-ic-amp", "x\nABC\nabc", ":set ic<CR>:set ic&<CR>/abc<CR>", "x\nABC\nabc", 3, 1, "", "", std::nullopt},
+    {"ex-failure-scs-amp", "x\nabc\nAbc", ":set ic<CR>:set scs<CR>:set scs&<CR>/Abc<CR>", "x\nabc\nAbc", 2, 1, "", "", std::nullopt},
+    {"ex-failure-wrap-amp-continues", "abc\ndef\nghi", ":set wrap&<CR>j", "abc\ndef\nghi", 2, 1, "", "", std::nullopt},
+    {"ex-failure-in-a-macro-continues", "abc\ndef\nghi", "@a", "bc\ndef\nghi", 1, 1, "a", "v", std::nullopt, VimMacroFixture{'a', ":set so?<CR>x"}},
+    {"ex-failure-so-amp-3j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", ":set so&<CR>3j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 15, 1, "", "", VimViewportFixture{6, 10, 12, 1, 10, 3, 0, 0, 0, 0, 0, 0, 2}},
+    {"ex-failure-so-amp-query-3j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", ":set so&<CR>:set so?<CR>3j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 15, 1, "", "", VimViewportFixture{6, 10, 12, 1, 10, 3, 0, 0, 0, 0, 0, 0, 2}},
+    {"ex-failure-so-amp-vim-3j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", ":set so&vim<CR>3j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 15, 1, "", "", VimViewportFixture{6, 10, 12, 1, 10, 3, 0, 0, 0, 0, 0, 0, 2}},
+    {"ex-failure-scrolloff-amp-vi-3j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", ":set scrolloff&vi<CR>3j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 15, 1, "", "", VimViewportFixture{6, 10, 12, 1, 10, 3, 0, 0, 0, 0, 0, 0, 2}},
 }};
 } // namespace nenenib::tests
 // clang-format on

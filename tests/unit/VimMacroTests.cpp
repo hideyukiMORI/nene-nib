@@ -326,6 +326,61 @@ void verify_macro_replays_ex_line()
            "a : line replayed while recording runs and only @a is recorded");
 }
 
+// Ex のエラーは再生（`@a`）と fixture の鍵（`:normal!`）の残りを打ち切る（#1525）。oracle の
+// `-es` は Ex のエラーで終了 1 を返して fixture にできないので、同じ Vim 9.1（`-u NONE -es`・
+// 道具 D:/NeNeNib/scripts/20261111/c10/gen4.py の p4.vim・out4.txt）で `@a` と
+// `exe "normal! :{行}<CR>j"` の両方を測った行をそのまま置く: 本文 abc/def/ghi の 1 行目から、
+// エラーは 1 行目に残り、成功は `j` で 2 行目へ。
+using ExReplayCase = std::pair<std::string_view, std::size_t>;
+constexpr std::array<ExReplayCase, 18> ex_replay_cases{{
+    {"set so!", 1},                 // E488
+    {"set invso", 1},               // E474
+    {"set noso", 1},                // E474
+    {"set foo", 1},                 // E518
+    {"foo", 1},                     // E492
+    {"set so=abc", 1},              // E521
+    {"set wrap=1", 1},              // E474
+    {"set so!?", 1},                // E488
+    {"set so&?", 1},                // E488
+    {"set noso&", 1},               // E474
+    {"set invnowrap", 1},           // E518
+    {"colorscheme nosuchtheme", 1}, // E185
+    {"set ff=nosuch", 1},           // E474
+    {"noh", 2},
+    {"set so?", 2},
+    {"set so&", 2},
+    {"set wrap!", 2},
+    {"set invwrap", 2},
+}};
+
+constexpr std::string_view ex_replay_text = "abc\ndef\nghi";
+
+// 1 件を `:normal!` の意味（vim_normal）と `@a` の再生の両方で流し、キャレットの行を比べる。
+void verify_ex_replay_case(std::string_view line, std::size_t expected)
+{
+    const std::string text(ex_replay_text);
+    const std::string keys = ":" + std::string(line) + "<CR>j";
+    Editing normal;
+    open_vim_document(normal, text);
+    vim_normal(normal.controller(), keys);
+    expect(caret_at(normal.controller().frame(), expected, 1),
+           (":normal! " + keys + ": the line after the Ex line").c_str());
+    Editing replayed;
+    open_vim_document(replayed, text);
+    applied(replayed.controller(), stored_text('a', keys));
+    vim_replay(replayed.controller(), "@a");
+    expect(caret_at(replayed.controller().frame(), expected, 1),
+           ("@a of " + keys + ": the line after the Ex line").c_str());
+}
+
+void verify_ex_failure_stops_replay()
+{
+    for (const auto &[line, expected] : ex_replay_cases)
+    {
+        verify_ex_replay_case(line, expected);
+    }
+}
+
 // 再生の中の `q` は何もせず次の鍵も待たない（Vim の「レジスタ実行中は q は無効」）。
 void verify_macro_q_inside_replay()
 {
@@ -1430,6 +1485,7 @@ void verify_vim_macro_contracts()
     verify_macro_records_typed_keys_only();
     verify_macro_records_ex_line();
     verify_macro_replays_ex_line();
+    verify_ex_failure_stops_replay();
     verify_macro_q_inside_replay();
     verify_macro_failure_stops_the_rest();
     verify_macro_records_failed_replace();
@@ -1473,8 +1529,9 @@ void verify_vim_macro_scope()
         // macro 欄はほかの族の fixture も持つ（#1246 の insert-page-edge-・#1232 の
         // viewport-ctrl-e-・#1325 の del-key-・#1337 の dot-register-count-・#1341 の
         // huge-count-macro-・#1369 の prefix-escape-・#1363 の viewport-insert-follow-replay-・
-        // #1448 の mark-insert-left-・#1440 の change-mark-macro-）。macro- には #1528 の macro-ex-
-        // を含む。 名前で守るのは逆の向き: macro- の fixture は必ず macro 欄を持つ（#1324）。
+        // #1448 の mark-insert-left-・#1440 の change-mark-macro-・#1525 の ex-failure-）。
+        // macro- には #1528 の macro-ex- を含む。
+        // 名前で守るのは逆の向き: macro- の fixture は必ず macro 欄を持つ（#1324）。
         named &= !fixture.name.starts_with("macro-") || fixture.macro.has_value();
         if (macro_fixture(fixture))
         {
@@ -1482,7 +1539,7 @@ void verify_vim_macro_scope()
             ++selected;
         }
     }
-    expect(selected == 186, "the scope replays the 49 macro, 108 register and 29 other "
+    expect(selected == 187, "the scope replays the 49 macro, 108 register and 30 other "
                             "fixtures with a macro register");
     expect(named, "every macro- fixture carries a macro register");
     verify_vim_macro_contracts();

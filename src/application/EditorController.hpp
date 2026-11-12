@@ -1149,6 +1149,8 @@ class EditorController final
     // 流す歩の上限（既定は core::vim_replay_key_limit・limit_replay_keys だけが置き換える）。
     std::size_t replay_key_limit_ = core::vim_replay_key_limit;
     std::optional<std::size_t> replay_depth_;
+    // reject（鳴らした拒否）の数。Ex の行の確定が断られたかを submit が前後で比べる（#1525）。
+    std::size_t rejections_ = 0;
     // `@` の再生の中で `map` の左辺の途中まで読んだ鍵（#1312）。再生の中だけで持ち、列が尽きたら
     // 待たずに流す。state_ の待ち（打った鍵の分）へ持ち越さない。
     std::vector<core::VimKey> replay_pending_;
