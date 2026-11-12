@@ -198,6 +198,36 @@ void verify_input_lines()
            "a cancelled search restarts INSERT where it was (Vim scriptin)");
 }
 
+// オペレータ待ちの `:`（#1549）を INSERT の `Ctrl-o` の命令として打つ（まとめ枝 #1563）。
+// `vim_command_operated` は vim_step を通らないので、鍵の出口と同じ insert_restart_noted を
+// 確定の `<CR>` で通す。期待値は Vim 9.1 の実測（oracle の viewport の形・:normal!・
+// D:/NeNeNib/scripts/20261112/1563-chain/measurev.py）: `d:5` `y:5` は命令が終わって始め直し、
+// `c:5` は打った鍵なら OP_CHANGE の KeyTyped で印を消し、:normal! なら c の Esc の後に始め直す。
+void verify_operator_lines()
+{
+    constexpr std::string_view ten =
+        "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc";
+    const std::string rest = "\nline05 abc\nline06 abc";
+    for (const bool as_normal : {false, true})
+    {
+        const auto run = [as_normal, ten](std::string_view keys)
+        { return as_normal ? normal(ten, keys) : typed(ten, keys); };
+        const std::string label = as_normal ? ":normal! " : "typed ";
+        expect(run("2GllaX<C-o>d:5<CR>Y<Esc>") == "line01 abc\nlinXY" + rest,
+               (label + "<C-o>d:5<CR> deletes to line 5 and restarts INSERT").c_str());
+        expect(run("2GllaX<C-o>y:5<CR>Y<Esc>") ==
+                   "line01 abc\nlinXYe02 abc\nline03 abc\nline04 abc" + rest,
+               (label + "<C-o>y:5<CR> yanks and restarts INSERT").c_str());
+        expect(run("2GllaX<C-o>d:set so=0<CR>Y<Esc>") ==
+                   "line01 abc\nlinXYe02 abc\nline03 abc\nline04 abc" + rest,
+               (label + "<C-o>d:set so=0<CR> closes empty and restarts INSERT").c_str());
+    }
+    expect(normal(ten, "2GllaX<C-o>c:5<CR>Y<Esc>Z<Esc>") == "line01 abc\nlinXZY" + rest,
+           ":normal! <C-o>c:5<CR> keeps the mark and restarts INSERT after the Esc of c");
+    expect(typed(ten, "2GllaX<C-o>c:5<CR>Y<Esc>Z<Esc>") == "line01 abc\nlinXY" + rest,
+           "typed <C-o>c:5<CR> drops the mark, so the Esc of c goes back to NORMAL");
+}
+
 void place(EditorController &controller, std::size_t column)
 {
     static_cast<void>(controller.apply(
@@ -421,6 +451,7 @@ void verify_vim_insert_normal_scope()
     verify_recording();
     verify_label_and_ime();
     verify_input_lines();
+    verify_operator_lines();
     verify_click_and_interrupts();
     verify_mark_drops();
     verify_window_setting();

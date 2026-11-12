@@ -3,6 +3,7 @@
 #include "Offset.hpp"
 #include "Selection.hpp"
 #include "VimChangeMark.hpp"
+#include "VimCommandMotion.hpp"
 #include "VimCount.hpp"
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
@@ -92,7 +93,9 @@ struct VimStep
 // 通らない編集のあとでは、組み立て中の入力（INSERT の入力記録・組み立て中の `.` の記録・
 // 保留オペレータ・回数・次キー待ち）はどれも engine の外の出来事を織り込めないので捨てる。
 // モード・直前の変更・検索と文字検索の記憶は保つ。何が割り込みかを決めるのは呼ぶ側だが、
-// 何を捨てるかを決めるのは engine の側である（ARC-004）。
+// 何を捨てるかを決めるのは engine の側である（ARC-004）。オペレータ待ちの `:` `/` の入力行を
+// 確定の外で離れたときと Ex の命令が断られたときもこれで捨てる（欲しい列は保つ・ADR 0022 の
+// 追補 #1549・Vim の clearop）。
 [[nodiscard]] VimState vim_interrupted(const VimState &state);
 
 // タブを切り替えたあとの状態（ADR 0056 の決定 4）。割り込みと同じく組み立て中の入力を捨て、
@@ -161,6 +164,17 @@ void vim_macro_typed(VimState &state, std::span<const VimKey> keys);
 // 鍵ではないので `.` とマクロの記録には積まない。controller は鍵と同じ写しの道で結果を写す。
 [[nodiscard]] VimStep vim_line_jumped(const VimState &state, const VimEditorView &view,
                                       std::optional<std::size_t> line);
+
+// オペレータ待ちの `:` の確定（ADR 0022 の追補 #1549・Vim の nv_colon）。Ex
+// の命令が動かしたキャレット までを文字単位の exclusive
+// な移動として保留のオペレータを閉じる。行き先は motion.line があれば
+// `:N` と同じ着地（vim_line_jumped と同じ document_last）、無ければ今のキャレット（空の範囲・`d` は
+// 何も消さず `c` は INSERT へ入り `y` は空を取る・Vim の実測）。範囲は exclusive の言い換え（行頭で
+// 終わる範囲は行単位か前の行の末尾まで）を検索の後ろのオペレータと同じ 1 本で通る。`.` の記録は
+// `:` までの記録に motion.typed の文字と `<CR>` を足した鍵の列（Vim の repeat_cmdline）で、再生は
+// 同じ入力行の口を通る。マクロの録画には積まない（#1528）。保留のオペレータが無ければ何もしない。
+[[nodiscard]] VimStep vim_command_operated(const VimState &state, const VimEditorView &view,
+                                           const VimCommandMotion &motion);
 
 // 本文のダブルクリック・トリプルクリックの VISUAL（#1250・ADR 0056 の決定 9
 // の追補）。鍵ではないので
