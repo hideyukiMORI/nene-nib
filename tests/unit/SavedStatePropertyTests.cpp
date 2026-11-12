@@ -68,6 +68,7 @@
 #include <random>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -96,12 +97,14 @@ using Check = Reason (*)(const Case &);
 // パス → 保存の port がそのパスへ最後に書いたバイト列（開いただけなら読んだバイト列）。
 using Written = std::map<std::string, std::string, std::less<>>;
 // 届いた形の数（不変条件が見ている状態に列が届くか）。
-using Reached = std::array<std::size_t, 8>;
+using Reached = std::array<std::size_t, 11>;
+// 届いた形の欄の数。
+constexpr std::size_t reach_kinds = 11U;
 
 // Debug（ASan）で 10 秒前後の回数。20 倍の走りは rounds を 20 にして手元で回し、commit しない。
 constexpr std::size_t rounds = 1U;
 constexpr std::size_t family_cases = 6U * rounds;
-constexpr std::size_t reach_cases = 4U;
+constexpr std::size_t reach_cases = 8U;
 constexpr std::size_t step_floor = 40U;
 constexpr std::size_t step_spread = 41U;
 constexpr std::size_t visible_lines = 40U;
@@ -135,6 +138,10 @@ constexpr std::array<std::string_view, 66> vim_fragments{
     ":set fenc=utf-8-bom<CR>"};
 // `<Esc>` を付けずに打つ鍵（INSERT の続き・保存の後に打鍵が続く形）。ノーマルでも害が無い。
 constexpr std::array<std::string_view, 4> raw_fragments{"ab", "<BS>", "<CR>", "9"};
+// Vim のモードで空の単位を作ってすぐ通常モードの Ctrl+Z を押す組（make_mode_crossing）。`o<Esc>` の
+// 空の行で `>>` `cc` は範囲が空の changed、`o1<Esc>` の数字の上の `~` `g~~` は saved_only を作る。
+constexpr std::array<std::string_view, 4> crossing_fragments{"o<Esc>>>", "o<Esc>cc<Esc>",
+                                                             "o1<Esc>~", "o1<Esc>g~~"};
 constexpr std::array<std::string_view, 4> typed_texts{"a", "1", "あ", "\t"};
 constexpr std::array<core::CaretMotion, 6> motions{
     core::CaretMotion::previous_line,  core::CaretMotion::next_line,
@@ -351,21 +358,38 @@ void apply_step(Editing &editing, const Action &action, const app::EditorFrame &
     return intent != nullptr && std::holds_alternative<app::SwitchTab>(*intent);
 }
 
-// 歩の前の「アクティブなタブが保存済みか」と履歴。
-using Before = std::pair<bool, core::EditHistory>;
+// 通常モードの Ctrl+Z / Ctrl+Y の歩（frame は歩の後の frame・履歴の歩はモードを変えない）。
+[[nodiscard]] bool ordinary_history_step(const Step &step, const app::EditorFrame &frame,
+                                         core::HistoryDirection direction)
+{
+    const auto *intent = std::get_if<app::EditorIntent>(&step.second);
+    const auto *history = intent == nullptr ? nullptr : std::get_if<app::HistoryAction>(intent);
+    return history != nullptr && history->direction == direction &&
+           frame.mode == core::EditMode::ordinary;
+}
+
+[[nodiscard]] std::size_t distance(std::size_t left, std::size_t right)
+{
+    return left > right ? left - right : right - left;
+}
+
+// 歩の前の「アクティブなタブが保存済みか」と履歴と本文。
+using Before = std::tuple<bool, core::EditHistory, std::string>;
 
 // この歩で届いた形（verify_generator_reaches_the_states）。frame は歩の後の frame。
-[[nodiscard]] std::array<bool, 8> reached_now(const Step &step, const Before &prior,
-                                              Editing &editing, const app::EditorFrame &frame)
+[[nodiscard]] std::array<bool, reach_kinds>
+reached_now(const Step &step, const Before &prior, Editing &editing, const app::EditorFrame &frame)
 {
-    const bool was_saved = prior.first;
-    const core::EditHistory &before = prior.second;
+    const bool was_saved = std::get<0>(prior);
+    const core::EditHistory &before = std::get<1>(prior);
     const core::EditHistory &after = editing.controller().history();
     const bool saved = active_saved(editing.controller(), frame.active_tab);
     const bool saving = saving_step(step);
     const std::string &bytes = editing.files().written();
     const bool switched = switching_step(step);
-    return std::array<bool, 8>{
+    const bool undo = ordinary_history_step(step, frame, core::HistoryDirection::undo);
+    const bool history = undo || ordinary_history_step(step, frame, core::HistoryDirection::redo);
+    return std::array<bool, reach_kinds>{
         // saved_only の単位を挟んで保存済みのまま
         saved && after.position() > after.content_position(),
         // 本文と違う改行の形で保存した
@@ -381,10 +405,17 @@ using Before = std::pair<bool, core::EditHistory>;
         // マクロを再生して履歴が動いた
         step.first.find('@') != std::string::npos && after.revision() != before.revision(),
         // redo の枝を捨てて積んだ（件数が減るのは 2 件以上を捨てて 1 件を積んだときだけ）
-        after.size() < before.size()};
+        after.size() < before.size(),
+        // 通常モードの Ctrl+Z / Ctrl+Y が saved_only の空の単位を飛ばした（1 回で 2 件以上動いた）
+        history && distance(after.position(), before.position()) >= 2U,
+        // 通常モードの Ctrl+Z が changed の空の単位を消費した（本文は同じで本文の位置が 1 戻った）
+        undo && editing.controller().text().text() == std::get<2>(prior) &&
+            after.content_position() + 1U == before.content_position(),
+        // 保存しない歩で文字コードだけを変えて未保存になった
+        step.first.starts_with("format utf") && was_saved && !saved};
 }
 
-void count_reached(Reached &reached, const std::array<bool, 8> &now)
+void count_reached(Reached &reached, const std::array<bool, reach_kinds> &now)
 {
     for (std::size_t flag = 0; flag < now.size(); ++flag)
     {
@@ -408,7 +439,8 @@ void count_reached(Reached &reached, const std::array<bool, 8> &now)
         {
             return reason;
         }
-        const Before prior{active_saved(controller, frame.active_tab), controller.history()};
+        const Before prior{active_saved(controller, frame.active_tab), controller.history(),
+                           controller.text().text()};
         apply_step(editing, step.second, frame, written);
         const Reason now = violation(controller, written, frame);
         reason = reason.empty() ? now : reason;
@@ -513,11 +545,22 @@ void make_mode(Random &random, Steps &steps)
                     app::SelectEditMode{vim ? core::EditMode::vim : core::EditMode::ordinary}));
 }
 
+// Vim のモードで空の単位を作り、Vim の編集を挟まずに通常モードへ切り替えて Ctrl+Z を押す
+// （V-1541 の M1: 通常モードの Ctrl+Z が空の単位に当たる形に届かせる）。
+void make_mode_crossing(Random &random, Steps &steps)
+{
+    steps.push_back(intent_step("mode vim", app::SelectEditMode{core::EditMode::vim}));
+    steps.push_back(keys_step("<Esc>" + std::string(pick(random, crossing_fragments))));
+    steps.push_back(intent_step("mode ordinary", app::SelectEditMode{core::EditMode::ordinary}));
+    steps.push_back(intent_step("ctrl+z", app::HistoryAction{core::HistoryDirection::undo}));
+}
+
 using Maker = void (*)(Random &, Steps &);
 // 行の重みは並べた回数。Vim の鍵を厚くし、通常の編集・保存・形・タブ・モードを混ぜる。
-constexpr std::array<Maker, 14> makers{
-    make_vim,      make_vim,      make_vim,  make_vim,  make_vim,    make_vim, make_ordinary,
-    make_ordinary, make_ordinary, make_save, make_save, make_format, make_tab, make_mode};
+constexpr std::array<Maker, 15> makers{make_vim,      make_vim,  make_vim,          make_vim,
+                                       make_vim,      make_vim,  make_ordinary,     make_ordinary,
+                                       make_ordinary, make_save, make_save,         make_format,
+                                       make_tab,      make_mode, make_mode_crossing};
 
 [[nodiscard]] std::string random_body(Random &random)
 {
@@ -641,7 +684,9 @@ void verify_determinism()
 
 // 生成した列が、saved_only の単位を挟んだ保存済み・本文と違う改行の形の保存・BOM つきの保存・
 // 保存しない歩での保存済みへの戻り・名前を付けて保存・履歴を持つタブへの切り替え・マクロの再生・
-// redo の枝を捨てる編集に届く。どれかが 0 なら性質の試験はその形を見ていない。
+// redo の枝を捨てる編集・通常モードの Ctrl+Z / Ctrl+Y が saved_only の空の単位を飛ばす歩・通常
+// モードの Ctrl+Z が changed の空の単位を消費する歩・文字コードだけを変えて未保存になる歩に届く。
+// どれかが 0 なら性質の試験はその形を見ていない。
 void verify_generator_reaches_the_states()
 {
     Random random{15351U};
@@ -652,8 +697,9 @@ void verify_generator_reaches_the_states()
     }
     expect(std::ranges::all_of(reached, [](std::size_t count) { return count > 0U; }),
            "the saved-state cases reach a saved document past a saved_only unit, a converted and a "
-           "BOM save, an undo back to the save point, a save as, a tab switch, a macro and a "
-           "discarded redo branch");
+           "BOM save, an undo back to the save point, a save as, a tab switch, a macro, a "
+           "discarded redo branch, an ordinary undo or redo past a saved_only unit, an ordinary "
+           "undo of an empty changed unit and an encoding-only change");
 }
 
 [[nodiscard]] Case known_case(std::string body, std::vector<Step> steps)
@@ -666,12 +712,38 @@ void verify_generator_reaches_the_states()
     return Step{"ctrl+s", Action{SaveCurrent{}}};
 }
 
+[[nodiscard]] Step mode_ordinary()
+{
+    return intent_step("mode ordinary", app::SelectEditMode{core::EditMode::ordinary});
+}
+
+[[nodiscard]] Step ctrl_z()
+{
+    return intent_step("ctrl+z", app::HistoryAction{core::HistoryDirection::undo});
+}
+
+[[nodiscard]] Step ctrl_y()
+{
+    return intent_step("ctrl+y", app::HistoryAction{core::HistoryDirection::redo});
+}
+
+[[nodiscard]] Step switch_to(std::size_t position)
+{
+    return intent_step("switch " + std::to_string(position), app::SwitchTab{position});
+}
+
+// 手書きの組は本文を帯の 3 つ目（開いた最後のタブ・アクティブ）に置く。
+[[nodiscard]] Case flipped(const Case &input)
+{
+    return Case{Bodies{input.first.at(1), input.first.at(2), input.first.at(0)}, input.second};
+}
+
 // V-1530 の L2 の手書きの形（保存 → saved_only を挟む undo → 別の編集）と、INSERT の途中の保存の
 // 後に打鍵が続く形・形だけを変えて保存して戻す形を、同じ不変条件で見る。開いた最後のタブ
 // （帯の 3 つ目）が本文を持つ。
 void verify_known_cases()
 {
-    const std::array<Case, 5> cases{
+    const std::array<Case, 6> cases{
         known_case("abc\n123", {mode_vim(), keys_step("x"), keys_step(":w<CR>"), keys_step("j~"),
                                 keys_step("u"), keys_step("u"), keys_step("ix<Esc>")}),
         known_case("abc\n123", {mode_vim(), keys_step("x:w<CR>"), keys_step("j~"), keys_step("u"),
@@ -683,15 +755,76 @@ void verify_known_cases()
                     ctrl_s(),
                     intent_step("format lf", app::SelectDocumentFormat{core::LineEnding::lf})}),
         known_case("\n123", {mode_vim(), keys_step(">>"), keys_step(":w<CR>"), keys_step("u"),
-                             keys_step("j~"), keys_step("<C-r>")})};
+                             keys_step("j~"), keys_step("<C-r>")}),
+        // V-1541 の M1: 保存の後の空の行の `>>` を通常モードの Ctrl+Z が消費する（2 回目で `x`）
+        known_case("abc\n\n", {mode_vim(), keys_step("x"), keys_step(":w<CR>"), keys_step("j>>"),
+                               mode_ordinary(), ctrl_z(), ctrl_z(), ctrl_y(), ctrl_y()})};
     std::size_t broken = 0;
     for (const auto &input : cases)
     {
-        const Case flipped{Bodies{input.first.at(1), input.first.at(2), input.first.at(0)},
-                           input.second};
-        broken += case_violation(flipped).empty() ? 0U : 1U;
+        broken += case_violation(flipped(input)).empty() ? 0U : 1U;
     }
     expect(broken == 0U, "the hand-written save, undo and branch cases keep the saved bytes");
+}
+
+// 列を流し終えたときのアクティブなタブの本文と、保存済みか。
+using Ending = std::pair<std::string, bool>;
+
+[[nodiscard]] Ending ending_of(const Case &input)
+{
+    Editing editing;
+    Written written;
+    open_files(editing, input.first, written);
+    auto &controller = editing.controller();
+    for (const auto &step : input.second)
+    {
+        apply_step(editing, step.second, controller.frame(), written);
+    }
+    return Ending{controller.text().text(),
+                  active_saved(controller, controller.frame().active_tab)};
+}
+
+// 終わりの本文と印を名指しで期待する手書きの組。不変条件 1 は「保存済みと出る」側の誤りしか
+// 見ないので、「未保存と出る」側の誤り（タブを切り替えた後の束の保存時点のずれ・V-1541 の F1）と
+// 通常モードの Ctrl+Z が changed の空の単位を消費する規則（M1）をここで見る。
+void verify_known_endings()
+{
+    using Expected = std::pair<Case, Ending>;
+    const std::array<Expected, 5> cases{
+        // M1: 1 回目の Ctrl+Z は `>>` だけを戻して保存済み・2 回目は `x` を戻して未保存
+        Expected{known_case("abc\n\n", {mode_vim(), keys_step("x"), keys_step(":w<CR>"),
+                                        keys_step("j>>"), mode_ordinary(), ctrl_z()}),
+                 Ending{"bc\n\n", true}},
+        Expected{known_case("abc\n\n", {mode_vim(), keys_step("x"), keys_step(":w<CR>"),
+                                        keys_step("j>>"), mode_ordinary(), ctrl_z(), ctrl_z()}),
+                 Ending{"abc\n\n", false}},
+        // F1: 保存 → 数字の上の `~` → ほかのタブへ行って戻る → 保存済み
+        Expected{known_case("123", {mode_vim(), keys_step("x"), keys_step(":w<CR>"), keys_step("~"),
+                                    switch_to(0), switch_to(2)}),
+                 Ending{"23", true}},
+        // F1: 保存 → 通常モードの Ctrl+Z → Ctrl+Y → ほかのタブへ行って戻る → 保存済み
+        Expected{known_case("abc", {mode_ordinary(), intent_step("insert x", app::InsertText{"x"}),
+                                    ctrl_s(), ctrl_z(), ctrl_y(), switch_to(1), switch_to(2)}),
+                 Ending{"xabc", true}},
+        // F1: 保存 → 空の行の `>>` → `u` → ほかのタブへ行って戻る → 保存済み
+        Expected{
+            known_case("abc\n\n", {mode_vim(), keys_step("x"), keys_step(":w<CR>"),
+                                   keys_step("j>>"), keys_step("u"), switch_to(0), switch_to(2)}),
+            Ending{"bc\n\n", true}}};
+    std::size_t broken = 0;
+    for (const auto &[input, ending] : cases)
+    {
+        const Case placed = flipped(input);
+        const bool kept = case_violation(placed).empty() && ending_of(placed) == ending;
+        if (!kept)
+        {
+            std::fprintf(
+                stderr, "  ending: %s -> \"%s\" saved=%d\n", escaped(placed.first.at(2)).c_str(),
+                escaped(ending_of(placed).first).c_str(), ending_of(placed).second ? 1 : 0);
+        }
+        broken += kept ? 0U : 1U;
+    }
+    expect(broken == 0U, "the hand-written cases end with the expected text and saved mark");
 }
 
 // 検査そのものが破れを見つける: 保存済みのタブの覚えたバイト列を書き換えると不変条件 1 が落ちる。
@@ -714,6 +847,7 @@ void verify_saved_state_property_scope()
     verify_determinism();
     verify_checks_catch_a_break();
     verify_known_cases();
+    verify_known_endings();
     verify_generator_reaches_the_states();
     expect(broken_cases("saved means the saved bytes", 15352U, case_violation) == 0U,
            "Vim keys, ordinary edits, undo and redo, saves, save forms and tab switches keep a "

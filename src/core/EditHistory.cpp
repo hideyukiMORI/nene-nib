@@ -46,33 +46,6 @@ constexpr std::size_t history_block_entries = 256;
     std::unreachable();
 }
 
-// direction の向きの次の件（undo なら戻す件・redo ならやり直す件）。
-[[nodiscard]] std::expected<Edit, HistoryFailure> toward(const EditHistory &history,
-                                                         HistoryDirection direction)
-{
-    switch (direction)
-    {
-    case HistoryDirection::undo:
-        return history.undo();
-    case HistoryDirection::redo:
-        return history.redo();
-    }
-    std::unreachable();
-}
-
-// direction の向きへ 1 件動かした次の履歴。
-[[nodiscard]] EditHistory stepped_toward(const EditHistory &history, HistoryDirection direction)
-{
-    switch (direction)
-    {
-    case HistoryDirection::undo:
-        return history.undone();
-    case HistoryDirection::redo:
-        return history.redone();
-    }
-    std::unreachable();
-}
-
 // 区切り方ごとの畳み方。separate は畳まない＝新しい単位を開く（ADR 0009 / ADR 0015）。
 // 畳んだ単位の restore は最初の編集の値のまま（ADR 0052 の決定 3）。空の編集（空の単位）は前の
 // 単位に畳まず、空の単位へは INSERT の absorb だけが畳む（ADR 0181 の決定 3）。
@@ -256,25 +229,57 @@ EditHistory EditHistory::redone() const
                        content_ + counted(entry_at(position_).change));
 }
 
-// 飛ばす向きの次の件を見て、空の単位なら 1 件動かす。本文を変える件に当たればそこで止め、端まで
-// 空の単位だけなら端の失敗を返す（Windows の標準に「何も起きない取り消し」は無い・D82）。
-std::expected<EditHistory, HistoryFailure>
-EditHistory::past_empty_units(HistoryDirection direction) const
+// 本文に触れず、本文を変えたとも数えない単位か（saved_only の空の単位・ADR 0181 の追補 9）。
+// 件の参照だけを読み、Edit を写さない。
+bool EditHistory::silent_at(std::size_t index) const
 {
-    EditHistory walked = *this;
-    for (;;)
+    const HistoryUnit &unit = entry_at(index);
+    return unit.change == VimChange::saved_only && is_empty_edit(unit.edit);
+}
+
+// その向きに続く saved_only の空の単位を飛ばした位置。changed の空の単位と本文を変える単位の手前
+// （または履歴の端）で止まる。
+std::size_t EditHistory::past_silent(HistoryDirection direction) const
+{
+    std::size_t position = position_;
+    switch (direction)
     {
-        const auto next = toward(walked, direction);
-        if (!next.has_value())
+    case HistoryDirection::undo:
+        while (position > 0 && silent_at(position - 1))
         {
-            return std::unexpected(next.error());
+            --position;
         }
-        if (!is_empty_edit(next.value()))
+        return position;
+    case HistoryDirection::redo:
+        while (position < size_ && silent_at(position))
         {
-            return walked;
+            ++position;
         }
-        walked = stepped_toward(walked, direction);
+        return position;
     }
+    std::unreachable();
+}
+
+// 位置だけを動かす。飛ばす件は counted が 0 なので本文の位置（content_）は写したまま変わらない。
+// 改訂番号は undone / redone と同じく 1 件ごとに 1 増える。端まで saved_only の空の単位だけなら
+// 端の失敗（Windows の標準に「何も起きない取り消し」は無い・D82）。
+std::expected<EditHistory, HistoryFailure>
+EditHistory::past_saved_only_units(HistoryDirection direction) const
+{
+    const bool undo = direction == HistoryDirection::undo;
+    const std::size_t position = past_silent(direction);
+    if (position == (undo ? 0 : size_))
+    {
+        return std::unexpected(undo ? HistoryFailure::nothing_to_undo
+                                    : HistoryFailure::nothing_to_redo);
+    }
+    if (position == position_)
+    {
+        return *this;
+    }
+    const std::size_t skipped = undo ? position_ - position : position - position_;
+    return EditHistory(blocks_, size_, position, EditBoundary::separate, revision_ + skipped,
+                       content_);
 }
 
 std::size_t EditHistory::size() const noexcept
