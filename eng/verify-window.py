@@ -3494,6 +3494,10 @@ WM_LBUTTONUP = 0x0202
 HTMINBUTTON = 8
 HTMAXBUTTON = 9
 SW_RESTORE = 9
+HTRIGHT = 11
+HTTOP = 12
+HTTOPLEFT = 13
+HTTOPRIGHT = 14
 CAPTION_SETTLE_SECONDS = 0.5
 CAPTION_DOCUMENT = "caption\n"
 
@@ -3631,6 +3635,42 @@ def verify_start_row_caption(executable: Path, environment: dict) -> dict:
             "held": state == "normal"}
 
 
+def verify_window_hit_cases(window) -> list:
+    """Issue #1498: WM_NCHITTEST (sent, so the answer comes back) on the window procedure. A window
+    that is not maximized answers its border before ＿ □ × (8 DIP, half of it over the buttons; the
+    maximized corner is read after the maximize case)."""
+    dpi = user.GetDpiForWindow(window)
+    buttons = caption_buttons(window)
+    client = rectangle(window, user.GetClientRect)
+    right = client[2] - client[0] - 1
+    close_x, close_y = buttons[HTCLOSE]
+    thin = to_pixels(8, dpi) // 2
+    cases = [
+        ("top right corner", (right, 0), HTTOPRIGHT),
+        ("top edge over close", (close_x, thin // 2), HTTOP),
+        ("below the thin edge over close", (close_x, thin), HTCLOSE),
+        ("top edge over maximize", (buttons[HTMAXBUTTON][0], 0), HTTOP),
+        ("right edge over close", (right, close_y), HTRIGHT),
+        ("inside close", buttons[HTCLOSE], HTCLOSE),
+        ("inside maximize", buttons[HTMAXBUTTON], HTMAXBUTTON),
+        ("inside minimize", buttons[HTMINBUTTON], HTMINBUTTON),
+        ("top left corner", (0, 0), HTTOPLEFT),
+    ]
+    results = []
+    for name, (x, y), wanted in cases:
+        state = ask_hit(window, x, y)
+        results.append({"name": f"hit: {name}", "state": state, "held": state == wanted})
+    return results
+
+
+def maximized_corner_case(window) -> dict:
+    """The top right pixel of a maximized window is the close button (the window has no border).
+    Read right after the maximize case, so no other call maximizes the window."""
+    zoomed = rectangle(window, user.GetClientRect)
+    corner = ask_hit(window, zoomed[2] - zoomed[0] - 1, 0) if user.IsZoomed(window) else 0
+    return {"name": "hit: maximized top right corner", "state": corner, "held": corner == HTCLOSE}
+
+
 def verify_caption(executable: Path, environment: dict, output: Path) -> dict:
     """Issue #1464: drive the window procedure with posted messages only (no foreground, no real
     pointer). A window that closed by mistake is started again, so every case is judged."""
@@ -3639,6 +3679,7 @@ def verify_caption(executable: Path, environment: dict, output: Path) -> dict:
     results = []
     process, window = start_caption_window(executable, environment, [str(opened)])
     try:
+        results.extend(verify_window_hit_cases(window))
         for name, steps, wanted in CAPTION_CASES:
             if caption_state(window) == "closed":
                 await_exit(process)
@@ -3650,6 +3691,8 @@ def verify_caption(executable: Path, environment: dict, output: Path) -> dict:
                 time.sleep(CAPTION_SETTLE_SECONDS)
             state = drive_caption_case(window, steps)
             results.append({"name": name, "state": state, "held": state == wanted})
+            if name == "maximize press and release":
+                results.append(maximized_corner_case(window))
         closed_code = await_exit(process) if caption_state(window) == "closed" else None
     finally:
         stop(process)
