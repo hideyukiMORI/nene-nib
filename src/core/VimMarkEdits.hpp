@@ -2,8 +2,10 @@
 
 #include "Edit.hpp"
 #include "Offset.hpp"
+#include "Selection.hpp"
 #include "TextBuffer.hpp"
 #include "VimBlockEdit.hpp"
+#include "VimLastVisual.hpp"
 #include "VimMarkPosition.hpp"
 #include "VimMarks.hpp"
 #include "VimRepeatFailure.hpp"
@@ -24,6 +26,13 @@ namespace nenenib::core
 // 寄せ、文字の途中なら文字の先頭へ（Vim の check_cursor・NORMAL の寄せは呼び手）。
 [[nodiscard]] std::optional<Offset> vim_mark_offset(const TextBuffer &text,
                                                     const VimMarkPosition &position);
+
+// 前の選択 → 選び直す選択（`gv`・ADR 0018 の追補 #1039）。始めの端の行が本文の外なら nullopt
+// （Vim の nv_gv のビープ）。キャレットの端の行は最後の行へ寄せ、桁はどちらも行の内容の終わりまで
+// （Vim の check_cursor）。`gv` と、VISUAL から開いた `:` の入力行の間に描く選択（#1572）が
+// この 1 本を通る。
+[[nodiscard]] std::optional<Selection> vim_last_visual_selection(const TextBuffer &text,
+                                                                 const VimLastVisual &visual);
 
 // 読む名前 → マーク（決定 3）。a〜z は名前つき、`'` と `` ` `` は直前の位置、`.` は最後の変更。
 // ほかの名前は refused、置いていないマークは not_found（Vim の E20）。

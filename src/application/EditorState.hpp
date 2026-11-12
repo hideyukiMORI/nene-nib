@@ -98,6 +98,12 @@ class EditorState final
     [[nodiscard]] EditorState with_key_map_pending(std::vector<core::VimKey> pending) const;
     // 検索の入力行が開いているあいだだけ値を持つ（ADR 0041 の決定 2）。
     [[nodiscard]] const std::optional<SearchPreview> &search_preview() const noexcept;
+    // VISUAL・行単位・矩形から開いた `:` の入力行が開いているあいだだけ真（ADR 0022 の追補
+    // #1526 の段 #1572）。立てるのは入力行を開く効果の 1 か所で、倒れるのは with_command_input が
+    // 入力行を閉じるか Ex でない面に置き換えたとき。frame はこの間、前の選択を選択の区間に載せる。
+    [[nodiscard]] bool visual_command_line() const noexcept;
+    // 今の入力行が Ex の行のときだけ立つ（ほかの面のときは倒れたまま）。
+    [[nodiscard]] EditorState with_visual_command_line(bool from_visual) const;
 
     [[nodiscard]] EditorState with_appearance(core::Appearance appearance) const;
     [[nodiscard]] EditorState with_mode(core::EditMode mode) const;
@@ -387,6 +393,7 @@ class EditorState final
     std::optional<core::DisplayText> command_message_;
     std::vector<DocumentReading> readings_;
     std::optional<SearchPreview> search_preview_;
+    bool visual_command_line_ = false;
     core::InputHistory ex_history_ = core::InputHistory::empty();
     core::InputHistory search_history_ = core::InputHistory::empty();
     // 木は大きくなり得るので、状態の写し（with_* のたび）で複製しない不変の束で持つ（ADR 0056 の

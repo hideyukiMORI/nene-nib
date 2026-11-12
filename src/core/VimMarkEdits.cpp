@@ -7,6 +7,7 @@
 #include "VimLastVisual.hpp"
 #include "VimMarkShift.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -136,6 +137,18 @@ std::optional<Offset> vim_mark_offset(const TextBuffer &text, const VimMarkPosit
         return std::nullopt;
     }
     return vim_line_and_column(text, position.line, position.byte);
+}
+
+std::optional<Selection> vim_last_visual_selection(const TextBuffer &text,
+                                                   const VimLastVisual &visual)
+{
+    const auto anchor = vim_mark_offset(text, visual.anchor);
+    if (!anchor.has_value())
+    {
+        return std::nullopt;
+    }
+    const LineNumber line{std::min(visual.caret.line.value, text.line_count())};
+    return Selection{anchor.value(), vim_line_and_column(text, line, visual.caret.byte)};
 }
 
 std::expected<VimMarkPosition, VimRepeatFailure> vim_mark_named(const VimMarks &marks,

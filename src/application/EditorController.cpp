@@ -35,10 +35,13 @@
 #include "TextPosition.hpp"
 #include "Utf8.hpp"
 #include "VimBlockRange.hpp"
+#include "VimLastVisual.hpp"
+#include "VimMarkEdits.hpp"
 #include "VimMode.hpp"
 #include "VimSearch.hpp"
 #include "VimStep.hpp"
 #include "VimVisualRange.hpp"
+#include "VimWantedColumn.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -97,6 +100,48 @@ namespace
         return core::CaretShape::bar;
     }
     std::unreachable();
+}
+
+// 矩形は 1 つの範囲では表せないので、VISUAL の種類で先に分かれる（ADR 0035 の決定 2）。
+[[nodiscard]] std::optional<core::VimBlockRange>
+visual_block_of(const core::TextBuffer &text, const core::Selection &selection, core::VimMode mode,
+                const std::optional<core::VimWantedColumn> &wanted)
+{
+    switch (mode)
+    {
+    case core::VimMode::normal:
+    case core::VimMode::insert:
+    case core::VimMode::visual:
+    case core::VimMode::visual_line:
+        return std::nullopt;
+    case core::VimMode::visual_block:
+        break;
+    }
+    return core::vim_block_range_for(text, selection, wanted);
+}
+
+// 描く選択（ADR 0022 の追補 #1526 の段 #1572）。VISUAL から開いた `:` の入力行の間は、前の選択
+// （`gv` が選び直す範囲・vim_last_visual_selection）を VISUAL のときと同じ 1 本（vim_visual_range
+// と vim_block_range_for）で区間にする。モード・engine の状態・`'<` `'>` は変えない（見た目だけ）。
+// それ以外（入力行が閉じた・NORMAL の `:`・`d:`）は今の選択のまま。
+[[nodiscard]] PaneSource drawn_source(const PaneSource &current)
+{
+    const EditorState &state = current.state;
+    const auto &last = state.vim_marks().last_visual;
+    if (!state.visual_command_line() || state.mode() != core::EditMode::vim || !last.has_value())
+    {
+        return current;
+    }
+    const core::VimLastVisual &visual = last.value();
+    const auto selection = core::vim_last_visual_selection(state.text(), visual);
+    if (!selection.has_value())
+    {
+        return current;
+    }
+    return PaneSource{state,
+                      core::vim_visual_range(state.text(), selection.value(), visual.mode).range,
+                      visual_block_of(state.text(), selection.value(), visual.mode, visual.wanted),
+                      current.pattern, current.tab};
 }
 
 // 描く範囲。矩形のあいだだけ行ごとの範囲へ差し替わる（ADR 0035 の決定 8）。短い行の右側
@@ -636,17 +681,14 @@ std::optional<core::VimBlockRange> EditorController::block_selection() const
     case core::EditMode::vim:
         break;
     }
-    switch (state_.vim().mode)
-    {
-    case core::VimMode::normal:
-    case core::VimMode::insert:
-    case core::VimMode::visual:
-    case core::VimMode::visual_line:
-        return std::nullopt;
-    case core::VimMode::visual_block:
-        break;
-    }
-    return core::vim_block_range_for(state_.text(), state_.selection(), state_.vim().wanted_column);
+    return visual_block_of(state_.text(), state_.selection(), state_.vim().mode,
+                           state_.vim().wanted_column);
+}
+
+PaneSource EditorController::framed_source(const core::VimPattern *pattern) const
+{
+    return drawn_source(PaneSource{state_, highlighted_range(), block_selection(), pattern,
+                                   state_.autosave_ids().at(state_.active_tab())});
 }
 
 const core::VimState &EditorController::vim_state() const noexcept
@@ -1124,8 +1166,7 @@ EditorFrame EditorController::frame()
     const bool gridded = !pending && !full && state_.display() == core::DisplayForm::grid &&
                          view_geometry_.width > 0;
     const auto pattern = search_pattern();
-    const PaneSource source{state_, highlighted_range(), block_selection(), pattern_of(pattern),
-                            state_.autosave_ids().at(state_.active_tab())};
+    const PaneSource source = framed_source(pattern_of(pattern));
     std::size_t lexed = 0;
     auto lines = pending || gridded || full
                      ? std::expected<std::vector<LineView>, TextLayoutFailure>{}
