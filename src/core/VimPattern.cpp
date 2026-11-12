@@ -12,6 +12,7 @@
 #include "VimPatternParse.hpp"
 #include "VimPatternQuantity.hpp"
 #include "VimPatternRepeat.hpp"
+#include "VimPatternRoute.hpp"
 #include "VimWordClass.hpp"
 #include "VimWordMotion.hpp"
 #include "VirtualColumn.hpp"
@@ -783,6 +784,33 @@ parsed_group(std::string_view pattern, std::size_t at, VimPatternParse &parse)
            (pattern[at + 1] == 'c' || pattern[at + 1] == 'C');
 }
 
+// 前置き（パターンの at より前）が `\c` `\C` だけか（Vim の at_start が残る）。
+[[nodiscard]] bool only_case_escapes(std::string_view pattern, std::size_t at) noexcept
+{
+    for (std::size_t index = 0; index < at; index += 2)
+    {
+        if (!case_escape(pattern, index))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// `\c` `\C` の直後の量は付く原子が無い（E866）。Vim の nfa_regconcat は `\c` を項目の間で読み、
+// 次の nfa_regatom が量を「Misplaced」で断る。星はパターンの先頭と `\(` の直後だけ文字のまま
+// （skipchr_keepstart が at_start と prevchr を残す・`^\c*` は E866・2026-11-13 に Vim 9.1
+// で実測）。
+[[nodiscard]] bool misplaced_after_case(std::string_view pattern, std::size_t at,
+                                        const VimPatternParse &parse)
+{
+    if (quantifier_escape(pattern, at))
+    {
+        return true;
+    }
+    return pattern[at] == '*' && !parse.opened && !only_case_escapes(pattern, at);
+}
+
 [[nodiscard]] char32_t separator_of(VimSearchDirection direction) noexcept
 {
     return direction == VimSearchDirection::forward ? U'/' : U'?';
@@ -808,10 +836,12 @@ parsed_next(std::string_view pattern, std::size_t at, VimSearchDirection separat
     if (case_escape(pattern, at))
     {
         forced_case(code_point_at(pattern, Offset{at + 1}), parse.forced);
+        parse.cased = true;
         return at + 2;
     }
     // 直前の項目が量だったか（量の後ろの量・`\{0}` の後ろの量を断る・ADR 0184 の決定 2）。
     // `\c` `\C` は原子を足さないので、この印を動かさない。
+    const bool cased = std::exchange(parse.cased, false);
     parse.after_multi = std::exchange(parse.multi, false);
     parse.after_emptied = std::exchange(parse.emptied, false);
     if (escaped_separator(pattern, at, separator))
@@ -819,6 +849,10 @@ parsed_next(std::string_view pattern, std::size_t at, VimSearchDirection separat
         parse.opened = false;
         parse.atoms.push_back(literal_atom(separator_of(separator)));
         return at + 2;
+    }
+    if (cased && misplaced_after_case(pattern, at, parse))
+    {
+        return std::unexpected(VimPatternFailure::misplaced);
     }
     if (quantifier_escape(pattern, at))
     {
@@ -1158,9 +1192,8 @@ std::optional<VimPatternMatch> VimPattern::matched(std::string_view line, std::s
         return std::nullopt;
     }
     // 量の無い列は後戻りしない列の道、量（`*` と開いた量の写し）を含む列は状態集合の道（ADR 0093・
-    // ADR 0184 の決定 1・2）。道は原子の列そのものから決める。
-    if (std::ranges::any_of(atoms_, [](const VimPatternAtom &atom)
-                            { return atom.repeat != VimPatternRepeat::once; }))
+    // ADR 0184 の決定 1・2）。道は原子の列そのものから決める（route の 1 本）。
+    if (route() != VimPatternRoute::sequence)
     {
         VimPatternEvaluation evaluation(*this, line);
         return evaluation.matched(from);
@@ -1181,6 +1214,23 @@ std::optional<VimPatternMatch> VimPattern::matched(std::string_view line, std::s
         at = next_code_point(line, Offset{at}).value;
     }
     return std::nullopt;
+}
+
+VimPatternRoute VimPattern::route() const noexcept
+{
+    if (lazy_)
+    {
+        return VimPatternRoute::lazy_states;
+    }
+    return std::ranges::any_of(atoms_, [](const VimPatternAtom &atom)
+                               { return atom.repeat != VimPatternRepeat::once; })
+               ? VimPatternRoute::states
+               : VimPatternRoute::sequence;
+}
+
+std::size_t VimPattern::atom_count() const noexcept
+{
+    return atoms_.size();
 }
 
 std::size_t VimPattern::group_count() const noexcept

@@ -4978,5 +4978,15 @@
   {"name":"pattern-quantifier-sub-err-double","text":"aab","keys":":s/a\\+\\+/X/<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
   {"name":"pattern-quantifier-sub-err-star-plus","text":"aab","keys":":s/a*\\+/X/<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
   {"name":"pattern-quantifier-sub-err-count-count","text":"aab","keys":":s/a\\{1}\\{2}/X/<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
-  {"name":"pattern-quantifier-sub-err-double-star","text":"a*ab","keys":":s/a**/X/<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}}
+  {"name":"pattern-quantifier-sub-err-double-star","text":"a*ab","keys":":s/a**/X/<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"pattern-case-multi-search-plus","text":"bAAb","keys":"/a\\c\\+<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"pattern-case-multi-sub-brace","text":"bAAb","keys":":s/a\\c\\{2}/X/<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"pattern-case-multi-sub-star","text":"bAAb","keys":":s/a\\c*/X/<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"pattern-case-multi-sub-upper-eq","text":"bAAb","keys":":s/a\\C\\=/X/<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"pattern-case-multi-sub-lead","text":"bAAb","keys":":s/\\ca\\+/X/<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"pattern-case-multi-sub-trail","text":"bAAb","keys":":s/a\\+\\c/X/<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"pattern-case-multi-sub-caret-star","text":"*Ab","keys":":s/^\\c*/X/<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"pattern-case-multi-sub-start-star","text":"b*Ab","keys":":s/\\c*/X/<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"pattern-case-multi-sub-open-star","text":"b*Ab","keys":":s/\\(\\c*\\)/X/<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"pattern-case-multi-back-plus","text":"bAAb","keys":"$?a\\c\\+<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}}
 ]

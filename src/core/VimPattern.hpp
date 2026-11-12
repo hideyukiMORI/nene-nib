@@ -7,6 +7,7 @@
 #include "VimPatternGroup.hpp"
 #include "VimPatternMatch.hpp"
 #include "VimPatternRange.hpp"
+#include "VimPatternRoute.hpp"
 #include "VimSearchDirection.hpp"
 
 #include <cstddef>
@@ -41,10 +42,10 @@ class VimPattern final
     // `\(` の直後の `*` は文字、`^` は錨、`\)` の直前の `$` は錨（Vim の magic と同じ）。
     // 原子 1 つに付く量 `\+` `\=` `\?` `\{n}` `\{n,}` `\{,m}` `\{n,m}` と最短の `\{-...}` は
     // 原子の写しに開く（ADR 0184 の決定 2）。`\{` の中の不正は brace（E554）、付く原子の無い量は
-    // misplaced（E866）、量の後ろの量（`a**` も）は multi_after_multi（E871）、開いた後の原子の数が
-    // atom_limit（製品は vim_pattern_atom_limit・試験だけが小さな値を渡す）を超えれば too_complex。
-    // 群に付く量は段 2 なので quantifier で断る。幅の無い原子に付く量は、最小が 1 以上なら原子
-    // 1 つ、0 なら原子を消す（`^\+a` は `^a`・Vim 9.1 の実測）。
+    // misplaced（E866・`\c` `\C` の直後も）、量の後ろの量（`a**` も）は multi_after_multi
+    // （E871）、開いた後の原子の数が atom_limit（製品は vim_pattern_atom_limit・試験だけが小さな
+    // 値を渡す）を超えれば too_complex。群に付く量は段 2 なので quantifier で断る。幅の無い原子に
+    // 付く量は、最小が 1 以上なら原子 1 つ、0 なら原子を消す（`^\+a` は `^a`・Vim 9.1 の実測）。
     [[nodiscard]] static std::expected<VimPattern, VimPatternFailure>
     parse(std::string_view pattern, VimSearchDirection separator, VimPatternCase letter_case,
           std::size_t atom_limit = vim_pattern_atom_limit);
@@ -65,6 +66,11 @@ class VimPattern final
     // パターンは、英字か ASCII の外の文字を含めば値が無い（バイト列の一致で絞れない・#1041）。
     [[nodiscard]] std::optional<std::string> literal_bytes() const;
 
+    // 照合器が通る道（ADR 0184 の決定 1）。matched と VimPatternEvaluation はこの答えで道を選ぶ。
+    // 試験が「量の無いパターンは今の道のまま」を直接見るための口でもある。
+    [[nodiscard]] VimPatternRoute route() const noexcept;
+    // 量を開いた後の原子の数（ADR 0184 の決定 1・2・試験が parse の結果を見る口）。
+    [[nodiscard]] std::size_t atom_count() const noexcept;
     // 群 `\(` `\)` の数（ADR 0168 の決定 4・0〜9）。
     [[nodiscard]] std::size_t group_count() const noexcept;
 

@@ -2,6 +2,7 @@
 
 #include "Utf8.hpp"
 #include "VimPattern.hpp"
+#include "VimPatternRoute.hpp"
 
 #include <algorithm>
 
@@ -26,8 +27,9 @@ VimPatternEvaluation::VimPatternEvaluation(const VimPattern &pattern, std::strin
       current_begins_(2 * skipping_), next_begins_(2 * skipping_),
       // 最短の量を含む列だけが後に置く消費を扱う展開を通る（ADR 0184 の決定 1・今の列の
       // 展開に分岐を足さない）。
-      expand_(pattern.lazy_ ? &VimPatternEvaluation::lazily_expanded
-                            : &VimPatternEvaluation::expanded)
+      expand_(pattern.route() == VimPatternRoute::lazy_states
+                  ? &VimPatternEvaluation::lazily_expanded
+                  : &VimPatternEvaluation::expanded)
 {
     current_.reserve(pattern.atoms_.size());
     next_.reserve(pattern.atoms_.size());

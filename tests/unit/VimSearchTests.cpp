@@ -25,6 +25,7 @@
 #include "VimPattern.hpp"
 #include "VimPatternFailure.hpp"
 #include "VimPatternMatch.hpp"
+#include "VimPatternRoute.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
 #include "VimSearch.hpp"
@@ -45,6 +46,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 
 namespace nenenib::tests
@@ -301,6 +303,21 @@ void verify_vim_pattern_quantifier_failures()
     expect(VimPattern::parse("^**", VimSearchDirection::forward, VimPatternCase::sensitive)
                .has_value(),
            "a star after the leading caret is a character, so the next star is a multi");
+    // `\c` `\C` は項目の間で読まれ、直後の量は付く原子が無い（Vim 9.1 の nfa_regconcat・実測）。
+    expect(rejects("a\\c\\+", VimPatternFailure::misplaced) &&
+               rejects("a\\C\\{2}", VimPatternFailure::misplaced) &&
+               rejects("a\\c\\=", VimPatternFailure::misplaced) &&
+               rejects("a\\c*", VimPatternFailure::misplaced) &&
+               rejects("^\\c*", VimPatternFailure::misplaced) &&
+               rejects("a*\\c*", VimPatternFailure::misplaced) &&
+               rejects("a\\c\\C\\+", VimPatternFailure::misplaced),
+           "a multi right after \\c or \\C is E866");
+    expect(match_range_is("\\c*", "b*Ab", 0, {1, 2}) &&
+               match_range_is("\\(\\c*\\)", "b*Ab", 0, {1, 2}),
+           "a star after \\c at the start or after \\( stays a character");
+    expect(match_range_is("\\ca\\+", "bAAb", 0, {1, 3}) &&
+               match_range_is("a\\+\\c", "bAAb", 0, {1, 3}),
+           "\\c before the atom or after the multi still folds the case");
     const auto parsed = [](std::string_view text, std::size_t limit)
     {
         return VimPattern::parse(text, VimSearchDirection::forward, VimPatternCase::sensitive,
@@ -336,6 +353,34 @@ void verify_vim_pattern_quantifier_bounds()
                parsed("e\xCC\x81\\{2}").value().longest_bytes() == std::optional<std::size_t>{16},
            "longest_bytes counts the copies and the composed characters");
     expect(match_range_is("\\(a\\+\\)b", "xaaab", 0, {1, 5}), "a group around a repeated atom");
+}
+
+// 決定 1 の道の選び方の表（ADR 0184）。量の無いパターンは今の 2 本（後戻りしない列か `*` の
+// 状態集合）のどちらかを通り、原子の数も量を足す前の parse と同じ。量の付いた 4 行は、開いた
+// 後の道と数が決めたとおりかを見る。
+void verify_vim_pattern_routes()
+{
+    using core::VimPatternRoute;
+    constexpr std::array<std::tuple<std::string_view, VimPatternRoute, std::size_t>, 20> table{{
+        {"", VimPatternRoute::sequence, 0},         {"abc", VimPatternRoute::sequence, 3},
+        {"a.c", VimPatternRoute::sequence, 3},      {"[a-c]x", VimPatternRoute::sequence, 2},
+        {"^ab$", VimPatternRoute::sequence, 4},     {"\\<foo\\>", VimPatternRoute::sequence, 5},
+        {"^*", VimPatternRoute::sequence, 2},       {"a\\*b", VimPatternRoute::sequence, 3},
+        {"\\(a\\)b", VimPatternRoute::sequence, 2}, {"\\(*\\)", VimPatternRoute::sequence, 1},
+        {"a\\/b", VimPatternRoute::sequence, 3},    {"e\xCC\x81", VimPatternRoute::sequence, 2},
+        {"a*", VimPatternRoute::states, 1},         {".*", VimPatternRoute::states, 1},
+        {"x*y*", VimPatternRoute::states, 2},       {"\\ca*b", VimPatternRoute::states, 2},
+        {"a\\{2}", VimPatternRoute::sequence, 2},   {"a\\+", VimPatternRoute::states, 2},
+        {"a\\{1,3}", VimPatternRoute::states, 3},   {"a\\{-}", VimPatternRoute::lazy_states, 1},
+    }};
+    for (const auto &[text, route, atoms] : table)
+    {
+        const auto parsed =
+            VimPattern::parse(text, VimSearchDirection::forward, VimPatternCase::sensitive);
+        expect(parsed.has_value() && parsed.value().route() == route &&
+                   parsed.value().atom_count() == atoms,
+               "a pattern takes the route and atom count the table decides");
+    }
 }
 
 void verify_vim_pattern_evaluation_bounds()
@@ -1408,6 +1453,7 @@ void verify_vim_search_contracts()
     verify_vim_pattern_quantifier_ranges();
     verify_vim_pattern_quantifier_failures();
     verify_vim_pattern_quantifier_bounds();
+    verify_vim_pattern_routes();
     verify_vim_pattern_composing();
     verify_vim_pattern_leading_composing();
     verify_vim_search_scan();

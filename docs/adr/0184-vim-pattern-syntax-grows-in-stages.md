@@ -42,10 +42,12 @@ Vim 9.1 の規則（実測 184 形）: 選択は最も左の開始が先で、�
 
 - 量の欄は閉じた enum `VimPatternRepeat`（`once` `star` `lazy_star` `optional` `lazy_optional`）で、読んだ量は `VimPatternQuantity`（最小・最大・最短か）。parse が `\{n,m}` を「n 個の `once` ＋ 残りの `optional`（上限なしなら `star` 1 つ）」に開く（Vim 9.1 の `nfa_regpiece` と同じ写し）。上限 `vim_pattern_atom_limit`（1,024・`VimPattern.hpp` の 1 か所）は開くときだけ数え、量の無いパターンには掛けない（決定 1）。試験は `parse` の引数で小さな上限を注入する。
 - 道は今の 2 本のまま。`once` だけの列（量の無い列と `a\{2}` のような固定の回数）は `matched_sequence`、ほかは `VimPatternEvaluation`（最短は「0 回の枝を先に展開し、消費を後に置く」）。群の範囲は `VimPatternCapture` が同じ優先順で歩く（升の表は原子の写しの上でそのまま成り立つ）。
+- 道を選ぶのは `VimPattern::route()`（閉じた enum `VimPatternRoute`: `sequence` `states` `lazy_states`）の 1 本で、`matched` と `VimPatternEvaluation` が同じ答えを読む。決定 1 の表は `--vim-search` の `verify_vim_pattern_routes`（量の無い代表 16 個と量の 4 個の道と原子の数）。
 - 量の付いた基底＋結合文字は 1 原子 `cluster` に畳む（`é\+` は `éé`）。量の無い `é` は今どおり literal の列。
-- 失敗: `brace`（E554）・`misplaced`（E866・先頭・`\(` の直後・`\{0}` の後ろ）・`multi_after_multi`（E871・`a**` を含む）・`too_complex`（E363 の文言）。群に付く量は `quantifier` で断る（段 2）。幅の無い原子に付く量は最小が 1 以上なら 1 つ、0 なら消す（`^\+a` `\<\+a` `^\=a` は実測どおり）。
+- `\c` `\C` の直後の量（`a\c\+` `a\C\{2}` `a\c*` `^\c*` `a*\c*`）は E866（`misplaced`）。Vim 9.1 の `nfa_regconcat` は `\c` を項目の間で読み、次の `nfa_regatom` が量を「Misplaced」で断る。星はパターンの先頭（`\c*`）と `\(` の直後（`\(\c*\)`）だけ文字のまま（`skipchr_keepstart` が `at_start` と `prevchr` を残す）。`\ca\+` と `a\+\c` は受ける（2026-11-13 に oracle で実測・fixture `pattern-case-multi-` 10 件）。
+- 失敗: `brace`（E554）・`misplaced`（E866・先頭・`\(` の直後・`\{0}` の後ろ・`\c` `\C` の直後）・`multi_after_multi`（E871・`a**` を含む）・`too_complex`（E363 の文言）。群に付く量は `quantifier` で断る（段 2）。幅の無い原子に付く量は最小が 1 以上なら 1 つ、0 なら消す（`^\+a` `\<\+a` `^\=a` は実測どおり）。
 - oracle の fixture `pattern-quantifier-` 67 件（検索の着地・`n`・`d/`・`?` の `\?`・`:s` の範囲と群・失敗は viewport の形で「本文が変わらず続きの鍵が打ち切られる」）。性質の試験 `--vim-pattern-property` の `verify_quantifiers_follow_the_model`（量と群を含む乱数のパターンを試験の中の後戻りの模型と照合・800 組）。unit は `--vim-search` の `verify_vim_pattern_quantifier_*` と知らせの文言。
-- 段 1 の残り: Vim は `\{` の最大が 500 を超えると後戻りの照合器へ移って受けるが、Nib は 1,024 原子を超える量を E363 で断る。E866 の文言は打った文字の代わりに `multi` と書く。`é*`（星だけのパターン）は今どおり結合文字だけに星が掛かり、`xééy` で `é`（1:4）に当たる。Vim 9.1 は 1 文字の全体に掛けて `éé`（1:7）に当たる（2026-11-12 に `matchstrpos` で実測）。今の構文だけのパターンなので決定 1 で変えず、直すなら別の Issue で決める。
+- 段 1 の残り: Vim は `\{` の最大が 500 を超えると後戻りの照合器へ移って受けるが、Nib は 1,024 原子を超える量を E363 で断る。E866 の文言は打った文字の代わりに `multi` と書く。`é*`（星だけのパターン）は今どおり結合文字だけに星が掛かり、`xééy` で `é`（1:4）に当たる。Vim 9.1 は 1 文字の全体に掛けて `éé`（1:7）に当たる（2026-11-12 に `matchstrpos` で実測）。今の構文だけのパターンなので決定 1 で変えず、直すなら別の Issue で決める。`\<*` `$*` の星（Vim は量）・上限 1,024 の量の長い行での費用・再生器の 16,384 字の行とあわせて #1588。
 
 ## 帰結
 

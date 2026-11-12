@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 5cf9e7c94b8ae37dd828fbd30c198f8325be2e30f5001e31c62c558393497179 / 4980 fixtures
+// fixtures.json: sha256 873fd2918029da0924f167936d8c053df534d71136fbf0b7348d2208858a31ed / 4990 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4980> vim_fixtures{{
+constexpr std::array<VimFixture, 4990> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4992,6 +4992,16 @@ constexpr std::array<VimFixture, 4980> vim_fixtures{{
     {"pattern-quantifier-sub-err-star-plus", "aab", ":s/a*\\+/X/<CR>x", "aab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"pattern-quantifier-sub-err-count-count", "aab", ":s/a\\{1}\\{2}/X/<CR>x", "aab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"pattern-quantifier-sub-err-double-star", "a*ab", ":s/a**/X/<CR>x", "a*ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-case-multi-search-plus", "bAAb", "/a\\c\\+<CR>x", "bAAb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-case-multi-sub-brace", "bAAb", ":s/a\\c\\{2}/X/<CR>x", "bAAb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-case-multi-sub-star", "bAAb", ":s/a\\c*/X/<CR>x", "bAAb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-case-multi-sub-upper-eq", "bAAb", ":s/a\\C\\=/X/<CR>x", "bAAb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-case-multi-sub-lead", "bAAb", ":s/\\ca\\+/X/<CR>", "bXb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-case-multi-sub-trail", "bAAb", ":s/a\\+\\c/X/<CR>", "bXb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-case-multi-sub-caret-star", "*Ab", ":s/^\\c*/X/<CR>x", "*Ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-case-multi-sub-start-star", "b*Ab", ":s/\\c*/X/<CR>", "bXAb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-case-multi-sub-open-star", "b*Ab", ":s/\\(\\c*\\)/X/<CR>", "bXAb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-case-multi-back-plus", "bAAb", "$?a\\c\\+<CR>x", "bAAb", 1, 4, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
 }};
 } // namespace nenenib::tests
 // clang-format on
