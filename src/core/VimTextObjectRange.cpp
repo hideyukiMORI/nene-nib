@@ -337,11 +337,12 @@ constexpr char32_t escape_character = U'\\';
         text, with_leading_blanks(text, begin, end, word_class_of(request.object)), end));
 }
 
-// 選択が無いときの 1 つめの単位と、そこから回数ぶん。
-[[nodiscard]] std::optional<Offset> fresh_word_end(const TextBuffer &text, Offset begin,
+// 選択が無いときの 1 つめの単位の終わり first から回数ぶん（1 つめは呼び出し元が 1 回だけ歩く・
+// 巨大な 1 行の語の歩きを 2 回しない）。
+[[nodiscard]] std::optional<Offset> fresh_word_end(const TextBuffer &text,
+                                                   std::optional<Offset> first,
                                                    VimTextObjectRequest request, std::size_t count)
 {
-    const auto first = unit_end(text, begin, request);
     if (!first.has_value())
     {
         return std::nullopt;
@@ -427,17 +428,14 @@ constexpr char32_t escape_character = U'\\';
     const Offset begin =
         grows ? selection_range(selection).begin
               : run_start_in_line(text, selection.caret, word_class_of(request.object));
-    if (!grows)
+    const auto first = grows ? std::optional<Offset>{} : unit_end(text, begin, request);
+    // 1 つめの単位が始まりより手前に着くのは、本文の最後の空行で fwd_word が動けないときだけ。
+    if (first.has_value() && first.value() < begin)
     {
-        // 1 つめの単位が始まりより手前に着くのは、本文の最後の空行で fwd_word が動けないときだけ。
-        const auto first = unit_end(text, begin, request);
-        if (first.has_value() && first.value() < begin)
-        {
-            return last_empty_line_outcome(text, begin, request, count);
-        }
+        return last_empty_line_outcome(text, begin, request, count);
     }
     const auto end = grows ? extended_end(text, selection.caret, request, count)
-                           : fresh_word_end(text, begin, request, count);
+                           : fresh_word_end(text, first, request, count);
     if (!end.has_value())
     {
         // 回数が本文で尽きた。Vim はそこまで作りかけた形を残してキャレットを本文の終わりへ
