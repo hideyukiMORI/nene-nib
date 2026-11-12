@@ -1268,6 +1268,8 @@ void EditorController::perform(const core::VimNoEffect &) {}
 
 // VISUAL の `:` は先にキャレットを選択の先の端へ置いて選択を畳み、入力行の先に範囲（`'<,'>`・
 // 回数の `.,.+N`）を置く（ADR 0022 の追補 #1526）。範囲は 256 bytes に届かないので入る。
+// キャレットを置く形（VISUAL から開いた行）は、入力行が開いている間だけ前の選択を描く印を立てる
+// （#1572・倒れるのは with_command_input）。
 void EditorController::perform(const core::VimOpenCommandLine &effect)
 {
     if (effect.caret.has_value())
@@ -1275,8 +1277,10 @@ void EditorController::perform(const core::VimOpenCommandLine &effect)
         move_caret_to(effect.caret.value(), core::SelectionAnchoring::collapse);
     }
     const auto line = core::CommandLine::empty(state_.themes()).with_fonts(given_fonts());
-    state_ = state_.with_command_input(
-        effect.range.empty() ? line : line.inserted(effect.range).value_or(line));
+    state_ = state_
+                 .with_command_input(
+                     effect.range.empty() ? line : line.inserted(effect.range).value_or(line))
+                 .with_visual_command_line(effect.caret.has_value());
     vim_line_open_ = true;
     note_recorded_line();
 }

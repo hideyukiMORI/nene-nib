@@ -8,10 +8,12 @@
 #include "CommandLayout.hpp"
 #include "CommandLine.hpp"
 #include "CommandText.hpp"
+#include "DisplayForm.hpp"
 #include "DisplayText.hpp"
 #include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
+#include "EditorFrame.hpp"
 #include "EditorSettings.hpp"
 #include "ExClipboardRequest.hpp"
 #include "ExEvaluationFailure.hpp"
@@ -46,12 +48,15 @@
 #include "ScriptedAppearance.hpp"
 #include "ScriptedSettings.hpp"
 #include "SelectAll.hpp"
+#include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
+#include "SelectionPresence.hpp"
 #include "SettingsFailure.hpp"
 #include "StatusBarLayout.hpp"
 #include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
 #include "TestSupport.hpp"
+#include "TextViewGeometry.hpp"
 #include "ThemeChoice.hpp"
 #include "ThemeExpectations.hpp"
 #include "VimCharacter.hpp"
@@ -836,6 +841,176 @@ void verify_ex_operator_colon_replaced_line()
     static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'j'}}));
     expect(whole_vim_body(controller) == four_lines,
            "switching tabs while d: is open drops the operator");
+}
+
+// frame に載った選択の区間の写し（本文の行と格子の画面行・#1572）。選択の無い行は書かない。
+[[nodiscard]] std::string drawn_selection(const app::EditorFrame &frame)
+{
+    std::string out;
+    for (const auto &line : frame.lines)
+    {
+        if (line.selection.presence == core::SelectionPresence::present)
+        {
+            out += "L" + std::to_string(line.number.value) + ":" +
+                   std::to_string(line.selection.begin.value) + "-" +
+                   std::to_string(line.selection.end.value) + ";";
+        }
+    }
+    for (const auto &row : frame.grid)
+    {
+        if (row.selection.has_value())
+        {
+            out += "G" + std::to_string(row.number.value) + "." + std::to_string(row.row) + ":" +
+                   std::to_string(row.selection.value().begin) + "-" +
+                   std::to_string(row.selection.value().end) + (row.newline_selected ? "+" : "") +
+                   ";";
+        }
+    }
+    return out;
+}
+
+// 1 升 10 画素（ScriptedTextLayouts）で 8 升の幅。200 字の行は折り返して 25 画面行になる。
+constexpr core::TextViewGeometry narrow_geometry{85, 20, 96};
+
+// VISUAL の選択を作ってから `:` を打ち、VISUAL の frame と入力行の frame の選択の区間を返す。
+[[nodiscard]] std::pair<std::string, std::string>
+colon_over_visual(app::EditorController &controller, std::string_view keys)
+{
+    vim_replay(controller, keys);
+    const auto visual = drawn_selection(controller.frame());
+    const auto opened = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}});
+    expect(opened.command_line.has_value() && opened.command_line.value().text == "'<,'>" &&
+               opened.vim_mode == VimMode::normal,
+           "VISUAL : opens the '<,'> line in NORMAL (#1526)");
+    return {visual, drawn_selection(opened)};
+}
+
+// VISUAL・行単位・矩形・折り返す行・格子から開いた `:` の入力行の間、frame は VISUAL のときと
+// 同じ選択の区間を載せる（#1572）。入力行を書き換えても残り、閉じたら消える。
+void verify_ex_visual_range_keeps_selection()
+{
+    const auto check = [](std::string_view keys, bool narrow, bool grid, const char *label)
+    {
+        Editing editor;
+        open_vim_document(editor,
+                          narrow ? std::string(200, 'a') + "\nb\n" : std::string(four_lines));
+        auto &controller = editor.controller();
+        if (narrow)
+        {
+            static_cast<void>(controller.apply_frame(VisibleLines{3, narrow_geometry}));
+        }
+        if (grid)
+        {
+            static_cast<void>(controller.apply_frame(app::SelectDisplay{core::DisplayForm::grid}));
+        }
+        expect(drawn_selection(controller.frame()).empty(), "NORMAL draws no selection");
+        const auto [visual, opened] = colon_over_visual(controller, keys);
+        expect(!visual.empty() && opened == visual, label);
+        static_cast<void>(controller.apply_frame(app::CommandText{"s/a/b/"}));
+        expect(drawn_selection(controller.frame()) == visual,
+               "typing on the line keeps the previous selection drawn (#1572)");
+        static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+        expect(drawn_selection(controller.frame()).empty(),
+               "the selection is gone once the line closes (#1572)");
+    };
+    check("jlvj", false, false, "v : keeps the characterwise selection drawn (#1572)");
+    check("jlVj", false, false, "V : keeps the linewise selection drawn (#1572)");
+    check("jl<C-v>jl", false, false, "<C-v> : keeps the block drawn row by row (#1572)");
+    check("jl<C-v>j$", false, false, "<C-v>$ : keeps the ragged block drawn (#1572)");
+    check("3lv12l", true, false, "a wrapped line keeps the selection drawn (#1572)");
+    check("3lv20l", true, true, "grid rows keep the selection drawn (#1572)");
+    check("3lV", true, true, "grid rows keep the linewise selection drawn (#1572)");
+}
+
+// 入力行が閉じる道のどれでも選択の区間は消え、閉じた後に戻らない（#1572）。
+void verify_ex_visual_range_selection_closes()
+{
+    const auto check = [](auto &&leave, const char *label)
+    {
+        Editing editor;
+        open_vim_document(editor, std::string(four_lines));
+        auto &controller = editor.controller();
+        static_cast<void>(controller.apply_frame(app::NewTab{}));
+        static_cast<void>(controller.apply_frame(app::SwitchTab{0}));
+        const auto [visual, opened] = colon_over_visual(controller, "jlvj");
+        expect(!opened.empty() && opened == visual, "the line opens with the selection drawn");
+        leave(controller);
+        expect(drawn_selection(controller.frame()).empty(), label);
+        static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+        expect(drawn_selection(controller.frame()).empty(), label);
+    };
+    check([](app::EditorController &controller)
+          { static_cast<void>(controller.apply_frame(app::SubmitCommand{})); },
+          "Enter on '<,'> drops the drawn selection");
+    check([](app::EditorController &controller)
+          { static_cast<void>(controller.apply_frame(app::CancelCommand{})); },
+          "Esc drops the drawn selection");
+    check(
+        [](app::EditorController &controller)
+        {
+            for (std::size_t typed = 0; typed <= std::string_view{"'<,'>"}.size(); ++typed)
+            {
+                static_cast<void>(
+                    controller.apply_frame(app::EditCommand{core::CommandEdit::backspace}));
+            }
+        },
+        "Backspace on the empty line drops the drawn selection");
+    check([](app::EditorController &controller)
+          { static_cast<void>(controller.apply_frame(app::OpenCommandPalette{})); },
+          "Ctrl+P over the line drops the drawn selection");
+    check([](app::EditorController &controller)
+          { static_cast<void>(controller.apply_frame(app::OpenTabList{})); },
+          "the tab list over the line drops the drawn selection");
+    check(
+        [](app::EditorController &controller)
+        {
+            static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+            static_cast<void>(controller.apply_frame(
+                app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                                core::SelectionAnchoring::collapse}));
+        },
+        "a click drops the drawn selection");
+    check(
+        [](app::EditorController &controller)
+        {
+            static_cast<void>(controller.apply_frame(app::SwitchTab{1}));
+            static_cast<void>(controller.apply_frame(app::SwitchTab{0}));
+        },
+        "switching tabs drops the drawn selection");
+    check([](app::EditorController &controller)
+          { static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::ordinary})); },
+          "leaving Vim drops the drawn selection");
+}
+
+// NORMAL の `:` と `d:` は前の選択があっても描かない。`:'<,'>s` を確定した後も描かない（#1572）。
+void verify_ex_visual_range_selection_only_from_visual()
+{
+    Editing editor;
+    open_vim_document(editor, std::string(four_lines));
+    auto &controller = editor.controller();
+    vim_replay(controller, "jlvjy");
+    expect(controller.vim_state().mode == VimMode::normal,
+           "the previous selection is remembered in NORMAL");
+    auto frame = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}});
+    expect(frame.command_line.has_value() && drawn_selection(frame).empty(),
+           "NORMAL : does not draw the previous selection (#1572)");
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    vim_replay(controller, "d");
+    frame = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}});
+    expect(frame.command_line.has_value() && drawn_selection(frame).empty(),
+           "d: does not draw the previous selection (#1572)");
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    vim_replay(controller, "ggVj");
+    static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}}));
+    static_cast<void>(controller.apply_frame(app::CommandText{"s/o/0/g"}));
+    frame = controller.apply_frame(app::SubmitCommand{});
+    expect(whole_vim_body(controller) == "0ne\ntw0\nthree\nfour" &&
+               drawn_selection(controller.frame()).empty() && drawn_selection(frame).empty(),
+           "`:'<,'>s` replaces the lines and leaves no drawn selection (#1572)");
+    vim_replay(controller, "gv");
+    expect(controller.vim_state().mode == VimMode::visual_line &&
+               !drawn_selection(controller.frame()).empty(),
+           "gv still reselects the previous selection through the shared conversion");
 }
 
 void verify_ex_tab_names()
@@ -1810,5 +1985,8 @@ void verify_ex_settings()
     verify_ex_operator_colon_motion_and_cancel();
     verify_ex_operator_colon_refused_request();
     verify_ex_operator_colon_replaced_line();
+    verify_ex_visual_range_keeps_selection();
+    verify_ex_visual_range_selection_closes();
+    verify_ex_visual_range_selection_only_from_visual();
 }
 } // namespace nenenib::tests

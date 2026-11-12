@@ -1070,6 +1070,8 @@ class EditorController final
     // 矩形 VISUAL のあいだだけ値を持つ（ADR 0035 の決定 2・8）。描く選択も Ctrl+C / Ctrl+X も
     // 同じ行ごとの範囲を使う。
     [[nodiscard]] std::optional<core::VimBlockRange> block_selection() const;
+    // 操作中の枠の frame の元（#1572）。VISUAL から開いた `:` の入力行の間は前の選択を描く。
+    [[nodiscard]] PaneSource framed_source(const core::VimPattern *pattern) const;
     // 検索強調の値（ADR 0037 / 0102）。入力中は解析値を所有し、確定後は保持結果を借用する。
     // 選択した値と借用はvisible_linesの同期呼出し内だけ生存する。
     using SearchPattern =

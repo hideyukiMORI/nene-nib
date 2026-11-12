@@ -329,7 +329,27 @@ EditorState EditorState::with_command_input(std::optional<CommandInput> command)
     {
         next.search_preview_ = std::nullopt;
     }
+    // VISUAL から開いた印は、同じ Ex の入力行が書き換わる間だけ残る（#1572）。閉じる（Enter・Esc・
+    // Ctrl+C・空の行の Backspace・クリック・タブの切り替え・通常 / Vim の切り替え）か別の面に
+    // 置き換わると、ここで倒れる。
+    const auto is_ex = [](const std::optional<CommandInput> &input)
+    { return input.has_value() && std::holds_alternative<core::CommandLine>(input.value()); };
+    next.visual_command_line_ = visual_command_line_ && is_ex(command_input_) && is_ex(command);
     next.command_input_ = std::move(command);
+    return next;
+}
+
+bool EditorState::visual_command_line() const noexcept
+{
+    return visual_command_line_;
+}
+
+EditorState EditorState::with_visual_command_line(bool from_visual) const
+{
+    EditorState next(*this);
+    const bool ex = command_input_.has_value() &&
+                    std::holds_alternative<core::CommandLine>(command_input_.value());
+    next.visual_command_line_ = from_visual && ex;
     return next;
 }
 
@@ -1391,6 +1411,7 @@ std::optional<EditorState> EditorState::other_pane_state() const
     pane.composition_.reset();
     pane.command_input_.reset();
     pane.search_preview_.reset();
+    pane.visual_command_line_ = false;
     return pane;
 }
 } // namespace nenenib::application
