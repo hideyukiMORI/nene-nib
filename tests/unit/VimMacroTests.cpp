@@ -355,7 +355,7 @@ void verify_macro_replays_ex_line()
 // `exe "normal! :{行}<CR>j"` の両方を測った行をそのまま置く: 本文 abc/def/ghi の 1 行目から、
 // エラーは 1 行目に残り、成功は `j` で 2 行目へ。
 using ExReplayCase = std::pair<std::string_view, std::size_t>;
-constexpr std::array<ExReplayCase, 18> ex_replay_cases{{
+constexpr std::array<ExReplayCase, 23> ex_replay_cases{{
     {"set so!", 1},                 // E488
     {"set invso", 1},               // E474
     {"set noso", 1},                // E474
@@ -374,6 +374,13 @@ constexpr std::array<ExReplayCase, 18> ex_replay_cases{{
     {"set so&", 2},
     {"set wrap!", 2},
     {"set invwrap", 2},
+    // hlsearch・incsearch の反転と短い名前の `&`（レビュー V-1552 の L4・Vim 9.1 は流す・
+    // D:/NeNeNib/scripts/20261112/v1552/e1.py と D:/NeNeNib/scripts/20261112/c10b/h.vim）。
+    {"set hls!", 2},
+    {"set invhls", 2},
+    {"set nohls!", 2},
+    {"set hls&", 2},
+    {"set is&", 2},
 }};
 
 constexpr std::string_view ex_replay_text = "abc\ndef\nghi";

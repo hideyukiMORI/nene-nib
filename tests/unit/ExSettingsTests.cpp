@@ -21,6 +21,7 @@
 #include "ExRootRequest.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
+#include "ExWindowState.hpp"
 #include "FilePath.hpp"
 #include "FontSize.hpp"
 #include "FontSizeAdjustment.hpp"
@@ -982,8 +983,10 @@ void verify_ex_scrolloff()
 // `:set {name}&`（`&vim` `&vi`）と `{name}!` `no{name}!` `inv{name}`（#1525・Vim 9.1 の実測）。
 // 既定値は保存する設定の正本 default_editor_settings と、検索の強調・incsearch の既定。数の
 // option の `!`（E488）・`inv`（E474）・`no{num}&`（E474）・`invno{bool}`（E518）・`{name}!?`
-// `{name}&?`（E488）は断る。文書の値（filetype など）の `&` と hlsearch・incsearch の反転はまだ
-// 受けない（今の値が設定に無い・残る違い）。
+// `{name}&?`（E488）は断る。文書の値（filetype など）の `&` はまだ受けない（残る違い）。hlsearch・
+// incsearch の反転と短い名前の `hls&` `is&` は Vim の状態（ExWindowState）の今の値と初期値から
+// 引く（レビュー V-1552 の L4・Vim 9.1 の実測 D:/NeNeNib/scripts/20261112/c10b/h.vim: `hls!`
+// `invhls` `nohls!` `is!` `invis` `nois!` はどれも反転、`hls&` `is&` は既定値へ）。
 core::EditorSettings changed_from_defaults()
 {
     auto changed = core::default_editor_settings();
@@ -1040,6 +1043,13 @@ void verify_ex_set_default_values()
     expect(incsearch.has_value() &&
                incsearch.value().incsearch == std::optional{core::vim_default_incsearch},
            "incsearch& asks for the default incsearch");
+    const core::ExWindowState cleared{Appearance::dark, core::VimSearchHighlight::off, false};
+    const auto hls = core::evaluate_ex("set hls&", changed, cleared);
+    expect(hls.has_value() && hls.value().highlight == std::optional{core::vim_default_highlight},
+           "hls& asks for the default highlight");
+    const auto is = core::evaluate_ex("set is&", changed, cleared);
+    expect(is.has_value() && is.value().incsearch == std::optional{core::vim_default_incsearch},
+           "is& asks for the default incsearch");
     const auto clipboard = core::evaluate_ex("set clipboard&", changed, Appearance::dark);
     expect(clipboard.has_value() &&
                clipboard.value().clipboard == std::optional{core::ExClipboardRequest::disable},
@@ -1047,6 +1057,39 @@ void verify_ex_set_default_values()
     const auto lsp = core::evaluate_ex("set lsp!", defaults, Appearance::dark);
     expect(lsp.has_value() && lsp.value().lsp == std::optional{core::ExLspRequest::enable},
            "lsp! turns the off language server on");
+}
+
+// hlsearch と incsearch の反転は Vim の状態の今の値から（`:noh` の後の suspended も立っている）。
+void verify_ex_set_search_toggle()
+{
+    const auto defaults = core::default_editor_settings();
+    using core::VimSearchHighlight;
+    for (const auto text : {"set hls!", "set invhls", "set nohls!", "set hlsearch!",
+                            "set invhlsearch", "set nohlsearch!"})
+    {
+        for (const auto current : {VimSearchHighlight::on, VimSearchHighlight::suspended})
+        {
+            const auto off = core::evaluate_ex(
+                text, defaults, core::ExWindowState{Appearance::dark, current, true});
+            expect(off.has_value() &&
+                       off.value().highlight == std::optional{VimSearchHighlight::off},
+                   (std::string(text) + " turns a set hlsearch off").c_str());
+        }
+        const auto on = core::evaluate_ex(
+            text, defaults, core::ExWindowState{Appearance::dark, VimSearchHighlight::off, true});
+        expect(on.has_value() && on.value().highlight == std::optional{VimSearchHighlight::on},
+               (std::string(text) + " turns hlsearch on").c_str());
+    }
+    for (const auto text : {"set is!", "set invis", "set nois!", "set incsearch!"})
+    {
+        const auto off = core::evaluate_ex(
+            text, defaults, core::ExWindowState{Appearance::dark, VimSearchHighlight::on, true});
+        const auto on = core::evaluate_ex(
+            text, defaults, core::ExWindowState{Appearance::dark, VimSearchHighlight::on, false});
+        expect(off.has_value() && off.value().incsearch == std::optional{false} && on.has_value() &&
+                   on.value().incsearch == std::optional{true},
+               (std::string(text) + " toggles incsearch").c_str());
+    }
 }
 
 void verify_ex_set_toggle()
@@ -1075,6 +1118,7 @@ void verify_ex_set_toggle()
     expect(carries_settings(minimap) &&
                core::minimap_shown(settings_of(minimap)) != core::minimap_shown(defaults),
            "minimap! toggles");
+    verify_ex_set_search_toggle();
 }
 
 void verify_ex_set_refused()
@@ -1082,7 +1126,7 @@ void verify_ex_set_refused()
     const auto defaults = core::default_editor_settings();
     for (const auto text :
          {"set so!", "set invso", "set noso&", "set invnowrap", "set so!?", "set so&?",
-          "set wrap!?", "set ft&", "set hlsearch!", "set fontsize!", "set noso!"})
+          "set wrap!?", "set ft&", "set hls!?", "set fontsize!", "set noso!"})
     {
         expect(!core::evaluate_ex(text, defaults, Appearance::dark).has_value(),
                (std::string(text) + " is refused").c_str());
