@@ -20,6 +20,7 @@
 #include "ExSyntaxRequest.hpp"
 #include "ExTabRequest.hpp"
 #include "ExWindowCommand.hpp"
+#include "ExWindowState.hpp"
 #include "FontFamilies.hpp"
 #include "ThemeCatalog.hpp"
 #include "VimSearchHighlight.hpp"
@@ -92,6 +93,11 @@ struct ExResult
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 evaluate_ex(std::string_view text, const EditorSettings &settings, Appearance system_appearance,
+            const ThemeCatalog &themes = ThemeCatalog::builtins());
+// 窓の状態（明暗と hlsearch・incsearch の今の値）を渡す形。上の形は明暗だけを渡し、hlsearch と
+// incsearch は初期値として読む（#1525 のレビュー V-1552 の L4）。
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
+evaluate_ex(std::string_view text, const EditorSettings &settings, const ExWindowState &window,
             const ThemeCatalog &themes = ThemeCatalog::builtins());
 // prefix が `set guifont=` で始まるときだけ、fonts の名前を `set guifont=<名前>`
 // の候補として後ろに足す （施主決定 D58）。`set filetype=` `set ft=` で始まるときは言語の名前を

@@ -580,8 +580,10 @@ std::optional<core::VimRepeatFailure> EditorController::evaluate_command(std::st
     {
         return std::nullopt;
     }
-    const auto result =
-        core::evaluate_ex(text, state_.settings(), state_.appearance(), state_.themes());
+    const auto result = core::evaluate_ex(
+        text, state_.settings(),
+        core::ExWindowState{state_.appearance(), state_.vim().highlight, state_.vim().incsearch},
+        state_.themes());
     if (!result)
     {
         reject(core::ex_failure_message(result.error(), text));
