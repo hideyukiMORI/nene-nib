@@ -232,6 +232,15 @@ bool EditorController::records_command_line() const noexcept
            core::vim_key_recorded_in_macro(unit_source_);
 }
 
+void EditorController::note_command_key() noexcept
+{
+    if (!replay_depth_.has_value() && !normal_busy_ &&
+        core::vim_key_recorded_in_macro(unit_source_))
+    {
+        command_line_typed_ = true;
+    }
+}
+
 void EditorController::record_command_keys(std::span<const core::VimKey> keys)
 {
     if (!records_command_line())
@@ -284,7 +293,12 @@ void EditorController::accept(const CommandText &intent)
     {
         return;
     }
-    record_command_keys(typed_character_keys(intent.utf8));
+    note_command_key();
+    // 録画していなければ鍵の列を作らない（入力行と面の 1 打鍵ごとに確保しない・レビュー L1）。
+    if (records_command_line())
+    {
+        record_command_keys(typed_character_keys(intent.utf8));
+    }
     auto next = inserted_command(input.value(), intent.utf8);
     if (!next)
     {
@@ -303,6 +317,7 @@ void EditorController::accept(const EditCommand &intent)
     {
         return;
     }
+    note_command_key();
     const auto recorded = recorded_edit_key(intent.edit);
     if (recorded.has_value())
     {
@@ -328,6 +343,19 @@ void EditorController::accept(const EditCommand &intent)
             : edited_command(input.value(), edit));
     reach_font_families();
     update_search_preview();
+}
+
+std::optional<core::VimRepeatFailure> EditorController::recalled_key(core::CommandEdit direction)
+{
+    const auto &input = state_.command_input();
+    const bool moves = input.has_value() && recalls_command(input.value(), state_.ex_history(),
+                                                            state_.search_history(), direction);
+    accept(EditCommand{direction});
+    if (moves)
+    {
+        return std::nullopt;
+    }
+    return core::VimRepeatFailure::not_moved;
 }
 
 void EditorController::fit_command_rows()
@@ -466,9 +494,11 @@ void EditorController::accept(const SubmitCommand &intent)
 }
 
 // 確定の意図（Enter）だけが入力を履歴に足す。Esc は取消で、再生の中の <Esc> の確定
-// （submitted_command を直接呼ぶ）も足さない（#725・ADR 0022 決定 2 の追補）。
+// （submitted_command を直接呼ぶ）も足さない（#725・ADR 0022 決定 2 の追補）。足すかを決めるのは
+// remember の 1 か所（Ex の行は打った鍵が届いたときだけ・#1528 のレビュー M1）。
 std::optional<core::VimRepeatFailure> EditorController::confirmed_command()
 {
+    note_command_key();
     constexpr core::VimKey enter{core::VimSpecialKey::enter};
     record_command_keys(std::span<const core::VimKey>{&enter, 1U});
     const auto &open = state_.command_input();
@@ -480,13 +510,21 @@ std::optional<core::VimRepeatFailure> EditorController::confirmed_command()
     return submitted_command();
 }
 
+// Vim の getcmdline は `:` の行を、行の鍵が 1 つでも打たれたとき（some_key_typed）だけ履歴に
+// 足す。再生（`@a` `.`）・`map` の右辺・:normal! だけで確定した行は足さない（Vim 9.1 の実測・
+// #1528 のレビュー M1・D:/NeNeNib/scripts/20261112/c10b/h.vim）。
 void EditorController::remember(const core::CommandLine &line)
 {
+    if (!command_line_typed_)
+    {
+        return;
+    }
     state_ = state_.with_ex_history(state_.ex_history().remembered(line.text()));
 }
 
 // 「検索: 」の語も検索の履歴の 1 本へ（入力行の履歴は共用・ADR 0174 の決定 3）。
-// 「行: 」と「置換後: 」は足さない。
+// 「行: 」と「置換後: 」は足さない。検索の行は打った鍵が無くても足す（Vim の getcmdline の
+// `histype == HIST_SEARCH`・再生・`map` の右辺・:normal! の `/` も履歴に入る実測・#1528）。
 void EditorController::remember(const core::SearchLine &line)
 {
     if (line.prompt() == core::InputLinePrompt::go_to_line ||
@@ -1015,6 +1053,7 @@ void EditorController::close_command_input()
     // 入力行の変換は入力行と一緒に消える（ADR 0061 の決定 3・#635 の追記）。
     const bool opened = command_line_active();
     state_ = state_.with_command_input(std::nullopt);
+    command_line_typed_ = false;
     if (opened)
     {
         state_ = state_.with_composition(std::nullopt);

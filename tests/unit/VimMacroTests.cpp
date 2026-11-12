@@ -3,6 +3,7 @@
 #include "CommandEdit.hpp"
 #include "CommandText.hpp"
 #include "DisplayLine.hpp"
+#include "DocumentFormatKind.hpp"
 #include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -10,6 +11,8 @@
 #include "EditorFrame.hpp"
 #include "LineNumber.hpp"
 #include "Offset.hpp"
+#include "OpenDocumentFormatList.hpp"
+#include "OpenOperationList.hpp"
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
 #include "Selection.hpp"
@@ -399,6 +402,97 @@ void verify_ex_failure_stops_replay()
     {
         verify_ex_replay_case(line, expected);
     }
+}
+
+// `:` の行を履歴に足すのは、行の鍵が 1 つでも打たれたときだけ（Vim の getcmdline の
+// some_key_typed・#1528 のレビュー M1）。検索の行は打っていなくても足す。期待値は Vim 9.1 の
+// feedkeys(…, 'xt') の実測（レビューの h1.vim h2.vim と D:/NeNeNib/scripts/20261112/c10b/h.vim:
+// map の右辺だけの `:3<CR>` は足さず、`nnoremap X :2` に打った `<CR>` だけでも足し、:normal! の
+// `:1<CR>` は足さず、`@s` の `/l4<CR>` と map の右辺の `/l2<CR>` と :normal! の `/l5<CR>`
+// は足す）。
+void verify_macro_replay_keeps_ex_history()
+{
+    constexpr std::string_view five = "l1\nl2\nl3\nl4\nl5";
+    {
+        // r12: 再生の `:3` は履歴に入らないので、再生の `:<Up>` は打った `:5` を引く。
+        Editing editing;
+        open_vim_document(editing, std::string(five));
+        EditorController &controller = editing.controller();
+        vim_replay(controller, "qa:3<CR>:<Up><CR>xq:5<CR>1G@a");
+        expect(whole_vim_body(controller) == "l1\nl2\n3\nl4\n5" &&
+                   caret_at(controller.frame(), 5, 1),
+               "r12: a replayed : line is not remembered, so <Up> recalls the typed :5");
+    }
+    {
+        // h1 の B: 打った `:2` の後の `@b`（`:4<CR>:<Up><CR>x`）は 2 行目に着く。
+        Editing editing;
+        open_vim_document(editing, std::string(five));
+        EditorController &controller = editing.controller();
+        vim_replay(controller, ":2<CR>");
+        applied(controller, StoreVimRegister{'b', VimRegister{":4\r:\xC2\x80ku\rx",
+                                                              VimRegisterKind::characters}});
+        vim_replay(controller, "1G@b");
+        expect(whole_vim_body(controller) == "l1\n2\nl3\nl4\nl5" &&
+                   caret_at(controller.frame(), 2, 1),
+               "h1 B: <Up> in the replay skips the replayed :4");
+    }
+    {
+        // map の右辺だけで確定した行は足さない。打った `<CR>` で確定した行は足す。
+        Editing editing;
+        open_vim_document(editing, std::string(five));
+        EditorController &controller = editing.controller();
+        static_cast<void>(run_ex(controller, "nnoremap Z :3<CR>"));
+        static_cast<void>(run_ex(controller, "nnoremap Y :4"));
+        vim_replay(controller, ":5<CR>1GZ");
+        expect(caret_at(controller.frame(), 3, 1), "the mapped :3 ran");
+        vim_replay(controller, ":<Up><CR>");
+        expect(caret_at(controller.frame(), 5, 1),
+               "a : line of a right side only is not remembered");
+        vim_replay(controller, "Y<CR>1G:<Up><CR>");
+        expect(caret_at(controller.frame(), 4, 1),
+               "a mapped : line with a typed <CR> is remembered");
+    }
+    {
+        // :normal!（press_vim_keys）の `:` の行は足さない。
+        Editing editing;
+        open_vim_document(editing, std::string(five));
+        EditorController &controller = editing.controller();
+        vim_replay(controller, ":2<CR>");
+        vim_normal(controller, ":5<CR>");
+        vim_replay(controller, "1G:<Up><CR>");
+        expect(caret_at(controller.frame(), 2, 1), "a : line of :normal! is not remembered");
+    }
+    {
+        // 検索の行は再生でも足す（`@s` の `/l4` を打った `/<Up>` が引く）。
+        Editing editing;
+        open_vim_document(editing, std::string(five));
+        EditorController &controller = editing.controller();
+        applied(controller, stored_text('s', "/l4<CR>"));
+        vim_replay(controller, "@s1G/<Up><CR>");
+        expect(caret_at(controller.frame(), 4, 1), "a replayed search line is remembered");
+    }
+}
+
+// F1 の一覧と保存の形の一覧が開いている `:` の行を閉じるのは打った Esc ではないので、録画に
+// `<Esc>` を積まない（#1528 のレビュー L2）。積むと `@a` の `<Esc>` が行を実行してしまう。
+void verify_macro_list_closes_ex_line_unrecorded()
+{
+    using nenenib::application::CancelCommand;
+    using nenenib::application::OpenDocumentFormatList;
+    using nenenib::application::OpenOperationList;
+    Editing editing;
+    open_vim_document(editing, "abc\ndef\nghi");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "qa:3");
+    applied(controller, OpenOperationList{});
+    applied(controller, CancelCommand{});
+    vim_replay(controller, ":2");
+    applied(controller, OpenDocumentFormatList{nenenib::core::DocumentFormatKind::encoding});
+    applied(controller, CancelCommand{});
+    vim_replay(controller, "xq");
+    expect(named_register(controller.vim_state(), U'a').text == ":3:2x",
+           "a list that closes the : line records no <Esc>");
+    expect(whole_vim_body(controller) == "bc\ndef\nghi", "the x ran on line 1 while recording");
 }
 
 // 再生の中の `q` は何もせず次の鍵も待たない（Vim の「レジスタ実行中は q は無効」）。
@@ -1507,6 +1601,8 @@ void verify_vim_macro_contracts()
     verify_macro_records_visual_ex_line();
     verify_macro_replays_ex_line();
     verify_ex_failure_stops_replay();
+    verify_macro_replay_keeps_ex_history();
+    verify_macro_list_closes_ex_line_unrecorded();
     verify_macro_q_inside_replay();
     verify_macro_failure_stops_the_rest();
     verify_macro_records_failed_replace();
@@ -1560,7 +1656,7 @@ void verify_vim_macro_scope()
             ++selected;
         }
     }
-    expect(selected == 187, "the scope replays the 49 macro, 108 register and 30 other "
+    expect(selected == 189, "the scope replays the 51 macro, 108 register and 30 other "
                             "fixtures with a macro register");
     expect(named, "every macro- fixture carries a macro register");
     verify_vim_macro_contracts();

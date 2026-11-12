@@ -108,6 +108,7 @@ void EditorController::accept(const OpenTabList &)
 }
 
 // 開いている入力行（検索の preview も）は取消と同じ道で閉じてから開く（ADR 0078 の決定 9）。
+// 打った Esc ではないので録画に `<Esc>` を積まない（#1528 のレビュー L2）。
 void EditorController::accept(const OpenOperationList &)
 {
     if (state_.composition().has_value())
@@ -116,14 +117,15 @@ void EditorController::accept(const OpenOperationList &)
     }
     if (command_line_active())
     {
-        accept(CancelCommand{});
+        cancel_command_input();
     }
     run_palette_request(core::ExPaletteRequest{core::PaletteScope::operations, {}});
 }
 
 // 保存の形の候補の面（ADR 0010 の追補 #1049 の決定 2 の (a)・(c)）。Ctrl+P の面の部品に、出どころ
 // document_format の候補だけを渡して空の入力で開く（記号の表には載せない）。同じフォルダは読まず、
-// 前の面の読みの券は進めて捨てる。選択は今の値。開いている入力行は取消と同じ道で閉じてから開く。
+// 前の面の読みの券は進めて捨てる。選択は今の値。開いている入力行は取消と同じ道で閉じてから開く
+// （録画に `<Esc>` を積まない）。
 void EditorController::accept(const OpenDocumentFormatList &intent)
 {
     if (state_.composition().has_value())
@@ -132,7 +134,7 @@ void EditorController::accept(const OpenDocumentFormatList &intent)
     }
     if (command_line_active())
     {
-        accept(CancelCommand{});
+        cancel_command_input();
     }
     static_cast<void>(receive_folders());
     focus_explorer(false);

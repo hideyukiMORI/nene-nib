@@ -44,6 +44,9 @@ class CommandLine final
     // 履歴の上下（#725・ADR 0022 決定 2 の追補）。歩きを始めたときの入力の接頭辞で history を
     // 歩き、補完の巡回は終える。動かなければ同じ行。ほかの編集（inserted / edited）は歩きを終える。
     [[nodiscard]] CommandLine recalled(const InputHistory &history, CommandEdit direction) const;
+    // recalled が履歴を 1 歩動くか（Vim の c_<Up> c_<Down> は動けないと beep_flush で先読みを
+    // 捨てる・ex_getln.c・#1528）。
+    [[nodiscard]] bool recalls(const InputHistory &history, CommandEdit direction) const;
 
   private:
     CommandLine(std::string text, Offset caret, ThemeCatalog themes, FontFamilies fonts);

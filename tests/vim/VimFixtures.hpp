@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 f44a889368f609bd5303d1ddcc154f622afc28cab5b95b56c9b314d373a2b951 / 4767 fixtures
+// fixtures.json: sha256 559a92730d789b93bcac718a8aaf2447b19df23197dca1022742e44c942922b1 / 4769 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4767> vim_fixtures{{
+constexpr std::array<VimFixture, 4769> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4779,6 +4779,8 @@ constexpr std::array<VimFixture, 4767> vim_fixtures{{
     {"ex-failure-so-amp-query-3j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", ":set so&<CR>:set so?<CR>3j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 15, 1, "", "", VimViewportFixture{6, 10, 12, 1, 10, 3, 0, 0, 0, 0, 0, 0, 2}},
     {"ex-failure-so-amp-vim-3j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", ":set so&vim<CR>3j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 15, 1, "", "", VimViewportFixture{6, 10, 12, 1, 10, 3, 0, 0, 0, 0, 0, 0, 2}},
     {"ex-failure-scrolloff-amp-vi-3j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", ":set scrolloff&vi<CR>3j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 15, 1, "", "", VimViewportFixture{6, 10, 12, 1, 10, 3, 0, 0, 0, 0, 0, 0, 2}},
+    {"macro-ex-history-replayed-line", "l1\nl2\nl3\nl4\nl5", "@a", "l1\nl2\nl3\nl4\nl5", 1, 1, "", "", std::nullopt, VimMacroFixture{'a', ":3<CR>1G:<Up><CR>x"}},
+    {"macro-ex-history-search-line", "l1\nl2\nl3\nl4\nl5", "@a", "l1\nl2\nl3\n4\nl5", 4, 1, "l", "v", std::nullopt, VimMacroFixture{'a', "/l4<CR>1G/<Up><CR>x"}},
 }};
 } // namespace nenenib::tests
 // clang-format on
