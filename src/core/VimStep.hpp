@@ -95,9 +95,15 @@ struct VimStep
 // 保留オペレータ・回数・次キー待ち）はどれも engine の外の出来事を織り込めないので捨てる。
 // モード・直前の変更・検索と文字検索の記憶は保つ。何が割り込みかを決めるのは呼ぶ側だが、
 // 何を捨てるかを決めるのは engine の側である（ARC-004）。オペレータ待ちの `:` `/` の入力行を
-// 確定の外で離れたときと Ex の命令が断られたときもこれで捨てる（欲しい列は保つ・ADR 0022 の
-// 追補 #1549・Vim の clearop）。
+// 確定の外で離れたとき（Ctrl+P・クリック・タブの切り替え）もこれで捨てる（欲しい列は保つ・
+// ADR 0022 の追補 #1549）。INSERT の `Ctrl-o` の印も捨てる（ADR 0182 の決定 8）。
 [[nodiscard]] VimState vim_interrupted(const VimState &state);
+
+// オペレータ待ちの `:` の命令が断られたか、跳ばない命令が窓の要求を立てたときに、保留の
+// オペレータを捨てた状態（Vim の clearop / clearopbeep・ADR 0022 の追補 #1549 と #1569）。
+// 割り込みと同じ組み立て中の入力を捨て、INSERT の `Ctrl-o` の印は残す（Vim の clearopbeep は
+// restart_edit を消さないので、Ex の行の後に INSERT へ戻る）。
+[[nodiscard]] VimState vim_operator_cleared(const VimState &state);
 
 // タブを切り替えたあとの状態（ADR 0056 の決定 4）。割り込みと同じく組み立て中の入力を捨て、
 // モードは NORMAL へ戻し、文書ごとの値（欲しい列と 'scroll'）は相手の文書の値に置き換える。
