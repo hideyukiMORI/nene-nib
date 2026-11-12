@@ -28,6 +28,7 @@
 #include "InsertText.hpp"
 #include "LineNumber.hpp"
 #include "Offset.hpp"
+#include "OpenCommandPalette.hpp"
 #include "PlaceCaret.hpp"
 #include "Scopes.hpp"
 #include "SelectAll.hpp"
@@ -186,6 +187,24 @@ void verify_label_and_ime()
     expect(controller.frame().mode_label == "NORMAL", "one more Esc leaves INSERT");
 }
 
+// `Ctrl-o` の `:` の行を Ctrl+P の面で置き換えたら、`d:` の形と同じく割り込みとして印を捨てる
+// （#1569 の L2・ADR 0182 の決定 8）。面を閉じた後は NORMAL で、次の鍵は NORMAL の命令のまま。
+void verify_input_line_replaced()
+{
+    for (const std::string_view opened : {"iX<C-o>:", "iX<C-o>d:"})
+    {
+        Editing editing;
+        open_vim_document(editing, std::string(words));
+        EditorController &controller = editing.controller();
+        vim_replay(controller, opened);
+        static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+        static_cast<void>(controller.apply(app::CancelCommand{}));
+        const auto frame = controller.frame();
+        expect(frame.mode_label == "NORMAL" && frame.vim_mode == core::VimMode::normal,
+               (std::string(opened) + " replaced by Ctrl+P drops the Ctrl-o mark").c_str());
+    }
+}
+
 void verify_input_lines()
 {
     expect(typed(words, "iX<C-o>:set so=2<CR>Y<Esc>") == "XYalpha beta gamma",
@@ -226,6 +245,39 @@ void verify_operator_lines()
            ":normal! <C-o>c:5<CR> keeps the mark and restarts INSERT after the Esc of c");
     expect(typed(ten, "2GllaX<C-o>c:5<CR>Y<Esc>Z<Esc>") == "line01 abc\nlinXY" + rest,
            "typed <C-o>c:5<CR> drops the mark, so the Esc of c goes back to NORMAL");
+}
+
+// INSERT の `Ctrl-o` の後のオペレータ待ちの `:` `/` が断られても、INSERT へ戻る（#1569 の M1・
+// Vim の clearopbeep は restart_edit を残す）。期待値は Vim 9.1 の打った鍵（feedkeys(…, 'xt')・
+// D:/NeNeNib/scripts/20261112/review-chain/t/t.py の T1〜T14 T17 T18）: どれも 2 行目が
+// `lXYine02 abc` になる。:normal! の形は失敗の後ろの鍵を捨てて INSERT のまま終わる（oracle の列
+// 2）。
+void verify_refused_operator_lines()
+{
+    constexpr std::string_view twenty =
+        "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc";
+    const std::string expected = "line01 abc\nlXYine02 abc\nline03 abc\nline04 abc\nline05 abc\n"
+                                 "line06 abc";
+    for (const std::string_view command :
+         {"d:tabnext 9<CR>", "c:tabnext 9<CR>", ":tabnext 9<CR>", "d:bogus<CR>", "d:<Esc>",
+          "d/<Esc>", "c:<Esc>", "vj:set so=2<CR>", "d:3tabnext<CR>", "y:tabnext 9<CR>",
+          "d:tabnext 0<CR>", "c:bogus<CR>", "d/zzz<CR>", "v:<Esc>", "d/line05<Esc>"})
+    {
+        const std::string keys = "2GaX<C-o>" + std::string(command) + "Y<Esc>";
+        expect(typed(twenty, keys) == expected,
+               ("typed " + keys + ": INSERT restarts after the refused or cancelled line").c_str());
+    }
+    for (const std::string_view command :
+         {"d:tabnext 9<CR>", "c:tabnext 9<CR>", "d:bogus<CR>", "y:tabnext 9<CR>"})
+    {
+        Editing editing;
+        open_vim_document(editing, std::string(twenty));
+        vim_normal(editing.controller(), "2GaX<C-o>" + std::string(command) + "Y<Esc>");
+        // :normal! は INSERT のまま尽きた鍵を Esc で終えるので 1 桁左へ戻る（Vim の列 2・印を捨てて
+        // NORMAL のままなら列 3）。
+        expect(caret_at(editing.controller().frame(), 2, 2),
+               (":normal! <C-o>" + std::string(command) + ": the replay stops in INSERT").c_str());
+    }
 }
 
 void place(EditorController &controller, std::size_t column)
@@ -451,7 +503,9 @@ void verify_vim_insert_normal_scope()
     verify_recording();
     verify_label_and_ime();
     verify_input_lines();
+    verify_input_line_replaced();
     verify_operator_lines();
+    verify_refused_operator_lines();
     verify_click_and_interrupts();
     verify_mark_drops();
     verify_window_setting();
