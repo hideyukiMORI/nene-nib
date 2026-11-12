@@ -4,7 +4,7 @@
 // 1. 契約: fixture 全件の鍵を engine に直に流し、本文を置き換える編集の効果を返した step は印が
 //    changed、印の無い step は編集の効果を返さない（効果の後の本文は追わないので、最初の編集か
 //    文字組みの問いで止める）。
-// 2. engine の印: U だけ（英字の無い `~`・空の行の `x` `C`・空のレジスタの `p`・数の無い
+// 2. engine の印: U だけ（英字の無い `~`・空の行の `x` `C`・`"_p`・空のレジスタの `p`・数の無い
 //    `<C-a>`）、U ＋ C で範囲が空（空の行の `>>`）、どちらも無し（空の行の `D`・移動）。
 // 3. 未保存の印と undo: saved_only の単位の後は保存済みのまま・空の範囲の changed の後は未保存・
 //    `u` で戻ると保存済み・保存の後の saved_only の単位も保存済みのまま・通常モードは空の単位を
@@ -173,6 +173,7 @@ void verify_engine_marks()
     expect(last_mark("abc", "<<") == changed, "<< without indent still counts as a change");
     expect(last_mark("\nx", "D") == std::nullopt, "D on an empty line neither saves nor changes");
     expect(last_mark("abc", "<C-a>") == saved_only, "Ctrl-a without a number only saves");
+    expect(last_mark("abc", "\"_p") == saved_only, "\"_p only saves for undo");
     expect(last_mark("abc", "p") == saved_only,
            "p from an unused register is refused after it saves for undo");
     expect(last_mark("abc", "l") == std::nullopt, "a motion carries no mark");

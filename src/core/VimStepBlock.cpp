@@ -867,10 +867,28 @@ namespace detail
     return source.kind == VimRegisterKind::uninitialized || (source.text.empty() && clipboard);
 }
 
-// Vim の do_put は貼る前に u_save を呼ぶので、空のレジスタを E353 で断る `p` と空の本文の `p` は
-// 単位だけを作る（saved_only・ADR 0181 の決定 7）。`"_p` も u_save を呼ぶ（U だけ・実測）が、印は
-// 付けない（ADR 0181 の実装の追補 7・既存の fixture `black-hole-put-then-undo` が oracle の 1 本の
-// `:normal!` の単位に頼るので設計席の判断待ち）。
+} // namespace detail
+
+namespace
+{
+// `"_` からの貼り付けは拒まずに何もしない（Vim の do_put はブラックホールなら黙って返る）。
+// それでも直前の変更になり `.` は `"_p` を繰り返す（nv_put は do_put の前に redo を置く・実測）。
+// 記録に載る「何も入れない貼付」は行の無い矩形の貼付で表す（本文とキャレットを変えない・#988・
+// ADR 0050 の決定 5 の追補）。Vim の do_put は先に u_save を呼ぶので単位だけを作る（saved_only・
+// ADR 0181 の実装の注記 7・`-es` で実測）。
+[[nodiscard]] VimStep black_hole_put(const VimState &state, Offset caret)
+{
+    return detail::change_noted(
+        VimStep{vim_resting_from(state, state.unnamed_register),
+                VimInsertBlock{std::vector<VimBlockEdit>{}, caret, EditBoundary::separate}},
+        VimChange::saved_only);
+}
+} // namespace
+
+namespace detail
+{
+// Vim の do_put は貼る前に u_save を呼ぶので、空のレジスタを E353 で断る `p`・空の本文の `p`・
+// `"_p` は単位だけを作る（saved_only・ADR 0181 の決定 7）。
 [[nodiscard]] VimStep put_step(const VimState &state, const VimEditorView &view, VimPutSide side)
 {
     const TextBuffer &text = view.text;
@@ -885,12 +903,7 @@ namespace detail
     }
     if (black_hole)
     {
-        // `"_` からの貼り付けは拒まずに何もしない（Vim の do_put はブラックホールなら黙って返る）。
-        // それでも直前の変更になり `.` は `"_p` を繰り返す（nv_put は do_put の前に redo を置く・
-        // 実測）。記録に載る「何も入れない貼付」は行の無い矩形の貼付で表す（本文・履歴・キャレット
-        // を変えない・#988・ADR 0050 の決定 5 の追補）。
-        return VimStep{vim_resting_from(state, state.unnamed_register),
-                       VimInsertBlock{std::vector<VimBlockEdit>{}, caret, EditBoundary::separate}};
+        return black_hole_put(state, caret);
     }
     if (source.kind == VimRegisterKind::block)
     {

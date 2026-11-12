@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 c5163df12a82ad90ebe5ec1402ec0e77d3fb4395f700d3725b94da4c8cdce4fd / 4577 fixtures
+// fixtures.json: sha256 d15923db990f92b831842fb554540b4b5838c6af6e6d69ff84df6d978571cd6e / 4577 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -2542,8 +2542,8 @@ constexpr std::array<VimFixture, 4577> vim_fixtures{{
     {"black-hole-put-dot", "abcdef", "x\"_p.", "bcdef", 1, 1, "a", "v", std::nullopt},
     {"black-hole-put-count-p-then-a", "abc", "2\"_pax<Esc>", "axbc", 1, 2, "", "", std::nullopt},
     {"black-hole-put-after-yank-dot", "abc\ndef", "yyp\"_p.", "abc\nabc\ndef", 2, 1, "abc\n", "V", std::nullopt},
-    {"black-hole-put-then-undo", "abcdef", "x\"_pu", "abcdef", 1, 1, "a", "v", std::nullopt},
-    {"black-hole-put-dot-then-undo", "abcdef", "x\"_p.u", "abcdef", 1, 1, "a", "v", std::nullopt},
+    {"black-hole-put-then-undo", "abcdef", "yl\"_pu", "abcdef", 1, 1, "a", "v", std::nullopt},
+    {"black-hole-put-dot-keeps-register", "abcdef", "yl\"_p.", "abcdef", 1, 1, "a", "v", std::nullopt, std::nullopt, VimChangeFixture{false, false, true}},
     {"count-dollar-on-the-last-line-fails", "    12 A 12", "2$x", "    12 A 12", 1, 1, "", "", std::nullopt},
     {"count-dollar-after-dollar-on-the-last-line-fails", "    12 A 12", "$2$x", "    12 A 12", 1, 11, "", "", std::nullopt},
     {"count-dollar-wide-on-the-last-line-fails", "    １２ Ａ １２", "2$", "    １２ Ａ １２", 1, 1, "", "", std::nullopt},
