@@ -2,6 +2,7 @@
 // `relativenumber` の行番号の文字は画面の値なので oracle では測れず、ここで契約にする。`scrolloff`
 // の H M L と Ctrl-f / Ctrl-b / Ctrl-d / Ctrl-u の着地（#1099）も窓の高さが要るのでここ。
 #include "Column.hpp"
+#include "CommandText.hpp"
 #include "DisplayForm.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -20,6 +21,7 @@
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "StoreVimRegister.hpp"
+#include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
@@ -48,12 +50,14 @@ namespace nenenib::tests
 {
 namespace
 {
+using nenenib::application::CommandText;
 using nenenib::application::EditorFrame;
 using nenenib::application::InsertText;
 using nenenib::application::PlaceCaret;
 using nenenib::application::ScrollLines;
 using nenenib::application::SelectDisplay;
 using nenenib::application::SelectEditMode;
+using nenenib::application::SubmitCommand;
 using nenenib::application::VimKeyPress;
 using nenenib::application::VisibleLines;
 using nenenib::core::Column;
@@ -972,6 +976,96 @@ void verify_typed_follow_without_frames()
            "#1363 a far move still pending before the insert keeps the one jump to the middle");
 }
 
+// `scrolloff` の契約を回す 2 つの窓（#1432）。幅の無い窓（fixture の再生と同じ・後の鍵の前に
+// 印 setting_follow_ が解く）と、製品と同じ幅のある窓（`:set` の確定の中の clamp_scroll が
+// 新しい余白でその場で解く）。
+constexpr std::array margin_windows{nenenib::core::TextViewGeometry{},
+                                    nenenib::core::TextViewGeometry{400, 20, 96}};
+
+// 本文と窓は fixture viewport-set-so- の 30 行と同じ（6 行の窓・so=0・先頭 10・行 line）。
+void placed_thirty(EditorController &controller, std::size_t line,
+                   nenenib::core::TextViewGeometry geometry)
+{
+    applied(controller, VisibleLines{6, geometry});
+    std::string text;
+    for (std::size_t number = 1; number <= 30; ++number)
+    {
+        text += std::string(number < 10 ? "0" : "") + std::to_string(number) +
+                (number < 30 ? "\n" : "");
+    }
+    static_cast<void>(controller.apply(InsertText{text}));
+    applied(controller, SelectEditMode{EditMode::vim});
+    static_cast<void>(run_ex(controller, "set so=0"));
+    vim_replay(controller, "10Gzt" + std::to_string(line) + "G");
+}
+
+// `scrolloff` を変えた後の鍵を frame を挟まずに送る（#1432）。Ex の入力行から余白を確定し、鍵を
+// 意図で送って最後に 1 回だけ frame を読む。
+[[nodiscard]] std::pair<std::size_t, std::size_t>
+margin_changed_then(std::size_t line, std::string_view margin, std::string_view keys,
+                    nenenib::core::TextViewGeometry geometry)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    placed_thirty(controller, line, geometry);
+    static_cast<void>(controller.apply(VimKeyPress{VimCharacter{U':'}}));
+    static_cast<void>(controller.apply(CommandText{"set so=" + std::string(margin)}));
+    static_cast<void>(controller.apply(SubmitCommand{}));
+    for (const VimKey &key : vim_keys_of(keys))
+    {
+        static_cast<void>(controller.apply(VimKeyPress{key}));
+    }
+    return top_and_line(controller.frame());
+}
+
+// Vim は `:set so=N` の後、次の鍵の前に今のキャレットで窓を新しい余白で決め直す（Vim 9.1 の
+// oracle の値・fixture viewport-set-so-top-j / bottom-k / same-value-control）。窓の 1 打鍵の道で
+// 鍵の保留が設定の保留を置き換えても、解決は設定の時点のキャレットを先に流す（印を外した木では
+// 鍵の後のキャレットだけで解き、上の 2 件が落ちる）。
+void verify_margin_change_without_frames()
+{
+    using Seen = std::pair<std::size_t, std::size_t>;
+    for (const auto geometry : margin_windows)
+    {
+        expect(margin_changed_then(10, "2", "j", geometry) == Seen{8, 11},
+               "#1432 :set so=2 then j re-decides the window at the caret before the key");
+        expect(margin_changed_then(15, "2", "k", geometry) == Seen{12, 14},
+               "#1432 the caret on the bottom line is followed with the new margin before k");
+        expect(margin_changed_then(10, "0", "j", geometry) == Seen{10, 11},
+               "#1432 setting the same margin does not move the window");
+    }
+}
+
+// `@a` の中の `:set so=N<CR>` と次の鍵（#1432）。再生は 1 回の apply で鍵を流し、途中で追従を
+// 解かない。値は Vim 9.1 の oracle（`let @a = ":set so=2\<CR>j"` の形・register 欄の fixture の
+// 測り方）で測った先頭と行。fixture にしないのは、register 欄の録画（store_vim_fixture_macro）が
+// 入力行の鍵を録らず、再生の側で余白が変わらないため（試した木で so=0 のまま）。
+[[nodiscard]] std::pair<std::size_t, std::size_t>
+macro_margin_then(std::size_t line, std::string_view stored,
+                  nenenib::core::TextViewGeometry geometry)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    placed_thirty(controller, line, geometry);
+    using nenenib::core::VimRegister;
+    using nenenib::core::VimRegisterKind;
+    applied(controller, nenenib::application::StoreVimRegister{
+                            'a', VimRegister{std::string(stored), VimRegisterKind::characters}});
+    vim_replay(controller, "@a");
+    return top_and_line(controller.frame());
+}
+
+void verify_margin_change_in_a_macro()
+{
+    using Seen = std::pair<std::size_t, std::size_t>;
+    for (const auto geometry : margin_windows)
+    {
+        expect(macro_margin_then(10, ":set so=2\rj", geometry) == Seen{8, 11},
+               "#1432 :set so=2 inside @a re-decides the window before the next replayed key");
+        expect(macro_margin_then(15, ":set so=2\rk", geometry) == Seen{12, 14},
+               "#1432 the bottom line inside @a is followed with the new margin before k");
+    }
+}
 } // namespace
 
 void verify_vim_view_scope()
@@ -997,5 +1091,7 @@ void verify_vim_view_scope()
     verify_far_jump_with_large_margin();
     verify_scroll_line_in_a_macro();
     verify_typed_follow_without_frames();
+    verify_margin_change_without_frames();
+    verify_margin_change_in_a_macro();
 }
 } // namespace nenenib::tests
