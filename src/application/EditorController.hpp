@@ -804,6 +804,17 @@ class EditorController final
     [[nodiscard]] std::optional<core::VimRepeatFailure> evaluate_command(std::string_view text);
     // オペレータ待ちの `:` の確定（ADR 0022 の追補 #1549）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> operator_command(const std::string &text);
+    [[nodiscard]] bool refused_operator_command(
+        std::string_view text,
+        const std::expected<core::ExResult, core::ExEvaluationFailure> &result);
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    operator_closed_in_place(const std::string &text);
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    ran_ex_result(std::string_view text,
+                  const std::expected<core::ExResult, core::ExEvaluationFailure> &result);
+    // オペレータ待ちの入力行（`d:` `d/`）が開かれた後、意図の出口で入力行が閉じているか別の面に
+    // 置き換わっていれば保留のオペレータを捨てる 1 か所（#1549）。
+    void settle_line_operator();
     [[nodiscard]] std::optional<core::ExLineRequest>
     landing_line(const core::ExResult &result) const;
     [[nodiscard]] bool ran_ex_request(const core::ExResult &result);
@@ -1169,6 +1180,10 @@ class EditorController final
     // 中の最後の鍵の値を引き継いで、鍵の終わりの寄せ（追従）を頼まない。perform(VimReplay) が
     // 再生の始めに消す。
     bool vim_top_kept_ = false;
+    // オペレータ待ちの `:` `/` が入力行を開いた（settle_line_operator が読む・#1549）。
+    bool line_operator_ = false;
+    // reject を通った断りの数（オペレータ待ちの `:` が Vim の did_emsg として読む・#1549）。
+    std::size_t refusals_ = 0;
     // 再生の編集を畳む起点（ADR 0046 の決定 3）。再生の外では空。perform(VimReplay) が置いて
     // 消し、再生の中で文書が替わったら reopen_replayed_unit が入った文書の値へ置き直す。
     std::optional<core::EditHistory> replay_history_;

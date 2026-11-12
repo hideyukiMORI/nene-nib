@@ -273,8 +273,6 @@ void EditorController::accept(const CancelCommand &)
     // Vim の `/` `?` の取消だけ。通常モードの「検索: 」「行: 」は engine の待ちを持たない。
     const auto *line = input.has_value() ? std::get_if<core::SearchLine>(&input.value()) : nullptr;
     const bool searching = line != nullptr && vim_search_prompt(line->prompt());
-    const bool ex_line =
-        input.has_value() && std::holds_alternative<core::CommandLine>(input.value());
     // 入力行を閉じると preview も消えるので、戻す先を先に写す（ADR 0041 の決定 5）。
     const auto preview = state_.search_preview();
     close_command_input();
@@ -288,11 +286,35 @@ void EditorController::accept(const CancelCommand &)
         // 同じ・実測）。何を捨てるかは engine の純関数が決める（ADR 0032 の決定 1）。
         state_ = state_.with_vim(core::vim_cancelled_input(state_.vim()));
     }
-    // `d:` `c:` `y:` の入力行の取消（Esc・Ctrl+C・空の行の Backspace）はオペレータごと捨てる
-    // （ADR 0022 の追補 #1549・Vim の nv_colon の clearop）。NORMAL の `:` は待ちを持たない。
-    if (ex_line && state_.vim().pending.has_value())
+    // `d:` の入力行の取消で残ったオペレータは、意図の出口の settle_line_operator
+    // が捨てる（#1549）。
+}
+
+// オペレータ待ちの `:` `/` の入力行（#1549）。確定（vim_command_operated と検索の鍵）が閉じれば
+// engine の待ちは消えている。待ちが残ったまま Vim の入力行が開いていなければ、取消（Esc・Ctrl+C・
+// 空の行の Backspace）か、Ctrl+P・タブの一覧・クリック・タブの切り替えなどで入力行が閉じたか別の
+// 面に置き換わったので、オペレータを捨てる（Vim の clearop）。入口ごとに書かず、意図の出口のここの
+// 1 か所で拾う。
+void EditorController::settle_line_operator()
+{
+    if (!line_operator_)
     {
-        state_ = state_.with_vim(core::vim_command_abandoned(state_.vim()));
+        return;
+    }
+    const auto &input = state_.command_input();
+    const auto *search =
+        input.has_value() ? std::get_if<core::SearchLine>(&input.value()) : nullptr;
+    const bool open =
+        input.has_value() && (std::holds_alternative<core::CommandLine>(input.value()) ||
+                              (search != nullptr && vim_search_prompt(search->prompt())));
+    if (open)
+    {
+        return;
+    }
+    line_operator_ = false;
+    if (state_.vim().pending.has_value())
+    {
+        state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
     }
 }
 
@@ -323,33 +345,56 @@ std::optional<core::VimRepeatFailure> EditorController::submit(const core::Comma
     return evaluate_command(std::string(line.text()));
 }
 
-// オペレータ待ちの `:` の確定（ADR 0022 の追補 #1549・Vim の nv_colon）。行へ跳ぶ命令（`:N` `:$`・
-// `:.` `:.,.+N`）はキャレットを動かさずに行き先を engine へ渡し、オペレータの移動にする。ほかの
-// 命令は今までの評価の 1 本（evaluate_command）を通し、失敗ならオペレータを捨て（Vim の clearop・
-// 再生は refused で打ち切る）、成功なら動かないキャレットまでの空の範囲で閉じる（`d` は何も消さず
-// `c` は INSERT へ入る・実測）。命令がタブを替えて待ちが消えていれば閉じない。
+// オペレータ待ちの `:` の確定（ADR 0022 の追補 #1549・Vim の nv_colon）。Ex は 1 回だけ評価する。
+// 行へ跳ぶ命令（`:N` `:$`・`:.` `:.,.+N`）はキャレットを動かさずに行き先を engine へ渡し、
+// オペレータの移動にする。ほかの命令は評価の答えの写し（ran_ex_result）を通し、断られたら
+// （refused_operator_command）オペレータを捨てて refused を返す（再生も打ち切る）。成功なら
+// operator_closed_in_place が動かないキャレットまでの空の範囲で閉じる。
 std::optional<core::VimRepeatFailure> EditorController::operator_command(const std::string &text)
 {
-    const auto evaluated =
-        text.empty() ? std::nullopt
-                     : std::optional{core::evaluate_ex(text, state_.settings(), state_.appearance(),
-                                                       state_.themes())};
-    const auto line = evaluated.has_value() && evaluated.value().has_value()
-                          ? landing_line(evaluated.value().value())
-                          : std::nullopt;
+    close_command_input();
+    if (text.empty())
+    {
+        return operator_closed_in_place(text);
+    }
+    const auto result =
+        core::evaluate_ex(text, state_.settings(), state_.appearance(), state_.themes());
+    const auto line = result.has_value() ? landing_line(result.value()) : std::nullopt;
     if (line.has_value())
     {
-        close_command_input();
         return stepped_vim(VimStepSource{core::VimCommandMotion{text, line}});
     }
-    const auto failure = evaluate_command(text);
-    if (failure.has_value())
+    if (refused_operator_command(text, result))
     {
-        state_ = state_.with_vim(core::vim_command_abandoned(state_.vim()));
-        return failure;
+        return core::VimRepeatFailure::refused;
     }
-    if (!state_.vim().pending.has_value())
+    return operator_closed_in_place(text);
+}
+
+// 答えを写し、評価の失敗か、命令の要求が後で断った（reject を通った・`:tabnext 9` など・Vim の
+// did_emsg の clearopbeep）ならオペレータを捨てて真（#1549）。
+bool EditorController::refused_operator_command(
+    std::string_view text, const std::expected<core::ExResult, core::ExEvaluationFailure> &result)
+{
+    const std::size_t refusals = refusals_;
+    if (!ran_ex_result(text, result).has_value() && refusals_ == refusals)
     {
+        return false;
+    }
+    state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
+    return true;
+}
+
+// 跳ばない命令の成功の後（#1549）。動かないキャレットまでの空の範囲で閉じる（`d` は何も消さず `c`
+// は INSERT へ入る・実測）。窓が後で行う要求（`:tabclose` の閉じる・一覧から頼んだ操作）は要求を
+// 出してオペレータを捨て、タブを替えて待ちが消えていれば何もしない。
+std::optional<core::VimRepeatFailure>
+EditorController::operator_closed_in_place(const std::string &text)
+{
+    if (state_.close_request().has_value() || state_.operation_request().has_value() ||
+        !state_.vim().pending.has_value())
+    {
+        state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
         return std::nullopt;
     }
     return stepped_vim(VimStepSource{core::VimCommandMotion{text, std::nullopt}});
@@ -489,6 +534,9 @@ void EditorController::reject(core::DisplayText message)
 {
     state_ = state_.with_command_message(std::move(message));
     ports_.bell.ring();
+    // 断りの数（オペレータ待ちの `:` が、命令の要求が後で断ったことを Vim の did_emsg として読む・
+    // #1549）。
+    ++refusals_;
 }
 
 // 評価の失敗と設定の保存の失敗は知らせて refused を返す（再生を打ち切る・ADR 0022 の追補 #1526）。
@@ -499,8 +547,14 @@ std::optional<core::VimRepeatFailure> EditorController::evaluate_command(std::st
     {
         return std::nullopt;
     }
-    const auto result =
-        core::evaluate_ex(text, state_.settings(), state_.appearance(), state_.themes());
+    return ran_ex_result(
+        text, core::evaluate_ex(text, state_.settings(), state_.appearance(), state_.themes()));
+}
+
+// 評価した Ex の答えを写す（evaluate_command とオペレータ待ちの `:` が共用する 1 本・#1549）。
+std::optional<core::VimRepeatFailure> EditorController::ran_ex_result(
+    std::string_view text, const std::expected<core::ExResult, core::ExEvaluationFailure> &result)
+{
     if (!result)
     {
         reject(core::ex_failure_message(result.error(), text));

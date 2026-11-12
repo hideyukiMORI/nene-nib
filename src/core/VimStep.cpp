@@ -2196,11 +2196,6 @@ VimState vim_interrupted(const VimState &state)
     return input_discarded(state);
 }
 
-VimState vim_command_abandoned(const VimState &state)
-{
-    return input_discarded(state);
-}
-
 VimState vim_switched_document(const VimState &state, std::optional<VimWantedColumn> wanted_column,
                                std::optional<VimCount> scroll_lines)
 {

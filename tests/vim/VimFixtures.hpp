@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 d9258f5e427bc9a8b5e82191c0d87214bf6802cafe71c9ef6b85dd9e3d707b2a / 4779 fixtures
+// fixtures.json: sha256 2d7427886222135aa499dead825bf070bd68a0dedf0816c9dc1caf54cd2ecf6e / 4783 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4779> vim_fixtures{{
+constexpr std::array<VimFixture, 4783> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4791,6 +4791,10 @@ constexpr std::array<VimFixture, 4779> vim_fixtures{{
     {"operator-colon-shift-set-moves-nothing", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "j>:set so=2<CR>", "line01 abc\n\tline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 2, 2, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"operator-colon-tilde-noh-moves-nothing", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "jlg~:noh<CR>", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 2, 2, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"operator-colon-yank-empty-line-keeps-caret", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "jlly:<CR>x", "line01 abc\nlie02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 2, 3, "n", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"operator-colon-change-refused-tabnext", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "jc:tabnext 9<CR>x", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"operator-colon-delete-refused-tabnext", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "jd:tabnext 9<CR>x", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"operator-colon-yank-tabnext-one-tab", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "jy:tabnext<CR>x", "line01 abc\nine02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 2, 1, "l", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"operator-colon-change-colorscheme-inserts", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "jc:colorscheme blue<CR>X<Esc>", "line01 abc\nXline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
 }};
 } // namespace nenenib::tests
 // clang-format on
