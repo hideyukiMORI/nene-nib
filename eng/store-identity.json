@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "identityName": "HideyukiMori.NeNeNib",
+  "publisher": "CN=C37230AA-B52D-403B-9BFD-E7980F088422",
+  "publisherDisplayName": "Hideyuki Mori",
+  "packageFamilyName": "HideyukiMori.NeNeNib_3sft4ch5kzywy",
+  "storeId": "9NCLGDTFQ529",
+  "displayName": "NeNe Nib",
+  "description": "A fast text editor for Windows 11 that toggles between ordinary editing and Vim editing.",
+  "languages": [
+    "ja-JP",
+    "en-US",
+    "zh-Hans"
+  ],
+  "minVersion": "10.0.22621.0",
+  "maxVersionTested": "10.0.26100.0",
+  "windowsPackagingSdk": "10.0.26100.0",
+  "makeappx": "10.0.26100.7705",
+  "makepri": "10.0.26100.7705"
+}
