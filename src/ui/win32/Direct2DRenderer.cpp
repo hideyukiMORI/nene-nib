@@ -22,6 +22,7 @@
 #include "GutterLabels.hpp"
 #include "GutterMetrics.hpp"
 #include "InputLinePrompt.hpp"
+#include "InputText.hpp"
 #include "KeycapPainter.hpp"
 #include "Milestone.hpp"
 #include "MinimapFlush.hpp"
@@ -203,6 +204,18 @@ constexpr float full_channel = 255.0F;
 }
 
 // 入力行のプロンプトの文字（ADR 0032 の決定 1）。選択肢が増えたらここで落ちる（CPP-002）。
+// 長い入力行（上限 4096 バイト・#1568）は、キャレットと変換の周りの窓だけを組む。shown を窓に
+// 切り、at（入力のキャレット）と caret（変換の中のキャレット）を窓の中の位置へ移す。横の送りは
+// 窓の中のキャレットの位置から決めるので、見え方は全部を組んだときと同じ。
+void windowed_input_line(std::string &shown, std::size_t &at, std::size_t &caret,
+                         std::size_t composed)
+{
+    const auto window = core::input_line_window(shown, core::Offset{at}, core::Offset{composed});
+    shown = shown.substr(window.begin.value, window.end.value - window.begin.value);
+    at -= window.begin.value;
+    caret -= window.begin.value;
+}
+
 [[nodiscard]] std::string prompt_text(core::InputLinePrompt prompt, std::string_view detail)
 {
     switch (prompt)
@@ -2022,26 +2035,25 @@ void Direct2DRenderer::draw_recording(const application::EditorFrame &frame,
 void Direct2DRenderer::draw_command(const application::EditorFrame &frame,
                                     const core::LayoutRect &area)
 {
-    if (core::width_of(area) <= 0)
-    {
-        return;
-    }
-    if (!frame.command_line.has_value())
+    if (core::width_of(area) <= 0 || !frame.command_line.has_value())
     {
         return;
     }
     const auto &command = frame.command_line.value();
     const std::string prefix = prompt_text(command.prompt, command.prompt_detail);
     // 入力の文字のキャレットの位置（バイト）。変換中の文字列はここへ差し込む（ADR 0061 の決定 5）。
-    const std::size_t at = prefix.size() + command.caret.value;
+    std::size_t at = prefix.size() + command.caret.value;
     auto shown = prefix + command.text;
     std::size_t caret = at;
+    std::size_t composed = at;
     if (frame.command_composition.has_value())
     {
         const auto &composition = frame.command_composition.value();
         shown.insert(at, composition.utf8);
         caret = at + composition.cursor.value;
+        composed = at + composition.utf8.size();
     }
+    windowed_input_line(shown, at, caret, composed);
     const auto text = text_layout(shown, command_format_.Get(), area);
     if (!text)
     {

@@ -12,7 +12,7 @@ namespace
 {
     const InputText empty{std::string{}, Offset{0}};
     auto filled = inserted_input(empty, preset);
-    return filled ? std::move(filled).value() : empty;
+    return filled && !overflows(filled.value()) ? std::move(filled).value() : empty;
 }
 } // namespace
 
@@ -51,6 +51,11 @@ std::string_view SearchLine::text() const noexcept
 Offset SearchLine::caret() const noexcept
 {
     return input_.caret;
+}
+
+bool SearchLine::overflowed() const noexcept
+{
+    return overflows(input_);
 }
 
 VimSearchDirection SearchLine::direction() const noexcept

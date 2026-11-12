@@ -94,6 +94,16 @@ Offset CommandLine::caret() const noexcept
     return caret_;
 }
 
+bool CommandLine::overflowed() const noexcept
+{
+    return lost_ || text_.size() > input_line_limit;
+}
+
+InputText CommandLine::input() const
+{
+    return InputText{text_, caret_, lost_};
+}
+
 std::vector<std::string> CommandLine::completions() const
 {
     const auto &prefix = completion_seed_.has_value() ? completion_seed_.value() : text_;
@@ -132,14 +142,16 @@ CommandLine CommandLine::with_completion_rows(std::size_t rows) const
 std::expected<CommandLine, ExFailure> CommandLine::inserted(std::string_view text) const
 {
     // 文字列とキャレットの規則は検索の入力行と共用する（ADR 0032 の決定 1・ARC-001）。
-    auto next = inserted_input(InputText{text_, caret_}, text);
+    auto next = inserted_input(input(), text);
     if (!next)
     {
         return std::unexpected(next.error());
     }
     const auto caret = next.value().caret;
+    const bool lost = next.value().lost;
     CommandLine line(std::move(next).value().text, caret, themes_, fonts_);
     line.completion_rows_ = completion_rows_;
+    line.lost_ = lost;
     return line;
 }
 
@@ -166,6 +178,7 @@ CommandLine CommandLine::completed(CommandEdit direction) const
     const Offset caret{filled.size()};
     CommandLine next(std::move(filled), caret, themes_, fonts_);
     next.completion_rows_ = completion_rows_;
+    next.lost_ = lost_;
     return next;
 }
 
@@ -182,6 +195,7 @@ CommandLine CommandLine::cycled(const std::vector<std::string> &candidates,
     next.completion_seed_ = std::move(seed);
     next.completion_index_ = index;
     next.completion_rows_ = completion_rows_;
+    next.lost_ = lost_;
     next.completion_first_ = list_window_first(completion_first_, index.value_or(completion_first_),
                                                completion_rows_, candidates.size());
     return next;
@@ -211,21 +225,22 @@ CommandLine CommandLine::edited(CommandEdit edit) const
     case CommandEdit::erase:
         break;
     }
-    InputText next = edited_input(InputText{text_, caret_}, edit);
+    InputText next = edited_input(input(), edit);
     const auto caret = next.caret;
     CommandLine line(std::move(next.text), caret, themes_, fonts_);
     line.completion_rows_ = completion_rows_;
+    line.lost_ = next.lost;
     return line;
 }
 
 bool CommandLine::recalls(const InputHistory &history, CommandEdit direction) const
 {
-    return history.stepped(InputText{text_, caret_}, history_walk_, direction).has_value();
+    return history.stepped(input(), history_walk_, direction).has_value();
 }
 
 CommandLine CommandLine::recalled(const InputHistory &history, CommandEdit direction) const
 {
-    const auto walk = history.stepped(InputText{text_, caret_}, history_walk_, direction);
+    const auto walk = history.stepped(input(), history_walk_, direction);
     if (!walk.has_value())
     {
         return *this;
@@ -234,6 +249,7 @@ CommandLine CommandLine::recalled(const InputHistory &history, CommandEdit direc
     const auto caret = shown.caret;
     CommandLine line(std::move(shown.text), caret, themes_, fonts_);
     line.completion_rows_ = completion_rows_;
+    line.lost_ = shown.lost;
     line.history_walk_ = walk;
     return line;
 }

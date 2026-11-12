@@ -41,7 +41,9 @@ namespace nenenib::application::detail
 }
 // incsearch が入力中のパターンを見せる状態か（ADR 0041 の決定 3・4）。検索の入力行（Vim の `/` `?`
 // と通常モードの「検索: 」・ADR 0174 の決定 5）が開いていて、入力が空でなく、incsearch が on の
-// ときだけ。「行: 」は検索ではないので見せない。
+// ときだけ。「行: 」は検索ではないので見せない。あふれた行（確定で必ず断られる・#1568）も
+// 見せない: 照合の費用は pattern の長さに比例して増えるので、働きの無い照合を打鍵ごとに走らせない
+// （preview は消えて起点に戻り、Ctrl-G / Ctrl-T と入力中の塗りもここを読む）。
 [[nodiscard]] const core::SearchLine *previewed_line(const EditorState &state)
 {
     const auto &input = state.command_input();
@@ -50,7 +52,8 @@ namespace nenenib::application::detail
         return nullptr;
     }
     const auto *line = std::get_if<core::SearchLine>(&input.value());
-    if (line == nullptr || line->text().empty() || !searched_text(*line).has_value())
+    if (line == nullptr || line->text().empty() || line->overflowed() ||
+        !searched_text(*line).has_value())
     {
         return nullptr;
     }

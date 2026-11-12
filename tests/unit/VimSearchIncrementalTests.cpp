@@ -8,6 +8,7 @@
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "InputLineView.hpp"
+#include "InputText.hpp"
 #include "LineView.hpp"
 #include "Scopes.hpp"
 #include "SearchHop.hpp"
@@ -81,27 +82,29 @@ frame_current(const EditorFrame &frame)
 
 void verify_search_line_input_ownership()
 {
+    constexpr std::size_t kept = core::input_line_limit - 3U;
     const auto source = core::SearchLine::opened(VimSearchDirection::forward)
-                            .inserted(std::string(253U, 'a'))
+                            .inserted(std::string(kept, 'a'))
                             .value();
     const std::string_view source_view = source.text();
     const auto maximum = source.inserted("日");
-    expect(maximum.has_value() && maximum.value().text() == std::string(253U, 'a') + "日" &&
-               maximum.value().caret().value == 256U && source.text() == std::string(253U, 'a') &&
-               source_view == source.text() && source.caret().value == 253U,
-           "SearchLine accepts exactly 256 bytes and preserves its source");
+    expect(maximum.has_value() && maximum.value().text() == std::string(kept, 'a') + "日" &&
+               maximum.value().caret().value == core::input_line_limit &&
+               !maximum.value().overflowed() && source.text() == std::string(kept, 'a') &&
+               source_view == source.text() && source.caret().value == kept,
+           "SearchLine accepts exactly the limit and preserves its source");
     const auto overlong = maximum.value().inserted("X");
-    expect(!overlong && overlong.error() == core::ExFailure::too_long &&
-               maximum.value().text() == std::string(253U, 'a') + "日" &&
-               maximum.value().caret().value == 256U,
-           "SearchLine rejects overflow without consuming the full source");
+    expect(overlong.has_value() && overlong.value().overflowed() &&
+               maximum.value().text() == std::string(kept, 'a') + "日" &&
+               maximum.value().caret().value == core::input_line_limit,
+           "SearchLine keeps overflow as an overflowed line without consuming the source (#1568)");
     const auto invalid = source.inserted("\xFF");
     expect(!invalid && invalid.error() == core::ExFailure::invalid_text &&
-               source_view == source.text() && source.caret().value == 253U,
+               source_view == source.text() && source.caret().value == kept,
            "SearchLine rejects invalid UTF-8 without consuming its source");
     const auto newline = source.inserted("\n");
     expect(!newline && newline.error() == core::ExFailure::invalid_text &&
-               source_view == source.text() && source.caret().value == 253U,
+               source_view == source.text() && source.caret().value == kept,
            "SearchLine rejects line breaks without consuming its source");
     const auto backward = core::SearchLine::opened(VimSearchDirection::backward)
                               .inserted("a日🖋z")
