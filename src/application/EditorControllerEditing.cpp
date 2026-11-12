@@ -276,7 +276,12 @@ void EditorController::replace(
     {
         interrupt_vim_insert();
     }
-    // 本文を置き換える編集は Vim の印 changed と同じ（決定 2）。鍵の印はここで使い終わる。
+    // 本文を置き換える編集は Vim の印 changed と同じ（決定 2）。鍵の印はここで使い終わる。印の
+    // ある鍵の置き換えは Vim が changed_* を呼んだ位置として覚える（#1374）。
+    if (vim_change_.has_value())
+    {
+        note_vim_changed(range.begin);
+    }
     vim_change_.reset();
     auto next = state_.text().replaced(range.begin, range.end, text);
     const core::Edit edit{range.begin, std::move(removed), std::string(text), restore};
@@ -325,6 +330,7 @@ void EditorController::push_empty_unit(core::Offset restore)
     {
     case core::VimChange::changed:
     {
+        note_vim_changed(edit.at);
         const bool started =
             history.position() != before &&
             (!replay_history_.has_value() || before == replay_history_.value().position());
@@ -339,6 +345,15 @@ void EditorController::push_empty_unit(core::Offset restore)
     }
     state_ = state_.with_history(std::move(history))
                  .with_document(after_edit_at(state_.document(), content));
+}
+
+// 流している Vim の鍵が changed_* を呼んだ位置を覚える（小さい方を残す・#1374）。
+void EditorController::note_vim_changed(core::Offset at)
+{
+    if (!vim_changed_from_.has_value() || at.value < vim_changed_from_.value().value)
+    {
+        vim_changed_from_ = at;
+    }
 }
 
 // 覚えは line の行頭の状態で、それは line より前の行だけで決まる。編集の始まり（編集の前の本文の

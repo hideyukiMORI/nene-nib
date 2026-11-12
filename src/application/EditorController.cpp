@@ -463,18 +463,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<ScrollTabs>(intent) ||
                  std::holds_alternative<SettleRecentTab>(intent) ||
                  std::holds_alternative<EndSession>(intent) || keeps_explorer_notice(intent));
-    // `map` の待ちの鍵は、待ちを保つ意図のほかは受ける前に流す（ADR 0176 の決定 4）。
-    // 窓が閉じていく EndSession では流さずに捨てる（保存済みの文書を未保存にしない・#1096 の
-    // R1-2）。
-    map_timer_.reset();
-    if (std::holds_alternative<EndSession>(intent))
-    {
-        discard_key_map_pending();
-    }
-    else if (!keeps_key_map_pending(intent))
-    {
-        flush_key_map_pending();
-    }
+    settle_pending_keys(intent);
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     // SelectLanguage も同じ（ADR 0154 の決定 4）。SelectSyntax も同じ（ADR 0156 の追補）。
@@ -521,6 +510,26 @@ void EditorController::forget_unkept_marks(const EditorIntent &intent)
     if (!keeps_explorer_click(intent))
     {
         explorer_clicked_.reset();
+    }
+}
+
+// `map` の待ちの鍵は、待ちを保つ意図のほかは受ける前に流す（ADR 0176 の決定 4）。
+// 窓が閉じていく EndSession では流さずに捨てる（保存済みの文書を未保存にしない・#1096 の
+// R1-2）。待ちを保つ意図（打った Vim の鍵と使う人の操作でない意図）のほかは、「前の Vim の鍵が
+// 先頭を確かめ済みで終えた」も捨てる。ホイール・タブ・モードの切り替え・クリックの後の鍵は先頭を
+// 確かめ直す（#1374）。流した鍵の後で捨てるので、流した鍵どうしは引き継ぐ。
+void EditorController::settle_pending_keys(const EditorIntent &intent)
+{
+    map_timer_.reset();
+    if (std::holds_alternative<EndSession>(intent))
+    {
+        discard_key_map_pending();
+        vim_top_kept_ = false;
+    }
+    else if (!keeps_key_map_pending(intent))
+    {
+        flush_key_map_pending();
+        vim_top_kept_ = false;
     }
 }
 

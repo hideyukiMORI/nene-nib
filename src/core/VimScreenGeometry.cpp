@@ -281,6 +281,9 @@ correction_window(const VimEditorView &view, LineNumber first)
     }
     auto &result = target.value();
     result.preserve_column = result.caret == view.text.position_of(view.selection.caret).line;
+    // 折り返さない道の half_page_step と同じ規則: 先頭の決め直しは update_topline の写しだけで、
+    // 末尾より下の段が見える窓で余白に押さない（#1374）。
+    result.topline = VimToplineSettle::updated;
     if (state.count.has_value() &&
         (result.first != vim_viewport_of(view).first_visible || !result.preserve_column))
     {

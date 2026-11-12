@@ -37,6 +37,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <optional>
 #include <set>
 #include <span>
@@ -854,6 +855,32 @@ void verify_grid_rows_cursor_correct()
     verify_grid_rows_edges();
 }
 
+// Ctrl-e の後に同じ 1 行（格子の巨大な行）の中を動く鍵は、先頭の行が窓より高いので画面行を追う
+// （Vim の curs_columns が w_skipcol を動かす形・#1374）。窓を Ctrl-e の置いた画面行へ戻して
+// キャレットを窓の外に残さない。見えたままの移動（`l`）は窓を動かさない。
+void verify_grid_ctrl_e_then_same_line()
+{
+    for (const std::string_view keys : {"<C-e>$", "<C-e>gjgjgjgjgjgjgjgjgjgjgj", "<C-e>$0$"})
+    {
+        Editing editing;
+        EditorController &controller = editing.controller();
+        open_grid_window(controller, "0");
+        vim_replay(controller, keys);
+        const auto [top, column] = grid_top_and_column(controller);
+        const std::size_t row = (column - 1) / 8;
+        expect(top <= row && row < top + shown_lines,
+               "#1374 grid Ctrl-e then a move in the same line keeps the caret on screen");
+    }
+    Editing shown;
+    EditorController &kept = shown.controller();
+    open_grid_window(kept, "0");
+    vim_replay(kept, "<C-e>");
+    const auto scrolled = grid_top_and_column(kept);
+    vim_replay(kept, "l");
+    expect(grid_top_and_column(kept).first == scrolled.first,
+           "#1374 grid Ctrl-e then a visible move in the same line keeps the window");
+}
+
 // INSERT の PgUp / PgDn が端で送れないとき、Vim の ins_pageup / ins_pagedown は onepage の FAIL で
 // ビープだけを返し start_arrow を呼ばない。回数の反復も `.` の記録も切らない（#1149・ADR 0028 の
 // 追補）。窓の高さが要るので oracle では測れず、ここで契約にする。
@@ -1082,6 +1109,7 @@ void verify_vim_view_scope()
     verify_ordinary_mode_options();
     verify_scrolloff_cursor_correct();
     verify_grid_rows_cursor_correct();
+    verify_grid_ctrl_e_then_same_line();
     verify_insert_page_edges();
     verify_topline_updated();
     verify_topline_after_shrinking();
