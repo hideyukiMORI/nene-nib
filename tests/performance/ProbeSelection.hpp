@@ -13,6 +13,7 @@
 #include "NewlineIndexWorkload.hpp"
 #include "OperationChoiceWorkload.hpp"
 #include "PaletteChoiceWorkload.hpp"
+#include "PieceListWorkload.hpp"
 #include "PreviewCaretWorkload.hpp"
 #include "ProbeWorkload.hpp"
 #include "SearchSnapshotWorkload.hpp"
@@ -33,8 +34,8 @@ using ProbeSelection =
                  CommandInputWorkload, ExCompletionWorkload, CompletionPrefixWorkload,
                  PaletteChoiceWorkload, OperationChoiceWorkload, SearchSpanWorkload,
                  TextObjectWorkload, MarkdownWorkload, NewlineIndexWorkload, LexerWorkload,
-                 ExplorerFrameWorkload, VimBlockWorkload, WordObjectWorkload,
-                 EditedHistoryWorkload>;
+                 ExplorerFrameWorkload, VimBlockWorkload, WordObjectWorkload, EditedHistoryWorkload,
+                 PieceListWorkload>;
 
 [[nodiscard]] std::optional<ProbeSelection> workload_of(std::string_view name) noexcept;
 [[nodiscard]] std::string input_of(ProbeSelection workload);

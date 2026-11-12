@@ -1,7 +1,8 @@
 // scope `--text-buffer-property` の単体テスト（#869・ADR 0042 決定 2・ADR 0044 / 0047 / 0121 /
 // 0139 / 0052）。固定 seed の決定的な編集の列（insert / erase / replaced と範囲の外の端）を
 // TextBuffer と std::string の模型の両方に施し、各段で本文・行・位置・仮想桁を模型の素朴な走査と
-// 照合する。最後に EditHistory の undo / redo を全段ぶん往復させる。
+// 照合する。最後に EditHistory の undo / redo を全段ぶん往復させる。piece が数千の本文（#1474）も
+// 毎段で照合する。
 // 模型の行は TextBuffer.hpp の注釈に従う: 行は '\n' で切り、内容の終わりから '\r' を 1 つ外すのは
 // 改行の形が CRLF の文書だけ（LF の文書では '\r' は 1 文字）。CRLF の文書で '\n' の続かない最終行の
 // 末尾の '\r' も外すのは注釈に無く、既存の試験（"the existing CRLF model also strips a terminal CR
@@ -26,6 +27,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <random>
 #include <string>
 #include <string_view>
@@ -574,6 +576,336 @@ void verify_chunk_crossing_case(Random &random)
                                    EditShape{48, crossing_fragments, (64U * 1024U) + 1U});
     expect(inserted > 64U * 1024U, "the crossing case inserts more than one add chunk");
 }
+
+// 6. piece が数千の本文（#1474・ADR 0183 の決定 5）。小さな case は P が数十までしか届かないので、
+// piece を増やす編集の形（「5 文字打って BS」の周・行頭への貼り付け・短い削除・undo / redo の
+// 入れ直し）を数千段積み、毎段で読む口を模型と照合する。97 段ごとに値の写しを取り、写しと元の
+// 両方を別々に編集する（add の先端を先に伸ばした側だけが同じ chunk を使う・ADR 0044 の決定 2）。
+// 写しは最後にもう一度照合する（後から編集された元の値に引きずられない）。
+using Tracked = std::pair<TextBuffer, std::string>;
+// undo の列と redo の列。
+using Stacks = std::pair<std::vector<Edit>, std::vector<Edit>>;
+// 置き換える半開範囲 [first, second)。
+using Span = std::pair<std::size_t, std::size_t>;
+
+constexpr std::size_t many_piece_sampled_interval = 16;
+constexpr std::size_t many_piece_fork_interval = 97;
+constexpr std::size_t many_piece_full_interval = 200;
+constexpr std::size_t typed_per_cycle = 5;
+
+[[nodiscard]] bool continues_code_point(char byte)
+{
+    return (static_cast<unsigned char>(byte) & 0xC0U) == 0x80U;
+}
+
+// at 以下で最も近い code point の先頭（模型の継続 byte を後ろへ飛ばす）。
+[[nodiscard]] std::size_t boundary_at(std::string_view model, std::size_t at)
+{
+    std::size_t result = std::min(at, model.size());
+    while (result > 0 && result < model.size() && continues_code_point(model[result]))
+    {
+        --result;
+    }
+    return result;
+}
+
+[[nodiscard]] std::size_t random_boundary(Random &random, std::string_view model)
+{
+    return boundary_at(model, below(random, model.size() + 1));
+}
+
+// 空でない断片を 1 つ（打鍵の 1 文字）。
+[[nodiscard]] std::string_view typed_fragment(Random &random)
+{
+    return fragments.at(below(random, fragments.size() - 1));
+}
+
+// ランダムな 3 行の端と文字列。
+[[nodiscard]] bool sampled_lines_match(const TextBuffer &text, std::string_view model,
+                                       const std::vector<ModelLine> &lines, Random &random)
+{
+    bool same = true;
+    for (std::size_t pick = 0; pick < 3; ++pick)
+    {
+        const std::size_t index = below(random, lines.size());
+        const auto &expected = lines.at(index);
+        const LineNumber line{index + 1};
+        const auto content = expected.at(line_content_end) - expected.at(line_begin);
+        same = same && text.line_start(line).value == expected.at(line_begin) &&
+               text.line_end(line).value == expected.at(line_content_end) &&
+               text.line_terminator_end(line).value == expected.at(line_next) &&
+               text.line_text(line) == model.substr(expected.at(line_begin), content);
+    }
+    return same;
+}
+
+// at を含む模型の行の番号（0 始まり）。
+[[nodiscard]] std::size_t model_line_of(const std::vector<ModelLine> &lines, std::size_t at)
+{
+    const auto after = std::ranges::upper_bound(
+        lines, at, std::ranges::less{}, [](const ModelLine &line) { return line.at(line_begin); });
+    return static_cast<std::size_t>(after - lines.begin()) - 1;
+}
+
+// ランダムな 3 つの境目の位置の往復（行と行頭からの code point の序数）。
+[[nodiscard]] bool sampled_positions_match(const TextBuffer &text, std::string_view model,
+                                           const std::vector<ModelLine> &lines, Random &random)
+{
+    bool same = true;
+    for (std::size_t pick = 0; pick < 3; ++pick)
+    {
+        const std::size_t at = random_boundary(random, model);
+        const std::size_t index = model_line_of(lines, at);
+        const auto &expected = lines.at(index);
+        const auto counted = std::ranges::count_if(
+            model.substr(expected.at(line_begin), at - expected.at(line_begin)),
+            [](char byte) { return !continues_code_point(byte); });
+        const TextPosition position{LineNumber{index + 1},
+                                    Column{static_cast<std::size_t>(counted) + 1}};
+        same = same && text.position_of(Offset{at}) == position &&
+               text.offset_of(position).value == std::min(at, expected.at(line_content_end));
+    }
+    return same;
+}
+
+// ランダムな 2 つの範囲。
+[[nodiscard]] bool sampled_ranges_match(const TextBuffer &text, std::string_view model,
+                                        Random &random)
+{
+    bool same = true;
+    for (std::size_t pick = 0; pick < 2; ++pick)
+    {
+        const auto first = random_boundary(random, model);
+        const auto second = random_boundary(random, model);
+        const auto low = std::min(first, second);
+        const auto high = std::max(first, second);
+        same = same && text.text_range(Offset{low}, Offset{high}) == model.substr(low, high - low);
+    }
+    return same;
+}
+
+// 毎段の照合: 本文・大きさ・行の数と、行・位置・範囲の標本。模型の答えは素朴な数えから出す。
+void verify_sampled(const TextBuffer &text, std::string_view model, Random &random)
+{
+    const auto lines = model_lines(model, text.line_ending());
+    const bool whole = text.text() == model && text.size_bytes() == model.size() &&
+                       text.line_count() == lines.size();
+    const bool sampled = sampled_lines_match(text, model, lines, random) &&
+                         sampled_positions_match(text, model, lines, random) &&
+                         sampled_ranges_match(text, model, random);
+    expect(whole && sampled,
+           "a text with thousands of pieces answers its reads like the model at every step");
+}
+
+// 模型の at を含む行: 行の番号（0 始まり）・行頭・内容の終わり。at の前の改行を数えるだけの素朴な
+// 走査で、行の列を作らない（毎段の軽い照合のため）。
+[[nodiscard]] std::array<std::size_t, 3> model_line_at(std::string_view model, LineEnding ending,
+                                                       std::size_t at)
+{
+    const auto index = static_cast<std::size_t>(std::ranges::count(model.substr(0, at), '\n'));
+    const std::size_t begin = index == 0 ? 0 : model.rfind('\n', at - 1) + 1;
+    const auto newline = model.find('\n', at);
+    const std::size_t stop = newline == std::string_view::npos ? model.size() : newline;
+    const bool strip = ending == LineEnding::crlf && stop > begin && model[stop - 1] == '\r';
+    return {index, begin, strip ? stop - 1 : stop};
+}
+
+// 毎段の軽い照合: 1 つの境目の行の端・位置の往復・そこから 64 バイトまでの範囲。
+void verify_light(const TextBuffer &text, std::string_view model, Random &random)
+{
+    const std::size_t at = random_boundary(random, model);
+    const auto [index, begin, content_end] = model_line_at(model, text.line_ending(), at);
+    const LineNumber line{index + 1};
+    const auto counted = std::ranges::count_if(model.substr(begin, at - begin), [](char byte)
+                                               { return !continues_code_point(byte); });
+    const TextPosition position{line, Column{static_cast<std::size_t>(counted) + 1}};
+    const std::size_t high = boundary_at(model, at + 64);
+    expect(text.size_bytes() == model.size() && text.line_start(line).value == begin &&
+               text.line_end(line).value == content_end &&
+               text.position_of(Offset{at}) == position &&
+               text.offset_of(position).value == std::min(at, content_end) &&
+               text.text_range(Offset{at}, Offset{high}) == model.substr(at, high - at),
+           "a text with thousands of pieces answers a sampled read like the model at every step");
+}
+
+// 1 回の編集を値と模型に施して照合し、施した編集を返す（undo の列に積むのは呼ぶ側）。
+[[nodiscard]] Edit applied_to(Tracked &tracked, Span span, std::string_view inserted,
+                              Random &random)
+{
+    auto &[text, model] = tracked;
+    const auto [at, end] = span;
+    Edit edit{Offset{at}, model.substr(at, end - at), std::string{inserted}, Offset{at}};
+    text = text.replaced(Offset{at}, Offset{end}, inserted);
+    model.replace(at, end - at, inserted);
+    if (below(random, many_piece_sampled_interval) == 0)
+    {
+        verify_sampled(text, model, random);
+    }
+    else
+    {
+        verify_light(text, model, random);
+    }
+    return edit;
+}
+
+// 新しい編集を施して undo の列に積み、redo の列を捨てる。
+void pushed_edit(Stacks &stacks, Edit edit)
+{
+    stacks.first.push_back(std::move(edit));
+    stacks.second.clear();
+}
+
+// 「5 文字打って BS」の 1 周。打つ所は 1 つの境目で、キャレットは打った分だけ進む。
+void typed_and_erased(Tracked &tracked, Stacks &stacks, Random &random)
+{
+    std::size_t caret = random_boundary(random, tracked.second);
+    std::size_t last = 0;
+    for (std::size_t typed = 0; typed < typed_per_cycle; ++typed)
+    {
+        const auto fragment = typed_fragment(random);
+        pushed_edit(stacks, applied_to(tracked, Span{caret, caret}, fragment, random));
+        caret += fragment.size();
+        last = fragment.size();
+    }
+    pushed_edit(stacks, applied_to(tracked, Span{caret - last, caret}, "", random));
+}
+
+// 行頭への貼り付け（断片 1〜3 つ）。
+void pasted_at_line_head(Tracked &tracked, Stacks &stacks, Random &random)
+{
+    const auto lines = model_lines(tracked.second, tracked.first.line_ending());
+    const std::size_t at = lines.at(below(random, lines.size())).at(line_begin);
+    std::string clip;
+    while (clip.empty())
+    {
+        clip = generated(random, 1 + below(random, 3));
+    }
+    pushed_edit(stacks, applied_to(tracked, Span{at, at}, clip, random));
+}
+
+// 短い削除（境目から 1〜8 バイト先の境目まで）。
+void erased_short(Tracked &tracked, Stacks &stacks, Random &random)
+{
+    const auto &model = tracked.second;
+    const std::size_t at = random_boundary(random, model);
+    const std::size_t end = boundary_at(model, at + 1 + below(random, 8));
+    if (end > at)
+    {
+        pushed_edit(stacks, applied_to(tracked, Span{at, end}, "", random));
+    }
+}
+
+// undo と redo は消した本文を新しい add の piece として入れ直す（controller の undo と同じ道）。
+// undoing なら undo の列から redo の列へ、そうでなければ逆へ 1 つ移す。
+void moved_in_history(Tracked &tracked, Stacks &stacks, bool undoing, Random &random)
+{
+    auto &from = undoing ? stacks.first : stacks.second;
+    auto &to = undoing ? stacks.second : stacks.first;
+    if (from.empty())
+    {
+        return;
+    }
+    Edit edit = from.back();
+    from.pop_back();
+    const std::size_t at = edit.at.value;
+    const auto &present = undoing ? edit.inserted : edit.removed;
+    const auto &restored = undoing ? edit.removed : edit.inserted;
+    static_cast<void>(applied_to(tracked, Span{at, at + present.size()}, restored, random));
+    to.push_back(std::move(edit));
+}
+
+// 写しを取り、写しと元を別々に 1 回ずつ編集する。どちらを先にするかは写しの数で入れ替える。
+void forked(Tracked &tracked, Stacks &stacks, std::vector<Tracked> &forks, Random &random)
+{
+    Tracked fork = tracked;
+    const bool fork_first = forks.size() % 2 == 0;
+    const auto edit_fork = [&fork, &random]
+    {
+        const std::size_t at = random_boundary(random, fork.second);
+        static_cast<void>(applied_to(fork, Span{at, at}, typed_fragment(random), random));
+    };
+    const auto edit_tracked = [&tracked, &stacks, &random]
+    {
+        const std::size_t at = random_boundary(random, tracked.second);
+        pushed_edit(stacks, applied_to(tracked, Span{at, at}, typed_fragment(random), random));
+    };
+    if (fork_first)
+    {
+        edit_fork();
+    }
+    edit_tracked();
+    if (!fork_first)
+    {
+        edit_fork();
+    }
+    verify_sampled(fork.first, fork.second, random);
+    forks.push_back(std::move(fork));
+}
+
+// 1 段の操作: 0〜1 は「5 文字打って BS」・2〜6 は行頭への貼り付け・7 は短い削除・8 は undo・
+// 9 は redo。
+void operated(Tracked &tracked, Stacks &stacks, Random &random)
+{
+    const std::size_t kind = below(random, 10);
+    if (kind <= 1)
+    {
+        typed_and_erased(tracked, stacks, random);
+        return;
+    }
+    if (kind <= 6)
+    {
+        pasted_at_line_head(tracked, stacks, random);
+        return;
+    }
+    if (kind == 7)
+    {
+        erased_short(tracked, stacks, random);
+        return;
+    }
+    moved_in_history(tracked, stacks, kind == 8, random);
+}
+
+// 区切りの照合: 持たない本文と、今の値から索引を作った本文の全部の照合（verify_step）。
+void verify_whole(const Tracked &tracked, Random &random)
+{
+    const auto &[text, model] = tracked;
+    verify_step(Buffers{text, text.with_virtual_columns()}, model, walked(model), random);
+}
+
+// operations 段を積み、piece が段の数の 3/4 より多くなることも確かめる（1 段でおよそ 1 つ増える・
+// 行頭への貼り付けが前の貼り付けの境に当たると 1 つしか増えない）。
+void verify_many_pieces_case(Random &random, const std::string &initial, std::size_t operations)
+{
+    Tracked tracked{buffer_of(initial), initial};
+    Stacks stacks;
+    std::vector<Tracked> forks;
+    for (std::size_t operation = 1; operation <= operations; ++operation)
+    {
+        operated(tracked, stacks, random);
+        if (operation % many_piece_fork_interval == 0)
+        {
+            forked(tracked, stacks, forks, random);
+        }
+        if (operation % many_piece_full_interval == 0)
+        {
+            verify_whole(tracked, random);
+        }
+    }
+    expect(tracked.first.piece_count() * 4 > operations * 3,
+           "the many-piece case grows about one piece for each operation");
+    for (const auto &[text, model] : forks)
+    {
+        verify_sampled(text, model, random);
+    }
+    verify_whole(tracked, random);
+}
+
+void verify_many_pieces_cases(Random &random)
+{
+    verify_many_pieces_case(random, generated(random, 600), 2400);
+    // CRLF の本文（最初の改行の形で決まる）でも同じ列を踏む。
+    verify_many_pieces_case(random, "a\r\n" + generated(random, 400), 800);
+}
 } // namespace
 
 void verify_text_buffer_property_scope()
@@ -582,5 +914,6 @@ void verify_text_buffer_property_scope()
     verify_edge_texts(random);
     verify_small_cases(random);
     verify_chunk_crossing_case(random);
+    verify_many_pieces_cases(random);
 }
 } // namespace nenenib::tests
