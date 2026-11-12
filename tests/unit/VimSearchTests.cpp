@@ -24,6 +24,7 @@
 #include "VimMode.hpp"
 #include "VimPattern.hpp"
 #include "VimPatternFailure.hpp"
+#include "VimPatternMatch.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
 #include "VimSearch.hpp"
@@ -65,6 +66,7 @@ using nenenib::core::VimMode;
 using nenenib::core::VimPattern;
 using nenenib::core::VimPatternCase;
 using nenenib::core::VimPatternFailure;
+using nenenib::core::VimPatternMatch;
 using nenenib::core::VimRegister;
 using nenenib::core::VimRegisterKind;
 using nenenib::core::VimSearchDirection;
@@ -436,6 +438,48 @@ void verify_vim_pattern_composing()
            "after a symbol with a variation selector the word starts at the letter");
 }
 
+[[nodiscard]] std::optional<VimPatternMatch>
+composed_range(std::string_view pattern, std::string_view line, VimPatternCase cased)
+{
+    const auto parsed = VimPattern::parse(pattern, VimSearchDirection::forward, cased);
+    expect(parsed.has_value(), "the composing-only pattern is inside the supported subset");
+    if (!parsed.has_value())
+    {
+        return std::nullopt;
+    }
+    return parsed.value().matched(line, 0);
+}
+
+[[nodiscard]] bool spans(const std::optional<VimPatternMatch> &match, std::size_t begin,
+                         std::size_t end)
+{
+    return match.has_value() && match.value().begin == begin && match.value().end == end;
+}
+
+// 基底の無い結合文字の原子（#1506・Vim 9.1 の NFA_COMPOSING の基底を無視する形・実測）。当たりは
+// その結合文字を持つ 1 文字の頭から末尾までで、hlsearch と incsearch の塗りもこの範囲を使う。
+void verify_vim_pattern_leading_composing()
+{
+    constexpr auto sensitive = VimPatternCase::sensitive;
+    constexpr auto ignore = VimPatternCase::ignore;
+    expect(spans(composed_range("゙", "x が ab", sensitive), 2, 8) &&
+               spans(composed_range("́", "x É", ignore), 2, 5) &&
+               spans(composed_range("́", "x é̂ y", sensitive), 2, 7),
+           "a leading mark matches the whole character that carries it");
+    expect(spans(composed_range("́̂", "x ế y", sensitive), 2, 7) &&
+               !composed_range("゙゚", "x が ab", sensitive).has_value() &&
+               !composed_range("a゙", "x が ab", sensitive).has_value(),
+           "every mark of the run must be there, in any order, and a base still binds");
+    expect(spans(composed_range(".́y", "x éy", sensitive), 2, 6) &&
+               spans(composed_range("゙*b", "a ががb", sensitive), 2, 15) &&
+               spans(composed_range("e*́", "x É é", sensitive), 2, 5),
+           "a dot before the mark vanishes and the starred path carries the whole character");
+    expect(!composed_range("́", "́a", sensitive).has_value() &&
+               spans(composed_range("́", "́́a", sensitive), 0, 4) &&
+               spans(composed_range("́", "è̂̃̄̅̆́ é", sensitive), 16, 19),
+           "a lone mark is its own base and only the first six marks are looked at");
+}
+
 using RangeFinder = std::optional<OffsetRange> (*)(const TextBuffer &, Offset);
 
 [[nodiscard]] std::string range_under(std::string_view text, std::size_t at, RangeFinder finder)
@@ -763,9 +807,9 @@ void verify_vim_search_dot()
 
 void verify_vim_search_fixtures()
 {
-    // 検索の 241 件（大小の 30 件・#1041 と結合文字の 16 件・#1138 と結合文字の大小の 13 件・#1147
-    // と始まりの 18 件・#1146 と空の範囲のオペレータの 29 件・#1344
-    // を含む）と、鍵の分類の表・次キー待ちを共有する境界の代表（`.`・r・ f/t・gg）。
+    // 検索の 270 件（大小の 30 件・#1041 と結合文字の 16 件・#1138 と結合文字の大小の 13 件・#1147
+    // と始まりの 18 件・#1146 と空の範囲のオペレータの 29 件・#1344 と基底の無い結合文字の 29 件・
+    // #1506 を含む）と、鍵の分類の表・次キー待ちを共有する境界の代表（`.`・r・ f/t・gg）。
     constexpr std::array<std::string_view, 6> boundaries{
         "replace-char-one",    "replace-char-count", "char-search-f-count",
         "char-search-t-first", "line-jump-gg-count", "dot-remove-word"};
@@ -779,7 +823,7 @@ void verify_vim_search_fixtures()
             ++selected;
         }
     }
-    expect(selected == 247, "the scope replays 241 search fixtures and 6 shared boundaries");
+    expect(selected == 276, "the scope replays 270 search fixtures and 6 shared boundaries");
 }
 
 // 次の一致を求める 1 本の経路（ADR 0041 の決定 1）。確定の検索の鍵と incsearch の preview が
@@ -1224,6 +1268,7 @@ void verify_vim_search_contracts()
     verify_vim_pattern_word_boundaries();
     verify_vim_pattern_rejections();
     verify_vim_pattern_composing();
+    verify_vim_pattern_leading_composing();
     verify_vim_search_scan();
     verify_vim_search_wrap();
     verify_vim_search_encoding();

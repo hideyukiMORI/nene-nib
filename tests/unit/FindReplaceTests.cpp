@@ -122,6 +122,15 @@ void verify_literal_pattern()
     expect(pattern.has_value() &&
                pattern.value().literal_bytes() == std::optional<std::string>{"a.c[1]"},
            "the escaped word parses back to the literal bytes");
+    // 語の先頭の結合文字は `\` で逃がし、code point 1 つの literal のまま比べる（#1506）。
+    const auto marked = nenenib::core::VimPattern::parse(
+        nenenib::core::literal_pattern("́a", VimSearchDirection::forward),
+        VimSearchDirection::forward, nenenib::core::VimPatternCase::sensitive);
+    expect(nenenib::core::literal_pattern("́a", VimSearchDirection::forward) == "\\́a" &&
+               nenenib::core::literal_pattern("é", VimSearchDirection::forward) == "é" &&
+               marked.has_value() &&
+               marked.value().literal_bytes() == std::optional<std::string>{"́a"},
+           "a leading composing mark is escaped and stays a literal code point");
 }
 
 // 「行: 」の入力（決定 8）。ASCII の 10 進の `行` と `行:桁` だけ。
