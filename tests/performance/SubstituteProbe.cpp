@@ -38,15 +38,20 @@ constexpr std::string_view line_tail = " a b a";
         std::nullopt};
 }
 
-// 行ごとの編集を下の行から本文に当てる（controller の apply_block の替え玉）。
-[[nodiscard]] core::TextBuffer applied(core::TextBuffer text,
+// 行ごとの編集を 1 つの置き換えに畳んで本文に当てる（controller の apply_block と同じ形・LF の本文）。
+[[nodiscard]] core::TextBuffer applied(const core::TextBuffer &text,
                                        const std::vector<core::VimBlockEdit> &edits)
 {
-    for (auto edit = edits.rbegin(); edit != edits.rend(); ++edit)
+    const core::Offset begin = edits.front().range.begin;
+    std::string body;
+    core::Offset at = begin;
+    for (const core::VimBlockEdit &edit : edits)
     {
-        text = text.replaced(edit->range.begin, edit->range.end, edit->utf8);
+        body += text.text_range(at, edit.range.begin);
+        body += edit.utf8;
+        at = edit.range.end;
     }
-    return text;
+    return text.replaced(begin, edits.back().range.end, body);
 }
 } // namespace
 
