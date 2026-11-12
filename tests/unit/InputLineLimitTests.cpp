@@ -9,11 +9,20 @@
 //    できる・lost の行は戻しても断る。
 // 3. 貼り付けと IME の確定も同じ規則・検索の履歴に長い行が入り、あふれた行は入らない・`:set` と
 //    `:w <長いパス>` の長い引数。
+// 4. 確定と同じ口: 通常モードの「検索: 」の F3 / Shift+F3（Ctrl+G / Ctrl+T も同じ意図）・
+//    「置換後: 」の Enter と Ctrl+Enter・面の候補のクリックも、あふれた行は同じ 1 か所で断る。
+//    incsearch の preview はあふれた行では照合せず、起点のまま（レビュー V-1570 の M1・M2・L3）。
+#include "ActivateCommandChoice.hpp"
+#include "BeginFind.hpp"
+#include "BeginReplace.hpp"
+#include "CancelCommand.hpp"
 #include "CommandInput.hpp"
 #include "CommandLine.hpp"
+#include "CommandText.hpp"
 #include "CommitText.hpp"
 #include "DisplayText.hpp"
 #include "EditCommand.hpp"
+#include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
@@ -25,10 +34,13 @@
 #include "InputText.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
+#include "OpenCommandPalette.hpp"
 #include "PasteCommand.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
+#include "SearchHop.hpp"
 #include "SearchLine.hpp"
+#include "SelectEditMode.hpp"
 #include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
 #include "Utf8.hpp"
@@ -41,6 +53,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace nenenib::tests
 {
@@ -306,6 +319,129 @@ void verify_long_arguments()
                message_of(frame) == "Written",
            "a write target over 260 characters is passed whole");
 }
+
+// 通常モードの文書を開く（「検索: 」「置換後: 」は通常モードの入力行）。
+void open_ordinary(Editing &editing, std::string text)
+{
+    open_vim_document(editing, std::move(text));
+    static_cast<void>(
+        editing.controller().apply_frame(app::SelectEditMode{core::EditMode::ordinary}));
+}
+
+// あふれた「検索: 」で F3 / Shift+F3 を押しても、確定と同じに断る。キャレット・語・最後の検索は
+// 変わらない（Ctrl+G / Ctrl+T は同じ SearchHop の意図）。
+void verify_find_hop_refused(core::VimSearchDirection relative, const char *what)
+{
+    Editing editing;
+    open_ordinary(editing, "x\n" + std::string(input_line_limit + 1, 'a') + "\n");
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply_frame(app::BeginFind{}));
+    static_cast<void>(
+        controller.apply_frame(app::CommandText{std::string(input_line_limit + 1, 'a')}));
+    const auto frame = controller.apply_frame(app::SearchHop{relative});
+    expect(caret_at(frame, 1, 1) && !frame.command_line.has_value() &&
+               message_of(frame) == limit_message() &&
+               !controller.vim_state().last_search.has_value(),
+           what);
+    const auto reopened = controller.apply_frame(app::BeginFind{});
+    expect(reopened.command_line.has_value() && reopened.command_line.value().text.empty(),
+           "the refused hop does not remember the word");
+}
+
+// `foo` を打った後に持てる最大を超えて貼ると lost になる。F3 は打った語と違う `foo` で探さない。
+void verify_find_hop_lost()
+{
+    Editing editing;
+    open_ordinary(editing, "x\nfoo\n");
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply_frame(app::BeginFind{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{"foo"}));
+    static_cast<void>(controller.apply_frame(app::CommandText{std::string(9000, 'b')}));
+    const auto frame = controller.apply_frame(app::SearchHop{core::VimSearchDirection::forward});
+    expect(caret_at(frame, 1, 1) && !frame.command_line.has_value() &&
+               message_of(frame) == limit_message() &&
+               !controller.vim_state().last_search.has_value(),
+           "F3 on a lost find line does not search the kept word");
+}
+
+// 「置換後: 」を開いてあふれた置換語を打つ。
+void overflow_replacement(app::EditorController &controller)
+{
+    static_cast<void>(controller.apply_frame(app::BeginReplace{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{"beta"}));
+    static_cast<void>(controller.apply_frame(app::SubmitCommand{}));
+    static_cast<void>(
+        controller.apply_frame(app::CommandText{std::string(input_line_limit + 1, 'B')}));
+}
+
+// 「置換後: 」の Enter と Ctrl+Enter と F3 も、あふれた行は本文を変えずに断る。
+void verify_replace_refused()
+{
+    for (const bool all : {false, true})
+    {
+        Editing editing;
+        open_ordinary(editing, "beta\nbeta\n");
+        auto &controller = editing.controller();
+        overflow_replacement(controller);
+        const auto frame = controller.apply_frame(app::SubmitCommand{all});
+        expect(whole_vim_body(controller) == "beta\nbeta\n" && !frame.command_line.has_value() &&
+                   message_of(frame) == limit_message() &&
+                   frame.document.save_state == core::SaveState::saved,
+               all ? "Ctrl+Enter on an overflowed replacement is refused"
+                   : "Enter on an overflowed replacement is refused");
+    }
+    Editing hop;
+    open_ordinary(hop, "beta\nbeta\n");
+    overflow_replacement(hop.controller());
+    const auto frame =
+        hop.controller().apply_frame(app::SearchHop{core::VimSearchDirection::forward});
+    expect(caret_at(frame, 1, 1) && !frame.command_line.has_value() &&
+               message_of(frame) == limit_message(),
+           "F3 on an overflowed replacement line is refused like Enter");
+}
+
+// incsearch の preview はあふれた行では照合せず起点のまま。上限ちょうどでは当たりを見せる。
+// Vim の `/` の Ctrl-G は当たりが無いので動かず、Esc は起点へ戻る。当たりの桁は 1 から数える。
+void verify_preview_on_overflow()
+{
+    Editing editing;
+    open_vim_document(editing, "x\n" + std::string(input_line_limit + 1, 'a') + "\n");
+    auto &controller = editing.controller();
+    // 1 鍵ずつ流すと preview が 4096 回照合するので、pattern は 1 回の差し込みで入れる。
+    vim_replay(controller, "/");
+    auto frame = controller.apply_frame(app::CommandText{std::string(input_line_limit, 'a')});
+    expect(current_match_is(frame, 1, MatchSpan{1, input_line_limit + 1}) && caret_at(frame, 1, 1),
+           "a pattern of exactly the limit is previewed");
+    frame = controller.apply_frame(app::CommandText{"a"});
+    expect(current_match_is(frame, 1, std::nullopt) && frame.command_line.has_value() &&
+               caret_at(frame, 1, 1),
+           "an overflowed pattern is not matched and the preview returns to the origin");
+    frame = controller.apply_frame(app::SearchHop{core::VimSearchDirection::forward});
+    expect(current_match_is(frame, 1, std::nullopt) && frame.command_line.has_value() &&
+               caret_at(frame, 1, 1),
+           "Ctrl-G on an overflowed vim search line does nothing");
+    frame = controller.apply_frame(app::EditCommand{CommandEdit::backspace});
+    expect(current_match_is(frame, 1, MatchSpan{1, input_line_limit + 1}),
+           "backspacing within the limit previews again");
+    static_cast<void>(controller.apply_frame(app::CommandText{"a"}));
+    frame = controller.apply_frame(app::CancelCommand{});
+    expect(!frame.command_line.has_value() && caret_at(frame, 1, 1),
+           "Esc from an overflowed line returns to the origin");
+}
+
+// 面の候補のクリックも Enter と同じ 1 か所で断る（打った値の候補を lost の面で実行しない）。
+void verify_palette_click_refused()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{":set fontsize=18"}));
+    static_cast<void>(controller.apply_frame(app::CommandText{std::string(9000, ' ')}));
+    const auto frame = controller.apply_frame(app::ActivateCommandChoice{0});
+    expect(editing.settings().writes() == 0 && !frame.command_line.has_value() &&
+               message_of(frame) == limit_message(),
+           "a click on a lost palette is refused like Enter");
+}
 } // namespace
 
 void verify_input_line_limit_scope()
@@ -320,5 +456,13 @@ void verify_input_line_limit_scope()
     verify_paste_and_commit();
     verify_search_history();
     verify_long_arguments();
+    verify_find_hop_refused(core::VimSearchDirection::forward,
+                            "F3 on an overflowed find line is refused like Enter");
+    verify_find_hop_refused(core::VimSearchDirection::backward,
+                            "Shift+F3 on an overflowed find line is refused like Enter");
+    verify_find_hop_lost();
+    verify_replace_refused();
+    verify_preview_on_overflow();
+    verify_palette_click_refused();
 }
 } // namespace nenenib::tests

@@ -1,6 +1,5 @@
 #include "DisplayText.hpp"
 
-#include "Offset.hpp"
 #include "Utf8.hpp"
 
 #include <utility>
@@ -52,12 +51,9 @@ std::expected<DisplayText, TextFailure> clipped_display_text(std::string_view te
         return DisplayText::parse(text);
     }
     constexpr std::string_view ellipsis = "…";
-    Offset cut{DisplayText::maximum_bytes - ellipsis.size()};
-    while (cut.value > 0 && !is_boundary(text, cut))
-    {
-        --cut.value;
-    }
-    std::string shown(text.substr(0, cut.value));
+    // 末尾で切れた code point は whole_code_points の 1 本で落とす（#1292・ARC-001）。
+    const std::string_view kept = text.substr(0, DisplayText::maximum_bytes - ellipsis.size());
+    std::string shown(kept.substr(0, whole_code_points(kept)));
     shown += ellipsis;
     return DisplayText::parse(shown);
 }

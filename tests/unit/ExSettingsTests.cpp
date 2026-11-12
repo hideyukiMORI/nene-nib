@@ -298,20 +298,28 @@ void verify_ex_long_set_arguments()
     const auto size = core::evaluate_ex(size_fits, settings, Appearance::dark);
     expect(size_fits.size() == 256 && size.has_value() && size.value().message.text().size() == 252,
            "a 256-byte fontsize command is shown within the display limit");
-    // 入力行の上限は 4096 バイト（#1568）。それより短い長い引数は、受けても断っても例外で止まらず、
-    // 受けたときの知らせは表示の 1 行に収まる。
-    for (const auto &text :
-         {"set guifont=" + std::string(241, 'F') + ":h12",
-          "set guifont=" + repeated("界", 81) + ":h12",
-          "set fontsize=" + std::string(242, '0') + "12",
-          "set fontsize=" + std::string(4000, '0') + "12",
-          "set " + std::string(300, ' ') + "fontsize=12", "colorscheme " + std::string(300, 'd')})
+    // 入力行の上限は 4096 バイト（#1568）。それより短い長い引数は受けて、知らせは表示の 1 行に
+    // 収まる（HEAD の exe で答えを見て固めた・レビュー V-1570 の L5）。
+    for (const auto &text : {"set guifont=" + std::string(241, 'F') + ":h12",
+                             "set guifont=" + repeated("界", 81) + ":h12",
+                             "set fontsize=" + std::string(242, '0') + "12",
+                             "set fontsize=" + std::string(4000, '0') + "12",
+                             "set " + std::string(300, ' ') + "fontsize=12"})
     {
         const auto result = core::evaluate_ex(text, settings, Appearance::dark);
-        expect(!result.has_value() ||
+        expect(result.has_value() &&
                    result.value().message.text().size() <= core::DisplayText::maximum_bytes,
-               "a long set argument is shown within the display limit, not an exception");
+               "a long set argument is accepted and shown within the display limit");
     }
+    const auto spaced = core::evaluate_ex("set " + std::string(300, ' ') + "fontsize=12", settings,
+                                          Appearance::dark);
+    expect(spaced.has_value() && spaced.value().message.text() == "fontsize=12",
+           "leading blanks before a set argument are skipped");
+    const auto long_theme =
+        core::evaluate_ex("colorscheme " + std::string(300, 'd'), settings, Appearance::dark);
+    expect(!long_theme &&
+               long_theme.error() == core::ExEvaluationFailure{core::ExFailure::unknown_theme},
+           "a long theme name is an unknown colorscheme, a closed failure");
     const auto long_family = core::evaluate_ex("set guifont=" + std::string(300, 'F') + ":h12",
                                                settings, Appearance::dark);
     expect(!long_family && long_family.error() ==

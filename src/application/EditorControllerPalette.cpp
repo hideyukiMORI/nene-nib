@@ -468,7 +468,8 @@ void EditorController::accept(const ActivateCommandChoice &intent)
     }
     if (const auto *palette = std::get_if<core::CommandPalette>(&input.value()))
     {
-        if (intent.index < palette->count())
+        // クリックも Enter と同じ確定なので、あふれた面は同じ 1 か所で断る（#1568）。
+        if (intent.index < palette->count() && !refused_overflow())
         {
             submit_palette(palette->selected_at(intent.index));
         }

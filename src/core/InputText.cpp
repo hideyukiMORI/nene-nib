@@ -31,18 +31,14 @@ bool overflows(const InputText &input) noexcept
 
 OffsetRange input_line_window(std::string_view text, Offset from, Offset to) noexcept
 {
-    Offset begin{from.value > input_line_window_before ? from.value - input_line_window_before : 0};
-    while (begin.value < from.value && !is_boundary(text, begin))
-    {
-        ++begin.value;
-    }
-    const std::size_t after = text.size() - std::min(to.value, text.size());
-    Offset end{to.value + std::min(after, input_line_window_after)};
-    while (end.value > to.value && !is_boundary(text, end))
-    {
-        --end.value;
-    }
-    return OffsetRange{begin, end};
+    // 窓の端で切れた code point は、先頭は leading_continuations、末尾は whole_code_points の
+    // 1 本で落とす（#1322・#1292・ARC-001）。
+    const std::size_t head = std::min(from.value, text.size());
+    const std::size_t start = head > input_line_window_before ? head - input_line_window_before : 0;
+    const Offset begin{start + leading_continuations(text.substr(start, head - start))};
+    const std::size_t tail = std::min(to.value, text.size());
+    const std::string_view after = text.substr(tail, input_line_window_after);
+    return OffsetRange{begin, Offset{tail + whole_code_points(after)}};
 }
 
 InputText edited_input(const InputText &input, CommandEdit edit)
