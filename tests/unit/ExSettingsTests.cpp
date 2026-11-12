@@ -1268,6 +1268,29 @@ void verify_ex_command_table()
            ":w reaches the document row");
 }
 
+// Vim が窓を決め直す option の表（#1524・ADR 0019 の #1524 の追補）。値を置く形だけが真で、同じ
+// 値の置き直しも真、問いと窓の旗を持たない option と Vim に無い option は偽（Vim 9.1 の実測）。
+void verify_ex_window_recheck()
+{
+    const auto rechecks = [](const core::ExResult &r) { return r.rechecks_window; };
+    for (const auto text : {"set wrap", "set nowrap", "set rnu", "set nornu", "set relativenumber",
+                            "set norelativenumber", "set hlsearch", "set nohlsearch", "set so=0",
+                            "set so=3", "set scrolloff=2"})
+    {
+        expect(ex_result_has(text, rechecks), "a P_RWIN / P_RALL option re-checks the window");
+    }
+    for (const auto text :
+         {"set rnu?", "set so", "set so?", "set scrolloff", "set ic", "set noic", "set scs",
+          "set incsearch", "set noincsearch", "set guide", "set minimap", "set explorer",
+          "set fontsize=12", "set clipboard=", "set ft=c", "set ff=unix", "noh", "syntax off"})
+    {
+        const auto result =
+            core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark);
+        expect(result.has_value() && !result.value().rechecks_window,
+               "a query or an option without a window flag does not re-check the window");
+    }
+}
+
 } // namespace
 
 void verify_ex_settings()
@@ -1301,5 +1324,6 @@ void verify_ex_settings()
     verify_ex_relativenumber();
     verify_ex_scrolloff();
     verify_ex_command_table();
+    verify_ex_window_recheck();
 }
 } // namespace nenenib::tests

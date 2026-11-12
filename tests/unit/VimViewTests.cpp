@@ -1066,6 +1066,150 @@ void verify_margin_change_in_a_macro()
                "#1432 the bottom line inside @a is followed with the new margin before k");
     }
 }
+
+// Vim が窓を決め直す option の契約（#1524）。本文と窓は fixture viewport-set-redraw- の窓（60 行・
+// 8 行の窓・so=4・先頭 53・行 57）。`3<C-e>` で先頭 56・行 59 にした窓は Vim の窓の確かめで
+// 先頭 55 へ戻る（`changed_window_setting` が VALID_TOPLINE を落とした後の update_topline）。
+void placed_sixty(EditorController &controller, nenenib::core::TextViewGeometry geometry)
+{
+    applied(controller, VisibleLines{8, geometry});
+    std::string text;
+    for (std::size_t number = 1; number <= 60; ++number)
+    {
+        text += std::string(number < 10 ? "0" : "") + std::to_string(number) +
+                (number < 60 ? "\n" : "");
+    }
+    static_cast<void>(controller.apply(InsertText{text}));
+    applied(controller, SelectEditMode{EditMode::vim});
+    static_cast<void>(run_ex(controller, "set so=4"));
+    static_cast<void>(controller.apply(
+        PlaceCaret{TextPosition{LineNumber{57}, Column{1}}, SelectionAnchoring::collapse}));
+    const auto current = static_cast<std::int64_t>(controller.frame().first_visible.value);
+    static_cast<void>(controller.apply(ScrollLines{static_cast<std::int32_t>(53 - current)}));
+    expect(top_and_line(controller.frame()) == std::pair<std::size_t, std::size_t>{53, 57},
+           "#1524 the sixty-line window is arranged at top 53 and line 57");
+}
+
+// `3<C-e>` と Ex の入力行の `:set <option>` と後の鍵を frame を挟まずに送り、最後に 1 回だけ読む。
+[[nodiscard]] std::pair<std::size_t, std::size_t>
+window_option_then(std::string_view option, std::string_view keys,
+                   nenenib::core::TextViewGeometry geometry)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    placed_sixty(controller, geometry);
+    for (const VimKey &key : vim_keys_of("3<C-e>:"))
+    {
+        static_cast<void>(controller.apply(VimKeyPress{key}));
+    }
+    static_cast<void>(controller.apply(CommandText{"set " + std::string(option)}));
+    static_cast<void>(controller.apply(SubmitCommand{}));
+    for (const VimKey &key : vim_keys_of(keys))
+    {
+        static_cast<void>(controller.apply(VimKeyPress{key}));
+    }
+    return top_and_line(controller.frame());
+}
+
+// 同じ形を `@a` の中で流す（再生は 1 回の apply で鍵を流し途中で解かない）。
+[[nodiscard]] std::pair<std::size_t, std::size_t>
+macro_window_option_then(std::string_view stored, nenenib::core::TextViewGeometry geometry)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    placed_sixty(controller, geometry);
+    using nenenib::core::VimRegister;
+    using nenenib::core::VimRegisterKind;
+    applied(controller, nenenib::application::StoreVimRegister{
+                            'a', VimRegister{std::string(stored), VimRegisterKind::characters}});
+    vim_replay(controller, "@a");
+    return top_and_line(controller.frame());
+}
+
+// 値は Vim 9.1 の実測（直接の形は fixture viewport-set-redraw- と同じ値・`@a` の形は
+// `let @a = "3\<C-e>:set rnu\<CR>j"` を oracle の窓で測った値・D:/NeNeNib/scripts/20261112/1524）。
+// 値が同じ `nornu` `so=4` `nowrap` も決め直し、問いの `rnu?` と窓に効かない `ic` は決め直さない。
+void verify_window_option_without_frames()
+{
+    using Seen = std::pair<std::size_t, std::size_t>;
+    for (const auto geometry : margin_windows)
+    {
+        for (const std::string_view option : {"rnu", "nornu", "nohlsearch", "so=4", "nowrap"})
+        {
+            expect(window_option_then(option, "", geometry) == Seen{55, 59},
+                   "#1524 a window option re-decides the window at the caret");
+            expect(window_option_then(option, "j", geometry) == Seen{55, 60},
+                   "#1524 a window option re-decides the window before the next key");
+        }
+        expect(window_option_then("rnu", "<C-y>", geometry) == Seen{54, 59},
+               "#1524 the re-decided window is the one <C-y> scrolls");
+        for (const std::string_view option : {"rnu?", "ic"})
+        {
+            expect(window_option_then(option, "j", geometry) == Seen{56, 60},
+                   "#1524 a query or an option without a window flag keeps the window");
+        }
+    }
+}
+
+void verify_window_option_in_a_macro()
+{
+    using Seen = std::pair<std::size_t, std::size_t>;
+    for (const auto geometry : margin_windows)
+    {
+        for (const std::string_view stored :
+             {"3\x05:set rnu\rj", "3\x05:set nohlsearch\rj", "3\x05:set so=4\rj"})
+        {
+            expect(macro_window_option_then(stored, geometry) == Seen{55, 60},
+                   "#1524 a window option inside @a re-decides the window before the next key");
+        }
+        expect(macro_window_option_then("3\x05:set ic\rj", geometry) == Seen{56, 60},
+               "#1524 an option without a window flag inside @a keeps the window");
+    }
+}
+
+// 折り返す窓の `:set wrap` と次の鍵を frame を挟まずに送る（#1524）。本文と窓は fixture
+// wrap-set-redraw-wrap-then-k / -j と同じ（47 字の 30 行・20 桁・6 行の窓・折り返さない窓の先頭
+// 10・so=0）。値は eng/vim-wrap-oracle.py が測った先頭と行。
+[[nodiscard]] std::pair<std::size_t, std::size_t> wrap_option_then(std::size_t line,
+                                                                   std::string_view keys)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    std::string text;
+    for (std::size_t number = 1; number <= 30; ++number)
+    {
+        text += std::string(number < 10 ? "0" : "") + std::to_string(number) +
+                std::string(45, 'x') + (number < 30 ? "\n" : "");
+    }
+    static_cast<void>(controller.apply(InsertText{text}));
+    applied(controller, SelectEditMode{EditMode::vim});
+    static_cast<void>(run_ex(controller, "set so=0"));
+    static_cast<void>(run_ex(controller, "set nowrap"));
+    applied(controller, VisibleLines{6, nenenib::core::TextViewGeometry{200, 20, 96, 10.0F}});
+    static_cast<void>(controller.apply(
+        PlaceCaret{TextPosition{LineNumber{line}, Column{1}}, SelectionAnchoring::collapse}));
+    const auto current = static_cast<std::int64_t>(controller.frame().first_visible.value);
+    static_cast<void>(controller.apply(ScrollLines{static_cast<std::int32_t>(10 - current)}));
+    expect(top_and_line(controller.frame()) == std::pair<std::size_t, std::size_t>{10, line},
+           "#1524 the unwrapped window is arranged at top 10");
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimCharacter{U':'}}}));
+    static_cast<void>(controller.apply(CommandText{"set wrap"}));
+    static_cast<void>(controller.apply(SubmitCommand{}));
+    for (const VimKey &key : vim_keys_of(keys))
+    {
+        static_cast<void>(controller.apply(VimKeyPress{key}));
+    }
+    return top_and_line(controller.frame());
+}
+
+void verify_wrap_option_without_frames()
+{
+    using Seen = std::pair<std::size_t, std::size_t>;
+    expect(wrap_option_then(15, "k") == Seen{14, 14},
+           "#1524 :set wrap re-decides the wrapped window at the caret before k");
+    expect(wrap_option_then(12, "j") == Seen{12, 13},
+           "#1524 :set wrap re-decides the wrapped window at the caret before j");
+}
 } // namespace
 
 void verify_vim_view_scope()
@@ -1093,5 +1237,8 @@ void verify_vim_view_scope()
     verify_typed_follow_without_frames();
     verify_margin_change_without_frames();
     verify_margin_change_in_a_macro();
+    verify_window_option_without_frames();
+    verify_window_option_in_a_macro();
+    verify_wrap_option_without_frames();
 }
 } // namespace nenenib::tests

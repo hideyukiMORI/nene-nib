@@ -268,3 +268,33 @@ PR #1306（#1293）の独立レビューの後続 1。折り返す窓で、窓�
 5. **Ctrl+P の面。** 面の `:` の候補は値の無い `set scrolloff=` だけで、値を打った `:set scrolloff=2` も `:set so=2` も候補が無く確定しても何も起きない（契約を書く途中の実測）（`palette_choices` が値を受けるのは `set fontsize=` と字体と `colorscheme` だけ）。面から余白を変える道は今は無いので、面の形の契約は置かない。面が値を受けるようになっても、同じ `evaluate_command` → `persist_settings` を通る。
 6. **検証。** fixture `viewport-set-so-` 12 件（Issue の形の `j` `k` と鍵なし・30 行の窓の上端の `j`・長い名前・下端の `k` と `3k`・2 回の変更・`ox<Esc>`・同じ値・窓の中ほど・問い・Vim 9.1 の oracle が測った値）。直す前の再生器では 7 件（`issue-j` `issue-k` `issue-alone` `top-j` `long-name-top-j` `bottom-k` `twice-j`）が落ちる。fixture の再生は鍵ごとに解決するので、この 7 件は決定 4 の幅の判定の直しで通る。印（`setting_follow_`）が要る形は 2 つの契約（`--vim-view`）で守る。`verify_margin_change_without_frames` は窓の 1 打鍵の道（frame を挟まずに `:set so=2` と `j` / `k` を送る 3 件）、`verify_margin_change_in_a_macro` は `@a` の中の `:set so=2<CR>j` と `:set so=2<CR>k`（再生は 1 回の apply で鍵を流し途中で解かない・値は oracle の register 欄の形 `let @a = "…"` で測った 8 / 11 と 12 / 14）。印だけを外した木では前者の `j` `k` の 2 件と後者の 2 件が落ちる（同じ形の 4 件・余白が変わらない `so=0` の対照は落ちない）。`@a` を register 欄の fixture にしないのは、その録画（`store_vim_fixture_macro` が別の editor で `q` から打つ）が入力行の鍵を録らず、再生の側で余白が変わらない（印の有無によらず so=0 のまま・試した 3 件）ため。
 7. **製品の道の検証（レビュー V-1519 の M1）。** 決定 6 の 2 つの契約は、幅の無い窓（`VisibleLines{6}`）と製品と同じ幅のある窓（`TextViewGeometry{400, 20, 96}`）の両方で回す（`margin_windows`・10 件）。幅のある窓は印ではなく `follow_after_settings` の `clamp_scroll` の解決を通る。試した木: 余白の追従の頼みを `clamp_scroll` の後へ戻した木は 0 件落ちる（印が後で解くので結果は同じ）、印だけを外した木は幅の無い窓の 4 件、頼みと印の両方を外した木（直す前の幅のある窓の道と同じ）は幅のある窓の 4 件を加えた 8 件が落ちる。折り返す窓（20 桁）は fixture `wrap-set-so-` 8 件（`eng/vim-wrap-oracle.py` が鍵の中の `:set so=N<CR>` で測った値・Issue の形の `j` `k` と鍵なし・#1300 の確かめで残った 5 件 `compare-21` の 58 / 107 と `compare-23` の 154 / 320 / 343。`compare-22` の 220 は Issue の `j` と同じ形・320 は最後の空の行を 1 文字の行にした・画面行の数は同じ）で、Vim の先頭は #1300 の写しの記録と全部一致した。この 8 件は直す前の木でも通る（fixture の再生は鍵ごとに frame を読むので、幅のある窓では `:set` の確定の中の `clamp_scroll` と `follow_caret` の頼みが次の鍵の前に解ける）。そのため、折り返す窓で直す前に落ちる形は fixture では作れず、frame を挟まない形は上の契約が守る。
+
+## 追補（2026-11-12・#1524）: 窓の旗を持つ option は値が同じでも鍵の前のキャレットで窓を決め直す
+
+PR #1519（#1432）の独立レビュー V-1519 の後続 1 と、レビュー V-1543 の後続 F1。60 行・高さ 8・先頭 53・行 57・`so=4` の窓で `3<C-e>:set rnu<CR>` と `3<C-e>:set nohls<CR>` は Vim 先頭 55・Nib 56（`3<C-e>` だけの先頭は 56・行 59）。#1432 の追補の決定 1 の「`so` が変わらない形（同じ値の `:set so=0`）は窓を動かさない」と決定 2 の「ほかの設定は決め直しても先頭は変わらない」は、窓が既に Vim の確かめを満たしている形だけの話で、`<C-e>` が本文の終わりの近くで置いた窓（Vim の `update_topline` が戻す窓）では外れる。
+
+1. **Vim の規則（source）。** tag v9.1.0004 の `option.c` で、真偽の option（`set_bool_option`）と数の option（`set_num_option`）は値を書いた後に `check_redraw(options[opt_idx].flags)` を呼ぶ。値が変わったかは見ない。文字列の option は `optionstr.c` の同じ呼び出しで、GUI だけの option（`guifont` など）は GUI が動いていないと呼ばない。`check_redraw` は旗に `P_RWIN` か `P_RBUF` があるか `P_RALL`（`P_RCLR` を含む）なら `changed_window_setting()` を呼び、`move.c` の `changed_window_setting_win` が `w_valid` から `VALID_TOPLINE` を落とす。次の `update_topline`（`:normal!` の中は次の鍵の前の `update_topline_cursor`・対話では描く前）が今のキャレットで窓を決め直す。問い（`:set rnu?`）は値を書かないので呼ばない。
+2. **Nib の option の表（`optiondefs.h` の旗と Vim 9.1 の実測）。** 実測は `D:/NeNeNib/scripts/20261112/1524/probe.py`（`eng/vim-oracle.py` の `run_vim` で上の窓に `3<C-e>:set <option><CR>` を流す・`3<C-e>` だけは先頭 56）。
+
+   | Nib の `:set` | Vim の旗 | 実測の先頭 | Nib の扱い |
+   |---|---|---|---|
+   | `wrap` `nowrap` | `P_RWIN` | 55（同じ値の `nowrap` も） | 決め直す |
+   | `relativenumber` `rnu` `nornu` | `P_RWIN` | 55（同じ値の `nornu` も） | 決め直す |
+   | `hlsearch` `nohlsearch` | `P_RALL` | 55 | 決め直す |
+   | `scrolloff=N` `so=N` | `P_RALL` | 55（同じ値の `so=4` も） | 決め直す（#1432 は値が変わったときだけだった） |
+   | `rnu?` `so?` `so`（問い） | — | 56 | 決め直さない |
+   | `ignorecase` `ic` `noic` | 無し | 56 | 決め直さない |
+   | `smartcase` `scs` | 無し | 56 | 決め直さない |
+   | `incsearch` `noincsearch` | 無し | 56 | 決め直さない |
+   | `clipboard=` | 無し | 56 | 決め直さない |
+   | `filetype=` `ft=` | 無し | 56 | 決め直さない |
+   | `fileformat=` `ff=` | `P_RSTAT` だけ | 56 | 決め直さない |
+   | `guifont=` | `P_RCLR`（GUI だけの option） | 56（端末の Vim は `check_redraw` を通らない） | 決め直さない（行高の変わる Nib の道のまま） |
+   | `:noh`（命令） | — | 56 | 決め直さない |
+   | `fontsize=` `guide` `explorer` `minimap` `lsp` `display=` `root=` | Vim に無い | — | 対象外（今のまま） |
+
+   Vim の `number` `list` は Nib の `:set` が受けない（Vim では `P_RWIN` で 55）。
+3. **Nib の写し。** 表は core の `ExResult.cpp` の `window_setting_names` の 1 つ（長い名前と短い名前・`no` の形を同じ行で受ける）で、option ごとの分岐は書かない。`evaluate_ex` の `set` が答えに `rechecks_window` を添え、値を置いた形（答えが設定か検索の強調を持つ）だけが真になる。controller の Ex の経路 `evaluate_command` は、`rechecks_window` なら設定を写す前に `follow_window_setting`（#1432 の `follow_changed_margin` を改名）で今のキャレットの追従と印 `setting_follow_` を頼む。`persist_settings` は余白が変わったかを数えなくなり、設定を書く道（Ex・Ctrl+P の面の `:`・意図）の後始末は `follow_after_settings` の clamp と行高の頼みだけ。幅のある窓（製品）では続く `clamp_scroll` が新しい設定で頼みをその場で解き、設定を書かない形（同じ値・`hlsearch`）と幅の無い窓では、印が後の鍵の前（鍵が無ければスクロールを読む所）で解く。通常モードは今までどおり印を立てない。設定を読む起動の道と Ctrl+P の面の候補は変えない（面の `:` から確定した `:set` は Ex と同じ `evaluate_command` を通る・#1432 の追補の決定 5）。
+4. **`wrap` の切り替え。** 折り返す窓の oracle（`eng/vim-wrap-oracle.py`・20 桁・6 行・47 字の 30 行）で鍵の中の `:set wrap<CR>` / `:set nowrap<CR>` を測った: 折り返さない窓の先頭 10・行 15 から `:set wrap<CR>` は 14 / 15、行 12 からは 11 / 12、`:set wrap<CR>k` は 14 / 14、`:set wrap<CR>j`（行 12）は 12 / 13、先頭 25・行 30 からは 29 / 30、折り返す窓の先頭 10・行 11 から `:set nowrap<CR>j` は 10 / 12、先頭 29・行 30 から `:set nowrap<CR>` は 29 / 30（余白 0 では本文の後の空きを残す）、`:set so=2<CR>:set nowrap<CR>` は 28 / 30。
+5. **検証。** fixture `viewport-set-redraw-` 18 件（`eng/vim-oracle.py`・上の窓の 12 件の決め直しと、問い・`ic`・`incsearch`・`:noh`・`so?`・`so=0` の窓の 6 件の対照）と `wrap-set-redraw-` 8 件（決定 4 の値・`eng/vim-wrap-oracle.py`）。契約は #1432 と同じ形で、`--vim-view` の `verify_window_option_without_frames`（幅の無い窓と幅のある窓・frame を挟まない `3<C-e>:set <option><CR>` と後の鍵・`rnu` `nornu` `nohlsearch` `so=4` `nowrap` と対照の `rnu?` `ic`）・`verify_window_option_in_a_macro`（`@a` の中の `3<C-e>:set rnu<CR>j` ほか・値は `let @a = …` を oracle の窓で測った 55 / 60 と対照の 56 / 60）・`verify_wrap_option_without_frames`（折り返す窓の frame を挟まない `:set wrap<CR>k` / `j`）と、`--ex-settings` の `verify_ex_window_recheck`（表の真偽）。直す前の木（決め直しの頼みを #1432 と同じ「余白の値が変わったときだけ」に戻した木）では、viewport の fixture 12 件（対照の 6 件は通る）と契約の 26 件（frame を挟まない形 19・`@a` 6・折り返す窓の `k` 1）が落ちる。wrap の fixture 8 件は直す前でも通る（#1432 の追補の決定 7 と同じく、fixture の再生は鍵ごとに frame を読み、幅のある窓では `:set` の確定の中の clamp と追従が次の鍵の前に解ける）。折り返す窓で直す前に落ちる形は frame を挟まない契約の `:set wrap<CR>k`（Vim 14 / 14・直す前の Nib は先頭が違う）で守る。
+6. **残る違い。** Vim の `set_bool_option` / `set_num_option` は `P_RALL` と `P_CURSWANT` の option で `w_set_curswant` も立てる（欲しい列を今の桁で取り直す）が、Nib は写していない（本件は窓の先頭だけ・確かめていない）。`guifont` は GUI の Vim では `check_redraw` を通るが、正本の端末の Vim では通らないので表に載せない。Vim の `number` `list` などは Nib が受けないので対象外。
