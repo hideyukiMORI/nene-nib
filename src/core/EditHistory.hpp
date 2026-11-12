@@ -2,6 +2,7 @@
 
 #include "Edit.hpp"
 #include "EditBoundary.hpp"
+#include "HistoryDirection.hpp"
 #include "HistoryFailure.hpp"
 #include "HistoryUnit.hpp"
 #include "VimChange.hpp"
@@ -47,6 +48,14 @@ class EditHistory final
     [[nodiscard]] std::optional<Edit> applied(std::size_t index) const;
     [[nodiscard]] EditHistory undone() const;
     [[nodiscard]] EditHistory redone() const;
+    // direction の向きに続く saved_only の空の単位（本文も未保存の印も変えない単位）を全部飛ばした
+    // 次の履歴（ADR 0181 の追補 9・#1535）。範囲が空の changed の単位は飛ばさない（戻すと未保存の
+    // 印が変わるので、通常モードの 1 回の undo / redo として消費する）。その向きに saved_only の
+    // 空の単位しか無ければ端の失敗（nothing_to_undo / nothing_to_redo）で何も動かさない。飛ばした
+    // 件ごとに位置と改訂番号を動かし、本文の位置（content_position）は変えない。通常モード
+    // （Vim でないモード）の Ctrl+Z / Ctrl+Y の入口だけが呼ぶ。Vim の `u` `<C-r>` は呼ばない。
+    [[nodiscard]] std::expected<EditHistory, HistoryFailure>
+    past_saved_only_units(HistoryDirection direction) const;
     [[nodiscard]] std::size_t size() const noexcept;
     [[nodiscard]] std::size_t position() const noexcept;
     // 改訂番号（ADR 0137 の決定 2）。編集（前の単位にまとめられたときも）・undo・redo のたびに
@@ -71,6 +80,10 @@ class EditHistory final
     // 0 から count 件を残し、その後ろに entry を足した次の束。
     [[nodiscard]] std::shared_ptr<const Blocks> kept_with(std::size_t count, Entry entry) const;
     [[nodiscard]] const HistoryUnit &entry_at(std::size_t index) const;
+    // index 番目の件が saved_only の空の単位か（past_saved_only_units が飛ばす件）。
+    [[nodiscard]] bool silent_at(std::size_t index) const;
+    // direction の向きに続く saved_only の空の単位を飛ばした位置（past_saved_only_units の歩き）。
+    [[nodiscard]] std::size_t past_silent(HistoryDirection direction) const;
     std::shared_ptr<const Blocks> blocks_;
     // 束の中の編集の数。塊の列は size_ 件ちょうどを持つ。
     std::size_t size_;
