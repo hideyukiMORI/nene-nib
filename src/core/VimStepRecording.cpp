@@ -753,6 +753,23 @@ namespace
     return record;
 }
 
+// `&` と `g&` か（ADR 0168 の決定 1）。`.` の記録には積まない（Vim の nv_optrans と nv_g_cmd は
+// redo を書かない・`x&j.` は `x` を繰り返す・実測）。
+[[nodiscard]] bool repeats_substitute(const VimState &before, const VimKey &key) noexcept
+{
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    if (character == nullptr || character->code != U'&')
+    {
+        return false;
+    }
+    if (!before.input_wait.has_value())
+    {
+        return true;
+    }
+    const auto *const prefix = std::get_if<VimPrefix>(&before.input_wait.value());
+    return prefix != nullptr && *prefix == VimPrefix::g;
+}
+
 // NORMAL の記録。完了した鍵だけが効果で分かれ、途中の鍵と INSERT へ入る命令は記録を続ける。
 [[nodiscard]] VimState normal_recorded(const VimState &before, VimState next,
                                        const VimEffect &effect, VimKey key)
@@ -773,7 +790,7 @@ namespace
         next.recording = std::move(record);
         return next;
     }
-    if (changes_text(effect))
+    if (changes_text(effect) && !repeats_substitute(before, key))
     {
         next.last_change = std::move(record);
     }

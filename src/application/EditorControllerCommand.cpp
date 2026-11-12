@@ -484,6 +484,12 @@ std::optional<core::VimRepeatFailure> EditorController::operator_command(const s
         return operator_closed_in_place(text);
     }
     const auto result = evaluated_ex(text);
+    const auto substitute =
+        result.has_value() ? result.value().substitute : std::optional<core::ExSubstituteRequest>{};
+    if (substitute.has_value())
+    {
+        return operator_substituted(text, substitute.value());
+    }
     const auto line = result.has_value() ? landing_line(result.value()) : std::nullopt;
     if (line.has_value())
     {
@@ -494,6 +500,27 @@ std::optional<core::VimRepeatFailure> EditorController::operator_command(const s
         return core::VimRepeatFailure::refused;
     }
     return operator_closed_in_place(text);
+}
+
+// オペレータ待ちの `:s`（`d:s/a/b/`・ADR 0168 の追補 16）。Vim は置換を先に流し、置換の前の
+// キャレットから置換の後のキャレットまでを exclusive な移動としてオペレータを閉じる（`jd:s/a/X/` は
+// `  b a` を `b X` に・実測）。置換が断られたら（E486 ほか）オペレータを捨てて再生を打ち切る。
+std::optional<core::VimRepeatFailure>
+EditorController::operator_substituted(const std::string &text,
+                                       const core::ExSubstituteRequest &request)
+{
+    const core::Offset origin = state_.selection().caret;
+    const auto failure = stepped_vim(VimStepSource{request});
+    if (failure.has_value())
+    {
+        state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
+        return failure;
+    }
+    if (!state_.vim().pending.has_value())
+    {
+        return std::nullopt;
+    }
+    return stepped_vim(VimStepSource{core::VimCommandMotion{text, std::nullopt, origin}});
 }
 
 // 答えを写し、断られた（ran_ex_result が refused を返した・評価の失敗も命令の要求の断りも・
@@ -707,6 +734,12 @@ std::optional<core::VimRepeatFailure> EditorController::ran_ex_result(
     {
         reject(core::ex_failure_message(result.error(), text));
         return core::VimRepeatFailure::refused;
+    }
+    // `:s` の族は engine の 1 歩（ADR 0168 の決定 1）。E486 などの失敗は再生を打ち切る。
+    const auto &substitute = result.value().substitute;
+    if (substitute.has_value())
+    {
+        return stepped_vim(VimStepSource{substitute.value()});
     }
     const std::size_t refusals = refusals_;
     if (ran_ex_request(result.value()))
@@ -1096,7 +1129,9 @@ void EditorController::replace_all_matches()
         case core::SubstituteFailure::no_match:
             static_cast<void>(hop_find(find.pattern, core::VimSearchDirection::forward, true));
             return;
+        // 通常モードの語は literal で群を持たないので too_complex にはならない。来たら同じく断る。
         case core::SubstituteFailure::too_large:
+        case core::SubstituteFailure::too_complex:
             reject(core::DisplayText::parse(replace_too_large_notice).value());
             return;
         }

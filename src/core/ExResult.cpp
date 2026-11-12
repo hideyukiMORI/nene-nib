@@ -10,7 +10,9 @@
 #include "ExLineRequest.hpp"
 #include "ExMapCommand.hpp"
 #include "ExPaletteName.hpp"
+#include "ExRange.hpp"
 #include "ExRelativeLineRequest.hpp"
+#include "ExSubstituteCommand.hpp"
 #include "ExTabName.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
@@ -1446,11 +1448,34 @@ constexpr std::array<ExCommandParser, 10> command_parsers{
     return std::unexpected(ExFailure::unknown_command);
 }
 
+// `:s` の族（ADR 0168 の決定 1）。range は範囲の字面（無ければ今の行）。`:s` の族でなければ値なし。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+substitute_result(std::string_view text, std::optional<ExRange> range)
+{
+    auto parsed = substitute_command(text);
+    if (!parsed.has_value())
+    {
+        return std::nullopt;
+    }
+    if (!parsed.value())
+    {
+        return std::unexpected(parsed.value().error());
+    }
+    ExResult result{std::nullopt, std::nullopt, std::nullopt, DisplayText::parse(text).value()};
+    result.substitute = std::move(parsed).value().value();
+    result.substitute.value().range = std::move(range);
+    return result;
+}
+
 // 範囲のない 1 命令（`colorscheme` `set` と表の命令）。範囲の後ろの命令もここを通す。
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 unranged_command(std::string_view text, const EditorSettings &settings, const ExWindowState &window,
                  const ThemeCatalog &themes)
 {
+    if (auto substituted = substitute_result(text, std::nullopt))
+    {
+        return std::move(substituted).value();
+    }
     const auto space = text.find(' ');
     const auto name = text.substr(0, space);
     const auto argument =
@@ -1473,62 +1498,10 @@ constexpr std::string_view visual_range = "'<,'>";
 // 回数の `N:` が置く範囲の頭（Vim の nv_colon の `.,.+(N-1)`）。
 constexpr std::string_view relative_range = ".,.+";
 
-// マークの名前の 1 文字（`'a` `'<`）。ASCII の印字できる文字だけを読む。
-[[nodiscard]] bool is_mark_name(char letter) noexcept
+// 行の先の範囲の長さ（範囲を読むのは parsed_ex_range の 1 本・ADR 0168 の決定 1）。
+[[nodiscard]] std::size_t range_length(std::string_view text)
 {
-    return letter > ' ' && letter <= '~';
-}
-
-// 番地の基点の長さ（`.` `$` `%`・10 進・`'` とマークの名前）。基点が無ければ 0。
-[[nodiscard]] std::size_t address_base_length(std::string_view text) noexcept
-{
-    if (text.empty())
-    {
-        return 0;
-    }
-    const char first = text.front();
-    if (first == '.' || first == '$' || first == '%')
-    {
-        return 1;
-    }
-    if (first == '\'')
-    {
-        return text.size() > 1 && is_mark_name(text.at(1)) ? 2 : 0;
-    }
-    return leading(text, is_digit);
-}
-
-// 番地 1 つの長さ（Vim の get_address の部分集合）。基点の後に `+N` `-N` と数字の足しを続けて読む。
-[[nodiscard]] std::size_t address_length(std::string_view text) noexcept
-{
-    std::size_t at = address_base_length(text);
-    while (at < text.size())
-    {
-        const char next = text.at(at);
-        if (next == '+' || next == '-')
-        {
-            at += 1 + leading(text.substr(at + 1), is_digit);
-            continue;
-        }
-        const std::size_t digits = leading(text.substr(at), is_digit);
-        if (digits == 0)
-        {
-            break;
-        }
-        at += digits;
-    }
-    return at;
-}
-
-// 行の先の範囲の長さ。番地を `,` `;` で区切って続けて読む（空の番地も Vim と同じに許す）。
-[[nodiscard]] std::size_t range_length(std::string_view text) noexcept
-{
-    std::size_t at = address_length(text);
-    while (at < text.size() && (text.at(at) == ',' || text.at(at) == ';'))
-    {
-        at += 1 + address_length(text.substr(at + 1));
-    }
-    return at;
+    return parsed_ex_range(text).second;
 }
 
 // `.`（0）と `.,.+N`（N）の N。ほかの形は値なし。大きすぎる数は size_t の最大に飽和する。
@@ -1589,6 +1562,10 @@ ranged_command(std::string_view text, const EditorSettings &settings, const ExWi
     if (command.empty())
     {
         return range_only(text);
+    }
+    if (auto substituted = substitute_result(command, parsed_ex_range(text).first))
+    {
+        return std::move(substituted).value();
     }
     const auto evaluated = unranged_command(command, settings, window, themes);
     if (!evaluated)
@@ -1815,11 +1792,15 @@ std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
     {
         return std::unexpected(ExFailure::invalid_text);
     }
-    if (text.find('|') != std::string_view::npos)
+    text = trimmed(text);
+    // `|` は命令の区切りで Nib は続けて流さない。`:s` だけは区切りの間（パターンと置き換え）の `|`
+    // を 文字として読む（Vim の ex_substitute・ADR 0168 の追補）。フラグの後ろの `|` は E488
+    // の手前で断る。
+    if (text.find('|') != std::string_view::npos &&
+        !substitute_command(text.substr(range_length(text))).has_value())
     {
         return std::unexpected(ExFailure::unknown_command);
     }
-    text = trimmed(text);
     if (auto ranged = ranged_command(text, settings, window, themes))
     {
         return std::move(ranged).value();
@@ -1867,6 +1848,13 @@ DisplayText ex_failure_message(ExFailure failure)
         return DisplayText::parse("E474: Invalid argument").value();
     case ExFailure::no_range_allowed:
         return DisplayText::parse("E481: No range allowed").value();
+    case ExFailure::letter_delimiter:
+        return DisplayText::parse("E146: Regular expressions can't be delimited by letters")
+            .value();
+    case ExFailure::value_too_large:
+        return DisplayText::parse("E1510: Value too large").value();
+    case ExFailure::trailing_characters:
+        return DisplayText::parse("E488: Trailing characters").value();
     }
     std::unreachable();
 }

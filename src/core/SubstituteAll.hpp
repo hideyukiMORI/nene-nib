@@ -2,6 +2,9 @@
 
 #include "Edit.hpp"
 #include "SubstituteFailure.hpp"
+#include "SubstituteReplacement.hpp"
+#include "SubstituteRequest.hpp"
+#include "SubstituteResult.hpp"
 #include "TextBuffer.hpp"
 #include "VimPattern.hpp"
 
@@ -11,18 +14,24 @@
 
 namespace nenenib::core
 {
-// 本文の当たりをすべて replacement で置き換えた 1 回の Edit（ADR 0174 の決定 7・ADR 0168 の
-// `:%s` の全件と同じ 1 本）。純関数で、本文・状態を持たない。当たりは行ごとに vim_line_matches の
-// 1 本で前から数え（重なる当たりは飛ばす・Vim の `:s///g` と同じ）、長さ 0 の当たりは置き換えない
-// （通常モードの語は literal なので長さ 0 にならない）。Edit は最初の当たりの始まりから最後の
-// 当たりの終わりまでの 1 つの範囲で、当たりの間の本文はそのまま写す。replacement は literal
-// （`\n` `&` `\1` を解釈しない・決定 7 の限界）。restore は最初の当たりの始まりで、本文へ当てる
-// 側（controller の replace）がそのときのキャレットで書き直す。当たりが無ければ no_match。
-// 置き換えた後の文書のバイト数（本文 - 当たりの和 + 当たりの数 × replacement）が limit（製品は
-// maximum_document_bytes・試験だけが小さな値を渡す）を超えるなら、当たりを数えるだけの 1 周目の
-// 後、置き換えた本文を確保する前に too_large（#1376・#1341 と同じ上限）。当たりの位置の列は
-// 持たず（本文の 16 倍になり得る）、置き換える 2 周目で最初の当たりの行から最後の当たりの行まで
-// の行を全部照合し直す（その外の行は飛ばす）。
+// 範囲の行の当たりを replacement で置き換えた行ごとの編集（ADR 0168 の決定 5・ADR 0174 の決定 7
+// の 1 本）。純関数で、本文・状態を持たない。行の当たりは Vim の do_sub と同じ順で拾う: 前の当たり
+// の終わりから次を探し、前の当たりの終わりにぴったり続く長さ 0 の当たりは数えず 1 文字進めて
+// 探し直し（`:s/x*/-/g` は "abc" を "-a-b-c" に・実測）、行の終わりに着いたら止める。every で
+// なければ行の最初の 1 つだけ。当たりは行の中だけ（照合器が行をまたがない）。replacement が群
+// （`\1`〜`\9`）を読むときだけ当たりごとに VimPattern::captured を引く。
+// 当たりが無ければ no_match。置き換えた後の文書のバイト数（本文 - 当たりの和 + 広げた置き換えの和）
+// が request.limit を超えるなら、数えるだけの 1 周目の後、置き換えた本文を作る前に too_large
+// （#1376）。count_only は 1 周目だけで edits は空。
+[[nodiscard]] std::expected<SubstituteResult, SubstituteFailure>
+substituted(const TextBuffer &text, const VimPattern &pattern,
+            const SubstituteReplacement &replacement, const SubstituteRequest &request);
+
+// 本文の当たりをすべて replacement（literal）で置き換えた 1 回の Edit（ADR 0174 の決定 7・
+// 通常モードの「すべて置換」）。substituted の全行・every と同じ当たりを、最初の当たりの始まりから
+// 最後の当たりの終わりまでの 1 つの範囲に畳む（当たりの間の本文はそのまま写す・行ごとの編集の列は
+// 作らない）。restore は最初の当たりの始まりで、本文へ当てる側（controller の replace）がそのときの
+// キャレットで書き直す。通常モードの語は literal なので長さ 0 の当たりにならない。
 [[nodiscard]] std::expected<Edit, SubstituteFailure> substituted_all(const TextBuffer &text,
                                                                      const VimPattern &pattern,
                                                                      std::string_view replacement,
