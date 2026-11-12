@@ -171,6 +171,24 @@ void vim_macro_typed(VimState &state, std::span<const VimKey> keys);
 [[nodiscard]] VimStep vim_pointer_selected(const VimState &state, const VimEditorView &view,
                                            Selection selection, VimMode mode);
 
+// INSERT の `Ctrl-o` の印で INSERT を始め直す（ADR 0182 の決定 2・8）。印が無ければ何も変えない。
+// controller は印が due になった鍵の効果を写した後（キャレットは NORMAL
+// の寄せの後）と、印を待つ間に 開いた入力行を閉じた後（Ex
+// の評価・検索の取消）とクリックの後に呼ぶ。何を始め直すか（位置の 規則・`i` と同じ入口・`.`
+// の記録の印）を決めるのは engine である（ARC-004）。
+// command_caret は命令の効果を写した後で NORMAL の寄せの前のキャレット（Vim は restart_edit の間
+// それが行の内容の終わりにいてよい・決定 2）。engine の外の命令の後は今のキャレット。
+[[nodiscard]] VimStep vim_restarted_insert(const VimState &state, const VimEditorView &view,
+                                           Offset command_caret);
+
+// INSERT の `Ctrl-o` の命令を待つ間か（印が waiting か due・ステータスの `(insert)`・ADR 0182 の
+// 決定 9）。始め直した INSERT と印の無い状態は偽。
+[[nodiscard]] bool vim_insert_paused(const VimState &state) noexcept;
+
+// 命令が終わって始め直す時が来たか（印が due・決定 2）。controller は鍵の効果を写した後にこれを
+// 見て vim_restarted_insert を呼ぶ（`.` の再生の鍵が残る間は呼ばない・Vim の stuff_empty()）。
+[[nodiscard]] bool vim_insert_restart_due(const VimState &state) noexcept;
+
 // Vim エンジンの鍵の唯一の入口（ARC-001）。純関数で、時刻・OS・スレッドを持たない（ARC-007）。
 // 本文・選択・表示領域を 1 回だけ借用する（ADR 0019 の決定 1）。NORMAL / INSERT は
 // selection の caret だけを読み、VISUAL は anchor も範囲の片端として読む。

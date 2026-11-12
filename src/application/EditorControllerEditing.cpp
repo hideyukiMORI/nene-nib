@@ -27,6 +27,7 @@
 #include "VimMode.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
+#include "VimStep.hpp"
 #include "VisualPosition.hpp"
 
 #include <algorithm>
@@ -276,6 +277,12 @@ void EditorController::replace(
     {
         interrupt_vim_insert();
     }
+    // engine の外の道の編集（通常モードの意図・貼り付け・IME の確定）は INSERT の `Ctrl-o` の印を
+    // 捨てる（ADR 0182 の決定 8・vim_interrupted）。engine の効果を写す編集は命令そのもの。
+    if (!in_vim_effect_)
+    {
+        interrupt_vim_pause();
+    }
     // 本文を置き換える編集は Vim の印 changed と同じ（決定 2）。鍵の印はここで使い終わる。
     vim_change_.reset();
     auto next = state_.text().replaced(range.begin, range.end, text);
@@ -378,6 +385,7 @@ void EditorController::accept(const InsertText &intent)
 
 void EditorController::accept(const MoveCaret &intent)
 {
+    interrupt_vim_pause();
     interrupt_vim_insert();
     const core::Offset origin = motion_origin(state_, intent);
     if (collapses_in_place(state_, intent))
@@ -405,6 +413,8 @@ void EditorController::accept(const PlaceCaret &intent)
     move_caret_to(core::placed_caret(state_.text(), intent.position, caret_unit(state_.mode())),
                   anchoring_in(state_.mode(), intent.anchoring), intent.affinity);
     settle_vim_caret();
+    // INSERT の `Ctrl-o` の後のクリックは命令 1 つと数え、押した所で始め直す（ADR 0182 の決定 8）。
+    resume_vim_insert();
 }
 
 void EditorController::accept(const CancelSelection &)
@@ -437,6 +447,7 @@ void EditorController::accept(const NewLine &)
 
 void EditorController::accept(const SelectAll &)
 {
+    interrupt_vim_pause();
     interrupt_vim_insert();
     state_ = state_.with_selection(
         core::Selection{core::Offset{0}, core::Offset{state_.text().size_bytes()}});
@@ -652,6 +663,7 @@ void EditorController::insert_pasted(std::string_view pasted)
 // から 1 段ずつ戻す。
 void EditorController::accept(const HistoryAction &intent)
 {
+    interrupt_vim_pause();
     interrupt_vim_insert();
     const auto walked = state_.history().past_saved_only_units(intent.direction);
     if (!walked.has_value())
@@ -776,7 +788,9 @@ void EditorController::accept(const SelectEditMode &intent)
     // モードが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
     state_ = state_.with_composition(std::nullopt);
     // Vim に入ると NORMAL で、回数もオペレータも空。通常へ戻るときも同じ形に捨てる（決定 10）。
-    core::VimState vim = core::vim_resting_from(state_.vim(), state_.vim().unnamed_register);
+    // INSERT の `Ctrl-o` の印も捨てる（切り替えは割り込み・ADR 0182 の決定 8）。
+    core::VimState vim =
+        core::vim_interrupted(core::vim_resting_from(state_.vim(), state_.vim().unnamed_register));
     state_ = state_.with_mode(intent.mode).with_vim(std::move(vim));
     switch (intent.mode)
     {
