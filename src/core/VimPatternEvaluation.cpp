@@ -81,16 +81,17 @@ std::optional<VimPatternMatch> VimPatternEvaluation::arrived(std::size_t target,
     return std::nullopt;
 }
 
-// 列の 1 候補に code を食べさせて次の列へ置く。途中の印の候補は食べずに target へ向かう。
+// 列の 1 候補に before の code point を食べさせて次の列へ置く。途中の印の候補は食べずに target
+// へ向かう。
 std::optional<VimPatternMatch> VimPatternEvaluation::stepped(std::size_t index, std::size_t begin,
-                                                             char32_t code)
+                                                             std::size_t before, char32_t code)
 {
     if (index >= skipping_)
     {
         return arrived(index - skipping_, begin);
     }
     const VimPatternAtom &atom = pattern_.atoms_.at(index);
-    if (!pattern_.consumes(atom, code))
+    if (!pattern_.consumes(line_, atom, before, code))
     {
         return std::nullopt;
     }
@@ -113,7 +114,7 @@ void VimPatternEvaluation::advanced()
         {
             continue;
         }
-        const auto match = stepped(index, begin.value(), code);
+        const auto match = stepped(index, begin.value(), before, code);
         if (match.has_value())
         {
             found_ = match;
