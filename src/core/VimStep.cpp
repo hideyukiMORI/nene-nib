@@ -129,7 +129,6 @@ using detail::visual_special;
 using detail::wanted_after;
 using detail::wanted_column_of;
 using detail::window_started;
-using detail::word_writing_empty;
 
 namespace
 {
@@ -1824,11 +1823,9 @@ namespace
         return failed(VimStep{finished_input_wait(state), VimNoEffect{}},
                       VimRepeatFailure::refused);
     }
-    const VimTextObjectOutcome outcome = word_writing_empty(
-        vim_text_object_range(view.text, view.selection,
-                              VimTextObjectRequest{scope, object.value(), state.mode},
-                              resolved_count(state)),
-        object.value());
+    const VimTextObjectOutcome outcome = vim_text_object_range(
+        view.text, view.selection, VimTextObjectRequest{scope, object.value(), state.mode},
+        resolved_count(state));
     // 答えの種類が増えたら写し先が足りずコンパイルが落ちる（CPP-002）。範囲にならなかったときは
     // キャレットが動いても Vim はビープする（ADR 0046 の決定 3）。
     VimStep step = std::visit([&](const auto &value)
