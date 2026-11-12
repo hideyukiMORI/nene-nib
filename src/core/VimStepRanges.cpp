@@ -45,7 +45,6 @@ using detail::to_line_end;
 using detail::whole_lines_for_delete;
 using detail::wrapped_backward;
 using detail::wrapped_forward;
-using detail::writing_empty;
 
 namespace detail
 {
@@ -105,13 +104,6 @@ namespace detail
 [[nodiscard]] Offset inclusive_end(const TextBuffer &text, Offset at)
 {
     return forward_characters(text, at, single_step);
-}
-
-// inclusive な行末への移動の範囲。空行で空でも `c` は空の本文を書く（#960・VimEmptyChange）。
-[[nodiscard]] VimMotionRange writing_empty(VimMotionRange range)
-{
-    range.empty_change = VimEmptyChange::writes_empty;
-    return range;
 }
 
 // $ と g_ は inclusive で、回数があると count-1 行下の行末・最後の非空白まで（Vim の nv_dollar と

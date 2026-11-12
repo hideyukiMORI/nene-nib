@@ -134,6 +134,39 @@ void verify_vim_word()
            "a combining accent belongs to the word in Vim too");
 }
 
+// 改行で終わる本文 `foo\n` の 2 行目（空の最後の行・#1507）。`iw` は前の行の末尾へ戻るが、押しは
+// 空行に留まる（gvim の find_start_of_word・メモ帳も何も選ばない）。
+void prepare_last_empty(EditorController &controller)
+{
+    static_cast<void>(controller.apply(InsertText{"foo\n"}));
+    static_cast<void>(controller.apply(VisibleLines{5, TextViewGeometry{400, 20, 96}}));
+}
+
+void verify_ordinary_last_empty_line()
+{
+    Editing editing;
+    prepare_last_empty(editing.controller());
+    press(editing.controller(), 5, 1, PointerClicks::double_);
+    expect(copied(editing).empty(),
+           "a double click on the empty last line selects nothing, not the previous line's end");
+    expect(editing.controller().frame().caret.position == TextPosition{LineNumber{2}, Column{1}},
+           "and the caret stays on the empty last line");
+}
+
+void verify_vim_last_empty_line()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    prepare_last_empty(controller);
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    press(controller, 5, 1, PointerClicks::double_);
+    expect(controller.frame().vim_mode == VimMode::visual &&
+               controller.frame().caret.position == TextPosition{LineNumber{2}, Column{1}},
+           "a double click on the empty last line in Vim stays in VISUAL on that line");
+    expect(yanked(controller, "", VimRegisterKind::characters),
+           "the VISUAL selection does not reach back into the previous line");
+}
+
 void verify_vim_line()
 {
     Editing editing;
@@ -237,6 +270,8 @@ void verify_pointer_scope()
     verify_ordinary_line();
     verify_vim_word();
     verify_vim_line();
+    verify_ordinary_last_empty_line();
+    verify_vim_last_empty_line();
     verify_vim_from_visual();
     verify_vim_keeps_repeat();
     verify_vim_waits_dropped();

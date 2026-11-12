@@ -103,7 +103,6 @@ character_search_position(const VimEditorView &view, const VimState &state,
 [[nodiscard]] std::optional<VimMotionRange> lines_below(const TextBuffer &text, LineNumber line,
                                                         std::size_t steps);
 [[nodiscard]] Offset inclusive_end(const TextBuffer &text, Offset at);
-[[nodiscard]] VimMotionRange writing_empty(VimMotionRange range);
 [[nodiscard]] std::optional<VimMotionRange> to_line_end(const TextBuffer &text, Offset caret,
                                                         std::size_t count, VimMotion motion);
 [[nodiscard]] std::optional<VimMotionRange>
