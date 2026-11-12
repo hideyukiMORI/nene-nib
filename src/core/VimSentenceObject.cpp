@@ -456,6 +456,7 @@ using Units = std::pair<std::size_t, bool>;
         here = stepped.first;
     }
 }
+
 // Vim の findsent(dir, 1)。FAIL ならキャレットは動かない。周の終わりに動いていなければ 1 文字
 // 進めてやり直す枝（EQUAL_POS(prev_pos, pos)）も通る: 前の行が文の終わりで、行頭が `.` `!` `?`
 // や閉じの記号の行から前へ探すと、その記号は前の文の終わりに数えられて行頭へ戻り、動かないので
