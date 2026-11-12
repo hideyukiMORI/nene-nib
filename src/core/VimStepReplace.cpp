@@ -129,6 +129,19 @@ namespace
     return splits_line ? VimLineMarks::shifted : VimLineMarks::kept;
 }
 
+// NORMAL の r<CR> は edit() を通り、改行を入れる前のカーソル（del_chars の後の位置）で
+// update_topline が流れる（ADR 0019 の追補 #1374）。VISUAL の r<CR> は op_replace で edit() を
+// 通らない。
+[[nodiscard]] std::optional<TextPosition> split_topline(const TextBuffer &text, Offset at,
+                                                        bool splits_line)
+{
+    if (!splits_line)
+    {
+        return std::nullopt;
+    }
+    return text.position_of(at);
+}
+
 [[nodiscard]] VimStep replaced_character(const VimState &state, const VimEditorView &view,
                                          char32_t target)
 {
@@ -163,6 +176,7 @@ namespace
     VimStep step{vim_resting_from(state, state.unnamed_register),
                  VimReplaceRange{selected, std::move(body), caret, EditBoundary::separate,
                                  replacement_lines(splits_line)}};
+    step.edit_topline = split_topline(view.text, selected.begin, splits_line);
     // NORMAL の r は engine が書かない（ADR 0052 の決定 11）。VISUAL は決定 10。
     if (state.mode != VimMode::normal)
     {

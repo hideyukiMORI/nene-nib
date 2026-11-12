@@ -4747,5 +4747,183 @@
       "line": 30,
       "column": 1
     }
+  },
+  {
+    "name": "wrap-half-past-end-ctrl-d-so3",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46",
+    "keys": "<C-d>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 8,
+      "first_visible": 40,
+      "line": 44,
+      "column": 1,
+      "scrolloff": 3
+    }
+  },
+  {
+    "name": "wrap-half-past-end-ctrl-u-so3",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46",
+    "keys": "<C-u>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 8,
+      "first_visible": 40,
+      "line": 44,
+      "column": 1,
+      "scrolloff": 3
+    }
+  },
+  {
+    "name": "wrap-half-past-end-ctrl-d-ctrl-u-so3",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46",
+    "keys": "<C-d><C-u>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 8,
+      "first_visible": 40,
+      "line": 44,
+      "column": 1,
+      "scrolloff": 3
+    }
+  },
+  {
+    "name": "wrap-half-past-end-long-row-ctrl-d-so3",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n46",
+    "keys": "<C-d>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 8,
+      "first_visible": 40,
+      "line": 43,
+      "column": 1,
+      "scrolloff": 3
+    }
+  },
+  {
+    "name": "wrap-half-after-delete-3dd-ctrl-d-so3",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48",
+    "keys": "7j3dd<C-d>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 8,
+      "first_visible": 33,
+      "line": 37,
+      "column": 1,
+      "scrolloff": 3
+    }
+  },
+  {
+    "name": "wrap-half-long-rows-ctrl-d-so3",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n23\n24\n25xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n26xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46",
+    "keys": "<C-d>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 8,
+      "first_visible": 17,
+      "line": 21,
+      "column": 1,
+      "scrolloff": 3
+    }
+  },
+  {
+    "name": "wrap-half-long-rows-ctrl-u-so3",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n23\n24\n25xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n26xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46",
+    "keys": "<C-u>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 8,
+      "first_visible": 27,
+      "line": 30,
+      "column": 1,
+      "scrolloff": 3
+    }
+  },
+  {
+    "name": "wrap-half-scroll-then-count-ctrl-d-so4",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60",
+    "keys": "3<C-e>2<C-d>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 8,
+      "first_visible": 53,
+      "line": 57,
+      "column": 1,
+      "scrolloff": 4
+    }
+  },
+  {
+    "name": "wrap-half-tall-top-ctrl-e-gj-gj",
+    "text": "01\n02xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n03\n04\n05\n06\n07\n08\n09\n10",
+    "keys": "<C-e>gjgj",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 2,
+      "first_visible": 1,
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "wrap-half-tall-top-ctrl-e-dollar",
+    "text": "01\n02xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n03\n04\n05\n06\n07\n08\n09\n10",
+    "keys": "<C-e>$",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 2,
+      "first_visible": 1,
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "wrap-half-tall-top-ctrl-e-gj-x4",
+    "text": "01\n02xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n03\n04\n05\n06\n07\n08\n09\n10",
+    "keys": "<C-e>gjgjgjgj",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 2,
+      "first_visible": 1,
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "wrap-half-tall-top-ctrl-e-gj-gj-zero",
+    "text": "01\n02xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n03\n04\n05\n06\n07\n08\n09\n10",
+    "keys": "<C-e>gjgj0",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 2,
+      "first_visible": 1,
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "wrap-half-scroll-same-line-ctrl-d-so4",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60",
+    "keys": "3<C-e>0$l<C-d>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 8,
+      "first_visible": 53,
+      "line": 57,
+      "column": 1,
+      "scrolloff": 4
+    }
+  },
+  {
+    "name": "wrap-half-scroll-tilde-ctrl-d-so4",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60",
+    "keys": "3<C-e>~<C-d>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 8,
+      "first_visible": 53,
+      "line": 57,
+      "column": 1,
+      "scrolloff": 4
+    }
   }
 ]

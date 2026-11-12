@@ -423,7 +423,14 @@ namespace detail
 
 [[nodiscard]] VimStep change_noted(VimStep step, std::optional<VimChange> change)
 {
-    step.change = change;
+    step.change = change.has_value() ? std::optional{VimChangeMark{change.value(), std::nullopt}}
+                                     : std::nullopt;
+    return step;
+}
+
+[[nodiscard]] VimStep change_placed(VimStep step, TextPosition at)
+{
+    step.change = VimChangeMark{VimChange::changed, at};
     return step;
 }
 

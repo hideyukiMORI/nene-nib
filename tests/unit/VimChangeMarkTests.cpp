@@ -81,12 +81,22 @@ using nenenib::core::VimState;
 using nenenib::core::VimStep;
 using nenenib::core::VimViewport;
 
-// 1 つの step が契約を守るか（決定 2）。
+// 印の種類（位置は見ない）。
+[[nodiscard]] std::optional<VimChange> kind_of(const VimStep &step)
+{
+    return step.change.has_value() ? std::optional{step.change.value().kind} : std::nullopt;
+}
+
+// 1 つの step が契約を守るか（決定 2）。changed の印は Vim が changed_* に渡した位置を持ち、
+// saved_only は持たない（追補 #1374）。
 [[nodiscard]] bool keeps_contract(const VimStep &step)
 {
     const bool replaces = vim_replaces_text(step.effect);
-    return (!replaces || step.change == std::optional{VimChange::changed}) &&
-           (step.change.has_value() || !replaces);
+    const bool placed =
+        !step.change.has_value() ||
+        step.change.value().at.has_value() == (step.change.value().kind == VimChange::changed);
+    return (!replaces || kind_of(step) == std::optional{VimChange::changed}) &&
+           (step.change.has_value() || !replaces) && placed;
 }
 
 // 歩きを止める step（文字組みの問い・失敗・本文の置き換え）。その後の本文と状態は追わない。
@@ -159,7 +169,7 @@ void verify_fixture_contract()
     {
         const VimStep step =
             vim_step(state, VimEditorView{text, selection, VimViewport{LineNumber{1}, 64, 0}}, key);
-        mark = step.change;
+        mark = kind_of(step);
         state = step.next;
     }
     return mark;
