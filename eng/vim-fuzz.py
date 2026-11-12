@@ -729,6 +729,10 @@ def oracle_values(measured: dict) -> dict:
     if viewport is not None:
         values.update(first_visible=viewport["expected_first_visible"],
                       scroll=viewport["expected_scroll_lines"])
+    change = measured.get("change")
+    if change is not None:
+        # 再生器が書く欄の値と同じ 0 / 1（--change・ADR 0181）。
+        values.update({key: "1" if change[key] else "0" for key in ("modified", "changed", "undo")})
     return values
 
 

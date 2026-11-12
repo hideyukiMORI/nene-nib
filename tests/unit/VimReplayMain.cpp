@@ -362,8 +362,10 @@ void write_mismatch(const std::string &name, std::string_view field, std::string
     {
         return std::nullopt;
     }
+    // 欄を外す前に読む（digits は外す欄の中を指す）。
+    const ChangeMarks marks{digits.at(0) == '1', digits.at(1) == '1', digits.at(2) == '1'};
     fields.pop_back();
-    return ChangeMarks{digits.at(0) == '1', digits.at(1) == '1', digits.at(2) == '1'};
+    return marks;
 }
 
 // 本文を開いて Vim にし、fixture の窓を置いてから余白を打つ（契約 --vim-view の placed_window
