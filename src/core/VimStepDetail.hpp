@@ -315,4 +315,11 @@ inline constexpr char32_t carriage_return_character = 0x0D;
                                    LineNumber line, VimMode mode);
 [[nodiscard]] LineNumber line_below(const TextBuffer &text, LineNumber line, std::size_t count);
 [[nodiscard]] LineNumber line_above(LineNumber line, std::size_t count);
+// INSERT の `Ctrl-o`（ADR 0182・VimStepRestart.cpp）。
+[[nodiscard]] bool pauses_insert(const VimState &state, const VimKey &key) noexcept;
+[[nodiscard]] VimStep insert_paused(const VimState &state, const VimEditorView &view);
+[[nodiscard]] VimStep insert_restart_noted(const VimState &before, const VimEditorView &view,
+                                           VimStep step, const VimKey &key);
+[[nodiscard]] const std::optional<VimRepeatRecord> &repeated_record(const VimState &state) noexcept;
+[[nodiscard]] bool restarted_untyped(const VimState &state) noexcept;
 } // namespace nenenib::core::detail

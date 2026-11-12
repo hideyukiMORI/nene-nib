@@ -74,6 +74,7 @@ using detail::horizontal_action;
 using detail::input_action;
 using detail::insert_character;
 using detail::insert_register_step;
+using detail::insert_restart_noted;
 using detail::insert_special;
 using detail::insert_start_kept;
 using detail::insert_started;
@@ -2175,7 +2176,10 @@ VimState vim_cancelled_input(const VimState &state)
 
 VimState vim_interrupted(const VimState &state)
 {
-    return input_discarded(state);
+    // INSERT の `Ctrl-o` の印も捨てる（ADR 0182 の決定 8）。
+    VimState next = input_discarded(state);
+    next.insert_restart = std::nullopt;
+    return next;
 }
 
 VimState vim_switched_document(const VimState &state, std::optional<VimWantedColumn> wanted_column,
@@ -2184,6 +2188,7 @@ VimState vim_switched_document(const VimState &state, std::optional<VimWantedCol
     // VISUAL と INSERT は文書の上の出来事なので持ち越さない（ADR 0056 の決定 4）。
     VimState next = input_discarded(state);
     next.mode = VimMode::normal;
+    next.insert_restart = std::nullopt;
     next.wanted_column = wanted_column;
     next.scroll_lines = scroll_lines;
     return next;
@@ -2436,8 +2441,11 @@ VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
         return step;
     }
     step = visual_remembered(state, view, key, std::move(step));
-    return change_marked(
-        macro_recorded(state, view, vim_recorded(state, view, std::move(step), key), key));
+    return insert_restart_noted(
+        state, view,
+        change_marked(
+            macro_recorded(state, view, vim_recorded(state, view, std::move(step), key), key)),
+        key);
 }
 
 namespace

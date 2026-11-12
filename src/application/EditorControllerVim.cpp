@@ -253,6 +253,13 @@ static_assert(core::vim_replay_key_limit == 100000, "replay_limit_notice の数�
 
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
                                         const core::VimEditorView &view,
+                                        const InsertRestartRequest & /*restart*/)
+{
+    return core::vim_restarted_insert(state, view);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
                                         const VimStepSource &source)
 {
     return std::visit([&state, &view](const auto &chosen)
@@ -372,6 +379,9 @@ EditorFrame EditorController::press_vim_key(const core::VimKey &key)
 // 列（`G30G` `''''`）の先頭行が途中の画面を経ない値になる。窓の 1 打鍵の道はここを通らない。
 EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
 {
+    // :normal! の鍵は打った鍵ではない（Vim の KeyTyped が偽・`<C-o>c` の後に INSERT を始め直す側・
+    // ADR 0182 の決定 4）。出どころの値は map の右辺と同じ mapped を借りる（新しい値は足さない）。
+    const ScopedValue<core::VimKeySource> source{unit_source_, core::VimKeySource::mapped};
     const auto failed = [this](const core::VimKey &key)
     {
         settle_tab_walk_before(false);
@@ -839,8 +849,42 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     settle_vim_step(step, before);
     // 鍵の終わりに、動かなかった・消えた前の位置を戻す（決定 5・Vim の checkpcmark）。
     check_vim_marks();
+    restart_due_vim_insert();
     // 再生（`.` `@`）の中の鍵が失敗したら、再生を返した鍵の失敗にする（Issue #983）。
     return step_failure(step.failure, replay_failure_);
+}
+
+// INSERT の `Ctrl-o` の命令が終わった鍵の後に始め直す（ADR 0182 の決定 2）。効果を写して NORMAL の
+// 寄せを済ませた後なので、engine の位置の規則は Vim の normal_cmd の終わりのカーソルを読む。`.` の
+// 再生の鍵が列に残る間は始め直さない（Vim の stuff_empty()）。マクロの鍵は typeahead
+// なので待たない。
+void EditorController::restart_due_vim_insert()
+{
+    if (!core::vim_insert_restart_due(state_.vim()) ||
+        (!replay_levels_.empty() && replay_levels_.front().kind == core::VimReplayKind::repeat))
+    {
+        return;
+    }
+    restart_vim_insert();
+}
+
+// 印を待つ間に engine の外で終わった命令（Ex の行・検索の取消・クリック）の後に始め直す（決定 8）。
+// 入力行がまだ開いていれば（Ex が別の入力行を開いた）始め直さない。
+void EditorController::resume_vim_insert()
+{
+    if (state_.mode() != core::EditMode::vim || state_.command_input().has_value() ||
+        !core::vim_insert_paused(state_.vim()))
+    {
+        return;
+    }
+    restart_vim_insert();
+}
+
+// 始め直しの 1 歩（決定 2）。何を始め直すかは engine の vim_restarted_insert が決め、写しは鍵と同じ
+// stepped_vim を通る（NORMAL → INSERT の出入りで undo を区切る）。
+void EditorController::restart_vim_insert()
+{
+    static_cast<void>(stepped_vim(VimStepSource{InsertRestartRequest{}}));
 }
 
 // 鍵の効果を写す。印は効果を写す間だけ置き、置き換えが積めば消え、残れば空の単位になる（ADR 0181
@@ -848,6 +892,7 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
 void EditorController::perform_vim_effect(const core::VimStep &step)
 {
     const auto outer_change = std::exchange(vim_change_, step.change);
+    const ScopedValue<bool> effecting{in_vim_effect_, true};
     const core::Offset restore = state_.selection().caret;
     // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->perform(value); }, step.effect);
@@ -1141,6 +1186,17 @@ void EditorController::interrupt_vim_insert()
     {
         state_ = state_.with_vim(core::vim_interrupted(state_.vim()))
                      .with_history(state_.history().sealed());
+    }
+}
+
+// 印を待つ間の割り込みは印を捨てて NORMAL のまま（ADR 0182 の決定 8）。何を捨てるかは
+// vim_interrupted が決める。engine の効果を写す replace の道は通らない（`<C-o>x`
+// は割り込みでない）。
+void EditorController::interrupt_vim_pause()
+{
+    if (core::vim_insert_paused(state_.vim()))
+    {
+        state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
     }
 }
 
@@ -1568,6 +1624,14 @@ void EditorController::queue_replay(const core::VimReplay &effect, std::size_t d
         return;
     }
     const ReplayLevel level{static_cast<std::uint32_t>(depth), effect.kind};
+    // `<C-o>@a` は全部の周の後に `i` を流す（Vim の put_reedit_in_typebuf・ADR 0182 の決定
+    // 7）。周の 鍵は列の頭へ積むので、先に積んだ `i`
+    // はいつも最後の周の後ろに残る。失敗で列を捨てれば一緒に 捨てる。
+    if (effect.insert_after)
+    {
+        replay_queue_.push_front(core::VimKey{core::VimCharacter{U'i'}});
+        replay_levels_.push_front(level);
+    }
     const bool more = effect.rounds > 1U && !effect.keys.empty();
     if (more)
     {

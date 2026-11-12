@@ -349,6 +349,12 @@ class EditorController final
     // engine の 1 歩（鍵の vim_step か `:N` の vim_line_jumped）を測って写す 1 本。
     // 要求の往復・マーク・効果・キャレットの寄せは鍵と同じ（Issue #847）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> stepped_vim(const VimStepSource &source);
+    // INSERT の `Ctrl-o` の始め直し（ADR 0182 の決定 2・8）。engine を呼ぶのは restart_vim_insert
+    // の 1 本で、鍵の後（due）と engine の外の命令の後（入力行・クリック）の 2
+    // つの合図がそこを通る。
+    void restart_due_vim_insert();
+    void resume_vim_insert();
+    void restart_vim_insert();
     [[nodiscard]] std::expected<core::VimStep, TextLayoutFailure>
     measured_vim_step(const VimStepSource &source);
     // engine の要求（表示領域・行の画面行数・行の中の画面行）に 1 つ応えて view へ置く（ADR 0129 の
@@ -917,6 +923,8 @@ class EditorController final
     // ので再帰は深さ 1 で止まる。UI・IME・描画は通らない。
     void perform(const core::VimReplay &effect);
     void interrupt_vim_insert();
+    // INSERT の `Ctrl-o` の命令を待つ間の割り込み（Ctrl+Z・全選択など・ADR 0182 の決定 8）。
+    void interrupt_vim_pause();
     void perform(const core::VimUndo &);
     void perform(const core::VimRedo &);
     // `gt` `gT`（ADR 0057 の決定 3）。窓の SwitchTab と同じ accept の 1 本へ写す。
@@ -1167,6 +1175,9 @@ class EditorController final
     // 流している鍵の engine の印（ADR 0181）。stepped_vim が効果を写す間だけ置き、replace が
     // 本文を置き換える編集を積めば消す。残れば push_empty_unit が空の単位を積む。
     std::optional<core::VimChange> vim_change_;
+    // engine の効果を写している間か（ADR 0182 の決定 8）。replace はこの間の編集を割り込みと
+    // 数えず、外の道（通常モードの意図）の編集だけが INSERT の `Ctrl-o` の印を捨てる。
+    bool in_vim_effect_ = false;
     std::optional<core::TextBuffer> replay_text_;
     // 同じ意図の中で読めなかったタブの数（ADR 0059 の「知らせの文言」）。begin_intent が 0 に戻す。
     std::size_t unreached_tabs_ = 0;

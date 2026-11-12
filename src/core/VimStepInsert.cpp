@@ -38,12 +38,14 @@ using detail::erased_nothing;
 using detail::failed;
 using detail::finished_input_wait;
 using detail::insert_character;
+using detail::insert_paused;
 using detail::insert_special;
 using detail::last_code_point_size;
 using detail::line_feed;
 using detail::line_of;
 using detail::page_stays;
 using detail::page_step;
+using detail::pauses_insert;
 using detail::register_read;
 using detail::register_selection_of;
 using detail::repeated;
@@ -909,11 +911,11 @@ namespace detail
     // 決定 14）。窓は INSERT では写さない。
     case VimSpecialKey::control_a:
     case VimSpecialKey::control_x:
-    // INSERT の Ctrl-o（Vim では NORMAL の命令を 1 つ）は未対応で、失敗にせず何もしない（#1037）。
-    case VimSpecialKey::control_o:
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
         return VimStep{state, VimNoEffect{}};
+    case VimSpecialKey::control_o:
+        return insert_paused(state, view);
     case VimSpecialKey::page_up:
         return insert_page_moved(state, view, VimScrollDirection::up);
     case VimSpecialKey::page_down:
@@ -1092,7 +1094,8 @@ namespace
 [[nodiscard]] VimState insert_started(const VimState &state, const VimEditorView &view,
                                       const VimKey &key)
 {
-    if (state.mode != VimMode::insert)
+    // `Ctrl-o` は打鍵ではない（Vim の ins_ctrl_o は stop_arrow を呼ばない・ADR 0182 の決定 6）。
+    if (state.mode != VimMode::insert || pauses_insert(state, key))
     {
         return state;
     }

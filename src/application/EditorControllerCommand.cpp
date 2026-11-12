@@ -284,6 +284,8 @@ void EditorController::accept(const CancelCommand &)
         // 同じ・実測）。何を捨てるかは engine の純関数が決める（ADR 0032 の決定 1）。
         state_ = state_.with_vim(core::vim_cancelled_input(state_.vim()));
     }
+    // INSERT の `Ctrl-o` の後の入力行は取り消しても命令 1 つ（ADR 0182 の決定 8）。
+    resume_vim_insert();
 }
 
 void EditorController::accept(const PasteCommand &)
@@ -305,6 +307,8 @@ void EditorController::accept(const PasteCommand &)
 std::optional<core::VimRepeatFailure> EditorController::submit(const core::CommandLine &line)
 {
     evaluate_command(std::string(line.text()));
+    // Ex の行の後に始め直す（ADR 0182 の決定 8・`<C-o>:set so=2<CR>`）。
+    resume_vim_insert();
     return std::nullopt;
 }
 
