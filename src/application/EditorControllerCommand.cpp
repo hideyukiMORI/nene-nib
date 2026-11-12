@@ -4,10 +4,12 @@
 #include "CommandEdit.hpp"
 #include "CommandInput.hpp"
 #include "CommandLayout.hpp"
+#include "CommandLine.hpp"
 #include "CommandPalette.hpp"
 #include "DisplayText.hpp"
 #include "DocumentByteLimit.hpp"
 #include "EditBoundary.hpp"
+#include "EditMode.hpp"
 #include "EditorSettings.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExLineRequest.hpp"
@@ -38,6 +40,7 @@
 #include "Utf8.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
+#include "VimKeySource.hpp"
 #include "VimMode.hpp"
 #include "VimPattern.hpp"
 #include "VimSearchPattern.hpp"
@@ -48,10 +51,12 @@
 #include <algorithm>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -166,7 +171,76 @@ constexpr std::string_view replace_too_large_notice = "置換の結果は 1 GiB 
 static_assert(core::maximum_document_bytes == std::size_t{1024} * 1024U * 1024U);
 // 置換の起点を戻す幅（UTF-8 の 1 コードポイントの最大のバイト数）。
 constexpr std::size_t code_point_bytes = 4;
+
+// 入力行の 1 つの編集を Vim が録る打った鍵へ（#1528・Vim 9.1 の feedkeys の実測）。Vim は
+// 入力行の鍵もそのまま録り、`<Tab>` は文字の Tab（再生では 'wildchar' が効かず Tab が入る）、
+// 上下は `<Up>` `<Down>`（再生でも履歴を引く）。Shift+Tab（`<S-Tab>`）は Nib の鍵の表に無いので
+// 録らない。一覧の頁と端は面だけの編集で、`:` の行には届かない。
+[[nodiscard]] std::optional<core::VimKey> recorded_edit_key(core::CommandEdit edit) noexcept
+{
+    switch (edit)
+    {
+    case core::CommandEdit::left:
+        return core::VimKey{core::VimSpecialKey::arrow_left};
+    case core::CommandEdit::right:
+        return core::VimKey{core::VimSpecialKey::arrow_right};
+    case core::CommandEdit::home:
+        return core::VimKey{core::VimSpecialKey::home};
+    case core::CommandEdit::end:
+        return core::VimKey{core::VimSpecialKey::end};
+    case core::CommandEdit::backspace:
+        return core::VimKey{core::VimSpecialKey::backspace};
+    case core::CommandEdit::erase:
+        return core::VimKey{core::VimSpecialKey::delete_key};
+    case core::CommandEdit::complete_next:
+        return core::VimKey{core::VimCharacter{U'\t'}};
+    case core::CommandEdit::history_previous:
+        return core::VimKey{core::VimSpecialKey::arrow_up};
+    case core::CommandEdit::history_next:
+        return core::VimKey{core::VimSpecialKey::arrow_down};
+    case core::CommandEdit::complete_previous:
+    case core::CommandEdit::page_previous:
+    case core::CommandEdit::page_next:
+    case core::CommandEdit::list_first:
+    case core::CommandEdit::list_last:
+        return std::nullopt;
+    }
+    std::unreachable();
+}
+
+// 入力行へ入った文字列（打った文字・IME の確定・Ctrl+V の貼り付け）を 1 コードポイント 1 鍵に。
+[[nodiscard]] std::vector<core::VimKey> typed_character_keys(std::string_view utf8)
+{
+    std::vector<core::VimKey> keys;
+    core::Offset at{0};
+    while (at.value < utf8.size())
+    {
+        keys.emplace_back(core::VimCharacter{core::code_point_at(utf8, at)});
+        at = core::next_code_point(utf8, at);
+    }
+    return keys;
+}
 } // namespace
+
+bool EditorController::records_command_line() const noexcept
+{
+    const auto &input = state_.command_input();
+    return state_.mode() == core::EditMode::vim && input.has_value() &&
+           std::holds_alternative<core::CommandLine>(input.value()) &&
+           state_.vim().macro_recording.has_value() && !replay_depth_.has_value() &&
+           core::vim_key_recorded_in_macro(unit_source_);
+}
+
+void EditorController::record_command_keys(std::span<const core::VimKey> keys)
+{
+    if (!records_command_line())
+    {
+        return;
+    }
+    auto vim = state_.vim();
+    core::vim_macro_typed(vim, keys);
+    state_ = state_.with_vim(std::move(vim));
+}
 
 bool EditorController::command_line_active() const noexcept
 {
@@ -209,6 +283,7 @@ void EditorController::accept(const CommandText &intent)
     {
         return;
     }
+    record_command_keys(typed_character_keys(intent.utf8));
     auto next = inserted_command(input.value(), intent.utf8);
     if (!next)
     {
@@ -227,6 +302,11 @@ void EditorController::accept(const EditCommand &intent)
     {
         return;
     }
+    const auto recorded = recorded_edit_key(intent.edit);
+    if (recorded.has_value())
+    {
+        record_command_keys(std::span<const core::VimKey>{&recorded.value(), 1U});
+    }
     // 空の入力行の Backspace は取消（Ex と検索で同じ・ADR 0032 の決定 1）。
     // 設定一覧は候補を出したまま残る。
     const bool palette = std::holds_alternative<core::CommandPalette>(input.value());
@@ -237,7 +317,7 @@ void EditorController::accept(const EditCommand &intent)
         edit = vim_line_edit(line, intent.edit);
         if (line.text.empty() && edit == core::CommandEdit::backspace)
         {
-            accept(CancelCommand{});
+            cancel_command_input();
             return;
         }
     }
@@ -266,6 +346,13 @@ void EditorController::fit_command_rows()
 }
 
 void EditorController::accept(const CancelCommand &)
+{
+    constexpr core::VimKey escape{core::VimSpecialKey::escape};
+    record_command_keys(std::span<const core::VimKey>{&escape, 1U});
+    cancel_command_input();
+}
+
+void EditorController::cancel_command_input()
 {
     const auto &input = state_.command_input();
     // Vim の `/` `?` の取消だけ。通常モードの「検索: 」「行: 」は engine の待ちを持たない。
@@ -380,6 +467,8 @@ void EditorController::accept(const SubmitCommand &intent)
 // （submitted_command を直接呼ぶ）も足さない（#725・ADR 0022 決定 2 の追補）。
 std::optional<core::VimRepeatFailure> EditorController::confirmed_command()
 {
+    constexpr core::VimKey enter{core::VimSpecialKey::enter};
+    record_command_keys(std::span<const core::VimKey>{&enter, 1U});
     const auto &open = state_.command_input();
     if (open.has_value())
     {

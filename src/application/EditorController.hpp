@@ -1076,6 +1076,13 @@ class EditorController final
     [[nodiscard]] bool composition_ignored() const noexcept;
     // 入力行を閉じる 1 本。閉じるときに残っている変換は消す（ADR 0061 の決定 3）。
     void close_command_input();
+    // 入力行の取消の 1 本（Esc と、文書が替わるとき・空の行の Backspace）。録画に `<Esc>` を
+    // 積むのは打った Esc の意図 accept(CancelCommand) だけ（#1528）。
+    void cancel_command_input();
+    // 録画中の `:` の行で打った鍵を録画の書き手 vim_macro_typed へ積む（#1528・ADR 0046 の
+    // 追補）。打った鍵（再生でも `map` の右辺でもない）で、開いている入力行が Ex の行のときだけ。
+    void record_command_keys(std::span<const core::VimKey> keys);
+    [[nodiscard]] bool records_command_line() const noexcept;
     [[nodiscard]] core::FontFamilies given_fonts() const;
     void reach_font_families();
     // 確定した文字列を Vim の打鍵として流す。`.` の再生とマクロが後で自然に載る（決定 4）。

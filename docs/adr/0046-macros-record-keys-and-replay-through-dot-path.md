@@ -87,3 +87,16 @@ Vim 9.1 の実測（`-es -u NONE`・`feedkeys(…, 'tx')`・1 件 20 秒で打�
 Vim と違う最小の形は契約 `--vim-macro` の `verify_macro_key_limit`（本文 `ab`・a = `0`・c = `3@ax` で `@c` の `x` は 7 鍵目。上限 7 なら流れて `b`、上限 6 なら `x` を捨てて `ab` と知らせ。Vim は `b`）。Debug で 100,000 鍵を流すと 1 件約 80 秒かかる（負荷 70% の機械で 3 件 240 秒）ので、契約は試験の口 `EditorController::limit_replay_keys` で小さい上限を置き（製品は呼ばない・既定は `core::vim_replay_key_limit`）、製品の値は `static_assert`（知らせの文の数と上限・契約の 100,000）で守る。fixture にしないのは Vim と違う結果だから。
 
 限界（PR #1407 のレビュー）: 表に行があるときの 1 歩は右辺 1 つぶんを流すので、実際に engine へ流れる鍵の数は上限の右辺の長さ倍まで伸びる。知らせの「100,000 鍵」はその場合に厳密でない（文は変えない・止まることは同じ）。上限で止めた所が INSERT の途中なら、鍵の失敗や E132 と同じく INSERT のまま残り、後で打った文字は本文に入る（今の扱いのまま）。打った 1 鍵の `map` の右辺に `@a` を並べると、それぞれがいちばん外の再生になって数が 0 に戻る（後続）。
+
+## 追補（2026-11-12・#1528）`:` の行も打った鍵として録る
+
+決定 2 の「Ex（`:`）は application の入力行なので本 ADR では録らない」を改める。Vim 9.1 は `qa:set so=2<CR>jq` の a を `:set so=2^Mj` にし、`@a` は `:set so=2` も再生する（`-es -u NONE` の `feedkeys(…, 'xt')` で実測・道具 `D:/NeNeNib/scripts/20261111/c10/p1.vim` `p5.vim`）。Nib は次の形で揃える。
+
+1. engine の `macro_recorded` は `:`（効果 `VimOpenCommandLine`）を積む。`/` `?`（`VimOpenSearch`）は今までどおり積まず、確定した検索は `VimSearchPattern` の 1 鍵（本文は `/pat\r`）で積む。
+2. 入力行の中の鍵は controller が録画の書き手 `vim_macro_typed` の 1 本で積む（`record_command_keys`）。積むのは開いている入力行が Ex の行（`CommandLine`）で、録画中・再生の外・鍵の出どころが `typed`（`map` の右辺でない）のときだけ。窓の意図と fixture の harness の鍵の口は同じ入口を通るので、積む所は入口の 4 つ: `CommandText`（1 コードポイント 1 鍵・IME の確定と Ctrl+V の貼り付けも同じ口なので文字として積む）・`EditCommand`（下の表）・確定 `confirmed_command`（`<CR>`）・取消 `accept(CancelCommand)`（`<Esc>`）。文書の切り替えと空の行の Backspace の取消は `cancel_command_input` を直接呼び、`<Esc>` を積まない。
+3. 編集の写し（Vim の実測）: ← → Home End BS Del は `<Left>` `<Right>` `<Home>` `<End>` `<BS>` `<Del>`、履歴の上下は `<Up>` `<Down>`、補完の Tab は文字の Tab（Vim の再生では 'wildchar' が効かず Tab が入る・`:se<Tab>so=6` は `:set so=6` と同じに効く）。Shift+Tab（Vim は `<S-Tab>`）は Nib の鍵の表に無いので積まない。面（Ctrl+P）の中の鍵は Ex の行ではないので積まない。
+4. 再生と fixture の鍵の `<Up>` `<Down>` は、入力行で窓と同じ履歴の前・次に写す（Vim の再生の `<Up>` も履歴を引く・実測: 打った `:set so=4<CR>:set so=1<CR>` の後の `:<Up><Up><CR>` の再生で so=4）。今までは捨てていた。
+
+守り: fixture `macro-ex-`（7 件・register 欄の `@a` の再生・録画の harness `store_vim_fixture_macro` が入力行の鍵を録れるようになったので `:set so=2<CR>j` を fixture にできる）と契約 `--vim-macro` の `verify_macro_records_ex_line` / `verify_macro_replays_ex_line`。
+
+限界: Vim は再生の中で確定した `:` の行を履歴に足さない（実測 `p2.vim`: レジスタ c に `:set so=4<CR>:set so=1<CR>:<Up><Up><CR>` を置いた `@c` は so=1 のまま。source は手元に無く読んでいない）。Nib は再生の中の確定も履歴に足す（今のまま・`<Up>` の再生が引く値が違いうる）。

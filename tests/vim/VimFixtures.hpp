@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 1cd5f6762f818069b1fe72b0ef16a5ad8a283032c537056e1349e6e1db017d68 / 4723 fixtures
+// fixtures.json: sha256 59d0b5e7843aabbd888623cc18ed3bf235139cadcca2eb05156e60b88213826c / 4730 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4723> vim_fixtures{{
+constexpr std::array<VimFixture, 4730> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4735,6 +4735,13 @@ constexpr std::array<VimFixture, 4723> vim_fixtures{{
     {"change-mark-undo-shr-empty", "\nabc", ">>ju", "\nabc", 1, 1, "", "", std::nullopt},
     {"change-mark-undo-tilde-digits", "123\nabc", "~ju", "123\nabc", 1, 1, "", "", std::nullopt},
     {"change-mark-undo-cc-empty", "\nabc", "cc<Esc>ju", "\nabc", 1, 1, "\n", "V", std::nullopt},
+    {"macro-ex-set-so-then-j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "@a", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 11, 1, "", "", VimViewportFixture{6, 10, 10, 1, 8, 3}, VimMacroFixture{'a', ":set so=2<CR>j"}},
+    {"macro-ex-set-so-count", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "2@a", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 12, 1, "", "", VimViewportFixture{6, 10, 10, 1, 9, 3}, VimMacroFixture{'a', ":set so=2<CR>j"}},
+    {"macro-ex-escape-runs-the-line", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "@a", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 11, 1, "", "", VimViewportFixture{6, 10, 10, 1, 8, 3}, VimMacroFixture{'a', ":set so=2<Esc>j"}},
+    {"macro-ex-backspace-in-the-line", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "@a", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 11, 1, "", "", VimViewportFixture{6, 10, 10, 1, 8, 3}, VimMacroFixture{'a', ":set so=3<BS>2<CR>j"}},
+    {"macro-ex-noh-then-x", "abc def", "@a", "bc def", 1, 1, "a", "v", std::nullopt, VimMacroFixture{'a', ":noh<CR>x"}},
+    {"macro-ex-ignorecase-then-search", "x\nabc", "@a", "x\nbc", 2, 1, "a", "v", std::nullopt, VimMacroFixture{'a', ":set ic<CR>/ABC<CR>x"}},
+    {"macro-ex-line-number-then-x", "abc\ndef\nghi", "@a", "abc\ndef\nhi", 3, 1, "g", "v", std::nullopt, VimMacroFixture{'a', ":3<CR>x"}},
 }};
 } // namespace nenenib::tests
 // clang-format on
