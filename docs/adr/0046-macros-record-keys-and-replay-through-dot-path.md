@@ -100,3 +100,25 @@ Vim と違う最小の形は契約 `--vim-macro` の `verify_macro_key_limit`（
 守り: VISUAL の反例（レビュー V-1547）`qavj:set so=2<CR>xq` の a は `vj:set so=2^Mx` で、`@a` は E481 で打ち切られて `x` を流さない（実測 `p6.vim`・契約 `verify_macro_records_visual_ex_line`）。fixture `macro-ex-`（7 件・register 欄の `@a` の再生・録画の harness `store_vim_fixture_macro` が入力行の鍵を録れるようになったので `:set so=2<CR>j` を fixture にできる）と契約 `--vim-macro` の `verify_macro_records_ex_line` / `verify_macro_replays_ex_line`。
 
 限界: Vim は再生の中で確定した `:` の行を履歴に足さない（実測 `p2.vim`: レジスタ c に `:set so=4<CR>:set so=1<CR>:<Up><Up><CR>` を置いた `@c` は so=1 のまま。source は手元に無く読んでいない）。Nib は再生の中の確定も履歴に足す（今のまま・`<Up>` の再生が引く値が違いうる）。
+
+## 追補（2026-11-12・#1525）Ex のエラーは再生を打ち切る
+
+決定 3 の「失敗で打ち切り」に Ex の行を足す。Vim 9.1（`-u NONE -es`・道具 `D:/NeNeNib/scripts/20261111/c10/gen4.py` → `p4.vim` / `out4.txt`）で、本文 abc/def/ghi の 1 行目から `let @a = ":{行}\rj"` の `@a` と `exe "normal! :{行}\rj"` を測ると、Ex のエラーはどれも残りの `j` を流さない（行 1）。成功は流す（行 2）。
+
+| 行 | Vim のエラー | Vim の再生 |
+|---|---|---|
+| `set so!` `set so!?` `set so&?` `set wrap!?` | E488 | 打ち切る |
+| `set invso` `set noso` `set wrap=1` `set noso&` `set ff=nosuch` `set display=grid` | E474 | 打ち切る |
+| `set foo` `set invnowrap` `set fontsize=12` `set so=2 foo` | E518 | 打ち切る |
+| `foo` | E492 | 打ち切る |
+| `3noh` | E481 | 打ち切る |
+| `set so=abc` | E521 | 打ち切る |
+| `colorscheme nosuchtheme` | E185 | 打ち切る |
+| `tabnext 5`（タブ 1 つ） | E475 | 打ち切る |
+| `noh` `set so?` `set so&` `set so&vim` `set wrap!` `set invwrap` `set nowrap!` `set ic!` `set so=-1` `echo 1` `set ft=nosuchlang` `set fenc=nosuch` | 成功 | 流す |
+
+打ち切りの道は ADR 0022 の追補 #1526 の決定 6（`evaluate_command` が評価の失敗と設定の保存の失敗で `VimRepeatFailure::refused` を返し、`submit(CommandLine)` がそのまま返す・#1547）の 1 本で、本追補は第 2 の道を作らない。返り値は再生（`@a` `.`）と fixture の harness（`press_vim_keys`）の今の打ち切りの道へ流れる。本追補が足すのは上の表（Vim の実測）と、`:set` の `&` `!` `inv`（ADR 0022 の追補 #1525）で、表の行のうち命令の要求の後の失敗（`tabnext 5` の E475）は決定 6 のとおり今は打ち切らない（残る違い）。
+
+oracle の `-es` は Ex のエラーで終了 1 を返すので、エラーの行は fixture にできない（`run_vim` が拒む・測定のコードを変えると全件の再生成が要る）。エラーの行は上の表の値を契約 `--vim-macro` の `verify_ex_failure_stops_replay`（`:normal!` と `@a` の両方）に置き、成功の行は fixture `ex-failure-`（17 件）で守る。
+
+限界（Vim と違う形）: Vim が受けて Nib が受けない行（`:echo 1`・`:set ft=nosuchlang` `:set fenc=nosuch`（Nib の値は閉じている）・Nib に無い Vim の option）は Nib では拒否なので打ち切る（Vim は流す）。Nib だけの書き方（`:set fontsize=12` `:set guide` `:set display=grid`）は Vim ではエラーで打ち切るが Nib は流す。

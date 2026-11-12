@@ -13,8 +13,10 @@
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorSettings.hpp"
+#include "ExClipboardRequest.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
+#include "ExLspRequest.hpp"
 #include "ExResult.hpp"
 #include "ExRootRequest.hpp"
 #include "ExTabRequest.hpp"
@@ -22,6 +24,7 @@
 #include "FilePath.hpp"
 #include "FontSize.hpp"
 #include "FontSizeAdjustment.hpp"
+#include "GuideVisibility.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InputHistory.hpp"
@@ -29,6 +32,8 @@
 #include "InputText.hpp"
 #include "InsertText.hpp"
 #include "LayoutRect.hpp"
+#include "LineWrapping.hpp"
+#include "Minimap.hpp"
 #include "Offset.hpp"
 #include "OpenCommandPalette.hpp"
 #include "PasteCommand.hpp"
@@ -896,7 +901,8 @@ void verify_ex_smartcase()
     expect(carries_settings(off) && !settings_of(off).smartcase &&
                message_of(off) == "smartcase=off",
            "set nosmartcase turns it off");
-    for (const auto text : {"set noic?", "set ic!", "set invic", "set icase", "set ignorecas"})
+    // `ic!` `invic` は反転として受ける（#1525・verify_ex_set_toggle）。
+    for (const auto text : {"set noic?", "set icase", "set ignorecas"})
     {
         const auto refused = core::evaluate_ex(text, defaults, Appearance::dark);
         expect(!refused.has_value(), "other spellings are refused");
@@ -930,7 +936,8 @@ void verify_ex_relativenumber()
     expect(asked.has_value() && !carries_settings(asked) &&
                message_of(asked) == "relativenumber=on",
            "rnu? tells the current value without changing settings");
-    for (const auto text : {"set rn", "set rnu!", "set nornu?"})
+    // `rnu!` は反転として受ける（#1525・verify_ex_set_toggle）。
+    for (const auto text : {"set rn", "set nornu?"})
     {
         expect(!core::evaluate_ex(text, defaults, Appearance::dark).has_value(),
                "other spellings of relativenumber are refused");
@@ -970,6 +977,116 @@ void verify_ex_scrolloff()
                core::scrolloff_of("42") == std::optional<std::size_t>{42} &&
                !core::scrolloff_of("4a").has_value(),
            "the one scrolloff reader is shared by Ex and the settings codec");
+}
+
+// `:set {name}&`（`&vim` `&vi`）と `{name}!` `no{name}!` `inv{name}`（#1525・Vim 9.1 の実測）。
+// 既定値は保存する設定の正本 default_editor_settings と、検索の強調・incsearch の既定。数の
+// option の `!`（E488）・`inv`（E474）・`no{num}&`（E474）・`invno{bool}`（E518）・`{name}!?`
+// `{name}&?`（E488）は断る。文書の値（filetype など）の `&` と hlsearch・incsearch の反転はまだ
+// 受けない（今の値が設定に無い・残る違い）。
+core::EditorSettings changed_from_defaults()
+{
+    auto changed = core::default_editor_settings();
+    changed.scrolloff = 5;
+    changed.wrapping = core::LineWrapping::no_wrap;
+    changed.guide = core::GuideVisibility::hidden;
+    changed.ignorecase = true;
+    changed.relativenumber = true;
+    changed.explorer = true;
+    changed.font_size = core::FontSize::parse("20").value();
+    return changed;
+}
+
+void verify_ex_set_default()
+{
+    const auto defaults = core::default_editor_settings();
+    const auto changed = changed_from_defaults();
+    for (const auto text : {"set so&", "set so&vim", "set so&vi", "set scrolloff&"})
+    {
+        const auto reset = core::evaluate_ex(text, changed, Appearance::dark);
+        expect(carries_settings(reset) && settings_of(reset).scrolloff == defaults.scrolloff &&
+                   message_of(reset) == "scrolloff=0",
+               "so& puts the margin back to the default");
+    }
+    const auto wrap = core::evaluate_ex("set wrap&", changed, Appearance::dark);
+    expect(carries_settings(wrap) && settings_of(wrap).wrapping == defaults.wrapping,
+           "wrap& puts wrapping back to the default");
+    const auto guide = core::evaluate_ex("set guide&", changed, Appearance::dark);
+    expect(carries_settings(guide) && settings_of(guide).guide == defaults.guide,
+           "guide& puts the guide back to the default");
+    const auto ic = core::evaluate_ex("set ic&", changed, Appearance::dark);
+    expect(carries_settings(ic) && !settings_of(ic).ignorecase, "ic& turns ignorecase off");
+}
+
+void verify_ex_set_default_values()
+{
+    const auto defaults = core::default_editor_settings();
+    const auto changed = changed_from_defaults();
+    const auto font = core::evaluate_ex("set fontsize&", changed, Appearance::dark);
+    expect(carries_settings(font) &&
+               settings_of(font).font_size.points() == defaults.font_size.points() &&
+               message_of(font) == "fontsize=13.5",
+           "fontsize& puts the size back to the default");
+    const auto family = core::evaluate_ex("set guifont&", changed, Appearance::dark);
+    expect(carries_settings(family) &&
+               settings_of(family).font_family.text() == defaults.font_family.text() &&
+               settings_of(family).font_size.points() == defaults.font_size.points(),
+           "guifont& puts the family and the size back to the default");
+    const auto highlight = core::evaluate_ex("set hlsearch&", changed, Appearance::dark);
+    expect(highlight.has_value() &&
+               highlight.value().highlight == std::optional{core::vim_default_highlight},
+           "hlsearch& asks for the default highlight");
+    const auto incsearch = core::evaluate_ex("set incsearch&", changed, Appearance::dark);
+    expect(incsearch.has_value() &&
+               incsearch.value().incsearch == std::optional{core::vim_default_incsearch},
+           "incsearch& asks for the default incsearch");
+    const auto clipboard = core::evaluate_ex("set clipboard&", changed, Appearance::dark);
+    expect(clipboard.has_value() &&
+               clipboard.value().clipboard == std::optional{core::ExClipboardRequest::disable},
+           "clipboard& turns the clipboard sync off");
+    const auto lsp = core::evaluate_ex("set lsp!", defaults, Appearance::dark);
+    expect(lsp.has_value() && lsp.value().lsp == std::optional{core::ExLspRequest::enable},
+           "lsp! turns the off language server on");
+}
+
+void verify_ex_set_toggle()
+{
+    const auto defaults = core::default_editor_settings();
+    const auto changed = changed_from_defaults();
+    for (const auto text : {"set wrap!", "set invwrap", "set nowrap!"})
+    {
+        const auto toggled = core::evaluate_ex(text, defaults, Appearance::dark);
+        expect(carries_settings(toggled) &&
+                   settings_of(toggled).wrapping == core::LineWrapping::no_wrap &&
+                   message_of(toggled) == "wrap=off",
+               "wrap! invwrap nowrap! toggle wrapping");
+    }
+    for (const auto text : {"set ic!", "set invic", "set ignorecase!", "set invignorecase"})
+    {
+        const auto toggled = core::evaluate_ex(text, changed, Appearance::dark);
+        expect(carries_settings(toggled) && !settings_of(toggled).ignorecase,
+               "ic! and invic toggle ignorecase");
+    }
+    const auto rnu = core::evaluate_ex("set rnu!", defaults, Appearance::dark);
+    expect(carries_settings(rnu) && settings_of(rnu).relativenumber, "rnu! toggles");
+    const auto explorer = core::evaluate_ex("set invexplorer", changed, Appearance::dark);
+    expect(carries_settings(explorer) && !settings_of(explorer).explorer, "invexplorer toggles");
+    const auto minimap = core::evaluate_ex("set minimap!", defaults, Appearance::dark);
+    expect(carries_settings(minimap) &&
+               core::minimap_shown(settings_of(minimap)) != core::minimap_shown(defaults),
+           "minimap! toggles");
+}
+
+void verify_ex_set_refused()
+{
+    const auto defaults = core::default_editor_settings();
+    for (const auto text :
+         {"set so!", "set invso", "set noso&", "set invnowrap", "set so!?", "set so&?",
+          "set wrap!?", "set ft&", "set hlsearch!", "set fontsize!", "set noso!"})
+    {
+        expect(!core::evaluate_ex(text, defaults, Appearance::dark).has_value(),
+               (std::string(text) + " is refused").c_str());
+    }
 }
 
 // ルート（ADR 0162 の決定 7）。`root=<経路>` と `root=` は settings に載り、`root?` と `root=.` は
@@ -1398,6 +1515,10 @@ void verify_ex_settings()
     verify_ex_smartcase();
     verify_ex_relativenumber();
     verify_ex_scrolloff();
+    verify_ex_set_default();
+    verify_ex_set_default_values();
+    verify_ex_set_toggle();
+    verify_ex_set_refused();
     verify_ex_command_table();
     verify_ex_ranges();
     verify_ex_visual_range_refusal();

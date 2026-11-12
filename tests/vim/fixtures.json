@@ -4748,5 +4748,22 @@
   {"name":"macro-ex-backspace-in-the-line","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"@a","settings":["set scrolloff=0"],"register":{"name":"a","keys":":set so=3<BS>2<CR>j"},"viewport":{"visible_lines":6,"first_visible":10,"line":10,"column":1}},
   {"name":"macro-ex-noh-then-x","text":"abc def","keys":"@a","register":{"name":"a","keys":":noh<CR>x"}},
   {"name":"macro-ex-ignorecase-then-search","text":"x\nabc","keys":"@a","register":{"name":"a","keys":":set ic<CR>/ABC<CR>x"}},
-  {"name":"macro-ex-line-number-then-x","text":"abc\ndef\nghi","keys":"@a","register":{"name":"a","keys":":3<CR>x"}}
+  {"name":"macro-ex-line-number-then-x","text":"abc\ndef\nghi","keys":"@a","register":{"name":"a","keys":":3<CR>x"}},
+  {"name":"ex-failure-noh-continues","text":"abc\ndef\nghi","keys":":noh<CR>j"},
+  {"name":"ex-failure-query-continues","text":"abc\ndef\nghi","keys":":set so?<CR>j"},
+  {"name":"ex-failure-wrap-bang-continues","text":"abc\ndef\nghi","keys":":set wrap!<CR>j"},
+  {"name":"ex-failure-invwrap-continues","text":"abc\ndef\nghi","keys":":set invwrap<CR>j"},
+  {"name":"ex-failure-rnu-bang-continues","text":"abc\ndef\nghi","keys":":set rnu!<CR>j"},
+  {"name":"ex-failure-ic-bang","text":"x\nabc","keys":":set ic!<CR>/ABC<CR>"},
+  {"name":"ex-failure-invic","text":"x\nabc","keys":":set invic<CR>/ABC<CR>"},
+  {"name":"ex-failure-noic-bang","text":"x\nabc","keys":":set noic!<CR>/ABC<CR>"},
+  {"name":"ex-failure-ignorecase-bang-twice","text":"x\nABC\nabc","keys":":set ignorecase!<CR>:set ignorecase!<CR>/abc<CR>"},
+  {"name":"ex-failure-ic-amp","text":"x\nABC\nabc","keys":":set ic<CR>:set ic&<CR>/abc<CR>"},
+  {"name":"ex-failure-scs-amp","text":"x\nabc\nAbc","keys":":set ic<CR>:set scs<CR>:set scs&<CR>/Abc<CR>"},
+  {"name":"ex-failure-wrap-amp-continues","text":"abc\ndef\nghi","keys":":set wrap&<CR>j"},
+  {"name":"ex-failure-in-a-macro-continues","text":"abc\ndef\nghi","keys":"@a","register":{"name":"a","keys":":set so?<CR>x"}},
+  {"name":"ex-failure-so-amp-3j","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":":set so&<CR>3j","settings":["set scrolloff=2"],"viewport":{"visible_lines":6,"first_visible":10,"line":12,"column":1}},
+  {"name":"ex-failure-so-amp-query-3j","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":":set so&<CR>:set so?<CR>3j","settings":["set scrolloff=2"],"viewport":{"visible_lines":6,"first_visible":10,"line":12,"column":1}},
+  {"name":"ex-failure-so-amp-vim-3j","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":":set so&vim<CR>3j","settings":["set scrolloff=2"],"viewport":{"visible_lines":6,"first_visible":10,"line":12,"column":1}},
+  {"name":"ex-failure-scrolloff-amp-vi-3j","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":":set scrolloff&vi<CR>3j","settings":["set scrolloff=2"],"viewport":{"visible_lines":6,"first_visible":10,"line":12,"column":1}}
 ]
