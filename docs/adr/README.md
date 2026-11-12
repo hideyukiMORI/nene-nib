@@ -193,3 +193,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0179](0179-the-transient-tab-is-one-window-mark-replaced-by-opening-in-place.md) | プレビューのタブは窓に 1 つの印で、置き換えは「同じ位置に開いて前の文書を外す」の 1 本 | 受理（D83・2026-11-11）・#1397 |
 | [0180](0180-state-copies-share-the-history-and-the-piece-list.md) | 状態の写しは undo の履歴と piece の列を複製しない（履歴は塊の不変の列・piece の列は共有の束） | 受理（設計席・2026-11-11）・#1473 |
 | [0181](0181-vim-change-mark-is-one-engine-effect.md) | Vim の鍵が「undo の単位を作ったか」と「本文を変えたと数えるか」は engine が効果に添える 1 つの印 | 受理（設計席・2026-11-12）・#1440 |
+| [0184](0184-vim-pattern-syntax-grows-in-stages.md) | 照合器の構文を段で広げる: 量は原子の写しに開き、選択からは命令の列と優先順の状態集合で照合する（段 1: 原子 1 つに付く量） | 受理（設計席・2026-11-12）・#1566 |

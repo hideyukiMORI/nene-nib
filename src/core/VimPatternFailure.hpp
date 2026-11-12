@@ -12,8 +12,16 @@ enum class VimPatternFailure : std::uint8_t
     group,
     // `\|`
     branch,
-    // `\{` `\}` `\+` `\=` `\?`
+    // 群に付く量（`\(ab\)*` `\(ab\)\+` `\(ab\)\{2}`・段 2・ADR 0184 の決定 3）と対の無い `\}`
     quantifier,
+    // `\{` の中の不正（`a\{` `a\{x}` `a\{1,2,3}`・Vim の E554・ADR 0184 の決定 2）
+    brace,
+    // 付く原子の無い量（先頭の `\+` `\{2}`・`\(` の直後・`\{0}` の後ろ・Vim の E866）
+    misplaced,
+    // 量の後ろの量（`a**` `a*\+` `a\+\+` `a\{1}\{2}`・Vim の E871）
+    multi_after_multi,
+    // 量を開いた後の原子の数が上限（vim_pattern_atom_limit）を超える（Vim の E363 と同じ知らせ）
+    too_complex,
     // `\v` `\V` `\m` `\M`
     magic,
     // そのほかの未対応の `\`（`\%` `\_` `\@` `\&` `\z` と `\n` `\t` などの英数字、末尾の単独の

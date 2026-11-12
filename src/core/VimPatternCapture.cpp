@@ -30,22 +30,43 @@ std::optional<VimPatternCaptureFrame> VimPatternCapture::next_child(VimPatternCa
     const VimPatternAtom &atom = pattern_.atoms_.at(top.index);
     const std::uint8_t phase = top.phase;
     ++top.phase;
-    const auto next = static_cast<std::uint32_t>(top.index + 1);
     if (VimPattern::is_zero_width(atom.kind))
     {
         return zero_width_child(atom, top, phase);
     }
-    // `*` の 0 回の枝は 1 文字食べる枝の後（照合器と同じ優先順）。
-    if (phase == 1 && atom.repeated)
+    const auto child = quantified_child(atom, top, phase);
+    if (child.has_value() || !VimPattern::skippable(atom.repeat) || phase != 0)
     {
-        return VimPatternCaptureFrame{top.at, next, 0};
+        return child;
     }
-    const auto eaten = phase == 0 ? consumed(atom, top.at) : std::nullopt;
-    if (eaten.has_value())
+    return next_child(top);
+}
+
+// 量の 0 回の枝は 1 文字食べる枝の後、最短（`\{-}`）なら先（照合器と同じ優先順・ADR 0184 の
+// 決定 2）。枝は 2 つまで（phase 0 と 1）。
+std::optional<VimPatternCaptureFrame>
+VimPatternCapture::quantified_child(const VimPatternAtom &atom, const VimPatternCaptureFrame &top,
+                                    std::uint8_t phase) const
+{
+    const auto next = static_cast<std::uint32_t>(top.index + 1);
+    const std::uint8_t skip_phase = VimPattern::lazy(atom.repeat) ? 0 : 1;
+    if (phase > 1)
     {
-        return VimPatternCaptureFrame{eaten.value(), atom.repeated ? top.index : next, 0};
+        return std::nullopt;
     }
-    return atom.repeated && phase == 0 ? next_child(top) : std::nullopt;
+    if (phase == skip_phase)
+    {
+        return VimPattern::skippable(atom.repeat)
+                   ? std::optional{VimPatternCaptureFrame{top.at, next, 0}}
+                   : std::nullopt;
+    }
+    const auto eaten = consumed(atom, top.at);
+    if (!eaten.has_value())
+    {
+        return std::nullopt;
+    }
+    return VimPatternCaptureFrame{eaten.value(), VimPattern::loops(atom.repeat) ? top.index : next,
+                                  0};
 }
 
 std::optional<VimPatternCaptureFrame>

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "VimPatternAtomKind.hpp"
+#include "VimPatternRepeat.hpp"
 
 #include <cstddef>
 
@@ -11,13 +12,14 @@ namespace nenenib::core
 struct VimPatternAtom
 {
     VimPatternAtomKind kind;
-    // literal の code point。ほかの種類では 0。
+    // literal と cluster の（基底の）code point。ほかの種類では 0。
     char32_t code;
     // set の `[^...]`。
     bool negated;
-    // 直後の `*`（0 回以上の繰り返し）。幅の無い原子には付かない。
-    bool repeated;
-    // set の区間の VimPattern の列の中での始まりと個数。composing は結合文字 1 つずつを
+    // 原子に付く量（ADR 0184 の決定 2）。once のほかは直後の `*` か、parse が開いた量の写しの
+    // 残り。幅の無い原子は once だけ。
+    VimPatternRepeat repeat;
+    // set の区間の VimPattern の列の中での始まりと個数。composing と cluster は結合文字 1 つずつを
     // 幅 1 の区間（first == last）として持つ（#1506）。ほかの種類では 0。
     std::size_t first_range;
     std::size_t range_count;

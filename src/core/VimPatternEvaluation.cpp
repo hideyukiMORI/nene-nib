@@ -35,33 +35,62 @@ VimPatternEvaluation::expanded(std::vector<std::size_t> &order,
                                std::size_t begin)
 {
     // 幅のない遷移は原子indexを増やすだけ。同位置で先に来た候補を優先する。
-    while (!begins.at(index).has_value())
+    std::optional<std::size_t> atom = index;
+    while (atom.has_value() && !begins.at(atom.value()).has_value())
     {
-        begins.at(index) = begin;
-        if (index == pattern_.atoms_.size())
+        begins.at(atom.value()) = begin;
+        if (atom.value() == pattern_.atoms_.size())
         {
-            return finished_match(VimPattern::ends_a_character(line_, at_), begin, at_);
+            return finished(order, begin);
         }
-        const VimPatternAtom &atom = pattern_.atoms_.at(index);
-        const bool zero_width = VimPattern::is_zero_width(atom.kind);
-        if (zero_width && !VimPattern::anchored(line_, atom, at_))
-        {
-            return std::nullopt;
-        }
-        if (zero_width)
-        {
-            ++index;
-            continue;
-        }
-        // 星の消費を先に置き、0回で先へ進む候補を後から展開する。
-        order.push_back(index);
-        if (!atom.repeated)
-        {
-            return std::nullopt;
-        }
-        ++index;
+        atom = passed(order, atom.value());
     }
+    deferred_placed(order);
     return std::nullopt;
+}
+
+std::optional<VimPatternMatch> VimPatternEvaluation::finished(std::vector<std::size_t> &order,
+                                                              std::size_t begin)
+{
+    auto match = finished_match(VimPattern::ends_a_character(line_, at_), begin, at_);
+    if (match.has_value())
+    {
+        // 一致は後に置いた最短の消費より優先する。
+        deferred_.clear();
+        return match;
+    }
+    deferred_placed(order);
+    return std::nullopt;
+}
+
+std::optional<std::size_t> VimPatternEvaluation::passed(std::vector<std::size_t> &order,
+                                                        std::size_t index)
+{
+    const VimPatternAtom &atom = pattern_.atoms_.at(index);
+    if (VimPattern::is_zero_width(atom.kind))
+    {
+        return VimPattern::anchored(line_, atom, at_) ? std::optional{index + 1} : std::nullopt;
+    }
+    // 最短（`\{-}`）は 0 回で先へ進む候補を先に展開し、消費を後に置く（ADR 0184 の決定 2）。
+    if (VimPattern::lazy(atom.repeat))
+    {
+        deferred_.push_back(index);
+        return index + 1;
+    }
+    // 星の消費を先に置き、0回で先へ進む候補を後から展開する。
+    order.push_back(index);
+    return VimPattern::skippable(atom.repeat) ? std::optional{index + 1} : std::nullopt;
+}
+
+// 後に置いた最短の消費は、先へ進んだ道が尽きた所で後ろの最短から順に置く（0 回の枝を先に
+// 再帰で展開する形と同じ順・最短の無いパターンでは何もしない）。
+void VimPatternEvaluation::deferred_placed(std::vector<std::size_t> &order)
+{
+    while (!deferred_.empty())
+    {
+        order.push_back(deferred_.back());
+        deferred_.pop_back();
+    }
 }
 
 // `.` と集合が 1 文字の残りの結合文字を食べる間（#1146）、候補は skipping_ 以上の番号で
@@ -95,7 +124,7 @@ std::optional<VimPatternMatch> VimPatternEvaluation::stepped(std::size_t index, 
     {
         return std::nullopt;
     }
-    const std::size_t target = atom.repeated ? index : index + 1;
+    const std::size_t target = VimPattern::loops(atom.repeat) ? index : index + 1;
     return VimPattern::whole_character(atom.kind) ? arrived(target, begin)
                                                   : expanded(next_, next_begins_, target, begin);
 }

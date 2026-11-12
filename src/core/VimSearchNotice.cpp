@@ -24,7 +24,17 @@ constexpr std::string_view not_found_alone = "E486: Pattern not found";
     case VimPatternFailure::branch:
         return "Unsupported pattern item: \\|";
     case VimPatternFailure::quantifier:
-        return "Unsupported pattern item: \\{ \\+ \\= \\?";
+        return "Unsupported pattern item: a multi on \\( \\), or \\}";
+    // 量の失敗は Vim 9.1 の NFA の文言（ADR 0184 の決定 2）。E866 の文字は値に持たないので
+    // 「multi」と書く（Vim は打った文字 `+` `{` を書く）。
+    case VimPatternFailure::brace:
+        return "E554: Syntax error in \\{...}";
+    case VimPatternFailure::misplaced:
+        return "E866: (NFA regexp) Misplaced multi";
+    case VimPatternFailure::multi_after_multi:
+        return "E871: (NFA regexp) Can't have a multi follow a multi";
+    case VimPatternFailure::too_complex:
+        return "E363: pattern uses more memory than 'maxmempattern'";
     case VimPatternFailure::magic:
         return "Unsupported pattern item: \\v \\V \\m \\M";
     case VimPatternFailure::escape:

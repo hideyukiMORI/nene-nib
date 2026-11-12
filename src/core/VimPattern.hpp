@@ -18,6 +18,12 @@
 
 namespace nenenib::core
 {
+// 量（`\+` `\=` `\?` `\{n,m}` `\{-n,m}`）を原子の写しに開いた後の原子の数の上限（ADR 0184 の
+// 決定 2）。照合の仕事は 1 文字ごとに原子の数に比例するので、写しで膨らむ数を parse で止める
+// （時計を使わない守り）。超える量は too_complex で断る（Vim の E363 と同じ知らせ）。量の無い
+// パターンには掛けない（決定 1・今のパターンの受け方を変えない）。
+inline constexpr std::size_t vim_pattern_atom_limit = 1024;
+
 // Vim の `magic` の部分集合の照合器（ADR 0032 の決定 4）。`std::regex` と `<locale>` は
 // 使わない（ロケール依存のシンボルが core の外へ出る）。一致は 1 行の中だけで、行をまたがない。
 // 生成経路は parse ただ 1 つで、未対応の構文は閉じた失敗で拒否する（CPP-005 / CPP-007）。
@@ -33,16 +39,24 @@ class VimPattern final
     // 10 個目・群の後ろの `*`（群の繰り返し）は group / quantifier で拒否する（ADR 0168 の決定
     // 4）。
     // `\(` の直後の `*` は文字、`^` は錨、`\)` の直前の `$` は錨（Vim の magic と同じ）。
+    // 原子 1 つに付く量 `\+` `\=` `\?` `\{n}` `\{n,}` `\{,m}` `\{n,m}` と最短の `\{-...}` は
+    // 原子の写しに開く（ADR 0184 の決定 2）。`\{` の中の不正は brace（E554）、付く原子の無い量は
+    // misplaced（E866）、量の後ろの量（`a**` も）は multi_after_multi（E871）、開いた後の原子の数が
+    // atom_limit（製品は vim_pattern_atom_limit・試験だけが小さな値を渡す）を超えれば too_complex。
+    // 群に付く量は段 2 なので quantifier で断る。幅の無い原子に付く量は、最小が 1 以上なら原子
+    // 1 つ、0 なら原子を消す（`^\+a` は `^a`・Vim 9.1 の実測）。
     [[nodiscard]] static std::expected<VimPattern, VimPatternFailure>
-    parse(std::string_view pattern, VimSearchDirection separator, VimPatternCase letter_case);
+    parse(std::string_view pattern, VimSearchDirection separator, VimPatternCase letter_case,
+          std::size_t atom_limit = vim_pattern_atom_limit);
 
     // line の from バイト以降で最も左の一致（ADR 0032 の決定 4 の追記）。長さ 0 の一致も返す。
     // line（matched_sequence も）は検証済みの UTF-8 が前提で、行ごとには確かめない（#906）。
     [[nodiscard]] std::optional<VimPatternMatch> matched(std::string_view line,
                                                          std::size_t from) const;
 
-    // 一致の長さの上限（バイト・#556）。食べる原子は 1 code point（UTF-8 で 4 バイトまで）を
-    // 食べ、幅の無い原子は何も食べない。反復（`*`）を含めば決まらないので値が無い。
+    // 一致の長さの上限（バイト・#556）。食べる原子は 1 code point（UTF-8 で 4 バイトまで・cluster
+    // は基底と結合文字の数だけ）を食べ、幅の無い原子は何も食べない。上限の無い反復（`*`
+    // `\{-}`）を含めば決まらないので値が無い。`\=` の写しは 1 回ぶんを数える。
     [[nodiscard]] std::optional<std::size_t> longest_bytes() const noexcept;
 
     // 魔法の無い文字だけの列なら、その UTF-8 のバイト列（#583）。このパターンが行に当たるのは
@@ -74,6 +88,11 @@ class VimPattern final
     [[nodiscard]] std::optional<std::size_t> matched_sequence(std::string_view line,
                                                               std::size_t at) const;
     [[nodiscard]] static bool is_zero_width(VimPatternAtomKind kind) noexcept;
+    // 量の 3 つの問い（ADR 0184 の決定 2）: 食べた後に同じ原子へ戻るか（`*` `\{-}`）・0 回で
+    // 先へ進めるか・0 回の枝を先に試すか（最短）。照合器と群の道の探索が同じ答えを読む。
+    [[nodiscard]] static bool loops(VimPatternRepeat repeat) noexcept;
+    [[nodiscard]] static bool skippable(VimPatternRepeat repeat) noexcept;
+    [[nodiscard]] static bool lazy(VimPatternRepeat repeat) noexcept;
     [[nodiscard]] static bool anchored(std::string_view line, const VimPatternAtom &atom,
                                        std::size_t at);
     // 位置が Vim の 1 文字の境か（本文の側にだけ結合文字が続けば偽・#1138）。一致の終わりと
@@ -88,6 +107,9 @@ class VimPattern final
     // 文字の続きを読む（#1506）。
     [[nodiscard]] bool consumes(std::string_view line, const VimPatternAtom &atom, std::size_t at,
                                 char32_t code) const;
+    // cluster（ADR 0184 の決定 2）の結合文字が at の基底の後ろにちょうど並ぶか。
+    [[nodiscard]] bool spells_cluster(std::string_view line, const VimPatternAtom &atom,
+                                      std::size_t at) const;
     // 結合文字だけの原子（#1506）が at から始まる 1 文字に当たるか。
     [[nodiscard]] bool carries_marks(std::string_view line, const VimPatternAtom &atom,
                                      std::size_t at) const;

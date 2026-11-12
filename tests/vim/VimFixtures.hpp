@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 5b4871b6b296187defea0f560e8986c0c81f0f2043a3270d567a7ffbba46fcce / 4913 fixtures
+// fixtures.json: sha256 5cf9e7c94b8ae37dd828fbd30c198f8325be2e30f5001e31c62c558393497179 / 4980 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4913> vim_fixtures{{
+constexpr std::array<VimFixture, 4980> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4925,6 +4925,73 @@ constexpr std::array<VimFixture, 4913> vim_fixtures{{
     {"substitute-question-delimiter-g", "a?b a?b", ":s?a\\?b?X?g<CR>", "X X", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"substitute-question-in-slash", "a?b ab", ":s/a?b/X/<CR>", "X ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"substitute-bracket-slash", "a/b", ":s/[/]/X/<CR>", "aXb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-search-plus-n", "baaac a", "/a\\+<CR>n", "baaac a", 1, 7, "", "", std::nullopt},
+    {"pattern-quantifier-search-plus-count", "baaac a\naa", "2/a\\+<CR>", "baaac a\naa", 1, 7, "", "", std::nullopt},
+    {"pattern-quantifier-search-eq", "color colour", "w/colou\\=r<CR>", "color colour", 1, 1, "", "", std::nullopt},
+    {"pattern-quantifier-search-qm-forward", "xab b", "/a\\?b<CR>n", "xab b", 1, 5, "", "", std::nullopt},
+    {"pattern-quantifier-search-qm-backward-literal", "a?b ab", "$?a\\?b<CR>", "a?b ab", 1, 1, "", "", std::nullopt},
+    {"pattern-quantifier-search-backward-plus", "aa b aaa", "$?a\\+<CR>", "aa b aaa", 1, 6, "", "", std::nullopt},
+    {"pattern-quantifier-search-brace-n", "a aa aaa aaaa", "/a\\{2,}<CR>n", "a aa aaa aaaa", 1, 6, "", "", std::nullopt},
+    {"pattern-quantifier-search-lazy-n", "abcabc abc", "/.\\{-}c<CR>n", "abcabc abc", 1, 7, "", "", std::nullopt},
+    {"pattern-quantifier-search-lazy-one-n", "aaa", "/a\\{-1,}<CR>n", "aaa", 1, 3, "", "", std::nullopt},
+    {"pattern-quantifier-search-d", "aaa bbb ccc", "d/b\\{2}<CR>", "bbb ccc", 1, 1, "aaa ", "v", std::nullopt},
+    {"pattern-quantifier-search-d-plus", "x   y  z", "d/ \\+z<CR>", "  z", 1, 1, "x   y", "v", std::nullopt},
+    {"pattern-quantifier-search-wide", "いああああう", "/あ\\+<CR>", "いああああう", 1, 4, "", "", std::nullopt},
+    {"pattern-quantifier-search-composed", "xééy zé", "/é\\+<CR>n", "xééy zé", 1, 11, "", "", std::nullopt},
+    {"pattern-quantifier-search-err-brace", "xa{x}", "/a\\{x}<CR>x", "xa{x}", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-search-err-double-star", "xa*a", "/a**<CR>x", "xa*a", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-search-err-start", "+a", "/\\+a<CR>x", "+a", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-plus-g", "a   b  c", ":s/ \\+/ /g<CR>", "a b c", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-eq-g", "colour color colouur", ":s/colou\\=r/X/g<CR>", "X X colouur", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-qm-g", "baaac", ":s/a\\?/X/g<CR>", "XbXXXc", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-n-g", "a aa aaa aaaa", ":s/a\\{2}/X/g<CR>", "a X Xa XX", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-n-close-backslash", "a aa aaa", ":s/a\\{2\\}/X/g<CR>", "a X Xa", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-n-min-g", "a aa aaa aaaa", ":s/a\\{2,}/X/g<CR>", "a X X X", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-max-g", "a aa aaaa", ":s/a\\{,3}/X/g<CR>", "X X XX", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-n-m-g", "a aa aaa aaaa", ":s/a\\{2,3}/X/g<CR>", "a X X Xa", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-empty-braces-g", "baab", ":s/a\\{}/X/g<CR>", "XbXb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-comma-braces-g", "baab", ":s/a\\{,}/X/g<CR>", "XbXb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-lazy-g", "aaa", ":s/a\\{-}/X/g<CR>", "XaXaXa", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-lazy-one-g", "aaa", ":s/a\\{-1,}/X/g<CR>", "XXX", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-lazy-max-g", "aaa", ":s/a\\{-,3}/X/g<CR>", "XaXaXa", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-lazy-n-m-g", "aaaaa", ":s/a\\{-2,3}/X/g<CR>", "XXa", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-lazy-reversed-g", "aaaaa", ":s/a\\{-3,2}/X/g<CR>", "XXa", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-reversed-g", "aaaa", ":s/a\\{3,1}/X/g<CR>", "XX", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-zero", "ab", ":s/a\\{0}b/X/<CR>", "aX", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-set-plus-g", "ab 123 4", ":s/[0-9]\\+/N/g<CR>", "ab N N", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-dot-plus", "abc", ":s/.\\+/X/<CR>", "X", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-dot-lazy-g", "abcabc", ":s/.\\{-}c/X/g<CR>", "XX", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-x-lazy-y", "xaybyc y", ":s/x.\\{-}y/X/<CR>", "Xbyc y", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-lazy-amp", "aXbYb", ":s/a.\\{-}b/[&]/<CR>", "[aXb]Yb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-greedy-amp", "aXbYb", ":s/a.\\{-0,}b/[&]/<CR>", "[aXb]Yb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-trailing-blank", "foo   \nbar  \nbaz", ":%s/\\s\\+$//<CR>", "foo\nbar\nbaz", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-wide", "いああああう", ":s/あ\\+/X/<CR>", "いXう", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-composed-plus", "xééy", ":s/é\\+/X/<CR>", "xXy", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-composed-count", "xéééy", ":s/é\\{2}/X/<CR>", "xXéy", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-composed-base", "xéeey", ":s/e\\+/X/<CR>", "xéXy", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-dot-composed-g", "xééy", ":s/.\\{2}/X/g<CR>", "XX", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-capture-lazy-g", "<a><b>", ":s/<\\(.\\{-}\\)>/[\\1]/g<CR>", "[a][b]", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-capture-plus", "key   =  value", ":s/\\(\\w\\+\\)\\s*=\\s*\\(\\w\\+\\)/\\2=\\1/<CR>", "value=key", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-capture-group-plus", "xaaab", ":s/\\(a\\+\\)b/[\\1]/<CR>", "x[aaa]", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-capture-count-eq-g", "aab aa", ":s/\\(a\\{2}\\)\\(b\\=\\)/[\\1|\\2]/g<CR>", "[aa|b] [aa|]", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-anchor-plus", "aa", ":s/^\\+a/X/<CR>", "Xa", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-anchor-eq", "ba", ":s/^\\=a/X/<CR>", "bX", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-word-plus", "ab", ":s/\\<\\+a/X/<CR>", "Xb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-big-count", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ":s/a\\{30}/X/<CR>", "Xaaaaaaaaaa", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-ignorecase", "baAab", ":set ic<CR>:s/A\\+/X/<CR>", "bXb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-percent-g", "a  b\nc   d\ne f", ":%s/ \\+/_/g<CR>", "a_b\nc_d\ne_f", 3, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-err-open", "ab", ":s/a\\{/X/<CR>x", "ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-err-bad", "ab", ":s/a\\{x}/X/<CR>x", "ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-err-three", "ab", ":s/a\\{1,2,3}/X/<CR>x", "ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-err-lazy-open", "ab", ":s/a\\{-/X/<CR>x", "ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-err-start-plus", "+ab", ":s/\\+a/X/<CR>x", "+ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-err-start-brace", "ab", ":s/\\{2}a/X/<CR>x", "ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-err-after-group-open", "ab", ":s/\\(\\+a\\)/X/<CR>x", "ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-err-after-zero", "ab", ":s/ba\\{0}\\+/X/<CR>x", "ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-err-double", "aab", ":s/a\\+\\+/X/<CR>x", "aab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-err-star-plus", "aab", ":s/a*\\+/X/<CR>x", "aab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-err-count-count", "aab", ":s/a\\{1}\\{2}/X/<CR>x", "aab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-quantifier-sub-err-double-star", "a*ab", ":s/a**/X/<CR>x", "a*ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
 }};
 } // namespace nenenib::tests
 // clang-format on
