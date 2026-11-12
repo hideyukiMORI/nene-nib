@@ -5,6 +5,7 @@
 #include "FontFamilies.hpp"
 #include "HistoryWalk.hpp"
 #include "InputHistory.hpp"
+#include "InputText.hpp"
 #include "Offset.hpp"
 #include "ThemeCatalog.hpp"
 
@@ -29,6 +30,9 @@ class CommandLine final
     [[nodiscard]] CommandLine with_fonts(FontFamilies fonts) const;
     [[nodiscard]] std::string_view text() const noexcept;
     [[nodiscard]] Offset caret() const noexcept;
+    // 行があふれているか（上限 input_line_limit を超えている・差し込みを捨てた・#1568）。
+    // あふれた行の確定は断る。
+    [[nodiscard]] bool overflowed() const noexcept;
     [[nodiscard]] std::vector<std::string> completions() const;
     // 巡回で選ばれている候補（ADR 0150 の決定 3）。巡回していない・巡回が打った元の文字に
     // 戻っている間は空。
@@ -56,8 +60,12 @@ class CommandLine final
     [[nodiscard]] CommandLine cycled(const std::vector<std::string> &candidates,
                                      CommandEdit direction) const;
 
+    [[nodiscard]] InputText input() const;
+
     std::string text_;
     Offset caret_;
+    // 差し込みを捨てた印（InputText::lost・#1568）。行を閉じるまで消えない。
+    bool lost_ = false;
     // 巡回の元の入力。値があれば巡回の中で、候補はこの文字列から作る。
     std::optional<std::string> completion_seed_;
     std::optional<std::size_t> completion_index_;

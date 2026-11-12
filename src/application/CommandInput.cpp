@@ -157,6 +157,21 @@ namespace
     return true;
 }
 
+[[nodiscard]] bool overflows_of(const core::CommandLine &line)
+{
+    return line.overflowed();
+}
+
+[[nodiscard]] bool overflows_of(const core::SearchLine &line)
+{
+    return line.overflowed();
+}
+
+[[nodiscard]] bool overflows_of(const core::CommandPalette &palette)
+{
+    return palette.input().overflowed();
+}
+
 [[nodiscard]] std::optional<std::string> focused_of(const core::SearchLine & /*line*/)
 {
     return std::nullopt;
@@ -221,6 +236,11 @@ CommandInput edited_command(const CommandInput &input, core::CommandEdit edit)
 {
     return std::visit([edit](const auto &value) -> CommandInput { return value.edited(edit); },
                       input);
+}
+
+bool overflows_command(const CommandInput &input)
+{
+    return std::visit([](const auto &value) { return overflows_of(value); }, input);
 }
 
 CommandInput recalled_command(const CommandInput &input, const core::InputHistory &ex,

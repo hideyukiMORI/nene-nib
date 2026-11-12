@@ -280,8 +280,8 @@ void verify_ex_rejections()
     return text;
 }
 
-// 使う人が打った `:set` の引数を表示の 1 行へ写すとき、上限の 256 バイトを超えても例外で止まらず
-// 閉じた失敗で返す（#495）。256 バイトちょうどは通り、表示の 1 行も上限の内側に収まる。
+// 使う人が打った `:set` の引数を表示の 1 行へ写すとき、表示の上限の 256 バイトを超えても例外で
+// 止まらず、知らせを 1 行に切るか閉じた失敗で返す（#495・入力行の上限は 4096 バイト・#1568）。
 void verify_ex_long_set_arguments()
 {
     const auto settings = core::default_editor_settings();
@@ -298,18 +298,34 @@ void verify_ex_long_set_arguments()
     const auto size = core::evaluate_ex(size_fits, settings, Appearance::dark);
     expect(size_fits.size() == 256 && size.has_value() && size.value().message.text().size() == 252,
            "a 256-byte fontsize command is shown within the display limit");
+    // 入力行の上限は 4096 バイト（#1568）。それより短い長い引数は、受けても断っても例外で止まらず、
+    // 受けたときの知らせは表示の 1 行に収まる。
     for (const auto &text :
          {"set guifont=" + std::string(241, 'F') + ":h12",
           "set guifont=" + repeated("界", 81) + ":h12",
-          "set guifont=Consolas:h" + std::string(300, '1'),
           "set fontsize=" + std::string(242, '0') + "12",
-          "set fontsize=" + std::string(4096, '0') + "9",
+          "set fontsize=" + std::string(4000, '0') + "12",
           "set " + std::string(300, ' ') + "fontsize=12", "colorscheme " + std::string(300, 'd')})
     {
         const auto result = core::evaluate_ex(text, settings, Appearance::dark);
-        expect(!result.has_value() && result.error() == too_long,
-               "an overlong set argument is a closed failure, not an exception");
+        expect(!result.has_value() ||
+                   result.value().message.text().size() <= core::DisplayText::maximum_bytes,
+               "a long set argument is shown within the display limit, not an exception");
     }
+    const auto long_family = core::evaluate_ex("set guifont=" + std::string(300, 'F') + ":h12",
+                                               settings, Appearance::dark);
+    expect(!long_family && long_family.error() ==
+                               core::ExEvaluationFailure{core::ExFailure::invalid_font_family},
+           "a family name longer than one display line is a closed failure");
+    const auto long_size = core::evaluate_ex("set guifont=Consolas:h" + std::string(300, '1'),
+                                             settings, Appearance::dark);
+    expect(!long_size &&
+               long_size.error() == core::ExEvaluationFailure{core::ExFailure::invalid_font_size},
+           "a long size is a closed failure");
+    const auto over = core::evaluate_ex("set fontsize=" + std::string(4096, '0') + "9", settings,
+                                        Appearance::dark);
+    expect(!over && over.error() == too_long,
+           "a command past the input line limit is a closed failure, not an exception");
 }
 
 void verify_command_editing()
@@ -328,9 +344,13 @@ void verify_command_editing()
     expect(!line.inserted("\n") && !line.inserted("\t") && !line.inserted("\xFF"),
            "input is one valid line");
     expect(line.inserted("").has_value(), "empty clipboard text is harmless");
-    const auto full = core::CommandLine::empty().inserted(std::string(256, 'x')).value();
-    expect(!full.inserted("y") && full.text().size() == 256,
-           "rejected input does not alter the line");
+    // 上限を超えた入力は行に持って「あふれた」行にする（#1568・確定は controller が断る）。
+    const auto full =
+        core::CommandLine::empty().inserted(std::string(core::input_line_limit, 'x')).value();
+    const auto overflowed = full.inserted("y");
+    expect(!full.overflowed() && overflowed.has_value() && overflowed.value().overflowed() &&
+               overflowed.value().text().size() == core::input_line_limit + 1,
+           "input past the limit is kept and marks the line overflowed");
 }
 
 // `:` の Tab の共通の接頭辞（ADR 0150 の決定 3）。

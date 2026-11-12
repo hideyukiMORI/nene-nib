@@ -1,25 +1,48 @@
 #include "InputText.hpp"
 
-#include "DisplayText.hpp"
 #include "Utf8.hpp"
 
+#include <algorithm>
 #include <utility>
 
 namespace nenenib::core
 {
 std::expected<InputText, ExFailure> inserted_input(const InputText &input, std::string_view text)
 {
-    if (text.size() > DisplayText::maximum_bytes - input.text.size())
-    {
-        return std::unexpected(ExFailure::too_long);
-    }
     if (!validate_utf8(text) || has_control_character(text))
     {
         return std::unexpected(ExFailure::invalid_text);
     }
+    if (text.size() > input_line_hold - std::min(input.text.size(), input_line_hold))
+    {
+        InputText kept = input;
+        kept.lost = true;
+        return kept;
+    }
     std::string next = input.text;
     next.insert(input.caret.value, text);
-    return InputText{std::move(next), Offset{input.caret.value + text.size()}};
+    return InputText{std::move(next), Offset{input.caret.value + text.size()}, input.lost};
+}
+
+bool overflows(const InputText &input) noexcept
+{
+    return input.lost || input.text.size() > input_line_limit;
+}
+
+OffsetRange input_line_window(std::string_view text, Offset from, Offset to) noexcept
+{
+    Offset begin{from.value > input_line_window_before ? from.value - input_line_window_before : 0};
+    while (begin.value < from.value && !is_boundary(text, begin))
+    {
+        ++begin.value;
+    }
+    const std::size_t after = text.size() - std::min(to.value, text.size());
+    Offset end{to.value + std::min(after, input_line_window_after)};
+    while (end.value > to.value && !is_boundary(text, end))
+    {
+        --end.value;
+    }
+    return OffsetRange{begin, end};
 }
 
 InputText edited_input(const InputText &input, CommandEdit edit)

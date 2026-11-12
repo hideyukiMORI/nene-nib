@@ -811,6 +811,8 @@ class EditorController final
     [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::SearchLine &line);
     [[nodiscard]] std::optional<core::VimRepeatFailure> submitted_command();
     [[nodiscard]] std::optional<core::VimRepeatFailure> confirmed_command();
+    // あふれた入力の確定を断ったら真（入力行を閉じて知らせる・#1568）。
+    [[nodiscard]] bool refused_overflow();
     void remember(const core::CommandLine &line);
     void remember(const core::SearchLine &line);
     void remember(const core::CommandPalette &palette);

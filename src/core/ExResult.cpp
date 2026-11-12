@@ -15,8 +15,8 @@
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
 #include "ExWindowName.hpp"
+#include "InputText.hpp"
 #include "LanguageTable.hpp"
-#include "Offset.hpp"
 #include "Utf8.hpp"
 #include "VimSearchHighlight.hpp"
 
@@ -96,7 +96,7 @@ namespace
     }
     settings.font_size = size.value();
     return ExResult{settings, std::nullopt, std::nullopt,
-                    DisplayText::parse("fontsize=" + std::string(value)).value()};
+                    clipped_display_text("fontsize=" + std::string(value)).value()};
 }
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure> set_gui_font(std::string_view value,
@@ -120,7 +120,7 @@ namespace
     settings.font_size = size.value();
     settings.font_family = family.value();
     return ExResult{settings, std::nullopt, std::nullopt,
-                    DisplayText::parse("guifont=" + std::string(value)).value()};
+                    clipped_display_text("guifont=" + std::string(value)).value()};
 }
 
 // 3 値が増えたらここでコンパイルが落ちる（CPP-002）。
@@ -446,8 +446,6 @@ document_option(std::string_view option)
 
 [[nodiscard]] std::expected<FilePath, ExFailure> document_path(std::string_view text);
 
-constexpr std::string_view ellipsis = "…";
-
 // `explorer=on` `explorer=off`（ADR 0162 の決定 7）。`set wrap` と同じ形の文言。
 [[nodiscard]] DisplayText explorer_message(bool shown)
 {
@@ -468,17 +466,7 @@ constexpr std::string_view ellipsis = "…";
     {
         text += root.value().text();
     }
-    if (text.size() > DisplayText::maximum_bytes)
-    {
-        Offset cut{DisplayText::maximum_bytes - ellipsis.size()};
-        while (!is_boundary(text, cut))
-        {
-            cut = previous_code_point(text, cut);
-        }
-        text.resize(cut.value);
-        text += ellipsis;
-    }
-    auto parsed = DisplayText::parse(text);
+    auto parsed = clipped_display_text(text);
     if (!parsed)
     {
         return DisplayText::parse("root").value();
@@ -1401,7 +1389,7 @@ line_command(std::string_view text)
         const auto parsed = std::from_chars(text.data(), text.data() + text.size(), number);
         line = parsed.ec == std::errc{} ? number : std::numeric_limits<std::size_t>::max();
     }
-    ExResult result{std::nullopt, std::nullopt, std::nullopt, DisplayText::parse(text).value()};
+    ExResult result{std::nullopt, std::nullopt, std::nullopt, clipped_display_text(text).value()};
     result.line = ExLineRequest{line};
     return result;
 }
@@ -1561,7 +1549,7 @@ constexpr std::string_view relative_range = ".,.+";
     {
         return std::unexpected(ExFailure::unsupported_argument);
     }
-    ExResult result{std::nullopt, std::nullopt, std::nullopt, DisplayText::parse(text).value()};
+    ExResult result{std::nullopt, std::nullopt, std::nullopt, clipped_display_text(text).value()};
     result.relative_line = ExRelativeLineRequest{below};
     return result;
 }
@@ -1807,7 +1795,9 @@ std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
                                                          const ExWindowState &window,
                                                          const ThemeCatalog &themes)
 {
-    if (text.size() > DisplayText::maximum_bytes)
+    // 入力行と同じ上限（#1568）。入力行はあふれた行を確定させないので、ここへ来る長い文は
+    // 入力行を経ない呼び出し（試験・面の候補）だけ。
+    if (text.size() > input_line_limit)
     {
         return std::unexpected(ExFailure::too_long);
     }
@@ -1860,7 +1850,9 @@ DisplayText ex_failure_message(ExFailure failure)
     case ExFailure::invalid_text:
         return DisplayText::parse("Command must be a single line of UTF-8 text").value();
     case ExFailure::too_long:
-        return DisplayText::parse("Command is limited to 256 bytes").value();
+        return DisplayText::parse("Command is limited to " + std::to_string(input_line_limit) +
+                                  " bytes")
+            .value();
     case ExFailure::unsupported_argument:
         return DisplayText::parse("Not supported").value();
     case ExFailure::invalid_argument:

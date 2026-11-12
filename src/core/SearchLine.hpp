@@ -26,7 +26,7 @@ class SearchLine final
   public:
     [[nodiscard]] static SearchLine opened(VimSearchDirection direction);
     // 通常モードの「検索: 」。前回の語 preset を置いてキャレットを末尾に置く。preset が 1 行の
-    // 入力にならなければ（長すぎる・改行を含む）空で開く。
+    // 入力にならなければ（上限を超える・改行を含む）空で開く。
     [[nodiscard]] static SearchLine opened_find(std::string_view preset);
     // 通常モードの置換の 2 段目「置換後: 」（ADR 0174 の決定 3）。前回の置換後の語 preset を置く
     // （入らなければ空・opened_find と同じ）。
@@ -35,6 +35,8 @@ class SearchLine final
     [[nodiscard]] static SearchLine opened_go_to_line();
     [[nodiscard]] std::string_view text() const noexcept;
     [[nodiscard]] Offset caret() const noexcept;
+    // 行があふれているか（CommandLine::overflowed と同じ規則・InputText の overflows・#1568）。
+    [[nodiscard]] bool overflowed() const noexcept;
     // `/` 「検索: 」「置換後: 」「行: 」は forward、`?` は backward。
     [[nodiscard]] VimSearchDirection direction() const noexcept;
     // search_forward / search_backward / find / replace_with / go_to_line のどれか。

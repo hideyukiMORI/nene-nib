@@ -24,6 +24,9 @@ using CommandInput = std::variant<core::CommandLine, core::CommandPalette, core:
 [[nodiscard]] std::expected<CommandInput, core::ExFailure>
 inserted_command(const CommandInput &input, std::string_view text);
 [[nodiscard]] CommandInput edited_command(const CommandInput &input, core::CommandEdit edit);
+// 入力があふれているか（上限 core::input_line_limit を超えた・差し込みを捨てた・#1568）。`:` の
+// 行・検索の行・面の入力のどれも同じ InputText の規則で、あふれた入力の確定は丸ごと断る。
+[[nodiscard]] bool overflows_command(const CommandInput &input);
 // 履歴の上下（#725・ADR 0022 決定 2 の追補）。`:` の行は ex、検索の行は search の履歴を歩き、
 // 面は変えない（面の上下は候補の選択・ADR 0150 の決定 2）。
 [[nodiscard]] CommandInput recalled_command(const CommandInput &input, const core::InputHistory &ex,

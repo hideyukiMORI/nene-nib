@@ -1,5 +1,6 @@
 #include "DisplayText.hpp"
 
+#include "Offset.hpp"
 #include "Utf8.hpp"
 
 #include <utility>
@@ -42,5 +43,22 @@ std::string_view DisplayText::text() const noexcept
 std::size_t DisplayText::code_point_count() const noexcept
 {
     return code_point_count_;
+}
+
+std::expected<DisplayText, TextFailure> clipped_display_text(std::string_view text)
+{
+    if (text.size() <= DisplayText::maximum_bytes)
+    {
+        return DisplayText::parse(text);
+    }
+    constexpr std::string_view ellipsis = "…";
+    Offset cut{DisplayText::maximum_bytes - ellipsis.size()};
+    while (cut.value > 0 && !is_boundary(text, cut))
+    {
+        --cut.value;
+    }
+    std::string shown(text.substr(0, cut.value));
+    shown += ellipsis;
+    return DisplayText::parse(shown);
 }
 } // namespace nenenib::core
