@@ -64,7 +64,14 @@ class VimPattern final
     [[nodiscard]] static std::size_t eaten(std::string_view line, VimPatternAtomKind kind,
                                            std::size_t at);
     [[nodiscard]] static bool whole_character(VimPatternAtomKind kind) noexcept;
-    [[nodiscard]] bool consumes(const VimPatternAtom &atom, char32_t code) const;
+    // 原子が line の at の code point（code は呼び手が 1 回だけ読んだその値）を食べられるか
+    // （食べた後の位置は eaten）。line と at は結合文字だけの原子が同じ 1
+    // 文字の続きを読む（#1506）。
+    [[nodiscard]] bool consumes(std::string_view line, const VimPatternAtom &atom, std::size_t at,
+                                char32_t code) const;
+    // 結合文字だけの原子（#1506）が at から始まる 1 文字に当たるか。
+    [[nodiscard]] bool carries_marks(std::string_view line, const VimPatternAtom &atom,
+                                     std::size_t at) const;
     // 1 文字を食べる原子。幅の無い原子は何も食べない。
     [[nodiscard]] std::optional<std::size_t>
     stepped(std::string_view line, const VimPatternAtom &atom, std::size_t at) const;

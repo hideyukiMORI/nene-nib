@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 10635a0f5fcce466c81ad2d5a803ab537f56e4774450bd6a784cfca9c3fed01f / 4486 fixtures
+// fixtures.json: sha256 9a2f0cafab5c5c54986acf96bf72de0b681de19d36cd8c7e59b5342af19efd56 / 4515 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4486> vim_fixtures{{
+constexpr std::array<VimFixture, 4515> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3331,6 +3331,35 @@ constexpr std::array<VimFixture, 4486> vim_fixtures{{
     {"search-composing-ic-set-folds", "x É é", ":set ic<CR>/[e]́<CR>", "x É é", 1, 3, "", "", std::nullopt},
     {"search-composing-ic-precomposed-folds", "x É é", ":set ic<CR>/é<CR>", "x É é", 1, 3, "", "", std::nullopt},
     {"search-composing-ic-repeat-before", "x É é", ":set ic<CR>/x*é<CR>", "x É é", 1, 7, "", "", std::nullopt},
+    {"search-combining-lead-forward", "x が ab\ncd ef", "/゙<CR>", "x が ab\ncd ef", 1, 3, "", "", std::nullopt},
+    {"search-combining-lead-next-line", "が ab\ncd ぐ ef", "/゙<CR>", "が ab\ncd ぐ ef", 2, 4, "", "", std::nullopt},
+    {"search-combining-lead-n", "x が ab\ncd ぐ ef", "/゙<CR>n", "x が ab\ncd ぐ ef", 2, 4, "", "", std::nullopt},
+    {"search-combining-lead-n-back", "x が ab\ncd ぐ ef", "/゙<CR>nN", "x が ab\ncd ぐ ef", 1, 3, "", "", std::nullopt},
+    {"search-combining-lead-x", "x が ab\ncd ef", "/゙<CR>x", "x  ab\ncd ef", 1, 3, "が", "v", std::nullopt},
+    {"search-combining-lead-d", "x が ab\ncd ef", "d/゙<CR>", "が ab\ncd ef", 1, 1, "x ", "v", std::nullopt},
+    {"search-combining-lead-acute", "x é ab\ncd ef", "/́<CR>", "x é ab\ncd ef", 1, 3, "", "", std::nullopt},
+    {"search-combining-lead-acute-two", "x é ab\ncd é ef", "/́<CR>", "x é ab\ncd é ef", 1, 3, "", "", std::nullopt},
+    {"search-combining-lead-backward-emoji", "    ⚠️ , !が x1→?   ", "?゙<CR>", "    ⚠️ , !が x1→?   ", 1, 15, "", "", std::nullopt},
+    {"search-combining-lead-backward-gamma", "   がgamma  ", "?゙<CR>", "   がgamma  ", 1, 4, "", "", std::nullopt},
+    {"search-combining-lead-wrap-then-da", "が a.b角\n(paren)  !→<w>", "/゙<CR>da(", "が a.b角\n  !→<w>", 2, 1, "(paren)", "v", std::nullopt},
+    {"search-combining-lead-only-cursor", "が ab\ncd ef", "/゙<CR>", "が ab\ncd ef", 1, 1, "", "", std::nullopt},
+    {"search-combining-lead-glued-control", "x が ab\ncd ef", "/が<CR>", "x が ab\ncd ef", 1, 3, "", "", std::nullopt},
+    {"search-combining-lead-ic", "x É é", ":set ic<CR>/́<CR>", "x É é", 1, 3, "", "", std::nullopt},
+    {"search-combining-lead-backslash-c", "x É é", "/\\ć<CR>", "x É é", 1, 3, "", "", std::nullopt},
+    {"search-combining-lead-two-marks-any-order", "x ế y", "/́̂<CR>", "x ế y", 1, 3, "", "", std::nullopt},
+    {"search-combining-lead-two-marks-x", "x ế y", "/́̂<CR>x", "x  y", 1, 3, "ế", "v", std::nullopt},
+    {"search-combining-lead-dot-mark-y", "x éy", "/.́y<CR>", "x éy", 1, 3, "", "", std::nullopt},
+    {"search-combining-lead-dot-mark", "x éy", "/.́<CR>x", "x y", 1, 3, "é", "v", std::nullopt},
+    {"search-combining-lead-caret", "ab\nが c", "/^゙<CR>", "ab\nが c", 2, 1, "", "", std::nullopt},
+    {"search-combining-lead-mark-star-b", "a ががb", "/゙*b<CR>", "a ががb", 1, 3, "", "", std::nullopt},
+    {"search-combining-lead-e-star-mark", "x É é", "/e*́<CR>", "x É é", 1, 3, "", "", std::nullopt},
+    {"search-combining-lead-word-star-control", "が x が", "*", "が x が", 1, 10, "", "", std::nullopt},
+    {"search-combining-lead-mark-then-letter", "x éa éb", "/́b<CR>", "x éa éb", 1, 8, "", "", std::nullopt},
+    {"search-combining-lead-word-start-mark", "aé é", "/\\<́<CR>", "aé é", 1, 6, "", "", std::nullopt},
+    {"search-combining-lead-mark-extra-text", "x é̂ y", "/́<CR>x", "x  y", 1, 3, "é̂", "v", std::nullopt},
+    {"search-combining-lead-lone-mark-skipped", "x\ńa é", "/́<CR>", "x\ńa é", 2, 5, "", "", std::nullopt},
+    {"search-combining-lead-lone-mark-carries", "x\ń́a", "/́<CR>", "x\ń́a", 2, 1, "", "", std::nullopt},
+    {"search-combining-lead-seventh-mark", "x è̂̃̄̅̆́ y é", "/́<CR>", "x è̂̃̄̅̆́ y é", 1, 21, "", "", std::nullopt},
     {"visual-line-case-gg-tilde", "  x1 \nab", "jVgg~", "  X1 \nAB", 1, 3, "", "", std::nullopt},
     {"visual-line-case-gg-tilde-then-c", "  x1 \nab", "jVgg~c$ <Esc>", "   \nAB", 1, 3, "X1 ", "v", std::nullopt},
     {"visual-line-case-tilde-mid", "abc def", "wV~", "ABC DEF", 1, 1, "", "", std::nullopt},

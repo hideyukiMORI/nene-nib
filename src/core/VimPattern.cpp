@@ -65,6 +65,7 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
     case VimPatternAtomKind::literal:
     case VimPatternAtomKind::any:
     case VimPatternAtomKind::set:
+    case VimPatternAtomKind::composing:
         return false;
     case VimPatternAtomKind::line_start:
     case VimPatternAtomKind::line_end:
@@ -304,6 +305,35 @@ parsed_escape(std::string_view pattern, std::size_t at, std::vector<VimPatternAt
     return !atoms.empty() && !atoms.back().repeated && !zero_width(atoms.back().kind);
 }
 
+// パターンの結合文字が直前の literal（基底か、基底に続く結合文字）の続きか。Vim の nfa_regatom は
+// 基底の文字と直後の結合文字の列を 1 つの原子にする（その形は今どおり literal の列で比べる）。
+[[nodiscard]] bool follows_base(const std::vector<VimPatternAtom> &atoms) noexcept
+{
+    return !atoms.empty() && atoms.back().kind == VimPatternAtomKind::literal &&
+           !atoms.back().repeated;
+}
+
+// 基底の続きでない結合文字（#1506）。直前が結合文字だけの原子ならその列に足し、直前が `.` なら
+// `.` を消して結合文字だけの原子にする（Vim の nfa_regatom の `c == Magic('.') &&
+// utf_iscomposing(peekchr())`）。ほか（先頭・`*` と幅の無い原子の後ろ）は新しい原子を始める。
+void appended_mark(char32_t code, std::vector<VimPatternAtom> &atoms,
+                   std::vector<VimPatternRange> &ranges)
+{
+    const bool open = !atoms.empty() && !atoms.back().repeated;
+    const bool continued = open && atoms.back().kind == VimPatternAtomKind::composing;
+    if (open && atoms.back().kind == VimPatternAtomKind::any)
+    {
+        atoms.pop_back();
+    }
+    if (!continued)
+    {
+        atoms.push_back(VimPatternAtom{VimPatternAtomKind::composing, 0, false, false,
+                                       ranges.size(), 0, false, false});
+    }
+    ranges.push_back(VimPatternRange{code, code});
+    ++atoms.back().range_count;
+}
+
 // `^` は先頭でだけ錨、`$` は末尾でだけ錨、ほかはただの文字（ADR 0032 の決定 4 の追記）。
 [[nodiscard]] VimPatternAtom plain_atom(char32_t code, std::size_t at, std::size_t next,
                                         std::size_t size) noexcept
@@ -332,6 +362,11 @@ parsed_item(std::string_view pattern, std::size_t at, std::vector<VimPatternAtom
     if (code == U'\\')
     {
         return parsed_escape(pattern, next, atoms, ranges);
+    }
+    if (display_width(code) == DisplayWidth::zero && !follows_base(atoms))
+    {
+        appended_mark(code, atoms, ranges);
+        return next;
     }
     if (code == U'~')
     {
@@ -480,6 +515,7 @@ bool VimPattern::anchored(std::string_view line, const VimPatternAtom &atom, std
     case VimPatternAtomKind::literal:
     case VimPatternAtomKind::any:
     case VimPatternAtomKind::set:
+    case VimPatternAtomKind::composing:
         return false;
     }
     std::unreachable();
@@ -562,6 +598,7 @@ bool VimPattern::whole_character(VimPatternAtomKind kind) noexcept
     {
     case VimPatternAtomKind::any:
     case VimPatternAtomKind::set:
+    case VimPatternAtomKind::composing:
         return true;
     case VimPatternAtomKind::literal:
     case VimPatternAtomKind::line_start:
@@ -598,7 +635,37 @@ bool VimPattern::in_set(const VimPatternAtom &atom, char32_t code) const
     return found != atom.negated;
 }
 
-bool VimPattern::consumes(const VimPatternAtom &atom, char32_t code) const
+// 結合文字だけの原子（#1506）。at の code point（基底でも、1 文字の途中の結合文字でもよい）は
+// 比べずに飛ばし、同じ Vim の 1 文字に続く結合文字を Vim の MAX_MCO（6）個まで集めて、原子の
+// 結合文字が全部その中にあれば当たる（順は問わない・本文の側に余る結合文字は問わない・大小は
+// 畳まない）。Vim 9.1 の nfa_regmatch の NFA_COMPOSING の `utf_iscomposing(sta->c)` の枝と同じ。
+// 読むのは at から始まる 1 文字の中だけで、行を写さない。
+bool VimPattern::carries_marks(std::string_view line, const VimPatternAtom &atom,
+                               std::size_t at) const
+{
+    constexpr std::size_t most_marks = 6;
+    std::array<char32_t, most_marks> marks{};
+    std::size_t count = 0;
+    std::size_t next = next_code_point(line, Offset{at}).value;
+    while (count < most_marks && !ends_a_character(line, next))
+    {
+        marks.at(count) = code_point_at(line, Offset{next});
+        ++count;
+        next = next_code_point(line, Offset{next}).value;
+    }
+    const std::span<const char32_t> held(marks.data(), count);
+    for (std::size_t index = 0; index < atom.range_count; ++index)
+    {
+        if (!contains(held, ranges_.at(atom.first_range + index).first))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool VimPattern::consumes(std::string_view line, const VimPatternAtom &atom, std::size_t at,
+                          char32_t code) const
 {
     switch (atom.kind)
     {
@@ -609,6 +676,8 @@ bool VimPattern::consumes(const VimPatternAtom &atom, char32_t code) const
                (ignore_case_ && !atom.exact && vim_folded(code) == vim_folded(atom.code));
     case VimPatternAtomKind::set:
         return in_set(atom, code);
+    case VimPatternAtomKind::composing:
+        return carries_marks(line, atom, at);
     // 幅の無い原子は 1 文字も食べない。
     case VimPatternAtomKind::line_start:
     case VimPatternAtomKind::line_end:
@@ -626,9 +695,9 @@ std::optional<std::size_t> VimPattern::stepped(std::string_view line, const VimP
     {
         return std::nullopt;
     }
-    const char32_t code = code_point_at(line, Offset{at});
-    return consumes(atom, code) ? std::optional<std::size_t>{eaten(line, atom.kind, at)}
-                                : std::nullopt;
+    return consumes(line, atom, at, code_point_at(line, Offset{at}))
+               ? std::optional<std::size_t>{eaten(line, atom.kind, at)}
+               : std::nullopt;
 }
 
 std::optional<std::size_t> VimPattern::matched_sequence(std::string_view line, std::size_t at) const

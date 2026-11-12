@@ -17,7 +17,8 @@ struct VimPatternAtom
     bool negated;
     // 直後の `*`（0 回以上の繰り返し）。幅の無い原子には付かない。
     bool repeated;
-    // set の区間の VimPattern の列の中での始まりと個数。ほかの種類では 0。
+    // set の区間の VimPattern の列の中での始まりと個数。composing は結合文字 1 つずつを
+    // 幅 1 の区間（first == last）として持つ（#1506）。ほかの種類では 0。
     std::size_t first_range;
     std::size_t range_count;
     // `[...]` の集合なら真（`ignorecase` で大小を畳む）。`\d \w \s` の集合は Vim と同じく

@@ -24,8 +24,9 @@ class VimPatternEvaluation final
              std::size_t index, std::size_t begin);
     // 食べ終えた候補を target へ進める。1 文字の途中なら途中の印のまま次の列に残す（#1146）。
     [[nodiscard]] std::optional<VimPatternMatch> arrived(std::size_t target, std::size_t begin);
+    // before は食べる code point の位置（結合文字だけの原子は同じ 1 文字の続きを読む・#1506）。
     [[nodiscard]] std::optional<VimPatternMatch> stepped(std::size_t index, std::size_t begin,
-                                                         char32_t code);
+                                                         std::size_t before, char32_t code);
     void advanced();
 
     const VimPattern &pattern_;
