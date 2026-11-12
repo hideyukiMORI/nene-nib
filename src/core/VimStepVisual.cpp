@@ -101,8 +101,8 @@ namespace detail
 }
 
 // `gv`（#1039）。前の選択を種類・両端・欲しい列ごと選び直す。前の選択が無いか、始めの端の行が
-// 本文の外なら空（Vim の nv_gv のビープ・最終行の `dd` の後で実測）。キャレットの端の行は最後の
-// 行へ寄せ、桁はどちらも行の内容の終わりまで（Vim の check_cursor）。
+// 本文の外なら空（Vim の nv_gv のビープ・最終行の `dd` の後で実測）。両端の寄せは
+// vim_last_visual_selection の 1 本（VISUAL から開いた `:` の入力行の描く選択と共用・#1572）。
 [[nodiscard]] std::optional<VimStep> reselected_visual(const VimState &state,
                                                        const VimEditorView &view)
 {
@@ -112,16 +112,14 @@ namespace detail
         return std::nullopt;
     }
     const VimLastVisual &previous = last.value();
-    const auto anchor = vim_mark_offset(view.text, previous.anchor);
-    if (!anchor.has_value())
+    const auto selection = vim_last_visual_selection(view.text, previous);
+    if (!selection.has_value())
     {
         return std::nullopt;
     }
-    const LineNumber line{std::min(previous.caret.line.value, view.text.line_count())};
-    const Offset caret = vim_line_and_column(view.text, line, previous.caret.byte);
     VimState next = visual_resting(state, previous.mode);
     next.wanted_column = previous.wanted;
-    return VimStep{std::move(next), VimSelect{Selection{anchor.value(), caret}}};
+    return VimStep{std::move(next), VimSelect{selection.value()}};
 }
 } // namespace detail
 
