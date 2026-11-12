@@ -124,6 +124,7 @@
 #include "VimMapMode.hpp"
 #include "VimMarks.hpp"
 #include "VimPattern.hpp"
+#include "VimRecordedKeys.hpp"
 #include "VimRegister.hpp"
 #include "VimRepeatFailure.hpp"
 #include "VimReplay.hpp"
@@ -831,9 +832,12 @@ class EditorController final
     [[nodiscard]] std::optional<core::VimRepeatFailure>
     ran_ex_result(std::string_view text,
                   const std::expected<core::ExResult, core::ExEvaluationFailure> &result);
-    // オペレータ待ちの入力行（`d:` `d/`）が開かれた後、意図の出口で入力行が閉じているか別の面に
-    // 置き換わっていれば保留のオペレータを捨てる 1 か所（#1549）。
-    void settle_line_operator();
+    // Vim の入力行（`:` `/` `?`）が開かれた後、意図の出口で入力行が閉じているか別の面に置き換わって
+    // いれば、保留のオペレータと始め直していない `Ctrl-o` の印を捨てる 1 か所（#1549・#1569）。
+    void settle_vim_line();
+    [[nodiscard]] bool vim_line_shown() const;
+    // controller が鍵の列の後で窓に頼む要求（閉じる・操作）が立っているか（#1569 の M2）。
+    [[nodiscard]] bool window_request_pending() const noexcept;
     [[nodiscard]] std::optional<core::ExLineRequest>
     landing_line(const core::ExResult &result) const;
     [[nodiscard]] bool ran_ex_request(const core::ExResult &result);
@@ -1135,6 +1139,9 @@ class EditorController final
     // レビュー M1）。再生（`.`・マクロ）・`map` の右辺・press_vim_keys（:normal!）の鍵は打って
     // いない。印は close_command_input が倒す。
     void note_command_key() noexcept;
+    // 今の鍵が打った鍵か（再生・`map` の右辺・:normal! でない・Vim の KeyTyped）。
+    [[nodiscard]] bool keys_typed() const noexcept;
+    void note_recorded_line();
     // 録画中の `:` の行で打った鍵を録画の書き手 vim_macro_typed へ積む（#1528・ADR 0046 の
     // 追補）。打った鍵（再生でも `map` の右辺でもない）で、開いている入力行が Ex の行のときだけ。
     void record_command_keys(std::span<const core::VimKey> keys);
@@ -1213,9 +1220,6 @@ class EditorController final
     // 再生の外で engine に流す鍵の出どころ（typed か mapped）。typed_unit が表に当たった単位の
     // 間だけ mapped にする。再生の中は replayed が勝つ（measured_vim_step）。
     core::VimKeySource unit_source_ = core::VimKeySource::typed;
-    // press_vim_keys が鍵を流している間（Vim の ex_normal_busy・ScopedValue で戻す）。その鍵は
-    // 打った鍵ではない（note_command_key・#1528 のレビュー M1）。
-    bool normal_busy_ = false;
     // 開いている入力行に打った鍵が 1 つでも届いたか（Vim の some_key_typed）。Ex の行を履歴に
     // 足すのはこれが立っているときだけ（remember(CommandLine)）。note_command_key だけが立て、
     // close_command_input だけが倒す。
@@ -1233,8 +1237,11 @@ class EditorController final
     // 中の最後の鍵の値を引き継いで、鍵の終わりの寄せ（追従）を頼まない。perform(VimReplay) が
     // 再生の始めに消す。
     bool vim_top_kept_ = false;
-    // オペレータ待ちの `:` `/` が入力行を開いた（settle_line_operator が読む・#1549）。
-    bool line_operator_ = false;
+    // engine が Vim の入力行（`:` `/` `?`）を開いた（settle_vim_line が読む・#1549・#1569）。
+    bool vim_line_open_ = false;
+    // 録画中に打った `:` の行を開く前の録画（note_recorded_line が置き、確定・Esc・空の行の
+    // Backspace が消し、settle_vim_line が行の捨てられたときに戻す・#1569 の L1）。
+    std::optional<core::VimRecordedKeys> recorded_line_;
     // reject を通った断りの数（ran_ex_result が命令の要求の断りを Vim の did_emsg として読む・
     // #1549・まとめ枝 #1563）。
     std::size_t refusals_ = 0;
