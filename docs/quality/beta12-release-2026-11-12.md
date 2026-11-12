@@ -54,4 +54,13 @@
 
 ## 公開の結果
 
-公開の後に埋める。
+2026-11-12 12:11（JST）に公開した。手順 1〜4 はすべて設計席が行った（tag と pre-release は `D:/NeNeNib/evidence/beta12-release/publish.ps1`・1 回で成功）。
+
+- URL: https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.12（pre-release・release id 442451408・published 2026-11-12T03:11:35Z）
+- tag `v0.1.0-beta.12`（annotated・tag object `81bcf0e4023ac867ac9b87e47322382b8e9d108a`）→ `9ed904633b8a1ef9652de186277ae0769448e20f`（main・梱包の commit と同じ・この記録の文書 PR #1537 の merge）。写しは `D:/NeNeNib/releases/v0.1.0-beta.12/remote-tag.txt`。
+- 梱包: `pwsh -NoProfile -File eng/package-release.ps1 -Beta 12 ...` が `D:/NeNeNib/worktrees/beta12` で成功。記録 `D:/NeNeNib/releases/v0.1.0-beta.12/package.json`（recordedAt 2026-11-12T02-59-45Z・build 482 s・clang-cl 19.1.5）。exe の SHA-256 `c00a0cc67a666b70d900a7bc1b441f21640be121f48d0db8e85f530ef4d74ee8`（3,318,784 bytes・fileVersion 0.1.0.0・署名なし）。
+- 起動・描画: `python D:/NeNeNib/evidence/beta12-release/release-smoke.py` が pass（release-smoke-01・隔離 profile・DPI 120・正常終了 0・本文不変・`launch.png` を設計席が目で確かめた）。
+- 速さ: 梱包の exe では測っていない。同じ中身の木（まとめ枝 23 の `b148dcd1`）の Release の 1 回（8 本 0 regression）を再利用した（QLT-012）。記録 `D:/NeNeNib/outputs/20261112/gate-integration23-b148dcd1.log`。`b148dcd1` と main `3eb7787e` は同じ tree（`git diff` が空）。公開元 `9ed90463` は `3eb7787e` の上の文書だけの commit。
+- 添付: `NeNeNib-0.1.0-beta.12-windows-x64.zip` 1,382,116 bytes・SHA-256 `01aa391016be917595da6e9396985b57836ad2cc25f6a5e7498a8c27f74df995`、`SHA256SUMS` 105 bytes（SHA-256 `e92343f9260f0b675306a6cf628a2bd6512a5b8bdbe633be12c98bb725c7bd04`）
+- 照合（`verify-publication.py`）: **1 回目は `downloaded/` が無くて止まった。** `gh release download --dir downloaded` で再取得し `remote-tag.txt` を先に置いてから回すと、bytes 一致・zip の中身一致・tag の commit 一致・展開した exe の起動 pass（release-smoke-01）→ `result: pass`（checkedAt 2026-11-12T03:12:46Z）。写しは `D:/NeNeNib/releases/v0.1.0-beta.12/publication-verification.json` と `github-release.json`。次回は手順 4 の前に download を置く。
+- hide の試用: 公開の時点では施主は不在。試用前と書いたもののうち、右上の角の伸縮・× □ ＿ の上端・× の押し心地・Snap した窓で画面の右上の角が × に当たること・Ctrl+Shift+R は、2026-11-12 夜にまとめ枝 27 の試用 exe で期待どおりと確かめた（[quality-day-2026-11-12.md](quality-day-2026-11-12.md) §11.2）。矩形の貼付の全角（#1482）と `'^` `` `^ ``（#1448）と非常時の下地（#1499）は未確認。
