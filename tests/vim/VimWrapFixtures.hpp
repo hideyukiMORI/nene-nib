@@ -2,7 +2,7 @@
 // oracle: C:\Program Files\Vim\vim91\vim.exe - VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3
 // 2024 23:53:58)
 
-// wrap-fixtures.json: sha256 c53673c36d97a778ee72e35588c70380e0aba0ab47f84737471e634f4bba5c36
+// wrap-fixtures.json: sha256 13ce6e0d0f53f1740b2e6551d47b618e351d535dfed7acd7d09549a483a1169a
 
 // measurement: sha256 4f48b1c81d44d1a648ecde42c8b3a679af91e39f8ff855c97ae71d40a22bb1fe
 
@@ -16,7 +16,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 376> vim_wrap_fixtures{{
+constexpr std::array<VimFixture, 380> vim_wrap_fixtures{{
     {"wrap-top-00",
      "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
      "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
@@ -4499,5 +4499,33 @@ constexpr std::array<VimFixture, 376> vim_wrap_fixtures{{
      "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
      "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
      3, 20, "", "", VimViewportFixture{12, 1, 3, 25, 1, 6, 0, 0, 20, 20, 19}},
+    {"g-home-end-wrap-blank-row-dg-end",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "dg<End>",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrs               "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     3, 20, "t     ", "v", VimViewportFixture{12, 1, 3, 25, 1, 6, 20, 0}},
+    {"g-home-end-wrap-blank-row-cg-end",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "cg<End>X<Esc>",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrsX               "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     3, 20, "t     ", "v", VimViewportFixture{12, 1, 3, 25, 1, 6, 20, 0}},
+    {"g-home-end-wrap-blank-tail-back-dg-end",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "dg<End>",
+     "short\nabcdefghijklmnopqrstabcdefg     xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     2, 28, "h       ", "v", VimViewportFixture{12, 1, 2, 35, 1, 6, 20, 0}},
+    {"g-home-end-wrap-last-row-trailing-back-yg-end",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "yg<End>",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     4, 26, "z  ", "v", VimViewportFixture{12, 1, 4, 28, 1, 6, 20, 0}},
 }};
 } // namespace nenenib::tests

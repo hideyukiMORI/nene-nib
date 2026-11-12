@@ -71,29 +71,22 @@ constexpr std::size_t longest_code_point_bytes = 4;
     }
 }
 
-// [start, stop) の最後の非空白の文字の先頭。空白しか無ければ start。stop から窓ごとに手前へ読み、
-// 空白（1 バイト）を越えた最後のバイトを含む文字に載る（行の全体は写さない）。g_ と g<End> が
-// 共用する（ADR 0147 の決定 8・9）。
-[[nodiscard]] Offset non_blank_before(const TextBuffer &text, Offset start, Offset stop)
+// whole の終わりで始まる空白の文字から、手前の文字へ 1 つずつ戻り、頭のバイトが空白でない文字の
+// 先頭で止まる（whole の中の位置）。手前がみな空白なら 0。空白は 1 バイトなので文字の頭のバイト
+// だけを見る（Vim の gchar_cursor は文字の基底・結合文字の付いた空白も空白・ADR 0053）。
+[[nodiscard]] std::size_t blank_characters_back(std::string_view whole) noexcept
 {
-    std::size_t window = caret_window_bytes;
-    while (stop.value > start.value)
+    std::size_t top = whole.size();
+    while (top > 0)
     {
-        const Offset begin{stop.value - std::min(window, stop.value - start.value)};
-        const std::string content = text.text_range(begin, stop);
-        std::size_t index = content.size();
-        while (index > 0 && blank_byte(content[index - 1]))
+        const std::size_t previous = vim_character_start(whole, Offset{top}).value;
+        if (!blank_byte(whole[previous]))
         {
-            --index;
+            return previous;
         }
-        if (index > 0)
-        {
-            return vim_resting_caret(text, Offset{begin.value + index - 1});
-        }
-        stop = begin;
-        window *= 2;
+        top = previous;
     }
-    return start;
+    return 0;
 }
 } // namespace
 
@@ -197,19 +190,51 @@ Offset vim_non_blank_from(const TextBuffer &text, Offset at)
 
 Offset vim_last_non_blank(const TextBuffer &text, LineNumber line)
 {
-    return non_blank_before(text, text.line_start(line), text.line_end(line));
+    const Offset start = text.line_start(line);
+    // 行の終わりから窓ごとに手前へ読み、空白（1 バイト）を越えた最後のバイトを含む文字に載る。
+    Offset stop = text.line_end(line);
+    std::size_t window = caret_window_bytes;
+    while (stop.value > start.value)
+    {
+        const Offset begin{stop.value - std::min(window, stop.value - start.value)};
+        const std::string content = text.text_range(begin, stop);
+        std::size_t index = content.size();
+        while (index > 0 && blank_byte(content[index - 1]))
+        {
+            --index;
+        }
+        if (index > 0)
+        {
+            return vim_resting_caret(text, Offset{begin.value + index - 1});
+        }
+        stop = begin;
+        window *= 2;
+    }
+    return start;
 }
 
 Offset vim_non_blank_back_from(const TextBuffer &text, Offset at)
 {
     const LineNumber line = text.position_of(at).line;
-    const Offset end = text.line_end(line);
-    // 空白は 1 バイトなので、at の 1 バイトだけを読んで決める。
-    if (at.value >= end.value || !blank_byte(text.text_range(at, Offset{at.value + 1}).front()))
+    const Offset start = text.line_start(line);
+    if (!(at < text.line_end(line)) ||
+        !blank_byte(text.text_range(at, Offset{at.value + 1}).front()))
     {
         return at;
     }
-    return non_blank_before(text, text.line_start(line), Offset{at.value + 1});
+    // Vim の oneleft と同じく 1 文字ずつ戻る。読むのは at の手前の窓だけで、窓の頭の文字は窓の
+    // 外から始まるかもしれないので、行頭に届くか窓の中で止まるまで窓を倍に広げて読み直す。
+    for (std::size_t window = caret_window_bytes;; window *= 2)
+    {
+        const Offset from{at.value - std::min(window, at.value - start.value)};
+        const std::string content = text.text_range(from, at);
+        const std::size_t skipped = from == start ? 0 : leading_continuations(content);
+        const std::size_t found = blank_characters_back(std::string_view{content}.substr(skipped));
+        if (from == start || found > 0)
+        {
+            return Offset{from.value + skipped + found};
+        }
+    }
 }
 
 Offset vim_line_and_column(const TextBuffer &text, LineNumber line, std::size_t column)

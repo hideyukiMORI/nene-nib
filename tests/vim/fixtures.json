@@ -4755,5 +4755,22 @@
   {"name":"g-home-end-g-end-a-esc","text":"ab cd  \nxyz","keys":"g<End>a!<Esc>"},
   {"name":"g-home-end-ctrl-v-g-end-d","text":"ab cd  \nabcdefgh\nxy","keys":"<C-v>jg<End>d"},
   {"name":"g-home-end-d2gdollar","text":"ab  \ncd  \nef","keys":"d2g$"},
-  {"name":"g-home-end-ctrl-v-gdollar-d","text":"ab cd  \nabcdefgh\nxy","keys":"<C-v>jg$d"}
+  {"name":"g-home-end-ctrl-v-gdollar-d","text":"ab cd  \nabcdefgh\nxy","keys":"<C-v>jg$d"},
+  {"name":"g-home-end-back-dg-end","text":"ab cd  \nxyz","keys":"5ldg<End>"},
+  {"name":"g-home-end-back-yg-end","text":"ab cd  \nxyz","keys":"6lyg<End>"},
+  {"name":"g-home-end-back-cg-end","text":"ab cd  \nxyz","keys":"6lcg<End>X<Esc>"},
+  {"name":"g-home-end-back-dg-end-dot","text":"ab cd  \nxy z  \nq","keys":"6ldg<End>j$."},
+  {"name":"g-home-end-back-blank-dg-end","text":"     \nabc","keys":"3ldg<End>"},
+  {"name":"g-home-end-back-blank-cg-end","text":"   \nabc","keys":"lcg<End>X<Esc>"},
+  {"name":"g-home-end-combining-blank-g-end","text":"ab ́  \nxyz","keys":"g<End>"},
+  {"name":"g-home-end-combining-blank-dg-end","text":"ab ́  \nxyz","keys":"$dg<End>"},
+  {"name":"g-home-end-combining-blank-g-underscore","text":"ab ́  \nxyz","keys":"g_"},
+  {"name":"g-home-end-combining-blank-last-g-end","text":"ab ́\nxyz","keys":"$g<End>"},
+  {"name":"g-home-end-combining-letter-g-end","text":"ab é  \nxyz","keys":"g<End>"},
+  {"name":"g-home-end-combining-blank-g-end-j","text":"ab ́  \nabcdefgh","keys":"g<End>j"},
+  {"name":"g-home-end-in-place-dg-end","text":"ab cd  \nxyz","keys":"4ldg<End>"},
+  {"name":"g-home-end-back-dg-underscore","text":"ab cd  \nxyz","keys":"6ldg_"},
+  {"name":"g-home-end-empty-dg-end","text":"\nabc","keys":"dg<End>"},
+  {"name":"g-home-end-wide-back-dg-end","text":"日本語  \nxyz","keys":"$dg<End>"},
+  {"name":"g-home-end-wide-back-yg-end","text":"日本語  \nxyz","keys":"$yg<End>"}
 ]

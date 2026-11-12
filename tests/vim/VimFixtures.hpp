@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 23ff94d00d9dc878967634a3cbcdb46f3a76381fdd8a0765279c4b5993481245 / 4757 fixtures
+// fixtures.json: sha256 dc78a436eef69e3472b2ae59a422b70570f3047297c522f4c978a53b17cdf87a / 4774 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4757> vim_fixtures{{
+constexpr std::array<VimFixture, 4774> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4769,6 +4769,23 @@ constexpr std::array<VimFixture, 4757> vim_fixtures{{
     {"g-home-end-ctrl-v-g-end-d", "ab cd  \nabcdefgh\nxy", "<C-v>jg<End>d", "\n\nxy", 1, 1, "ab cd  \nabcdefgh", "\0269", std::nullopt},
     {"g-home-end-d2gdollar", "ab  \ncd  \nef", "d2g$", "ef", 1, 1, "ab  \ncd  \n", "V", std::nullopt},
     {"g-home-end-ctrl-v-gdollar-d", "ab cd  \nabcdefgh\nxy", "<C-v>jg$d", "\n\nxy", 1, 1, "ab cd  \nabcdefgh", "\0269", std::nullopt},
+    {"g-home-end-back-dg-end", "ab cd  \nxyz", "5ldg<End>", "ab c \nxyz", 1, 5, "d ", "v", std::nullopt},
+    {"g-home-end-back-yg-end", "ab cd  \nxyz", "6lyg<End>", "ab cd  \nxyz", 1, 5, "d  ", "v", std::nullopt},
+    {"g-home-end-back-cg-end", "ab cd  \nxyz", "6lcg<End>X<Esc>", "ab cX\nxyz", 1, 5, "d  ", "v", std::nullopt},
+    {"g-home-end-back-dg-end-dot", "ab cd  \nxy z  \nq", "6ldg<End>j$.", "ab c\nxy \nq", 2, 3, "z  ", "v", std::nullopt},
+    {"g-home-end-back-blank-dg-end", "     \nabc", "3ldg<End>", " \nabc", 1, 1, "    ", "v", std::nullopt},
+    {"g-home-end-back-blank-cg-end", "   \nabc", "lcg<End>X<Esc>", "X \nabc", 1, 1, "  ", "v", std::nullopt},
+    {"g-home-end-combining-blank-g-end", "ab ́  \nxyz", "g<End>", "ab ́  \nxyz", 1, 2, "", "", std::nullopt},
+    {"g-home-end-combining-blank-dg-end", "ab ́  \nxyz", "$dg<End>", "a\nxyz", 1, 1, "b ́  ", "v", std::nullopt},
+    {"g-home-end-combining-blank-g-underscore", "ab ́  \nxyz", "g_", "ab ́  \nxyz", 1, 3, "", "", std::nullopt},
+    {"g-home-end-combining-blank-last-g-end", "ab ́\nxyz", "$g<End>", "ab ́\nxyz", 1, 2, "", "", std::nullopt},
+    {"g-home-end-combining-letter-g-end", "ab é  \nxyz", "g<End>", "ab é  \nxyz", 1, 4, "", "", std::nullopt},
+    {"g-home-end-combining-blank-g-end-j", "ab ́  \nabcdefgh", "g<End>j", "ab ́  \nabcdefgh", 2, 2, "", "", std::nullopt},
+    {"g-home-end-in-place-dg-end", "ab cd  \nxyz", "4ldg<End>", "ab c  \nxyz", 1, 5, "d", "v", std::nullopt},
+    {"g-home-end-back-dg-underscore", "ab cd  \nxyz", "6ldg_", "ab c\nxyz", 1, 4, "d  ", "v", std::nullopt},
+    {"g-home-end-empty-dg-end", "\nabc", "dg<End>", "\nabc", 1, 1, "", "", std::nullopt},
+    {"g-home-end-wide-back-dg-end", "日本語  \nxyz", "$dg<End>", "日本\nxyz", 1, 4, "語  ", "v", std::nullopt},
+    {"g-home-end-wide-back-yg-end", "日本語  \nxyz", "$yg<End>", "日本語  \nxyz", 1, 7, "語  ", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

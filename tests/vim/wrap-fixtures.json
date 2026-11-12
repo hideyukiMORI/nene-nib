@@ -4598,5 +4598,53 @@
       "column": 25,
       "leftcol": 20
     }
+  },
+  {
+    "name": "g-home-end-wrap-blank-row-dg-end",
+    "text": "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+    "keys": "dg<End>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 3,
+      "column": 25
+    }
+  },
+  {
+    "name": "g-home-end-wrap-blank-row-cg-end",
+    "text": "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+    "keys": "cg<End>X<Esc>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 3,
+      "column": 25
+    }
+  },
+  {
+    "name": "g-home-end-wrap-blank-tail-back-dg-end",
+    "text": "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+    "keys": "dg<End>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 2,
+      "column": 35
+    }
+  },
+  {
+    "name": "g-home-end-wrap-last-row-trailing-back-yg-end",
+    "text": "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+    "keys": "yg<End>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 4,
+      "column": 28
+    }
   }
 ]
