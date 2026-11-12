@@ -976,14 +976,9 @@ void verify_typed_follow_without_frames()
            "#1363 a far move still pending before the insert keeps the one jump to the middle");
 }
 
-// `scrolloff` を変えた後の鍵を frame を挟まずに送る（#1432）。本文と窓は fixture
-// viewport-set-so- の 30 行と同じ（6 行の窓・so=0・先頭 10）。Ex の入力行から余白を確定し、鍵を
-// 意図で送って最後に 1 回だけ frame を読む。
-[[nodiscard]] std::pair<std::size_t, std::size_t>
-margin_changed_then(std::size_t line, std::string_view margin, std::string_view keys)
+// 本文と窓は fixture viewport-set-so- の 30 行と同じ（6 行の窓・so=0・先頭 10・行 line）。
+void placed_thirty(EditorController &controller, std::size_t line)
 {
-    Editing editing;
-    EditorController &controller = editing.controller();
     applied(controller, VisibleLines{6});
     std::string text;
     for (std::size_t number = 1; number <= 30; ++number)
@@ -995,6 +990,16 @@ margin_changed_then(std::size_t line, std::string_view margin, std::string_view 
     applied(controller, SelectEditMode{EditMode::vim});
     static_cast<void>(run_ex(controller, "set so=0"));
     vim_replay(controller, "10Gzt" + std::to_string(line) + "G");
+}
+
+// `scrolloff` を変えた後の鍵を frame を挟まずに送る（#1432）。Ex の入力行から余白を確定し、鍵を
+// 意図で送って最後に 1 回だけ frame を読む。
+[[nodiscard]] std::pair<std::size_t, std::size_t>
+margin_changed_then(std::size_t line, std::string_view margin, std::string_view keys)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    placed_thirty(controller, line);
     static_cast<void>(controller.apply(VimKeyPress{VimCharacter{U':'}}));
     static_cast<void>(controller.apply(CommandText{"set so=" + std::string(margin)}));
     static_cast<void>(controller.apply(SubmitCommand{}));
@@ -1018,6 +1023,33 @@ void verify_margin_change_without_frames()
            "#1432 the caret on the bottom line is followed with the new margin before k");
     expect(margin_changed_then(10, "0", "j") == Seen{10, 11},
            "#1432 setting the same margin does not move the window");
+}
+
+// `@a` の中の `:set so=N<CR>` と次の鍵（#1432）。再生は 1 回の apply で鍵を流し、途中で追従を
+// 解かない。値は Vim 9.1 の oracle（`let @a = ":set so=2\<CR>j"` の形・register 欄の fixture の
+// 測り方）で測った先頭と行。fixture にしないのは、register 欄の録画（store_vim_fixture_macro）が
+// 入力行の鍵を録らず、再生の側で余白が変わらないため（試した木で so=0 のまま）。
+[[nodiscard]] std::pair<std::size_t, std::size_t> macro_margin_then(std::size_t line,
+                                                                    std::string_view stored)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    placed_thirty(controller, line);
+    using nenenib::core::VimRegister;
+    using nenenib::core::VimRegisterKind;
+    applied(controller, nenenib::application::StoreVimRegister{
+                            'a', VimRegister{std::string(stored), VimRegisterKind::characters}});
+    vim_replay(controller, "@a");
+    return top_and_line(controller.frame());
+}
+
+void verify_margin_change_in_a_macro()
+{
+    using Seen = std::pair<std::size_t, std::size_t>;
+    expect(macro_margin_then(10, ":set so=2\rj") == Seen{8, 11},
+           "#1432 :set so=2 inside @a re-decides the window before the next replayed key");
+    expect(macro_margin_then(15, ":set so=2\rk") == Seen{12, 14},
+           "#1432 the bottom line inside @a is followed with the new margin before k");
 }
 } // namespace
 
@@ -1045,5 +1077,6 @@ void verify_vim_view_scope()
     verify_scroll_line_in_a_macro();
     verify_typed_follow_without_frames();
     verify_margin_change_without_frames();
+    verify_margin_change_in_a_macro();
 }
 } // namespace nenenib::tests
