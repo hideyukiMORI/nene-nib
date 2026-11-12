@@ -1170,18 +1170,23 @@ void verify_window_option_in_a_macro()
 // 折り返す窓の `:set wrap` と次の鍵を frame を挟まずに送る（#1524）。本文と窓は fixture
 // wrap-set-redraw-wrap-then-k / -j と同じ（47 字の 30 行・20 桁・6 行の窓・折り返さない窓の先頭
 // 10・so=0）。値は eng/vim-wrap-oracle.py が測った先頭と行。
-[[nodiscard]] std::pair<std::size_t, std::size_t> wrap_option_then(std::size_t line,
-                                                                   std::string_view keys)
+[[nodiscard]] std::string thirty_long_lines()
 {
-    Editing editing;
-    EditorController &controller = editing.controller();
     std::string text;
     for (std::size_t number = 1; number <= 30; ++number)
     {
         text += std::string(number < 10 ? "0" : "") + std::to_string(number) +
                 std::string(45, 'x') + (number < 30 ? "\n" : "");
     }
-    static_cast<void>(controller.apply(InsertText{text}));
+    return text;
+}
+
+[[nodiscard]] std::pair<std::size_t, std::size_t> wrap_option_then(std::size_t line,
+                                                                   std::string_view keys)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    static_cast<void>(controller.apply(InsertText{thirty_long_lines()}));
     applied(controller, SelectEditMode{EditMode::vim});
     static_cast<void>(run_ex(controller, "set so=0"));
     static_cast<void>(run_ex(controller, "set nowrap"));
@@ -1202,6 +1207,46 @@ void verify_window_option_in_a_macro()
     return top_and_line(controller.frame());
 }
 
+// 対の形: 折り返す窓（20 桁・8 行・so=4・短い 60 行・先頭 53・行 57）で `3<C-e>` が先頭を 56
+// にした後の `:set nowrap` と次の鍵を frame を挟まずに送る（レビュー V-1553 の L3）。Vim は
+// `<C-e>` の後の窓を確かめ直さないが、`changed_window_setting` の後の update_topline が今の
+// キャレットと余白で先頭を 55 に決め直す（`:set so=4<CR>3<C-e>:set nowrap<CR>j` を
+// eng/vim-wrap-oracle.py で測った値・`:set` の無い `3<C-e>j` は 56 / 60・
+// D:/NeNeNib/scripts/20261112/1524b/probe_nowrap2.py）。余白は鍵の前から 4 のままで変わらない。
+[[nodiscard]] std::pair<std::size_t, std::size_t> nowrap_option_then(std::string_view keys)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    std::string text;
+    for (std::size_t number = 1; number <= 60; ++number)
+    {
+        text += std::string(number < 10 ? "0" : "") + std::to_string(number) +
+                (number < 60 ? "\n" : "");
+    }
+    static_cast<void>(controller.apply(InsertText{text}));
+    applied(controller, SelectEditMode{EditMode::vim});
+    static_cast<void>(run_ex(controller, "set so=4"));
+    static_cast<void>(run_ex(controller, "set wrap"));
+    applied(controller, VisibleLines{8, nenenib::core::TextViewGeometry{200, 20, 96, 10.0F}});
+    static_cast<void>(controller.apply(
+        PlaceCaret{TextPosition{LineNumber{57}, Column{1}}, SelectionAnchoring::collapse}));
+    const auto current = static_cast<std::int64_t>(controller.frame().first_visible.value);
+    static_cast<void>(controller.apply(ScrollLines{static_cast<std::int32_t>(53 - current)}));
+    expect(top_and_line(controller.frame()) == std::pair<std::size_t, std::size_t>{53, 57},
+           "#1524 the wrapped window is arranged at top 53 and line 57");
+    for (const VimKey &key : vim_keys_of("3<C-e>:"))
+    {
+        static_cast<void>(controller.apply(VimKeyPress{key}));
+    }
+    static_cast<void>(controller.apply(CommandText{"set nowrap"}));
+    static_cast<void>(controller.apply(SubmitCommand{}));
+    for (const VimKey &key : vim_keys_of(keys))
+    {
+        static_cast<void>(controller.apply(VimKeyPress{key}));
+    }
+    return top_and_line(controller.frame());
+}
+
 void verify_wrap_option_without_frames()
 {
     using Seen = std::pair<std::size_t, std::size_t>;
@@ -1209,6 +1254,10 @@ void verify_wrap_option_without_frames()
            "#1524 :set wrap re-decides the wrapped window at the caret before k");
     expect(wrap_option_then(12, "j") == Seen{12, 13},
            "#1524 :set wrap re-decides the wrapped window at the caret before j");
+    expect(nowrap_option_then("j") == Seen{55, 60},
+           "#1524 :set nowrap re-decides the unwrapped window at the caret before j");
+    expect(nowrap_option_then("k") == Seen{54, 58},
+           "#1524 :set nowrap re-decides the unwrapped window at the caret before k");
 }
 } // namespace
 
