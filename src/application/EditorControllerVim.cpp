@@ -458,11 +458,13 @@ EditorFrame EditorController::press_vim_key(const core::VimKey &key)
 // deliver_vim_key の返り値で決める）。Vim は 1 鍵ごとに update_topline するので、各鍵の後に
 // 追従を解決する（ADR 0129 の追補・#1154）。解決を最後に 1 回へまとめると、画面の外へ出て戻る
 // 列（`G30G` `''''`）の先頭行が途中の画面を経ない値になる。窓の 1 打鍵の道はここを通らない。
+// :normal! の鍵は打った鍵ではないので、`:` の行を履歴に足さない（normal_busy_・#1528）。
 EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
 {
     // :normal! の鍵は打った鍵ではない（Vim の KeyTyped が偽・`<C-o>c` の後に INSERT を始め直す側・
     // ADR 0182 の決定 4）。出どころの値は map の右辺と同じ mapped を借りる（新しい値は足さない）。
     const ScopedValue<core::VimKeySource> source{unit_source_, core::VimKeySource::mapped};
+    const ScopedValue<bool> busy{normal_busy_, true};
     const auto failed = [this](const core::VimKey &key)
     {
         settle_tab_walk_before(false);
@@ -775,8 +777,8 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(const core::
     return std::nullopt;
 }
 
-// 入力行での特殊鍵の写し（ADR 0048 の決定 8）。窓と同じ EditCommand の写しで、上下（履歴）と
-// 入力行に意味の無い鍵は捨てる。再生の中の <Esc> は Vim の c_<Esc> と同じに確定する。
+// 入力行での特殊鍵の写し（ADR 0048 の決定 8）。窓と同じ EditCommand の写しで、入力行に意味の
+// 無い鍵は捨てる。再生の中の <Esc> は Vim の c_<Esc> と同じに確定する。
 std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpecialKey key)
 {
     switch (key)
@@ -809,8 +811,11 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpe
     case core::VimSpecialKey::end:
         accept(EditCommand{core::CommandEdit::end});
         return std::nullopt;
+    // 上下は窓と同じ履歴の前・次（Vim の再生の `<Up>` も履歴を引く・#1528 の実測）。
     case core::VimSpecialKey::arrow_up:
+        return recalled_key(core::CommandEdit::history_previous);
     case core::VimSpecialKey::arrow_down:
+        return recalled_key(core::CommandEdit::history_next);
     case core::VimSpecialKey::control_r:
     case core::VimSpecialKey::page_up:
     case core::VimSpecialKey::page_down:

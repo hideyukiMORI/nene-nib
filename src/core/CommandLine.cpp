@@ -218,6 +218,11 @@ CommandLine CommandLine::edited(CommandEdit edit) const
     return line;
 }
 
+bool CommandLine::recalls(const InputHistory &history, CommandEdit direction) const
+{
+    return history.stepped(InputText{text_, caret_}, history_walk_, direction).has_value();
+}
+
 CommandLine CommandLine::recalled(const InputHistory &history, CommandEdit direction) const
 {
     const auto walk = history.stepped(InputText{text_, caret_}, history_walk_, direction);

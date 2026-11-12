@@ -974,15 +974,15 @@ namespace detail
 // 録画中は vim_step に届いた打った鍵をそのまま積む。積まないのは、録画を始める鍵と止める `q`
 // （どちらも step の前後で録画が立っていない）、再生の中の鍵と `map` の右辺の鍵（打った鍵では
 // ない・右辺の代わりに controller が打った左辺を vim_macro_typed で積む・#1312）、入力行を
-// 開くだけの `/` `?` `:`（確定した検索は VimSearchPattern の 1 鍵として積まれる・Ex は後続）。
-// 録画は実行の経路を変えない。
+// 開くだけの `/` `?`（確定した検索は VimSearchPattern の 1 鍵として積まれる）。`:` は積み、
+// 入力行の中で打った鍵と確定の `<CR>` は controller が同じ vim_macro_typed で積む（#1528・
+// ADR 0046 の追補）。録画は実行の経路を変えない。
 [[nodiscard]] VimStep macro_recorded(const VimState &before, const VimEditorView &view,
                                      VimStep step, VimKey key)
 {
     if (!vim_key_recorded_in_macro(view.source) || !before.macro_recording.has_value() ||
         !step.next.macro_recording.has_value() ||
-        std::holds_alternative<VimOpenSearch>(step.effect) ||
-        std::holds_alternative<VimOpenCommandLine>(step.effect))
+        std::holds_alternative<VimOpenSearch>(step.effect))
     {
         return step;
     }

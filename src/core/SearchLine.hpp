@@ -43,6 +43,8 @@ class SearchLine final
     [[nodiscard]] SearchLine edited(CommandEdit edit) const;
     // 履歴の上下（#725・CommandLine::recalled と同じ規則・履歴は検索の 1 本）。
     [[nodiscard]] SearchLine recalled(const InputHistory &history, CommandEdit direction) const;
+    // recalled が履歴を 1 歩動くか（CommandLine::recalls と同じ・#1528）。
+    [[nodiscard]] bool recalls(const InputHistory &history, CommandEdit direction) const;
 
   private:
     SearchLine(InputText input, InputLinePrompt prompt);
