@@ -727,6 +727,16 @@ const core::TextBuffer &EditorController::text() const noexcept
     return state_.text();
 }
 
+const core::EditHistory &EditorController::history() const noexcept
+{
+    return state_.history();
+}
+
+const core::VimMarks &EditorController::vim_marks() const noexcept
+{
+    return state_.vim_marks();
+}
+
 core::TitleBarInput EditorController::title_bar_input(std::int32_t width, std::uint32_t dpi) const
 {
     return core::TitleBarInput{
@@ -1009,7 +1019,7 @@ EditorController::grid_visible_rows(const PaneSource &source,
 DocumentView EditorController::active_document_view() const
 {
     const auto &document = state_.document();
-    const auto save_state = save_state_of(document, state_.history().position());
+    const auto save_state = save_state_of(document, state_.history().content_position());
     return DocumentView{core::tab_title_for(document.path, save_state), document.path,
                         document.encoding, save_state, state_.last_failure()};
 }

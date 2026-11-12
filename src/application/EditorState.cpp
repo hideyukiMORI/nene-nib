@@ -879,7 +879,7 @@ EditorState EditorState::with_hovered(std::optional<core::TitleBarTarget> hovere
 std::shared_ptr<const DocumentState> EditorState::parked_active() const
 {
     auto history = history_.sealed();
-    const auto save_state = save_state_of(document_, history.position());
+    const auto save_state = save_state_of(document_, history.content_position());
     DocumentView view{core::tab_title_for(document_.path, save_state), document_.path,
                       document_.encoding, save_state, std::nullopt};
     return std::make_shared<const DocumentState>(
@@ -1033,11 +1033,11 @@ bool EditorState::transient_saved() const
     }
     if (position.value() == active_)
     {
-        return save_state_of(document_, history_.position()) == core::SaveState::saved;
+        return save_state_of(document_, history_.content_position()) == core::SaveState::saved;
     }
     const auto bundle = loaded_at(position.value());
     return bundle.has_value() &&
-           save_state_of(bundle.value()->document, bundle.value()->history.position()) ==
+           save_state_of(bundle.value()->document, bundle.value()->history.content_position()) ==
                core::SaveState::saved;
 }
 

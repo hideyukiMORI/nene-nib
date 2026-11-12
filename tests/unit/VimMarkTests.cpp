@@ -548,8 +548,9 @@ void verify_vim_mark_scope()
             ++selected;
         }
     }
-    expect(selected == 230,
-           "the scope replays the 230 oracle fixtures of %, the marks and the jump lists");
+    // change-mark- は `'.` の 21 件と、Vim の変更の印の 91 件（#1440・ADR 0181）。
+    expect(selected == 321,
+           "the scope replays the 321 oracle fixtures of %, the marks and the jump lists");
     verify_vim_mark_contracts();
 }
 } // namespace nenenib::tests

@@ -146,15 +146,19 @@ namespace detail
     const TextBuffer &text = view.text;
     const Offset caret = view.selection.caret;
     const LineNumber line = line_of(text, caret);
+    // Vim の op_addsub は数を探す前に u_save_cursor を呼ぶ（ADR 0181 の決定 7）。空の行と数の無い
+    // 行は単位だけを作る（数の無い行は失敗も返す）。
     if (text.line_start(line) == text.line_end(line))
     {
-        return VimStep{vim_resting_from(state, state.unnamed_register), VimNoEffect{}};
+        return change_noted(VimStep{vim_resting_from(state, state.unnamed_register), VimNoEffect{}},
+                            VimChange::saved_only);
     }
     const NumberAt found = number_around(text, caret, true, [](const VimNumberWindow &window)
                                          { return vim_find_number(window); });
     if (!found)
     {
-        return failed(cancelled(state), VimRepeatFailure::not_found);
+        return change_noted(failed(cancelled(state), VimRepeatFailure::not_found),
+                            VimChange::saved_only);
     }
     const auto &[base, span] = found.value();
     const OffsetRange range = span_range(base, span);
@@ -191,9 +195,13 @@ namespace detail
         amount += in_sequence(action) ? step : 0;
     }
     const Offset landing = selection_start(state, view);
-    return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
-                               VimReplaceBlock{std::move(edits), landing}},
-                       landing);
+    // VISUAL の op_addsub は行を探す前に u_save を呼ぶ。数が 1 つも無ければ単位だけ（ADR 0181）。
+    const std::optional<VimChange> change =
+        edits.empty() ? std::optional{VimChange::saved_only} : std::nullopt;
+    return change_noted(restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
+                                            VimReplaceBlock{std::move(edits), landing}},
+                                    landing),
+                        change);
 }
 } // namespace detail
 } // namespace nenenib::core

@@ -1,5 +1,6 @@
 #include "VimStepDetail.hpp"
 
+#include "DocumentCaret.hpp"
 #include "Utf8.hpp"
 #include "VimAction.hpp"
 #include "VimCaret.hpp"
@@ -419,6 +420,36 @@ namespace detail
     step.restore = restore;
     return step;
 }
+
+[[nodiscard]] VimStep change_noted(VimStep step, std::optional<VimChange> change)
+{
+    step.change = change;
+    return step;
+}
+
+// Vim の op_delete は ML_EMPTY（Nib の 0 バイトの文書）なら何もせず、空の範囲（exclusive な移動の
+// oap->empty）なら u_save_cursor だけして返り、inclusive な範囲が空の行に掛かった `d` は u_save の
+// 前に返る（ops.c）。op_change は ML_EMPTY でも u_save_cursor を呼び、行単位なら空の行の中身を
+// 消して changed_* を呼ぶ（空の行の `cc`）。文字単位の空の範囲の `c` は u_save
+// だけ（空の行の `C`）。VISUAL の範囲は空の行でも改行を覆うので空にならない
+// （`vd` は U ＋ C・実測）。
+[[nodiscard]] VimStep empty_removal_noted(VimStep step, const TextBuffer &text,
+                                          const VimMotionRange &range, VimOperator operation)
+{
+    if (!is_empty(range.range) || step.failure.has_value())
+    {
+        return step;
+    }
+    const bool change = operation == VimOperator::change;
+    if (text.size_bytes() == 0 || range.kind != VimRegisterKind::lines)
+    {
+        const bool inclusive = range.empty_change == VimEmptyChange::writes_empty;
+        const bool saves = change || (text.size_bytes() > 0 && !inclusive);
+        return change_noted(std::move(step),
+                            saves ? std::optional{VimChange::saved_only} : std::nullopt);
+    }
+    return change_noted(std::move(step), change ? VimChange::changed : VimChange::saved_only);
+}
 } // namespace detail
 
 namespace
@@ -500,7 +531,9 @@ namespace
 [[nodiscard]] VimStep removed(const VimState &state, const TextBuffer &text,
                               const VimMotionRange &range)
 {
-    return removed_exactly(state, text, whole_lines_for_delete(text, range));
+    const VimMotionRange whole = whole_lines_for_delete(text, range);
+    return detail::empty_removal_noted(removed_exactly(state, text, whole), text, whole,
+                                       VimOperator::remove);
 }
 } // namespace
 
@@ -711,21 +744,34 @@ namespace detail
 // 改行へ直して 1 Edit にする。u の戻り先は範囲の戻り先（行単位はキャレットと着地の小さい方・
 // ないときは範囲の先頭・Vim の oap->start）で、キャレットはそれを置き換えた後の本文の行と桁へ
 // 写した位置（cased_caret・#1170）。書き換える本文が空でも変更と
-// して返す（`.` の記録に残り、キャレットは範囲の先頭へ・空の置き換えは controller が履歴に積まない
-// ・#1064）。
+// して返す（`.` の記録に残り、キャレットは範囲の先頭へ・#1064）。どの文字も大小が変わらなければ
+// （英字の無い範囲・既にその大小・空の行）、Vim の op_tilde は u_save だけして changed_* を呼ばない
+// ので、本文を置き換えない空の置き換え（着地の位置に置く。`.` の記録は効果の種類で決まるので
+// 種類は保つ）を返し、印は saved_only（ADR 0181 の決定 2）。
 [[nodiscard]] VimStep case_changed(const VimState &state, const TextBuffer &text,
                                    const VimMotionRange &range, VimOperator operation)
 {
     const OffsetRange span = case_span(text, range);
     const Offset caret = range.restore.value_or(range.range.begin);
-    std::string body = cased_text(
-        without_newline_carriage_returns(text.text_range(span.begin, span.end), text.line_ending()),
-        operation);
+    const std::string before =
+        without_newline_carriage_returns(text.text_range(span.begin, span.end), text.line_ending());
+    std::string body = cased_text(before, operation);
     const Offset landing = cased_caret(text, span, body, caret);
-    return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
-                               VimReplaceRange{span, std::move(body), landing,
-                                               EditBoundary::separate, VimLineMarks::kept}},
-                       caret);
+    VimState next = vim_resting_from(state, state.unnamed_register);
+    if (body == before)
+    {
+        const Offset at = document_caret_after(span.begin, body, landing, text.line_ending());
+        return change_noted(
+            restored_at(VimStep{std::move(next),
+                                VimReplaceRange{OffsetRange{at, at}, std::string{}, at,
+                                                EditBoundary::separate, VimLineMarks::kept}},
+                        caret),
+            VimChange::saved_only);
+    }
+    return restored_at(
+        VimStep{std::move(next), VimReplaceRange{span, std::move(body), landing,
+                                                 EditBoundary::separate, VimLineMarks::kept}},
+        caret);
 }
 } // namespace detail
 
@@ -847,10 +893,14 @@ namespace detail
     }
     const OffsetRange span{text.line_start(first), text.line_end(last)};
     const Offset caret{span.begin.value + first_line_first_non_blank(body)};
-    return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
-                               VimReplaceRange{span, std::move(body), caret, EditBoundary::separate,
-                                               VimLineMarks::kept}},
-                       range.restore.value_or(range.range.begin));
+    // Vim の op_shift は空の行と字下げの無い行の `<` でも changed_lines を呼ぶ（ADR 0181）。範囲が
+    // 空（空の行だけ）でも changed で、controller が空の単位を積む。
+    return change_noted(
+        restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
+                            VimReplaceRange{span, std::move(body), caret, EditBoundary::separate,
+                                            VimLineMarks::kept}},
+                    range.restore.value_or(range.range.begin)),
+        VimChange::changed);
 }
 } // namespace detail
 
@@ -1008,9 +1058,11 @@ namespace detail
         }
     }
     const Offset caret = block.lines.front().range.begin;
-    return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
-                               VimReplaceBlock{std::move(edits), caret}},
-                       caret);
+    // 動いた行が無くても Vim の op_shift は changed_lines を呼ぶ（ADR 0181）。
+    return change_noted(restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
+                                            VimReplaceBlock{std::move(edits), caret}},
+                                    caret),
+                        VimChange::changed);
 }
 } // namespace detail
 
@@ -1118,11 +1170,21 @@ namespace detail
         return failed(cancelled(state), VimRepeatFailure::not_moved);
     }
     const Offset end = forward_characters(text, caret, count_of(state.count));
-    std::string body = cased_text(text.text_range(caret, end), VimOperator::toggle_case);
+    const std::string before = text.text_range(caret, end);
+    std::string body = cased_text(before, VimOperator::toggle_case);
     const std::size_t landed = end == text.line_end(line)
                                    ? vim_character_start(body, Offset{body.size()}).value
                                    : body.size();
     const Offset landing{caret.value + landed};
+    // 大小の変わる文字が無ければ Vim の n_swapchar は u_save だけ（did_change が偽・ADR 0181）。
+    if (body == before)
+    {
+        return change_noted(
+            VimStep{vim_resting_from(state, state.unnamed_register),
+                    VimReplaceRange{OffsetRange{landing, landing}, std::string{}, landing,
+                                    EditBoundary::separate, VimLineMarks::kept}},
+            VimChange::saved_only);
+    }
     return VimStep{vim_resting_from(state, state.unnamed_register),
                    VimReplaceRange{OffsetRange{caret, end}, std::move(body), landing,
                                    EditBoundary::separate, VimLineMarks::kept}};
@@ -1142,7 +1204,8 @@ namespace detail
     case VimOperator::remove:
         return removed(state, text, range);
     case VimOperator::change:
-        return changed(state, text, range);
+        return detail::empty_removal_noted(changed(state, text, range), text, range,
+                                           VimOperator::change);
     case VimOperator::yank:
         return yanked(state, text, caret, range);
     case VimOperator::toggle_case:
