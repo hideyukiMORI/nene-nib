@@ -1267,7 +1267,7 @@ void EditorController::leave_document()
     // 捨てる。Esc と同じ 1 本を通す（ADR 0041 の決定 5・ADR 0056 の決定 4）。
     if (state_.command_input().has_value())
     {
-        accept(CancelCommand{});
+        cancel_command_input();
     }
     state_ = state_.with_composition(std::nullopt);
 }

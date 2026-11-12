@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 c4ba9022943ba511fdbcf5c9402f5e3458fa355f20a1b019e819f0b306894890 / 4743 fixtures
+// fixtures.json: sha256 fc075c5631cbd7921f79b20619fc2f6e8145684253a6051b98b8c0f6f2e166e0 / 4750 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4743> vim_fixtures{{
+constexpr std::array<VimFixture, 4750> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4755,6 +4755,13 @@ constexpr std::array<VimFixture, 4743> vim_fixtures{{
     {"visual-colon-count-one-is-current-line", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "jll1:<CR>x", "line01 abc\nine02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 2, 1, "l", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"visual-colon-count-beyond-the-end", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "jjjjjjjj5:<CR>x", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nine10 abc", 10, 1, "l", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"visual-colon-count-set-has-no-range", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "3:set so=2<CR>j", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"macro-ex-set-so-then-j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "@a", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 11, 1, "", "", VimViewportFixture{6, 10, 10, 1, 8, 3}, VimMacroFixture{'a', ":set so=2<CR>j"}},
+    {"macro-ex-set-so-count", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "2@a", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 12, 1, "", "", VimViewportFixture{6, 10, 10, 1, 9, 3}, VimMacroFixture{'a', ":set so=2<CR>j"}},
+    {"macro-ex-escape-runs-the-line", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "@a", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 11, 1, "", "", VimViewportFixture{6, 10, 10, 1, 8, 3}, VimMacroFixture{'a', ":set so=2<Esc>j"}},
+    {"macro-ex-backspace-in-the-line", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "@a", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 11, 1, "", "", VimViewportFixture{6, 10, 10, 1, 8, 3}, VimMacroFixture{'a', ":set so=3<BS>2<CR>j"}},
+    {"macro-ex-noh-then-x", "abc def", "@a", "bc def", 1, 1, "a", "v", std::nullopt, VimMacroFixture{'a', ":noh<CR>x"}},
+    {"macro-ex-ignorecase-then-search", "x\nabc", "@a", "x\nbc", 2, 1, "a", "v", std::nullopt, VimMacroFixture{'a', ":set ic<CR>/ABC<CR>x"}},
+    {"macro-ex-line-number-then-x", "abc\ndef\nghi", "@a", "abc\ndef\nhi", 3, 1, "g", "v", std::nullopt, VimMacroFixture{'a', ":3<CR>x"}},
 }};
 } // namespace nenenib::tests
 // clang-format on

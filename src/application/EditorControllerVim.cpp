@@ -684,8 +684,8 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(const core::
     return std::nullopt;
 }
 
-// 入力行での特殊鍵の写し（ADR 0048 の決定 8）。窓と同じ EditCommand の写しで、上下（履歴）と
-// 入力行に意味の無い鍵は捨てる。再生の中の <Esc> は Vim の c_<Esc> と同じに確定する。
+// 入力行での特殊鍵の写し（ADR 0048 の決定 8）。窓と同じ EditCommand の写しで、入力行に意味の
+// 無い鍵は捨てる。再生の中の <Esc> は Vim の c_<Esc> と同じに確定する。
 std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpecialKey key)
 {
     switch (key)
@@ -718,8 +718,13 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpe
     case core::VimSpecialKey::end:
         accept(EditCommand{core::CommandEdit::end});
         return std::nullopt;
+    // 上下は窓と同じ履歴の前・次（Vim の再生の `<Up>` も履歴を引く・#1528 の実測）。
     case core::VimSpecialKey::arrow_up:
+        accept(EditCommand{core::CommandEdit::history_previous});
+        return std::nullopt;
     case core::VimSpecialKey::arrow_down:
+        accept(EditCommand{core::CommandEdit::history_next});
+        return std::nullopt;
     case core::VimSpecialKey::control_r:
     case core::VimSpecialKey::page_up:
     case core::VimSpecialKey::page_down:
