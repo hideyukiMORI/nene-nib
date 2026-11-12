@@ -38,7 +38,8 @@ constexpr std::string_view line_tail = " a b a";
         std::nullopt};
 }
 
-// 行ごとの編集を 1 つの置き換えに畳んで本文に当てる（controller の apply_block と同じ形・LF の本文）。
+// 行ごとの編集を 1 つの置き換えに畳んで本文に当てる（controller の apply_block と同じ形・LF
+// の本文）。
 [[nodiscard]] core::TextBuffer applied(const core::TextBuffer &text,
                                        const std::vector<core::VimBlockEdit> &edits)
 {
