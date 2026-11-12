@@ -918,6 +918,26 @@ namespace detail
     std::unreachable();
 }
 
+// オペレータ待ちの `:` の確定の記録（ADR 0022 の追補 #1549）。`:` までの記録に入力行に打った本文を
+// 1 文字ずつ鍵として足し、確定の `<CR>` を鍵として記録の 1 本（vim_recorded）へ流す（Vim の
+// do_pending_operator が redo に積む repeat_cmdline と NL）。`.` は `d:5<CR>`
+// を同じ入力行の口で流し 直す。
+[[nodiscard]] VimStep command_motion_recorded(const VimState &before, const VimEditorView &view,
+                                              VimStep step, std::string_view typed)
+{
+    VimState typed_before = before;
+    if (typed_before.recording.has_value())
+    {
+        VimRepeatRecord record = std::move(typed_before.recording).value();
+        for (Offset at{0}; at.value < typed.size(); at = next_code_point(typed, at))
+        {
+            record = appended(std::move(record), VimKey{VimCharacter{code_point_at(typed, at)}});
+        }
+        typed_before.recording = std::move(record);
+    }
+    return vim_recorded(typed_before, view, std::move(step), VimKey{VimSpecialKey::enter});
+}
+
 // ------------------------------------------ マクロの録画（ADR 0046 の決定 2）
 
 // 録画中は vim_step に届いた打った鍵をそのまま積む。積まないのは、録画を始める鍵と止める `q`

@@ -37,6 +37,7 @@
 #include "TextPosition.hpp"
 #include "Utf8.hpp"
 #include "VimCharacter.hpp"
+#include "VimCommandMotion.hpp"
 #include "VimKey.hpp"
 #include "VimMode.hpp"
 #include "VimPattern.hpp"
@@ -272,6 +273,8 @@ void EditorController::accept(const CancelCommand &)
     // Vim の `/` `?` の取消だけ。通常モードの「検索: 」「行: 」は engine の待ちを持たない。
     const auto *line = input.has_value() ? std::get_if<core::SearchLine>(&input.value()) : nullptr;
     const bool searching = line != nullptr && vim_search_prompt(line->prompt());
+    const bool ex_line =
+        input.has_value() && std::holds_alternative<core::CommandLine>(input.value());
     // 入力行を閉じると preview も消えるので、戻す先を先に写す（ADR 0041 の決定 5）。
     const auto preview = state_.search_preview();
     close_command_input();
@@ -284,6 +287,12 @@ void EditorController::accept(const CancelCommand &)
         // 検索の取消は保留中のオペレータと回数も捨てる（`d/<Esc>` のあとの `x` が消すのと
         // 同じ・実測）。何を捨てるかは engine の純関数が決める（ADR 0032 の決定 1）。
         state_ = state_.with_vim(core::vim_cancelled_input(state_.vim()));
+    }
+    // `d:` `c:` `y:` の入力行の取消（Esc・Ctrl+C・空の行の Backspace）はオペレータごと捨てる
+    // （ADR 0022 の追補 #1549・Vim の nv_colon の clearop）。NORMAL の `:` は待ちを持たない。
+    if (ex_line && state_.vim().pending.has_value())
+    {
+        state_ = state_.with_vim(core::vim_command_abandoned(state_.vim()));
     }
 }
 
@@ -307,7 +316,56 @@ void EditorController::accept(const PasteCommand &)
 // Vim の emsg が typeahead を捨てる）。入力行に打った後ろの鍵が本文の鍵として流れない。
 std::optional<core::VimRepeatFailure> EditorController::submit(const core::CommandLine &line)
 {
+    if (state_.vim().pending.has_value())
+    {
+        return operator_command(std::string(line.text()));
+    }
     return evaluate_command(std::string(line.text()));
+}
+
+// オペレータ待ちの `:` の確定（ADR 0022 の追補 #1549・Vim の nv_colon）。行へ跳ぶ命令（`:N` `:$`・
+// `:.` `:.,.+N`）はキャレットを動かさずに行き先を engine へ渡し、オペレータの移動にする。ほかの
+// 命令は今までの評価の 1 本（evaluate_command）を通し、失敗ならオペレータを捨て（Vim の clearop・
+// 再生は refused で打ち切る）、成功なら動かないキャレットまでの空の範囲で閉じる（`d` は何も消さず
+// `c` は INSERT へ入る・実測）。命令がタブを替えて待ちが消えていれば閉じない。
+std::optional<core::VimRepeatFailure> EditorController::operator_command(const std::string &text)
+{
+    const auto evaluated =
+        text.empty() ? std::nullopt
+                     : std::optional{core::evaluate_ex(text, state_.settings(), state_.appearance(),
+                                                       state_.themes())};
+    const auto line = evaluated.has_value() && evaluated.value().has_value()
+                          ? landing_line(evaluated.value().value())
+                          : std::nullopt;
+    if (line.has_value())
+    {
+        close_command_input();
+        return stepped_vim(VimStepSource{core::VimCommandMotion{text, line}});
+    }
+    const auto failure = evaluate_command(text);
+    if (failure.has_value())
+    {
+        state_ = state_.with_vim(core::vim_command_abandoned(state_.vim()));
+        return failure;
+    }
+    if (!state_.vim().pending.has_value())
+    {
+        return std::nullopt;
+    }
+    return stepped_vim(VimStepSource{core::VimCommandMotion{text, std::nullopt}});
+}
+
+// Ex の答えがキャレットを跳ばす行（`:N` `:$` と範囲だけの `:.` `:.,.+N`）。`:'<,'>`
+// と跳ばない命令は 値なし。
+std::optional<core::ExLineRequest>
+EditorController::landing_line(const core::ExResult &result) const
+{
+    if (result.line.has_value())
+    {
+        return result.line;
+    }
+    return result.relative_line.has_value() ? line_below_caret(result.relative_line.value())
+                                            : std::nullopt;
 }
 
 std::optional<core::VimRepeatFailure> EditorController::submit(const core::CommandPalette &palette)
@@ -591,14 +649,26 @@ void EditorController::jump_to_line(const core::ExLineRequest &request)
 // 追補 #1526）。行の番号は size_t の最大に飽和し、本文の外は engine が最後の行へ寄せる。
 void EditorController::jump_below_caret(const core::ExRelativeLineRequest &request)
 {
+    const auto line = line_below_caret(request);
+    if (line.has_value())
+    {
+        jump_to_line(line.value());
+    }
+}
+
+// `:.,.+N` の行き先（キャレットの行の N 行下・`'<,'>` は値なし）。跳ぶ道とオペレータ待ちの `:`
+// （#1549）が同じ行を引く。
+std::optional<core::ExLineRequest>
+EditorController::line_below_caret(const core::ExRelativeLineRequest &request) const
+{
     if (!request.below.has_value())
     {
-        return;
+        return std::nullopt;
     }
     const std::size_t line = state_.text().position_of(state_.selection().caret).line.value;
     const std::size_t below = request.below.value();
     constexpr std::size_t most = std::numeric_limits<std::size_t>::max();
-    jump_to_line(core::ExLineRequest{below > most - line ? most : line + below});
+    return core::ExLineRequest{below > most - line ? most : line + below};
 }
 
 // 行き先は gt / gT と同じ tab_destination の 1 本。範囲の外の数は Vim の実測の文言（決定 4・5）。

@@ -802,6 +802,10 @@ class EditorController final
     void remember(const core::CommandPalette &palette);
     void submit_palette(const core::CommandPalette &palette);
     [[nodiscard]] std::optional<core::VimRepeatFailure> evaluate_command(std::string_view text);
+    // オペレータ待ちの `:` の確定（ADR 0022 の追補 #1549）。
+    [[nodiscard]] std::optional<core::VimRepeatFailure> operator_command(const std::string &text);
+    [[nodiscard]] std::optional<core::ExLineRequest>
+    landing_line(const core::ExResult &result) const;
     [[nodiscard]] bool ran_ex_request(const core::ExResult &result);
     void apply_unsaved_ex(const core::ExResult &result);
     // `:set filetype=` と `:set filetype?` の写し先（ADR 0154 の決定 4）。どちらも今の言語を
@@ -818,6 +822,8 @@ class EditorController final
     // Ex の `:N` `:$` の写し先（ADR 0022 の追補・Issue #847）。engine の `{N}G` と同じ着地。
     void jump_to_line(const core::ExLineRequest &request);
     void jump_below_caret(const core::ExRelativeLineRequest &request);
+    [[nodiscard]] std::optional<core::ExLineRequest>
+    line_below_caret(const core::ExRelativeLineRequest &request) const;
     void run_window_command(core::ExWindowCommand command);
     // Ex のファイル命令も Ctrl+P と同じ面へ渡す（ADR 0064）。
     // 断りの知らせを立てて OS の警告音を 1 回鳴らす。鳴らすかを決める唯一の口で、呼ぶのは入力行の
