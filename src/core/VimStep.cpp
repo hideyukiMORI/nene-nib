@@ -69,6 +69,7 @@ using detail::escaped_or_refused;
 using detail::failed;
 using detail::finished_input_wait;
 using detail::forward_characters;
+using detail::home_uncounted;
 using detail::horizontal_action;
 using detail::input_action;
 using detail::insert_character;
@@ -1616,6 +1617,20 @@ namespace detail
     next.count = rest == 0 ? std::nullopt : std::optional{VimCount{rest}};
     return VimStep{std::move(next), VimNoEffect{}};
 }
+
+// `<Home>` は回数を捨てた `1|`（Vim の nv_home は `count0 = 1` にして nv_pipe を呼び、欲しい列を
+// 0 に固定する。`0` の nv_beginline は見た目の桁から引き直すので、Tab の行の次の `j` で違う・
+// #1505）。オペレータの回数も捨てる（`3d<Home>` は `d0` と同じ範囲）。
+[[nodiscard]] VimState home_uncounted(const VimState &state)
+{
+    VimState next = state;
+    next.count = std::nullopt;
+    if (next.pending.has_value())
+    {
+        next.pending.value().count = std::nullopt;
+    }
+    return next;
+}
 } // namespace detail
 
 namespace
@@ -1668,7 +1683,8 @@ namespace
     return normal_character(unnamed, view, VimCharacter{U'x'});
 }
 
-// NORMAL の特別な鍵。矢印は h j k l と同じ動作で、Home / End は 0 と $（ADR 0015 の決定 6）。
+// NORMAL の特別な鍵。矢印は h j k l と同じ動作で、Home は回数を捨てた `1|`、End は `$`（ADR 0015 の
+// 決定 6 と追補 #1505）。
 // Esc は保留を捨てるだけ（ADR 0012 の決定 5）。Backspace は行をまたぐ h（ADR 0049 の決定 1）。
 [[nodiscard]] VimStep normal_special(const VimState &state, const VimEditorView &view,
                                      VimSpecialKey key)
@@ -1690,7 +1706,7 @@ namespace
     case VimSpecialKey::arrow_down:
         return acted(state, view, VimAction::move_down);
     case VimSpecialKey::home:
-        return acted(state, view, VimAction::move_line_start);
+        return acted(home_uncounted(state), view, VimAction::move_to_column);
     case VimSpecialKey::end:
         return acted(state, view, VimAction::move_line_end);
     case VimSpecialKey::control_r:
