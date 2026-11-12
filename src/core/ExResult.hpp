@@ -15,6 +15,7 @@
 #include "ExPaletteRequest.hpp"
 #include "ExPreviewRequest.hpp"
 #include "ExPrintRequest.hpp"
+#include "ExRelativeLineRequest.hpp"
 #include "ExRootRequest.hpp"
 #include "ExSyntaxRequest.hpp"
 #include "ExTabRequest.hpp"
@@ -62,6 +63,8 @@ inline constexpr std::string_view guifont_command = "set guifont=";
 // `check_redraw` → `changed_window_setting` が `VALID_TOPLINE` を落とす。問い（`set rnu?`）は
 // 値を置かないので偽。表は ExResult.cpp の window_setting_names の 1 つで、Vim のモードで今の
 // キャレットの決め直しを頼むのは controller。
+// relative_line は範囲だけの `:.` `:.,.+N` `:'<,'>`（ADR 0022 の追補 #1526）で、キャレットの行から
+// 着地を決めるのは controller。
 struct ExResult
 {
     std::optional<EditorSettings> settings;
@@ -84,6 +87,7 @@ struct ExResult
     std::optional<ExPreviewRequest> preview = std::nullopt;
     std::optional<ExPrintRequest> print = std::nullopt;
     bool rechecks_window = false;
+    std::optional<ExRelativeLineRequest> relative_line = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>

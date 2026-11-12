@@ -47,6 +47,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -310,12 +311,15 @@ void EditorController::accept(const PasteCommand &)
     accept(CommandText{text.value()});
 }
 
+// Ex の評価の失敗は再生（`.`・マクロ・fixture の :normal!）を打ち切る（ADR 0022 の追補 #1526・
+// Vim の emsg が typeahead を捨てる）。入力行に打った後ろの鍵が本文の鍵として流れない。
 std::optional<core::VimRepeatFailure> EditorController::submit(const core::CommandLine &line)
 {
-    evaluate_command(std::string(line.text()));
-    // Ex の行の後に始め直す（ADR 0182 の決定 8・`<C-o>:set so=2<CR>`）。
+    const auto failure = evaluate_command(std::string(line.text()));
+    // Ex の行の後に始め直す（ADR 0182 の決定 8・`<C-o>:set so=2<CR>`）。評価が失敗して再生を
+    // 打ち切るときも、Vim の restart_edit は残るので始め直す。
     resume_vim_insert();
-    return std::nullopt;
+    return failure;
 }
 
 std::optional<core::VimRepeatFailure> EditorController::submit(const core::CommandPalette &palette)
@@ -441,23 +445,24 @@ void EditorController::reject(core::DisplayText message)
     ports_.bell.ring();
 }
 
-void EditorController::evaluate_command(std::string_view text)
+// 評価の失敗と設定の保存の失敗は知らせて refused を返す（再生を打ち切る・ADR 0022 の追補 #1526）。
+std::optional<core::VimRepeatFailure> EditorController::evaluate_command(std::string_view text)
 {
     close_command_input();
     if (text.empty())
     {
-        return;
+        return std::nullopt;
     }
     const auto result =
         core::evaluate_ex(text, state_.settings(), state_.appearance(), state_.themes());
     if (!result)
     {
         reject(core::ex_failure_message(result.error(), text));
-        return;
+        return core::VimRepeatFailure::refused;
     }
     if (ran_ex_request(result.value()))
     {
-        return;
+        return std::nullopt;
     }
     // Vim が窓を決め直す option は、設定を写す前に今のキャレットの決め直しを頼む（#1524）。幅の
     // ある窓では続く persist_settings の clamp_scroll が新しい設定でその場で解く。
@@ -469,10 +474,11 @@ void EditorController::evaluate_command(std::string_view text)
     if (settings.has_value() && !persist_settings(settings.value()))
     {
         reject(core::DisplayText::parse("Settings could not be saved").value());
-        return;
+        return core::VimRepeatFailure::refused;
     }
     apply_unsaved_ex(result.value());
     state_ = state_.with_command_message(result.value().message);
+    return std::nullopt;
 }
 
 // Ex の答えのうち命令の要求（タブ・行番号・窓・面・文書・ルート・言語・構文・クリップボード）を
@@ -488,6 +494,11 @@ bool EditorController::ran_ex_request(const core::ExResult &result)
     if (result.line.has_value())
     {
         jump_to_line(result.line.value());
+        return true;
+    }
+    if (result.relative_line.has_value())
+    {
+        jump_below_caret(result.relative_line.value());
         return true;
     }
     if (result.window.has_value())
@@ -591,6 +602,21 @@ void EditorController::run_map_request(const core::ExMapRequest &request)
 void EditorController::jump_to_line(const core::ExLineRequest &request)
 {
     static_cast<void>(stepped_vim(VimStepSource{request}));
+}
+
+// 範囲だけの `:.` `:.,.+N` はキャレットの行から N 行下へ `:N` と同じ着地（Vim の
+// ex_range_without_command）。`:'<,'>`（below が空）は動かさず、知らせも出さない（ADR 0022 の
+// 追補 #1526）。行の番号は size_t の最大に飽和し、本文の外は engine が最後の行へ寄せる。
+void EditorController::jump_below_caret(const core::ExRelativeLineRequest &request)
+{
+    if (!request.below.has_value())
+    {
+        return;
+    }
+    const std::size_t line = state_.text().position_of(state_.selection().caret).line.value;
+    const std::size_t below = request.below.value();
+    constexpr std::size_t most = std::numeric_limits<std::size_t>::max();
+    jump_to_line(core::ExLineRequest{below > most - line ? most : line + below});
 }
 
 // 行き先は gt / gT と同じ tab_destination の 1 本。範囲の外の数は Vim の実測の文言（決定 4・5）。

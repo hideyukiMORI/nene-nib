@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 957aacfe474967a36119bf35e5f9922d36f6b72486a2a5e7d8a00f7a2fdd6132 / 5096 fixtures
+// fixtures.json: sha256 3d753127d139bceef61230f9cd3d9a7f93e9334e0d260ea58cd0b1a77e2d5e56 / 5116 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 5096> vim_fixtures{{
+constexpr std::array<VimFixture, 5116> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -5108,6 +5108,26 @@ constexpr std::array<VimFixture, 5096> vim_fixtures{{
     {"insert-ctrl-o-mid-x", "abcd", "lli<C-o>xY<Esc>", "abYd", 1, 3, "c", "v", std::nullopt},
     {"insert-ctrl-o-start-x", "abc", "i<C-o>xY<Esc>", "Ybc", 1, 1, "a", "v", std::nullopt},
     {"insert-ctrl-o-empty-line-x", "ab\n\ncd", "ji<C-o>xY<Esc>", "ab\nY\ncd", 2, 1, "", "", std::nullopt},
+    {"visual-colon-set-has-no-range", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "Vj:set so=2<CR>j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 10, 1, "", "", VimViewportFixture{6, 10, 10, 1, 10, 3}},
+    {"visual-colon-set-charwise", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "vj:set so=2<CR>j", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"visual-colon-nohlsearch-has-no-range", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "jv:noh<CR>x", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"visual-colon-colorscheme-has-no-range", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "jvj:colorscheme blue<CR>x", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"visual-colon-unknown-command-stops", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "vj:foo<CR>j", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"visual-colon-s-does-not-reach-the-text", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "vj:s<CR>j", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"visual-colon-write-stops", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "jvj:w<CR>x", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"visual-colon-range-only-stays-at-start", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", "jjlvjl:<CR>x", "line01 abc\nline02 abc\nlne03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", 3, 2, "i", "v", VimViewportFixture{12, 1, 1, 1, 1, 6}},
+    {"visual-colon-linewise-anchor-above", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", "lllVj:<CR>x", "ine01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", 1, 1, "l", "v", VimViewportFixture{12, 1, 1, 1, 1, 6}},
+    {"visual-colon-linewise-anchor-below", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", "jllllVk:<CR>x", "line1 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", 1, 5, "0", "v", VimViewportFixture{12, 1, 1, 1, 1, 6}},
+    {"visual-colon-block-left-column", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", "jlll<C-v>kll:<CR>x", "lin01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", 1, 4, "e", "v", VimViewportFixture{12, 1, 1, 1, 1, 6}},
+    {"visual-colon-block-left-corner", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", "jlll<C-v>khh:<CR>x", "lne01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", 1, 2, "i", "v", VimViewportFixture{12, 1, 1, 1, 1, 6}},
+    {"visual-colon-charwise-end-of-line", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", "lllvj$:<CR>x", "lin01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", 1, 4, "e", "v", VimViewportFixture{12, 1, 1, 1, 1, 6}},
+    {"visual-colon-gv-reselects", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", "jjvj:<CR>gvd", "line01 abc\nline02 abc\nine04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", 3, 1, "line03 abc\nl", "v", VimViewportFixture{12, 1, 1, 1, 1, 6}},
+    {"visual-colon-count-in-visual", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", "jvj3:<CR>x", "line01 abc\nine02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", 2, 1, "l", "v", VimViewportFixture{12, 1, 1, 1, 1, 6}},
+    {"visual-colon-dot-after", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", "xjvj:<CR>.", "ine01 abc\nine02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc\nline11 abc\nline12 abc", 2, 1, "l", "v", VimViewportFixture{12, 1, 1, 1, 1, 6}},
+    {"visual-colon-count-range-lands", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "jj3:<CR>x", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nine05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 5, 1, "l", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"visual-colon-count-one-is-current-line", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "jll1:<CR>x", "line01 abc\nine02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 2, 1, "l", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"visual-colon-count-beyond-the-end", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "jjjjjjjj5:<CR>x", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nine10 abc", 10, 1, "l", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"visual-colon-count-set-has-no-range", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", "3:set so=2<CR>j", "line01 abc\nline02 abc\nline03 abc\nline04 abc\nline05 abc\nline06 abc\nline07 abc\nline08 abc\nline09 abc\nline10 abc", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
 }};
 } // namespace nenenib::tests
 // clang-format on
