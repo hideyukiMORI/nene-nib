@@ -418,10 +418,52 @@ using Units = std::pair<std::size_t, bool>;
     return edge.second ? Advance{advanced_past_blanks(text, edge.first), true} : edge;
 }
 
-// Vim の findsent(dir, 1)。FAIL ならキャレットは動かない。
+// 端で尽きた周の位置。最後の周なら成功（Vim の findsent の break）、残りがあれば失敗（FAIL）。
+[[nodiscard]] std::optional<Offset> kept_if_last(Offset at, bool last)
+{
+    return last ? std::optional<Offset>{at} : std::nullopt;
+}
+
+// 移動の回数 1 つぶん（Vim の findsent の while の 1 周）。動かなかったら 1 文字進めて同じ周を
+// やり直し、進めなければ残りの回数があれば失敗（textobject.c の EQUAL_POS(prev_pos, pos) の
+// 枝）。周は位置が進むか失敗で抜けるので、本文の端に着いた後の回数を空回りしない（巨大な回数で
+// 固まらない・#1334）。last は最後の周か。
+[[nodiscard]] std::optional<Offset> sentence_turn(const TextBuffer &text, Offset at, bool forward,
+                                                  bool last)
+{
+    Offset here = at;
+    for (;;)
+    {
+        const auto walk = sentence_walk(text, here, forward);
+        if (!walk.has_value())
+        {
+            return std::nullopt;
+        }
+        const Advance walked = walk.value();
+        if (!walked.second)
+        {
+            return kept_if_last(walked.first, last);
+        }
+        if (!(walked.first == here))
+        {
+            return walked.first;
+        }
+        const Advance stepped = stepped_toward(text, here, forward);
+        if (!stepped.second)
+        {
+            return kept_if_last(stepped.first, last);
+        }
+        here = stepped.first;
+    }
+}
+
+// Vim の findsent(dir, 1)。FAIL ならキャレットは動かない。周の終わりに動いていなければ 1 文字
+// 進めてやり直す枝（EQUAL_POS(prev_pos, pos)）も通る: 前の行が文の終わりで、行頭が `.` `!` `?`
+// や閉じの記号の行から前へ探すと、その記号は前の文の終わりに数えられて行頭へ戻り、動かないので
+// 次の文の先頭まで進む（`is` `as` が失敗しない・#1508）。
 [[nodiscard]] Offset sentence_start(const TextBuffer &text, Offset at, bool forward)
 {
-    return sentence_walk(text, at, forward).value_or(Advance{at, true}).first;
+    return sentence_turn(text, at, forward, true).value_or(at);
 }
 
 // 周の始めの位置が 2 周前（同じ向きの印）と同じなら、残りの周は 2 周の繰り返しなので、残りを
@@ -618,44 +660,6 @@ using Units = std::pair<std::size_t, bool>;
                           VimRegisterKind::characters};
 }
 
-// 端で尽きた周の位置。最後の周なら成功（Vim の findsent の break）、残りがあれば失敗（FAIL）。
-[[nodiscard]] std::optional<Offset> kept_if_last(Offset at, bool last)
-{
-    return last ? std::optional<Offset>{at} : std::nullopt;
-}
-
-// 移動の回数 1 つぶん（Vim の findsent の while の 1 周）。動かなかったら 1 文字進めて同じ周を
-// やり直し、進めなければ残りの回数があれば失敗（textobject.c の EQUAL_POS(prev_pos, pos) の
-// 枝）。周は位置が進むか失敗で抜けるので、本文の端に着いた後の回数を空回りしない（巨大な回数で
-// 固まらない・#1334）。last は最後の周か。
-[[nodiscard]] std::optional<Offset> sentence_turn(const TextBuffer &text, Offset at, bool forward,
-                                                  bool last)
-{
-    Offset here = at;
-    for (;;)
-    {
-        const auto walk = sentence_walk(text, here, forward);
-        if (!walk.has_value())
-        {
-            return std::nullopt;
-        }
-        const Advance walked = walk.value();
-        if (!walked.second)
-        {
-            return kept_if_last(walked.first, last);
-        }
-        if (!(walked.first == here))
-        {
-            return walked.first;
-        }
-        const Advance stepped = stepped_toward(text, here, forward);
-        if (!stepped.second)
-        {
-            return kept_if_last(stepped.first, last);
-        }
-        here = stepped.first;
-    }
-}
 } // namespace
 
 std::optional<Offset> vim_sentence_motion(const TextBuffer &text, Offset caret, bool forward,
