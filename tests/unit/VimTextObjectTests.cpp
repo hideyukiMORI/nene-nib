@@ -223,6 +223,23 @@ void verify_vim_text_object_history()
     expect(editing.files().written() == original, "one undo restores a delete through an object");
 }
 
+// 本文の最後の空行の `iw`（#1507）。CRLF の文書でも前の行の末尾の語と改行（`\r\n` ごと）を取り、
+// レジスタの本文は LF の文書と同じ `b\n`（fixture は LF だけなので、CRLF の形はここで見る）。
+void verify_vim_word_object_last_empty_line_crlf()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string{"c a.b\r\n"}});
+    applied(controller, OpenDocument{sample_path()});
+    applied(controller, SelectEditMode{EditMode::vim});
+    vim_replay(controller, "GciwX<Esc>");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "c a.X",
+           "ciw on the last empty line of a CRLF text takes the word before it and the CRLF");
+    expect(controller.vim_state().unnamed_register.value().text == "b\n",
+           "the register holds the word and an LF as for an LF text");
+}
+
 void verify_vim_text_object_dot()
 {
     Editing editing;
@@ -418,6 +435,20 @@ void verify_vim_sentence_across_pieces()
            "is and as find a candidate that ends a piece (Issue #751)");
 }
 
+// 前の行が文の終わりで行頭が `.` の行の `is` `as`（#1508）。CRLF の本文でも LF の fixture と同じく
+// 次の行の文（`x1 foo.` と後ろの空白）を取る。塊を割った本文も同じ答え。
+void verify_vim_sentence_line_head_crlf()
+{
+    const auto whole = TextBuffer::from_utf8("ab cd.\r\n.\r\nx1 foo. end").value();
+    const TextBuffer split = split_at(whole, 8, 9);
+    expect(whole.line_ending() == LineEnding::crlf, "the text is CRLF");
+    expect(is_range(sentence_range(whole, 8, VimTextObjectScope::around, 1), 11, 19) &&
+               is_range(sentence_range(whole, 8, VimTextObjectScope::inner, 1), 11, 18) &&
+               sentences_match(whole, split),
+           "is and as on a line that starts with a period after a finished sentence take the "
+           "next sentence in a CRLF text (Issue #1508)");
+}
+
 void verify_vim_sentence_before_crlf()
 {
     // CRLF の行の内容の終わりは `\r` の手前なので、`.` の次は行末として読まれ、`as` は LF の本文と
@@ -589,12 +620,14 @@ void verify_vim_text_object_contracts()
     verify_vim_text_object_cancellation();
     verify_vim_text_object_visual();
     verify_vim_text_object_history();
+    verify_vim_word_object_last_empty_line_crlf();
     verify_vim_text_object_dot();
     verify_vim_text_object_residuals();
     verify_vim_text_object_quote_pairs();
     verify_vim_text_object_paragraphs_and_sentences();
     verify_vim_sentence_across_pieces();
     verify_vim_sentence_before_crlf();
+    verify_vim_sentence_line_head_crlf();
     verify_vim_bracket_prefix_refuses();
     verify_vim_bracket_escape_cancels();
     verify_vim_huge_count_motions_stop();

@@ -170,6 +170,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/ExplorerTests.cpp
     tests/unit/EditingPropertyTests.cpp
     tests/unit/ControllerMixedPropertyTests.cpp
+    tests/unit/SavedStatePropertyTests.cpp
     tests/unit/SplitTests.cpp
     tests/unit/SessionTests.cpp
     tests/unit/BookmarkTests.cpp

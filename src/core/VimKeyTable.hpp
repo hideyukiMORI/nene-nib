@@ -26,6 +26,10 @@ namespace nenenib::core
 // g の後ろの鍵 → 動作（gg ge gE gt gT gj gk）。表に無い鍵は nullopt（g を打ち消す）。
 [[nodiscard]] std::optional<VimAction> vim_g_action_for(char32_t key) noexcept;
 
+// g の後ろの特別な鍵 → 動作（`g<Home>` は `g0` と同じ動作・`g<End>`・Issue #1522）。ほかの特別な
+// 鍵は nullopt（Ctrl-a と Ctrl-x は vim_number_control_character で文字に写して上の表を引く）。
+[[nodiscard]] std::optional<VimAction> vim_g_action_for(VimSpecialKey key) noexcept;
+
 // z の後ろの鍵 → 動作（zl zh zL zH zs ze・ADR 0145 の決定 5。zt zz zb z<CR> z. z-・ADR 0146 の
 // 決定 2）。<CR> は 0x0D で引く。表に無い鍵は nullopt（失敗して後ろを打ち切る）。
 [[nodiscard]] std::optional<VimAction> vim_z_action_for(char32_t key) noexcept;

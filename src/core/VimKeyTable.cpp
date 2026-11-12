@@ -228,6 +228,7 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::move_display_line_middle, VimActionGroup::motion},
      {VimAction::move_line_middle, VimActionGroup::motion},
      {VimAction::move_display_line_first_non_blank, VimActionGroup::motion},
+     {VimAction::move_display_line_last_non_blank, VimActionGroup::motion},
      {VimAction::move_last_non_blank, VimActionGroup::motion},
      {VimAction::move_first_non_blank_below, VimActionGroup::motion},
      {VimAction::join_lines, VimActionGroup::edit_line},
@@ -263,7 +264,7 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::prefix_bracket, VimActionGroup::input_wait}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
-constexpr std::array<VimMotionBinding, 41> motion_bindings{
+constexpr std::array<VimMotionBinding, 42> motion_bindings{
     {{VimAction::move_left, VimMotion::left},
      {VimAction::move_down, VimMotion::down},
      {VimAction::move_up, VimMotion::up},
@@ -296,6 +297,7 @@ constexpr std::array<VimMotionBinding, 41> motion_bindings{
      {VimAction::move_display_line_middle, VimMotion::display_line_middle},
      {VimAction::move_line_middle, VimMotion::line_middle},
      {VimAction::move_display_line_first_non_blank, VimMotion::display_line_first_non_blank},
+     {VimAction::move_display_line_last_non_blank, VimMotion::display_line_last_non_blank},
      {VimAction::move_last_non_blank, VimMotion::last_non_blank},
      {VimAction::move_first_non_blank_below, VimMotion::first_non_blank_below},
      {VimAction::move_matching_pair, VimMotion::matching_pair},
@@ -434,7 +436,15 @@ constexpr std::array<VimTextObjectBinding, 18> text_object_bindings{
      {U's', VimTextObject::sentence},
      {U't', VimTextObject::tag}}};
 
-// 終わりの位置を範囲に入れない移動（Vim の exclusive）。$ と e E ge gE g$ g_ は入れる
+// g の後ろの特別な鍵 → 動作（Issue #1522）。Vim の nv_g_cmd は K_HOME を '0' と同じ case で
+// nv_g_home_m_cmd へ、K_END を '$' と同じ case で nv_g_dollar_cmd へ渡す。`g<Home>` は `g0` と同じ
+// 動作の行で、`g<End>` は `g$` の着地から空白を左へ越える（nv_g_dollar_cmd の flag・ADR 0147 の
+// 決定 9）。Ctrl-a と Ctrl-x は文字に写して上の表を引く（vim_number_control_character）。
+constexpr std::array<std::pair<VimSpecialKey, VimAction>, 2> g_special_bindings{
+    {{VimSpecialKey::home, VimAction::move_display_line_start},
+     {VimSpecialKey::end, VimAction::move_display_line_last_non_blank}}};
+
+// 終わりの位置を範囲に入れない移動（Vim の exclusive）。$ と e E ge gE g$ g_ g<End> は入れる
 // （inclusive）。行単位の j k はどちらでもないので、この表には無い。gj gk は文字単位の
 // exclusive（ADR 0144）。g0 gm gM g^ は exclusive（ADR 0147 の決定 1・8）。`%` は inclusive、
 // `` `a `` は exclusive（ADR 0152 の決定 3）。`{ } ( )` は exclusive で、本文の端の inclusive は
@@ -542,6 +552,18 @@ static_assert(every_alignment_has_one_row(),
         if (binding.key == key)
         {
             return binding.action;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<VimAction> vim_g_action_for(VimSpecialKey key) noexcept
+{
+    for (const auto &[special, action] : g_special_bindings)
+    {
+        if (special == key)
+        {
+            return action;
         }
     }
     return std::nullopt;

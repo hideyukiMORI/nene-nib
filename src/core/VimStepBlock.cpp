@@ -179,10 +179,13 @@ namespace detail
     const VimBlockRange block = block_of(state, view);
     // キャレットも戻り先も矩形の左上（ADR 0052 の決定 10）。左上が切れた Tab や全角なら、その
     // 文字のあった所＝埋めた空白の先頭（Vim の op_replace は oap->start へ戻す・#1067 で実測）。
-    return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
-                               VimReplaceBlock{replaced_block_edits(view.text, block, target),
-                                               block_caret(block)}},
-                       block_caret(block));
+    // Vim の op_replace の矩形は changed_lines(start.lnum, start.col, ...)（追補 #1374）。
+    return change_placed(
+        restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
+                            VimReplaceBlock{replaced_block_edits(view.text, block, target),
+                                            block_caret(block)}},
+                    block_caret(block)),
+        view.text.position_of(block_caret(block)));
 }
 } // namespace detail
 
@@ -541,10 +544,14 @@ namespace detail
         return restored_at(VimStep{std::move(next), VimMoveTo{at}}, at);
     }
     const Offset begin = entry.range.begin;
-    // 埋めた編集は打つ本文と同じ INSERT の単位に入る（controller が absorb で写す）。
-    return restored_at(
-        VimStep{std::move(next), VimReplaceBlock{std::vector<VimBlockEdit>{std::move(entry)}, at}},
-        begin);
+    // 埋めた編集は打つ本文と同じ INSERT の単位に入る（controller が absorb で写す）。Vim は埋めを
+    // changed_bytes(行, 埋めの始まり) で数える（追補 #1374）。
+    const TextPosition padded = text.position_of(begin);
+    return change_placed(
+        restored_at(VimStep{std::move(next),
+                            VimReplaceBlock{std::vector<VimBlockEdit>{std::move(entry)}, at}},
+                    begin),
+        padded);
 }
 
 // 矩形の `c` `C`（ADR 0035 の追補 #1042）。`d` と同じく矩形を消してレジスタ（矩形の種類）へ書き、

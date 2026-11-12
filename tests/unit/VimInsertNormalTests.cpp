@@ -271,6 +271,32 @@ void verify_mark_drops()
     expect(cancelled.controller().vim_state().mode == core::VimMode::normal &&
                core::vim_insert_paused(cancelled.controller().vim_state()),
            "a cancel without an input line (a notice, the palette) keeps waiting for the command");
+    // Ctrl+Z は印を捨ててから、通常の undo（空の単位を飛ばす・#1541）で `<C-o>` の前に打った分を
+    // 戻す。
+    Editing undone;
+    open_vim_document(undone, std::string(words));
+    vim_replay(undone.controller(), "iab<C-o>");
+    static_cast<void>(undone.controller().apply(app::HistoryAction{core::HistoryDirection::undo}));
+    expect(whole_vim_body(undone.controller()) == std::string(words) &&
+               !core::vim_insert_paused(undone.controller().vim_state()) &&
+               undone.controller().vim_state().mode == core::VimMode::normal,
+           "Ctrl+Z while waiting undoes the typed text and leaves NORMAL");
+}
+
+// 窓を決め直す `:set`（#1553）の後も、Ex の行は命令 1 つで INSERT を始め直す（決め直しが先で、
+// 始め直しが後）。
+void verify_window_setting()
+{
+    for (const std::string_view keys : {std::string_view{"iX<C-o>:set nowrap<CR>Y<Esc>"},
+                                        std::string_view{"iX<C-o>:set so=3<CR>Y<Esc>"}})
+    {
+        Editing editing;
+        open_vim_document(editing, std::string(words));
+        vim_replay(editing.controller(), keys);
+        expect(whole_vim_body(editing.controller()) == "XYalpha beta gamma" &&
+                   editing.controller().vim_state().mode == core::VimMode::normal,
+               (std::string(keys) + ": the window setting is one command").c_str());
+    }
 }
 
 void verify_failed_command()
@@ -397,6 +423,7 @@ void verify_vim_insert_normal_scope()
     verify_input_lines();
     verify_click_and_interrupts();
     verify_mark_drops();
+    verify_window_setting();
     verify_failed_command();
     verify_mark_table();
     verify_mark_carriers();

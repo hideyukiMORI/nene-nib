@@ -55,8 +55,8 @@ Nib の engine の効果は「本文を置き換える編集を返すか」し�
 ## 帰結
 
 - 未保存の印・undo の段・`'.`・窓の先頭の決め直しが、engine の 1 つの印から決まる。controller は推し量らない。
-- `EditHistory` の 1 件に 1 バイトぶんの種類が増える（ADR 0180 の塊の形は変えない）。1 打鍵の道の費用は、印の 1 欄の写しだけ。
-- 通常モードの undo の単位は変わらない。
+- `EditHistory` の 1 件に 1 バイトぶんの種類が増える（ADR 0180 の塊の形は変えない）。1 打鍵の道の費用は、印の 1 欄の写しだけ（#1440 の時点）。追補 #1374 の後は、engine が changed の鍵ごとに `position_of` を 1 回呼ぶ（鎖の外でも呼ぶ・索引の無い行では行頭からコードポイントを数える）。100 万文字の 1 行で INSERT の 2000 打鍵を Debug の再生器で 3 回ずつ流した比では、前の木と揺れの範囲だった（独立レビュー V-1543b の L3・正式な速さのゲートでは測っていない）。
+- 通常モードの undo の単位は変わらない。通常モードの Ctrl+Z / Ctrl+Y は Vim のモードで作った `saved_only` の空の単位を飛ばし、範囲が空の `changed` の単位は 1 回として消費する（実装の追補 9・#1535）。
 
 ## 実装の追補（#1440・2026-11-12）
 
@@ -68,6 +68,42 @@ Nib の engine の効果は「本文を置き換える編集を返すか」し�
 6. `VimStep.change` は `stepped_vim` の `settle_vim_step(step, before)` まで届く（決定 6 の #1411 の判定はこの PR に入れていない）。
 7. **`"_p` は `saved_only`**（Vim の do_put は `"_` でも先に u_save を呼ぶ・U だけ・`-es` で実測・設計席の決定 案 A）。**既存の fixture を 2 件書き直した。** `black-hole-put-then-undo`（`x"_pu`）と `black-hole-put-dot-then-undo`（`x"_p.u`）は `u` を含むのに変更が 2 つ以上あり（CLAUDE.md の「`u` を含む fixture は変更が 1 つだけの鍵列で書く」に反する）、oracle の 1 本の `:normal!` が `x` と `"_p` を 1 単位に畳む答え（`u` が `x` まで戻す）に頼っていた。人が打つ Vim では `u` は `"_p` の空の単位だけを戻すので、印を付けると 2 件が落ちた。`black-hole-put-then-undo` は変更が `"_p` の 1 つだけの `yl"_pu`（`u` が空の単位を戻し、レジスタは `yl` の `a` のまま）にし、`black-hole-put-dot-then-undo` は `u` を使わない `black-hole-put-dot-keeps-register`（`yl"_p.`・`change: true`・`"_p` と `.` がレジスタを書かず、単位だけを作り未保存にしない）に書き直した。元の 2 件が守っていた「`"_p` はレジスタを書かない」「`.` で繰り返せる」は、この 2 件と既存の `black-hole-put-dot`（`x"_p.`）・`black-hole-put-unnamed-kept` が守る。fixture の json の差はこの 2 行だけ。
 8. 大小の変わらない `~` `g~` `gu` `gU` と VISUAL の `~` `u` `U` は、本文を置き換えない空の置き換え（`VimReplaceRange` の空の範囲・着地の位置）を返す。`.` の記録は効果の種類で決まる（`changes_text`）ので、種類を保って記録を今のまま残す（`VimMoveTo` にすると `.` が大小の no-op を繰り返さなくなり、既存の fixture `empty-case-*` が落ちた）。
+
+9. **通常モード（Vim でないモード）の Ctrl+Z / Ctrl+Y は `saved_only` の空の単位だけを飛ばす**（#1535・V-1530 の L3・V-1541 の M1 と止まった点 2・設計席の決定・施主決定 D82: Windows の標準に「何も起きない取り消し」は無い）。
+   - 飛ばすのは `saved_only` の空の単位（決定 3・本文も未保存の印も変えない単位）だけ。戻しても使う人に見える変化が何も無いので、飛ばさなければ「何も起きない取り消し」になる。
+   - 範囲が空の `changed` の単位（空の行の `>>` `<<` `cc<Esc>` `C<Esc>`）は飛ばさず、通常モードの Ctrl+Z / Ctrl+Y 1 回として消費する。本文は変わらないが未保存の印が保存時点の側へ動く（使う人に見える変化がある）。これで「保存 → 空の行の `>>` → 通常モードの Ctrl+Z」が保存の前の編集まで戻し、● が付いたまま保存した本文から離れる道が無くなる（前の規則は `changed` の空の単位も飛ばしていた・V-1541 の反例 `"abc\n\n"` の `x` `:w<CR>` `j>>`）。保存時点で止める引数（レビューの候補 C）は要らない。
+   - その向きに `saved_only` の空の単位しか無ければ、何も動かさず端の失敗（何もしない・`nothing_to_undo` / `nothing_to_redo`）。
+   - 規則は `EditHistory::past_saved_only_units(HistoryDirection)`（`std::expected` を返す）の 1 本。件の参照の種類と空かだけを見て `Edit` を写さず（V-1541 の L1）、位置と改訂番号（1 件ごとに 1）だけを動かして `content_position()` は写したまま変えない（飛ばす件は数えない件なので、本文の位置は構造で不変・契約が固定する）。飛ばす件が無ければ状態を写さない。呼ぶのは通常モードの入口 `EditorController::accept(const HistoryAction &)` だけ（窓は Vim のモードで Ctrl+Z / Ctrl+Y を送らない・`send_history`）。飛ばした後の 1 件は今までどおり `undo_edit` / `redo_edit` が戻す・やり直す（空の `changed` の単位も同じ道で、キャレットを単位の位置に置く）。
+   - Vim のモードの `u` `<C-r>`（`perform(VimUndo)` `perform(VimRedo)`）は今までどおり 1 段ずつ。飛ばした件の `Edit.restore` は使わず（通常モードの undo は戻した本文の末尾に置く・ADR 0052）、飛ばした件は `'.` を置かない（Vim の `u` だけが単位の行に置く・追補 2）。
+   - 契約（単体・active）: `--vim-change-mark` の `verify_ordinary_history_skips_empty_units`（`saved_only` の 2 つを飛ばす undo・その手前で止まる redo・`saved_only` だけのときは何もしない・通常の打鍵の後の 2 回の undo・Vim の `u` は 1 段ずつ）。最初の規則を入れる前は 5 件が落ちた（`xj~~` の 3 件・`~` だけの `alone`・`xj~` の後に打った `between`。Vim の `u` の 1 件は前から通る）。V-1541 で足した `verify_ordinary_history_takes_empty_changed_units`（`x` `:w<CR>` `j>>` の後の Ctrl+Z 1 回で本文は同じ・保存済み、2 回目で `x` が戻って未保存、Ctrl+Y ×2 で戻る・`>>` と `~` が並ぶ形）・`verify_ordinary_history_round_trip`（数字の上の `~` の後に打った本文の Ctrl+Z ×2 → Ctrl+Y ×2）・`verify_ordinary_history_saved_only_edges`（`saved_only` だけが並ぶ両端）・`verify_history_skips_only_saved_only_units`（`EditHistory` の口で、飛ばす間に本文の位置が変わらず `changed` の空の単位の手前で止まる）の 18 件は、前の規則（空の単位を全部飛ばす）では 7 件が落ちた。
+   - 性質の試験（active）: `--saved-state-property`（#1535・V-1530 の L2）は、未保存の判定の式を使わず「保存済みなら、保存の port が最後に書いたバイト列 ＝ 今の本文を今の保存の形で写したバイト列」と「帯の印 ＝ タブと窓を閉じるときに聞くか」を、Vim の鍵（空の単位を作る鍵・マクロ・`:w`・`:set ff=` `fenc=`）・通常の編集と Ctrl+Z / Ctrl+Y・保存・名前を付けて保存・保存の形・タブの切り替え・「Vim のモードで空の単位を作ってすぐ通常モードの Ctrl+Z」を混ぜた固定 seed（15350〜15352）の列で毎歩確かめる（既定実行の契約に載る）。手書きの組に V-1541 の反例と、終わりの本文と印を名指しで期待する 5 件（M1 の 2 件と、「未保存と出る」側の誤りを捕まえる、保存の後にタブを切り替えて戻る形・通常モードの Ctrl+Z → Ctrl+Y の形の 3 件・V-1541 の F1）がある。届いたかの欄は 11（通常モードの Ctrl+Z / Ctrl+Y が `saved_only` の空の単位を飛ばした・通常モードの Ctrl+Z が `changed` の空の単位を消費した・文字コードだけを変えて未保存になった、を V-1541 で足した）。生成器は UTF-8 と BOM つきだけを保存する（Shift_JIS と UTF-16 は後続）。
+
+## 追補（#1374・2026-11-12）: changed の印は Vim が `changed_*` に渡した位置を持つ
+
+決定 6 の窓の判定（`changed_common` の式）は「Vim が `changed_*` に渡した行と桁」を要る。controller が「最初の置き換えの始まり」から決めると、上端の行を編集しない矩形の操作（空の行・英字の無い行・もう大文字の行の `d` `x` `U` `~` `r` `>`・`$` の矩形を詰めた桁）で Vim より後ろの位置になった（PR #1543 の独立レビュー V-1543 の M1・11 形）。設計席の決定で、位置も engine が印に添える。
+
+1. **型。** `VimStep.change` は `std::optional<VimChangeMark>`（`VimChangeMark.hpp`・`VimChange kind` と `std::optional<TextPosition> at`）。`changed` は必ず位置を持ち、`saved_only` は持たない（契約 `--vim-change-mark` が fixture 全件の step で確かめる）。位置は鍵の前の本文の座標（置き換えの始まりより前は鍵の後も同じ）。
+2. **書く所。** `vim_step` の出口の `change_marked` が、changed で位置の無い印に既定の位置（`change_position`・効果ごとの多重定義で、効果が増えたらコンパイルが落ちる）を書く。矩形の `r` と矩形の INSERT の 1 行目の埋めは作る所が `change_placed` で書く。
+
+   | 鍵の族 | Vim の `changed_*`（v9.1.0004） | 印の位置 |
+   |---|---|---|
+   | ふつうの削除・置き換え（`x` `d` `c` `r` `s` `J` `gJ`・大小・VISUAL） | `del_bytes` / `changed_bytes` / `changed_lines(start.lnum, start.col)`・`do_join` の (行, 元の行の長さ) | 置き換えの範囲の始まり |
+   | 行単位のオペレータ・`>` `<`（文字単位と行単位） | `changed_lines(start.lnum, 0, ...)` | 範囲の始まり（行頭） |
+   | INSERT の打鍵・Enter | `ins_char_bytes` の `changed_bytes(行, col)`・`open_line` | 鍵の前のカーソル |
+   | `p` `P`（文字単位・行単位） | `changed_lines(cursor.lnum, col)`・`changed_lines(b_op_start.lnum, 0)`・1 行は `changed_cline_bef_curs` も | 貼る所（効果の置き換えの始まり） |
+   | 矩形の `d` `x` `c`（`op_delete`） | `changed_lines(cursor.lnum, cursor.col)`（`check_cursor_col` の後） | 左上の行の行頭（カーソルの行ではカーソルの桁が必ずそれ以上なので同じ答え） |
+   | 矩形の `~` `u` `U`（`op_tilde`）・`>` `<`（`op_shift`）・VISUAL の `<C-a>` `<C-x>`（`op_addsub`） | `changed_lines(start.lnum, 0, ...)` | 左上の行の行頭 |
+   | 矩形の `r`（`op_replace`） | `changed_lines(start.lnum, start.col, ...)` | 矩形の左上（`change_placed`） |
+   | 矩形の INSERT の 1 行目の埋め | `changed_bytes(行, 埋めの始まり)` | 埋めの始まり（`change_placed`） |
+   | 矩形の `I` `A` `c` の Esc（`block_insert`・`op_change`） | `changed_lines(start.lnum + 1, 0, ...)`（1 行目は打鍵が済ませた） | 左上の次の行の行頭 |
+   | 矩形の貼付（`do_put` の `MBLOCK`） | `changed_lines(lnum, 0, ...)`（呼ぶときのカーソルは貼った行の下） | 左上の行の行頭 |
+   | 空の範囲の changed（空の行の `>>` `cc`・字下げの無い行の `<<`） | `changed_lines(start.lnum, 0)` / `changed_bytes(行, 0)` | 範囲の始まりか鍵の前のカーソル |
+   | `.` とマクロの再生 | 再生の中の鍵ごとの印 | 再生の中の鍵がそれぞれ持つ（再生を返した外の鍵は窓の送りを頼む側で、判定を引き継がない） |
+
+3. **`u` と `<C-r>`。** engine の効果は「戻せ」だけで印を立てない（`u_save` を呼ばない）。Vim の `u_undoredo` は `changed_lines(top + 1, 0, ...)` を呼ぶが、戻す行は履歴を持つ controller だけが知るので、controller が戻した編集の行の行頭を位置にする（ADR 0019 の追補 #1374 の 4）。
+4. **controller。** 鍵の始めに印の位置を覚えるだけで、`replace` `apply_block` `push_empty_unit` は位置を覚えない（覚える所は `stepped_vim` の 1 か所と `u` / `<C-r>`）。
+5. **強制の範囲（独立レビュー V-1543b の L2）。** 契約 `--vim-change-mark` が見るのは型の不変条件（changed は位置を持ち、saved_only は持たない）だけ。`change_marked` は位置の無い changed にいつも既定の位置を書くので、「Vim の式が既定と違う効果で `change_placed` を書き忘れた」は契約では捕まらない。矩形の位置を守るのは fixture `viewport-half-after-delete-block-` 12 件（窓の先頭で見る）だけ。
+6. **矩形の削除の前提（V-1543b の L4）。** 表の「左上の行の行頭で同じ答え」は、鍵の後のキャレットが Vim の `changed_lines` を呼ぶ時点のカーソル（`check_cursor_col` で詰めた左上）と同じ行・桁にあることに立つ。`o` `O` で角を入れ替えた形・`$` の矩形・右下から選んだ形でも、鍵の後のキャレットは左上に来る（V-1543b の s6 / s7 の 16 形で Vim の 3 通りの流し方と一致）。
 
 ## 残る穴
 

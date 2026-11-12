@@ -14,9 +14,7 @@
 #include "VimScreenPosition.hpp"
 #include "VimScrollDirection.hpp"
 #include "VimStep.hpp"
-#include "VimTextObject.hpp"
 #include "VimTextObjectCancel.hpp"
-#include "VimTextObjectOutcome.hpp"
 #include "VimTextObjectSpan.hpp"
 
 #include <cstddef>
@@ -107,7 +105,6 @@ character_search_position(const VimEditorView &view, const VimState &state,
 [[nodiscard]] std::optional<VimMotionRange> lines_below(const TextBuffer &text, LineNumber line,
                                                         std::size_t steps);
 [[nodiscard]] Offset inclusive_end(const TextBuffer &text, Offset at);
-[[nodiscard]] VimMotionRange writing_empty(VimMotionRange range);
 [[nodiscard]] std::optional<VimMotionRange> to_line_end(const TextBuffer &text, Offset caret,
                                                         std::size_t count, VimMotion motion);
 [[nodiscard]] std::optional<VimMotionRange>
@@ -132,6 +129,9 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 [[nodiscard]] VimStep restored_at(VimStep step, Offset restore);
 // 編集を返さない形の印を 1 打鍵の結果に添える（ADR 0181 の決定 1・2）。状態と効果は変えない。
 [[nodiscard]] VimStep change_noted(VimStep step, std::optional<VimChange> change);
+// changed の印に Vim が changed_* に渡した位置を書く（追補 #1374）。矩形の効果のように置き換えの
+// 始まりが Vim の位置と違う所だけが呼ぶ。印が無ければ changed を立てる。
+[[nodiscard]] VimStep change_placed(VimStep step, TextPosition at);
 // 範囲が空の `d` `c` の印（ADR 0181・Vim の op_delete / op_change）。範囲が空でなければ step の
 // まま。inclusive な移動（行末・語のテキストオブジェクト）は range.empty_change が writes_empty。
 [[nodiscard]] VimStep empty_removal_noted(VimStep step, const TextBuffer &text,
@@ -282,8 +282,6 @@ repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::
                                             const VimTextObjectSpan &span);
 [[nodiscard]] VimStep completed_text_object(const VimState &state, const VimEditorView &view,
                                             const VimTextObjectCancel &cancel);
-[[nodiscard]] VimTextObjectOutcome word_writing_empty(VimTextObjectOutcome outcome,
-                                                      VimTextObject object);
 [[nodiscard]] std::optional<char32_t> macro_name_of(const VimKey &key) noexcept;
 [[nodiscard]] VimStep started_macro(const VimState &state, const VimKey &key);
 [[nodiscard]] VimRegister appended_recording(const VimRegister &old, std::string_view text);

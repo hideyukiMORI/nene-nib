@@ -459,6 +459,12 @@ void EditorController::evaluate_command(std::string_view text)
     {
         return;
     }
+    // Vim が窓を決め直す option は、設定を写す前に今のキャレットの決め直しを頼む（#1524）。幅の
+    // ある窓では続く persist_settings の clamp_scroll が新しい設定でその場で解く。
+    if (result.value().rechecks_window)
+    {
+        follow_window_setting();
+    }
     const auto &settings = result.value().settings;
     if (settings.has_value() && !persist_settings(settings.value()))
     {

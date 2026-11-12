@@ -6,8 +6,8 @@ A fast single-executable text editor for Windows 11 that toggles between ordinar
 
 C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
 
-> **Status (2026-11-11):** [v0.1.0-beta.11](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.11)
-> (2026-11-11) is the published build for Windows 11 x64. It has ordinary editing with Notepad-style find,
+> **Status (2026-11-12):** [v0.1.0-beta.12](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.12)
+> (2026-11-12) is the published build for Windows 11 x64. It has ordinary editing with Notepad-style find,
 > replace, go to line, printing and date insertion; UTF-8, Shift_JIS and UTF-16 files (UTF-8 up to 1 GiB, read
 > in the background); Japanese IME; 125 built-in themes; syntax colors for 25 languages; a Markdown preview with
 > clickable task-list checkboxes; a side file explorer; two split panes; opt-in language-server diagnostics; and
@@ -15,10 +15,10 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > repeat, macros, registers, blockwise VISUAL and `map`). Tabs in the title bar come back on the next start,
 > Ctrl+P lists open tabs, bookmarks, recently closed files and files in the current folder, and F1 lists every
 > operation. It starts in about 45 ms on the owner's machine, autosaves every 30 seconds and offers a grid display
-> for giant lines. New in beta.11: scrolling with the Markdown preview open no longer freezes the window for
-> tens of seconds on long paragraphs, the minimap scrolls on a click and follows a drag, the start screen also
-> appears on new untitled tabs and sits in the middle of the body, a long editing session no longer slows each
-> keystroke down, and Vim VISUAL `p` `P` replace the selection (characterwise, linewise and blockwise).
+> for giant lines. New in beta.12: square window corners without the Mica backdrop (decision D86), the
+> top-right corner and the top edge of × □ ＿ resize a window that is not maximized, the minimap's visible range
+> is darker with edge lines, Ctrl+Shift+R opens a folder in the explorer (decision D85), and Vim `'^` `` `^ ``
+> and blockwise `p` `P` over wide characters now match Vim.
 
 <p>
   <img src="docs/images/nib-palette.png" width="49%" alt="NeNe Nib lists open tabs, bookmarks, recently closed files and folder files in Ctrl+P.">
@@ -39,13 +39,13 @@ Compare all 125 themes, filter by name or appearance, and select a card for a la
 The image and gallery show color samples, not application screenshots. The gallery works offline and starts
 with the plain-text colors; its syntax colors are design samples, not the editor's syntax coloring.
 [Theme names and sources](docs/design/2026-10-12-colorschemes.md) are also available as a text list.
-All 125 themes are included in the published v0.1.0-beta.11.
+All 125 themes are included in the published v0.1.0-beta.12.
 
 ## What works today
 
 Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); the decisions behind it are in
-[`docs/adr/`](docs/adr/README.md). Everything below is in the published v0.1.0-beta.11 unless it says
-*since beta.11* (on main, not yet published) or *in review* (an open pull request, not on main). The current
+[`docs/adr/`](docs/adr/README.md). Everything below is in the published v0.1.0-beta.12 unless it says
+*since beta.12* (on main, not yet published) or *in review* (an open pull request, not on main). The current
 tasks are in `docs/todo/current.md`; the measurements are in `docs/quality/gate-proofs.md` and the dated
 records in `docs/quality/`.
 
@@ -62,7 +62,7 @@ records in `docs/quality/`.
   Ctrl+Backspace / Ctrl+Delete remove a word (or the selection). With a selection, an arrow without Shift moves
   from the selection's edge: ← collapses to its start and → to its end. The `:`, search and Ctrl+P lines do not
   yet move or delete by word.
-- **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 4486
+- **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 4562
   oracle-generated fixtures in `tests/vim/fixtures.json` and 335 wrapped-viewport fixtures in
   `tests/vim/wrap-fixtures.json` are checked by CTest, and a differential fuzzer (`eng/vim-fuzz.py`, fixed seeds)
   compares generated key sequences with Vim. Implemented:
@@ -76,7 +76,8 @@ records in `docs/quality/`.
     (operator × motion);
   - text objects `iw aw iW aW`, quotes, brackets (with the `b` / `B` aliases), `ip ap is as` and `it at`;
   - `i a I A gI o O` with counts, INSERT `Ctrl-w Ctrl-u Ctrl-r {register}`, `gi`, `u` / Ctrl-r, `.` (also in VISUAL);
-  - `v V` and blockwise `Ctrl-v` (`o O $`, `d x y r`, `I A c C`, `> <`, `~ u U`, block `p P`, `.`), `gv`;
+  - `v V` and blockwise `Ctrl-v` (`o O $`, `d x y r`, `I A c C`, `> <`, `~ u U`, block `p P`, `.`), `gv`; a block
+    `p P` whose column falls inside a wide character pads before it instead of splitting it;
     VISUAL `J gJ X D Y` and `C R s I A` as in Vim; VISUAL `p P` (characterwise, linewise and blockwise) replace
     the selection with the register text, and `P` leaves the registers unchanged;
   - registers: unnamed, named `"a`-`"z` / `"A`-`"Z`, numbered `"0`-`"9`, small delete `"-`, black hole `"_`,
@@ -85,7 +86,7 @@ records in `docs/quality/`.
   - search `/ ? n N * #` with `hlsearch` and `incsearch` on by default (`:noh`, Ctrl-G / Ctrl-T while typing),
     `:set ignorecase` / `smartcase`, and Up / Down history on the `:` and search lines; matchparen highlights
     the partner bracket (on by default);
-  - marks `m{a-z}` with `'{a-z}` `` `{a-z} ``, `''` and `'.`
+  - marks `m{a-z}` with `'{a-z}` `` `{a-z} ``, `''`, `'.` and `'^` `` `^ `` (where INSERT was last left)
     ([ADR 0152](docs/adr/0152-vim-marks-are-document-values-adjusted-by-edits.md)), the jump list `Ctrl-o`
     `Ctrl-i` and the change list `g;` `g,` (in Vim mode Ctrl+O is the jump list, so opening a file is Ctrl+Shift+O);
   - `:set relativenumber`, `:set scrolloff=`, virtual columns (Tab = 8, wide = 2), literal CR in LF files,
@@ -147,7 +148,10 @@ records in `docs/quality/`.
   the list. Read/write failures leave the previous list intact and show a one-line notice. The taskbar jump
   list is planned.
 - **FR-011 look** — frameless window with an opaque tab band as its title bar, follows the OS light / dark theme (aubergine dark, orange
-  accent), one paint per frame. Done.
+  accent), one paint per frame. The window corners are square and no Mica backdrop is applied (decision D86); a
+  window that is not maximized resizes from all edges and corners, including the top-right corner and a 4 DIP
+  strip along the top of × □ ＿, while a maximized window and edges touching the monitor's edge leave those
+  pixels to the buttons, so a pointer thrown into the screen corner still hits ×. Done.
 - **FR-012 Japanese IME** — IMM32; the composition is drawn in place and committed as one intent; Vim NORMAL turns the
   IME off, INSERT turns it back on. The Ctrl+P palette and the Vim `:` and search lines take a composition: they
   open with the IME off and leave it to the user (D32, D57). The explorer filter also takes Japanese input. Done.
@@ -213,16 +217,17 @@ records in `docs/quality/`.
   (FR-023), commentary, surround, autopairs and INSERT completion (FR-024), changed-line markers, indent guides
   and a yank flash (FR-025), project-wide search (FR-026) and the `:s` family (FR-027).
 - **FR-028 – FR-030** — a settings dialog with measured speed costs and six display languages are planned. A first
-  minimap (a retained bitmap at the right edge, `:set minimap`, off by default) shows the document; a click on it
-  scrolls that line to the middle of the screen and a drag follows the pointer, without moving the caret
+  minimap (a retained bitmap at the right edge, `:set minimap`, off by default) shows the document with its
+  visible range shaded and edged in the accent color; a click on it scrolls that line to the middle of the
+  screen and a drag follows the pointer, without moving the caret
   ([ADR 0171](docs/adr/0171-minimap-is-a-retained-bitmap-redrawn-only-for-edited-lines.md)). A start without
   files or previous tabs shows a start screen on the empty untitled document (decision D70,
   [ADR 0172](docs/adr/0172-start-screen-shows-recent-files-and-entry-actions-on-the-untouched-untitled-document.md)):
   the title, up to 10 recent files and 10 bookmarks as name and folder (read after the first frame, and read
   again in the background whenever the screen appears, so a new untitled tab from Ctrl+T shows them too),
-  新しいファイル (with its key Ctrl+T) / ファイルを開く / フォルダを開く and the main shortcuts in one column centred
-  horizontally and vertically. ↑ ↓ (and `j` `k` in Vim NORMAL) select a row, Enter or a click runs it, and
-  typing or opening a document hides the screen.
+  新しいファイル (with its key Ctrl+T) / ファイルを開く / フォルダを開く (with its key Ctrl+Shift+R, decision D85)
+  and the main shortcuts in one column centred horizontally and vertically. ↑ ↓ (and `j` `k` in Vim NORMAL)
+  select a row, Enter or a click runs it, and typing or opening a document hides the screen.
 - **FR-031 Notepad's operations** — in ordinary mode Ctrl+F finds, F3 / Shift+F3 move to the next or previous
   match, Ctrl+H replaces (Enter one, Ctrl+Enter all) and Ctrl+G goes to a line; Vim mode keeps its own keys and
   reaches the same features from F1 through its `/` and `:` lines
