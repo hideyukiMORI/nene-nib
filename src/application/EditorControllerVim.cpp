@@ -1343,6 +1343,12 @@ void EditorController::accept(const SearchHop &intent)
     const auto word = hopped_word(input.value(), state_.find());
     if (word.has_value())
     {
+        // 「検索: 」「置換後: 」の F3 は Enter と同じ確定なので、あふれた行は同じ 1 か所で断る
+        // （キャレット・語・最後の検索を変えない・ADR 0022 の追補 #1568）。
+        if (refused_overflow())
+        {
+            return;
+        }
         static_cast<void>(hop_find(word.value(), intent.relative, false));
         return;
     }

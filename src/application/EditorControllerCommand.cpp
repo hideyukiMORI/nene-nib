@@ -332,7 +332,13 @@ void EditorController::accept(const CommandText &intent)
         state_ = state_.with_command_message(core::ex_failure_message(next.error()));
         return;
     }
+    const bool overflowed = overflows_command(next.value());
     state_ = state_.with_command_input(std::move(next).value());
+    // あふれた行は持ったまま、超えた所で知らせる（確定は丸ごと断る・#1568）。
+    if (overflowed)
+    {
+        state_ = state_.with_command_message(core::ex_failure_message(core::ExFailure::too_long));
+    }
     reach_font_families();
     update_search_preview();
 }
@@ -365,10 +371,17 @@ void EditorController::accept(const EditCommand &intent)
             return;
         }
     }
-    state_ = state_.with_command_input(
-        recalls_history(edit)
-            ? recalled_command(input.value(), state_.ex_history(), state_.search_history(), edit)
-            : edited_command(input.value(), edit));
+    const bool overflowed = overflows_command(input.value());
+    CommandInput next = recalls_history(edit) ? recalled_command(input.value(), state_.ex_history(),
+                                                                 state_.search_history(), edit)
+                                              : edited_command(input.value(), edit);
+    const bool fits = !overflows_command(next);
+    state_ = state_.with_command_input(std::move(next));
+    // Backspace などで上限の内へ戻れば、あふれの知らせを消す（そのまま確定できる・#1568）。
+    if (overflowed && fits)
+    {
+        state_ = state_.with_command_message(std::nullopt);
+    }
     reach_font_families();
     update_search_preview();
 }
@@ -669,7 +682,10 @@ void EditorController::accept(const SubmitCommand &intent)
     // Ctrl+Enter は「置換後: 」の全件だけ（ADR 0174 の決定 3・7）。
     if (intent.all)
     {
-        replace_all_matches();
+        if (!refused_overflow())
+        {
+            replace_all_matches();
+        }
         return;
     }
     static_cast<void>(confirmed_command());
@@ -684,6 +700,11 @@ std::optional<core::VimRepeatFailure> EditorController::confirmed_command()
     constexpr core::VimKey enter{core::VimSpecialKey::enter};
     record_command_keys(std::span<const core::VimKey>{&enter, 1U});
     recorded_line_.reset();
+    // あふれた行は履歴にも足さない（呼び出して確定すると切れた行になる・#1568）。
+    if (refused_overflow())
+    {
+        return core::VimRepeatFailure::refused;
+    }
     const auto &open = state_.command_input();
     if (open.has_value())
     {
@@ -731,9 +752,30 @@ std::optional<core::VimRepeatFailure> EditorController::submitted_command()
     {
         return std::nullopt;
     }
+    if (refused_overflow())
+    {
+        return core::VimRepeatFailure::refused;
+    }
     // 入力行は state_ が持つので、写し先が状態を書き換える前に値ごと複製する。
     const CommandInput input = open.value();
     return std::visit([this](const auto &value) { return this->submit(value); }, input);
+}
+
+// あふれた入力の確定は丸ごと断る（ADR 0022 の追補 #1568）。切れた命令・pattern を実行しない。
+// 取消と同じに入力行を閉じ（検索の preview の起点へ戻す・`/` の待ちを捨てる・INSERT の `Ctrl-o`
+// を始め直す）、1 行知らせて鳴らす。本文・レジスタ・マーク・未保存の印には触れない。呼んだ道は
+// refused を返して再生（`.`・マクロ・`map` の右辺・fixture）を打ち切る。入力が開いていない・
+// あふれていなければ偽で何もしない。
+bool EditorController::refused_overflow()
+{
+    const auto &open = state_.command_input();
+    if (!open.has_value() || !overflows_command(open.value()))
+    {
+        return false;
+    }
+    cancel_command_input();
+    reject(core::ex_failure_message(core::ExFailure::too_long));
+    return true;
 }
 
 // 鳴らすかは呼んだ道で決め、文字列（E で始まるか）では決めない（ADR 0153 の決定 3）。Ex の命令の

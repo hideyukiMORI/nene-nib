@@ -5,6 +5,7 @@
 #include "ExResult.hpp"
 #include "FolderBatch.hpp"
 #include "HistoryAction.hpp"
+#include "InputText.hpp"
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
@@ -139,7 +140,7 @@ void verify_palette_input()
                    core::palette_query_of(escaped).scope == core::PaletteScope::files,
                "an initial mark in a file name remains a literal all-files query");
     }
-    const std::string query(254, 'x');
+    const std::string query(core::input_line_limit - 2, 'x');
     expect(request_is("b " + query, core::PaletteScope::tabs, query), "the longest command fits");
     const auto long_input =
         core::evaluate_ex("b " + query + 'x', core::default_editor_settings(), Appearance::dark);

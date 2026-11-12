@@ -35,6 +35,7 @@
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InputLineView.hpp"
+#include "InputText.hpp"
 #include "InsertText.hpp"
 #include "LayoutRect.hpp"
 #include "ListWindow.hpp"
@@ -174,8 +175,13 @@ void verify_palette_editing()
     expect(palette.selected_at(50).selected() == 0, "invalid row leaves selection intact");
     palette = palette.filled("set fontsize=").value();
     expect(palette.input().text() == ":set fontsize=", "fill retains command prefix");
-    expect(!palette.filled(std::string(256, 'x')),
-           "fill respects shared input limit including prefix");
+    expect(
+        !palette.filled(std::string(core::input_line_limit - 1, 'x'))
+                .value()
+                .input()
+                .overflowed() &&
+            palette.filled(std::string(core::input_line_limit, 'x')).value().input().overflowed(),
+        "fill shares the input limit including prefix (#1568)");
     palette = palette.filled("界😀").value().edited(CommandEdit::backspace);
     expect(palette.input().text() == ":界", "palette reuses Unicode code point editing");
     expect(!palette.inserted("\n") && !palette.inserted("\xFF"),
@@ -1208,11 +1214,13 @@ void verify_palette_commit_limits()
     auto frame = controller.apply_frame(HistoryAction{HistoryDirection::undo});
     expect(frame.lines.front().text.empty(), "undo still only sees the typed body");
     static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply_frame(app::CommandText{std::string(250, 'a')}));
+    static_cast<void>(
+        controller.apply_frame(app::CommandText{std::string(core::input_line_limit - 6, 'a')}));
     frame = controller.apply_frame(CommitText{"日本語"});
-    expect(frame.command_line.value_or(core::InputLineView{}).text == std::string(250, 'a') &&
+    expect(frame.command_line.value_or(core::InputLineView{}).text ==
+                   std::string(core::input_line_limit - 6, 'a') + "日本語" &&
                frame.command_message.has_value() && !app::composing(frame),
-           "a commit past the input limit is refused with a notice");
+           "a commit past the input limit overflows the input with a notice (#1568)");
 }
 
 // Ex の行と検索の行も面と同じく変換を入力行に載せ、確定は打った文字と同じ道で入力行に入る。
@@ -1241,20 +1249,22 @@ void verify_input_lines_take_composition()
     }
 }
 
-// Ex の行でも上限（256 バイト）を越える確定は入らず、面と同じ知らせが 1 行出る（ADR 0061 の
-// 決定 3・#635 の追記・入力の上限は inserted_command の 1 本を共用）。
+// Ex の行でも上限（core::input_line_limit）を越える確定は行をあふれさせ、面と同じ知らせが 1 行
+// 出る（ADR 0061 の決定 3・#635 の追記・入力の上限は inserted_command の 1 本を共用・#1568）。
 void verify_ex_commit_limit()
 {
     Editing editor;
     auto &controller = editor.controller();
     static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     static_cast<void>(controller.apply_frame(VimKeyPress{core::VimCharacter{U':'}}));
-    static_cast<void>(controller.apply_frame(app::CommandText{std::string(250, 'a')}));
+    static_cast<void>(
+        controller.apply_frame(app::CommandText{std::string(core::input_line_limit - 6, 'a')}));
     const auto frame = controller.apply_frame(CommitText{"日本語"});
-    expect(frame.command_line.value_or(core::InputLineView{}).text == std::string(250, 'a') &&
+    expect(frame.command_line.value_or(core::InputLineView{}).text ==
+                   std::string(core::input_line_limit - 6, 'a') + "日本語" &&
                frame.command_message.has_value() && !app::composing(frame) &&
                frame.lines.front().text.empty(),
-           "an Ex commit past the input limit is refused with a notice");
+           "an Ex commit past the input limit overflows the line with a notice");
 }
 
 // 記号の案内は変換を始めたら消え、取り消して空に戻ればまた出る。確定して文字が入れば出ない

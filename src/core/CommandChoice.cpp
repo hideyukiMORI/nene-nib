@@ -60,7 +60,9 @@ namespace
 
 [[nodiscard]] CommandChoice choice_of(std::string command)
 {
-    auto label = DisplayText::parse(command).value();
+    // 打った値（`set guifont=…`）の候補は入力行の上限まで長くなるので、名前の欄は 1 行に切る
+    // （実行する命令は command の全文・#1568）。
+    auto label = clipped_display_text(command).value();
     const auto kind = command == "set fontsize=" || command == guifont_command
                           ? CommandChoiceKind::fill
                           : CommandChoiceKind::execute;

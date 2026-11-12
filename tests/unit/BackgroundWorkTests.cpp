@@ -22,6 +22,7 @@
 #include "FolderProgress.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
+#include "InputText.hpp"
 #include "InsertText.hpp"
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
@@ -577,7 +578,8 @@ void verify_folder_truncated_stays()
     expect(optional_text(slash.command_message) == truncated_notice &&
                rows_of(slash).starts_with("C:\\work\\b.txt<同じフォルダ>|"),
            "the notice stays when the slash shows only the same folder");
-    const auto refused = controller.apply_frame(app::CommandText{std::string(300, 'a')});
+    const auto refused =
+        controller.apply_frame(app::CommandText{std::string(core::input_line_limit, 'a')});
     expect(refused.command_message.has_value() &&
                optional_text(refused.command_message) != truncated_notice,
            "a state notice shows once over the truncated notice");

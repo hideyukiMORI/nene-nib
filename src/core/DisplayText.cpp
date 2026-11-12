@@ -43,4 +43,18 @@ std::size_t DisplayText::code_point_count() const noexcept
 {
     return code_point_count_;
 }
+
+std::expected<DisplayText, TextFailure> clipped_display_text(std::string_view text)
+{
+    if (text.size() <= DisplayText::maximum_bytes)
+    {
+        return DisplayText::parse(text);
+    }
+    constexpr std::string_view ellipsis = "…";
+    // 末尾で切れた code point は whole_code_points の 1 本で落とす（#1292・ARC-001）。
+    const std::string_view kept = text.substr(0, DisplayText::maximum_bytes - ellipsis.size());
+    std::string shown(kept.substr(0, whole_code_points(kept)));
+    shown += ellipsis;
+    return DisplayText::parse(shown);
+}
 } // namespace nenenib::core
