@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 76d41020854eb787e9828d8b79a246a0fc9ab90dea1d3c0301f4058f596ed79d / 4522 fixtures
+// fixtures.json: sha256 eb7dbd63b1467334e75ddffafd27f10b70b4873bb431f2a478193ac9377ad95a / 4560 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4522> vim_fixtures{{
+constexpr std::array<VimFixture, 4560> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4534,6 +4534,44 @@ constexpr std::array<VimFixture, 4522> vim_fixtures{{
     {"textobject-word-lastempty-previous-empty-diw", "c a.b", "o<Esc>o<Esc>diw", "c a.b", 1, 1, "\n\n", "V", std::nullopt},
     {"textobject-word-lastempty-blank-line-diw", "ab\n  ", "Go<Esc>diw", "ab", 1, 1, "  \n\n", "V", std::nullopt},
     {"textobject-word-lastempty-indented-word-diw", "ab\n  cd", "Go<Esc>diw", "ab\n  c", 2, 3, "d\n", "v", std::nullopt},
+    {"textobject-sentence-linehead-yas", "ab cd.\n.\nx1 foo. end", "jyas", "ab cd.\n.\nx1 foo. end", 3, 1, "x1 foo. ", "v", std::nullopt},
+    {"textobject-sentence-linehead-yis", "ab cd.\n.\nx1 foo. end", "jyis", "ab cd.\n.\nx1 foo. end", 3, 1, "x1 foo.", "v", std::nullopt},
+    {"textobject-sentence-linehead-y2as", "ab cd.\n.\nx1 foo. end", "jy2as", "ab cd.\n.\nx1 foo. end", 3, 1, "x1 foo. end", "v", std::nullopt},
+    {"textobject-sentence-linehead-y2is", "ab cd.\n.\nx1 foo. end", "jy2is", "ab cd.\n.\nx1 foo. end", 3, 1, "x1 foo. ", "v", std::nullopt},
+    {"textobject-sentence-linehead-das", "ab cd.\n.\nx1 foo. end", "jdas", "ab cd.\n.\nend", 3, 1, "x1 foo. ", "v", std::nullopt},
+    {"textobject-sentence-linehead-dis", "ab cd.\n.\nx1 foo. end", "jdis", "ab cd.\n.\n end", 3, 1, "x1 foo.", "v", std::nullopt},
+    {"textobject-sentence-linehead-cis", "ab cd.\n.\nx1 foo. end", "jcisX<Esc>", "ab cd.\n.\nX end", 3, 1, "x1 foo.", "v", std::nullopt},
+    {"textobject-sentence-linehead-vasy", "ab cd.\n.\nx1 foo. end", "jvasy", "ab cd.\n.\nx1 foo. end", 3, 1, "x1 foo. ", "v", std::nullopt},
+    {"textobject-sentence-linehead-visy", "ab cd.\n.\nx1 foo. end", "jvisy", "ab cd.\n.\nx1 foo. end", 3, 1, "x1 foo.", "v", std::nullopt},
+    {"textobject-sentence-linehead-vis-caret", "ab cd.\n.\nx1 foo. end", "jvis<Esc>", "ab cd.\n.\nx1 foo. end", 3, 7, "", "", std::nullopt},
+    {"textobject-sentence-linehead-v2isy", "ab cd.\n.\nx1 foo. end", "jv2isy", "ab cd.\n.\nx1 foo. end", 3, 1, "x1 foo. ", "v", std::nullopt},
+    {"textobject-sentence-linehead-visisy", "ab cd.\n.\nx1 foo. end", "jvisisy", "ab cd.\n.\nx1 foo. end", 3, 1, "x1 foo. ", "v", std::nullopt},
+    {"textobject-sentence-linehead-bang", "ab cd.\n!\nx1 foo. end", "jyas", "ab cd.\n!\nx1 foo. end", 3, 1, "x1 foo. ", "v", std::nullopt},
+    {"textobject-sentence-linehead-question", "ab cd.\n?\nx1 foo. end", "jyas", "ab cd.\n?\nx1 foo. end", 3, 1, "x1 foo. ", "v", std::nullopt},
+    {"textobject-sentence-linehead-dot-x", "ab cd.\n.x\nx1 foo. end", "jyas", "ab cd.\n.x\nx1 foo. end", 2, 1, ".x\nx1 foo. ", "v", std::nullopt},
+    {"textobject-sentence-linehead-dot-dot", "ab cd.\n..\nx1 foo. end", "jyas", "ab cd.\n..\nx1 foo. end", 2, 1, "..\n", "V", std::nullopt},
+    {"textobject-sentence-linehead-dot-pp-yas", "ab cd.\n.\n.PP\nx1 foo. end", "jyas", "ab cd.\n.\n.PP\nx1 foo. end", 3, 1, ".PP\nx1 foo. ", "v", std::nullopt},
+    {"textobject-sentence-linehead-dot-pp-yis", "ab cd.\n.\n.PP\nx1 foo. end", "jyis", "ab cd.\n.\n.PP\nx1 foo. end", 3, 1, ".PP\n", "V", std::nullopt},
+    {"textobject-sentence-linehead-before-empty", "ab cd.\n.\n\nx1 foo. end", "jyas", "ab cd.\n.\n\nx1 foo. end", 3, 1, "\n", "V", std::nullopt},
+    {"textobject-sentence-linehead-quote-visy", "a b. gamma Hello 12.)\"\n\"dq\" x. y", "jvisy", "a b. gamma Hello 12.)\"\n\"dq\" x. y", 2, 1, "\"dq\" x.", "v", std::nullopt},
+    {"textobject-sentence-linehead-quote-yis", "a b. gamma Hello 12.)\"\n\"dq\" x. y", "jyis", "a b. gamma Hello 12.)\"\n\"dq\" x. y", 2, 1, "\"dq\" x.", "v", std::nullopt},
+    {"textobject-sentence-linehead-quote-yas", "a b. gamma Hello 12.)\"\n\"dq\" x. y", "jyas", "a b. gamma Hello 12.)\"\n\"dq\" x. y", 2, 1, "\"dq\" x. ", "v", std::nullopt},
+    {"textobject-sentence-linehead-quote-plain-dot", "a b. gamma Hello 12.\n\"dq\" x. y", "jvisy", "a b. gamma Hello 12.\n\"dq\" x. y", 2, 1, "\"dq\" x.", "v", std::nullopt},
+    {"textobject-sentence-linehead-quote-wide", "a b. gamma Hello １２.)\"\n\"dq\" x. y", "jvisy", "a b. gamma Hello １２.)\"\n\"dq\" x. y", 2, 1, "\"dq\" x.", "v", std::nullopt},
+    {"textobject-sentence-linehead-quote-vis0u", "a b. gamma Hello 12.)\"\n\"dq\" x. y", "jvis0u", "a b. gamma Hello 12.)\"\n\"dq\" x. y", 2, 1, "", "", std::nullopt},
+    {"textobject-sentence-linehead-paren", "ab cd.\n)x\nx1 foo. end", "jyas", "ab cd.\n)x\nx1 foo. end", 2, 1, ")x\nx1 foo. ", "v", std::nullopt},
+    {"textobject-sentence-linehead-last-line", "ab cd.\n.", "jyas", "ab cd.\n.", 2, 1, ".", "v", std::nullopt},
+    {"textobject-sentence-linehead-last-line-vis", "ab cd.\n.", "jvisy", "ab cd.\n.", 2, 1, ".", "v", std::nullopt},
+    {"textobject-sentence-linehead-control-not-end", "ab cd\n.\nx1 foo. end", "jyas", "ab cd\n.\nx1 foo. end", 1, 1, "ab cd\n.\n", "V", std::nullopt},
+    {"textobject-sentence-linehead-control-z", "ab cd.\nz.\n.PP\nx1 foo. end", "jyas", "ab cd.\nz.\n.PP\nx1 foo. end", 2, 1, "z.\n", "V", std::nullopt},
+    {"textobject-sentence-linehead-control-first-line", ".\n.PP\nx1 foo. end", "yas", ".\n.PP\nx1 foo. end", 2, 1, ".PP\nx1 foo. ", "v", std::nullopt},
+    {"textobject-sentence-linehead-control-dot-blank", "ab cd.\n. \nx1 foo. end", "jyas", "ab cd.\n. \nx1 foo. end", 2, 1, "", "v", std::nullopt},
+    {"textobject-sentence-linehead-control-dot-paren", "ab cd.\n.)\nx1 foo. end", "jyas", "ab cd.\n.)\nx1 foo. end", 2, 1, "", "v", std::nullopt},
+    {"textobject-sentence-linehead-control-close", "ab cd.\n.\n.PP\nx1 foo. end", "j)", "ab cd.\n.\n.PP\nx1 foo. end", 4, 1, "", "", std::nullopt},
+    {"textobject-sentence-linehead-control-open", "ab cd.\n.\n.PP\nx1 foo. end", "j(", "ab cd.\n.\n.PP\nx1 foo. end", 1, 1, "", "", std::nullopt},
+    {"textobject-sentence-linehead-fullwidth-stop", "ab cd。\n。\nx1 foo. end", "jyas", "ab cd。\n。\nx1 foo. end", 1, 1, "ab cd。\n。\nx1 foo. ", "v", std::nullopt},
+    {"textobject-sentence-linehead-fullwidth-stop-yis", "ab cd。\n。x\nx1 foo. end", "jyis", "ab cd。\n。x\nx1 foo. end", 1, 1, "ab cd。\n。x\nx1 foo.", "v", std::nullopt},
+    {"textobject-sentence-linehead-fuzz-form", "ab ＡＢＣ.\nＡＢＣ.\nx1 foo. end", "jdawvas~", "ab ＡＢＣ.\n.\nX1 FOO. end", 3, 1, "ＡＢＣ", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
