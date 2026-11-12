@@ -355,7 +355,7 @@ void verify_macro_replays_ex_line()
 // `exe "normal! :{行}<CR>j"` の両方を測った行をそのまま置く: 本文 abc/def/ghi の 1 行目から、
 // エラーは 1 行目に残り、成功は `j` で 2 行目へ。
 using ExReplayCase = std::pair<std::string_view, std::size_t>;
-constexpr std::array<ExReplayCase, 23> ex_replay_cases{{
+constexpr std::array<ExReplayCase, 28> ex_replay_cases{{
     {"set so!", 1},                 // E488
     {"set invso", 1},               // E474
     {"set noso", 1},                // E474
@@ -381,6 +381,15 @@ constexpr std::array<ExReplayCase, 23> ex_replay_cases{{
     {"set nohls!", 2},
     {"set hls&", 2},
     {"set is&", 2},
+    // 命令の要求が後で断る形（reject を通る）も同じ refused の 1 本で打ち切る（まとめ枝 #1563・
+    // Vim 9.1 の `-u NONE -es` の `normal! @a`・D:/NeNeNib/scripts/20261112/1563-chain/e/e.py）。
+    // 最後のタブの `:tabclose`（Vim は E784）と無題の `:w`（Vim は E32）は Nib では断りではない
+    // （窓を閉じる流れと保存の面・施主決定 D22）ので表に置かない。
+    {"tabnext 9", 1},     // E475
+    {"tabnext 0", 1},     // E475
+    {"3tabnext", 1},      // E16
+    {"tabprevious 9", 2}, // 折り返す
+    {"tabnext 1", 2},
 }};
 
 constexpr std::string_view ex_replay_text = "abc\ndef\nghi";
@@ -408,6 +417,25 @@ void verify_ex_failure_stops_replay()
     for (const auto &[line, expected] : ex_replay_cases)
     {
         verify_ex_replay_case(line, expected);
+    }
+}
+
+// オペレータ待ちの `:` の命令が断られたら、オペレータを捨てて再生の残りも打ち切る（#1549 と
+// #1525 を重ねた形・まとめ枝 #1563）。Vim 9.1 の `exe "normal! jd:tabnext 9<CR>x"` は本文を変えず
+// 2 行目に残る（`x` は流れない・D:/NeNeNib/scripts/20261112/1563-chain/e/e.py）。
+void verify_ex_failure_stops_operator_replay()
+{
+    using Case = std::pair<std::string_view, std::size_t>;
+    for (const auto &[keys, line] : {Case{"c:tabnext 9<CR>XY<Esc>", 1},
+                                     Case{"jd:tabnext 9<CR>x", 2}, Case{"jd:3tabnext<CR>x", 2}})
+    {
+        Editing normal;
+        open_vim_document(normal, std::string(ex_replay_text));
+        vim_normal(normal.controller(), keys);
+        expect(whole_vim_body(normal.controller()) == ex_replay_text &&
+                   caret_at(normal.controller().frame(), line, 1),
+               (":normal! " + std::string(keys) + ": a refused operator line stops the replay")
+                   .c_str());
     }
 }
 
@@ -1608,6 +1636,7 @@ void verify_vim_macro_contracts()
     verify_macro_records_visual_ex_line();
     verify_macro_replays_ex_line();
     verify_ex_failure_stops_replay();
+    verify_ex_failure_stops_operator_replay();
     verify_macro_replay_keeps_ex_history();
     verify_macro_list_closes_ex_line_unrecorded();
     verify_macro_q_inside_replay();
