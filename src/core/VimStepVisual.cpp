@@ -39,6 +39,7 @@ using detail::drops_count_digit;
 using detail::entered_insert;
 using detail::failed;
 using detail::forward_characters;
+using detail::home_uncounted;
 using detail::horizontal_action;
 using detail::input_action;
 using detail::JoinedLines;
@@ -752,7 +753,7 @@ namespace detail
     case VimSpecialKey::arrow_down:
         return visual_acted(state, view, VimAction::move_down);
     case VimSpecialKey::home:
-        return visual_acted(state, view, VimAction::move_line_start);
+        return visual_acted(home_uncounted(state), view, VimAction::move_to_column);
     case VimSpecialKey::end:
         return visual_acted(state, view, VimAction::move_line_end);
     case VimSpecialKey::page_up:

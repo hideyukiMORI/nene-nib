@@ -136,6 +136,12 @@ VISUAL の `y` は触らない。`d` `c` の後のキャレットは別の規則
     - 鍵は `VimSpecialKey::control_a` `control_x`（`g` の後ろは表の 0x01 と 0x18・本文 ↔ 鍵の写しも同じ値・`r<C-a>` は他の Ctrl 鍵と同じく何もしない）。窓は Vim の NORMAL と VISUAL でだけ Ctrl+A / Ctrl+X を写す（D71 の Vim 優先・INSERT は通常モードの表へ落ちる）。INSERT の `Ctrl-a`（直前の挿入）と `Ctrl-x`（補完）は未対応で何もしない。
     - fixture は `increment-` の 72 件（Vim 9.1 の oracle で実測・どれも `set nrformats=bin,hex` を fixture の設定に書く。oracle の `-u NONE` の Vim の既定は `bin,octal,hex` で、`007` の `Ctrl-a` が 8 進の `010` になる）。窓の外を読まないこと・値の往復・範囲の形は `--vim-number-property`（固定 seed の性質の試験）。
 
+### 決定 6 の追補（2026-11-12・#1505）: NORMAL と VISUAL の `<Home>` は回数を捨てた `1|`
+
+- 決定 6 の「NORMAL の `<Home>` は `0`」を改める。Vim 9.1 の `nv_home`（normal.c）は `cap->count0 = 1` にして `nv_pipe` を呼ぶ。`nv_pipe` は `beginline(0)` の後 `coladvance(0)` で同じ行頭の文字へ動き、`w_curswant = 0` と `w_set_curswant = FALSE` で**欲しい列を 0 に固定する**。`0` の `nv_beginline` は欲しい列を固定しない（次の `j` `k` がキャレットの見た目の桁から引き直す）ので、行頭が Tab の行では Tab の右端（仮想桁 7）が欲しい列になり、次の行の 8 桁目へ行く。着地は同じで、違いは次の上下の移動の欲しい列だけ。
+- engine は NORMAL（オペレータ待ちを含む）と VISUAL（文字・行・矩形）の `<Home>` を `move_to_column`（`|`）に写し、その前に回数とオペレータの回数を捨てる（`detail::home_uncounted` の 1 本・`3<Home>` `$v3<Home>d` `$3d<Home>` `$2d3<Home>` は回数なしと同じ）。範囲は `d|` と同じ exclusive の文字単位で、`d0` と同じ。INSERT の `<Home>`（`ins_home`）と通常モード（Vim でないモード）の Home は変えない（INSERT の `A<Home><Esc>j` は Esc の後の欲しい列が見た目の桁のままで、Vim と既に一致している・D82）。`<End>` は `$` と同じまま（`nv_end` は `nv_dollar` を呼ぶ）。
+- fixture は `home-wanted-` の 29 件（Tab・空白・全角・結合文字・空の行・回数・VISUAL の 3 種・オペレータと回数・`c`・`.`・対照の `0j` `1|j` `<End>j` `$j` と INSERT の `<Home>`・Vim 9.1 の実測）。
+
 ## 強制
 
 - fixture の再生（ADR 0005 / 0012）— **active**（`nib_unit` が `VimFixtures.hpp` の全項目を再生し、レジスタの種類も突き合わせる）
