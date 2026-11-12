@@ -37,6 +37,7 @@
 #include "VimBlockRange.hpp"
 #include "VimMode.hpp"
 #include "VimSearch.hpp"
+#include "VimStep.hpp"
 #include "VimVisualRange.hpp"
 
 #include <algorithm>
@@ -1095,6 +1096,15 @@ EditorDelivery EditorController::delivery() const
         std::nullopt};
 }
 
+namespace
+{
+// INSERT の `Ctrl-o` の命令を待つ間か（ステータスの `(insert)`・ADR 0182 の決定 9）。
+[[nodiscard]] bool insert_paused(const EditorState &state) noexcept
+{
+    return core::vim_insert_paused(state.vim());
+}
+} // namespace
+
 // 頼まれた追従を解決してから作る（ADR 0128 の決定 3）。解決の失敗は failure に載る。
 EditorFrame EditorController::frame()
 {
@@ -1131,7 +1141,7 @@ EditorFrame EditorController::frame()
                        delivered.mode,
                        delivered.vim_mode,
                        delivered.ime,
-                       core::mode_label(delivered.mode, delivered.vim_mode),
+                       core::mode_label(delivered.mode, delivered.vim_mode, insert_paused(state_)),
                        recording_name(),
                        std::move(delivered.composition),
                        std::move(delivered.command_composition),

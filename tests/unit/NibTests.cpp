@@ -20,7 +20,7 @@ namespace
 // 契約を持たない scope（--vim-visual-yank）と、既に載っている契約を別の切り口で束ねただけの scope
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 // 表は関数の外に置く（CPP-012・関数長の上限は表の行を数えない形で守る）。
-constexpr std::array<std::pair<std::string_view, void (*)()>, 105> contracts{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 106> contracts{{
     {"--vim-wrapped", verify_vim_wrapped_contracts},
     {"--wrapped-view", verify_wrapped_view_scope},
     {"--edge-arrows", verify_edge_arrows_scope},
@@ -94,6 +94,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 105> contracts{{
     {"--text-buffer-property", verify_text_buffer_property_scope},
     {"--edit-history-property", verify_edit_history_property_scope},
     {"--vim-change-mark", verify_vim_change_mark_scope},
+    {"--vim-insert-normal", verify_vim_insert_normal_scope},
     {"--saved-state-property", verify_saved_state_property_scope},
     {"--vim-pattern-property", verify_vim_pattern_property_scope},
     {"--title-bar-layout-property", verify_title_bar_layout_property_scope},
@@ -143,7 +144,7 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 130> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 131> scopes{{
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
@@ -244,6 +245,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 130> scopes{{
     {"--text-buffer-property", verify_text_buffer_property_scope},
     {"--edit-history-property", verify_edit_history_property_scope},
     {"--vim-change-mark", verify_vim_change_mark_scope},
+    {"--vim-insert-normal", verify_vim_insert_normal_scope},
     {"--saved-state-property", verify_saved_state_property_scope},
     {"--vim-pattern-property", verify_vim_pattern_property_scope},
     {"--title-bar-layout-property", verify_title_bar_layout_property_scope},
