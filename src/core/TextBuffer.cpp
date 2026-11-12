@@ -37,6 +37,8 @@ using Chunks = std::vector<std::shared_ptr<AddChunk>>;
 
 // 本文の半開範囲と各 piece の非空の交差だけを、その呼び出し中に読む（Issue #338）。
 // offset / length は piece 内の位置。借用を保存せず、本文外の end で容量も取らない。
+// pieces は begin を含む piece から始まる列の尾（TextBuffer::pieces_from）で、piece の本文の中の
+// 位置は累積の prefix_bytes から読む（0 番目から足さない・ADR 0183 の決定 3）。
 template <typename Visitor>
 void visit_text_range(std::span<const Piece> pieces, Offset begin, Offset end, Visitor &&visitor)
 {
@@ -44,9 +46,9 @@ void visit_text_range(std::span<const Piece> pieces, Offset begin, Offset end, V
     {
         return;
     }
-    std::size_t absolute = 0;
     for (const auto &piece : pieces)
     {
+        const std::size_t absolute = piece.prefix_bytes;
         if (absolute >= end.value)
         {
             break;
@@ -57,7 +59,6 @@ void visit_text_range(std::span<const Piece> pieces, Offset begin, Offset end, V
         {
             return;
         }
-        absolute += piece.length;
     }
 }
 
@@ -70,8 +71,25 @@ void visit_text_range(std::span<const Piece> pieces, Offset begin, Offset end, V
            length <= chunk_bytes - fill;
 }
 
+// 列の末尾に piece を置き、手前までのバイト数と改行の数を直前の piece の累積から埋める。列を作る
+// 道（構築・collect・挿入）はどれもここを通り、累積を埋めるのはこの 1 か所だけ（ADR 0183 の決定
+// 2）。列を作る周がそのまま累積を埋めるので、合計のための周も累積のための周も回さない。
+void placed(std::vector<Piece> &out, Piece piece)
+{
+    piece.prefix_bytes = 0;
+    piece.prefix_newlines = 0;
+    if (!out.empty())
+    {
+        const Piece &last = out.back();
+        piece.prefix_bytes = last.prefix_bytes + last.length;
+        piece.prefix_newlines = last.prefix_newlines + (last.newline_end - last.newline_begin);
+    }
+    out.push_back(piece);
+}
+
 // 末尾の add piece に続く入力は piece を増やさずに伸ばす。連続した入力で列が膨らまない。
 // 続くのは同じ chunk の中だけで、chunk が変われば新しい piece になる（ADR 0044 の決定 3）。
+// 伸ばすのは末尾の piece なので、後ろの累積は無い。
 void append_insertion(std::vector<Piece> &out, Piece piece)
 {
     const bool continues = !out.empty() && out.back().source == PieceSource::add &&
@@ -79,7 +97,7 @@ void append_insertion(std::vector<Piece> &out, Piece piece)
                            out.back().start.value + out.back().length == piece.start.value;
     if (!continues)
     {
-        out.push_back(piece);
+        placed(out, piece);
         return;
     }
     // 同じ chunk の索引で窓が隣り合うので、窓の端を進めるだけで済む（ADR 0047 の決定 4）。
@@ -88,24 +106,20 @@ void append_insertion(std::vector<Piece> &out, Piece piece)
     last.newline_end = piece.newline_end;
 }
 
+// 合計は最後の piece の累積と自分の分で読む（合計のための周を回さない・ADR 0183 の決定 2）。
 [[nodiscard]] std::size_t total_length(const std::vector<Piece> &pieces) noexcept
 {
-    std::size_t bytes = 0;
-    for (const auto &piece : pieces)
-    {
-        bytes += piece.length;
-    }
-    return bytes;
+    return pieces.empty() ? 0 : pieces.back().prefix_bytes + pieces.back().length;
 }
 
 [[nodiscard]] std::size_t total_newlines(const std::vector<Piece> &pieces) noexcept
 {
-    std::size_t count = 0;
-    for (const auto &piece : pieces)
+    if (pieces.empty())
     {
-        count += piece.newline_end - piece.newline_begin;
+        return 0;
     }
-    return count;
+    const Piece &last = pieces.back();
+    return last.prefix_newlines + (last.newline_end - last.newline_begin);
 }
 } // namespace
 
@@ -128,7 +142,8 @@ Piece TextBuffer::appended(Chunks &chunks, std::size_t &fill, std::string_view t
     chunk.newlines.append(text);
     fill += text.size();
     const std::size_t last = chunk.newlines.size();
-    return Piece{PieceSource::add, chunks.size() - 1, Offset{start}, text.size(), first, last};
+    return Piece{
+        PieceSource::add, chunks.size() - 1, Offset{start}, text.size(), first, last, 0, 0};
 }
 
 // add は空の列で始まり、最初の挿入が 1 本目の chunk を作る（ADR 0044）。
@@ -189,8 +204,8 @@ TextBuffer TextBuffer::from_validated_utf8(std::string text, std::size_t skip)
     std::vector<Piece> pieces;
     if (original->size() > start)
     {
-        pieces.push_back(Piece{PieceSource::original, 0, Offset{start}, original->size() - start,
-                               newlines->count_before(start), newlines->size()});
+        placed(pieces, Piece{PieceSource::original, 0, Offset{start}, original->size() - start,
+                             newlines->count_before(start), newlines->size(), 0, 0});
     }
     // 改行の形はここで 1 度だけ判別する。以後は本文が持ち回り、開く経路は自分で判別しない
     // （ADR 0036 の決定 1 / ADR 0010 の決定 4）。
@@ -244,15 +259,64 @@ Piece TextBuffer::clipped(const Piece &piece, std::size_t from, std::size_t leng
                  Offset{begin},
                  length,
                  index.count_before(begin),
-                 index.count_before(begin + length)};
+                 index.count_before(begin + length),
+                 0,
+                 0};
+}
+
+// at を含む piece の番号（手前までのバイト数が at 以下の最後の piece）。at が本文の末尾なら最後の
+// piece、列が空なら 0。位置 → piece を引く唯一の口（ADR 0183 の決定 3）。piece は空でないので
+// 累積は狭義に増える。比較は ceil(log2 P) 回で、P が 1 なら 0 回・2〜4 なら 1〜2 回。
+std::size_t TextBuffer::piece_at(std::size_t at) const noexcept
+{
+    const auto &pieces = *pieces_;
+    // 0 番目の累積は 0 で at 以下なので、答えはいつも [low, low + count) の中にある。
+    std::size_t low = 0;
+    std::size_t count = pieces.size();
+    while (count > 1)
+    {
+        const std::size_t half = count / 2;
+        if (pieces[low + half].prefix_bytes <= at)
+        {
+            low += half;
+        }
+        count -= half;
+    }
+    return low;
+}
+
+// index 番目（0 始まり）の改行を含む piece の番号（手前までの改行の数が index 以下の最後の
+// piece）。呼ぶ側は index < newline_count_ を守る。行 → piece を引く唯一の口（ADR 0183 の決定 3）。
+// 後ろの piece の累積は index を越えるので、改行を持たない piece には止まらない。
+std::size_t TextBuffer::piece_of_newline(std::size_t index) const noexcept
+{
+    const auto &pieces = *pieces_;
+    std::size_t low = 0;
+    std::size_t count = pieces.size();
+    while (count > 1)
+    {
+        const std::size_t half = count / 2;
+        if (pieces[low + half].prefix_newlines <= index)
+        {
+            low += half;
+        }
+        count -= half;
+    }
+    return low;
+}
+
+// at を含む piece から始まる列の尾。範囲を歩く道（visit_text_range）はここから始める。
+std::span<const Piece> TextBuffer::pieces_from(std::size_t at) const noexcept
+{
+    return std::span<const Piece>(*pieces_).subspan(piece_at(at));
 }
 
 void TextBuffer::collect(std::vector<Piece> &out, std::size_t from, std::size_t to) const
 {
-    visit_text_range(*pieces_, Offset{from}, Offset{to},
+    visit_text_range(pieces_from(from), Offset{from}, Offset{to},
                      [this, &out](const Piece &piece, std::size_t offset, std::size_t length)
                      {
-                         out.push_back(clipped(piece, offset, length));
+                         placed(out, clipped(piece, offset, length));
                          return true;
                      });
 }
@@ -265,6 +329,7 @@ TextBuffer TextBuffer::replaced(Offset begin, Offset end, std::string_view text)
     auto add = add_;
     std::size_t fill = add_fill_;
     std::vector<Piece> next;
+    next.reserve(pieces_->size() + 2);
     collect(next, 0, from);
     if (!text.empty())
     {
@@ -374,7 +439,7 @@ std::vector<std::string_view> TextBuffer::segments() const &
 std::string TextBuffer::text_range(Offset begin, Offset end) const
 {
     std::string result;
-    visit_text_range(*pieces_, begin, end,
+    visit_text_range(pieces_from(begin.value), begin, end,
                      [this, &result](const Piece &piece, std::size_t offset, std::size_t length)
                      {
                          result.append(view_of(piece).substr(offset, length));
@@ -387,7 +452,7 @@ char TextBuffer::byte_at(Offset at) const noexcept
 {
     char result = '\0';
     bool found = false;
-    visit_text_range(*pieces_, at, Offset{at.value + 1},
+    visit_text_range(pieces_from(at.value), at, Offset{at.value + 1},
                      [this, &result, &found](const Piece &piece, std::size_t offset, std::size_t)
                      {
                          result = view_of(piece)[offset];
@@ -407,39 +472,30 @@ std::string TextBuffer::text() const
     return text_range(Offset{0}, Offset{size_bytes_});
 }
 
+// 行 → piece を引いてから、その piece の窓で改行の索引を引く（ADR 0183 の決定 3・ADR 0047）。
 std::size_t TextBuffer::newline_offset(std::size_t index) const noexcept
 {
-    std::size_t absolute = 0;
-    std::size_t seen = 0;
-    for (const auto &piece : *pieces_)
+    if (index >= newline_count_)
     {
-        const std::size_t count = piece.newline_end - piece.newline_begin;
-        if (seen + count > index)
-        {
-            const Offset entry = index_of(piece).at(piece.newline_begin + (index - seen));
-            return absolute + (entry.value - piece.start.value);
-        }
-        seen += count;
-        absolute += piece.length;
+        return size_bytes_;
     }
-    return size_bytes_;
+    const Piece &piece = (*pieces_)[piece_of_newline(index)];
+    const Offset entry = index_of(piece).at(piece.newline_begin + (index - piece.prefix_newlines));
+    return piece.prefix_bytes + (entry.value - piece.start.value);
 }
 
+// at の手前の改行の数。本文の外の at は末尾として読む（末尾の piece の窓の全部）。
 std::size_t TextBuffer::newlines_before(std::size_t at) const noexcept
 {
-    std::size_t absolute = 0;
-    std::size_t count = 0;
-    for (const auto &piece : *pieces_)
+    if (pieces_->empty())
     {
-        if (absolute + piece.length >= at)
-        {
-            return count + index_of(piece).count_before(piece.start.value + (at - absolute)) -
-                   piece.newline_begin;
-        }
-        count += piece.newline_end - piece.newline_begin;
-        absolute += piece.length;
+        return 0;
     }
-    return count;
+    const std::size_t clamped = std::min(at, size_bytes_);
+    const Piece &piece = (*pieces_)[piece_at(clamped)];
+    return piece.prefix_newlines +
+           index_of(piece).count_before(piece.start.value + (clamped - piece.prefix_bytes)) -
+           piece.newline_begin;
 }
 
 Offset TextBuffer::line_start(LineNumber line) const noexcept
@@ -507,7 +563,7 @@ std::pair<TextPosition, std::size_t> TextBuffer::position_read(Offset at) const
     std::size_t code_points = 0;
     // 非継続 byte の個数は任意の byte 分割で加法的。途中 offset / piece も丸めない。
     visit_text_range(
-        *pieces_, start, Offset{clamped},
+        pieces_from(start.value), start, Offset{clamped},
         [this, &code_points](const Piece &piece, std::size_t offset, std::size_t length)
         {
             code_points += code_point_count(view_of(piece).substr(offset, length));
@@ -530,7 +586,7 @@ std::pair<Offset, std::size_t> TextBuffer::offset_read(const TextPosition &posit
     std::size_t remaining = position.column.value - 1;
     std::size_t consumed = 0;
     visit_text_range(
-        *pieces_, start, line_end(position.line),
+        pieces_from(start.value), start, line_end(position.line),
         [this, &remaining, &consumed](const Piece &piece, std::size_t offset, std::size_t length)
         {
             const auto slice = view_of(piece).substr(offset, length);
