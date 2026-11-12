@@ -203,7 +203,7 @@ constexpr std::array<Apply, 12> operations{
 [[nodiscard]] TabValue value_of(const std::shared_ptr<const app::DocumentState> &tab)
 {
     const auto &saved = tab->document.saved_position;
-    const bool unsaved = !saved.has_value() || saved.value() != tab->history.position();
+    const bool unsaved = !saved.has_value() || saved.value() != tab->history.content_position();
     return std::pair{unsaved, tab->history.revision()};
 }
 
@@ -221,7 +221,8 @@ constexpr std::array<Apply, 12> operations{
         if (position == state.active_tab())
         {
             const auto &saved = state.document().saved_position;
-            const bool unsaved = !saved.has_value() || saved.value() != state.history().position();
+            const bool unsaved =
+                !saved.has_value() || saved.value() != state.history().content_position();
             values.emplace_back(std::pair{unsaved, state.history().revision()});
             continue;
         }

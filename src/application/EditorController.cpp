@@ -984,7 +984,7 @@ EditorController::grid_visible_rows(const PaneSource &source,
 DocumentView EditorController::active_document_view() const
 {
     const auto &document = state_.document();
-    const auto save_state = save_state_of(document, state_.history().position());
+    const auto save_state = save_state_of(document, state_.history().content_position());
     return DocumentView{core::tab_title_for(document.path, save_state), document.path,
                         document.encoding, save_state, state_.last_failure()};
 }

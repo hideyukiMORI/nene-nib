@@ -17,12 +17,18 @@
 // `scroll`（Vim の 'scroll'）が加わる。鍵の記法の表
 // （src/core/VimKeyNames.hpp）に無い `<…>` を含む件と、欄の数が違う行と、数の欄が
 // std::uint32_t の範囲を超える行は `skip <name> <理由>`（#1233）。
+// どちらの形も、最後の欄が `change=<m><c><u>`（各 0 か 1・oracle の fixture の `change` と同じ
+// &modified・changedtick が進んだか・seq_cur が進んだか）なら、Vim の変更の印も比べる
+// （ADR 0181・#1440）。比べる欄は `modified`（未保存の印）・`changed`（`'.` が置かれたか・Vim の
+// changedtick は `u` でも進むので本文の位置ではなく `'.` で比べる）・`undo`（履歴の位置が 0 より
+// 先か）。
 #include "../vim/VimFixture.hpp"
 #include "../vim/VimViewportFixture.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "OpenDocument.hpp"
+#include "SaveState.hpp"
 #include "ScriptedFiles.hpp"
 #include "SelectEditMode.hpp"
 #include "TestSupport.hpp"
@@ -72,6 +78,11 @@ constexpr std::size_t field_count = 8;
 constexpr std::size_t viewport_field_count = 15;
 constexpr std::size_t viewport_numbers = viewport_field_count - field_count;
 using ViewportValues = std::array<std::size_t, viewport_numbers>;
+// 変更の印の欄（modified changed undo・ADR 0181）。
+using ChangeMarks = std::array<bool, 3>;
+// 本文の後の line と column。
+using Place = std::pair<std::size_t, std::size_t>;
+constexpr std::string_view change_prefix = "change=";
 constexpr std::size_t read_chunk = 65536;
 // 数の欄の上限。fixture の line・column と窓の値は std::uint32_t に狭めるので、超える欄は読めない
 // 欄として skip にする（#1233・R2-1）。
@@ -313,6 +324,48 @@ void write_mismatch(const std::string &name, std::string_view field, std::string
     return differences;
 }
 
+// 変更の印を比べる（verify_vim_fixture の変更の印と同じ口・ADR 0181）。
+[[nodiscard]] std::size_t change_differences(const std::string &name,
+                                             const EditorController &controller,
+                                             const std::optional<ChangeMarks> &change)
+{
+    if (!change.has_value())
+    {
+        return 0;
+    }
+    const ChangeMarks actual{
+        controller.documents().at(0).save_state == nenenib::core::SaveState::modified,
+        controller.vim_marks().last_change.has_value(), controller.history().position() > 0};
+    constexpr std::array<std::string_view, 3> names{"modified", "changed", "undo"};
+    std::size_t differences = 0;
+    for (std::size_t index = 0; index < names.size(); ++index)
+    {
+        if (actual.at(index) != change.value().at(index))
+        {
+            write_mismatch(name, names.at(index), change.value().at(index) ? "1" : "0",
+                           actual.at(index) ? "1" : "0");
+            ++differences;
+        }
+    }
+    return differences;
+}
+
+// 最後の欄が変更の印なら外して読む。形が違えば欄はそのまま残り、欄の数の検査が skip にする。
+[[nodiscard]] std::optional<ChangeMarks> taken_change(Fields &fields)
+{
+    if (fields.empty() || !fields.back().starts_with(change_prefix))
+    {
+        return std::nullopt;
+    }
+    const std::string_view digits = std::string_view(fields.back()).substr(change_prefix.size());
+    if (digits.size() != 3 || digits.find_first_not_of("01") != std::string_view::npos)
+    {
+        return std::nullopt;
+    }
+    fields.pop_back();
+    return ChangeMarks{digits.at(0) == '1', digits.at(1) == '1', digits.at(2) == '1'};
+}
+
 // 本文を開いて Vim にし、fixture の窓を置いてから余白を打つ（契約 --vim-view の placed_window
 // の順）。
 void prepare(Editing &editing, const VimFixture &fixture, std::size_t scrolloff)
@@ -332,9 +385,10 @@ void prepare(Editing &editing, const VimFixture &fixture, std::size_t scrolloff)
 
 // verify_vim_fixture と同じ道で 1 件を流し、違った欄ごとに 1 行を書く。viewport つきの件は
 // 窓を置いてから余白を打つ。
-void replay_one(const Fields &fields, std::size_t line_number, std::size_t column,
-                const std::optional<ViewportValues> &window)
+void replay_one(const Fields &fields, Place place, const std::optional<ViewportValues> &window,
+                const std::optional<ChangeMarks> &change)
 {
+    const auto [line_number, column] = place;
     const std::optional<VimViewportFixture> viewport =
         window.has_value() ? std::optional{viewport_of(window.value())} : std::nullopt;
     const std::size_t scrolloff = window.has_value() ? window.value().at(viewport_numbers - 1) : 0;
@@ -376,6 +430,7 @@ void replay_one(const Fields &fields, std::size_t line_number, std::size_t colum
     {
         differences += viewport_differences(name, viewport.value(), first_visible, scroll_lines);
     }
+    differences += change_differences(name, controller, change);
     if (differences == 0)
     {
         write_line("ok " + name);
@@ -413,7 +468,8 @@ void replay_line(std::string_view line)
     {
         return;
     }
-    const Fields fields = fields_of(line);
+    Fields fields = fields_of(line);
+    const std::optional<ChangeMarks> change = taken_change(fields);
     const std::string name = fields.at(0);
     if (!known_field_count(fields.size()))
     {
@@ -438,7 +494,7 @@ void replay_line(std::string_view line)
     }
     if (fields.size() == field_count)
     {
-        replay_one(fields, line_number.value(), column.value(), std::nullopt);
+        replay_one(fields, Place{line_number.value(), column.value()}, std::nullopt, change);
         return;
     }
     const auto values = viewport_values(fields);
@@ -448,7 +504,7 @@ void replay_line(std::string_view line)
                    std::to_string(number_limit));
         return;
     }
-    replay_one(fields, line_number.value(), column.value(), values);
+    replay_one(fields, Place{line_number.value(), column.value()}, values, change);
 }
 
 [[nodiscard]] std::string whole_stream(std::FILE *stream)

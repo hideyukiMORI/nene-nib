@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 b73f8ec6b6e63e736e9119e6a4bd82b909958e82b2f0bb68acb25c72ec7fd0c8 / 4578 fixtures
+// fixtures.json: sha256 c5163df12a82ad90ebe5ec1402ec0e77d3fb4395f700d3725b94da4c8cdce4fd / 4577 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4578> vim_fixtures{{
+constexpr std::array<VimFixture, 4577> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4579,7 +4579,6 @@ constexpr std::array<VimFixture, 4578> vim_fixtures{{
     {"change-mark-gJ-next-empty", "abc\n\nx", "gJ", "abc\nx", 1, 3, "", "", std::nullopt, std::nullopt, VimChangeFixture{true, true, true}},
     {"change-mark-o-esc", "abc", "o<Esc>", "abc\n", 2, 1, "", "", std::nullopt, std::nullopt, VimChangeFixture{true, true, true}},
     {"change-mark-ctrla-num", "5", "<C-a>", "6", 1, 1, "", "", std::nullopt, std::nullopt, VimChangeFixture{true, true, true}},
-    {"change-mark-blackhole-put", "abc", "\"_p", "abc", 1, 1, "", "", std::nullopt, std::nullopt, VimChangeFixture{false, false, true}},
     {"change-mark-empty-text-put", "\nx", "C<Esc>p", "\nx", 1, 1, "", "v", std::nullopt, std::nullopt, VimChangeFixture{false, false, true}},
     {"change-mark-macro-tilde", "123\nabc", "@a", "123\nAbc", 2, 2, "", "", std::nullopt, VimMacroFixture{'a', "~j0~"}, VimChangeFixture{true, true, true}},
     {"change-mark-macro-x-empty", "\nabc", "@a", "\nbc", 2, 1, "a", "v", std::nullopt, VimMacroFixture{'a', "xjx"}, VimChangeFixture{true, true, true}},

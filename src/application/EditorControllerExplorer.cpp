@@ -756,7 +756,8 @@ std::vector<core::FilePath> EditorController::unsaved_files() const
     std::vector<core::FilePath> files;
     const auto &active = state_.document().path;
     if (active.has_value() &&
-        save_state_of(state_.document(), state_.history().position()) != core::SaveState::saved)
+        save_state_of(state_.document(), state_.history().content_position()) !=
+            core::SaveState::saved)
     {
         files.push_back(active.value());
     }

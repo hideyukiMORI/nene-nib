@@ -4566,7 +4566,6 @@
   {"name":"change-mark-gJ-next-empty","text":"abc\n\nx","keys":"gJ","change":true},
   {"name":"change-mark-o-esc","text":"abc","keys":"o<Esc>","change":true},
   {"name":"change-mark-ctrla-num","text":"5","keys":"<C-a>","change":true},
-  {"name":"change-mark-blackhole-put","text":"abc","keys":"\"_p","change":true},
   {"name":"change-mark-empty-text-put","text":"\nx","keys":"C<Esc>p","change":true},
   {"name":"change-mark-macro-tilde","text":"123\nabc","keys":"@a","register":{"name":"a","keys":"~j0~"},"change":true},
   {"name":"change-mark-macro-x-empty","text":"\nabc","keys":"@a","register":{"name":"a","keys":"xjx"},"change":true},

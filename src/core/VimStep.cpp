@@ -2370,6 +2370,18 @@ namespace
     return step;
 }
 
+// 本文を置き換える編集の効果を返す step の印（ADR 0181 の決定 2）。編集を返す鍵は Vim が必ず
+// u_save と changed_* を呼ぶので、印を書く所を効果ごとに散らさず出口のこの 1 か所で立てる。
+// 編集を返さない形の印（saved_only・空の範囲の changed）は効果を作る所が立てたまま残す。
+[[nodiscard]] VimStep change_marked(VimStep step)
+{
+    if (vim_replaces_text(step.effect))
+    {
+        step.change = VimChange::changed;
+    }
+    return step;
+}
+
 // `"{name}` の前の回数は、回数と選んだレジスタが両方残るあいだだけ持つ（#1319）。オペレータへ
 // 移った回数は pending が持ち、移動や命令で回数を使い終えれば Vim の opcount も 0 に戻る。
 [[nodiscard]] VimStep register_count_kept(VimStep step)
@@ -2408,6 +2420,104 @@ VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
         return step;
     }
     step = visual_remembered(state, view, key, std::move(step));
-    return macro_recorded(state, view, vim_recorded(state, view, std::move(step), key), key);
+    return change_marked(
+        macro_recorded(state, view, vim_recorded(state, view, std::move(step), key), key));
+}
+
+namespace
+{
+[[nodiscard]] bool replaces_block(const std::vector<VimBlockEdit> &edits) noexcept
+{
+    return std::ranges::any_of(edits, [](const VimBlockEdit &edit)
+                               { return !is_empty(edit.range) || !edit.utf8.empty(); });
+}
+
+[[nodiscard]] bool replaces(const VimNoEffect &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool replaces(const VimMoveTo &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool replaces(const VimNavigate &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool replaces(const VimSelect &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool replaces(const VimRemoveRange &effect) noexcept
+{
+    return !is_empty(effect.range);
+}
+[[nodiscard]] bool replaces(const VimRemoveLines &effect) noexcept
+{
+    return !is_empty(effect.range);
+}
+[[nodiscard]] bool replaces(const VimInsertString &effect) noexcept
+{
+    return !effect.utf8.empty();
+}
+[[nodiscard]] bool replaces(const VimNewLine &) noexcept
+{
+    return true;
+}
+[[nodiscard]] bool replaces(const VimInsertAt &effect) noexcept
+{
+    return !effect.utf8.empty();
+}
+[[nodiscard]] bool replaces(const VimReplaceRange &effect) noexcept
+{
+    return !is_empty(effect.range) || !effect.utf8.empty();
+}
+[[nodiscard]] bool replaces(const VimRemoveBlock &effect) noexcept
+{
+    return replaces_block(effect.edits);
+}
+[[nodiscard]] bool replaces(const VimReplaceBlock &effect) noexcept
+{
+    return replaces_block(effect.edits);
+}
+[[nodiscard]] bool replaces(const VimInsertBlock &effect) noexcept
+{
+    return replaces_block(effect.edits);
+}
+[[nodiscard]] bool replaces(const VimUndo &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool replaces(const VimRedo &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool replaces(const VimOpenCommandLine &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool replaces(const VimOpenSearch &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool replaces(const VimReplay &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool replaces(const VimSwitchTab &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool replaces(const VimWindowCommand &) noexcept
+{
+    return false;
+}
+} // namespace
+
+// u と Ctrl-r は Vim の u_save を呼ばない（undo の単位を作らない）ので本文を置き換えても数えない。
+// 効果の種類が増えたら上の多重定義が足りずにコンパイルが落ちる（CPP-002）。
+bool vim_replaces_text(const VimEffect &effect) noexcept
+{
+    return std::visit([](const auto &chosen) { return replaces(chosen); }, effect);
 }
 } // namespace nenenib::core

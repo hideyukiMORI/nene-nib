@@ -266,6 +266,8 @@ void EditorController::replace(
     // 決定 2）。
     const core::Offset restore = state_.selection().caret;
     std::string removed = state_.text().text_range(range.begin, range.end);
+    // 空の置き換えは本文に触れない。engine の印があれば鍵の終わりに push_empty_unit が空の単位を
+    // 積む（ADR 0181 の決定 3）。
     if (removed.empty() && text.empty())
     {
         return;
@@ -274,10 +276,13 @@ void EditorController::replace(
     {
         interrupt_vim_insert();
     }
+    // 本文を置き換える編集は Vim の印 changed と同じ（決定 2）。鍵の印はここで使い終わる。
+    vim_change_.reset();
     auto next = state_.text().replaced(range.begin, range.end, text);
     const core::Edit edit{range.begin, std::move(removed), std::string(text), restore};
     const core::Offset caret{range.begin.value + text.size()};
     const std::size_t before = state_.history().position();
+    const std::size_t content = state_.history().content_position();
     auto history = state_.history().pushed(edit, boundary);
     // 行がずれたマークを直し、最後の変更の位置を置く（ADR 0152 の決定 6・7）。変更の列には、
     // 新しい undo の単位を始めた編集かを添えて置く（追補 #1037・Vim の b_new_change）。`.` と `@`
@@ -290,7 +295,7 @@ void EditorController::replace(
     marks.last_change = core::vim_last_change_of(state_.text(), edit);
     marks = core::vim_change_recorded(marks, marks.last_change.value(), started);
     state_ = state_.with_vim_marks(std::move(marks));
-    auto document = after_edit_at(state_.document(), before);
+    auto document = after_edit_at(state_.document(), content);
     forget_syntax_before(edit);
     note_minimap_edit(next, edit);
     language_server_edit(edit);
@@ -298,6 +303,42 @@ void EditorController::replace(
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), std::move(history),
                               std::move(document));
     follow_caret();
+}
+
+// 空の単位（ADR 0181 の決定 3）。本文の置き換えの口（LSP・ミニマップ・構文の覚え・マークの行の
+// 直し・ほかの枠）を通らない。`'.` と変更の列は changed のときだけ置く（決定 5）。積む位置
+// （at）は効果の後のキャレットで、INSERT へ入る鍵（空の行の `C` `cc`）なら打つ本文がこの単位に
+// 畳まれる。未保存の判定は content_position の 1 本（決定 4）。
+void EditorController::push_empty_unit(core::Offset restore)
+{
+    if (!vim_change_.has_value())
+    {
+        return;
+    }
+    const core::VimChange change = vim_change_.value();
+    vim_change_.reset();
+    const core::Edit edit{state_.selection().caret, std::string{}, std::string{}, restore};
+    const std::size_t before = state_.history().position();
+    const std::size_t content = state_.history().content_position();
+    auto history = state_.history().pushed(edit, vim_boundary(), change);
+    switch (change)
+    {
+    case core::VimChange::changed:
+    {
+        const bool started =
+            history.position() != before &&
+            (!replay_history_.has_value() || before == replay_history_.value().position());
+        auto marks = state_.vim_marks();
+        marks.last_change = core::vim_last_change_of(state_.text(), edit);
+        marks = core::vim_change_recorded(marks, marks.last_change.value(), started);
+        state_ = state_.with_vim_marks(std::move(marks));
+        break;
+    }
+    case core::VimChange::saved_only:
+        break;
+    }
+    state_ = state_.with_history(std::move(history))
+                 .with_document(after_edit_at(state_.document(), content));
 }
 
 // 覚えは line の行頭の状態で、それは line より前の行だけで決まる。編集の始まり（編集の前の本文の
@@ -626,6 +667,16 @@ void EditorController::undo_edit()
     {
         return;
     }
+    // 空の単位は本文に触れず 1 段を戻す（ADR 0181 の決定 3）。キャレットは単位の位置へ。Vim の
+    // u_undoredo は単位が保存した行を書き戻して changed_lines を呼ぶので `'.` は単位の行になる。
+    if (edit.value().removed.empty() && edit.value().inserted.empty())
+    {
+        undone_marks(edit.value());
+        state_ = state_.with_history(state_.history().undone())
+                     .with_selection(core::collapsed_at(edit.value().at));
+        follow_caret();
+        return;
+    }
     const core::Offset at = edit.value().at;
     const core::Offset end{at.value + edit.value().inserted.size()};
     auto next = state_.text().replaced(at, end, edit.value().removed);
@@ -647,6 +698,14 @@ void EditorController::redo_edit()
     const auto edit = state_.history().redo();
     if (!edit)
     {
+        return;
+    }
+    if (edit.value().removed.empty() && edit.value().inserted.empty())
+    {
+        undone_marks(edit.value());
+        state_ = state_.with_history(state_.history().redone())
+                     .with_selection(core::collapsed_at(edit.value().at));
+        follow_caret();
         return;
     }
     const core::Offset at = edit.value().at;

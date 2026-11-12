@@ -111,8 +111,8 @@ using nenenib::core::is_empty;
 using nenenib::core::LineNumber;
 using nenenib::core::mode_label;
 using nenenib::core::Offset;
-using nenenib::core::SaveState;
 using nenenib::core::OffsetRange;
+using nenenib::core::SaveState;
 using nenenib::core::Selection;
 using nenenib::core::SelectionAnchoring;
 using nenenib::core::SelectionPresence;
@@ -673,9 +673,9 @@ void verify_vim_caret_placement()
     expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{5}},
            "INSERT may sit past the last character");
 }
-// fixture の変更の印（ADR 0181・求めた fixture だけ）。開いた直後は保存済みで履歴も `'.` も空なので、
-// 鍵の後の未保存の印・`'.` の有無・undo の単位の有無を Vim の &modified・changedtick・seq_cur と
-// 比べる（鍵に `u` を含む fixture には印を求めない）。
+// fixture の変更の印（ADR 0181・求めた fixture だけ）。開いた直後は保存済みで履歴も `'.`
+// も空なので、 鍵の後の未保存の印・`'.` の有無・undo の単位の有無を Vim の
+// &modified・changedtick・seq_cur と 比べる（鍵に `u` を含む fixture には印を求めない）。
 void verify_vim_fixture_change(const EditorController &controller, const VimFixture &fixture)
 {
     if (!fixture.change.has_value())
@@ -689,6 +689,8 @@ void verify_vim_fixture_change(const EditorController &controller, const VimFixt
     expect(controller.vim_marks().last_change.has_value() == marks.changed,
            (name + ": last change mark").c_str());
     expect((controller.history().position() > 0) == marks.undo, (name + ": undo unit").c_str());
+    expect((controller.history().content_position() > 0) == marks.changed,
+           (name + ": content position").c_str());
 }
 } // namespace
 

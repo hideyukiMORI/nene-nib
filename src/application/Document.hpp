@@ -13,7 +13,7 @@
 
 namespace nenenib::application
 {
-// いま開いている文書（経路・文字コード・保存時点の履歴の位置・保存の形）。所有者は EditorState
+// いま開いている文書（経路・文字コード・保存時点の本文の位置・保存の形）。所有者は EditorState
 // （ARC-004）。どの欄も互いに独立して妥当な値なので公開 aggregate（ADR 0007 / CPP-003）。
 struct Document
 {
@@ -29,9 +29,13 @@ struct Document
     std::optional<core::TextEncoding> saved_encoding = std::nullopt;
     std::optional<core::LineEnding> saved_line_ending = std::nullopt;
 };
+// saved_position は保存時点の EditHistory::content_position（本文を変えたと
+// 数える単位の数・ADR 0181 の決定 4）。履歴の位置ではないので、本文を変えない
+// 空の単位（Vim の数字への `~`）は未保存にしない。
 
-// 未保存かどうかは、履歴の位置と保存時点の一致と、保存の形と保存時点の形の一致で決まる（ADR 0010
-// の決定 7・追補 #1049 の決定 1）。判定はこの 1 か所。
+// 未保存かどうかは、本文の位置（EditHistory::content_position・ADR 0181 の
+// 決定 4）と保存時点の一致と、保存の形と保存時点の形の一致で決まる（ADR 0010 の
+// 決定 7・追補 #1049 の決定 1）。判定はこの 1 か所。
 [[nodiscard]] inline core::SaveState save_state_of(const Document &document,
                                                    std::size_t position) noexcept
 {
@@ -103,6 +107,8 @@ struct Document
 }
 
 // 新しい編集は redo の列を切る。保存時点がその先にあったら、もう戻れないので空にする（決定 7）。
+// position は積む前の本文の位置（content_position）。切った列が本文を変えない単位だけなら保存時点の
+// 本文は今と同じなので残る（ADR 0181 の決定 4）。
 [[nodiscard]] inline Document after_edit_at(const Document &document, std::size_t position)
 {
     if (document.saved_position.has_value() && document.saved_position.value() > position)

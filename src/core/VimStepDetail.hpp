@@ -128,6 +128,12 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 [[nodiscard]] VimStep with_clipboard(VimStep step, std::optional<VimRegister> clipboard);
 [[nodiscard]] VimStep refused_register(const VimState &state);
 [[nodiscard]] VimStep restored_at(VimStep step, Offset restore);
+// 編集を返さない形の印を 1 打鍵の結果に添える（ADR 0181 の決定 1・2）。状態と効果は変えない。
+[[nodiscard]] VimStep change_noted(VimStep step, std::optional<VimChange> change);
+// 範囲が空の `d` `c` の印（ADR 0181・Vim の op_delete / op_change）。範囲が空でなければ step の
+// まま。inclusive な移動（行末・語のテキストオブジェクト）は range.empty_change が writes_empty。
+[[nodiscard]] VimStep empty_removal_noted(VimStep step, const TextBuffer &text,
+                                          const VimMotionRange &range, VimOperator operation);
 // VISUAL の鍵が範囲を取る種類（Vim の v_visop・nv_subst・nv_Replace の読み替え・#1436）。
 [[nodiscard]] VimMode visual_operated_mode(VimMode mode, VimAction action) noexcept;
 // VISUAL をオペレータで抜けた歩に覚え直した仮想桁を置く（Vim の oap->start_vcol / end_vcol・

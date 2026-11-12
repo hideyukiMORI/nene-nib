@@ -6,7 +6,9 @@ sequence), measures each one with the oracle's `measure` (eng/vim-oracle.py: `pr
 `run_vim` under `-u NONE -es`, imported, never changed), replays the measured cases through the
 replayer `nib_vim_replay` (tests/unit/VimReplayMain.cpp, the same path as `verify_vim_fixture`), and
 compares the five values the fixtures compare: the buffer, `line`, `column`, and the unnamed
-register's text and kind.
+register's text and kind. With `--change` the oracle also measures Vim's change marks (the
+fixture's `change`: `&modified`, whether `b:changedtick` and `undotree().seq_cur` moved) and the
+replayer compares them too (Issue #1440, ADR 0181).
 
 The key grammar is `WORDS`, the one table of generator units at the top of this file. Every word
 leaves Vim in NORMAL mode (an insert ends with `<Esc>`, a VISUAL selection with an operator or
@@ -270,6 +272,9 @@ GENERATORS = (3, 4, 5, 6)
 # Vim に置く設定。Nib の `nrformats` は `bin,hex` の固定で、`-u NONE` の Vim の既定 `bin,octal,hex` の
 # ままだと `07<C-a>` が 8 進で測られる（ADR 0015 の決定 14）。fixture へ写すときも同じ設定を書く。
 ORACLE_SETTINGS = ["set nrformats=bin,hex"]
+# --change: oracle に Vim の変更の印（&modified・changedtick・seq_cur）も測らせ、再生器に比べさせる
+# （ADR 0181・#1440）。既定は測らない（前の走りの答えと比べる欄を変えない）。
+CHANGE_MARKS = False
 WORD_NAMES = tuple(kind for kind, _, _ in WORDS + WORDS_4 + WORDS_5 + WORDS_6)
 # `H M L` も Vim の jump-motions（生成器 3 / 4 は作らないので、その列は変わらない）。オペレータと
 # VISUAL の中の `H M L`（`dS` `yS` `vS`）も Vim の nv_scroll が setpcmark を呼ぶので跳び（#1233）。
@@ -604,6 +609,11 @@ def replay_line(measured: dict) -> str:
         values += tuple(str(viewport[key]) for key in (
             "visible_lines", "first_visible", "line", "column", "expected_first_visible",
             "expected_scroll_lines")) + (str(measured.get("scrolloff", 0)),)
+    change = measured.get("change")
+    if change is not None:
+        # 変更の印は最後の 1 欄（--change・ADR 0181・#1440）。
+        values += ("change=" + "".join("1" if change[key] else "0"
+                                       for key in ("modified", "changed", "undo")),)
     return "\t".join(escape(value) for value in values)
 
 
@@ -642,6 +652,8 @@ def measure(work: Path, name: str, text: str, keys: str,
     """The oracle's answer, or None and the reason it refused. `window` is generator 5's
     settings and viewport (`generate_window`); the answer then carries its `scrolloff`."""
     fixture = {"name": name, "text": text, "keys": keys, "settings": ORACLE_SETTINGS}
+    if CHANGE_MARKS:
+        fixture["change"] = True
     if window is not None:
         fixture.update(settings=window["settings"], viewport=window["viewport"])
     try:
@@ -1214,7 +1226,11 @@ def main() -> int:
                         help="3 keeps generator 3's tables (its seeds give the same cases); "
                              "5 adds the viewport and the screen words (#1224); 6 adds <C-e> <C-y>, "
                              "{ } ( ), <Del> and register counts (#1353)")
+    parser.add_argument("--change", action="store_true",
+                        help="also compare Vim's change marks (modified, changed, undo; ADR 0181)")
     args = parser.parse_args()
+    global CHANGE_MARKS
+    CHANGE_MARKS = args.change
     if not args.replay.is_file():
         parser.error(f"no replayer at {args.replay}; build the nib_vim_replay target first")
     if args.from_fixtures is not None:
