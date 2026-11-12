@@ -85,7 +85,10 @@ records in `docs/quality/`.
     stops after 100,000 keys, drops the rest and says so in one line (decision D75);
   - search `/ ? n N * #` with `hlsearch` and `incsearch` on by default (`:noh`, Ctrl-G / Ctrl-T while typing),
     `:set ignorecase` / `smartcase`, and Up / Down history on the `:` and search lines; matchparen highlights
-    the partner bracket (on by default);
+    the partner bracket (on by default); patterns (shared by search and `:s`) take a `magic` subset with `*`
+    and the multis on one atom `\+ \= \? \{n} \{n,} \{,m} \{n,m}` and the shortest `\{-n,m}`
+    ([ADR 0184](docs/adr/0184-vim-pattern-syntax-grows-in-stages.md) stage 1); `\|`, a multi on a group,
+    `\zs` `\ze`, `\v` and patterns across lines come in the next stages;
   - substitute `:[range]s/pat/rep/[g i I n e &] [count]` (ranges `%` `N,M` `.` `$` `'<,'>` `'a,'b` `.,.+N`,
     any non-letter delimiter, `&` `\0`-`\9` with `\( \)` groups, `~` `\r` `\u` `\U` `\l` `\L` `\e`),
     `:&` `:&&` `:~` and NORMAL `&` `g&`, one undo step each

@@ -103,7 +103,8 @@ void verify_search_failures_and_direction()
     using core::VimPatternFailure;
     expect_search_failure("\\(", VimPatternFailure::group);
     expect_search_failure("a\\|b", VimPatternFailure::branch);
-    expect_search_failure("a\\+", VimPatternFailure::quantifier);
+    expect_search_failure("\\(a\\)\\+", VimPatternFailure::quantifier);
+    expect_search_failure("a**", VimPatternFailure::multi_after_multi);
     expect_search_failure("\\va", VimPatternFailure::magic);
     expect_search_failure("\\n", VimPatternFailure::escape);
     expect_search_failure("~", VimPatternFailure::previous_substitute);

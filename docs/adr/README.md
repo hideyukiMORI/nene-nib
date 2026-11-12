@@ -195,5 +195,6 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0181](0181-vim-change-mark-is-one-engine-effect.md) | Vim の鍵が「undo の単位を作ったか」と「本文を変えたと数えるか」は engine が効果に添える 1 つの印 | 受理（設計席・2026-11-12）・#1440 |
 | [0182](0182-insert-ctrl-o-is-a-restart-mark.md) | INSERT の Ctrl-o は「INSERT を抜けて、NORMAL の命令 1 つの後に始め直す印」 | 受理（設計席・2026-11-12）・#1517 |
 | [0183](0183-piece-list-prefix-sums-and-binary-search.md) | piece の列は累積の長さと改行の数を持ち、読む口は二分探索で引く（段 1）。塊の列は次の段 | 受理（設計席・2026-11-12）・#1474 |
+| [0184](0184-vim-pattern-syntax-grows-in-stages.md) | 照合器の構文を段で広げる: 量は原子の写しに開き、選択からは命令の列と優先順の状態集合で照合する（段 1: 原子 1 つに付く量） | 受理（設計席・2026-11-12）・#1566 |
 | [0185](0185-app-icon-is-one-svg-and-the-derived-files-are-checked-by-pixels.md) | アプリアイコンの正本は SVG 1 つで、ICO と MSIX のロゴは道具 1 本の生成物。一致は画素で確かめる | 提案（実装席・2026-11-13）・#1580 |
 | [0186](0186-msix-is-a-second-package-of-the-same-release-exe.md) | MSIX は同じ Release の exe を包む 2 つ目の配布の形で、身元は表 1 つ・版は `project()` から導く | 提案（実装席・2026-11-13）・#1581 |
