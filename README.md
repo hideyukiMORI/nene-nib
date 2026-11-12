@@ -327,6 +327,11 @@ It needs Visual Studio Build Tools with the pinned MSVC toolset and the bundled 
 Python 3.12 (`eng/tool-versions.json`). Run `pwsh -NoProfile -File ./eng/bootstrap.ps1` once after cloning.
 The Phase 0 measurements can be reproduced with `pwsh -NoProfile -File ./eng/measure-language.ps1`.
 
+## Privacy
+
+NeNe Nib collects and sends no personal information and makes no network connections of its own; see
+[PRIVACY.md](PRIVACY.md) (English and Japanese).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
