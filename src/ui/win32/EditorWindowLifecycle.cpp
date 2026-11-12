@@ -1,6 +1,7 @@
 #include "EditorWindow.hpp"
 #include "EditorWindowDetail.hpp"
 
+#include "AppIconResource.hpp"
 #include "ClosingSteps.hpp"
 #include "DevicePixels.hpp"
 #include "EditorSettings.hpp"
@@ -60,6 +61,26 @@ constexpr UINT autosave_question_message = WM_APP + 2;
 constexpr std::array<UINT, 10> pointer_messages{
     WM_LBUTTONDOWN, WM_LBUTTONDBLCLK, WM_LBUTTONUP,  WM_MBUTTONDOWN,    WM_MBUTTONUP,
     WM_MOUSEMOVE,   WM_MOUSELEAVE,    WM_MOUSEWHEEL, WM_CAPTURECHANGED, WM_SETCURSOR};
+
+// 窓の class を登録する（#1580・ADR 0185）。
+// アイコンは exe の resource を共有で引くだけ（LR_SHARED）。ファイルを読まず、解放もしない。
+// 小さいアイコンは hIconSm を空にして、OS が同じ resource から合う大きさを選ぶ。
+// LR_SHARED は名前で cache するので、大きさ違いを 2 回引くと同じ handle が返る。
+// 覆いの子窓 CoverWindow は別の class で、アイコンを持たない。
+[[nodiscard]] ATOM register_editor_class(HINSTANCE instance, WNDPROC procedure) noexcept
+{
+    WNDCLASSEXW registration{};
+    registration.cbSize = static_cast<UINT>(sizeof(registration));
+    registration.hInstance = instance;
+    registration.lpfnWndProc = procedure;
+    registration.lpszClassName = class_name;
+    registration.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    registration.hIcon =
+        static_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(NENENIB_ICON_RESOURCE), IMAGE_ICON,
+                                      0, 0, LR_DEFAULTSIZE | LR_SHARED));
+    registration.style = CS_DBLCLKS; // 面のダブルクリック（ADR 0162）。面の外は押しと同じ。
+    return RegisterClassExW(&registration);
+}
 } // namespace
 
 EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &controller,
@@ -98,14 +119,7 @@ EditorWindow::create(HINSTANCE instance, application::EditorController &controll
 
 std::expected<void, WindowFailure> EditorWindow::initialize()
 {
-    WNDCLASSEXW registration{};
-    registration.cbSize = static_cast<UINT>(sizeof(registration));
-    registration.hInstance = instance_;
-    registration.lpfnWndProc = procedure;
-    registration.lpszClassName = class_name;
-    registration.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    registration.style = CS_DBLCLKS; // 面のダブルクリック（ADR 0162）。面の外は押しと同じ。
-    class_ = RegisterClassExW(&registration);
+    class_ = register_editor_class(instance_, procedure);
     if (class_ == 0)
     {
         return std::unexpected(WindowFailure::class_registration);

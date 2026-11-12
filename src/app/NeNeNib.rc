@@ -1,5 +1,9 @@
+#include "../ui/win32/AppIconResource.hpp"
 #include "NeNeNibVersion.h"
 #include <winver.h>
+
+// Generated from docs/design/app-icon.svg by eng/render-app-icon.py (Issue #1580, ADR 0185).
+NENENIB_ICON_RESOURCE ICON "NeNeNib.ico"
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION NENENIB_VERSION_COMMA
