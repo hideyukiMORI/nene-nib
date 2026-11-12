@@ -48,6 +48,7 @@
 #include "VimKeyPress.hpp"
 #include "VimMode.hpp"
 #include "VimSearchHighlight.hpp"
+#include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 
 #include <array>
@@ -563,12 +564,15 @@ void verify_ex_input_isolation()
            "command input preserves the register");
     static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'2'}}));
     frame = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}});
-    expect(!frame.command_line.has_value(),
-           "unsupported counted Ex does not execute as an uncounted command");
+    expect(frame.command_line.value_or(core::InputLineView{}).text == ".,.+1",
+           "counted Ex opens with the count's range, not as an uncounted command (#1526)");
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
     static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'v'}}));
     frame = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}});
-    expect(!frame.command_line.has_value() && frame.vim_mode == core::VimMode::visual,
-           "visual ranges are not interpreted");
+    expect(frame.command_line.value_or(core::InputLineView{}).text == "'<,'>" &&
+               frame.vim_mode == core::VimMode::normal,
+           "VISUAL : leaves VISUAL and opens the line with the visual range (#1526)");
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
 }
 // タブの命令の名前と省略形と引数（ADR 0057 の決定 4）。省略は Vim 9.1 の実測（probe の節 F）。
 [[nodiscard]] bool tab_request_is(std::string_view text, core::ExTabVerb verb,
@@ -589,6 +593,100 @@ void verify_ex_input_isolation()
 {
     const auto result = core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark);
     return !result.has_value() && result.error() == core::ExEvaluationFailure{failure};
+}
+
+// 範囲つきの行（ADR 0022 の追補 #1526）。範囲を取らない命令は E481、範囲つきの形をまだ持たない
+// 命令は unsupported、未知の命令は unknown のまま。範囲だけの `'<,'>` `.` `.,.+N` は受ける。
+void verify_ex_ranges()
+{
+    for (const std::string_view text :
+         {"'<,'>set so=2", "'<,'>colorscheme", "'<,'> set fontsize=12", "'<,'>noh",
+          ".,.+2nohlsearch", "3set hlsearch", "'<,'>nmap a b", "'<,'>syntax on"})
+    {
+        expect(ex_fails_with(text, core::ExFailure::no_range_allowed),
+               "a command that takes no range refuses one with E481");
+    }
+    expect(core::ex_failure_message(core::ExFailure::no_range_allowed).text() ==
+               "E481: No range allowed",
+           "E481 keeps Vim's number and words");
+    for (const std::string_view text : {"'<,'>w", "'<,'>tabnext 2", "'<,'>only", "'<,'>hardcopy",
+                                        "4tabnext", "'<,'>3", "1,5", "%", "'a", ".,.+x", "'<,'>,"})
+    {
+        expect(ex_fails_with(text, core::ExFailure::unsupported_argument),
+               "ranges Nib does not run yet are closed failures");
+    }
+    for (const std::string_view text : {"'<,'>s", "'<,'>foo", "'<,'>d", "3d", "'<,'>set bogus"})
+    {
+        expect(
+            !core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark).has_value(),
+            "a ranged command Nib does not know is refused");
+    }
+    expect(ex_fails_with("'<,'>s", core::ExFailure::unknown_command),
+           "`:'<,'>s` is an unknown command, not text for the buffer");
+    const auto below = [](std::string_view text) -> std::optional<std::optional<std::size_t>>
+    {
+        const auto result =
+            core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark);
+        if (!result.has_value() || !result.value().relative_line.has_value())
+        {
+            return std::nullopt;
+        }
+        return std::optional<std::optional<std::size_t>>{
+            std::in_place, result.value().relative_line.value().below};
+    };
+    expect(below("'<,'>") == std::optional<std::optional<std::size_t>>{std::in_place},
+           "the VISUAL range alone keeps the caret");
+    expect(
+        below(".") == std::optional{std::optional<std::size_t>{0}} &&
+            below(".,.+2") == std::optional{std::optional<std::size_t>{2}} &&
+            below(".,.+99999999999999999999999") ==
+                std::optional{std::optional<std::size_t>{std::numeric_limits<std::size_t>::max()}},
+        "the count range goes N lines below the caret");
+    expect(!below("3").has_value() && !below("$").has_value(), ":N and :$ stay line requests");
+}
+
+constexpr std::string_view four_lines = "one\ntwo\nthree\nfour";
+
+// VISUAL の `:` は VISUAL を抜けて `'<,'>` つきの入力行を開き、打った文字は本文に入らない
+// （#1526・Vim の nv_colon → op_colon）。
+void verify_ex_visual_range_refusal()
+{
+    Editing editor;
+    open_vim_document(editor, std::string(four_lines));
+    auto &controller = editor.controller();
+    vim_replay(controller, "jlvj");
+    const auto opened = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}});
+    expect(opened.command_line.has_value() && opened.command_line.value().text == "'<,'>" &&
+               opened.vim_mode == core::VimMode::normal && caret_at(opened, 2, 2),
+           "VISUAL : leaves VISUAL at the start and opens the line with '<,'>");
+    static_cast<void>(controller.apply_frame(app::CommandText{"set so=2"}));
+    const auto refused = controller.apply_frame(app::SubmitCommand{});
+    expect(whole_vim_body(controller) == four_lines && refused.command_message.has_value() &&
+               refused.command_message.value().text() == "E481: No range allowed",
+           "`:'<,'>set` is refused and the typed text never reaches the buffer");
+    static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'x'}}));
+    expect(whole_vim_body(controller) == "one\nto\nthree\nfour",
+           "the next key is a NORMAL key at the selection start");
+}
+
+// 取消は NORMAL のまま（VISUAL へ戻らない）。回数の `3:` は `.,.+2` で、確定は範囲の最後の行。
+void verify_ex_visual_range_cancel_and_count()
+{
+    Editing editor;
+    open_vim_document(editor, std::string(four_lines));
+    auto &controller = editor.controller();
+    vim_replay(controller, "jlvj");
+    static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}}));
+    const auto cancelled = controller.apply_frame(app::CancelCommand{});
+    expect(!cancelled.command_line.has_value() && cancelled.vim_mode == core::VimMode::normal &&
+               caret_at(cancelled, 2, 2),
+           "Esc on the line leaves NORMAL, not VISUAL");
+    vim_replay(controller, "3");
+    const auto counted = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}});
+    expect(counted.command_line.has_value() && counted.command_line.value().text == ".,.+2",
+           "a count before : opens the line with .,.+(count-1)");
+    static_cast<void>(controller.apply_frame(app::SubmitCommand{}));
+    expect(caret_at(controller.frame(), 4, 1), ":.,.+2 lands on the last line of the range");
 }
 
 void verify_ex_tab_names()
@@ -1301,5 +1399,8 @@ void verify_ex_settings()
     verify_ex_relativenumber();
     verify_ex_scrolloff();
     verify_ex_command_table();
+    verify_ex_ranges();
+    verify_ex_visual_range_refusal();
+    verify_ex_visual_range_cancel_and_count();
 }
 } // namespace nenenib::tests

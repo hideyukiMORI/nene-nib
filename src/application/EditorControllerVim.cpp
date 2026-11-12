@@ -1028,10 +1028,17 @@ core::EditBoundary EditorController::vim_boundary() const noexcept
 
 void EditorController::perform(const core::VimNoEffect &) {}
 
-void EditorController::perform(const core::VimOpenCommandLine &)
+// VISUAL の `:` は先にキャレットを選択の先の端へ置いて選択を畳み、入力行の先に範囲（`'<,'>`・
+// 回数の `.,.+N`）を置く（ADR 0022 の追補 #1526）。範囲は 256 bytes に届かないので入る。
+void EditorController::perform(const core::VimOpenCommandLine &effect)
 {
+    if (effect.caret.has_value())
+    {
+        move_caret_to(effect.caret.value(), core::SelectionAnchoring::collapse);
+    }
+    const auto line = core::CommandLine::empty(state_.themes()).with_fonts(given_fonts());
     state_ = state_.with_command_input(
-        core::CommandLine::empty(state_.themes()).with_fonts(given_fonts()));
+        effect.range.empty() ? line : line.inserted(effect.range).value_or(line));
 }
 
 void EditorController::perform(const core::VimOpenSearch &effect)

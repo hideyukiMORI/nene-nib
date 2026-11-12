@@ -7,6 +7,7 @@
 #include "VimKeyTable.hpp"
 #include "VimMarkEdits.hpp"
 #include "VimMotionRange.hpp"
+#include "VimOpenCommandLine.hpp"
 #include "VimOperatorColumns.hpp"
 #include "VimPutSide.hpp"
 #include "VimVisualRange.hpp"
@@ -14,12 +15,14 @@
 
 #include <algorithm>
 #include <optional>
+#include <string>
 #include <utility>
 
 namespace nenenib::core
 {
 using detail::aligned_screen;
 using detail::backward_characters;
+using detail::block_caret;
 using detail::block_changed;
 using detail::block_inserted;
 using detail::block_line_end_state;
@@ -618,6 +621,19 @@ namespace
     std::unreachable();
 }
 
+// VISUAL・行単位・矩形の `:`（ADR 0022 の追補 #1526・Vim の nv_colon → op_colon）。VISUAL を抜け、
+// キャレットを Vim の oap->start（`d y` の戻り先と同じ・矩形は左上）に置いて、入力行を `'<,'>` を
+// 先に置いて開く。VISUAL の中の回数は使わない。前の選択と `'<` `'>` は VISUAL を抜ける鍵の出口
+// （visual_remembered）が覚える。
+[[nodiscard]] VimStep visual_command_line(const VimState &state, const VimEditorView &view)
+{
+    const Offset caret = state.mode == VimMode::visual_block
+                             ? block_caret(block_of(state, view))
+                             : visual_restore(state, view.text, view.selection);
+    return VimStep{vim_resting_from(state, state.unnamed_register),
+                   VimOpenCommandLine{std::string{"'<,'>"}, caret}};
+}
+
 // 分類ごとの写し先（CPP-012 / ADR 0006）。分類が増えたらここで落ちる。
 [[nodiscard]] VimStep visual_grouped(const VimState &state, const VimEditorView &view,
                                      VimAction action, VimActionGroup group)
@@ -659,7 +675,7 @@ namespace
     case VimActionGroup::edit_line:
         return visual_edit_line(state, view, action);
     case VimActionGroup::ex_line:
-        return visual_unchanged(state);
+        return visual_command_line(state, view);
     }
     std::unreachable();
 }

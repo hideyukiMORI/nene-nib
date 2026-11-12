@@ -835,13 +835,18 @@ namespace
     return operated_to_line_end(state, view.text, view.selection.caret, operation);
 }
 
+// NORMAL の `:`。回数つきの `N:` は行の先に `.,.+(N-1)`（`1:` は `.`）を置く（Vim の nv_colon・
+// ADR 0022 の追補 #1526）。
 [[nodiscard]] VimStep opened_command_line(const VimState &state)
 {
+    std::string range;
     if (state.count.has_value())
     {
-        return cancelled(state);
+        const std::size_t count = state.count.value().value;
+        range = count > 1 ? ".,.+" + std::to_string(count - 1) : std::string{"."};
     }
-    return VimStep{vim_resting_from(state, state.unnamed_register), VimOpenCommandLine{}};
+    return VimStep{vim_resting_from(state, state.unnamed_register),
+                   VimOpenCommandLine{std::move(range)}};
 }
 
 [[nodiscard]] VimStep appended_insert(const VimState &state, const VimEditorView &view)

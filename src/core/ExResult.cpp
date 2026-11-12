@@ -10,6 +10,7 @@
 #include "ExLineRequest.hpp"
 #include "ExMapCommand.hpp"
 #include "ExPaletteName.hpp"
+#include "ExRelativeLineRequest.hpp"
 #include "ExTabName.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
@@ -1250,6 +1251,161 @@ constexpr std::array<ExCommandParser, 10> command_parsers{
     }
     return std::unexpected(ExFailure::unknown_command);
 }
+
+// 範囲のない 1 命令（`colorscheme` `set` と表の命令）。範囲の後ろの命令もここを通す。
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
+unranged_command(std::string_view text, const EditorSettings &settings,
+                 Appearance system_appearance, const ThemeCatalog &themes)
+{
+    const auto space = text.find(' ');
+    const auto name = text.substr(0, space);
+    const auto argument =
+        space == std::string_view::npos ? std::string_view{} : trimmed(text.substr(space + 1));
+    if (name == "colorscheme")
+    {
+        return colorscheme(argument, settings, system_appearance, themes);
+    }
+    if (name == "set")
+    {
+        return set_option(argument, settings);
+    }
+    return remaining_command(text);
+}
+
+// ------------------------------------------------ 範囲（ADR 0022 の追補 #1526）
+
+// VISUAL の `:` が入力行の先に置く範囲（Vim の op_colon）。
+constexpr std::string_view visual_range = "'<,'>";
+// 回数の `N:` が置く範囲の頭（Vim の nv_colon の `.,.+(N-1)`）。
+constexpr std::string_view relative_range = ".,.+";
+
+// マークの名前の 1 文字（`'a` `'<`）。ASCII の印字できる文字だけを読む。
+[[nodiscard]] bool is_mark_name(char letter) noexcept
+{
+    return letter > ' ' && letter <= '~';
+}
+
+// 番地の基点の長さ（`.` `$` `%`・10 進・`'` とマークの名前）。基点が無ければ 0。
+[[nodiscard]] std::size_t address_base_length(std::string_view text) noexcept
+{
+    if (text.empty())
+    {
+        return 0;
+    }
+    const char first = text.front();
+    if (first == '.' || first == '$' || first == '%')
+    {
+        return 1;
+    }
+    if (first == '\'')
+    {
+        return text.size() > 1 && is_mark_name(text.at(1)) ? 2 : 0;
+    }
+    return leading(text, is_digit);
+}
+
+// 番地 1 つの長さ（Vim の get_address の部分集合）。基点の後に `+N` `-N` と数字の足しを続けて読む。
+[[nodiscard]] std::size_t address_length(std::string_view text) noexcept
+{
+    std::size_t at = address_base_length(text);
+    while (at < text.size())
+    {
+        const char next = text.at(at);
+        if (next == '+' || next == '-')
+        {
+            at += 1 + leading(text.substr(at + 1), is_digit);
+            continue;
+        }
+        const std::size_t digits = leading(text.substr(at), is_digit);
+        if (digits == 0)
+        {
+            break;
+        }
+        at += digits;
+    }
+    return at;
+}
+
+// 行の先の範囲の長さ。番地を `,` `;` で区切って続けて読む（空の番地も Vim と同じに許す）。
+[[nodiscard]] std::size_t range_length(std::string_view text) noexcept
+{
+    std::size_t at = address_length(text);
+    while (at < text.size() && (text.at(at) == ',' || text.at(at) == ';'))
+    {
+        at += 1 + address_length(text.substr(at + 1));
+    }
+    return at;
+}
+
+// `.`（0）と `.,.+N`（N）の N。ほかの形は値なし。大きすぎる数は size_t の最大に飽和する。
+[[nodiscard]] std::optional<std::size_t> relative_lines(std::string_view text)
+{
+    if (text == ".")
+    {
+        return std::size_t{0};
+    }
+    if (!text.starts_with(relative_range))
+    {
+        return std::nullopt;
+    }
+    const auto digits = text.substr(relative_range.size());
+    if (digits.empty() || leading(digits, is_digit) != digits.size())
+    {
+        return std::nullopt;
+    }
+    std::size_t below = 0;
+    const auto parsed = std::from_chars(digits.data(), digits.data() + digits.size(), below);
+    return parsed.ec == std::errc{} ? below : std::numeric_limits<std::size_t>::max();
+}
+
+// 範囲だけの行。`'<,'>` は何もしない（Vim は VISUAL の `:` の確定でキャレットを選択の先の端に
+// 残す・実測）。`.` と `.,.+N` はキャレットの行から N 行下へ。ほかの形はまだ受けない。
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure> range_only(std::string_view text)
+{
+    const auto below = relative_lines(text);
+    if (text != visual_range && !below.has_value())
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    ExResult result{std::nullopt, std::nullopt, std::nullopt, DisplayText::parse(text).value()};
+    result.relative_line = ExRelativeLineRequest{below};
+    return result;
+}
+
+// Vim で範囲を取らない命令の答えか（`:set` 系・`:colorscheme`・`:noh`・`map` 系・`:syntax`）。
+[[nodiscard]] bool takes_no_range(std::string_view name, const ExResult &result) noexcept
+{
+    return name == "set" || name == "colorscheme" || result.highlight.has_value() ||
+           result.map.has_value() || result.syntax.has_value();
+}
+
+// 範囲つきの行（ADR 0022 の追補 #1526）。範囲が無いか数字だけ・`$` だけ（`:N`）なら値なし。
+// 範囲の後ろの命令は範囲なしで評価し、失敗ならその失敗、範囲を取らない命令なら
+// no_range_allowed、ほかは Nib がまだ範囲つきの形を持たないので unsupported_argument。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+ranged_command(std::string_view text, const EditorSettings &settings, Appearance system_appearance,
+               const ThemeCatalog &themes)
+{
+    const std::size_t range = range_length(text);
+    if (range == 0 || line_command(text).has_value())
+    {
+        return std::nullopt;
+    }
+    const auto command = trimmed(text.substr(range));
+    if (command.empty())
+    {
+        return range_only(text);
+    }
+    const auto evaluated = unranged_command(command, settings, system_appearance, themes);
+    if (!evaluated)
+    {
+        return std::unexpected(evaluated.error());
+    }
+    const auto name = command.substr(0, command.find(' '));
+    return std::unexpected(takes_no_range(name, evaluated.value())
+                               ? ExFailure::no_range_allowed
+                               : ExFailure::unsupported_argument);
+}
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
 // 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
@@ -1462,19 +1618,11 @@ std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
         return std::unexpected(ExFailure::unknown_command);
     }
     text = trimmed(text);
-    const auto space = text.find(' ');
-    const auto name = text.substr(0, space);
-    const auto argument =
-        space == std::string_view::npos ? std::string_view{} : trimmed(text.substr(space + 1));
-    if (name == "colorscheme")
+    if (auto ranged = ranged_command(text, settings, system_appearance, themes))
     {
-        return colorscheme(argument, settings, system_appearance, themes);
+        return std::move(ranged).value();
     }
-    if (name == "set")
-    {
-        return set_option(argument, settings);
-    }
-    return remaining_command(text);
+    return unranged_command(text, settings, system_appearance, themes);
 }
 
 std::vector<std::string> ex_command_candidates(const ThemeCatalog &themes)
@@ -1515,6 +1663,8 @@ DisplayText ex_failure_message(ExFailure failure)
         return DisplayText::parse("Not supported").value();
     case ExFailure::invalid_argument:
         return DisplayText::parse("E474: Invalid argument").value();
+    case ExFailure::no_range_allowed:
+        return DisplayText::parse("E481: No range allowed").value();
     }
     std::unreachable();
 }

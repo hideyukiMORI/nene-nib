@@ -32,6 +32,31 @@ C2の設定保存に対話的な入口を足す。画面はhideが採用したEx
 4. 網羅性の `static_assert` は置かない。無名名前空間の解析関数を表に書き忘れると `-Wunused-function`（`/W4` が含む・`/WX` で error）でコンパイルが落ち、単体試験 `verify_ex_command_table` が候補の全件が表のどれかの行に当たることと各行の境目の入力を守る。
 5. 命令を足すときの差分は、解析関数 1 つと表に 1 行（と補完の候補）。候補の名前の表 `fixed_candidates` と解析関数の名前の 2 か所の統合は別 Issue。
 
+## 追補（2026-11-12・#1526）: VISUAL の `:` と回数の `:` は範囲つきで開く
+
+Vim 9.1 の実測（`-u NONE`・`:normal!` と `feedkeys(…, 'tx')`・窓のある形 `--not-a-term`）と source（`normal.c` の `nv_colon`・`ops.c` の `op_colon` / `do_pending_operator`）に揃える。それまで VISUAL の `:` は何もしない鍵で、続けて打った `set so=2` の `s` が VISUAL の置き換えになって本文を変えた（#1526）。NORMAL の `3:` は取消で、続く文字が NORMAL の鍵として流れた。
+
+1. VISUAL・行単位・矩形の `:` は VISUAL を抜けて入力行を開き、行の先に `'<,'>` を置く（Vim の `op_colon`）。キャレットは Vim の `oap->start`（文字単位は選択の先の端・行単位は始めの端がその行の先なら行頭で、キャレットが上なら今の桁・矩形は左上）で、`d y` の戻り先と同じ `visual_restore` と矩形の `block_caret` の 1 本ずつ。前の選択（`gv`）と `'<` `'>` は VISUAL を抜ける鍵の出口（`visual_remembered`）が覚える。VISUAL の中の回数は使わない（Vim も `'<,'>` だけ）。`.` の記録は変えない（Vim の `op_colon` は redo に入らない）。
+2. NORMAL の回数つき `N:` は行の先に `.,.+(N-1)`（`1:` は `.`）を置く（Vim の `nv_colon`）。
+3. 効果は `VimOpenCommandLine` の 1 つで、`range`（置く文字・空なら何も置かない）と `caret`（VISUAL を抜けて置くキャレット・NORMAL では値なし）を持つ。controller の `perform` がキャレットを置いてから同じ `CommandLine` を開き、`inserted` で範囲を入れる。IME の構え（D57）と入力行の写しは `:` と同じ道のまま。
+4. 範囲の解析は `evaluate_ex` の入口の 1 か所（`ranged_command`）。範囲は Vim の番地の部分集合（`.` `$` `%` 10 進・`'` と ASCII の 1 文字・`+N` `-N` と数字の足し・`,` `;` の区切り）で、数字だけ・`$` だけの行は今までどおり `line_command`（`:N`）。範囲の後ろが空の行は次のとおり。
+   - `'<,'>` だけ: 何もしない（成功・知らせなし）。Vim は VISUAL の `:` で開いた行の `'<,'>` の確定でキャレットを選択の先の端に残す（桁も保つ・実測。NORMAL で打った `:'<,'>` は `'>` の行へ飛ぶが、その形は残す違い）。
+   - `.` と `.,.+N`: キャレットの行から N 行下へ `{N}G` と同じ着地（`ExRelativeLineRequest`・controller が `:N` の `jump_to_line` へ渡す・本文の外は最後の行）。
+   - ほかの範囲だけの行（`'<,'>3` `1,5` `%` `'a` など）: `unsupported_argument`（「Not supported: <入力>」）。Vim は `line2` へ飛ぶ（残す違い）。
+5. 範囲の後ろに命令がある行は、後ろを今の評価に通して、失敗ならその失敗（未知の命令は `Unknown command`）。成功した命令が Vim で範囲を取らない種類（設定・強調・incsearch・表示形式・言語・構文・クリップボード・ルート・LSP・`map`・保存の形＝ `:set` `:colorscheme` `:noh` `:nmap` 系・`:syntax`）なら新しい `ExFailure::no_range_allowed`（「E481: No range allowed」・Vim と同じ番号）、ほか（`:w` `:q` `:e` `:tabnext` `:only` `:hardcopy` `:tabs` など）は範囲つきの形を Nib がまだ持たないので `unsupported_argument`（Vim は E140 / E16 / E481 / 範囲の実行・残す違い）。`:s` `:d` など範囲を取る Vim の命令は Nib に無いので `Unknown command`（#1007 が範囲の命令を足すまで）。どの失敗も本文・選択・レジスタを変えない。
+6. Ex の評価の失敗（`evaluate_ex` の失敗と設定の保存の失敗）は、知らせと警告音に加えて再生（`:normal!` の写しの fixture・`.`・マクロ）を打ち切る（`submit(CommandLine)` が `VimRepeatFailure::refused` を返す）。Vim の `emsg` が typeahead を捨てるのと同じで、入力行に打った後ろの鍵が本文の鍵として流れない。命令の要求の後の失敗（`:tabnext 9` の範囲の外など）は今までどおり知らせだけ（後続）。
+7. 窓で打った Esc / Ctrl+C は入力行を閉じるだけで、モードは NORMAL（VISUAL へ戻らない・Vim の実測）。キャレットは決定 1 の位置。再生の中の `<Esc>` は今までどおり確定（Vim の `c_<Esc>`）。マクロの録画の道（`:` の行を録らない・#1528）は変えない。
+8. 限界（Vim と違いを残した形・どれも本文・選択・レジスタを変えない失敗か無動作）:
+
+   | 形 | Vim 9.1 | Nib |
+   |---|---|---|
+   | 範囲つきで実行する命令（`:'<,'>s` `:'<,'>d` `:3d`） | 範囲に実行 | `Unknown command`（#1007） |
+   | 範囲だけの行の跳び（`:'<,'>3` `:1,5` `:%` `:'a`） | `line2` へ飛ぶ | `Not supported: <入力>`（#1540） |
+   | NORMAL で打った `:'<,'>` | `'>` の行へ飛ぶ | 動かない（VISUAL の `:` の確定と同じ扱い） |
+   | `:'<,'>w` `:'<,'>q` `:'<,'>e` `:'<,'>tabnext` | E140 / E16 / E481 / E16 | `Not supported`（番号が違う） |
+
+9. fixture は接頭辞 `visual-colon-`（24 件）。マクロの中の VISUAL の `:` は、fixture の再生がマクロを `q` で録って置くので、録画が `:` の行を録らない間（#1528）は fixture にしない。Ex が失敗する鍵列は `-es` の Vim が終了コード 1 で終わり oracle が測れないので、窓のある形（`viewport`）で測る。窓のある形にしたのは、`-es` の Ex モードでは範囲だけの行が `'<,'>+`（`'>` の次の行）になる別の規則（`ex_docmd.c` の `use_plus_cmd`）だから。
+
 ## 検証
 
 ### 固定済みSTLの参照追加

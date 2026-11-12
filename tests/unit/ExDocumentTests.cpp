@@ -354,13 +354,22 @@ void verify_line_numbers()
     expect(line_request("99999999999999999999999") ==
                std::optional{std::optional<std::size_t>{std::numeric_limits<std::size_t>::max()}},
            "a number beyond size_t saturates (the engine clamps to the last line)");
-    for (const std::string_view input :
-         {"3,5", "+3", "-3", "'a", "3d", "3 4", "$$", "3$", ".", "%"})
+    for (const std::string_view input : {"3,5", "+3", "-3", "'a", "3d", "3 4", "$$", "3$", "%"})
     {
         const auto before =
             core::evaluate_ex(input, core::default_editor_settings(), core::Appearance::dark);
         expect(!before.has_value(), "ranges, offsets, marks and line commands stay unsupported");
     }
+    // `:.` は回数の `1:` が置く範囲だけの行で、キャレットの行（ADR 0022 の追補 #1526）。
+    const auto current =
+        core::evaluate_ex(".", core::default_editor_settings(), core::Appearance::dark);
+    const std::optional<core::ExRelativeLineRequest> relative =
+        current.has_value() && !current.value().line.has_value() ? current.value().relative_line
+                                                                 : std::nullopt;
+    expect(relative.has_value() &&
+               relative.value_or(core::ExRelativeLineRequest{std::nullopt}).below ==
+                   std::optional<std::size_t>{0},
+           ":. is the caret's line, not a line number");
     expect(!line_request("tabnext 3").has_value() && !line_request("set fontsize=12").has_value(),
            "other commands never carry a line request");
 }

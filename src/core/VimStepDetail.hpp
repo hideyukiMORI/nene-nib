@@ -219,6 +219,8 @@ repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::
 [[nodiscard]] std::optional<VimRegisterSelection> register_selection_of(char32_t name);
 [[nodiscard]] VimStep selected_register(const VimState &state, const VimKey &key);
 [[nodiscard]] VimBlockRange block_of(const VimState &state, const VimEditorView &view);
+// 矩形の左上（Vim の oap->start・取る・消す・置き換える・`:` の後のキャレット）。
+[[nodiscard]] Offset block_caret(const VimBlockRange &block);
 [[nodiscard]] VimStep block_operated(const VimState &state, const VimEditorView &view,
                                      VimOperator operation);
 // 矩形の `D`。選んだ矩形を `$` で取り直して消す（`C` と同じ取り直し・#1417）。
