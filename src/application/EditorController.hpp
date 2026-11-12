@@ -330,6 +330,8 @@ class EditorController final
     void flush_key_map_pending();
     // 積んだ鍵を流さずに捨てる（窓が閉じていく EndSession だけ）。
     void discard_key_map_pending();
+    // 入口で、意図を写す前に待ちの鍵を流すか捨て、Vim の先頭の判定を捨てる（#1374）。
+    void settle_pending_keys(const EditorIntent &intent);
     // 待ちの合図（決定 4）。積んだ鍵が無ければ何も変えない（描き直さない）。
     void accept(const MapTimeout &);
     // 設定の `maps` と `mapleader` から表を作り直す。設定を置く 2 か所（起動・persist_settings）
@@ -349,6 +351,8 @@ class EditorController final
     // engine の 1 歩（鍵の vim_step か `:N` の vim_line_jumped）を測って写す 1 本。
     // 要求の往復・マーク・効果・キャレットの寄せは鍵と同じ（Issue #847）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> stepped_vim(const VimStepSource &source);
+    // stepped_vim が測った 1 歩を状態へ写す（寄せと先頭の判定の前まで）。
+    void applied_vim_step(const core::VimStep &step, core::VimMode before);
     [[nodiscard]] std::expected<core::VimStep, TextLayoutFailure>
     measured_vim_step(const VimStepSource &source);
     // engine の要求（表示領域・行の画面行数・行の中の画面行）に 1 つ応えて view へ置く（ADR 0129 の
@@ -937,6 +941,8 @@ class EditorController final
     // （ADR 0181 の決定 3）。積む口はこの 1 か所。印は鍵ごとに perform_vim_effect が
     // 置き、replace が編集を積めば消す。restore は効果を写す前のキャレット。
     void push_empty_unit(core::Offset restore);
+    // u / Ctrl-r が戻した行の行頭を changed_* の位置に足す（#1374）。
+    void note_vim_undone(const core::Edit &edit);
     // 鍵の効果を写す 1 か所（stepped_vim から）。鍵の印を置いてから写し、残った印を空の単位にする。
     void perform_vim_effect(const core::VimStep &step);
     void move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring,
@@ -968,7 +974,15 @@ class EditorController final
     // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();
-    void settle_vim_step(const core::VimStep &step, core::VimMode before);
+    // 鍵の前のキャレットの行と窓（Vim の先頭を前の鍵から引き継ぐかの入力・#1374）。
+    using HeldVimWindow = std::pair<core::LineNumber, ScrollState>;
+    void settle_vim_step(const core::VimStep &step, core::VimMode before,
+                         const std::optional<HeldVimWindow> &held);
+    [[nodiscard]] bool still_valid_vim_top(const HeldVimWindow &held) const;
+    // 鍵の前の窓を保てたら true（キャレットが見えたまま・横は追う・#1374）。
+    [[nodiscard]] bool keep_vim_window(const ScrollState &held);
+    // engine に文字組みの値を渡す窓か（wrap か格子で幅がある・VimLayoutView と共用）。
+    [[nodiscard]] bool vim_rows_layout() const noexcept;
     // INSERT で打った本文の追従（ScrollFollow::vim_typed・#1363）。鍵の前の保留を覚え、鍵の後に
     // 打った本文（と動かない鍵・INSERT へ入る近い鍵）の追従の印を立てる。
     void note_follow_before_key();
@@ -1113,7 +1127,8 @@ class EditorController final
     bool pending_typed_ = false;
     // 打った本文の追従の最後の位置（#1363）。打った後の別の頼み（Esc と `.` の後の寄せ・再生の
     // 中の NORMAL の移動）が保留を置き換えても残り、解決は先にここまで歩いてから保留を 1 回の
-    // 追従で解く（Vim は打つ周ごとに update_topline を終えてから次の鍵を読む）。
+    // 追従で解く（Vim は打つ周ごとに update_topline を終えてから次の鍵を読む）。NORMAL の `r<CR>`
+    // の edit() が改行を入れる前に先頭を確かめた位置（VimStep.edit_topline・#1374）もここに置く。
     std::optional<core::TextPosition> walked_follow_;
     // Vim が窓を決め直す option（`scrolloff` `wrap` `relativenumber` `hlsearch`）を置いた時点の
     // キャレット（#1432・#1524・Vim 9.1 の実測）。後の鍵の頼みが保留を置き換えても残り、解決は
@@ -1169,6 +1184,10 @@ class EditorController final
     // 流している鍵の engine の印（ADR 0181）。stepped_vim が効果を写す間だけ置き、replace が
     // 本文を置き換える編集を積めば消す。残れば push_empty_unit が空の単位を積む。
     std::optional<core::VimChange> vim_change_;
+    // 流している鍵で Vim が changed_* に渡した位置（engine の印 VimStep.change の位置・undo / redo
+    // は戻した行の行頭）。stepped_vim が鍵の始めに置き、先頭を前の鍵から引き継ぐかの判定
+    // （vim_top_still_valid）だけが読む（#1374・ADR 0181 の決定 6 と追補）。
+    std::optional<core::TextPosition> vim_changed_from_;
     std::optional<core::TextBuffer> replay_text_;
     // 同じ意図の中で読めなかったタブの数（ADR 0059 の「知らせの文言」）。begin_intent が 0 に戻す。
     std::size_t unreached_tabs_ = 0;

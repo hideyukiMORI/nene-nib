@@ -856,6 +856,35 @@ def stale_bottom_after_zb(judged: dict) -> bool:
             and judged["fields"] <= {"line", "column", "first_visible"})
 
 
+SCROLL_DOWN = re.compile(r"^(\d+)<C-e>$")
+TOP_LINE = re.compile(r"^[1-3]?H$")
+
+
+def stale_bottom_before_h(judged: dict) -> bool:
+    """#1374: after a counted `<C-e>` the oracle's single `:normal!` has not redrawn, so `VALID_BOTLINE`
+    is off and `H`'s `cursor_correct` -> `validate_botline` -> `comp_botline` -> `check_cursor_moved`
+    sees the top line it placed the caret on and drops `VALID_TOPLINE`; with `:redraw!` between the
+    keys Vim keeps the top that `<C-e>` set, as Nib does (ADR 0019 the #1374 addendum 4 · PR #1543
+    review V-1543 M2). Only what Vim 9.1 measured (60 lines, windows 8/10/12 rows high): a shrunk case
+    of exactly a `<C-e>` with a count of 2 or more and an `H` with no count or 1 to 3, differing on
+    `first_visible` only, with `scrolloff` above 0 and at least half the height (`2 * so >= height`;
+    `so=4` in 10 rows, `so=3` in 8 rows and `so=4` in 12 rows did not differ) and the text's end
+    above the window's last row after the scroll (windows in the middle of the text did not differ).
+    A plain `<C-e>`, `zt` `z<CR>` `z.` before `H`, and `M` `L` after it are not known."""
+    words, window = judged["words"], judged["window"]
+    if not (judged["shrunk"] and window is not None and len(words) == 2):
+        return False
+    (scroll_kind, scroll_keys), (top_kind, top_keys) = words
+    scrolled = SCROLL_DOWN.match(scroll_keys)
+    if scroll_kind != "<C-e>" or scrolled is None or top_kind != "H" or not TOP_LINE.match(top_keys):
+        return False
+    count, viewport, scrolloff = int(scrolled.group(1)), window["viewport"], window["scrolloff"]
+    height, lines = viewport["visible_lines"], judged.get("lines")
+    return (count >= 2 and scrolloff > 0 and 2 * scrolloff >= height and lines is not None
+            and viewport["first_visible"] + count + height - 1 > lines
+            and judged["fields"] == {"first_visible"})
+
+
 SEARCH_OPERATOR = re.compile(r'^(?:".)?\d*[dcy]\d*[nN*#/?]')
 # 生成器 6 の既定の既知（#1353）。1 行が Issue・説明・判定の述語（`judged_case` の辞書を読む）。
 # 名前の `--known` の後に読む。閉じた Issue と直した Issue の行は置かない（直った後に別の原因を
@@ -864,6 +893,10 @@ SEARCH_OPERATOR = re.compile(r'^(?:".)?\d*[dcy]\d*[nN*#/?]')
 # #1483 は閉じるが直さない違い（oracle の 1 本の `:normal!` だけの形・Nib は対話の Vim と同じ・
 # ADR 0146 の #1483 の追補）なので、閉じた後も行を残す。述語は最小の 2 語に狭めてある。
 DEFAULT_KNOWN = (
+    # #1374 は直さない違い（oracle の 1 本の `:normal!` だけの形・Nib は対話の Vim と同じ・
+    # ADR 0019 の #1374 の追補 4）。#1310 の述語も同じ形を拾うので、狭いこちらを先に読む。
+    ("1374", "回数つきの `<C-e>` の後の `H` が先頭を決め直す（`:normal!` の中だけの違い）",
+     stale_bottom_before_h),
     ("1310", "so>0 の `<C-e>` `<C-y>` と後の 1 語だけに縮んだ `first_visible` の違い",
      scrolled_then_one_key),
     ("1344", "検索つきのオペレータ",
@@ -897,8 +930,9 @@ def judged_case(entry: dict, by_name: dict, mismatches: list[dict]) -> dict:
         fields = set(minimal.get("nib", {})) or set(entry["fields"])
     else:
         words, fields = list(by_name[entry["name"]]["words"]), set(entry["fields"])
+    case = by_name[entry["name"]]
     return {"words": words, "fields": fields, "shrunk": minimal is not None,
-            "window": by_name[entry["name"]]["window"]}
+            "window": case["window"], "lines": case["text"].count("\n") + 1}
 
 
 def fuzz(args: argparse.Namespace, seed: int, out: Path) -> dict:
