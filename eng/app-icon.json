@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "source": "docs/design/app-icon.svg",
+  "icon": "src/app/NeNeNib.ico",
+  "iconSizes": [
+    16,
+    20,
+    24,
+    32,
+    40,
+    48,
+    64,
+    256
+  ],
+  "msixDirectory": "src/app/msix",
+  "bases": {
+    "Square44x44Logo": 44,
+    "Square150x150Logo": 150,
+    "StoreLogo": 50
+  },
+  "scales": [
+    100,
+    125,
+    150,
+    200,
+    400
+  ],
+  "targetSizes": [
+    16,
+    24,
+    32,
+    48,
+    256
+  ],
+  "listingLogo": "docs/images/store/store-logo-300.png",
+  "listingSize": 300,
+  "renderer": {
+    "name": "Google Chrome headless",
+    "version": "157.0.8103.52"
+  },
+  "digests": {
+    "docs/design/app-icon.svg": "d4eb442e566931beadfe9135bb3a7771c8816c43412c252694e8fbad9c7fbea7",
+    "docs/images/store/store-logo-300.png": "d59a8e99ddc9dcfb141d4daca3c70342679fd8ddf225e1fa76561007b3d1dcad",
+    "src/app/NeNeNib.ico": "f5e5011ecdfce7063d7a0750f26c25625b17b27221e9903c1835975f588216db",
+    "src/app/msix/Square150x150Logo.scale-100.png": "ad566633ccddf0aaab10fe71b1ca743e65afa304a1689079d71ea1dfddd2a211",
+    "src/app/msix/Square150x150Logo.scale-125.png": "4064cb9a99c35358901e4d6cfb5533a3131fbba3162fe1284974d96e0c2b2b22",
+    "src/app/msix/Square150x150Logo.scale-150.png": "c0782df65fa0317045e7c393b88f640cee39ce47b7918e032d5f9e4275341196",
+    "src/app/msix/Square150x150Logo.scale-200.png": "d59a8e99ddc9dcfb141d4daca3c70342679fd8ddf225e1fa76561007b3d1dcad",
+    "src/app/msix/Square150x150Logo.scale-400.png": "5205112ee4d55aa9f49a950d003ee4f7ffacd42ee54a1f9b80ad579d8926fc5e",
+    "src/app/msix/Square44x44Logo.scale-100.png": "7cd776ff1bc177fb66f0aee31b00b9597037167da4f771be81657b5a4126cbf6",
+    "src/app/msix/Square44x44Logo.scale-125.png": "e4b37a6f834f642a45e39d8ff754cad1ab3788e1ece71181ce8350a96fec31fa",
+    "src/app/msix/Square44x44Logo.scale-150.png": "687fb4b9f02a8d23738c840f4880abe615b2167fe5561dacabf0b8df7e3af5e7",
+    "src/app/msix/Square44x44Logo.scale-200.png": "faffc6062cbc5e142e7c34cbd73b7eb2dd7c7bfefcd23f339648931218ec4b06",
+    "src/app/msix/Square44x44Logo.scale-400.png": "7b1f77fe3b707055872b1913f48c335411d1c88da608366ff7c53aa641503a39",
+    "src/app/msix/Square44x44Logo.targetsize-16_altform-lightunplated.png": "a50d1f0d36b8c357cf0e21cfcb36eff22065e93f0cb946c63bdf2e04fabc30ab",
+    "src/app/msix/Square44x44Logo.targetsize-16_altform-unplated.png": "a50d1f0d36b8c357cf0e21cfcb36eff22065e93f0cb946c63bdf2e04fabc30ab",
+    "src/app/msix/Square44x44Logo.targetsize-24_altform-lightunplated.png": "1107fb647131da874fb6b2a4ee1bf38be4b18aaf3147fce88e45cc7616ca821b",
+    "src/app/msix/Square44x44Logo.targetsize-24_altform-unplated.png": "1107fb647131da874fb6b2a4ee1bf38be4b18aaf3147fce88e45cc7616ca821b",
+    "src/app/msix/Square44x44Logo.targetsize-256_altform-lightunplated.png": "ba478fbc641a1a6fee9151917fe3f61d3c7b7ebe03ecf44ec1e41513c74ab62f",
+    "src/app/msix/Square44x44Logo.targetsize-256_altform-unplated.png": "ba478fbc641a1a6fee9151917fe3f61d3c7b7ebe03ecf44ec1e41513c74ab62f",
+    "src/app/msix/Square44x44Logo.targetsize-32_altform-lightunplated.png": "50cd099883d67eb08fb74f38edb30210c6fca8fcbdc3d879a78243c4d3c6a111",
+    "src/app/msix/Square44x44Logo.targetsize-32_altform-unplated.png": "50cd099883d67eb08fb74f38edb30210c6fca8fcbdc3d879a78243c4d3c6a111",
+    "src/app/msix/Square44x44Logo.targetsize-48_altform-lightunplated.png": "eb778208ef91b2e0f7be3ed8f6bfe45dba74178089d11a526a3979eb92c6d63a",
+    "src/app/msix/Square44x44Logo.targetsize-48_altform-unplated.png": "eb778208ef91b2e0f7be3ed8f6bfe45dba74178089d11a526a3979eb92c6d63a",
+    "src/app/msix/StoreLogo.scale-100.png": "57b2f0223a6c8cd7b25c10d506cd337c634b9a0e7733dc5d797ac9417ae1909e",
+    "src/app/msix/StoreLogo.scale-125.png": "d9fa224412b66f9bccbf32b26b1c4c8446e5723abf12774aa1f7a1e4b7c54507",
+    "src/app/msix/StoreLogo.scale-150.png": "7c2ff3fb3276c9ea498a1c6d37996aa1b10bb6cffd26d8d7c42f26a6b78a7a37",
+    "src/app/msix/StoreLogo.scale-200.png": "6a564ce72b69aa7dca2ef9615eee0c02e26e1cb529bad4870975973844826f2f",
+    "src/app/msix/StoreLogo.scale-400.png": "af040c1cce4e543d9e299410b9c1a4a2e2f742e7d0533e04af8b71b13e591688"
+  }
+}

@@ -489,6 +489,10 @@ foreach(library IN ITEMS ole32 d2d1 dwrite windowscodecs)
 endforeach()
 
 nenenib_target(NeNeNib app EXECUTABLE src/app/Main.cpp src/app/NeNeNib.rc)
+# rc の ICON が指す生成物（eng/render-app-icon.py・#1580・ADR 0185）。rc の依存の走査は ICON の
+# ファイルを拾わないので、差し替えたら rc を作り直すよう名指しする。
+set_source_files_properties(src/app/NeNeNib.rc PROPERTIES OBJECT_DEPENDS
+    "${CMAKE_SOURCE_DIR}/src/app/NeNeNib.ico;${CMAKE_SOURCE_DIR}/src/ui/win32/AppIconResource.hpp")
 set_source_files_properties("${NENENIB_MANIFEST}" PROPERTIES GENERATED TRUE)
 target_sources(NeNeNib PRIVATE "${NENENIB_MANIFEST}")
 target_include_directories(NeNeNib PRIVATE "${NENENIB_GENERATED_DIR}")
