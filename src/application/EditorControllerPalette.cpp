@@ -484,7 +484,7 @@ void EditorController::submit_palette(const core::CommandPalette &palette)
     switch (choice.kind)
     {
     case core::CommandChoiceKind::execute:
-        evaluate_command(choice.command);
+        static_cast<void>(evaluate_command(choice.command));
         return;
     case core::CommandChoiceKind::open:
         // 入力を閉じてから開く（evaluate_command と同じ順・choice は入力ではなく手元の列を指す）。
