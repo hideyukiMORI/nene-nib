@@ -35,9 +35,12 @@
 #include "LayoutRect.hpp"
 #include "LineWrapping.hpp"
 #include "Minimap.hpp"
+#include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenCommandPalette.hpp"
+#include "OpenTabList.hpp"
 #include "PasteCommand.hpp"
+#include "PlaceCaret.hpp"
 #include "RefreshAppearance.hpp"
 #include "Scopes.hpp"
 #include "ScriptedAppearance.hpp"
@@ -47,6 +50,7 @@
 #include "SettingsFailure.hpp"
 #include "StatusBarLayout.hpp"
 #include "SubmitCommand.hpp"
+#include "SwitchTab.hpp"
 #include "TestSupport.hpp"
 #include "ThemeChoice.hpp"
 #include "ThemeExpectations.hpp"
@@ -693,6 +697,143 @@ void verify_ex_visual_range_cancel_and_count()
            "a count before : opens the line with .,.+(count-1)");
     static_cast<void>(controller.apply_frame(app::SubmitCommand{}));
     expect(caret_at(controller.frame(), 4, 1), ":.,.+2 lands on the last line of the range");
+}
+
+// オペレータ待ちの `:` を窓の鍵の道で打つ（#1549・Vim の nv_colon）。`d:` は空の入力行を開き、
+// 入力行に打った文字は本文の鍵にならない。跳ばない命令は空の範囲（`d` は何も消さない）、跳ぶ
+// 命令（`:3`）は移動、取消と失敗はオペレータを捨てて次の鍵は NORMAL の鍵になる。
+void verify_ex_operator_colon_typed()
+{
+    for (const std::string_view command : {"set so=2", "noh", "foo", ""})
+    {
+        Editing editor;
+        open_vim_document(editor, std::string(four_lines));
+        auto &controller = editor.controller();
+        vim_replay(controller, "jd");
+        const auto opened = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}});
+        expect(opened.command_line.has_value() && opened.command_line.value().text.empty() &&
+                   opened.vim_mode == core::VimMode::normal,
+               "d: opens an empty input line");
+        static_cast<void>(controller.apply_frame(app::CommandText{std::string(command)}));
+        const auto submitted = controller.apply_frame(app::SubmitCommand{});
+        expect(!submitted.command_line.has_value() && whole_vim_body(controller) == four_lines &&
+                   submitted.vim_mode == core::VimMode::normal,
+               "a command that does not jump deletes nothing and the typed text stays out of the "
+               "buffer");
+        static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'x'}}));
+        expect(whole_vim_body(controller) == "one\nwo\nthree\nfour",
+               "the operator is closed: the next key is a NORMAL key");
+    }
+}
+
+// `d:3` は行への移動で、`c:` の空の範囲は INSERT へ入る。Esc と空の行の Backspace はオペレータごと
+// 取り消す（#1549）。
+void verify_ex_operator_colon_motion_and_cancel()
+{
+    {
+        Editing editor;
+        open_vim_document(editor, std::string(four_lines));
+        auto &controller = editor.controller();
+        vim_replay(controller, "jd:");
+        static_cast<void>(controller.apply_frame(app::CommandText{"3"}));
+        static_cast<void>(controller.apply_frame(app::SubmitCommand{}));
+        expect(whole_vim_body(controller) == "one\nthree\nfour" &&
+                   caret_at(controller.frame(), 2, 1),
+               "d:3 deletes up to the line as an exclusive motion that turns linewise");
+    }
+    {
+        Editing editor;
+        open_vim_document(editor, std::string(four_lines));
+        auto &controller = editor.controller();
+        vim_replay(controller, "jc:");
+        static_cast<void>(controller.apply_frame(app::CommandText{"set so=2"}));
+        const auto changed = controller.apply_frame(app::SubmitCommand{});
+        expect(changed.vim_mode == core::VimMode::insert &&
+                   whole_vim_body(controller) == four_lines,
+               "c: with a command that does not jump enters INSERT on the empty range");
+    }
+    for (const bool escape : {true, false})
+    {
+        Editing editor;
+        open_vim_document(editor, std::string(four_lines));
+        auto &controller = editor.controller();
+        vim_replay(controller, "jd:");
+        const auto cancelled =
+            escape ? controller.apply_frame(app::CancelCommand{})
+                   : controller.apply_frame(app::EditCommand{core::CommandEdit::backspace});
+        expect(!cancelled.command_line.has_value() && cancelled.vim_mode == core::VimMode::normal,
+               "Esc and Backspace on the empty line close the input line");
+        static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'x'}}));
+        expect(whole_vim_body(controller) == "one\nwo\nthree\nfour",
+               "cancelling drops the operator: x deletes one character");
+    }
+}
+
+// 命令の要求が後で断った（`:tabnext 9`）ときは失敗と同じに、窓が後で行う要求（最後のタブの
+// `:tabclose`）は要求を出して、オペレータを捨てる（#1549 の M1・Vim の did_emsg の clearopbeep）。
+// `c` は INSERT に入らず、次に打った `x` は NORMAL の鍵。
+void verify_ex_operator_colon_refused_request()
+{
+    for (const std::string_view command : {"tabnext 9", "tabclose"})
+    {
+        Editing editor;
+        open_vim_document(editor, std::string(four_lines));
+        auto &controller = editor.controller();
+        vim_replay(controller, "jc:");
+        static_cast<void>(controller.apply_frame(app::CommandText{std::string(command)}));
+        const auto refused = controller.apply_frame(app::SubmitCommand{});
+        expect(refused.vim_mode == core::VimMode::normal,
+               "a refused or deferred request drops the operator instead of entering INSERT");
+        static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'x'}}));
+        expect(whole_vim_body(controller) == "one\nwo\nthree\nfour",
+               "the next x is a NORMAL key, not text typed into the buffer");
+    }
+}
+
+// `d:` の入力行が確定の外で閉じるか別の面に置き換わったら、保留のオペレータを捨てる（#1549 の
+// M2）。 Ctrl+P の面・タブの一覧・クリック・タブの切り替えと、`d/` の
+// Ctrl+P（前からの穴）。どれも後の `j` は 1 行下へ動くだけで、本文は変わらない。
+void verify_ex_operator_colon_replaced_line()
+{
+    const auto check = [](std::string_view opener, auto &&leave, const char *label)
+    {
+        Editing editor;
+        open_vim_document(editor, std::string(four_lines));
+        auto &controller = editor.controller();
+        vim_replay(controller, "jd");
+        vim_replay(controller, opener);
+        leave(controller);
+        static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+        static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'j'}}));
+        expect(whole_vim_body(controller) == four_lines, label);
+    };
+    const auto palette = [](app::EditorController &controller)
+    { static_cast<void>(controller.apply_frame(app::OpenCommandPalette{})); };
+    const auto tab_list = [](app::EditorController &controller)
+    { static_cast<void>(controller.apply_frame(app::OpenTabList{})); };
+    const auto click = [](app::EditorController &controller)
+    {
+        static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+        static_cast<void>(controller.apply_frame(
+            app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                            core::SelectionAnchoring::collapse}));
+    };
+    check(":", palette, "Ctrl+P over d: drops the operator");
+    check(":", tab_list, "the tab list over d: drops the operator");
+    check(":", click, "a click on the text drops the operator");
+    check("/", palette, "Ctrl+P over d/ drops the operator");
+
+    Editing editor;
+    open_vim_document(editor, std::string(four_lines));
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply_frame(app::NewTab{}));
+    static_cast<void>(controller.apply_frame(app::SwitchTab{0}));
+    vim_replay(controller, "jd:");
+    static_cast<void>(controller.apply_frame(app::SwitchTab{1}));
+    static_cast<void>(controller.apply_frame(app::SwitchTab{0}));
+    static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'j'}}));
+    expect(whole_vim_body(controller) == four_lines,
+           "switching tabs while d: is open drops the operator");
 }
 
 void verify_ex_tab_names()
@@ -1663,5 +1804,9 @@ void verify_ex_settings()
     verify_ex_ranges();
     verify_ex_visual_range_refusal();
     verify_ex_visual_range_cancel_and_count();
+    verify_ex_operator_colon_typed();
+    verify_ex_operator_colon_motion_and_cancel();
+    verify_ex_operator_colon_refused_request();
+    verify_ex_operator_colon_replaced_line();
 }
 } // namespace nenenib::tests

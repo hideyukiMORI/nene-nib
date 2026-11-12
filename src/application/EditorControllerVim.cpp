@@ -231,7 +231,8 @@ constexpr std::string_view replay_limit_notice =
     "再生を 100,000 鍵で止めました（残りは捨てました）";
 static_assert(core::vim_replay_key_limit == 100000, "replay_limit_notice の数を上限に合わせる");
 // engine を呼ぶ 1 か所の写し（Issue #1023）。鍵は vim_step・`:N` の行は vim_line_jumped・押しの
-// VISUAL は vim_pointer_selected（#1250）。
+// VISUAL は vim_pointer_selected（#1250）・オペレータ待ちの `:` の確定は
+// vim_command_operated（#1549）。
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
                                         const core::VimEditorView &view, const core::VimKey &key)
 {
@@ -257,6 +258,13 @@ static_assert(core::vim_replay_key_limit == 100000, "replay_limit_notice の数�
                                         const InsertRestartRequest &restart)
 {
     return core::vim_restarted_insert(state, view, restart.command_caret);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
+                                        const core::VimCommandMotion &motion)
+{
+    return core::vim_command_operated(state, view, motion);
 }
 
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
@@ -762,6 +770,9 @@ std::optional<core::VimRepeatFailure> EditorController::deliver_vim_key(const co
 {
     if (!state_.command_input().has_value())
     {
+        // 再生の中で入力行を取り消した後の鍵も、engine へ流す前に同じ 1
+        // か所で待ちを捨てる（#1549）。
+        settle_line_operator();
         return step_vim(key);
     }
     // 入力行の鍵は先頭を確かめない（確定が流す engine の鍵は stepped_vim が置き直す・#1232）。
@@ -929,11 +940,13 @@ void EditorController::restart_due_vim_insert(core::Offset command_caret)
 }
 
 // 印を待つ間に engine の外で終わった命令（Ex の行・検索の取消・クリック）の後に始め直す（決定 8）。
-// 入力行がまだ開いていれば（Ex が別の入力行を開いた）始め直さない。
+// 入力行がまだ開いていれば（Ex が別の入力行を開いた）始め直さない。命令が INSERT へ入ったまま
+// （印を保ったオペレータ待ちの `c:5<CR>`・#1549）なら、その INSERT の Esc の後に鍵の出口が始め
+// 直すので、ここでは始め直さない（Vim 9.1 の実測・まとめ枝 #1563）。
 void EditorController::resume_vim_insert()
 {
     if (state_.mode() != core::EditMode::vim || state_.command_input().has_value() ||
-        !core::vim_insert_paused(state_.vim()))
+        state_.vim().mode == core::VimMode::insert || !core::vim_insert_paused(state_.vim()))
     {
         return;
     }
@@ -1258,6 +1271,7 @@ void EditorController::perform(const core::VimOpenCommandLine &effect)
     const auto line = core::CommandLine::empty(state_.themes()).with_fonts(given_fonts());
     state_ = state_.with_command_input(
         effect.range.empty() ? line : line.inserted(effect.range).value_or(line));
+    line_operator_ = state_.vim().pending.has_value();
 }
 
 void EditorController::perform(const core::VimOpenSearch &effect)
@@ -1266,6 +1280,7 @@ void EditorController::perform(const core::VimOpenSearch &effect)
     state_ = state_.with_command_input(core::SearchLine::opened(effect.direction));
     state_ = state_.with_search_preview(
         SearchPreview{std::nullopt, origin, state_.text().position_of(state_.selection().caret)});
+    line_operator_ = state_.vim().pending.has_value();
 }
 
 // 入力行が変わるたびに 1 か所で呼ぶ（ADR 0041 の決定 3）。画面は毎回 origin から数え直すので、
