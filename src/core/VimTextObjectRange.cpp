@@ -9,7 +9,6 @@
 #include "VimBracketPair.hpp"
 #include "VimCaret.hpp"
 #include "VimCharacterBoundary.hpp"
-#include "VimEmptyChange.hpp"
 #include "VimMode.hpp"
 #include "VimMotionRange.hpp"
 #include "VimParagraphObject.hpp"
@@ -317,15 +316,9 @@ constexpr char32_t escape_character = U'\\';
     return begin;
 }
 
-// 語の範囲は空行で空でも `c` が空の本文を書く（#979）。Vim の current_word は空行の NUL を
-// inclusive に選ぶので oap->empty にならず、op_change は空を yank する（実測）。括弧などのほかの
-// 空の範囲（`ci(` の `()`）は書かないので、印は語の範囲だけが立てる。
-[[nodiscard]] VimMotionRange writing_empty(VimMotionRange range)
-{
-    range.empty_change = VimEmptyChange::writes_empty;
-    return range;
-}
-
+// 語の範囲は空行で空でも `c` が空の本文を書く（#979・writing_empty）。Vim の current_word は空行の
+// NUL を inclusive に選ぶので oap->empty にならず、op_change は空を yank する（実測）。括弧などの
+// ほかの空の範囲（`ci(` の `()`）は書かないので、印は語の範囲だけが立てる。
 [[nodiscard]] VimMotionRange word_motion_range(const TextBuffer &text, Offset begin, Offset end,
                                                VimTextObjectRequest request)
 {
