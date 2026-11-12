@@ -68,6 +68,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
     src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
     src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp src/core/SaveQuestionText.cpp src/core/LanguageTable.cpp
+    src/core/ResolvedLanguage.cpp src/core/UiTexts.cpp
     src/core/Lexer.cpp src/core/LexCpp.cpp src/core/LexCursor.cpp
     src/core/MarkdownParse.cpp src/core/MarkdownBuilder.cpp src/core/MarkdownEntity.cpp src/core/PreviewSelectionText.cpp
     src/core/ImageFormat.cpp src/core/ImageGeometry.cpp src/core/ImageReference.cpp
@@ -181,6 +182,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/AutosavePlanPropertyTests.cpp
     tests/unit/AutosaveRestorePropertyTests.cpp
     tests/unit/OperationsTests.cpp
+    tests/unit/UiTextsTests.cpp
     tests/unit/FindReplaceTests.cpp tests/unit/ExSubstituteTests.cpp tests/unit/MatchParenTests.cpp tests/unit/MinimapTests.cpp
     tests/unit/MinimapPropertyTests.cpp tests/unit/MinimapPointerTests.cpp
     tests/unit/GuideTests.cpp

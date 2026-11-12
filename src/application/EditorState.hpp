@@ -6,6 +6,7 @@
 #include "Composition.hpp"
 #include "DisplayForm.hpp"
 #include "DisplayInquiry.hpp"
+#include "DisplayLanguage.hpp"
 #include "Document.hpp"
 #include "DocumentReading.hpp"
 #include "DocumentState.hpp"
@@ -101,6 +102,11 @@ class EditorState final
 
     [[nodiscard]] EditorState with_appearance(core::Appearance appearance) const;
     [[nodiscard]] EditorState with_mode(core::EditMode mode) const;
+    // 解決済みの表示言語（ADR 0123 の追補 2026-11-13 の決定 3・#1019）。窓に 1 つで、タブの切り替え
+    // では変わらない。既定は japanese（いままでの表示）。置くのは合成ルートの起動の解決と
+    // `:set language=` だけ（どちらも T1b）。
+    [[nodiscard]] core::DisplayLanguage display_language() const noexcept;
+    [[nodiscard]] EditorState with_display_language(core::DisplayLanguage language) const;
     // lvalue は元を保ち、所有権を渡した一時値は同じ更新経路で消費する（ADR 0081）。
     [[nodiscard]] EditorState with_vim(core::VimState vim) const &;
     [[nodiscard]] EditorState with_vim(core::VimState vim) &&;
@@ -372,6 +378,7 @@ class EditorState final
     bool display_question_ = false;
     core::Appearance appearance_;
     core::EditMode mode_;
+    core::DisplayLanguage display_language_ = core::DisplayLanguage::japanese;
     core::VimState vim_;
     Document document_;
     core::VimMarks vim_marks_{};

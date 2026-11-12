@@ -1,0 +1,338 @@
+file	line	module	text	kind	params	reach	proposed_id	en	note
+adapters/win32/Win32ThemeAdapter.cpp	39	adapters	themes: cannot read directory	screen	0	notice() → ThemeInventory.notice(DisplayText) → 知らせ(到達の道は未確認)	notice_themes_unreadable_directory	themes: cannot read directory	adapters が画面の文を持つ(ARC 上の例外になる)。9 文(39 50 55 64 72 82 124 150 行)
+adapters/win32/Win32ThemeAdapter.cpp	50	adapters	themes: more than 128 files; none loaded	screen	0(128 が埋め込み)	同上	notice_themes_too_many	themes: more than 128 files; none loaded	-
+adapters/win32/Win32ThemeAdapter.cpp	55	adapters	themes: incomplete directory read; none loaded	screen	0	同上	notice_themes_incomplete	themes: incomplete directory read; none loaded	-
+adapters/win32/Win32ThemeAdapter.cpp	64	adapters	{}: invalid or reserved theme filename	screen	1: ファイル名	ファイル名 + suffix の連結 → 同上	notice_themes_invalid_filename	{}: invalid or reserved theme filename	suffix のリテラルは ": invalid or reserved theme filename"
+adapters/win32/Win32ThemeAdapter.cpp	72	adapters	themes: invalid theme filename	screen	0	上の fallback → 同上	notice_themes_invalid_filename_fallback	themes: invalid theme filename	-
+adapters/win32/Win32ThemeAdapter.cpp	82	adapters	themes: invalid filename encoding	screen	0	同上	notice_themes_invalid_encoding	themes: invalid filename encoding	-
+adapters/win32/Win32ThemeAdapter.cpp	124	adapters	themes: conflicting names; none loaded	screen	0	同上	notice_themes_conflicting_names	themes: conflicting names; none loaded	-
+adapters/win32/Win32ThemeAdapter.cpp	150	adapters	themes: location unavailable	screen	0	read(): directory_ 無し → ThemeInventory.notice	notice_themes_location_unavailable	themes: location unavailable	-
+app/Main.cpp	57	app	NeNe Nib	screen	0	product_name[] → Main.cpp の MessageBoxW の caption	app_error_caption	NeNe Nib	製品名
+app/Main.cpp	64	app	ウィンドウクラスを登録できませんでした。	screen	0	MessageBoxW の本文 (Main.cpp の report(): MessageBoxW(nullptr, reason, "NeNe Nib", MB_OK|MB_ICONERROR))	app_error_window_class	Could not register the window class.	起動失敗の箱。reason_of は const wchar_t* を返す。表を引く時点でまだ設定を読んでいないので言語が決まらない(OS 言語で決めるしかない)
+app/Main.cpp	66	app	ウィンドウを作成できませんでした。	screen	0	MessageBoxW の本文 (Main.cpp の report())	app_error_window_create	Could not create the window.	同上
+app/Main.cpp	68	app	Direct2D で描画を始められませんでした。	screen	0	MessageBoxW の本文 (Main.cpp の report())	app_error_render_start	Could not start rendering with Direct2D.	同上
+app/Main.cpp	332	app	COM を初期化できませんでした。	screen	0	MessageBoxW の本文 (wWinMain の CoInitializeEx 失敗)	app_error_com_init	Could not initialize COM.	設定を読む前。言語は OS から決めるしかない
+application/EditorController.cpp	610	application	同じフォルダは {} 件まで。残りは一覧に出ません	screen	1: 件数(palette_folder_.received)	前後 2 つのリテラルを std::to_string で連結。DisplayText::parse → 状態の知らせ(palette_message 系)→ ステータスバーの知らせ枠	notice_palette_folder_truncated	Only the first {} files in the same folder are listed	日本語の語順は「N 件まで」。連結の書き方だと言語ごとに語順を変えられない(位置指定の {} が要る)。リテラルは 610 と 611 の 2 行に分かれている
+application/EditorControllerAutosave.cpp	70	application	自動退避できませんでした	screen	0	constexpr string_view autosave_failed_message → 知らせ枠	notice_autosave_failed	Autosave failed	呼び出し先は未確認(コメントの「1 行」から知らせ枠と判断)
+application/EditorControllerAutosave.cpp	72	application	64 MiB を超える文書は自動退避しません	screen	0	constexpr string_view autosave_oversized_message → 知らせ枠	notice_autosave_oversized	Documents larger than 64 MiB are not autosaved	64 MiB は上限の定数と手で揃えた数字(static_assert は無い)
+application/EditorControllerAutosave.cpp	74	application	戻せませんでした: {}	screen	1: 題名(残骸の tab_title_for・無題なら「無題」)+ 末尾に「（ほか N 件）」が付くことがある	named_notice(prefix, name, others) の連結 → 知らせ枠	notice_autosave_unrestored	Could not restore: {}	prefix + 名前 + suffix の連結。named_line が prefix.size() で名前の収まる長さを計算している(文の長さが言語で変わる)
+application/EditorControllerCommand.cpp	167	application	行番号を入れてください	screen	0	constexpr string_view not_a_line_notice → 知らせ枠(入力行の確定の断り・鳴らす)	notice_go_to_line_invalid	Enter a line number	-
+application/EditorControllerCommand.cpp	172	application	置換の結果は 1 GiB までです	screen	0(1 GiB は文に埋め込み)	constexpr string_view replace_too_large_notice → 知らせ枠(断り・鳴らす)	notice_replace_too_large	The result of the replacement is limited to 1 GiB	static_assert(maximum_document_bytes == 1 GiB) が文の数字を縛っている。表へ移すなら static_assert の置き場も決める
+application/EditorControllerCommand.cpp	497	application	Clipboard unavailable	screen	0	with_command_message → 知らせ枠	notice_clipboard_unavailable	Clipboard unavailable	英語で書かれている画面の文(試験: 0 件)
+application/EditorControllerCommand.cpp	809	application	Settings could not be saved	screen	0	reject(...) → 知らせ枠+ベル	notice_settings_unsaved	Settings could not be saved	同じ文が EditorControllerCommand.cpp:929 / EditorControllerExplorer.cpp:425 / :463 / EditorControllerLanguageServer.cpp:468 にもある(計 5 箇所)
+application/EditorControllerCommand.cpp	914	application	Not supported: listing mappings	screen	0	reject(...) → 知らせ枠+ベル	notice_map_list_unsupported	Not supported: listing mappings	Ex の `:map` の一覧が未対応。「Not supported: 」の類
+application/EditorControllerCommand.cpp	992	application	E475: Invalid argument: {}	vim_message	1: 数(request.number)	reject → 知らせ枠+ベル	||	Vim の E475	-
+application/EditorControllerDetail.cpp	152	application	（ほか {} 件）	screen	1: 件数(others)	named_notice の suffix 連結(std::string "（ほか " + to_string + " 件）") → 知らせ枠	notice_others_suffix	({} more)	全角括弧。リテラルは 152 行に 2 つ(「（ほか 」と「 件）」)
+application/EditorControllerDocuments.cpp	84	application	E13: File exists	vim_message	0	write_failure_text(already_exists) → 知らせ枠	||	Vim の E13	-
+application/EditorControllerDocuments.cpp	86	application	Could not write: text cannot be represented in this encoding	screen	0	write_failure_text(FileFailure::unencodable) → :w の断りの知らせ	notice_write_unencodable	Could not write: text cannot be represented in this encoding	ui の dialog_file_unencodable と同じ意味の別の文(日本語/英語で別経路)
+application/EditorControllerDocuments.cpp	96	application	Could not write file	screen	0	write_failure_text(その他) → :w の断りの知らせ	notice_write_failed	Could not write file	-
+application/EditorControllerDocuments.cpp	291	application	開けませんでした: {}	screen	1: 題名(+「（ほか N 件）」)	named_notice(unreached_prefix, ...) → 知らせ枠(reach_tab の失敗)	notice_open_failed	Could not open: {}	-
+application/EditorControllerDocuments.cpp	292	application	読み込み中: {}	screen	1: 名前	reading_prefix + 名前 → reading_message() → 状態の知らせ(frame の知らせ枠)	notice_reading	Reading: {}	-
+application/EditorControllerDocuments.cpp	389	application	前回のタブを読めませんでした	screen	0	restore_session の session.read() 失敗 → with_command_message	notice_session_unreadable	Could not read the previous tabs	-
+application/EditorControllerDocuments.cpp	557	application	E32: No file name	vim_message	0	reject → 知らせ枠+ベル	||	Vim の E32(EditorControllerExplorer.cpp:451 にも)	-
+application/EditorControllerDocuments.cpp	577	application	E139: File is open in another tab	vim_message	0	reject → 知らせ枠+ベル	||	Vim の E139 に近い文言(Nib のタブに合わせた語)	-
+application/EditorControllerDocuments.cpp	597	application	Written	screen	0	with_command_message → 知らせ枠(:w の成功)	notice_written	Written	Vim の `"f" 3L, 10B written` の簡略版(Nib の文)
+application/EditorControllerDocuments.cpp	607	application	E37: No write since last change (add ! to override)	vim_message	0	reject → 知らせ枠+ベル	||	Vim の E37	-
+application/EditorControllerDocuments.cpp	1520	application	印刷は 16 MiB までです	screen	0	print_failure_notice(PrintFailure::too_large) → DisplayText::parse → 知らせ枠	notice_print_too_large	Printing is limited to 16 MiB	-
+application/EditorControllerDocuments.cpp	1521	application	印刷できませんでした: {}	screen	1: 理由(下の 3 文のどれか)	std::string(print_failed_prefix) + 理由の連結 → 知らせ枠	notice_print_failed	Could not print: {}	理由と前置きを別々に連結(「A: B」の形は言語で変わり得る)
+application/EditorControllerDocuments.cpp	1528	application	プリンタがありません	screen	0	print_failure_notice(no_printer) の連結の右辺	notice_print_no_printer	No printer is available	-
+application/EditorControllerDocuments.cpp	1530	application	印刷のダイアログを開けません	screen	0	print_failure_notice(dialog_failed) の連結の右辺	notice_print_dialog_failed	Could not open the print dialog	-
+application/EditorControllerDocuments.cpp	1532	application	ページを描けません	screen	0	print_failure_notice(rendering_failed) の連結の右辺	notice_print_render_failed	Could not render the page	-
+application/EditorControllerEditing.cpp	215	application	クリップボードに書けませんでした	screen	0	constexpr string_view clipboard_unwritten_notice → 知らせ枠	notice_clipboard_unwritten	Could not write to the clipboard	-
+application/EditorControllerEditing.cpp	236	application	INSERT モードで F5 を押してください	screen	0(モード名と鍵名が文に埋め込み)	constexpr date_time_insert_only_notice → 知らせ枠(鳴らさない)	notice_date_time_insert_only	Press F5 in INSERT mode	「INSERT」(Vim のモード名)と「F5」は訳さない語。文の中に混じる
+application/EditorControllerEditing.cpp	238	application	HTML が無いので文字だけを貼りました	screen	0	constexpr html_missing_notice → 知らせ枠	notice_paste_no_html	No HTML on the clipboard; pasted text only	-
+application/EditorControllerEditing.cpp	239	application	HTML を変換できないので文字だけを貼りました	screen	0	constexpr html_unconverted_notice → 知らせ枠	notice_paste_html_unconverted	Could not convert the HTML; pasted text only	-
+application/EditorControllerExplorer.cpp	47	application	（読めません）	screen	0(フォルダ名の後ろに付ける)	constexpr unreadable_suffix → エクスプローラーの行の名前の後ろ	explorer_unreadable_suffix	(cannot read)	名前 + suffix の連結。全角括弧
+application/EditorControllerLanguageServer.cpp	40	application	言語サーバーを起こせませんでした: {}	screen	1: 言語名(language_name)	prefix + 言語名の連結(99 行) → 知らせ枠	notice_lsp_not_started	Could not start the language server: {}	-
+application/EditorControllerLanguageServer.cpp	41	application	言語サーバーが終わりました: {}	screen	1: 言語名	同上	notice_lsp_ended	The language server has exited: {}	-
+application/EditorControllerLanguageServer.cpp	42	application	言語サーバーが答えません: {}	screen	1: 言語名	同上	notice_lsp_silent	The language server is not responding: {}	-
+application/EditorControllerLanguageServer.cpp	44	application	言語サーバーを止めました（:set lsp で再開）: {}	screen	1: 言語名	同上	notice_lsp_given_up	Stopped the language server (resume with :set lsp): {}	「:set lsp」は Ex の命令(訳さない)が文の中に混じる
+application/EditorControllerPalette.cpp	187	application	今の形	screen	0	CommandChoice の detail 枠(Ctrl+P の保存の形の面で今選ばれている行の注記)	palette_current_format	Current	-
+application/EditorControllerPalette.cpp	231	application	ブックマークを読めませんでした	screen	0	with_command_message(面を開くとき) → 知らせ枠	notice_bookmarks_unreadable	Could not read the bookmarks	同じ文が EditorControllerPalette.cpp:435 にもある
+application/EditorControllerPalette.cpp	428	application	保存済みのファイルを選んでください	screen	0	with_command_message → 知らせ枠	notice_bookmark_needs_saved_file	Choose a saved file	-
+application/EditorControllerPalette.cpp	435	application	ブックマークを読めませんでした	screen	0	with_command_message → 知らせ枠	notice_bookmarks_unreadable	Could not read the bookmarks	重複: EditorControllerPalette.cpp:231 と同じ文
+application/EditorControllerPalette.cpp	443	application	ブックマークは {} 件まで登録できます	screen	1: 上限(bookmark_limit)	443 と 444 の 2 リテラルを std::to_string で連結 → 知らせ枠	notice_bookmark_limit	You can register up to {} bookmarks	数が文の途中。語順が言語で変わり得る
+application/EditorControllerPalette.cpp	450	application	ブックマークを保存できませんでした	screen	0	reject(...) → 知らせ枠+ベル	notice_bookmark_unsaved	Could not save the bookmarks	-
+application/EditorControllerPalette.cpp	457	application	ブックマークを解除しました	screen	0	三項演算子の左 → 知らせ枠	notice_bookmark_removed	Bookmark removed	457 と 458 は 1 つの三項演算子
+application/EditorControllerPalette.cpp	458	application	ブックマークに追加しました	screen	0	三項演算子の右 → 知らせ枠	notice_bookmark_added	Bookmark added	-
+application/EditorControllerPreview.cpp	58	application	プレビューは 16 MiB までです	screen	0	constexpr preview_too_large_message → 知らせ枠	notice_preview_too_large	The preview is limited to 16 MiB	-
+application/EditorControllerPreview.cpp	59	application	Markdown を解析できませんでした	screen	0	constexpr preview_rejected_message → 知らせ枠	notice_preview_parse_failed	Could not parse the Markdown	-
+application/EditorControllerPreview.cpp	60	application	メモリが足りずプレビューできませんでした	screen	0	constexpr preview_memory_message → 知らせ枠	notice_preview_memory	Not enough memory to show the preview	-
+application/EditorControllerPreview.cpp	62	application	プレビューが古いので切り替えられません	screen	0	constexpr preview_task_stale_message → 知らせ枠	notice_preview_task_stale	The preview is out of date, so the task cannot be toggled	-
+application/EditorControllerPreview.cpp	100	application	プレビュー中は編集できません。Esc で戻る	screen	0(鍵名 Esc が文に混じる)	constexpr preview_full_refused_message → 知らせ枠(鳴らさない)	notice_preview_full_refused	Cannot edit while previewing. Press Esc to go back	句点は文の途中だけ(末尾なし)
+application/EditorControllerPreview.cpp	102	application	この行にタスクはありません	screen	0	constexpr preview_no_task_message → 知らせ枠	notice_preview_no_task	There is no task on this line	-
+application/EditorControllerShell.cpp	24	application	NeNe Nib で開く	screen	0(製品名込み)	constexpr verb_name → ShellRegistrationPlan の値 → レジストリ(エクスプローラー右クリックの項目の文)	shell_verb_open	Open with NeNe Nib	レジストリに書く文字なので言語を切り替えると書き直しが要る(登録済みのものは古い言語のまま)。未確認: 切替時の書き直しの有無
+application/EditorControllerShell.cpp	25	application	NeNe Nib	screen	0	constexpr application_name → レジストリ(「プログラムから開く」「既定のアプリ」に出る名前)	shell_application_name	NeNe Nib	製品名・訳さない
+application/EditorControllerShell.cpp	27	application	（Windows 11 は「その他のオプションを表示」の中）	screen	0	constexpr windows_11_note → 登録成功の知らせに続けて連結 → 知らせ枠	notice_shell_windows_11_note	(On Windows 11, under "Show more options")	OS の文言「その他のオプションを表示」を引用している。OS の表示言語に依存するので Nib の言語と食い違い得る
+application/EditorControllerShell.cpp	28	application	Windows の右クリックに登録しました	screen	0	constexpr registered_notice → 知らせ枠	notice_shell_registered	Added to the Windows right-click menu	-
+application/EditorControllerShell.cpp	29	application	以前の登録を置き換えました	screen	0	constexpr replaced_notice → 知らせ枠	notice_shell_replaced	Replaced the previous registration	-
+application/EditorControllerShell.cpp	30	application	登録を外しました	screen	0	constexpr unregistered_notice → 知らせ枠	notice_shell_unregistered	Registration removed	-
+application/EditorControllerShell.cpp	31	application	登録されていません	screen	0	constexpr absent_notice → 知らせ枠	notice_shell_absent	Not registered	-
+application/EditorControllerShell.cpp	32	application	登録できませんでした: {}	screen	1: 理由(failure_text / plan_failure_text / 計画失敗の std::string)	joined(prefix, 理由) → 知らせ枠	notice_shell_register_failed	Could not register: {}	-
+application/EditorControllerShell.cpp	33	application	登録を外せませんでした: {}	screen	1: 理由	joined(prefix, 理由) → 知らせ枠	notice_shell_unregister_failed	Could not remove the registration: {}	-
+application/EditorControllerShell.cpp	40	application	アクセスが拒否されました	screen	0	failure_text(access_denied) → string_view → 上の {}	notice_shell_access_denied	Access denied	-
+application/EditorControllerShell.cpp	42	application	レジストリを読み書きできませんでした	screen	0	failure_text(io_error) → 上の {}	notice_shell_registry_io	Could not read or write the registry	-
+application/EditorControllerShell.cpp	53	application	exe のパスがありません	screen	0	plan_failure_text(empty_path) → 上の {}	notice_shell_empty_path	The exe path is missing	-
+application/EditorControllerShell.cpp	55	application	exe のパスに " があります	screen	0	plan_failure_text(quote_in_path) → 上の {}(ソースは \" のエスケープ)	notice_shell_quote_in_path	The exe path contains a " character	-
+application/EditorControllerTabs.cpp	240	application	もう分かれています	screen	0	with_command_message(SplitPane) → 知らせ枠	notice_pane_already_split	Already split	-
+application/EditorControllerTabs.cpp	256	application	プレビューの枠には入れません	screen	0	with_command_message(SwitchPane) → 知らせ枠	notice_pane_preview_unreachable	Cannot move into the preview pane	-
+application/EditorControllerVim.cpp	226	application	内部の不整合: 画面行の問い（鍵は無効）	screen	0	constexpr inconsistent_layout_notice → 知らせ枠(ADR 0133 追補・#665)	notice_internal_layout_inconsistent	Internal inconsistency: screen row query (key ignored)	開発者向けの文。訳すかは問い
+application/EditorControllerVim.cpp	228	application	E1240: Resulting text too long	vim_message	0	constexpr too_long_notice → 知らせ枠	||	Vim 9.1 の同じ文	-
+application/EditorControllerVim.cpp	231	application	再生を 100,000 鍵で止めました（残りは捨てました）	screen	0(数字が文に埋め込み)	constexpr replay_limit_notice → 知らせ枠	notice_replay_limit	Stopped the replay at 100,000 keys (the rest was discarded)	隣の static_assert(vim_replay_key_limit == 100000) が数字を縛る。表へ移すと static_assert の文(232 行)も移す
+application/EditorControllerVim.cpp	232	application	replay_limit_notice の数を上限に合わせる	comment_like	0	static_assert のメッセージ(画面に出ない)	||	-	-
+application/EditorControllerVim.cpp	1826	application	E132: Macro depth is higher than 100	vim_message	0	with_command_message → 知らせ枠	||	Vim の E132	-
+core/CommandChoice.cpp	340	core	開いているタブ	screen	0	palette_origin_label(PaletteOrigin::tab) → renderer の write_palette_note → Ctrl+P の面の行の右の注記	palette_origin_tab	Open tabs	戻り値 std::string_view の switch
+core/CommandChoice.cpp	342	core	タブ・ブックマーク	screen	0	palette_origin_label(bookmarked_tab) → 同上	palette_origin_bookmarked_tab	Tab and bookmark	-
+core/CommandChoice.cpp	344	core	ブックマーク	screen	0	palette_origin_label(bookmark) → 同上	palette_origin_bookmark	Bookmark	重複: PaletteMarks.hpp:18 と StartScreenPainter.cpp:28 と同じ日本語
+core/CommandChoice.cpp	346	core	履歴	screen	0	palette_origin_label(history) → 同上	palette_origin_history	History	重複: PaletteMarks.hpp:19
+core/CommandChoice.cpp	348	core	同じフォルダ	screen	0	palette_origin_label(folder) → 同上	palette_origin_folder	Same folder	-
+core/CommandChoice.cpp	350	core	保存の形	screen	0	palette_origin_label(document_format) → 同上	palette_origin_document_format	Save format	文字コード・改行を選ぶ面の注記
+core/DisplayFormLabel.cpp	14	core	grid	screen	0	display_form_label(grid) → Direct2DRenderer.cpp:1946 → ステータスバーの表示形式の枠(幅 24 DIP)	status_display_grid	grid	Ex の設定値と同じ語
+core/ExEvaluationFailure.cpp	35	core	Not supported: {}	screen	1: 入力した命令	"Not supported: " + shown の連結 → Ex の断りの知らせ枠	notice_ex_unsupported_input	Not supported: {}	-
+core/ExMapCommand.cpp	381	core	Unknown key name in mapping	screen	0	ex_map_failure_message(unknown_key) → 知らせ枠	notice_map_unknown_key	Unknown key name in mapping	-
+core/ExMapCommand.cpp	383	core	E474: Invalid argument	vim_message	0	ex_map_failure_message(empty_keys) → 知らせ枠	||	Vim の E474(ExResult.cpp:1848 にも)	-
+core/ExMapCommand.cpp	385	core	Mapping keys are limited to 3	screen	0(3 が埋め込み)	ex_map_failure_message(long_lhs) → 知らせ枠	notice_map_long_lhs	Mapping keys are limited to 3	-
+core/ExMapCommand.cpp	387	core	mapleader must be one key	screen	0	ex_map_failure_message(bad_leader) → 知らせ枠	notice_map_bad_leader	mapleader must be one key	-
+core/ExMapCommand.cpp	389	core	Mapping cannot be saved in settings	screen	0	ex_map_failure_message(unwritable) → 知らせ枠	notice_map_unwritable	Mapping cannot be saved in settings	-
+core/ExMapCommand.cpp	391	core	E31: No such mapping	vim_message	0	ex_map_failure_message(no_such_mapping) → 知らせ枠	||	Vim の E31	-
+core/ExResult.cpp	1830	core	Unknown command	screen	0	ex_failure_message(ExFailure::unknown_command) → DisplayText → Ex の断りの知らせ枠(Command.cpp:332 / 780、Palette.cpp:513 の 3 呼び出し)	notice_ex_unknown_command	Unknown command	ExFailure.hpp のコメント「文言は Vim の E 番号ではなく Nib の言葉」
+core/ExResult.cpp	1833	core	Use set fontsize=, set guifont=, set (no)hlsearch or set (no)guide	screen	0(Ex の命令が文に混じる)	ex_failure_message(unknown_option)	notice_ex_unknown_option	Use set fontsize=, set guifont=, set (no)hlsearch or set (no)guide	命令名は訳さない。説明の語は訳す
+core/ExResult.cpp	1836	core	Unknown colorscheme (Tab lists names)	screen	0	ex_failure_message(unknown_theme)	notice_ex_unknown_theme	Unknown colorscheme (Tab lists names)	「Tab」は鍵名
+core/ExResult.cpp	1838	core	Font size must be 8 to 40 pt	screen	0(範囲が埋め込み)	ex_failure_message(invalid_font_size)	notice_ex_invalid_font_size	Font size must be 8 to 40 pt	8〜40 は SettingsNotice.hpp:31 と同じ範囲
+core/ExResult.cpp	1840	core	Use set guifont=<name>:h<pt>	screen	0	ex_failure_message(invalid_font_family)	notice_ex_invalid_font_family	Use set guifont=<name>:h<pt>	-
+core/ExResult.cpp	1842	core	Command must be a single line of UTF-8 text	screen	0	ex_failure_message(invalid_text)	notice_ex_invalid_text	Command must be a single line of UTF-8 text	-
+core/ExResult.cpp	1844	core	Command is limited to 256 bytes	screen	0	ex_failure_message(too_long)	notice_ex_too_long	Command is limited to 256 bytes	256 は DisplayText::maximum_bytes 等と手で揃えた数字
+core/ExResult.cpp	1846	core	Not supported	screen	0	ex_failure_message(unsupported_argument)・ExEvaluationFailure.cpp:35 が「Not supported: {入力}」へ連結	notice_ex_unsupported	Not supported	ExEvaluationFailure.cpp:35 の "Not supported: " + 入力は別のリテラル(params 1: 入力した命令)
+core/LineEnding.hpp	50	core	CRLF	screen	0	line_ending_label → status_items_for の 3 つ目 → ステータスバーの右の項目(幅 36 DIP)・Ctrl+P の保存の形の面の行(Palette.cpp:159)	status_line_ending_crlf	CRLF	規格名・訳さない
+core/LineEnding.hpp	52	core	LF	screen	0	line_ending_label → 同上	status_line_ending_lf	LF	-
+core/MarkdownBuilder.cpp	23	core	[画像: {}]	screen	1: alt(画像の代替文字)	image_opening + alt + image_closing の連結(文字の枠)→ Markdown プレビューの本文の文字(preview span)	preview_image_placeholder	[Image: {}]	リテラルは "[画像: " と "]" の 2 つ。プレビューの画像が読めないときの代わりの文字
+core/ModeLabel.cpp	14	core	NORMAL	screen	0	vim_label(VimMode::normal) → EditorFrame.mode_label → ステータスバーのモード枠(mode_width_dips = 72)	status_mode_normal	NORMAL	Vim の showmode と同じ英語。訳すかは問い(1)
+core/ModeLabel.cpp	16	core	INSERT	screen	0	vim_label(insert) → 同上	status_mode_insert	INSERT	-
+core/ModeLabel.cpp	18	core	VISUAL	screen	0	vim_label(visual) → 同上	status_mode_visual	VISUAL	-
+core/ModeLabel.cpp	20	core	VISUAL LINE	screen	0	vim_label(visual_line) → 同上	status_mode_visual_line	VISUAL LINE	-
+core/ModeLabel.cpp	22	core	VISUAL BLOCK	screen	0	vim_label(visual_block) → 同上	status_mode_visual_block	VISUAL BLOCK	72 DIP の枠で最も長い文字列の 1 つ(paused 版はさらに長い)
+core/ModeLabel.cpp	34	core	(insert)	screen	0	paused_label(normal) → 同上(INSERT の Ctrl-o の待ち)	status_mode_insert_paused	(insert)	-
+core/ModeLabel.cpp	36	core	INSERT	screen	0	paused_label(insert) → 同上	status_mode_insert	INSERT	重複: 16 行と同じ
+core/ModeLabel.cpp	38	core	(insert) VISUAL	screen	0	paused_label(visual) → 同上	status_mode_insert_paused_visual	(insert) VISUAL	-
+core/ModeLabel.cpp	40	core	(insert) VISUAL LINE	screen	0	paused_label(visual_line) → 同上	status_mode_insert_paused_visual_line	(insert) VISUAL LINE	-
+core/ModeLabel.cpp	42	core	(insert) VISUAL BLOCK	screen	0	paused_label(visual_block) → 同上	status_mode_insert_paused_visual_block	(insert) VISUAL BLOCK	-
+core/ModeLabel.cpp	53	core	通常	screen	0	mode_label(EditMode::ordinary,...) → EditorFrame.mode_label(string_view)→ ステータスバーのモード枠(幅 72 DIP)	status_mode_ordinary	Standard	「Normal」にすると Vim の NORMAL と紛らわしいので Standard を提案(問い)。同じ日本語が Direct2DRenderer.cpp:1916 にもある
+core/OperationTexts.hpp	13	core	ファイルを開く	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_open_file_name	Open File	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	13	core	ふぁいるをひらく	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_open_file_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	14	core	保存してあるファイルを選んで開きます	operation	0	operation_texts → 一覧の行の説明	operation_open_file_description	Choose a saved file and open it	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	15	core	保存	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_save_name	Save	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	15	core	ほぞん	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_save_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	15	core	いまのファイルに上書きします	operation	0	operation_texts → 一覧の行の説明	operation_save_description	Overwrite the current file	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	16	core	名前を付けて保存	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_save_as_name	Save As	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	16	core	なまえをつけてほぞん	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_save_as_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	17	core	別の名前のファイルに保存します	operation	0	operation_texts → 一覧の行の説明	operation_save_as_description	Save to a file with another name	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	18	core	新しいタブ	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_new_tab_name	New Tab	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	18	core	あたらしいたぶ	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_new_tab_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	18	core	空の文書を新しいタブで開きます	operation	0	operation_texts → 一覧の行の説明	operation_new_tab_description	Open an empty document in a new tab	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	19	core	タブを閉じる	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_close_tab_name	Close Tab	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	19	core	たぶをとじる	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_close_tab_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	19	core	いまのタブを閉じます	operation	0	operation_texts → 一覧の行の説明	operation_close_tab_description	Close the current tab	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	20	core	前に使ったタブへ	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_recent_tab_name	Go to Recently Used Tab	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	20	core	まえにつかったたぶへ	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_recent_tab_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	21	core	最近使った順にタブを移ります	operation	0	operation_texts → 一覧の行の説明	operation_recent_tab_description	Move through tabs in recently used order	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	22	core	前に使ったタブへ（逆向き）	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_recent_tab_back_name	Go to Recently Used Tab (Reverse)	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	23	core	まえにつかったたぶへぎゃくむき	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_recent_tab_back_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	23	core	最近使った順を逆にたどります	operation	0	operation_texts → 一覧の行の説明	operation_recent_tab_back_description	Move through recently used tabs in reverse order	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	24	core	ファイルとタブの一覧	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_list_files_name	Files and Tabs	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	24	core	ふぁいるとたぶのいちらん	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_list_files_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	25	core	タブ・ブックマーク・履歴・同じフォルダから探します	operation	0	operation_texts → 一覧の行の説明	operation_list_files_description	Search tabs, bookmarks, history and files in the same folder	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	25	core	一覧	operation	0	operation_guide_entry → ステータスバー/本文の操作の案内の語	operation_list_files_short_name	List	操作の案内(ステータスバー)で使う短い名前。一覧の名前・検索対象には加えない(ADR 0079)
+core/OperationTexts.hpp	26	core	操作の一覧	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_list_operations_name	All Operations	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	26	core	そうさのいちらん	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_list_operations_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	26	core	この一覧を開きます	operation	0	operation_texts → 一覧の行の説明	operation_list_operations_description	Open this list	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	27	core	ヘルプ	operation	0	operation_guide_entry → ステータスバー/本文の操作の案内の語	operation_list_operations_short_name	Help	操作の案内(ステータスバー)で使う短い名前。一覧の名前・検索対象には加えない(ADR 0079)
+core/OperationTexts.hpp	28	core	ブックマークに付ける・外す	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_toggle_bookmark_name	Add or Remove Bookmark	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	28	core	ぶっくまーくにつけるはずす	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_toggle_bookmark_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	29	core	いまのファイルをブックマークに付け外しします	operation	0	operation_texts → 一覧の行の説明	operation_toggle_bookmark_description	Add or remove the current file from your bookmarks	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	30	core	元に戻す	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_undo_name	Undo	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	30	core	もとにもどす	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_undo_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	30	core	直前の編集を取り消します	operation	0	operation_texts → 一覧の行の説明	operation_undo_description	Undo the last edit	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	31	core	やり直す	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_redo_name	Redo	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	31	core	やりなおす	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_redo_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	31	core	取り消した編集をもう一度行います	operation	0	operation_texts → 一覧の行の説明	operation_redo_description	Redo the edit you undid	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	32	core	文字を大きく	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_font_larger_name	Increase Text Size	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	32	core	もじをおおきく	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_font_larger_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	33	core	本文の文字を 1 段大きくします	operation	0	operation_texts → 一覧の行の説明	operation_font_larger_description	Make the text one step larger	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	34	core	文字を小さく	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_font_smaller_name	Decrease Text Size	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	34	core	もじをちいさく	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_font_smaller_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	35	core	本文の文字を 1 段小さくします	operation	0	operation_texts → 一覧の行の説明	operation_font_smaller_description	Make the text one step smaller	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	36	core	文字の大きさを戻す	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_font_reset_name	Reset Text Size	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	36	core	もじのおおきさをもどす	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_font_reset_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	37	core	本文の文字を既定の大きさに戻します	operation	0	operation_texts → 一覧の行の説明	operation_font_reset_description	Restore the text to its default size	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	38	core	通常 / Vim を切り替える	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_toggle_mode_name	Switch Standard / Vim	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	38	core	つうじょうびむをきりかえる	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_toggle_mode_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	39	core	編集のしかたを通常と Vim で切り替えます	operation	0	operation_texts → 一覧の行の説明	operation_toggle_mode_description	Switch the editing style between Standard and Vim	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	40	core	左右に分ける	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_split_vertical_name	Split Left and Right	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	40	core	さゆうにわける	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_split_vertical_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	41	core	本文を左右 2 つの枠に分けて同じ文書を出します	operation	0	operation_texts → 一覧の行の説明	operation_split_vertical_description	Split the text area into two side-by-side panes showing the same document	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	42	core	上下に分ける	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_split_horizontal_name	Split Top and Bottom	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	42	core	じょうげにわける	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_split_horizontal_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	43	core	本文を上下 2 つの枠に分けて同じ文書を出します	operation	0	operation_texts → 一覧の行の説明	operation_split_horizontal_description	Split the text area into two stacked panes showing the same document	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	44	core	隣の枠へ	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_next_pane_name	Next Pane	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	44	core	となりのわくへ	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_next_pane_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	44	core	もう 1 つの枠へ移ります	operation	0	operation_texts → 一覧の行の説明	operation_next_pane_description	Move to the other pane	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	45	core	枠を閉じる	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_close_pane_name	Close Pane	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	45	core	わくをとじる	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_close_pane_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	45	core	いまの枠を閉じて 1 つに戻します	operation	0	operation_texts → 一覧の行の説明	operation_close_pane_description	Close this pane and return to a single pane	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	46	core	Markdown プレビュー	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_toggle_preview_name	Markdown Preview	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	46	core	まーくだうんぷれびゅー	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_toggle_preview_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	47	core	Markdown のプレビューを右（下）の枠に出す・もう一度で全面・もう一度で閉じる	operation	0	operation_texts → 一覧の行の説明	operation_toggle_preview_description	Show the preview in the right (lower) pane; again for full view; again to close	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	48	core	文字だけを貼り付け	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_paste_plain_name	Paste as Plain Text	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	48	core	もじだけをはりつけ	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_paste_plain_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	49	core	クリップボードの文字だけを貼ります（HTML を変換しない）	operation	0	operation_texts → 一覧の行の説明	operation_paste_plain_description	Paste only the text from the clipboard (HTML is not converted)	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	50	core	HTML のまま貼り付け	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_paste_html_name	Paste HTML As Is	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	50	core	えいちてぃーえむえるのままはりつけ	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_paste_html_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	51	core	クリップボードの HTML をタグごと貼ります	operation	0	operation_texts → 一覧の行の説明	operation_paste_html_description	Paste the clipboard HTML including its tags	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	52	core	エクスプローラーを出す・消す	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_toggle_explorer_name	Show or Hide Explorer	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	52	core	えくすぷろーらーをだすけす	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_toggle_explorer_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	53	core	ルートからのフォルダの木を左の面に出す・もう一度で消します	operation	0	operation_texts → 一覧の行の説明	operation_toggle_explorer_description	Show the folder tree from the root in the left pane; again to hide it	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	54	core	ルートのフォルダを選ぶ	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_choose_explorer_root_name	Choose Root Folder	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	54	core	るーとのふぉるだをえらぶ	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_choose_explorer_root_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	55	core	エクスプローラーのルートにするフォルダを選びます	operation	0	operation_texts → 一覧の行の説明	operation_choose_explorer_root_description	Choose the folder to use as the explorer root	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	56	core	日時を挿入	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_insert_date_time_name	Insert Date and Time	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	56	core	にちじをそうにゅう	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_insert_date_time_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	57	core	いまの時刻と日付をキャレットの位置に入れます（Vim は INSERT で）	operation	0	operation_texts → 一覧の行の説明	operation_insert_date_time_description	Insert the current time and date at the caret (in Vim, in INSERT mode)	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	58	core	文字コードを選ぶ	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_choose_encoding_name	Choose Encoding	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	58	core	もじこーどをえらぶ	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_choose_encoding_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	59	core	保存するときの文字コードを選びます（本文は変えません）	operation	0	operation_texts → 一覧の行の説明	operation_choose_encoding_description	Choose the encoding used when saving (the text is not changed)	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	60	core	改行を選ぶ	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_choose_line_ending_name	Choose Line Ending	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	60	core	かいぎょうをえらぶ	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_choose_line_ending_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	61	core	保存するときの改行の形（LF / CRLF）を選びます（本文は変えません）	operation	0	operation_texts → 一覧の行の説明	operation_choose_line_ending_description	Choose the line ending (LF / CRLF) used when saving (the text is not changed)	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	63	core	検索	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_find_name	Find	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	63	core	けんさく	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_find_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	63	core	文字列を探して次の当たりへ移ります	operation	0	operation_texts → 一覧の行の説明	operation_find_description	Search for text and move to the next match	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	64	core	次を検索	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_find_next_name	Find Next	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	64	core	つぎをけんさく	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_find_next_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	65	core	最後に探した文字列の次の当たりへ移ります	operation	0	operation_texts → 一覧の行の説明	operation_find_next_description	Move to the next match of the last search	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	66	core	前を検索	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_find_previous_name	Find Previous	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	66	core	まえをけんさく	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_find_previous_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	67	core	最後に探した文字列の前の当たりへ移ります	operation	0	operation_texts → 一覧の行の説明	operation_find_previous_description	Move to the previous match of the last search	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	68	core	置換	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_replace_name	Replace	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	68	core	ちかん	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_replace_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	68	core	探した文字列を別の文字列に置き換えます	operation	0	operation_texts → 一覧の行の説明	operation_replace_description	Replace the searched text with other text	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	69	core	行へ移動	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_go_to_line_name	Go to Line	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	69	core	ぎょうへいどう	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_go_to_line_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	70	core	行番号（行:桁）を入れてそこへ移ります	operation	0	operation_texts → 一覧の行の説明	operation_go_to_line_description	Enter a line number (line:column) and move there	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	71	core	Markdown プレビュー（全面）	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_preview_full_name	Markdown Preview (Full)	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	71	core	まーくだうんぷれびゅーぜんめん	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_preview_full_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	72	core	本文の面の全部に Markdown のプレビューを出す・Esc で戻る	operation	0	operation_texts → 一覧の行の説明	operation_preview_full_description	Show the Markdown preview over the whole text area; press Esc to go back	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	73	core	印刷	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_print_name	Print	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	73	core	いんさつ	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_print_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	73	core	いまの文書をプリンタを選んで印刷します	operation	0	operation_texts → 一覧の行の説明	operation_print_description	Choose a printer and print the current document	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	74	core	Windows の右クリックに登録する	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_register_shell_name	Add to Windows Right-Click Menu	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	75	core	うぃんどうずのみぎくりっくにとうろくする	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_register_shell_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	76	core	エクスプローラーの右クリックと「プログラムから開く」に NeNe Nib を載せます	operation	0	operation_texts → 一覧の行の説明	operation_register_shell_description	Add NeNe Nib to the Explorer right-click menu and to Open with	操作の説明(一覧の行の下)
+core/OperationTexts.hpp	77	core	登録を外す	operation	0	operation_text(op).name → OperationGuide / CommandChoice(`operation_texts` を直接走査 CommandChoice.cpp:310)→ 一覧・案内の行	operation_unregister_shell_name	Remove Registration	操作の表の名前(F1 の一覧・Ctrl+P の `?` の面・起動画面・操作の案内)
+core/OperationTexts.hpp	77	core	とうろくをはずす	operation	0	operation_texts を直接走査(CommandChoice.cpp:310)→ 絞り込みの照合だけ(画面には出ない)	operation_unregister_shell_reading	-	ひらがなの読み。IME を使わない照合(一覧の絞り込み)にだけ使う。英語では不要(空)
+core/OperationTexts.hpp	78	core	Windows の右クリックと「プログラムから開く」から NeNe Nib を外します	operation	0	operation_texts → 一覧の行の説明	operation_unregister_shell_description	Remove NeNe Nib from the Windows right-click menu and from Open with	操作の説明(一覧の行の下)
+core/PaletteMarks.hpp	17	core	タブ	screen	0	palette_marks の name → palette_mark_hint() が「# タブ　* ブックマーク …」と連結 → Ctrl+P の面の案内	palette_mark_tabs	Tabs	constexpr の std::array<PaletteMark,6> の初期化子。表が言語を持てない(string_view の定数)
+core/PaletteMarks.hpp	18	core	ブックマーク	screen	0	同上	palette_mark_bookmarks	Bookmarks	重複(CommandChoice.cpp:344 / StartScreenPainter.cpp:28)
+core/PaletteMarks.hpp	19	core	履歴	screen	0	同上	palette_mark_history	History	重複(CommandChoice.cpp:346)
+core/PaletteMarks.hpp	20	core	フォルダ	screen	0	同上	palette_mark_folder	Folder	-
+core/PaletteMarks.hpp	21	core	設定	screen	0	同上	palette_mark_commands	Settings	-
+core/PaletteMarks.hpp	22	core	操作	screen	0	同上	palette_mark_operations	Operations	-
+core/SaveQuestionText.cpp	12	core	変更が保存されていません。保存しますか。	screen	0	save_question_text(unsaved_question) → ui/SaveQuestion.cpp が to_utf16 → TaskDialogIndirect の本文	dialog_save_unsaved_question	Your changes have not been saved. Do you want to save them?	core が文を持つ(1 か所・ADR 0133 追補 #1282)。SaveQuestionText.hpp に DisplayLanguage の言及あり
+core/SaveQuestionText.cpp	14	core	描画できなくなったので閉じます。保存しますか。	screen	0	save_question_text(rendering_lost_question) → TaskDialog の本文	dialog_save_rendering_lost_question	Rendering has failed, so the window will close. Do you want to save?	-
+core/SaveQuestionText.cpp	16	core	保存する(&Y)	screen	0	save_question_text(save_button) → TaskDialog のボタン(アクセラレータ Y)	dialog_save_button	&Save	アクセラレータの文字(&Y / &N)が言語ごとに違う。日本語の Y/N は英語の頭文字ではない(Windows の標準は「保存(&S)」「保存しない(&N)」)
+core/SaveQuestionText.cpp	18	core	保存しない(&N)	screen	0	save_question_text(discard_button) → TaskDialog のボタン	dialog_discard_button	Do&n't Save	-
+core/SaveQuestionText.cpp	20	core	キャンセル	screen	0	save_question_text(cancel_button) → TaskDialog のボタン	dialog_cancel_button	Cancel	-
+core/ShellRegistration.cpp	25	core	NeNeNib	data	0	registered_application_name → レジストリの RegisteredApplications の値名	||	内部名(画面には出ない)	-
+core/ShellRegistration.cpp	28	core	{} ファイル（NeNe Nib）	screen	1: 拡張子(md 等・リテラルの前に連結)	shell_registration_plan の ProgId の説明 → レジストリ → エクスプローラーの「種類」の列	shell_progid_description	{} file (NeNe Nib)	リテラルは " ファイル（NeNe Nib）" で先頭に拡張子が付く。語順が言語で変わる形(「A ファイル」)
+core/StatusItems.cpp	42	core	行 {}, 桁 {}	screen	2: 行・桁(10 進)	caret_position(): 「行 」「, 桁 」の 2 リテラルを std::array の記憶域に std::copy で連結(prefix.size()+separator.size() で大きさを決める) → status_items_for の 1 つ目 → ステータスバーの右の項目枠(幅 96 DIP)	status_caret_position	Ln {}, Col {}	固定長の buffer なので別言語の文の長さが違うと大きさの式を直す。リテラルは 42 と 43 の 2 行
+core/StatusItems.cpp	65	core	E{n} W{n} +	screen	2 以下: 件数(error / warning)	diagnostic_count_item: "E" + to_string 、" W" 等の連結 → ステータスバーの 5 つ目の枠(幅 96 DIP)	status_diagnostic_counts	E{} W{}	記号は訳さない。リテラルは "E" "W" " W" "+" の 4 つ(65 69 行)
+core/TabTitle.cpp	14	core	無題	screen	0	tab_title_for(nullopt) の名前 → タブの帯の題名・窓の題名・知らせの名前・起動画面の行	tab_untitled	Untitled	tab_title_for の呼び出しは 14 箇所。試験が「無題」を直接比べる(21 ファイル 84 箇所)
+core/TextEncoding.hpp	30	core	UTF-8	screen	0	encoding_label → status_items_for の 2 つ目 → ステータスバーの右の項目(幅 72 DIP)・保存の形の面(Palette.cpp:154)	status_encoding_utf8	UTF-8	規格名・訳さない
+core/TextEncoding.hpp	32	core	UTF-8 BOM	screen	0	同上	status_encoding_utf8_bom	UTF-8 BOM	-
+core/TextEncoding.hpp	34	core	Shift_JIS	screen	0	同上	status_encoding_shift_jis	Shift_JIS	-
+core/TextEncoding.hpp	36	core	UTF-16 LE	screen	0	同上	status_encoding_utf16le	UTF-16 LE	-
+core/TextEncoding.hpp	38	core	UTF-16 BE	screen	0	同上	status_encoding_utf16be	UTF-16 BE	-
+core/ThemeDerivation.hpp	93	core	ui_mix_weights の添字は Appearance の並びそのもの	comment_like	0	static_assert のメッセージ	||	-	-
+core/ThemeDerivation.hpp	95	core	ui_mix_weights の添字は Appearance の並びそのもの	comment_like	0	static_assert のメッセージ	||	同じ文が 93 行にもある	-
+core/ThemeLookupFailure.cpp	17	core	Theme file not found	screen	0(呼び出し側が「{テーマ名}: 」を前置)	theme_failure_message: name + ": " + 理由の連結 → ex_failure_message(…)(知らせ枠)/ settings_notice(ThemeLookupFailure) → MessageBoxW	theme_failure_not_found	Theme file not found	設定ダイアログでは日本語の続き(SettingsNotice.hpp:46)と混ざる。理由は 14 文(17〜45 行)
+core/ThemeLookupFailure.cpp	19	core	Theme file could not be read	screen	0(呼び出し側が「{テーマ名}: 」を前置)	同上	theme_failure_unreadable	Theme file could not be read	-
+core/ThemeLookupFailure.cpp	21	core	Theme file exceeds 16 KiB	screen	0(呼び出し側が「{テーマ名}: 」を前置)	同上	theme_failure_too_large	Theme file exceeds 16 KiB	-
+core/ThemeLookupFailure.cpp	23	core	Expected key=value lines	screen	0(呼び出し側が「{テーマ名}: 」を前置)	同上	theme_failure_malformed	Expected key=value lines	-
+core/ThemeLookupFailure.cpp	25	core	Duplicate theme field	screen	0(呼び出し側が「{テーマ名}: 」を前置)	同上	theme_failure_duplicate_field	Duplicate theme field	-
+core/ThemeLookupFailure.cpp	27	core	Unknown theme field	screen	0(呼び出し側が「{テーマ名}: 」を前置)	同上	theme_failure_unknown_field	Unknown theme field	-
+core/ThemeLookupFailure.cpp	29	core	Required theme field missing	screen	0(呼び出し側が「{テーマ名}: 」を前置)	同上	theme_failure_missing_field	Required theme field missing	-
+core/ThemeLookupFailure.cpp	31	core	Unsupported theme version	screen	0(呼び出し側が「{テーマ名}: 」を前置)	同上	theme_failure_unsupported_version	Unsupported theme version	-
+core/ThemeLookupFailure.cpp	33	core	Invalid theme filename or name	screen	0(呼び出し側が「{テーマ名}: 」を前置)	同上	theme_failure_invalid_name	Invalid theme filename or name	-
+core/ThemeLookupFailure.cpp	35	core	Theme name does not match filename	screen	0(呼び出し側が「{テーマ名}: 」を前置)	同上	theme_failure_name_mismatch	Theme name does not match filename	-
+core/ThemeLookupFailure.cpp	37	core	Reserved theme name	screen	0(呼び出し側が「{テーマ名}: 」を前置)	同上	theme_failure_reserved_name	Reserved theme name	-
+core/ThemeLookupFailure.cpp	39	core	Invalid UTF-8 or theme attribution	screen	0(呼び出し側が「{テーマ名}: 」を前置)	同上	theme_failure_invalid_utf8	Invalid UTF-8 or theme attribution	-
+core/ThemeLookupFailure.cpp	41	core	Appearance must be dark or light	screen	0(呼び出し側が「{テーマ名}: 」を前置)	同上	theme_failure_invalid_appearance	Appearance must be dark or light	-
+core/ThemeLookupFailure.cpp	43	core	Invalid RGB or RGBA color	screen	0(呼び出し側が「{テーマ名}: 」を前置)	同上	theme_failure_invalid_color	Invalid RGB or RGBA color	-
+core/ThemeLookupFailure.cpp	45	core	Text/background contrast must be at least 4.5	screen	0(呼び出し側が「{テーマ名}: 」を前置)	同上	theme_failure_low_contrast	Text/background contrast must be at least 4.5	-
+core/VimKeyTable.cpp	514	core	動作 → 大分類の表は動作と同じ数の行を持つ（CPP-012）	comment_like	0	static_assert のメッセージ	||	-	-
+core/VimKeyTable.cpp	516	core	どの動作も表にちょうど 1 行。欠落と重複はここでコンパイルが落ちる（CPP-002）	comment_like	0	static_assert のメッセージ	||	-	-
+core/VimKeyTable.cpp	537	core	縦の位置合わせの動作だけが意味の表にちょうど 1 行（CPP-012）	comment_like	0	static_assert のメッセージ	||	-	-
+core/VimSearchNotice.cpp	14	core	E486: Pattern not found: {}	vim_message	1: 検索語	not_found_message → 知らせ枠	||	Vim の E486	-
+core/VimSearchNotice.cpp	23	core	Unsupported pattern item: \( \)	screen	0	vim_search_message(unsupported_pattern) → 知らせ枠	notice_pattern_unsupported_group	Unsupported pattern item: \( \)	コメント「Vim には無い報せなので本実装のもの」。ソースは \\ のエスケープ
+core/VimSearchNotice.cpp	25	core	Unsupported pattern item: \|	screen	0	同上	notice_pattern_unsupported_branch	Unsupported pattern item: \|	-
+core/VimSearchNotice.cpp	27	core	Unsupported pattern item: \{ \+ \= \?	screen	0	同上	notice_pattern_unsupported_quantifier	Unsupported pattern item: \{ \+ \= \?	-
+core/VimSearchNotice.cpp	29	core	Unsupported pattern item: \v \V \m \M	screen	0	同上	notice_pattern_unsupported_magic	Unsupported pattern item: \v \V \m \M	-
+core/VimSearchNotice.cpp	31	core	Unsupported pattern escape	screen	0	同上	notice_pattern_unsupported_escape	Unsupported pattern escape	-
+core/VimSearchNotice.cpp	33	core	Unsupported pattern item: ~	screen	0	同上	notice_pattern_unsupported_previous_substitute	Unsupported pattern item: ~	-
+core/VimSearchNotice.cpp	35	core	Search offset is not supported	screen	0	同上	notice_pattern_unsupported_offset	Search offset is not supported	-
+core/VimSearchNotice.cpp	37	core	Unsupported pattern: invalid UTF-8	screen	0	同上	notice_pattern_invalid_utf8	Unsupported pattern: invalid UTF-8	-
+core/VimSearchNotice.cpp	60	core	{} match(es) / substitution(s) on {} line(s)	vim_message	2: 件数・行数	counted_message: 数 + " match"/" substitution" + "es"/"s" + " on " + 行数 + " line"/" lines" の連結 → 知らせ枠	||	Vim の do_sub_msg の文言(英語の単複を連結で作る)	-
+core/VimSearchNotice.cpp	78	core	E35 / E348 / E33 / E16 / E20 / E493 / E939 / E363 と search hit BOTTOM/TOP の 2 文	vim_message	0	vim_search_message の各 case → 知らせ枠	||	Vim の文。E 番号つき 8 文 + search hit 2 文(78〜102 行)	-
+ui/win32/Direct2DRenderer.cpp	220	ui	検索:	screen	0	prompt_text(InputLinePrompt::find) → 入力行(ステータスバー左)の前置き	prompt_find	Find:	末尾に半角の空白。std::string を返す関数
+ui/win32/Direct2DRenderer.cpp	222	ui	行:	screen	0	prompt_text(go_to_line) → 入力行の前置き	prompt_go_to_line	Line:	-
+ui/win32/Direct2DRenderer.cpp	225	ui	置換後:	screen	0	prompt_text(replace_with・detail 空) → 入力行の前置き	prompt_replace_with	Replace with:	-
+ui/win32/Direct2DRenderer.cpp	226	ui	置換後 ({}):	screen	1: 検索語(detail)	std::string{"置換後 ("} + detail + "): " の連結 → 入力行の前置き	prompt_replace_with_detail	Replace with ({}):	225 と同じ語を 2 つのリテラルに分けている
+ui/win32/Direct2DRenderer.cpp	1829	ui	打ち始めると消えます	screen	0	draw_guide: write(note) → 本文の空の文書の操作の案内の注記	guide_note_disappears	Disappears when you start typing	幅の決まった枠(body->note)
+ui/win32/Direct2DRenderer.cpp	1916	ui	通常	screen	0	draw_toggle: write_status → ステータスバーの「通常 | Vim」トグルの左の枠(segment_width_dips = 44)	status_toggle_ordinary	Std	枠の幅が狭い(44 DIP)。ModeLabel.cpp:53 と同じ日本語だが枠が違う(短い言い回しが要る)
+ui/win32/Direct2DRenderer.cpp	1918	ui	Vim	screen	0	draw_toggle: write_status → トグルの右の枠	status_toggle_vim	Vim	固有名・訳さない
+ui/win32/Direct2DRenderer.cpp	2016	ui	recording @{}	screen	1: レジスタ名(frame.recording)	std::string("recording @") + 名前 → write_status → ステータスバーの録画枠(モード枠の右)	status_recording	recording @{}	Vim の showmode と同じ英語。訳すかは問い(1)
+ui/win32/Direct2DRenderer.cpp	2359	ui	候補なし	screen	0	draw_palette_list: palette.total == 0 のとき名前の欄に write → Ctrl+P の面	palette_no_candidates	No matches	-
+ui/win32/Direct2DRenderer.cpp	2386	ui	↑↓ 選択   Enter 決定   Esc 閉じる	screen	0(鍵名が文に混じる)	draw_palette_footer: command_message が無いときの案内 → 面の下の欄(幅は 64 DIP 引いた残り)	palette_footer_hint	↑↓ Select   Enter OK   Esc Close	空白 3 個で区切る。鍵名 Enter / Esc は訳さない
+ui/win32/EditorWindow.cpp	32	ui	前回の未保存の編集が残っています。戻しますか。	screen	0	wchar_t autosave_question[] → MessageBoxW(window_, ..., product_name, MB_YESNO|MB_ICONQUESTION)	dialog_autosave_restore_question	Unsaved edits from last time remain. Do you want to restore them?	ボタン(はい/いいえ)は OS の表示言語
+ui/win32/EditorWindowDetail.hpp	17	ui	NeNe Nib	screen	0	product_name[] → MessageBoxW の caption(EditorWindow*.cpp の 6 箇所)	dialog_caption_product	NeNe Nib	製品名
+ui/win32/EditorWindowLifecycle.cpp	48	ui	" - NeNe Nib"	screen	0	title_suffix[] → update_title: 題名 + title_suffix → SetWindowTextW(窓の題名・タスクバー)	window_title_suffix	" - NeNe Nib"	製品名・訳さない
+ui/win32/EditorWindowLifecycle.cpp	117	ui	NeNe Nib	screen	0	CreateWindowExW の初期の窓名	window_initial_title	NeNe Nib	製品名
+ui/win32/EditorWindowLifecycle.cpp	562	ui	保存されていない変更があります	screen	0	ShutdownBlockReasonCreate(window_, L"…") → OS のシャットダウンの画面の理由	os_shutdown_block_reason	You have unsaved changes	OS が出す文。ライブラリは wchar_t*
+ui/win32/EditorWindowOperations.cpp	64	ui	無題.txt	screen	0	untitled_file[] → 263 行 名前を付けて保存の既定のファイル名(無題のとき)	os_save_default_file_name	Untitled.txt	ファイル名なのでタブ題名 tab_untitled と揃える
+ui/win32/EditorWindowOperations.cpp	67	ui	改行の無い巨大な行があります。格子表示で開きますか。	screen	0	display_question[] → MessageBoxW(MB_YESNO|MB_ICONQUESTION)	dialog_giant_line_question	This file has a very long line with no line breaks. Do you want to open it in grid view?	「格子表示」= display=grid の用語
+ui/win32/EditorWindowOperations.cpp	92	ui	ファイルが見つかりませんでした。	screen	0	reason_of(FileFailure::not_found) → MessageBoxW(MB_OK|MB_ICONWARNING) の本文	dialog_file_not_found	The file could not be found.	reason_of は const wchar_t* を返す
+ui/win32/EditorWindowOperations.cpp	94	ui	ファイルを開く権限がありません。	screen	0	reason_of(access_denied) → MessageBoxW	dialog_file_access_denied	You do not have permission to open the file.	-
+ui/win32/EditorWindowOperations.cpp	96	ui	ファイルを読み取れませんでした。	screen	0	reason_of(unreadable) → MessageBoxW	dialog_file_unreadable	The file could not be read.	-
+ui/win32/EditorWindowOperations.cpp	98	ui	ファイルを保存できませんでした。元のファイルは変わっていません。	screen	0	reason_of(unwritable) → MessageBoxW	dialog_file_unwritable	The file could not be saved. The original file has not been changed.	-
+ui/win32/EditorWindowOperations.cpp	100	ui	ファイルは既に存在します。	screen	0	reason_of(already_exists) → MessageBoxW	dialog_file_already_exists	The file already exists.	-
+ui/win32/EditorWindowOperations.cpp	102	ui	1 GB を超えるファイルは開けません。	screen	0(1 GB が文に埋め込み)	reason_of(too_large) → MessageBoxW	dialog_file_too_large	Files larger than 1 GB cannot be opened.	上限 1 GiB と書き方がずれている(GB と GiB)・未確認: 上限の定数との整合
+ui/win32/EditorWindowOperations.cpp	104	ui	64 MiB を超える Shift_JIS / UTF-16 は開けません。	screen	0	reason_of(too_large_to_decode) → MessageBoxW	dialog_file_too_large_to_decode	Shift_JIS / UTF-16 files larger than 64 MiB cannot be opened.	-
+ui/win32/EditorWindowOperations.cpp	106	ui	文字コードを判別できませんでした。	screen	0	reason_of(undecodable) → MessageBoxW	dialog_file_undecodable	The text encoding could not be determined.	-
+ui/win32/EditorWindowOperations.cpp	108	ui	UTF-32 のファイルは扱えません。UTF-8 か UTF-16 で保存し直してください。	screen	0	reason_of(unsupported_utf32) → MessageBoxW	dialog_file_unsupported_utf32	UTF-32 files are not supported. Please re-save the file as UTF-8 or UTF-16.	-
+ui/win32/EditorWindowOperations.cpp	110	ui	この文字コードでは保存できない文字があります。	screen	0	reason_of(unencodable) → MessageBoxW	dialog_file_unencodable	The text contains characters that cannot be saved in this encoding.	重複: 207 行の文の前半と同じ
+ui/win32/EditorWindowOperations.cpp	112	ui	メモリが足りず、ファイルを開けませんでした。	screen	0	reason_of(insufficient_memory) → MessageBoxW	dialog_file_insufficient_memory	The file could not be opened because there is not enough memory.	-
+ui/win32/EditorWindowOperations.cpp	207	ui	この文字コードでは保存できない文字があります。UTF-8 で保存しますか。	screen	0	offer_utf8: MessageBoxW(MB_YESNO|MB_ICONWARNING)	dialog_unencodable_offer_utf8	The text contains characters that cannot be saved in this encoding. Do you want to save it as UTF-8?	前半は 110 行と同じ文
+ui/win32/ExplorerPainter.cpp	23	ui	:set root= でルートを決めてください	screen	0(Ex の命令が文に混じる)	constexpr no_root → ルートが無い面の先頭の行	explorer_no_root	Set the root with :set root=	-
+ui/win32/FileDialog.cpp	34	ui	対応するファイル	screen	0	static const COMDLG_FILTERSPEC types{...} → IFileDialog::SetFileTypes の絞り込み名	os_filter_supported_files	Supported files	static const 配列にポインタを入れている。言語を切り替えると作り直しが要る
+ui/win32/FileDialog.cpp	34	ui	すべてのファイル	screen	0	同上(COMDLG_FILTERSPEC 2 つ目・既定)	os_filter_all_files	All files	-
+ui/win32/SettingsNotice.hpp	17	ui	設定の保存先を取得できませんでした。設定は保存されません。	screen	0	settings_notice(SettingsFailure::location_unavailable) → announce_settings の MessageBoxW(MB_OK|MB_ICONWARNING)	dialog_settings_location_unavailable	Could not get the settings location. Settings will not be saved.	-
+ui/win32/SettingsNotice.hpp	19	ui	設定ファイルを読めませんでした。元の設定は保持します。	screen	0	settings_notice(unreadable) → MessageBoxW	dialog_settings_unreadable	Could not read the settings file. The original settings are kept.	後半「元の設定は保持します。」は 6 文で共通
+ui/win32/SettingsNotice.hpp	21	ui	設定ファイルが上限の 16 KiB（16384 バイト）を超えています。元の設定は保持します。	screen	0(数字が文に埋め込み)	settings_notice(too_large) → MessageBoxW	dialog_settings_too_large	The settings file exceeds the 16 KiB (16384 bytes) limit. The original settings are kept.	数字は設定の上限の定数と手で揃えている
+ui/win32/SettingsNotice.hpp	23	ui	設定ファイルの形式が正しくありません。元の設定は保持します。	screen	0	settings_notice(malformed) → MessageBoxW	dialog_settings_malformed	The settings file format is invalid. The original settings are kept.	-
+ui/win32/SettingsNotice.hpp	25	ui	設定ファイルの版に対応していません。元の設定は保持します。	screen	0	settings_notice(unsupported_version) → MessageBoxW	dialog_settings_unsupported_version	The settings file version is not supported. The original settings are kept.	-
+ui/win32/SettingsNotice.hpp	27	ui	設定ファイルのテーマ名が見つかりません。元の設定は保持します。	screen	0	settings_notice(unknown_theme) → MessageBoxW	dialog_settings_unknown_theme	The theme name in the settings file was not found. The original settings are kept.	-
+ui/win32/SettingsNotice.hpp	29	ui	設定ファイルのフォント名が正しくありません。元の設定は保持します。	screen	0	settings_notice(invalid_font_family) → MessageBoxW	dialog_settings_invalid_font_family	The font name in the settings file is invalid. The original settings are kept.	-
+ui/win32/SettingsNotice.hpp	31	ui	設定ファイルの文字サイズは 8〜40 pt で指定してください。元の設定は保持します。	screen	0(範囲が文に埋め込み)	settings_notice(invalid_font_size) → MessageBoxW	dialog_settings_invalid_font_size	Specify a font size between 8 and 40 pt in the settings file. The original settings are kept.	8〜40 は FontSize の範囲と手で揃えている(Ex の "Font size must be 8 to 40 pt" にも同じ数字)
+ui/win32/SettingsNotice.hpp	33	ui	設定を保存できませんでした。別の起動で使用中、または書き込みが許可されていません。	screen	0	settings_notice(unwritable) → MessageBoxW	dialog_settings_unwritable	Could not save the settings. They are in use by another instance, or writing is not permitted.	ソースでは 2 つの L"" に途中で割れている(33-34 行)
+ui/win32/SettingsNotice.hpp	36	ui	別の処理で設定ファイルが変更されました。上書きせずに保持します。再起動で読み直してください。	screen	0	settings_notice(changed_externally) → MessageBoxW	dialog_settings_changed_externally	The settings file was changed by another process. It was kept without being overwritten. Restart to reload it.	ソースでは 2 つの L"" に割れている(36-37 行)
+ui/win32/SettingsNotice.hpp	39	ui	設定を読み込めていないため、保存しませんでした。	screen	0	settings_notice(not_loaded) → MessageBoxW	dialog_settings_not_loaded	The settings were not saved because they have not been loaded.	-
+ui/win32/SettingsNotice.hpp	46	ui	\n元の設定ファイルは保持します。テーマを修正して再起動してください。	screen	0(前に theme_failure_message の英語文が連結される)	settings_notice(ThemeLookupFailure): 英語の理由文 + この日本語の続きを std::wstring で連結 → MessageBoxW	dialog_settings_theme_suffix	\nThe original settings file is kept. Fix the theme and restart.	英語(ThemeLookupFailure.cpp)と日本語が 1 つの箱に混ざっている。理由文も表に入れて言語を揃える必要
+ui/win32/StartScreenPainter.cpp	26	ui	NeNe Nib	screen	0	constexpr title_text → 起動画面の見出し	start_title	NeNe Nib	製品名・訳さない
+ui/win32/StartScreenPainter.cpp	27	ui	最近使ったファイル	screen	0	constexpr recent_text → 起動画面の見出し	start_recent_files	Recent Files	コメント「英語以外の文は後続」(ADR 0172 決定 8)
+ui/win32/StartScreenPainter.cpp	28	ui	ブックマーク	screen	0	constexpr bookmark_text → 起動画面の見出し	start_bookmarks	Bookmarks	重複: CommandChoice.cpp:344 / PaletteMarks.hpp:18
+ui/win32/StartScreenPainter.cpp	29	ui	はじめる	screen	0	constexpr start_text → 起動画面の見出し	start_get_started	Get Started	-
+ui/win32/StartScreenPainter.cpp	30	ui	ショートカット	screen	0	constexpr key_text → 起動画面の見出し	start_shortcuts	Shortcuts	-
+ui/win32/StartScreenPainter.cpp	32	ui	まだ履歴がありません。ファイルを開くか、そのまま打ち始めてください	screen	0	constexpr empty_text → 起動画面の最近のファイルが空のときの 1 行	start_empty_history	No history yet. Open a file or just start typing	句点なしで終わる
+ui/win32/StartScreenPainter.cpp	35	ui	新しいファイル	screen	0	constexpr new_file_text → 起動画面の「はじめる」の行	start_new_file	New File	-
+ui/win32/StartScreenPainter.cpp	36	ui	そのまま打ち始める	screen	0	constexpr new_file_detail → 同行の説明	start_new_file_detail	Just start typing	-
+ui/win32/StartScreenPainter.cpp	37	ui	フォルダを開く	screen	0	constexpr open_folder_text → 起動画面の行	start_open_folder	Open Folder	-
+ui/win32/StartScreenPainter.cpp	38	ui	ルートを選んでエクスプローラーを出す	screen	0	constexpr open_folder_detail → 同行の説明	start_open_folder_detail	Choose a root and show the explorer	-
