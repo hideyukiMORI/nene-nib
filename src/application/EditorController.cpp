@@ -1054,8 +1054,10 @@ core::EditorSettings EditorController::shown_settings() const
     {
         return state_.settings();
     }
-    const auto evaluated =
-        core::evaluate_ex(focused.value(), state_.settings(), state_.appearance(), state_.themes());
+    const auto evaluated = core::evaluate_ex(
+        focused.value(), state_.settings(),
+        core::ExWindowState{state_.appearance(), state_.vim().highlight, state_.vim().incsearch},
+        state_.themes());
     if (!evaluated)
     {
         return state_.settings();
