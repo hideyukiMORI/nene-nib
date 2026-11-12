@@ -562,6 +562,8 @@ void EditorController::settle_tab_walk_before(bool keeps_walk)
 // 全部をここで拾い、編集の経路ごとに書かない。印が無ければ欄を 1 つ読むだけで抜ける。
 void EditorController::settle_transient()
 {
+    // 同じ意図の出口で、確定の外で閉じたオペレータ待ちの入力行の待ちも捨てる（#1549）。
+    settle_line_operator();
     if (state_.transient().has_value() && !state_.transient_saved())
     {
         state_ = state_.without_transient();

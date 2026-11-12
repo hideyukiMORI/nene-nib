@@ -292,6 +292,9 @@ repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::
 [[nodiscard]] VimStep repeated_change(const VimState &state);
 [[nodiscard]] VimStep vim_recorded(const VimState &before, const VimEditorView &view, VimStep step,
                                    VimKey key);
+// オペレータ待ちの `:` の確定の記録（#1549）。typed の文字と `<CR>` を `:` までの記録に足す。
+[[nodiscard]] VimStep command_motion_recorded(const VimState &before, const VimEditorView &view,
+                                              VimStep step, std::string_view typed);
 [[nodiscard]] VimStep macro_recorded(const VimState &before, const VimEditorView &view,
                                      VimStep step, VimKey key);
 inline constexpr std::size_t single_step = 1;

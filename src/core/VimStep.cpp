@@ -55,6 +55,7 @@ using detail::caret_on_line;
 using detail::carriage_return_character;
 using detail::characters_between;
 using detail::combined_count;
+using detail::command_motion_recorded;
 using detail::completed_character_search;
 using detail::completed_text_object;
 using detail::count_digit_dropped;
@@ -66,6 +67,7 @@ using detail::display_view;
 using detail::drops_count_digit;
 using detail::entered_insert;
 using detail::escaped_or_refused;
+using detail::exclusive_range;
 using detail::failed;
 using detail::finished_input_wait;
 using detail::forward_characters;
@@ -83,6 +85,7 @@ using detail::jump_list_action;
 using detail::laid_out_motion;
 using detail::landed_column;
 using detail::landed_step;
+using detail::landing_of;
 using detail::line_below;
 using detail::line_of;
 using detail::macro_record_action;
@@ -94,6 +97,7 @@ using detail::operated;
 using detail::operated_on_lines;
 using detail::operated_to_line_end;
 using detail::operation_of;
+using detail::operator_start;
 using detail::page_step;
 using detail::pending_operator;
 using detail::performed;
@@ -854,6 +858,14 @@ namespace
                    VimOpenCommandLine{std::move(range)}};
 }
 
+// `d:` `c:` `y:` は入力行を開く（ADR 0022 の追補 #1549・Vim の nv_colon は Ex の命令を移動として
+// 使う）。NORMAL の `:` と同じ効果の 1 本で、保留のオペレータ・回数・レジスタの名指しは状態に残す
+// （回数は範囲に写さない）。確定は vim_command_operated が閉じ、取消と失敗は捨てる。
+[[nodiscard]] VimStep operator_command_line(const VimState &state)
+{
+    return VimStep{state, VimOpenCommandLine{}};
+}
+
 [[nodiscard]] VimStep appended_insert(const VimState &state, const VimEditorView &view)
 {
     return entered_insert(state, forward_characters(view.text, view.selection.caret, single_step));
@@ -1578,7 +1590,8 @@ namespace
     const auto &view = displayed.value();
     if (state.pending.has_value())
     {
-        return pending_step(state, view, action);
+        return action == VimAction::open_command_line ? operator_command_line(state)
+                                                      : pending_step(state, view, action);
     }
     return commanded(state, view, action);
 }
@@ -2364,16 +2377,25 @@ VimViewport vim_viewport_of(const VimEditorView &view) noexcept
     return view.viewport.value_or(VimViewport{LineNumber{1}, 1, 0});
 }
 
-VimStep vim_line_jumped(const VimState &state, const VimEditorView &view,
-                        std::optional<std::size_t> line)
+namespace
 {
-    // 行番号は `{N}G` の回数と同じ値として渡す（回数なしは最後の行・回数 0 は無いので 1 行目）。
-    // Vim 9.1 の `:N` は jump ではない（`:help jump-motions` に無い）ので `''` は置かない。
+// `:N` の行番号を `{N}G` の回数として置いた状態（回数なしは最後の行・回数 0 は無いので 1 行目）。
+// 跳ぶ `:N` とオペレータ待ちの `:N`（#1549）が同じ着地を引く。
+[[nodiscard]] VimState line_counted(const VimState &state, std::optional<std::size_t> line)
+{
     VimState counted = state;
     counted.pending = std::nullopt;
     counted.count = line.has_value() ? std::optional{VimCount{std::max(line.value(), single_step)}}
                                      : std::nullopt;
-    return landed_step(counted, view, VimMotion::document_last);
+    return counted;
+}
+} // namespace
+
+VimStep vim_line_jumped(const VimState &state, const VimEditorView &view,
+                        std::optional<std::size_t> line)
+{
+    // Vim 9.1 の `:N` は jump ではない（`:help jump-motions` に無い）ので `''` は置かない。
+    return landed_step(line_counted(state, line), view, VimMotion::document_last);
 }
 
 namespace detail
@@ -2617,6 +2639,33 @@ VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
         change_marked(view, macro_recorded(state, view,
                                            vim_recorded(state, view, std::move(step), key), key)),
         key);
+}
+
+VimStep vim_command_operated(const VimState &state, const VimEditorView &view,
+                             const VimCommandMotion &motion)
+{
+    if (!state.pending.has_value())
+    {
+        return VimStep{state, VimNoEffect{}};
+    }
+    // 行き先は `:N` と同じ着地（document_last）で、跳ばない命令はキャレットのまま。範囲は検索の
+    // 後ろのオペレータと同じ exclusive の 1 本の規則を通り、空の範囲も同じ道（Vim の nv_colon の
+    // MCHAR・inclusive = FALSE → do_pending_operator）。`:` は jump ではないので `''` を置かない。
+    const Offset caret = view.selection.caret;
+    const Offset destination = motion.line.has_value()
+                                   ? landing_of(view, line_counted(state, motion.line.value().line),
+                                                VimMotion::document_last)
+                                         .offset
+                                   : caret;
+    VimStep step = performed(state, view.text, operator_start(caret, destination),
+                             exclusive_range(view.text, characters_between(caret, destination)));
+    // INSERT の `Ctrl-o` の印は鍵の出口と同じ 1 本で進める（ADR 0182 の決定 2・4）。確定の鍵は
+    // `<CR>` で、`<C-o>d:5<CR>` は命令が終わって due に、打った `<C-o>c:5<CR>` は OP_CHANGE の
+    // KeyTyped で 印を消す（Vim 9.1 の実測・まとめ枝 #1563）。
+    return insert_restart_noted(
+        state, view,
+        change_marked(view, command_motion_recorded(state, view, std::move(step), motion.typed)),
+        VimKey{VimSpecialKey::enter});
 }
 
 namespace
