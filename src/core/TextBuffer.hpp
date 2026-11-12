@@ -15,6 +15,7 @@
 #include <expected>
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -117,6 +118,10 @@ class TextBuffer final
     [[nodiscard]] const std::string &buffer_of(const Piece &piece) const noexcept;
     // piece が指すバッファの改行の索引。窓 [newline_begin, newline_end) の添字はこの列の中を指す。
     [[nodiscard]] const NewlineIndex &index_of(const Piece &piece) const noexcept;
+    // 位置 → piece と 行 → piece の 2 本。累積の長さと改行の数を二分探索で引く（ADR 0183）。
+    [[nodiscard]] std::size_t piece_at(std::size_t at) const noexcept;
+    [[nodiscard]] std::size_t piece_of_newline(std::size_t index) const noexcept;
+    [[nodiscard]] std::span<const Piece> pieces_from(std::size_t at) const noexcept;
     void collect(std::vector<Piece> &out, std::size_t from, std::size_t to) const;
     [[nodiscard]] Piece clipped(const Piece &piece, std::size_t from, std::size_t length) const;
     [[nodiscard]] std::size_t newline_offset(std::size_t index) const noexcept;
@@ -133,7 +138,8 @@ class TextBuffer final
     // 末尾の chunk の、この値が知っている書き込み済みの長さ（ADR 0044 の決定 2）。
     std::size_t add_fill_;
     // piece の列は不変の束で、値の写し（状態の with_* のたび）では複製しない。新しい列を作るのは
-    // 編集（replaced）の 1 回だけ（ADR 0180 の決定 1・3）。
+    // 編集（replaced）の 1 回だけ（ADR 0180 の決定 1・3）。各 piece は手前までの累積を持つ
+    // （ADR 0183 の決定 2）。
     std::shared_ptr<const std::vector<Piece>> pieces_;
     std::size_t size_bytes_;
     std::size_t newline_count_;
