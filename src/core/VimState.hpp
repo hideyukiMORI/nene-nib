@@ -21,9 +21,11 @@
 #include "VimRepeatRecord.hpp"
 #include "VimSearchHighlight.hpp"
 #include "VimSearchSnapshot.hpp"
+#include "VimSubstituteMemory.hpp"
 #include "VimWantedColumn.hpp"
 
 #include <cstddef>
+#include <memory>
 #include <optional>
 #include <utility>
 
@@ -113,6 +115,10 @@ struct VimState
     // INSERT へ入る前の直前の変更（Vim の old_redobuff・ADR 0182 の決定 6）。`<C-o>.` が読む。
     // 置くのは vim_recorded（INSERT へ入る命令と始め直した後の最初の打鍵）だけ。
     std::optional<VimRepeatRecord> change_before_insert = std::nullopt;
+    // 前の置換（`:s` の族・ADR 0168 の決定 1〜3）。直前の検索と同じく窓に 1
+    // つで、鍵を食べ終わっても （vim_resting_from でも）保つ。書くのは vim_substituted の 1
+    // か所。打鍵ごとの写しを軽くする ため不変の値を共有する。
+    std::shared_ptr<const VimSubstituteMemory> last_substitute = nullptr;
 };
 
 // 鍵を 1 つ食べ終わったあとの NORMAL。回数・オペレータ・欲しい列は空で、無名レジスタだけ残る。
@@ -176,6 +182,7 @@ struct VimState
         next.insert_restart = state.insert_restart;
     }
     next.change_before_insert = state.change_before_insert;
+    next.last_substitute = state.last_substitute;
     return next;
 }
 

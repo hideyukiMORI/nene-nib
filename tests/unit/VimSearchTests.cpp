@@ -284,7 +284,9 @@ void verify_vim_pattern_word_boundaries()
 // 未対応の構文は黙って別の意味にせず、閉じた失敗で拒否する（決定 4）。
 void verify_vim_pattern_rejections()
 {
-    expect(rejects("\\(foo\\)", VimPatternFailure::group), "a group is refused");
+    expect(rejects("\\(foo", VimPatternFailure::group) &&
+               rejects("\\(foo\\)*", VimPatternFailure::quantifier),
+           "an open group and a starred group are refused (groups are ADR 0168)");
     expect(rejects("foo\\|bar", VimPatternFailure::branch), "a branch is refused");
     expect(rejects("fo\\{2}", VimPatternFailure::quantifier), "a brace count is refused");
     expect(rejects("fo\\+", VimPatternFailure::quantifier), "one or more is refused");
@@ -732,7 +734,7 @@ void verify_vim_search_messages()
     Editing refused;
     open_vim_document(refused, "foo foobar");
     EditorController &sixth = refused.controller();
-    vim_replay(sixth, "/\\(foo\\)<CR>");
+    vim_replay(sixth, "/\\(foo<CR>");
     expect(message_is(sixth.frame(), "Unsupported pattern item: \\( \\)") &&
                caret_at(sixth.frame(), 1, 1),
            "an unsupported item is refused instead of meaning something else");

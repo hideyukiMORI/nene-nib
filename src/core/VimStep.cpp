@@ -854,8 +854,11 @@ namespace
         const std::size_t count = state.count.value().value;
         range = count > 1 ? ".,.+" + std::to_string(count - 1) : std::string{"."};
     }
-    return VimStep{vim_resting_from(state, state.unnamed_register),
-                   VimOpenCommandLine{std::move(range)}};
+    // 欲しい列は入力行の確定の後も残す（Vim の curswant・`$` の後の `:s` は行末に着く・ADR 0168 の
+    // 追補 8）。入力行の取消は vim_cancelled_input が捨てる。
+    VimState next = vim_resting_from(state, state.unnamed_register);
+    next.wanted_column = state.wanted_column;
+    return VimStep{std::move(next), VimOpenCommandLine{std::move(range)}};
 }
 
 // `d:` `c:` `y:` は入力行を開く（ADR 0022 の追補 #1549・Vim の nv_colon は Ex の命令を移動として
@@ -1362,6 +1365,8 @@ namespace
         return numbered(state, view, action);
     case VimActionGroup::jump_list:
         return jump_list_action(state, view, action);
+    case VimActionGroup::substitute:
+        return detail::substitute_action(state, view, action);
     }
     std::unreachable();
 }
@@ -2651,12 +2656,14 @@ VimStep vim_command_operated(const VimState &state, const VimEditorView &view,
     // 行き先は `:N` と同じ着地（document_last）で、跳ばない命令はキャレットのまま。範囲は検索の
     // 後ろのオペレータと同じ exclusive の 1 本の規則を通り、空の範囲も同じ道（Vim の nv_colon の
     // MCHAR・inclusive = FALSE → do_pending_operator）。`:` は jump ではないので `''` を置かない。
-    const Offset caret = view.selection.caret;
+    // `d:s/a/b/` は置換が先にキャレットを動かすので、範囲は置換の前のキャレット（origin）から今の
+    // キャレットまで（ADR 0168 の追補 16・実測）。
+    const Offset caret = motion.origin.value_or(view.selection.caret);
     const Offset destination = motion.line.has_value()
                                    ? landing_of(view, line_counted(state, motion.line.value().line),
                                                 VimMotion::document_last)
                                          .offset
-                                   : caret;
+                                   : view.selection.caret;
     VimStep step = performed(state, view.text, operator_start(caret, destination),
                              exclusive_range(view.text, characters_between(caret, destination)));
     // INSERT の `Ctrl-o` の印は鍵の出口と同じ 1 本で進める（ADR 0182 の決定 2・4）。確定の鍵は

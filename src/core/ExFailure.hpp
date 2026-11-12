@@ -23,7 +23,13 @@ enum class ExFailure : std::uint8_t
     invalid_argument,
     // 範囲を取らない命令に範囲が付いた（VISUAL の `:'<,'>set` や回数の `:.,.+2noh`・ADR 0022 の
     // 追補 #1526）。文言は Vim の E481: No range allowed。
-    no_range_allowed
+    no_range_allowed,
+    // `:s` の区切りが英字（ADR 0168 の決定 1）。文言は Vim の E146。
+    letter_delimiter,
+    // `:s` の回数が INT_MAX 以上（ADR 0168 の追補 14）。文言は Vim の E1510: Value too large。
+    value_too_large,
+    // `:s` のフラグと回数の後ろの余り（ADR 0168 の決定 2）。文言は Vim の E488。
+    trailing_characters
 };
 
 [[nodiscard]] DisplayText ex_failure_message(ExFailure failure);

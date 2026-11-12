@@ -625,14 +625,16 @@ void verify_ex_ranges()
         expect(ex_fails_with(text, core::ExFailure::unsupported_argument),
                "ranges Nib does not run yet are closed failures");
     }
-    for (const std::string_view text : {"'<,'>s", "'<,'>foo", "'<,'>d", "3d", "'<,'>set bogus"})
+    for (const std::string_view text : {"'<,'>foo", "'<,'>d", "3d", "'<,'>set bogus"})
     {
         expect(
             !core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark).has_value(),
             "a ranged command Nib does not know is refused");
     }
-    expect(ex_fails_with("'<,'>s", core::ExFailure::unknown_command),
-           "`:'<,'>s` is an unknown command, not text for the buffer");
+    const auto ranged_substitute =
+        core::evaluate_ex("'<,'>s", core::default_editor_settings(), Appearance::dark);
+    expect(ranged_substitute.has_value() && ranged_substitute.value().substitute.has_value(),
+           "`:'<,'>s` repeats the substitute on the VISUAL lines (ADR 0168)");
     const auto below = [](std::string_view text) -> std::optional<std::optional<std::size_t>>
     {
         const auto result =
