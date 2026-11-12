@@ -25,6 +25,7 @@
 #include "VimPattern.hpp"
 #include "VimPatternFailure.hpp"
 #include "VimPatternMatch.hpp"
+#include "VimPatternRoute.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
 #include "VimSearch.hpp"
@@ -45,6 +46,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 
 namespace nenenib::tests
@@ -225,6 +227,162 @@ void verify_vim_pattern_priority()
            "BMP and supplementary repetitions preserve byte endpoints");
 }
 
+// 原子 1 つに付く量（ADR 0184 の決定 2）。範囲は Vim 9.1 の matchstrpos の実測（#1566 の G4・
+// docs/quality/vim-pattern-syntax-2026-11-12.md の q- の行）。
+void verify_vim_pattern_quantifier_ranges()
+{
+    expect(match_range_is("a\\+", "baaac a", 0, {1, 4}) &&
+               match_range_is("a\\+", "baaac a", 4, {6, 7}),
+           "one or more is greedy");
+    expect(match_range_is("a\\=", "baaac", 0, {0, 0}) && match_range_is("a\\?", "baaac", 1, {1, 2}),
+           "zero or one is greedy and may be empty");
+    expect(match_range_is("colou\\=r", "color colour", 1, {6, 12}), "an optional letter");
+    expect(match_range_is("a\\{2}", "a aa aaa", 0, {2, 4}) &&
+               match_range_is("a\\{2,}", "a aa aaaa", 5, {5, 9}) &&
+               match_range_is("a\\{,3}", "aaaa", 0, {0, 3}) &&
+               match_range_is("a\\{2,3}", "aaaa", 0, {0, 3}) &&
+               match_range_is("a\\{2\\}", "aaa", 0, {0, 2}),
+           "brace counts take the measured ranges");
+    expect(match_range_is("a\\{}", "baab", 1, {1, 3}) &&
+               match_range_is("a\\{,}", "baab", 1, {1, 3}),
+           "empty braces are a star");
+    expect(match_range_is("a\\{3,1}", "aaaa", 0, {0, 3}) &&
+               match_range_is("a\\{0}b", "ab", 0, {1, 2}),
+           "reversed limits swap and a zero count drops the atom");
+    expect(match_range_is("a\\{-}", "aaa", 0, {0, 0}) &&
+               match_range_is("a\\{-1,}", "aaa", 0, {0, 1}) &&
+               match_range_is("a\\{-2,3}", "aaaaa", 0, {0, 2}) &&
+               match_range_is(".\\{-}c", "abcabc", 0, {0, 3}) &&
+               match_range_is("a.\\{-}b", "aXbYb", 0, {0, 3}),
+           "the lazy forms take the shortest match");
+    expect(match_range_is("[0-9]\\+", "ab 123 4", 0, {3, 6}) &&
+               match_range_is("\\s\\+$", "foo   ", 0, {3, 6}) &&
+               match_range_is("あ\\+", "いああああう", 0, {3, 15}),
+           "sets and wide characters repeat whole code points");
+    expect(match_range_is("e\xCC\x81\\+",
+                          "xe\xCC\x81"
+                          "e\xCC\x81y",
+                          0, {1, 7}) &&
+               match_range_is("e\\+",
+                              "xe\xCC\x81"
+                              "eey",
+                              0, {4, 6}) &&
+               match_range_is(".\\{2}",
+                              "xe\xCC\x81"
+                              "e\xCC\x81y",
+                              0, {0, 4}),
+           "a multi after a composed character repeats the whole character");
+    expect(match_range_is("^\\+a", "aa", 0, {0, 1}) && match_range_is("\\<\\+a", "ab", 0, {0, 1}) &&
+               match_range_is("^\\=a", "ba", 0, {1, 2}),
+           "a multi on an anchor keeps it once or drops it at zero");
+    expect(match_range_is("a\\{30}", std::string(40, 'a'), 0, {0, 30}), "a count of thirty");
+}
+
+// 量の失敗の形（E554 / E866 / E871 / E363・ADR 0184 の決定 2）と、開いた後の原子の数の上限を
+// 試験から注入した too_complex。
+void verify_vim_pattern_quantifier_failures()
+{
+    expect(rejects("a\\{", VimPatternFailure::brace) &&
+               rejects("a\\{x}", VimPatternFailure::brace) &&
+               rejects("a\\{1,2,3}", VimPatternFailure::brace) &&
+               rejects("a\\{-", VimPatternFailure::brace),
+           "a broken brace is E554");
+    expect(rejects("\\+a", VimPatternFailure::misplaced) &&
+               rejects("\\{2}a", VimPatternFailure::misplaced) &&
+               rejects("\\(\\+a\\)", VimPatternFailure::misplaced) &&
+               rejects("ba\\{0}\\+", VimPatternFailure::misplaced) &&
+               rejects("ba\\{0}*", VimPatternFailure::misplaced),
+           "a multi with no atom before it is E866");
+    expect(rejects("a\\+\\+", VimPatternFailure::multi_after_multi) &&
+               rejects("a*\\+", VimPatternFailure::multi_after_multi) &&
+               rejects("a\\{1}\\{2}", VimPatternFailure::multi_after_multi) &&
+               rejects("a**", VimPatternFailure::multi_after_multi) &&
+               rejects("a\\=*", VimPatternFailure::multi_after_multi) &&
+               rejects("^\\+\\+", VimPatternFailure::multi_after_multi),
+           "a multi after a multi is E871, including a doubled star");
+    expect(VimPattern::parse("^**", VimSearchDirection::forward, VimPatternCase::sensitive)
+               .has_value(),
+           "a star after the leading caret is a character, so the next star is a multi");
+    // `\c` `\C` は項目の間で読まれ、直後の量は付く原子が無い（Vim 9.1 の nfa_regconcat・実測）。
+    expect(rejects("a\\c\\+", VimPatternFailure::misplaced) &&
+               rejects("a\\C\\{2}", VimPatternFailure::misplaced) &&
+               rejects("a\\c\\=", VimPatternFailure::misplaced) &&
+               rejects("a\\c*", VimPatternFailure::misplaced) &&
+               rejects("^\\c*", VimPatternFailure::misplaced) &&
+               rejects("a*\\c*", VimPatternFailure::misplaced) &&
+               rejects("a\\c\\C\\+", VimPatternFailure::misplaced),
+           "a multi right after \\c or \\C is E866");
+    expect(match_range_is("\\c*", "b*Ab", 0, {1, 2}) &&
+               match_range_is("\\(\\c*\\)", "b*Ab", 0, {1, 2}),
+           "a star after \\c at the start or after \\( stays a character");
+    expect(match_range_is("\\ca\\+", "bAAb", 0, {1, 3}) &&
+               match_range_is("a\\+\\c", "bAAb", 0, {1, 3}),
+           "\\c before the atom or after the multi still folds the case");
+    const auto parsed = [](std::string_view text, std::size_t limit)
+    {
+        return VimPattern::parse(text, VimSearchDirection::forward, VimPatternCase::sensitive,
+                                 limit);
+    };
+    expect(parsed("a\\{4}", 4).has_value() &&
+               parsed("a\\{5}", 4) == std::unexpected(VimPatternFailure::too_complex) &&
+               parsed("ab\\{,3}", 4).has_value() &&
+               parsed("ab\\{,4}", 4) == std::unexpected(VimPatternFailure::too_complex) &&
+               parsed("abcdef", 4).has_value(),
+           "the opened atoms are counted against the limit, a pattern without a multi is not");
+    expect(
+        rejects("a\\{1025}", VimPatternFailure::too_complex) &&
+            rejects("a\\{99999999999999999999}", VimPatternFailure::too_complex) &&
+            VimPattern::parse("a\\{1024}", VimSearchDirection::forward, VimPatternCase::sensitive)
+                .has_value(),
+        "the product limit is vim_pattern_atom_limit atoms");
+}
+
+// 量の付いたパターンの道と上限（ADR 0184 の決定 1・2）。上限のある量は longest_bytes を持ち、
+// 量の写しだけの列は literal の速道に乗る。
+void verify_vim_pattern_quantifier_bounds()
+{
+    const auto parsed = [](std::string_view text)
+    { return VimPattern::parse(text, VimSearchDirection::forward, VimPatternCase::sensitive); };
+    expect(parsed("a\\{2}b").value().literal_bytes() == std::optional<std::string>{"aab"} &&
+               !parsed("a\\+").value().literal_bytes().has_value() &&
+               !parsed("a\\=").value().literal_bytes().has_value(),
+           "only a fixed count stays a literal run");
+    expect(parsed("a\\{2,3}").value().longest_bytes() == std::optional<std::size_t>{12} &&
+               !parsed("a\\{2,}").value().longest_bytes().has_value() &&
+               !parsed("a\\{-}").value().longest_bytes().has_value() &&
+               parsed("e\xCC\x81\\{2}").value().longest_bytes() == std::optional<std::size_t>{16},
+           "longest_bytes counts the copies and the composed characters");
+    expect(match_range_is("\\(a\\+\\)b", "xaaab", 0, {1, 5}), "a group around a repeated atom");
+}
+
+// 決定 1 の道の選び方の表（ADR 0184）。量の無いパターンは今の 2 本（後戻りしない列か `*` の
+// 状態集合）のどちらかを通り、原子の数も量を足す前の parse と同じ。量の付いた 4 行は、開いた
+// 後の道と数が決めたとおりかを見る。
+void verify_vim_pattern_routes()
+{
+    using core::VimPatternRoute;
+    constexpr std::array<std::tuple<std::string_view, VimPatternRoute, std::size_t>, 20> table{{
+        {"", VimPatternRoute::sequence, 0},         {"abc", VimPatternRoute::sequence, 3},
+        {"a.c", VimPatternRoute::sequence, 3},      {"[a-c]x", VimPatternRoute::sequence, 2},
+        {"^ab$", VimPatternRoute::sequence, 4},     {"\\<foo\\>", VimPatternRoute::sequence, 5},
+        {"^*", VimPatternRoute::sequence, 2},       {"a\\*b", VimPatternRoute::sequence, 3},
+        {"\\(a\\)b", VimPatternRoute::sequence, 2}, {"\\(*\\)", VimPatternRoute::sequence, 1},
+        {"a\\/b", VimPatternRoute::sequence, 3},    {"e\xCC\x81", VimPatternRoute::sequence, 2},
+        {"a*", VimPatternRoute::states, 1},         {".*", VimPatternRoute::states, 1},
+        {"x*y*", VimPatternRoute::states, 2},       {"\\ca*b", VimPatternRoute::states, 2},
+        {"a\\{2}", VimPatternRoute::sequence, 2},   {"a\\+", VimPatternRoute::states, 2},
+        {"a\\{1,3}", VimPatternRoute::states, 3},   {"a\\{-}", VimPatternRoute::lazy_states, 1},
+    }};
+    for (const auto &[text, route, atoms] : table)
+    {
+        const auto parsed =
+            VimPattern::parse(text, VimSearchDirection::forward, VimPatternCase::sensitive);
+        expect(parsed.has_value() && parsed.value().route() == route &&
+                   parsed.value().atom_count() == atoms,
+               "a pattern takes the route and atom count the table decides");
+    }
+}
+
 void verify_vim_pattern_evaluation_bounds()
 {
     expect(match_range_is(".*", "a🖋b", 1, {1, 6}),
@@ -288,10 +446,10 @@ void verify_vim_pattern_rejections()
                rejects("\\(foo\\)*", VimPatternFailure::quantifier),
            "an open group and a starred group are refused (groups are ADR 0168)");
     expect(rejects("foo\\|bar", VimPatternFailure::branch), "a branch is refused");
-    expect(rejects("fo\\{2}", VimPatternFailure::quantifier), "a brace count is refused");
-    expect(rejects("fo\\+", VimPatternFailure::quantifier), "one or more is refused");
-    expect(rejects("fo\\=", VimPatternFailure::quantifier), "an optional atom is refused");
-    expect(rejects("fo\\?", VimPatternFailure::quantifier), "its other spelling too");
+    expect(rejects("\\(fo\\)\\+", VimPatternFailure::quantifier) &&
+               rejects("\\(fo\\)\\{2}", VimPatternFailure::quantifier) &&
+               rejects("\\(fo\\)\\=", VimPatternFailure::quantifier),
+           "a multi on a group is stage 2 and refused (ADR 0184 decision 3)");
     expect(rejects("\\v(foo)", VimPatternFailure::magic), "very magic is refused");
     expect(rejects("\\Mfoo", VimPatternFailure::magic), "nomagic is refused");
     expect(rejects("\\%(foo", VimPatternFailure::escape), "a percent escape is refused");
@@ -741,6 +899,29 @@ void verify_vim_search_messages()
     vim_replay(sixth, "/foo/e<CR>");
     expect(message_is(sixth.frame(), "Search offset is not supported"),
            "and so is a search offset");
+}
+
+// 量の失敗の知らせ（ADR 0184 の決定 2・Vim 9.1 の NFA の文言）と、量の付いた検索の着地。
+void verify_vim_search_quantifier_messages()
+{
+    Editing quantified;
+    open_vim_document(quantified, "foo foobar");
+    EditorController &controller = quantified.controller();
+    vim_replay(controller, "/o**<CR>");
+    expect(message_is(controller.frame(), "E871: (NFA regexp) Can't have a multi follow a multi") &&
+               caret_at(controller.frame(), 1, 1),
+           "a doubled star is E871 as in Vim 9.1");
+    vim_replay(controller, "/o\\{x}<CR>");
+    expect(message_is(controller.frame(), "E554: Syntax error in \\{...}"),
+           "a broken brace is E554");
+    vim_replay(controller, "/\\+o<CR>");
+    expect(message_is(controller.frame(), "E866: (NFA regexp) Misplaced multi"),
+           "a leading multi is E866");
+    vim_replay(controller, "/o\\{2000}<CR>");
+    expect(message_is(controller.frame(), "E363: pattern uses more memory than 'maxmempattern'"),
+           "too many opened atoms is E363");
+    vim_replay(controller, "/o\\+b<CR>");
+    expect(caret_at(controller.frame(), 1, 6), "a quantified search lands on its match");
 }
 
 // 決定 1 の入力行と取消。入力中に本文は変わらず、Esc と空の Backspace で取消になる。
@@ -1269,6 +1450,10 @@ void verify_vim_search_contracts()
     verify_vim_pattern_evaluation_bounds();
     verify_vim_pattern_word_boundaries();
     verify_vim_pattern_rejections();
+    verify_vim_pattern_quantifier_ranges();
+    verify_vim_pattern_quantifier_failures();
+    verify_vim_pattern_quantifier_bounds();
+    verify_vim_pattern_routes();
     verify_vim_pattern_composing();
     verify_vim_pattern_leading_composing();
     verify_vim_search_scan();
@@ -1280,6 +1465,7 @@ void verify_vim_search_contracts()
     verify_vim_search_operators();
     verify_vim_search_word_keys();
     verify_vim_search_messages();
+    verify_vim_search_quantifier_messages();
     verify_vim_search_input();
     verify_vim_search_history();
     verify_vim_search_dot();
