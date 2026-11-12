@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 10635a0f5fcce466c81ad2d5a803ab537f56e4774450bd6a784cfca9c3fed01f / 4486 fixtures
+// fixtures.json: sha256 4ba6b8269d1b6e1e69a5309341cee2a32df4dc0c8cb0d1f87370bc979802fb4f / 4515 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4486> vim_fixtures{{
+constexpr std::array<VimFixture, 4515> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4498,6 +4498,35 @@ constexpr std::array<VimFixture, 4486> vim_fixtures{{
     {"block-visual-put-wide-cut-dollar-short", "aあ\nabcd\nabc", "yl$<C-v>jjp", "aa\naa\naa", 1, 2, "あ\nbcd\nbc", "\0263", std::nullopt},
     {"block-visual-put-wide-line-end", "aあb\nabcd", "yl$<C-v>jhp", "aあa\nabca", 1, 5, "b\nd", "\0261", std::nullopt},
     {"block-visual-put-named-lines", "abc\ndef\nghi", "\"byy<C-v>j\"bp", "bc\nef\nabc\nghi", 3, 1, "a\nd", "\0261", std::nullopt},
+    {"home-wanted-tab-j", "\tab\nabcdefghijkl", "<Home>j", "\tab\nabcdefghijkl", 2, 1, "", "", std::nullopt},
+    {"home-wanted-tab-l-j", "\tab\nabcdefghijkl", "l<Home>j", "\tab\nabcdefghijkl", 2, 1, "", "", std::nullopt},
+    {"home-wanted-tab-count-j", "\tabcdef\nabcdefghijkl", "3<Home>j", "\tabcdef\nabcdefghijkl", 2, 1, "", "", std::nullopt},
+    {"home-wanted-tab-down", "\tab\nabcdefghijkl", "<Home><Down>", "\tab\nabcdefghijkl", 2, 1, "", "", std::nullopt},
+    {"home-wanted-tab-middle-j", "x\n\tab\nabcdefghijkl", "2G<Home>j", "x\n\tab\nabcdefghijkl", 3, 1, "", "", std::nullopt},
+    {"home-wanted-tab-k", "abcdefghijkl\n\tab", "G<Home>k", "abcdefghijkl\n\tab", 1, 1, "", "", std::nullopt},
+    {"home-wanted-tab-zero-j", "\tab\nabcdefghijkl", "0j", "\tab\nabcdefghijkl", 2, 8, "", "", std::nullopt},
+    {"home-wanted-tab-pipe-j", "\tab\nabcdefghijkl", "1|j", "\tab\nabcdefghijkl", 2, 1, "", "", std::nullopt},
+    {"home-wanted-tab-end-j", "\tab\nabcdefghijkl", "<End>j", "\tab\nabcdefghijkl", 2, 12, "", "", std::nullopt},
+    {"home-wanted-tab-dollar-j", "\tab\nabcdefghijkl", "$j", "\tab\nabcdefghijkl", 2, 12, "", "", std::nullopt},
+    {"home-wanted-blank-j", "  ab\nabcdefghijkl", "$<Home>j", "  ab\nabcdefghijkl", 2, 1, "", "", std::nullopt},
+    {"home-wanted-wide-j", "日ab\nabcdefghijkl", "l<Home>j", "日ab\nabcdefghijkl", 2, 1, "", "", std::nullopt},
+    {"home-wanted-fullwidth-space-j", "　ab\nabcdefghijkl", "$<Home>j", "　ab\nabcdefghijkl", 2, 1, "", "", std::nullopt},
+    {"home-wanted-combining-j", "éab\nabcdefghijkl", "$<Home>j", "éab\nabcdefghijkl", 2, 1, "", "", std::nullopt},
+    {"home-wanted-empty-j", "\n\tab", "<Home>j", "\n\tab", 2, 1, "", "", std::nullopt},
+    {"home-wanted-empty-tab-j", "\tab\n\n\tab", "<Home>jj", "\tab\n\n\tab", 3, 1, "", "", std::nullopt},
+    {"home-wanted-count-plain", "abcdef", "$3<Home>", "abcdef", 1, 1, "", "", std::nullopt},
+    {"home-wanted-visual-tab-j", "\tab\nabcdefghijkl", "v<Home>jd", "bcdefghijkl", 1, 1, "\tab\na", "v", std::nullopt},
+    {"home-wanted-visual-tab-l-j", "\tab\nabcdefghijkl", "lv<Home>jy", "\tab\nabcdefghijkl", 1, 2, "ab\na", "v", std::nullopt},
+    {"home-wanted-visual-tab-dollar-j", "\tab\nabcdefghijkl", "$v<Home>jd", "\tabcdefghijkl", 1, 3, "b\na", "v", std::nullopt},
+    {"home-wanted-visual-line-tab-j", "\tab\nabcdefghijkl", "lV<Home>j<Esc>", "\tab\nabcdefghijkl", 2, 1, "", "", std::nullopt},
+    {"home-wanted-visual-count", "abcdef", "$v3<Home>d", "", 1, 1, "abcdef", "v", std::nullopt},
+    {"home-wanted-block-tab-j", "\tab\nabcdefghijkl", "l<C-v><Home>jd", "b\njkl", 1, 1, "\ta\nabcdefghi", "\0269", std::nullopt},
+    {"home-wanted-operator-tab", "\tabc\nabcdefghijkl", "$d<Home>j", "c\nabcdefghijkl", 2, 1, "\tab", "v", std::nullopt},
+    {"home-wanted-operator-count", "abcdef", "$3d<Home>", "f", 1, 1, "abcde", "v", std::nullopt},
+    {"home-wanted-operator-count-both", "abcdefgh", "$2d3<Home>", "h", 1, 1, "abcdefg", "v", std::nullopt},
+    {"home-wanted-change-tab", "\tabc\nabcdefghijkl", "$c<Home>X<Esc>j", "Xc\nabcdefghijkl", 2, 1, "\tab", "v", std::nullopt},
+    {"home-wanted-insert-tab-j", "\tab\nabcdefghijkl", "A<Home><Esc>j", "\tab\nabcdefghijkl", 2, 8, "", "", std::nullopt},
+    {"home-wanted-repeat-tab", "\tab\n\tcd\nabcdefghijkl", "$d<Home>j$.j", "b\nd\nabcdefghijkl", 3, 1, "\tc", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

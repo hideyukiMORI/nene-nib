@@ -57,6 +57,8 @@ requested_viewport(const VimState &state, const VimEditorView &view, VimAction a
 [[nodiscard]] bool drops_count_digit(const VimState &state, const VimKey &key) noexcept;
 // 回数の最後の桁を消す（`12<Del>` は 1・`3<Del>` は回数なし）。
 [[nodiscard]] VimStep count_digit_dropped(const VimState &state);
+// `<Home>` の前に回数とオペレータの回数を捨てる（`1|` に写す・Vim の nv_home・#1505）。
+[[nodiscard]] VimState home_uncounted(const VimState &state);
 [[nodiscard]] VimStep window_started(const VimState &state);
 // 1 鍵を待つ接頭辞の後ろの Esc は打ち消し、ほかの鍵は refused（#1369・VimStep.cpp）。
 [[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key, VimStep refused);
