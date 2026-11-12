@@ -1,15 +1,23 @@
 // scope `--vim-macro` の単体テスト（ADR 0042 決定 2・ADR 0046）。
+#include "CancelCommand.hpp"
+#include "CommandEdit.hpp"
+#include "CommandText.hpp"
 #include "DisplayLine.hpp"
+#include "DocumentFormatKind.hpp"
+#include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "LineNumber.hpp"
 #include "Offset.hpp"
+#include "OpenDocumentFormatList.hpp"
+#include "OpenOperationList.hpp"
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
 #include "Selection.hpp"
 #include "StoreVimRegister.hpp"
+#include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
 #include "VimBlockEdit.hpp"
@@ -243,6 +251,193 @@ void verify_macro_records_typed_keys_only()
            "a search is recorded as the one confirmed pattern key and stored as /beta<CR>");
     vim_replay(controller, "j0@c");
     expect(caret_at(controller.frame(), 3, 1), "the recorded search replays from the caret");
+}
+
+// `:` の行も打った鍵として録る（#1528）。期待値は Vim 9.1 で feedkeys(…, 'xt') を打った実測
+// （`qa:set so=2<CR>jq` の a は `:set so=2^Mj`・`<BS>` `<Left>` `<Del>` `<Right>` `<Home>` `<End>`
+// は `<80>kb` `<80>kl` `<80>kD` `<80>kr` `<80>kh` `<80>@7`・`<Tab>` は文字の Tab・`<Up>` は
+// `<80>ku`・ 取消の `<Esc>`
+// も積む）。窓が送る入力行の意図（CommandText・EditCommand・SubmitCommand・ CancelCommand）と
+// fixture の harness の鍵の口（vim_replay）の両方を見る。
+void verify_macro_records_ex_line()
+{
+    using nenenib::application::CancelCommand;
+    using nenenib::application::CommandText;
+    using nenenib::application::EditCommand;
+    using nenenib::application::SubmitCommand;
+    using nenenib::core::CommandEdit;
+    Editing editing;
+    open_vim_document(editing, "abc\ndef\nghi\njkl");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "qa:");
+    applied(controller, CommandText{"set so=3"});
+    applied(controller, EditCommand{CommandEdit::backspace});
+    applied(controller, CommandText{"2"});
+    applied(controller, EditCommand{CommandEdit::left});
+    applied(controller, EditCommand{CommandEdit::right});
+    applied(controller, EditCommand{CommandEdit::home});
+    applied(controller, EditCommand{CommandEdit::end});
+    applied(controller, SubmitCommand{});
+    vim_replay(controller, "jq");
+    expect(named_register(controller.vim_state(), U'a').text ==
+               ":set so=3\xC2\x80kb2\xC2\x80kl\xC2\x80kr\xC2\x80kh\xC2\x80@7\rj",
+           "the window's input-line intents are recorded as the typed keys");
+    expect(controller.frame().settings.scrolloff == 2, "the recorded line ran while recording");
+
+    vim_replay(controller, "qb:noh");
+    applied(controller, CancelCommand{});
+    vim_replay(controller, "q");
+    expect(named_register(controller.vim_state(), U'b').text == ":noh\x1b",
+           "a cancelling Esc is recorded too");
+
+    vim_replay(controller, "qc:set so=1<CR>q");
+    expect(named_register(controller.vim_state(), U'c').text == ":set so=1\r",
+           "the harness keys record the same way");
+
+    vim_replay(controller, "qd:");
+    applied(controller, EditCommand{CommandEdit::history_previous});
+    applied(controller, EditCommand{CommandEdit::complete_next});
+    applied(controller, EditCommand{CommandEdit::complete_previous});
+    applied(controller, CancelCommand{});
+    vim_replay(controller, "q");
+    expect(named_register(controller.vim_state(), U'd').text == ":\xC2\x80ku\t\x1b",
+           "history Up is <Up>, Tab is a Tab and Shift+Tab is not recorded");
+
+    vim_replay(controller, "qe/def<CR>q");
+    expect(named_register(controller.vim_state(), U'e').text == "/def\r",
+           "a search is still the one confirmed pattern key");
+}
+
+// VISUAL の `:` の行も録る（#1528・レビュー V-1547 の反例・Vim 9.1 の feedkeys の実測
+// D:/NeNeNib/scripts/20261111/c10/p6.vim）: `qavj:set so=2<CR>xq` の a は `vj:set
+// so=2^Mx`。録画中の
+// `:'<,'>set so=2` は E481 で、打った `x` は流れて 1 行目が `bc` になる。`@a` は同じ E481 で
+// 打ち切られ、`x` は流れない（本文は `bc` `def` `ghi` のまま）。
+void verify_macro_records_visual_ex_line()
+{
+    Editing editing;
+    open_vim_document(editing, "abc\ndef\nghi");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "qavj:set so=2<CR>xq");
+    expect(named_register(controller.vim_state(), U'a').text == "vj:set so=2\rx",
+           "the VISUAL : line is recorded as the typed keys");
+    expect(whole_vim_body(controller) == "bc\ndef\nghi", "the typed x after E481 still runs");
+    vim_replay(controller, "@a");
+    expect(whole_vim_body(controller) == "bc\ndef\nghi" &&
+               controller.vim_state().mode == VimMode::normal,
+           "@a stops at E481 and its x does not run");
+}
+
+// 再生と fixture の鍵の `<Up>` は窓と同じ履歴の前（Vim 9.1 の実測: 打った `:set so=4<CR>`
+// `:set so=1<CR>` の後の `let @c = ":\<Up>\<Up>\r"` と `@c` で so=4）。録画の中の `:` の行は
+// 再生しても録画に積まない（#1528）。
+void verify_macro_replays_ex_line()
+{
+    Editing editing;
+    open_vim_document(editing, "abc\ndef\nghi\njkl");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, ":set so=4<CR>:set so=1<CR>");
+    applied(controller, StoreVimRegister{'c', VimRegister{":\xC2\x80ku\xC2\x80ku\r",
+                                                          VimRegisterKind::characters}});
+    vim_replay(controller, "@c");
+    expect(controller.frame().settings.scrolloff == 4, "<Up> in a replayed : line recalls history");
+
+    applied(controller, stored_text('a', ":set so=2<CR>j"));
+    vim_replay(controller, "qb@aq");
+    expect(named_register(controller.vim_state(), U'b').text == "@a" &&
+               controller.frame().settings.scrolloff == 2 && caret_at(controller.frame(), 2, 1),
+           "a : line replayed while recording runs and only @a is recorded");
+}
+
+// `:` の行を履歴に足すのは、行の鍵が 1 つでも打たれたときだけ（Vim の getcmdline の
+// some_key_typed・#1528 のレビュー M1）。検索の行は打っていなくても足す。期待値は Vim 9.1 の
+// feedkeys(…, 'xt') の実測（レビューの h1.vim h2.vim と D:/NeNeNib/scripts/20261112/c10b/h.vim:
+// map の右辺だけの `:3<CR>` は足さず、`nnoremap X :2` に打った `<CR>` だけでも足し、:normal! の
+// `:1<CR>` は足さず、`@s` の `/l4<CR>` と map の右辺の `/l2<CR>` と :normal! の `/l5<CR>`
+// は足す）。
+void verify_macro_replay_keeps_ex_history()
+{
+    constexpr std::string_view five = "l1\nl2\nl3\nl4\nl5";
+    {
+        // r12: 再生の `:3` は履歴に入らないので、再生の `:<Up>` は打った `:5` を引く。
+        Editing editing;
+        open_vim_document(editing, std::string(five));
+        EditorController &controller = editing.controller();
+        vim_replay(controller, "qa:3<CR>:<Up><CR>xq:5<CR>1G@a");
+        expect(whole_vim_body(controller) == "l1\nl2\n3\nl4\n5" &&
+                   caret_at(controller.frame(), 5, 1),
+               "r12: a replayed : line is not remembered, so <Up> recalls the typed :5");
+    }
+    {
+        // h1 の B: 打った `:2` の後の `@b`（`:4<CR>:<Up><CR>x`）は 2 行目に着く。
+        Editing editing;
+        open_vim_document(editing, std::string(five));
+        EditorController &controller = editing.controller();
+        vim_replay(controller, ":2<CR>");
+        applied(controller, StoreVimRegister{'b', VimRegister{":4\r:\xC2\x80ku\rx",
+                                                              VimRegisterKind::characters}});
+        vim_replay(controller, "1G@b");
+        expect(whole_vim_body(controller) == "l1\n2\nl3\nl4\nl5" &&
+                   caret_at(controller.frame(), 2, 1),
+               "h1 B: <Up> in the replay skips the replayed :4");
+    }
+    {
+        // map の右辺だけで確定した行は足さない。打った `<CR>` で確定した行は足す。
+        Editing editing;
+        open_vim_document(editing, std::string(five));
+        EditorController &controller = editing.controller();
+        static_cast<void>(run_ex(controller, "nnoremap Z :3<CR>"));
+        static_cast<void>(run_ex(controller, "nnoremap Y :4"));
+        vim_replay(controller, ":5<CR>1GZ");
+        expect(caret_at(controller.frame(), 3, 1), "the mapped :3 ran");
+        vim_replay(controller, ":<Up><CR>");
+        expect(caret_at(controller.frame(), 5, 1),
+               "a : line of a right side only is not remembered");
+        vim_replay(controller, "Y<CR>1G:<Up><CR>");
+        expect(caret_at(controller.frame(), 4, 1),
+               "a mapped : line with a typed <CR> is remembered");
+    }
+    {
+        // :normal!（press_vim_keys）の `:` の行は足さない。
+        Editing editing;
+        open_vim_document(editing, std::string(five));
+        EditorController &controller = editing.controller();
+        vim_replay(controller, ":2<CR>");
+        vim_normal(controller, ":5<CR>");
+        vim_replay(controller, "1G:<Up><CR>");
+        expect(caret_at(controller.frame(), 2, 1), "a : line of :normal! is not remembered");
+    }
+    {
+        // 検索の行は再生でも足す（`@s` の `/l4` を打った `/<Up>` が引く）。
+        Editing editing;
+        open_vim_document(editing, std::string(five));
+        EditorController &controller = editing.controller();
+        applied(controller, stored_text('s', "/l4<CR>"));
+        vim_replay(controller, "@s1G/<Up><CR>");
+        expect(caret_at(controller.frame(), 4, 1), "a replayed search line is remembered");
+    }
+}
+
+// F1 の一覧と保存の形の一覧が開いている `:` の行を閉じるのは打った Esc ではないので、録画に
+// `<Esc>` を積まない（#1528 のレビュー L2）。積むと `@a` の `<Esc>` が行を実行してしまう。
+void verify_macro_list_closes_ex_line_unrecorded()
+{
+    using nenenib::application::CancelCommand;
+    using nenenib::application::OpenDocumentFormatList;
+    using nenenib::application::OpenOperationList;
+    Editing editing;
+    open_vim_document(editing, "abc\ndef\nghi");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "qa:3");
+    applied(controller, OpenOperationList{});
+    applied(controller, CancelCommand{});
+    vim_replay(controller, ":2");
+    applied(controller, OpenDocumentFormatList{nenenib::core::DocumentFormatKind::encoding});
+    applied(controller, CancelCommand{});
+    vim_replay(controller, "xq");
+    expect(named_register(controller.vim_state(), U'a').text == ":3:2x",
+           "a list that closes the : line records no <Esc>");
+    expect(whole_vim_body(controller) == "bc\ndef\nghi", "the x ran on line 1 while recording");
 }
 
 // 再生の中の `q` は何もせず次の鍵も待たない（Vim の「レジスタ実行中は q は無効」）。
@@ -1347,6 +1542,11 @@ void verify_vim_macro_contracts()
     verify_macro_escape_cancels();
     verify_macro_empty_registers();
     verify_macro_records_typed_keys_only();
+    verify_macro_records_ex_line();
+    verify_macro_records_visual_ex_line();
+    verify_macro_replays_ex_line();
+    verify_macro_replay_keeps_ex_history();
+    verify_macro_list_closes_ex_line_unrecorded();
     verify_macro_q_inside_replay();
     verify_macro_failure_stops_the_rest();
     verify_macro_records_failed_replace();
@@ -1391,7 +1591,8 @@ void verify_vim_macro_scope()
         // viewport-ctrl-e-・#1325 の del-key-・#1337 の dot-register-count-・#1341 の
         // huge-count-macro-・#1369 の prefix-escape-・#1363 の viewport-insert-follow-replay-・
         // #1448 の mark-insert-left-・#1440 の change-mark-macro-・#1517 の insert-ctrl-o-）。
-        // 名前で守るのは逆の向き: macro- の fixture は必ず macro 欄を持つ（#1324）。
+        // macro- には #1528 の macro-ex- を含む。名前で守るのは逆の向き: macro- の fixture は必ず
+        // macro 欄を持つ（#1324）。
         named &= !fixture.name.starts_with("macro-") || fixture.macro.has_value();
         if (macro_fixture(fixture))
         {
@@ -1399,7 +1600,7 @@ void verify_vim_macro_scope()
             ++selected;
         }
     }
-    expect(selected == 187, "the scope replays the 42 macro, 108 register and 37 other "
+    expect(selected == 196, "the scope replays the 51 macro, 108 register and 37 other "
                             "fixtures with a macro register");
     expect(named, "every macro- fixture carries a macro register");
     verify_vim_macro_contracts();
