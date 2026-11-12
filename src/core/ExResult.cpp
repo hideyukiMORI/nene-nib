@@ -18,16 +18,19 @@
 #include "LanguageTable.hpp"
 #include "Offset.hpp"
 #include "Utf8.hpp"
+#include "VimSearchHighlight.hpp"
 
 #include <algorithm>
 #include <array>
 #include <charconv>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <optional>
 #include <span>
 #include <string>
 #include <system_error>
+#include <tuple>
 #include <utility>
 
 namespace nenenib::core
@@ -771,8 +774,154 @@ constexpr std::array<std::string_view, 6> window_setting_names{"wrap",     "rela
     return result;
 }
 
+// 真偽の option の今の値を読む関数（設定の正本の欄か、設定に載せない Vim の状態から）。
+using SwitchReader = bool (*)(const EditorSettings &, const ExWindowState &) noexcept;
+// 表の 1 行: 長い名前・Vim の短い名前（無ければ空）・今の値。
+using SwitchOption = std::tuple<std::string_view, std::string_view, SwitchReader>;
+
+// `:set` の真偽の option（長い名前と Vim の短い名前・#1525）。`{name}!` `no{name}!` `inv{name}` の
+// 反転と `{name}&` の既定値はこの表の 1 か所から引く（名前と値を同じ行に置く・レビュー L3）。
+// hlsearch と incsearch の値は設定に無い Vim の状態（ExWindowState）から読む（レビュー L4）。
+constexpr std::array<SwitchOption, 10> switch_options{{
+    {"wrap", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.wrapping == LineWrapping::wrap; }},
+    {"guide", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.guide == GuideVisibility::shown; }},
+    {"ignorecase", "ic", [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.ignorecase; }},
+    {"smartcase", "scs", [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.smartcase; }},
+    {"relativenumber", "rnu", [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.relativenumber; }},
+    {minimap_feature, "", [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return minimap_shown(settings); }},
+    {"explorer", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.explorer; }},
+    {"lsp", "",
+     [](const EditorSettings &settings, const ExWindowState &) noexcept { return settings.lsp; }},
+    // `:noh` の後（suspended）も 'hlsearch' は立っている（Vim の no_hlsearch は別の旗）。
+    {"hlsearch", "hls", [](const EditorSettings &, const ExWindowState &window) noexcept
+     { return window.highlight != VimSearchHighlight::off; }},
+    {"incsearch", "is",
+     [](const EditorSettings &, const ExWindowState &window) noexcept { return window.incsearch; }},
+}};
+
+// 表の真偽の option の行。表に無ければ空。
+[[nodiscard]] std::optional<SwitchOption> switch_named(std::string_view name) noexcept
+{
+    for (const auto &option : switch_options)
+    {
+        const auto &[long_name, short_name, reader] = option;
+        if (name == long_name || (!short_name.empty() && name == short_name))
+        {
+            return option;
+        }
+    }
+    return std::nullopt;
+}
+
+// 表の行の長い名前の `name` か `noname`（今の読みの形）。
+[[nodiscard]] std::string switch_text(const SwitchOption &option, bool on)
+{
+    const std::string name(std::get<0>(option));
+    return on ? name : "no" + name;
+}
+
+// 表の行の今の値。
+[[nodiscard]] bool switch_value(const SwitchOption &option, const EditorSettings &settings,
+                                const ExWindowState &window) noexcept
+{
+    return std::get<2>(option)(settings, window);
+}
+
+// `{name}!` `no{name}!` `inv{name}` を `name` か `noname` へ（Vim 9.1 の実測: 真偽の option は
+// 反転する。数の option の `!` は E488、`inv` は E474、`invno{name}` は E518 で、どれも表に当たら
+// ないので後の読みが unknown_option で断る）。
+[[nodiscard]] std::optional<std::string>
+toggled_text(std::string_view option, const EditorSettings &settings, const ExWindowState &window)
+{
+    std::string_view name;
+    if (option.ends_with('!'))
+    {
+        name = option.substr(0, option.size() - 1);
+        if (!switch_named(name).has_value() && name.starts_with("no"))
+        {
+            name.remove_prefix(2);
+        }
+    }
+    else if (option.starts_with("inv"))
+    {
+        name = option.substr(3);
+    }
+    const auto found = switch_named(name);
+    if (!found.has_value())
+    {
+        return std::nullopt;
+    }
+    return switch_text(found.value(), !switch_value(found.value(), settings, window));
+}
+
+// 既定値へ戻す接尾辞（Vim 9.1 の実測: `&` `&vim` `&vi` はどれも既定値へ戻す）。
+constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
+
+// 字の大きさの 10 進（小数 1 桁まで・FontSize::parse が読める形）。core は libm を呼ばないので
+// 0.1 pt の整数で丸める。
+[[nodiscard]] std::string points_text(FontSize size)
+{
+    const auto tenths = static_cast<std::int64_t>((size.points() * 10.0F) + 0.5F);
+    std::string text = std::to_string(tenths / 10);
+    if (tenths % 10 != 0)
+    {
+        text += "." + std::to_string(tenths % 10);
+    }
+    return text;
+}
+
+// `{name}&`（`&vim` `&vi`）を既定値の書き方へ（#1525）。既定値は保存する設定の正本
+// default_editor_settings と、Vim の状態の既定（ExWindowState の初期値・クリップボード）。文書の
+// 値（filetype・fileencoding・fileformat・display）は受けない（後の読みが unknown_option で断る）。
+[[nodiscard]] std::optional<std::string> reset_text(std::string_view option)
+{
+    const auto suffix = std::ranges::find_if(default_suffixes, [option](std::string_view value)
+                                             { return option.ends_with(value); });
+    if (suffix == default_suffixes.end())
+    {
+        return std::nullopt;
+    }
+    const std::string_view name = option.substr(0, option.size() - suffix->size());
+    const EditorSettings defaults = default_editor_settings();
+    const auto switched = switch_named(name);
+    if (switched.has_value())
+    {
+        return switch_text(switched.value(), switch_value(switched.value(), defaults,
+                                                          ExWindowState{Appearance::dark}));
+    }
+    if (std::ranges::find(scrolloff_names, name) != scrolloff_names.end())
+    {
+        return std::string(scrolloff_names.front()) + "=" + std::to_string(defaults.scrolloff);
+    }
+    if (name == "clipboard")
+    {
+        return std::string("clipboard=");
+    }
+    if (name == "root" && !defaults.root.has_value())
+    {
+        return std::string("root=");
+    }
+    if (name == "fontsize")
+    {
+        return "fontsize=" + points_text(defaults.font_size);
+    }
+    if (name == "guifont")
+    {
+        return "guifont=" + std::string(defaults.font_family.text()) + ":h" +
+               points_text(defaults.font_size);
+    }
+    return std::nullopt;
+}
+
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
-set_option(std::string_view option, const EditorSettings &settings)
+read_set_option(std::string_view option, const EditorSettings &settings)
 {
     auto view = view_option(option, settings);
     if (view.has_value())
@@ -820,6 +969,23 @@ set_option(std::string_view option, const EditorSettings &settings)
     }
     return unsaved_option(option);
 }
+
+// 反転と既定値の書き方を今の読みの形へ 1 段だけ写してから読む（#1525）。写した形は `&` `!`
+// `inv` を持たない。
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
+set_option(std::string_view option, const EditorSettings &settings, const ExWindowState &window)
+{
+    const auto rewritten =
+        toggled_text(option, settings, window).or_else([option] { return reset_text(option); });
+    // 窓の決め直し（#1524）は書き換えた後の形で見る（`so&` `hls!` `invwrap` も値を置く・Vim の
+    // do_set は反転と既定値でも check_redraw を通る）。
+    const std::string_view read =
+        rewritten.has_value() ? std::string_view{rewritten.value()} : option;
+    return read_set_option(read, settings)
+        .transform([read](ExResult result)
+                   { return with_window_recheck(std::move(result), read); });
+}
+
 // 命令の名前の省略は Vim 9.1 のとおり「最短の形から完全な形までの前方一致」の 1 つ。タブ・一覧・
 // 保存と終了の表と `:nohlsearch` が同じ判定を使う（Issue #501）。
 [[nodiscard]] bool abbreviates(std::string_view input, std::string_view name,
@@ -1282,8 +1448,8 @@ constexpr std::array<ExCommandParser, 10> command_parsers{
 
 // 範囲のない 1 命令（`colorscheme` `set` と表の命令）。範囲の後ろの命令もここを通す。
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
-unranged_command(std::string_view text, const EditorSettings &settings,
-                 Appearance system_appearance, const ThemeCatalog &themes)
+unranged_command(std::string_view text, const EditorSettings &settings, const ExWindowState &window,
+                 const ThemeCatalog &themes)
 {
     const auto space = text.find(' ');
     const auto name = text.substr(0, space);
@@ -1291,13 +1457,11 @@ unranged_command(std::string_view text, const EditorSettings &settings,
         space == std::string_view::npos ? std::string_view{} : trimmed(text.substr(space + 1));
     if (name == "colorscheme")
     {
-        return colorscheme(argument, settings, system_appearance, themes);
+        return colorscheme(argument, settings, window.system_appearance, themes);
     }
     if (name == "set")
     {
-        return set_option(argument, settings)
-            .transform([argument](ExResult result)
-                       { return with_window_recheck(std::move(result), argument); });
+        return set_option(argument, settings, window);
     }
     return remaining_command(text);
 }
@@ -1413,7 +1577,7 @@ constexpr std::string_view relative_range = ".,.+";
 // 範囲の後ろの命令は範囲なしで評価し、失敗ならその失敗、範囲を取らない命令なら
 // no_range_allowed、ほかは Nib がまだ範囲つきの形を持たないので unsupported_argument。
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
-ranged_command(std::string_view text, const EditorSettings &settings, Appearance system_appearance,
+ranged_command(std::string_view text, const EditorSettings &settings, const ExWindowState &window,
                const ThemeCatalog &themes)
 {
     const std::size_t range = range_length(text);
@@ -1426,7 +1590,7 @@ ranged_command(std::string_view text, const EditorSettings &settings, Appearance
     {
         return range_only(text);
     }
-    const auto evaluated = unranged_command(command, settings, system_appearance, themes);
+    const auto evaluated = unranged_command(command, settings, window, themes);
     if (!evaluated)
     {
         return std::unexpected(evaluated.error());
@@ -1635,6 +1799,14 @@ std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
                                                          Appearance system_appearance,
                                                          const ThemeCatalog &themes)
 {
+    return evaluate_ex(text, settings, ExWindowState{system_appearance}, themes);
+}
+
+std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
+                                                         const EditorSettings &settings,
+                                                         const ExWindowState &window,
+                                                         const ThemeCatalog &themes)
+{
     if (text.size() > DisplayText::maximum_bytes)
     {
         return std::unexpected(ExFailure::too_long);
@@ -1648,11 +1820,11 @@ std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
         return std::unexpected(ExFailure::unknown_command);
     }
     text = trimmed(text);
-    if (auto ranged = ranged_command(text, settings, system_appearance, themes))
+    if (auto ranged = ranged_command(text, settings, window, themes))
     {
         return std::move(ranged).value();
     }
-    return unranged_command(text, settings, system_appearance, themes);
+    return unranged_command(text, settings, window, themes);
 }
 
 std::vector<std::string> ex_command_candidates(const ThemeCatalog &themes)
