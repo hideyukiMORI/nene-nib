@@ -230,3 +230,5 @@ Issue #413 / ADR 0115。ベータ番号だけを指定し、数値版はCMakeか
 公開は squash 統合後の clean な `main` から同じコマンドで作り直し、短い実機起動を確認してから
 `v<version>` の tag と同名 Release へ配布物と `SHA256SUMS` を添付する。公開後に再ダウンロードして照合する。
 署名・インストーラ・自動更新は別の焦点 Issue とする。
+
+Microsoft Store へ出す MSIX は、同じ Release の exe を `pwsh -NoProfile -File eng/package-msix.ps1 -OutputDirectory <新しいディレクトリ> -Zip <上の ZIP> -Store` で包む（Issue #1581・ADR 0186）。版は `project()` の `x.y.z.0` で、`-Store` は先頭が 0 の版を断る。署名・導入・WACK・申請はしない。手順と hide の手でやることは [docs/store/msix.md](store/msix.md)。
