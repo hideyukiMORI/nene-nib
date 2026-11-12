@@ -5,6 +5,7 @@
   "eng/probes/language.json": ["eng/measure-language.ps1"],
   "eng/architecture.json": ["eng/targets.cmake", "eng/conformance.py", "eng/symbols.py", "eng/coverage.py"],
   "eng/symbol-allowlist.json": ["eng/symbols.py"],
+  "eng/app-icon.json": ["eng/render-app-icon.py"],
   "eng/coverage-policy.json": ["eng/coverage.py"],
   "eng/conformance-rules.json": ["eng/conformance.py"],
   "eng/sdk-abi-signatures.json": ["eng/conformance.py"],

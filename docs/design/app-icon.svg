@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>NeNe Nib application icon (A-best)</title>
+  <desc>Cream fountain-pen nib with breather hole and slit on an aubergine rounded tile; an orange ink line under the tip.</desc>
+  <clipPath id="tile"><rect width="256" height="256" rx="24"/></clipPath>
+  <g clip-path="url(#tile)">
+    <rect width="256" height="256" fill="#461136"/>
+  </g>
+  <path fill="#F5F2EB" fill-rule="evenodd" d="M97.12 30 H158.88 Q166.88 30 166.88 38 V60.8 L182 75.92 V86 C182 115.4 136.64 154.6 128 184 C119.36 154.6 74 115.4 74 86 V75.92 L89.12 60.8 V38 Q89.12 30 97.12 30 Z M121.5 120.79 A18 18 0 1 1 134.5 120.79 V168 H121.5 Z"/>
+  <rect x="72" y="194" width="112" height="27.5" rx="13.75" fill="#E95420"/>
+</svg>
