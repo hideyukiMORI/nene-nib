@@ -46,7 +46,7 @@ constexpr char32_t tab_character = 0x09;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 81> normal_bindings{
+constexpr std::array<VimBinding, 82> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {line_feed, VimAction::move_down},
@@ -127,7 +127,8 @@ constexpr std::array<VimBinding, 81> normal_bindings{
      {U'[', VimAction::prefix_bracket},
      {U']', VimAction::prefix_bracket},
      {U's', VimAction::substitute},
-     {U'R', VimAction::replace_mode}}};
+     {U'R', VimAction::replace_mode},
+     {U'&', VimAction::repeat_substitute}}};
 
 // 動作 → 大分類の表（CPP-012 / ADR 0006）。NORMAL と VISUAL の写し先はこの分類で分かれる。
 // 行の欠落と重複は下の static_assert で落ちる（動作を足したら、この表に行を足すまで通らない）。
@@ -171,6 +172,8 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::remove_character_before, VimActionGroup::edit_line},
      {VimAction::substitute, VimActionGroup::edit_line},
      {VimAction::replace_mode, VimActionGroup::edit_line},
+     {VimAction::repeat_substitute, VimActionGroup::substitute},
+     {VimAction::repeat_substitute_all, VimActionGroup::substitute},
      {VimAction::insert_before, VimActionGroup::insert_object},
      {VimAction::insert_after, VimActionGroup::insert_object},
      {VimAction::insert_at_line_start, VimActionGroup::insert_line},
@@ -310,7 +313,7 @@ constexpr std::array<VimMotionBinding, 41> motion_bindings{
 // ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10・14 / #1039 の gv gi / ADR 0152 の追補 #1037 /
 // ADR 0028 の追補 #1032 の gI）。
 // ここに無い鍵は g を打ち消す。
-constexpr std::array<VimBinding, 24> g_bindings{
+constexpr std::array<VimBinding, 25> g_bindings{
     {{U'g', VimAction::move_document_first},
      {U'e', VimAction::move_previous_word_end},
      {U'E', VimAction::move_previous_big_word_end},
@@ -334,7 +337,8 @@ constexpr std::array<VimBinding, 24> g_bindings{
      {control_a_character, VimAction::increment_sequence},
      {control_x_character, VimAction::decrement_sequence},
      {U';', VimAction::change_older},
-     {U',', VimAction::change_newer}}};
+     {U',', VimAction::change_newer},
+     {U'&', VimAction::repeat_substitute_all}}};
 
 // 保留を立てる鍵 → オペレータ（ADR 0015 の決定 1・10・11）。同じ行の鍵を保留の後ろで押すと
 // 行単位（dd g~g~ >>）。

@@ -3,6 +3,7 @@
 #include "Offset.hpp"
 #include "Utf8.hpp"
 
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -51,6 +52,20 @@ constexpr std::string_view not_found_alone = "E486: Pattern not found";
 {
     return DisplayText::parse(text).value_or(DisplayText::parse(not_found_alone).value());
 }
+
+// `:s` の数の報せ（Vim の do_sub_msg の文言）。count_only なら match、ほかは substitution。
+[[nodiscard]] DisplayText counted_message(const VimSearchNotice &notice, bool count_only)
+{
+    std::string text = std::to_string(notice.count);
+    const std::string_view noun = count_only ? " match" : " substitution";
+    text += noun;
+    if (notice.count != 1)
+    {
+        text += count_only ? "es" : "s";
+    }
+    text += " on " + std::to_string(notice.lines) + (notice.lines == 1 ? " line" : " lines");
+    return message_of(text);
+}
 } // namespace
 
 DisplayText vim_search_message(const VimSearchNotice &notice)
@@ -69,6 +84,18 @@ DisplayText vim_search_message(const VimSearchNotice &notice)
         return message_of("search hit TOP, continuing at BOTTOM");
     case VimSearchNoticeKind::unsupported_pattern:
         return message_of(unsupported_text(notice.failure.value_or(VimPatternFailure::escape)));
+    case VimSearchNoticeKind::substitutions:
+        return counted_message(notice, false);
+    case VimSearchNoticeKind::matches:
+        return counted_message(notice, true);
+    case VimSearchNoticeKind::no_previous_substitute:
+        return message_of("E33: No previous substitute regular expression");
+    case VimSearchNoticeKind::invalid_range:
+        return message_of("E16: Invalid range");
+    case VimSearchNoticeKind::mark_not_set:
+        return message_of("E20: Mark not set");
+    case VimSearchNoticeKind::backwards_range:
+        return message_of("E493: Backwards range given");
     }
     std::unreachable();
 }

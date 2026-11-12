@@ -19,9 +19,11 @@
 #include "VimRepeatRecord.hpp"
 #include "VimSearchHighlight.hpp"
 #include "VimSearchSnapshot.hpp"
+#include "VimSubstituteMemory.hpp"
 #include "VimWantedColumn.hpp"
 
 #include <cstddef>
+#include <memory>
 #include <optional>
 #include <utility>
 
@@ -103,6 +105,10 @@ struct VimState
     // 文字単位と行単位の VISUAL の `A` が読む。書くのは VISUAL のオペレータの 1 か所
     // （visual_operation_noted）で、鍵を食べ終わっても（vim_resting_from）残す。
     VimOperatorColumns operator_columns{};
+    // 前の置換（`:s` の族・ADR 0168 の決定 1〜3）。直前の検索と同じく窓に 1
+    // つで、鍵を食べ終わっても （vim_resting_from でも）保つ。書くのは vim_substituted の 1
+    // か所。打鍵ごとの写しを軽くする ため不変の値を共有する。
+    std::shared_ptr<const VimSubstituteMemory> last_substitute = nullptr;
 };
 
 // 鍵を 1 つ食べ終わったあとの NORMAL。回数・オペレータ・欲しい列は空で、無名レジスタだけ残る。
@@ -158,6 +164,7 @@ struct VimState
     next.macro_recording = state.macro_recording;
     next.last_macro = state.last_macro;
     next.operator_columns = state.operator_columns;
+    next.last_substitute = state.last_substitute;
     return next;
 }
 

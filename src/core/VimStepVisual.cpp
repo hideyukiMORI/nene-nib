@@ -616,6 +616,7 @@ namespace
     case VimActionGroup::screen_alignment:
     case VimActionGroup::jump_list:
     case VimActionGroup::ex_line:
+    case VimActionGroup::substitute:
         return false;
     }
     std::unreachable();
@@ -676,6 +677,11 @@ namespace
         return visual_edit_line(state, view, action);
     case VimActionGroup::ex_line:
         return visual_command_line(state, view);
+    // VISUAL の `g&` は NORMAL と同じ `:%s//~/&`、`&` は鳴らすだけ（実測）。
+    case VimActionGroup::substitute:
+        return action == VimAction::repeat_substitute_all
+                   ? detail::substitute_action(state, view, action)
+                   : failed(visual_unchanged(state), VimRepeatFailure::refused);
     }
     std::unreachable();
 }

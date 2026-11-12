@@ -845,8 +845,11 @@ namespace
         const std::size_t count = state.count.value().value;
         range = count > 1 ? ".,.+" + std::to_string(count - 1) : std::string{"."};
     }
-    return VimStep{vim_resting_from(state, state.unnamed_register),
-                   VimOpenCommandLine{std::move(range)}};
+    // 欲しい列は入力行の確定の後も残す（Vim の curswant・`$` の後の `:s` は行末に着く・ADR 0168 の
+    // 追補 8）。入力行の取消は vim_cancelled_input が捨てる。
+    VimState next = vim_resting_from(state, state.unnamed_register);
+    next.wanted_column = state.wanted_column;
+    return VimStep{std::move(next), VimOpenCommandLine{std::move(range)}};
 }
 
 [[nodiscard]] VimStep appended_insert(const VimState &state, const VimEditorView &view)
@@ -1345,6 +1348,8 @@ namespace
         return numbered(state, view, action);
     case VimActionGroup::jump_list:
         return jump_list_action(state, view, action);
+    case VimActionGroup::substitute:
+        return detail::substitute_action(state, view, action);
     }
     std::unreachable();
 }

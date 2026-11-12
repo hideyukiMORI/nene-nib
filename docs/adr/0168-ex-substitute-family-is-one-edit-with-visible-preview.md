@@ -41,3 +41,20 @@ Nib の Ex は設定・タブ・文書・窓の命令だけで、`:s` が無い�
 | 行ごとに `Edit` を積む | undo が行の数になる。Vim は 1 単位 |
 | 外部の正規表現（`std::regex` / PCRE） | `std::regex` は例外と遅さ・PCRE は外部。`VimPattern` に群を足す方が ADR 0032 の 1 本を保つ |
 | preview を別の窓（`inccommand=split`） | 2 枠の仕組みと衝突。見えている行の中だけで足りる |
+
+## 追補（2026-11-12・#1007 段 1・実装席）
+
+段 1（`:s` `:&` `:&&` `:~` と NORMAL の `&` `g&`）を、10-28 の後に入った木（ADR 0174 の置換の本体・#1376 の上限・#1547 の範囲つきの入力行・ADR 0181 の変更の印・ADR 0052 の `Edit.restore`）に寄せて実装した。Vim 9.1 の実測は `docs/quality/vim-substitute-2026-11-12.md`（163 形）で、fixture は `substitute-` の 157 件。
+
+1. **置換の本体は 1 本。** ADR 0174 の `substituted_all` を一般化した core の `substituted(text, pattern, replacement, SubstituteRequest{first, last, every, count_only, limit})`（`SubstituteAll.hpp`）が行ごとの編集（`VimBlockEdit`）を返し、通常モードの「すべて置換」は同じ本体の答えを 1 つの `Edit` に畳む（`substituted_all`・literal の置き換え）。第 2 の置換の経路は作らない。上限は #1376 と同じ（1 周目で数え、本文を作る前に `too_large`）。
+2. **行の当たりの順は Vim の `do_sub`。** 前の当たりの終わりから探し、前の当たりにぴったり続く長さ 0 の当たりは数えずに 1 文字進め、行の終わりで止める（`:s/x*/-/g` は `abc` を `-a-b-c`・実測）。通常モードの語は literal で長さ 0 にならないので答えは変わらない。`--substitute-property` の模型もこの規則に直した。
+3. **置き換えの本文は `SubstituteReplacement`。** 決定 3 の特殊のうち `\n` は Vim の実測どおり NUL のバイト（決定 3 の「改行として受けない」を NUL を入れる形に改める）、`\b` は BS、`\<CR>` は CR の文字、末尾の `\` は `\`。`\u` `\l` `\U` `\L` は VimCase の写像（`ß` はそのまま・`ǆ` は `Ǆ`・実測）。`~` は `vim_tilde_expanded`（Vim の regtilde）で前の広げた置き換えに解く。`\=` は断る。
+4. **群（決定 4）。** 群は原子の列に入れず `VimPatternGroup` の列で持つので、既存の照合の答えは変わらない（契約で固定）。群の範囲は置き換えが `\1`〜`\9` を読むときだけ `VimPattern::captured`（`VimPatternCapture`・照合器と同じ優先順の道を 1 本・試した所の印で 2 度試さない）で引く。印が 64 Mi を超える一致は群を空で返す（限界）。`\(` の直後の `*` は文字・`^` は錨、`\)` の直前の `$` は錨、群の繰り返し `\(ab\)*` と 10 個目の群は断る。
+5. **範囲は `parsed_ex_range` の 1 本。** #1547 の `range_length` もここから長さを取る。行に解くのは engine（`resolved_lines`）: 本文の外は E16、マークが無ければ E20、逆向きは E493（Vim の `:normal` の中の答え）、0 行目は 1 行目。`;` の後ろは前の番地から数える。
+6. **engine の入口は `vim_substituted` の 1 本。** controller は Ex の答えの `substitute` を `VimStepSource` に入れて `:N` と同じ写しの道で流す（E486 などの失敗は #1547 と同じく再生を打ち切る）。`&` は回数つきなら `:.,.+(N-1)s`、`g&` は `:%s//~/&` を同じ入口へ。`&` `g&` は `.` の記録に積まない（`x&j.` は `x`・実測）。VISUAL の `&` は鳴らすだけ、`g&` は NORMAL と同じ（実測）。オペレータの後ろの `&` は失敗。
+7. **効果は `VimReplaceBlock`（行ごとの編集）。** controller の `apply_block` が 1 つの置き換えに畳む（undo 1 単位は決定 5 のまま）。行の間の本文は文書のバイトのまま写し、置き換えの改行だけを文書の改行（CRLF）に直す。`\r` を含む置き換えでも下の行のマークは行のずれで動き、同じ行のマークは動かない（実測）。
+8. **キャレットと undo の戻り先。** キャレットは最後に置き換えた行（置き換えが入れた改行の後ろ）の最初の非空白、空白だけの行は最後の文字（Vim の `beginline(BL_WHITE | BL_FIX)`）。`$` の後の繰り返し（`:s` `&` `:&` `:~`）は行末（Vim の endcolumn）。**`restore` は決定 5 の「`:` を打ったときのキャレット」ではなく、最初に置き換えた行の頭**（Vim の u_savesub の uh_cursor・`u` と Ctrl-r は (2,1) に着く・実測）。`''` は置換の前のキャレット（実測）。ADR 0181 の印は `changed`。`'[` `']` は Nib に無いので置かない。
+9. **前の置換と直前の検索。** 打った置き換え・広げた置き換え・フラグ・置換のパターン（Vim の old_sub・reg_prev_sub・subflags・RE_SUBST）は `VimState.last_substitute`（不変の値を `shared_ptr` で共有）。置換のパターンは直前の検索（RE_LAST・`n` が探す）にもなり、向きは前の検索のまま、`:nohlsearch` で止めた強調を戻す。空の pat・`:~`・`r` は直前の検索、`:s` `:&` `&` は置換のパターン。前の置換が要る形で無ければ E33、パターンが無ければ E35。
+10. **報せ。** 置き換えは 3 つ以上のときだけ `N substitutions on M lines`（Vim の 'report' の既定 2）、`n` はいつも `N matches on M lines`（`VimSearchNotice` の文の 1 か所）。`e` は当たりが無くても何もしない。
+11. **段 1 で断る形（閉じた失敗・1 行の知らせ）。** `c`（段 2・決定 6）と `p` `#` `l`（決定 10）のフラグ、`\=`、`\/` `\?` `\&` の区切り、ASCII の外の区切り。照合器が受けない構文（`\n` の行またぎ `:%s/\n//`・`\|`・`\{}`・パターンの `~`・`[/]` の中の区切り）は「Unsupported pattern」の報せ。
+12. **速さ。** 置換を使わない打鍵の道は、`.` の記録が変更の鍵を確定するときの `&` の判定 1 つ（`changes_text` が真のときだけ）と、`VimState` の写しの `shared_ptr` 1 つ（置換を使う前は空）だけ。入力中の preview（決定 7）は段 2。10 万行の `:%s/a/b/g` は `nib_perf_probes` の probe に記録した。

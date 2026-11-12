@@ -17,6 +17,7 @@
 #include "ExPrintRequest.hpp"
 #include "ExRelativeLineRequest.hpp"
 #include "ExRootRequest.hpp"
+#include "ExSubstituteRequest.hpp"
 #include "ExSyntaxRequest.hpp"
 #include "ExTabRequest.hpp"
 #include "ExWindowCommand.hpp"
@@ -60,6 +61,8 @@ inline constexpr std::string_view guifont_command = "set guifont=";
 // print は `:hardcopy` の印刷の要求（ADR 0177 の決定 1）で、port を呼ぶのは controller。
 // relative_line は範囲だけの `:.` `:.,.+N` `:'<,'>`（ADR 0022 の追補 #1526）で、キャレットの行から
 // 着地を決めるのは controller。
+// substitute は `:s` の族の 1 命令（ADR 0168 の決定 1）で、範囲を解いて本文を置き換えるのは engine
+// の vim_substituted（controller は鍵と同じ写しの道で結果を写す）。
 struct ExResult
 {
     std::optional<EditorSettings> settings;
@@ -82,6 +85,7 @@ struct ExResult
     std::optional<ExPreviewRequest> preview = std::nullopt;
     std::optional<ExPrintRequest> print = std::nullopt;
     std::optional<ExRelativeLineRequest> relative_line = std::nullopt;
+    std::optional<ExSubstituteRequest> substitute = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>

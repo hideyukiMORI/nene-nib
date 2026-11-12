@@ -186,10 +186,17 @@ enum class VimAction : std::uint8_t
     // 種類のまま・`R` は行単位へ読み替え）。NORMAL の `s`（`cl`）と REPLACE モードの `R`
     // は未実装で、表に無い鍵と同じに打ち消す。
     substitute,
-    replace_mode
+    replace_mode,
+    // NORMAL の `&`（`:s` の繰り返し・回数は `:.,.+(N-1)s`）と `g&`（`:%s//~/&`）。Ex の `:s` と
+    // 同じ vim_substituted の 1 本へ流す（ADR 0168 の決定 1）。`.` の記録には積まない（Vim の
+    // nv_optrans と nv_g_cmd は redo を書かない・実測）。VISUAL の `&` は失敗、`g&` は NORMAL
+    // と同じ。
+    repeat_substitute,
+    repeat_substitute_all
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::replace_mode) + 1;
+constexpr std::size_t vim_action_count =
+    static_cast<std::size_t>(VimAction::repeat_substitute_all) + 1;
 } // namespace nenenib::core

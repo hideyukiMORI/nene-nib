@@ -448,6 +448,12 @@ std::optional<core::VimRepeatFailure> EditorController::evaluate_command(std::st
         reject(core::ex_failure_message(result.error(), text));
         return core::VimRepeatFailure::refused;
     }
+    // `:s` の族は engine の 1 歩（ADR 0168 の決定 1）。E486 などの失敗は再生を打ち切る。
+    const auto &substitute = result.value().substitute;
+    if (substitute.has_value())
+    {
+        return stepped_vim(VimStepSource{substitute.value()});
+    }
     if (ran_ex_request(result.value()))
     {
         return std::nullopt;

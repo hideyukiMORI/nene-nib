@@ -24,6 +24,7 @@
 #include "SearchSnapshotProbe.hpp"
 #include "SearchSpanProbe.hpp"
 #include "StatusItemsProbe.hpp"
+#include "SubstituteProbe.hpp"
 #include "TabDisplayProbe.hpp"
 #include "TextObjectProbe.hpp"
 #include "VimBlockProbe.hpp"
@@ -988,6 +989,17 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(SubstituteWorkload workload)
+{
+    switch (workload)
+    {
+    case SubstituteWorkload::all_lines_100k:
+    case SubstituteWorkload::no_match_100k:
+        return 236U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -1003,7 +1015,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 236> dispatches{{
+constexpr std::array<ProbeDispatch, 238> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1482,6 +1494,10 @@ constexpr std::array<ProbeDispatch, 236> dispatches{{
                      edited_history_input, edited_history_keys},
     ProbeDispatchRow{EditedHistoryWorkload::erases_after_16000, "vim-x-after-16000-edits",
                      edited_history_input, edited_history_keys},
+    ProbeDispatchRow{SubstituteWorkload::all_lines_100k, "vim-substitute-percent-g-100k-lines",
+                     substitute_input, substitute_lines},
+    ProbeDispatchRow{SubstituteWorkload::no_match_100k, "vim-substitute-no-match-100k-lines",
+                     substitute_input, substitute_lines},
 }};
 
 constexpr auto dispatch_names = []
@@ -1524,7 +1540,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 236U);
+static_assert(dispatches.size() == 238U);
 static_assert(dispatch_is_complete());
 
 } // namespace

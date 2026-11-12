@@ -18,6 +18,7 @@
 #include "SearchSnapshotWorkload.hpp"
 #include "SearchSpanWorkload.hpp"
 #include "StatusItemsWorkload.hpp"
+#include "SubstituteWorkload.hpp"
 #include "TabDisplayWorkload.hpp"
 #include "TextObjectWorkload.hpp"
 #include "VimBlockWorkload.hpp"
@@ -33,8 +34,8 @@ using ProbeSelection =
                  CommandInputWorkload, ExCompletionWorkload, CompletionPrefixWorkload,
                  PaletteChoiceWorkload, OperationChoiceWorkload, SearchSpanWorkload,
                  TextObjectWorkload, MarkdownWorkload, NewlineIndexWorkload, LexerWorkload,
-                 ExplorerFrameWorkload, VimBlockWorkload, WordObjectWorkload,
-                 EditedHistoryWorkload>;
+                 ExplorerFrameWorkload, VimBlockWorkload, WordObjectWorkload, EditedHistoryWorkload,
+                 SubstituteWorkload>;
 
 [[nodiscard]] std::optional<ProbeSelection> workload_of(std::string_view name) noexcept;
 [[nodiscard]] std::string input_of(ProbeSelection workload);

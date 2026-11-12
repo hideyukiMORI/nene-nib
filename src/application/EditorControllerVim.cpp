@@ -230,7 +230,7 @@ constexpr std::string_view replay_limit_notice =
     "再生を 100,000 鍵で止めました（残りは捨てました）";
 static_assert(core::vim_replay_key_limit == 100000, "replay_limit_notice の数を上限に合わせる");
 // engine を呼ぶ 1 か所の写し（Issue #1023）。鍵は vim_step・`:N` の行は vim_line_jumped・押しの
-// VISUAL は vim_pointer_selected（#1250）。
+// VISUAL は vim_pointer_selected（#1250）・`:s` の族は vim_substituted（ADR 0168）。
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
                                         const core::VimEditorView &view, const core::VimKey &key)
 {
@@ -249,6 +249,13 @@ static_assert(core::vim_replay_key_limit == 100000, "replay_limit_notice の数�
                                         const PointerSelection &pointed)
 {
     return core::vim_pointer_selected(state, view, pointed.selection, pointed.mode);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
+                                        const core::ExSubstituteRequest &request)
+{
+    return core::vim_substituted(state, view, request);
 }
 
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,

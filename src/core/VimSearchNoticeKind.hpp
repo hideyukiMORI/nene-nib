@@ -19,6 +19,19 @@ enum class VimSearchNoticeKind : std::uint8_t
     // search hit TOP, continuing at BOTTOM
     wrapped_to_bottom,
     // 未対応の構文の拒否（Vim には無い報せ）
-    unsupported_pattern
+    unsupported_pattern,
+    // `:s` の族（ADR 0168 の決定 5）。N substitution(s) on M line(s)（置き換えが 3
+    // つ以上のときだけ・ Vim の 'report' の既定 2）と、`n` の N match(es) on M
+    // line(s)（いつも）。数は count と lines。
+    substitutions,
+    matches,
+    // E33: No previous substitute regular expression（前の置換が無い `:s` `:&` `&` `:~`）
+    no_previous_substitute,
+    // E16: Invalid range（範囲が本文の外・ADR 0168 の決定 1）
+    invalid_range,
+    // E20: Mark not set（範囲のマークが無い）
+    mark_not_set,
+    // E493: Backwards range given（範囲が逆向き・Vim の :normal の中の答え）
+    backwards_range
 };
 } // namespace nenenib::core

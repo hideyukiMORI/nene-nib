@@ -85,6 +85,11 @@ records in `docs/quality/`.
   - search `/ ? n N * #` with `hlsearch` and `incsearch` on by default (`:noh`, Ctrl-G / Ctrl-T while typing),
     `:set ignorecase` / `smartcase`, and Up / Down history on the `:` and search lines; matchparen highlights
     the partner bracket (on by default);
+  - substitute `:[range]s/pat/rep/[g i I n e &] [count]` (ranges `%` `N,M` `.` `$` `'<,'>` `'a,'b` `.,.+N`,
+    any non-letter delimiter, `&` `\0`-`\9` with `\( \)` groups, `~` `\r` `\u` `\U` `\l` `\L` `\e`),
+    `:&` `:&&` `:~` and NORMAL `&` `g&`, one undo step each
+    ([ADR 0168](docs/adr/0168-ex-substitute-family-is-one-edit-with-visible-preview.md)); the `c` flag,
+    the typing preview and `:g` `:v` `:sort` are planned;
   - marks `m{a-z}` with `'{a-z}` `` `{a-z} ``, `''` and `'.`
     ([ADR 0152](docs/adr/0152-vim-marks-are-document-values-adjusted-by-edits.md)), the jump list `Ctrl-o`
     `Ctrl-i` and the change list `g;` `g,` (in Vim mode Ctrl+O is the jump list, so opening a file is Ctrl+Shift+O);

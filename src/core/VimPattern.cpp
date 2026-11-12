@@ -6,7 +6,10 @@
 #include "VimCase.hpp"
 #include "VimCharacterBoundary.hpp"
 #include "VimPatternAtomKind.hpp"
+#include "VimPatternCapture.hpp"
 #include "VimPatternEvaluation.hpp"
+#include "VimPatternGroup.hpp"
+#include "VimPatternParse.hpp"
 #include "VimWordClass.hpp"
 #include "VimWordMotion.hpp"
 #include "VirtualColumn.hpp"
@@ -16,6 +19,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace nenenib::core
@@ -334,7 +338,11 @@ void appended_mark(char32_t code, std::vector<VimPatternAtom> &atoms,
     ++atoms.back().range_count;
 }
 
-// `^` は先頭でだけ錨、`$` は末尾でだけ錨、ほかはただの文字（ADR 0032 の決定 4 の追記）。
+// 群の閉じ `\)`。
+constexpr std::string_view group_close = "\\)";
+
+// `^` は先頭でだけ錨、`$` は末尾でだけ錨、ほかはただの文字（ADR 0032 の決定 4 の追記）。size は
+// `$` が錨になる位置（パターンの末尾か、`\)` の手前・ADR 0168 の決定 4）。
 [[nodiscard]] VimPatternAtom plain_atom(char32_t code, std::size_t at, std::size_t next,
                                         std::size_t size) noexcept
 {
@@ -385,8 +393,77 @@ parsed_item(std::string_view pattern, std::size_t at, std::vector<VimPatternAtom
             return set.value();
         }
     }
-    atoms.push_back(plain_atom(code, at, next, pattern.size()));
+    const bool closes = pattern.substr(next).starts_with(group_close);
+    atoms.push_back(plain_atom(code, at, next, closes ? next : pattern.size()));
     return next;
+}
+
+// 開いている群のうち最も内側（最後に開いた）の番号。
+[[nodiscard]] std::optional<std::size_t> innermost_open(const std::vector<VimPatternGroup> &groups)
+{
+    for (std::size_t index = groups.size(); index > 0; --index)
+    {
+        if (groups.at(index - 1).end == vim_pattern_group_open)
+        {
+            return index - 1;
+        }
+    }
+    return std::nullopt;
+}
+
+// 群の閉じ `\)`（at は `\` の位置）。対の無い閉じと、群の繰り返し（`\(ab\)*`・原子の繰り返しに
+// ならない）は拒否する。
+[[nodiscard]] std::expected<std::size_t, VimPatternFailure>
+closed_group(std::string_view pattern, std::size_t at, VimPatternParse &parse)
+{
+    const auto open = innermost_open(parse.groups);
+    if (!open.has_value())
+    {
+        return std::unexpected(VimPatternFailure::group);
+    }
+    parse.groups.at(open.value()).end = parse.atoms.size();
+    if (at + 2 < pattern.size() && pattern[at + 2] == '*')
+    {
+        return std::unexpected(VimPatternFailure::quantifier);
+    }
+    return at + 2;
+}
+
+// 群の開き `\(` と閉じ `\)` を読む（ADR 0168 の決定 4）。群の項目でなければ値なし、読めば次の
+// 位置。10 個目の群は拒否する。
+[[nodiscard]] std::optional<std::expected<std::size_t, VimPatternFailure>>
+parsed_group(std::string_view pattern, std::size_t at, VimPatternParse &parse)
+{
+    if (at + 1 >= pattern.size() || pattern[at] != '\\' ||
+        (pattern[at + 1] != '(' && pattern[at + 1] != ')'))
+    {
+        return std::nullopt;
+    }
+    if (pattern[at + 1] == ')')
+    {
+        return closed_group(pattern, at, parse);
+    }
+    if (parse.groups.size() == vim_pattern_group_limit)
+    {
+        return std::unexpected(VimPatternFailure::group);
+    }
+    parse.groups.push_back(VimPatternGroup{parse.atoms.size(), vim_pattern_group_open});
+    parse.opened = true;
+    return at + 2;
+}
+
+// `\(` の直後の `*`（文字）と `^`（錨）。Vim の magic と同じ（ADR 0168 の決定 4）。
+[[nodiscard]] std::optional<std::size_t> opened_item(std::string_view pattern, std::size_t at,
+                                                     VimPatternParse &parse)
+{
+    const bool opened = std::exchange(parse.opened, false);
+    if (!opened || (pattern[at] != '*' && pattern[at] != '^'))
+    {
+        return std::nullopt;
+    }
+    parse.atoms.push_back(pattern[at] == '*' ? literal_atom(U'*')
+                                             : atom_of(VimPatternAtomKind::line_start));
+    return at + 1;
 }
 
 // `smartcase` の「大文字がある」（Vim の pat_has_uppercase）。`\` とそれに続く 1 文字は数えない
@@ -453,11 +530,44 @@ parsed_item(std::string_view pattern, std::size_t at, std::vector<VimPatternAtom
     return code_point_at(pattern, Offset{at}) == U'\\' && next < pattern.size() &&
            code_point_at(pattern, Offset{next}) == separator_of(separator);
 }
+// 次の項目を parse に読み、次の位置を返す。区切りは offset として断る。
+[[nodiscard]] std::expected<std::size_t, VimPatternFailure>
+parsed_next(std::string_view pattern, std::size_t at, VimSearchDirection separator,
+            VimPatternParse &parse)
+{
+    if (code_point_at(pattern, Offset{at}) == separator_of(separator))
+    {
+        return std::unexpected(VimPatternFailure::offset);
+    }
+    if (escaped_separator(pattern, at, separator))
+    {
+        parse.opened = false;
+        parse.atoms.push_back(literal_atom(separator_of(separator)));
+        return at + 2;
+    }
+    if (case_escape(pattern, at))
+    {
+        forced_case(code_point_at(pattern, Offset{at + 1}), parse.forced);
+        return at + 2;
+    }
+    auto group = parsed_group(pattern, at, parse);
+    if (group.has_value())
+    {
+        return std::move(group).value();
+    }
+    const auto opened = opened_item(pattern, at, parse);
+    if (opened.has_value())
+    {
+        return opened.value();
+    }
+    return parsed_item(pattern, at, parse.atoms, parse.ranges);
+}
 } // namespace
 
 VimPattern::VimPattern(std::vector<VimPatternAtom> atoms, std::vector<VimPatternRange> ranges,
-                       bool ignore_case)
-    : atoms_(std::move(atoms)), ranges_(std::move(ranges)), ignore_case_(ignore_case)
+                       std::vector<VimPatternGroup> groups, bool ignore_case)
+    : atoms_(std::move(atoms)), ranges_(std::move(ranges)), groups_(std::move(groups)),
+      ignore_case_(ignore_case)
 {
 }
 
@@ -530,38 +640,25 @@ std::expected<VimPattern, VimPatternFailure> VimPattern::parse(std::string_view 
     {
         return std::unexpected(VimPatternFailure::invalid_utf8);
     }
-    std::vector<VimPatternAtom> atoms;
-    std::vector<VimPatternRange> ranges;
-    std::optional<VimPatternCase> forced;
+    VimPatternParse parse;
     std::size_t at = 0;
     while (at < pattern.size())
     {
-        if (code_point_at(pattern, Offset{at}) == separator_of(separator))
-        {
-            return std::unexpected(VimPatternFailure::offset);
-        }
-        if (escaped_separator(pattern, at, separator))
-        {
-            atoms.push_back(literal_atom(separator_of(separator)));
-            at += 2;
-            continue;
-        }
-        if (case_escape(pattern, at))
-        {
-            forced_case(code_point_at(pattern, Offset{at + 1}), forced);
-            at += 2;
-            continue;
-        }
-        const auto next = parsed_item(pattern, at, atoms, ranges);
+        const auto next = parsed_next(pattern, at, separator, parse);
         if (!next)
         {
             return std::unexpected(next.error());
         }
         at = next.value();
     }
-    marked_exact(atoms);
-    return VimPattern(std::move(atoms), std::move(ranges),
-                      ignores_case(letter_case, forced, pattern));
+    if (innermost_open(parse.groups).has_value())
+    {
+        return std::unexpected(VimPatternFailure::group);
+    }
+    marked_exact(parse.atoms);
+    const bool ignore_case = ignores_case(letter_case, parse.forced, pattern);
+    return VimPattern(std::move(parse.atoms), std::move(parse.ranges), std::move(parse.groups),
+                      ignore_case);
 }
 
 // 一致の終わりが文字の途中（本文の側にだけ結合文字が続く）なら一致にしない。Vim の NFA の
@@ -744,5 +841,33 @@ std::optional<VimPatternMatch> VimPattern::matched(std::string_view line, std::s
         at = next_code_point(line, Offset{at}).value;
     }
     return std::nullopt;
+}
+
+std::size_t VimPattern::group_count() const noexcept
+{
+    return groups_.size();
+}
+
+VimPatternCaptures VimPattern::captured(std::string_view line, VimPatternMatch match) const
+{
+    VimPatternCaptures captures{};
+    captures.at(0) = match;
+    if (groups_.empty() || match.end < match.begin ||
+        (atoms_.size() + 1) * (match.end - match.begin + 1) > vim_capture_cell_limit)
+    {
+        return captures;
+    }
+    VimPatternCapture walk(*this, line, match);
+    if (!walk.walked(0, match.begin))
+    {
+        return captures;
+    }
+    for (std::size_t group = 0; group < groups_.size(); ++group)
+    {
+        const VimPatternGroup &range = groups_.at(group);
+        captures.at(group + 1) =
+            VimPatternMatch{walk.positions_.at(range.first), walk.positions_.at(range.end)};
+    }
+    return captures;
 }
 } // namespace nenenib::core
