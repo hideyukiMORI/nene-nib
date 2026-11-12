@@ -55,6 +55,9 @@ enum class VimMotion : std::uint8_t
     // `g^`。`g0` の着地から空白（空白と Tab）を右へ越えた最初の文字。行の最後の文字で止まる
     // （Issue #721・ADR 0147 の決定 8・Vim の nv_g_cmd）。exclusive。
     display_line_first_non_blank,
+    // `g<End>`。`g$` の着地（回数と失敗も同じ）から空白（空白と Tab）を左へ越えた最後の非空白。
+    // 行頭で止まる。inclusive（Issue #1522・ADR 0147 の決定 9・Vim の nv_g_dollar_cmd の flag）。
+    display_line_last_non_blank,
     // `g_`。回数 − 1 行下の行の最後の非空白（空白だけの行と空行は行頭）。inclusive（Issue #721・
     // ADR 0147 の決定 8）。
     last_non_blank,

@@ -231,7 +231,8 @@ namespace
     {
         return std::nullopt;
     }
-    const bool inclusive = motion == VimMotion::display_line_end;
+    const bool inclusive =
+        motion == VimMotion::display_line_end || motion == VimMotion::display_line_last_non_blank;
     return characters_between(view.selection.caret, inclusive
                                                         ? inclusive_end(view.text, landing.offset)
                                                         : landing.offset);
@@ -471,6 +472,7 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     case VimMotion::display_line_middle:
     case VimMotion::line_middle:
     case VimMotion::display_line_first_non_blank:
+    case VimMotion::display_line_last_non_blank:
         return display_range(view, motion);
     }
     std::unreachable();

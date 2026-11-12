@@ -70,6 +70,31 @@ constexpr std::size_t longest_code_point_bytes = 4;
         }
     }
 }
+
+// [start, stop) の最後の非空白の文字の先頭。空白しか無ければ start。stop から窓ごとに手前へ読み、
+// 空白（1 バイト）を越えた最後のバイトを含む文字に載る（行の全体は写さない）。g_ と g<End> が
+// 共用する（ADR 0147 の決定 8・9）。
+[[nodiscard]] Offset non_blank_before(const TextBuffer &text, Offset start, Offset stop)
+{
+    std::size_t window = caret_window_bytes;
+    while (stop.value > start.value)
+    {
+        const Offset begin{stop.value - std::min(window, stop.value - start.value)};
+        const std::string content = text.text_range(begin, stop);
+        std::size_t index = content.size();
+        while (index > 0 && blank_byte(content[index - 1]))
+        {
+            --index;
+        }
+        if (index > 0)
+        {
+            return vim_resting_caret(text, Offset{begin.value + index - 1});
+        }
+        stop = begin;
+        window *= 2;
+    }
+    return start;
+}
 } // namespace
 
 Offset vim_character_after(const TextBuffer &text, Offset at, Offset line_end)
@@ -172,27 +197,19 @@ Offset vim_non_blank_from(const TextBuffer &text, Offset at)
 
 Offset vim_last_non_blank(const TextBuffer &text, LineNumber line)
 {
-    const Offset start = text.line_start(line);
-    // 行の終わりから窓ごとに手前へ読み、空白（1 バイト）を越えた最後のバイトを含む文字に載る。
-    Offset stop = text.line_end(line);
-    std::size_t window = caret_window_bytes;
-    while (stop.value > start.value)
+    return non_blank_before(text, text.line_start(line), text.line_end(line));
+}
+
+Offset vim_non_blank_back_from(const TextBuffer &text, Offset at)
+{
+    const LineNumber line = text.position_of(at).line;
+    const Offset end = text.line_end(line);
+    // 空白は 1 バイトなので、at の 1 バイトだけを読んで決める。
+    if (at.value >= end.value || !blank_byte(text.text_range(at, Offset{at.value + 1}).front()))
     {
-        const Offset begin{stop.value - std::min(window, stop.value - start.value)};
-        const std::string content = text.text_range(begin, stop);
-        std::size_t index = content.size();
-        while (index > 0 && blank_byte(content[index - 1]))
-        {
-            --index;
-        }
-        if (index > 0)
-        {
-            return vim_resting_caret(text, Offset{begin.value + index - 1});
-        }
-        stop = begin;
-        window *= 2;
+        return at;
     }
-    return start;
+    return non_blank_before(text, text.line_start(line), Offset{at.value + 1});
 }
 
 Offset vim_line_and_column(const TextBuffer &text, LineNumber line, std::size_t column)

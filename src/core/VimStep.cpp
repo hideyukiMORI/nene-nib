@@ -1411,7 +1411,7 @@ namespace
                                                 : std::nullopt;
 }
 
-// g0 gm g$ g^ の所。ほかの動作は無し（ADR 0147 の決定 1・8）。
+// g0 gm g$ g^ g<End> の所。ほかの動作は無し（ADR 0147 の決定 1・8・9）。
 [[nodiscard]] std::optional<VimDisplayLineEdge> display_line_edge(VimAction action) noexcept
 {
     if (action == VimAction::move_display_line_start)
@@ -1425,6 +1425,10 @@ namespace
     if (action == VimAction::move_display_line_first_non_blank)
     {
         return VimDisplayLineEdge::first_non_blank;
+    }
+    if (action == VimAction::move_display_line_last_non_blank)
+    {
+        return VimDisplayLineEdge::last_non_blank;
     }
     return action == VimAction::move_display_line_end ? std::optional{VimDisplayLineEdge::end}
                                                       : std::nullopt;
@@ -1448,7 +1452,27 @@ namespace
                          VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, at)}};
 }
 
-// g0 gm g$ gM の着地（ADR 0147 の決定 2）。表示領域と画面行の範囲から解き、ほかの動作は無し。
+// `g<End>` の着地（ADR 0147 の決定 9）。`g$` の着地をモードで寄せた所（NORMAL とオペレータ待ちは
+// 最後の文字・VISUAL の最後の段は行の内容の終わり）から、空白と Tab を左へ越えた最後の非空白へ
+// 戻る（行頭で止まる・Vim の nv_g_dollar_cmd の flag の oneleft）。行の内容の終わりの上では戻らない
+// （Vim の gchar_cursor は NUL）。戻ったときだけ欲しい列は着地の桁（oneleft が w_set_curswant を
+// 立てる）、戻らなければ `g$` の欲しい列のまま（{N}g$ の行末の印も）。失敗の印も `g$` のまま。
+[[nodiscard]] VimRowLanding blank_walked_back(const VimRowLanding &landing, const TextBuffer &text,
+                                              VimMode mode)
+{
+    const Offset rested = rested_in(text, landing.landing.offset, mode);
+    const Offset walked = vim_non_blank_back_from(text, rested);
+    if (walked == rested)
+    {
+        return landing;
+    }
+    return VimRowLanding{
+        VimMotionLanding{walked, landing.landing.failure},
+        VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, walked)}};
+}
+
+// g0 gm g$ gM g<End> の着地（ADR 0147 の決定 2・9）。表示領域と画面行の範囲から解き、ほかの動作は
+// 無し。
 [[nodiscard]] std::expected<std::optional<VimRowLanding>, VimLayoutNeed>
 display_line_view(const VimState &state, const VimEditorView &view, VimAction action)
 {
@@ -1465,6 +1489,10 @@ display_line_view(const VimState &state, const VimEditorView &view, VimAction ac
     if (!landing)
     {
         return std::unexpected(landing.error());
+    }
+    if (edge.value() == VimDisplayLineEdge::last_non_blank)
+    {
+        return std::optional{blank_walked_back(landing.value(), view.text, state.mode)};
     }
     return std::optional{landing.value()};
 }
@@ -1869,11 +1897,23 @@ namespace
     return special != nullptr ? vim_number_control_character(*special) : std::nullopt;
 }
 
+// g の後ろの鍵 → 動作。特別な鍵は先に特別な鍵の表（g<Home> g<End>・Issue #1522）を引く。
+[[nodiscard]] std::optional<VimAction> g_action_of(const VimKey &key) noexcept
+{
+    if (const auto *const special = std::get_if<VimSpecialKey>(&key); special != nullptr)
+    {
+        if (const auto action = vim_g_action_for(*special); action.has_value())
+        {
+            return action;
+        }
+    }
+    return g_key_code(key).and_then([](char32_t code) { return vim_g_action_for(code); });
+}
+
 // g の後ろの鍵（gg ge gE）。表に無い鍵は g を打ち消す（Issue #222）。
 [[nodiscard]] VimStep g_prefix_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
-    const std::optional<VimAction> action =
-        g_key_code(key).and_then([](char32_t code) { return vim_g_action_for(code); });
+    const std::optional<VimAction> action = g_action_of(key);
     if (action.has_value())
     {
         return completed_prefix(state, view, action.value());

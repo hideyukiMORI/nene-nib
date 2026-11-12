@@ -40,6 +40,11 @@ namespace nenenib::core
 // line の最後の非空白の文字の先頭。空白だけの行と空行は行頭（Vim の g_・ADR 0147 の決定 8）。
 [[nodiscard]] Offset vim_last_non_blank(const TextBuffer &text, LineNumber line);
 
+// at の文字が空白（空白と Tab）なら、左へ空白を越えた最後の非空白の文字の先頭。行頭まで空白なら
+// 行頭。at の文字が空白でないか、at が行の内容の終わりならそのまま（Vim の g<End> の oneleft の
+// 歩き・ADR 0147 の決定 9）。vim_last_non_blank と同じ窓の歩きを共用する。
+[[nodiscard]] Offset vim_non_blank_back_from(const TextBuffer &text, Offset at);
+
 // line の上のバイトの桁 column の位置。桁が行の内容を越えたら行の内容の終わり（NORMAL の寄せは
 // vim_resting_caret）、文字の途中ならその文字の先頭。行の桁の写しはこの 1 本（ADR 0052 の決定
 // 5・9）。
