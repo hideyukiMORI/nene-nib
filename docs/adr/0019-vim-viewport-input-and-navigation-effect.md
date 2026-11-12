@@ -283,10 +283,30 @@ PR #1306（#1293）の独立レビューの後続 1。折り返す窓で、窓�
    | `check_cursor_moved`（鍵の終わりの `update_topline`） | 行の変わる鍵 | 写した（鍵の前後の行） |
    | `changed_common` | `changed_*` を呼ぶ鍵 | 写した（engine の印の位置・ADR 0181 の追補 #1374） |
    | `do_put` の 1 行の文字単位の `changed_cline_bef_curs`（register.c） | `p` `P` | 同じ答え（貼った後のカーソルは `changed_lines` の桁以上なので `changed_common` の側で落ちる） |
-   | `comp_botline` の中の `check_cursor_moved`（`cursor_correct` → `validate_botline`） | `VALID_BOTLINE` が立っていないときの `H`（`M` `L` は先に `validate_botline` を呼ぶ） | 写していない。1 本の `:normal!` に束ねた形だけで起きる（鍵の間の描画が `VALID_BOTLINE` を立てる）。`3<C-e>H`（60 行・高さ 10・先頭 51・56 行・`so=6`）は束ねると Vim 52、`:redraw!` を挟むと 54（Nib 54）。`so=4`・高さ 8 の形も束ねて 55・挟んで 56（Nib 56）。追補 #1300 の 4 と同じく、束ねた形とだけ違う形は fixture に入れない |
+   | `comp_botline` の中の `check_cursor_moved`（`cursor_correct` → `validate_botline`） | `VALID_BOTLINE` が立っていないときの `H`（`M` `L` は先に `validate_botline` を呼ぶ） | 写していない。1 本の `:normal!` に束ねた形だけで起きる（鍵の間の描画が `VALID_BOTLINE` を立てる・下の表）。追補 #1300 の 4 と同じく、束ねた形とだけ違う形は fixture に入れない（設計席の決定・案 A） |
    | `set_leftcol`（misc2.c） | `zl` `zh` `zs` `ze` で横の先頭が変わるとき | 写していない（限界・折り返さない窓の横送りの後の鍵） |
    | `changed_window_setting`（option.c の `check_redraw`） | 窓に効く設定の `:set`（`rnu` `nohls` ほか） | 写していない（後続） |
    | `change_indent`（indent.c） | INSERT の `<C-t>` `<C-d>` など | 写していない（限界） |
+
+   束ねた形とだけ違う `H` の族（Vim 9.1 の実測。束ね = 1 本の `:normal!`・挟む = 鍵の間に `:redraw!<CR>`・分ける = 鍵ごとの `:normal!` の間に `redraw!` の行。窓 S = 60 行・高さ 10・先頭 51・56 行・`so=6`、T = 60 行・高さ 8・先頭 53・57 行・`so=4`、U = 60 行・高さ 10・先頭 51・56 行・`so=5`、W = 60 行・高さ 12・先頭 49・55 行・`so=6`。先頭 / 行。分けるの値は独立レビュー V-1543b の測り）:
+
+   | 形（窓） | 束ね | 挟む | 分ける | Nib |
+   |---|---|---|---|---|
+   | `3<C-e>H`（S） | 52 / 58 | 54 / 58 | 54 / 58 | 54 / 58 |
+   | `3<C-e>2H`（S） | 52 / 58 | 54 / 58 | 54 / 58 | 54 / 58 |
+   | `3<C-e>H`（T） | 55 / 59 | 56 / 59 | 56 / 59 | 56 / 59 |
+   | `2<C-e>H` `2<C-e>3H`（U） | 52 / 57 | 53 / 57 | — | 53 / 57 |
+   | `3<C-e>H` `3<C-e>3H`（U） | 53 / 58 | 54 / 58 | — | 54 / 58 |
+   | `2<C-e>H` `2<C-e>3H`（W） | 50 / 56 | 51 / 56 | — | 51 / 56 |
+   | `3<C-e>H` `3<C-e>3H`（W） | 51 / 57 | 52 / 57 | — | 52 / 57 |
+   | `ztH` `zt2H` `ztM`（S） | 50 / 54 | 51 / 55 | 51 / 55（`ztH`） | 51 / 55 |
+   | `ztL`（S） | 50 / 54 | 51 / 60 | — | 51 / 60 |
+   | `z<CR>H` `z<CR>M` `z<CR>L`（S） | `zt` と同じ | | | |
+   | `3<C-e>vHy`（S） | 52 / 58 | — | 54 / 58 | 54 / 58 |
+   | `3<C-e>H<C-d>`（S） | 52 / 60 | 54 / 60 | 54 / 60 | 54 / 60 |
+
+   束ねても挟んでも同じだった形（Nib も同じ）: `<C-e>H`（回数なし・S と T）・`3<C-e>M` `3<C-e>L`・`<C-y>` `<C-d>` `<C-u>` `<C-f>` `<C-b>` `zb` `j` `5j` `G` `gg` `15G` の後の `H` `2H` `M` `L`（S・T と `so` 0 / 2 / 3 の窓）・`zt` `z<CR>` の後の `H` `M` `L`（T・U・W）・`so=4` で高さ 10 / 12・`so=3` で高さ 8 / 10 の窓の `2<C-e>H` `3<C-e>H`・本文の途中の窓（先頭 20）。測りは `D:/NeNeNib/scripts/20261112/1374/hmatrix.py` `hmatrix2.py`（出力 `D:/NeNeNib/outputs/20261112/1374-hmatrix*.txt`）。fuzz の既定の既知（`eng/vim-fuzz.py` の `stale_bottom_before_h`・#1374）は、確かめた条件だけに狭める: 縮んだ 2 語で、回数 2 以上の `<C-e>` と回数なしか 1〜3 の `H`・`scrolloff` が 0 より大きく高さの半分以上（`2 * so >= 高さ`）・送った後の窓の最後の段が本文の末尾より下・違う欄が `first_visible` だけ。`zt` `z<CR>` の後（S の窓でだけ違った）・`vHy`・`H<C-d>`（3 語）は条件を確かめきれないので既知に入れない。#1310 の述語（`<C-e>` `<C-y>` と後の 1 語）も同じ形を拾うので、狭いこちらを先に読む。
+   **`r<CR>`（独立レビュー V-1543b の N1）。** Vim の NORMAL の `r<CR>` は `nv_replace` が `del_chars` の後に改行と Esc を積んで `invoke_edit` を呼び、`edit()` は改行を入れる前に `update_topline` を流す（edit.c「May need to adjust w_topline to show the cursor.」）。`del_chars` の `changed_bytes` が `VALID_TOPLINE` を落としているので、先頭は先に元の行のカーソルで決め直され、その後に改行の後の行で決め直される。engine は `VimStep.edit_topline` に `del_chars` の後の位置を添え、controller は鍵の終わりの追従の前にそこへ歩く（`walked_follow_`・#1363 の打鍵の歩きと同じ解き方）。旧 HEAD（`8cf83600` / `9b450da7`）は Ctrl-e の置いた先頭を `r` の鍵（待ちの鍵）が保ったまま `<CR>` の後の行だけで追従したので、移動だけの `j` と同じ値になった（S の窓の `3<C-e>r<CR>` は Vim 52 / Nib 53）。VISUAL の `r<CR>` は `op_replace` で `edit()` を通らない。fixture `viewport-half-after-delete-split-` 8 件。
 
    `changed_*` を呼ぶかは本文が結果として変わるかと一致しない（字下げの無い行の `<<`・空の行の `>>`・同じ文字への `r`・同じ本文の VISUAL の `p` は呼び、英字の無い `~` `g~~` `gUU` `gul` `vU` は呼ばない）ので、改訂番号やバイト列からは決められない。`$x` `$D` は `del_bytes` がカーソルを 1 つ戻してから `changed_bytes` を呼ぶので落とさない。
    - **判定の 1 か所。** `EditorControllerVim.cpp` の `vim_top_still_valid(鍵の前のキャレットの行, 鍵の後のキャレットの行と桁, changed_* の位置)` が Vim の式のまま決める（行が変われば落とす・`caret.line > changed.line || (caret.line == changed.line && caret.column >= changed.column)` なら落とす）。鍵の後のキャレットは NORMAL の寄せ（`settle_vim_caret`）の後の値（Vim の `del_bytes` がカーソルを戻した後の値に当たる）。

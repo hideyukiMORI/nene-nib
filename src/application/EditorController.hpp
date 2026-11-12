@@ -1126,7 +1126,8 @@ class EditorController final
     bool pending_typed_ = false;
     // 打った本文の追従の最後の位置（#1363）。打った後の別の頼み（Esc と `.` の後の寄せ・再生の
     // 中の NORMAL の移動）が保留を置き換えても残り、解決は先にここまで歩いてから保留を 1 回の
-    // 追従で解く（Vim は打つ周ごとに update_topline を終えてから次の鍵を読む）。
+    // 追従で解く（Vim は打つ周ごとに update_topline を終えてから次の鍵を読む）。NORMAL の `r<CR>`
+    // の edit() が改行を入れる前に先頭を確かめた位置（VimStep.edit_topline・#1374）もここに置く。
     std::optional<core::TextPosition> walked_follow_;
     // Vim の `scrolloff` を変えた時点のキャレット（#1432・Vim 9.1 の実測）。
     // 後の鍵の頼みが保留を置き換えても残り、解決は先にここで新しい余白の追従を 1 回流してから

@@ -919,6 +919,12 @@ void EditorController::applied_vim_step(const core::VimStep &step, core::VimMode
     adopt_vim_marks(step.marks);
     perform_vim_effect(step);
     placed_after_effect(state_, step);
+    // 鍵の中で Vim の edit() が先頭を確かめた所へ、鍵の終わりの追従の前に歩く（#1374・`r<CR>`）。
+    // 前の打鍵の歩きが残っていればそれを先に解く（解決は読む所で 1 回・ADR 0128）。
+    if (step.edit_topline.has_value() && !walked_follow_.has_value())
+    {
+        walked_follow_ = step.edit_topline;
+    }
     // 検索の報せは Ex の結果と同じ 1 本に出し、次の入力で消える（ADR 0032 の決定 5）。
     if (step.notice.has_value())
     {

@@ -73,6 +73,11 @@ struct VimStep
     // 印は Vim が changed_* に渡した位置を持つ（追補 #1374）。位置は既定で効果の置き換えの始まり
     // （change_marked）で、矩形の効果は Vim の op_* の式を作る所が書く。
     std::optional<VimChangeMark> change = std::nullopt;
+    // 鍵の中で Vim の edit() が先頭を確かめたカーソル（ADR 0019 の追補 #1374）。NORMAL の `r<CR>`
+    // は nv_replace が del_chars の後に改行と Esc を積んで invoke_edit を呼び、edit()
+    // は改行を入れる 前に update_topline を流す（edit.c「May need to adjust w_topline to show the
+    // cursor.」）。 controller は鍵の終わりの追従の前に、ここで先に 1 回追従する。ほかの鍵は空。
+    std::optional<TextPosition> edit_topline = std::nullopt;
 };
 
 // 効果が本文を置き換えるか（ADR 0181 の決定 2）。範囲も本文も空の置き換え・行の無い矩形は
