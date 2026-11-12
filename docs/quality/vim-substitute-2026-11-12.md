@@ -1,6 +1,6 @@
 # Vim 9.1 の `:s` の族の実測（2026-11-12・#1007 段 1）
 
-Vim 9.1.0004（Windows・`--not-a-term`・`-u NONE`）に `eng/vim-oracle.py` の `measure`（viewport の形）で流した答え。測る道具は `D:/NeNeNib/scripts/20261112/1007/measure.py` と `measure_extra.py`。行・桁は 1 始まり。⏎ は改行、→ は Tab、^@ は NUL。fixture（`substitute-` の接頭辞）はこの表から本文に NUL と BS を含む 2 形（`rep-nl` `rep-backslash-b`・oracle の literal が制御文字を書けない・契約 `--ex-substitute` で守る）と、段 1 が断る 2 形（`s-c-confirm` `multiline-pattern`）と設定つきの 1 形（`s-I-over-ic`）を除いた 157 件。
+Vim 9.1.0004（Windows・`--not-a-term`・`-u NONE`）に `eng/vim-oracle.py` の `measure`（viewport の形）で流した答え。測る道具は `D:/NeNeNib/scripts/20261112/1007/measure.py` と `measure_extra.py`。行・桁は 1 始まり。⏎ は改行、→ は Tab、^@ は NUL。fixture（`substitute-` の接頭辞・170 件）はこの表から本文に NUL と BS を含む 2 形（`rep-nl` `rep-backslash-b`・oracle の literal が制御文字を書けない・契約 `--ex-substitute` で守る）と、段 1 が断る 2 形（`s-c-confirm` `multiline-pattern`）と設定つきの 1 形（`s-I-over-ic`）を除いた 157 件。
 
 ## 主な形（139 形）
 
@@ -174,3 +174,24 @@ Vim 9.1.0004（Windows・`--not-a-term`・`-u NONE`）に `eng/vim-oracle.py` �
 | star-after-open | `:s/\(*b\)/X/<CR>` | 'aX' | 1,1 |
 | undo-marks-a | `jjma:%s/a/X/<CR>'a` | 'X1 a2\n  b X\nc X a\nX\n\tx X y\nlXst a' | 3,1 |
 | cr-marks-below | `5Gmagg:s/ /\r/<CR>'a` | 'a1\na2\n  b a\nc a a\na\n\tx a y\nlast a' | 6,2 |
+
+## レビュー V-1564 の追加の形（14 形）
+
+`count-2147483646-from-3` だけは Vim が 32 ビットの行番号の溢れで断る形で、fixture にしない（Nib は本文の終わりで止めて置換する・ADR 0168 の追補 14）。
+
+| 名前 | 鍵 | Vim の本文 | 行,桁 |
+|---|---|---|---|
+| count-2147483646 | `:s/a/X/ 2147483646<CR>x` | X1 a2⏎  b X⏎c X a⏎X⏎→x X y⏎Xst a | 6,1 |
+| count-2147483647 | `:s/a/X/ 2147483647<CR>x` | a1 a2⏎  b a⏎c a a⏎a⏎→x a y⏎last a | 1,1 |
+| count-2147483648 | `:s/a/X/ 2147483648<CR>x` | a1 a2⏎  b a⏎c a a⏎a⏎→x a y⏎last a | 1,1 |
+| count-4294967297 | `:s/a/X/ 4294967297<CR>x` | a1 a2⏎  b a⏎c a a⏎a⏎→x a y⏎last a | 1,1 |
+| count-huge | `:s/a/X/ 99999999999999999999999<CR>x` | a1 a2⏎  b a⏎c a a⏎a⏎→x a y⏎last a | 1,1 |
+| count-2147483646-from-3 | `:3s/a/X/g 2147483646<CR>x` | a1 a2⏎  b a⏎c a a⏎a⏎→x a y⏎last a | 1,1 |
+| count-zero-e | `:s/a/X/e 0<CR>x` | 1 a2⏎  b a⏎c a a⏎a⏎→x a y⏎last a | 1,1 |
+| count-zero | `:s/a/X/ 0<CR>x` | a1 a2⏎  b a⏎c a a⏎a⏎→x a y⏎last a | 1,1 |
+| count-zero-e-g | `:%s/a/X/ge 0<CR>x` | 1 a2⏎  b a⏎c a a⏎a⏎→x a y⏎last a | 1,1 |
+| count-zero-amp-e | `:s/a/X/e<CR>j:&& 0<CR>x` | X1 a2⏎ b a⏎c a a⏎a⏎→x a y⏎last a | 2,1 |
+| question-delimiter | `:s?a\?b?X?<CR>` | X ab | 1,1 |
+| question-delimiter-g | `:s?a\?b?X?g<CR>` | X X | 1,1 |
+| question-in-slash | `:s/a?b/X/<CR>` | X ab | 1,1 |
+| bracket-slash | `:s/[/]/X/<CR>` | aXb | 1,1 |

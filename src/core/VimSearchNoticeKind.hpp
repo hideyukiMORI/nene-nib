@@ -32,6 +32,11 @@ enum class VimSearchNoticeKind : std::uint8_t
     // E20: Mark not set（範囲のマークが無い）
     mark_not_set,
     // E493: Backwards range given（範囲が逆向き・Vim の :normal の中の答え）
-    backwards_range
+    backwards_range,
+    // E939: Positive count required（`e` の無い回数 0・`e` があれば Vim は黙って何もしない・実測）
+    positive_count,
+    // E363: pattern uses more memory than 'maxmempattern'（群の範囲を引く道の升の数の上限を超える
+    // 当たり・ADR 0168 の追補 13。本文は変えない）
+    pattern_too_complex
 };
 } // namespace nenenib::core

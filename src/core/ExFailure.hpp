@@ -26,8 +26,8 @@ enum class ExFailure : std::uint8_t
     no_range_allowed,
     // `:s` の区切りが英字（ADR 0168 の決定 1）。文言は Vim の E146。
     letter_delimiter,
-    // `:s` の回数が 0（ADR 0168 の決定 2）。文言は Vim の E939: Positive count required。
-    positive_count,
+    // `:s` の回数が INT_MAX 以上（ADR 0168 の追補 14）。文言は Vim の E1510: Value too large。
+    value_too_large,
     // `:s` のフラグと回数の後ろの余り（ADR 0168 の決定 2）。文言は Vim の E488。
     trailing_characters
 };

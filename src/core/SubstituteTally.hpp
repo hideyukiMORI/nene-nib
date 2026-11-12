@@ -15,5 +15,7 @@ struct SubstituteTally
     std::size_t last = 0;
     std::size_t removed = 0;
     std::size_t added = 0;
+    // 群の範囲を引けなかった当たりがある（升の数の上限・追補 13）。
+    bool too_complex = false;
 };
 } // namespace nenenib::core

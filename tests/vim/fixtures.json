@@ -4899,5 +4899,17 @@
   {"name":"substitute-star-after-open","text":"a*b","keys":":s/\\(*b\\)/X/<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
   {"name":"substitute-undo-marks-a","text":"a1 a2\n  b a\nc a a\na\n\tx a y\nlast a","keys":"jjma:%s/a/X/<CR>'a","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
   {"name":"substitute-cr-marks-below","text":"a1 a2\n  b a\nc a a\na\n\tx a y\nlast a","keys":"5Gmagg:s/ /\\r/<CR>'a","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
-  {"name":"substitute-empty-star-composing-end","text":"a.́","keys":":s/b*/X/g<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}}
+  {"name":"substitute-empty-star-composing-end","text":"a.́","keys":":s/b*/X/g<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"substitute-count-2147483646","text":"a1 a2\n  b a\nc a a\na\n\tx a y\nlast a","keys":":s/a/X/ 2147483646<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"substitute-count-2147483647","text":"a1 a2\n  b a\nc a a\na\n\tx a y\nlast a","keys":":s/a/X/ 2147483647<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"substitute-count-2147483648","text":"a1 a2\n  b a\nc a a\na\n\tx a y\nlast a","keys":":s/a/X/ 2147483648<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"substitute-count-4294967297","text":"a1 a2\n  b a\nc a a\na\n\tx a y\nlast a","keys":":s/a/X/ 4294967297<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"substitute-count-huge","text":"a1 a2\n  b a\nc a a\na\n\tx a y\nlast a","keys":":s/a/X/ 99999999999999999999999<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"substitute-count-zero-e","text":"a1 a2\n  b a\nc a a\na\n\tx a y\nlast a","keys":":s/a/X/e 0<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"substitute-count-zero-e-g","text":"a1 a2\n  b a\nc a a\na\n\tx a y\nlast a","keys":":%s/a/X/ge 0<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"substitute-count-zero-amp-e","text":"a1 a2\n  b a\nc a a\na\n\tx a y\nlast a","keys":":s/a/X/e<CR>j:&& 0<CR>x","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"substitute-question-delimiter","text":"a?b ab","keys":":s?a\\?b?X?<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"substitute-question-delimiter-g","text":"a?b a?b","keys":":s?a\\?b?X?g<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"substitute-question-in-slash","text":"a?b ab","keys":":s/a?b/X/<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"substitute-bracket-slash","text":"a/b","keys":":s/[/]/X/<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}}
 ]

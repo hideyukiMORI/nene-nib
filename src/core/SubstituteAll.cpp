@@ -1,5 +1,6 @@
 #include "SubstituteAll.hpp"
 
+#include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
@@ -52,17 +53,34 @@ void each_line_match(std::string_view line, const VimPattern &pattern, bool ever
     }
 }
 
-// 当たりの群の範囲（置き換えが `\1`〜`\9` を読むときだけ引く）。
-[[nodiscard]] VimPatternCaptures captures_of(const SubstituteScan &scan, std::string_view line,
-                                             VimPatternMatch match)
+// 当たりだけの群の範囲（`&` `\0`）。
+[[nodiscard]] VimPatternCaptures match_only(VimPatternMatch match)
 {
-    if (scan.groups)
-    {
-        return scan.pattern.captured(line, match);
-    }
     VimPatternCaptures captures{};
     captures.at(0) = match;
     return captures;
+}
+
+// 当たりの群の範囲（置き換えが `\1`〜`\9` を読むときだけ引く）。
+// 升の数の上限を超える当たりは値なし（追補 13）。
+[[nodiscard]] std::optional<VimPatternCaptures>
+captures_of(const SubstituteScan &scan, std::string_view line, VimPatternMatch match)
+{
+    if (scan.groups)
+    {
+        return scan.pattern.captured(line, match, scan.capture_limit);
+    }
+    return match_only(match);
+}
+
+// 1 周目の 1 つの当たりが足すバイト（文書の改行の形で数える・群を引けなければ印を立てる）。
+[[nodiscard]] std::size_t added_bytes(const SubstituteScan &scan, std::string_view line,
+                                      VimPatternMatch match, SubstituteTally &tally)
+{
+    const auto captures = captures_of(scan, line, match);
+    tally.too_complex = tally.too_complex || !captures.has_value();
+    return scan.replacement.expanded_bytes(line, captures.value_or(match_only(match)),
+                                           newline_of(scan.text.line_ending()).size());
 }
 
 // 1 周目の 1 行: 数えるだけ。置き換えの本文は作らない。
@@ -75,10 +93,7 @@ void line_tallied(const SubstituteScan &scan, std::size_t line, bool count_only,
     {
         ++tally.substitutions;
         tally.removed += match.end - match.begin;
-        tally.added +=
-            count_only
-                ? 0
-                : scan.replacement.expanded_bytes(content, captures_of(scan, content, match));
+        tally.added += count_only ? 0 : added_bytes(scan, content, match, tally);
     };
     each_line_match(content, scan.pattern, scan.every, visit);
     if (tally.substitutions == before)
@@ -102,7 +117,8 @@ void line_tallied(const SubstituteScan &scan, std::size_t line, bool count_only,
         copied = begin.has_value() ? copied : match.begin;
         begin = begin.value_or(match.begin);
         body.append(content, copied, match.begin - copied);
-        scan.replacement.appended(body, content, captures_of(scan, content, match));
+        scan.replacement.appended(body, content,
+                                  captures_of(scan, content, match).value_or(match_only(match)));
         copied = match.end;
     };
     each_line_match(content, scan.pattern, scan.every, visit);
@@ -148,6 +164,10 @@ checked_tally(const SubstituteScan &scan, const SubstituteRequest &request)
     {
         return std::unexpected(SubstituteFailure::no_match);
     }
+    if (tally.too_complex)
+    {
+        return std::unexpected(SubstituteFailure::too_complex);
+    }
     if (!request.count_only &&
         !fits(scan.text.size_bytes() - tally.removed, tally.added, request.limit))
     {
@@ -161,8 +181,12 @@ std::expected<SubstituteResult, SubstituteFailure>
 substituted(const TextBuffer &text, const VimPattern &pattern,
             const SubstituteReplacement &replacement, const SubstituteRequest &request)
 {
-    const SubstituteScan scan{text, pattern, replacement, request.every,
-                              replacement.reads_subgroups() && pattern.group_count() > 0};
+    const SubstituteScan scan{text,
+                              pattern,
+                              replacement,
+                              request.every,
+                              replacement.reads_subgroups() && pattern.group_count() > 0,
+                              request.capture_limit};
     const auto tally = checked_tally(scan, request);
     if (!tally)
     {
@@ -190,7 +214,7 @@ std::expected<Edit, SubstituteFailure> substituted_all(const TextBuffer &text,
                                                        std::size_t limit)
 {
     const SubstituteReplacement literal = SubstituteReplacement::literal(replacement);
-    const SubstituteScan scan{text, pattern, literal, true, false};
+    const SubstituteScan scan{text, pattern, literal, true, false, vim_capture_cell_limit};
     const auto tally = checked_tally(
         scan, SubstituteRequest{LineNumber{1}, LineNumber{text.line_count()}, true, false, limit});
     if (!tally)

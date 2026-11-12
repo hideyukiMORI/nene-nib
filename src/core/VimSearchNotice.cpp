@@ -96,6 +96,10 @@ DisplayText vim_search_message(const VimSearchNotice &notice)
         return message_of("E20: Mark not set");
     case VimSearchNoticeKind::backwards_range:
         return message_of("E493: Backwards range given");
+    case VimSearchNoticeKind::positive_count:
+        return message_of("E939: Positive count required");
+    case VimSearchNoticeKind::pattern_too_complex:
+        return message_of("E363: pattern uses more memory than 'maxmempattern'");
     }
     std::unreachable();
 }

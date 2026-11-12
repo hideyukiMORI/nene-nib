@@ -18,9 +18,6 @@
 
 namespace nenenib::core
 {
-// captured が道の探索に使う印の数の上限（約 64 MiB の bool の列・限界）。
-inline constexpr std::size_t vim_capture_cell_limit = std::size_t{64} * 1024U * 1024U;
-
 // Vim の `magic` の部分集合の照合器（ADR 0032 の決定 4）。`std::regex` と `<locale>` は
 // 使わない（ロケール依存のシンボルが core の外へ出る）。一致は 1 行の中だけで、行をまたがない。
 // 生成経路は parse ただ 1 つで、未対応の構文は閉じた失敗で拒否する（CPP-005 / CPP-007）。
@@ -57,12 +54,15 @@ class VimPattern final
     // 群 `\(` `\)` の数（ADR 0168 の決定 4・0〜9）。
     [[nodiscard]] std::size_t group_count() const noexcept;
 
-    // match（この line への matched の答え）の群の範囲（ADR 0168 の決定 4）。0 は match そのもの。
-    // 照合器と同じ優先順（`*` は長い方から・前の原子が先）で match の始まりから終わりまでの道を
-    // 1 本だけ探し、その道で群の端を通った位置を返す。群の無いパターンは歩かない。道の探索は
-    // （原子の数 + 1）×（一致の長さ + 1）の印で同じ所を 2 度試さない。印が
-    // vim_capture_cell_limit を超える一致（巨大な行の `\(.*\)`）は群を値なしで返す（限界）。
-    [[nodiscard]] VimPatternCaptures captured(std::string_view line, VimPatternMatch match) const;
+    // match（この line への matched の答え）の群の範囲（ADR 0168 の決定 4・追補 13）。0 は match
+    // そのもの。照合器と同じ優先順（`*` は長い方から・前の原子が先）で match の始まりから終わり
+    // までの道を 1 本だけ探し（VimPatternCapture・仕事は升の数に比例）、その道で群の端を通った
+    // 位置を返す。群の無いパターンは歩かない。升の数（原子の数 + 1）×（一致の長さ + 1）が
+    // cell_limit（製品は vim_capture_cell_limit・試験だけが小さな値を渡す）を超える一致は探さずに
+    // 値なしを返す（群を黙って空にしない・呼ぶ側が置換全体を断る）。
+    [[nodiscard]] std::optional<VimPatternCaptures>
+    captured(std::string_view line, VimPatternMatch match,
+             std::size_t cell_limit = vim_capture_cell_limit) const;
 
   private:
     friend class VimPatternEvaluation;

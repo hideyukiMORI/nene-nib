@@ -12,6 +12,8 @@ namespace nenenib::core
 namespace
 {
 constexpr std::string_view substitute_name = "substitute";
+// 回数の上限（Vim の INT_MAX・これ以上は E1510）。
+constexpr std::size_t substitute_count_limit = 2147483647;
 // `:s` の直後がこの文字なら前のパターンと置き換え（Vim の ex_substitute の判定）。
 constexpr std::string_view previous_starts = "0123456789cegriIp|\"";
 // フラグの文字（Vim の ex_substitute の while）。
@@ -167,9 +169,12 @@ count_read(std::string_view text) noexcept
     request.flags = std::string(text.substr(0, letters.value()));
     text = skipped_white(text.substr(letters.value()));
     const auto [count, digits] = count_read(text);
-    if (count == std::optional<std::size_t>{0})
+    // 回数 0 は `e` の有無で E939 か何もしないかが分かれ、`e` は `&` で前のフラグからも来るので
+    // engine が決める。INT_MAX 以上は E1510（Vim の ex_substitute・2147483646
+    // までは受ける・実測）。
+    if (count.value_or(0) >= substitute_count_limit)
     {
-        return std::unexpected(ExFailure::positive_count);
+        return std::unexpected(ExFailure::value_too_large);
     }
     request.count = count;
     text = skipped_white(text.substr(digits));

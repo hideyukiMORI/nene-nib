@@ -1,6 +1,7 @@
 #pragma once
 
 #include "LineNumber.hpp"
+#include "VimPatternCaptures.hpp"
 
 #include <cstddef>
 
@@ -17,5 +18,8 @@ struct SubstituteRequest
     bool every;
     bool count_only;
     std::size_t limit;
+    // 群の範囲を引く道の升の数の上限（製品は vim_capture_cell_limit・試験だけが小さな値を置く・
+    // ADR 0168 の追補 13）。超える当たりがあれば置換全体を too_complex で断る。
+    std::size_t capture_limit = vim_capture_cell_limit;
 };
 } // namespace nenenib::core

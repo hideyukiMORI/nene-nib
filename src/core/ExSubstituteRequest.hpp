@@ -15,8 +15,8 @@ namespace nenenib::core
 // は区切りの 間の字面のまま・空なら最後に使ったパターン・replacement は `\` も `~`
 // もそのまま）。delimiter は typed の区切りの文字。keep_flags は flags の先頭の
 // `&`（前のフラグを保つ）、flags はその後の フラグの文字（`g` `n` `e` `r` `i` `I` だけ・`c` `p` `#`
-// `l` は evaluate_ex が断る）、count は 末尾の回数（1 以上）。どの値も単独で妥当なので公開
-// aggregate（CPP-003）。
+// `l` は evaluate_ex が断る）、count は 末尾の回数（0 から 2147483646・0 は engine が `e`
+// で決める）。どの値も単独で妥当なので公開 aggregate（CPP-003）。
 struct ExSubstituteRequest
 {
     std::optional<ExRange> range;

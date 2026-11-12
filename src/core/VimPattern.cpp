@@ -848,19 +848,24 @@ std::size_t VimPattern::group_count() const noexcept
     return groups_.size();
 }
 
-VimPatternCaptures VimPattern::captured(std::string_view line, VimPatternMatch match) const
+std::optional<VimPatternCaptures> VimPattern::captured(std::string_view line, VimPatternMatch match,
+                                                       std::size_t cell_limit) const
 {
     VimPatternCaptures captures{};
     captures.at(0) = match;
-    if (groups_.empty() || match.end < match.begin ||
-        (atoms_.size() + 1) * (match.end - match.begin + 1) > vim_capture_cell_limit)
+    if (groups_.empty())
     {
         return captures;
     }
-    VimPatternCapture walk(*this, line, match);
-    if (!walk.walked(0, match.begin))
+    if (match.end < match.begin || (atoms_.size() + 1) * (match.end - match.begin + 1) > cell_limit)
     {
-        return captures;
+        return std::nullopt;
+    }
+    VimPatternCapture walk(*this, line, match);
+    // match は照合器の答えなので道は必ずある。無ければ群を黙って空にせず値なし。
+    if (!walk.walked())
+    {
+        return std::nullopt;
     }
     for (std::size_t group = 0; group < groups_.size(); ++group)
     {

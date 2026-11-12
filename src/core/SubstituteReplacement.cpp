@@ -192,14 +192,16 @@ void SubstituteReplacement::appended(std::string &out, std::string_view line,
 }
 
 std::size_t SubstituteReplacement::expanded_bytes(std::string_view line,
-                                                  const VimPatternCaptures &captures) const
+                                                  const VimPatternCaptures &captures,
+                                                  std::size_t newline_bytes) const
 {
     if (literal_)
     {
         return text_.size();
     }
     std::size_t bytes = 0;
-    auto sink = [&bytes](char32_t code) { bytes += utf8_bytes(code); };
+    auto sink = [&bytes, newline_bytes](char32_t code)
+    { bytes += code == U'\n' ? newline_bytes : utf8_bytes(code); };
     expanded(line, captures, sink);
     return bytes;
 }

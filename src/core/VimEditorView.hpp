@@ -8,6 +8,7 @@
 #include "VimKeySource.hpp"
 #include "VimLayoutView.hpp"
 #include "VimMarks.hpp"
+#include "VimPatternCaptures.hpp"
 #include "VimPatternCase.hpp"
 #include "VimRowLanding.hpp"
 #include "VimTabs.hpp"
@@ -50,5 +51,9 @@ struct VimEditorView
     // maximum_document_bytes のまま置き換えず、試験だけが小さな値を置いて境を確かめる（1 GiB を
     // 確保せずに CRLF の数え方を見るため）。
     std::size_t document_limit = maximum_document_bytes;
+    // `:s` の群の範囲を引く道の升の数の上限（ADR 0168 の追補
+    // 13）。製品は既定のまま、試験だけが小さな
+    // 値を置いて「群を引けない当たりは置換全体を断る」を確かめる。
+    std::size_t capture_limit = vim_capture_cell_limit;
 };
 } // namespace nenenib::core

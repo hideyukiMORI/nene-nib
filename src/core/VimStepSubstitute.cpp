@@ -221,13 +221,10 @@ resolved_lines(const VimEditorView &view, const std::optional<ExRange> &range)
 
 // 直前の検索のパターンを前向きの区切りで読める形に（`?` の検索の `\?` は `?` の文字・`/`
 // は逃がす）。
-[[nodiscard]] std::string forward_text(const VimSearchSnapshot &search)
+// `?` を区切りにしたパターンの `\?` を `?` の文字にした前向きの形（Vim の skip_regexp_ex の
+// `dirc == '?'`・`:s?a\?b?X?` は `a?b` に当たる・実測）。`/` は逃がす。
+[[nodiscard]] std::string question_unescaped(std::string_view text)
 {
-    const std::string_view text = search.text();
-    if (search.direction() == VimSearchDirection::forward)
-    {
-        return std::string(text);
-    }
     std::string plain;
     plain.reserve(text.size());
     for (std::size_t at = 0; at < text.size(); ++at)
@@ -238,6 +235,13 @@ resolved_lines(const VimEditorView &view, const std::optional<ExRange> &range)
         at += length - 1;
     }
     return separated(plain, '/');
+}
+
+[[nodiscard]] std::string forward_text(const VimSearchSnapshot &search)
+{
+    const std::string_view text = search.text();
+    return search.direction() == VimSearchDirection::forward ? std::string(text)
+                                                             : question_unescaped(text);
 }
 
 // 大小のフラグ（`i` は ignore・`I` は sensitive）。
@@ -371,6 +375,10 @@ resolved_lines(const VimEditorView &view, const std::optional<ExRange> &range)
                        VimRepeatFailure::not_found);
     case SubstituteFailure::too_large:
         return detail::failed(VimStep{std::move(next), VimNoEffect{}}, VimRepeatFailure::too_large);
+    // 群を引けない当たりは本文を 1 バイトも変えずに断る（追補 13・群を黙って空にしない）。
+    case SubstituteFailure::too_complex:
+        return noticed(next, notice_of(VimSearchNoticeKind::pattern_too_complex),
+                       VimRepeatFailure::refused);
     }
     std::unreachable();
 }
@@ -427,7 +435,8 @@ resolved_lines(const VimEditorView &view, const std::optional<ExRange> &range)
 {
     if (request.source == ExSubstituteSource::typed && !request.pattern.empty())
     {
-        return separated(request.pattern, '/');
+        return request.delimiter == '?' ? question_unescaped(request.pattern)
+                                        : separated(request.pattern, '/');
     }
     if (request.source != ExSubstituteSource::repeated || last_used)
     {
@@ -436,6 +445,19 @@ resolved_lines(const VimEditorView &view, const std::optional<ExRange> &range)
                    : std::nullopt;
     }
     return memory.pattern;
+}
+
+// パターンを探す前に断る理由（パターンが無ければ E35・`e` の無い回数 0 は E939・Vim の
+// ex_substitute の順）。断らなければ値なし。
+[[nodiscard]] std::optional<VimSearchNoticeKind>
+early_refusal(const VimSubstituteMemory &memory, bool has_pattern,
+              const ExSubstituteRequest &request) noexcept
+{
+    if (request.count == std::optional<std::size_t>{0} && memory.flags.error)
+    {
+        return VimSearchNoticeKind::positive_count;
+    }
+    return has_pattern ? std::nullopt : std::optional{VimSearchNoticeKind::no_previous_pattern};
 }
 
 // 回数（`:s/a/b/ 3`）は範囲の最後の行から回数の行（本文の終わりまで・Vim の ex_substitute）。
@@ -494,16 +516,18 @@ VimStep vim_substituted(const VimState &state, const VimEditorView &view,
     }
     auto [memory, pattern] = std::move(renewed).value();
     VimState next = rested(state);
-    if (!pattern.has_value())
+    const auto refused = early_refusal(memory, pattern.has_value(), request);
+    if (refused.has_value())
     {
         next.last_substitute = std::make_shared<const VimSubstituteMemory>(std::move(memory));
-        return noticed(next, notice_of(VimSearchNoticeKind::no_previous_pattern),
-                       VimRepeatFailure::refused);
+        return noticed(next, notice_of(refused.value()), VimRepeatFailure::refused);
     }
+    // early_refusal がパターンの無い形を断ったので、ここでは値がある。
+    const std::string pattern_text = pattern.value_or(std::string{});
     const VimSubstituteFlags flags = memory.flags;
     const auto replacement = SubstituteReplacement::vim(memory.previous);
-    next = remembered(std::move(next), view, std::move(memory), pattern.value());
-    const auto parsed = VimPattern::parse(pattern.value(), VimSearchDirection::forward,
+    next = remembered(std::move(next), view, std::move(memory), pattern_text);
+    const auto parsed = VimPattern::parse(pattern_text, VimSearchDirection::forward,
                                           flags.letter_case.value_or(view.search_case));
     if (!parsed)
     {
@@ -512,13 +536,19 @@ VimStep vim_substituted(const VimState &state, const VimEditorView &view,
                                        parsed.error()},
                        VimRepeatFailure::refused);
     }
+    // `e` の回数 0 は範囲が空で、当たりも報せも無く続く（Vim の ex_substitute・実測）。
+    if (request.count == std::optional<std::size_t>{0})
+    {
+        return VimStep{std::move(next), VimNoEffect{}};
+    }
     const auto [first, last] = counted_lines(span.value(), request, view.text);
-    auto result = substituted(view.text, parsed.value(), replacement,
-                              SubstituteRequest{LineNumber{first}, LineNumber{last}, flags.every,
-                                                flags.count, view.document_limit});
+    auto result =
+        substituted(view.text, parsed.value(), replacement,
+                    SubstituteRequest{LineNumber{first}, LineNumber{last}, flags.every, flags.count,
+                                      view.document_limit, view.capture_limit});
     if (!result)
     {
-        return unsubstituted(std::move(next), result.error(), flags, pattern.value());
+        return unsubstituted(std::move(next), result.error(), flags, pattern_text);
     }
     // `$` の後の前の置換の繰り返しは行末に着く（Vim の endcolumn・実測）。
     const bool end_column = request.source != ExSubstituteSource::typed &&

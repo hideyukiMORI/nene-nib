@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 45bbe24b91deeb4285330a4c355eedd4354855869ff406353176ad69520a1523 / 4901 fixtures
+// fixtures.json: sha256 5b4871b6b296187defea0f560e8986c0c81f0f2043a3270d567a7ffbba46fcce / 4913 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4901> vim_fixtures{{
+constexpr std::array<VimFixture, 4913> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4913,6 +4913,18 @@ constexpr std::array<VimFixture, 4901> vim_fixtures{{
     {"substitute-undo-marks-a", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", "jjma:%s/a/X/<CR>'a", "X1 a2\n  b X\nc X a\nX\n\tx X y\nlXst a", 3, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"substitute-cr-marks-below", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", "5Gmagg:s/ /\\r/<CR>'a", "a1\na2\n  b a\nc a a\na\n\tx a y\nlast a", 6, 2, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"substitute-empty-star-composing-end", "a.́", ":s/b*/X/g<CR>", "XaX.́", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"substitute-count-2147483646", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", ":s/a/X/ 2147483646<CR>x", "X1 a2\n  b X\nc X a\nX\n\tx X y\nXst a", 6, 1, "l", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"substitute-count-2147483647", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", ":s/a/X/ 2147483647<CR>x", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"substitute-count-2147483648", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", ":s/a/X/ 2147483648<CR>x", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"substitute-count-4294967297", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", ":s/a/X/ 4294967297<CR>x", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"substitute-count-huge", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", ":s/a/X/ 99999999999999999999999<CR>x", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"substitute-count-zero-e", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", ":s/a/X/e 0<CR>x", "1 a2\n  b a\nc a a\na\n\tx a y\nlast a", 1, 1, "a", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"substitute-count-zero-e-g", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", ":%s/a/X/ge 0<CR>x", "1 a2\n  b a\nc a a\na\n\tx a y\nlast a", 1, 1, "a", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"substitute-count-zero-amp-e", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", ":s/a/X/e<CR>j:&& 0<CR>x", "X1 a2\n b a\nc a a\na\n\tx a y\nlast a", 2, 1, " ", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"substitute-question-delimiter", "a?b ab", ":s?a\\?b?X?<CR>", "X ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"substitute-question-delimiter-g", "a?b a?b", ":s?a\\?b?X?g<CR>", "X X", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"substitute-question-in-slash", "a?b ab", ":s/a?b/X/<CR>", "X ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"substitute-bracket-slash", "a/b", ":s/[/]/X/<CR>", "aXb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
 }};
 } // namespace nenenib::tests
 // clang-format on

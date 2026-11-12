@@ -23,9 +23,11 @@ class SubstituteReplacement final
     // line の当たり（captures の 0）を置き換える本文を out の後ろに足す。
     void appended(std::string &out, std::string_view line,
                   const VimPatternCaptures &captures) const;
-    // appended が足すバイト数（本文を作らずに数える・上限の判定）。
+    // appended が足すバイト数（本文を作らずに数える・上限の判定）。改行は newline_bytes（文書の
+    // 改行の形の長さ・controller が改行を写す形）と数える（ADR 0168 の追補 13）。
     [[nodiscard]] std::size_t expanded_bytes(std::string_view line,
-                                             const VimPatternCaptures &captures) const;
+                                             const VimPatternCaptures &captures,
+                                             std::size_t newline_bytes = 1) const;
     // `\1`〜`\9` を読むか（パターンの群の範囲を引く要がある）。
     [[nodiscard]] bool reads_subgroups() const noexcept;
 

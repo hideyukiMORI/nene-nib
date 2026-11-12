@@ -1649,8 +1649,8 @@ DisplayText ex_failure_message(ExFailure failure)
     case ExFailure::letter_delimiter:
         return DisplayText::parse("E146: Regular expressions can't be delimited by letters")
             .value();
-    case ExFailure::positive_count:
-        return DisplayText::parse("E939: Positive count required").value();
+    case ExFailure::value_too_large:
+        return DisplayText::parse("E1510: Value too large").value();
     case ExFailure::trailing_characters:
         return DisplayText::parse("E488: Trailing characters").value();
     }

@@ -11,24 +11,41 @@
 #include "ExRange.hpp"
 #include "ExResult.hpp"
 #include "ExSubstituteCommand.hpp"
+#include "ExSubstituteRequest.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
+#include "LineNumber.hpp"
+#include "Offset.hpp"
 #include "SaveDocument.hpp"
 #include "Scopes.hpp"
+#include "Selection.hpp"
 #include "SubstituteAll.hpp"
+#include "SubstituteFailure.hpp"
 #include "SubstituteReplacement.hpp"
+#include "SubstituteRequest.hpp"
 #include "TestSupport.hpp"
+#include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
+#include "VimEditorView.hpp"
+#include "VimNoEffect.hpp"
 #include "VimPattern.hpp"
+#include "VimPatternCaptures.hpp"
 #include "VimPatternCase.hpp"
 #include "VimPatternFailure.hpp"
+#include "VimRegisterKind.hpp"
+#include "VimRepeatFailure.hpp"
+#include "VimReplaceBlock.hpp"
 #include "VimSearchDirection.hpp"
+#include "VimSearchNotice.hpp"
+#include "VimSearchNoticeKind.hpp"
+#include "VimStep.hpp"
 #include "VimTestSupport.hpp"
 
 #include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <variant>
 
 namespace nenenib::tests
 {
@@ -97,7 +114,17 @@ void verify_substitute_command_text()
         expect(!core::substitute_command(text).has_value(), "other commands are not :s");
     }
     expect(fails_with("s xaxbx", ExFailure::letter_delimiter), "a letter delimiter is E146");
-    expect(fails_with("s/a/b/ 0", ExFailure::positive_count), "a zero count is E939");
+    for (const std::string_view text :
+         {"s/a/b/ 2147483647", "s/a/b/ 2147483648", "s/a/b/g4294967297",
+          "s/a/b/ 99999999999999999999999", "&& 2147483647"})
+    {
+        expect(fails_with(text, ExFailure::value_too_large),
+               "a count of INT_MAX or more is E1510 (Vim 9.1, measured)");
+    }
+    expect(request_of("s/a/b/ 2147483646").value_or(unread()).count ==
+                   std::optional<std::size_t>{2147483646} &&
+               request_of("s/a/b/ 0").value_or(unread()).count == std::optional<std::size_t>{0},
+           "2147483646 and 0 are read; the engine decides 0 by the e flag");
     expect(fails_with("s/a/b/q", ExFailure::trailing_characters), "trailing text is E488");
     for (const std::string_view text :
          {"s/a/b/c", "s/a/b/gc", "&&c", "s/a/b/p", "s/a/b/#", "s/a/b/l", "s/a/\\=1/", "s\\/b/",
@@ -110,8 +137,8 @@ void verify_substitute_command_text()
     expect(request_of("s/a/b/ \"note").has_value(), "a comment after the flags is allowed");
     expect(core::ex_failure_message(ExFailure::letter_delimiter).text() ==
                    "E146: Regular expressions can't be delimited by letters" &&
-               core::ex_failure_message(ExFailure::positive_count).text() ==
-                   "E939: Positive count required" &&
+               core::ex_failure_message(ExFailure::value_too_large).text() ==
+                   "E1510: Value too large" &&
                core::ex_failure_message(ExFailure::trailing_characters).text() ==
                    "E488: Trailing characters",
            "the parse failures keep Vim's numbers and words");
@@ -167,7 +194,11 @@ void verify_substitute_ranges()
         return std::nullopt;
     }
     const auto captures = parsed.value().captured(line, match.value());
-    const auto &range = captures.at(group);
+    if (!captures.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto &range = captures.value().at(group);
     if (!range.has_value())
     {
         return std::nullopt;
@@ -352,8 +383,134 @@ void verify_substitute_repeat_and_bytes()
 }
 } // namespace
 
+namespace
+{
+// engine の 1 歩（今の行・打ったパターン・request の回数とフラグ）。capture_limit
+// は群の道の升の数の 上限。
+[[nodiscard]] core::VimStep stepped_with(const core::TextBuffer &text,
+                                         core::ExSubstituteRequest request,
+                                         std::size_t capture_limit)
+{
+    const core::Selection selection = core::collapsed_at(core::Offset{0});
+    core::VimEditorView view{text, selection, std::nullopt};
+    view.capture_limit = capture_limit;
+    return core::vim_substituted(empty_vim_state(), view, request);
+}
+
+[[nodiscard]] core::ExSubstituteRequest typed_request(std::string pattern, std::string replacement)
+{
+    return core::ExSubstituteRequest{std::nullopt,
+                                     ExSubstituteSource::typed,
+                                     '/',
+                                     std::move(pattern),
+                                     std::move(replacement),
+                                     false,
+                                     "",
+                                     std::nullopt};
+}
+
+[[nodiscard]] core::VimStep substitute_step(const core::TextBuffer &text, std::string pattern,
+                                            std::string replacement, std::size_t capture_limit)
+{
+    return stepped_with(text, typed_request(std::move(pattern), std::move(replacement)),
+                        capture_limit);
+}
+
+// 回数 0 の 1 歩（flags は `e` か空）。
+[[nodiscard]] core::VimStep zero_counted(const core::TextBuffer &text, std::string flags)
+{
+    core::ExSubstituteRequest request = typed_request("x", "X");
+    request.flags = std::move(flags);
+    request.count = 0;
+    return stepped_with(text, std::move(request), core::vim_capture_cell_limit);
+}
+
+[[nodiscard]] std::string replaced_body(const core::VimStep &step)
+{
+    const auto *block = std::get_if<core::VimReplaceBlock>(&step.effect);
+    return block != nullptr && block->edits.size() == 1 ? block->edits.front().utf8 : "?";
+}
+
+[[nodiscard]] bool refused_untouched(const core::VimStep &step)
+{
+    return std::holds_alternative<core::VimNoEffect>(step.effect) &&
+           step.failure == std::optional{core::VimRepeatFailure::refused} &&
+           step.notice.has_value() &&
+           step.notice.value().kind == core::VimSearchNoticeKind::pattern_too_complex &&
+           !step.marks.has_value() && !step.change.has_value() && !step.restore.has_value() &&
+           step.next.unnamed_register.value().kind == core::VimRegisterKind::uninitialized;
+}
+
+// 群の範囲を引けない当たり（升の数の上限・ADR 0168 の追補 13）は置換全体を断り、本文・レジスタ・
+// マーク・変更の印を変えない。上限の内では群は正しい。歩きは升の数に比例する（N = 20000 でも
+// 群つきのパターンが 1 歩で返る）。
+void verify_capture_limits()
+{
+    const std::string fields = "x" + std::string(200, 'y') + "," + std::string(200, 'z');
+    const core::TextBuffer text = buffer_of(fields);
+    const std::string swapped = std::string(200, 'z') + "," + "x" + std::string(200, 'y');
+    expect(replaced_body(substitute_step(text, "\\(.*\\),\\(.*\\)", "\\2,\\1",
+                                         core::vim_capture_cell_limit)) == swapped,
+           "within the limit the groups swap the fields");
+    const auto refused = substitute_step(text, "\\(.*\\),\\(.*\\)", "\\2,\\1", 100);
+    expect(refused_untouched(refused),
+           "over the limit the whole :s is refused with E363 and nothing changes");
+    expect(core::vim_search_message(refused.notice.value_or(core::VimSearchNotice{})).text() ==
+               "E363: pattern uses more memory than 'maxmempattern'",
+           "the refusal says so in one line");
+    const std::string huge =
+        std::string(std::size_t{1} << 20, 'a') + "," + std::string(std::size_t{1} << 20, 'b');
+    expect(refused_untouched(substitute_step(buffer_of(huge), "\\(.*\\),\\(.*\\)", "\\2,\\1",
+                                             core::vim_capture_cell_limit)),
+           "a 2 MiB field swap is over the product limit: refused, never emptied");
+    expect(
+        replaced_body(substitute_step(buffer_of(huge), "a*,b", "[&]", core::vim_capture_cell_limit))
+            .starts_with("[a"),
+        "without \\1 the groups are not walked and the limit does not apply");
+    const std::string walked = "y" + std::string(20000, 'z') + "x";
+    expect(replaced_body(substitute_step(buffer_of(walked), "\\(.*\\).*y.*x", "[\\1]",
+                                         core::vim_capture_cell_limit)) == "[]",
+           "the walk is linear in the cells (20000 characters, one step)");
+    const auto loud = zero_counted(text, "");
+    expect(loud.notice.value_or(core::VimSearchNotice{}).kind ==
+                   core::VimSearchNoticeKind::positive_count &&
+               loud.failure == std::optional{core::VimRepeatFailure::refused},
+           "a zero count without e is E939");
+    const auto quiet = zero_counted(text, "e");
+    expect(!quiet.failure.has_value() && !quiet.notice.has_value() &&
+               std::holds_alternative<core::VimNoEffect>(quiet.effect),
+           "a zero count with e does nothing and goes on (Vim 9.1, measured)");
+}
+
+// 上限の判定は置き換えが入れる改行を文書の改行の形の長さで数える（CRLF は 2 バイト）。
+void verify_limit_counts_document_newlines()
+{
+    const core::TextBuffer crlf = buffer_of("a\r\nb");
+    const auto pattern =
+        VimPattern::parse("a", VimSearchDirection::forward, VimPatternCase::sensitive);
+    if (!pattern.has_value())
+    {
+        expect(false, "the pattern parses");
+        return;
+    }
+    const auto replaced = [&](std::size_t limit)
+    {
+        return core::substituted(
+            crlf, pattern.value(), core::SubstituteReplacement::vim("x\\ry"),
+            core::SubstituteRequest{core::LineNumber{1}, core::LineNumber{1}, true, false, limit});
+    };
+    expect(
+        replaced(7).has_value() && replaced(6).error_or(core::SubstituteFailure::no_match) ==
+                                       core::SubstituteFailure::too_large,
+        "x CRLF y CRLF b is 7 bytes: 7 fits and 6 is too large (LF counting would let 6 through)");
+}
+
+} // namespace
+
 void verify_ex_substitute_scope()
 {
+    verify_capture_limits();
+    verify_limit_counts_document_newlines();
     verify_substitute_command_text();
     verify_substitute_ranges();
     verify_pattern_groups();

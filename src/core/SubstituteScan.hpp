@@ -16,5 +16,7 @@ struct SubstituteScan
     const SubstituteReplacement &replacement;
     bool every;
     bool groups;
+    // 群の範囲を引く道の升の数の上限（SubstituteRequest.capture_limit）。
+    std::size_t capture_limit;
 };
 } // namespace nenenib::core

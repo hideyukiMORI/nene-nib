@@ -2,6 +2,7 @@
 
 #include "VimPattern.hpp"
 
+#include <cstdint>
 #include <optional>
 
 namespace nenenib::core
@@ -14,54 +15,93 @@ VimPatternCapture::VimPatternCapture(const VimPattern &pattern, std::string_view
 {
 }
 
-bool VimPatternCapture::walked(std::size_t index, std::size_t at)
+std::size_t VimPatternCapture::cell(const VimPatternCaptureFrame &frame) const noexcept
 {
-    const std::size_t cell = index * (match_.end - match_.begin + 1) + (at - match_.begin);
-    if (failed_.at(cell))
-    {
-        return false;
-    }
-    positions_.at(index) = at;
-    const bool arrived = index == pattern_.atoms_.size()
-                             ? at == match_.end && VimPattern::ends_a_character(line_, at)
-                             : stepped_on(index, at);
-    if (!arrived)
-    {
-        failed_.at(cell) = true;
-    }
-    return arrived;
+    return frame.index * (match_.end - match_.begin + 1) + (frame.at - match_.begin);
 }
 
-bool VimPatternCapture::stepped_on(std::size_t index, std::size_t at)
+bool VimPatternCapture::arrived(const VimPatternCaptureFrame &frame) const noexcept
 {
-    const VimPatternAtom &atom = pattern_.atoms_.at(index);
+    return frame.at == match_.end && VimPattern::ends_a_character(line_, frame.at);
+}
+
+std::optional<VimPatternCaptureFrame> VimPatternCapture::next_child(VimPatternCaptureFrame &top)
+{
+    const VimPatternAtom &atom = pattern_.atoms_.at(top.index);
+    const std::uint8_t phase = top.phase;
+    ++top.phase;
+    const auto next = static_cast<std::uint32_t>(top.index + 1);
     if (VimPattern::is_zero_width(atom.kind))
     {
-        return VimPattern::anchored(line_, atom, at) && walked(index + 1, at);
+        return zero_width_child(atom, top, phase);
     }
-    const std::vector<std::size_t> positions = reached(atom, at);
-    // 繰り返しの無い原子は 1 歩食べた所だけ、`*` は長い方から 0 回まで。
-    const std::size_t shortest = atom.repeated ? 0 : 1;
-    for (std::size_t tried = positions.size(); tried > shortest; --tried)
+    // `*` の 0 回の枝は 1 文字食べる枝の後（照合器と同じ優先順）。
+    if (phase == 1 && atom.repeated)
     {
-        if (walked(index + 1, positions.at(tried - 1)))
-        {
-            return true;
-        }
+        return VimPatternCaptureFrame{top.at, next, 0};
     }
-    return false;
+    const auto eaten = phase == 0 ? consumed(atom, top.at) : std::nullopt;
+    if (eaten.has_value())
+    {
+        return VimPatternCaptureFrame{eaten.value(), atom.repeated ? top.index : next, 0};
+    }
+    return atom.repeated && phase == 0 ? next_child(top) : std::nullopt;
 }
 
-std::vector<std::size_t> VimPatternCapture::reached(const VimPatternAtom &atom,
-                                                    std::size_t at) const
+std::optional<VimPatternCaptureFrame>
+VimPatternCapture::zero_width_child(const VimPatternAtom &atom, const VimPatternCaptureFrame &top,
+                                    std::uint8_t phase) const
 {
-    std::vector<std::size_t> positions{at};
-    for (auto next = pattern_.stepped(line_, atom, at);
-         next.has_value() && next.value() <= match_.end;
-         next = atom.repeated ? pattern_.stepped(line_, atom, positions.back()) : std::nullopt)
+    if (phase != 0 || !VimPattern::anchored(line_, atom, top.at))
     {
-        positions.push_back(next.value());
+        return std::nullopt;
     }
-    return positions;
+    return VimPatternCaptureFrame{top.at, static_cast<std::uint32_t>(top.index + 1), 0};
+}
+
+std::optional<std::size_t> VimPatternCapture::consumed(const VimPatternAtom &atom,
+                                                       std::size_t at) const
+{
+    const auto stepped = pattern_.stepped(line_, atom, at);
+    return stepped.has_value() && stepped.value() <= match_.end ? stepped : std::nullopt;
+}
+
+void VimPatternCapture::positions_recorded(const std::vector<VimPatternCaptureFrame> &path)
+{
+    std::vector<bool> placed(positions_.size(), false);
+    for (const VimPatternCaptureFrame &frame : path)
+    {
+        if (!placed.at(frame.index))
+        {
+            placed.at(frame.index) = true;
+            positions_.at(frame.index) = frame.at;
+        }
+    }
+}
+
+bool VimPatternCapture::walked()
+{
+    const auto last = static_cast<std::uint32_t>(pattern_.atoms_.size());
+    std::vector<VimPatternCaptureFrame> path{VimPatternCaptureFrame{match_.begin, 0, 0}};
+    while (!path.empty())
+    {
+        VimPatternCaptureFrame &top = path.back();
+        const bool entered = top.phase == 0;
+        if (entered && top.index == last && arrived(top))
+        {
+            positions_recorded(path);
+            return true;
+        }
+        const auto child =
+            !failed_.at(cell(top)) && top.index < last ? next_child(top) : std::nullopt;
+        if (child.has_value())
+        {
+            path.push_back(child.value());
+            continue;
+        }
+        failed_.at(cell(path.back())) = true;
+        path.pop_back();
+    }
+    return false;
 }
 } // namespace nenenib::core

@@ -822,7 +822,9 @@ void EditorController::replace_all_matches()
         case core::SubstituteFailure::no_match:
             static_cast<void>(hop_find(find.pattern, core::VimSearchDirection::forward, true));
             return;
+        // 通常モードの語は literal で群を持たないので too_complex にはならない。来たら同じく断る。
         case core::SubstituteFailure::too_large:
+        case core::SubstituteFailure::too_complex:
             reject(core::DisplayText::parse(replace_too_large_notice).value());
             return;
         }
