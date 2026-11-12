@@ -80,6 +80,11 @@ SearchLine SearchLine::edited(CommandEdit edit) const
     return SearchLine(edited_input(input_, edit), prompt_);
 }
 
+bool SearchLine::recalls(const InputHistory &history, CommandEdit direction) const
+{
+    return history.stepped(input_, history_walk_, direction).has_value();
+}
+
 SearchLine SearchLine::recalled(const InputHistory &history, CommandEdit direction) const
 {
     const auto walk = history.stepped(input_, history_walk_, direction);

@@ -370,8 +370,10 @@ EditorFrame EditorController::press_vim_key(const core::VimKey &key)
 // deliver_vim_key の返り値で決める）。Vim は 1 鍵ごとに update_topline するので、各鍵の後に
 // 追従を解決する（ADR 0129 の追補・#1154）。解決を最後に 1 回へまとめると、画面の外へ出て戻る
 // 列（`G30G` `''''`）の先頭行が途中の画面を経ない値になる。窓の 1 打鍵の道はここを通らない。
+// :normal! の鍵は打った鍵ではないので、`:` の行を履歴に足さない（normal_busy_・#1528）。
 EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
 {
+    const ScopedValue<bool> busy{normal_busy_, true};
     const auto failed = [this](const core::VimKey &key)
     {
         settle_tab_walk_before(false);
@@ -720,11 +722,9 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpe
         return std::nullopt;
     // 上下は窓と同じ履歴の前・次（Vim の再生の `<Up>` も履歴を引く・#1528 の実測）。
     case core::VimSpecialKey::arrow_up:
-        accept(EditCommand{core::CommandEdit::history_previous});
-        return std::nullopt;
+        return recalled_key(core::CommandEdit::history_previous);
     case core::VimSpecialKey::arrow_down:
-        accept(EditCommand{core::CommandEdit::history_next});
-        return std::nullopt;
+        return recalled_key(core::CommandEdit::history_next);
     case core::VimSpecialKey::control_r:
     case core::VimSpecialKey::page_up:
     case core::VimSpecialKey::page_down:

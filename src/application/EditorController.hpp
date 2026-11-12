@@ -8,6 +8,7 @@
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
 #include "CommandChoice.hpp"
+#include "CommandEdit.hpp"
 #include "CompositionView.hpp"
 #include "DetectedText.hpp"
 #include "Diagnostic.hpp"
@@ -344,6 +345,9 @@ class EditorController final
     [[nodiscard]] std::optional<core::VimRepeatFailure> command_key(core::VimSpecialKey key);
     [[nodiscard]] std::optional<core::VimRepeatFailure>
     command_key(const core::VimSearchPattern &key);
+    // 入力行の鍵の `<Up>` `<Down>`。履歴を動けなければ not_moved（Vim の beep_flush が先読みを
+    // 捨てる・ex_getln.c・#1528）で、再生と :normal! の残りを打ち切る。
+    [[nodiscard]] std::optional<core::VimRepeatFailure> recalled_key(core::CommandEdit direction);
     // 1 鍵を engine へ流して効果を写す唯一の経路（ADR 0030 の決定 7）。打った鍵も再生の鍵も
     // ここを通り、鍵が閉じた失敗で終わったら理由を返す（ADR 0046 の決定 3）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> step_vim(const core::VimKey &key);
@@ -1078,9 +1082,14 @@ class EditorController final
     [[nodiscard]] bool composition_ignored() const noexcept;
     // 入力行を閉じる 1 本。閉じるときに残っている変換は消す（ADR 0061 の決定 3）。
     void close_command_input();
-    // 入力行の取消の 1 本（Esc と、文書が替わるとき・空の行の Backspace）。録画に `<Esc>` を
-    // 積むのは打った Esc の意図 accept(CancelCommand) だけ（#1528）。
+    // 入力行の取消の 1 本（Esc と、文書が替わるとき・空の行の Backspace・F1 の一覧と保存の形の
+    // 一覧が開いている行を閉じるとき）。録画に `<Esc>` を積むのは打った Esc の意図
+    // accept(CancelCommand) だけ（#1528）。
     void cancel_command_input();
+    // 入力行に届いた鍵が打った鍵なら印を立てる（Vim の getcmdline の some_key_typed・#1528 の
+    // レビュー M1）。再生（`.`・マクロ）・`map` の右辺・press_vim_keys（:normal!）の鍵は打って
+    // いない。印は close_command_input が倒す。
+    void note_command_key() noexcept;
     // 録画中の `:` の行で打った鍵を録画の書き手 vim_macro_typed へ積む（#1528・ADR 0046 の
     // 追補）。打った鍵（再生でも `map` の右辺でもない）で、開いている入力行が Ex の行のときだけ。
     void record_command_keys(std::span<const core::VimKey> keys);
@@ -1157,6 +1166,13 @@ class EditorController final
     // 再生の外で engine に流す鍵の出どころ（typed か mapped）。typed_unit が表に当たった単位の
     // 間だけ mapped にする。再生の中は replayed が勝つ（measured_vim_step）。
     core::VimKeySource unit_source_ = core::VimKeySource::typed;
+    // press_vim_keys が鍵を流している間（Vim の ex_normal_busy・ScopedValue で戻す）。その鍵は
+    // 打った鍵ではない（note_command_key・#1528 のレビュー M1）。
+    bool normal_busy_ = false;
+    // 開いている入力行に打った鍵が 1 つでも届いたか（Vim の some_key_typed）。Ex の行を履歴に
+    // 足すのはこれが立っているときだけ（remember(CommandLine)）。note_command_key だけが立て、
+    // close_command_input だけが倒す。
+    bool command_line_typed_ = false;
     // 表に当たった単位の打った左辺で、右辺の最初の鍵を流した後に録画へ積むもの（#1312）。
     // typed_unit が録画中にだけ置き（ScopedValue で戻す）、recorded_held_lhs が積んで消す。
     std::optional<std::span<const core::VimKey>> held_lhs_;

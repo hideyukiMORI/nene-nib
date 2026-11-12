@@ -136,6 +136,27 @@ namespace
     return palette;
 }
 
+[[nodiscard]] bool recalls_of(const core::CommandLine &line, const core::InputHistory &ex,
+                              const core::InputHistory & /*search*/, core::CommandEdit direction)
+{
+    return line.recalls(ex, direction);
+}
+
+[[nodiscard]] bool recalls_of(const core::SearchLine &line, const core::InputHistory & /*ex*/,
+                              const core::InputHistory &search, core::CommandEdit direction)
+{
+    return line.prompt() == core::InputLinePrompt::go_to_line ||
+           line.prompt() == core::InputLinePrompt::replace_with || line.recalls(search, direction);
+}
+
+[[nodiscard]] bool recalls_of(const core::CommandPalette & /*palette*/,
+                              const core::InputHistory & /*ex*/,
+                              const core::InputHistory & /*search*/,
+                              core::CommandEdit /*direction*/)
+{
+    return true;
+}
+
 [[nodiscard]] std::optional<std::string> focused_of(const core::SearchLine & /*line*/)
 {
     return std::nullopt;
@@ -207,6 +228,13 @@ CommandInput recalled_command(const CommandInput &input, const core::InputHistor
 {
     return std::visit([&ex, &search, direction](const auto &value)
                       { return recalled_of(value, ex, search, direction); }, input);
+}
+
+bool recalls_command(const CommandInput &input, const core::InputHistory &ex,
+                     const core::InputHistory &search, core::CommandEdit direction)
+{
+    return std::visit([&ex, &search, direction](const auto &value)
+                      { return recalls_of(value, ex, search, direction); }, input);
 }
 
 std::optional<std::string> focused_command_of(const CommandInput &input)
