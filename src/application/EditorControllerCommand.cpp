@@ -44,6 +44,7 @@
 #include "VimKeySource.hpp"
 #include "VimMode.hpp"
 #include "VimPattern.hpp"
+#include "VimRecordedKeys.hpp"
 #include "VimSearchPattern.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimStep.hpp"
@@ -224,22 +225,47 @@ constexpr std::size_t code_point_bytes = 4;
 }
 } // namespace
 
+// 今の鍵が打った鍵か（再生の中でも `map` の右辺でも :normal!（press_vim_keys が出どころを mapped
+// にする）でもない・Vim の KeyTyped）。
+bool EditorController::keys_typed() const noexcept
+{
+    return !replay_depth_.has_value() && core::vim_key_recorded_in_macro(unit_source_);
+}
+
 bool EditorController::records_command_line() const noexcept
 {
     const auto &input = state_.command_input();
     return state_.mode() == core::EditMode::vim && input.has_value() &&
            std::holds_alternative<core::CommandLine>(input.value()) &&
-           state_.vim().macro_recording.has_value() && !replay_depth_.has_value() &&
-           core::vim_key_recorded_in_macro(unit_source_);
+           state_.vim().macro_recording.has_value() && keys_typed();
 }
 
 void EditorController::note_command_key() noexcept
 {
-    if (!replay_depth_.has_value() && !normal_busy_ &&
-        core::vim_key_recorded_in_macro(unit_source_))
+    if (keys_typed())
     {
         command_line_typed_ = true;
     }
+}
+
+// 録画中に打った `:` で Ex の行が開いたら、`:` を積む前の録画を覚える（#1569 の
+// L1）。確定（`<CR>`） と Esc（`<Esc>`）と空の行の
+// Backspace（`<BS>`）は鍵を積んで覚えを消し、それ以外（Ctrl+P・
+// タブの一覧・クリック・タブの切り替え）で行が捨てられたら settle_vim_line が録画を戻す。
+void EditorController::note_recorded_line()
+{
+    recorded_line_.reset();
+    const auto &recording = state_.vim().macro_recording;
+    if (!records_command_line() || !recording.has_value())
+    {
+        return;
+    }
+    auto keys = recording.value().keys.owned_keys();
+    if (!keys.empty())
+    {
+        keys.pop_back();
+    }
+    recorded_line_ = core::VimRecordedKeys::from(keys);
 }
 
 void EditorController::record_command_keys(std::span<const core::VimKey> keys)
@@ -334,6 +360,7 @@ void EditorController::accept(const EditCommand &intent)
         edit = vim_line_edit(line, intent.edit);
         if (line.text.empty() && edit == core::CommandEdit::backspace)
         {
+            recorded_line_.reset();
             cancel_command_input();
             return;
         }
@@ -379,6 +406,7 @@ void EditorController::accept(const CancelCommand &)
 {
     constexpr core::VimKey escape{core::VimSpecialKey::escape};
     record_command_keys(std::span<const core::VimKey>{&escape, 1U});
+    recorded_line_.reset();
     cancel_command_input();
 }
 
@@ -409,36 +437,51 @@ void EditorController::cancel_command_input()
     {
         resume_vim_insert();
     }
-    // `d:` の入力行の取消で残ったオペレータは、意図の出口の settle_line_operator
-    // が捨てる（#1549）。
+    // `d:` の入力行の取消で残ったオペレータは、意図の出口の settle_vim_line が捨てる（#1549）。
 }
 
-// オペレータ待ちの `:` `/` の入力行（#1549）。確定（vim_command_operated と検索の鍵）が閉じれば
-// engine の待ちは消えている。待ちが残ったまま Vim の入力行が開いていなければ、取消（Esc・Ctrl+C・
-// 空の行の Backspace）か、Ctrl+P・タブの一覧・クリック・タブの切り替えなどで入力行が閉じたか別の
-// 面に置き換わったので、オペレータを捨てる（Vim の clearop）。入口ごとに書かず、意図の出口のここの
-// 1 か所で拾う。
-void EditorController::settle_line_operator()
+bool EditorController::window_request_pending() const noexcept
 {
-    if (!line_operator_)
+    return state_.close_request().has_value() || state_.operation_request().has_value() ||
+           state_.closing();
+}
+
+// engine が開いた Vim の入力行（`:` `/` `?`・#1549・#1569）。確定（vim_command_operated と検索の
+// 鍵）が閉じればオペレータの待ちは消え、INSERT の `Ctrl-o` の印は始め直しで進んでいる。待ちか、
+// 始め直していない印が残ったまま Vim の入力行が開いていなければ、取消（Esc・Ctrl+C・空の行の
+// Backspace）か、Ctrl+P・タブの一覧・クリック・タブの切り替えなどで入力行が閉じたか別の面に
+// 置き換わったので、割り込みとして捨てる（Vim の clearop・ADR 0182 の決定 8）。録画中に打った
+// `:` の行が確定も Esc も無く捨てられたら、`:` から後の録画を戻す（#1569 の L1）。入口ごとに
+// 書かず、意図の出口のここの 1 か所で拾う。
+void EditorController::settle_vim_line()
+{
+    if (!vim_line_open_ || vim_line_shown())
     {
         return;
     }
+    vim_line_open_ = false;
+    auto vim = state_.vim();
+    if (recorded_line_.has_value() && vim.macro_recording.has_value())
+    {
+        vim.macro_recording.value().keys = recorded_line_.value();
+    }
+    recorded_line_.reset();
+    const bool paused = vim.mode != core::VimMode::insert && core::vim_insert_paused(vim);
+    state_ = state_.with_vim(vim.pending.has_value() || paused ? core::vim_interrupted(vim)
+                                                               : std::move(vim));
+}
+
+// 開いている入力行が Vim の `:` の行か `/` `?` の行か（settle_vim_line が読む）。
+bool EditorController::vim_line_shown() const
+{
     const auto &input = state_.command_input();
-    const auto *search =
-        input.has_value() ? std::get_if<core::SearchLine>(&input.value()) : nullptr;
-    const bool open =
-        input.has_value() && (std::holds_alternative<core::CommandLine>(input.value()) ||
-                              (search != nullptr && vim_search_prompt(search->prompt())));
-    if (open)
+    if (!input.has_value())
     {
-        return;
+        return false;
     }
-    line_operator_ = false;
-    if (state_.vim().pending.has_value())
-    {
-        state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
-    }
+    const auto *search = std::get_if<core::SearchLine>(&input.value());
+    return std::holds_alternative<core::CommandLine>(input.value()) ||
+           (search != nullptr && vim_search_prompt(search->prompt()));
 }
 
 void EditorController::accept(const PasteCommand &)
@@ -505,7 +548,8 @@ bool EditorController::refused_operator_command(
     {
         return false;
     }
-    state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
+    // 断りは Vim の clearopbeep で、INSERT の `Ctrl-o` の印は残す（#1569 の M1）。
+    state_ = state_.with_vim(core::vim_operator_cleared(state_.vim()));
     return true;
 }
 
@@ -515,10 +559,9 @@ bool EditorController::refused_operator_command(
 std::optional<core::VimRepeatFailure>
 EditorController::operator_closed_in_place(const std::string &text)
 {
-    if (state_.close_request().has_value() || state_.operation_request().has_value() ||
-        !state_.vim().pending.has_value())
+    if (window_request_pending() || !state_.vim().pending.has_value())
     {
-        state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
+        state_ = state_.with_vim(core::vim_operator_cleared(state_.vim()));
         return std::nullopt;
     }
     return stepped_vim(VimStepSource{core::VimCommandMotion{text, std::nullopt}});
@@ -613,6 +656,7 @@ std::optional<core::VimRepeatFailure> EditorController::confirmed_command()
     note_command_key();
     constexpr core::VimKey enter{core::VimSpecialKey::enter};
     record_command_keys(std::span<const core::VimKey>{&enter, 1U});
+    recorded_line_.reset();
     const auto &open = state_.command_input();
     if (open.has_value())
     {
@@ -665,7 +709,8 @@ std::optional<core::VimRepeatFailure> EditorController::submitted_command()
     return std::visit([this](const auto &value) { return this->submit(value); }, input);
 }
 
-// 鳴らすかは呼んだ道で決め、文字列（E で始まるか）では決めない（ADR 0153 の決定 3）。
+// 鳴らすかは呼んだ道で決め、文字列（E で始まるか）では決めない（ADR 0153 の決定 3）。Ex の命令の
+// 要求の中から呼ぶと、その命令は断りとして再生を打ち切る（ran_ex_result・まとめ枝 #1563）。
 void EditorController::reject(core::DisplayText message)
 {
     state_ = state_.with_command_message(std::move(message));
@@ -709,10 +754,15 @@ std::optional<core::VimRepeatFailure> EditorController::ran_ex_result(
         return core::VimRepeatFailure::refused;
     }
     const std::size_t refusals = refusals_;
+    const bool requested = window_request_pending();
     if (ran_ex_request(result.value()))
     {
-        return refusals_ == refusals ? std::nullopt
-                                     : std::optional{core::VimRepeatFailure::refused};
+        // 再生の中で窓の要求（閉じる・操作）を立てた命令は、要求を残したまま再生を打ち切る。要求は
+        // 鍵の列の後で窓が行うので、後ろの鍵が閉じる前の文書を変えない（#1569 の M2・Vim の
+        // `:tabclose` は E784 で打ち切る）。打った鍵は今までどおり後ろを捨てない。
+        const bool deferred = !keys_typed() && !requested && window_request_pending();
+        return refusals_ == refusals && !deferred ? std::nullopt
+                                                  : std::optional{core::VimRepeatFailure::refused};
     }
     // Vim が窓を決め直す option は、設定を写す前に今のキャレットの決め直しを頼む（#1524）。幅の
     // ある窓では続く persist_settings の clamp_scroll が新しい設定でその場で解く。

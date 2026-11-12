@@ -466,13 +466,12 @@ EditorFrame EditorController::press_vim_key(const core::VimKey &key)
 // deliver_vim_key の返り値で決める）。Vim は 1 鍵ごとに update_topline するので、各鍵の後に
 // 追従を解決する（ADR 0129 の追補・#1154）。解決を最後に 1 回へまとめると、画面の外へ出て戻る
 // 列（`G30G` `''''`）の先頭行が途中の画面を経ない値になる。窓の 1 打鍵の道はここを通らない。
-// :normal! の鍵は打った鍵ではないので、`:` の行を履歴に足さない（normal_busy_・#1528）。
+// :normal! の鍵は打った鍵ではないので、`:` の行を履歴に足さない（出どころ mapped・#1528）。
 EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
 {
     // :normal! の鍵は打った鍵ではない（Vim の KeyTyped が偽・`<C-o>c` の後に INSERT を始め直す側・
     // ADR 0182 の決定 4）。出どころの値は map の右辺と同じ mapped を借りる（新しい値は足さない）。
     const ScopedValue<core::VimKeySource> source{unit_source_, core::VimKeySource::mapped};
-    const ScopedValue<bool> busy{normal_busy_, true};
     const auto failed = [this](const core::VimKey &key)
     {
         settle_tab_walk_before(false);
@@ -772,7 +771,7 @@ std::optional<core::VimRepeatFailure> EditorController::deliver_vim_key(const co
     {
         // 再生の中で入力行を取り消した後の鍵も、engine へ流す前に同じ 1
         // か所で待ちを捨てる（#1549）。
-        settle_line_operator();
+        settle_vim_line();
         return step_vim(key);
     }
     // 入力行の鍵は先頭を確かめない（確定が流す engine の鍵は stepped_vim が置き直す・#1232）。
@@ -1271,7 +1270,8 @@ void EditorController::perform(const core::VimOpenCommandLine &effect)
     const auto line = core::CommandLine::empty(state_.themes()).with_fonts(given_fonts());
     state_ = state_.with_command_input(
         effect.range.empty() ? line : line.inserted(effect.range).value_or(line));
-    line_operator_ = state_.vim().pending.has_value();
+    vim_line_open_ = true;
+    note_recorded_line();
 }
 
 void EditorController::perform(const core::VimOpenSearch &effect)
@@ -1280,7 +1280,7 @@ void EditorController::perform(const core::VimOpenSearch &effect)
     state_ = state_.with_command_input(core::SearchLine::opened(effect.direction));
     state_ = state_.with_search_preview(
         SearchPreview{std::nullopt, origin, state_.text().position_of(state_.selection().caret)});
-    line_operator_ = state_.vim().pending.has_value();
+    vim_line_open_ = true;
 }
 
 // 入力行が変わるたびに 1 か所で呼ぶ（ADR 0041 の決定 3）。画面は毎回 origin から数え直すので、

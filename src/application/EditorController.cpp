@@ -563,7 +563,7 @@ void EditorController::settle_tab_walk_before(bool keeps_walk)
 void EditorController::settle_transient()
 {
     // 同じ意図の出口で、確定の外で閉じたオペレータ待ちの入力行の待ちも捨てる（#1549）。
-    settle_line_operator();
+    settle_vim_line();
     if (state_.transient().has_value() && !state_.transient_saved())
     {
         state_ = state_.without_transient();
@@ -1056,10 +1056,8 @@ core::EditorSettings EditorController::shown_settings() const
     {
         return state_.settings();
     }
-    const auto evaluated = core::evaluate_ex(
-        focused.value(), state_.settings(),
-        core::ExWindowState{state_.appearance(), state_.vim().highlight, state_.vim().incsearch},
-        state_.themes());
+    // 評価は Ex の行と同じ 1 本（窓の状態を渡す evaluated_ex・#1569 の L3）。
+    const auto evaluated = evaluated_ex(focused.value());
     if (!evaluated)
     {
         return state_.settings();

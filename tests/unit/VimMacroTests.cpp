@@ -439,6 +439,40 @@ void verify_ex_failure_stops_operator_replay()
     }
 }
 
+// 再生の中で窓の要求（閉じる・操作）を立てた Ex の命令は、要求を残したまま再生を打ち切る
+// （#1569 の M2）。要求は鍵の列の後で窓が行うので、後ろの鍵が閉じる前の文書を変えない。Vim 9.1 は
+// タブ 1 つの `:tabclose` を E784 で打ち切る（D:/NeNeNib/scripts/20261112/1563-chain/e/e.py）。
+// その場で行う命令（`:tabnext` `:only` は同じ文書のまま・`:tabnew` は新しいタブへ移る）は
+// 今までどおり後ろの鍵を流す（Vim の `normal! @a` も流す・e/m2.py）。
+using WindowRequestCase = std::pair<std::string_view, std::string_view>;
+constexpr std::array<WindowRequestCase, 7> window_request_cases{{
+    {":tabclose<CR>x", "abc\ndef\nghi"},   // close_request（窓の閉じる流れ）
+    {"jd:tabclose<CR>x", "abc\ndef\nghi"}, // オペレータ待ちの形も同じ
+    {":q<CR>x", "abc\ndef\nghi"},          // 最後のタブは窓を閉じる印（closing）
+    {":hardcopy<CR>x", "abc\ndef\nghi"},   // operation_request（印刷の面は窓が出す）
+    {":tabnext<CR>x", "bc\ndef\nghi"},     // その場（タブ 1 つ）
+    {":only<CR>x", "bc\ndef\nghi"},        // その場
+    {":tabnew<CR>x", ""},                  // その場（新しい空のタブへ移り、x は空で失敗）
+}};
+
+void verify_window_request_stops_replay()
+{
+    for (const auto &[keys, body] : window_request_cases)
+    {
+        Editing normal;
+        open_vim_document(normal, std::string(ex_replay_text));
+        vim_normal(normal.controller(), keys);
+        expect(whole_vim_body(normal.controller()) == body,
+               (":normal! " + std::string(keys) + ": a window request stops the replay").c_str());
+        Editing replayed;
+        open_vim_document(replayed, std::string(ex_replay_text));
+        applied(replayed.controller(), stored_text('a', keys));
+        vim_replay(replayed.controller(), "@a");
+        expect(whole_vim_body(replayed.controller()) == body,
+               ("@a of " + std::string(keys) + ": a window request stops the replay").c_str());
+    }
+}
+
 // `:` の行を履歴に足すのは、行の鍵が 1 つでも打たれたときだけ（Vim の getcmdline の
 // some_key_typed・#1528 のレビュー M1）。検索の行は打っていなくても足す。期待値は Vim 9.1 の
 // feedkeys(…, 'xt') の実測（レビューの h1.vim h2.vim と D:/NeNeNib/scripts/20261112/c10b/h.vim:
@@ -525,8 +559,10 @@ void verify_macro_list_closes_ex_line_unrecorded()
     applied(controller, OpenDocumentFormatList{nenenib::core::DocumentFormatKind::encoding});
     applied(controller, CancelCommand{});
     vim_replay(controller, "xq");
-    expect(named_register(controller.vim_state(), U'a').text == ":3:2x",
-           "a list that closes the : line records no <Esc>");
+    // 確定も Esc も無く捨てた `:` の行は録画から外す（#1569 の L1・Vim で測れない形なので、確定の
+    // 無い行を残して `@a` が入力行を開いたまま止まるより、無かったことにする）。
+    expect(named_register(controller.vim_state(), U'a').text == "x",
+           "a list that closes the : line drops the : line from the recording");
     expect(whole_vim_body(controller) == "bc\ndef\nghi", "the x ran on line 1 while recording");
 }
 
@@ -1637,6 +1673,7 @@ void verify_vim_macro_contracts()
     verify_macro_replays_ex_line();
     verify_ex_failure_stops_replay();
     verify_ex_failure_stops_operator_replay();
+    verify_window_request_stops_replay();
     verify_macro_replay_keeps_ex_history();
     verify_macro_list_closes_ex_line_unrecorded();
     verify_macro_q_inside_replay();

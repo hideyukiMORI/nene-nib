@@ -2237,9 +2237,14 @@ VimState vim_cancelled_input(const VimState &state)
 VimState vim_interrupted(const VimState &state)
 {
     // INSERT の `Ctrl-o` の印も捨てる（ADR 0182 の決定 8）。
-    VimState next = input_discarded(state);
+    VimState next = vim_operator_cleared(state);
     next.insert_restart = std::nullopt;
     return next;
+}
+
+VimState vim_operator_cleared(const VimState &state)
+{
+    return input_discarded(state);
 }
 
 VimState vim_switched_document(const VimState &state, std::optional<VimWantedColumn> wanted_column,
