@@ -223,6 +223,23 @@ void verify_vim_text_object_history()
     expect(editing.files().written() == original, "one undo restores a delete through an object");
 }
 
+// 本文の最後の空行の `iw`（#1507）。CRLF の文書でも前の行の末尾の語と改行（`\r\n` ごと）を取り、
+// レジスタの本文は LF の文書と同じ `b\n`（fixture は LF だけなので、CRLF の形はここで見る）。
+void verify_vim_word_object_last_empty_line_crlf()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string{"c a.b\r\n"}});
+    applied(controller, OpenDocument{sample_path()});
+    applied(controller, SelectEditMode{EditMode::vim});
+    vim_replay(controller, "GciwX<Esc>");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "c a.X",
+           "ciw on the last empty line of a CRLF text takes the word before it and the CRLF");
+    expect(controller.vim_state().unnamed_register.value().text == "b\n",
+           "the register holds the word and an LF as for an LF text");
+}
+
 void verify_vim_text_object_dot()
 {
     Editing editing;
@@ -589,6 +606,7 @@ void verify_vim_text_object_contracts()
     verify_vim_text_object_cancellation();
     verify_vim_text_object_visual();
     verify_vim_text_object_history();
+    verify_vim_word_object_last_empty_line_crlf();
     verify_vim_text_object_dot();
     verify_vim_text_object_residuals();
     verify_vim_text_object_quote_pairs();

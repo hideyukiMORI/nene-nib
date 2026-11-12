@@ -9,6 +9,7 @@
 #include "VimBracketPair.hpp"
 #include "VimCaret.hpp"
 #include "VimCharacterBoundary.hpp"
+#include "VimEmptyChange.hpp"
 #include "VimMode.hpp"
 #include "VimMotionRange.hpp"
 #include "VimParagraphObject.hpp"
@@ -316,15 +317,24 @@ constexpr char32_t escape_character = U'\\';
     return begin;
 }
 
+// 語の範囲は空行で空でも `c` が空の本文を書く（#979）。Vim の current_word は空行の NUL を
+// inclusive に選ぶので oap->empty にならず、op_change は空を yank する（実測）。括弧などのほかの
+// 空の範囲（`ci(` の `()`）は書かないので、印は語の範囲だけが立てる。
+[[nodiscard]] VimMotionRange writing_empty(VimMotionRange range)
+{
+    range.empty_change = VimEmptyChange::writes_empty;
+    return range;
+}
+
 [[nodiscard]] VimMotionRange word_motion_range(const TextBuffer &text, Offset begin, Offset end,
                                                VimTextObjectRequest request)
 {
     if (request.scope == VimTextObjectScope::inner)
     {
-        return characters_through(text, begin, end);
+        return writing_empty(characters_through(text, begin, end));
     }
-    return characters_through(
-        text, with_leading_blanks(text, begin, end, word_class_of(request.object)), end);
+    return writing_empty(characters_through(
+        text, with_leading_blanks(text, begin, end, word_class_of(request.object)), end));
 }
 
 // 選択が無いときの 1 つめの単位と、そこから回数ぶん。
@@ -337,30 +347,6 @@ constexpr char32_t escape_character = U'\\';
         return std::nullopt;
     }
     return extended_end(text, first.value(), request, count - 1);
-}
-
-// 前向き（選択が無いか、caret が anchor 以上）。VISUAL で選択が 1 文字より大きいときは
-// 始まりが選択の小さいほうのままで、caret 側だけ伸びる。
-[[nodiscard]] VimTextObjectOutcome forward_word_outcome(const TextBuffer &text,
-                                                        const Selection &selection,
-                                                        VimTextObjectRequest request,
-                                                        std::size_t count)
-{
-    const bool grows = has_selection(selection);
-    const Offset begin =
-        grows ? selection_range(selection).begin
-              : run_start_in_line(text, selection.caret, word_class_of(request.object));
-    const auto end = grows ? extended_end(text, selection.caret, request, count)
-                           : fresh_word_end(text, begin, request, count);
-    if (!end.has_value())
-    {
-        // 回数が本文で尽きた。Vim はそこまで作りかけた形を残してキャレットを本文の終わりへ
-        // 運ぶ（`d9iw` が最後の文字に載るのはこれ・実測）。
-        return VimTextObjectCancel{Selection{begin, buffer_end(text)}};
-    }
-    const VimMotionRange range = grows ? characters_through(text, begin, end.value())
-                                       : word_motion_range(text, begin, end.value(), request);
-    return VimTextObjectSpan{range, forward_selection(text, range), VimMode::visual};
 }
 
 // 後ろ向きの選択（caret が anchor より小さい）。Vim は anchor を動かさず、caret だけを
@@ -389,6 +375,78 @@ constexpr char32_t escape_character = U'\\';
     const Selection grown{selection.anchor, caret};
     return VimTextObjectSpan{VimMotionRange{selection_range(grown), VimRegisterKind::characters},
                              grown, VimMode::visual};
+}
+
+// 本文の最後の空行の `iw` `iW`（#1507・Vim 9.1 の textobject.c の current_word）。fwd_word は
+// 本文の終わりで FAIL を返すが current_word は戻り値を見ず、1 桁目に居るので decl で前の行の
+// 最後の文字（前の行が空ならその行）へ戻る。始まり（空行）より手前に着いた範囲は
+// do_pending_operator が両端を入れ替えるので、前の行の末尾の語か空白と改行になる（実測）。
+// VISUAL は VIsual が空行・caret が戻った所の後ろ向きの選択で、残りの回数は後ろ向きの選択と同じに
+// 手前へ広げる（`v2iw`）。オペレータの 2 つめは incl で空行へ戻ってまた fwd_word が失敗し、
+// oneleft が 1 桁目で失敗して空行の上の exclusive な空の範囲になる（`c` は空を書かず `y` は書く）。
+// 3 つめからは `count > 1` の FAIL。
+[[nodiscard]] VimTextObjectOutcome last_empty_line_outcome(const TextBuffer &text, Offset begin,
+                                                           VimTextObjectRequest request,
+                                                           std::size_t count)
+{
+    const Offset back = retreated_to_text(text, begin).value_or(begin);
+    const Selection backward{begin, back};
+    if (is_visual_mode(request.mode))
+    {
+        if (count > 1)
+        {
+            return backward_word_outcome(text, backward, request, count - 1);
+        }
+        return VimTextObjectSpan{
+            VimMotionRange{selection_range(backward), VimRegisterKind::characters}, backward,
+            VimMode::visual};
+    }
+    if (count == 1)
+    {
+        return VimTextObjectSpan{
+            writing_empty(VimMotionRange{OffsetRange{back, begin}, VimRegisterKind::characters}),
+            backward, VimMode::visual};
+    }
+    if (count == 2)
+    {
+        return VimTextObjectSpan{
+            VimMotionRange{OffsetRange{begin, begin}, VimRegisterKind::characters},
+            Selection{begin, begin}, VimMode::visual};
+    }
+    return VimTextObjectCancel{Selection{begin, begin}};
+}
+
+// 前向き（選択が無いか、caret が anchor 以上）。VISUAL で選択が 1 文字より大きいときは
+// 始まりが選択の小さいほうのままで、caret 側だけ伸びる。
+[[nodiscard]] VimTextObjectOutcome forward_word_outcome(const TextBuffer &text,
+                                                        const Selection &selection,
+                                                        VimTextObjectRequest request,
+                                                        std::size_t count)
+{
+    const bool grows = has_selection(selection);
+    const Offset begin =
+        grows ? selection_range(selection).begin
+              : run_start_in_line(text, selection.caret, word_class_of(request.object));
+    if (!grows)
+    {
+        // 1 つめの単位が始まりより手前に着くのは、本文の最後の空行で fwd_word が動けないときだけ。
+        const auto first = unit_end(text, begin, request);
+        if (first.has_value() && first.value() < begin)
+        {
+            return last_empty_line_outcome(text, begin, request, count);
+        }
+    }
+    const auto end = grows ? extended_end(text, selection.caret, request, count)
+                           : fresh_word_end(text, begin, request, count);
+    if (!end.has_value())
+    {
+        // 回数が本文で尽きた。Vim はそこまで作りかけた形を残してキャレットを本文の終わりへ
+        // 運ぶ（`d9iw` が最後の文字に載るのはこれ・実測）。
+        return VimTextObjectCancel{Selection{begin, buffer_end(text)}};
+    }
+    const VimMotionRange range = grows ? characters_through(text, begin, end.value())
+                                       : word_motion_range(text, begin, end.value(), request);
+    return VimTextObjectSpan{range, forward_selection(text, range), VimMode::visual};
 }
 
 [[nodiscard]] VimTextObjectOutcome word_outcome(const TextBuffer &text, const Selection &selection,

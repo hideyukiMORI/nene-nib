@@ -1,14 +1,11 @@
 #include "VimStepDetail.hpp"
 
 #include "VimMotionRange.hpp"
-#include "VimTextObject.hpp"
 #include "VimTextObjectCancel.hpp"
-#include "VimTextObjectOutcome.hpp"
 #include "VimTextObjectSpan.hpp"
 
 #include <optional>
 #include <utility>
-#include <variant>
 
 namespace nenenib::core
 {
@@ -17,8 +14,6 @@ using detail::finished_input_wait;
 using detail::performed;
 using detail::rested_in;
 using detail::visual_resting;
-using detail::word_writing_empty;
-using detail::writing_empty;
 
 namespace
 {
@@ -89,21 +84,6 @@ namespace detail
     next.wanted_column =
         VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(view.text, caret)};
     return VimStep{std::move(next), VimMoveTo{caret}};
-}
-
-// 語の範囲（`iw` `iW` `aw` `aW`）。空行で空でも `c` は空の本文を書く（#979・VimEmptyChange）。
-// Vim の current_word は空行の NUL を inclusive に選ぶので oap->empty にならず、op_change は空を
-// yank する（実測）。括弧などのほかの空の範囲（`ci(` の `()`）は書かないので印を立てない。
-[[nodiscard]] VimTextObjectOutcome word_writing_empty(VimTextObjectOutcome outcome,
-                                                      VimTextObject object)
-{
-    if ((object == VimTextObject::word || object == VimTextObject::big_word) &&
-        std::holds_alternative<VimTextObjectSpan>(outcome))
-    {
-        auto &span = std::get<VimTextObjectSpan>(outcome);
-        span.range = writing_empty(span.range);
-    }
-    return outcome;
 }
 } // namespace detail
 } // namespace nenenib::core

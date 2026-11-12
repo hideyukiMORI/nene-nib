@@ -14,9 +14,7 @@
 #include "VimScreenPosition.hpp"
 #include "VimScrollDirection.hpp"
 #include "VimStep.hpp"
-#include "VimTextObject.hpp"
 #include "VimTextObjectCancel.hpp"
-#include "VimTextObjectOutcome.hpp"
 #include "VimTextObjectSpan.hpp"
 
 #include <cstddef>
@@ -274,8 +272,6 @@ repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::
                                             const VimTextObjectSpan &span);
 [[nodiscard]] VimStep completed_text_object(const VimState &state, const VimEditorView &view,
                                             const VimTextObjectCancel &cancel);
-[[nodiscard]] VimTextObjectOutcome word_writing_empty(VimTextObjectOutcome outcome,
-                                                      VimTextObject object);
 [[nodiscard]] std::optional<char32_t> macro_name_of(const VimKey &key) noexcept;
 [[nodiscard]] VimStep started_macro(const VimState &state, const VimKey &key);
 [[nodiscard]] VimRegister appended_recording(const VimRegister &old, std::string_view text);

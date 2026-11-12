@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 10635a0f5fcce466c81ad2d5a803ab537f56e4774450bd6a784cfca9c3fed01f / 4486 fixtures
+// fixtures.json: sha256 76d41020854eb787e9828d8b79a246a0fc9ab90dea1d3c0301f4058f596ed79d / 4522 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4486> vim_fixtures{{
+constexpr std::array<VimFixture, 4522> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4498,6 +4498,42 @@ constexpr std::array<VimFixture, 4486> vim_fixtures{{
     {"block-visual-put-wide-cut-dollar-short", "aあ\nabcd\nabc", "yl$<C-v>jjp", "aa\naa\naa", 1, 2, "あ\nbcd\nbc", "\0263", std::nullopt},
     {"block-visual-put-wide-line-end", "aあb\nabcd", "yl$<C-v>jhp", "aあa\nabca", 1, 5, "b\nd", "\0261", std::nullopt},
     {"block-visual-put-named-lines", "abc\ndef\nghi", "\"byy<C-v>j\"bp", "bc\nef\nabc\nghi", 3, 1, "a\nd", "\0261", std::nullopt},
+    {"textobject-word-lastempty-ciW", "c a.b", "o<Esc>ciWX<Esc>", "c a.X", 1, 5, "b\n", "v", std::nullopt},
+    {"textobject-word-lastempty-ciw", "c a.b", "o<Esc>ciwX<Esc>", "c a.X", 1, 5, "b\n", "v", std::nullopt},
+    {"textobject-word-lastempty-diW", "c a.b", "o<Esc>diW", "c a.", 1, 4, "b\n", "v", std::nullopt},
+    {"textobject-word-lastempty-diw", "c a.b", "o<Esc>diw", "c a.", 1, 4, "b\n", "v", std::nullopt},
+    {"textobject-word-lastempty-yiW", "c a.b", "o<Esc>yiW", "c a.b\n", 1, 5, "b\n", "v", std::nullopt},
+    {"textobject-word-lastempty-yiw", "c a.b", "o<Esc>yiw", "c a.b\n", 1, 5, "b\n", "v", std::nullopt},
+    {"textobject-word-lastempty-viWd", "c a.b", "o<Esc>viWd", "c a.", 1, 4, "b\n", "v", std::nullopt},
+    {"textobject-word-lastempty-viwy", "c a.b", "o<Esc>viwy", "c a.b\n", 1, 5, "b\n", "v", std::nullopt},
+    {"textobject-word-lastempty-viw-caret", "c a.b", "o<Esc>viw<Esc>", "c a.b\n", 1, 5, "", "", std::nullopt},
+    {"textobject-word-lastempty-viwo", "c a.b", "o<Esc>viwo<Esc>", "c a.b\n", 2, 1, "", "", std::nullopt},
+    {"textobject-word-lastempty-viwiwd", "c a b", "o<Esc>viwiwd", "c a", 1, 3, " b\n", "v", std::nullopt},
+    {"textobject-word-lastempty-trailing-blank", "c a.b ", "o<Esc>ciWX<Esc>", "c a.bX", 1, 6, " \n", "v", std::nullopt},
+    {"textobject-word-lastempty-trailing-blanks-diw", "c a.b  ", "o<Esc>diw", "c a.b ", 1, 6, " \n", "v", std::nullopt},
+    {"textobject-word-lastempty-previous-empty", "c a.b", "o<Esc>o<Esc>ciWX<Esc>", "c a.b\nX", 2, 1, "\n", "v", std::nullopt},
+    {"textobject-word-lastempty-fuzz-form", "c a.b\nd e", "jv)dciWX<Esc>", "c a.X", 1, 5, "b\n", "v", std::nullopt},
+    {"textobject-word-lastempty-single-char-word", "ab c", "o<Esc>diw", "ab ", 1, 3, "c\n", "v", std::nullopt},
+    {"textobject-word-lastempty-wide", "c a.あい", "o<Esc>yiw", "c a.あい\n", 1, 8, "い\n", "v", std::nullopt},
+    {"textobject-word-lastempty-d2iw", "c a b", "o<Esc>d2iw", "c a b\n", 2, 1, "", "", std::nullopt},
+    {"textobject-word-lastempty-d2iW", "c a b", "o<Esc>d2iW", "c a b\n", 2, 1, "", "", std::nullopt},
+    {"textobject-word-lastempty-y3iw", "c a b", "o<Esc>y3iw", "c a b\n", 2, 1, "", "", std::nullopt},
+    {"textobject-word-lastempty-v2iwd", "c a b", "o<Esc>v2iwd", "c a", 1, 3, " b\n", "v", std::nullopt},
+    {"textobject-word-lastempty-only-empty-lines", "", "o<Esc>diw", "", 1, 1, "\n\n", "V", std::nullopt},
+    {"textobject-word-lastempty-only-empty-lines-ciw", "", "o<Esc>o<Esc>ciwX<Esc>", "\nX", 2, 1, "\n", "v", std::nullopt},
+    {"textobject-word-lastempty-daw-fails", "c a.b", "o<Esc>dawx", "c a.b\n", 2, 1, "", "", std::nullopt},
+    {"textobject-word-lastempty-caW-fails", "c a.b", "o<Esc>caWX<Esc>", "c a.b\n", 2, 1, "", "", std::nullopt},
+    {"textobject-word-lastempty-vaw-fails", "c a.b", "o<Esc>vawd", "c a.b\n", 2, 1, "", "", std::nullopt},
+    {"textobject-word-lastempty-cib-fails", "c a.b", "o<Esc>ci(X<Esc>", "c a.b\n", 2, 1, "", "", std::nullopt},
+    {"textobject-word-lastempty-dot", "c a b", "o<Esc>diw..", "c ", 1, 2, "a", "v", std::nullopt},
+    {"textobject-word-lastempty-control-next-line", "c a.b\nz", "o<Esc>ciWX<Esc>", "c a.b\nX\nz", 2, 1, "", "v", std::nullopt},
+    {"textobject-word-lastempty-control-middle-empty", "c a.b\n\nx", "jciWX<Esc>", "c a.b\nX\nx", 2, 1, "", "v", std::nullopt},
+    {"textobject-word-lastempty-c2iw", "c a b", "o<Esc>c2iwX<Esc>", "c a b\nX", 2, 1, "", "", std::nullopt},
+    {"textobject-word-lastempty-y2iw", "c a b", "o<Esc>y2iw", "c a b\n", 2, 1, "", "v", std::nullopt},
+    {"textobject-word-lastempty-c3iw", "c a b", "o<Esc>c3iwX<Esc>", "c a b\n", 2, 1, "", "", std::nullopt},
+    {"textobject-word-lastempty-previous-empty-diw", "c a.b", "o<Esc>o<Esc>diw", "c a.b", 1, 1, "\n\n", "V", std::nullopt},
+    {"textobject-word-lastempty-blank-line-diw", "ab\n  ", "Go<Esc>diw", "ab", 1, 1, "  \n\n", "V", std::nullopt},
+    {"textobject-word-lastempty-indented-word-diw", "ab\n  cd", "Go<Esc>diw", "ab\n  c", 2, 3, "d\n", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
