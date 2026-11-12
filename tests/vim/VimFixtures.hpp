@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 e2849ae06185e32a0f7bc4626eee05481132faa101fb0f17bb3511f4f97c4586 / 4797 fixtures
+// fixtures.json: sha256 e6c826c56bb6feb7074e907cac09cb2e7d5a5f3e5f8b7db1ae0b78b383e89e9b / 4848 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4797> vim_fixtures{{
+constexpr std::array<VimFixture, 4848> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4809,6 +4809,57 @@ constexpr std::array<VimFixture, 4797> vim_fixtures{{
     {"textobject-sentence-linehead-fullwidth-stop", "ab cd。\n。\nx1 foo. end", "jyas", "ab cd。\n。\nx1 foo. end", 1, 1, "ab cd。\n。\nx1 foo. ", "v", std::nullopt},
     {"textobject-sentence-linehead-fullwidth-stop-yis", "ab cd。\n。x\nx1 foo. end", "jyis", "ab cd。\n。x\nx1 foo. end", 1, 1, "ab cd。\n。x\nx1 foo.", "v", std::nullopt},
     {"textobject-sentence-linehead-fuzz-form", "ab ＡＢＣ.\nＡＢＣ.\nx1 foo. end", "jdawvas~", "ab ＡＢＣ.\n.\nX1 FOO. end", 3, 1, "ＡＢＣ", "v", std::nullopt},
+    {"g-home-end-g-home", "abc def", "$g<Home>", "abc def", 1, 1, "", "", std::nullopt},
+    {"g-home-end-g-home-tab-j", "\tab\nabcdefghijkl", "lg<Home>j", "\tab\nabcdefghijkl", 2, 8, "", "", std::nullopt},
+    {"g-home-end-g0-tab-j", "\tab\nabcdefghijkl", "lg0j", "\tab\nabcdefghijkl", 2, 8, "", "", std::nullopt},
+    {"g-home-end-3g-home", "abc def", "$3g<Home>", "abc def", 1, 1, "", "", std::nullopt},
+    {"g-home-end-dg-home", "abc def", "$dg<Home>", "f", 1, 1, "abc de", "v", std::nullopt},
+    {"g-home-end-yg-home", "abc def", "$yg<Home>", "abc def", 1, 1, "abc de", "v", std::nullopt},
+    {"g-home-end-vg-home-y", "abc def", "$vg<Home>y", "abc def", 1, 1, "abc def", "v", std::nullopt},
+    {"g-home-end-g-home-dot", "abc def\nghi jkl", "$dg<Home>j$.", "f\nl", 2, 1, "ghi jk", "v", std::nullopt},
+    {"g-home-end-g-end", "abc def", "g<End>", "abc def", 1, 7, "", "", std::nullopt},
+    {"g-home-end-g-end-trailing", "abc def   \nxyz", "g<End>", "abc def   \nxyz", 1, 7, "", "", std::nullopt},
+    {"g-home-end-g-end-trailing-j", "abc def   \nabcdefghijkl", "g<End>j", "abc def   \nabcdefghijkl", 2, 7, "", "", std::nullopt},
+    {"g-home-end-gdollar-trailing-j", "abc def   \nabcdefghijkl", "g$j", "abc def   \nabcdefghijkl", 2, 10, "", "", std::nullopt},
+    {"g-home-end-g-end-trailing-tab", "abc\t\t\nxyz", "g<End>", "abc\t\t\nxyz", 1, 3, "", "", std::nullopt},
+    {"g-home-end-g-end-blank", "     \nabc", "g<End>", "     \nabc", 1, 1, "", "", std::nullopt},
+    {"g-home-end-g-end-blank-j", "     \nabcdefgh", "g<End>j", "     \nabcdefgh", 2, 1, "", "", std::nullopt},
+    {"g-home-end-g-end-empty", "\nabc", "g<End>", "\nabc", 1, 1, "", "", std::nullopt},
+    {"g-home-end-g-end-wide", "日本語  \nabcdefghij", "g<End>", "日本語  \nabcdefghij", 1, 7, "", "", std::nullopt},
+    {"g-home-end-g-end-wide-j", "日本語  \nabcdefghij", "g<End>j", "日本語  \nabcdefghij", 2, 5, "", "", std::nullopt},
+    {"g-home-end-2g-end", "ab  \ncd  \nef", "2g<End>", "ab  \ncd  \nef", 2, 2, "", "", std::nullopt},
+    {"g-home-end-2g-end-j", "ab  \ncd  \nabcdefgh", "2g<End>j", "ab  \ncd  \nabcdefgh", 3, 2, "", "", std::nullopt},
+    {"g-home-end-dg-end", "ab cd  \nxyz", "dg<End>", "  \nxyz", 1, 1, "ab cd", "v", std::nullopt},
+    {"g-home-end-dg-end-plain", "ab cd\nxyz", "ldg<End>", "a\nxyz", 1, 1, "b cd", "v", std::nullopt},
+    {"g-home-end-yg-end", "ab cd  \nxyz", "yg<End>", "ab cd  \nxyz", 1, 1, "ab cd", "v", std::nullopt},
+    {"g-home-end-cg-end", "ab cd  \nxyz", "lcg<End>X<Esc>", "aX  \nxyz", 1, 2, "b cd", "v", std::nullopt},
+    {"g-home-end-d2g-end", "ab  \ncd  \nef", "d2g<End>", "ef", 1, 1, "ab  \ncd  \n", "V", std::nullopt},
+    {"g-home-end-dg-end-dot", "ab cd  \nxyz uv \nq", "dg<End>j0.", "  \n \nq", 2, 1, "xyz uv", "v", std::nullopt},
+    {"g-home-end-vg-end-y", "ab cd  \nxyz", "vg<End>y", "ab cd  \nxyz", 1, 1, "ab cd  \n", "v", std::nullopt},
+    {"g-home-end-vg-end-y-last", "ab cd  ", "vg<End>y", "ab cd  ", 1, 1, "ab cd  ", "v", std::nullopt},
+    {"g-home-end-vg-end-d", "ab cd  \nxyz", "lvg<End>d", "axyz", 1, 2, "b cd  \n", "v", std::nullopt},
+    {"g-home-end-Vg-end-y", "ab cd  \nxyz", "Vg<End>y", "ab cd  \nxyz", 1, 1, "ab cd  \n", "V", std::nullopt},
+    {"g-home-end-g-end-a-esc", "ab cd  \nxyz", "g<End>a!<Esc>", "ab cd!  \nxyz", 1, 6, "", "", std::nullopt},
+    {"g-home-end-ctrl-v-g-end-d", "ab cd  \nabcdefgh\nxy", "<C-v>jg<End>d", "\n\nxy", 1, 1, "ab cd  \nabcdefgh", "\0269", std::nullopt},
+    {"g-home-end-d2gdollar", "ab  \ncd  \nef", "d2g$", "ef", 1, 1, "ab  \ncd  \n", "V", std::nullopt},
+    {"g-home-end-ctrl-v-gdollar-d", "ab cd  \nabcdefgh\nxy", "<C-v>jg$d", "\n\nxy", 1, 1, "ab cd  \nabcdefgh", "\0269", std::nullopt},
+    {"g-home-end-back-dg-end", "ab cd  \nxyz", "5ldg<End>", "ab c \nxyz", 1, 5, "d ", "v", std::nullopt},
+    {"g-home-end-back-yg-end", "ab cd  \nxyz", "6lyg<End>", "ab cd  \nxyz", 1, 5, "d  ", "v", std::nullopt},
+    {"g-home-end-back-cg-end", "ab cd  \nxyz", "6lcg<End>X<Esc>", "ab cX\nxyz", 1, 5, "d  ", "v", std::nullopt},
+    {"g-home-end-back-dg-end-dot", "ab cd  \nxy z  \nq", "6ldg<End>j$.", "ab c\nxy \nq", 2, 3, "z  ", "v", std::nullopt},
+    {"g-home-end-back-blank-dg-end", "     \nabc", "3ldg<End>", " \nabc", 1, 1, "    ", "v", std::nullopt},
+    {"g-home-end-back-blank-cg-end", "   \nabc", "lcg<End>X<Esc>", "X \nabc", 1, 1, "  ", "v", std::nullopt},
+    {"g-home-end-combining-blank-g-end", "ab ́  \nxyz", "g<End>", "ab ́  \nxyz", 1, 2, "", "", std::nullopt},
+    {"g-home-end-combining-blank-dg-end", "ab ́  \nxyz", "$dg<End>", "a\nxyz", 1, 1, "b ́  ", "v", std::nullopt},
+    {"g-home-end-combining-blank-g-underscore", "ab ́  \nxyz", "g_", "ab ́  \nxyz", 1, 3, "", "", std::nullopt},
+    {"g-home-end-combining-blank-last-g-end", "ab ́\nxyz", "$g<End>", "ab ́\nxyz", 1, 2, "", "", std::nullopt},
+    {"g-home-end-combining-letter-g-end", "ab é  \nxyz", "g<End>", "ab é  \nxyz", 1, 4, "", "", std::nullopt},
+    {"g-home-end-combining-blank-g-end-j", "ab ́  \nabcdefgh", "g<End>j", "ab ́  \nabcdefgh", 2, 2, "", "", std::nullopt},
+    {"g-home-end-in-place-dg-end", "ab cd  \nxyz", "4ldg<End>", "ab c  \nxyz", 1, 5, "d", "v", std::nullopt},
+    {"g-home-end-back-dg-underscore", "ab cd  \nxyz", "6ldg_", "ab c\nxyz", 1, 4, "d  ", "v", std::nullopt},
+    {"g-home-end-empty-dg-end", "\nabc", "dg<End>", "\nabc", 1, 1, "", "", std::nullopt},
+    {"g-home-end-wide-back-dg-end", "日本語  \nxyz", "$dg<End>", "日本\nxyz", 1, 4, "語  ", "v", std::nullopt},
+    {"g-home-end-wide-back-yg-end", "日本語  \nxyz", "$yg<End>", "日本語  \nxyz", 1, 7, "語  ", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

@@ -1926,6 +1926,38 @@ void verify_vim_grid_display_line_failure()
            "grid g0 g$ on a giant line land on the caret screen row edges");
 }
 
+// 格子の g<Home> g<End>（Issue #1522・ADR 0147 の決定 9）。g<Home> は g0 と同じ段の頭。g<End> は
+// g$ の着地（段の最後の文字）から空白を左へ越えた最後の非空白で、欲しい列はその桁。段が空白だけなら
+// 前の段の最後の非空白まで戻る。2g<End> は g$ と同じく 1 画面行下の段の端へ歩いてから戻り、戻った
+// ので欲しい列は行末の印でなく着地の桁。巨大な 1 行の格子でも段の端に着く。
+void verify_vim_grid_display_line_home_end()
+{
+    const auto parsed = TextBuffer::from_utf8("abcdefghij      klmn\nabcdefgh        xy");
+    expect(parsed.has_value(), "the grid g<Home> g<End> sample parses");
+    const auto &text = parsed.value();
+    const auto at = [&text](ScreenMove move)
+    { return cut_screen_move(text, move, grid_width, wanted_at(1)); };
+    expect(moved_to(at(ScreenMove{Offset{10}, "g<Home>"})) == std::optional{Offset{8}},
+           "grid g<Home> lands on the first character of the caret screen row like g0");
+    const auto back = at(ScreenMove{Offset{10}, "g<End>"});
+    expect(moved_to(back) == std::optional{Offset{9}} &&
+               back.next.wanted_column == std::optional{wanted_at(10)},
+           "grid g<End> walks back over the row's trailing blanks and wants that column");
+    expect(moved_to(at(ScreenMove{Offset{21 + 10}, "g<End>"})) == std::optional{Offset{21 + 7}},
+           "grid g<End> on a blank screen row walks back into the previous row");
+    const auto counted = at(ScreenMove{Offset{2}, "2g<End>"});
+    expect(moved_to(counted) == std::optional{Offset{9}} && !counted.failure.has_value() &&
+               counted.next.wanted_column == std::optional{wanted_at(10)},
+           "grid 2g<End> walks one screen row down, then back over the blanks");
+    const auto giant = TextBuffer::from_utf8(std::string(20'000, 'x'));
+    expect(giant.has_value(), "the giant grid line parses");
+    expect(moved_to(cut_screen_move(giant.value(), ScreenMove{Offset{16'390}, "g<Home>"},
+                                    grid_width, wanted_at(1))) == std::optional{Offset{16'384}} &&
+               moved_to(cut_screen_move(giant.value(), ScreenMove{Offset{16'390}, "g<End>"},
+                                        grid_width, wanted_at(1))) == std::optional{Offset{16'391}},
+           "grid g<Home> g<End> on a giant line land on the caret screen row edges");
+}
+
 // 横に送る文書（巨大な行の窓の text 形・columns > 0）の g0 gm g$ は見えている升の左端・中・右端
 // （ADR 0147 の決定 2）。文字組みの問いを立てない。wrap の文書の巨大な行の窓（文字組みが有効で
 // row_columns を持つ）でも columns > 0 が先に見られ、画面行の範囲を問わない
@@ -1972,6 +2004,7 @@ void verify_vim_viewport_request()
     verify_vim_display_cut_first_line_only();
     verify_vim_grid_display_line_edges();
     verify_vim_grid_display_line_failure();
+    verify_vim_grid_display_line_home_end();
     verify_vim_scrolled_display_line_edges();
     verify_vim_counted_alignment_round_trip();
     verify_indexed_virtual_columns();

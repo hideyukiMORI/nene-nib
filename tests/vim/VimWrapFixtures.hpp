@@ -2,7 +2,7 @@
 // oracle: C:\Program Files\Vim\vim91\vim.exe - VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3
 // 2024 23:53:58)
 
-// wrap-fixtures.json: sha256 8320f868d7484b7971f9dbf81cc4001058a422c73c7f36f3417644f28b02a647
+// wrap-fixtures.json: sha256 13ce6e0d0f53f1740b2e6551d47b618e351d535dfed7acd7d09549a483a1169a
 
 // measurement: sha256 4f48b1c81d44d1a648ecde42c8b3a679af91e39f8ff855c97ae71d40a22bb1fe
 
@@ -16,7 +16,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 343> vim_wrap_fixtures{{
+constexpr std::array<VimFixture, 380> vim_wrap_fixtures{{
     {"wrap-top-00",
      "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
      "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
@@ -4216,5 +4216,316 @@ constexpr std::array<VimFixture, 343> vim_wrap_fixtures{{
      "xxx\nxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxx\nxx"
      "xxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
      9, 1, "", "", VimViewportFixture{7, 9, 12, 1, 7, 3, 20, 0}},
+    {"g-home-end-wrap-g-home",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "g<Home>",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     2, 21, "", "", VimViewportFixture{12, 1, 2, 30, 1, 6, 20, 0}},
+    {"g-home-end-wrap-g-home-j",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "g<Home>j",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     3, 21, "", "", VimViewportFixture{12, 1, 2, 30, 1, 6, 20, 0}},
+    {"g-home-end-wrap-3g-home",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "3g<Home>",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     2, 21, "", "", VimViewportFixture{12, 1, 2, 30, 1, 6, 20, 0}},
+    {"g-home-end-wrap-dg-home",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "dg<Home>",
+     "short\nabcdefghijklmnopqrstdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklm"
+     "nopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmnopqrstuvwx"
+     "yzabcdefghijklmnopqrstuvwx",
+     2, 21, "uvwxyzabc", "v", VimViewportFixture{12, 1, 2, 30, 1, 6, 20, 0}},
+    {"g-home-end-wrap-vg-home-y",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "vg<Home>y",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     2, 21, "uvwxyzabcd", "v", VimViewportFixture{12, 1, 2, 30, 1, 6, 20, 0}},
+    {"g-home-end-wrap-g-end",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "g<End>",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     2, 40, "", "", VimViewportFixture{12, 1, 2, 30, 1, 6, 20, 0}},
+    {"g-home-end-wrap-g-end-j",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "g<End>j",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     3, 40, "", "", VimViewportFixture{12, 1, 2, 30, 1, 6, 20, 0}},
+    {"g-home-end-wrap-2g-end",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "2g<End>",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     2, 60, "", "", VimViewportFixture{12, 1, 2, 30, 1, 6, 20, 0}},
+    {"g-home-end-wrap-2g-end-j",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "2g<End>j",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     3, 80, "", "", VimViewportFixture{12, 1, 2, 30, 1, 6, 20, 0}},
+    {"g-home-end-wrap-dg-end",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "dg<End>",
+     "short\nabcdefghijklmnopqrstuvwxyzabcopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmnopqrstuvwxyz"
+     "abcdefghijklmnopqrstuvwx",
+     2, 30, "defghijklmn", "v", VimViewportFixture{12, 1, 2, 30, 1, 6, 20, 0}},
+    {"g-home-end-wrap-d2g-end",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "d2g<End>",
+     "short\nabcdefghijklmnopqrstuvwxyzabcijklmnopqrstuvwxyzab\nabcdefghijklmnopqrstuvwxyzabcdefghi"
+     "jklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrst"
+     "uvwx",
+     2, 30, "defghijklmnopqrstuvwxyzabcdefgh", "v", VimViewportFixture{12, 1, 2, 30, 1, 6, 20, 0}},
+    {"g-home-end-wrap-vg-end-y",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "vg<End>y",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     2, 30, "defghijklmn", "v", VimViewportFixture{12, 1, 2, 30, 1, 6, 20, 0}},
+    {"g-home-end-wrap-last-row-g-end",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "g<End>",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     4, 50, "", "", VimViewportFixture{12, 1, 4, 45, 1, 6, 20, 0}},
+    {"g-home-end-wrap-last-row-vg-end-y",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "vg<End>y",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     4, 45, "stuvwx", "v", VimViewportFixture{12, 1, 4, 45, 1, 6, 20, 0}},
+    {"g-home-end-wrap-last-row-g-home",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "g<Home>",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     4, 41, "", "", VimViewportFixture{12, 1, 4, 45, 1, 6, 20, 0}},
+    {"g-home-end-wrap-9g-end-x",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     "9g<End>x",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx",
+     4, 50, "", "", VimViewportFixture{12, 1, 4, 45, 1, 6, 20, 0}},
+    {"g-home-end-wrap-blank-tail-g-end",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "g<End>",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     2, 28, "", "", VimViewportFixture{12, 1, 2, 25, 1, 6, 20, 0}},
+    {"g-home-end-wrap-blank-tail-g-end-j",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "g<End>j",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     3, 28, "", "", VimViewportFixture{12, 1, 2, 25, 1, 6, 20, 0}},
+    {"g-home-end-wrap-blank-tail-2g-end",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "2g<End>",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     2, 28, "", "", VimViewportFixture{12, 1, 2, 5, 1, 6, 20, 0}},
+    {"g-home-end-wrap-blank-tail-dg-end",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "dg<End>",
+     "short\nabcdefghijklmnopqrsta            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     2, 22, "bcdefgh", "v", VimViewportFixture{12, 1, 2, 22, 1, 6, 20, 0}},
+    {"g-home-end-wrap-blank-row-g-end",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "g<End>",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     3, 20, "", "", VimViewportFixture{12, 1, 3, 25, 1, 6, 20, 0}},
+    {"g-home-end-wrap-blank-row-g-end-j",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "g<End>j",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     4, 20, "", "", VimViewportFixture{12, 1, 3, 25, 1, 6, 20, 0}},
+    {"g-home-end-wrap-blank-row-g-home",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "g<Home>",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     3, 21, "", "", VimViewportFixture{12, 1, 3, 25, 1, 6, 20, 0}},
+    {"g-home-end-wrap-last-row-trailing-g-end",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "g<End>",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     4, 26, "", "", VimViewportFixture{12, 1, 4, 22, 1, 6, 20, 0}},
+    {"g-home-end-wrap-last-row-trailing-vg-end-y",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "vg<End>y",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     4, 22, "vwxyz   \n", "v", VimViewportFixture{12, 1, 4, 22, 1, 6, 20, 0}},
+    {"g-home-end-nowrap-g-home",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx\naあああああああああああああああああああああああああああ"
+     "あああ\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab",
+     "g<Home>",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx\naあああああああああああああああああああああああああああ"
+     "あああ\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab",
+     2, 31, "", "", VimViewportFixture{10, 1, 2, 40, 1, 5, 0, 0, 20, 30, 30}},
+    {"g-home-end-nowrap-g-end",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx\naあああああああああああああああああああああああああああ"
+     "あああ\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab",
+     "g<End>",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx\naあああああああああああああああああああああああああああ"
+     "あああ\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab",
+     2, 50, "", "", VimViewportFixture{10, 1, 2, 40, 1, 5, 0, 0, 20, 30, 30}},
+    {"g-home-end-nowrap-g-end-j",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx\naあああああああああああああああああああああああああああ"
+     "あああ\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab",
+     "g<End>j",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx\naあああああああああああああああああああああああああああ"
+     "あああ\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab",
+     3, 50, "", "", VimViewportFixture{10, 1, 2, 40, 1, 5, 0, 0, 20, 30, 30}},
+    {"g-home-end-nowrap-2g-end",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx\naあああああああああああああああああああああああああああ"
+     "あああ\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab",
+     "2g<End>",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx\naあああああああああああああああああああああああああああ"
+     "あああ\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab",
+     3, 50, "", "", VimViewportFixture{10, 1, 2, 40, 1, 5, 0, 0, 20, 30, 30}},
+    {"g-home-end-nowrap-dg-end",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwx\naあああああああああああああああああああああああああああ"
+     "あああ\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab",
+     "dg<End>",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab\nabcdefghijklmnopqrstuvwxyz"
+     "abcdefghijklmnopqrstuvwx\naああああああああああああああああああああああああああああああ\nabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab",
+     2, 40, "nopqrstuvwx", "v", VimViewportFixture{10, 1, 2, 40, 1, 5, 0, 0, 20, 30, 30}},
+    {"g-home-end-nowrap-blank-tail-g-end",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "g<End>",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     2, 28, "", "", VimViewportFixture{12, 1, 2, 25, 1, 6, 0, 0, 20, 20, 20}},
+    {"g-home-end-nowrap-blank-tail-g-end-j",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "g<End>j",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     3, 28, "", "", VimViewportFixture{12, 1, 2, 25, 1, 6, 0, 0, 20, 20, 20}},
+    {"g-home-end-nowrap-blank-view-g-end",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "g<End>",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     3, 20, "", "", VimViewportFixture{12, 1, 3, 25, 1, 6, 0, 0, 20, 20, 19}},
+    {"g-home-end-wrap-blank-row-dg-end",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "dg<End>",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrs               "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     3, 20, "t     ", "v", VimViewportFixture{12, 1, 3, 25, 1, 6, 20, 0}},
+    {"g-home-end-wrap-blank-row-cg-end",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "cg<End>X<Esc>",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrsX               "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     3, 20, "t     ", "v", VimViewportFixture{12, 1, 3, 25, 1, 6, 20, 0}},
+    {"g-home-end-wrap-blank-tail-back-dg-end",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "dg<End>",
+     "short\nabcdefghijklmnopqrstabcdefg     xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     2, 28, "h       ", "v", VimViewportFixture{12, 1, 2, 35, 1, 6, 20, 0}},
+    {"g-home-end-wrap-last-row-trailing-back-yg-end",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     "yg<End>",
+     "short\nabcdefghijklmnopqrstabcdefgh            xyz\nabcdefghijklmnopqrst                    "
+     "xyz\nabcdefghijklmnopqrstuvwxyz   \nabcdefghijklmnopqrstuvwxyzabcdefghij",
+     4, 26, "z  ", "v", VimViewportFixture{12, 1, 4, 28, 1, 6, 20, 0}},
 }};
 } // namespace nenenib::tests
