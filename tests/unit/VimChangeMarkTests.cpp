@@ -9,11 +9,13 @@
 // 3. 未保存の印と undo: saved_only の単位の後は保存済みのまま・空の範囲の changed の後は未保存・
 //    `u` で戻ると保存済み・保存の後の saved_only の単位も保存済みのまま・通常モードは空の単位を
 //    作らない。
+// 4. 通常モードの Ctrl+Z / Ctrl+Y は空の単位を飛ばす（#1535・追補 9）。Vim の `u` は 1 段ずつ。
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
+#include "InsertText.hpp"
 #include "LineNumber.hpp"
 #include "Offset.hpp"
 #include "OpenDocument.hpp"
@@ -51,6 +53,7 @@ namespace
 {
 using nenenib::application::EditorController;
 using nenenib::application::HistoryAction;
+using nenenib::application::InsertText;
 using nenenib::application::OpenDocument;
 using nenenib::application::SaveDocument;
 using nenenib::application::SelectEditMode;
@@ -255,6 +258,65 @@ void verify_change_unit()
     expect(whole_vim_body(editing.controller()) == "\nabc" && saved(editing.controller()),
            "one u takes back C and the typed text");
 }
+void press_history(Editing &editing, HistoryDirection direction)
+{
+    static_cast<void>(editing.controller().apply_frame(HistoryAction{direction}));
+}
+
+void select_ordinary(Editing &editing)
+{
+    static_cast<void>(editing.controller().apply_frame(SelectEditMode{EditMode::ordinary}));
+}
+
+// 通常モードの Ctrl+Z / Ctrl+Y は空の単位を全部飛ばして本文を変える次の単位まで 1 回で進み、
+// 前後に本文を変える単位が無ければ何もしない（ADR 0181 の追補 9・#1535・D82）。Vim の `u` は
+// 1 段ずつのまま。
+void verify_ordinary_history_skips_empty_units()
+{
+    Editing skipped;
+    open_vim(skipped, "abc\n123");
+    vim_replay(skipped.controller(), "xj~~");
+    select_ordinary(skipped);
+    press_history(skipped, HistoryDirection::undo);
+    expect(skipped.controller().text().text() == "abc\n123" &&
+               skipped.controller().history().position() == 0 &&
+               skipped.controller().history().content_position() == 0 &&
+               saved(skipped.controller()),
+           "one ordinary Ctrl+Z skips the empty units and takes back the edit before them");
+    press_history(skipped, HistoryDirection::redo);
+    expect(skipped.controller().text().text() == "bc\n123" &&
+               skipped.controller().history().position() == 1 && !saved(skipped.controller()),
+           "one ordinary Ctrl+Y redoes the edit and stops before the empty units");
+    press_history(skipped, HistoryDirection::redo);
+    expect(skipped.controller().history().position() == 1,
+           "ordinary Ctrl+Y with only empty units ahead does nothing");
+
+    Editing alone;
+    open_vim(alone, "123");
+    vim_replay(alone.controller(), "~");
+    select_ordinary(alone);
+    press_history(alone, HistoryDirection::undo);
+    expect(alone.controller().history().position() == 1 && saved(alone.controller()),
+           "ordinary Ctrl+Z with only empty units behind does nothing");
+
+    Editing between;
+    open_vim(between, "abc\n123");
+    vim_replay(between.controller(), "xj~");
+    select_ordinary(between);
+    static_cast<void>(between.controller().apply_frame(InsertText{"Z"}));
+    press_history(between, HistoryDirection::undo);
+    press_history(between, HistoryDirection::undo);
+    expect(between.controller().text().text() == "abc\n123" &&
+               between.controller().history().position() == 0,
+           "two ordinary Ctrl+Z take back the typed text and the edit behind the empty unit");
+
+    Editing vim;
+    open_vim(vim, "abc\n123");
+    vim_replay(vim.controller(), "xj~u");
+    expect(vim.controller().text().text() == "bc\n123" &&
+               vim.controller().history().position() == 1,
+           "Vim's u still takes back one empty unit at a time");
+}
 } // namespace
 
 void verify_vim_change_mark_scope()
@@ -263,5 +325,6 @@ void verify_vim_change_mark_scope()
     verify_engine_marks();
     verify_save_state();
     verify_change_unit();
+    verify_ordinary_history_skips_empty_units();
 }
 } // namespace nenenib::tests

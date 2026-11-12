@@ -2,6 +2,7 @@
 
 #include "Edit.hpp"
 #include "EditBoundary.hpp"
+#include "HistoryDirection.hpp"
 #include "HistoryFailure.hpp"
 #include "HistoryUnit.hpp"
 #include "VimChange.hpp"
@@ -47,6 +48,13 @@ class EditHistory final
     [[nodiscard]] std::optional<Edit> applied(std::size_t index) const;
     [[nodiscard]] EditHistory undone() const;
     [[nodiscard]] EditHistory redone() const;
+    // direction の向きに続く空の単位を全部飛ばした次の履歴（ADR 0181 の追補 9・#1535）。次の
+    // undo / redo は本文を変える単位になる。その向きに本文を変える単位が無ければ端の失敗
+    // （nothing_to_undo / nothing_to_redo）で、空の単位も動かさない。通常モード（Vim でないモード）
+    // の Ctrl+Z / Ctrl+Y の入口だけが呼び、飛ばした件ごとに undone / redone
+    // と同じく位置・改訂番号・ 本文の位置を動かす。Vim の `u` `<C-r>` は呼ばない。
+    [[nodiscard]] std::expected<EditHistory, HistoryFailure>
+    past_empty_units(HistoryDirection direction) const;
     [[nodiscard]] std::size_t size() const noexcept;
     [[nodiscard]] std::size_t position() const noexcept;
     // 改訂番号（ADR 0137 の決定 2）。編集（前の単位にまとめられたときも）・undo・redo のたびに

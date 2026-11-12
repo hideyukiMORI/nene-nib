@@ -56,7 +56,7 @@ Nib の engine の効果は「本文を置き換える編集を返すか」し�
 
 - 未保存の印・undo の段・`'.`・窓の先頭の決め直しが、engine の 1 つの印から決まる。controller は推し量らない。
 - `EditHistory` の 1 件に 1 バイトぶんの種類が増える（ADR 0180 の塊の形は変えない）。1 打鍵の道の費用は、印の 1 欄の写しだけ。
-- 通常モードの undo の単位は変わらない。
+- 通常モードの undo の単位は変わらない。通常モードの Ctrl+Z / Ctrl+Y は Vim のモードで作った空の単位を飛ばす（実装の追補 9・#1535）。
 
 ## 実装の追補（#1440・2026-11-12）
 
@@ -68,6 +68,10 @@ Nib の engine の効果は「本文を置き換える編集を返すか」し�
 6. `VimStep.change` は `stepped_vim` の `settle_vim_step(step, before)` まで届く（決定 6 の #1411 の判定はこの PR に入れていない）。
 7. **`"_p` は `saved_only`**（Vim の do_put は `"_` でも先に u_save を呼ぶ・U だけ・`-es` で実測・設計席の決定 案 A）。**既存の fixture を 2 件書き直した。** `black-hole-put-then-undo`（`x"_pu`）と `black-hole-put-dot-then-undo`（`x"_p.u`）は `u` を含むのに変更が 2 つ以上あり（CLAUDE.md の「`u` を含む fixture は変更が 1 つだけの鍵列で書く」に反する）、oracle の 1 本の `:normal!` が `x` と `"_p` を 1 単位に畳む答え（`u` が `x` まで戻す）に頼っていた。人が打つ Vim では `u` は `"_p` の空の単位だけを戻すので、印を付けると 2 件が落ちた。`black-hole-put-then-undo` は変更が `"_p` の 1 つだけの `yl"_pu`（`u` が空の単位を戻し、レジスタは `yl` の `a` のまま）にし、`black-hole-put-dot-then-undo` は `u` を使わない `black-hole-put-dot-keeps-register`（`yl"_p.`・`change: true`・`"_p` と `.` がレジスタを書かず、単位だけを作り未保存にしない）に書き直した。元の 2 件が守っていた「`"_p` はレジスタを書かない」「`.` で繰り返せる」は、この 2 件と既存の `black-hole-put-dot`（`x"_p.`）・`black-hole-put-unnamed-kept` が守る。fixture の json の差はこの 2 行だけ。
 8. 大小の変わらない `~` `g~` `gu` `gU` と VISUAL の `~` `u` `U` は、本文を置き換えない空の置き換え（`VimReplaceRange` の空の範囲・着地の位置）を返す。`.` の記録は効果の種類で決まる（`changes_text`）ので、種類を保って記録を今のまま残す（`VimMoveTo` にすると `.` が大小の no-op を繰り返さなくなり、既存の fixture `empty-case-*` が落ちた）。
+
+9. **通常モード（Vim でないモード）の Ctrl+Z / Ctrl+Y は空の単位を飛ばす**（#1535・V-1530 の L3・設計席の決定・施主決定 D82: Windows の標準に「何も起きない取り消し」は無い）。通常モードの undo / redo は、その向きに続く空の単位（決定 3・`saved_only` の件も範囲が空の `changed` の件も）を全部飛ばし、本文を変える次の単位まで 1 回で進む。その向きに本文を変える単位が無ければ、空の単位も動かさず端の失敗（何もしない・`nothing_to_undo` / `nothing_to_redo`）。飛ばす規則は `EditHistory::past_empty_units(HistoryDirection)`（`std::expected` を返す）の 1 本で、呼ぶのは通常モードの入口 `EditorController::accept(const HistoryAction &)` だけ（窓は Vim のモードで Ctrl+Z / Ctrl+Y を送らない・`send_history`）。Vim のモードの `u` `<C-r>`（`perform(VimUndo)` `perform(VimRedo)`）は今までどおり 1 段ずつ。飛ばした件は `undone` / `redone` と同じに位置・改訂番号・本文の位置を動かすので、未保存の判定（`content_position()` と保存時点の比較）は変わらず、`Edit.restore` は飛ばした件のものを使わない（通常モードの undo は戻した本文の末尾に置く・ADR 0052）。飛ばした空の単位は `'.` を置かない（Vim の `u` だけが単位の行に置く・追補 2）。範囲が空の `changed` の単位だけが後ろにある未保存の文書（空の行の `>>` の後）は、通常モードの Ctrl+Z では保存済みに戻らない（Vim の `u` で戻る）。
+   - 契約（単体・active）: `--vim-change-mark` の `verify_ordinary_history_skips_empty_units`（空の単位 2 つを飛ばす undo・空の単位の手前で止まる redo・空の単位だけのときは何もしない・通常の打鍵の後の 2 回の undo・Vim の `u` は 1 段ずつ）。直す前は 5 件が落ちた（後ろの 1 件だけが直す前から通る）。
+   - 性質の試験（active）: `--saved-state-property`（#1535・V-1530 の L2）は、未保存の判定の式を使わず「保存済みなら、保存の port が最後に書いたバイト列 ＝ 今の本文を今の保存の形で写したバイト列」と「帯の印 ＝ タブと窓を閉じるときに聞くか」を、Vim の鍵（空の単位を作る鍵・マクロ・`:w`・`:set ff=` `fenc=`）・通常の編集と Ctrl+Z / Ctrl+Y・保存・名前を付けて保存・保存の形・タブの切り替えを混ぜた固定 seed（15350〜15352）の列で毎歩確かめる（既定実行の契約に載る）。
 
 ## 残る穴
 

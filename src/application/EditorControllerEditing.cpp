@@ -645,9 +645,18 @@ void EditorController::insert_pasted(std::string_view pasted)
             core::EditBoundary::separate);
 }
 
+// 通常モード（Vim でないモード）の Ctrl+Z / Ctrl+Y の入口。空の単位は飛ばし、本文を変える次の
+// 単位まで 1 回で進む。その向きに本文を変える単位が無ければ何もしない（ADR 0181 の追補 9・D82）。
+// Vim の `u` `<C-r>` は perform(VimUndo) / perform(VimRedo) から 1 段ずつ戻す。
 void EditorController::accept(const HistoryAction &intent)
 {
     interrupt_vim_insert();
+    const auto walked = state_.history().past_empty_units(intent.direction);
+    if (!walked.has_value())
+    {
+        return;
+    }
+    state_ = state_.with_history(walked.value());
     switch (intent.direction)
     {
     case core::HistoryDirection::undo:

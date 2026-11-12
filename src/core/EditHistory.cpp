@@ -46,6 +46,33 @@ constexpr std::size_t history_block_entries = 256;
     std::unreachable();
 }
 
+// direction の向きの次の件（undo なら戻す件・redo ならやり直す件）。
+[[nodiscard]] std::expected<Edit, HistoryFailure> toward(const EditHistory &history,
+                                                         HistoryDirection direction)
+{
+    switch (direction)
+    {
+    case HistoryDirection::undo:
+        return history.undo();
+    case HistoryDirection::redo:
+        return history.redo();
+    }
+    std::unreachable();
+}
+
+// direction の向きへ 1 件動かした次の履歴。
+[[nodiscard]] EditHistory stepped_toward(const EditHistory &history, HistoryDirection direction)
+{
+    switch (direction)
+    {
+    case HistoryDirection::undo:
+        return history.undone();
+    case HistoryDirection::redo:
+        return history.redone();
+    }
+    std::unreachable();
+}
+
 // 区切り方ごとの畳み方。separate は畳まない＝新しい単位を開く（ADR 0009 / ADR 0015）。
 // 畳んだ単位の restore は最初の編集の値のまま（ADR 0052 の決定 3）。空の編集（空の単位）は前の
 // 単位に畳まず、空の単位へは INSERT の absorb だけが畳む（ADR 0181 の決定 3）。
@@ -227,6 +254,27 @@ EditHistory EditHistory::redone() const
     }
     return EditHistory(blocks_, size_, position_ + 1, EditBoundary::separate, revision_ + 1,
                        content_ + counted(entry_at(position_).change));
+}
+
+// 飛ばす向きの次の件を見て、空の単位なら 1 件動かす。本文を変える件に当たればそこで止め、端まで
+// 空の単位だけなら端の失敗を返す（Windows の標準に「何も起きない取り消し」は無い・D82）。
+std::expected<EditHistory, HistoryFailure>
+EditHistory::past_empty_units(HistoryDirection direction) const
+{
+    EditHistory walked = *this;
+    for (;;)
+    {
+        const auto next = toward(walked, direction);
+        if (!next.has_value())
+        {
+            return std::unexpected(next.error());
+        }
+        if (!is_empty_edit(next.value()))
+        {
+            return walked;
+        }
+        walked = stepped_toward(walked, direction);
+    }
 }
 
 std::size_t EditHistory::size() const noexcept
