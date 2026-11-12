@@ -352,9 +352,9 @@ class EditorController final
     // INSERT の `Ctrl-o` の始め直し（ADR 0182 の決定 2・8）。engine を呼ぶのは restart_vim_insert
     // の 1 本で、鍵の後（due）と engine の外の命令の後（入力行・クリック）の 2
     // つの合図がそこを通る。
-    void restart_due_vim_insert();
+    void restart_due_vim_insert(core::Offset command_caret);
     void resume_vim_insert();
-    void restart_vim_insert();
+    void restart_vim_insert(core::Offset command_caret);
     [[nodiscard]] std::expected<core::VimStep, TextLayoutFailure>
     measured_vim_step(const VimStepSource &source);
     // engine の要求（表示領域・行の画面行数・行の中の画面行）に 1 つ応えて view へ置く（ADR 0129 の
@@ -975,7 +975,7 @@ class EditorController final
     // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();
-    void settle_vim_step(const core::VimStep &step, core::VimMode before);
+    core::Offset settle_vim_step(const core::VimStep &step, core::VimMode before);
     // INSERT で打った本文の追従（ScrollFollow::vim_typed・#1363）。鍵の前の保留を覚え、鍵の後に
     // 打った本文（と動かない鍵・INSERT へ入る近い鍵）の追従の印を立てる。
     void note_follow_before_key();

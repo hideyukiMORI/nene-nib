@@ -17,7 +17,9 @@
 // 6. 印が残る / 消える鍵の族の表（engine）。vim_resting_from は待ちと due を持ち越し、始め直した
 //    後の印は持ち越さない。割り込み・タブの切り替えは消し、入力行の取消は保つ（決定 2・8）。
 // 7. `<C-o>.` は INSERT へ入る前の変更、始め直した後の `.` は始め直してから打った分（決定 6）。
+#include "CancelCommand.hpp"
 #include "Column.hpp"
+#include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "HistoryAction.hpp"
@@ -29,6 +31,7 @@
 #include "PlaceCaret.hpp"
 #include "Scopes.hpp"
 #include "SelectAll.hpp"
+#include "SelectEditMode.hpp"
 #include "Selection.hpp"
 #include "SelectionAnchoring.hpp"
 #include "StoreVimRegister.hpp"
@@ -242,6 +245,34 @@ void verify_click_and_interrupts()
            "an edit outside the engine (paste, IME) drops the restart and stays in NORMAL");
 }
 
+// 印を持ち越す所と捨てる所の表（決定 2・8）。engine の vim_resting_from の呼び出しは NORMAL と
+// VISUAL の命令の終わり・INSERT の出入りで、どれも Vim の restart_edit を残す（持ち越す）。engine
+// の外から 状態を休止へ戻す所（通常 / Vim
+// の切り替え・割り込み・タブの切り替え）は捨てる。入力行の取消は
+// `<C-o>` の命令として開いた入力行だけが始め直し、入力行の無い取消（知らせを閉じる・面の Esc）は
+// 印に触らない。
+void verify_mark_drops()
+{
+    Editing switched;
+    open_vim_document(switched, std::string(words));
+    vim_replay(switched.controller(), "iX<C-o>");
+    static_cast<void>(switched.controller().apply(app::SelectEditMode{core::EditMode::ordinary}));
+    static_cast<void>(switched.controller().apply(app::SelectEditMode{core::EditMode::vim}));
+    expect(!core::vim_insert_paused(switched.controller().vim_state()) &&
+               switched.controller().frame().mode_label == "NORMAL",
+           "switching ordinary / Vim drops the restart and enters NORMAL");
+    vim_replay(switched.controller(), "x");
+    expect(switched.controller().vim_state().mode == core::VimMode::normal,
+           "and the next command stays in NORMAL");
+    Editing cancelled;
+    open_vim_document(cancelled, std::string(words));
+    vim_replay(cancelled.controller(), "iX<C-o>");
+    static_cast<void>(cancelled.controller().apply(app::CancelCommand{}));
+    expect(cancelled.controller().vim_state().mode == core::VimMode::normal &&
+               core::vim_insert_paused(cancelled.controller().vim_state()),
+           "a cancel without an input line (a notice, the palette) keeps waiting for the command");
+}
+
 void verify_failed_command()
 {
     expect(typed(words, "AX<C-o>lY<Esc>") == "alpha beta gammaXY",
@@ -336,7 +367,7 @@ void verify_mark_carriers()
         !core::vim_switched_document(state, std::nullopt, std::nullopt).insert_restart.has_value(),
         "switching the tab drops the mark");
     const core::VimEditorView view{text, caret, std::nullopt};
-    const core::VimStep restarted = core::vim_restarted_insert(state, view);
+    const core::VimStep restarted = core::vim_restarted_insert(state, view, caret.caret);
     expect(restarted.next.mode == core::VimMode::insert &&
                restarted.next.insert_restart.has_value() &&
                restarted.next.insert_restart.value().phase == Phase::restarted &&
@@ -365,6 +396,7 @@ void verify_vim_insert_normal_scope()
     verify_label_and_ime();
     verify_input_lines();
     verify_click_and_interrupts();
+    verify_mark_drops();
     verify_failed_command();
     verify_mark_table();
     verify_mark_carriers();

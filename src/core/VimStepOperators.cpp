@@ -1172,7 +1172,9 @@ namespace detail
     const Offset end = forward_characters(text, caret, count_of(state.count));
     const std::string before = text.text_range(caret, end);
     std::string body = cased_text(before, VimOperator::toggle_case);
-    const std::size_t landed = end == text.line_end(line)
+    // 行の内容の終わりに着いたら最後の文字へ戻す。INSERT の `Ctrl-o` の命令を待つ間は Vim の
+    // check_cursor_col が行末（NUL）を許すので戻さない（ADR 0182 の決定 2・`$i<C-o>~`）。
+    const std::size_t landed = end == text.line_end(line) && !vim_insert_paused(state)
                                    ? vim_character_start(body, Offset{body.size()}).value
                                    : body.size();
     const Offset landing{caret.value + landed};

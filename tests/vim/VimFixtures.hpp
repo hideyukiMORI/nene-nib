@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 03ef919d738818003db2e29262ff1ee5dc66ea5f86e728fcc28ebdd11874a517 / 4848 fixtures
+// fixtures.json: sha256 bf9b1ceef4a79d82b17bed469026401f9513fd67e4acd0e567c1ab785c573972 / 4867 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 4848> vim_fixtures{{
+constexpr std::array<VimFixture, 4867> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4860,6 +4860,25 @@ constexpr std::array<VimFixture, 4848> vim_fixtures{{
     {"insert-ctrl-o-macro-i", "alpha beta gamma", "@aZ<Esc>", "XYalpha beta gamma", 1, 2, "", "", std::nullopt, VimMacroFixture{'a', "iX<C-o>iY<Esc>"}},
     {"insert-ctrl-o-change-mark-l", "alpha beta gamma", "iX<C-o>lY<Esc>", "XaYlpha beta gamma", 1, 3, "", "", std::nullopt, std::nullopt, VimChangeFixture{true, true, true}},
     {"insert-ctrl-o-change-mark-motion-only", "alpha beta gamma", "i<C-o>l<Esc>", "alpha beta gamma", 1, 1, "", "", std::nullopt, std::nullopt, VimChangeFixture{false, false, false}},
+    {"insert-ctrl-o-eol-x", "abc", "$i<C-o>xY<Esc>", "abY", 1, 3, "c", "v", std::nullopt},
+    {"insert-ctrl-o-eol-x-typed", "abc", "$iX<C-o>xY<Esc>", "abXY", 1, 4, "c", "v", std::nullopt},
+    {"insert-ctrl-o-eol-dl", "abc", "$iX<C-o>dlY<Esc>", "abXY", 1, 4, "c", "v", std::nullopt},
+    {"insert-ctrl-o-eol-2x", "abcd", "$hiX<C-o>2xY<Esc>", "abXY", 1, 4, "cd", "v", std::nullopt},
+    {"insert-ctrl-o-eol-tilde", "abc", "$i<C-o>~Y<Esc>", "abCY", 1, 4, "", "", std::nullopt},
+    {"insert-ctrl-o-eol-tilde-typed", "abc", "$iX<C-o>~Y<Esc>", "abXCY", 1, 5, "", "", std::nullopt},
+    {"insert-ctrl-o-eol-3tilde", "abcd", "$hiX<C-o>3~Y<Esc>", "abXCDY", 1, 6, "", "", std::nullopt},
+    {"insert-ctrl-o-eol-dw", "ab cd", "$i<C-o>dwY<Esc>", "ab cY", 1, 5, "d", "v", std::nullopt},
+    {"insert-ctrl-o-eol-de", "ab cd", "$i<C-o>deY<Esc>", "ab cY", 1, 5, "d", "v", std::nullopt},
+    {"insert-ctrl-o-eol-d-dollar", "ab cd", "$i<C-o>d$Y<Esc>", "ab cY", 1, 5, "d", "v", std::nullopt},
+    {"insert-ctrl-o-eol-vd", "abc", "$i<C-o>vdY<Esc>", "abY", 1, 3, "c", "v", std::nullopt},
+    {"insert-ctrl-o-eol-x-two-lines", "abc\ndef", "$i<C-o>xY<Esc>", "abY\ndef", 1, 3, "c", "v", std::nullopt},
+    {"insert-ctrl-o-eol-x-tab", "a\tb", "$i<C-o>xY<Esc>", "a\tY", 1, 3, "b", "v", std::nullopt},
+    {"insert-ctrl-o-eol-x-wide", "aあい", "$i<C-o>xY<Esc>", "aあY", 1, 5, "い", "v", std::nullopt},
+    {"insert-ctrl-o-eol-tilde-wide", "aあ", "$i<C-o>~Y<Esc>", "aあY", 1, 5, "", "", std::nullopt},
+    {"insert-ctrl-o-eol-x-twice", "abcdef", "$i<C-o>x<C-o>xY<Esc>", "abcdY", 1, 5, "e", "v", std::nullopt},
+    {"insert-ctrl-o-mid-x", "abcd", "lli<C-o>xY<Esc>", "abYd", 1, 3, "c", "v", std::nullopt},
+    {"insert-ctrl-o-start-x", "abc", "i<C-o>xY<Esc>", "Ybc", 1, 1, "a", "v", std::nullopt},
+    {"insert-ctrl-o-empty-line-x", "ab\n\ncd", "ji<C-o>xY<Esc>", "ab\nY\ncd", 2, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

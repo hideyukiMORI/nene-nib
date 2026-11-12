@@ -112,7 +112,7 @@ namespace
     next.macro_recording = std::nullopt;
     std::vector<VimKey> keys = recording.keys.owned_keys();
     // `<C-o>q` で止めた録画は末尾の `Ctrl-o` を外す（Vim の get_recorded・ADR 0182 の決定 7）。
-    if (state.insert_restart.has_value() && !keys.empty() &&
+    if (vim_insert_paused(state) && !keys.empty() &&
         keys.back() == VimKey{VimSpecialKey::control_o})
     {
         keys.pop_back();

@@ -118,17 +118,11 @@ constexpr char line_feed_byte = 0x0A;
 // 印を待つ間の命令のうち Vim がカーソルを変える 2 つ（決定 2 の位置の規則が読む）。`D` は `d$`
 // なので curswant が行末（MAXCOL）、1 行の中の文字単位の `p` `P` は貼った本文の後ろ（register.c の
 // do_put の「CTRL-O p」・restart_edit が立っている間）。
-[[nodiscard]] VimStep paused_command_adjusted(const VimState &before, const TextBuffer &text,
-                                              VimStep step, const VimKey &key)
+[[nodiscard]] VimStep paused_put_adjusted(const VimState &before, VimStep step, const VimKey &key)
 {
     if (before.mode != VimMode::normal || before.input_wait.has_value() ||
         before.pending.has_value())
     {
-        return step;
-    }
-    if (is_character(key, U'D', U'D'))
-    {
-        step.next.wanted_column = VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
         return step;
     }
     auto *const put = std::get_if<VimInsertAt>(&step.effect);
@@ -136,12 +130,6 @@ constexpr char line_feed_byte = 0x0A;
         put->utf8.find(line_feed_byte) == std::string::npos)
     {
         put->caret = Offset{put->at.value + put->utf8.size()};
-        // 行の内容の終わりへ貼ったら Vim のカーソルは行末の後ろのまま（NORMAL の寄せが最後の文字へ
-        // 戻しても、始め直す位置の規則が後ろへ進める）。
-        if (put->at == text.line_end(line_of(text, put->at)))
-        {
-            step.next.wanted_column = VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
-        }
     }
     return step;
 }
@@ -167,9 +155,17 @@ constexpr char line_feed_byte = 0x0A;
 // 始め直す位置（edit.c の 355〜375 行）。`Ctrl-o` の前に行の内容の終わりにいて同じ行にまだいるか、
 // 欲しい列が今の桁より右で、キャレットが行の最後の文字の上なら、その文字の後ろへ進める。
 [[nodiscard]] Offset restarted_caret(const VimState &state, const VimEditorView &view,
-                                     const VimInsertRestart &mark)
+                                     const VimInsertRestart &mark, Offset command_caret)
 {
     const TextBuffer &text = view.text;
+    // Vim は restart_edit の間、命令の後のカーソルが行の内容の終わり（NUL）にいるのを許す
+    // （check_cursor_col と del_bytes）。NORMAL の寄せの前にそこにいたなら、そこで始め直す
+    // （`$i<C-o>x` `$i<C-o>~` `$i<C-o>d$`・`*ptr == NUL` なので位置の規則は進めない）。
+    if (command_caret.value <= text.size_bytes() &&
+        command_caret == text.line_end(line_of(text, command_caret)))
+    {
+        return command_caret;
+    }
     const Offset caret = view.selection.caret;
     const LineNumber line = line_of(text, caret);
     const Offset end = text.line_end(line);
@@ -265,7 +261,7 @@ VimStep insert_restart_noted(const VimState &before, const VimEditorView &view, 
         return step;
     }
     mark.at_line_end = mark.at_line_end && !goes_to_line_start(before, key);
-    step = paused_command_adjusted(before, view.text, std::move(step), key);
+    step = paused_put_adjusted(before, std::move(step), key);
     mark.phase = command_finished(step.next, step.effect) ? VimInsertRestartPhase::due
                                                           : VimInsertRestartPhase::waiting;
     return step;
@@ -297,14 +293,14 @@ bool vim_insert_restart_due(const VimState &state) noexcept
            state.insert_restart.value().phase == VimInsertRestartPhase::due;
 }
 
-VimStep vim_restarted_insert(const VimState &state, const VimEditorView &view)
+VimStep vim_restarted_insert(const VimState &state, const VimEditorView &view, Offset command_caret)
 {
     if (!state.insert_restart.has_value())
     {
         return VimStep{state, VimNoEffect{}};
     }
     VimInsertRestart mark = state.insert_restart.value();
-    const Offset caret = restarted_caret(state, view, mark);
+    const Offset caret = restarted_caret(state, view, mark, command_caret);
     // `i` と同じ入口（回数は使わない・Vim の edit(restart_edit, FALSE, 1)）。
     VimState resting = state;
     resting.count = std::nullopt;

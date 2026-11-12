@@ -27,6 +27,7 @@
 #include "VimMode.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
+#include "VimStep.hpp"
 #include "VisualPosition.hpp"
 
 #include <algorithm>
@@ -773,7 +774,9 @@ void EditorController::accept(const SelectEditMode &intent)
     // モードが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
     state_ = state_.with_composition(std::nullopt);
     // Vim に入ると NORMAL で、回数もオペレータも空。通常へ戻るときも同じ形に捨てる（決定 10）。
-    core::VimState vim = core::vim_resting_from(state_.vim(), state_.vim().unnamed_register);
+    // INSERT の `Ctrl-o` の印も捨てる（切り替えは割り込み・ADR 0182 の決定 8）。
+    core::VimState vim =
+        core::vim_interrupted(core::vim_resting_from(state_.vim(), state_.vim().unnamed_register));
     state_ = state_.with_mode(intent.mode).with_vim(std::move(vim));
     switch (intent.mode)
     {

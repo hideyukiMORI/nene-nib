@@ -169,7 +169,10 @@ void vim_macro_typed(VimState &state, std::span<const VimKey> keys);
 // の寄せの後）と、印を待つ間に 開いた入力行を閉じた後（Ex
 // の評価・検索の取消）とクリックの後に呼ぶ。何を始め直すか（位置の 規則・`i` と同じ入口・`.`
 // の記録の印）を決めるのは engine である（ARC-004）。
-[[nodiscard]] VimStep vim_restarted_insert(const VimState &state, const VimEditorView &view);
+// command_caret は命令の効果を写した後で NORMAL の寄せの前のキャレット（Vim は restart_edit の間
+// それが行の内容の終わりにいてよい・決定 2）。engine の外の命令の後は今のキャレット。
+[[nodiscard]] VimStep vim_restarted_insert(const VimState &state, const VimEditorView &view,
+                                           Offset command_caret);
 
 // INSERT の `Ctrl-o` の命令を待つ間か（印が waiting か due・ステータスの `(insert)`・ADR 0182 の
 // 決定 9）。始め直した INSERT と印の無い状態は偽。

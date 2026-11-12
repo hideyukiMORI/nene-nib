@@ -253,9 +253,9 @@ static_assert(core::vim_replay_key_limit == 100000, "replay_limit_notice の数�
 
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
                                         const core::VimEditorView &view,
-                                        const InsertRestartRequest & /*restart*/)
+                                        const InsertRestartRequest &restart)
 {
-    return core::vim_restarted_insert(state, view);
+    return core::vim_restarted_insert(state, view, restart.command_caret);
 }
 
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
@@ -846,10 +846,10 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     {
         state_ = state_.with_history(state_.history().sealed());
     }
-    settle_vim_step(step, before);
+    const core::Offset command_caret = settle_vim_step(step, before);
     // 鍵の終わりに、動かなかった・消えた前の位置を戻す（決定 5・Vim の checkpcmark）。
     check_vim_marks();
-    restart_due_vim_insert();
+    restart_due_vim_insert(command_caret);
     // 再生（`.` `@`）の中の鍵が失敗したら、再生を返した鍵の失敗にする（Issue #983）。
     return step_failure(step.failure, replay_failure_);
 }
@@ -857,15 +857,15 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
 // INSERT の `Ctrl-o` の命令が終わった鍵の後に始め直す（ADR 0182 の決定 2）。効果を写して NORMAL の
 // 寄せを済ませた後なので、engine の位置の規則は Vim の normal_cmd の終わりのカーソルを読む。`.` の
 // 再生の鍵が列に残る間は始め直さない（Vim の stuff_empty()）。マクロの鍵は typeahead
-// なので待たない。
-void EditorController::restart_due_vim_insert()
+// なので待たない。command_caret は寄せの前のキャレット。
+void EditorController::restart_due_vim_insert(core::Offset command_caret)
 {
     if (!core::vim_insert_restart_due(state_.vim()) ||
         (!replay_levels_.empty() && replay_levels_.front().kind == core::VimReplayKind::repeat))
     {
         return;
     }
-    restart_vim_insert();
+    restart_vim_insert(command_caret);
 }
 
 // 印を待つ間に engine の外で終わった命令（Ex の行・検索の取消・クリック）の後に始め直す（決定 8）。
@@ -877,14 +877,14 @@ void EditorController::resume_vim_insert()
     {
         return;
     }
-    restart_vim_insert();
+    restart_vim_insert(state_.selection().caret);
 }
 
 // 始め直しの 1 歩（決定 2）。何を始め直すかは engine の vim_restarted_insert が決め、写しは鍵と同じ
 // stepped_vim を通る（NORMAL → INSERT の出入りで undo を区切る）。
-void EditorController::restart_vim_insert()
+void EditorController::restart_vim_insert(core::Offset command_caret)
 {
-    static_cast<void>(stepped_vim(VimStepSource{InsertRestartRequest{}}));
+    static_cast<void>(stepped_vim(VimStepSource{InsertRestartRequest{command_caret}}));
 }
 
 // 鍵の効果を写す。印は効果を写す間だけ置き、置き換えが積めば消え、残れば空の単位になる（ADR 0181
@@ -965,15 +965,18 @@ void EditorController::adopt_vim_marks(const std::optional<core::VimMarks> &mark
 
 // 鍵の終わりの寄せ（keeps_vim_top の判定を覚えてから寄せる・ADR 0019 の追補 #1232）。再生を
 // 返した外側の鍵が引き継ぐのは、再生がいま終わったとき（入れ子なら鍵を積んだだけ）だけ。
-// before は鍵の前のモード（INSERT で打った本文の追従の印・#1363）。
-void EditorController::settle_vim_step(const core::VimStep &step, core::VimMode before)
+// before は鍵の前のモード（INSERT で打った本文の追従の印・#1363）。返すのは寄せの前のキャレット
+// （INSERT の `Ctrl-o` の始め直す位置が読む・ADR 0182 の決定 2）。
+core::Offset EditorController::settle_vim_step(const core::VimStep &step, core::VimMode before)
 {
+    const core::Offset command_caret = state_.selection().caret;
     vim_top_kept_ = keeps_vim_top(step, !replay_depth_.has_value() && vim_top_kept_);
     if (!state_.command_input().has_value() && !vim_top_kept_)
     {
         settle_vim_caret();
     }
     mark_typed_follow(before, step);
+    return command_caret;
 }
 
 void EditorController::settle_vim_caret()
