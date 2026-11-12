@@ -69,6 +69,31 @@ Nib の engine の効果は「本文を置き換える編集を返すか」し�
 7. **`"_p` は `saved_only`**（Vim の do_put は `"_` でも先に u_save を呼ぶ・U だけ・`-es` で実測・設計席の決定 案 A）。**既存の fixture を 2 件書き直した。** `black-hole-put-then-undo`（`x"_pu`）と `black-hole-put-dot-then-undo`（`x"_p.u`）は `u` を含むのに変更が 2 つ以上あり（CLAUDE.md の「`u` を含む fixture は変更が 1 つだけの鍵列で書く」に反する）、oracle の 1 本の `:normal!` が `x` と `"_p` を 1 単位に畳む答え（`u` が `x` まで戻す）に頼っていた。人が打つ Vim では `u` は `"_p` の空の単位だけを戻すので、印を付けると 2 件が落ちた。`black-hole-put-then-undo` は変更が `"_p` の 1 つだけの `yl"_pu`（`u` が空の単位を戻し、レジスタは `yl` の `a` のまま）にし、`black-hole-put-dot-then-undo` は `u` を使わない `black-hole-put-dot-keeps-register`（`yl"_p.`・`change: true`・`"_p` と `.` がレジスタを書かず、単位だけを作り未保存にしない）に書き直した。元の 2 件が守っていた「`"_p` はレジスタを書かない」「`.` で繰り返せる」は、この 2 件と既存の `black-hole-put-dot`（`x"_p.`）・`black-hole-put-unnamed-kept` が守る。fixture の json の差はこの 2 行だけ。
 8. 大小の変わらない `~` `g~` `gu` `gU` と VISUAL の `~` `u` `U` は、本文を置き換えない空の置き換え（`VimReplaceRange` の空の範囲・着地の位置）を返す。`.` の記録は効果の種類で決まる（`changes_text`）ので、種類を保って記録を今のまま残す（`VimMoveTo` にすると `.` が大小の no-op を繰り返さなくなり、既存の fixture `empty-case-*` が落ちた）。
 
+## 追補（#1374・2026-11-12）: changed の印は Vim が `changed_*` に渡した位置を持つ
+
+決定 6 の窓の判定（`changed_common` の式）は「Vim が `changed_*` に渡した行と桁」を要る。controller が「最初の置き換えの始まり」から決めると、上端の行を編集しない矩形の操作（空の行・英字の無い行・もう大文字の行の `d` `x` `U` `~` `r` `>`・`$` の矩形を詰めた桁）で Vim より後ろの位置になった（PR #1543 の独立レビュー V-1543 の M1・11 形）。設計席の決定で、位置も engine が印に添える。
+
+1. **型。** `VimStep.change` は `std::optional<VimChangeMark>`（`VimChangeMark.hpp`・`VimChange kind` と `std::optional<TextPosition> at`）。`changed` は必ず位置を持ち、`saved_only` は持たない（契約 `--vim-change-mark` が fixture 全件の step で確かめる）。位置は鍵の前の本文の座標（置き換えの始まりより前は鍵の後も同じ）。
+2. **書く所。** `vim_step` の出口の `change_marked` が、changed で位置の無い印に既定の位置（`change_position`・効果ごとの多重定義で、効果が増えたらコンパイルが落ちる）を書く。矩形の `r` と矩形の INSERT の 1 行目の埋めは作る所が `change_placed` で書く。
+
+   | 鍵の族 | Vim の `changed_*`（v9.1.0004） | 印の位置 |
+   |---|---|---|
+   | ふつうの削除・置き換え（`x` `d` `c` `r` `s` `J` `gJ`・大小・VISUAL） | `del_bytes` / `changed_bytes` / `changed_lines(start.lnum, start.col)`・`do_join` の (行, 元の行の長さ) | 置き換えの範囲の始まり |
+   | 行単位のオペレータ・`>` `<`（文字単位と行単位） | `changed_lines(start.lnum, 0, ...)` | 範囲の始まり（行頭） |
+   | INSERT の打鍵・Enter | `ins_char_bytes` の `changed_bytes(行, col)`・`open_line` | 鍵の前のカーソル |
+   | `p` `P`（文字単位・行単位） | `changed_lines(cursor.lnum, col)`・`changed_lines(b_op_start.lnum, 0)`・1 行は `changed_cline_bef_curs` も | 貼る所（効果の置き換えの始まり） |
+   | 矩形の `d` `x` `c`（`op_delete`） | `changed_lines(cursor.lnum, cursor.col)`（`check_cursor_col` の後） | 左上の行の行頭（カーソルの行ではカーソルの桁が必ずそれ以上なので同じ答え） |
+   | 矩形の `~` `u` `U`（`op_tilde`）・`>` `<`（`op_shift`）・VISUAL の `<C-a>` `<C-x>`（`op_addsub`） | `changed_lines(start.lnum, 0, ...)` | 左上の行の行頭 |
+   | 矩形の `r`（`op_replace`） | `changed_lines(start.lnum, start.col, ...)` | 矩形の左上（`change_placed`） |
+   | 矩形の INSERT の 1 行目の埋め | `changed_bytes(行, 埋めの始まり)` | 埋めの始まり（`change_placed`） |
+   | 矩形の `I` `A` `c` の Esc（`block_insert`・`op_change`） | `changed_lines(start.lnum + 1, 0, ...)`（1 行目は打鍵が済ませた） | 左上の次の行の行頭 |
+   | 矩形の貼付（`do_put` の `MBLOCK`） | `changed_lines(lnum, 0, ...)`（呼ぶときのカーソルは貼った行の下） | 左上の行の行頭 |
+   | 空の範囲の changed（空の行の `>>` `cc`・字下げの無い行の `<<`） | `changed_lines(start.lnum, 0)` / `changed_bytes(行, 0)` | 範囲の始まりか鍵の前のカーソル |
+   | `.` とマクロの再生 | 再生の中の鍵ごとの印 | 再生の中の鍵がそれぞれ持つ（再生を返した外の鍵は窓の送りを頼む側で、判定を引き継がない） |
+
+3. **`u` と `<C-r>`。** engine の効果は「戻せ」だけで印を立てない（`u_save` を呼ばない）。Vim の `u_undoredo` は `changed_lines(top + 1, 0, ...)` を呼ぶが、戻す行は履歴を持つ controller だけが知るので、controller が戻した編集の行の行頭を位置にする（ADR 0019 の追補 #1374 の 4）。
+4. **controller。** 鍵の始めに印の位置を覚えるだけで、`replace` `apply_block` `push_empty_unit` は位置を覚えない（覚える所は `stepped_vim` の 1 か所と `u` / `<C-r>`）。
+
 ## 残る穴
 
 - `'.` の位置（#1475・#793）・`ML_EMPTY`（#980）・`s` `S` の失敗の違い（G1 の表の注）。

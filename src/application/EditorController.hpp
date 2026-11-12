@@ -940,8 +940,7 @@ class EditorController final
     // （ADR 0181 の決定 3）。積む口はこの 1 か所。印は鍵ごとに perform_vim_effect が
     // 置き、replace が編集を積めば消す。restore は効果を写す前のキャレット。
     void push_empty_unit(core::Offset restore);
-    // 流している Vim の鍵が changed_* を呼んだ位置を覚える（#1374）。undo / redo は戻した行の行頭。
-    void note_vim_changed(core::Offset at);
+    // u / Ctrl-r が戻した行の行頭を changed_* の位置に足す（#1374）。
     void note_vim_undone(const core::Edit &edit);
     // 鍵の効果を写す 1 か所（stepped_vim から）。鍵の印を置いてから写し、残った印を空の単位にする。
     void perform_vim_effect(const core::VimStep &step);
@@ -1182,11 +1181,10 @@ class EditorController final
     // 流している鍵の engine の印（ADR 0181）。stepped_vim が効果を写す間だけ置き、replace が
     // 本文を置き換える編集を積めば消す。残れば push_empty_unit が空の単位を積む。
     std::optional<core::VimChange> vim_change_;
-    // 流している鍵で Vim が changed_* を呼んだ位置（印が残っている間の最初の置き換えの始まりと
-    // changed の空の単位の位置の小さい方・undo / redo は戻した行の行頭）。stepped_vim
-    // が鍵の始めに消し、先頭を前の鍵から
-    // 引き継ぐかの判定（vim_top_still_valid）だけが読む（#1374・ADR 0181 の決定 6）。
-    std::optional<core::Offset> vim_changed_from_;
+    // 流している鍵で Vim が changed_* に渡した位置（engine の印 VimStep.change の位置・undo / redo
+    // は戻した行の行頭）。stepped_vim が鍵の始めに置き、先頭を前の鍵から引き継ぐかの判定
+    // （vim_top_still_valid）だけが読む（#1374・ADR 0181 の決定 6 と追補）。
+    std::optional<core::TextPosition> vim_changed_from_;
     std::optional<core::TextBuffer> replay_text_;
     // 同じ意図の中で読めなかったタブの数（ADR 0059 の「知らせの文言」）。begin_intent が 0 に戻す。
     std::size_t unreached_tabs_ = 0;

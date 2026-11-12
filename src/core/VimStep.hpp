@@ -2,7 +2,7 @@
 
 #include "Offset.hpp"
 #include "Selection.hpp"
-#include "VimChange.hpp"
+#include "VimChangeMark.hpp"
 #include "VimCount.hpp"
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
@@ -69,8 +69,10 @@ struct VimStep
     // 必ず changed で、vim_step の出口の 1 か所（change_marked）が立てる。編集を返さずに印だけを
     // 持つ形（U だけの saved_only と、範囲が空の U ＋ C）は、効果を作る所が立てる。controller は
     // 編集の効果が無い印から「空の単位」を履歴に積み（決定 3）、`'.` は changed のときだけ置く
-    // （決定 5）。失敗（failure）と同時に立つこともある（空のレジスタの `p`・決定 7）。
-    std::optional<VimChange> change = std::nullopt;
+    // （決定 5）。失敗（failure）と同時に立つこともある（空のレジスタの `p`・決定 7）。changed の
+    // 印は Vim が changed_* に渡した位置を持つ（追補 #1374）。位置は既定で効果の置き換えの始まり
+    // （change_marked）で、矩形の効果は Vim の op_* の式を作る所が書く。
+    std::optional<VimChangeMark> change = std::nullopt;
 };
 
 // 効果が本文を置き換えるか（ADR 0181 の決定 2）。範囲も本文も空の置き換え・行の無い矩形は

@@ -409,6 +409,19 @@ using HeldVimWindow = std::pair<core::LineNumber, ScrollState>;
                                                        caret.column.value >= changed.column.value));
 }
 
+// engine の印が持つ Vim の changed_* の位置（ADR 0181 の追補 #1374）。changed でない鍵は空。
+// changed の印は必ず位置を持つ（vim_step の出口の change_marked が書く・契約 --vim-change-mark）。
+// 持たなければ文書の先頭とみなし、先頭を確かめ直す側に倒す。
+[[nodiscard]] std::optional<core::TextPosition> changed_position_of(const core::VimStep &step)
+{
+    if (!step.change.has_value() || step.change.value().kind != core::VimChange::changed)
+    {
+        return std::nullopt;
+    }
+    return step.change.value().at.value_or(
+        core::TextPosition{core::LineNumber{1}, core::Column{1}});
+}
+
 // held の窓（先頭の論理行と隠れた画面行から visible_lines
 // 段）にキャレットの画面行が入るか。画面行の
 // 単位の窓（wrap・格子）だけが問う。答えられなければ入らないと数える（保たない側・#1374）。
@@ -872,7 +885,9 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     const auto &step = measured.value();
     // 前の鍵が先頭を確かめ済みで終えたときだけ、鍵の前の行と窓を覚える（#1374）。
     const auto held = held_vim_window(state_, vim_top_kept_ && !pending_follow_.has_value());
-    vim_changed_from_.reset();
+    // Vim が changed_* に渡した位置は engine の印が持つ（ADR 0181 の追補 #1374）。u と Ctrl-r は
+    // 効果を写すときに戻した行を足す（note_vim_undone）。
+    vim_changed_from_ = changed_position_of(step);
     applied_vim_step(step, before);
     settle_vim_step(step, before,
                     held.has_value() && !requests_window(step, held.value().second) ? held
@@ -927,7 +942,9 @@ void EditorController::applied_vim_step(const core::VimStep &step, core::VimMode
 // の決定 3）。再生（`.` `@`）の中の鍵は自分の印を置いて外の鍵の印へ戻す。
 void EditorController::perform_vim_effect(const core::VimStep &step)
 {
-    const auto outer_change = std::exchange(vim_change_, step.change);
+    const auto outer_change =
+        std::exchange(vim_change_, step.change.has_value() ? std::optional{step.change.value().kind}
+                                                           : std::nullopt);
     const core::Offset restore = state_.selection().caret;
     // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->perform(value); }, step.effect);
@@ -1027,11 +1044,8 @@ void EditorController::settle_vim_step(const core::VimStep &step, core::VimMode 
 // （vim_top_still_valid の入力を作るだけ・#1374）。
 bool EditorController::still_valid_vim_top(const HeldVimWindow &held) const
 {
-    const auto &text = state_.text();
-    const auto changed = vim_changed_from_.has_value()
-                             ? std::optional{text.position_of(vim_changed_from_.value())}
-                             : std::nullopt;
-    return vim_top_still_valid(held.first, text.position_of(state_.selection().caret), changed);
+    return vim_top_still_valid(held.first, state_.text().position_of(state_.selection().caret),
+                               vim_changed_from_);
 }
 
 // engine に文字組みの値を渡す窓か（wrap か格子で、幅がある）。VimLayoutView と先頭を保つ判定が
@@ -1822,11 +1836,21 @@ void EditorController::perform(const core::VimRedo &)
     }
 }
 
-// Vim の u_undoredo は単位を書き戻して changed_lines(top + 1, 0, ...) を呼ぶ（印は立てない・
-// u_save を呼ばない）。戻した行の行頭を changed_* の位置として覚える（#1374）。
+// Vim の u_undoredo は単位を書き戻して changed_lines(top + 1, 0, ...) を呼ぶ（u_save を呼ばない
+// ので engine の印は立たない）。engine の効果は「戻せ」だけで、戻した行は controller が履歴から
+// 知るので、戻した編集の行の行頭を changed_* の位置として覚える（#1374）。Vim がこれを呼ぶときの
+// カーソルは戻す前の位置だが、比べるのは戻した後のキャレット（u はほぼいつもカーソルの行を
+// 動かすので、行が変わった側で落ちる）。
 void EditorController::note_vim_undone(const core::Edit &edit)
 {
-    note_vim_changed(state_.text().line_start(state_.text().line_containing(edit.at)));
+    const core::TextPosition undone{state_.text().line_containing(edit.at), core::Column{1}};
+    if (!vim_changed_from_.has_value() ||
+        undone.line.value < vim_changed_from_.value().line.value ||
+        (undone.line == vim_changed_from_.value().line &&
+         undone.column.value < vim_changed_from_.value().column.value))
+    {
+        vim_changed_from_ = undone;
+    }
 }
 
 void EditorController::perform(const core::VimSwitchTab &effect)
