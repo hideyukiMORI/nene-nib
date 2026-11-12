@@ -60,6 +60,7 @@
 #include "VimTabs.hpp"
 #include "VimVisualReselect.hpp"
 #include "VimWindowCommand.hpp"
+#include "VisualPosition.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -230,7 +231,8 @@ constexpr std::string_view replay_limit_notice =
     "再生を 100,000 鍵で止めました（残りは捨てました）";
 static_assert(core::vim_replay_key_limit == 100000, "replay_limit_notice の数を上限に合わせる");
 // engine を呼ぶ 1 か所の写し（Issue #1023）。鍵は vim_step・`:N` の行は vim_line_jumped・押しの
-// VISUAL は vim_pointer_selected（#1250）・`:s` の族は vim_substituted（ADR 0168）。
+// VISUAL は vim_pointer_selected（#1250）・オペレータ待ちの `:` の確定は
+// vim_command_operated（#1549）・`:s` の族は vim_substituted（ADR 0168）。
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
                                         const core::VimEditorView &view, const core::VimKey &key)
 {
@@ -249,6 +251,20 @@ static_assert(core::vim_replay_key_limit == 100000, "replay_limit_notice の数�
                                         const PointerSelection &pointed)
 {
     return core::vim_pointer_selected(state, view, pointed.selection, pointed.mode);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
+                                        const InsertRestartRequest &restart)
+{
+    return core::vim_restarted_insert(state, view, restart.command_caret);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
+                                        const core::VimCommandMotion &motion)
+{
+    return core::vim_command_operated(state, view, motion);
 }
 
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
@@ -350,7 +366,8 @@ measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &r
 // scrolloff が先頭を戻すので、Vim の VALID_TOPLINE と同じに飛ばす（キャレットは engine がモードの
 // 寄せまで済ませた・ADR 0019 の追補 #1232）。再生（`.` `@`）を返した鍵は、中で最後に流した鍵が
 // 先頭を確かめ済みで終えたか（replayed_top_kept）を引き継ぐ。入れ子の再生は鍵を積むだけで、
-// 積んだ鍵が後から流れるので引き継がない。
+// 積んだ鍵が後から流れるので引き継がない。ほかの鍵が前の鍵の判定を引き継ぐかは
+// vim_top_still_valid の 1 か所が決める（#1374）。
 [[nodiscard]] bool keeps_vim_top(const core::VimStep &step, bool replayed_top_kept)
 {
     if (const auto *const navigate = std::get_if<core::VimNavigate>(&step.effect))
@@ -358,6 +375,85 @@ measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &r
         return navigate->topline == core::VimToplineSettle::kept;
     }
     return std::holds_alternative<core::VimReplay>(step.effect) && replayed_top_kept;
+}
+
+// 鍵が窓を動かすことを頼んだか（engine の置いた先頭が鍵の前と違う・タブや枠を替える・再生は中の
+// 鍵が動かしうる）。頼んだ鍵は行が同じでも鍵の前の窓へ戻さない（#1374）。
+[[nodiscard]] bool requests_window(const core::VimStep &step, const ScrollState &before)
+{
+    if (const auto *const navigate = std::get_if<core::VimNavigate>(&step.effect))
+    {
+        return navigate->first_visible != before.first_visible ||
+               navigate->first_row != before.first_row;
+    }
+    return std::holds_alternative<core::VimSwitchTab>(step.effect) ||
+           std::holds_alternative<core::VimWindowCommand>(step.effect) ||
+           std::holds_alternative<core::VimReplay>(step.effect);
+}
+
+// 鍵の前のキャレットの行と窓。前の鍵が先頭を確かめ済みで終え、保留の追従も無いときだけ読む
+// （確かめ済みでなければ引き継ぐものが無いので、1 打鍵の道に読みを足さない・#1374）。
+using HeldVimWindow = std::pair<core::LineNumber, ScrollState>;
+
+[[nodiscard]] std::optional<HeldVimWindow> held_vim_window(const EditorState &state, bool kept)
+{
+    if (!kept)
+    {
+        return std::nullopt;
+    }
+    return HeldVimWindow{state.text().line_containing(state.selection().caret), state.scroll()};
+}
+
+// 前の鍵が確かめ済みにした先頭（Vim の VALID_TOPLINE）が、この鍵の後も確かめ済みのままか
+// （#1374・ADR 0181 の決定 6）。判定はこの 1 か所で、入力は鍵の前のキャレットの行（line_before）・
+// 鍵の後のキャレットの行と桁（caret）・Vim が changed_* を呼んだ位置（changed_from）だけ。
+// changed_from は engine の印 VimStep.change が changed の鍵の最初の置き換えと空の単位の位置
+// （と Vim の u_undoredo が changed_lines を呼ぶ undo / redo の行頭）で、印が空か saved_only の
+// 鍵には無い。改訂番号・本文のバイト列は比べない。
+// - Vim の check_cursor_moved（move.c）はカーソルの行（lnum）が変われば落とす。
+// - Vim の changed_common（change.c）は、変えた行より下にカーソルがあるか、変えた行にいて
+//   カーソルの桁が変えた桁以上なら落とす（changed_line_abv_curs_win /
+//   changed_cline_bef_curs_win）。
+//   `$x` `$D` は del_bytes がカーソルを 1 つ戻してから changed_bytes を呼ぶので落とさない。
+[[nodiscard]] bool vim_top_still_valid(core::LineNumber line_before, core::TextPosition caret,
+                                       const std::optional<core::TextPosition> &changed_from)
+{
+    if (caret.line != line_before)
+    {
+        return false;
+    }
+    if (!changed_from.has_value())
+    {
+        return true;
+    }
+    const core::TextPosition &changed = changed_from.value();
+    return !(caret.line.value > changed.line.value || (caret.line.value == changed.line.value &&
+                                                       caret.column.value >= changed.column.value));
+}
+
+// engine の印が持つ Vim の changed_* の位置（ADR 0181 の追補 #1374）。changed でない鍵は空。
+// changed の印は必ず位置を持つ（vim_step の出口の change_marked が書く・契約 --vim-change-mark）。
+// 持たなければ文書の先頭とみなし、先頭を確かめ直す側に倒す。
+[[nodiscard]] std::optional<core::TextPosition> changed_position_of(const core::VimStep &step)
+{
+    if (!step.change.has_value() || step.change.value().kind != core::VimChange::changed)
+    {
+        return std::nullopt;
+    }
+    return step.change.value().at.value_or(
+        core::TextPosition{core::LineNumber{1}, core::Column{1}});
+}
+
+// held の窓（先頭の論理行と隠れた画面行から visible_lines
+// 段）にキャレットの画面行が入るか。画面行の
+// 単位の窓（wrap・格子）だけが問う。答えられなければ入らないと数える（保たない側・#1374）。
+[[nodiscard]] bool shows_caret(VisualTextView &view, core::TextCaret caret, const ScrollState &held)
+{
+    const auto at = view.position(caret);
+    const core::VisualPosition first{held.first_visible, held.first_row};
+    const auto last = view.shifted(
+        first, static_cast<std::int64_t>(std::max<std::size_t>(held.visible_lines, 1) - 1));
+    return at && last && !(at.value() < first) && !(last.value() < at.value());
 }
 } // namespace
 
@@ -377,8 +473,13 @@ EditorFrame EditorController::press_vim_key(const core::VimKey &key)
 // deliver_vim_key の返り値で決める）。Vim は 1 鍵ごとに update_topline するので、各鍵の後に
 // 追従を解決する（ADR 0129 の追補・#1154）。解決を最後に 1 回へまとめると、画面の外へ出て戻る
 // 列（`G30G` `''''`）の先頭行が途中の画面を経ない値になる。窓の 1 打鍵の道はここを通らない。
+// :normal! の鍵は打った鍵ではないので、`:` の行を履歴に足さない（normal_busy_・#1528）。
 EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
 {
+    // :normal! の鍵は打った鍵ではない（Vim の KeyTyped が偽・`<C-o>c` の後に INSERT を始め直す側・
+    // ADR 0182 の決定 4）。出どころの値は map の右辺と同じ mapped を借りる（新しい値は足さない）。
+    const ScopedValue<core::VimKeySource> source{unit_source_, core::VimKeySource::mapped};
+    const ScopedValue<bool> busy{normal_busy_, true};
     const auto failed = [this](const core::VimKey &key)
     {
         settle_tab_walk_before(false);
@@ -676,6 +777,9 @@ std::optional<core::VimRepeatFailure> EditorController::deliver_vim_key(const co
 {
     if (!state_.command_input().has_value())
     {
+        // 再生の中で入力行を取り消した後の鍵も、engine へ流す前に同じ 1
+        // か所で待ちを捨てる（#1549）。
+        settle_line_operator();
         return step_vim(key);
     }
     // 入力行の鍵は先頭を確かめない（確定が流す engine の鍵は stepped_vim が置き直す・#1232）。
@@ -691,8 +795,8 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(const core::
     return std::nullopt;
 }
 
-// 入力行での特殊鍵の写し（ADR 0048 の決定 8）。窓と同じ EditCommand の写しで、上下（履歴）と
-// 入力行に意味の無い鍵は捨てる。再生の中の <Esc> は Vim の c_<Esc> と同じに確定する。
+// 入力行での特殊鍵の写し（ADR 0048 の決定 8）。窓と同じ EditCommand の写しで、入力行に意味の
+// 無い鍵は捨てる。再生の中の <Esc> は Vim の c_<Esc> と同じに確定する。
 std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpecialKey key)
 {
     switch (key)
@@ -725,8 +829,11 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpe
     case core::VimSpecialKey::end:
         accept(EditCommand{core::CommandEdit::end});
         return std::nullopt;
+    // 上下は窓と同じ履歴の前・次（Vim の再生の `<Up>` も履歴を引く・#1528 の実測）。
     case core::VimSpecialKey::arrow_up:
+        return recalled_key(core::CommandEdit::history_previous);
     case core::VimSpecialKey::arrow_down:
+        return recalled_key(core::CommandEdit::history_next);
     case core::VimSpecialKey::control_r:
     case core::VimSpecialKey::page_up:
     case core::VimSpecialKey::page_down:
@@ -809,6 +916,61 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
         return core::VimRepeatFailure::refused;
     }
     const auto &step = measured.value();
+    // 前の鍵が先頭を確かめ済みで終えたときだけ、鍵の前の行と窓を覚える（#1374）。
+    const auto held = held_vim_window(state_, vim_top_kept_ && !pending_follow_.has_value());
+    // Vim が changed_* に渡した位置は engine の印が持つ（ADR 0181 の追補 #1374）。u と Ctrl-r は
+    // 効果を写すときに戻した行を足す（note_vim_undone）。
+    vim_changed_from_ = changed_position_of(step);
+    applied_vim_step(step, before);
+    const core::Offset command_caret = settle_vim_step(
+        step, before,
+        held.has_value() && !requests_window(step, held.value().second) ? held : std::nullopt);
+    // 鍵の終わりに、動かなかった・消えた前の位置を戻す（決定 5・Vim の checkpcmark）。
+    check_vim_marks();
+    restart_due_vim_insert(command_caret);
+    // 再生（`.` `@`）の中の鍵が失敗したら、再生を返した鍵の失敗にする（Issue #983）。
+    return step_failure(step.failure, replay_failure_);
+}
+
+// INSERT の `Ctrl-o` の命令が終わった鍵の後に始め直す（ADR 0182 の決定 2）。効果を写して NORMAL の
+// 寄せと窓の先頭の判定（#1374）を済ませた後なので、engine の位置の規則は Vim の normal_cmd
+// の終わりの カーソルを読む。`.` の再生の鍵が列に残る間は始め直さない（Vim の
+// stuff_empty()）。マクロの鍵は typeahead なので待たない。command_caret は寄せの前のキャレット。
+void EditorController::restart_due_vim_insert(core::Offset command_caret)
+{
+    if (!core::vim_insert_restart_due(state_.vim()) ||
+        (!replay_levels_.empty() && replay_levels_.front().kind == core::VimReplayKind::repeat))
+    {
+        return;
+    }
+    restart_vim_insert(command_caret);
+}
+
+// 印を待つ間に engine の外で終わった命令（Ex の行・検索の取消・クリック）の後に始め直す（決定 8）。
+// 入力行がまだ開いていれば（Ex が別の入力行を開いた）始め直さない。命令が INSERT へ入ったまま
+// （印を保ったオペレータ待ちの `c:5<CR>`・#1549）なら、その INSERT の Esc の後に鍵の出口が始め
+// 直すので、ここでは始め直さない（Vim 9.1 の実測・まとめ枝 #1563）。
+void EditorController::resume_vim_insert()
+{
+    if (state_.mode() != core::EditMode::vim || state_.command_input().has_value() ||
+        state_.vim().mode == core::VimMode::insert || !core::vim_insert_paused(state_.vim()))
+    {
+        return;
+    }
+    restart_vim_insert(state_.selection().caret);
+}
+
+// 始め直しの 1 歩（決定 2）。何を始め直すかは engine の vim_restarted_insert が決め、写しは鍵と同じ
+// stepped_vim を通る（NORMAL → INSERT の出入りで undo を区切る）。
+void EditorController::restart_vim_insert(core::Offset command_caret)
+{
+    static_cast<void>(stepped_vim(VimStepSource{InsertRestartRequest{command_caret}}));
+}
+
+// engine の答えを状態へ写す（モード・undo の区切り・戻り先・マーク・効果・知らせ・
+// クリップボード）。
+void EditorController::applied_vim_step(const core::VimStep &step, core::VimMode before)
+{
     state_ = state_.with_vim(step.next);
     // INSERT の出入りが undo の区切り（ADR 0012 の決定 6 / ADR 0009 の決定 3 の Vim 側）。
     if (before != step.next.mode && before != core::VimMode::insert)
@@ -826,6 +988,13 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     adopt_vim_marks(step.marks);
     perform_vim_effect(step);
     placed_after_effect(state_, step);
+    // 鍵の中で Vim の edit() が先頭を確かめた所へ、鍵の終わりの追従の前に歩く（#1374・`r<CR>`）。
+    // 前の打鍵の歩きがまだ解かれずに残っていれば、そちらを残してこの位置は捨てる（歩きの段は
+    // 1 つ・解決は読む所で 1 回・ADR 0128）。描く前に鍵が続いたときだけ起きる（V-1543c の L1）。
+    if (step.edit_topline.has_value() && !walked_follow_.has_value())
+    {
+        walked_follow_ = step.edit_topline;
+    }
     // 検索の報せは Ex の結果と同じ 1 本に出し、次の入力で消える（ADR 0032 の決定 5）。
     if (step.notice.has_value())
     {
@@ -843,18 +1012,16 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     {
         state_ = state_.with_history(state_.history().sealed());
     }
-    settle_vim_step(step, before);
-    // 鍵の終わりに、動かなかった・消えた前の位置を戻す（決定 5・Vim の checkpcmark）。
-    check_vim_marks();
-    // 再生（`.` `@`）の中の鍵が失敗したら、再生を返した鍵の失敗にする（Issue #983）。
-    return step_failure(step.failure, replay_failure_);
 }
 
 // 鍵の効果を写す。印は効果を写す間だけ置き、置き換えが積めば消え、残れば空の単位になる（ADR 0181
 // の決定 3）。再生（`.` `@`）の中の鍵は自分の印を置いて外の鍵の印へ戻す。
 void EditorController::perform_vim_effect(const core::VimStep &step)
 {
-    const auto outer_change = std::exchange(vim_change_, step.change);
+    const auto outer_change =
+        std::exchange(vim_change_, step.change.has_value() ? std::optional{step.change.value().kind}
+                                                           : std::nullopt);
+    const ScopedValue<bool> effecting{in_vim_effect_, true};
     const core::Offset restore = state_.selection().caret;
     // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->perform(value); }, step.effect);
@@ -927,15 +1094,80 @@ void EditorController::adopt_vim_marks(const std::optional<core::VimMarks> &mark
 
 // 鍵の終わりの寄せ（keeps_vim_top の判定を覚えてから寄せる・ADR 0019 の追補 #1232）。再生を
 // 返した外側の鍵が引き継ぐのは、再生がいま終わったとき（入れ子なら鍵を積んだだけ）だけ。
-// before は鍵の前のモード（INSERT で打った本文の追従の印・#1363）。
-void EditorController::settle_vim_step(const core::VimStep &step, core::VimMode before)
+// before は鍵の前のモード（INSERT で打った本文の追従の印・#1363）。held
+// は前の鍵が先頭を確かめ済みで
+// 終え、この鍵が窓の送りを頼まなかったときの鍵の前のキャレットの行と窓（#1374）。引き継ぐかは
+// NORMAL の寄せの後のキャレットで vim_top_still_valid が決め（Vim の changed_common は del_bytes が
+// カーソルを戻した後に呼ばれる）、窓を戻せなければ（keep_vim_window）今までの追従のまま確かめ直す。
+core::Offset EditorController::settle_vim_step(const core::VimStep &step, core::VimMode before,
+                                               const std::optional<HeldVimWindow> &held)
 {
-    vim_top_kept_ = keeps_vim_top(step, !replay_depth_.has_value() && vim_top_kept_);
-    if (!state_.command_input().has_value() && !vim_top_kept_)
+    // 寄せの前のキャレット（INSERT の `Ctrl-o` の始め直す位置が読む・ADR 0182 の決定 2）。
+    const core::Offset command_caret = state_.selection().caret;
+    const bool kept = keeps_vim_top(step, !replay_depth_.has_value() && vim_top_kept_);
+    vim_top_kept_ = kept;
+    if (!state_.command_input().has_value() && !kept)
     {
         settle_vim_caret();
+        vim_top_kept_ = held.has_value() && still_valid_vim_top(held.value()) &&
+                        keep_vim_window(held.value().second);
+    }
+    else if (!kept && held.has_value())
+    {
+        vim_top_kept_ = still_valid_vim_top(held.value());
     }
     mark_typed_follow(before, step);
+    return command_caret;
+}
+
+// 鍵の後のキャレットと、この鍵が changed_* を呼んだ位置で、前の鍵の先頭がまだ確かめ済みか
+// （vim_top_still_valid の入力を作るだけ・#1374）。
+bool EditorController::still_valid_vim_top(const HeldVimWindow &held) const
+{
+    return vim_top_still_valid(held.first, state_.text().position_of(state_.selection().caret),
+                               vim_changed_from_);
+}
+
+// engine に文字組みの値を渡す窓か（wrap か格子で、幅がある）。VimLayoutView と先頭を保つ判定が
+// 共用する 1 本（#1374）。
+bool EditorController::vim_rows_layout() const noexcept
+{
+    return view_geometry_.width > 0 && (state_.settings().wrapping == core::LineWrapping::wrap ||
+                                        state_.display() == core::DisplayForm::grid);
+}
+
+// 鍵の前の窓（縦の先頭の論理行と隠れた画面行）を保つ。保つのはキャレットがその窓に見えたまま
+// のときだけで、横の送りは追う（Vim の curs_columns の leftcol）。画面行の単位の窓（wrap・格子）で
+// キャレットが先頭の行にいるときは保たない（Vim の curs_columns は窓より高い先頭の行の中で
+// w_skipcol を動かす・#1374）。保たないときは効果と保留の追従をそのまま残して
+// false（今までと同じ）。
+// 保つときは保留の追従を捨てるので、文字組みは画面行の窓の見える判定と横の追従の分だけ読む。
+bool EditorController::keep_vim_window(const ScrollState &held)
+{
+    const core::Offset caret = state_.selection().caret;
+    const bool rows = vim_rows_layout();
+    if (pending_clamp_ || (rows && state_.text().line_containing(caret) == held.first_visible))
+    {
+        return false;
+    }
+    const ScrollState followed = state_.scroll();
+    const auto pending = std::exchange(pending_follow_, std::nullopt);
+    state_ = state_.with_scroll(ScrollState{held.first_visible, followed.visible_lines,
+                                            held.first_row, followed.horizontal});
+    auto view = visual_view();
+    const auto text_caret =
+        core::TextCaret{state_.text().position_of(caret), state_.caret_affinity()};
+    const auto horizontal = view.followed_horizontal(text_caret);
+    if (!horizontal || (rows && !shows_caret(view, text_caret, held)))
+    {
+        pending_follow_ = pending;
+        state_ = state_.with_scroll(followed);
+        return false;
+    }
+    auto kept = state_.scroll();
+    kept.horizontal = horizontal.value();
+    state_ = state_.with_scroll(kept);
+    return true;
 }
 
 void EditorController::settle_vim_caret()
@@ -1046,6 +1278,7 @@ void EditorController::perform(const core::VimOpenCommandLine &effect)
     const auto line = core::CommandLine::empty(state_.themes()).with_fonts(given_fonts());
     state_ = state_.with_command_input(
         effect.range.empty() ? line : line.inserted(effect.range).value_or(line));
+    line_operator_ = state_.vim().pending.has_value();
 }
 
 void EditorController::perform(const core::VimOpenSearch &effect)
@@ -1054,6 +1287,7 @@ void EditorController::perform(const core::VimOpenSearch &effect)
     state_ = state_.with_command_input(core::SearchLine::opened(effect.direction));
     state_ = state_.with_search_preview(
         SearchPreview{std::nullopt, origin, state_.text().position_of(state_.selection().caret)});
+    line_operator_ = state_.vim().pending.has_value();
 }
 
 // 入力行が変わるたびに 1 か所で呼ぶ（ADR 0041 の決定 3）。画面は毎回 origin から数え直すので、
@@ -1155,6 +1389,17 @@ void EditorController::interrupt_vim_insert()
     {
         state_ = state_.with_vim(core::vim_interrupted(state_.vim()))
                      .with_history(state_.history().sealed());
+    }
+}
+
+// 印を待つ間の割り込みは印を捨てて NORMAL のまま（ADR 0182 の決定 8）。何を捨てるかは
+// vim_interrupted が決める。engine の効果を写す replace の道は通らない（`<C-o>x`
+// は割り込みでない）。
+void EditorController::interrupt_vim_pause()
+{
+    if (core::vim_insert_paused(state_.vim()))
+    {
+        state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
     }
 }
 
@@ -1582,6 +1827,14 @@ void EditorController::queue_replay(const core::VimReplay &effect, std::size_t d
         return;
     }
     const ReplayLevel level{static_cast<std::uint32_t>(depth), effect.kind};
+    // `<C-o>@a` は全部の周の後に `i` を流す（Vim の put_reedit_in_typebuf・ADR 0182 の決定
+    // 7）。周の 鍵は列の頭へ積むので、先に積んだ `i`
+    // はいつも最後の周の後ろに残る。失敗で列を捨てれば一緒に 捨てる。
+    if (effect.insert_after)
+    {
+        replay_queue_.push_front(core::VimKey{core::VimCharacter{U'i'}});
+        replay_levels_.push_front(level);
+    }
     const bool more = effect.rounds > 1U && !effect.keys.empty();
     if (more)
     {
@@ -1671,6 +1924,7 @@ void EditorController::perform(const core::VimUndo &)
     undo_edit();
     if (edit.has_value())
     {
+        note_vim_undone(edit.value());
         move_caret_to(edit.value().restore, core::SelectionAnchoring::collapse);
     }
 }
@@ -1684,8 +1938,26 @@ void EditorController::perform(const core::VimRedo &)
     redo_edit();
     if (edit.has_value())
     {
+        note_vim_undone(edit.value());
         move_caret_to(core::vim_same_line_and_column(before, edit.value().restore, state_.text()),
                       core::SelectionAnchoring::collapse);
+    }
+}
+
+// Vim の u_undoredo は単位を書き戻して changed_lines(top + 1, 0, ...) を呼ぶ（u_save を呼ばない
+// ので engine の印は立たない）。engine の効果は「戻せ」だけで、戻した行は controller が履歴から
+// 知るので、戻した編集の行の行頭を changed_* の位置として覚える（#1374）。Vim がこれを呼ぶときの
+// カーソルは戻す前の位置だが、比べるのは戻した後のキャレット（u はほぼいつもカーソルの行を
+// 動かすので、行が変わった側で落ちる）。
+void EditorController::note_vim_undone(const core::Edit &edit)
+{
+    const core::TextPosition undone{state_.text().line_containing(edit.at), core::Column{1}};
+    if (!vim_changed_from_.has_value() ||
+        undone.line.value < vim_changed_from_.value().line.value ||
+        (undone.line == vim_changed_from_.value().line &&
+         undone.column.value < vim_changed_from_.value().column.value))
+    {
+        vim_changed_from_ = undone;
     }
 }
 
@@ -1743,10 +2015,7 @@ EditorController::measured_vim_step(const VimStepSource &source)
         // ADR 0145 の決定 4）。横送りの row_request は有効か否かに関わらず答える。
         // 格子の画面移動は画面行の単位（ADR 0144 の決定 5）。text の形は wrap でも論理行のまま。
         // 1 画面行の升の数は文字組みの問いに答えるときに一緒に置く（決定 10）。
-        core::VimLayoutView{view_geometry_.width > 0 &&
-                                (state_.settings().wrapping == core::LineWrapping::wrap ||
-                                 state_.display() == core::DisplayForm::grid),
-                            rows,
+        core::VimLayoutView{vim_rows_layout(), rows,
                             state_.display() == core::DisplayForm::grid ? core::VimScrollUnit::row
                                                                         : core::VimScrollUnit::line,
                             spans}};

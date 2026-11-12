@@ -91,5 +91,61 @@ class StaleBottomAfterZbTests(unittest.TestCase):
         self.assertIsNone(self.known(case))
 
 
+def scrolled(words, first_visible=51, line=56, visible_lines=10, fields=("first_visible",),
+             shrunk=True, scrolloff=6, lines=60):
+    case = judged(words, first_visible, line, visible_lines, fields, shrunk, scrolloff)
+    case["lines"] = lines
+    return case
+
+
+class StaleBottomBeforeHTests(unittest.TestCase):
+    """#1374: the known rule for `H` after a counted `<C-e>` inside one `:normal!` (V-1543 M2)."""
+
+    def known(self, case):
+        return vim_fuzz.default_known(case)
+
+    def test_measured_windows_are_known(self):
+        # Vim 9.1: 束ねると先頭 52 / 55 / 52 / 50、`:redraw!` を挟むと 54 / 56 / 53 / 51（Nib と同じ）。
+        for scroll, top, first, line, height, so in (("3<C-e>", "H", 51, 56, 10, 6),
+                                                       ("3<C-e>", "2H", 53, 57, 8, 4),
+                                                       ("2<C-e>", "3H", 51, 56, 10, 5),
+                                                       ("2<C-e>", "H", 49, 55, 12, 6)):
+            with self.subTest(scroll=scroll, top=top, height=height, so=so):
+                case = scrolled([("<C-e>", scroll), ("H", top)], first, line, height,
+                                scrolloff=so)
+                self.assertEqual(self.known(case), "1374")
+
+    def test_a_small_scrolloff_is_not_known(self):
+        # `so=4` の高さ 10・`so=3` の高さ 8・`so=4` の高さ 12 は束ねても Vim と Nib が一致した。
+        for height, so, first, line in ((10, 4, 51, 56), (8, 3, 53, 57), (12, 4, 49, 55)):
+            with self.subTest(height=height, so=so):
+                case = scrolled([("<C-e>", "3<C-e>"), ("H", "H")], first, line, height,
+                                scrolloff=so)
+                self.assertNotEqual(self.known(case), "1374")
+
+    def test_a_window_in_the_middle_of_the_text_is_not_known(self):
+        case = scrolled([("<C-e>", "3<C-e>"), ("H", "H")], 20, 24, 8, scrolloff=4)
+        self.assertNotEqual(self.known(case), "1374")
+
+    def test_other_keys_are_not_known(self):
+        for words in ([("<C-e>", "<C-e>"), ("H", "H")], [("<C-e>", "1<C-e>"), ("H", "H")],
+                      [("<C-e>", "3<C-e>"), ("M", "M")], [("<C-e>", "3<C-e>"), ("L", "L")],
+                      [("<C-e>", "3<C-e>"), ("H", "5H")], [("zt", "zt"), ("H", "H")],
+                      [("<C-y>", "3<C-y>"), ("H", "H")]):
+            with self.subTest(words=words):
+                self.assertNotEqual(self.known(scrolled(words)), "1374")
+
+    def test_a_third_word_or_another_field_is_not_known(self):
+        three = scrolled([("<C-e>", "3<C-e>"), ("j", "j"), ("H", "H")])
+        self.assertNotEqual(self.known(three), "1374")
+        line = scrolled([("<C-e>", "3<C-e>"), ("H", "H")], fields=("first_visible", "line"))
+        self.assertNotEqual(self.known(line), "1374")
+        unshrunk = scrolled([("<C-e>", "3<C-e>"), ("H", "H")], shrunk=False)
+        self.assertNotEqual(self.known(unshrunk), "1374")
+        no_lines = scrolled([("<C-e>", "3<C-e>"), ("H", "H")])
+        del no_lines["lines"]
+        self.assertNotEqual(self.known(no_lines), "1374")
+
+
 if __name__ == "__main__":
     unittest.main()

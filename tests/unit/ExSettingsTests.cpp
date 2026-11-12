@@ -13,15 +13,19 @@
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorSettings.hpp"
+#include "ExClipboardRequest.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
+#include "ExLspRequest.hpp"
 #include "ExResult.hpp"
 #include "ExRootRequest.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
+#include "ExWindowState.hpp"
 #include "FilePath.hpp"
 #include "FontSize.hpp"
 #include "FontSizeAdjustment.hpp"
+#include "GuideVisibility.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InputHistory.hpp"
@@ -29,9 +33,14 @@
 #include "InputText.hpp"
 #include "InsertText.hpp"
 #include "LayoutRect.hpp"
+#include "LineWrapping.hpp"
+#include "Minimap.hpp"
+#include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenCommandPalette.hpp"
+#include "OpenTabList.hpp"
 #include "PasteCommand.hpp"
+#include "PlaceCaret.hpp"
 #include "RefreshAppearance.hpp"
 #include "Scopes.hpp"
 #include "ScriptedAppearance.hpp"
@@ -41,6 +50,7 @@
 #include "SettingsFailure.hpp"
 #include "StatusBarLayout.hpp"
 #include "SubmitCommand.hpp"
+#include "SwitchTab.hpp"
 #include "TestSupport.hpp"
 #include "ThemeChoice.hpp"
 #include "ThemeExpectations.hpp"
@@ -691,6 +701,143 @@ void verify_ex_visual_range_cancel_and_count()
     expect(caret_at(controller.frame(), 4, 1), ":.,.+2 lands on the last line of the range");
 }
 
+// オペレータ待ちの `:` を窓の鍵の道で打つ（#1549・Vim の nv_colon）。`d:` は空の入力行を開き、
+// 入力行に打った文字は本文の鍵にならない。跳ばない命令は空の範囲（`d` は何も消さない）、跳ぶ
+// 命令（`:3`）は移動、取消と失敗はオペレータを捨てて次の鍵は NORMAL の鍵になる。
+void verify_ex_operator_colon_typed()
+{
+    for (const std::string_view command : {"set so=2", "noh", "foo", ""})
+    {
+        Editing editor;
+        open_vim_document(editor, std::string(four_lines));
+        auto &controller = editor.controller();
+        vim_replay(controller, "jd");
+        const auto opened = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}});
+        expect(opened.command_line.has_value() && opened.command_line.value().text.empty() &&
+                   opened.vim_mode == core::VimMode::normal,
+               "d: opens an empty input line");
+        static_cast<void>(controller.apply_frame(app::CommandText{std::string(command)}));
+        const auto submitted = controller.apply_frame(app::SubmitCommand{});
+        expect(!submitted.command_line.has_value() && whole_vim_body(controller) == four_lines &&
+                   submitted.vim_mode == core::VimMode::normal,
+               "a command that does not jump deletes nothing and the typed text stays out of the "
+               "buffer");
+        static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'x'}}));
+        expect(whole_vim_body(controller) == "one\nwo\nthree\nfour",
+               "the operator is closed: the next key is a NORMAL key");
+    }
+}
+
+// `d:3` は行への移動で、`c:` の空の範囲は INSERT へ入る。Esc と空の行の Backspace はオペレータごと
+// 取り消す（#1549）。
+void verify_ex_operator_colon_motion_and_cancel()
+{
+    {
+        Editing editor;
+        open_vim_document(editor, std::string(four_lines));
+        auto &controller = editor.controller();
+        vim_replay(controller, "jd:");
+        static_cast<void>(controller.apply_frame(app::CommandText{"3"}));
+        static_cast<void>(controller.apply_frame(app::SubmitCommand{}));
+        expect(whole_vim_body(controller) == "one\nthree\nfour" &&
+                   caret_at(controller.frame(), 2, 1),
+               "d:3 deletes up to the line as an exclusive motion that turns linewise");
+    }
+    {
+        Editing editor;
+        open_vim_document(editor, std::string(four_lines));
+        auto &controller = editor.controller();
+        vim_replay(controller, "jc:");
+        static_cast<void>(controller.apply_frame(app::CommandText{"set so=2"}));
+        const auto changed = controller.apply_frame(app::SubmitCommand{});
+        expect(changed.vim_mode == core::VimMode::insert &&
+                   whole_vim_body(controller) == four_lines,
+               "c: with a command that does not jump enters INSERT on the empty range");
+    }
+    for (const bool escape : {true, false})
+    {
+        Editing editor;
+        open_vim_document(editor, std::string(four_lines));
+        auto &controller = editor.controller();
+        vim_replay(controller, "jd:");
+        const auto cancelled =
+            escape ? controller.apply_frame(app::CancelCommand{})
+                   : controller.apply_frame(app::EditCommand{core::CommandEdit::backspace});
+        expect(!cancelled.command_line.has_value() && cancelled.vim_mode == core::VimMode::normal,
+               "Esc and Backspace on the empty line close the input line");
+        static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'x'}}));
+        expect(whole_vim_body(controller) == "one\nwo\nthree\nfour",
+               "cancelling drops the operator: x deletes one character");
+    }
+}
+
+// 命令の要求が後で断った（`:tabnext 9`）ときは失敗と同じに、窓が後で行う要求（最後のタブの
+// `:tabclose`）は要求を出して、オペレータを捨てる（#1549 の M1・Vim の did_emsg の clearopbeep）。
+// `c` は INSERT に入らず、次に打った `x` は NORMAL の鍵。
+void verify_ex_operator_colon_refused_request()
+{
+    for (const std::string_view command : {"tabnext 9", "tabclose"})
+    {
+        Editing editor;
+        open_vim_document(editor, std::string(four_lines));
+        auto &controller = editor.controller();
+        vim_replay(controller, "jc:");
+        static_cast<void>(controller.apply_frame(app::CommandText{std::string(command)}));
+        const auto refused = controller.apply_frame(app::SubmitCommand{});
+        expect(refused.vim_mode == core::VimMode::normal,
+               "a refused or deferred request drops the operator instead of entering INSERT");
+        static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'x'}}));
+        expect(whole_vim_body(controller) == "one\nwo\nthree\nfour",
+               "the next x is a NORMAL key, not text typed into the buffer");
+    }
+}
+
+// `d:` の入力行が確定の外で閉じるか別の面に置き換わったら、保留のオペレータを捨てる（#1549 の
+// M2）。 Ctrl+P の面・タブの一覧・クリック・タブの切り替えと、`d/` の
+// Ctrl+P（前からの穴）。どれも後の `j` は 1 行下へ動くだけで、本文は変わらない。
+void verify_ex_operator_colon_replaced_line()
+{
+    const auto check = [](std::string_view opener, auto &&leave, const char *label)
+    {
+        Editing editor;
+        open_vim_document(editor, std::string(four_lines));
+        auto &controller = editor.controller();
+        vim_replay(controller, "jd");
+        vim_replay(controller, opener);
+        leave(controller);
+        static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+        static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'j'}}));
+        expect(whole_vim_body(controller) == four_lines, label);
+    };
+    const auto palette = [](app::EditorController &controller)
+    { static_cast<void>(controller.apply_frame(app::OpenCommandPalette{})); };
+    const auto tab_list = [](app::EditorController &controller)
+    { static_cast<void>(controller.apply_frame(app::OpenTabList{})); };
+    const auto click = [](app::EditorController &controller)
+    {
+        static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+        static_cast<void>(controller.apply_frame(
+            app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                            core::SelectionAnchoring::collapse}));
+    };
+    check(":", palette, "Ctrl+P over d: drops the operator");
+    check(":", tab_list, "the tab list over d: drops the operator");
+    check(":", click, "a click on the text drops the operator");
+    check("/", palette, "Ctrl+P over d/ drops the operator");
+
+    Editing editor;
+    open_vim_document(editor, std::string(four_lines));
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply_frame(app::NewTab{}));
+    static_cast<void>(controller.apply_frame(app::SwitchTab{0}));
+    vim_replay(controller, "jd:");
+    static_cast<void>(controller.apply_frame(app::SwitchTab{1}));
+    static_cast<void>(controller.apply_frame(app::SwitchTab{0}));
+    static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'j'}}));
+    expect(whole_vim_body(controller) == four_lines,
+           "switching tabs while d: is open drops the operator");
+}
+
 void verify_ex_tab_names()
 {
     using core::ExTabVerb;
@@ -898,7 +1045,8 @@ void verify_ex_smartcase()
     expect(carries_settings(off) && !settings_of(off).smartcase &&
                message_of(off) == "smartcase=off",
            "set nosmartcase turns it off");
-    for (const auto text : {"set noic?", "set ic!", "set invic", "set icase", "set ignorecas"})
+    // `ic!` `invic` は反転として受ける（#1525・verify_ex_set_toggle）。
+    for (const auto text : {"set noic?", "set icase", "set ignorecas"})
     {
         const auto refused = core::evaluate_ex(text, defaults, Appearance::dark);
         expect(!refused.has_value(), "other spellings are refused");
@@ -932,7 +1080,8 @@ void verify_ex_relativenumber()
     expect(asked.has_value() && !carries_settings(asked) &&
                message_of(asked) == "relativenumber=on",
            "rnu? tells the current value without changing settings");
-    for (const auto text : {"set rn", "set rnu!", "set nornu?"})
+    // `rnu!` は反転として受ける（#1525・verify_ex_set_toggle）。
+    for (const auto text : {"set rn", "set nornu?"})
     {
         expect(!core::evaluate_ex(text, defaults, Appearance::dark).has_value(),
                "other spellings of relativenumber are refused");
@@ -972,6 +1121,159 @@ void verify_ex_scrolloff()
                core::scrolloff_of("42") == std::optional<std::size_t>{42} &&
                !core::scrolloff_of("4a").has_value(),
            "the one scrolloff reader is shared by Ex and the settings codec");
+}
+
+// `:set {name}&`（`&vim` `&vi`）と `{name}!` `no{name}!` `inv{name}`（#1525・Vim 9.1 の実測）。
+// 既定値は保存する設定の正本 default_editor_settings と、検索の強調・incsearch の既定。数の
+// option の `!`（E488）・`inv`（E474）・`no{num}&`（E474）・`invno{bool}`（E518）・`{name}!?`
+// `{name}&?`（E488）は断る。文書の値（filetype など）の `&` はまだ受けない（残る違い）。hlsearch・
+// incsearch の反転と短い名前の `hls&` `is&` は Vim の状態（ExWindowState）の今の値と初期値から
+// 引く（レビュー V-1552 の L4・Vim 9.1 の実測 D:/NeNeNib/scripts/20261112/c10b/h.vim: `hls!`
+// `invhls` `nohls!` `is!` `invis` `nois!` はどれも反転、`hls&` `is&` は既定値へ）。
+core::EditorSettings changed_from_defaults()
+{
+    auto changed = core::default_editor_settings();
+    changed.scrolloff = 5;
+    changed.wrapping = core::LineWrapping::no_wrap;
+    changed.guide = core::GuideVisibility::hidden;
+    changed.ignorecase = true;
+    changed.relativenumber = true;
+    changed.explorer = true;
+    changed.font_size = core::FontSize::parse("20").value();
+    return changed;
+}
+
+void verify_ex_set_default()
+{
+    const auto defaults = core::default_editor_settings();
+    const auto changed = changed_from_defaults();
+    for (const auto text : {"set so&", "set so&vim", "set so&vi", "set scrolloff&"})
+    {
+        const auto reset = core::evaluate_ex(text, changed, Appearance::dark);
+        expect(carries_settings(reset) && settings_of(reset).scrolloff == defaults.scrolloff &&
+                   message_of(reset) == "scrolloff=0",
+               "so& puts the margin back to the default");
+    }
+    const auto wrap = core::evaluate_ex("set wrap&", changed, Appearance::dark);
+    expect(carries_settings(wrap) && settings_of(wrap).wrapping == defaults.wrapping,
+           "wrap& puts wrapping back to the default");
+    const auto guide = core::evaluate_ex("set guide&", changed, Appearance::dark);
+    expect(carries_settings(guide) && settings_of(guide).guide == defaults.guide,
+           "guide& puts the guide back to the default");
+    const auto ic = core::evaluate_ex("set ic&", changed, Appearance::dark);
+    expect(carries_settings(ic) && !settings_of(ic).ignorecase, "ic& turns ignorecase off");
+}
+
+void verify_ex_set_default_values()
+{
+    const auto defaults = core::default_editor_settings();
+    const auto changed = changed_from_defaults();
+    const auto font = core::evaluate_ex("set fontsize&", changed, Appearance::dark);
+    expect(carries_settings(font) &&
+               settings_of(font).font_size.points() == defaults.font_size.points() &&
+               message_of(font) == "fontsize=13.5",
+           "fontsize& puts the size back to the default");
+    const auto family = core::evaluate_ex("set guifont&", changed, Appearance::dark);
+    expect(carries_settings(family) &&
+               settings_of(family).font_family.text() == defaults.font_family.text() &&
+               settings_of(family).font_size.points() == defaults.font_size.points(),
+           "guifont& puts the family and the size back to the default");
+    const auto highlight = core::evaluate_ex("set hlsearch&", changed, Appearance::dark);
+    expect(highlight.has_value() &&
+               highlight.value().highlight == std::optional{core::vim_default_highlight},
+           "hlsearch& asks for the default highlight");
+    const auto incsearch = core::evaluate_ex("set incsearch&", changed, Appearance::dark);
+    expect(incsearch.has_value() &&
+               incsearch.value().incsearch == std::optional{core::vim_default_incsearch},
+           "incsearch& asks for the default incsearch");
+    const core::ExWindowState cleared{Appearance::dark, core::VimSearchHighlight::off, false};
+    const auto hls = core::evaluate_ex("set hls&", changed, cleared);
+    expect(hls.has_value() && hls.value().highlight == std::optional{core::vim_default_highlight},
+           "hls& asks for the default highlight");
+    const auto is = core::evaluate_ex("set is&", changed, cleared);
+    expect(is.has_value() && is.value().incsearch == std::optional{core::vim_default_incsearch},
+           "is& asks for the default incsearch");
+    const auto clipboard = core::evaluate_ex("set clipboard&", changed, Appearance::dark);
+    expect(clipboard.has_value() &&
+               clipboard.value().clipboard == std::optional{core::ExClipboardRequest::disable},
+           "clipboard& turns the clipboard sync off");
+    const auto lsp = core::evaluate_ex("set lsp!", defaults, Appearance::dark);
+    expect(lsp.has_value() && lsp.value().lsp == std::optional{core::ExLspRequest::enable},
+           "lsp! turns the off language server on");
+}
+
+// hlsearch と incsearch の反転は Vim の状態の今の値から（`:noh` の後の suspended も立っている）。
+void verify_ex_set_search_toggle()
+{
+    const auto defaults = core::default_editor_settings();
+    using core::VimSearchHighlight;
+    for (const auto text : {"set hls!", "set invhls", "set nohls!", "set hlsearch!",
+                            "set invhlsearch", "set nohlsearch!"})
+    {
+        for (const auto current : {VimSearchHighlight::on, VimSearchHighlight::suspended})
+        {
+            const auto off = core::evaluate_ex(
+                text, defaults, core::ExWindowState{Appearance::dark, current, true});
+            expect(off.has_value() &&
+                       off.value().highlight == std::optional{VimSearchHighlight::off},
+                   (std::string(text) + " turns a set hlsearch off").c_str());
+        }
+        const auto on = core::evaluate_ex(
+            text, defaults, core::ExWindowState{Appearance::dark, VimSearchHighlight::off, true});
+        expect(on.has_value() && on.value().highlight == std::optional{VimSearchHighlight::on},
+               (std::string(text) + " turns hlsearch on").c_str());
+    }
+    for (const auto text : {"set is!", "set invis", "set nois!", "set incsearch!"})
+    {
+        const auto off = core::evaluate_ex(
+            text, defaults, core::ExWindowState{Appearance::dark, VimSearchHighlight::on, true});
+        const auto on = core::evaluate_ex(
+            text, defaults, core::ExWindowState{Appearance::dark, VimSearchHighlight::on, false});
+        expect(off.has_value() && off.value().incsearch == std::optional{false} && on.has_value() &&
+                   on.value().incsearch == std::optional{true},
+               (std::string(text) + " toggles incsearch").c_str());
+    }
+}
+
+void verify_ex_set_toggle()
+{
+    const auto defaults = core::default_editor_settings();
+    const auto changed = changed_from_defaults();
+    for (const auto text : {"set wrap!", "set invwrap", "set nowrap!"})
+    {
+        const auto toggled = core::evaluate_ex(text, defaults, Appearance::dark);
+        expect(carries_settings(toggled) &&
+                   settings_of(toggled).wrapping == core::LineWrapping::no_wrap &&
+                   message_of(toggled) == "wrap=off",
+               "wrap! invwrap nowrap! toggle wrapping");
+    }
+    for (const auto text : {"set ic!", "set invic", "set ignorecase!", "set invignorecase"})
+    {
+        const auto toggled = core::evaluate_ex(text, changed, Appearance::dark);
+        expect(carries_settings(toggled) && !settings_of(toggled).ignorecase,
+               "ic! and invic toggle ignorecase");
+    }
+    const auto rnu = core::evaluate_ex("set rnu!", defaults, Appearance::dark);
+    expect(carries_settings(rnu) && settings_of(rnu).relativenumber, "rnu! toggles");
+    const auto explorer = core::evaluate_ex("set invexplorer", changed, Appearance::dark);
+    expect(carries_settings(explorer) && !settings_of(explorer).explorer, "invexplorer toggles");
+    const auto minimap = core::evaluate_ex("set minimap!", defaults, Appearance::dark);
+    expect(carries_settings(minimap) &&
+               core::minimap_shown(settings_of(minimap)) != core::minimap_shown(defaults),
+           "minimap! toggles");
+    verify_ex_set_search_toggle();
+}
+
+void verify_ex_set_refused()
+{
+    const auto defaults = core::default_editor_settings();
+    for (const auto text :
+         {"set so!", "set invso", "set noso&", "set invnowrap", "set so!?", "set so&?",
+          "set wrap!?", "set ft&", "set hls!?", "set fontsize!", "set noso!"})
+    {
+        expect(!core::evaluate_ex(text, defaults, Appearance::dark).has_value(),
+               (std::string(text) + " is refused").c_str());
+    }
 }
 
 // ルート（ADR 0162 の決定 7）。`root=<経路>` と `root=` は settings に載り、`root?` と `root=.` は
@@ -1368,6 +1670,101 @@ void verify_ex_command_table()
            ":w reaches the document row");
 }
 
+// Ex の候補にある `set …` の option は、全部が「決め直す」か「決め直さない」のどちらかに分類されて
+// いる（レビュー V-1553 の L2）。option を候補に足して分類を書き忘れると落ちる。分類は Vim 9.1 の
+// optiondefs.h の旗（`P_RWIN` `P_RALL` が決め直す・ADR 0019 の #1524 の追補の決定 2 の表）。値まで
+// 書いた候補（`set wrap` `set display=grid` など）は、評価した答えの `rechecks_window`
+// が分類と同じ。
+constexpr std::array<std::string_view, 4> window_rechecking_options{"wrap", "relativenumber",
+                                                                    "hlsearch", "scrolloff"};
+constexpr std::array<std::string_view, 14> window_keeping_options{
+    "fontsize",  "guifont",  "incsearch", "guide", "display",    "filetype",  "ft",
+    "clipboard", "explorer", "root",      "lsp",   "ignorecase", "smartcase", "minimap"};
+
+[[nodiscard]] bool listed_in(const auto &rows, std::string_view name)
+{
+    for (const std::string_view row : rows)
+    {
+        if (row == name)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void verify_ex_window_recheck_closed()
+{
+    const auto settings = core::default_editor_settings();
+    const auto classified = [](std::string_view name)
+    {
+        return listed_in(window_rechecking_options, name) ||
+               listed_in(window_keeping_options, name);
+    };
+    for (const auto &candidate : core::ex_command_candidates())
+    {
+        const std::string_view text = candidate;
+        if (!text.starts_with("set "))
+        {
+            continue;
+        }
+        const std::string_view option = text.substr(4);
+        std::string_view name = option.substr(0, option.find('='));
+        if (!classified(name) && name.starts_with("no"))
+        {
+            name = name.substr(2);
+        }
+        expect(classified(name),
+               "every :set option among the Ex candidates is classified for the window re-check");
+        if (option.ends_with('='))
+        {
+            continue;
+        }
+        const auto result = core::evaluate_ex(text, settings, Appearance::dark);
+        const bool rechecks = result.has_value() && result.value().rechecks_window;
+        expect(rechecks == listed_in(window_rechecking_options, name),
+               "a :set candidate re-checks the window exactly when its option is classified so");
+    }
+}
+
+// Vim が窓を決め直す option の表（#1524・ADR 0019 の #1524 の追補）。値を置く形だけが真で、同じ
+// 値の置き直しも真、問いと窓の旗を持たない option と Vim に無い option は偽（Vim 9.1 の実測）。
+void verify_ex_window_recheck()
+{
+    const auto rechecks = [](const core::ExResult &r) { return r.rechecks_window; };
+    for (const auto text : {"set wrap", "set nowrap", "set rnu", "set nornu", "set relativenumber",
+                            "set norelativenumber", "set hlsearch", "set nohlsearch", "set so=0",
+                            "set so=3", "set scrolloff=2"})
+    {
+        expect(ex_result_has(text, rechecks), "a P_RWIN / P_RALL option re-checks the window");
+    }
+    // 反転と既定値（#1525）も値を置くので、書き換えた後の名前で決め直す（Vim の do_set は `!` `inv`
+    // `&` でも check_redraw を通る・まとめ枝 #1563 で #1524 と #1525 を重ねた形）。
+    for (const auto text : {"set so&", "set hls!", "set invwrap", "set rnu&", "set nornu!"})
+    {
+        expect(ex_result_has(text, rechecks),
+               "a toggled or reset P_RWIN / P_RALL option re-checks the window");
+    }
+    for (const auto text : {"set ic!", "set is&", "set invguide"})
+    {
+        const auto result =
+            core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark);
+        expect(result.has_value() && !result.value().rechecks_window,
+               "a toggled or reset option without a window flag does not re-check the window");
+    }
+    for (const auto text :
+         {"set rnu?", "set so", "set so?", "set scrolloff", "set ic", "set noic", "set scs",
+          "set incsearch", "set noincsearch", "set guide", "set minimap", "set explorer",
+          "set fontsize=12", "set clipboard=", "set ft=c", "set ff=unix", "noh", "syntax off"})
+    {
+        const auto result =
+            core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark);
+        expect(result.has_value() && !result.value().rechecks_window,
+               "a query or an option without a window flag does not re-check the window");
+    }
+    verify_ex_window_recheck_closed();
+}
+
 } // namespace
 
 void verify_ex_settings()
@@ -1400,9 +1797,18 @@ void verify_ex_settings()
     verify_ex_smartcase();
     verify_ex_relativenumber();
     verify_ex_scrolloff();
+    verify_ex_set_default();
+    verify_ex_set_default_values();
+    verify_ex_set_toggle();
+    verify_ex_set_refused();
     verify_ex_command_table();
+    verify_ex_window_recheck();
     verify_ex_ranges();
     verify_ex_visual_range_refusal();
     verify_ex_visual_range_cancel_and_count();
+    verify_ex_operator_colon_typed();
+    verify_ex_operator_colon_motion_and_cancel();
+    verify_ex_operator_colon_refused_request();
+    verify_ex_operator_colon_replaced_line();
 }
 } // namespace nenenib::tests

@@ -4,10 +4,12 @@
 #include "CommandEdit.hpp"
 #include "CommandInput.hpp"
 #include "CommandLayout.hpp"
+#include "CommandLine.hpp"
 #include "CommandPalette.hpp"
 #include "DisplayText.hpp"
 #include "DocumentByteLimit.hpp"
 #include "EditBoundary.hpp"
+#include "EditMode.hpp"
 #include "EditorSettings.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExLineRequest.hpp"
@@ -37,7 +39,9 @@
 #include "TextPosition.hpp"
 #include "Utf8.hpp"
 #include "VimCharacter.hpp"
+#include "VimCommandMotion.hpp"
 #include "VimKey.hpp"
+#include "VimKeySource.hpp"
 #include "VimMode.hpp"
 #include "VimPattern.hpp"
 #include "VimSearchPattern.hpp"
@@ -49,10 +53,12 @@
 #include <cstddef>
 #include <limits>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -167,7 +173,85 @@ constexpr std::string_view replace_too_large_notice = "置換の結果は 1 GiB 
 static_assert(core::maximum_document_bytes == std::size_t{1024} * 1024U * 1024U);
 // 置換の起点を戻す幅（UTF-8 の 1 コードポイントの最大のバイト数）。
 constexpr std::size_t code_point_bytes = 4;
+
+// 入力行の 1 つの編集を Vim が録る打った鍵へ（#1528・Vim 9.1 の feedkeys の実測）。Vim は
+// 入力行の鍵もそのまま録り、`<Tab>` は文字の Tab（再生では 'wildchar' が効かず Tab が入る）、
+// 上下は `<Up>` `<Down>`（再生でも履歴を引く）。Shift+Tab（`<S-Tab>`）は Nib の鍵の表に無いので
+// 録らない。一覧の頁と端は面だけの編集で、`:` の行には届かない。
+[[nodiscard]] std::optional<core::VimKey> recorded_edit_key(core::CommandEdit edit) noexcept
+{
+    switch (edit)
+    {
+    case core::CommandEdit::left:
+        return core::VimKey{core::VimSpecialKey::arrow_left};
+    case core::CommandEdit::right:
+        return core::VimKey{core::VimSpecialKey::arrow_right};
+    case core::CommandEdit::home:
+        return core::VimKey{core::VimSpecialKey::home};
+    case core::CommandEdit::end:
+        return core::VimKey{core::VimSpecialKey::end};
+    case core::CommandEdit::backspace:
+        return core::VimKey{core::VimSpecialKey::backspace};
+    case core::CommandEdit::erase:
+        return core::VimKey{core::VimSpecialKey::delete_key};
+    case core::CommandEdit::complete_next:
+        return core::VimKey{core::VimCharacter{U'\t'}};
+    case core::CommandEdit::history_previous:
+        return core::VimKey{core::VimSpecialKey::arrow_up};
+    case core::CommandEdit::history_next:
+        return core::VimKey{core::VimSpecialKey::arrow_down};
+    case core::CommandEdit::complete_previous:
+    case core::CommandEdit::page_previous:
+    case core::CommandEdit::page_next:
+    case core::CommandEdit::list_first:
+    case core::CommandEdit::list_last:
+        return std::nullopt;
+    }
+    std::unreachable();
+}
+
+// 入力行へ入った文字列（打った文字・IME の確定・Ctrl+V の貼り付け）を 1 コードポイント 1 鍵に。
+[[nodiscard]] std::vector<core::VimKey> typed_character_keys(std::string_view utf8)
+{
+    std::vector<core::VimKey> keys;
+    core::Offset at{0};
+    while (at.value < utf8.size())
+    {
+        keys.emplace_back(core::VimCharacter{core::code_point_at(utf8, at)});
+        at = core::next_code_point(utf8, at);
+    }
+    return keys;
+}
 } // namespace
+
+bool EditorController::records_command_line() const noexcept
+{
+    const auto &input = state_.command_input();
+    return state_.mode() == core::EditMode::vim && input.has_value() &&
+           std::holds_alternative<core::CommandLine>(input.value()) &&
+           state_.vim().macro_recording.has_value() && !replay_depth_.has_value() &&
+           core::vim_key_recorded_in_macro(unit_source_);
+}
+
+void EditorController::note_command_key() noexcept
+{
+    if (!replay_depth_.has_value() && !normal_busy_ &&
+        core::vim_key_recorded_in_macro(unit_source_))
+    {
+        command_line_typed_ = true;
+    }
+}
+
+void EditorController::record_command_keys(std::span<const core::VimKey> keys)
+{
+    if (!records_command_line())
+    {
+        return;
+    }
+    auto vim = state_.vim();
+    core::vim_macro_typed(vim, keys);
+    state_ = state_.with_vim(std::move(vim));
+}
 
 bool EditorController::command_line_active() const noexcept
 {
@@ -210,6 +294,12 @@ void EditorController::accept(const CommandText &intent)
     {
         return;
     }
+    note_command_key();
+    // 録画していなければ鍵の列を作らない（入力行と面の 1 打鍵ごとに確保しない・レビュー L1）。
+    if (records_command_line())
+    {
+        record_command_keys(typed_character_keys(intent.utf8));
+    }
     auto next = inserted_command(input.value(), intent.utf8);
     if (!next)
     {
@@ -228,6 +318,12 @@ void EditorController::accept(const EditCommand &intent)
     {
         return;
     }
+    note_command_key();
+    const auto recorded = recorded_edit_key(intent.edit);
+    if (recorded.has_value())
+    {
+        record_command_keys(std::span<const core::VimKey>{&recorded.value(), 1U});
+    }
     // 空の入力行の Backspace は取消（Ex と検索で同じ・ADR 0032 の決定 1）。
     // 設定一覧は候補を出したまま残る。
     const bool palette = std::holds_alternative<core::CommandPalette>(input.value());
@@ -238,7 +334,7 @@ void EditorController::accept(const EditCommand &intent)
         edit = vim_line_edit(line, intent.edit);
         if (line.text.empty() && edit == core::CommandEdit::backspace)
         {
-            accept(CancelCommand{});
+            cancel_command_input();
             return;
         }
     }
@@ -248,6 +344,19 @@ void EditorController::accept(const EditCommand &intent)
             : edited_command(input.value(), edit));
     reach_font_families();
     update_search_preview();
+}
+
+std::optional<core::VimRepeatFailure> EditorController::recalled_key(core::CommandEdit direction)
+{
+    const auto &input = state_.command_input();
+    const bool moves = input.has_value() && recalls_command(input.value(), state_.ex_history(),
+                                                            state_.search_history(), direction);
+    accept(EditCommand{direction});
+    if (moves)
+    {
+        return std::nullopt;
+    }
+    return core::VimRepeatFailure::not_moved;
 }
 
 void EditorController::fit_command_rows()
@@ -268,10 +377,19 @@ void EditorController::fit_command_rows()
 
 void EditorController::accept(const CancelCommand &)
 {
+    constexpr core::VimKey escape{core::VimSpecialKey::escape};
+    record_command_keys(std::span<const core::VimKey>{&escape, 1U});
+    cancel_command_input();
+}
+
+void EditorController::cancel_command_input()
+{
     const auto &input = state_.command_input();
     // Vim の `/` `?` の取消だけ。通常モードの「検索: 」「行: 」は engine の待ちを持たない。
     const auto *line = input.has_value() ? std::get_if<core::SearchLine>(&input.value()) : nullptr;
     const bool searching = line != nullptr && vim_search_prompt(line->prompt());
+    const bool ex_line =
+        input.has_value() && std::holds_alternative<core::CommandLine>(input.value());
     // 入力行を閉じると preview も消えるので、戻す先を先に写す（ADR 0041 の決定 5）。
     const auto preview = state_.search_preview();
     close_command_input();
@@ -284,6 +402,42 @@ void EditorController::accept(const CancelCommand &)
         // 検索の取消は保留中のオペレータと回数も捨てる（`d/<Esc>` のあとの `x` が消すのと
         // 同じ・実測）。何を捨てるかは engine の純関数が決める（ADR 0032 の決定 1）。
         state_ = state_.with_vim(core::vim_cancelled_input(state_.vim()));
+    }
+    // INSERT の `Ctrl-o` の命令として開いた Ex の行と検索の行は、取り消しても命令 1 つ（ADR 0182 の
+    // 決定 8）。入力行の無い取消（知らせを閉じる）と面の取消は印に触らない。
+    if (searching || ex_line)
+    {
+        resume_vim_insert();
+    }
+    // `d:` の入力行の取消で残ったオペレータは、意図の出口の settle_line_operator
+    // が捨てる（#1549）。
+}
+
+// オペレータ待ちの `:` `/` の入力行（#1549）。確定（vim_command_operated と検索の鍵）が閉じれば
+// engine の待ちは消えている。待ちが残ったまま Vim の入力行が開いていなければ、取消（Esc・Ctrl+C・
+// 空の行の Backspace）か、Ctrl+P・タブの一覧・クリック・タブの切り替えなどで入力行が閉じたか別の
+// 面に置き換わったので、オペレータを捨てる（Vim の clearop）。入口ごとに書かず、意図の出口のここの
+// 1 か所で拾う。
+void EditorController::settle_line_operator()
+{
+    if (!line_operator_)
+    {
+        return;
+    }
+    const auto &input = state_.command_input();
+    const auto *search =
+        input.has_value() ? std::get_if<core::SearchLine>(&input.value()) : nullptr;
+    const bool open =
+        input.has_value() && (std::holds_alternative<core::CommandLine>(input.value()) ||
+                              (search != nullptr && vim_search_prompt(search->prompt())));
+    if (open)
+    {
+        return;
+    }
+    line_operator_ = false;
+    if (state_.vim().pending.has_value())
+    {
+        state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
     }
 }
 
@@ -307,7 +461,107 @@ void EditorController::accept(const PasteCommand &)
 // Vim の emsg が typeahead を捨てる）。入力行に打った後ろの鍵が本文の鍵として流れない。
 std::optional<core::VimRepeatFailure> EditorController::submit(const core::CommandLine &line)
 {
-    return evaluate_command(std::string(line.text()));
+    // オペレータ待ちの `:`（#1549）も Ex の行も、評価の後に始め直す（ADR 0182 の決定 8・
+    // `<C-o>:set so=2<CR>` `<C-o>d:5<CR>`）。評価が失敗して再生を打ち切るときも、Vim の
+    // restart_edit は残るので始め直す。
+    const std::string text(line.text());
+    const auto failure =
+        state_.vim().pending.has_value() ? operator_command(text) : evaluate_command(text);
+    resume_vim_insert();
+    return failure;
+}
+
+// オペレータ待ちの `:` の確定（ADR 0022 の追補 #1549・Vim の nv_colon）。Ex は 1 回だけ評価する。
+// 行へ跳ぶ命令（`:N` `:$`・`:.` `:.,.+N`）はキャレットを動かさずに行き先を engine へ渡し、
+// オペレータの移動にする。ほかの命令は評価の答えの写し（ran_ex_result）を通し、断られたら
+// （refused_operator_command）オペレータを捨てて refused を返す（再生も打ち切る）。成功なら
+// operator_closed_in_place が動かないキャレットまでの空の範囲で閉じる。
+std::optional<core::VimRepeatFailure> EditorController::operator_command(const std::string &text)
+{
+    close_command_input();
+    if (text.empty())
+    {
+        return operator_closed_in_place(text);
+    }
+    const auto result = evaluated_ex(text);
+    const auto substitute =
+        result.has_value() ? result.value().substitute : std::optional<core::ExSubstituteRequest>{};
+    if (substitute.has_value())
+    {
+        return operator_substituted(text, substitute.value());
+    }
+    const auto line = result.has_value() ? landing_line(result.value()) : std::nullopt;
+    if (line.has_value())
+    {
+        return stepped_vim(VimStepSource{core::VimCommandMotion{text, line}});
+    }
+    if (refused_operator_command(text, result))
+    {
+        return core::VimRepeatFailure::refused;
+    }
+    return operator_closed_in_place(text);
+}
+
+// オペレータ待ちの `:s`（`d:s/a/b/`・ADR 0168 の追補 16）。Vim は置換を先に流し、置換の前の
+// キャレットから置換の後のキャレットまでを exclusive な移動としてオペレータを閉じる（`jd:s/a/X/` は
+// `  b a` を `b X` に・実測）。置換が断られたら（E486 ほか）オペレータを捨てて再生を打ち切る。
+std::optional<core::VimRepeatFailure>
+EditorController::operator_substituted(const std::string &text,
+                                       const core::ExSubstituteRequest &request)
+{
+    const core::Offset origin = state_.selection().caret;
+    const auto failure = stepped_vim(VimStepSource{request});
+    if (failure.has_value())
+    {
+        state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
+        return failure;
+    }
+    if (!state_.vim().pending.has_value())
+    {
+        return std::nullopt;
+    }
+    return stepped_vim(VimStepSource{core::VimCommandMotion{text, std::nullopt, origin}});
+}
+
+// 答えを写し、断られた（ran_ex_result が refused を返した・評価の失敗も命令の要求の断りも・
+// `:tabnext 9` など・Vim の did_emsg の clearopbeep）ならオペレータを捨てて真（#1549）。
+bool EditorController::refused_operator_command(
+    std::string_view text, const std::expected<core::ExResult, core::ExEvaluationFailure> &result)
+{
+    if (!ran_ex_result(text, result).has_value())
+    {
+        return false;
+    }
+    state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
+    return true;
+}
+
+// 跳ばない命令の成功の後（#1549）。動かないキャレットまでの空の範囲で閉じる（`d` は何も消さず `c`
+// は INSERT へ入る・実測）。窓が後で行う要求（`:tabclose` の閉じる・一覧から頼んだ操作）は要求を
+// 出してオペレータを捨て、タブを替えて待ちが消えていれば何もしない。
+std::optional<core::VimRepeatFailure>
+EditorController::operator_closed_in_place(const std::string &text)
+{
+    if (state_.close_request().has_value() || state_.operation_request().has_value() ||
+        !state_.vim().pending.has_value())
+    {
+        state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
+        return std::nullopt;
+    }
+    return stepped_vim(VimStepSource{core::VimCommandMotion{text, std::nullopt}});
+}
+
+// Ex の答えがキャレットを跳ばす行（`:N` `:$` と範囲だけの `:.` `:.,.+N`）。`:'<,'>`
+// と跳ばない命令は 値なし。
+std::optional<core::ExLineRequest>
+EditorController::landing_line(const core::ExResult &result) const
+{
+    if (result.line.has_value())
+    {
+        return result.line;
+    }
+    return result.relative_line.has_value() ? line_below_caret(result.relative_line.value())
+                                            : std::nullopt;
 }
 
 std::optional<core::VimRepeatFailure> EditorController::submit(const core::CommandPalette &palette)
@@ -379,9 +633,13 @@ void EditorController::accept(const SubmitCommand &intent)
 }
 
 // 確定の意図（Enter）だけが入力を履歴に足す。Esc は取消で、再生の中の <Esc> の確定
-// （submitted_command を直接呼ぶ）も足さない（#725・ADR 0022 決定 2 の追補）。
+// （submitted_command を直接呼ぶ）も足さない（#725・ADR 0022 決定 2 の追補）。足すかを決めるのは
+// remember の 1 か所（Ex の行は打った鍵が届いたときだけ・#1528 のレビュー M1）。
 std::optional<core::VimRepeatFailure> EditorController::confirmed_command()
 {
+    note_command_key();
+    constexpr core::VimKey enter{core::VimSpecialKey::enter};
+    record_command_keys(std::span<const core::VimKey>{&enter, 1U});
     const auto &open = state_.command_input();
     if (open.has_value())
     {
@@ -391,13 +649,21 @@ std::optional<core::VimRepeatFailure> EditorController::confirmed_command()
     return submitted_command();
 }
 
+// Vim の getcmdline は `:` の行を、行の鍵が 1 つでも打たれたとき（some_key_typed）だけ履歴に
+// 足す。再生（`@a` `.`）・`map` の右辺・:normal! だけで確定した行は足さない（Vim 9.1 の実測・
+// #1528 のレビュー M1・D:/NeNeNib/scripts/20261112/c10b/h.vim）。
 void EditorController::remember(const core::CommandLine &line)
 {
+    if (!command_line_typed_)
+    {
+        return;
+    }
     state_ = state_.with_ex_history(state_.ex_history().remembered(line.text()));
 }
 
 // 「検索: 」の語も検索の履歴の 1 本へ（入力行の履歴は共用・ADR 0174 の決定 3）。
-// 「行: 」と「置換後: 」は足さない。
+// 「行: 」と「置換後: 」は足さない。検索の行は打った鍵が無くても足す（Vim の getcmdline の
+// `histype == HIST_SEARCH`・再生・`map` の右辺・:normal! の `/` も履歴に入る実測・#1528）。
 void EditorController::remember(const core::SearchLine &line)
 {
     if (line.prompt() == core::InputLinePrompt::go_to_line ||
@@ -431,6 +697,9 @@ void EditorController::reject(core::DisplayText message)
 {
     state_ = state_.with_command_message(std::move(message));
     ports_.bell.ring();
+    // 断りの数（ran_ex_result が、命令の要求が後で断ったことを Vim の did_emsg として読む・
+    // #1549・まとめ枝 #1563）。
+    ++refusals_;
 }
 
 // 評価の失敗と設定の保存の失敗は知らせて refused を返す（再生を打ち切る・ADR 0022 の追補 #1526）。
@@ -441,8 +710,26 @@ std::optional<core::VimRepeatFailure> EditorController::evaluate_command(std::st
     {
         return std::nullopt;
     }
-    const auto result =
-        core::evaluate_ex(text, state_.settings(), state_.appearance(), state_.themes());
+    return ran_ex_result(text, evaluated_ex(text));
+}
+
+// Ex の評価の 1 本（Ex の行とオペレータ待ちの `:` が同じ窓の状態を渡す・#1525・#1549）。
+std::expected<core::ExResult, core::ExEvaluationFailure>
+EditorController::evaluated_ex(std::string_view text) const
+{
+    return core::evaluate_ex(
+        text, state_.settings(),
+        core::ExWindowState{state_.appearance(), state_.vim().highlight, state_.vim().incsearch},
+        state_.themes());
+}
+
+// 評価した Ex の答えを写す（evaluate_command とオペレータ待ちの `:` が共用する 1 本・#1549）。
+// 断りは評価の失敗も、命令の要求が後で断った（reject を通った・`:tabnext 9` `:tabclose` の最後の
+// タブ・`:w` の E32 など）のも refused の 1 本で返す（Vim の emsg が先読みを捨てて再生を打ち切り、
+// オペレータ待ちでは clearopbeep する・ADR 0022 の追補 #1525 / #1549・まとめ枝 #1563）。
+std::optional<core::VimRepeatFailure> EditorController::ran_ex_result(
+    std::string_view text, const std::expected<core::ExResult, core::ExEvaluationFailure> &result)
+{
     if (!result)
     {
         reject(core::ex_failure_message(result.error(), text));
@@ -454,9 +741,17 @@ std::optional<core::VimRepeatFailure> EditorController::evaluate_command(std::st
     {
         return stepped_vim(VimStepSource{substitute.value()});
     }
+    const std::size_t refusals = refusals_;
     if (ran_ex_request(result.value()))
     {
-        return std::nullopt;
+        return refusals_ == refusals ? std::nullopt
+                                     : std::optional{core::VimRepeatFailure::refused};
+    }
+    // Vim が窓を決め直す option は、設定を写す前に今のキャレットの決め直しを頼む（#1524）。幅の
+    // ある窓では続く persist_settings の clamp_scroll が新しい設定でその場で解く。
+    if (result.value().rechecks_window)
+    {
+        follow_window_setting();
     }
     const auto &settings = result.value().settings;
     if (settings.has_value() && !persist_settings(settings.value()))
@@ -597,14 +892,26 @@ void EditorController::jump_to_line(const core::ExLineRequest &request)
 // 追補 #1526）。行の番号は size_t の最大に飽和し、本文の外は engine が最後の行へ寄せる。
 void EditorController::jump_below_caret(const core::ExRelativeLineRequest &request)
 {
+    const auto line = line_below_caret(request);
+    if (line.has_value())
+    {
+        jump_to_line(line.value());
+    }
+}
+
+// `:.,.+N` の行き先（キャレットの行の N 行下・`'<,'>` は値なし）。跳ぶ道とオペレータ待ちの `:`
+// （#1549）が同じ行を引く。
+std::optional<core::ExLineRequest>
+EditorController::line_below_caret(const core::ExRelativeLineRequest &request) const
+{
     if (!request.below.has_value())
     {
-        return;
+        return std::nullopt;
     }
     const std::size_t line = state_.text().position_of(state_.selection().caret).line.value;
     const std::size_t below = request.below.value();
     constexpr std::size_t most = std::numeric_limits<std::size_t>::max();
-    jump_to_line(core::ExLineRequest{below > most - line ? most : line + below});
+    return core::ExLineRequest{below > most - line ? most : line + below};
 }
 
 // 行き先は gt / gT と同じ tab_destination の 1 本。範囲の外の数は Vim の実測の文言（決定 4・5）。
@@ -934,6 +1241,7 @@ void EditorController::close_command_input()
     // 入力行の変換は入力行と一緒に消える（ADR 0061 の決定 3・#635 の追記）。
     const bool opened = command_line_active();
     state_ = state_.with_command_input(std::nullopt);
+    command_line_typed_ = false;
     if (opened)
     {
         state_ = state_.with_composition(std::nullopt);

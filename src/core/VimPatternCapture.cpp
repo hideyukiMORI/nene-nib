@@ -82,7 +82,10 @@ void VimPatternCapture::positions_recorded(const std::vector<VimPatternCaptureFr
 bool VimPatternCapture::walked()
 {
     const auto last = static_cast<std::uint32_t>(pattern_.atoms_.size());
-    std::vector<VimPatternCaptureFrame> path{VimPatternCaptureFrame{match_.begin, 0, 0}};
+    // 道の段は多くとも（一致の長さ + 原子の数 + 1）なので先に確保する（伸びで 2 倍にしない）。
+    std::vector<VimPatternCaptureFrame> path;
+    path.reserve(match_.end - match_.begin + last + 1);
+    path.push_back(VimPatternCaptureFrame{match_.begin, 0, 0});
     while (!path.empty())
     {
         VimPatternCaptureFrame &top = path.back();

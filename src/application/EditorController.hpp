@@ -8,6 +8,7 @@
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
 #include "CommandChoice.hpp"
+#include "CommandEdit.hpp"
 #include "CompositionView.hpp"
 #include "DetectedText.hpp"
 #include "Diagnostic.hpp"
@@ -331,6 +332,8 @@ class EditorController final
     void flush_key_map_pending();
     // 積んだ鍵を流さずに捨てる（窓が閉じていく EndSession だけ）。
     void discard_key_map_pending();
+    // 入口で、意図を写す前に待ちの鍵を流すか捨て、Vim の先頭の判定を捨てる（#1374）。
+    void settle_pending_keys(const EditorIntent &intent);
     // 待ちの合図（決定 4）。積んだ鍵が無ければ何も変えない（描き直さない）。
     void accept(const MapTimeout &);
     // 設定の `maps` と `mapleader` から表を作り直す。設定を置く 2 か所（起動・persist_settings）
@@ -344,12 +347,23 @@ class EditorController final
     [[nodiscard]] std::optional<core::VimRepeatFailure> command_key(core::VimSpecialKey key);
     [[nodiscard]] std::optional<core::VimRepeatFailure>
     command_key(const core::VimSearchPattern &key);
+    // 入力行の鍵の `<Up>` `<Down>`。履歴を動けなければ not_moved（Vim の beep_flush が先読みを
+    // 捨てる・ex_getln.c・#1528）で、再生と :normal! の残りを打ち切る。
+    [[nodiscard]] std::optional<core::VimRepeatFailure> recalled_key(core::CommandEdit direction);
     // 1 鍵を engine へ流して効果を写す唯一の経路（ADR 0030 の決定 7）。打った鍵も再生の鍵も
     // ここを通り、鍵が閉じた失敗で終わったら理由を返す（ADR 0046 の決定 3）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> step_vim(const core::VimKey &key);
     // engine の 1 歩（鍵の vim_step か `:N` の vim_line_jumped）を測って写す 1 本。
     // 要求の往復・マーク・効果・キャレットの寄せは鍵と同じ（Issue #847）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> stepped_vim(const VimStepSource &source);
+    // INSERT の `Ctrl-o` の始め直し（ADR 0182 の決定 2・8）。engine を呼ぶのは restart_vim_insert
+    // の 1 本で、鍵の後（due）と engine の外の命令の後（入力行・クリック）の 2
+    // つの合図がそこを通る。
+    void restart_due_vim_insert(core::Offset command_caret);
+    void resume_vim_insert();
+    void restart_vim_insert(core::Offset command_caret);
+    // stepped_vim が測った 1 歩を状態へ写す（寄せと先頭の判定の前まで）。
+    void applied_vim_step(const core::VimStep &step, core::VimMode before);
     [[nodiscard]] std::expected<core::VimStep, TextLayoutFailure>
     measured_vim_step(const VimStepSource &source);
     // engine の要求（表示領域・行の画面行数・行の中の画面行）に 1 つ応えて view へ置く（ADR 0129 の
@@ -802,6 +816,26 @@ class EditorController final
     void remember(const core::CommandPalette &palette);
     void submit_palette(const core::CommandPalette &palette);
     [[nodiscard]] std::optional<core::VimRepeatFailure> evaluate_command(std::string_view text);
+    [[nodiscard]] std::expected<core::ExResult, core::ExEvaluationFailure>
+    evaluated_ex(std::string_view text) const;
+    // オペレータ待ちの `:` の確定（ADR 0022 の追補 #1549）。
+    [[nodiscard]] std::optional<core::VimRepeatFailure> operator_command(const std::string &text);
+    [[nodiscard]] bool refused_operator_command(
+        std::string_view text,
+        const std::expected<core::ExResult, core::ExEvaluationFailure> &result);
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    operator_closed_in_place(const std::string &text);
+    // オペレータ待ちの `:s`（ADR 0168 の追補 16）。置換の前のキャレットから後のキャレットまで。
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    operator_substituted(const std::string &text, const core::ExSubstituteRequest &request);
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    ran_ex_result(std::string_view text,
+                  const std::expected<core::ExResult, core::ExEvaluationFailure> &result);
+    // オペレータ待ちの入力行（`d:` `d/`）が開かれた後、意図の出口で入力行が閉じているか別の面に
+    // 置き換わっていれば保留のオペレータを捨てる 1 か所（#1549）。
+    void settle_line_operator();
+    [[nodiscard]] std::optional<core::ExLineRequest>
+    landing_line(const core::ExResult &result) const;
     [[nodiscard]] bool ran_ex_request(const core::ExResult &result);
     void apply_unsaved_ex(const core::ExResult &result);
     // `:set filetype=` と `:set filetype?` の写し先（ADR 0154 の決定 4）。どちらも今の言語を
@@ -818,6 +852,8 @@ class EditorController final
     // Ex の `:N` `:$` の写し先（ADR 0022 の追補・Issue #847）。engine の `{N}G` と同じ着地。
     void jump_to_line(const core::ExLineRequest &request);
     void jump_below_caret(const core::ExRelativeLineRequest &request);
+    [[nodiscard]] std::optional<core::ExLineRequest>
+    line_below_caret(const core::ExRelativeLineRequest &request) const;
     void run_window_command(core::ExWindowCommand command);
     // Ex のファイル命令も Ctrl+P と同じ面へ渡す（ADR 0064）。
     // 断りの知らせを立てて OS の警告音を 1 回鳴らす。鳴らすかを決める唯一の口で、呼ぶのは入力行の
@@ -847,9 +883,10 @@ class EditorController final
     [[nodiscard]] std::optional<core::DisplayText> command_message() const;
     [[nodiscard]] bool persist_settings(core::EditorSettings settings);
     // 設定が変わった後の追従と clamp の頼み（順は定義のコメント・#1432）。
-    void follow_after_settings(bool reshaped, bool margin_changed);
-    // Vim の `scrolloff` を変えた時点のキャレットで追従を頼み、印を立てる（#1432）。
-    void follow_changed_margin();
+    void follow_after_settings(bool reshaped);
+    // Vim が窓を決め直す option（`scrolloff` `wrap` `relativenumber` `hlsearch`）を置いた時点の
+    // キャレットで追従を頼み、印を立てる（#1432・#1524）。
+    void follow_window_setting();
     // IME の 3 つ（ADR 0014 の決定 3）。ComposeText と CancelComposition は本文にも履歴にも
     // 触らず、CommitText だけが既存の 1 本（replace / vim_step）を通って本文に入る。
     void accept(const ComposeText &intent);
@@ -919,6 +956,8 @@ class EditorController final
     // ので再帰は深さ 1 で止まる。UI・IME・描画は通らない。
     void perform(const core::VimReplay &effect);
     void interrupt_vim_insert();
+    // INSERT の `Ctrl-o` の命令を待つ間の割り込み（Ctrl+Z・全選択など・ADR 0182 の決定 8）。
+    void interrupt_vim_pause();
     void perform(const core::VimUndo &);
     void perform(const core::VimRedo &);
     // `gt` `gT`（ADR 0057 の決定 3）。窓の SwitchTab と同じ accept の 1 本へ写す。
@@ -938,6 +977,8 @@ class EditorController final
     // （ADR 0181 の決定 3）。積む口はこの 1 か所。印は鍵ごとに perform_vim_effect が
     // 置き、replace が編集を積めば消す。restore は効果を写す前のキャレット。
     void push_empty_unit(core::Offset restore);
+    // u / Ctrl-r が戻した行の行頭を changed_* の位置に足す（#1374）。
+    void note_vim_undone(const core::Edit &edit);
     // 鍵の効果を写す 1 か所（stepped_vim から）。鍵の印を置いてから写し、残った印を空の単位にする。
     void perform_vim_effect(const core::VimStep &step);
     void move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring,
@@ -969,7 +1010,15 @@ class EditorController final
     // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();
-    void settle_vim_step(const core::VimStep &step, core::VimMode before);
+    // 鍵の前のキャレットの行と窓（Vim の先頭を前の鍵から引き継ぐかの入力・#1374）。
+    using HeldVimWindow = std::pair<core::LineNumber, ScrollState>;
+    core::Offset settle_vim_step(const core::VimStep &step, core::VimMode before,
+                                 const std::optional<HeldVimWindow> &held);
+    [[nodiscard]] bool still_valid_vim_top(const HeldVimWindow &held) const;
+    // 鍵の前の窓を保てたら true（キャレットが見えたまま・横は追う・#1374）。
+    [[nodiscard]] bool keep_vim_window(const ScrollState &held);
+    // engine に文字組みの値を渡す窓か（wrap か格子で幅がある・VimLayoutView と共用）。
+    [[nodiscard]] bool vim_rows_layout() const noexcept;
     // INSERT で打った本文の追従（ScrollFollow::vim_typed・#1363）。鍵の前の保留を覚え、鍵の後に
     // 打った本文（と動かない鍵・INSERT へ入る近い鍵）の追従の印を立てる。
     void note_follow_before_key();
@@ -1078,6 +1127,18 @@ class EditorController final
     [[nodiscard]] bool composition_ignored() const noexcept;
     // 入力行を閉じる 1 本。閉じるときに残っている変換は消す（ADR 0061 の決定 3）。
     void close_command_input();
+    // 入力行の取消の 1 本（Esc と、文書が替わるとき・空の行の Backspace・F1 の一覧と保存の形の
+    // 一覧が開いている行を閉じるとき）。録画に `<Esc>` を積むのは打った Esc の意図
+    // accept(CancelCommand) だけ（#1528）。
+    void cancel_command_input();
+    // 入力行に届いた鍵が打った鍵なら印を立てる（Vim の getcmdline の some_key_typed・#1528 の
+    // レビュー M1）。再生（`.`・マクロ）・`map` の右辺・press_vim_keys（:normal!）の鍵は打って
+    // いない。印は close_command_input が倒す。
+    void note_command_key() noexcept;
+    // 録画中の `:` の行で打った鍵を録画の書き手 vim_macro_typed へ積む（#1528・ADR 0046 の
+    // 追補）。打った鍵（再生でも `map` の右辺でもない）で、開いている入力行が Ex の行のときだけ。
+    void record_command_keys(std::span<const core::VimKey> keys);
+    [[nodiscard]] bool records_command_line() const noexcept;
     [[nodiscard]] core::FontFamilies given_fonts() const;
     void reach_font_families();
     // 確定した文字列を Vim の打鍵として流す。`.` の再生とマクロが後で自然に載る（決定 4）。
@@ -1114,11 +1175,13 @@ class EditorController final
     bool pending_typed_ = false;
     // 打った本文の追従の最後の位置（#1363）。打った後の別の頼み（Esc と `.` の後の寄せ・再生の
     // 中の NORMAL の移動）が保留を置き換えても残り、解決は先にここまで歩いてから保留を 1 回の
-    // 追従で解く（Vim は打つ周ごとに update_topline を終えてから次の鍵を読む）。
+    // 追従で解く（Vim は打つ周ごとに update_topline を終えてから次の鍵を読む）。NORMAL の `r<CR>`
+    // の edit() が改行を入れる前に先頭を確かめた位置（VimStep.edit_topline・#1374）もここに置く。
     std::optional<core::TextPosition> walked_follow_;
-    // Vim の `scrolloff` を変えた時点のキャレット（#1432・Vim 9.1 の実測）。
-    // 後の鍵の頼みが保留を置き換えても残り、解決は先にここで新しい余白の追従を 1 回流してから
-    // 保留を解く（Vim は次の鍵の前に今のキャレットで update_topline を流す）。
+    // Vim が窓を決め直す option（`scrolloff` `wrap` `relativenumber` `hlsearch`）を置いた時点の
+    // キャレット（#1432・#1524・Vim 9.1 の実測）。後の鍵の頼みが保留を置き換えても残り、解決は
+    // 先にここで新しい設定の追従を 1 回流してから保留を解く（Vim は次の鍵の前に今のキャレットで
+    // update_topline を流す）。
     std::optional<core::TextPosition> setting_follow_;
     // 鍵の前の保留の追従が無いか打った本文の追従だったか（note_follow_before_key が置く）。
     bool follow_walks_ = false;
@@ -1150,6 +1213,13 @@ class EditorController final
     // 再生の外で engine に流す鍵の出どころ（typed か mapped）。typed_unit が表に当たった単位の
     // 間だけ mapped にする。再生の中は replayed が勝つ（measured_vim_step）。
     core::VimKeySource unit_source_ = core::VimKeySource::typed;
+    // press_vim_keys が鍵を流している間（Vim の ex_normal_busy・ScopedValue で戻す）。その鍵は
+    // 打った鍵ではない（note_command_key・#1528 のレビュー M1）。
+    bool normal_busy_ = false;
+    // 開いている入力行に打った鍵が 1 つでも届いたか（Vim の some_key_typed）。Ex の行を履歴に
+    // 足すのはこれが立っているときだけ（remember(CommandLine)）。note_command_key だけが立て、
+    // close_command_input だけが倒す。
+    bool command_line_typed_ = false;
     // 表に当たった単位の打った左辺で、右辺の最初の鍵を流した後に録画へ積むもの（#1312）。
     // typed_unit が録画中にだけ置き（ScopedValue で戻す）、recorded_held_lhs が積んで消す。
     std::optional<std::span<const core::VimKey>> held_lhs_;
@@ -1163,12 +1233,24 @@ class EditorController final
     // 中の最後の鍵の値を引き継いで、鍵の終わりの寄せ（追従）を頼まない。perform(VimReplay) が
     // 再生の始めに消す。
     bool vim_top_kept_ = false;
+    // オペレータ待ちの `:` `/` が入力行を開いた（settle_line_operator が読む・#1549）。
+    bool line_operator_ = false;
+    // reject を通った断りの数（ran_ex_result が命令の要求の断りを Vim の did_emsg として読む・
+    // #1549・まとめ枝 #1563）。
+    std::size_t refusals_ = 0;
     // 再生の編集を畳む起点（ADR 0046 の決定 3）。再生の外では空。perform(VimReplay) が置いて
     // 消し、再生の中で文書が替わったら reopen_replayed_unit が入った文書の値へ置き直す。
     std::optional<core::EditHistory> replay_history_;
     // 流している鍵の engine の印（ADR 0181）。stepped_vim が効果を写す間だけ置き、replace が
     // 本文を置き換える編集を積めば消す。残れば push_empty_unit が空の単位を積む。
     std::optional<core::VimChange> vim_change_;
+    // engine の効果を写している間か（ADR 0182 の決定 8）。replace はこの間の編集を割り込みと
+    // 数えず、外の道（通常モードの意図）の編集だけが INSERT の `Ctrl-o` の印を捨てる。
+    bool in_vim_effect_ = false;
+    // 流している鍵で Vim が changed_* に渡した位置（engine の印 VimStep.change の位置・undo / redo
+    // は戻した行の行頭）。stepped_vim が鍵の始めに置き、先頭を前の鍵から引き継ぐかの判定
+    // （vim_top_still_valid）だけが読む（#1374・ADR 0181 の決定 6 と追補）。
+    std::optional<core::TextPosition> vim_changed_from_;
     std::optional<core::TextBuffer> replay_text_;
     // 同じ意図の中で読めなかったタブの数（ADR 0059 の「知らせの文言」）。begin_intent が 0 に戻す。
     std::size_t unreached_tabs_ = 0;

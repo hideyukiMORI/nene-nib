@@ -281,6 +281,9 @@ correction_window(const VimEditorView &view, LineNumber first)
     }
     auto &result = target.value();
     result.preserve_column = result.caret == view.text.position_of(view.selection.caret).line;
+    // 折り返さない道の half_page_step と同じ規則: 先頭の決め直しは update_topline の写しだけで、
+    // 末尾より下の段が見える窓で余白に押さない（#1374）。
+    result.topline = VimToplineSettle::updated;
     if (state.count.has_value() &&
         (result.first != vim_viewport_of(view).first_visible || !result.preserve_column))
     {
@@ -829,14 +832,15 @@ lined_top(const VimEditorView &view, Offset caret, VimScreenPlace place)
     return vim_group_for(action) == VimActionGroup::horizontal_scroll;
 }
 
-// g0 g$ gm g^（ADR 0147 の決定 2・8）。横に送る文書の見えている升を表示領域から読む。gM
+// g0 g$ gm g^ g<End>（ADR 0147 の決定 2・8・9）。横に送る文書の見えている升を表示領域から読む。gM
 // は行の本文の幅 だけを読むので表示領域を求めない。
 [[nodiscard]] bool moves_in_display_line(VimAction action) noexcept
 {
     return action == VimAction::move_display_line_start ||
            action == VimAction::move_display_line_end ||
            action == VimAction::move_display_line_middle ||
-           action == VimAction::move_display_line_first_non_blank;
+           action == VimAction::move_display_line_first_non_blank ||
+           action == VimAction::move_display_line_last_non_blank;
 }
 } // namespace
 

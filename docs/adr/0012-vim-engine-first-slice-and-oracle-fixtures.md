@@ -114,3 +114,7 @@ INSERT の `Ctrl-w` `Ctrl-u` `Ctrl-r {name}` を足した。値は oracle（`bac
 ## 関連
 
 ADR 0005（自前 Vim・oracle）・ADR 0006（表駆動）・ADR 0009（piece table・意図の和型・undo の区切り）・採用案 `docs/design/2026-09-15-editing-look.md`（D15）。
+
+## 追記（2026-11-12・Issue #1517・ADR 0182）
+
+INSERT の `Ctrl-o` の undo の区切りは決定 6（INSERT の出入りが区切り）のままで、打った鍵では Vim の対話と同じ 3 単位（`Ctrl-o` の前・命令・始め直した後）になる。始め直しは鍵ではなく controller が流す 1 歩（`InsertRestartRequest` → `vim_restarted_insert`）で、NORMAL → INSERT の出入りとして同じ区切りを通る。fixture の再生（press_vim_keys）の鍵は :normal! と同じに打った鍵ではない（出どころ mapped）ので、`<C-o>c` 系の Esc の後は INSERT を始め直す（ADR 0182 の決定 4）。

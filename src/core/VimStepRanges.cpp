@@ -45,7 +45,6 @@ using detail::to_line_end;
 using detail::whole_lines_for_delete;
 using detail::wrapped_backward;
 using detail::wrapped_forward;
-using detail::writing_empty;
 
 namespace detail
 {
@@ -105,13 +104,6 @@ namespace detail
 [[nodiscard]] Offset inclusive_end(const TextBuffer &text, Offset at)
 {
     return forward_characters(text, at, single_step);
-}
-
-// inclusive な行末への移動の範囲。空行で空でも `c` は空の本文を書く（#960・VimEmptyChange）。
-[[nodiscard]] VimMotionRange writing_empty(VimMotionRange range)
-{
-    range.empty_change = VimEmptyChange::writes_empty;
-    return range;
 }
 
 // $ と g_ は inclusive で、回数があると count-1 行下の行末・最後の非空白まで（Vim の nv_dollar と
@@ -218,11 +210,12 @@ namespace
         inclusive_end(text, vim_word_end(text, caret, walk, word_end_stop_for(motion)).offset));
 }
 
-// gj gk g0 gm gM g^ の範囲（文字単位・exclusive）と g$ の範囲（inclusive・着いた文字まで含み、
-// 最後の段では行の内容の終わりまでで改行を含まない・ADR 0147 の決定 5）。回数の途中で本文の端の
-// 画面行に当たったら Vim はオペレータを打ち消す（nv_gomove・nv_g_dollar_cmd の clearopbeep）ので
-// 範囲が無い（ADR 0144 の決定 4）。着地はオペレータ待ちの NORMAL の寄せ（行の内容の終わりには
-// 載らない）。
+// gj gk g0 gm gM g^ の範囲（文字単位・exclusive）と g$ g<End> の範囲（inclusive・着いた文字まで
+// 含み、最後の段では行の内容の終わりまでで改行を含まない・ADR 0147 の決定 5・9）。後ろへ戻った
+// g<End>（末尾の空白の上から）はキャレットの文字まで含む（inclusive な後ろ向きの移動・g_ の
+// to_line_end と同じ）。回数の途中で本文の端の画面行に当たったら Vim はオペレータを打ち消す
+// （nv_gomove・nv_g_dollar_cmd の clearopbeep）ので範囲が無い（ADR 0144 の決定 4）。着地は
+// オペレータ待ちの NORMAL の寄せ（行の内容の終わりには載らない）。
 [[nodiscard]] std::optional<VimMotionRange> display_range(const VimEditorView &view,
                                                           VimMotion motion)
 {
@@ -231,10 +224,14 @@ namespace
     {
         return std::nullopt;
     }
-    const bool inclusive = motion == VimMotion::display_line_end;
-    return characters_between(view.selection.caret, inclusive
-                                                        ? inclusive_end(view.text, landing.offset)
-                                                        : landing.offset);
+    const Offset caret = view.selection.caret;
+    if (motion != VimMotion::display_line_end && motion != VimMotion::display_line_last_non_blank)
+    {
+        return characters_between(caret, landing.offset);
+    }
+    return landing.offset.value < caret.value
+               ? characters_between(landing.offset, inclusive_end(view.text, caret))
+               : characters_between(caret, inclusive_end(view.text, landing.offset));
 }
 
 // `<Space>` `<BS>` の範囲（ADR 0049）。`<Space>` はどのオペレータでも行末の位置に止まり、`<BS>` の
@@ -471,6 +468,7 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     case VimMotion::display_line_middle:
     case VimMotion::line_middle:
     case VimMotion::display_line_first_non_blank:
+    case VimMotion::display_line_last_non_blank:
         return display_range(view, motion);
     }
     std::unreachable();

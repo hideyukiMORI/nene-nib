@@ -6,6 +6,8 @@
 #include "VimCount.hpp"
 #include "VimInputWait.hpp"
 #include "VimInsertRepeat.hpp"
+#include "VimInsertRestart.hpp"
+#include "VimInsertRestartPhase.hpp"
 #include "VimInsertStart.hpp"
 #include "VimMacroRecording.hpp"
 #include "VimMode.hpp"
@@ -105,6 +107,14 @@ struct VimState
     // 文字単位と行単位の VISUAL の `A` が読む。書くのは VISUAL のオペレータの 1 か所
     // （visual_operation_noted）で、鍵を食べ終わっても（vim_resting_from）残す。
     VimOperatorColumns operator_columns{};
+    // INSERT の `Ctrl-o` の始め直す印（ADR 0182 の決定 1）。立てるのは `Ctrl-o`、段を進めるのは
+    // vim_step の出口の 1 か所（insert_restart_noted）、始め直すのは vim_restarted_insert。
+    // vim_resting_from が waiting と due を持ち越し（NORMAL の Esc も消さない）、restarted は
+    // 持ち越さない。消すのは INSERT へ入る命令（決定 4）・割り込み・タブの切り替え（決定 8）。
+    std::optional<VimInsertRestart> insert_restart = std::nullopt;
+    // INSERT へ入る前の直前の変更（Vim の old_redobuff・ADR 0182 の決定 6）。`<C-o>.` が読む。
+    // 置くのは vim_recorded（INSERT へ入る命令と始め直した後の最初の打鍵）だけ。
+    std::optional<VimRepeatRecord> change_before_insert = std::nullopt;
     // 前の置換（`:s` の族・ADR 0168 の決定 1〜3）。直前の検索と同じく窓に 1
     // つで、鍵を食べ終わっても （vim_resting_from でも）保つ。書くのは vim_substituted の 1
     // か所。打鍵ごとの写しを軽くする ため不変の値を共有する。
@@ -122,8 +132,8 @@ struct VimState
                     std::nullopt,
                     std::nullopt,
                     std::nullopt,
-                    VimSearchHighlight::on,
-                    true,
+                    vim_default_highlight,
+                    vim_default_incsearch,
                     std::nullopt,
                     std::nullopt,
                     std::nullopt,
@@ -164,6 +174,14 @@ struct VimState
     next.macro_recording = state.macro_recording;
     next.last_macro = state.last_macro;
     next.operator_columns = state.operator_columns;
+    // 印は命令が終わるまで持ち越す（ADR 0182 の決定 2）。始め直した後の印（restarted）は INSERT
+    // を離れたら消える。
+    if (state.insert_restart.has_value() &&
+        state.insert_restart.value().phase != VimInsertRestartPhase::restarted)
+    {
+        next.insert_restart = state.insert_restart;
+    }
+    next.change_before_insert = state.change_before_insert;
     next.last_substitute = state.last_substitute;
     return next;
 }

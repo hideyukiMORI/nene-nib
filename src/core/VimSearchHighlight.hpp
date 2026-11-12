@@ -15,6 +15,11 @@ enum class VimSearchHighlight : std::uint8_t
     suspended
 };
 
+// 窓が Vim モードに入ったときの強調と incsearch の既定（施主決定 D17・D18）。VimState の始まりの
+// 形と Ex の `:set hlsearch&` `:set incsearch&`（#1525）が同じ値を読む。
+inline constexpr VimSearchHighlight vim_default_highlight = VimSearchHighlight::on;
+inline constexpr bool vim_default_incsearch = true;
+
 // Ex の求めを今の値に重ねた結果（ADR 0037 の決定 1・2）。`:nohlsearch` は on を止めるだけで、
 // `:set nohlsearch` の off は止めようがない（固定 Vim の 'hlsearch' と no_hlsearch の 2 つの旗を
 // 3 値へ畳んだぶん、ここで 1 か所に閉じる）。`:set (no)hlsearch` はそのまま置き換わる。

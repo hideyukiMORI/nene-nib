@@ -57,6 +57,38 @@ Vim 9.1 の実測（`-u NONE`・`:normal!` と `feedkeys(…, 'tx')`・窓のあ
 
 9. fixture は接頭辞 `visual-colon-`（20 件）。fixture にしない形が 3 つある。マクロの中の VISUAL の `:`（fixture の再生がマクロを `q` で録って置くので、録画が `:` の行を録らない間・#1528）、`` `< `` `` `> `` `'<` `'>` の移動（ADR 0152 の限界のまま・置く値は前の選択 `gv` で確かめる）、再生の中の入力行の `<Esc>`（Vim の `:normal!` は行を実行するが、fixture の道は打った鍵の取消・ADR 0048 の決定 8）。Ex が失敗する鍵列は `-es` の Vim が終了コード 1 で終わり oracle が測れないので、窓のある形（`viewport`）で測る。窓のある形にしたのは、`-es` の Ex モードでは範囲だけの行が `'<,'>+`（`'>` の次の行）になる別の規則（`ex_docmd.c` の `use_plus_cmd`）だから。
 
+## 追補（2026-11-12・#1549）: オペレータ待ちの `:` は Ex の命令を移動として使う
+
+Vim 9.1 の実測（窓のある形 `viewport`・`set scrolloff=0`）と source（`normal.c` の `nv_colon`・`ops.c` の `do_pending_operator`・`ex_docmd.c` の `do_cmdline` の `DOCMD_KEEPLINE`）に揃える。それまでオペレータ待ちの `:`（`d:` `c:` `y:`）は取消と失敗で入力行が開かず、窓で続けて打った `set so=2<CR>` が NORMAL の鍵として流れて `o` から本文に文字が入った（#1549・V-1547 の L1）。
+
+1. オペレータ待ちの `:`（全部のオペレータ・回数つき・`"x` の前置きつき）は、NORMAL の `:` と同じ効果 `VimOpenCommandLine`（範囲もキャレットも無し）の 1 本で空の入力行を開く。保留のオペレータ・回数・レジスタの名指しは engine の状態に残す。回数は範囲に写さない（Vim の `nv_colon` は `op_type == OP_NOP` のときだけ `.,.+(N-1)` を置く・`j2d:5<CR>` と `jd3:5<CR>` は `jd:5<CR>` と同じ・実測）。engine の入口は `acted` の 1 か所（保留中の `:` だけを `operator_command_line` へ）。
+2. 確定（Enter）は controller の `submit(CommandLine)` が engine の待ちを見て `operator_command` へ分ける。Ex の答えが行へ跳ぶ形（`:N` `:$` と範囲だけの `:.` `:.,.+N`・`landing_line`）なら、跳ぶ道（`jump_to_line`）を通さずに行き先を `VimCommandMotion{typed, line}` で engine の `vim_command_operated` へ渡す。行き先は `:N` と同じ着地（`line_counted` → `document_last`・行の最初の非空白）で、範囲は Vim の `nv_colon` の `MCHAR`・`inclusive = FALSE` のとおり文字単位の exclusive を、検索の後ろのオペレータと同じ 1 本（`exclusive_range(characters_between)`・`:help exclusive-linewise`）に通す。`:.,.+N` の行は跳ぶ道と同じ `line_below_caret` が引く。移動の種類（実測）:
+
+   | 起点 → 行き先 | 範囲 | 例（10 行 `lineNN abc`） |
+   |---|---|---|
+   | 行頭（字下げの中）→ 別の行の行頭 | 行単位（行き先の行を含まない） | `jd:5<CR>` は 2〜4 行目・`jjjd:2<CR>` は 2〜3 行目・`jd:$<CR>` `jd:9999<CR>` は 2〜9 行目・`jc:4<CR>` は 2〜3 行目を替える |
+   | 行の途中 → 別の行の行頭 | 文字単位・前の行の末尾まで | `jlld:5<CR>` は `ne02 abc⏎…line04 abc`・`jlg~:3<CR>` は 2 行目の `ine02 abc` |
+   | どこか → 字下げのある行（行き先が最初の非空白で桁 0 でない） | 文字単位の exclusive | `jd:4<CR>`（4 行目が `    line04`）は `    line02 abc⏎line03 abc⏎    ` |
+   | 同じ行（`:.`） | 文字単位の exclusive（行頭へ戻る） | `jlld:.<CR>` は `li` |
+
+3. 跳ばない命令（`:set …` `:noh` `:colorscheme` と、要求を出して成功する `:tabnext`（タブが 1 つ）・`:only` と空の行）は Ex を 1 回だけ評価した答えを、評価の写しの 1 本（`ran_ex_result`・`evaluate_command` と共用・#1526 の `refused` の形のまま）に通し、成功ならキャレットまでの空の範囲で閉じる（`VimCommandMotion{typed, 空}`）。空の範囲は検索の後ろのオペレータと同じ道で、`d` は何も消さず、`c` は INSERT に入り、`y` は空の文字単位を取り（`yyjy:noh<CR>p` は何も貼らない）、`g~` は何も変えず、`>` は 1 行を字下げする（Vim の `op_shift` は `line_count` 1 の行・`j>:set so=2<CR>`）。欲しい列は置き直す（`$d:set so=2<CR>jj` は 8 桁目・Vim の `w_set_curswant`）。Vim の実測（10 行・2 行目）: `d:set so=2<CR>x` `d:colorscheme blue<CR>x` `d:tabnext<CR>x` `y:tabs<CR>x` は空の範囲の後に `x` が 1 文字を消し、`c:noh` `c:colorscheme blue` `c:tabnext` `c:tabs` `c:only` `c:syntax on` `c:nmap a b` の後の `X<Esc>` は INSERT で入る。命令がタブを替えて engine の待ちが消えていれば閉じない。
+4. 評価の失敗（未知の命令・E481・`Not supported`・設定の保存の失敗）と、命令の要求が後で断った形（`:tabnext 9` の範囲の外など、写し先が `reject` を通った・Vim の `did_emsg` の `clearopbeep`）は、知らせと警告音と再生の打ち切り（`refused`）に加えて、engine の `vim_interrupted` でオペレータを捨てる（Vim の `cmd_result == FAIL` の `clearop`）。要求の断りは `reject`（断りと警告音の唯一の口）を通った数（`refusals_`）の前後で読み、要求の写し先ごとに失敗を返す形にはしない。窓が後で行う要求（`:tabclose` の閉じる `close_request`・一覧から頼んだ操作 `operation_request`）は、要求を出して同じ `vim_interrupted` でオペレータを捨てる（閉じた後の位置へ空の範囲を閉じない）。Vim の実測: `c:tabnext 9<CR>x` `c:tabclose<CR>x`（最後のタブ・E784） `d:tabnext 9<CR>x` は本文が変わらず NORMAL のまま（`x` は流れない）。
+5. 入力行が確定の外で閉じたら、オペレータごと捨てる（NORMAL）。Esc・Ctrl+C・空の行の Backspace に限らず、Ctrl+P の面・タブの一覧・操作の一覧・文字コードの一覧・通常モードの入力行・クリック・タブの切り替え・エクスプローラーへの焦点など、Vim の入力行（Ex の行と `/` `?`）を閉じるか別の面に置き換える入口の全部を、入口ごとに書かずに 1 か所で拾う: 入力行を開いた効果（`perform(VimOpenCommandLine)` と `perform(VimOpenSearch)`）が engine の待ちを見て印 `line_operator_` を立て、意図の出口（`apply` の終わりの `settle_transient` の中）と engine へ鍵を流す直前（`deliver_vim_key`・再生の中の取消の後の鍵）の `settle_line_operator` が、印が立ち・Vim の入力行が開いておらず・engine が待っていれば `vim_interrupted` で捨てる。欲しい列は保つ（`$d:<BS>jj` は行末・実測）。`vim_interrupted` はクリックなどの割り込みと同じ捨て方で、口を増やさない。検索の Esc は今までどおり `vim_cancelled_input`（欲しい列も捨てる・ADR 0032 の決定 1）で、`d/` → Ctrl+P → Esc で保留が残る前からの穴（V-1556 の F1）も同じ 1 か所で閉じる。再生の中の `<Esc>` は今までどおり確定（Vim の `c_<Esc>`・ADR 0048 の決定 8）。
+6. `.` の記録は `:` までの記録（`d:`）に入力行に打った本文の文字と `<CR>` を鍵として足したもの（`command_motion_recorded` → 記録の 1 本 `vim_recorded`・Vim の `do_pending_operator` が redo に積む `repeat_cmdline` と NL）。再生は同じ入力行の口（`deliver_vim_key` → `command_key`）を通るので、`jd:4<CR>.` は同じ `:4` へ、`jd:.,.+1<CR>j.` は今の行から 1 行を消す（実測）。マクロの録画はこの PR では変えない（`:` の行を録らない）。#1528 の直し（#1552・`macro_recorded` が `VimOpenCommandLine` を除かず、入力行の文字と確定を録る）と一緒に積むと、録画中の `d:5<CR>` は `d:5<CR>` の全体が録られ、`@a` は `operator_command` で閉じる（`vim_command_operated` は `macro_recorded` を通らないので二重に録らない）。
+7. 打った文字が本文の鍵にならないことは、窓の鍵の道（`VimKeyPress` で `d` `:`・入力行の `CommandText`・`SubmitCommand` / `CancelCommand` / Backspace・`OpenCommandPalette` `OpenTabList`・`PlaceCaret`・`SwitchTab`）の単体試験 `verify_ex_operator_colon_typed` `verify_ex_operator_colon_motion_and_cancel` `verify_ex_operator_colon_refused_request` `verify_ex_operator_colon_replaced_line` が守る（`--ex-settings`）。
+8. 限界（Vim と違いを残した形・どれも入力行の文字を本文に入れない）:
+
+   | 形 | Vim 9.1 | Nib |
+   |---|---|---|
+   | 範囲だけの跳び（`d:'a` `d:.+2` `d:1,5` `d:%` `d:'<,'>3`） | `line2` までの移動 | `Not supported`・オペレータを捨てる（#1540） |
+   | NORMAL で打った `d:'<,'>` | `'>` の行までの移動 | 跳ばない・空の範囲（#1526 の決定 8 の表のまま） |
+   | 録画中の `d:5<CR>` の後の `@a`（#1552 を積むまで） | `d:5<CR>` を流す | 録画は `d` だけ（`:` の行を録らない）で、`@a` の後に `d` が待つ（#1528・#1552 を積めば消える・決定 6） |
+   | タブや文書を替える命令（`c:tabnew<CR>` `d:tabnext<CR>`（タブが 2 つ以上）・`d:e x<CR>`） | 新しい窓の位置が本文の中なら閉じる（`1Gc:tabnew<CR>X` は新しいタブで INSERT・`2G` からは `clearopbeep`・実測） | 待ちが消え、何もしない（入力行の文字は本文に入らない） |
+   | `c:tabs<CR>` | 一覧を出し、空の範囲で INSERT | Nib の `:tabs` はタブの一覧の面を開くので、決定 5 でオペレータを捨てる |
+   | 最後のタブの `c:tabclose<CR>x` | E784 で断り、`x` は流れない | 窓を閉じる要求（施主決定 D20）を出してオペレータを捨てる。`x` は NORMAL の鍵 |
+
+9. fixture は接頭辞 `operator-colon-`（40 件・#1547 と同じ窓のある形）。Esc・Ctrl+P・クリック・タブの切り替えの取消は fixture にしない（再生の中の `<Esc>` は確定・面とクリックは鍵ではない）ので単体試験で守る。
+
 ## 検証
 
 ### 固定済みSTLの参照追加
@@ -72,3 +104,18 @@ Vim 9.1 の実測（`-u NONE`・`:normal!` と `feedkeys(…, 'tx')`・窓のあ
 - UIにコマンド解析と保存を持つ: 状態の正本と検証が分裂する。
 - コマンド文字列を本文へ一度入力して戻す: undoと選択を壊す。
 - 設定変更ごとに保存処理を複製する: C2と競合保護が分裂する。
+
+## 追補（2026-11-12・#1525）`:set {name}&` と真偽の反転
+
+Vim 9.1 の実測（道具 `D:/NeNeNib/scripts/20261111/c10/gen4.py`）: `{name}&` `{name}&vim` `{name}&vi` は既定値へ戻す。真偽の option の `{name}!` `inv{name}` `no{name}!` は反転する。数の option の `{name}!` は E488、`inv{name}` と `no{name}` と `no{name}&` は E474、`invno{name}` は E518、`{name}!?` `{name}&?` は E488。
+
+1. `set_option` は読む前に `toggled_text`（反転）と `reset_text`（既定値）で今の読みの形（`wrap` / `nowrap`・`scrolloff=0` など）へ 1 段だけ写す。写した形は `&` `!` `inv` を持たない。
+2. 真偽の option の表は 1 つ（`switch_options`・wrap guide ignorecase/ic smartcase/scs relativenumber/rnu minimap explorer lsp hlsearch/hls incsearch/is）で、名前と今の値を読む関数を同じ行に持つ（名前の列と値の if の列を分けない・レビュー V-1552 の L3）。今の値は `EditorSettings` の欄か、設定に無い hlsearch と incsearch は `evaluate_ex` の引数 `ExWindowState`（明暗と並べて controller が `VimState` の `highlight` `incsearch` を渡す・明暗だけの形では初期値）から読む。hlsearch は `:noh` の後（suspended）も立っている（Vim の no_hlsearch は別の旗）。
+3. 既定値は保存する設定の正本 `default_editor_settings()` の 1 か所から読む（scrolloff・真偽の 8 つ・fontsize・guifont（字体と大きさ）・root（決めていない））。設定に無い hlsearch と incsearch は `ExWindowState` の初期値 `vim_default_highlight` `vim_default_incsearch`（`VimSearchHighlight.hpp`・VimState の始まりの形と共用・施主決定 D17 / D18 なので Vim の既定 off とは違う）で、短い名前の `hls&` `is&` も表から受ける（レビュー V-1552 の L4）、clipboard は外す。
+4. 受けないもの（残る違い）: 文書の値（filetype / ft・fileencoding / fenc・fileformat / ff・display）の `&`（文書ごとの値で、Vim の既定の意味（空・unix）を Nib の閉じた値に写す決めが要る）。短い名前の `:set hls` `:set nohls` `:set is` と、Vim が受けて Nib が断るほかの行（レビュー V-1552 の F3・後続の Issue）。hlsearch と incsearch の反転 `hls!` `invhls` `nohls!` `is!` `invis` は受ける（Vim 9.1 の実測 `D:/NeNeNib/scripts/20261112/c10b/h.vim`・`map` の右辺によく書かれる形）。`:set` の複数の引数（`:set so=3 so&`）は今どおり受けない。
+5. 窓の決め直し（ADR 0019 の #1524 の追補・`rechecks_window`）は、写した後の形で `with_window_recheck` が見る（まとめ枝 #1563 で #1524 と重ねた）。`so&` `hls!` `invwrap` `rnu&` も値を置く形なので決め直し、`ic!` `is&` は決め直さない（Vim の do_set は反転と既定値でも check_redraw を通る・契約 `verify_ex_window_recheck`）。
+
+## 追補（2026-11-12・まとめ枝 #1563）断りは `refused` の 1 本・オペレータ待ちの `:` と INSERT の `Ctrl-o`
+
+1. 命令の断りの読み方を 1 本にする。`ran_ex_result`（Ex の行とオペレータ待ちの `:` が共用する答えの写し）は、評価の失敗に加えて、命令の要求が後で断った（`reject` を通った・`:tabnext 9` `:tabnext 0` の E475 など）ときも `refused` を返す（`reject` の数 `refusals_` を要求の前後で比べる 1 か所）。#1525 の再生の打ち切り（`evaluate_command` の `refused`）と #1549 のオペレータの捨て方（`refused_operator_command` は返り値だけを読む）が同じ答えを読む。窓で打った鍵は今までどおり後ろを捨てない（`accept(SubmitCommand)` は返り値を捨てる）。振る舞いが変わるのは再生（`.`・`@a`・fixture の :normal!）の中で要求が断られた形で、今までは後ろの鍵が流れていた。Vim 9.1 の `-u NONE -es` の `normal! @a` は `:tabnext 9` `:tabnext 0` `3tabnext` `:tabclose` `:w` `:w!` の後ろの `j` を流さず、`:tabprevious 9` `:tabnext 1` は流す。最後のタブの `:tabclose`（Vim は E784）と無題の `:w`（E32）は Nib では断りではなく窓を閉じる流れと保存の面へ進む（施主決定 D22）ので、再生は今どおり続く（残る違い・道具 `D:/NeNeNib/scripts/20261112/1563-chain/e/e.py`・Vim に近づく向きだけ・契約 `--vim-macro` の `ex_replay_cases` と `verify_ex_failure_stops_operator_replay`）。
+2. `submit(CommandLine)` は、待ちがあれば `operator_command`、無ければ `evaluate_command` を呼び、どちらの後にも `resume_vim_insert()` を通す（ADR 0182 の決定 8）。`vim_command_operated` は鍵の出口と同じ `insert_restart_noted` を確定の `<CR>` で通すので、`<C-o>d:5<CR>` `<C-o>y:5<CR>` は命令が終わって始め直し、打った `<C-o>c:5<CR>` は OP_CHANGE の KeyTyped で印を消し、:normal! の `c:5<CR>` は印を保って c の Esc の後に始め直す。`resume_vim_insert` は INSERT にいる間は始め直さない（印を保った `c` の INSERT を外から始め直さない）。Vim 9.1 の実測（oracle の viewport の形・道具 `D:/NeNeNib/scripts/20261112/1563-chain/measurev.py`）と契約 `--vim-insert-normal` の `verify_operator_lines`。

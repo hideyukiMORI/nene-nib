@@ -29,6 +29,11 @@ inserted_command(const CommandInput &input, std::string_view text);
 [[nodiscard]] CommandInput recalled_command(const CommandInput &input, const core::InputHistory &ex,
                                             const core::InputHistory &search,
                                             core::CommandEdit direction);
+// 上下が失敗しないか（Vim の c_<Up> c_<Down> は履歴を動けないと beep_flush・#1528）。`:` の行と
+// 検索の行は recalled_command が 1 歩動くか。履歴を歩かない「行: 」「置換後: 」と面は Vim に無い
+// 入力行なので失敗にしない（true）。
+[[nodiscard]] bool recalls_command(const CommandInput &input, const core::InputHistory &ex,
+                                   const core::InputHistory &search, core::CommandEdit direction);
 // 入力が字体の名前の補完を求めているか（Ex の行と Ctrl+P の面だけ・検索は求めない・#597）。
 [[nodiscard]] bool wants_font_families(const CommandInput &input);
 // 焦点の候補の命令（ADR 0150 の決定 4）。面では選択した候補が実行の候補ならその命令、`:` の行

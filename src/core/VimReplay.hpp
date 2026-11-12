@@ -35,5 +35,9 @@ struct VimReplay
     std::optional<VimVisualExtent> reselect;
     VimReplayKind kind;
     std::size_t rounds;
+    // INSERT の `Ctrl-o` の後の `@`（ADR 0182 の決定 7）。Vim の do_execreg は始め直す印を消して
+    // `i` を再生の鍵の後ろへ積む（put_reedit_in_typebuf）ので、controller は全部の周の後に `i` を
+    // 1 つ流す。再生が失敗して残りを捨てれば `i` も捨てる。
+    bool insert_after = false;
 };
 } // namespace nenenib::core

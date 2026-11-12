@@ -1143,11 +1143,17 @@ void EditorController::follow_reads()
 
 void EditorController::collect_reads()
 {
+    const AutosaveId active = state_.autosave_ids().at(state_.active_tab());
     for (DocumentReadOutcome &outcome : ports_.reads.collect())
     {
         adopt_read(std::move(outcome));
     }
     settle_reads();
+    // 読み終えたタブへ切り替えたら、前の文書の Vim の先頭の判定を捨てる（#1374）。
+    if (state_.autosave_ids().at(state_.active_tab()) != active)
+    {
+        vim_top_kept_ = false;
+    }
 }
 
 // 読み込み中の 1 行（決定 4）。頼んだ順の最初の要求を見せる。
@@ -1267,7 +1273,7 @@ void EditorController::leave_document()
     // 捨てる。Esc と同じ 1 本を通す（ADR 0041 の決定 5・ADR 0056 の決定 4）。
     if (state_.command_input().has_value())
     {
-        accept(CancelCommand{});
+        cancel_command_input();
     }
     state_ = state_.with_composition(std::nullopt);
 }

@@ -14,9 +14,7 @@
 #include "VimScreenPosition.hpp"
 #include "VimScrollDirection.hpp"
 #include "VimStep.hpp"
-#include "VimTextObject.hpp"
 #include "VimTextObjectCancel.hpp"
-#include "VimTextObjectOutcome.hpp"
 #include "VimTextObjectSpan.hpp"
 
 #include <cstddef>
@@ -110,7 +108,6 @@ character_search_position(const VimEditorView &view, const VimState &state,
 [[nodiscard]] std::optional<VimMotionRange> lines_below(const TextBuffer &text, LineNumber line,
                                                         std::size_t steps);
 [[nodiscard]] Offset inclusive_end(const TextBuffer &text, Offset at);
-[[nodiscard]] VimMotionRange writing_empty(VimMotionRange range);
 [[nodiscard]] std::optional<VimMotionRange> to_line_end(const TextBuffer &text, Offset caret,
                                                         std::size_t count, VimMotion motion);
 [[nodiscard]] std::optional<VimMotionRange>
@@ -135,6 +132,9 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 [[nodiscard]] VimStep restored_at(VimStep step, Offset restore);
 // 編集を返さない形の印を 1 打鍵の結果に添える（ADR 0181 の決定 1・2）。状態と効果は変えない。
 [[nodiscard]] VimStep change_noted(VimStep step, std::optional<VimChange> change);
+// changed の印に Vim が changed_* に渡した位置を書く（追補 #1374）。矩形の効果のように置き換えの
+// 始まりが Vim の位置と違う所だけが呼ぶ。印が無ければ changed を立てる。
+[[nodiscard]] VimStep change_placed(VimStep step, TextPosition at);
 // 範囲が空の `d` `c` の印（ADR 0181・Vim の op_delete / op_change）。範囲が空でなければ step の
 // まま。inclusive な移動（行末・語のテキストオブジェクト）は range.empty_change が writes_empty。
 [[nodiscard]] VimStep empty_removal_noted(VimStep step, const TextBuffer &text,
@@ -287,8 +287,6 @@ repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::
                                             const VimTextObjectSpan &span);
 [[nodiscard]] VimStep completed_text_object(const VimState &state, const VimEditorView &view,
                                             const VimTextObjectCancel &cancel);
-[[nodiscard]] VimTextObjectOutcome word_writing_empty(VimTextObjectOutcome outcome,
-                                                      VimTextObject object);
 [[nodiscard]] std::optional<char32_t> macro_name_of(const VimKey &key) noexcept;
 [[nodiscard]] VimStep started_macro(const VimState &state, const VimKey &key);
 [[nodiscard]] VimRegister appended_recording(const VimRegister &old, std::string_view text);
@@ -297,6 +295,9 @@ repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::
 [[nodiscard]] VimStep repeated_change(const VimState &state);
 [[nodiscard]] VimStep vim_recorded(const VimState &before, const VimEditorView &view, VimStep step,
                                    VimKey key);
+// オペレータ待ちの `:` の確定の記録（#1549）。typed の文字と `<CR>` を `:` までの記録に足す。
+[[nodiscard]] VimStep command_motion_recorded(const VimState &before, const VimEditorView &view,
+                                              VimStep step, std::string_view typed);
 [[nodiscard]] VimStep macro_recorded(const VimState &before, const VimEditorView &view,
                                      VimStep step, VimKey key);
 inline constexpr std::size_t single_step = 1;
@@ -320,4 +321,11 @@ inline constexpr char32_t carriage_return_character = 0x0D;
                                    LineNumber line, VimMode mode);
 [[nodiscard]] LineNumber line_below(const TextBuffer &text, LineNumber line, std::size_t count);
 [[nodiscard]] LineNumber line_above(LineNumber line, std::size_t count);
+// INSERT の `Ctrl-o`（ADR 0182・VimStepRestart.cpp）。
+[[nodiscard]] bool pauses_insert(const VimState &state, const VimKey &key) noexcept;
+[[nodiscard]] VimStep insert_paused(const VimState &state, const VimEditorView &view);
+[[nodiscard]] VimStep insert_restart_noted(const VimState &before, const VimEditorView &view,
+                                           VimStep step, const VimKey &key);
+[[nodiscard]] const std::optional<VimRepeatRecord> &repeated_record(const VimState &state) noexcept;
+[[nodiscard]] bool restarted_untyped(const VimState &state) noexcept;
 } // namespace nenenib::core::detail

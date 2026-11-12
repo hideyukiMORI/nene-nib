@@ -87,3 +87,45 @@ Vim 9.1 の実測（`-es -u NONE`・`feedkeys(…, 'tx')`・1 件 20 秒で打�
 Vim と違う最小の形は契約 `--vim-macro` の `verify_macro_key_limit`（本文 `ab`・a = `0`・c = `3@ax` で `@c` の `x` は 7 鍵目。上限 7 なら流れて `b`、上限 6 なら `x` を捨てて `ab` と知らせ。Vim は `b`）。Debug で 100,000 鍵を流すと 1 件約 80 秒かかる（負荷 70% の機械で 3 件 240 秒）ので、契約は試験の口 `EditorController::limit_replay_keys` で小さい上限を置き（製品は呼ばない・既定は `core::vim_replay_key_limit`）、製品の値は `static_assert`（知らせの文の数と上限・契約の 100,000）で守る。fixture にしないのは Vim と違う結果だから。
 
 限界（PR #1407 のレビュー）: 表に行があるときの 1 歩は右辺 1 つぶんを流すので、実際に engine へ流れる鍵の数は上限の右辺の長さ倍まで伸びる。知らせの「100,000 鍵」はその場合に厳密でない（文は変えない・止まることは同じ）。上限で止めた所が INSERT の途中なら、鍵の失敗や E132 と同じく INSERT のまま残り、後で打った文字は本文に入る（今の扱いのまま）。打った 1 鍵の `map` の右辺に `@a` を並べると、それぞれがいちばん外の再生になって数が 0 に戻る（後続）。
+
+## 追補（2026-11-12・#1517・ADR 0182）INSERT の `Ctrl-o` と録画・再生
+
+打った `Ctrl-o` は録画に積む（vim_macro_typed の 1 本のまま）。`<C-o>q` で止めた録画は末尾の `Ctrl-o` を外す（Vim の get_recorded）。`<C-o>@a` は Vim の do_execreg と同じに始め直す印を消し、再生の全部の周の後に `i` を 1 つ流す（`VimReplay.insert_after`・失敗で列を捨てれば `i` も捨てる）。マクロの中の `Ctrl-o` の後は命令 1 つで INSERT を始め直し（マクロの鍵は typeahead）、`.` の再生の鍵が列に残る間は始め直さない（Vim の stuff_empty()）。再生の中の undo は今までどおり全体で 1 単位。詳細は ADR 0182 の決定 5・7。
+
+## 追補（2026-11-12・#1528）`:` の行も打った鍵として録る
+
+決定 2 の「Ex（`:`）は application の入力行なので本 ADR では録らない」を改める。Vim 9.1 は `qa:set so=2<CR>jq` の a を `:set so=2^Mj` にし、`@a` は `:set so=2` も再生する（`-es -u NONE` の `feedkeys(…, 'xt')` で実測・道具 `D:/NeNeNib/scripts/20261111/c10/p1.vim` `p5.vim`）。Nib は次の形で揃える。
+
+1. engine の `macro_recorded` は `:`（効果 `VimOpenCommandLine`・NORMAL の `N:` と VISUAL の `:` も同じ効果・#1526）を積む。範囲 `'<,'>` `.,.+N` は engine が置くので録らない（Vim も録るのは `:` だけ）。`/` `?`（`VimOpenSearch`）は今までどおり積まず、確定した検索は `VimSearchPattern` の 1 鍵（本文は `/pat\r`）で積む。
+2. 入力行の中の鍵は controller が録画の書き手 `vim_macro_typed` の 1 本で積む（`record_command_keys`）。積むのは開いている入力行が Ex の行（`CommandLine`）で、録画中・再生の外・鍵の出どころが `typed`（`map` の右辺でない）のときだけ。窓の意図と fixture の harness の鍵の口は同じ入口を通るので、積む所は入口の 4 つ: `CommandText`（1 コードポイント 1 鍵・IME の確定と Ctrl+V の貼り付けも同じ口なので文字として積む）・`EditCommand`（下の表）・確定 `confirmed_command`（`<CR>`）・取消 `accept(CancelCommand)`（`<Esc>`）。文書の切り替え・空の行の Backspace・F1 の一覧（`OpenOperationList`）と保存の形の一覧（`OpenDocumentFormatList`）が開いている行を閉じる取消は `cancel_command_input` を直接呼び、`<Esc>` を積まない（打った Esc ではない・レビュー V-1552 の L2・契約 `verify_macro_list_closes_ex_line_unrecorded`）。
+3. 編集の写し（Vim の実測）: ← → Home End BS Del は `<Left>` `<Right>` `<Home>` `<End>` `<BS>` `<Del>`、履歴の上下は `<Up>` `<Down>`、補完の Tab は文字の Tab（Vim の再生では 'wildchar' が効かず Tab が入る・`:se<Tab>so=6` は `:set so=6` と同じに効く）。Shift+Tab（Vim は `<S-Tab>`）は Nib の鍵の表に無いので積まない。面（Ctrl+P）の中の鍵は Ex の行ではないので積まない。
+4. 再生と fixture の鍵の `<Up>` `<Down>` は、入力行で窓と同じ履歴の前・次に写す（Vim の再生の `<Up>` も履歴を引く・実測: 打った `:set so=4<CR>:set so=1<CR>` の後の `:<Up><Up><CR>` の再生で so=4）。今までは捨てていた。
+
+守り: VISUAL の反例（レビュー V-1547）`qavj:set so=2<CR>xq` の a は `vj:set so=2^Mx` で、`@a` は E481 で打ち切られて `x` を流さない（実測 `p6.vim`・契約 `verify_macro_records_visual_ex_line`）。fixture `macro-ex-`（7 件・register 欄の `@a` の再生・録画の harness `store_vim_fixture_macro` が入力行の鍵を録れるようになったので `:set so=2<CR>j` を fixture にできる）と契約 `--vim-macro` の `verify_macro_records_ex_line` / `verify_macro_replays_ex_line`。
+
+5. 履歴に足す（レビュー V-1552 の M1 で「限界」を直した）: Vim の getcmdline は `:` の行を、行の鍵が 1 つでも打たれたとき（`some_key_typed`・`KeyTyped` の鍵）だけ履歴に足し、検索の行は打っていなくても足す（`histype == HIST_SEARCH`・ex_getln.c 9.1）。Nib は足す口 `remember` の 1 か所で同じにする: 入力行に届いた鍵が打った鍵なら印を立て（`note_command_key`・入口は `CommandText` `EditCommand` `confirmed_command` の 3 つ・再生の中・`map` の右辺・`press_vim_keys`（:normal!）の鍵は打っていない）、印は `close_command_input` が倒す。`remember(CommandLine)` は印が立っているときだけ足す。実測（`feedkeys(…, 'xt')`・`D:/NeNeNib/scripts/20261112/c10b/h.vim`）: `nnoremap Z :3<CR>` の打った `Z` は足さない、`nnoremap X :2` に打った `<CR>` だけでも足す、`@r`（`:5`）に打った `<CR>` は足す、`:normal! :1<CR>` は足さない、`@s`（`/l4<CR>`）・map の右辺の `/l2<CR>`・`:normal! /l5<CR>` は検索の履歴に足す。
+6. 再生と :normal! の `<Up>` `<Down>` が履歴を動けなければ、残りの鍵を打ち切る（Vim の `c_<Up>` は動けないと `beep_flush` で先読みを捨てる・ex_getln.c）。controller の `recalled_key` が `recalls_command` で動くかを先に見て `not_moved` を返す。窓の上下（`EditCommand`）は打った鍵で、先読みが無いので何もしない（今のまま）。
+
+守り（V-1552）: 反例 r12 `qa:3<CR>:<Up><CR>xq:5<CR>1G@a`（Vim は本文 `l1 l2 3 l4 5`・5 行目）と h1 の B・map の右辺・:normal!・検索の行の契約 `verify_macro_replay_keeps_ex_history`、fixture `macro-ex-history-`（2 件・oracle の :normal! は `:` の履歴が空なので、再生の `:3<CR>` を足すと `:<Up>` が 3 を引き、足さなければ `<Up>` が先読みを捨てる）。
+
+## 追補（2026-11-12・#1525）Ex のエラーは再生を打ち切る
+
+決定 3 の「失敗で打ち切り」に Ex の行を足す。Vim 9.1（`-u NONE -es`・道具 `D:/NeNeNib/scripts/20261111/c10/gen4.py` → `p4.vim` / `out4.txt`）で、本文 abc/def/ghi の 1 行目から `let @a = ":{行}\rj"` の `@a` と `exe "normal! :{行}\rj"` を測ると、Ex のエラーはどれも残りの `j` を流さない（行 1）。成功は流す（行 2）。
+
+| 行 | Vim のエラー | Vim の再生 |
+|---|---|---|
+| `set so!` `set so!?` `set so&?` `set wrap!?` | E488 | 打ち切る |
+| `set invso` `set noso` `set wrap=1` `set noso&` `set ff=nosuch` `set display=grid` | E474 | 打ち切る |
+| `set foo` `set invnowrap` `set fontsize=12` `set so=2 foo` | E518 | 打ち切る |
+| `foo` | E492 | 打ち切る |
+| `3noh` | E481 | 打ち切る |
+| `set so=abc` | E521 | 打ち切る |
+| `colorscheme nosuchtheme` | E185 | 打ち切る |
+| `tabnext 5`（タブ 1 つ） | E475 | 打ち切る |
+| `noh` `set so?` `set so&` `set so&vim` `set wrap!` `set invwrap` `set nowrap!` `set ic!` `set so=-1` `echo 1` `set ft=nosuchlang` `set fenc=nosuch` | 成功 | 流す |
+
+打ち切りの道は ADR 0022 の追補 #1526 の決定 6（`evaluate_command` が評価の失敗と設定の保存の失敗で `VimRepeatFailure::refused` を返し、`submit(CommandLine)` がそのまま返す・#1547）の 1 本で、本追補は第 2 の道を作らない。返り値は再生（`@a` `.`）と fixture の harness（`press_vim_keys`）の今の打ち切りの道へ流れる。本追補が足すのは上の表（Vim の実測）と、`:set` の `&` `!` `inv`（ADR 0022 の追補 #1525）で、表の行のうち命令の要求の後の失敗（`tabnext 5` の E475）は決定 6 のとおり今は打ち切らない（残る違い）。
+
+oracle の `-es` は Ex のエラーで終了 1 を返すので、エラーの行は fixture にできない（`run_vim` が拒む・測定のコードを変えると全件の再生成が要る）。エラーの行は上の表の値を契約 `--vim-macro` の `verify_ex_failure_stops_replay`（`:normal!` と `@a` の両方）に置き、成功の行は fixture `ex-failure-`（17 件）で守る。
+
+限界（Vim と違う形）: Vim が受けて Nib が受けない行（`:echo 1`・`:set ft=nosuchlang` `:set fenc=nosuch`（Nib の値は閉じている）・Nib に無い Vim の option）は Nib では拒否なので打ち切る（Vim は流す）。Nib だけの書き方（`:set fontsize=12` `:set guide` `:set display=grid`）は Vim ではエラーで打ち切るが Nib は流す。

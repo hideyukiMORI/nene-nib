@@ -16,6 +16,7 @@
 #include "OperationChoiceProbe.hpp"
 #include "PaletteChoiceProbe.hpp"
 #include "PatternProbe.hpp"
+#include "PieceListProbe.hpp"
 #include "PreviewCaretProbe.hpp"
 #include "ProbeDispatch.hpp"
 #include "ProbeSelection.hpp"
@@ -989,13 +990,34 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(PieceListWorkload workload)
+{
+    switch (workload)
+    {
+    case PieceListWorkload::reads_after_1:
+    case PieceListWorkload::reads_after_1000:
+    case PieceListWorkload::reads_after_4000:
+    case PieceListWorkload::reads_after_16000:
+    case PieceListWorkload::replaces_after_1:
+    case PieceListWorkload::replaces_after_1000:
+    case PieceListWorkload::replaces_after_4000:
+    case PieceListWorkload::replaces_after_16000:
+    case PieceListWorkload::replace_all_after_1:
+    case PieceListWorkload::replace_all_after_8000:
+    case PieceListWorkload::frame_after_1:
+    case PieceListWorkload::frame_after_16000:
+        return 236U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t checked_index(SubstituteWorkload workload)
 {
     switch (workload)
     {
     case SubstituteWorkload::all_lines_100k:
     case SubstituteWorkload::no_match_100k:
-        return 236U + static_cast<std::size_t>(workload);
+        return 248U + static_cast<std::size_t>(workload);
     }
     std::unreachable();
 }
@@ -1015,7 +1037,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 238> dispatches{{
+constexpr std::array<ProbeDispatch, 250> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1494,6 +1516,30 @@ constexpr std::array<ProbeDispatch, 238> dispatches{{
                      edited_history_input, edited_history_keys},
     ProbeDispatchRow{EditedHistoryWorkload::erases_after_16000, "vim-x-after-16000-edits",
                      edited_history_input, edited_history_keys},
+    ProbeDispatchRow{PieceListWorkload::reads_after_1, "piece-read-after-1-pieces",
+                     piece_list_input, piece_list_run},
+    ProbeDispatchRow{PieceListWorkload::reads_after_1000, "piece-read-after-1000-pieces",
+                     piece_list_input, piece_list_run},
+    ProbeDispatchRow{PieceListWorkload::reads_after_4000, "piece-read-after-4000-pieces",
+                     piece_list_input, piece_list_run},
+    ProbeDispatchRow{PieceListWorkload::reads_after_16000, "piece-read-after-16000-pieces",
+                     piece_list_input, piece_list_run},
+    ProbeDispatchRow{PieceListWorkload::replaces_after_1, "piece-replace-after-1-pieces",
+                     piece_list_input, piece_list_run},
+    ProbeDispatchRow{PieceListWorkload::replaces_after_1000, "piece-replace-after-1000-pieces",
+                     piece_list_input, piece_list_run},
+    ProbeDispatchRow{PieceListWorkload::replaces_after_4000, "piece-replace-after-4000-pieces",
+                     piece_list_input, piece_list_run},
+    ProbeDispatchRow{PieceListWorkload::replaces_after_16000, "piece-replace-after-16000-pieces",
+                     piece_list_input, piece_list_run},
+    ProbeDispatchRow{PieceListWorkload::replace_all_after_1, "replace-all-100000-after-1-pieces",
+                     piece_list_input, piece_list_run},
+    ProbeDispatchRow{PieceListWorkload::replace_all_after_8000,
+                     "replace-all-100000-after-8000-pieces", piece_list_input, piece_list_run},
+    ProbeDispatchRow{PieceListWorkload::frame_after_1, "frame-after-1-pieces", piece_list_input,
+                     piece_list_run},
+    ProbeDispatchRow{PieceListWorkload::frame_after_16000, "frame-after-16000-pieces",
+                     piece_list_input, piece_list_run},
     ProbeDispatchRow{SubstituteWorkload::all_lines_100k, "vim-substitute-percent-g-100k-lines",
                      substitute_input, substitute_lines},
     ProbeDispatchRow{SubstituteWorkload::no_match_100k, "vim-substitute-no-match-100k-lines",
@@ -1540,7 +1586,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 238U);
+static_assert(dispatches.size() == 250U);
 static_assert(dispatch_is_complete());
 
 } // namespace

@@ -285,8 +285,8 @@ void verify_setting()
                core::minimap_set(core::minimap_set(others, false), true).features ==
                    std::vector<std::string>{"a", "b", "minimap"},
            "other feature names keep their order");
-    expect(!core::evaluate_ex("set mm", defaults, core::Appearance::dark).has_value() &&
-               !core::evaluate_ex("set minimap!", defaults, core::Appearance::dark).has_value(),
+    // `minimap!` は反転として受ける（#1525・ExSettingsTests の verify_ex_set_toggle）。
+    expect(!core::evaluate_ex("set mm", defaults, core::Appearance::dark).has_value(),
            "other spellings are refused");
 }
 

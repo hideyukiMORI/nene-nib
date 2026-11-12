@@ -21,6 +21,7 @@
 #include "ExSyntaxRequest.hpp"
 #include "ExTabRequest.hpp"
 #include "ExWindowCommand.hpp"
+#include "ExWindowState.hpp"
 #include "FontFamilies.hpp"
 #include "ThemeCatalog.hpp"
 #include "VimSearchHighlight.hpp"
@@ -59,6 +60,11 @@ inline constexpr std::string_view guifont_command = "set guifont=";
 // preview は `:preview full|side|off` と `:preview?` の要求（ADR 0155 の改訂 16）で、見せ方を置いて
 // 答えるのは controller。
 // print は `:hardcopy` の印刷の要求（ADR 0177 の決定 1）で、port を呼ぶのは controller。
+// rechecks_window は値を置いた `:set` が Vim で窓の先頭を決め直す option か（ADR 0019 の #1524 の
+// 追補）。Vim 9.1 で `P_RWIN` / `P_RBUF` / `P_RALL` を持つ option は、値が同じでも
+// `check_redraw` → `changed_window_setting` が `VALID_TOPLINE` を落とす。問い（`set rnu?`）は
+// 値を置かないので偽。表は ExResult.cpp の window_setting_names の 1 つで、Vim のモードで今の
+// キャレットの決め直しを頼むのは controller。
 // relative_line は範囲だけの `:.` `:.,.+N` `:'<,'>`（ADR 0022 の追補 #1526）で、キャレットの行から
 // 着地を決めるのは controller。
 // substitute は `:s` の族の 1 命令（ADR 0168 の決定 1）で、範囲を解いて本文を置き換えるのは engine
@@ -84,12 +90,18 @@ struct ExResult
     std::optional<ExFormatRequest> format = std::nullopt;
     std::optional<ExPreviewRequest> preview = std::nullopt;
     std::optional<ExPrintRequest> print = std::nullopt;
+    bool rechecks_window = false;
     std::optional<ExRelativeLineRequest> relative_line = std::nullopt;
     std::optional<ExSubstituteRequest> substitute = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 evaluate_ex(std::string_view text, const EditorSettings &settings, Appearance system_appearance,
+            const ThemeCatalog &themes = ThemeCatalog::builtins());
+// 窓の状態（明暗と hlsearch・incsearch の今の値）を渡す形。上の形は明暗だけを渡し、hlsearch と
+// incsearch は初期値として読む（#1525 のレビュー V-1552 の L4）。
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
+evaluate_ex(std::string_view text, const EditorSettings &settings, const ExWindowState &window,
             const ThemeCatalog &themes = ThemeCatalog::builtins());
 // prefix が `set guifont=` で始まるときだけ、fonts の名前を `set guifont=<名前>`
 // の候補として後ろに足す （施主決定 D58）。`set filetype=` `set ft=` で始まるときは言語の名前を

@@ -255,7 +255,12 @@ void verify_window_register_put()
     Editing editing;
     open_vim_document(editing, "abc");
     EditorController &controller = editing.controller();
-    static_cast<void>(controller.press_vim_keys(window_keys("qa|wq\"ap")));
+    // 録画は打った鍵を録る（press_vim_keys の :normal! の鍵は打った鍵ではない・ADR 0182 の決定
+    // 4）。
+    for (const auto &key : window_keys("qa|wq\"ap"))
+    {
+        static_cast<void>(controller.press_vim_key(key));
+    }
     expect(whole_vim_body(controller) == "a\x17wbc",
            "\"ap puts control-w as one control character");
 }

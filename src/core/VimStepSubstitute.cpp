@@ -43,8 +43,14 @@ constexpr std::int64_t line_limit = std::int64_t{1} << 62;
 
 // 置換の後の NORMAL。`.` の直前の変更は保つ（`:s` は `.` の記録を変えない・`x:s/a/X/<CR>j.` は
 // `x` を繰り返す・実測）。
+// オペレータ待ちの `:s`（`d:s/a/b/`）は保留のオペレータと回数・レジスタ・`.` の組み立てをそのまま
+// 残し、controller が置換の前のキャレットから今のキャレットまでで閉じる（ADR 0168 の追補 16）。
 [[nodiscard]] VimState rested(const VimState &state)
 {
+    if (state.pending.has_value())
+    {
+        return state;
+    }
     VimState next = vim_resting_from(state, state.unnamed_register);
     next.last_change = state.last_change;
     return next;
@@ -422,7 +428,9 @@ resolved_lines(const VimEditorView &view, const std::optional<ExRange> &range)
     VimStep step{std::move(next), VimReplaceBlock{std::move(result.edits), caret}};
     step.notice = std::move(notice);
     step.restore = restore;
-    step.change = VimChange::changed;
+    // Vim の do_sub は changed_lines(first_line, 0, …) を呼ぶ（最初に置き換えた行の桁 0・ADR 0181
+    // の 追補 #1374 の位置）。
+    step.change = VimChangeMark{VimChange::changed, view.text.position_of(restore)};
     return context_marked(std::move(step), view);
 }
 
@@ -447,6 +455,12 @@ resolved_lines(const VimEditorView &view, const std::optional<ExRange> &range)
     return memory.pattern;
 }
 
+// 前の広げた置き換え（`~` が入れる・無ければ空）。
+[[nodiscard]] std::string previous_of(const VimState &state)
+{
+    return state.last_substitute != nullptr ? state.last_substitute->previous : std::string{};
+}
+
 // パターンを探す前に断る理由（パターンが無ければ E35・`e` の無い回数 0 は E939・Vim の
 // ex_substitute の順）。断らなければ値なし。
 [[nodiscard]] std::optional<VimSearchNoticeKind>
@@ -460,16 +474,24 @@ early_refusal(const VimSubstituteMemory &memory, bool has_pattern,
     return has_pattern ? std::nullopt : std::optional{VimSearchNoticeKind::no_previous_pattern};
 }
 
-// 回数（`:s/a/b/ 3`）は範囲の最後の行から回数の行（本文の終わりまで・Vim の ex_substitute）。
-[[nodiscard]] LineSpan counted_lines(LineSpan span, const ExSubstituteRequest &request,
-                                     const TextBuffer &text) noexcept
+// 回数（`:s/a/b/ 3`）は範囲の最後の行から回数の行（本文の終わりまで・Vim の ex_substitute）。回数 0
+// と、最後の行 + 回数 - 1 が INT_MAX を越える形（Vim の 32 ビットの行番号が溢れて範囲が空になる・
+// `:3s/a/X/g 2147483646` は E486・実測）は空の範囲で、値なし（ADR 0168 の追補 14）。
+[[nodiscard]] std::optional<LineSpan>
+counted_lines(LineSpan span, const ExSubstituteRequest &request, const TextBuffer &text) noexcept
 {
     if (!request.count.has_value())
     {
         return span;
     }
+    constexpr std::size_t line_number_limit = 2147483647;
+    const std::size_t count = request.count.value();
+    if (count == 0 || span.second > line_number_limit - (count - 1))
+    {
+        return std::nullopt;
+    }
     const std::size_t room = text.line_count() - span.second;
-    return LineSpan{span.second, span.second + std::min(request.count.value() - 1, room)};
+    return LineSpan{span.second, span.second + std::min(count - 1, room)};
 }
 
 // 置換の覚えを新しくした値と、パターン（無ければ E35）。前の置換が要る形で無ければ E33。
@@ -493,10 +515,10 @@ renewed_memory(const VimState &state, const ExSubstituteRequest &request)
         flags = flag_applied(flags, letter, last_used);
     }
     memory.flags = flags;
+    // 置換のパターン（RE_SUBST）と広げた置き換え（reg_prev_sub）は、E939 と E35 の後では変えない
+    // （Vim は回数の検査と search_regcomp の後でだけ書く・`:s/a/X/ 0` の後の `:&` と `n` は前の
+    // パターン・実測）。書くのは vim_substituted の remembered の手前。
     auto pattern = pattern_of(state, request, memory, last_used);
-    memory.pattern = pattern.has_value() ? pattern : memory.pattern;
-    memory.previous = vim_tilde_expanded(memory.replacement,
-                                         before != nullptr ? before->previous : std::string{});
     return std::pair{std::move(memory), std::move(pattern)};
 }
 } // namespace
@@ -524,6 +546,8 @@ VimStep vim_substituted(const VimState &state, const VimEditorView &view,
     }
     // early_refusal がパターンの無い形を断ったので、ここでは値がある。
     const std::string pattern_text = pattern.value_or(std::string{});
+    memory.pattern = pattern_text;
+    memory.previous = vim_tilde_expanded(memory.replacement, previous_of(state));
     const VimSubstituteFlags flags = memory.flags;
     const auto replacement = SubstituteReplacement::vim(memory.previous);
     next = remembered(std::move(next), view, std::move(memory), pattern_text);
@@ -536,12 +560,13 @@ VimStep vim_substituted(const VimState &state, const VimEditorView &view,
                                        parsed.error()},
                        VimRepeatFailure::refused);
     }
-    // `e` の回数 0 は範囲が空で、当たりも報せも無く続く（Vim の ex_substitute・実測）。
-    if (request.count == std::optional<std::size_t>{0})
+    // 空の範囲（`e` の回数 0・行番号の溢れ）は当たりが無いのと同じ（`e` なら黙って続く・実測）。
+    const auto lines = counted_lines(span.value(), request, view.text);
+    if (!lines.has_value())
     {
-        return VimStep{std::move(next), VimNoEffect{}};
+        return unsubstituted(std::move(next), SubstituteFailure::no_match, flags, pattern_text);
     }
-    const auto [first, last] = counted_lines(span.value(), request, view.text);
+    const auto [first, last] = lines.value();
     auto result =
         substituted(view.text, parsed.value(), replacement,
                     SubstituteRequest{LineNumber{first}, LineNumber{last}, flags.every, flags.count,
