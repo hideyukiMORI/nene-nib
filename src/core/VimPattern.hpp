@@ -125,5 +125,7 @@ class VimPattern final
     std::vector<VimPatternGroup> groups_;
     // 大小を畳んで比べるか（parse が旗と `\c` `\C` から 1 回だけ決める）。
     bool ignore_case_;
+    // 最短の量（`\{-...}`）の写しを含むか（ADR 0184 の決定 2・照合器が展開の道を選ぶ）。
+    bool lazy_;
 };
 } // namespace nenenib::core

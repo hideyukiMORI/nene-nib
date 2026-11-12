@@ -841,7 +841,8 @@ parsed_next(std::string_view pattern, std::size_t at, VimSearchDirection separat
 VimPattern::VimPattern(std::vector<VimPatternAtom> atoms, std::vector<VimPatternRange> ranges,
                        std::vector<VimPatternGroup> groups, bool ignore_case)
     : atoms_(std::move(atoms)), ranges_(std::move(ranges)), groups_(std::move(groups)),
-      ignore_case_(ignore_case)
+      ignore_case_(ignore_case), lazy_(std::ranges::any_of(atoms_, [](const VimPatternAtom &atom)
+                                                           { return lazy(atom.repeat); }))
 {
 }
 

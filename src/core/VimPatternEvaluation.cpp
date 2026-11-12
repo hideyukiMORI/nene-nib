@@ -23,7 +23,11 @@ namespace
 
 VimPatternEvaluation::VimPatternEvaluation(const VimPattern &pattern, std::string_view line)
     : pattern_(pattern), line_(line), at_(0), skipping_(pattern.atoms_.size() + 1),
-      current_begins_(2 * skipping_), next_begins_(2 * skipping_)
+      current_begins_(2 * skipping_), next_begins_(2 * skipping_),
+      // 最短の量を含む列だけが後に置く消費を扱う展開を通る（ADR 0184 の決定 1・今の列の
+      // 展開に分岐を足さない）。
+      expand_(pattern.lazy_ ? &VimPatternEvaluation::lazily_expanded
+                            : &VimPatternEvaluation::expanded)
 {
     current_.reserve(pattern.atoms_.size());
     next_.reserve(pattern.atoms_.size());
@@ -35,6 +39,40 @@ VimPatternEvaluation::expanded(std::vector<std::size_t> &order,
                                std::size_t begin)
 {
     // 幅のない遷移は原子indexを増やすだけ。同位置で先に来た候補を優先する。
+    while (!begins.at(index).has_value())
+    {
+        begins.at(index) = begin;
+        if (index == pattern_.atoms_.size())
+        {
+            return finished_match(VimPattern::ends_a_character(line_, at_), begin, at_);
+        }
+        const VimPatternAtom &atom = pattern_.atoms_.at(index);
+        const bool zero_width = VimPattern::is_zero_width(atom.kind);
+        if (zero_width && !VimPattern::anchored(line_, atom, at_))
+        {
+            return std::nullopt;
+        }
+        if (zero_width)
+        {
+            ++index;
+            continue;
+        }
+        // 星の消費を先に置き、0回で先へ進む候補を後から展開する。
+        order.push_back(index);
+        if (atom.repeat == VimPatternRepeat::once)
+        {
+            return std::nullopt;
+        }
+        ++index;
+    }
+    return std::nullopt;
+}
+
+std::optional<VimPatternMatch>
+VimPatternEvaluation::lazily_expanded(std::vector<std::size_t> &order,
+                                      std::vector<std::optional<std::size_t>> &begins,
+                                      std::size_t index, std::size_t begin)
+{
     std::optional<std::size_t> atom = index;
     while (atom.has_value() && !begins.at(atom.value()).has_value())
     {
@@ -99,7 +137,7 @@ std::optional<VimPatternMatch> VimPatternEvaluation::arrived(std::size_t target,
 {
     if (VimPattern::ends_a_character(line_, at_))
     {
-        return expanded(next_, next_begins_, target, begin);
+        return (this->*expand_)(next_, next_begins_, target, begin);
     }
     const std::size_t slot = skipping_ + target;
     if (!next_begins_.at(slot).has_value())
@@ -124,9 +162,12 @@ std::optional<VimPatternMatch> VimPatternEvaluation::stepped(std::size_t index, 
     {
         return std::nullopt;
     }
-    const std::size_t target = VimPattern::loops(atom.repeat) ? index : index + 1;
-    return VimPattern::whole_character(atom.kind) ? arrived(target, begin)
-                                                  : expanded(next_, next_begins_, target, begin);
+    const bool loops =
+        atom.repeat == VimPatternRepeat::star || atom.repeat == VimPatternRepeat::lazy_star;
+    const std::size_t target = loops ? index : index + 1;
+    return VimPattern::whole_character(atom.kind)
+               ? arrived(target, begin)
+               : (this->*expand_)(next_, next_begins_, target, begin);
 }
 
 void VimPatternEvaluation::advanced()
@@ -163,7 +204,7 @@ std::optional<VimPatternMatch> VimPatternEvaluation::matched(std::size_t from)
         // 始まりは Vim の 1 文字の先頭だけ（結合文字の上からは試さない・#1146）。
         if (!found_.has_value() && VimPattern::ends_a_character(line_, at_))
         {
-            found_ = expanded(current_, current_begins_, 0, at_);
+            found_ = (this->*expand_)(current_, current_begins_, 0, at_);
         }
         if (at_ == line_.size())
         {
