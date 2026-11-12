@@ -32,4 +32,12 @@ struct VimMotionRange
     VimEmptyChange empty_change = VimEmptyChange::keeps_registers;
     VimYankShape yank_shape = VimYankShape::by_kind;
 };
+
+// 空でも `c` が空の本文を書く範囲（empty_change を立てる 1 本）。呼ぶのは inclusive な行末への
+// 移動（#960）と語のテキストオブジェクト（#979）だけ。
+[[nodiscard]] constexpr VimMotionRange writing_empty(VimMotionRange range) noexcept
+{
+    range.empty_change = VimEmptyChange::writes_empty;
+    return range;
+}
 } // namespace nenenib::core

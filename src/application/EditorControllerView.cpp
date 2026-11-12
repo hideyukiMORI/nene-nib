@@ -45,9 +45,16 @@ namespace
 constexpr std::size_t pointed_window_bytes = 64;
 
 // 押した文字の語（`iw`）の VISUAL の選択（caret は含む側の端）。範囲にならない（空の本文）なら
-// キャレットのまま。通常モードと Vim モードが同じ 1 本を使う。
+// キャレットのまま。通常モードと Vim モードが同じ 1 本を使う。押した行が空なら範囲関数を引かずに
+// キャレットのまま（gvim の do_mouse の find_start_of_word は NUL の上で動かない。本文の最後の
+// 空行の `iw` は前の行の末尾へ戻るが、押しは空行に留まる・#1507）。
 [[nodiscard]] core::Selection clicked_word_visual(const core::TextBuffer &text, core::Offset rest)
 {
+    const auto line = text.position_of(rest).line;
+    if (text.line_start(line) == text.line_end(line))
+    {
+        return core::Selection{rest, rest};
+    }
     const auto outcome = core::vim_text_object_range(
         text, core::Selection{rest, rest},
         core::VimTextObjectRequest{core::VimTextObjectScope::inner, core::VimTextObject::word,
