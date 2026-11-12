@@ -534,8 +534,8 @@ void verify_syntax_evaluation()
     }
     const auto ranged = core::evaluate_ex("2syntax on", settings, system);
     expect(!ranged.has_value() &&
-               ranged.error() == core::ExEvaluationFailure{core::ExFailure::unsupported_argument},
-           "a range before syntax is not supported");
+               ranged.error() == core::ExEvaluationFailure{core::ExFailure::no_range_allowed},
+           "a range before syntax is E481 like Vim (ADR 0022 #1526)");
     const auto completions = core::command_completions("synt");
     expect(completions == std::vector<std::string>{"syntax on", "syntax off"},
            "syntax completes to syntax on and syntax off");

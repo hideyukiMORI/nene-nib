@@ -20,6 +20,7 @@
 
 namespace nenenib::core
 {
+using detail::block_caret;
 using detail::block_insert_edit;
 using detail::block_of;
 using detail::block_operated;
@@ -61,17 +62,18 @@ namespace detail
     }
     return vim_block_range_for(view.text, view.selection, state.wanted_column);
 }
-} // namespace detail
 
-namespace
-{
 // 矩形の左上。取ったあとも消したあとも置き換えたあとも Vim はここへキャレットを置く（実測）。
 // 左上が端で切れた Tab や全角なら、その文字のあった所＝埋め直した空白の先頭（ADR 0035 の追補
-// #1067・Vim は oap->start へ戻す）。
+// #1067・Vim は oap->start へ戻す）。矩形の `:` もここ（ADR 0022 の追補 #1526）。
 [[nodiscard]] Offset block_caret(const VimBlockRange &block)
 {
     return block.lines.front().range.begin;
 }
+} // namespace detail
+
+namespace
+{
 
 [[nodiscard]] VimRegister block_register(const TextBuffer &text, const VimBlockRange &block)
 {
