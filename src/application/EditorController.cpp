@@ -388,29 +388,23 @@ bool EditorController::persist_settings(core::EditorSettings settings)
         return false;
     }
     const bool reshaped = core::affects_line_height(state_.settings(), settings);
-    const bool margin_changed = settings.scrolloff != state_.settings().scrolloff;
     state_ = state_.with_settings(std::move(settings)).with_settings_failure(std::nullopt);
     // 面の表示とルートは設定の値（ADR 0162 の決定 3）。Ex・面の `:`・意図のどれから書いても同じ 1
     // 本。
     sync_explorer();
     sync_minimap();
     refresh_key_map();
-    follow_after_settings(reshaped, margin_changed);
+    follow_after_settings(reshaped);
     return true;
 }
 
 // 設定が変わった後の画面の後始末（追従と clamp の頼み）はここの 1 か所（#1432 のレビュー L1）。
-// 順に意味がある。余白の変更の追従を先に頼むので、幅のある窓（製品）では続く clamp_scroll の
-// 解決が `:set` の確定の中で新しい余白の追従をその場で 1 回解き、印も消える。幅の無い窓
-// （fixture の再生・試験の窓）は clamp しないので、印が後の鍵の前に解く。順を入れ替えても印が
-// 後で解くので結果は同じだが、印と順の両方を外すと契約 verify_margin_change_without_frames /
-// verify_margin_change_in_a_macro の幅のある窓の 4 件も落ちる（2026-11-12 に試した木で確認）。
-void EditorController::follow_after_settings(bool reshaped, bool margin_changed)
+// Vim の窓の決め直し（follow_window_setting）は Ex の経路が persist_settings より先に頼むので
+// （#1524）、幅のある窓（製品）では続く clamp_scroll の解決が `:set` の確定の中で新しい設定の
+// 決め直しをその場で 1 回解き、印も消える。幅の無い窓（fixture の再生・試験の窓）は clamp しない
+// ので、印が後の鍵の前に解く。値が変わらず設定を書かない `:set` も同じく印が後で解く。
+void EditorController::follow_after_settings(bool reshaped)
 {
-    if (margin_changed)
-    {
-        follow_changed_margin();
-    }
     if (view_geometry_.width <= 0)
     {
         return;
@@ -427,13 +421,15 @@ void EditorController::follow_after_settings(bool reshaped, bool margin_changed)
     follow_caret();
 }
 
-// Vim は `scrolloff` を変えると、次の鍵の前（鍵が無ければ描く前）に今のキャレットで窓を新しい
-// 余白で決め直す（#1432・Vim 9.1 の実測・source では P_RALL が VALID_TOPLINE を落とす）。追従を
-// 頼み、後の鍵の頼みが保留を置き換えても解決はこの位置を先に流す印を立てる。幅のある窓では
-// follow_after_settings の clamp_scroll がこの頼みをその場で解く（文字組みは `:set` の確定の
-// 1 回で、鍵ごとの費用は増えない）。印が後の鍵まで残るのは幅の無い窓だけ。通常モードの追従は
+// Vim は `P_RWIN` / `P_RALL` の option（`scrolloff` `wrap` `relativenumber` `hlsearch`・表は
+// core の window_setting_names）を置くと、値が同じでも、次の鍵の前（鍵が無ければ描く前）に今の
+// キャレットで窓を決め直す（#1432・#1524・Vim 9.1 の実測・source では check_redraw →
+// changed_window_setting が VALID_TOPLINE を落とす）。追従を頼み、後の鍵の頼みが保留を置き換えても
+// 解決はこの位置を先に流す印を立てる。幅のある窓では follow_after_settings の clamp_scroll がこの
+// 頼みをその場で解く（文字組みは `:set` の確定の 1 回で、鍵ごとの費用は増えない）。印が後の鍵まで
+// 残るのは幅の無い窓と、設定を書かない `:set`（同じ値・`hlsearch`）だけ。通常モードの追従は
 // 変えない（印を立てず、今までどおり幅の決まった窓の追従だけ）。
-void EditorController::follow_changed_margin()
+void EditorController::follow_window_setting()
 {
     switch (state_.mode())
     {

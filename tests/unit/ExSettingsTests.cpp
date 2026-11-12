@@ -1268,6 +1268,87 @@ void verify_ex_command_table()
            ":w reaches the document row");
 }
 
+// Ex の候補にある `set …` の option は、全部が「決め直す」か「決め直さない」のどちらかに分類されて
+// いる（レビュー V-1553 の L2）。option を候補に足して分類を書き忘れると落ちる。分類は Vim 9.1 の
+// optiondefs.h の旗（`P_RWIN` `P_RALL` が決め直す・ADR 0019 の #1524 の追補の決定 2 の表）。値まで
+// 書いた候補（`set wrap` `set display=grid` など）は、評価した答えの `rechecks_window`
+// が分類と同じ。
+constexpr std::array<std::string_view, 4> window_rechecking_options{"wrap", "relativenumber",
+                                                                    "hlsearch", "scrolloff"};
+constexpr std::array<std::string_view, 14> window_keeping_options{
+    "fontsize",  "guifont",  "incsearch", "guide", "display",    "filetype",  "ft",
+    "clipboard", "explorer", "root",      "lsp",   "ignorecase", "smartcase", "minimap"};
+
+[[nodiscard]] bool listed_in(const auto &rows, std::string_view name)
+{
+    for (const std::string_view row : rows)
+    {
+        if (row == name)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void verify_ex_window_recheck_closed()
+{
+    const auto settings = core::default_editor_settings();
+    const auto classified = [](std::string_view name)
+    {
+        return listed_in(window_rechecking_options, name) ||
+               listed_in(window_keeping_options, name);
+    };
+    for (const auto &candidate : core::ex_command_candidates())
+    {
+        const std::string_view text = candidate;
+        if (!text.starts_with("set "))
+        {
+            continue;
+        }
+        const std::string_view option = text.substr(4);
+        std::string_view name = option.substr(0, option.find('='));
+        if (!classified(name) && name.starts_with("no"))
+        {
+            name = name.substr(2);
+        }
+        expect(classified(name),
+               "every :set option among the Ex candidates is classified for the window re-check");
+        if (option.ends_with('='))
+        {
+            continue;
+        }
+        const auto result = core::evaluate_ex(text, settings, Appearance::dark);
+        const bool rechecks = result.has_value() && result.value().rechecks_window;
+        expect(rechecks == listed_in(window_rechecking_options, name),
+               "a :set candidate re-checks the window exactly when its option is classified so");
+    }
+}
+
+// Vim が窓を決め直す option の表（#1524・ADR 0019 の #1524 の追補）。値を置く形だけが真で、同じ
+// 値の置き直しも真、問いと窓の旗を持たない option と Vim に無い option は偽（Vim 9.1 の実測）。
+void verify_ex_window_recheck()
+{
+    const auto rechecks = [](const core::ExResult &r) { return r.rechecks_window; };
+    for (const auto text : {"set wrap", "set nowrap", "set rnu", "set nornu", "set relativenumber",
+                            "set norelativenumber", "set hlsearch", "set nohlsearch", "set so=0",
+                            "set so=3", "set scrolloff=2"})
+    {
+        expect(ex_result_has(text, rechecks), "a P_RWIN / P_RALL option re-checks the window");
+    }
+    for (const auto text :
+         {"set rnu?", "set so", "set so?", "set scrolloff", "set ic", "set noic", "set scs",
+          "set incsearch", "set noincsearch", "set guide", "set minimap", "set explorer",
+          "set fontsize=12", "set clipboard=", "set ft=c", "set ff=unix", "noh", "syntax off"})
+    {
+        const auto result =
+            core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark);
+        expect(result.has_value() && !result.value().rechecks_window,
+               "a query or an option without a window flag does not re-check the window");
+    }
+    verify_ex_window_recheck_closed();
+}
+
 } // namespace
 
 void verify_ex_settings()
@@ -1301,5 +1382,6 @@ void verify_ex_settings()
     verify_ex_relativenumber();
     verify_ex_scrolloff();
     verify_ex_command_table();
+    verify_ex_window_recheck();
 }
 } // namespace nenenib::tests

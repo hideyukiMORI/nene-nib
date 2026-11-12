@@ -57,6 +57,11 @@ inline constexpr std::string_view guifont_command = "set guifont=";
 // preview は `:preview full|side|off` と `:preview?` の要求（ADR 0155 の改訂 16）で、見せ方を置いて
 // 答えるのは controller。
 // print は `:hardcopy` の印刷の要求（ADR 0177 の決定 1）で、port を呼ぶのは controller。
+// rechecks_window は値を置いた `:set` が Vim で窓の先頭を決め直す option か（ADR 0019 の #1524 の
+// 追補）。Vim 9.1 で `P_RWIN` / `P_RBUF` / `P_RALL` を持つ option は、値が同じでも
+// `check_redraw` → `changed_window_setting` が `VALID_TOPLINE` を落とす。問い（`set rnu?`）は
+// 値を置かないので偽。表は ExResult.cpp の window_setting_names の 1 つで、Vim のモードで今の
+// キャレットの決め直しを頼むのは controller。
 struct ExResult
 {
     std::optional<EditorSettings> settings;
@@ -78,6 +83,7 @@ struct ExResult
     std::optional<ExFormatRequest> format = std::nullopt;
     std::optional<ExPreviewRequest> preview = std::nullopt;
     std::optional<ExPrintRequest> print = std::nullopt;
+    bool rechecks_window = false;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
