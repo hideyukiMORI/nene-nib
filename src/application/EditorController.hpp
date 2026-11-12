@@ -838,6 +838,8 @@ class EditorController final
     // 打ち切られたときの 1 行。判断はここだけ（ARC-001）。
     [[nodiscard]] std::optional<core::DisplayText> command_message() const;
     [[nodiscard]] bool persist_settings(core::EditorSettings settings);
+    // 設定が変わった後の追従と clamp の頼み（順は定義のコメント・#1432）。
+    void follow_after_settings(bool reshaped, bool margin_changed);
     // Vim の `scrolloff` を変えた時点のキャレットで追従を頼み、印を立てる（#1432）。
     void follow_changed_margin();
     // IME の 3 つ（ADR 0014 の決定 3）。ComposeText と CancelComposition は本文にも履歴にも
