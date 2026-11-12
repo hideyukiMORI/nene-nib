@@ -34,8 +34,8 @@
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
 #include "TitleBarTarget.hpp"
+#include "WindowHit.hpp"
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -52,16 +52,17 @@ namespace
 {
 constexpr std::int32_t resize_border_dips = 8;
 
-// 縁のヒットテストは 3 行 3 列の表で引く。分岐で書くと CPP-012 の認知的複雑度を越える。
-constexpr std::array<LRESULT, 9> border_codes{HTNOWHERE, HTLEFT,       HTRIGHT,
-                                              HTTOP,     HTTOPLEFT,    HTTOPRIGHT,
-                                              HTBOTTOM,  HTBOTTOMLEFT, HTBOTTOMRIGHT};
-
-[[nodiscard]] LRESULT border_hit(POINT point, const RECT &client, std::int32_t margin) noexcept
+// 窓が載っているモニターの物理の端（rcMonitor・作業領域ではない）。取れなければ nullopt（縁は
+// どの辺も接していない扱い・#1498）。確保しない。
+[[nodiscard]] std::optional<RECT> monitor_edges(HWND window) noexcept
 {
-    const std::size_t row = point.y < margin ? 1U : (point.y >= client.bottom - margin ? 2U : 0U);
-    const std::size_t column = point.x < margin ? 1U : (point.x >= client.right - margin ? 2U : 0U);
-    return border_codes.at(row * 3U + column);
+    MONITORINFO monitor{};
+    monitor.cbSize = static_cast<DWORD>(sizeof(monitor));
+    if (GetMonitorInfoW(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), &monitor) == 0)
+    {
+        return std::nullopt;
+    }
+    return monitor.rcMonitor;
 }
 
 // 診断の文がトグルの位置を覆っている間（covered）はトグルを押さない（command_message のときと
@@ -416,17 +417,13 @@ LRESULT EditorWindow::hit_test(LPARAM data) noexcept
     RECT client{};
     GetClientRect(window_, &client);
     const auto hit = core::title_bar_target(title_bar(), point.x, point.y).hit;
-    // 窓の操作の上では大きさを変えられない。それ以外の縁は 8 DIP を 8 方向に割り当てる。
-    if (window_button(hit))
-    {
-        return caption_code(hit);
-    }
-    const LRESULT border = border_hit(point, client, core::to_pixels(resize_border_dips, dpi_));
-    if (border != HTNOWHERE)
-    {
-        return border;
-    }
-    return caption_code(hit);
+    // 最大化していなければ縁（8 DIP・8 方向・窓の操作の上は 4 DIP）が窓の操作より先に勝つ（右上の
+    // 角・× の上端と右端・#1498）。最大化した窓とモニターの端に接した辺には縁が無い。
+    RECT placed{};
+    GetWindowRect(window_, &placed);
+    const auto borders = resize_borders(core::to_pixels(resize_border_dips, dpi_),
+                                        IsZoomed(window_) != 0, placed, monitor_edges(window_));
+    return window_hit(point, client, borders, hit);
 }
 
 LRESULT EditorWindow::press_caption(UINT message, WPARAM word, LPARAM data) noexcept
