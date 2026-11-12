@@ -404,8 +404,8 @@ using Moves = std::pair<Walk, Walk>;
     return end > row.start_column && target >= end ? end - 1 : target;
 }
 
-// g0 gm g$ g^ の着地（ADR 0147 の決定 2・4・8）。g^ は g0 の所 at から最初の非空白へ進む。欲しい
-// 列は着地の桁で、失敗は無い。
+// g0 gm g$ g^ g<End> の着地（ADR 0147 の決定 2・4・8・9）。g^ は g0 の所 at から最初の非空白へ
+// 進む（g<End> の戻りはモードの寄せの後なので呼び手）。欲しい列は着地の桁で、失敗は無い。
 [[nodiscard]] VimRowLanding edge_landing(const TextBuffer &text, Offset at, VimDisplayLineEdge edge)
 {
     const Offset landed =
@@ -431,6 +431,7 @@ using Moves = std::pair<Walk, Walk>;
     case VimDisplayLineEdge::middle:
         return character_at_cell(text, line, left + (viewport.columns / 2));
     case VimDisplayLineEdge::end:
+    case VimDisplayLineEdge::last_non_blank:
         break;
     }
     const std::size_t right = left + viewport.columns - 1;
@@ -452,6 +453,7 @@ using Moves = std::pair<Walk, Walk>;
     case VimDisplayLineEdge::middle:
         return landed(view.text, span, span.start_column + (view.layout.row_columns / 2));
     case VimDisplayLineEdge::end:
+    case VimDisplayLineEdge::last_non_blank:
         break;
     }
     return landed(view.text, span, std::nullopt);
@@ -467,6 +469,7 @@ using Moves = std::pair<Walk, Walk>;
     case VimDisplayLineEdge::first_non_blank:
         return text.line_start(line);
     case VimDisplayLineEdge::end:
+    case VimDisplayLineEdge::last_non_blank:
         break;
     }
     return text.line_end(line);
@@ -581,10 +584,11 @@ vim_display_line_landing(const VimEditorView &view, VimDisplayLineEdge edge, std
     const Offset caret = view.selection.caret;
     const LineNumber line = text.position_of(caret).line;
     const VimViewport viewport = vim_viewport_of(view);
-    // {N}g$ は回数 − 1 だけ下へ。横に送る文書と文字組みの無い文書は N − 1 行下（本文の末尾で止まり
-    // 失敗しない）、折り返す文書は N − 1 画面行下へ MAXCOL で歩く（決定 3・4）。
-    const std::size_t below =
-        edge == VimDisplayLineEdge::end ? std::max<std::size_t>(count, 1) - 1 : 0;
+    // {N}g$ と {N}g<End> は回数 − 1 だけ下へ。横に送る文書と文字組みの無い文書は N − 1 行下（本文の
+    // 末尾で止まり失敗しない）、折り返す文書は N − 1 画面行下へ MAXCOL で歩く（決定 3・4・9）。
+    const bool counted =
+        edge == VimDisplayLineEdge::end || edge == VimDisplayLineEdge::last_non_blank;
+    const std::size_t below = counted ? std::max<std::size_t>(count, 1) - 1 : 0;
     const LineNumber target{line.value + std::min(below, text.line_count() - line.value)};
     if (viewport.columns > 0)
     {

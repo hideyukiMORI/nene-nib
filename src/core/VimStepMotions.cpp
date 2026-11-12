@@ -672,11 +672,12 @@ namespace
                : wrapped_backward(view.text, view.selection.caret, count, stop);
 }
 
-// `+` `<CR>` と `-` の着地（下・上の行の最初の非空白）。
-[[nodiscard]] Offset other_line_landing(const TextBuffer &text, Offset caret, bool below,
+// `+` `<CR>`（next_line）と `-`（previous_line）の着地（下・上の行の最初の非空白）。
+[[nodiscard]] Offset other_line_landing(const TextBuffer &text, Offset caret, VimMotion motion,
                                         std::size_t count)
 {
     const LineNumber line = line_of(text, caret);
+    const bool below = motion == VimMotion::next_line;
     return first_non_blank_of_other_line(
         text, caret, line, below ? line_below(text, line, count) : line_above(line, count));
 }
@@ -690,18 +691,17 @@ namespace detail
 {
     const std::size_t count = resolved_motion_count(state, view.text, motion);
     const TextBuffer &text = view.text;
-    const Offset caret = view.selection.caret;
     switch (motion)
     {
     case VimMotion::left:
-        return backward_characters(text, caret, count);
+        return backward_characters(text, view.selection.caret, count);
     case VimMotion::right:
-        return rested_in(text, forward_characters(text, caret, count), state.mode);
+        return rested_in(text, forward_characters(text, view.selection.caret, count), state.mode);
     case VimMotion::up:
     case VimMotion::down:
         return vertical_caret(view, state, motion, count);
     case VimMotion::line_start:
-        return text.line_start(line_of(text, caret));
+        return text.line_start(line_of(text, view.selection.caret));
     case VimMotion::first_non_blank:
     case VimMotion::next_word:
     case VimMotion::next_big_word:
@@ -720,6 +720,7 @@ namespace detail
     case VimMotion::display_line_middle:
     case VimMotion::line_middle:
     case VimMotion::display_line_first_non_blank:
+    case VimMotion::display_line_last_non_blank:
     case VimMotion::line_end:
     case VimMotion::last_non_blank:
     case VimMotion::first_non_blank_below:
@@ -739,12 +740,12 @@ namespace detail
         return line_jump_landing(view, state, motion, count);
     case VimMotion::next_line:
     case VimMotion::previous_line:
-        return other_line_landing(text, caret, motion == VimMotion::next_line, count);
+        return other_line_landing(text, view.selection.caret, motion, count);
     case VimMotion::wrap_right:
     case VimMotion::wrap_left:
         return wrapped_landing(view, state, motion);
     case VimMotion::column:
-        return column_landing(text, line_of(text, caret), count, state.mode);
+        return column_landing(text, line_of(text, view.selection.caret), count, state.mode);
     }
     std::unreachable();
 }
@@ -802,6 +803,7 @@ namespace detail
     case VimMotion::display_line_middle:
     case VimMotion::line_middle:
     case VimMotion::display_line_first_non_blank:
+    case VimMotion::display_line_last_non_blank:
         return row_landing_in(view, state.mode);
     case VimMotion::line_end:
         return line_end_landing(view.text, view.selection.caret, count, state.mode);
@@ -858,7 +860,9 @@ namespace detail
     case VimMotion::line_end:
         return VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
     case VimMotion::display_line_end:
-        // 回数 1 は着地の桁、折り返す文書の {N}g$ だけが行末の印（ADR 0147 の決定 4）。
+    case VimMotion::display_line_last_non_blank:
+        // 回数 1 は着地の桁、折り返す文書の {N}g$ だけが行末の印（ADR 0147 の決定 4）。g<End>
+        // は空白を 戻ったら着地の桁（決定 9・印は engine が着地と一緒に置く）。
         return wanted.wish == VimColumnWish::at_line_end
                    ? wanted
                    : VimWantedColumn{VimColumnWish::at_column, landed};
@@ -910,7 +914,8 @@ namespace detail
                                          VimMotion motion)
 {
     const bool by_rows = motion == VimMotion::display_down || motion == VimMotion::display_up ||
-                         motion == VimMotion::display_line_end;
+                         motion == VimMotion::display_line_end ||
+                         motion == VimMotion::display_line_last_non_blank;
     if (by_rows && view.row_landing.has_value())
     {
         return view.row_landing.value().wanted;
@@ -979,6 +984,7 @@ namespace
     case VimMotion::display_line_middle:
     case VimMotion::line_middle:
     case VimMotion::display_line_first_non_blank:
+    case VimMotion::display_line_last_non_blank:
     case VimMotion::last_non_blank:
     case VimMotion::first_non_blank_below:
     case VimMotion::matching_pair:

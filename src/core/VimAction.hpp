@@ -123,6 +123,9 @@ enum class VimAction : std::uint8_t
     // （Issue #721・ADR 0147 の決定 8）。
     move_display_line_first_non_blank,
     move_last_non_blank,
+    // `g<End>` は `g$` の着地から空白を左へ越えた最後の非空白へ（`g<Home>` は `g0` と同じ動作・
+    // Issue #1522・ADR 0147 の決定 9）。
+    move_display_line_last_non_blank,
     // `_`。回数 − 1 行下の行の最初の非空白（Issue #976）。
     move_first_non_blank_below,
     // `J` と `gJ`。回数の行（最小 2）をつなぐ。オペレータではない（ADR 0015 の決定 9）。
