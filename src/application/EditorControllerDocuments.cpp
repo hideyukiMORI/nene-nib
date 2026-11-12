@@ -1246,7 +1246,7 @@ std::expected<void, FileFailure> EditorController::save_document(const SaveDocum
     }
     // 保存の直後に単位を閉じる。続く入力が保存時点の単位に混ざらない（決定 7）。
     const auto history = state_.history().sealed();
-    const std::size_t position = history.position();
+    const std::size_t position = history.content_position();
     state_ = state_.with_history(history).with_document(
         saved_document(state_.document(), intent.path, intent.encoding, position));
     return {};

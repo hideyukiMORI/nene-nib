@@ -817,8 +817,7 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     // マークは効果を写す前に置く。飛ぶ鍵が置いた前の位置もオペレータの編集で直る（ADR 0152 の
     // 決定 2・6・Vim の setpcmark の後の mark_adjust）。
     adopt_vim_marks(step.marks);
-    // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
-    std::visit([this](const auto &value) { this->perform(value); }, step.effect);
+    perform_vim_effect(step);
     placed_after_effect(state_, step);
     // 検索の報せは Ex の結果と同じ 1 本に出し、次の入力で消える（ADR 0032 の決定 5）。
     if (step.notice.has_value())
@@ -842,6 +841,18 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     check_vim_marks();
     // 再生（`.` `@`）の中の鍵が失敗したら、再生を返した鍵の失敗にする（Issue #983）。
     return step_failure(step.failure, replay_failure_);
+}
+
+// 鍵の効果を写す。印は効果を写す間だけ置き、置き換えが積めば消え、残れば空の単位になる（ADR 0181
+// の決定 3）。再生（`.` `@`）の中の鍵は自分の印を置いて外の鍵の印へ戻す。
+void EditorController::perform_vim_effect(const core::VimStep &step)
+{
+    const auto outer_change = std::exchange(vim_change_, step.change);
+    const core::Offset restore = state_.selection().caret;
+    // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
+    std::visit([this](const auto &value) { this->perform(value); }, step.effect);
+    push_empty_unit(restore);
+    vim_change_ = outer_change;
 }
 
 // 鍵の前の保留の追従が無いか打った本文の追従だけなら、この鍵の追従は歩いた答えにできる

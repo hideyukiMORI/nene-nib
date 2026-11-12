@@ -6,7 +6,7 @@
 
 // measurement: sha256 4f48b1c81d44d1a648ecde42c8b3a679af91e39f8ff855c97ae71d40a22bb1fe
 
-// shared oracle: sha256 cf3cfe0822171a421193664fdd5c59aafcbfe3e8cb64c58a5cbe0e3ecd999e0d
+// shared oracle: sha256 d33cf84766fa00e7c696794b6b6d607d21e07f16882717b3d40b39e1f6cb9f53
 
 #pragma once
 

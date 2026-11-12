@@ -2,6 +2,7 @@
 
 #include "Offset.hpp"
 #include "Selection.hpp"
+#include "VimChange.hpp"
 #include "VimCount.hpp"
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
@@ -63,7 +64,18 @@ struct VimStep
     // 位置なので marks には入れず、controller が効果を写した後に文書の前の選択へ置く
     // （insert_left と同じ形・行のずれは掛けない）。
     std::optional<VimLastVisual> visual_after = std::nullopt;
+    // 鍵が Vim の undo の単位を作ったか・本文を変えたと数えるか（ADR 0181 の決定 1・2）。空は
+    // Vim が u_save を呼ばない鍵。本文を置き換える編集の効果（vim_replaces_text）を返す step は
+    // 必ず changed で、vim_step の出口の 1 か所（change_marked）が立てる。編集を返さずに印だけを
+    // 持つ形（U だけの saved_only と、範囲が空の U ＋ C）は、効果を作る所が立てる。controller は
+    // 編集の効果が無い印から「空の単位」を履歴に積み（決定 3）、`'.` は changed のときだけ置く
+    // （決定 5）。失敗（failure）と同時に立つこともある（空のレジスタの `p`・決定 7）。
+    std::optional<VimChange> change = std::nullopt;
 };
+
+// 効果が本文を置き換えるか（ADR 0181 の決定 2）。範囲も本文も空の置き換え・行の無い矩形は
+// 置き換えない。同じ本文への置き換え（同じ文字への `r`）は置き換える。
+[[nodiscard]] bool vim_replaces_text(const VimEffect &effect) noexcept;
 
 // 入力行の取消のあとの状態（ADR 0032 の決定 1）。保留中のオペレータと回数と組み立て中の
 // 鍵を捨て、モードと直前の変更は保つ。何を捨てるかを決めるのは engine の側である（ARC-004）。

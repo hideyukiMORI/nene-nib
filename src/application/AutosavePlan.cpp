@@ -40,7 +40,7 @@ using TabRevision = std::tuple<core::SaveState, std::size_t, std::size_t>;
 [[nodiscard]] std::optional<TabRevision>
 revision_of(const std::shared_ptr<const DocumentState> &tab)
 {
-    return TabRevision{save_state_of(tab->document, tab->history.position()),
+    return TabRevision{save_state_of(tab->document, tab->history.content_position()),
                        tab->history.revision(), tab->text.size_bytes()};
 }
 
@@ -56,7 +56,7 @@ revision_of(const std::shared_ptr<const UnloadedDocument> &)
 {
     if (position == state.active_tab())
     {
-        return TabRevision{save_state_of(state.document(), state.history().position()),
+        return TabRevision{save_state_of(state.document(), state.history().content_position()),
                            state.history().revision(), state.text().size_bytes()};
     }
     const std::size_t parked = position < state.active_tab() ? position : position - 1;
