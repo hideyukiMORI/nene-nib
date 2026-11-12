@@ -2,6 +2,7 @@
 
 #include "Utf8.hpp"
 #include "VimCount.hpp"
+#include "VimInsertRestartPhase.hpp"
 #include "VimRegisterSelection.hpp"
 #include "VimRegisterText.hpp"
 
@@ -35,6 +36,7 @@ using detail::moved_nothing;
 using detail::register_read;
 using detail::register_selection_of;
 using detail::repeated_change;
+using detail::repeated_record;
 using detail::replayed_macro;
 using detail::resolved_count;
 using detail::restarts_insert;
@@ -108,7 +110,14 @@ namespace
 {
     VimState next = finished_input_wait(state);
     next.macro_recording = std::nullopt;
-    const std::string text = vim_register_text(recording.keys.owned_keys());
+    std::vector<VimKey> keys = recording.keys.owned_keys();
+    // `<C-o>q` で止めた録画は末尾の `Ctrl-o` を外す（Vim の get_recorded・ADR 0182 の決定 7）。
+    if (vim_insert_paused(state) && !keys.empty() &&
+        keys.back() == VimKey{VimSpecialKey::control_o})
+    {
+        keys.pop_back();
+    }
+    const std::string text = vim_register_text(keys);
     const auto numbered = vim_numbered_index(static_cast<char32_t>(recording.name));
     if (numbered.has_value())
     {
@@ -379,11 +388,13 @@ namespace detail
 // 鍵の列に載せる（vim_resting_from が選んだレジスタを捨てても名前は鍵が運ぶ・#1337）。
 [[nodiscard]] VimStep repeated_change(const VimState &state)
 {
-    if (!state.last_change.has_value())
+    // INSERT の `Ctrl-o` の後は INSERT へ入る前の変更（ADR 0182 の決定 6）。
+    const std::optional<VimRepeatRecord> &repeated = repeated_record(state);
+    if (!repeated.has_value())
     {
         return failed(cancelled(state), VimRepeatFailure::refused);
     }
-    const VimRepeatRecord &record = state.last_change.value();
+    const VimRepeatRecord &record = repeated.value();
     if (record.visual.has_value())
     {
         return replayed_visual(state, record, record.visual.value());
@@ -651,6 +662,30 @@ namespace
     return appended(arrow_pending(before) ? restarted_insert() : std::move(record), std::move(key));
 }
 
+// 始め直した INSERT の最初の打鍵か（ADR 0182 の決定 6・#1137 の `1i`）。始め直しは記録を持たずに
+// 入り、移動・何も消せない鍵・Esc と `Ctrl-o` は記録も直前の変更も変えない（何も打たずに Esc した
+// `.` は `Ctrl-o` の時点の記録のまま）。
+[[nodiscard]] bool restarts_recording(const VimState &before, const VimState &next,
+                                      const VimEffect &effect, const VimKey &key) noexcept
+{
+    return before.insert_restart.has_value() &&
+           before.insert_restart.value().phase == VimInsertRestartPhase::restarted &&
+           next.mode == VimMode::insert && !restarts_insert(key) && !erased_nothing(key, effect) &&
+           !moved_nothing(key, effect);
+}
+
+// `Ctrl-o` は Esc と同じに記録を確定する（Vim の ins_esc の AppendToRedobuff(ESC)・ADR 0182 の
+// 決定 3）。
+[[nodiscard]] VimKey left_by_escape(VimKey key) noexcept
+{
+    const auto *const special = std::get_if<VimSpecialKey>(&key);
+    if (special != nullptr && *special == VimSpecialKey::control_o)
+    {
+        return VimKey{VimSpecialKey::escape};
+    }
+    return key;
+}
+
 // INSERT の記録（決定 4）。Esc で 1 つの変更として確定する。区切った後に何も打たずに Esc すれば
 // 記録は区切る前のまま（`ix<Left><Esc>.` は `x` を・`vlcZ<Home><Esc>.`
 // は大きさごと繰り返す・#1137）。 VISUAL から入った挿入は記録を持たないので、確定もしない（決定
@@ -659,13 +694,23 @@ namespace
 [[nodiscard]] VimState insert_recording(const VimState &before, VimState next,
                                         const VimEffect &effect, VimKey key)
 {
-    if (!before.recording.has_value())
+    const bool fresh = restarts_recording(before, next, effect, key);
+    if (!before.recording.has_value() && !fresh)
     {
         return next;
     }
+    // 始め直した後の最初の打鍵は `1i` から取り直し（arrow_pending が真なので restarted_insert を
+    // 通る）、INSERT の前の変更を置いて印を下ろす。
+    VimRepeatRecord record =
+        before.recording.has_value() ? before.recording.value() : restarted_insert();
+    if (fresh)
+    {
+        next.change_before_insert = before.last_change;
+        next.insert_restart = std::nullopt;
+    }
     if (next.input_wait.has_value() || before.input_wait.has_value())
     {
-        next.recording = waited_recording(before, before.recording.value(), next, effect);
+        next.recording = waited_recording(before, std::move(record), next, effect);
         return next;
     }
     if (erased_nothing(key, effect) || moved_nothing(key, effect))
@@ -674,10 +719,10 @@ namespace
     }
     if (next.mode == VimMode::normal)
     {
-        next.last_change = appended(before.recording.value(), key);
+        next.last_change = appended(std::move(record), left_by_escape(std::move(key)));
         return next;
     }
-    next.recording = typed_recording(before, before.recording.value(), std::move(key));
+    next.recording = typed_recording(before, std::move(record), std::move(key));
     return next;
 }
 
@@ -895,6 +940,12 @@ namespace detail
                                    VimKey key)
 {
     step.next.last_change = before.last_change;
+    // INSERT へ入る命令はその前の変更を残す（Vim の ResetRedobuff の old_redobuff・ADR 0182 の
+    // 決定 6）。`<C-o>.` が読む。
+    step.next.change_before_insert =
+        before.mode != VimMode::insert && step.next.mode == VimMode::insert
+            ? before.last_change
+            : before.change_before_insert;
     // `.` 自身は記録しない。再生する鍵に `.` が入らないので再帰は深さ 1 で止まる（決定 7）。
     // VISUAL の再生は step が置いた「大きさだけの記録」を種として持ち越す（ADR 0033 の決定 4）。
     if (std::holds_alternative<VimReplay>(step.effect))

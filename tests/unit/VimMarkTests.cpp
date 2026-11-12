@@ -416,10 +416,19 @@ void verify_change_list()
     expect(body_after("abc\ndef\nghi", "xGxuug;g;x") == "bc\ndef\nghi",
            "u after a unit that added a position only moves the last one");
     // 再生（`@a`）の全体は 1 単位で、変更の列に足すのは最初の 1 回だけ（Vim の測定: [1,0] [4,0]）。
+    // 録画は打った鍵で（:normal! の鍵は録らない・ADR 0182 の決定 4）、残りは :normal! で流す。
+    const auto recorded_after = [](std::string text, std::string_view keys)
+    {
+        Editing editing;
+        open_vim_document(editing, std::move(text));
+        vim_replay(editing.controller(), "qaxjq");
+        vim_normal(editing.controller(), keys);
+        return whole_vim_body(editing.controller());
+    };
     const std::string five = "abc\ndef\nghi\njkl\nmno";
-    expect(body_after(five, "qaxjq3@ag;g;x") == "c\nef\nhi\nkl\nmno",
+    expect(recorded_after(five, "3@ag;g;x") == "c\nef\nhi\nkl\nmno",
            "3@a adds one position and moves it to the last line it changed");
-    expect(body_after(five, "qaxjq3@ag;g;g;x") == "bc\nef\nhi\nkl\nmno",
+    expect(recorded_after(five, "3@ag;g;g;x") == "bc\nef\nhi\nkl\nmno",
            "the third g; after 3@a is past the oldest");
     // 20 桁の回数は SIZE_MAX で止まり、足しても回り込まない（#1072 R2-1）。
     expect(body_after("a\nb\nc\nd\ne", "Ggg3G<C-o><C-o>99999999999999999999<Tab>x") ==

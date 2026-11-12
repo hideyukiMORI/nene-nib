@@ -271,6 +271,8 @@ void EditorController::accept(const CancelCommand &)
     // Vim の `/` `?` の取消だけ。通常モードの「検索: 」「行: 」は engine の待ちを持たない。
     const auto *line = input.has_value() ? std::get_if<core::SearchLine>(&input.value()) : nullptr;
     const bool searching = line != nullptr && vim_search_prompt(line->prompt());
+    const bool ex_line =
+        input.has_value() && std::holds_alternative<core::CommandLine>(input.value());
     // 入力行を閉じると preview も消えるので、戻す先を先に写す（ADR 0041 の決定 5）。
     const auto preview = state_.search_preview();
     close_command_input();
@@ -283,6 +285,12 @@ void EditorController::accept(const CancelCommand &)
         // 検索の取消は保留中のオペレータと回数も捨てる（`d/<Esc>` のあとの `x` が消すのと
         // 同じ・実測）。何を捨てるかは engine の純関数が決める（ADR 0032 の決定 1）。
         state_ = state_.with_vim(core::vim_cancelled_input(state_.vim()));
+    }
+    // INSERT の `Ctrl-o` の命令として開いた Ex の行と検索の行は、取り消しても命令 1 つ（ADR 0182 の
+    // 決定 8）。入力行の無い取消（知らせを閉じる）と面の取消は印に触らない。
+    if (searching || ex_line)
+    {
+        resume_vim_insert();
     }
 }
 
@@ -305,6 +313,8 @@ void EditorController::accept(const PasteCommand &)
 std::optional<core::VimRepeatFailure> EditorController::submit(const core::CommandLine &line)
 {
     evaluate_command(std::string(line.text()));
+    // Ex の行の後に始め直す（ADR 0182 の決定 8・`<C-o>:set so=2<CR>`）。
+    resume_vim_insert();
     return std::nullopt;
 }
 
