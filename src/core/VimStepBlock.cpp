@@ -213,14 +213,21 @@ cased_block_edits(const TextBuffer &text, const VimBlockRange &block, VimOperato
 namespace detail
 {
 // キャレットも u の戻り先も矩形の左上（切れた Tab の上なら Tab の先頭・実測）。レジスタは書かない。
+// どの行も大小が変わらなければ Vim の op_tilde は u_save だけ（ADR 0181）。変わらない行の置き換えは
+// 返さない。
 [[nodiscard]] VimStep cased_block(const VimState &state, const VimEditorView &view,
                                   VimOperator operation)
 {
     const VimBlockRange block = block_of(state, view);
-    return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
-                               VimReplaceBlock{cased_block_edits(view.text, block, operation),
-                                               block_caret(block)}},
-                       block_caret(block));
+    std::vector<VimBlockEdit> edits = cased_block_edits(view.text, block, operation);
+    std::erase_if(edits, [&view](const VimBlockEdit &edit)
+                  { return view.text.text_range(edit.range.begin, edit.range.end) == edit.utf8; });
+    const std::optional<VimChange> change =
+        edits.empty() ? std::optional{VimChange::saved_only} : std::nullopt;
+    return change_noted(restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
+                                            VimReplaceBlock{std::move(edits), block_caret(block)}},
+                                    block_caret(block)),
+                        change);
 }
 } // namespace detail
 
@@ -860,6 +867,28 @@ namespace detail
     return source.kind == VimRegisterKind::uninitialized || (source.text.empty() && clipboard);
 }
 
+} // namespace detail
+
+namespace
+{
+// `"_` からの貼り付けは拒まずに何もしない（Vim の do_put はブラックホールなら黙って返る）。
+// それでも直前の変更になり `.` は `"_p` を繰り返す（nv_put は do_put の前に redo を置く・実測）。
+// 記録に載る「何も入れない貼付」は行の無い矩形の貼付で表す（本文とキャレットを変えない・#988・
+// ADR 0050 の決定 5 の追補）。Vim の do_put は先に u_save を呼ぶので単位だけを作る（saved_only・
+// ADR 0181 の実装の注記 7・`-es` で実測）。
+[[nodiscard]] VimStep black_hole_put(const VimState &state, Offset caret)
+{
+    return detail::change_noted(
+        VimStep{vim_resting_from(state, state.unnamed_register),
+                VimInsertBlock{std::vector<VimBlockEdit>{}, caret, EditBoundary::separate}},
+        VimChange::saved_only);
+}
+} // namespace
+
+namespace detail
+{
+// Vim の do_put は貼る前に u_save を呼ぶので、空のレジスタを E353 で断る `p`・空の本文の `p`・
+// `"_p` は単位だけを作る（saved_only・ADR 0181 の決定 7）。
 [[nodiscard]] VimStep put_step(const VimState &state, const VimEditorView &view, VimPutSide side)
 {
     const TextBuffer &text = view.text;
@@ -869,16 +898,12 @@ namespace detail
                             state.selected_register.value().target == VimRegisterTarget::black_hole;
     if (!black_hole && refuses_put(state, source))
     {
-        return failed(cancelled(state), VimRepeatFailure::refused);
+        return change_noted(failed(cancelled(state), VimRepeatFailure::refused),
+                            VimChange::saved_only);
     }
     if (black_hole)
     {
-        // `"_` からの貼り付けは拒まずに何もしない（Vim の do_put はブラックホールなら黙って返る）。
-        // それでも直前の変更になり `.` は `"_p` を繰り返す（nv_put は do_put の前に redo を置く・
-        // 実測）。記録に載る「何も入れない貼付」は行の無い矩形の貼付で表す（本文・履歴・キャレット
-        // を変えない・#988・ADR 0050 の決定 5 の追補）。
-        return VimStep{vim_resting_from(state, state.unnamed_register),
-                       VimInsertBlock{std::vector<VimBlockEdit>{}, caret, EditBoundary::separate}};
+        return black_hole_put(state, caret);
     }
     if (source.kind == VimRegisterKind::block)
     {
@@ -894,7 +919,8 @@ namespace detail
     if (source.text.empty())
     {
         // 空の本文は何も貼らず、キャレットも動かさない（Vim は yanklen が 0 なら列を進めない）。
-        return VimStep{vim_resting_from(state, state.unnamed_register), VimNoEffect{}};
+        return change_noted(VimStep{vim_resting_from(state, state.unnamed_register), VimNoEffect{}},
+                            VimChange::saved_only);
     }
     auto body = repeated(source.text, count_of(state.count), text, view.document_limit);
     if (!body.has_value())

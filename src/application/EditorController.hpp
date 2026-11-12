@@ -22,6 +22,7 @@
 #include "DocumentView.hpp"
 #include "Edit.hpp"
 #include "EditBoundary.hpp"
+#include "EditHistory.hpp"
 #include "EditorDelivery.hpp"
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
@@ -111,6 +112,7 @@
 #include "UnloadedDocument.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
+#include "VimChange.hpp"
 #include "VimCharacter.hpp"
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
@@ -242,6 +244,10 @@ class EditorController final
     // アクティブな文書の本文を読むだけの口。試験が仮想桁の索引の持ち方（ADR 0140 の決定 4）を
     // 確かめるために読む。状態を変える口はここには無い。
     [[nodiscard]] const core::TextBuffer &text() const noexcept;
+    // アクティブな文書の undo の履歴とマークを読むだけの口。fixture の再生が Vim の変更の印
+    // （ADR 0181）を比べるために読む。
+    [[nodiscard]] const core::EditHistory &history() const noexcept;
+    [[nodiscard]] const core::VimMarks &vim_marks() const noexcept;
     // 前回のプロセスが残した退避（ADR 0137 の決定 6）。ui が窓を見せて最初の frame を描いた後に
     // 1 回だけ呼ぶ。port の remnants() を 1 回呼んで列を覚え、その列を返す（失敗は空）。
     // RestoreAutosave と DiscardAutosave はこの覚えた列を使い、port へもう 1 回聞かない。
@@ -926,6 +932,12 @@ class EditorController final
     void replace(const core::OffsetRange &range, std::string_view text, core::EditBoundary boundary,
                  std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> lines =
                      core::VimLineMarks::shifted);
+    // engine の印が残っていれば（効果が本文を置き換えなかった鍵）、空の単位を積む
+    // （ADR 0181 の決定 3）。積む口はこの 1 か所。印は鍵ごとに perform_vim_effect が
+    // 置き、replace が編集を積めば消す。restore は効果を写す前のキャレット。
+    void push_empty_unit(core::Offset restore);
+    // 鍵の効果を写す 1 か所（stepped_vim から）。鍵の印を置いてから写し、残った印を空の単位にする。
+    void perform_vim_effect(const core::VimStep &step);
     void move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring,
                        core::CaretAffinity affinity = core::CaretAffinity::leading);
     void accept(const PointText &intent);
@@ -1152,6 +1164,9 @@ class EditorController final
     // 再生の編集を畳む起点（ADR 0046 の決定 3）。再生の外では空。perform(VimReplay) が置いて
     // 消し、再生の中で文書が替わったら reopen_replayed_unit が入った文書の値へ置き直す。
     std::optional<core::EditHistory> replay_history_;
+    // 流している鍵の engine の印（ADR 0181）。stepped_vim が効果を写す間だけ置き、replace が
+    // 本文を置き換える編集を積めば消す。残れば push_empty_unit が空の単位を積む。
+    std::optional<core::VimChange> vim_change_;
     std::optional<core::TextBuffer> replay_text_;
     // 同じ意図の中で読めなかったタブの数（ADR 0059 の「知らせの文言」）。begin_intent が 0 に戻す。
     std::size_t unreached_tabs_ = 0;

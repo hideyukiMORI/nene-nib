@@ -109,6 +109,7 @@ void verify_lexer_property_scope();
 void verify_text_buffer_property_scope();
 // EditHistoryPropertyTests.cpp（#1473・ADR 0180・履歴の塊の境と写す模型との照合）
 void verify_edit_history_property_scope();
+void verify_vim_change_mark_scope();
 
 // VimPatternPropertyTests.cpp（#899・検索の pattern の parse と matched の性質の試験）
 void verify_vim_pattern_property_scope();
