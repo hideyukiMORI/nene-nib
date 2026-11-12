@@ -1,8 +1,10 @@
 #pragma once
 
 #include "VimPatternAtom.hpp"
+#include "VimPatternCaptures.hpp"
 #include "VimPatternCase.hpp"
 #include "VimPatternFailure.hpp"
+#include "VimPatternGroup.hpp"
 #include "VimPatternMatch.hpp"
 #include "VimPatternRange.hpp"
 #include "VimSearchDirection.hpp"
@@ -27,7 +29,10 @@ class VimPattern final
     // invalid_utf8 で拒否する（#906）。letter_case は大小の旗（#1041）で、パターンの中の `\c`
     // （区別しない）と `\C`（区別する）が旗より強く、両方あれば `\c` が勝つ（Vim 9.1 の実測）。
     // smart の「大文字がある」は `\` に続く文字を数えない（`\S` `\C` は数えない・Vim の
-    // pat_has_uppercase）。
+    // pat_has_uppercase）。群 `\(` `\)` は 9 個まで・入れ子可で、閉じない `\(`・対の無い `\)`・
+    // 10 個目・群の後ろの `*`（群の繰り返し）は group / quantifier で拒否する（ADR 0168 の決定
+    // 4）。
+    // `\(` の直後の `*` は文字、`^` は錨、`\)` の直前の `$` は錨（Vim の magic と同じ）。
     [[nodiscard]] static std::expected<VimPattern, VimPatternFailure>
     parse(std::string_view pattern, VimSearchDirection separator, VimPatternCase letter_case);
 
@@ -46,11 +51,25 @@ class VimPattern final
     // パターンは、英字か ASCII の外の文字を含めば値が無い（バイト列の一致で絞れない・#1041）。
     [[nodiscard]] std::optional<std::string> literal_bytes() const;
 
+    // 群 `\(` `\)` の数（ADR 0168 の決定 4・0〜9）。
+    [[nodiscard]] std::size_t group_count() const noexcept;
+
+    // match（この line への matched の答え）の群の範囲（ADR 0168 の決定 4・追補 13）。0 は match
+    // そのもの。照合器と同じ優先順（`*` は長い方から・前の原子が先）で match の始まりから終わり
+    // までの道を 1 本だけ探し（VimPatternCapture・仕事は升の数に比例）、その道で群の端を通った
+    // 位置を返す。群の無いパターンは歩かない。升の数（原子の数 + 1）×（一致の長さ + 1）が
+    // cell_limit（製品は vim_capture_cell_limit・試験だけが小さな値を渡す）を超える一致は探さずに
+    // 値なしを返す（群を黙って空にしない・呼ぶ側が置換全体を断る）。
+    [[nodiscard]] std::optional<VimPatternCaptures>
+    captured(std::string_view line, VimPatternMatch match,
+             std::size_t cell_limit = vim_capture_cell_limit) const;
+
   private:
     friend class VimPatternEvaluation;
+    friend class VimPatternCapture;
 
     VimPattern(std::vector<VimPatternAtom> atoms, std::vector<VimPatternRange> ranges,
-               bool ignore_case);
+               std::vector<VimPatternGroup> groups, bool ignore_case);
     // 反復のない原子列を順に評価する。選択肢がないので状態列の確保も再帰も不要。
     [[nodiscard]] std::optional<std::size_t> matched_sequence(std::string_view line,
                                                               std::size_t at) const;
@@ -80,6 +99,8 @@ class VimPattern final
 
     std::vector<VimPatternAtom> atoms_;
     std::vector<VimPatternRange> ranges_;
+    // 群（`\(` の順）。照合は読まず、captured だけが読む。
+    std::vector<VimPatternGroup> groups_;
     // 大小を畳んで比べるか（parse が旗と `\c` `\C` から 1 回だけ決める）。
     bool ignore_case_;
 };

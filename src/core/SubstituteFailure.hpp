@@ -12,6 +12,9 @@ enum class SubstituteFailure : std::uint8_t
     no_match,
     // 置き換えた後の文書が上限（製品は maximum_document_bytes・ADR 0159 の決定 7）を超える。
     // 置き換えた本文を確保する前に断る。
-    too_large
+    too_large,
+    // 群の範囲を引く道の探索が升の数の上限（vim_capture_cell_limit）を超える一致がある（ADR 0168 の
+    // 追補 13）。群を黙って空にせず、置き換えた本文を作る前に断る。
+    too_complex
 };
 } // namespace nenenib::core

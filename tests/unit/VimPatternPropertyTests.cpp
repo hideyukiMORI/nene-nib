@@ -105,7 +105,7 @@ constexpr std::array<std::string_view, 40> supported_fragments{{
 constexpr std::array<Unsupported, 22> unsupported_fragments{{
     {"\\(", VimPatternFailure::group},
     {"\\)", VimPatternFailure::group},
-    {"\\(a*\\)*b", VimPatternFailure::group},
+    {"\\(a*\\)*b", VimPatternFailure::quantifier},
     {"\\|", VimPatternFailure::branch},
     {"\\+", VimPatternFailure::quantifier},
     {"\\=", VimPatternFailure::quantifier},
@@ -603,13 +603,13 @@ void verify_unsupported_suffixes()
 }
 
 // 星を並べた pattern が a の列（64 文字と 4 KiB）に、どの開始位置からも当たらずに答えを返す。
-// `\(a*\)*b` は group で断られる。
+// `\(a*\)*b` は群の繰り返しなので quantifier で断られる（群そのものは ADR 0168 の決定 4）。
 void verify_backtracking_is_bounded()
 {
     expect(
         VimPattern::parse("\\(a*\\)*b", VimSearchDirection::forward, VimPatternCase::sensitive) ==
-            std::unexpected(VimPatternFailure::group),
-        "a nested star group is refused as group");
+            std::unexpected(VimPatternFailure::quantifier),
+        "a nested star group is refused as a quantifier");
     const std::array<std::string, 2> lines{std::string(64U, 'a'),
                                            std::string(large_line_bytes, 'a')};
     bool holds = true;

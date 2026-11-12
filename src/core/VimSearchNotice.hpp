@@ -4,6 +4,7 @@
 #include "VimPatternFailure.hpp"
 #include "VimSearchNoticeKind.hpp"
 
+#include <cstddef>
 #include <optional>
 #include <string>
 
@@ -18,6 +19,9 @@ struct VimSearchNotice
     std::string pattern;
     // unsupported_pattern で拒否した構文。ほかの kind では空。
     std::optional<VimPatternFailure> failure;
+    // substitutions と matches の数（置き換えた・数えた当たりと、当たった行）。ほかの kind では 0。
+    std::size_t count = 0;
+    std::size_t lines = 0;
 };
 
 // 報せの文言はここ 1 か所だけが持つ（ARC-001）。長すぎるパターンは文字の境界で切る。

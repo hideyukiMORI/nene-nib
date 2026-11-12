@@ -825,6 +825,9 @@ class EditorController final
         const std::expected<core::ExResult, core::ExEvaluationFailure> &result);
     [[nodiscard]] std::optional<core::VimRepeatFailure>
     operator_closed_in_place(const std::string &text);
+    // オペレータ待ちの `:s`（ADR 0168 の追補 16）。置換の前のキャレットから後のキャレットまで。
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    operator_substituted(const std::string &text, const core::ExSubstituteRequest &request);
     [[nodiscard]] std::optional<core::VimRepeatFailure>
     ran_ex_result(std::string_view text,
                   const std::expected<core::ExResult, core::ExEvaluationFailure> &result);

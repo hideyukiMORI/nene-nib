@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ExSubstituteRequest.hpp"
 #include "Offset.hpp"
 #include "Selection.hpp"
 #include "VimChangeMark.hpp"
@@ -175,6 +176,15 @@ void vim_macro_typed(VimState &state, std::span<const VimKey> keys);
 // 同じ入力行の口を通る。マクロの録画には積まない（#1528）。保留のオペレータが無ければ何もしない。
 [[nodiscard]] VimStep vim_command_operated(const VimState &state, const VimEditorView &view,
                                            const VimCommandMotion &motion);
+// Ex の `:s` の族（`:s` `:&` `:~`）と NORMAL の `&` `g&` の唯一の入口（ADR 0168 の決定
+// 1〜5）。範囲を 行に解き（E16 E20 E493）、前の置換と前のパターンを引き（E33 E35）、置換の本体
+// substituted の 行ごとの編集を VimReplaceBlock の 1 つの効果（undo 1
+// 単位）で返す。前の置換と直前の検索を覚え、
+// `''` に置換の前のキャレットを置き、キャレットは最後に置き換えた行の最初の非空白。当たりが無ければ
+// E486（`e` なら何もしない）。`n` は数えるだけで報せを出す。鍵ではないので `.` とマクロの記録には
+// 積まない。controller は鍵と同じ写しの道で結果を写す。
+[[nodiscard]] VimStep vim_substituted(const VimState &state, const VimEditorView &view,
+                                      const ExSubstituteRequest &request);
 
 // 本文のダブルクリック・トリプルクリックの VISUAL（#1250・ADR 0056 の決定 9
 // の追補）。鍵ではないので

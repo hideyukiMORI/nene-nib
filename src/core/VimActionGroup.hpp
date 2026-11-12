@@ -44,6 +44,9 @@ enum class VimActionGroup : std::uint8_t
     number,
     // `Ctrl-o` `Ctrl-i` `g;` `g,`（ADR 0152 の追補 #1037）。NORMAL でだけ動き、VISUAL
     // とオペレータの 後ろでは失敗する（Vim の nv_pcmark の checkclearopq）。
-    jump_list
+    jump_list,
+    // `&` `g&`（ADR 0168 の決定 1）。オペレータの後ろでは失敗する（Vim の nv_optrans の
+    // checkclearopq）。
+    substitute
 };
 } // namespace nenenib::core

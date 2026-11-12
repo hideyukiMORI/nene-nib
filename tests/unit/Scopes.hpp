@@ -88,6 +88,8 @@ void verify_operations_scope();
 void verify_find_replace_scope();
 // SubstitutePropertyTests.cpp（#1291・ADR 0174 の決定 7・置換の全件の性質）
 void verify_substitute_property_scope();
+// ExSubstituteTests.cpp（ADR 0168 の段 1・`:s` の族）
+void verify_ex_substitute_scope();
 // MatchParenTests.cpp（ADR 0164・matchparen）
 void verify_matchparen_scope();
 // MinimapTests.cpp（ADR 0171・ミニマップの段 1）
