@@ -845,9 +845,10 @@ class EditorController final
     [[nodiscard]] std::optional<core::DisplayText> command_message() const;
     [[nodiscard]] bool persist_settings(core::EditorSettings settings);
     // 設定が変わった後の追従と clamp の頼み（順は定義のコメント・#1432）。
-    void follow_after_settings(bool reshaped, bool margin_changed);
-    // Vim の `scrolloff` を変えた時点のキャレットで追従を頼み、印を立てる（#1432）。
-    void follow_changed_margin();
+    void follow_after_settings(bool reshaped);
+    // Vim が窓を決め直す option（`scrolloff` `wrap` `relativenumber` `hlsearch`）を置いた時点の
+    // キャレットで追従を頼み、印を立てる（#1432・#1524）。
+    void follow_window_setting();
     // IME の 3 つ（ADR 0014 の決定 3）。ComposeText と CancelComposition は本文にも履歴にも
     // 触らず、CommitText だけが既存の 1 本（replace / vim_step）を通って本文に入る。
     void accept(const ComposeText &intent);
@@ -1114,9 +1115,10 @@ class EditorController final
     // 中の NORMAL の移動）が保留を置き換えても残り、解決は先にここまで歩いてから保留を 1 回の
     // 追従で解く（Vim は打つ周ごとに update_topline を終えてから次の鍵を読む）。
     std::optional<core::TextPosition> walked_follow_;
-    // Vim の `scrolloff` を変えた時点のキャレット（#1432・Vim 9.1 の実測）。
-    // 後の鍵の頼みが保留を置き換えても残り、解決は先にここで新しい余白の追従を 1 回流してから
-    // 保留を解く（Vim は次の鍵の前に今のキャレットで update_topline を流す）。
+    // Vim が窓を決め直す option（`scrolloff` `wrap` `relativenumber` `hlsearch`）を置いた時点の
+    // キャレット（#1432・#1524・Vim 9.1 の実測）。後の鍵の頼みが保留を置き換えても残り、解決は
+    // 先にここで新しい設定の追従を 1 回流してから保留を解く（Vim は次の鍵の前に今のキャレットで
+    // update_topline を流す）。
     std::optional<core::TextPosition> setting_follow_;
     // 鍵の前の保留の追従が無いか打った本文の追従だったか（note_follow_before_key が置く）。
     bool follow_walks_ = false;

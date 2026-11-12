@@ -742,6 +742,34 @@ view_option(std::string_view option, const EditorSettings &settings)
     return scrolloff_option(option, settings);
 }
 
+// Vim が値を置いた後に窓の先頭を決め直す option の名前（ADR 0019 の #1524 の追補）。Nib が
+// `:set` で受ける option のうち、Vim 9.1（v9.1.0004 の optiondefs.h）で `P_RWIN`（`wrap`
+// `relativenumber`）か `P_RALL`（`hlsearch` `scrolloff`）を持つものだけ。`check_redraw` が
+// `changed_window_setting` を呼ぶ旗はこの 2 つと `P_RBUF` で、Nib の受ける option に `P_RBUF` は
+// 無い。ほかの option（`ignorecase` `smartcase` `incsearch` `clipboard` `filetype` `fileformat`、
+// 端末の Vim では `check_redraw` を通らない `guifont`）と Vim に無い Nib だけの option は載せない
+// （Vim 9.1 の実測・`D:/NeNeNib/scripts/20261112/1524/probe.py`）。option ごとに分岐を書かない。
+constexpr std::array<std::string_view, 6> window_setting_names{"wrap",     "relativenumber", "rnu",
+                                                               "hlsearch", "scrolloff",      "so"};
+
+// `name` `no<name>` `<name>=<値>` のどれか（問いの `?` と値の無い数の名前は呼び手が除く）。
+[[nodiscard]] bool names_window_setting(std::string_view option) noexcept
+{
+    const std::string_view name = option.substr(0, option.find('='));
+    return std::ranges::any_of(
+        window_setting_names, [name](std::string_view row)
+        { return name == row || (name.starts_with("no") && name.substr(2) == row); });
+}
+
+// 値を置いた `:set` だけが決め直す。問い（`set rnu?` `set so`）は設定も強調も変えない答えなので、
+// 値を置いたかは答えの欄で見る（同じ値を置き直す `set nornu` も設定を載せるので真）。
+[[nodiscard]] ExResult with_window_recheck(ExResult result, std::string_view option)
+{
+    result.rechecks_window = (result.settings.has_value() || result.highlight.has_value()) &&
+                             names_window_setting(option);
+    return result;
+}
+
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 set_option(std::string_view option, const EditorSettings &settings)
 {
@@ -1472,7 +1500,9 @@ std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
     }
     if (name == "set")
     {
-        return set_option(argument, settings);
+        return set_option(argument, settings)
+            .transform([argument](ExResult result)
+                       { return with_window_recheck(std::move(result), argument); });
     }
     return remaining_command(text);
 }
