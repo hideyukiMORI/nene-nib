@@ -5,7 +5,6 @@
 #include "FindHandle.hpp"
 #include "NativePath.hpp"
 #include "ParentDirectory.hpp"
-#include "TemporaryFiles.hpp"
 #include "Utf16.hpp"
 
 #include <windows.h>
@@ -118,16 +117,65 @@ void upsert(Entries &entries, AutosaveEntry entry)
     entries.push_back(std::move(entry));
 }
 
-[[nodiscard]] std::optional<std::uint64_t> decimal_of(std::string_view text)
+template <typename Number>
+[[nodiscard]] std::optional<Number> number_of(std::string_view text, int base)
 {
-    std::uint64_t value = 0;
+    Number value = 0;
     const auto *const end = text.data() + text.size();
-    const auto [stop, error] = std::from_chars(text.data(), end, value);
+    const auto [stop, error] = std::from_chars(text.data(), end, value, base);
     if (text.empty() || error != std::errc{} || stop != end)
     {
         return std::nullopt;
     }
     return value;
+}
+
+// 作る形の名前（今の形 `<pid>-<作成時刻>` か前の形 `<pid>`・どちらも小文字の 16 進）。
+[[nodiscard]] std::string folder_text(const AutosaveFolderName &name)
+{
+    return name.created.has_value() ? std::format("{:x}-{:x}", name.pid, name.created.value())
+                                    : std::format("{:x}", name.pid);
+}
+
+// 数を読んでから作る形に書き直して元と比べるので、大文字・先頭の 0・余分な字は通らない。
+[[nodiscard]] std::optional<AutosaveFolderName> folder_name_of(std::string_view text)
+{
+    const std::size_t dash = text.find('-');
+    const auto pid = number_of<std::uint32_t>(text.substr(0, dash), 16);
+    if (!pid.has_value())
+    {
+        return std::nullopt;
+    }
+    AutosaveFolderName name{pid.value(), std::nullopt};
+    if (dash != std::string_view::npos)
+    {
+        const auto created = number_of<std::uint64_t>(text.substr(dash + 1), 16);
+        if (!created.has_value())
+        {
+            return std::nullopt;
+        }
+        name.created = created.value();
+    }
+    if (folder_text(name) != text)
+    {
+        return std::nullopt;
+    }
+    return name;
+}
+
+// ASCII だけの名前を狭い文字列に写す（作る形は ASCII だけ）。ほかの字があれば無し。
+[[nodiscard]] std::optional<std::string> ascii_of(std::wstring_view wide)
+{
+    std::string text;
+    for (const wchar_t letter : wide)
+    {
+        if (letter > L'\x7f')
+        {
+            return std::nullopt;
+        }
+        text.push_back(static_cast<char>(letter));
+    }
+    return text;
 }
 
 void listed_remnants(application::FilePort &files, const std::string &folder, std::string_view name,
@@ -146,20 +194,17 @@ void listed_remnants(application::FilePort &files, const std::string &folder, st
     }
 }
 
-// 名前が作る形の 16 進の pid で、自分でなく、生きていないフォルダ。
-[[nodiscard]] std::optional<std::uint32_t> remnant_process(const WIN32_FIND_DATAW &data,
-                                                           std::uint32_t self)
+// 残骸のフォルダの名前（autosave_remnant_name が真のフォルダだけ）。
+[[nodiscard]] std::optional<std::string>
+remnant_name(const WIN32_FIND_DATAW &data, ProcessInstance self, ProcessCreatedOf created_of)
 {
-    if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+    const std::wstring_view name(static_cast<const wchar_t *>(data.cFileName));
+    if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
+        !autosave_remnant_name(name, self, created_of))
     {
         return std::nullopt;
     }
-    const auto pid = process_id_of(static_cast<const wchar_t *>(data.cFileName));
-    if (!pid.has_value() || pid.value() == self || process_alive(pid.value()))
-    {
-        return std::nullopt;
-    }
-    return pid;
+    return ascii_of(name);
 }
 
 void delete_file_entry(const std::wstring &folder, const WIN32_FIND_DATAW &data)
@@ -187,20 +232,47 @@ void delete_files_in(const std::wstring &folder)
 }
 } // namespace
 
-std::string autosave_folder(const core::FilePath &root, std::uint32_t pid)
+std::string autosave_folder(const core::FilePath &root, ProcessInstance self)
 {
-    return std::format("{}/{:x}", root.text(), pid);
+    return std::format("{}/{}", root.text(), folder_text({self.pid, self.created}));
+}
+
+std::optional<AutosaveFolderName> autosave_folder_name_of(std::wstring_view name)
+{
+    const auto text = ascii_of(name);
+    return text.has_value() ? folder_name_of(text.value()) : std::nullopt;
+}
+
+bool autosave_remnant_name(std::wstring_view name, ProcessInstance self,
+                           ProcessCreatedOf created_of)
+{
+    const auto parsed = autosave_folder_name_of(name);
+    if (!parsed.has_value())
+    {
+        return false;
+    }
+    const AutosaveFolderName &folder = parsed.value();
+    if (folder.pid == self.pid)
+    {
+        return !folder.created.has_value() || folder.created.value() != self.created;
+    }
+    const auto created = created_of(folder.pid);
+    if (!created.has_value())
+    {
+        return created.error() == ProcessQueryFailure::gone;
+    }
+    return folder.created.has_value() && folder.created.value() != created.value();
 }
 
 std::expected<void, Failure> autosave_stored(application::FilePort &files,
-                                             const std::optional<core::FilePath> &root,
+                                             const std::optional<std::string> &own,
                                              const application::AutosaveSnapshot &snapshot)
 {
-    if (!root.has_value())
+    if (!own.has_value())
     {
         return std::unexpected(Failure::location_unavailable);
     }
-    const std::string folder = autosave_folder(root.value(), GetCurrentProcessId());
+    const std::string &folder = own.value();
     const auto body = inside(folder, autosave_body_name(snapshot.id));
     if (!body.has_value() || !folders_made(folder))
     {
@@ -247,7 +319,7 @@ void remove_autosave_folder(const std::string &folder)
 }
 
 Remnants autosave_remnants_in(application::FilePort &files, const core::FilePath &root,
-                              std::uint32_t self)
+                              ProcessInstance self, ProcessCreatedOf created_of)
 {
     Remnants remnants;
     const std::wstring wide = widen(root.text());
@@ -264,11 +336,11 @@ Remnants autosave_remnants_in(application::FilePort &files, const core::FilePath
     }
     do
     {
-        const auto pid = remnant_process(data, self);
-        if (pid.has_value())
+        const auto name = remnant_name(data, self, created_of);
+        if (name.has_value())
         {
-            const std::string name = std::format("{:x}", pid.value());
-            listed_remnants(files, autosave_folder(root, pid.value()), name, remnants);
+            listed_remnants(files, std::format("{}/{}", root.text(), name.value()), name.value(),
+                            remnants);
         }
     } while (FindNextFileW(search.get(), &data) != 0);
     return remnants;
@@ -283,14 +355,13 @@ std::optional<std::string> autosave_remnant_folder(const core::FilePath &root,
     {
         return std::nullopt;
     }
-    const std::string_view hex = location.substr(0, slash);
-    const auto pid = process_id_of(std::wstring(hex.begin(), hex.end()));
-    const auto id = decimal_of(location.substr(slash + 1));
-    if (!pid.has_value() || !id.has_value() || id.value() != remnant.id.value ||
-        std::format("{:x}/{}", pid.value(), id.value()) != location)
+    const auto name = folder_name_of(location.substr(0, slash));
+    const auto id = number_of<std::uint64_t>(location.substr(slash + 1), 10);
+    if (!name.has_value() || !id.has_value() || id.value() != remnant.id.value ||
+        std::format("{}/{}", folder_text(name.value()), id.value()) != location)
     {
         return std::nullopt;
     }
-    return autosave_folder(root, pid.value());
+    return std::format("{}/{}", root.text(), folder_text(name.value()));
 }
 } // namespace nenenib::adapters::win32
