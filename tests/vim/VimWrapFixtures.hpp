@@ -4,9 +4,9 @@
 
 // wrap-fixtures.json: sha256 2f739746d785829118f06bbb0ed056cca9b7b903606de5f012e4b92f6b6aafd9
 
-// measurement: sha256 f5575ceedf89a39e13a4fcf6b43b23ded17ece3a9573e12f094bb0aa686024f8
+// measurement: sha256 ab520223eb1fd609ba32ace0933e278848b5d947336e080bb1e687cea523e34e
 
-// shared oracle: sha256 d33cf84766fa00e7c696794b6b6d607d21e07f16882717b3d40b39e1f6cb9f53
+// shared oracle: sha256 8cfc13ba28ddd28427476b3a2d933b00a1e9afb7a45ef40b405c11dc81caa1d4
 
 #pragma once
 
@@ -4813,21 +4813,24 @@ constexpr std::array<VimFixture, 402> vim_wrap_fixtures{{
      "<C-d>",
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
      "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46",
-     46, 1, "", "", VimViewportFixture{8, 40, 44, 1, 40, 4, 20, 0, 0, 0, 0, 0, 3}},
+     46, 1, "", "", VimViewportFixture{8, 40, 44, 1, 40, 4, 20, 0}, std::nullopt, std::nullopt,
+     "set scrolloff=3"},
     {"wrap-half-past-end-ctrl-u-so3",
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
      "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46",
      "<C-u>",
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
      "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46",
-     40, 1, "", "", VimViewportFixture{8, 40, 44, 1, 36, 4, 20, 0, 0, 0, 0, 0, 3}},
+     40, 1, "", "", VimViewportFixture{8, 40, 44, 1, 36, 4, 20, 0}, std::nullopt, std::nullopt,
+     "set scrolloff=3"},
     {"wrap-half-past-end-ctrl-d-ctrl-u-so3",
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
      "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46",
      "<C-d><C-u>",
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
      "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46",
-     40, 1, "", "", VimViewportFixture{8, 40, 44, 1, 36, 4, 20, 0, 0, 0, 0, 0, 3}},
+     40, 1, "", "", VimViewportFixture{8, 40, 44, 1, 36, 4, 20, 0}, std::nullopt, std::nullopt,
+     "set scrolloff=3"},
     {"wrap-half-past-end-long-row-ctrl-d-so3",
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
      "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45xxxxxxxx"
@@ -4836,7 +4839,8 @@ constexpr std::array<VimFixture, 402> vim_wrap_fixtures{{
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
      "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45xxxxxxxx"
      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n46",
-     46, 1, "", "", VimViewportFixture{8, 40, 43, 1, 41, 4, 20, 0, 0, 0, 0, 0, 3}},
+     46, 1, "", "", VimViewportFixture{8, 40, 43, 1, 41, 4, 20, 0}, std::nullopt, std::nullopt,
+     "set scrolloff=3"},
     {"wrap-half-after-delete-3dd-ctrl-d-so3",
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
      "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47"
@@ -4844,7 +4848,8 @@ constexpr std::array<VimFixture, 402> vim_wrap_fixtures{{
      "7j3dd<C-d>",
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
      "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n47\n48",
-     45, 1, "44\n45\n46\n", "V", VimViewportFixture{8, 33, 37, 1, 40, 4, 20, 0, 0, 0, 0, 0, 3}},
+     45, 1, "44\n45\n46\n", "V", VimViewportFixture{8, 33, 37, 1, 40, 4, 20, 0}, std::nullopt,
+     std::nullopt, "set scrolloff=3"},
     {"wrap-half-long-rows-ctrl-d-so3",
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22xxxxxxx"
      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n23\n24\n25xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -4855,7 +4860,8 @@ constexpr std::array<VimFixture, 402> vim_wrap_fixtures{{
      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n23\n24\n25xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
      "xx\n26xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n"
      "37\n38\n39\n40\n41\n42\n43\n44\n45\n46",
-     22, 1, "", "", VimViewportFixture{8, 17, 21, 1, 20, 4, 20, 0, 0, 0, 0, 0, 3}},
+     22, 1, "", "", VimViewportFixture{8, 17, 21, 1, 20, 4, 20, 0}, std::nullopt, std::nullopt,
+     "set scrolloff=3"},
     {"wrap-half-long-rows-ctrl-u-so3",
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22xxxxxxx"
      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n23\n24\n25xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -4866,7 +4872,8 @@ constexpr std::array<VimFixture, 402> vim_wrap_fixtures{{
      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n23\n24\n25xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
      "xx\n26xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n"
      "37\n38\n39\n40\n41\n42\n43\n44\n45\n46",
-     28, 1, "", "", VimViewportFixture{8, 27, 30, 1, 26, 4, 20, 0, 0, 0, 0, 0, 3}},
+     28, 1, "", "", VimViewportFixture{8, 27, 30, 1, 26, 4, 20, 0}, std::nullopt, std::nullopt,
+     "set scrolloff=3"},
     {"wrap-half-scroll-then-count-ctrl-d-so4",
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
      "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47"
@@ -4875,7 +4882,8 @@ constexpr std::array<VimFixture, 402> vim_wrap_fixtures{{
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
      "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47"
      "\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60",
-     60, 1, "", "", VimViewportFixture{8, 53, 57, 1, 56, 2, 20, 0, 0, 0, 0, 0, 4}},
+     60, 1, "", "", VimViewportFixture{8, 53, 57, 1, 56, 2, 20, 0}, std::nullopt, std::nullopt,
+     "set scrolloff=4"},
     {"wrap-half-tall-top-ctrl-e-gj-gj",
      "01\n02xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
      "xxxxxxxx\n03\n04\n05\n06\n07\n08\n09\n10",
@@ -4912,7 +4920,8 @@ constexpr std::array<VimFixture, 402> vim_wrap_fixtures{{
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
      "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47"
      "\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60",
-     59, 2, "", "", VimViewportFixture{8, 53, 57, 1, 56, 4, 20, 0, 0, 0, 0, 0, 4}},
+     59, 2, "", "", VimViewportFixture{8, 53, 57, 1, 56, 4, 20, 0}, std::nullopt, std::nullopt,
+     "set scrolloff=4"},
     {"wrap-half-scroll-tilde-ctrl-d-so4",
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
      "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47"
@@ -4921,6 +4930,7 @@ constexpr std::array<VimFixture, 402> vim_wrap_fixtures{{
      "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n2"
      "4\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47"
      "\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60",
-     60, 1, "", "", VimViewportFixture{8, 53, 57, 1, 56, 4, 20, 0, 0, 0, 0, 0, 4}},
+     60, 1, "", "", VimViewportFixture{8, 53, 57, 1, 56, 4, 20, 0}, std::nullopt, std::nullopt,
+     "set scrolloff=4"},
 }};
 } // namespace nenenib::tests

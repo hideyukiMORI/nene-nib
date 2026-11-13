@@ -145,6 +145,8 @@ Vim の 1 文字はコードポイント 1 つと直後に続く幅 0（`Display
 
 C++ の表 `src/core/VimKeyNames.hpp`（#1082 で `tests/vim` から core へ移した・`map` の設定の行も同じ表で読む）は生成物で、手で書かない（`python eng/vim-oracle.py --key-names`・ADR 0054・CNF-010）。
 表は oracle の測定の領域にあるので、表を変えた commit を `--reuse-ref` にしてから fixture を部分再生成する。
+fixture の `settings` は生成物の行の最後の欄に載り、再生（nib_tests・窓の道・`nib_vim_replay`）が窓の後・鍵の前に `:` の行として流す。Nib が断る行は試験が落ちる。流さないのは oracle の `NIB_FIXED_SETTINGS`（Nib の固定値と同じ行）だけで、余白の `set scrolloff=N` も同じ道（#1626・ADR 0012 の追記）。
+`-es` の Vim は失敗した検索（`nowrapscan` の E385 など）で終了コード 1 を返して測れないので、そういう fixture は viewport つき（`--not-a-term`）で書く。
 同じ鍵に 2 つの名前を足さない（`<C-i>` は `<Tab>`）。表の名前は鍵と 1 対 1 に往復し、`map` の一覧の表示名はそこから引く（#1081 の契約・#1037 で 1 件落ちた）。
 fuzz（`eng/vim-fuzz.py`）の生成器 3 の `WORDS` に語を足さない（固定 seed の列が変わる・`WORDS_4`（生成器 4）と `WORDS_5`（生成器 5・viewport と画面移動）も同じ・`WORDS_6`（生成器 6・`<C-e>` `<C-y>`・`{ } ( )`・Del・レジスタの回数・#1353）も同じ・足すのは次の版（生成器 7）・#1135 / #1224）。oracle の測定コードを変えた PR（#1116 / #1124 の形）は `--only` が「全件を再生成せよ」で拒むので、乗せ替えでは枝の commit を `--reuse-ref` にして main 側にだけある fixture を測る（逆に main 側が oracle を変えていれば main を `--reuse-ref` にして枝の分だけ測る・`D:\NeNeNib\scripts\20261030\resolve-vim-conflicts.py`）。oracle の `-es` は Windows 版の既定 `isprint=@,~-255` で DEL を 1 桁に数える（Unix 版は `^?` の 2 桁・#1119 で Windows を正本に決めた）。
 

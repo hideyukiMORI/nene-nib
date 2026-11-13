@@ -28,6 +28,8 @@
 #include "VimBlockWorkload.hpp"
 #include "WordObjectWorkload.hpp"
 
+#include <span>
+#include <string_view>
 #include <variant>
 
 namespace nenenib::tests::performance
@@ -43,6 +45,8 @@ using ProbeSelection =
                  SearchObjectWorkload>;
 
 [[nodiscard]] std::optional<ProbeSelection> workload_of(std::string_view name) noexcept;
+// 表 ProbeDispatchRow の全 workload の名前（表の順・#1604 の --expectations が流す）。
+[[nodiscard]] std::span<const std::string_view> workload_names() noexcept;
 [[nodiscard]] std::string input_of(ProbeSelection workload);
 [[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
 run_workload(ProbeSelection workload, const std::string &input, application::TimingPort &timing);

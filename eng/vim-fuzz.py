@@ -97,9 +97,11 @@ only the first case of each (#1233).
 and writes the totals and the new differences, folded the same way, to `<out>/summary.md`.
 
 `--from-fixtures N` is the replayer's self-check: it measures the first N tests/vim/fixtures.json
-cases without settings, viewport or register, the first N viewport cases with `scrolloff` 0 and the
-first N with `scrolloff` above 0 (only `set scrolloff=` as settings, no register, only the four
-window keys the replayer carries), through the same oracle and expects every one `ok`.
+cases without settings, viewport or register, the first N cases with settings only (the replayer
+types each line `replayed_settings` keeps before the keys, #1626), the first N viewport cases with
+`scrolloff` 0 and the first N with `scrolloff` above 0 (only `set scrolloff=` as settings, no
+register, only the four window keys the replayer carries), through the same oracle and expects
+every one `ok`.
 
 Usage:
     python eng/vim-fuzz.py --count 300 --seed 1 --out D:/NeNeNib/outputs/<date>/vim-fuzz-seed1 --shrink
@@ -129,7 +131,7 @@ DEFAULT_REPLAY = ROOT / "build" / "nib_vim_replay.exe"
 FIELDS = ("text", "line", "column", "register", "register_kind")
 # 生成器 5 の件（viewport つき）が加えて比べる欄（#1224）。
 VIEWPORT_FIELDS = ("first_visible", "scroll")
-# 再生器の 7 欄が運ぶ viewport の鍵（`--from-fixtures` はこれだけの fixture を測る・#1233）。
+# 再生器の viewport の 6 欄が運ぶ鍵（`--from-fixtures` はこれだけの fixture を測る・#1233）。
 VIEWPORT_KEYS = frozenset(("visible_lines", "first_visible", "line", "column"))
 
 # 語の表（生成器の単位・Issue #954 の 2）。1 行が 語の種類・重み・鍵の型。型の `{…}` は
@@ -607,10 +609,15 @@ def replay_line(measured: dict) -> str:
               measured["register_kind"])
     viewport = measured.get("viewport")
     if viewport is not None:
-        # viewport つきの件は 7 欄を足す（tests/unit/VimReplayMain.cpp の冒頭・#1224）。
+        # viewport つきの件は 6 欄を足す（tests/unit/VimReplayMain.cpp の冒頭・#1224）。
         values += tuple(str(viewport[key]) for key in (
             "visible_lines", "first_visible", "line", "column", "expected_first_visible",
-            "expected_scroll_lines")) + (str(measured.get("scrolloff", 0)),)
+            "expected_scroll_lines"))
+    settings = measured.get("settings", [])
+    if settings:
+        # 再生が鍵の前に流す設定の行（oracle の replayed_settings・余白の `set scrolloff=N` も
+        # ここ・#1626）。改行でつなぐ。
+        values += ("settings=" + "\n".join(settings),)
     change = measured.get("change")
     if change is not None:
         # 変更の印は最後の 1 欄（--change・ADR 0181・#1440）。
@@ -652,7 +659,8 @@ def replay(replayer: Path, work: Path, measured: list[dict]) -> dict[str, dict]:
 def measure(work: Path, name: str, text: str, keys: str,
             window: dict | None = None) -> tuple[dict | None, str]:
     """The oracle's answer, or None and the reason it refused. `window` is generator 5's
-    settings and viewport (`generate_window`); the answer then carries its `scrolloff`."""
+    settings and viewport (`generate_window`); the answer then carries the settings the replayer
+    types before the keys (`replayed_settings`, #1626)."""
     fixture = {"name": name, "text": text, "keys": keys, "settings": ORACLE_SETTINGS}
     if CHANGE_MARKS:
         fixture["change"] = True
@@ -660,8 +668,8 @@ def measure(work: Path, name: str, text: str, keys: str,
         fixture.update(settings=window["settings"], viewport=window["viewport"])
     try:
         answer = ORACLE.measure(work, fixture)
-        if window is not None:
-            answer["scrolloff"] = window["scrolloff"]
+        # 再生へは oracle と同じ設定の行を渡す（Nib の固定値と同じ nrformats は外れる・#1626）。
+        answer["settings"] = ORACLE.replayed_settings(fixture["settings"])
         return answer, ""
     except ValueError as error:
         return None, f"ValueError: {error}"
@@ -1233,22 +1241,24 @@ def from_fixtures(args: argparse.Namespace) -> int:
     work.mkdir(parents=True, exist_ok=True)
     fixtures = json.loads((ROOT / "tests" / "vim" / "fixtures.json").read_text(encoding="utf-8"))
     plain = [f for f in fixtures if not set(f) - {"name", "text", "keys"}][:args.from_fixtures]
+    set_only = [f for f in fixtures if f.get("settings")
+                and not set(f) - {"name", "text", "keys", "settings"}][:args.from_fixtures]
     windows = [f for f in fixtures if replayable_window(f)]
     flat = [f for f in windows if scrolloff_of(f) == 0][:args.from_fixtures]
     margined = [f for f in windows if scrolloff_of(f) > 0][:args.from_fixtures]
     windowed = flat + margined
     measured = [ORACLE.measure(work, fixture) for fixture in plain]
-    for fixture in windowed:
+    for fixture in set_only + windowed:
         answer = ORACLE.measure(work, fixture)
-        answer["scrolloff"] = scrolloff_of(fixture)
+        answer["settings"] = ORACLE.replayed_settings(fixture["settings"])
         measured.append(answer)
     results = replay(args.replay, work, measured)
     counts = Counter(result["status"] for result in results.values())
     for name, result in results.items():
         if result["status"] != "ok":
             print(f"{result['status']} {name} {result['fields'] or result['reason']}")
-    total = len(plain) + len(windowed)
-    print(f"fixtures {len(plain)} + viewport {len(flat)} (so=0) + {len(margined)} (so>0): "
+    total = len(plain) + len(set_only) + len(windowed)
+    print(f"fixtures {len(plain)} + settings {len(set_only)} + viewport {len(flat)} (so=0) + {len(margined)} (so>0): "
           + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
     return 0 if counts.get("ok", 0) == total else 1
 

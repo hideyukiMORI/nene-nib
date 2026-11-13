@@ -279,21 +279,39 @@ class VimOracleTests(unittest.TestCase):
                                         "macro": {"name": "a", "keys": "x"}})
         self.assertTrue(macro.endswith(', std::nullopt, VimMacroFixture{\'a\', "x"}},'))
 
-    def test_header_row_carries_the_scrolloff_only_when_it_is_not_zero(self):
+    # fixture の settings は行の最後の欄（#1626）。余白も窓の欄ではなくここに載る。
+    def test_header_row_carries_the_settings_in_the_last_field(self):
         record = self.record({"name": "so", "text": "ab", "keys": "j"}, "ab")
         viewport = {"visible_lines": 10, "first_visible": 1, "line": 7, "column": 1,
                     "expected_first_visible": 2, "expected_scroll_lines": 5}
         plain = vim_oracle.fixture_row({**record, "viewport": viewport, "macro": None})
         self.assertTrue(plain.endswith("VimViewportFixture{10, 1, 7, 1, 2, 5}},"))
-        zero = vim_oracle.fixture_row({**record, "viewport": viewport, "macro": None,
-                                       "scrolloff": 0})
-        self.assertEqual(zero, plain)
+        self.assertEqual(vim_oracle.fixture_row({**record, "viewport": viewport, "macro": None,
+                                                 "settings": []}), plain)
         margin = vim_oracle.fixture_row({**record, "viewport": viewport, "macro": None,
-                                         "scrolloff": 2})
-        self.assertTrue(margin.endswith("VimViewportFixture{10, 1, 7, 1, 2, 5, 0, 0, 0, 0, 0, 0, 2}},"))
-        self.assertEqual(vim_oracle.settings_scrolloff(["set nrformats=bin,hex",
-                                                         "set scrolloff=3"]), 3)
-        self.assertEqual(vim_oracle.settings_scrolloff([]), 0)
+                                         "settings": ["set scrolloff=2"]})
+        self.assertTrue(margin.endswith("VimViewportFixture{10, 1, 7, 1, 2, 5}, std::nullopt, "
+                                        'std::nullopt, "set scrolloff=2"},'))
+        both = vim_oracle.fixture_row({**record, "viewport": None, "macro": None,
+                                       "settings": ["set ic", "set nows"]})
+        self.assertTrue(both.endswith('std::nullopt, std::nullopt, std::nullopt, "set ic\\nset nows"},'))
+        macro = vim_oracle.fixture_row({**record, "viewport": None,
+                                        "macro": {"name": "a", "keys": "x"}, "settings": ["set ic"]})
+        self.assertTrue(macro.endswith('VimMacroFixture{\'a\', "x"}, std::nullopt, "set ic"},'))
+        change = vim_oracle.fixture_row({**record, "viewport": None, "macro": None,
+                                         "change": {"modified": True, "changed": True, "undo": True},
+                                         "settings": ["set ic"]})
+        self.assertTrue(change.endswith('VimChangeFixture{true, true, true}, "set ic"},'))
+
+    # Nib の固定値と同じ行は再生へ渡さず、ほかは順のまま渡す。改行と空の行は断る（#1626）。
+    def test_replayed_settings_drop_only_the_fixed_lines(self):
+        self.assertEqual(vim_oracle.replayed_settings(["set nrformats=bin,hex", "set scrolloff=3"]),
+                         ["set scrolloff=3"])
+        self.assertEqual(vim_oracle.replayed_settings(["set nrformats=octal"]), ["set nrformats=octal"])
+        self.assertEqual(vim_oracle.replayed_settings([]), [])
+        for bad in ("", " ", "set ic\nset nows"):
+            with self.assertRaises(ValueError):
+                vim_oracle.replayed_settings([bad])
 
     def test_canonical_form_is_idempotent_and_ends_with_one_newline(self):
         content = vim_oracle.canonical_fixtures_json(

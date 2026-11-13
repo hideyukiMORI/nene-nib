@@ -237,6 +237,7 @@ Vim を要らずに全文を作り直せるので、SHA の 1 行ではなく全
 Vim の大小の写像の表 `src/core/CaseMappingTable.hpp` も同じ形の生成物で、`eng/case-mapping.py` の `case_mapping_header()`（固定の Python の `unicodedata`）の出力との全文の一致を CNF-010 で見る（Issue #781・ADR 0015 決定 10 の追記）。直すのは `python eng/case-mapping.py --write` だけ。
 折り返す窓の fixture の生成物 `tests/vim/VimWrapFixtures.hpp` は、`eng/vim-wrap-oracle.py --regenerate` が先頭に書いた入力 3 つ（`wrap-fixtures.json`・測定のコード `eng/vim-wrap-oracle.py`・共有の oracle `eng/vim-oracle.py`）の SHA-256 の行を、木のファイルのバイト列の SHA-256 と突き合わせる。入力の表は `eng/conformance-rules.json` の `wrapFixtureProvenance` の 1 つで、生成器が自分で照合する口（`python eng/vim-wrap-oracle.py`）と同じ 3 つ。生成物が無い・行が無い・SHA が違う・入力が無い、のいずれも CNF-010（Issue #1431）。
 Vim を起動しないので CI でも回る。共有の oracle も入力に数えるので、`eng/vim-oracle.py` を変える PR は折り返す窓の fixture も Vim のある機械で測り直す。
+fixture の `settings` は生成物の行の最後の欄に載り、再生が窓の後・鍵の前に `:` の行として流し、Nib が受けない行は再生の試験が落ちる: **active**（CTest `nib_unit` / `nib_unit_scopes` の fixture の再生・載せない行は oracle の `NIB_FIXED_SETTINGS` の表だけ・ADR 0012 の追記・#1626）。
 
 - 対応する規則: QLT-013 / ARC-012
 - 機械強制: **active**（`eng/conformance.py`。正例・反例は `tests/conformance` がゲートで回る。正例は oracle の `header()` が書いた行と `key_names_header()` の出力、折り返す窓の生成器の `provenance()` の行をそのまま読ませる）
@@ -402,7 +403,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | 単体テスト | C++23 基盤のスモークと中核の振る舞い | CTest / tests/build・tests/unit（ASan / UBSan 付き・`-fno-sanitize-recover=all`。OS 資源と表示は使わない） |
 | 描画の保持の契約 | 字体選択の保持（鍵・上限・OS の失敗）と字形の保持（棄却・画面外・画素の一致）を窓を作らずに | CTest `nib_window` / tests/ui（DirectWrite の factory と WIC のソフトウェアの描画先まで。フォントに依る検査は環境依存で、測れないときは 1 行言って数えない・ADR 0077） |
 | プレビューの見た目の確かめ | Markdown プレビューの描画（案 B・D62）を設計席が画で見る。合否は判定しない | `nib_preview_capture`（tests/preview・WIC の bitmap に製品と同じ `PreviewPainter` で描いて PNG に落とす・CTest に登録しない・ADR 0151 の決定 18・#784） |
-| probe の正しさ | 窓なしの固定 workload（`nib_perf_probes`・CTest に登録しない）の期待値のずれ | `eng/probe-smoke.ps1`（全 workload を warmup 1 + sample 1 で流し非 0 を落とす・時間は判定しない・`-Full` だけが回し CI の必須 check は回さない・ADR 0082 の追補・#690） |
+| probe の正しさ | 窓なしの固定 workload（`nib_perf_probes`）の期待値のずれ | **active**: CTest `nib_probe_expectations`（`nib_perf_probes --expectations`・全 workload の warmup 1 回の結果を表の期待と照合・時間は測らない・Debug で 60 秒に収まらない workload は `tests/performance/ProbeMain.cpp` の表で名指しで外す・CI の ctest も回す・#1604）と `eng/probe-smoke.ps1`（外した分を含む全 workload を warmup 1 + sample 1 で流し非 0 を落とす・`-Full` だけが回す・ADR 0082 の追補・#690） |
 | カバレッジ | 中核の検証密度 | `eng/coverage.py` / `eng/coverage-policy.json`。測定ビルドで LLVM の実分岐を 90% 以上要求 |
 | 速さ | 4 本のベンチ（基準値の鍵 5 つ）の退行 | `eng/measure-speed.py --check`（一致する指紋の基準値で比較。必要な変更で選んで実行・QLT-014） |
 | 依存 | 道具の版と実行時依存 0 | tool-versions.json / architecture.json / `/MT`（R1） |
