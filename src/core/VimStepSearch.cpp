@@ -134,6 +134,18 @@ namespace
     return state;
 }
 
+// 検索が着く位置（Vim の normal_search の最後の check_cursor・#1606）。行の内容の終わり（NUL）の
+// 当たり（`/$` `/\>` など幅の無い当たり）は、NORMAL とオペレータ待ちでは最後の文字の上に寄せ、
+// その寄せた位置がオペレータの範囲の端になる（exclusive なので `d/$` は最後の文字を残す）。VISUAL
+// と INSERT の `Ctrl-o` の命令を待つ間は Vim の check_cursor_col が NUL を許すので寄せない
+// （`v/$d` は改行まで・`i<C-o>d/$` は行の全体を消す・実測）。
+[[nodiscard]] Offset searched_landing(const VimState &state, const TextBuffer &text,
+                                      const VimSearchHit &hit)
+{
+    const Offset at = text.offset_of(hit.position);
+    return vim_insert_paused(state) ? at : detail::rested_in(text, at, state.mode);
+}
+
 // 解析済みの last_search が正本。回数ぶん探し、着いた先へ 1 本で流す（決定 3・4）。
 [[nodiscard]] VimStep search_from(const VimState &state, const VimEditorView &view,
                                   const VimSearchRequest &request)
@@ -157,7 +169,7 @@ namespace
         return search_noticed(
             state, VimSearchNotice{hit.error(), std::string{remembered.text()}, std::nullopt});
     }
-    const Offset destination = view.text.offset_of(hit.value().position);
+    const Offset destination = searched_landing(state, view.text, hit.value());
     VimStep step = state.pending.has_value() ? search_operated(state, view, request, destination)
                                              : search_moved(state, view, destination);
     step.notice = wrap_notice(hit.value(), request.direction);

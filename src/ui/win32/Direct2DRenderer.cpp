@@ -40,6 +40,10 @@
 #include "StartScreenLayout.hpp"
 #include "StartScreenText.hpp"
 #include "SyntaxColor.hpp"
+#include "UiLocale.hpp"
+#include "UiMessage.hpp"
+#include "UiTextSizes.hpp"
+#include "UiTexts.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
 
@@ -62,8 +66,7 @@ namespace nenenib::ui::win32
 namespace
 {
 // 採用案の寸法（docs/design/2026-09-15-look.md 第 2 節）。色は Palette 以外に持たない（ADR 0008）。
-constexpr float tab_text_dips = 12.5F;
-constexpr float ui_text_dips = 12.0F;
+// 画面の文字の大きさは UiTextSizes.hpp（幅の試験と共用）。
 // text の表示の巨大な行の印 `»`（ADR 0139 の決定 2）。
 constexpr std::string_view giant_mark = "\xC2\xBB";
 constexpr std::int32_t caret_inset_dips = 2;
@@ -86,9 +89,9 @@ constexpr float palette_detail_gap_dips = 12.0F;
 constexpr float palette_key_padding_dips = 9.0F;
 constexpr float palette_key_height_dips = 20.0F;
 constexpr float palette_key_radius_dips = 5.0F;
-// 空の文書の案内の鍵の枠の左右の余白（docs/design/2026-10-06-guide.md の 2 節）。箱の幅を測る
-// guide_key_width と描く draw_body_guide が同じ値を使う（#1122）。
-constexpr float guide_key_padding_dips = 9.0F;
+// 空の文書の案内の鍵の枠の左右の余白（docs/design/2026-10-06-guide.md の 2 節）は UiTextSizes.hpp
+// の guide_key_padding_dips。箱の幅を測る guide_key_width と描く draw_body_guide
+// が同じ値を使う（#1122）。
 constexpr DWORD latency_timeout_milliseconds = 1000;
 constexpr float full_channel = 255.0F;
 
@@ -216,7 +219,9 @@ void windowed_input_line(std::string &shown, std::size_t &at, std::size_t &caret
     caret -= window.begin.value;
 }
 
-[[nodiscard]] std::string prompt_text(core::InputLinePrompt prompt, std::string_view detail)
+// 通常モードの 3 つは表示言語の表から引く（ADR 0123 の追補 2026-11-13・#1019）。
+[[nodiscard]] std::string prompt_text(core::InputLinePrompt prompt, std::string_view detail,
+                                      core::DisplayLanguage language)
 {
     switch (prompt)
     {
@@ -230,13 +235,15 @@ void windowed_input_line(std::string &shown, std::size_t &at, std::size_t &caret
         return "?";
     // 通常モードの検索と行へ移動（ADR 0174 の決定 3）。
     case core::InputLinePrompt::find:
-        return "検索: ";
+        return std::string(core::ui_text(core::UiMessage::prompt_find, language));
     case core::InputLinePrompt::go_to_line:
-        return "行: ";
+        return std::string(core::ui_text(core::UiMessage::prompt_go_to_line, language));
     // 置換の 2 段目は検索語を添える（ADR 0174 の結果「置換後 (abc): 」）。
     case core::InputLinePrompt::replace_with:
-        return detail.empty() ? std::string{"置換後: "}
-                              : std::string{"置換後 ("} + std::string(detail) + "): ";
+        return detail.empty()
+                   ? std::string(core::ui_text(core::UiMessage::prompt_replace_with, language))
+                   : core::ui_text_filled(core::UiMessage::prompt_replace_with_pattern, language,
+                                          {detail});
     }
     std::unreachable();
 }
@@ -263,6 +270,7 @@ Direct2DRenderer::create(HWND window, std::uint32_t dpi, application::TimingPort
 {
     Direct2DRenderer renderer(sources.text_layouts);
     renderer.dpi_ = dpi;
+    renderer.formatted_language_ = sources.language;
     return started(std::move(renderer), window, timing, sources.warmup);
 }
 
@@ -272,6 +280,7 @@ Direct2DRenderer::create_provisional(HWND cover, std::uint32_t dpi, application:
 {
     Direct2DRenderer renderer(sources.text_layouts);
     renderer.dpi_ = dpi;
+    renderer.formatted_language_ = sources.language;
     renderer.provisional_ = true;
     return started(std::move(renderer), cover, timing, sources.warmup);
 }
@@ -470,17 +479,17 @@ const wchar_t *Direct2DRenderer::family(const wchar_t *preferred, const wchar_t 
 HRESULT Direct2DRenderer::make_format(const wchar_t *face, float size_dips,
                                       DWRITE_FONT_WEIGHT weight, TextFormat &format)
 {
-    return dwrite_->CreateTextFormat(face, nullptr, weight, DWRITE_FONT_STYLE_NORMAL,
-                                     DWRITE_FONT_STRETCH_NORMAL, scaled(size_dips), L"",
-                                     format.ReleaseAndGetAddressOf());
+    return dwrite_->CreateTextFormat(
+        face, nullptr, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+        scaled(size_dips), ui_locale_name(formatted_language_), format.ReleaseAndGetAddressOf());
 }
 
 HRESULT Direct2DRenderer::make_italic_format(const wchar_t *face, float size_dips,
                                              DWRITE_FONT_WEIGHT weight, TextFormat &format)
 {
-    return dwrite_->CreateTextFormat(face, nullptr, weight, DWRITE_FONT_STYLE_ITALIC,
-                                     DWRITE_FONT_STRETCH_NORMAL, scaled(size_dips), L"",
-                                     format.ReleaseAndGetAddressOf());
+    return dwrite_->CreateTextFormat(
+        face, nullptr, weight, DWRITE_FONT_STYLE_ITALIC, DWRITE_FONT_STRETCH_NORMAL,
+        scaled(size_dips), ui_locale_name(formatted_language_), format.ReleaseAndGetAddressOf());
 }
 
 void Direct2DRenderer::align_text_formats()
@@ -591,10 +600,12 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_guide_formats(const 
     measured_guide_key_width_ = 0;
     measured_start_keys_.reset();
     measured_start_key_width_ = 0;
-    const auto key = make_format(family(L"Cascadia Code", L"Consolas"), 12.5F,
+    const auto key = make_format(family(L"Cascadia Code", L"Consolas"), guide_key_dips,
                                  DWRITE_FONT_WEIGHT_NORMAL, guide_key_format_);
-    const auto label = make_format(face, 13.5F, DWRITE_FONT_WEIGHT_NORMAL, guide_label_format_);
-    const auto note = make_format(face, 11.5F, DWRITE_FONT_WEIGHT_NORMAL, guide_note_format_);
+    const auto label =
+        make_format(face, guide_label_dips, DWRITE_FONT_WEIGHT_NORMAL, guide_label_format_);
+    const auto note =
+        make_format(face, guide_note_dips, DWRITE_FONT_WEIGHT_NORMAL, guide_note_format_);
     const auto status =
         make_format(face, ui_text_dips, DWRITE_FONT_WEIGHT_NORMAL, guide_status_format_);
     if (FAILED(key) || FAILED(label) || FAILED(note) || FAILED(status))
@@ -654,6 +665,18 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     formatted_size_ = settings.font_size;
     formatted_family_ = settings.font_family;
     return {};
+}
+
+std::expected<void, RenderFailure> Direct2DRenderer::set_language(core::DisplayLanguage language)
+{
+    if (formatted_language_ == language)
+    {
+        return {};
+    }
+    // 画面の文字の書式の locale が変わる。DPI の変化と同じ道で全部の UI 書式を作り直す（保持の
+    // 枠は create_text_formats の入口で書式より先に消える・ADR 0070）。
+    formatted_language_ = language;
+    return create_text_formats();
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::set_font(const core::EditorSettings &settings)
@@ -1839,7 +1862,8 @@ void Direct2DRenderer::draw_body_guide(const application::EditorFrame &frame,
         context_->PopAxisAlignedClip();
     }
     context_->PushAxisAlignedClip(to_rect(body->note), D2D1_ANTIALIAS_MODE_ALIASED);
-    write("打ち始めると消えます", guide_note_format_.Get(), body->note, frame.palette.muted);
+    write(core::ui_text(core::UiMessage::guide_note_disappears, frame.language),
+          guide_note_format_.Get(), body->note, frame.palette.muted);
     context_->PopAxisAlignedClip();
 }
 
@@ -1882,17 +1906,19 @@ void Direct2DRenderer::draw_start_screen(const application::EditorFrame &frame,
     // 「はじめる」の 3 行の鍵は操作の表から今のモードで引く（Vim の「ファイルを開く」は
     // Ctrl+Shift+O・D71。鍵の無い操作は空で枠を描かない・#1480）。
     const auto new_key =
-        core::operation_guide_entry(core::EditorOperation::new_tab, frame.mode).key;
+        core::operation_guide_entry(core::EditorOperation::new_tab, frame.mode, frame.language).key;
     const auto open_key =
-        core::operation_guide_entry(core::EditorOperation::open_file, frame.mode).key;
-    const auto folder_key =
-        core::operation_guide_entry(core::EditorOperation::choose_explorer_root, frame.mode).key;
+        core::operation_guide_entry(core::EditorOperation::open_file, frame.mode, frame.language)
+            .key;
+    const auto folder_key = core::operation_guide_entry(core::EditorOperation::choose_explorer_root,
+                                                        frame.mode, frame.language)
+                                .key;
     StartScreenPainter painter(*context_.Get(), *brush_.Get(),
                                StartScreenText{dwrite_.Get(), start_title_format_.Get(),
                                                explorer_format_.Get(), guide_status_format_.Get(),
                                                guide_key_format_.Get(), guide_label_format_.Get(),
                                                guide_keycap_style(frame.palette), new_key, open_key,
-                                               folder_key, dpi_},
+                                               folder_key, dpi_, frame.language},
                                start_layouts_);
     painter.paint(view, layout.value(), frame.palette, body.band);
 }
@@ -1926,7 +1952,8 @@ void Direct2DRenderer::draw_toggle(const application::EditorFrame &frame,
     const bool vim = frame.mode == core::EditMode::vim;
     const auto &selected = vim ? layout.toggle_vim : layout.toggle_ordinary;
     fill_rounded(selected, frame.palette.accent, static_cast<float>(layout.segment_radius));
-    write_status("通常", toggle_format_.Get(), layout.toggle_ordinary,
+    write_status(core::ui_text(core::UiMessage::status_mode_basic, frame.language),
+                 toggle_format_.Get(), layout.toggle_ordinary,
                  vim ? frame.palette.muted : frame.palette.on_accent);
     write_status("Vim", toggle_format_.Get(), layout.toggle_vim,
                  vim ? frame.palette.on_accent : frame.palette.muted);
@@ -2040,7 +2067,7 @@ void Direct2DRenderer::draw_command(const application::EditorFrame &frame,
         return;
     }
     const auto &command = frame.command_line.value();
-    const std::string prefix = prompt_text(command.prompt, command.prompt_detail);
+    const std::string prefix = prompt_text(command.prompt, command.prompt_detail, frame.language);
     // 入力の文字のキャレットの位置（バイト）。変換中の文字列はここへ差し込む（ADR 0061 の決定 5）。
     std::size_t at = prefix.size() + command.caret.value;
     auto shown = prefix + command.text;
@@ -2206,7 +2233,7 @@ void Direct2DRenderer::draw_palette_choice(const application::EditorFrame &frame
     context_->PopAxisAlignedClip();
     if (choice.origin.has_value())
     {
-        write_palette_note(core::palette_origin_label(choice.origin.value()),
+        write_palette_note(core::palette_origin_label(choice.origin.value(), frame.language),
                            core::palette_row_note(row, dpi_), frame.palette.muted);
     }
     if (!choice.key.empty())
@@ -2368,7 +2395,8 @@ void Direct2DRenderer::draw_palette_choices(const application::EditorFrame &fram
     if (palette.total == 0)
     {
         // 行の名前と同じ欄に書く（ADR 0060 の決定 9）。面の左端に寄せない。#309
-        write("候補なし", mode_format_.Get(),
+        write(core::ui_text(core::UiMessage::palette_no_candidates, frame.language),
+              mode_format_.Get(),
               core::palette_row_label(core::palette_row(layout, 0), dpi_, false),
               frame.palette.muted);
         return;
@@ -2395,7 +2423,7 @@ void Direct2DRenderer::draw_palette_footer(const application::EditorFrame &frame
     const core::LayoutRect hint_area{area.left, area.top, split, area.bottom};
     const auto hint = frame.command_message.has_value()
                           ? frame.command_message.value().text()
-                          : std::string_view("↑↓ 選択   Enter 決定   Esc 閉じる");
+                          : core::ui_text(core::UiMessage::palette_footer_hint, frame.language);
     context_->PushAxisAlignedClip(to_rect(hint_area), D2D1_ANTIALIAS_MODE_ALIASED);
     write(hint, mode_format_.Get(), hint_area, frame.palette.muted);
     context_->PopAxisAlignedClip();
@@ -2508,10 +2536,10 @@ void Direct2DRenderer::draw_explorer(const application::EditorFrame &frame,
         explorer_shapes_.clear();
         return;
     }
-    ExplorerPainter painter(
-        *context_.Get(), *brush_.Get(),
-        ExplorerText{dwrite_.Get(), explorer_format_.Get(), explorer_strong_format_.Get(), dpi_},
-        explorer_layouts_, explorer_shapes_);
+    ExplorerPainter painter(*context_.Get(), *brush_.Get(),
+                            ExplorerText{dwrite_.Get(), explorer_format_.Get(),
+                                         explorer_strong_format_.Get(), dpi_, frame.language},
+                            explorer_layouts_, explorer_shapes_);
     painter.paint(frame.explorer.value(), layout, frame.palette, frame.body);
 }
 
@@ -2564,6 +2592,11 @@ std::expected<void, RenderFailure> Direct2DRenderer::acquire_surface()
 std::expected<void, RenderFailure> Direct2DRenderer::render(const application::EditorFrame &frame,
                                                             application::TimingPort &timing)
 {
+    const auto localized = set_language(frame.language);
+    if (!localized)
+    {
+        return localized;
+    }
     const auto formatted = set_font(frame.settings);
     if (!formatted)
     {

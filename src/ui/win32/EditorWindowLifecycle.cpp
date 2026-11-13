@@ -14,7 +14,9 @@
 #include "RgbColor.hpp"
 #include "TitleBarLayout.hpp"
 #include "TitleBarWidth.hpp"
+#include "UiMessage.hpp"
 #include "UnsavedTab.hpp"
+#include "WideUiText.hpp"
 #include "WindowBackdrop.hpp"
 #include "WindowCorners.hpp"
 
@@ -228,7 +230,8 @@ std::expected<Direct2DRenderer, RenderFailure> EditorWindow::create_renderer()
             return covered;
         }
     }
-    return Direct2DRenderer::create(window_, dpi_, timing_, {text_layouts_, warmup_});
+    return Direct2DRenderer::create(window_, dpi_, timing_,
+                                    {text_layouts_, warmup_, controller_.display_language()});
 }
 
 std::expected<Direct2DRenderer, RenderFailure> EditorWindow::create_provisional_renderer()
@@ -247,8 +250,8 @@ std::expected<Direct2DRenderer, RenderFailure> EditorWindow::create_provisional_
             SetFocus(window_);
         }
     }
-    return Direct2DRenderer::create_provisional(cover_->handle(), dpi_, timing_,
-                                                {text_layouts_, warmup_});
+    return Direct2DRenderer::create_provisional(
+        cover_->handle(), dpi_, timing_, {text_layouts_, warmup_, controller_.display_language()});
 }
 
 void EditorWindow::place_at_screen_centre()
@@ -571,9 +574,12 @@ LRESULT EditorWindow::query_session_end()
     case application::ExitPlan::block_session_end:
         // OS が「終了を妨げています」と理由を見せる。使う人が戻ってから今日の確認を通す。
         // 立てた理由が残っている間は印を落とさない（2 回目の失敗で OS 側の理由が外れ残らない）。
-        shutdown_blocked_ =
-            shutdown_blocked_ ||
-            ShutdownBlockReasonCreate(window_, L"保存されていない変更があります") != FALSE;
+        // 理由の文は状態の表示言語で引く（decisions の 5）。
+        shutdown_blocked_ = shutdown_blocked_ ||
+                            ShutdownBlockReasonCreate(
+                                window_, wide_ui_text(core::UiMessage::os_shutdown_block_reason,
+                                                      controller_.display_language())
+                                             .c_str()) != FALSE;
         return FALSE;
     case application::ExitPlan::leave_now:
         release_session_block();
@@ -698,7 +704,8 @@ void EditorWindow::adopt_device()
     {
         return;
     }
-    auto adopted = Direct2DRenderer::create(window_, dpi_, timing_, {text_layouts_, warmup_});
+    auto adopted = Direct2DRenderer::create(
+        window_, dpi_, timing_, {text_layouts_, warmup_, controller_.display_language()});
     if (!adopted)
     {
         abandon();

@@ -14,10 +14,13 @@
 #include "PreviewTick.hpp"
 #include "SplitLayout.hpp"
 #include "TitleBarWidth.hpp"
+#include "UiMessage.hpp"
+#include "WideUiText.hpp"
 #include "WindowLines.hpp"
 #include "WorkCompleted.hpp"
 
 #include <algorithm>
+#include <string>
 #include <utility>
 #include <variant>
 
@@ -25,12 +28,6 @@ namespace nenenib::ui::win32
 {
 using detail::font_of;
 using detail::product_name;
-
-namespace
-{
-// 起動の問いの文言（決定 6）。ここの 1 か所だけ。
-constexpr wchar_t autosave_question[] = L"前回の未保存の編集が残っています。戻しますか。";
-} // namespace
 
 LRESULT EditorWindow::frame_message(UINT message, WPARAM word, LPARAM data)
 {
@@ -196,8 +193,11 @@ void EditorWindow::offer_autosave()
     {
         return;
     }
+    // 起動の問いの文言（決定 6）は表の 1 行。
+    const std::wstring question = wide_ui_text(core::UiMessage::dialog_autosave_restore_question,
+                                               controller_.display_language());
     const int answer =
-        MessageBoxW(window_, autosave_question, product_name, MB_YESNO | MB_ICONQUESTION);
+        MessageBoxW(window_, question.c_str(), product_name, MB_YESNO | MB_ICONQUESTION);
     if (answer == IDYES)
     {
         send(application::RestoreAutosave{});

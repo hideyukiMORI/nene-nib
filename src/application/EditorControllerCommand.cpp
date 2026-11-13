@@ -6,6 +6,7 @@
 #include "CommandLayout.hpp"
 #include "CommandLine.hpp"
 #include "CommandPalette.hpp"
+#include "DisplayLanguageNames.hpp"
 #include "DisplayText.hpp"
 #include "DocumentByteLimit.hpp"
 #include "EditBoundary.hpp"
@@ -29,6 +30,8 @@
 #include "OffsetRange.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteMarks.hpp"
+#include "QuantityText.hpp"
+#include "ResolvedLanguage.hpp"
 #include "SearchLine.hpp"
 #include "StatusBarLayout.hpp"
 #include "SubstituteAll.hpp"
@@ -37,6 +40,7 @@
 #include "TabJump.hpp"
 #include "TabJumpDirection.hpp"
 #include "TextPosition.hpp"
+#include "UiMessage.hpp"
 #include "Utf8.hpp"
 #include "VimCharacter.hpp"
 #include "VimCommandMotion.hpp"
@@ -163,15 +167,8 @@ namespace
     return edit;
 }
 
-// 「行: 」が数でないときの知らせ（ADR 0174 の決定 8）。
-constexpr std::string_view not_a_line_notice = "行番号を入れてください";
 // Vim モードで一覧から「置換」を選んだときの `:` の前置き（ADR 0174 の決定 2）。
 constexpr std::string_view vim_replace_prefix = "%s/";
-// 全件の置換の後の文書が開ける上限を超えるときの知らせ（#1376・印刷の「16 MiB までです」と同じ
-// 流儀）。入力行の確定の断りなので鳴らす（ADR 0153 の決定 1）。
-constexpr std::string_view replace_too_large_notice = "置換の結果は 1 GiB までです";
-// 文の「1 GiB」を上限の値に縛る。上限を変えたらここで落ちるので、文も一緒に直す。
-static_assert(core::maximum_document_bytes == std::size_t{1024} * 1024U * 1024U);
 // 置換の起点を戻す幅（UTF-8 の 1 コードポイントの最大のバイト数）。
 constexpr std::size_t code_point_bytes = 4;
 
@@ -972,6 +969,39 @@ void EditorController::run_map_request(const core::ExMapRequest &request)
     }
 }
 
+// `:set language=<名前>` `:set language?` `:set language&`（ADR 0123 の追補 2026-11-13 の決定 2・
+// 8）。選んだ値は設定 v4 の ui_language へ既存の保存の入口で書き、解決し直して状態に置く（frame
+// の文はその場で変わる）。OS を観測するのは system を選んだときだけ（決定案 6）。保存できなければ
+// 断って言語を変えない（`:set lsp` と同じ）。問い（`?`）は読むだけで保存を通さない。どの形も今の
+// 希望値を 1 行で知らせ、希望値と解決済みの値が違う名前なら括弧で添える（`language=system (ja)`・
+// `language=ko (en)`）。
+void EditorController::answer_display_language(const core::ExDisplayLanguageRequest &request)
+{
+    auto settings = state_.settings();
+    if (request.chosen.has_value())
+    {
+        settings.ui_language = request.chosen.value();
+        if (!persist_settings(settings))
+        {
+            reject(core::DisplayText::parse("Settings could not be saved").value());
+            return;
+        }
+        const bool follows_windows = settings.ui_language == core::DisplayLanguageChoice::system;
+        state_ = state_.with_display_language(core::resolved_language(
+            settings.ui_language, follows_windows ? ports_.ui_language.observe() : std::nullopt));
+    }
+    std::string shown = "language=";
+    shown += core::display_language_choice_name(settings.ui_language);
+    if (core::display_language_choice_name(settings.ui_language) !=
+        core::display_language_code(state_.display_language()))
+    {
+        shown += " (";
+        shown += core::display_language_code(state_.display_language());
+        shown += ")";
+    }
+    state_ = state_.with_command_message(core::DisplayText::parse(shown).value());
+}
+
 // `:N` は鍵の `{N}G` と同じ engine の着地を同じ写しの道で写す（2 本にしない）。着地は必ず本文の中で
 // 失敗しないので、断りの知らせも警告音も無い（Vim も `:8000` は黙って最後の行へ）。
 void EditorController::jump_to_line(const core::ExLineRequest &request)
@@ -1224,7 +1254,10 @@ void EditorController::replace_all_matches()
         // 通常モードの語は literal で群を持たないので too_complex にはならない。来たら同じく断る。
         case core::SubstituteFailure::too_large:
         case core::SubstituteFailure::too_complex:
-            reject(core::DisplayText::parse(replace_too_large_notice).value());
+            // 全件の置換の後の文書が開ける上限を超えるときの知らせ（#1376・印刷の上限と同じ流儀・
+            // 上限は定数から差し込む）。入力行の確定の断りなので鳴らす（ADR 0153 の決定 1）。
+            reject(ui_notice(core::UiMessage::notice_replace_too_large,
+                             {core::binary_size_text(core::maximum_document_bytes)}));
             return;
         }
         return;
@@ -1313,7 +1346,8 @@ void EditorController::go_to_line(const core::SearchLine &line)
     const auto target = core::go_to_line_target(typed);
     if (!target.has_value())
     {
-        reject(core::DisplayText::parse(not_a_line_notice).value());
+        // 「行: 」が数でないときの知らせ（ADR 0174 の決定 8）。
+        reject(ui_notice(core::UiMessage::notice_go_to_line_invalid));
         return;
     }
     jump_to_line(core::ExLineRequest{target.value().line});

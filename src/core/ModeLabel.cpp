@@ -1,5 +1,8 @@
 #include "ModeLabel.hpp"
 
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
+
 #include <utility>
 
 namespace nenenib::core
@@ -45,12 +48,13 @@ namespace
 }
 } // namespace
 
-std::string_view mode_label(EditMode mode, VimMode vim, bool insert_paused) noexcept
+std::string_view mode_label(EditMode mode, VimMode vim, bool insert_paused,
+                            DisplayLanguage language) noexcept
 {
     switch (mode)
     {
     case EditMode::ordinary:
-        return "通常";
+        return ui_text(UiMessage::status_mode_basic, language);
     case EditMode::vim:
         break;
     }

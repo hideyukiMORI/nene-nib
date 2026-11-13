@@ -21,6 +21,8 @@
 #include "LspShowMessage.hpp"
 #include "PendingLspRequest.hpp"
 #include "ServerCommand.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -36,13 +38,6 @@ namespace nenenib::application
 {
 namespace
 {
-// 1 行の知らせ（ADR 0160 の決定 6）。言語の名前を後ろに付ける。
-constexpr std::string_view server_unstarted_message = "言語サーバーを起こせませんでした: ";
-constexpr std::string_view server_ended_message = "言語サーバーが終わりました: ";
-constexpr std::string_view server_silent_message = "言語サーバーが答えません: ";
-constexpr std::string_view server_given_up_message =
-    "言語サーバーを止めました（:set lsp で再開）: ";
-
 // `initialize` の params（決定 5）。位置の単位は utf-8 と utf-16 を申し出る。rootUri は起こす
 // 要求の root（設定の root か最初に開いた文書のフォルダ）の URI（ADR 0161 の決定 1）。
 [[nodiscard]] core::JsonValue initialize_params(const std::string &root_uri)
@@ -94,9 +89,12 @@ constexpr std::string_view server_given_up_message =
     return core::JsonValue{std::move(params)};
 }
 
-[[nodiscard]] core::DisplayText server_notice(std::string_view head, core::Language language)
+// 1 行の知らせ（ADR 0160 の決定 6）。言語の名前を置き場 {0} に入れる。
+[[nodiscard]] core::DisplayText server_notice(core::UiMessage message, core::Language language,
+                                              core::DisplayLanguage display_language)
 {
-    return core::DisplayText::parse(std::string{head} + std::string{core::language_name(language)})
+    return core::DisplayText::parse(
+               core::ui_text_filled(message, display_language, {core::language_name(language)}))
         .value();
 }
 } // namespace
@@ -189,7 +187,9 @@ void EditorController::start_language_server(core::Language language, ServerLaun
     if (!started)
     {
         link.given_up = true;
-        state_ = state_.with_command_message(server_notice(server_unstarted_message, language));
+        state_ = state_.with_command_message(
+            server_notice(core::UiMessage::notice_language_server_not_started, language,
+                          state_.display_language()));
         return;
     }
     link.phase = LanguageServerPhase::starting;
@@ -245,7 +245,7 @@ void EditorController::send_lsp_request(LspRequestKind kind, std::string_view me
 }
 
 // 子が終わった・話せない・答えない（決定 6）。止めて 1 行知らせ、上限までは同じ言語で起こし直す。
-void EditorController::language_server_failed(std::string_view head)
+void EditorController::language_server_failed(core::UiMessage message)
 {
     auto &link = language_server_;
     const core::Language language = link.language.value_or(state_.language());
@@ -254,10 +254,12 @@ void EditorController::language_server_failed(std::string_view head)
     if (link.failures > language_server_restart_limit)
     {
         link.given_up = true;
-        state_ = state_.with_command_message(server_notice(server_given_up_message, language));
+        state_ = state_.with_command_message(server_notice(
+            core::UiMessage::notice_language_server_given_up, language, state_.display_language()));
         return;
     }
-    state_ = state_.with_command_message(server_notice(head, language));
+    state_ =
+        state_.with_command_message(server_notice(message, language, state_.display_language()));
     auto launch = wanted_language_server(language);
     if (launch.has_value())
     {
@@ -331,7 +333,7 @@ void EditorController::end_language_server()
         reconcile_language_server();
         return;
     }
-    language_server_failed(server_ended_message);
+    language_server_failed(core::UiMessage::notice_language_server_ended);
 }
 
 void EditorController::receive_lsp(const core::LspResponse &response)
@@ -355,7 +357,7 @@ void EditorController::receive_lsp(const core::LspResponse &response)
     case LspRequestKind::initialize:
         if (!response.result)
         {
-            language_server_failed(server_unstarted_message);
+            language_server_failed(core::UiMessage::notice_language_server_not_started);
             return;
         }
         link.encoding = chosen_encoding(response.result.value());
@@ -435,7 +437,7 @@ void EditorController::expire_lsp_request(const PendingLspRequest &request)
         ports_.language_server.send(
             core::lsp_notification_body("$/cancelRequest", cancel_params(request.id)));
         repaint_ = true;
-        language_server_failed(server_silent_message);
+        language_server_failed(core::UiMessage::notice_language_server_silent);
         return;
     case LspRequestKind::shutdown:
         stop_language_server();

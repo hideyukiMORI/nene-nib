@@ -31,6 +31,7 @@
 #include "Win32SettingsAdapter.hpp"
 #include "Win32ShellRegistration.hpp"
 #include "Win32TimingAdapter.hpp"
+#include "Win32UiLanguage.hpp"
 #include "Win32WslDistributions.hpp"
 #include "WslDistribution.hpp"
 #include "WslPlaces.hpp"
@@ -592,6 +593,40 @@ void verify_timing_marks(Win32FileAdapter &files)
     const auto missing = read_text(files, unrecorded.value(), read_limit);
     expect(!missing.has_value() && missing.error() == FileFailure::not_found,
            "an adapter that was never bound writes nothing");
+}
+
+// OS の表示言語の写し（ADR 0123 の追補 2026-11-13 の決定 2・#1019）。LANGID の値は Windows SDK の
+// MAKELANGID(primary, sub) で、日本語と簡体字（中国・シンガポール）だけが列のある言語に写り、ほか
+// （繁体字・英語・列の無い言語）は english。OS を読む observe は 3 値のどれかを返す。
+void verify_ui_language_mapping()
+{
+    using nenenib::adapters::win32::display_language_of;
+    using nenenib::core::DisplayLanguage;
+    expect(display_language_of(MAKELANGID(LANG_JAPANESE, SUBLANG_JAPANESE_JAPAN)) ==
+               DisplayLanguage::japanese,
+           "Japanese maps to Japanese");
+    expect(display_language_of(MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED)) ==
+                   DisplayLanguage::simplified_chinese &&
+               display_language_of(MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SINGAPORE)) ==
+                   DisplayLanguage::simplified_chinese &&
+               display_language_of(MAKELANGID(LANG_CHINESE, SUBLANG_NEUTRAL)) ==
+                   DisplayLanguage::simplified_chinese,
+           "simplified Chinese (China, Singapore and the neutral zh-Hans) maps to simplified "
+           "Chinese");
+    expect(display_language_of(MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_TRADITIONAL)) ==
+                   DisplayLanguage::english &&
+               display_language_of(MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_HONGKONG)) ==
+                   DisplayLanguage::english,
+           "traditional Chinese has no column yet and maps to English");
+    expect(display_language_of(MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US)) ==
+                   DisplayLanguage::english &&
+               display_language_of(MAKELANGID(LANG_KOREAN, SUBLANG_KOREAN)) ==
+                   DisplayLanguage::english &&
+               display_language_of(MAKELANGID(LANG_GERMAN, SUBLANG_GERMAN)) ==
+                   DisplayLanguage::english,
+           "English and the languages without a column map to English");
+    nenenib::adapters::win32::Win32UiLanguage observer;
+    expect(observer.observe().has_value(), "observing the OS gives one of the three languages");
 }
 
 void verify_settings_codec()
@@ -2200,7 +2235,8 @@ std::wstring shell_test_value(const std::wstring &key, const wchar_t *name)
 nenenib::core::ShellRegistrationPlan shell_test_plan(const std::string &exe_path)
 {
     return nenenib::core::shell_registration_plan({exe_path, "NeNe Nib で開く", "NeNe Nib",
-                                                   nenenib::core::shell_registration_extensions()})
+                                                   nenenib::core::shell_registration_extensions()},
+                                                  nenenib::core::DisplayLanguage::japanese)
         .value_or(nenenib::core::ShellRegistrationPlan{});
 }
 
@@ -2374,6 +2410,7 @@ int run_memory_tests(std::string_view scope)
         return test_result();
     }
     verify_settings_codec();
+    verify_ui_language_mapping();
     verify_bad_settings_fields();
     verify_bad_settings_values();
     verify_settings_versions();
@@ -2447,6 +2484,7 @@ int run_tests(int argc, char **argv)
     }
     verify_timing_marks(files);
     verify_settings_codec();
+    verify_ui_language_mapping();
     verify_bad_settings_fields();
     verify_bad_settings_values();
     verify_settings_versions();

@@ -9,6 +9,7 @@
 // 測らない（QLT-013）。
 #include "BodyLayout.hpp"
 #include "DirectWriteFactory.hpp"
+#include "DisplayLanguage.hpp"
 #include "EditMode.hpp"
 #include "FilePath.hpp"
 #include "FontSize.hpp"
@@ -111,7 +112,8 @@ using Formats = std::vector<Format>;
         "Ctrl+T",
         "Ctrl+O",
         "Ctrl+Shift+R",
-        dpi};
+        dpi,
+        core::DisplayLanguage::japanese};
 }
 
 [[nodiscard]] core::BodyLayout body_of()
@@ -127,14 +129,16 @@ using Formats = std::vector<Format>;
         core::FilePath::parse("C:\\" + std::string(120, 'w') + "\\notes2.txt").value()};
     const std::vector<core::FilePath> bookmarks{
         core::FilePath::parse("D:\\NeNeNib\\README.md").value()};
-    return application::StartScreenView{core::start_entries(recent, bookmarks), std::size_t{0},
-                                        true, core::start_key_entries(core::EditMode::ordinary)};
+    return application::StartScreenView{
+        core::start_entries(recent, bookmarks), std::size_t{0}, true,
+        core::start_key_entries(core::EditMode::ordinary, core::DisplayLanguage::japanese)};
 }
 
 [[nodiscard]] application::StartScreenView first_view()
 {
-    return application::StartScreenView{core::start_entries({}, {}), std::nullopt, false,
-                                        core::start_key_entries(core::EditMode::ordinary)};
+    return application::StartScreenView{
+        core::start_entries({}, {}), std::nullopt, false,
+        core::start_key_entries(core::EditMode::ordinary, core::DisplayLanguage::japanese)};
 }
 
 // 画素（BGRA・premultiplied・不透明）が色と同じか。

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "DisplayLanguage.hpp"
+
 #include <cstdint>
 #include <string_view>
 
@@ -20,6 +22,7 @@ enum class PaletteOrigin : std::uint8_t
     document_format
 };
 
-// 行の右に添える補足の文言（ADR 0060 の決定 3）。
-[[nodiscard]] std::string_view palette_origin_label(PaletteOrigin origin) noexcept;
+// 行の右に添える補足の文言（ADR 0060 の決定 3）。文は表示言語の文の表（#1019）。
+[[nodiscard]] std::string_view palette_origin_label(PaletteOrigin origin,
+                                                    DisplayLanguage language) noexcept;
 } // namespace nenenib::core

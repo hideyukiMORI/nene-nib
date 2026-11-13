@@ -8,8 +8,12 @@
 #include "LocalSettingsPath.hpp"
 #include "Milestone.hpp"
 #include "OpenDocument.hpp"
+#include "ResolvedLanguage.hpp"
 #include "SystemFontFamilies.hpp"
 #include "TemporaryFiles.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
+#include "Utf16.hpp"
 #include "Win32AppearanceAdapter.hpp"
 #include "Win32AutosaveAdapter.hpp"
 #include "Win32Bell.hpp"
@@ -32,6 +36,7 @@
 #include "Win32StartListAdapter.hpp"
 #include "Win32ThemeAdapter.hpp"
 #include "Win32TimingAdapter.hpp"
+#include "Win32UiLanguage.hpp"
 #include "Win32Worker.hpp"
 #include "Win32WslDistributions.hpp"
 #include "WindowFailure.hpp"
@@ -56,23 +61,31 @@ namespace nib_adapters = nenenib::adapters::win32;
 
 constexpr wchar_t product_name[] = L"NeNe Nib";
 
-const wchar_t *reason_of(nenenib::ui::win32::WindowFailure failure) noexcept
+nenenib::core::UiMessage reason_of(nenenib::ui::win32::WindowFailure failure) noexcept
 {
     switch (failure)
     {
     case nenenib::ui::win32::WindowFailure::class_registration:
-        return L"ウィンドウクラスを登録できませんでした。";
+        return nenenib::core::UiMessage::app_error_window_class;
     case nenenib::ui::win32::WindowFailure::creation:
-        return L"ウィンドウを作成できませんでした。";
+        return nenenib::core::UiMessage::app_error_window_create;
     case nenenib::ui::win32::WindowFailure::render:
-        return L"Direct2D で描画を始められませんでした。";
+        return nenenib::core::UiMessage::app_error_rendering_start;
     }
     std::unreachable();
 }
 
-int report(const wchar_t *reason) noexcept
+// 起動できなかった理由の 1 行。設定を読む前の失敗なので、文の言語は OS の観測だけで解決する
+// （ADR 0123 の追補 2026-11-13・decisions の 5）。観測は失敗の道でだけ行い、起動の道の費用を
+// 足さない。表の文は検証済みの UTF-8 なので変換は失敗しない（失敗なら空の本文で出す）。
+int report(nenenib::core::UiMessage reason)
 {
-    MessageBoxW(nullptr, reason, product_name, MB_OK | MB_ICONERROR);
+    nenenib::adapters::win32::Win32UiLanguage observer;
+    const auto language = nenenib::core::resolved_language(
+        nenenib::core::DisplayLanguageChoice::system, observer.observe());
+    const auto text =
+        nenenib::core::to_utf16(nenenib::core::ui_text(reason, language)).value_or(std::wstring{});
+    MessageBoxW(nullptr, text.c_str(), product_name, MB_OK | MB_ICONERROR);
     return 1;
 }
 
@@ -259,7 +272,8 @@ void bind_work_signal(const nenenib::ui::win32::EditorWindow &window, Adapters &
 // 窓ができてから合図を結ぶ（bind_work_signal）。
 // 起動画面の履歴とブックマークの 1 回の読み（ADR 0172 の決定 3）も同じワーカーを借り、
 // 頼むのは最初の frame の合図のときだけ。履歴と明示登録（ADR 0063）の adapter はその仕事が
-// 借りるので、ワーカーより先に作って後に壊す。
+// 借りるので、ワーカーより先に作って後に壊す。表示言語の観測（ADR 0123 の追補 2026-11-13 の決定
+// 2）は controller が起動の 1 回だけ呼ぶ。
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
@@ -289,8 +303,7 @@ int run(HINSTANCE instance)
     // 字体の一覧は ui/win32 が DirectWrite から読み、adapters が OS の照合順に並べる（#696）。
     nenenib::ui::win32::SystemFontFamilies system_fonts;
     nenenib::adapters::win32::Win32FontCollationAdapter fonts(system_fonts);
-    nenenib::adapters::win32::Win32AutosaveAdapter autosave(
-        worker, files, nenenib::adapters::win32::local_autosave_root());
+    nib_adapters::Win32AutosaveAdapter autosave(worker, files, nib_adapters::local_autosave_root());
     nenenib::adapters::win32::Win32Bell bell;
     nib_adapters::Win32Clock wall_clock;
     nenenib::ui::win32::Win32Printer printer;
@@ -300,19 +313,20 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32LanguageServer language_server({});
     nenenib::adapters::win32::Win32ImageAdapter images(worker);
     nenenib::adapters::win32::Win32StartListAdapter start_lists(worker, history, bookmarks);
+    nib_adapters::Win32UiLanguage ui_language;
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{
             appearance,   clipboard,       files,      code_pages, settings,
             themes,       session,         history,    folders,    bookmarks,
             text_layouts, autosave,        fonts,      bell,       markdown,
             reads,        language_server, wall_clock, printer,    shell_registration,
-            images,       start_lists},
+            images,       start_lists,     ui_language},
         initial_documents(given));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);
     const auto window = nenenib::ui::win32::EditorWindow::create(
-        instance, controller, {timing, wsl}, {text_layouts, warmup});
+        instance, controller, {timing, wsl}, {text_layouts, warmup, controller.display_language()});
     if (!window)
     {
         return report(reason_of(window.error()));
@@ -329,7 +343,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
     // COM はファイルダイアログのために 1 度だけ（ADR 0010 の決定 10）。窓と同じ 1 本のスレッド。
     if (FAILED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)))
     {
-        return report(L"COM を初期化できませんでした。");
+        return report(nenenib::core::UiMessage::app_error_com_initialize);
     }
     const int code = run(instance);
     CoUninitialize();

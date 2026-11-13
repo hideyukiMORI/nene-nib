@@ -7,6 +7,7 @@
 #include "CompositionView.hpp"
 #include "DiagnosticCounts.hpp"
 #include "DisplayForm.hpp"
+#include "DisplayLanguage.hpp"
 #include "DisplayText.hpp"
 #include "DocumentView.hpp"
 #include "EditMode.hpp"
@@ -148,6 +149,9 @@ struct EditorFrame
     // 起動画面（ADR 0172 の決定 1・2）。出る条件（start_screen_shown）が真のときだけ値を持つ。
     // renderer は値があれば本文の案内の代わりにこれを操作中の枠に描く（段 2・#1018）。
     std::optional<StartScreenView> start_screen{};
+    // 解決済みの表示言語（ADR 0123 の追補 2026-11-13 の決定 3・#1019）。状態の display_language と
+    // 同じ値で、ui は画面の文をこの言語で引く（ui は設定も OS も読まない）。
+    core::DisplayLanguage language = core::DisplayLanguage::japanese;
 };
 
 // 変換中か（本文と入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

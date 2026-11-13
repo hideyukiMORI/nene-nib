@@ -25,6 +25,7 @@
 #include "PaneView.hpp"
 #include "PreviewFrame.hpp"
 #include "PreviewView.hpp"
+#include "ResolvedLanguage.hpp"
 #include "SearchLine.hpp"
 #include "Selection.hpp"
 #include "SelectionSpan.hpp"
@@ -33,6 +34,8 @@
 #include "TabTitle.hpp"
 #include "TextCaret.hpp"
 #include "TextPosition.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 #include "Utf8.hpp"
 #include "VimBlockRange.hpp"
 #include "VimLastVisual.hpp"
@@ -185,9 +188,9 @@ visual_block_of(const core::TextBuffer &text, const core::Selection &selection, 
 status_items_of(const EditorState &state, core::TextPosition caret, core::TextEncoding encoding)
 {
     // 改行の欄は保存の形（ADR 0010 の追補 #1049 の決定 1）。選んでいなければ本文の形。
-    return core::status_items_for(caret, encoding,
-                                  save_line_ending_of(state.document(), state.line_ending()),
-                                  state.language());
+    return core::status_items_for(
+        core::caret_status_item(caret, state.display_language()), encoding,
+        save_line_ending_of(state.document(), state.line_ending()), state.language());
 }
 // 描けない失敗だけを残す（frame の欄・ADR 0133 の追補 2026-10-18）。
 [[nodiscard]] std::optional<TextLayoutFailure>
@@ -380,6 +383,10 @@ EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocu
     {
         state_ = state_.with_settings(loaded.value().value_or(state_.settings()));
     }
+    // 表示言語は設定の希望値と OS の観測から起動の 1 回だけ解決する（ADR 0123 の追補 2026-11-13 の
+    // 決定 2・3）。観測は port の 1 回（GetUserDefaultUILanguage）だけで、ファイルを読まない。
+    state_ = state_.with_display_language(
+        core::resolved_language(state_.settings().ui_language, ports_.ui_language.observe()));
     // 面が出ている設定ならルートの木を作って読み始める（ADR 0162 の決定 3・5）。
     sync_explorer();
     sync_minimap();
@@ -419,6 +426,20 @@ void EditorController::accept(const AdjustFontSize &intent)
     settings.font_size =
         core::adjusted_font_size(settings.font_size, intent.adjustment, intent.steps);
     (void)persist_settings(std::move(settings));
+}
+
+// 表の文は検証済みの UTF-8 で短いので parse は必ず成功する（不変条件・ARC-010）。
+core::DisplayText EditorController::ui_notice(core::UiMessage message) const
+{
+    return core::DisplayText::parse(core::ui_text(message, state_.display_language())).value();
+}
+
+core::DisplayText EditorController::ui_notice(core::UiMessage message,
+                                              std::initializer_list<std::string_view> values) const
+{
+    return core::DisplayText::parse(
+               core::ui_text_filled(message, state_.display_language(), values))
+        .value();
 }
 
 bool EditorController::persist_settings(core::EditorSettings settings)
@@ -652,8 +673,10 @@ std::optional<core::DisplayText> EditorController::command_message() const
     {
         return std::nullopt;
     }
-    return core::DisplayText::parse("同じフォルダは " + std::to_string(palette_folder_.received) +
-                                    " 件まで。残りは一覧に出ません")
+    return core::DisplayText::parse(
+               core::ui_text_filled(core::UiMessage::notice_folder_truncated,
+                                    state_.display_language(),
+                                    {std::to_string(palette_folder_.received)}))
         .value();
 }
 
@@ -1070,8 +1093,8 @@ DocumentView EditorController::active_document_view() const
 {
     const auto &document = state_.document();
     const auto save_state = save_state_of(document, state_.history().content_position());
-    return DocumentView{core::tab_title_for(document.path, save_state), document.path,
-                        document.encoding, save_state, state_.last_failure()};
+    return DocumentView{core::tab_title_for(document.path, save_state, state_.display_language()),
+                        document.path, document.encoding, save_state, state_.last_failure()};
 }
 
 core::GuideContext EditorController::guide_context() const noexcept
@@ -1184,7 +1207,7 @@ EditorFrame EditorController::frame()
                        delivered.mode,
                        delivered.vim_mode,
                        delivered.ime,
-                       core::mode_label(delivered.mode, delivered.vim_mode, insert_paused(state_)),
+                       {},
                        recording_name(),
                        std::move(delivered.composition),
                        std::move(delivered.command_composition),
@@ -1203,7 +1226,7 @@ EditorFrame EditorController::frame()
                        delivered.close_request,
                        delivered.operation_request,
                        delivered.display_question,
-                       core::operation_guide(guide_context(), delivered.mode),
+                       {},
                        failure,
                        scroll.horizontal,
                        state_.display(),
@@ -1216,6 +1239,11 @@ EditorFrame EditorController::frame()
 void EditorController::finish_frame(EditorFrame &result, const PaneSource &source, bool gridded,
                                     std::size_t lexed)
 {
+    // 表示言語の文（ADR 0123 の追補 2026-11-13）。モードの名前と案内はここで今の言語から引く。
+    result.language = state_.display_language();
+    result.mode_label =
+        core::mode_label(result.mode, result.vim_mode, insert_paused(state_), result.language);
+    result.guide = core::operation_guide(guide_context(), result.mode, result.language);
     if (gridded)
     {
         GridTally tally{0, 0, lexed};

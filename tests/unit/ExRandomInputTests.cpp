@@ -659,7 +659,8 @@ void typed_steps(EditorController &controller, const std::vector<Step> &steps)
                                                  editing.printer(),
                                                  editing.shell_registration(),
                                                  editing.images(),
-                                                 editing.start_lists()}};
+                                                 editing.start_lists(),
+                                                 editing.ui_language()}};
     open_document(controller, editing.files(), trial.first);
     for (std::size_t index = 0; index < trial.second.size(); ++index)
     {

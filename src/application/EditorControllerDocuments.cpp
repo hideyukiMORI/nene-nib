@@ -33,6 +33,7 @@
 #include "PrintFailure.hpp"
 #include "PrintJob.hpp"
 #include "PrintPages.hpp"
+#include "QuantityText.hpp"
 #include "ReadingTarget.hpp"
 #include "SaveState.hpp"
 #include "Selection.hpp"
@@ -45,6 +46,8 @@
 #include "TabTitle.hpp"
 #include "TextCaret.hpp"
 #include "TextPosition.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 #include "UnloadedDocument.hpp"
 #include "Utf16.hpp"
 #include "VimMarkEdits.hpp"
@@ -288,9 +291,6 @@ utf16_parts(std::string_view source, std::string_view mark, core::ByteOrder orde
     return std::vector<std::string_view>{mark, held};
 }
 
-constexpr std::string_view unreached_prefix = "開けませんでした: ";
-constexpr std::string_view reading_prefix = "読み込み中: ";
-
 // 読み込み中の要求の列の中で券の位置（ADR 0159 の決定 5）。無ければ値なし。
 [[nodiscard]] std::optional<std::size_t> reading_index(const std::vector<DocumentReading> &readings,
                                                        std::uint64_t ticket)
@@ -334,9 +334,10 @@ constexpr std::string_view reading_prefix = "読み込み中: ";
     return std::holds_alternative<OpenRequest>(reading.target);
 }
 
-[[nodiscard]] core::DisplayText unreached_message(const core::FilePath &path, std::size_t others)
+[[nodiscard]] core::DisplayText unreached_message(const core::FilePath &path, std::size_t others,
+                                                  core::DisplayLanguage language)
 {
-    return named_notice(unreached_prefix,
+    return named_notice(core::UiMessage::notice_open_failed, language,
                         std::string(path.file_name().empty() ? path.text() : path.file_name()),
                         others);
 }
@@ -385,8 +386,7 @@ void EditorController::restore_session()
     const auto session = ports_.session.read();
     if (!session)
     {
-        state_ = state_.with_command_message(
-            core::DisplayText::parse("前回のタブを読めませんでした").value());
+        state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_session_unreadable));
         return;
     }
     const std::optional<Session> &listed = session.value();
@@ -466,6 +466,11 @@ bool EditorController::answer_current_value(const core::ExResult &result)
     if (result.lsp.has_value())
     {
         answer_lsp(result.lsp.value());
+        return true;
+    }
+    if (result.display_language.has_value())
+    {
+        answer_display_language(result.display_language.value());
         return true;
     }
     if (result.format.has_value())
@@ -1074,10 +1079,10 @@ void EditorController::answer_unopened(const core::FilePath &path, FileFailure f
         fail(failure);
         return;
     case OpenFailureReply::notice:
-        reject(unreached_message(path, 0));
+        reject(unreached_message(path, 0, state_.display_language()));
         return;
     case OpenFailureReply::notice_forgetting:
-        reject(unreached_message(path, 0));
+        reject(unreached_message(path, 0, state_.display_language()));
         if (failure == FileFailure::not_found)
         {
             forget(path);
@@ -1169,11 +1174,12 @@ std::optional<core::DisplayText> EditorController::reading_message() const
                                                           : value.path.file_name());
     if (value.total_bytes == 0)
     {
-        return named_line(reading_prefix, name, {});
+        return named_line(core::UiMessage::notice_reading, state_.display_language(), name, {});
     }
     const std::uint64_t percent =
         std::min<std::uint64_t>(100, value.read_bytes * 100 / value.total_bytes);
-    return named_line(reading_prefix, name, " " + std::to_string(percent) + "%");
+    return named_line(core::UiMessage::notice_reading, state_.display_language(), name,
+                      " " + std::to_string(percent) + "%");
 }
 
 // Ctrl+O と起動引数の開く。失敗はダイアログ（ADR 0010 の決定 9）。
@@ -1360,7 +1366,8 @@ TabReach EditorController::loaded_tab(std::size_t position,
 void EditorController::report_unreached(const core::FilePath &path)
 {
     ++unreached_tabs_;
-    state_ = state_.with_command_message(unreached_message(path, unreached_tabs_ - 1));
+    state_ = state_.with_command_message(
+        unreached_message(path, unreached_tabs_ - 1, state_.display_language()));
 }
 
 // 窓が閉じていく（ADR 0059 の決定 3）。一覧を作るのはここだけで、1 打鍵の道には無い。書けなくても
@@ -1516,22 +1523,21 @@ void EditorController::close_active_tab()
 }
 namespace
 {
-// 印刷の知らせ（ADR 0177 の決定 2・7）。失敗の理由は PrintFailure の値ごとに 1 つ。
-constexpr std::string_view print_too_large_notice = "印刷は 16 MiB までです";
-constexpr std::string_view print_failed_prefix = "印刷できませんでした: ";
-
-[[nodiscard]] std::string print_failure_notice(PrintFailure failure)
+// 印刷の知らせ（ADR 0177 の決定 2・7）。失敗の理由は PrintFailure の値ごとに 1 つ。上限は定数から
+// 差し込む。
+[[nodiscard]] std::string print_failure_notice(PrintFailure failure, core::DisplayLanguage language)
 {
     switch (failure)
     {
     case PrintFailure::no_printer:
-        return std::string(print_failed_prefix) + "プリンタがありません";
+        return std::string(core::ui_text(core::UiMessage::notice_print_no_printer, language));
     case PrintFailure::dialog_failed:
-        return std::string(print_failed_prefix) + "印刷のダイアログを開けません";
+        return std::string(core::ui_text(core::UiMessage::notice_print_dialog_failed, language));
     case PrintFailure::rendering_failed:
-        return std::string(print_failed_prefix) + "ページを描けません";
+        return std::string(core::ui_text(core::UiMessage::notice_print_render_failed, language));
     case PrintFailure::too_large:
-        return std::string(print_too_large_notice);
+        return core::ui_text_filled(core::UiMessage::notice_print_too_large, language,
+                                    {core::binary_size_text(core::print_byte_limit)});
     }
     std::unreachable();
 }
@@ -1543,14 +1549,18 @@ void EditorController::accept(const PrintDocument &intent)
     if (!intent.settings)
     {
         state_ = state_.with_command_message(
-            core::DisplayText::parse(print_failure_notice(intent.settings.error())).value());
+            core::DisplayText::parse(
+                print_failure_notice(intent.settings.error(), state_.display_language()))
+                .value());
         return;
     }
     // 大きすぎる本文は写さず、port も呼ばない（決定 7）。
     if (state_.text().size_bytes() > core::print_byte_limit)
     {
-        state_ =
-            state_.with_command_message(core::DisplayText::parse(print_too_large_notice).value());
+        state_ = state_.with_command_message(
+            core::DisplayText::parse(
+                print_failure_notice(PrintFailure::too_large, state_.display_language()))
+                .value());
         return;
     }
     const auto &settings = state_.settings();
@@ -1558,7 +1568,8 @@ void EditorController::accept(const PrintDocument &intent)
     auto text = std::make_shared<const std::string>(state_.text().text());
     PrintJob job{std::move(text),
                  state_.text().line_ending(),
-                 core::tab_title_for(state_.document().path, core::SaveState::saved),
+                 core::tab_title_for(state_.document().path, core::SaveState::saved,
+                                     state_.display_language()),
                  state_.language(),
                  settings.font_family,
                  settings.font_size,
@@ -1570,7 +1581,8 @@ void EditorController::accept(const PrintDocument &intent)
         return;
     }
     state_ = state_.with_command_message(
-        core::DisplayText::parse(print_failure_notice(outcome.error())).value());
+        core::DisplayText::parse(print_failure_notice(outcome.error(), state_.display_language()))
+            .value());
 }
 
 void EditorController::run_print_request(core::ExPrintRequest request)

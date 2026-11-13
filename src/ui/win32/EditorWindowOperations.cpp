@@ -12,10 +12,12 @@
 #include "FileDialog.hpp"
 #include "FileDrop.hpp"
 #include "FileFailure.hpp"
+#include "FileFailureText.hpp"
 #include "FontSizeAdjustment.hpp"
 #include "InsertDateTime.hpp"
 #include "Milestone.hpp"
 #include "OpenCommandPalette.hpp"
+#include "OpenDisplayLanguageList.hpp"
 #include "OpenDocument.hpp"
 #include "OpenDocumentFormatList.hpp"
 #include "OpenOperationList.hpp"
@@ -39,9 +41,11 @@
 #include "TextEncoding.hpp"
 #include "ToggleBookmark.hpp"
 #include "ToggleExplorer.hpp"
+#include "UiMessage.hpp"
 #include "UnregisterShell.hpp"
 #include "UnsavedTab.hpp"
 #include "VimSearchDirection.hpp"
+#include "WideUiText.hpp"
 #include "WslPlaces.hpp"
 
 #include <array>
@@ -61,11 +65,6 @@ using detail::widen;
 
 namespace
 {
-constexpr wchar_t untitled_file[] = L"無題.txt";
-
-// 格子表示の問いの文言（ADR 0140 の決定 2）。ここの 1 か所だけ。
-constexpr wchar_t display_question[] = L"改行の無い巨大な行があります。格子表示で開きますか。";
-
 // 印刷のダイアログを出し、選んだ設定かダイアログの失敗を意図にする。取り消しは nullopt（何も送ら
 // ない）。ダイアログは controller の apply の外で回す（ADR 0177 の決定 10）。
 [[nodiscard]] std::optional<application::PrintDocument> print_intent(HWND owner)
@@ -81,37 +80,6 @@ constexpr wchar_t display_question[] = L"改行の無い巨大な行がありま
         return std::nullopt;
     }
     return application::PrintDocument{std::move(pressed).value()};
-}
-
-// 失敗の理由は 1 行だけ出す。本文は変わらない（ADR 0010 の決定 9）。
-[[nodiscard]] const wchar_t *reason_of(application::FileFailure failure) noexcept
-{
-    switch (failure)
-    {
-    case application::FileFailure::not_found:
-        return L"ファイルが見つかりませんでした。";
-    case application::FileFailure::access_denied:
-        return L"ファイルを開く権限がありません。";
-    case application::FileFailure::unreadable:
-        return L"ファイルを読み取れませんでした。";
-    case application::FileFailure::unwritable:
-        return L"ファイルを保存できませんでした。元のファイルは変わっていません。";
-    case application::FileFailure::already_exists:
-        return L"ファイルは既に存在します。";
-    case application::FileFailure::too_large:
-        return L"1 GB を超えるファイルは開けません。";
-    case application::FileFailure::too_large_to_decode:
-        return L"64 MiB を超える Shift_JIS / UTF-16 は開けません。";
-    case application::FileFailure::undecodable:
-        return L"文字コードを判別できませんでした。";
-    case application::FileFailure::unsupported_utf32:
-        return L"UTF-32 のファイルは扱えません。UTF-8 か UTF-16 で保存し直してください。";
-    case application::FileFailure::unencodable:
-        return L"この文字コードでは保存できない文字があります。";
-    case application::FileFailure::insufficient_memory:
-        return L"メモリが足りず、ファイルを開けませんでした。";
-    }
-    std::unreachable();
 }
 } // namespace
 
@@ -144,8 +112,11 @@ void EditorWindow::finish_display_question(bool question)
 void EditorWindow::ask_display()
 {
     timing_.mark(core::Milestone::question_shown);
+    // 格子表示の問いの文言（ADR 0140 の決定 2）は表の 1 行。
+    const std::wstring question =
+        wide_ui_text(core::UiMessage::dialog_giant_line_question, controller_.display_language());
     const int answer =
-        MessageBoxW(window_, display_question, product_name, MB_YESNO | MB_ICONQUESTION);
+        MessageBoxW(window_, question.c_str(), product_name, MB_YESNO | MB_ICONQUESTION);
     timing_.mark(core::Milestone::question_answered);
     send(application::SelectDisplay{answer == IDYES ? core::DisplayForm::grid
                                                     : core::DisplayForm::text});
@@ -189,23 +160,29 @@ void EditorWindow::announce(const application::EditorDelivery &delivery)
         offer_utf8(delivery.document.path.value());
         return;
     }
-    MessageBoxW(window_, reason_of(failure), product_name, MB_OK | MB_ICONWARNING);
+    // 失敗の理由は 1 行だけ出す。本文は変わらない（ADR 0010 の決定 9）。
+    MessageBoxW(window_, file_failure_text(failure, controller_.display_language()).c_str(),
+                product_name, MB_OK | MB_ICONWARNING);
 }
 
 void EditorWindow::announce_settings(const application::EditorDelivery &delivery)
 {
     if (delivery.settings_failure.has_value())
     {
-        MessageBoxW(window_, settings_notice(delivery.settings_failure.value()).c_str(),
-                    product_name, MB_OK | MB_ICONWARNING);
+        MessageBoxW(
+            window_,
+            settings_notice(delivery.settings_failure.value(), controller_.display_language())
+                .c_str(),
+            product_name, MB_OK | MB_ICONWARNING);
     }
 }
 
 void EditorWindow::offer_utf8(const core::FilePath &path)
 {
-    const int answer = MessageBoxW(
-        window_, L"この文字コードでは保存できない文字があります。UTF-8 で保存しますか。",
-        product_name, MB_YESNO | MB_ICONWARNING);
+    const std::wstring question =
+        wide_ui_text(core::UiMessage::dialog_unencodable_save_utf8, controller_.display_language());
+    const int answer =
+        MessageBoxW(window_, question.c_str(), product_name, MB_YESNO | MB_ICONWARNING);
     if (answer != IDYES)
     {
         return;
@@ -216,7 +193,7 @@ void EditorWindow::offer_utf8(const core::FilePath &path)
 void EditorWindow::open_document()
 {
     // 開くは今の文書を置き換えないので確かめない（ADR 0056 の決定 5）。
-    const auto chosen = choose_file_to_open(window_);
+    const auto chosen = choose_file_to_open(window_, controller_.display_language());
     if (!chosen.has_value())
     {
         return;
@@ -237,7 +214,9 @@ void EditorWindow::open_dropped_files(WPARAM word)
         }
         if (!path)
         {
-            MessageBoxW(window_, reason_of(path.error()), product_name, MB_OK | MB_ICONWARNING);
+            MessageBoxW(window_,
+                        file_failure_text(path.error(), controller_.display_language()).c_str(),
+                        product_name, MB_OK | MB_ICONWARNING);
             continue;
         }
         send(application::OpenDocument{path.value()});
@@ -258,10 +237,11 @@ void EditorWindow::save_document()
 void EditorWindow::save_document_as()
 {
     const auto delivery = controller_.delivery();
-    const std::wstring suggested = delivery.document.path.has_value()
-                                       ? widen(delivery.document.path.value().file_name())
-                                       : std::wstring(untitled_file);
-    const auto chosen = choose_file_to_save(window_, suggested);
+    const std::wstring suggested =
+        delivery.document.path.has_value()
+            ? widen(delivery.document.path.value().file_name())
+            : wide_ui_text(core::UiMessage::default_file_name, controller_.display_language());
+    const auto chosen = choose_file_to_save(window_, suggested, controller_.display_language());
     if (!chosen.has_value())
     {
         return;
@@ -280,7 +260,8 @@ bool EditorWindow::confirm_discard()
     {
         return true;
     }
-    const auto answer = ask_save(window_, product_name, SaveQuestion::unsaved);
+    const auto answer =
+        ask_save(window_, product_name, SaveQuestion::unsaved, controller_.display_language());
     switch (save_step(SaveQuestion::unsaved, answer))
     {
     case SaveStep::close_discarding:
@@ -302,7 +283,8 @@ bool EditorWindow::confirm_lost_tab()
     // 理由（announce のダイアログ）を見せた後でもう一度聞く。
     while (controller_.delivery().document.save_state != core::SaveState::saved)
     {
-        const auto answer = ask_save(window_, product_name, SaveQuestion::rendering_lost);
+        const auto answer = ask_save(window_, product_name, SaveQuestion::rendering_lost,
+                                     controller_.display_language());
         switch (save_step(SaveQuestion::rendering_lost, answer))
         {
         case SaveStep::save:
@@ -403,6 +385,7 @@ EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation op
         {core::EditorOperation::print, &EditorWindow::run_print},
         {core::EditorOperation::register_shell, &EditorWindow::run_register_shell},
         {core::EditorOperation::unregister_shell, &EditorWindow::run_unregister_shell},
+        {core::EditorOperation::choose_language, &EditorWindow::run_choose_language},
     }};
     static_assert(runners_in_order(runners),
                   "operation runners follow the order of EditorOperation and point to a function");
@@ -604,6 +587,12 @@ void EditorWindow::run_register_shell()
 void EditorWindow::run_unregister_shell()
 {
     send(application::UnregisterShell{});
+}
+
+// 表示言語を選ぶ（ADR 0123 の追補 2026-11-13 の決定 8）。候補の面は controller が開く。
+void EditorWindow::run_choose_language()
+{
+    send(application::OpenDisplayLanguageList{});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

@@ -6,12 +6,16 @@
 #include "AutosaveSnapshot.hpp"
 #include "AutosaveStep.hpp"
 #include "DisplayText.hpp"
+#include "DocumentByteLimit.hpp"
 #include "DocumentState.hpp"
 #include "Language.hpp"
+#include "QuantityText.hpp"
 #include "SaveState.hpp"
 #include "Selection.hpp"
 #include "TabTitle.hpp"
 #include "TextPosition.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 #include "UnloadedDocument.hpp"
 #include "VimMarkEdits.hpp"
 
@@ -66,33 +70,30 @@ autosave_bundle(const std::shared_ptr<const UnloadedDocument> &)
     return bytes;
 }
 
-// 自動退避の失敗の 1 行（ADR 0137 の決定 4）。
-constexpr std::string_view autosave_failed_message = "自動退避できませんでした";
-// 上限を超える本文を退避しない知らせ（ADR 0159 の決定 7・L-4）。
-constexpr std::string_view autosave_oversized_message = "64 MiB を超える文書は自動退避しません";
-// 自動退避の残骸を読めなかった知らせ（ADR 0137 の決定 6）。
-constexpr std::string_view unrestored_prefix = "戻せませんでした: ";
-
-// 読めなかった残骸の知らせ。名前は未保存の印の無い題名（無題なら「無題」）。
+// 読めなかった残骸の知らせ（ADR 0137 の決定 6）。名前は未保存の印の無い題名（無題なら「無題」）。
 [[nodiscard]] core::DisplayText unrestored_message(const AutosaveRemnant &remnant,
-                                                   std::size_t others)
+                                                   std::size_t others,
+                                                   core::DisplayLanguage language)
 {
     return named_notice(
-        unrestored_prefix,
-        std::string(core::tab_title_for(remnant.path, core::SaveState::saved).text()), others);
+        core::UiMessage::notice_autosave_unrestored, language,
+        std::string(core::tab_title_for(remnant.path, core::SaveState::saved, language).text()),
+        others);
 }
 
 // 自動退避から戻した 1 タブの束（ADR 0137 の決定 6）。保存した時点は無い（未保存の印）。
 // キャレットは一覧に書いた位置を reached_bundle と同じく寄せる（行は本文の範囲へ、桁は行の中の
 // 文字の境目へ）。スクロールは先頭、履歴は空。
 [[nodiscard]] DocumentState restored_document(core::TextBuffer text, Document document,
-                                              core::TextPosition caret)
+                                              core::TextPosition caret,
+                                              core::DisplayLanguage display_language)
 {
     const core::Offset placed =
         text.offset_of(core::TextPosition{line_within(text, caret.line), caret.column});
     const core::VimMarkPosition opened = core::vim_mark_position_of(text, placed);
-    DocumentView view{core::tab_title_for(document.path, core::SaveState::modified), document.path,
-                      document.encoding, core::SaveState::modified, std::nullopt};
+    DocumentView view{
+        core::tab_title_for(document.path, core::SaveState::modified, display_language),
+        document.path, document.encoding, core::SaveState::modified, std::nullopt};
     // 戻した文書の言語もパスから引く（ADR 0154 の決定 5）。
     const core::Language language = language_of(document);
     DocumentState bundle{std::move(text),
@@ -168,7 +169,8 @@ void EditorController::accept(const RestoreAutosave &)
             restored.push_back(std::move(bundle).value());
             continue;
         }
-        state_ = state_.with_command_message(unrestored_message(remnant, unrestored++));
+        state_ = state_.with_command_message(
+            unrestored_message(remnant, unrestored++, state_.display_language()));
     }
     if (!restored.empty())
     {
@@ -217,7 +219,8 @@ std::optional<DocumentState> EditorController::restored_bundle(const AutosaveRem
         return std::nullopt;
     }
     return restored_document(std::move(text).value(),
-                             Document{remnant.path, encoding, std::nullopt}, remnant.caret);
+                             Document{remnant.path, encoding, std::nullopt}, remnant.caret,
+                             state_.display_language());
 }
 
 void EditorController::store_planned(AutosaveId id)
@@ -261,7 +264,8 @@ bool EditorController::store_autosave(AutosaveId id, const core::TextBuffer &tex
     }
     // store にするのは未保存のタブだけなので、題名は未保存の印つき。
     ports_.autosave.store(AutosaveSnapshot{
-        id, document.path, core::tab_title_for(document.path, core::SaveState::modified),
+        id, document.path,
+        core::tab_title_for(document.path, core::SaveState::modified, state_.display_language()),
         joined_bytes(parts.value()), caret});
     return true;
 }
@@ -301,7 +305,9 @@ void EditorController::notify_autosave_failure()
     }
     autosave_notified_ = true;
     // 材料は固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
-    reject(core::DisplayText::parse(autosave_failed_message).value());
+    reject(core::DisplayText::parse(
+               core::ui_text(core::UiMessage::notice_autosave_failed, state_.display_language()))
+               .value());
 }
 
 // 退避しない知らせは文書ごとに 1 回（ADR 0159 の決定 7・L-4）。打鍵の失敗ではないので鳴らさない。
@@ -314,7 +320,11 @@ void EditorController::notify_autosave_oversized(AutosaveId id)
     autosave_oversized_.push_back(id);
     repaint_ = true;
     // 材料は固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
-    state_ =
-        state_.with_command_message(core::DisplayText::parse(autosave_oversized_message).value());
+    state_ = state_.with_command_message(
+        core::DisplayText::parse(
+            core::ui_text_filled(core::UiMessage::notice_autosave_too_large,
+                                 state_.display_language(),
+                                 {core::binary_size_text(core::maximum_decoded_document_bytes)}))
+            .value());
 }
 } // namespace nenenib::application

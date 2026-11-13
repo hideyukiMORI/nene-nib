@@ -1,6 +1,8 @@
 #include "PaletteChoiceProbe.hpp"
 #include "AsciiCase.hpp"
 #include "CommandChoice.hpp"
+#include "DisplayLanguage.hpp"
+#include "DisplayLanguageNames.hpp"
 #include "ExCompletionProbe.hpp"
 #include "Milestone.hpp"
 #include "PaletteChoiceSample.hpp"
@@ -230,9 +232,25 @@ constexpr std::array<PaletteChoiceSample, 9> samples{{
     return line.text() == sample.input && line.caret().value == sample.input.size() &&
            !line.completion_index().has_value() && catalog_equal(line.catalog(), sample);
 }
+// `set language=<名前>` の候補だけは説明（言語の自称か「Windows に合わせる」）を持つ（ADR 0123 の
+// 2026-11-13 の追補の決定 8・面は既定の日本語で開く）。ほかの候補は説明なし。
+[[nodiscard]] bool detail_equal(const core::CommandChoice &choice, std::string_view expected)
+{
+    constexpr std::string_view stem = "set language=";
+    const auto named = expected.starts_with(stem)
+                           ? core::display_language_choice_named(expected.substr(stem.size()))
+                           : std::nullopt;
+    if (!named.has_value())
+    {
+        return !choice.detail.has_value();
+    }
+    return choice.detail.has_value() &&
+           choice.detail.value().text() ==
+               core::display_language_choice_detail(named.value(), core::DisplayLanguage::japanese);
+}
 [[nodiscard]] bool choice_equal(const core::CommandChoice &choice, std::string_view expected)
 {
-    return !choice.detail.has_value() && choice.command == expected &&
+    return detail_equal(choice, expected) && choice.command == expected &&
            choice.label.text() == expected &&
            choice.label.code_point_count() == code_points_of(expected) &&
            choice.kind == kind_of(expected) && !choice.origin.has_value() &&

@@ -13,6 +13,7 @@
 #include "NewlineIndexWorkload.hpp"
 #include "OperationChoiceWorkload.hpp"
 #include "PaletteChoiceWorkload.hpp"
+#include "PatternCostWorkload.hpp"
 #include "PatternProgramWorkload.hpp"
 #include "PieceListWorkload.hpp"
 #include "PreviewCaretWorkload.hpp"
@@ -44,5 +45,6 @@ using ProbeDispatch =
                  ProbeDispatchRow<LexerWorkload>, ProbeDispatchRow<ExplorerFrameWorkload>,
                  ProbeDispatchRow<VimBlockWorkload>, ProbeDispatchRow<WordObjectWorkload>,
                  ProbeDispatchRow<EditedHistoryWorkload>, ProbeDispatchRow<PieceListWorkload>,
-                 ProbeDispatchRow<SubstituteWorkload>, ProbeDispatchRow<PatternProgramWorkload>>;
+                 ProbeDispatchRow<SubstituteWorkload>, ProbeDispatchRow<PatternCostWorkload>,
+                 ProbeDispatchRow<PatternProgramWorkload>>;
 } // namespace nenenib::tests::performance

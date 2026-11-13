@@ -1,7 +1,9 @@
 #include "FileDialog.hpp"
 
 #include "LanguageTable.hpp"
+#include "UiMessage.hpp"
 #include "Utf16.hpp"
+#include "WideUiText.hpp"
 
 #include <windows.h>
 
@@ -25,16 +27,6 @@ using Microsoft::WRL::ComPtr;
 // 既定は 2 つ目の「すべてのファイル」（SetFileTypeIndex は 1 始まり）。
 constexpr UINT all_files_index = 2;
 
-[[nodiscard]] std::span<const COMDLG_FILTERSPEC> file_types()
-{
-    // ASCII の pattern は変換に失敗しない。失敗の値は空の絞り込みにせず「すべて」に倒す。
-    static const std::wstring supported =
-        core::to_utf16(core::file_dialog_pattern()).value_or(std::wstring{L"*.*"});
-    static const std::array<COMDLG_FILTERSPEC, 2> types{
-        {{L"対応するファイル", supported.c_str()}, {L"すべてのファイル", L"*.*"}}};
-    return types;
-}
-
 // COM が返した UTF-16 の経路を検証済みの core::FilePath へ。解放はここで閉じる（CPP-016）。
 // 変換は core::to_utf8 ただ 1 本で、変換できない経路は空になり parse が拒む（Issue #13）。
 [[nodiscard]] std::optional<core::FilePath> path_of(IShellItem &item)
@@ -54,9 +46,17 @@ constexpr UINT all_files_index = 2;
     return std::move(parsed).value();
 }
 
-[[nodiscard]] std::optional<core::FilePath> shown(IFileDialog &dialog, HWND owner)
+[[nodiscard]] std::optional<core::FilePath> shown(IFileDialog &dialog, HWND owner,
+                                                  core::DisplayLanguage language)
 {
-    const auto types = file_types();
+    // 絞り込みの名前は表示言語から箱を出すたびに作る（ADR 0123 の追補 2026-11-13 の決定 11）。
+    // COMDLG_FILTERSPEC が指す文字列は、箱を閉じるまでこの関数の局所が持つ。
+    // ASCII の pattern は変換に失敗しない。失敗の値は空の絞り込みにせず「すべて」に倒す。
+    const std::wstring supported =
+        core::to_utf16(core::file_dialog_pattern()).value_or(std::wstring{L"*.*"});
+    const auto names = file_type_names(language);
+    const std::array<COMDLG_FILTERSPEC, 2> types{
+        {{names.at(0).c_str(), supported.c_str()}, {names.at(1).c_str(), L"*.*"}}};
     static_cast<void>(dialog.SetFileTypes(static_cast<UINT>(types.size()), types.data()));
     static_cast<void>(dialog.SetFileTypeIndex(all_files_index));
     // 取り消しは HRESULT の失敗として返る。理由を分けずに「選ばれなかった」として扱う。
@@ -93,7 +93,13 @@ void add_places(IFileDialog &dialog, std::span<const std::string> places)
 }
 } // namespace
 
-std::optional<core::FilePath> choose_file_to_open(HWND owner)
+std::array<std::wstring, 2> file_type_names(core::DisplayLanguage language)
+{
+    return {wide_ui_text(core::UiMessage::os_filter_supported_files, language),
+            wide_ui_text(core::UiMessage::os_filter_all_files, language)};
+}
+
+std::optional<core::FilePath> choose_file_to_open(HWND owner, core::DisplayLanguage language)
 {
     ComPtr<IFileOpenDialog> dialog;
     if (FAILED(CoCreateInstance(__uuidof(FileOpenDialog), nullptr, CLSCTX_INPROC_SERVER,
@@ -101,10 +107,11 @@ std::optional<core::FilePath> choose_file_to_open(HWND owner)
     {
         return std::nullopt;
     }
-    return shown(*dialog.Get(), owner);
+    return shown(*dialog.Get(), owner, language);
 }
 
-std::optional<core::FilePath> choose_file_to_save(HWND owner, const std::wstring &suggested)
+std::optional<core::FilePath> choose_file_to_save(HWND owner, const std::wstring &suggested,
+                                                  core::DisplayLanguage language)
 {
     ComPtr<IFileSaveDialog> dialog;
     if (FAILED(CoCreateInstance(__uuidof(FileSaveDialog), nullptr, CLSCTX_INPROC_SERVER,
@@ -115,7 +122,7 @@ std::optional<core::FilePath> choose_file_to_save(HWND owner, const std::wstring
     static_cast<void>(dialog->SetFileName(suggested.c_str()));
     // 拡張子を打たずに決めた名前は .txt になる（IFileDialog の既定の振る舞い）。
     static_cast<void>(dialog->SetDefaultExtension(L"txt"));
-    return shown(*dialog.Get(), owner);
+    return shown(*dialog.Get(), owner, language);
 }
 
 std::optional<core::FilePath> choose_folder(HWND owner, std::span<const std::string> places)

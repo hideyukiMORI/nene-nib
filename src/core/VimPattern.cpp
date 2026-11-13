@@ -42,12 +42,21 @@ constexpr std::uint32_t symbol_group = 1;
 // 食べる原子 1 つが食べる最長のバイト数（UTF-8 の 1 code point）。
 constexpr std::size_t longest_code_point = 4;
 
-// 未対応の `\` の組（ADR 0032 の決定 4）。表に無い英数字も未対応で、記号は文字そのものになる。
+// 未対応の `\` の組（ADR 0032 の決定 4）。表に無い英数字も未対応で（略記 `\t` `\r` `\e` `\b` は
+// 先に 1 文字に読む・#1605）、記号は文字そのものになる。
 // 量 `\{` `\+` `\=` `\?` は parse が先に読むので、ここに来るのは対の無い `\}` だけ。
 constexpr std::array<char32_t, 2> group_escapes{U'(', U')'};
 constexpr std::array<char32_t, 1> quantifier_escapes{U'}'};
 constexpr std::array<char32_t, 4> magic_escapes{U'v', U'V', U'm', U'M'};
 constexpr std::array<char32_t, 5> other_escapes{U'%', U'_', U'@', U'&', U'z'};
+
+// `\t` `\r` `\e` `\b` は 1 文字（Vim の REGEXP_ABBR と backslash_trans・#1605）。集合の外でも中でも
+// 同じ表を引く。`\n` は行またぎ（ADR 0184 の段 5）なので表に置かない。
+constexpr std::array<std::pair<char32_t, char32_t>, 4> abbreviations{
+    {{U't', U'\t'}, {U'r', U'\r'}, {U'e', U'\x1B'}, {U'b', U'\b'}}};
+
+// 集合の中で `\` と組になる文字（Vim の REGEXP_INRANGE）。`\n` はここでも行またぎで断る。
+constexpr std::array<char32_t, 4> set_specials{U']', U'^', U'-', U'\\'};
 
 // `\d \D \w \W \s \S` の文字集合。表は 1 つで、大文字は否定だけが違う。
 constexpr std::array<VimPatternRange, 1> digit_ranges{{{U'0', U'9'}}};
@@ -71,6 +80,41 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
 {
     return (code >= U'0' && code <= U'9') || (code >= U'A' && code <= U'Z') ||
            (code >= U'a' && code <= U'z');
+}
+
+// `\` に続く code が 1 文字の略記（`\t` `\r` `\e` `\b`）なら、その文字。
+[[nodiscard]] std::optional<char32_t> abbreviated(char32_t code) noexcept
+{
+    for (const auto &[letter, meant] : abbreviations)
+    {
+        if (letter == code)
+        {
+            return meant;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] bool hex_digit(char32_t code) noexcept
+{
+    return (code >= U'0' && code <= U'9') || (code >= U'a' && code <= U'f') ||
+           (code >= U'A' && code <= U'F');
+}
+
+// 集合の中の `\d` `\o` `\x` `\u` `\U` に数が続くか。Vim の coll_get_char はこの形を文字の番号に読む
+// （数が続かなければ `\` とその文字の 2
+// つの成員で、今の読みと同じ）。番号の形はまだ読まないので断る。
+[[nodiscard]] bool numbered_member(char32_t letter, char32_t next) noexcept
+{
+    if (letter == U'd')
+    {
+        return next >= U'0' && next <= U'9';
+    }
+    if (letter == U'o')
+    {
+        return next >= U'0' && next <= U'7';
+    }
+    return (letter == U'x' || letter == U'u' || letter == U'U') && hex_digit(next);
 }
 
 [[nodiscard]] bool zero_width(VimPatternAtomKind kind) noexcept
@@ -197,28 +241,58 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
     return true;
 }
 
-// 文字集合の成員を 1 つ足して、次の位置を返す。a-z は区間、それ以外は 1 文字。
-[[nodiscard]] std::size_t parsed_member(std::string_view pattern, std::size_t at,
-                                        std::vector<VimPatternRange> &ranges)
+// 集合の成員の 1 文字と次の位置（Vim の nfa_regatom の `[` の枝・#1605）。`\` に続く REGEXP_INRANGE
+// の文字（`\]` `\^` `\-` `\\`）と略記（`\t` `\r` `\e` `\b`）は 1 文字。`\n`（行またぎ）と数の続く
+// `\d` などは refused を立てる。ほかの `\` はそれ自身の成員（`[\a]` は `\` と `a`・実測）。
+[[nodiscard]] std::pair<char32_t, std::size_t> member_at(std::string_view pattern, std::size_t at,
+                                                         bool &refused)
 {
     const char32_t code = code_point_at(pattern, Offset{at});
     const std::size_t next = next_code_point(pattern, Offset{at}).value;
+    if (code != U'\\' || next >= pattern.size())
+    {
+        return {code, next};
+    }
+    const char32_t paired = code_point_at(pattern, Offset{next});
+    const std::size_t after = next_code_point(pattern, Offset{next}).value;
+    if (contains(set_specials, paired))
+    {
+        return {paired, after};
+    }
+    const auto meant = abbreviated(paired);
+    if (meant.has_value())
+    {
+        return {meant.value(), after};
+    }
+    const char32_t following = after < pattern.size() ? code_point_at(pattern, Offset{after}) : 0;
+    refused = refused || paired == U'n' || numbered_member(paired, following);
+    return {code, next};
+}
+
+// 文字集合の成員を 1 つ足して、次の位置を返す。a-z は区間、それ以外は 1 文字。
+[[nodiscard]] std::size_t parsed_member(std::string_view pattern, std::size_t at,
+                                        std::vector<VimPatternRange> &ranges, bool &refused)
+{
+    const auto [code, next] = member_at(pattern, at, refused);
     const std::size_t after = next_code_point(pattern, Offset{next}).value;
     if (next < pattern.size() && code_point_at(pattern, Offset{next}) == U'-' &&
         after < pattern.size() && code_point_at(pattern, Offset{after}) != U']')
     {
-        ranges.push_back(VimPatternRange{code, code_point_at(pattern, Offset{after})});
-        return next_code_point(pattern, Offset{after}).value;
+        const auto [last, end] = member_at(pattern, after, refused);
+        ranges.push_back(VimPatternRange{code, last});
+        return end;
     }
     ranges.push_back(VimPatternRange{code, code});
     return next;
 }
 
 // 開き大括弧から始まる文字集合。閉じる大括弧が無ければ何も足さず nullopt（開きは文字そのもの）。
-[[nodiscard]] std::optional<std::size_t> parsed_set(std::string_view pattern, std::size_t at,
-                                                    std::vector<VimPatternAtom> &atoms,
-                                                    std::vector<VimPatternRange> &ranges)
+// 閉じた集合が断る成員（`[\n]` など）を持てば閉じた失敗 escape。
+[[nodiscard]] std::optional<std::expected<std::size_t, VimPatternFailure>>
+parsed_set(std::string_view pattern, std::size_t at, std::vector<VimPatternAtom> &atoms,
+           std::vector<VimPatternRange> &ranges)
 {
+    bool refused = false;
     const std::size_t saved = ranges.size();
     std::size_t scan = next_code_point(pattern, Offset{at}).value;
     const bool negated = scan < pattern.size() && code_point_at(pattern, Offset{scan}) == U'^';
@@ -227,24 +301,26 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
         scan = next_code_point(pattern, Offset{scan}).value;
     }
     const std::size_t first = scan;
-    while (scan < pattern.size())
+    // 先頭の閉じ大括弧は成員そのもの（Vim も同じ）。集合を閉じるのは 2 つめ以降である。
+    while (scan < pattern.size() && (code_point_at(pattern, Offset{scan}) != U']' || scan == first))
     {
-        // 先頭の閉じ大括弧は成員そのもの（Vim も同じ）。集合を閉じるのは 2 つめ以降である。
-        if (code_point_at(pattern, Offset{scan}) == U']' && scan != first)
-        {
-            atoms.push_back(VimPatternAtom{VimPatternAtomKind::set, 0, negated,
-                                           VimPatternRepeat::once, saved, ranges.size() - saved,
-                                           true, false});
-            // 閉じ大括弧の直後の結合文字は閉じ大括弧と 1 文字として読み飛ばす（Vim の
-            // nfa_regatom の `MB_PTR_ADV(regparse)` は utfc_ptr2len で進む・`/[e]` + U+0301 は
-            // `e` にも `é` にも（`ic` なら `É` にも）当たる・#1146 の実測）。集合は 1 文字の残りの
-            // 結合文字まで食べるので、後ろに比べる原子は残らない。
-            return vim_character_end(pattern, Offset{scan}).value;
-        }
-        scan = parsed_member(pattern, scan, ranges);
+        scan = parsed_member(pattern, scan, ranges, refused);
     }
-    ranges.resize(saved);
-    return std::nullopt;
+    if (scan >= pattern.size() || refused)
+    {
+        ranges.resize(saved);
+        return scan >= pattern.size()
+                   ? std::nullopt
+                   : std::optional<std::expected<std::size_t, VimPatternFailure>>{
+                         std::unexpected(VimPatternFailure::escape)};
+    }
+    atoms.push_back(VimPatternAtom{VimPatternAtomKind::set, 0, negated, VimPatternRepeat::once,
+                                   saved, ranges.size() - saved, true, false});
+    // 閉じ大括弧の直後の結合文字は閉じ大括弧と 1 文字として読み飛ばす（Vim の nfa_regatom の
+    // `MB_PTR_ADV(regparse)` は utfc_ptr2len で進む・`/[e]` + U+0301 は `e` にも `é` にも（`ic`
+    // なら `É` にも）当たる・#1146 の実測）。集合は 1 文字の残りの結合文字まで食べるので、後ろに
+    // 比べる原子は残らない。
+    return vim_character_end(pattern, Offset{scan}).value;
 }
 
 [[nodiscard]] bool composing_literal(const VimPatternAtom &atom) noexcept
@@ -303,6 +379,12 @@ parsed_escape(std::string_view pattern, std::size_t at, std::vector<VimPatternAt
     {
         atoms.push_back(
             atom_of(code == U'<' ? VimPatternAtomKind::word_start : VimPatternAtomKind::word_end));
+        return next;
+    }
+    const auto meant = abbreviated(code);
+    if (meant.has_value())
+    {
+        atoms.push_back(literal_atom(meant.value()));
         return next;
     }
     const auto failure = escape_failure(code);
@@ -461,10 +543,10 @@ parsed_item(std::string_view pattern, std::size_t at, VimPatternParse &parse)
     }
     if (code == U'[')
     {
-        const auto set = parsed_set(pattern, at, atoms, ranges);
+        auto set = parsed_set(pattern, at, atoms, ranges);
         if (set.has_value())
         {
-            return set.value();
+            return std::move(set).value();
         }
     }
     // `$` は群の閉じと選択の手前でも錨（Vim の peekchr・ADR 0184 の決定 3）。

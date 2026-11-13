@@ -132,8 +132,9 @@ using Plan = std::vector<std::pair<AutosaveId, AutosaveStep>>;
     const core::FilePath path = sample_path();
     return app::UnloadedDocument{
         path, core::TextPosition{core::LineNumber{1}, core::Column{1}}, core::LineNumber{1},
-        app::DocumentView{core::tab_title_for(path, core::SaveState::saved), path,
-                          core::TextEncoding::utf8, core::SaveState::saved, std::nullopt}};
+        app::DocumentView{core::tab_title_for(path, core::SaveState::saved,
+                                              nenenib::core::DisplayLanguage::japanese),
+                          path, core::TextEncoding::utf8, core::SaveState::saved, std::nullopt}};
 }
 
 // 決定 2 の表（読み込み済みのアクティブ）。
@@ -227,7 +228,9 @@ void verify_tick_stores_changes()
     expect(stored.back().caret == core::TextPosition{core::LineNumber{1}, core::Column{3}},
            "the stored caret is the line and the 1-based column");
     expect(stored.back().title.text() ==
-               core::tab_title_for(std::nullopt, core::SaveState::modified).text(),
+               core::tab_title_for(std::nullopt, core::SaveState::modified,
+                                   nenenib::core::DisplayLanguage::japanese)
+                   .text(),
            "the stored title carries the unsaved mark");
     expect(!controller.apply(app::AutosaveTick{}).repaint &&
                editing.autosave().stored().size() == 1,
@@ -419,7 +422,8 @@ void verify_tick_keeps_wanted_column()
 // 前回のプロセスが残した退避の 1 本。location は替え玉が本文を引く鍵。
 [[nodiscard]] app::AutosaveRemnant remnant(std::string location, std::optional<core::FilePath> path)
 {
-    auto title = core::tab_title_for(path, core::SaveState::modified);
+    auto title = core::tab_title_for(path, core::SaveState::modified,
+                                     nenenib::core::DisplayLanguage::japanese);
     return app::AutosaveRemnant{std::move(location), AutosaveId{0}, std::move(path),
                                 std::move(title),
                                 core::TextPosition{core::LineNumber{1}, core::Column{1}}};

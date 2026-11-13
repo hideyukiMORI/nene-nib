@@ -185,8 +185,9 @@ void closed(Order &order, std::size_t tab)
 
 [[nodiscard]] app::DocumentView view_of(const core::FilePath &path)
 {
-    return app::DocumentView{core::tab_title_for(path, core::SaveState::saved), path,
-                             core::TextEncoding::utf8, core::SaveState::saved, std::nullopt};
+    return app::DocumentView{
+        core::tab_title_for(path, core::SaveState::saved, nenenib::core::DisplayLanguage::japanese),
+        path, core::TextEncoding::utf8, core::SaveState::saved, std::nullopt};
 }
 
 [[nodiscard]] app::Document document_of(std::uint64_t id)

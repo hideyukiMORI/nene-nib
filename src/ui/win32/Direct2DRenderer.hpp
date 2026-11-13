@@ -10,6 +10,7 @@
 #include "CommandChoice.hpp"
 #include "CommandLayout.hpp"
 #include "DeviceWarmup.hpp"
+#include "DisplayLanguage.hpp"
 #include "DisplayLine.hpp"
 #include "EditorFrame.hpp"
 #include "ExplorerLayout.hpp"
@@ -125,6 +126,8 @@ class Direct2DRenderer final
     [[nodiscard]] std::expected<void, RenderFailure> create_context();
     [[nodiscard]] std::expected<void, RenderFailure> acquire_surface();
     [[nodiscard]] std::expected<void, RenderFailure> create_text_formats();
+    // 表示言語が書式を作ったときと違えば、画面の文字の書式を作り直す（UI 書式の再作成の道）。
+    [[nodiscard]] std::expected<void, RenderFailure> set_language(core::DisplayLanguage language);
     [[nodiscard]] std::expected<void, RenderFailure> create_guide_formats(const wchar_t *face);
     [[nodiscard]] bool create_explorer_formats(const wchar_t *face);
     [[nodiscard]] std::expected<void, RenderFailure>
@@ -441,5 +444,7 @@ class Direct2DRenderer final
     // DirectWrite 資源の無効化キー。設定の所有者は EditorState（ADR 0020）。
     core::FontSize formatted_size_ = core::default_font_size();
     core::DisplayText formatted_family_ = core::default_editor_settings().font_family;
+    // 画面の文字の書式を作った表示言語（locale の鍵・ADR 0123 の追補 2026-11-13 の決定 9）。
+    core::DisplayLanguage formatted_language_ = core::DisplayLanguage::japanese;
 };
 } // namespace nenenib::ui::win32

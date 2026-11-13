@@ -3,6 +3,7 @@
 #include "FileHandle.hpp"
 #include "NativePath.hpp"
 #include "ParentDirectory.hpp"
+#include "SettingsByteLimit.hpp"
 #include "SettingsCodec.hpp"
 #include "Utf16.hpp"
 
@@ -15,8 +16,8 @@ namespace nenenib::adapters::win32
 namespace
 {
 using Failure = application::SettingsFailure;
-// command の行が増えるので 16 KiB（ADR 0170 の決定 3・#1044）。
-constexpr std::size_t maximum_settings_bytes = 16384;
+// command の行が増えるので 16 KiB（ADR 0170 の決定 3・#1044・正本は core）。
+using core::maximum_settings_bytes;
 constexpr std::array<SettingsVersion, 4> reading_order{SettingsVersion::v4, SettingsVersion::v3,
                                                        SettingsVersion::v2, SettingsVersion::v1};
 

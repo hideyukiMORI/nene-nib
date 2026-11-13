@@ -513,7 +513,8 @@ void verify_explorer_paint()
     {
         return;
     }
-    const ExplorerText text{factory.Get(), format.Get(), strong.Get(), dpi};
+    const ExplorerText text{factory.Get(), format.Get(), strong.Get(), dpi,
+                            core::DisplayLanguage::japanese};
     verify_panel_pixels(target, text);
     verify_unfocused_frame_and_shapes(target, text);
     verify_focus_and_hidden(target, text);

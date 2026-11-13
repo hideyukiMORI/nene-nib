@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DisplayLanguage.hpp"
 #include "KeycapStyle.hpp"
 
 #include <cstdint>
@@ -17,8 +18,9 @@ namespace nenenib::ui::win32
 // new_key・open_key・folder_key は「はじめる」の 3 行の鍵の表示名（操作の表の new_tab・open_file・
 // choose_explorer_root を今のモードの shown_chord で引いた値・鍵が無ければ空で枠を描かない・Vim の
 // 「ファイルを開く」は Ctrl+Shift+O・#1480）、
-// dpi は保持の鍵と寸法の倍率。書式はどれも借用で、持ち主は renderer（試験では試験の関数）。
-// 公開 aggregate（CPP-003）。
+// dpi は保持の鍵と寸法の倍率、language
+// は見出しと「はじめる」の行の文を引く表示言語（#1019）。書式はどれも借用で、持ち主は
+// renderer（試験では試験の関数）。 公開 aggregate（CPP-003）。
 struct StartScreenText
 {
     IDWriteFactory *dwrite;
@@ -32,5 +34,6 @@ struct StartScreenText
     std::string_view open_key;
     std::string_view folder_key;
     std::uint32_t dpi;
+    core::DisplayLanguage language;
 };
 } // namespace nenenib::ui::win32

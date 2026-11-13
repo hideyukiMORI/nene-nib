@@ -6,6 +6,7 @@
 #include "CommandChoice.hpp"
 #include "ComposeText.hpp"
 #include "DevicePixels.hpp"
+#include "DisplayLanguage.hpp"
 #include "Editing.hpp"
 #include "GuideContext.hpp"
 #include "GuideRequest.hpp"
@@ -60,7 +61,8 @@ void verify_guide_text()
 {
     for (const auto mode : {core::EditMode::ordinary, core::EditMode::vim})
     {
-        const auto guide = core::operation_guide(GuideContext::untouched_untitled, mode);
+        const auto guide = core::operation_guide(GuideContext::untouched_untitled, mode,
+                                                 core::DisplayLanguage::japanese);
         constexpr std::array<core::EditorOperation, 3> operations{
             core::EditorOperation::list_files, core::EditorOperation::open_file,
             core::EditorOperation::list_operations};
@@ -83,7 +85,8 @@ void verify_guide_text()
         expect(guide.entries.at(2).body_name == "ヘルプ" &&
                    guide.entries.at(2).short_name == "ヘルプ",
                "operation list is called help in both guides");
-        expect(core::operation_choices("ヘルプ", mode).empty(),
+        expect(core::operation_choices("ヘルプ", mode, nenenib::core::DisplayLanguage::japanese)
+                   .empty(),
                "new guide short names do not become operation list search targets");
     }
 }

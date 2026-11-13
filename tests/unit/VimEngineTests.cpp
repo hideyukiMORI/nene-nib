@@ -198,15 +198,26 @@ void verify_vim_key_notation()
 
 void verify_vim_mode_labels()
 {
-    expect(mode_label(EditMode::ordinary, VimMode::normal, false) == "通常", "the ordinary label");
-    expect(mode_label(EditMode::ordinary, VimMode::insert, false) == "通常",
+    expect(mode_label(EditMode::ordinary, VimMode::normal, false,
+                      nenenib::core::DisplayLanguage::japanese) == "通常",
+           "the ordinary label");
+    expect(mode_label(EditMode::ordinary, VimMode::insert, false,
+                      nenenib::core::DisplayLanguage::japanese) == "通常",
            "the Vim mode does not show through in ordinary mode");
-    expect(mode_label(EditMode::vim, VimMode::normal, false) == "NORMAL", "the NORMAL label");
-    expect(mode_label(EditMode::vim, VimMode::insert, false) == "INSERT", "the INSERT label");
-    expect(mode_label(EditMode::vim, VimMode::visual, false) == "VISUAL", "the VISUAL label");
-    expect(mode_label(EditMode::vim, VimMode::visual_line, false) == "VISUAL LINE",
+    expect(mode_label(EditMode::vim, VimMode::normal, false,
+                      nenenib::core::DisplayLanguage::japanese) == "NORMAL",
+           "the NORMAL label");
+    expect(mode_label(EditMode::vim, VimMode::insert, false,
+                      nenenib::core::DisplayLanguage::japanese) == "INSERT",
+           "the INSERT label");
+    expect(mode_label(EditMode::vim, VimMode::visual, false,
+                      nenenib::core::DisplayLanguage::japanese) == "VISUAL",
+           "the VISUAL label");
+    expect(mode_label(EditMode::vim, VimMode::visual_line, false,
+                      nenenib::core::DisplayLanguage::japanese) == "VISUAL LINE",
            "the VISUAL LINE label");
-    expect(mode_label(EditMode::ordinary, VimMode::visual, false) == "通常",
+    expect(mode_label(EditMode::ordinary, VimMode::visual, false,
+                      nenenib::core::DisplayLanguage::japanese) == "通常",
            "VISUAL does not show through in ordinary mode either");
 }
 

@@ -61,4 +61,6 @@ void verify_start_screen_paint();
 void verify_window_corners();
 // 描画を失って取消の無い箱を聞く間だけの窓の下地（#1499）。窓は作らない。
 void verify_question_backdrop();
+// 表示言語の ui の文・画面の文字の locale・固定の枠の幅（ADR 0123 の追補 2026-11-13・#1594）。
+void verify_language_texts();
 } // namespace nenenib::tests::ui

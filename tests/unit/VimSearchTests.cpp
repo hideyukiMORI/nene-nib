@@ -646,7 +646,10 @@ void verify_vim_pattern_rejections()
     expect(rejects("\\Mfoo", VimPatternFailure::magic), "nomagic is refused");
     expect(rejects("\\%d1", VimPatternFailure::escape), "a percent escape is refused");
     expect(rejects("\\_foo", VimPatternFailure::escape), "a multiline escape is refused");
-    expect(rejects("alpha\\r$", VimPatternFailure::escape), "a carriage return escape is refused");
+    expect(rejects("alpha\\n", VimPatternFailure::escape) &&
+               rejects("[\\n]", VimPatternFailure::escape) &&
+               rejects("[^a\\n]", VimPatternFailure::escape),
+           "a newline escape is refused inside and outside a set (ADR 0184 stage 5)");
     expect(rejects("foo\\", VimPatternFailure::escape), "a trailing backslash is refused");
     expect(rejects("~", VimPatternFailure::previous_substitute),
            "the previous substitute is refused");
@@ -667,6 +670,55 @@ void verify_vim_pattern_rejections()
     expect(escaped.has_value() && escaped.value().matched("a?b", 0).has_value() &&
                !escaped.value().matched("ab", 0).has_value(),
            "an escaped question mark is the character itself in a backward search");
+}
+
+// `\t` `\r` `\e` `\b` は 1 文字で、集合の中でも同じ（#1605・ADR 0032 の追補・Vim 9.1 の searchpos
+// の実測）。集合の中の `\]` `\^` `\-` `\\` も 1 文字。CRLF の文書の行末の CR には `\r`
+// が当たらない。
+void verify_vim_pattern_abbreviations()
+{
+    expect(matched_begin("\\t", "ab\tcd", 0) == std::optional<std::size_t>{2} &&
+               matched_begin("\\r", "ab\rcd", 0) == std::optional<std::size_t>{2} &&
+               matched_begin("\\e",
+                             "ab\x1B"
+                             "cd",
+                             0) == std::optional<std::size_t>{2} &&
+               matched_begin("\\b", "ab\bcd", 0) == std::optional<std::size_t>{2},
+           "the abbreviations are the tab, the carriage return, the escape and the backspace");
+    expect(!matched_begin("\\t", "a\\tb", 0).has_value(),
+           "a tab escape does not match a backslash and a t");
+    expect(matched_begin("[\\t]", "ab\tcd", 0) == std::optional<std::size_t>{2} &&
+               matched_begin("[^\\t ]", "\t \tab", 0) == std::optional<std::size_t>{3} &&
+               matched_begin("[\\t-z]", "|~\t{", 0) == std::optional<std::size_t>{2},
+           "an abbreviation inside a set is the same character, also as a range end");
+    expect(matched_begin("[\\]]", "a]b", 0) == std::optional<std::size_t>{1} &&
+               matched_begin("[\\^]", "a^b", 0) == std::optional<std::size_t>{1} &&
+               matched_begin("[\\-]", "a-b", 0) == std::optional<std::size_t>{1} &&
+               !matched_begin("[\\^]", "a\\b", 0).has_value() &&
+               matched_begin("[\\\\]", "a\\b", 0) == std::optional<std::size_t>{1},
+           "the escaped specials inside a set are one character each");
+    expect(matched_begin("[\\a]", "\\a", 0) == std::optional<std::size_t>{0} &&
+               matched_begin("[\\d]", "d", 0) == std::optional<std::size_t>{0} &&
+               matched_begin("[\\x]", "\\", 0) == std::optional<std::size_t>{0},
+           "other escapes inside a set are the backslash and the character");
+    expect(matched_begin("[a\\]b", "x[a]bc", 0) == std::optional<std::size_t>{1},
+           "an escaped closing bracket leaves the set unclosed and the bracket literal");
+    expect(rejects("[\\d97]", VimPatternFailure::escape) &&
+               rejects("[\\x61]", VimPatternFailure::escape) &&
+               rejects("[\\u00e9]", VimPatternFailure::escape),
+           "a numbered character inside a set is not read yet and is refused");
+    expect(matched_begin("\\t\\+", "a\t\tb", 0) == std::optional<std::size_t>{1} &&
+               !matched_begin("\\t\\{2}", "a\tb\tc", 0).has_value(),
+           "a quantifier repeats the tab");
+    expect(!searched("ab\r\nxy\r\n", 0, "\\r", VimSearchDirection::forward).has_value() &&
+               found_at("ab\rcd\r\nxy\r\n", 0, "\\r", 2),
+           "in a CRLF document the line end is not a carriage return, a lone one is");
+    const auto literal =
+        VimPattern::parse(nenenib::core::literal_pattern("\\t", VimSearchDirection::forward),
+                          VimSearchDirection::forward, VimPatternCase::sensitive);
+    expect(literal.has_value() && literal.value().matched("a\\tb", 0).has_value() &&
+               !literal.value().matched("a\tb", 0).has_value(),
+           "the ordinary find escapes the backslash, so a typed \\t is a backslash and a t");
 }
 
 // 走査の規則（決定 4 の追記）。必要な桁に足りない一致は終端まで飛ばし、行の長さで打ち切る。
@@ -1190,9 +1242,10 @@ void verify_vim_search_dot()
 
 void verify_vim_search_fixtures()
 {
-    // 検索の 270 件（大小の 30 件・#1041 と結合文字の 16 件・#1138 と結合文字の大小の 13 件・#1147
+    // 検索の 314 件（大小の 30 件・#1041 と結合文字の 16 件・#1138 と結合文字の大小の 13 件・#1147
     // と始まりの 18 件・#1146 と空の範囲のオペレータの 29 件・#1344 と基底の無い結合文字の 29 件・
-    // #1506 を含む）と、鍵の分類の表・次キー待ちを共有する境界の代表（`.`・r・ f/t・gg）。
+    // #1506 と行末の幅の無い当たりの 44 件・#1606 を含む）と、鍵の分類の表・次キー待ちを共有する
+    // 境界の代表（`.`・r・ f/t・gg）。
     constexpr std::array<std::string_view, 6> boundaries{
         "replace-char-one",    "replace-char-count", "char-search-f-count",
         "char-search-t-first", "line-jump-gg-count", "dot-remove-word"};
@@ -1206,7 +1259,7 @@ void verify_vim_search_fixtures()
             ++selected;
         }
     }
-    expect(selected == 276, "the scope replays 270 search fixtures and 6 shared boundaries");
+    expect(selected == 320, "the scope replays 314 search fixtures and 6 shared boundaries");
 }
 
 // 次の一致を求める 1 本の経路（ADR 0041 の決定 1）。確定の検索の鍵と incsearch の preview が
@@ -1715,6 +1768,13 @@ void verify_vim_pattern_close_revisits()
                  .matched("ab", 0)
                  .has_value(),
         "a caret after an empty group is a character");
+    // #1605 の逃がしの読みと合わせた形（V-1614 の §7）。集合の `[\n]` は行またぎ（段 5）なので、
+    // 選択の枝の中でもパターン全体が閉じた失敗になる（Vim は `x` に当たる・段 5 の後続）。
+    expect(!VimPattern::parse("x\\|[\\n]", VimSearchDirection::forward, VimPatternCase::sensitive)
+                   .has_value() &&
+               match_range_is("\\(a\\|\\t\\)\\+", "a\t\tab", 0, {0, 4}) &&
+               match_range_is("\\([\\]]\\|[\\-]\\)\\+", "]-]x", 0, {0, 3}),
+           "the escapes of #1605 work inside branches and a newline set refuses the pattern");
 }
 
 // 2 つのパターンが行の文字の境のどの位置から照合しても同じ範囲に当たるか。
@@ -1812,6 +1872,7 @@ void verify_vim_search_contracts()
     verify_vim_pattern_evaluation_bounds();
     verify_vim_pattern_word_boundaries();
     verify_vim_pattern_rejections();
+    verify_vim_pattern_abbreviations();
     verify_vim_pattern_quantifier_ranges();
     verify_vim_pattern_quantifier_failures();
     verify_vim_pattern_quantifier_bounds();

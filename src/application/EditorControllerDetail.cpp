@@ -2,6 +2,8 @@
 
 #include "InputLinePrompt.hpp"
 #include "LiteralPattern.hpp"
+#include "TabTitle.hpp"
+#include "UiTexts.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
@@ -113,6 +115,14 @@ std::optional<std::string> searched_text(const core::SearchLine &line)
             views.push_back(active);
         }
         views.push_back(parked_view(tab));
+        // 脇の無題の題名は置いた時点の言語なので、今の表示言語で作り直す（#1019・経路のある題名は
+        // 言語を問わない）。
+        auto &parked = views.back();
+        if (!parked.path.has_value())
+        {
+            parked.title =
+                core::tab_title_for(std::nullopt, parked.save_state, state.display_language());
+        }
     }
     if (views.size() == state.active_tab())
     {
@@ -148,12 +158,24 @@ parked_path(const std::shared_ptr<const UnloadedDocument> &tab)
 
 // 名前を 1 つ載せる知らせの 1 行（ADR 0059 の「知らせの文言」）。others は同じ意図の中でほかに
 // 読めなかった数。名前は 1 行に収まるよう末尾をコードポイントの境目で落とす（題名と同じ「…」）。
-[[nodiscard]] core::DisplayText named_notice(std::string_view prefix, std::string name,
+[[nodiscard]] core::DisplayText named_notice(core::UiMessage message,
+                                             core::DisplayLanguage language, std::string name,
                                              std::size_t others)
 {
-    const std::string suffix =
-        others == 0 ? std::string{} : "（ほか " + std::to_string(others) + " 件）";
-    return named_line(prefix, std::move(name), suffix);
+    const std::string suffix = others == 0
+                                   ? std::string{}
+                                   : core::ui_text_filled(core::UiMessage::notice_others, language,
+                                                          {std::to_string(others)});
+    return named_line(message, language, std::move(name), suffix);
+}
+
+// 文の置き場 {0} の前を prefix、後ろを suffix の頭にして、上の形で名前を切る（#1019）。日本語の
+// 「開けませんでした: {0}」は今までの prefix と同じ結果になる。
+[[nodiscard]] core::DisplayText named_line(core::UiMessage message, core::DisplayLanguage language,
+                                           std::string name, std::string_view suffix)
+{
+    const auto [before, after] = core::first_slot_split(core::ui_text(message, language));
+    return named_line(before, std::move(name), std::string(after) + std::string(suffix));
 }
 
 [[nodiscard]] core::DisplayText named_line(std::string_view prefix, std::string name,

@@ -1,5 +1,7 @@
 #include "PaletteMarks.hpp"
 
+#include "UiTexts.hpp"
+
 #include <algorithm>
 #include <string>
 
@@ -30,18 +32,18 @@ std::string palette_input_for(const PaletteQuery &query)
     return (escape ? " " : "") + std::string(query.query);
 }
 
-DisplayText palette_mark_hint()
+DisplayText palette_mark_hint(DisplayLanguage language)
 {
     std::string hint;
     for (const PaletteMark &mark : palette_marks)
     {
         if (!hint.empty())
         {
-            hint += "　";
+            hint += ui_text(UiMessage::palette_mark_separator, language);
         }
         hint += mark.mark;
         hint += ' ';
-        hint += mark.name;
+        hint += ui_text(mark.name, language);
     }
     return DisplayText::parse(hint).value();
 }

@@ -301,11 +301,11 @@ C++ のソースの `// SDK-ABI:` を含む行ごとに次を確かめ、1 つ�
 
 core の `feature_costs` の表の各行が名指す任意のベンチ（`bench`）が `eng/measure-speed.py` の `OPTIONAL_BENCHES` に在り、`docs/quality/feature-costs.md` の行と表の数字が一致する（[ADR 0170](adr/0170-settings-modal-lists-features-with-measured-speed-cost-tiers.md)・Issue #1016）。検査は設定モーダルの S2 の PR で足し、そのとき状態を active にする。
 
-### CNF-016 — 画面の文のリテラルは文の表の外に書かない（planned・ADR 0123 の改訂）
+### CNF-016 — 画面の文のリテラルは文の表の外に書かない（ADR 0123）
 
-機械強制: **planned**（表示言語の T1 の PR で active にする）。
+画面の文は `core::UiMessage` の文の表から `ui_text` で引く（[ADR 0123](adr/0123-ui-language-is-a-versioned-setting.md) の 2026-11-13 の追補の決定 4・12・Issue #1019）。`eng/conformance.py` が 2 つを確かめる。(1) `ui_text_literal_checks`: `src/**/*.cpp` `*.hpp` の文字列リテラルと文字リテラル（`"…"` `u8"…"` `L"…"` `R"(…)"`・コメントは数えない）の中のひらがな・カタカナ・CJK 統合漢字・半角カタカナを数え、`eng/conformance-rules.json` の `uiTextLiteralAllowedPaths`（日本語と中国語の列・読みの表 `OperationReadings.hpp`・言語の自称 `DisplayLanguageNames.cpp`）の外にあれば `CNF-016: <path>: line N: Japanese or Chinese text in a string literal; …`。`tests/` は数えない。英語の列は許した場所に入れない。(2) `ui_message_table_checks`: `uiMessageTable` の enum（`src/core/UiMessage.hpp`）の列挙子の列と、`ui_message_count` が名指しする値（最後の列挙子であること）と、3 列の行の数と順を比べる（C++ の `static_assert` は、最後の値の後ろに値だけを足して行を書かない形を通すため・V-1598 の A-M1）。画面に出る英語の直書きは機械では見分けられないので、棚卸しの表と独立レビューで守る。
 
-`src/**/*.cpp` `*.hpp` の文字列リテラル（`"…"` `u8"…"` `L"…"`・コメントは除く）の中の日本語（ひらがな・カタカナ・CJK 統合漢字・全角の記号）は `src/core/UiTexts.cpp` と `tests/` の外で 0 とする（[ADR 0123](adr/0123-ui-language-is-a-versioned-setting.md) の改訂・Issue #1019）。検査は表示言語の T1 の PR で足し、そのとき状態を active にする。
+- 機械強制: **active**（正例・反例は `tests/conformance` の `UiTextChecks` がゲートで回る。2026-11-13・Issue #1602）
 
 ---
 
@@ -380,7 +380,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CNF-013 | active | eng/conformance.py / tests/conformance（表は eng/conformance-rules.json の `thirdPartyDigests` の 1 つ・照合は git の index の blob） |
 | CNF-014 | active | eng/conformance.py / tests/conformance（ADR 0158・3,000 行・PR #1053） |
 | CNF-015 | planned | eng/conformance.py（ADR 0170・設定モーダルの S2 の PR で active） |
-| CNF-016 | planned | eng/conformance.py（ADR 0123 の改訂・表示言語の T1 の PR で active） |
+| CNF-016 | active | eng/conformance.py / tests/conformance（ADR 0123 の 2026-11-13 の追補・許した場所と表の在りかは eng/conformance-rules.json・#1602） |
 
 ---
 

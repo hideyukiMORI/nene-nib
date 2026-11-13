@@ -90,9 +90,9 @@ inline constexpr std::array<UiMixWeights, 2> ui_mix_weights{{
 }};
 
 static_assert(static_cast<std::size_t>(Appearance::light) == 0,
-              "ui_mix_weights の添字は Appearance の並びそのもの");
+              "ui_mix_weights is indexed in the order of Appearance");
 static_assert(static_cast<std::size_t>(Appearance::dark) == 1,
-              "ui_mix_weights の添字は Appearance の並びそのもの");
+              "ui_mix_weights is indexed in the order of Appearance");
 
 // 本文の 3 色と明暗から UI トークン 19 個を導く決定的な純関数（ADR 0017 / 0117）。
 // 有名テーマは本文の色しか定義しないので、タイトルバー・ステータスバー・パネルはここが決める。

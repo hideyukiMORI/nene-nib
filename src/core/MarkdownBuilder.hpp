@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DisplayLanguage.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownImage.hpp"
 #include "MarkdownStop.hpp"
@@ -27,7 +28,8 @@ class MarkdownBuilder final
 {
   public:
     // input は本文の全体。text の source がこの中を指すときだけ位置に使う。
-    MarkdownBuilder(std::string_view input, const MarkdownStop &stop) noexcept;
+    MarkdownBuilder(std::string_view input, const MarkdownStop &stop,
+                    DisplayLanguage language) noexcept;
 
     // 述語に問う。一度 true を聞いたら以後は問わずに true を返し続ける（打ち切りを取り消さない）。
     [[nodiscard]] bool should_stop();
@@ -73,6 +75,9 @@ class MarkdownBuilder final
 
     std::string_view input_;
     const MarkdownStop *stop_;
+    // 画像の代わりの文字の枠の前と後ろ（表の文 preview_image_alt を置き場で割った静的な文）。
+    std::string_view image_opening_;
+    std::string_view image_closing_;
     std::vector<PreviewBlock> blocks_;
     std::optional<PreviewBlock> leaf_;
     std::optional<std::size_t> leaf_begin_;

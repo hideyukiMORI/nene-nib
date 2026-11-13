@@ -4,6 +4,7 @@
 #include "DisplayText.hpp"
 #include "EditorSettings.hpp"
 #include "ExClipboardRequest.hpp"
+#include "ExDisplayLanguageRequest.hpp"
 #include "ExDocumentRequest.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
@@ -69,6 +70,8 @@ inline constexpr std::string_view guifont_command = "set guifont=";
 // 着地を決めるのは controller。
 // substitute は `:s` の族の 1 命令（ADR 0168 の決定 1）で、範囲を解いて本文を置き換えるのは engine
 // の vim_substituted（controller は鍵と同じ写しの道で結果を写す）。
+// display_language は `:set language=` と `:set language?` の要求（ADR 0123 の追補 2026-11-13 の
+// 決定 8）で、設定の保存と OS の観測と解決は controller。
 struct ExResult
 {
     std::optional<EditorSettings> settings;
@@ -93,6 +96,7 @@ struct ExResult
     bool rechecks_window = false;
     std::optional<ExRelativeLineRequest> relative_line = std::nullopt;
     std::optional<ExSubstituteRequest> substitute = std::nullopt;
+    std::optional<ExDisplayLanguageRequest> display_language = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>

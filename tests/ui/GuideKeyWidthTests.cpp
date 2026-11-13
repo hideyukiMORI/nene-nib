@@ -5,6 +5,7 @@
 #include "BodyLayout.hpp"
 #include "DevicePixels.hpp"
 #include "DirectWriteFactory.hpp"
+#include "DisplayLanguage.hpp"
 #include "EditMode.hpp"
 #include "GuideKeyWidth.hpp"
 #include "GuideRequest.hpp"
@@ -99,10 +100,11 @@ void verify_with(SoftwareTarget &target, IDWriteFactory2 &factory, IDWriteTextFo
 {
     const auto fit = [&](const std::string &key, const core::LayoutRect &column)
     { return fits(target, column_layout(factory, format, key, column), column); };
-    const auto vim =
-        core::operation_guide(core::GuideContext::untouched_untitled, core::EditMode::vim);
+    const auto vim = core::operation_guide(core::GuideContext::untouched_untitled,
+                                           core::EditMode::vim, core::DisplayLanguage::japanese);
     const auto ordinary =
-        core::operation_guide(core::GuideContext::untouched_untitled, core::EditMode::ordinary);
+        core::operation_guide(core::GuideContext::untouched_untitled, core::EditMode::ordinary,
+                              core::DisplayLanguage::japanese);
     expect(std::ranges::any_of(vim.entries, [](const core::GuideEntry &entry)
                                { return entry.key == "Ctrl+Shift+O"; }),
            "the Vim guide shows Ctrl+Shift+O (#1037)");
