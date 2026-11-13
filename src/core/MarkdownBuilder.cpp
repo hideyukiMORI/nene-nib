@@ -23,20 +23,14 @@ constexpr std::string_view bullet_marker = "•";
 constexpr std::size_t depth_limit = 255U;
 // 画像の代わりの文字の枠（#784）。alt は表の文 preview_image_alt の置き場 {0} の位置に入る
 // （ADR 0123 の追補 2026-11-13）。置き場の前が開き、後ろが閉じ。
-constexpr std::string_view image_slot = "{0}";
-
 [[nodiscard]] std::string_view image_opening_of(DisplayLanguage language) noexcept
 {
-    const auto frame = ui_text(UiMessage::preview_image_alt, language);
-    return frame.substr(0, frame.find(image_slot));
+    return first_slot_split(ui_text(UiMessage::preview_image_alt, language)).first;
 }
 
 [[nodiscard]] std::string_view image_closing_of(DisplayLanguage language) noexcept
 {
-    const auto frame = ui_text(UiMessage::preview_image_alt, language);
-    const auto slot = frame.find(image_slot);
-    return slot == std::string_view::npos ? std::string_view{}
-                                          : frame.substr(slot + image_slot.size());
+    return first_slot_split(ui_text(UiMessage::preview_image_alt, language)).second;
 }
 
 [[nodiscard]] std::uint8_t saturated_depth(std::size_t depth) noexcept

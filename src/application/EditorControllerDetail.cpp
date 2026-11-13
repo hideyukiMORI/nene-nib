@@ -171,15 +171,8 @@ parked_path(const std::shared_ptr<const UnloadedDocument> &tab)
 [[nodiscard]] core::DisplayText named_line(core::UiMessage message, core::DisplayLanguage language,
                                            std::string name, std::string_view suffix)
 {
-    constexpr std::string_view slot = "{0}";
-    const std::string_view text = core::ui_text(message, language);
-    const std::size_t at = text.find(slot);
-    if (at == std::string_view::npos)
-    {
-        return named_line(text, std::move(name), suffix);
-    }
-    return named_line(text.substr(0, at), std::move(name),
-                      std::string(text.substr(at + slot.size())) + std::string(suffix));
+    const auto [before, after] = core::first_slot_split(core::ui_text(message, language));
+    return named_line(before, std::move(name), std::string(after) + std::string(suffix));
 }
 
 [[nodiscard]] core::DisplayText named_line(std::string_view prefix, std::string name,

@@ -6,6 +6,7 @@
 #include <initializer_list>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace nenenib::core
 {
@@ -18,6 +19,13 @@ namespace nenenib::core
 // でない `{` はそのまま。語順は言語ごとの文が決めるので、呼び出し元で断片を連結しない。
 [[nodiscard]] std::string ui_text_filled(UiMessage message, DisplayLanguage language,
                                          std::initializer_list<std::string_view> values);
+
+// 文を最初の置き場 {0}
+// の前と後ろに割る（名前を切って詰める知らせ・画像の代わりの文字の枠・#1019）。
+// 置き場が無ければ全体と空。部分列の探索（STL の検索は __std_search_* を core の外へ出す・ARC-003）
+// を使わず 1 バイトずつ歩く。
+[[nodiscard]] std::pair<std::string_view, std::string_view>
+first_slot_split(std::string_view text) noexcept;
 
 // ui_text_filled の埋め方の本体（表を引かない純関数・試験が表に無い形の文で埋め方を確かめる口）。
 [[nodiscard]] std::string placeholders_filled(std::string_view text,
