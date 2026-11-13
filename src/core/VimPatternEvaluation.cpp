@@ -4,7 +4,7 @@
 #include "VimPattern.hpp"
 #include "VimPatternRoute.hpp"
 
-#include <algorithm>
+#include <string_view>
 
 namespace nenenib::core
 {
@@ -24,7 +24,8 @@ namespace
 
 VimPatternEvaluation::VimPatternEvaluation(const VimPattern &pattern, std::string_view line)
     : pattern_(pattern), line_(line), at_(0), skipping_(pattern.atoms_.size() + 1),
-      current_begins_(2 * skipping_), next_begins_(2 * skipping_),
+      current_begins_(2 * skipping_, {std::string_view::npos, 0}),
+      next_begins_(2 * skipping_, {std::string_view::npos, 0}),
       // 最短の量を含む列だけが後に置く消費を扱う展開を通る（ADR 0184 の決定 1・今の列の
       // 展開に分岐を足さない）。
       expand_(pattern.route() == VimPatternRoute::lazy_states
@@ -35,15 +36,16 @@ VimPatternEvaluation::VimPatternEvaluation(const VimPattern &pattern, std::strin
     next_.reserve(pattern.atoms_.size());
 }
 
-std::optional<VimPatternMatch>
-VimPatternEvaluation::expanded(std::vector<std::size_t> &order,
-                               std::vector<std::optional<std::size_t>> &begins, std::size_t index,
-                               std::size_t begin)
+std::optional<VimPatternMatch> VimPatternEvaluation::expanded(std::vector<std::size_t> &order,
+                                                              Visits &begins, std::size_t index,
+                                                              std::size_t begin)
 {
-    // 幅のない遷移は原子indexを増やすだけ。同位置で先に来た候補を優先する。
-    while (!begins.at(index).has_value())
+    // 幅のない遷移は原子indexを増やすだけ。同位置で先に来た候補を優先する。印の位置は展開の
+    // 間に変わらないので 1 回だけ読む（印の書き込みのたびに at_ を読み直さない）。
+    const std::size_t at = at_;
+    while (begins.at(index).first != at)
     {
-        begins.at(index) = begin;
+        begins.at(index) = {at, begin};
         if (index == pattern_.atoms_.size())
         {
             return finished_match(VimPattern::ends_a_character(line_, at_), begin, at_);
@@ -71,14 +73,14 @@ VimPatternEvaluation::expanded(std::vector<std::size_t> &order,
 }
 
 std::optional<VimPatternMatch>
-VimPatternEvaluation::lazily_expanded(std::vector<std::size_t> &order,
-                                      std::vector<std::optional<std::size_t>> &begins,
+VimPatternEvaluation::lazily_expanded(std::vector<std::size_t> &order, Visits &begins,
                                       std::size_t index, std::size_t begin)
 {
     std::optional<std::size_t> atom = index;
-    while (atom.has_value() && !begins.at(atom.value()).has_value())
+    const std::size_t at = at_;
+    while (atom.has_value() && begins.at(atom.value()).first != at)
     {
-        begins.at(atom.value()) = begin;
+        begins.at(atom.value()) = {at, begin};
         if (atom.value() == pattern_.atoms_.size())
         {
             return finished(order, begin);
@@ -142,9 +144,9 @@ std::optional<VimPatternMatch> VimPatternEvaluation::arrived(std::size_t target,
         return (this->*expand_)(next_, next_begins_, target, begin);
     }
     const std::size_t slot = skipping_ + target;
-    if (!next_begins_.at(slot).has_value())
+    if (next_begins_.at(slot).first != at_)
     {
-        next_begins_.at(slot) = begin;
+        next_begins_.at(slot) = {at_, begin};
         next_.push_back(slot);
     }
     return std::nullopt;
@@ -177,16 +179,16 @@ void VimPatternEvaluation::advanced()
     const std::size_t before = at_;
     const char32_t code = code_point_at(line_, Offset{before});
     at_ = next_code_point(line_, Offset{before}).value;
+    // 次の列の印は新しい at_ の印だけを訪問済みと読むので、前の文字の印を消さずに空の列として使う。
     next_.clear();
-    std::ranges::fill(next_begins_, std::nullopt);
     for (const std::size_t index : current_)
     {
-        const auto begin = current_begins_.at(index);
-        if (!begin.has_value())
+        const auto [visited, begin] = current_begins_.at(index);
+        if (visited != before)
         {
             continue;
         }
-        const auto match = stepped(index, begin.value(), before, code);
+        const auto match = stepped(index, begin, before, code);
         if (match.has_value())
         {
             found_ = match;

@@ -543,7 +543,7 @@ nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/WordObjectProbe.cpp
     tests/performance/VimFollowProbe.cpp tests/performance/EditedHistoryProbe.cpp
     tests/performance/PieceListProbe.cpp
-    tests/performance/SubstituteProbe.cpp)
+    tests/performance/SubstituteProbe.cpp tests/performance/PatternCostProbe.cpp)
 nenenib_link(nib_perf_probes nenenib_core)
 nenenib_link(nib_perf_probes nenenib_application)
 nenenib_link(nib_perf_probes nenenib_adapters)
