@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 4703b85a07e0a9bafc82f3ece217ffa9794c101a591274225390e2d98617c744 / 5943 fixtures
+// fixtures.json: sha256 128e0a7ad8790f402e7551c51eefdf9c8f41448f5286f69e04c716ddc72c5a8a / 5951 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 5943> vim_fixtures{{
+constexpr std::array<VimFixture, 5951> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -5772,7 +5772,7 @@ constexpr std::array<VimFixture, 5943> vim_fixtures{{
     {"pattern-escape-search-unclosed-escaped-bracket", "x[a]bc", "/[a\\]b<CR>", "x[a]bc", 1, 2, "", "", std::nullopt},
     {"pattern-escape-sub-tab-replacement-tab", "a\tb", ":s/\\t/\\t\\t/<CR>", "a\t\tb", 1, 1, "", "", std::nullopt},
     {"pattern-escape-delete-to-tab-dot", "a\tb\tc\td", "d/\\t<CR>.", "\tc\td", 1, 1, "\tb", "v", std::nullopt},
-    {"pattern-escape-search-tab-smartcase", "aT\tb", "/\\t<CR>", "aT\tb", 1, 3, "", "", std::nullopt, std::nullopt, std::nullopt, "set ignorecase smartcase"},
+    {"pattern-escape-search-tab-smartcase", "x\tA\ta", "/\\ta<CR>x", "xA\ta", 1, 2, "\t", "v", std::nullopt, std::nullopt, std::nullopt, "set ignorecase smartcase"},
     {"pattern-escape-search-set-digit-letter", "a\\dx", "/[\\d]<CR>", "a\\dx", 1, 2, "", "", std::nullopt},
     {"pattern-escape-search-set-hex-letter", "ax\\y", "/[\\x]<CR>", "ax\\y", 1, 2, "", "", std::nullopt},
     {"pattern-escape-visual-to-tab", "ab\tcd", "v/\\t<CR>d", "cd", 1, 1, "ab\t", "v", std::nullopt},
@@ -5955,6 +5955,14 @@ constexpr std::array<VimFixture, 5943> vim_fixtures{{
     {"gn-nowrapscan-gn-count-past-the-end-fails", "foo x\nfoo", ":set nows<CR>/foo<CR>G$2dgn", "foo x\nfoo", 2, 3, "", "", std::nullopt},
     {"gn-nowrapscan-visual-gn-fails-and-stays", "x foo y", ":set nows<CR>/foo<CR>$vgnd", "x foo y", 1, 7, "", "", std::nullopt},
     {"gn-nowrapscan-gN-count-backward", "foo y foo", ":set nows<CR>/foo<CR>$2gN<Esc>x", "oo y foo", 1, 1, "f", "v", std::nullopt},
+    {"fixture-settings-ignorecase-search", "x FOO foo", "/foo<CR>x", "x OO foo", 1, 3, "F", "v", std::nullopt, std::nullopt, std::nullopt, "set ignorecase"},
+    {"fixture-settings-smartcase-lower-ignores-case", "x FOO foo", "/foo<CR>x", "x OO foo", 1, 3, "F", "v", std::nullopt, std::nullopt, std::nullopt, "set ignorecase smartcase"},
+    {"fixture-settings-smartcase-upper-keeps-case", "x foo Foo", "/Foo<CR>x", "x foo oo", 1, 7, "F", "v", std::nullopt, std::nullopt, std::nullopt, "set ignorecase smartcase"},
+    {"fixture-settings-ignorecase-star", "foo x FOO", "*x", "foo x OO", 1, 7, "F", "v", std::nullopt, std::nullopt, std::nullopt, "set ic"},
+    {"fixture-settings-smartcase-not-for-star", "Foo x foo", "*x", "Foo x oo", 1, 7, "f", "v", std::nullopt, std::nullopt, std::nullopt, "set ic scs"},
+    {"fixture-settings-nowrapscan-n-stops", "foo x foo", "/foo<CR>nx", "foo x foo", 1, 7, "", "", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set nows"},
+    {"fixture-settings-nowrapscan-star-stops", "foo\nbar foo", "G$*x", "foo\nbar foo", 2, 5, "", "", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set nowrapscan"},
+    {"fixture-settings-two-lines-in-order", "x FOO foo FOO", "/foo<CR>nnx", "x FOO foo OO", 1, 11, "F", "v", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set ignorecase\nset nowrapscan"},
 }};
 } // namespace nenenib::tests
 // clang-format on

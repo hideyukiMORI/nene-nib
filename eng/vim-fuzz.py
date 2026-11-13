@@ -131,7 +131,7 @@ DEFAULT_REPLAY = ROOT / "build" / "nib_vim_replay.exe"
 FIELDS = ("text", "line", "column", "register", "register_kind")
 # 生成器 5 の件（viewport つき）が加えて比べる欄（#1224）。
 VIEWPORT_FIELDS = ("first_visible", "scroll")
-# 再生器の 7 欄が運ぶ viewport の鍵（`--from-fixtures` はこれだけの fixture を測る・#1233）。
+# 再生器の viewport の 6 欄が運ぶ鍵（`--from-fixtures` はこれだけの fixture を測る・#1233）。
 VIEWPORT_KEYS = frozenset(("visible_lines", "first_visible", "line", "column"))
 
 # 語の表（生成器の単位・Issue #954 の 2）。1 行が 語の種類・重み・鍵の型。型の `{…}` は

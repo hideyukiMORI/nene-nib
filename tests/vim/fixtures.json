@@ -5759,7 +5759,7 @@
   {"name":"pattern-escape-search-unclosed-escaped-bracket","text":"x[a]bc","keys":"/[a\\]b<CR>"},
   {"name":"pattern-escape-sub-tab-replacement-tab","text":"a\tb","keys":":s/\\t/\\t\\t/<CR>"},
   {"name":"pattern-escape-delete-to-tab-dot","text":"a\tb\tc\td","keys":"d/\\t<CR>."},
-  {"name":"pattern-escape-search-tab-smartcase","text":"aT\tb","keys":"/\\t<CR>","settings":["set ignorecase smartcase"]},
+  {"name":"pattern-escape-search-tab-smartcase","text":"x\tA\ta","keys":"/\\ta<CR>x","settings":["set ignorecase smartcase"]},
   {"name":"pattern-escape-search-set-digit-letter","text":"a\\dx","keys":"/[\\d]<CR>"},
   {"name":"pattern-escape-search-set-hex-letter","text":"ax\\y","keys":"/[\\x]<CR>"},
   {"name":"pattern-escape-visual-to-tab","text":"ab\tcd","keys":"v/\\t<CR>d"},
@@ -5941,5 +5941,13 @@
   {"name":"gn-nowrapscan-gn-next-line","text":"foo x\nfoo","keys":":set nows<CR>/foo<CR>G$dgn"},
   {"name":"gn-nowrapscan-gn-count-past-the-end-fails","text":"foo x\nfoo","keys":":set nows<CR>/foo<CR>G$2dgn"},
   {"name":"gn-nowrapscan-visual-gn-fails-and-stays","text":"x foo y","keys":":set nows<CR>/foo<CR>$vgnd"},
-  {"name":"gn-nowrapscan-gN-count-backward","text":"foo y foo","keys":":set nows<CR>/foo<CR>$2gN<Esc>x"}
+  {"name":"gn-nowrapscan-gN-count-backward","text":"foo y foo","keys":":set nows<CR>/foo<CR>$2gN<Esc>x"},
+  {"name":"fixture-settings-ignorecase-search","text":"x FOO foo","keys":"/foo<CR>x","settings":["set ignorecase"]},
+  {"name":"fixture-settings-smartcase-lower-ignores-case","text":"x FOO foo","keys":"/foo<CR>x","settings":["set ignorecase smartcase"]},
+  {"name":"fixture-settings-smartcase-upper-keeps-case","text":"x foo Foo","keys":"/Foo<CR>x","settings":["set ignorecase smartcase"]},
+  {"name":"fixture-settings-ignorecase-star","text":"foo x FOO","keys":"*x","settings":["set ic"]},
+  {"name":"fixture-settings-smartcase-not-for-star","text":"Foo x foo","keys":"*x","settings":["set ic scs"]},
+  {"name":"fixture-settings-nowrapscan-n-stops","text":"foo x foo","keys":"/foo<CR>nx","settings":["set nows"],"viewport":{"visible_lines":5,"first_visible":1,"line":1,"column":1}},
+  {"name":"fixture-settings-nowrapscan-star-stops","text":"foo\nbar foo","keys":"G$*x","settings":["set nowrapscan"],"viewport":{"visible_lines":5,"first_visible":1,"line":1,"column":1}},
+  {"name":"fixture-settings-two-lines-in-order","text":"x FOO foo FOO","keys":"/foo<CR>nnx","settings":["set ignorecase","set nowrapscan"],"viewport":{"visible_lines":5,"first_visible":1,"line":1,"column":1}}
 ]

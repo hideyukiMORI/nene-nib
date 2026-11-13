@@ -84,6 +84,8 @@ using ViewportValues = std::array<std::size_t, viewport_numbers>;
 using ChangeMarks = std::array<bool, 3>;
 // 本文の後の line と column。
 using Place = std::pair<std::size_t, std::size_t>;
+// 行の後ろの任意の欄（変更の印と設定の行・#1626）。
+using Tail = std::pair<std::optional<ChangeMarks>, std::string>;
 constexpr std::string_view change_prefix = "change=";
 constexpr std::string_view settings_prefix = "settings=";
 constexpr std::size_t read_chunk = 65536;
@@ -378,7 +380,8 @@ void write_mismatch(const std::string &name, std::string_view field, std::string
     {
         return {};
     }
-    std::string settings = unescaped(std::string_view(fields.back()).substr(settings_prefix.size()));
+    std::string settings =
+        unescaped(std::string_view(fields.back()).substr(settings_prefix.size()));
     fields.pop_back();
     return settings;
 }
@@ -396,44 +399,14 @@ void prepare(Editing &editing, const VimFixture &fixture)
     nenenib::tests::apply_vim_fixture_settings(controller, fixture);
 }
 
-// verify_vim_fixture と同じ道で 1 件を流し、違った欄ごとに 1 行を書く。viewport つきの件は
-// 窓を置いてから設定の行を打つ。
-void replay_one(const Fields &fields, Place place, const std::optional<ViewportValues> &window,
-                const std::optional<ChangeMarks> &change, const std::string &settings)
+// 鍵を流した後の本文・キャレット・レジスタ・窓・変更の印を fixture と比べ、違った欄ごとに 1 行を
+// 書く（本文が違えば本文の 1 行だけ）。
+void compare_outcome(const VimFixture &fixture, EditorController &controller,
+                     const std::optional<ChangeMarks> &change)
 {
-    const auto [line_number, column] = place;
-    const std::optional<VimViewportFixture> viewport =
-        window.has_value() ? std::optional{viewport_of(window.value())} : std::nullopt;
-    const std::string &name = fields.at(0);
-    const std::string text = unescaped(fields.at(1));
-    const std::string keys = unescaped(fields.at(2));
-    const std::string expected = unescaped(fields.at(3));
-    const std::string register_text = unescaped(fields.at(6));
-    const std::string register_kind = unescaped(fields.at(7));
-
-    const VimFixture fixture{name,
-                             text,
-                             keys,
-                             expected,
-                             static_cast<std::uint32_t>(line_number),
-                             static_cast<std::uint32_t>(column),
-                             register_text,
-                             register_kind,
-                             viewport,
-                             std::nullopt,
-                             std::nullopt,
-                             settings};
-    Editing editing;
-    EditorController &controller = editing.controller();
-    const std::size_t failures = nenenib::tests::failure_count();
-    prepare(editing, fixture);
-    // Nib が断った設定の行（apply_vim_fixture_settings の検査）は黙って流さず違いにする（#1626）。
-    if (nenenib::tests::failure_count() != failures)
-    {
-        write_mismatch(name, "setting", "taken", settings);
-        return;
-    }
-    nenenib::tests::vim_normal(controller, keys);
+    const std::string name(fixture.name);
+    const std::string expected(fixture.expected_text);
+    const std::optional<VimViewportFixture> &viewport = fixture.viewport;
     const TextPosition caret = controller.frame().caret.position;
     const std::size_t first_visible = controller.frame().first_visible.value;
     const std::size_t fallback =
@@ -459,7 +432,48 @@ void replay_one(const Fields &fields, Place place, const std::optional<ViewportV
     }
 }
 
-// viewport の 7 欄を数として読む。読めない欄があれば無し。
+// verify_vim_fixture と同じ道で 1 件を流し、違った欄ごとに 1 行を書く。viewport つきの件は
+// 窓を置いてから設定の行を打つ。
+void replay_one(const Fields &fields, Place place, const std::optional<ViewportValues> &window,
+                const Tail &tail)
+{
+    const auto &[change, settings] = tail;
+    const auto [line_number, column] = place;
+    const std::optional<VimViewportFixture> viewport =
+        window.has_value() ? std::optional{viewport_of(window.value())} : std::nullopt;
+    const std::string &name = fields.at(0);
+    const std::string text = unescaped(fields.at(1));
+    const std::string keys = unescaped(fields.at(2));
+    const std::string expected = unescaped(fields.at(3));
+    const std::string register_text = unescaped(fields.at(6));
+    const std::string register_kind = unescaped(fields.at(7));
+
+    const VimFixture fixture{name,
+                             text,
+                             keys,
+                             expected,
+                             static_cast<std::uint32_t>(line_number),
+                             static_cast<std::uint32_t>(column),
+                             register_text,
+                             register_kind,
+                             viewport,
+                             std::nullopt,
+                             std::nullopt,
+                             settings};
+    Editing editing;
+    const std::size_t failures = nenenib::tests::failure_count();
+    prepare(editing, fixture);
+    // Nib が断った設定の行（apply_vim_fixture_settings の検査）は黙って流さず違いにする（#1626）。
+    if (nenenib::tests::failure_count() != failures)
+    {
+        write_mismatch(name, "setting", "taken", settings);
+        return;
+    }
+    nenenib::tests::vim_normal(editing.controller(), keys);
+    compare_outcome(fixture, editing.controller(), change);
+}
+
+// viewport の 6 欄を数として読む。読めない欄があれば無し。
 [[nodiscard]] std::optional<ViewportValues> viewport_values(const Fields &fields)
 {
     ViewportValues values{};
@@ -491,8 +505,9 @@ void replay_line(std::string_view line)
         return;
     }
     Fields fields = fields_of(line);
+    // 後ろから変更の印、次に設定の行の順に外す（fuzz の replay_line が書く順の逆）。
     const std::optional<ChangeMarks> change = taken_change(fields);
-    const std::string settings = taken_settings(fields);
+    const Tail tail{change, taken_settings(fields)};
     const std::string name = fields.at(0);
     if (!known_field_count(fields.size()))
     {
@@ -517,8 +532,7 @@ void replay_line(std::string_view line)
     }
     if (fields.size() == field_count)
     {
-        replay_one(fields, Place{line_number.value(), column.value()}, std::nullopt, change,
-                   settings);
+        replay_one(fields, Place{line_number.value(), column.value()}, std::nullopt, tail);
         return;
     }
     const auto values = viewport_values(fields);
@@ -528,7 +542,7 @@ void replay_line(std::string_view line)
                    std::to_string(number_limit));
         return;
     }
-    replay_one(fields, Place{line_number.value(), column.value()}, values, change, settings);
+    replay_one(fields, Place{line_number.value(), column.value()}, values, tail);
 }
 
 [[nodiscard]] std::string whole_stream(std::FILE *stream)

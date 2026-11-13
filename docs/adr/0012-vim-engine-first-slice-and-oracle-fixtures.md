@@ -118,3 +118,13 @@ ADR 0005（自前 Vim・oracle）・ADR 0006（表駆動）・ADR 0009（piece t
 ## 追記（2026-11-12・Issue #1517・ADR 0182）
 
 INSERT の `Ctrl-o` の undo の区切りは決定 6（INSERT の出入りが区切り）のままで、打った鍵では Vim の対話と同じ 3 単位（`Ctrl-o` の前・命令・始め直した後）になる。始め直しは鍵ではなく controller が流す 1 歩（`InsertRestartRequest` → `vim_restarted_insert`）で、NORMAL → INSERT の出入りとして同じ区切りを通る。fixture の再生（press_vim_keys）の鍵は :normal! と同じに打った鍵ではない（出どころ mapped）ので、`<C-o>c` 系の Esc の後は INSERT を始め直す（ADR 0182 の決定 4）。
+
+## 追記（2026-11-13・Issue #1626）— fixture の settings は再生も流す
+
+oracle は fixture の `settings` を `-u NONE` の上に置いて測るが、生成物 `VimFixtures.hpp` に載って再生が読むのは viewport つきの `set scrolloff=N` だけで、ほかの行は黙って落ちていた（`set ignorecase smartcase` の 1 件は設定が効かなくても答えが同じで、何も試していなかった）。決定 7 を次のとおり補う。
+
+- **settings は行の最後の欄**: `VimFixture.settings`（改行でつないだ行）。書くのは oracle の書き出し（`fixture_row` / `settings_field`・測定の領域の外）で、値は fixture の入力から作るので、`--only` の再利用の行もそのまま正しい。測定のコードは変えていない（`measurement_sources_match` が真）。
+- **再生は窓の後・鍵の前に `:` の行として打つ**: `apply_vim_fixture_settings`（`tests/unit/VimTestSupport.cpp`）の 1 本を `verify_vim_fixture`・窓の道（`VimFixtureWindowPathTests`）・fuzz の再生器 `nib_vim_replay`（欄 `settings=`）が呼ぶ。余白の `set scrolloff=N` も同じ道で、`VimViewportFixture.scrolloff`（#1239）は無くした（道を 2 本にしない）。折り返す窓の fixture も余白を同じ欄の `set scrolloff=N` で書く（`eng/vim-wrap-oracle.py`）。
+- **Nib が断る行は落とす**: 打つ前に同じ評価 `evaluate_ex` が受けるかを確かめ、受けなければ試験が落ちる（再生器は `mismatch <name> setting`）。Nib に `:set` の口が無く固定値と同じ行だけを、oracle の表 `NIB_FIXED_SETTINGS`（いまは `set nrformats=bin,hex` の 1 行）が生成物に載せない。表に無い行は全部流す。
+- **移し替え**: 既存の 1,087 行（余白の 1,086 行と smartcase の 1 行）は Vim を使わずに書き出しの形だけを移し、24 件を新しい書き出しで測り直して生成物の差が 0 であることを確かめた。折り返す窓の 402 件は共有 oracle の digest（CNF-010）のため測り直し、差は余白の 10 行の形と digest の行だけ。
+- **守り**: fixture `fixture-settings-` 8 件（`ignorecase`・`smartcase`（`*` には効かない）・`nowrapscan`・2 行の設定）を足した。設定を流さない変異で、うち 7 件と下の 1 件が落ちる（残る 1 件 `smartcase-upper-keeps-case` は大文字のパターンで、設定が効いても効かなくても答えが同じ。`ignorecase` だけが効いて `smartcase` が落ちる形を落とす）。同じ変異で余白の fixture 187 件のうち 131 件、折り返す窓の 10 件のうち 6 件も落ちる。`nowrapscan` の失敗する検索は `-es` の Vim が終了コード 1 を返すので、viewport つき（`--not-a-term`）で測る。`pattern-escape-search-tab-smartcase` は本文と鍵を設定が効く形（`x\tA\ta` で `/\ta<CR>x`）に直して測り直した。`hlsearch` は fixture の欄（本文・キャレット・レジスタ・窓）に現れないので、この形では試せない。
