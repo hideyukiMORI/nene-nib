@@ -106,6 +106,11 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::app_error_window_create, "ウィンドウを作成できませんでした。"},
     {UiMessage::app_error_rendering_start, "Direct2D で描画を始められませんでした。"},
     {UiMessage::app_error_com_initialize, "COM を初期化できませんでした。"},
+    {UiMessage::app_error_defect_backed_up,
+     "問題が起きたため NeNe Nib "
+     "を閉じます。保存していない変更は退避しました。次の起動で戻せます。"},
+    {UiMessage::app_error_defect_not_backed_up,
+     "問題が起きたため NeNe Nib を閉じます。保存していない変更は退避できませんでした。"},
     {UiMessage::notice_folder_truncated, "同じフォルダは {0} 件まで。残りは一覧に出ません"},
     {UiMessage::notice_autosave_failed, "自動退避できませんでした"},
     {UiMessage::notice_autosave_too_large, "{0} を超える文書は自動退避しません"},

@@ -17,6 +17,7 @@
 #include "GridLineRows.hpp"
 #include "GridLineSource.hpp"
 #include "ImeStance.hpp"
+#include "LastResortPlan.hpp"
 #include "LineSpanEvaluation.hpp"
 #include "MatchParen.hpp"
 #include "ModeLabel.hpp"
@@ -511,6 +512,12 @@ void EditorController::follow_window_setting()
 
 EditorDelivery EditorController::apply(const EditorIntent &intent)
 {
+    // いちばん外の意図の入口の印（ADR 0137 の追補 #1625）。出口で深さを戻すのは return の直前の
+    // 1 か所で、例外で抜けると戻らない（最後の砦が「意図の途中」と読む）。RAII で戻さない。
+    if (intent_depth_++ == 0)
+    {
+        intent_mark_ = intent_mark_of(state_);
+    }
     layout_failure_.reset();
     repaint_ = true;
     forget_unkept_marks(intent);
@@ -558,6 +565,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 契約の破れは配達に 1 回だけ載せ、ここで消す（ADR 0133 の追補 2026-10-18）。次の apply の
     // 消去に頼らない。layout を作れない失敗は作り直しの apply で消えるまで frame に載る。
     layout_failure_ = drawing_failure(layout_failure_);
+    --intent_depth_;
     return delivered;
 }
 

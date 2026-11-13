@@ -141,3 +141,11 @@ hide の実機（Windows 11 Pro 26300・日本語・試用 exe `NeNeNib-main-b40
 ## 追補 2026-11-11（#1499）: 描画を失って聞く間だけ窓に下地を掛ける
 
 窓の Mica を外した（#1488・ADR 0008 決定 9 の追記）後、`abandon()` → `end_window` が取消の無い「描画できなくなったので閉じます。保存しますか。」を聞く間、描けない窓は縁と影だけの見えない矩形になった（レビュー V-1497 の L-b）。`end_window` は `exit_plan` の値が `confirm_each_tab_without_cancel` のときだけ（`WindowBackdrop` の `needs_question_backdrop`）、箱を出す前に `show_question_backdrop` で `DWMWA_SYSTEMBACKDROP_TYPE` = `DWMSBT_MAINWINDOW` を掛ける（失敗は無視）。窓はこの後 `leave(SessionEnd::rendering_lost)` で必ず壊れるので外さない。`recover()` が成功した道とすぐ終わる道（`leave_now`）では掛けない。`WS_EX_NOREDIRECTIONBITMAP` の窓では GDI の塗りも class の背景ブラシも画面に出ないので（ADR 0013 の追補 #1488）、下地は Mica だけ。角の約 4 px の点はこの非常時だけ受ける（#1496）。契約は `nib_window_tests --question-backdrop`。
+
+## 追補 2026-11-13（#1625）: 捕まえていない例外の終わり方は `exit_plan` の外の道
+
+決定 2 の表の「プロセスが殺される（タスクマネージャ・クラッシュ）」の行のうち、C++ の例外が誰にも捕まらなかった（`noexcept` を抜けたを含む）終わり方には、ADR 0137 の追補 #1625 の最後の砦を足した。UI スレッドで落ちたときは、決定 9 と同じ同期の退避を 1 回だけ回してから OS の箱で 1 行知らせ、決めた終了コード（`0x1625`）で終える。
+
+- **`ExitCause` と `SessionEnd` に値（`defect`）を足さない。** 2 つの enum は `end_window` / `leave` を通る終わり方の値だが、最後の砦はどちらも通らない。`DestroyWindow` も `leave` も一覧の書きも呼ばず、壊れた状態で窓の手続きを回さない。値を足しても、`exit_plan`・`ExitPlanTests`・`EditorControllerDocuments`・`EditorWindowLifecycle` の `switch` に、何もしない行が増えるだけになる。そこで `exit_plan` の外の道として、ここと ADR 0137 に書く。
+- 決定 1 の「本窓を壊すのは `leave` だけ」は変えない。最後の砦は窓を壊さず、窓の手続きを `DefWindowProcW` に替えて無効にしてから、process を `TerminateProcess` で終える。
+- SEH（アクセス違反・stack の溢れ）とプロセスが殺される経路は、今までどおり該当なし（定期の退避だけ）。

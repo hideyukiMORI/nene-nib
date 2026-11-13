@@ -5,6 +5,8 @@
 #include "DeviceWarmup.hpp"
 #include "EditorController.hpp"
 #include "EditorWindow.hpp"
+#include "LastResortArming.hpp"
+#include "LastResortHooks.hpp"
 #include "LocalSettingsPath.hpp"
 #include "Milestone.hpp"
 #include "OpenDocument.hpp"
@@ -46,6 +48,7 @@
 #include <objbase.h>
 #include <shellapi.h>
 
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <span>
@@ -274,6 +277,50 @@ void bind_work_signal(const nenenib::ui::win32::EditorWindow &window, Adapters &
 // 頼むのは最初の frame の合図のときだけ。履歴と明示登録（ADR 0063）の adapter はその仕事が
 // 借りるので、ワーカーより先に作って後に壊す。表示言語の観測（ADR 0123 の追補 2026-11-13 の決定
 // 2）は controller が起動の 1 回だけ呼ぶ。
+// ワーカーの最初の仕事（device の生成・ADR 0131）。同じ仕事の頭で、最後の砦の手続きをワーカーの
+// スレッドにも置く（std::set_terminate はスレッドごと・ADR 0137 の追補 #1625）。post の順と回数は
+// 変えない。
+void make_device_first(nenenib::adapters::win32::Win32Worker &worker,
+                       nenenib::ui::win32::DeviceWarmup &warmup)
+{
+    worker.post(
+        [&warmup](const std::stop_token &stop)
+        {
+            nib_adapters::arm_last_resort_thread();
+            warmup.make(stop.stop_requested());
+        });
+}
+
+// 最後の砦の 2 つの口（ADR 0137 の追補 #1625）。退避は controller の 1 本、知らせは OS の箱。
+// 3 言語 × 2 つの文は起動のときに UTF-16 にしておき、手続きの中では変換しない。言語は落ちたときの
+// 解決済みの値で選ぶ。
+[[nodiscard]] nib_adapters::LastResortHooks
+last_resort_hooks(nenenib::application::EditorController &controller)
+{
+    using nenenib::core::UiMessage;
+    const auto utf16 = [](UiMessage message, nenenib::core::DisplayLanguage language)
+    {
+        return nenenib::core::to_utf16(nenenib::core::ui_text(message, language))
+            .value_or(std::wstring{});
+    };
+    std::array<std::array<std::wstring, 2>, nenenib::core::display_language_count> texts;
+    for (std::size_t index = 0; index < texts.size(); ++index)
+    {
+        const auto language = static_cast<nenenib::core::DisplayLanguage>(index);
+        texts.at(index) = {utf16(UiMessage::app_error_defect_not_backed_up, language),
+                           utf16(UiMessage::app_error_defect_backed_up, language)};
+    }
+    return {
+        [&controller] { return controller.back_up_before_defect(); },
+        [&controller, texts = std::move(texts)](bool backed_up)
+        {
+            const auto &text =
+                texts.at(std::to_underlying(controller.display_language())).at(backed_up ? 1U : 0U);
+            MessageBoxW(nullptr, text.c_str(), product_name,
+                        MB_OK | MB_ICONERROR | MB_TASKMODAL | MB_SETFOREGROUND);
+        }};
+}
+
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
@@ -294,10 +341,9 @@ int run(HINSTANCE instance)
     // 裏の仕事のワーカーと device の箱（宣言の順と壊れる順は run の上の注記）。
     nenenib::ui::win32::DeviceWarmup warmup;
     nenenib::adapters::win32::Win32Worker worker;
-    worker.post([&warmup](const std::stop_token &stop) { warmup.make(stop.stop_requested()); });
+    make_device_first(worker, warmup);
     nenenib::adapters::win32::Win32FolderAdapter folders(worker);
-    // Markdown のプレビューの解析も同じワーカーを借りる（ADR 0155 の決定 5・壊れる順は folders
-    // と同じ）。
+    // Markdown の解析も同じワーカーを借りる（ADR 0155 の決定 5・壊れる順は folders と同じ）。
     nenenib::adapters::win32::Win32MarkdownAdapter markdown(worker);
     nenenib::ui::win32::BodyTextLayouts text_layouts;
     // 字体の一覧は ui/win32 が DirectWrite から読み、adapters が OS の照合順に並べる（#696）。
@@ -322,6 +368,7 @@ int run(HINSTANCE instance)
             reads,        language_server, wall_clock, printer,    shell_registration,
             images,       start_lists,     ui_language},
         initial_documents(given));
+    const nib_adapters::LastResortArming last_resort(last_resort_hooks(controller));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);

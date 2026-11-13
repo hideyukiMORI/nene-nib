@@ -4,6 +4,7 @@
 #include "AutosaveId.hpp"
 #include "AutosaveLedger.hpp"
 #include "AutosaveRemnant.hpp"
+#include "AutosaveStep.hpp"
 #include "CaretMotion.hpp"
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
@@ -65,6 +66,7 @@
 #include "GridRowView.hpp"
 #include "GridTally.hpp"
 #include "ImageOutcome.hpp"
+#include "IntentMark.hpp"
 #include "JsonValue.hpp"
 #include "KeyMap.hpp"
 #include "LanguageServerLink.hpp"
@@ -265,6 +267,12 @@ class EditorController final
     // 1 回だけ呼ぶ。port の remnants() を 1 回呼んで列を覚え、その列を返す（失敗は空）。
     // RestoreAutosave と DiscardAutosave はこの覚えた列を使い、port へもう 1 回聞かない。
     [[nodiscard]] const std::vector<AutosaveRemnant> &autosave_remnants();
+    // 最後の砦（ADR 0137 の追補 #1625）。捕まえていない例外で落ちる直前に、UI スレッドの
+    // std::terminate の手続きだけが 1 回呼ぶ。決定 9 と同じ退避（変わったタブの store と flush）を
+    // last_resort_plan の計画で回す（意図の途中で動いたタブは書かず前の退避を残す）。一覧・履歴・
+    // 読みの取消・言語サーバーには触れない（accept(EndSession) を通さない）。頼んだ退避が全部
+    // 書けたら真（上限を超えて書かない文書・flush の時間切れ・書けなかった結果があれば偽）。
+    [[nodiscard]] bool back_up_before_defect();
 
   private:
     // 意図の前に 1 意図ぶんだけの表示（失敗・報せ）を消す。keeps_message は報せを残す意図。
@@ -773,6 +781,9 @@ class EditorController final
     void accept(const AutosaveTick &);
     // 計画を回して store と discard を頼み、帳面を進める（決定 2）。合図と復元の直後が呼ぶ。
     void autosave_now();
+    // 計画の仕事を頼み、帳面を進める（autosave_now と back_up_before_defect の 1 本）。上限を超えて
+    // 書かない文書があれば偽。
+    bool run_autosave_steps(const std::vector<std::pair<AutosaveId, AutosaveStep>> &plan);
     // 起動の問いの答え（決定 6）。戻すのは覚えた残骸を順に読み、開くのと同じ復号で帯の末尾に
     // 未保存のタブとして足し、最初に戻したタブをアクティブにする。読めない残骸は 1 行知らせて
     // 飛ばす。戻したタブは直後に退避を頼んでから forget する。どちらの答えも残骸を全部 forget
@@ -1348,6 +1359,10 @@ class EditorController final
     // 読みを頼んだ後に履歴から外した path（届いた列から外す・届いたら捨てる・#1495）。
     std::vector<core::FilePath> start_forgotten_;
     std::optional<std::size_t> start_selection_;
+    // 写している途中の意図の深さと、いちばん外の意図の入口の印（ADR 0137 の追補 #1625）。apply の
+    // 入口と出口が整数を書くだけで、例外で抜けると深さは戻らない（落ちたときは「意図の中」と読む）。
+    std::size_t intent_depth_ = 0;
+    IntentMark intent_mark_;
     // 自動退避の帳面（ADR 0137 の決定 2）。AutosaveTick の道だけが読み書きする。
     AutosaveLedger autosave_ledger_;
     // 「自動退避できませんでした」を出したか。次に成功するまで 2 回目を出さない（決定 4）。

@@ -104,6 +104,8 @@ enum class UiMessage : std::uint16_t
     app_error_window_create,
     app_error_rendering_start,
     app_error_com_initialize,
+    app_error_defect_backed_up,
+    app_error_defect_not_backed_up,
     notice_folder_truncated,
     notice_autosave_failed,
     notice_autosave_too_large,

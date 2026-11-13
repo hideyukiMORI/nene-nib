@@ -335,13 +335,13 @@ void verify_flush(adapters::Win32Worker &worker, adapters::Win32FileAdapter &fil
     autosave.store(snapshot(7, std::nullopt, "無題", "seven"));
     autosave.store(snapshot(8, std::nullopt, "無題", "eight"));
     autosave.discard(AutosaveId{3});
-    autosave.flush();
+    expect(autosave.flush(), "flush answers that every requested job finished (#1625)");
     expect(own_body(files, 7) == "seven" && own_body(files, 8) == "eight" &&
                !exists(own_folder() + L"/3.body"),
            "flush returns after the queued stores and discards are done");
     expect(printed(autosave.collect()) == "7ok 8ok 3ok",
            "every job finished before flush returned left its outcome");
-    autosave.flush();
+    expect(autosave.flush(), "flush with nothing requested answers finished");
     autosave.store(snapshot(9, std::nullopt, "無題", "nine"));
     drain(worker);
     expect(own_body(files, 9) == "nine" && printed(autosave.collect()) == "9ok",
@@ -356,7 +356,8 @@ void verify_flush_limit(adapters::Win32Worker &worker, adapters::Win32FileAdapte
     Signals gate{0};
     worker.post([&gate](const std::stop_token &) { gate.acquire(); });
     autosave.store(snapshot(10, std::nullopt, "無題", "blocked"));
-    autosave.flush();
+    const bool flushed = autosave.flush();
+    expect(!flushed, "flush answers false when it returns at its limit (#1625)");
     expect(own_body(files, 10).empty(), "flush returns at its limit while the worker is blocked");
     gate.release();
     drain(worker);

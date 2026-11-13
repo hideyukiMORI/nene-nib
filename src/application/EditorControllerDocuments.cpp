@@ -1388,7 +1388,7 @@ void EditorController::accept(const EndSession &intent)
     if (!clears)
     {
         autosave_now();
-        ports_.autosave.flush();
+        static_cast<void>(ports_.autosave.flush());
     }
     static_cast<void>(ports_.session.write(ended_session(state_, intent.reason)));
     // 閉じたファイルを履歴に記録する（ADR 0060 の決定 8）。一覧の書きの後。

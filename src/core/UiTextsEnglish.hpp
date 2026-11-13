@@ -113,6 +113,11 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::app_error_window_create, "Could not create the window."},
     {UiMessage::app_error_rendering_start, "Could not start drawing with Direct2D."},
     {UiMessage::app_error_com_initialize, "Could not initialize COM."},
+    {UiMessage::app_error_defect_backed_up,
+     "A problem occurred, so NeNe Nib will close. Unsaved changes were backed up and can be "
+     "restored the next time you start it."},
+    {UiMessage::app_error_defect_not_backed_up,
+     "A problem occurred, so NeNe Nib will close. Unsaved changes could not be backed up."},
     {UiMessage::notice_folder_truncated, "Only the first {0} files in the same folder are listed"},
     {UiMessage::notice_autosave_failed, "Autosave failed"},
     {UiMessage::notice_autosave_too_large, "Documents larger than {0} are not autosaved"},

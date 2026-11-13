@@ -1,0 +1,19 @@
+#pragma once
+
+#include "AutosaveId.hpp"
+
+#include <cstddef>
+
+namespace nenenib::application
+{
+// いちばん外の意図を写し始めたときの印（ADR 0137 の追補 #1625）。アクティブなタブの退避番号・
+// その改訂番号（EditHistory::revision）・タブの数。apply の入口が整数を書くだけで、最後の砦の
+// 計画（last_resort_plan）が「意図の途中で動いたタブ」を見分けるのに読む。値だけを運ぶ公開
+// aggregate（CPP-003）。
+struct IntentMark
+{
+    AutosaveId active{0};
+    std::size_t revision = 0;
+    std::size_t tabs = 0;
+};
+} // namespace nenenib::application
