@@ -9,7 +9,8 @@
 // 4 KiB）に答えを返すことだけを見る。時間は Release の probe の pattern-star-miss-1024 / 2048 /
 // 4096 と pattern-multistar-miss-32 が測る（ADR 0093）。Vim との一致は oracle の領分で問わない。
 // 原子 1 つに付く量（ADR 0184 の決定 2）は、乱数のパターンを試験の中の素朴な後戻りの模型と照合して
-// 当たりと群の範囲が同じになることを見る（verify_quantifiers_follow_the_model）。
+// 当たりと群の範囲が同じになることを見る（verify_quantifiers_follow_the_model）。状態集合の道の
+// 答えは、直す前の評価器の答えの畳みと比べる（verify_state_route_keeps_its_answers・#1584）。
 // 回数は Debug（ASan）で scope 全体が 1 秒以内に終わる値。50 倍の走りは rounds を手で 50 にして
 // 回す（commit しない）。生成器は std::mt19937_64 の剰余だけを使い、分布の型は使わない。
 #include "Offset.hpp"
@@ -20,6 +21,7 @@
 #include "VimPatternCaptures.hpp"
 #include "VimPatternFailure.hpp"
 #include "VimPatternMatch.hpp"
+#include "VimPatternRoute.hpp"
 #include "VimSearchDirection.hpp"
 
 #include <algorithm>
@@ -944,6 +946,130 @@ void verify_quantifiers_follow_the_model()
     expect(matched >= family_cases, "the quantifier model cases include matches");
 }
 
+// ---------------------------------------------------------------- 状態集合の道の答え（#1584）
+// 状態集合の道（VimPatternEvaluation）を通るパターンを固定 seed で作り、行のすべての 1 文字の境
+// から当てた答え（当たりの有無・始まり・終わり）を FNV-1a 64 で畳む。期待の値は、訪問済みの印を
+// 1 文字ごとに埋め直していた直す前の評価器（main e43e93e8）がこの生成器の列に出した答えの畳み。
+// 評価器の中の持ち方を変えても、最も左の開始・貪欲 / 最短の優先順・結合文字の途中の印が同じなら
+// 値は変わらない。生成器・断片・回数を変えたら、直す前の木で測り直した値に置き換える。
+
+// 状態集合の道を通る断片（`*`・量・最短・幅の無い原子・結合文字・多バイト）。
+constexpr std::array<std::string_view, 32> state_fragments{{
+    "a",           "b",         " ",
+    "x",           ".",         "a*",
+    "b*",          ".*",        "[ab]*",
+    "[^a]*",       "\\w*",      "\\s*",
+    "a\\+",        "b\\=",      ".\\{-}",
+    "a\\{-1,}",    ".\\{-1,2}", "a\\{2}",
+    "[ab]\\{1,3}", "a\\{,2}",   "\\<",
+    "\\>",         "^",         "$",
+    "\xC3\xA9",    "\xC3\xA9*", "\xE3\x81\x82*",
+    ".\\=",        "\\S\\+",    "[^ ]\\{-1,}",
+    "e\xCC\x81",   ".\\{2,}",
+}};
+
+// 行の材料（ASCII・2〜4 バイト・基底と結合文字・単独の結合文字）。どれも正しい UTF-8。
+constexpr std::array<std::string_view, 10> state_line_pieces{{
+    "a",
+    "a",
+    "b",
+    " ",
+    "x",
+    "\xC3\xA9",
+    "e\xCC\x81",
+    "\xE3\x81\x82",
+    "\xF0\x9F\x98\x80",
+    "\xCC\x81",
+}};
+
+// 期待の値がこの数の列の畳みなので、rounds（50 倍の走り）を掛けない。
+constexpr std::size_t state_cases = 3000U;
+constexpr std::uint64_t fnv_offset = 14695981039346656037ULL;
+constexpr std::uint64_t fnv_prime = 1099511628211ULL;
+// 直す前の評価器（main e43e93e8）の答えの畳み（seed 9011・state_cases 組）。
+constexpr std::uint64_t state_answers_digest = 0x669ac3eccfd658c1ULL;
+
+[[nodiscard]] std::string state_pattern(Random &random)
+{
+    const std::size_t pieces = 1U + below(random, 8U);
+    std::string pattern;
+    for (std::size_t piece = 0; piece < pieces; ++piece)
+    {
+        pattern.append(pick(random, state_fragments));
+    }
+    return pattern;
+}
+
+[[nodiscard]] std::string state_line(Random &random)
+{
+    const std::size_t pieces = below(random, 24U);
+    std::string line;
+    for (std::size_t piece = 0; piece < pieces; ++piece)
+    {
+        line.append(pick(random, state_line_pieces));
+    }
+    return line;
+}
+
+void folded(std::uint64_t &digest, std::size_t value)
+{
+    for (std::size_t shift = 0; shift < 64U; shift += 8U)
+    {
+        digest = (digest ^ ((static_cast<std::uint64_t>(value) >> shift) & 0xFFU)) * fnv_prime;
+    }
+}
+
+// 1 組のすべての境からの答えを畳み、当たった数を返す。
+[[nodiscard]] std::size_t state_answers_folded(std::uint64_t &digest, const VimPattern &pattern,
+                                               std::string_view line)
+{
+    std::size_t found = 0;
+    for (const std::size_t from : boundaries(line))
+    {
+        const Found match = pattern.matched(line, from);
+        folded(digest, from);
+        folded(digest, match.has_value() ? 1U : 0U);
+        if (match.has_value())
+        {
+            folded(digest, match.value().begin);
+            folded(digest, match.value().end);
+            ++found;
+        }
+    }
+    return found;
+}
+
+void verify_state_route_keeps_its_answers()
+{
+    Random random{9011U};
+    std::uint64_t digest = fnv_offset;
+    std::size_t states = 0;
+    std::size_t found = 0;
+    for (std::size_t round = 0; round < state_cases; ++round)
+    {
+        const std::string pattern = state_pattern(random);
+        const std::string line = state_line(random);
+        const Parsed parsed =
+            VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
+        folded(digest, parsed.has_value() ? 1U : 0U);
+        if (!parsed.has_value() || parsed.value().route() == core::VimPatternRoute::sequence)
+        {
+            continue;
+        }
+        ++states;
+        found += state_answers_folded(digest, parsed.value(), line);
+    }
+    if (digest != state_answers_digest)
+    {
+        std::fprintf(stderr, "  state route answers digest: %016llx (cases %zu, found %zu)\n",
+                     static_cast<unsigned long long>(digest), states, found);
+    }
+    expect(digest == state_answers_digest,
+           "the state route gives the answers of the evaluator before #1584");
+    expect(states >= state_cases / 2U && found >= state_cases,
+           "the state route cases go through the evaluator and include matches");
+}
+
 // 生成器そのものが決定的（同じ seed で同じ列）。
 void verify_generators_are_deterministic()
 {
@@ -977,5 +1103,6 @@ void verify_vim_pattern_property_scope()
     verify_backtracking_is_bounded();
     verify_known_cases();
     verify_quantifiers_follow_the_model();
+    verify_state_route_keeps_its_answers();
 }
 } // namespace nenenib::tests
