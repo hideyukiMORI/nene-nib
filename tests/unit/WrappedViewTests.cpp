@@ -234,7 +234,8 @@ void verify_wrap_settings()
                wrapped.lines.front().screen_rows == 4,
            "wrapping restores visual rows without changing source text");
     expect(editing.settings().writes() == 2, "wrap changes use the existing settings persistence");
-    expect(command_completions("set now") == std::vector<std::string>{"set nowrap"},
+    expect(command_completions("set now") ==
+               std::vector<std::string>{"set nowrap", "set nowrapscan"},
            "nowrap is exposed through the shared completion catalog");
     editing.settings().fail(SettingsFailure::unwritable);
     static_cast<void>(controller.apply(OpenCommandPalette{}));

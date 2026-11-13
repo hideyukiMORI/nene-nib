@@ -15,7 +15,9 @@
 #include "NewlineIndexProbe.hpp"
 #include "OperationChoiceProbe.hpp"
 #include "PaletteChoiceProbe.hpp"
+#include "PatternCostProbe.hpp"
 #include "PatternProbe.hpp"
+#include "PatternProgramProbe.hpp"
 #include "PieceListProbe.hpp"
 #include "PreviewCaretProbe.hpp"
 #include "ProbeDispatch.hpp"
@@ -1022,6 +1024,44 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(PatternProgramWorkload workload)
+{
+    switch (workload)
+    {
+    case PatternProgramWorkload::branch_star_miss_4096:
+    case PatternProgramWorkload::group_bounded_miss_4096:
+        return 268U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] constexpr std::size_t checked_index(PatternCostWorkload workload)
+{
+    switch (workload)
+    {
+    case PatternCostWorkload::lead_16_line:
+    case PatternCostWorkload::lead_64_line:
+    case PatternCostWorkload::lead_256_line:
+    case PatternCostWorkload::lead_1024_line:
+    case PatternCostWorkload::tail_16_line:
+    case PatternCostWorkload::tail_64_line:
+    case PatternCostWorkload::tail_256_line:
+    case PatternCostWorkload::tail_1024_line:
+    case PatternCostWorkload::quantity_line:
+    case PatternCostWorkload::lead_16_lines:
+    case PatternCostWorkload::lead_64_lines:
+    case PatternCostWorkload::lead_256_lines:
+    case PatternCostWorkload::lead_1024_lines:
+    case PatternCostWorkload::tail_16_lines:
+    case PatternCostWorkload::tail_64_lines:
+    case PatternCostWorkload::tail_256_lines:
+    case PatternCostWorkload::tail_1024_lines:
+    case PatternCostWorkload::quantity_lines:
+        return 250U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -1037,7 +1077,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 250> dispatches{{
+constexpr std::array<ProbeDispatch, 270> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1544,6 +1584,64 @@ constexpr std::array<ProbeDispatch, 250> dispatches{{
                      substitute_input, substitute_lines},
     ProbeDispatchRow{SubstituteWorkload::no_match_100k, "vim-substitute-no-match-100k-lines",
                      substitute_input, substitute_lines},
+    ProbeDispatchRow{PatternCostWorkload::lead_16_line,
+                     "pattern-cost-star-lead-16-16000-chars-line", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::lead_64_line,
+                     "pattern-cost-star-lead-64-16000-chars-line", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::lead_256_line,
+                     "pattern-cost-star-lead-256-16000-chars-line", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::lead_1024_line,
+                     "pattern-cost-star-lead-1024-16000-chars-line", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::tail_16_line,
+                     "pattern-cost-star-tail-16-16000-chars-line", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::tail_64_line,
+                     "pattern-cost-star-tail-64-16000-chars-line", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::tail_256_line,
+                     "pattern-cost-star-tail-256-16000-chars-line", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::tail_1024_line,
+                     "pattern-cost-star-tail-1024-16000-chars-line", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::quantity_line,
+                     "pattern-cost-quantity-1000-16000-chars-line", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::lead_16_lines,
+                     "pattern-cost-star-lead-16-2000-lines-40-chars", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::lead_64_lines,
+                     "pattern-cost-star-lead-64-2000-lines-40-chars", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::lead_256_lines,
+                     "pattern-cost-star-lead-256-2000-lines-40-chars", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::lead_1024_lines,
+                     "pattern-cost-star-lead-1024-2000-lines-40-chars", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::tail_16_lines,
+                     "pattern-cost-star-tail-16-2000-lines-40-chars", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::tail_64_lines,
+                     "pattern-cost-star-tail-64-2000-lines-40-chars", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::tail_256_lines,
+                     "pattern-cost-star-tail-256-2000-lines-40-chars", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::tail_1024_lines,
+                     "pattern-cost-star-tail-1024-2000-lines-40-chars", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternCostWorkload::quantity_lines,
+                     "pattern-cost-quantity-1000-2000-lines-40-chars", pattern_cost_input,
+                     pattern_cost_run},
+    ProbeDispatchRow{PatternProgramWorkload::branch_star_miss_4096, "pattern-branch-star-miss-4096",
+                     pattern_program_input, matched_program},
+    ProbeDispatchRow{PatternProgramWorkload::group_bounded_miss_4096,
+                     "pattern-group-bounded-miss-4096", pattern_program_input, matched_program},
 }};
 
 constexpr auto dispatch_names = []
@@ -1586,7 +1684,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 250U);
+static_assert(dispatches.size() == 270U);
 static_assert(dispatch_is_complete());
 
 } // namespace

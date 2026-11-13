@@ -2089,7 +2089,10 @@ substitute_result(std::string_view text, std::optional<ExRange> range)
     {
         return std::unexpected(parsed.value().error());
     }
-    ExResult result{std::nullopt, std::nullopt, std::nullopt, DisplayText::parse(text).value()};
+    // 命令は入力行の上限（4096 バイト）まで長くなるので、知らせの 1 行に切る（置換は request の
+    // 全文で流し、この文は表示にしか使わない・#1616）。evaluate_ex が制御文字と壊れた UTF-8 を
+    // 先に断り、`:s` の族は空でないので、切った文は必ず受かる（不変条件・ARC-010）。
+    ExResult result{std::nullopt, std::nullopt, std::nullopt, clipped_display_text(text).value()};
     result.substitute = std::move(parsed).value().value();
     result.substitute.value().range = std::move(range);
     return result;
