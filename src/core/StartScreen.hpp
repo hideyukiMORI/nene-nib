@@ -28,8 +28,6 @@ inline constexpr std::size_t start_section_limit = 10;
 // エクスプローラー（Ctrl+Shift+E）の順で、鍵と名前は操作の表から引く（operation_guide_entry）。
 // 設定（Ctrl+,）は設定画面の操作が表に入ったときに行を足す（ADR 0172 の追補 2026-11-11）。
 [[nodiscard]] std::array<GuideEntry, 3> start_key_entries(EditMode mode, DisplayLanguage language);
-// 言語の無い形は日本語の文（ui の試験の形・T1e で言語の形へ寄せる）。
-[[nodiscard]] std::array<GuideEntry, 3> start_key_entries(EditMode mode);
 
 // 選びを 1 つ進めた後の位置（ADR 0172 の追補 2026-11-11 の 5）。何も選んでいなければ next は
 // 最初の行、previous は最後の行から選び始める。選んでいれば前後へ動き、端では反対の端へ回る

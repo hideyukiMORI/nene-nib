@@ -131,7 +131,7 @@ records in `docs/quality/`.
   `:ls` / `:files` / `:buffers` show open tabs. Arguments seed the search (`:b memo` filters tabs); press Enter
   to choose a result. See [ADR 0064](docs/adr/0064-ex-file-commands-open-the-shared-palette.md).
 - **FR-007 Markdown preview** — Ctrl+Shift+M shows the rendered Markdown document in the other pane and hides it
-  again; the F1 operation 「Markdown プレビュー（全面）」 or `:preview full` shows it over the whole body, where
+  again; the F1 operation "Markdown Preview (Full)" (「Markdown プレビュー（全面）」 in Japanese) or `:preview full` shows it over the whole body, where
   text can be selected and copied but not edited (`:preview side`, `:preview off`). Ctrl+Shift+M
   cycles closed → side pane → full view → closed (D77). Parsing uses md4c 0.5.2 (CommonMark) and the drawing is
   the editor's own ([look](docs/design/2026-10-21-markdown-preview-look.md),
@@ -224,7 +224,16 @@ records in `docs/quality/`.
 - **FR-023 – FR-027 editing features** — matchparen (FR-024) is done and on by default. Planned: easymotion
   (FR-023), commentary, surround, autopairs and INSERT completion (FR-024), changed-line markers, indent guides
   and a yank flash (FR-025), project-wide search (FR-026) and the `:s` family (FR-027).
-- **FR-028 – FR-030** — a settings dialog with measured speed costs and six display languages are planned. A first
+- **FR-029 display language** — the screen text is shown in Japanese, English or Simplified Chinese
+  (Korean, Spanish and German follow in 1.1.0 and show English until then). The default follows the Windows
+  display language; `:set language=ja`, `en`, `zh-hans` or `system` (also from Ctrl+P `:`, or the F1
+  operation "Choose Display Language" / 「表示言語を選ぶ」) switches at once and is saved in `settings.v4`;
+  `:set language?` shows the choice and what it resolved to. Vim messages, mode names, key names and theme
+  names stay as they are. Every screen string comes from one table per language, and string literals with
+  Japanese or Chinese text outside those tables fail the conformance check CNF-016
+  ([ADR 0123](docs/adr/0123-ui-language-is-a-versioned-setting.md)). The Chinese text is a machine
+  translation; corrections are welcome ([docs/i18n/REVIEW.md](docs/i18n/REVIEW.md)).
+- **FR-028 / FR-030** — a settings dialog with measured speed costs is planned. A first
   minimap (a retained bitmap at the right edge, `:set minimap`, off by default) shows the document with its
   visible range shaded and edged in the accent color; a click on it scrolls that line to the middle of the
   screen and a drag follows the pointer, without moving the caret
@@ -249,9 +258,10 @@ records in `docs/quality/`.
   `:let mapleader=` are stored as `map.<mode>.<lhs>=` and `mapleader` lines in `settings.v4` and applied at the
   window entry, in Vim mode only
   ([ADR 0176](docs/adr/0176-vim-map-is-a-settings-row-applied-by-one-key-table-at-the-window-entry.md)).
-- **FR-033 Windows right-click registration** — the F1 operation 「Windows の右クリックに登録する」 adds NeNe Nib
-  to the Explorer right-click menu and "Open with" under `HKCU` without administrator rights; 「登録を外す」
-  removes it. Nothing is written at startup. The Windows 11 top-level menu waits for a signed, packaged release
+- **FR-033 Windows right-click registration** — the F1 operation "Add to Windows Right-Click Menu"
+  (「Windows の右クリックに登録する」) adds NeNe Nib to the File Explorer right-click menu and "Open with" under
+  `HKCU` without administrator rights; "Remove from Windows Right-Click Menu" (「登録を外す」) removes it. The
+  names are written in the display language of the moment you register. Nothing is written at startup. The Windows 11 top-level menu waits for a signed, packaged release
   ([ADR 0178](docs/adr/0178-shell-registration-is-one-port-written-only-by-an-explicit-operation-under-hkcu.md)).
 - **FR-034 Markdown task lists** — the preview draws `- [ ]` / `- [x]` checkboxes; clicking one writes the change
   into the text as one undo step, in the side pane and in the full view.
@@ -265,7 +275,7 @@ Use `set fontsize=18` or `set guifont=Cascadia Code:h18` for the body font. `Ent
 Press `Ctrl+P` in either editing mode and type `:` to choose the same commands from a filtered list,
 together with `set wrap` / `nowrap`, `set guide` / `noguide`, `set hlsearch` / `incsearch` and their `no`
 forms, `set ignorecase` / `smartcase` / `relativenumber` / `scrolloff=`, `set display=grid|text`,
-`set filetype=`, `syntax on|off`, `set clipboard=unnamed`, `set explorer` / `root=`, `set lsp`,
+`set filetype=`, `syntax on|off`, `set clipboard=unnamed`, `set explorer` / `root=`, `set lsp`, `set language=`,
 `preview full|side|off`, `hardcopy`, `only` and the tab commands.
 Use `set noguide` to hide shortcut hints and `set guide` to show them again (the default).
 

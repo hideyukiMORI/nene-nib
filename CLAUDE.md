@@ -208,6 +208,10 @@ v4 は既存 5 鍵に `ui_language` `lsp` `explorer` `root` `features` と任意
 
 名前と回収は `src/adapters/win32/TemporaryFiles` の 1 か所（ADR 0135）。連番はプロセスで 1 つ（`next_temporary_sequence`）で、名前が既にあれば最大 8 回まで次を試す。回収は名前が `<16 進の pid>-<10 進の連番>` の形で、pid のプロセスが生きていない（`OpenProcess`・拒否は生きている側）か、自分の古い連番のものだけ。判定は純関数 `reclaimable_temporary` の 1 本で、時刻で決めない。起動時は合成ルートが設定の置き場で `reclaim_temporaries_beside` を 1 回呼ぶ。固定名の一時ファイルを書かない。
 
+### 画面の文は `ui_text` の表。直書きしない（CNF-016）
+
+画面に出る文は `core::UiMessage` の名前で `ui_text(message, language)`（差し込みは `ui_text_filled` の `{0}` `{1}`）から引く。足すのは `UiMessage` に 1 値と、3 列（`UiTextsJapanese.hpp` `UiTextsEnglish.hpp` `UiTextsSimplifiedChinese.hpp`）の同じ位置に 1 行ずつ。最後の値の後ろに足したら `ui_message_count` の名指しも移す（列挙子の数・最後の値・3 列の行の数と順は `eng/conformance.py` の CNF-016 が照合する）。`src/**` の文字列リテラルに日本語・中国語を書くと CNF-016 が落ちる（許した場所は `eng/conformance-rules.json` の `uiTextLiteralAllowedPaths`・`static_assert` の文は英語）。言語は状態の `display_language()` の 1 つで、frame は `EditorFrame.language`、ui の箱は `EditorController::display_language()`。OS を観測するのは起動と `:set language=system` / `&` だけ（ADR 0123 の 2026-11-13 の追補）。Vim の報せ・モード名・鍵の名前は訳さない。
+
 ### 2026-11-10 に 1 本にした所（足すときはここ）
 
 - **合図かどうか**は `detail::is_signal` の 1 本（`WorkCompleted` `AutosaveTick` など使う人の操作でない意図）。狙う横位置・面のクリックの印を捨てるかもここを読む（#1296）。

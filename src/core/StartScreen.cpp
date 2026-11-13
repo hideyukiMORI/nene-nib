@@ -38,11 +38,6 @@ std::array<GuideEntry, 3> start_key_entries(EditMode mode, DisplayLanguage langu
             operation_guide_entry(EditorOperation::toggle_explorer, mode, language)};
 }
 
-std::array<GuideEntry, 3> start_key_entries(EditMode mode)
-{
-    return start_key_entries(mode, DisplayLanguage::japanese);
-}
-
 std::optional<std::size_t> start_selection_stepped(std::optional<std::size_t> selected,
                                                    std::size_t count, StartStep step) noexcept
 {

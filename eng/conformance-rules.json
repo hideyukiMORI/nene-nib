@@ -27,6 +27,11 @@
   "simdModulePath": "src/core/simd/",
   "markdownParserHeader": "md4c.h",
   "markdownParserAllowedPath": "src/core/MarkdownParse.cpp",
+  "uiMessageTable": {
+    "enum": "src/core/UiMessage.hpp",
+    "columns": ["src/core/UiTextsJapanese.hpp", "src/core/UiTextsEnglish.hpp", "src/core/UiTextsSimplifiedChinese.hpp"]
+  },
+  "uiTextLiteralAllowedPaths": ["src/core/UiTextsJapanese.hpp", "src/core/UiTextsSimplifiedChinese.hpp", "src/core/OperationReadings.hpp", "src/core/DisplayLanguageNames.cpp"],
   "cppExtensions": [".cpp", ".hpp", ".h", ".cc", ".cxx", ".hxx"],
   "configurationExtensions": [".ps1", ".cmake", ".yml", ".yaml"],
   "normativeFiles": ["docs/ARCHITECTURE_CONSTITUTION.md", "docs/CODING_RULES.md", "docs/COMMIT_CONVENTIONS.md", "docs/QUALITY_GATES.md"]

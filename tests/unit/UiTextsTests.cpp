@@ -172,7 +172,7 @@ void verify_japanese_save_and_palette()
     }};
     for (const auto &[text, message] : questions)
     {
-        expect(core::save_question_text(text) == japanese(message),
+        expect(core::save_question_text(text, core::DisplayLanguage::japanese) == japanese(message),
                "the Japanese save question is the product text");
     }
     using Origin = core::PaletteOrigin;
@@ -219,18 +219,11 @@ void verify_japanese_status_and_operations()
                                                       core::DisplayLanguage::japanese,
                                                       {"12", "34"}),
            "the filled Japanese caret position is the product text");
-    // 操作の表は文の名前を持つ（T1b・決定 6）。T1a の 37 操作は名前・説明・短い名前の順に enum の
-    // 頭に並び、T1b で足した表示言語の操作だけは T1b の群の値を持つ。
+    // 操作の表は文の名前を持つ（T1b・決定 6）。38 操作は名前・説明・短い名前の順に enum の頭に並ぶ
+    // （T1b の表示言語の操作も T1f で同じ群へ移した）。
     std::size_t index = 0;
     for (const core::OperationText &row : core::operation_texts)
     {
-        if (row.operation == core::EditorOperation::choose_language)
-        {
-            expect(row.name == core::UiMessage::operation_choose_language_name &&
-                       row.description == core::UiMessage::operation_choose_language_description,
-                   "the display language operation names its T1b texts");
-            continue;
-        }
         expect(row.name == static_cast<core::UiMessage>(index) &&
                    row.description == static_cast<core::UiMessage>(index + 1),
                "the operation rows name their texts in the order of the table");

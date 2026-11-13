@@ -12,8 +12,8 @@ std::optional<core::DisplayLanguage> display_language_of(std::uint16_t language_
         return core::DisplayLanguage::japanese;
     }
     const auto sub = SUBLANGID(language_id);
-    if (primary == LANG_CHINESE &&
-        (sub == SUBLANG_CHINESE_SIMPLIFIED || sub == SUBLANG_CHINESE_SINGAPORE))
+    if (primary == LANG_CHINESE && (sub == SUBLANG_CHINESE_SIMPLIFIED ||
+                                    sub == SUBLANG_CHINESE_SINGAPORE || sub == SUBLANG_NEUTRAL))
     {
         return core::DisplayLanguage::simplified_chinese;
     }

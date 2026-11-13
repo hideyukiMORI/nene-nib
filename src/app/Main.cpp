@@ -326,7 +326,7 @@ int run(HINSTANCE instance)
     // 復号が済んでいる（Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);
     const auto window = nenenib::ui::win32::EditorWindow::create(
-        instance, controller, {timing, wsl}, {text_layouts, warmup});
+        instance, controller, {timing, wsl}, {text_layouts, warmup, controller.display_language()});
     if (!window)
     {
         return report(reason_of(window.error()));

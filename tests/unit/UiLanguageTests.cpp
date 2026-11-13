@@ -3,17 +3,22 @@
 // 操作「表示言語を選ぶ」・切り替えで frame の文が変わる・本文 / undo / レジスタは変わらない・
 // port の回数・全文を英語と中国語で埋めて置き場が残らない。
 #include "CommandChoice.hpp"
+#include "CommandEdit.hpp"
 #include "CommandPaletteView.hpp"
+#include "CommandText.hpp"
 #include "DisplayLanguage.hpp"
 #include "DisplayLanguageChoice.hpp"
 #include "DisplayLanguageNames.hpp"
+#include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorSettings.hpp"
+#include "InputLineView.hpp"
 #include "InsertDateTime.hpp"
 #include "InsertText.hpp"
 #include "NewTab.hpp"
+#include "OpenCommandPalette.hpp"
 #include "OpenDisplayLanguageList.hpp"
 #include "OpenOperationList.hpp"
 #include "QuantityText.hpp"
@@ -41,6 +46,7 @@
 #include <string_view>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -148,7 +154,10 @@ void verify_set_language_values()
     for (const auto &[name, choice, language, shown] : cases)
     {
         const auto frame = run_ex(controller, "set language=" + std::string(name));
-        ++observed;
+        if (choice == DisplayLanguageChoice::system)
+        {
+            ++observed;
+        }
         expect(controller.display_language() == language && frame.language == language &&
                    message_of(frame) == shown,
                ":set language= resolves, places the language and echoes the wished value");
@@ -158,7 +167,25 @@ void verify_set_language_values()
                        .ui_language == choice,
                ":set language= saves ui_language through the settings entry");
         expect(editing.ui_language().calls() == observed,
-               ":set language= observes the OS language once");
+               ":set language= observes the OS language only when system is chosen");
+    }
+    static_cast<void>(ex_message(controller, "set language=en"));
+    editing.ui_language().set(DisplayLanguage::simplified_chinese);
+    expect(ex_message(controller, "set language&") == "language=system (zh-hans)" &&
+               controller.display_language() == DisplayLanguage::simplified_chinese &&
+               editing.ui_language().calls() == observed + 1 &&
+               editing.settings()
+                       .written()
+                       .value_or(settings_with(DisplayLanguageChoice::german))
+                       .ui_language == DisplayLanguageChoice::system,
+           ":set language& goes back to the default system, observing the OS once");
+    const std::size_t written = editing.settings().writes();
+    for (const std::string_view flag : {"set language!", "set invlanguage"})
+    {
+        expect(!ex_message(controller, std::string(flag)).starts_with("language=") &&
+                   controller.display_language() == DisplayLanguage::simplified_chinese &&
+                   editing.settings().writes() == written,
+               "language is not a flag, so ! and inv are refused as unknown options (E518)");
     }
 }
 
@@ -171,10 +198,12 @@ void verify_set_language_answers()
     static_cast<void>(ex_message(controller, "set language=system"));
     editing.ui_language().set(DisplayLanguage::english);
     const std::size_t observed = editing.ui_language().calls();
+    const std::size_t asked = editing.settings().writes();
     expect(ex_message(controller, "set language?") == "language=system (ja)" &&
                controller.display_language() == DisplayLanguage::japanese &&
-               editing.ui_language().calls() == observed,
-           ":set language? echoes the wished value and the resolved one without observing");
+               editing.ui_language().calls() == observed && editing.settings().writes() == asked,
+           ":set language? echoes the wished value and the resolved one without observing or "
+           "saving");
     expect(ex_message(controller, "set language=system") == "language=system (en)" &&
                controller.display_language() == DisplayLanguage::english,
            "choosing system again observes the OS and follows it");
@@ -360,6 +389,73 @@ void verify_filled_columns()
                core::grouped_decimal_text(1234567) == "1,234,567",
            "grouped decimals put a comma every three digits");
 }
+
+// 面で fill の候補を選んだ後も言語を保つ（V-1601 の M1）: en で `set fontsize=` を選び、入力を空に
+// して `?` を打つと F1 の一覧は英語の名前。
+void verify_filled_palette_keeps_language()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    static_cast<void>(ex_message(controller, "set language=en"));
+    applied(controller, app::OpenCommandPalette{});
+    applied(controller, app::CommandText{":fz"});
+    auto frame = controller.apply_frame(app::SubmitCommand{});
+    expect(frame.command_line.value_or(core::InputLineView{}).text == ":set fontsize=",
+           "Enter on the fill candidate stages set fontsize=");
+    for (std::size_t erased = 0; erased < std::string_view{":set fontsize="}.size(); ++erased)
+    {
+        applied(controller, app::EditCommand{core::CommandEdit::backspace});
+    }
+    applied(controller, app::CommandText{"?"});
+    frame = controller.frame();
+    expect(frame.command_palette.has_value() && !frame.command_palette.value().rows.empty() &&
+               frame.command_palette.value().rows.at(0).label.text() ==
+                   core::ui_text(UiMessage::operation_open_file_name, DisplayLanguage::english),
+           "the palette keeps the display language after a fill candidate");
+}
+
+// 英語で F1 の一覧を名前と短い名前で絞る（V-1601 の L11）。
+void verify_english_operation_filter()
+{
+    const auto names = [](std::string_view query)
+    {
+        std::vector<std::string> shown;
+        for (const auto &choice :
+             core::operation_choices(query, core::EditMode::ordinary, DisplayLanguage::english))
+        {
+            shown.emplace_back(choice.label.text());
+        }
+        return shown;
+    };
+    const auto saved = names("save");
+    expect(saved.size() >= 2 && saved.at(0) == "Save" && saved.at(1) == "Save As",
+           "the English names filter the F1 list (save gives Save and Save As first)");
+    const auto help = names(
+        core::ui_text(UiMessage::operation_list_operations_short_name, DisplayLanguage::english));
+    expect(!help.empty() && help.front() == core::ui_text(UiMessage::operation_list_operations_name,
+                                                          DisplayLanguage::english),
+           "the English short name finds its operation");
+    expect(names("ほぞん").empty(), "the Japanese readings are not searched in English");
+}
+
+// 列の無い希望値（ko）は英語に解決し、別の `:set` を保存しても設定から消えない（V-1601 の L11）。
+void verify_columnless_choice_is_kept()
+{
+    Editing editing{SettingsReading{settings_with(DisplayLanguageChoice::korean)},
+                    DisplayLanguage::japanese};
+    auto &controller = editing.controller();
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    expect(controller.display_language() == DisplayLanguage::english &&
+               ex_message(controller, "set language?") == "language=ko (en)",
+           "ko resolves to English and the question names both");
+    static_cast<void>(ex_message(controller, "set fontsize=18"));
+    expect(editing.settings()
+                   .written()
+                   .value_or(settings_with(DisplayLanguageChoice::japanese))
+                   .ui_language == DisplayLanguageChoice::korean,
+           "saving another setting keeps ui_language=ko");
+}
 } // namespace
 
 void verify_ui_language_scope()
@@ -373,5 +469,8 @@ void verify_ui_language_scope()
     verify_switch_keeps_editing();
     verify_quiet_observation();
     verify_filled_columns();
+    verify_filled_palette_keeps_language();
+    verify_english_operation_filter();
+    verify_columnless_choice_is_kept();
 }
 } // namespace nenenib::tests

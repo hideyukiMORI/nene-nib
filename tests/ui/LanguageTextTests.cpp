@@ -1,10 +1,9 @@
-// #1594（#1019 の T1c）: ui が自分で出す文を表示言語の表から引き、画面の文字の書式の locale
-// を言語から 決め、固定の枠に出る文が 3 言語とも枠に収まる（ADR 0123 の追補 2026-11-13 の決定
-// 9〜11）。 文の確かめは窓を作らない。幅は本物の DirectWrite で、製品の renderer
-// と同じ字体・大きさ・太さ・ locale の書式で測り、枠は製品と同じ core の配置から引く（96
-// DPI・物理画素 = DIP）。字体に結果が 依るので、Segoe UI も無い機械では幅を測らない。中国語の列は
-// T1d が埋めるまで英語の写しなので、
-// 中国語の実際の幅はその後に同じ試験が測る（列の中身に依らない形）。
+// #1594（#1019 の T1c）・#1602（T1f）: ui が自分で出す文を表示言語の表から引き、画面の文字の書式の
+// locale を言語から決め、固定の枠に出る文が 3 言語とも枠に収まる（ADR 0123 の追補 2026-11-13 の
+// 決定 9〜11）。文の確かめは窓を作らない。幅は本物の DirectWrite で、製品の renderer と同じ字体・
+// 大きさ（UiTextSizes.hpp）・太さ・locale の書式で測り、枠は製品と同じ core の配置から引く（96
+// DPI・物理画素 = DIP）。字体に結果が依るので、Segoe UI も無い機械では幅を測らない。zh-cn の書式で
+// 漢字が日本語の字体に落ちないことも本物の MapCharacters で確かめる。
 #include "BodyGuideLayout.hpp"
 #include "BodyLayout.hpp"
 #include "DevicePixels.hpp"
@@ -14,6 +13,7 @@
 #include "EditorOperation.hpp"
 #include "ExplorerLayout.hpp"
 #include "ExplorerWidth.hpp"
+#include "FallbackRunSource.hpp"
 #include "FileDialog.hpp"
 #include "FileFailure.hpp"
 #include "FileFailureText.hpp"
@@ -32,6 +32,7 @@
 #include "StatusGuideLayout.hpp"
 #include "UiLocale.hpp"
 #include "UiMessage.hpp"
+#include "UiTextSizes.hpp"
 #include "UiTexts.hpp"
 #include "Utf16.hpp"
 #include "WindowChecks.hpp"
@@ -47,6 +48,7 @@
 #include <utility>
 #include <variant>
 #include <wrl/client.h>
+#include <wrl/implements.h>
 
 namespace nenenib::tests::ui
 {
@@ -60,14 +62,13 @@ using nenenib::ui::win32::ui_locale_name;
 constexpr std::uint32_t dpi = 96;
 constexpr std::array<DisplayLanguage, 3> languages{
     DisplayLanguage::japanese, DisplayLanguage::english, DisplayLanguage::simplified_chinese};
-// Direct2DRenderer の tab_text_dips・ui_text_dips・案内の書式の大きさと同じ値。
-constexpr float tab_text_dips = 12.5F;
-constexpr float ui_text_dips = 12.0F;
-constexpr float guide_key_dips = 12.5F;
-constexpr float guide_label_dips = 13.5F;
-constexpr float guide_note_dips = 11.5F;
-// draw_keycap と起動画面の鍵の枠の左右の余白（DIP・Direct2DRenderer の guide_key_padding_dips）。
-constexpr float keycap_padding_dips = 9.0F;
+// 字の大きさと鍵の枠の余白は renderer と同じ出どころ（UiTextSizes.hpp）から読む。
+using nenenib::ui::win32::guide_key_dips;
+using nenenib::ui::win32::guide_key_padding_dips;
+using nenenib::ui::win32::guide_label_dips;
+using nenenib::ui::win32::guide_note_dips;
+using nenenib::ui::win32::tab_text_dips;
+using nenenib::ui::win32::ui_text_dips;
 
 [[nodiscard]] const char *language_name(DisplayLanguage language) noexcept
 {
@@ -454,7 +455,7 @@ start_row_texts(core::StartEntryKind kind)
             core::operation_guide_entry(operation, mode, DisplayLanguage::japanese).key;
         const float width = key.empty() ? 0.0F
                                         : width_in(key_pen, Said{DisplayLanguage::japanese, key}) +
-                                              (keycap_padding_dips * 2.0F);
+                                              (guide_key_padding_dips * 2.0F);
         widest = std::max(widest, width);
     }
     return widest;
@@ -544,6 +545,97 @@ void verify_widths()
     verify_explorer_text(*factory.Get(), face);
     verify_start_screen(*factory.Get(), face, key_face);
 }
+
+// ---- zh-cn の字体の選び（本物の MapCharacters・追補の決定 9・V-1598 の C-F1） ----
+
+// 字体の family の英語の名前（無ければ最初の名前）。取れなければ空。
+[[nodiscard]] std::wstring family_name_of(IDWriteFont &font)
+{
+    Microsoft::WRL::ComPtr<IDWriteFontFamily> family;
+    Microsoft::WRL::ComPtr<IDWriteLocalizedStrings> names;
+    if (FAILED(font.GetFontFamily(family.GetAddressOf())) ||
+        FAILED(family->GetFamilyNames(names.GetAddressOf())))
+    {
+        return {};
+    }
+    UINT32 index = 0;
+    BOOL exists = FALSE;
+    if (FAILED(names->FindLocaleName(L"en-us", &index, &exists)) || exists == FALSE)
+    {
+        index = 0;
+    }
+    UINT32 length = 0;
+    if (FAILED(names->GetStringLength(index, &length)))
+    {
+        return {};
+    }
+    std::wstring name(length + 1U, L'\0');
+    if (FAILED(names->GetString(index, name.data(), length + 1U)))
+    {
+        return {};
+    }
+    name.resize(length);
+    return name;
+}
+
+// 漢字 1 字を言語の札 tag つきで OS の字体選択に渡し、選ばれた字体の名前を返す（取れなければ空）。
+[[nodiscard]] std::wstring fallback_family(IDWriteFactory2 &factory, const wchar_t *tag)
+{
+    Microsoft::WRL::ComPtr<IDWriteFontFallback> fallback;
+    if (FAILED(factory.GetSystemFontFallback(fallback.GetAddressOf())))
+    {
+        return {};
+    }
+    auto source = Microsoft::WRL::Make<nenenib::ui::win32::FallbackRunSource>(
+        tag, DWRITE_READING_DIRECTION_LEFT_TO_RIGHT);
+    // 「直」（U+76F4）は日本語と簡体字で字形が違う字。
+    source->reset(L"直");
+    UINT32 mapped = 0;
+    Microsoft::WRL::ComPtr<IDWriteFont> font;
+    FLOAT scale = 0.0F;
+    if (FAILED(fallback->MapCharacters(source.Get(), 0, source->length(), nullptr, L"Segoe UI",
+                                       DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+                                       DWRITE_FONT_STRETCH_NORMAL, &mapped, font.GetAddressOf(),
+                                       &scale)) ||
+        font == nullptr)
+    {
+        return {};
+    }
+    return family_name_of(*font.Get());
+}
+
+// 日本語の字体の family か（Windows に入っている和文の字体の名前の頭）。
+[[nodiscard]] bool japanese_family(std::wstring_view name)
+{
+    constexpr std::array<std::wstring_view, 5> heads{L"Yu Gothic", L"Yu Mincho", L"Meiryo", L"MS ",
+                                                     L"BIZ UD"};
+    return std::ranges::any_of(heads,
+                               [name](std::wstring_view head) { return name.starts_with(head); });
+}
+
+void verify_chinese_fallback()
+{
+    const auto factory = directwrite_factory();
+    if (factory == nullptr)
+    {
+        unmeasured("the DirectWrite factory is not available; the zh-cn fallback is not checked");
+        return;
+    }
+    const auto japanese =
+        fallback_family(*factory.Get(), ui_locale_name(DisplayLanguage::japanese));
+    const auto chinese =
+        fallback_family(*factory.Get(), ui_locale_name(DisplayLanguage::simplified_chinese));
+    std::printf("  fallback of U+76F4: ja (L\"\") = %ls, ja-jp = %ls, zh-cn = %ls\n",
+                japanese.c_str(), fallback_family(*factory.Get(), L"ja-jp").c_str(),
+                chinese.c_str());
+    if (chinese.empty())
+    {
+        unmeasured("no font maps U+76F4 for zh-cn; the zh-cn fallback is not checked");
+        return;
+    }
+    expect(!japanese_family(chinese),
+           "the zh-cn locale of the screen text falls back to a non-Japanese (simplified) font");
+}
 } // namespace
 
 void verify_language_texts()
@@ -552,5 +644,6 @@ void verify_language_texts()
     verify_os_texts();
     verify_screen_texts();
     verify_widths();
+    verify_chinese_fallback();
 }
 } // namespace nenenib::tests::ui

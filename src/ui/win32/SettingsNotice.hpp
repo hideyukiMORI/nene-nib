@@ -2,6 +2,7 @@
 
 #include "DisplayLanguage.hpp"
 #include "FontSize.hpp"
+#include "SettingsByteLimit.hpp"
 #include "SettingsFailure.hpp"
 #include "SettingsIssue.hpp"
 #include "UiMessage.hpp"
@@ -15,11 +16,9 @@
 
 namespace nenenib::ui::win32
 {
-// 設定ファイルの上限（バイト）。正本は adapters の Win32SettingsAdapter.cpp の
-// maximum_settings_bytes（ui から adapters は見えない）。文の「16 KiB（16384 バイト）」の 2 つの
-// 置き場をこの 1 つから埋める（#1019・core へ上げるのは後続）。
-inline constexpr std::size_t settings_notice_byte_limit = 16384;
-static_assert(settings_notice_byte_limit % 1024U == 0);
+// 設定ファイルの上限（バイト）は core の maximum_settings_bytes の 1 つ（adapters
+// の読みと同じ値）。 文の「16 KiB（16384 バイト）」の 2 つの置き場をこの 1 つから埋める（#1019）。
+static_assert(core::maximum_settings_bytes % 1024U == 0);
 
 [[nodiscard]] inline core::UiMessage
 settings_failure_message(application::SettingsFailure failure) noexcept
@@ -62,8 +61,8 @@ settings_failure_message(application::SettingsFailure failure) noexcept
     const auto message = settings_failure_message(failure);
     if (failure == application::SettingsFailure::too_large)
     {
-        const std::string size = std::to_string(settings_notice_byte_limit / 1024U) + " KiB";
-        const std::string bytes = std::to_string(settings_notice_byte_limit);
+        const std::string size = std::to_string(core::maximum_settings_bytes / 1024U) + " KiB";
+        const std::string bytes = std::to_string(core::maximum_settings_bytes);
         return wide_ui_text_filled(message, language, {size, bytes});
     }
     if (failure == application::SettingsFailure::invalid_font_size)
