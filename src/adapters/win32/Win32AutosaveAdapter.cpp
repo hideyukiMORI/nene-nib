@@ -4,6 +4,7 @@
 #include "AutosaveFolder.hpp"
 #include "DocumentByteLimit.hpp"
 #include "LocalSettingsPath.hpp"
+#include "ProcessInstances.hpp"
 
 #include <windows.h>
 
@@ -59,6 +60,24 @@ Win32AutosaveAdapter::~Win32AutosaveAdapter()
     static_cast<void>(shelf_->close(0));
 }
 
+ProcessInstance Win32AutosaveAdapter::self()
+{
+    if (!self_.has_value())
+    {
+        self_ = current_process_instance();
+    }
+    return self_.value();
+}
+
+std::optional<std::string> Win32AutosaveAdapter::own_folder()
+{
+    if (!root_.has_value())
+    {
+        return std::nullopt;
+    }
+    return autosave_folder(root_.value(), self());
+}
+
 void Win32AutosaveAdapter::bind(std::function<void()> finished)
 {
     shelf_->bind(std::move(finished));
@@ -71,23 +90,23 @@ void Win32AutosaveAdapter::store(application::AutosaveSnapshot snapshot)
         return;
     }
     worker_.post(
-        [shelf = shelf_, &files = files_, root = root_,
+        [shelf = shelf_, &files = files_, folder = own_folder(),
          snapshot = std::move(snapshot)](const std::stop_token &stop)
         {
             run_job(*shelf, snapshot.id, stop,
-                    [&] { return autosave_stored(files, root, snapshot); });
+                    [&] { return autosave_stored(files, folder, snapshot); });
         });
 }
 
 void Win32AutosaveAdapter::discard(application::AutosaveId id)
 {
-    if (!root_.has_value() || !shelf_->request())
+    auto folder = own_folder();
+    if (!folder.has_value() || !shelf_->request())
     {
         return;
     }
     worker_.post(
-        [shelf = shelf_, &files = files_,
-         folder = autosave_folder(root_.value(), GetCurrentProcessId()),
+        [shelf = shelf_, &files = files_, folder = std::move(folder).value(),
          id](const std::stop_token &stop)
         { run_job(*shelf, id, stop, [&] { return autosave_dropped(files, folder, id); }); });
 }
@@ -100,9 +119,10 @@ std::vector<application::AutosaveOutcome> Win32AutosaveAdapter::collect()
 void Win32AutosaveAdapter::clear()
 {
     static_cast<void>(shelf_->close(clear_wait_milliseconds));
-    if (root_.has_value())
+    const auto folder = own_folder();
+    if (folder.has_value())
     {
-        remove_autosave_folder(autosave_folder(root_.value(), GetCurrentProcessId()));
+        remove_autosave_folder(folder.value());
     }
 }
 
@@ -118,7 +138,7 @@ std::expected<std::vector<application::AutosaveRemnant>, Failure> Win32AutosaveA
     {
         return std::unexpected(Failure::location_unavailable);
     }
-    return autosave_remnants_in(files_, root_.value(), GetCurrentProcessId());
+    return autosave_remnants_in(files_, root_.value(), self(), process_created);
 }
 
 std::expected<std::vector<std::byte>, Failure>
