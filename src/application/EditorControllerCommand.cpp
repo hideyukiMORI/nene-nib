@@ -801,10 +801,10 @@ std::optional<core::VimRepeatFailure> EditorController::evaluate_command(std::st
 std::expected<core::ExResult, core::ExEvaluationFailure>
 EditorController::evaluated_ex(std::string_view text) const
 {
-    return core::evaluate_ex(
-        text, state_.settings(),
-        core::ExWindowState{state_.appearance(), state_.vim().highlight, state_.vim().incsearch},
-        state_.themes());
+    return core::evaluate_ex(text, state_.settings(),
+                             core::ExWindowState{state_.appearance(), state_.vim().highlight,
+                                                 state_.vim().incsearch, state_.vim().wrapscan},
+                             state_.themes());
 }
 
 // 評価した Ex の答えを写す（evaluate_command とオペレータ待ちの `:` が共用する 1 本・#1549）。
@@ -849,7 +849,20 @@ std::optional<core::VimRepeatFailure> EditorController::ran_ex_result(
         return core::VimRepeatFailure::refused;
     }
     apply_unsaved_ex(result.value());
-    state_ = state_.with_command_message(result.value().message);
+    return noted_ex_result(text, result.value());
+}
+
+// 写した答えの知らせ。複数の引数の `:set` が途中で止まった（#1561）なら、前の引数の分は写したまま、
+// Vim の do_set の emsg と同じく知らせて断る（再生を打ち切る）。
+std::optional<core::VimRepeatFailure>
+EditorController::noted_ex_result(std::string_view text, const core::ExResult &result)
+{
+    state_ = state_.with_command_message(result.message);
+    if (result.stopped.has_value())
+    {
+        reject(core::ex_failure_message(result.stopped.value(), text));
+        return core::VimRepeatFailure::refused;
+    }
     return std::nullopt;
 }
 
@@ -931,6 +944,14 @@ void EditorController::apply_unsaved_ex(const core::ExResult &result)
     {
         core::VimState vim = state_.vim();
         vim.incsearch = incsearch.value();
+        state_ = state_.with_vim(std::move(vim));
+    }
+    // 'wrapscan' も Vim の状態で、保存しない（#1561）。
+    const auto &wrapscan = result.wrapscan;
+    if (wrapscan.has_value())
+    {
+        core::VimState vim = state_.vim();
+        vim.wrapscan = wrapscan.value();
         state_ = state_.with_vim(std::move(vim));
     }
 }

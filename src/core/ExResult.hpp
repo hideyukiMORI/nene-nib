@@ -72,6 +72,10 @@ inline constexpr std::string_view guifont_command = "set guifont=";
 // の vim_substituted（controller は鍵と同じ写しの道で結果を写す）。
 // display_language は `:set language=` と `:set language?` の要求（ADR 0123 の追補 2026-11-13 の
 // 決定 8）で、設定の保存と OS の観測と解決は controller。
+// wrapscan は `:set (no)wrapscan` の値（#1561・incsearch と同じく保存しない Vim の状態）。
+// stopped は複数の引数の `:set` が途中で止まった理由（#1561）。Vim の do_set は左から順に置き、
+// 誤りの引数で止まって前の分は残すので、ここまでの答えを写した後に controller が知らせて断る
+// （再生を打ち切る）。1 つの引数の失敗は今までどおり expected の失敗。
 struct ExResult
 {
     std::optional<EditorSettings> settings;
@@ -97,6 +101,8 @@ struct ExResult
     std::optional<ExRelativeLineRequest> relative_line = std::nullopt;
     std::optional<ExSubstituteRequest> substitute = std::nullopt;
     std::optional<ExDisplayLanguageRequest> display_language = std::nullopt;
+    std::optional<bool> wrapscan = std::nullopt;
+    std::optional<ExEvaluationFailure> stopped = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>

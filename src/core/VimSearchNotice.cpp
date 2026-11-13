@@ -54,11 +54,16 @@ constexpr std::string_view not_found_alone = "E486: Pattern not found";
     std::unreachable();
 }
 
+// 'nowrapscan' の端の報せ（Vim 9.1 の e_search_hit_bottom_without_match_for_str ほか・#1561）。
+constexpr std::string_view hit_bottom_prefix = "E385: Search hit BOTTOM without match for: ";
+constexpr std::string_view hit_top_prefix = "E384: Search hit TOP without match for: ";
+
 // 表示できる長さに収める。切るのは入力の文を知らせに入れる所の 1 本 clipped_display_text（code
 // point の境目で落として「…」・#1568 / #1616）。表示できない文字があれば E486 の文言だけを出す。
-[[nodiscard]] DisplayText not_found_message(std::string_view pattern)
+[[nodiscard]] DisplayText not_found_message(std::string_view pattern,
+                                            std::string_view prefix = not_found_prefix)
 {
-    std::string text(not_found_prefix);
+    std::string text(prefix);
     text += pattern;
     return clipped_display_text(text).value_or(DisplayText::parse(not_found_alone).value());
 }
@@ -97,6 +102,10 @@ DisplayText vim_search_message(const VimSearchNotice &notice)
         return message_of("search hit BOTTOM, continuing at TOP");
     case VimSearchNoticeKind::wrapped_to_bottom:
         return message_of("search hit TOP, continuing at BOTTOM");
+    case VimSearchNoticeKind::hit_bottom_without_match:
+        return not_found_message(notice.pattern, hit_bottom_prefix);
+    case VimSearchNoticeKind::hit_top_without_match:
+        return not_found_message(notice.pattern, hit_top_prefix);
     case VimSearchNoticeKind::unsupported_pattern:
         return message_of(unsupported_text(notice.failure.value_or(VimPatternFailure::escape)));
     case VimSearchNoticeKind::substitutions:
