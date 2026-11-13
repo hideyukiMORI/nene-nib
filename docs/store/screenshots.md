@@ -71,7 +71,7 @@ showcase-2026-10-12 と同じ隔離の形にする。
 
 | # | 日本語 | English | 简体中文（機械の訳・レビュー歓迎） |
 | --- | --- | --- | --- |
-| 1 | `普通の操作と Vim の操作をキー 1 つで切り替え。構文の色分けとタブ。` | `Switch between ordinary editing and Vim editing with one key. Syntax colors and tabs.` | `一个按键即可在普通编辑和 Vim 编辑之间切换。支持语法高亮和标签页。` |
+| 1 | `普通の操作と Vim の操作をキー 1 つで切り替え。構文の色分けとタブ。` | `Switch between ordinary editing and Vim editing with one key. Syntax colors and tabs.` | `一个按键即可在标准编辑和 Vim 编辑之间切换。支持语法高亮和标签页。` |
 | 2 | `編集中の Markdown を隣の欄でプレビュー。` | `Preview the Markdown you are editing in the next pane.` | `在旁边的窗格中预览正在编辑的 Markdown。` |
 | 3 | `Ctrl+P でタブ・ブックマーク・最近のファイル・同じフォルダのファイルをまとめて探す。` | `Ctrl+P finds tabs, bookmarks, recent files and files in the current folder in one list.` | `按 Ctrl+P 在一个列表中查找标签页、书签、最近的文件和当前文件夹中的文件。` |
 | 4 | `左のファイルエクスプローラーとタイトルバーのタブ。` | `A file explorer on the left and tabs in the title bar.` | `左侧的文件资源管理器和标题栏中的标签页。` |

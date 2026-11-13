@@ -214,7 +214,7 @@ computer-use 無しで見た目を確かめるときは `python eng/verify-windo
 
 製品の版入力は **`CMakeLists.txt` の `project(... VERSION)`** だけとする。設定画面・manifest・VERSIONINFO・配布物名はビルドがそこから導出し、
 2 か所目に手で書かない。版は素の `x.y.z`（1.0.0 から・Store の版と同じ）で、**`-beta.N` のような札を版にも配布物の名前にも付けない**（#1596・施主決定 D88・NeNe Folio と同じ形）。
-GitHub の配布が試験版であることは、Release の題の「Beta」と pre-release の印だけで示す。`v0.1.0-beta.1`〜`v0.1.0-beta.12` の tag と記録はそのまま残す。
+GitHub の配布が試験版であることは、Release の題の「Beta」と pre-release の印だけで示す。`v0.1.0-beta.1`〜`v0.1.0-beta.13` の tag と記録はそのまま残す（beta.13 までは版 0.1.0 の `-Beta <番号>` で梱包した。記録の命令は過去の事実で、今の道具には `-Beta` が無い）。
 同じ版をもう一度配り直す必要が出たとき（Store の再提出・梱包の作り直しなど）は、**版を上げる**（`1.0.1` か `1.1.0`）。公開した版の配布物を同じ版で作り直さない。
 
 配布物の正規生成経路は次の 1 本である。
@@ -236,11 +236,12 @@ Issue #413 / ADR 0115 / #1596。数値版はCMakeから導出し、配布物の�
 | 順 | 誰 | GitHub（ZIP・試験版） | Microsoft Store（MSIX） |
 | --- | --- | --- | --- |
 | 1 | 設計席 | 版を上げる PR（`project()` の 1 行と、版を見る文書）を main へ | 同じ |
+| 1a | 設計席 | 公開の記録（`docs/quality/release-<x.y.z>-<日付>.md`・前半の根拠だけ・雛形から写す）の文書 PR を main へ。**その merge の commit が公開元**で、梱包の `-Verification` はこの記録を指す | 同じ記録・同じ commit |
 | 2 | 設計席 | clean な main の detached 作業木で上の梱包のコマンド（Release のビルドは 1 回） | 同じ `build/release-<short>/NeNeNib.exe` から `eng/package-msix.ps1 -OutputDirectory D:/NeNeNib/releases/v<x.y.z>/msix -Zip <ZIP> -Store` |
 | 3 | 設計席 | 照合: `package.json`（exe の SHA-256・VERSIONINFO が `x.y.z`）と展開した exe の短い起動 | 照合: `msix.json`（exe の SHA-256 が ZIP と同じ・Identity の Version が `x.y.z.0`・言語は `en-US` が先頭・中身 30 個） |
 | 4 | 設計席 | annotated tag `v<x.y.z>` → GitHub Release（**題に「Beta」**・例 `NeNe Nib 1.0.0 Beta`・**pre-release の印**）に ZIP と `SHA256SUMS` を添付し、再取得して照合 | — |
 | 5 | hide | — | 自己署名の写しで入れて確かめる・WACK（管理者）→ Partner Center に署名なしの `-store.msix` を上げて申請（[docs/store/msix.md](store/msix.md)・[docs/store/submission.md](store/submission.md)） |
-| 6 | 設計席 | 記録を `docs/quality/` に | 認定の後に結果を同じ記録へ |
+| 6 | 設計席 | 公開の結果を同じ記録の末尾の節へ（文書 PR） | 認定の後に結果を同じ記録へ |
 
 署名・インストーラ・自動更新は別の焦点 Issue とする。
 MSIX の版は `project()` の `x.y.z.0` で、`-Store` は先頭が 0 の版を断る（Issue #1581・ADR 0186）。道具は署名・導入・WACK・申請をしない。手順と hide の手でやることは [docs/store/msix.md](store/msix.md)。

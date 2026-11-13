@@ -28,4 +28,4 @@ hideのD44は折り返し・通常ドラッグを含むベータのタグとZIP�
 ## 追補（2026-11-13・#1596・施主決定 D88）
 
 決定 1 と 3 の `-Beta <正整数>` と配布の識別子の `-beta.<番号>` を外した。版は `project()` の素の `x.y.z`（1.0.0 から・Store の版と同じ）で、ZIP の名前は `NeNeNib-<x.y.z>-windows-x64.zip` の 1 通り（`archive_name`・版に `-` が入っていれば断る）。
-GitHub の配布が試験版であることは Release の題の「Beta」と pre-release の印で示す（NeNe Folio と同じ形）。同じ版を配り直す必要が出たら版を上げ、同じ版で作り直さない。`v0.1.0-beta.1`〜`v0.1.0-beta.12` の tag と記録はそのまま残す。手順の正本は `docs/DEVELOPMENT_WORKFLOW.md` の公開の節。
+GitHub の配布が試験版であることは Release の題の「Beta」と pre-release の印で示す（NeNe Folio と同じ形）。同じ版を配り直す必要が出たら版を上げ、同じ版で作り直さない。`v0.1.0-beta.1`〜`v0.1.0-beta.13` の tag と記録はそのまま残す（beta.13 は 2026-11-14 に `-Beta 13` で梱包した最後の版・記録の命令は書き換えない）。手順の正本は `docs/DEVELOPMENT_WORKFLOW.md` の公開の節。

@@ -34,7 +34,7 @@
 
 | 欄 | 答え | 根拠 |
 | --- | --- | --- |
-| カテゴリ | **開発者ツール（Developer tools）を推す**。次点は仕事効率化（Productivity） | 下の「カテゴリの推し」 |
+| カテゴリ | **開発者ツール（Developer tools）**（決定・D89） | 下の「カテゴリ」 |
 | サブカテゴリ | 画面に出れば「テキストエディタ」に近いもの。無ければ空欄 | 画面の選択肢は未確認 |
 | プライバシーポリシーの URL | `https://github.com/hideyukiMORI/nene-nib/blob/main/PRIVACY.md` | このリポジトリの直下 |
 | Web サイト | `https://github.com/hideyukiMORI/nene-nib` | |
@@ -43,13 +43,13 @@
 | デバイス ファミリ | 「Windows 10/11 Desktop」だけ | 包んだ Win32 のアプリ |
 | 製品の申告 | 「アクセシビリティ」は付けない（検証していない）。「ペンとインク」も付けない | 確かめていない性質を申告しない |
 
-**カテゴリの推し**: 開発者ツール。
+**カテゴリ（決定・D89）**: 開発者ツール。下は決める前に比べた理由（記録として残す）。
 
 - 良い点: 紹介の柱（Vim の操作・構文の色分け・言語サーバー・Markdown）を求める人が探す棚で、Store の主なテキストエディタ
   （コード向けのエディタ）もこの棚に並ぶ。Vim を知っている人に届きやすい。
 - 悪い点: 「メモ帳の代わり」を探す人には見つかりにくい。そこは検索語（メモ帳・notepad・记事本）で補う。
 - 仕事効率化にすると、Markdown のメモを書く人には近いが、Vim と構文の色分けの価値が伝わりにくい。
-- 決めるのは hide。
+- 2026-11-13 夜に hide が開発者ツールに決めた（施主決定 D89 の (3)）。
 
 ### 年齢区分（IARC のアンケート）
 
@@ -72,11 +72,11 @@
 
 設問「この製品は個人情報へのアクセス、収集、または送信を行いますか」:
 
-- **推しは「はい」と答えて PRIVACY.md の URL を入れる。** Nib は使う人の文書（個人情報を含み得る）を読み書きし、
+- **決定（D89）: 「はい」と答えて PRIVACY.md の URL を入れる。** Nib は使う人の文書（個人情報を含み得る）を読み書きし、
   ファイルのパスを端末に保存し、設定したときだけ文書の本文を手元の言語サーバーのプロセスへ渡す。「アクセス」に当たると読める。
   Loupe は画面の画素を読むことと規約 10.5.1 を理由に「はい」と答えて認定された。
 - 「はい」と答えても、ポリシーの中身は D88 の「集めない・送らない」のまま（PRIVACY.md の冒頭の太字）。
-- 「いいえ」と答える案もあるが、その場合も Win32 のアプリにはポリシーの URL を求められる見込み（規約 10.5.1・読み）。決めるのは hide。
+- 「いいえ」と答える案も比べたが（その場合も Win32 のアプリにはポリシーの URL を求められる見込み・規約 10.5.1・読み）、2026-11-13 夜に hide が「はい ＋ URL」に決めた（施主決定 D89 の (3)）。
 
 ### 申請オプション
 
@@ -93,7 +93,7 @@ NeNe Nib is an existing Win32 desktop text editor (C++, no UWP components) packa
 入力欄は申請オプションのページの「認定の注意書き」の説明にある「追加のテスト情報」のリンクの先（Loupe の記録）。
 
 ```text
-No account or sign-in is needed. To test: launch the app, type in the untitled document, press Ctrl+S to save it, and press Ctrl+O to open a file. Ctrl+Shift+Space (or a click on "通常 | Vim" in the status bar) switches between ordinary editing and Vim editing. Open a .md file and press Ctrl+Shift+M to show the Markdown preview. Ctrl+P lists open tabs, recent files and files in the same folder; F1 lists every operation. The language-server feature is off by default and starts nothing unless a command is entered in the settings file. The app makes no network connections.
+No account or sign-in is needed. To test: launch the app, type in the untitled document, press Ctrl+S to save it, and press Ctrl+O to open a file. Ctrl+Shift+Space (or a click on "Basic | Vim" in the status bar; "通常 | Vim" in Japanese and "标准 | Vim" in Chinese) switches between ordinary editing and Vim editing. Open a .md file and press Ctrl+Shift+M to show the Markdown preview. Ctrl+P lists open tabs, recent files and files in the same folder; F1 lists every operation. The language-server feature is off by default and starts nothing unless a command is entered in the settings file. The app makes no network connections.
 ```
 
 WACK の任意の試験で FAIL や WARNING が出たら、その試験の名前と理由をこの欄の末尾に 1 段落で足す（Folio は「Blocked executables」の FAIL をここで説明して認定された）。
@@ -112,8 +112,8 @@ WACK の任意の試験で FAIL や WARNING が出たら、その試験の名前
 | 2 | 席 | アプリアイコン一式（D87・`#461136`）: `.ico` と MSIX の PNG と Store の 300×300 | `docs/images/store/store-logo-300.png` ほか | **済み**（#1580・ADR 0185） |
 | 3 | 席 | MSIX を作る道具（#1581）: identity・版 `x.y.z.0`・runFullTrust・言語 `en-US`（既定）`ja-JP` `zh-Hans`・makepri・makeappx（署名なし）・unpack して exe が ZIP と同じバイト列かの照合 | `.msix`・`msix.json`・`SHA256SUMS` | **済み**（#1581・ADR 0186） |
 | 3a | 席 | PRIVACY.md と 3 言語の掲載文（[listing.md](listing.md)）・この文書 | | **済み**（#1582） |
-| 3b | 席 | 版を `1.0.0` に上げ、ZIP の名前から `-beta.N` を外す（#1596） | ZIP `NeNeNib-1.0.0-windows-x64.zip`・MSIX `NeNeNib-1.0.0.0-windows-x64-store.msix` | PR（draft）・予行は作業枝で 1 回 |
-| 3c | 設計席 | 公開元の main で ZIP と `-Store` の MSIX を作る（[DEVELOPMENT_WORKFLOW.md](../DEVELOPMENT_WORKFLOW.md) の公開の手順） | `D:/NeNeNib/releases/v1.0.0/` | 未（長い `:s` の不具合 #1616 の直しの後） |
+| 3b | 席 | 版を `1.0.0` に上げ、ZIP の名前から `-beta.N` を外す（#1596） | ZIP `NeNeNib-1.0.0-windows-x64.zip`・MSIX `NeNeNib-1.0.0.0-windows-x64-store.msix` | 済み（PR #1621 の merge）・予行は作業枝で 2 回（11-13・11-14・配る物ではない） |
+| 3c | 設計席 | 公開元の main で ZIP と `-Store` の MSIX を作る（[DEVELOPMENT_WORKFLOW.md](../DEVELOPMENT_WORKFLOW.md) の公開の手順） | `D:/NeNeNib/releases/v1.0.0/` | 未（#1616 の直しは main に入った。版 1.0.0 の main から作る） |
 | 4 | hide | 自己署名の証明書で MSIX の写しに署名して入れる（証明書を `LocalMachine\TrustedPeople` に入れるのに管理者権限が要る。`.pfx` はリポジトリに置かない） | 起動する | 未 |
 | 5 | hide | packaged の実機の確かめ（下の表） | 結果を設計席へ。Store 版の登録の扱いは別の ADR | 未 |
 | 6 | 設計席 | スクリーンショット 5 枚 × 言語（[screenshots.md](screenshots.md)・窓を前に出すので hide の了承の後） | PNG | 未 |
