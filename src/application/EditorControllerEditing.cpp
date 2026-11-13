@@ -15,6 +15,7 @@
 #include "OrdinaryWordBoundary.hpp"
 #include "PasteKind.hpp"
 #include "Selection.hpp"
+#include "UiMessage.hpp"
 #include "Utf8.hpp"
 #include "VimBlockRange.hpp"
 #include "VimCaret.hpp"
@@ -211,8 +212,6 @@ constexpr std::size_t single_page_line = 1;
     }
     std::unreachable();
 }
-// クリップボードに書けなかった知らせ（ADR 0134 の決定 3）。
-constexpr std::string_view clipboard_unwritten_notice = "クリップボードに書けませんでした";
 // NORMAL / VISUAL で次の鍵を待っているか（オペレータ・回数・レジスタの名指し・1 鍵の待ち）。
 // VISUAL の Esc は VISUAL を出るので、VISUAL ではオペレータと 1 鍵の待ちだけを待ちと見る（回数と
 // レジスタの名指しは選択を捨ててまで取り消さない）。
@@ -231,12 +230,6 @@ constexpr std::string_view clipboard_unwritten_notice = "クリップボード�
     }
     std::unreachable();
 }
-
-// F5 を Vim の NORMAL / VISUAL で押したときの知らせ（ADR 0175 の決定 3）。鳴らさない。
-constexpr std::string_view date_time_insert_only_notice = "INSERT モードで F5 を押してください";
-// 貼り付けの知らせ（ADR 0157 の決定 3・7）。鳴らさない情報の 1 行。
-constexpr std::string_view html_missing_notice = "HTML が無いので文字だけを貼りました";
-constexpr std::string_view html_unconverted_notice = "HTML を変換できないので文字だけを貼りました";
 
 // 編集で行がずれたマーク（ADR 0152 の決定 6）。行をその場で書き換えた置き換え（kept）は Vim が
 // mark_adjust を呼ばないので動かさない（#1360）。矩形は行ごとの置き換えで直す（#1361）。
@@ -491,8 +484,7 @@ bool EditorController::clipboard_written(std::string_view text)
     {
         return true;
     }
-    state_ =
-        state_.with_command_message(core::DisplayText::parse(clipboard_unwritten_notice).value());
+    state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_clipboard_unwritten));
     return false;
 }
 
@@ -590,7 +582,7 @@ void EditorController::paste_html_fragment()
         return;
     }
     paste_text();
-    state_ = state_.with_command_message(core::DisplayText::parse(html_missing_notice).value());
+    state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_paste_no_html));
 }
 
 // 変換できなければ文字だけ貼って 1 行知らせる（決定 7・鳴らさない）。
@@ -601,7 +593,7 @@ void EditorController::paste_markdown(std::string_view fragment)
     {
         paste_text();
         state_ =
-            state_.with_command_message(core::DisplayText::parse(html_unconverted_notice).value());
+            state_.with_command_message(ui_notice(core::UiMessage::notice_paste_html_unconverted));
         return;
     }
     // 変換の結果が空（script だけ・src の無い img だけなど）なら、黙って文字の貼り付けに戻す。
@@ -956,8 +948,8 @@ void EditorController::accept(const InsertDateTime &)
         {
             static_cast<void>(step_vim(core::VimKey{core::VimSpecialKey::escape}));
         }
-        state_ = state_.with_command_message(
-            core::DisplayText::parse(date_time_insert_only_notice).value());
+        state_ =
+            state_.with_command_message(ui_notice(core::UiMessage::notice_date_time_insert_only));
         return;
     }
     std::unreachable();

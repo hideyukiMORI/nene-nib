@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DisplayLanguage.hpp"
 #include "GuideEntry.hpp"
 #include "StartEntry.hpp"
 
@@ -20,5 +21,7 @@ struct StartScreenView
     std::optional<std::size_t> selected;
     bool lists_read = false;
     std::array<core::GuideEntry, 3> keys{};
+    // 画面の文の言語（frame の language と同じ値・ADR 0123 の追補 2026-11-13）。
+    core::DisplayLanguage language = core::DisplayLanguage::japanese;
 };
 } // namespace nenenib::application

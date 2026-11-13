@@ -56,15 +56,17 @@ namespace
 }
 } // namespace
 
-CommandLine::CommandLine(std::string text, Offset caret, ThemeCatalog themes, FontFamilies fonts)
+CommandLine::CommandLine(std::string text, Offset caret, ThemeCatalog themes, FontFamilies fonts,
+                         DisplayLanguage language)
     : text_(std::move(text)), caret_(caret), completion_rows_(command_completion_row_limit),
-      themes_(std::move(themes)), fonts_(std::move(fonts))
+      themes_(std::move(themes)), fonts_(std::move(fonts)), language_(language)
 {
 }
 
 CommandLine CommandLine::empty(ThemeCatalog themes)
 {
-    return CommandLine({}, Offset{0}, std::move(themes), FontFamilies::none());
+    return CommandLine({}, Offset{0}, std::move(themes), FontFamilies::none(),
+                       DisplayLanguage::japanese);
 }
 
 const FontFamilies &CommandLine::fonts() const & noexcept
@@ -77,6 +79,18 @@ CommandLine CommandLine::with_fonts(FontFamilies fonts) const
     CommandLine next = *this;
     next.fonts_ = std::move(fonts);
     return next;
+}
+
+CommandLine CommandLine::with_language(DisplayLanguage language) const
+{
+    CommandLine next = *this;
+    next.language_ = language;
+    return next;
+}
+
+DisplayLanguage CommandLine::language() const noexcept
+{
+    return language_;
 }
 
 const ThemeCatalog &CommandLine::catalog() const & noexcept
@@ -138,7 +152,7 @@ std::expected<CommandLine, ExFailure> CommandLine::inserted(std::string_view tex
         return std::unexpected(next.error());
     }
     const auto caret = next.value().caret;
-    CommandLine line(std::move(next).value().text, caret, themes_, fonts_);
+    CommandLine line(std::move(next).value().text, caret, themes_, fonts_, language_);
     line.completion_rows_ = completion_rows_;
     return line;
 }
@@ -164,7 +178,7 @@ CommandLine CommandLine::completed(CommandEdit direction) const
     }
     std::string filled = candidates.front().substr(0, common);
     const Offset caret{filled.size()};
-    CommandLine next(std::move(filled), caret, themes_, fonts_);
+    CommandLine next(std::move(filled), caret, themes_, fonts_, language_);
     next.completion_rows_ = completion_rows_;
     return next;
 }
@@ -178,7 +192,7 @@ CommandLine CommandLine::cycled(const std::vector<std::string> &candidates,
     std::string seed = completion_seed_.value_or(text_);
     std::string shown = index.has_value() ? candidates[index.value()] : seed;
     const Offset caret{shown.size()};
-    CommandLine next(std::move(shown), caret, themes_, fonts_);
+    CommandLine next(std::move(shown), caret, themes_, fonts_, language_);
     next.completion_seed_ = std::move(seed);
     next.completion_index_ = index;
     next.completion_rows_ = completion_rows_;
@@ -213,7 +227,7 @@ CommandLine CommandLine::edited(CommandEdit edit) const
     }
     InputText next = edited_input(InputText{text_, caret_}, edit);
     const auto caret = next.caret;
-    CommandLine line(std::move(next.text), caret, themes_, fonts_);
+    CommandLine line(std::move(next.text), caret, themes_, fonts_, language_);
     line.completion_rows_ = completion_rows_;
     return line;
 }
@@ -232,7 +246,7 @@ CommandLine CommandLine::recalled(const InputHistory &history, CommandEdit direc
     }
     InputText shown = history.shown(walk.value());
     const auto caret = shown.caret;
-    CommandLine line(std::move(shown.text), caret, themes_, fonts_);
+    CommandLine line(std::move(shown.text), caret, themes_, fonts_, language_);
     line.completion_rows_ = completion_rows_;
     line.history_walk_ = walk;
     return line;

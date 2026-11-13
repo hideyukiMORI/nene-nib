@@ -51,6 +51,7 @@
 #include "ScriptedSettings.hpp"
 #include "ScriptedStartLists.hpp"
 #include "ScriptedThemes.hpp"
+#include "ScriptedUiLanguage.hpp"
 #include "ScrollLines.hpp"
 #include "SelectEditMode.hpp"
 #include "Selection.hpp"
@@ -345,8 +346,9 @@ void verify_walk_settles_before_writing()
 {
     const FilePath path = work_path(name);
     return UnloadedDocument{path, TextPosition{LineNumber{2}, Column{3}}, LineNumber{2},
-                            DocumentView{tab_title_for(path, SaveState::saved), path,
-                                         TextEncoding::utf8, SaveState::saved, std::nullopt}};
+                            DocumentView{tab_title_for(path, SaveState::saved,
+                                                       nenenib::core::DisplayLanguage::japanese),
+                                         path, TextEncoding::utf8, SaveState::saved, std::nullopt}};
 }
 
 // 無題 1 本の右に a b c のまだ読んでいない文書を並べた状態。
@@ -367,8 +369,9 @@ void verify_walk_settles_before_writing()
                          LineNumber{1},
                          std::nullopt,
                          std::nullopt,
-                         DocumentView{tab_title_for(path, SaveState::saved), path,
-                                      TextEncoding::utf8, SaveState::saved, std::nullopt}};
+                         DocumentView{tab_title_for(path, SaveState::saved,
+                                                    nenenib::core::DisplayLanguage::japanese),
+                                      path, TextEncoding::utf8, SaveState::saved, std::nullopt}};
 }
 
 // 使った順を帯の位置の数字の並びで読む（先頭がいちばん最近）。
@@ -538,6 +541,7 @@ void verify_recency_ranked()
     ScriptedShellRegistration shell_registration;
     ScriptedImages images;
     ScriptedStartLists start_lists;
+    ScriptedUiLanguage ui_language;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -548,7 +552,7 @@ void verify_recency_ranked()
                     themes,       session,         history,    folders,    bookmarks,
                     text_layouts, autosave,        fonts,      bell,       markdown,
                     reads,        language_server, wall_clock, printer,    shell_registration,
-                    images,       start_lists},
+                    images,       start_lists,     ui_language},
         initial);
     return controller.frame();
 }

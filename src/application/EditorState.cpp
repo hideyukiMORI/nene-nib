@@ -28,19 +28,19 @@ constexpr std::size_t first_line = 1;
 constexpr std::size_t initial_visible_lines = 1;
 
 // 起動のときの文書と NewTab の文書は同じ「空の無題」の 1 つ（ADR 0056 の決定 3・ARC-001）。
-[[nodiscard]] DocumentState untitled_document()
+[[nodiscard]] DocumentState untitled_document(core::DisplayLanguage language)
 {
     const Document document{std::nullopt, core::TextEncoding::utf8, std::size_t{0}};
-    return DocumentState{core::TextBuffer::empty(),
-                         core::collapsed_at(core::Offset{0}),
-                         core::EditHistory::empty(),
-                         document,
-                         core::LineNumber{first_line},
-                         std::nullopt,
-                         std::nullopt,
-                         DocumentView{core::tab_title_for(std::nullopt, core::SaveState::saved),
-                                      std::nullopt, document.encoding, core::SaveState::saved,
-                                      std::nullopt}};
+    return DocumentState{
+        core::TextBuffer::empty(),
+        core::collapsed_at(core::Offset{0}),
+        core::EditHistory::empty(),
+        document,
+        core::LineNumber{first_line},
+        std::nullopt,
+        std::nullopt,
+        DocumentView{core::tab_title_for(std::nullopt, core::SaveState::saved, language),
+                     std::nullopt, document.encoding, core::SaveState::saved, std::nullopt}};
 }
 
 [[nodiscard]] std::ptrdiff_t distance_of(std::size_t index) noexcept
@@ -189,7 +189,9 @@ EditorState EditorState::create(core::Appearance appearance, core::EditMode mode
 {
     // 引数なしで起動した Vim の無題と同じに、起動の無題は 1 行目の 1 項を持つ。新しいタブは
     // 持たない（Vim の `:tabnew` のバッファは自分の項を持たない・ADR 0152 の追補 #1124）。
-    DocumentState untitled = untitled_document();
+    // 状態の表示言語の既定は日本語（合成ルートの解決は create の後に置き直す・題名は置くときに作り
+    // 直す）。
+    DocumentState untitled = untitled_document(core::DisplayLanguage::japanese);
     untitled.marks = core::vim_marks_opened(core::VimMarkPosition{core::LineNumber{first_line}, 0});
     return EditorState(appearance, mode, std::move(untitled));
 }
@@ -892,8 +894,8 @@ std::shared_ptr<const DocumentState> EditorState::parked_active() const
 {
     auto history = history_.sealed();
     const auto save_state = save_state_of(document_, history.content_position());
-    DocumentView view{core::tab_title_for(document_.path, save_state), document_.path,
-                      document_.encoding, save_state, std::nullopt};
+    DocumentView view{core::tab_title_for(document_.path, save_state, display_language_),
+                      document_.path, document_.encoding, save_state, std::nullopt};
     return std::make_shared<const DocumentState>(
         DocumentState{text_, core::collapsed_at(selection_.caret), std::move(history), document_,
                       scroll_.first_visible, vim_.wanted_column, vim_.scroll_lines, std::move(view),
@@ -1089,7 +1091,7 @@ EditorState EditorState::with_new_tab() const
     next.active_ = active_ + 1;
     next.autosave_ids_.insert(std::next(next.autosave_ids_.begin(), distance_of(next.active_)),
                               AutosaveId{next.next_autosave_id_++});
-    next.spread(untitled_document());
+    next.spread(untitled_document(display_language_));
     // 歩きの途中なら着いたタブで確定してから、新しいタブを先頭に置く（ADR 0058 の決定 2）。
     next.recency_ =
         core::tab_recency_opened(core::tab_recency_touched(recency_, active_), next.active_);

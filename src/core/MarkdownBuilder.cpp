@@ -4,6 +4,8 @@
 #include "MarkdownTask.hpp"
 #include "Offset.hpp"
 #include "PreviewSpan.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -19,9 +21,23 @@ namespace
 {
 constexpr std::string_view bullet_marker = "•";
 constexpr std::size_t depth_limit = 255U;
-// 画像の代わりの文字の枠（#784）。alt はこの間に入る。
-constexpr std::string_view image_opening = "[画像: ";
-constexpr std::string_view image_closing = "]";
+// 画像の代わりの文字の枠（#784）。alt は表の文 preview_image_alt の置き場 {0} の位置に入る
+// （ADR 0123 の追補 2026-11-13）。置き場の前が開き、後ろが閉じ。
+constexpr std::string_view image_slot = "{0}";
+
+[[nodiscard]] std::string_view image_opening_of(DisplayLanguage language) noexcept
+{
+    const auto frame = ui_text(UiMessage::preview_image_alt, language);
+    return frame.substr(0, frame.find(image_slot));
+}
+
+[[nodiscard]] std::string_view image_closing_of(DisplayLanguage language) noexcept
+{
+    const auto frame = ui_text(UiMessage::preview_image_alt, language);
+    const auto slot = frame.find(image_slot);
+    return slot == std::string_view::npos ? std::string_view{}
+                                          : frame.substr(slot + image_slot.size());
+}
 
 [[nodiscard]] std::uint8_t saturated_depth(std::size_t depth) noexcept
 {
@@ -86,8 +102,10 @@ constexpr std::string_view image_closing = "]";
 }
 } // namespace
 
-MarkdownBuilder::MarkdownBuilder(std::string_view input, const MarkdownStop &stop) noexcept
-    : input_(input), stop_(&stop)
+MarkdownBuilder::MarkdownBuilder(std::string_view input, const MarkdownStop &stop,
+                                 DisplayLanguage language) noexcept
+    : input_(input), stop_(&stop), image_opening_(image_opening_of(language)),
+      image_closing_(image_closing_of(language))
 {
 }
 
@@ -216,7 +234,7 @@ void MarkdownBuilder::enter_span(std::optional<PreviewStyle> style)
     block.spans.push_back(PreviewSpan{at, at, style.value()});
     if (style.value() == PreviewStyle::image)
     {
-        block.text.append(image_opening);
+        block.text.append(image_opening_);
     }
 }
 
@@ -235,7 +253,7 @@ void MarkdownBuilder::leave_span()
         const bool image = span.style == PreviewStyle::image;
         if (image)
         {
-            block.text.append(image_closing);
+            block.text.append(image_closing_);
         }
         span.end = Offset{block.text.size()};
         if (image)
@@ -260,8 +278,8 @@ void MarkdownBuilder::finish_image(const PreviewBlock &block, bool closed)
     auto &image = images_.at(open_images_.back());
     open_images_.pop_back();
     image.end = Offset{block.text.size()};
-    const std::size_t from = image.begin.value + image_opening.size();
-    const std::size_t to = image.end.value - (closed ? image_closing.size() : 0U);
+    const std::size_t from = image.begin.value + image_opening_.size();
+    const std::size_t to = image.end.value - (closed ? image_closing_.size() : 0U);
     image.alt = to > from ? block.text.substr(from, to - from) : std::string{};
 }
 

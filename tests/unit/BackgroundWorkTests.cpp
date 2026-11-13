@@ -417,7 +417,10 @@ EditorFrame deliver(Editing &editing, std::initializer_list<std::string_view> fi
     {
         text += row.command;
         text += row.origin.has_value()
-                    ? "<" + std::string(core::palette_origin_label(row.origin.value())) + ">"
+                    ? "<" +
+                          std::string(core::palette_origin_label(
+                              row.origin.value(), nenenib::core::DisplayLanguage::japanese)) +
+                          ">"
                     : std::string("<>");
         text += "|";
     }

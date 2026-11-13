@@ -254,6 +254,13 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::start_new_file, "New File"},
     {UiMessage::start_new_file_detail, "Just start typing"},
     {UiMessage::start_open_folder, "Open Folder"},
+    // T1b
+    {UiMessage::operation_choose_language_name, "Choose Display Language"},
+    {UiMessage::operation_choose_language_description,
+     "Choose the language of the text on the screen"},
+    {UiMessage::palette_mark_separator, "   "},
+    {UiMessage::language_choice_system, "Match Windows"},
+    // T1b
     {UiMessage::start_open_folder_detail, "Choose a root and show the explorer"},
 }};
 } // namespace nenenib::core

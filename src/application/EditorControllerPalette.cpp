@@ -18,6 +18,8 @@
 #include "PaletteOrigin.hpp"
 #include "SaveState.hpp"
 #include "TabTitle.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 #include "UnlistedExtensions.hpp"
 
 #include <algorithm>
@@ -53,7 +55,8 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
         // 記号の案内は入力が空で、入力行が変換中でないときだけ（ADR 0060 の決定 9）。
         // 1 文字でも打てば消え、変換を始めても消える（長い変換の文字列に重ねない）。
         auto hint = palette->input().text().empty() && !command_composed().has_value()
-                        ? std::optional<core::DisplayText>{core::palette_mark_hint()}
+                        ? std::optional<core::DisplayText>{core::palette_mark_hint(
+                              state_.display_language())}
                         : std::nullopt;
         // 載せるのは見えている行の窓だけ（ADR 0062 の決定 2）。全件は写さない。窓の先頭は面の
         // 状態（ADR 0150 の決定 1）。
@@ -122,6 +125,22 @@ void EditorController::accept(const OpenOperationList &)
     run_palette_request(core::ExPaletteRequest{core::PaletteScope::operations, {}});
 }
 
+// 表示言語の候補の面（ADR 0123 の追補 2026-11-13 の決定 8）。Ctrl+P の面を `:set language=` の
+// 入力で開き、Ex の候補の 4 つ（説明つき）を見せる。選ぶと `:set language=<名前>` と同じ 1 本。
+// 開いている入力行は取消と同じ道で閉じてから開く（録画に `<Esc>` を積まない）。
+void EditorController::accept(const OpenDisplayLanguageList &)
+{
+    if (state_.composition().has_value())
+    {
+        return;
+    }
+    if (command_line_active())
+    {
+        cancel_command_input();
+    }
+    run_palette_request(core::ExPaletteRequest{core::PaletteScope::commands, "set language="});
+}
+
 // 保存の形の候補の面（ADR 0010 の追補 #1049 の決定 2 の (a)・(c)）。Ctrl+P の面の部品に、出どころ
 // document_format の候補だけを渡して空の入力で開く（記号の表には載せない）。同じフォルダは読まず、
 // 前の面の読みの券は進めて捨てる。選択は今の値。開いている入力行は取消と同じ道で閉じてから開く
@@ -141,8 +160,9 @@ void EditorController::accept(const OpenDocumentFormatList &intent)
     palette_folder_ = PaletteFolder{++folder_tickets_, {}, 0, false};
     auto [entries, current] = format_choices(intent.kind);
     state_ = state_.with_command_input(
-        core::CommandPalette::opened(entries, "", state_.mode(),
-                                     core::CommandLine::empty(state_.themes()))
+        core::CommandPalette::opened(
+            entries, "", state_.mode(),
+            core::CommandLine::empty(state_.themes()).with_language(state_.display_language()))
             .selected_at(current));
 }
 
@@ -172,7 +192,8 @@ namespace
 // 保存の形の候補の列と、今の値の候補の位置。
 template <typename Value, std::size_t Count>
 [[nodiscard]] std::pair<std::vector<core::CommandChoice>, std::size_t>
-listed_formats(const std::array<Value, Count> &values, Value current)
+listed_formats(const std::array<Value, Count> &values, Value current,
+               core::DisplayLanguage language)
 {
     std::vector<core::CommandChoice> entries;
     std::size_t position = 0;
@@ -184,7 +205,11 @@ listed_formats(const std::array<Value, Count> &values, Value current)
             core::DisplayText::parse(format_label(value)).value(),
             format_command(value),
             core::CommandChoiceKind::execute,
-            chosen ? std::optional{core::DisplayText::parse("今の形").value()} : std::nullopt,
+            chosen ? std::optional{core::DisplayText::parse(
+                                       core::ui_text(core::UiMessage::palette_current_format,
+                                                     language))
+                                       .value()}
+                   : std::nullopt,
             core::PaletteOrigin::document_format,
             std::nullopt,
             {}});
@@ -201,10 +226,11 @@ EditorController::format_choices(core::DocumentFormatKind kind) const
     switch (kind)
     {
     case core::DocumentFormatKind::encoding:
-        return listed_formats(core::text_encodings, document.encoding);
+        return listed_formats(core::text_encodings, document.encoding, state_.display_language());
     case core::DocumentFormatKind::line_ending:
         return listed_formats(core::line_endings,
-                              save_line_ending_of(document, state_.line_ending()));
+                              save_line_ending_of(document, state_.line_ending()),
+                              state_.display_language());
     }
     std::unreachable();
 }
@@ -221,14 +247,15 @@ void EditorController::open_palette(std::string_view input, std::size_t selected
     auto entries = palette_entries(bookmarks.value_or(FileBookmarks{}));
     request_folder(entries);
     state_ = state_.with_command_input(
-        core::CommandPalette::opened(
-            std::move(entries), input, state_.mode(),
-            core::CommandLine::empty(state_.themes()).with_fonts(given_fonts()))
+        core::CommandPalette::opened(std::move(entries), input, state_.mode(),
+                                     core::CommandLine::empty(state_.themes())
+                                         .with_fonts(given_fonts())
+                                         .with_language(state_.display_language()))
             .selected_at(selected));
     if (!bookmarks)
     {
-        state_ = state_.with_command_message(
-            core::DisplayText::parse("ブックマークを読めませんでした").value());
+        state_ =
+            state_.with_command_message(ui_notice(core::UiMessage::notice_bookmarks_unreadable));
     }
 }
 
@@ -425,14 +452,14 @@ void EditorController::accept(const ToggleBookmark &)
     if (!path.has_value())
     {
         state_ = state_.with_command_message(
-            core::DisplayText::parse("保存済みのファイルを選んでください").value());
+            ui_notice(core::UiMessage::notice_bookmark_needs_saved_file));
         return;
     }
     const auto before = ports_.bookmarks.read();
     if (!before)
     {
-        state_ = state_.with_command_message(
-            core::DisplayText::parse("ブックマークを読めませんでした").value());
+        state_ =
+            state_.with_command_message(ui_notice(core::UiMessage::notice_bookmarks_unreadable));
         return;
     }
     const bool removing = bookmarks_contain(before.value(), path.value(), ports_.files);
@@ -440,23 +467,20 @@ void EditorController::accept(const ToggleBookmark &)
     if (!after)
     {
         state_ = state_.with_command_message(
-            core::DisplayText::parse("ブックマークは " + std::to_string(bookmark_limit) +
-                                     " 件まで登録できます")
-                .value());
+            ui_notice(core::UiMessage::notice_bookmark_limit, {std::to_string(bookmark_limit)}));
         return;
     }
     if (!ports_.bookmarks.write(after.value()))
     {
-        reject(core::DisplayText::parse("ブックマークを保存できませんでした").value());
+        reject(ui_notice(core::UiMessage::notice_bookmarks_unsaved));
         return;
     }
     // 次に起動画面が出たら読み直す（ADR 0172 の追補 25）。
     mark_start_lists_stale();
     close_command_input();
-    state_ = state_.with_command_message(
-        core::DisplayText::parse(removing ? "ブックマークを解除しました"
-                                          : "ブックマークに追加しました")
-            .value());
+    state_ =
+        state_.with_command_message(ui_notice(removing ? core::UiMessage::notice_bookmark_removed
+                                                       : core::UiMessage::notice_bookmark_added));
 }
 
 void EditorController::accept(const ActivateCommandChoice &intent)

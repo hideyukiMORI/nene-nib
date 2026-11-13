@@ -26,6 +26,7 @@
 #include "ScriptedStartLists.hpp"
 #include "ScriptedTextLayouts.hpp"
 #include "ScriptedThemes.hpp"
+#include "ScriptedUiLanguage.hpp"
 #include "ThemeCatalog.hpp"
 
 #include <functional>
@@ -49,7 +50,19 @@ class Editing final
               themes_,       session_,         history_,    folders_,    bookmarks_,
               text_layouts_, autosave_,        fonts_,      bell_,       markdown_,
               reads_,        language_server_, wall_clock_, printer_,    shell_registration_,
-              images_,       start_lists_})
+              images_,       start_lists_,     ui_language_})
+    {
+    }
+
+    // OS の表示言語の観測を置いてから controller を作る口（ADR 0123 の追補 2026-11-13・#1019）。
+    Editing(SettingsReading reading, std::optional<nenenib::core::DisplayLanguage> observed)
+        : settings_(std::move(reading)), ui_language_(observed),
+          controller_(nenenib::application::EditorPorts{
+              appearance_,   clipboard_,       files_,      code_pages_, settings_,
+              themes_,       session_,         history_,    folders_,    bookmarks_,
+              text_layouts_, autosave_,        fonts_,      bell_,       markdown_,
+              reads_,        language_server_, wall_clock_, printer_,    shell_registration_,
+              images_,       start_lists_,     ui_language_})
     {
     }
 
@@ -167,6 +180,11 @@ class Editing final
         return start_lists_;
     }
 
+    [[nodiscard]] ScriptedUiLanguage &ui_language() noexcept
+    {
+        return ui_language_;
+    }
+
     [[nodiscard]] ScriptedPrinter &printer() noexcept
     {
         return printer_;
@@ -193,7 +211,7 @@ class Editing final
             themes_,       session_,         history_,    folders_,    bookmarks_,
             text_layouts_, autosave_,        fonts_,      bell_,       markdown_,
             reads_,        language_server_, wall_clock_, printer_,    shell_registration_,
-            images_,       start_lists_};
+            images_,       start_lists_,     ui_language_};
     }
 
     ScriptedAppearance appearance_{Reading{Appearance::dark}};
@@ -218,6 +236,7 @@ class Editing final
     ScriptedShellRegistration shell_registration_;
     ScriptedImages images_;
     ScriptedStartLists start_lists_;
+    ScriptedUiLanguage ui_language_;
     EditorController controller_;
 };
 } // namespace nenenib::tests

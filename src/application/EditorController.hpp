@@ -13,6 +13,7 @@
 #include "DetectedText.hpp"
 #include "Diagnostic.hpp"
 #include "DiagnosticsCount.hpp"
+#include "DisplayLanguage.hpp"
 #include "Document.hpp"
 #include "DocumentFormatKind.hpp"
 #include "DocumentReadFinished.hpp"
@@ -30,6 +31,7 @@
 #include "EditorPorts.hpp"
 #include "EditorState.hpp"
 #include "ExClipboardRequest.hpp"
+#include "ExDisplayLanguageRequest.hpp"
 #include "ExDocumentRequest.hpp"
 #include "ExFormatRequest.hpp"
 #include "ExLanguageRequest.hpp"
@@ -111,6 +113,7 @@
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "TitleBarInput.hpp"
+#include "UiMessage.hpp"
 #include "UnloadedDocument.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
@@ -142,6 +145,7 @@
 #include <cstdint>
 #include <deque>
 #include <expected>
+#include <initializer_list>
 #include <optional>
 #include <span>
 #include <string>
@@ -187,6 +191,10 @@ class EditorController final
     // 決定 6）。
     [[nodiscard]] bool find_line_active() const noexcept;
     [[nodiscard]] bool command_palette_active() const noexcept;
+    // 解決済みの表示言語（ADR 0123 の追補 2026-11-13 の決定 3）。ui
+    // が自分で出す文（箱・ダイアログ） のための安い読みで、frame を作らない。frame の language
+    // と同じ値。
+    [[nodiscard]] core::DisplayLanguage display_language() const noexcept;
     // エクスプローラーの面に焦点があるか（ADR 0162 の決定 4・E4 で足した口）。窓が鍵の行き先を
     // 決めるための安い読みで、frame を作らない。面が消えていれば偽。
     [[nodiscard]] bool explorer_focused() const noexcept;
@@ -639,6 +647,9 @@ class EditorController final
     void accept(const SelectDocumentFormat &intent);
     // 保存の形の候補の面（決定 2 の (a)・(c)）。候補は閉じた enum の全部で、今の値に印を付ける。
     void accept(const OpenDocumentFormatList &intent);
+    // 表示言語の候補の面（ADR 0123 の追補 2026-11-13 の決定 8）。Ctrl+P の面を `:set language=` で
+    // 開く。
+    void accept(const OpenDisplayLanguageList &intent);
     [[nodiscard]] std::pair<std::vector<core::CommandChoice>, std::size_t>
     format_choices(core::DocumentFormatKind kind) const;
     // 枠（ADR 0148）。分ける・移る・閉じる・もう 1 つの枠を送る。
@@ -720,7 +731,7 @@ class EditorController final
     void shut_language_server();
     void send_lsp_request(LspRequestKind kind, std::string_view method,
                           const core::JsonValue &params);
-    void language_server_failed(std::string_view head);
+    void language_server_failed(core::UiMessage message);
     void collect_language_server();
     void receive_server(const ServerStarted &started);
     void receive_server(const ServerMessage &message);
@@ -733,6 +744,12 @@ class EditorController final
     void accept(const LanguageServerTick &);
     void expire_lsp_request(const PendingLspRequest &request);
     void answer_lsp(core::ExLspRequest request);
+    // `:set language=` `:set language?`（ADR 0123 の追補 2026-11-13 の決定 8）。
+    void answer_display_language(const core::ExDisplayLanguageRequest &request);
+    // 文の表の 1 行を今の表示言語で（#1019）。values は置き場 {0} {1} を埋める値。
+    [[nodiscard]] core::DisplayText ui_notice(core::UiMessage message) const;
+    [[nodiscard]] core::DisplayText ui_notice(core::UiMessage message,
+                                              std::initializer_list<std::string_view> values) const;
     void end_language_server_session();
     // 文書の同期と診断（ADR 0161 の決定 1〜3・5）。sync は running の間の apply の終わりで、閉じた
     // タブ・言語や URI や大きさの変わったアクティブな文書を `didClose` し、この意図の編集を文書

@@ -166,7 +166,8 @@ std::optional<StartScreenView> EditorController::start_screen_view() const
                               ? start_selection_
                               : std::nullopt;
     return StartScreenView{std::move(entries), selected, start_lists_.has_value(),
-                           core::start_key_entries(state_.mode())};
+                           core::start_key_entries(state_.mode(), state_.display_language()),
+                           state_.display_language()};
 }
 
 // 最初の frame の合図（決定 3）。以後は起動画面の鍵を受け、出口（settle_start_screen）が

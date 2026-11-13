@@ -16,6 +16,7 @@
 #include "InsertDateTime.hpp"
 #include "Milestone.hpp"
 #include "OpenCommandPalette.hpp"
+#include "OpenDisplayLanguageList.hpp"
 #include "OpenDocument.hpp"
 #include "OpenDocumentFormatList.hpp"
 #include "OpenOperationList.hpp"
@@ -280,7 +281,8 @@ bool EditorWindow::confirm_discard()
     {
         return true;
     }
-    const auto answer = ask_save(window_, product_name, SaveQuestion::unsaved);
+    const auto answer =
+        ask_save(window_, product_name, SaveQuestion::unsaved, controller_.display_language());
     switch (save_step(SaveQuestion::unsaved, answer))
     {
     case SaveStep::close_discarding:
@@ -302,7 +304,8 @@ bool EditorWindow::confirm_lost_tab()
     // 理由（announce のダイアログ）を見せた後でもう一度聞く。
     while (controller_.delivery().document.save_state != core::SaveState::saved)
     {
-        const auto answer = ask_save(window_, product_name, SaveQuestion::rendering_lost);
+        const auto answer = ask_save(window_, product_name, SaveQuestion::rendering_lost,
+                                     controller_.display_language());
         switch (save_step(SaveQuestion::rendering_lost, answer))
         {
         case SaveStep::save:
@@ -403,6 +406,7 @@ EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation op
         {core::EditorOperation::print, &EditorWindow::run_print},
         {core::EditorOperation::register_shell, &EditorWindow::run_register_shell},
         {core::EditorOperation::unregister_shell, &EditorWindow::run_unregister_shell},
+        {core::EditorOperation::choose_language, &EditorWindow::run_choose_language},
     }};
     static_assert(runners_in_order(runners),
                   "operation runners follow the order of EditorOperation and point to a function");
@@ -604,6 +608,12 @@ void EditorWindow::run_register_shell()
 void EditorWindow::run_unregister_shell()
 {
     send(application::UnregisterShell{});
+}
+
+// 表示言語を選ぶ（ADR 0123 の追補 2026-11-13 の決定 8）。候補の面は controller が開く。
+void EditorWindow::run_choose_language()
+{
+    send(application::OpenDisplayLanguageList{});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

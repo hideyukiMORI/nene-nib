@@ -74,6 +74,7 @@ namespace
     case EditorOperation::print:
     case EditorOperation::register_shell:
     case EditorOperation::unregister_shell:
+    case EditorOperation::choose_language:
         return std::nullopt;
     }
     std::unreachable();

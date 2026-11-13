@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DisplayLanguage.hpp"
 #include "ShellRegistrationInput.hpp"
 #include "ShellRegistrationPlan.hpp"
 #include "ShellRegistrationPlanFailure.hpp"
@@ -17,9 +18,10 @@ namespace nenenib::core
 // から開く」（`Software\Classes\Applications\NeNeNib.exe`）・拡張子ごとの ProgId
 // （`Software\Classes\NeNeNib.<拡張子>`）・「既定のアプリ」（`Software\NeNeNib\Capabilities` と
 // `Software\RegisteredApplications`）の順。exe のパスと `%1` は `"` で囲み、拡張子は小文字・`.`
-// 付き・重複なしに畳む。パスが空か `"` を含めば失敗（ARC-010）。
+// 付き・重複なしに畳む。パスが空か `"` を含めば失敗（ARC-010）。ProgId の説明は登録の時点の
+// language の文で、言語を変えても書き直さない（ADR 0123 の追補 2026-11-13 の決定 11）。
 [[nodiscard]] std::expected<ShellRegistrationPlan, ShellRegistrationPlanFailure>
-shell_registration_plan(const ShellRegistrationInput &input);
+shell_registration_plan(const ShellRegistrationInput &input, DisplayLanguage language);
 
 // 外すときに木ごと消す根（removal が subtree の値の木）を計画の順に重複なく並べる。右クリックの
 // 項目・アプリ・拡張子ごとの ProgId・`Software\NeNeNib` の順。共有の鍵の値（value）は含めない。

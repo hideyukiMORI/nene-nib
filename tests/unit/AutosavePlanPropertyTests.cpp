@@ -104,8 +104,9 @@ constexpr std::size_t ledger_shifted = 1U;
     const core::FilePath path = sample_path();
     return app::UnloadedDocument{
         path, core::TextPosition{core::LineNumber{1}, core::Column{1}}, core::LineNumber{1},
-        app::DocumentView{core::tab_title_for(path, core::SaveState::saved), path,
-                          core::TextEncoding::utf8, core::SaveState::saved, std::nullopt}};
+        app::DocumentView{core::tab_title_for(path, core::SaveState::saved,
+                                              nenenib::core::DisplayLanguage::japanese),
+                          path, core::TextEncoding::utf8, core::SaveState::saved, std::nullopt}};
 }
 
 [[nodiscard]] EditorState typed(const EditorState &state, core::EditBoundary boundary)

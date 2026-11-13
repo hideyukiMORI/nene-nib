@@ -2,13 +2,16 @@
 
 #include "AsciiCase.hpp"
 #include "CommandMatch.hpp"
+#include "DisplayLanguageNames.hpp"
 #include "ExResult.hpp"
 #include "KeyChord.hpp"
 #include "OperationBindings.hpp"
+#include "OperationReadings.hpp"
 #include "OperationText.hpp"
 #include "OperationTexts.hpp"
 #include "SubsequenceScore.hpp"
 #include "ThemeCatalog.hpp"
+#include "UiTexts.hpp"
 
 #include <algorithm>
 #include <array>
@@ -81,6 +84,24 @@ namespace
         }
     }
     return choices;
+}
+
+// `set language=<名前>` の候補に添える説明（ADR 0123 の追補 2026-11-13 の決定 8）。言語の自称か
+// 「Windows に合わせる」の表の文。ほかの候補は無し。
+[[nodiscard]] std::optional<DisplayText> language_detail(std::string_view command,
+                                                         DisplayLanguage language)
+{
+    constexpr std::string_view stem = "set language=";
+    if (!command.starts_with(stem))
+    {
+        return std::nullopt;
+    }
+    const auto choice = display_language_choice_named(command.substr(stem.size()));
+    if (!choice.has_value())
+    {
+        return std::nullopt;
+    }
+    return DisplayText::parse(display_language_choice_detail(choice.value(), language)).value();
 }
 
 // 出どころの印が見せる出どころ（ADR 0060 の決定 3）。印が増えたらここが落ちる（CPP-002）。
@@ -205,23 +226,45 @@ template <std::ranges::sized_range Positions>
 }
 
 // 操作の一覧の 1 行（ADR 0078 の決定 6）。鍵はモードで見せる鍵の表示名、無ければ空。
-[[nodiscard]] CommandChoice operation_choice_of(const OperationText &text, std::string key)
+[[nodiscard]] CommandChoice operation_choice_of(const OperationText &text, std::string key,
+                                                DisplayLanguage language)
 {
-    return CommandChoice{DisplayText::parse(text.name).value(),
+    return CommandChoice{DisplayText::parse(ui_text(text.name, language)).value(),
                          {},
                          CommandChoiceKind::operate,
-                         DisplayText::parse(text.description).value(),
+                         DisplayText::parse(ui_text(text.description, language)).value(),
                          std::nullopt,
                          text.operation,
                          std::move(key)};
 }
 
-// 名前・読み・鍵の表示名のうち一番良い点（ADR 0078 の決定 6）。どれにも当たらなければ無し。
-[[nodiscard]] std::optional<std::size_t>
-operation_score(std::string_view query, const OperationText &text, std::string_view key)
+// 2 つ目の照合の欄（ADR 0123 の追補 2026-11-13 の決定 6）。日本語は読み（ひらがな）、英語と
+// 中国語は短い名前（無ければ空・何にも当たらない）。読みの拼音は持たない。
+[[nodiscard]] std::string_view second_field(const OperationText &text,
+                                            DisplayLanguage language) noexcept
+{
+    switch (language)
+    {
+    case DisplayLanguage::japanese:
+        return operation_reading(text.operation);
+    case DisplayLanguage::english:
+    case DisplayLanguage::simplified_chinese:
+        break;
+    }
+    return text.short_name.has_value() ? ui_text(text.short_name.value(), language)
+                                       : std::string_view{};
+}
+
+// 名前・読み（日本語）か短い名前（英語・中国語）・鍵の表示名のうち一番良い点（ADR 0078 の決定
+// 6）。どれにも当たらなければ無し。
+[[nodiscard]] std::optional<std::size_t> operation_score(std::string_view query,
+                                                         const OperationText &text,
+                                                         std::string_view key,
+                                                         DisplayLanguage language)
 {
     std::optional<std::size_t> best;
-    const std::array<std::string_view, 3> fields{text.name, text.reading, key};
+    const std::array<std::string_view, 3> fields{ui_text(text.name, language),
+                                                 second_field(text, language), key};
     for (const std::string_view field : fields)
     {
         const auto score = match_score(query, field);
@@ -300,10 +343,15 @@ std::vector<CommandChoice> palette_choices(const CommandLine &input)
     {
         return {choice_of(std::string(query))};
     }
+    for (auto &choice : choices)
+    {
+        choice.detail = language_detail(choice.command, input.language());
+    }
     return choices;
 }
 
-std::vector<CommandChoice> operation_choices(std::string_view query, EditMode mode)
+std::vector<CommandChoice> operation_choices(std::string_view query, EditMode mode,
+                                             DisplayLanguage language)
 {
     std::vector<CommandChoice> available;
     std::vector<ScoredPosition> scored;
@@ -315,12 +363,12 @@ std::vector<CommandChoice> operation_choices(std::string_view query, EditMode mo
         }
         const auto chord = shown_chord(text.operation, mode);
         auto key = chord.has_value() ? key_chord_label(chord.value()) : std::string{};
-        const auto score =
-            query.empty() ? std::optional<std::size_t>{0} : operation_score(query, text, key);
+        const auto score = query.empty() ? std::optional<std::size_t>{0}
+                                         : operation_score(query, text, key, language);
         if (score.has_value())
         {
             scored.emplace_back(available.size(), score.value());
-            available.push_back(operation_choice_of(text, std::move(key)));
+            available.push_back(operation_choice_of(text, std::move(key), language));
         }
     }
     std::vector<CommandChoice> choices;
@@ -332,24 +380,33 @@ std::vector<CommandChoice> operation_choices(std::string_view query, EditMode mo
     return choices;
 }
 
-std::string_view palette_origin_label(PaletteOrigin origin) noexcept
+namespace
+{
+// 出どころの印の補足の文の名前（ADR 0060 の決定 3）。印が増えたらここが落ちる（CPP-002）。
+[[nodiscard]] UiMessage palette_origin_message(PaletteOrigin origin) noexcept
 {
     switch (origin)
     {
     case PaletteOrigin::tab:
-        return "開いているタブ";
+        return UiMessage::palette_origin_tab;
     case PaletteOrigin::bookmarked_tab:
-        return "タブ・ブックマーク";
+        return UiMessage::palette_origin_bookmarked_tab;
     case PaletteOrigin::bookmark:
-        return "ブックマーク";
+        return UiMessage::label_bookmarks;
     case PaletteOrigin::history:
-        return "履歴";
+        return UiMessage::label_history;
     case PaletteOrigin::folder:
-        return "同じフォルダ";
+        return UiMessage::palette_origin_folder;
     case PaletteOrigin::document_format:
-        return "保存の形";
+        return UiMessage::palette_origin_document_format;
     }
     std::unreachable();
+}
+} // namespace
+
+std::string_view palette_origin_label(PaletteOrigin origin, DisplayLanguage language) noexcept
+{
+    return ui_text(palette_origin_message(origin), language);
 }
 
 std::vector<std::size_t> listed_positions(const std::vector<CommandChoice> &entries,

@@ -27,6 +27,7 @@
 #include "OpenedAs.hpp"
 #include "ResizeExplorer.hpp"
 #include "SaveState.hpp"
+#include "UiMessage.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -43,8 +44,6 @@ namespace nenenib::application
 {
 namespace
 {
-// 読めないフォルダの知らせ（ADR 0162 の決定 5）。名前の後ろに付ける。
-constexpr std::string_view unreadable_suffix = "（読めません）";
 constexpr std::string_view root_prefix = "root=";
 
 // 面の見えている行の先頭の上限（行の数 rows と面の行数 page から）。
@@ -722,7 +721,9 @@ void EditorController::adopt_explorer_batch(ExplorerFolder &pending, FolderBatch
         // 行は残し（子の無い読み終えたフォルダにして頼み直さない）、1 行だけ知らせる。
         place_explorer_entries(pending.folder, {});
         state_ = state_.with_command_message(
-            detail::named_line({}, shown_name(pending.folder), unreadable_suffix));
+            // 読めないフォルダの知らせ（ADR 0162 の決定 5）。名前は置き場 {0}。
+            detail::named_line(core::UiMessage::explorer_folder_unreadable,
+                               state_.display_language(), shown_name(pending.folder), {}));
         break;
     }
     explorer_folder_.reset();

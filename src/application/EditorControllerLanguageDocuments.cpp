@@ -376,7 +376,8 @@ void EditorController::add_diagnostics(EditorFrame &result) const
     result.diagnostic_message = shown_diagnostic_message();
     if (result.diagnostic_message.has_value())
     {
-        result.guide = core::operation_guide(core::GuideContext::hidden, result.mode);
+        result.guide =
+            core::operation_guide(core::GuideContext::hidden, result.mode, result.language);
     }
 }
 } // namespace nenenib::application

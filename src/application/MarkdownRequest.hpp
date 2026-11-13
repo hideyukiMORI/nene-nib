@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DisplayLanguage.hpp"
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -13,5 +14,7 @@ struct MarkdownRequest
 {
     std::uint64_t ticket;
     std::shared_ptr<const std::string> text;
+    // 画像の代わりの文字の言語（ADR 0123 の追補 2026-11-13）。controller が状態の表示言語を載せる。
+    core::DisplayLanguage language = core::DisplayLanguage::japanese;
 };
 } // namespace nenenib::application

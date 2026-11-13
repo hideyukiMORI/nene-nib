@@ -5,6 +5,7 @@
 
 #include "AsciiCase.hpp"
 #include "BuiltinThemes.hpp"
+#include "DisplayLanguageNames.hpp"
 #include "DocumentFormat.hpp"
 #include "DocumentFormatKind.hpp"
 #include "ExLineRequest.hpp"
@@ -573,6 +574,41 @@ explorer_option(std::string_view option, const EditorSettings &settings)
                     .lsp = request};
 }
 
+// `language=<名前>` `language?` `language`（ADR 0123 の追補 2026-11-13 の決定 8）。名前は
+// listed_display_language_choices の 4 つだけで、ほか（列の無い `ko` `es` `de` と表に無い名前）は
+// E474。保存と観測と解決は今の値を知る controller が行い、報せも controller が書くので、ここでは
+// 名前だけ。language の option でなければ空。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+display_language_option(std::string_view option)
+{
+    constexpr std::string_view name = "language";
+    if (!option.starts_with(name))
+    {
+        return std::nullopt;
+    }
+    const auto rest = option.substr(name.size());
+    std::optional<DisplayLanguageChoice> chosen;
+    if (rest.starts_with('='))
+    {
+        chosen = display_language_choice_named(rest.substr(1));
+        if (!chosen.has_value() ||
+            std::ranges::find(listed_display_language_choices, chosen.value()) ==
+                listed_display_language_choices.end())
+        {
+            return std::unexpected(ExFailure::invalid_argument);
+        }
+    }
+    else if (!rest.empty() && rest != "?")
+    {
+        return std::nullopt;
+    }
+    return ExResult{.settings = std::nullopt,
+                    .highlight = std::nullopt,
+                    .incsearch = std::nullopt,
+                    .message = DisplayText::parse(name).value(),
+                    .display_language = ExDisplayLanguageRequest{chosen}};
+}
+
 // 検索の大小の option の名前（#1041）。長い名前と Vim の短い名前（`ic` `scs`）。
 constexpr std::array<std::string_view, 2> ignorecase_names{"ignorecase", "ic"};
 constexpr std::array<std::string_view, 2> smartcase_names{"smartcase", "scs"};
@@ -922,6 +958,19 @@ constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
     return std::nullopt;
 }
 
+// 保存する設定のうち、置いて答えるのが controller の option（`lsp`・`language`）。どれにも当たら
+// なければ空。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+answered_option(std::string_view option)
+{
+    auto lsp = lsp_option(option);
+    if (lsp.has_value())
+    {
+        return std::move(lsp).value();
+    }
+    return display_language_option(option);
+}
+
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 read_set_option(std::string_view option, const EditorSettings &settings)
 {
@@ -964,10 +1013,10 @@ read_set_option(std::string_view option, const EditorSettings &settings)
     {
         return std::move(explorer).value();
     }
-    auto lsp = lsp_option(option);
-    if (lsp.has_value())
+    auto answered = answered_option(option);
+    if (answered.has_value())
     {
-        return std::move(lsp).value();
+        return std::move(answered).value();
     }
     return unsaved_option(option);
 }
@@ -1580,7 +1629,7 @@ ranged_command(std::string_view text, const EditorSettings &settings, const ExWi
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
 // 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
-constexpr std::array<std::string_view, 45> fixed_candidates{"colorscheme",
+constexpr std::array<std::string_view, 49> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -1621,6 +1670,10 @@ constexpr std::array<std::string_view, 45> fixed_candidates{"colorscheme",
                                                             "set scrolloff=",
                                                             "set minimap",
                                                             "set nominimap",
+                                                            "set language=ja",
+                                                            "set language=en",
+                                                            "set language=zh-hans",
+                                                            "set language=system",
                                                             "preview full",
                                                             "preview side",
                                                             "preview off",

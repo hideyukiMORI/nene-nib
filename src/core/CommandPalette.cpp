@@ -106,7 +106,7 @@ CommandPalette::Result CommandPalette::result_of(const CommandLine &input, EditM
         // で開いていた頃と同じ）。
         return Result{palette_choices(input)};
     case PaletteScope::operations:
-        return Result{operation_choices(query.query, mode)};
+        return Result{operation_choices(query.query, mode, input.language())};
     case PaletteScope::files:
     case PaletteScope::tabs:
     case PaletteScope::bookmarks:

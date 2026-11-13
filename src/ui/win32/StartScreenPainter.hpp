@@ -85,6 +85,8 @@ class StartScreenPainter final
     ID2D1RenderTarget &target_;
     ID2D1SolidColorBrush &brush_;
     StartScreenText text_;
+    // 今の paint の文の言語（view の language・#1019）。
+    core::DisplayLanguage language_ = core::DisplayLanguage::japanese;
     PaletteRowLayouts &layouts_;
 };
 } // namespace nenenib::ui::win32

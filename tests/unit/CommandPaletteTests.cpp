@@ -510,14 +510,17 @@ void verify_palette_marks()
                query_is("?", core::PaletteScope::operations, ""),
            "the question mark selects the operations");
     expect(query_is("a#", core::PaletteScope::files, "a#"), "only the first character is a mark");
-    expect(core::palette_mark_hint().text() ==
+    expect(core::palette_mark_hint(nenenib::core::DisplayLanguage::japanese).text() ==
                "# タブ\u3000* ブックマーク\u3000@ 履歴\u3000/ フォルダ\u3000: 設定　? 操作",
            "the hint is built from the table");
-    expect(core::palette_origin_label(core::PaletteOrigin::tab) == "開いているタブ",
+    expect(core::palette_origin_label(core::PaletteOrigin::tab,
+                                      nenenib::core::DisplayLanguage::japanese) == "開いているタブ",
            "the tab origin has its label");
-    expect(core::palette_origin_label(core::PaletteOrigin::history) == "履歴",
+    expect(core::palette_origin_label(core::PaletteOrigin::history,
+                                      nenenib::core::DisplayLanguage::japanese) == "履歴",
            "the history origin has its label");
-    expect(core::palette_origin_label(core::PaletteOrigin::folder) == "同じフォルダ",
+    expect(core::palette_origin_label(core::PaletteOrigin::folder,
+                                      nenenib::core::DisplayLanguage::japanese) == "同じフォルダ",
            "the folder origin has its label");
 }
 
@@ -1003,7 +1006,9 @@ void verify_palette_hint_view()
     { return frame.command_palette.value_or(app::CommandPaletteView{}).hint; };
     auto frame = controller.apply_frame(app::OpenCommandPalette{});
     const auto opened = hint_of(frame);
-    expect(opened.has_value() && opened.value().text() == core::palette_mark_hint().text(),
+    expect(opened.has_value() &&
+               opened.value().text() ==
+                   core::palette_mark_hint(nenenib::core::DisplayLanguage::japanese).text(),
            "Ctrl+P opens with the mark hint");
     frame = controller.apply_frame(app::CommandText{"a"});
     expect(frame.command_palette.has_value() && !hint_of(frame).has_value(),

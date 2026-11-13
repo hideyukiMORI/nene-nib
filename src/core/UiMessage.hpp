@@ -217,6 +217,12 @@ enum class UiMessage : std::uint16_t
     start_new_file,
     start_new_file_detail,
     start_open_folder,
+    // T1b
+    operation_choose_language_name,
+    operation_choose_language_description,
+    palette_mark_separator,
+    language_choice_system,
+    // T1b
     start_open_folder_detail,
 };
 

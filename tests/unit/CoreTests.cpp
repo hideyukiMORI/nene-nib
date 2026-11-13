@@ -1741,12 +1741,14 @@ void verify_milestone()
 void verify_status_position_boundary(const TextPosition &caret, std::string_view expected,
                                      std::size_t bytes, std::size_t code_points)
 {
-    const auto held = status_items_for(caret, TextEncoding::utf8, LineEnding::crlf,
-                                       nenenib::core::Language::plain);
+    const auto held = status_items_for(
+        nenenib::core::caret_status_item(caret, nenenib::core::DisplayLanguage::japanese),
+        TextEncoding::utf8, LineEnding::crlf, nenenib::core::Language::plain);
     const auto view = held.at(0).text();
-    static_cast<void>(status_items_for(TextPosition{LineNumber{123456}, Column{654321}},
-                                       TextEncoding::utf8_bom, LineEnding::lf,
-                                       nenenib::core::Language::plain));
+    static_cast<void>(status_items_for(
+        nenenib::core::caret_status_item(TextPosition{LineNumber{123456}, Column{654321}},
+                                         nenenib::core::DisplayLanguage::japanese),
+        TextEncoding::utf8_bom, LineEnding::lf, nenenib::core::Language::plain));
     expect(held.at(0).text() == expected, "a later call preserves the owned caret label");
     expect(view == expected, "a later call preserves the borrowed caret label view");
     expect(view.size() == bytes, "the caret label contains exactly the expected bytes");
@@ -1767,21 +1769,25 @@ void verify_status_position_boundaries()
 
 void verify_status_items()
 {
-    const auto items = status_items_for(TextPosition{LineNumber{1}, Column{1}}, TextEncoding::utf8,
-                                        LineEnding::crlf, nenenib::core::Language::plain);
+    const auto items =
+        status_items_for(nenenib::core::caret_status_item(TextPosition{LineNumber{1}, Column{1}},
+                                                          nenenib::core::DisplayLanguage::japanese),
+                         TextEncoding::utf8, LineEnding::crlf, nenenib::core::Language::plain);
     expect(items.at(0).text() == "行 1, 桁 1", "the caret position is the first item");
     expect(items.at(1).text() == "UTF-8", "the encoding follows the document");
     expect(items.at(2).text() == "CRLF", "the line ending follows the buffer");
     const auto moved =
-        status_items_for(TextPosition{LineNumber{9}, Column{24}}, TextEncoding::utf8_bom,
-                         LineEnding::lf, nenenib::core::Language::plain);
+        status_items_for(nenenib::core::caret_status_item(TextPosition{LineNumber{9}, Column{24}},
+                                                          nenenib::core::DisplayLanguage::japanese),
+                         TextEncoding::utf8_bom, LineEnding::lf, nenenib::core::Language::plain);
     expect(moved.at(0).text() == "行 9, 桁 24", "the caret position is formatted from the numbers");
     expect(moved.at(0).code_point_count() == 9, "the formatted position counts code points");
     expect(moved.at(1).text() == "UTF-8 BOM", "a file with a BOM says so");
     expect(moved.at(2).text() == "LF", "an LF buffer says LF");
     const auto japanese =
-        status_items_for(TextPosition{LineNumber{1}, Column{1}}, TextEncoding::shift_jis,
-                         LineEnding::crlf, nenenib::core::Language::plain);
+        status_items_for(nenenib::core::caret_status_item(TextPosition{LineNumber{1}, Column{1}},
+                                                          nenenib::core::DisplayLanguage::japanese),
+                         TextEncoding::shift_jis, LineEnding::crlf, nenenib::core::Language::plain);
     expect(japanese.at(1).text() == "Shift_JIS", "an old Japanese file says Shift_JIS");
 }
 
@@ -2326,8 +2332,8 @@ void verify_tab_title_boundaries()
     constexpr std::array<std::size_t, 6> code_points{254U, 252U, 254U, 251U, 251U, 252U};
     for (std::size_t index = 0; index < names.size(); ++index)
     {
-        const auto title =
-            tab_title_for(FilePath::parse(names.at(index)).value(), states.at(index));
+        const auto title = tab_title_for(FilePath::parse(names.at(index)).value(), states.at(index),
+                                         nenenib::core::DisplayLanguage::japanese);
         expect(title.text() == expected.at(index) &&
                    title.code_point_count() == code_points.at(index),
                "the exact title and code point count preserve the marked UTF-8 boundary");
@@ -2336,18 +2342,27 @@ void verify_tab_title_boundaries()
 
 void verify_tab_titles()
 {
-    expect(tab_title_for(std::nullopt, SaveState::saved).text() == "無題",
+    expect(tab_title_for(std::nullopt, SaveState::saved, nenenib::core::DisplayLanguage::japanese)
+                   .text() == "無題",
            "no path at all is 無題");
-    expect(tab_title_for(std::nullopt, SaveState::modified).text() == "● 無題",
-           "an unsaved buffer carries the mark");
+    expect(
+        tab_title_for(std::nullopt, SaveState::modified, nenenib::core::DisplayLanguage::japanese)
+                .text() == "● 無題",
+        "an unsaved buffer carries the mark");
     const auto path = FilePath::parse("C:\\work\\note.txt").value();
-    expect(tab_title_for(path, SaveState::saved).text() == "note.txt", "a saved file is its name");
-    expect(tab_title_for(path, SaveState::modified).text() == "● note.txt",
-           "an unsaved file carries the mark before the name");
-    expect(tab_title_for(FilePath::parse("C:\\").value(), SaveState::saved).text() == "C:\\",
+    expect(tab_title_for(path, SaveState::saved, nenenib::core::DisplayLanguage::japanese).text() ==
+               "note.txt",
+           "a saved file is its name");
+    expect(
+        tab_title_for(path, SaveState::modified, nenenib::core::DisplayLanguage::japanese).text() ==
+            "● note.txt",
+        "an unsaved file carries the mark before the name");
+    expect(tab_title_for(FilePath::parse("C:\\").value(), SaveState::saved,
+                         nenenib::core::DisplayLanguage::japanese)
+                   .text() == "C:\\",
            "a path without a name falls back to the path");
-    const auto clipped =
-        tab_title_for(FilePath::parse(std::string(300, 'a')).value(), SaveState::saved);
+    const auto clipped = tab_title_for(FilePath::parse(std::string(300, 'a')).value(),
+                                       SaveState::saved, nenenib::core::DisplayLanguage::japanese);
     expect(clipped.text().size() <= DisplayText::maximum_bytes, "a long name is clipped");
     expect(clipped.text().ends_with("…"), "the clipped name says it was clipped");
     std::string wide_name;
@@ -2355,8 +2370,8 @@ void verify_tab_titles()
     {
         wide_name += "あ";
     }
-    const auto wide_clipped =
-        tab_title_for(FilePath::parse(wide_name).value(), SaveState::modified);
+    const auto wide_clipped = tab_title_for(FilePath::parse(wide_name).value(), SaveState::modified,
+                                            nenenib::core::DisplayLanguage::japanese);
     expect(wide_clipped.text().size() <= DisplayText::maximum_bytes, "wide names are clipped too");
     expect(validate_utf8(wide_clipped.text()).has_value(),
            "the clip lands on a code point boundary");

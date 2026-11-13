@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CommandEdit.hpp"
+#include "DisplayLanguage.hpp"
 #include "ExFailure.hpp"
 #include "FontFamilies.hpp"
 #include "HistoryWalk.hpp"
@@ -27,6 +28,10 @@ class CommandLine final
     const FontFamilies &fonts() const && = delete;
     // 同じ入力・キャレット・補完の位置で、字体の一覧だけを入れた行（#597・D58）。
     [[nodiscard]] CommandLine with_fonts(FontFamilies fonts) const;
+    // 同じ入力で、候補の説明と操作の一覧の文の言語だけを替えた行（ADR 0123 の追補 2026-11-13）。
+    // 既定は日本語。
+    [[nodiscard]] CommandLine with_language(DisplayLanguage language) const;
+    [[nodiscard]] DisplayLanguage language() const noexcept;
     [[nodiscard]] std::string_view text() const noexcept;
     [[nodiscard]] Offset caret() const noexcept;
     [[nodiscard]] std::vector<std::string> completions() const;
@@ -49,7 +54,8 @@ class CommandLine final
     [[nodiscard]] bool recalls(const InputHistory &history, CommandEdit direction) const;
 
   private:
-    CommandLine(std::string text, Offset caret, ThemeCatalog themes, FontFamilies fonts);
+    CommandLine(std::string text, Offset caret, ThemeCatalog themes, FontFamilies fonts,
+                DisplayLanguage language);
     // Tab / Shift+Tab（ADR 0150 の決定 3）。巡回していなければ候補の共通の接頭辞まで埋め、
     // これ以上埋まらなければ巡回に入る。巡回の端の次は打った元の文字（completion_seed_）。
     [[nodiscard]] CommandLine completed(CommandEdit direction) const;
@@ -67,5 +73,6 @@ class CommandLine final
     std::optional<HistoryWalk> history_walk_;
     ThemeCatalog themes_;
     FontFamilies fonts_;
+    DisplayLanguage language_;
 };
 } // namespace nenenib::core

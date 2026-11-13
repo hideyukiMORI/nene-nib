@@ -517,7 +517,8 @@ void verify_marks_follow_documents()
         std::nullopt,
         std::nullopt,
         nenenib::application::DocumentView{
-            nenenib::core::tab_title_for(std::nullopt, nenenib::core::SaveState::saved),
+            nenenib::core::tab_title_for(std::nullopt, nenenib::core::SaveState::saved,
+                                         nenenib::core::DisplayLanguage::japanese),
             std::nullopt, document.encoding, nenenib::core::SaveState::saved, std::nullopt}};
     const auto appended = state.with_appended({bundle}).with_switched(1);
     expect(appended.vim_marks() == VimMarks{} && appended.with_switched(0).vim_marks() == set,

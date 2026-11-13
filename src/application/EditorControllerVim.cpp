@@ -17,6 +17,7 @@
 #include "LineNumber.hpp"
 #include "MapTimeout.hpp"
 #include "MapTimer.hpp"
+#include "QuantityText.hpp"
 #include "ReplayLevel.hpp"
 #include "ScopedValue.hpp"
 #include "ScrollFollow.hpp"
@@ -27,6 +28,7 @@
 #include "TextBuffer.hpp"
 #include "TextCaret.hpp"
 #include "TextPosition.hpp"
+#include "UiMessage.hpp"
 #include "Utf8.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimCaret.hpp"
@@ -222,14 +224,8 @@ void placed_after_effect(EditorState &state, const core::VimStep &step)
                       std::string(after.substr(head, after.size() - head - tail)), restore};
 }
 
-// Vim の問いの往復の契約の破れの知らせ（ADR 0133 の追補 2026-10-18・#665）。鍵は効かない。
-constexpr std::string_view inconsistent_layout_notice = "内部の不整合: 画面行の問い（鍵は無効）";
 // 回数で本文を増やす編集を文書の上限で断った鍵の知らせ（#1341・Vim 9.1 の同じ種類の文）。
 constexpr std::string_view too_long_notice = "E1240: Resulting text too long";
-// 再生を鍵の数の上限で止めた知らせ（#1351・施主決定 D75・値は core::vim_replay_key_limit）。
-constexpr std::string_view replay_limit_notice =
-    "再生を 100,000 鍵で止めました（残りは捨てました）";
-static_assert(core::vim_replay_key_limit == 100000, "replay_limit_notice の数を上限に合わせる");
 // engine を呼ぶ 1 か所の写し（Issue #1023）。鍵は vim_step・`:N` の行は vim_line_jumped・押しの
 // VISUAL は vim_pointer_selected（#1250）・オペレータ待ちの `:` の確定は
 // vim_command_operated（#1549）・`:s` の族は vim_substituted（ADR 0168）。
@@ -906,8 +902,8 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
         switch (measured.error())
         {
         case TextLayoutFailure::inconsistent:
-            state_ = state_.with_command_message(
-                core::DisplayText::parse(inconsistent_layout_notice).value());
+            state_ =
+                state_.with_command_message(ui_notice(core::UiMessage::notice_layout_inconsistent));
             break;
         case TextLayoutFailure::unavailable:
             break;
@@ -1274,7 +1270,9 @@ void EditorController::perform(const core::VimOpenCommandLine &effect)
     {
         move_caret_to(effect.caret.value(), core::SelectionAnchoring::collapse);
     }
-    const auto line = core::CommandLine::empty(state_.themes()).with_fonts(given_fonts());
+    const auto line = core::CommandLine::empty(state_.themes())
+                          .with_fonts(given_fonts())
+                          .with_language(state_.display_language());
     state_ = state_.with_command_input(
         effect.range.empty() ? line : line.inserted(effect.range).value_or(line));
     vim_line_open_ = true;
@@ -1890,7 +1888,11 @@ bool EditorController::replay_step_allowed()
         return true;
     }
     dropped_replay();
-    state_ = state_.with_command_message(core::DisplayText::parse(replay_limit_notice).value());
+    // 再生を鍵の数の上限で止めた知らせ（#1351・施主決定 D75）。数は core::vim_replay_key_limit
+    // から桁区切りつきで差し込む（今の日本語の文の `100,000`）。
+    state_ = state_.with_command_message(
+        ui_notice(core::UiMessage::notice_replay_limit,
+                  {core::grouped_decimal_text(core::vim_replay_key_limit)}));
     return false;
 }
 

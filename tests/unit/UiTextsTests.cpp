@@ -7,6 +7,7 @@
 #include "DisplayLanguageChoice.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
+#include "EditorOperation.hpp"
 #include "EditorState.hpp"
 #include "Language.hpp"
 #include "LineEnding.hpp"
@@ -184,7 +185,8 @@ void verify_japanese_save_and_palette()
     }};
     for (const auto &[origin, message] : origins)
     {
-        expect(core::palette_origin_label(origin) == japanese(message),
+        expect(core::palette_origin_label(origin, nenenib::core::DisplayLanguage::japanese) ==
+                   japanese(message),
                "the Japanese palette origin is the product text");
     }
     constexpr std::array<Message, 6> marks{
@@ -193,38 +195,49 @@ void verify_japanese_save_and_palette()
         Message::palette_mark_settings, Message::palette_mark_operations};
     for (std::size_t index = 0; index < marks.size(); ++index)
     {
-        expect(core::palette_marks.at(index).name == japanese(marks.at(index)),
-               "the Japanese palette mark name is the product text");
+        expect(core::palette_marks.at(index).name == marks.at(index),
+               "the palette mark names its text in the table");
     }
 }
 
 void verify_japanese_status_and_operations()
 {
-    expect(core::mode_label(core::EditMode::ordinary, core::VimMode::normal, false) ==
+    expect(core::mode_label(core::EditMode::ordinary, core::VimMode::normal, false,
+                            nenenib::core::DisplayLanguage::japanese) ==
                japanese(core::UiMessage::status_mode_basic),
            "the Japanese basic mode label is the product text");
-    expect(core::tab_title_for(std::nullopt, core::SaveState::saved).text() ==
-               japanese(core::UiMessage::tab_untitled),
+    expect(core::tab_title_for(std::nullopt, core::SaveState::saved,
+                               nenenib::core::DisplayLanguage::japanese)
+                   .text() == japanese(core::UiMessage::tab_untitled),
            "the Japanese untitled tab is the product text");
     const auto items = core::status_items_for(
-        core::TextPosition{core::LineNumber{12}, core::Column{34}}, core::TextEncoding::utf8,
-        core::LineEnding::lf, core::Language::plain);
+        nenenib::core::caret_status_item(core::TextPosition{core::LineNumber{12}, core::Column{34}},
+                                         nenenib::core::DisplayLanguage::japanese),
+        core::TextEncoding::utf8, core::LineEnding::lf, core::Language::plain);
     expect(items.at(0).text() == core::ui_text_filled(core::UiMessage::status_line_column,
                                                       core::DisplayLanguage::japanese,
                                                       {"12", "34"}),
            "the filled Japanese caret position is the product text");
+    // 操作の表は文の名前を持つ（T1b・決定 6）。T1a の 37 操作は名前・説明・短い名前の順に enum の
+    // 頭に並び、T1b で足した表示言語の操作だけは T1b の群の値を持つ。
     std::size_t index = 0;
     for (const core::OperationText &row : core::operation_texts)
     {
-        const auto name = static_cast<core::UiMessage>(index);
-        const auto description = static_cast<core::UiMessage>(index + 1);
-        expect(row.name == japanese(name) && row.description == japanese(description),
-               "the Japanese operation name and description are the product text");
-        index += 2;
-        if (!row.short_name.empty())
+        if (row.operation == core::EditorOperation::choose_language)
         {
-            expect(row.short_name == japanese(static_cast<core::UiMessage>(index)),
-                   "the Japanese operation short name is the product text");
+            expect(row.name == core::UiMessage::operation_choose_language_name &&
+                       row.description == core::UiMessage::operation_choose_language_description,
+                   "the display language operation names its T1b texts");
+            continue;
+        }
+        expect(row.name == static_cast<core::UiMessage>(index) &&
+                   row.description == static_cast<core::UiMessage>(index + 1),
+               "the operation rows name their texts in the order of the table");
+        index += 2;
+        if (row.short_name.has_value())
+        {
+            expect(row.short_name.value() == static_cast<core::UiMessage>(index),
+                   "the operation short name follows its description");
             ++index;
         }
     }
