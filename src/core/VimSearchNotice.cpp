@@ -19,12 +19,17 @@ constexpr std::string_view not_found_alone = "E486: Pattern not found";
 {
     switch (failure)
     {
+    // 群の失敗は Vim 9.1 の文言（ADR 0184 の決定 3）。
     case VimPatternFailure::group:
-        return "Unsupported pattern item: \\( \\)";
-    case VimPatternFailure::branch:
-        return "Unsupported pattern item: \\|";
+        return "E54: Unmatched \\(";
+    case VimPatternFailure::unclosed_plain_group:
+        return "E53: Unmatched \\%(";
+    case VimPatternFailure::unmatched_close:
+        return "E55: Unmatched \\)";
+    case VimPatternFailure::too_many_groups:
+        return "E872: (NFA regexp) Too many '('";
     case VimPatternFailure::quantifier:
-        return "Unsupported pattern item: a multi on \\( \\), or \\}";
+        return "Unsupported pattern item: \\}, or a multi on a group edge inside a character";
     // 量の失敗は Vim 9.1 の NFA の文言（ADR 0184 の決定 2）。E866 の文字は値に持たないので
     // 「multi」と書く（Vim は打った文字 `+` `{` を書く）。
     case VimPatternFailure::brace:

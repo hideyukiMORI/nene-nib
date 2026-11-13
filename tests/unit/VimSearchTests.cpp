@@ -13,6 +13,7 @@
 #include "InputLinePrompt.hpp"
 #include "InputLineView.hpp"
 #include "LineNumber.hpp"
+#include "LiteralPattern.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "Scopes.hpp"
@@ -321,7 +322,7 @@ void verify_vim_pattern_quantifier_failures()
     const auto parsed = [](std::string_view text, std::size_t limit)
     {
         return VimPattern::parse(text, VimSearchDirection::forward, VimPatternCase::sensitive,
-                                 limit);
+                                 nenenib::core::VimPatternLimits{.atoms = limit});
     };
     expect(parsed("a\\{4}", 4).has_value() &&
                parsed("a\\{5}", 4) == std::unexpected(VimPatternFailure::too_complex) &&
@@ -381,6 +382,200 @@ void verify_vim_pattern_routes()
                    parsed.value().atom_count() == atoms,
                "a pattern takes the route and atom count the table decides");
     }
+}
+
+// 選択と群の量の道（ADR 0184 の決定 1・3）。選択か群の量を含むパターンだけが命令の列の道を通り、
+// `\%(` だけのパターンと段 1 までの構文は今の道のまま（verify_vim_pattern_routes の 20
+// 行は変えない）。
+void verify_vim_pattern_program_routes()
+{
+    using core::VimPatternRoute;
+    constexpr std::array<std::pair<std::string_view, VimPatternRoute>, 10> table{{
+        {"a\\|b", VimPatternRoute::program},
+        {"\\(ab\\)\\+", VimPatternRoute::program},
+        {"\\(a\\)*", VimPatternRoute::program},
+        {"\\%(a\\|b\\)c", VimPatternRoute::program},
+        {"\\(a\\)\\{0}b", VimPatternRoute::program},
+        {"\\(a\\)\\{-}", VimPatternRoute::program},
+        {"\\%(ab\\)", VimPatternRoute::sequence},
+        {"\\%(a*\\)b", VimPatternRoute::states},
+        {"\\(a\\)\\(b\\)", VimPatternRoute::sequence},
+        {"a\\{-1,}", VimPatternRoute::lazy_states},
+    }};
+    for (const auto &[text, route] : table)
+    {
+        const auto parsed =
+            VimPattern::parse(text, VimSearchDirection::forward, VimPatternCase::sensitive);
+        const bool program = parsed.has_value() && parsed.value().instruction_count() > 0;
+        expect(parsed.has_value() && parsed.value().route() == route &&
+                   program == (route == VimPatternRoute::program),
+               "a branch or a multi on a group takes the program route, nothing else does");
+    }
+    // 通常モードの Ctrl+F / Ctrl+H は `\` を逃がすので、選択も群の量も届かない（決定 10）。
+    const auto typed = VimPattern::parse(
+        nenenib::core::literal_pattern("a\\|b\\(c\\)*", VimSearchDirection::forward),
+        VimSearchDirection::forward, VimPatternCase::sensitive);
+    expect(typed.has_value() && typed.value().route() == VimPatternRoute::sequence &&
+               typed.value().matched("xa\\|b\\(c\\)*", 0).has_value(),
+           "the find box escapes a backslash so the program route is never reached");
+}
+
+// 選択の優先（最も左 → 最初に当たる枝・Vim 9.1 の実測・`out/1603-impl/measured.md`）。
+void verify_vim_pattern_alternation_priority()
+{
+    expect(match_range_is("a\\|ab", "abc", 0, {0, 1}) &&
+               match_range_is("ab\\|a", "abc", 0, {0, 2}) &&
+               match_range_is("a\\|b", "ba", 0, {0, 1}),
+           "the leftmost start wins, then the first branch that matches");
+    expect(match_range_is("\\(ab\\|abc\\)d", "abcd", 0, {0, 4}),
+           "a failed tail goes back into the next branch");
+    expect(match_range_is("\\|a", "ba", 0, {0, 0}) && match_range_is("a\\|", "ba", 0, {0, 0}) &&
+               match_range_is("a\\|", "ba", 1, {1, 2}),
+           "an empty branch matches the empty text where nothing earlier wins");
+    expect(
+        match_range_is("^a\\|b$", "cab", 0, {2, 3}) && match_range_is("x\\|^b", "ba", 0, {0, 1}) &&
+            match_range_is("a$\\|b", "ba", 0, {0, 1}) && match_range_is("a$\\|b", "ba", 1, {1, 2}),
+        "^ after \\| and $ before \\| are anchors");
+    expect(match_range_is("a\\|*b", "x*b", 0, {1, 3}) && match_range_is("x\\|^*a", "*a", 0, {0, 2}),
+           "a star right after \\| or after its ^ is a character");
+    expect(match_range_is("\\(\\|a\\)\\+", "aa", 0, {0, 0}) &&
+               match_range_is("\\(a\\|\\)*", "aab", 0, {0, 2}) &&
+               match_range_is("\\(a*\\)*", "aaa", 0, {0, 3}),
+           "an empty iteration runs once and does not loop forever");
+    expect(match_range_is("\\(a\\|b\\)\\{-1,}", "abab", 0, {0, 1}) &&
+               match_range_is("\\(ab\\)\\{-}", "abab", 0, {0, 0}) &&
+               match_range_is("\\(a\\|b\\)\\{-}c", "abc", 0, {0, 3}),
+           "a lazy multi on a group takes the fewest iterations");
+    expect(match_range_is("\\(a\\)\\{2,3}", "aaaa", 0, {0, 3}) &&
+               match_range_is("\\(a\\)\\{0}b", "ab", 0, {1, 2}) &&
+               match_range_is("\\(ab\\|a\\)\\{,50}c", "ababac", 0, {0, 6}),
+           "a counted multi on a group copies the group like Vim");
+}
+
+[[nodiscard]] std::optional<std::string> captured_text(std::string_view pattern,
+                                                       std::string_view line, std::size_t group)
+{
+    const auto parsed =
+        VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
+    const auto match = parsed.has_value() ? parsed.value().matched(line, 0)
+                                          : std::optional<core::VimPatternMatch>{};
+    if (!match.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto captures = parsed.value().captured(line, match.value());
+    const auto range =
+        captures.has_value() ? captures.value().at(group) : std::optional<core::VimPatternMatch>{};
+    if (!range.has_value())
+    {
+        return std::nullopt;
+    }
+    return std::string{line.substr(range.value().begin, range.value().end - range.value().begin)};
+}
+
+// 群の値は最後の周（ADR 0184 の決定 4・Vim 9.1 の実測）。
+void verify_vim_pattern_group_iterations()
+{
+    expect(captured_text("\\(a\\|b\\)*", "abba", 1) == std::optional<std::string>{"a"},
+           "a starred group keeps its last iteration");
+    expect(captured_text("\\(a*\\)\\+", "aaa", 1) == std::optional<std::string>{""} &&
+               captured_text("\\(a*\\)*", "aaa", 1) == std::optional<std::string>{""},
+           "the empty iteration at the end is the last one (Vim's NFA)");
+    expect(captured_text("\\(ab\\(c\\)\\=\\)\\+", "abcab", 1) == std::optional<std::string>{"ab"} &&
+               captured_text("\\(ab\\(c\\)\\=\\)\\+", "abcab", 2) ==
+                   std::optional<std::string>{"c"},
+           "an inner group skipped in the last iteration keeps the earlier value");
+    expect(captured_text("\\(\\(a\\)*\\)*", "aab", 1) == std::optional<std::string>{""} &&
+               captured_text("\\(\\(a\\)*\\)*", "aab", 2) == std::optional<std::string>{"a"},
+           "nested stars keep Vim's values");
+    expect(!captured_text("\\(a\\)\\|b", "b", 1).has_value() &&
+               captured_text("\\%(a\\|b\\)\\(c\\)", "bc", 1) == std::optional<std::string>{"c"},
+           "a group not passed is empty and \\%( is not numbered");
+    expect(captured_text("\\(a\\|ab\\)\\(c\\|bcd\\)\\(d*\\)", "abcd", 2) ==
+                   std::optional<std::string>{"bcd"} &&
+               captured_text("\\(a\\)\\{2,3}", "aaaa", 1) == std::optional<std::string>{"a"},
+           "groups follow the leftmost-first path");
+    const auto parsed =
+        VimPattern::parse("\\(a\\|b\\)\\+", VimSearchDirection::forward, VimPatternCase::sensitive);
+    const std::string line(64, 'a');
+    expect(parsed.has_value() &&
+               !parsed.value().captured(line, {0, line.size()}, 4 * line.size()).has_value() &&
+               parsed.value().captured(line, {0, line.size()}).has_value(),
+           "the cell limit refuses a long match instead of an empty group");
+}
+
+// 選択と群の失敗（Vim 9.1 の番号）と上限（ADR 0184 の決定 3）。
+void verify_vim_pattern_program_failures()
+{
+    expect(rejects("\\%(a", VimPatternFailure::unclosed_plain_group) &&
+               rejects("\\(a\\|b", VimPatternFailure::group) &&
+               rejects("\\(\\%(a\\)", VimPatternFailure::group) &&
+               rejects("\\(\\%(a", VimPatternFailure::unclosed_plain_group) &&
+               rejects("a\\|b\\)", VimPatternFailure::unmatched_close) &&
+               rejects("\\%(a\\)\\)", VimPatternFailure::unmatched_close) &&
+               rejects("\\(\\)\\(\\)\\(\\)\\(\\)\\(\\)\\(\\)\\(\\)\\(\\)\\(\\)\\(\\)",
+                       VimPatternFailure::too_many_groups),
+           "unclosed and stray groups and a tenth group use Vim's numbers");
+    expect(rejects("a\\|\\+", VimPatternFailure::misplaced) &&
+               rejects("a\\|\\{2}", VimPatternFailure::misplaced) &&
+               rejects("\\%(*a\\)", VimPatternFailure::misplaced) &&
+               rejects("\\%(\\+a\\)", VimPatternFailure::misplaced) &&
+               rejects("\\(a\\)\\{0}\\+", VimPatternFailure::misplaced) &&
+               rejects("\\(a\\)\\c\\+", VimPatternFailure::misplaced),
+           "a multi with nothing before it is E866");
+    expect(rejects("\\(a\\)**", VimPatternFailure::multi_after_multi) &&
+               rejects("\\(a\\)*\\+", VimPatternFailure::multi_after_multi) &&
+               rejects("\\(a\\)\\{", VimPatternFailure::brace),
+           "a multi after a group multi is E871 and a broken brace E554");
+    const auto limited = [](std::string_view text, std::size_t instructions)
+    {
+        return VimPattern::parse(text, VimSearchDirection::forward, VimPatternCase::sensitive,
+                                 nenenib::core::VimPatternLimits{.instructions = instructions});
+    };
+    expect(limited("a\\|b", 5).has_value() &&
+               limited("a\\|bc", 5) == std::unexpected(VimPatternFailure::too_complex) &&
+               limited("abcdefgh", 2).has_value(),
+           "the instructions are counted against the limit, a pattern without a branch is not");
+    expect(
+        VimPattern::parse("\\(a\\)\\{1365}", VimSearchDirection::forward, VimPatternCase::sensitive)
+                .has_value() &&
+            rejects("\\(a\\)\\{1366}", VimPatternFailure::too_complex) &&
+            rejects("\\(\\(\\(a\\)\\{20}\\)\\{20}\\)\\{20}", VimPatternFailure::too_complex),
+        "the product limit is vim_pattern_instruction_limit instructions");
+    std::string nested;
+    for (std::size_t depth = 0; depth < 65; ++depth)
+    {
+        nested += "\\%(";
+    }
+    nested += "a\\|b";
+    for (std::size_t depth = 0; depth < 65; ++depth)
+    {
+        nested += "\\)";
+    }
+    expect(rejects(nested, VimPatternFailure::too_complex) &&
+               VimPattern::parse(nested.substr(3, nested.size() - 5), VimSearchDirection::forward,
+                                 VimPatternCase::sensitive)
+                   .has_value(),
+           "groups nest 64 deep at most");
+}
+
+// 命令の列の道の longest_bytes と literal_bytes（ADR 0184 の決定 3）。
+void verify_vim_pattern_program_bounds()
+{
+    const auto parsed = [](std::string_view text)
+    {
+        return VimPattern::parse(text, VimSearchDirection::forward, VimPatternCase::sensitive)
+            .value();
+    };
+    expect(parsed("a\\|bc").longest_bytes() == std::optional<std::size_t>{8} &&
+               parsed("\\(ab\\)\\{2}").longest_bytes() == std::optional<std::size_t>{16} &&
+               parsed("\\(a\\)\\=b").longest_bytes() == std::optional<std::size_t>{8} &&
+               !parsed("\\(ab\\)\\+").longest_bytes().has_value() &&
+               !parsed("a*\\|b").longest_bytes().has_value(),
+           "the longest match follows the longest branch and is unknown with a loop");
+    expect(!parsed("foo\\|bar").literal_bytes().has_value() &&
+               parsed("\\%(foo\\)").literal_bytes() == std::optional<std::string>{"foo"},
+           "a branch has no literal bytes, a plain group alone keeps them");
 }
 
 void verify_vim_pattern_evaluation_bounds()
@@ -443,16 +638,12 @@ void verify_vim_pattern_word_boundaries()
 void verify_vim_pattern_rejections()
 {
     expect(rejects("\\(foo", VimPatternFailure::group) &&
-               rejects("\\(foo\\)*", VimPatternFailure::quantifier),
-           "an open group and a starred group are refused (groups are ADR 0168)");
-    expect(rejects("foo\\|bar", VimPatternFailure::branch), "a branch is refused");
-    expect(rejects("\\(fo\\)\\+", VimPatternFailure::quantifier) &&
-               rejects("\\(fo\\)\\{2}", VimPatternFailure::quantifier) &&
-               rejects("\\(fo\\)\\=", VimPatternFailure::quantifier),
-           "a multi on a group is stage 2 and refused (ADR 0184 decision 3)");
+               rejects("foo\\)", VimPatternFailure::unmatched_close) &&
+               rejects("\\%(foo", VimPatternFailure::unclosed_plain_group),
+           "an open group and a stray close are refused with Vim's numbers");
     expect(rejects("\\v(foo)", VimPatternFailure::magic), "very magic is refused");
     expect(rejects("\\Mfoo", VimPatternFailure::magic), "nomagic is refused");
-    expect(rejects("\\%(foo", VimPatternFailure::escape), "a percent escape is refused");
+    expect(rejects("\\%d1", VimPatternFailure::escape), "a percent escape is refused");
     expect(rejects("\\_foo", VimPatternFailure::escape), "a multiline escape is refused");
     expect(rejects("alpha\\r$", VimPatternFailure::escape), "a carriage return escape is refused");
     expect(rejects("foo\\", VimPatternFailure::escape), "a trailing backslash is refused");
@@ -893,8 +1084,7 @@ void verify_vim_search_messages()
     open_vim_document(refused, "foo foobar");
     EditorController &sixth = refused.controller();
     vim_replay(sixth, "/\\(foo<CR>");
-    expect(message_is(sixth.frame(), "Unsupported pattern item: \\( \\)") &&
-               caret_at(sixth.frame(), 1, 1),
+    expect(message_is(sixth.frame(), "E54: Unmatched \\(") && caret_at(sixth.frame(), 1, 1),
            "an unsupported item is refused instead of meaning something else");
     vim_replay(sixth, "/foo/e<CR>");
     expect(message_is(sixth.frame(), "Search offset is not supported"),
@@ -922,6 +1112,15 @@ void verify_vim_search_quantifier_messages()
            "too many opened atoms is E363");
     vim_replay(controller, "/o\\+b<CR>");
     expect(caret_at(controller.frame(), 1, 6), "a quantified search lands on its match");
+    vim_replay(controller, "/\\%(o<CR>");
+    expect(message_is(controller.frame(), "E53: Unmatched \\%("), "an open \\%( is E53");
+    vim_replay(controller, "/o\\)<CR>");
+    expect(message_is(controller.frame(), "E55: Unmatched \\)"), "a stray \\) is E55");
+    vim_replay(controller, "/\\(\\)\\(\\)\\(\\)\\(\\)\\(\\)\\(\\)\\(\\)\\(\\)\\(\\)\\(\\)<CR>");
+    expect(message_is(controller.frame(), "E872: (NFA regexp) Too many '('"),
+           "a tenth group is E872");
+    vim_replay(controller, "/bar\\|foo<CR>");
+    expect(caret_at(controller.frame(), 1, 8), "a search with a branch lands on its match");
 }
 
 // 決定 1 の入力行と取消。入力中に本文は変わらず、Esc と空の Backspace で取消になる。
@@ -1454,6 +1653,11 @@ void verify_vim_search_contracts()
     verify_vim_pattern_quantifier_failures();
     verify_vim_pattern_quantifier_bounds();
     verify_vim_pattern_routes();
+    verify_vim_pattern_program_routes();
+    verify_vim_pattern_alternation_priority();
+    verify_vim_pattern_group_iterations();
+    verify_vim_pattern_program_failures();
+    verify_vim_pattern_program_bounds();
     verify_vim_pattern_composing();
     verify_vim_pattern_leading_composing();
     verify_vim_search_scan();
