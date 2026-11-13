@@ -47,4 +47,23 @@ DisplayText palette_mark_hint(DisplayLanguage language)
     }
     return DisplayText::parse(hint).value();
 }
+
+std::array<std::size_t, palette_marks.size()> palette_mark_hint_starts(DisplayLanguage language)
+{
+    // palette_mark_hint と同じ並べ方の長さを足していく（組 = 記号 1 バイト ＋ 空白 1 バイト ＋
+    // 名前）。
+    const auto separator = ui_text(UiMessage::palette_mark_separator, language).size();
+    std::array<std::size_t, palette_marks.size()> starts{};
+    std::size_t at = 0;
+    for (std::size_t index = 0; index < palette_marks.size(); ++index)
+    {
+        if (index > 0)
+        {
+            at += separator;
+        }
+        starts.at(index) = at;
+        at += 2 + ui_text(palette_marks.at(index).name, language).size();
+    }
+    return starts;
+}
 } // namespace nenenib::core

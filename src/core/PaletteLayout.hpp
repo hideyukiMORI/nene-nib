@@ -1,16 +1,20 @@
 #pragma once
 
 #include "LayoutRect.hpp"
+#include "PaletteHintPlace.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
 
 namespace nenenib::core
 {
 // 面に並ぶ行の数の上限（ADR 0062 の決定 2）。配置の見えている行数と面の窓の行数（ADR 0150 の
 // 決定 1）が読む。
 inline constexpr std::size_t palette_row_limit = 8;
+// 検索欄の左端（キャレットの棒）と記号の案内の左端の間に空ける最小の幅（#1640）。
+inline constexpr std::int32_t palette_hint_gap_dips = 24;
 
 struct PaletteLayout
 {
@@ -39,6 +43,9 @@ struct PaletteLayout
 // 名前と場所の欄。`noted` で補足の欄が幅を持てばその左 12 DIP まで、そうでなければ行の内側の全部。
 [[nodiscard]] LayoutRect palette_row_label(const LayoutRect &row, std::uint32_t dpi,
                                            bool noted) noexcept;
-// 検索欄の右半分（記号の案内の欄）。160 DIP 相当より狭ければ幅 0。
-[[nodiscard]] LayoutRect palette_input_hint(const PaletteLayout &layout) noexcept;
+// 記号の案内の置き場（#1640）。widths の k 番目は組 k から最後の組までの文の幅（物理画素・描画と
+// 同じ書式で ui が測る）。検索欄の左端から palette_hint_gap_dips を空けた残りに入る最も前の組から
+// 出し、欄の幅は出す文の幅（右端は検索欄の右端）。組の途中では切らない（文の左が欄の外へ出ない）。
+[[nodiscard]] PaletteHintPlace palette_input_hint(const PaletteLayout &layout, std::uint32_t dpi,
+                                                  std::span<const std::int32_t> widths) noexcept;
 } // namespace nenenib::core

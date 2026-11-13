@@ -29,6 +29,7 @@
 #include "MinimapLayout.hpp"
 #include "OperationGuide.hpp"
 #include "PaletteLayout.hpp"
+#include "PaletteMarks.hpp"
 #include "PaletteOrigin.hpp"
 #include "PaneLayouts.hpp"
 #include "PaneRole.hpp"
@@ -2434,6 +2435,55 @@ void Direct2DRenderer::draw_palette_footer(const application::EditorFrame &frame
     context_->PopAxisAlignedClip();
 }
 
+void Direct2DRenderer::draw_palette_hint(const application::EditorFrame &frame,
+                                         const core::PaletteLayout &layout)
+{
+    if (!frame.command_palette.has_value() || !frame.command_palette.value().hint.has_value())
+    {
+        return;
+    }
+    // 文は検索欄の幅の右寄せの layout 1 つ（右端は今までと同じ検索欄の右端）。組の境目の位置から
+    // 右端までの幅を測って core の配置に渡し、出す最初の組の左端で切る（#1640）。
+    const auto text = frame.command_palette.value().hint.value().text();
+    const auto shown =
+        palette_text(text, status_format_.Get(), PaletteTextRole::trailing, layout.input);
+    DWRITE_TEXT_METRICS metrics{};
+    if (!shown || FAILED(shown->GetMetrics(&metrics)))
+    {
+        return;
+    }
+    const auto starts = core::palette_mark_hint_starts(frame.language);
+    if (starts.back() >= text.size())
+    {
+        return;
+    }
+    const float right = metrics.left + metrics.width;
+    std::array<std::int32_t, core::palette_marks.size()> widths{};
+    for (std::size_t index = 0; index < starts.size(); ++index)
+    {
+        float x = 0.0F;
+        float y = 0.0F;
+        DWRITE_HIT_TEST_METRICS hit{};
+        if (FAILED(
+                shown->HitTestTextPosition(utf16_at(text, starts.at(index)), FALSE, &x, &y, &hit)))
+        {
+            return;
+        }
+        widths.at(index) = static_cast<std::int32_t>(std::ceil(right - x));
+    }
+    const auto place = core::palette_input_hint(layout, dpi_, widths);
+    if (core::width_of(place.area) <= 0)
+    {
+        return;
+    }
+    brush_->SetColor(to_color(frame.palette.muted));
+    context_->PushAxisAlignedClip(to_rect(place.area), D2D1_ANTIALIAS_MODE_ALIASED);
+    context_->DrawTextLayout(
+        D2D1::Point2F(static_cast<float>(layout.input.left), static_cast<float>(layout.input.top)),
+        shown.Get(), brush_.Get());
+    context_->PopAxisAlignedClip();
+}
+
 void Direct2DRenderer::draw_palette(const application::EditorFrame &frame,
                                     const core::PaletteLayout &layout)
 {
@@ -2452,11 +2502,7 @@ void Direct2DRenderer::draw_palette(const application::EditorFrame &frame,
                                      static_cast<float>(layout.input.bottom)),
                        brush_.Get(), scaled(1.0F));
     // 記号の案内は入力より先に描く。出すかどうかは application が決め、ui は値があれば描く。
-    if (frame.command_palette.has_value() && frame.command_palette.value().hint.has_value())
-    {
-        write_right(frame.command_palette.value().hint.value().text(), status_format_.Get(),
-                    core::palette_input_hint(layout), frame.palette.muted);
-    }
+    draw_palette_hint(frame, layout);
     draw_command(frame, layout.input);
     context_->PushAxisAlignedClip(to_rect(layout.rows), D2D1_ANTIALIAS_MODE_ALIASED);
     draw_palette_choices(frame, layout);
