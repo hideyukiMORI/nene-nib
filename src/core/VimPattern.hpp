@@ -5,6 +5,8 @@
 #include "VimPatternCase.hpp"
 #include "VimPatternFailure.hpp"
 #include "VimPatternGroup.hpp"
+#include "VimPatternInstruction.hpp"
+#include "VimPatternLimits.hpp"
 #include "VimPatternMatch.hpp"
 #include "VimPatternRange.hpp"
 #include "VimPatternRoute.hpp"
@@ -19,11 +21,7 @@
 
 namespace nenenib::core
 {
-// 量（`\+` `\=` `\?` `\{n,m}` `\{-n,m}`）を原子の写しに開いた後の原子の数の上限（ADR 0184 の
-// 決定 2）。照合の仕事は 1 文字ごとに原子の数に比例するので、写しで膨らむ数を parse で止める
-// （時計を使わない守り）。超える量は too_complex で断る（Vim の E363 と同じ知らせ）。量の無い
-// パターンには掛けない（決定 1・今のパターンの受け方を変えない）。
-inline constexpr std::size_t vim_pattern_atom_limit = 1024;
+struct VimPatternParse;
 
 // Vim の `magic` の部分集合の照合器（ADR 0032 の決定 4）。`std::regex` と `<locale>` は
 // 使わない（ロケール依存のシンボルが core の外へ出る）。一致は 1 行の中だけで、行をまたがない。
@@ -43,12 +41,18 @@ class VimPattern final
     // 原子 1 つに付く量 `\+` `\=` `\?` `\{n}` `\{n,}` `\{,m}` `\{n,m}` と最短の `\{-...}` は
     // 原子の写しに開く（ADR 0184 の決定 2）。`\{` の中の不正は brace（E554）、付く原子の無い量は
     // misplaced（E866・`\c` `\C` の直後も）、量の後ろの量（`a**` も）は multi_after_multi
-    // （E871）、開いた後の原子の数が atom_limit（製品は vim_pattern_atom_limit・試験だけが小さな
-    // 値を渡す）を超えれば too_complex。群に付く量は段 2 なので quantifier で断る。幅の無い原子に
-    // 付く量は、最小が 1 以上なら原子 1 つ、0 なら原子を消す（`^\+a` は `^a`・Vim 9.1 の実測）。
+    // （E871）、開いた後の原子の数が limits.atoms（製品は vim_pattern_atom_limit・
+    // 試験だけが小さな値を渡す）を超えれば too_complex。幅の無い原子に付く量は、
+    // 最小が 1 以上なら原子 1 つ、0 なら原子を消す（`^\+a` は `^a`・Vim 9.1 の実測）。
+    // 選択 `\|`・番号の無い群 `\%(` `\)`・群に付く量（ADR 0184 の決定 3）を受け、
+    // 選択か群の量を含むパターンだけを命令の列に組む（決定 1）。
+    // 命令の数が limits.instructions（製品は vim_pattern_instruction_limit）を
+    // 超えれば too_complex。閉じない `\(` は group（E54）、
+    // 閉じない `\%(` は unclosed_plain_group（E53）、
+    // 対の無い `\)` は unmatched_close（E55）、10 個目の `\(` は too_many_groups（E872）。
     [[nodiscard]] static std::expected<VimPattern, VimPatternFailure>
     parse(std::string_view pattern, VimSearchDirection separator, VimPatternCase letter_case,
-          std::size_t atom_limit = vim_pattern_atom_limit);
+          VimPatternLimits limits = {});
 
     // line の from バイト以降で最も左の一致（ADR 0032 の決定 4 の追記）。長さ 0 の一致も返す。
     // line（matched_sequence も）は検証済みの UTF-8 が前提で、行ごとには確かめない（#906）。
@@ -71,6 +75,9 @@ class VimPattern final
     [[nodiscard]] VimPatternRoute route() const noexcept;
     // 量を開いた後の原子の数（ADR 0184 の決定 1・2・試験が parse の結果を見る口）。
     [[nodiscard]] std::size_t atom_count() const noexcept;
+    // 命令の列の命令の数（命令の列の道でなければ 0・ADR 0184 の決定 3・試験が parse
+    // の結果を見る口）。
+    [[nodiscard]] std::size_t instruction_count() const noexcept;
     // 群 `\(` `\)` の数（ADR 0168 の決定 4・0〜9）。
     [[nodiscard]] std::size_t group_count() const noexcept;
 
@@ -87,9 +94,17 @@ class VimPattern final
   private:
     friend class VimPatternEvaluation;
     friend class VimPatternCapture;
+    friend class VimPatternMachine;
+    friend class VimPatternTrace;
 
-    VimPattern(std::vector<VimPatternAtom> atoms, std::vector<VimPatternRange> ranges,
-               std::vector<VimPatternGroup> groups, bool ignore_case);
+    VimPattern(VimPatternParse &&parse, std::vector<VimPatternInstruction> program,
+               bool ignore_case);
+    // 命令の列の道の群の範囲（VimPatternTrace・ADR 0184 の決定 4）。
+    [[nodiscard]] std::optional<VimPatternCaptures>
+    traced(std::string_view line, VimPatternMatch match, std::size_t cell_limit) const;
+    // 量の無い列の道（最も左の一致・ADR 0184 の決定 1）。
+    [[nodiscard]] std::optional<VimPatternMatch> sequenced(std::string_view line,
+                                                           std::size_t from) const;
     // 反復のない原子列を順に評価する。選択肢がないので状態列の確保も再帰も不要。
     [[nodiscard]] std::optional<std::size_t> matched_sequence(std::string_view line,
                                                               std::size_t at) const;
@@ -127,11 +142,18 @@ class VimPattern final
 
     std::vector<VimPatternAtom> atoms_;
     std::vector<VimPatternRange> ranges_;
-    // 群（`\(` の順）。照合は読まず、captured だけが読む。
+    // 番号のある群（`\(` の順）。照合は読まず、captured
+    // だけが読む（命令の列の道では数だけを読む）。
     std::vector<VimPatternGroup> groups_;
     // 大小を畳んで比べるか（parse が旗と `\c` `\C` から 1 回だけ決める）。
     bool ignore_case_;
     // 最短の量（`\{-...}`）の写しを含むか（ADR 0184 の決定 2・照合器が展開の道を選ぶ）。
     bool lazy_;
+    // 命令の列（選択か群の量を含むパターンだけ・ほかは空・ADR 0184 の決定 3）。
+    std::vector<VimPatternInstruction> program_;
+    // 通る道（構築で 1 回だけ決める・ADR 0184 の決定 1）。
+    VimPatternRoute route_;
+    // 命令の列の一致の長さの上限（longest_bytes の答え・命令の列の道だけが読む）。
+    std::optional<std::size_t> program_longest_;
 };
 } // namespace nenenib::core
