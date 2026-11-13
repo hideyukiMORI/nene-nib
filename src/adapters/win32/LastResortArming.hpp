@@ -1,28 +1,25 @@
 #pragma once
 
-#include "LastResortHooks.hpp"
+#include <functional>
 
 namespace nenenib::adapters::win32
 {
-// 最後の砦で終えるときの終了コード（ADR 0137 の追補 #1625・1 か所）。run の 0 / 1、abort の 3、
-// __fastfail の 0xC0000409 と重ならない値（Issue の番号）。
-inline constexpr unsigned int last_resort_exit_code = 0x1625U;
-
 // 最後の砦（ADR 0137 の追補 #1625）。捕まえていない C++ の例外と、noexcept を抜けた例外で呼ばれる
 // std::terminate の手続きを 1 つ置く。std::set_terminate は呼んだスレッドだけに効く（UCRT は
 // スレッドごとの欄に持つ）ので、UI スレッドはこの型を作ったときに、ワーカーは
 // arm_last_resort_thread を最初の仕事の頭で呼んで、同じ手続きを置く。
-// 手続きは、作ったスレッド（UI）で呼ばれたときだけ hooks.backup を 1 回呼び、そのスレッドの窓の
-// 手続きを止めてから（窓の手続きを DefWindowProcW に替えて入力を止める・壊れた状態で回さない）
-// hooks.notice で知らせ、last_resort_exit_code で process を終える（TerminateProcess・
-// DestroyWindow も後始末も通らない）。ほかのスレッドで呼ばれたら何もせずに終える。2 度目に
-// 入ったら（退避の中でまた例外・別のスレッドが同時に）すぐ終える。SEH（アクセス違反・stack の
-// 溢れ）は受けない。壊すと手続きを外す（hooks は持ち主の controller より先に消える）。合成ルートが
-// 起動のときに 1 つだけ作る。
+// 手続きは、作ったスレッド（UI）で呼ばれたときだけ backup を 1 回呼び（未保存の退避・投げても
+// 受ける）、どのスレッドでも、置いたときに set_terminate が返した前の手続き（UCRT の既定は
+// abort）へ渡して終える。箱は出さず、窓にも触れない。使う人への知らせは次の起動の「前回の未保存を戻しますか」が
+// 担い、終わり方は既定のまま（製品の Release は __fastfail で WER の記録が残る）。2 度目に入ったら
+// （退避の中でまた例外・別のスレッドが同時に）退避せずに前の手続きへ渡す。SEH（アクセス違反・
+// stack の溢れ）は受けない。壊すと UI スレッドの印と backup を外し、UI スレッドの手続きを前のものへ
+// 戻す（backup は持ち主の controller より先に消える）。合成ルートが起動のときに 1 つだけ作る。
 class LastResortArming final
 {
   public:
-    explicit LastResortArming(LastResortHooks hooks);
+    // backup は全部書けたら真を返すが、手続きは値を使わない（試験と controller の契約のため）。
+    explicit LastResortArming(std::function<bool()> backup);
     ~LastResortArming();
     LastResortArming(const LastResortArming &) = delete;
     LastResortArming(LastResortArming &&) = delete;
@@ -30,6 +27,7 @@ class LastResortArming final
     LastResortArming &operator=(LastResortArming &&) = delete;
 };
 
-// 呼んだスレッド（ワーカー）に同じ手続きを置く。このスレッドで呼ばれた手続きは退避せずに終える。
+// 呼んだスレッド（ワーカー）に同じ手続きを置く。このスレッドで呼ばれた手続きは退避せずに前の手続きへ
+// 渡す。
 void arm_last_resort_thread() noexcept;
 } // namespace nenenib::adapters::win32

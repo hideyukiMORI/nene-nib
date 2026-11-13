@@ -6,7 +6,6 @@
 #include "EditorController.hpp"
 #include "EditorWindow.hpp"
 #include "LastResortArming.hpp"
-#include "LastResortHooks.hpp"
 #include "LocalSettingsPath.hpp"
 #include "Milestone.hpp"
 #include "OpenDocument.hpp"
@@ -48,7 +47,6 @@
 #include <objbase.h>
 #include <shellapi.h>
 
-#include <array>
 #include <cstddef>
 #include <optional>
 #include <span>
@@ -265,18 +263,6 @@ void bind_work_signal(const nenenib::ui::win32::EditorWindow &window, Adapters &
     (adapters.bind(window.work_signal()), ...);
 }
 
-// 裏の仕事のワーカー 1 本と、それを借りて同じフォルダを読む adapter（ADR 0062 の決定 5・10）。
-// スレッドはここでは起きず、最初の仕事で起きる。controller より先に宣言して後に壊す
-// （壊れる順は 窓 → controller → adapter → ワーカー → device の箱）。
-// device の箱は仕事に借りられるので worker より先に宣言して後に壊す。最初の仕事として
-// device を作り始め、窓を作って見せる間に重ねる（ADR 0131 の決定 2）。
-// Markdown プレビューの画像の口（ADR 0155 の追補 53・54）も同じ worker を
-// 借りてファイルを読み WIC で復号し（壊れる順は folders と同じ）、
-// 窓ができてから合図を結ぶ（bind_work_signal）。
-// 起動画面の履歴とブックマークの 1 回の読み（ADR 0172 の決定 3）も同じワーカーを借り、
-// 頼むのは最初の frame の合図のときだけ。履歴と明示登録（ADR 0063）の adapter はその仕事が
-// 借りるので、ワーカーより先に作って後に壊す。表示言語の観測（ADR 0123 の追補 2026-11-13 の決定
-// 2）は controller が起動の 1 回だけ呼ぶ。
 // ワーカーの最初の仕事（device の生成・ADR 0131）。同じ仕事の頭で、最後の砦の手続きをワーカーの
 // スレッドにも置く（std::set_terminate はスレッドごと・ADR 0137 の追補 #1625）。post の順と回数は
 // 変えない。
@@ -291,36 +277,28 @@ void make_device_first(nenenib::adapters::win32::Win32Worker &worker,
         });
 }
 
-// 最後の砦の 2 つの口（ADR 0137 の追補 #1625）。退避は controller の 1 本、知らせは OS の箱。
-// 3 言語 × 2 つの文は起動のときに UTF-16 にしておき、手続きの中では変換しない。言語は落ちたときの
-// 解決済みの値で選ぶ。
-[[nodiscard]] nib_adapters::LastResortHooks
-last_resort_hooks(nenenib::application::EditorController &controller)
+// 最後の砦（ADR 0137 の追補 #1625）。UI スレッドで捕まえていない例外が上ったら、決定 9 と同じ退避を
+// 1 回だけ回してから既定の終わり方へ渡す（箱は出さない・使う人への知らせは次の起動の復元の問い）。
+// controller の直後に作り、先に壊す。
+[[nodiscard]] nib_adapters::LastResortArming
+last_resort_for(nenenib::application::EditorController &controller)
 {
-    using nenenib::core::UiMessage;
-    const auto utf16 = [](UiMessage message, nenenib::core::DisplayLanguage language)
-    {
-        return nenenib::core::to_utf16(nenenib::core::ui_text(message, language))
-            .value_or(std::wstring{});
-    };
-    std::array<std::array<std::wstring, 2>, nenenib::core::display_language_count> texts;
-    for (std::size_t index = 0; index < texts.size(); ++index)
-    {
-        const auto language = static_cast<nenenib::core::DisplayLanguage>(index);
-        texts.at(index) = {utf16(UiMessage::app_error_defect_not_backed_up, language),
-                           utf16(UiMessage::app_error_defect_backed_up, language)};
-    }
-    return {
-        [&controller] { return controller.back_up_before_defect(); },
-        [&controller, texts = std::move(texts)](bool backed_up)
-        {
-            const auto &text =
-                texts.at(std::to_underlying(controller.display_language())).at(backed_up ? 1U : 0U);
-            MessageBoxW(nullptr, text.c_str(), product_name,
-                        MB_OK | MB_ICONERROR | MB_TASKMODAL | MB_SETFOREGROUND);
-        }};
+    return nib_adapters::LastResortArming([&controller]
+                                          { return controller.back_up_before_defect(); });
 }
 
+// 裏の仕事のワーカー 1 本と、それを借りて同じフォルダを読む adapter（ADR 0062 の決定 5・10）。
+// スレッドはここでは起きず、最初の仕事で起きる。controller より先に宣言して後に壊す
+// （壊れる順は 窓 → controller → adapter → ワーカー → device の箱）。
+// device の箱は仕事に借りられるので worker より先に宣言して後に壊す。最初の仕事として
+// device を作り始め、窓を作って見せる間に重ねる（ADR 0131 の決定 2）。
+// Markdown プレビューの画像の口（ADR 0155 の追補 53・54）も同じ worker を
+// 借りてファイルを読み WIC で復号し（壊れる順は folders と同じ）、
+// 窓ができてから合図を結ぶ（bind_work_signal）。
+// 起動画面の履歴とブックマークの 1 回の読み（ADR 0172 の決定 3）も同じワーカーを借り、
+// 頼むのは最初の frame の合図のときだけ。履歴と明示登録（ADR 0063）の adapter はその仕事が
+// 借りるので、ワーカーより先に作って後に壊す。表示言語の観測（ADR 0123 の追補 2026-11-13 の決定
+// 2）は controller が起動の 1 回だけ呼ぶ。
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
@@ -368,7 +346,7 @@ int run(HINSTANCE instance)
             reads,        language_server, wall_clock, printer,    shell_registration,
             images,       start_lists,     ui_language},
         initial_documents(given));
-    const nib_adapters::LastResortArming last_resort(last_resort_hooks(controller));
+    const auto last_resort = last_resort_for(controller);
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);

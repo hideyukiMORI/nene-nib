@@ -1,23 +1,35 @@
 // Issue #1625: 最後の砦の試験が起こす子（ADR 0137 の追補）。CTest には登録せず、親の試験
 // nib_last_resort_tests が第 1 引数の経路から起こす。製品の合成ルートと同じ LastResortArming と
 // arm_last_resort_thread を置き、本当に std::terminate を起こして手続きを通す。退避の口は替え玉で、
-// 呼ばれたら置き場に backup.txt を書く。知らせの口も替え玉で、箱を出さずに notice.txt へ
-// 「0」（退避できなかった）か「1」（退避した）を書く。時計を読まない。
-// 引数: <mode> <置き場>。mode は
-//   ui      UI スレッドで noexcept の関数を例外が抜ける（退避して知らせる）
+// 呼ばれたら置き場に backup.txt を書く（real だけは本物の自動退避の adapter で書く）。手続きは
+// 退避の後に既定の終わり方（abort）へ渡すので、abort の箱と WER は wmain の頭で止める（製品は
+// 止めない）。時計を読まない。
+// 引数: <mode> <置き場>。置き場は親の cwd と同じ（子は cwd を受け継ぐ）。mode は
+//   ui      UI スレッドで noexcept の関数を例外が抜ける（退避する）
 //   worker  ワーカーのスレッドの仕事が投げる（Win32Worker::run は noexcept・退避しない）
-//   again   退避の口が投げる（手続きが受けて「退避できなかった」と知らせる）
-//   nested  退避の口の中で noexcept を例外が抜ける（手続きに 2 度目に入る・すぐ終える）
+//   again   退避の口が投げる（手続きが受けて既定へ渡す）
+//   nested  退避の口の中で noexcept を例外が抜ける（手続きに 2 度目に入る・既定へ渡す）
 //   lock    UI スレッドが mutex を握ったまま落ち、退避の口が同じ mutex を取りに行く
+//   real    本物の Win32AutosaveAdapter（置き場の下の work/autosave）で 1 本を退避して落ちる
+#include "AutosaveId.hpp"
+#include "AutosaveOutcome.hpp"
+#include "AutosaveSnapshot.hpp"
+#include "DisplayText.hpp"
+#include "FilePath.hpp"
 #include "LastResortArming.hpp"
-#include "LastResortHooks.hpp"
+#include "TextPosition.hpp"
+#include "Win32AutosaveAdapter.hpp"
+#include "Win32FileAdapter.hpp"
 #include "Win32Worker.hpp"
 
 #include <windows.h>
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -26,14 +38,20 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace
 {
 namespace adapters = nenenib::adapters::win32;
+namespace application = nenenib::application;
+namespace core = nenenib::core;
 
 constexpr int usage_exit_code = 2;
 // 手続きを通らずに戻ったとき（試験が落ちる値）。
 constexpr int returned_exit_code = 4;
+// real の退避の番号と本文（親が次の起動の残骸として読む）。
+constexpr std::uint64_t real_id = 5;
+constexpr std::string_view real_text = "kept by the last resort";
 
 [[nodiscard]] std::wstring &place() noexcept
 {
@@ -81,15 +99,17 @@ enum class Mode : std::uint8_t
     worker,
     again,
     nested,
-    lock
+    lock,
+    real
 };
 
-constexpr std::array<std::pair<const wchar_t *, Mode>, 5> modes{{
+constexpr std::array<std::pair<const wchar_t *, Mode>, 6> modes{{
     {L"ui", Mode::ui},
     {L"worker", Mode::worker},
     {L"again", Mode::again},
     {L"nested", Mode::nested},
     {L"lock", Mode::lock},
+    {L"real", Mode::real},
 }};
 
 // 名前の照合は OS の順序なしの比較で行う（wstring_view の比較は UCRT の wmemcmp が argv の 2 バイト
@@ -123,16 +143,11 @@ constexpr std::array<std::pair<const wchar_t *, Mode>, 5> modes{{
     }
     case Mode::ui:
     case Mode::worker:
+    case Mode::real:
         break;
     }
     write_file(L"backup.txt", "backup");
     return true;
-}
-
-[[nodiscard]] adapters::LastResortHooks hooks_for(Mode mode)
-{
-    return {[mode] { return backed_up(mode); },
-            [](bool backed_up) { write_file(L"notice.txt", backed_up ? "1" : "0"); }};
 }
 
 // 終わらない待ち（ワーカーの手続きが process を終えるまで）。止まれば親が上限で殺す。
@@ -142,9 +157,44 @@ void wait_forever()
     static_cast<void>(WaitForSingleObject(never, INFINITE));
 }
 
+[[nodiscard]] std::vector<std::byte> bytes_of(std::string_view text)
+{
+    const auto view = std::as_bytes(std::span{text});
+    return {view.begin(), view.end()};
+}
+
+// 本物の自動退避の adapter（製品と同じ worker・ファイルの port）で 1 本を退避して落ちる。退避は
+// controller の back_up_before_defect と同じ store → flush → collect の順。
+int run_real()
+{
+    adapters::Win32Worker worker;
+    adapters::Win32FileAdapter files;
+    adapters::Win32AutosaveAdapter autosave(worker, files,
+                                            core::FilePath::parse("work/autosave").value());
+    const auto backup = [&autosave]
+    {
+        autosave.store(application::AutosaveSnapshot{
+            application::AutosaveId{real_id}, std::nullopt,
+            core::DisplayText::parse("無題").value(), bytes_of(real_text),
+            core::TextPosition{core::LineNumber{1}, core::Column{2}}});
+        const bool flushed = autosave.flush();
+        const auto outcomes = autosave.collect();
+        return flushed &&
+               std::ranges::none_of(outcomes, [](const application::AutosaveOutcome &done)
+                                    { return done.failure.has_value(); });
+    };
+    const adapters::LastResortArming arming(backup);
+    escape_noexcept(&raise, "ui throws after real edits");
+    return returned_exit_code;
+}
+
 int run(Mode mode)
 {
-    const adapters::LastResortArming arming(hooks_for(mode));
+    if (mode == Mode::real)
+    {
+        return run_real();
+    }
+    const adapters::LastResortArming arming([mode] { return backed_up(mode); });
     if (mode == Mode::worker)
     {
         adapters::Win32Worker worker;
@@ -168,7 +218,8 @@ int run(Mode mode)
 
 int wmain(int argc, wchar_t **argv)
 {
-    // 手続きを通らなかったときに abort の箱と WER の箱で止まらない（親が上限で落とす）。
+    // 手続きは既定の終わり方（abort）へ渡す。Debug の CRT の「abort() has been called」の箱と WER
+    // の記録で止まらない（親が上限で落とす）。製品には入れない（製品は WER を残す）。
     static_cast<void>(_set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT));
     static_cast<void>(SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX));
     const std::span<wchar_t *const> arguments(argv, static_cast<std::size_t>(argc));

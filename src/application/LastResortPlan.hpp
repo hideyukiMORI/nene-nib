@@ -19,10 +19,12 @@ namespace nenenib::application
 // 退避を 1 回だけ回すときの仕事。depth は写している途中の意図の深さ（落ちたときは apply の出口を
 // 通らないので 0 より大きいまま）。
 // - depth が 0（意図の外で落ちた）: autosave_plan そのまま。
-// - 意図の中で、アクティブのタブとタブの数が入口と同じ: アクティブのタブの改訂番号が入口と同じなら
-//   autosave_plan そのまま。進んでいれば、そのタブだけ keep にする（途中の本文で前の退避を
-//   上書きしない）。ほかのタブは autosave_plan のまま。
-// - 意図の中で、アクティブのタブかタブの数が入口と違う: 何もしない（空の計画・前の退避を残す）。
+// - 意図の中で、アクティブのタブ・タブの数・切り替えの回数が入口と同じ（アクティブ以外のタブには
+//   触れていない）: アクティブのタブの改訂番号が入口と同じなら autosave_plan
+//   そのまま。進んでいれば、 そのタブだけ keep
+//   にする（途中の本文で前の退避を上書きしない）。ほかのタブは autosave_plan のまま。
+// - 意図の中で、どれかが入口と違う（行って戻った切り替えを含む）: 何もしない（空の計画・前の退避を
+//   残す）。
 [[nodiscard]] std::vector<std::pair<AutosaveId, AutosaveStep>>
 last_resort_plan(const EditorState &state, const AutosaveLedger &ledger, const IntentMark &entered,
                  std::size_t depth);

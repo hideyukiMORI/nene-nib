@@ -119,6 +119,10 @@ void verify_plan_branches()
            "outside an intent even a moved active tab is stored");
     expect(app::last_resort_plan(moved.with_switched(0), {}, entered, 1).empty(),
            "inside an intent a switched active tab writes nothing");
+    const EditorState returned = typed(two.with_switched(0)).with_switched(1);
+    expect(returned.tab_switches() == two.tab_switches() + 2 &&
+               app::last_resort_plan(returned, {}, entered, 1).empty(),
+           "inside an intent a switch there and back counts and writes nothing");
     expect(
         app::last_resort_plan(typed(two.with_new_tab()).with_switched(1), {}, entered, 1).empty(),
         "inside an intent a changed tab count writes nothing");
@@ -215,6 +219,29 @@ void verify_backup_midway_switched()
     expect(calls == std::vector<std::string>{"flush"},
            "a switched active tab inside the intent writes nothing");
 }
+
+// 意図の途中でタブを行って戻った（マクロの gt … gT・レビュー V-1628 の M1）: アクティブの番号・
+// 改訂番号・タブの数は入口と同じでも、途中で触ったほかのタブ（行が消えたまま）を書かない。
+// 切り替えの回数が入口と違うので何も書かず、flush だけ。
+void verify_backup_midway_returned()
+{
+    Editing editing;
+    open_vim_document(editing, "abcd\n");
+    auto &controller = editing.controller();
+    applied(controller, app::NewTab{});
+    vim_replay(controller, "i1<CR>2<Esc>");
+    applied(controller, app::SwitchTab{0});
+    vim_replay(controller, "qagtddgT:w<CR>gtPgTq");
+    applied(controller, app::AutosaveTick{});
+    const std::size_t before = editing.autosave().calls().size();
+    expect(thrown_midway(editing), "the scripted write throws after gt dd gT in @a");
+    expect(controller.back_up_before_defect(), "flushing nothing is backed up");
+    const std::vector<std::string> calls(editing.autosave().calls().begin() +
+                                             static_cast<std::ptrdiff_t>(before),
+                                         editing.autosave().calls().end());
+    expect(calls == std::vector<std::string>{"flush"},
+           "a tab visited and left inside the intent keeps its previous backup");
+}
 } // namespace
 
 void verify_last_resort_contracts()
@@ -223,5 +250,6 @@ void verify_last_resort_contracts()
     verify_backup_outside_intent();
     verify_backup_midway_keeps_active();
     verify_backup_midway_switched();
+    verify_backup_midway_returned();
 }
 } // namespace nenenib::tests

@@ -7,7 +7,7 @@ namespace nenenib::application
 IntentMark intent_mark_of(const EditorState &state)
 {
     return IntentMark{state.autosave_ids().at(state.active_tab()), state.history().revision(),
-                      state.tab_count()};
+                      state.tab_count(), state.tab_switches()};
 }
 
 std::vector<std::pair<AutosaveId, AutosaveStep>> last_resort_plan(const EditorState &state,
@@ -21,7 +21,8 @@ std::vector<std::pair<AutosaveId, AutosaveStep>> last_resort_plan(const EditorSt
         return plan;
     }
     const IntentMark now = intent_mark_of(state);
-    if (!(now.active == entered.active) || now.tabs != entered.tabs)
+    if (!(now.active == entered.active) || now.tabs != entered.tabs ||
+        now.switches != entered.switches)
     {
         return {};
     }

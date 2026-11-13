@@ -2,8 +2,13 @@
 // nib_last_resort_child（第 1 引数の経路）で、製品の合成ルートと同じ LastResortArming と
 // arm_last_resort_thread を置く。置き場は temporary_test_directory（#1103）の中。子の終わりは
 // 上限つきで待ち、止まったら子を殺して落とす（固まらないことを見る）。CTest の制限時間も付ける。
-#include "LastResortArming.hpp"
+#include "AutosaveId.hpp"
+#include "AutosaveRemnant.hpp"
+#include "FilePath.hpp"
 #include "TemporaryTestDirectory.hpp"
+#include "Win32AutosaveAdapter.hpp"
+#include "Win32FileAdapter.hpp"
+#include "Win32Worker.hpp"
 
 #include <windows.h>
 
@@ -13,10 +18,13 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace
 {
 namespace adapters = nenenib::adapters::win32;
+namespace application = nenenib::application;
+namespace core = nenenib::core;
 
 // 子が終わるまでの上限（固まった子を落とすため・時計は読まない）。
 constexpr DWORD child_wait_milliseconds = 30'000;
@@ -103,74 +111,100 @@ std::optional<DWORD> run_child(std::wstring_view mode, const std::wstring &folde
     return code;
 }
 
+// 子の終わり方が「手続きを通って既定の終わり方で終わった」形か。終了コードの値は CRT の版で
+// 変わる（abort の 3・__fastfail の 0xC0000409）ので書かず、0 と、子が手続きを通らずに戻ったときの
+// 値（2 は使い方の誤り・4 は escape_noexcept から戻った）でないことだけを見る。
+[[nodiscard]] bool ended_abnormally(const std::optional<DWORD> &code)
+{
+    return code.has_value() && code.value() != 0 && code.value() != 2 && code.value() != 4 &&
+           code.value() != STILL_ACTIVE;
+}
+
 // 1 つの mode の走り。前の走りのファイルを消してから起こす。
 struct Ran
 {
     std::optional<DWORD> code;
     std::optional<std::string> backup;
-    std::optional<std::string> notice;
 };
 
 Ran ran(std::wstring_view mode, const std::wstring &folder)
 {
     const std::wstring backup = folder + L"\\backup.txt";
-    const std::wstring notice = folder + L"\\notice.txt";
     static_cast<void>(DeleteFileW(backup.c_str()));
-    static_cast<void>(DeleteFileW(notice.c_str()));
     const auto code = run_child(mode, folder);
-    return Ran{code, read_file(backup), read_file(notice)};
+    return Ran{code, read_file(backup)};
 }
 
-[[nodiscard]] bool ended_by_last_resort(const Ran &result)
-{
-    return result.code.has_value() && result.code.value() == adapters::last_resort_exit_code;
-}
-
-// (a) UI スレッドで noexcept を例外が抜ける: 退避の口を 1 回呼び、箱の替え玉に「退避した」を渡し、
-// 決めた終了コードで終わる。
+// (a) UI スレッドで noexcept を例外が抜ける: 退避の口を 1 回呼び、箱を出さずに既定の終わり方で
+// 終わる（固まらない）。
 void verify_ui_thread(const std::wstring &folder)
 {
     const Ran result = ran(L"ui", folder);
-    expect(ended_by_last_resort(result), "ui: the process ends with last_resort_exit_code");
+    expect(ended_abnormally(result.code), "ui: the process ends abnormally without hanging");
     expect(result.backup == std::optional<std::string>{"backup"},
            "ui: the backup hook ran on the UI thread");
-    expect(result.notice == std::optional<std::string>{"1"},
-           "ui: the notice hook was told the backup succeeded (no box in the test)");
 }
 
-// (b) ワーカーのスレッドで投げる: 状態は UI スレッドの持ち物なので退避せず、知らせず、決めた終了
-// コードで終わる（arm_last_resort_thread が無ければ abort で終わる）。
+// (b) ワーカーのスレッドで投げる: 状態は UI
+// スレッドの持ち物なので退避せず、既定の終わり方で終わる。
 void verify_worker_thread(const std::wstring &folder)
 {
     const Ran result = ran(L"worker", folder);
-    expect(ended_by_last_resort(result), "worker: the process ends with last_resort_exit_code");
+    expect(ended_abnormally(result.code), "worker: the process ends abnormally without hanging");
     expect(!result.backup.has_value(), "worker: no backup is written from the worker thread");
-    expect(!result.notice.has_value(), "worker: no notice from the worker thread");
 }
 
-// (c) 退避の中でもう一度例外: 退避の口が投げれば手続きが受けて「退避できなかった」と知らせる。
-// noexcept を抜ければ手続きに 2 度目に入り、何もせずにすぐ終える。どちらも固まらない。
+// (c) 退避の中でもう一度例外: 退避の口が投げれば手続きが受け、noexcept を抜ければ手続きに 2 度目に
+// 入って退避せずに既定へ渡す。どちらも固まらない。
 void verify_again(const std::wstring &folder)
 {
     const Ran thrown = ran(L"again", folder);
-    expect(ended_by_last_resort(thrown), "again: the process ends with last_resort_exit_code");
-    expect(!thrown.backup.has_value() && thrown.notice == std::optional<std::string>{"0"},
-           "again: a throwing backup is reported as not backed up");
+    expect(ended_abnormally(thrown.code), "again: the process ends abnormally without hanging");
+    expect(!thrown.backup.has_value(), "again: a throwing backup writes nothing");
     const Ran nested = ran(L"nested", folder);
-    expect(ended_by_last_resort(nested), "nested: re-entering the procedure ends at once");
-    expect(!nested.backup.has_value() && !nested.notice.has_value(),
-           "nested: the second entry neither backs up nor notifies");
+    expect(ended_abnormally(nested.code), "nested: re-entering the procedure ends at once");
+    expect(!nested.backup.has_value(), "nested: the second entry does not back up");
 }
 
 // (c) UI スレッドが mutex を握ったまま落ち、退避が同じ mutex を取りに行く（adapter のロックの
-// 再入の形）。固まらずに決めた終了コードで終わる。MSVC STL の std::mutex は同じスレッドの 2 度目の
-// lock で投げるので、手続きが受けて「退避できなかった」になる（2026-11-13 の Debug で確かめた）。
+// 再入の形）。固まらずに終わる。MSVC STL の std::mutex は同じスレッドの 2 度目の lock
+// で投げるので、 手続きが受けて退避は書かれない（2026-11-13 の Debug と Release で確かめた）。
 void verify_lock(const std::wstring &folder)
 {
     const Ran result = ran(L"lock", folder);
-    expect(ended_by_last_resort(result), "lock: the process ends with last_resort_exit_code");
-    expect(!result.backup.has_value() && result.notice == std::optional<std::string>{"0"},
-           "lock: a relocked mutex is reported as not backed up, without hanging");
+    expect(ended_abnormally(result.code), "lock: the process ends abnormally without hanging");
+    expect(!result.backup.has_value(), "lock: a relocked mutex writes no backup");
+}
+
+// 本物の自動退避の adapter（子と同じ置き場の
+// work/autosave）で、子が落ちる前に書いた退避を、次の起動と 同じ remnants → read で拾う。子の
+// process は終わっているので残骸になる（ADR 0137 の決定 6）。
+void verify_real_remnant()
+{
+    const Ran result = ran(L"real", L".");
+    expect(ended_abnormally(result.code), "real: the process ends abnormally without hanging");
+    adapters::Win32Worker worker;
+    adapters::Win32FileAdapter files;
+    adapters::Win32AutosaveAdapter autosave(worker, files,
+                                            core::FilePath::parse("work/autosave").value());
+    const auto listed = autosave.remnants().value_or(std::vector<application::AutosaveRemnant>{});
+    expect(listed.size() == 1 && listed.front().id == application::AutosaveId{5} &&
+               !listed.front().path.has_value() && listed.front().title.text() == "無題",
+           "real: the next start lists the backup of the ended process as a remnant");
+    if (listed.size() != 1)
+    {
+        return;
+    }
+    const auto read = autosave.read(listed.front());
+    const auto bytes = read.value_or(std::vector<std::byte>{});
+    std::string text;
+    for (const std::byte value : bytes)
+    {
+        text.push_back(static_cast<char>(value));
+    }
+    expect(read.has_value() && text == "kept by the last resort",
+           "real: the remnant reads back the bytes backed up before the end");
+    autosave.forget(listed.front());
 }
 } // namespace
 
@@ -203,6 +237,7 @@ int wmain(int argc, wchar_t **argv)
     verify_worker_thread(folder.value());
     verify_again(folder.value());
     verify_lock(folder.value());
+    verify_real_remnant();
     nenenib::tests::remove_temporary_test_directory(folder.value());
     std::printf("Last resort: %zu checks, %zu failures\n", checks(), failures());
     return failures() == 0 ? 0 : 1;

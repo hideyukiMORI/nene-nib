@@ -146,8 +146,8 @@ records in `docs/quality/`.
   `:set fenc=` / `:set ff=`, or from F1. Unsaved mark and "save?" prompt; the prompt has its own
   button labels. Unsaved edits are autosaved every 30 seconds and offered back once on the next start after the
   process ends abnormally ([ADR 0137](docs/adr/0137-autosave-every-30-seconds.md)). If an uncaught C++ exception
-  is about to end the process on the window thread, Nib backs up the unsaved edits once more, says so in one line
-  and closes (the last resort, #1625). Done.
+  is about to end the process on the window thread, Nib backs up the unsaved edits once more and then ends the
+  default way, so the next start offers them back (the last resort, #1625). Done.
 - **FR-009 tab restore** — starting without a file argument brings back the previous tabs (saved files only): their
   order, the tab in view, caret and scroll position. Only the tab in view is read at startup; the others are read
   when first viewed, and a missing file is dropped with a one-line notice. Done; window position and size are planned.
