@@ -7,6 +7,7 @@
 #include "AutosaveCodec.hpp"
 #include "AutosaveEntry.hpp"
 #include "AutosaveFailure.hpp"
+#include "AutosaveFolder.hpp"
 #include "AutosaveId.hpp"
 #include "AutosaveOutcome.hpp"
 #include "AutosaveRemnant.hpp"
@@ -18,6 +19,9 @@
 #include "FilePort.hpp"
 #include "FileWriteMode.hpp"
 #include "FindHandle.hpp"
+#include "ProcessInstance.hpp"
+#include "ProcessInstances.hpp"
+#include "ProcessQueryFailure.hpp"
 #include "SealedBytes.hpp"
 #include "TemporaryTestDirectory.hpp"
 #include "TextEncoding.hpp"
@@ -29,7 +33,9 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <expected>
 #include <format>
@@ -38,6 +44,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -122,9 +129,17 @@ bool exists(const std::wstring &path)
     return GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
 }
 
+// この起動のフォルダの名前（`<pid>-<作成時刻>`・#1634）。
 std::wstring own_hex()
 {
-    return std::format(L"{:x}", GetCurrentProcessId());
+    const adapters::ProcessInstance self = adapters::current_process_instance();
+    return std::format(L"{:x}-{:x}", self.pid, self.created);
+}
+
+std::string own_name()
+{
+    const adapters::ProcessInstance self = adapters::current_process_instance();
+    return std::format("{:x}-{:x}", self.pid, self.created);
 }
 
 std::wstring own_folder()
@@ -186,14 +201,14 @@ std::string read_text(adapters::Win32FileAdapter &files, std::string_view path)
 
 std::vector<adapters::AutosaveEntry> own_entries(adapters::Win32FileAdapter &files)
 {
-    const auto list = std::format("{}/{:x}/autosave.v1", root_text, GetCurrentProcessId());
+    const auto list = std::format("{}/{}/autosave.v1", root_text, own_name());
     return adapters::decode_autosave_entries(read_text(files, list))
         .value_or(std::vector<adapters::AutosaveEntry>{});
 }
 
 std::string own_body(adapters::Win32FileAdapter &files, std::uint64_t id)
 {
-    return read_text(files, std::format("{}/{:x}/{}.body", root_text, GetCurrentProcessId(), id));
+    return read_text(files, std::format("{}/{}/{}.body", root_text, own_name(), id));
 }
 
 // 結果の列を「番号と成否」の列で読む（例: "3ok 4ok" / "1location_unavailable"）。
@@ -587,6 +602,125 @@ void verify_read_back_at_limit(adapters::Win32FileAdapter &files,
     expect(!exists(std::wstring(root) + L"/deadbee5"), "the remnant at the limit is forgotten");
 }
 
+// (i) #1634: 落ちた前の process と同じ pid を引いた起動。前の process が自分と同じ pid のフォルダ
+// に未保存の退避を残して落ちた所から始める（pid が自分と同じなら、前の process は必ず終わって
+// いる）。前の版の形 `<pid>`（番号 1）と、今の形で作成時刻だけが違う `<pid>-<別の時刻>`（番号 2）の
+// 2 つを置く。起動は両方を残骸として問い、自分の store と clear は前の退避に触れない。
+// 直す前の HEAD（c970e47f）では最初の 3 件が落ちた（残骸が出ない・store が同じ番号の本文を上書き
+// する・clear がフォルダごと消す）。
+void leave_same_pid_remnants(adapters::Win32FileAdapter &files)
+{
+    const adapters::ProcessInstance self = adapters::current_process_instance();
+    const std::string previous = std::format("{:x}", self.pid);
+    const std::string earlier = std::format("{:x}-{:x}", self.pid, self.created + 1U);
+    make_folder(std::wstring(previous.begin(), previous.end()));
+    make_folder(std::wstring(earlier.begin(), earlier.end()));
+    write_list(files, previous, {{AutosaveId{1}, std::nullopt, title_of("無題"), caret_at(1, 1)}});
+    write_body(files, previous, 1, "unsaved before the crash");
+    write_list(files, earlier, {{AutosaveId{2}, std::nullopt, title_of("無題"), caret_at(1, 1)}});
+    write_body(files, earlier, 2, "unsaved in the same form");
+}
+
+// 番号 id の残骸の本文（無いか読めなければ空）。
+std::string remnant_body(adapters::Win32AutosaveAdapter &autosave,
+                         std::span<const AutosaveRemnant> remnants, std::uint64_t id)
+{
+    const auto remnant = remnant_with(remnants, id);
+    if (!remnant.has_value())
+    {
+        return {};
+    }
+    const auto bytes = autosave.read(remnant.value());
+    return bytes ? text_of(bytes.value()) : std::string{};
+}
+
+void verify_reused_process_id(adapters::Win32Worker &worker, adapters::Win32FileAdapter &files)
+{
+    leave_same_pid_remnants(files);
+    {
+        adapters::Win32AutosaveAdapter autosave(worker, files, root_path(root_text));
+        const auto asked = autosave.remnants().value_or(std::vector<AutosaveRemnant>{});
+        expect(remnant_with(asked, 1).has_value(),
+               "the folder left by a dead process with the same pid is a remnant at start-up");
+        expect(remnant_body(autosave, asked, 2) == "unsaved in the same form",
+               "a folder of the same pid with another creation time is a remnant at start-up");
+        autosave.store(snapshot(1, std::nullopt, "無題", "this process"));
+        autosave.store(snapshot(2, std::nullopt, "無題", "this process"));
+        drain(worker);
+        expect(remnant_body(autosave, asked, 1) == "unsaved before the crash",
+               "a store of the same id does not overwrite the previous process's body");
+        expect(own_body(files, 1) == "this process", "the store goes to this start's own folder");
+        autosave.clear();
+        expect(!exists(own_folder()), "clear removes this start's own folder");
+    }
+    adapters::Win32AutosaveAdapter next(worker, files, root_path(root_text));
+    const auto left = next.remnants().value_or(std::vector<AutosaveRemnant>{});
+    expect(remnant_body(next, left, 1) == "unsaved before the crash",
+           "a normal close does not remove the previous process's remnant");
+    expect(remnant_body(next, left, 2) == "unsaved in the same form",
+           "a normal close does not remove a remnant of the same pid in the new form");
+    // 一度も store しなかった起動の clear は、自分のフォルダが無いので何も消さない。
+    next.clear();
+    expect(next.remnants().value_or(std::vector<AutosaveRemnant>{}).size() == 2,
+           "clear without a store of its own removes nothing");
+    for (const AutosaveRemnant &remnant : left)
+    {
+        next.forget(remnant);
+    }
+    const adapters::ProcessInstance self = adapters::current_process_instance();
+    expect(!exists(std::format(L"{}/{:x}", root, self.pid)) &&
+               !exists(std::format(L"{}/{:x}-{:x}", root, self.pid, self.created + 1U)),
+           "forgetting the remnants removes the folders of both forms");
+}
+
+// 「pid → 作成時刻」の替え玉。8 は終わった、c は作成時刻 0x100 で生きている、10 は拒否する。
+std::expected<std::uint64_t, adapters::ProcessQueryFailure>
+scripted_created(std::uint32_t pid) noexcept
+{
+    if (pid == 0xcU)
+    {
+        return 0x100U;
+    }
+    return std::unexpected(pid == 0x10U ? adapters::ProcessQueryFailure::denied
+                                        : adapters::ProcessQueryFailure::gone);
+}
+
+// 判定の表の 1 行。名前・残骸か・説明。
+using NameRow = std::tuple<std::wstring_view, bool, const char *>;
+
+// (j) 残骸の名前の判定（純関数・#1634）。自分は pid 0x20・作成時刻 0x500。
+void verify_remnant_names()
+{
+    constexpr adapters::ProcessInstance self{0x20U, 0x500U};
+    const std::array<NameRow, 19> rows{{
+        {L"20-500", false, "this start's own folder is not a remnant"},
+        {L"20-501", true, "the same pid with another creation time is a remnant"},
+        {L"20", true, "the old form of the own pid is a remnant"},
+        {L"8", true, "the old form of a gone pid is a remnant"},
+        {L"8-1", true, "the new form of a gone pid is a remnant"},
+        {L"c-100", false, "a live process with the same creation time is not a remnant"},
+        {L"c-101", true, "a live process that reused the pid is a remnant"},
+        {L"c", false, "the old form of a live pid is not a remnant"},
+        {L"10-5", false, "a denied pid is not a remnant"},
+        {L"10", false, "the old form of a denied pid is not a remnant"},
+        {L"C-100", false, "upper case is outside the form"},
+        {L"08-1", false, "a leading zero in the pid is outside the form"},
+        {L"8-01", false, "a leading zero in the creation time is outside the form"},
+        {L"8-", false, "an empty creation time is outside the form"},
+        {L"-1", false, "an empty pid is outside the form"},
+        {L"8-1-1", false, "a second dash is outside the form"},
+        {L"100000000-1", false, "a pid over 32 bits is outside the form"},
+        {L"8-10000000000000000", false, "a creation time over 64 bits is outside the form"},
+        {L"8-1\u00e9", false, "a name with letters outside ASCII is outside the form"},
+    }};
+    for (const auto &[name, remnant, message] : rows)
+    {
+        expect(adapters::autosave_remnant_name(name, self, scripted_created) == remnant, message);
+    }
+    expect(adapters::autosave_folder(path_of("C:/a/autosave"), self) == "C:/a/autosave/20-500",
+           "the own folder is named by the pid and the creation time in lower hex");
+}
+
 void verify_autosave()
 {
     remove_tree(base);
@@ -612,6 +746,8 @@ void verify_autosave()
         autosave.clear();
         expect(!exists(own_folder()), "clear removes the own folder again");
     }
+    verify_reused_process_id(worker, files);
+    verify_remnant_names();
     remove_tree(base);
 }
 int run_tests(int argc, char **argv)
