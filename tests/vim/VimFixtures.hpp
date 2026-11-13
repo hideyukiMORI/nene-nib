@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 89614d2e966ab3a67ea6ef934c3d3786df289ca25051e748ca0aa2c78facd545 / 5456 fixtures
+// fixtures.json: sha256 26b8748d21fd6eb06e55511531964290168833280d36060fc6850ad8770b2169 / 5484 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 5456> vim_fixtures{{
+constexpr std::array<VimFixture, 5484> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -5468,6 +5468,34 @@ constexpr std::array<VimFixture, 5456> vim_fixtures{{
     {"pattern-case-multi-sub-start-star", "b*Ab", ":s/\\c*/X/<CR>", "bXAb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"pattern-case-multi-sub-open-star", "b*Ab", ":s/\\(\\c*\\)/X/<CR>", "bXAb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"pattern-case-multi-back-plus", "bAAb", "$?a\\c\\+<CR>x", "bAAb", 1, 4, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-escape-sub-tab-all", "ab\tcd\tef\n\tx\ty\nlast", ":%s/\\t/  /g<CR>", "ab  cd  ef\n  x  y\nlast", 2, 3, "", "", std::nullopt},
+    {"pattern-escape-sub-tab-blank-set-plus", "ab\tcd ef\nx \t y", ":%s/[\\t ]\\+/,/g<CR>", "ab,cd,ef\nx,y", 2, 1, "", "", std::nullopt},
+    {"pattern-escape-delete-to-tab", "ab\tcd", "d/\\t<CR>", "\tcd", 1, 1, "ab", "v", std::nullopt},
+    {"pattern-escape-search-tab", "ab\tcd\nx\ty", "/\\t<CR>", "ab\tcd\nx\ty", 1, 3, "", "", std::nullopt},
+    {"pattern-escape-search-tab-n", "ab\tcd\tef\nx\ty", "/\\t<CR>nn", "ab\tcd\tef\nx\ty", 2, 2, "", "", std::nullopt},
+    {"pattern-escape-search-tab-backward", "ab\tcd\nx\ty", "G$?\\t<CR>", "ab\tcd\nx\ty", 2, 2, "", "", std::nullopt},
+    {"pattern-escape-search-tab-set", "ab\tcd", "/[\\t]<CR>", "ab\tcd", 1, 3, "", "", std::nullopt},
+    {"pattern-escape-search-not-tab-or-space", "\t \tab", "/[^\\t ]<CR>", "\t \tab", 1, 4, "", "", std::nullopt},
+    {"pattern-escape-sub-tab-plus", "a\t\t\tb\tc", ":s/\\t\\+/ /g<CR>", "a b c", 1, 1, "", "", std::nullopt},
+    {"pattern-escape-search-tab-twice", "a\tb\t\tc\t\t\td", "/\\t\\{2}<CR>", "a\tb\t\tc\t\t\td", 1, 4, "", "", std::nullopt},
+    {"pattern-escape-sub-tab-star", "ab\t\tcd xbcd", ":s/b\\t*c/X/g<CR>", "aXd xXd", 1, 1, "", "", std::nullopt},
+    {"pattern-escape-search-tab-range-set", "|~\t{", "/[\\t-z]<CR>", "|~\t{", 1, 3, "", "", std::nullopt},
+    {"pattern-escape-search-cr", "ab\rcd\nzz", "/\\r<CR>", "ab\rcd\nzz", 1, 3, "", "", std::nullopt},
+    {"pattern-escape-search-cr-set", "zz\nab\rcd", "/[\\r]<CR>", "zz\nab\rcd", 2, 3, "", "", std::nullopt},
+    {"pattern-escape-sub-cr-all", "ab\rcd\nzz\rq", ":%s/\\r/-/g<CR>", "ab-cd\nzz-q", 2, 1, "", "", std::nullopt},
+    {"pattern-escape-sub-control-set", "ab\rc\\d\re", ":s/[\\e\\b\\r\\\\]/_/g<CR>", "ab_c_d_e", 1, 1, "", "", std::nullopt},
+    {"pattern-escape-sub-set-escaped-specials", "a\\b]c^d-e", ":s/[\\]\\^\\-]/_/g<CR>", "a\\b_c_d_e", 1, 1, "", "", std::nullopt},
+    {"pattern-escape-search-unclosed-escaped-bracket", "x[a]bc", "/[a\\]b<CR>", "x[a]bc", 1, 2, "", "", std::nullopt},
+    {"pattern-escape-sub-tab-replacement-tab", "a\tb", ":s/\\t/\\t\\t/<CR>", "a\t\tb", 1, 1, "", "", std::nullopt},
+    {"pattern-escape-delete-to-tab-dot", "a\tb\tc\td", "d/\\t<CR>.", "\tc\td", 1, 1, "\tb", "v", std::nullopt},
+    {"pattern-escape-search-tab-smartcase", "aT\tb", "/\\t<CR>", "aT\tb", 1, 3, "", "", std::nullopt},
+    {"pattern-escape-search-set-digit-letter", "a\\dx", "/[\\d]<CR>", "a\\dx", 1, 2, "", "", std::nullopt},
+    {"pattern-escape-search-set-hex-letter", "ax\\y", "/[\\x]<CR>", "ax\\y", 1, 2, "", "", std::nullopt},
+    {"pattern-escape-visual-to-tab", "ab\tcd", "v/\\t<CR>d", "cd", 1, 1, "ab\t", "v", std::nullopt},
+    {"pattern-escape-sub-tab-first-only", "a\tb\tc", ":s/\\t/,/<CR>", "a,b\tc", 1, 1, "", "", std::nullopt},
+    {"pattern-escape-search-tab-then-word", "a\tb x\tby", "/\\tb<CR>n", "a\tb x\tby", 1, 6, "", "", std::nullopt},
+    {"pattern-escape-sub-tab-at-least-two", "a\t\tb\tc\n\t\t\td", ":%s/\\t\\{2,}/;/g<CR>", "a;b\tc\n;d", 2, 1, "", "", std::nullopt},
+    {"pattern-escape-search-cr-backward", "zz\nab\rcd\rq", "G$?\\r<CR>", "zz\nab\rcd\rq", 2, 6, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
