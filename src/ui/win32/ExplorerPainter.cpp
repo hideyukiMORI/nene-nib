@@ -5,6 +5,8 @@
 #include "PaletteRowKey.hpp"
 #include "PaletteTextRole.hpp"
 #include "SyntaxColor.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 #include "Utf16.hpp"
 
 #include <algorithm>
@@ -19,8 +21,6 @@ namespace
 constexpr float full_channel = 255.0F;
 // 「…」の行（2,000 件を超えたフォルダ）。
 constexpr std::string_view more_mark = "…";
-// ルートが無い面の先頭の行（採用案の表・文は今のまま）。
-constexpr std::string_view no_root = ":set root= でルートを決めてください";
 
 // 絵の寸法（DIP・採用案 B の表）。線の太さ 1.25 DIP、升 16 DIP の座標で書いた絵、ファイルの印は
 // 6 DIP の四角で角の半径 1.5 DIP。絵の細部（点の位置）は採用案のモックの SVG を升へ写したもの。
@@ -156,7 +156,9 @@ void ExplorerPainter::paint_root(const application::ExplorerView &view,
     const core::LayoutRect area = core::explorer_root_name(layout, core::explorer_line(layout, 0));
     if (!view.root.has_value())
     {
-        write(no_root, area, palette.muted, text_.format);
+        // ルートが無い面の先頭の行（採用案の表・文は表示言語の表から・#1019）。
+        write(core::ui_text(core::UiMessage::explorer_no_root, text_.language), area, palette.muted,
+              text_.format);
         return;
     }
     write(root_name(view.root.value()), area, palette.text, text_.strong);

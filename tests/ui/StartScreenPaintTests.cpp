@@ -111,7 +111,8 @@ using Formats = std::vector<Format>;
         "Ctrl+T",
         "Ctrl+O",
         "Ctrl+Shift+R",
-        dpi};
+        dpi,
+        core::DisplayLanguage::japanese};
 }
 
 [[nodiscard]] core::BodyLayout body_of()
