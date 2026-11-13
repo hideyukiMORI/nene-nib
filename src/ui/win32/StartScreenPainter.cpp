@@ -9,6 +9,8 @@
 #include "SaveState.hpp"
 #include "StartEntryKind.hpp"
 #include "TabTitle.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 #include "Utf16.hpp"
 
 #include <algorithm>
@@ -21,21 +23,12 @@ namespace nenenib::ui::win32
 namespace
 {
 constexpr float full_channel = 255.0F;
-// 採用案の文（docs/design/2026-10-28-start-screen-look.md・英語以外の文は後続・ADR 0172 の決定
-// 8）。
+// 題は製品名で訳さない（decisions の追加の決め）。見出しと「はじめる」の行の文は表示言語の表から
+// 引く（採用案の文 docs/design/2026-10-28-start-screen-look.md・ADR 0123 の追補
+// 2026-11-13・#1019）。
 constexpr std::string_view title_text = "NeNe Nib";
-constexpr std::string_view recent_text = "最近使ったファイル";
-constexpr std::string_view bookmark_text = "ブックマーク";
-constexpr std::string_view start_text = "はじめる";
-constexpr std::string_view key_text = "ショートカット";
-constexpr std::string_view empty_text =
-    "まだ履歴がありません。ファイルを開くか、そのまま打ち始めてください";
 constexpr std::string_view selected_mark = "▸";
 constexpr std::string_view ellipsis = "…";
-constexpr std::string_view new_file_text = "新しいファイル";
-constexpr std::string_view new_file_detail = "そのまま打ち始める";
-constexpr std::string_view open_folder_text = "フォルダを開く";
-constexpr std::string_view open_folder_detail = "ルートを選んでエクスプローラーを出す";
 // 場所の全文の幅を測る欄の幅（物理画素）。測る文字組みは省略の印を外すので、この幅を超える
 // 全文も尻まで並び、幅と当たりは全文のもの（レビュー M2）。
 constexpr std::int32_t measured_width = 8192;
@@ -179,19 +172,23 @@ void StartScreenPainter::paint_headings(const core::StartScreenLayout &layout,
     const TextStyle heading{text_.heading, PaletteTextRole::plain};
     if (layout.recent_heading.has_value())
     {
-        write(recent_text, heading, layout.recent_heading.value(), palette.muted);
+        write(core::ui_text(core::UiMessage::start_recent_files, text_.language), heading,
+              layout.recent_heading.value(), palette.muted);
     }
     if (layout.bookmark_heading.has_value())
     {
-        write(bookmark_text, heading, layout.bookmark_heading.value(), palette.muted);
+        write(core::ui_text(core::UiMessage::label_bookmarks, text_.language), heading,
+              layout.bookmark_heading.value(), palette.muted);
     }
     if (layout.empty_note.has_value())
     {
-        write(empty_text, {text_.heading, PaletteTextRole::trimmed}, layout.empty_note.value(),
-              palette.muted);
+        write(core::ui_text(core::UiMessage::start_no_history, text_.language),
+              {text_.heading, PaletteTextRole::trimmed}, layout.empty_note.value(), palette.muted);
     }
-    write(start_text, heading, layout.start_heading, palette.muted);
-    write(key_text, heading, layout.key_heading, palette.muted);
+    write(core::ui_text(core::UiMessage::start_get_started, text_.language), heading,
+          layout.start_heading, palette.muted);
+    write(core::ui_text(core::UiMessage::start_shortcuts, text_.language), heading,
+          layout.key_heading, palette.muted);
 }
 
 void StartScreenPainter::paint_row(const core::StartEntry &entry, const core::StartRowLayout &row,
@@ -212,7 +209,9 @@ void StartScreenPainter::paint_row(const core::StartEntry &entry, const core::St
         }
         return;
     case core::StartEntryKind::new_file:
-        paint_named(new_file_text, new_file_detail, keyed(text_.new_key, row.label), palette);
+        paint_named(core::ui_text(core::UiMessage::start_new_file, text_.language),
+                    core::ui_text(core::UiMessage::start_new_file_detail, text_.language),
+                    keyed(text_.new_key, row.label), palette);
         return;
     case core::StartEntryKind::open_file:
         // 名前は操作の表から（鍵と同じ正本・ADR 0078）。
@@ -220,8 +219,9 @@ void StartScreenPainter::paint_row(const core::StartEntry &entry, const core::St
                     keyed(text_.open_key, row.label), palette);
         return;
     case core::StartEntryKind::open_folder:
-        paint_named(open_folder_text, open_folder_detail, keyed(text_.folder_key, row.label),
-                    palette);
+        paint_named(core::ui_text(core::UiMessage::start_open_folder, text_.language),
+                    core::ui_text(core::UiMessage::start_open_folder_detail, text_.language),
+                    keyed(text_.folder_key, row.label), palette);
         return;
     }
 }

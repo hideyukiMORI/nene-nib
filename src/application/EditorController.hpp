@@ -244,6 +244,12 @@ class EditorController final
     // 寸法を送り直すのに読む口。設定（sync_minimap が置いた 1 欄）がオンで、全面プレビューでない
     // とき（本文が隠れている間は面を出さない・レビュー L6）。frame の minimap と同じ条件。
     [[nodiscard]] bool minimap_shown() const noexcept;
+    // 解決済みの表示言語（ADR 0123 の追補 2026-11-13 の決定 3・#1019）。ui が自分で出す文
+    // （MessageBox・ShutdownBlockReason・ファイルの選択）を引く口で、frame を作らずに読む。
+    [[nodiscard]] core::DisplayLanguage display_language() const noexcept
+    {
+        return state_.display_language();
+    }
     // アクティブな文書の本文を読むだけの口。試験が仮想桁の索引の持ち方（ADR 0140 の決定 4）を
     // 確かめるために読む。状態を変える口はここには無い。
     [[nodiscard]] const core::TextBuffer &text() const noexcept;
