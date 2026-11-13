@@ -223,6 +223,28 @@ namespace
     return literal_pattern(text, direction);
 }
 
+// 外れた `*` / `#` の 1 歩。Vim の nv_ident は探す前にキャレットを語の先頭へ置き（setpcmark の
+// 後）、見つからなくてもそこに残る。モードと保留のオペレータに依らない: NORMAL とオペレータ待ちは
+// キャレット（オペレータは何もせずに消え、失敗なので再生は打ち切る）、VISUAL は選択の端が動く。
+// 'wrapscan' なら語そのものに必ず当たるので、見えるのは `:set nows` の E385 / E384 だけ（#1561・
+// FZ1 と #1622 の M2 の実測）。
+[[nodiscard]] VimStep word_start_kept(VimStep step, const VimEditorView &view, Offset begin)
+{
+    switch (step.next.mode)
+    {
+    case VimMode::normal:
+    case VimMode::insert:
+        step.effect = VimMoveTo{begin};
+        return context_marked(std::move(step), view);
+    case VimMode::visual:
+    case VimMode::visual_line:
+    case VimMode::visual_block:
+        step.effect = VimSelect{Selection{view.selection.anchor, begin}};
+        return context_marked(std::move(step), view);
+    }
+    std::unreachable();
+}
+
 // `*` / `#`（決定 3 と Issue #961 の追補）。キャレットの下か後ろの語を \<…\> のパターンにし、
 // 語が無ければ空白でない文字列を \< \> なしで、同じ経路へ。どちらも無ければ E348。
 [[nodiscard]] VimStep word_search(const VimState &original, const VimEditorView &view,
@@ -247,13 +269,9 @@ namespace
     // 探し始めるのは語の先頭だが、範囲の端は元のキャレットである（実測）。
     VimStep step = search_from(
         remembered, view, VimSearchRequest{found.value().begin, view.selection.caret, direction});
-    // Vim の nv_ident は探す前にキャレットを語の先頭へ置き（setpcmark の後）、見つからなくても
-    // そこに残る。'wrapscan' なら語そのものに必ず当たるので、見えるのは `:set nows` の E385 / E384
-    // だけ（#1561・FZ1 の実測）。
-    if (step.failure.has_value() && state.mode == VimMode::normal && !state.pending.has_value())
+    if (step.failure.has_value())
     {
-        step.effect = VimMoveTo{found.value().begin};
-        return context_marked(std::move(step), view);
+        return word_start_kept(std::move(step), view, found.value().begin);
     }
     return step;
 }

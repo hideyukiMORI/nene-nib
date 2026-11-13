@@ -1578,6 +1578,8 @@ const auto completion_ordinary = std::vector<std::string>{"colorscheme",
                                                           "set noignorecase",
                                                           "set smartcase",
                                                           "set nosmartcase",
+                                                          "set wrapscan",
+                                                          "set nowrapscan",
                                                           "set relativenumber",
                                                           "set norelativenumber",
                                                           "set scrolloff=",
@@ -1905,10 +1907,10 @@ void verify_ex_command_table()
 // が分類と同じ。
 constexpr std::array<std::string_view, 4> window_rechecking_options{"wrap", "relativenumber",
                                                                     "hlsearch", "scrolloff"};
-constexpr std::array<std::string_view, 15> window_keeping_options{
-    "fontsize", "guifont",    "incsearch", "guide",    "display",
-    "filetype", "ft",         "clipboard", "explorer", "root",
-    "lsp",      "ignorecase", "smartcase", "minimap",  "language"};
+constexpr std::array<std::string_view, 16> window_keeping_options{
+    "fontsize",  "guifont",   "incsearch", "guide",   "display", "filetype",
+    "ft",        "clipboard", "explorer",  "root",    "lsp",     "ignorecase",
+    "smartcase", "minimap",   "language",  "wrapscan"};
 
 [[nodiscard]] bool listed_in(const auto &rows, std::string_view name)
 {
@@ -2054,6 +2056,82 @@ void verify_ex_set_arguments()
     }
 }
 
+// `:set` の答えの見える所（文言・置いた設定・Vim の状態・controller の要求）を 1 行の文字列に。
+std::string set_signature(const std::expected<core::ExResult, core::ExEvaluationFailure> &result)
+{
+    if (!result.has_value())
+    {
+        return "refused";
+    }
+    const core::ExResult &answer = result.value();
+    std::string text(answer.message.text());
+    if (answer.settings.has_value())
+    {
+        const core::EditorSettings &placed = answer.settings.value();
+        text += " ic=" + std::to_string(int{placed.ignorecase}) +
+                " scs=" + std::to_string(int{placed.smartcase}) +
+                " rnu=" + std::to_string(int{placed.relativenumber}) +
+                " so=" + std::to_string(placed.scrolloff) +
+                " gfn=" + std::string(placed.font_family.text());
+    }
+    const auto number = [](auto value) { return std::to_string(static_cast<int>(value)); };
+    text += " hls=" + (answer.highlight.has_value() ? number(answer.highlight.value()) : "-");
+    text += " is=" + (answer.incsearch.has_value() ? number(answer.incsearch.value()) : "-");
+    text += " ws=" + (answer.wrapscan.has_value() ? number(answer.wrapscan.value()) : "-");
+    text += " cb=" + (answer.clipboard.has_value() ? number(answer.clipboard.value()) : "-");
+    return text + (answer.stopped.has_value() ? " stopped" : "");
+}
+
+// Vim の短い名前は、どの形でも長い名前と同じ答えになる（#1561・#1622 のレビュー L6: 短い名前を
+// 別の option に結ぶ取り違えを捕まえる）。
+void verify_ex_set_short_names()
+{
+    const auto defaults = core::default_editor_settings();
+    const core::ExWindowState window{Appearance::dark, core::VimSearchHighlight::on, true, true};
+    using Names = std::pair<std::string_view, std::string_view>;
+    const auto same = [&](std::string_view short_form, std::string_view long_form)
+    {
+        const auto left = core::evaluate_ex(short_form, defaults, window);
+        const auto right = core::evaluate_ex(long_form, defaults, window);
+        expect(set_signature(left) == set_signature(right),
+               (std::string(short_form) + " answers as " + std::string(long_form)).c_str());
+    };
+    for (const auto &[short_name, long_name] : std::array<Names, 7>{{{"ic", "ignorecase"},
+                                                                     {"scs", "smartcase"},
+                                                                     {"rnu", "relativenumber"},
+                                                                     {"hls", "hlsearch"},
+                                                                     {"is", "incsearch"},
+                                                                     {"ws", "wrapscan"},
+                                                                     {"et", "expandtab"}}})
+    {
+        for (const auto &[head, tail] : std::array<Names, 6>{
+                 {{"", ""}, {"no", ""}, {"", "!"}, {"inv", ""}, {"", "?"}, {"", "&"}}})
+        {
+            same("set " + std::string(head) + std::string(short_name) + std::string(tail),
+                 "set " + std::string(head) + std::string(long_name) + std::string(tail));
+        }
+    }
+    for (const auto &[short_name, long_name] :
+         std::array<Names, 3>{{{"so", "scrolloff"}, {"sw", "shiftwidth"}, {"ts", "tabstop"}}})
+    {
+        for (const auto tail : {"=3", "=8", "?", "&", "+=0"})
+        {
+            same("set " + std::string(short_name) + tail, "set " + std::string(long_name) + tail);
+        }
+    }
+    for (const auto tail : {"=Consolas:h11", "=MS Gothic:h12", "=Consolas"})
+    {
+        same(std::string("set gfn") + tail, std::string("set guifont") + tail);
+    }
+    for (const auto tail : {"=unnamed", "=", "?", "&"})
+    {
+        same(std::string("set cb") + tail, std::string("set clipboard") + tail);
+    }
+    expect(set_signature(core::evaluate_ex("set gfn=Consolas:h11", defaults, window))
+               .contains("gfn=Consolas"),
+           "set gfn= places the font family");
+}
+
 // 値を変えられない option と wrapscan（#1561）。
 void verify_ex_set_fixed_options()
 {
@@ -2111,6 +2189,7 @@ void verify_ex_settings()
 {
     verify_ex_set_form_table();
     verify_ex_set_arguments();
+    verify_ex_set_short_names();
     verify_ex_set_fixed_options();
     verify_ex_set_arguments_controller();
     verify_font_sizes();

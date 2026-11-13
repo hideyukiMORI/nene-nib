@@ -425,6 +425,47 @@ void verify_incsearch_hops()
     expect(caret_at(controller.frame(), 2, 1), "and Enter after Ctrl-T lands there");
 }
 
+// 'nowrapscan' の preview と Ctrl-G / Ctrl-T は本文の端を越えない（#1561・#1622 の L1）。Ctrl-T で
+// 本文の最初の当たりへ移れ、Enter はそこへ着く（Vim の may_adjust_incsearch_highlighting の読み・
+// oracle は incsearch を測れない）。
+void verify_incsearch_nowrapscan()
+{
+    constexpr std::string_view body = "alpha beta\nbeta gamma\ndelta beta";
+    Editing session;
+    open_vim_document(session, std::string(body));
+    EditorController &controller = session.controller();
+    static_cast<void>(run_ex(controller, "set nows"));
+    vim_replay(controller, "G$/be");
+    expect(!frame_current(controller.frame()).has_value(),
+           "with nowrapscan the preview does not wrap past the end");
+    vim_replay(controller, "<Esc>gg/be");
+    hop(controller, VimSearchDirection::forward);
+    hop(controller, VimSearchDirection::forward);
+    expect(current_is(controller.frame(), 2, {7, 9}), "Ctrl-G reaches the last match");
+    hop(controller, VimSearchDirection::forward);
+    expect(current_is(controller.frame(), 2, {7, 9}), "and Ctrl-G there does not wrap");
+    vim_replay(controller, "<CR>");
+    expect(caret_at(controller.frame(), 3, 7), "Enter lands on the last match");
+    vim_replay(controller, "gg/be");
+    hop(controller, VimSearchDirection::forward);
+    hop(controller, VimSearchDirection::backward);
+    expect(current_is(controller.frame(), 0, {7, 9}),
+           "Ctrl-T moves back to the first match of the body");
+    hop(controller, VimSearchDirection::backward);
+    expect(current_is(controller.frame(), 0, {7, 9}), "and Ctrl-T there does not wrap");
+    vim_replay(controller, "<CR>");
+    expect(caret_at(controller.frame(), 1, 7), "Enter lands on the first match");
+    vim_replay(controller, "G$?be");
+    expect(current_is(controller.frame(), 2, {7, 9}), "? previews the match before the caret");
+    hop(controller, VimSearchDirection::backward);
+    hop(controller, VimSearchDirection::forward);
+    expect(current_is(controller.frame(), 2, {7, 9}),
+           "Ctrl-G while typing ? moves forward to the last match of the body");
+    vim_replay(controller, "<CR>");
+    expect(caret_at(controller.frame(), 3, 7) && vim_body(controller.frame()) == body,
+           "and Enter lands there");
+}
+
 // 起点はパターンの編集で残り、回数は hop のたびに数え直す（ADR 0043 の文脈 (a)(b)）。
 void verify_incsearch_hop_start()
 {
@@ -573,6 +614,7 @@ void verify_vim_search_incremental_contracts()
     verify_incsearch_hlsearch();
     verify_incsearch_hops();
     verify_incsearch_hop_start();
+    verify_incsearch_nowrapscan();
     verify_incsearch_hop_inert();
     verify_incsearch_hop_scroll();
     verify_incsearch_composition();

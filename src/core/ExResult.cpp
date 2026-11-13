@@ -2208,7 +2208,7 @@ ranged_command(std::string_view text, const EditorSettings &settings, const ExWi
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
 // 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
-constexpr std::array<std::string_view, 49> fixed_candidates{"colorscheme",
+constexpr std::array<std::string_view, 51> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -2244,6 +2244,8 @@ constexpr std::array<std::string_view, 49> fixed_candidates{"colorscheme",
                                                             "set noignorecase",
                                                             "set smartcase",
                                                             "set nosmartcase",
+                                                            "set wrapscan",
+                                                            "set nowrapscan",
                                                             "set relativenumber",
                                                             "set norelativenumber",
                                                             "set scrolloff=",

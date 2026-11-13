@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 a76c993fcbfd6a0de8480b7728f9b154c95a62a3e0a394a9f396c336fdc2a6c3 / 5561 fixtures
+// fixtures.json: sha256 1b38c8e31e1692a48e2a0f4dc8414545255e4de3ee4fc562c6beb095dee9e4b9 / 5583 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 5561> vim_fixtures{{
+constexpr std::array<VimFixture, 5583> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -5573,6 +5573,28 @@ constexpr std::array<VimFixture, 5561> vim_fixtures{{
     {"ex-subn-caret-blank", "   ", "$:s/ /c/gn<CR>", "   ", 1, 3, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"ex-subn-caret-then-j", "abc\nabc", "j$:1,2s/b/X/n<CR>j", "abc\nabc", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"ex-subn-caret-then-x", "ab", "$:s/b/X/n<CR>x", "b", 1, 1, "a", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-subn-caret-end-amp-amp", "  aaa\n  aaa", ":s/a/b/n<CR>$:&&<CR>", "  aaa\n  aaa", 1, 5, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-subn-caret-end-amp-amp-x", "  aaa\n  aaa", ":s/a/b/n<CR>$:&&<CR>x", "  aa\n  aaa", 1, 4, "a", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-subn-caret-end-amp-amp-j", "  aaa\n  aaa\n  aaaaa", ":s/a/b/n<CR>$:&&<CR>jj", "  aaa\n  aaa\n  aaaaa", 3, 7, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-subn-caret-noend-amp-amp", "  aaa\n  aaa", ":s/a/b/n<CR>l:&&<CR>", "  aaa\n  aaa", 1, 3, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-subn-caret-end-amp-amp-replaced", "  aaa\n  aaa", ":s/a/b/<CR>$:&&<CR>", "  bba\n  aaa", 1, 5, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-subn-caret-end-tilde-amp", "  aaa\n  aaa", ":s/a/b/n<CR>$:~&<CR>", "  aaa\n  aaa", 1, 5, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-subn-caret-end-tilde", "  aaa\n  aaa", ":s/a/b/n<CR>$:~<CR>", "  baa\n  aaa", 1, 5, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-subn-caret-end-amp-key", "  aaa\n  aaa", ":s/a/b/n<CR>$&", "  baa\n  aaa", 1, 5, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-subn-caret-end-g-amp", "  aaa\n  aaa", ":s/a/b/n<CR>$g&", "  aaa\n  aaa", 1, 3, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-subn-caret-end-range-amp-amp", "  aaa\n  aaa\n  aaaaa", ":s/a/b/n<CR>$:%&&<CR>", "  aaa\n  aaa\n  aaaaa", 1, 5, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-subn-caret-end-other-line-amp-amp", "  aaa\n  aaa\n  aaaaa", ":s/a/b/n<CR>$:3&&<CR>", "  aaa\n  aaa\n  aaaaa", 1, 5, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-subn-caret-end-s-n", "  aaa\n  aaa", ":s/a/b/n<CR>$:s<CR>", "  baa\n  aaa", 1, 5, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-set-form-nows-ident-visual-star", "bar\nfoo", ":set nows<CR>G$v*", "bar\nfoo", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-set-form-nows-ident-visual-star-d", "bar\nfoo x", ":set nows<CR>Gllv*d", "bar\nfoo x", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-set-form-nows-ident-visual-hash-d", "foo\nbar", ":set nows<CR>$v#d", "foo\nbar", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-set-form-nows-ident-visual-line-star-d", "bar\nfoo\nbaz", ":set nows<CR>j$V*jd", "bar\nfoo\nbaz", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-set-form-nows-ident-block-star-d", "bar\nfoo", ":set nows<CR>G$<C-v>*d", "bar\nfoo", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-set-form-nows-ident-delete-star-x", "bar\nfoo", ":set nows<CR>G$d*x", "bar\nfoo", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-set-form-nows-ident-change-star-x", "bar\nfoo", ":set nows<CR>G$c*x", "bar\nfoo", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-set-form-nows-ident-delete-hash", "foo\nbar", "l:set nows<CR>d#", "foo\nbar", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-set-form-nows-ident-yank-star-p", "bar\nfoo", ":set nows<CR>yl$G$y*p", "bar\nfoo", 2, 1, "b", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"ex-set-form-nows-ident-macro-stops", "bar\nfoo", ":set nows<CR>G$@a", "bar\nfoo", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}, VimMacroFixture{'a', "d*x"}},
 }};
 } // namespace nenenib::tests
 // clang-format on
