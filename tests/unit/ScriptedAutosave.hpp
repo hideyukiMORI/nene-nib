@@ -48,7 +48,7 @@ class ScriptedAutosave final : public nenenib::application::AutosavePort
         ++clears_;
     }
 
-    void flush() override
+    [[nodiscard]] bool flush() override
     {
         calls_.push_back("flush");
         ++flushes_;
@@ -56,6 +56,7 @@ class ScriptedAutosave final : public nenenib::application::AutosavePort
         {
             flushing_();
         }
+        return flushed_;
     }
 
     [[nodiscard]] std::expected<std::vector<nenenib::application::AutosaveRemnant>,
@@ -103,6 +104,12 @@ class ScriptedAutosave final : public nenenib::application::AutosavePort
     void when_flushed(std::function<void()> flushing)
     {
         flushing_ = std::move(flushing);
+    }
+
+    // flush が返す値（既定は片付いた・偽は上限の時間切れの形・#1625）。
+    void flush_returns(bool flushed) noexcept
+    {
+        flushed_ = flushed;
     }
 
     // 次の collect が返す結果を足す（数えない）。worker が id の仕事を終えた形を仕込む。
@@ -174,5 +181,6 @@ class ScriptedAutosave final : public nenenib::application::AutosavePort
     std::vector<std::string> forgotten_;
     std::vector<std::string> calls_;
     std::function<void()> flushing_;
+    bool flushed_ = true;
 };
 } // namespace nenenib::tests

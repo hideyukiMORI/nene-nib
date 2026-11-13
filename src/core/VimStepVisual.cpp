@@ -615,6 +615,7 @@ namespace
     case VimActionGroup::jump_list:
     case VimActionGroup::ex_line:
     case VimActionGroup::substitute:
+    case VimActionGroup::display:
         return false;
     }
     std::unreachable();
@@ -680,8 +681,27 @@ namespace
         return action == VimAction::repeat_substitute_all
                    ? detail::substitute_action(state, view, action)
                    : failed(visual_unchanged(state), VimRepeatFailure::refused);
+    // 表示だけの `ga` `g8` などは選択のまま何もしない（`vlgad` の `d` が効く・`8g8` は失敗・#1617
+    // の レビュー M1）。
+    case VimActionGroup::display:
+        return detail::finds_illegal_byte(state, action)
+                   ? failed(visual_unchanged(state), VimRepeatFailure::refused)
+                   : visual_unchanged(state);
     }
     std::unreachable();
+}
+
+// VISUAL をオペレータで抜けた歩に、columns の状態から覚え直した仮想桁を置く（#1436）。`mode` は
+// 範囲を取る種類。VISUAL に残る歩と、VISUAL でない鍵の前の状態は変えない。
+[[nodiscard]] VimStep columns_noted(const VimState &columns, const VimEditorView &view,
+                                    VimMode mode, VimStep step)
+{
+    if (!is_visual_mode(columns.mode) || is_visual_mode(step.next.mode))
+    {
+        return step;
+    }
+    step.next.operator_columns = operator_columns_of(columns, view, mode);
+    return step;
 }
 } // namespace
 
@@ -694,17 +714,23 @@ namespace detail
 
 // VISUAL をオペレータで抜けた歩に、覚え直した仮想桁を置く 1 か所（#1436・Vim の
 // do_pending_operator）。`mode` は鍵が範囲を取る種類（operated_mode）。VISUAL に残る歩と、VISUAL
-// でない鍵の前の状態は変えない。`r{char}` の道（VimStepReplace）もここを通す。
+// でない鍵の前の状態は変えない。`r{char}` の道（VimStepReplace）とオペレータ待ちの `gn` `gN`
+// （visual_operator_applied）もここを通す。
 [[nodiscard]] VimStep visual_operation_noted(const VimState &state, const VimEditorView &view,
                                              VimAction action, VimStep step)
 {
-    if (!is_visual_mode(state.mode) || is_visual_mode(step.next.mode))
-    {
-        return step;
-    }
-    step.next.operator_columns = operator_columns_of(block_line_end_state(state, action), view,
-                                                     operated_mode(state.mode, action));
-    return step;
+    return columns_noted(block_line_end_state(state, action), view,
+                         operated_mode(state.mode, action), std::move(step));
+}
+
+// 文字単位の選択にオペレータを効かせる VISUAL の道（`d x y c` と `~ u U > <`）。オペレータ待ちの
+// `gn` `gN` が選んだ当たりへ流す（Vim は current_search が VIsual を立て、do_pending_operator が
+// VISUAL の範囲として効かせ、oap->start_vcol / end_vcol も書き直す・#1617）。選択は文字単位なので
+// 種類の読み替えは起きず、覚え直しは visual_operation_noted と同じ columns_noted を通る。
+[[nodiscard]] VimStep visual_operator_applied(const VimState &state, const VimEditorView &view,
+                                              VimOperator operation)
+{
+    return columns_noted(state, view, state.mode, visual_operated(state, view, operation));
 }
 
 // VISUAL の写し先（決定 7・決定 8）。行に効く命令・挿入・Ex は VISUAL では効かない。

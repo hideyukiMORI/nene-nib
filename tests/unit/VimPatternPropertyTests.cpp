@@ -10,6 +10,9 @@
 // 4096 と pattern-multistar-miss-32 が測る（ADR 0093）。Vim との一致は oracle の領分で問わない。
 // 原子 1 つに付く量（ADR 0184 の決定 2）は、乱数のパターンを試験の中の素朴な後戻りの模型と照合して
 // 当たりと群の範囲が同じになることを見る（verify_quantifiers_follow_the_model）。
+// 選択と群に付く量（決定 3）も同じく、木の形の後戻りの模型と照合する
+// （verify_branches_follow_the_model）。状態集合の道の答えは、直す前の評価器の答えの
+// 畳みと比べる（verify_state_route_keeps_its_answers・#1584）。
 // 回数は Debug（ASan）で scope 全体が 1 秒以内に終わる値。50 倍の走りは rounds を手で 50 にして
 // 回す（commit しない）。生成器は std::mt19937_64 の剰余だけを使い、分布の型は使わない。
 #include "Offset.hpp"
@@ -20,6 +23,7 @@
 #include "VimPatternCaptures.hpp"
 #include "VimPatternFailure.hpp"
 #include "VimPatternMatch.hpp"
+#include "VimPatternRoute.hpp"
 #include "VimSearchDirection.hpp"
 
 #include <algorithm>
@@ -108,11 +112,11 @@ constexpr std::array<std::string_view, 40> supported_fragments{{
 // 受けない断片と、末尾に置いたときの閉じた失敗（VimPatternFailure.hpp の一覧）。
 constexpr std::array<Unsupported, 22> unsupported_fragments{{
     {"\\(", VimPatternFailure::group},
-    {"\\)", VimPatternFailure::group},
-    {"\\(a*\\)*b", VimPatternFailure::quantifier},
-    {"\\|", VimPatternFailure::branch},
-    {"\\(a\\)\\+", VimPatternFailure::quantifier},
-    {"\\(a\\)\\=", VimPatternFailure::quantifier},
+    {"\\)", VimPatternFailure::unmatched_close},
+    {"\\%(a", VimPatternFailure::unclosed_plain_group},
+    {"\\|\\+", VimPatternFailure::misplaced},
+    {"\\(a\\)**", VimPatternFailure::multi_after_multi},
+    {"\\(a\\)\\{x}", VimPatternFailure::brace},
     {"a\\{x}", VimPatternFailure::brace},
     {"a\\{1,2,3}", VimPatternFailure::brace},
     {"a**", VimPatternFailure::multi_after_multi},
@@ -148,13 +152,15 @@ constexpr std::array<std::string_view, 9> multibyte_pieces{{
 }};
 
 // 星を並べた後戻りの爆発の候補（a の列には当たらない）。
-constexpr std::array<std::string_view, 6> explosive_patterns{{
+constexpr std::array<std::string_view, 8> explosive_patterns{{
     "a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*b",
     ".*.*.*.*.*.*.*.*.*.*.*.*.*.*.*.*b",
     "[ab]*a*[a-z]*\\w*.*b",
     "a*a*a*a*a*a*a*a*$b",
     "\\<a*a*a*a*a*a*a*a*\\>b",
     "^.*a*.*a*.*a*.*c",
+    "\\(a*\\)*b",
+    "\\(a\\|aa\\)\\+b",
 }};
 
 [[nodiscard]] std::size_t below(Random &random, std::size_t bound)
@@ -607,13 +613,13 @@ void verify_unsupported_suffixes()
 }
 
 // 星を並べた pattern が a の列（64 文字と 4 KiB）に、どの開始位置からも当たらずに答えを返す。
-// `\(a*\)*b` は群の繰り返しなので quantifier で断られる（群そのものは ADR 0168 の決定 4）。
+// `\(a*\)*b` と `\(a\|aa\)\+b` は命令の列の道（ADR 0184 の決定 3）で後戻りしない。
 void verify_backtracking_is_bounded()
 {
-    expect(
-        VimPattern::parse("\\(a*\\)*b", VimSearchDirection::forward, VimPatternCase::sensitive) ==
-            std::unexpected(VimPatternFailure::quantifier),
-        "a nested star group is refused as a quantifier");
+    expect(VimPattern::parse("\\(a*\\)*b", VimSearchDirection::forward, VimPatternCase::sensitive)
+                   .value()
+                   .route() == core::VimPatternRoute::program,
+           "a nested star group takes the program route");
     const std::array<std::string, 2> lines{std::string(64U, 'a'),
                                            std::string(large_line_bytes, 'a')};
     bool holds = true;
@@ -944,6 +950,492 @@ void verify_quantifiers_follow_the_model()
     expect(matched >= family_cases, "the quantifier model cases include matches");
 }
 
+// ---------------------------------------------------------------- 選択と群の量の模型
+// 選択 `\|` と群（`\(` `\%(`）に付く量を含む乱数のパターンを（ADR 0184 の決定 3）、
+// 素朴な後戻りの模型と照合し、当たりの範囲と群 1〜9 の範囲が同じになることを見る。
+// 模型は Vim 9.1 の規則を後戻りで書く: 最も左の開始・最初に当たる枝・
+// 量は多い方から（最短は少ない方から）・群の量は必須の回数の後に、
+// 上限が無ければ輪、あれば任意の回（Vim の nfa_regpiece の写しと同じ）・
+// 輪の中で何も食べなかった周の後は回らない（空の周は 1 回だけ）・
+// 群の値は閉じを通った周の範囲（通らなかった群は前の値のまま）。
+// 行は a b c だけの ASCII。照合器の作り（命令の列・状態集合）とは別に書く。
+
+// 木の節: 群か・原子の番号・量の形・n・m・群の番号（番号の無い群と原子は
+// npos）・枝の列（節の番号）。
+using TreeBranch = std::vector<std::size_t>;
+using TreeNode = std::tuple<bool, std::size_t, std::size_t, std::size_t, std::size_t, std::size_t,
+                            std::vector<TreeBranch>>;
+// 節 0 は根（番号の無い 1 回だけの群・括弧を書かない）。
+using Tree = std::vector<TreeNode>;
+// 群 0〜9 の範囲（値の無い群は npos の組）。
+using TreeCaptures = std::array<std::pair<std::size_t, std::size_t>, 10>;
+// 続きの積みの 1 つ: 種類（0 は枝の続き・1 は群の閉じ）・節・枝か済んだ周の数・項目か周の始まり。
+using TreeTask = std::tuple<std::uint8_t, std::size_t, std::size_t, std::size_t>;
+using TreeTasks = std::vector<TreeTask>;
+// 当たりの終わりと群の範囲。
+using TreeAnswer = std::pair<std::size_t, TreeCaptures>;
+// 当たりの始まりと答え。
+using TreeFound = std::optional<std::pair<std::size_t, TreeAnswer>>;
+
+constexpr std::size_t tree_no_capture = std::string_view::npos;
+// 模型の歩数の上限（入れ子の星で指数になる組は数えずに外す）。
+constexpr std::size_t tree_budget = 100000U;
+
+[[nodiscard]] std::string tree_text(const Tree &tree, std::size_t node)
+{
+    const auto &[group, atom, form, n, m, capture, branches] = tree.at(node);
+    if (!group)
+    {
+        return std::string{model_atoms.at(atom)} + quantity_text(form, n, m);
+    }
+    std::string text;
+    for (std::size_t branch = 0; branch < branches.size(); ++branch)
+    {
+        text += branch == 0 ? "" : "\\|";
+        for (const std::size_t item : branches.at(branch))
+        {
+            text += tree_text(tree, item);
+        }
+    }
+    if (node == 0)
+    {
+        return text;
+    }
+    return (capture == tree_no_capture ? "\\%(" : "\\(") + text + "\\)" + quantity_text(form, n, m);
+}
+
+// 枝 1 つの項目（depth は群の入れ子の深さ・captures は振った群の番号の数・番号は `\(` の順）。
+[[nodiscard]] std::size_t tree_node(Random &random, Tree &tree, std::size_t depth,
+                                    std::size_t &captures)
+{
+    const bool group = depth < 2U && below(random, 3U) == 0U;
+    const std::size_t index = tree.size();
+    tree.emplace_back(group, below(random, model_atoms.size()), below(random, model_forms),
+                      below(random, 3U), below(random, 3U), tree_no_capture,
+                      std::vector<TreeBranch>{});
+    if (!group)
+    {
+        return index;
+    }
+    if (below(random, 4U) != 0U && captures < 9U)
+    {
+        std::get<5>(tree.at(index)) = captures++;
+    }
+    std::vector<TreeBranch> branches(1U + below(random, 2U));
+    for (TreeBranch &branch : branches)
+    {
+        branch.resize(below(random, 3U));
+        for (std::size_t &item : branch)
+        {
+            item = tree_node(random, tree, depth + 1U, captures);
+        }
+    }
+    std::get<6>(tree.at(index)) = std::move(branches);
+    return index;
+}
+
+[[nodiscard]] Tree random_tree(Random &random)
+{
+    Tree tree;
+    tree.emplace_back(true, 0U, 0U, 0U, 0U, tree_no_capture, std::vector<TreeBranch>{});
+    std::size_t captures = 0;
+    std::vector<TreeBranch> branches(1U + below(random, 3U));
+    for (TreeBranch &branch : branches)
+    {
+        branch.resize(1U + below(random, 3U));
+        for (std::size_t &item : branch)
+        {
+            item = tree_node(random, tree, 0U, captures);
+        }
+    }
+    std::get<6>(tree.at(0)) = std::move(branches);
+    return tree;
+}
+
+// 後戻りの模型（木と行と歩数）。続きは積み（TreeTasks）で持ち、枝ごとに写して戻りを表す。
+class TreeModel final
+{
+  public:
+    TreeModel(const Tree &tree, std::string_view line) : tree_(tree), line_(line) {}
+
+    // from 以降の最も左の当たり。歩数が尽きたら外側の値なし（その組は数えない）。
+    [[nodiscard]] std::optional<TreeFound> matched(std::size_t from)
+    {
+        TreeCaptures unset{};
+        unset.fill({tree_no_capture, tree_no_capture});
+        for (std::size_t start = from; start <= line_.size(); ++start)
+        {
+            auto answer = loop({}, {0U, 0U}, start, unset);
+            if (budget_ == 0U)
+            {
+                return std::nullopt;
+            }
+            if (answer.has_value())
+            {
+                return TreeFound{std::pair{start, std::move(answer).value()}};
+            }
+        }
+        return TreeFound{};
+    }
+
+  private:
+    [[nodiscard]] std::optional<TreeAnswer> run(TreeTasks tasks, std::size_t pos,
+                                                const TreeCaptures &captures)
+    {
+        if (budget_ == 0U)
+        {
+            return std::nullopt;
+        }
+        --budget_;
+        if (tasks.empty())
+        {
+            return TreeAnswer{pos, captures};
+        }
+        const TreeTask task = tasks.back();
+        tasks.pop_back();
+        if (std::get<0>(task) == 1U)
+        {
+            return closed(std::move(tasks), task, pos, captures);
+        }
+        const auto [kind, node, branch, item] = task;
+        const TreeBranch &items = std::get<6>(tree_.at(node)).at(branch);
+        if (item == items.size())
+        {
+            return run(std::move(tasks), pos, captures);
+        }
+        tasks.emplace_back(std::uint8_t{0}, node, branch, item + 1U);
+        const std::size_t child = items.at(item);
+        if (!std::get<0>(tree_.at(child)))
+        {
+            return eaten(tasks, child, pos, captures);
+        }
+        return loop(tasks, {child, 0U}, pos, captures);
+    }
+
+    // 群の周を done 回済ませた所から、抜けるか次の周かを優先順に試す（state は節と done）。
+    [[nodiscard]] std::optional<TreeAnswer> loop(const TreeTasks &rest,
+                                                 std::pair<std::size_t, std::size_t> state,
+                                                 std::size_t pos, const TreeCaptures &captures)
+    {
+        const auto &[group, atom, form, n, m, capture, branches] = tree_.at(state.first);
+        const auto [minimum, maximum, lazy] = quantity_limits(form, n, m);
+        const bool may_exit = state.second >= minimum;
+        const bool may_iterate = maximum == model_unbounded || state.second < maximum;
+        if (lazy && may_exit)
+        {
+            auto answer = run(rest, pos, captures);
+            if (answer.has_value())
+            {
+                return answer;
+            }
+        }
+        auto answer = may_iterate ? iterated(rest, state, pos, captures) : std::nullopt;
+        if (answer.has_value() || lazy || !may_exit)
+        {
+            return answer;
+        }
+        return run(rest, pos, captures);
+    }
+
+    // 次の周を枝の順に試す。
+    [[nodiscard]] std::optional<TreeAnswer> iterated(const TreeTasks &rest,
+                                                     std::pair<std::size_t, std::size_t> state,
+                                                     std::size_t pos, const TreeCaptures &captures)
+    {
+        const std::size_t branches = std::get<6>(tree_.at(state.first)).size();
+        for (std::size_t branch = 0; branch < branches; ++branch)
+        {
+            TreeTasks next = rest;
+            next.emplace_back(std::uint8_t{1}, state.first, state.second + 1U, pos);
+            next.emplace_back(std::uint8_t{0}, state.first, branch, 0U);
+            auto answer = run(std::move(next), pos, captures);
+            if (answer.has_value())
+            {
+                return answer;
+            }
+        }
+        return std::nullopt;
+    }
+
+    // 群の閉じ: 値を写し、輪の中で何も食べなかった周なら抜けるだけ、ほかは次の周か抜けるか。
+    [[nodiscard]] std::optional<TreeAnswer> closed(TreeTasks tasks, TreeTask task, std::size_t pos,
+                                                   TreeCaptures captures)
+    {
+        const auto [kind, node, done, start] = task;
+        const auto &[group, atom, form, n, m, capture, branches] = tree_.at(node);
+        if (capture != tree_no_capture)
+        {
+            captures.at(capture + 1U) = {start, pos};
+        }
+        const auto [minimum, maximum, lazy] = quantity_limits(form, n, m);
+        if (maximum == model_unbounded && done > minimum && pos == start)
+        {
+            return run(std::move(tasks), pos, captures);
+        }
+        return loop(tasks, {node, done}, pos, captures);
+    }
+
+    // 原子 1 つ（量つき）を食べる回数を優先順に試す。
+    [[nodiscard]] std::optional<TreeAnswer> eaten(const TreeTasks &tasks, std::size_t node,
+                                                  std::size_t pos, const TreeCaptures &captures)
+    {
+        const auto &[group, atom, form, n, m, capture, branches] = tree_.at(node);
+        const auto [minimum, maximum, lazy] = quantity_limits(form, n, m);
+        const std::size_t run_length = model_run(atom, maximum, line_, pos);
+        const std::size_t choices = run_length >= minimum ? run_length - minimum + 1U : 0U;
+        for (std::size_t step = 0; step < choices; ++step)
+        {
+            auto answer = run(tasks, pos + (lazy ? minimum + step : run_length - step), captures);
+            if (answer.has_value())
+            {
+                return answer;
+            }
+        }
+        return std::nullopt;
+    }
+
+    const Tree &tree_;
+    std::string_view line_;
+    std::size_t budget_ = tree_budget;
+};
+
+// 群の範囲が模型と同じか（値の無い群は両方とも値なし）。
+[[nodiscard]] bool same_tree_groups(const std::optional<core::VimPatternCaptures> &captures,
+                                    const TreeCaptures &expected)
+{
+    if (!captures.has_value())
+    {
+        return false;
+    }
+    for (std::size_t group = 1; group < expected.size(); ++group)
+    {
+        const auto &actual = captures.value().at(group);
+        const auto [begin, end] = expected.at(group);
+        const bool same =
+            begin == tree_no_capture
+                ? !actual.has_value()
+                : actual.has_value() && actual.value().begin == begin && actual.value().end == end;
+        if (!same)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// 1 つの開始位置での照合器と模型の違い（空なら同じ・skipped は模型の歩数が尽きた数）。
+[[nodiscard]] std::string_view from_tree_violation(const VimPattern &pattern, const Tree &tree,
+                                                   std::string_view line, std::size_t from)
+{
+    TreeModel model(tree, line);
+    const auto expected = model.matched(from);
+    if (!expected.has_value())
+    {
+        return {};
+    }
+    const Found found = pattern.matched(line, from);
+    if (found.has_value() != expected.value().has_value())
+    {
+        return "the matcher and the branch model disagree on a match";
+    }
+    if (!found.has_value())
+    {
+        return {};
+    }
+    const auto &[start, answer] = expected.value().value();
+    if (found.value().begin != start || found.value().end != answer.first)
+    {
+        return "the matcher and the branch model disagree on the range";
+    }
+    return same_tree_groups(pattern.captured(line, found.value()), answer.second)
+               ? std::string_view{}
+               : "the group ranges differ from the branch model";
+}
+
+[[nodiscard]] std::string_view tree_violation(const Tree &tree, std::string_view line)
+{
+    const std::string pattern = tree_text(tree, 0);
+    const Parsed parsed =
+        VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
+    if (!parsed.has_value())
+    {
+        return "a pattern of the branch model is refused";
+    }
+    for (const std::size_t from : {std::size_t{0}, line.size() / 2U, line.size()})
+    {
+        const std::string_view violation = from_tree_violation(parsed.value(), tree, line, from);
+        if (!violation.empty())
+        {
+            return violation;
+        }
+    }
+    return case_violation({pattern, std::string{line}});
+}
+
+// 組の数え（counts は当たりのある組・模型の歩数が尽きた組・命令の列の道を通る組）。
+void tree_counted(const Tree &tree, std::string_view line, std::array<std::size_t, 3> &counts)
+{
+    TreeModel model(tree, line);
+    const auto whole = model.matched(0U);
+    counts.at(0) += whole.has_value() && whole.value().has_value() ? 1U : 0U;
+    counts.at(1) += whole.has_value() ? 0U : 1U;
+    const Parsed parsed = VimPattern::parse(tree_text(tree, 0), VimSearchDirection::forward,
+                                            VimPatternCase::sensitive);
+    counts.at(2) +=
+        parsed.has_value() && parsed.value().route() == core::VimPatternRoute::program ? 1U : 0U;
+}
+
+// 模型との照合。破れた最初の組は綴りで出す。模型の歩数が尽きた組は数えずに数だけ見る。
+void verify_branches_follow_the_model()
+{
+    Random random{8995U};
+    std::size_t broken = 0;
+    // 当たりのある組・模型の歩数が尽きた組・命令の列の道を通る組の数。
+    std::array<std::size_t, 3> counts{};
+    constexpr std::size_t cases = 6U * family_cases;
+    for (std::size_t round = 0; round < cases; ++round)
+    {
+        const Tree tree = random_tree(random);
+        const std::string line = model_line(random);
+        tree_counted(tree, line, counts);
+        const std::string_view violation = tree_violation(tree, line);
+        if (!violation.empty() && broken++ == 0U)
+        {
+            std::fprintf(stderr, "  branch model: %.*s\n", static_cast<int>(violation.size()),
+                         violation.data());
+            print_bytes("pattern", tree_text(tree, 0));
+            print_bytes("line", line);
+        }
+    }
+    expect(broken == 0U, "branches and group multis match and capture like the branch model");
+    expect(counts.at(0) >= cases / 4U && counts.at(2) >= cases / 2U && counts.at(1) <= cases / 20U,
+           "the branch model cases take the program route, include matches and rarely run out");
+}
+
+// ---------------------------------------------------------------- 状態集合の道の答え（#1584）
+// 状態集合の道（VimPatternEvaluation）を通るパターンを固定 seed で作り、行のすべての 1 文字の境
+// から当てた答え（当たりの有無・始まり・終わり）を FNV-1a 64 で畳む。期待の値は、訪問済みの印を
+// 1 文字ごとに埋め直していた直す前の評価器（main e43e93e8）がこの生成器の列に出した答えの畳み。
+// 評価器の中の持ち方を変えても、最も左の開始・貪欲 / 最短の優先順・結合文字の途中の印が同じなら
+// 値は変わらない。生成器・断片・回数を変えたら、直す前の木で測り直した値に置き換える。
+
+// 状態集合の道を通る断片（`*`・量・最短・幅の無い原子・結合文字・多バイト）。
+constexpr std::array<std::string_view, 32> state_fragments{{
+    "a",           "b",         " ",
+    "x",           ".",         "a*",
+    "b*",          ".*",        "[ab]*",
+    "[^a]*",       "\\w*",      "\\s*",
+    "a\\+",        "b\\=",      ".\\{-}",
+    "a\\{-1,}",    ".\\{-1,2}", "a\\{2}",
+    "[ab]\\{1,3}", "a\\{,2}",   "\\<",
+    "\\>",         "^",         "$",
+    "\xC3\xA9",    "\xC3\xA9*", "\xE3\x81\x82*",
+    ".\\=",        "\\S\\+",    "[^ ]\\{-1,}",
+    "e\xCC\x81",   ".\\{2,}",
+}};
+
+// 行の材料（ASCII・2〜4 バイト・基底と結合文字・単独の結合文字）。どれも正しい UTF-8。
+constexpr std::array<std::string_view, 10> state_line_pieces{{
+    "a",
+    "a",
+    "b",
+    " ",
+    "x",
+    "\xC3\xA9",
+    "e\xCC\x81",
+    "\xE3\x81\x82",
+    "\xF0\x9F\x98\x80",
+    "\xCC\x81",
+}};
+
+// 期待の値がこの数の列の畳みなので、rounds（50 倍の走り）を掛けない。
+constexpr std::size_t state_cases = 3000U;
+constexpr std::uint64_t fnv_offset = 14695981039346656037ULL;
+constexpr std::uint64_t fnv_prime = 1099511628211ULL;
+// 直す前の評価器（main e43e93e8）の答えの畳み（seed 9011・state_cases 組）。
+constexpr std::uint64_t state_answers_digest = 0x669ac3eccfd658c1ULL;
+
+[[nodiscard]] std::string state_pattern(Random &random)
+{
+    const std::size_t pieces = 1U + below(random, 8U);
+    std::string pattern;
+    for (std::size_t piece = 0; piece < pieces; ++piece)
+    {
+        pattern.append(pick(random, state_fragments));
+    }
+    return pattern;
+}
+
+[[nodiscard]] std::string state_line(Random &random)
+{
+    const std::size_t pieces = below(random, 24U);
+    std::string line;
+    for (std::size_t piece = 0; piece < pieces; ++piece)
+    {
+        line.append(pick(random, state_line_pieces));
+    }
+    return line;
+}
+
+void folded(std::uint64_t &digest, std::size_t value)
+{
+    for (std::size_t shift = 0; shift < 64U; shift += 8U)
+    {
+        digest = (digest ^ ((static_cast<std::uint64_t>(value) >> shift) & 0xFFU)) * fnv_prime;
+    }
+}
+
+// 1 組のすべての境からの答えを畳み、当たった数を返す。
+[[nodiscard]] std::size_t state_answers_folded(std::uint64_t &digest, const VimPattern &pattern,
+                                               std::string_view line)
+{
+    std::size_t found = 0;
+    for (const std::size_t from : boundaries(line))
+    {
+        const Found match = pattern.matched(line, from);
+        folded(digest, from);
+        folded(digest, match.has_value() ? 1U : 0U);
+        if (match.has_value())
+        {
+            folded(digest, match.value().begin);
+            folded(digest, match.value().end);
+            ++found;
+        }
+    }
+    return found;
+}
+
+void verify_state_route_keeps_its_answers()
+{
+    Random random{9011U};
+    std::uint64_t digest = fnv_offset;
+    std::size_t states = 0;
+    std::size_t found = 0;
+    for (std::size_t round = 0; round < state_cases; ++round)
+    {
+        const std::string pattern = state_pattern(random);
+        const std::string line = state_line(random);
+        const Parsed parsed =
+            VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
+        folded(digest, parsed.has_value() ? 1U : 0U);
+        if (!parsed.has_value() || parsed.value().route() == core::VimPatternRoute::sequence)
+        {
+            continue;
+        }
+        ++states;
+        found += state_answers_folded(digest, parsed.value(), line);
+    }
+    if (digest != state_answers_digest)
+    {
+        std::fprintf(stderr, "  state route answers digest: %016llx (cases %zu, found %zu)\n",
+                     static_cast<unsigned long long>(digest), states, found);
+    }
+    expect(digest == state_answers_digest,
+           "the state route gives the answers of the evaluator before #1584");
+    expect(states >= state_cases / 2U && found >= state_cases,
+           "the state route cases go through the evaluator and include matches");
+}
+
 // 生成器そのものが決定的（同じ seed で同じ列）。
 void verify_generators_are_deterministic()
 {
@@ -977,5 +1469,7 @@ void verify_vim_pattern_property_scope()
     verify_backtracking_is_bounded();
     verify_known_cases();
     verify_quantifiers_follow_the_model();
+    verify_branches_follow_the_model();
+    verify_state_route_keeps_its_answers();
 }
 } // namespace nenenib::tests

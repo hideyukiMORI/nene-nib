@@ -2,11 +2,14 @@
 
 #include "LiteralPattern.hpp"
 #include "VimAction.hpp"
+#include "VimMarkEdits.hpp"
 #include "VimMatchRequest.hpp"
 #include "VimMotionRange.hpp"
 #include "VimNumberedRule.hpp"
 #include "VimSearch.hpp"
 #include "VimSearchHit.hpp"
+#include "VimSearchObject.hpp"
+#include "VimSearchObjectRequest.hpp"
 #include "VimSearchRequest.hpp"
 #include "VimSmartcase.hpp"
 #include "VimWordMotion.hpp"
@@ -19,8 +22,10 @@
 namespace nenenib::core
 {
 using detail::characters_between;
+using detail::combined_count;
 using detail::context_marked;
 using detail::exclusive_range;
+using detail::operation_of;
 using detail::operator_start;
 using detail::opposite;
 using detail::performed;
@@ -28,6 +33,8 @@ using detail::resolved_count;
 using detail::rested_mode;
 using detail::search_action;
 using detail::searched_key;
+using detail::visual_operator_applied;
+using detail::visual_resting;
 
 namespace detail
 {
@@ -134,6 +141,18 @@ namespace
     return state;
 }
 
+// 検索が着く位置（Vim の normal_search の最後の check_cursor・#1606）。行の内容の終わり（NUL）の
+// 当たり（`/$` `/\>` など幅の無い当たり）は、NORMAL とオペレータ待ちでは最後の文字の上に寄せ、
+// その寄せた位置がオペレータの範囲の端になる（exclusive なので `d/$` は最後の文字を残す）。VISUAL
+// と INSERT の `Ctrl-o` の命令を待つ間は Vim の check_cursor_col が NUL を許すので寄せない
+// （`v/$d` は改行まで・`i<C-o>d/$` は行の全体を消す・実測）。
+[[nodiscard]] Offset searched_landing(const VimState &state, const TextBuffer &text,
+                                      const VimSearchHit &hit)
+{
+    const Offset at = text.offset_of(hit.position);
+    return vim_insert_paused(state) ? at : detail::rested_in(text, at, state.mode);
+}
+
 // 解析済みの last_search が正本。回数ぶん探し、着いた先へ 1 本で流す（決定 3・4）。
 [[nodiscard]] VimStep search_from(const VimState &state, const VimEditorView &view,
                                   const VimSearchRequest &request)
@@ -149,15 +168,16 @@ namespace
         return search_noticed(state, VimSearchNotice{VimSearchNoticeKind::unsupported_pattern,
                                                      std::string{}, parsed.error()});
     }
-    const auto hit = vim_find_match(view.text, parsed.value(),
-                                    VimMatchRequest{view.text.position_of(request.origin),
-                                                    request.direction, resolved_count(state)});
+    const auto hit =
+        vim_find_match(view.text, parsed.value(),
+                       VimMatchRequest{view.text.position_of(request.origin), request.direction,
+                                       resolved_count(state), state.wrapscan});
     if (!hit.has_value())
     {
         return search_noticed(
             state, VimSearchNotice{hit.error(), std::string{remembered.text()}, std::nullopt});
     }
-    const Offset destination = view.text.offset_of(hit.value().position);
+    const Offset destination = searched_landing(state, view.text, hit.value());
     VimStep step = state.pending.has_value() ? search_operated(state, view, request, destination)
                                              : search_moved(state, view, destination);
     step.notice = wrap_notice(hit.value(), request.direction);
@@ -222,6 +242,28 @@ namespace
     return literal_pattern(text, direction);
 }
 
+// 外れた `*` / `#` の 1 歩。Vim の nv_ident は探す前にキャレットを語の先頭へ置き（setpcmark の
+// 後）、見つからなくてもそこに残る。モードと保留のオペレータに依らない: NORMAL とオペレータ待ちは
+// キャレット（オペレータは何もせずに消え、失敗なので再生は打ち切る）、VISUAL は選択の端が動く。
+// 'wrapscan' なら語そのものに必ず当たるので、見えるのは `:set nows` の E385 / E384 だけ（#1561・
+// FZ1 と #1622 の M2 の実測）。
+[[nodiscard]] VimStep word_start_kept(VimStep step, const VimEditorView &view, Offset begin)
+{
+    switch (step.next.mode)
+    {
+    case VimMode::normal:
+    case VimMode::insert:
+        step.effect = VimMoveTo{begin};
+        return context_marked(std::move(step), view);
+    case VimMode::visual:
+    case VimMode::visual_line:
+    case VimMode::visual_block:
+        step.effect = VimSelect{Selection{view.selection.anchor, begin}};
+        return context_marked(std::move(step), view);
+    }
+    std::unreachable();
+}
+
 // `*` / `#`（決定 3 と Issue #961 の追補）。キャレットの下か後ろの語を \<…\> のパターンにし、
 // 語が無ければ空白でない文字列を \< \> なしで、同じ経路へ。どちらも無ければ E348。
 [[nodiscard]] VimStep word_search(const VimState &original, const VimEditorView &view,
@@ -244,8 +286,98 @@ namespace
         VimSearchSnapshot::from(word.has_value() ? "\\<" + text + "\\>" : text, direction,
                                 view.search_case, VimSmartcase::ignored);
     // 探し始めるのは語の先頭だが、範囲の端は元のキャレットである（実測）。
-    return search_from(remembered, view,
-                       VimSearchRequest{found.value().begin, view.selection.caret, direction});
+    VimStep step = search_from(
+        remembered, view, VimSearchRequest{found.value().begin, view.selection.caret, direction});
+    if (step.failure.has_value())
+    {
+        return word_start_kept(std::move(step), view, found.value().begin);
+    }
+    return step;
+}
+
+// オペレータ待ちの `gn` `gN`（#1617）。Vim の current_search は当たりを VISUAL として立て、
+// do_pending_operator がその VISUAL の範囲にオペレータを効かせる（is_VIsual）。同じ道として、選んだ
+// 当たりを文字単位の選択に置いて VISUAL のオペレータの 1 本へ流す。回数は当たりを選ぶのに使い、
+// `>` `<` では字下げの回数にもなる（Vim の op_shift の cap->count1・`2>gn` は 2 段・実測）。
+// `.` の記録は NORMAL の鍵の列（`cgnX<Esc>`）のままで、再生は次の当たりを選び直す。抜けた選択は
+// `gv` と `'<` `'>` が読む前の選択になる（`dgngv` は消した所を選ぶ・実測）。
+[[nodiscard]] VimStep object_operated(const VimState &state, const VimEditorView &view,
+                                      const Selection &selected)
+{
+    VimState visual = state;
+    visual.mode = VimMode::visual;
+    visual.count = combined_count(state);
+    visual.pending = std::nullopt;
+    visual.input_wait = std::nullopt;
+    // 選択は借用の欄なので、ほかの欄を写した view を選んだ当たりで組み直す。欄を全部ほどいてから
+    // 名指しで組むので、VimEditorView に欄が足されるとほどく数が合わずにコンパイルが落ちる
+    // （足した欄を黙って既定値にしない・#1617 のレビュー L3）。
+    const auto &[text, selection, viewport, source, tabs, layout, navigation, row_landing,
+                 view_marks, mark_landing, search_case, scroll_margin, document_limit,
+                 capture_limit] = view;
+    static_cast<void>(selection);
+    const VimEditorView over{.text = text,
+                             .selection = selected,
+                             .viewport = viewport,
+                             .source = source,
+                             .tabs = tabs,
+                             .layout = layout,
+                             .navigation = navigation,
+                             .row_landing = row_landing,
+                             .marks = view_marks,
+                             .mark_landing = mark_landing,
+                             .search_case = search_case,
+                             .scroll_margin = scroll_margin,
+                             .document_limit = document_limit,
+                             .capture_limit = capture_limit};
+    VimStep step = visual_operator_applied(visual, over, operation_of(state));
+    VimMarks marks = step.marks.value_or(*view.marks);
+    marks.last_visual =
+        VimLastVisual{VimMode::visual, vim_mark_position_of(view.text, selected.anchor),
+                      vim_mark_position_of(view.text, selected.caret), std::nullopt};
+    step.marks = std::move(marks);
+    return step;
+}
+
+// `gn` `gN`（#1617・Vim の nv_g_cmd の `n` `N` → current_search）。最後の検索のパターンで当たりを
+// 選ぶ 1 本で、NORMAL は文字単位の VISUAL に入り、VISUAL は anchor を残して広げ（行単位と矩形も
+// 文字単位になる）、オペレータ待ちはその選択に効かせる。範囲は vim_search_object の 1 本が決める。
+// 欲しい列は Vim と同じく動かさない（current_search は curswant を書かない）。
+// 検索の強調・ジャンプの列・覚えた向きは変えない（SEARCH_KEEP）。最後の検索が無ければ E35、
+// 当たりが無ければ報せを出さずに失敗し、オペレータは消えて VISUAL は選択のまま残る（clearopbeep）。
+[[nodiscard]] VimStep matched_object(const VimState &state, const VimEditorView &view,
+                                     VimAction action)
+{
+    if (!state.last_search.has_value())
+    {
+        return search_noticed(state, notice_of(VimSearchNoticeKind::no_previous_pattern));
+    }
+    const auto &parsed = state.last_search.value().parsed();
+    if (!parsed)
+    {
+        return search_noticed(state, VimSearchNotice{VimSearchNoticeKind::unsupported_pattern,
+                                                     std::string{}, parsed.error()});
+    }
+    const bool visual = is_visual_mode(state.mode);
+    const VimSearchObjectRequest request{
+        visual ? view.selection : collapsed_at(view.selection.caret),
+        visual ? VimSearchObjectFrom::selection : VimSearchObjectFrom::caret,
+        action == VimAction::select_next_match ? VimSearchDirection::forward
+                                               : VimSearchDirection::backward,
+        resolved_count(state), state.wrapscan};
+    const auto selected = vim_search_object(view.text, parsed.value(), request);
+    if (!selected.has_value())
+    {
+        return VimStep{search_rested(state), VimNoEffect{}, std::nullopt,
+                       VimRepeatFailure::not_found};
+    }
+    if (state.pending.has_value())
+    {
+        return object_operated(state, view, selected.value());
+    }
+    VimState next = visual_resting(state, VimMode::visual);
+    next.wanted_column = state.wanted_column;
+    return VimStep{std::move(next), VimSelect{selected.value()}};
 }
 
 // 検索の入力行を開く（決定 2）。VimState は変えないので保留・回数・記録はそのまま残る。
@@ -271,6 +403,10 @@ namespace detail
     if (action == VimAction::repeat_search || action == VimAction::repeat_search_opposite)
     {
         return repeated_search(state, view, action);
+    }
+    if (action == VimAction::select_next_match || action == VimAction::select_previous_match)
+    {
+        return matched_object(state, view, action);
     }
     return word_search(state, view, action);
 }

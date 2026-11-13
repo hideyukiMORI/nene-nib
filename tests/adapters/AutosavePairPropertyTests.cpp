@@ -4,11 +4,15 @@
 // 古い改訂の一覧・壊れた一覧のバイト・一覧の欠け・余分なファイル・余分なフォルダ）を入れ、本物の
 // フォルダの上で Win32AutosaveAdapter の remnants・read・forget を素朴な模型と照らす。模型は
 // 「この試験が最後に各ファイルへ書いたバイト列」の写しで、次を確かめる。
-//   1. remnants は、名前が作る形で生きていない pid のフォルダのうち、一覧が読めるものの行だけを
-//      全部返す（location は `<pid>/<番号>`・パス・題名・キャレットは一覧の行）。一覧を壊していない
-//      フォルダは書いた行そのもの、壊したフォルダは一覧の復号（--persisted-property が別に守る）。
-//      自分の pid・生きている pid（4）・大文字・先頭の 0・フォルダでないもの・一覧の無いものは
-//      出ない。並びは比べない（ADR 0137 は残骸の順を約束せず、フォルダの順は FindFirstFileExW の
+//   1. remnants は、次のフォルダのうち一覧が読めるものの行だけを全部返す:
+//      名前が作る形で生きていない pid のフォルダと、自分と同じ pid の前の起動のフォルダ
+//      （前の版の形 `<pid>` と、作成時刻の違う `<pid>-<時刻>`・#1634）。
+//      location は `<フォルダ名>/<番号>`、パス・題名・キャレットは一覧の行。
+//      一覧を壊していないフォルダは書いた行そのもの、壊したフォルダは一覧の復号
+//      （--persisted-property が別に守る）。
+//      この起動のフォルダ（自分の pid かつ自分の作成時刻）・生きている pid（4）・大文字・
+//      先頭の 0・フォルダでないもの・一覧の無いものは出ない。
+//      並びは比べない（ADR 0137 は残骸の順を約束せず、フォルダの順は FindFirstFileExW の
 //      列挙の順に従うので、両側を並べ替えてから比べる）。
 //   2. read は、その番号の本文に最後に書いたバイト列をそのまま返し、本文が無ければ unreadable。
 //      別の番号・別のフォルダの本文を返さない（模型との完全な一致で見る）。
@@ -30,6 +34,8 @@
 #include "FilePath.hpp"
 #include "FindHandle.hpp"
 #include "LineNumber.hpp"
+#include "ProcessInstance.hpp"
+#include "ProcessInstances.hpp"
 #include "TemporaryTestDirectory.hpp"
 #include "TextPosition.hpp"
 #include "Win32AutosaveAdapter.hpp"
@@ -372,14 +378,24 @@ void damaged(Random &random, DeadFolder &folder)
     wounds.at(below(random, wounds.size()))(random, folder);
 }
 
+// named が有れば、その名前（自分と同じ pid の前の起動のフォルダ）で作る。
 [[nodiscard]] DeadFolder dead_folder(Random &random, std::size_t index,
-                                     std::set<std::string> &names)
+                                     std::set<std::string> &names,
+                                     const std::optional<std::string> &named)
 {
     DeadFolder folder;
-    do
+    if (named.has_value())
     {
-        folder.name = std::format("{:x}", dead_pid(random));
-    } while (!names.insert(folder.name).second);
+        folder.name = named.value();
+        names.insert(folder.name);
+    }
+    else
+    {
+        do
+        {
+            folder.name = std::format("{:x}", dead_pid(random));
+        } while (!names.insert(folder.name).second);
+    }
     folder.entries = entries_of(random, index);
     folder.list = adapters::encode_autosave_entries(folder.entries).value();
     for (const auto &entry : folder.entries)
@@ -409,7 +425,7 @@ void damaged(Random &random, DeadFolder &folder)
     return written;
 }
 
-// 残骸にならないフォルダ（自分・生きている System・大文字・先頭の 0・名前が 16 進でない）と、
+// 残骸にならないフォルダ（この起動・生きている System・大文字・先頭の 0・名前が 16 進でない）と、
 // 名前は死んだ pid だがフォルダでないファイル。どれにも読める一覧と本文を置く。
 [[nodiscard]] std::vector<std::wstring> foreign_folders(Random &random,
                                                         std::set<std::string> &names)
@@ -420,8 +436,9 @@ void damaged(Random &random, DeadFolder &folder)
     const std::string upper = std::format("{:X}", dead_pid(random));
     const std::string zero = std::format("0{:x}", dead_pid(random));
     std::vector<std::wstring> kept;
-    for (const std::string &name : {std::format("{:x}", GetCurrentProcessId()), std::string("4"),
-                                    upper, zero, std::string("zz")})
+    const adapters::ProcessInstance self = adapters::current_process_instance();
+    for (const std::string &name : {std::format("{:x}-{:x}", self.pid, self.created),
+                                    std::string("4"), upper, zero, std::string("zz")})
     {
         if (below(random, 2U) == 0U || !names.insert(name).second)
         {
@@ -560,9 +577,16 @@ void damaged(Random &random, DeadFolder &folder)
     std::vector<DeadFolder> folders;
     std::vector<std::wstring> kept = foreign_folders(random, names);
     const std::size_t count = 1U + below(random, 3U);
+    const adapters::ProcessInstance self = adapters::current_process_instance();
+    // 4 件に 1 件ずつ、自分と同じ pid の前の起動のフォルダ（前の版の形・作成時刻の違う今の形）を
+    // 最初の 1 つに置く（#1634）。
+    const std::array<std::optional<std::string>, 4> same_pid{
+        {std::nullopt, std::format("{:x}", self.pid),
+         std::format("{:x}-{:x}", self.pid, self.created + 1U), std::nullopt}};
     for (std::size_t at = 0; at < count; ++at)
     {
-        folders.push_back(dead_folder(random, index, names));
+        folders.push_back(
+            dead_folder(random, index, names, at == 0 ? same_pid.at(index % 4U) : std::nullopt));
         write_folder(folders.back());
         const auto extra = extra_files(random, folders.back());
         kept.insert(kept.end(), extra.begin(), extra.end());

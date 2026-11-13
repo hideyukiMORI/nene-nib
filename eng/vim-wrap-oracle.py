@@ -8,7 +8,9 @@ starts scrolled to "leftcol", and the snapshot records winsaveview().leftcol.
 A wrapped viewport with "first_row" starts with that many screen rows of "first_visible" hidden
 (winsaveview().skipcol = first_row * columns; ADR 0146 decision 5).
 A viewport with "scrolloff" sets that 'scrolloff' before the window is placed (0 when absent,
-the value every earlier fixture was measured with; #1374). The replay sets it after the window.
+the value every earlier fixture was measured with; #1374). The row carries it as the setting line
+`set scrolloff=N` in the same last field the main oracle writes (`settings_field`, #1626), and the
+replay types that line after it places the window.
 """
 
 from __future__ import annotations
@@ -121,16 +123,17 @@ def row(record: dict) -> str:
                     (view['visible_lines'], view['first_visible'], view['line'], view['column'],
                      result['first'], result['scroll'], view['columns'],
                      result['skipcol'] // view['columns']))
-        # 鍵の前に隠れている画面行と余白は、ある fixture だけ書く（無い行は前の形のまま）。
-        if view.get('first_row') or view.get('scrolloff'):
-            viewport += ", 0, 0, 0, %d" % view.get('first_row', 0)
-        if view.get('scrolloff'):
-            viewport += ", %d" % view['scrolloff']
+        # 鍵の前に隠れている画面行は、ある fixture だけ書く（無い行は前の形のまま）。
+        if view.get('first_row'):
+            viewport += ", 0, 0, 0, %d" % view['first_row']
         viewport += "}"
     values = [oracle.literal(fixture[key]) for key in ('name', 'text', 'keys')]
     values += [oracle.literal(result['text']), str(result['line']), str(result['column']),
                oracle.literal(result['register']), oracle.literal(result['register_kind']), viewport]
-    return "    {" + ", ".join(values) + "},\n"
+    # 余白は窓の欄ではなく、主の fixture と同じ settings 欄に `set scrolloff=N` の行で書く。再生は
+    # 窓を置いた後にその行を流す（#1626・主の oracle の settings_field）。
+    settings = [f"set scrolloff={view['scrolloff']}"] if view.get('scrolloff') else []
+    return "    {" + ", ".join(values) + oracle.settings_field(settings, False, False) + "},\n"
 
 
 def header(records: list[dict], version: str) -> str:

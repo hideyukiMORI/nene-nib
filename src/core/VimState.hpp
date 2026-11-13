@@ -87,6 +87,10 @@ struct VimState
     // `:set clipboard=` だけが変える。真なら無名への書きを OS へも出し、`p` `P` の直前に OS
     // の本文を無名へ読む。incsearch と同じく窓に 1 つで、設定ファイルにもセッションにも入れない。
     bool clipboard_unnamed = false;
+    // 検索が本文の端で折り返すか（Vim の 'wrapscan'・#1561）。既定は真（Vim と同じ）で、Ex の
+    // `:set (no)wrapscan` `ws` だけが変える。incsearch と同じく窓に 1 つで、設定ファイルにも
+    // セッションにも入れない。読むのは検索の鍵（search_from）と incsearch の preview。
+    bool wrapscan = true;
     // `.` が VISUAL の変更を再生しているあいだ真（Vim の redo_VIsual_busy・#1039）。再生の VISUAL
     // を 抜けても前の選択（`gv`）を置き換えない（実測）。立てるのは `.` の 1 か所、持ち越すのは
     // vim_step の 1 か所で、再生の鍵が VISUAL にいるあいだだけ続く。
@@ -168,6 +172,7 @@ struct VimState
     next.highlight = state.highlight;
     next.incsearch = state.incsearch;
     next.clipboard_unnamed = state.clipboard_unnamed;
+    next.wrapscan = state.wrapscan;
     next.registers = state.registers;
     next.numbered = state.numbered;
     next.small_delete = state.small_delete;

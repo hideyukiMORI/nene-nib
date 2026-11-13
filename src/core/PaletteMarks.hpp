@@ -7,6 +7,7 @@
 #include "PaletteScope.hpp"
 
 #include <array>
+#include <cstddef>
 #include <string>
 #include <string_view>
 
@@ -34,4 +35,9 @@ inline constexpr std::array<PaletteMark, 6> palette_marks{{
 // 操作`）。記号と名前の間は半角の空白、項目の間は表の区切り palette_mark_separator（日本語は全角の
 // 空白 U+3000）。名前と区切りは language の文（#1019）。
 [[nodiscard]] DisplayText palette_mark_hint(DisplayLanguage language);
+
+// 案内の文（palette_mark_hint）の中で、各組（記号 ＋ 名前）が始まるバイトの位置（表の順・#1640）。
+// 欄が狭いとき ui が組の単位で前を落とすために、組の境目の幅を測る所を渡す。
+[[nodiscard]] std::array<std::size_t, palette_marks.size()>
+palette_mark_hint_starts(DisplayLanguage language);
 } // namespace nenenib::core

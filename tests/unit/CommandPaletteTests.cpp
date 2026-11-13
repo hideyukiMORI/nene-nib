@@ -66,6 +66,8 @@
 #include "ThemeCatalog.hpp"
 #include "ThemeChoice.hpp"
 #include "ToggleBookmark.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 #include "UnlistedExtensions.hpp"
 #include "VimCharacter.hpp"
 #include "VimKeyPress.hpp"
@@ -76,6 +78,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <optional>
 #include <span>
@@ -964,9 +967,66 @@ void verify_palette_entries_controller()
            "a command behind the colon mark changes the theme as before");
 }
 
+// 記号の案内の組の境目（#1640）。各組は記号で始まり、前は表の区切り。3 言語とも。
+void verify_palette_hint_starts()
+{
+    for (const auto language :
+         {nenenib::core::DisplayLanguage::japanese, nenenib::core::DisplayLanguage::english,
+          nenenib::core::DisplayLanguage::simplified_chinese})
+    {
+        const auto hint = core::palette_mark_hint(language);
+        const auto text = hint.text();
+        const auto starts = core::palette_mark_hint_starts(language);
+        const auto separator = core::ui_text(core::UiMessage::palette_mark_separator, language);
+        bool marked = starts.front() == 0;
+        for (std::size_t index = 0; index < starts.size(); ++index)
+        {
+            const auto at = starts.at(index);
+            marked =
+                marked && at + 1 < text.size() &&
+                text.at(at) == core::palette_marks.at(index).mark && text.at(at + 1) == ' ' &&
+                (index == 0 || text.substr(at - separator.size(), separator.size()) == separator);
+        }
+        expect(marked, "every group of the mark hint starts at its mark after the separator");
+    }
+}
+
+// 記号の案内の置き場（#1640）。入る最も前の組から出し、組の途中で切らない。描画と同じ配置を読む。
+void verify_palette_hint_place(std::uint32_t dpi)
+{
+    const auto layout = core::palette_layout(1600, 1200, dpi, 13);
+    const auto &input = layout.input;
+    const auto room = width_of(input) - to_pixels(core::palette_hint_gap_dips, dpi);
+    const std::array<std::int32_t, 6> roomy{room / 2, room / 3, room / 4, room / 5, room / 6, 8};
+    const auto all = core::palette_input_hint(layout, dpi, roomy);
+    expect(
+        all.first == 0 && all.area == core::LayoutRect{input.right - room / 2, input.top,
+                                                       input.right, input.bottom},
+        "a hint that fits shows every group, right aligned to the query and as wide as the text");
+    const std::array<std::int32_t, 6> tight{room + 40, room + 1, room, room - 30, 60, 30};
+    const auto dropped = core::palette_input_hint(layout, dpi, tight);
+    expect(dropped.first == 2 &&
+               dropped.area ==
+                   core::LayoutRect{input.right - room, input.top, input.right, input.bottom} &&
+               dropped.area.left == input.left + to_pixels(core::palette_hint_gap_dips, dpi),
+           "a narrow query drops the leading groups whole and keeps the gap after the caret");
+    const std::array<std::int32_t, 6> wide{room + 6, room + 5, room + 4,
+                                           room + 3, room + 2, room + 1};
+    const auto none = core::palette_input_hint(layout, dpi, wide);
+    expect(none.first == wide.size() && width_of(none.area) == 0 && none.area.right == input.right,
+           "a query narrower than the last group shows no hint");
+    const auto smallest = core::palette_layout(to_pixels(360, dpi), 1200, dpi, 13);
+    const auto least = width_of(smallest.input) - to_pixels(core::palette_hint_gap_dips, dpi);
+    const std::array<std::int32_t, 6> long_text{least + 300, least + 200, least + 100,
+                                                least,       90,          40};
+    expect(core::palette_input_hint(smallest, dpi, long_text).first == 3,
+           "the smallest window shows the trailing groups that fit");
+}
+
 // 行の右端の補足と検索欄の案内の欄（ADR 0060 の決定 9）。描画と同じ core の配置を読む。
 void verify_palette_notes_geometry()
 {
+    verify_palette_hint_starts();
     for (const auto dpi : {96U, 120U})
     {
         const auto inset = to_pixels(8, dpi) * 2;
@@ -982,12 +1042,7 @@ void verify_palette_notes_geometry()
                "the name ends 12 DIP before the note without overlapping");
         expect(core::palette_row_label(row, dpi, false) == inside,
                "an unmarked row keeps the whole inside for the name");
-        const auto hint = core::palette_input_hint(layout);
-        expect(hint.right == layout.input.right &&
-                   hint.left == layout.input.left + width_of(layout.input) / 2 &&
-                   hint.top == layout.input.top && hint.bottom == layout.input.bottom &&
-                   width_of(hint) > 0,
-               "the mark hint takes the right half of the query");
+        verify_palette_hint_place(dpi);
         const core::LayoutRect least{0, 0, to_pixels(244, dpi) + inset * 2, row.bottom - row.top};
         expect(width_of(core::palette_row_note(least, dpi)) == to_pixels(112, dpi),
                "the note stays while the name keeps its minimum");
@@ -997,9 +1052,6 @@ void verify_palette_notes_geometry()
         expect(width_of(core::palette_row_note(narrow, dpi)) == 0 &&
                    core::palette_row_label(narrow, dpi, true) == narrow_inside,
                "a narrow row drops the note and keeps the name as before");
-        const auto smallest = core::palette_layout(to_pixels(360, dpi), 1200, dpi, 13);
-        expect(width_of(core::palette_input_hint(smallest)) == 0,
-               "the smallest window drops the mark hint");
     }
 }
 

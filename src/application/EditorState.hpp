@@ -202,6 +202,10 @@ class EditorState final
     // 復元・自動退避から戻した文書）が通し番号を振り、閉じる・外すが列から抜く。切り替えは帯の順を変えないので触らない。
     // 番号は閉じても再利用しない。
     [[nodiscard]] const std::vector<AutosaveId> &autosave_ids() const noexcept;
+    // アクティブの文書を置いてほかの束を広げた回数（切り替えの 1 か所 switched_to が 1 つ進める・
+    // ADR 0137 の追補 #1625 の決定 5）。最後の砦が「意図の途中でアクティブ以外のタブに触れたか」を
+    // 見分けるのに読むだけで、比較にも一覧（session）にも入れない。
+    [[nodiscard]] std::uint64_t tab_switches() const noexcept;
     // 帯の位置 position がまだ読んでいない文書なら、その値。アクティブ・範囲の外・読み込み済みは
     // 値なし。読むのは controller の reach_tab だけ（ADR 0059 の決定 5）。
     [[nodiscard]] std::optional<UnloadedDocument> unloaded_at(std::size_t position) const;
@@ -413,6 +417,7 @@ class EditorState final
     std::size_t active_ = 0;
     std::vector<AutosaveId> autosave_ids_{AutosaveId{0}};
     std::uint64_t next_autosave_id_ = 1;
+    std::uint64_t tab_switches_ = 0;
     core::TabRecency recency_ = core::TabRecency::single();
     std::optional<AutosaveId> transient_;
     bool tab_walk_ = false;

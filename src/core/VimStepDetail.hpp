@@ -141,6 +141,10 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
                                           const VimMotionRange &range, VimOperator operation);
 // VISUAL の鍵が範囲を取る種類（Vim の v_visop・nv_subst・nv_Replace の読み替え・#1436）。
 [[nodiscard]] VimMode visual_operated_mode(VimMode mode, VimAction action) noexcept;
+// 文字単位・行単位の選択にオペレータを効かせる VISUAL の道。オペレータ待ちの `gn` `gN` が選んだ
+// 当たりへ流す（#1617）。
+[[nodiscard]] VimStep visual_operator_applied(const VimState &state, const VimEditorView &view,
+                                              VimOperator operation);
 // VISUAL をオペレータで抜けた歩に覚え直した仮想桁を置く（Vim の oap->start_vcol / end_vcol・
 // #1436）。`action` は抜けた鍵の動作（種類の読み替えと矩形の `C` `D` の行末を決める）。
 [[nodiscard]] VimStep visual_operation_noted(const VimState &state, const VimEditorView &view,
@@ -185,6 +189,10 @@ using JoinedLines = std::pair<LineNumber, LineNumber>;
 [[nodiscard]] VimOperator operation_of(const VimState &state) noexcept;
 [[nodiscard]] VimStep performed(const VimState &state, const TextBuffer &text, Offset caret,
                                 const VimMotionRange &range);
+// 表示だけの `g` の鍵（#1617 のレビュー M1）。`8g8` は失敗し、NORMAL は何もせず、オペレータ待ちは
+// キャレットの上の空の範囲に効かせる。VISUAL は呼び手が選択のまま残す。
+[[nodiscard]] bool finds_illegal_byte(const VimState &state, VimAction action) noexcept;
+[[nodiscard]] VimStep displayed(const VimState &state, const VimEditorView &view, VimAction action);
 [[nodiscard]] Offset operator_start(Offset before, Offset landing) noexcept;
 [[nodiscard]] VimState finished_input_wait(const VimState &state);
 [[nodiscard]] VimStep completed_character_search(const VimState &state, const VimEditorView &view,

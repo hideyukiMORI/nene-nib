@@ -18,6 +18,10 @@ enum class VimSearchNoticeKind : std::uint8_t
     wrapped_to_top,
     // search hit TOP, continuing at BOTTOM
     wrapped_to_bottom,
+    // E385: Search hit BOTTOM without match for: <pattern>（'nowrapscan' の前向き・#1561）
+    hit_bottom_without_match,
+    // E384: Search hit TOP without match for: <pattern>（'nowrapscan' の後ろ向き・#1561）
+    hit_top_without_match,
     // 未対応の構文の拒否（Vim には無い報せ）
     unsupported_pattern,
     // `:s` の族（ADR 0168 の決定 5）。N substitution(s) on M line(s)（置き換えが 3

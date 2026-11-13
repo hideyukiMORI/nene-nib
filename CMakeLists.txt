@@ -59,8 +59,8 @@ nenenib_target(nenenib_core core STATIC
     src/core/StatusBarLayout.cpp src/core/StatusItems.cpp src/core/LineEndingConversion.cpp
     src/core/TabDestination.cpp src/core/TabKeyTable.cpp src/core/TabRecency.cpp src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
     src/core/TitleBarLayout.cpp src/core/UnlistedExtensions.cpp src/core/Utf16.cpp src/core/Utf8.cpp
-    src/core/VimBlockRange.cpp src/core/VimCaret.cpp src/core/VimCase.cpp src/core/VimCharacterBoundary.cpp src/core/VimClipboardText.cpp src/core/VimJumpLists.cpp src/core/VimKeyTable.cpp src/core/VimMarkEdits.cpp src/core/VimMatchingPair.cpp src/core/VimNumber.cpp src/core/VimPattern.cpp src/core/VimPatternCapture.cpp src/core/VimPatternEvaluation.cpp src/core/VimRegisterSnapshot.cpp src/core/VimRegisterText.cpp src/core/VimKeyNotation.cpp src/core/VimLineColumns.cpp
-    src/core/VimSearch.cpp src/core/VimSearchNotice.cpp src/core/VimSearchWalk.cpp src/core/VimSearchSnapshot.cpp src/core/VimRecordedKeys.cpp
+    src/core/VimBlockRange.cpp src/core/VimCaret.cpp src/core/VimCase.cpp src/core/VimCharacterBoundary.cpp src/core/VimClipboardText.cpp src/core/VimJumpLists.cpp src/core/VimKeyTable.cpp src/core/VimMarkEdits.cpp src/core/VimMatchingPair.cpp src/core/VimNumber.cpp src/core/VimPattern.cpp src/core/VimPatternCapture.cpp src/core/VimPatternCompiler.cpp src/core/VimPatternEvaluation.cpp src/core/VimPatternMachine.cpp src/core/VimPatternTrace.cpp src/core/VimRegisterSnapshot.cpp src/core/VimRegisterText.cpp src/core/VimKeyNotation.cpp src/core/VimLineColumns.cpp
+    src/core/VimSearch.cpp src/core/VimSearchNotice.cpp src/core/VimSearchObject.cpp src/core/VimSearchWalk.cpp src/core/VimSearchSnapshot.cpp src/core/VimRecordedKeys.cpp
     src/core/VimStep.cpp src/core/VimStepBlock.cpp src/core/VimStepDetail.cpp src/core/VimStepInsert.cpp src/core/VimStepMotions.cpp src/core/VimStepOperators.cpp src/core/VimStepPut.cpp
     src/core/VimStepRanges.cpp src/core/VimStepRecording.cpp src/core/VimStepReplace.cpp src/core/VimStepRestart.cpp src/core/VimStepSearch.cpp src/core/VimStepSubstitute.cpp src/core/VimStepTextObjects.cpp src/core/VimStepVisual.cpp src/core/VimStepNumbers.cpp
     src/core/VimScreenGeometry.cpp src/core/VimCursorCorrect.cpp src/core/VimScreenLine.cpp src/core/VimToplineUpdate.cpp src/core/VimScreenRows.cpp src/core/VimHorizontalScroll.cpp
@@ -97,7 +97,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp src/application/DocumentDecoding.cpp
     src/application/EditorControllerLanguageServer.cpp src/application/ServerCommand.cpp
     src/application/EditorControllerLanguageDocuments.cpp src/application/DocumentUri.cpp
-    src/application/DiagnosticLines.cpp)
+    src/application/DiagnosticLines.cpp src/application/LastResortPlan.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
 nenenib_target(nib_tests unit_tests EXECUTABLE
@@ -126,6 +126,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimRandomKeyTests.cpp
     tests/unit/ExRandomInputTests.cpp
     tests/unit/InputLineLimitTests.cpp
+    tests/unit/InputLinePropertyTests.cpp
     tests/unit/VimWindowTests.cpp
     tests/unit/VimClipboardTests.cpp
     tests/unit/VimSearchTests.cpp
@@ -180,7 +181,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/HistoryTests.cpp
     tests/unit/BackgroundWorkTests.cpp
     tests/unit/OpenAsyncTests.cpp
-    tests/unit/AutosaveTests.cpp
+    tests/unit/AutosaveTests.cpp tests/unit/LastResortTests.cpp
     tests/unit/AutosavePlanPropertyTests.cpp
     tests/unit/AutosaveRestorePropertyTests.cpp
     tests/unit/OperationsTests.cpp
@@ -256,9 +257,9 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32Bell.cpp src/adapters/win32/Win32Clock.cpp src/adapters/win32/Win32UiLanguage.cpp src/adapters/win32/Win32ShellRegistration.cpp src/adapters/win32/Win32WslDistributions.cpp
     src/adapters/win32/ClipboardCalls.cpp src/adapters/win32/HtmlClipboardFormat.cpp src/adapters/win32/Win32ClipboardAdapter.cpp
     src/adapters/win32/Win32CodePageAdapter.cpp src/adapters/win32/Win32FontCollationAdapter.cpp
-    src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/TemporaryFiles.cpp
+    src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/TemporaryFiles.cpp src/adapters/win32/ProcessInstances.cpp
     src/adapters/win32/Win32TimingAdapter.cpp
-    src/adapters/win32/Win32Worker.cpp src/adapters/win32/FolderShelf.cpp
+    src/adapters/win32/Win32Worker.cpp src/adapters/win32/LastResortArming.cpp src/adapters/win32/FolderShelf.cpp
     src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
     src/adapters/win32/MarkdownShelf.cpp src/adapters/win32/Win32MarkdownAdapter.cpp
     src/adapters/win32/ImageShelf.cpp src/adapters/win32/ImageFileRead.cpp
@@ -431,6 +432,23 @@ add_test(NAME nib_language_server COMMAND nib_language_server_tests $<TARGET_FIL
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(nib_language_server PROPERTIES TIMEOUT 60)
 
+# Issue #1625: 最後の砦（ADR 0137 の追補）を本当に std::terminate を起こす子 process で通す。子
+# nib_last_resort_child は CTest に登録せず、試験の exe が第 1 引数の経路から起こす。子の終わりは上限つきで
+# 待つ（固まれば子を殺して落とす）。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
+nenenib_target(nib_last_resort_child adapter_tests EXECUTABLE tests/adapters/LastResortChildMain.cpp)
+nenenib_link(nib_last_resort_child nenenib_core)
+nenenib_link(nib_last_resort_child nenenib_application)
+nenenib_link(nib_last_resort_child nenenib_adapters)
+nenenib_target(nib_last_resort_tests adapter_tests EXECUTABLE tests/adapters/LastResortTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
+nenenib_link(nib_last_resort_tests nenenib_core)
+nenenib_link(nib_last_resort_tests nenenib_application)
+nenenib_link(nib_last_resort_tests nenenib_adapters)
+add_dependencies(nib_last_resort_tests nib_last_resort_child)
+add_test(NAME nib_adapters_last_resort COMMAND nib_last_resort_tests $<TARGET_FILE:nib_last_resort_child>
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_adapters_last_resort PROPERTIES TIMEOUT 180)
+
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorWindowDetail.cpp src/ui/win32/EditorWindowLifecycle.cpp src/ui/win32/EditorWindowPointer.cpp src/ui/win32/EditorWindowKeys.cpp
     src/ui/win32/EditorWindowOperations.cpp src/ui/win32/EditorWindowIme.cpp src/ui/win32/EditorWindowExplorer.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
@@ -520,7 +538,8 @@ target_link_options(NeNeNib PRIVATE /DELAYLOAD:d3d11.dll /DELAYLOAD:d2d1.dll /DE
     /DELAYLOAD:comctl32.dll)
 target_link_libraries(NeNeNib PRIVATE delayimp)
 
-# ADR 0082: 開発用の閉じた比較。unit は inline の足場だけ借用し、CTest に登録しない。
+# ADR 0082: 開発用の閉じた比較。unit は inline の足場だけ借用する。CTest に載せるのは期待の
+# 照合だけ（nib_probe_expectations・#1604・時間は測らない）。
 nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/ProbeMain.cpp tests/performance/ProbeWorkload.cpp
     tests/performance/ScopedProbe.cpp tests/performance/BufferProbe.cpp
@@ -543,7 +562,9 @@ nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/WordObjectProbe.cpp
     tests/performance/VimFollowProbe.cpp tests/performance/EditedHistoryProbe.cpp
     tests/performance/PieceListProbe.cpp
-    tests/performance/SubstituteProbe.cpp)
+    tests/performance/SubstituteProbe.cpp tests/performance/PatternCostProbe.cpp
+    tests/performance/PatternProgramProbe.cpp
+    tests/performance/SearchObjectProbe.cpp)
 nenenib_link(nib_perf_probes nenenib_core)
 nenenib_link(nib_perf_probes nenenib_application)
 nenenib_link(nib_perf_probes nenenib_adapters)
@@ -557,6 +578,10 @@ target_compile_definitions(nib_perf_probes PRIVATE
     NIB_PROBE_COMMIT="${NIB_PROBE_COMMIT}" NIB_PROBE_DIRTY="$<BOOL:${NIB_PROBE_DIRTY}>"
     NIB_PROBE_COMPILER="${CMAKE_CXX_COMPILER_VERSION}" NIB_PROBE_CONFIGURATION="$<CONFIG>"
     NIB_PROBE_TOOLCHAIN_HASH="${NIB_PROBE_TOOLCHAIN_HASH}")
+# #1604: 全 workload の warmup の結果が表の期待と合うか（重い workload は ProbeMain.cpp の表で
+# 名指しで外す・外した分は eng/probe-smoke.ps1）。節目を書かず、時間は判定しない。
+add_test(NAME nib_probe_expectations COMMAND nib_perf_probes --expectations)
+set_tests_properties(nib_probe_expectations PROPERTIES TIMEOUT 60)
 
 # #818: Markdown プレビューの差し替えの費用の probe（ADR 0155 の決定 7）。nib_preview_capture と同じ
 # 土台で、時刻は adapters の Win32TimingAdapter の節目だけで取る（ARC-007）。CTest に登録しない。

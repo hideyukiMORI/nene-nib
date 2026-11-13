@@ -16,6 +16,9 @@
 //      の上限の模型（#1376）: 上限は置き換えた後の本文の大きさの 1 つ下・ちょうど・1 つ上・
 //      製品の上限を本文の長さの 4 の剰余で選び、模型の本文が上限を超える件（当たりがあるとき）だけ
 //      too_large。当たりが無ければ上限に依らず no_match。
+//   2b. 略記の `\t` `\r` `\e` `\b`（集合の中も）の pattern は、略記をその文字そのもので書いた
+//      pattern の当たりの模型（2 と同じ歩き）と同じに置き換える（本文に
+//      CR・Esc・後退を差す・#1605）。
 //   3. 通常モードの入口（Ctrl+H → 語 → Enter → 置換文字列 → Ctrl+Enter）で全件を置き換えた本文が
 //      1 の模型と同じで、undo 1 回で開いた本文に、続く redo 1 回で置換後の本文に戻る。
 // 回数は Debug（ASan）で scope 全体が 1 秒程度に終わる値。生成器は std::mt19937_64 の剰余だけを
@@ -75,6 +78,7 @@ constexpr std::size_t rounds = 1U;
 constexpr std::size_t literal_cases = 500U * rounds;
 constexpr std::size_t magic_cases = 500U * rounds;
 constexpr std::size_t controller_cases = 60U * rounds;
+constexpr std::size_t control_cases = 300U * rounds;
 constexpr std::size_t most_lines = 8U;
 constexpr std::size_t most_pieces = 10U;
 
@@ -499,6 +503,75 @@ void verify_magic_patterns()
     expect(refused * 4U < magic_cases, "most generated magic patterns parse");
 }
 
+// 略記の pattern と、略記をその文字そのもので書いた pattern（#1605・`\t` `\r` `\e` `\b` は 1
+// 文字）。
+constexpr std::array<std::pair<std::string_view, std::string_view>, 8> escaped_controls{{
+    {"\\t", "\t"},
+    {"[\\t]", "[\t]"},
+    {"\\r", "\r"},
+    {"[\\r]", "[\r]"},
+    {"[^\\t ]\\+", "[^\t ]\\+"},
+    {"\\t[\\t]", "\t[\t]"},
+    {"\\e", "\x1B"},
+    {"[\\b]", "[\b]"},
+}};
+
+// 本文の code point の境（続きのバイトでない位置）に CR・Esc・後退を 0〜3 個差す。
+[[nodiscard]] std::string with_controls(Random &random, std::string text)
+{
+    constexpr std::array<char, 3> controls{'\r', '\x1B', '\b'};
+    const std::size_t count = below(random, 4U);
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        std::size_t at = below(random, text.size() + 1U);
+        while (at < text.size() && (static_cast<unsigned char>(text.at(at)) & 0xC0U) == 0x80U)
+        {
+            ++at;
+        }
+        text.insert(at, 1U, controls.at(below(random, controls.size())));
+    }
+    return text;
+}
+
+// 略記の pattern の置換は、その文字そのものの pattern の当たりを左から歩いた模型と同じ（CRLF の
+// 行末の CR は模型も外す）。
+[[nodiscard]] bool control_holds(const Case &input, std::string_view raw)
+{
+    const std::string &text = input.first;
+    auto parsed = VimPattern::parse(input.second.first, VimSearchDirection::forward,
+                                    VimPatternCase::sensitive);
+    auto plain = VimPattern::parse(raw, VimSearchDirection::forward, VimPatternCase::sensitive);
+    const auto buffer = core::TextBuffer::from_utf8(text);
+    if (!parsed.has_value() || !plain.has_value() || !buffer.has_value())
+    {
+        return false;
+    }
+    const VimPattern &model = plain.value();
+    const Spans spans = text_spans(text, crlf_of(buffer.value()), [&model](std::string_view line)
+                                   { return pattern_spans(line, model); });
+    return substitution_matches(input, buffer.value(), parsed.value(), spans);
+}
+
+void verify_escaped_controls()
+{
+    Random random{129115U};
+    std::size_t broken = 0;
+    for (std::size_t index = 0; index < control_cases; ++index)
+    {
+        const bool crlf = below(random, 2U) == 0;
+        std::string text = with_controls(random, random_text(random, crlf, true));
+        const auto &[source, raw] = escaped_controls.at(below(random, escaped_controls.size()));
+        std::string replacement = pieces_of(random, replacement_pieces, 0U, 3U);
+        const Case input{std::move(text), {std::string{source}, std::move(replacement)}};
+        if (!control_holds(input, raw))
+        {
+            broken = counted_broken(broken, "escaped control", index, input);
+        }
+    }
+    expect(broken == 0, "substituting \\t \\r \\e \\b (also in a set) equals substituting the "
+                        "pattern written with the character itself");
+}
+
 void open_ordinary(Editing &editing, std::string text)
 {
     editing.files().hold(Bytes{std::move(text)});
@@ -580,6 +653,7 @@ void verify_substitute_property_scope()
     verify_generators_are_deterministic();
     verify_literal_words();
     verify_magic_patterns();
+    verify_escaped_controls();
     verify_controller_replace_all();
 }
 } // namespace nenenib::tests

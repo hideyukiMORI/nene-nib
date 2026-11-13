@@ -349,6 +349,9 @@ class Direct2DRenderer final
     void draw_keycap_layout(IDWriteTextLayout *shown, const core::LayoutRect &note,
                             const KeycapStyle &style);
     void draw_palette_footer(const application::EditorFrame &frame, const core::LayoutRect &area);
+    // 検索欄の記号の案内（#1640）。組の境目の幅を測り、どの組から出すかは core の配置が決める。
+    void draw_palette_hint(const application::EditorFrame &frame,
+                           const core::PaletteLayout &layout);
     // エクスプローラーの面（ADR 0162 の決定 8）。面が無い frame は保持を捨てるだけ。
     void draw_explorer(const application::EditorFrame &frame, const core::ExplorerLayout &layout);
     // ミニマップ（ADR 0171 の決定 1・2）。面が無い frame は最初の 1 行で返る。

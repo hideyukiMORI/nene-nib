@@ -253,12 +253,13 @@ void verify_pattern_groups()
     expect(group_text("a", "a", 0) == std::optional<std::string>{"a"}, "group 0 is the match");
     expect(!group_text("a", "a", 1).has_value(), "a group the pattern has not is empty");
     expect(parse_failure("\\(a") == std::optional{VimPatternFailure::group} &&
-               parse_failure("a\\)") == std::optional{VimPatternFailure::group} &&
-               parse_failure("\\(ab\\)*") == std::optional{VimPatternFailure::quantifier} &&
+               parse_failure("a\\)") == std::optional{VimPatternFailure::unmatched_close} &&
+               !parse_failure("\\(ab\\)*").has_value() &&
                parse_failure(
                    "\\(a\\)\\(a\\)\\(a\\)\\(a\\)\\(a\\)\\(a\\)\\(a\\)\\(a\\)\\(a\\)\\(a\\)") ==
-                   std::optional{VimPatternFailure::group},
-           "an open group, a stray \\), a starred group and a tenth group are refused");
+                   std::optional{VimPatternFailure::too_many_groups},
+           "an open group, a stray \\) and a tenth group are refused, a starred group is taken "
+           "(ADR 0184 decision 3)");
     for (const auto &[with, without] :
          {std::pair<std::string_view, std::string_view>{"\\(ab\\)c", "abc"},
           {"\\(a*\\)b", "a*b"},
@@ -344,9 +345,8 @@ void verify_substitute_notices()
            "range failures keep Vim's words");
     expect(message_of(substituted(controller, ":s/a/X/c<CR>")) == "Not supported: s/a/X/c",
            "the confirm flag is refused in stage 1, nothing is replaced silently");
-    expect(message_of(substituted(controller, ":s/\\(a/X/<CR>")) ==
-               "Unsupported pattern item: \\( \\)",
-           "a broken group is a closed failure");
+    expect(message_of(substituted(controller, ":s/\\(a/X/<CR>")) == "E54: Unmatched \\(",
+           "a broken group is a closed failure with Vim's words");
 
     Editing fresh;
     open_vim_document(fresh, std::string(six_lines));

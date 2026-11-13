@@ -8,6 +8,7 @@
 #include "ExSubstituteRequest.hpp"
 #include "LineEnding.hpp"
 #include "SubstituteAll.hpp"
+#include "VimCaret.hpp"
 #include "VimCharacterBoundary.hpp"
 #include "VimColumnWish.hpp"
 #include "VimMarkEdits.hpp"
@@ -308,6 +309,18 @@ resolved_lines(const VimEditorView &view, const std::optional<ExRange> &range)
     return column;
 }
 
+// 数えるだけの後のキャレット（Vim の do_sub は w_cursor を old_cursor へ戻し、`$` の後の繰り返し
+// （endcolumn）なら coladvance(MAXCOL) で行末、ほかは beginline(BL_WHITE | BL_FIX)）。
+[[nodiscard]] Offset counted_caret(const TextBuffer &text, Offset caret, bool end_column)
+{
+    if (!end_column)
+    {
+        return vim_first_non_blank(text, caret);
+    }
+    const LineNumber line = text.position_of(caret).line;
+    return Offset{text.line_start(line).value + landing_column(text.line_text(line), true)};
+}
+
 // 最後の編集より前の編集が増やしたバイト数（文書の改行の形）。負なら減らした。
 [[nodiscard]] std::int64_t earlier_growth(const SubstituteResult &result, LineEnding ending)
 {
@@ -412,9 +425,16 @@ resolved_lines(const VimEditorView &view, const std::optional<ExRange> &range)
 {
     const bool counted = result.edits.empty();
     auto notice = counted_notice(result, counted);
+    // 数えるだけ（`n`）は今の行に留まる（範囲がほかの行でも行は動かない・Vim の do_sub の末尾は
+    // old_cursor へ戻してから置き換えた道と同じ着地・#1607 の 1 つ目と #1622 の M1 の実測）。
     if (counted)
     {
-        VimStep step{std::move(next), VimNoEffect{}};
+        next.wanted_column =
+            end_column
+                ? std::optional{VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{0}}}
+                : std::nullopt;
+        VimStep step{std::move(next),
+                     VimMoveTo{counted_caret(view.text, view.selection.caret, end_column)}};
         step.notice = std::move(notice);
         return context_marked(std::move(step), view);
     }

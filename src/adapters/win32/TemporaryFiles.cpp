@@ -2,6 +2,7 @@
 
 #include "FindHandle.hpp"
 #include "NativePath.hpp"
+#include "ProcessInstances.hpp"
 #include "Utf16.hpp"
 
 #include <windows.h>
@@ -171,18 +172,11 @@ bool reclaimable_temporary(std::wstring_view suffix, std::uint32_t self, std::ui
 }
 
 // 無い pid（ERROR_INVALID_PARAMETER）か、開けて終わっているものだけが生きていない。拒否
-// （ERROR_ACCESS_DENIED）とほかの失敗は消さない側に倒す。
+// （ERROR_ACCESS_DENIED）とほかの失敗は消さない側に倒す。判定は process_created の 1 本（#1634）。
 bool process_alive(std::uint32_t pid) noexcept
 {
-    const HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-    if (process == nullptr)
-    {
-        return GetLastError() != ERROR_INVALID_PARAMETER;
-    }
-    DWORD code = 0;
-    const BOOL read = GetExitCodeProcess(process, &code);
-    static_cast<void>(CloseHandle(process));
-    return read == 0 || code == STILL_ACTIVE;
+    const auto created = process_created(pid);
+    return created.has_value() || created.error() == ProcessQueryFailure::denied;
 }
 
 std::optional<std::uint32_t> process_id_of(std::wstring_view text) noexcept

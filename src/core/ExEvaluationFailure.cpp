@@ -1,5 +1,7 @@
 #include "ExEvaluationFailure.hpp"
 
+#include "DisplayText.hpp"
+
 #include <string>
 
 namespace nenenib::core
@@ -34,7 +36,8 @@ DisplayText ex_failure_message(const ExEvaluationFailure &failure, std::string_v
         first == std::string_view::npos
             ? std::string_view{}
             : input.substr(first, input.find_last_not_of(' ') - first + 1);
-    const auto message = DisplayText::parse("Not supported: " + std::string(shown));
+    // 打った命令は入力行の上限まで長くなるので、知らせの 1 行に切る（#1616・切り方は 1 本）。
+    const auto message = clipped_display_text("Not supported: " + std::string(shown));
     return message ? message.value() : ex_failure_message(failure);
 }
 } // namespace nenenib::core

@@ -13,5 +13,7 @@ struct ExWindowState
     Appearance system_appearance;
     VimSearchHighlight highlight = vim_default_highlight;
     bool incsearch = vim_default_incsearch;
+    // 'wrapscan'（#1561・Vim と同じく既定は真）。`ws!` `invws` の反転が今の値を読む。
+    bool wrapscan = true;
 };
 } // namespace nenenib::core

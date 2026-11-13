@@ -77,6 +77,8 @@ void verify_open_async_scope();
 // AutosaveTests.cpp
 void verify_autosave_contracts();
 void verify_autosave_scope();
+// LastResortTests.cpp（#1625・最後の砦の計画と controller の口）
+void verify_last_resort_contracts();
 // AutosavePlanPropertyTests.cpp（#930・autosave_plan と clears_autosave の性質の試験）
 void verify_autosave_plan_property_scope();
 // AutosaveRestorePropertyTests.cpp（#1290・起動時の復元の性質の試験）
@@ -392,6 +394,7 @@ void verify_ex_random_scope();
 
 // InputLineLimitTests.cpp（#1568・入力行の上限とあふれた行の確定）
 void verify_input_line_limit_scope();
+void verify_input_line_property_scope();
 
 // BellTests.cpp
 void verify_bell_contracts();

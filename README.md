@@ -6,8 +6,8 @@ A fast single-executable text editor for Windows 11 that toggles between ordinar
 
 C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
 
-> **Status (2026-11-12):** [v0.1.0-beta.12](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.12)
-> (2026-11-12) is the published build for Windows 11 x64. It has ordinary editing with Notepad-style find,
+> **Status (2026-11-14):** [v0.1.0-beta.13](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.13)
+> (2026-11-14) is the published build for Windows 11 x64. It has ordinary editing with Notepad-style find,
 > replace, go to line, printing and date insertion; UTF-8, Shift_JIS and UTF-16 files (UTF-8 up to 1 GiB, read
 > in the background); Japanese IME; 125 built-in themes; syntax colors for 25 languages; a Markdown preview with
 > clickable task-list checkboxes; a side file explorer; two split panes; opt-in language-server diagnostics; and
@@ -15,10 +15,9 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > repeat, macros, registers, blockwise VISUAL and `map`). Tabs in the title bar come back on the next start,
 > Ctrl+P lists open tabs, bookmarks, recently closed files and files in the current folder, and F1 lists every
 > operation. It starts in about 45 ms on the owner's machine, autosaves every 30 seconds and offers a grid display
-> for giant lines. New in beta.12: square window corners without the Mica backdrop (decision D86), the
-> top-right corner and the top edge of × □ ＿ resize a window that is not maximized, the minimap's visible range
-> is darker with edge lines, Ctrl+Shift+R opens a folder in the explorer (decision D85), and Vim `'^` `` `^ ``
-> and blockwise `p` `P` over wide characters now match Vim.
+> for giant lines. New in beta.13: the screen text in Japanese, English or Simplified Chinese
+> (`:set language=`), an app icon, Vim `:s` with the multis, `\|` and groups in patterns, `gn` `gN` and
+> INSERT `Ctrl-o`, and a last resort that backs up unsaved edits before an uncaught exception ends the process.
 
 <p>
   <img src="docs/images/nib-palette.png" width="49%" alt="NeNe Nib lists open tabs, bookmarks, recently closed files and folder files in Ctrl+P.">
@@ -39,13 +38,13 @@ Compare all 125 themes, filter by name or appearance, and select a card for a la
 The image and gallery show color samples, not application screenshots. The gallery works offline and starts
 with the plain-text colors; its syntax colors are design samples, not the editor's syntax coloring.
 [Theme names and sources](docs/design/2026-10-12-colorschemes.md) are also available as a text list.
-All 125 themes are included in the published v0.1.0-beta.12.
+All 125 themes are included in the published v0.1.0-beta.13.
 
 ## What works today
 
 Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); the decisions behind it are in
-[`docs/adr/`](docs/adr/README.md). Everything below is in the published v0.1.0-beta.12 unless it says
-*since beta.12* (on main, not yet published) or *in review* (an open pull request, not on main). The current
+[`docs/adr/`](docs/adr/README.md). Everything below is in the published v0.1.0-beta.13 unless it says
+*since beta.13* (on main, not yet published) or *in review* (an open pull request, not on main). The current
 tasks are in `docs/todo/current.md`; the measurements are in `docs/quality/gate-proofs.md` and the dated
 records in `docs/quality/`.
 
@@ -62,8 +61,8 @@ records in `docs/quality/`.
   Ctrl+Backspace / Ctrl+Delete remove a word (or the selection). With a selection, an arrow without Shift moves
   from the selection's edge: ← collapses to its start and → to its end. The `:`, search and Ctrl+P lines do not
   yet move or delete by word.
-- **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 4562
-  oracle-generated fixtures in `tests/vim/fixtures.json` and 335 wrapped-viewport fixtures in
+- **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 5951
+  oracle-generated fixtures in `tests/vim/fixtures.json` and 402 wrapped-viewport fixtures in
   `tests/vim/wrap-fixtures.json` are checked by CTest, and a differential fuzzer (`eng/vim-fuzz.py`, fixed seeds)
   compares generated key sequences with Vim. Implemented:
   - motions `h j k l 0 $ ^ _ w b e W B E ge gE gg G {N}|`, `f F t T ; ,`, `%` and `{N}%`, `H M L`, Home / End
@@ -84,6 +83,7 @@ records in `docs/quality/`.
     clipboard `"+` `"*` (and `:set clipboard=unnamed`); macros `q @ @@` with counts; a replay by `.` or `@`
     stops after 100,000 keys, drops the rest and says so in one line (decision D75);
   - search `/ ? n N * #` with `hlsearch` and `incsearch` on by default (`:noh`, Ctrl-G / Ctrl-T while typing),
+    `gn` `gN` select the last search's match (also after an operator: `cgn` + `.` changes the next one),
     `:set ignorecase` / `smartcase`, and Up / Down history on the `:` and search lines; matchparen highlights
     the partner bracket (on by default); patterns (shared by search and `:s`) take a `magic` subset with `*`
     and the multis on one atom `\+ \= \? \{n} \{n,} \{,m} \{n,m}` and the shortest `\{-n,m}`
@@ -98,7 +98,12 @@ records in `docs/quality/`.
     ([ADR 0152](docs/adr/0152-vim-marks-are-document-values-adjusted-by-edits.md)), the jump list `Ctrl-o`
     `Ctrl-i` and the change list `g;` `g,` (in Vim mode Ctrl+O is the jump list, so opening a file is Ctrl+Shift+O);
   - `:set relativenumber`, `:set scrolloff=`, virtual columns (Tab = 8, wide = 2), literal CR in LF files,
-    Esc everywhere.
+    Esc everywhere;
+  - `:set` takes Vim's short names (`hls is ic scs rnu so ws cb et sw ts`), several arguments in one line
+    (`:set ic scs`; a wrong one stops the line and keeps the ones before it), `name?` `noname?` `name&`
+    `name<` `name:val` `+=` `-=` `^=`, and `:se` `:setl` `:setg`; `:set nowrapscan` stops searches at the end
+    of the text; `magic`, `noexpandtab`, `sw=8` and `ts=8` (the values Nib always has) are accepted and other
+    values of them, `number` and `all&` are refused (#1561).
 
   Basic Ex `:w`, `:q`, `:q!`, `:wq`, `:x` and `:{N}` work on the current tab. `:q` refuses unsaved changes;
   `:wq` always writes, while `:x` writes only changes. These saves accept filenames: `:w name` names an
@@ -107,7 +112,7 @@ records in `docs/quality/`.
   `:saveas! name` is used. Japanese names, spaces and relative paths (from the process working folder) work;
   filename expansion is planned. Failed writes keep the old name and tab open (D39). See
   [ADR 0067](docs/adr/0067-ex-filenames-share-atomic-save-policy.md).
-  Not yet: uppercase marks `'A`-`'Z` and `:marks`, `:s` `:g` and Ex ranges (FR-027), read-only registers
+  Not yet: uppercase marks `'A`-`'Z` and `:marks`, `:g` `:v` `:sort` (FR-027), read-only registers
   `". ": "/ "%`, NORMAL `s S R` and VISUAL `S`, autoindent, dragging into VISUAL with the mouse in Vim mode, easymotion (FR-023),
   commentary, surround and INSERT completion (FR-024).
 - **FR-004 one toggle** — the status bar switches "通常 | Vim", and so does `Ctrl+Shift+Space` in either mode (D61). Done.
@@ -145,7 +150,9 @@ records in `docs/quality/`.
   read. The encoding and line ending for saving can be chosen by clicking them in the status bar, with
   `:set fenc=` / `:set ff=`, or from F1. Unsaved mark and "save?" prompt; the prompt has its own
   button labels. Unsaved edits are autosaved every 30 seconds and offered back once on the next start after the
-  process ends abnormally ([ADR 0137](docs/adr/0137-autosave-every-30-seconds.md)). Done.
+  process ends abnormally ([ADR 0137](docs/adr/0137-autosave-every-30-seconds.md)). If an uncaught C++ exception
+  is about to end the process on the window thread, Nib backs up the unsaved edits once more and then ends the
+  default way, so the next start offers them back (the last resort, #1625). Done.
 - **FR-009 tab restore** — starting without a file argument brings back the previous tabs (saved files only): their
   order, the tab in view, caret and scroll position. Only the tab in view is read at startup; the others are read
   when first viewed, and a missing file is dropped with a one-line notice. Done; window position and size are planned.
@@ -223,7 +230,8 @@ records in `docs/quality/`.
   `\\wsl.localhost\<distro>` places.
 - **FR-023 – FR-027 editing features** — matchparen (FR-024) is done and on by default. Planned: easymotion
   (FR-023), commentary, surround, autopairs and INSERT completion (FR-024), changed-line markers, indent guides
-  and a yank flash (FR-025), project-wide search (FR-026) and the `:s` family (FR-027).
+  and a yank flash (FR-025), project-wide search (FR-026) and the rest of the `:s` family (FR-027: the `c`
+  flag, the typing preview and `:g` `:v` `:sort`; `:s` itself is under FR-003).
 - **FR-029 display language** — the screen text is shown in Japanese, English or Simplified Chinese
   (Korean, Spanish and German follow in 1.1.0 and show English until then). The default follows the Windows
   display language; `:set language=ja`, `en`, `zh-hans` or `system` (also from Ctrl+P `:`, or the F1

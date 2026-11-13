@@ -39,6 +39,12 @@ fixture whose `keys` or register keys hold one (#190). `records_a_macro` walks t
 conservative subset of the modes, so a `q` typed as text, a character argument (`fq` `rq`), a
 register name (`@q` `"qyy`) or inside a `/.../<CR>` search passes, and a doubtful `q` is refused.
 
+The replay reads a fixture's `settings` too (#1626): `fixture_row` writes the lines that are not in
+`NIB_FIXED_SETTINGS` (`replayed_settings`, joined by newlines) into the last field of the row, and
+the replay types each one as an Ex line after it places the window and before the keys. A line Nib
+does not take fails the replay, so no setting the oracle measured with is dropped silently. The
+field is rendering, not measurement: it comes from the fixture's input, so a reused row keeps it.
+
 `--regenerate --only f- --only df-` measures just matching fixture-name prefixes and reuses every
 other generated row from `--reuse-ref` (default `HEAD`). Reuse is refused before measurement when
 a prefix is empty or unknown, the old JSON/header/source do not prove their origin, a non-selected
@@ -464,35 +470,46 @@ def literal(value: str) -> str:
     return f'"{escaped}"'
 
 
-def settings_scrolloff(settings: list[str]) -> int:
-    """`set scrolloff=N` の N（最後の 1 つ・無ければ 0）。nib_tests の再生が窓を作った後に
-    `:set so=N` を打つ（#1239）。"""
-    value = 0
+# fixture の `settings` のうち、Nib が固定で持つ値と同じなので再生へ渡さない行（#1626）。Nib には
+# この option の `:set` の口が無い（`nrformats` は bin,hex に固定・#1038）。表に無い行は全部、
+# 生成物の settings 欄に載り、再生（nib_tests と nib_vim_replay）が窓を置いた後・鍵の前に `:` の
+# 行として流す。Nib が断る行は再生の試験が落ちるので、再生が読めない設定は黙って通らない。
+NIB_FIXED_SETTINGS = ("set nrformats=bin,hex",)
+
+
+def replayed_settings(settings: list[str]) -> list[str]:
+    """再生が鍵の前に `:` の行として流す設定（NIB_FIXED_SETTINGS を除いた残り・順は fixture の
+    まま・#1626）。生成物の欄は改行でつなぐので、改行を含む行と空の行は断る。"""
     for setting in settings:
-        match = re.fullmatch(r"set scrolloff=(\d+)", setting)
-        if match:
-            value = int(match.group(1))
-    return value
+        if not setting.strip() or "\n" in setting or "\r" in setting:
+            raise ValueError(f"setting {setting!r} must be one non-empty line")
+    return [setting for setting in settings if setting not in NIB_FIXED_SETTINGS]
 
 
 def measured_record(work: Path, fixture: dict) -> dict:
-    """測った行に、再生が要る余白（scrolloff）を添える。測定の領域（literal より上）は変えない。"""
+    """測った行に、再生が流す設定の行を添える。測定の領域（literal より上）は変えない。"""
     record = measure(work, fixture)
-    record["scrolloff"] = settings_scrolloff(fixture.get("settings", []))
+    record["settings"] = replayed_settings(fixture.get("settings", []))
     return record
+
+
+def settings_field(settings: list[str], has_macro: bool, has_change: bool) -> str:
+    """行の末尾の settings 欄（VimFixture の最後の欄・#1626）。設定の無い行は何も足さないので
+    前と同じ字面のまま残る。在る行は、間の macro と change の欄を std::nullopt で埋める。"""
+    if not settings:
+        return ""
+    skipped = "" if has_change else (", std::nullopt" if has_macro else ", std::nullopt" * 2)
+    return "%s, %s" % (skipped, literal("\n".join(settings)))
 
 
 def fixture_row(record: dict) -> str:
     viewport = record.get("viewport")
-    # 余白は 0 でないときだけ VimViewportFixture の末尾の欄に書く（間の 6 欄は既定の 0・#1239）。
-    # so=0 の行は前と同じ字面のまま残る。
-    scrolloff = record.get("scrolloff", 0)
-    margin = "" if scrolloff == 0 else ", 0, 0, 0, 0, 0, 0, %d" % scrolloff
+    # 余白（scrolloff）は窓の欄に書かず、ほかの設定と同じ settings 欄に載る（#1626）。
     viewport_value = "std::nullopt" if viewport is None else (
-        "VimViewportFixture{%d, %d, %d, %d, %d, %d%s}" %
+        "VimViewportFixture{%d, %d, %d, %d, %d, %d}" %
         (viewport["visible_lines"], viewport["first_visible"], viewport["line"],
          viewport["column"], viewport["expected_first_visible"],
-         viewport["expected_scroll_lines"], margin))
+         viewport["expected_scroll_lines"]))
     # マクロのレジスタは在るときだけ末尾に足す（VimFixture の既定値は空・ADR 0046 の決定 6）。
     # 無い行は前と同じ字面のまま残る。
     macro = record.get("macro")
@@ -503,11 +520,13 @@ def fixture_row(record: dict) -> str:
     change_value = "" if change is None else "%s, VimChangeFixture{%s, %s, %s}" % (
         ", std::nullopt" if macro is None else "",
         *("true" if change[key] else "false" for key in ("modified", "changed", "undo")))
-    return "    {%s, %s, %s, %s, %d, %d, %s, %s, %s%s%s}," % (
+    settings_value = settings_field(record.get("settings", []), macro is not None,
+                                    change is not None)
+    return "    {%s, %s, %s, %s, %d, %d, %s, %s, %s%s%s%s}," % (
         literal(record["name"]), literal(record["text"]), literal(record["keys"]),
         literal(record["expected"]), record["line"], record["column"],
         literal(record["register"]), literal(record["register_kind"]), viewport_value,
-        macro_value, change_value)
+        macro_value, change_value, settings_value)
 
 
 def header_from_rows(rows: list[str], version: str, digest: str) -> str:
