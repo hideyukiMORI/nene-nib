@@ -141,6 +141,10 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
                                           const VimMotionRange &range, VimOperator operation);
 // VISUAL の鍵が範囲を取る種類（Vim の v_visop・nv_subst・nv_Replace の読み替え・#1436）。
 [[nodiscard]] VimMode visual_operated_mode(VimMode mode, VimAction action) noexcept;
+// 文字単位・行単位の選択にオペレータを効かせる VISUAL の道。オペレータ待ちの `gn` `gN` が選んだ
+// 当たりへ流す（#1617）。
+[[nodiscard]] VimStep visual_operator_applied(const VimState &state, const VimEditorView &view,
+                                              VimOperator operation);
 // VISUAL をオペレータで抜けた歩に覚え直した仮想桁を置く（Vim の oap->start_vcol / end_vcol・
 // #1436）。`action` は抜けた鍵の動作（種類の読み替えと矩形の `C` `D` の行末を決める）。
 [[nodiscard]] VimStep visual_operation_noted(const VimState &state, const VimEditorView &view,

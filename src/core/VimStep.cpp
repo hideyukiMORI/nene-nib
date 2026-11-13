@@ -1936,7 +1936,10 @@ namespace
     return g_key_code(key).and_then([](char32_t code) { return vim_g_action_for(code); });
 }
 
-// g の後ろの鍵（gg ge gE）。表に無い鍵は g を打ち消す（Issue #222）。
+// g の後ろの鍵（gg ge gE）。表に無い鍵は g と保留中のオペレータと回数を打ち消して失敗し、後ろの鍵を
+// 打ち切る（Vim の nv_g_cmd の default の clearopbeep・`dgxx` `gxx` は本文を変えない・VISUAL は
+// 選択のまま・実測）。打ち切らないと、オペレータを失った後ろの鍵が別の命令として本文を変える
+// （`cgnX` の `X` が手前の文字を消した・#1617）。Esc は鳴らさずに打ち消すだけ（`g<Esc>G`）。
 [[nodiscard]] VimStep g_prefix_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
     const std::optional<VimAction> action = g_action_of(key);
@@ -1944,7 +1947,7 @@ namespace
     {
         return completed_prefix(state, view, action.value());
     }
-    return VimStep{finished_input_wait(state), VimNoEffect{}};
+    return escaped_or_refused(state, key);
 }
 
 // z の後ろの鍵を表の文字へ。<CR> は 0x0D（z<CR>）。ほかの特別な鍵と検索の文字列は表に無い 0。

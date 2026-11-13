@@ -195,11 +195,15 @@ enum class VimAction : std::uint8_t
     // nv_optrans と nv_g_cmd は redo を書かない・実測）。VISUAL の `&` は失敗、`g&` は NORMAL
     // と同じ。
     repeat_substitute,
-    repeat_substitute_all
+    repeat_substitute_all,
+    // `gn` `gN`（#1617）。最後の検索の当たりを文字単位の VISUAL に選ぶ（オペレータ待ちでは範囲・
+    // VISUAL では選択を広げる）。検索の大分類で、範囲は vim_search_object の 1 本が決める。
+    select_next_match,
+    select_previous_match
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
 constexpr std::size_t vim_action_count =
-    static_cast<std::size_t>(VimAction::repeat_substitute_all) + 1;
+    static_cast<std::size_t>(VimAction::select_previous_match) + 1;
 } // namespace nenenib::core

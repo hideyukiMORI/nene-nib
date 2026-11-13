@@ -196,6 +196,8 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::repeat_search_opposite, VimActionGroup::search},
      {VimAction::search_word_forward, VimActionGroup::search},
      {VimAction::search_word_backward, VimActionGroup::search},
+     {VimAction::select_next_match, VimActionGroup::search},
+     {VimAction::select_previous_match, VimActionGroup::search},
      {VimAction::record_macro, VimActionGroup::input_wait},
      {VimAction::replay_macro, VimActionGroup::input_wait},
      {VimAction::select_register, VimActionGroup::input_wait},
@@ -313,9 +315,9 @@ constexpr std::array<VimMotionBinding, 42> motion_bindings{
 
 // g の後ろの鍵 → 動作（ADR 0027 / Issue #222 / ADR 0057 の決定 2 / ADR 0144 の決定 4 /
 // ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10・14 / #1039 の gv gi / ADR 0152 の追補 #1037 /
-// ADR 0028 の追補 #1032 の gI）。
-// ここに無い鍵は g を打ち消す。
-constexpr std::array<VimBinding, 25> g_bindings{
+// ADR 0028 の追補 #1032 の gI / #1617 の gn gN）。
+// ここに無い鍵は g を打ち消して失敗する（Vim の nv_g_cmd の clearopbeep）。
+constexpr std::array<VimBinding, 27> g_bindings{
     {{U'g', VimAction::move_document_first},
      {U'e', VimAction::move_previous_word_end},
      {U'E', VimAction::move_previous_big_word_end},
@@ -340,7 +342,9 @@ constexpr std::array<VimBinding, 25> g_bindings{
      {control_x_character, VimAction::decrement_sequence},
      {U';', VimAction::change_older},
      {U',', VimAction::change_newer},
-     {U'&', VimAction::repeat_substitute_all}}};
+     {U'&', VimAction::repeat_substitute_all},
+     {U'n', VimAction::select_next_match},
+     {U'N', VimAction::select_previous_match}}};
 
 // 保留を立てる鍵 → オペレータ（ADR 0015 の決定 1・10・11）。同じ行の鍵を保留の後ろで押すと
 // 行単位（dd g~g~ >>）。

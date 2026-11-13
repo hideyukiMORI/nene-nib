@@ -692,6 +692,15 @@ namespace detail
     return operated_mode(mode, action);
 }
 
+// 文字単位の選択にオペレータを効かせる VISUAL の道（`d x y c` と `~ u U > <`）。オペレータ待ちの
+// `gn` `gN` が選んだ当たりへ流す（Vim は current_search が VIsual を立て、do_pending_operator が
+// VISUAL の範囲として効かせる・#1617）。
+[[nodiscard]] VimStep visual_operator_applied(const VimState &state, const VimEditorView &view,
+                                              VimOperator operation)
+{
+    return visual_operated(state, view, operation);
+}
+
 // VISUAL をオペレータで抜けた歩に、覚え直した仮想桁を置く 1 か所（#1436・Vim の
 // do_pending_operator）。`mode` は鍵が範囲を取る種類（operated_mode）。VISUAL に残る歩と、VISUAL
 // でない鍵の前の状態は変えない。`r{char}` の道（VimStepReplace）もここを通す。

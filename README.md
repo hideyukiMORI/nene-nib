@@ -84,6 +84,7 @@ records in `docs/quality/`.
     clipboard `"+` `"*` (and `:set clipboard=unnamed`); macros `q @ @@` with counts; a replay by `.` or `@`
     stops after 100,000 keys, drops the rest and says so in one line (decision D75);
   - search `/ ? n N * #` with `hlsearch` and `incsearch` on by default (`:noh`, Ctrl-G / Ctrl-T while typing),
+    `gn` `gN` select the last search's match (also after an operator: `cgn` + `.` changes the next one),
     `:set ignorecase` / `smartcase`, and Up / Down history on the `:` and search lines; matchparen highlights
     the partner bracket (on by default); patterns (shared by search and `:s`) take a `magic` subset with `*`
     and the multis on one atom `\+ \= \? \{n} \{n,} \{,m} \{n,m}` and the shortest `\{-n,m}`

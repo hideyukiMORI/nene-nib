@@ -17,6 +17,7 @@
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "Scopes.hpp"
+#include "Selection.hpp"
 #include "StoreVimRegister.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
@@ -33,6 +34,9 @@
 #include "VimSearchDirection.hpp"
 #include "VimSearchHit.hpp"
 #include "VimSearchNoticeKind.hpp"
+#include "VimSearchObject.hpp"
+#include "VimSearchObjectFrom.hpp"
+#include "VimSearchObjectRequest.hpp"
 #include "VimState.hpp"
 #include "VimTestSupport.hpp"
 #include "VimWordMotion.hpp"
@@ -1486,6 +1490,87 @@ void verify_vim_pattern_composing_case()
         "the composing marks right after a set are skipped with its closing bracket");
 }
 
+// ---------------------------------------------------------------- `gn` `gN`（#1617）
+
+// vim_search_object の答えを (anchor, caret) のバイト位置で読む。当たりが無ければ値が無い。
+[[nodiscard]] std::optional<std::pair<std::size_t, std::size_t>>
+searched_object(std::string_view text, std::string_view pattern,
+                const core::VimSearchObjectRequest &request)
+{
+    const auto buffer = TextBuffer::from_utf8(text);
+    const auto parsed =
+        VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
+    expect(buffer.has_value() && parsed.has_value(), "the searched body and pattern are valid");
+    if (!buffer.has_value() || !parsed.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto selected = core::vim_search_object(buffer.value(), parsed.value(), request);
+    if (!selected.has_value())
+    {
+        return std::nullopt;
+    }
+    return std::pair{selected.value().anchor.value, selected.value().caret.value};
+}
+
+// NORMAL とオペレータ待ちの問い（キャレットから）。
+[[nodiscard]] core::VimSearchObjectRequest at_caret(std::size_t caret, VimSearchDirection direction,
+                                                    std::size_t count = 1)
+{
+    return core::VimSearchObjectRequest{core::collapsed_at(Offset{caret}),
+                                        core::VimSearchObjectFrom::caret, direction, count};
+}
+
+// VISUAL の問い（今の選択を広げる）。
+[[nodiscard]] core::VimSearchObjectRequest in_visual(std::size_t anchor, std::size_t caret,
+                                                     VimSearchDirection direction)
+{
+    return core::VimSearchObjectRequest{core::Selection{Offset{anchor}, Offset{caret}},
+                                        core::VimSearchObjectFrom::selection, direction, 1};
+}
+
+[[nodiscard]] bool selects(std::optional<std::pair<std::size_t, std::size_t>> selected,
+                           std::size_t anchor, std::size_t caret)
+{
+    return selected == std::optional{std::pair{anchor, caret}};
+}
+
+// 期待値は Vim 9.1 の `-es -u NONE` の実測（`'<` `'>` とカーソル）。fixture の `gn-` が同じ形を
+// 本物の鍵の道で守り、ここは範囲の 1 本を直接問う。
+void verify_vim_search_object()
+{
+    constexpr std::string_view three = "foo bar foo bar foo";
+    const auto forward = VimSearchDirection::forward;
+    const auto backward = VimSearchDirection::backward;
+    expect(selects(searched_object(three, "foo", at_caret(0, forward)), 0, 2) &&
+               selects(searched_object(three, "foo", at_caret(2, forward)), 0, 2) &&
+               selects(searched_object(three, "foo", at_caret(3, forward)), 8, 10) &&
+               selects(searched_object(three, "foo", at_caret(18, forward)), 16, 18),
+           "gn selects the match under the caret, its last character included, or the next one");
+    expect(selects(searched_object(three, "foo", at_caret(0, backward)), 2, 0) &&
+               selects(searched_object(three, "foo", at_caret(3, backward)), 2, 0) &&
+               selects(searched_object(three, "foo", at_caret(18, backward)), 18, 16),
+           "gN selects the match under the caret or the one before, with the caret at its start");
+    expect(selects(searched_object(three, "foo", at_caret(0, forward, 4)), 0, 2) &&
+               selects(searched_object("c c c", "c", at_caret(0, forward, 999'999)), 4, 4) &&
+               selects(searched_object("c c c", "c", at_caret(4, backward, 999'999)), 0, 0),
+           "a count wraps around the text and a huge count does not walk every lap");
+    expect(selects(searched_object("abc\ndef", "$", at_caret(0, forward)), 3, 3) &&
+               selects(searched_object("abc\ndef", "$", at_caret(4, forward)), 7, 7) &&
+               selects(searched_object("axb axb", "x*", at_caret(0, forward)), 0, 0) &&
+               selects(searched_object("xab xab", "x*", at_caret(0, forward)), 0, 0),
+           "a zero-width match is one position, on the line end for a dollar");
+    expect(selects(searched_object("あいう いう", "いう", at_caret(6, forward)), 3, 6),
+           "the caret lands on the first byte of the last character of the match");
+    expect(!searched_object("abc", "x", at_caret(0, forward)).has_value(),
+           "no match anywhere is not found");
+    constexpr std::string_view two = "abc def abc def";
+    expect(selects(searched_object(two, "def", in_visual(14, 14, forward)), 14, 4) &&
+               selects(searched_object(two, "def", in_visual(14, 10, forward)), 14, 12) &&
+               selects(searched_object(two, "def", in_visual(0, 0, backward)), 0, 12),
+           "in VISUAL the anchor stays and the caret goes to the end or the start of the match");
+}
+
 } // namespace
 
 void verify_vim_search_contracts()
@@ -1505,6 +1590,7 @@ void verify_vim_search_contracts()
     verify_vim_pattern_word_boundaries();
     verify_vim_pattern_rejections();
     verify_vim_pattern_abbreviations();
+    verify_vim_search_object();
     verify_vim_pattern_quantifier_ranges();
     verify_vim_pattern_quantifier_failures();
     verify_vim_pattern_quantifier_bounds();

@@ -178,7 +178,8 @@ void verify_window_refusals()
 }
 
 // ほかの待ちの後ろの Ctrl-w（Issue #684 のレビュー I2）。`f` は 0x17 を文字として探し、`z` は
-// 表に無いので失敗し、`g` は待ちを静かに打ち消す。
+// 表に無いので失敗し、`g` も表に無いので失敗する（Vim の nv_g_cmd の clearopbeep・`g<C-w>x` は
+// x を打ち切る・Vim 9.1 の実測・#1617）。
 void verify_window_after_other_waits()
 {
     const VimStep found = window_step_in("a\x17"
@@ -191,11 +192,7 @@ void verify_window_after_other_waits()
     expect(refused(window_step_of("f|"), VimMode::normal),
            "and fails when the line has no control-w character");
     expect(refused(window_step_of("z|"), VimMode::normal), "z then control-w fails");
-    const VimStep cancelled = window_step_of("g|");
-    expect(std::holds_alternative<VimNoEffect>(cancelled.effect) &&
-               !cancelled.failure.has_value() && !cancelled.next.input_wait.has_value() &&
-               cancelled.next.mode == VimMode::normal,
-           "g then control-w cancels the wait quietly");
+    expect(refused(window_step_of("g|"), VimMode::normal), "g then control-w fails");
 }
 
 // VISUAL でも効き、VISUAL は解除しない（枠を移るときに畳むのは controller）。INSERT
