@@ -49,13 +49,13 @@ constexpr std::string_view not_found_alone = "E486: Pattern not found";
     std::unreachable();
 }
 
-// 表示できる長さに収める。切るのは文字の境界で、切れたら E486 の文言だけを出す。
+// 表示できる長さに収める。切るのは入力の文を知らせに入れる所の 1 本 clipped_display_text（code
+// point の境目で落として「…」・#1568 / #1616）。表示できない文字があれば E486 の文言だけを出す。
 [[nodiscard]] DisplayText not_found_message(std::string_view pattern)
 {
-    const std::size_t room = DisplayText::maximum_bytes - not_found_prefix.size();
     std::string text(not_found_prefix);
-    text += pattern.substr(0, room);
-    return DisplayText::parse(text).value_or(DisplayText::parse(not_found_alone).value());
+    text += pattern;
+    return clipped_display_text(text).value_or(DisplayText::parse(not_found_alone).value());
 }
 
 [[nodiscard]] DisplayText message_of(std::string_view text)
