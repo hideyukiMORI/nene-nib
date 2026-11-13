@@ -84,6 +84,8 @@ void verify_autosave_restore_property_scope();
 
 // OperationsTests.cpp
 void verify_operations_scope();
+// 表示言語の文の表と読む口（ADR 0123 の追補 2026-11-13・#1019 の T1a）。
+void verify_ui_texts_scope();
 // FindReplaceTests.cpp
 void verify_find_replace_scope();
 // SubstitutePropertyTests.cpp（#1291・ADR 0174 の決定 7・置換の全件の性質）
