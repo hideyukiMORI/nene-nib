@@ -12,8 +12,7 @@ namespace nenenib::core
 {
 VimPatternMachine::VimPatternMachine(const VimPattern &pattern, std::string_view line)
     : pattern_(pattern), line_(line), at_(0), transit_(pattern.program_.size()),
-      current_begins_(2 * transit_, 0), next_begins_(2 * transit_, 0),
-      current_stamps_(2 * transit_, 0), next_stamps_(2 * transit_, 0)
+      cells_(cells_per_slot * 2 * transit_, 0)
 {
     current_.reserve(2 * transit_);
     next_.reserve(2 * transit_);
@@ -52,7 +51,18 @@ std::optional<VimPatternMatch> VimPatternMachine::placed(bool into_next, std::si
 
 std::size_t &VimPatternMachine::stamp_of(bool into_next, std::size_t slot)
 {
-    return (into_next ? next_stamps_ : current_stamps_).at(slot);
+    return cells_.at(cell_of(into_next, slot) + 1);
+}
+
+std::size_t &VimPatternMachine::begin_of(bool into_next, std::size_t slot)
+{
+    return cells_.at(cell_of(into_next, slot));
+}
+
+// 升の並びは列の番号ごとに（今の列の始まり・印・次の列の始まり・印）の 4 つ（確保を 1 回にする）。
+std::size_t VimPatternMachine::cell_of(bool into_next, std::size_t slot) const noexcept
+{
+    return (slot * cells_per_slot) + (into_next == current_is_first_ ? 2 : 0);
 }
 
 std::size_t VimPatternMachine::done_stamp(bool into_next) const noexcept
@@ -94,7 +104,7 @@ void VimPatternMachine::atom_placed(bool into_next, std::size_t here, std::size_
         }
         return;
     }
-    (into_next ? next_begins_ : current_begins_).at(here) = begin;
+    begin_of(into_next, here) = begin;
     (into_next ? next_ : current_).push_back(here);
 }
 
@@ -136,10 +146,10 @@ std::optional<VimPatternMatch> VimPatternMachine::arrived(std::size_t target, st
         return placed(true, target, begin);
     }
     const std::size_t slot = transit_ + target;
-    if (next_stamps_.at(slot) != done_stamp(true))
+    if (stamp_of(true, slot) != done_stamp(true))
     {
-        next_stamps_.at(slot) = done_stamp(true);
-        next_begins_.at(slot) = begin;
+        stamp_of(true, slot) = done_stamp(true);
+        begin_of(true, slot) = begin;
         next_.push_back(slot);
     }
     return std::nullopt;
@@ -169,7 +179,7 @@ void VimPatternMachine::advanced()
     next_.clear();
     for (const std::size_t slot : current_)
     {
-        const auto match = stepped(slot, current_begins_.at(slot), before, code);
+        const auto match = stepped(slot, begin_of(false, slot), before, code);
         if (match.has_value())
         {
             found_ = match;
@@ -178,8 +188,7 @@ void VimPatternMachine::advanced()
     }
     // 当たりより優先する候補だけが次の列に残る。後続の低い優先の候補は捨てる。
     current_.swap(next_);
-    current_begins_.swap(next_begins_);
-    current_stamps_.swap(next_stamps_);
+    current_is_first_ = !current_is_first_;
     current_generation_ = std::exchange(next_generation_, next_generation_ + 1);
 }
 

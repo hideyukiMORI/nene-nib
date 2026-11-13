@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 9410a95d5e456e67c2604c6a1c2c38c590159425b78a254a957e7d31570c4bc5 / 5556 fixtures
+// fixtures.json: sha256 e3b4e81d3e2fc8a868d2f9cf91b0d0596ebf1d97ef1c56590d0a25343bca1a98 / 5565 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 5556> vim_fixtures{{
+constexpr std::array<VimFixture, 5565> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -5537,6 +5537,15 @@ constexpr std::array<VimFixture, 5556> vim_fixtures{{
     {"pattern-group-multi-err-zero-plus", "ab", ":s/\\(a\\)\\{0}\\+/X/<CR>x", "ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"pattern-group-multi-err-brace-open", "ab", ":s/\\(a\\)\\{/X/<CR>x", "ab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"pattern-group-multi-err-case-plus", "aab", ":s/\\(a\\)\\c\\+/X/<CR>x", "aab", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-group-multi-err-bt-empty-branch", "aaa", ":s/\\(\\|a\\)\\{,300}b/X/<CR>x", "aaa", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-group-multi-err-bt-other-atom", "aaa", ":s/\\(a*\\)*b\\{,300}c/X/<CR>x", "aaa", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-group-multi-err-bt-span-201", "aaa", ":s/\\(a*\\)\\{,201}b/X/<CR>x", "aaa", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-group-multi-err-bt-min-199", "aaa", ":s/\\(a*\\)\\{199,400}b/X/<CR>x", "aaa", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-group-multi-err-bt-branch-atom", "ccc", ":s/a\\{,300}b\\|q/X/<CR>x", "ccc", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-group-multi-sub-nfa-span-200", "aaa", ":s/\\(a*\\)\\{,200}/[\\1]/<CR>", "[]", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-group-multi-sub-nfa-min-plus-200", "aaa", ":s/\\(a*\\)\\{1,201}/[\\1]/<CR>", "[]", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-group-multi-sub-nfa-min-200", "aaa", ":s/\\(a*\\)\\{200,401}/[\\1]/<CR>", "[]", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"pattern-group-multi-sub-empty-group-caret", "x^a", ":s/\\(\\)^a/X/<CR>", "xX", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"substitute-group-last-iter-g", "xabbay", ":s/\\(a\\|b\\)\\+/[\\1]/g<CR>", "x[a]y", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"substitute-group-inner-first", "ab", ":s/\\(\\(a\\)\\|b\\)\\+/[\\1\\2]/<CR>", "[ba]", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"substitute-group-inner-opt-keep", "abcab", ":s/\\(ab\\(c\\)\\=\\)\\+/[\\1-\\2]/<CR>", "[ab-c]", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},

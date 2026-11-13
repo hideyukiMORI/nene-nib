@@ -25,6 +25,7 @@
 #include "VimMode.hpp"
 #include "VimPattern.hpp"
 #include "VimPatternFailure.hpp"
+#include "VimPatternLimits.hpp"
 #include "VimPatternMatch.hpp"
 #include "VimPatternRoute.hpp"
 #include "VimRegister.hpp"
@@ -1633,6 +1634,168 @@ void verify_vim_pattern_composing_case()
 
 } // namespace
 
+namespace
+{
+// Vim 9.1 がパターン全体を後戻りの照合器（BT）で照合する `\{n,m}`（regexp_nfa.c の
+// nfa_regpiece・V-1614 の M1）。命令の列の道ではこの量を 1 つでも含むパターンを断り、段 1 の道は
+// 今どおり受ける（2026-11-13 に Vim 9.1 で 26 形を実測・BT と答えが同じ・結合文字の量を除く）。
+void verify_vim_pattern_backtracking_refusals()
+{
+    using core::vim_quantity_backtracks;
+    constexpr std::array<std::tuple<std::size_t, std::optional<std::size_t>, bool>, 14> table{{
+        {0, 200, false},
+        {0, 201, true},
+        {1, 201, false},
+        {1, 202, true},
+        {199, 399, false},
+        {199, 400, true},
+        {200, 401, false},
+        {200, 501, false},
+        {300, 501, false},
+        {0, 500, true},
+        {0, 1, false},
+        {0, 0, false},
+        {0, std::nullopt, false},
+        {150, std::nullopt, false},
+    }};
+    for (const auto &[minimum, maximum, backtracks] : table)
+    {
+        expect(vim_quantity_backtracks(minimum, maximum) == backtracks,
+               "the BT condition is Vim's nfa_regpiece: a finite maximum, minimum below 200 and "
+               "maximum above minimum + 200 or above 500");
+    }
+    expect(rejects("\\(\\|a\\)\\{,300}", VimPatternFailure::too_complex) &&
+               rejects("\\(a*\\)\\{,201}", VimPatternFailure::too_complex) &&
+               rejects("\\(a*\\)\\{199,400}", VimPatternFailure::too_complex) &&
+               rejects("\\(a\\|\\)\\{-,300}b", VimPatternFailure::too_complex),
+           "a multi on a group that sends Vim to BT is refused on the program route");
+    expect(rejects("\\(a*\\)*x\\{,300}", VimPatternFailure::too_complex) &&
+               rejects("a\\{,300}b\\|q", VimPatternFailure::too_complex) &&
+               rejects("x\\{,300}\\(a\\)\\+", VimPatternFailure::too_complex),
+           "a BT multi on another atom refuses the whole program pattern");
+    const auto accepted = [](std::string_view text)
+    {
+        return VimPattern::parse(text, VimSearchDirection::forward, VimPatternCase::sensitive)
+            .has_value();
+    };
+    expect(accepted("\\(a*\\)\\{,200}") && accepted("\\(a*\\)\\{1,201}") &&
+               accepted("\\(a*\\)\\{200,401}") && accepted("\\(a\\|b\\)\\{2,}") &&
+               accepted("\\(a\\)\\{1365}"),
+           "a multi that keeps Vim on its NFA stays on the program route");
+    expect(accepted("a\\{,300}") && accepted("x\\{,1000}") && accepted("\\(a\\{,300}\\)a") &&
+               accepted("\\%(abc\\)a\\{,600}"),
+           "the stage 1 route keeps a BT multi (Vim's BT answers the same)");
+    const auto nested = [](std::string_view text, std::size_t nesting)
+    {
+        return VimPattern::parse(text, VimSearchDirection::forward, VimPatternCase::sensitive,
+                                 core::VimPatternLimits{.nesting = nesting})
+            .has_value();
+    };
+    expect(nested("\\%(\\%(a\\|b\\)\\)", 2) && !nested("\\%(\\%(\\%(a\\|b\\)\\)\\)", 2) &&
+               nested("\\%(\\%(\\%(ab\\)\\)\\)", 2),
+           "the nesting limit is injected from VimPatternLimits and only counts compiled groups");
+}
+
+// 群の閉じに同じ位置で何度も着く形（V-1614 の §6 の変異 3・Vim 9.1 の実測）と、`\(\)` の後ろの
+// `^`（`\)` の直後は文字・Vim に揃えた L2）。
+void verify_vim_pattern_close_revisits()
+{
+    expect(captured_text("\\(\\%(\\|a\\)*\\)\\+", "aab", 1) == std::optional<std::string>{""} &&
+               match_range_is("\\(\\%(\\|a\\)*\\)\\+", "aab", 0, {0, 0}),
+           "a starred empty branch inside a repeated group stops at the empty match");
+    expect(captured_text("\\(\\%(\\|a\\)*\\)\\+b", "aab", 1) == std::optional<std::string>{""} &&
+               captured_text("\\(\\(\\|a\\)*\\)\\+b", "aab", 2) == std::optional<std::string>{""} &&
+               captured_text("\\(\\%(a\\|\\)\\%(b\\|\\)\\)\\+", "abab", 1) ==
+                   std::optional<std::string>{""},
+           "a group closed again at the same position keeps Vim's last iteration");
+    expect(
+        match_range_is("\\(\\)^a", "x^a", 0, {1, 3}) &&
+            !VimPattern::parse("\\(\\)^a", VimSearchDirection::forward, VimPatternCase::sensitive)
+                 .value()
+                 .matched("ab", 0)
+                 .has_value(),
+        "a caret after an empty group is a character");
+}
+
+// 2 つのパターンが行の文字の境のどの位置から照合しても同じ範囲に当たるか。
+[[nodiscard]] bool match_alike(const VimPattern &left, const VimPattern &right,
+                               std::string_view line)
+{
+    constexpr unsigned char lead_mask = 0xC0U;
+    constexpr unsigned char continuation = 0x80U;
+    for (std::size_t from = 0; from <= line.size(); ++from)
+    {
+        if (from < line.size() &&
+            (static_cast<unsigned char>(line[from]) & lead_mask) == continuation)
+        {
+            continue;
+        }
+        const auto one = left.matched(line, from);
+        const auto other = right.matched(line, from);
+        if (one.has_value() != other.has_value() ||
+            (one.has_value() &&
+             (one.value().begin != other.value().begin || one.value().end != other.value().end)))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// 量の写しの規則は 2 か所（原子は parse の opened_quantity・群は VimPatternCompiler）、結合文字の
+// 途中の印は 2 か所（VimPatternEvaluation と VimPatternMachine）にある（ADR 0184 の段 2 の強制・
+// 決定 1 で段 1 の原子の列を変えないため）。同じ量の表で、原子の量と `\%(…\)` に付けた量
+// （命令の列の道）の当たりが同じことを確かめる。
+// 原子 unit に量 quantity を付けた形（段 1 の道）と `\%(unit\)` に付けた形（命令の列の道）が、
+// 表の全部の行で同じ範囲に当たるか。
+void verify_copies_agree_for(std::string_view unit, std::string_view quantity)
+{
+    constexpr std::array<std::string_view, 7> lines{"",
+                                                    "a",
+                                                    "aab",
+                                                    "xaaaab",
+                                                    "baab",
+                                                    "e\xcc\x81"
+                                                    "e\xcc\x81"
+                                                    "x",
+                                                    "\xe3\x81\x84\xe3\x81\x84"
+                                                    "b"};
+    const std::string atom = std::string{unit} + std::string{quantity} + "b\\=";
+    const std::string group = "\\%(" + std::string{unit} + "\\)" + std::string{quantity} + "b\\=";
+    const auto left =
+        VimPattern::parse(atom, VimSearchDirection::forward, VimPatternCase::sensitive);
+    const auto right =
+        VimPattern::parse(group, VimSearchDirection::forward, VimPatternCase::sensitive);
+    expect(left.has_value() && right.has_value() &&
+               right.value().route() == core::VimPatternRoute::program &&
+               left.value().route() != core::VimPatternRoute::program,
+           "the atom multi stays on the stage 1 route and the group multi compiles");
+    if (!left.has_value() || !right.has_value())
+    {
+        return;
+    }
+    expect(std::ranges::all_of(lines, [&](std::string_view line)
+                               { return match_alike(left.value(), right.value(), line); }),
+           "an atom multi and the same multi on a plain group match alike");
+}
+
+void verify_vim_pattern_copies_agree()
+{
+    constexpr std::array<std::string_view, 11> quantities{"*",        "\\+",    "\\=",    "\\{2,3}",
+                                                          "\\{-1,3}", "\\{,2}", "\\{2,}", "\\{-}",
+                                                          "\\{0}",    "\\{3}",  "\\{-2,}"};
+    constexpr std::array<std::string_view, 2> units{"a", "."};
+    for (const std::string_view unit : units)
+    {
+        for (const std::string_view quantity : quantities)
+        {
+            verify_copies_agree_for(unit, quantity);
+        }
+    }
+}
+
+} // namespace
+
 void verify_vim_search_contracts()
 {
     verify_vim_pattern_case();
@@ -1658,6 +1821,9 @@ void verify_vim_search_contracts()
     verify_vim_pattern_group_iterations();
     verify_vim_pattern_program_failures();
     verify_vim_pattern_program_bounds();
+    verify_vim_pattern_backtracking_refusals();
+    verify_vim_pattern_close_revisits();
+    verify_vim_pattern_copies_agree();
     verify_vim_pattern_composing();
     verify_vim_pattern_leading_composing();
     verify_vim_search_scan();

@@ -20,7 +20,7 @@ class VimPattern;
 // 始まりは当たりが見つかるまで位置ごとに最も低い優先で足し（最も左）、
 // 当たった候補より低い優先の候補は捨てる
 // （最初に当たる枝・Vim 9.1 の nfa_regmatch の NFA_MATCH）。
-// 確保は作るときだけ。生成と操作は VimPattern::matched に閉じる
+// 確保は作るときだけ（升の表 1 本と列 2 本と積み 1 本）。生成と操作は VimPattern::matched に閉じる
 // （ADR 0093 と同じ形）。
 class VimPatternMachine final
 {
@@ -36,6 +36,8 @@ class VimPatternMachine final
     // 命令 here を辿るか（辿るなら印を付けて真・辿り直す命令は辿り終えの印を積む）。
     [[nodiscard]] bool entered(bool into_next, std::size_t here);
     [[nodiscard]] std::size_t &stamp_of(bool into_next, std::size_t slot);
+    [[nodiscard]] std::size_t &begin_of(bool into_next, std::size_t slot);
+    [[nodiscard]] std::size_t cell_of(bool into_next, std::size_t slot) const noexcept;
     // 列の番号の「辿り終えた」印の値（今の世代の 2 倍 + 1・途中は 2 倍）。
     [[nodiscard]] std::size_t done_stamp(bool into_next) const noexcept;
     // 命令 here を 1 つ辿る（幅の無い遷移は pending_ に積み、食べる原子は列に置く）。当たりなら値。
@@ -55,12 +57,13 @@ class VimPatternMachine final
     std::size_t transit_;
     std::vector<std::size_t> current_;
     std::vector<std::size_t> next_;
-    // 列の番号ごとの始まりの位置（印 stamps が今の世代のときだけ値がある）。
-    std::vector<std::size_t> current_begins_;
-    std::vector<std::size_t> next_begins_;
-    // 列の番号ごとの、最後に辿った列の世代の印（done_stamp なら辿り終えた・1 小さければ途中）。
-    std::vector<std::size_t> current_stamps_;
-    std::vector<std::size_t> next_stamps_;
+    // 列の番号ごとの升 4 つ（今の列と次の列の、始まりの位置と世代の印）を 1 本に並べる（確保と
+    // 0 埋めは作るときに 1 回）。始まりは印が今の世代のときだけ値がある。印は最後に辿った列の世代
+    // （done_stamp なら辿り終えた・1 小さければ途中）。列を入れ替えるときは current_is_first_ を
+    // 返すだけで、升を写さない。
+    static constexpr std::size_t cells_per_slot = 4;
+    std::vector<std::size_t> cells_;
+    bool current_is_first_ = true;
     std::size_t current_generation_ = 1;
     std::size_t next_generation_ = 2;
     // 幅の無い遷移を辿る積み（命令の番号の 2

@@ -698,17 +698,20 @@ parsed_quantifier(std::string_view pattern, std::size_t at, VimPatternParse &par
     {
         return std::unexpected(quantity.error());
     }
+    const VimPatternQuantity read = quantity.value().first;
+    // 原子に付く量も群に付く量も、どこにあってもパターン全体を BT にする（Vim の nfa_regpiece）。
+    parse.backtracks = parse.backtracks || vim_quantity_backtracks(read.minimum, read.maximum);
     if (parse.after_close)
     {
-        parse.marks.back().quantity = quantity.value().first;
+        parse.marks.back().quantity = read;
     }
-    const auto opened_atoms = parse.after_close ? std::expected<void, VimPatternFailure>{}
-                                                : opened_quantity(parse, quantity.value().first);
+    const auto opened_atoms =
+        parse.after_close ? std::expected<void, VimPatternFailure>{} : opened_quantity(parse, read);
     if (!opened_atoms.has_value())
     {
         return std::unexpected(opened_atoms.error());
     }
-    const bool emptied = quantity.value().first.maximum == std::optional<std::size_t>{0};
+    const bool emptied = read.maximum == std::optional<std::size_t>{0};
     parse.multi = !emptied;
     parse.emptied = emptied;
     return quantity.value().second;
@@ -942,6 +945,23 @@ parsed_next(std::string_view pattern, std::size_t at, VimSearchDirection separat
         { return mark.kind == VimPatternMarkKind::branch || mark.quantity.has_value(); });
 }
 
+// 選択か群の量を含むパターンだけを命令の列に組む（ADR 0184 の決定 1・3・ほかは空の列）。Vim 9.1 が
+// 後戻りの照合器へ移る量（vim_quantity_backtracks）を含むなら、NFA の規則の答えが Vim と分かれる
+// ので too_complex で断る（段 2 の強制・V-1614 の M1）。
+[[nodiscard]] std::expected<std::vector<VimPatternInstruction>, VimPatternFailure>
+program_of(const VimPatternParse &parse, VimPatternLimits limits)
+{
+    if (!needs_program(parse.marks))
+    {
+        return std::vector<VimPatternInstruction>{};
+    }
+    if (parse.backtracks)
+    {
+        return std::unexpected(VimPatternFailure::too_complex);
+    }
+    return VimPatternCompiler::compiled(parse.atoms, parse.marks, limits);
+}
+
 // 食べる原子 1 つが食べる最長のバイト数（cluster は基底と結合文字の数だけ・幅の無い原子は 0）。
 [[nodiscard]] std::size_t atom_bytes(const VimPatternAtom &atom) noexcept
 {
@@ -1159,18 +1179,12 @@ std::expected<VimPattern, VimPatternFailure> VimPattern::parse(std::string_view 
     }
     marked_exact(parse.atoms);
     const bool ignore_case = ignores_case(letter_case, parse.forced, pattern);
-    // 選択か群の量を含むパターンだけを命令の列に組む（ADR 0184 の決定 1・3）。
-    std::vector<VimPatternInstruction> program;
-    if (needs_program(parse.marks))
+    auto program = program_of(parse, limits);
+    if (!program.has_value())
     {
-        auto compiled = VimPatternCompiler::compiled(parse.atoms, parse.marks, limits.instructions);
-        if (!compiled.has_value())
-        {
-            return std::unexpected(compiled.error());
-        }
-        program = std::move(compiled).value();
+        return std::unexpected(program.error());
     }
-    return VimPattern(std::move(parse), std::move(program), ignore_case);
+    return VimPattern(std::move(parse), std::move(program).value(), ignore_case);
 }
 
 // 一致の終わりが文字の途中（本文の側にだけ結合文字が続く）なら一致にしない。Vim の NFA の

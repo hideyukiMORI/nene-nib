@@ -9,8 +9,8 @@ namespace nenenib::core
 {
 VimPatternCompiler::VimPatternCompiler(std::span<const VimPatternAtom> atoms,
                                        std::span<const VimPatternMark> marks,
-                                       std::size_t instruction_limit)
-    : atoms_(atoms), marks_(marks), limit_(instruction_limit)
+                                       VimPatternLimits limits)
+    : atoms_(atoms), marks_(marks), limits_(limits)
 {
     tokens_.reserve(atoms.size() + marks.size());
     partners_.resize(atoms.size() + marks.size(), 0);
@@ -18,9 +18,9 @@ VimPatternCompiler::VimPatternCompiler(std::span<const VimPatternAtom> atoms,
 
 std::expected<std::vector<VimPatternInstruction>, VimPatternFailure>
 VimPatternCompiler::compiled(std::span<const VimPatternAtom> atoms,
-                             std::span<const VimPatternMark> marks, std::size_t instruction_limit)
+                             std::span<const VimPatternMark> marks, VimPatternLimits limits)
 {
-    VimPatternCompiler compiler(atoms, marks, instruction_limit);
+    VimPatternCompiler compiler(atoms, marks, limits);
     compiler.tokens_built();
     compiler.alternation(0, compiler.tokens_.size());
     compiler.emitted(VimPatternInstruction{VimPatternOpcode::accept, 0, 0});
@@ -73,7 +73,7 @@ const VimPatternMark &VimPatternCompiler::mark_of(std::size_t token) const
 
 std::size_t VimPatternCompiler::emitted(VimPatternInstruction instruction)
 {
-    overflowed_ = overflowed_ || program_.size() >= limit_;
+    overflowed_ = overflowed_ || program_.size() >= limits_.instructions;
     if (overflowed_)
     {
         return 0;
@@ -195,7 +195,7 @@ void VimPatternCompiler::optional_body_emitted(std::size_t open, std::size_t clo
 
 void VimPatternCompiler::group_emitted(std::size_t open, std::size_t close)
 {
-    if (++depth_ > vim_pattern_nesting_limit)
+    if (++depth_ > limits_.nesting)
     {
         overflowed_ = true;
         return;

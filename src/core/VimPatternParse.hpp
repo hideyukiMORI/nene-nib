@@ -25,7 +25,9 @@ namespace nenenib::core
 // 結合文字は基底の続きにしない）、emptied は今の量が `\{0}`（after_emptied に移る・
 // 原子を消したので、その後ろの量は E866・Vim の nfa_regpiece の早い戻り）、
 // cased は直前の項目が `\c` `\C`（その直後の量は付く原子が無いので E866・
-// Vim の nfa_regconcat）、atom_limit は量を開いた後の原子の数の上限（ADR 0184 の決定 2）。
+// Vim の nfa_regconcat）、atom_limit は量を開いた後の原子の数の上限（ADR 0184 の決定 2）、
+// backtracks は Vim 9.1 がパターン全体を後戻りの照合器で照合する量（vim_quantity_backtracks）を
+// 読んだか（命令の列の道に乗るなら断る・ADR 0184 の段 2 の強制）。
 struct VimPatternParse
 {
     std::vector<VimPatternAtom> atoms;
@@ -44,5 +46,6 @@ struct VimPatternParse
     bool after_multi = false;
     bool after_emptied = false;
     bool cased = false;
+    bool backtracks = false;
 };
 } // namespace nenenib::core
