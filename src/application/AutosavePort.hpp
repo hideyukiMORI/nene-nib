@@ -34,7 +34,8 @@ class AutosavePort
     virtual void discard(AutosaveId id) = 0;
     [[nodiscard]] virtual std::vector<AutosaveOutcome> collect() = 0;
     virtual void clear() = 0;
-    virtual void flush() = 0;
+    // 頼んだ仕事が上限の内に全部片付いたら真（時間切れなら偽・ADR 0137 の追補 #1625）。
+    [[nodiscard]] virtual bool flush() = 0;
     [[nodiscard]] virtual std::expected<std::vector<AutosaveRemnant>, AutosaveFailure>
     remnants() = 0;
     [[nodiscard]] virtual std::expected<std::vector<std::byte>, AutosaveFailure>

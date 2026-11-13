@@ -9,6 +9,7 @@
 #include "DocumentByteLimit.hpp"
 #include "DocumentState.hpp"
 #include "Language.hpp"
+#include "LastResortPlan.hpp"
 #include "QuantityText.hpp"
 #include "SaveState.hpp"
 #include "Selection.hpp"
@@ -124,7 +125,14 @@ void EditorController::accept(const AutosaveTick &)
 // 作り、書くのは worker（決定 4）。
 void EditorController::autosave_now()
 {
-    for (const auto &[id, step] : autosave_plan(state_, autosave_ledger_))
+    static_cast<void>(run_autosave_steps(autosave_plan(state_, autosave_ledger_)));
+}
+
+bool EditorController::run_autosave_steps(
+    const std::vector<std::pair<AutosaveId, AutosaveStep>> &plan)
+{
+    bool whole = true;
+    for (const auto &[id, step] : plan)
     {
         switch (step)
         {
@@ -139,10 +147,26 @@ void EditorController::autosave_now()
         case AutosaveStep::keep:
             break;
         case AutosaveStep::oversized:
+            whole = false;
             notify_autosave_oversized(id);
             break;
         }
     }
+    return whole;
+}
+
+// 最後の砦（ADR 0137 の追補 #1625）。決定 9 の「退避を 1 回頼み、worker が書き終えるまで上限
+// つきで待つ」と同じ道を、意図の途中を見分ける計画で回す。結果は flush の後に引いて、書けなかった
+// ものが 1 つでもあれば偽。
+bool EditorController::back_up_before_defect()
+{
+    const bool planned =
+        run_autosave_steps(last_resort_plan(state_, autosave_ledger_, intent_mark_, intent_depth_));
+    const bool flushed = ports_.autosave.flush();
+    const auto outcomes = ports_.autosave.collect();
+    return planned && flushed &&
+           std::ranges::none_of(outcomes, [](const AutosaveOutcome &outcome)
+                                { return outcome.failure.has_value(); });
 }
 
 // 起動の問いの前の一覧（ADR 0137 の決定 6・7）。起動の道で自動退避に触れるのはこの 1 回だけ。

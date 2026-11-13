@@ -97,7 +97,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp src/application/DocumentDecoding.cpp
     src/application/EditorControllerLanguageServer.cpp src/application/ServerCommand.cpp
     src/application/EditorControllerLanguageDocuments.cpp src/application/DocumentUri.cpp
-    src/application/DiagnosticLines.cpp)
+    src/application/DiagnosticLines.cpp src/application/LastResortPlan.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
 nenenib_target(nib_tests unit_tests EXECUTABLE
@@ -181,7 +181,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/HistoryTests.cpp
     tests/unit/BackgroundWorkTests.cpp
     tests/unit/OpenAsyncTests.cpp
-    tests/unit/AutosaveTests.cpp
+    tests/unit/AutosaveTests.cpp tests/unit/LastResortTests.cpp
     tests/unit/AutosavePlanPropertyTests.cpp
     tests/unit/AutosaveRestorePropertyTests.cpp
     tests/unit/OperationsTests.cpp
@@ -259,7 +259,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32CodePageAdapter.cpp src/adapters/win32/Win32FontCollationAdapter.cpp
     src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/TemporaryFiles.cpp
     src/adapters/win32/Win32TimingAdapter.cpp
-    src/adapters/win32/Win32Worker.cpp src/adapters/win32/FolderShelf.cpp
+    src/adapters/win32/Win32Worker.cpp src/adapters/win32/LastResortArming.cpp src/adapters/win32/FolderShelf.cpp
     src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
     src/adapters/win32/MarkdownShelf.cpp src/adapters/win32/Win32MarkdownAdapter.cpp
     src/adapters/win32/ImageShelf.cpp src/adapters/win32/ImageFileRead.cpp
@@ -431,6 +431,23 @@ add_dependencies(nib_language_server_tests nib_fake_language_server)
 add_test(NAME nib_language_server COMMAND nib_language_server_tests $<TARGET_FILE:nib_fake_language_server>
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(nib_language_server PROPERTIES TIMEOUT 60)
+
+# Issue #1625: 最後の砦（ADR 0137 の追補）を本当に std::terminate を起こす子 process で通す。子
+# nib_last_resort_child は CTest に登録せず、試験の exe が第 1 引数の経路から起こす。子の終わりは上限つきで
+# 待つ（固まれば子を殺して落とす）。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
+nenenib_target(nib_last_resort_child adapter_tests EXECUTABLE tests/adapters/LastResortChildMain.cpp)
+nenenib_link(nib_last_resort_child nenenib_core)
+nenenib_link(nib_last_resort_child nenenib_application)
+nenenib_link(nib_last_resort_child nenenib_adapters)
+nenenib_target(nib_last_resort_tests adapter_tests EXECUTABLE tests/adapters/LastResortTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
+nenenib_link(nib_last_resort_tests nenenib_core)
+nenenib_link(nib_last_resort_tests nenenib_application)
+nenenib_link(nib_last_resort_tests nenenib_adapters)
+add_dependencies(nib_last_resort_tests nib_last_resort_child)
+add_test(NAME nib_adapters_last_resort COMMAND nib_last_resort_tests $<TARGET_FILE:nib_last_resort_child>
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_adapters_last_resort PROPERTIES TIMEOUT 180)
 
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorWindowDetail.cpp src/ui/win32/EditorWindowLifecycle.cpp src/ui/win32/EditorWindowPointer.cpp src/ui/win32/EditorWindowKeys.cpp

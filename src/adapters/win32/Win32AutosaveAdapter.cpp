@@ -107,9 +107,9 @@ void Win32AutosaveAdapter::clear()
 }
 
 // 閉じない。合図と結果は今までどおりで、置き場は消さない。
-void Win32AutosaveAdapter::flush()
+bool Win32AutosaveAdapter::flush()
 {
-    static_cast<void>(shelf_->drain(flush_wait_milliseconds));
+    return shelf_->drain(flush_wait_milliseconds);
 }
 
 std::expected<std::vector<application::AutosaveRemnant>, Failure> Win32AutosaveAdapter::remnants()
