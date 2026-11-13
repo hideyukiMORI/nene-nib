@@ -1,6 +1,7 @@
 #include "SettingsCodec.hpp"
 
 #include "BuiltinThemes.hpp"
+#include "DisplayLanguageNames.hpp"
 #include "ExplorerLayout.hpp"
 #include "KeyMap.hpp"
 #include "KeyValueFields.hpp"
@@ -44,36 +45,6 @@ constexpr std::string_view lsp_prefix = "lsp.";
 constexpr std::string_view lsp_suffix = ".command";
 // Vim の `map` の行の鍵の接頭辞（ADR 0176 の決定 1）。行の形の検査は core の parse_map_line。
 constexpr std::string_view map_prefix = "map.";
-
-// 表示言語の希望値の全値（ADR 0123 の改訂の決定 1）。値を足したら language_text の switch
-// が落ちる。
-constexpr std::array<core::DisplayLanguageChoice, 7> language_choices{
-    core::DisplayLanguageChoice::system,  core::DisplayLanguageChoice::japanese,
-    core::DisplayLanguageChoice::english, core::DisplayLanguageChoice::simplified_chinese,
-    core::DisplayLanguageChoice::korean,  core::DisplayLanguageChoice::spanish,
-    core::DisplayLanguageChoice::german};
-
-[[nodiscard]] std::string_view language_text(core::DisplayLanguageChoice choice) noexcept
-{
-    switch (choice)
-    {
-    case core::DisplayLanguageChoice::system:
-        return "system";
-    case core::DisplayLanguageChoice::japanese:
-        return "ja";
-    case core::DisplayLanguageChoice::english:
-        return "en";
-    case core::DisplayLanguageChoice::simplified_chinese:
-        return "zh-hans";
-    case core::DisplayLanguageChoice::korean:
-        return "ko";
-    case core::DisplayLanguageChoice::spanish:
-        return "es";
-    case core::DisplayLanguageChoice::german:
-        return "de";
-    }
-    std::unreachable();
-}
 
 [[nodiscard]] std::expected<SettingsFields, Failure> read_fields(std::string_view bytes)
 {
@@ -207,12 +178,13 @@ theme_from(std::string_view name, const core::ThemeCatalog &themes)
 [[nodiscard]] std::expected<core::DisplayLanguageChoice, Failure>
 language_from(std::string_view text)
 {
-    const auto found = std::ranges::find(language_choices, text, language_text);
-    if (found == language_choices.end())
+    // 名前の正本は core の 1 か所（`:set language=` と同じ・#1019）。
+    const auto found = core::display_language_choice_named(text);
+    if (!found.has_value())
     {
         return std::unexpected(Failure::malformed);
     }
-    return *found;
+    return found.value();
 }
 
 // `root=` は「決めていない」、ほかは検証済みの経路（展開も絶対化もしない・ARC-007）。
@@ -572,10 +544,11 @@ std::string encode_settings(const core::EditorSettings &settings)
                        "ignorecase={}\nsmartcase={}\nrelativenumber={}\nscrolloff={}\n"
                        "explorer_width={}\n{}{}",
                        theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
-                       language_text(settings.ui_language), switch_text(settings.lsp),
-                       switch_text(settings.explorer), root, features_text(settings.features),
-                       switch_text(settings.ignorecase), switch_text(settings.smartcase),
-                       switch_text(settings.relativenumber), settings.scrolloff, explorer_width,
-                       lsp_commands_text(settings.lsp_commands), maps_text(settings));
+                       core::display_language_choice_name(settings.ui_language),
+                       switch_text(settings.lsp), switch_text(settings.explorer), root,
+                       features_text(settings.features), switch_text(settings.ignorecase),
+                       switch_text(settings.smartcase), switch_text(settings.relativenumber),
+                       settings.scrolloff, explorer_width, lsp_commands_text(settings.lsp_commands),
+                       maps_text(settings));
 }
 } // namespace nenenib::adapters::win32

@@ -14,6 +14,7 @@
 #include "TabRecency.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
+#include "UiMessage.hpp"
 #include "VisualPosition.hpp"
 
 #include <algorithm>
@@ -236,8 +237,7 @@ void EditorController::accept(const SplitPane &intent)
     }
     if (state_.split().layout != core::SplitLayout::none)
     {
-        state_ =
-            state_.with_command_message(core::DisplayText::parse("もう分かれています").value());
+        state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_pane_already_split));
         return;
     }
     settle_follow();
@@ -253,7 +253,7 @@ void EditorController::accept(const SwitchPane &)
     if (state_.preview() != nullptr)
     {
         state_ = state_.with_command_message(
-            core::DisplayText::parse("プレビューの枠には入れません").value());
+            ui_notice(core::UiMessage::notice_pane_preview_unreachable));
         return;
     }
     const PaneView *other = state_.other_pane();

@@ -83,7 +83,8 @@ void verify_guide_text()
         expect(guide.entries.at(2).body_name == "ヘルプ" &&
                    guide.entries.at(2).short_name == "ヘルプ",
                "operation list is called help in both guides");
-        expect(core::operation_choices("ヘルプ", mode).empty(),
+        expect(core::operation_choices("ヘルプ", mode, nenenib::core::DisplayLanguage::japanese)
+                   .empty(),
                "new guide short names do not become operation list search targets");
     }
 }

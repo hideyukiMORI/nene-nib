@@ -240,6 +240,12 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::start_new_file, "新しいファイル"},
     {UiMessage::start_new_file_detail, "そのまま打ち始める"},
     {UiMessage::start_open_folder, "フォルダを開く"},
+    // T1b
+    {UiMessage::operation_choose_language_name, "表示言語を選ぶ"},
+    {UiMessage::operation_choose_language_description, "画面の文字の言語を選びます"},
+    {UiMessage::palette_mark_separator, "　"},
+    {UiMessage::language_choice_system, "Windows に合わせる"},
+    // T1b
     {UiMessage::start_open_folder_detail, "ルートを選んでエクスプローラーを出す"},
 }};
 } // namespace nenenib::core

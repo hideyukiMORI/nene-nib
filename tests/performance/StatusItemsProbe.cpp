@@ -116,8 +116,9 @@ std::expected<std::uint64_t, ProbeFailure> fixed_status_items(StatusItemsWorkloa
     {
         return std::unexpected(ProbeFailure::wrong_result);
     }
-    const auto initial =
-        core::status_items_for(sample.caret, sample.encoding, sample.ending, core::Language::plain);
+    const auto initial = core::status_items_for(
+        nenenib::core::caret_status_item(sample.caret, nenenib::core::DisplayLanguage::japanese),
+        sample.encoding, sample.ending, core::Language::plain);
     if (!status_matches(initial, sample))
     {
         return std::unexpected(ProbeFailure::wrong_result);
@@ -126,15 +127,19 @@ std::expected<std::uint64_t, ProbeFailure> fixed_status_items(StatusItemsWorkloa
     timing.mark(core::Milestone::probe_started);
     for (std::size_t iteration = 0; iteration < 1024U; ++iteration)
     {
-        const auto items = core::status_items_for(sample.caret, sample.encoding, sample.ending,
-                                                  core::Language::plain);
+        const auto items =
+            core::status_items_for(nenenib::core::caret_status_item(
+                                       sample.caret, nenenib::core::DisplayLanguage::japanese),
+                                   sample.encoding, sample.ending, core::Language::plain);
         checksum += status_checksum(items);
     }
     timing.mark(core::Milestone::probe_finished);
     if (checksum != sample.checksum || !status_matches(initial, sample) ||
-        !status_matches(core::status_items_for(sample.caret, sample.encoding, sample.ending,
-                                               core::Language::plain),
-                        sample))
+        !status_matches(
+            core::status_items_for(nenenib::core::caret_status_item(
+                                       sample.caret, nenenib::core::DisplayLanguage::japanese),
+                                   sample.encoding, sample.ending, core::Language::plain),
+            sample))
     {
         return std::unexpected(ProbeFailure::wrong_result);
     }

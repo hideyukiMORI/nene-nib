@@ -125,7 +125,8 @@ std::expected<std::uint64_t, ProbeFailure> fixed_tab_display(TabDisplayWorkload 
         }
         path = parsed.value();
     }
-    const auto initial_title = core::tab_title_for(path, sample.state);
+    const auto initial_title =
+        core::tab_title_for(path, sample.state, nenenib::core::DisplayLanguage::japanese);
     const auto initial_folder = core::tab_folder_for(path);
     if (!path_equal(path, input) || !display_equal(initial_title, initial_folder, sample))
     {
@@ -135,14 +136,17 @@ std::expected<std::uint64_t, ProbeFailure> fixed_tab_display(TabDisplayWorkload 
     timing.mark(core::Milestone::probe_started);
     for (std::size_t iteration = 0; iteration < 1024U; ++iteration)
     {
-        const auto title = core::tab_title_for(path, sample.state);
+        const auto title =
+            core::tab_title_for(path, sample.state, nenenib::core::DisplayLanguage::japanese);
         const auto folder = core::tab_folder_for(path);
         checksum += display_checksum(title, folder);
     }
     timing.mark(core::Milestone::probe_finished);
     if (checksum != sample.checksum || !path_equal(path, input) ||
         !display_equal(initial_title, initial_folder, sample) ||
-        !display_equal(core::tab_title_for(path, sample.state), core::tab_folder_for(path), sample))
+        !display_equal(
+            core::tab_title_for(path, sample.state, nenenib::core::DisplayLanguage::japanese),
+            core::tab_folder_for(path), sample))
     {
         return std::unexpected(ProbeFailure::wrong_result);
     }

@@ -69,6 +69,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
     src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp src/core/SaveQuestionText.cpp src/core/LanguageTable.cpp
     src/core/ResolvedLanguage.cpp src/core/UiTexts.cpp
+    src/core/DisplayLanguageNames.cpp src/core/QuantityText.cpp
     src/core/Lexer.cpp src/core/LexCpp.cpp src/core/LexCursor.cpp
     src/core/MarkdownParse.cpp src/core/MarkdownBuilder.cpp src/core/MarkdownEntity.cpp src/core/PreviewSelectionText.cpp
     src/core/ImageFormat.cpp src/core/ImageGeometry.cpp src/core/ImageReference.cpp
@@ -184,6 +185,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/AutosaveRestorePropertyTests.cpp
     tests/unit/OperationsTests.cpp
     tests/unit/UiTextsTests.cpp
+    tests/unit/UiLanguageTests.cpp
     tests/unit/FindReplaceTests.cpp tests/unit/ExSubstituteTests.cpp tests/unit/MatchParenTests.cpp tests/unit/MinimapTests.cpp
     tests/unit/MinimapPropertyTests.cpp tests/unit/MinimapPointerTests.cpp
     tests/unit/GuideTests.cpp
@@ -251,7 +253,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/SynchronousDocumentReader.cpp src/adapters/win32/Win32DocumentReader.cpp
     src/adapters/win32/DocumentReadShelf.cpp src/adapters/win32/DocumentChunkRead.cpp
     src/adapters/win32/HistoryCodec.cpp src/adapters/win32/Win32HistoryAdapter.cpp
-    src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32Bell.cpp src/adapters/win32/Win32Clock.cpp src/adapters/win32/Win32ShellRegistration.cpp src/adapters/win32/Win32WslDistributions.cpp
+    src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32Bell.cpp src/adapters/win32/Win32Clock.cpp src/adapters/win32/Win32UiLanguage.cpp src/adapters/win32/Win32ShellRegistration.cpp src/adapters/win32/Win32WslDistributions.cpp
     src/adapters/win32/ClipboardCalls.cpp src/adapters/win32/HtmlClipboardFormat.cpp src/adapters/win32/Win32ClipboardAdapter.cpp
     src/adapters/win32/Win32CodePageAdapter.cpp src/adapters/win32/Win32FontCollationAdapter.cpp
     src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/TemporaryFiles.cpp

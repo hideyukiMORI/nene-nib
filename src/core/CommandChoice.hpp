@@ -2,6 +2,7 @@
 
 #include "CommandChoiceKind.hpp"
 #include "CommandLine.hpp"
+#include "DisplayLanguage.hpp"
 #include "DisplayText.hpp"
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
@@ -40,7 +41,10 @@ struct CommandChoice
 // 操作の一覧の候補（ADR 0078 の決定 6・11）。操作の表のうち mode で使える操作だけで、query が
 // 空なら operation_texts の順、あれば名前・読み・鍵の表示名に match_score を当てた一番良い点の
 // 小さい順（同点は表の順）。どれにも当たらない操作は外す。説明は照合しない。
-[[nodiscard]] std::vector<CommandChoice> operation_choices(std::string_view query, EditMode mode);
+// 名前と説明は language の文、照合は名前・読み（日本語のときだけ）か短い名前（英語・中国語）・鍵の
+// 表示名（ADR 0123 の追補 2026-11-13 の決定 6）。
+[[nodiscard]] std::vector<CommandChoice> operation_choices(std::string_view query, EditMode mode,
+                                                           DisplayLanguage language);
 // Ctrl+P の候補の列の絞り込みと順（ADR 0060 の決定 4）。scope に入る候補だけを残し（files は印の
 // ある候補の全部・commands はこの関数の外なので空）、query が空なら列の順、あれば名前に
 // match_score（大文字と小文字を区別しない部分列）、名前に当たらなければ「場所＋名前」に当てて

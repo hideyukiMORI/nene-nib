@@ -54,6 +54,8 @@ enum class EditorOperation : std::uint8_t
     print,
     // エクスプローラーへの登録の 2 つ（ADR 0178 の決定 3）。
     register_shell,
-    unregister_shell
+    unregister_shell,
+    // 表示言語を選ぶ（ADR 0123 の追補 2026-11-13 の決定 8・#1019）。鍵なしで F1 の一覧から。
+    choose_language
 };
 } // namespace nenenib::core

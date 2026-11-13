@@ -54,6 +54,7 @@
 #include "ScriptedSettings.hpp"
 #include "ScriptedStartLists.hpp"
 #include "ScriptedThemes.hpp"
+#include "ScriptedUiLanguage.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollTabs.hpp"
 #include "SelectEditMode.hpp"
@@ -551,6 +552,7 @@ void verify_open_failure_adds_no_tab()
     ScriptedShellRegistration shell_registration;
     ScriptedImages images;
     ScriptedStartLists start_lists;
+    ScriptedUiLanguage ui_language;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -561,7 +563,7 @@ void verify_open_failure_adds_no_tab()
                     themes,       session,         history,    folders,    bookmarks,
                     text_layouts, autosave,        fonts,      bell,       markdown,
                     reads,        language_server, wall_clock, printer,    shell_registration,
-                    images,       start_lists},
+                    images,       start_lists,     ui_language},
         initial);
     return controller.frame();
 }
@@ -1183,6 +1185,7 @@ void verify_recent_after_startup()
     ScriptedShellRegistration shell_registration;
     ScriptedImages images;
     ScriptedStartLists start_lists;
+    ScriptedUiLanguage ui_language;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -1193,7 +1196,7 @@ void verify_recent_after_startup()
                     themes,       session,         history,    folders,    bookmarks,
                     text_layouts, autosave,        fonts,      bell,       markdown,
                     reads,        language_server, wall_clock, printer,    shell_registration,
-                    images,       start_lists},
+                    images,       start_lists,     ui_language},
         {open_at("C:\\work\\a.txt"), open_at("C:\\work\\b.txt"), open_at("C:\\work\\c.txt")});
     applied(controller, VisibleLines{10});
     expect(recent_bodies(controller) == "cba", "three arguments leave the last one most recent");

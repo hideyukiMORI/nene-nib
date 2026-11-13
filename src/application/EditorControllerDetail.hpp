@@ -2,6 +2,7 @@
 
 #include "Composition.hpp"
 #include "CompositionView.hpp"
+#include "DisplayLanguage.hpp"
 #include "DisplayText.hpp"
 #include "DocumentState.hpp"
 #include "DocumentView.hpp"
@@ -14,6 +15,7 @@
 #include "ScrollExtent.hpp"
 #include "SearchLine.hpp"
 #include "TextBuffer.hpp"
+#include "UiMessage.hpp"
 #include "UnloadedDocument.hpp"
 #include "VimPattern.hpp"
 
@@ -64,7 +66,12 @@ inline constexpr std::string_view clipped_mark = "…";
 // 落とす（題名と同じ「…」・DisplayText の 256 バイト）。named_notice と読み込み中の 1 行の共通。
 [[nodiscard]] core::DisplayText named_line(std::string_view prefix, std::string name,
                                            std::string_view suffix);
-[[nodiscard]] core::DisplayText named_notice(std::string_view prefix, std::string name,
+// 文の表の文（置き場 {0} に名前）で作る形（#1019）。named_notice は名前の後ろに「（ほか N 件）」
+// （notice_others）を付ける。
+[[nodiscard]] core::DisplayText named_line(core::UiMessage message, core::DisplayLanguage language,
+                                           std::string name, std::string_view suffix);
+[[nodiscard]] core::DisplayText named_notice(core::UiMessage message,
+                                             core::DisplayLanguage language, std::string name,
                                              std::size_t others);
 // 面と `:` の補完の面の見えている行数を決める窓の寸法（ADR 0150 の決定 1）。幅か高さが 0 なら
 // 寸法が届く前で、行数は上限のまま。

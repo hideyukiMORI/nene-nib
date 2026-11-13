@@ -323,9 +323,12 @@ constexpr std::array<std::string_view, 6> exe_paths{{
                               input.extensions.end());
     ShellRegistrationInput upper = input;
     upper.extensions = swapped_case(input.extensions);
-    const auto again = core::shell_registration_plan(input);
-    const auto twice = core::shell_registration_plan(doubled);
-    const auto shouted = core::shell_registration_plan(upper);
+    const auto again =
+        core::shell_registration_plan(input, nenenib::core::DisplayLanguage::japanese);
+    const auto twice =
+        core::shell_registration_plan(doubled, nenenib::core::DisplayLanguage::japanese);
+    const auto shouted =
+        core::shell_registration_plan(upper, nenenib::core::DisplayLanguage::japanese);
     const bool same = again.has_value() && again.value() == plan && twice.has_value() &&
                       twice.value() == plan && shouted.has_value() && shouted.value() == plan;
     return same ? std::string_view{} : "the plan changes with repeats, case or a second call";
@@ -333,7 +336,8 @@ constexpr std::array<std::string_view, 6> exe_paths{{
 
 [[nodiscard]] std::string_view failure_violation(const ShellRegistrationInput &input)
 {
-    const auto plan = core::shell_registration_plan(input);
+    const auto plan =
+        core::shell_registration_plan(input, nenenib::core::DisplayLanguage::japanese);
     if (input.exe_path.empty())
     {
         return !plan && plan.error() == ShellRegistrationPlanFailure::empty_path
@@ -351,7 +355,8 @@ constexpr std::array<std::string_view, 6> exe_paths{{
     {
         return failure_violation(input);
     }
-    const auto plan = core::shell_registration_plan(input);
+    const auto plan =
+        core::shell_registration_plan(input, nenenib::core::DisplayLanguage::japanese);
     if (!plan)
     {
         return "a valid input is refused";
@@ -390,7 +395,10 @@ void verify_random_plans()
     {
         const ShellRegistrationInput input = random_input(random);
         const std::string_view reason = plan_violation(input);
-        planned += core::shell_registration_plan(input).has_value() ? 1U : 0U;
+        planned += core::shell_registration_plan(input, nenenib::core::DisplayLanguage::japanese)
+                           .has_value()
+                       ? 1U
+                       : 0U;
         if (!reason.empty() && broken++ == 0U)
         {
             print_input(reason, input);

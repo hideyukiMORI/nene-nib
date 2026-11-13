@@ -1,5 +1,7 @@
 #pragma once
 
+#include "DisplayLanguage.hpp"
+
 #include <string_view>
 
 namespace nenenib::core
@@ -17,6 +19,10 @@ enum class SaveQuestionText
     cancel_button,
 };
 
-// 文は UTF-8 でここ 1 か所だけ。ボタンの `&` は箱のアクセスキー（MessageBox の Y / N と同じ）。
+// 文は表示言語の文の表（UiTexts・#1019）から引く。ボタンの `&` は箱のアクセスキー（MessageBox の
+// Y / N と同じ）。
+[[nodiscard]] std::string_view save_question_text(SaveQuestionText text,
+                                                  DisplayLanguage language) noexcept;
+// 言語の無い形は日本語の文（ui の試験の形・T1e で言語の形へ寄せる）。
 [[nodiscard]] std::string_view save_question_text(SaveQuestionText text) noexcept;
 } // namespace nenenib::core

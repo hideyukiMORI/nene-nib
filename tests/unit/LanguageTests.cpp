@@ -430,7 +430,9 @@ void verify_status_item()
     static_cast<void>(run_ex(controller, "set ft=ps1"));
     expect(controller.frame().status_items.at(3).text() == "ps1",
            ":set ft= changes the status item");
-    expect(core::status_items_for(core::TextPosition{core::LineNumber{1}, core::Column{1}},
+    expect(core::status_items_for(nenenib::core::caret_status_item(
+                                      core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                                      nenenib::core::DisplayLanguage::japanese),
                                   core::TextEncoding::utf8, core::LineEnding::lf,
                                   Language::typescript)
                    .at(3)
@@ -503,12 +505,14 @@ void verify_restored_autosave()
     const std::optional<core::FilePath> named{path_of("C:\\work\\data.json")};
     editing.autosave().remain(
         app::AutosaveRemnant{"1f/0", app::AutosaveId{0}, named,
-                             core::tab_title_for(named, core::SaveState::modified),
+                             core::tab_title_for(named, core::SaveState::modified,
+                                                 nenenib::core::DisplayLanguage::japanese),
                              core::TextPosition{core::LineNumber{1}, core::Column{1}}},
         "{}");
     editing.autosave().remain(
         app::AutosaveRemnant{"1f/1", app::AutosaveId{0}, std::nullopt,
-                             core::tab_title_for(std::nullopt, core::SaveState::modified),
+                             core::tab_title_for(std::nullopt, core::SaveState::modified,
+                                                 nenenib::core::DisplayLanguage::japanese),
                              core::TextPosition{core::LineNumber{1}, core::Column{1}}},
         "gamma");
     static_cast<void>(controller.autosave_remnants());

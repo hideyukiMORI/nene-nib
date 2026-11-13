@@ -2,15 +2,18 @@
 // 使わない。
 #include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
+#include "DisplayLanguage.hpp"
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
 #include "KeyChord.hpp"
 #include "OperationBindings.hpp"
 #include "OperationKey.hpp"
 #include "OperationModes.hpp"
+#include "OperationReadings.hpp"
 #include "OperationTexts.hpp"
 #include "Scopes.hpp"
 #include "TestSupport.hpp"
+#include "UiTexts.hpp"
 
 #include <algorithm>
 #include <array>
@@ -131,7 +134,7 @@ constexpr std::array<ChordRow, 58> chord_rows{{
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
-constexpr std::array<ShownRow, 37> shown_rows{{
+constexpr std::array<ShownRow, 38> shown_rows{{
     {EditorOperation::open_file, "Ctrl+O", "Ctrl+Shift+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
@@ -177,6 +180,8 @@ constexpr std::array<ShownRow, 37> shown_rows{{
     // 鍵なし。F1 の一覧からだけ（ADR 0178 の決定 3）。
     {EditorOperation::register_shell, "", "", true, true},
     {EditorOperation::unregister_shell, "", "", true, true},
+    // 鍵なし。F1 の一覧からだけ（ADR 0123 の追補 2026-11-13 の決定 8）。
+    {EditorOperation::choose_language, "", "", true, true},
 }};
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
@@ -294,14 +299,18 @@ void verify_texts()
                "the text table holds every operation exactly once");
         const auto &text = nenenib::core::operation_text(operation);
         expect(text.operation == operation, "operation_text returns the row of the operation");
-        expect(!text.name.empty() && !text.reading.empty() && !text.description.empty(),
-               "every operation has a name, a reading and a description");
+        expect(
+            !nenenib::core::ui_text(text.name, nenenib::core::DisplayLanguage::japanese).empty() &&
+                !nenenib::core::operation_reading(operation).empty() &&
+                !nenenib::core::ui_text(text.description, nenenib::core::DisplayLanguage::japanese)
+                     .empty(),
+            "every operation has a name, a reading and a description");
         expect(std::ranges::any_of(nenenib::core::operation_bindings,
                                    [&](const nenenib::core::OperationBinding &row)
                                    { return row.operation == operation; }),
                "every operation has a row in the binding table");
     }
-    expect(nenenib::core::operation_text(EditorOperation::save).reading == "ほぞん",
+    expect(nenenib::core::operation_reading(EditorOperation::save) == "ほぞん",
            "the reading of save is hiragana");
 }
 [[nodiscard]] std::vector<Operation>
@@ -315,10 +324,17 @@ operations_of(const std::vector<nenenib::core::CommandChoice> &choices)
     return operations;
 }
 
+// 日本語の表示の操作の一覧（#1019・今までの試験の言語）。
+[[nodiscard]] std::vector<nenenib::core::CommandChoice> japanese_choices(std::string_view query,
+                                                                         EditMode mode)
+{
+    return nenenib::core::operation_choices(query, mode, nenenib::core::DisplayLanguage::japanese);
+}
+
 // 空の入力の一覧で operation の行の「名前|説明|鍵」。行が無ければ "<missing>"。
 [[nodiscard]] std::string row_text(EditorOperation operation, EditMode mode)
 {
-    for (const auto &choice : nenenib::core::operation_choices("", mode))
+    for (const auto &choice : japanese_choices("", mode))
     {
         if (choice.operation == operation)
         {
@@ -332,7 +348,7 @@ operations_of(const std::vector<nenenib::core::CommandChoice> &choices)
 // 空の入力の一覧で operation の行の鍵の表示名。行が無ければ "<missing>"。
 [[nodiscard]] std::string key_for(EditorOperation operation, EditMode mode)
 {
-    for (const auto &choice : nenenib::core::operation_choices("", mode))
+    for (const auto &choice : japanese_choices("", mode))
     {
         if (choice.operation == operation)
         {
@@ -346,9 +362,9 @@ operations_of(const std::vector<nenenib::core::CommandChoice> &choices)
 // 名前・読み・鍵の表示名に当てて良い順、どれにも当たらなければ外す。
 void verify_operation_choices()
 {
-    const auto ordinary = nenenib::core::operation_choices("", EditMode::ordinary);
-    const auto vim = nenenib::core::operation_choices("", EditMode::vim);
-    expect(ordinary.size() == 37 && vim.size() == 35,
+    const auto ordinary = japanese_choices("", EditMode::ordinary);
+    const auto vim = japanese_choices("", EditMode::vim);
+    expect(ordinary.size() == 38 && vim.size() == 36,
            "an empty query lists every operation available in the mode");
     std::vector<Operation> in_order;
     for (const auto &text : nenenib::core::operation_texts)
@@ -375,20 +391,20 @@ void verify_operation_choices()
     expect(row_text(EditorOperation::save, EditMode::ordinary) ==
                "保存|いまのファイルに上書きします|Ctrl+S",
            "a row shows the name, the description and the key label");
-    const auto saved = nenenib::core::operation_choices("ほぞん", EditMode::ordinary);
+    const auto saved = japanese_choices("ほぞん", EditMode::ordinary);
     expect(operations_of(saved) ==
                std::vector<Operation>{EditorOperation::save, EditorOperation::save_as},
            "the reading finds save and save as, the closer one first");
-    const auto keyed = nenenib::core::operation_choices("ctrl+s", EditMode::ordinary);
+    const auto keyed = japanese_choices("ctrl+s", EditMode::ordinary);
     expect(keyed.size() >= 2 && keyed.at(0).operation == EditorOperation::save &&
                keyed.at(1).operation == EditorOperation::save_as,
            "the key label finds Ctrl+S before Ctrl+Shift+S");
-    expect(operations_of(nenenib::core::operation_choices("f1", EditMode::vim)) ==
+    expect(operations_of(japanese_choices("f1", EditMode::vim)) ==
                std::vector<Operation>{EditorOperation::list_operations},
            "F1 finds the operation list");
-    expect(nenenib::core::operation_choices("qqq", EditMode::ordinary).empty(),
+    expect(japanese_choices("qqq", EditMode::ordinary).empty(),
            "a query that hits nothing lists nothing");
-    expect(nenenib::core::operation_choices("上書き", EditMode::ordinary).empty(),
+    expect(japanese_choices("上書き", EditMode::ordinary).empty(),
            "the description is not matched");
     expect(key_for(EditorOperation::close_tab, EditMode::ordinary) == "Ctrl+W" &&
                key_for(EditorOperation::close_tab, EditMode::vim) == "Ctrl+F4",
@@ -405,12 +421,14 @@ void verify_date_time_choice()
 {
     expect(row_text(EditorOperation::insert_date_time, EditMode::ordinary) ==
                    "日時を挿入|" +
-                       std::string(nenenib::core::operation_text(EditorOperation::insert_date_time)
-                                       .description) +
+                       std::string(nenenib::core::ui_text(
+                           nenenib::core::operation_text(EditorOperation::insert_date_time)
+                               .description,
+                           nenenib::core::DisplayLanguage::japanese)) +
                        "|F5" &&
                key_for(EditorOperation::insert_date_time, EditMode::vim) == "F5",
            "the operation list shows insert date and time with F5 in both modes");
-    expect(operations_of(nenenib::core::operation_choices("f5", EditMode::ordinary)) ==
+    expect(operations_of(japanese_choices("f5", EditMode::ordinary)) ==
                std::vector<Operation>{EditorOperation::insert_date_time},
            "F5 finds insert date and time");
 }
@@ -423,7 +441,7 @@ void verify_print_choice()
                row_text(EditorOperation::print, EditMode::vim) ==
                    "印刷|いまの文書をプリンタを選んで印刷します|",
            "the operation list shows print without a key in both modes");
-    expect(operations_of(nenenib::core::operation_choices("いんさつ", EditMode::vim)) ==
+    expect(operations_of(japanese_choices("いんさつ", EditMode::vim)) ==
                std::vector<Operation>{EditorOperation::print},
            "the reading finds print");
 }

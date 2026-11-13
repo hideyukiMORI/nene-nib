@@ -72,8 +72,9 @@ void verify_plan_rows()
 
 [[nodiscard]] DocumentView tab_in(SaveState state)
 {
-    return DocumentView{nenenib::core::tab_title_for(std::nullopt, state), std::nullopt,
-                        nenenib::core::TextEncoding::utf8, state, std::nullopt};
+    return DocumentView{
+        nenenib::core::tab_title_for(std::nullopt, state, nenenib::core::DisplayLanguage::japanese),
+        std::nullopt, nenenib::core::TextEncoding::utf8, state, std::nullopt};
 }
 
 void verify_unsaved_count()

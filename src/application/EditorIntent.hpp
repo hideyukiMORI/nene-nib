@@ -33,6 +33,7 @@
 #include "NewLine.hpp"
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
+#include "OpenDisplayLanguageList.hpp"
 #include "OpenDocument.hpp"
 #include "OpenDocumentFormatList.hpp"
 #include "OpenOperationList.hpp"
@@ -101,7 +102,7 @@ using EditorIntent = std::variant<
     SplitPane, SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick, TogglePreviewTask,
     ToggleExplorer, ExplorerKey, PointExplorer, ScrollExplorer, ExplorerRootChosen, ResizeExplorer,
     HoverExplorer, LanguageServerTick, MapTimeout, InsertDateTime, SelectDocumentFormat,
-    OpenDocumentFormatList, BeginFind, BeginGoToLine, BeginReplace, SetPreviewPlacement,
-    PointPreview, PrintDocument, RegisterShell, UnregisterShell, PinTab, FirstFramePresented,
-    ChooseStartEntry, PointMinimap>;
+    OpenDocumentFormatList, OpenDisplayLanguageList, BeginFind, BeginGoToLine, BeginReplace,
+    SetPreviewPlacement, PointPreview, PrintDocument, RegisterShell, UnregisterShell, PinTab,
+    FirstFramePresented, ChooseStartEntry, PointMinimap>;
 } // namespace nenenib::application

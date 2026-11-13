@@ -303,11 +303,17 @@ bool markdown_size_fits(std::size_t size) noexcept
 std::expected<MarkdownDocument, MarkdownFailure> parse_markdown(std::string_view text,
                                                                 const MarkdownStop &stop)
 {
+    return parse_markdown(text, stop, DisplayLanguage::japanese);
+}
+
+std::expected<MarkdownDocument, MarkdownFailure>
+parse_markdown(std::string_view text, const MarkdownStop &stop, DisplayLanguage language)
+{
     if (!markdown_size_fits(text.size()))
     {
         return std::unexpected(MarkdownFailure::too_large);
     }
-    MarkdownBuilder builder(text, stop);
+    MarkdownBuilder builder(text, stop, language);
     if (text.empty())
     {
         return std::move(builder).finished();

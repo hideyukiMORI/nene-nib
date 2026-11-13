@@ -2,6 +2,8 @@
 
 #include "AsciiCase.hpp"
 #include "LanguageTable.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 
 #include <algorithm>
 #include <initializer_list>
@@ -24,8 +26,6 @@ constexpr std::string_view capabilities_key = "Software\\NeNeNib\\Capabilities";
 constexpr std::string_view registered_applications_key = "Software\\RegisteredApplications";
 constexpr std::string_view registered_application_name = "NeNeNib";
 constexpr std::string_view command_suffix = "\\shell\\open\\command";
-// ProgId の説明の後ろ（「md ファイル（NeNe Nib）」）。
-constexpr std::string_view prog_id_description_suffix = " ファイル（NeNe Nib）";
 
 [[nodiscard]] std::string joined(std::string_view head, std::string_view tail)
 {
@@ -108,8 +108,10 @@ void add_verb_and_application(ShellRegistrationPlan &plan, const ShellRegistrati
 }
 
 // 拡張子ごとの ProgId（決定 2 の 3 つ目）。ProgId の名前は `NeNeNib.` に `.` を除いた拡張子。
+// 説明（「md ファイル（NeNe Nib）」）は登録の時点の表示言語の文（ADR 0123 の追補 2026-11-13 の
+// 決定 11）。
 void add_prog_ids(ShellRegistrationPlan &plan, const ShellRegistrationInput &input,
-                  const std::vector<std::string> &extensions)
+                  const std::vector<std::string> &extensions, DisplayLanguage language)
 {
     const auto command = command_of(input.exe_path);
     const auto icon = icon_of(input.exe_path);
@@ -117,8 +119,9 @@ void add_prog_ids(ShellRegistrationPlan &plan, const ShellRegistrationInput &inp
     {
         const std::string_view bare = std::string_view(extension).substr(1);
         const auto key = joined(classes_key, joined(prog_id_prefix, bare));
-        plan.push_back(
-            {key, "", joined(bare, prog_id_description_suffix), ShellRegistrationRemoval::subtree});
+        plan.push_back({key, "",
+                        ui_text_filled(UiMessage::shell_prog_id_description, language, {bare}),
+                        ShellRegistrationRemoval::subtree});
         plan.push_back({joined(key, "\\DefaultIcon"), "", icon, ShellRegistrationRemoval::subtree});
         plan.push_back(
             {joined(key, command_suffix), "", command, ShellRegistrationRemoval::subtree});
@@ -177,7 +180,7 @@ void add_capabilities(ShellRegistrationPlan &plan, const ShellRegistrationInput 
 } // namespace
 
 std::expected<ShellRegistrationPlan, ShellRegistrationPlanFailure>
-shell_registration_plan(const ShellRegistrationInput &input)
+shell_registration_plan(const ShellRegistrationInput &input, DisplayLanguage language)
 {
     if (input.exe_path.empty())
     {
@@ -190,7 +193,7 @@ shell_registration_plan(const ShellRegistrationInput &input)
     const auto extensions = normalized_extensions(input.extensions);
     ShellRegistrationPlan plan;
     add_verb_and_application(plan, input, extensions);
-    add_prog_ids(plan, input, extensions);
+    add_prog_ids(plan, input, extensions, language);
     add_capabilities(plan, input, extensions);
     return plan;
 }

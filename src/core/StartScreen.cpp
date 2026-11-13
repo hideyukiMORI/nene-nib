@@ -31,11 +31,16 @@ std::vector<StartEntry> start_entries(std::span<const FilePath> recent,
     return entries;
 }
 
+std::array<GuideEntry, 3> start_key_entries(EditMode mode, DisplayLanguage language)
+{
+    return {operation_guide_entry(EditorOperation::list_files, mode, language),
+            operation_guide_entry(EditorOperation::list_operations, mode, language),
+            operation_guide_entry(EditorOperation::toggle_explorer, mode, language)};
+}
+
 std::array<GuideEntry, 3> start_key_entries(EditMode mode)
 {
-    return {operation_guide_entry(EditorOperation::list_files, mode),
-            operation_guide_entry(EditorOperation::list_operations, mode),
-            operation_guide_entry(EditorOperation::toggle_explorer, mode)};
+    return start_key_entries(mode, DisplayLanguage::japanese);
 }
 
 std::optional<std::size_t> start_selection_stepped(std::optional<std::size_t> selected,
