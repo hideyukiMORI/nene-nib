@@ -133,13 +133,12 @@
 - 速さ: 梱包の exe では測っていない。同じ中身の木（まとめ枝 33 の `0e5a2e3e`）の Release の 1 回（8 本 0 regression・根拠 (a)）を再利用した（QLT-012）。記録 `D:/NeNeNib/outputs/20261113/gate-integration33-0e5a2e3e.log`。`git diff 0e5a2e3e 3d3859e6 -- src tests eng CMakeLists.txt third_party` は空（差は文書だけ）。
 - 添付: `NeNeNib-0.1.0-beta.13-windows-x64.zip` 1,500,602 bytes・SHA-256 `cdd46e7222228ceaf4f2478e69e8bfa56ef381bf364dfe87322ef93170924120`、`SHA256SUMS` 105 bytes（SHA-256 `03a738497e1d76afe8961e67a01a5c4d961d627a3b334694c6d8947e2f2e34d9`）
 - 照合（`verify-publication.py`）: 手順 4 のとおり `gh release download --dir downloaded` を先に行ってから回し、1 回で bytes 一致・zip の中身一致・tag の commit 一致・展開した exe の起動 pass（release-smoke-01）→ `result: pass`（checkedAt 2026-11-13T15:16:25Z）。写しは `D:/NeNeNib/releases/v0.1.0-beta.13/publication-verification.json` と `github-release.json`。
-- 公開の文: `D:/NeNeNib/evidence/beta13-release/release-notes.md`。公開の前に、先頭の注記 1 行と余分な `**` を消し、配布元に公開元の full SHA を入れた。公開した本文には、対にならない `**` がまだ 1 つ残っている（表示言語の項の「機械の訳です**（」・`gh release view` の本文で `**` は 23 個）。
+- 公開の文: `D:/NeNeNib/evidence/beta13-release/release-notes.md`。公開の前に、先頭の注記 1 行を消し、配布元に公開元の full SHA を入れた。このとき設計席が「余分な `**`」として消したのは、太字 `**中国語の訳は機械の訳です**` の開きの印だった（本文を途中で切って読んだため）。公開した本文に対にならない `**` が 1 つ残り、公開の結果を記録する席が見つけた。00:3x に開きの印を戻し、`gh release edit --notes-file` で本文を直した（tag と添付は変えていない・`**` は 24 個で対になった）。
 - hide の試用: 公開の前の 2026-11-13 夜に、表の A〜D とも OK（根拠 (d)）。公開した ZIP の exe での試用はしていない（smoke だけ）。
 
 ## 未確認と残るリスク
 
 - 公開元の commit・梱包・smoke・tag・Release・照合は済んだ（上の「公開の結果」・2026-11-14 00:02〜00:16）。
 - 英語と中国語の画面の撮影（施主の了承は 21:28）は公開の前にしていない（Store のスクリーンショットと合わせて公開の後）。
-- 公開した本文に対にならない `**` が 1 つ残る（上の「公開の文」）。直すかは設計席の判断。
 - 最後の砦と退避の置き場は実機で起こしていない（自動の試験だけ）。
 - クリップボード: 11-13 の席 C20 の Vim の実測が `:set cb=unnamed` の後に `x` を流していた（OS のクリップボードを書いた恐れ・実際に書いたかは未確認・施主に報告済み・製品と fixture には該当なし）。公開物には関わらない。
