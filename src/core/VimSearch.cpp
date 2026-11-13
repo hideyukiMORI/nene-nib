@@ -2,6 +2,7 @@
 
 #include "LineNumber.hpp"
 #include "Utf8.hpp"
+#include "VimCharacterBoundary.hpp"
 #include "VimPatternMatch.hpp"
 #include "VimSearchWalk.hpp"
 
@@ -89,13 +90,28 @@ void visit_line_matches(std::string_view line, const VimPattern &pattern, const 
     return found;
 }
 
+// 起点の行の前向きの一致（起点の次の桁以降）。行の内容の終わり（Vim の NUL）に始まる一致は、NORMAL
+// のキャレットが着いた後に寄る最後の文字の桁で比べるので、起点が最後の文字の上か行の内容の終わり
+// なら起点の行の答えにしない（Vim の searchit の `matchpos.col - (ptr[matchpos.col] == NUL) <
+// start_pos.col + extra_col`・extra_col は起点の 1 文字の長さ）。そうしないと `/$` の `n` が同じ
+// 行の行末に留まる（#1606）。
+[[nodiscard]] std::optional<std::size_t>
+first_match_past(std::string_view content, const VimPattern &pattern, std::size_t index)
+{
+    const auto found = first_match(content, pattern, index + 1);
+    const bool on_last =
+        vim_character_end(content, Offset{std::min(index, content.size())}).value >= content.size();
+    return found.has_value() && found.value() == content.size() && on_last ? std::nullopt : found;
+}
+
+// 起点の行の一致。前向きは起点の次の桁以降（first_match_past）、後ろ向きは起点より前。
 [[nodiscard]] std::optional<std::size_t> found_in_line(std::string_view content,
                                                        const VimPattern &pattern,
                                                        VimSearchDirection direction,
-                                                       std::size_t bound)
+                                                       std::size_t index)
 {
-    return direction == VimSearchDirection::forward ? first_match(content, pattern, bound)
-                                                    : last_match(content, pattern, bound);
+    return direction == VimSearchDirection::forward ? first_match_past(content, pattern, index)
+                                                    : last_match(content, pattern, index);
 }
 
 // 前向きに、行 begin から行 last までを見る（どちらも行の始まり）。値は当たりのバイト位置。
@@ -176,8 +192,7 @@ using Landing = std::optional<std::pair<Offset, bool>>;
     VimSearchWalk walk(text, pattern);
     const std::size_t first = text.line_start(text.position_of(from).line).value;
     const std::size_t index = from.value - first;
-    const auto own = found_in_line(walk.line_at(first), pattern, direction,
-                                   direction == VimSearchDirection::forward ? index + 1 : index);
+    const auto own = found_in_line(walk.line_at(first), pattern, direction, index);
     return own.has_value() ? landing(first + own.value(), false)
                            : searched_outside(walk, pattern, first, direction);
 }
