@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 89614d2e966ab3a67ea6ef934c3d3786df289ca25051e748ca0aa2c78facd545 / 5456 fixtures
+// fixtures.json: sha256 d4ae0bf776a6b20dd71335513ddf8305acffca579d81f06f12426443cc5b2407 / 5500 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 5456> vim_fixtures{{
+constexpr std::array<VimFixture, 5500> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -4082,6 +4082,50 @@ constexpr std::array<VimFixture, 5456> vim_fixtures{{
     {"search-operator-empty-bracket-right-escape-cancels", "abc", "]<Esc>x", "bc", 1, 1, "a", "v", std::nullopt},
     {"search-operator-empty-bracket-escape-after-count", "abc", "3[<Esc>x", "bc", 1, 1, "a", "v", std::nullopt},
     {"search-operator-empty-bracket-escape-cancels-operator", "abc", "d[<Esc>x", "bc", 1, 1, "a", "v", std::nullopt},
+    {"search-zero-width-d-dollar", "abcd", "d/$<CR>", "d", 1, 1, "abc", "v", std::nullopt},
+    {"search-zero-width-c-dollar", "abcd", "c/$<CR>Q<Esc>", "Qd", 1, 1, "abc", "v", std::nullopt},
+    {"search-zero-width-y-dollar", "abcd", "y/$<CR>", "abcd", 1, 1, "abc", "v", std::nullopt},
+    {"search-zero-width-d-backward-dollar", "abcd ef", "wd?$<CR>", "abcd f", 1, 6, "e", "v", std::nullopt},
+    {"search-zero-width-n-dollar", "abcd\nxy", "/$<CR>n", "abcd\nxy", 2, 2, "", "", std::nullopt},
+    {"search-zero-width-nn-dollar", "ab\nxy\nzz", "/$<CR>nn", "ab\nxy\nzz", 3, 2, "", "", std::nullopt},
+    {"search-zero-width-yn-backward-dollar", "1/2", "?$<CR>yn", "1/2", 1, 3, "", "v", std::nullopt},
+    {"search-zero-width-dN-count-zero-dollar", "foo  1/2  abc  baz  color", "/a\\{0}$<CR>dN", "foo  1/2  abc  baz  color", 1, 25, "", "", std::nullopt},
+    {"search-zero-width-count-dollar", "ab\ncd\nef\ngh", "3/$<CR>", "ab\ncd\nef\ngh", 3, 2, "", "", std::nullopt},
+    {"search-zero-width-count-n-dollar", "ab\ncd\nef\ngh", "/$<CR>2n", "ab\ncd\nef\ngh", 3, 2, "", "", std::nullopt},
+    {"search-zero-width-N-dollar-wrap", "ab\ncd\nef", "G/$<CR>N", "ab\ncd\nef", 2, 2, "", "", std::nullopt},
+    {"search-zero-width-n-dollar-wrap", "ab\ncd", "j$/$<CR>", "ab\ncd", 1, 2, "", "", std::nullopt},
+    {"search-zero-width-backward-dollar", "abcd\nef", "j?$<CR>", "abcd\nef", 1, 4, "", "", std::nullopt},
+    {"search-zero-width-backward-dollar-n", "ab\ncd\nef", "G?$<CR>n", "ab\ncd\nef", 1, 2, "", "", std::nullopt},
+    {"search-zero-width-n-dollar-empty-line", "ab\n\ncd", "/$<CR>n", "ab\n\ncd", 2, 1, "", "", std::nullopt},
+    {"search-zero-width-dollar-from-empty-line", "\nab", "/$<CR>", "\nab", 2, 2, "", "", std::nullopt},
+    {"search-zero-width-caret", "ab\ncd", "l/^<CR>", "ab\ncd", 2, 1, "", "", std::nullopt},
+    {"search-zero-width-caret-n-empty-line", "ab\n\ncd", "/^<CR>n", "ab\n\ncd", 3, 1, "", "", std::nullopt},
+    {"search-zero-width-d-caret", "ab cd\nef", "wd/^<CR>", "ab \nef", 1, 3, "cd", "v", std::nullopt},
+    {"search-zero-width-word-end-n", "ab cd", "/\\><CR>n", "ab cd", 1, 5, "", "", std::nullopt},
+    {"search-zero-width-word-end-nn", "ab cd\nef", "/\\><CR>nn", "ab cd\nef", 2, 2, "", "", std::nullopt},
+    {"search-zero-width-d-word-end", "ab cd", "wd/\\><CR>", "ab d", 1, 4, "c", "v", std::nullopt},
+    {"search-zero-width-word-start-n", "ab cd", "/\\<<CR>n", "ab cd", 1, 1, "", "", std::nullopt},
+    {"search-zero-width-star-empty-from-last", "abc", "$/x*<CR>", "abc", 1, 1, "", "", std::nullopt},
+    {"search-zero-width-star-empty-next-line", "ab\ncd", "$/x*<CR>", "ab\ncd", 2, 1, "", "", std::nullopt},
+    {"search-zero-width-optional-from-last", "xbc\nde", "$/a\\=<CR>", "xbc\nde", 2, 1, "", "", std::nullopt},
+    {"search-zero-width-visual-d-dollar", "abcd\nef", "v/$<CR>d", "ef", 1, 1, "abcd\n", "v", std::nullopt},
+    {"search-zero-width-visual-y-dollar", "abcd", "v/$<CR>y", "abcd", 1, 1, "abcd", "v", std::nullopt},
+    {"search-zero-width-visual-n-dollar", "ab\ncd\nef", "v/$<CR>nd", "ef", 1, 1, "ab\ncd\n", "v", std::nullopt},
+    {"search-zero-width-count-d-dollar", "ab\ncd", "2d/$<CR>", "d", 1, 1, "ab\nc", "v", std::nullopt},
+    {"search-zero-width-dn-dollar", "ab\ncd\nef", "/$<CR>0dn", "b\ncd\nef", 1, 1, "a", "v", std::nullopt},
+    {"search-zero-width-d-dollar-utf8", "あいう", "d/$<CR>", "う", 1, 1, "あい", "v", std::nullopt},
+    {"search-zero-width-n-dollar-utf8", "あいう\nえお", "/$<CR>n", "あいう\nえお", 2, 4, "", "", std::nullopt},
+    {"search-zero-width-n-dollar-last-line", "ab\ncd", "G/$<CR>n", "ab\ncd", 1, 2, "", "", std::nullopt},
+    {"search-zero-width-dot-d-dollar", "abcd\nefgh", "d/$<CR>j0.", "d\nh", 2, 1, "efg", "v", std::nullopt},
+    {"search-zero-width-d-backward-caret", "ab cd", "$d?^<CR>", "d", 1, 1, "ab c", "v", std::nullopt},
+    {"search-zero-width-d-dollar-composing", "abé", "d/$<CR>", "é", 1, 1, "ab", "v", std::nullopt},
+    {"search-zero-width-n-dollar-one-char", "a\nb", "/$<CR>n", "a\nb", 1, 1, "", "", std::nullopt},
+    {"search-zero-width-insert-ctrl-o-dollar", "abcd", "0i<C-o>/$<CR>X<Esc>", "abcdX", 1, 5, "", "", std::nullopt},
+    {"search-zero-width-insert-ctrl-o-d-dollar", "abcd", "0i<C-o>d/$<CR>X<Esc>", "X", 1, 1, "abcd", "v", std::nullopt},
+    {"search-zero-width-s-dollar", "ab\ncd", ":s/$/X/<CR>", "abX\ncd", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"search-zero-width-s-caret", "ab\ncd", ":s/^/X/<CR>", "Xab\ncd", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"search-zero-width-s-all-dollar", "ab\ncd\n\nef", ":%s/$/;/<CR>", "ab;\ncd;\n;\nef;", 4, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
+    {"search-zero-width-s-star-empty-g", "axxb\nc", ":s/x*/-/g<CR>", "-a-b\nc", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"dot-register-count-count-after-register-is-squared", "line01 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline02 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline03 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline04 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline05 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline06 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline07 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline08 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline09 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline10 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN", "x\"a3.G\"ap", "defghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline02 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline03 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline04 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline05 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline06 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline07 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline08 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline09 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline01 abcine10 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN", 10, 10, "ine01 abc", "v", std::nullopt},
     {"dot-register-count-count-before-register-is-squared", "line01 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline02 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline03 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline04 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline05 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline06 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline07 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline08 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline09 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline10 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN", "x2\"a.G\"ap", "1 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline02 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline03 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline04 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline05 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline06 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline07 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline08 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline09 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline0ine10 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN", 10, 5, "ine0", "v", std::nullopt},
     {"dot-register-count-counts-around-register-are-multiplied-then-squared", "line01 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline02 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline03 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline04 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline05 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline06 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline07 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline08 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline09 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline10 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN", "x2\"a3.G\"ap", "456789ABCDEFGHIJKLMN\nline02 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline03 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline04 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline05 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline06 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline07 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline08 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline09 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN\nline01 abcdefghijklmnopqrstuvwxyz0123ine10 abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN", 10, 37, "ine01 abcdefghijklmnopqrstuvwxyz0123", "v", std::nullopt},

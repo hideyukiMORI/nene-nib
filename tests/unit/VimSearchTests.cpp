@@ -990,9 +990,10 @@ void verify_vim_search_dot()
 
 void verify_vim_search_fixtures()
 {
-    // 検索の 270 件（大小の 30 件・#1041 と結合文字の 16 件・#1138 と結合文字の大小の 13 件・#1147
+    // 検索の 314 件（大小の 30 件・#1041 と結合文字の 16 件・#1138 と結合文字の大小の 13 件・#1147
     // と始まりの 18 件・#1146 と空の範囲のオペレータの 29 件・#1344 と基底の無い結合文字の 29 件・
-    // #1506 を含む）と、鍵の分類の表・次キー待ちを共有する境界の代表（`.`・r・ f/t・gg）。
+    // #1506 と行末の幅の無い当たりの 44 件・#1606 を含む）と、鍵の分類の表・次キー待ちを共有する
+    // 境界の代表（`.`・r・ f/t・gg）。
     constexpr std::array<std::string_view, 6> boundaries{
         "replace-char-one",    "replace-char-count", "char-search-f-count",
         "char-search-t-first", "line-jump-gg-count", "dot-remove-word"};
@@ -1006,7 +1007,7 @@ void verify_vim_search_fixtures()
             ++selected;
         }
     }
-    expect(selected == 276, "the scope replays 270 search fixtures and 6 shared boundaries");
+    expect(selected == 320, "the scope replays 314 search fixtures and 6 shared boundaries");
 }
 
 // 次の一致を求める 1 本の経路（ADR 0041 の決定 1）。確定の検索の鍵と incsearch の preview が
