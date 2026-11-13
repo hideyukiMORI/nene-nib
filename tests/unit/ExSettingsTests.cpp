@@ -1359,6 +1359,10 @@ const auto completion_ordinary = std::vector<std::string>{"colorscheme",
                                                           "set scrolloff=",
                                                           "set minimap",
                                                           "set nominimap",
+                                                          "set language=ja",
+                                                          "set language=en",
+                                                          "set language=zh-hans",
+                                                          "set language=system",
                                                           "preview full",
                                                           "preview side",
                                                           "preview off",
@@ -1677,9 +1681,10 @@ void verify_ex_command_table()
 // が分類と同じ。
 constexpr std::array<std::string_view, 4> window_rechecking_options{"wrap", "relativenumber",
                                                                     "hlsearch", "scrolloff"};
-constexpr std::array<std::string_view, 14> window_keeping_options{
-    "fontsize",  "guifont",  "incsearch", "guide", "display",    "filetype",  "ft",
-    "clipboard", "explorer", "root",      "lsp",   "ignorecase", "smartcase", "minimap"};
+constexpr std::array<std::string_view, 15> window_keeping_options{
+    "fontsize", "guifont",    "incsearch", "guide",    "display",
+    "filetype", "ft",         "clipboard", "explorer", "root",
+    "lsp",      "ignorecase", "smartcase", "minimap",  "language"};
 
 [[nodiscard]] bool listed_in(const auto &rows, std::string_view name)
 {
