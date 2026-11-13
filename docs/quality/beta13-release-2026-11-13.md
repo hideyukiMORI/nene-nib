@@ -1,6 +1,6 @@
 # beta.13 の公開（2026-11-13）
 
-公開の記録。前半は公開の前に書いた根拠、末尾の節が公開の結果（公開の後に埋める）。公開元は main の最新（この文書 PR の merge の後の commit）。beta.12（2026-11-12・tag `v0.1.0-beta.12` = `9ed90463`）からの製品の変更は、2026-11-12 のまとめ枝 24〜26（PR #1539 #1557 #1565）と 2026-11-13 のまとめ枝 27〜33（PR #1579 #1599 #1615 #1629 #1635 #1639・33 は #1645）の **37 commit**（`git log 9ed90463..cc9c7f44` のうち `src/` に触れる commit・下の表は機械で数えた・公開元はその上にこの文書 PR の commit が 1 つ載るだけ）。ほかに道具と試験 2 本（#1581 MSIX の道具 `26d55cbe`・#1626 fixture の設定と probe の期待 `2328247a`・製品でない）と文書 4 本（#1574 `a5695676`・#1577 `bfc320a3`・#1582 Store の文書 `dab523f3`・#1633 11-13 の記録 `79982c06`）。**公開は設計席が行う**（tag と pre-release も・施主の指示 2026-11-10 夜）。版は 0.1.0 のまま（`project(NeNeNib VERSION 0.1.0)`）。版を 1.0.0 に上げる PR #1621 はこの公開の後に入れる（入れると `-Beta` の梱包ができなくなる・走り書き 14:1x）。
+公開の記録。前半は公開の前に書いた根拠、末尾の節が公開の結果（2026-11-14 の公開の後の文書 PR（#1648）で埋めた）。公開元は main `3d3859e69fc8023e1374ff4adae5af34ae916c98`（この記録を置いた文書 PR #1647（#1646）の merge の commit）。beta.12（2026-11-12・tag `v0.1.0-beta.12` = `9ed90463`）からの製品の変更は、2026-11-12 のまとめ枝 24〜26（PR #1539 #1557 #1565）と 2026-11-13 のまとめ枝 27〜33（PR #1579 #1599 #1615 #1629 #1635 #1639・33 は #1645）の **37 commit**（`git log 9ed90463..cc9c7f44` のうち `src/` に触れる commit・下の表は機械で数えた・公開元はその上にこの文書 PR の commit が 1 つ載るだけ）。ほかに道具と試験 2 本（#1581 MSIX の道具 `26d55cbe`・#1626 fixture の設定と probe の期待 `2328247a`・製品でない）と文書 4 本（#1574 `a5695676`・#1577 `bfc320a3`・#1582 Store の文書 `dab523f3`・#1633 11-13 の記録 `79982c06`）。**公開は設計席が行う**（tag と pre-release も・施主の指示 2026-11-10 夜）。版は 0.1.0 のまま（`project(NeNeNib VERSION 0.1.0)`）。版を 1.0.0 に上げる PR #1621 はこの公開の後に入れる（入れると `-Beta` の梱包ができなくなる・走り書き 14:1x）。
 
 **柱は表示言語**（#1019 の T1・ADR 0123 の追補・施主決定 D88）。日本語・英語・中国語（簡体字）の 3 言語・`UiMessage` 201 値 × 3 列・`:set language=ja|en|zh-hans|system`・F1 の操作「表示言語を選ぶ」・既定は `system`（起動のとき 1 回 OS の表示言語を観測）・CNF-016 が active。日本語の表示は変えていない（消したリテラルを表の文と機械で照合・quality-day-2026-11-13 §3.6）。「通常」は英語 `Basic`・中国語 `标准`（施主決定 2026-11-13 21:28 の (1)）。**英語と中国語の画面を目で見たのは施主の試用だけ**（撮影の席は権限の確認で断られた・施主の了承は 21:28 に出たが、公開の前の撮影はしていない）。
 
@@ -124,11 +124,22 @@
 
 ## 公開の結果
 
-未実施（公開の後の文書 PR で埋める）。埋めるもの: 日時（JST）・URL と release id と published・tag object と commit（`remote-tag.txt`）・梱包の記録（recordedAt・build の秒・exe の SHA-256 と bytes）・smoke（release-smoke-01・DPI・終了コード・本文不変・`launch.png` を目で）・速さ（33 の木の再利用・`git diff <33 の木> <公開元>` の対象）・添付（zip と SHA256SUMS の bytes と SHA-256）・照合（`publication-verification.json`）・施主の試用の後の分。
+2026-11-14 00:16（JST）に公開した。手順 1〜4 はすべて設計席が行った（tag と pre-release は `D:/NeNeNib/evidence/beta13-release/publish.ps1`・1 回で成功・段取りは施主決定 D89）。
 
-## 未確認と残るリスク（公開の前の時点）
+- URL: https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.13（pre-release・release id 444382159・created 2026-11-13T15:16:10Z・published 2026-11-13T15:16:16Z）
+- tag `v0.1.0-beta.13`（annotated・tag object `04b55b0e98fc4e04d3cf5a35a56de862b110a32a`）→ `3d3859e69fc8023e1374ff4adae5af34ae916c98`（main・梱包の commit と同じ・この記録を置いた文書 PR #1647 の merge）。写しは `D:/NeNeNib/releases/v0.1.0-beta.13/remote-tag.txt`。
+- 梱包: `pwsh -NoProfile -File eng/package-release.ps1 -Beta 13 ...` が `D:/NeNeNib/worktrees/beta13`（detached・clean）で成功（00:02 に始め 00:06 に ZIP）。記録 `D:/NeNeNib/releases/v0.1.0-beta.13/package.json`（recordedAt 2026-11-13T15-02-58Z・configure 4.075 s・build 231.354 s・clang-cl 19.1.5・`extractedBytesMatch` true・imports 15 個が `declaredImports` と同じ）。exe の SHA-256 `2c4570bec85d062a63c835aabd81afbbfce8c08869fab9749c6d83a6d770e936`（3,623,424 bytes・fileVersion 0.1.0.0・署名なし）。ログ `D:/NeNeNib/outputs/20261113/package-beta13.log`。
+- 起動・描画: `python D:/NeNeNib/evidence/beta13-release/release-smoke.py` が pass（release-smoke-01・00:15・施主の了承の後に 1 回・隔離 profile・鍵は送らない・DPI 120・正常終了 0・本文不変・`launch.png` を設計席が目で確かめた = 日本語の画面・タブ・ステータスバーとも崩れなし）。
+- 速さ: 梱包の exe では測っていない。同じ中身の木（まとめ枝 33 の `0e5a2e3e`）の Release の 1 回（8 本 0 regression・根拠 (a)）を再利用した（QLT-012）。記録 `D:/NeNeNib/outputs/20261113/gate-integration33-0e5a2e3e.log`。`git diff 0e5a2e3e 3d3859e6 -- src tests eng CMakeLists.txt third_party` は空（差は文書だけ）。
+- 添付: `NeNeNib-0.1.0-beta.13-windows-x64.zip` 1,500,602 bytes・SHA-256 `cdd46e7222228ceaf4f2478e69e8bfa56ef381bf364dfe87322ef93170924120`、`SHA256SUMS` 105 bytes（SHA-256 `03a738497e1d76afe8961e67a01a5c4d961d627a3b334694c6d8947e2f2e34d9`）
+- 照合（`verify-publication.py`）: 手順 4 のとおり `gh release download --dir downloaded` を先に行ってから回し、1 回で bytes 一致・zip の中身一致・tag の commit 一致・展開した exe の起動 pass（release-smoke-01）→ `result: pass`（checkedAt 2026-11-13T15:16:25Z）。写しは `D:/NeNeNib/releases/v0.1.0-beta.13/publication-verification.json` と `github-release.json`。
+- 公開の文: `D:/NeNeNib/evidence/beta13-release/release-notes.md`。公開の前に、先頭の注記 1 行と余分な `**` を消し、配布元に公開元の full SHA を入れた。公開した本文には、対にならない `**` がまだ 1 つ残っている（表示言語の項の「機械の訳です**（」・`gh release view` の本文で `**` は 23 個）。
+- hide の試用: 公開の前の 2026-11-13 夜に、表の A〜D とも OK（根拠 (d)）。公開した ZIP の exe での試用はしていない（smoke だけ）。
 
-- 公開元の commit・梱包・smoke・tag・Release・照合は未実施（この文書 PR の merge の後・上の「公開の結果」）。
-- 英語と中国語の画面の撮影（施主の了承は 21:28）は公開の前にしていない。
+## 未確認と残るリスク
+
+- 公開元の commit・梱包・smoke・tag・Release・照合は済んだ（上の「公開の結果」・2026-11-14 00:02〜00:16）。
+- 英語と中国語の画面の撮影（施主の了承は 21:28）は公開の前にしていない（Store のスクリーンショットと合わせて公開の後）。
+- 公開した本文に対にならない `**` が 1 つ残る（上の「公開の文」）。直すかは設計席の判断。
 - 最後の砦と退避の置き場は実機で起こしていない（自動の試験だけ）。
 - クリップボード: 11-13 の席 C20 の Vim の実測が `:set cb=unnamed` の後に `x` を流していた（OS のクリップボードを書いた恐れ・実際に書いたかは未確認・施主に報告済み・製品と fixture には該当なし）。公開物には関わらない。

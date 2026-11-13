@@ -6,9 +6,8 @@ A fast single-executable text editor for Windows 11 that toggles between ordinar
 
 C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
 
-> **Status (2026-11-13):** v0.1.0-beta.13 (2026-11-13) for Windows 11 x64 is being released from this commit;
-> until its release page is up, [v0.1.0-beta.12](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.12)
-> (2026-11-12) is the latest published build. It has ordinary editing with Notepad-style find,
+> **Status (2026-11-14):** [v0.1.0-beta.13](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.13)
+> (2026-11-14) is the published build for Windows 11 x64. It has ordinary editing with Notepad-style find,
 > replace, go to line, printing and date insertion; UTF-8, Shift_JIS and UTF-16 files (UTF-8 up to 1 GiB, read
 > in the background); Japanese IME; 125 built-in themes; syntax colors for 25 languages; a Markdown preview with
 > clickable task-list checkboxes; a side file explorer; two split panes; opt-in language-server diagnostics; and
@@ -39,12 +38,12 @@ Compare all 125 themes, filter by name or appearance, and select a card for a la
 The image and gallery show color samples, not application screenshots. The gallery works offline and starts
 with the plain-text colors; its syntax colors are design samples, not the editor's syntax coloring.
 [Theme names and sources](docs/design/2026-10-12-colorschemes.md) are also available as a text list.
-All 125 themes are included in v0.1.0-beta.12 and v0.1.0-beta.13.
+All 125 themes are included in the published v0.1.0-beta.13.
 
 ## What works today
 
 Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); the decisions behind it are in
-[`docs/adr/`](docs/adr/README.md). Everything below is in v0.1.0-beta.13 (see the status above) unless it says
+[`docs/adr/`](docs/adr/README.md). Everything below is in the published v0.1.0-beta.13 unless it says
 *since beta.13* (on main, not yet published) or *in review* (an open pull request, not on main). The current
 tasks are in `docs/todo/current.md`; the measurements are in `docs/quality/gate-proofs.md` and the dated
 records in `docs/quality/`.
