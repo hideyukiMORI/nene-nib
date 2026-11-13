@@ -23,6 +23,8 @@
 #include "OperationGuide.hpp"
 #include "OperationGuideLayout.hpp"
 #include "PaletteLayout.hpp"
+#include "PaletteMarks.hpp"
+#include "PaletteOrigin.hpp"
 #include "SettingsFailure.hpp"
 #include "SettingsNotice.hpp"
 #include "StartEntryKind.hpp"
@@ -39,6 +41,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <optional>
@@ -351,6 +354,94 @@ void verify_palette_texts(IDWriteFactory2 &factory, Face face)
                    UiMessage::palette_footer_hint, "the palette footer hint fits beside the count");
 }
 
+// ---- Ctrl+P の面の 3 通りの窓の幅と 2 つの DPI（#1640） ----
+
+// 製品の書式は字の大きさを物理画素で持つ（renderer の make_format）。dpi の pen はその写し。
+[[nodiscard]] Pen pen_at(IDWriteFactory2 &factory, Face face, std::uint32_t at,
+                         DWRITE_FONT_WEIGHT weight)
+{
+    return Pen{&factory, face, ui_text_dips * static_cast<float>(at) / 96.0F, weight};
+}
+
+// 記号の案内の組 k から最後の組までの文の幅（物理画素・切り上げ）。製品は描く layout の組の境目で
+// 測り、試験は組 k からの文を別の layout で測る（同じ値になるはず）。
+[[nodiscard]] std::array<std::int32_t, core::palette_marks.size()>
+hint_widths(const Pen &pen, DisplayLanguage language)
+{
+    const auto hint = core::palette_mark_hint(language);
+    const auto starts = core::palette_mark_hint_starts(language);
+    std::array<std::int32_t, core::palette_marks.size()> widths{};
+    std::ranges::transform(starts, widths.begin(),
+                           [&](std::size_t start)
+                           {
+                               const auto rest = hint.text().substr(start);
+                               return static_cast<std::int32_t>(
+                                   std::ceil(width_in(pen, Said{language, rest})));
+                           });
+    return widths;
+}
+
+// 記号の案内（#1640）: 出す文は欄に収まり、欄は検索欄の右端に揃い、左はキャレットから
+// palette_hint_gap_dips を空け、入る最も前の組から出す。1280 px 以上の窓では全部の組が出る。
+void verify_palette_hint_at(const Pen &pen, const core::PaletteLayout &layout, std::uint32_t at,
+                            std::int32_t window)
+{
+    const auto &input = layout.input;
+    const auto room = core::width_of(input) - core::to_pixels(core::palette_hint_gap_dips, at);
+    for (const auto language : languages)
+    {
+        const auto widths = hint_widths(pen, language);
+        const auto place = core::palette_input_hint(layout, at, widths);
+        const bool shown = place.first < widths.size();
+        std::printf(
+            "  mark hint dpi %u window %d px [%s]: room %d px, whole %d px, from group %zu\n", at,
+            window, language_name(language), room, widths.front(), place.first);
+        expect(!shown || (place.area.right == input.right &&
+                          core::width_of(place.area) == widths.at(place.first) &&
+                          core::width_of(place.area) <= room),
+               "the shown mark hint fits its field at the right of the query");
+        expect(place.first == 0 || widths.at(place.first - 1) > room,
+               "the mark hint drops only the leading groups that do not fit");
+        expect(window < 1280 || place.first == 0,
+               "a window of 1280 px or wider shows every group of the mark hint");
+    }
+}
+
+// 行の右端の補足（112 DIP）と下の案内（件数の 64 DIP を引いた残り）。
+void verify_palette_notes_at(const Pen &pen, const Pen &bold, const core::PaletteLayout &layout,
+                             std::uint32_t at)
+{
+    const auto note = core::width_of(core::palette_row_note(core::palette_row(layout, 0), at));
+    for (const auto language : languages)
+    {
+        for (const auto origin :
+             {core::PaletteOrigin::tab, core::PaletteOrigin::bookmarked_tab,
+              core::PaletteOrigin::bookmark, core::PaletteOrigin::history,
+              core::PaletteOrigin::folder, core::PaletteOrigin::document_format})
+        {
+            expect_fits_in(pen, note, Said{language, core::palette_origin_label(origin, language)},
+                           "the palette row note fits its 112 DIP frame");
+        }
+    }
+    expect_all_fit(bold, core::width_of(layout.footer) - core::to_pixels(64, at),
+                   UiMessage::palette_footer_hint, "the palette footer hint fits beside the count");
+}
+
+void verify_palette_widths(IDWriteFactory2 &factory, Face face)
+{
+    for (const auto at : {96U, 120U})
+    {
+        const auto pen = pen_at(factory, face, at, DWRITE_FONT_WEIGHT_NORMAL);
+        const auto bold = pen_at(factory, face, at, DWRITE_FONT_WEIGHT_BOLD);
+        for (const auto window : {core::to_pixels(360, at), 1280, 1920})
+        {
+            const auto layout = core::palette_layout(window, 800, at, 0);
+            verify_palette_hint_at(pen, layout, at, window);
+            verify_palette_notes_at(pen, bold, layout, at);
+        }
+    }
+}
+
 // 空の文書の案内の説明の列（144 DIP・13.5 DIP）と注記（11.5 DIP）。
 void verify_body_guide(IDWriteFactory2 &factory, Face face)
 {
@@ -540,6 +631,7 @@ void verify_widths()
     verify_status_left(*factory.Get(), face);
     verify_status_items(*factory.Get(), face);
     verify_palette_texts(*factory.Get(), face);
+    verify_palette_widths(*factory.Get(), face);
     verify_body_guide(*factory.Get(), face);
     verify_status_guide(*factory.Get(), face);
     verify_explorer_text(*factory.Get(), face);
