@@ -1537,6 +1537,32 @@ searched_object(std::string_view text, std::string_view pattern,
 
 // 期待値は Vim 9.1 の `-es -u NONE` の実測（`'<` `'>` とカーソル）。fixture の `gn-` が同じ形を
 // 本物の鍵の道で守り、ここは範囲の 1 本を直接問う。
+// `g Ctrl-g` は表示だけで後ろの鍵が効く（#1617 のレビュー M1・Vim 9.1 の実測）。fixture の記法の表
+// に `<C-g>` を足すと eng/vim-oracle.py が変わり、折り返す窓の fixture 402 件が記録する共有の
+// digest が変わって全件の再測定になるので、生の 0x07 の鍵で `:normal!`
+// の意味（失敗で残りを捨てる）に流す。
+[[nodiscard]] std::string display_keys_body(std::string_view keys)
+{
+    Editing editing;
+    open_vim_document(editing, "abc def\nghi jkl");
+    EditorController &controller = editing.controller();
+    vim_normal(controller, keys);
+    return whole_vim_body(controller);
+}
+
+void verify_vim_display_control_g()
+{
+    expect(display_keys_body("g\x07x") == "bc def\nghi jkl" &&
+               display_keys_body("3g\x07x") == "bc def\nghi jkl",
+           "g control-g shows nothing and the key after it works");
+    expect(display_keys_body("dg\x07x") == "bc def\nghi jkl" &&
+               display_keys_body("cg\x07X<Esc>") == "Xabc def\nghi jkl",
+           "after an operator g control-g is an empty range at the caret");
+    expect(display_keys_body("vlg\x07"
+                             "d") == "c def\nghi jkl",
+           "in VISUAL g control-g keeps the selection");
+}
+
 void verify_vim_search_object()
 {
     constexpr std::string_view three = "foo bar foo bar foo";
@@ -1569,6 +1595,76 @@ void verify_vim_search_object()
                selects(searched_object(two, "def", in_visual(14, 10, forward)), 14, 12) &&
                selects(searched_object(two, "def", in_visual(0, 0, backward)), 0, 12),
            "in VISUAL the anchor stays and the caret goes to the end or the start of the match");
+    // 幅のあるパターンの途中の空の当たり（#1617 のレビュー M3・Vim の searchit の SEARCH_END は
+    // 終わり − 1 < 起点の当たりを数え、起点ちょうどの空の当たりも入る）。
+    expect(selects(searched_object("xab ab", "x*", at_caret(5, forward)), 0, 0) &&
+               selects(searched_object("xab ab", "x*", at_caret(2, forward)), 3, 3) &&
+               selects(searched_object("xx a xx", "x*", at_caret(4, forward)), 5, 6) &&
+               selects(searched_object("xab xab", "x*", at_caret(1, backward)), 2, 2),
+           "an empty match inside a wide pattern counts at the start and is skipped forward");
+}
+
+[[nodiscard]] bool matches_from(std::string_view text, std::string_view pattern, std::size_t at,
+                                std::optional<std::pair<std::size_t, std::size_t>> expected)
+{
+    const auto buffer = TextBuffer::from_utf8(text);
+    const auto parsed =
+        VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
+    if (!buffer.has_value() || !parsed.has_value())
+    {
+        return false;
+    }
+    const auto match = core::vim_match_from(buffer.value(), parsed.value(), core::Offset{at});
+    if (!match.has_value() || !expected.has_value())
+    {
+        return match.has_value() == expected.has_value();
+    }
+    return match.value().begin.value == expected.value().first &&
+           match.value().end.value == expected.value().second;
+}
+
+// vim_match_from（#1617 のレビュー M4）。at の行の at 以降で最も左の一致を、本文の中の位置で返す。
+void verify_vim_match_from()
+{
+    using Span = std::pair<std::size_t, std::size_t>;
+    expect(matches_from("xab ab", "x*", 0, Span{0, 1}) &&
+               matches_from("xab ab", "x*", 1, Span{1, 1}) &&
+               matches_from("abc\ndef", "$", 4, Span{7, 7}) &&
+               matches_from("abc\ndef", "de", 4, Span{4, 6}) &&
+               matches_from("abc\ndef", "ab", 1, std::nullopt),
+           "the match from a position stays in its line and is the leftmost one");
+}
+
+[[nodiscard]] bool ends_by(std::string_view text, std::string_view pattern, std::size_t at,
+                           std::optional<std::pair<std::size_t, std::size_t>> expected)
+{
+    const auto buffer = TextBuffer::from_utf8(text);
+    const auto parsed =
+        VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
+    if (!buffer.has_value() || !parsed.has_value())
+    {
+        return false;
+    }
+    const auto match =
+        core::vim_last_match_ending_by(buffer.value(), parsed.value(), core::Offset{at});
+    if (!match.has_value() || !expected.has_value())
+    {
+        return match.has_value() == expected.has_value();
+    }
+    return match.value().begin.value == expected.value().first &&
+           match.value().end.value == expected.value().second;
+}
+
+// vim_last_match_ending_by（#1617 のレビュー M3）。Vim の後ろ向きの SEARCH_END が起点の行で数える
+// 当たり: 終わり − 1 < 起点の桁の区切りの最後。起点ちょうどの空の当たりも入る。
+void verify_vim_last_match_ending_by()
+{
+    using Span = std::pair<std::size_t, std::size_t>;
+    expect(ends_by("xab ab", "x*", 5, Span{5, 5}) && ends_by("xab ab", "x*", 1, Span{1, 1}) &&
+               ends_by("xx a xx", "x*", 6, Span{4, 4}) && ends_by("xx a xx", "x*", 7, Span{5, 7}) &&
+               ends_by("ab ab", "ab", 4, Span{0, 2}) && ends_by("ab ab", "ab", 1, std::nullopt) &&
+               ends_by("abc\ndef", "def", 7, Span{4, 7}),
+           "the last match of the line that ends by the position, an empty one there included");
 }
 
 } // namespace
@@ -1591,6 +1687,9 @@ void verify_vim_search_contracts()
     verify_vim_pattern_rejections();
     verify_vim_pattern_abbreviations();
     verify_vim_search_object();
+    verify_vim_match_from();
+    verify_vim_last_match_ending_by();
+    verify_vim_display_control_g();
     verify_vim_pattern_quantifier_ranges();
     verify_vim_pattern_quantifier_failures();
     verify_vim_pattern_quantifier_bounds();

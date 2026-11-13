@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 3b5d77dacf41e1e2ba964ba854200ba5683e72c68b21f759a2565d050126bf13 / 5615 fixtures
+// fixtures.json: sha256 1e8f1702324a76f4464ec0cc9ee34499bf9d629680c2384d5cc4ccd855f8440a / 5675 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 5615> vim_fixtures{{
+constexpr std::array<VimFixture, 5675> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -5627,6 +5627,66 @@ constexpr std::array<VimFixture, 5615> vim_fixtures{{
     {"gn-unknown-g-key-normal-stops-the-keys", "abc def", "/b<CR>0gxx", "abc def", 1, 1, "", "", std::nullopt},
     {"gn-unknown-g-key-visual-stays", "abc def", "/b<CR>0vlgxd", "abc def", 1, 2, "", "", std::nullopt},
     {"gn-g-escape-keeps-the-keys", "abc def", "0dg<Esc>x", "bc def", 1, 1, "a", "v", std::nullopt},
+    {"gn-display-ga-normal-keeps-the-keys", "abc def\nghi jkl", "gax", "bc def\nghi jkl", 1, 1, "a", "v", std::nullopt},
+    {"gn-display-ga-delete-empty", "abc def\nghi jkl", "wdgax", "abc ef\nghi jkl", 1, 5, "d", "v", std::nullopt},
+    {"gn-display-ga-visual-stays", "abc def\nghi jkl", "vlgad", "c def\nghi jkl", 1, 1, "ab", "v", std::nullopt},
+    {"gn-display-g8-normal-keeps-the-keys", "abc def\nghi jkl", "g8x", "bc def\nghi jkl", 1, 1, "a", "v", std::nullopt},
+    {"gn-display-g8-delete-empty", "abc def\nghi jkl", "wdg8x", "abc ef\nghi jkl", 1, 5, "d", "v", std::nullopt},
+    {"gn-display-g8-visual-stays", "abc def\nghi jkl", "vlg8d", "c def\nghi jkl", 1, 1, "ab", "v", std::nullopt},
+    {"gn-display-glt-normal-keeps-the-keys", "abc def\nghi jkl", "g<x", "bc def\nghi jkl", 1, 1, "a", "v", std::nullopt},
+    {"gn-display-glt-delete-empty", "abc def\nghi jkl", "wdg<x", "abc ef\nghi jkl", 1, 5, "d", "v", std::nullopt},
+    {"gn-display-glt-visual-stays", "abc def\nghi jkl", "vlg<d", "c def\nghi jkl", 1, 1, "ab", "v", std::nullopt},
+    {"gn-display-gv-upper-normal-keeps-the-keys", "abc def\nghi jkl", "gVx", "bc def\nghi jkl", 1, 1, "a", "v", std::nullopt},
+    {"gn-display-gv-upper-delete-empty", "abc def\nghi jkl", "wdgVx", "abc ef\nghi jkl", 1, 5, "d", "v", std::nullopt},
+    {"gn-display-gv-upper-visual-stays", "abc def\nghi jkl", "vlgVd", "c def\nghi jkl", 1, 1, "ab", "v", std::nullopt},
+    {"gn-display-gs-normal-keeps-the-keys", "abc def\nghi jkl", "gsx", "bc def\nghi jkl", 1, 1, "a", "v", std::nullopt},
+    {"gn-display-gs-delete-empty", "abc def\nghi jkl", "wdgsx", "abc ef\nghi jkl", 1, 5, "d", "v", std::nullopt},
+    {"gn-display-gs-visual-stays", "abc def\nghi jkl", "vlgsd", "c def\nghi jkl", 1, 1, "ab", "v", std::nullopt},
+    {"gn-display-ga-change-empty-inserts", "abc def\nghi jkl", "wcgaX<Esc>", "abc Xdef\nghi jkl", 1, 5, "", "", std::nullopt},
+    {"gn-display-ga-yank-empty", "abc def\nghi jkl", "ygaP", "abc def\nghi jkl", 1, 1, "", "v", std::nullopt},
+    {"gn-display-g8-shift-the-line", "abc def\nghi jkl", "w>g8x", "\tbc def\nghi jkl", 1, 2, "a", "v", std::nullopt},
+    {"gn-display-gv-upper-case-at-column-one", "abc def\nghi jkl", "g~gVx", "bc def\nghi jkl", 1, 1, "A", "v", std::nullopt},
+    {"gn-display-gs-case-not-at-column-one", "abc def\nghi jkl", "wg~gsx", "abc ef\nghi jkl", 1, 5, "d", "v", std::nullopt},
+    {"gn-display-ga-count-and-register", "abc def\nghi jkl", "3\"agax", "bc def\nghi jkl", 1, 1, "a", "v", std::nullopt},
+    {"gn-display-ga-linewise-visual-stays", "abc def\nghi jkl", "Vjgad", "", 1, 1, "abc def\nghi jkl\n", "V", std::nullopt},
+    {"gn-display-ga-block-visual-stays", "abc def\nghi jkl", "<C-v>jlgad", "c def\ni jkl", 1, 1, "ab\ngh", "\0262", std::nullopt},
+    {"gn-display-g8-count-8-fails", "abc def\nghi jkl", "8g8x", "abc def\nghi jkl", 1, 1, "", "", std::nullopt},
+    {"gn-display-g8-count-8-delete-fails", "abc def\nghi jkl", "d8g8x", "abc def\nghi jkl", 1, 1, "", "", std::nullopt},
+    {"gn-display-g8-count-8-visual-stays", "abc def\nghi jkl", "vl8g8d", "abc def\nghi jkl", 1, 2, "", "", std::nullopt},
+    {"gn-display-g8-count-2-keeps-the-keys", "abc def\nghi jkl", "2g8x", "bc def\nghi jkl", 1, 1, "a", "v", std::nullopt},
+    {"gn-display-ga-dot-repeats-the-x", "abc def\nghi jkl", "dgax.", "c def\nghi jkl", 1, 1, "b", "v", std::nullopt},
+    {"gn-g-down-is-gj", "abc def\nghi jkl", "g<Down>x", "abc def\nhi jkl", 2, 1, "g", "v", std::nullopt},
+    {"gn-g-up-is-gk", "abc def\nghi jkl", "jg<Up>x", "bc def\nghi jkl", 1, 1, "a", "v", std::nullopt},
+    {"gn-operator-columns-yank-then-visual-append", "abcdef\nabcdef\nabcdef", "/e<CR>0ygn0vjAX<Esc>", "abcdef\naXbcdef\nabcdef", 2, 2, "e", "v", std::nullopt},
+    {"gn-operator-columns-delete-then-visual-append", "abcdef\nabcdef\nabcdef", "/e<CR>0dgn0vjAX<Esc>", "abcdf\naXbcdef\nabcdef", 2, 2, "e", "v", std::nullopt},
+    {"gn-operator-columns-yank-then-visual-insert", "abcdef\nabcdef\nabcdef", "/e<CR>0ygn0vjIX<Esc>", "Xabcdef\nabcdef\nabcdef", 1, 1, "e", "v", std::nullopt},
+    {"gn-operator-columns-yank-then-gv", "abcdef\nabcdef\nabcdef", "/e<CR>0ygngvd", "abcdf\nabcdef\nabcdef", 1, 5, "e", "v", std::nullopt},
+    {"gn-operator-columns-yank-then-ex-range", "abcdef\nabcdef\nabcdef", "/e<CR>0ygn:'<,'>s/^/X/<CR>", "Xabcdef\nabcdef\nabcdef", 1, 1, "e", "v", std::nullopt},
+    {"gn-operator-columns-yank-then-block-append", "abcdef\nabcdef\nabcdef", "/e<CR>0ygn0<C-v>jAX<Esc>", "aXbcdef\naXbcdef\nabcdef", 1, 1, "e", "v", std::nullopt},
+    {"gn-operator-columns-upper-then-visual-append", "abcdef\nabcdef\nabcdef", "/e<CR>0gUgn0vjAX<Esc>", "abcdEf\naXbcdef\nabcdef", 2, 2, "", "", std::nullopt},
+    {"gn-operator-columns-change-then-visual-append", "abcdef\nabcdef\nabcdef", "/e<CR>0cgnZ<Esc>0vjAX<Esc>", "abcdZf\naXbcdef\nabcdef", 2, 2, "e", "v", std::nullopt},
+    {"gn-operator-columns-two-chars-then-visual-insert", "abcdef\nabcdef\nabcdef", "/bc<CR>0ygn0vjIX<Esc>", "Xabcdef\nabcdef\nabcdef", 1, 1, "bc", "v", std::nullopt},
+    {"gn-operator-columns-linewise-visual-append", "abcdef\nabcdef\nabcdef", "/e<CR>0ygn0VjAX<Esc>", "abcdef\naXbcdef\nabcdef", 2, 2, "e", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-01", "xab ab", "/x*<CR>$dgn", "ab ab", 1, 1, "x", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-02", "xab ab", "/x*<CR>0lldgn", "xabab", 1, 4, " ", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-03", "xab xab", "/x*<CR>0ldgN", "xa xab", 1, 3, "b", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-04", "xab ab", "/x*<CR>0llgN<Esc>x", "xabab", 1, 4, " ", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-05", "xx a xx", "/x*<CR>0lllldgn", "xx a ", 1, 5, "xx", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-06", "xx a xx", "/x*<CR>0llldgN", "xx axx", 1, 5, " ", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-07", "xx a xx", "/x*<CR>$dgN", "xx a ", 1, 5, "xx", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-08", "xx a xx", "/x*<CR>0l2dgn", "xxa xx", 1, 3, " ", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-09", "xx a xx", "/x*<CR>$2dgN", "xx axx", 1, 5, " ", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-10", "1a 22 b", "/[0-9]*<CR>0lldgn", "1a  b", 1, 4, "22", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-11", "1a 22 b", "/[0-9]*<CR>0llldgN", "1a 22b", 1, 6, " ", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-12", "x\nab\nxx", "/x*<CR>jdgn", "x\nab\n", 3, 1, "xx", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-13", "x\nab\nxx", "/x*<CR>jdgN", "x\nab\n", 3, 1, "xx", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-14", "xab ab", "/x*<CR>$vgNd", "xab a", 1, 5, "b", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-15", "xé ab", "/x*<CR>0ldgn", "xéab", 1, 4, " ", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-16", "xab ab", "/x*<CR>03gn<Esc>x", "xa ab", 1, 3, "b", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-17", "xx a xx\nb xx", "/x*<CR>G$dgN", "xx a xx\nb ", 2, 2, "xx", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-18", "xab ab\ncd", "/x*<CR>0vjgnd", "ab ab\ncd", 1, 1, "x", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-19", "xx a xx", "/x*<CR>0lll3dgN", "xx axx", 1, 5, " ", "v", std::nullopt},
+    {"gn-empty-match-inside-wide-pattern-20", "ab\n\nxa", "/x*<CR>ggvjgn<Esc>x", "ab\n\na", 3, 1, "x", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

@@ -22,6 +22,7 @@
 #include "ProbeDispatch.hpp"
 #include "ProbeSelection.hpp"
 #include "ScopedProbe.hpp"
+#include "SearchObjectProbe.hpp"
 #include "SearchProbe.hpp"
 #include "SearchSnapshotProbe.hpp"
 #include "SearchSpanProbe.hpp"
@@ -1050,6 +1051,23 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(SearchObjectWorkload workload)
+{
+    switch (workload)
+    {
+    case SearchObjectWorkload::n_at_start:
+    case SearchObjectWorkload::gn_at_start:
+    case SearchObjectWorkload::dgn_at_start:
+    case SearchObjectWorkload::n_at_end:
+    case SearchObjectWorkload::previous_at_end:
+    case SearchObjectWorkload::gn_at_end:
+    case SearchObjectWorkload::dgn_at_end:
+    case SearchObjectWorkload::dgprevious_at_end:
+        return 268U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -1065,7 +1083,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 268> dispatches{{
+constexpr std::array<ProbeDispatch, 276> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1626,6 +1644,22 @@ constexpr std::array<ProbeDispatch, 268> dispatches{{
     ProbeDispatchRow{PatternCostWorkload::quantity_lines,
                      "pattern-cost-quantity-1000-2000-lines-40-chars", pattern_cost_input,
                      pattern_cost_run},
+    ProbeDispatchRow{SearchObjectWorkload::n_at_start, "vim-n-1mib-line-start", search_object_input,
+                     search_object_keys},
+    ProbeDispatchRow{SearchObjectWorkload::gn_at_start, "vim-gn-1mib-line-start",
+                     search_object_input, search_object_keys},
+    ProbeDispatchRow{SearchObjectWorkload::dgn_at_start, "vim-dgn-1mib-line-start",
+                     search_object_input, search_object_keys},
+    ProbeDispatchRow{SearchObjectWorkload::n_at_end, "vim-n-1mib-line-end", search_object_input,
+                     search_object_keys},
+    ProbeDispatchRow{SearchObjectWorkload::previous_at_end, "vim-shift-n-1mib-line-end",
+                     search_object_input, search_object_keys},
+    ProbeDispatchRow{SearchObjectWorkload::gn_at_end, "vim-gn-1mib-line-end", search_object_input,
+                     search_object_keys},
+    ProbeDispatchRow{SearchObjectWorkload::dgn_at_end, "vim-dgn-1mib-line-end", search_object_input,
+                     search_object_keys},
+    ProbeDispatchRow{SearchObjectWorkload::dgprevious_at_end, "vim-dg-shift-n-1mib-line-end",
+                     search_object_input, search_object_keys},
 }};
 
 constexpr auto dispatch_names = []
@@ -1668,7 +1702,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 268U);
+static_assert(dispatches.size() == 276U);
 static_assert(dispatch_is_complete());
 
 } // namespace

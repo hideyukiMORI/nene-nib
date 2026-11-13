@@ -281,21 +281,27 @@ namespace
     visual.count = combined_count(state);
     visual.pending = std::nullopt;
     visual.input_wait = std::nullopt;
-    // 選択は借用の欄なので、ほかの欄を写した view を選んだ当たりで組み直す。
-    const VimEditorView over{.text = view.text,
+    // 選択は借用の欄なので、ほかの欄を写した view を選んだ当たりで組み直す。欄を全部ほどいてから
+    // 名指しで組むので、VimEditorView に欄が足されるとほどく数が合わずにコンパイルが落ちる
+    // （足した欄を黙って既定値にしない・#1617 のレビュー L3）。
+    const auto &[text, selection, viewport, source, tabs, layout, navigation, row_landing,
+                 view_marks, mark_landing, search_case, scroll_margin, document_limit,
+                 capture_limit] = view;
+    static_cast<void>(selection);
+    const VimEditorView over{.text = text,
                              .selection = selected,
-                             .viewport = view.viewport,
-                             .source = view.source,
-                             .tabs = view.tabs,
-                             .layout = view.layout,
-                             .navigation = view.navigation,
-                             .row_landing = view.row_landing,
-                             .marks = view.marks,
-                             .mark_landing = view.mark_landing,
-                             .search_case = view.search_case,
-                             .scroll_margin = view.scroll_margin,
-                             .document_limit = view.document_limit,
-                             .capture_limit = view.capture_limit};
+                             .viewport = viewport,
+                             .source = source,
+                             .tabs = tabs,
+                             .layout = layout,
+                             .navigation = navigation,
+                             .row_landing = row_landing,
+                             .marks = view_marks,
+                             .mark_landing = mark_landing,
+                             .search_case = search_case,
+                             .scroll_margin = scroll_margin,
+                             .document_limit = document_limit,
+                             .capture_limit = capture_limit};
     VimStep step = visual_operator_applied(visual, over, operation_of(state));
     VimMarks marks = step.marks.value_or(*view.marks);
     marks.last_visual =

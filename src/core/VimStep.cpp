@@ -1367,8 +1367,28 @@ namespace
         return jump_list_action(state, view, action);
     case VimActionGroup::substitute:
         return detail::substitute_action(state, view, action);
+    case VimActionGroup::display:
+        return detail::displayed(state, view, action);
     }
     std::unreachable();
+}
+
+// 保留中のオペレータの後ろで移動にならない大分類。`d<C-a>` はオペレータを打ち消すだけで失敗に
+// しない（Vim の nv_addsub の clearop・ADR 0015 の決定 14）。表示だけの `ga` `g8` などは空の範囲に
+// 効かせる（#1617 のレビュー M1）。ほかの大分類は値が無い。
+[[nodiscard]] std::optional<VimStep> unranged_step(const VimState &state, const VimEditorView &view,
+                                                   VimAction action)
+{
+    const auto group = vim_group_for(action);
+    if (group == VimActionGroup::number)
+    {
+        return cancelled(state);
+    }
+    if (group == VimActionGroup::display)
+    {
+        return detail::displayed(state, view, action);
+    }
+    return std::nullopt;
 }
 
 // 保留中のオペレータの後ろ。同じ鍵なら行単位、移動なら範囲、ほかの鍵なら打ち消し（Vim と同じ）。
@@ -1389,11 +1409,9 @@ namespace
     {
         return text_object_action(state, action);
     }
-    // `d<C-a>` はオペレータを打ち消すだけで失敗にしない（Vim の nv_addsub の clearop・ADR 0015 の
-    // 決定 14）。
-    if (vim_group_for(action) == VimActionGroup::number)
+    if (auto step = unranged_step(state, view, action))
     {
-        return cancelled(state);
+        return std::move(step).value();
     }
     // 同じオペレータの鍵をもう一度押すと行単位（dd cc yy g~~ guu gUU >> <<・表は VimKeyTable）。
     if (vim_operator_doubles(operation, action))

@@ -18,6 +18,7 @@
 #include "PreviewCaretWorkload.hpp"
 #include "ProbeDispatchRow.hpp"
 #include "ProbeWorkload.hpp"
+#include "SearchObjectWorkload.hpp"
 #include "SearchSnapshotWorkload.hpp"
 #include "SearchSpanWorkload.hpp"
 #include "StatusItemsWorkload.hpp"
@@ -44,5 +45,6 @@ using ProbeDispatch =
                  ProbeDispatchRow<LexerWorkload>, ProbeDispatchRow<ExplorerFrameWorkload>,
                  ProbeDispatchRow<VimBlockWorkload>, ProbeDispatchRow<WordObjectWorkload>,
                  ProbeDispatchRow<EditedHistoryWorkload>, ProbeDispatchRow<PieceListWorkload>,
-                 ProbeDispatchRow<SubstituteWorkload>, ProbeDispatchRow<PatternCostWorkload>>;
+                 ProbeDispatchRow<SubstituteWorkload>, ProbeDispatchRow<PatternCostWorkload>,
+                 ProbeDispatchRow<SearchObjectWorkload>>;
 } // namespace nenenib::tests::performance

@@ -40,6 +40,8 @@ constexpr char32_t control_w_character = 0x17;
 // 本文 → 鍵の写しはこの値を引く。
 constexpr char32_t control_a_character = 0x01;
 constexpr char32_t control_x_character = 0x18;
+// `g Ctrl-g`（表示だけ・#1617 のレビュー M1）。
+constexpr char32_t control_g_character = 0x07;
 // `Ctrl-i` と `<Tab>` は同じ文字（窓は Tab を文字の鍵で渡す・ADR 0152 の追補 #1037）。
 constexpr char32_t tab_character = 0x09;
 
@@ -198,6 +200,8 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::search_word_backward, VimActionGroup::search},
      {VimAction::select_next_match, VimActionGroup::search},
      {VimAction::select_previous_match, VimActionGroup::search},
+     {VimAction::show_information, VimActionGroup::display},
+     {VimAction::show_character_bytes, VimActionGroup::display},
      {VimAction::record_macro, VimActionGroup::input_wait},
      {VimAction::replay_macro, VimActionGroup::input_wait},
      {VimAction::select_register, VimActionGroup::input_wait},
@@ -315,9 +319,10 @@ constexpr std::array<VimMotionBinding, 42> motion_bindings{
 
 // g の後ろの鍵 → 動作（ADR 0027 / Issue #222 / ADR 0057 の決定 2 / ADR 0144 の決定 4 /
 // ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10・14 / #1039 の gv gi / ADR 0152 の追補 #1037 /
-// ADR 0028 の追補 #1032 の gI / #1617 の gn gN）。
-// ここに無い鍵は g を打ち消して失敗する（Vim の nv_g_cmd の clearopbeep）。
-constexpr std::array<VimBinding, 27> g_bindings{
+// ADR 0028 の追補 #1032 の gI / #1617 の gn gN と表示だけの ga g8 g<C-g> g< gV gs）。
+// ここに無い鍵は g を打ち消して失敗する（Vim の nv_g_cmd の clearopbeep と、Nib に無い命令で本文か
+// キャレットを変える鍵・一覧は #1617 の out/1617-fix/g-keys.md）。
+constexpr std::array<VimBinding, 33> g_bindings{
     {{U'g', VimAction::move_document_first},
      {U'e', VimAction::move_previous_word_end},
      {U'E', VimAction::move_previous_big_word_end},
@@ -344,7 +349,13 @@ constexpr std::array<VimBinding, 27> g_bindings{
      {U',', VimAction::change_newer},
      {U'&', VimAction::repeat_substitute_all},
      {U'n', VimAction::select_next_match},
-     {U'N', VimAction::select_previous_match}}};
+     {U'N', VimAction::select_previous_match},
+     {U'a', VimAction::show_information},
+     {control_g_character, VimAction::show_information},
+     {U'<', VimAction::show_information},
+     {U'V', VimAction::show_information},
+     {U's', VimAction::show_information},
+     {U'8', VimAction::show_character_bytes}}};
 
 // 保留を立てる鍵 → オペレータ（ADR 0015 の決定 1・10・11）。同じ行の鍵を保留の後ろで押すと
 // 行単位（dd g~g~ >>）。
@@ -447,10 +458,13 @@ constexpr std::array<VimTextObjectBinding, 18> text_object_bindings{
 // g の後ろの特別な鍵 → 動作（Issue #1522）。Vim の nv_g_cmd は K_HOME を '0' と同じ case で
 // nv_g_home_m_cmd へ、K_END を '$' と同じ case で nv_g_dollar_cmd へ渡す。`g<Home>` は `g0` と同じ
 // 動作の行で、`g<End>` は `g$` の着地から空白を左へ越える（nv_g_dollar_cmd の flag・ADR 0147 の
-// 決定 9）。Ctrl-a と Ctrl-x は文字に写して上の表を引く（vim_number_control_character）。
-constexpr std::array<std::pair<VimSpecialKey, VimAction>, 2> g_special_bindings{
+// 決定 9）。K_DOWN と K_UP は 'j' 'k' と同じ case（`g<Down>` は `gj`・#1617 のレビュー L1）。
+// Ctrl-a と Ctrl-x は文字に写して上の表を引く（vim_number_control_character）。
+constexpr std::array<std::pair<VimSpecialKey, VimAction>, 4> g_special_bindings{
     {{VimSpecialKey::home, VimAction::move_display_line_start},
-     {VimSpecialKey::end, VimAction::move_display_line_last_non_blank}}};
+     {VimSpecialKey::end, VimAction::move_display_line_last_non_blank},
+     {VimSpecialKey::arrow_down, VimAction::move_display_down},
+     {VimSpecialKey::arrow_up, VimAction::move_display_up}}};
 
 // 終わりの位置を範囲に入れない移動（Vim の exclusive）。$ と e E ge gE g$ g_ g<End> は入れる
 // （inclusive）。行単位の j k はどちらでもないので、この表には無い。gj gk は文字単位の

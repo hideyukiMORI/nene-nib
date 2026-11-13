@@ -47,6 +47,11 @@ enum class VimActionGroup : std::uint8_t
     jump_list,
     // `&` `g&`（ADR 0168 の決定 1）。オペレータの後ろでは失敗する（Vim の nv_optrans の
     // checkclearopq）。
-    substitute
+    substitute,
+    // 表示だけの `ga` `g8` `g<C-g>` `g<` `gV` `gs`（#1617 のレビュー M1）。NORMAL と VISUAL では
+    // 何もせず失敗にもしない（後ろの鍵が効く）。オペレータの後ろでは、Vim の nv_g_cmd が動かずに
+    // 返った後の do_pending_operator と同じく、キャレットの上の空の範囲（exclusive）に効かせる
+    // （`dga` は何も消さず、`cga` は INSERT へ、`>ga` は行を字下げする・実測）。`8g8` は失敗。
+    display
 };
 } // namespace nenenib::core

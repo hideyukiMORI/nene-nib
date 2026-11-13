@@ -8,6 +8,7 @@
 #include "VimSearchNoticeKind.hpp"
 
 #include <expected>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -30,6 +31,21 @@ namespace nenenib::core
 // （窓の余裕はバイト）と text の表示の巨大な行の窓（窓はコードポイント）が共用する 1 本。
 [[nodiscard]] std::vector<OffsetRange> vim_window_matches(std::string_view text, OffsetRange window,
                                                           const VimPattern &pattern);
+
+// at の行の、at 以降に始まる最も左の一致（位置は本文の中のバイト・#1617）。数え始めが at なので
+// vim_line_matches の区切りとは限らない。区切りの一致の始まり（vim_find_match の答え）か行頭を
+// 渡せば、その区切りの一致が返る。行を写さず（piece をまたぐ行だけ vim_find_match と同じく繋ぐ）、
+// 照合は at から 1 回だけ。`gn` `gN` が当たりの終わりと 1 行目の最初の当たりを引く。
+[[nodiscard]] std::optional<OffsetRange> vim_match_from(const TextBuffer &text,
+                                                        const VimPattern &pattern, Offset at);
+
+// at の行の区切りの一致（vim_line_matches と同じ走査）のうち、終わりが at を越えない最後の一致
+// （位置は本文の中のバイト・#1617）。Vim の searchit の後ろ向きの SEARCH_END が起点の行で数える
+// 当たり（`endpos.col - 1 < start_pos.col`）で、at ちょうどの空の一致も入る。走査は行頭から 1
+// 回で、 行を写さない。起点が行頭のときに起点の行を見ない規則と、ほかの行は呼ぶ側（`gn`
+// `gN`）が持つ。
+[[nodiscard]] std::optional<OffsetRange>
+vim_last_match_ending_by(const TextBuffer &text, const VimPattern &pattern, Offset at);
 
 // 次の一致を求める 1 本の経路（ADR 0032 の決定 3・4 の追記・ADR 0041 の決定 1）。純関数で、
 // 本文・履歴・状態を持たない。確定の検索の鍵（`/` `?` の Enter・`n` `N` `*` `#`）と

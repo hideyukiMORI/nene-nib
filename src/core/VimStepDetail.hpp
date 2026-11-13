@@ -189,6 +189,10 @@ using JoinedLines = std::pair<LineNumber, LineNumber>;
 [[nodiscard]] VimOperator operation_of(const VimState &state) noexcept;
 [[nodiscard]] VimStep performed(const VimState &state, const TextBuffer &text, Offset caret,
                                 const VimMotionRange &range);
+// 表示だけの `g` の鍵（#1617 のレビュー M1）。`8g8` は失敗し、NORMAL は何もせず、オペレータ待ちは
+// キャレットの上の空の範囲に効かせる。VISUAL は呼び手が選択のまま残す。
+[[nodiscard]] bool finds_illegal_byte(const VimState &state, VimAction action) noexcept;
+[[nodiscard]] VimStep displayed(const VimState &state, const VimEditorView &view, VimAction action);
 [[nodiscard]] Offset operator_start(Offset before, Offset landing) noexcept;
 [[nodiscard]] VimState finished_input_wait(const VimState &state);
 [[nodiscard]] VimStep completed_character_search(const VimState &state, const VimEditorView &view,
