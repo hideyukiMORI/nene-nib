@@ -32,9 +32,4 @@ std::string_view save_question_text(SaveQuestionText text, DisplayLanguage langu
 {
     return ui_text(save_question_message(text), language);
 }
-
-std::string_view save_question_text(SaveQuestionText text) noexcept
-{
-    return save_question_text(text, DisplayLanguage::japanese);
-}
 } // namespace nenenib::core

@@ -42,6 +42,7 @@
 #include "SyntaxColor.hpp"
 #include "UiLocale.hpp"
 #include "UiMessage.hpp"
+#include "UiTextSizes.hpp"
 #include "UiTexts.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
@@ -65,8 +66,7 @@ namespace nenenib::ui::win32
 namespace
 {
 // 採用案の寸法（docs/design/2026-09-15-look.md 第 2 節）。色は Palette 以外に持たない（ADR 0008）。
-constexpr float tab_text_dips = 12.5F;
-constexpr float ui_text_dips = 12.0F;
+// 画面の文字の大きさは UiTextSizes.hpp（幅の試験と共用）。
 // text の表示の巨大な行の印 `»`（ADR 0139 の決定 2）。
 constexpr std::string_view giant_mark = "\xC2\xBB";
 constexpr std::int32_t caret_inset_dips = 2;
@@ -89,9 +89,9 @@ constexpr float palette_detail_gap_dips = 12.0F;
 constexpr float palette_key_padding_dips = 9.0F;
 constexpr float palette_key_height_dips = 20.0F;
 constexpr float palette_key_radius_dips = 5.0F;
-// 空の文書の案内の鍵の枠の左右の余白（docs/design/2026-10-06-guide.md の 2 節）。箱の幅を測る
-// guide_key_width と描く draw_body_guide が同じ値を使う（#1122）。
-constexpr float guide_key_padding_dips = 9.0F;
+// 空の文書の案内の鍵の枠の左右の余白（docs/design/2026-10-06-guide.md の 2 節）は UiTextSizes.hpp
+// の guide_key_padding_dips。箱の幅を測る guide_key_width と描く draw_body_guide
+// が同じ値を使う（#1122）。
 constexpr DWORD latency_timeout_milliseconds = 1000;
 constexpr float full_channel = 255.0F;
 
@@ -270,6 +270,7 @@ Direct2DRenderer::create(HWND window, std::uint32_t dpi, application::TimingPort
 {
     Direct2DRenderer renderer(sources.text_layouts);
     renderer.dpi_ = dpi;
+    renderer.formatted_language_ = sources.language;
     return started(std::move(renderer), window, timing, sources.warmup);
 }
 
@@ -279,6 +280,7 @@ Direct2DRenderer::create_provisional(HWND cover, std::uint32_t dpi, application:
 {
     Direct2DRenderer renderer(sources.text_layouts);
     renderer.dpi_ = dpi;
+    renderer.formatted_language_ = sources.language;
     renderer.provisional_ = true;
     return started(std::move(renderer), cover, timing, sources.warmup);
 }
@@ -598,10 +600,12 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_guide_formats(const 
     measured_guide_key_width_ = 0;
     measured_start_keys_.reset();
     measured_start_key_width_ = 0;
-    const auto key = make_format(family(L"Cascadia Code", L"Consolas"), 12.5F,
+    const auto key = make_format(family(L"Cascadia Code", L"Consolas"), guide_key_dips,
                                  DWRITE_FONT_WEIGHT_NORMAL, guide_key_format_);
-    const auto label = make_format(face, 13.5F, DWRITE_FONT_WEIGHT_NORMAL, guide_label_format_);
-    const auto note = make_format(face, 11.5F, DWRITE_FONT_WEIGHT_NORMAL, guide_note_format_);
+    const auto label =
+        make_format(face, guide_label_dips, DWRITE_FONT_WEIGHT_NORMAL, guide_label_format_);
+    const auto note =
+        make_format(face, guide_note_dips, DWRITE_FONT_WEIGHT_NORMAL, guide_note_format_);
     const auto status =
         make_format(face, ui_text_dips, DWRITE_FONT_WEIGHT_NORMAL, guide_status_format_);
     if (FAILED(key) || FAILED(label) || FAILED(note) || FAILED(status))

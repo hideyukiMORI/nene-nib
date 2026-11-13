@@ -336,8 +336,10 @@ CommandPalette CommandPalette::selected_at(std::size_t index) const
 // 候補の列を持ったまま、入力を `:<command>` にする（ADR 0060 の決定 5）。
 std::expected<CommandPalette, ExFailure> CommandPalette::filled(std::string_view command) const
 {
+    // 表示言語も写す（`?` の操作の一覧と `set language=` の説明が読む・V-1601 の M1）。
     auto input = CommandLine::empty(input_.catalog())
                      .with_fonts(input_.fonts())
+                     .with_language(input_.language())
                      .inserted(":" + std::string(command));
     if (!input)
     {

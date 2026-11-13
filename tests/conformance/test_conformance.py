@@ -842,6 +842,75 @@ class TranslationUnitSizeChecks(unittest.TestCase):
         self.assertEqual([], [str(f) for f in cnf.translation_unit_size_checks(ROOT, cnf.inventory(ROOT))])
 
 
+class UiTextChecks(unittest.TestCase):
+    """CNF-016 — 画面の文は UiMessage の表から（ADR 0123 の追補 2026-11-13 の決定 12・#1019）。"""
+
+    ENUM = ("enum class UiMessage : std::uint16_t\n{\n    alpha,\n    // beta, はコメント\n    beta,\n};\n"
+            "inline constexpr std::size_t ui_message_count =\n"
+            "    std::to_underlying(UiMessage::beta) + 1U;\n")
+    COLUMN = ('inline constexpr UiTextColumn column{{\n    {UiMessage::alpha, "A"},\n'
+              '    // {UiMessage::gamma, "コメントの行は数えない"},\n    {UiMessage::beta,\n     "B"},\n}};\n')
+
+    def literal_ids(self, source, path="src/ui/win32/Painter.cpp"):
+        return [f.rule for f in cnf.source_checks(path, source, RULES, {}) if f.rule == "CNF-016"]
+
+    def test_cnf016_literal_in_ui_fails(self):
+        self.assertEqual(["CNF-016"], self.literal_ids('const auto text = "保存しますか";\n'))
+
+    def test_cnf016_names_the_line(self):
+        details = [f.detail for f in cnf.source_checks("src/core/Notice.cpp", 'int a;\nauto b = L"候補なし";\n',
+                                                       RULES, {}) if f.rule == "CNF-016"]
+        self.assertEqual(1, len(details))
+        self.assertTrue(details[0].startswith("line 2: "))
+
+    def test_cnf016_raw_string_and_chinese_fail(self):
+        self.assertEqual(["CNF-016", "CNF-016"],
+                         self.literal_ids('auto a = R"(未保存)";\nauto b = u8"设置";\n', "src/core/Text.cpp"))
+
+    def test_cnf016_comments_pass(self):
+        self.assertEqual([], self.literal_ids('// "保存しますか" はコメント\n/* "候補なし" */\nint a;\n'))
+
+    def test_cnf016_english_and_escapes_pass(self):
+        self.assertEqual([], self.literal_ids('auto a = "Find: ";\nauto b = "\\xE3\\x81\\x82";\n'))
+
+    def test_cnf016_allowed_places_pass(self):
+        for path in RULES["uiTextLiteralAllowedPaths"]:
+            self.assertEqual([], self.literal_ids('auto a = "日本語";\n', path), path)
+
+    def test_cnf016_english_column_is_not_allowed(self):
+        self.assertEqual(["CNF-016"], self.literal_ids('auto a = "日本語";\n', "src/core/UiTextsEnglish.hpp"))
+
+    def test_cnf016_tests_pass(self):
+        self.assertEqual([], self.literal_ids('expect(text == "保存しますか");\n', "tests/ui/Painter.cpp"))
+
+    def test_cnf016_table_positive(self):
+        self.assertEqual([], cnf.ui_message_table_problems(self.ENUM, {"ja": self.COLUMN, "en": self.COLUMN}))
+
+    def test_cnf016_enumerator_added_after_the_last_fails(self):
+        grown = self.ENUM.replace("    beta,\n};", "    beta,\n    gamma,\n};")
+        problems = cnf.ui_message_table_problems(grown, {"ja": self.COLUMN})
+        self.assertIn(("", "ui_message_count names beta, but the last enumerator is gamma"), problems)
+        self.assertIn(("ja", "2 rows for 3 UiMessage values"), problems)
+
+    def test_cnf016_count_moved_without_rows_fails(self):
+        grown = self.ENUM.replace("    beta,\n};", "    beta,\n    gamma,\n};").replace("UiMessage::beta)",
+                                                                                     "UiMessage::gamma)")
+        self.assertEqual([("ja", "2 rows for 3 UiMessage values")],
+                         cnf.ui_message_table_problems(grown, {"ja": self.COLUMN}))
+
+    def test_cnf016_column_out_of_order_fails(self):
+        swapped = self.COLUMN.replace("UiMessage::alpha", "UiMessage::tmp").replace(
+            "UiMessage::beta", "UiMessage::alpha").replace("UiMessage::tmp", "UiMessage::beta")
+        self.assertEqual([("en", "row 0 is beta, but the enum has alpha")],
+                         cnf.ui_message_table_problems(self.ENUM, {"ja": self.COLUMN, "en": swapped}))
+
+    def test_cnf016_repository_passes(self):
+        literal = [str(f) for path in cnf.inventory(ROOT) if path.suffix in {".cpp", ".hpp"}
+                   for f in cnf.ui_text_literal_checks(path.as_posix(),
+                                                       (ROOT / path).read_text(encoding="utf-8"), RULES)]
+        self.assertEqual([], literal + [str(f) for f in cnf.ui_message_table_checks(ROOT, RULES)])
+
+
 class GitChecks(unittest.TestCase):
     def test_valid(self):
         self.assertEqual([], git_conventions.validate("build: 検査を固定する (#1)"))

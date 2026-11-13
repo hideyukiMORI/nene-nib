@@ -23,6 +23,4 @@ enum class SaveQuestionText
 // Y / N と同じ）。
 [[nodiscard]] std::string_view save_question_text(SaveQuestionText text,
                                                   DisplayLanguage language) noexcept;
-// 言語の無い形は日本語の文（ui の試験の形・T1e で言語の形へ寄せる）。
-[[nodiscard]] std::string_view save_question_text(SaveQuestionText text) noexcept;
 } // namespace nenenib::core

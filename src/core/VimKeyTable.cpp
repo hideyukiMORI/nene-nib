@@ -511,9 +511,9 @@ constexpr std::array<VimMotion, 12> jump_motions{
 }
 
 static_assert(action_groups.size() == vim_action_count,
-              "動作 → 大分類の表は動作と同じ数の行を持つ（CPP-012）");
+              "the action-to-group table has one row per action (CPP-012)");
 static_assert(every_action_has_one_row(),
-              "どの動作も表にちょうど 1 行。欠落と重複はここでコンパイルが落ちる（CPP-002）");
+              "every action has exactly one row; a missing or repeated row fails here (CPP-002)");
 
 // 縦の位置合わせの大分類の動作は、意味の表にちょうど 1 行（ADR 0146 の決定 2）。
 [[nodiscard]] constexpr bool every_alignment_has_one_row() noexcept
@@ -533,8 +533,9 @@ static_assert(every_action_has_one_row(),
     return true;
 }
 
-static_assert(every_alignment_has_one_row(),
-              "縦の位置合わせの動作だけが意味の表にちょうど 1 行（CPP-012）");
+static_assert(
+    every_alignment_has_one_row(),
+    "only the vertical alignment actions have exactly one row in the meaning table (CPP-012)");
 } // namespace
 
 [[nodiscard]] std::optional<VimAction> vim_action_for(char32_t key) noexcept

@@ -19,6 +19,10 @@
 | 位置 | バイトの `Offset`（0 始まり）・行の `LineNumber`（1 始まり）・code point の `Column`（1 始まり） | core |
 | 選択 | anchor と caret の 2 つの位置。Shift+移動が anchor を固定する | `Selection`（core） |
 | 言語 | 文書の値で、パスの拡張子から core の 1 つの表で決まり `:set filetype=` で選び直せる。名前は Vim の filetype 名（`plain` は `text`）。設定とセッションには入れない | `Language` / `LanguageTable`（core・ADR 0154） |
+| 表示言語 | 画面の文（ステータスバー・帯・面・ダイアログ・案内）を出す言語。文書の「言語」（filetype）とは別。いまは日本語・英語・中国語（簡体字） | `DisplayLanguage`（core・ADR 0123 の 2026-11-13 の追補） |
+| 希望値（表示言語の） | 使う人が選んで `settings.v4` の `ui_language` に保存する値。`system`（Windows に合わせる）か言語の 1 つ（`ja` `en` `zh-hans`・列の無い `ko` `es` `de`） | `DisplayLanguageChoice`（core） |
+| 解決済みの値（表示言語の） | 希望値と OS の観測から `resolved_language` が決めた、いま画面に出す言語。状態が 1 つ持ち frame が運ぶ。列の無い言語と観測できない `system` は英語 | `EditorState::display_language()` / `EditorFrame.language`（application） |
+| 文の表 | 画面の文の名前ごとに 1 行ずつ文を持つ、言語ごとの列。読む口は `ui_text` の 1 本（CNF-016） | `UiMessage` / `UiTexts*.hpp` / `ui_text` / `ui_text_filled`（core） |
 | 編集履歴 | undo / redo の列。連続した文字入力は 1 単位 | `EditHistory`（core） |
 | 編集モード | 通常 / Vim の 2 つ。トグルで入れ替わるのはキー割り当てとマウス規則だけ | `EditMode`（core・閉じた集合） |
 | Vim エンジン | Vim の振る舞い（モード・カーソル・レジスタ・オペレータ・テキストオブジェクト・`.`・マクロ）を純関数で持つ自前実装 | `Vim*`（core） |

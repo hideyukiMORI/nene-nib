@@ -12,13 +12,14 @@ namespace nenenib::core
 // app_error_ notice_ shell_ palette_ label_（2 つ以上の場面の同じ語）status_ tab_ default_ preview_
 // prompt_ guide_ explorer_ dialog_ os_ start_）。差し込む値は文の中の置き場 {0} {1} で受ける。
 // 足し方（5 行）:
-// 1. 同じ場面の群の中に 1 値足す（最後の値 start_open_folder_detail の後ろには足さない）。
-// 2. 3 つの列のファイルの、enum と同じ位置に 1 行ずつ足す（並びと数は UiTexts.cpp の
-// static_assert）。
+// 1. 同じ場面の群の中に 1 値足す（最後の値の後ろに足したら ui_message_count の名指しも移す）。
+// 2. 3 つの列のファイルの、enum と同じ位置に 1 行ずつ足す（並び・空でない・UTF-8・置き場は
+// UiTexts.cpp の static_assert、列挙子の数・最後の値・3 列の行の数と順は eng/conformance.py の
+// CNF-016 が照合する。C++ は列挙子を数えられないので、行の無い値は static_assert を通る）。
 // 3. 日本語は製品の今の文と 1 文字も違わない文にする。数や名前は置き場にし、3
 // 列で同じ置き場の集合。
-// 4. 中国語の列が未訳の間は英語の文を写す（列の見出しの「未訳」を残す）。
-// 5. 最後の値を変えたら ui_message_count を直す。値を消すときは呼び出し元と 3 列を同時に消す。
+// 4. 中国語は日本語の文の意味から訳す（用語は docs/i18n/REVIEW.md）。
+// 5. 値を消すときは呼び出し元と 3 列を同時に消す。
 enum class UiMessage : std::uint16_t
 {
     operation_open_file_name,
@@ -97,6 +98,8 @@ enum class UiMessage : std::uint16_t
     operation_register_shell_description,
     operation_unregister_shell_name,
     operation_unregister_shell_description,
+    operation_choose_language_name,
+    operation_choose_language_description,
     app_error_window_class,
     app_error_window_create,
     app_error_rendering_start,
@@ -162,6 +165,8 @@ enum class UiMessage : std::uint16_t
     palette_mark_folder,
     palette_mark_settings,
     palette_mark_operations,
+    palette_mark_separator,
+    language_choice_system,
     palette_no_candidates,
     palette_footer_hint,
     status_mode_basic,
@@ -217,16 +222,10 @@ enum class UiMessage : std::uint16_t
     start_new_file,
     start_new_file_detail,
     start_open_folder,
-    // T1b
-    operation_choose_language_name,
-    operation_choose_language_description,
-    palette_mark_separator,
-    language_choice_system,
-    // T1b
     start_open_folder_detail,
 };
 
-// 値の数（最後の値から数える・足し方の 1 と 5）。列の大きさはこの数で、static_assert
+// 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
     std::to_underlying(UiMessage::start_open_folder_detail) + 1U;

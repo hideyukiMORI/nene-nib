@@ -906,6 +906,8 @@ constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
 // `{name}&`（`&vim` `&vi`）を既定値の書き方へ（#1525）。既定値は保存する設定の正本
 // default_editor_settings と、Vim の状態の既定（ExWindowState の初期値・クリップボード）。文書の
 // 値（filetype・fileencoding・fileformat・display）は受けない（後の読みが unknown_option で断る）。
+// `language&` は既定の system へ（ADR 0123 の追補 2026-11-13 の決定 8・controller が OS を 1
+// 回観測する）。
 [[nodiscard]] std::optional<std::string> reset_text(std::string_view option)
 {
     const auto suffix = std::ranges::find_if(default_suffixes, [option](std::string_view value)
@@ -937,6 +939,10 @@ constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
     if (name == "fontsize")
     {
         return "fontsize=" + points_text(defaults.font_size);
+    }
+    if (name == "language")
+    {
+        return "language=" + std::string(display_language_choice_name(defaults.ui_language));
     }
     if (name == "guifont")
     {

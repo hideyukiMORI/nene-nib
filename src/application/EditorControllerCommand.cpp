@@ -969,30 +969,31 @@ void EditorController::run_map_request(const core::ExMapRequest &request)
     }
 }
 
-// `:set language=<名前>` `:set language?`（ADR 0123 の追補 2026-11-13 の決定 2・8）。選んだ値は
-// 設定 v4 の ui_language へ既存の保存の入口で書き、OS を 1 回観測して解決し直して状態に置く（frame
-// の文はその場で変わる）。保存できなければ断って言語を変えない（`:set lsp` と同じ）。どの形も今の
-// 希望値を 1 行で知らせ、system は解決済みの値も括弧で添える（`language=system (ja)`）。
+// `:set language=<名前>` `:set language?` `:set language&`（ADR 0123 の追補 2026-11-13 の決定 2・
+// 8）。選んだ値は設定 v4 の ui_language へ既存の保存の入口で書き、解決し直して状態に置く（frame
+// の文はその場で変わる）。OS を観測するのは system を選んだときだけ（決定案 6）。保存できなければ
+// 断って言語を変えない（`:set lsp` と同じ）。問い（`?`）は読むだけで保存を通さない。どの形も今の
+// 希望値を 1 行で知らせ、希望値と解決済みの値が違う名前なら括弧で添える（`language=system (ja)`・
+// `language=ko (en)`）。
 void EditorController::answer_display_language(const core::ExDisplayLanguageRequest &request)
 {
     auto settings = state_.settings();
     if (request.chosen.has_value())
     {
         settings.ui_language = request.chosen.value();
-    }
-    if (!persist_settings(settings))
-    {
-        reject(core::DisplayText::parse("Settings could not be saved").value());
-        return;
-    }
-    if (request.chosen.has_value())
-    {
-        state_ = state_.with_display_language(
-            core::resolved_language(settings.ui_language, ports_.ui_language.observe()));
+        if (!persist_settings(settings))
+        {
+            reject(core::DisplayText::parse("Settings could not be saved").value());
+            return;
+        }
+        const bool follows_windows = settings.ui_language == core::DisplayLanguageChoice::system;
+        state_ = state_.with_display_language(core::resolved_language(
+            settings.ui_language, follows_windows ? ports_.ui_language.observe() : std::nullopt));
     }
     std::string shown = "language=";
     shown += core::display_language_choice_name(settings.ui_language);
-    if (settings.ui_language == core::DisplayLanguageChoice::system)
+    if (core::display_language_choice_name(settings.ui_language) !=
+        core::display_language_code(state_.display_language()))
     {
         shown += " (";
         shown += core::display_language_code(state_.display_language());

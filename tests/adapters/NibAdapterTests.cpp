@@ -608,8 +608,11 @@ void verify_ui_language_mapping()
     expect(display_language_of(MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED)) ==
                    DisplayLanguage::simplified_chinese &&
                display_language_of(MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SINGAPORE)) ==
+                   DisplayLanguage::simplified_chinese &&
+               display_language_of(MAKELANGID(LANG_CHINESE, SUBLANG_NEUTRAL)) ==
                    DisplayLanguage::simplified_chinese,
-           "simplified Chinese (China and Singapore) maps to simplified Chinese");
+           "simplified Chinese (China, Singapore and the neutral zh-Hans) maps to simplified "
+           "Chinese");
     expect(display_language_of(MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_TRADITIONAL)) ==
                    DisplayLanguage::english &&
                display_language_of(MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_HONGKONG)) ==

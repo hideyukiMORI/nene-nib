@@ -24,11 +24,6 @@ GuideEntry operation_guide_entry(EditorOperation operation, EditMode mode, Displ
                       short_name};
 }
 
-OperationGuide operation_guide(GuideContext context, EditMode mode)
-{
-    return operation_guide(context, mode, DisplayLanguage::japanese);
-}
-
 OperationGuide operation_guide(GuideContext context, EditMode mode, DisplayLanguage language)
 {
     OperationGuide result{context, {}};

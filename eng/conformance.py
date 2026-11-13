@@ -201,6 +201,7 @@ def source_checks(path: str, text: str, rules: dict, waivers: dict,
             if Path(include).name in rules["platformHeaders"]:
                 findings.append(Finding("ARC-003", path, f"platform header {include}"))
     findings.extend(concurrency_and_simd(path, text, rules))
+    findings.extend(ui_text_literal_checks(path, text, rules))
     sdk_findings, sdk_covered = sdk_abi_checks(path, text, signatures)
     findings.extend(sdk_findings)
     raw_lines = text.splitlines()
@@ -560,6 +561,93 @@ def third_party_digest_checks(root: Path, paths: list[Path], rules: dict) -> lis
     return findings
 
 
+# 文字列リテラルとコメントの字句（CNF-016）。cpp_code と同じ形で、文字列は改行をまたがない。
+_STRING_TOKEN = re.compile(
+    r'R"(?P<delimiter>[^ ()\\\t\r\n]{0,16})\((?P<raw>.*?)\)(?P=delimiter)"|//[^\n]*|/\*.*?\*/'
+    r'|"(?P<quoted>(?:\\.|[^"\\\n])*)"|\'(?P<character>(?:\\.|[^\'\\\n])*)\'', re.S)
+# ひらがな・カタカナ・CJK 統合漢字（拡張 A と互換を含む）・半角カタカナ。
+_JAPANESE_OR_CHINESE = re.compile("[぀-ヿ㐀-䶿一-鿿豈-﫿ｦ-ﾟ]")
+
+
+def japanese_literal_lines(text: str) -> list[int]:
+    """1-based lines of string and character literals that hold kana or kanji (comments are skipped)."""
+    lines = []
+    for match in _STRING_TOKEN.finditer(text):
+        body = next((group for group in (match["raw"], match["quoted"], match["character"])
+                     if group is not None), None)
+        if body is not None and _JAPANESE_OR_CHINESE.search(body):
+            lines.append(text.count("\n", 0, match.start()) + 1)
+    return lines
+
+
+def ui_text_literal_checks(path: str, text: str, rules: dict) -> list[Finding]:
+    """CNF-016: screen text lives in the UiMessage table, not in literals (ADR 0123, 2026-11-13).
+
+    A string literal under src/ that holds Japanese or Chinese text is a finding unless the file is
+    one of the places the table `uiTextLiteralAllowedPaths` names: the Japanese and Chinese columns,
+    the reading table of the operations, and the language names written in their own script.
+    Comments are not counted. English text cannot be told apart from code by a machine, so it is
+    kept out by the inventory and review instead.
+    """
+    if not path.startswith("src/") or Path(path).suffix not in {".cpp", ".hpp"}:
+        return []
+    if path in rules["uiTextLiteralAllowedPaths"]:
+        return []
+    return [Finding("CNF-016", path, f"line {number}: Japanese or Chinese text in a string literal; "
+                    "put screen text in the UiMessage table and read it with ui_text")
+            for number in japanese_literal_lines(text)]
+
+
+def ui_message_names(enum_text: str) -> list[str]:
+    """The enumerators of `enum class UiMessage`, in order (comments are skipped)."""
+    code = cpp_code(enum_text)
+    body = re.search(r"\benum\s+class\s+UiMessage\b[^{;]*\{(?P<body>[^}]*)\}", code)
+    if body is None:
+        return []
+    return [part.strip() for part in body["body"].split(",") if part.strip()]
+
+
+def ui_message_table_problems(enum_text: str, columns: dict[str, str]) -> list[tuple[str, str]]:
+    """CNF-016: what is wrong with the UiMessage enum and its columns, as (path or "", detail).
+
+    The C++ static_asserts check that each column holds every value once in enum order, but an
+    enumerator added after the last one with no row and no change to `ui_message_count` passes them
+    and makes `ui_text` read past the end of the column (review A-M1). C++23 cannot count
+    enumerators, so the count is checked here.
+    """
+    names = ui_message_names(enum_text)
+    if not names:
+        return [("", "enum class UiMessage is missing")]
+    problems = []
+    counted = re.search(r"\bui_message_count\s*=\s*std::to_underlying\(\s*UiMessage::(\w+)\s*\)\s*\+\s*1U?\s*;",
+                        cpp_code(enum_text))
+    if counted is None:
+        problems.append(("", "ui_message_count is not std::to_underlying(UiMessage::<last>) + 1U"))
+    elif counted[1] != names[-1]:
+        problems.append(("", f"ui_message_count names {counted[1]}, but the last enumerator is {names[-1]}"))
+    for path, text in columns.items():
+        rows = re.findall(r"\{\s*UiMessage::(\w+)\s*,", cpp_code(text))
+        if len(rows) != len(names):
+            problems.append((path, f"{len(rows)} rows for {len(names)} UiMessage values"))
+            continue
+        mismatch = next((index for index, (row, name) in enumerate(zip(rows, names)) if row != name), None)
+        if mismatch is not None:
+            problems.append((path, f"row {mismatch} is {rows[mismatch]}, but the enum has {names[mismatch]}"))
+    return problems
+
+
+def ui_message_table_checks(root: Path, rules: dict) -> list[Finding]:
+    table = rules["uiMessageTable"]
+    enum_path = table["enum"]
+    paths = [enum_path] + table["columns"]
+    missing = [name for name in paths if not (root / name).is_file()]
+    if missing:
+        return [Finding("CNF-016", name, "the UiMessage table file is missing") for name in missing]
+    columns = {name: (root / name).read_text(encoding="utf-8") for name in table["columns"]}
+    return [Finding("CNF-016", path or enum_path, detail)
+            for path, detail in ui_message_table_problems((root / enum_path).read_text(encoding="utf-8"), columns)]
+
+
 # 1 つの翻訳単位の行数の上限（ADR 0158 の決定 6）。超えたファイルは ADR の群の表に群を足して分ける。
 MAXIMUM_TRANSLATION_UNIT_LINES = 3000
 
@@ -679,6 +767,7 @@ def check(root: Path, today: datetime.date, build_dir: Path | None = None) -> li
     findings.extend(fixture_format_checks(root))
     findings.extend(third_party_digest_checks(root, paths, rules))
     findings.extend(translation_unit_size_checks(root, paths))
+    findings.extend(ui_message_table_checks(root, rules))
     findings.extend(architecture_checks(root, paths, build_dir))
     signatures = sdk_abi_signatures(root)
     for path in paths:

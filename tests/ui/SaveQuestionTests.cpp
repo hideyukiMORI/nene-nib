@@ -1,3 +1,4 @@
+#include "DisplayLanguage.hpp"
 #include "SaveAnswer.hpp"
 #include "SaveQuestion.hpp"
 #include "SaveQuestionText.hpp"
@@ -97,15 +98,20 @@ void verify_steps()
 void verify_texts()
 {
     using nenenib::core::save_question_text;
-    expect(save_question_text(SaveQuestionText::unsaved_question) ==
-               "変更が保存されていません。保存しますか。",
-           "the closing question keeps its wording");
-    expect(save_question_text(SaveQuestionText::rendering_lost_question)
+    expect(
+        save_question_text(SaveQuestionText::unsaved_question, core::DisplayLanguage::japanese) ==
+            "変更が保存されていません。保存しますか。",
+        "the closing question keeps its wording");
+    expect(save_question_text(SaveQuestionText::rendering_lost_question,
+                              core::DisplayLanguage::japanese)
                .starts_with("描画できなくなったので閉じます"),
            "the lost-rendering question starts as ADR 0133 decision 3 says");
-    expect(save_question_text(SaveQuestionText::save_button) == "保存する(&Y)" &&
-               save_question_text(SaveQuestionText::discard_button) == "保存しない(&N)" &&
-               save_question_text(SaveQuestionText::cancel_button) == "キャンセル",
+    expect(save_question_text(SaveQuestionText::save_button, core::DisplayLanguage::japanese) ==
+                   "保存する(&Y)" &&
+               save_question_text(SaveQuestionText::discard_button,
+                                  core::DisplayLanguage::japanese) == "保存しない(&N)" &&
+               save_question_text(SaveQuestionText::cancel_button,
+                                  core::DisplayLanguage::japanese) == "キャンセル",
            "the buttons carry our own labels with the Y and N access keys");
 }
 } // namespace

@@ -16,8 +16,8 @@ connections. Everything it saves stays on your device.**
 | Settings | Theme, font, wrapping and other display choices, the explorer root folder, Vim `map` lines and, if you add them, language-server commands. | `%LOCALAPPDATA%\NeNeNib\settings.v4` on your device. |
 | Tabs, history and bookmarks | The paths of the tabs open when the window closed (with caret and scroll positions), up to 100 recently closed files, and up to 1024 bookmarks. | `session.v2`, `history.v1` and `bookmarks.v1` in `%LOCALAPPDATA%\NeNeNib\`. |
 | Clipboard | The clipboard is read or written only when you copy, cut or paste (including Vim's `"+` and `"*` registers). | Your clipboard, on your device. |
-| Windows settings | The application reads the Windows light/dark setting and the list of installed WSL distributions (to offer them as folders). It does not change them. | Not stored. |
-| Explorer registration | Only when you choose 「Windows の右クリックに登録する」 from the operation list (F1), the application adds itself to the Explorer right-click menu under `HKEY_CURRENT_USER`. 「登録を外す」 removes it. Nothing is written at startup. | The Windows registry of your user account. |
+| Windows settings | The application reads the Windows light/dark setting, the Windows display language (to choose the language of its own screen text when the setting says to follow Windows) and the list of installed WSL distributions (to offer them as folders). It does not change them. | Not stored. |
+| Explorer registration | Only when you choose "Add to Windows Right-Click Menu" from the operation list (F1), the application adds itself to the File Explorer right-click menu under `HKEY_CURRENT_USER`. "Remove from Windows Right-Click Menu" removes it. Nothing is written at startup. | The Windows registry of your user account. |
 
 The application has no accounts, no telemetry, no analytics, no advertising, no crash reporting, no automatic
 update check of its own, and no third-party services.
@@ -36,7 +36,7 @@ portable version, Windows may let the application use it directly.
 The application makes no network connections. It does not use any networking library: the libraries it may link
 are fixed by an allow-list in the build (`eng/architecture.json`), and none of them provides networking. It has no
 code that opens web pages, and the Markdown preview shows only local images; `http` and `https` images are not
-downloaded and are shown as `[画像: alt]` instead.
+downloaded and are shown as their alt text (`[Image: alt]`) instead.
 
 Two things can still reach a network because you chose them, not because the application does:
 
@@ -74,7 +74,7 @@ Questions: open an issue at <https://github.com/hideyukiMORI/nene-nib/issues>.
 | 設定 | テーマ・フォント・折り返しなどの表示の選択、エクスプローラーの起点のフォルダ、Vim の `map` の行、書いた場合は言語サーバーの命令。 | 端末の `%LOCALAPPDATA%\NeNeNib\settings.v4`。 |
 | タブ・履歴・ブックマーク | 窓を閉じたときに開いていたタブのパス（キャレットとスクロールの位置つき）、閉じたファイル最大 100 件、ブックマーク最大 1024 件。 | `%LOCALAPPDATA%\NeNeNib\` の `session.v2`・`history.v1`・`bookmarks.v1`。 |
 | クリップボード | コピー・切り取り・貼り付け（Vim の `"+` `"*` レジスタを含む）の操作をしたときだけ読み書きします。 | お使いの端末のクリップボード。 |
-| Windows の設定 | Windows のライト／ダークの設定と、入っている WSL の一覧（フォルダとして選べるようにするため）を読みます。変更はしません。 | 保存しません。 |
+| Windows の設定 | Windows のライト／ダークの設定と、Windows の表示言語（設定が「Windows に合わせる」のとき画面の文の言語を決めるため）と、入っている WSL の一覧（フォルダとして選べるようにするため）を読みます。変更はしません。 | 保存しません。 |
 | エクスプローラーへの登録 | 操作の一覧（F1）から「Windows の右クリックに登録する」を選んだときだけ、`HKEY_CURRENT_USER` の下にエクスプローラーの右クリックの項目を書きます。「登録を外す」で消します。起動では書きません。 | お使いのユーザーのレジストリ。 |
 
 アカウント、利用状況の送信、解析、広告、クラッシュ報告、アプリ独自の更新確認、第三者のサービスはありません。

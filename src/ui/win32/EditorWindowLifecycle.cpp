@@ -230,7 +230,8 @@ std::expected<Direct2DRenderer, RenderFailure> EditorWindow::create_renderer()
             return covered;
         }
     }
-    return Direct2DRenderer::create(window_, dpi_, timing_, {text_layouts_, warmup_});
+    return Direct2DRenderer::create(window_, dpi_, timing_,
+                                    {text_layouts_, warmup_, controller_.display_language()});
 }
 
 std::expected<Direct2DRenderer, RenderFailure> EditorWindow::create_provisional_renderer()
@@ -249,8 +250,8 @@ std::expected<Direct2DRenderer, RenderFailure> EditorWindow::create_provisional_
             SetFocus(window_);
         }
     }
-    return Direct2DRenderer::create_provisional(cover_->handle(), dpi_, timing_,
-                                                {text_layouts_, warmup_});
+    return Direct2DRenderer::create_provisional(
+        cover_->handle(), dpi_, timing_, {text_layouts_, warmup_, controller_.display_language()});
 }
 
 void EditorWindow::place_at_screen_centre()
@@ -703,7 +704,8 @@ void EditorWindow::adopt_device()
     {
         return;
     }
-    auto adopted = Direct2DRenderer::create(window_, dpi_, timing_, {text_layouts_, warmup_});
+    auto adopted = Direct2DRenderer::create(
+        window_, dpi_, timing_, {text_layouts_, warmup_, controller_.display_language()});
     if (!adopted)
     {
         abandon();

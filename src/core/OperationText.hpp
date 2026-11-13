@@ -14,7 +14,9 @@ struct OperationText
     EditorOperation operation;
     UiMessage name;
     UiMessage description;
-    // 無ければ通常名を使う。操作一覧の名前・検索対象には加えない（ADR 0079）。
+    // 無ければ通常名を使う。操作一覧の名前には使わない（ADR
+    // 0079）。検索の対象にするのは英語と中国語 のときだけ（日本語は読みで探す・ADR 0123 の
+    // 2026-11-13 の追補の決定 6）。
     std::optional<UiMessage> short_name{};
 };
 } // namespace nenenib::core

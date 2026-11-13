@@ -100,6 +100,8 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::operation_unregister_shell_name, "登録を外す"},
     {UiMessage::operation_unregister_shell_description,
      "Windows の右クリックと「プログラムから開く」から NeNe Nib を外します"},
+    {UiMessage::operation_choose_language_name, "表示言語を選ぶ"},
+    {UiMessage::operation_choose_language_description, "画面の文字の言語を選びます"},
     {UiMessage::app_error_window_class, "ウィンドウクラスを登録できませんでした。"},
     {UiMessage::app_error_window_create, "ウィンドウを作成できませんでした。"},
     {UiMessage::app_error_rendering_start, "Direct2D で描画を始められませんでした。"},
@@ -168,6 +170,8 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::palette_mark_folder, "フォルダ"},
     {UiMessage::palette_mark_settings, "設定"},
     {UiMessage::palette_mark_operations, "操作"},
+    {UiMessage::palette_mark_separator, "　"},
+    {UiMessage::language_choice_system, "Windows に合わせる"},
     {UiMessage::palette_no_candidates, "候補なし"},
     {UiMessage::palette_footer_hint, "↑↓ 選択   Enter 決定   Esc 閉じる"},
     {UiMessage::status_mode_basic, "通常"},
@@ -240,12 +244,6 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::start_new_file, "新しいファイル"},
     {UiMessage::start_new_file_detail, "そのまま打ち始める"},
     {UiMessage::start_open_folder, "フォルダを開く"},
-    // T1b
-    {UiMessage::operation_choose_language_name, "表示言語を選ぶ"},
-    {UiMessage::operation_choose_language_description, "画面の文字の言語を選びます"},
-    {UiMessage::palette_mark_separator, "　"},
-    {UiMessage::language_choice_system, "Windows に合わせる"},
-    // T1b
     {UiMessage::start_open_folder_detail, "ルートを選んでエクスプローラーを出す"},
 }};
 } // namespace nenenib::core
