@@ -93,6 +93,8 @@ class PackageMsixTests(unittest.TestCase):
         product = MSIX.RELEASE.version_of((ROOT / "CMakeLists.txt").read_text(encoding="utf-8"))
         manifest = MSIX.manifest_xml(TABLE, MSIX.package_version(product, store=False))
         self.assertEqual(ET.fromstring(manifest).find(SPACE + "Identity").get("Version"), product + ".0")
+        # The canonical version is the one the Store takes (D88: 1.0.0; a leading 0 is refused).
+        self.assertEqual(MSIX.package_version(product, store=True), product + ".0")
 
     # --- the manifest -------------------------------------------------------------------------
 

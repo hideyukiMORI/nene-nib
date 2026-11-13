@@ -18,6 +18,8 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > for giant lines. New in beta.13: the screen text in Japanese, English or Simplified Chinese
 > (`:set language=`), an app icon, Vim `:s` with the multis, `\|` and groups in patterns, `gn` `gN` and
 > INSERT `Ctrl-o`, and a last resort that backs up unsaved edits before an uncaught exception ends the process.
+> Since beta.13, main carries version 1.0.0, the version planned for the first Microsoft Store submission (D88).
+> Neither the Store submission nor a v1.0.0 GitHub release has been made yet; beta.13 stays the published build.
 
 <p>
   <img src="docs/images/nib-palette.png" width="49%" alt="NeNe Nib lists open tabs, bookmarks, recently closed files and folder files in Ctrl+P.">

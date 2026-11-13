@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.31)
 # 版はここが唯一の出どころ（Phase 4 で manifest / VERSIONINFO がこれを受け取る）。
 # C は third_party の外部コード（md4c・ADR 0151）のためだけに有効にする。
-project(NeNeNib VERSION 0.1.0 LANGUAGES C CXX)
+project(NeNeNib VERSION 1.0.0 LANGUAGES C CXX)
 
 # manifest（PMv2 DPI・版）と VERSIONINFO は project(... VERSION) からだけ導く。
 # 固定の manifest と版リテラルは CNF-007（eng/conformance.py の version_metadata_checks）が拒否する。

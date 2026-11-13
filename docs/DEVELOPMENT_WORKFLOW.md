@@ -213,22 +213,35 @@ computer-use 無しで見た目を確かめるときは `python eng/verify-windo
 手で書かない生成物と、書き直す道具は次のとおり（一致は CNF-010）。`tests/vim/VimFixtures.hpp` は `python -X utf8 eng/vim-oracle.py --regenerate`（`--only <接頭辞>`）、`src/core/VimKeyNames.hpp`（core の表・fixture の再生と設定の `map` が読む・ADR 0176） は `python eng/vim-oracle.py --key-names`、Vim の大小の写像の表 `src/core/CaseMappingTable.hpp` は `python eng/case-mapping.py --write`（固定の Python の `unicodedata` から・`--check` は違えば 1 で終わる・Issue #781）。
 
 製品の版入力は **`CMakeLists.txt` の `project(... VERSION)`** だけとする。設定画面・manifest・VERSIONINFO・配布物名はビルドがそこから導出し、
-2 か所目に手で書かない。配布物の正規生成経路は次の 1 本である。
+2 か所目に手で書かない。版は素の `x.y.z`（1.0.0 から・Store の版と同じ）で、**`-beta.N` のような札を版にも配布物の名前にも付けない**（#1596・施主決定 D88・NeNe Folio と同じ形）。
+GitHub の配布が試験版であることは、Release の題の「Beta」と pre-release の印だけで示す。`v0.1.0-beta.1`〜`v0.1.0-beta.13` の tag と記録はそのまま残す（beta.13 までは版 0.1.0 の `-Beta <番号>` で梱包した。記録の命令は過去の事実で、今の道具には `-Beta` が無い）。
+同じ版をもう一度配り直す必要が出たとき（Store の再提出・梱包の作り直しなど）は、**版を上げる**（`1.0.1` か `1.1.0`）。公開した版の配布物を同じ版で作り直さない。
+
+配布物の正規生成経路は次の 1 本である。
 
 ```powershell
-pwsh -NoProfile -File eng/package-release.ps1 -Beta 1 -OutputDirectory D:/NeNeNib/releases/<task-id> -Verification docs/quality/<accepted-record>.md
+pwsh -NoProfile -File eng/package-release.ps1 -OutputDirectory D:/NeNeNib/releases/v<x.y.z> -Verification docs/quality/<accepted-record>.md
 ```
 
-Issue #413 / ADR 0115。ベータ番号だけを指定し、数値版はCMakeから導出する。cleanなmain（同じcommitのD側detached作業木も可）とGitHub上の現在のmainの一致を要求する。
+Issue #413 / ADR 0115 / #1596。数値版はCMakeから導出し、配布物の名前は `NeNeNib-<x.y.z>-windows-x64.zip` の 1 通り（`archive_name`・版に `-` が入っていれば道具が断る）。cleanなmain（同じcommitのD側detached作業木も可）とGitHub上の現在のmainの一致を要求する。
 `-Preview`はcleanな作業ブランチで梱包ツールを確かめるためだけに使い、公開用として扱わない。
 このコマンドは固定した toolchain と既存`eng/build-release.ps1 -Ref HEAD`で **単一ゲートとは別のビルドディレクトリ** に clean build し、追跡済みの規約検査とテストの記録を参照し、
 成果物を検査（アーキテクチャ・宣言外の動的依存が無いこと・埋め込み版の一致・同梱一覧の完全一致）してから
-`D:/NeNeNib/releases`または`D:/NeNeNib/outputs`配下の新規ディレクトリへ配布物と `SHA256SUMS` を作る。既存出力・既存Releaseビルド・親のリンク/ジャンクションは拒否し、自動で消さない。配布物の直下は **`NeNeNib.exe`・利用者向け `README.txt`・`LICENSE` だけ**とする。
+`D:/NeNeNib/releases`または`D:/NeNeNib/outputs`配下の新規ディレクトリへ配布物と `SHA256SUMS` を作る。既存出力・既存Releaseビルド・親のリンク/ジャンクションは拒否し、自動で消さない。配布物の直下は **`NeNeNib.exe`・利用者向け `README.txt`・`LICENSE`・`THIRD_PARTY_NOTICES.txt` だけ**とする。
 作成したZIPを新規の`extracted`フォルダへ展開して全bytesを照合し、版・commit・SHA・依存・署名状態・検証記録のSHAを`package.json`へ残す。梱包コマンド自体は起動・タグ作成・公開を行わない。
 公開物の検査と開発中の検証は対象を明記する。関連入力が不変の検証は再利用し、最終 HEAD という理由だけで全件を追加しない（QLT-012）。
 
-公開は squash 統合後の clean な `main` から同じコマンドで作り直し、短い実機起動を確認してから
-`v<version>` の tag と同名 Release へ配布物と `SHA256SUMS` を添付する。公開後に再ダウンロードして照合する。
-署名・インストーラ・自動更新は別の焦点 Issue とする。
+公開の手順（GitHub と Store は同じ commit の同じ exe・記録の雛形は `docs/quality/release-1.0.0-draft.md`）:
 
-Microsoft Store へ出す MSIX は、同じ Release の exe を `pwsh -NoProfile -File eng/package-msix.ps1 -OutputDirectory <新しいディレクトリ> -Zip <上の ZIP> -Store` で包む（Issue #1581・ADR 0186）。版は `project()` の `x.y.z.0` で、`-Store` は先頭が 0 の版を断る。署名・導入・WACK・申請はしない。手順と hide の手でやることは [docs/store/msix.md](store/msix.md)。
+| 順 | 誰 | GitHub（ZIP・試験版） | Microsoft Store（MSIX） |
+| --- | --- | --- | --- |
+| 1 | 設計席 | 版を上げる PR（`project()` の 1 行と、版を見る文書）を main へ | 同じ |
+| 1a | 設計席 | 公開の記録（`docs/quality/release-<x.y.z>-<日付>.md`・前半の根拠だけ・雛形から写す）の文書 PR を main へ。**その merge の commit が公開元**で、梱包の `-Verification` はこの記録を指す | 同じ記録・同じ commit |
+| 2 | 設計席 | clean な main の detached 作業木で上の梱包のコマンド（Release のビルドは 1 回） | 同じ `build/release-<short>/NeNeNib.exe` から `eng/package-msix.ps1 -OutputDirectory D:/NeNeNib/releases/v<x.y.z>/msix -Zip <ZIP> -Store` |
+| 3 | 設計席 | 照合: `package.json`（exe の SHA-256・VERSIONINFO が `x.y.z`）と展開した exe の短い起動 | 照合: `msix.json`（exe の SHA-256 が ZIP と同じ・Identity の Version が `x.y.z.0`・言語は `en-US` が先頭・中身 30 個） |
+| 4 | 設計席 | annotated tag `v<x.y.z>` → GitHub Release（**題に「Beta」**・例 `NeNe Nib 1.0.0 Beta`・**pre-release の印**）に ZIP と `SHA256SUMS` を添付し、再取得して照合 | — |
+| 5 | hide | — | 自己署名の写しで入れて確かめる・WACK（管理者）→ Partner Center に署名なしの `-store.msix` を上げて申請（[docs/store/msix.md](store/msix.md)・[docs/store/submission.md](store/submission.md)） |
+| 6 | 設計席 | 公開の結果を同じ記録の末尾の節へ（文書 PR） | 認定の後に結果を同じ記録へ |
+
+署名・インストーラ・自動更新は別の焦点 Issue とする。
+MSIX の版は `project()` の `x.y.z.0` で、`-Store` は先頭が 0 の版を断る（Issue #1581・ADR 0186）。道具は署名・導入・WACK・申請をしない。手順と hide の手でやることは [docs/store/msix.md](store/msix.md)。

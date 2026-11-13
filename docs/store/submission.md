@@ -15,7 +15,7 @@
 | Publisher | `CN=C37230AA-B52D-403B-9BFD-E7980F088422`（Loupe・Folio と同じ） |
 | PublisherDisplayName | `Hideyuki Mori` |
 | Package Family Name | `HideyukiMori.NeNeNib_3sft4ch5kzywy` |
-| 版 | `1.0.0.0`（D88。GitHub の配布は `0.1.0-beta.N` の札のまま） |
+| 版 | `1.0.0.0`（D88・`project()` の `1.0.0` に `.0`）。GitHub の ZIP も同じ素の版 `1.0.0`（tag `v1.0.0`）で、試験版であることは Release の題の「Beta」と pre-release の印で示す（#1596）。同じ版の作り直しはせず、配り直すときは版を上げる |
 
 予約は申請しないまま 3 か月で外れる（SPECIFICATION の D88）。
 
@@ -34,7 +34,7 @@
 
 | 欄 | 答え | 根拠 |
 | --- | --- | --- |
-| カテゴリ | **開発者ツール（Developer tools）を推す**。次点は仕事効率化（Productivity） | 下の「カテゴリの推し」 |
+| カテゴリ | **開発者ツール（Developer tools）**（決定・D89） | 下の「カテゴリ」 |
 | サブカテゴリ | 画面に出れば「テキストエディタ」に近いもの。無ければ空欄 | 画面の選択肢は未確認 |
 | プライバシーポリシーの URL | `https://github.com/hideyukiMORI/nene-nib/blob/main/PRIVACY.md` | このリポジトリの直下 |
 | Web サイト | `https://github.com/hideyukiMORI/nene-nib` | |
@@ -43,13 +43,13 @@
 | デバイス ファミリ | 「Windows 10/11 Desktop」だけ | 包んだ Win32 のアプリ |
 | 製品の申告 | 「アクセシビリティ」は付けない（検証していない）。「ペンとインク」も付けない | 確かめていない性質を申告しない |
 
-**カテゴリの推し**: 開発者ツール。
+**カテゴリ（決定・D89）**: 開発者ツール。下は決める前に比べた理由（記録として残す）。
 
 - 良い点: 紹介の柱（Vim の操作・構文の色分け・言語サーバー・Markdown）を求める人が探す棚で、Store の主なテキストエディタ
   （コード向けのエディタ）もこの棚に並ぶ。Vim を知っている人に届きやすい。
 - 悪い点: 「メモ帳の代わり」を探す人には見つかりにくい。そこは検索語（メモ帳・notepad・记事本）で補う。
 - 仕事効率化にすると、Markdown のメモを書く人には近いが、Vim と構文の色分けの価値が伝わりにくい。
-- 決めるのは hide。
+- 2026-11-13 夜に hide が開発者ツールに決めた（施主決定 D89 の (3)）。
 
 ### 年齢区分（IARC のアンケート）
 
@@ -72,11 +72,11 @@
 
 設問「この製品は個人情報へのアクセス、収集、または送信を行いますか」:
 
-- **推しは「はい」と答えて PRIVACY.md の URL を入れる。** Nib は使う人の文書（個人情報を含み得る）を読み書きし、
+- **決定（D89）: 「はい」と答えて PRIVACY.md の URL を入れる。** Nib は使う人の文書（個人情報を含み得る）を読み書きし、
   ファイルのパスを端末に保存し、設定したときだけ文書の本文を手元の言語サーバーのプロセスへ渡す。「アクセス」に当たると読める。
   Loupe は画面の画素を読むことと規約 10.5.1 を理由に「はい」と答えて認定された。
 - 「はい」と答えても、ポリシーの中身は D88 の「集めない・送らない」のまま（PRIVACY.md の冒頭の太字）。
-- 「いいえ」と答える案もあるが、その場合も Win32 のアプリにはポリシーの URL を求められる見込み（規約 10.5.1・読み）。決めるのは hide。
+- 「いいえ」と答える案も比べたが（その場合も Win32 のアプリにはポリシーの URL を求められる見込み・規約 10.5.1・読み）、2026-11-13 夜に hide が「はい ＋ URL」に決めた（施主決定 D89 の (3)）。
 
 ### 申請オプション
 
@@ -93,7 +93,7 @@ NeNe Nib is an existing Win32 desktop text editor (C++, no UWP components) packa
 入力欄は申請オプションのページの「認定の注意書き」の説明にある「追加のテスト情報」のリンクの先（Loupe の記録）。
 
 ```text
-No account or sign-in is needed. To test: launch the app, type in the untitled document, press Ctrl+S to save it, and press Ctrl+O to open a file. Ctrl+Shift+Space (or a click on "通常 | Vim" in the status bar) switches between ordinary editing and Vim editing. Open a .md file and press Ctrl+Shift+M to show the Markdown preview. Ctrl+P lists open tabs, recent files and files in the same folder; F1 lists every operation. The language-server feature is off by default and starts nothing unless a command is entered in the settings file. The app makes no network connections.
+No account or sign-in is needed. To test: launch the app, type in the untitled document, press Ctrl+S to save it, and press Ctrl+O to open a file. Ctrl+Shift+Space (or a click on "Basic | Vim" in the status bar; "通常 | Vim" in Japanese and "标准 | Vim" in Chinese) switches between ordinary editing and Vim editing. Open a .md file and press Ctrl+Shift+M to show the Markdown preview. Ctrl+P lists open tabs, recent files and files in the same folder; F1 lists every operation. The language-server feature is off by default and starts nothing unless a command is entered in the settings file. The app makes no network connections.
 ```
 
 WACK の任意の試験で FAIL や WARNING が出たら、その試験の名前と理由をこの欄の末尾に 1 段落で足す（Folio は「Blocked executables」の FAIL をここで説明して認定された）。
@@ -106,17 +106,20 @@ WACK の任意の試験で FAIL や WARNING が出たら、その試験の名前
 
 設計席・席がすること（リポジトリ）と、hide の手（管理者権限・Partner Center）を分ける。
 
-| 順 | 誰 | すること | 出力・確かめ |
-| --- | --- | --- | --- |
-| 1 | 席 | 表示言語（#1019）を main に入れる | 3 言語が切り替わる。入らなければ listing.md の「表示は…」の文を事実に直す |
-| 2 | 席 | アプリアイコン一式（D87・`#461136`）: `.ico` と MSIX の PNG と Store の 300×300 | 別の Issue |
-| 3 | 席 | MSIX を作る道具（#1581）: identity・版 `1.0.0.0`・runFullTrust・言語 ja / en / zh-Hans・makepri・makeappx（署名なし）・unpack して exe が zip と同じバイト列かの照合 | `.msix`・中身の一覧・exe の SHA-256 |
-| 4 | hide | 自己署名の証明書で MSIX に署名して入れる（証明書を `LocalMachine\TrustedPeople` に入れるのに管理者権限が要る。`.pfx` はリポジトリに置かない） | 起動する |
-| 5 | hide | packaged の実機の確かめ（下の表） | 結果を設計席へ。Store 版の登録の扱いは別の ADR |
-| 6 | 設計席 | スクリーンショット 5 枚 × 言語（[screenshots.md](screenshots.md)・窓を前に出すので hide の了承の後） | PNG |
-| 7 | hide | WACK（Windows App Certification Kit）を管理者で 1 回 | FAIL 0。WARNING と任意の試験の FAIL は認定の注意書きで説明 |
-| 8 | hide | Partner Center に署名なしの `.msix` を上げる（Store が署名する）。この文書と listing.md の欄を埋めて申請 | 「Validated」・runFullTrust の承認の警告は想定どおり |
-| 9 | 設計席 | 認定の後に結果を `docs/quality/` に記録し、この文書の「確かめていないこと」を更新 | |
+| 順 | 誰 | すること | 出力・確かめ | 状態 |
+| --- | --- | --- | --- | --- |
+| 1 | 席 | 表示言語（#1019）を main に入れる | 3 言語が切り替わる | **済み**（T1・#1592〜#1595・#1602・ADR 0123 の追補・CNF-016） |
+| 2 | 席 | アプリアイコン一式（D87・`#461136`）: `.ico` と MSIX の PNG と Store の 300×300 | `docs/images/store/store-logo-300.png` ほか | **済み**（#1580・ADR 0185） |
+| 3 | 席 | MSIX を作る道具（#1581）: identity・版 `x.y.z.0`・runFullTrust・言語 `en-US`（既定）`ja-JP` `zh-Hans`・makepri・makeappx（署名なし）・unpack して exe が ZIP と同じバイト列かの照合 | `.msix`・`msix.json`・`SHA256SUMS` | **済み**（#1581・ADR 0186） |
+| 3a | 席 | PRIVACY.md と 3 言語の掲載文（[listing.md](listing.md)）・この文書 | | **済み**（#1582） |
+| 3b | 席 | 版を `1.0.0` に上げ、ZIP の名前から `-beta.N` を外す（#1596） | ZIP `NeNeNib-1.0.0-windows-x64.zip`・MSIX `NeNeNib-1.0.0.0-windows-x64-store.msix` | 済み（PR #1621 の merge）・予行は作業枝で 2 回（11-13・11-14・配る物ではない） |
+| 3c | 設計席 | 公開元の main で ZIP と `-Store` の MSIX を作る（[DEVELOPMENT_WORKFLOW.md](../DEVELOPMENT_WORKFLOW.md) の公開の手順） | `D:/NeNeNib/releases/v1.0.0/` | 未（#1616 の直しは main に入った。版 1.0.0 の main から作る） |
+| 4 | hide | 自己署名の証明書で MSIX の写しに署名して入れる（証明書を `LocalMachine\TrustedPeople` に入れるのに管理者権限が要る。`.pfx` はリポジトリに置かない） | 起動する | 未 |
+| 5 | hide | packaged の実機の確かめ（下の表） | 結果を設計席へ。Store 版の登録の扱いは別の ADR | 未 |
+| 6 | 設計席 | スクリーンショット 5 枚 × 言語（[screenshots.md](screenshots.md)・窓を前に出すので hide の了承の後） | PNG | 未 |
+| 7 | hide | WACK（Windows App Certification Kit）を管理者で 1 回 | FAIL 0。WARNING と任意の試験の FAIL は認定の注意書きで説明 | 未 |
+| 8 | hide | Partner Center に署名なしの `-store.msix` を上げる（Store が署名する）。この文書と listing.md の欄を埋めて申請 | 「Validated」・runFullTrust の承認の警告は想定どおり | 未 |
+| 9 | 設計席 | 認定の後に結果を `docs/quality/` の記録（雛形 `release-1.0.0-draft.md`）に書き、この文書の「確かめていないこと」を更新 | | 未 |
 
 ### packaged の実機の確かめ（順 5）
 
@@ -129,15 +132,18 @@ WACK の任意の試験で FAIL や WARNING が出たら、その試験の名前
 | 保存（任意のフォルダ・一時ファイルの置き換え） | 保存できる | ADR 0135 |
 | 印刷（F1） | 印刷の窓が出る | XPS の印刷 |
 
-## MSIX の道具（#1581）の出力の置き場（案）
+## 出力の置き場（#1581 の道具の形）
 
-- リポジトリの外の `D:\NeNeNib\releases\1.0.0\` に置く（Folio の `D:\NeNeFolio\releases\1.0.0\` と同じ形）。
-  - `NeNeNib-v1.0.0-windows-x64-store.msix`・中身の一覧・exe の SHA-256・道具の記録
+- リポジトリの外の `D:\NeNeNib\releases\v1.0.0\` に置く（道具は `D:/NeNeNib/releases`・`D:/NeNeNib/outputs` の下の新しいディレクトリにだけ書く）。
+  - `zip\NeNeNib-1.0.0-windows-x64.zip`・`SHA256SUMS`・`package.json`（`eng/package-release.ps1` の出力）
+  - `msix\NeNeNib-1.0.0.0-windows-x64-store.msix`・`SHA256SUMS`・`msix.json`・`layout\` `work\` `unpacked\`（`eng/package-msix.ps1 -Store` の出力。名前の版は manifest の Identity の Version と同じ 4 つ組で、`v` は付かない）
   - `wack\`（WACK の報告）
-  - `store-listing\{ja-JP,en-US,zh-CN}\`（listing.md から作る貼り付け用のテキスト。作るなら道具で生成し、手で直さない）
-  - `screenshots\{ja-JP,en-US,zh-CN}\`
+  - `store-listing\{en-US,ja-JP,zh-Hans}\`（listing.md から作る貼り付け用のテキスト。作るなら道具で生成し、手で直さない）
+  - `screenshots\{en-US,ja-JP,zh-Hans}\`
 - `.msix` と `.pfx` はリポジトリに入れない。リポジトリには記録（`docs/quality/` の日付つきの文書）だけを置く。
-- 置き場は #1581 の席が決めた形があればそちらに従い、この節を直す。
+
+**中国語の札**: manifest の `Resources` は `zh-Hans`（文字の種類で言う BCP-47 の札・表示言語の表の中国語（簡体字）と同じ）で、Partner Center は package が宣言した言語から掲載の言語を出す（Microsoft の文書の読み）。
+画面の札が `zh-Hans`・`zh-CN`・`zh-Hans-CN` のどれで出るか、別々の掲載になるかは**確かめていない**（V-1589 の L6）。中国語（簡体字）の掲載は Partner Center が出した 1 つにだけ書き、`zh-CN` を別に足さない。
 
 ## 確かめていないこと
 
