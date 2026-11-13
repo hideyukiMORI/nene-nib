@@ -30,6 +30,7 @@
 #include "UiTextsSimplifiedChinese.hpp"
 #include "VimMode.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <optional>
@@ -248,6 +249,27 @@ void verify_state_and_frame()
     expect(editor.controller().frame().language == core::DisplayLanguage::japanese,
            "the frame carries the state's display language");
 }
+
+// T1d（#1595）: 中国語の列に英語の写しが残っていない。どの行も ASCII
+// の外の字を含み、英語の行と違う。
+void verify_chinese_translated()
+{
+    std::size_t untranslated = 0;
+    for (std::size_t index = 0; index < core::ui_message_count; ++index)
+    {
+        const auto message = static_cast<core::UiMessage>(index);
+        const std::string_view chinese =
+            core::ui_text(message, core::DisplayLanguage::simplified_chinese);
+        const bool ascii_only = std::ranges::all_of(
+            chinese, [](char unit) { return static_cast<unsigned char>(unit) < 0x80U; });
+        const bool copied = chinese == core::ui_text(message, core::DisplayLanguage::english);
+        untranslated += ascii_only || copied ? 1U : 0U;
+    }
+    expect(untranslated == 0, "every Chinese text is translated (no ASCII-only or English copy)");
+    expect(core::ui_text(core::UiMessage::tab_untitled,
+                         core::DisplayLanguage::simplified_chinese) == "无标题",
+           "the Chinese untitled tab is the Notepad wording");
+}
 } // namespace
 
 void verify_ui_texts_scope()
@@ -258,5 +280,6 @@ void verify_ui_texts_scope()
     verify_japanese_save_and_palette();
     verify_japanese_status_and_operations();
     verify_state_and_frame();
+    verify_chinese_translated();
 }
 } // namespace nenenib::tests
