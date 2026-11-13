@@ -716,6 +716,7 @@ void verify_vim_fixture(const VimFixture &fixture)
     static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
     static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     arrange_vim_viewport(controller, fixture);
+    apply_vim_fixture_settings(controller, fixture);
     store_vim_fixture_macro(controller, fixture);
     // oracle は鍵を 1 本の :normal! で流すので、鍵が失敗したら残りを流さない（Issue #230）。
     vim_normal(controller, fixture.keys);

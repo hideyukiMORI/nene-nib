@@ -23,8 +23,7 @@ struct VimViewportFixture
     // 折り返す窓で、鍵の前に first_visible の行の上から隠れている画面行の数（skipcol / 幅・
     // ADR 0146 の決定 5）。
     std::uint32_t first_row = 0;
-    // fixture の settings の `set scrolloff=N`（#1239）。0 は打たない（既定の 0 のまま）。再生は
-    // 窓を作ってから `:set so=N` を打つ。
-    std::uint32_t scrolloff = 0;
+    // 余白（scrolloff）はここに持たない。fixture の settings 欄の `set scrolloff=N` の行を、再生が
+    // ほかの設定と同じ道で窓の後に打つ（#1239 → #1626）。
 };
 } // namespace nenenib::tests

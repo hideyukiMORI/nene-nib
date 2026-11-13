@@ -11,10 +11,12 @@
 // line / column の比較が意味を持たないので `text` の 1 行だけを書く。
 // viewport つきの件（生成器 5・#1224）は 8 欄の後ろに
 //   visible_lines \t first_visible \t start_line \t start_column \t expected_first_visible \t
-//   expected_scroll_lines \t scrolloff
-// の 7 欄を足す。窓は fixture の再生と同じ arrange_vim_viewport で置き、余白は窓を置いた後で
-// `:set so=` を打つ（契約 --vim-view の placed_window と同じ順）。比べる欄に `first_visible` と
-// `scroll`（Vim の 'scroll'）が加わる。鍵の記法の表
+//   expected_scroll_lines
+// の 6 欄を足す。窓は fixture の再生と同じ arrange_vim_viewport で置く。比べる欄に
+// `first_visible` と `scroll`（Vim の 'scroll'）が加わる。どちらの形も、変更の印の前に
+// `settings=<行>`（行は改行でつなぐ・oracle の replayed_settings）の欄があれば、窓を置いた後・鍵の
+// 前に fixture の再生と同じ apply_vim_fixture_settings で 1 行ずつ `:` の行として打つ（余白の
+// `set scrolloff=N` もここ・#1626）。Nib が断る行は試験の失敗として数える。鍵の記法の表
 // （src/core/VimKeyNames.hpp）に無い `<…>` を含む件と、欄の数が違う行と、数の欄が
 // std::uint32_t の範囲を超える行は `skip <name> <理由>`（#1233）。
 // どちらの形も、最後の欄が `change=<m><c><u>`（各 0 か 1・oracle の fixture の `change` と同じ
@@ -74,8 +76,8 @@ using Fields = std::vector<std::string>;
 
 // 1 件の欄の数（name text keys expected line column register register_kind）。
 constexpr std::size_t field_count = 8;
-// viewport つきの件の欄の数（上の 8 欄と viewport の 7 欄・#1224）。
-constexpr std::size_t viewport_field_count = 15;
+// viewport つきの件の欄の数（上の 8 欄と viewport の 6 欄・#1224・余白は settings の欄・#1626）。
+constexpr std::size_t viewport_field_count = 14;
 constexpr std::size_t viewport_numbers = viewport_field_count - field_count;
 using ViewportValues = std::array<std::size_t, viewport_numbers>;
 // 変更の印の欄（modified changed undo・ADR 0181）。
@@ -83,6 +85,7 @@ using ChangeMarks = std::array<bool, 3>;
 // 本文の後の line と column。
 using Place = std::pair<std::size_t, std::size_t>;
 constexpr std::string_view change_prefix = "change=";
+constexpr std::string_view settings_prefix = "settings=";
 constexpr std::size_t read_chunk = 65536;
 // 数の欄の上限。fixture の line・column と窓の値は std::uint32_t に狭めるので、超える欄は読めない
 // 欄として skip にする（#1233・R2-1）。
@@ -257,8 +260,8 @@ void write_mismatch(const std::string &name, std::string_view field, std::string
                " actual=" + escaped(actual));
 }
 
-// viewport の 7 欄（visible_lines first_visible start_line start_column expected_first_visible
-// expected_scroll_lines scrolloff）から fixture の窓の値を作る。余白は最後の欄で別に読む。
+// viewport の 6 欄（visible_lines first_visible start_line start_column expected_first_visible
+// expected_scroll_lines）から fixture の窓の値を作る。
 // どの欄も number_of が number_limit 以下に収めてあるので、狭めで値は変わらない。
 [[nodiscard]] VimViewportFixture viewport_of(const ViewportValues &values)
 {
@@ -368,9 +371,21 @@ void write_mismatch(const std::string &name, std::string_view field, std::string
     return marks;
 }
 
-// 本文を開いて Vim にし、fixture の窓を置いてから余白を打つ（契約 --vim-view の placed_window
-// の順）。
-void prepare(Editing &editing, const VimFixture &fixture, std::size_t scrolloff)
+// 最後の欄（変更の印を外した後）が設定の行なら外して読む（#1626）。無ければ空。
+[[nodiscard]] std::string taken_settings(Fields &fields)
+{
+    if (fields.empty() || !fields.back().starts_with(settings_prefix))
+    {
+        return {};
+    }
+    std::string settings = unescaped(std::string_view(fields.back()).substr(settings_prefix.size()));
+    fields.pop_back();
+    return settings;
+}
+
+// 本文を開いて Vim にし、fixture の窓を置いてから設定の行を打つ（verify_vim_fixture と契約
+// --vim-view の placed_window と同じ順）。
+void prepare(Editing &editing, const VimFixture &fixture)
 {
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string(fixture.text)});
@@ -378,22 +393,17 @@ void prepare(Editing &editing, const VimFixture &fixture, std::size_t scrolloff)
     static_cast<void>(controller.apply_frame(OpenDocument{nenenib::tests::sample_path()}));
     static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     nenenib::tests::arrange_vim_viewport(controller, fixture);
-    if (scrolloff > 0)
-    {
-        static_cast<void>(
-            nenenib::tests::run_ex(controller, "set so=" + std::to_string(scrolloff)));
-    }
+    nenenib::tests::apply_vim_fixture_settings(controller, fixture);
 }
 
 // verify_vim_fixture と同じ道で 1 件を流し、違った欄ごとに 1 行を書く。viewport つきの件は
-// 窓を置いてから余白を打つ。
+// 窓を置いてから設定の行を打つ。
 void replay_one(const Fields &fields, Place place, const std::optional<ViewportValues> &window,
-                const std::optional<ChangeMarks> &change)
+                const std::optional<ChangeMarks> &change, const std::string &settings)
 {
     const auto [line_number, column] = place;
     const std::optional<VimViewportFixture> viewport =
         window.has_value() ? std::optional{viewport_of(window.value())} : std::nullopt;
-    const std::size_t scrolloff = window.has_value() ? window.value().at(viewport_numbers - 1) : 0;
     const std::string &name = fields.at(0);
     const std::string text = unescaped(fields.at(1));
     const std::string keys = unescaped(fields.at(2));
@@ -409,10 +419,20 @@ void replay_one(const Fields &fields, Place place, const std::optional<ViewportV
                              static_cast<std::uint32_t>(column),
                              register_text,
                              register_kind,
-                             viewport};
+                             viewport,
+                             std::nullopt,
+                             std::nullopt,
+                             settings};
     Editing editing;
     EditorController &controller = editing.controller();
-    prepare(editing, fixture, scrolloff);
+    const std::size_t failures = nenenib::tests::failure_count();
+    prepare(editing, fixture);
+    // Nib が断った設定の行（apply_vim_fixture_settings の検査）は黙って流さず違いにする（#1626）。
+    if (nenenib::tests::failure_count() != failures)
+    {
+        write_mismatch(name, "setting", "taken", settings);
+        return;
+    }
     nenenib::tests::vim_normal(controller, keys);
     const TextPosition caret = controller.frame().caret.position;
     const std::size_t first_visible = controller.frame().first_visible.value;
@@ -472,6 +492,7 @@ void replay_line(std::string_view line)
     }
     Fields fields = fields_of(line);
     const std::optional<ChangeMarks> change = taken_change(fields);
+    const std::string settings = taken_settings(fields);
     const std::string name = fields.at(0);
     if (!known_field_count(fields.size()))
     {
@@ -496,7 +517,8 @@ void replay_line(std::string_view line)
     }
     if (fields.size() == field_count)
     {
-        replay_one(fields, Place{line_number.value(), column.value()}, std::nullopt, change);
+        replay_one(fields, Place{line_number.value(), column.value()}, std::nullopt, change,
+                   settings);
         return;
     }
     const auto values = viewport_values(fields);
@@ -506,7 +528,7 @@ void replay_line(std::string_view line)
                    std::to_string(number_limit));
         return;
     }
-    replay_one(fields, Place{line_number.value(), column.value()}, values, change);
+    replay_one(fields, Place{line_number.value(), column.value()}, values, change, settings);
 }
 
 [[nodiscard]] std::string whole_stream(std::FILE *stream)
