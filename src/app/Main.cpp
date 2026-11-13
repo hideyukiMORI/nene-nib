@@ -5,6 +5,7 @@
 #include "DeviceWarmup.hpp"
 #include "EditorController.hpp"
 #include "EditorWindow.hpp"
+#include "LastResortArming.hpp"
 #include "LocalSettingsPath.hpp"
 #include "Milestone.hpp"
 #include "OpenDocument.hpp"
@@ -262,6 +263,30 @@ void bind_work_signal(const nenenib::ui::win32::EditorWindow &window, Adapters &
     (adapters.bind(window.work_signal()), ...);
 }
 
+// ワーカーの最初の仕事（device の生成・ADR 0131）。同じ仕事の頭で、最後の砦の手続きをワーカーの
+// スレッドにも置く（std::set_terminate はスレッドごと・ADR 0137 の追補 #1625）。post の順と回数は
+// 変えない。
+void make_device_first(nenenib::adapters::win32::Win32Worker &worker,
+                       nenenib::ui::win32::DeviceWarmup &warmup)
+{
+    worker.post(
+        [&warmup](const std::stop_token &stop)
+        {
+            nib_adapters::arm_last_resort_thread();
+            warmup.make(stop.stop_requested());
+        });
+}
+
+// 最後の砦（ADR 0137 の追補 #1625）。UI スレッドで捕まえていない例外が上ったら、決定 9 と同じ退避を
+// 1 回だけ回してから既定の終わり方へ渡す（箱は出さない・使う人への知らせは次の起動の復元の問い）。
+// controller の直後に作り、先に壊す。
+[[nodiscard]] nib_adapters::LastResortArming
+last_resort_for(nenenib::application::EditorController &controller)
+{
+    return nib_adapters::LastResortArming([&controller]
+                                          { return controller.back_up_before_defect(); });
+}
+
 // 裏の仕事のワーカー 1 本と、それを借りて同じフォルダを読む adapter（ADR 0062 の決定 5・10）。
 // スレッドはここでは起きず、最初の仕事で起きる。controller より先に宣言して後に壊す
 // （壊れる順は 窓 → controller → adapter → ワーカー → device の箱）。
@@ -294,10 +319,9 @@ int run(HINSTANCE instance)
     // 裏の仕事のワーカーと device の箱（宣言の順と壊れる順は run の上の注記）。
     nenenib::ui::win32::DeviceWarmup warmup;
     nenenib::adapters::win32::Win32Worker worker;
-    worker.post([&warmup](const std::stop_token &stop) { warmup.make(stop.stop_requested()); });
+    make_device_first(worker, warmup);
     nenenib::adapters::win32::Win32FolderAdapter folders(worker);
-    // Markdown のプレビューの解析も同じワーカーを借りる（ADR 0155 の決定 5・壊れる順は folders
-    // と同じ）。
+    // Markdown の解析も同じワーカーを借りる（ADR 0155 の決定 5・壊れる順は folders と同じ）。
     nenenib::adapters::win32::Win32MarkdownAdapter markdown(worker);
     nenenib::ui::win32::BodyTextLayouts text_layouts;
     // 字体の一覧は ui/win32 が DirectWrite から読み、adapters が OS の照合順に並べる（#696）。
@@ -322,6 +346,7 @@ int run(HINSTANCE instance)
             reads,        language_server, wall_clock, printer,    shell_registration,
             images,       start_lists,     ui_language},
         initial_documents(given));
+    const auto last_resort = last_resort_for(controller);
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);

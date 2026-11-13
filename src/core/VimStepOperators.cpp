@@ -1496,5 +1496,34 @@ namespace detail
     }
     return performed(with, text, caret, range.value());
 }
+
+// `8g8`（#1617 のレビュー M1・Vim の nv_g_cmd の '8'）。回数がちょうど 8 なら Vim
+// は不正なバイト列を 探し、見つからなければ鳴る。Nib の本文はいつも正しい UTF-8 なので必ず鳴る。
+[[nodiscard]] bool finds_illegal_byte(const VimState &state, VimAction action) noexcept
+{
+    constexpr std::size_t illegal_search_count = 8;
+    const auto count = combined_count(state);
+    return action == VimAction::show_character_bytes && count.has_value() &&
+           count.value().value == illegal_search_count;
+}
+
+// 表示だけの `g` の鍵の NORMAL とオペレータ待ち（VimActionGroup::display）。NORMAL
+// は回数とレジスタの 指定を消すだけで失敗にしない（`gax` の `x` が効く）。オペレータ待ちは、Vim の
+// nv_g_cmd が動かずに 返った後の do_pending_operator
+// と同じく、キャレットの上の空の範囲にオペレータを効かせる（`dga` は 何も消さず、`cga` は INSERT
+// へ、`yga` は空を yank し、`>ga` は行を字下げする・`0` を 0 桁目で 打ったのと同じ道・実測）。
+[[nodiscard]] VimStep displayed(const VimState &state, const VimEditorView &view, VimAction action)
+{
+    if (finds_illegal_byte(state, action))
+    {
+        return failed(cancelled(state), VimRepeatFailure::refused);
+    }
+    if (!state.pending.has_value())
+    {
+        return cancelled(state);
+    }
+    const Offset caret = view.selection.caret;
+    return performed(state, view.text, caret, characters_between(caret, caret));
+}
 } // namespace detail
 } // namespace nenenib::core

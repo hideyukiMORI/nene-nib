@@ -732,6 +732,11 @@ const std::vector<AutosaveId> &EditorState::autosave_ids() const noexcept
     return autosave_ids_;
 }
 
+std::uint64_t EditorState::tab_switches() const noexcept
+{
+    return tab_switches_;
+}
+
 std::size_t EditorState::parked_index_of(std::size_t position) const noexcept
 {
     // 脇の列は帯の位置からアクティブを抜いた順なので、アクティブより右は 1 つずれる。
@@ -953,6 +958,7 @@ EditorState EditorState::switched_to(std::size_t position, const DocumentState &
     next.parked_.erase(std::next(next.parked_.begin(), distance_of(position)));
     next.active_ = position;
     next.spread(target);
+    ++next.tab_switches_;
     return next;
 }
 

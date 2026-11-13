@@ -143,6 +143,30 @@ void placed_after_effect(EditorState &state, const core::VimStep &step)
     return hit.value().position;
 }
 
+// Ctrl-G / Ctrl-T の後の検索の起点（ADR 0043 の決定 3）。着いた当たりから入力行と反対の向きへ
+// 回数ぶん戻った当たりで、そこから入力行の向きへ探すと着いた当たりに戻る。'nowrapscan' で手前に
+// 当たりが無いとき（回数 1）は本文の端を起点にする: 手前に当たりが無いので、端から探しても着いた
+// 当たりに着く（Vim の may_adjust_incsearch_highlighting は search_start を当たりの 1 文字手前へ
+// 置くだけで、手前の当たりを探さない・ex_getln.c の読み・oracle は incsearch を測れない・#1622）。
+[[nodiscard]] std::optional<core::TextPosition> hop_start(const core::TextBuffer &text,
+                                                          const core::VimPattern &pattern,
+                                                          const core::VimMatchRequest &request)
+{
+    const auto found = found_match(text, pattern, request);
+    if (found.has_value() || request.wrapscan || request.count != 1)
+    {
+        return found;
+    }
+    const core::TextPosition edge = request.direction == core::VimSearchDirection::backward
+                                        ? core::TextPosition{}
+                                        : text.position_of(core::Offset{text.size_bytes()});
+    if (edge == request.from)
+    {
+        return std::nullopt;
+    }
+    return edge;
+}
+
 // 入力中のパターンの次の当たり。検索の起点から入力行の向きへ、確定の鍵と同じ回数だけ探す
 // （ADR 0041 の決定 3・ADR 0043 の決定 1）。解析の失敗と不一致は当たり無し。
 [[nodiscard]] std::optional<core::TextPosition> previewed_match(const EditorState &state,
@@ -158,9 +182,10 @@ void placed_after_effect(EditorState &state, const core::VimStep &step)
     {
         return std::nullopt;
     }
-    return found_match(
-        state.text(), pattern.value(),
-        core::VimMatchRequest{from, line->direction(), core::vim_search_count(state.vim())});
+    return found_match(state.text(), pattern.value(),
+                       core::VimMatchRequest{from, line->direction(),
+                                             core::vim_search_count(state.vim()),
+                                             state.vim().wrapscan});
 }
 
 // 境界が文字の途中か CRLF の間なら、覆う範囲を外へ 1 バイト広げる向きに動かせるか。
@@ -1362,16 +1387,17 @@ void EditorController::accept(const SearchHop &intent)
         return;
     }
     const std::size_t count = core::vim_search_count(state_.vim());
-    const auto match =
-        found_match(state_.text(), pattern.value(),
-                    core::VimMatchRequest{preview.value().match.value(), intent.relative, count});
+    const bool wrapscan = state_.vim().wrapscan;
+    const auto match = found_match(
+        state_.text(), pattern.value(),
+        core::VimMatchRequest{preview.value().match.value(), intent.relative, count, wrapscan});
     if (!match.has_value())
     {
         return;
     }
-    const auto from =
-        found_match(state_.text(), pattern.value(),
-                    core::VimMatchRequest{match.value(), core::opposite(line->direction()), count});
+    const auto from = hop_start(
+        state_.text(), pattern.value(),
+        core::VimMatchRequest{match.value(), core::opposite(line->direction()), count, wrapscan});
     if (!from.has_value())
     {
         return;

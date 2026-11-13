@@ -84,6 +84,7 @@ records in `docs/quality/`.
     clipboard `"+` `"*` (and `:set clipboard=unnamed`); macros `q @ @@` with counts; a replay by `.` or `@`
     stops after 100,000 keys, drops the rest and says so in one line (decision D75);
   - search `/ ? n N * #` with `hlsearch` and `incsearch` on by default (`:noh`, Ctrl-G / Ctrl-T while typing),
+    `gn` `gN` select the last search's match (also after an operator: `cgn` + `.` changes the next one),
     `:set ignorecase` / `smartcase`, and Up / Down history on the `:` and search lines; matchparen highlights
     the partner bracket (on by default); patterns (shared by search and `:s`) take a `magic` subset with `*`
     and the multis on one atom `\+ \= \? \{n} \{n,} \{,m} \{n,m}` and the shortest `\{-n,m}`
@@ -98,7 +99,12 @@ records in `docs/quality/`.
     ([ADR 0152](docs/adr/0152-vim-marks-are-document-values-adjusted-by-edits.md)), the jump list `Ctrl-o`
     `Ctrl-i` and the change list `g;` `g,` (in Vim mode Ctrl+O is the jump list, so opening a file is Ctrl+Shift+O);
   - `:set relativenumber`, `:set scrolloff=`, virtual columns (Tab = 8, wide = 2), literal CR in LF files,
-    Esc everywhere.
+    Esc everywhere;
+  - `:set` takes Vim's short names (`hls is ic scs rnu so ws cb et sw ts`), several arguments in one line
+    (`:set ic scs`; a wrong one stops the line and keeps the ones before it), `name?` `noname?` `name&`
+    `name<` `name:val` `+=` `-=` `^=`, and `:se` `:setl` `:setg`; `:set nowrapscan` stops searches at the end
+    of the text; `magic`, `noexpandtab`, `sw=8` and `ts=8` (the values Nib always has) are accepted and other
+    values of them, `number` and `all&` are refused (#1561).
 
   Basic Ex `:w`, `:q`, `:q!`, `:wq`, `:x` and `:{N}` work on the current tab. `:q` refuses unsaved changes;
   `:wq` always writes, while `:x` writes only changes. These saves accept filenames: `:w name` names an
@@ -145,7 +151,9 @@ records in `docs/quality/`.
   read. The encoding and line ending for saving can be chosen by clicking them in the status bar, with
   `:set fenc=` / `:set ff=`, or from F1. Unsaved mark and "save?" prompt; the prompt has its own
   button labels. Unsaved edits are autosaved every 30 seconds and offered back once on the next start after the
-  process ends abnormally ([ADR 0137](docs/adr/0137-autosave-every-30-seconds.md)). Done.
+  process ends abnormally ([ADR 0137](docs/adr/0137-autosave-every-30-seconds.md)). If an uncaught C++ exception
+  is about to end the process on the window thread, Nib backs up the unsaved edits once more and then ends the
+  default way, so the next start offers them back (the last resort, #1625). Done.
 - **FR-009 tab restore** — starting without a file argument brings back the previous tabs (saved files only): their
   order, the tab in view, caret and scroll position. Only the tab in view is read at startup; the others are read
   when first viewed, and a missing file is dropped with a one-line notice. Done; window position and size are planned.

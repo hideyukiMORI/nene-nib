@@ -92,6 +92,8 @@ constexpr auto fixed_candidates = std::to_array<std::string_view>({"colorscheme"
                                                                    "set noignorecase",
                                                                    "set smartcase",
                                                                    "set nosmartcase",
+                                                                   "set wrapscan",
+                                                                   "set nowrapscan",
                                                                    "set relativenumber",
                                                                    "set norelativenumber",
                                                                    "set scrolloff=",

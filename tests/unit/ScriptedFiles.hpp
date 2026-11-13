@@ -12,6 +12,7 @@
 #include <map>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -80,6 +81,12 @@ class ScriptedFiles final : public FilePort
         write_failure_ = failure;
     }
 
+    // 次からの write が例外を投げる（欠陥の替え玉・最後の砦の契約 #1625）。
+    void throw_on_writes() noexcept
+    {
+        throws_on_write_ = true;
+    }
+
     [[nodiscard]] const std::string &written() const noexcept
     {
         return written_;
@@ -139,6 +146,10 @@ class ScriptedFiles final : public FilePort
                                                          FileWriteMode mode) override
     {
         write_mode_ = mode;
+        if (throws_on_write_)
+        {
+            throw std::runtime_error("scripted write defect");
+        }
         if (write_failure_.has_value())
         {
             return std::unexpected(write_failure_.value());
@@ -171,6 +182,7 @@ class ScriptedFiles final : public FilePort
 
   private:
     Bytes content_{std::unexpected(FileFailure::not_found)};
+    bool throws_on_write_ = false;
     std::optional<std::expected<FilePath, FileFailure>> resolved_;
     std::string resolve_input_;
     FileWriteMode write_mode_ = FileWriteMode::replace;
