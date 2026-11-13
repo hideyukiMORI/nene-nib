@@ -248,6 +248,42 @@ std::vector<OffsetRange> vim_window_matches(std::string_view text, OffsetRange w
     return matches;
 }
 
+std::optional<OffsetRange> vim_match_from(const TextBuffer &text, const VimPattern &pattern,
+                                          Offset at)
+{
+    VimSearchWalk walk(text, pattern);
+    const std::size_t start = text.line_start(text.position_of(at).line).value;
+    const std::string_view line = walk.line_at(start);
+    const auto match = pattern.matched(line, std::min(at.value - start, line.size()));
+    if (!match.has_value())
+    {
+        return std::nullopt;
+    }
+    return OffsetRange{Offset{start + match.value().begin}, Offset{start + match.value().end}};
+}
+
+std::optional<OffsetRange> vim_last_match_ending_by(const TextBuffer &text,
+                                                    const VimPattern &pattern, Offset at)
+{
+    VimSearchWalk walk(text, pattern);
+    const std::size_t start = text.line_start(text.position_of(at).line).value;
+    const std::string_view line = walk.line_at(start);
+    const std::size_t limit = std::min(at.value - start, line.size());
+    std::optional<OffsetRange> found;
+    visit_line_matches(line, pattern,
+                       [&found, limit, start](const VimPatternMatch &match)
+                       {
+                           if (match.end > limit)
+                           {
+                               return false;
+                           }
+                           found =
+                               OffsetRange{Offset{start + match.begin}, Offset{start + match.end}};
+                           return true;
+                       });
+    return found;
+}
+
 namespace
 {
 // 折り返しで最初の当たりへ戻ったら、当たりの列は step 歩ごとの繰り返しなので、残りの回数から
