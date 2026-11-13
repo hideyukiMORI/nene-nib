@@ -8,11 +8,15 @@ namespace nenenib::core
 // せず、この値で拒否してメッセージを出す。Vim には無い失敗なので文言も本実装のものである。
 enum class VimPatternFailure : std::uint8_t
 {
-    // `\(` `\)`
+    // 閉じない `\(`（Vim の E54）
     group,
-    // `\|`
-    branch,
-    // 群に付く量（`\(ab\)*` `\(ab\)\+` `\(ab\)\{2}`・段 2・ADR 0184 の決定 3）と対の無い `\}`
+    // 閉じない `\%(`（Vim の E53・ADR 0184 の決定 3）
+    unclosed_plain_group,
+    // 対の無い `\)`（Vim の E55）
+    unmatched_close,
+    // 10 個目の `\(`（Vim の E872）
+    too_many_groups,
+    // 対の無い `\}` と、量を掛ける 1 文字の中に群の端がある形（`\(e\)` + 結合文字 + `\+`）
     quantifier,
     // `\{` の中の不正（`a\{` `a\{x}` `a\{1,2,3}`・Vim の E554・ADR 0184 の決定 2）
     brace,
