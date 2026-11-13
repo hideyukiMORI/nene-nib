@@ -17,6 +17,7 @@
 #include "PaletteChoiceProbe.hpp"
 #include "PatternCostProbe.hpp"
 #include "PatternProbe.hpp"
+#include "PatternProgramProbe.hpp"
 #include "PieceListProbe.hpp"
 #include "PreviewCaretProbe.hpp"
 #include "ProbeDispatch.hpp"
@@ -1023,6 +1024,17 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(PatternProgramWorkload workload)
+{
+    switch (workload)
+    {
+    case PatternProgramWorkload::branch_star_miss_4096:
+    case PatternProgramWorkload::group_bounded_miss_4096:
+        return 268U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t checked_index(PatternCostWorkload workload)
 {
     switch (workload)
@@ -1065,7 +1077,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 268> dispatches{{
+constexpr std::array<ProbeDispatch, 270> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1626,6 +1638,10 @@ constexpr std::array<ProbeDispatch, 268> dispatches{{
     ProbeDispatchRow{PatternCostWorkload::quantity_lines,
                      "pattern-cost-quantity-1000-2000-lines-40-chars", pattern_cost_input,
                      pattern_cost_run},
+    ProbeDispatchRow{PatternProgramWorkload::branch_star_miss_4096, "pattern-branch-star-miss-4096",
+                     pattern_program_input, matched_program},
+    ProbeDispatchRow{PatternProgramWorkload::group_bounded_miss_4096,
+                     "pattern-group-bounded-miss-4096", pattern_program_input, matched_program},
 }};
 
 constexpr auto dispatch_names = []
@@ -1668,7 +1684,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 268U);
+static_assert(dispatches.size() == 270U);
 static_assert(dispatch_is_complete());
 
 } // namespace
