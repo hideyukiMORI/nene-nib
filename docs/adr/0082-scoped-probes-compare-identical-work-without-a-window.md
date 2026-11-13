@@ -221,3 +221,11 @@ checksum は `checksum_of(input)` に、範囲なら各結果の 1 + begin + end
 | double-click-word-solid-1line-16384（1 本だけ） | ダブルクリック | 選択は行の全体（Ctrl+C の写しが本文と同じ） |
 
 checksum は `checksum_of(input)` に 1 + begin + end（ダブルクリックは写しの長さ）を足す。16 MiB の `solid` の 2 本は Debug（ASan 付き）で 1 回が読みで約 1 分（16,384・163,840・1,638,400 の段から線形に外挿した約 56 秒。実測は warmup と sample の 2 回が 120 秒の上限で打ち切り・語が行の全体で、1 文字ずつ後ろへ歩く・#1424 の報告）。`eng/compare-probes.py` の名前の表には足していない。
+
+## 追補（2026-11-13・#1604）— 期待の照合だけを CTest に載せる
+
+#690 の smoke は `-Full` だけが回すので、差分で選ぶ検証と CI の ctest は probe の期待を見ず、操作の鍵を変えた #1495 の後に operation-choice の 4 本の期待が古いまま main に残った（独立レビュー V-1601）。期待の照合だけを CTest に載せる。
+
+- `nib_perf_probes --expectations` は表 `ProbeDispatchRow` の全 workload を名前の一覧 `workload_names()` から引き、warmup の 1 回だけを流して結果が期待と合うか（`run_workload` が値を返すか）を見る。節目の置き場を `bind` しないので時刻を書かず、回数も時間も比べない。合わない workload を 1 行ずつ書いて 1 を返す。
+- CTest `nib_probe_expectations`（`TIMEOUT 60`）が回す。Debug（ASan 付き）で 60 秒に収めるため、Debug の 1 回（warmup 1 + sample 1）が 2 秒を超えた 73 本を `tests/performance/ProbeMain.cpp` の表で名指しで外す（16 MiB・1 MiB の 1 行・16,000 片などの重い入力）。外した名前が表から消えると落ちる。外した分の期待は従来どおり `eng/probe-smoke.ps1` が見る。
+- 2026-11-13 の作業木（まとめ枝 31 の上・Debug）で全 278 本を 1 回ずつ流し、期待が合わない workload は 0 本だった。

@@ -52,6 +52,9 @@ void vim_normal(nenenib::application::EditorController &controller, std::string_
                                     nenenib::core::VimPrefix prefix) noexcept;
 void arrange_vim_viewport(nenenib::application::EditorController &controller,
                           const VimFixture &fixture);
+// fixture の settings の行を窓の後・鍵の前に `:` の行として打つ（#1626）。
+void apply_vim_fixture_settings(nenenib::application::EditorController &controller,
+                                const VimFixture &fixture);
 void store_vim_fixture_macro(nenenib::application::EditorController &controller,
                              const VimFixture &fixture);
 [[nodiscard]] std::string whole_vim_body(nenenib::application::EditorController &controller);

@@ -538,7 +538,8 @@ target_link_options(NeNeNib PRIVATE /DELAYLOAD:d3d11.dll /DELAYLOAD:d2d1.dll /DE
     /DELAYLOAD:comctl32.dll)
 target_link_libraries(NeNeNib PRIVATE delayimp)
 
-# ADR 0082: 開発用の閉じた比較。unit は inline の足場だけ借用し、CTest に登録しない。
+# ADR 0082: 開発用の閉じた比較。unit は inline の足場だけ借用する。CTest に載せるのは期待の
+# 照合だけ（nib_probe_expectations・#1604・時間は測らない）。
 nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/ProbeMain.cpp tests/performance/ProbeWorkload.cpp
     tests/performance/ScopedProbe.cpp tests/performance/BufferProbe.cpp
@@ -577,6 +578,10 @@ target_compile_definitions(nib_perf_probes PRIVATE
     NIB_PROBE_COMMIT="${NIB_PROBE_COMMIT}" NIB_PROBE_DIRTY="$<BOOL:${NIB_PROBE_DIRTY}>"
     NIB_PROBE_COMPILER="${CMAKE_CXX_COMPILER_VERSION}" NIB_PROBE_CONFIGURATION="$<CONFIG>"
     NIB_PROBE_TOOLCHAIN_HASH="${NIB_PROBE_TOOLCHAIN_HASH}")
+# #1604: 全 workload の warmup の結果が表の期待と合うか（重い workload は ProbeMain.cpp の表で
+# 名指しで外す・外した分は eng/probe-smoke.ps1）。節目を書かず、時間は判定しない。
+add_test(NAME nib_probe_expectations COMMAND nib_perf_probes --expectations)
+set_tests_properties(nib_probe_expectations PROPERTIES TIMEOUT 60)
 
 # #818: Markdown プレビューの差し替えの費用の probe（ADR 0155 の決定 7）。nib_preview_capture と同じ
 # 土台で、時刻は adapters の Win32TimingAdapter の節目だけで取る（ARC-007）。CTest に登録しない。

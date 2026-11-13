@@ -248,6 +248,7 @@ void prepare(Editing &editing, const VimFixture &fixture)
 {
     open_vim_document(editing, std::string(fixture.text));
     arrange_vim_viewport(editing.controller(), fixture);
+    apply_vim_fixture_settings(editing.controller(), fixture);
     store_vim_fixture_macro(editing.controller(), fixture);
 }
 

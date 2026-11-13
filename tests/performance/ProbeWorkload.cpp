@@ -64,6 +64,7 @@
 #include <cstddef>
 #include <format>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -1733,6 +1734,11 @@ std::optional<ProbeSelection> workload_of(std::string_view name) noexcept
         }
     }
     return std::nullopt;
+}
+
+std::span<const std::string_view> workload_names() noexcept
+{
+    return dispatch_names;
 }
 
 std::string input_of(ProbeSelection workload)

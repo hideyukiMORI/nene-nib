@@ -32,5 +32,9 @@ struct VimFixture
     std::optional<VimMacroFixture> macro = std::nullopt;
     // Vim の変更の印（ADR 0181）。求めた fixture の行だけが書く。
     std::optional<VimChangeFixture> change = std::nullopt;
+    // fixture の settings のうち再生が流す行（改行でつなぐ・#1626）。再生は窓を置いた後・鍵の前に
+    // 1 行ずつ `:` の行として打ち、Nib が断る行は試験を落とす。Nib の固定値と同じ行（oracle の
+    // NIB_FIXED_SETTINGS）は生成物に載らない。設定の無い fixture の行は書かない。
+    std::string_view settings = {};
 };
 } // namespace nenenib::tests

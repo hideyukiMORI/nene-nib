@@ -1,11 +1,13 @@
 // Vim の単体テストが共有する足場の定義（ADR 0042 決定 1）。
 #include "VimTestSupport.hpp"
+#include "Appearance.hpp"
 #include "Column.hpp"
 #include "CommandText.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "ExResult.hpp"
 #include "LineNumber.hpp"
 #include "Offset.hpp"
 #include "OpenCommandPalette.hpp"
@@ -280,17 +282,27 @@ void arrange_vim_viewport(EditorController &controller, const VimFixture &fixtur
     {
         return;
     }
-    const auto &viewport = fixture.viewport.value();
-    placed_vim_viewport(controller, fixture, viewport);
-    // fixture の `set scrolloff=N`（#1239）。窓を作ってから余白を打つ（fuzz の再生器と契約
-    // --vim-view の placed_window と同じ順）。0 の fixture は打たない。
-    // oracle は so を窓より先に置くが、置いた直後の検査で topline が動かないことを確かめているので
-    // 結果の状態は同じ。
-    if (viewport.scrolloff > 0)
+    placed_vim_viewport(controller, fixture, fixture.viewport.value());
+}
+
+// fixture の settings（#1626）。oracle は設定を鍵より前に置いて測るので、再生は窓を置いた後・
+// マクロのレジスタと鍵の前に 1 行ずつ `:` の行として打つ（余白の `set scrolloff=N` も同じ道・
+// fuzz の再生器と契約 --vim-view の placed_window と同じ順）。oracle は so を窓より先に置くが、
+// 置いた直後の検査で topline が動かないことを確かめているので結果の状態は同じ。Nib が断る行は
+// 黙って落とさず試験を落とす（評価は打つ道と同じ evaluate_ex）。
+void apply_vim_fixture_settings(EditorController &controller, const VimFixture &fixture)
+{
+    std::string_view rest = fixture.settings;
+    while (!rest.empty())
     {
-        const auto frame = run_ex(controller, "set so=" + std::to_string(viewport.scrolloff));
-        expect(frame.settings.scrolloff == viewport.scrolloff,
-               "the fixture's scrolloff is set before its keys");
+        const std::size_t end = std::min(rest.find('\n'), rest.size());
+        const std::string line(rest.substr(0, end));
+        rest.remove_prefix(std::min(end + 1, rest.size()));
+        const bool taken = nenenib::core::evaluate_ex(line, controller.frame().settings,
+                                                      nenenib::core::Appearance::dark)
+                               .has_value();
+        expect(taken, (std::string(fixture.name) + ": Nib takes the setting " + line).c_str());
+        static_cast<void>(run_ex(controller, line));
     }
 }
 
