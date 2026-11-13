@@ -12,6 +12,9 @@
 // 4. 確定と同じ口: 通常モードの「検索: 」の F3 / Shift+F3（Ctrl+G / Ctrl+T も同じ意図）・
 //    「置換後: 」の Enter と Ctrl+Enter・面の候補のクリックも、あふれた行は同じ 1 か所で断る。
 //    incsearch の preview はあふれた行では照合せず、起点のまま（レビュー V-1570 の M1・M2・L3）。
+// 5. 長い `:s`（#1616）: 256 バイトを超える `:s` の族は知らせの文を作る所で例外が抜けて落ちていた。
+//    パターン側・置換側・全角・群と `&` の展開・E486 / E939 / 未対応の断り・`:&&` `:~` `&` `g&`・
+//    VISUAL の `:`・`d:`・マクロを、256 の前後と上限の前後の長さで流す。
 #include "ActivateCommandChoice.hpp"
 #include "BeginFind.hpp"
 #include "BeginReplace.hpp"
@@ -27,8 +30,11 @@
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "EditorSettings.hpp"
+#include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
 #include "ExResult.hpp"
+#include "ExSubstituteRequest.hpp"
+#include "ExSubstituteSource.hpp"
 #include "FontSize.hpp"
 #include "InputLineView.hpp"
 #include "InputText.hpp"
@@ -49,6 +55,7 @@
 #include "VimSearchDirection.hpp"
 #include "VimTestSupport.hpp"
 
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -442,6 +449,210 @@ void verify_palette_click_refused()
                message_of(frame) == limit_message(),
            "a click on a lost palette is refused like Enter");
 }
+
+// ------------------------------------------------ 長い `:s`（#1616）
+
+// 入力行の長さ（`:` を除く）。256 の前後・上限の前後を含む。
+constexpr std::array<std::size_t, 8> substitute_sizes{250, 256, 257, 258, 300, 1000, 4096, 4097};
+
+// `s/` ＋ 当たる字 × n ＋ `/X/` が size バイトになる n。
+[[nodiscard]] std::size_t pattern_run(std::size_t size)
+{
+    return size - std::string_view{"s//X/"}.size();
+}
+
+// `:s` の族の長い命令（パターン側・置換側・範囲・フラグの後ろの `"`・`&` `:~`）を評価しても例外で
+// 止まらず、知らせは 1 行に収まり、request は打った全文を持つ（覚えは切らない）。
+void verify_long_substitute_evaluation()
+{
+    const auto settings = core::default_editor_settings();
+    for (const std::size_t size : substitute_sizes)
+    {
+        const std::string pattern(pattern_run(size), 'c');
+        for (const auto &text :
+             {"s/" + pattern + "/X/", "s/a/" + pattern + "/", "%s/" + pattern + "/X/g",
+              "'<,'>s/" + pattern + "/X/", "s#" + pattern + "#X#", "s/a/X/ \"" + pattern,
+              "&&" + pattern, "~ " + pattern, "s/" + repeated("界", size / 3) + "/X/"})
+        {
+            const auto result = core::evaluate_ex(text, settings, core::Appearance::dark);
+            expect(text.size() > input_line_limit || !result.has_value() ||
+                       result.value().message.text().size() <= core::DisplayText::maximum_bytes,
+                   "a long substitute is evaluated without throwing and shown clipped");
+        }
+        const std::string both = "s/" + pattern + "/" + pattern + "/";
+        const auto typed = core::evaluate_ex(both, settings, core::Appearance::dark);
+        const auto request = typed.has_value() ? typed.value().substitute
+                                               : std::optional<core::ExSubstituteRequest>{};
+        const auto read =
+            request.value_or(core::ExSubstituteRequest{std::nullopt,
+                                                       core::ExSubstituteSource::repeated,
+                                                       '/',
+                                                       {},
+                                                       {},
+                                                       false,
+                                                       {},
+                                                       std::nullopt});
+        expect(both.size() > input_line_limit ||
+                   (read.pattern == pattern && read.replacement == pattern),
+               "the substitute request keeps the whole pattern and replacement");
+    }
+}
+
+// 長いパターンの `:s` は全文で当たる（256 で切れると短い run の行に当たる）。上限を超える行は
+// 本文・キャレット・未保存の印を変えずに断る。`u` で元に戻る。
+void verify_long_substitute_pattern()
+{
+    for (const std::size_t size : substitute_sizes)
+    {
+        const std::size_t run = pattern_run(size);
+        const std::string body =
+            "<" + std::string(run - 1, 'c') + ">\n<" + std::string(run, 'c') + ">\n";
+        Editing editing;
+        open_vim_document(editing, body);
+        auto &controller = editing.controller();
+        vim_normal(controller, ":%s/" + std::string(run, 'c') + "/X/<CR>");
+        // `%` の分だけ 1 バイト長い。上限の 4096 の行は `%` で 4097 になる。
+        const bool overflowed = size + 1 > input_line_limit;
+        const auto frame = controller.frame();
+        expect(overflowed
+                   ? whole_vim_body(controller) == body &&
+                         frame.document.save_state == core::SaveState::saved &&
+                         message_of(frame) == limit_message()
+                   : whole_vim_body(controller) == "<" + std::string(run - 1, 'c') + ">\n<X>\n" &&
+                         caret_at(frame, 2, 1),
+               "a long substitute pattern matches whole or is refused whole");
+        vim_normal(controller, "u");
+        expect(whole_vim_body(controller) == body, "undo restores the long substitute");
+    }
+}
+
+// 置換側が長い・両方が長い・全角で 256 の境をまたぐ・`&` と `\1` の展開で結果が長くなる形。
+void verify_long_substitute_replacement()
+{
+    for (const std::size_t size : substitute_sizes)
+    {
+        // `s/a/` ＋ d × n ＋ `/` が size バイト。
+        const std::string long_text(pattern_run(size), 'd');
+        Editing editing;
+        open_vim_document(editing, "abc\n");
+        auto &controller = editing.controller();
+        vim_normal(controller, ":s/a/" + long_text + "/<CR>");
+        expect(whole_vim_body(controller) ==
+                   (size > input_line_limit ? std::string("abc\n") : long_text + "bc\n"),
+               "a long replacement is used whole or refused whole");
+    }
+    Editing both;
+    open_vim_document(both, std::string(1000, 'a') + "\n");
+    vim_normal(both.controller(),
+               ":s/" + std::string(1000, 'a') + "/" + repeated("界", 1000) + "/<CR>");
+    expect(whole_vim_body(both.controller()) == repeated("界", 1000) + "\n",
+           "a long pattern and a long wide replacement are used whole");
+    const std::string wide = repeated("あ", 100);
+    Editing crossing;
+    open_vim_document(crossing, "x" + wide + "y\n");
+    vim_normal(crossing.controller(), ":s/" + wide + "/-/<CR>");
+    expect(whole_vim_body(crossing.controller()) == "x-y\n",
+           "a wide pattern across the display limit matches whole");
+    const std::string run(400, 'c');
+    Editing grouped;
+    open_vim_document(grouped, run + "\n");
+    vim_normal(grouped.controller(), ":s/\\(" + run + "\\)/\\1&\\1/<CR>");
+    expect(whole_vim_body(grouped.controller()) == run + run + run + "\n",
+           "a group and & expand a long match whole");
+}
+
+// 当たらない長いパターンは E486 の知らせ（1 行に切る）で断り、断られる形（E939・未対応の構文）も
+// 本文を変えずに断る。
+void verify_long_substitute_refused()
+{
+    const std::string pattern(1000, 'z');
+    Editing editing;
+    open_vim_document(editing, std::string(four_lines));
+    auto &controller = editing.controller();
+    vim_normal(controller, ":s/" + pattern + "/X/<CR>");
+    auto frame = controller.frame();
+    expect(whole_vim_body(controller) == four_lines &&
+               message_of(frame).starts_with("E486: Pattern not found: zzz") &&
+               message_of(frame).size() <= core::DisplayText::maximum_bytes,
+           "a long pattern that does not match says E486 clipped");
+    vim_normal(controller, ":s/" + pattern + "/X/ 0<CR>");
+    frame = controller.frame();
+    expect(whole_vim_body(controller) == four_lines &&
+               message_of(frame) == "E939: Positive count required",
+           "a long substitute with count 0 is refused with E939");
+    vim_normal(controller, ":s/\\v" + pattern + "/X/<CR>");
+    // 知らせは次の意図（whole_vim_body が窓を動かす）で消えるので、本文を読む前に写す。
+    frame = controller.frame();
+    expect(whole_vim_body(controller) == four_lines &&
+               message_of(frame).starts_with("Unsupported pattern item"),
+           "a long substitute with an unsupported item is refused");
+    // 全角の pattern は code point の境目で切って「…」を付ける（切れた字で E486
+    // の文だけに戻らない）。
+    vim_normal(controller, ":s/" + repeated("あ", 100) + "/X/<CR>");
+    frame = controller.frame();
+    expect(message_of(frame).starts_with("E486: Pattern not found: あ") &&
+               message_of(frame).ends_with("…") &&
+               message_of(frame).size() <= core::DisplayText::maximum_bytes,
+           "a long wide pattern is clipped at a code point boundary");
+    const std::string unsupported = "tabnext +" + std::string(1000, '1');
+    const auto refused =
+        core::evaluate_ex(unsupported, core::default_editor_settings(), core::Appearance::dark);
+    const std::string said =
+        refused.has_value()
+            ? std::string()
+            : std::string(core::ex_failure_message(refused.error(), unsupported).text());
+    expect(said.starts_with("Not supported: tabnext +111") && said.ends_with("…") &&
+               said.size() <= core::DisplayText::maximum_bytes,
+           "a long unsupported command is named clipped");
+}
+
+// 長い `:s` の後の繰り返し（`:&&` `:~` `&` `g&`）は覚えた全文で置き換える。
+void verify_long_substitute_repeated()
+{
+    const std::string long_text(1000, 'd');
+    const std::string body = "abc\nabc\nabc\nabc\n";
+    const std::string done = long_text + "bc\n";
+    for (const std::string_view repeat : {"j:&&<CR>", "j:~<CR>", "j&"})
+    {
+        Editing editing;
+        open_vim_document(editing, body);
+        vim_normal(editing.controller(), ":s/a/" + long_text + "/<CR>" + std::string(repeat));
+        expect(whole_vim_body(editing.controller()) == done + done + "abc\nabc\n",
+               "a repeat of a long substitute uses the whole replacement");
+    }
+    Editing every;
+    open_vim_document(every, body);
+    vim_normal(every.controller(), ":s/a/" + long_text + "/<CR>g&");
+    expect(whole_vim_body(every.controller()) == done + done + done + done,
+           "g& repeats a long substitute on every line");
+}
+
+// VISUAL の `:`・`d:`・マクロに録った長い `:s`。
+void verify_long_substitute_entries()
+{
+    const std::string long_text(1000, 'd');
+    Editing visual;
+    open_vim_document(visual, "abc\nabc\nabc\n");
+    vim_normal(visual.controller(), "Vj:s/a/" + long_text + "/<CR>");
+    expect(whole_vim_body(visual.controller()) == long_text + "bc\n" + long_text + "bc\nabc\n",
+           "a long substitute from VISUAL : runs on the selected lines");
+    Editing operated;
+    open_vim_document(operated, "  b a\n");
+    vim_normal(operated.controller(), "d:s/a/" + long_text + "/<CR>");
+    expect(whole_vim_body(operated.controller()) == "b " + long_text + "\n",
+           "d: with a long substitute deletes to the caret after the substitute");
+    Editing macro;
+    open_vim_document(macro, "abc\nabc\nabc\n");
+    vim_replay(macro.controller(), "qa:s/a/" + long_text + "/<CR>jq@a");
+    expect(whole_vim_body(macro.controller()) == long_text + "bc\n" + long_text + "bc\nabc\n" &&
+               caret_at(macro.controller().frame(), 3, 1),
+           "a macro that recorded a long substitute replays it whole");
+    Editing over;
+    open_vim_document(over, "abc\nabc\n");
+    vim_replay(over.controller(), "qa:s/a/" + std::string(input_line_limit, 'd') + "/<CR>jq@a");
+    expect(whole_vim_body(over.controller()) == "abc\nabc\n",
+           "an overflowed substitute while recording is refused whole");
+}
 } // namespace
 
 void verify_input_line_limit_scope()
@@ -464,5 +675,11 @@ void verify_input_line_limit_scope()
     verify_replace_refused();
     verify_preview_on_overflow();
     verify_palette_click_refused();
+    verify_long_substitute_evaluation();
+    verify_long_substitute_pattern();
+    verify_long_substitute_replacement();
+    verify_long_substitute_refused();
+    verify_long_substitute_repeated();
+    verify_long_substitute_entries();
 }
 } // namespace nenenib::tests

@@ -126,6 +126,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimRandomKeyTests.cpp
     tests/unit/ExRandomInputTests.cpp
     tests/unit/InputLineLimitTests.cpp
+    tests/unit/InputLinePropertyTests.cpp
     tests/unit/VimWindowTests.cpp
     tests/unit/VimClipboardTests.cpp
     tests/unit/VimSearchTests.cpp
