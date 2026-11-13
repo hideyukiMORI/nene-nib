@@ -211,7 +211,7 @@ characters (for example `Adds Korean, Spanish and German to the interface langua
 
 ---
 
-## 中国語（簡体字・zh-CN）— 機械の訳・レビュー歓迎
+## 中国語（簡体字・manifest の札は zh-Hans）— 機械の訳・レビュー歓迎
 
 > この節は設計席が日本語と英語から訳した文で、中国語を母語とする人のレビューを受けていない。
 > 誤りや不自然な所は GitHub の Issue で知らせてほしい（Machine translation; reviews are welcome via GitHub issues）。

@@ -24,3 +24,8 @@ hideのD44は折り返し・通常ドラッグを含むベータのタグとZIP�
 - feature branchで測定したexeをそのまま公開する: squash後のmainから作り直す既存方針に反する。
 - 独自のCMakeコマンドで梱包用Releaseを作る: ビルドの正典が二つになる。
 - 梱包で全製品テストを無条件に再実行する: 関連入力が不変でも重複するためQLT-012に反する。
+
+## 追補（2026-11-13・#1596・施主決定 D88）
+
+決定 1 と 3 の `-Beta <正整数>` と配布の識別子の `-beta.<番号>` を外した。版は `project()` の素の `x.y.z`（1.0.0 から・Store の版と同じ）で、ZIP の名前は `NeNeNib-<x.y.z>-windows-x64.zip` の 1 通り（`archive_name`・版に `-` が入っていれば断る）。
+GitHub の配布が試験版であることは Release の題の「Beta」と pre-release の印で示す（NeNe Folio と同じ形）。同じ版を配り直す必要が出たら版を上げ、同じ版で作り直さない。`v0.1.0-beta.1`〜`v0.1.0-beta.12` の tag と記録はそのまま残す。手順の正本は `docs/DEVELOPMENT_WORKFLOW.md` の公開の節。

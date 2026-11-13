@@ -20,12 +20,13 @@ Store へ上げる物は clean な `main`（GitHub の main と同じ commit）�
 
 ```powershell
 # 1) ZIP（Release のビルドもここで 1 回だけ走る・ADR 0115）
-pwsh -NoProfile -File eng/package-release.ps1 -Beta <N> -OutputDirectory D:/NeNeNib/releases/<版>/zip -Verification docs/quality/<accepted-record>.md
+pwsh -NoProfile -File eng/package-release.ps1 -OutputDirectory D:/NeNeNib/releases/v<x.y.z>/zip -Verification docs/quality/<accepted-record>.md
 # 2) MSIX（同じ build/release-<short>/NeNeNib.exe を受ける。ZIP の exe とバイト列を比べる）
-pwsh -NoProfile -File eng/package-msix.ps1 -OutputDirectory D:/NeNeNib/releases/<版>/msix -Zip D:/NeNeNib/releases/<版>/zip/<ZIP の名前> -Store
+pwsh -NoProfile -File eng/package-msix.ps1 -OutputDirectory D:/NeNeNib/releases/v<x.y.z>/msix -Zip D:/NeNeNib/releases/v<x.y.z>/zip/NeNeNib-<x.y.z>-windows-x64.zip -Store
 ```
 
-- `-Store` は版の先頭が 0 なら断る。Store の 1.0.0 は `project()` を 1.0.0 に上げてから作る（版を上げるのは公開の手順）。
+- `-Store` は版の先頭が 0 なら断る。版は `project()` の素の `x.y.z`（1.0.0 から・#1596）で、ZIP は `NeNeNib-<x.y.z>-windows-x64.zip`、MSIX は `NeNeNib-<x.y.z.0>-windows-x64-store.msix`（例 `NeNeNib-1.0.0-windows-x64.zip` と `NeNeNib-1.0.0.0-windows-x64-store.msix`）。どちらの名前にも `v` と `-beta.N` は付かない。
+- `-Store` は clean な `main`（GitHub の main と同じ commit）でだけ通る。作業枝では `-Store` を外す（版の検査は同じ・先頭 0 の拒否だけが掛からない）。
 - 手元の確かめだけなら、作業枝の clean な木で `-Store` と `-Zip` を外して作れる（`eng/build-release.ps1 -Ref HEAD` の後に、出力は作業木の `out/` の下でもよい）。名前は `NeNeNib-<x.y.z.0>-windows-x64.msix`、`-Store` は `…-store.msix`。
 - 出力のディレクトリ: `layout/`（包む前の配置）・`work/`（PRI の設定と dump）・`unpacked/`（MakeAppx が開き直した木）・`.msix`・`SHA256SUMS`・`msix.json`（入力の exe と ZIP と MSIX の SHA-256 と大きさ・項目の一覧・版・SDK の版と SHA-256・`signed=false`）。
 - 道具が落ちる所: 表の身元が予約の値と合わない（PFN の計算）・版が `project()` と違う / 4 つ目が 0 でない / `-Store` で先頭 0・ロゴが 25 枚でない / 名前や大きさが違う・exe が Release の記録や ZIP と違う・SDK の版が違う・MSIX か unpack の中身の集合やバイト列が配置と違う・manifest の身元と版が表と違う。
@@ -43,7 +44,7 @@ $cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=C37230AA-B52D-403B-9
 Export-Certificate -Cert $cert -FilePath D:/NeNeNib/temp/nib-msix-test.cer
 Import-Certificate -FilePath D:/NeNeNib/temp/nib-msix-test.cer -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople'
 # 3) 写しに署名する
-Copy-Item <出力>/NeNeNib-<版>-windows-x64.msix D:/NeNeNib/temp/nib-signed.msix
+Copy-Item <出力>/NeNeNib-<x.y.z.0>-windows-x64.msix D:/NeNeNib/temp/nib-signed.msix
 & "${env:ProgramFiles(x86)}/Windows Kits/10/bin/10.0.26100.0/x64/signtool.exe" sign /fd SHA256 /s My /sha1 $cert.Thumbprint D:/NeNeNib/temp/nib-signed.msix
 # 4) 入れる・外す
 Add-AppxPackage -Path D:/NeNeNib/temp/nib-signed.msix
@@ -62,7 +63,7 @@ Windows App Certification Kit は Windows SDK に入っている。**署名し�
 ```powershell
 $kit = "${env:ProgramFiles(x86)}/Windows Kits/10/App Certification Kit/appcert.exe"
 & $kit reset
-& $kit test -appxpackagepath <出力>/NeNeNib-<版>-windows-x64-store.msix -reportoutputpath D:/NeNeNib/releases/<版>/wack/report.xml
+& $kit test -appxpackagepath <出力>/NeNeNib-<x.y.z.0>-windows-x64-store.msix -reportoutputpath D:/NeNeNib/releases/v<x.y.z>/wack/report.xml
 ```
 
 - 画面から回すなら「Windows App Cert Kit」→「Validate Store App」→ パッケージを選ぶ。
@@ -73,14 +74,14 @@ $kit = "${env:ProgramFiles(x86)}/Windows Kits/10/App Certification Kit/appcert.e
 
 | 上げる物 | 所在 |
 | --- | --- |
-| パッケージ | `D:/NeNeNib/releases/<版>/msix/NeNeNib-<版>-windows-x64-store.msix`（**署名なし**。「パッケージ」の欄へ。上げると Partner Center が身元と版を読んで検証する） |
+| パッケージ | `D:/NeNeNib/releases/v<x.y.z>/msix/NeNeNib-<x.y.z.0>-windows-x64-store.msix`（**署名なし**。「パッケージ」の欄へ。上げると Partner Center が身元と版を読んで検証する） |
 | 中身と SHA-256 の記録 | 同じディレクトリの `msix.json` と `SHA256SUMS`（上げない。設計席が `docs/quality/` の記録に写す） |
 | 掲載文・画像・申告 | `docs/store/listing.md`・`docs/store/screenshots.md`・`docs/store/submission.md` |
 | Store の 300 × 300 のロゴ | `docs/images/store/store-logo-300.png`（ADR 0185） |
 
 `submission.md`・`listing.md`・`screenshots.md` は Store の文書の PR（#1582）で入る。
 
-- 版は前に上げた版より大きくなければならない。同じ版で作り直したときは、上げる前に `msix.json` の `msix.sha256` が上げる物の SHA-256 と同じか確かめる。
+- 版は前に上げた版より大きくなければならない。**同じ版で作り直さない**: 再提出や梱包の直しが要るときは `project()` の版を上げる（`1.0.1` など・#1596）。上げる前に `msix.json` の `msix.sha256` が上げる物の SHA-256 と同じか確かめる。
 - `runFullTrust` の承認の警告は想定どおり（理由の文は submission.md）。
 
 ## 確かめていないこと

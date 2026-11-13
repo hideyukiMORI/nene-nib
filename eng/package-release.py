@@ -27,6 +27,14 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def archive_name(version: str) -> str:
+    """The ZIP name follows from the bare product version alone; a pre-release tag is not a version (#1596)."""
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        raise ValueError(f"The release version must be a bare x.y.z, not {version!r}; "
+                         "Beta is the GitHub Release title and pre-release flag")
+    return f"NeNeNib-{version}-windows-x64.zip"
+
+
 def version_of(cmake: str) -> str:
     matches = re.findall(r"^project\(NeNeNib VERSION (\d+\.\d+\.\d+) LANGUAGES C CXX\)$",
                          cmake, re.MULTILINE)
@@ -122,7 +130,7 @@ def package(args: argparse.Namespace) -> Path:
     commit, branch = source_state(ROOT, args.preview)
     verification = verification_record(ROOT, args.verification)
     version = version_of((ROOT / "CMakeLists.txt").read_text(encoding="utf-8"))
-    release_version = f"{version}-beta.{args.beta}"
+    bundle_name = archive_name(version)
     short = run(["git", "rev-parse", "--short=7", commit])
     build = ROOT / "build" / f"release-{short}"
     if build.exists():
@@ -148,10 +156,10 @@ def package(args: argparse.Namespace) -> Path:
     imports = validate_pe(report, metadata, version, allowed)
     readme = (ROOT / "eng/release/README.txt.in").read_text(encoding="utf-8")
     contents = {"NeNeNib.exe": binary,
-                "README.txt": readme.replace("@VERSION@", release_version).encode("utf-8"),
+                "README.txt": readme.replace("@VERSION@", version).encode("utf-8"),
                 "LICENSE": (ROOT / "LICENSE").read_bytes(),
                 "THIRD_PARTY_NOTICES.txt": (ROOT / "THIRD_PARTY_NOTICES.txt").read_bytes()}
-    archive = output / f"NeNeNib-{release_version}-windows-x64.zip"
+    archive = output / bundle_name
     with zipfile.ZipFile(archive, "x", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
         for name in ENTRIES:
             bundle.writestr(name, contents[name])
@@ -159,7 +167,7 @@ def package(args: argparse.Namespace) -> Path:
     archive_hash = digest(archive.read_bytes())
     (output / "SHA256SUMS").write_text(f"{archive_hash}  {archive.name}\n", encoding="ascii")
     record = {"schema": 1, "commit": commit, "branch": branch, "preview": args.preview,
-              "version": release_version, "productVersion": version,
+              "version": version, "productVersion": version,
               "verification": verification, "release": release, "metadata": metadata,
               "imports": imports, "declaredImports": sorted(allowed),
               "archive": {"name": archive.name, "sha256": archive_hash,
@@ -172,16 +180,8 @@ def package(args: argparse.Namespace) -> Path:
     return archive
 
 
-def positive(value: str) -> int:
-    number = int(value)
-    if number < 1:
-        raise argparse.ArgumentTypeError("beta number must be positive")
-    return number
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--beta", type=positive, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--verification", required=True)
     parser.add_argument("--preview", action="store_true")

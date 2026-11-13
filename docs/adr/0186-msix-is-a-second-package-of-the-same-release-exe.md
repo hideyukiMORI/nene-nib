@@ -43,3 +43,8 @@ NeNe Folio（`eng/release.py`・ADR 0080 / 0088）は manifest を道具が生�
 - エクスプローラーへの登録（ADR 0178・D73 段 1）: packaged の HKCU への書き込みがエクスプローラーから見えるか。見えなければ Store 版で F1 の操作を隠し、manifest の `uap:FileTypeAssociation` と Windows 11 の最上位のメニュー（D73 段 2）で宣言する。
 - full trust の子プロセス（LSP・ADR 0160）・`\\wsl.localhost`・印刷・一時ファイルの置き換え（ADR 0135）。
 - WACK の結果（Loupe は DPI の WARNING 1 件で認定された）。
+
+## 追補（2026-11-13・#1596）
+
+結果の 3 つ目の「GitHub の公開の名前との関係」は #1596 で決めた: `project()` を `1.0.0` に上げ、ZIP（`NeNeNib-1.0.0-windows-x64.zip`）と MSIX（`NeNeNib-1.0.0.0-windows-x64-store.msix`）は同じ素の版から名前が決まる。GitHub は tag `v1.0.0` の pre-release で、題に「Beta」を付ける（ADR 0115 の追補）。
+`docs/store/submission.md` の名前と中国語の札は道具の出力（`1.0.0.0`・manifest の `zh-Hans`）に合わせた（V-1589 の L6）。

@@ -94,11 +94,18 @@ class PackageTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         PACKAGE.source_state(WORK, preview)
 
-    def test_positive_beta(self):
-        self.assertEqual(PACKAGE.positive("1"), 1)
-        for value in ("0", "-1"):
-            with self.assertRaises(argparse.ArgumentTypeError):
-                PACKAGE.positive(value)
+    def test_archive_name_is_the_bare_version(self):
+        self.assertEqual(PACKAGE.archive_name("1.0.0"), "NeNeNib-1.0.0-windows-x64.zip")
+        self.assertEqual(PACKAGE.archive_name("12.3.45"), "NeNeNib-12.3.45-windows-x64.zip")
+        self.assertNotEqual(PACKAGE.archive_name("1.0.1"), PACKAGE.archive_name("1.0.0"))
+        for value in ("1.0.0-beta.1", "0.1.0-beta.12", "1.0.0-rc", "1.0", "1.0.0.0", "v1.0.0", " 1.0.0", ""):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                PACKAGE.archive_name(value)
+
+    def test_no_beta_argument(self):
+        with patch("sys.argv", ["package-release.py", "--beta", "1", "--output", "x", "--verification", "y"]), \
+             patch("sys.stderr"), self.assertRaises(SystemExit):
+            PACKAGE.main()
 
     def test_complete_package_after_build_boundary(self):
         root = WORK / "fixture-source"
@@ -131,17 +138,19 @@ class PackageTests(unittest.TestCase):
             return json.dumps({"fileVersion": "1.2.3.0", "productVersion": "1.2.3", "signature": "NotSigned"})
 
         output = WORK / "complete-package"
-        args = argparse.Namespace(output=output, preview=True, verification="proof.md", beta=2)
+        args = argparse.Namespace(output=output, preview=True, verification="proof.md")
         with patch.object(PACKAGE, "ROOT", root), patch.object(PACKAGE, "source_state", return_value=(commit, "topic")), \
              patch.object(PACKAGE, "verification_record", return_value={"path": "proof.md", "sha256": "fixture"}), \
              patch.object(PACKAGE, "run", side_effect=inspect), patch.object(PACKAGE.subprocess, "run", side_effect=build):
             archive = PACKAGE.package(args)
-        self.assertEqual(archive.name, "NeNeNib-1.2.3-beta.2-windows-x64.zip")
+        self.assertEqual(archive.name, "NeNeNib-1.2.3-windows-x64.zip")
         self.assertEqual((output / "extracted/NeNeNib.exe").read_bytes(), binary)
-        self.assertEqual((output / "extracted/README.txt").read_text(), "fixture 1.2.3-beta.2")
+        self.assertEqual((output / "extracted/README.txt").read_text(), "fixture 1.2.3")
         self.assertEqual((output / "extracted/THIRD_PARTY_NOTICES.txt").read_bytes(),
                          b"fixture palette notices")
         record = json.loads((output / "package.json").read_text())
+        self.assertEqual((record["version"], record["productVersion"]), ("1.2.3", "1.2.3"))
+        self.assertEqual(record["archive"]["name"], PACKAGE.archive_name("1.2.3"))
         self.assertTrue(record["preview"] and record["extractedBytesMatch"])
         self.assertFalse(record["launched"] or record["published"])
         self.assertEqual((output / "SHA256SUMS").read_text().split()[0], PACKAGE.digest(archive.read_bytes()))
