@@ -3,6 +3,8 @@
 #include "DevicePixels.hpp"
 
 #include <algorithm>
+#include <iterator>
+#include <span>
 
 namespace nenenib::core
 {
@@ -91,16 +93,16 @@ LayoutRect palette_row_label(const LayoutRect &row, std::uint32_t dpi, bool note
     return LayoutRect{inside.left, inside.top, note.left - to_pixels(12, dpi), inside.bottom};
 }
 
-LayoutRect palette_input_hint(const PaletteLayout &layout) noexcept
+PaletteHintPlace palette_input_hint(const PaletteLayout &layout, std::uint32_t dpi,
+                                    std::span<const std::int32_t> widths) noexcept
 {
-    // 行の高さは 40 DIP なので、160 DIP はその 4 つぶん（配置は dpi を持たない）。
-    const auto least = layout.row_height * 4;
     const auto &input = layout.input;
-    const auto centre = input.left + width_of(input) / 2;
-    if (input.right - centre < least)
-    {
-        return LayoutRect{input.right, input.top, input.right, input.bottom};
-    }
-    return LayoutRect{centre, input.top, input.right, input.bottom};
+    const auto room = width_of(input) - to_pixels(palette_hint_gap_dips, dpi);
+    const auto fitting = std::ranges::find_if(widths, [room](std::int32_t width)
+                                              { return width > 0 && width <= room; });
+    const auto first = static_cast<std::size_t>(std::ranges::distance(widths.begin(), fitting));
+    const auto width = fitting == widths.end() ? 0 : *fitting;
+    return PaletteHintPlace{LayoutRect{input.right - width, input.top, input.right, input.bottom},
+                            first};
 }
 } // namespace nenenib::core
