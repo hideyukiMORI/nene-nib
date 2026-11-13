@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <expected>
 #include <optional>
+#include <tuple>
 #include <utility>
 
 namespace nenenib::core
@@ -29,10 +30,10 @@ using Found = std::pair<Offset, Offset>;
 // 見つけた位置と、どこかで折り返したか。
 using Landed = std::pair<Found, bool>;
 
-// 続けて探す向きと回数。
-using Steps = std::pair<VimSearchDirection, std::size_t>;
+// 続けて探す向きと回数と、本文の端で折り返すか（Vim の 'wrapscan'・1 回目はいつも偽）。
+using Steps = std::tuple<VimSearchDirection, std::size_t, bool>;
 
-// 探し方: 向きと回数と、SEARCH_END か。
+// 探し方: 向きと回数と折り返しと、SEARCH_END か。
 using Way = std::pair<Steps, bool>;
 
 // 探し始め。値が無いのは本文の頭の手前（Vim の lnum 0）で、1 行目の 0 桁目の当たりも数える。
@@ -49,8 +50,9 @@ using Start = std::pair<Origin, bool>;
 [[nodiscard]] std::optional<Hit> hit_of(const TextBuffer &text, const VimPattern &pattern,
                                         Offset from, Steps steps)
 {
+    const auto [direction, count, wrapscan] = steps;
     const auto hit = vim_find_match(
-        text, pattern, VimMatchRequest{text.position_of(from), steps.first, steps.second});
+        text, pattern, VimMatchRequest{text.position_of(from), direction, count, wrapscan});
     if (!hit.has_value())
     {
         return std::nullopt;
@@ -97,16 +99,17 @@ using Start = std::pair<Origin, bool>;
     {
         return Hit{own.value().begin, false};
     }
-    return hit_of(text, pattern, text.line_end(first), Steps{VimSearchDirection::forward, 1});
+    return hit_of(text, pattern, text.line_end(first), Steps{VimSearchDirection::forward, 1, true});
 }
 
 // 前向きに count 個目（Vim の searchit の FORWARD）。
 [[nodiscard]] std::optional<Hit> forward_hit(const TextBuffer &text, const VimPattern &pattern,
-                                             Origin from, std::size_t count)
+                                             Origin from, Steps steps)
 {
+    const auto [direction, count, wrapscan] = steps;
     if (from.has_value())
     {
-        return hit_of(text, pattern, from.value(), Steps{VimSearchDirection::forward, count});
+        return hit_of(text, pattern, from.value(), steps);
     }
     const auto top = first_from_top(text, pattern);
     if (!top.has_value() || count <= 1)
@@ -114,7 +117,7 @@ using Start = std::pair<Origin, bool>;
         return top;
     }
     const auto next =
-        hit_of(text, pattern, top.value().first, Steps{VimSearchDirection::forward, count - 1});
+        hit_of(text, pattern, top.value().first, Steps{direction, count - 1, wrapscan});
     if (!next.has_value())
     {
         return std::nullopt;
@@ -126,8 +129,8 @@ using Start = std::pair<Origin, bool>;
 // 起点を越えない区切りの当たりの最後（終わり − 1 < 起点の桁・起点ちょうどの空の当たりも入る・
 // vim_last_match_ending_by の 1 回の走査）。起点が行頭なら起点の行を見ない（start_pos.col == 0）。
 // 起点の行に無ければ上の行から（ほかの行は行の最後の当たり・vim_find_match の後ろ向き）。
-[[nodiscard]] std::optional<Hit> backward_end_once(const TextBuffer &text,
-                                                   const VimPattern &pattern, Offset from)
+[[nodiscard]] std::optional<Hit>
+backward_end_once(const TextBuffer &text, const VimPattern &pattern, Offset from, bool wrapscan)
 {
     const Offset line_start = text.line_start(text.line_containing(from));
     if (from != line_start)
@@ -138,7 +141,7 @@ using Start = std::pair<Origin, bool>;
             return Hit{own.value().begin, false};
         }
     }
-    return hit_of(text, pattern, line_start, Steps{VimSearchDirection::backward, 1});
+    return hit_of(text, pattern, line_start, Steps{VimSearchDirection::backward, 1, wrapscan});
 }
 
 // 当たりから Vim の pos と end_pos へ。ends は SEARCH_END（空の当たりは始まりと始まり）。
@@ -175,14 +178,16 @@ using Start = std::pair<Origin, bool>;
 // 後ろ向きの SEARCH_END を count 回（2 回目からは前の答えの pos = 最後の文字から・Vim の
 // searchit の回数の繰り返し）。
 [[nodiscard]] std::optional<Landed> backward_ends(const TextBuffer &text, const VimPattern &pattern,
-                                                  Offset from, std::size_t count)
+                                                  Offset from, Steps steps)
 {
+    const auto [direction, count, wrapscan] = steps;
+    static_cast<void>(direction);
     Found found{from, from};
     bool wrapped = false;
     std::optional<Offset> first;
     for (std::size_t step = 0; step < count; ++step)
     {
-        const auto hit = backward_end_once(text, pattern, found.first);
+        const auto hit = backward_end_once(text, pattern, found.first, wrapscan);
         if (!hit.has_value())
         {
             return std::nullopt;
@@ -199,13 +204,13 @@ using Start = std::pair<Origin, bool>;
                                              Origin from, Way way)
 {
     const auto [steps, ends] = way;
-    const auto [direction, count] = steps;
+    const VimSearchDirection direction = std::get<0>(steps);
     if (direction == VimSearchDirection::backward && ends)
     {
-        return backward_ends(text, pattern, from.value_or(Offset{0}), count);
+        return backward_ends(text, pattern, from.value_or(Offset{0}), steps);
     }
     const auto hit = direction == VimSearchDirection::forward
-                         ? forward_hit(text, pattern, from, count)
+                         ? forward_hit(text, pattern, from, steps)
                          : hit_of(text, pattern, from.value_or(Offset{0}), steps);
     if (!hit.has_value())
     {
@@ -325,10 +330,10 @@ using Start = std::pair<Origin, bool>;
         return Origin{};
     }
     const bool zero = empty_range(top);
-    const auto landed =
-        searched(text, pattern, pos,
-                 Way{Steps{forward ? VimSearchDirection::backward : VimSearchDirection::forward, 1},
-                     forward && !zero});
+    const auto landed = searched(
+        text, pattern, pos,
+        Way{Steps{forward ? VimSearchDirection::backward : VimSearchDirection::forward, 1, false},
+            forward && !zero});
     if (!landed.has_value() || landed.value().second)
     {
         return forward ? Origin{} : Origin{text.line_end(LineNumber{text.line_count()})};
@@ -340,9 +345,9 @@ using Start = std::pair<Origin, bool>;
 [[nodiscard]] std::optional<Found> second_round(const TextBuffer &text, const VimPattern &pattern,
                                                 Start start, const VimSearchObjectRequest &request)
 {
-    const auto landed = searched(
-        text, pattern, start.first,
-        Way{Steps{request.direction, request.count}, !is_forward(request) && !start.second});
+    const auto landed = searched(text, pattern, start.first,
+                                 Way{Steps{request.direction, request.count, request.wrapscan},
+                                     !is_forward(request) && !start.second});
     if (!landed.has_value())
     {
         return std::nullopt;

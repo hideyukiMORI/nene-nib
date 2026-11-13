@@ -15,7 +15,7 @@ namespace nenenib::core
 struct VimSearchNotice
 {
     VimSearchNoticeKind kind;
-    // pattern_not_found の E486 に載るパターン。ほかの kind では空。
+    // pattern_not_found の E486 と 'nowrapscan' の E385 / E384 に載るパターン。ほかの kind では空。
     std::string pattern;
     // unsupported_pattern で拒否した構文。ほかの kind では空。
     std::optional<VimPatternFailure> failure;

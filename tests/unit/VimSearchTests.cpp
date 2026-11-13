@@ -1148,6 +1148,22 @@ void verify_vim_search_messages()
            "and so is a search offset");
 }
 
+// 'nowrapscan' の端の報せ（Vim 9.1 の e_search_hit_bottom_without_match_for_str ほか・#1561）。
+void verify_vim_search_unwrapped_messages()
+{
+    Editing unwrapped;
+    open_vim_document(unwrapped, "alpha beta\nbeta gamma\ndelta beta");
+    EditorController &seventh = unwrapped.controller();
+    vim_replay(seventh, ":set nows<CR>G$/alpha<CR>");
+    expect(message_is(seventh.frame(), "E385: Search hit BOTTOM without match for: alpha") &&
+               caret_at(seventh.frame(), 3, 10),
+           "with nowrapscan a forward search stops at the bottom and says so");
+    vim_replay(seventh, "gg?gamma<CR>");
+    expect(message_is(seventh.frame(), "E384: Search hit TOP without match for: gamma") &&
+               caret_at(seventh.frame(), 1, 1),
+           "and a backward one stops at the top");
+}
+
 // 量の失敗の知らせ（ADR 0184 の決定 2・Vim 9.1 の NFA の文言）と、量の付いた検索の着地。
 void verify_vim_search_quantifier_messages()
 {
@@ -1717,7 +1733,7 @@ searched_object(std::string_view text, std::string_view pattern,
                                                     std::size_t count = 1)
 {
     return core::VimSearchObjectRequest{core::collapsed_at(Offset{caret}),
-                                        core::VimSearchObjectFrom::caret, direction, count};
+                                        core::VimSearchObjectFrom::caret, direction, count, true};
 }
 
 // VISUAL の問い（今の選択を広げる）。
@@ -1725,7 +1741,7 @@ searched_object(std::string_view text, std::string_view pattern,
                                                      VimSearchDirection direction)
 {
     return core::VimSearchObjectRequest{core::Selection{Offset{anchor}, Offset{caret}},
-                                        core::VimSearchObjectFrom::selection, direction, 1};
+                                        core::VimSearchObjectFrom::selection, direction, 1, true};
 }
 
 [[nodiscard]] bool selects(std::optional<std::pair<std::size_t, std::size_t>> selected,
@@ -2081,6 +2097,7 @@ void verify_vim_search_contracts()
     verify_vim_search_operators();
     verify_vim_search_word_keys();
     verify_vim_search_messages();
+    verify_vim_search_unwrapped_messages();
     verify_vim_search_quantifier_messages();
     verify_vim_search_input();
     verify_vim_search_history();
