@@ -450,7 +450,8 @@ start_row_texts(core::StartEntryKind kind)
     float widest = 0.0F;
     for (const auto mode : {core::EditMode::ordinary, core::EditMode::vim})
     {
-        const auto key = core::operation_guide_entry(operation, mode).key;
+        const auto key =
+            core::operation_guide_entry(operation, mode, DisplayLanguage::japanese).key;
         const float width = key.empty() ? 0.0F
                                         : width_in(key_pen, Said{DisplayLanguage::japanese, key}) +
                                               (keycap_padding_dips * 2.0F);

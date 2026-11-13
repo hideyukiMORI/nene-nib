@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DiagnosticCounts.hpp"
+#include "DisplayLanguage.hpp"
 #include "DisplayText.hpp"
 #include "Language.hpp"
 #include "LineEnding.hpp"
@@ -18,7 +19,11 @@ namespace nenenib::core
 // language_name の表（ADR 0154 の決定 6）。
 inline constexpr std::size_t status_item_count = 4;
 
-[[nodiscard]] std::array<DisplayText, status_item_count> status_items_for(const TextPosition &caret,
+// 1 つ目の項目「行 N, 桁 M」（文は language の文の表・#1019）。1 打鍵ごとに通る道なので、文の
+// 置き場を固定長の buffer に埋めて作る（確保は DisplayText の 1 つだけ）。
+[[nodiscard]] DisplayText caret_status_item(const TextPosition &caret, DisplayLanguage language);
+// caret_item は caret_status_item の項目。
+[[nodiscard]] std::array<DisplayText, status_item_count> status_items_for(DisplayText caret_item,
                                                                           TextEncoding encoding,
                                                                           LineEnding ending,
                                                                           Language language);

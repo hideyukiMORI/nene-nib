@@ -249,7 +249,8 @@ constexpr std::array<Make, 5> broken_makers{
         {
             path = core::FilePath::parse(std::format("C:/work/r{}-{}.txt", index, at)).value();
         }
-        auto title = core::tab_title_for(path, core::SaveState::modified);
+        auto title = core::tab_title_for(path, core::SaveState::modified,
+                                         nenenib::core::DisplayLanguage::japanese);
         const core::TextPosition caret{core::LineNumber{1U + below(random, 6U)},
                                        core::Column{1U + below(random, 9U)}};
         Body body = body_of(random);
@@ -467,7 +468,8 @@ void verify_generator_reaches_both_sides()
 void verify_known_case()
 {
     auto path = core::FilePath::parse("C:/work/known.txt").value();
-    auto title = core::tab_title_for(path, core::SaveState::modified);
+    auto title = core::tab_title_for(path, core::SaveState::modified,
+                                     nenenib::core::DisplayLanguage::japanese);
     const core::TextPosition caret{core::LineNumber{1}, core::Column{1}};
     const std::vector<Planted> planted{
         {{"k/0", app::AutosaveId{0}, path, title, caret}, {std::string("alpha\r\nbeta"), true}},

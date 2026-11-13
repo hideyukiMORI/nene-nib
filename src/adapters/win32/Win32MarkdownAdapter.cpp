@@ -29,12 +29,12 @@ void Win32MarkdownAdapter::parse(application::MarkdownRequest request)
 {
     shelf_->renew(request.ticket);
     worker_.post(
-        [shelf = shelf_, ticket = request.ticket,
-         text = std::move(request.text)](const std::stop_token &stop)
+        [shelf = shelf_, ticket = request.ticket, text = std::move(request.text),
+         language = request.language](const std::stop_token &stop)
         {
             const auto ask = [&] { return stop.stop_requested() || !shelf->wanted(ticket); };
             shelf->deliver(application::MarkdownOutcome{
-                ticket, core::parse_markdown(*text, core::MarkdownStop::asking(ask))});
+                ticket, core::parse_markdown(*text, core::MarkdownStop::asking(ask), language)});
         });
 }
 

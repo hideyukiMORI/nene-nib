@@ -22,6 +22,7 @@
 #include "StartListPort.hpp"
 #include "TextLayoutPort.hpp"
 #include "ThemePort.hpp"
+#include "UiLanguagePort.hpp"
 
 namespace nenenib::application
 {
@@ -66,5 +67,8 @@ struct EditorPorts
     // 起動画面の履歴とブックマークを裏で 1 回読む（ADR 0172 の決定 3）。
     // 最初の frame の後に起動画面が出ているときだけ呼ぶ。
     StartListPort &start_lists;
+    // OS の表示言語の観測（ADR 0123 の追補 2026-11-13 の決定 2）。起動の 1 回と `:set language=`
+    // のときだけ呼ぶ。
+    UiLanguagePort &ui_language;
 };
 } // namespace nenenib::application

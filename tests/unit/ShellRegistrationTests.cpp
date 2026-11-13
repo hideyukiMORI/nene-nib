@@ -61,7 +61,8 @@ constexpr std::string_view exe = "C:\\Tools\\NeNe Nib\\NeNeNib.exe";
 // 決定 2: 右クリックの項目・「プログラムから開く」・ProgId・既定のアプリの鍵と値。
 void verify_plan_entries()
 {
-    const auto planned = core::shell_registration_plan(input_of({".md"}));
+    const auto planned =
+        core::shell_registration_plan(input_of({".md"}), nenenib::core::DisplayLanguage::japanese);
     expect(planned.has_value(), "a plain exe path makes a plan");
     const auto &plan = planned.value();
     const std::string command = "\"C:\\Tools\\NeNe Nib\\NeNeNib.exe\" \"%1\"";
@@ -97,7 +98,9 @@ void verify_plan_entries()
 // 決定 2: 外すときは Nib の木の根ごと消し、共有の RegisteredApplications は値だけを消す。
 void verify_plan_removals()
 {
-    const auto plan = core::shell_registration_plan(input_of({".md", ".txt"})).value();
+    const auto plan = core::shell_registration_plan(input_of({".md", ".txt"}),
+                                                    nenenib::core::DisplayLanguage::japanese)
+                          .value();
     const auto shared =
         std::ranges::count_if(plan, [](const core::ShellRegistrationEntry &entry)
                               { return entry.removal == core::ShellRegistrationRemoval::value; });
@@ -116,8 +119,8 @@ void verify_plan_removals()
 // 決定 2: 拡張子は小文字・`.` 付き・重複なし（表の順）。空と `.` だけは捨てる。
 void verify_plan_extensions()
 {
-    const auto plan =
-        core::shell_registration_plan(input_of({"TXT", ".md", ".txt", "", ".", "Md"}));
+    const auto plan = core::shell_registration_plan(input_of({"TXT", ".md", ".txt", "", ".", "Md"}),
+                                                    nenenib::core::DisplayLanguage::japanese);
     std::vector<std::string> supported;
     for (const auto &entry : plan.value())
     {
@@ -137,13 +140,15 @@ void verify_plan_rejections()
 {
     auto quoted = input_of({".txt"});
     quoted.exe_path = "C:\\a\"b\\NeNeNib.exe";
-    const auto rejected = core::shell_registration_plan(quoted);
+    const auto rejected =
+        core::shell_registration_plan(quoted, nenenib::core::DisplayLanguage::japanese);
     expect(!rejected.has_value() &&
                rejected.error() == core::ShellRegistrationPlanFailure::quote_in_path,
            "an exe path with a double quote is refused");
     auto empty = input_of({".txt"});
     empty.exe_path.clear();
-    const auto missing = core::shell_registration_plan(empty);
+    const auto missing =
+        core::shell_registration_plan(empty, nenenib::core::DisplayLanguage::japanese);
     expect(!missing.has_value() &&
                missing.error() == core::ShellRegistrationPlanFailure::empty_path,
            "an empty exe path is refused");

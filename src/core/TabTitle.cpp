@@ -1,6 +1,8 @@
 #include "TabTitle.hpp"
 
 #include "Offset.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 #include "Utf8.hpp"
 
 #include <string>
@@ -11,15 +13,15 @@ namespace nenenib::core
 {
 namespace
 {
-constexpr std::string_view untitled = "無題";
 constexpr std::string_view modified_mark = "● ";
 constexpr std::string_view ellipsis = "…";
 
-[[nodiscard]] std::string_view name_of(const std::optional<FilePath> &path)
+[[nodiscard]] std::string_view name_of(const std::optional<FilePath> &path,
+                                       DisplayLanguage language)
 {
     if (!path.has_value())
     {
-        return untitled;
+        return ui_text(UiMessage::tab_untitled, language);
     }
     // 「C:\」のように区切りで終わる経路ではファイル名が空になる。そのときは経路そのものを出す。
     const std::string_view name = path.value().file_name();
@@ -70,9 +72,16 @@ constexpr std::string_view ellipsis = "…";
 }
 } // namespace
 
-DisplayText tab_title_for(const std::optional<FilePath> &path, SaveState state)
+DisplayText tab_title_for(const std::optional<FilePath> &path, SaveState state,
+                          DisplayLanguage language)
 {
-    return clipped(name_of(path), mark_of(state));
+    return clipped(name_of(path, language), mark_of(state));
+}
+
+DisplayText tab_title_for(const FilePath &path, SaveState state)
+{
+    // 経路があれば「無題」を引かないので、どの言語でも同じ題名。
+    return tab_title_for(std::optional<FilePath>{path}, state, DisplayLanguage::japanese);
 }
 
 std::optional<DisplayText> tab_folder_for(const std::optional<FilePath> &path)

@@ -215,8 +215,9 @@ void StartScreenPainter::paint_row(const core::StartEntry &entry, const core::St
         return;
     case core::StartEntryKind::open_file:
         // 名前は操作の表から（鍵と同じ正本・ADR 0078）。
-        paint_named(core::operation_text(core::EditorOperation::open_file).name, {},
-                    keyed(text_.open_key, row.label), palette);
+        paint_named(core::ui_text(core::operation_text(core::EditorOperation::open_file).name,
+                                  text_.language),
+                    {}, keyed(text_.open_key, row.label), palette);
         return;
     case core::StartEntryKind::open_folder:
         paint_named(core::ui_text(core::UiMessage::start_open_folder, text_.language),

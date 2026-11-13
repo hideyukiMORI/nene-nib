@@ -16,7 +16,7 @@ constexpr std::array<OperationChoiceExpected, 2> expected_0{
 constexpr std::array<OperationChoiceExpected, 0> expected_1{{
 
 }};
-constexpr std::array<OperationChoiceExpected, 37> expected_2{
+constexpr std::array<OperationChoiceExpected, 38> expected_2{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -112,8 +112,10 @@ constexpr std::array<OperationChoiceExpected, 37> expected_2{
       core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::unregister_shell, 36U, "登録を外す", 5U,
       "Windows の右クリックと「プログラムから開く」から NeNe Nib を外します", 43U, "", "",
-      core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 35> expected_3{
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::choose_language, 37U, "表示言語を選ぶ", 7U,
+      "画面の文字の言語を選びます", 13U, "", "", core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 36> expected_3{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+Shift+O", "",
       core::CommandChoiceKind::operate, std::nullopt},
@@ -205,8 +207,10 @@ constexpr std::array<OperationChoiceExpected, 35> expected_3{
       core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::unregister_shell, 36U, "登録を外す", 5U,
       "Windows の右クリックと「プログラムから開く」から NeNe Nib を外します", 43U, "", "",
-      core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 37> expected_4{
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::choose_language, 37U, "表示言語を選ぶ", 7U,
+      "画面の文字の言語を選びます", 13U, "", "", core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 38> expected_4{
     {{core::EditorOperation::paste_html, 22U, "HTML のまま貼り付け", 12U,
       "クリップボードの HTML をタグごと貼ります", 23U, "", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -230,6 +234,8 @@ constexpr std::array<OperationChoiceExpected, 37> expected_4{
      {core::EditorOperation::unregister_shell, 36U, "登録を外す", 5U,
       "Windows の右クリックと「プログラムから開く」から NeNe Nib を外します", 43U, "", "",
       core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::choose_language, 37U, "表示言語を選ぶ", 7U,
+      "画面の文字の言語を選びます", 13U, "", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
       "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::next_pane, 18U, "隣の枠へ", 4U, "もう 1 つの枠へ移ります", 13U, "F6",
@@ -367,14 +373,14 @@ constexpr std::array<OperationChoiceSample, 10> samples{
       "operation-choice-v1\nmiss-"
       "ordinary\nordinary\nqqq\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820"
       "d98\n"},
-     {"", core::EditMode::ordinary, 256U, 1286144U, expected_2,
+     {"", core::EditMode::ordinary, 256U, 1316608U, expected_2,
       "operation-choice-v1\nall-"
       "ordinary\nordinary\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98"
       "\n"},
-     {"", core::EditMode::vim, 256U, 1235968U, expected_3,
+     {"", core::EditMode::vim, 256U, 1266432U, expected_3,
       "operation-choice-v1\nall-"
       "vim\nvim\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {" ", core::EditMode::ordinary, 256U, 1286144U, expected_4,
+     {" ", core::EditMode::ordinary, 256U, 1316608U, expected_4,
       "operation-choice-v1\nspace-ordinary\nordinary\n "
       "\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
      {"cTrL+s", core::EditMode::vim, 1024U, 1625088U, expected_5,
@@ -500,14 +506,15 @@ constexpr std::array<OperationChoiceSample, 10> samples{
 [[nodiscard]] std::vector<core::CommandChoice> detached_choices(const OperationChoiceSample &sample)
 {
     const std::string query(sample.query);
-    return core::operation_choices(query, sample.mode);
+    return core::operation_choices(query, sample.mode, nenenib::core::DisplayLanguage::japanese);
 }
 [[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
 pure_probe(const OperationChoiceSample &sample, application::TimingPort &timing)
 {
     const std::string query(sample.query);
     const auto mode = sample.mode;
-    const auto held = core::operation_choices(query, mode);
+    const auto held =
+        core::operation_choices(query, mode, nenenib::core::DisplayLanguage::japanese);
     const auto views = held_views(held);
     const auto detached = detached_choices(sample);
     const auto detached_views = held_views(detached);
@@ -520,12 +527,15 @@ pure_probe(const OperationChoiceSample &sample, application::TimingPort &timing)
     timing.mark(core::Milestone::probe_started);
     for (std::size_t index = 0; index < sample.rounds; ++index)
     {
-        const auto choices = core::operation_choices(query, mode);
+        const auto choices =
+            core::operation_choices(query, mode, nenenib::core::DisplayLanguage::japanese);
         checksum += result_checksum(choices);
     }
     timing.mark(core::Milestone::probe_finished);
     if (checksum != sample.checksum || query != sample.query || mode != sample.mode ||
-        !result_equal(core::operation_choices(query, mode), sample) ||
+        !result_equal(
+            core::operation_choices(query, mode, nenenib::core::DisplayLanguage::japanese),
+            sample) ||
         !result_equal(held, sample) || !views_equal(views, sample) ||
         !result_equal(detached, sample) || !views_equal(detached_views, sample))
     {

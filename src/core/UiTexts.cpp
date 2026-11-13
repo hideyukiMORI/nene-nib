@@ -195,4 +195,17 @@ std::string placeholders_filled(std::string_view text,
     }
     return filled;
 }
+
+std::pair<std::string_view, std::string_view> first_slot_split(std::string_view text) noexcept
+{
+    constexpr std::string_view slot = "{0}";
+    for (std::size_t index = 0; index + slot.size() <= text.size(); ++index)
+    {
+        if (text[index] == slot[0] && text[index + 1] == slot[1] && text[index + 2] == slot[2])
+        {
+            return {text.substr(0, index), text.substr(index + slot.size())};
+        }
+    }
+    return {text, {}};
+}
 } // namespace nenenib::core

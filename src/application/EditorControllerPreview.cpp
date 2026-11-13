@@ -27,10 +27,12 @@
 #include "PreviewSelection.hpp"
 #include "PreviewSelectionText.hpp"
 #include "PreviewView.hpp"
+#include "QuantityText.hpp"
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
 #include "SetPreviewPlacement.hpp"
 #include "TogglePreviewTask.hpp"
+#include "UiMessage.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimMode.hpp"
@@ -54,12 +56,6 @@ namespace nenenib::application
 {
 namespace
 {
-// プレビューの 1 行（ADR 0155 の決定 3・6）。
-constexpr std::string_view preview_too_large_message = "プレビューは 16 MiB までです";
-constexpr std::string_view preview_rejected_message = "Markdown を解析できませんでした";
-constexpr std::string_view preview_memory_message = "メモリが足りずプレビューできませんでした";
-// チェックボックスの印が本文で `[ ]` `[x]` `[X]` の形でないとき（ADR 0155 の追補 24）。
-constexpr std::string_view preview_task_stale_message = "プレビューが古いので切り替えられません";
 
 // 解析の結果の画像の状態（ADR 0155 の追補 50）。画像の節が無ければ null。同じ文書の前の状態
 // previous から同じ経路の状態を引き継ぐ（読めた画素を頼み直さない）。
@@ -95,11 +91,6 @@ images_of(const core::MarkdownDocument &document, const std::optional<core::File
     return around.size() == 3U && around.front() == '[' && around.back() == ']' &&
            (around.at(1) == ' ' || around.at(1) == 'x' || around.at(1) == 'X');
 }
-// 全面プレビューの間の知らせ（ADR 0155 の改訂 17）。鳴らさない。
-constexpr std::string_view preview_full_refused_message =
-    "プレビュー中は編集できません。Esc で戻る";
-// 全面の Space で切り替えるタスクがキャレットの行に無いとき（追補 25）。
-constexpr std::string_view preview_no_task_message = "この行にタスクはありません";
 
 // 全面プレビューの間も写す意図のうち、タブ・窓・枠・面の側（passes_full_preview の続き・
 // CPP-012 の関数の長さで分ける）。
@@ -355,8 +346,7 @@ void EditorController::accept(const TogglePreviewTask &intent)
         !task_mark_shape(state_.text().text_range(core::Offset{mark.value() - 1U},
                                                   core::Offset{mark.value() + 2U})))
     {
-        state_ = state_.with_command_message(
-            core::DisplayText::parse(preview_task_stale_message).value());
+        state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_preview_task_stale));
         return;
     }
     const core::Offset at{mark.value()};
@@ -423,12 +413,13 @@ void EditorController::request_preview(bool fresh)
     view.ticket = ++preview_tickets_;
     if (state_.text().size_bytes() > core::preview_byte_limit)
     {
-        view.notice = core::DisplayText::parse(preview_too_large_message).value();
+        view.notice = ui_notice(core::UiMessage::notice_preview_too_large,
+                                {core::binary_size_text(core::preview_byte_limit)});
         state_ = state_.with_shown_preview(std::move(view));
         return;
     }
     auto text = std::make_shared<const std::string>(state_.text().text());
-    ports_.markdown.parse(MarkdownRequest{view.ticket, std::move(text)});
+    ports_.markdown.parse(MarkdownRequest{view.ticket, std::move(text), state_.display_language()});
     state_ = state_.with_shown_preview(std::move(view));
 }
 
@@ -464,13 +455,14 @@ void EditorController::collect_preview()
         case core::MarkdownFailure::stopped:
             continue;
         case core::MarkdownFailure::too_large:
-            view.notice = core::DisplayText::parse(preview_too_large_message).value();
+            view.notice = ui_notice(core::UiMessage::notice_preview_too_large,
+                                    {core::binary_size_text(core::preview_byte_limit)});
             break;
         case core::MarkdownFailure::parser_rejected:
-            view.notice = core::DisplayText::parse(preview_rejected_message).value();
+            view.notice = ui_notice(core::UiMessage::notice_preview_parse_failed);
             break;
         case core::MarkdownFailure::insufficient_memory:
-            view.notice = core::DisplayText::parse(preview_memory_message).value();
+            view.notice = ui_notice(core::UiMessage::notice_preview_out_of_memory);
             break;
         }
         changed = true;
@@ -726,8 +718,7 @@ void EditorController::finish_vim_g(const VimKeyPress &press)
         accept(press);
         return;
     }
-    state_ =
-        state_.with_command_message(core::DisplayText::parse(preview_full_refused_message).value());
+    state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_preview_full_read_only));
 }
 
 void EditorController::run_full_preview_route(PreviewFullRoute route, const EditorIntent &intent)
@@ -786,8 +777,8 @@ void EditorController::run_full_preview_route(PreviewFullRoute route, const Edit
         toggle_caret_task();
         return;
     case PreviewFullRoute::refuse:
-        state_ = state_.with_command_message(
-            core::DisplayText::parse(preview_full_refused_message).value());
+        state_ =
+            state_.with_command_message(ui_notice(core::UiMessage::notice_preview_full_read_only));
         return;
     }
     std::unreachable();
@@ -828,8 +819,8 @@ void EditorController::toggle_caret_task()
     if (preview == nullptr || preview->document == nullptr || selection.anchor != selection.caret ||
         selected)
     {
-        state_ = state_.with_command_message(
-            core::DisplayText::parse(preview_full_refused_message).value());
+        state_ =
+            state_.with_command_message(ui_notice(core::UiMessage::notice_preview_full_read_only));
         return;
     }
     const core::TextBuffer &text = state_.text();
@@ -848,7 +839,7 @@ void EditorController::toggle_caret_task()
             return;
         }
     }
-    state_ = state_.with_command_message(core::DisplayText::parse(preview_no_task_message).value());
+    state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_preview_no_task));
 }
 
 // ---------------------------------------------------------------- 全面の選択（ADR 0155 の改訂 18）

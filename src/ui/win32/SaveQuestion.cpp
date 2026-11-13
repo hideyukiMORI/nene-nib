@@ -17,9 +17,10 @@ namespace nenenib::ui::win32
 namespace
 {
 // 固定の文は ASCII でないので、変換の失敗は空の文字に倒さず箱の失敗（cancel）と同じ道へ。
-[[nodiscard]] std::optional<std::wstring> utf16_of(core::SaveQuestionText text)
+[[nodiscard]] std::optional<std::wstring> utf16_of(core::SaveQuestionText text,
+                                                   core::DisplayLanguage language)
 {
-    auto wide = core::to_utf16(core::save_question_text(text));
+    auto wide = core::to_utf16(core::save_question_text(text, language));
     if (!wide.has_value())
     {
         return std::nullopt;
@@ -58,7 +59,8 @@ namespace
 
 // MessageBoxW のボタンの文言は OS が決め、hide の実機（Windows 11 26300・日本語）では
 // MB_YESNOCANCEL が「OK／さらに詳しく／キャンセル」と出た（#1282）。文言は自分で持つ。
-SaveAnswer ask_save(HWND owner, const wchar_t *title, SaveQuestion question)
+SaveAnswer ask_save(HWND owner, const wchar_t *title, SaveQuestion question,
+                    core::DisplayLanguage language)
 {
     const auto buttons = save_buttons(question);
     std::vector<std::wstring> labels;
@@ -67,7 +69,7 @@ SaveAnswer ask_save(HWND owner, const wchar_t *title, SaveQuestion question)
     rows.reserve(buttons.size());
     for (const auto &button : buttons)
     {
-        auto label = utf16_of(button.second);
+        auto label = utf16_of(button.second, language);
         if (!label.has_value())
         {
             return SaveAnswer::cancel;
@@ -79,7 +81,7 @@ SaveAnswer ask_save(HWND owner, const wchar_t *title, SaveQuestion question)
     {
         rows.push_back(TASKDIALOG_BUTTON{buttons[index].first, labels[index].c_str()});
     }
-    const auto message = utf16_of(save_message(question));
+    const auto message = utf16_of(save_message(question), language);
     if (!message.has_value())
     {
         return SaveAnswer::cancel;

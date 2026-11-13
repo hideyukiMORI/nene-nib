@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DisplayLanguage.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownFailure.hpp"
 #include "MarkdownStop.hpp"
@@ -15,6 +16,10 @@ namespace nenenib::core
 // 問い、true なら打ち切って MarkdownFailure::stopped を返す。
 [[nodiscard]] std::expected<MarkdownDocument, MarkdownFailure>
 parse_markdown(std::string_view text, const MarkdownStop &stop);
+// 画像の代わりの文字（`[画像: alt]`）を language の文で作る形（ADR 0123 の追補 2026-11-13）。上の
+// 形は日本語の文。
+[[nodiscard]] std::expected<MarkdownDocument, MarkdownFailure>
+parse_markdown(std::string_view text, const MarkdownStop &stop, DisplayLanguage language);
 
 // md4c の大きさの型（unsigned）に入るか。入らない本文は parse_markdown が too_large で断る。
 [[nodiscard]] bool markdown_size_fits(std::size_t size) noexcept;

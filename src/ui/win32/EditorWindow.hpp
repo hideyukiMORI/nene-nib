@@ -371,6 +371,7 @@ class EditorWindow final
     void run_toggle_explorer();
     void run_insert_date_time();
     void run_choose_encoding();
+    void run_choose_language();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();

@@ -50,6 +50,7 @@
 #include "ScriptedSettings.hpp"
 #include "ScriptedStartLists.hpp"
 #include "ScriptedThemes.hpp"
+#include "ScriptedUiLanguage.hpp"
 #include "Session.hpp"
 #include "SessionEnd.hpp"
 #include "SessionTab.hpp"
@@ -396,6 +397,7 @@ void verify_quiet_start_with_files()
     ScriptedShellRegistration shell_registration;
     ScriptedImages images;
     ScriptedStartLists start_lists;
+    ScriptedUiLanguage ui_language;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -406,7 +408,7 @@ void verify_quiet_start_with_files()
                     themes,       session,         history,    folders,    bookmarks,
                     text_layouts, autosave,        fonts,      bell,       markdown,
                     reads,        language_server, wall_clock, printer,    shell_registration,
-                    images,       start_lists},
+                    images,       start_lists,     ui_language},
         {work_open('a'), work_open('b')});
     // 最初の frame の合図でも、起動画面が出ていなければ起動画面の読みを頼まない（ADR 0172 の決定
     // 3）。
@@ -521,6 +523,9 @@ void verify_quiet_after_start_lists()
                editing.start_lists().collects() == 1,
            "with the read finished, opening, switching, new tabs, typing, saving and panes never "
            "touch the start lists");
+    // 表示言語の観測は起動の 1 回だけ（ADR 0123 の追補 2026-11-13 の決定 2・#1019）。
+    expect(editing.ui_language().calls() == 1,
+           "opening, switching, new tabs, typing, saving and panes never observe the OS language");
 }
 
 // 起動・開く・切り替え・新しいタブ・保存・打鍵の道では、履歴を読まない・書かない（D24・決定 8）。

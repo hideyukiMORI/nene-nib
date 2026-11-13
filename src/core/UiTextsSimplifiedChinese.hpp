@@ -217,6 +217,12 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::start_new_file, "新建文件"},
     {UiMessage::start_new_file_detail, "直接开始输入"},
     {UiMessage::start_open_folder, "打开文件夹"},
+    // T1b
+    {UiMessage::operation_choose_language_name, "选择显示语言"},
+    {UiMessage::operation_choose_language_description, "选择界面文字的语言"},
+    {UiMessage::palette_mark_separator, "　"},
+    {UiMessage::language_choice_system, "跟随 Windows"},
+    // T1b
     {UiMessage::start_open_folder_detail, "选择根文件夹并显示资源管理器"},
 }};
 } // namespace nenenib::core

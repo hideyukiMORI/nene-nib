@@ -61,5 +61,7 @@ inline constexpr std::array<SaveButton, 2> rendering_lost_buttons{{
 }
 
 // 箱を出して答えを返す。入れ子のメッセージループを回す（MessageBoxW と同じ）。
-[[nodiscard]] SaveAnswer ask_save(HWND owner, const wchar_t *title, SaveQuestion question);
+// 文は language の文（#1019・ui は controller の display_language から引く）。
+[[nodiscard]] SaveAnswer ask_save(HWND owner, const wchar_t *title, SaveQuestion question,
+                                  core::DisplayLanguage language);
 } // namespace nenenib::ui::win32

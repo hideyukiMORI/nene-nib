@@ -1012,16 +1012,18 @@ void verify_vim_insert_cycles()
 // を、起動画面が描く鍵と 同じ operation_guide_entry で両モードとも引ける。
 void verify_folder_row_key()
 {
-    expect(
-        core::operation_guide_entry(core::EditorOperation::choose_explorer_root,
-                                    core::EditMode::ordinary)
-                    .key == "Ctrl+Shift+R" &&
-            core::operation_guide_entry(core::EditorOperation::choose_explorer_root,
-                                        core::EditMode::vim)
-                    .key == "Ctrl+Shift+R" &&
-            core::operation_guide_entry(core::EditorOperation::new_tab, core::EditMode::vim).key ==
-                "Ctrl+T",
-        "the start rows read Ctrl+Shift+R for the folder and Ctrl+T for the new file");
+    expect(core::operation_guide_entry(core::EditorOperation::choose_explorer_root,
+                                       core::EditMode::ordinary,
+                                       nenenib::core::DisplayLanguage::japanese)
+                       .key == "Ctrl+Shift+R" &&
+               core::operation_guide_entry(core::EditorOperation::choose_explorer_root,
+                                           core::EditMode::vim,
+                                           nenenib::core::DisplayLanguage::japanese)
+                       .key == "Ctrl+Shift+R" &&
+               core::operation_guide_entry(core::EditorOperation::new_tab, core::EditMode::vim,
+                                           nenenib::core::DisplayLanguage::japanese)
+                       .key == "Ctrl+T",
+           "the start rows read Ctrl+Shift+R for the folder and Ctrl+T for the new file");
 }
 } // namespace
 
