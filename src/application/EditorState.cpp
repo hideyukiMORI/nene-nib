@@ -310,6 +310,18 @@ EditorState EditorState::with_mode(core::EditMode mode) const
     return next;
 }
 
+core::DisplayLanguage EditorState::display_language() const noexcept
+{
+    return display_language_;
+}
+
+EditorState EditorState::with_display_language(core::DisplayLanguage language) const
+{
+    EditorState next(*this);
+    next.display_language_ = language;
+    return next;
+}
+
 const std::optional<CommandInput> &EditorState::command_input() const noexcept
 {
     return command_input_;

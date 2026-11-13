@@ -1216,6 +1216,7 @@ EditorFrame EditorController::frame()
 void EditorController::finish_frame(EditorFrame &result, const PaneSource &source, bool gridded,
                                     std::size_t lexed)
 {
+    result.language = state_.display_language();
     if (gridded)
     {
         GridTally tally{0, 0, lexed};
