@@ -158,9 +158,10 @@ void placed_after_effect(EditorState &state, const core::VimStep &step)
     {
         return std::nullopt;
     }
-    return found_match(
-        state.text(), pattern.value(),
-        core::VimMatchRequest{from, line->direction(), core::vim_search_count(state.vim())});
+    return found_match(state.text(), pattern.value(),
+                       core::VimMatchRequest{from, line->direction(),
+                                             core::vim_search_count(state.vim()),
+                                             state.vim().wrapscan});
 }
 
 // 境界が文字の途中か CRLF の間なら、覆う範囲を外へ 1 バイト広げる向きに動かせるか。
@@ -1362,16 +1363,17 @@ void EditorController::accept(const SearchHop &intent)
         return;
     }
     const std::size_t count = core::vim_search_count(state_.vim());
-    const auto match =
-        found_match(state_.text(), pattern.value(),
-                    core::VimMatchRequest{preview.value().match.value(), intent.relative, count});
+    const bool wrapscan = state_.vim().wrapscan;
+    const auto match = found_match(
+        state_.text(), pattern.value(),
+        core::VimMatchRequest{preview.value().match.value(), intent.relative, count, wrapscan});
     if (!match.has_value())
     {
         return;
     }
-    const auto from =
-        found_match(state_.text(), pattern.value(),
-                    core::VimMatchRequest{match.value(), core::opposite(line->direction()), count});
+    const auto from = found_match(
+        state_.text(), pattern.value(),
+        core::VimMatchRequest{match.value(), core::opposite(line->direction()), count, wrapscan});
     if (!from.has_value())
     {
         return;

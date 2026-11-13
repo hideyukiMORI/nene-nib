@@ -21,6 +21,7 @@
 #include "ExLspRequest.hpp"
 #include "ExResult.hpp"
 #include "ExRootRequest.hpp"
+#include "ExSetFormTable.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
 #include "ExWindowState.hpp"
@@ -66,6 +67,7 @@
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <expected>
@@ -1248,8 +1250,8 @@ void verify_ex_smartcase()
     expect(carries_settings(off) && !settings_of(off).smartcase &&
                message_of(off) == "smartcase=off",
            "set nosmartcase turns it off");
-    // `ic!` `invic` は反転として受ける（#1525・verify_ex_set_toggle）。
-    for (const auto text : {"set noic?", "set icase", "set ignorecas"})
+    // `ic!` `invic` は反転、`noic?` は問いとして受ける（#1525・#1561・verify_ex_set_toggle）。
+    for (const auto text : {"set icase", "set ignorecas"})
     {
         const auto refused = core::evaluate_ex(text, defaults, Appearance::dark);
         expect(!refused.has_value(), "other spellings are refused");
@@ -1283,17 +1285,38 @@ void verify_ex_relativenumber()
     expect(asked.has_value() && !carries_settings(asked) &&
                message_of(asked) == "relativenumber=on",
            "rnu? tells the current value without changing settings");
-    // `rnu!` は反転として受ける（#1525・verify_ex_set_toggle）。
-    for (const auto text : {"set rn", "set nornu?"})
+    // `rnu!` は反転、`nornu?` は問いとして受ける（#1525・#1561・verify_ex_set_toggle）。
+    for (const auto text : {"set rn", "set rnux"})
     {
         expect(!core::evaluate_ex(text, defaults, Appearance::dark).has_value(),
                "other spellings of relativenumber are refused");
     }
 }
 
-// 追従の余白（#1041）。`so=N` は 0〜999 の 10 進だけを受け、`so?` と名前だけの `so` は問い。
+// 数の書き方は Vim の vim_str2nr（`010` は 8 進・`08` は 10 進・`0x10` は 16 進・実測・#1561）。
+void verify_ex_scrolloff_numbers()
+{
+    const auto defaults = core::default_editor_settings();
+    for (const auto &[text, value] : std::array<std::pair<std::string_view, std::size_t>, 4>{
+             {{"set so=010", 8}, {"set so=08", 8}, {"set so=0x10", 16}, {"set so:3", 3}}})
+    {
+        const auto read = core::evaluate_ex(text, defaults, Appearance::dark);
+        expect(carries_settings(read) && settings_of(read).scrolloff == value,
+               (std::string(text) + " reads the number the Vim way").c_str());
+    }
+    for (const auto text : {"set so=-1", "set so=", "set so=3x", "set so=x", "set so=2147483648"})
+    {
+        const auto refused = core::evaluate_ex(text, defaults, Appearance::dark);
+        expect(!refused.has_value() && std::holds_alternative<core::ExFailure>(refused.error()) &&
+                   std::get<core::ExFailure>(refused.error()) == core::ExFailure::invalid_argument,
+               "a negative or non-decimal margin is an invalid argument");
+    }
+}
+
+// 追従の余白（#1041）。`so=N` は 0〜999 を置き、`so?` と名前だけの `so` は問い。
 void verify_ex_scrolloff()
 {
+    verify_ex_scrolloff_numbers();
     const auto defaults = core::default_editor_settings();
     for (const auto text : {"set so=5", "set scrolloff=5"})
     {
@@ -1313,13 +1336,11 @@ void verify_ex_scrolloff()
         expect(asked.has_value() && !carries_settings(asked) && message_of(asked) == "scrolloff=7",
                "so? and so tell the current margin without changing settings");
     }
-    for (const auto text : {"set so=1000", "set so=-1", "set so=", "set so=05", "set so=x"})
-    {
-        const auto refused = core::evaluate_ex(text, defaults, Appearance::dark);
-        expect(!refused.has_value() && std::holds_alternative<core::ExFailure>(refused.error()) &&
-                   std::get<core::ExFailure>(refused.error()) == core::ExFailure::invalid_argument,
-               "a margin outside 0 to 999 or not in plain decimal is an invalid argument");
-    }
+    // Vim 9.1 は 999 を超える値も受け、画面の半分で切り詰める（#1561）。保存は上限に畳む。
+    const auto wider = core::evaluate_ex("set so=1000", defaults, Appearance::dark);
+    expect(carries_settings(wider) && settings_of(wider).scrolloff == 999 &&
+               message_of(wider) == "scrolloff=999",
+           "a margin above 999 is stored as 999");
     expect(core::scrolloff_of("0") == std::optional<std::size_t>{0} &&
                core::scrolloff_of("42") == std::optional<std::size_t>{42} &&
                !core::scrolloff_of("4a").has_value(),
@@ -1973,10 +1994,125 @@ void verify_ex_window_recheck()
     verify_ex_window_recheck_closed();
 }
 
+// `:set` の形の表（#1561）。Vim 9.1 の実測で後ろの鍵が流れる形は受け（複数の引数は止まらずに
+// 最後まで）、流れない形は断る。Nib が方針として断る形は nib_refused_set_forms の表だけ。
+[[nodiscard]] bool nib_accepts_set(std::string_view text)
+{
+    const auto result = core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark);
+    return result.has_value() && !result.value().stopped.has_value();
+}
+
+void verify_ex_set_form_table()
+{
+    for (const auto &[text, flows] : vim_set_forms)
+    {
+        const bool refused =
+            std::ranges::find(nib_refused_set_forms, text) != nib_refused_set_forms.end();
+        expect(nib_accepts_set(text) == (flows && !refused),
+               (std::string(text) + (flows && !refused ? " is accepted as in Vim" : " is refused"))
+                   .c_str());
+    }
+}
+
+// 複数の引数は左から順に置き、次の引数は置いた後の値を読む。誤りの引数で止まって前の分は残す
+// （Vim の do_set・実測）。
+void verify_ex_set_arguments()
+{
+    const auto defaults = core::default_editor_settings();
+    const auto both = core::evaluate_ex("set ic scs", defaults, Appearance::dark);
+    expect(carries_settings(both) && settings_of(both).ignorecase && settings_of(both).smartcase &&
+               message_of(both) == "ignorecase=on smartcase=on",
+           "set ic scs places both in one answer");
+    const auto twice = core::evaluate_ex("set ic ic!", defaults, Appearance::dark);
+    expect(carries_settings(twice) && !settings_of(twice).ignorecase,
+           "the second argument reads the value the first one placed");
+    const auto partial = core::evaluate_ex("set ic bogus scs", defaults, Appearance::dark);
+    expect(carries_settings(partial) && settings_of(partial).ignorecase &&
+               !settings_of(partial).smartcase && partial.value().stopped.has_value(),
+           "an unknown argument stops the line and keeps what was placed before it");
+    const auto first = core::evaluate_ex("set bogus ic", defaults, Appearance::dark);
+    expect(!first.has_value(), "a first unknown argument refuses the line");
+    const auto request = core::evaluate_ex("set ic lsp", defaults, Appearance::dark);
+    expect(carries_settings(request) && request.value().stopped.has_value(),
+           "an argument the controller answers stops a line of several");
+    const auto search = core::evaluate_ex(
+        "set nohls nows", defaults,
+        core::ExWindowState{Appearance::dark, core::VimSearchHighlight::on, true});
+    expect(search.has_value() &&
+               search.value().highlight == std::optional{core::VimSearchHighlight::off} &&
+               search.value().wrapscan == std::optional{false},
+           "Vim state options are placed together");
+    const auto font = core::evaluate_ex("set ic guifont=MS Gothic:h12", defaults, Appearance::dark);
+    expect(carries_settings(font) && settings_of(font).ignorecase &&
+               settings_of(font).font_family.text() == "MS Gothic",
+           "guifont= takes the rest of the line with its spaces");
+    for (const auto text : {"se ic", "setl ic", "setlocal ic", "setg ic", "setglobal ic"})
+    {
+        const auto scoped = core::evaluate_ex(text, defaults, Appearance::dark);
+        expect(carries_settings(scoped) && settings_of(scoped).ignorecase,
+               (std::string(text) + " is :set").c_str());
+    }
+}
+
+// 値を変えられない option と wrapscan（#1561）。
+void verify_ex_set_fixed_options()
+{
+    const auto defaults = core::default_editor_settings();
+    for (const auto &[text, message] : std::array<std::pair<std::string_view, std::string_view>, 6>{
+             {{"set magic", "magic=on"},
+              {"set magic?", "magic=on"},
+              {"set noet", "expandtab=off"},
+              {"set sw=8", "shiftwidth=8"},
+              {"set ts?", "tabstop=8"},
+              {"set sw&", "shiftwidth=8"}}})
+    {
+        const auto kept = core::evaluate_ex(text, defaults, Appearance::dark);
+        expect(kept.has_value() && !carries_settings(kept) && message_of(kept) == message,
+               (std::string(text) + " is accepted without changing anything").c_str());
+    }
+    for (const auto text : {"set nomagic", "set et", "set sw=4", "set ts=2", "set sw+=1"})
+    {
+        const auto refused = core::evaluate_ex(text, defaults, Appearance::dark);
+        expect(!refused.has_value() && std::holds_alternative<core::ExFailure>(refused.error()) &&
+                   std::get<core::ExFailure>(refused.error()) ==
+                       core::ExFailure::unsupported_argument,
+               (std::string(text) + " is not supported").c_str());
+    }
+    const core::ExWindowState unwrapped{Appearance::dark, core::VimSearchHighlight::on, true,
+                                        false};
+    expect(core::evaluate_ex("set nows", defaults, Appearance::dark).value().wrapscan ==
+                   std::optional{false} &&
+               core::evaluate_ex("set ws!", defaults, unwrapped).value().wrapscan ==
+                   std::optional{true} &&
+               core::evaluate_ex("set ws&", defaults, unwrapped).value().wrapscan ==
+                   std::optional{true} &&
+               message_of(core::evaluate_ex("set ws?", defaults, unwrapped)) == "wrapscan=off",
+           "wrapscan is a Vim state option toggled, reset and asked like incsearch");
+}
+
+// 複数の引数で 2 つ変えても保存は 1 回、止まった行は前の分を写してから断る（#1561）。
+void verify_ex_set_arguments_controller()
+{
+    Editing editor;
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply_frame(app::SelectEditMode{EditMode::vim}));
+    const auto both = run_ex(controller, "set ic scs");
+    expect(both.settings.ignorecase && both.settings.smartcase && editor.settings().writes() == 1,
+           "two arguments save once");
+    const auto stopped = run_ex(controller, "set noic bogus");
+    expect(!stopped.settings.ignorecase && editor.settings().writes() == 2 &&
+               stopped.command_message.has_value(),
+           "a stopped line keeps the earlier argument and tells the failure");
+}
+
 } // namespace
 
 void verify_ex_settings()
 {
+    verify_ex_set_form_table();
+    verify_ex_set_arguments();
+    verify_ex_set_fixed_options();
+    verify_ex_set_arguments_controller();
     verify_font_sizes();
     verify_settings_loading();
     verify_settings_adjustment();

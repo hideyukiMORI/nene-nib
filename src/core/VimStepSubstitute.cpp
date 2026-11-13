@@ -8,6 +8,7 @@
 #include "ExSubstituteRequest.hpp"
 #include "LineEnding.hpp"
 #include "SubstituteAll.hpp"
+#include "VimCaret.hpp"
 #include "VimCharacterBoundary.hpp"
 #include "VimColumnWish.hpp"
 #include "VimMarkEdits.hpp"
@@ -412,9 +413,14 @@ resolved_lines(const VimEditorView &view, const std::optional<ExRange> &range)
 {
     const bool counted = result.edits.empty();
     auto notice = counted_notice(result, counted);
+    // 数えるだけ（`n`）は今の行の最初の非空白へ（範囲がほかの行でも行は動かない・Vim の do_sub の
+    // 末尾の beginline(BL_WHITE | BL_FIX)・#1607 の 1
+    // つ目の実測）。欲しい列も着いた桁から決め直す。
     if (counted)
     {
-        VimStep step{std::move(next), VimNoEffect{}};
+        next.wanted_column = std::nullopt;
+        VimStep step{std::move(next),
+                     VimMoveTo{vim_first_non_blank(view.text, view.selection.caret)}};
         step.notice = std::move(notice);
         return context_marked(std::move(step), view);
     }

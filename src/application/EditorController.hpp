@@ -853,6 +853,9 @@ class EditorController final
     [[nodiscard]] std::optional<core::VimRepeatFailure>
     ran_ex_result(std::string_view text,
                   const std::expected<core::ExResult, core::ExEvaluationFailure> &result);
+    // 写した答えの知らせと、複数の引数の `:set` が途中で止まった断り（#1561）。
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    noted_ex_result(std::string_view text, const core::ExResult &result);
     // Vim の入力行（`:` `/` `?`）が開かれた後、意図の出口で入力行が閉じているか別の面に置き換わって
     // いれば、保留のオペレータと始め直していない `Ctrl-o` の印を捨てる 1 か所（#1549・#1569）。
     void settle_vim_line();

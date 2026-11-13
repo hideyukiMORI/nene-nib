@@ -148,38 +148,58 @@ using Landing = std::optional<std::pair<Offset, bool>>;
 
 // 起点の行の外。前向きは下の行から本文の末尾まで、折り返して先頭から起点の行（行全体）まで。
 // 後ろ向きは上の行から先頭まで、折り返して末尾から起点の行まで（#583・意味は行ごとの走査と同じ）。
+// request.wrapscan が偽なら折り返さない（Vim の searchit の `!p_ws` で 1 周目だけ・#1561）。
 [[nodiscard]] Landing searched_outside(VimSearchWalk &walk, const VimPattern &pattern,
-                                       std::size_t first, VimSearchDirection direction)
+                                       std::size_t first, const VimMatchRequest &request)
 {
-    if (direction == VimSearchDirection::forward)
+    const bool wrapscan = request.wrapscan;
+    if (request.direction == VimSearchDirection::forward)
     {
         const auto next = walk.line_after(first);
         const auto below = next.has_value()
                                ? found_forward(walk, pattern, next.value(), walk.last_line())
                                : std::nullopt;
-        return below.has_value() ? landing(below, false)
-                                 : landing(found_forward(walk, pattern, 0, first), true);
+        if (below.has_value() || !wrapscan)
+        {
+            return landing(below, false);
+        }
+        return landing(found_forward(walk, pattern, 0, first), true);
     }
     const auto previous = walk.line_before(first);
     const auto above =
         previous.has_value() ? found_backward(walk, pattern, previous.value(), 0) : std::nullopt;
-    return above.has_value()
-               ? landing(above, false)
-               : landing(found_backward(walk, pattern, walk.last_line(), first), true);
+    if (above.has_value() || !wrapscan)
+    {
+        return landing(above, false);
+    }
+    return landing(found_backward(walk, pattern, walk.last_line(), first), true);
 }
 
 // 1 回ぶんの検索。着いたバイト位置と、本文の端を越えて折り返したか。起点の行では必要な桁を
-// 要求する（前向きは起点の次の桁以降、後ろ向きは起点より前）。
+// 要求する（前向きは起点の次の桁以降、後ろ向きは起点より前）。向きと折り返しは request から読む。
 [[nodiscard]] Landing searched_once(const TextBuffer &text, Offset from, const VimPattern &pattern,
-                                    VimSearchDirection direction)
+                                    const VimMatchRequest &request)
 {
     VimSearchWalk walk(text, pattern);
+    const VimSearchDirection direction = request.direction;
     const std::size_t first = text.line_start(text.position_of(from).line).value;
     const std::size_t index = from.value - first;
     const auto own = found_in_line(walk.line_at(first), pattern, direction,
                                    direction == VimSearchDirection::forward ? index + 1 : index);
     return own.has_value() ? landing(first + own.value(), false)
-                           : searched_outside(walk, pattern, first, direction);
+                           : searched_outside(walk, pattern, first, request);
+}
+
+// 見つからないときの報せ（Vim の searchit: 'wrapscan' なら E486、無ければ向きの端の E385 / E384）。
+[[nodiscard]] VimSearchNoticeKind missed(const VimMatchRequest &request) noexcept
+{
+    if (request.wrapscan)
+    {
+        return VimSearchNoticeKind::pattern_not_found;
+    }
+    return request.direction == VimSearchDirection::forward
+               ? VimSearchNoticeKind::hit_bottom_without_match
+               : VimSearchNoticeKind::hit_top_without_match;
 }
 } // namespace
 
@@ -243,10 +263,10 @@ vim_find_match(const TextBuffer &text, const VimPattern &pattern, const VimMatch
     std::optional<Offset> first = std::nullopt;
     for (std::size_t step = 0; step < request.count; ++step)
     {
-        const auto hit = searched_once(text, at, pattern, request.direction);
+        const auto hit = searched_once(text, at, pattern, request);
         if (!hit.has_value())
         {
-            return std::unexpected(VimSearchNoticeKind::pattern_not_found);
+            return std::unexpected(missed(request));
         }
         at = hit.value().first;
         wrapped = wrapped || hit.value().second;

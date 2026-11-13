@@ -149,9 +149,10 @@ namespace
         return search_noticed(state, VimSearchNotice{VimSearchNoticeKind::unsupported_pattern,
                                                      std::string{}, parsed.error()});
     }
-    const auto hit = vim_find_match(view.text, parsed.value(),
-                                    VimMatchRequest{view.text.position_of(request.origin),
-                                                    request.direction, resolved_count(state)});
+    const auto hit =
+        vim_find_match(view.text, parsed.value(),
+                       VimMatchRequest{view.text.position_of(request.origin), request.direction,
+                                       resolved_count(state), state.wrapscan});
     if (!hit.has_value())
     {
         return search_noticed(
@@ -244,8 +245,17 @@ namespace
         VimSearchSnapshot::from(word.has_value() ? "\\<" + text + "\\>" : text, direction,
                                 view.search_case, VimSmartcase::ignored);
     // 探し始めるのは語の先頭だが、範囲の端は元のキャレットである（実測）。
-    return search_from(remembered, view,
-                       VimSearchRequest{found.value().begin, view.selection.caret, direction});
+    VimStep step = search_from(
+        remembered, view, VimSearchRequest{found.value().begin, view.selection.caret, direction});
+    // Vim の nv_ident は探す前にキャレットを語の先頭へ置き（setpcmark の後）、見つからなくても
+    // そこに残る。'wrapscan' なら語そのものに必ず当たるので、見えるのは `:set nows` の E385 / E384
+    // だけ（#1561・FZ1 の実測）。
+    if (step.failure.has_value() && state.mode == VimMode::normal && !state.pending.has_value())
+    {
+        step.effect = VimMoveTo{found.value().begin};
+        return context_marked(std::move(step), view);
+    }
+    return step;
 }
 
 // 検索の入力行を開く（決定 2）。VimState は変えないので保留・回数・記録はそのまま残る。

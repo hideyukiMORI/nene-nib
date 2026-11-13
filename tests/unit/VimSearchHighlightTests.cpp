@@ -268,7 +268,8 @@ void verify_ex_highlight_commands()
     const auto theme = core::evaluate_ex("colorscheme dracula", settings, Appearance::dark).value();
     expect(!theme.highlight.has_value(),
            "commands that are not about the highlight leave it alone");
-    for (const auto text : {"nohlsearch now", "noh 1", "set hlsearch=1", "set hls", "hlsearch"})
+    // 短い名前の `set hls` は Vim と同じく受ける（#1561・ExSettingsTests の形の表）。
+    for (const auto text : {"nohlsearch now", "noh 1", "set hlsearch=1", "set hlx", "hlsearch"})
     {
         expect(!core::evaluate_ex(text, settings, Appearance::dark),
                "only the four measured spellings are accepted");

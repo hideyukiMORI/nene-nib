@@ -22,6 +22,7 @@
 #include "LanguageTable.hpp"
 #include "Utf8.hpp"
 #include "VimSearchHighlight.hpp"
+#include "VirtualColumn.hpp"
 
 #include <algorithm>
 #include <array>
@@ -802,34 +803,43 @@ constexpr std::array<std::string_view, 6> window_setting_names{"wrap",     "rela
 
 // 真偽の option の今の値を読む関数（設定の正本の欄か、設定に載せない Vim の状態から）。
 using SwitchReader = bool (*)(const EditorSettings &, const ExWindowState &) noexcept;
-// 表の 1 行: 長い名前・Vim の短い名前（無ければ空）・今の値。
-using SwitchOption = std::tuple<std::string_view, std::string_view, SwitchReader>;
+// 表の 1 行: 長い名前・Vim の短い名前（無ければ空）・今の値・Nib が値を変えられるか。変えられない
+// 行（Nib の振る舞いが固定の option・#1561）は今の値と同じ値を置く形だけを受けて何もしない。
+using SwitchOption = std::tuple<std::string_view, std::string_view, SwitchReader, bool>;
 
 // `:set` の真偽の option（長い名前と Vim の短い名前・#1525）。`{name}!` `no{name}!` `inv{name}` の
 // 反転と `{name}&` の既定値はこの表の 1 か所から引く（名前と値を同じ行に置く・レビュー L3）。
 // hlsearch と incsearch の値は設定に無い Vim の状態（ExWindowState）から読む（レビュー L4）。
-constexpr std::array<SwitchOption, 10> switch_options{{
+// wrapscan も Vim の状態（#1561）。magic と expandtab は Nib の振る舞いが固定（照合器は magic・
+// ADR 0015 の決定 9〜11 の noexpandtab）なので、変えられない行（#1561）。
+constexpr std::array<SwitchOption, 13> switch_options{{
     {"wrap", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
-     { return settings.wrapping == LineWrapping::wrap; }},
+     { return settings.wrapping == LineWrapping::wrap; }, true},
     {"guide", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
-     { return settings.guide == GuideVisibility::shown; }},
+     { return settings.guide == GuideVisibility::shown; }, true},
     {"ignorecase", "ic", [](const EditorSettings &settings, const ExWindowState &) noexcept
-     { return settings.ignorecase; }},
+     { return settings.ignorecase; }, true},
     {"smartcase", "scs", [](const EditorSettings &settings, const ExWindowState &) noexcept
-     { return settings.smartcase; }},
+     { return settings.smartcase; }, true},
     {"relativenumber", "rnu", [](const EditorSettings &settings, const ExWindowState &) noexcept
-     { return settings.relativenumber; }},
+     { return settings.relativenumber; }, true},
     {minimap_feature, "", [](const EditorSettings &settings, const ExWindowState &) noexcept
-     { return minimap_shown(settings); }},
+     { return minimap_shown(settings); }, true},
     {"explorer", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
-     { return settings.explorer; }},
-    {"lsp", "",
-     [](const EditorSettings &settings, const ExWindowState &) noexcept { return settings.lsp; }},
+     { return settings.explorer; }, true},
+    {"lsp", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.lsp; }, true},
     // `:noh` の後（suspended）も 'hlsearch' は立っている（Vim の no_hlsearch は別の旗）。
     {"hlsearch", "hls", [](const EditorSettings &, const ExWindowState &window) noexcept
-     { return window.highlight != VimSearchHighlight::off; }},
-    {"incsearch", "is",
-     [](const EditorSettings &, const ExWindowState &window) noexcept { return window.incsearch; }},
+     { return window.highlight != VimSearchHighlight::off; }, true},
+    {"incsearch", "is", [](const EditorSettings &, const ExWindowState &window) noexcept
+     { return window.incsearch; }, true},
+    {"wrapscan", "ws", [](const EditorSettings &, const ExWindowState &window) noexcept
+     { return window.wrapscan; }, true},
+    {"magic", "", [](const EditorSettings &, const ExWindowState &) noexcept { return true; },
+     false},
+    {"expandtab", "et",
+     [](const EditorSettings &, const ExWindowState &) noexcept { return false; }, false},
 }};
 
 // 表の真偽の option の行。表に無ければ空。
@@ -837,7 +847,7 @@ constexpr std::array<SwitchOption, 10> switch_options{{
 {
     for (const auto &option : switch_options)
     {
-        const auto &[long_name, short_name, reader] = option;
+        const auto &[long_name, short_name, reader, settable] = option;
         if (name == long_name || (!short_name.empty() && name == short_name))
         {
             return option;
@@ -887,6 +897,41 @@ toggled_text(std::string_view option, const EditorSettings &settings, const ExWi
     return switch_text(found.value(), !switch_value(found.value(), settings, window));
 }
 
+// 数の option の今の値を読む関数（#1561）。
+using NumberReader = std::size_t (*)(const EditorSettings &) noexcept;
+// 表の 1 行: 長い名前・Vim の短い名前・今の値・Nib が値を変えられるか。変えられない行は今の値と
+// 同じ値を置く形だけを受けて何もしない（真偽の表と同じ・#1561）。
+using NumberOption = std::tuple<std::string_view, std::string_view, NumberReader, bool>;
+
+// `:set` の数の option（#1561）。scrolloff は設定の正本、shiftwidth と tabstop は Nib の固定の値
+// （ADR 0015 の決定 9〜11・ADR 0045）。`=` `:` `+=` `-=` `^=` `&` `<` と問いはこの表から引く。
+constexpr std::array<NumberOption, 3> number_options{{
+    {"scrolloff", "so", [](const EditorSettings &settings) noexcept { return settings.scrolloff; },
+     true},
+    {"shiftwidth", "sw", [](const EditorSettings &) noexcept { return vim_shift_width; }, false},
+    {"tabstop", "ts", [](const EditorSettings &) noexcept { return vim_tab_stop; }, false},
+}};
+
+// 表の数の option の行。表に無ければ空。
+[[nodiscard]] std::optional<NumberOption> number_named(std::string_view name) noexcept
+{
+    for (const auto &option : number_options)
+    {
+        const auto &[long_name, short_name, reader, settable] = option;
+        if (name == long_name || name == short_name)
+        {
+            return option;
+        }
+    }
+    return std::nullopt;
+}
+
+// 表の数の option の `name=<今の値>`（長い名前）。
+[[nodiscard]] std::string number_text(const NumberOption &option, std::size_t value)
+{
+    return std::string(std::get<0>(option)) + "=" + std::to_string(value);
+}
+
 // 既定値へ戻す接尾辞（Vim 9.1 の実測: `&` `&vim` `&vi` はどれも既定値へ戻す）。
 constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
 
@@ -903,6 +948,18 @@ constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
     return text;
 }
 
+// 既定値へ戻す名前。真偽の `no{name}&` も `{name}` の既定値へ戻す（Vim 9.1 の実測・#1561。数の
+// `no{name}&` は E474 のまま）。
+[[nodiscard]] std::string_view reset_name(std::string_view name) noexcept
+{
+    if (!switch_named(name).has_value() && name.starts_with("no") &&
+        switch_named(name.substr(2)).has_value())
+    {
+        return name.substr(2);
+    }
+    return name;
+}
+
 // `{name}&`（`&vim` `&vi`）を既定値の書き方へ（#1525）。既定値は保存する設定の正本
 // default_editor_settings と、Vim の状態の既定（ExWindowState の初期値・クリップボード）。文書の
 // 値（filetype・fileencoding・fileformat・display）は受けない（後の読みが unknown_option で断る）。
@@ -916,7 +973,7 @@ constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
     {
         return std::nullopt;
     }
-    const std::string_view name = option.substr(0, option.size() - suffix->size());
+    const std::string_view name = reset_name(option.substr(0, option.size() - suffix->size()));
     const EditorSettings defaults = default_editor_settings();
     const auto switched = switch_named(name);
     if (switched.has_value())
@@ -924,9 +981,10 @@ constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
         return switch_text(switched.value(), switch_value(switched.value(), defaults,
                                                           ExWindowState{Appearance::dark}));
     }
-    if (std::ranges::find(scrolloff_names, name) != scrolloff_names.end())
+    const auto number = number_named(name);
+    if (number.has_value())
     {
-        return std::string(scrolloff_names.front()) + "=" + std::to_string(defaults.scrolloff);
+        return number_text(number.value(), std::get<2>(number.value())(defaults));
     }
     if (name == "clipboard")
     {
@@ -1015,20 +1073,536 @@ read_set_option(std::string_view option, const EditorSettings &settings)
     return unsaved_option(option);
 }
 
-// 反転と既定値の書き方を今の読みの形へ 1 段だけ写してから読む（#1525）。写した形は `&` `!`
-// `inv` を持たない。
-[[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
-set_option(std::string_view option, const EditorSettings &settings, const ExWindowState &window)
+// ------------------------------------------------ `:set` の形（#1561・ADR 0022 の追補）
+
+// 文字列の option の Vim の短い名前（真偽と数は表の列が持つ）。
+constexpr std::array<std::pair<std::string_view, std::string_view>, 2> value_aliases{
+    {{"clipboard", "cb"}, {"guifont", "gfn"}}};
+
+// 表のどれかの名前（長い名前か短い名前）なら長い名前。どれでもなければ空。
+[[nodiscard]] std::optional<std::string_view> long_name_of(std::string_view name) noexcept
 {
-    const auto rewritten =
-        toggled_text(option, settings, window).or_else([option] { return reset_text(option); });
+    const auto switched = switch_named(name);
+    if (switched.has_value())
+    {
+        return std::get<0>(switched.value());
+    }
+    const auto number = number_named(name);
+    if (number.has_value())
+    {
+        return std::get<0>(number.value());
+    }
+    for (const auto &[long_name, short_name] : value_aliases)
+    {
+        if (name == long_name || name == short_name)
+        {
+            return long_name;
+        }
+    }
+    return std::nullopt;
+}
+
+// Vim の option の名前の字（do_set の名前は英数字の並び）。
+[[nodiscard]] bool option_letter(char letter) noexcept
+{
+    return (letter >= 'a' && letter <= 'z') || (letter >= 'A' && letter <= 'Z') ||
+           (letter >= '0' && letter <= '9');
+}
+
+// 引数を長い名前の形へ（#1561）。名前（`no` `inv` の後ろも）の短い名前を長い名前に、名前の直後の
+// `:` を `=` に（Vim の do_set は `name:value` を `name=value` と同じに読む）。表に無い名前は
+// そのまま（後の読みが今までどおり受けるか断る）。
+[[nodiscard]] std::string canonical_option(std::string_view option)
+{
+    std::size_t length = 0;
+    while (length < option.size() && option_letter(option[length]))
+    {
+        ++length;
+    }
+    const std::string_view name = option.substr(0, length);
+    std::string_view suffix = option.substr(length);
+    std::string text;
+    if (const auto plain = long_name_of(name))
+    {
+        text = plain.value();
+    }
+    else if (const auto negated = name.starts_with("no") ? long_name_of(name.substr(2))
+                                                         : std::optional<std::string_view>{})
+    {
+        text = "no" + std::string(negated.value());
+    }
+    else if (const auto inverted = name.starts_with("inv") ? long_name_of(name.substr(3))
+                                                           : std::optional<std::string_view>{})
+    {
+        text = "inv" + std::string(inverted.value());
+    }
+    else
+    {
+        text = name;
+    }
+    if (suffix.starts_with(':'))
+    {
+        text += '=';
+        suffix.remove_prefix(1);
+    }
+    text += suffix;
+    return text;
+}
+
+// 数の値の基数（Vim の do_set の vim_str2nr(STR2NR_ALL)・#1561）。`0x` `0X` は 16 進、`0b` `0B` は
+// 2 進（数字はその後ろ）、0 で始まり 8 と 9 を含まない 2 桁以上は 8 進（`08` は 10 進の 8・実測）。
+[[nodiscard]] std::pair<std::string_view, int> number_base(std::string_view text) noexcept
+{
+    constexpr int hexadecimal = 16;
+    constexpr int octal = 8;
+    constexpr int binary = 2;
+    constexpr int decimal = 10;
+    if (text.size() > 2 && text.front() == '0' && (text[1] == 'x' || text[1] == 'X'))
+    {
+        return {text.substr(2), hexadecimal};
+    }
+    if (text.size() > 2 && text.front() == '0' && (text[1] == 'b' || text[1] == 'B'))
+    {
+        return {text.substr(2), binary};
+    }
+    if (text.size() > 1 && text.front() == '0' &&
+        std::ranges::none_of(text, [](char letter) { return letter == '8' || letter == '9'; }))
+    {
+        return {text.substr(1), octal};
+    }
+    return {text, decimal};
+}
+
+// 数の値（#1561）。Vim の long（32 ビット）に収まる 0〜2147483647。符号と余りの字は受けない
+// （Vim の E521・E487）。
+[[nodiscard]] std::optional<std::uint64_t> number_value(std::string_view text) noexcept
+{
+    constexpr std::uint64_t value_limit = 2147483647;
+    const auto [digits, base] = number_base(text);
+    std::uint64_t value = 0;
+    const auto parsed = std::from_chars(digits.data(), digits.data() + digits.size(), value, base);
+    if (digits.empty() || parsed.ec != std::errc{} || parsed.ptr != digits.data() + digits.size() ||
+        digits.front() == '+' || digits.front() == '-')
+    {
+        return std::nullopt;
+    }
+    return value <= value_limit ? std::optional{value} : std::nullopt;
+}
+
+// `+=` `-=` `^=` の計算（Vim の do_set_option_numeric の OP_ADDING・OP_REMOVING・
+// OP_PREPENDING）。負と 32 ビットを超える値は Vim の端末で E487 になる形なので値なし。
+[[nodiscard]] std::optional<std::uint64_t> operated(char operation, std::uint64_t current,
+                                                    std::uint64_t value) noexcept
+{
+    constexpr std::uint64_t value_limit = 2147483647;
+    std::uint64_t result = value;
+    if (operation == '+')
+    {
+        result = current + value;
+    }
+    if (operation == '-')
+    {
+        if (value > current)
+        {
+            return std::nullopt;
+        }
+        result = current - value;
+    }
+    if (operation == '^')
+    {
+        if (value != 0 && current > value_limit / value)
+        {
+            return std::nullopt;
+        }
+        result = current * value;
+    }
+    return result <= value_limit ? std::optional{result} : std::nullopt;
+}
+
+// 数の option の `=` `+=` `-=` `^=` を `name=<値>` へ（#1561）。値は今の値から計算し、負と範囲の
+// 外は E474 と同じ失敗（Vim の端末は E487・`-es` は負を受けるが窓のある Vim に揃える）。
+// scrolloff の上限を超える値は上限に畳む（Vim は画面の半分で切り詰めるので振る舞いは同じ）。
+// 数の option の値の形でなければ値なし。
+[[nodiscard]] std::optional<std::expected<std::string, ExEvaluationFailure>>
+number_assigned(std::string_view option, const EditorSettings &settings)
+{
+    const std::size_t equals = option.find('=');
+    if (equals == std::string_view::npos || equals == 0)
+    {
+        return std::nullopt;
+    }
+    const char operation = option[equals - 1];
+    const bool operating = operation == '+' || operation == '-' || operation == '^';
+    const auto row = number_named(option.substr(0, operating ? equals - 1 : equals));
+    if (!row.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto value = number_value(option.substr(equals + 1));
+    const auto current = static_cast<std::uint64_t>(std::get<2>(row.value())(settings));
+    const auto result = value.has_value()
+                            ? operated(operating ? operation : '=', current, value.value())
+                            : std::nullopt;
+    if (!result.has_value())
+    {
+        return std::unexpected(ExFailure::invalid_argument);
+    }
+    const bool scrolled = std::get<0>(row.value()) == scrolloff_names.front();
+    return number_text(row.value(), scrolled
+                                        ? std::min<std::uint64_t>(result.value(), scrolloff_limit)
+                                        : result.value());
+}
+
+// `clipboard+=<値>` `clipboard^=<値>` は `clipboard=<値>`（Nib の値は「無名と OS を同期するか」の 1
+// つなので、足しても前に置いても同期する・#1561）。`clipboard-=` は今の値を知らないので断る。
+[[nodiscard]] std::optional<std::expected<std::string, ExEvaluationFailure>>
+clipboard_assigned(std::string_view option)
+{
+    for (const std::string_view operation : {"+=", "^="})
+    {
+        const std::string head = "clipboard" + std::string(operation);
+        if (option.starts_with(head) && option.size() > head.size())
+        {
+            return "clipboard=" + std::string(option.substr(head.size()));
+        }
+    }
+    if (option.starts_with("clipboard+=") || option.starts_with("clipboard^=") ||
+        option.starts_with("clipboard-="))
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    return std::nullopt;
+}
+
+// `{name}<`（局所の値を大域の値へ戻す・Vim の OPT_LOCAL）。Nib の option は値を 1 つしか持たない
+// ので、今の値を置き直す形へ（#1561）。真偽と数の表に無ければ値なし。
+[[nodiscard]] std::optional<std::string> local_copy_text(std::string_view option,
+                                                         const EditorSettings &settings,
+                                                         const ExWindowState &window)
+{
+    if (!option.ends_with('<'))
+    {
+        return std::nullopt;
+    }
+    const std::string_view name = option.substr(0, option.size() - 1);
+    const auto switched = switch_named(name);
+    if (switched.has_value())
+    {
+        return switch_text(switched.value(), switch_value(switched.value(), settings, window));
+    }
+    const auto number = number_named(name);
+    if (number.has_value())
+    {
+        return number_text(number.value(), std::get<2>(number.value())(settings));
+    }
+    return std::nullopt;
+}
+
+// `no{name}?` は `{name}?`（Vim 9.1 の実測: 真偽の option の問いは `no`
+// を付けても今の値を答える）。
+[[nodiscard]] std::optional<std::string> negated_question(std::string_view option)
+{
+    if (!option.starts_with("no") || !option.ends_with('?') ||
+        !switch_named(option.substr(2, option.size() - 3)).has_value())
+    {
+        return std::nullopt;
+    }
+    return std::string(option.substr(2));
+}
+
+// 値を変える書き方を今の読みの形へ 1 段だけ写す（#1525・#1561）。写した形は `&` `!` `inv` `<`
+// `+=` `-=` `^=` を持たない。写す形でなければ値なし。
+[[nodiscard]] std::optional<std::expected<std::string, ExEvaluationFailure>>
+rewritten_option(std::string_view option, const EditorSettings &settings,
+                 const ExWindowState &window)
+{
+    auto assigned = number_assigned(option, settings);
+    if (assigned.has_value())
+    {
+        return assigned;
+    }
+    auto clipboard = clipboard_assigned(option);
+    if (clipboard.has_value())
+    {
+        return clipboard;
+    }
+    auto text = toggled_text(option, settings, window)
+                    .or_else([option] { return reset_text(option); })
+                    .or_else([option, &settings, &window]
+                             { return local_copy_text(option, settings, window); })
+                    .or_else([option] { return negated_question(option); });
+    if (!text.has_value())
+    {
+        return std::nullopt;
+    }
+    return std::move(text).value();
+}
+
+// 真偽と数の表の問い（`{name}?`・数は名前だけでも問い）。文言は `set wrap` と同じ `name=on` の形。
+[[nodiscard]] std::optional<ExResult>
+asked_option(std::string_view option, const EditorSettings &settings, const ExWindowState &window)
+{
+    const bool asking = option.ends_with('?');
+    const std::string_view name = asking ? option.substr(0, option.size() - 1) : option;
+    const auto switched = asking ? switch_named(name) : std::nullopt;
+    if (switched.has_value())
+    {
+        return ExResult{std::nullopt, std::nullopt, std::nullopt,
+                        switch_message(std::get<0>(switched.value()),
+                                       switch_value(switched.value(), settings, window))};
+    }
+    const auto number = number_named(name);
+    if (!number.has_value())
+    {
+        return std::nullopt;
+    }
+    return ExResult{
+        std::nullopt, std::nullopt, std::nullopt,
+        DisplayText::parse(number_text(number.value(), std::get<2>(number.value())(settings)))
+            .value()};
+}
+
+// 値を変えられない行（magic・expandtab・shiftwidth・tabstop・#1561）の置く形。今の値と同じなら受けて
+// 何もしない（文言は問いと同じ）、違えば unsupported_argument（後ろの鍵を予期しない状態で流す
+// より、断って再生を打ち切るほうが安全）。表の行でなければ値なし。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+fixed_option(std::string_view option, const EditorSettings &settings, const ExWindowState &window)
+{
+    const bool negated = option.starts_with("no");
+    const auto switched = switch_named(negated ? option.substr(2) : option);
+    if (switched.has_value() && !std::get<3>(switched.value()))
+    {
+        const bool current = switch_value(switched.value(), settings, window);
+        if (current == negated)
+        {
+            return std::unexpected(ExFailure::unsupported_argument);
+        }
+        return ExResult{std::nullopt, std::nullopt, std::nullopt,
+                        switch_message(std::get<0>(switched.value()), current)};
+    }
+    const std::size_t equals = option.find('=');
+    const auto number =
+        equals == std::string_view::npos ? std::nullopt : number_named(option.substr(0, equals));
+    if (!number.has_value() || std::get<3>(number.value()))
+    {
+        return std::nullopt;
+    }
+    const std::size_t current = std::get<2>(number.value())(settings);
+    if (option != number_text(number.value(), current))
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    return ExResult{std::nullopt, std::nullopt, std::nullopt,
+                    DisplayText::parse(number_text(number.value(), current)).value()};
+}
+
+// `wrapscan` `nowrapscan`（#1561）。incsearch と同じく保存しない Vim の状態で、文言は
+// `wrapscan=on` の形。wrapscan の形でなければ値なし。
+[[nodiscard]] std::optional<ExResult> wrapscan_option(std::string_view option)
+{
+    if (option != "wrapscan" && option != "nowrapscan")
+    {
+        return std::nullopt;
+    }
+    const bool wanted = option == "wrapscan";
+    ExResult result{std::nullopt, std::nullopt, std::nullopt, switch_message("wrapscan", wanted)};
+    result.wrapscan = wanted;
+    return result;
+}
+
+// 今までの読み（read_set_option）が名前を知らなかった形（#1561）。問い・wrapscan・値を変えられない
+// 行。どれでもなければ値なし。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+unknown_fallback(std::string_view option, const EditorSettings &settings,
+                 const ExWindowState &window)
+{
+    auto asked = asked_option(option, settings, window);
+    if (asked.has_value())
+    {
+        return std::move(asked).value();
+    }
+    auto wrapscan = wrapscan_option(option);
+    if (wrapscan.has_value())
+    {
+        return std::move(wrapscan).value();
+    }
+    return fixed_option(option, settings, window);
+}
+
+[[nodiscard]] bool is_unknown_option(const ExEvaluationFailure &failure) noexcept
+{
+    const auto *ex = std::get_if<ExFailure>(&failure);
+    return ex != nullptr && *ex == ExFailure::unknown_option;
+}
+
+// 1 つの引数（#1525・#1561）。短い名前を長い名前に、値を変える書き方を今の読みの形へ写してから
+// 読む。
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
+set_option(std::string_view typed, const EditorSettings &settings, const ExWindowState &window)
+{
+    const std::string option = canonical_option(typed);
+    auto rewritten = rewritten_option(option, settings, window);
+    if (rewritten.has_value() && !rewritten.value().has_value())
+    {
+        return std::unexpected(rewritten.value().error());
+    }
     // 窓の決め直し（#1524）は書き換えた後の形で見る（`so&` `hls!` `invwrap` も値を置く・Vim の
     // do_set は反転と既定値でも check_redraw を通る）。
-    const std::string_view read =
-        rewritten.has_value() ? std::string_view{rewritten.value()} : option;
-    return read_set_option(read, settings)
-        .transform([read](ExResult result)
-                   { return with_window_recheck(std::move(result), read); });
+    const std::string read = rewritten.has_value() ? std::move(rewritten).value().value() : option;
+    auto result = read_set_option(read, settings);
+    if (!result && is_unknown_option(result.error()))
+    {
+        auto fallback = unknown_fallback(read, settings, window);
+        if (fallback.has_value())
+        {
+            result = std::move(fallback).value();
+        }
+    }
+    return std::move(result).transform([&read](ExResult value)
+                                       { return with_window_recheck(std::move(value), read); });
+}
+
+// `:set` の引数を空白で区切った列（Vim の do_set・`\ ` は区切らない）。`guifont=` と `root=` は
+// 空白入りの値を `\ ` 無しで受ける Nib の形（ADR 0022 の決定 4・ADR 0162 の決定 7）なので、行の
+// 残り全部を 1 つの引数にする（#1561）。
+// 引数が行の残り全部を値に取るか（`guifont=` `gfn=` `root=`）。
+[[nodiscard]] bool takes_the_rest(std::string_view text) noexcept
+{
+    const auto stop = std::ranges::find_if(
+        text, [](char letter) { return letter == ' ' || letter == '=' || letter == ':'; });
+    const std::string_view head = text.substr(0, static_cast<std::size_t>(stop - text.begin()));
+    const auto whole = long_name_of(head);
+    return (whole.has_value() && whole.value() == "guifont") || head == "root";
+}
+
+// 先頭の引数の長さ（`\ ` の空白は区切らない）。
+[[nodiscard]] std::size_t argument_length(std::string_view text) noexcept
+{
+    std::size_t end = 0;
+    while (end < text.size() && (text[end] != ' ' || (end > 0 && text[end - 1] == '\\')))
+    {
+        ++end;
+    }
+    return end;
+}
+
+[[nodiscard]] std::vector<std::string_view> set_arguments(std::string_view text)
+{
+    std::vector<std::string_view> arguments;
+    while (!text.empty())
+    {
+        if (takes_the_rest(text))
+        {
+            arguments.push_back(trimmed(text));
+            break;
+        }
+        const std::size_t end = argument_length(text);
+        arguments.push_back(text.substr(0, end));
+        text = trimmed(text.substr(end));
+    }
+    return arguments;
+}
+
+// 複数の引数で写せる答えか（設定・検索の強調・incsearch・wrapscan・表示形式と知らせ）。命令の要求
+// （言語・クリップボード・lsp など controller が今の値を知って答えるもの）を持つ答えは 1 つの
+// 引数でだけ受ける（#1561）。
+[[nodiscard]] bool carries_request(const ExResult &result) noexcept
+{
+    const bool command = result.tab.has_value() || result.palette.has_value() ||
+                         result.document.has_value() || result.window.has_value() ||
+                         result.line.has_value() || result.relative_line.has_value() ||
+                         result.substitute.has_value() || result.print.has_value();
+    const bool answered = result.language.has_value() || result.syntax.has_value() ||
+                          result.clipboard.has_value() || result.root.has_value() ||
+                          result.lsp.has_value() || result.map.has_value();
+    const bool chosen = result.format.has_value() || result.preview.has_value() ||
+                        result.display_language.has_value();
+    return command || answered || chosen;
+}
+
+// 引数の答えを重ねられないときの理由（受けない形の失敗か、命令の要求を持つ答え）。重ねられれば空。
+[[nodiscard]] std::optional<ExEvaluationFailure>
+refusal_of(const std::expected<ExResult, ExEvaluationFailure> &answer)
+{
+    if (!answer)
+    {
+        return answer.error();
+    }
+    if (carries_request(answer.value()))
+    {
+        return ExFailure::unsupported_argument;
+    }
+    return std::nullopt;
+}
+
+// 前の引数の答えに次の引数の答えを重ねる。次の引数は重ねた設定と窓の状態で読む（`:set ic ic!` は
+// 置いた後の値を反転する）。
+void merge_set_result(ExResult &combined, ExResult next, EditorSettings &settings,
+                      ExWindowState &window)
+{
+    if (next.settings.has_value())
+    {
+        settings = next.settings.value();
+        combined.settings = settings;
+    }
+    if (next.highlight.has_value())
+    {
+        combined.highlight = next.highlight;
+        window.highlight = requested_highlight(window.highlight, next.highlight.value());
+    }
+    if (next.incsearch.has_value())
+    {
+        combined.incsearch = next.incsearch;
+        window.incsearch = next.incsearch.value();
+    }
+    if (next.wrapscan.has_value())
+    {
+        combined.wrapscan = next.wrapscan;
+        window.wrapscan = next.wrapscan.value();
+    }
+    if (next.display.has_value())
+    {
+        combined.display = next.display;
+    }
+    combined.rechecks_window = combined.rechecks_window || next.rechecks_window;
+}
+
+// `:set` の 1 行（#1561）。引数が 1 つなら今までどおりの答え。複数なら左から順に読んで答えを
+// 重ね、知らせは並べる。誤りの引数（受けない形・命令の要求を持つ答え）で止まり、最初の引数なら
+// その失敗、2 つ目より後なら前の分の答えに止まった理由（stopped）を添える（Vim の do_set は誤りの
+// 引数で止まり、前に置いた値は残す・実測）。設定は重ねた 1 つなので保存は 1 回。
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
+set_command(std::string_view argument, const EditorSettings &settings, const ExWindowState &window)
+{
+    const auto arguments = set_arguments(argument);
+    if (arguments.size() <= 1)
+    {
+        return set_option(arguments.empty() ? argument : arguments.front(), settings, window);
+    }
+    auto first = set_option(arguments.front(), settings, window);
+    const auto refused = refusal_of(first);
+    if (refused.has_value())
+    {
+        return std::unexpected(refused.value());
+    }
+    EditorSettings current = settings;
+    ExWindowState state = window;
+    ExResult combined{std::nullopt, std::nullopt, std::nullopt, first.value().message};
+    std::string message(first.value().message.text());
+    merge_set_result(combined, std::move(first).value(), current, state);
+    for (const std::string_view typed : std::span{arguments}.subspan(1))
+    {
+        auto next = set_option(typed, current, state);
+        combined.stopped = refusal_of(next);
+        if (combined.stopped.has_value())
+        {
+            break;
+        }
+        message += " " + std::string(next.value().message.text());
+        merge_set_result(combined, std::move(next).value(), current, state);
+    }
+    combined.message = clipped_display_text(message).value();
+    return combined;
 }
 
 // 命令の名前の省略は Vim 9.1 のとおり「最短の形から完全な形までの前方一致」の 1 つ。タブ・一覧・
@@ -1037,6 +1611,17 @@ set_option(std::string_view option, const EditorSettings &settings, const ExWind
                                std::size_t shortest) noexcept
 {
     return input.size() >= shortest && name.starts_with(input);
+}
+
+// `:se[t]` `:setl[ocal]` `:setg[lobal]`（#1561）。Nib の option は値を 1 つしか持たないので、局所と
+// 大域の命令も `:set` と同じに読む（Vim 9.1 の実測: `:setl ic` `:setg ic` も受けて流す）。
+[[nodiscard]] bool is_set_command(std::string_view name) noexcept
+{
+    constexpr std::size_t set_shortest = 2;
+    constexpr std::size_t scoped_shortest = 4;
+    return abbreviates(name, "set", set_shortest) ||
+           abbreviates(name, "setlocal", scoped_shortest) ||
+           abbreviates(name, "setglobal", scoped_shortest);
 }
 
 // `:noh[lsearch]`（最短は `noh`・`:no` は Vim では noremap）。
@@ -1527,9 +2112,9 @@ unranged_command(std::string_view text, const EditorSettings &settings, const Ex
     {
         return colorscheme(argument, settings, window.system_appearance, themes);
     }
-    if (name == "set")
+    if (is_set_command(name))
     {
-        return set_option(argument, settings, window);
+        return set_command(argument, settings, window);
     }
     return remaining_command(text);
 }
@@ -1585,7 +2170,7 @@ constexpr std::string_view relative_range = ".,.+";
 // Vim で範囲を取らない命令の答えか（`:set` 系・`:colorscheme`・`:noh`・`map` 系・`:syntax`）。
 [[nodiscard]] bool takes_no_range(std::string_view name, const ExResult &result) noexcept
 {
-    return name == "set" || name == "colorscheme" || result.highlight.has_value() ||
+    return is_set_command(name) || name == "colorscheme" || result.highlight.has_value() ||
            result.map.has_value() || result.syntax.has_value();
 }
 
