@@ -19,12 +19,17 @@ constexpr std::string_view not_found_alone = "E486: Pattern not found";
 {
     switch (failure)
     {
+    // 群の失敗は Vim 9.1 の文言（ADR 0184 の決定 3）。
     case VimPatternFailure::group:
-        return "Unsupported pattern item: \\( \\)";
-    case VimPatternFailure::branch:
-        return "Unsupported pattern item: \\|";
+        return "E54: Unmatched \\(";
+    case VimPatternFailure::unclosed_plain_group:
+        return "E53: Unmatched \\%(";
+    case VimPatternFailure::unmatched_close:
+        return "E55: Unmatched \\)";
+    case VimPatternFailure::too_many_groups:
+        return "E872: (NFA regexp) Too many '('";
     case VimPatternFailure::quantifier:
-        return "Unsupported pattern item: a multi on \\( \\), or \\}";
+        return "Unsupported pattern item: \\}, or a multi on a group edge inside a character";
     // 量の失敗は Vim 9.1 の NFA の文言（ADR 0184 の決定 2）。E866 の文字は値に持たないので
     // 「multi」と書く（Vim は打った文字 `+` `{` を書く）。
     case VimPatternFailure::brace:
@@ -49,13 +54,13 @@ constexpr std::string_view not_found_alone = "E486: Pattern not found";
     std::unreachable();
 }
 
-// 表示できる長さに収める。切るのは文字の境界で、切れたら E486 の文言だけを出す。
+// 表示できる長さに収める。切るのは入力の文を知らせに入れる所の 1 本 clipped_display_text（code
+// point の境目で落として「…」・#1568 / #1616）。表示できない文字があれば E486 の文言だけを出す。
 [[nodiscard]] DisplayText not_found_message(std::string_view pattern)
 {
-    const std::size_t room = DisplayText::maximum_bytes - not_found_prefix.size();
     std::string text(not_found_prefix);
-    text += pattern.substr(0, room);
-    return DisplayText::parse(text).value_or(DisplayText::parse(not_found_alone).value());
+    text += pattern;
+    return clipped_display_text(text).value_or(DisplayText::parse(not_found_alone).value());
 }
 
 [[nodiscard]] DisplayText message_of(std::string_view text)

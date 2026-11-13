@@ -14,6 +14,7 @@
 #include "OperationChoiceWorkload.hpp"
 #include "PaletteChoiceWorkload.hpp"
 #include "PatternCostWorkload.hpp"
+#include "PatternProgramWorkload.hpp"
 #include "PieceListWorkload.hpp"
 #include "PreviewCaretWorkload.hpp"
 #include "ProbeDispatchRow.hpp"
@@ -46,5 +47,5 @@ using ProbeDispatch =
                  ProbeDispatchRow<VimBlockWorkload>, ProbeDispatchRow<WordObjectWorkload>,
                  ProbeDispatchRow<EditedHistoryWorkload>, ProbeDispatchRow<PieceListWorkload>,
                  ProbeDispatchRow<SubstituteWorkload>, ProbeDispatchRow<PatternCostWorkload>,
-                 ProbeDispatchRow<SearchObjectWorkload>>;
+                 ProbeDispatchRow<PatternProgramWorkload>, ProbeDispatchRow<SearchObjectWorkload>>;
 } // namespace nenenib::tests::performance
