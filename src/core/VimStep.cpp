@@ -2606,6 +2606,13 @@ namespace
 {
     return caret_position(view);
 }
+// `:s///c` の答えは置いた当たりの行頭を印に書いて返す（VimStepSubstituteConfirm.cpp）。
+[[nodiscard]] TextPosition change_position(const VimEditorView &view,
+                                           const VimConfirmSubstitute &effect)
+{
+    return effect.edits.empty() ? caret_position(view)
+                                : view.text.position_of(effect.edits.front().range.begin);
+}
 
 // 本文を置き換える編集の効果を返す step の印（ADR 0181 の決定 2）。編集を返す鍵は Vim が必ず
 // u_save と changed_* を呼ぶので、印を書く所を効果ごとに散らさず出口のこの 1 か所で立てる。
@@ -2788,6 +2795,11 @@ namespace
 [[nodiscard]] bool replaces(const VimWindowCommand &) noexcept
 {
     return false;
+}
+// `:s///c` は置いた当たりがあるときだけ本文を置き換える（`n` `q` は動くだけ）。
+[[nodiscard]] bool replaces(const VimConfirmSubstitute &effect) noexcept
+{
+    return !effect.edits.empty();
 }
 } // namespace
 

@@ -22,6 +22,7 @@
 #include "GutterLabels.hpp"
 #include "GutterMetrics.hpp"
 #include "InputLinePrompt.hpp"
+#include "InputLinePromptText.hpp"
 #include "InputText.hpp"
 #include "KeycapPainter.hpp"
 #include "Milestone.hpp"
@@ -218,35 +219,6 @@ void windowed_input_line(std::string &shown, std::size_t &at, std::size_t &caret
     shown = shown.substr(window.begin.value, window.end.value - window.begin.value);
     at -= window.begin.value;
     caret -= window.begin.value;
-}
-
-// 通常モードの 3 つは表示言語の表から引く（ADR 0123 の追補 2026-11-13・#1019）。
-[[nodiscard]] std::string prompt_text(core::InputLinePrompt prompt, std::string_view detail,
-                                      core::DisplayLanguage language)
-{
-    switch (prompt)
-    {
-    case core::InputLinePrompt::ex:
-        return ":";
-    case core::InputLinePrompt::palette:
-        return {};
-    case core::InputLinePrompt::search_forward:
-        return "/";
-    case core::InputLinePrompt::search_backward:
-        return "?";
-    // 通常モードの検索と行へ移動（ADR 0174 の決定 3）。
-    case core::InputLinePrompt::find:
-        return std::string(core::ui_text(core::UiMessage::prompt_find, language));
-    case core::InputLinePrompt::go_to_line:
-        return std::string(core::ui_text(core::UiMessage::prompt_go_to_line, language));
-    // 置換の 2 段目は検索語を添える（ADR 0174 の結果「置換後 (abc): 」）。
-    case core::InputLinePrompt::replace_with:
-        return detail.empty()
-                   ? std::string(core::ui_text(core::UiMessage::prompt_replace_with, language))
-                   : core::ui_text_filled(core::UiMessage::prompt_replace_with_pattern, language,
-                                          {detail});
-    }
-    std::unreachable();
 }
 
 // 行番号の欄の中の文字の枠。右寄せの番号は右に余白を置き、左寄せ（relativenumber のキャレットの

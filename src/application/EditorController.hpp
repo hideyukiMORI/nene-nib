@@ -108,6 +108,8 @@
 #include "StartEntry.hpp"
 #include "StartLists.hpp"
 #include "StartScreenView.hpp"
+#include "SubstituteQuestion.hpp"
+#include "SubstituteReply.hpp"
 #include "SyntaxStateCache.hpp"
 #include "TabReach.hpp"
 #include "TextBuffer.hpp"
@@ -121,6 +123,7 @@
 #include "VimBlockRange.hpp"
 #include "VimChange.hpp"
 #include "VimCharacter.hpp"
+#include "VimConfirmSubstitute.hpp"
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
@@ -840,6 +843,8 @@ class EditorController final
     [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::CommandLine &line);
     [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::CommandPalette &palette);
     [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::SearchLine &line);
+    // `:s///c` の問いの Enter は答えではない（Vim は無視する・ADR 0168 の決定 6）。
+    [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const SubstituteQuestion &question);
     [[nodiscard]] std::optional<core::VimRepeatFailure> submitted_command();
     [[nodiscard]] std::optional<core::VimRepeatFailure> confirmed_command();
     // あふれた入力の確定を断ったら真（入力行を閉じて知らせる・#1568）。
@@ -847,6 +852,18 @@ class EditorController final
     void remember(const core::CommandLine &line);
     void remember(const core::SearchLine &line);
     void remember(const core::CommandPalette &palette);
+    void remember(const SubstituteQuestion &question);
+    // `:s///c` の問い（ADR 0168 の決定
+    // 6・EditorControllerSubstitute.cpp）。開いている問い（無ければ
+    // 空）・文字を答えとして読む（問いが開いていれば真）・答えを engine の 1
+    // 歩で写す・答え以外の意図の 前に `q` と同じに終える（入口の 1 か所）・終えるときに置いた分を 1
+    // つの undo の単位に畳む。
+    [[nodiscard]] const SubstituteQuestion *substitute_question() const noexcept;
+    [[nodiscard]] bool answered_question(std::string_view utf8);
+    void answer_question(core::SubstituteReply reply);
+    void record_question_key(const core::VimKey &key);
+    void end_question_before(const EditorIntent &intent);
+    void merge_question_edits(const SubstituteQuestion &question, core::Offset restore);
     void submit_palette(const core::CommandPalette &palette);
     [[nodiscard]] std::optional<core::VimRepeatFailure> evaluate_command(std::string_view text);
     [[nodiscard]] std::expected<core::ExResult, core::ExEvaluationFailure>
@@ -1003,6 +1020,8 @@ class EditorController final
     void perform(const core::VimSwitchTab &effect);
     // `Ctrl-w` の窓の命令（ADR 0148 の決定 7）。2 枠の意図が入るまで何もしない。
     void perform(const core::VimWindowCommand &command);
+    // `:s///c` の 1 歩（ADR 0168 の決定 6）。置く当たりを写し、問いを開くか続けるか終える。
+    void perform(const core::VimConfirmSubstitute &effect);
     // INSERT にいるあいだの編集は 1 つの undo 単位に吸収する（ADR 0015 の決定 5）。
     [[nodiscard]] core::EditBoundary vim_boundary() const noexcept;
 

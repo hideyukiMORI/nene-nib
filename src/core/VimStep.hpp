@@ -3,6 +3,7 @@
 #include "ExSubstituteRequest.hpp"
 #include "Offset.hpp"
 #include "Selection.hpp"
+#include "SubstituteAnswer.hpp"
 #include "VimChangeMark.hpp"
 #include "VimCommandMotion.hpp"
 #include "VimCount.hpp"
@@ -191,6 +192,16 @@ void vim_macro_typed(VimState &state, std::span<const VimKey> keys);
 // 積まない。controller は鍵と同じ写しの道で結果を写す。
 [[nodiscard]] VimStep vim_substituted(const VimState &state, const VimEditorView &view,
                                       const ExSubstituteRequest &request);
+// `:s///c` の問いへの 1 つの答え（ADR 0168 の決定 6・段 2a）。vim_substituted が返した問いの値と
+// 答えから、置く当たり（いまの本文の座標）・キャレット・続けて問う値を VimConfirmSubstitute
+// で返す。 `y` は置いて次へ（キャレットは置いた本文の終わりの行の頭・Vim の do_sub）、`n`
+// は飛ばして次へ、 `l` は置いて終え、`a` は残りを全部置いて最後に置き換えた行の最初の非空白へ、`q`
+// は置かずに
+// 終える（キャレットは問うていた当たり）。次の当たりが無ければ終える。終えるときは置いた数が 3 つ
+// 以上なら報せを添え、置いた分の undo の戻り先を返す。鍵ではないので `.` とマクロの記録には
+// 積まない。
+[[nodiscard]] VimStep vim_substitute_answered(const VimState &state, const VimEditorView &view,
+                                              const SubstituteAnswer &answer);
 
 // 本文のダブルクリック・トリプルクリックの VISUAL（#1250・ADR 0056 の決定 9
 // の追補）。鍵ではないので

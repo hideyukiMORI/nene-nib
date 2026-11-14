@@ -95,6 +95,13 @@ constexpr std::array<CommandInputSample, 12> cases{{
            palette.count() == 0U && palette.selected() == 0U && palette.rows(0U, 1U).empty();
 }
 
+// `:s///c` の問い（ADR 0168 の決定 6）は打った行を持たないので、どの見本とも等しくない。
+[[nodiscard]] bool matches(const application::SubstituteQuestion & /*question*/,
+                           std::string_view /*text*/, std::size_t /*caret*/)
+{
+    return false;
+}
+
 [[nodiscard]] bool input_equal(const application::CommandInput &input, std::string_view text,
                                std::size_t caret, std::size_t alternative)
 {

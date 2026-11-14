@@ -35,7 +35,10 @@
 #include "SearchLine.hpp"
 #include "StatusBarLayout.hpp"
 #include "SubstituteAll.hpp"
+#include "SubstituteAnswer.hpp"
 #include "SubstituteFailure.hpp"
+#include "SubstituteQuestion.hpp"
+#include "SubstituteReply.hpp"
 #include "TabDestination.hpp"
 #include "TabJump.hpp"
 #include "TabJumpDirection.hpp"
@@ -55,6 +58,7 @@
 #include "VimStepSource.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <limits>
 #include <optional>
@@ -133,6 +137,12 @@ namespace
     return std::nullopt;
 }
 
+[[nodiscard]] std::optional<CommandInput> fitted_rows(const SubstituteQuestion & /*question*/,
+                                                      CommandWindow /*window*/)
+{
+    return std::nullopt;
+}
+
 // Vim の `/` `?` の入力行か（engine の検索の待ちを持つ）。写し先が足りなければ落ちる（CPP-002）。
 [[nodiscard]] constexpr bool vim_search_prompt(core::InputLinePrompt prompt) noexcept
 {
@@ -146,6 +156,7 @@ namespace
     case core::InputLinePrompt::go_to_line:
     case core::InputLinePrompt::ex:
     case core::InputLinePrompt::palette:
+    case core::InputLinePrompt::substitute_confirm:
         return false;
     }
     std::unreachable();
@@ -219,6 +230,43 @@ constexpr std::size_t code_point_bytes = 4;
         at = core::next_code_point(utf8, at);
     }
     return keys;
+}
+
+// `:s///c` の問いの答えの文字（Vim の do_sub の typed・ADR 0168 の決定 6）。表に無い文字は答えに
+// ならず問いを続ける（Vim の `^E` `^Y` の窓の送りは段 2a で受けない）。
+constexpr std::array<std::pair<char32_t, core::SubstituteReply>, 5> substitute_replies{{
+    {U'y', core::SubstituteReply::yes},
+    {U'n', core::SubstituteReply::no},
+    {U'a', core::SubstituteReply::all},
+    {U'q', core::SubstituteReply::quit},
+    {U'l', core::SubstituteReply::last},
+}};
+
+[[nodiscard]] std::optional<core::SubstituteReply> substitute_reply_of(char32_t code) noexcept
+{
+    for (const auto &[letter, reply] : substitute_replies)
+    {
+        if (letter == code)
+        {
+            return reply;
+        }
+    }
+    return std::nullopt;
+}
+
+// `:s///c` の問いを開いたまま受ける意図（ADR 0168 の決定 6）。答えを運ぶ入力行の意図（文字・Esc・
+// Enter・行の編集・貼り付け）と、入力行が捨てる Vim の鍵と、使う人の操作ではない意図（合図・窓の
+// 寸法・外観・帯の hover・is_signal を含む not_user_operation の 1 本）。これ以外の意図（窓を
+// 閉じる・タブの切り替え・開く・Ctrl+P・クリック・モードの切り替え…）は、受ける前に問いを `q` と
+// 同じに終える。
+[[nodiscard]] bool keeps_question(const EditorIntent &intent) noexcept
+{
+    return detail::not_user_operation(intent) || std::holds_alternative<CommandText>(intent) ||
+           std::holds_alternative<CancelCommand>(intent) ||
+           std::holds_alternative<SubmitCommand>(intent) ||
+           std::holds_alternative<EditCommand>(intent) ||
+           std::holds_alternative<PasteCommand>(intent) ||
+           std::holds_alternative<VimKeyPress>(intent);
 }
 } // namespace
 
@@ -313,7 +361,7 @@ std::optional<core::InputLineView> EditorController::command_line_view() const
 void EditorController::accept(const CommandText &intent)
 {
     const auto &input = state_.command_input();
-    if (!input.has_value())
+    if (!input.has_value() || answered_question(intent.utf8))
     {
         return;
     }
@@ -343,7 +391,8 @@ void EditorController::accept(const CommandText &intent)
 void EditorController::accept(const EditCommand &intent)
 {
     const auto &input = state_.command_input();
-    if (!input.has_value())
+    // `:s///c` の問いの行の編集（矢印・Backspace・Delete・上下）は答えではない（Vim は無視する）。
+    if (!input.has_value() || substitute_question() != nullptr)
     {
         return;
     }
@@ -414,6 +463,14 @@ void EditorController::fit_command_rows()
 
 void EditorController::accept(const CancelCommand &)
 {
+    // `:s///c` の問いの Esc は `q` と同じ（Vim の do_sub・ADR 0168 の決定 6）。
+    if (substitute_question() != nullptr)
+    {
+        constexpr core::VimKey escape{core::VimSpecialKey::escape};
+        record_question_key(escape);
+        answer_question(core::SubstituteReply::quit);
+        return;
+    }
     constexpr core::VimKey escape{core::VimSpecialKey::escape};
     record_command_keys(std::span<const core::VimKey>{&escape, 1U});
     recorded_line_.reset();
@@ -496,7 +553,8 @@ bool EditorController::vim_line_shown() const
 
 void EditorController::accept(const PasteCommand &)
 {
-    if (!state_.command_input().has_value())
+    // `:s///c` の問いは貼り付けを答えにしない。
+    if (!state_.command_input().has_value() || substitute_question() != nullptr)
     {
         return;
     }
@@ -648,6 +706,7 @@ std::optional<core::VimRepeatFailure> EditorController::submit(const core::Searc
     case core::InputLinePrompt::search_backward:
     case core::InputLinePrompt::ex:
     case core::InputLinePrompt::palette:
+    case core::InputLinePrompt::substitute_confirm:
         break;
     }
     // Vim も確定の前に入力前の画面へ戻してから本当の検索をする（ex_getln.c の
@@ -676,6 +735,11 @@ std::optional<core::VimRepeatFailure> EditorController::submit(const core::Searc
 
 void EditorController::accept(const SubmitCommand &intent)
 {
+    // `:s///c` の問いの Enter と Ctrl+Enter は答えではない（Vim は無視する）。
+    if (substitute_question() != nullptr)
+    {
+        return;
+    }
     // Ctrl+Enter は「置換後: 」の全件だけ（ADR 0174 の決定 3・7）。
     if (intent.all)
     {
@@ -739,6 +803,86 @@ void EditorController::remember(const core::SearchLine &line)
 void EditorController::remember(const core::CommandPalette & /*palette*/)
 {
     // 面の確定は履歴に足さない（#725）。
+}
+
+void EditorController::remember(const SubstituteQuestion & /*question*/)
+{
+    // 問いの答えは履歴に足さない。
+}
+
+std::optional<core::VimRepeatFailure> EditorController::submit(const SubstituteQuestion &)
+{
+    return std::nullopt;
+}
+
+const SubstituteQuestion *EditorController::substitute_question() const noexcept
+{
+    const auto &input = state_.command_input();
+    return input.has_value() ? std::get_if<SubstituteQuestion>(&input.value()) : nullptr;
+}
+
+// 問いが開いていれば文字を 1 つずつ答えとして読み、真を返す（入力行へは差し込まない）。答えが問いを
+// 終えたら残りの文字は捨てる（窓の 1 打鍵は 1 文字）。録画中に打った文字は録る（Vim は問いの答えも
+// 打った鍵として録る）。
+bool EditorController::answered_question(std::string_view utf8)
+{
+    if (substitute_question() == nullptr)
+    {
+        return false;
+    }
+    core::Offset at{0};
+    while (at.value < utf8.size() && substitute_question() != nullptr)
+    {
+        const char32_t code = core::code_point_at(utf8, at);
+        at = core::next_code_point(utf8, at);
+        record_question_key(core::VimKey{core::VimCharacter{code}});
+        const auto reply = substitute_reply_of(code);
+        if (reply.has_value())
+        {
+            answer_question(reply.value());
+        }
+    }
+    return true;
+}
+
+void EditorController::record_question_key(const core::VimKey &key)
+{
+    if (state_.mode() != core::EditMode::vim || !state_.vim().macro_recording.has_value() ||
+        !keys_typed())
+    {
+        return;
+    }
+    auto vim = state_.vim();
+    core::vim_macro_typed(vim, std::span<const core::VimKey>{&key, 1U});
+    state_ = state_.with_vim(std::move(vim));
+}
+
+// 答えは engine の 1 歩（vim_substitute_answered）で、写しは鍵と同じ stepped_vim を通る。問いが
+// 終わったら、INSERT の `Ctrl-o` から開いた `:s` の INSERT を始め直す（ADR 0182 の決定 8）。
+void EditorController::answer_question(core::SubstituteReply reply)
+{
+    const SubstituteQuestion *question = substitute_question();
+    if (question == nullptr)
+    {
+        return;
+    }
+    const core::SubstituteAnswer answer{question->confirmation, reply};
+    static_cast<void>(stepped_vim(VimStepSource{answer}));
+    if (substitute_question() == nullptr)
+    {
+        resume_vim_insert();
+    }
+}
+
+// 意図の入口の 1 か所（apply）が、答えでない意図の前に呼ぶ。問いを `q` と同じに終え、置いた分は
+// 1 つの undo の単位で残す。
+void EditorController::end_question_before(const EditorIntent &intent)
+{
+    if (substitute_question() == nullptr || keeps_question(intent))
+    {
+        return;
+    }
+    answer_question(core::SubstituteReply::quit);
 }
 
 // 確定の失敗（検索の当たりが無い等）は再生を打ち切るので理由を返す（ADR 0048 の決定 8）。

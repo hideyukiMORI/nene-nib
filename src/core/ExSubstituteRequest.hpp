@@ -14,7 +14,7 @@ namespace nenenib::core
 // range が空なら今の行。pattern と replacement は source が typed のときだけ読む（pattern
 // は区切りの 間の字面のまま・空なら最後に使ったパターン・replacement は `\` も `~`
 // もそのまま）。delimiter は typed の区切りの文字。keep_flags は flags の先頭の
-// `&`（前のフラグを保つ）、flags はその後の フラグの文字（`g` `n` `e` `r` `i` `I` だけ・`c` `p` `#`
+// `&`（前のフラグを保つ）、flags はその後の フラグの文字（`g` `c` `n` `e` `r` `i` `I` だけ・`p` `#`
 // `l` は evaluate_ex が断る）、count は 末尾の回数（0 から 2147483646・0 は engine が `e`
 // で決める）。どの値も単独で妥当なので公開 aggregate（CPP-003）。
 struct ExSubstituteRequest

@@ -1,6 +1,6 @@
 // scope `--ex-substitute`（ADR 0168 の段 1・Issue #1007）。`:s` の族の字面（evaluate_ex と
 // substitute_command）・範囲の字面（parsed_ex_range）・照合器の群（VimPattern::captured）・置き換えの
-// 本文（SubstituteReplacement）と、oracle の fixture にできない形（報せの文言・`c` の拒否・NUL と
+// 本文（SubstituteReplacement）と、oracle の fixture にできない形（報せの文言・NUL と
 // BS の置き換え・CRLF の文書・`.` に積まないこと・undo 1 単位）を controller の道で確かめる。
 // 本文とキャレットの答えの正本は fixture（`substitute-`・Vim 9.1 の実測）。
 #include "DisplayText.hpp"
@@ -126,13 +126,12 @@ void verify_substitute_command_text()
                request_of("s/a/b/ 0").value_or(unread()).count == std::optional<std::size_t>{0},
            "2147483646 and 0 are read; the engine decides 0 by the e flag");
     expect(fails_with("s/a/b/q", ExFailure::trailing_characters), "trailing text is E488");
-    for (const std::string_view text :
-         {"s/a/b/c", "s/a/b/gc", "&&c", "s/a/b/p", "s/a/b/#", "s/a/b/l", "s/a/\\=1/", "s\\/b/",
-          "s\xC3\xA9"
-          "a\xC3\xA9"})
+    for (const std::string_view text : {"s/a/b/p", "s/a/b/#", "s/a/b/l", "s/a/\\=1/", "s\\/b/",
+                                        "s\xC3\xA9"
+                                        "a\xC3\xA9"})
     {
         expect(fails_with(text, ExFailure::unsupported_argument),
-               "forms stage 1 does not take are closed failures (c is stage 2)");
+               "forms not taken yet are closed failures (p # l and the expression)");
     }
     expect(request_of("s/a/b/ \"note").has_value(), "a comment after the flags is allowed");
     expect(core::ex_failure_message(ExFailure::letter_delimiter).text() ==
@@ -142,6 +141,13 @@ void verify_substitute_command_text()
                core::ex_failure_message(ExFailure::trailing_characters).text() ==
                    "E488: Trailing characters",
            "the parse failures keep Vim's numbers and words");
+}
+
+void verify_confirm_flag_text()
+{
+    expect(request_of("s/a/b/gc").value_or(unread()).flags == "gc" &&
+               request_of("&&c").value_or(unread()).flags == "c",
+           "the c flag is read since stage 2a (ADR 0168 decision 6)");
 }
 
 void verify_substitute_ranges()
@@ -343,8 +349,6 @@ void verify_substitute_notices()
                    "E493: Backwards range given" &&
                message_of(substituted(controller, ":'zs/a/X/<CR>")) == "E20: Mark not set",
            "range failures keep Vim's words");
-    expect(message_of(substituted(controller, ":s/a/X/c<CR>")) == "Not supported: s/a/X/c",
-           "the confirm flag is refused in stage 1, nothing is replaced silently");
     expect(message_of(substituted(controller, ":s/\\(a/X/<CR>")) == "E54: Unmatched \\(",
            "a broken group is a closed failure with Vim's words");
 
@@ -512,6 +516,7 @@ void verify_ex_substitute_scope()
     verify_capture_limits();
     verify_limit_counts_document_newlines();
     verify_substitute_command_text();
+    verify_confirm_flag_text();
     verify_substitute_ranges();
     verify_pattern_groups();
     verify_replacement_text();
