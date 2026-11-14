@@ -87,3 +87,13 @@
 2. 群の関数（`run_document_operation` `run_tab_operation` `run_edit_operation` `run_sent_operation` `run_pane_operation`）と、そこにあった「何もしない `case` の列」は置かない。操作ごとの本体は 1 操作 1 つの小さな private メンバ関数 `run_<operation>`（引数の要らない既存の `open_document` `save_document` `save_document_as` `toggle_mode` `choose_explorer_root` は表から直に引く）。
 3. 網羅性は `static_assert` 1 つ（`runners_in_order`）で守る: 全行の `first` が行の番号の値で `second` が空でないこと（`OperationTexts.cpp` の `texts_in_order` と同じ形）。表の大きさは配列の型の `operation_texts.size()`（`OperationTexts.cpp` が値の数と照合済み）なので、行の書き忘れは `{open_file, nullptr}` で埋まり `runners_in_order` が落とす。行が多すぎれば初期化子の数でコンパイルが落ちる。
 4. 操作を足すときの ui の差分は、表に 1 行と小さなメンバ関数 1 つ（と `EditorWindow.hpp` の宣言 1 行）。決定 1〜7 は変えない。
+
+## 追補（2026-11-14・#1658）: 行の右端の鍵の欄は枠の幅に合わせて広げる
+
+1.0.0 の前の撮影で、F1 の一覧の `Ctrl+Shift+Space` の枠の右端が切れて `Ctrl+Shift+Spac` になっていた（3 言語とも）。右端の欄が 112 DIP の固定で、等幅 12 DIP の `Ctrl+Shift+Space`（16 字）に左右 9 DIP を足した枠（Cascadia Code の実測で 96 DPI は 131 px・120 DPI は 164 px。操作の表の全部の鍵で最も広い）が入らず、`paint_keycap` が欄の幅で切っていた。
+
+1. 鍵の欄の幅は core の `palette_row_note(row, dpi, content)` が決める。`content` は ui が描画と同じ文字組みで測った枠の幅（字の幅 ＋ 左右の `palette_key_padding_dips`・切り上げの物理画素）。112 DIP 以下なら今までと同じ欄（同じ式・同じ丸め）で、広ければ欄をその幅に広げ、名前と説明の欄（`palette_row_label(row, dpi, note)`）はその左 12 DIP まで縮む。説明は今の文字単位の省略（`…`）のまま。
+2. 広げた欄 ＋ すき間 12 ＋ 名前の最小 120 DIP が行の内側に入らなければ、欄は幅 0 で鍵を出さない（枠を途中で切らない・今までの「狭い行は補足を出さない」と同じ形）。
+3. 欄の幅は行ごと（右寄せの枠なので、行ごとに名前の欄の右端が違ってもそろって見える）。印の補足（決定 9 の `palette_origin_label`）は 112 DIP のまま。
+4. 鍵の文字組みは行の矩形を箱にして面の保持から引く（行はどれも同じ寸法・左寄せで折り返さないので幅は箱に依らない）。枠の余白は幅の試験も読むので `UiTextSizes.hpp` に移した。
+5. 幅は `nib_window_tests --language` が操作の表の全部の鍵（通常と Vim の `shown_chord` → `key_chord_label`）の最も広い枠で、96 / 120 DPI × 窓 3 通り（360 DIP・1280 px・1920 px）について測り、1280 px 以上で丸ごと出ることと、どの窓でも丸ごとか出さないかを守る。実測では 6 つの形（2 DPI × 3 窓）のどれでも欄が枠と同じ幅で丸ごと出て、名前の欄は最小の窓で 153 px（96 DPI）・191 px（120 DPI）残る。直す前の欄（112 DIP の固定）では、この試験は 10 件落ちる（1280 px 以上の 4 形で「丸ごと出る」・最小を含む 6 形で「丸ごとか出さない」）。

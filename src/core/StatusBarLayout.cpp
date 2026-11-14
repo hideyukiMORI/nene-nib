@@ -148,6 +148,35 @@ StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height,
                              DiagnosticCounts{0, 0, DiagnosticsCount::complete});
 }
 
+namespace
+{
+// 最初の項目の左端 left の左隣の表示形式の印の欄（status_bar_layout と同じ式）。
+[[nodiscard]] LayoutRect display_beside(std::int32_t left, const LayoutRect &band,
+                                        std::uint32_t dpi) noexcept
+{
+    return LayoutRect{left - to_pixels(display_gap_dips + display_width_dips, dpi), band.top,
+                      left - to_pixels(display_gap_dips, dpi), band.bottom};
+}
+} // namespace
+
+StatusBarLayout status_bar_fitted(const StatusBarLayout &layout, std::uint32_t dpi,
+                                  std::int32_t mode_width, std::int32_t position_width) noexcept
+{
+    auto fitted = layout;
+    auto &position = fitted.items.front();
+    const auto limit = layout.mode.left + mode_width + to_pixels(status_text_gap_dips, dpi);
+    // 文は枠の右端に揃う（右寄せ）。文の左端がモードの文から間を空けて入らなければ落とす。
+    const auto text_left = position.right - position_width;
+    position.left = text_left < limit ? position.right : std::min(position.left, text_left);
+    fitted.display = display_beside(position.left, layout.band, dpi);
+    if (fitted.display.left < limit)
+    {
+        fitted.display =
+            LayoutRect{position.left, layout.band.top, position.left, layout.band.bottom};
+    }
+    return fitted;
+}
+
 StatusBarHit status_bar_hit(const StatusBarLayout &layout, std::int32_t x, std::int32_t y) noexcept
 {
     if (contains(layout.toggle_ordinary, x, y))

@@ -74,19 +74,36 @@ LayoutRect row_inside(const LayoutRect &row, std::uint32_t dpi) noexcept
 
 LayoutRect palette_row_note(const LayoutRect &row, std::uint32_t dpi) noexcept
 {
+    return palette_row_note(row, dpi, 0);
+}
+
+LayoutRect palette_row_note(const LayoutRect &row, std::uint32_t dpi, std::int32_t content) noexcept
+{
     const auto inside = row_inside(row, dpi);
-    if (width_of(inside) < to_pixels(112 + 12 + 120, dpi))
+    // 112 DIP 以下の中身では今までと同じ式（丸めも同じ）のまま。広げた分だけ要る幅を足す。
+    const auto least = to_pixels(112, dpi);
+    const auto width = std::max(least, content);
+    if (width_of(inside) < to_pixels(112 + 12 + 120, dpi) + (width - least))
     {
         return LayoutRect{inside.right, inside.top, inside.right, inside.bottom};
     }
-    return LayoutRect{inside.right - to_pixels(112, dpi), inside.top, inside.right, inside.bottom};
+    return LayoutRect{inside.right - width, inside.top, inside.right, inside.bottom};
 }
 
 LayoutRect palette_row_label(const LayoutRect &row, std::uint32_t dpi, bool noted) noexcept
 {
+    if (!noted)
+    {
+        return row_inside(row, dpi);
+    }
+    return palette_row_label(row, dpi, palette_row_note(row, dpi));
+}
+
+LayoutRect palette_row_label(const LayoutRect &row, std::uint32_t dpi,
+                             const LayoutRect &note) noexcept
+{
     const auto inside = row_inside(row, dpi);
-    const auto note = palette_row_note(row, dpi);
-    if (!noted || width_of(note) <= 0)
+    if (width_of(note) <= 0)
     {
         return inside;
     }

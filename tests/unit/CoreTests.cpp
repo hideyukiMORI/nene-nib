@@ -2105,6 +2105,37 @@ void verify_status_bar_rectangles()
     expect(layout.corner_radius == 6 && layout.segment_radius == 4, "the toggle radii");
 }
 
+// 測った文の幅に合わせた配置（#1658）。layout は 640 × 360 DIP（モード 122〜194・行と桁 304〜400・
+// 印 278〜302）。
+void verify_status_bar_fitted()
+{
+    using nenenib::core::status_bar_fitted;
+    const auto layout = status_bar_layout(640, 360, 96);
+    const auto same = status_bar_fitted(layout, 96, 40, 90);
+    expect(same.items == layout.items && same.display == layout.display && same.mode == layout.mode,
+           "texts that fit keep the unmeasured place");
+    const auto wide = status_bar_fitted(layout, 96, 40, 110);
+    expect(wide.items.at(0) == LayoutRect{290, 332, 400, 360} &&
+               wide.display == LayoutRect{264, 332, 288, 360} &&
+               wide.items.at(1) == layout.items.at(1),
+           "a wide line and column widens its item to the left and moves the mark beside it");
+    // モード 122 + 152 + 間 6 = 280 は印の左端 278 を越える（150 なら 278 でちょうど入る）。
+    const auto marked = status_bar_fitted(layout, 96, 152, 90);
+    expect(status_bar_fitted(layout, 96, 150, 90).display == layout.display,
+           "a mark that starts exactly at the gap after the mode text stays");
+    expect(marked.items.at(0) == layout.items.at(0) && nenenib::core::width_of(marked.display) == 0,
+           "the mark that would reach the mode text is dropped first");
+    const auto narrow = status_bar_layout(360, 200, 96);
+    const auto dropped = status_bar_fitted(narrow, 96, 40, 70);
+    expect(nenenib::core::width_of(dropped.items.at(0)) == 0 &&
+               dropped.items.at(0).right == narrow.items.at(0).right &&
+               dropped.items.at(1) == narrow.items.at(1),
+           "a line and column that would reach the mode text is dropped and the others stay");
+    const auto kept = status_bar_fitted(narrow, 96, 30, 48);
+    expect(kept.items.at(0) == narrow.items.at(0),
+           "a short line and column beside a short mode text stays in the smallest window");
+}
+
 void verify_status_bar_scaling()
 {
     const auto at_125 = status_bar_layout(800, 450, 120);
@@ -2731,6 +2762,7 @@ void verify_look()
     verify_title_bar_targets();
     verify_status_bar_rectangles();
     verify_status_bar_scaling();
+    verify_status_bar_fitted();
     verify_status_bar_hits();
 }
 } // namespace nenenib::tests
