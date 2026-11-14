@@ -660,7 +660,7 @@ void verify_ex_ranges()
         expect(ex_fails_with(text, core::ExFailure::unsupported_argument),
                "ranges Nib does not run yet are closed failures");
     }
-    for (const std::string_view text : {"'<,'>foo", "'<,'>d", "3d", "'<,'>set bogus"})
+    for (const std::string_view text : {"'<,'>foo", "'<,'>m", "3m", "'<,'>set bogus"})
     {
         expect(
             !core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark).has_value(),

@@ -333,11 +333,21 @@ void store_vim_fixture_macro(EditorController &controller, const VimFixture &fix
     {
         return;
     }
+    // `let @a = "…"` は本文の最後が NL か CR なら行単位のレジスタにする（Vim の str_to_reg の
+    // MAUTO）。行単位の本文は行の列で、最後が CR なら 1 行（CR を含む）に NL を足す（`@a` は行の
+    // 後ろに NL を流す・`:2,3y<CR>` の後は `j` が 1 回動く・実測 #1654）。
+    std::string text = nenenib::core::vim_register_text(recording.value().keys.owned_keys());
+    VimRegisterKind kind = VimRegisterKind::characters;
+    if (!text.empty() && (text.back() == '\n' || text.back() == '\r'))
+    {
+        kind = VimRegisterKind::lines;
+        if (text.back() == '\r')
+        {
+            text += '\n';
+        }
+    }
     applied(controller,
-            nenenib::application::StoreVimRegister{
-                macro.name,
-                VimRegister{nenenib::core::vim_register_text(recording.value().keys.owned_keys()),
-                            VimRegisterKind::characters}});
+            nenenib::application::StoreVimRegister{macro.name, VimRegister{std::move(text), kind}});
 }
 
 [[nodiscard]] std::string whole_vim_body(EditorController &controller)

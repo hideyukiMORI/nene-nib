@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 
@@ -132,18 +133,42 @@ void line_tallied(const SubstituteScan &scan, std::size_t line, bool count_only,
         std::move(body)};
 }
 
-// 2 周目: 当たった行の編集を上の行から emit へ渡す。
-template <typename Emit>
-void each_line_edit(const SubstituteScan &scan, const SubstituteTally &tally, Emit &&emit)
+// first から last の行（marked があればその中の行だけ）を上から visit へ渡す。
+template <typename Visit>
+void each_scanned_line(std::size_t first, std::size_t last,
+                       const std::optional<std::span<const std::size_t>> &marked, Visit &&visit)
 {
-    for (std::size_t line = tally.first; line <= tally.last; ++line)
+    if (!marked.has_value())
     {
-        auto edit = line_edited(scan, line);
-        if (edit.has_value())
+        for (std::size_t line = first; line <= last; ++line)
         {
-            emit(std::move(edit).value());
+            visit(line);
+        }
+        return;
+    }
+    for (const std::size_t line : marked.value())
+    {
+        if (line >= first && line <= last)
+        {
+            visit(line);
         }
     }
+}
+
+// 2 周目: 当たった行の編集を上の行から emit へ渡す。
+template <typename Emit>
+void each_line_edit(const SubstituteScan &scan, const SubstituteTally &tally,
+                    const std::optional<std::span<const std::size_t>> &marked, Emit &&emit)
+{
+    each_scanned_line(tally.first, tally.last, marked,
+                      [&](std::size_t line)
+                      {
+                          auto edit = line_edited(scan, line);
+                          if (edit.has_value())
+                          {
+                              emit(std::move(edit).value());
+                          }
+                      });
 }
 
 // 当たりの外の本文 kept と、足すバイト added が limit に収まるか。
@@ -156,10 +181,8 @@ void each_line_edit(const SubstituteScan &scan, const SubstituteTally &tally, Em
 checked_tally(const SubstituteScan &scan, const SubstituteRequest &request)
 {
     SubstituteTally tally;
-    for (std::size_t line = request.first.value; line <= request.last.value; ++line)
-    {
-        line_tallied(scan, line, request.count_only, tally);
-    }
+    each_scanned_line(request.first.value, request.last.value, request.marked, [&](std::size_t line)
+                      { line_tallied(scan, line, request.count_only, tally); });
     if (tally.substitutions == 0)
     {
         return std::unexpected(SubstituteFailure::no_match);
@@ -198,7 +221,7 @@ substituted(const TextBuffer &text, const VimPattern &pattern,
     {
         return result;
     }
-    each_line_edit(scan, tally.value(),
+    each_line_edit(scan, tally.value(), request.marked,
                    [&result](VimBlockEdit edit)
                    {
                        result.breaks +=
@@ -224,7 +247,7 @@ std::expected<Edit, SubstituteFailure> substituted_all(const TextBuffer &text,
     std::optional<Offset> at;
     Offset copied{};
     std::string inserted;
-    each_line_edit(scan, tally.value(),
+    each_line_edit(scan, tally.value(), std::nullopt,
                    [&](const VimBlockEdit &edit)
                    {
                        copied = at.has_value() ? copied : edit.range.begin;

@@ -253,7 +253,8 @@ void placed_after_effect(EditorState &state, const core::VimStep &step)
 constexpr std::string_view too_long_notice = "E1240: Resulting text too long";
 // engine を呼ぶ 1 か所の写し（Issue #1023）。鍵は vim_step・`:N` の行は vim_line_jumped・押しの
 // VISUAL は vim_pointer_selected（#1250）・オペレータ待ちの `:` の確定は
-// vim_command_operated（#1549）・`:s` の族は vim_substituted（ADR 0168）。
+// vim_command_operated（#1549）・`:s` の族は vim_substituted（ADR 0168）・`:d` `:y` は
+// vim_lines_edited・`:g` は vim_global（ADR 0168 の段 3a）。
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
                                         const core::VimEditorView &view, const core::VimKey &key)
 {
@@ -293,6 +294,20 @@ constexpr std::string_view too_long_notice = "E1240: Resulting text too long";
                                         const core::ExSubstituteRequest &request)
 {
     return core::vim_substituted(state, view, request);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
+                                        const core::ExLinesRequest &request)
+{
+    return core::vim_lines_edited(state, view, request);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
+                                        const core::ExGlobalRequest &request)
+{
+    return core::vim_global(state, view, request);
 }
 
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
@@ -1587,9 +1602,20 @@ void EditorController::perform(const core::VimRemoveBlock &effect)
     apply_block(effect.edits, effect.caret, vim_boundary());
 }
 
+// engine が `'.` の位置を添えた効果（Ex の `:s` `:d` `:g`・Vim は命令ごとに changed_lines
+// を呼ぶ）は、 畳んだ Edit が置いた `'.` と変更の列の最後の位置を、その位置で置き直す（同じ undo
+// の単位の続きの 変更として vim_change_recorded に渡す・#1654）。
 void EditorController::perform(const core::VimReplaceBlock &effect)
 {
     apply_block(effect.edits, effect.caret, vim_boundary());
+    if (!effect.last_change.has_value() || effect.edits.empty())
+    {
+        return;
+    }
+    auto marks = state_.vim_marks();
+    marks.last_change = effect.last_change.value();
+    marks = core::vim_change_recorded(marks, effect.last_change.value(), false);
+    state_ = state_.with_vim_marks(std::move(marks));
 }
 
 // 矩形の貼付は単位を切り、矩形の INSERT の Esc は 1 行目の INSERT の単位に畳む（ADR 0035 の追補

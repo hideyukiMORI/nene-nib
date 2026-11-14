@@ -3,6 +3,7 @@
 #include "ExFailure.hpp"
 #include "ExSubstituteRequest.hpp"
 
+#include <cstddef>
 #include <expected>
 #include <optional>
 #include <string_view>
@@ -16,4 +17,9 @@ namespace nenenib::core
 // 区切り）は unsupported_argument。
 [[nodiscard]] std::optional<std::expected<ExSubstituteRequest, ExFailure>>
 substitute_command(std::string_view text);
+
+// 区切り delimiter までのパターンの長さ（Vim の skip_regexp_ex の部分集合）。`\` の次と `[...]` の
+// 中の区切りは終わりにしない。区切りが無ければ text の長さ。`:s` と `:g` が同じ 1 本で読む
+// （ADR 0168 の段 3a）。
+[[nodiscard]] std::size_t ex_pattern_end(std::string_view text, char delimiter) noexcept;
 } // namespace nenenib::core

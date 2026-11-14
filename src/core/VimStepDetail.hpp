@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ExRange.hpp"
+#include "ExSubstituteRequest.hpp"
 #include "VimAction.hpp"
 #include "VimBlockInsert.hpp"
 #include "VimBlockRange.hpp"
@@ -20,6 +22,7 @@
 #include <cstddef>
 #include <expected>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -104,6 +107,34 @@ character_search_position(const VimEditorView &view, const VimState &state,
 // `&` と `g&`（ADR 0168 の決定 1・VimStepSubstitute.cpp）。どちらも vim_substituted の 1 本へ流す。
 [[nodiscard]] VimStep substitute_action(const VimState &state, const VimEditorView &view,
                                         VimAction action);
+// Ex の行を書き換える命令（`:s` の族・`:d` `:y`・`:g`・ADR 0168）が共用する部品
+// （VimStepSubstitute.cpp）。範囲を解いた最初と最後の行（両端を含む・1 始まり）。
+using ExLineSpan = std::pair<std::size_t, std::size_t>;
+// 範囲を行に解く 1 本（Vim の do_one_cmd の後半）。範囲が無ければキャレットの行。逆向きは E493、
+// 本文の外は E16、マークが無ければ E20。
+[[nodiscard]] std::expected<ExLineSpan, VimSearchNoticeKind>
+ex_lines_resolved(const VimEditorView &view, const std::optional<ExRange> &range);
+// Ex の命令の後の状態（鍵を食べ終えた NORMAL・`.`
+// の直前の変更は保つ・オペレータ待ちならそのまま）。
+[[nodiscard]] VimState ex_rested(const VimState &state);
+// 報せと失敗だけの 1 歩（状態は ex_rested）。
+[[nodiscard]] VimStep ex_noticed(const VimState &state, VimSearchNotice notice,
+                                 VimRepeatFailure failure);
+// 行の中の最初の非空白の桁（Vim の beginline(BL_WHITE | BL_FIX)・空白だけなら最後の文字）。
+[[nodiscard]] std::size_t ex_landing_column(std::string_view line);
+// 打ったパターンを前向きの検索の形に（区切り delimiter の `\?` は `?` の文字・`/` は逃がす）。
+[[nodiscard]] std::string ex_forward_pattern(std::string_view pattern, char delimiter);
+// 直前の検索のパターンの前向きの形（無ければ値なし）。
+[[nodiscard]] std::optional<std::string> ex_last_search(const VimState &state);
+// `:g` のパターンを直前の検索と置換のパターン（Vim の RE_BOTH・前の置換がある時だけ）に覚えた状態。
+[[nodiscard]] VimState ex_pattern_remembered(VimState next, const VimEditorView &view,
+                                             std::string_view pattern);
+// `:g/{pat}/s//{rep}/` の置換（ADR 0168 の段 3a）。marked は `:g`
+// が選んだ行（上から・空でない）で、 置換の本体を集合の行に 1
+// 回だけ流す。当たりが無ければ失敗にせず、最後の選んだ行の頭に着く。
+[[nodiscard]] VimStep global_substituted(const VimState &state, const VimEditorView &view,
+                                         const ExSubstituteRequest &request,
+                                         std::span<const std::size_t> marked);
 [[nodiscard]] VimMotionRange characters_between(Offset first, Offset second);
 [[nodiscard]] std::optional<VimMotionRange> lines_below(const TextBuffer &text, LineNumber line,
                                                         std::size_t steps);

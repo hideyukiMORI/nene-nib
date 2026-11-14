@@ -354,7 +354,7 @@ void verify_line_numbers()
     expect(line_request("99999999999999999999999") ==
                std::optional{std::optional<std::size_t>{std::numeric_limits<std::size_t>::max()}},
            "a number beyond size_t saturates (the engine clamps to the last line)");
-    for (const std::string_view input : {"3,5", "+3", "-3", "'a", "3d", "3 4", "$$", "3$", "%"})
+    for (const std::string_view input : {"3,5", "+3", "-3", "'a", "3m", "3 4", "$$", "3$", "%"})
     {
         const auto before =
             core::evaluate_ex(input, core::default_editor_settings(), core::Appearance::dark);
