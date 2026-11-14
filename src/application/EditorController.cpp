@@ -534,6 +534,9 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<SettleRecentTab>(intent) ||
                  std::holds_alternative<EndSession>(intent) || keeps_explorer_notice(intent));
     settle_pending_keys(intent);
+    // `:s///c` の問いは答えでない意図の前に `q` と同じに終える（ADR 0168 の決定 6・入口の 1
+    // か所）。
+    end_question_before(intent);
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     // SelectLanguage も同じ（ADR 0154 の決定 4）。SelectSyntax も同じ（ADR 0156 の追補）。
@@ -861,7 +864,11 @@ std::optional<EditorController::SearchPattern> EditorController::search_pattern(
         return SearchPattern{std::move(parsed).value()};
     }
     const auto &remembered = state_.vim().last_search;
-    if (state_.vim().highlight != core::VimSearchHighlight::on || !remembered.has_value())
+    // `:s///c` の問いの間は置換のパターン（直前の検索）で今の当たりの枠を描く（hlsearch が off
+    // でも・ 全一致の面は on のときだけ・ADR 0168 の決定 6・Vim の highlight_match）。
+    const bool asking = substitute_question() != nullptr;
+    if ((!asking && state_.vim().highlight != core::VimSearchHighlight::on) ||
+        !remembered.has_value())
     {
         return std::nullopt;
     }

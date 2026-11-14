@@ -297,6 +297,13 @@ constexpr std::string_view too_long_notice = "E1240: Resulting text too long";
 
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
                                         const core::VimEditorView &view,
+                                        const core::SubstituteAnswer &answer)
+{
+    return core::vim_substitute_answered(state, view, answer);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
                                         const VimStepSource &source)
 {
     return std::visit([&state, &view](const auto &chosen)
@@ -365,6 +372,7 @@ measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &r
     case core::InputLinePrompt::go_to_line:
     case core::InputLinePrompt::ex:
     case core::InputLinePrompt::palette:
+    case core::InputLinePrompt::substitute_confirm:
         return std::nullopt;
     }
     std::unreachable();
@@ -1952,6 +1960,52 @@ void EditorController::merge_replayed_edits(const core::EditHistory &before,
         return;
     }
     state_ = state_.with_history(before.pushed(edit.value(), core::EditBoundary::separate));
+}
+
+// `:s///c` の 1 歩（ADR 0168 の決定 6・段 2a）。置く当たりは矩形と同じ apply_block で写し（`y` の
+// たびに置いた本文が見え、使う人は見てから次を答える）、問いを開くか続けるなら入力行の問いを
+// 置き直し、終えるなら閉じて、置いた分を問いを開いたときの履歴の上の 1 つの undo の単位に畳む。
+void EditorController::perform(const core::VimConfirmSubstitute &effect)
+{
+    const SubstituteQuestion *open = substitute_question();
+    const bool opened = open != nullptr;
+    SubstituteQuestion question = opened ? *open
+                                         : SubstituteQuestion{core::SubstituteConfirmation{},
+                                                              state_.history(), state_.text()};
+    apply_block(effect.edits, effect.caret, core::EditBoundary::separate);
+    if (effect.asking.has_value())
+    {
+        question.confirmation = effect.asking.value();
+        state_ = state_.with_command_input(CommandInput{std::move(question)});
+        return;
+    }
+    if (opened)
+    {
+        close_command_input();
+    }
+    if (effect.restore.has_value())
+    {
+        merge_question_edits(question, effect.restore.value());
+    }
+}
+
+// 問いの間に積んだ単位を、問いを開いたときの履歴の上の 1 つの Edit に置き換える（undo 1 回で全部
+// 戻る・途中で止めても 1 単位・ADR 0168 の決定 6）。戻り先は engine が Vim の uh_cursor の規則で
+// 決めた restore（ADR 0052 の決定 3 の畳み方は再生と同じ）。積んでいなければ何もしない。
+void EditorController::merge_question_edits(const SubstituteQuestion &question,
+                                            core::Offset restore)
+{
+    if (state_.history().position() <= question.history.position())
+    {
+        return;
+    }
+    // 問いは意図をまたぐので、途中の改訂番号は自動退避の帳面と LSP の版に見えている。畳んだ
+    // 履歴は今の値より大きくする（ADR 0137 の決定 2・ADR 0168 の段 2a の追補 14）。
+    const auto edit = covering_edit(question.text.text(), state_.text().text(), restore);
+    const core::EditHistory folded =
+        edit.has_value() ? question.history.pushed(edit.value(), core::EditBoundary::separate)
+                         : question.history.sealed();
+    state_ = state_.with_history(folded.revised_beyond(state_.history().revision()));
 }
 
 // Vim の u は戻した単位が覚えた戻り先（最初の編集の瞬間のキャレット）へ置き、行末の 1 つ先などの

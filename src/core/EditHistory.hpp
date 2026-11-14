@@ -62,6 +62,11 @@ class EditHistory final
     // 1 増え、減らない。sealed では変わらない。位置はまとめられた編集と undo の後の別の編集で
     // 同じ値に戻るので、「前に見たときから変わったか」は位置ではなくこれで比べる。
     [[nodiscard]] std::size_t revision() const noexcept;
+    // 改訂番号だけを seen より大きくした次の履歴（seen 以下なら seen + 1・大きければそのまま）。
+    // 意図をまたいで積んだ単位を前の履歴の上に畳み直す所（`:s///c` の問いの終わり・ADR 0168 の
+    // 段 2a の追補 14）が、畳む前の今の改訂番号を渡す。畳み直しても改訂番号は減らず、途中で
+    // 見せた値を別の本文に使わない。位置・区切り・本文の位置は変えない。
+    [[nodiscard]] EditHistory revised_beyond(std::size_t seen) const;
     // 本文の位置（ADR 0181 の決定 4）。[0, position) にある changed の単位の数。saved_only の
     // 単位は数えない。保存時点と比べる値で、判定は application の save_state_of の 1 か所。
     // 値は件ごとに数え直さず、積む・畳む・戻す・やり直すの 4 つで足し引きして持つ（O(1)）。

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "SubstituteConfirmation.hpp"
+#include "SubstituteMatch.hpp"
+#include "SubstituteResult.hpp"
 #include "VimAction.hpp"
 #include "VimBlockInsert.hpp"
 #include "VimBlockRange.hpp"
@@ -23,6 +26,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 // VimStep の群（ADR 0158 の決定 3）が翻訳単位をまたいで呼ぶ関数の宣言と、2 つ以上の群が使う定数。
 // src/core/VimStep*.cpp だけが include する。
@@ -104,6 +108,17 @@ character_search_position(const VimEditorView &view, const VimState &state,
 // `&` と `g&`（ADR 0168 の決定 1・VimStepSubstitute.cpp）。どちらも vim_substituted の 1 本へ流す。
 [[nodiscard]] VimStep substitute_action(const VimState &state, const VimEditorView &view,
                                         VimAction action);
+// `:s` の置き換えた後の着地（最後に置き換えた行の最初の非空白・end_column なら行末）と、置き換えの
+// 数の報せ（3 つ以上のときだけ）。`c` の `a` も同じ規則（VimStepSubstitute.cpp・ADR 0168 の
+// 追補 8・10）。
+[[nodiscard]] Offset substitute_landing(const TextBuffer &text, const SubstituteResult &result,
+                                        bool end_column);
+[[nodiscard]] std::optional<VimSearchNotice> substitute_notice(const SubstituteResult &result);
+// `c` の問いの始まり（ADR 0168 の決定 6・VimStepSubstituteConfirm.cpp）。matches の最初の当たりへ
+// キャレットを置いて問い、`''` に置換の前のキャレットを置く。再生の中では問わずに断る。
+[[nodiscard]] VimStep confirm_started(VimState next, const VimEditorView &view,
+                                      std::vector<SubstituteMatch> matches,
+                                      SubstituteConfirmation seed);
 [[nodiscard]] VimMotionRange characters_between(Offset first, Offset second);
 [[nodiscard]] std::optional<VimMotionRange> lines_below(const TextBuffer &text, LineNumber line,
                                                         std::size_t steps);

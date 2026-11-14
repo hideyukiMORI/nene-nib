@@ -25,6 +25,12 @@ namespace
     return ImeStance::closed_once;
 }
 
+// `:s///c` の問いは答えの文字だけを読むので、問いの間は IME を閉じたまま（ADR 0168 の決定 6）。
+[[nodiscard]] ImeStance stance_of(const SubstituteQuestion &) noexcept
+{
+    return ImeStance::closed;
+}
+
 // 入力が無いときはモードが決める（ADR 0014 の決定 5・今までの ui の ime_blocked と同じ表）。
 [[nodiscard]] ImeStance stance_of(core::EditMode mode, core::VimMode vim_mode) noexcept
 {

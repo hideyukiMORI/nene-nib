@@ -1,5 +1,6 @@
 #include "EditHistory.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <utility>
@@ -295,6 +296,11 @@ std::size_t EditHistory::position() const noexcept
 std::size_t EditHistory::revision() const noexcept
 {
     return revision_;
+}
+
+EditHistory EditHistory::revised_beyond(std::size_t seen) const
+{
+    return EditHistory(blocks_, size_, position_, tail_, std::max(revision_, seen + 1), content_);
 }
 
 std::size_t EditHistory::content_position() const noexcept

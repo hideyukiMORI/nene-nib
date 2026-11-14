@@ -8,6 +8,7 @@
 #include "ExSubstituteRequest.hpp"
 #include "LineEnding.hpp"
 #include "SubstituteAll.hpp"
+#include "SubstituteConfirmation.hpp"
 #include "VimCaret.hpp"
 #include "VimCharacterBoundary.hpp"
 #include "VimColumnWish.hpp"
@@ -278,6 +279,10 @@ resolved_lines(const VimEditorView &view, const std::optional<ExRange> &range)
     {
         flags.error = !flags.error;
     }
+    else if (letter == 'c')
+    {
+        flags.confirm = !flags.confirm;
+    }
     last_used = last_used || letter == 'r';
     return cased(flags, letter);
 }
@@ -534,12 +539,31 @@ renewed_memory(const VimState &state, const ExSubstituteRequest &request)
     {
         flags = flag_applied(flags, letter, last_used);
     }
+    // `n` は問わずに数えるだけ（Vim の do_count は do_ask を倒し、倒した値を `&&` が保つ）。
+    flags.confirm = flags.confirm && !flags.count;
     memory.flags = flags;
     // 置換のパターン（RE_SUBST）と広げた置き換え（reg_prev_sub）は、E939 と E35 の後では変えない
     // （Vim は回数の検査と search_regcomp の後でだけ書く・`:s/a/X/ 0` の後の `:&` と `n` は前の
     // パターン・実測）。書くのは vim_substituted の remembered の手前。
     auto pattern = pattern_of(state, request, memory, last_used);
     return std::pair{std::move(memory), std::move(pattern)};
+}
+
+// `$` の後の前の置換の繰り返しか（着地を行末にする・Vim の endcolumn・実測）。
+[[nodiscard]] bool repeats_at_line_end(const VimState &state,
+                                       const ExSubstituteRequest &request) noexcept
+{
+    return request.source != ExSubstituteSource::typed && state.wanted_column.has_value() &&
+           state.wanted_column.value().wish == VimColumnWish::at_line_end;
+}
+
+// `c` の問いの最初の値の種（問いの文の置き換えと `a` の着地・ADR 0168 の決定 6）。
+[[nodiscard]] SubstituteConfirmation confirm_seed(std::string shown, bool end_column)
+{
+    SubstituteConfirmation seed;
+    seed.shown = std::move(shown);
+    seed.end_column = end_column;
+    return seed;
 }
 } // namespace
 
@@ -570,6 +594,8 @@ VimStep vim_substituted(const VimState &state, const VimEditorView &view,
     memory.previous = vim_tilde_expanded(memory.replacement, previous_of(state));
     const VimSubstituteFlags flags = memory.flags;
     const auto replacement = SubstituteReplacement::vim(memory.previous);
+    // 問いの文の置き換え（Vim の do_sub の sub は regtilde の後）。
+    std::string shown = memory.previous;
     next = remembered(std::move(next), view, std::move(memory), pattern_text);
     const auto parsed = VimPattern::parse(pattern_text, VimSearchDirection::forward,
                                           flags.letter_case.value_or(view.search_case));
@@ -587,23 +613,34 @@ VimStep vim_substituted(const VimState &state, const VimEditorView &view,
         return unsubstituted(std::move(next), SubstituteFailure::no_match, flags, pattern_text);
     }
     const auto [first, last] = lines.value();
-    auto result =
-        substituted(view.text, parsed.value(), replacement,
-                    SubstituteRequest{LineNumber{first}, LineNumber{last}, flags.every, flags.count,
-                                      view.document_limit, view.capture_limit});
-    if (!result)
+    const bool end_column = repeats_at_line_end(state, request);
+    const SubstituteRequest scope{LineNumber{first}, LineNumber{last},    flags.every,
+                                  flags.count,       view.document_limit, view.capture_limit};
+    // `c` は当たりの列を元の本文から 1 回で計画して最初の当たりを問う（決定 6・段 2a）。
+    if (flags.confirm)
     {
-        return unsubstituted(std::move(next), result.error(), flags, pattern_text);
+        auto matches = substitute_matches(view.text, parsed.value(), replacement, scope);
+        return matches ? detail::confirm_started(std::move(next), view, std::move(matches).value(),
+                                                 confirm_seed(std::move(shown), end_column))
+                       : unsubstituted(std::move(next), matches.error(), flags, pattern_text);
     }
-    // `$` の後の前の置換の繰り返しは行末に着く（Vim の endcolumn・実測）。
-    const bool end_column = request.source != ExSubstituteSource::typed &&
-                            state.wanted_column.has_value() &&
-                            state.wanted_column.value().wish == VimColumnWish::at_line_end;
-    return substituted_step(std::move(next), view, std::move(result).value(), end_column);
+    auto result = substituted(view.text, parsed.value(), replacement, scope);
+    return result ? substituted_step(std::move(next), view, std::move(result).value(), end_column)
+                  : unsubstituted(std::move(next), result.error(), flags, pattern_text);
 }
 
 namespace detail
 {
+Offset substitute_landing(const TextBuffer &text, const SubstituteResult &result, bool end_column)
+{
+    return substituted_caret(text, result, end_column);
+}
+
+std::optional<VimSearchNotice> substitute_notice(const SubstituteResult &result)
+{
+    return counted_notice(result, false);
+}
+
 VimStep substitute_action(const VimState &state, const VimEditorView &view, VimAction action)
 {
     if (action == VimAction::repeat_substitute_all)

@@ -41,6 +41,12 @@ enum class VimSearchNoticeKind : std::uint8_t
     positive_count,
     // E363: pattern uses more memory than 'maxmempattern'（群の範囲を引く道の升の数の上限を超える
     // 当たり・ADR 0168 の追補 13。本文は変えない）
-    pattern_too_complex
+    pattern_too_complex,
+    // `:s///c` の問いを再生（`.`・`@`）の中では開かない（Vim には無い報せ・ADR 0168 の決定 6 の
+    // 段 2a の限界）。Vim は後ろの鍵を答えとして読むが、Nib は再生を打ち切る。
+    confirm_in_replay,
+    // オペレータ待ちの `:s///c`（`d:s/a/X/gc`）は問いを開かない（Vim には無い報せ・ADR 0168 の
+    // 段 2a の追補 13）。Vim は問いが終わってからオペレータを閉じるが、Nib は断る。
+    confirm_with_operator
 };
 } // namespace nenenib::core

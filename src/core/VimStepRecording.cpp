@@ -469,6 +469,12 @@ namespace
     return false;
 }
 
+// `:s` の族は `.` の記録に積まない（ADR 0168 の追補 6）。`c` の問いの答えも同じ。
+[[nodiscard]] bool changes_text(const VimConfirmSubstitute &) noexcept
+{
+    return false;
+}
+
 [[nodiscard]] bool changes_text(const VimRemoveRange &) noexcept
 {
     return true;

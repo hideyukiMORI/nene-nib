@@ -31,6 +31,20 @@ namespace
     return core::InputLinePrompt::palette;
 }
 
+[[nodiscard]] core::InputLinePrompt prompt_of(const SubstituteQuestion &)
+{
+    return core::InputLinePrompt::substitute_confirm;
+}
+
+// `:s///c` の問いの文（Vim の do_sub の文言・英語のまま訳さない・ADR 0168 の決定 6）。Vim の文の
+// `^E/^Y` は段 2a で受けないので出さない。キャレットは文の終わり（Vim は問いの後ろで待つ）。
+[[nodiscard]] core::InputLineView view_of(const SubstituteQuestion &question)
+{
+    std::string text = "replace with " + question.confirmation.shown + " (y/n/a/q/l)?";
+    const core::Offset caret{text.size()};
+    return core::InputLineView{prompt_of(question), std::move(text), caret, {}, std::nullopt};
+}
+
 // 検索は補完も候補も持たないので、見え方の列は空になる（ADR 0032 の決定 1）。
 [[nodiscard]] core::InputLineView view_of(const core::SearchLine &line)
 {
@@ -80,6 +94,11 @@ namespace
     return false;
 }
 
+[[nodiscard]] bool wants_fonts(const SubstituteQuestion & /*question*/)
+{
+    return false;
+}
+
 [[nodiscard]] CommandInput fonts_given(const core::CommandLine &line,
                                        const core::FontFamilies &fonts)
 {
@@ -96,6 +115,12 @@ namespace
                                        const core::FontFamilies & /*fonts*/)
 {
     return line;
+}
+
+[[nodiscard]] CommandInput fonts_given(const SubstituteQuestion &question,
+                                       const core::FontFamilies & /*fonts*/)
+{
+    return question;
 }
 
 [[nodiscard]] core::InputLineView view_of(const core::CommandPalette &palette)
@@ -136,6 +161,14 @@ namespace
     return palette;
 }
 
+[[nodiscard]] CommandInput recalled_of(const SubstituteQuestion &question,
+                                       const core::InputHistory & /*ex*/,
+                                       const core::InputHistory & /*search*/,
+                                       core::CommandEdit /*direction*/)
+{
+    return question;
+}
+
 [[nodiscard]] bool recalls_of(const core::CommandLine &line, const core::InputHistory &ex,
                               const core::InputHistory & /*search*/, core::CommandEdit direction)
 {
@@ -150,6 +183,15 @@ namespace
 }
 
 [[nodiscard]] bool recalls_of(const core::CommandPalette & /*palette*/,
+                              const core::InputHistory & /*ex*/,
+                              const core::InputHistory & /*search*/,
+                              core::CommandEdit /*direction*/)
+{
+    return true;
+}
+
+// 問いは履歴を歩かない（上下は無視する答えで、失敗にしない）。
+[[nodiscard]] bool recalls_of(const SubstituteQuestion & /*question*/,
                               const core::InputHistory & /*ex*/,
                               const core::InputHistory & /*search*/,
                               core::CommandEdit /*direction*/)
@@ -172,7 +214,40 @@ namespace
     return palette.input().overflowed();
 }
 
+[[nodiscard]] bool overflows_of(const SubstituteQuestion & /*question*/)
+{
+    return false;
+}
+
+// 文字の差し込みと行の編集（問いは文字を答えとして controller が先に読むので、ここでは変えない）。
+template <typename Input> [[nodiscard]] auto inserted_of(const Input &input, std::string_view text)
+{
+    return input.inserted(text);
+}
+
+[[nodiscard]] std::expected<SubstituteQuestion, core::ExFailure>
+inserted_of(const SubstituteQuestion &question, std::string_view /*text*/)
+{
+    return question;
+}
+
+template <typename Input>
+[[nodiscard]] CommandInput edited_of(const Input &input, core::CommandEdit edit)
+{
+    return input.edited(edit);
+}
+
+[[nodiscard]] CommandInput edited_of(const SubstituteQuestion &question, core::CommandEdit /*edit*/)
+{
+    return question;
+}
+
 [[nodiscard]] std::optional<std::string> focused_of(const core::SearchLine & /*line*/)
+{
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<std::string> focused_of(const SubstituteQuestion & /*question*/)
 {
     return std::nullopt;
 }
@@ -222,7 +297,7 @@ std::expected<CommandInput, core::ExFailure> inserted_command(const CommandInput
     return std::visit(
         [text](const auto &value) -> std::expected<CommandInput, core::ExFailure>
         {
-            auto next = value.inserted(text);
+            auto next = inserted_of(value, text);
             if (!next)
             {
                 return std::unexpected(next.error());
@@ -234,7 +309,7 @@ std::expected<CommandInput, core::ExFailure> inserted_command(const CommandInput
 
 CommandInput edited_command(const CommandInput &input, core::CommandEdit edit)
 {
-    return std::visit([edit](const auto &value) -> CommandInput { return value.edited(edit); },
+    return std::visit([edit](const auto &value) -> CommandInput { return edited_of(value, edit); },
                       input);
 }
 

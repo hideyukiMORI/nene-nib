@@ -124,6 +124,10 @@ DisplayText vim_search_message(const VimSearchNotice &notice)
         return message_of("E939: Positive count required");
     case VimSearchNoticeKind::pattern_too_complex:
         return message_of("E363: pattern uses more memory than 'maxmempattern'");
+    case VimSearchNoticeKind::confirm_in_replay:
+        return message_of("Not supported: the c flag of :s in a replay");
+    case VimSearchNoticeKind::confirm_with_operator:
+        return message_of("Not supported: the c flag of :s with an operator");
     }
     std::unreachable();
 }
