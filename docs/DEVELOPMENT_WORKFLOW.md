@@ -220,7 +220,7 @@ GitHub の配布が試験版であることは、Release の題の「Beta」と 
 配布物の正規生成経路は次の 1 本である。
 
 ```powershell
-pwsh -NoProfile -File eng/package-release.ps1 -OutputDirectory D:/NeNeNib/releases/v<x.y.z> -Verification docs/quality/<accepted-record>.md
+pwsh -NoProfile -File eng/package-release.ps1 -OutputDirectory D:/NeNeNib/releases/v<x.y.z>/zip -Verification docs/quality/<accepted-record>.md
 ```
 
 Issue #413 / ADR 0115 / #1596。数値版はCMakeから導出し、配布物の名前は `NeNeNib-<x.y.z>-windows-x64.zip` の 1 通り（`archive_name`・版に `-` が入っていれば道具が断る）。cleanなmain（同じcommitのD側detached作業木も可）とGitHub上の現在のmainの一致を要求する。
@@ -238,7 +238,7 @@ Issue #413 / ADR 0115 / #1596。数値版はCMakeから導出し、配布物の�
 | 1 | 設計席 | 版を上げる PR（`project()` の 1 行と、版を見る文書）を main へ | 同じ |
 | 1a | 設計席 | 公開の記録（`docs/quality/release-<x.y.z>-<日付>.md`・前半の根拠だけ・雛形から写す）の文書 PR を main へ。**その merge の commit が公開元**で、梱包の `-Verification` はこの記録を指す | 同じ記録・同じ commit |
 | 2 | 設計席 | clean な main の detached 作業木で上の梱包のコマンド（Release のビルドは 1 回） | 同じ `build/release-<short>/NeNeNib.exe` から `eng/package-msix.ps1 -OutputDirectory D:/NeNeNib/releases/v<x.y.z>/msix -Zip <ZIP> -Store` |
-| 3 | 設計席 | 照合: `package.json`（exe の SHA-256・VERSIONINFO が `x.y.z`）と展開した exe の短い起動 | 照合: `msix.json`（exe の SHA-256 が ZIP と同じ・Identity の Version が `x.y.z.0`・言語は `en-US` が先頭・中身 30 個） |
+| 3 | 設計席 | 照合: `package.json`（exe の SHA-256・VERSIONINFO が `x.y.z`）と展開した exe の短い起動 | 照合: `msix.json`（exe の SHA-256 が ZIP と同じ・Identity の Version が `x.y.z.0`・言語は `en-US` が先頭・中身 30 個（`entries` は makeappx が足す 2 つを含めて 32）） |
 | 4 | 設計席 | annotated tag `v<x.y.z>` → GitHub Release（**題に「Beta」**・例 `NeNe Nib 1.0.0 Beta`・**pre-release の印**）に ZIP と `SHA256SUMS` を添付し、再取得して照合 | — |
 | 5 | hide | — | 自己署名の写しで入れて確かめる・WACK（管理者）→ Partner Center に署名なしの `-store.msix` を上げて申請（[docs/store/msix.md](store/msix.md)・[docs/store/submission.md](store/submission.md)） |
 | 6 | 設計席 | 公開の結果を同じ記録の末尾の節へ（文書 PR） | 認定の後に結果を同じ記録へ |
