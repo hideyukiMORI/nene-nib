@@ -940,6 +940,9 @@ class EditorController final
     void accept(const UnregisterShell &);
     // 登録の結果の 1 行（鳴らさない）。
     void show_shell_notice(const std::string &text);
+    // バージョン情報（施主決定 D90）。core::app_about_line の 1 行を知らせにするだけで、port を
+    // 呼ばない（ページを開かない・通信しない）。
+    void accept(const ShowVersion &);
 
     // ---------------------------------------------------------------- 起動画面（ADR 0172）
     // EditorControllerStartScreen.cpp の群だけが読み書きする。

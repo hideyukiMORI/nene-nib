@@ -410,6 +410,9 @@ void verify_print_contracts();
 // ShellRegistrationTests.cpp（ADR 0178・エクスプローラーへの登録）
 void verify_shell_registration_contracts();
 
+// VersionInfoTests.cpp（施主決定 D90・バージョン情報と :version）
+void verify_version_info_contracts();
+
 // WslPlacesTests.cpp（ADR 0162 の追補 #1450・フォルダ選びの箱の WSL の場所）
 void verify_wsl_places_scope();
 

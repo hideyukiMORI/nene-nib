@@ -12,7 +12,7 @@ namespace nenenib::core
 // 出さず、表示言語が日本語のときだけ F1 の一覧の絞り込みで名前と並べて照合する（英語と中国語は
 // 名前・鍵の表示名で探す・拼音の読みは持たない）。EditorOperation の順に全値を 1 回ずつ持つ
 // （OperationTexts.cpp の static_assert が守る）。
-inline constexpr std::array<OperationReading, 38> operation_readings{{
+inline constexpr std::array<OperationReading, 39> operation_readings{{
     {EditorOperation::open_file, "ふぁいるをひらく"},
     {EditorOperation::save, "ほぞん"},
     {EditorOperation::save_as, "なまえをつけてほぞん"},
@@ -51,6 +51,7 @@ inline constexpr std::array<OperationReading, 38> operation_readings{{
     {EditorOperation::register_shell, "うぃんどうずのみぎくりっくにとうろくする"},
     {EditorOperation::unregister_shell, "とうろくをはずす"},
     {EditorOperation::choose_language, "ひょうじげんごをえらぶ"},
+    {EditorOperation::show_version, "ばーじょんじょうほう"},
 }};
 
 // 操作の読み。switch ではなく表を引く。

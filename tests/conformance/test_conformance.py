@@ -360,7 +360,18 @@ class RepositoryChecks(unittest.TestCase):
         self.write(
             "CMakeLists.txt",
             "configure_file(src/app/NeNeNib.manifest.in generated/NeNeNib.manifest @ONLY)\n"
-            "configure_file(src/app/NeNeNibVersion.h.in generated/NeNeNibVersion.h @ONLY)\n",
+            "configure_file(src/app/NeNeNibVersion.h.in generated/NeNeNibVersion.h @ONLY)\n"
+            'set_source_files_properties(src/core/AppIdentity.cpp PROPERTIES COMPILE_DEFINITIONS "NENENIB_APP_VERSION=\\"${PROJECT_VERSION}\\"")\n',
+        )
+        self.write(
+            "src/core/AppIdentity.hpp",
+            'inline constexpr std::string_view app_author = "Hideyuki Mori";\n'
+            'inline constexpr std::string_view app_copyright_year = "2026";\n',
+        )
+        self.write(
+            "src/app/NeNeNib.rc",
+            '            VALUE "CompanyName", "Hideyuki Mori\\0"\n'
+            '            VALUE "LegalCopyright", "Copyright (c) 2026 Hideyuki Mori\\0"\n',
         )
         self.write(
             "src/app/NeNeNib.manifest.in",
@@ -385,6 +396,26 @@ class RepositoryChecks(unittest.TestCase):
     def test_cnf007_literal_manifest_version_negative(self):
         self.seed_version_metadata()
         self.write("src/app/NeNeNib.manifest.in", '<assemblyIdentity version="0.1.0.0"/>')
+        self.assertTrue(cnf.version_metadata_checks(self.root))
+
+    # D90（#1677）: 見せる版は PROJECT_VERSION から、rc の署名は core の定数と同じ文。
+    def test_cnf007_literal_shown_version_negative(self):
+        self.seed_version_metadata()
+        self.write(
+            "CMakeLists.txt",
+            "configure_file(src/app/NeNeNib.manifest.in generated/NeNeNib.manifest @ONLY)\n"
+            "configure_file(src/app/NeNeNibVersion.h.in generated/NeNeNibVersion.h @ONLY)\n"
+            'set_source_files_properties(src/core/AppIdentity.cpp PROPERTIES COMPILE_DEFINITIONS "NENENIB_APP_VERSION=\\"1.0.0\\"")\n',
+        )
+        self.assertTrue(cnf.version_metadata_checks(self.root))
+
+    def test_cnf007_rc_signature_disagrees_negative(self):
+        self.seed_version_metadata()
+        self.write(
+            "src/app/NeNeNib.rc",
+            '            VALUE "CompanyName", "Hideyuki Mori\\0"\n'
+            '            VALUE "LegalCopyright", "Copyright (c) 2025 Hideyuki Mori\\0"\n',
+        )
         self.assertTrue(cnf.version_metadata_checks(self.root))
 
     # CNF-010 — 生成物 VimFixtures.hpp が読んだ fixtures.json の SHA-256 と本数を名乗る。

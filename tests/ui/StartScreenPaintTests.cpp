@@ -47,8 +47,8 @@ using Format = Microsoft::WRL::ComPtr<IDWriteTextFormat>;
 constexpr std::uint32_t dpi = 96;
 // 最初の frame（履歴とブックマークを読む前）の文字組みの数: 題 1・見出し 2（はじめる・
 // ショートカット）・「はじめる」の名前 3 と補足 2 と鍵の枠 3（新しいファイル・ファイルを開く・
-// フォルダを開く・#1480 / #1495）・ショートカットの枠 3 と説明 3。
-constexpr std::size_t first_frame_layouts = 17;
+// フォルダを開く・#1480 / #1495）・ショートカットの枠 3 と説明 3・題の右の版 1 と署名 2（D90）。
+constexpr std::size_t first_frame_layouts = 20;
 // 最近 2・ブックマーク 1 を読み、最初の行を選んだ frame: 見出し 2・印 1・「…」1 と、パスの行ごとに
 // 名前・場所の全文（幅を測る）・描いた場所の 3 つが増える。
 constexpr std::size_t listed_layouts = first_frame_layouts + 2 + 1 + 1 + (3 * 3);
