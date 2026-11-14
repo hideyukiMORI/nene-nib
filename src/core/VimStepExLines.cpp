@@ -8,6 +8,7 @@
 #include "ExLineVerb.hpp"
 #include "ExLinesRequest.hpp"
 #include "LineNumber.hpp"
+#include "VimMarkPosition.hpp"
 #include "VimPattern.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
@@ -71,8 +72,9 @@ void lines_appended(std::string &out, const TextBuffer &text, const LineChunk &c
     }
 }
 
-// 書き手へ渡す値（行単位の本文の列・ADR 0168 の段 3a）。Vim の `:g` は塊ごとに `:d` を流すので、塊の
-// 数だけ `"1` が繰り下がる。`"9` より前に出る塊は 1 回の書きに畳む（名前つきの上書きも追記も、数字の
+// 書き手へ渡す値（行単位の本文の列・ADR 0168 の段 3a）。Vim の `:g` は塊ごとに `:d`
+// を流すので、塊の 数だけ `"1` が繰り下がる。`"9` より前に出る塊は 1
+// 回の書きに畳む（名前つきの上書きも追記も、数字の
 // レジスタも、畳まずに書いた答えと同じ）ので、値は多くて 10 個。
 [[nodiscard]] std::vector<std::string> written_values(const TextBuffer &text,
                                                       std::span<const LineChunk> chunks)
@@ -163,8 +165,7 @@ written_lines(const VimState &state, const TextBuffer &text, std::span<const Lin
         return OffsetRange{text.line_start(LineNumber{run.first}),
                            text.line_start(LineNumber{run.second + 1})};
     }
-    const Offset begin =
-        run.first > 1 ? text.line_end(LineNumber{run.first - 1}) : Offset{0};
+    const Offset begin = run.first > 1 ? text.line_end(LineNumber{run.first - 1}) : Offset{0};
     return OffsetRange{begin, Offset{text.size_bytes()}};
 }
 
@@ -185,7 +186,8 @@ written_lines(const VimState &state, const TextBuffer &text, std::span<const Lin
     std::size_t removed = 0;
     for (const VimBlockEdit &edit : edits)
     {
-        removed += edit.range.end.value <= start ? edit.range.end.value - edit.range.begin.value : 0;
+        removed +=
+            edit.range.end.value <= start ? edit.range.end.value - edit.range.begin.value : 0;
     }
     return Offset{start - removed + ex_landing_column(text.line_text(target))};
 }
@@ -228,7 +230,12 @@ written_lines(const VimState &state, const TextBuffer &text, std::span<const Lin
     const std::size_t lines = lines_in(runs);
     const LineNumber first{runs.front().first};
     const Offset head = text.line_start(first);
-    VimStep step{std::move(written.value().first), VimReplaceBlock{std::move(edits), caret}};
+    // `'.` は最後の塊の `:d` が changed_lines に渡す位置（前の塊が消した行の分だけ上がった行の
+    // 桁 0・Vim は塊ごとに del_lines を呼び最後の塊が残る・実測 #1654）。
+    const std::size_t above = lines_in(chunks.first(chunks.size() - 1));
+    VimStep step{std::move(written.value().first),
+                 VimReplaceBlock{std::move(edits), caret,
+                                 VimMarkPosition{LineNumber{chunks.back().first - above}, 0}}};
     step.clipboard = std::move(written.value().second);
     step.restore = Offset{head.value + ex_landing_column(text.line_text(first))};
     step.change = VimChangeMark{VimChange::changed, text.position_of(head)};
@@ -259,17 +266,17 @@ written_lines(const VimState &state, const TextBuffer &text, std::span<const Lin
     // `"_` は Vim の op_yank が書く前に返るので報せない。
     if (lines > report_lines && name != std::optional<char>{'_'})
     {
-        step.notice = counted_notice(VimSearchNoticeKind::lines_yanked, lines,
-                                     name.has_value() ? std::string(1, name.value()) : std::string{});
+        step.notice =
+            counted_notice(VimSearchNoticeKind::lines_yanked, lines,
+                           name.has_value() ? std::string(1, name.value()) : std::string{});
     }
     return step;
 }
 
 // 回数（`:d 3`・`:2,3d 2`）の行の塊（Vim の do_one_cmd: 範囲の最後の行から回数の行・本文の終わり
 // まで）。回数 0 は値なし（E939）。
-[[nodiscard]] std::optional<LineChunk> counted_chunk(detail::ExLineSpan span,
-                                                     std::optional<std::size_t> count,
-                                                     std::size_t total) noexcept
+[[nodiscard]] std::optional<LineChunk>
+counted_chunk(detail::ExLineSpan span, std::optional<std::size_t> count, std::size_t total) noexcept
 {
     if (!count.has_value())
     {
@@ -399,8 +406,8 @@ VimStep vim_global(const VimState &state, const VimEditorView &view, const ExGlo
     {
         return ex_noticed(state, notice_of(pattern_text.error()), VimRepeatFailure::refused);
     }
-    const auto pattern = VimPattern::parse(pattern_text.value(), VimSearchDirection::forward,
-                                           view.search_case);
+    const auto pattern =
+        VimPattern::parse(pattern_text.value(), VimSearchDirection::forward, view.search_case);
     if (!pattern)
     {
         return ex_noticed(state,

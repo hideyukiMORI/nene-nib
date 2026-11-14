@@ -57,7 +57,8 @@ constexpr std::size_t probe_lines = 100000;
     std::unreachable();
 }
 
-// 行の塊の編集を 1 つの置き換えに畳んで本文に当てる（controller の apply_block と同じ形・LF の本文）。
+// 行の塊の編集を 1 つの置き換えに畳んで本文に当てる（controller の apply_block と同じ形・LF
+// の本文）。
 [[nodiscard]] core::TextBuffer applied(const core::TextBuffer &text,
                                        const std::vector<core::VimBlockEdit> &edits)
 {

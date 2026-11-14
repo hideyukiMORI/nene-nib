@@ -574,11 +574,13 @@ std::optional<core::VimRepeatFailure> EditorController::operator_command(const s
 // 命令を先に流し、命令の前のキャレットから後のキャレットまでを exclusive な移動としてオペレータを
 // 閉じる（`jd:s/a/X/` は `  b a` を `b X` に・`d:3d` は 3 行目を消してから 1 行目の頭から消した後の
 // 3 行目の最初の非空白までを消す・実測）。命令が断られたら（E486 ほか）オペレータを捨てて再生を
-// 打ち切る。
+// 打ち切る。起点は命令の前の行と桁のまま（Vim の oap->start は mark_adjust で動かない・上の行を
+// 消すと別の本文を指す）で、命令の後の本文で行か桁が外にあればオペレータを捨てて再生を打ち切る
+// （Vim の nv_colon の clearopbeep・`:normal!` の続きの鍵は流れない・実測 #1654）。
 std::optional<core::VimRepeatFailure>
 EditorController::operator_line_edited(const std::string &text, const VimStepSource &source)
 {
-    const core::Offset origin = state_.selection().caret;
+    const core::TextPosition origin = state_.text().position_of(state_.selection().caret);
     const auto failure = stepped_vim(source);
     if (failure.has_value())
     {
@@ -589,7 +591,16 @@ EditorController::operator_line_edited(const std::string &text, const VimStepSou
     {
         return std::nullopt;
     }
-    return stepped_vim(VimStepSource{core::VimCommandMotion{text, std::nullopt, origin}});
+    const core::TextBuffer &after = state_.text();
+    if (origin.line.value > after.line_count() ||
+        origin.column.value >
+            after.line_end(origin.line).value - after.line_start(origin.line).value)
+    {
+        state_ = state_.with_vim(core::vim_operator_cleared(state_.vim()));
+        return core::VimRepeatFailure::refused;
+    }
+    return stepped_vim(
+        VimStepSource{core::VimCommandMotion{text, std::nullopt, after.offset_of(origin)}});
 }
 
 // 答えを写し、断られた（ran_ex_result が refused を返した・評価の失敗も命令の要求の断りも・

@@ -2488,7 +2488,8 @@ std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
         return std::unexpected(ExFailure::invalid_text);
     }
     text = trimmed(text);
-    // `|` は命令の区切りで Nib は続けて流さない。`:s` と `:g` だけは区切りの間（パターンと置き換え）の
+    // `|` は命令の区切りで Nib は続けて流さない。`:s` と `:g`
+    // だけは区切りの間（パターンと置き換え）の
     // `|` を 文字として読む（Vim の ex_substitute と ex_global・ADR 0168 の追補と段 3a）。フラグの
     // 後ろと `:g` の命令の `|` は命令の字面が断る。
     if (text.find('|') != std::string_view::npos && !takes_bar(text.substr(range_length(text))))

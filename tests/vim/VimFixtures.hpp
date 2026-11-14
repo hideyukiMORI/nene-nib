@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 31d8422852392092bb156494c69c4607843955cae84bdc6bda936a4e5f9425d1 / 6121 fixtures
+// fixtures.json: sha256 5155190a26ad1c125090ece62cb31ec04fc4e4f222a43edd360d743f00bccd4f / 6138 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 6121> vim_fixtures{{
+constexpr std::array<VimFixture, 6138> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -6133,6 +6133,23 @@ constexpr std::array<VimFixture, 6121> vim_fixtures{{
     {"ex-global-macro", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", "@a", "l1 a\nl3 a\nl5 a\nl7 a", 4, 1, "  l6 b\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, VimMacroFixture{'a', ":g/b/d<CR>"}, std::nullopt, "set scrolloff=0"},
     {"ex-delete-macro-count", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", "2@a", "  l2 b\n\tl4 b\nl5 a\n  l6 b\nl7 a", 3, 4, "l3 a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, VimMacroFixture{'a', ":d<CR>j"}, std::nullopt, "set scrolloff=0"},
     {"ex-yank-macro", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", "@ap", "l1 a\n  l2 b\n  l2 b\nl3 a\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", 3, 3, "  l2 b\nl3 a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, VimMacroFixture{'a', ":2,3y<CR>"}, std::nullopt, "set scrolloff=0"},
+    {"ex-global-dot-mark-blocks", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":g/b/d<CR>gg`.", "l1 a\nl3 a\nl5 a\nl7 a", 4, 1, "  l6 b\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-global-dot-mark-blocks-count", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":g/b/d 2<CR>G`.", "l1 a", 1, 1, "  l6 b\nl7 a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-global-dot-mark-beyond", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":g/a/d<CR>gg`.x", "  l2 b\n\tl4 b\n  l6 b", 1, 3, "l7 a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-global-changelist-blocks", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":g/b/d<CR>ggg;", "l1 a\nl3 a\nl5 a\nl7 a", 4, 1, "  l6 b\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-global-s-dot-mark", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":g/b/s//X/<CR>gg`.", "l1 a\n  l2 X\nl3 a\n\tl4 X\nl5 a\n  l6 X\nl7 a", 6, 1, "", "", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-global-s-dot-mark-every", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":g/a/s/a/Y/<CR>gg`.", "l1 Y\n  l2 b\nl3 Y\n\tl4 b\nl5 Y\n  l6 b\nl7 Y", 7, 1, "", "", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-global-s-cr-dot-mark", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":g/b/s/b/\\r/<CR>gg`.", "l1 a\n  l2 \n\nl3 a\n\tl4 \n\nl5 a\n  l6 \n\nl7 a", 8, 1, "", "", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-global-s-changelist", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":g/b/s//X/<CR>ggg;", "l1 a\n  l2 X\nl3 a\n\tl4 X\nl5 a\n  l6 X\nl7 a", 6, 1, "", "", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-global-then-percent-s-dot-mark", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":g/b/s//X/<CR>:%s/a/Z/<CR>G`.", "l1 Z\n  l2 X\nl3 Z\n\tl4 X\nl5 Z\n  l6 X\nl7 Z", 1, 1, "", "", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-global-op-origin-beyond", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", "d:g/b/d<CR>x", "l1 a\nl3 a\nl5 a\nl7 a", 4, 1, "  l6 b\n", "V", VimViewportFixture{20, 1, 5, 2, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-delete-op-origin-shift", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", "d:1d<CR>", "   a\n  l6 b\nl7 a", 1, 3, "l2 b\nl3 a\n\tl4 b\nl5", "v", VimViewportFixture{20, 1, 4, 3, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-delete-op-origin-range", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", "d:2,3d<CR>", "l1 a\n  l6 b\nl7 a", 2, 3, "\tl4 b\nl5 a\n", "V", VimViewportFixture{20, 1, 4, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-delete-op-origin-beyond-line", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", "d:1d<CR>x", "  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", 1, 3, "l1 a\n", "V", VimViewportFixture{20, 1, 7, 3, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-delete-op-origin-beyond-column", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", "d:1d<CR>x", "  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", 1, 3, "l1 a\n", "V", VimViewportFixture{20, 1, 2, 6, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-delete-op-origin-column-end", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", "d:1d<CR>x", "  \n  l6 b\nl7 a", 1, 2, "a", "v", VimViewportFixture{20, 1, 4, 4, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-delete-op-y-origin", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", "y:1d<CR>x", "  2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", 1, 3, "l", "v", VimViewportFixture{20, 1, 6, 3, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-delete-op-c-origin", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", "c:1d<CR>ZZ<Esc>", "  ZZl4 b\nl5 a\n  l6 b\nl7 a", 1, 4, "l2 b\nl3 a\n\t", "v", VimViewportFixture{20, 1, 3, 2, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
 }};
 } // namespace nenenib::tests
 // clang-format on

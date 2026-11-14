@@ -196,15 +196,17 @@ void vim_macro_typed(VimState &state, std::span<const VimKey> keys);
 
 // Ex の `:[range]d [x] [count]` と `:[range]y [x] [count]` の 1 歩（ADR 0168 の決定 1・5・段 3a）。
 // 範囲を行に解き（`:s` と同じ vim_ex_lines の 1 本・E16 E20 E493）、行単位の値をレジスタの書き手
-// （registers_written）へ渡す。`:d` は行を 1 つの編集で消し、キャレットは消した行の次の行（最後の行を
+// （registers_written）へ渡す。`:d` は行を 1
+// つの編集で消し、キャレットは消した行の次の行（最後の行を
 // 消したなら新しい最後の行）の最初の非空白、`''` は前のキャレット、undo の戻り先は最初に消した行の
 // 最初の非空白（Vim 9.1 の実測）。`:y` はキャレットを動かさない。回数 0 は E939。3 行を超えれば
 // N fewer lines / N lines yanked を報せる。鍵ではないので `.` とマクロの記録には積まない。
 [[nodiscard]] VimStep vim_lines_edited(const VimState &state, const VimEditorView &view,
                                        const ExLinesRequest &request);
 
-// Ex の `:[range]g/{pat}/{cmd}` `:g!` `:v` の 1 歩（ADR 0168 の決定 5・段 3a）。範囲（既定は全体）の
-// 行を 1 回走って当たる（`:v` は当たらない）行の集合を決め、`:d` はその行を 1 つの編集で消し、
+// Ex の `:[range]g/{pat}/{cmd}` `:g!` `:v` の 1 歩（ADR 0168 の決定 5・段
+// 3a）。範囲（既定は全体）の 行を 1 回走って当たる（`:v` は当たらない）行の集合を決め、`:d`
+// はその行を 1 つの編集で消し、
 // `:s` の族は置換の本体を集合の行に 1 回だけ流す（undo 1 単位）。パターンは直前の検索と置換の
 // パターンになる。当たる行が無ければ報せだけでエラーにしない（Vim の smsg・実測）。
 [[nodiscard]] VimStep vim_global(const VimState &state, const VimEditorView &view,

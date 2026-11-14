@@ -116,8 +116,8 @@ register_read(std::string_view text) noexcept
     return std::pair{std::optional<char>{name}, skipped_white(text.substr(1))};
 }
 
-// レジスタと回数の後ろ（Vim の do_one_cmd の separate_nextcmd）。空と注釈（`"`）は受け、`|` の後ろの
-// 命令は Nib ではまだ流さない。
+// レジスタと回数の後ろ（Vim の do_one_cmd の separate_nextcmd）。空と注釈（`"`）は受け、`|`
+// の後ろの 命令は Nib ではまだ流さない。
 [[nodiscard]] std::optional<ExFailure> trailing_failure(std::string_view text) noexcept
 {
     if (text.empty() || text.front() == '"')

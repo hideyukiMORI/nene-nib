@@ -114,7 +114,8 @@ using ExLineSpan = std::pair<std::size_t, std::size_t>;
 // 本文の外は E16、マークが無ければ E20。
 [[nodiscard]] std::expected<ExLineSpan, VimSearchNoticeKind>
 ex_lines_resolved(const VimEditorView &view, const std::optional<ExRange> &range);
-// Ex の命令の後の状態（鍵を食べ終えた NORMAL・`.` の直前の変更は保つ・オペレータ待ちならそのまま）。
+// Ex の命令の後の状態（鍵を食べ終えた NORMAL・`.`
+// の直前の変更は保つ・オペレータ待ちならそのまま）。
 [[nodiscard]] VimState ex_rested(const VimState &state);
 // 報せと失敗だけの 1 歩（状態は ex_rested）。
 [[nodiscard]] VimStep ex_noticed(const VimState &state, VimSearchNotice notice,
@@ -128,8 +129,9 @@ ex_lines_resolved(const VimEditorView &view, const std::optional<ExRange> &range
 // `:g` のパターンを直前の検索と置換のパターン（Vim の RE_BOTH・前の置換がある時だけ）に覚えた状態。
 [[nodiscard]] VimState ex_pattern_remembered(VimState next, const VimEditorView &view,
                                              std::string_view pattern);
-// `:g/{pat}/s//{rep}/` の置換（ADR 0168 の段 3a）。marked は `:g` が選んだ行（上から・空でない）で、
-// 置換の本体を集合の行に 1 回だけ流す。当たりが無ければ失敗にせず、最後の選んだ行の頭に着く。
+// `:g/{pat}/s//{rep}/` の置換（ADR 0168 の段 3a）。marked は `:g`
+// が選んだ行（上から・空でない）で、 置換の本体を集合の行に 1
+// 回だけ流す。当たりが無ければ失敗にせず、最後の選んだ行の頭に着く。
 [[nodiscard]] VimStep global_substituted(const VimState &state, const VimEditorView &view,
                                          const ExSubstituteRequest &request,
                                          std::span<const std::size_t> marked);

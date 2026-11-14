@@ -1,5 +1,5 @@
-// scope `--ex-lines`（ADR 0168 の段 3a・Issue #1654）。`:d` `:y` と `:g` `:v` の字面（lines_command と
-// global_command・evaluate_ex）と、oracle の fixture にできない形（報せの文言・段 3a が断る形・
+// scope `--ex-lines`（ADR 0168 の段 3a・Issue #1654）。`:d` `:y` と `:g` `:v` の字面（lines_command
+// と global_command・evaluate_ex）と、oracle の fixture にできない形（報せの文言・段 3a が断る形・
 // `.` に積まないこと・undo 1 単位・CRLF の文書・変更の印・クリップボードの替え玉）を controller と
 // engine の道で確かめる。本文とキャレットとレジスタの答えの正本は fixture（`ex-delete-` `ex-yank-`
 // `ex-global-`・Vim 9.1 の実測）。
@@ -131,10 +131,11 @@ void verify_global_command_text()
                ":g! and :v keep the lines that do not match");
     }
     const auto substitute = core::global_command("global#a#s/l/X/g");
-    expect(substitute.has_value() && substitute.value().has_value() &&
-               substitute.value().value().delimiter == '#' &&
-               std::holds_alternative<core::ExSubstituteRequest>(substitute.value().value().command),
-           ":g carries the :s family as its command");
+    expect(
+        substitute.has_value() && substitute.value().has_value() &&
+            substitute.value().value().delimiter == '#' &&
+            std::holds_alternative<core::ExSubstituteRequest>(substitute.value().value().command),
+        ":g carries the :s family as its command");
     const auto bar = core::global_command("g/a|b/:d");
     expect(bar.has_value() && bar.value().has_value() && bar.value().value().pattern == "a|b",
            "a bar inside the :g pattern is a character and a leading colon is skipped");
@@ -166,12 +167,14 @@ void verify_global_through_evaluate()
     const auto ranged =
         core::evaluate_ex("2,5g/a|b/d", core::default_editor_settings(), core::Appearance::dark);
     const bool global = ranged.has_value() && ranged.value().global.has_value();
-    expect(global && ranged.value().global.value_or(core::ExGlobalRequest{std::nullopt, false, '/',
-                                                                          std::string{},
-                                                                          core::ExLinesRequest{}})
+    expect(global && ranged.value()
+                         .global
+                         .value_or(core::ExGlobalRequest{std::nullopt, false, '/', std::string{},
+                                                         core::ExLinesRequest{}})
                          .range.has_value(),
            "evaluate_ex keeps the range and lets a bar in the :g pattern through");
-    const auto yanked = core::evaluate_ex("%y a", core::default_editor_settings(), core::Appearance::dark);
+    const auto yanked =
+        core::evaluate_ex("%y a", core::default_editor_settings(), core::Appearance::dark);
     expect(yanked.has_value() && yanked.value().lines.has_value(), "evaluate_ex reads :%y a");
 }
 
@@ -262,12 +265,13 @@ void verify_change_marks()
            ":d marks a change (ADR 0181)");
     const auto yanked = lines_step(
         text, core::ExLinesRequest{std::nullopt, ExLineVerb::yank_lines, std::nullopt, 2});
-    expect(!yanked.change.has_value() && yanked.next.unnamed_register.value().text == "l1 a\n  l2 b\n",
+    expect(!yanked.change.has_value() &&
+               yanked.next.unnamed_register.value().text == "l1 a\n  l2 b\n",
            ":y writes the lines and marks no change");
     const auto empty = core::TextBuffer::empty();
-    const auto nothing = lines_step(
-        empty, core::ExLinesRequest{std::nullopt, ExLineVerb::delete_lines, std::nullopt,
-                                    std::nullopt});
+    const auto nothing =
+        lines_step(empty, core::ExLinesRequest{std::nullopt, ExLineVerb::delete_lines, std::nullopt,
+                                               std::nullopt});
     expect(!nothing.change.has_value() && nothing.next.unnamed_register.value().text.empty(),
            ":d on an empty buffer deletes nothing and writes no register (Vim's ML_EMPTY)");
 }

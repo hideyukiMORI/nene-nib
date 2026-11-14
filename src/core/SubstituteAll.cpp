@@ -181,8 +181,8 @@ void each_line_edit(const SubstituteScan &scan, const SubstituteTally &tally,
 checked_tally(const SubstituteScan &scan, const SubstituteRequest &request)
 {
     SubstituteTally tally;
-    each_scanned_line(request.first.value, request.last.value, request.marked,
-                      [&](std::size_t line) { line_tallied(scan, line, request.count_only, tally); });
+    each_scanned_line(request.first.value, request.last.value, request.marked, [&](std::size_t line)
+                      { line_tallied(scan, line, request.count_only, tally); });
     if (tally.substitutions == 0)
     {
         return std::unexpected(SubstituteFailure::no_match);

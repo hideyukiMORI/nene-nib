@@ -12,6 +12,7 @@
 #include "VimCharacterBoundary.hpp"
 #include "VimColumnWish.hpp"
 #include "VimMarkEdits.hpp"
+#include "VimMarkPosition.hpp"
 #include "VimSearchSnapshot.hpp"
 #include "VimSmartcase.hpp"
 #include "VimSubstituteMemory.hpp"
@@ -360,7 +361,8 @@ resolved_lines(const VimEditorView &view, const std::optional<ExRange> &range)
                   landing_column(line, end_column)};
 }
 
-// `:g` の置換の後のキャレット（Vim の global_exe・ADR 0168 の段 3a）。最後に選んだ行で置き換えたなら
+// `:g` の置換の後のキャレット（Vim の global_exe・ADR 0168 の段
+// 3a）。最後に選んだ行で置き換えたなら
 // `:s` と同じ着地、ほかは最後に選んだ行（その上の置き換えが入れた改行の分だけ下がる）の最初の
 // 非空白（どこかで置き換えたら global_need_beginline の beginline(BL_WHITE | BL_FIX)・実測）。
 [[nodiscard]] Offset global_caret(const TextBuffer &text, const SubstituteResult &result,
@@ -377,9 +379,30 @@ resolved_lines(const VimEditorView &view, const std::optional<ExRange> &range)
         static_cast<std::int64_t>(document_bytes(last.utf8, ending)) -
         static_cast<std::int64_t>(last.range.end.value - last.range.begin.value);
     const LineNumber line{last_marked};
-    return Offset{static_cast<std::size_t>(
-                      static_cast<std::int64_t>(text.line_start(line).value) + growth) +
-                  landing_column(text.line_text(line), false)};
+    return Offset{
+        static_cast<std::size_t>(static_cast<std::int64_t>(text.line_start(line).value) + growth) +
+        landing_column(text.line_text(line), false)};
+}
+
+// `:g` の置換の後の `'.`（Vim は選んだ行ごとに do_sub を流し、最後に置き換えた行の
+// changed_lines(lnum, 0) が残る・実測
+// #1654）。行は、その上の置き換えが足し引きした改行の分だけ動く。
+[[nodiscard]] VimMarkPosition global_last_change(const TextBuffer &text,
+                                                 std::span<const VimBlockEdit> edits)
+{
+    const LineNumber last = text.position_of(edits.back().range.begin).line;
+    std::size_t line = last.value;
+    for (const VimBlockEdit &edit : edits)
+    {
+        const LineNumber begin = text.position_of(edit.range.begin).line;
+        if (begin.value >= last.value)
+        {
+            break;
+        }
+        const std::size_t removed = text.position_of(edit.range.end).line.value - begin.value;
+        line = line + static_cast<std::size_t>(std::ranges::count(edit.utf8, '\n')) - removed;
+    }
+    return VimMarkPosition{LineNumber{line}, 0};
 }
 
 // 前の置換を覚えた状態（Vim の old_sub・reg_prev_sub・subflags・RE_SUBST と RE_LAST）。直前の
@@ -469,12 +492,14 @@ resolved_lines(const VimEditorView &view, const std::optional<ExRange> &range)
     const Offset caret = substituted_caret(view.text, result, end_column);
     const Offset restore =
         view.text.line_start(view.text.position_of(result.edits.front().range.begin).line);
-    VimStep step{std::move(next), VimReplaceBlock{std::move(result.edits), caret}};
+    // Vim の do_sub は changed_lines(first_line, 0, …) を呼ぶ（最初に置き換えた行の桁 0・ADR 0181
+    // の 追補 #1374 の位置）。`'.` もそこ（畳んだ Edit の桁ではない・実測 #1654）。
+    const TextPosition first = view.text.position_of(restore);
+    VimStep step{std::move(next),
+                 VimReplaceBlock{std::move(result.edits), caret, VimMarkPosition{first.line, 0}}};
     step.notice = std::move(notice);
     step.restore = restore;
-    // Vim の do_sub は changed_lines(first_line, 0, …) を呼ぶ（最初に置き換えた行の桁 0・ADR 0181
-    // の 追補 #1374 の位置）。
-    step.change = VimChangeMark{VimChange::changed, view.text.position_of(restore)};
+    step.change = VimChangeMark{VimChange::changed, first};
     return context_marked(std::move(step), view);
 }
 
@@ -640,9 +665,9 @@ namespace
     const VimSubstituteFlags flags = memory.flags;
     const auto replacement = SubstituteReplacement::vim(memory.previous);
     auto result = substituted(view.text, pattern, replacement,
-                              SubstituteRequest{LineNumber{marked.front()}, LineNumber{marked.back()},
-                                                flags.every, flags.count, view.document_limit,
-                                                view.capture_limit, marked});
+                              SubstituteRequest{LineNumber{marked.front()},
+                                                LineNumber{marked.back()}, flags.every, flags.count,
+                                                view.document_limit, view.capture_limit, marked});
     if (!result && result.error() == SubstituteFailure::no_match)
     {
         VimStep step{std::move(next), VimMoveTo{view.text.line_start(LineNumber{marked.back()})}};
@@ -658,10 +683,12 @@ namespace
         return substituted_step(std::move(next), view, std::move(result).value(), false);
     }
     const Offset caret = global_caret(view.text, result.value(), marked.back());
+    const VimMarkPosition last_change = global_last_change(view.text, result.value().edits);
     VimStep step = substituted_step(std::move(next), view, std::move(result).value(), false);
     if (auto *const block = std::get_if<VimReplaceBlock>(&step.effect))
     {
         block->caret = caret;
+        block->last_change = last_change;
     }
     return step;
 }
@@ -741,9 +768,10 @@ VimStep global_substituted(const VimState &state, const VimEditorView &view,
     const std::string pattern_text = pattern.value_or(std::string{});
     memory.pattern = pattern_text;
     memory.previous = vim_tilde_expanded(memory.replacement, previous_of(state));
-    // Vim は選んだ行ごとに `:s` を流し、`~` は前の行の広げた置き換えに解くので、`~` が行ごとに伸びる
-    // 形は 1 回の置換に畳めない。段 3a では断る（本文・状態は変えない）。
-    if (marked.size() > 1 && vim_tilde_expanded(memory.replacement, memory.previous) != memory.previous)
+    // Vim は選んだ行ごとに `:s` を流し、`~` は前の行の広げた置き換えに解くので、`~`
+    // が行ごとに伸びる 形は 1 回の置換に畳めない。段 3a では断る（本文・状態は変えない）。
+    if (marked.size() > 1 &&
+        vim_tilde_expanded(memory.replacement, memory.previous) != memory.previous)
     {
         return noticed(state, notice_of(VimSearchNoticeKind::not_supported),
                        VimRepeatFailure::refused);

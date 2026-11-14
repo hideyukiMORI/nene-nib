@@ -1602,9 +1602,20 @@ void EditorController::perform(const core::VimRemoveBlock &effect)
     apply_block(effect.edits, effect.caret, vim_boundary());
 }
 
+// engine が `'.` の位置を添えた効果（Ex の `:s` `:d` `:g`・Vim は命令ごとに changed_lines
+// を呼ぶ）は、 畳んだ Edit が置いた `'.` と変更の列の最後の位置を、その位置で置き直す（同じ undo
+// の単位の続きの 変更として vim_change_recorded に渡す・#1654）。
 void EditorController::perform(const core::VimReplaceBlock &effect)
 {
     apply_block(effect.edits, effect.caret, vim_boundary());
+    if (!effect.last_change.has_value() || effect.edits.empty())
+    {
+        return;
+    }
+    auto marks = state_.vim_marks();
+    marks.last_change = effect.last_change.value();
+    marks = core::vim_change_recorded(marks, effect.last_change.value(), false);
+    state_ = state_.with_vim_marks(std::move(marks));
 }
 
 // 矩形の貼付は単位を切り、矩形の INSERT の Esc は 1 行目の INSERT の単位に畳む（ADR 0035 の追補
