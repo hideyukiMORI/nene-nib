@@ -41,7 +41,9 @@ struct StatusBarLayout
                                                 std::uint32_t dpi) noexcept;
 
 // モードの文の右端と、その右に並ぶ文（表示形式の印・行と桁）の間に空ける最小の幅（#1658）。
-inline constexpr std::int32_t status_text_gap_dips = 8;
+// 6 DIP は最小の窓の日本語の `通常` と `行 17, 桁 4`（直す前に 96 / 120 DPI とも 8 px 空いて
+// いた形）を 2 つの DPI とも残す幅（8 DIP は 120 DPI で 10 px になり落とす）。
+inline constexpr std::int32_t status_text_gap_dips = 6;
 
 // 測った文の幅に合わせた配置（#1658・ADR 0154 の追補 2026-11-14）。mode_width はモードの文の幅、
 // position_width は行と桁の文の幅（物理画素・描画と同じ書式で ui が測る）。行と桁の欄は文が枠

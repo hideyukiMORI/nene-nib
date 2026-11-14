@@ -2119,7 +2119,10 @@ void verify_status_bar_fitted()
                wide.display == LayoutRect{264, 332, 288, 360} &&
                wide.items.at(1) == layout.items.at(1),
            "a wide line and column widens its item to the left and moves the mark beside it");
-    const auto marked = status_bar_fitted(layout, 96, 150, 90);
+    // モード 122 + 152 + 間 6 = 280 は印の左端 278 を越える（150 なら 278 でちょうど入る）。
+    const auto marked = status_bar_fitted(layout, 96, 152, 90);
+    expect(status_bar_fitted(layout, 96, 150, 90).display == layout.display,
+           "a mark that starts exactly at the gap after the mode text stays");
     expect(marked.items.at(0) == layout.items.at(0) && nenenib::core::width_of(marked.display) == 0,
            "the mark that would reach the mode text is dropped first");
     const auto narrow = status_bar_layout(360, 200, 96);
