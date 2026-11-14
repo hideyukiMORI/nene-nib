@@ -193,7 +193,7 @@ void verify_vim_pattern_subset()
 }
 
 [[nodiscard]] bool match_range_is(std::string_view pattern, std::string_view line, std::size_t from,
-                                  core::VimPatternMatch expected)
+                                  std::pair<std::size_t, std::size_t> expected)
 {
     const auto parsed =
         VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
@@ -203,8 +203,8 @@ void verify_vim_pattern_subset()
         return false;
     }
     const auto match = parsed.value().matched(line, from);
-    return match.has_value() && match.value().begin == expected.begin &&
-           match.value().end == expected.end;
+    return match.has_value() && match.value().begin == expected.first &&
+           match.value().end == expected.second;
 }
 
 void verify_vim_pattern_priority()
@@ -503,9 +503,10 @@ void verify_vim_pattern_group_iterations()
     const auto parsed =
         VimPattern::parse("\\(a\\|b\\)\\+", VimSearchDirection::forward, VimPatternCase::sensitive);
     const std::string line(64, 'a');
+    const core::VimPatternMatch whole{0, line.size(), 0, line.size()};
     expect(parsed.has_value() &&
-               !parsed.value().captured(line, {0, line.size()}, 4 * line.size()).has_value() &&
-               parsed.value().captured(line, {0, line.size()}).has_value(),
+               !parsed.value().captured(line, whole, 4 * line.size()).has_value() &&
+               parsed.value().captured(line, whole).has_value(),
            "the cell limit refuses a long match instead of an empty group");
 }
 
@@ -1194,6 +1195,182 @@ void verify_vim_search_quantifier_messages()
            "a tenth group is E872");
     vim_replay(controller, "/bar\\|foo<CR>");
     expect(caret_at(controller.frame(), 1, 8), "a search with a branch lands on its match");
+}
+
+// ---------------------------------------------------------------- `\zs` `\ze`（ADR 0184 の決定 5）
+// 期待は 2026-11-14 に Vim 9.1（-es -u NONE）の searchpos / :s / gn で測った値
+// （作業木の out/1653-impl/vim-measure.md）。
+
+// 決定 1 の表: `\zs` `\ze` を含むパターンだけが命令の列の道で、置き直した範囲を運ぶ（bounded）。
+// 含まないパターンは道も原子の数も今のまま（verify_vim_pattern_routes と
+// verify_vim_pattern_program_routes の行）で、bounded にならない。
+void verify_vim_pattern_bound_routes()
+{
+    constexpr std::array<std::string_view, 7> bounded{{
+        "foo\\zsbar",
+        "\\zs",
+        "a\\ze",
+        "\\(a\\zsb\\)*c",
+        "x\\|a\\zsb",
+        "a\\zs\\=b",
+        "\\%(a\\ze\\)",
+    }};
+    for (const std::string_view text : bounded)
+    {
+        const auto parsed =
+            VimPattern::parse(text, VimSearchDirection::forward, VimPatternCase::sensitive);
+        expect(parsed.has_value() && parsed.value().route() == core::VimPatternRoute::program &&
+                   parsed.value().bounded() && !parsed.value().literal_bytes().has_value(),
+               "a pattern with \\zs or \\ze takes the program route and carries its bounds");
+    }
+    constexpr std::array<std::string_view, 10> plain{{
+        "",
+        "foobar",
+        "a*b",
+        "a\\{-}",
+        "a\\|b",
+        "\\(a\\)*",
+        "\\%(ab\\)",
+        "\\zx",
+        "z\\s",
+        "a\\(z\\)s",
+    }};
+    for (const std::string_view text : plain)
+    {
+        const auto parsed =
+            VimPattern::parse(text, VimSearchDirection::forward, VimPatternCase::sensitive);
+        expect(!parsed.has_value() || !parsed.value().bounded(),
+               "a pattern without \\zs \\ze does not carry bounds (decision 1)");
+    }
+}
+
+[[nodiscard]] bool whole_range_is(std::string_view pattern, std::string_view line,
+                                  std::pair<std::size_t, std::size_t> placed,
+                                  std::pair<std::size_t, std::size_t> whole)
+{
+    const auto parsed =
+        VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
+    const auto match = parsed.has_value() ? parsed.value().matched(line, 0)
+                                          : std::optional<core::VimPatternMatch>{};
+    return match.has_value() && match.value().begin == placed.first &&
+           match.value().end == placed.second && match.value().whole_begin == whole.first &&
+           match.value().whole_end == whole.second;
+}
+
+// 置き直した範囲（`\zs` の最後が効く・`\zs` は前の `\ze` を消す・群の値は動かない）。
+void verify_vim_pattern_bound_ranges()
+{
+    expect(whole_range_is("foo\\zsbar", "foobar", {3, 6}, {0, 6}) &&
+               whole_range_is("foo\\zebar", "foobar", {0, 3}, {0, 6}) &&
+               whole_range_is("x\\zsabc\\zex", "xabcx", {1, 4}, {0, 5}),
+           "\\zs moves the start and \\ze the end, the whole match stays");
+    expect(match_range_is("a\\zsb\\zsc", "abc", 0, {2, 3}) &&
+               match_range_is("a\\zeb\\zec", "abc", 0, {0, 2}) &&
+               match_range_is("a\\zeb\\zsc", "abc", 0, {2, 3}) &&
+               match_range_is("a\\ze\\zsbc", "abc", 0, {1, 3}) &&
+               match_range_is("a\\zs\\zebc", "abc", 0, {1, 1}) &&
+               match_range_is("a\\zeb\\zsc\\zed", "abcd", 0, {2, 3}),
+           "the last \\zs wins and clears an earlier \\ze, the last \\ze after it wins");
+    expect(match_range_is("\\(a\\zsb\\)*c", "ababc", 0, {3, 5}) &&
+               match_range_is("\\(a\\zsb\\)*c", "c", 0, {0, 1}) &&
+               match_range_is("\\(a\\zeb\\)\\+", "abab", 0, {0, 3}) &&
+               match_range_is("a\\(\\zs\\)*b", "ab", 0, {1, 2}) &&
+               match_range_is("\\%(a\\zs\\|b\\)c", "ac bc", 0, {1, 2}) &&
+               match_range_is("\\%(a\\zs\\|b\\)c", "ac bc", 2, {3, 5}) &&
+               match_range_is("a\\zsb\\|ab", "ab", 0, {1, 2}) &&
+               match_range_is("ab\\|a\\zsb", "ab", 0, {0, 2}),
+           "a mark in a loop keeps the last iteration and a mark in a branch only that branch");
+    expect(match_range_is("\\zs^a", "a^a", 0, {1, 3}) &&
+               match_range_is("b$\\ze", "ab$", 0, {1, 3}) &&
+               match_range_is("b\\ze$", "ab ab", 0, {4, 5}) &&
+               match_range_is("a\\zs\\=b", "ab", 0, {1, 2}) &&
+               match_range_is("a\\zs", "aaa", 1, {2, 2}),
+           "^ after \\zs and $ before \\ze are characters, \\= after a mark is that mark");
+    expect(captured_text("\\(a\\)\\zsb", "ab", 1) == std::optional<std::string>{"a"} &&
+               captured_text("\\(a\\)\\zsb", "ab", 0) == std::optional<std::string>{"b"} &&
+               captured_text("\\(a\\zsb\\)c", "abc", 1) == std::optional<std::string>{"ab"} &&
+               captured_text("\\(a\\zsb\\)c", "abc", 0) == std::optional<std::string>{"bc"},
+           "groups keep their values and group 0 is the placed match");
+    // `\zs` は群の開きと同じく同じ位置で 2 度目は辿らない（Vim 9.1 の addstate）。後戻りで読むと
+    // `\3` は空だが、Vim 9.1 は `aabc`（`:s` で実測・印を抜いた形は空）。
+    constexpr std::string_view revisited = "\\(\\zs\\(\\|[^a]\\{,0}[ab]\\{-2,}\\)\\{-1}\\)\\{-1}"
+                                           "\\zs\\%(\\(\\ze.*\\)\\{-1,1}\\zs\\)\\{}";
+    expect(captured_text(revisited, "aabc", 3) == std::optional<std::string>{"aabc"} &&
+               captured_text(revisited, "aabc", 0) == std::optional<std::string>{""},
+           "a \\zs reached twice at one position is not followed again, like Vim");
+}
+
+[[nodiscard]] bool matches_from(std::string_view text, std::string_view pattern, std::size_t at,
+                                std::optional<std::pair<std::size_t, std::size_t>> expected);
+
+// 当たりの範囲を使う所（塗り・`gn` の当たりの終わり）が置き直した範囲を読む。
+void verify_vim_pattern_bound_readers()
+{
+    const auto spans = [](std::string_view line, std::string_view pattern)
+    {
+        const auto parsed =
+            VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
+        std::vector<std::pair<std::size_t, std::size_t>> found;
+        for (const auto &match : core::vim_line_matches(line, parsed.value()))
+        {
+            found.emplace_back(match.begin.value, match.end.value);
+        }
+        return found;
+    };
+    using Spans = std::vector<std::pair<std::size_t, std::size_t>>;
+    expect(spans("foobar foobar", "foo\\zsbar") == Spans{{3, 6}, {10, 13}} &&
+               spans("foobar foobar", "foo\\zebar") == Spans{{0, 3}, {7, 10}} &&
+               spans("aaa", "a\\zs") == Spans{{1, 1}, {3, 3}} &&
+               spans("ab", "\\zs") == Spans{{0, 0}, {1, 1}},
+           "the painted matches are the placed ranges, counted like n");
+    using Span = std::pair<std::size_t, std::size_t>;
+    expect(matches_from("foobar foobar", "foo\\zsbar", 3, Span{3, 6}) &&
+               matches_from("foobar foobar", "foo\\zsbar", 0, Span{3, 6}) &&
+               matches_from("foobar foobar", "foo\\zsbar", 4, Span{10, 13}) &&
+               matches_from("xx\nfoobar", "foo\\zsbar", 3, Span{6, 9}) &&
+               matches_from("foobar", "foo\\zsbar", 4, std::nullopt),
+           "the match from a position compares the placed start, not where matching began");
+}
+
+// `\zs` `\ze` の直後の `*` `\+` `\{` は E888（Vim 9.1 の文言）。
+void verify_vim_pattern_bound_failures()
+{
+    expect(rejects("a\\zs*", VimPatternFailure::repeated_match_begin) &&
+               rejects("\\zs*a", VimPatternFailure::repeated_match_begin) &&
+               rejects("a\\zs\\+", VimPatternFailure::repeated_match_begin) &&
+               rejects("a\\zs\\{2}", VimPatternFailure::repeated_match_begin) &&
+               rejects("a\\ze*", VimPatternFailure::repeated_match_end) &&
+               rejects("a\\ze\\{-}", VimPatternFailure::repeated_match_end) &&
+               rejects("a\\zs\\=\\=b", VimPatternFailure::multi_after_multi) &&
+               rejects("a\\zs\\=*", VimPatternFailure::multi_after_multi) &&
+               rejects("a\\zxb", VimPatternFailure::escape) &&
+               rejects("a\\z", VimPatternFailure::escape),
+           "a multi after \\zs or \\ze is E888 and another \\z stays unsupported");
+    const auto backward =
+        VimPattern::parse("a\\zs\\?", VimSearchDirection::backward, VimPatternCase::sensitive);
+    const auto separated = backward.has_value() ? backward.value().matched("xa?", 0)
+                                                : std::optional<core::VimPatternMatch>{};
+    expect(separated.has_value() && separated.value().begin == 2 && separated.value().end == 3,
+           "in a ? search \\? after \\zs is the separator character");
+    Editing marked;
+    open_vim_document(marked, "foobar foobar");
+    EditorController &controller = marked.controller();
+    vim_replay(controller, "/o\\zs*<CR>");
+    expect(message_is(controller.frame(), "E888: (NFA regexp) cannot repeat \\zs") &&
+               caret_at(controller.frame(), 1, 1),
+           "the notice is Vim's E888 and the caret stays");
+    vim_replay(controller, "/o\\ze\\+<CR>");
+    expect(message_is(controller.frame(), "E888: (NFA regexp) cannot repeat \\ze"),
+           "and it names \\ze");
+    vim_replay(controller, "/foo\\zsbar<CR>");
+    expect(caret_at(controller.frame(), 1, 4), "a search with \\zs lands on the placed start");
+    // 通常モードの Ctrl+F / Ctrl+H は `\` を逃がすので `\zs` は届かない（決定 10）。
+    const auto typed =
+        VimPattern::parse(nenenib::core::literal_pattern("foo\\zsbar", VimSearchDirection::forward),
+                          VimSearchDirection::forward, VimPatternCase::sensitive);
+    expect(typed.has_value() && !typed.value().bounded() &&
+               typed.value().matched("foo\\zsbar", 0).has_value(),
+           "the find box escapes a backslash so \\zs is never reached");
 }
 
 // 決定 1 の入力行と取消。入力中に本文は変わらず、Esc と空の Backspace で取消になる。
@@ -2088,6 +2265,10 @@ void verify_vim_search_contracts()
     verify_vim_pattern_copies_agree();
     verify_vim_pattern_composing();
     verify_vim_pattern_leading_composing();
+    verify_vim_pattern_bound_routes();
+    verify_vim_pattern_bound_ranges();
+    verify_vim_pattern_bound_readers();
+    verify_vim_pattern_bound_failures();
     verify_vim_search_scan();
     verify_vim_search_wrap();
     verify_vim_search_encoding();

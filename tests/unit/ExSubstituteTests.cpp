@@ -278,7 +278,7 @@ void verify_pattern_groups()
                                    std::size_t begin, std::size_t end)
 {
     core::VimPatternCaptures captures{};
-    captures.at(0) = core::VimPatternMatch{begin, end};
+    captures.at(0) = core::VimPatternMatch{begin, end, begin, end};
     std::string out;
     core::SubstituteReplacement::vim(replacement).appended(out, line, captures);
     expect(core::SubstituteReplacement::vim(replacement).expanded_bytes(line, captures) ==

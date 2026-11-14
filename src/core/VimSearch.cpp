@@ -72,6 +72,27 @@ void visit_line_matches(std::string_view line, const VimPattern &pattern, const 
     return found;
 }
 
+// 行の区切りの一致（vim_line_matches と同じ走査）のうち、置き直した始まりが lower 以降の最初の
+// 一致。`\zs` は照合の始まりより後ろに当たりを置くので、照合を lower から始めると at の手前で
+// 始まる区切りの一致を見落とす（`foo\zsbar` の `bar` の上の `gn`・ADR 0184 の決定 5・Vim の
+// searchit が行頭から数える形）。
+[[nodiscard]] std::optional<VimPatternMatch>
+first_placed_match(std::string_view content, const VimPattern &pattern, std::size_t lower)
+{
+    std::optional<VimPatternMatch> found;
+    visit_line_matches(content, pattern,
+                       [&found, lower](const VimPatternMatch &match)
+                       {
+                           if (match.begin < lower)
+                           {
+                               return true;
+                           }
+                           found = match;
+                           return false;
+                       });
+    return found;
+}
+
 // 行の中で upper 桁より前にある最後の一致の始まり。
 [[nodiscard]] std::optional<std::size_t> last_match(std::string_view content,
                                                     const VimPattern &pattern, std::size_t upper)
@@ -254,7 +275,9 @@ std::optional<OffsetRange> vim_match_from(const TextBuffer &text, const VimPatte
     VimSearchWalk walk(text, pattern);
     const std::size_t start = text.line_start(text.position_of(at).line).value;
     const std::string_view line = walk.line_at(start);
-    const auto match = pattern.matched(line, std::min(at.value - start, line.size()));
+    const std::size_t lower = std::min(at.value - start, line.size());
+    const auto match =
+        pattern.bounded() ? first_placed_match(line, pattern, lower) : pattern.matched(line, lower);
     if (!match.has_value())
     {
         return std::nullopt;

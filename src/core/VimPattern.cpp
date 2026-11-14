@@ -970,6 +970,64 @@ opened_item(std::string_view pattern, std::size_t at, VimPatternParse &parse)
     return code_point_at(pattern, Offset{at}) == U'\\' && next < pattern.size() &&
            code_point_at(pattern, Offset{next}) == separator_of(separator);
 }
+
+// at から `\` と letter が並ぶか。
+[[nodiscard]] bool escaped_at(std::string_view pattern, std::size_t at, char letter) noexcept
+{
+    return at + 1 < pattern.size() && pattern[at] == '\\' && pattern[at + 1] == letter;
+}
+
+// `\zs` `\ze`（ADR 0184 の決定 5）。項目でなければ値なし、読めば次の位置。直後の `*` `\+` `\{` は
+// E888（Vim 9.1 の re_mult_next・MULTI_MULT）。直後の `\=` `\?`（`?` の検索の `\?` は区切りの文字）
+// は Vim の nfa_regpiece が 0 回か 1 回の量にする。先の道（1 回）が必ず先に着いて後の道（0 回）は
+// 同じ状態で捨てられるので、印 1 つと同じに読む（`a\zs\=b` は `a\zsb`・実測）。直後は `\(` の
+// 直後と違い、`*` も `^` も錨や文字に読み替えない（`\zs^a` の `^` は文字・実測）。
+// at が `\zs` か `\ze` なら、その最後の文字（`s` か `e`）。
+[[nodiscard]] std::optional<char> bound_letter(std::string_view pattern, std::size_t at) noexcept
+{
+    if (!escaped_at(pattern, at, 'z') || at + 2 >= pattern.size())
+    {
+        return std::nullopt;
+    }
+    const char letter = pattern[at + 2];
+    return letter == 's' || letter == 'e' ? std::optional{letter} : std::nullopt;
+}
+
+// at に Vim の MULTI_MULT の量（`*` `\+` `\{`）が始まるか。
+[[nodiscard]] bool multiplies(std::string_view pattern, std::size_t at) noexcept
+{
+    const bool star = at < pattern.size() && pattern[at] == '*';
+    return star || escaped_at(pattern, at, '+') || escaped_at(pattern, at, '{');
+}
+
+[[nodiscard]] std::optional<std::expected<std::size_t, VimPatternFailure>>
+parsed_bound(std::string_view pattern, std::size_t at, VimSearchDirection separator,
+             VimPatternParse &parse)
+{
+    const auto letter = bound_letter(pattern, at);
+    if (!letter.has_value())
+    {
+        return std::nullopt;
+    }
+    const bool begins = letter.value() == 's';
+    const std::size_t next = at + 3;
+    if (multiplies(pattern, next))
+    {
+        return std::unexpected(begins ? VimPatternFailure::repeated_match_begin
+                                      : VimPatternFailure::repeated_match_end);
+    }
+    parse.opened = false;
+    parse.opened_plain = false;
+    parse.marks.push_back(
+        VimPatternMark{begins ? VimPatternMarkKind::match_begin : VimPatternMarkKind::match_end,
+                       parse.atoms.size(), std::nullopt, std::nullopt});
+    const bool optional =
+        escaped_at(pattern, next, '=') ||
+        (escaped_at(pattern, next, '?') && separator == VimSearchDirection::forward);
+    parse.multi = optional;
+    return optional ? next + 2 : next;
+}
+
 // 次の項目を parse に読み、次の位置を返す。区切りは offset として断る。
 [[nodiscard]] std::expected<std::size_t, VimPatternFailure>
 parsed_next(std::string_view pattern, std::size_t at, VimSearchDirection separator,
@@ -1002,6 +1060,11 @@ parsed_next(std::string_view pattern, std::size_t at, VimSearchDirection separat
     {
         return std::unexpected(VimPatternFailure::misplaced);
     }
+    auto bound = parsed_bound(pattern, at, separator, parse);
+    if (bound.has_value())
+    {
+        return std::move(bound).value();
+    }
     if (quantifier_escape(pattern, at))
     {
         return parsed_quantifier(pattern, at, parse);
@@ -1019,12 +1082,33 @@ parsed_next(std::string_view pattern, std::size_t at, VimSearchDirection separat
     return parsed_item(pattern, at, parse);
 }
 
-// 選択か群に付く量を含むか（命令の列に組むパターン・ADR 0184 の決定 1・3）。
+// `\zs` `\ze` の印か（ADR 0184 の決定 5）。
+[[nodiscard]] bool bound_mark(const VimPatternMark &mark) noexcept
+{
+    return mark.kind == VimPatternMarkKind::match_begin ||
+           mark.kind == VimPatternMarkKind::match_end;
+}
+
+// 選択か群に付く量か `\zs` `\ze` を含むか（命令の列に組むパターン・ADR 0184 の決定 1・3・5）。
 [[nodiscard]] bool needs_program(const std::vector<VimPatternMark> &marks) noexcept
 {
-    return std::ranges::any_of(
-        marks, [](const VimPatternMark &mark)
-        { return mark.kind == VimPatternMarkKind::branch || mark.quantity.has_value(); });
+    return std::ranges::any_of(marks,
+                               [](const VimPatternMark &mark)
+                               {
+                                   return mark.kind == VimPatternMarkKind::branch ||
+                                          mark.quantity.has_value() || bound_mark(mark);
+                               });
+}
+
+// 命令の列に `\zs` `\ze` の命令があるか（照合器が置き直した始まりと終わりを運ぶか）。
+[[nodiscard]] bool bounded_program(const std::vector<VimPatternInstruction> &program) noexcept
+{
+    return std::ranges::any_of(program,
+                               [](const VimPatternInstruction &instruction)
+                               {
+                                   return instruction.opcode == VimPatternOpcode::match_begin ||
+                                          instruction.opcode == VimPatternOpcode::match_end;
+                               });
 }
 
 // 選択か群の量を含むパターンだけを命令の列に組む（ADR 0184 の決定 1・3・ほかは空の列）。Vim 9.1 が
@@ -1091,6 +1175,8 @@ program_of(const VimPatternParse &parse, VimPatternLimits limits)
                                        : std::optional{longest.at(instruction.first)};
     case VimPatternOpcode::open:
     case VimPatternOpcode::close:
+    case VimPatternOpcode::match_begin:
+    case VimPatternOpcode::match_end:
         return longest.at(pc + 1);
     case VimPatternOpcode::accept:
         return std::size_t{0};
@@ -1125,7 +1211,7 @@ VimPattern::VimPattern(VimPatternParse &&parse, std::vector<VimPatternInstructio
       lazy_(std::ranges::any_of(atoms_,
                                 [](const VimPatternAtom &atom) { return lazy(atom.repeat); })),
       program_(std::move(program)), route_(route_of(atoms_, lazy_, !program_.empty())),
-      program_longest_(program_longest(program_, atoms_))
+      bounded_(bounded_program(program_)), program_longest_(program_longest(program_, atoms_))
 {
 }
 
@@ -1481,7 +1567,7 @@ std::optional<VimPatternMatch> VimPattern::sequenced(std::string_view line, std:
         const auto end = ends_a_character(line, at) ? matched_sequence(line, at) : std::nullopt;
         if (end.has_value() && ends_a_character(line, end.value()))
         {
-            return VimPatternMatch{at, end.value()};
+            return VimPatternMatch{at, end.value(), at, end.value()};
         }
         if (at >= line.size())
         {
@@ -1495,6 +1581,11 @@ std::optional<VimPatternMatch> VimPattern::sequenced(std::string_view line, std:
 VimPatternRoute VimPattern::route() const noexcept
 {
     return route_;
+}
+
+bool VimPattern::bounded() const noexcept
+{
+    return bounded_;
 }
 
 std::size_t VimPattern::instruction_count() const noexcept
@@ -1538,8 +1629,9 @@ std::optional<VimPatternCaptures> VimPattern::captured(std::string_view line, Vi
     for (std::size_t group = 0; group < groups_.size(); ++group)
     {
         const VimPatternGroup &range = groups_.at(group);
-        captures.at(group + 1) =
-            VimPatternMatch{walk.positions_.at(range.first), walk.positions_.at(range.end)};
+        const std::size_t first = walk.positions_.at(range.first);
+        const std::size_t last = walk.positions_.at(range.end);
+        captures.at(group + 1) = VimPatternMatch{first, last, first, last};
     }
     return captures;
 }
@@ -1549,7 +1641,8 @@ std::optional<VimPatternCaptures> VimPattern::captured(std::string_view line, Vi
 std::optional<VimPatternCaptures> VimPattern::traced(std::string_view line, VimPatternMatch match,
                                                      std::size_t cell_limit) const
 {
-    if (match.end < match.begin || program_.size() * (match.end - match.begin + 1) > cell_limit)
+    if (match.whole_end < match.whole_begin ||
+        program_.size() * (match.whole_end - match.whole_begin + 1) > cell_limit)
     {
         return std::nullopt;
     }

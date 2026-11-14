@@ -20,6 +20,9 @@ class VimPattern;
 // 始まりは当たりが見つかるまで位置ごとに最も低い優先で足し（最も左）、
 // 当たった候補より低い優先の候補は捨てる
 // （最初に当たる枝・Vim 9.1 の nfa_regmatch の NFA_MATCH）。
+// `\zs` `\ze` を含むパターン（bounded_）だけ、候補ごとに置き直した始まりと終わり（ADR 0184 の
+// 決定 5）を運ぶ: 列の番号ごとの 2 欄（bounds_）と、積みの 1 項目ごとの 2 語（pending_ に続けて
+// 積む）。含まないパターンはこの 2 つを確保も読みもしない（決定 1）。
 // 確保は作るときだけ（升の表 1 本と列 2 本と積み 1 本）。生成と操作は VimPattern::matched に閉じる
 // （ADR 0093 と同じ形）。
 class VimPatternMachine final
@@ -38,6 +41,15 @@ class VimPatternMachine final
     [[nodiscard]] std::size_t &stamp_of(bool into_next, std::size_t slot);
     [[nodiscard]] std::size_t &begin_of(bool into_next, std::size_t slot);
     [[nodiscard]] std::size_t cell_of(bool into_next, std::size_t slot) const noexcept;
+    // 積みに 1 項目を積む（bounded_ なら運んでいる始まりと終わりを続けて積む）。
+    void pushed(std::size_t entry);
+    // 積みから 1 項目を取り出す（bounded_ なら運ぶ始まりと終わりを carried_ に戻す）。
+    [[nodiscard]] std::size_t popped();
+    // 列の番号 slot に置いた候補の始まりと終わり（bounded_ のときだけ・bounds_ の 2 欄）。
+    void bounds_stored(bool into_next, std::size_t slot);
+    void bounds_loaded(bool into_next, std::size_t slot);
+    // 当たり（置き直した範囲と、パターン全体の範囲）。
+    [[nodiscard]] VimPatternMatch accepted(std::size_t begin) const noexcept;
     // 列の番号の「辿り終えた」印の値（今の世代の 2 倍 + 1・途中は 2 倍）。
     [[nodiscard]] std::size_t done_stamp(bool into_next) const noexcept;
     // 命令 here を 1 つ辿る（幅の無い遷移は pending_ に積み、食べる原子は列に置く）。当たりなら値。
@@ -70,5 +82,13 @@ class VimPatternMachine final
     // 倍・奇数は辿り終えの印・再帰しない・作るときに確保する）。
     std::vector<std::size_t> pending_;
     std::optional<VimPatternMatch> found_;
+    // パターンが `\zs` `\ze` を含むか（作るときに 1 回だけ読む）。
+    bool bounded_;
+    // 列の番号ごとの、置き直した始まりと終わりの 4 欄（今の列と次の列・並びは cells_ と同じ規則・
+    // bounded_ のときだけ確保する）。終わりの値 npos は「`\ze` を通っていない」。
+    std::vector<std::size_t> bounds_;
+    // 辿っている候補の置き直した始まりと終わり（積みから取り出すたびに戻す）。
+    std::size_t carried_begin_ = 0;
+    std::size_t carried_end_ = 0;
 };
 } // namespace nenenib::core
