@@ -1285,6 +1285,10 @@ class EditorController final
     // 再生の編集を畳む起点（ADR 0046 の決定 3）。再生の外では空。perform(VimReplay) が置いて
     // 消し、再生の中で文書が替わったら reopen_replayed_unit が入った文書の値へ置き直す。
     std::optional<core::EditHistory> replay_history_;
+    // 畳みの起点から後で undo を流したか・その後に保存したか（#1672・merge_replayed_edits が
+    // 保存時点を写す after_replay_folded の unsure）。起点を置く所が倒す。
+    bool replay_undone_ = false;
+    bool replay_save_unsure_ = false;
     // 流している鍵の engine の印（ADR 0181）。stepped_vim が効果を写す間だけ置き、replace が
     // 本文を置き換える編集を積めば消す。残れば push_empty_unit が空の単位を積む。
     std::optional<core::VimChange> vim_change_;
