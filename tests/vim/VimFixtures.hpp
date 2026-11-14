@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 128e0a7ad8790f402e7551c51eefdf9c8f41448f5286f69e04c716ddc72c5a8a / 5951 fixtures
+// fixtures.json: sha256 8b6195007c5bed62ead607fdae0e1623b7b5284417d85ebdaa1ebe3922b94ef0 / 5956 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 5951> vim_fixtures{{
+constexpr std::array<VimFixture, 5956> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -5414,6 +5414,11 @@ constexpr std::array<VimFixture, 5951> vim_fixtures{{
     {"substitute-c-colon-s", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", "jc:s/a/X/<CR>Z<Esc>", "a1 a2\nZb X\nc a a\na\n\tx a y\nlast a", 2, 1, "  ", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}, std::nullopt, std::nullopt, "set scrolloff=0"},
     {"substitute-y-colon-s", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", "jy:s/a/X/<CR>P", "a1 a2\n    b X\nc a a\na\n\tx a y\nlast a", 2, 2, "  ", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}, std::nullopt, std::nullopt, "set scrolloff=0"},
     {"substitute-d-colon-s-fail", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", "jd:s/zzz/X/<CR>x", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"substitute-op-origin-col-beyond", "aaaa\nb", "$d:s/a\\+/X/<CR>x", "X\nb", 1, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"substitute-op-origin-above-shrink", "aaaa\nbbbb\ncccc", "jjlld:1s/a\\+/X/<CR>", "cc", 1, 1, "X\nbbbb\ncc", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"substitute-op-origin-yank-grow", "aaaa\nbbbb\ncccc", "jjly:%s/a/XY/<CR>P", "XYaaa\nbbbb\ncXYaaa\nbbbb\ncccc", 1, 1, "XYaaa\nbbbb\nc", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"substitute-op-origin-empty-line", "aaaa\n\nbbbb", "jd:1s/a\\+/X/<CR>", "\nbbbb", 1, 1, "X\n", "V", VimViewportFixture{10, 1, 1, 1, 1, 5}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"substitute-op-origin-at-line-end", "aaaa", "$d:s/aa/X/<CR>", "", 1, 1, "Xaa", "v", VimViewportFixture{10, 1, 1, 1, 1, 5}, std::nullopt, std::nullopt, "set scrolloff=0"},
     {"substitute-insert-ctrl-o-s", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", "jA!<C-o>:s/a/X/<CR>?<Esc>", "a1 a2\n  ?b X!\nc a a\na\n\tx a y\nlast a", 2, 3, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}, std::nullopt, std::nullopt, "set scrolloff=0"},
     {"substitute-insert-ctrl-o-s-g", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", "jIq<C-o>:s/a/X/g<CR>w<Esc>", "a1 a2\n  wqb X\nc a a\na\n\tx a y\nlast a", 2, 3, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}, std::nullopt, std::nullopt, "set scrolloff=0"},
     {"substitute-macro-s", "a1 a2\n  b a\nc a a\na\n\tx a y\nlast a", "@a", "X1 a2\n  b a\nc a a\na\n\tx a y\nlast a", 2, 1, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}, VimMacroFixture{'a', ":s/a/X/<CR>j"}, std::nullopt, "set scrolloff=0"},
