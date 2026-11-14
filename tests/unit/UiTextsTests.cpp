@@ -84,7 +84,8 @@ void verify_columns()
                    "every text is non-empty and has the Japanese placeholders");
         }
     }
-    expect(core::ui_message_count == 201, "the table has 201 messages (T1a 197 and T1b 4)");
+    expect(core::ui_message_count == 203,
+           "the table has 203 messages (T1a 197, T1b 4 and the About operation 2 of D90)");
     expect(placed == 26, "26 messages take placeholders (T1a)");
     expect(core::ui_text(core::UiMessage::tab_untitled, core::DisplayLanguage::english) ==
                "Untitled",

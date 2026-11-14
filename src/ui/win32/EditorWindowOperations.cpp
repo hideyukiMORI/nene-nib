@@ -33,6 +33,7 @@
 #include "SelectEditMode.hpp"
 #include "SetPreviewPlacement.hpp"
 #include "SettingsNotice.hpp"
+#include "ShowVersion.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
 #include "SwitchPane.hpp"
@@ -386,6 +387,7 @@ EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation op
         {core::EditorOperation::register_shell, &EditorWindow::run_register_shell},
         {core::EditorOperation::unregister_shell, &EditorWindow::run_unregister_shell},
         {core::EditorOperation::choose_language, &EditorWindow::run_choose_language},
+        {core::EditorOperation::show_version, &EditorWindow::run_show_version},
     }};
     static_assert(runners_in_order(runners),
                   "operation runners follow the order of EditorOperation and point to a function");
@@ -593,6 +595,12 @@ void EditorWindow::run_unregister_shell()
 void EditorWindow::run_choose_language()
 {
     send(application::OpenDisplayLanguageList{});
+}
+
+// バージョン情報（施主決定 D90）。1 行の知らせは controller が作る。場所は文字だけで、開かない。
+void EditorWindow::run_show_version()
+{
+    send(application::ShowVersion{});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

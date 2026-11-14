@@ -511,6 +511,13 @@ void verify_selection_steps()
     return {(area.left + area.right) / 2, (area.top + area.bottom) / 2};
 }
 
+// ブロックの下端（署名を置けば署名の 2 行目の下端、置かなければ鍵の案内の 3 行目の下端・D90）。
+[[nodiscard]] std::int32_t block_bottom(const core::StartScreenLayout &layout)
+{
+    return layout.signature.has_value() ? layout.signature.value().at(1).bottom
+                                        : layout.keys.at(2).key.bottom;
+}
+
 // 列の中央・幅・題（段 2 の配置の採用値）。
 void verify_column(const core::StartScreenLayout &layout, const core::BodyLayout &body,
                    std::uint32_t dpi)
@@ -581,7 +588,7 @@ void verify_layout_at(std::uint32_t dpi)
     expect(layout.keys.at(0).key.top >= layout.key_heading.bottom &&
                core::width_of(layout.keys.at(0).key) == key_width &&
                layout.keys.at(0).label.left > layout.keys.at(0).key.right &&
-               layout.keys.at(2).key.bottom == layout.column.bottom,
+               block_bottom(layout) == layout.column.bottom,
            "the key rows use the measured key width in one column");
 }
 
@@ -682,8 +689,8 @@ void verify_centered_at(std::uint32_t dpi, std::size_t recent, std::int32_t band
     {
         expect(above == least, "without room the block starts 36 DIP under the top");
     }
-    bool hits = layout.title.top == layout.column.top &&
-                layout.keys.at(2).key.bottom == layout.column.bottom;
+    bool hits =
+        layout.title.top == layout.column.top && block_bottom(layout) == layout.column.bottom;
     for (std::size_t index = 0; index < layout.rows.size(); ++index)
     {
         const auto [x, y] = middle_of(layout.rows.at(index).line);
@@ -734,6 +741,129 @@ void verify_centered()
     verify_centered_exact();
 }
 
+// D90: 署名の 2 行は鍵の案内の下に 16 DIP 空けて見出しと同じ 20 DIP の高さで、見出しと同じ左右。
+// 上下の中央寄せは署名を含めたブロックで取る。押せない。
+void verify_signature_placed(std::uint32_t dpi, core::StartScreenShape shape)
+{
+    const auto body = wide_body(dpi);
+    const auto placed = core::start_screen_layout(body, dpi, shape, 0);
+    if (!placed.has_value() || !placed.value().signature.has_value())
+    {
+        expect(false, "a wide body places the signature under the shortcuts");
+        return;
+    }
+    const auto &layout = placed.value();
+    const auto &lines = layout.signature.value();
+    const auto gap = core::to_pixels(core::start_section_gap_dips, dpi);
+    const auto line = core::to_pixels(core::start_heading_dips, dpi);
+    expect(lines.at(0).top == layout.keys.at(2).key.bottom + gap &&
+               lines.at(1).top == lines.at(0).bottom && core::height_of(lines.at(0)) == line &&
+               core::height_of(lines.at(1)) == line &&
+               lines.at(0).left == layout.key_heading.left &&
+               lines.at(1).right == layout.key_heading.right &&
+               layout.column.bottom == lines.at(1).bottom,
+           "the two signature lines sit 16 DIP under the shortcuts at the heading height");
+    const auto above = layout.column.top - body.content.top;
+    const auto below = body.content.bottom - layout.column.bottom;
+    expect(above - below >= -1 && above - below <= 1,
+           "the block with the signature sits in the vertical middle");
+    const auto [x, y] = middle_of(lines.at(0));
+    const auto [x2, y2] = middle_of(lines.at(1));
+    expect(!core::start_screen_row_at(layout, body, x, y).has_value() &&
+               !core::start_screen_row_at(layout, body, x2, y2).has_value(),
+           "the signature lines are not selectable");
+}
+
+// 本文の欄の高さ room（物理画素・96 DPI）の本文。
+[[nodiscard]] core::BodyLayout body_with_room(std::int32_t room)
+{
+    const auto wide = wide_body(96);
+    const auto top_gap = wide.content.top - wide.band.top;
+    const auto bottom_gap = wide.band.bottom - wide.content.bottom;
+    return core::body_layout_in(core::LayoutRect{0, 0, 1300, top_gap + room + bottom_gap}, 96,
+                                core::default_font_size());
+}
+
+// D90: 上の 36 DIP と署名を含めたブロックがちょうど入る高さなら置き、1 px 足りなければ置かない
+// （狭い窓で最初に落とす）。低い本文では署名の無いブロックが上から 36 DIP に置かれる。
+void verify_signature_dropped(core::StartScreenShape shape)
+{
+    const auto wide = core::start_screen_layout(wide_body(96), 96, shape, 0);
+    if (!wide.has_value() || !wide.value().signature.has_value())
+    {
+        expect(false, "the wide layout carries the signature");
+        return;
+    }
+    const auto block = core::height_of(wide.value().column);
+    const auto least = core::to_pixels(core::start_top_dips, 96);
+    const auto exact_body = body_with_room(least + block);
+    const auto exact = core::start_screen_layout(exact_body, 96, shape, 0);
+    const auto short_of_body = body_with_room(least + block - 1);
+    const auto short_of = core::start_screen_layout(short_of_body, 96, shape, 0);
+    expect(core::height_of(exact_body.content) == least + block && exact.has_value() &&
+               exact.value().signature.has_value(),
+           "a body exactly as high as 36 DIP and the signed block keeps the signature");
+    expect(short_of.has_value() && !short_of.value().signature.has_value() &&
+               short_of.value().column.bottom == short_of.value().keys.at(2).key.bottom,
+           "one pixel less drops the signature and ends the block at the shortcuts");
+    const auto tiny = core::start_screen_layout(short_body(), 96, shape, 0);
+    expect(tiny.has_value() && !tiny.value().signature.has_value() &&
+               tiny.value().column.top == short_body().content.top + least,
+           "a body lower than the block drops the signature and stays 36 DIP under the top");
+}
+
+// D90: 落とす順は署名 → 版（start_credit）。版が欄に入らなければ署名も描かない。幅 0（測れない）は
+// 入らない扱い。
+void verify_credit_order()
+{
+    const auto placed = core::start_screen_layout(wide_body(96), 96, core::StartScreenShape{}, 0);
+    const auto unsigned_layout =
+        core::start_screen_layout(short_body(), 96, core::StartScreenShape{}, 0);
+    if (!placed.has_value() || !placed.value().signature.has_value() ||
+        !unsigned_layout.has_value())
+    {
+        expect(false, "the credit layouts are placed");
+        return;
+    }
+    const auto &layout = placed.value();
+    const auto title = core::width_of(layout.title);
+    const auto area = core::start_version_area(layout.title, 100, 96);
+    expect(area.left == layout.title.left + 100 + core::start_detail_gap_dips &&
+               area.right == layout.title.right && area.top == layout.title.top &&
+               area.bottom == layout.title.bottom,
+           "the version area starts 12 DIP after the title in the title row");
+    const auto room = core::width_of(area);
+    const auto line = core::width_of(layout.signature.value().at(0));
+    using core::StartCredit;
+    expect(core::start_credit(layout, 96, {100, room, line, line}) ==
+               StartCredit::version_and_signature,
+           "everything that fits is drawn");
+    expect(core::start_credit(layout, 96, {100, room, line + 1, line}) == StartCredit::version &&
+               core::start_credit(layout, 96, {100, room, line, line + 1}) ==
+                   StartCredit::version &&
+               core::start_credit(layout, 96, {100, room, 0, line}) == StartCredit::version,
+           "a signature line that does not fit whole drops both signature lines first");
+    expect(core::start_credit(layout, 96, {100, room + 1, line, line}) == StartCredit::none &&
+               core::start_credit(layout, 96, {title, 1, 1, 1}) == StartCredit::none &&
+               core::start_credit(layout, 96, {100, 0, line, line}) == StartCredit::none,
+           "a version that does not fit drops the version and the signature with it");
+    expect(core::start_credit(unsigned_layout.value(), 96, {100, room, 1, 1}) ==
+               StartCredit::version,
+           "a layout without the signature lines draws the version only");
+}
+
+void verify_signature()
+{
+    for (const std::uint32_t dpi : {96U, 120U, 144U})
+    {
+        verify_signature_placed(dpi, core::StartScreenShape{0, 0, true});
+        verify_signature_placed(dpi, core::StartScreenShape{3, 2, false});
+    }
+    verify_signature_dropped(core::StartScreenShape{0, 0, true});
+    verify_signature_dropped(core::StartScreenShape{4, 2, false});
+    verify_credit_order();
+}
+
 void verify_layout()
 {
     verify_layout_at(96);
@@ -743,6 +873,7 @@ void verify_layout()
     verify_centered();
     verify_shape();
     verify_hits();
+    verify_signature();
 }
 
 // 窓と同じ押しと離しの道（core::start_screen_layout と start_screen_row_at・start_pressed・
