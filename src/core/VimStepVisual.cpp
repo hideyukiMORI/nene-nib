@@ -433,7 +433,7 @@ namespace
 
 // 行に効く鍵（`I` `A` `C` `gi` `gI`）。矩形の `I` `A` `C` は ADR 0035 の追補 #1042、文字単位と
 // 行単位の `I` `A` `C` は #1436。`gi` は VISUAL では失敗する（実測・#1039）。`J` `gJ` `X` `D` `Y`
-// `s` `R` と `p` `P`（#1418・#1461）は visual_edit_line が先に振り分ける。
+// `s` `S` `R` と `p` `P`（#1418・#1461）は visual_edit_line が先に振り分ける。
 [[nodiscard]] VimStep visual_line_command(const VimState &state, const VimEditorView &view,
                                           VimAction action)
 {
@@ -499,6 +499,12 @@ namespace
     if (action == VimAction::substitute)
     {
         return visual_changed(state, view);
+    }
+    // `S` は Vim では行単位の `c` だが、surround の `S{char}` に充てるので何もしない（表に無かった
+    // ときと同じ・ADR 0018 の追補 #1436・ADR 0165 の決定 5・#1001・#768）。
+    if (action == VimAction::substitute_line)
+    {
+        return visual_unchanged(state);
     }
     if (action == VimAction::replace_mode)
     {

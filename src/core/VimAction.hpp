@@ -186,8 +186,8 @@ enum class VimAction : std::uint8_t
     // 次の鍵を別の命令として流さない・#1334）。
     prefix_bracket,
     // `s` と `R`（#1436）。VISUAL では Vim の nv_subst と nv_Replace のとおり `c` に流す（`s` は
-    // 種類のまま・`R` は行単位へ読み替え）。NORMAL の `s`（`cl`）と REPLACE モードの `R`
-    // は未実装で、表に無い鍵と同じに打ち消す。
+    // 種類のまま・`R` は行単位へ読み替え）。NORMAL の `s` は `cl`（Vim の nv_optrans・#768）。
+    // REPLACE モードの `R` は未実装で、表に無い鍵と同じに打ち消す。
     substitute,
     replace_mode,
     // NORMAL の `&`（`:s` の繰り返し・回数は `:.,.+(N-1)s`）と `g&`（`:%s//~/&`）。Ex の `:s` と
@@ -205,11 +205,13 @@ enum class VimAction : std::uint8_t
     // 回数 8 なら不正なバイト列を探して見つからずに鳴る（Nib の本文はいつも正しい UTF-8）。
     // 表示の大分類で、NORMAL と VISUAL は何もせず、オペレータ待ちは空の範囲に効かせる。
     show_information,
-    show_character_bytes
+    show_character_bytes,
+    // `S`（#768）。NORMAL は `cc`（Vim の nv_optrans）。VISUAL では Vim は行単位の `c` だが、
+    // surround の `S{char}` に充てるので何もしない（ADR 0018 の追補・ADR 0165 の決定 5）。
+    substitute_line
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count =
-    static_cast<std::size_t>(VimAction::show_character_bytes) + 1;
+constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::substitute_line) + 1;
 } // namespace nenenib::core

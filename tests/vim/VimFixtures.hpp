@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 128e0a7ad8790f402e7551c51eefdf9c8f41448f5286f69e04c716ddc72c5a8a / 5951 fixtures
+// fixtures.json: sha256 5d86311885573483fa503933c396882f0ff6d08bee08710bb6b1115f34ebde63 / 6025 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 5951> vim_fixtures{{
+constexpr std::array<VimFixture, 6025> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -5963,6 +5963,80 @@ constexpr std::array<VimFixture, 5951> vim_fixtures{{
     {"fixture-settings-nowrapscan-n-stops", "foo x foo", "/foo<CR>nx", "foo x foo", 1, 7, "", "", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set nows"},
     {"fixture-settings-nowrapscan-star-stops", "foo\nbar foo", "G$*x", "foo\nbar foo", 2, 5, "", "", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set nowrapscan"},
     {"fixture-settings-two-lines-in-order", "x FOO foo FOO", "/foo<CR>nnx", "x FOO foo OO", 1, 11, "F", "v", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set ignorecase\nset nowrapscan"},
+    {"substitute-key-s-first", "abcd", "sZ<Esc>", "Zbcd", 1, 1, "a", "v", std::nullopt},
+    {"substitute-key-s-middle", "abcd", "lsZ<Esc>", "aZcd", 1, 2, "b", "v", std::nullopt},
+    {"substitute-key-s-last", "abcd", "$sZ<Esc>", "abcZ", 1, 4, "d", "v", std::nullopt},
+    {"substitute-key-s-count2", "abcd", "2sZ<Esc>", "Zcd", 1, 1, "ab", "v", std::nullopt},
+    {"substitute-key-s-count-past-end", "abcd", "l9sZ<Esc>", "aZ", 1, 2, "bcd", "v", std::nullopt},
+    {"substitute-key-s-count-past-end-two-lines", "abcd\nefgh", "l9sZ<Esc>", "aZ\nefgh", 1, 2, "bcd", "v", std::nullopt},
+    {"substitute-key-s-last-count3", "abcd", "$3sZ<Esc>", "abcZ", 1, 4, "d", "v", std::nullopt},
+    {"substitute-key-s-empty-line", "\nabc", "sZ<Esc>", "Z\nabc", 1, 1, "", "", std::nullopt},
+    {"substitute-key-s-empty-doc", "x", "ddsZ<Esc>", "Z", 1, 1, "x\n", "V", std::nullopt},
+    {"substitute-key-s-fullwidth", "aあb", "lsZ<Esc>", "aZb", 1, 2, "あ", "v", std::nullopt},
+    {"substitute-key-s-fullwidth-count", "あいうえ", "l2sZ<Esc>", "あZえ", 1, 4, "いう", "v", std::nullopt},
+    {"substitute-key-s-combining", "éx", "sZ<Esc>", "Zx", 1, 1, "é", "v", std::nullopt},
+    {"substitute-key-s-tab", "a\tb", "lsZ<Esc>", "aZb", 1, 2, "\t", "v", std::nullopt},
+    {"substitute-key-s-empty-insert", "abcd", "ls<Esc>", "acd", 1, 1, "b", "v", std::nullopt},
+    {"substitute-key-s-empty-insert-last", "abcd", "$s<Esc>", "abc", 1, 3, "d", "v", std::nullopt},
+    {"substitute-key-s-bs", "abcd", "lsZ<BS><BS>Y<Esc>", "Ycd", 1, 1, "b", "v", std::nullopt},
+    {"substitute-key-s-undo", "abcd", "lsZ<Esc>u", "abcd", 1, 2, "b", "v", std::nullopt},
+    {"substitute-key-s-undo-last", "abcd", "$2sZ<Esc>u", "abcd", 1, 4, "d", "v", std::nullopt},
+    {"substitute-key-s-undo-count", "abcdef", "l3sZ<Esc>u", "abcdef", 1, 2, "bcd", "v", std::nullopt},
+    {"substitute-key-s-dot", "abcdef", "sZ<Esc>l.", "ZZcdef", 1, 2, "b", "v", std::nullopt},
+    {"substitute-key-s-dot-count", "abcdef", "2sZ<Esc>l.", "ZZef", 1, 2, "cd", "v", std::nullopt},
+    {"substitute-key-s-dot-replace-count", "abcdefgh", "2sZ<Esc>l3.", "ZZfgh", 1, 2, "cde", "v", std::nullopt},
+    {"substitute-key-s-dot-next-line", "abcdef\nabcdef", "3sZ<Esc>j0.", "Zdef\nZdef", 2, 1, "abc", "v", std::nullopt},
+    {"substitute-key-s-reg-append", "abcd", "\"ayll\"AsZ<Esc>\"ap", "aZabcd", 1, 4, "ab", "v", std::nullopt},
+    {"substitute-key-s-reg-black-hole", "abcd", "yl\"_lsZ<Esc>p", "aZbcd", 1, 3, "b", "v", std::nullopt},
+    {"substitute-key-s-reg-small", "abcd", "lsZ<Esc>\"-p", "aZbcd", 1, 3, "b", "v", std::nullopt},
+    {"substitute-key-s-reg-one-untouched", "abcd\nef", "ddsZ<Esc>\"1p", "Zf\nabcd", 2, 1, "e", "v", std::nullopt},
+    {"substitute-key-s-reg-unnamed", "abcd", "l2sZ<Esc>p", "aZbcd", 1, 4, "bc", "v", std::nullopt},
+    {"substitute-key-s-reg-dot", "abcdef", "\"asZ<Esc>l.$\"ap", "ZZcdefb", 1, 7, "b", "v", std::nullopt},
+    {"substitute-key-s-reg-count-order", "abcdef", "2\"asZ<Esc>\"ap", "Zabcdef", 1, 3, "ab", "v", std::nullopt},
+    {"substitute-key-s-huge-count", "abcd", "99999999sZ<Esc>", "Z", 1, 1, "abcd", "v", std::nullopt},
+    {"substitute-key-s-operator-d", "abcd", "dsx", "abcd", 1, 1, "", "", std::nullopt},
+    {"substitute-key-s-operator-c", "abcd", "csx", "abcd", 1, 1, "", "", std::nullopt},
+    {"substitute-key-s-operator-y", "abcd", "ysx", "abcd", 1, 1, "", "", std::nullopt},
+    {"substitute-key-s-ctrl-o", "abcd", "i<C-o>sZ<Esc>", "Zbcd", 1, 1, "a", "v", std::nullopt},
+    {"substitute-key-line-one", "abc\ndef", "SX<Esc>", "X\ndef", 1, 1, "abc\n", "V", std::nullopt},
+    {"substitute-key-line-indent", "  abc\ndef", "SX<Esc>", "X\ndef", 1, 1, "  abc\n", "V", std::nullopt},
+    {"substitute-key-line-tab-indent", "\tabc\ndef", "SX<Esc>", "X\ndef", 1, 1, "\tabc\n", "V", std::nullopt},
+    {"substitute-key-line-blank-line", "   \nabc", "SX<Esc>", "X\nabc", 1, 1, "   \n", "V", std::nullopt},
+    {"substitute-key-line-empty-line", "\nabc", "SX<Esc>", "X\nabc", 1, 1, "\n", "V", std::nullopt},
+    {"substitute-key-line-count2", "abc\ndef\nghi", "2SX<Esc>", "X\nghi", 1, 1, "abc\ndef\n", "V", std::nullopt},
+    {"substitute-key-line-count-past-end", "abc\ndef\nghi", "j9SX<Esc>", "abc\nX", 2, 1, "def\nghi\n", "V", std::nullopt},
+    {"substitute-key-line-last-line", "abc\ndef", "GSX<Esc>", "abc\nX", 2, 1, "def\n", "V", std::nullopt},
+    {"substitute-key-line-single", "abc", "SX<Esc>", "X", 1, 1, "abc\n", "V", std::nullopt},
+    {"substitute-key-line-empty-insert", "  abc\ndef", "lS<Esc>", "\ndef", 1, 1, "  abc\n", "V", std::nullopt},
+    {"substitute-key-line-fullwidth", "あいう\nえ", "lSX<Esc>", "X\nえ", 1, 1, "あいう\n", "V", std::nullopt},
+    {"substitute-key-line-undo", "abc\ndef", "jlSX<Esc>u", "abc\ndef", 2, 1, "def\n", "V", std::nullopt},
+    {"substitute-key-line-undo-count", "abc\n  def\nghi", "jl2SX<Esc>u", "abc\n  def\nghi", 3, 2, "  def\nghi\n", "V", std::nullopt},
+    {"substitute-key-line-dot", "abc\ndef\nghi", "SX<Esc>j.", "X\nX\nghi", 2, 1, "def\n", "V", std::nullopt},
+    {"substitute-key-line-dot-replace-count", "a\nb\nc\nd\ne", "SX<Esc>j2.", "X\nX\nd\ne", 2, 1, "b\nc\n", "V", std::nullopt},
+    {"substitute-key-line-dot-count", "a\nb\nc\nd\ne", "2SX<Esc>j.", "X\nX\ne", 2, 1, "c\nd\n", "V", std::nullopt},
+    {"substitute-key-line-reg-a", "abc\ndef", "\"aSX<Esc>\"ap", "X\nabc\ndef", 2, 1, "abc\n", "V", std::nullopt},
+    {"substitute-key-line-reg-append", "abc\ndef", "\"ayyj\"ASX<Esc>\"ap", "abc\nX\nabc\ndef", 3, 1, "abc\ndef\n", "V", std::nullopt},
+    {"substitute-key-line-reg-one", "abc\ndef", "SX<Esc>\"1p", "X\nabc\ndef", 2, 1, "abc\n", "V", std::nullopt},
+    {"substitute-key-line-reg-unnamed", "abc\ndef", "SX<Esc>p", "X\nabc\ndef", 2, 1, "abc\n", "V", std::nullopt},
+    {"substitute-key-line-reg-black-hole", "abc\ndef", "yyj\"_SX<Esc>p", "abc\nX\nabc", 3, 1, "abc\n", "V", std::nullopt},
+    {"substitute-key-line-reg-shift", "a\nb\nc", "SX<Esc>jSY<Esc>\"2p", "X\nY\na\nc", 3, 1, "b\n", "V", std::nullopt},
+    {"substitute-key-line-huge-count", "abc\ndef", "99999999SX<Esc>", "X", 1, 1, "abc\ndef\n", "V", std::nullopt},
+    {"substitute-key-line-operator-d", "abc\ndef", "dSx", "abc\ndef", 1, 1, "", "", std::nullopt},
+    {"substitute-key-line-ctrl-o-start", "abc\ndef", "i<C-o>SZ<Esc>", "Z\ndef", 1, 1, "abc\n", "V", std::nullopt},
+    {"substitute-key-line-ctrl-o-count", "abc\ndef\nghi", "i<C-o>2SZ<Esc>", "Z\nghi", 1, 1, "abc\ndef\n", "V", std::nullopt},
+    {"substitute-key-s-reg-a", "abcd", "l\"asZ<Esc>$\"ap", "aZcdb", 1, 5, "b", "v", std::nullopt},
+    {"substitute-key-s-combining-count", "ééx", "2sZ<Esc>", "Zx", 1, 1, "éé", "v", std::nullopt},
+    {"substitute-key-s-middle-line-last", "ab\ncd\nef", "j$sZ<Esc>", "ab\ncZ\nef", 2, 2, "d", "v", std::nullopt},
+    {"substitute-key-line-combining", "é\nx", "SX<Esc>", "X\nx", 1, 1, "é\n", "V", std::nullopt},
+    {"substitute-key-line-middle-count-undo", "a\nb\nc\nd", "j2SX<Esc>u", "a\nb\nc\nd", 3, 1, "b\nc\n", "V", std::nullopt},
+    {"substitute-key-line-reg-small-untouched", "abc\ndef", "lx\"-pjSX<Esc>\"-p", "acb\nXb", 2, 2, "def\n", "V", std::nullopt},
+    {"substitute-key-s-reg-one-shift", "abcd\nef", "dd\"aSX<Esc>\"2p", "X\nabcd", 2, 1, "ef\n", "V", std::nullopt},
+    {"substitute-key-s-ctrl-o-esc-only", "abcd", "li<C-o>s<Esc>", "acd", 1, 1, "b", "v", std::nullopt},
+    {"substitute-key-line-ctrl-o-esc-only", "  abc\ndef", "A<C-o>S<Esc>", "\ndef", 1, 1, "  abc\n", "V", std::nullopt},
+    {"substitute-key-s-macro-register", "abcdefgh", "2@a", "ZZcdefgh", 1, 3, "b", "v", std::nullopt, VimMacroFixture{'a', "sZ<Esc>l"}},
+    {"substitute-key-line-macro-register", "a\nb\nc\nd", "2@a", "X\nX\nc\nd", 3, 1, "b\n", "V", std::nullopt, VimMacroFixture{'a', "SX<Esc>j"}},
+    {"substitute-key-s-ctrl-o-restart", "alpha beta gamma", "iX<C-o>sY<Esc>Z<Esc>", "XZYlpha beta gamma", 1, 2, "a", "v", std::nullopt},
+    {"substitute-key-line-ctrl-o-restart", "alpha beta gamma", "iX<C-o>SY<Esc>Z<Esc>", "ZY", 1, 1, "Xalpha beta gamma\n", "V", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

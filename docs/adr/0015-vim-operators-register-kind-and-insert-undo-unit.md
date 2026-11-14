@@ -142,6 +142,16 @@ VISUAL の `y` は触らない。`d` `c` の後のキャレットは別の規則
 - engine は NORMAL（オペレータ待ちを含む）と VISUAL（文字・行・矩形）の `<Home>` を `move_to_column`（`|`）に写し、その前に回数とオペレータの回数を捨てる（`detail::home_uncounted` の 1 本・`3<Home>` `$v3<Home>d` `$3d<Home>` `$2d3<Home>` は回数なしと同じ）。範囲は `d|` と同じ exclusive の文字単位で、`d0` と同じ。INSERT の `<Home>`（`ins_home`）と通常モード（Vim でないモード）の Home は変えない（INSERT の `A<Home><Esc>j` は Esc の後の欲しい列が見た目の桁のままで、Vim と既に一致している・D82）。`<End>` は `$` と同じまま（`nv_end` は `nv_dollar` を呼ぶ）。
 - fixture は `home-wanted-` の 29 件（Tab・空白・全角・結合文字・空の行・回数・VISUAL の 3 種・オペレータと回数・`c`・`.`・対照の `0j` `1|j` `<End>j` `$j` と INSERT の `<Home>`・Vim 9.1 の実測）。
 
+### 決定 15（2026-11-14 追記・#768 の段 #1674）: NORMAL の `s` `S` は `cl` `cc` の道へそのまま流す
+
+15. **NORMAL の `[count]s` は `[count]cl`、`["x][count]S` は `["x][count]cc`。** Vim 9.1 の `nv_subst`（normal.c）は VISUAL でなければ `nv_optrans` を呼び、`nv_optrans` は回数を前に置いた `cl` / `cc` を読み込みの列に積むだけ。engine は鍵の表に `S` → `VimAction::substitute_line`（`edit_line` の群）を 1 行足し、`VimStep.cpp` の `substituted_keys` で `s` は保留の `c` を立てて `l` の移動の 1 本（`operated`）へ、`S` は `cc` の 1 本（`operated_on_lines(…, VimOperator::change)`）へ流す。第 2 の編集の道は作らない。
+    - 範囲・レジスタ（`"a` `"A` `"_`・1 行の中の `s` は `"-`・行単位の `S` は `"1` と繰り下がり）・u の戻り先（ADR 0052）・INSERT の回数・`.`（記録は打った鍵の `s` `S`・`N.` は回数を置き換える）・マクロは `cl` `cc` と同じ。行末を越える回数（`l9s`）は行末まで・行をまたがない、空の行と空の文書の `s` は INSERT へ入るだけ、最後の行より多い `S` は最後の行まで、`99999999s` `99999999S` も同じ（Vim 9.1 の実測）。`S` は `cc` と同じく字下げを消す（`autoindent` は #1086 / PR #1668 の道で、`cc` と同じ所を通る）。
+    - **#1436 が NORMAL の `s` を断っていた理由**は「VISUAL の `s` `R` だけを入れる範囲の判断」（コードの注「NORMAL の `s` と `R` は未実装」・#1436 の題と本文は VISUAL の鍵だけ）で、engine の制約ではなかった。`cl` の道（`operated` と `motion_for_change`）は保留の `c` の下で行末の最後の文字と空の行を Vim と同じに扱うことを fixture で確かめてから外した。NORMAL の `R`（REPLACE モード）は未実装のまま断る（同じ関数の中の 1 枝・後続）。
+    - **オペレータ待ちの `s` `S`**（`ds` `cs` `ys` `dS`）は変えない: 表で範囲にならない鍵なのでオペレータを打ち消して失敗する（Vim の `checkclearopq`・`dsx` は `x` を打ち切る・実測）。surround（#1001・ADR 0165 の決定 5）が後で `ys` `ds` `cs` を取る。
+    - **VISUAL の `S` は何もしない（ADR 0018 の追補 #1436 の判断のまま）。** Vim は行単位の `c`（`nv_subst` は `VIsual_mode` を `'V'` にする）だが、ADR 0165 の決定 5（D67）が VISUAL の `S{char}` を surround に充てるので、`visual_edit_line` が `substitute_line` を `visual_unchanged` へ返す（表に `S` が無かったときと同じ・`verify_vim_visual_step_edges` が守る）。
+    - **INSERT の `Ctrl-o` の中**は NORMAL の 1 命令なので同じ道。`S` を OP_CHANGE の鍵（`VimStepRestart.cpp` の `enters_change`・`s` は #1517 で載っていた）に足し、打った鍵では Esc の後 NORMAL、`:normal!` では INSERT を始め直す（ADR 0182 の決定 4・`iX<C-o>SY<Esc>Z<Esc>` は `ZY`）。`:normal!` の終わりで始め直した INSERT を閉じた後の桁（`li<C-o>2sZ<Esc>` は Vim 1 桁・Nib 2 桁）は `<C-o>cl` `<C-o>cc` `<C-o>C` と同じ違いで、本件の外（後続）。
+    - fixture は `substitute-key-` の 74 件（`s` 42・`S` 32（名前は `line-`）・Vim 9.1 の実測・修正前の再生器（PR #1668 の作業木の `nib_vim_replay`・`s` `S` は main と同じ）で register 欄の無い 72 件のうち 68 件が落ちる。通る 4 件はオペレータ待ちの `ds` `cs` `ys` `dS`。register 欄の 2 件は再生器の外で、落ちるのは読み）。下ごしらえの probe は 112 形（`s` `S`・VISUAL の `S`・`Ctrl-o` の中の `s` `S` `cl` `cc` `C`・`R`）。
+
 ## 強制
 
 - fixture の再生（ADR 0005 / 0012）— **active**（`nib_unit` が `VimFixtures.hpp` の全項目を再生し、レジスタの種類も突き合わせる）

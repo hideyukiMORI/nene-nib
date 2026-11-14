@@ -1042,7 +1042,28 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return pending_action(state, action);
 }
 
-// 行に効く本文の変更（X p P D C Y J gJ）。
+// NORMAL の `s` `S`（#768）と `R`。Vim の nv_optrans は回数を前に置いた `cl` と `cc` を読み込みの
+// 列へ積むだけなので、保留の `c` を立てて `cl` の移動と `cc` の行の 1 本へそのまま流す（範囲・
+// レジスタ・`"-` と `"1` の規則・u の戻り先・INSERT の回数は `cl` `cc` と同じ道）。
+[[nodiscard]] VimStep substituted_keys(const VimState &state, const VimEditorView &view,
+                                       VimAction action)
+{
+    if (action == VimAction::replace_mode)
+    {
+        // NORMAL の `R`（REPLACE モード）は未実装。表に無い鍵と同じに打ち消す（VISUAL だけ効く・
+        // #1436・#768）。
+        return failed(cancelled(state), VimRepeatFailure::refused);
+    }
+    if (action == VimAction::substitute_line)
+    {
+        return operated_on_lines(state, view.text, view.selection.caret, VimOperator::change);
+    }
+    VimState with = state;
+    with.pending = VimPendingOperator{VimOperator::change, std::nullopt};
+    return operated(with, view, VimMotion::right);
+}
+
+// 行に効く本文の変更（X p P D C Y J gJ s S R）。
 [[nodiscard]] VimStep normal_line_action(const VimState &state, const VimEditorView &view,
                                          VimAction action)
 {
@@ -1066,12 +1087,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return operated_on_lines(state, view.text, view.selection.caret, VimOperator::yank);
     }
-    if (action == VimAction::substitute || action == VimAction::replace_mode)
-    {
-        // NORMAL の `s` と `R` は未実装。表に無い鍵と同じに打ち消す（VISUAL だけ効く・#1436）。
-        return failed(cancelled(state), VimRepeatFailure::refused);
-    }
-    std::unreachable();
+    return substituted_keys(state, view, action);
 }
 
 // 次の 1 鍵を待つ接頭辞の動作 → 接頭辞（g z @ " と m ' `・ADR 0152 の決定 3・[ ]）。ほかは
