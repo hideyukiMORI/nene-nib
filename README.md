@@ -13,8 +13,10 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > clickable task-list checkboxes; a side file explorer; two split panes; opt-in language-server diagnostics; and
 > the Vim NORMAL / INSERT / VISUAL core (motions, operators, text objects, search, marks, the jump list, `.`
 > repeat, macros, registers, blockwise VISUAL and `map`). Tabs in the title bar come back on the next start,
-> Ctrl+P lists open tabs, bookmarks, recently closed files and files in the current folder, and F1 lists every
-> operation. It starts in about 45 ms on the owner's machine, autosaves every 30 seconds and offers a grid display
+> Ctrl+P lists open tabs, bookmarks, recently closed files and files in the current folder, and F1 lists the
+> editor's commands (files, tabs, view, encodings, find, print and more; Vim keys and copy / paste are not in that
+> list). Its first frame appears about 40 ms after launch on the owner's machine (median 41.9 ms,
+> [speed adoption record](docs/quality/speed-adoption-2026-10-18.md)), it autosaves every 30 seconds and offers a grid display
 > for giant lines. New in beta.13: the screen text in Japanese, English or Simplified Chinese
 > (`:set language=`), an app icon, Vim `:s` with the multis, `\|` and groups in patterns, `gn` `gN` and
 > INSERT `Ctrl-o`, and a last resort that backs up unsaved edits before an uncaught exception ends the process.
@@ -117,7 +119,8 @@ records in `docs/quality/`.
   Not yet: uppercase marks `'A`-`'Z` and `:marks`, `:g` `:v` `:sort` (FR-027), read-only registers
   `". ": "/ "%`, NORMAL `s S R` and VISUAL `S`, autoindent, dragging into VISUAL with the mouse in Vim mode, easymotion (FR-023),
   commentary, surround and INSERT completion (FR-024).
-- **FR-004 one toggle** — the status bar switches "通常 | Vim", and so does `Ctrl+Shift+Space` in either mode (D61). Done.
+- **FR-004 one toggle** — the status bar switches "通常 | Vim" ("Basic | Vim" in English and "标准 | Vim" in
+  Simplified Chinese, decision D89), and so does `Ctrl+Shift+Space` in either mode (D61). Done.
 - **FR-005 tabs in the title bar** — several tabs in the band: click to switch, × and middle click to close, `+` to
   add, a list behind `∨` when they overflow. Ctrl+T, Ctrl+Tab (most recently used order), Ctrl+F4; Vim `gt` `gT`
   and `:tabnext` `:tabprevious` `:tabnew` `:tabclose` `:tabs`. Done; reordering by drag is planned.
@@ -145,7 +148,7 @@ records in `docs/quality/`.
   [ADR 0155](docs/adr/0155-markdown-preview-sits-in-the-other-pane-with-ticketed-port-and-tick.md)).
   Local images (PNG, JPEG, the first frame of a GIF, BMP; D79) are drawn in the text flow,
   shrunk to the pane width but never enlarged; web images and images that cannot be read stay as
-  `[画像: alt]`. A retained paragraph is laid out once and redrawn without changing its formatting, so scrolling
+  `[画像: alt]` (`[Image: alt]` in English, `[图片：alt]` in Simplified Chinese). A retained paragraph is laid out once and redrawn without changing its formatting, so scrolling
   with the preview open does not stall; the first display of a very long paragraph still takes a moment.
 - **FR-008 encodings and line endings** — UTF-8, UTF-8 BOM, Shift_JIS and UTF-16 LE / BE with BOM
   ([ADR 0149](docs/adr/0149-utf16-with-bom-is-read-and-written-back.md)); UTF-32 is refused. CRLF / LF are kept as
@@ -271,7 +274,10 @@ records in `docs/quality/`.
 - **FR-033 Windows right-click registration** — the F1 operation "Add to Windows Right-Click Menu"
   (「Windows の右クリックに登録する」) adds NeNe Nib to the File Explorer right-click menu and "Open with" under
   `HKCU` without administrator rights; "Remove from Windows Right-Click Menu" (「登録を外す」) removes it. The
-  names are written in the display language of the moment you register. Nothing is written at startup. The Windows 11 top-level menu waits for a signed, packaged release
+  names are written in the display language of the moment you register. Nothing is written at startup. This is
+  how the ZIP version works; in the Microsoft Store (MSIX) version, Windows is expected to keep the write in the
+  package's own registry, so the entry would probably not appear in File Explorer — not yet checked on a real
+  machine (`docs/store/submission.md`, step 5). The Windows 11 top-level menu waits for a signed, packaged release
   ([ADR 0178](docs/adr/0178-shell-registration-is-one-port-written-only-by-an-explicit-operation-under-hkcu.md)).
 - **FR-034 Markdown task lists** — the preview draws `- [ ]` / `- [x]` checkboxes; clicking one writes the change
   into the text as one undo step, in the side pane and in the full view.
