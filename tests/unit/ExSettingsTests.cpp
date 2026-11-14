@@ -4,6 +4,8 @@
 #include "BuiltinTheme.hpp"
 #include "BuiltinThemes.hpp"
 #include "CancelCommand.hpp"
+#include "CaretMotion.hpp"
+#include "CommandChoiceKind.hpp"
 #include "CommandEdit.hpp"
 #include "CommandLayout.hpp"
 #include "CommandLine.hpp"
@@ -38,19 +40,23 @@
 #include "LayoutRect.hpp"
 #include "LineWrapping.hpp"
 #include "Minimap.hpp"
+#include "MoveCaret.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenCommandPalette.hpp"
+#include "OpenDocument.hpp"
 #include "OpenTabList.hpp"
 #include "PasteCommand.hpp"
 #include "PlaceCaret.hpp"
 #include "RefreshAppearance.hpp"
 #include "Scopes.hpp"
 #include "ScriptedAppearance.hpp"
+#include "ScriptedFiles.hpp"
 #include "ScriptedSettings.hpp"
 #include "SelectAll.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
+#include "SelectionAnchoring.hpp"
 #include "SelectionPresence.hpp"
 #include "SettingsFailure.hpp"
 #include "StatusBarLayout.hpp"
@@ -71,6 +77,7 @@
 #include <array>
 #include <cstddef>
 #include <expected>
+#include <initializer_list>
 #include <limits>
 #include <optional>
 #include <string>
@@ -2016,6 +2023,187 @@ void verify_ex_set_form_table()
     }
 }
 
+// 確定の後に比べるもの: 1 行の知らせ・ステータスバーの項目・表示形式（設定は same_settings）。
+[[nodiscard]] std::string set_outcome(const app::EditorFrame &frame)
+{
+    std::string out = frame.command_message.has_value()
+                          ? std::string(frame.command_message.value().text())
+                          : std::string("-");
+    for (const auto &item : frame.status_items)
+    {
+        out += "|" + std::string(item.text());
+    }
+    out += frame.display == core::DisplayForm::grid ? "|grid" : "|text";
+    return out;
+}
+
+// 面の `:` から打った `:set` の形の確定は、Ex の入力行と同じに効く（#1527）。表は #1561 の
+// Vim 9.1 の実測の形のうち Nib が受ける全部。確定は同じ evaluate_command → persist_settings の 1
+// 本。
+void verify_palette_set_forms()
+{
+    for (const auto &[text, flows] : vim_set_forms)
+    {
+        if (!nib_accepts_set(text))
+        {
+            continue;
+        }
+        Editing by_line;
+        open_vim_document(by_line, std::string(four_lines));
+        static_cast<void>(by_line.controller().apply_frame(VimKeyPress{VimCharacter{U':'}}));
+        static_cast<void>(by_line.controller().apply_frame(app::CommandText{std::string(text)}));
+        const auto line = by_line.controller().apply_frame(app::SubmitCommand{});
+        Editing by_palette;
+        open_vim_document(by_palette, std::string(four_lines));
+        static_cast<void>(by_palette.controller().apply_frame(app::OpenCommandPalette{}));
+        static_cast<void>(
+            by_palette.controller().apply_frame(app::CommandText{":" + std::string(text)}));
+        const auto palette = by_palette.controller().apply_frame(app::SubmitCommand{});
+        expect(!palette.command_palette.has_value() &&
+                   core::same_settings(line.settings, palette.settings) &&
+                   set_outcome(line) == set_outcome(palette),
+               (std::string(text) + ": the palette sets it as the Ex line does (#1527)").c_str());
+    }
+}
+
+// 面の `:` の最初の候補が command で、その動きが kind か（候補が無ければ偽）。
+[[nodiscard]] bool first_choice_is(std::string_view query, std::string_view command,
+                                   core::CommandChoiceKind kind)
+{
+    const auto choices = choices_for(query);
+    return !choices.empty() && choices.front().command == command && choices.front().kind == kind;
+}
+
+// 値の無い候補（`set scrolloff=`）を選ぶと、`set fontsize=` と同じに入力欄をその文字に置き換えて
+// 面を開いたままにし、設定を書かない。続けて値を打って確定すると効く（#1527）。
+void verify_palette_set_value_staged()
+{
+    Editing editor;
+    open_vim_document(editor, std::string(four_lines));
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{":set scrolloff="}));
+    const auto staged = controller.apply_frame(app::SubmitCommand{});
+    expect(staged.command_palette.has_value() && staged.command_line.has_value() &&
+               staged.command_line.value().text == ":set scrolloff=" &&
+               editor.settings().writes() == 0,
+           "the value-less scrolloff stages the input and keeps the palette open (#1527)");
+    static_cast<void>(controller.apply_frame(app::CommandText{"2"}));
+    const auto set = controller.apply_frame(app::SubmitCommand{});
+    expect(!set.command_palette.has_value() && set.settings.scrolloff == 2 &&
+               editor.settings().writes() == 1,
+           "typing the value after the staged input sets it (#1527)");
+    for (const auto *staged_command : {"set ft=", "set filetype=", "set fontsize=", "set guifont="})
+    {
+        expect(first_choice_is(staged_command, staged_command, core::CommandChoiceKind::fill),
+               (std::string(staged_command) + " stages the input (#1527)").c_str());
+    }
+    for (const std::string_view empty_value : {"set clipboard=", "set root="})
+    {
+        const auto choices = choices_for(empty_value);
+        const auto found = std::ranges::find(choices, empty_value, &core::CommandChoice::command);
+        expect(found != choices.end() && found->kind == core::CommandChoiceKind::execute,
+               (std::string(empty_value) + " runs, as its empty value means something").c_str());
+    }
+    expect(first_choice_is("set display=g", "set display=grid", core::CommandChoiceKind::execute),
+           "a refused typed line keeps the candidate it matches first (#1527)");
+    const auto refused = choices_for("set so=abc");
+    expect(std::ranges::find(refused, "set so=abc", &core::CommandChoice::command) == refused.end(),
+           "a refused typed line is not offered, as before (#1527)");
+}
+
+// 面の `:` で打った行のうち、設定の族でない引数つきの行（ファイルを書く・閉じる・本文を変える・
+// map・タブ・開く）は、打った行を候補にしない（V-1663 の M1・設計席の決め）。
+constexpr std::array<std::string_view, 12> palette_unoffered_lines{"w! C:\\work\\other.txt",
+                                                                   "saveas! C:\\work\\other.txt",
+                                                                   "wq C:\\work\\new.txt",
+                                                                   "x C:\\work\\new.txt",
+                                                                   "%s/a b/x/g",
+                                                                   "map x y",
+                                                                   "nmap x dd",
+                                                                   "tabnew C:\\work\\new.txt",
+                                                                   "e C:\\work\\other.txt",
+                                                                   "hardcopy x",
+                                                                   "q!",
+                                                                   "tabclose"};
+
+// 面の候補の列に、表に無い（打った）行が入っていないか。
+[[nodiscard]] bool only_table_choices(std::string_view query)
+{
+    const auto table = core::ex_command_candidates();
+    return std::ranges::all_of(choices_for(query), [&table](const core::CommandChoice &choice)
+                               { return std::ranges::find(table, choice.command) != table.end(); });
+}
+
+// 面から打っても main と同じ: 引数つきの行は候補が 0 で、Enter は何もしない（ファイル・本文・タブ・
+// map と設定を書かない・閉じない）。`q!` `tabclose` は表の候補のままで、打った行は足さない。
+void verify_palette_runs_only_settings()
+{
+    for (const auto line : palette_unoffered_lines)
+    {
+        expect(only_table_choices(line),
+               (std::string(line) + ": the palette does not offer the typed line (#1527)").c_str());
+        if (line.find(' ') == std::string_view::npos)
+        {
+            continue;
+        }
+        expect(choices_for(line).empty(),
+               (std::string(line) + ": no candidate matches it, as on main (#1527)").c_str());
+        Editing editor;
+        open_vim_document(editor, "a b\ntwo");
+        auto &controller = editor.controller();
+        const auto before = controller.frame();
+        static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+        static_cast<void>(controller.apply_frame(app::CommandText{":" + std::string(line)}));
+        const auto after = controller.apply_frame(app::SubmitCommand{});
+        expect(editor.files().written().empty() && editor.files().written_path().empty() &&
+                   editor.settings().writes() == 0 && after.settings.maps.empty() &&
+                   after.lines.size() == before.lines.size() &&
+                   after.lines.front().text == before.lines.front().text &&
+                   after.tabs.size() == before.tabs.size() && !after.closing &&
+                   !after.close_request.has_value() && !after.operation_request.has_value(),
+               (std::string(line) + ": Enter in the palette changes nothing, as on main (#1527)")
+                   .c_str());
+    }
+}
+
+// 通常モードの余白（ADR 0019 の #1432 の追補・V-1519 の R1 の通常モードの項）。通常モードは Vim の
+// 印（follow_window_setting）を立てないが、画面行の追従（screen_followed_first）が余白を読むので、
+// 面から余白を変えると確定の中の clamp_scroll と
+// follow_caret（follow_after_settings）が新しい余白で その場で 1
+// 回追い、次の移動も同じ余白で追う（実測・幅のある窓）。
+void verify_palette_margin_in_ordinary_mode()
+{
+    Editing editor;
+    std::string many;
+    for (int number = 1; number <= 40; ++number)
+    {
+        many += "line " + std::to_string(number) + "\n";
+    }
+    editor.files().hold(Bytes{many});
+    auto &controller = editor.controller();
+    static_cast<void>(
+        controller.apply_frame(VisibleLines{10, core::TextViewGeometry{400, 20, 96}}));
+    static_cast<void>(controller.apply_frame(app::OpenDocument{sample_path()}));
+    for (int step = 1; step < 10; ++step)
+    {
+        static_cast<void>(controller.apply_frame(
+            app::MoveCaret{core::CaretMotion::next_line, core::SelectionAnchoring::collapse}));
+    }
+    const auto bottom = controller.frame();
+    expect(bottom.first_visible.value == 1 && bottom.caret.position.line.value == 10,
+           "the caret is on the last visible row in ordinary mode");
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{":set so=2"}));
+    const auto set = controller.apply_frame(app::SubmitCommand{});
+    expect(set.settings.scrolloff == 2 && set.first_visible.value == 3,
+           "a margin set from the palette re-follows the ordinary-mode caret at once (#1527)");
+    const auto moved = controller.apply_frame(
+        app::MoveCaret{core::CaretMotion::next_line, core::SelectionAnchoring::collapse});
+    expect(moved.first_visible.value == 4 && moved.caret.position.line.value == 11,
+           "the next move in ordinary mode keeps the new margin (#1527)");
+}
+
 // 複数の引数は左から順に置き、次の引数は置いた後の値を読む。誤りの引数で止まって前の分は残す
 // （Vim の do_set・実測）。
 void verify_ex_set_arguments()
@@ -2188,6 +2376,10 @@ void verify_ex_set_arguments_controller()
 void verify_ex_settings()
 {
     verify_ex_set_form_table();
+    verify_palette_set_forms();
+    verify_palette_set_value_staged();
+    verify_palette_runs_only_settings();
+    verify_palette_margin_in_ordinary_mode();
     verify_ex_set_arguments();
     verify_ex_set_short_names();
     verify_ex_set_fixed_options();
