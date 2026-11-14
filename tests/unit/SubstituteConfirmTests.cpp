@@ -18,6 +18,7 @@
 #include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
+#include "VimMode.hpp"
 #include "VimTestSupport.hpp"
 #include "WorkCompleted.hpp"
 
@@ -327,6 +328,82 @@ void verify_replays()
                message_of(frame) == "Not supported: the c flag of :s in a replay",
            "a replay does not open the question and stops (stage 2a limit)");
 }
+
+// オペレータ待ちの `:s///c`（`d:` `y:` `c:`）は段 2a では閉じた失敗で断る（ADR 0168 の追補 段 2a・
+// レビュー V-1666 の M1）。問いを開いた後でオペレータを閉じると、消した後の本文に消す前の位置の
+// まま答えを置いて当たりでない文字を書き換えた。本文・無名レジスタ・`''` は変えず、オペレータは
+// 打ち切り、:normal! の口は後ろの鍵（答えだった鍵）を流さない。前置きの `Gggyl` は `''` を 2 行目に
+// 置き、無名レジスタに 1 文字を入れる（断った後の `''` と `P` で確かめる）。
+void verify_operator_refused()
+{
+    // 本文・鍵・断った後の `''` と `P` の本文。
+    constexpr std::array<std::array<std::string_view, 3>, 5> cases{{
+        {"b a a\nc", "d:s/a/X/gc<CR>yy", "b a a\nbc"},
+        {"x b a a\nc a", "wd:%s/a/X/gc<CR>nyyy", "x b a a\nxc a"},
+        {"b a a\nc", "y:s/a/X/gc<CR>nyP", "b a a\nbc"},
+        {"b a a\nc", "c:s/a/X/c<CR>yZZ<Esc>", "b a a\nbc"},
+        {"b a a\nc", "2\"ad:s/a/X/gc<CR>yy", "b a a\nbc"},
+    }};
+    for (const auto &[body, keys, pasted] : cases)
+    {
+        Editing editing;
+        opened(editing, body, std::string("Gggyl") + std::string(keys));
+        auto &controller = editing.controller();
+        const auto frame = controller.frame();
+        const std::string label = "operator " + std::string(keys);
+        expect(
+            whole_vim_body(controller) == body,
+            (label + ": the body is untouched (the c flag is refused under an operator)").c_str());
+        expect(question_of(frame).empty() &&
+                   message_of(frame) == "Not supported: the c flag of :s with an operator",
+               (label + ": no question opens and one line tells why").c_str());
+        expect(!controller.vim_state().pending.has_value() &&
+                   controller.vim_state().mode == core::VimMode::normal,
+               (label + ": the operator is dropped and Vim rests in NORMAL").c_str());
+        vim_normal(controller, "''");
+        expect(caret_at(controller.frame(), 2, 1), (label + ": '' is not moved").c_str());
+        vim_normal(controller, "P");
+        expect(whole_vim_body(controller) == pasted,
+               (label + ": the unnamed register is not written").c_str());
+    }
+
+    // 問いの入口はほかにも `g&`（前の `c` を引き継ぐ）がある。オペレータの後ろでは問いを開かない。
+    Editing global;
+    opened(global, "a\na", ":s/a/X/c<CR>qdg&");
+    expect(question_of(global.controller().frame()).empty() &&
+               whole_vim_body(global.controller()) == "a\na",
+           "g& under an operator does not open the question");
+}
+
+// 問いの終わりの畳みは改訂番号を戻さない（ADR 0137 の決定 2・レビュー V-1666 の M2）。問いは意図を
+// またぐので、途中の AutosaveTick が帳面に書いた番号を畳んだ履歴が使い回すと、畳んだ後の本文が
+// 「変わっていない」と判断されて退避されない。
+void verify_fold_keeps_revision()
+{
+    Editing editing;
+    opened(editing, "a\na\na", ":%s/a/X/gc<CR>");
+    auto &controller = editing.controller();
+    static_cast<void>(answered(controller, "y"));
+    static_cast<void>(controller.apply_frame(app::AutosaveTick{}));
+    const auto &stored = editing.autosave().stored();
+    const std::size_t first = stored.size();
+    expect(first >= 1 && stored.back().bytes.size() == 5,
+           "a tick inside the question stores the body so far");
+    static_cast<void>(answered(controller, "yq"));
+    static_cast<void>(controller.apply_frame(app::AutosaveTick{}));
+    std::string last;
+    for (const std::byte byte : editing.autosave().stored().back().bytes)
+    {
+        last += static_cast<char>(byte);
+    }
+    expect(editing.autosave().stored().size() == first + 1 && last == "X\nX\na",
+           "after the fold the next tick stores the folded body (the revision went up)");
+    static_cast<void>(controller.apply_frame(app::AutosaveTick{}));
+    expect(editing.autosave().stored().size() == first + 1,
+           "a tick after that without a change stores nothing");
+    static_cast<void>(undone(controller));
+    expect(whole_vim_body(controller) == "a\na\na", "one u still undoes the whole question");
+}
 } // namespace
 
 void verify_substitute_confirm_scope()
@@ -338,5 +415,7 @@ void verify_substitute_confirm_scope()
     verify_keys_and_signals();
     verify_flags_and_repeats();
     verify_replays();
+    verify_operator_refused();
+    verify_fold_keeps_revision();
 }
 } // namespace nenenib::tests

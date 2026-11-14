@@ -1999,10 +1999,13 @@ void EditorController::merge_question_edits(const SubstituteQuestion &question,
     {
         return;
     }
+    // 問いは意図をまたぐので、途中の改訂番号は自動退避の帳面と LSP の版に見えている。畳んだ
+    // 履歴は今の値より大きくする（ADR 0137 の決定 2・ADR 0168 の段 2a の追補 14）。
     const auto edit = covering_edit(question.text.text(), state_.text().text(), restore);
-    state_ = state_.with_history(
+    const core::EditHistory folded =
         edit.has_value() ? question.history.pushed(edit.value(), core::EditBoundary::separate)
-                         : question.history.sealed());
+                         : question.history.sealed();
+    state_ = state_.with_history(folded.revised_beyond(state_.history().revision()));
 }
 
 // Vim の u は戻した単位が覚えた戻り先（最初の編集の瞬間のキャレット）へ置き、行末の 1 つ先などの

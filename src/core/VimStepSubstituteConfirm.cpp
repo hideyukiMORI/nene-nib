@@ -232,6 +232,15 @@ VimStep confirm_started(VimState next, const VimEditorView &view, Matches matche
         step.notice = VimSearchNotice{VimSearchNoticeKind::confirm_in_replay, {}, std::nullopt};
         return failed(std::move(step), VimRepeatFailure::refused);
     }
+    // オペレータ待ち（`d:s///c` `y:` `c:`・オペレータの後ろの `g&`）でも問わない（段 2a の追補
+    // 13）。問いを開いた後でオペレータを閉じると、消した後の本文に消す前の位置で答えを置くため。
+    // 本文・レジスタ・マークは変えず、オペレータは controller が失敗の道で捨てる。
+    if (next.pending.has_value())
+    {
+        VimStep step{std::move(next), VimNoEffect{}};
+        step.notice = VimSearchNotice{VimSearchNoticeKind::confirm_with_operator, {}, std::nullopt};
+        return failed(std::move(step), VimRepeatFailure::refused);
+    }
     seed.breaks = matches.front().utf8.find('\n') != std::string::npos;
     const Offset caret = matches.front().range.begin;
     seed.matches = std::make_shared<const Matches>(std::move(matches));

@@ -853,11 +853,11 @@ class EditorController final
     void remember(const core::SearchLine &line);
     void remember(const core::CommandPalette &palette);
     void remember(const SubstituteQuestion &question);
-    // `:s///c` の問い（ADR 0168 の決定
-    // 6・EditorControllerSubstitute.cpp）。開いている問い（無ければ
-    // 空）・文字を答えとして読む（問いが開いていれば真）・答えを engine の 1
-    // 歩で写す・答え以外の意図の 前に `q` と同じに終える（入口の 1 か所）・終えるときに置いた分を 1
-    // つの undo の単位に畳む。
+    // `:s///c` の問い（ADR 0168 の決定 6・本体は EditorControllerCommand.cpp と畳みの
+    // EditorControllerVim.cpp）。開いている問い（無ければ空）・文字を答えとして読む（問いが開いて
+    // いれば真）・答えを engine の 1 歩で写す・答え以外の意図の前に `q` と同じに終える（入口の
+    // 1 か所）・終えるときに置いた分を 1 つの undo の単位に畳む（改訂番号は問いの間のどの値より
+    // 大きい・ADR 0168 の追補 段 2a）。
     [[nodiscard]] const SubstituteQuestion *substitute_question() const noexcept;
     [[nodiscard]] bool answered_question(std::string_view utf8);
     void answer_question(core::SubstituteReply reply);
