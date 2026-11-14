@@ -396,6 +396,9 @@ void verify_ex_random_scope();
 void verify_input_line_limit_scope();
 void verify_input_line_property_scope();
 
+// CommandLineEditTests.cpp（#1550・#1643・Vim の入力行の c_CTRL-U / c_CTRL-W と `/` の Tab）
+void verify_command_line_edit_scope();
+
 // BellTests.cpp
 void verify_bell_contracts();
 

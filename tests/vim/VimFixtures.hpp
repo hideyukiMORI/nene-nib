@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 128e0a7ad8790f402e7551c51eefdf9c8f41448f5286f69e04c716ddc72c5a8a / 5951 fixtures
+// fixtures.json: sha256 9c62957584dbb55df58a02db04c53d47db5d8c86d5264d4f4d9767349c9ccbe7 / 6012 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 5951> vim_fixtures{{
+constexpr std::array<VimFixture, 6012> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -5963,6 +5963,67 @@ constexpr std::array<VimFixture, 5951> vim_fixtures{{
     {"fixture-settings-nowrapscan-n-stops", "foo x foo", "/foo<CR>nx", "foo x foo", 1, 7, "", "", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set nows"},
     {"fixture-settings-nowrapscan-star-stops", "foo\nbar foo", "G$*x", "foo\nbar foo", 2, 5, "", "", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set nowrapscan"},
     {"fixture-settings-two-lines-in-order", "x FOO foo FOO", "/foo<CR>nnx", "x FOO foo OO", 1, 11, "F", "v", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set ignorecase\nset nowrapscan"},
+    {"cmdline-edit-ctrl-u-clears-the-visual-range", "a1 a\na2 a\na3 a\na4 a\na5 a", "vj:<C-u>s/a/X/<CR>", "X1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-u-visual-range-then-set", "a1 a\na2 a\na3 a\na4 a\na5 a", "vj:<C-u>set so=2<CR>j", "a1 a\na2 a\na3 a\na4 a\na5 a", 2, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-u-keeps-the-text-after-the-caret", "a1 a\na2 a\na3 a\na4 a\na5 a", ":abcs/a/X/<Home><Right><Right><Right><C-u><CR>", "X1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-u-at-the-line-start-does-nothing", "a1 a\na2 a\na3 a\na4 a\na5 a", ":3<Home><C-u><CR>", "a1 a\na2 a\na3 a\na4 a\na5 a", 3, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-u-twice", "a1 a\na2 a\na3 a\na4 a\na5 a", ":abc<C-u><C-u>3<CR>", "a1 a\na2 a\na3 a\na4 a\na5 a", 3, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-u-full-width", "a1 a\na2 a\na3 a\na4 a\na5 a", ":あいう<C-u>2<CR>", "a1 a\na2 a\na3 a\na4 a\na5 a", 2, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-u-full-width-before-the-caret", "a1 a\na2 a\na3 a\na4 a\na5 a", ":あい3<Left><C-u><CR>", "a1 a\na2 a\na3 a\na4 a\na5 a", 3, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-u-empty-line-stays-open", "a1 a\na2 a\na3 a\na4 a\na5 a", ":<C-u>3<CR>", "a1 a\na2 a\na3 a\na4 a\na5 a", 3, 1, "", "", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"cmdline-edit-ctrl-u-then-backspace-closes", "a1 a\na2 a\na3 a\na4 a\na5 a", ":abc<C-u><BS>x", "1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "a", "v", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"cmdline-edit-ctrl-u-visual-range-then-backspace-closes", "a1 a\na2 a\na3 a\na4 a\na5 a", "vj:<C-u><BS>x", "1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "a", "v", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"cmdline-edit-ctrl-u-search", "ab ac ad", "/b<C-u>c<CR>x", "ab a ad", 1, 5, "c", "v", std::nullopt},
+    {"cmdline-edit-ctrl-u-search-backward", "ab ac ad", "$?d<C-u>c<CR>x", "ab a ad", 1, 5, "c", "v", std::nullopt},
+    {"cmdline-edit-ctrl-u-search-empty-uses-the-last-pattern", "ab ac ab", "/b<CR>0/zz<C-u><CR>x", "a ac ab", 1, 2, "b", "v", std::nullopt},
+    {"cmdline-edit-ctrl-u-search-then-backspace-closes", "ab ac ad", "/b<C-u><BS>x", "b ac ad", 1, 1, "a", "v", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"cmdline-edit-ctrl-u-search-after-a-miss", "ab ac ad", "/zzz<C-u>ad<CR>x", "ab ac d", 1, 7, "a", "v", std::nullopt},
+    {"cmdline-edit-ctrl-u-d-search", "foo bar baz", "d/x<C-u>baz<CR>", "baz", 1, 1, "foo bar ", "v", std::nullopt},
+    {"cmdline-edit-ctrl-u-d-search-dot", "a b c b c b", "d/zz<C-u>b<CR>.", "b c b", 1, 1, "b c ", "v", std::nullopt},
+    {"cmdline-edit-ctrl-w-word", "a1 a\na2 a\na3 a\na4 a\na5 a", ":s/a/XYZ abc<C-w>Q/<CR>", "XYZ Q1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-trailing-blanks", "a1 a\na2 a\na3 a\na4 a\na5 a", ":s/a/foo  <C-w>Q/<CR>", "Q1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-symbol-run", "a1 a\na2 a\na3 a\na4 a\na5 a", ":s/a/b.,;<C-w>X/<CR>", "bX1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-word-after-a-symbol", "a1 a\na2 a\na3 a\na4 a\na5 a", ":s/a/x.y<C-w>Z/<CR>", "x.Z1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-underscore-and-digits", "a1 a\na2 a\na3 a\na4 a\na5 a", ":s/a/q x_9<C-w>Z/<CR>", "q Z1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-full-width", "a1 a\na2 a\na3 a\na4 a\na5 a", ":s/a/q あいう<C-w>Z/<CR>", "q Z1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-full-width-after-ascii", "a1 a\na2 a\na3 a\na4 a\na5 a", ":s/a/abcあい<C-w>Z/<CR>", "abcZ1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-ascii-after-full-width", "a1 a\na2 a\na3 a\na4 a\na5 a", ":s/a/あいabc<C-w>Z/<CR>", "あいZ1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-kana-after-kanji", "a1 a\na2 a\na3 a\na4 a\na5 a", ":s/a/漢字かな<C-w>Z/<CR>", "漢字Z1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-full-width-period", "a1 a\na2 a\na3 a\na4 a\na5 a", ":s/a/あ。<C-w>Z/<CR>", "あZ1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-after-a-full-width-comma", "a1 a\na2 a\na3 a\na4 a\na5 a", ":s/a/あ、い<C-w>Z/<CR>", "あ、Z1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-combining", "a1 a\na2 a\na3 a\na4 a\na5 a", ":s/a/q éé<C-w>Z/<CR>", "q Z1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-combining-after-ascii", "a1 a\na2 a\na3 a\na4 a\na5 a", ":s/a/qé<C-w>Z/<CR>", "Z1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-stops-at-an-ideographic-space", "a1 a\na2 a\na3 a\na4 a\na5 a", ":s/a/x　y<C-w>Z/<CR>", "x　Z1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-blanks-only", "a1 a\na2 a\na3 a\na4 a\na5 a", ":   <C-w>3<CR>", "a1 a\na2 a\na3 a\na4 a\na5 a", 3, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-empty-line-stays-open", "a1 a\na2 a\na3 a\na4 a\na5 a", ":<C-w>3<CR>", "a1 a\na2 a\na3 a\na4 a\na5 a", 3, 1, "", "", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"cmdline-edit-ctrl-w-at-the-line-start-then-backspace-closes", "a1 a\na2 a\na3 a\na4 a\na5 a", ":<C-w><BS>x", "1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "a", "v", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"cmdline-edit-ctrl-w-then-backspace-closes", "a1 a\na2 a\na3 a\na4 a\na5 a", ":ab<C-w><BS>x", "1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "a", "v", VimViewportFixture{5, 1, 1, 1, 1, 2}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"cmdline-edit-ctrl-w-clears-the-visual-range", "a1 a\na2 a\na3 a\na4 a\na5 a", "vj:<C-w>s/a/X/<CR>", "X1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-twice-on-the-visual-range", "a1 a\na2 a\na3 a\na4 a\na5 a", "vj:<C-w><C-w>s/a/X/<CR>", "X1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-before-the-caret", "a1 a\na2 a\na3 a\na4 a\na5 a", ":xx s/a/Q/<Home><Right><Right><C-w><Del><CR>", "Q1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-twice", "a1 a\na2 a\na3 a\na4 a\na5 a", ":s/a/one two three<C-w><C-w>Z/<CR>", "one Z1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
+    {"cmdline-edit-ctrl-w-search", "foo bar baz", "/foo bar<C-w>ba<CR>x", "oo bar baz", 1, 1, "f", "v", std::nullopt},
+    {"cmdline-edit-ctrl-w-search-slash", "a/b a/c ac", "/a/b<C-w><C-w>c<CR>x", "a/b a/c c", 1, 9, "a", "v", std::nullopt},
+    {"cmdline-edit-ctrl-w-c-search-dot", "foo bar foo bar end", "c/xx yy<C-w><C-w>bar<CR>Z<Esc>w.", "Zbar Zbar end", 1, 6, "foo ", "v", std::nullopt},
+    {"cmdline-edit-history-ctrl-u-then-up-has-no-prefix", "a1 a\na2 a\na3 a", ":s/a/X/<CR>j:s/a/Y/<CR>j:s/a/X<C-u><Up><CR>", "X1 a\nY2 a\na3 a", 3, 1, "", "", std::nullopt},
+    {"cmdline-edit-history-up-then-ctrl-w", "a1 a\na2 a\na3 a", ":s/a/X/<CR>j:<Up><C-w>Z/<CR>", "X1 a\na2 a\na3 a", 2, 1, "", "", std::nullopt},
+    {"cmdline-edit-history-up-then-ctrl-u", "a1 a\na2 a\na3 a", ":s/a/X/<CR>j:<Up><C-u>s/a/W/<CR>", "X1 a\na2 a\na3 a", 2, 1, "", "", std::nullopt},
+    {"cmdline-edit-history-ctrl-w-then-up", "a1 a\na2 a\na3 a", ":s/a/X/<CR>j:s/a/Y/<CR>j:s/a/X/ q<C-w><Up><CR>", "X1 a\nY2 a\na3 a", 3, 1, "", "", std::nullopt},
+    {"cmdline-edit-history-up-ctrl-u-down", "a1 a\na2 a\na3 a", ":s/a/X/<CR>j:<Up><C-u><Down>3<CR>", "X1 a\na2 a\na3 a", 2, 1, "", "", std::nullopt},
+    {"cmdline-edit-history-search-ctrl-u-then-up", "ab ac ab ac", "/ac<CR>0/ab<C-u><Up><CR>x", "ab c ab ac", 1, 4, "a", "v", std::nullopt},
+    {"cmdline-edit-macro-ctrl-u-visual-range", "a1 a\na2 a\na3 a\na4 a\na5 a", "j@a", "a1 a\n2 a\na3 a\na4 a\na5 a", 2, 1, "X", "v", std::nullopt, VimMacroFixture{'a', "vj:<C-u>s/a/X/<CR>x"}},
+    {"cmdline-edit-macro-ctrl-w", "a1 a\na2 a\na3 a\na4 a\na5 a", "@a", "Y Z1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "X", "v", std::nullopt, VimMacroFixture{'a', ":s/a/XY q<C-w>Z/<CR>x"}},
+    {"cmdline-edit-macro-ctrl-w-visual-range", "a1 a\na2 a\na3 a\na4 a\na5 a", "j@a", "a1 a\n2 a\na3 a\na4 a\na5 a", 2, 1, "X", "v", std::nullopt, VimMacroFixture{'a', "vj:<C-w>s/a/X/<CR>x"}},
+    {"cmdline-edit-macro-ctrl-u-search", "ab ac ad ac", "@a", "ab c ad ac", 1, 4, "a", "v", std::nullopt, VimMacroFixture{'a', "/ab<C-u>ac<CR>x"}},
+    {"cmdline-edit-tab-search", "x\tb\tc", "/<Tab>c<CR>x", "x\tbc", 1, 4, "\t", "v", std::nullopt},
+    {"cmdline-edit-tab-d-search", "ab\tcd\tef", "d/<Tab>e<CR>", "\tef", 1, 1, "ab\tcd", "v", std::nullopt},
+    {"cmdline-edit-tab-search-backward", "x\tb\tc", "$?<Tab>b<CR>x", "xb\tc", 1, 2, "\t", "v", std::nullopt},
+    {"cmdline-edit-tab-search-ctrl-w-takes-the-tab", "x\tb\tc", "/c<Tab><C-w>b<CR>x", "x\t\tc", 1, 3, "b", "v", std::nullopt},
+    {"cmdline-edit-tab-search-ctrl-w-word-after-tab", "x\tb\tc", "/b<Tab><C-w>c<CR>x", "x\tb\t", 1, 4, "c", "v", std::nullopt},
+    {"cmdline-edit-tab-search-ctrl-u", "x\tb\tc", "/<Tab>b<C-u>c<CR>x", "x\tb\t", 1, 4, "c", "v", std::nullopt},
+    {"cmdline-edit-tab-search-history", "x\tb\tc\tb", "/<Tab>b<CR>0/<Up><CR>x", "xb\tc\tb", 1, 2, "\t", "v", std::nullopt},
+    {"cmdline-edit-tab-search-backspace", "x\tb\tc", "/<Tab><BS>c<CR>x", "x\tb\t", 1, 4, "c", "v", std::nullopt},
+    {"cmdline-edit-macro-tab-search", "x\tb\tc", "@a", "x\tbc", 1, 4, "\t", "v", std::nullopt, VimMacroFixture{'a', "/<Tab>c<CR>x"}},
 }};
 } // namespace nenenib::tests
 // clang-format on

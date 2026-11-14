@@ -369,6 +369,9 @@ class EditorController final
     // 入力行の鍵の `<Up>` `<Down>`。履歴を動けなければ not_moved（Vim の beep_flush が先読みを
     // 捨てる・ex_getln.c・#1528）で、再生と :normal! の残りを打ち切る。
     [[nodiscard]] std::optional<core::VimRepeatFailure> recalled_key(core::CommandEdit direction);
+    // 入力行の種類で読み替える編集（#1550・#1643）。Vim の行でない入力の Ctrl+U / Ctrl+W は捨て、
+    // Vim の `/` `?` の Tab は文字の Tab として入れる。読み替えたら真。
+    [[nodiscard]] bool rerouted_edit(const EditCommand &intent);
     // 1 鍵を engine へ流して効果を写す唯一の経路（ADR 0030 の決定 7）。打った鍵も再生の鍵も
     // ここを通り、鍵が閉じた失敗で終わったら理由を返す（ADR 0046 の決定 3）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> step_vim(const core::VimKey &key);

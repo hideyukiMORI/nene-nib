@@ -296,40 +296,9 @@ constexpr std::size_t erase_window_bytes = 64;
     return erase_lands_on(text, floor, caret) ? floor : line_start;
 }
 
-// Vim の vim_isspace（Tab・改行の類・空白）。語の前の空白を先に消すかを決める。
-[[nodiscard]] bool erased_blank(char32_t code) noexcept
-{
-    constexpr char32_t tab = U'\t';
-    constexpr char32_t carriage_return = U'\r';
-    return code == U' ' || (code >= tab && code <= carriage_return);
-}
-
-// INSERT の `Ctrl-w` の左端（#1040）。手前の空白を消してから、同じ種類の文字（`b` と同じ表
-// vim_character_class）の連なりを消す。Vim と同じく少なくとも 1 文字は消し、floor で止まる。
-[[nodiscard]] std::size_t word_erase_begin(std::string_view content, std::size_t floor)
-{
-    std::size_t index = content.size();
-    std::optional<std::uint32_t> kind;
-    do
-    {
-        const std::size_t previous = vim_character_start(content, Offset{index}).value;
-        const char32_t code = code_point_at(content, Offset{previous});
-        const std::uint32_t current = vim_character_class(code, VimWordClass::word);
-        if (kind.has_value() && (erased_blank(code) || current != kind.value()))
-        {
-            break;
-        }
-        if (!kind.has_value() && !erased_blank(code))
-        {
-            kind = current;
-        }
-        index = previous;
-    } while (index > floor);
-    return index;
-}
-
 // 仮想桁の索引を持つ本文の `Ctrl-w` の左端（#1258）。floor が行頭に戻ると floor から写すのは行の
-// 全体になるので（1 行 16 MiB の行）、キャレットの手前の窓だけを読んで word_erase_begin に渡し、
+// 全体になるので（1 行 16 MiB の行）、キャレットの手前の窓だけを読んで vim_word_erase_begin
+// に渡し、
 // 窓の頭で止まった（語が窓より長い）か止めた所の手前の文字が窓の頭から始まる（窓の頭は文字の頭
 // とは限らない）ときだけ窓を倍にして読み直す。窓が floor に届けば floor から写した答えと同じ。
 // 持たない本文は今のまま floor から写す（ADR 0035 の追補）。
@@ -340,7 +309,7 @@ constexpr std::size_t erase_window_bytes = 64;
     {
         const Offset begin{caret.value - std::min(window, caret.value - floor.value)};
         const std::string content = text.text_range(begin, caret);
-        const std::size_t index = word_erase_begin(content, 0);
+        const std::size_t index = vim_word_erase_begin(content, 0);
         if (begin == floor || (index > 0 && vim_character_start(content, Offset{index}).value > 0))
         {
             return Offset{begin.value + index};
@@ -375,7 +344,7 @@ constexpr std::size_t erase_window_bytes = 64;
     {
         // 消しうるのは floor から先だけなので、行頭からは写さない（1 行 16 MiB の行・#1040）。
         const std::string content = text.text_range(floor, caret);
-        begin = Offset{floor.value + word_erase_begin(content, 0)};
+        begin = Offset{floor.value + vim_word_erase_begin(content, 0)};
     }
     return VimStep{state, VimRemoveRange{OffsetRange{begin, caret}}};
 }

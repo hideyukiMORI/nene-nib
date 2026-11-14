@@ -637,4 +637,36 @@ VimMotionLanding vim_previous_word(const TextBuffer &text, Offset caret, VimWord
     }
     return VimMotionLanding{offset_of(text, point)};
 }
+namespace
+{
+// Vim の vim_isspace（Tab・改行の類・空白）。語の前の空白を先に消すかを決める。
+[[nodiscard]] bool erased_blank(char32_t code) noexcept
+{
+    constexpr char32_t tab = U'\t';
+    constexpr char32_t carriage_return = U'\r';
+    return code == U' ' || (code >= tab && code <= carriage_return);
+}
+} // namespace
+
+std::size_t vim_word_erase_begin(std::string_view content, std::size_t floor)
+{
+    std::size_t index = content.size();
+    std::optional<std::uint32_t> kind;
+    do
+    {
+        const std::size_t previous = vim_character_start(content, Offset{index}).value;
+        const char32_t code = code_point_at(content, Offset{previous});
+        const std::uint32_t current = vim_character_class(code, VimWordClass::word);
+        if (kind.has_value() && (erased_blank(code) || current != kind.value()))
+        {
+            break;
+        }
+        if (!kind.has_value() && !erased_blank(code))
+        {
+            kind = current;
+        }
+        index = previous;
+    } while (index > floor);
+    return index;
+}
 } // namespace nenenib::core
