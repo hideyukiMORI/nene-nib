@@ -11,7 +11,10 @@
 ## 書き方の約束
 
 - 各文は README の「What works today」と突き合わせた。**README に無い機能は書かない。** 予定の機能（補完・設定画面・
-  プロジェクト全体の検索・エディタの中の右クリックのメニュー）は書かない（`:s` は beta.13 から入ったので、この一覧から外した。掲載文には書いていない）。
+  プロジェクト全体の検索・エディタの中の右クリックのメニュー）は書かない。`:s` は beta.13 から入ったので、この一覧から外し、
+  「ご注意」に今ある形（`:s` `:&` `&` `g&`）とまだ無い形（確認の `c` フラグ・`:g`・`:sort`）を書いた（#1655）。
+- F1「Windows の右クリックに登録する」は掲載文に書かない。Store 版（MSIX）では書き込みがパッケージ専用の場所に写って
+  エクスプローラーに出ない見込みで、まだ実機で確かめていない（submission.md の順 5・#1655）。
 - 説明の欄には HTML・コード例・URL を入れない（Microsoft の文書）。サポートとプライバシーの URL は専用の欄に入れる。
 - 製品の機能の各項目には箇条書きの記号を付けない（Store が付ける）。
 - 最上級（「最速」「fastest」）を使わない。速さは測った値と、測った機械を添えて書く（脚注 [^speed]）。
@@ -24,7 +27,7 @@
 
 | 欄 | 上限 | この原稿 |
 | --- | --- | --- |
-| 説明 | 10,000 文字・必須・平文 | 各言語 約 1,000〜2,000 文字 |
+| 説明 | 10,000 文字・必須・平文 | 日本語 約 1,300・英語 約 2,500・中国語 約 1,100 文字（#1655 で数え直した） |
 | 短い説明 | 1,000 文字（表示は最初の 270 文字。270 未満を推奨） | 各言語 270 文字未満 |
 | 製品の機能 | 1 項目 200 文字・20 項目まで | 各言語 14 項目 |
 | 検索語 | 7 個・各 40 文字・全体で 21 単語（Loupe の入力画面の表示） | 各言語 7 個 |
@@ -71,7 +74,7 @@ Ctrl+Shift+M で、編集中の Markdown を隣の欄に整えて表示します
 ・UTF-8・Shift_JIS・UTF-16 と、CRLF・LF を読んだ形のまま保存
 ・日本語入力（IME）に対応
 ・30 秒ごとの自動退避。異常終了の後に 1 回だけ戻すかを聞きます
-・F1 で全部の操作を一覧から探して実行
+・F1 の一覧から、ファイル・タブ・表示・文字コード・検索・印刷などの操作を探して実行（Vim の鍵とコピー・貼り付けは一覧の外）
 ・言語サーバーの診断（既定はオフ。設定に書いたサーバーを起動します）
 
 ■ プライバシー
@@ -81,7 +84,8 @@ Ctrl+Shift+M で、編集中の Markdown を隣の欄に整えて表示します
 ・動作環境: Windows 11（22H2 以降・x64）。Windows 10 には対応していません。
 ・表示は日本語・英語・中国語（簡体字）です。
 ・言語サーバーは診断の表示だけで、補完・ホバー・定義へ移動はまだありません。
-・Vim の置換コマンド（:s）、プロジェクト全体の検索、設定の画面、エディタの中の右クリックのメニューはまだありません。
+・Vim の置換（:s・:&・&・g&）に対応しています。1 件ずつ確かめながら置換する c フラグ、:g、:sort はまだありません。
+・プロジェクト全体の検索、設定の画面、エディタの中の右クリックのメニューはまだありません。
 ・MIT License のオープンソースです。
 ```
 
@@ -160,7 +164,7 @@ Also included
 • UTF-8, Shift_JIS and UTF-16, with CRLF or LF kept as read
 • Japanese input (IME)
 • Autosave every 30 seconds, offered back once after an abnormal exit
-• F1 lists every operation, so you can find and run any of them
+• F1 lists the commands for files, tabs, view, encodings, find, print and more, so you can find and run them (Vim keys and copy/paste are not in the list)
 • Language-server diagnostics (off by default; starts only the server you configure)
 
 Privacy
@@ -170,7 +174,8 @@ Good to know
 • Requires Windows 11 (version 22H2 or later, x64). Windows 10 is not supported.
 • The interface is available in Japanese, English and Simplified Chinese.
 • The language server shows diagnostics only; completion, hover and go-to-definition are not available yet.
-• Vim's substitute command (:s), project-wide search, a settings dialog and a right-click menu inside the editor are not available yet.
+• Vim's substitute (:s, :&, & and g&) is available; its c (confirm) flag, :g and :sort are not yet.
+• Project-wide search, a settings dialog and a right-click menu inside the editor are not available yet.
 • Open source under the MIT License.
 ```
 
@@ -253,7 +258,7 @@ Markdown 预览
 • 支持 UTF-8、Shift_JIS 和 UTF-16，按读取时的形式保留 CRLF 或 LF
 • 支持日语输入法（IME）
 • 每 30 秒自动备份，异常退出后下次启动时询问一次是否恢复
-• 按 F1 列出全部操作，可以查找并执行
+• 按 F1 列出文件、标签页、显示、编码、查找、打印等操作，可以查找并执行（Vim 按键和复制粘贴不在列表中）
 • 语言服务器的诊断（默认关闭，只启动您在设置中配置的服务器）
 
 隐私
@@ -263,7 +268,8 @@ Markdown 预览
 • 系统要求：Windows 11（22H2 或更高版本，x64）。不支持 Windows 10。
 • 界面支持日语、英语和简体中文。
 • 语言服务器目前只显示诊断，尚不支持补全、悬停提示和转到定义。
-• 尚不支持 Vim 的替换命令（:s）、整个项目范围的搜索、设置对话框和编辑器内的右键菜单。
+• 支持 Vim 的替换命令（:s、:&、&、g&），但尚不支持逐个确认的 c 标志、:g 和 :sort。
+• 尚不支持整个项目范围的搜索、设置对话框和编辑器内的右键菜单。
 • 基于 MIT 许可证的开源软件。
 ```
 

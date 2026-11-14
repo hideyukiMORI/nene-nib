@@ -93,7 +93,7 @@ NeNe Nib is an existing Win32 desktop text editor (C++, no UWP components) packa
 入力欄は申請オプションのページの「認定の注意書き」の説明にある「追加のテスト情報」のリンクの先（Loupe の記録）。
 
 ```text
-No account or sign-in is needed. To test: launch the app, type in the untitled document, press Ctrl+S to save it, and press Ctrl+O to open a file. Ctrl+Shift+Space (or a click on "Basic | Vim" in the status bar; "通常 | Vim" in Japanese and "标准 | Vim" in Chinese) switches between ordinary editing and Vim editing. Open a .md file and press Ctrl+Shift+M to show the Markdown preview. Ctrl+P lists open tabs, recent files and files in the same folder; F1 lists every operation. The language-server feature is off by default and starts nothing unless a command is entered in the settings file. The app makes no network connections.
+No account or sign-in is needed. To test: launch the app, type in the untitled document, press Ctrl+S to save it, and press Ctrl+O to open a file. Ctrl+Shift+Space (or a click on "Basic | Vim" in the status bar; "通常 | Vim" in Japanese and "标准 | Vim" in Chinese) switches between ordinary editing and Vim editing. Open a .md file and press Ctrl+Shift+M to show the Markdown preview. Ctrl+P lists open tabs, recent files and files in the same folder; F1 lists the editor's commands (files, tabs, view, encodings, find, print). The language-server feature is off by default and starts nothing unless a command is entered in the settings file. The app makes no network connections.
 ```
 
 WACK の任意の試験で FAIL や WARNING が出たら、その試験の名前と理由をこの欄の末尾に 1 段落で足す（Folio は「Blocked executables」の FAIL をここで説明して認定された）。
@@ -113,11 +113,11 @@ WACK の任意の試験で FAIL や WARNING が出たら、その試験の名前
 | 3 | 席 | MSIX を作る道具（#1581）: identity・版 `x.y.z.0`・runFullTrust・言語 `en-US`（既定）`ja-JP` `zh-Hans`・makepri・makeappx（署名なし）・unpack して exe が ZIP と同じバイト列かの照合 | `.msix`・`msix.json`・`SHA256SUMS` | **済み**（#1581・ADR 0186） |
 | 3a | 席 | PRIVACY.md と 3 言語の掲載文（[listing.md](listing.md)）・この文書 | | **済み**（#1582） |
 | 3b | 席 | 版を `1.0.0` に上げ、ZIP の名前から `-beta.N` を外す（#1596） | ZIP `NeNeNib-1.0.0-windows-x64.zip`・MSIX `NeNeNib-1.0.0.0-windows-x64-store.msix` | 済み（PR #1621 の merge）・予行は作業枝で 2 回（11-13・11-14・配る物ではない） |
-| 3c | 設計席 | 公開元の main で ZIP と `-Store` の MSIX を作る（[DEVELOPMENT_WORKFLOW.md](../DEVELOPMENT_WORKFLOW.md) の公開の手順） | `D:/NeNeNib/releases/v1.0.0/` | 未（#1616 の直しは main に入った。版 1.0.0 の main から作る） |
+| 3c | 設計席 | 公開元の main で ZIP と `-Store` の MSIX を作る（[DEVELOPMENT_WORKFLOW.md](../DEVELOPMENT_WORKFLOW.md) の公開の手順） | `D:/NeNeNib/releases/v1.0.0/` | 未。候補 `D:/NeNeNib/releases/v1.0.0-candidate-9944470c/`（main `9944470c`）は予行で、上げる物ではない。本番は文書の直し（#1655）と公開の記録の文書 PR が main に入った後の commit から作り、順 4・5・7 はその本番の物で行う（試した物 = 上げる物・2026-11-14 の設計席の決め） |
 | 4 | hide | 自己署名の証明書で MSIX の写しに署名して入れる（証明書を `LocalMachine\TrustedPeople` に入れるのに管理者権限が要る。`.pfx` はリポジトリに置かない） | 起動する | 未 |
 | 5 | hide | packaged の実機の確かめ（下の表） | 結果を設計席へ。Store 版の登録の扱いは別の ADR | 未 |
-| 6 | 設計席 | スクリーンショット 5 枚 × 言語（[screenshots.md](screenshots.md)・窓を前に出すので hide の了承の後） | PNG | 未 |
-| 7 | hide | WACK（Windows App Certification Kit）を管理者で 1 回 | FAIL 0。WARNING と任意の試験の FAIL は認定の注意書きで説明 | 未 |
+| 6 | 設計席 | スクリーンショット 5 枚 × 言語（[screenshots.md](screenshots.md)・窓を前に出すので hide の了承の後） | PNG | 撮影中（2026-11-14・席 SHOT1・候補の exe・置き場 `D:/NeNeNib/evidence/store-1.0.0/screenshots/`） |
+| 7 | hide | 順 4 で自己署名で入れた物を `Remove-AppxPackage` で外してから、WACK（Windows App Certification Kit）を管理者で 1 回（[msix.md](msix.md) の §3） | FAIL 0。WARNING と任意の試験の FAIL は認定の注意書きで説明 | 未 |
 | 8 | hide | Partner Center に署名なしの `-store.msix` を上げる（Store が署名する）。この文書と listing.md の欄を埋めて申請 | 「Validated」・runFullTrust の承認の警告は想定どおり | 未 |
 | 9 | 設計席 | 認定の後に結果を `docs/quality/` の記録（雛形 `release-1.0.0-draft.md`）に書き、この文書の「確かめていないこと」を更新 | | 未 |
 
@@ -126,7 +126,7 @@ WACK の任意の試験で FAIL や WARNING が出たら、その試験の名前
 | 確かめること | 期待 | なぜ |
 | --- | --- | --- |
 | 設定・session・history・bookmarks・自動退避の置き場 | ZIP 版の `%LOCALAPPDATA%\NeNeNib` が既にあればそこ、無ければ `Packages\HideyukiMori.NeNeNib_3sft4ch5kzywy\LocalCache\Local\NeNeNib\` | Loupe の実測と同じになるはず（読み）。PRIVACY.md の Store 版の段落の根拠 |
-| F1「Windows の右クリックに登録する」 | packaged では HKCU の書き込みがパッケージ専用の場所に写され、エクスプローラーから見えない見込み（読み） | 見えなければ Store 版では操作を隠すか無効にする（別の ADR・D73 の段 2） |
+| F1「Windows の右クリックに登録する」 | packaged では HKCU の書き込みがパッケージ専用の場所に写され、エクスプローラーから見えない見込み（読み） | 見えなければ Store 版では操作を隠すか無効にする（別の ADR・D73 の段 2）。PRIVACY.md と README の FR-033 は「ZIP 版の動き・Store 版では効かない見込みで未実測」と書いてある（#1655）。結果に合わせて直す |
 | 言語サーバー（`lsp=on` と clangd の命令） | 起動して診断が出る | full trust の子プロセス（読み・未実測） |
 | `\\wsl.localhost\<distro>` を起点にする | 開ける | full trust はファイルの API を普通に使える（読み） |
 | 保存（任意のフォルダ・一時ファイルの置き換え） | 保存できる | ADR 0135 |
@@ -145,11 +145,14 @@ WACK の任意の試験で FAIL や WARNING が出たら、その試験の名前
 **中国語の札**: manifest の `Resources` は `zh-Hans`（文字の種類で言う BCP-47 の札・表示言語の表の中国語（簡体字）と同じ）で、Partner Center は package が宣言した言語から掲載の言語を出す（Microsoft の文書の読み）。
 画面の札が `zh-Hans`・`zh-CN`・`zh-Hans-CN` のどれで出るか、別々の掲載になるかは**確かめていない**（V-1589 の L6）。中国語（簡体字）の掲載は Partner Center が出した 1 つにだけ書き、`zh-CN` を別に足さない。
 
+## 決まったこと
+
+- MSIX の manifest の `MinVersion` は `10.0.22621.0`（#1581・[ADR 0186](../adr/0186-msix-is-a-second-package-of-the-same-release-exe.md) の決定・
+  SPECIFICATION の動作環境の Windows 11 22H2 以降。Loupe / Folio の `10.0.19041.0` は Windows 10 を支えるためで、Nib は使わない）。
+
 ## 確かめていないこと
 
 - Partner Center の「カテゴリ」と「サブカテゴリ」の今の選択肢（Microsoft の文書に一覧が無い。画面で確かめる）。
 - 市場を「すべて」にしたとき、掲載の無い言語の市場で英語の掲載が出るか。
 - 日本語・中国語の検索語で「全体で 21 単語まで」がどう数えられるか（Loupe でも未確認）。
-- MSIX の manifest の `MinVersion`。動作環境は Windows 11 22H2 以降（SPECIFICATION の動作環境）なので `10.0.22621.0` が合うが、
-  Loupe は `10.0.19041.0` だった。#1581 で決める。
 - packaged の実機の表（順 5）はすべて未実測。
