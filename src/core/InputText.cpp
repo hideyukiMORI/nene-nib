@@ -1,15 +1,31 @@
 #include "InputText.hpp"
 
 #include "Utf8.hpp"
+#include "VimWordMotion.hpp"
 
 #include <algorithm>
 #include <utility>
 
 namespace nenenib::core
 {
-std::expected<InputText, ExFailure> inserted_input(const InputText &input, std::string_view text)
+namespace
 {
-    if (!validate_utf8(text) || has_control_character(text))
+constexpr char tab_byte = '\t';
+
+// 差し込みの本体。tab_kept なら Tab だけは制御文字に数えない（Vim の `/` `?` の行・#1643）。
+[[nodiscard]] std::expected<InputText, ExFailure>
+inserted_checked(const InputText &input, std::string_view text, bool tab_kept)
+{
+    const bool refused =
+        tab_kept
+            ? std::ranges::any_of(text,
+                                  [](const char &value)
+                                  {
+                                      return value != tab_byte &&
+                                             has_control_character(std::string_view{&value, 1});
+                                  })
+            : has_control_character(text);
+    if (!validate_utf8(text) || refused)
     {
         return std::unexpected(ExFailure::invalid_text);
     }
@@ -22,6 +38,34 @@ std::expected<InputText, ExFailure> inserted_input(const InputText &input, std::
     std::string next = input.text;
     next.insert(input.caret.value, text);
     return InputText{std::move(next), Offset{input.caret.value + text.size()}, input.lost};
+}
+
+// 行頭からキャレットまでの語の前を消す（Vim の c_CTRL-W・#1550）。INSERT の `Ctrl-w` と同じ
+// vim_word_erase_begin の 1 本で切る。行頭では何もしない。
+[[nodiscard]] InputText word_erased(const InputText &input)
+{
+    InputText next = input;
+    if (input.caret.value == 0)
+    {
+        return next;
+    }
+    const std::size_t begin =
+        vim_word_erase_begin(std::string_view{input.text}.substr(0, input.caret.value), 0);
+    next.text.erase(begin, input.caret.value - begin);
+    next.caret = Offset{begin};
+    return next;
+}
+} // namespace
+
+std::expected<InputText, ExFailure> inserted_input(const InputText &input, std::string_view text)
+{
+    return inserted_checked(input, text, false);
+}
+
+std::expected<InputText, ExFailure> inserted_tab_input(const InputText &input,
+                                                       std::string_view text)
+{
+    return inserted_checked(input, text, true);
 }
 
 bool overflows(const InputText &input) noexcept
@@ -67,6 +111,13 @@ InputText edited_input(const InputText &input, CommandEdit edit)
     case CommandEdit::erase:
         next.text.erase(input.caret.value, after.value - input.caret.value);
         return next;
+    // Vim の c_CTRL-U はキャレットの前だけを消し、後ろは残す（`:xyzd<Left><C-u>` は `d`・#1550）。
+    case CommandEdit::erase_to_start:
+        next.text.erase(0, input.caret.value);
+        next.caret = Offset{0};
+        return next;
+    case CommandEdit::erase_word:
+        return word_erased(input);
     case CommandEdit::complete_next:
     case CommandEdit::complete_previous:
     case CommandEdit::page_previous:
