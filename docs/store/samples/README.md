@@ -11,12 +11,14 @@ A small plan for the balcony garden. This file is a sample document for the NeNe
 
 ## What to plant
 
-| Plant | When | Sun | Notes |
-| --- | --- | --- | --- |
-| Basil | Spring | Full | Pinch the tops to keep it bushy |
-| Mint | Spring | Partial | Keep it in its own pot |
-| Cherry tomato | Early summer | Full | Needs a stake |
-| Lettuce | Autumn | Partial | Harvest the outer leaves first |
+- **Basil** — spring, full sun
+  - Pinch the tops to keep it bushy
+- **Mint** — spring, partial shade
+  - Keep it in its own pot
+- **Cherry tomato** — early summer, full sun
+  - Needs a stake
+- *Lettuce* — autumn, partial shade
+  - Harvest the outer leaves first
 
 ## Watering rule
 
