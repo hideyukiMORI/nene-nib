@@ -10,6 +10,29 @@
 - **製品の変更 1 本**: #1658（PR #1665・main `a4c0d40badc829cdaeb406f308622aa4231f7a92`・2026-11-14T07:38:28Z に squash merge）。F1 の一覧の鍵の札が `Ctrl+Shift+Spac` で切れる（3 言語）のと、最小の窓のステータスバーでモードの文と行と桁が重なる、の表示の直し。見つけたのは今日の撮影（3 言語の目視・下の「今日の調査」）。鍵の欄は札の実測の幅まで広げ、入らなければ欄ごと出さない。ステータスバーはモードの文の右から 6 DIP（96 DPI で 6 px・120 DPI で 8 px）空かない項目を、行と桁 → 表示形式の印 → 案内の順に落とす。収まるときの配置は変わらず、当たり（`status_bar_hit`）も変えない（ADR 0078 と ADR 0154 の追補 2026-11-14）。出荷を止める種類（落ちる・失う）の不具合ではないが、看板の鍵の名前が切れているのは最初の版の見た目として直す、と設計席が決めて公開の前に入れた。根拠は下の (a)〜(d)。
 - **文書の変更 2 本**: #1655（PR #1656・main `238d56b7`・掲載文・PRIVACY・README・msix の手順の食い違いの直し）と #1660（PR #1661・main `3ba9a991`・Store の撮影用の見本 `docs/store/samples/README.md` から表を外した。Markdown プレビューは表を描かない（md4c の表の flag を立てていない仕様）のに見本に表があり、撮影の 2 枚目に生の `|` が出ていたため）。
 
+## 作り直し（2026-11-14 夜・この節が前の節より優先）
+
+1.0.0 は未公開のまま、**公開元を作り直す**（施主の決め 2026-11-14 夜: 「再現したら 1.0.0 に入れて作り直して」「作り直すなら版と署名を入れたい」）。前の公開元 `672c15c58cc32f5b076cc9e1c20396a6feb272bf`（#1657 / PR #1659 の merge）から作った ZIP（`ff349e84…dcb2d`）と MSIX（`abb6a407…661a7`・exe `cc72edbf…64a1`）は **上げない**（置き場を `D:/NeNeNib/releases/v1.0.0-superseded-672c15c5/` に移して残す・施主はまだ自己署名で入れていない・tag も公開も申請もしていない）。
+
+**新しい公開元**: この節を足した文書 PR（#1681）の merge の commit（40 桁は merge の後に `git rev-parse origin/main` から写し、公開の結果の節に書く）。下の「公開元」の表の 1 行目と「梱包の作業木」は、この commit で読み替える。
+
+**足した製品の変更 2 本**（まとめ枝 34・#1679 / PR #1680・rebase merge・2026-11-14T13:01:24Z）:
+
+- **#1672（PR #1675・main `7290a93d0796b3f192bad3cbc9d559a0cb04b071`）— 保存の印の直し（本文を失う種類）**: 履歴の単位を畳む 2 つの口で、保存時点の位置が畳む前の値のまま残り、保存の後に変えた本文が「保存済み」と判定されていた（● が出ず、閉じるときに「保存しますか」を聞かれない）。口は (1) マクロや `.` の再生の途中の `:w`（`merge_replayed_edits`）と (2) 矩形の INSERT の途中の Ctrl+S の後の Esc（`fold_block_into_insert`）。保存時点を畳んだ履歴へ写す純関数 `after_units_folded`（`src/application/Document.hpp`）の 1 本にした（scope `--fold-save-point`）。見つけたのは今日の独立レビュー（V-1666 が `:s` の `c` の畳みを読む途中）で、設計席が main の製品で再現させた。**公開済みの `v0.1.0-beta.13` にもある**（1.0.0 で直る）。REL-A の「止める製品の不具合 0 件」は開いている Issue を読んだ結果で、この不具合は Issue に無かった。
+- **#1677（PR #1678・main `0747a19a3982b5e2503f46a4ad22bc895bb39766`）— バージョン情報（施主決定 D90）**: F1 の操作「バージョン情報」と Ex の `:ve` `:ver` `:version` がステータスバーに 1 行（版・署名・GitHub の URL の文字）、起動画面は題の右に版・一覧の下に署名の 2 行（入らなければ署名 → 版の順に落とす）、exe の版情報の `CompanyName` は `Hideyuki Mori`。版は `project(... VERSION)` を `src/core/AppIdentity.cpp` にだけ渡す 1 本（CNF-007）。URL は文字だけで、開かない・通信しない・クリップボードに書かない（PRIVACY.md と Store の申告「Web ページを開かない」は変えていない）。Store の 5 枚に起動画面と F1 の一覧は無いので、掲載のスクリーンショットは撮り直さない。
+
+`git diff 672c15c5 0747a19a -- src third_party CMakeLists.txt eng tests` は 47 ファイル（+1342 / −51）で、この 2 本のほかに製品の差は無い（間の #1670 / PR #1671 `f749283d` は文書のみ）。
+
+**根拠**（前の (a)〜(e) に足す。beta.13 と #1658 の根拠はそのまま再利用する）:
+
+- (a') 速さのゲート（QLT-014）: まとめ枝 34 の木 `dfbf1840be4f303fca2f5d100cad9dd75c882bcc` の Release（`NeNeNib.exe` 3,635,712 bytes・SHA-256 `e6ba3aea091a7a960af853c814b1362c219f4de7410a13804c7d23538917c9e9`）で **8 benches checked・0 regression・0 unmeasurable**（2026-11-14 21:28〜21:32・施主の了承の後・5 runs・中央値 起動 46.443 / 窓 35.140 / 単打 0.625 / 200 打鍵 3.009 / open 16 MiB 58.304 / 16 MiB で 200 打鍵 3.226 / 面 1.056 / 長い行 1.128 ms・ビルドの process 0・負荷の読み 0 / 6 / 0%・記録 `D:/NeNeNib/outputs/20261114/gate-integration34-dfbf1840.log` と `-load.txt`・1 回だけ測った）。`git diff dfbf1840 0747a19a` は空（rebase merge で SHA だけが変わった）。起動画面に版と署名の layout が足されたので、起動の 2 本が基準の内にあることを merge の前に確かめた（V-1678 の求め）。
+- (b') 独立レビュー（読むだけの席・2026-11-14）: #1675 は V-1675（`D:/NeNeNib/outputs/20261114/review-1675/review.md`・矩形の INSERT の口が残っていると指摘）→ 直しの席が同じ枝に commit を足し（HEAD `6b379b75`）→ V-1675b（`review-1675b/review.md`・「片付いた」）。#1678 は V-1678（`review-1678/review.md`・HEAD `832bd457`・「merge してよい」・必須 0）。V-1678 の軽い指摘 L1: バージョン情報の 1 行は最小の窓（360 DIP）で省略記号なしに切れる。起動画面の署名の 2 行は、履歴の一覧が長いと出ない（D90 の「切らずに落とす」のとおり）。どちらも 1.0.0 を止めず、施主に見てもらう。
+- (b'') 手元の検証（まとめ枝 34・HEAD `dfbf1840`）: Debug の全 target（warning 0）・`ctest` 22 / 22・`python eng/symbols.py` 0 violation・`python eng/conformance.py` 0 violation・`python eng/test-conformance.py` OK・`eng/format-check.ps1` 通過・Release の全 target（warning 0）（`D:/NeNeNib/outputs/20261114/verify-1679.log`）。表は contracts 113・scopes 139・groups 40。
+- (c') CI: PR #1680 の merge の道具の run [43595457342](https://github.com/hideyukiMORI/nene-nib/actions/runs/43595457342)（`workflow_dispatch`・題 `Merge PR #1680 at dfbf1840be4f303fca2f5d100cad9dd75c882bcc`・success・2026-11-14T12:34:00Z〜13:01:14Z）→ rebase merge で main `0747a19a`。これが製品の最後の CI。この記録の PR は文書のみ。
+- (d') 施主の試用（D41）: 試用の exe（`D:/NeNeNib/evidence/20261114-trial/NeNeNib-integration34-dfbf1840.exe`・上の (a') と同じバイト列）と表（同じ所の `README.md`・A 版と署名 7 項目・B 保存の印 4 項目・C 朝の表示の直し 2 項目）を 2026-11-14 20:3x に渡した。**この記録を書いた時点で結果はまだ受け取っていない。** 施主は本番の物でも packaged の確かめと一緒に見る。直しが要れば、未公開なので同じ版のまま公開元をもう一度作り直す。
+
+**既知の限界に足す**: 設定に鍵を足す版（1.0.0 の後）へ上げてから 1.0.0 に戻すと、1.0.0 は知らない鍵のある `settings.v4` を壊れた物として読み、そのセッションの設定の保存を断る（ファイルは壊さない）。1.0.0 の後は、鍵を足す前に形（版を上げる / 読み飛ばして残す）を施主が決める。
+
 ## 公開元
 
 | 項目 | 値 |
