@@ -4,6 +4,7 @@
 #include "BuiltinTheme.hpp"
 #include "BuiltinThemes.hpp"
 #include "CancelCommand.hpp"
+#include "CloseTab.hpp"
 #include "CommandEdit.hpp"
 #include "CommandLayout.hpp"
 #include "CommandLine.hpp"
@@ -41,21 +42,25 @@
 #include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenCommandPalette.hpp"
+#include "OpenDocument.hpp"
 #include "OpenTabList.hpp"
 #include "PasteCommand.hpp"
 #include "PlaceCaret.hpp"
 #include "RefreshAppearance.hpp"
 #include "Scopes.hpp"
 #include "ScriptedAppearance.hpp"
+#include "ScriptedFiles.hpp"
 #include "ScriptedSettings.hpp"
 #include "SelectAll.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionPresence.hpp"
 #include "SettingsFailure.hpp"
+#include "SettleRecentTab.hpp"
 #include "StatusBarLayout.hpp"
 #include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
+#include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "TextViewGeometry.hpp"
 #include "ThemeChoice.hpp"
@@ -66,11 +71,13 @@
 #include "VimSearchHighlight.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
+#include "WalkRecentTab.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <expected>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <string>
@@ -952,23 +959,31 @@ void verify_ex_visual_range_keeps_selection()
     check("3lV", true, true, "grid rows keep the linewise selection drawn (#1572)");
 }
 
+// 入力行を閉じる 1 つの道で選択の区間が消え、閉じた後に戻らないか。タブ 1 にも別の前の選択（1〜3
+// 行目）を置き、タブ 1 にいる間の frame がそれを描かないことも見る（#1583 L2）。
+void check_selection_closes(const std::function<void(app::EditorController &)> &leave,
+                            const char *label)
+{
+    Editing editor;
+    open_vim_document(editor, std::string(four_lines));
+    auto &controller = editor.controller();
+    editor.files().hold_at("C:\\work\\other.txt", Bytes{std::string(four_lines)});
+    static_cast<void>(controller.apply_frame(
+        app::OpenDocument{core::FilePath::parse("C:\\work\\other.txt").value()}));
+    vim_replay(controller, "vjjy");
+    static_cast<void>(controller.apply_frame(app::SwitchTab{0}));
+    const auto [visual, opened] = colon_over_visual(controller, "jlvj");
+    expect(!opened.empty() && opened == visual, "the line opens with the selection drawn");
+    leave(controller);
+    expect(drawn_selection(controller.frame()).empty(), label);
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    expect(drawn_selection(controller.frame()).empty(), label);
+}
+
 // 入力行が閉じる道のどれでも選択の区間は消え、閉じた後に戻らない（#1572）。
 void verify_ex_visual_range_selection_closes()
 {
-    const auto check = [](auto &&leave, const char *label)
-    {
-        Editing editor;
-        open_vim_document(editor, std::string(four_lines));
-        auto &controller = editor.controller();
-        static_cast<void>(controller.apply_frame(app::NewTab{}));
-        static_cast<void>(controller.apply_frame(app::SwitchTab{0}));
-        const auto [visual, opened] = colon_over_visual(controller, "jlvj");
-        expect(!opened.empty() && opened == visual, "the line opens with the selection drawn");
-        leave(controller);
-        expect(drawn_selection(controller.frame()).empty(), label);
-        static_cast<void>(controller.apply_frame(app::CancelCommand{}));
-        expect(drawn_selection(controller.frame()).empty(), label);
-    };
+    const auto check = check_selection_closes;
     check([](app::EditorController &controller)
           { static_cast<void>(controller.apply_frame(app::SubmitCommand{})); },
           "Enter on '<,'> drops the drawn selection");
@@ -991,6 +1006,8 @@ void verify_ex_visual_range_selection_closes()
     check([](app::EditorController &controller)
           { static_cast<void>(controller.apply_frame(app::OpenTabList{})); },
           "the tab list over the line drops the drawn selection");
+    // ui は本文のクリックの前に CancelCommand を送る（EditorWindowPointer.cpp の順を写したもの）
+    // ので、この形は Esc と同じ道を通る。
     check(
         [](app::EditorController &controller)
         {
@@ -1010,6 +1027,28 @@ void verify_ex_visual_range_selection_closes()
     check([](app::EditorController &controller)
           { static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::ordinary})); },
           "leaving Vim drops the drawn selection");
+}
+
+// タブ 1 にいる間の frame・Ctrl+Tab の歩き・アクティブなタブを閉じる道でも消える（読みでは全部
+// leave_document で倒れる・#1583 L2）。
+void verify_ex_visual_range_selection_leaves_tab()
+{
+    const auto check = check_selection_closes;
+    check([](app::EditorController &controller)
+          { static_cast<void>(controller.apply_frame(app::SwitchTab{1})); },
+          "the frame on the other tab draws neither selection (#1583)");
+    check(
+        [](app::EditorController &controller)
+        {
+            static_cast<void>(controller.apply_frame(app::WalkRecentTab{core::TabStep::next}));
+            expect(drawn_selection(controller.frame()).empty(),
+                   "the frame while walking tabs draws no selection (#1583)");
+            static_cast<void>(controller.apply_frame(app::SettleRecentTab{}));
+        },
+        "Ctrl+Tab drops the drawn selection (#1583)");
+    check([](app::EditorController &controller)
+          { static_cast<void>(controller.apply_frame(app::CloseTab{0})); },
+          "closing the active tab drops the drawn selection (#1583)");
 }
 
 // NORMAL の `:` と `d:` は前の選択があっても描かない。`:'<,'>s` を確定した後も描かない（#1572）。
@@ -2235,6 +2274,7 @@ void verify_ex_settings()
     verify_ex_operator_colon_replaced_line();
     verify_ex_visual_range_keeps_selection();
     verify_ex_visual_range_selection_closes();
+    verify_ex_visual_range_selection_leaves_tab();
     verify_ex_visual_range_selection_only_from_visual();
 }
 } // namespace nenenib::tests

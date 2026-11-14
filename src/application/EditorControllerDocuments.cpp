@@ -987,9 +987,12 @@ void EditorController::open_read(const core::FilePath &path, OpenedDocument open
     }
     if (blank_untitled())
     {
-        drop_pending_follow();
-        settle_follow();
+        // 本文が丸ごと替わるので、新しいタブの道と同じ文書を離れる 1 本を通す（入力行は Esc
+        // と同じ形で 閉じ、前に指したタブへは切り替えない・#1583 F1）。今は入力行の間の読みを留める
+        // （reads_held）ので入力行は開いていないが、文書を離れる後始末をここで分けない。
+        leave_document();
         state_ = state_.with_opened(std::move(opened.text), std::move(document));
+        reopen_replayed_unit();
         // 同じ退避番号で改訂番号 0 のまま本文が丸ごと替わるので、構文の覚えを両方捨てる
         // （ADR 0156 の決定 9）。
         first_syntax_.reset();
