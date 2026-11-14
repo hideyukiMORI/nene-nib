@@ -1,8 +1,10 @@
 #include "CommandChoice.hpp"
 
+#include "Appearance.hpp"
 #include "AsciiCase.hpp"
 #include "CommandMatch.hpp"
 #include "DisplayLanguageNames.hpp"
+#include "EditorSettings.hpp"
 #include "ExResult.hpp"
 #include "KeyChord.hpp"
 #include "OperationBindings.hpp"
@@ -23,6 +25,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace nenenib::core
 {
@@ -61,14 +64,24 @@ namespace
     return match_score(query, command);
 }
 
+// Ex の入力行と同じ評価が受けるか（既定の設定で・途中で止まる行は受けない）。候補の動きを決める
+// のはこの 1 本で、形ごとの表を別に持たない（#1527）。
+[[nodiscard]] bool evaluates(std::string_view command)
+{
+    const auto result = evaluate_ex(command, default_editor_settings(), Appearance::dark);
+    return result.has_value() && !result.value().stopped.has_value();
+}
+
 [[nodiscard]] CommandChoice choice_of(std::string command)
 {
     // 打った値（`set guifont=…`）の候補は入力行の上限まで長くなるので、名前の欄は 1 行に切る
     // （実行する命令は command の全文・#1568）。
     auto label = clipped_display_text(command).value();
-    const auto kind = command == "set fontsize=" || command == guifont_command
-                          ? CommandChoiceKind::fill
-                          : CommandChoiceKind::execute;
+    // 値の無い候補（`set fontsize=` `set guifont=` `set scrolloff=` `set ft=`）のうち、空の値を
+    // Ex が受けないものは、選ぶと入力欄をその文字に置き換えて面を開いたままにする（#1527）。空の
+    // 値に意味がある `set clipboard=` `set root=` はそのまま実行する。
+    const auto kind = command.ends_with('=') && !evaluates(command) ? CommandChoiceKind::fill
+                                                                    : CommandChoiceKind::execute;
     return CommandChoice{std::move(label), std::move(command), kind, std::nullopt,
                          std::nullopt,     std::nullopt,       {}};
 }
@@ -313,6 +326,22 @@ template <std::ranges::sized_range Positions>
     }
     return choices;
 }
+
+// 打った引数つきの行（`set so=2` `set ft=python` `setl ic` `se cb=unnamed`）を先頭の候補にするか
+// （#1527）。Ex が受ける行か、ほかに当たる候補が無い行（確定で Ex と同じ失敗を知らせる）で、
+// 同じ文字の候補が列に無いときだけ。受けない行でもほかに当たる候補があれば（`set display=g`）、
+// そちらを先に残す。引数の無い行（`w` `tabn`）は今までどおり候補の列だけ。
+[[nodiscard]] bool typed_command(std::string_view query, const std::vector<CommandChoice> &choices)
+{
+    const auto space = query.find(' ');
+    if (space == std::string_view::npos || space == 0 || space + 1 == query.size() ||
+        std::ranges::any_of(choices, [query](const CommandChoice &choice)
+                            { return choice.command == query; }))
+    {
+        return false;
+    }
+    return choices.empty() || evaluates(query);
+}
 } // namespace
 
 bool completes_font_family(std::string_view input)
@@ -344,6 +373,10 @@ std::vector<CommandChoice> palette_choices(const CommandLine &input)
     if (choices.empty() && query.starts_with("colorscheme "))
     {
         return {choice_of(std::string(query))};
+    }
+    if (typed_command(query, choices))
+    {
+        choices.insert(choices.begin(), choice_of(std::string(query)));
     }
     for (auto &choice : choices)
     {
