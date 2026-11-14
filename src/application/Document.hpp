@@ -120,18 +120,19 @@ struct Document
     return document;
 }
 
-// 再生の編集を 1 つの undo の単位に畳んだ後の文書（ADR 0046 の追補 #1672）。保存時点は畳む前の
-// 履歴の本文の位置で覚えているので、畳んだ後の履歴で同じ本文を指す位置へ写す。replayed は畳む
-// 前の本文の位置、folded は畳んだ後の位置、kept はそのまま残してよい位置の上限（再生の前の位置。
-// 再生の中で再生の前の単位を戻した後に保存したときは値なし＝同じ位置の単位が畳んだ履歴の単位と
-// 違い得る）。
+// 履歴の上の単位を 1 つの単位に畳んだ・置き換えた後の文書（ADR 0046 の追補 #1672）。畳む口は
+// 再生の畳み（merge_replayed_edits）と矩形の INSERT の Esc（fold_block_into_insert）の 2 つで、
+// どちらもこの 1 本を通す。保存時点は畳む前の履歴の本文の位置で覚えているので、畳んだ後の履歴で
+// 同じ本文を指す位置へ写す。replayed は畳む前の本文の位置、folded は畳んだ後の位置、kept は
+// そのまま残してよい位置の上限（畳んだ単位の下の位置。再生の中で再生の前の単位を戻した後に保存
+// したときは値なし＝同じ位置の単位が畳んだ履歴の単位と違い得る）。
 // - replayed と同じなら、ファイルは今の本文なので folded。保存より下で積んだ編集は after_edit_at が
 //   保存時点を消すので、残っていれば保存の後の単位は今の本文へ続く。
-// - kept 以下ならそのまま（再生の前の履歴の本文）。
+// - kept 以下ならそのまま（畳んだ単位の下の履歴の本文）。
 // - ほか（畳んだ単位の途中）は、どの位置とも一致しないので消す（必ず未保存と出る）。
-[[nodiscard]] inline Document after_replay_folded(const Document &document,
-                                                  std::optional<std::size_t> kept,
-                                                  std::size_t replayed, std::size_t folded)
+[[nodiscard]] inline Document after_units_folded(const Document &document,
+                                                 std::optional<std::size_t> kept,
+                                                 std::size_t replayed, std::size_t folded)
 {
     if (!document.saved_position.has_value())
     {

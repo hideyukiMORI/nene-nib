@@ -1632,9 +1632,14 @@ void EditorController::fold_block_into_insert(const std::vector<core::VimBlockEd
     apply_block(edits, caret, core::EditBoundary::separate);
     std::string inserted =
         state_.text().text_range(open.at, core::Offset{state_.text().size_bytes() - untouched});
-    state_ = state_.with_history(
+    const std::size_t replaced = state_.history().content_position();
+    const core::EditHistory folded =
         before.pushed(core::Edit{open.at, std::move(removed), std::move(inserted), open.restore},
-                      core::EditBoundary::separate));
+                      core::EditBoundary::separate);
+    // 1 行目を打った直後の Ctrl+S の保存時点は外した単位の位置を指し、置き換えた単位と同じ数に
+    // なる（ファイルは写す前の本文）。再生の畳みと同じ 1 本で写す（#1672）。
+    state_ = state_.with_history(folded).with_document(after_units_folded(
+        state_.document(), before.content_position(), replaced, folded.content_position()));
 }
 
 // `.`（ADR 0030 の決定 7）。前後で履歴を閉じるので、再生した命令が 1 つの undo 単位になる。
@@ -1682,6 +1687,9 @@ void EditorController::perform(const core::VimReplay &effect)
     close_replayed_unit();
     replay_history_ = std::nullopt;
     replay_text_ = std::nullopt;
+    // 再生の中の印は再生の終わりで倒す（再生の外の保存に残さない・#1672）。
+    replay_undone_ = false;
+    replay_save_unsure_ = false;
     state_ = state_.with_history(state_.history().sealed());
 }
 
@@ -1941,7 +1949,7 @@ bool EditorController::replay_step_allowed()
 // 2 つ以上積んだときは、再生の前後の本文の違う所をまとめて覆う 1 つの Edit に置き換える
 // （矩形の編集を 1 つの範囲の置換にする apply_block と同じ考え方）。
 // 再生の中の `:w` は畳む前の位置で保存時点を覚えるので、畳んだ履歴の同じ本文の位置へ写す
-// （after_replay_folded・#1672）。写さないと、畳んだ位置がファイルに無い本文と同じ数になり得る。
+// （after_units_folded・#1672）。写さないと、畳んだ位置がファイルに無い本文と同じ数になり得る。
 void EditorController::merge_replayed_edits(const core::EditHistory &before,
                                             const core::TextBuffer &text)
 {
@@ -1959,7 +1967,7 @@ void EditorController::merge_replayed_edits(const core::EditHistory &before,
     const auto kept =
         replay_save_unsure_ ? std::nullopt : std::optional<std::size_t>{before.content_position()};
     state_ = state_.with_history(folded).with_document(
-        after_replay_folded(state_.document(), kept, replayed, folded.content_position()));
+        after_units_folded(state_.document(), kept, replayed, folded.content_position()));
 }
 
 // Vim の u は戻した単位が覚えた戻り先（最初の編集の瞬間のキャレット）へ置き、行末の 1 つ先などの

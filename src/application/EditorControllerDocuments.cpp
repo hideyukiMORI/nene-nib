@@ -1262,7 +1262,7 @@ std::expected<void, FileFailure> EditorController::save_document(const SaveDocum
     state_ = state_.with_history(history).with_document(
         saved_document(state_.document(), intent.path, intent.encoding, position));
     // 再生の中で再生の前の単位を戻した後の保存は、畳んだ後の同じ位置が別の本文を指し得る
-    // （#1672・after_replay_folded の unsure）。
+    // （#1672・after_units_folded の unsure）。
     replay_save_unsure_ = replay_undone_;
     return {};
 }
