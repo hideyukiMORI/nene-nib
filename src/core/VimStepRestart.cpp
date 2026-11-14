@@ -52,8 +52,8 @@ namespace
            !std::holds_alternative<VimOpenSearch>(effect);
 }
 
-// Vim の OP_CHANGE で INSERT へ入る鍵か（`c` の演算・NORMAL の `s` `C`・VISUAL の `c` `s` `C`
-// `S` `R`・ops.c の case OP_CHANGE）。
+// Vim の OP_CHANGE で INSERT へ入る鍵か（`c` の演算・NORMAL の `s` `S` `C`（#768）・VISUAL の `c`
+// `s` `C` `S` `R`・ops.c の case OP_CHANGE）。
 [[nodiscard]] bool enters_change(const VimState &before, const VimKey &key) noexcept
 {
     if (before.pending.has_value() && before.pending.value().operation == VimOperator::change)
@@ -69,7 +69,7 @@ namespace
         return is_character(key, U'c', U's') || is_character(key, U'C', U'S') ||
                is_character(key, U'R', U'R');
     }
-    return is_character(key, U's', U'C');
+    return is_character(key, U's', U'C') || is_character(key, U'S', U'S');
 }
 
 // VISUAL の `I` `A`（Vim の op_insert は印をいつも保つ・ops.c の case OP_INSERT）。

@@ -988,10 +988,11 @@ void verify_vim_visual_step_edges()
     // 小文字化になったので、ここには効かない文字 `Z` `Q` と `.` を置く。`D` は #1417 で行単位の
     // 削除になった（fixture visual-line-command- が測る）。`A` は #1436 で選択の終わりの INSERT に
     // なった（fixture visual-change-key- が測る）。`p` は #1418 で選択の置き換えになった（fixture
-    // visual-put- が測る）。
+    // visual-put- が測る）。`S` は NORMAL では `cc` になった（#768）が、VISUAL では surround の
+    // `S{char}` に残すので何もしない（ADR 0018 の追補 #1436・ADR 0165 の決定 5）。
     for (const VimKey &key :
          {VimKey{VimCharacter{U'.'}}, VimKey{VimCharacter{U'Z'}}, VimKey{VimCharacter{U'Q'}},
-          VimKey{VimSpecialKey::control_r}, VimKey{VimCharacter{U'z'}}})
+          VimKey{VimSpecialKey::control_r}, VimKey{VimCharacter{U'z'}}, VimKey{VimCharacter{U'S'}}})
     {
         const auto step = vim_step(
             visual, VimEditorView{buffer, selection, VimViewport{LineNumber{1}, 64, 0}}, key);
