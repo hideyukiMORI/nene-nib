@@ -44,6 +44,7 @@ using detail::joined;
 using detail::jumped_by;
 using detail::keeps_the_line_break;
 using detail::landing_of;
+using detail::leading_blank_bytes;
 using detail::line_of;
 using detail::lines_below;
 using detail::motion_range;
@@ -544,11 +545,40 @@ namespace
 }
 } // namespace
 
+namespace
+{
+// 行単位の `c` の autoindent（Vim の op_change が op_delete に任せる MLINE の b_p_ai・#1086）。
+// レジスタは行の全体のまま、消すのは 1 行目の最初の非空白から（beginline(BL_WHITE)・字下げの
+// 空白と Tab はそのまま残し作り直さない）で、字下げを写した印を立てる（did_ai）。字下げだけの行
+// では何も消さないが、Vim の truncate_line は changed_bytes を呼ぶので変更として数える。
+[[nodiscard]] VimStep indent_kept_change(const TextBuffer &text, const VimMotionRange &range,
+                                         VimState next, std::optional<VimRegister> clipboard)
+{
+    const Offset begin = range.range.begin;
+    const Offset first_end = text.line_end(line_of(text, begin));
+    const Offset kept{begin.value + leading_blank_bytes(text, begin, first_end)};
+    next.auto_indented = true;
+    const OffsetRange removed{kept, Offset{std::max(kept.value, range.range.end.value)}};
+    if (is_empty(removed))
+    {
+        // 消すものが無くてもキャレットは字下げの後ろ（空の範囲の削除は controller が写さない）。
+        return detail::change_noted(
+            restored_at(
+                with_clipboard(VimStep{std::move(next), VimMoveTo{kept}}, std::move(clipboard)),
+                change_restore(text, range)),
+            VimChange::changed);
+    }
+    return restored_at(
+        with_clipboard(VimStep{std::move(next), VimRemoveRange{removed}}, std::move(clipboard)),
+        change_restore(text, range));
+}
+} // namespace
+
 namespace detail
 {
 // c。効果は削除そのままで、次の状態が INSERT（決定 2）。行単位でも改行は残す＝行が 1 本残る。
 [[nodiscard]] VimStep changed(const VimState &state, const TextBuffer &text,
-                              const VimMotionRange &range)
+                              const VimMotionRange &range, bool autoindent)
 {
     auto written = registers_written(state, register_after(text, range, VimOperator::change),
                                      VimOperator::change, range.numbered);
@@ -558,6 +588,10 @@ namespace detail
     }
     auto [next, clipboard] = std::move(written).value();
     next.mode = VimMode::insert;
+    if (autoindent && range.kind == VimRegisterKind::lines)
+    {
+        return indent_kept_change(text, range, std::move(next), std::move(clipboard));
+    }
     return restored_at(
         with_clipboard(VimStep{std::move(next), VimRemoveRange{range.range}}, std::move(clipboard)),
         change_restore(text, range));
@@ -1205,16 +1239,17 @@ namespace detail
     return state.pending.has_value() ? state.pending.value().operation : VimOperator::remove;
 }
 
-[[nodiscard]] VimStep performed(const VimState &state, const TextBuffer &text, Offset caret,
+[[nodiscard]] VimStep performed(const VimState &state, const VimEditorView &view, Offset caret,
                                 const VimMotionRange &range)
 {
+    const TextBuffer &text = view.text;
     switch (operation_of(state))
     {
     case VimOperator::remove:
         return removed(state, text, range);
     case VimOperator::change:
-        return detail::empty_removal_noted(changed(state, text, range), text, range,
-                                           VimOperator::change);
+        return detail::empty_removal_noted(changed(state, text, range, view.autoindent), text,
+                                           range, VimOperator::change);
     case VimOperator::yank:
         return yanked(state, text, caret, range);
     case VimOperator::toggle_case:
@@ -1299,7 +1334,7 @@ namespace detail
     }
     if (recorded.pending.has_value())
     {
-        return performed(recorded, view.text, view.selection.caret,
+        return performed(recorded, view, view.selection.caret,
                          character_search_range(view.text, view.selection.caret,
                                                 destination.value(), search.kind));
     }
@@ -1452,7 +1487,7 @@ namespace detail
                           : operator_start(view.selection.caret, moved_by(view, state, wanted));
     }
     // 飛ぶ移動はオペレータの後ろでも前の位置を置く（Vim の setpcmark・ADR 0152 の決定 4）。
-    return jumped_by(performed(state, view.text, yanked_from, operated_range), view, wanted);
+    return jumped_by(performed(state, view, yanked_from, operated_range), view, wanted);
 }
 
 // オペレータを自分の回数といっしょに保留する（決定 1）。積んだ回数はここで移る。
@@ -1466,9 +1501,11 @@ namespace detail
 }
 
 // dd cc yy と Y。自分の行から count-1 行下まで。保留を立ててから 1 本の performed に流す。
-[[nodiscard]] VimStep operated_on_lines(const VimState &state, const TextBuffer &text, Offset caret,
+[[nodiscard]] VimStep operated_on_lines(const VimState &state, const VimEditorView &view,
                                         VimOperator operation)
 {
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
     auto range = lines_below(text, line_of(text, caret), resolved_count(state) - single_step);
     if (!range.has_value())
     {
@@ -1479,14 +1516,16 @@ namespace detail
     range.value().restore = landing.value < caret.value ? landing : caret;
     VimState with = state;
     with.pending = VimPendingOperator{operation, std::nullopt};
-    return performed(with, text, line_yank_from(text, state, caret, resolved_count(state)),
+    return performed(with, view, line_yank_from(text, state, caret, resolved_count(state)),
                      range.value());
 }
 
 // D と C。d$ / c$ と同じ経路（決定 6）。回数は $ が受け取る（2D が 2 行ぶんになる）。
-[[nodiscard]] VimStep operated_to_line_end(const VimState &state, const TextBuffer &text,
-                                           Offset caret, VimOperator operation)
+[[nodiscard]] VimStep operated_to_line_end(const VimState &state, const VimEditorView &view,
+                                           VimOperator operation)
 {
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
     VimState with = state;
     with.pending = VimPendingOperator{operation, std::nullopt};
     const auto range = to_line_end(text, caret, resolved_count(with), VimMotion::line_end);
@@ -1494,7 +1533,7 @@ namespace detail
     {
         return failed(cancelled(state), VimRepeatFailure::not_moved);
     }
-    return performed(with, text, caret, range.value());
+    return performed(with, view, caret, range.value());
 }
 
 // `8g8`（#1617 のレビュー M1・Vim の nv_g_cmd の '8'）。回数がちょうど 8 なら Vim
@@ -1523,7 +1562,7 @@ namespace detail
         return cancelled(state);
     }
     const Offset caret = view.selection.caret;
-    return performed(state, view.text, caret, characters_between(caret, caret));
+    return performed(state, view, caret, characters_between(caret, caret));
 }
 } // namespace detail
 } // namespace nenenib::core

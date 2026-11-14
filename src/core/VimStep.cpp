@@ -49,6 +49,8 @@ namespace nenenib::core
 {
 using detail::aligned_screen;
 using detail::appended_recording;
+using detail::auto_indent_noted;
+using detail::auto_indent_of;
 using detail::block_line_end_state;
 using detail::cancelled;
 using detail::caret_on_line;
@@ -175,10 +177,12 @@ namespace detail
 namespace
 {
 // x。保留中のオペレータの無い削除なので、範囲を作って同じ 1 本（performed）に流す。
-[[nodiscard]] VimStep removed_character(const VimState &state, const TextBuffer &text, Offset caret)
+[[nodiscard]] VimStep removed_character(const VimState &state, const VimEditorView &view)
 {
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
     return performed(
-        state, text, caret,
+        state, view, caret,
         characters_between(caret, forward_characters(text, caret, count_of(state.count))));
 }
 
@@ -192,7 +196,7 @@ namespace
     {
         return failed(cancelled(state), VimRepeatFailure::not_moved);
     }
-    return performed(state, view.text, view.selection.caret, range.value());
+    return performed(state, view, view.selection.caret, range.value());
 }
 } // namespace
 
@@ -841,7 +845,7 @@ namespace
 {
     const VimOperator operation =
         action == VimAction::remove_to_line_end ? VimOperator::remove : VimOperator::change;
-    return operated_to_line_end(state, view.text, view.selection.caret, operation);
+    return operated_to_line_end(state, view, operation);
 }
 
 // NORMAL の `:`。回数つきの `N:` は行の先に `.,.+(N-1)`（`1:` は `.`）を置く（Vim の nv_colon・
@@ -922,6 +926,22 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return pending_operator(state, operation.value());
 }
 
+// autoindent の `o` `O`（Vim の n_opencmd → open_line・#1086）。新しい行の字下げは今の行の全体の
+// 頭の空白と Tab の桁から Tab と空白で作り直し（`O` も今の行・どちらも実測）、字下げを写した印を
+// 立てる（did_ai）。回数の残りは INSERT の改行の鍵として流れ、同じ規則を通る。
+[[nodiscard]] VimStep opened_with_indent(const TextBuffer &text, LineNumber line, bool below,
+                                         VimState next)
+{
+    const Offset start = text.line_start(line);
+    const Offset end = text.line_end(line);
+    std::string indent = auto_indent_of(text, start, end);
+    next.auto_indented = true;
+    const Offset at = below ? end : start;
+    const Offset caret{at.value + indent.size() + (below ? single_step : 0)};
+    std::string body = below ? "\n" + indent : indent + "\n";
+    return VimStep{std::move(next), VimInsertAt{at, std::move(body), caret, EditBoundary::absorb}};
+}
+
 [[nodiscard]] VimStep normal_visual_action(const VimState &state, const VimEditorView &view,
                                            VimAction action)
 {
@@ -946,6 +966,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         next.insert_repeat = VimInsertRepeat{
             count - single_step, VimRecordedKeys::from({}).appended(VimKey{VimSpecialKey::enter})};
+    }
+    if (view.autoindent)
+    {
+        return opened_with_indent(view.text, line, below, std::move(next));
     }
     return VimStep{
         std::move(next),
@@ -1033,7 +1057,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 {
     if (action == VimAction::remove_character)
     {
-        return removed_character(state, view.text, view.selection.caret);
+        return removed_character(state, view);
     }
     if (action == VimAction::toggle_case_character)
     {
@@ -1064,7 +1088,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     }
     if (action == VimAction::yank_line)
     {
-        return operated_on_lines(state, view.text, view.selection.caret, VimOperator::yank);
+        return operated_on_lines(state, view, VimOperator::yank);
     }
     if (action == VimAction::substitute || action == VimAction::replace_mode)
     {
@@ -1416,7 +1440,7 @@ namespace
     // 同じオペレータの鍵をもう一度押すと行単位（dd cc yy g~~ guu gUU >> <<・表は VimKeyTable）。
     if (vim_operator_doubles(operation, action))
     {
-        return operated_on_lines(state, view.text, view.selection.caret, operation);
+        return operated_on_lines(state, view, operation);
     }
     const auto search_step = character_search_action(state, view, action);
     if (search_step.has_value())
@@ -2178,7 +2202,7 @@ namespace
     case VimMode::normal:
         return normal_character(state, view, key);
     case VimMode::insert:
-        return insert_character(state, key);
+        return insert_character(state, view, key);
     case VimMode::visual:
     case VimMode::visual_line:
     case VimMode::visual_block:
@@ -2247,6 +2271,7 @@ namespace
     next.recording = std::nullopt;
     next.insert_start = std::nullopt;
     next.block_insert = std::nullopt;
+    next.auto_indented = false;
     return next;
 }
 } // namespace
@@ -2658,8 +2683,9 @@ VimStep vim_pointer_selected(const VimState &state, const VimEditorView &view, S
 
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
-    auto step = register_count_kept(
-        insert_start_kept(state, stepped(insert_started(state, view, key), view, key), key));
+    auto step = register_count_kept(auto_indent_noted(
+        state, view.text,
+        insert_start_kept(state, stepped(insert_started(state, view, key), view, key), key), key));
     if (step.layout_request.has_value() || step.row_request.has_value() || step.viewport_request)
     {
         return step;
@@ -2690,7 +2716,7 @@ VimStep vim_command_operated(const VimState &state, const VimEditorView &view,
                                                 VimMotion::document_last)
                                          .offset
                                    : view.selection.caret;
-    VimStep step = performed(state, view.text, operator_start(caret, destination),
+    VimStep step = performed(state, view, operator_start(caret, destination),
                              exclusive_range(view.text, characters_between(caret, destination)));
     // INSERT の `Ctrl-o` の印は鍵の出口と同じ 1 本で進める（ADR 0182 の決定 2・4）。確定の鍵は
     // `<CR>` で、`<C-o>d:5<CR>` は命令が終わって due に、打った `<C-o>c:5<CR>` は OP_CHANGE の

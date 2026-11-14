@@ -126,7 +126,7 @@ namespace
     // 検索の移動の削除は 1 行の中でも `"1` へ行く（ADR 0050 の決定 4）。
     range.numbered = VimNumberedRule::always;
     // 後ろ向きで行単位になった y は検索の当たりに着く（Vim の oap->start・#1294）。
-    return performed(state, view.text, operator_start(request.anchor, destination), range);
+    return performed(state, view, operator_start(request.anchor, destination), range);
 }
 
 // 検索の鍵は `:nohlsearch` で止めた強調を戻す（ADR 0037 の決定 1）。見つからなくても（E486）、
@@ -313,7 +313,7 @@ namespace
     // 名指しで組むので、VimEditorView に欄が足されるとほどく数が合わずにコンパイルが落ちる
     // （足した欄を黙って既定値にしない・#1617 のレビュー L3）。
     const auto &[text, selection, viewport, source, tabs, layout, navigation, row_landing,
-                 view_marks, mark_landing, search_case, scroll_margin, document_limit,
+                 view_marks, mark_landing, search_case, scroll_margin, autoindent, document_limit,
                  capture_limit] = view;
     static_cast<void>(selection);
     const VimEditorView over{.text = text,
@@ -328,6 +328,7 @@ namespace
                              .mark_landing = mark_landing,
                              .search_case = search_case,
                              .scroll_margin = scroll_margin,
+                             .autoindent = autoindent,
                              .document_limit = document_limit,
                              .capture_limit = capture_limit};
     VimStep step = visual_operator_applied(visual, over, operation_of(state));

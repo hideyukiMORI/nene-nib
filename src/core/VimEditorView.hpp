@@ -47,6 +47,10 @@ struct VimEditorView
     // H M L と Ctrl-f / Ctrl-b / Ctrl-d / Ctrl-u の着地を Vim の cursor_correct
     // で寄せるときだけ読む。
     std::size_t scroll_margin = 0;
+    // 字下げの写し（設定の `autoindent`・#1086）。controller が設定から写し、engine は INSERT の
+    // 改行・`o` `O`・行単位の `c` と、写した字下げを消す鍵（Esc・上下・`Ctrl-o`）と `Ctrl-u` の
+    // 止まりで読む。偽なら INSERT の道は今のまま（分岐 1 つ）。
+    bool autoindent = false;
     // 回数で本文を増やす編集が守る文書の上限（#1341・ADR 0159 の決定 7）。製品は既定の
     // maximum_document_bytes のまま置き換えず、試験だけが小さな値を置いて境を確かめる（1 GiB を
     // 確保せずに CRLF の数え方を見るため）。

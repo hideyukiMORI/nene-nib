@@ -152,6 +152,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimCaseTests.cpp
     tests/unit/VimChangeMarkTests.cpp
     tests/unit/VimInsertNormalTests.cpp
+    tests/unit/VimAutoindentTests.cpp
     tests/unit/VimNumberPropertyTests.cpp
     tests/unit/UserThemeSelectionTests.cpp
     tests/unit/UserThemeValuesTests.cpp

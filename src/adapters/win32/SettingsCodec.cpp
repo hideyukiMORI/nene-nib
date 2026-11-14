@@ -28,17 +28,20 @@ using Field = std::optional<std::string_view> SettingsFields::*;
 
 // 鍵の名前と DTO の欄の対（同じ位置）。v4 だけの鍵も読むが、旧版にあれば apply_v4_fields
 // が拒否する。
-constexpr std::array<std::string_view, 17> field_names{
-    "version",     "colorscheme", "font_family",    "font_size", "guide",         "wrap",
-    "ui_language", "lsp",         "explorer",       "root",      "features",      "mapleader",
-    "ignorecase",  "smartcase",   "relativenumber", "scrolloff", "explorer_width"};
-constexpr std::array<Field, 17> field_members{
-    &SettingsFields::version,     &SettingsFields::colorscheme,   &SettingsFields::font_family,
-    &SettingsFields::font_size,   &SettingsFields::guide,         &SettingsFields::wrap,
-    &SettingsFields::ui_language, &SettingsFields::lsp,           &SettingsFields::explorer,
-    &SettingsFields::root,        &SettingsFields::features,      &SettingsFields::mapleader,
-    &SettingsFields::ignorecase,  &SettingsFields::smartcase,     &SettingsFields::relativenumber,
-    &SettingsFields::scrolloff,   &SettingsFields::explorer_width};
+constexpr std::array<std::string_view, 18> field_names{
+    "version",     "colorscheme", "font_family",    "font_size", "guide",          "wrap",
+    "ui_language", "lsp",         "explorer",       "root",      "features",       "mapleader",
+    "ignorecase",  "smartcase",   "relativenumber", "scrolloff", "explorer_width", "autoindent"};
+constexpr std::array<Field, 18> field_members{
+    &SettingsFields::version,        &SettingsFields::colorscheme,
+    &SettingsFields::font_family,    &SettingsFields::font_size,
+    &SettingsFields::guide,          &SettingsFields::wrap,
+    &SettingsFields::ui_language,    &SettingsFields::lsp,
+    &SettingsFields::explorer,       &SettingsFields::root,
+    &SettingsFields::features,       &SettingsFields::mapleader,
+    &SettingsFields::ignorecase,     &SettingsFields::smartcase,
+    &SettingsFields::relativenumber, &SettingsFields::scrolloff,
+    &SettingsFields::explorer_width, &SettingsFields::autoindent};
 
 // 言語ごとのサーバーの命令の鍵 `lsp.<language>.command`（ADR 0160・ADR 0170 の決定 3）。
 constexpr std::string_view lsp_prefix = "lsp.";
@@ -277,8 +280,8 @@ later_explorer_width_from(const std::optional<std::string_view> &value) noexcept
            fields.explorer.has_value() || fields.root.has_value() || fields.features.has_value() ||
            fields.ignorecase.has_value() || fields.smartcase.has_value() ||
            fields.relativenumber.has_value() || fields.scrolloff.has_value() ||
-           fields.explorer_width.has_value() || !fields.lsp_commands.empty() ||
-           !fields.maps.empty() || fields.mapleader.has_value();
+           fields.explorer_width.has_value() || fields.autoindent.has_value() ||
+           !fields.lsp_commands.empty() || !fields.maps.empty() || fields.mapleader.has_value();
 }
 
 // `lsp.<language>.command=<値>` の行。言語は LanguageTable の名前だけ、同じ言語の 2 行目は
@@ -368,8 +371,9 @@ lsp_commands_from(const SettingsFields &fields)
     const auto smartcase = later_switch_from(fields.smartcase);
     const auto relativenumber = later_switch_from(fields.relativenumber);
     const auto scrolloff = later_scrolloff_from(fields.scrolloff);
+    const auto autoindent = later_switch_from(fields.autoindent);
     if (!language || !lsp || !explorer || !root || !features || !commands || !ignorecase ||
-        !smartcase || !relativenumber || !scrolloff)
+        !smartcase || !relativenumber || !scrolloff || !autoindent)
     {
         return std::unexpected(Failure::malformed);
     }
@@ -383,6 +387,7 @@ lsp_commands_from(const SettingsFields &fields)
     settings.smartcase = smartcase.value();
     settings.relativenumber = relativenumber.value();
     settings.scrolloff = scrolloff.value();
+    settings.autoindent = autoindent.value();
     settings.explorer_width = later_explorer_width_from(fields.explorer_width);
     return apply_maps(settings, fields);
 }
@@ -542,13 +547,13 @@ std::string encode_settings(const core::EditorSettings &settings)
     return std::format("version=4\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
                        "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n"
                        "ignorecase={}\nsmartcase={}\nrelativenumber={}\nscrolloff={}\n"
-                       "explorer_width={}\n{}{}",
+                       "explorer_width={}\nautoindent={}\n{}{}",
                        theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
                        core::display_language_choice_name(settings.ui_language),
                        switch_text(settings.lsp), switch_text(settings.explorer), root,
                        features_text(settings.features), switch_text(settings.ignorecase),
                        switch_text(settings.smartcase), switch_text(settings.relativenumber),
-                       settings.scrolloff, explorer_width, lsp_commands_text(settings.lsp_commands),
-                       maps_text(settings));
+                       settings.scrolloff, explorer_width, switch_text(settings.autoindent),
+                       lsp_commands_text(settings.lsp_commands), maps_text(settings));
 }
 } // namespace nenenib::adapters::win32

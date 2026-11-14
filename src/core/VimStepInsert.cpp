@@ -77,6 +77,148 @@ constexpr std::size_t arrow_window_bytes = 64;
 constexpr std::size_t longest_code_point_bytes = 4;
 // 索引を持つ本文の `Ctrl-w` が読む窓の初めの大きさ（#1258・語が長ければ倍に広げる）。
 constexpr std::size_t erase_window_bytes = 64;
+// autoindent の字下げの空白を数える窓の初めの大きさ（#1086・行の全体は写さない・長ければ倍に）。
+constexpr std::size_t blank_window_bytes = 64;
+// 字下げに数える文字（Vim の get_indent_str と VIM_ISWHITE は空白と Tab だけ）。memchr を引く
+// string の find 系は core の外のシンボルになるので、1 文字ずつ比べる（ARC-003）。
+[[nodiscard]] constexpr bool is_indent_blank(char unit) noexcept
+{
+    return unit == ' ' || unit == '\t';
+}
+
+// [floor, caret) の終わりの空白と Tab のバイト数（#1086・Vim の truncate_spaces と stop_insert の
+// 後ろ向きの歩き）。キャレットの手前の窓だけを読む。
+[[nodiscard]] std::size_t trailing_blank_bytes(const TextBuffer &text, Offset floor, Offset caret)
+{
+    std::size_t count = 0;
+    std::size_t window = blank_window_bytes;
+    while (caret.value - count > floor.value)
+    {
+        const Offset end{caret.value - count};
+        const Offset begin{end.value - std::min(window, end.value - floor.value)};
+        const std::string piece = text.text_range(begin, end);
+        const auto last = std::ranges::find_if_not(piece.rbegin(), piece.rend(), is_indent_blank);
+        if (last != piece.rend())
+        {
+            return count + static_cast<std::size_t>(last - piece.rbegin());
+        }
+        count += piece.size();
+        window *= 2;
+    }
+    return count;
+}
+
+// 空白と Tab の列の桁の数（Vim の get_indent_str・Tab は次の vim_tab_stop の倍数まで）。
+[[nodiscard]] std::size_t blank_width(std::string_view blanks) noexcept
+{
+    std::size_t width = 0;
+    for (const char blank : blanks)
+    {
+        width = blank == '\t' ? width + vim_tab_stop - (width % vim_tab_stop) : width + 1;
+    }
+    return width;
+}
+
+// 字下げを写した行を離れるときに消す範囲と、消した後のカーソル（Vim の stop_insert の did_ai の
+// 歩き・#1086）。キャレットの下が空白なら前向きに、行の終わりまで空白なら行末から後ろ向きに空白と
+// Tab を消す。非空白に当たった所で止まり、その文字が行の最後の 1 バイトの文字ならカーソルは行末
+// （Vim の `++curwin->w_cursor.col`）。どちらも消す範囲の後ろの本文の位置で、Esc はここから 1 文字
+// 左へ戻る。
+using AutoIndentTrim = std::pair<OffsetRange, Offset>;
+[[nodiscard]] AutoIndentTrim auto_indent_trim(const TextBuffer &text, Offset caret)
+{
+    const LineNumber line = line_of(text, caret);
+    const Offset end = text.line_end(line);
+    const std::size_t after = detail::leading_blank_bytes(text, caret, end);
+    if (caret.value + after < end.value)
+    {
+        const bool onto_end = caret.value + after + 1 == end.value;
+        return {OffsetRange{caret, Offset{caret.value + after}},
+                Offset{caret.value + (onto_end ? single_step : 0)}};
+    }
+    const Offset begin{caret.value - trailing_blank_bytes(text, text.line_start(line), caret)};
+    return {OffsetRange{begin, end}, begin};
+}
+
+// 消す範囲を消してキャレットを final（消す範囲より前か頭）に置く効果（#1086）。final から消す範囲
+// までの本文は元のまま書き戻し、INSERT の 1 単位に吸収する。消すものが無ければ動くだけ。
+[[nodiscard]] VimEffect trimmed_effect(const TextBuffer &text, OffsetRange removed, Offset final)
+{
+    if (is_empty(removed))
+    {
+        return VimMoveTo{final};
+    }
+    const Offset from{std::min(final.value, removed.begin.value)};
+    return VimReplaceRange{OffsetRange{from, removed.end}, text.text_range(from, removed.begin),
+                           final, EditBoundary::absorb, VimLineMarks::shifted};
+}
+
+// 消した後のカーソルから 1 文字左（行頭なら動かない・Vim の ins_esc の oneleft）。行末へ寄せた
+// カーソル（caret の 1 バイトの文字の後ろ）は caret へ戻る。
+[[nodiscard]] Offset trimmed_left(const TextBuffer &text, Offset caret, Offset cursor)
+{
+    if (cursor == text.line_start(line_of(text, caret)))
+    {
+        return cursor;
+    }
+    return cursor.value > caret.value ? caret : backward_characters(text, cursor, single_step);
+}
+
+// 字下げを消してカーソルの桁が変わったとき、欲しい列は消す前のキャレットの桁のまま（Vim の
+// ins_esc は stop_insert の前後で桁が変わると w_set_curswant を立てない・`o<Esc>j` は字下げの
+// 桁へ・実測）。
+[[nodiscard]] VimState trimmed_wanted(VimState next, const TextBuffer &text, Offset caret)
+{
+    next.wanted_column =
+        VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, caret)};
+    return next;
+}
+
+// 字下げを写した印のまま Esc を打った（#1086）。消すものもカーソルの動きも無ければ今の Esc のまま。
+[[nodiscard]] VimStep auto_indent_escaped(const VimState &state, const VimEditorView &view,
+                                          VimStep step)
+{
+    if (!state.auto_indented)
+    {
+        return step;
+    }
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
+    const auto [removed, cursor] = auto_indent_trim(text, caret);
+    if (cursor == caret && is_empty(removed))
+    {
+        return step;
+    }
+    const Offset final = trimmed_left(text, caret, cursor);
+    step.next = trimmed_wanted(std::move(step.next), text, caret);
+    step.insert_left = cursor.value - final.value;
+    step.effect = trimmed_effect(text, removed, final);
+    return step;
+}
+
+// 字下げを写した印のまま上下の矢印で行を離れた（Vim の ins_up ins_down の start_arrow →
+// stop_insert・#1086）。離れた行の字下げを消し、行き先は消す前の本文で決めた位置（下の行なら消した
+// ぶん詰める）。
+[[nodiscard]] VimStep auto_indent_left_line(const VimState &state, const VimEditorView &view,
+                                            VimStep step)
+{
+    const auto *const moved = std::get_if<VimMoveTo>(&step.effect);
+    if (!state.auto_indented || moved == nullptr)
+    {
+        return step;
+    }
+    const auto [removed, cursor] = auto_indent_trim(view.text, view.selection.caret);
+    if (is_empty(removed))
+    {
+        return step;
+    }
+    const std::size_t length = removed.end.value - removed.begin.value;
+    const Offset target = moved->caret;
+    const Offset landing{target.value > removed.begin.value ? target.value - length : target.value};
+    step.effect = VimReplaceRange{removed, std::string{}, landing, EditBoundary::absorb,
+                                  VimLineMarks::shifted};
+    return step;
+}
 
 // 端で動かない矢印か（行頭の `<Left>`・行の内容の終わりの `<Right>`・#1136、最初の行の
 // `<Up>`・最後の行の `<Down>`・端の `<PageUp>` `<PageDown>`・#1149）。Vim の ins_left ins_right
@@ -140,7 +282,8 @@ constexpr std::size_t erase_window_bytes = 64;
     {
         return VimStep{state, VimNoEffect{}};
     }
-    return insert_moved(state, view.text, view.selection.caret, motion);
+    return auto_indent_left_line(state, view,
+                                 insert_moved(state, view.text, view.selection.caret, motion));
 }
 
 // INSERT の `<Left>`（Vim の ins_left と oneleft・#1136）。既定の whichwrap=b,s に `[` が無いので
@@ -276,8 +419,9 @@ constexpr std::size_t erase_window_bytes = 64;
 }
 
 // `Ctrl-w` `Ctrl-u` が戻れる左端（Vim の ins_bs の mincol と Insstart_orig・#1040）。キャレットが
-// 始めの行で始めの桁より右にあり、その桁が文字の頭ならそこ、ほかは行頭（autoindent は無いので
-// 字下げで止まらない・始めの桁が文字の途中なら Vim も行頭まで歩く・#1234）。
+// 始めの行で始めの桁より右にあり、その桁が文字の頭ならそこ、ほかは行頭（字下げで止まるのは
+// autoindent の `Ctrl-u` だけで、呼び手の indent_floor が重ねる・始めの桁が文字の途中なら Vim も
+// 行頭まで歩く・#1234）。
 [[nodiscard]] Offset erase_floor(const VimState &state, const TextBuffer &text, Offset caret,
                                  LineNumber line)
 {
@@ -294,6 +438,17 @@ constexpr std::size_t erase_window_bytes = 64;
     }
     const Offset floor{line_start.value + start.byte_column};
     return erase_lands_on(text, floor, caret) ? floor : line_start;
+}
+
+// autoindent の `Ctrl-u` の左端（Vim の ins_bs の BACKSPACE_LINE と b_p_ai・#1086）。行の最初の
+// 非空白がキャレットより左ならそこでも止まる（始めの位置の止まりと重ねて右の方）。字下げの中か
+// 字下げの直後のキャレットは止まらず行頭まで消す（`A<CR>xy<C-u><C-u>` は 2
+// 回目で字下げを消す・実測）。
+[[nodiscard]] Offset indent_floor(const TextBuffer &text, Offset caret, Offset line_start,
+                                  Offset floor)
+{
+    const Offset first{line_start.value + detail::leading_blank_bytes(text, line_start, caret)};
+    return first.value < caret.value && first.value > floor.value ? first : floor;
 }
 
 // Vim の vim_isspace（Tab・改行の類・空白）。語の前の空白を先に消すかを決める。
@@ -352,9 +507,10 @@ constexpr std::size_t erase_window_bytes = 64;
 // INSERT の `Ctrl-w` と `Ctrl-u`（#1040）。行頭では前の行とつなぎ、ほかは左端まで（`Ctrl-w` は語の
 // 境でも）消す。`.` の記録と回数の鍵の列には鍵のまま残り、再生も同じ消し方をする（Vim の redo
 // と同じ・#1093）。
-[[nodiscard]] VimStep insert_cut(const VimState &state, const TextBuffer &text, Offset caret,
-                                 bool by_word)
+[[nodiscard]] VimStep insert_cut(const VimState &state, const VimEditorView &view, bool by_word)
 {
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
     if (caret.value == 0)
     {
         return VimStep{state, VimNoEffect{}};
@@ -365,7 +521,11 @@ constexpr std::size_t erase_window_bytes = 64;
     {
         return joined_back(state, text, caret, line);
     }
-    const Offset floor = erase_floor(state, text, caret, line);
+    Offset floor = erase_floor(state, text, caret, line);
+    if (view.autoindent && !by_word)
+    {
+        floor = indent_floor(text, caret, line_start, floor);
+    }
     Offset begin = floor;
     if (by_word && text.has_virtual_columns())
     {
@@ -422,9 +582,10 @@ constexpr std::size_t erase_window_bytes = 64;
 
 // 流し直す 1 鍵（#1093）。打った鍵と同じ関数を通る。鍵の種類が増えたら std::visit がここで
 // 落ちる（CPP-002）。
-[[nodiscard]] VimStep replayed_key(const VimState &state, const VimEditorView &, VimCharacter key)
+[[nodiscard]] VimStep replayed_key(const VimState &state, const VimEditorView &view,
+                                   VimCharacter key)
 {
-    return insert_character(state, key);
+    return insert_character(state, view, key);
 }
 
 [[nodiscard]] VimStep replayed_key(const VimState &state, const VimEditorView &view,
@@ -458,6 +619,19 @@ constexpr std::size_t erase_window_bytes = 64;
     {
         return {text.erase(removed->range.begin, removed->range.end), removed->range.begin};
     }
+    // autoindent の改行（#1086）。本文の改行は文書の形で入れ、キャレットも文書の改行で数え直す。
+    if (const auto *const replaced = std::get_if<VimReplaceRange>(&effect))
+    {
+        const std::string_view newline = newline_of(text.line_ending());
+        std::string body;
+        for (const char unit : replaced->utf8)
+        {
+            body += unit == '\n' ? newline : std::string_view{&unit, 1};
+        }
+        return {text.replaced(replaced->range.begin, replaced->range.end, body),
+                document_caret_after(replaced->range.begin, replaced->utf8, replaced->caret,
+                                     text.line_ending())};
+    }
     return {text, caret};
 }
 
@@ -487,10 +661,22 @@ constexpr std::size_t erase_window_bytes = 64;
     return std::visit([&](const auto &value) { return replayed_key(state, view, value); }, key);
 }
 
-// 鍵の列を残りの周だけ本文の写しへ流し直した本文・キャレット・消した手前の端（#1093）。
-// 周の終わりに本文が文書の上限（view.document_limit）を超えたら、残りの周を流さずに too_large
-// （#1341）。写しの本文は文書の改行の形で入るので、CRLF の改行も 2 バイトに数える。
-[[nodiscard]] std::expected<std::tuple<TextBuffer, Offset, Offset>, VimRepeatFailure>
+// 流し直した 1 鍵の後の消した手前の端（#1093）。autoindent の改行はキャレットの手前の空白も切る
+// ので、その置き換えの頭も数える（#1086）。
+[[nodiscard]] Offset touched_low(const VimEffect &effect, Offset caret, Offset low)
+{
+    const auto *const cut = std::get_if<VimReplaceRange>(&effect);
+    const Offset touched =
+        cut == nullptr ? caret : Offset{std::min(caret.value, cut->range.begin.value)};
+    return Offset{std::min(low.value, touched.value)};
+}
+
+// 鍵の列を残りの周だけ本文の写しへ流し直した本文・キャレット・消した手前の端と、最後の周の後に
+// 字下げを写した印が残ったか（#1093・#1086）。周の終わりに本文が文書の上限（view.document_limit）を
+// 超えたら、残りの周を流さずに too_large（#1341）。写しの本文は文書の改行の形で入るので、CRLF の
+// 改行も 2 バイトに数える。
+using ReplayedRounds = std::tuple<TextBuffer, Offset, Offset, bool>;
+[[nodiscard]] std::expected<ReplayedRounds, VimRepeatFailure>
 replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t remaining,
                 const std::vector<VimKey> &keys)
 {
@@ -506,16 +692,39 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
             const Selection here = collapsed_at(caret);
             VimEditorView replay_view{text, here, view.viewport};
             replay_view.document_limit = view.document_limit;
-            VimStep keyed = replayed_key(replaying, replay_view, key);
+            replay_view.autoindent = view.autoindent;
+            VimStep keyed = detail::auto_indent_noted(
+                replaying, text, replayed_key(replaying, replay_view, key), key);
             replaying = std::move(keyed.next);
             auto replayed = replayed_effect(text, caret, keyed.effect);
             text = std::move(replayed.first);
             caret = replayed.second;
-            low = Offset{std::min(low.value, caret.value)};
+            low = touched_low(keyed.effect, caret, low);
         }
         if (text.size_bytes() > view.document_limit)
         {
             return std::unexpected(VimRepeatFailure::too_large);
+        }
+    }
+    return ReplayedRounds{std::move(text), caret, low, replaying.auto_indented};
+}
+
+// 流し直しの最後の周が字下げを写した行で終わったら、Esc と同じにその字下げを消す（#1086・
+// `3o<Esc>` の最後の行も空・実測）。流し直しのキャレットの後ろは元の本文の尾なので、消すのは
+// キャレットが行末で、消す範囲がキャレットで終わるときだけ（尾を変えない）。欲しい列は消す前の桁。
+[[nodiscard]] std::tuple<TextBuffer, Offset, Offset> replay_trimmed(ReplayedRounds rounds,
+                                                                    VimStep &step)
+{
+    auto &[text, caret, low, indented] = rounds;
+    if (indented)
+    {
+        const auto [removed, cursor] = auto_indent_trim(text, caret);
+        if (!is_empty(removed) && removed.end == caret)
+        {
+            step.next = trimmed_wanted(std::move(step.next), text, caret);
+            text = text.erase(removed.begin, removed.end);
+            caret = removed.begin;
+            low = Offset{std::min(low.value, caret.value)};
         }
     }
     return std::tuple{std::move(text), caret, low};
@@ -560,23 +769,25 @@ replayed_rounds(const VimState &state, const VimEditorView &view, std::size_t re
     step.insert_left = caret.value - back.value;
     if (!state.insert_repeat.has_value())
     {
-        return step;
+        return auto_indent_escaped(state, view, std::move(step));
     }
     const VimInsertRepeat &repeat = state.insert_repeat.value();
     const std::vector<VimKey> keys = repeat.keys.owned_keys();
     if (keys.empty())
     {
-        return step;
+        return auto_indent_escaped(state, view, std::move(step));
     }
     auto typed = typed_text(keys);
-    if (!typed.has_value())
+    // autoindent の改行は周ごとに字下げを数え直すので、本文の続きでは作れない（#1086）。
+    if (!typed.has_value() || (view.autoindent && typed.value().contains('\n')))
     {
         auto replayed = replayed_rounds(state, view, repeat.remaining, keys);
         if (!replayed.has_value())
         {
             return failed(std::move(step), replayed.error());
         }
-        return replayed_insert(view, std::move(step), replayed.value());
+        const auto rounds = replay_trimmed(std::move(replayed).value(), step);
+        return replayed_insert(view, std::move(step), rounds);
     }
     // 打った本文だけの列は、流し直しても本文を残りの回数だけ続けたものと同じなので 1 回で作る。
     auto result = repeated(typed.value(), repeat.remaining, view.text, view.document_limit);
@@ -859,10 +1070,63 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     }
     return page_step(next, view, direction);
 }
+// autoindent の INSERT の改行（`<CR>` と `<NL>`・Vim の ins_eol → open_line・#1086）。新しい行の
+// 字下げはキャレットの手前の本文の頭の空白と Tab の桁から作り直し、キャレットの後ろの空白と Tab
+// は捨てる（OPENLINE の skipwhite）。字下げを写した印のまま打った改行は、手前の行の終わりの空白も
+// 切る（trunc_line と truncate_spaces・`A<CR><CR>` の 2 行目は空・実測）。印を立てる（did_ai）。
+[[nodiscard]] VimStep auto_indented_newline(const VimState &state, const VimEditorView &view,
+                                            VimKey key)
+{
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
+    const LineNumber line = line_of(text, caret);
+    const Offset start = text.line_start(line);
+    const std::string indent = detail::auto_indent_of(text, start, caret);
+    const std::size_t trimmed = state.auto_indented ? trailing_blank_bytes(text, start, caret) : 0;
+    const std::size_t skipped = detail::leading_blank_bytes(text, caret, text.line_end(line));
+    const Offset begin{caret.value - trimmed};
+    std::string body = "\n" + indent;
+    const Offset rest{begin.value + body.size()};
+    VimState next = insert_recorded(state, std::move(key));
+    next.auto_indented = true;
+    return VimStep{std::move(next),
+                   VimReplaceRange{OffsetRange{begin, Offset{caret.value + skipped}},
+                                   std::move(body), rest, EditBoundary::absorb,
+                                   VimLineMarks::shifted}};
+}
 } // namespace
 
 namespace detail
 {
+std::size_t leading_blank_bytes(const TextBuffer &text, Offset from, Offset limit)
+{
+    std::size_t count = 0;
+    std::size_t window = blank_window_bytes;
+    while (from.value + count < limit.value)
+    {
+        const Offset begin{from.value + count};
+        const Offset end{std::min(limit.value, begin.value + window)};
+        const std::string piece = text.text_range(begin, end);
+        const auto first = std::ranges::find_if_not(piece, is_indent_blank);
+        if (first != piece.end())
+        {
+            return count + static_cast<std::size_t>(first - piece.begin());
+        }
+        count += piece.size();
+        window *= 2;
+    }
+    return count;
+}
+
+std::string auto_indent_of(const TextBuffer &text, Offset from, Offset limit)
+{
+    const std::size_t blanks = leading_blank_bytes(text, from, limit);
+    const std::size_t width = blank_width(text.text_range(from, Offset{from.value + blanks}));
+    std::string indent(width / vim_tab_stop, '\t');
+    indent.append(width % vim_tab_stop, ' ');
+    return indent;
+}
+
 [[nodiscard]] VimStep insert_special(const VimState &state, const VimEditorView &view,
                                      VimSpecialKey key)
 {
@@ -873,7 +1137,8 @@ namespace detail
     case VimSpecialKey::escape:
         return left_insert(state, view);
     case VimSpecialKey::enter:
-        return VimStep{insert_recorded(state, VimKey{key}), VimNewLine{}};
+        return view.autoindent ? auto_indented_newline(state, view, VimKey{key})
+                               : VimStep{insert_recorded(state, VimKey{key}), VimNewLine{}};
     case VimSpecialKey::backspace:
         return erase_recorded(insert_erased(state, text, caret), key);
     case VimSpecialKey::arrow_left:
@@ -889,9 +1154,9 @@ namespace detail
     case VimSpecialKey::end:
         return insert_moved(state, text, caret, CaretMotion::line_end);
     case VimSpecialKey::control_w:
-        return erase_recorded(insert_cut(state, text, caret, true), key);
+        return erase_recorded(insert_cut(state, view, true), key);
     case VimSpecialKey::control_u:
-        return erase_recorded(insert_cut(state, text, caret, false), key);
+        return erase_recorded(insert_cut(state, view, false), key);
     // `<Del>` は何も消せなくても redo に載る（ins_del の AppendCharToRedobuff）ので、回数の鍵の列
     // にも必ず足す（erase_recorded の「止まった鍵は足さない」を通さない）。
     case VimSpecialKey::delete_key:
@@ -924,11 +1189,13 @@ namespace detail
     std::unreachable();
 }
 
-[[nodiscard]] VimStep insert_character(const VimState &state, VimCharacter key)
+[[nodiscard]] VimStep insert_character(const VimState &state, const VimEditorView &view,
+                                       VimCharacter key)
 {
     if (key.code == line_feed)
     {
-        return VimStep{insert_recorded(state, VimKey{key}), VimNewLine{}};
+        return view.autoindent ? auto_indented_newline(state, view, VimKey{key})
+                               : VimStep{insert_recorded(state, VimKey{key}), VimNewLine{}};
     }
     std::string utf8;
     append_utf8(utf8, key.code);
@@ -1134,6 +1401,107 @@ namespace
     {
         step.next.insert_start = before.insert_start;
     }
+    return step;
+}
+
+namespace
+{
+// 改行の鍵（`<CR>` と `<NL>`）か。印は autoindent の改行が自分で立てる。
+[[nodiscard]] bool breaks_line(const VimKey &key) noexcept
+{
+    const auto *const special = std::get_if<VimSpecialKey>(&key);
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    return (special != nullptr && *special == VimSpecialKey::enter) ||
+           (character != nullptr && character->code == line_feed);
+}
+
+// 消す鍵の後も印を保つか（Vim の ins_bs の終わりの `if (curwin->w_cursor.col <= 1) did_ai =
+// FALSE`）。
+// 何も消せずにビープした鍵はそこへ届かないので保つ。消した後の桁は消す範囲の頭の行の中の桁（行頭で
+// つないだら上の行の終わり）。
+[[nodiscard]] bool erase_keeps_indent(const TextBuffer &text, const VimEffect &effect)
+{
+    if (std::holds_alternative<VimNoEffect>(effect))
+    {
+        return true;
+    }
+    const auto *const removed = std::get_if<VimRemoveRange>(&effect);
+    if (removed == nullptr)
+    {
+        return false;
+    }
+    const Offset begin = removed->range.begin;
+    return begin.value - text.line_start(line_of(text, begin)).value > single_step;
+}
+
+// 鍵の後も印を保つか（#1086）。改行は自分で決め、`Ctrl-r` は名前を待つ間と空のレジスタ（何も
+// 入れない）で保つ。端で動かない矢印（Vim は start_arrow を呼ばない）と、消す鍵の桁の規則でも保つ。
+// ほかの鍵（打った文字・動いた矢印と Home End・`<Del>`・Esc・`Ctrl-o`）は消す。
+[[nodiscard]] bool keeps_auto_indent(const VimState &before, const TextBuffer &text,
+                                     const VimStep &step, const VimKey &key)
+{
+    if (breaks_line(key))
+    {
+        return true;
+    }
+    if (before.input_wait.has_value())
+    {
+        return std::holds_alternative<VimNoEffect>(step.effect);
+    }
+    const auto *const special = std::get_if<VimSpecialKey>(&key);
+    if (special != nullptr && *special == VimSpecialKey::control_r)
+    {
+        return true;
+    }
+    if (moved_nothing(key, step.effect))
+    {
+        return true;
+    }
+    if (std::visit([](const auto &value) { return erases_in_insert(value); }, key))
+    {
+        return erase_keeps_indent(text, step.effect);
+    }
+    return false;
+}
+} // namespace
+
+VimStep auto_indent_noted(const VimState &before, const TextBuffer &text, VimStep step,
+                          const VimKey &key)
+{
+    if (!before.auto_indented || before.mode != VimMode::insert ||
+        keeps_auto_indent(before, text, step, key))
+    {
+        return step;
+    }
+    step.next.auto_indented = false;
+    return step;
+}
+
+// `Ctrl-o` の手前の印（#1086）。Vim の ins_esc は restart_edit のときも stop_insert(esc = TRUE) を
+// 呼ぶので、字下げは Esc と同じに消える（`o<C-o>0x` は x だけ・実測）。始め直す位置の行末かは消した
+// 後の行で決め、欲しい列は消す前の桁（`o<C-o>k` は字下げの桁へ・実測）。
+std::optional<VimStep> auto_indent_paused(const VimState &state, const VimEditorView &view,
+                                          VimStep step)
+{
+    if (!state.auto_indented || !step.next.insert_restart.has_value())
+    {
+        return std::nullopt;
+    }
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
+    const auto [removed, cursor] = auto_indent_trim(text, caret);
+    if (cursor == caret && is_empty(removed))
+    {
+        return std::nullopt;
+    }
+    const LineNumber line = line_of(text, caret);
+    const std::size_t length = removed.end.value - removed.begin.value;
+    const bool at_end = cursor.value >= text.line_end(line).value - length;
+    const Offset final = at_end ? trimmed_left(text, caret, cursor) : cursor;
+    step.next.insert_restart.value().at_line_end = at_end;
+    step.next = trimmed_wanted(std::move(step.next), text, caret);
+    step.insert_left = cursor.value - final.value;
+    step.effect = trimmed_effect(text, removed, final);
     return step;
 }
 } // namespace detail
