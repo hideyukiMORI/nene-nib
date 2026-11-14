@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 90a60098bc9596d1593190ab98668c8183474c5ccea15ff731d7a827e627c38b / 6095 fixtures
+// fixtures.json: sha256 ab536a5b16fe7b25724b4e45dedb07b84b3101a791afed37db4cef9e18edac93 / 6094 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 6095> vim_fixtures{{
+constexpr std::array<VimFixture, 6094> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -5985,7 +5985,6 @@ constexpr std::array<VimFixture, 6095> vim_fixtures{{
     {"autoindent-enter-skips-space-and-tab", "a \tb", "0li<CR>x<Esc>", "a\nxb", 2, 1, "", "", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
     {"autoindent-enter-blank-line-copies", "    ", "A<CR>x<Esc>", "    \n    x", 2, 5, "", "", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
     {"autoindent-enter-ideographic-space-is-not-indent", "　　foo\nbar", "A<CR>x<Esc>", "　　foo\nx\nbar", 2, 1, "", "", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
-    {"autoindent-ctrl-j-copies", "    foo\nbar", "A<NL>x<Esc>", "    foo\n    x\nbar", 2, 5, "", "", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
     {"autoindent-enter-undo-is-one-unit", "    foo\nbar", "A<CR>x<CR>y<Esc>u", "    foo\nbar", 1, 7, "", "", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
     {"autoindent-enter-escape-undo", "    foo\nbar", "A<CR><Esc>u", "    foo\nbar", 1, 7, "", "", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
     {"autoindent-enter-escape-undo-redo", "    foo\nbar", "A<CR><Esc>u<C-r>", "    foo\n\nbar", 1, 7, "", "", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},

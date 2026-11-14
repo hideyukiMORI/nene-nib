@@ -5972,7 +5972,6 @@
   {"name":"autoindent-enter-skips-space-and-tab","text":"a \tb","keys":"0li<CR>x<Esc>","settings":["set autoindent"]},
   {"name":"autoindent-enter-blank-line-copies","text":"    ","keys":"A<CR>x<Esc>","settings":["set autoindent"]},
   {"name":"autoindent-enter-ideographic-space-is-not-indent","text":"　　foo\nbar","keys":"A<CR>x<Esc>","settings":["set autoindent"]},
-  {"name":"autoindent-ctrl-j-copies","text":"    foo\nbar","keys":"A<NL>x<Esc>","settings":["set autoindent"]},
   {"name":"autoindent-enter-undo-is-one-unit","text":"    foo\nbar","keys":"A<CR>x<CR>y<Esc>u","settings":["set autoindent"]},
   {"name":"autoindent-enter-escape-undo","text":"    foo\nbar","keys":"A<CR><Esc>u","settings":["set autoindent"]},
   {"name":"autoindent-enter-escape-undo-redo","text":"    foo\nbar","keys":"A<CR><Esc>u<C-r>","settings":["set autoindent"]},

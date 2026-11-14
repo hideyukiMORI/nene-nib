@@ -131,7 +131,7 @@ oracle は fixture の `settings` を `-u NONE` の上に置いて測るが、�
 
 ## 追記（2026-11-14・Issue #1086）— `:set autoindent`
 
-Vim の `autoindent`（`ai`・既定 off）を足す。正本は Vim 9.1 の実測（`-es -u NONE` に `set ai` を前置き・約 210 形・表は作業木の `out/1086-impl/vim-measure.md`）と fixture `autoindent-` 147 件（設定は fixture の `settings` の欄 `set autoindent`・#1626 の道）。
+Vim の `autoindent`（`ai`・既定 off）を足す。正本は Vim 9.1 の実測（`-es -u NONE` に `set ai` を前置き・約 210 形・表は作業木の `out/1086-impl/vim-measure.md`）と fixture `autoindent-` 143 件（設定は fixture の `settings` の欄 `set autoindent`・#1626 の道）。
 
 - **読む口**: engine は `VimEditorView.autoindent`（controller が設定 `settings.v4` の `autoindent` から写す・`search_case` `scroll_margin` と同じ口）だけを読む。偽なら INSERT の改行は `VimNewLine`、`o` `O` は改行 1 つの `VimInsertAt`、行単位の `c` は行頭から消す今のままで、分岐はそれぞれ 1 つ。
 - **印**: `VimState.auto_indented`（Vim の did_ai）。立てるのは autoindent の改行・`o` `O`・行単位の `c`。保つか消すかは `auto_indent_noted` の 1 か所（打った文字・`<Del>`・動いた矢印と Home End・空でない `Ctrl-r` で消え、端で動かない矢印・空のレジスタの `Ctrl-r`・消した後の桁が 2 以上の消す鍵で残る・Vim の ins_bs の `col <= 1`）。`vim_resting_from` と `input_discarded` は持ち越さない。

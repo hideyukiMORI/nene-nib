@@ -234,7 +234,10 @@ void verify_controller_setting()
 void verify_typed_keys()
 {
     using Row = std::tuple<std::string_view, std::string_view, std::string_view>;
-    for (const auto &[text, keys, body] : std::array<Row, 6>{{
+    // `<NL>`（Ctrl-J）は窓の道で打てない鍵なので fixture ではなくここで守る（Vim は `<CR>`
+    // と同じ）。
+    for (const auto &[text, keys, body] : std::array<Row, 7>{{
+             {indented, "A<NL>x<Esc>", "    foo\n    x\nbar"},
              {indented, "A<CR><CR>x<Esc>", "    foo\n\n    x\nbar"},
              {indented, "3o<Esc>", "    foo\n\n\n\nbar"},
              {indented, "o<BS><Esc>", "    foo\n\nbar"},
