@@ -2107,8 +2107,64 @@ void verify_palette_set_value_staged()
     }
     expect(first_choice_is("set display=g", "set display=grid", core::CommandChoiceKind::execute),
            "a refused typed line keeps the candidate it matches first (#1527)");
-    expect(first_choice_is("set so=abc", "set so=abc", core::CommandChoiceKind::execute),
-           "a refused typed line with no other candidate is offered so Enter reports it (#1527)");
+    const auto refused = choices_for("set so=abc");
+    expect(std::ranges::find(refused, "set so=abc", &core::CommandChoice::command) == refused.end(),
+           "a refused typed line is not offered, as before (#1527)");
+}
+
+// 面の `:` で打った行のうち、設定の族でない引数つきの行（ファイルを書く・閉じる・本文を変える・
+// map・タブ・開く）は、打った行を候補にしない（V-1663 の M1・設計席の決め）。
+constexpr std::array<std::string_view, 12> palette_unoffered_lines{"w! C:\\work\\other.txt",
+                                                                   "saveas! C:\\work\\other.txt",
+                                                                   "wq C:\\work\\new.txt",
+                                                                   "x C:\\work\\new.txt",
+                                                                   "%s/a b/x/g",
+                                                                   "map x y",
+                                                                   "nmap x dd",
+                                                                   "tabnew C:\\work\\new.txt",
+                                                                   "e C:\\work\\other.txt",
+                                                                   "hardcopy x",
+                                                                   "q!",
+                                                                   "tabclose"};
+
+// 面の候補の列に、表に無い（打った）行が入っていないか。
+[[nodiscard]] bool only_table_choices(std::string_view query)
+{
+    const auto table = core::ex_command_candidates();
+    return std::ranges::all_of(choices_for(query), [&table](const core::CommandChoice &choice)
+                               { return std::ranges::find(table, choice.command) != table.end(); });
+}
+
+// 面から打っても main と同じ: 引数つきの行は候補が 0 で、Enter は何もしない（ファイル・本文・タブ・
+// map と設定を書かない・閉じない）。`q!` `tabclose` は表の候補のままで、打った行は足さない。
+void verify_palette_runs_only_settings()
+{
+    for (const auto line : palette_unoffered_lines)
+    {
+        expect(only_table_choices(line),
+               (std::string(line) + ": the palette does not offer the typed line (#1527)").c_str());
+        if (line.find(' ') == std::string_view::npos)
+        {
+            continue;
+        }
+        expect(choices_for(line).empty(),
+               (std::string(line) + ": no candidate matches it, as on main (#1527)").c_str());
+        Editing editor;
+        open_vim_document(editor, "a b\ntwo");
+        auto &controller = editor.controller();
+        const auto before = controller.frame();
+        static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+        static_cast<void>(controller.apply_frame(app::CommandText{":" + std::string(line)}));
+        const auto after = controller.apply_frame(app::SubmitCommand{});
+        expect(editor.files().written().empty() && editor.files().written_path().empty() &&
+                   editor.settings().writes() == 0 && after.settings.maps.empty() &&
+                   after.lines.size() == before.lines.size() &&
+                   after.lines.front().text == before.lines.front().text &&
+                   after.tabs.size() == before.tabs.size() && !after.closing &&
+                   !after.close_request.has_value() && !after.operation_request.has_value(),
+               (std::string(line) + ": Enter in the palette changes nothing, as on main (#1527)")
+                   .c_str());
+    }
 }
 
 // 通常モードの余白（ADR 0019 の #1432 の追補・V-1519 の R1 の通常モードの項）。通常モードは Vim の
@@ -2322,6 +2378,7 @@ void verify_ex_settings()
     verify_ex_set_form_table();
     verify_palette_set_forms();
     verify_palette_set_value_staged();
+    verify_palette_runs_only_settings();
     verify_palette_margin_in_ordinary_mode();
     verify_ex_set_arguments();
     verify_ex_set_short_names();

@@ -64,12 +64,30 @@ namespace
     return match_score(query, command);
 }
 
-// Ex の入力行と同じ評価が受けるか（既定の設定で・途中で止まる行は受けない）。候補の動きを決める
-// のはこの 1 本で、形ごとの表を別に持たない（#1527）。
-[[nodiscard]] bool evaluates(std::string_view command)
+// 設定を変えるか表示するだけの答えか（#1527・`set` の族・`colorscheme`・`syntax`）。文書の保存と
+// 終了・タブ・本文の置換・map・枠・面・印刷・行の移動・プレビューの要求を持つ答えは偽。答えの欄を
+// 構造化束縛で全部名指しするので、ExResult に欄が増えるとここがコンパイルで落ち、どちらの側かを
+// 決め直す（CPP-002 と同じ形・命令の名前の表は持たない）。途中で止まった複数の引数の行も偽。
+[[nodiscard]] bool settings_only(const ExResult &result) noexcept
+{
+    [[maybe_unused]] const auto &[settings, highlight, incsearch, message, tab, palette, document,
+                                  display, window, language, syntax, line, clipboard, root, lsp,
+                                  map, format, preview, print, rechecks_window, relative_line,
+                                  substitute, display_language, wrapscan, stopped] = result;
+    return !tab.has_value() && !palette.has_value() && !document.has_value() &&
+           !window.has_value() && !line.has_value() && !map.has_value() && !preview.has_value() &&
+           !print.has_value() && !relative_line.has_value() && !substitute.has_value() &&
+           !stopped.has_value();
+}
+
+// 面が打った行を候補として出すか（#1527）。Ex の入力行と同じ評価が受け、答えが設定の族だけのとき。
+// 評価は既定の設定で行い、決めるのは候補に出すかと値の無い候補の動きだけ（確定は今の設定で
+// evaluate_command が評価し直す）。答えの種類は設定の値に依らない。候補の動きを決めるのはこの 1
+// 本で、形ごとの表を別に持たない。
+[[nodiscard]] bool offered(std::string_view command)
 {
     const auto result = evaluate_ex(command, default_editor_settings(), Appearance::dark);
-    return result.has_value() && !result.value().stopped.has_value();
+    return result.has_value() && settings_only(result.value());
 }
 
 [[nodiscard]] CommandChoice choice_of(std::string command)
@@ -80,8 +98,8 @@ namespace
     // 値の無い候補（`set fontsize=` `set guifont=` `set scrolloff=` `set ft=`）のうち、空の値を
     // Ex が受けないものは、選ぶと入力欄をその文字に置き換えて面を開いたままにする（#1527）。空の
     // 値に意味がある `set clipboard=` `set root=` はそのまま実行する。
-    const auto kind = command.ends_with('=') && !evaluates(command) ? CommandChoiceKind::fill
-                                                                    : CommandChoiceKind::execute;
+    const auto kind = command.ends_with('=') && !offered(command) ? CommandChoiceKind::fill
+                                                                  : CommandChoiceKind::execute;
     return CommandChoice{std::move(label), std::move(command), kind, std::nullopt,
                          std::nullopt,     std::nullopt,       {}};
 }
@@ -328,9 +346,11 @@ template <std::ranges::sized_range Positions>
 }
 
 // 打った引数つきの行（`set so=2` `set ft=python` `setl ic` `se cb=unnamed`）を先頭の候補にするか
-// （#1527）。Ex が受ける行か、ほかに当たる候補が無い行（確定で Ex と同じ失敗を知らせる）で、
-// 同じ文字の候補が列に無いときだけ。受けない行でもほかに当たる候補があれば（`set display=g`）、
-// そちらを先に残す。引数の無い行（`w` `tabn`）は今までどおり候補の列だけ。
+// （#1527）。Ex が受けて答えが設定の族だけの行（offered）で、同じ文字の候補が列に無いときだけ。
+// ファイルを書く・閉じる・本文を変える・map・タブの行（`w! <file>` `%s/a b/x/g` `map x y`）と
+// 受けない行（`set so=abc`）は候補にせず、面は今までどおり候補の列だけ（無ければ何も起きない・
+// 受けない行でも当たる候補があればそちら・`set display=g` は `set display=grid`）。引数の無い行
+// （`w` `tabn`）も今までどおり候補の列だけ。
 [[nodiscard]] bool typed_command(std::string_view query, const std::vector<CommandChoice> &choices)
 {
     const auto space = query.find(' ');
@@ -340,7 +360,7 @@ template <std::ranges::sized_range Positions>
     {
         return false;
     }
-    return choices.empty() || evaluates(query);
+    return offered(query);
 }
 } // namespace
 
