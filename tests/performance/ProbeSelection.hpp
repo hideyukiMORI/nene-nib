@@ -17,6 +17,7 @@
 #include "PatternProgramWorkload.hpp"
 #include "PieceListWorkload.hpp"
 #include "PreviewCaretWorkload.hpp"
+#include "ExLinesWorkload.hpp"
 #include "ProbeWorkload.hpp"
 #include "SearchObjectWorkload.hpp"
 #include "SearchSnapshotWorkload.hpp"
@@ -42,7 +43,7 @@ using ProbeSelection =
                  TextObjectWorkload, MarkdownWorkload, NewlineIndexWorkload, LexerWorkload,
                  ExplorerFrameWorkload, VimBlockWorkload, WordObjectWorkload, EditedHistoryWorkload,
                  PieceListWorkload, SubstituteWorkload, PatternCostWorkload, PatternProgramWorkload,
-                 SearchObjectWorkload>;
+                 SearchObjectWorkload, ExLinesWorkload>;
 
 [[nodiscard]] std::optional<ProbeSelection> workload_of(std::string_view name) noexcept;
 // 表 ProbeDispatchRow の全 workload の名前（表の順・#1604 の --expectations が流す）。

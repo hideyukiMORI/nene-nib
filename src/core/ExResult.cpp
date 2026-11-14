@@ -8,6 +8,7 @@
 #include "DisplayLanguageNames.hpp"
 #include "DocumentFormat.hpp"
 #include "DocumentFormatKind.hpp"
+#include "ExLineCommand.hpp"
 #include "ExLineRequest.hpp"
 #include "ExMapCommand.hpp"
 #include "ExPaletteName.hpp"
@@ -1511,7 +1512,8 @@ set_option(std::string_view typed, const EditorSettings &settings, const ExWindo
     const bool command = result.tab.has_value() || result.palette.has_value() ||
                          result.document.has_value() || result.window.has_value() ||
                          result.line.has_value() || result.relative_line.has_value() ||
-                         result.substitute.has_value() || result.print.has_value();
+                         result.substitute.has_value() || result.print.has_value() ||
+                         result.lines.has_value() || result.global.has_value();
     const bool answered = result.language.has_value() || result.syntax.has_value() ||
                           result.clipboard.has_value() || result.root.has_value() ||
                           result.lsp.has_value() || result.map.has_value();
@@ -2076,6 +2078,15 @@ constexpr std::array<ExCommandParser, 10> command_parsers{
     return std::unexpected(ExFailure::unknown_command);
 }
 
+// 行を書き換える命令の答えの頭（ADR 0168）。命令は入力行の上限（4096 バイト）まで長くなるので、
+// 知らせの 1 行に切る（命令は request の全文で流し、この文は表示にしか使わない・#1616）。
+// evaluate_ex が制御文字と壊れた UTF-8 を先に断り、命令は空でないので、切った文は必ず受かる
+// （不変条件・ARC-010）。
+[[nodiscard]] ExResult edit_command_result(std::string_view text)
+{
+    return ExResult{std::nullopt, std::nullopt, std::nullopt, clipped_display_text(text).value()};
+}
+
 // `:s` の族（ADR 0168 の決定 1）。range は範囲の字面（無ければ今の行）。`:s` の族でなければ値なし。
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
 substitute_result(std::string_view text, std::optional<ExRange> range)
@@ -2089,13 +2100,58 @@ substitute_result(std::string_view text, std::optional<ExRange> range)
     {
         return std::unexpected(parsed.value().error());
     }
-    // 命令は入力行の上限（4096 バイト）まで長くなるので、知らせの 1 行に切る（置換は request の
-    // 全文で流し、この文は表示にしか使わない・#1616）。evaluate_ex が制御文字と壊れた UTF-8 を
-    // 先に断り、`:s` の族は空でないので、切った文は必ず受かる（不変条件・ARC-010）。
-    ExResult result{std::nullopt, std::nullopt, std::nullopt, clipped_display_text(text).value()};
+    ExResult result = edit_command_result(text);
     result.substitute = std::move(parsed).value().value();
     result.substitute.value().range = std::move(range);
     return result;
+}
+
+// `:d` `:y` と `:g` `:v`（ADR 0168 の段 3a）。range は範囲の字面（無ければ `:d` `:y` は今の行・
+// `:g` は本文の全体）。どれでもなければ値なし。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+lines_result(std::string_view text, const std::optional<ExRange> &range)
+{
+    if (auto global = global_command(text))
+    {
+        if (!global.value())
+        {
+            return std::unexpected(global.value().error());
+        }
+        ExResult result = edit_command_result(text);
+        result.global = std::move(global).value().value();
+        result.global.value().range = range;
+        return result;
+    }
+    auto lines = lines_command(text);
+    if (!lines.has_value())
+    {
+        return std::nullopt;
+    }
+    if (!lines.value())
+    {
+        return std::unexpected(lines.value().error());
+    }
+    ExResult result = edit_command_result(text);
+    result.lines = std::move(lines).value().value();
+    result.lines.value().range = range;
+    return result;
+}
+
+// 命令の字面が `|` を自分で読むか（`:s` の族と `:g`・区切りの間の `|` は文字）。
+[[nodiscard]] bool takes_bar(std::string_view command)
+{
+    return substitute_command(command).has_value() || global_command(command).has_value();
+}
+
+// 行を書き換える命令（`:s` の族・`:d` `:y`・`:g`）。どれでもなければ値なし。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+line_edit_result(std::string_view text, std::optional<ExRange> range)
+{
+    if (auto lined = lines_result(text, range))
+    {
+        return lined;
+    }
+    return substitute_result(text, std::move(range));
 }
 
 // 範囲のない 1 命令（`colorscheme` `set` と表の命令）。範囲の後ろの命令もここを通す。
@@ -2103,9 +2159,9 @@ substitute_result(std::string_view text, std::optional<ExRange> range)
 unranged_command(std::string_view text, const EditorSettings &settings, const ExWindowState &window,
                  const ThemeCatalog &themes)
 {
-    if (auto substituted = substitute_result(text, std::nullopt))
+    if (auto edited = line_edit_result(text, std::nullopt))
     {
-        return std::move(substituted).value();
+        return std::move(edited).value();
     }
     const auto space = text.find(' ');
     const auto name = text.substr(0, space);
@@ -2194,9 +2250,9 @@ ranged_command(std::string_view text, const EditorSettings &settings, const ExWi
     {
         return range_only(text);
     }
-    if (auto substituted = substitute_result(command, parsed_ex_range(text).first))
+    if (auto edited = line_edit_result(command, parsed_ex_range(text).first))
     {
-        return std::move(substituted).value();
+        return std::move(edited).value();
     }
     const auto evaluated = unranged_command(command, settings, window, themes);
     if (!evaluated)
@@ -2432,11 +2488,10 @@ std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
         return std::unexpected(ExFailure::invalid_text);
     }
     text = trimmed(text);
-    // `|` は命令の区切りで Nib は続けて流さない。`:s` だけは区切りの間（パターンと置き換え）の `|`
-    // を 文字として読む（Vim の ex_substitute・ADR 0168 の追補）。フラグの後ろの `|` は E488
-    // の手前で断る。
-    if (text.find('|') != std::string_view::npos &&
-        !substitute_command(text.substr(range_length(text))).has_value())
+    // `|` は命令の区切りで Nib は続けて流さない。`:s` と `:g` だけは区切りの間（パターンと置き換え）の
+    // `|` を 文字として読む（Vim の ex_substitute と ex_global・ADR 0168 の追補と段 3a）。フラグの
+    // 後ろと `:g` の命令の `|` は命令の字面が断る。
+    if (text.find('|') != std::string_view::npos && !takes_bar(text.substr(range_length(text))))
     {
         return std::unexpected(ExFailure::unknown_command);
     }
@@ -2496,6 +2551,10 @@ DisplayText ex_failure_message(ExFailure failure)
         return DisplayText::parse("E1510: Value too large").value();
     case ExFailure::trailing_characters:
         return DisplayText::parse("E488: Trailing characters").value();
+    case ExFailure::no_bang_allowed:
+        return DisplayText::parse("E477: No ! allowed").value();
+    case ExFailure::global_pattern_missing:
+        return DisplayText::parse("E148: Regular expression missing from :global").value();
     }
     std::unreachable();
 }

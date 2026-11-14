@@ -4,6 +4,8 @@
 #include "VimPatternCaptures.hpp"
 
 #include <cstddef>
+#include <optional>
+#include <span>
 
 namespace nenenib::core
 {
@@ -21,5 +23,8 @@ struct SubstituteRequest
     // 群の範囲を引く道の升の数の上限（製品は vim_capture_cell_limit・試験だけが小さな値を置く・
     // ADR 0168 の追補 13）。超える当たりがあれば置換全体を too_complex で断る。
     std::size_t capture_limit = vim_capture_cell_limit;
+    // `:g` が選んだ行（1 始まり・上から・first から last の中・ADR 0168 の段 3a）。値があれば
+    // first から last のうちこの行だけを走る。空の値なしは first から last の全部。
+    std::optional<std::span<const std::size_t>> marked = std::nullopt;
 };
 } // namespace nenenib::core

@@ -57,6 +57,9 @@ constexpr std::string_view not_found_alone = "E486: Pattern not found";
 // 'nowrapscan' の端の報せ（Vim 9.1 の e_search_hit_bottom_without_match_for_str ほか・#1561）。
 constexpr std::string_view hit_bottom_prefix = "E385: Search hit BOTTOM without match for: ";
 constexpr std::string_view hit_top_prefix = "E384: Search hit TOP without match for: ";
+// `:g` の報せ（Vim 9.1 の ex_global の smsg・E 番号の無い文言・ADR 0168 の段 3a）。
+constexpr std::string_view global_not_found_prefix = "Pattern not found: ";
+constexpr std::string_view global_every_line_prefix = "Pattern found in every line: ";
 
 // 表示できる長さに収める。切るのは入力の文を知らせに入れる所の 1 本 clipped_display_text（code
 // point の境目で落として「…」・#1568 / #1616）。表示できない文字があれば E486 の文言だけを出す。
@@ -84,6 +87,16 @@ constexpr std::string_view hit_top_prefix = "E384: Search hit TOP without match 
         text += count_only ? "es" : "s";
     }
     text += " on " + std::to_string(notice.lines) + (notice.lines == 1 ? " line" : " lines");
+    return message_of(text);
+}
+// `:y` の数の報せ（Vim の op_yank の文言）。名指しなら into "x を足す。
+[[nodiscard]] DisplayText yanked_message(const VimSearchNotice &notice)
+{
+    std::string text = std::to_string(notice.count) + " lines yanked";
+    if (!notice.pattern.empty())
+    {
+        text += " into \"" + notice.pattern;
+    }
     return message_of(text);
 }
 } // namespace
@@ -124,6 +137,18 @@ DisplayText vim_search_message(const VimSearchNotice &notice)
         return message_of("E939: Positive count required");
     case VimSearchNoticeKind::pattern_too_complex:
         return message_of("E363: pattern uses more memory than 'maxmempattern'");
+    case VimSearchNoticeKind::fewer_lines:
+        return message_of(std::to_string(notice.count) + " fewer lines");
+    case VimSearchNoticeKind::lines_yanked:
+        return yanked_message(notice);
+    case VimSearchNoticeKind::no_lines_in_buffer:
+        return message_of("--No lines in buffer--");
+    case VimSearchNoticeKind::global_not_found:
+        return not_found_message(notice.pattern, global_not_found_prefix);
+    case VimSearchNoticeKind::global_every_line:
+        return not_found_message(notice.pattern, global_every_line_prefix);
+    case VimSearchNoticeKind::not_supported:
+        return message_of("Not supported");
     }
     std::unreachable();
 }

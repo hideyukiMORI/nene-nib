@@ -253,7 +253,8 @@ void placed_after_effect(EditorState &state, const core::VimStep &step)
 constexpr std::string_view too_long_notice = "E1240: Resulting text too long";
 // engine を呼ぶ 1 か所の写し（Issue #1023）。鍵は vim_step・`:N` の行は vim_line_jumped・押しの
 // VISUAL は vim_pointer_selected（#1250）・オペレータ待ちの `:` の確定は
-// vim_command_operated（#1549）・`:s` の族は vim_substituted（ADR 0168）。
+// vim_command_operated（#1549）・`:s` の族は vim_substituted（ADR 0168）・`:d` `:y` は
+// vim_lines_edited・`:g` は vim_global（ADR 0168 の段 3a）。
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
                                         const core::VimEditorView &view, const core::VimKey &key)
 {
@@ -293,6 +294,20 @@ constexpr std::string_view too_long_notice = "E1240: Resulting text too long";
                                         const core::ExSubstituteRequest &request)
 {
     return core::vim_substituted(state, view, request);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
+                                        const core::ExLinesRequest &request)
+{
+    return core::vim_lines_edited(state, view, request);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
+                                        const core::ExGlobalRequest &request)
+{
+    return core::vim_global(state, view, request);
 }
 
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,

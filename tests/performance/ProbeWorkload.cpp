@@ -29,6 +29,7 @@
 #include "SearchSpanProbe.hpp"
 #include "StatusItemsProbe.hpp"
 #include "SubstituteProbe.hpp"
+#include "ExLinesProbe.hpp"
 #include "TabDisplayProbe.hpp"
 #include "TextObjectProbe.hpp"
 #include "VimBlockProbe.hpp"
@@ -1081,6 +1082,17 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(ExLinesWorkload workload)
+{
+    switch (workload)
+    {
+    case ExLinesWorkload::global_delete_half_100k:
+    case ExLinesWorkload::delete_all_100k:
+        return 278U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -1096,7 +1108,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 278> dispatches{{
+constexpr std::array<ProbeDispatch, 280> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1677,6 +1689,10 @@ constexpr std::array<ProbeDispatch, 278> dispatches{{
                      search_object_keys},
     ProbeDispatchRow{SearchObjectWorkload::dgprevious_at_end, "vim-dg-shift-n-1mib-line-end",
                      search_object_input, search_object_keys},
+    ProbeDispatchRow{ExLinesWorkload::global_delete_half_100k, "vim-global-delete-half-100k-lines",
+                     ex_lines_input, ex_lines_run},
+    ProbeDispatchRow{ExLinesWorkload::delete_all_100k, "vim-delete-percent-100k-lines",
+                     ex_lines_input, ex_lines_run},
 }};
 
 constexpr auto dispatch_names = []
@@ -1719,7 +1735,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 278U);
+static_assert(dispatches.size() == 280U);
 static_assert(dispatch_is_complete());
 
 } // namespace

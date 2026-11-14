@@ -220,6 +220,22 @@ constexpr std::size_t code_point_bytes = 4;
     }
     return keys;
 }
+
+// Ex の答えが行を書き換える命令（`:s` の族・`:d` `:y`・`:g`・ADR 0168）なら、engine の 1 歩の
+// 出どころ。ほかの答えは値なし。
+[[nodiscard]] std::optional<VimStepSource> line_edit_source(const core::ExResult &result)
+{
+    if (result.substitute.has_value())
+    {
+        return VimStepSource{result.substitute.value()};
+    }
+    if (result.lines.has_value())
+    {
+        return VimStepSource{result.lines.value()};
+    }
+    return result.global.has_value() ? std::optional{VimStepSource{result.global.value()}}
+                                     : std::nullopt;
+}
 } // namespace
 
 // 今の鍵が打った鍵か（再生の中でも `map` の右辺でも :normal!（press_vim_keys が出どころを mapped
@@ -537,11 +553,10 @@ std::optional<core::VimRepeatFailure> EditorController::operator_command(const s
         return operator_closed_in_place(text);
     }
     const auto result = evaluated_ex(text);
-    const auto substitute =
-        result.has_value() ? result.value().substitute : std::optional<core::ExSubstituteRequest>{};
-    if (substitute.has_value())
+    const auto edit = result.has_value() ? line_edit_source(result.value()) : std::nullopt;
+    if (edit.has_value())
     {
-        return operator_substituted(text, substitute.value());
+        return operator_line_edited(text, edit.value());
     }
     const auto line = result.has_value() ? landing_line(result.value()) : std::nullopt;
     if (line.has_value())
@@ -555,15 +570,16 @@ std::optional<core::VimRepeatFailure> EditorController::operator_command(const s
     return operator_closed_in_place(text);
 }
 
-// オペレータ待ちの `:s`（`d:s/a/b/`・ADR 0168 の追補 16）。Vim は置換を先に流し、置換の前の
-// キャレットから置換の後のキャレットまでを exclusive な移動としてオペレータを閉じる（`jd:s/a/X/` は
-// `  b a` を `b X` に・実測）。置換が断られたら（E486 ほか）オペレータを捨てて再生を打ち切る。
+// オペレータ待ちの `:s`（`d:s/a/b/`・ADR 0168 の追補 16）と `:d` `:y` `:g`（`d:3d`・段 3a）。Vim は
+// 命令を先に流し、命令の前のキャレットから後のキャレットまでを exclusive な移動としてオペレータを
+// 閉じる（`jd:s/a/X/` は `  b a` を `b X` に・`d:3d` は 3 行目を消してから 1 行目の頭から消した後の
+// 3 行目の最初の非空白までを消す・実測）。命令が断られたら（E486 ほか）オペレータを捨てて再生を
+// 打ち切る。
 std::optional<core::VimRepeatFailure>
-EditorController::operator_substituted(const std::string &text,
-                                       const core::ExSubstituteRequest &request)
+EditorController::operator_line_edited(const std::string &text, const VimStepSource &source)
 {
     const core::Offset origin = state_.selection().caret;
-    const auto failure = stepped_vim(VimStepSource{request});
+    const auto failure = stepped_vim(source);
     if (failure.has_value())
     {
         state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
@@ -819,11 +835,12 @@ std::optional<core::VimRepeatFailure> EditorController::ran_ex_result(
         reject(core::ex_failure_message(result.error(), text));
         return core::VimRepeatFailure::refused;
     }
-    // `:s` の族は engine の 1 歩（ADR 0168 の決定 1）。E486 などの失敗は再生を打ち切る。
-    const auto &substitute = result.value().substitute;
-    if (substitute.has_value())
+    // `:s` の族と `:d` `:y` `:g` は engine の 1 歩（ADR 0168 の決定 1・段 3a）。E486 などの失敗は
+    // 再生を打ち切る。
+    const auto edit = line_edit_source(result.value());
+    if (edit.has_value())
     {
-        return stepped_vim(VimStepSource{substitute.value()});
+        return stepped_vim(edit.value());
     }
     const std::size_t refusals = refusals_;
     const bool requested = window_request_pending();

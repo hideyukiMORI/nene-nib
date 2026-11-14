@@ -256,4 +256,9 @@ substitute_command(std::string_view text)
     }
     return substitute_argument(skipped_white(text.substr(name)));
 }
+
+std::size_t ex_pattern_end(std::string_view text, char delimiter) noexcept
+{
+    return pattern_end(text, delimiter);
+}
 } // namespace nenenib::core

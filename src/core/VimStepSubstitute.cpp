@@ -24,9 +24,11 @@
 #include <expected>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 
 namespace nenenib::core
 {
@@ -358,6 +360,28 @@ resolved_lines(const VimEditorView &view, const std::optional<ExRange> &range)
                   landing_column(line, end_column)};
 }
 
+// `:g` の置換の後のキャレット（Vim の global_exe・ADR 0168 の段 3a）。最後に選んだ行で置き換えたなら
+// `:s` と同じ着地、ほかは最後に選んだ行（その上の置き換えが入れた改行の分だけ下がる）の最初の
+// 非空白（どこかで置き換えたら global_need_beginline の beginline(BL_WHITE | BL_FIX)・実測）。
+[[nodiscard]] Offset global_caret(const TextBuffer &text, const SubstituteResult &result,
+                                  std::size_t last_marked)
+{
+    if (last_marked == result.last_line.value)
+    {
+        return substituted_caret(text, result, false);
+    }
+    const LineEnding ending = text.line_ending();
+    const VimBlockEdit &last = result.edits.back();
+    const std::int64_t growth =
+        earlier_growth(result, ending) +
+        static_cast<std::int64_t>(document_bytes(last.utf8, ending)) -
+        static_cast<std::int64_t>(last.range.end.value - last.range.begin.value);
+    const LineNumber line{last_marked};
+    return Offset{static_cast<std::size_t>(
+                      static_cast<std::int64_t>(text.line_start(line).value) + growth) +
+                  landing_column(text.line_text(line), false)};
+}
+
 // 前の置換を覚えた状態（Vim の old_sub・reg_prev_sub・subflags・RE_SUBST と RE_LAST）。直前の
 // 検索（`n` が探す）も置換のパターンにし、向きは前の検索のまま（無ければ前向き）・`:nohlsearch` で
 // 止めた強調を戻す（Vim の save_re_pat）。
@@ -602,8 +626,141 @@ VimStep vim_substituted(const VimState &state, const VimEditorView &view,
     return substituted_step(std::move(next), view, std::move(result).value(), end_column);
 }
 
+namespace
+{
+// `:g` の置換の 1 歩の残り（パターンを解いて置換を覚えた後・ADR 0168 の段 3a）。置換の覚えは
+// next.last_substitute。当たりが無ければ失敗にせず、最後に選んだ行の頭に着く（Vim の
+// global_exe_one の (lnum, 0)・実測）。
+[[nodiscard]] VimStep marked_substituted(VimState next, const VimEditorView &view,
+                                         const VimPattern &pattern,
+                                         std::span<const std::size_t> marked)
+{
+    const std::shared_ptr<const VimSubstituteMemory> remembered_memory = next.last_substitute;
+    const VimSubstituteMemory &memory = *remembered_memory;
+    const VimSubstituteFlags flags = memory.flags;
+    const auto replacement = SubstituteReplacement::vim(memory.previous);
+    auto result = substituted(view.text, pattern, replacement,
+                              SubstituteRequest{LineNumber{marked.front()}, LineNumber{marked.back()},
+                                                flags.every, flags.count, view.document_limit,
+                                                view.capture_limit, marked});
+    if (!result && result.error() == SubstituteFailure::no_match)
+    {
+        VimStep step{std::move(next), VimMoveTo{view.text.line_start(LineNumber{marked.back()})}};
+        return context_marked(std::move(step), view);
+    }
+    if (!result)
+    {
+        return unsubstituted(std::move(next), result.error(), flags,
+                             memory.pattern.value_or(std::string{}));
+    }
+    if (flags.count)
+    {
+        return substituted_step(std::move(next), view, std::move(result).value(), false);
+    }
+    const Offset caret = global_caret(view.text, result.value(), marked.back());
+    VimStep step = substituted_step(std::move(next), view, std::move(result).value(), false);
+    if (auto *const block = std::get_if<VimReplaceBlock>(&step.effect))
+    {
+        block->caret = caret;
+    }
+    return step;
+}
+} // namespace
+
 namespace detail
 {
+std::expected<ExLineSpan, VimSearchNoticeKind>
+ex_lines_resolved(const VimEditorView &view, const std::optional<ExRange> &range)
+{
+    return resolved_lines(view, range);
+}
+
+VimState ex_rested(const VimState &state)
+{
+    return rested(state);
+}
+
+VimStep ex_noticed(const VimState &state, VimSearchNotice notice, VimRepeatFailure failure)
+{
+    return noticed(state, std::move(notice), failure);
+}
+
+std::size_t ex_landing_column(std::string_view line)
+{
+    return landing_column(line, false);
+}
+
+std::string ex_forward_pattern(std::string_view pattern, char delimiter)
+{
+    return delimiter == '?' ? question_unescaped(pattern) : separated(pattern, '/');
+}
+
+std::optional<std::string> ex_last_search(const VimState &state)
+{
+    return state.last_search.has_value() ? std::optional{forward_text(state.last_search.value())}
+                                         : std::nullopt;
+}
+
+VimState ex_pattern_remembered(VimState next, const VimEditorView &view, std::string_view pattern)
+{
+    const VimSearchDirection direction = next.last_search.has_value()
+                                             ? next.last_search.value().direction()
+                                             : VimSearchDirection::forward;
+    next.last_search = VimSearchSnapshot::from(
+        separated(pattern, direction == VimSearchDirection::forward ? '/' : '?'), direction,
+        view.search_case, VimSmartcase::honored);
+    if (next.highlight == VimSearchHighlight::suspended)
+    {
+        next.highlight = VimSearchHighlight::on;
+    }
+    if (next.last_substitute != nullptr)
+    {
+        VimSubstituteMemory memory = *next.last_substitute;
+        memory.pattern = std::string(pattern);
+        next.last_substitute = std::make_shared<const VimSubstituteMemory>(std::move(memory));
+    }
+    return next;
+}
+
+VimStep global_substituted(const VimState &state, const VimEditorView &view,
+                           const ExSubstituteRequest &request, std::span<const std::size_t> marked)
+{
+    auto renewed = renewed_memory(state, request);
+    if (!renewed)
+    {
+        return noticed(state, notice_of(renewed.error()), VimRepeatFailure::refused);
+    }
+    auto [memory, pattern] = std::move(renewed).value();
+    VimState next = rested(state);
+    const auto refused = early_refusal(memory, pattern.has_value(), request);
+    if (refused.has_value())
+    {
+        next.last_substitute = std::make_shared<const VimSubstituteMemory>(std::move(memory));
+        return noticed(next, notice_of(refused.value()), VimRepeatFailure::refused);
+    }
+    const std::string pattern_text = pattern.value_or(std::string{});
+    memory.pattern = pattern_text;
+    memory.previous = vim_tilde_expanded(memory.replacement, previous_of(state));
+    // Vim は選んだ行ごとに `:s` を流し、`~` は前の行の広げた置き換えに解くので、`~` が行ごとに伸びる
+    // 形は 1 回の置換に畳めない。段 3a では断る（本文・状態は変えない）。
+    if (marked.size() > 1 && vim_tilde_expanded(memory.replacement, memory.previous) != memory.previous)
+    {
+        return noticed(state, notice_of(VimSearchNoticeKind::not_supported),
+                       VimRepeatFailure::refused);
+    }
+    const VimPatternCase letter_case = memory.flags.letter_case.value_or(view.search_case);
+    next = remembered(std::move(next), view, std::move(memory), pattern_text);
+    const auto parsed = VimPattern::parse(pattern_text, VimSearchDirection::forward, letter_case);
+    if (!parsed)
+    {
+        return noticed(next,
+                       VimSearchNotice{VimSearchNoticeKind::unsupported_pattern, std::string{},
+                                       parsed.error()},
+                       VimRepeatFailure::refused);
+    }
+    return marked_substituted(std::move(next), view, parsed.value(), marked);
+}
+
 VimStep substitute_action(const VimState &state, const VimEditorView &view, VimAction action)
 {
     if (action == VimAction::repeat_substitute_all)

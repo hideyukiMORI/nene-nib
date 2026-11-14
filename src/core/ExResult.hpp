@@ -9,8 +9,10 @@
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
 #include "ExFormatRequest.hpp"
+#include "ExGlobalRequest.hpp"
 #include "ExLanguageRequest.hpp"
 #include "ExLineRequest.hpp"
+#include "ExLinesRequest.hpp"
 #include "ExLspRequest.hpp"
 #include "ExMapRequest.hpp"
 #include "ExPaletteRequest.hpp"
@@ -69,7 +71,9 @@ inline constexpr std::string_view guifont_command = "set guifont=";
 // relative_line は範囲だけの `:.` `:.,.+N` `:'<,'>`（ADR 0022 の追補 #1526）で、キャレットの行から
 // 着地を決めるのは controller。
 // substitute は `:s` の族の 1 命令（ADR 0168 の決定 1）で、範囲を解いて本文を置き換えるのは engine
-// の vim_substituted（controller は鍵と同じ写しの道で結果を写す）。
+// の vim_substituted（controller は鍵と同じ写しの道で結果を写す）。lines は `:d` `:y` の 1 命令、
+// global は `:g` `:g!` `:v` の 1 命令（ADR 0168 の段 3a）で、どちらも同じ写しの道で engine の
+// vim_lines_edited と vim_global へ流す。
 // display_language は `:set language=` と `:set language?` の要求（ADR 0123 の追補 2026-11-13 の
 // 決定 8）で、設定の保存と OS の観測と解決は controller。
 // wrapscan は `:set (no)wrapscan` の値（#1561・incsearch と同じく保存しない Vim の状態）。
@@ -100,6 +104,8 @@ struct ExResult
     bool rechecks_window = false;
     std::optional<ExRelativeLineRequest> relative_line = std::nullopt;
     std::optional<ExSubstituteRequest> substitute = std::nullopt;
+    std::optional<ExLinesRequest> lines = std::nullopt;
+    std::optional<ExGlobalRequest> global = std::nullopt;
     std::optional<ExDisplayLanguageRequest> display_language = std::nullopt;
     std::optional<bool> wrapscan = std::nullopt;
     std::optional<ExEvaluationFailure> stopped = std::nullopt;
