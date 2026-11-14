@@ -27,7 +27,7 @@ namespace
     VimState from = state;
     from.input_wait = std::nullopt;
     from.wanted_column = std::nullopt;
-    return performed(from, view.text, range.range.begin, range);
+    return performed(from, view, range.range.begin, range);
 }
 
 // VISUAL。両端とモードは範囲関数が決めた値をそのまま置く（決定 4 と Issue #99 の補足）。行単位に

@@ -711,8 +711,9 @@ void verify_settings_versions()
     expect(bytes.starts_with("version=4\n") &&
                bytes.ends_with("guide=off\nwrap=off\nui_language=system\nlsp=off\nexplorer=off\n"
                                "root=\nfeatures=\nignorecase=off\nsmartcase=off\n"
-                               "relativenumber=off\nscrolloff=0\nexplorer_width=\n"),
-           "v4 writer emits the canonical sixteen-field schema");
+                               "relativenumber=off\nscrolloff=0\nexplorer_width=\n"
+                               "autoindent=off\n"),
+           "v4 writer emits the canonical seventeen-field schema");
     const auto v3 = decode_settings(v3_settings, SettingsVersion::v3);
     expect(v3 && v3.value().guide == nenenib::core::GuideVisibility::hidden &&
                v3.value().wrapping == nenenib::core::LineWrapping::no_wrap &&
@@ -720,12 +721,12 @@ void verify_settings_versions()
                !v3.value().lsp && !v3.value().explorer && !v3.value().root.has_value() &&
                v3.value().features.empty() && !v3.value().ignorecase && !v3.value().smartcase &&
                !v3.value().relativenumber && v3.value().scrolloff == 0 &&
-               !v3.value().explorer_width.has_value(),
+               !v3.value().explorer_width.has_value() && !v3.value().autoindent,
            "v3 keeps its values, stays Japanese and takes the other v4 defaults");
     for (const auto extra :
          {"ui_language=system\n", "lsp=off\n", "explorer=off\n", "root=\n", "features=\n",
           "ignorecase=off\n", "smartcase=off\n", "relativenumber=off\n", "scrolloff=0\n",
-          "explorer_width=\n", "explorer_width=300\n"})
+          "explorer_width=\n", "explorer_width=300\n", "autoindent=off\n", "autoindent=on\n"})
     {
         const auto refused = decode_settings(std::string(v3_settings) + extra, SettingsVersion::v3);
         expect(!refused && refused.error() == SettingsFailure::malformed,
@@ -792,10 +793,10 @@ void verify_settings_lsp_commands()
     settings.lsp_commands = {{"python", "C:\\py\\pylsp.exe"},
                              {"cpp", "C:\\llvm\\clangd.exe --log=error"}};
     const auto bytes = encode_settings(settings);
-    expect(bytes.ends_with(
-               "features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
-               "scrolloff=0\nexplorer_width=\nlsp.cpp.command=C:\\llvm\\clangd.exe --log=error\n"
-               "lsp.python.command=C:\\py\\pylsp.exe\n"),
+    expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
+                           "scrolloff=0\nexplorer_width=\nautoindent=off\n"
+                           "lsp.cpp.command=C:\\llvm\\clangd.exe --log=error\n"
+                           "lsp.python.command=C:\\py\\pylsp.exe\n"),
            "commands follow the fixed keys in language name order");
     const auto decoded = decode_settings(bytes, SettingsVersion::v4);
     expect(decoded && decoded.value().lsp_commands.size() == 2 &&
@@ -835,7 +836,7 @@ void verify_settings_maps()
         MapRow{VimModeSet{true, false, true, false, false}, "<leader>w", ":w<CR>", true}};
     const auto bytes = encode_settings(settings);
     expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
-                           "scrolloff=0\nexplorer_width=\nmapleader=<Space>\n"
+                           "scrolloff=0\nexplorer_width=\nautoindent=off\nmapleader=<Space>\n"
                            "map.i.jj=!<Esc>\nmap.nv.<leader>w=:w<CR>\n"),
            "the leader and the map rows follow the other lines in order");
     const auto decoded = decode_settings(bytes, SettingsVersion::v4);
@@ -951,20 +952,35 @@ void verify_settings_v4_later_keys()
     const auto bytes = encode_settings(default_editor_settings());
     auto stripped = bytes;
     for (const auto key :
-         {"ignorecase", "smartcase", "relativenumber", "scrolloff", "explorer_width"})
+         {"ignorecase", "smartcase", "relativenumber", "scrolloff", "explorer_width", "autoindent"})
     {
         stripped = without_setting(stripped, key);
     }
     const auto older = decode_settings(stripped, SettingsVersion::v4);
     expect(older && !older.value().ignorecase && !older.value().smartcase &&
                !older.value().relativenumber && older.value().scrolloff == 0 &&
-               !older.value().explorer_width.has_value() && encode_settings(older.value()) == bytes,
+               !older.value().explorer_width.has_value() && !older.value().autoindent &&
+               encode_settings(older.value()) == bytes,
            "a v4 without the later keys reads them as off, 0 and the default width and writes "
            "them back");
     expect(!decode_settings(bytes + "ignorecase=on\n", SettingsVersion::v4) &&
                !decode_settings(with_setting(bytes, "smartcase", "yes"), SettingsVersion::v4) &&
-               !decode_settings(bytes + "scrolloff=0\n", SettingsVersion::v4),
+               !decode_settings(bytes + "scrolloff=0\n", SettingsVersion::v4) &&
+               !decode_settings(with_setting(bytes, "autoindent", "1"), SettingsVersion::v4) &&
+               !decode_settings(bytes + "autoindent=off\n", SettingsVersion::v4),
            "a present later key is still read strictly");
+    // autoindent の後から足した鍵（#1086）。無ければ off、on は往復し、比べにも入る。
+    auto indenting = default_editor_settings();
+    indenting.autoindent = true;
+    const auto indented = encode_settings(indenting);
+    const auto read_back = decode_settings(indented, SettingsVersion::v4);
+    expect(indented.find("\nautoindent=on\n") != std::string::npos && read_back &&
+               read_back.value().autoindent && encode_settings(read_back.value()) == indented &&
+               !same_settings(indenting, default_editor_settings()),
+           "autoindent=on round trips and takes part in the settings comparison");
+    const auto missing =
+        decode_settings(without_setting(indented, "autoindent"), SettingsVersion::v4);
+    expect(missing && !missing.value().autoindent, "a v4 without autoindent reads it as off");
     verify_settings_explorer_width(bytes);
 }
 

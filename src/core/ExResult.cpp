@@ -685,6 +685,30 @@ constexpr std::array<std::string_view, 2> relativenumber_names{"relativenumber",
     return ExResult{std::move(changed), std::nullopt, std::nullopt, switch_message(name, wanted)};
 }
 
+// INSERT の字下げの写しの名前（#1086）。`set ai` `set noai` `set ai?` と長い名前。文言は
+// `autoindent=on` の形。保存する設定に載せる（relativenumber と同じ束）。
+constexpr std::array<std::string_view, 2> autoindent_names{"autoindent", "ai"};
+
+[[nodiscard]] std::optional<ExResult> autoindent_option(std::string_view option,
+                                                        const EditorSettings &settings)
+{
+    const auto request = switch_request(option, autoindent_names);
+    if (!request.has_value())
+    {
+        return std::nullopt;
+    }
+    const std::string_view name = autoindent_names.front();
+    if (!request.value().has_value())
+    {
+        return ExResult{std::nullopt, std::nullopt, std::nullopt,
+                        switch_message(name, settings.autoindent)};
+    }
+    const bool wanted = request.value().value();
+    EditorSettings changed = settings;
+    changed.autoindent = wanted;
+    return ExResult{std::move(changed), std::nullopt, std::nullopt, switch_message(name, wanted)};
+}
+
 // 追従の余白の名前（#1041）。`set so=N` `set so?` `set so`（数の option の名前だけは問い・
 // Vim と同じ）と長い名前。値は core の scrolloff_of の 1 本で読み、範囲の外は E474 と同じ失敗。
 constexpr std::array<std::string_view, 2> scrolloff_names{"scrolloff", "so"};
@@ -755,8 +779,8 @@ constexpr std::array<std::string_view, 1> minimap_names{minimap_feature};
                     switch_message(minimap_feature, wanted)};
 }
 
-// 画面の見え方の option（行番号の相対表示と追従の余白・#1041、ミニマップ・ADR 0171）。どれにも
-// 当たらなければ無し。
+// 画面の見え方の option（行番号の相対表示と追従の余白・#1041、ミニマップ・ADR 0171）と、同じ束で
+// 保存する INSERT の字下げの写し（#1086）。どれにも当たらなければ無し。
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
 view_option(std::string_view option, const EditorSettings &settings)
 {
@@ -769,6 +793,11 @@ view_option(std::string_view option, const EditorSettings &settings)
     if (minimap.has_value())
     {
         return std::expected<ExResult, ExEvaluationFailure>{std::move(minimap).value()};
+    }
+    auto indent = autoindent_option(option, settings);
+    if (indent.has_value())
+    {
+        return std::expected<ExResult, ExEvaluationFailure>{std::move(indent).value()};
     }
     return scrolloff_option(option, settings);
 }
@@ -812,7 +841,7 @@ using SwitchOption = std::tuple<std::string_view, std::string_view, SwitchReader
 // hlsearch と incsearch の値は設定に無い Vim の状態（ExWindowState）から読む（レビュー L4）。
 // wrapscan も Vim の状態（#1561）。magic と expandtab は Nib の振る舞いが固定（照合器は magic・
 // ADR 0015 の決定 9〜11 の noexpandtab）なので、変えられない行（#1561）。
-constexpr std::array<SwitchOption, 13> switch_options{{
+constexpr std::array<SwitchOption, 14> switch_options{{
     {"wrap", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return settings.wrapping == LineWrapping::wrap; }, true},
     {"guide", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
@@ -823,6 +852,8 @@ constexpr std::array<SwitchOption, 13> switch_options{{
      { return settings.smartcase; }, true},
     {"relativenumber", "rnu", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return settings.relativenumber; }, true},
+    {"autoindent", "ai", [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.autoindent; }, true},
     {minimap_feature, "", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return minimap_shown(settings); }, true},
     {"explorer", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
@@ -2211,7 +2242,7 @@ ranged_command(std::string_view text, const EditorSettings &settings, const ExWi
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
 // 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
-constexpr std::array<std::string_view, 51> fixed_candidates{"colorscheme",
+constexpr std::array<std::string_view, 53> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -2251,6 +2282,8 @@ constexpr std::array<std::string_view, 51> fixed_candidates{"colorscheme",
                                                             "set nowrapscan",
                                                             "set relativenumber",
                                                             "set norelativenumber",
+                                                            "set autoindent",
+                                                            "set noautoindent",
                                                             "set scrolloff=",
                                                             "set minimap",
                                                             "set nominimap",

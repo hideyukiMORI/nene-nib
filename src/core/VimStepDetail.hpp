@@ -158,8 +158,9 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 [[nodiscard]] OffsetRange removed_lines_range(const TextBuffer &text, const VimMotionRange &range);
 [[nodiscard]] VimStep removed_exactly(const VimState &state, const TextBuffer &text,
                                       const VimMotionRange &range);
+// 行単位の `c` は autoindent なら 1 行目の字下げを残す（Vim の op_change の b_p_ai・#1086）。
 [[nodiscard]] VimStep changed(const VimState &state, const TextBuffer &text,
-                              const VimMotionRange &range);
+                              const VimMotionRange &range, bool autoindent);
 [[nodiscard]] VimStep yanked(const VimState &state, const TextBuffer &text, Offset caret,
                              const VimMotionRange &range);
 [[nodiscard]] std::string cased_text(std::string_view text, VimOperator operation);
@@ -187,7 +188,8 @@ using JoinedLines = std::pair<LineNumber, LineNumber>;
 [[nodiscard]] VimStep swapped_characters(const VimState &state, const TextBuffer &text,
                                          Offset caret);
 [[nodiscard]] VimOperator operation_of(const VimState &state) noexcept;
-[[nodiscard]] VimStep performed(const VimState &state, const TextBuffer &text, Offset caret,
+// オペレータを範囲に効かせる 1 本。本文は view.text、行単位の `c` は view.autoindent を読む。
+[[nodiscard]] VimStep performed(const VimState &state, const VimEditorView &view, Offset caret,
                                 const VimMotionRange &range);
 // 表示だけの `g` の鍵（#1617 のレビュー M1）。`8g8` は失敗し、NORMAL は何もせず、オペレータ待ちは
 // キャレットの上の空の範囲に効かせる。VISUAL は呼び手が選択のまま残す。
@@ -205,10 +207,10 @@ using JoinedLines = std::pair<LineNumber, LineNumber>;
                                                 VimAction action);
 [[nodiscard]] VimStep operated(const VimState &state, const VimEditorView &view, VimMotion motion);
 [[nodiscard]] VimStep pending_operator(const VimState &state, VimOperator operation);
-[[nodiscard]] VimStep operated_on_lines(const VimState &state, const TextBuffer &text, Offset caret,
+[[nodiscard]] VimStep operated_on_lines(const VimState &state, const VimEditorView &view,
                                         VimOperator operation);
-[[nodiscard]] VimStep operated_to_line_end(const VimState &state, const TextBuffer &text,
-                                           Offset caret, VimOperator operation);
+[[nodiscard]] VimStep operated_to_line_end(const VimState &state, const VimEditorView &view,
+                                           VimOperator operation);
 // 回数で本文を増やす編集（`p` `P` の回数・INSERT の回数の反復・`o` の回数・矩形の `p`・矩形の
 // `I` `A` `c` `C` の写し・VISUAL と矩形の `>`）が、編集の後も文書の上限 limit（製品は
 // maximum_document_bytes・ADR 0159 の決定 7・VimEditorView.document_limit）に収まる残りの
@@ -282,7 +284,20 @@ repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::
                                      VimSpecialKey key);
 [[nodiscard]] VimStep insert_special(const VimState &state, const VimEditorView &view,
                                      VimSpecialKey key);
-[[nodiscard]] VimStep insert_character(const VimState &state, VimCharacter key);
+[[nodiscard]] VimStep insert_character(const VimState &state, const VimEditorView &view,
+                                       VimCharacter key);
+// autoindent の字下げ（VimStepInsert.cpp・#1086）。[from, limit) の頭の空白と Tab のバイト数と、
+// その桁の数から Tab（vim_tab_stop ごと）と残りの空白で作り直した字下げ（Vim の get_indent_str と
+// set_indent・noexpandtab）。`o` `O` と INSERT の改行は作り直し、行単位の `c` は元の字下げを残す。
+[[nodiscard]] std::size_t leading_blank_bytes(const TextBuffer &text, Offset from, Offset limit);
+[[nodiscard]] std::string auto_indent_of(const TextBuffer &text, Offset from, Offset limit);
+// 字下げを写した印（VimState.auto_indented）を鍵の後に保つか消す 1 か所（#1086）。
+[[nodiscard]] VimStep auto_indent_noted(const VimState &before, const TextBuffer &text,
+                                        VimStep step, const VimKey &key);
+// 印が立ったまま INSERT を `Ctrl-o` で離れる（Vim の stop_insert の did_ai・#1086）。字下げだけの
+// 行なら字下げを消した効果、消すものが無ければ空。
+[[nodiscard]] std::optional<VimStep> auto_indent_paused(const VimState &state,
+                                                        const VimEditorView &view, VimStep step);
 [[nodiscard]] VimStep insert_register_step(const VimState &state, const VimEditorView &view,
                                            const VimKey &key);
 [[nodiscard]] bool restarts_insert(VimKey key) noexcept;

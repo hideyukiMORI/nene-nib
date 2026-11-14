@@ -59,6 +59,9 @@ struct EditorSettings
     // 既定の式 min(240 DIP, client の 40%)。値は explorer_width_of が読める範囲で、描く幅は
     // explorer_panel_width が窓に合わせて切り詰める（ここは書き換えない）。
     std::optional<std::int32_t> explorer_width = std::nullopt;
+    // INSERT の改行と `o` `O` `cc` `S` が字下げを写すか（Vim の `autoindent`・既定はオフ・#1086）。
+    // `:set` だけが変え、設定の面には出さない（ignorecase などと同じ束）。
+    bool autoindent = false;
 };
 
 // `scrolloff` の上限（Vim の値は任意の非負だが、画面の半分で切り詰めるので 999 で足りる）。

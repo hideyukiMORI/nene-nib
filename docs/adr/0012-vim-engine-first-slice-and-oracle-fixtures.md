@@ -128,3 +128,14 @@ oracle は fixture の `settings` を `-u NONE` の上に置いて測るが、�
 - **Nib が断る行は落とす**: 打つ前に同じ評価 `evaluate_ex` が受けるかを確かめ、受けなければ試験が落ちる（再生器は `mismatch <name> setting`）。Nib に `:set` の口が無く固定値と同じ行だけを、oracle の表 `NIB_FIXED_SETTINGS`（いまは `set nrformats=bin,hex` の 1 行）が生成物に載せない。表に無い行は全部流す。
 - **移し替え**: 既存の 1,087 行（余白の 1,086 行と smartcase の 1 行）は Vim を使わずに書き出しの形だけを移し、24 件を新しい書き出しで測り直して生成物の差が 0 であることを確かめた。折り返す窓の 402 件は共有 oracle の digest（CNF-010）のため測り直し、差は余白の 10 行の形と digest の行だけ。
 - **守り**: fixture `fixture-settings-` 8 件（`ignorecase`・`smartcase`（`*` には効かない）・`nowrapscan`・2 行の設定）を足した。設定を流さない変異で、うち 7 件と下の 1 件が落ちる（残る 1 件 `smartcase-upper-keeps-case` は大文字のパターンで、設定が効いても効かなくても答えが同じ。`ignorecase` だけが効いて `smartcase` が落ちる形を落とす）。同じ変異で余白の fixture 187 件のうち 131 件、折り返す窓の 10 件のうち 6 件も落ちる。`nowrapscan` の失敗する検索は `-es` の Vim が終了コード 1 を返すので、viewport つき（`--not-a-term`）で測る。`pattern-escape-search-tab-smartcase` は本文と鍵を設定が効く形（`x\tA\ta` で `/\ta<CR>x`）に直して測り直した。`hlsearch` は fixture の欄（本文・キャレット・レジスタ・窓）に現れないので、この形では試せない。
+
+## 追記（2026-11-14・Issue #1086）— `:set autoindent`
+
+Vim の `autoindent`（`ai`・既定 off）を足す。正本は Vim 9.1 の実測（`-es -u NONE` に `set ai` を前置き・約 210 形・表は作業木の `out/1086-impl/vim-measure.md`）と fixture `autoindent-` 147 件（設定は fixture の `settings` の欄 `set autoindent`・#1626 の道）。
+
+- **読む口**: engine は `VimEditorView.autoindent`（controller が設定 `settings.v4` の `autoindent` から写す・`search_case` `scroll_margin` と同じ口）だけを読む。偽なら INSERT の改行は `VimNewLine`、`o` `O` は改行 1 つの `VimInsertAt`、行単位の `c` は行頭から消す今のままで、分岐はそれぞれ 1 つ。
+- **印**: `VimState.auto_indented`（Vim の did_ai）。立てるのは autoindent の改行・`o` `O`・行単位の `c`。保つか消すかは `auto_indent_noted` の 1 か所（打った文字・`<Del>`・動いた矢印と Home End・空でない `Ctrl-r` で消え、端で動かない矢印・空のレジスタの `Ctrl-r`・消した後の桁が 2 以上の消す鍵で残る・Vim の ins_bs の `col <= 1`）。`vim_resting_from` と `input_discarded` は持ち越さない。
+- **改行**: 新しい行の字下げはキャレットの手前の本文の頭の空白と Tab の桁から、Tab（`vim_tab_stop`）と残りの空白で作り直す（noexpandtab の set_indent）。キャレットの後ろの空白と Tab は捨て、印のままの改行は手前の行の終わりの空白も切る（open_line の trunc_line）。効果は文書の改行へ直す `VimReplaceRange`。`o` `O` は今の行の全体の字下げを作り直す（`O` も今の行）。行単位の `c` は 1 行目の字下げを作り直さずに残す（op_change の beginline(BL_WHITE)・レジスタは行の全体）。
+- **消す**: 印のまま Esc・`Ctrl-o`・上下の矢印を打つと、Vim の stop_insert の歩き（キャレットの下が空白なら前向き、行末まで空白なら後ろ向き）で消す。欲しい列は消す前の桁（ins_esc が w_set_curswant を立てない）。回数の繰り返し（`3o<Esc>`）は流し直しの最後の周の後に同じに消す。undo は INSERT の 1 単位のまま（`EditBoundary::absorb`）。
+- **`Ctrl-u`**: 行の最初の非空白がキャレットより左ならそこでも止まる（ins_bs の BACKSPACE_LINE と b_p_ai）。`Ctrl-w` と BS は変えない。
+- **入れなかった形**: `smartindent` `cindent` `copyindent` `preserveindent` `shiftround`、INSERT の `<C-d>` `<C-t>` `0<C-d>` `^<C-d>`（Nib の INSERT の `<C-d>` は何もしない・`<C-t>` は鍵の表に無い）、PgUp / PgDn と クリックで行を離れたときの字下げの消し（印は消えるが字下げは残る）、矩形の INSERT の中の印、NORMAL の `S`（Nib に無い）、`r<CR>` の字下げ（Vim は写す・Nib の `r<CR>` は INSERT を通らない）、空白の直後に結合文字が続く字下げの読み（Vim は空白に数えない）。通常モード（メモ帳の役）は変えない（D71 / D82）。
