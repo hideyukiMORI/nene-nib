@@ -1,5 +1,6 @@
 #include "StartScreenPainter.hpp"
 
+#include "AppIdentity.hpp"
 #include "DevicePixels.hpp"
 #include "DisplayText.hpp"
 #include "EditorOperation.hpp"
@@ -23,10 +24,9 @@ namespace nenenib::ui::win32
 namespace
 {
 constexpr float full_channel = 255.0F;
-// 題は製品名で訳さない（decisions の追加の決め）。見出しと「はじめる」の行の文は表示言語の表から
-// 引く（採用案の文 docs/design/2026-10-28-start-screen-look.md・ADR 0123 の追補
-// 2026-11-13・#1019）。
-constexpr std::string_view title_text = "NeNe Nib";
+// 題は製品名で訳さない（decisions の追加の決め・名前は core::app_name の 1 か所・D90）。
+// 見出しと「はじめる」の行の文は表示言語の表から引く（採用案の文
+// docs/design/2026-10-28-start-screen-look.md・ADR 0123 の追補 2026-11-13・#1019）。
 constexpr std::string_view selected_mark = "▸";
 constexpr std::string_view ellipsis = "…";
 // 場所の全文の幅を測る欄の幅（物理画素）。測る文字組みは省略の印を外すので、この幅を超える
@@ -52,6 +52,30 @@ constexpr std::int32_t measured_width = 8192;
 {
     const auto left = area.left + static_cast<std::int32_t>(std::ceil(width)) + gap;
     return core::LayoutRect{std::min(left, area.right), area.top, area.right, area.bottom};
+}
+
+// 文字組みの 1 行目の baseline の、文字組みの上端からの高さ（物理画素・段落の縦の寄せを含む）。
+// 測れなければ 0。
+[[nodiscard]] float baseline_of(IDWriteTextLayout &layout) noexcept
+{
+    DWRITE_TEXT_METRICS metrics{};
+    DWRITE_LINE_METRICS line{};
+    UINT32 count = 0;
+    if (FAILED(layout.GetMetrics(&metrics)) || FAILED(layout.GetLineMetrics(&line, 1, &count)) ||
+        count != 1)
+    {
+        return 0.0F;
+    }
+    return metrics.top + line.baseline;
+}
+
+// 1 行の文字組みの幅（後ろの空白を含む・切り上げた物理画素）。測れなければ 0。
+[[nodiscard]] std::int32_t whole_width(IDWriteTextLayout *layout) noexcept
+{
+    DWRITE_TEXT_METRICS metrics{};
+    return layout != nullptr && SUCCEEDED(layout->GetMetrics(&metrics))
+               ? static_cast<std::int32_t>(std::ceil(metrics.widthIncludingTrailingWhitespace))
+               : 0;
 }
 
 // UTF-8 の先頭のバイトが表すコードポイントのバイト数。
@@ -100,7 +124,9 @@ void StartScreenPainter::paint(const application::StartScreenView &view,
         return;
     }
     target_.PushAxisAlignedClip(to_rect(clip), D2D1_ANTIALIAS_MODE_ALIASED);
-    write(title_text, {text_.title, PaletteTextRole::plain}, layout.title, palette.muted);
+    const auto title_width =
+        write(core::app_name, {text_.title, PaletteTextRole::plain}, layout.title, palette.muted);
+    paint_credit(layout, static_cast<std::int32_t>(std::ceil(title_width)), palette.muted);
     paint_headings(layout, palette);
     for (std::size_t index = 0; index < layout.rows.size() && index < view.entries.size(); ++index)
     {
@@ -108,6 +134,76 @@ void StartScreenPainter::paint(const application::StartScreenView &view,
     }
     paint_keys(view, layout, palette);
     target_.PopAxisAlignedClip();
+}
+
+void StartScreenPainter::paint_credit(const core::StartScreenLayout &layout,
+                                      std::int32_t title_width, core::RgbColor color)
+{
+    // 版は題の右に 12 DIP 空けて見出しと同じ小さい書式で、署名は鍵の案内の下に同じ書式で。どれも
+    // 1 行のまま測り、どこまで描くか（落とす順は署名 → 版）は core::start_credit の 1 本が決める。
+    const auto version_area = core::start_version_area(layout.title, title_width, text_.dpi);
+    const auto version = single_line(core::app_version(), version_area);
+    const std::string copyright = core::app_copyright_line();
+    const auto &lines = layout.signature;
+    const auto signed_line = [&](std::string_view text, std::size_t at)
+    {
+        return lines.has_value() ? single_line(text, lines.value().at(at))
+                                 : PaletteRowLayouts::TextLayout{};
+    };
+    const auto first = signed_line(copyright, 0);
+    const auto second = signed_line(core::app_homepage, 1);
+    const core::StartCreditWidths widths{title_width, whole_width(version.Get()),
+                                         whole_width(first.Get()), whole_width(second.Get())};
+    switch (core::start_credit(layout, text_.dpi, widths))
+    {
+    case core::StartCredit::none:
+        return;
+    case core::StartCredit::version:
+        paint_version(layout.title, version_area, *version.Get(), color);
+        return;
+    case core::StartCredit::version_and_signature:
+        paint_version(layout.title, version_area, *version.Get(), color);
+        // start_credit は配置が署名の 2 行を置いたときだけこの値を返す。
+        if (lines.has_value())
+        {
+            draw_at(*first.Get(), lines.value().at(0), 0.0F, color);
+            draw_at(*second.Get(), lines.value().at(1), 0.0F, color);
+        }
+        return;
+    }
+}
+
+void StartScreenPainter::paint_version(const core::LayoutRect &title, const core::LayoutRect &area,
+                                       IDWriteTextLayout &version, core::RgbColor color)
+{
+    // 題の baseline に揃える（題の文字組みは題を書いたときの保持から引く）。
+    const auto named = obtained(core::app_name, {text_.title, PaletteTextRole::plain}, title);
+    const float lowered = named ? baseline_of(*named.Get()) - baseline_of(version) : 0.0F;
+    draw_at(version, area, lowered, color);
+}
+
+void StartScreenPainter::draw_at(IDWriteTextLayout &layout, const core::LayoutRect &area,
+                                 float lowered, core::RgbColor color)
+{
+    brush_.SetColor(to_color(color));
+    target_.DrawTextLayout(
+        D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top) + lowered),
+        &layout, &brush_, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+}
+
+PaletteRowLayouts::TextLayout StartScreenPainter::single_line(std::string_view text,
+                                                              const core::LayoutRect &area)
+{
+    // 見出しの書式で折り返さない文字組み（幅は欄に依らず全文の幅・描くときは欄で切る）。
+    return layouts_.obtain(
+        PaletteRowKey{text_.heading, PaletteTextRole::plain, text, area, text_.dpi},
+        [&]
+        {
+            auto layout = made(text, {text_.heading, PaletteTextRole::plain}, area);
+            return layout && SUCCEEDED(layout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP))
+                       ? layout
+                       : nullptr;
+        });
 }
 
 void StartScreenPainter::fill(const core::LayoutRect &area, core::RgbColor color)

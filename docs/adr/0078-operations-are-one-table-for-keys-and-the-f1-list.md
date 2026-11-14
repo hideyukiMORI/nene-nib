@@ -97,3 +97,9 @@
 3. 欄の幅は行ごと（右寄せの枠なので、行ごとに名前の欄の右端が違ってもそろって見える）。印の補足（決定 9 の `palette_origin_label`）は 112 DIP のまま。
 4. 鍵の文字組みは行の矩形を箱にして面の保持から引く（行はどれも同じ寸法・左寄せで折り返さないので幅は箱に依らない）。枠の余白は幅の試験も読むので `UiTextSizes.hpp` に移した。
 5. 幅は `nib_window_tests --language` が操作の表の全部の鍵（通常と Vim の `shown_chord` → `key_chord_label`）の最も広い枠で、96 / 120 DPI × 窓 3 通り（360 DIP・1280 px・1920 px）について測り、1280 px 以上で丸ごと出ることと、どの窓でも丸ごとか出さないかを守る。実測では 6 つの形（2 DPI × 3 窓）のどれでも欄が枠と同じ幅で丸ごと出て、名前の欄は最小の窓で 153 px（96 DPI）・191 px（120 DPI）残る。直す前の欄（112 DIP の固定）では、この試験は 10 件落ちる（1280 px 以上の 4 形で「丸ごと出る」・最小を含む 6 形で「丸ごとか出さない」）。
+
+## 追補（2026-11-14・#1677・施主決定 D90）: 操作「バージョン情報」と `:version`
+
+1. `EditorOperation::show_version` を最後に 1 値足す（名前は日本語「バージョン情報」・英語 `About NeNe Nib`・中国語 `关于 NeNe Nib`・読み「ばーじょんじょうほう」・鍵なしで両方のモード）。ui は表 `runner_of` に 1 行と `run_show_version` 1 つで、意図 `ShowVersion` を送るだけ。controller は `core::app_about_line()` の 1 行（`NeNe Nib 1.0.0 · © 2026 Hideyuki Mori · github.com/hideyukiMORI/nene-nib`）をステータスバーの知らせにし、port を呼ばない。使う人の操作なので `keeps_tab_walk` と `begin_intent` の表には書かない。
+2. Vim の `:ve[rsion]`（最短 `ve`・Vim と同じ）は Ex の表 `command_parsers` に 1 行（`version_command`）で、答えの文が同じ 1 行（同じ `app_about_line`）。Vim の `:version` は版と機能の一覧を複数行で出すが、Nib は 1 行の知らせ（違いとしてここに書く）。引数・`!`・範囲は `unsupported_argument`。Ctrl+P の面の `:` の候補にも `version` が出る（`fixed_candidates`）。再生の中では知らせを置くだけ。
+3. 文は訳さない（名前・版・`©`・名前・場所）。訳すのは操作の名前と説明だけ（`UiMessage` に 2 値・3 列に 1 行ずつ・最後の値は動かない）。

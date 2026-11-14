@@ -97,6 +97,8 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
      "从 Windows 右键菜单和“打开方式”中移除 NeNe Nib"},
     {UiMessage::operation_choose_language_name, "选择显示语言"},
     {UiMessage::operation_choose_language_description, "选择界面文字的语言"},
+    {UiMessage::operation_show_version_name, "关于 NeNe Nib"},
+    {UiMessage::operation_show_version_description, "显示版本、版权和 GitHub 地址"},
     {UiMessage::app_error_window_class, "无法注册窗口类。"},
     {UiMessage::app_error_window_create, "无法创建窗口。"},
     {UiMessage::app_error_rendering_start, "无法使用 Direct2D 开始绘制。"},

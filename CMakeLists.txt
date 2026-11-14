@@ -47,7 +47,7 @@ nenenib_third_party_target(nenenib_md4c third_party_md4c third_party/md4c/md4c.c
 
 # Phase 3 の縦切り（Issue #3 / ADR 0007）。5 層に正典の経路を 1 本ずつ置く。
 nenenib_target(nenenib_core core STATIC
-    src/core/ThemeName.cpp src/core/ThemeDocument.cpp src/core/ThemeChoice.cpp
+    src/core/AppIdentity.cpp src/core/ThemeName.cpp src/core/ThemeDocument.cpp src/core/ThemeChoice.cpp
     src/core/ThemeCatalog.cpp src/core/ThemeLookupFailure.cpp src/core/ExEvaluationFailure.cpp
     src/core/BookmarkKey.cpp src/core/BodyLayout.cpp src/core/PaneLayouts.cpp src/core/EditAdjust.cpp src/core/CaretMove.cpp src/core/ClipboardText.cpp src/core/CommandLayout.cpp
     src/core/CommandLine.cpp src/core/FontFamilies.cpp src/core/CommandChoice.cpp src/core/SubsequenceScore.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
@@ -79,6 +79,9 @@ nenenib_target(nenenib_core core STATIC
     src/core/LspFrames.cpp src/core/LspMessages.cpp src/core/LspPosition.cpp
     src/core/LspDiagnostics.cpp src/core/DiagnosticEdits.cpp src/core/DiagnosticCounts.cpp
     src/core/NoticeLine.cpp src/core/DiagnosticNotice.cpp src/core/LspShowMessage.cpp src/core/DiagnosticColor.cpp)
+# 版を core へ渡すのはこの 1 行だけ（AppIdentity.cpp の翻訳単位だけ・D90・#1677・CNF-007 が照合する）。
+set_source_files_properties(src/core/AppIdentity.cpp PROPERTIES
+    COMPILE_DEFINITIONS "NENENIB_APP_VERSION=\"${PROJECT_VERSION}\"")
 # core の parse_markdown（#765）だけが md4c を呼ぶ。md4c.h を include するのは src/core/MarkdownParse.cpp の 1 か所（CNF-009）。
 nenenib_link(nenenib_core nenenib_md4c)
 
@@ -161,7 +164,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimViewTests.cpp
     tests/unit/ExFileTests.cpp
     tests/unit/ExDocumentTests.cpp
-    tests/unit/ExWritePathTests.cpp tests/unit/BellTests.cpp tests/unit/ClockTests.cpp tests/unit/PrintTests.cpp tests/unit/ShellRegistrationTests.cpp
+    tests/unit/ExWritePathTests.cpp tests/unit/BellTests.cpp tests/unit/ClockTests.cpp tests/unit/PrintTests.cpp tests/unit/ShellRegistrationTests.cpp tests/unit/VersionInfoTests.cpp
     tests/unit/OrdinaryCharacterTests.cpp
     tests/unit/OrdinaryWordTests.cpp
     tests/unit/VimVisualBlockTests.cpp
@@ -231,6 +234,9 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/DocumentFormatTests.cpp tests/unit/EditHistoryPropertyTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
+# 版の契約（D90・#1677）は製品と同じ PROJECT_VERSION を期待値として読む（試験の翻訳単位だけ）。
+set_source_files_properties(tests/unit/VersionInfoTests.cpp PROPERTIES
+    COMPILE_DEFINITIONS "NIB_EXPECTED_VERSION=\"${PROJECT_VERSION}\"")
 add_test(NAME nib_unit COMMAND nib_tests)
 # #1324: 名指しの scope にしかない検査を門に載せる。既定実行の契約と同じ scope は飛ばす。
 add_test(NAME nib_unit_scopes COMMAND nib_tests --every-scope)
