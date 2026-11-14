@@ -38,6 +38,11 @@ constexpr std::string_view not_found_alone = "E486: Pattern not found";
         return "E866: (NFA regexp) Misplaced multi";
     case VimPatternFailure::multi_after_multi:
         return "E871: (NFA regexp) Can't have a multi follow a multi";
+    // Vim 9.1 の e_nfa_regexp_cannot_repeat_str（ADR 0184 の決定 5）。
+    case VimPatternFailure::repeated_match_begin:
+        return "E888: (NFA regexp) cannot repeat \\zs";
+    case VimPatternFailure::repeated_match_end:
+        return "E888: (NFA regexp) cannot repeat \\ze";
     case VimPatternFailure::too_complex:
         return "E363: pattern uses more memory than 'maxmempattern'";
     case VimPatternFailure::magic:

@@ -36,6 +36,9 @@ namespace nenenib::core
 // vim_line_matches の区切りとは限らない。区切りの一致の始まり（vim_find_match の答え）か行頭を
 // 渡せば、その区切りの一致が返る。行を写さず（piece をまたぐ行だけ vim_find_match と同じく繋ぐ）、
 // 照合は at から 1 回だけ。`gn` `gN` が当たりの終わりと 1 行目の最初の当たりを引く。
+// `\zs` `\ze` を含むパターン（VimPattern::bounded）だけは、照合の始まりが置き直した始まりより
+// 前にありうるので、行頭からの区切りの一致のうち置き直した始まりが at 以降の最初を返す（ADR 0184
+// の決定 5・照合は行の区切りの数だけ）。
 [[nodiscard]] std::optional<OffsetRange> vim_match_from(const TextBuffer &text,
                                                         const VimPattern &pattern, Offset at);
 

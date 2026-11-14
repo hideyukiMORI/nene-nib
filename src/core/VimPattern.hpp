@@ -50,6 +50,8 @@ class VimPattern final
     // 超えれば too_complex。閉じない `\(` は group（E54）、
     // 閉じない `\%(` は unclosed_plain_group（E53）、
     // 対の無い `\)` は unmatched_close（E55）、10 個目の `\(` は too_many_groups（E872）。
+    // `\zs` `\ze`（ADR 0184 の決定 5）を含むパターンも命令の列に組み、直後の `*` `\+` `\{` は
+    // repeated_match_begin / repeated_match_end（E888）で断る。
     [[nodiscard]] static std::expected<VimPattern, VimPatternFailure>
     parse(std::string_view pattern, VimSearchDirection separator, VimPatternCase letter_case,
           VimPatternLimits limits = {});
@@ -73,6 +75,10 @@ class VimPattern final
     // 照合器が通る道（ADR 0184 の決定 1）。matched と VimPatternEvaluation はこの答えで道を選ぶ。
     // 試験が「量の無いパターンは今の道のまま」を直接見るための口でもある。
     [[nodiscard]] VimPatternRoute route() const noexcept;
+    // `\zs` `\ze` を含むか（ADR 0184 の決定 5）。含むパターンは命令の列の道を通り、当たりの
+    // begin と end（置き直した範囲）が whole_begin と whole_end（パターン全体の範囲）と違いうる
+    // （「at 以降に始まる当たり」を引く呼び手は、照合の始まりではなく置き直した始まりで比べる）。
+    [[nodiscard]] bool bounded() const noexcept;
     // 量を開いた後の原子の数（ADR 0184 の決定 1・2・試験が parse の結果を見る口）。
     [[nodiscard]] std::size_t atom_count() const noexcept;
     // 命令の列の命令の数（命令の列の道でなければ 0・ADR 0184 の決定 3・試験が parse
@@ -153,6 +159,8 @@ class VimPattern final
     std::vector<VimPatternInstruction> program_;
     // 通る道（構築で 1 回だけ決める・ADR 0184 の決定 1）。
     VimPatternRoute route_;
+    // 命令の列に `\zs` `\ze` があるか（構築で 1 回だけ決める・ADR 0184 の決定 5）。
+    bool bounded_;
     // 命令の列の一致の長さの上限（longest_bytes の答え・命令の列の道だけが読む）。
     std::optional<std::size_t> program_longest_;
 };

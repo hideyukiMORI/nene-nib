@@ -24,12 +24,15 @@ enum class VimPatternFailure : std::uint8_t
     misplaced,
     // 量の後ろの量（`a**` `a*\+` `a\+\+` `a\{1}\{2}`・Vim の E871）
     multi_after_multi,
+    // `\zs` と `\ze` の直後の `*` `\+` `\{`（Vim の E888・ADR 0184 の決定 5）
+    repeated_match_begin,
+    repeated_match_end,
     // 量を開いた後の原子の数が上限（vim_pattern_atom_limit）を超える（Vim の E363 と同じ知らせ）
     too_complex,
     // `\v` `\V` `\m` `\M`
     magic,
-    // そのほかの未対応の `\`（`\%` `\_` `\@` `\&` `\z` と `\n` `\t` などの英数字、末尾の単独の
-    // `\`）
+    // そのほかの未対応の `\`（`\%` `\_` `\@` `\&`、`\zs` `\ze` でない `\z`、`\n` `\t` などの
+    // 英数字、末尾の単独の `\`）
     escape,
     // `~`（直前の置換の文字列）
     previous_substitute,
