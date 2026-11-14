@@ -79,4 +79,17 @@ OperationGuideLayout operation_guide_layout(GuideRequest request, const BodyLayo
     }
     return std::monostate{};
 }
+
+OperationGuideLayout status_guide_fitted(const OperationGuideLayout &guide,
+                                         const StatusBarLayout &status, std::uint32_t dpi,
+                                         std::int32_t mode_width) noexcept
+{
+    const auto *shown = std::get_if<StatusGuideLayout>(&guide);
+    const auto limit = status.mode.left + mode_width + to_pixels(status_text_gap_dips, dpi);
+    if (shown != nullptr && shown->rows.front().key.left < limit)
+    {
+        return std::monostate{};
+    }
+    return guide;
+}
 } // namespace nenenib::core

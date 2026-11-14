@@ -20,8 +20,12 @@
 #include "FontSize.hpp"
 #include "GuideContext.hpp"
 #include "GuideRequest.hpp"
+#include "KeyChord.hpp"
+#include "ModeLabel.hpp"
+#include "OperationBindings.hpp"
 #include "OperationGuide.hpp"
 #include "OperationGuideLayout.hpp"
+#include "OperationTexts.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteMarks.hpp"
 #include "PaletteOrigin.hpp"
@@ -37,6 +41,7 @@
 #include "UiTextSizes.hpp"
 #include "UiTexts.hpp"
 #include "Utf16.hpp"
+#include "VimMode.hpp"
 #include "WindowChecks.hpp"
 
 #include <algorithm>
@@ -70,6 +75,7 @@ using nenenib::ui::win32::guide_key_dips;
 using nenenib::ui::win32::guide_key_padding_dips;
 using nenenib::ui::win32::guide_label_dips;
 using nenenib::ui::win32::guide_note_dips;
+using nenenib::ui::win32::palette_key_padding_dips;
 using nenenib::ui::win32::tab_text_dips;
 using nenenib::ui::win32::ui_text_dips;
 
@@ -442,6 +448,218 @@ void verify_palette_widths(IDWriteFactory2 &factory, Face face)
     }
 }
 
+// ---- F1 の一覧の鍵の枠（#1658） ----
+
+// 操作 1 つの鍵の枠の幅（物理画素・切り上げ）と鍵の表示名。枠は製品の paint_keycap と同じ「字の
+// 幅 ＋ 左右の palette_key_padding_dips」。鍵の無い操作は 0 と空。
+[[nodiscard]] std::pair<std::int32_t, std::string> keycap_of(const Pen &key_pen, std::uint32_t at,
+                                                             core::EditorOperation operation,
+                                                             core::EditMode mode)
+{
+    const auto chord = core::shown_chord(operation, mode);
+    if (!chord.has_value())
+    {
+        return {0, {}};
+    }
+    auto label = core::key_chord_label(chord.value());
+    const auto cap = static_cast<std::int32_t>(
+        std::ceil(width_in(key_pen, Said{DisplayLanguage::english, label}) +
+                  (palette_key_padding_dips * static_cast<float>(at) / 96.0F * 2.0F)));
+    return {cap, std::move(label)};
+}
+
+// 2 つの枠の広い方（同じ幅なら left）。
+[[nodiscard]] std::pair<std::int32_t, std::string>
+wider_keycap(std::pair<std::int32_t, std::string> left, std::pair<std::int32_t, std::string> right)
+{
+    return right.first > left.first ? std::move(right) : std::move(left);
+}
+
+// 操作の表の全部の鍵の表示名（通常と Vim・key_chord_label）で、最も広い枠とその鍵。
+[[nodiscard]] std::pair<std::int32_t, std::string> widest_keycap(const Pen &key_pen,
+                                                                 std::uint32_t at)
+{
+    std::pair<std::int32_t, std::string> widest{0, {}};
+    for (const auto &text : core::operation_texts)
+    {
+        widest = wider_keycap(
+            std::move(widest),
+            wider_keycap(keycap_of(key_pen, at, text.operation, core::EditMode::ordinary),
+                         keycap_of(key_pen, at, text.operation, core::EditMode::vim)));
+    }
+    return widest;
+}
+
+// 面の行の右端の鍵の欄（#1658）: 鍵の枠は欄に丸ごと入るか、欄ごと出さない（途中で切らない）。
+// 1280 px 以上の窓では最も広い鍵も丸ごと出て、名前と説明の欄は 120 DIP 以上残る。
+void verify_palette_keys(IDWriteFactory2 &factory, Face key_face)
+{
+    for (const auto at : {96U, 120U})
+    {
+        const Pen key_pen{&factory, key_face, ui_text_dips * static_cast<float>(at) / 96.0F,
+                          DWRITE_FONT_WEIGHT_NORMAL};
+        const auto [cap, label] = widest_keycap(key_pen, at);
+        for (const auto window : {core::to_pixels(360, at), 1280, 1920})
+        {
+            const auto row = core::palette_row(core::palette_layout(window, 800, at, 0), 0);
+            const auto note = core::palette_row_note(row, at, cap);
+            const auto name = core::palette_row_label(row, at, note);
+            std::printf("  palette key dpi %u window %d px: widest %s = %d px, field %d px, "
+                        "name %d px\n",
+                        at, window, label.c_str(), cap, core::width_of(note), core::width_of(name));
+            expect(core::width_of(note) == 0 || core::width_of(note) >= cap,
+                   "the palette key cap is shown whole or not at all");
+            expect(window < 1280 || core::width_of(note) >= cap,
+                   "a window of 1280 px or wider shows the widest palette key whole");
+            expect(core::width_of(note) == 0 || core::width_of(name) >= core::to_pixels(120, at),
+                   "the palette name keeps 120 DIP beside the key");
+        }
+    }
+}
+
+// ---- ステータスバーのモードと行と桁（#1658） ----
+
+// 行と桁の数の組（2 桁と 1 桁・4 桁と 3 桁・5 桁と 3 桁・1 GiB の行と桁の上限）。
+constexpr std::array<std::pair<std::string_view, std::string_view>, 5> positions{{
+    {"17", "4"},
+    {"9999", "999"},
+    {"12345", "123"},
+    {"1073741824", "1"},
+    {"1", "1073741824"},
+}};
+
+// 行と桁の書式（標準）とモードの書式（太字）。
+using Pens = std::pair<Pen, Pen>;
+// 測る形（DPI・窓の幅・モードの文）。
+using StatusCase = std::tuple<std::uint32_t, std::int32_t, Said>;
+
+// 行と桁（文の左端
+// left）と表示形式の印がモードの文の右（limit）から間を空け、案内とも重ならないか。
+void expect_status_clear(const core::StatusBarLayout &fitted, std::int32_t left, std::int32_t limit,
+                         const core::OperationGuideLayout &guide)
+{
+    const auto &item = fitted.items.front();
+    const bool shown = core::width_of(item) > 0;
+    const auto *status_guide = std::get_if<core::StatusGuideLayout>(&guide);
+    expect(!shown || left >= limit, "the line and column keep the gap after the mode text");
+    expect(!shown || (left >= item.left && fitted.display.right <= item.left),
+           "the line and column stay right of the display form mark");
+    expect(core::width_of(fitted.display) == 0 || fitted.display.left >= limit,
+           "the display form mark keeps the gap after the mode text");
+    expect(status_guide == nullptr || !shown || status_guide->rows.at(1).label.right <= left,
+           "the line and column stay right of the status guide");
+    expect(status_guide == nullptr || status_guide->rows.at(0).key.left >= limit,
+           "the status guide stays right of the mode text");
+}
+
+// 1 つの形と数の組（positions の index 番目）。1280 px 以上の窓では行と桁は落ちず、4 桁と 3 桁
+// までは測らない配置のまま。
+void verify_status_position(const Pens &pens, const StatusCase &shape, std::int32_t mode_width,
+                            std::size_t index)
+{
+    const auto &[at, window, mode] = shape;
+    const auto layout = core::status_bar_layout(window, 800, at);
+    const auto limit =
+        layout.mode.left + mode_width + core::to_pixels(core::status_text_gap_dips, at);
+    const auto &[line, column] = positions.at(index);
+    const auto text =
+        core::ui_text_filled(UiMessage::status_line_column, mode.first, {line, column});
+    const auto width =
+        static_cast<std::int32_t>(std::ceil(width_in(pens.first, Said{mode.first, text})));
+    const auto fitted = core::status_bar_fitted(layout, at, mode_width, width);
+    const bool shown = core::width_of(fitted.items.front()) > 0;
+    const auto left = fitted.items.front().right - width;
+    // 製品と同じく、案内はモードの文の幅で入るかを決めた後のもの。
+    const auto guide = core::status_guide_fitted(
+        core::operation_guide_layout(core::GuideRequest{core::GuideContext::other, 0},
+                                     core::body_layout(window, 800, at, core::default_font_size()),
+                                     layout, at),
+        layout, at, mode_width);
+    const auto *guided = std::get_if<core::StatusGuideLayout>(&guide);
+    std::printf("  status dpi %u window %d px [%s] %.*s | %s: %d px from %d, mode ends %d, guide "
+                "%d, %s\n",
+                at, window, language_name(mode.first), static_cast<int>(mode.second.size()),
+                mode.second.data(), text.c_str(), width, left, limit,
+                guided == nullptr ? -1 : guided->rows.at(0).key.left, shown ? "shown" : "dropped");
+    std::fflush(stdout);
+    expect_status_clear(fitted, left, limit, guide);
+    expect(window < 1280 || shown, "a window of 1280 px or wider shows the line and column");
+    expect(window < 1280 || index > 1 ||
+               (fitted.items == layout.items && fitted.display == layout.display),
+           "a wide window keeps the unmeasured place for 4-digit lines and 3-digit columns");
+}
+
+// 1 つのモードの文で、数の組の全部。
+void verify_status_mode(const Pens &pens, std::uint32_t at, std::int32_t window, const Said &said)
+{
+    const auto mode_width = static_cast<std::int32_t>(std::ceil(width_in(pens.second, said)));
+    for (std::size_t index = 0; index < positions.size(); ++index)
+    {
+        verify_status_position(pens, StatusCase{at, window, said}, mode_width, index);
+    }
+}
+
+// 製品のモードの文の全部（mode_label の 1 本）: 通常と、Vim の 5 つのモード × INSERT の `Ctrl-o`
+// の待ちの有無（最も長いのは `(insert) VISUAL BLOCK`）。
+[[nodiscard]] std::array<std::string_view, 11> mode_texts(DisplayLanguage language)
+{
+    constexpr std::array<core::VimMode, 5> vim_modes{
+        core::VimMode::normal, core::VimMode::insert, core::VimMode::visual,
+        core::VimMode::visual_line, core::VimMode::visual_block};
+    std::array<std::string_view, 11> texts{};
+    texts.at(0) =
+        core::mode_label(core::EditMode::ordinary, core::VimMode::normal, false, language);
+    for (std::size_t index = 0; index < vim_modes.size(); ++index)
+    {
+        texts.at((index * 2) + 1) =
+            core::mode_label(core::EditMode::vim, vim_modes.at(index), false, language);
+        texts.at((index * 2) + 2) =
+            core::mode_label(core::EditMode::vim, vim_modes.at(index), true, language);
+    }
+    return texts;
+}
+
+// 1 つの DPI と窓で、3 言語 × モードの文 11 個（mode_texts）× 数の組。
+void verify_status_fit_at(const Pens &pens, std::uint32_t at, std::int32_t window)
+{
+    for (const auto language : languages)
+    {
+        for (const auto mode : mode_texts(language))
+        {
+            verify_status_mode(pens, at, window, Said{language, mode});
+        }
+    }
+}
+
+// ステータスの案内が出る最も狭い窓（物理画素）。案内の左端は窓とともに右へ動くので、モードの文と
+// いちばん近づくのはこの窓（行と桁と案内の間は窓に依らない）。1280 px まで出なければ 1280。
+[[nodiscard]] std::int32_t first_guided_window(std::uint32_t at)
+{
+    auto window = core::to_pixels(360, at);
+    while (window < 1280 &&
+           !std::holds_alternative<core::StatusGuideLayout>(core::operation_guide_layout(
+               core::GuideRequest{core::GuideContext::other, 0},
+               core::body_layout(window, 800, at, core::default_font_size()),
+               core::status_bar_layout(window, 800, at), at)))
+    {
+        ++window;
+    }
+    return window;
+}
+
+void verify_status_fit(IDWriteFactory2 &factory, Face face)
+{
+    for (const auto at : {96U, 120U})
+    {
+        const Pens pens{pen_at(factory, face, at, DWRITE_FONT_WEIGHT_NORMAL),
+                        pen_at(factory, face, at, DWRITE_FONT_WEIGHT_BOLD)};
+        for (const auto window : {core::to_pixels(360, at), first_guided_window(at), 1280, 1920})
+        {
+            verify_status_fit_at(pens, at, window);
+        }
+    }
+}
+
 // 空の文書の案内の説明の列（144 DIP・13.5 DIP）と注記（11.5 DIP）。
 void verify_body_guide(IDWriteFactory2 &factory, Face face)
 {
@@ -632,6 +850,8 @@ void verify_widths()
     verify_status_items(*factory.Get(), face);
     verify_palette_texts(*factory.Get(), face);
     verify_palette_widths(*factory.Get(), face);
+    verify_palette_keys(*factory.Get(), key_face);
+    verify_status_fit(*factory.Get(), face);
     verify_body_guide(*factory.Get(), face);
     verify_status_guide(*factory.Get(), face);
     verify_explorer_text(*factory.Get(), face);

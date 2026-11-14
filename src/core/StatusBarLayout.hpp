@@ -40,6 +40,20 @@ struct StatusBarLayout
 [[nodiscard]] StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height,
                                                 std::uint32_t dpi) noexcept;
 
+// モードの文の右端と、その右に並ぶ文（表示形式の印・行と桁）の間に空ける最小の幅（#1658）。
+inline constexpr std::int32_t status_text_gap_dips = 8;
+
+// 測った文の幅に合わせた配置（#1658・ADR 0154 の追補 2026-11-14）。mode_width はモードの文の幅、
+// position_width は行と桁の文の幅（物理画素・描画と同じ書式で ui が測る）。行と桁の欄は文が枠
+// （96 DIP）より広ければ左へ文の幅まで広げ、表示形式の印はその左へ寄せる。モードの文の右から
+// status_text_gap_dips より右に入らないものは、行と桁 → 表示形式の印の順に幅 0 にする（行と桁を
+// 落としたら印は空いた所へ寄せて、入るかを見る）。どちらも入って枠に収まるなら layout のまま。
+// 案内は status_guide_fitted（OperationGuideLayout.hpp）が同じ規則で落とす。
+// 当たり（status_bar_hit）と `:` の入力欄は測らない配置を読む（落とす 2 つはどちらも押せない）。
+[[nodiscard]] StatusBarLayout status_bar_fitted(const StatusBarLayout &layout, std::uint32_t dpi,
+                                                std::int32_t mode_width,
+                                                std::int32_t position_width) noexcept;
+
 [[nodiscard]] StatusBarHit status_bar_hit(const StatusBarLayout &layout, std::int32_t x,
                                           std::int32_t y) noexcept;
 } // namespace nenenib::core
