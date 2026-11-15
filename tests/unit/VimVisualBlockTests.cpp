@@ -307,6 +307,47 @@ void verify_vim_block_insert_interrupted()
            "Esc after the interruption copies nothing to the other lines");
 }
 
+// 矩形の INSERT の中でキャレットを動かしてから打つ形のうち、Vim 9.1 がほかの行へ打っていない
+// バイトか字の途中のバイトを写す形（ADR 0035 の追補 #1687 の決定 1）。Nib は 1 行目だけに打った
+// 本文を残し、本文はいつも妥当な UTF-8。Vim が不正な UTF-8 を作る形は oracle が読めず、打って
+// いないバイトを写す形は Vim と違うので、どちらも fixture に採れずここで測る。
+void verify_vim_block_insert_moved_copies_typed_only()
+{
+    // 本文・鍵・Nib の本文・言うこと。
+    using Case = std::array<std::string_view, 4>;
+    const std::array cases{
+        // Vim は 2・3 行目に字の途中のバイト（\xe3）を写す（実測）。
+        Case{"あいう\nかきく\nさしす", "<C-v>jjA<Right>Z<Esc>", "あいZう\nかきく\nさしす",
+             "A then Right over a wide character copies nothing"},
+        // Vim は 2・3 行目に \x82 を写す（実測）。
+        Case{"あいう\nかきく\nさしす", "l<C-v>jjlc<Left>Z<Esc>", "Zあ\nか\nさ",
+             "blockwise c then Left over a wide character copies nothing"},
+        // Vim は 2・3 行目に \x82\xe3 を写す（実測）。
+        Case{"abあいう\naあいう\nabcdef", "l<C-v>jjlA<Right>Z<Esc>", "abあいZう\naあいう\nabcdef",
+             "A with the right edge inside a wide character then Right copies nothing"},
+        // Vim は打っていない b を含む bab を写す（実測・旧 fixture block-insert-I-home）。
+        Case{"abcdef\nghijkl\nmnopqr", "ll<C-v>jjIab<Home>X<Esc>", "Xababcdef\nghijkl\nmnopqr",
+             "I, typing, then Home does not copy the untyped byte"},
+        // Vim は打っていない b を含む abb を写す（実測・旧 fixture block-insert-I-end）。
+        Case{"abcdef\nghijkl\nmnopqr", "l<C-v>jjIab<End>X<Esc>", "aabbcdefX\nghijkl\nmnopqr",
+             "I, typing, then End does not copy the untyped byte"},
+        // Vim は <Del> でつないだ次の行ごと Zabcdef を 3 行目へ写す（実測）。
+        Case{"abcdef\nabcdef\nabcdef", "<C-v>j$A<Del>Z<Esc>", "abcdefZabcdef\nabcdef",
+             "$A then Del joining the next line does not copy the joined text"},
+    };
+    for (const auto &[text, keys, wanted, what] : cases)
+    {
+        Editing editing;
+        EditorController &controller = vim_block_editor(editing, text);
+        vim_replay(controller, keys);
+        const std::string body = vim_body(controller.frame());
+        const std::string said(what);
+        expect(body == wanted, said.c_str());
+        expect(nenenib::core::validate_utf8(body).has_value(),
+               (said + ": the body stays valid UTF-8").c_str());
+    }
+}
+
 // core の純関数を直に測る。行ごとの範囲・左の桁・幅が 1 本で決まること（決定 2）。
 void verify_vim_block_range()
 {
@@ -822,7 +863,7 @@ void verify_vim_block_fixtures()
             ++selected;
         }
     }
-    expect(selected == 562, "the scope replays its 562 blockwise oracle fixtures");
+    expect(selected == 619, "the scope replays its 619 blockwise oracle fixtures");
 }
 } // namespace
 
@@ -837,6 +878,7 @@ void verify_vim_block_contracts()
     verify_vim_block_put_huge_count();
     verify_vim_block_insert_document_newlines();
     verify_vim_block_insert_interrupted();
+    verify_vim_block_insert_moved_copies_typed_only();
     verify_vim_block_range();
     verify_vim_block_reselect();
     verify_vim_block_indexed_small();
