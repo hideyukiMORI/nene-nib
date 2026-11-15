@@ -140,6 +140,14 @@ written_lines(const VimState &state, const TextBuffer &text, std::span<const Lin
     return WrittenLines{std::move(next), std::move(clipboard)};
 }
 
+// 書き手が断った 1 歩（矩形のレジスタへの行の追記など・ADR 0048 の決定 4）。`x` `dd` の書けない
+// 命令（refused_register）と同じく報せを出さず、本文もレジスタも変えずに閉じた失敗にする。状態は
+// ex_rested（Ex の 1 歩の止まり方）。
+[[nodiscard]] VimStep refused_write(const VimState &state, VimRepeatFailure failure)
+{
+    return detail::failed(VimStep{ex_rested(state), VimNoEffect{}}, failure);
+}
+
 // 続く塊を 1 つの行の塊に畳んだ列（消す範囲）。
 [[nodiscard]] std::vector<LineChunk> merged_runs(std::span<const LineChunk> chunks)
 {
@@ -217,7 +225,7 @@ written_lines(const VimState &state, const TextBuffer &text, std::span<const Lin
     auto written = written_lines(state, text, chunks, LineWrite{name, VimOperator::remove});
     if (!written)
     {
-        return ex_noticed(state, notice_of(VimSearchNoticeKind::not_supported), written.error());
+        return refused_write(state, written.error());
     }
     const std::vector<LineChunk> runs = merged_runs(chunks);
     std::vector<VimBlockEdit> edits;
@@ -258,7 +266,7 @@ written_lines(const VimState &state, const TextBuffer &text, std::span<const Lin
         written_lines(state, view.text, std::span{&chunk, 1}, LineWrite{name, VimOperator::yank});
     if (!written)
     {
-        return ex_noticed(state, notice_of(VimSearchNoticeKind::not_supported), written.error());
+        return refused_write(state, written.error());
     }
     VimStep step{std::move(written.value().first), VimNoEffect{}};
     step.clipboard = std::move(written.value().second);
@@ -325,21 +333,19 @@ counted_chunk(detail::ExLineSpan span, std::optional<std::size_t> count, std::si
     return chunks;
 }
 
-// `:g` が選んだ行に命令を流す 1 歩（Vim の global_exe）。
-[[nodiscard]] VimStep global_run(const VimState &state, const VimEditorView &view,
-                                 const ExGlobalCommand &command,
-                                 std::span<const std::size_t> marked)
+// `:g/{pat}/s//{rep}/`（置換の本体が選んだ行だけを走る）。
+[[nodiscard]] VimStep global_command_run(const VimState &state, const VimEditorView &view,
+                                         const ExSubstituteRequest &substitute,
+                                         std::span<const std::size_t> marked)
 {
-    if (const auto *const substitute = std::get_if<ExSubstituteRequest>(&command))
-    {
-        return detail::global_substituted(state, view, *substitute, marked);
-    }
-    const auto *const removal = std::get_if<ExLinesRequest>(&command);
-    if (removal == nullptr)
-    {
-        std::unreachable();
-    }
-    const ExLinesRequest &lines = *removal;
+    return detail::global_substituted(state, view, substitute, marked);
+}
+
+// `:g/{pat}/d [x] [count]`。
+[[nodiscard]] VimStep global_command_run(const VimState &state, const VimEditorView &view,
+                                         const ExLinesRequest &lines,
+                                         std::span<const std::size_t> marked)
+{
     if (lines.count == std::optional<std::size_t>{0})
     {
         return ex_noticed(state, notice_of(VimSearchNoticeKind::positive_count),
@@ -348,6 +354,16 @@ counted_chunk(detail::ExLineSpan span, std::optional<std::size_t> count, std::si
     const std::vector<LineChunk> chunks =
         global_chunks(marked, lines.count.value_or(1), view.text.line_count());
     return removed_lines(state, view, chunks, lines.register_name);
+}
+
+// `:g` が選んだ行に命令を流す 1 歩（Vim の global_exe）。
+[[nodiscard]] VimStep global_run(const VimState &state, const VimEditorView &view,
+                                 const ExGlobalCommand &command,
+                                 std::span<const std::size_t> marked)
+{
+    // 命令は閉じた和型（ADR 0009・選択肢が増えたら写し先が足りずコンパイルが落ちる・CPP-002）。
+    return std::visit([&](const auto &value)
+                      { return global_command_run(state, view, value, marked); }, command);
 }
 
 // `:g` のパターンの前向きの形（空なら直前の検索・無ければ E35）。

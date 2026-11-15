@@ -67,6 +67,7 @@
 #include "SelectSyntax.hpp"
 #include "SetPreviewPlacement.hpp"
 #include "SettleRecentTab.hpp"
+#include "ShowVersion.hpp"
 #include "SplitPane.hpp"
 #include "StoreVimRegister.hpp"
 #include "SubmitCommand.hpp"
@@ -104,5 +105,5 @@ using EditorIntent = std::variant<
     HoverExplorer, LanguageServerTick, MapTimeout, InsertDateTime, SelectDocumentFormat,
     OpenDocumentFormatList, OpenDisplayLanguageList, BeginFind, BeginGoToLine, BeginReplace,
     SetPreviewPlacement, PointPreview, PrintDocument, RegisterShell, UnregisterShell, PinTab,
-    FirstFramePresented, ChooseStartEntry, PointMinimap>;
+    FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion>;
 } // namespace nenenib::application

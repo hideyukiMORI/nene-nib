@@ -31,20 +31,25 @@ pwsh -NoProfile -File eng/package-msix.ps1 -OutputDirectory D:/NeNeNib/releases/
 - 出力のディレクトリ: `layout/`（包む前の配置）・`work/`（PRI の設定と dump）・`unpacked/`（MakeAppx が開き直した木）・`.msix`・`SHA256SUMS`・`msix.json`（入力の exe と ZIP と MSIX の SHA-256 と大きさ・項目の一覧・版・SDK の版と SHA-256・`signed=false`）。
 - 道具が落ちる所: 表の身元が予約の値と合わない（PFN の計算）・版が `project()` と違う / 4 つ目が 0 でない / `-Store` で先頭 0・ロゴが 25 枚でない / 名前や大きさが違う・exe が Release の記録や ZIP と違う・SDK の版が違う・MSIX か unpack の中身の集合やバイト列が配置と違う・manifest の身元と版が表と違う。
 
-## 2. 自己署名で入れてみる（hide の手・管理者の PowerShell）
+## 2. 自己署名で入れてみる（hide の手）
 
 Store に上げる `.msix` は署名しない（Store が署名する）。確かめには**写し**に署名して入れる。証明書の Subject は manifest の Publisher と同じでなければ入らない。
+
+管理者の PowerShell が要るのは「（管理者）」と書いた行（`Cert:\LocalMachine\TrustedPeople` への出し入れ）だけで、ほかの行は普通の PowerShell でよい。
+`$cert` を使う行（1）・2）の Export・3）の署名）は同じ窓で続けて打つ。管理者の行は `.cer` のパスだけを使うので、別の管理者の窓で打ってよい。
+この節の命令は設計席・席が実行していない（**未実測**・形は Microsoft の文書と Loupe・Folio の手順による）。
 
 ```powershell
 # 1) 自己署名の証明書（CurrentUser\My に作る。.pfx に書き出さない）
 $cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=C37230AA-B52D-403B-9BFD-E7980F088422' `
     -KeyUsage DigitalSignature -FriendlyName 'NeNe Nib MSIX local test' -CertStoreLocation 'Cert:\CurrentUser\My' `
     -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
-# 2) 公開鍵だけを LocalMachine\TrustedPeople に入れる（管理者権限が要る）
+# 2) 公開鍵だけを書き出し、LocalMachine\TrustedPeople に入れる（Import の行は管理者）
 Export-Certificate -Cert $cert -FilePath D:/NeNeNib/temp/nib-msix-test.cer
+# （管理者）
 Import-Certificate -FilePath D:/NeNeNib/temp/nib-msix-test.cer -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople'
-# 3) 写しに署名する
-Copy-Item <出力>/NeNeNib-<x.y.z.0>-windows-x64.msix D:/NeNeNib/temp/nib-signed.msix
+# 3) 写しに署名する（Store に上げる `-store.msix` そのものには署名しない。写しを作ってそれに署名する）
+Copy-Item <出力>/NeNeNib-<x.y.z.0>-windows-x64-store.msix D:/NeNeNib/temp/nib-signed.msix
 & "${env:ProgramFiles(x86)}/Windows Kits/10/bin/10.0.26100.0/x64/signtool.exe" sign /fd SHA256 /s My /sha1 $cert.Thumbprint D:/NeNeNib/temp/nib-signed.msix
 # 4) 入れる・外す
 Add-AppxPackage -Path D:/NeNeNib/temp/nib-signed.msix
@@ -53,14 +58,21 @@ Remove-AppxPackage (Get-AppxPackage HideyukiMori.NeNeNib).PackageFullName
 ```
 
 - 入れた後は「スタート」の NeNe Nib から起動する。確かめる表は `docs/store/submission.md` の「packaged の実機の確かめ」（設定の置き場・F1 の登録・言語サーバー・`\\wsl.localhost`・保存・印刷）。
-- 終わったら証明書を両方の置き場から消す（`Remove-Item Cert:\CurrentUser\My\<拇印>` と `Cert:\LocalMachine\TrustedPeople\<拇印>`）。
-- 自己署名で入れた後に Store 版を入れるときは、先に `Remove-AppxPackage` で外す（同じ身元で署名が違う）。
+- 写しの元は `eng/package-msix.ps1 -Store` の出力 `NeNeNib-<x.y.z.0>-windows-x64-store.msix`（`eng/package-msix.py` の `archive` の名前・1.0.0 なら `NeNeNib-1.0.0.0-windows-x64-store.msix`）。`-Store` を付けずに作った物（`…-windows-x64.msix`）は上げる物そのものではないので、確かめに使わない。
+- 確かめが終わったら、§3 の WACK の**前に** `Remove-AppxPackage` で外す（WACK はパッケージを入れて試すので、同じ身元の物が入ったままだとぶつかりうる・未実測）。
+- 終わったら証明書を両方の置き場から消す: `Remove-Item Cert:\CurrentUser\My\<拇印>`（普通の PowerShell）と `Remove-Item Cert:\LocalMachine\TrustedPeople\<拇印>`（管理者）。
+- 自己署名で入れた後に Store 版を入れるときも、先に `Remove-AppxPackage` で外す（同じ身元で署名が違う）。
 
 ## 3. WACK（hide の手・管理者）
 
 Windows App Certification Kit は Windows SDK に入っている。**署名していない Store 用の `.msix`** を対象に回す（Loupe・Folio と同じ）。
+先に §2 で入れた写しを外しておく（`Get-AppxPackage HideyukiMori.NeNeNib` が何も返さないこと）。報告の置き場のフォルダはまだ無い（`appcert.exe` が作るかは確かめていない）ので、先に作る。
+この節の命令も設計席・席は実行していない（**未実測**）。
 
 ```powershell
+# 報告の置き場を作る（普通の PowerShell でよい）
+New-Item -ItemType Directory -Force D:/NeNeNib/releases/v<x.y.z>/wack
+# ここから管理者
 $kit = "${env:ProgramFiles(x86)}/Windows Kits/10/App Certification Kit/appcert.exe"
 & $kit reset
 & $kit test -appxpackagepath <出力>/NeNeNib-<x.y.z.0>-windows-x64-store.msix -reportoutputpath D:/NeNeNib/releases/v<x.y.z>/wack/report.xml
@@ -69,6 +81,7 @@ $kit = "${env:ProgramFiles(x86)}/Windows Kits/10/App Certification Kit/appcert.e
 - 画面から回すなら「Windows App Cert Kit」→「Validate Store App」→ パッケージを選ぶ。
 - FAIL は 0 であること。WARNING と任意の試験の FAIL（Folio は「Blocked executables」）は、`docs/store/submission.md` の「認定の注意書き」の末尾に試験の名前と理由を 1 段落で足す。
 - この席は `appcert.exe` を回していない（管理者権限が要る）。引数の形は Microsoft の文書による。
+- 署名していない `.msix` を WACK が試せるかも、Nib では確かめていない（Loupe・Folio は署名なしで回した）。断られたら §2 の署名した写しを対象にして回し、そのことを記録に書く。
 
 ## 4. Partner Center へ上げる物（hide の手）
 

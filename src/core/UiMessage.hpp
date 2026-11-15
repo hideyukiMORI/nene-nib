@@ -100,6 +100,8 @@ enum class UiMessage : std::uint16_t
     operation_unregister_shell_description,
     operation_choose_language_name,
     operation_choose_language_description,
+    operation_show_version_name,
+    operation_show_version_description,
     app_error_window_class,
     app_error_window_create,
     app_error_rendering_start,

@@ -190,7 +190,7 @@ void listed_remnants(application::FilePort &files, const std::string &folder, st
     {
         remnants.push_back(application::AutosaveRemnant{std::format("{}/{}", name, entry.id.value),
                                                         entry.id, entry.path, entry.title,
-                                                        entry.caret});
+                                                        entry.caret, entry.form});
     }
 }
 
@@ -284,7 +284,8 @@ std::expected<void, Failure> autosave_stored(application::FilePort &files,
     }
     // 自分の一覧が壊れていたら、読めた分を捨てて今の行から書き直す（自分のワーカーだけが書く）。
     Entries entries = entries_in(files, folder).value_or(Entries{});
-    upsert(entries, AutosaveEntry{snapshot.id, snapshot.path, snapshot.title, snapshot.caret});
+    upsert(entries, AutosaveEntry{snapshot.id, snapshot.path, snapshot.title, snapshot.caret,
+                                  snapshot.form});
     return entries_written(files, folder, entries);
 }
 

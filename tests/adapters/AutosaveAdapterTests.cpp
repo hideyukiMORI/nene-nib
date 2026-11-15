@@ -8,6 +8,7 @@
 #include "AutosaveEntry.hpp"
 #include "AutosaveFailure.hpp"
 #include "AutosaveFolder.hpp"
+#include "AutosaveForm.hpp"
 #include "AutosaveId.hpp"
 #include "AutosaveOutcome.hpp"
 #include "AutosaveRemnant.hpp"
@@ -19,6 +20,7 @@
 #include "FilePort.hpp"
 #include "FileWriteMode.hpp"
 #include "FindHandle.hpp"
+#include "LineEnding.hpp"
 #include "ProcessInstance.hpp"
 #include "ProcessInstances.hpp"
 #include "ProcessQueryFailure.hpp"
@@ -53,6 +55,7 @@ namespace
 namespace core = nenenib::core;
 namespace adapters = nenenib::adapters::win32;
 using nenenib::application::AutosaveFailure;
+using nenenib::application::AutosaveForm;
 using nenenib::application::AutosaveId;
 using nenenib::application::AutosaveOutcome;
 using nenenib::application::AutosaveRemnant;
@@ -181,8 +184,37 @@ std::vector<std::byte> bytes_of(std::string_view text)
 AutosaveSnapshot snapshot(std::uint64_t id, std::optional<core::FilePath> path,
                           std::string_view title, std::string_view text)
 {
-    return AutosaveSnapshot{AutosaveId{id}, std::move(path), title_of(title), bytes_of(text),
-                            caret_at(2, 5)};
+    return AutosaveSnapshot{
+        AutosaveId{id},
+        std::move(path),
+        title_of(title),
+        bytes_of(text),
+        caret_at(2, 5),
+        AutosaveForm{core::TextEncoding::shift_jis, core::LineEnding::lf, core::LineEnding::crlf}};
+}
+
+[[nodiscard]] bool same_form(const std::optional<AutosaveForm> &left,
+                             const std::optional<AutosaveForm> &right)
+{
+    if (!left.has_value() || !right.has_value())
+    {
+        return left.has_value() == right.has_value();
+    }
+    return left.value().encoding == right.value().encoding &&
+           left.value().save == right.value().save && left.value().body == right.value().body;
+}
+
+// 形の無い行（手で並べた残骸の行）には UTF-8・LF の形を置く。書くのは版 2 だけ（#1688）。
+std::vector<adapters::AutosaveEntry> formed(std::vector<adapters::AutosaveEntry> entries)
+{
+    for (auto &entry : entries)
+    {
+        if (!entry.form.has_value())
+        {
+            entry.form = AutosaveForm{core::TextEncoding::utf8, std::nullopt, core::LineEnding::lf};
+        }
+    }
+    return entries;
 }
 
 // ワーカーは載せた順に 1 つずつ走るので、後ろに載せた合図が来れば前の仕事は終わっている。
@@ -258,6 +290,10 @@ void verify_store(adapters::Win32Worker &worker, adapters::Win32FileAdapter &fil
                text_of(entries[0].path) == "C:/work/a.txt" && entries[0].title.text() == "a.txt" &&
                entries[0].caret == caret_at(2, 5),
            "the entry keeps the id, path, title and caret");
+    const std::optional<AutosaveForm> form = entries.empty() ? std::nullopt : entries.front().form;
+    expect(same_form(form, AutosaveForm{core::TextEncoding::shift_jis, core::LineEnding::lf,
+                                        core::LineEnding::crlf}),
+           "the entry keeps the form of the document (#1688)");
     expect(entries.size() == 2 && !entries[1].path.has_value() && entries[1].title.text() == "無題",
            "an untitled entry has no path");
     autosave.store(snapshot(3, path_of("C:/work/a.txt"), "a.txt", "second"));
@@ -398,7 +434,7 @@ void verify_clear(adapters::Win32Worker &worker, adapters::Win32AutosaveAdapter 
 void write_list(adapters::Win32FileAdapter &files, std::string_view folder,
                 const std::vector<adapters::AutosaveEntry> &entries)
 {
-    const auto bytes = adapters::encode_autosave_entries(entries);
+    const auto bytes = adapters::encode_autosave_entries(formed(entries));
     expect(bytes.has_value(), "the list encodes");
     expect(files
                .write(path_of(std::format("{}/{}/autosave.v1", root_text, folder)),
@@ -518,6 +554,246 @@ void verify_read_and_forget(adapters::Win32FileAdapter &files,
     expect(!autosave.read(stray).has_value(), "a location outside the form is not read");
     expect(read_text(files, "nib-autosave-files/autosave/4/autosave.v1").size() > 0,
            "the folder of a live process is left alone");
+}
+
+[[nodiscard]] bool same_entries(const std::vector<adapters::AutosaveEntry> &left,
+                                const std::vector<adapters::AutosaveEntry> &right)
+{
+    return std::ranges::equal(
+        left, right,
+        [](const adapters::AutosaveEntry &one, const adapters::AutosaveEntry &other)
+        {
+            return one.id == other.id && one.path == other.path &&
+                   one.title.text() == other.title.text() && one.caret == other.caret &&
+                   same_form(one.form, other.form);
+        });
+}
+
+// (k) V-1692 の M1: どの行にも形が無い一覧（前の版 1 の残骸を縮めた物）は版 1 で書き、往復する。
+// 行が 0 の一覧は版 2。
+void verify_version_1_writes(std::vector<adapters::AutosaveEntry> entries)
+{
+    for (auto &entry : entries)
+    {
+        entry.form.reset();
+    }
+    const auto list = adapters::encode_autosave_entries(entries);
+    expect(list.has_value() && list.value().starts_with("version=1\n"
+                                                        "entry=3,2,5,3.body,"
+                                                        "C:/work/a.txt\ntitle=a.txt\n"
+                                                        "entry=4,1,1,4.body,\n"),
+           "a list without any form is written in version 1");
+    const auto decoded = adapters::decode_autosave_entries(list.value_or(std::string{}));
+    expect(decoded.has_value() && same_entries(decoded.value(), entries),
+           "a version 1 list round-trips");
+    expect(adapters::encode_autosave_entries({}).value_or(std::string{}) == "version=2\n",
+           "an empty list is written in version 2");
+}
+
+// (k) #1688: 一覧の版 2 は文書の形（文字コード・本文の改行の形・保存の改行の形）を持ち、往復で
+// 変わらない。書くのは版 2 だけで、形の無い行は書けない。版 1 の一覧は形なしで読み、形の欄が
+// 壊れた・欠けた版 2 と知らない版の一覧は全体を拒む。
+void verify_list_versions()
+{
+    const std::vector<adapters::AutosaveEntry> entries{
+        {AutosaveId{3}, path_of("C:/work/a.txt"), title_of("a.txt"), caret_at(2, 5),
+         AutosaveForm{core::TextEncoding::shift_jis, core::LineEnding::lf, core::LineEnding::crlf}},
+        {AutosaveId{4}, std::nullopt, title_of("無題"), caret_at(1, 1),
+         AutosaveForm{core::TextEncoding::utf8_bom, std::nullopt, core::LineEnding::lf}},
+        {AutosaveId{5}, path_of("C:/work/le.txt"), title_of("le.txt"), caret_at(1, 1),
+         AutosaveForm{core::TextEncoding::utf16_le, core::LineEnding::crlf, core::LineEnding::lf}},
+        {AutosaveId{6}, path_of("C:/work/be.txt"), title_of("be.txt"), caret_at(1, 1),
+         AutosaveForm{core::TextEncoding::utf16_be, std::nullopt, core::LineEnding::crlf}},
+        {AutosaveId{7}, path_of("C:/work/u.txt"), title_of("u.txt"), caret_at(1, 1),
+         AutosaveForm{core::TextEncoding::utf8, std::nullopt, core::LineEnding::lf}}};
+    const auto list = adapters::encode_autosave_entries(entries);
+    expect(list.has_value() && list.value().starts_with("version=2\n"
+                                                        "entry=3,2,5,3.body,cp932,dos,unix,"
+                                                        "C:/work/a.txt\ntitle=a.txt\n"
+                                                        "entry=4,1,1,4.body,utf-8-bom,unix,,\n"),
+           "version 2 writes the encoding, the body and the save line ending before the path");
+    const auto decoded = adapters::decode_autosave_entries(list.value_or(std::string{}));
+    expect(decoded.has_value() && same_entries(decoded.value(), entries),
+           "a version 2 list round-trips with every encoding and line ending form");
+    auto bare = entries;
+    bare.at(1).form.reset();
+    expect(!adapters::encode_autosave_entries(bare).has_value(),
+           "a list that mixes entries with and without a form is not written");
+    verify_version_1_writes(entries);
+    const auto old = adapters::decode_autosave_entries(
+        "version=1\nentry=7,3,5,7.body,C:/work/b.txt\ntitle=b.txt\n");
+    expect(old.has_value() && old.value().size() == 1 && !old.value()[0].form.has_value() &&
+               text_of(old.value()[0].path) == "C:/work/b.txt" &&
+               old.value()[0].caret == caret_at(3, 5),
+           "a version 1 list from an earlier release is read without a form");
+    for (const std::string_view broken :
+         {"version=2\nentry=7,3,5,7.body,C:/work/b.txt\ntitle=b.txt\n",
+          "version=2\nentry=7,3,5,7.body,latin1,unix,,C:/work/b.txt\ntitle=b.txt\n",
+          "version=2\nentry=7,3,5,7.body,utf-8,mac,,C:/work/b.txt\ntitle=b.txt\n",
+          "version=2\nentry=7,3,5,7.body,utf-8,,unix,C:/work/b.txt\ntitle=b.txt\n",
+          "version=2\nentry=7,3,5,7.body,utf-8,unix,cr,C:/work/b.txt\ntitle=b.txt\n",
+          "version=3\nentry=7,3,5,7.body,utf-8,unix,,C:/work/b.txt\ntitle=b.txt\n"})
+    {
+        expect(
+            !adapters::decode_autosave_entries(broken).has_value(),
+            "a version 2 list with a missing or unknown form, or an unknown version, is refused");
+    }
+}
+
+// (k) V-1692 の L2: 一覧に書く文字コードと改行の形の名前の集合を直書きで固定する。名前は
+// `:set fenc=` `:set ff=` の表（core の DocumentFormat）から来るので、表示名を変える・足すとここが
+// 落ちる。落ちたら一覧の版を上げる（ADR 0137 の追補 #1688）。
+void verify_list_names()
+{
+    using core::LineEnding;
+    using core::TextEncoding;
+    const std::vector<adapters::AutosaveEntry> entries{
+        {AutosaveId{1}, std::nullopt, title_of("a"), caret_at(1, 1),
+         AutosaveForm{TextEncoding::utf8, LineEnding::lf, LineEnding::crlf}},
+        {AutosaveId{2}, std::nullopt, title_of("b"), caret_at(1, 1),
+         AutosaveForm{TextEncoding::utf8_bom, LineEnding::crlf, LineEnding::lf}},
+        {AutosaveId{3}, std::nullopt, title_of("c"), caret_at(1, 1),
+         AutosaveForm{TextEncoding::shift_jis, std::nullopt, LineEnding::lf}},
+        {AutosaveId{4}, std::nullopt, title_of("d"), caret_at(1, 1),
+         AutosaveForm{TextEncoding::utf16_le, std::nullopt, LineEnding::lf}},
+        {AutosaveId{5}, std::nullopt, title_of("e"), caret_at(1, 1),
+         AutosaveForm{TextEncoding::utf16_be, std::nullopt, LineEnding::lf}}};
+    expect(adapters::encode_autosave_entries(entries).value_or(std::string{}) ==
+               "version=2\n"
+               "entry=1,1,1,1.body,utf-8,dos,unix,\ntitle=a\n"
+               "entry=2,1,1,2.body,utf-8-bom,unix,dos,\ntitle=b\n"
+               "entry=3,1,1,3.body,cp932,unix,,\ntitle=c\n"
+               "entry=4,1,1,4.body,utf-16le,unix,,\ntitle=d\n"
+               "entry=5,1,1,5.body,utf-16be,unix,,\ntitle=e\n",
+           "the list writes the fixed names of the encodings and line endings (V-1692 L2)");
+}
+
+// (k) 前の版の残骸のフォルダは形なしの残骸として出て、知らない版の一覧のフォルダは出ず、消えない。
+// deadbee9 と deadbee7 は奇数なので pid にならない。
+void verify_remnant_versions(adapters::Win32FileAdapter &files,
+                             adapters::Win32AutosaveAdapter &autosave)
+{
+    make_folder(L"deadbee9");
+    make_folder(L"deadbee7");
+    expect(files
+               .write(path_of(std::format("{}/deadbee9/autosave.v1", root_text)),
+                      "version=1\nentry=2,1,1,2.body,\ntitle=無題\n")
+               .has_value(),
+           "a version 1 list is written");
+    write_body(files, "deadbee9", 2, "\x93\xFA\x96\x7B");
+    expect(files
+               .write(path_of(std::format("{}/deadbee7/autosave.v1", root_text)),
+                      "version=3\nentry=2,1,1,2.body,utf-8,unix,,\ntitle=無題\n")
+               .has_value(),
+           "a list of an unknown version is written");
+    write_body(files, "deadbee7", 2, "newer");
+    const auto listed = autosave.remnants().value_or(std::vector<AutosaveRemnant>{});
+    const auto old = std::ranges::find_if(listed, [](const AutosaveRemnant &remnant)
+                                          { return remnant.location == "deadbee9/2"; });
+    expect(old != listed.end() && !old->form.has_value(),
+           "the remnant of a version 1 list is listed without a form");
+    expect(std::ranges::none_of(listed, [](const AutosaveRemnant &remnant)
+                                { return remnant.location.starts_with("deadbee7/"); }),
+           "the folder of an unknown version is not asked");
+    if (old != listed.end())
+    {
+        autosave.forget(*old);
+    }
+    expect(!exists(std::wstring(root) + L"/deadbee9") &&
+               exists(std::wstring(root) + L"/deadbee7/2.body"),
+           "forgetting the version 1 remnant removes it and leaves the unknown version alone");
+}
+
+// 前の版 1 の一覧の n 行（番号 2 から 1 つずつ・題名は t2 t3 …・形なし）。
+[[nodiscard]] std::string version_1_list(std::span<const std::uint64_t> ids)
+{
+    std::string text = "version=1\n";
+    for (const std::uint64_t id : ids)
+    {
+        text += std::format("entry={},1,1,{}.body,\ntitle=t{}\n", id, id, id);
+    }
+    return text;
+}
+
+[[nodiscard]] std::wstring wide_of(std::string_view ascii)
+{
+    return {ascii.begin(), ascii.end()};
+}
+
+// 起動の問いが列に出した残骸のうち location（`<フォルダ>/<番号>`）の 1 本（無ければ値なし）。
+[[nodiscard]] std::optional<AutosaveRemnant> asked(adapters::Win32AutosaveAdapter &autosave,
+                                                   std::string_view location)
+{
+    const auto listed = autosave.remnants().value_or(std::vector<AutosaveRemnant>{});
+    const auto found = std::ranges::find_if(listed, [location](const AutosaveRemnant &remnant)
+                                            { return remnant.location == location; });
+    expect(found != listed.end(), "the version 1 remnant is asked");
+    return found != listed.end() ? std::optional<AutosaveRemnant>{*found} : std::nullopt;
+}
+
+// 版 1 の一覧の残骸 location（`<フォルダ>/<番号>`）を 1 本 forget し、残りの行 left が版 1 のまま
+// （形なし）で一覧に残るか、left が空ならフォルダが消えることを見る。
+void forget_version_1(adapters::Win32FileAdapter &files, adapters::Win32AutosaveAdapter &autosave,
+                      std::string_view location, std::span<const std::uint64_t> left)
+{
+    const auto remnant = asked(autosave, location);
+    if (remnant.has_value())
+    {
+        autosave.forget(remnant.value());
+    }
+    const std::string_view folder = location.substr(0, location.find('/'));
+    if (left.empty())
+    {
+        expect(!exists(std::wstring(root) + L"/" + wide_of(folder)),
+               "forgetting the last version 1 remnant removes the folder");
+        return;
+    }
+    const auto text = read_text(files, std::format("{}/{}/autosave.v1", root_text, folder));
+    const auto decoded = adapters::decode_autosave_entries(text);
+    expect(text == version_1_list(left) && decoded.has_value() &&
+               std::ranges::none_of(decoded.value(), [](const adapters::AutosaveEntry &entry)
+                                    { return entry.form.has_value(); }),
+           "forgetting a version 1 remnant shrinks the list and keeps it in version 1 (V-1692 M1)");
+    expect(!exists(std::wstring(root) + L"/" + wide_of(location) + L".body"),
+           "forgetting a version 1 remnant removes its body");
+}
+
+// (k) V-1692 の M1: 版 1 の一覧に 2 行と 3 行があるフォルダを 1 本ずつ forget すると、毎回一覧が
+// 縮んで版 1 のまま読め、最後にフォルダが消える（直す前は残りの行を書き直せず一覧が残った）。
+// deadbee3 と deadbeeb は奇数なので pid にならない。
+void verify_shrinking_version_1(adapters::Win32FileAdapter &files,
+                                adapters::Win32AutosaveAdapter &autosave)
+{
+    using Ids = std::vector<std::uint64_t>;
+    const auto leave = [&files](std::string_view folder, const Ids &ids)
+    {
+        make_folder(wide_of(folder));
+        expect(files
+                   .write(path_of(std::format("{}/{}/autosave.v1", root_text, folder)),
+                          version_1_list(ids))
+                   .has_value(),
+               "a version 1 list is written");
+        for (const std::uint64_t id : ids)
+        {
+            write_body(files, folder, id, "\x93\xFA\x96\x7B");
+        }
+    };
+    leave("deadbee3", Ids{2, 3});
+    leave("deadbeeb", Ids{2, 3, 4});
+    // 「はい」の道（read の後に forget）で 1 本、「いいえ」の道（読まずに forget）で 1 本。
+    const auto yes = asked(autosave, "deadbee3/2");
+    std::string body;
+    if (yes.has_value())
+    {
+        const auto bytes = autosave.read(yes.value());
+        body = bytes.has_value() ? text_of(bytes.value()) : std::string{};
+    }
+    expect(body == "\x93\xFA\x96\x7B", "a version 1 remnant reads its body");
+    forget_version_1(files, autosave, "deadbee3/2", Ids{3});
+    forget_version_1(files, autosave, "deadbee3/3", Ids{});
+    forget_version_1(files, autosave, "deadbeeb/3", Ids{2, 4});
+    forget_version_1(files, autosave, "deadbeeb/2", Ids{4});
+    forget_version_1(files, autosave, "deadbeeb/4", Ids{});
 }
 
 // 本物のファイルの port へ渡し、read に渡された上限を覚える（#792 の上限の正本の契約）。
@@ -742,12 +1018,16 @@ void verify_autosave()
         verify_remnants(worker, files, autosave);
         verify_read_limit(worker, files);
         verify_read_and_forget(files, autosave);
+        verify_remnant_versions(files, autosave);
+        verify_shrinking_version_1(files, autosave);
         verify_read_back_at_limit(files, autosave);
         autosave.clear();
         expect(!exists(own_folder()), "clear removes the own folder again");
     }
     verify_reused_process_id(worker, files);
     verify_remnant_names();
+    verify_list_versions();
+    verify_list_names();
     remove_tree(base);
 }
 int run_tests(int argc, char **argv)

@@ -357,6 +357,38 @@ void verify_measured_key_width()
                core::GuideRequest{GuideContext::untouched_untitled, 65}, body, status, 96)),
            "a key one pixel wider than the exact margins no longer fits in the body");
 }
+
+// #1658: ステータスの案内は、左端がモードの文の右から status_text_gap_dips を空けて入るときだけ。
+// 境目は 1 画素で切り替わり、本文の案内と案内なしは測った幅に依らない。
+void verify_status_guide_fitted()
+{
+    for (const auto dpi : {96U, 120U})
+    {
+        const auto width = core::to_pixels(960, dpi);
+        const auto height = core::to_pixels(200, dpi);
+        const auto body = core::body_layout(width, height, dpi, core::default_font_size());
+        const auto status = core::status_bar_layout(width, height, dpi);
+        const auto guide = core::operation_guide_layout(core::GuideRequest{GuideContext::other, 0},
+                                                        body, status, dpi);
+        const auto room = std::get<core::StatusGuideLayout>(guide).rows.front().key.left -
+                          status.mode.left - core::to_pixels(core::status_text_gap_dips, dpi);
+        expect(std::holds_alternative<core::StatusGuideLayout>(
+                   core::status_guide_fitted(guide, status, dpi, room)) &&
+                   std::holds_alternative<core::StatusGuideLayout>(
+                       core::status_guide_fitted(guide, status, dpi, 0)),
+               "a mode text that leaves the gap keeps the status guide");
+        expect(std::holds_alternative<std::monostate>(
+                   core::status_guide_fitted(guide, status, dpi, room + 1)),
+               "a mode text that reaches the status guide drops it");
+        const auto tall =
+            core::body_layout(width, core::to_pixels(560, dpi), dpi, core::default_font_size());
+        const auto body_guide = core::operation_guide_layout(
+            core::GuideRequest{GuideContext::untouched_untitled, 0}, tall, status, dpi);
+        expect(std::holds_alternative<core::BodyGuideLayout>(
+                   core::status_guide_fitted(body_guide, status, dpi, width)),
+               "the body guide does not depend on the mode text");
+    }
+}
 } // namespace
 
 void verify_guide_scope()
@@ -369,5 +401,6 @@ void verify_guide_scope()
     verify_geometry();
     verify_layout_boundaries();
     verify_measured_key_width();
+    verify_status_guide_fitted();
 }
 } // namespace nenenib::tests

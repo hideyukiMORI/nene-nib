@@ -86,8 +86,8 @@ constexpr std::int32_t wave_period_dips = 4;
 constexpr float recording_gap_dips = 12.0F;
 // 一覧の行の題名と場所（`detail`）のあいだ（ADR 0057 の決定 7）。
 constexpr float palette_detail_gap_dips = 12.0F;
-// 一覧の行の右端の鍵の枠（docs/design/2026-10-06-guide.md の 5 節・ADR 0078 の決定 12）。
-constexpr float palette_key_padding_dips = 9.0F;
+// 一覧の行の右端の鍵の枠（docs/design/2026-10-06-guide.md の 5 節・ADR 0078 の決定 12）。左右の
+// 余白は幅の試験も読むので UiTextSizes.hpp の palette_key_padding_dips（#1658）。
 constexpr float palette_key_height_dips = 20.0F;
 constexpr float palette_key_radius_dips = 5.0F;
 // 空の文書の案内の鍵の枠の左右の余白（docs/design/2026-10-06-guide.md の 2 節）は UiTextSizes.hpp
@@ -1960,13 +1960,39 @@ void Direct2DRenderer::draw_toggle(const application::EditorFrame &frame,
                  vim ? frame.palette.on_accent : frame.palette.muted);
 }
 
-void Direct2DRenderer::draw_status_bar(const application::EditorFrame &frame,
-                                       const core::StatusBarLayout &layout)
+namespace
+{
+// 文の幅（物理画素・切り上げ）。測れなければ 0（測らない配置のまま・#1658）。
+[[nodiscard]] std::int32_t text_extent(IDWriteTextLayout *text)
+{
+    DWRITE_TEXT_METRICS metrics{};
+    if (text == nullptr || FAILED(text->GetMetrics(&metrics)))
+    {
+        return 0;
+    }
+    return static_cast<std::int32_t>(std::ceil(metrics.width));
+}
+} // namespace
+
+std::int32_t Direct2DRenderer::draw_status_bar(const application::EditorFrame &frame,
+                                               const core::StatusBarLayout &layout)
 {
     status_layout_cursor_ = 0;
     fill(layout.band, frame.palette.status);
-    draw_status_left(frame, layout);
-    for (std::size_t index = 0; index < core::status_item_count; ++index)
+    // 行と桁の文字組みを先に引き、モードの文と並べて入るかを core が決める（#1658）。文字組みの
+    // 箱は測らない配置の枠のままで、右端（右寄せ）も今までと同じ。モードを描かない frame（`:` の
+    // 入力・知らせ）は測らない配置のまま。
+    const auto &position = status_text_layout(frame.status_items.front().text(),
+                                              status_format_.Get(), layout.items.front());
+    const auto mode_width = draw_status_left(frame, layout, position);
+    const auto shown = mode_width > 0 ? core::status_bar_fitted(layout, dpi_, mode_width,
+                                                                text_extent(position.layout.Get()))
+                                      : layout;
+    if (core::width_of(shown.items.front()) > 0)
+    {
+        draw_status_text(position, layout.items.front(), frame.palette.muted);
+    }
+    for (std::size_t index = 1; index < core::status_item_count; ++index)
     {
         // 狭い窓で畳んだ言語の欄（幅 0・ADR 0154 の決定 6）は書かず、枠も使わない。
         if (core::width_of(layout.items.at(index)) <= 0)
@@ -1987,12 +2013,14 @@ void Direct2DRenderer::draw_status_bar(const application::EditorFrame &frame,
     const auto mark = core::display_form_label(frame.display);
     if (!mark.empty())
     {
-        write_right(mark, status_format_.Get(), layout.display, frame.palette.muted);
+        write_right(mark, status_format_.Get(), shown.display, frame.palette.muted);
     }
+    return mode_width;
 }
 
-void Direct2DRenderer::draw_status_left(const application::EditorFrame &frame,
-                                        const core::StatusBarLayout &layout)
+std::int32_t Direct2DRenderer::draw_status_left(const application::EditorFrame &frame,
+                                                const core::StatusBarLayout &layout,
+                                                const StatusTextLayout &position)
 {
     const auto command = core::command_layout(layout, dpi_, 0);
     // 分かれ目は status_left_state の 1 か所で、枠の数は status_layout_demand が同じ値から数える。
@@ -2001,10 +2029,10 @@ void Direct2DRenderer::draw_status_left(const application::EditorFrame &frame,
     case StatusLeftState::command_input:
         draw_command(frame, core::command_input_label(command, dpi_));
         draw_completions(frame, layout);
-        return;
+        return 0;
     case StatusLeftState::message:
         draw_status_message(frame, core::command_input_label(command, dpi_));
-        return;
+        return 0;
     case StatusLeftState::mode:
     case StatusLeftState::recording:
         break;
@@ -2012,7 +2040,12 @@ void Direct2DRenderer::draw_status_left(const application::EditorFrame &frame,
     draw_toggle(frame, layout);
     const auto &mode = status_text_layout(frame.mode_label, mode_format_.Get(), layout.mode);
     draw_status_text(mode, layout.mode, frame.palette.text);
-    draw_recording(frame, layout, mode);
+    const auto mode_width = text_extent(mode.layout.Get());
+    draw_recording(
+        frame,
+        core::status_bar_fitted(layout, dpi_, mode_width, text_extent(position.layout.Get())),
+        mode);
+    return mode_width;
 }
 
 // 知らせの 1 行。command_message か、キャレットの上の診断の文（ADR 0161 の決定 4）の値のある方を
@@ -2049,7 +2082,12 @@ void Direct2DRenderer::draw_recording(const application::EditorFrame &frame,
     const auto left = layout.mode.left +
                       static_cast<std::int32_t>(std::ceil(metrics.widthIncludingTrailingWhitespace +
                                                           scaled(recording_gap_dips)));
-    const core::LayoutRect area{left, layout.band.top, layout.items.at(0).left, layout.band.bottom};
+    // 表示形式の印を書く frame は印の手前まで（印は layout の欄に書く・#1658）。
+    const bool marked =
+        !core::display_form_label(frame.display).empty() && core::width_of(layout.display) > 0;
+    const core::LayoutRect area{left, layout.band.top,
+                                marked ? layout.display.left : layout.items.at(0).left,
+                                layout.band.bottom};
     if (core::width_of(area) <= 0)
     {
         return;
@@ -2226,36 +2264,57 @@ void Direct2DRenderer::draw_palette_choice(const application::EditorFrame &frame
         return;
     }
     const auto &choice = palette.rows.at(index - palette.first);
-    // 右端の欄は補足（印）か操作の鍵（ADR 0078 の決定 12）。両方を持つ行は無い。
-    const auto label =
-        core::palette_row_label(row, dpi_, choice.origin.has_value() || !choice.key.empty());
+    // 右端の欄は補足（印）か操作の鍵（ADR 0078 の決定 12）。両方を持つ行は無い。鍵の欄は枠の幅に
+    // 合わせて core が広げ、名前と説明の欄はその左まで（#1658）。
+    const auto key = choice.key.empty() ? TextLayout{} : palette_key_text(choice.key, row);
+    const auto note = palette_choice_note(choice, row, key.Get());
+    const auto label = core::palette_row_label(row, dpi_, note);
     context_->PushAxisAlignedClip(to_rect(label), D2D1_ANTIALIAS_MODE_ALIASED);
     draw_palette_label(frame, choice, label);
     context_->PopAxisAlignedClip();
     if (choice.origin.has_value())
     {
-        write_palette_note(core::palette_origin_label(choice.origin.value(), frame.language),
-                           core::palette_row_note(row, dpi_), frame.palette.muted);
+        write_palette_note(core::palette_origin_label(choice.origin.value(), frame.language), note,
+                           frame.palette.muted);
     }
-    if (!choice.key.empty())
+    if (key && core::width_of(note) > 0 && core::height_of(note) > 0)
     {
-        draw_palette_key(frame, choice.key, core::palette_row_note(row, dpi_));
+        draw_keycap_layout(key.Get(), note,
+                           KeycapStyle{palette_key_padding_dips, palette_key_height_dips,
+                                       palette_key_radius_dips, frame.palette.background,
+                                       frame.palette.panel_border, frame.palette.text});
     }
 }
 
-void Direct2DRenderer::draw_palette_key(const application::EditorFrame &frame, std::string_view key,
-                                        const core::LayoutRect &note)
+Direct2DRenderer::TextLayout Direct2DRenderer::palette_key_text(std::string_view key,
+                                                                const core::LayoutRect &row)
 {
-    // draw_keycap と同じく、寸法を確かめてから layout を引く（0 以下の欄で作らない・#900）。
-    if (core::width_of(note) <= 0 || core::height_of(note) <= 0)
+    // 鍵の文字組みは行の矩形を箱にして面の保持から引く（行はどれも同じ寸法・#900）。左寄せで
+    // 折り返さないので、幅は箱に依らず文字の幅（#258 の右寄せで測らない）。
+    if (core::width_of(row) <= 0 || core::height_of(row) <= 0)
     {
-        return;
+        return nullptr;
     }
-    const auto shown = palette_text(key, key_format_.Get(), PaletteTextRole::plain, note);
-    draw_keycap_layout(shown.Get(), note,
-                       KeycapStyle{palette_key_padding_dips, palette_key_height_dips,
-                                   palette_key_radius_dips, frame.palette.background,
-                                   frame.palette.panel_border, frame.palette.text});
+    return palette_text(key, key_format_.Get(), PaletteTextRole::plain, row);
+}
+
+core::LayoutRect Direct2DRenderer::palette_choice_note(const core::CommandChoice &choice,
+                                                       const core::LayoutRect &row,
+                                                       IDWriteTextLayout *key) const
+{
+    if (choice.origin.has_value())
+    {
+        return core::palette_row_note(row, dpi_);
+    }
+    // 鍵の枠の幅は paint_keycap と同じ「文字の幅 ＋ 左右の余白」を切り上げた物理画素（#1658）。
+    DWRITE_TEXT_METRICS metrics{};
+    if (key == nullptr || FAILED(key->GetMetrics(&metrics)))
+    {
+        return core::LayoutRect{row.right, row.top, row.right, row.bottom};
+    }
+    return core::palette_row_note(row, dpi_,
+                                  static_cast<std::int32_t>(std::ceil(
+                                      metrics.width + (scaled(palette_key_padding_dips) * 2.0F))));
 }
 
 void Direct2DRenderer::write_palette_note(std::string_view text, const core::LayoutRect &area,
@@ -2541,8 +2600,9 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     draw_body_area(frame, minimap.body, panes, guide);
     draw_explorer(frame, explorer);
     draw_minimap(frame, minimap.panel);
-    draw_status_bar(frame, status);
-    draw_status_guide(frame, guide);
+    // 長いモードの文（`(insert) VISUAL BLOCK` など）に届く案内は出さない（#1658）。
+    draw_status_guide(
+        frame, core::status_guide_fitted(guide, status, dpi_, draw_status_bar(frame, status)));
     if (frame.command_palette.has_value())
     {
         draw_palette(

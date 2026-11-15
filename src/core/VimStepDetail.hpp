@@ -281,6 +281,9 @@ repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::
                                                             const VimBlockInsert &insert,
                                                             std::string_view body);
 [[nodiscard]] std::string block_copied_body(const VimBlockInsert &insert, std::string body);
+[[nodiscard]] VimBlockInsert block_insert_moved(const VimBlockInsert &insert,
+                                                const VimEditorView &view, const VimKey &key,
+                                                bool stopped);
 [[nodiscard]] VimStep shifted_block(const VimState &state, const VimEditorView &view,
                                     ShiftBy shift);
 [[nodiscard]] VimRegister register_read(const VimState &state,

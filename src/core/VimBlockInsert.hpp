@@ -22,6 +22,9 @@ namespace nenenib::core
 // `straddled` は `I` の 1 行目で左の端が切った文字（幅 2 以上の文字・Tab・2 桁以上の制御文字や
 // 書式用文字）のうち端より前の桁の数（掛からなければ 0）。1 行目はその文字の頭から打ち、Esc は
 // 打った本文のうち端の桁から後ろだけを写す（#1196・block_copied_body）。決めるのは入口の 1 回。
+// `left` は矩形の左の桁（1 始まり）。INSERT の中でキャレットを動かしてから打つと、
+// 覚えは打ち始めへ置き直す（#1687・置き直すのは block_insert_moved の 1 か所）。
+// 単位: `at_byte` `line_bytes` `carried` はバイト、`column` `left` `straddled` は仮想桁。
 // 本文は持たない（ARC-004）。
 struct VimBlockInsert
 {
@@ -34,5 +37,6 @@ struct VimBlockInsert
     std::optional<Offset> caret;
     std::size_t carried;
     std::size_t straddled;
+    VirtualColumn left;
 };
 } // namespace nenenib::core

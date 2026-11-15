@@ -685,6 +685,8 @@ void EditorController::undo_edit()
     {
         return;
     }
+    // 再生の中の undo は畳みの起点より下の単位を戻し得る（#1672・merge_replayed_edits）。
+    replay_undone_ = replay_undone_ || replay_history_.has_value();
     // 空の単位は本文に触れず 1 段を戻す（ADR 0181 の決定 3）。キャレットは単位の位置へ。Vim の
     // u_undoredo は単位が保存した行を書き戻して changed_lines を呼ぶので `'.` は単位の行になる。
     if (edit.value().removed.empty() && edit.value().inserted.empty())

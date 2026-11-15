@@ -38,7 +38,7 @@
 - [ ] `msix.json` の `executable.sha256` が ZIP の中の exe と同じ（`zip.executableMatches`）
 - [ ] `msix.json` の `packageVersion` が `1.0.0.0`・`store` が true
 - [ ] manifest の `Resources` が `en-US` `ja-JP` `zh-Hans` の順
-- [ ] MSIX の中身が 30 個（`entries`）
+- [ ] `msix.json` の `entries` が 32 個（中身 30 個 ＝ exe・`LICENSE`・`THIRD_PARTY_NOTICES.txt`・`AppxManifest.xml`・`resources.pri`・`Assets` 25 枚、に makeappx が足す `AppxBlockMap.xml` と `[Content_Types].xml`）
 - [ ] 展開した exe の短い起動（隔離 profile）
 
 ## GitHub の公開

@@ -56,6 +56,9 @@ enum class EditorOperation : std::uint8_t
     register_shell,
     unregister_shell,
     // 表示言語を選ぶ（ADR 0123 の追補 2026-11-13 の決定 8・#1019）。鍵なしで F1 の一覧から。
-    choose_language
+    choose_language,
+    // バージョン情報（施主決定 D90・#1677・ADR 0078 の追補）。鍵なしで F1 の一覧と Vim の
+    // `:version` から。ステータスバーの 1 行の知らせだけで、ページを開かない。
+    show_version
 };
 } // namespace nenenib::core

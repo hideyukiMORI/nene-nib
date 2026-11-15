@@ -174,6 +174,17 @@ std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(std::string_view te
     return from_validated_utf8(std::move(owned));
 }
 
+std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(std::string_view text,
+                                                             LineEnding ending)
+{
+    auto buffer = from_utf8(text);
+    if (buffer)
+    {
+        buffer.value().ending_ = ending;
+    }
+    return buffer;
+}
+
 std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(DetectedText text)
 {
     switch (text.encoding_)
