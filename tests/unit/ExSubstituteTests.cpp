@@ -27,6 +27,7 @@
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
 #include "VimEditorView.hpp"
+#include "VimMode.hpp"
 #include "VimNoEffect.hpp"
 #include "VimPattern.hpp"
 #include "VimPatternCaptures.hpp"
@@ -38,6 +39,7 @@
 #include "VimSearchDirection.hpp"
 #include "VimSearchNotice.hpp"
 #include "VimSearchNoticeKind.hpp"
+#include "VimState.hpp"
 #include "VimStep.hpp"
 #include "VimTestSupport.hpp"
 
@@ -505,6 +507,44 @@ void verify_limit_counts_document_newlines()
         "x CRLF y CRLF b is 7 bytes: 7 fits and 6 is too large (LF counting would let 6 through)");
 }
 
+// オペレータ待ちの `:s` の鍵の列の後の本文が body で、オペレータは捨てられ、NORMAL のまま、
+// 無名レジスタは書かれていない。
+[[nodiscard]] bool operator_dropped(std::string text, std::string_view keys, std::string_view body)
+{
+    Editing editing;
+    open_vim_document(editing, std::move(text));
+    auto &controller = editing.controller();
+    vim_normal(controller, keys);
+    const bool kept = whole_vim_body(controller) == body;
+    const core::VimState vim = controller.vim_state();
+    return kept && !vim.pending.has_value() && vim.mode == core::VimMode::normal &&
+           vim.unnamed_register.value().kind == core::VimRegisterKind::uninitialized;
+}
+
+// 起点（行と行頭からのバイト数・Vim の oap->start）が置換の後で字の途中に落ちたら、Nib は字を
+// 割らずにオペレータを捨てる（Vim は字を割って不正な UTF-8 を残すので fixture にできない・
+// #1683 の D1・設計席の決め）。置換は本文に残り、同じ鍵の列の続きは流れない。
+void verify_operator_substitute_mid_character()
+{
+    expect(operator_dropped("aab", "$d:s/a/あ/<CR>", "あab"),
+           "d with the origin inside the new character keeps the substitution, drops the operator");
+    expect(operator_dropped("aab", "$y:s/a/あ/<CR>P", "あab"),
+           "y with the origin inside the new character yanks nothing and the P after it stops");
+    expect(operator_dropped("aab", "$c:s/a/あ/<CR>Z<Esc>", "あab"),
+           "c with the origin inside the new character does not start INSERT");
+    expect(operator_dropped("aaaaaaab", "$d:s/a/あ/g<CR>", "あああああああb"),
+           "a g substitution that leaves the origin inside a character drops the operator");
+    expect(operator_dropped("あいうえ", "$d:s/あ/a/<CR>", "aいうえ"),
+           "a shrinking substitution that leaves the origin inside a character drops it too");
+    Editing next;
+    open_vim_document(next, "aab");
+    vim_normal(next.controller(), "$d:s/a/あ/<CR>");
+    vim_normal(next.controller(), "x");
+    expect(
+        whole_vim_body(next.controller()) == "ab",
+        "the next key after the drop is a NORMAL command (x removes the character at the caret)");
+}
+
 } // namespace
 
 void verify_ex_substitute_scope()
@@ -517,5 +557,6 @@ void verify_ex_substitute_scope()
     verify_replacement_text();
     verify_substitute_notices();
     verify_substitute_repeat_and_bytes();
+    verify_operator_substitute_mid_character();
 }
 } // namespace nenenib::tests

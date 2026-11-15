@@ -558,14 +558,18 @@ std::optional<core::VimRepeatFailure> EditorController::operator_command(const s
 // オペレータ待ちの `:s`（`d:s/a/b/`・ADR 0168 の追補 16）。Vim は置換を先に流し、置換の前の
 // キャレットから置換の後のキャレットまでを exclusive な移動としてオペレータを閉じる（`jd:s/a/X/` は
 // `  b a` を `b X` に・実測）。置換が断られたら（E486 ほか）オペレータを捨てて再生を打ち切る。
-// 起点は置換の前の行と桁のまま（Vim の oap->start は置換で動かない・上の行が縮むと別の本文を指す）
-// で、置換の後の本文で行か桁が外にあればオペレータを捨てて再生を打ち切る（Vim の nv_colon の
-// clearopbeep・`:normal!` の続きの鍵は流れない・桁が行の長さちょうどなら外でない・実測 #1683）。
+// 起点は置換の前の行と行頭からのバイト数のまま（Vim の oap->start は置換で動かない・上の行が
+// 縮むと別の本文を指す）で、置換の後の本文で行かバイト数が外にあればオペレータを捨てて再生を
+// 打ち切る（Vim の nv_colon の clearopbeep・`:normal!` の続きの鍵は流れない・バイト数が行の長さ
+// ちょうどなら外でない・実測 #1683）。起点が字の途中に落ちたときも捨てる（Vim は字を割るが
+// Nib は割らない・設計席の決め）。
 std::optional<core::VimRepeatFailure>
 EditorController::operator_substituted(const std::string &text,
                                        const core::ExSubstituteRequest &request)
 {
-    const core::TextPosition origin = state_.text().position_of(state_.selection().caret);
+    const core::Offset caret = state_.selection().caret;
+    const core::LineNumber line = state_.text().line_containing(caret);
+    const std::size_t bytes = caret.value - state_.text().line_start(line).value;
     const auto failure = stepped_vim(VimStepSource{request});
     if (failure.has_value())
     {
@@ -577,14 +581,16 @@ EditorController::operator_substituted(const std::string &text,
         return std::nullopt;
     }
     const core::TextBuffer &after = state_.text();
-    if (origin.line.value > after.line_count() ||
-        origin.column.value > after.position_of(after.line_end(origin.line)).column.value)
+    const bool outside = line.value > after.line_count() ||
+                         bytes > after.line_end(line).value - after.line_start(line).value;
+    const core::Offset origin{outside ? 0 : after.line_start(line).value + bytes};
+    if (outside || !core::is_boundary(after.text_range(origin, core::Offset{origin.value + 1}),
+                                      core::Offset{0}))
     {
         state_ = state_.with_vim(core::vim_operator_cleared(state_.vim()));
         return core::VimRepeatFailure::refused;
     }
-    return stepped_vim(
-        VimStepSource{core::VimCommandMotion{text, std::nullopt, after.offset_of(origin)}});
+    return stepped_vim(VimStepSource{core::VimCommandMotion{text, std::nullopt, origin}});
 }
 
 // 答えを写し、断られた（ran_ex_result が refused を返した・評価の失敗も命令の要求の断りも・
