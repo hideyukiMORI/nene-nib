@@ -5,7 +5,7 @@
 // scriptin の実測・docs/quality/vim-insert-ctrl-o-2026-11-12.md）。
 // 1. undo は打った鍵で 3 単位（`<C-o>` の前・命令・始め直した後）、空の命令は単位を作らず、
 //    再生の中は全体で 1 単位（決定 5）。
-// 2. `<C-o>c` `C` と VISUAL の `c` の後の Esc（NORMAL の `s` は Nib に無い） は、打った鍵では
+// 2. `<C-o>c` `C` `s` `S`（#768）と VISUAL の `c` の後の Esc は、打った鍵では
 // NORMAL、:normal! では INSERT を
 //    始め直す（決定 4・Vim の KeyTyped）。
 // 3. 録画は打った `Ctrl-o` を録り、`<C-o>q` で止めた録画は末尾の `Ctrl-o` を外す（決定 7）。
@@ -127,10 +127,14 @@ void verify_undo_units()
 
 void verify_typed_change()
 {
-    constexpr std::array<std::array<std::string_view, 4>, 3> cases{{
+    // `s` `S` は `cl` `cc` と同じ OP_CHANGE（#768・:normal! の側は fixture
+    // substitute-key-s-ctrl-o-restart と substitute-key-line-ctrl-o-restart の実測と同じ値）。
+    constexpr std::array<std::array<std::string_view, 4>, 5> cases{{
         {"alpha beta gamma", "iX<C-o>cwY<Esc>Z<Esc>", "XY beta gamma", "XZY beta gamma"},
         {"alpha beta gamma", "wiX<C-o>CY<Esc>Z<Esc>", "alpha XY", "alpha XZY"},
         {"alpha beta gamma", "iX<C-o>vecY<Esc>Z<Esc>", "XY beta gamma", "XZY beta gamma"},
+        {"alpha beta gamma", "iX<C-o>sY<Esc>Z<Esc>", "XYlpha beta gamma", "XZYlpha beta gamma"},
+        {"alpha beta gamma", "iX<C-o>SY<Esc>Z<Esc>", "Y", "ZY"},
     }};
     for (const auto &[text, keys, as_typed, as_normal] : cases)
     {
