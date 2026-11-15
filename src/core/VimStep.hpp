@@ -105,6 +105,13 @@ struct VimStep
 // restart_edit を消さないので、Ex の行の後に INSERT へ戻る）。
 [[nodiscard]] VimState vim_operator_cleared(const VimState &state);
 
+// 保留のオペレータが、範囲の端が字の途中にあるとき字を割るか（Vim の d c y は端をバイトで切り、
+// 不正な UTF-8 を作る）。オペレータ待ちの `:s` の起点が置換の後で字の途中に落ちたとき、真なら
+// Nib は字を割らずにオペレータを捨て、偽なら起点を次の code point の境目へ切り上げて渡す（> < は
+// 行単位で桁が効かず、g~ gu gU は跨いだ字を起点が終わりなら含め始まりなら外す・#1683 の
+// Vim 9.1 の実測）。保留が無ければ偽。
+[[nodiscard]] bool vim_pending_splits_characters(const VimState &state) noexcept;
+
 // タブを切り替えたあとの状態（ADR 0056 の決定 4）。割り込みと同じく組み立て中の入力を捨て、
 // モードは NORMAL へ戻し、文書ごとの値（欲しい列と 'scroll'）は相手の文書の値に置き換える。
 // レジスタ・マクロ（録画中の録画も）・直前の検索と文字検索・`.` の直前の変更・hlsearch と

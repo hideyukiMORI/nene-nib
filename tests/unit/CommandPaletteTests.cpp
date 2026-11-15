@@ -1864,7 +1864,7 @@ void verify_operation_list_opens()
     auto frame = controller.apply_frame(app::OpenOperationList{});
     expect(frame.command_line.value_or(core::InputLineView{}).text == "?" &&
                frame.command_palette.value_or(app::CommandPaletteView{}).selected == 0 &&
-               frame.command_palette.value_or(app::CommandPaletteView{}).total == 38 &&
+               frame.command_palette.value_or(app::CommandPaletteView{}).total == 39 &&
                operation_row(frame, 0) == core::EditorOperation::open_file,
            "the operation list opens behind the question mark on the first row");
     expect(!frame.command_message.has_value(), "the operation list clears the one-line message");
@@ -1889,7 +1889,7 @@ void verify_operation_list_opens()
     frame = controller.apply_frame(app::OpenOperationList{});
     const auto vim_list = frame.command_palette.value_or(app::CommandPaletteView{});
     const auto &vim_rows = vim_list.rows;
-    expect(frame.command_line.value_or(core::InputLineView{}).text == "?" && vim_list.total == 36 &&
+    expect(frame.command_line.value_or(core::InputLineView{}).text == "?" && vim_list.total == 37 &&
                std::ranges::none_of(vim_rows, [](const core::CommandChoice &row)
                                     { return row.operation == core::EditorOperation::undo; }),
            "the Ex line gives way to the vim operation list without undo");

@@ -212,7 +212,9 @@ records in `docs/quality/`.
   descriptions and shortcuts; type to filter, then press Enter to run one. Operations without a key in a mode,
   such as find and replace in Vim mode or printing, run from here. An untouched untitled document
   shows three shortcut hints. Otherwise, the status bar shows compact hints when space permits.
-  `:set noguide` hides both; `:set guide` restores them. Done.
+  `:set noguide` hides both; `:set guide` restores them. Done. *In review*: the operation "About NeNe Nib"
+  and Vim's `:version` show the version, copyright and GitHub address in one status line, and the start screen
+  shows the version beside its title and the copyright and address under the shortcuts (text only, never a link).
 - **FR-019 wrapping** — on by default. `:set wrap` / `:set nowrap` (also in Ctrl+P settings) changes the display
   without inserting newlines. Ordinary Up/Down, Home/End and pages follow screen rows; Vim `j/k` and `0/$` keep
   logical-line meaning, `gj gk g0 g$` follow screen rows, and H/M/L and page motions use the wrapped viewport.

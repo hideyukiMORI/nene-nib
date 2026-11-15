@@ -257,3 +257,48 @@ REL-C の PR #1656（13:11 → main `238d56b7`・文書のみ・conformance 0・
 - PR #1656 の merge は 13:11（GitHub）・走り書きは 13:12。
 - 走り書きの 47 行目は merge の道具の出力の貼り付けで、途中で切れている（PR #1665・head `41ecd0041ffdee00c97087178683bfcefc71d259`・CI run 43568791652）。merge の結果は GitHub の値（16:38・`a4c0d40b`）で確かめた。
 - ZIP と MSIX の bytes は走り書きに無く、`final-verification.md` の値を写した。
+
+## 15. 17:05 の後（2026-11-15 00:2x の区切りまで）
+
+走り書き `D:/NeNeNib/outputs/20261114/notes.md` の 17:05 より後の行が正。ここは所在の要約。
+
+### 15.1 時刻順
+
+| 時刻 | できごと | 所在 |
+|---|---|---|
+| 17:17 | 日報・引き継ぎ・記録（#1670 / PR #1671）が main `f749283d` | — |
+| 夕方 | hide が戻る。保存の印の不具合（V-1666 の読み）を設計席が main で再現 → hide「再現したら 1.0.0 に入れて作り直して」。hide「版と署名を入れたい」→ 施主決定 D90（置き場所は「題の横と一覧の下」） | Issue #1672 #1677 |
+| 〜19:42 | PR #1675（HEAD `6b379b75`・V-1675 → 直しの席 R2 → V-1675b「片付いた」）・PR #1678（HEAD `832bd457`・V-1678「merge してよい」） | `outputs/20261114/review-1675/` `review-1675b/` `review-1678/` |
+| 19:45〜20:27 | まとめ枝 34（Issue #1679・`dfbf1840`・表は contracts 113 / scopes 139 / groups 40）の手元の検証: Debug 警告 0・ctest 22 / 22・symbols 0・conformance 0・test-conformance OK・format OK・Release 警告 0（2,563 秒） | `outputs/20261114/verify-1679.log` |
+| 20:3x | 試用の exe と表を hide に渡した（A 版と署名 7・B 保存の印 4・C 表示の直し 2）。**結果は未受領** | `evidence/20261114-trial/` |
+| 21:28〜21:32 | 8 本のゲート（hide の了承の後・1 回）: 0 regression。起動 46.443（1 本目 62.0）・窓 35.140・単打 0.625・200 打鍵 3.009・16 MiB open 58.304・16 MiB 200 打鍵 3.226・面 1.056・長い行 1.128 ms | `outputs/20261114/gate-integration34-dfbf1840.log` |
+| 21:34〜22:01 | PR #1680・CI run 43595457342 success → rebase merge・main `7290a93d` `0747a19a`（`git diff dfbf1840 0747a19a` は空） | `outputs/20261114/merge-1680.log` |
+| 22:0x | 公開の記録に「作り直し」の節（#1681 / PR #1682）→ 公開元 `f00f6d0f` | `merge-1682.log` |
+| 22:09 | 梱包（2 回目の物）: ZIP `0381385a120bf36563e3b54fe5ec582d9c2cfe787ac85147dde74e733e946ed4`（1,504,178 bytes）・MSIX `8097ef2043dd290a2814f3ec0c85265b7623673370216cba53d591b495b206b3`（1,623,055）・exe `b2831cb67b5eb350b492e03bf6ed4e77fd9d97bcf0e02c71dc16d3d97509dda6`（3,635,712） | いまは `releases/v1.0.0-superseded-f00f6d0f/` |
+| 22:11 | 短い起動（hide の了承の後）: pass・exitCode 0・documentUnchanged true | `evidence/v1.0.0-smoke-f00f6d0f/` |
+| 22:2x | 席 REL-G: 照合 6 項目 OK ＋ 足した確かめ 4 つ OK（会社名 `Hideyuki Mori`・記録の SHA 一致・個人のパスと `.pdb` 0・import 246 行は前と同じで `ShellExecute` は増えていない）・渡す物 8 ファイルの差し替え・設計席が 7 つ目を埋めた | `evidence/v1.0.0-release/`（古い版は `superseded-672c15c5/`） |
+| 22:4x | V-1676（PR #1676・HEAD `edc5d308`・読みだけ）: merge してよい・必須 0・L1（`substituted_keys` の終わりに `std::unreachable()` を戻す）L2（README の Not yet） | `review-1676/review.md` |
+| 23:0x | V-1673（PR #1673・HEAD `cfc50042`・Vim 54 件を実測・52 一致）: fixture を足してから。**公開元の木の穴（#1683）を報告**。設計席がまとめ枝 34 の木の `nib_vim_replay` で 4 件を測り直して確かめた | `review-1673/`・`temp/v1673/cases.tsv` |
+| 23:1x | hide「直してからリリースかな。」→ Issue #1683・席 O1。2 回目の物を `superseded-f00f6d0f` へ | `briefs/20261114/O1.md` |
+| 23:5x | 席 O1: PR #1684（`ba546945`・4 ファイル +26 / −4・fixture 5 件・直す前は 4 件落ち・`nib_tests` 既定 2,405,852 checks と `--every-scope` 2,420,321 checks pass・conformance 0）。全件の検証を先に回し始めた | 作業木 `worktrees/1683-op-substitute`・`worktrees/1684-verify` |
+| 00:0x | V-1684（Vim 68 件・replay 63 件・main 相当の exe とも比べた）: 直してから（必須 M1・設計の判断 D1・軽い 1・後続 2）。設計席の決め（起点はバイト・字の途中は捨てる）。検証を止めた（無効）。席 O1b | `review-1684/`・`briefs/20261114/O1b.md` |
+| 00:2x | hide が機械を落とすので区切り | — |
+
+### 15.2 #1683 の実測（V-1673 と V-1684 の報告から）
+
+| 本文 | 鍵 | Vim 9.1 | main `f00f6d0f` | PR `ba546945` |
+|---|---|---|---|---|
+| `aaaa\nb` | `$d:s/a\+/X/<CR>x` | `X\nb` | 空 | `X\nb` |
+| `aaaa\nbbbb\ncccc` | `jjlld:1s/a\+/X/<CR>` | `cc` | 空 | `cc` |
+| `aaaa\nbbbb\ncccc` | `jjly:%s/a/XY/<CR>P` | `XYaaa\nbbbb\ncXYaaa\nbbbb\ncccc` | 起点が 2 バイトずれる | 一致 |
+| `aaaa` | `$d:s/a/あ/<CR>` | `aaa` | 一致 | `a`（**PR が壊した**） |
+| `ああa` | `$d:s/あ/x/<CR>x` | `xあa` | 全部消す | 全部消す |
+| `😀ab` | `$d:s/😀/x/<CR>` | `xab` | 違う（値は `probe-main-baseline.log`） | `b` |
+| `aab` | `$d:s/a/あ/<CR>` | 字を割る（不正な UTF-8） | 値は `probe*.log` | 値は `probe*.log` |
+
+### 15.3 確かめていないこと（17:05 の後の分）
+
+- 席 O1b の直しの結果（区切りの時点で未完）。#1684 の最終の木の全件の検証・ゲート・CI。
+- hide の試用（試用の exe の A・B・C）・packaged の確かめ・WACK。
+- マクロの中のオペレータ待ちの `:s`（再生器に欄が無い・V-1684 は読み）。
+- 2 回目の物の BlockMap の中のブロックのハッシュ。

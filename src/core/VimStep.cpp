@@ -2289,6 +2289,28 @@ VimState vim_operator_cleared(const VimState &state)
     return input_discarded(state);
 }
 
+bool vim_pending_splits_characters(const VimState &state) noexcept
+{
+    if (!state.pending.has_value())
+    {
+        return false;
+    }
+    switch (state.pending.value().operation)
+    {
+    case VimOperator::remove:
+    case VimOperator::change:
+    case VimOperator::yank:
+        return true;
+    case VimOperator::toggle_case:
+    case VimOperator::lower_case:
+    case VimOperator::upper_case:
+    case VimOperator::shift_right:
+    case VimOperator::shift_left:
+        return false;
+    }
+    std::unreachable();
+}
+
 VimState vim_switched_document(const VimState &state, std::optional<VimWantedColumn> wanted_column,
                                std::optional<VimCount> scroll_lines)
 {

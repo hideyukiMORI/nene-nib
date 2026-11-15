@@ -4,6 +4,7 @@
 #include "CompleteFileRead.hpp"
 #include "FileHandle.hpp"
 #include "NativePath.hpp"
+#include "PlacementCleanup.hpp"
 #include "TemporaryFiles.hpp"
 #include "Utf16.hpp"
 
@@ -185,6 +186,31 @@ written_temporary(const std::wstring &temporary, std::span<const std::string_vie
     return Failure::unwritable;
 }
 
+// 置けなかった後の始末（ADR 0135 の追補・#1689）。新しいバイト列がディスクのどこにも無くなる
+// 始末はしない。置き直しが通れば保存は成功、通らなければ一時ファイルを残して失敗を返す。
+[[nodiscard]] std::expected<void, Failure> cleaned_after_failure(const std::wstring &target,
+                                                                 const std::wstring &temporary,
+                                                                 PlacementCleanup cleanup,
+                                                                 Failure failure)
+{
+    switch (cleanup)
+    {
+    case PlacementCleanup::remove_temporary:
+        DeleteFileW(native_path(temporary).c_str());
+        return std::unexpected(failure);
+    case PlacementCleanup::move_temporary:
+        if (MoveFileExW(native_path(temporary).c_str(), native_path(target).c_str(),
+                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0)
+        {
+            return {};
+        }
+        return std::unexpected(failure);
+    case PlacementCleanup::keep_temporary:
+        return std::unexpected(failure);
+    }
+    std::unreachable();
+}
+
 // 置き換えの直前に、一時ファイルがこのプロセスのこの連番のものかを名前で確かめる（決定 4）。
 [[nodiscard]] std::expected<void, Failure> placed_temporary(const std::wstring &target,
                                                             const std::wstring &temporary,
@@ -196,11 +222,23 @@ written_temporary(const std::wstring &temporary, std::span<const std::string_vie
     }
     if (!placed(target, temporary, mode))
     {
-        const auto failure = placement_failure(GetLastError(), mode);
-        DeleteFileW(native_path(temporary).c_str());
-        return std::unexpected(failure);
+        const DWORD error = GetLastError();
+        return cleaned_after_failure(target, temporary, placement_cleanup(error, mode),
+                                     placement_failure(error, mode));
     }
     return {};
+}
+
+// 前の保存が残した一時ファイルは、置き換えが成功した後に回収する。失敗が続く間は、残した一時
+// ファイル（新しいバイト列の写し）を消さない（ADR 0135 の決定 3 と追補・#1689）。
+[[nodiscard]] std::expected<void, Failure>
+reclaimed_after_success(std::expected<void, Failure> placement, const std::wstring &target)
+{
+    if (placement)
+    {
+        reclaim_temporaries_of(target);
+    }
+    return placement;
 }
 } // namespace
 
@@ -240,8 +278,6 @@ std::expected<void, Failure> Win32FileAdapter::write(const core::FilePath &path,
     {
         return std::unexpected(Failure::already_exists);
     }
-    // 前の保存が残した一時ファイルを、この保存先の保存の直前に回収する（ADR 0135 の決定 3）。
-    reclaim_temporaries_of(target);
     for (std::uint32_t attempt = 0; attempt < temporary_attempts; ++attempt)
     {
         const std::uint32_t sequence = next_temporary_sequence();
@@ -253,7 +289,8 @@ std::expected<void, Failure> Win32FileAdapter::write(const core::FilePath &path,
         }
         if (written.value())
         {
-            return placed_temporary(target, temporary, sequence, mode);
+            return reclaimed_after_success(placed_temporary(target, temporary, sequence, mode),
+                                           target);
         }
     }
     return std::unexpected(Failure::unwritable);

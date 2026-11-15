@@ -4,6 +4,7 @@
 // 大きさ（UiTextSizes.hpp）・太さ・locale の書式で測り、枠は製品と同じ core の配置から引く（96
 // DPI・物理画素 = DIP）。字体に結果が依るので、Segoe UI も無い機械では幅を測らない。zh-cn の書式で
 // 漢字が日本語の字体に落ちないことも本物の MapCharacters で確かめる。
+#include "AppIdentity.hpp"
 #include "BodyGuideLayout.hpp"
 #include "BodyLayout.hpp"
 #include "DevicePixels.hpp"
@@ -31,6 +32,8 @@
 #include "PaletteOrigin.hpp"
 #include "SettingsFailure.hpp"
 #include "SettingsNotice.hpp"
+#include "StartCredit.hpp"
+#include "StartCreditWidths.hpp"
 #include "StartEntryKind.hpp"
 #include "StartScreen.hpp"
 #include "StartScreenLayout.hpp"
@@ -825,6 +828,142 @@ void verify_start_screen(IDWriteFactory2 &factory, Face face, Face key_face)
     }
 }
 
+// D90（#1677）: 起動画面の題の右の版と一覧の下の署名 2 行。文は訳さないが字体の選びは表示言語の
+// locale に依るので 3 言語で測る。描く物は欄に切らずに収まり、題・鍵の案内・本文の欄と重ならず、
+// どこまで描くかは製品と同じ core::start_credit の 1 本（落とす順は署名 → 版）。
+using CreditPens = std::pair<Pen, Pen>;
+// 窓の幅と高さ（DIP）。最小の窓 360 × 200 DIP から。
+constexpr std::array<std::pair<std::int32_t, std::int32_t>, 6> credit_windows{
+    {{360, 200}, {480, 360}, {640, 480}, {960, 560}, {1280, 800}, {1920, 1080}}};
+// 履歴が無い（空の知らせ）・最近 5 件・最近 10 件とブックマーク 5 件。
+constexpr std::array<core::StartScreenShape, 3> credit_shapes{
+    {{0, 0, true}, {5, 0, false}, {10, 5, false}}};
+
+[[nodiscard]] const char *credit_name(core::StartCredit credit) noexcept
+{
+    switch (credit)
+    {
+    case core::StartCredit::none:
+        return "title only";
+    case core::StartCredit::version:
+        return "version";
+    case core::StartCredit::version_and_signature:
+        return "version and signature";
+    }
+    return "?";
+}
+
+// DIP の幅を物理画素へ（切り上げ・測れなければ 0 で、製品の「測れなければ描かない」と同じ）。
+[[nodiscard]] std::int32_t pixels_of(float dips, std::uint32_t at) noexcept
+{
+    return dips < 0.0F
+               ? 0
+               : static_cast<std::int32_t>(std::ceil(dips * static_cast<float>(at) /
+                                                     static_cast<float>(core::reference_dpi)));
+}
+
+// 1 つの形（DPI・窓の幅と高さ DIP・節の形・表示言語）。
+using CreditCase = std::tuple<std::uint32_t, std::pair<std::int32_t, std::int32_t>,
+                              core::StartScreenShape, DisplayLanguage>;
+// 配置と本文の枠の組。
+using CreditPlace = std::pair<const core::StartScreenLayout &, const core::BodyLayout &>;
+
+// 描くと決めた物が重ならず切れないか（版は題の右で列の中、署名は鍵の案内の下で本文の欄の中）。
+void expect_credit_clear(const CreditPlace &place, std::uint32_t at,
+                         const core::StartCreditWidths &widths, core::StartCredit credit)
+{
+    const auto &[layout, body] = place;
+    const auto area = core::start_version_area(layout.title, widths.title, at);
+    expect(credit == core::StartCredit::none ||
+               (area.left >= layout.title.left + widths.title &&
+                widths.version <= core::width_of(area) && area.right <= layout.column.right),
+           "the version sits right of the title inside the column without being cut");
+    if (credit != core::StartCredit::version_and_signature || !layout.signature.has_value())
+    {
+        expect(credit != core::StartCredit::version_and_signature,
+               "the signature is drawn only when the layout placed it");
+        return;
+    }
+    const auto &lines = layout.signature.value();
+    expect(lines.at(0).top >= layout.keys.at(2).key.bottom &&
+               lines.at(1).top >= lines.at(0).bottom && lines.at(1).bottom <= body.content.bottom &&
+               lines.at(0).left >= layout.column.left && lines.at(1).right <= layout.column.right &&
+               widths.copyright <= core::width_of(lines.at(0)) &&
+               widths.homepage <= core::width_of(lines.at(1)),
+           "the signature lines sit under the shortcuts inside the body without being cut");
+}
+
+// 名乗りの 4 つの文の幅（物理画素）。
+[[nodiscard]] core::StartCreditWidths credit_widths(const CreditPens &pens, std::uint32_t at,
+                                                    DisplayLanguage language)
+{
+    const std::string copyright = core::app_copyright_line();
+    return core::StartCreditWidths{
+        pixels_of(width_in(pens.first, Said{language, core::app_name}), at),
+        pixels_of(width_in(pens.second, Said{language, core::app_version()}), at),
+        pixels_of(width_in(pens.second, Said{language, copyright}), at),
+        pixels_of(width_in(pens.second, Said{language, core::app_homepage}), at)};
+}
+
+void verify_start_credit_at(const CreditPens &pens, const CreditCase &shape)
+{
+    const auto &[at, window, sections, language] = shape;
+    const auto body =
+        core::body_layout(core::to_pixels(window.first, at), core::to_pixels(window.second, at), at,
+                          core::default_font_size());
+    const auto placed = core::start_screen_layout(body, at, sections, 0);
+    if (!placed.has_value())
+    {
+        std::printf("  start credit dpi %u window %dx%d [%s] recent %zu: not placed\n", at,
+                    window.first, window.second, language_name(language), sections.recent);
+        return;
+    }
+    const auto &layout = placed.value();
+    const auto widths = credit_widths(pens, at, language);
+    const auto credit = core::start_credit(layout, at, widths);
+    std::printf("  start credit dpi %u window %dx%d [%s] recent %zu bookmarks %zu: %s (title %d, "
+                "version %d of %d, signature %d / %d of %d, lines %s)\n",
+                at, window.first, window.second, language_name(language), sections.recent,
+                sections.bookmarks, credit_name(credit), widths.title, widths.version,
+                core::width_of(core::start_version_area(layout.title, widths.title, at)),
+                widths.copyright, widths.homepage, core::width_of(layout.column),
+                layout.signature.has_value() ? "placed" : "dropped");
+    std::fflush(stdout);
+    expect_credit_clear(CreditPlace{layout, body}, at, widths, credit);
+    // 製品の既定の窓（960 × 560 DIP 以上）で履歴が無ければ、版も署名も出る。
+    expect(window.first < 960 || window.second < 560 || sections.recent > 0 ||
+               credit == core::StartCredit::version_and_signature,
+           "a usual window without history shows the version and the signature");
+}
+
+// 1 つの DPI と窓で、節の形 3 つ × 3 言語。
+void verify_start_credit_window(const CreditPens &pens, std::uint32_t at,
+                                std::pair<std::int32_t, std::int32_t> window)
+{
+    for (const auto &sections : credit_shapes)
+    {
+        for (const auto language : languages)
+        {
+            verify_start_credit_at(pens, CreditCase{at, window, sections, language});
+        }
+    }
+}
+
+void verify_start_credit(IDWriteFactory2 &factory, Face face, Face title_face)
+{
+    for (const auto at : {96U, 120U})
+    {
+        const CreditPens pens{Pen{&factory, title_face,
+                                  core::font_size_dips(core::default_font_size()) * 1.5F,
+                                  DWRITE_FONT_WEIGHT_NORMAL},
+                              Pen{&factory, face, ui_text_dips, DWRITE_FONT_WEIGHT_NORMAL}};
+        for (const auto &window : credit_windows)
+        {
+            verify_start_credit_window(pens, at, window);
+        }
+    }
+}
+
 void verify_widths()
 {
     const auto factory = directwrite_factory();
@@ -856,6 +995,11 @@ void verify_widths()
     verify_status_guide(*factory.Get(), face);
     verify_explorer_text(*factory.Get(), face);
     verify_start_screen(*factory.Get(), face, key_face);
+    // 起動画面の題は製品と同じく Segoe UI Variable Display、無ければ Segoe UI（D90 の版の揃え）。
+    const Face title_face = installed(*factory.Get(), L"Segoe UI Variable Display")
+                                ? L"Segoe UI Variable Display"
+                                : L"Segoe UI";
+    verify_start_credit(*factory.Get(), face, title_face);
 }
 
 // ---- zh-cn の字体の選び（本物の MapCharacters・追補の決定 9・V-1598 の C-F1） ----

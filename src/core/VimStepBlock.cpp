@@ -9,6 +9,7 @@
 #include "VimLineColumns.hpp"
 #include "VimNumberedRule.hpp"
 #include "VimPutSide.hpp"
+#include "VimSpecialKey.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -16,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace nenenib::core
@@ -366,7 +368,117 @@ namespace detail
     }
     return body.substr(at.value);
 }
+} // namespace detail
 
+namespace
+{
+[[nodiscard]] bool is_special_key(const VimKey &key, VimSpecialKey wanted) noexcept
+{
+    const auto *const special = std::get_if<VimSpecialKey>(&key);
+    return special != nullptr && *special == wanted;
+}
+
+// 消す鍵（Backspace・Delete・Ctrl-w・Ctrl-u）。
+[[nodiscard]] bool erases(const VimKey &key) noexcept
+{
+    return is_special_key(key, VimSpecialKey::backspace) ||
+           is_special_key(key, VimSpecialKey::delete_key) ||
+           is_special_key(key, VimSpecialKey::control_w) ||
+           is_special_key(key, VimSpecialKey::control_u);
+}
+
+// 打ち始めの桁の `I` へ合わせ直せる所なら、Vim が pre_textlen を数え始める所（矩形の左の桁の文字
+// の頭・バイト）。`I` は今の打ち始めより右、`A` は左の桁の文字の頭か手前だけ。`$A` は Vim が打ち
+// 始めの offset（バイト）を最も長い行の仮想桁から引いた所へ写すので合わせない。`c` `C`
+// （op_change）は合わせ直さない。ほかは空。
+[[nodiscard]] std::optional<std::size_t> insert_edge(const VimBlockInsert &insert,
+                                                     const VimLineColumns &line, std::size_t at)
+{
+    switch (insert.side)
+    {
+    case VimBlockInsertSide::line_end:
+        return std::nullopt;
+    case VimBlockInsertSide::after:
+    {
+        const std::size_t edge = line.byte_at(insert.left);
+        return at <= edge ? std::optional<std::size_t>{edge} : std::nullopt;
+    }
+    case VimBlockInsertSide::before:
+        return insert.caret.has_value() && at > insert.at_byte
+                   ? std::optional<std::size_t>{insert.at_byte}
+                   : std::nullopt;
+    }
+    std::unreachable();
+}
+
+// 何も打たないうちに動いて打ち始めた所 `at`（行頭からのバイト）へ置き直した覚え（固定 Vim の
+// op_insert が edit() の後に b_op_start_orig へ矩形を合わせ直す規則・ops.c）。打ち始めの桁の `I`
+// になり、Esc の後のキャレットは打ち始め（Vim の oap->start.col）。Vim は桁の差を仮想桁で
+// pre_textlen から引くので、打ち始めまでの仮想桁の差とバイトの差が違う形（全角・Tab をまたぐ）と
+// insert_edge が空の形は置き直さず、直す前の読み（入口から 1 行目の伸びたぶん）のまま。
+[[nodiscard]] VimBlockInsert reanchored(const VimBlockInsert &insert, const VimLineColumns &line,
+                                        std::size_t at)
+{
+    const std::optional<std::size_t> edge = insert_edge(insert, line, at);
+    const VirtualColumn column = line.column_of(at);
+    if (!edge.has_value() || column.value + edge.value() != insert.left.value + at)
+    {
+        return insert;
+    }
+    VimBlockInsert moved = insert;
+    moved.side = VimBlockInsertSide::before;
+    moved.column = column;
+    moved.left = column;
+    moved.at_byte = at;
+    moved.carried = 0;
+    moved.straddled = 0;
+    moved.caret = Offset{line.start().value + at};
+    return moved;
+}
+
+// 1 行目の行末の `<Del>` で次の行をつなぐと、`I` `A` は矩形の最後の行が無くなるとき Vim が写さない
+// （op_insert の u_save が断る・実測 `abcdef` ×3 の `<C-v>jj$A<Del>Z`）。
+[[nodiscard]] bool loses_last_line(const VimBlockInsert &insert, const TextBuffer &text,
+                                   Offset caret, const VimKey &key)
+{
+    return is_special_key(key, VimSpecialKey::delete_key) && insert.caret.has_value() &&
+           caret == text.line_end(insert.first) && insert.first.value < text.line_count() &&
+           insert.first.value + insert.lines > text.line_count();
+}
+} // namespace
+
+namespace detail
+{
+// 矩形の INSERT の鍵の前に覚えを置き直す 1 か所（ADR 0035 の追補 #1687）。`stopped` は移動の後に
+// 打った最初の鍵（Vim の stop_arrow・Esc は含まない）。1 行目で何も打たないうちに動いた後の打つ鍵
+// （消す鍵でない）だけ reanchored で置き直し、ほかは直す前の覚えのまま。行を写すのは置き直す
+// ときだけ（打鍵ごとには写さない）。`I` `A` の矩形の最後の行を `<Del>` が消すときは写さない
+// （覚えの `lines` を 1 にする）。
+[[nodiscard]] VimBlockInsert block_insert_moved(const VimBlockInsert &insert,
+                                                const VimEditorView &view, const VimKey &key,
+                                                bool stopped)
+{
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
+    if (loses_last_line(insert, text, caret, key))
+    {
+        VimBlockInsert single = insert;
+        single.lines = single_step;
+        return single;
+    }
+    if (!stopped || erases(key) || line_of(text, caret) != insert.first)
+    {
+        return insert;
+    }
+    const Offset start = text.line_start(insert.first);
+    const std::size_t at = caret.value - start.value;
+    if (at == insert.at_byte ||
+        text.line_end(insert.first).value - start.value != insert.line_bytes)
+    {
+        return insert;
+    }
+    return reanchored(insert, VimLineColumns(text, insert.first), at);
+}
 } // namespace detail
 
 namespace
@@ -528,7 +640,8 @@ namespace detail
                           0,
                           block_caret(block),
                           0,
-                          0};
+                          0,
+                          block.left};
     const VimLineColumns line(text, block.first);
     const std::optional<OffsetRange> straddled = after_straddled(insert, line);
     insert.carried = carried_bytes(straddled);
@@ -581,7 +694,7 @@ namespace detail
         std::move(next), single_step,
         VimBlockInsert{block.first, block.lines.size(), VimBlockInsertSide::before, block.left,
                        removal.caret.value - view.text.line_start(block.first).value, line_bytes,
-                       std::nullopt, 0, 0});
+                       std::nullopt, 0, 0, block.left});
     return restored_at(
         with_clipboard(VimStep{std::move(entered), std::move(removal)}, std::move(clipboard)),
         block_caret(block));

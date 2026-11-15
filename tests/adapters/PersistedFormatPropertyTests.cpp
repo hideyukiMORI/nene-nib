@@ -142,11 +142,16 @@ constexpr std::array<std::string_view, 3> path_list_samples{{
     "\xEF\xBB\xBFversion=1\r\nC:\\a.txt",
 }};
 
-constexpr std::array<std::string_view, 3> autosave_samples{{
+// 版 1（beta.13 までの残骸・形なし）と版 2（文書の形の 3 欄つき・ADR 0137 の追補 #1688）。
+constexpr std::array<std::string_view, 5> autosave_samples{{
     "version=1\nentry=7,3,5,7.body,C:/work/b.txt\ntitle=b.txt\nentry=8,1,1,8.body,\ntitle=無題\n",
     "version=1\n",
     "\xEF\xBB\xBFversion=1\r\nentry=18446744073709551615,400,17,18446744073709551615.body,"
     "\\\\server\\share\\x, y.md\r\ntitle=x, y.md\r\n",
+    "version=2\nentry=7,3,5,7.body,cp932,dos,unix,C:/work/b.txt\ntitle=b.txt\n"
+    "entry=8,1,1,8.body,utf-8-bom,unix,,\ntitle=無題\n",
+    "\xEF\xBB\xBFversion=2\r\nentry=9,2,1,9.body,utf-16be,unix,dos,\\\\server\\share\\x, y.md\r\n"
+    "title=x, y.md\r\nentry=10,1,1,10.body,utf-16le,dos,,\r\ntitle=t\r\n",
 }};
 
 // 挿入の断片（どの形式にも混ぜる）。区切り・鍵・数・巨大な数・パスの頭・改行の形・BOM・NUL・
@@ -678,8 +683,13 @@ std::string_view bookmarks_break(std::string_view bytes)
 [[nodiscard]] bool same_entry(const adapters::AutosaveEntry &left,
                               const adapters::AutosaveEntry &right)
 {
+    const bool forms =
+        left.form.has_value() == right.form.has_value() &&
+        (!left.form.has_value() || (left.form.value().encoding == right.form.value().encoding &&
+                                    left.form.value().save == right.form.value().save &&
+                                    left.form.value().body == right.form.value().body));
     return left.id == right.id && left.path == right.path &&
-           left.title.text() == right.title.text() && left.caret == right.caret;
+           left.title.text() == right.title.text() && left.caret == right.caret && forms;
 }
 
 std::string_view autosave_break(std::string_view bytes)

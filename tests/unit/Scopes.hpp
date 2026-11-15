@@ -120,6 +120,8 @@ void verify_edit_history_property_scope();
 void verify_vim_change_mark_scope();
 void verify_vim_insert_normal_scope();
 void verify_saved_state_property_scope();
+// ReplaySavePointTests.cpp（再生の中の :w の保存時点・ADR 0046 の追補）
+void verify_fold_save_point_scope();
 
 // VimPatternPropertyTests.cpp（#899・検索の pattern の parse と matched の性質の試験）
 void verify_vim_pattern_property_scope();
@@ -409,6 +411,9 @@ void verify_print_contracts();
 
 // ShellRegistrationTests.cpp（ADR 0178・エクスプローラーへの登録）
 void verify_shell_registration_contracts();
+
+// VersionInfoTests.cpp（施主決定 D90・バージョン情報と :version）
+void verify_version_info_contracts();
 
 // WslPlacesTests.cpp（ADR 0162 の追補 #1450・フォルダ選びの箱の WSL の場所）
 void verify_wsl_places_scope();

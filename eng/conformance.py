@@ -379,6 +379,43 @@ def version_metadata_checks(root: Path) -> list[Finding]:
     )
     if any(value not in header for value in required_header_values):
         findings.append(Finding("CNF-007", header_path.relative_to(root).as_posix(), "VERSIONINFO is not derived from PROJECT_VERSION"))
+    findings.extend(app_identity_checks(root, cmake))
+    return findings
+
+
+def app_identity_checks(root: Path, cmake: str) -> list[Finding]:
+    """CNF-007: the shown version and the signature have one source each (D90, Issue #1677).
+
+    The version reaches core only as the compile definition CMake derives from PROJECT_VERSION, and
+    the rc file (which cannot read C++) states the author and year exactly as the core constants in
+    src/core/AppIdentity.hpp do, so the About line, the start screen and the exe properties agree.
+    """
+    identity_path = root / "src/core/AppIdentity.hpp"
+    rc_path = root / "src/app/NeNeNib.rc"
+    if not identity_path.is_file() or not rc_path.is_file():
+        return [Finding("CNF-007", "src/core/AppIdentity.hpp", "app identity or the rc file is missing")]
+    findings = []
+    if 'NENENIB_APP_VERSION=\\"${PROJECT_VERSION}\\"' not in cmake:
+        findings.append(Finding("CNF-007", "CMakeLists.txt", "the shown version is not derived from PROJECT_VERSION"))
+    identity = identity_path.read_text(encoding="utf-8")
+    values = {}
+    for name in ("app_author", "app_copyright_year"):
+        match = re.search(rf'\b{name} = "([^"]+)";', identity)
+        if not match:
+            findings.append(Finding("CNF-007", "src/core/AppIdentity.hpp", f"{name} is not a plain literal"))
+            continue
+        values[name] = match[1]
+    if len(values) < 2:
+        return findings
+    rc = rc_path.read_text(encoding="utf-8")
+    author = values["app_author"]
+    year = values["app_copyright_year"]
+    expected = (
+        f'VALUE "CompanyName", "{author}\\0"',
+        f'VALUE "LegalCopyright", "Copyright (c) {year} {author}\\0"',
+    )
+    if any(value not in rc for value in expected):
+        findings.append(Finding("CNF-007", "src/app/NeNeNib.rc", "CompanyName or LegalCopyright disagrees with src/core/AppIdentity.hpp"))
     return findings
 
 

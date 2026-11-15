@@ -35,6 +35,10 @@ class TextBuffer final
     [[nodiscard]] static TextBuffer empty();
     [[nodiscard]] static std::expected<TextBuffer, TextFailure> from_utf8(std::string_view text);
     [[nodiscard]] static std::expected<TextBuffer, TextFailure> from_utf8(DetectedText text);
+    // 改行の形を判別せず、記録した形を置く（自動退避の復元だけ・ADR 0137 の追補 #1688）。形は
+    // 退避した時点の本文が持っていた値の写しで、編集では変わらないのは上と同じ。
+    [[nodiscard]] static std::expected<TextBuffer, TextFailure> from_utf8(std::string_view text,
+                                                                          LineEnding ending);
 
     [[nodiscard]] TextBuffer insert(Offset at, std::string_view text) const;
     [[nodiscard]] TextBuffer erase(Offset begin, Offset end) const;

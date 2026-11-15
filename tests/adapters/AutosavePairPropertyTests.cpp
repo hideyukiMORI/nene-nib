@@ -7,7 +7,7 @@
 //   1. remnants は、次のフォルダのうち一覧が読めるものの行だけを全部返す:
 //      名前が作る形で生きていない pid のフォルダと、自分と同じ pid の前の起動のフォルダ
 //      （前の版の形 `<pid>` と、作成時刻の違う `<pid>-<時刻>`・#1634）。
-//      location は `<フォルダ名>/<番号>`、パス・題名・キャレットは一覧の行。
+//      location は `<フォルダ名>/<番号>`、パス・題名・キャレット・文書の形（#1688）は一覧の行。
 //      一覧を壊していないフォルダは書いた行そのもの、壊したフォルダは一覧の復号
 //      （--persisted-property が別に守る）。
 //      この起動のフォルダ（自分の pid かつ自分の作成時刻）・生きている pid（4）・大文字・
@@ -27,16 +27,19 @@
 #include "AutosaveCodec.hpp"
 #include "AutosaveEntry.hpp"
 #include "AutosaveFailure.hpp"
+#include "AutosaveForm.hpp"
 #include "AutosaveId.hpp"
 #include "AutosaveRemnant.hpp"
 #include "Column.hpp"
 #include "DisplayText.hpp"
 #include "FilePath.hpp"
 #include "FindHandle.hpp"
+#include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "ProcessInstance.hpp"
 #include "ProcessInstances.hpp"
 #include "TemporaryTestDirectory.hpp"
+#include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "Win32AutosaveAdapter.hpp"
 #include "Win32FileAdapter.hpp"
@@ -65,14 +68,16 @@ namespace
 namespace core = nenenib::core;
 namespace adapters = nenenib::adapters::win32;
 using nenenib::application::AutosaveFailure;
+using nenenib::application::AutosaveForm;
 using nenenib::application::AutosaveId;
 using nenenib::application::AutosaveRemnant;
 using Random = std::mt19937_64;
 using Entries = std::vector<adapters::AutosaveEntry>;
 // 番号 → その本文のファイルに最後に書いたバイト列（ファイルが無ければ鍵が無い）。
 using Bodies = std::map<std::uint64_t, std::string>;
-// 比べる形: location・パス・題名・行・桁。
-using Row = std::tuple<std::string, std::string, std::string, std::size_t, std::size_t>;
+// 比べる形: location・パス・題名・行・桁・文書の形（#1688・無ければ空）。
+using Row =
+    std::tuple<std::string, std::string, std::string, std::size_t, std::size_t, std::string>;
 
 constexpr std::size_t rounds = 1U;
 constexpr std::size_t pair_cases = 16U * rounds;
@@ -215,6 +220,30 @@ void write_raw(const std::wstring &path, std::string_view bytes)
     return core::DisplayText::parse(text).value();
 }
 
+// 番号から決まる文書の形（#1688）。生成器の列を変えないよう、乱数を引かずに番号の剰余で選ぶ。
+[[nodiscard]] AutosaveForm form_of(std::uint64_t id)
+{
+    constexpr std::array<core::TextEncoding, 5> encodings{
+        core::TextEncoding::utf8, core::TextEncoding::utf8_bom, core::TextEncoding::shift_jis,
+        core::TextEncoding::utf16_le, core::TextEncoding::utf16_be};
+    constexpr std::array<std::optional<core::LineEnding>, 3> saves{
+        std::nullopt, core::LineEnding::lf, core::LineEnding::crlf};
+    return AutosaveForm{encodings.at(id % encodings.size()), saves.at(id % saves.size()),
+                        id % 2U == 0U ? core::LineEnding::lf : core::LineEnding::crlf};
+}
+
+[[nodiscard]] std::string form_text(const std::optional<AutosaveForm> &form)
+{
+    if (!form.has_value())
+    {
+        return {};
+    }
+    return std::format("{},{},{}", static_cast<int>(form.value().encoding),
+                       form.value().save.has_value() ? static_cast<int>(form.value().save.value())
+                                                     : -1,
+                       static_cast<int>(form.value().body));
+}
+
 [[nodiscard]] Entries entries_of(Random &random, std::size_t index)
 {
     Entries entries;
@@ -237,7 +266,8 @@ void write_raw(const std::wstring &path, std::string_view bytes)
         entries.push_back(
             adapters::AutosaveEntry{AutosaveId{id}, std::move(path), title_of(title),
                                     core::TextPosition{core::LineNumber{1U + below(random, 50U)},
-                                                       core::Column{1U + below(random, 80U)}}});
+                                                       core::Column{1U + below(random, 80U)}},
+                                    form_of(id)});
     }
     return entries;
 }
@@ -431,7 +461,7 @@ void damaged(Random &random, DeadFolder &folder)
                                                         std::set<std::string> &names)
 {
     const Entries entries{{AutosaveId{1}, std::nullopt, title_of("無題"),
-                           core::TextPosition{core::LineNumber{1}, core::Column{1}}}};
+                           core::TextPosition{core::LineNumber{1}, core::Column{1}}, form_of(1)}};
     const std::string list = adapters::encode_autosave_entries(entries).value();
     const std::string upper = std::format("{:X}", dead_pid(random));
     const std::string zero = std::format("0{:x}", dead_pid(random));
@@ -460,11 +490,15 @@ void damaged(Random &random, DeadFolder &folder)
 
 // --- 模型と答えの照合 ---
 
-[[nodiscard]] Row row_of(std::string location, const std::optional<core::FilePath> &path,
-                         const core::DisplayText &title, core::TextPosition caret)
+// 一覧の行（AutosaveEntry）と残骸（AutosaveRemnant）は同じ名前の欄を持つ。
+template <typename Listed> [[nodiscard]] Row row_of(std::string location, const Listed &listed)
 {
-    return {std::move(location), path.has_value() ? std::string(path.value().text()) : "",
-            std::string(title.text()), caret.line.value, caret.column.value};
+    return {std::move(location),
+            listed.path.has_value() ? std::string(listed.path.value().text()) : "",
+            std::string(listed.title.text()),
+            listed.caret.line.value,
+            listed.caret.column.value,
+            form_text(listed.form)};
 }
 
 // 模型が期待する残骸の行（壊した一覧は復号の答え・壊していない一覧は書いた行）。
@@ -483,8 +517,7 @@ void damaged(Random &random, DeadFolder &folder)
                 : folder.entries;
         for (const auto &entry : listed)
         {
-            rows.push_back(row_of(std::format("{}/{}", folder.name, entry.id.value), entry.path,
-                                  entry.title, entry.caret));
+            rows.push_back(row_of(std::format("{}/{}", folder.name, entry.id.value), entry));
         }
     }
     std::ranges::sort(rows);
@@ -496,7 +529,7 @@ void damaged(Random &random, DeadFolder &folder)
     std::vector<Row> rows;
     for (const AutosaveRemnant &remnant : remnants)
     {
-        rows.push_back(row_of(remnant.location, remnant.path, remnant.title, remnant.caret));
+        rows.push_back(row_of(remnant.location, remnant));
     }
     std::ranges::sort(rows);
     return rows;
@@ -618,9 +651,10 @@ void verify_known_case(adapters::Win32AutosaveAdapter &autosave)
     DeadFolder folder;
     folder.name = "deadbeef";
     folder.entries = {{AutosaveId{3}, core::FilePath::parse("C:/work/a.txt").value(),
-                       title_of("a.txt"), core::TextPosition{core::LineNumber{2}, core::Column{3}}},
+                       title_of("a.txt"), core::TextPosition{core::LineNumber{2}, core::Column{3}},
+                       form_of(3)},
                       {AutosaveId{5}, std::nullopt, title_of("無題"),
-                       core::TextPosition{core::LineNumber{1}, core::Column{1}}}};
+                       core::TextPosition{core::LineNumber{1}, core::Column{1}}, form_of(5)}};
     folder.list = adapters::encode_autosave_entries(folder.entries).value();
     // 3 の本文は 5 の本文と入れ替わり、5 の本文は欠け、一覧に無い 9 の本文が残る。
     folder.bodies = {{3U, "five"}, {9U, "orphan"}};

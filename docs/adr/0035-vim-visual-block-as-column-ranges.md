@@ -147,6 +147,17 @@ FR-003 の T2 に残る VISUAL の 3 つめ、矩形（`Ctrl-v`）を入れる�
 
 決定 6 の「貼る桁が Tab の途中に落ちたら、その Tab だけを左右の空白に割る（ほかの文字は割らない）」の **ほかの文字の扱い** を Vim に合わせる。貼る桁が Tab でない文字（全角・幅 2 の絵文字・結合文字つきの全角・`<200b>` のような書式用文字）の途中に落ちる行では、その文字は割らず、**文字の頭の前に「桁 − 文字の最初の桁」個の空白を入れてから本文を入れ、文字は後ろへずれる**（`ab⏎いう` の `<C-v>jyp` は `aabb⏎ いいう`）。右の埋めは本文が続く行の規則（決定 6）のまま付き、文字の後ろには空白を入れない。Vim の出どころは `register.c` の `do_put()` の `MBLOCK` の枝で、桁を越えて止まった（`vcol > col`）行は `bd.endspaces = vcol − col`・`bd.startspaces = incr − bd.endspaces` とし、Tab でなければ `delcount = 0; bd.endspaces = 0` にして `startspaces` 個の空白の後ろへ本文と元の文字を並べる（v9.1.0004 の source で確かめた）。キャレットは 1 行目の本文の頭（`curwin->w_cursor.col += bd.startspaces`）。空白の数は `put_lead` の 1 か所（Tab と同じ数）、置き換えか差し込みかは `put_block_line` の 1 か所で決め、NORMAL の `p` `P`・`.` の再生・回数つき・矩形の VISUAL の `p` `P`（追補 #1461）が同じ 1 本を通る。上限の検査（`block_put_fits`・#1341）の見積もり `max(桁, tabstop)` はこの空白（桁 − 1 個以下）も覆うので変えない。根拠は固定 Vim 9.1 の oracle の `block-put-wide-mid-` の fixture 18 件（Issue の NORMAL 3 件と VISUAL 2 件・下の行の `P`・絵文字・結合文字つきの全角・短い行とその回数つき・回数つき `3p`・`.`・`u`・VISUAL の `P` と `.` と `u`・対照の桁 1 の `P` と Tab の途中）。修正前の再生では 14 件が違った。
 
+## 追補（2026-11-15・#1687 矩形の INSERT の中でキャレットを動かした後の写し）
+
+矩形の `I` `A` `$A` `c` `C`（追補 #1042）で入った INSERT の中でキャレットを動かしてから打つ形を直す。根拠は固定 Vim 9.1 の実測（`:normal!` の道 792 件・打鍵の道の H3 の k4 1,980 件）と v9.1.0004 の `ops.c` の `op_insert` / `op_change` と `edit.c` の `stop_arrow` / `Insstart_orig`。
+
+1. **Nib は不正な UTF-8 を作らない（絶対の条件）。** Vim の正本は実測なので、Vim が 1 行目の別のバイト（`ll<C-v>jjIab<Home>X` の `bab`）を写す形も、妥当な UTF-8 である限り Vim と同じに写す。Esc の写しの本文が字の途中で始まるか切れるとき、または読み始めが入る前の 1 行目の外のときだけ写さない（`block_copied` / `first_line_growth` の守り）。Vim が字の途中のバイトを写して不正な UTF-8 を作る形は oracle が読めないので、手書きの契約 `verify_vim_block_insert_moved_keeps_utf8`（3 形）が守る。
+2. **置き直すのは 1 か所。** INSERT の鍵の前の `insert_started` が、移動の後に打った最初の鍵（Vim の `stop_arrow`・Esc は呼ばない）と 1 行目の行末の `<Del>` で `block_insert_moved`（`VimStepBlock.cpp`）を呼ぶ。鍵ごとの分岐は書かない。1 行目で何も打たないうちに動いてから打つ（消す鍵でない）とき、`I` は打ち始めより右、`A` は矩形の左の桁の文字の頭か手前なら、覚え `VimBlockInsert` を「打ち始めの桁の `I`」に置き直す（読み始め `at_byte` は打ち始めのバイト、写す桁 `column` と `left` は打ち始めの仮想桁、`carried` `straddled` は 0、Esc の後のキャレットは打ち始め・Vim の `oap->start.col`）。Vim は桁の差を仮想桁で `pre_textlen` から引くので、打ち始めまでの仮想桁の差とバイトの差が違う形（全角・Tab をまたぐ）は置き直さない。
+3. **合わせきれない形は直す前の読みのまま。** 置き直さない形（`I` の左・`A` の矩形の中や右・`$A`（Vim は最も長い行の仮想桁から offset バイトを引いた桁へ写す）・`c` `C`（`op_change` は合わせ直さない）・打った後に動いた形・消す鍵・1 行目の外）は、入口の `at_byte` から 1 行目の伸びたぶんを読む直す前の形（Vim の `op_insert` の長さの差）に決定 1 の守りを足したもの。直す前に Vim と合っていた形はそのまま合う。
+4. **`<Del>` で矩形の最後の行が無くなる形。** 1 行目の行末の `<Del>` で次の行をつないで `I` `A` の矩形の最後の行が無くなると、Vim は写さない（`u_save` が断る・実測 `abcdef` ×3 の `<C-v>jj$A<Del>Z`）ので写さない（覚えの `lines` を 1 にする）。直す前はほかの行へ足していた。
+5. **単位**: `at_byte` `line_bytes` `carried` はバイト、`column` `left` `straddled` は仮想桁。
+6. **測った集合**: fixture `block-insert-moved-` 58 件（Issue の 5 形・`I` `A` `$A` `c` `C` × `<Left>` `<Right>` `<Home>` `<End>` と戻る形と打った後の移動 × ASCII / 全角 / Tab / 短い行 / 空の行 / 全角の混在・`j.` 4 件・マクロ 2 件・`<BS>` でつなぐ 2 件・`<Up>`）。H3 の k4 1,980 件（打鍵の道）は直す前 257 件の違い（Nib の不正な UTF-8 65 件）が直した後 159 件（Nib の不正な UTF-8 0 件・直す前に合っていて直した後に違う件 0）。残りは Vim が不正な UTF-8 を作る 54 件・`$A` で動いた 32 件・置き直さない形で Vim と違う 61 件・`.` の後 5 件・直す前と同じ違い 7 件。
+
 ## 強制
 
 - モード・効果・レジスタの種類・大きさの和型の写し漏れ: **active**（`switch` / `std::visit` の網羅性・CPP-002）

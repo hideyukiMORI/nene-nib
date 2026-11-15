@@ -203,7 +203,7 @@ LSP オンの速さは、オフの 8 本と混ぜない任意のベンチで記�
 `eng/config-bindings.json` の設定と参照先を照合する。文字列参照だけでは実行を証明しないため、整形・lint・CMake・リンカ検査は実ツールの反例も実行する（`eng/prove-gates.py`）。
 
 - 対応する規則: QLT-007
-- 機械強制: **active**（`eng/conformance.py`。`version_metadata_checks` が固定 manifest と版リテラルを拒否し、正例 1・反例 2 が `tests/conformance` にある。実ツールの反例は `eng/prove-gates.py`。2026-09-15・Issue #3）
+- 機械強制: **active**（`eng/conformance.py`。`version_metadata_checks` が固定 manifest と版リテラルを拒否し、正例 1・反例 2 が `tests/conformance` にある。実ツールの反例は `eng/prove-gates.py`。2026-09-15・Issue #3。2026-11-14・#1677: `app_identity_checks` が、画面に出す版を `AppIdentity.cpp` へ渡す compile definition が `PROJECT_VERSION` から導かれることと、rc の `CompanyName` / `LegalCopyright` が `src/core/AppIdentity.hpp` の著作者と年と同じ文であることを照合する。反例 2 を足した・D90）
 
 ### CNF-008 — TODO と FIXME に Issue 番号
 
