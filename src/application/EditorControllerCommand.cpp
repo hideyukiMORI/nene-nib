@@ -169,7 +169,7 @@ namespace
 
 // Vim モードで一覧から「置換」を選んだときの `:` の前置き（ADR 0174 の決定 2）。
 constexpr std::string_view vim_replace_prefix = "%s/";
-// 置換の起点を戻す幅（UTF-8 の 1 コードポイントの最大のバイト数）。
+// 置換の起点を戻す幅・字の途中の起点の先を読む幅（UTF-8 の 1 コードポイントの最大のバイト数）。
 constexpr std::size_t code_point_bytes = 4;
 
 // 入力行の 1 つの編集を Vim が録る打った鍵へ（#1528・Vim 9.1 の feedkeys の実測）。Vim は
@@ -558,11 +558,20 @@ std::optional<core::VimRepeatFailure> EditorController::operator_command(const s
 // オペレータ待ちの `:s`（`d:s/a/b/`・ADR 0168 の追補 16）。Vim は置換を先に流し、置換の前の
 // キャレットから置換の後のキャレットまでを exclusive な移動としてオペレータを閉じる（`jd:s/a/X/` は
 // `  b a` を `b X` に・実測）。置換が断られたら（E486 ほか）オペレータを捨てて再生を打ち切る。
+// 起点は置換の前の行と行頭からのバイト数のまま（Vim の oap->start は置換で動かない・上の行が
+// 縮むと別の本文を指す）で、置換の後の本文で行かバイト数が外にあればオペレータを捨てて再生を
+// 打ち切る（Vim の nv_colon の clearopbeep・`:normal!` の続きの鍵は流れない・バイト数が行の長さ
+// ちょうどなら外でない・実測 #1683）。起点が置換の後で字の途中に落ちたとき（単位は行と行頭からの
+// バイト数）は、`d` `c` `y` は捨てる（Vim は字を割るが Nib は割らない・設計席の決め）。ほか
+// （`>` `<` `gU` `gu` `g~`）は次のコードポイントの境目へ切り上げる（Vim 9.1 の実測）。仕分けは
+// `core::vim_pending_splits_characters`。
 std::optional<core::VimRepeatFailure>
 EditorController::operator_substituted(const std::string &text,
                                        const core::ExSubstituteRequest &request)
 {
-    const core::Offset origin = state_.selection().caret;
+    const core::Offset caret = state_.selection().caret;
+    const core::LineNumber line = state_.text().line_containing(caret);
+    const std::size_t bytes = caret.value - state_.text().line_start(line).value;
     const auto failure = stepped_vim(VimStepSource{request});
     if (failure.has_value())
     {
@@ -573,7 +582,22 @@ EditorController::operator_substituted(const std::string &text,
     {
         return std::nullopt;
     }
-    return stepped_vim(VimStepSource{core::VimCommandMotion{text, std::nullopt, origin}});
+    const core::TextBuffer &after = state_.text();
+    const bool outside = line.value > after.line_count() ||
+                         bytes > after.line_end(line).value - after.line_start(line).value;
+    const core::Offset origin{outside ? 0 : after.line_start(line).value + bytes};
+    // 字の途中の起点の後ろに並ぶ継続バイト（境目なら 0・行の中の字は改行の手前で完結する）。
+    const std::size_t inside =
+        outside ? 0
+                : core::leading_continuations(
+                      after.text_range(origin, core::Offset{origin.value + code_point_bytes}));
+    if (outside || (inside != 0 && core::vim_pending_splits_characters(state_.vim())))
+    {
+        state_ = state_.with_vim(core::vim_operator_cleared(state_.vim()));
+        return core::VimRepeatFailure::refused;
+    }
+    return stepped_vim(VimStepSource{
+        core::VimCommandMotion{text, std::nullopt, core::Offset{origin.value + inside}}});
 }
 
 // 答えを写し、断られた（ran_ex_result が refused を返した・評価の失敗も命令の要求の断りも・
