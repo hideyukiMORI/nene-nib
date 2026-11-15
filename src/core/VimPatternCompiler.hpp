@@ -33,6 +33,10 @@ class VimPatternCompiler final
     void tokens_built();
     [[nodiscard]] bool is_mark(std::size_t token) const noexcept;
     [[nodiscard]] const VimPatternMark &mark_of(std::size_t token) const;
+    // 並びの値 token が選択 `\|` の印か。
+    [[nodiscard]] bool is_branch(std::size_t token) const;
+    // 選択の枝を探す歩きで、位置 token の後に続きを見る位置の 1 つ手前（群の開きは対の閉じ）。
+    [[nodiscard]] std::size_t passed(std::size_t token) const;
     // 並びの [begin, end) を選択として組む（枝が 1 つなら列のまま）。
     void alternation(std::size_t begin, std::size_t end);
     // 選択の無い並びの [begin, end) を組む。
