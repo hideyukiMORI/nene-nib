@@ -28,8 +28,10 @@ inline constexpr std::size_t maximum_autosave_list_bytes = 1024U * 1024U;
 //   title=<題名>
 // entry と title の 2 行で 1 タブ。パスは行の最後の欄で行末まで読む。行と桁は 1 始まり。
 // 文字コードと改行の形の名前は `:set fenc=` `:set ff=` と同じ（core の DocumentFormat・追補
-// #1688）。書くのは版 2 だけ。読みは版 2 と、前の版 1（形の 3 欄が無い・entry の form は無し）を
-// 受け、ほかの版は壊れた一覧と同じに拒む。
+// #1688）。名前を変える・足すときは一覧の版を上げる（書く名前の集合は adapters の試験が固定）。
+// 読みは版 2 と前の版 1（形の 3 欄が無い・entry の form は無し）を受け、ほかの版は拒む。
+// 書きは全部の行に形があれば版 2（行が 0 も）、どの行にも無ければ版 1（前の版の残骸の
+// 一覧を forget で縮めるときだけ）、混ざっていれば unwritable。
 // 本文のファイル名は番号から作る名前と一致しなければ拒む。壊れたものは一部だけ返さず全体を拒む。
 [[nodiscard]] std::expected<std::vector<AutosaveEntry>, application::AutosaveFailure>
 decode_autosave_entries(std::string_view bytes);

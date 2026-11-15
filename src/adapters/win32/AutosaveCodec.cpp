@@ -6,6 +6,7 @@
 #include "TextLines.hpp"
 #include "Utf8.hpp"
 
+#include <algorithm>
 #include <array>
 #include <charconv>
 #include <format>
@@ -171,6 +172,27 @@ entry_form_of(std::string_view &entry, bool formed)
     }
     return entries;
 }
+
+// 1 タブの 2 行。形があれば版 2 の行（形の 3 欄をパスの前に）、無ければ版 1 の行（形の欄なし）。
+[[nodiscard]] std::string entry_line(const AutosaveEntry &entry)
+{
+    const std::string_view path =
+        entry.path.has_value() ? entry.path.value().text() : std::string_view{};
+    if (!entry.form.has_value())
+    {
+        return std::format("entry={},{},{},{},{}\ntitle={}\n", entry.id.value,
+                           entry.caret.line.value, entry.caret.column.value,
+                           autosave_body_name(entry.id), path, entry.title.text());
+    }
+    const application::AutosaveForm &form = entry.form.value();
+    const std::string_view save = form.save.has_value()
+                                      ? core::line_ending_option_name(form.save.value())
+                                      : std::string_view{};
+    return std::format("entry={},{},{},{},{},{},{},{}\ntitle={}\n", entry.id.value,
+                       entry.caret.line.value, entry.caret.column.value,
+                       autosave_body_name(entry.id), core::encoding_option_name(form.encoding),
+                       core::line_ending_option_name(form.body), save, path, entry.title.text());
+}
 } // namespace
 
 std::string autosave_body_name(application::AutosaveId id)
@@ -200,29 +222,23 @@ std::expected<std::vector<AutosaveEntry>, Failure> decode_autosave_entries(std::
 std::expected<std::string, Failure>
 encode_autosave_entries(const std::vector<AutosaveEntry> &entries)
 {
-    if (entries.size() > maximum_autosave_entries)
+    // 版は行の形の有無で決める（V-1692 の M1）。
+    // 全部の行に形があれば版 2（行が 0 も版 2）。
+    // どの行にも無ければ版 1（beta.13 までの残骸の一覧を forget で縮めるときだけ・
+    // 本文も形も足さず、行を消すだけ）。
+    // 混ざっていれば拒む（自分のフォルダの行は必ず形を持つので、混ざるのは不変条件の破れ）。
+    const bool formed = std::ranges::all_of(entries, [](const AutosaveEntry &entry)
+                                            { return entry.form.has_value(); });
+    const bool bare = std::ranges::none_of(entries, [](const AutosaveEntry &entry)
+                                           { return entry.form.has_value(); });
+    if (entries.size() > maximum_autosave_entries || (!formed && !bare))
     {
         return std::unexpected(Failure::unwritable);
     }
-    std::string bytes = std::format("{}\n", version_line_2);
+    std::string bytes = std::format("{}\n", formed ? version_line_2 : version_line_1);
     for (const AutosaveEntry &entry : entries)
     {
-        // 書くのは版 2 だけで、形の無い行は書けない（自分の一覧は版 2 の行だけ）。
-        if (!entry.form.has_value())
-        {
-            return std::unexpected(Failure::unwritable);
-        }
-        const application::AutosaveForm &form = entry.form.value();
-        const std::string_view path =
-            entry.path.has_value() ? entry.path.value().text() : std::string_view{};
-        const std::string_view save = form.save.has_value()
-                                          ? core::line_ending_option_name(form.save.value())
-                                          : std::string_view{};
-        bytes +=
-            std::format("entry={},{},{},{},{},{},{},{}\ntitle={}\n", entry.id.value,
-                        entry.caret.line.value, entry.caret.column.value,
-                        autosave_body_name(entry.id), core::encoding_option_name(form.encoding),
-                        core::line_ending_option_name(form.body), save, path, entry.title.text());
+        bytes += entry_line(entry);
         if (bytes.size() > maximum_autosave_list_bytes)
         {
             return std::unexpected(Failure::unwritable);

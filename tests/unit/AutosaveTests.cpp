@@ -693,6 +693,38 @@ void verify_restore_stores_before_forget()
            "restoring stores the restored tabs before it forgets any remnant");
 }
 
+// V-1692 の M1: 同じフォルダの版 1 の残骸 2 本（形なし）。
+// 「はい」は判別で戻し、戻したタブを形つきでこのプロセスに退避し直してから 2 本とも forget する
+// （自分の一覧に形なしの行は混ざらない）。「いいえ」は読まずに 2 本とも forget する。
+// forget の後に版 1 の一覧が縮むことは adapters の (k)。
+void verify_version_1_remnants_answered()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    editing.autosave().remain(remnant("7a/0", sample_path()), "alpha\r\nbeta\r\n");
+    editing.autosave().remain(remnant("7a/1", std::nullopt),
+                              std::string(core::byte_order_mark()) + "gamma");
+    static_cast<void>(controller.autosave_remnants());
+    applied(controller, app::RestoreAutosave{});
+    const auto &stored = editing.autosave().stored();
+    expect(stored.size() == 2 && stored.at(0).form.encoding == core::TextEncoding::utf8 &&
+               stored.at(0).form.body == core::LineEnding::crlf &&
+               stored.at(1).form.encoding == core::TextEncoding::utf8_bom,
+           "restored version 1 remnants are stored again with the detected form");
+    expect(editing.autosave().forgotten() == std::vector<std::string>{"7a/0", "7a/1"},
+           "yes forgets both version 1 remnants of the folder");
+    Editing declined;
+    applied(declined.controller(), app::VisibleLines{10});
+    declined.autosave().remain(remnant("7b/0", sample_path()), "alpha");
+    declined.autosave().remain(remnant("7b/1", std::nullopt), "beta");
+    static_cast<void>(declined.controller().autosave_remnants());
+    applied(declined.controller(), app::DiscardAutosave{});
+    expect(declined.autosave().body_reads() == 0 && declined.autosave().stored().empty() &&
+               declined.autosave().forgotten() == std::vector<std::string>{"7b/0", "7b/1"},
+           "no forgets both version 1 remnants of the folder without reading them");
+}
+
 // --- #1688: 退避の本文は UTF-8、文書の形は一覧に記録し、復元は検出しない（ADR 0137 の追補）。 ---
 
 // 退避の写しを、次の起動の残骸として戻す。一覧は形をそのまま運ぶ（adapters の codec の試験 (k)）。
@@ -907,6 +939,7 @@ void verify_autosave_contracts()
     verify_end_session_keeps_unsaved();
     verify_end_session_flushes_unsaved();
     verify_restore_stores_before_forget();
+    verify_version_1_remnants_answered();
     verify_sjis_restored_without_detection();
     verify_sjis_ascii_keeps_encoding();
     verify_sjis_unencodable_stored();

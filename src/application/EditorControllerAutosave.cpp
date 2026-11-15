@@ -298,6 +298,9 @@ bool EditorController::store_autosave(AutosaveId id, const core::TextBuffer &tex
     // 同じ encoded_parts の 1 本で作る。形は form に記録する（追補 #1688 の決定 1・2）。
     std::string held;
     const auto parts = encoded_parts(text, core::TextEncoding::utf8, text.line_ending(), held);
+    // UTF-8 では起きない（V-1692 の L1）。本文の改行の形のままの UTF-8 は、encoded_parts が
+    // 写さずに utf8_parts の値を返す（型ではなく encoded_parts の分岐で決まる）。
+    // encoded_parts の結果型を受けるための枝で、分岐が変わっても失敗を黙って捨てないように残す。
     if (!parts)
     {
         notify_autosave_failure();
