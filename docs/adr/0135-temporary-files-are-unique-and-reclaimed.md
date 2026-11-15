@@ -38,3 +38,21 @@
 ## 限界
 
 一時ファイルを置けないフォルダ（読み取り専用）では今日どおり保存できない。回収は生きているプロセスの名前を消さないので、生きている別の Nib の閉じてから置き換えるまでの隙間を消すことは無い。代わりに、pid が再利用されて生きている別のプロセスに当たった残骸、別のユーザーのプロセス（`OpenProcess` が拒否する）の残骸、自分の pid の払い出していない連番の残骸（前に同じ pid だったプロセスのもの）は回収されずに残る（害は無い。次の保存は `CREATE_NEW` で別の連番を使う）。`GetExitCodeProcess` が `STILL_ACTIVE`（259）で終わったプロセスは生きているとみなす。回収は 8.3 形式の短い名前で当たったものを消さない（名前の頭と `.nib-tmp-` を確かめる）。前の版の固定名 `<target>.nib-tmp` は形に当たらないので、だれも回収しない。一時ファイルの名前は保存先より最大 28 文字（`.nib-tmp-` 9・pid 8・`-` 1・連番 10）長く、前の固定名より最大 20 文字長い。exe の manifest に `longPathAware` が無い（#498）ので、パスが MAX_PATH に近い保存先は、前は保存できても今は `unwritable` になり得る。
+
+## 追補（2026-11-15・#1689）: 置き換えの失敗の後始末は失敗の番号で決め、新しいバイト列を消さない
+
+`placed_temporary` は `ReplaceFileW` の失敗の番号を問わず一時ファイルを消していた。backup の名前を渡さない呼び方（決定 2）での、失敗の後の 2 つのファイルの場所は Microsoft の文書（[ReplaceFileW の Return value](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew)・2026-11-15 に読んだ）のとおり:
+
+| 番号 | 文書の文（引用） | 元のファイル | 一時ファイル（新しいバイト列） | 始末 |
+| --- | --- | --- | --- | --- |
+| 1175 `ERROR_UNABLE_TO_REMOVE_REPLACED` | "The replaced and replacement files retain their original file names." | 元の名前のまま | 一時ファイルの名前のまま | 消す（今の形） |
+| 1176 `ERROR_UNABLE_TO_MOVE_REPLACEMENT` | "Otherwise, the replaced file no longer exists and the replacement file exists under its original name." | 無い | 一時ファイルの名前のまま | 保存先の名前へ `MoveFileExW(MOVEFILE_REPLACE_EXISTING \| MOVEFILE_WRITE_THROUGH)` で置き直す。通れば保存は成功、通らなければ残す |
+| 1177 `ERROR_UNABLE_TO_MOVE_REPLACEMENT_2` | "The replacement file still exists under its original name; however, it has inherited the file streams and attributes from the file it is replacing. The file to be replaced still exists with a different name." | 別の名前（OS が決めた名前）で残る | 一時ファイルの名前のまま・元の属性を継ぐ | 消さずに残す |
+| ほか（`ERROR_ACCESS_DENIED` `ERROR_SHARING_VIOLATION` など） | "If any other error is returned, such as ERROR_INVALID_PARAMETER, the replaced and replacement files will retain their original file names." | 元の名前のまま | 一時ファイルの名前のまま | 消す（今の形） |
+
+1. 始末は閉じた `enum class PlacementCleanup`（`remove_temporary` / `move_temporary` / `keep_temporary`）で、純関数 `placement_cleanup(番号, モード)`（`src/adapters/win32/PlacementCleanup`）が決める。番号は OS の開いた値なので、名前のある 1176 と 1177 だけを選び、残りは 1 か所の既定（消す）に閉じて注釈する。新規保存（`create_new`）は `ReplaceFileW` を使わないので、いつも消す（置き直しの `MOVEFILE_REPLACE_EXISTING` で後から現れたファイルを上書きしない）。
+2. 失敗は今と同じ `FileFailure`（`unwritable` / `already_exists`）で返す。本文と未保存の印は application が今のまま持つ。知らせの文は足さない。
+3. **回収（決定 3 の (a)）は、置き換えが成功した保存の後に行う**（前は保存の直前）。残した一時ファイルは名前が `<target>.nib-tmp-<自分の pid>-<古い連番>` で、決定 3 の (b) 自分の古い連番に当たる。直前の回収のままだと、失敗が続く次の保存がそれを消し、ディスクの上の新しいバイト列の写しが無くなる。成功の後なら保存先が新しいバイト列を持っているので、消してよい。失敗が続く間は消えない。決定 3 の回収の規則（名前の形と pid）は変えない。
+4. 試験: 純関数の番号 → 始末（1175 1176 1177・`ERROR_ACCESS_DENIED` `ERROR_SHARING_VIOLATION`・新規保存）。実ファイルで、読み取り専用・ロック中は元のファイルが残り一時ファイルが残らない（今のまま）、自分の古い連番の残骸（残した一時ファイルと同じ名前の形）はロックで失敗する保存 2 回の間は残り、成功した保存の後に消える。1176 / 1177 は実機で起こせないので、偽の OS を足さず純関数だけで守る。
+
+限界: 1177 の後に OS が別の名前で残した元のファイルは名前が分からないので、Nib は回収しない（使う人の目に残る）。起動時の回収（決定 3 の (b)・設定の置き場）は、前のプロセスが設定の保存で残した一時ファイルも消す。設定の保存が 1176 の置き直しにも失敗した後に Nib を閉じると、次の起動でその写しは消える（前のプロセスのメモリの設定も無いので、ここでは変えない）。

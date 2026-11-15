@@ -17,6 +17,7 @@
 #include "HtmlClipboardFormat.hpp"
 #include "MapRow.hpp"
 #include "Milestone.hpp"
+#include "PlacementCleanup.hpp"
 #include "SettingsCodec.hpp"
 #include "ShellRegistration.hpp"
 #include "ShellRegistrationStatus.hpp"
@@ -203,7 +204,7 @@ std::wstring upcoming_name(std::wstring_view target, std::uint32_t ahead)
 }
 
 // 次の保存が試す 8 つの名前を、共有 0 で開いたまま塞ぐ（ADR 0135 の決定 2）。手放すと自分の
-// 古い連番の残骸になり、次の保存の直前に回収される。
+// 古い連番の残骸になり、次に成功した保存の後に回収される（#1689）。
 HeldNames occupy_upcoming_names(std::wstring_view target)
 {
     HeldNames held;
@@ -1590,7 +1591,7 @@ void verify_concurrent_temporaries(std::span<const std::wstring> others)
            "temporary files held open by other savers are not reclaimed");
 }
 
-// 決定 5 (b): 誰も開いていない残骸は、その保存先の保存の直前に消える。
+// 決定 5 (b): 誰も開いていない残骸は、その保存先の保存が成功した後に消える（#1689）。
 void verify_reclaimed_residue(const std::wstring &residue)
 {
     // pid は 4 の倍数なので 0xdeadbeef のプロセスは無い。OpenProcess で確かめてから使う。
@@ -1605,7 +1606,7 @@ void verify_reclaimed_residue(const std::wstring &residue)
     expect(!file_exists(residue), "a residue nobody holds is reclaimed before the save");
 }
 
-// 決定 5 (d): 設定の保存も同じ adapter を通るので、設定の置き場の残骸も保存の直前に消える。
+// 決定 5 (d): 設定の保存も同じ adapter を通るので、設定の置き場の残骸も保存の後に消える。
 void verify_reclaimed_settings_residue(const std::wstring &residue)
 {
     Win32FileAdapter fresh;
@@ -1698,6 +1699,62 @@ void verify_reclaim_rule(std::span<const std::wstring> kept)
     expect(file_exists(kept[3]), "a pid with an uppercase digit is outside the name form");
 }
 
+// #1689: 置き換えに失敗して残した一時ファイル（ERROR_UNABLE_TO_MOVE_REPLACEMENT_2 の後・自分の
+// 古い連番の名前）は、新しいバイト列のディスクの上の唯一の写しになり得る。失敗が続く間の保存は
+// それを回収せず、置き換えが成功した保存の後にだけ回収する。1177 は実機で起こせないので、残した
+// 一時ファイルは同じ名前の形の残骸で置き、失敗はロック（共有違反）で起こす。
+void verify_kept_temporary_survives_failures()
+{
+    Win32FileAdapter fresh;
+    const auto target = path_of("nib-adapter-files/temporaries/kept.txt");
+    const std::wstring kept = upcoming_name(kept_target, 0);
+    leave_residue(kept);
+    {
+        const FileHandle held(CreateFileW(kept_target, GENERIC_READ, FILE_SHARE_READ, nullptr,
+                                          OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+        expect(held.valid(), "hold the target without sharing replacement");
+        expect(!fresh.write(target, "must not replace"), "a locked target refuses the save");
+        expect(!fresh.write(target, "must not replace either"), "the next save is refused too");
+    }
+    expect(file_exists(kept), "a kept temporary file survives saves that fail");
+    expect(read_text(fresh, target, read_limit).value_or(std::string{}) == "after rule",
+           "the failed saves keep the complete previous file");
+    expect(fresh.write(target, "after kept").has_value(), "a save succeeds once the lock is gone");
+    expect(!file_exists(kept), "the kept temporary file is reclaimed after the save succeeds");
+    static_cast<void>(DeleteFileW(kept.c_str()));
+}
+
+// #1689: 置けなかった後の始末の純関数。番号の意味は ReplaceFileW の文書（ADR 0135 の追補の表）。
+void verify_placement_cleanups()
+{
+    using nenenib::adapters::win32::placement_cleanup;
+    using nenenib::adapters::win32::PlacementCleanup;
+    constexpr std::array<DWORD, 6> removed{
+        ERROR_UNABLE_TO_REMOVE_REPLACED, ERROR_ACCESS_DENIED,  ERROR_SHARING_VIOLATION,
+        ERROR_INVALID_PARAMETER,         ERROR_ALREADY_EXISTS, ERROR_FILE_EXISTS};
+    for (const DWORD error : removed)
+    {
+        expect(placement_cleanup(error, FileWriteMode::replace) ==
+                   PlacementCleanup::remove_temporary,
+               "a failure that keeps the original under its name removes the temporary file");
+    }
+    expect(placement_cleanup(ERROR_UNABLE_TO_MOVE_REPLACEMENT, FileWriteMode::replace) ==
+               PlacementCleanup::move_temporary,
+           "1176 leaves no original, so the temporary file is moved to the target name");
+    expect(placement_cleanup(ERROR_UNABLE_TO_MOVE_REPLACEMENT_2, FileWriteMode::replace) ==
+               PlacementCleanup::keep_temporary,
+           "1177 keeps the temporary file that holds the new bytes");
+    constexpr std::array<DWORD, 4> created{ERROR_UNABLE_TO_MOVE_REPLACEMENT,
+                                           ERROR_UNABLE_TO_MOVE_REPLACEMENT_2, ERROR_ALREADY_EXISTS,
+                                           ERROR_ACCESS_DENIED};
+    for (const DWORD error : created)
+    {
+        expect(placement_cleanup(error, FileWriteMode::create_new) ==
+                   PlacementCleanup::remove_temporary,
+               "create_new never uses ReplaceFileW and always removes its temporary file");
+    }
+}
+
 // 決定 3 の名前の読み（純関数）。self は 0x1a、払い出し済みの連番は 5。
 void verify_reclaimable_names()
 {
@@ -1740,6 +1797,7 @@ void verify_reclaimable_names()
 void verify_temporary_files()
 {
     verify_reclaimable_names();
+    verify_placement_cleanups();
     const BOOL created = CreateDirectoryW(temporaries_folder, nullptr);
     expect(created != 0 || GetLastError() == ERROR_ALREADY_EXISTS,
            "the temporaries folder is there");
@@ -1766,6 +1824,7 @@ void verify_temporary_files()
     verify_exhausted_names();
     verify_reclaimed_beside(std::span(named).subspan(5, 3));
     verify_reclaim_rule(std::span(named).subspan(8));
+    verify_kept_temporary_survives_failures();
     remove_temporaries_folder(named);
 }
 
