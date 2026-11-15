@@ -20,7 +20,7 @@ GitHub Issue が正で、ここは 1 画面の要約。日ごとの経緯は書�
 2. Store の認定の知らせが来たら GitHub の 1.0.0（tag と公開）を出し、公開の結果を記録に書く（公開だけは認定を待つ・hide の決め）。
 3. 固まり 2 つ: #1485（プレビューの大きい段落）・#1711（格子の制御文字の行）。
 4. 1.0.1: Store 版から右クリックの登録の操作を隠す。後続の Issue #1690・#1696〜#1708。
-5. **新しい要件: 探して見る面**（hide 2026-11-15 夜・fzf / telescope / snacks.nvim / tv.nvim の良い所）。段は live grep（#1003・ADR 0167・読みは自前のままで rg を使わない、と hide が確認）＋ プレビュー欄 → ルートの下のファイル名 → 行（#1015）・全タブの本文・見出し・診断 → レジスタ・ジャンプ・変更位置・マーク。演出（攻殻機動隊・マトリックス風）は常時ではなく、探すのに時間が掛かっている間だけ（D95）。見た目は /design で案を作って hide が選び、プレビュー欄と演出の形は ADR で決める（Issue は形が決まってから起票）。
+5. **新しい要件: 探して見る面**（hide 2026-11-15 夜・fzf / telescope / snacks.nvim / tv.nvim の良い所）。段は live grep（#1003・ADR 0167・読みは自前のままで rg を使わない、と hide が確認）＋ プレビュー欄 → ルートの下のファイル名 → 行（#1015）・全タブの本文・見出し・診断 → レジスタ・ジャンプ・変更位置・マーク。演出（攻殻機動隊・マトリックス風）は常時ではなく、探すのに時間が掛かっている間だけ（D95）。見た目は決まった（D96・2026-11-16: 右に並べる・細い窓は下・Ctrl+Shift+P で手の切り替え・演出は「解読」で走査の線なし）。形は [ADR 0189](../adr/0189-finder-preview-pane-and-waiting-effect.md)（段 P1〜P3）、採用案は [docs/design/2026-11-16-finder-look.md](../design/2026-11-16-finder-look.md)。全文検索は #1003（ADR 0167 の段 G1〜G3）。
 
 手順の細部は[引き継ぎ 2026-11-15](../handoffs/2026-11-15.md)の「区切りの後の追記 3」。
 
@@ -45,4 +45,4 @@ GitHub Issue が正で、ここは 1 画面の要約。日ごとの経緯は書�
 
 - 速さの基準値は `eng/perf-reference.json`、既定のベンチは `eng/measure-speed.py` の `BENCHES`。最後に有効なゲートは引き継ぎの「いまの状態」。
 - fixture は `tests/vim/fixtures.json`（折り返す窓は `wrap-fixtures.json`）。規則の状態は [QUALITY_GATES.md](../QUALITY_GATES.md) の表。
-- 施主決定は [SPECIFICATION.md](../../SPECIFICATION.md) の D 番号（最新は D95）。
+- 施主決定は [SPECIFICATION.md](../../SPECIFICATION.md) の D 番号（最新は D96）。
