@@ -6,7 +6,6 @@
 #include "VirtualColumn.hpp"
 
 #include <cstddef>
-#include <memory>
 #include <optional>
 
 namespace nenenib::core
@@ -25,12 +24,7 @@ namespace nenenib::core
 // 打った本文のうち端の桁から後ろだけを写す（#1196・block_copied_body）。決めるのは入口の 1 回。
 // `left` は矩形の左の桁（1 始まり）。INSERT の中でキャレットを動かしてから打つと、
 // 覚えは打ち始めへ置き直す（#1687・置き直すのは block_insert_moved の 1 か所）。
-// `entry` は置き直した覚えが持つ入口の覚えの写し（入口のままなら空）。
-// 写さないと決めた覚えは `lines` が 1（1 行目だけ）。
-// `typed_run` は `I` で打った後に打ち始めより手前へ動いて打ったとき、動く前に打った
-// 本文のバイト数（Esc はそれに収まる本文だけを写す）。ほかは空。
-// 単位: `at_byte` `line_bytes` `carried` `typed_run` はバイト、
-// `column` `left` `straddled` は仮想桁。
+// 単位: `at_byte` `line_bytes` `carried` はバイト、`column` `left` `straddled` は仮想桁。
 // 本文は持たない（ARC-004）。
 struct VimBlockInsert
 {
@@ -44,7 +38,5 @@ struct VimBlockInsert
     std::size_t carried;
     std::size_t straddled;
     VirtualColumn left;
-    std::shared_ptr<const VimBlockInsert> entry;
-    std::optional<std::size_t> typed_run;
 };
 } // namespace nenenib::core

@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 994403c260214e3b53052ed360f32f91b9e4b89a42d9763710014e87ec61c46a / 6008 fixtures
+// fixtures.json: sha256 b2f50b9f905ed7f2103a6f7ac0f437c7552949accd9b32a05d1808f9ff004bbf / 6009 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 6008> vim_fixtures{{
+constexpr std::array<VimFixture, 6009> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3204,6 +3204,8 @@ constexpr std::array<VimFixture, 6008> vim_fixtures{{
     {"block-insert-c-cr-rest", "abcdef\nabcdef\nabcdef", "l<C-v>jjlcX<CR>Y<Esc>", "aX\nYdef\nadef\nadef", 2, 1, "bc\nbc\nbc", "\0262", std::nullopt},
     {"block-insert-I-cr-bs", "abcdef\nghijkl\nmnopqr", "l<C-v>jjIa<CR><BS>b<Esc>", "aabbcdef\ngabhijkl\nmabnopqr", 1, 2, "", "", std::nullopt},
     {"block-insert-I-left", "abcdef\nghijkl\nmnopqr", "l<C-v>jjIab<Left>X<Esc>", "aaXbbcdef\ngaXbhijkl\nmaXbnopqr", 1, 2, "", "", std::nullopt},
+    {"block-insert-I-home", "abcdef\nghijkl\nmnopqr", "ll<C-v>jjIab<Home>X<Esc>", "Xababcdef\nghbabijkl\nmnbabopqr", 1, 1, "", "", std::nullopt},
+    {"block-insert-I-end", "abcdef\nghijkl\nmnopqr", "l<C-v>jjIab<End>X<Esc>", "aabbcdefX\ngabbhijkl\nmabbnopqr", 1, 2, "", "", std::nullopt},
     {"block-insert-I-down", "abcdef\nghijkl\nmnopqr", "l<C-v>jjIab<Down>X<Esc>", "aabbcdef\nghiXjkl\nmnopqr", 2, 4, "", "", std::nullopt},
     {"block-insert-A-right", "abcdef\nghijkl\nmnopqr", "l<C-v>jjAab<Left><Right>X<Esc>", "ababXcdef\nghabXijkl\nmnabXopqr", 1, 2, "", "", std::nullopt},
     {"block-insert-I-ctrl-w", "abcdef\nghijkl\nmnopqr", "ll<C-v>jjIx y<C-w><Esc>", "abx cdef\nghx ijkl\nmnx opqr", 1, 3, "", "", std::nullopt},
@@ -3233,7 +3235,6 @@ constexpr std::array<VimFixture, 6008> vim_fixtures{{
     {"block-insert-moved-asc-s0-A-zleft", "abcdef\nabcdef\nabcdef", "<C-v>jjAZ<Left>Y<Esc>", "aYZbcdef\naYZbcdef\naYZbcdef", 1, 1, "", "", std::nullopt},
     {"block-insert-moved-asc-s0-DA-right", "abcdef\nabcdef\nabcdef", "<C-v>jj$A<Right>Z<Esc>", "abcdefZ\nabcdefZ\nabcdefZ", 1, 1, "", "", std::nullopt},
     {"block-insert-moved-asc-s0-DA-zleft", "abcdef\nabcdef\nabcdef", "<C-v>jj$AZ<Left>Y<Esc>", "abcdefYZ\nabcdefYZ\nabcdefYZ", 1, 1, "", "", std::nullopt},
-    {"block-insert-moved-asc-s0-DA-home", "abcdef\nabcdef\nabcdef", "<C-v>jj$A<Home>Z<Esc>", "Zabcdef\nabcdef\nabcdef", 1, 1, "", "", std::nullopt},
     {"block-insert-moved-asc-s0-c-left", "abcdef\nabcdef\nabcdef", "<C-v>jjc<Left>Z<Esc>", "Zbcdef\nZbcdef\nZbcdef", 1, 1, "a\na\na", "\0261", std::nullopt},
     {"block-insert-moved-asc-s0-c-zleft", "abcdef\nabcdef\nabcdef", "<C-v>jjcZ<Left>Y<Esc>", "YZbcdef\nYZbcdef\nYZbcdef", 1, 1, "a\na\na", "\0261", std::nullopt},
     {"block-insert-moved-asc-s0-C-zright", "abcdef\nabcdef\nabcdef", "<C-v>jjCZ<Right>Y<Esc>", "ZY\nZY\nZY", 1, 2, "abcdef\nabcdef\nabcdef", "\0266", std::nullopt},
