@@ -237,6 +237,8 @@ CommandLine CommandLine::edited(CommandEdit edit) const
     case CommandEdit::end:
     case CommandEdit::backspace:
     case CommandEdit::erase:
+    case CommandEdit::erase_word:
+    case CommandEdit::erase_to_start:
         break;
     }
     InputText next = edited_input(input(), edit);

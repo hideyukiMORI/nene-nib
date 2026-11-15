@@ -71,7 +71,11 @@ InputLinePrompt SearchLine::prompt() const noexcept
 
 std::expected<SearchLine, ExFailure> SearchLine::inserted(std::string_view text) const
 {
-    auto next = inserted_input(input_, text);
+    // Vim の `/` `?` の行は Tab を文字として入れる（Vim の nextwild は検索の行で補完を持たず、
+    // Tab をふつうの文字に返す・#1643）。通常モードの「検索: 」などは今のまま断る。
+    const bool vim_search =
+        prompt_ == InputLinePrompt::search_forward || prompt_ == InputLinePrompt::search_backward;
+    auto next = vim_search ? inserted_tab_input(input_, text) : inserted_input(input_, text);
     if (!next)
     {
         return std::unexpected(next.error());

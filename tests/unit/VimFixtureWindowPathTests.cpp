@@ -125,14 +125,17 @@ constexpr std::array<std::string_view, 2> skip_reasons{
         return app::EditorIntent{app::EditCommand{core::CommandEdit::history_next}};
     case core::VimSpecialKey::control_v:
         return app::EditorIntent{app::PasteCommand{}};
+    // 窓の Ctrl+U / Ctrl+W は入力行の c_CTRL-U / c_CTRL-W（press_command_control_key・#1550）。
+    case core::VimSpecialKey::control_u:
+        return app::EditorIntent{app::EditCommand{core::CommandEdit::erase_to_start}};
+    case core::VimSpecialKey::control_w:
+        return app::EditorIntent{app::EditCommand{core::CommandEdit::erase_word}};
     case core::VimSpecialKey::page_up:
     case core::VimSpecialKey::page_down:
     case core::VimSpecialKey::control_r:
     case core::VimSpecialKey::control_d:
-    case core::VimSpecialKey::control_u:
     case core::VimSpecialKey::control_f:
     case core::VimSpecialKey::control_b:
-    case core::VimSpecialKey::control_w:
     case core::VimSpecialKey::control_a:
     case core::VimSpecialKey::control_x:
     case core::VimSpecialKey::control_o:
