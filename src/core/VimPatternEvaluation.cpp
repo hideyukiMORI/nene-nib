@@ -18,7 +18,7 @@ namespace
     {
         return std::nullopt;
     }
-    return VimPatternMatch{begin, end};
+    return VimPatternMatch{begin, end, begin, end};
 }
 } // namespace
 
