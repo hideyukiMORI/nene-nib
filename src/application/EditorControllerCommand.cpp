@@ -169,7 +169,7 @@ namespace
 
 // Vim モードで一覧から「置換」を選んだときの `:` の前置き（ADR 0174 の決定 2）。
 constexpr std::string_view vim_replace_prefix = "%s/";
-// 置換の起点を戻す幅（UTF-8 の 1 コードポイントの最大のバイト数）。
+// 置換の起点を戻す幅・字の途中の起点の先を読む幅（UTF-8 の 1 コードポイントの最大のバイト数）。
 constexpr std::size_t code_point_bytes = 4;
 
 // 入力行の 1 つの編集を Vim が録る打った鍵へ（#1528・Vim 9.1 の feedkeys の実測）。Vim は
@@ -584,13 +584,18 @@ EditorController::operator_substituted(const std::string &text,
     const bool outside = line.value > after.line_count() ||
                          bytes > after.line_end(line).value - after.line_start(line).value;
     const core::Offset origin{outside ? 0 : after.line_start(line).value + bytes};
-    if (outside || !core::is_boundary(after.text_range(origin, core::Offset{origin.value + 1}),
-                                      core::Offset{0}))
+    // 字の途中の起点の後ろに並ぶ継続バイト（境目なら 0・行の中の字は改行の手前で完結する）。
+    const std::size_t inside =
+        outside ? 0
+                : core::leading_continuations(
+                      after.text_range(origin, core::Offset{origin.value + code_point_bytes}));
+    if (outside || (inside != 0 && core::vim_pending_splits_characters(state_.vim())))
     {
         state_ = state_.with_vim(core::vim_operator_cleared(state_.vim()));
         return core::VimRepeatFailure::refused;
     }
-    return stepped_vim(VimStepSource{core::VimCommandMotion{text, std::nullopt, origin}});
+    return stepped_vim(VimStepSource{
+        core::VimCommandMotion{text, std::nullopt, core::Offset{origin.value + inside}}});
 }
 
 // 答えを写し、断られた（ran_ex_result が refused を返した・評価の失敗も命令の要求の断りも・

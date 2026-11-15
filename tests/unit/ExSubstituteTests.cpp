@@ -522,7 +522,7 @@ void verify_limit_counts_document_newlines()
 }
 
 // 起点（行と行頭からのバイト数・Vim の oap->start）が置換の後で字の途中に落ちたら、Nib は字を
-// 割らずにオペレータを捨てる（Vim は字を割って不正な UTF-8 を残すので fixture にできない・
+// 割らずに d c y のオペレータを捨てる（Vim は字を割って不正な UTF-8 を残すので fixture にできない・
 // #1683 の D1・設計席の決め）。置換は本文に残り、同じ鍵の列の続きは流れない。
 void verify_operator_substitute_mid_character()
 {
@@ -545,6 +545,34 @@ void verify_operator_substitute_mid_character()
         "the next key after the drop is a NORMAL command (x removes the character at the caret)");
 }
 
+// オペレータ待ちの `:s` の鍵の列の後の本文が body で、オペレータは閉じて待ちが無く NORMAL。
+[[nodiscard]] bool operator_closed(std::string text, std::string_view keys, std::string_view body)
+{
+    Editing editing;
+    open_vim_document(editing, std::move(text));
+    auto &controller = editing.controller();
+    vim_normal(controller, keys);
+    const core::VimState vim = controller.vim_state();
+    return whole_vim_body(controller) == body && !vim.pending.has_value() &&
+           vim.mode == core::VimMode::normal;
+}
+
+// 字を割らないオペレータ（> < g~ gu gU）は、字の途中の起点を捨てずに次の code point の境目へ
+// 切り上げて閉じる（#1683・Vim 9.1 の実測と同じ本文・fixture substitute-op-origin-mid-）。
+void verify_operator_substitute_mid_character_kept()
+{
+    expect(operator_closed("\t\taa\nb", "$<:s/a/あ/<CR>", "\tあa\nb"),
+           "< with the origin inside the new character still shifts the line");
+    expect(operator_closed("\t\taa\nb", "$<:s/a/あ/<CR>x", "\ta\nb"),
+           "the key after a kept < runs as a NORMAL command");
+    expect(operator_closed("aaéx", "$gU:s/a/ab/<CR>", "ABAÉx"),
+           "gU with the origin inside a character ends at the next boundary (includes it)");
+    // 本文だけを確かめる（fixture にしない）。キャレットは Vim と違う: Vim は跨いだ字の頭（1 行目の
+    // 行頭からバイト 3）・Nib は切り上げた起点（バイト 5）。既知の限界（ADR 0168 の追補 17）。
+    expect(operator_closed("aaééx\nc a", "$hgU:%s/a/ab/<CR>", "abaéÉX\nc ab"),
+           "gU with the origin inside a character starts at the next boundary (leaves it out)");
+}
+
 } // namespace
 
 void verify_ex_substitute_scope()
@@ -558,5 +586,6 @@ void verify_ex_substitute_scope()
     verify_substitute_notices();
     verify_substitute_repeat_and_bytes();
     verify_operator_substitute_mid_character();
+    verify_operator_substitute_mid_character_kept();
 }
 } // namespace nenenib::tests
