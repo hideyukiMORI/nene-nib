@@ -77,6 +77,7 @@ std::optional<std::string> searched_text(const core::SearchLine &line)
     case core::InputLinePrompt::go_to_line:
     case core::InputLinePrompt::ex:
     case core::InputLinePrompt::palette:
+    case core::InputLinePrompt::substitute_confirm:
         return std::nullopt;
     }
     std::unreachable();
