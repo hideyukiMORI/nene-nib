@@ -966,6 +966,28 @@ void verify_vim_insert_page_move_breaks_undo()
            "the earlier insertion remains a separate undo unit");
 }
 
+namespace
+{
+// 行単位と矩形の VISUAL の `S` も文字単位と同じ `visual_edit_line` → `visual_unchanged` を通る
+// （V-1676 の L5・surround #1001 が `S` を取るまでの退行の防ぎ）。
+void verify_wide_visual_substitute_line_does_nothing(const TextBuffer &buffer,
+                                                     const VimState &resting,
+                                                     const Selection &selection)
+{
+    for (const VimMode mode : {VimMode::visual_line, VimMode::visual_block})
+    {
+        VimState wide = resting;
+        wide.mode = mode;
+        const auto step =
+            vim_step(wide, VimEditorView{buffer, selection, VimViewport{LineNumber{1}, 64, 0}},
+                     VimKey{VimCharacter{U'S'}});
+        expect(std::holds_alternative<VimNoEffect>(step.effect),
+               "S does nothing in linewise and blockwise VISUAL");
+        expect(step.next.mode == mode, "and stays in the same VISUAL mode");
+    }
+}
+} // namespace
+
 // VISUAL の入口は選択そのもの（ADR 0018 の決定 2）。NORMAL / INSERT は anchor を読まない。
 void verify_vim_visual_step_edges()
 {
@@ -1000,6 +1022,7 @@ void verify_vim_visual_step_edges()
                "a key outside this slice does nothing in VISUAL");
         expect(step.next.mode == VimMode::visual, "and stays in VISUAL");
     }
+    verify_wide_visual_substitute_line_does_nothing(buffer, resting, selection);
     const auto escaped =
         vim_step(visual, VimEditorView{buffer, selection, VimViewport{LineNumber{1}, 64, 0}},
                  VimKey{VimSpecialKey::escape});

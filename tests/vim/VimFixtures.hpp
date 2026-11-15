@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 ef5ca0e66c3dfdfec75a1826086afdc2c46447bc58fda32eeb2b1d103ca2eaf8 / 6115 fixtures
+// fixtures.json: sha256 ed4b9415f6ba980022ca2e86996c09465ddb88541d84109f23adb550930db1ed / 6119 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 6115> vim_fixtures{{
+constexpr std::array<VimFixture, 6119> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -6120,13 +6120,17 @@ constexpr std::array<VimFixture, 6115> vim_fixtures{{
     {"substitute-key-line-combining", "é\nx", "SX<Esc>", "X\nx", 1, 1, "é\n", "V", std::nullopt},
     {"substitute-key-line-middle-count-undo", "a\nb\nc\nd", "j2SX<Esc>u", "a\nb\nc\nd", 3, 1, "b\nc\n", "V", std::nullopt},
     {"substitute-key-line-reg-small-untouched", "abc\ndef", "lx\"-pjSX<Esc>\"-p", "acb\nXb", 2, 2, "def\n", "V", std::nullopt},
-    {"substitute-key-s-reg-one-shift", "abcd\nef", "dd\"aSX<Esc>\"2p", "X\nabcd", 2, 1, "ef\n", "V", std::nullopt},
+    {"substitute-key-line-reg-one-shift", "abcd\nef", "dd\"aSX<Esc>\"2p", "X\nabcd", 2, 1, "ef\n", "V", std::nullopt},
     {"substitute-key-s-ctrl-o-esc-only", "abcd", "li<C-o>s<Esc>", "acd", 1, 1, "b", "v", std::nullopt},
     {"substitute-key-line-ctrl-o-esc-only", "  abc\ndef", "A<C-o>S<Esc>", "\ndef", 1, 1, "  abc\n", "V", std::nullopt},
     {"substitute-key-s-macro-register", "abcdefgh", "2@a", "ZZcdefgh", 1, 3, "b", "v", std::nullopt, VimMacroFixture{'a', "sZ<Esc>l"}},
     {"substitute-key-line-macro-register", "a\nb\nc\nd", "2@a", "X\nX\nc\nd", 3, 1, "b\n", "V", std::nullopt, VimMacroFixture{'a', "SX<Esc>j"}},
     {"substitute-key-s-ctrl-o-restart", "alpha beta gamma", "iX<C-o>sY<Esc>Z<Esc>", "XZYlpha beta gamma", 1, 2, "a", "v", std::nullopt},
     {"substitute-key-line-ctrl-o-restart", "alpha beta gamma", "iX<C-o>SY<Esc>Z<Esc>", "ZY", 1, 1, "Xalpha beta gamma\n", "V", std::nullopt},
+    {"substitute-key-line-count-on-last-line", "abc\ndef", "G2SX<Esc>", "abc\ndef", 2, 1, "", "", std::nullopt},
+    {"substitute-key-line-count-single-line", "abc", "3SX<Esc>", "abc", 1, 1, "", "", std::nullopt},
+    {"substitute-key-line-operator-c", "abc\ndef", "cSx", "abc\ndef", 1, 1, "", "", std::nullopt},
+    {"substitute-key-line-operator-y", "abc\ndef", "ySx", "abc\ndef", 1, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

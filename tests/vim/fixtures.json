@@ -6107,11 +6107,15 @@
   {"name":"substitute-key-line-combining","text":"é\nx","keys":"SX<Esc>"},
   {"name":"substitute-key-line-middle-count-undo","text":"a\nb\nc\nd","keys":"j2SX<Esc>u"},
   {"name":"substitute-key-line-reg-small-untouched","text":"abc\ndef","keys":"lx\"-pjSX<Esc>\"-p"},
-  {"name":"substitute-key-s-reg-one-shift","text":"abcd\nef","keys":"dd\"aSX<Esc>\"2p"},
+  {"name":"substitute-key-line-reg-one-shift","text":"abcd\nef","keys":"dd\"aSX<Esc>\"2p"},
   {"name":"substitute-key-s-ctrl-o-esc-only","text":"abcd","keys":"li<C-o>s<Esc>"},
   {"name":"substitute-key-line-ctrl-o-esc-only","text":"  abc\ndef","keys":"A<C-o>S<Esc>"},
   {"name":"substitute-key-s-macro-register","text":"abcdefgh","keys":"2@a","register":{"name":"a","keys":"sZ<Esc>l"}},
   {"name":"substitute-key-line-macro-register","text":"a\nb\nc\nd","keys":"2@a","register":{"name":"a","keys":"SX<Esc>j"}},
   {"name":"substitute-key-s-ctrl-o-restart","text":"alpha beta gamma","keys":"iX<C-o>sY<Esc>Z<Esc>"},
-  {"name":"substitute-key-line-ctrl-o-restart","text":"alpha beta gamma","keys":"iX<C-o>SY<Esc>Z<Esc>"}
+  {"name":"substitute-key-line-ctrl-o-restart","text":"alpha beta gamma","keys":"iX<C-o>SY<Esc>Z<Esc>"},
+  {"name":"substitute-key-line-count-on-last-line","text":"abc\ndef","keys":"G2SX<Esc>"},
+  {"name":"substitute-key-line-count-single-line","text":"abc","keys":"3SX<Esc>"},
+  {"name":"substitute-key-line-operator-c","text":"abc\ndef","keys":"cSx"},
+  {"name":"substitute-key-line-operator-y","text":"abc\ndef","keys":"ySx"}
 ]

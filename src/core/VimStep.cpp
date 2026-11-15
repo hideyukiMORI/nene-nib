@@ -1058,9 +1058,15 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return operated_on_lines(state, view.text, view.selection.caret, VimOperator::change);
     }
-    VimState with = state;
-    with.pending = VimPendingOperator{VimOperator::change, std::nullopt};
-    return operated(with, view, VimMotion::right);
+    if (action == VimAction::substitute)
+    {
+        VimState with = state;
+        with.pending = VimPendingOperator{VimOperator::change, std::nullopt};
+        return operated(with, view, VimMotion::right);
+    }
+    // 行に効く動作を足して normal_line_action に枝を書き忘れたら、黙って `cl` にせずここで止める
+    // （CPP-002 の趣旨）。
+    std::unreachable();
 }
 
 // 行に効く本文の変更（X p P D C Y J gJ s S R）。
