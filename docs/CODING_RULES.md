@@ -213,8 +213,8 @@ Windows SDK が決めた COM のインターフェース（`IDWriteFontFallback:
 
 | 依存 | 用途 | 根拠 |
 | --- | --- | --- |
-| — | — | 現在の実行時依存は 0。C++ ランタイムは `/MT` で静的に結び、実行ファイルは OS の DLL 以外を import しない（R1・D1） |
-| md4c release-0.5.2（予定・未導入） | Markdown プレビュー（FR-007）の構文解析 | [ADR 0003](adr/0003-cpp23-clang-cl-foundation-and-measured-limits.md)。別 target に `/W4 /WX` だけを当て、tag と 3 ファイルの SHA-256 で固定する。導入は FR-007 の Issue で ADR・許可リスト・この表を同時に更新する |
+| — | — | 実行時に別のバイナリとして読み込む依存は 0（`eng/architecture.json` の `runtimeDependencies` は空）。C++ ランタイムは `/MT` で静的に結び、実行ファイルは OS の DLL 以外を import しない（R1・D1） |
+| md4c release-0.5.2（導入済み・ソースを `third_party/md4c` に取り込み） | Markdown プレビュー（FR-007）の構文解析 | [ADR 0003](adr/0003-cpp23-clang-cl-foundation-and-measured-limits.md) / [ADR 0151](adr/0151-md4c-vendored-as-third-party-target-with-digest-check.md)。別 target に `/W4 /WX` だけを当て、3 ファイルの SHA-256 を `eng/conformance-rules.json` の `thirdPartyDigests` で固定する（CNF-013）。モジュールは `eng/architecture.json` の `third_party_md4c` |
 
 版は lock ファイルで固定し、マニフェストに範囲や `*` を書かない。ゲートは lock が更新される状態を拒む。
 

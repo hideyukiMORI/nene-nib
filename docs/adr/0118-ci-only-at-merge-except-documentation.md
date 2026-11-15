@@ -35,3 +35,8 @@ ADR 0021のCI頻度と過去の一律必須check記述を本決定が置き換�
 
 変更した統合道具とCI入口に限定して、文書の無起動、rename/混在変更、CI失敗・異なるheadの拒否、planの無変更を確認する。
 このCI設定変更のPRをマージする際の手動実行を実接続の確認として再利用する。製品ビルド・製品テスト・全件ゲートは実行しない。
+
+## 追補（2026-11-15・#1716）: CI の中身と計測の workflow
+
+- 本文の「CIの中身は…だけ」は ADR 0136 の前の記述。いまの `check.yml` は `check` job（conformance・Git 規約・検証記録・空白）と `build-and-test` job（clang-format・Release の全 target・リンカのシンボル・ctest）の 2 つ（ADR 0136・QLT-012）。
+- `.github/workflows/measure-speed.yml` は label `measure-palette-speed` か手動で起動する計測専用の workflow で、merge の判定には使わない。「マージ直前だけ起動」の対象は `check.yml`。
