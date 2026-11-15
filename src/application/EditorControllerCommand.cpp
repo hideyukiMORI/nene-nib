@@ -442,11 +442,8 @@ void EditorController::accept(const EditCommand &intent)
 {
     const auto &input = state_.command_input();
     // `:s///c` の問いの行の編集（矢印・Backspace・Delete・上下）は答えではない（Vim は無視する）。
-    if (!input.has_value() || substitute_question() != nullptr)
-    {
-        return;
-    }
-    if (rerouted_edit(intent))
+    // 行の種類が受けない編集は rerouted_edit が受け持つ（どちらも行の鍵を数えない）。
+    if (!input.has_value() || substitute_question() != nullptr || rerouted_edit(intent))
     {
         return;
     }
