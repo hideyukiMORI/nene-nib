@@ -434,6 +434,14 @@ void EditorWindow::press_command_control_key(WPARAM word)
     case 'C':
         send(application::CancelCommand{});
         return;
+    // Vim の c_CTRL-U / c_CTRL-W（#1550）。効くのは Vim の `:` `/` `?` の行だけで、ほかの入力行と
+    // 面では controller が何もしない（D82）。
+    case 'U':
+        send(application::EditCommand{core::CommandEdit::erase_to_start});
+        return;
+    case 'W':
+        send(application::EditCommand{core::CommandEdit::erase_word});
+        return;
     // 面が開いていれば Ctrl+P は前の候補（ADR 0150 の決定 2）。`:` と検索の行では面を開く。
     case 'P':
         send_palette_or(core::CommandEdit::complete_previous, application::OpenCommandPalette{});

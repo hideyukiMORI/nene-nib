@@ -43,7 +43,12 @@ struct InputText
 // （input_line_hold）を超える差し込みは文字を変えずに lost を立てる。
 [[nodiscard]] std::expected<InputText, ExFailure> inserted_input(const InputText &input,
                                                                  std::string_view text);
-// 左右・Home / End・Backspace / Delete。補完と一覧の送りはここでは動かない（持つ型が決める）。
+// inserted_input と同じで、Tab だけは文字として入れる（Vim の `/` `?` の行は Tab を文字として
+// 入れて探す・#1643）。ほかの制御文字は同じく閉じた失敗。
+[[nodiscard]] std::expected<InputText, ExFailure> inserted_tab_input(const InputText &input,
+                                                                     std::string_view text);
+// 左右・Home / End・Backspace / Delete・語の前と行頭までの削除（#1550）。補完と一覧の送りは
+// ここでは動かない（持つ型が決める）。
 [[nodiscard]] InputText edited_input(const InputText &input, CommandEdit edit);
 // 行があふれているか（上限を超えている・差し込みを捨てた）。あふれた行の確定は断る（#1568）。
 [[nodiscard]] bool overflows(const InputText &input) noexcept;
