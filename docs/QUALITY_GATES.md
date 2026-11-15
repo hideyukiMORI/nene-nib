@@ -330,24 +330,24 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | ARC-011 | planned | |
 | ARC-012 | 不能 | QLT-010 の手続き |
 | CPP-001 | planned | |
-| CPP-002 | planned | clang-cl `-Wswitch-enum` / `-Wcovered-switch-default` |
-| CPP-003 | active | `-Wold-style-cast`・clang-tidy cppcoreguidelines-pro-type-const-cast（eng/prove-gates.py の反例）。misc-non-private-member-variables はメソッドを持つ型だけで反例は未登録、メソッドの無い aggregate と `mutable` は通る |
+| CPP-002 | active | clang-cl `-Wswitch-enum` / `-Wcovered-switch-default`（eng/prove-gates.py の反例 2 本・ADR 0187）。`if` / `else` の分類はレビュー |
+| CPP-003 | active | `-Wold-style-cast`・clang-tidy cppcoreguidelines-pro-type-const-cast（eng/prove-gates.py の反例）。misc-non-private-member-variables はメソッドを持つ型だけで反例は未登録、メソッドの無い aggregate と `mutable` は通る（`mutable` の例外は adapters の同期原始だけ・ADR 0187） |
 | CPP-004 | active | `-Wzero-as-null-pointer-constant`・clang-tidy clang-analyzer-core.NullDereference / bugprone-unchecked-optional-access（`value()`）（eng/prove-gates.py の反例）。optional の `*` は落ちない（MSVC STL の穴・字句検査は planned）。`-Wuninitialized` は反例未登録 |
 | CPP-005 | active | `[[nodiscard]]`＋`-Wunused-result`（eng/prove-gates.py の反例）。結果型の選択と `catch` の広さはレビュー |
 | CPP-006 | planned | |
 | CPP-007 | planned | 非公開コンストラクタ。`malloc` は許可シンボル外 |
 | CPP-008 | planned | |
-| CPP-009 | active | clang-tidy cppcoreguidelines-pro-type-reinterpret-cast（eng/prove-gates.py の反例）・`#pragma` は CNF-003。そのほかの言語マジックの字句検査は planned |
+| CPP-009 | active | clang-tidy cppcoreguidelines-pro-type-reinterpret-cast（eng/prove-gates.py の反例）・抑制の `#pragma` は CNF-003（`#pragma once` は禁じない・ADR 0187）。そのほかの言語マジックの字句検査は planned |
 | CPP-010 | active | CNF-001（`tests/conformance` の `test_cnf001_*` 5 件・#571）。「常に禁止」の語だけ。文脈次第の語とマクロで生成した名前はレビュー |
 | CPP-011 | active | CNF-002（`tests/conformance` の `test_cnf002_*` 6 件・#571）。無名名前空間の `struct` は字句検査が名前空間として数えるが専用の反例は無い。テンプレート等の完全な分類は未完了 |
-| CPP-012 | planned | clang-tidy readability-* |
+| CPP-012 | active | clang-tidy readability-function-size / readability-function-cognitive-complexity（eng/prove-gates.py の引数の数の反例・ADR 0187）。行数・入れ子・複雑度の反例は未登録 |
 | CPP-013 | active | eng/symbols.py の concurrency 分類（core / application の実ライブラリ）＋ CNF-009 |
 | CPP-014 | planned | eng/symbols.py（setlocale / locale） |
 | CPP-015 | active | CNF-003 ＋ CNF-004（`tests/conformance` の `test_cnf003_*` 6 件・`test_cnf004_*` 6 件・#571）。waiver の理由と解除条件の妥当性はレビュー |
 | CPP-016 | active | `-Werror=vla-cxx-extension`・clang-tidy clang-analyzer-cplusplus.NewDeleteLeaks / bugprone-use-after-move（eng/prove-gates.py の反例）。ASan / UBSan は Debug に結線済みだが反例は未登録。所有と借用の型はレビュー |
 | CPP-017 | planned | platformLibraries（GDI を結べない） |
-| CPP-018 | planned | clang-cl の target feature 検査 ＋ CNF-009 |
-| CPP-019 | planned | CNF-012（表の引数の数とループ・保持はレビュー事項） |
+| CPP-018 | active | clang-cl の target feature 検査（eng/prove-gates.py の反例）＋ CNF-009（ADR 0187）。fallback の存在はレビュー。いまは SIMD の実装が 0 件 |
+| CPP-019 | active | CNF-012（`tests/conformance` の反例・ADR 0187。表の引数の数とループ・保持はレビュー事項） |
 | GIT-001 | planned | PR テンプレート＋CI（`Closes #N`） |
 | GIT-002 | planned | ruleset＋CI（head ブランチ名） |
 | GIT-003 | active | `.githooks/commit-msg` → eng/validate-commit-message.ps1 → eng/git-conventions.py ＋ CI の eng/validate-git.ps1（全コミットと PR タイトル）・tests/conformance の GitChecks |
