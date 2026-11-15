@@ -33,6 +33,7 @@ namespace nenenib::core
 using detail::backward_characters;
 using detail::block_copied_body;
 using detail::block_insert_edit;
+using detail::block_insert_moved;
 using detail::display_view;
 using detail::erased_nothing;
 using detail::failed;
@@ -678,7 +679,8 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     const auto &[head, middle, rest] = line;
     const std::size_t length =
         (head.end.value - head.begin.value) + middle.size() + (rest.end.value - rest.begin.value);
-    if (length <= insert.line_bytes)
+    // 読み始めが入る前の 1 行目の外なら（行の外を読む）写さない（#1687）。
+    if (length <= insert.line_bytes || insert.at_byte > insert.line_bytes)
     {
         return std::nullopt;
     }
@@ -774,6 +776,11 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     std::string body = block_carried_text(text, insert);
     body += growth.value().first;
     body = block_copied_body(insert, std::move(body));
+    // 写す本文が字の途中で始まるか切れるなら写さない（Nib は不正な UTF-8 を作らない・#1687）。
+    if (leading_continuations(body) != 0 || whole_code_points(body) != body.size())
+    {
+        return step;
+    }
     if (!block_copy_fits(text, insert, body, view.document_limit))
     {
         return std::nullopt;
@@ -1111,6 +1118,15 @@ namespace
         // を呼ばない）。
         next.insert_start = start;
         return next;
+    }
+    // 矩形の INSERT の覚えは、移動の後に打った最初の鍵（Vim の stop_arrow・Esc は呼ばない）で
+    // 打ち始めへ置き直す（#1687）。
+    if (next.block_insert.has_value())
+    {
+        const auto *const special = std::get_if<VimSpecialKey>(&key);
+        const bool escaping = special != nullptr && *special == VimSpecialKey::escape;
+        const bool stopped = start.moved && !moving && !state.input_wait.has_value() && !escaping;
+        next.block_insert = block_insert_moved(next.block_insert.value(), view, key, stopped);
     }
     if (moving)
     {

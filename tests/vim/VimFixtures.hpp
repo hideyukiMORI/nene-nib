@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 2d78d4045ff83de16a08f3480924b3cb89b26d325e06b6226874d10370d009f3 / 5983 fixtures
+// fixtures.json: sha256 a96684a731478f5336b6b9c7a86f11a7f380eeb245db87d42c4bb8868d689160 / 6041 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 5983> vim_fixtures{{
+constexpr std::array<VimFixture, 6041> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -3214,6 +3214,64 @@ constexpr std::array<VimFixture, 5983> vim_fixtures{{
     {"block-insert-c-ctrl-w", "abcdef\nghijkl\nmnopqr", "ll<C-v>jjlcxy<C-w>z<Esc>", "abzef\nghzkl\nmnzqr", 1, 3, "cd\nij\nop", "\0262", std::nullopt},
     {"block-insert-I-ctrl-r", "abcdef\nghijkl\nmnopqr", "yyjl<C-v>jIa<C-r>\"b<Esc>", "abcdef\ngaabcdef\nbhijkl\nmnopqr", 3, 1, "abcdef\n", "V", std::nullopt},
     {"block-insert-I-ctrl-r-chars", "abcdef\nghijkl\nmnopqr", "yl<C-v>jjI<C-r>\"<Esc>", "aabcdef\naghijkl\namnopqr", 1, 1, "a", "v", std::nullopt},
+    {"block-insert-moved-issue-1", "abc\nabc", "<C-v>jA<Left>Z<Esc>", "Zabc\nZabc", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-issue-2", "あい\nab", "<C-v>jA<Left>Z<Esc>", "Zあい\nZab", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-issue-3", "abc\nabc", "<C-v>jI<Right>Z<Esc>", "aZbc\naZbc", 1, 2, "", "", std::nullopt},
+    {"block-insert-moved-issue-4", "abcdef\nabcdef\nabcdef", "<C-v>jj$A<Del>Z<Esc>", "abcdefZabcdef\nabcdef", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-issue-5", "abcdef\nabcdef\nabcdef", "<C-v>jjcZ<Left>Y<Esc>", "YZbcdef\nYZbcdef\nYZbcdef", 1, 1, "a\na\na", "\0261", std::nullopt},
+    {"block-insert-moved-bs-join", "abcdef\nabcdef\nabcdef", "j<C-v>jI<BS>Z<Esc>", "abcdefZabcdef\nabcdef", 1, 7, "", "", std::nullopt},
+    {"block-insert-moved-bs-join-A", "abcdef\nabcdef\nabcdef", "j<C-v>jI<BS><CR>Z<Esc>", "abcdef\nZabcdef\nZabcdef", 2, 1, "", "", std::nullopt},
+    {"block-insert-moved-up", "abcdef\nabcdef\nabcdef", "j<C-v>jI<Up>Z<Down><Esc>", "Zabcdef\nabcdef\nabcdef", 2, 1, "", "", std::nullopt},
+    {"block-insert-moved-asc-s0-I-left", "abcdef\nabcdef\nabcdef", "<C-v>jjI<Left>Z<Esc>", "Zabcdef\nZabcdef\nZabcdef", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-asc-s0-I-right", "abcdef\nabcdef\nabcdef", "<C-v>jjI<Right>Z<Esc>", "aZbcdef\naZbcdef\naZbcdef", 1, 2, "", "", std::nullopt},
+    {"block-insert-moved-asc-s0-I-home", "abcdef\nabcdef\nabcdef", "<C-v>jjI<Home>Z<Esc>", "Zabcdef\nZabcdef\nZabcdef", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-asc-s0-I-end", "abcdef\nabcdef\nabcdef", "<C-v>jjI<End>Z<Esc>", "abcdefZ\nabcdefZ\nabcdefZ", 1, 7, "", "", std::nullopt},
+    {"block-insert-moved-asc-s0-I-back", "abcdef\nabcdef\nabcdef", "<C-v>jjI<Right><Left>Z<Esc>", "Zabcdef\nZabcdef\nZabcdef", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-asc-s0-I-zleft", "abcdef\nabcdef\nabcdef", "<C-v>jjIZ<Left>Y<Esc>", "YZabcdef\nYZabcdef\nYZabcdef", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-asc-s0-I-right2", "abcdef\nabcdef\nabcdef", "<C-v>jjI<Right><Right>Z<Esc>", "abZcdef\nabZcdef\nabZcdef", 1, 3, "", "", std::nullopt},
+    {"block-insert-moved-asc-s0-A-left", "abcdef\nabcdef\nabcdef", "<C-v>jjA<Left>Z<Esc>", "Zabcdef\nZabcdef\nZabcdef", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-asc-s0-A-home", "abcdef\nabcdef\nabcdef", "<C-v>jjA<Home>Z<Esc>", "Zabcdef\nZabcdef\nZabcdef", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-asc-s0-A-back", "abcdef\nabcdef\nabcdef", "<C-v>jjA<Right><Left>Z<Esc>", "aZbcdef\naZbcdef\naZbcdef", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-asc-s0-A-zleft", "abcdef\nabcdef\nabcdef", "<C-v>jjAZ<Left>Y<Esc>", "aYZbcdef\naYZbcdef\naYZbcdef", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-asc-s0-DA-right", "abcdef\nabcdef\nabcdef", "<C-v>jj$A<Right>Z<Esc>", "abcdefZ\nabcdefZ\nabcdefZ", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-asc-s0-DA-zleft", "abcdef\nabcdef\nabcdef", "<C-v>jj$AZ<Left>Y<Esc>", "abcdefYZ\nabcdefYZ\nabcdefYZ", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-asc-s0-c-left", "abcdef\nabcdef\nabcdef", "<C-v>jjc<Left>Z<Esc>", "Zbcdef\nZbcdef\nZbcdef", 1, 1, "a\na\na", "\0261", std::nullopt},
+    {"block-insert-moved-asc-s0-c-zleft", "abcdef\nabcdef\nabcdef", "<C-v>jjcZ<Left>Y<Esc>", "YZbcdef\nYZbcdef\nYZbcdef", 1, 1, "a\na\na", "\0261", std::nullopt},
+    {"block-insert-moved-asc-s0-C-zright", "abcdef\nabcdef\nabcdef", "<C-v>jjCZ<Right>Y<Esc>", "ZY\nZY\nZY", 1, 2, "abcdef\nabcdef\nabcdef", "\0266", std::nullopt},
+    {"block-insert-moved-asc-s0-C-end", "abcdef\nabcdef\nabcdef", "<C-v>jjC<End>Z<Esc>", "Z\nZ\nZ", 1, 1, "abcdef\nabcdef\nabcdef", "\0266", std::nullopt},
+    {"block-insert-moved-asc-s1-I-right", "abcdef\nabcdef\nabcdef", "l<C-v>jjlI<Right>Z<Esc>", "abZcdef\nabZcdef\nabZcdef", 1, 3, "", "", std::nullopt},
+    {"block-insert-moved-asc-s1-I-back", "abcdef\nabcdef\nabcdef", "l<C-v>jjlI<Right><Left>Z<Esc>", "aZbcdef\naZbcdef\naZbcdef", 1, 2, "", "", std::nullopt},
+    {"block-insert-moved-asc-s1-A-home", "abcdef\nabcdef\nabcdef", "l<C-v>jjlA<Home>Z<Esc>", "Zabcdef\nZabcdef\nZabcdef", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-asc-s1-A-left2", "abcdef\nabcdef\nabcdef", "l<C-v>jjlA<Left><Left>Z<Esc>", "aZbcdef\naZbcdef\naZbcdef", 1, 2, "", "", std::nullopt},
+    {"block-insert-moved-asc-s1-c-back", "abcdef\nabcdef\nabcdef", "l<C-v>jjlc<Right><Left>Z<Esc>", "aZdef\naZdef\naZdef", 1, 2, "bc\nbc\nbc", "\0262", std::nullopt},
+    {"block-insert-moved-asc-s0-I-right-dot", "abcdef\nabcdef\nabcdef", "<C-v>jjI<Right>Z<Esc>j.", "aZbcdef\naZZbcdef\naZbcdef", 2, 2, "", "", std::nullopt},
+    {"block-insert-moved-asc-s0-A-left-dot", "abcdef\nabcdef\nabcdef", "<C-v>jjA<Left>Z<Esc>j.", "Zabcdef\nZZabcdef\nZabcdef", 2, 1, "", "", std::nullopt},
+    {"block-insert-moved-asc-s1-I-right-dot", "abcdef\nabcdef\nabcdef", "l<C-v>jjlI<Right>Z<Esc>j.", "abZcdef\nabZZcdef\nabZcdef", 2, 3, "", "", std::nullopt},
+    {"block-insert-moved-wide-s0-A-left-dot", "あいう\nかきく\nさしす", "<C-v>jjA<Left>Z<Esc>j.", "Zあいう\nZZかきく\nZさしす", 2, 1, "", "", std::nullopt},
+    {"block-insert-moved-wide-s0-I-home", "あいう\nかきく\nさしす", "<C-v>jjI<Home>Z<Esc>", "Zあいう\nZかきく\nZさしす", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-wide-s0-A-left", "あいう\nかきく\nさしす", "<C-v>jjA<Left>Z<Esc>", "Zあいう\nZかきく\nZさしす", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-wide-s0-A-back", "あいう\nかきく\nさしす", "<C-v>jjA<Right><Left>Z<Esc>", "あZいう\nかZきく\nさZしす", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-wide-s0-c-zleft", "あいう\nかきく\nさしす", "<C-v>jjcZ<Left>Y<Esc>", "YZいう\nYZきく\nYZしす", 1, 1, "あ\nか\nさ", "\0262", std::nullopt},
+    {"block-insert-moved-wide-s1-I-back", "あいう\nかきく\nさしす", "l<C-v>jjlI<Right><Left>Z<Esc>", "あZいう\nかZきく\nさZしす", 1, 4, "", "", std::nullopt},
+    {"block-insert-moved-wide-s1-A-left2", "あいう\nかきく\nさしす", "l<C-v>jjlA<Left><Left>Z<Esc>", "あZいう\nかZきく\nさZしす", 1, 4, "", "", std::nullopt},
+    {"block-insert-moved-wide-s0-I-right", "あいう\nかきく\nさしす", "<C-v>jjI<Right>Z<Esc>", "あZいう\nかきく\nさしす", 1, 4, "", "", std::nullopt},
+    {"block-insert-moved-tab-s0-I-right", "a\tbcd\nabcdef\nab\tc", "<C-v>jjI<Right>Z<Esc>", "aZ\tbcd\naZbcdef\naZb\tc", 1, 2, "", "", std::nullopt},
+    {"block-insert-moved-tab-s0-A-back", "a\tbcd\nabcdef\nab\tc", "<C-v>jjA<Right><Left>Z<Esc>", "aZ\tbcd\naZbcdef\naZb\tc", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-tab-s1-A-back", "a\tbcd\nabcdef\nab\tc", "l<C-v>jjlA<Right><Left>Z<Esc>", "a\tbZcd\nabcdef   Z\nab\tcZ", 1, 2, "", "", std::nullopt},
+    {"block-insert-moved-tab-s1-A-zleft", "a\tbcd\nabcdef\nab\tc", "l<C-v>jjlAZ<Left>Y<Esc>", "a\tbYZcd\nabcdef   YZ\nab\tcYZ", 1, 2, "", "", std::nullopt},
+    {"block-insert-moved-tab-s1-I-back", "a\tbcd\nabcdef\nab\tc", "l<C-v>jjlI<Right><Left>Z<Esc>", "aZ\tbcd\naZbcdef\naZb\tc", 1, 2, "", "", std::nullopt},
+    {"block-insert-moved-short-s0-I-right2", "abcdef\nab\nabcdef", "<C-v>jjI<Right><Right>Z<Esc>", "abZcdef\nabZ\nabZcdef", 1, 3, "", "", std::nullopt},
+    {"block-insert-moved-short-s1-A-back", "abcdef\nab\nabcdef", "l<C-v>jjlA<Right><Left>Z<Esc>", "abcZdef\nab Z\nabcZdef", 1, 2, "", "", std::nullopt},
+    {"block-insert-moved-short-s1-I-end", "abcdef\nab\nabcdef", "l<C-v>jjlI<End>Z<Esc>", "abcdefZ\nab\nabcdefZ", 1, 7, "", "", std::nullopt},
+    {"block-insert-moved-empty-s0-I-left", "abc\n\nabc", "<C-v>jjI<Left>Z<Esc>", "Zabc\nZ\nZabc", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-empty-s0-A-back", "abc\n\nabc", "<C-v>jjA<Right><Left>Z<Esc>", "aZbc\n Z\naZbc", 1, 1, "", "", std::nullopt},
+    {"block-insert-moved-empty-s1-A-right", "abc\n\nabc", "l<C-v>jjlA<Right>Z<Esc>", "abcZ\n   Z\nabcZ", 1, 2, "", "", std::nullopt},
+    {"block-insert-moved-empty-s1-c-zleft", "abc\n\nabc", "l<C-v>jjlcZ<Left>Y<Esc>", "aYZ\n\naYZ", 1, 2, "bc\n  \nbc", "\0262", std::nullopt},
+    {"block-insert-moved-mixw-s0-I-right2", "abあいう\naあいう\nabcdef", "<C-v>jjI<Right><Right>Z<Esc>", "abZあいう\na Zあいう\nabZcdef", 1, 3, "", "", std::nullopt},
+    {"block-insert-moved-mixw-s1-I-right", "abあいう\naあいう\nabcdef", "l<C-v>jjlI<Right>Z<Esc>", "abZあいう\na Zあいう\nabZcdef", 1, 3, "", "", std::nullopt},
+    {"block-insert-moved-mixw-s1-c-back", "abあいう\naあいう\nabcdef", "l<C-v>jjlc<Right><Left>Z<Esc>", "aZ いう\naZいう\naZdef", 1, 2, "b \nあ\nbc", "\0262", std::nullopt},
+    {"block-insert-moved-macro-I-right", "abcdef\nabcdef\nabcdef", "@a", "aZbcdef\naZbcdef\naZbcdef", 1, 2, "", "", std::nullopt, VimMacroFixture{'a', "<C-v>jjI<Right>Z<Esc>"}},
+    {"block-insert-moved-macro-A-left", "abcdef\nabcdef\nabcdef", "l@a", "aZbcdef\naZbcdef\naZbcdef", 1, 2, "", "", std::nullopt, VimMacroFixture{'a', "<C-v>jjlA<Left><Left>Z<Esc>"}},
     {"jumplist-back", "a\nb\nc\nd\ne", "Ggg3G<C-o>x", "\nb\nc\nd\ne", 1, 1, "a", "v", std::nullopt},
     {"jumplist-forward", "a\nb\nc\nd\ne", "Ggg3G<C-o><Tab>x", "a\nb\n\nd\ne", 3, 1, "c", "v", std::nullopt},
     {"jumplist-tab", "a\nb\nc\nd\ne", "Ggg3G<C-o><C-o><Tab>x", "\nb\nc\nd\ne", 1, 1, "a", "v", std::nullopt},
