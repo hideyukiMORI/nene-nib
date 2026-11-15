@@ -12,20 +12,21 @@ namespace nenenib::core
 VimPatternTrace::VimPatternTrace(const VimPattern &pattern, std::string_view line,
                                  VimPatternMatch match)
     : pattern_(pattern), line_(line), match_(match),
-      marked_(pattern.program_.size() * (match.end - match.begin + 1), false)
+      marked_(pattern.program_.size() * (match.whole_end - match.whole_begin + 1), false)
 {
-    path_.reserve(match.end - match.begin + pattern.program_.size() + 1);
+    path_.reserve(match.whole_end - match.whole_begin + pattern.program_.size() + 1);
 }
 
 std::size_t VimPatternTrace::cell(const VimPatternTraceFrame &frame) const noexcept
 {
-    return frame.pc * (match_.end - match_.begin + 1) + (frame.at - match_.begin);
+    return frame.pc * (match_.whole_end - match_.whole_begin + 1) + (frame.at - match_.whole_begin);
 }
 
 bool VimPatternTrace::marked_on_entry(std::size_t pc) const
 {
     const VimPatternOpcode opcode = pattern_.program_.at(pc).opcode;
-    return opcode == VimPatternOpcode::atom || opcode == VimPatternOpcode::open;
+    return opcode == VimPatternOpcode::atom || opcode == VimPatternOpcode::open ||
+           opcode == VimPatternOpcode::match_begin;
 }
 
 std::optional<VimPatternTraceFrame> VimPatternTrace::atom_child(const VimPatternTraceFrame &top,
@@ -39,7 +40,7 @@ std::optional<VimPatternTraceFrame> VimPatternTrace::atom_child(const VimPattern
                    : std::nullopt;
     }
     const auto eaten = pattern_.stepped(line_, unit, top.at);
-    if (!eaten.has_value() || eaten.value() > match_.end)
+    if (!eaten.has_value() || eaten.value() > match_.whole_end)
     {
         return std::nullopt;
     }
@@ -60,6 +61,8 @@ VimPatternTrace::first_child(const VimPatternTraceFrame &top) const
         return VimPatternTraceFrame{top.at, instruction.first, 0};
     case VimPatternOpcode::open:
     case VimPatternOpcode::close:
+    case VimPatternOpcode::match_begin:
+    case VimPatternOpcode::match_end:
         return VimPatternTraceFrame{top.at, top.pc + 1, 0};
     case VimPatternOpcode::accept:
         return std::nullopt;
@@ -101,8 +104,8 @@ void VimPatternTrace::captures_recorded(VimPatternCaptures &captures) const
         }
         if (instruction.opcode == VimPatternOpcode::close)
         {
-            captures.at(instruction.first + 1) =
-                VimPatternMatch{starts.at(instruction.first), frame.at};
+            const std::size_t start = starts.at(instruction.first);
+            captures.at(instruction.first + 1) = VimPatternMatch{start, frame.at, start, frame.at};
         }
     }
 }
@@ -122,12 +125,12 @@ bool VimPatternTrace::cut(const VimPatternTraceFrame &top)
 bool VimPatternTrace::accepted(const VimPatternTraceFrame &top) const
 {
     return pattern_.program_.at(top.pc).opcode == VimPatternOpcode::accept &&
-           top.at == match_.end && VimPattern::ends_a_character(line_, top.at);
+           top.at == match_.whole_end && VimPattern::ends_a_character(line_, top.at);
 }
 
 bool VimPatternTrace::walked(VimPatternCaptures &captures)
 {
-    path_.push_back(VimPatternTraceFrame{match_.begin, 0, 0});
+    path_.push_back(VimPatternTraceFrame{match_.whole_begin, 0, 0});
     while (!path_.empty())
     {
         VimPatternTraceFrame &top = path_.back();

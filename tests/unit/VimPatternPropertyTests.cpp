@@ -11,7 +11,8 @@
 // 原子 1 つに付く量（ADR 0184 の決定 2）は、乱数のパターンを試験の中の素朴な後戻りの模型と照合して
 // 当たりと群の範囲が同じになることを見る（verify_quantifiers_follow_the_model）。
 // 選択と群に付く量（決定 3）も同じく、木の形の後戻りの模型と照合する
-// （verify_branches_follow_the_model）。状態集合の道の答えは、直す前の評価器の答えの
+// （verify_branches_follow_the_model）。`\zs` `\ze`（決定 5）は同じ木の葉に混ぜ、当たりと置き直した
+// 範囲を照合する（verify_bounds_follow_the_model）。状態集合の道の答えは、直す前の評価器の答えの
 // 畳みと比べる（verify_state_route_keeps_its_answers・#1584）。
 // 回数は Debug（ASan）で scope 全体が 1 秒以内に終わる値。50 倍の走りは rounds を手で 50 にして
 // 回す（commit しない）。生成器は std::mt19937_64 の剰余だけを使い、分布の型は使わない。
@@ -128,7 +129,7 @@ constexpr std::array<Unsupported, 22> unsupported_fragments{{
     {"\\%d", VimPatternFailure::escape},
     {"\\_s", VimPatternFailure::escape},
     {"\\@", VimPatternFailure::escape},
-    {"\\zs", VimPatternFailure::escape},
+    {"\\zx", VimPatternFailure::escape},
     {"\\n", VimPatternFailure::escape},
     {"\\", VimPatternFailure::escape},
     {"~", VimPatternFailure::previous_substitute},
@@ -980,13 +981,27 @@ using TreeFound = std::optional<std::pair<std::size_t, TreeAnswer>>;
 constexpr std::size_t tree_no_capture = std::string_view::npos;
 // 模型の歩数の上限（入れ子の星で指数になる組は数えずに外す）。
 constexpr std::size_t tree_budget = 100000U;
+// 葉の原子の番号のうち `\zs`（この番号）と `\ze`（次の番号）（ADR 0184 の決定 5・量を付けない・
+// bounds の生成器だけが作る）。
+constexpr std::size_t tree_match_begin = model_atoms.size();
+
+// 葉の綴り（原子と量か、`\zs` `\ze`）。
+[[nodiscard]] std::string leaf_text(std::size_t atom, std::size_t form, std::size_t n,
+                                    std::size_t m)
+{
+    if (atom >= model_atoms.size())
+    {
+        return atom == tree_match_begin ? "\\zs" : "\\ze";
+    }
+    return std::string{model_atoms.at(atom)} + quantity_text(form, n, m);
+}
 
 [[nodiscard]] std::string tree_text(const Tree &tree, std::size_t node)
 {
     const auto &[group, atom, form, n, m, capture, branches] = tree.at(node);
     if (!group)
     {
-        return std::string{model_atoms.at(atom)} + quantity_text(form, n, m);
+        return leaf_text(atom, form, n, m);
     }
     std::string text;
     for (std::size_t branch = 0; branch < branches.size(); ++branch)
@@ -1005,14 +1020,19 @@ constexpr std::size_t tree_budget = 100000U;
 }
 
 // 枝 1 つの項目（depth は群の入れ子の深さ・captures は振った群の番号の数・番号は `\(` の順）。
-[[nodiscard]] std::size_t tree_node(Random &random, Tree &tree, std::size_t depth,
+// bounds なら葉の 4 つに 1 つを `\zs` か `\ze` にする（偽なら乱数の消費は bounds の無い形と同じ）。
+[[nodiscard]] std::size_t tree_node(Random &random, Tree &tree, std::pair<std::size_t, bool> depth,
                                     std::size_t &captures)
 {
-    const bool group = depth < 2U && below(random, 3U) == 0U;
+    const bool group = depth.first < 2U && below(random, 3U) == 0U;
     const std::size_t index = tree.size();
     tree.emplace_back(group, below(random, model_atoms.size()), below(random, model_forms),
                       below(random, 3U), below(random, 3U), tree_no_capture,
                       std::vector<TreeBranch>{});
+    if (!group && depth.second && below(random, 4U) == 0U)
+    {
+        std::get<1>(tree.at(index)) = tree_match_begin + below(random, 2U);
+    }
     if (!group)
     {
         return index;
@@ -1027,14 +1047,14 @@ constexpr std::size_t tree_budget = 100000U;
         branch.resize(below(random, 3U));
         for (std::size_t &item : branch)
         {
-            item = tree_node(random, tree, depth + 1U, captures);
+            item = tree_node(random, tree, {depth.first + 1U, depth.second}, captures);
         }
     }
     std::get<6>(tree.at(index)) = std::move(branches);
     return index;
 }
 
-[[nodiscard]] Tree random_tree(Random &random)
+[[nodiscard]] Tree random_tree(Random &random, bool bounds)
 {
     Tree tree;
     tree.emplace_back(true, 0U, 0U, 0U, 0U, tree_no_capture, std::vector<TreeBranch>{});
@@ -1045,7 +1065,7 @@ constexpr std::size_t tree_budget = 100000U;
         branch.resize(1U + below(random, 3U));
         for (std::size_t &item : branch)
         {
-            item = tree_node(random, tree, 0U, captures);
+            item = tree_node(random, tree, {0U, bounds}, captures);
         }
     }
     std::get<6>(tree.at(0)) = std::move(branches);
@@ -1105,6 +1125,10 @@ class TreeModel final
         }
         tasks.emplace_back(std::uint8_t{0}, node, branch, item + 1U);
         const std::size_t child = items.at(item);
+        if (!std::get<0>(tree_.at(child)) && std::get<1>(tree_.at(child)) >= model_atoms.size())
+        {
+            return bounded(std::move(tasks), std::get<1>(tree_.at(child)), pos, captures);
+        }
         if (!std::get<0>(tree_.at(child)))
         {
             return eaten(tasks, child, pos, captures);
@@ -1194,6 +1218,16 @@ class TreeModel final
         return std::nullopt;
     }
 
+    // `\zs` `\ze`（ADR 0184 の決定 5）: 群 0 の欄に、置き直した始まり（`\zs` は前の `\ze`
+    // を消す）か 終わりを書いて続ける（Vim 9.1 の NFA_ZSTART と NFA_ZEND・複数行の照合の規則）。
+    [[nodiscard]] std::optional<TreeAnswer> bounded(TreeTasks tasks, std::size_t atom,
+                                                    std::size_t pos, TreeCaptures captures)
+    {
+        captures.at(0) = atom == tree_match_begin ? std::pair{pos, tree_no_capture}
+                                                  : std::pair{captures.at(0).first, pos};
+        return run(std::move(tasks), pos, captures);
+    }
+
     const Tree &tree_;
     std::string_view line_;
     std::size_t budget_ = tree_budget;
@@ -1243,9 +1277,16 @@ class TreeModel final
         return {};
     }
     const auto &[start, answer] = expected.value().value();
-    if (found.value().begin != start || found.value().end != answer.first)
+    if (found.value().whole_begin != start || found.value().whole_end != answer.first)
     {
         return "the matcher and the branch model disagree on the range";
+    }
+    // `\zs` `\ze` で置き直した範囲（群 0 の欄・通らなければパターン全体の端）。
+    const auto [placed_begin, placed_end] = answer.second.at(0);
+    if (found.value().begin != (placed_begin == tree_no_capture ? start : placed_begin) ||
+        found.value().end != (placed_end == tree_no_capture ? answer.first : placed_end))
+    {
+        return "the matcher and the branch model disagree on the \\zs \\ze range";
     }
     return same_tree_groups(pattern.captured(line, found.value()), answer.second)
                ? std::string_view{}
@@ -1295,7 +1336,7 @@ void verify_branches_follow_the_model()
     constexpr std::size_t cases = 6U * family_cases;
     for (std::size_t round = 0; round < cases; ++round)
     {
-        const Tree tree = random_tree(random);
+        const Tree tree = random_tree(random, false);
         const std::string line = model_line(random);
         tree_counted(tree, line, counts);
         const std::string_view violation = tree_violation(tree, line);
@@ -1310,6 +1351,131 @@ void verify_branches_follow_the_model()
     expect(broken == 0U, "branches and group multis match and capture like the branch model");
     expect(counts.at(0) >= cases / 4U && counts.at(2) >= cases / 2U && counts.at(1) <= cases / 20U,
            "the branch model cases take the program route, include matches and rarely run out");
+}
+
+// 1 つの開始位置での、当たりの有無・パターン全体の範囲・置き直した範囲の違い（空なら同じ）。群は
+// 比べない: Vim 9.1 は `\zs` を群の開きと同じく同じ位置で 2 度目は辿らないので、後戻りの模型と群の
+// 値が分かれる形がある（`\(\zs\(\|…\)\)…\(\ze.*\)` は `aabc` で `\3` が `aabc`・Vim と Nib は
+// 同じ・2026-11-14 に実測）。群の値は fixture と verify_branches_follow_the_model が見る。
+[[nodiscard]] std::string_view from_bounds_violation(const VimPattern &pattern, const Tree &tree,
+                                                     std::string_view line, std::size_t from)
+{
+    TreeModel model(tree, line);
+    const auto expected = model.matched(from);
+    if (!expected.has_value())
+    {
+        return {};
+    }
+    const Found found = pattern.matched(line, from);
+    if (found.has_value() != expected.value().has_value())
+    {
+        return "the matcher and the bounds model disagree on a match";
+    }
+    if (!found.has_value())
+    {
+        return {};
+    }
+    const auto &[start, answer] = expected.value().value();
+    const auto [placed_begin, placed_end] = answer.second.at(0);
+    const bool same =
+        found.value().whole_begin == start && found.value().whole_end == answer.first &&
+        found.value().begin == (placed_begin == tree_no_capture ? start : placed_begin) &&
+        found.value().end == (placed_end == tree_no_capture ? answer.first : placed_end);
+    return same ? std::string_view{} : "the matcher and the bounds model disagree on the range";
+}
+
+[[nodiscard]] std::string_view bounds_violation(const Tree &tree, std::string_view line)
+{
+    const std::string pattern = tree_text(tree, 0);
+    const Parsed parsed =
+        VimPattern::parse(pattern, VimSearchDirection::forward, VimPatternCase::sensitive);
+    if (!parsed.has_value())
+    {
+        return "a pattern of the bounds model is refused";
+    }
+    for (const std::size_t from : {std::size_t{0}, line.size() / 2U, line.size()})
+    {
+        const std::string_view violation = from_bounds_violation(parsed.value(), tree, line, from);
+        if (!violation.empty())
+        {
+            return violation;
+        }
+    }
+    return case_violation({pattern, std::string{line}});
+}
+
+// 木から `\zs` `\ze` の葉を抜いた木（節の番号は変えず、枝の項目から外すだけ）。
+[[nodiscard]] Tree without_bounds(Tree tree)
+{
+    const auto bound = [&tree](std::size_t item)
+    { return !std::get<0>(tree.at(item)) && std::get<1>(tree.at(item)) >= model_atoms.size(); };
+    for (TreeNode &node : tree)
+    {
+        for (TreeBranch &branch : std::get<6>(node))
+        {
+            std::erase_if(branch, bound);
+        }
+    }
+    return tree;
+}
+
+// bounds の数え（`\zs` `\ze` を含む組・置き直した範囲がパターン全体の範囲と違う組）。
+void bounds_counted(const Tree &tree, std::string_view line, std::array<std::size_t, 2> &bounds)
+{
+    const Parsed parsed = VimPattern::parse(tree_text(tree, 0), VimSearchDirection::forward,
+                                            VimPatternCase::sensitive);
+    if (!parsed.has_value())
+    {
+        return;
+    }
+    bounds.at(0) += parsed.value().bounded() ? 1U : 0U;
+    const Found found = parsed.value().matched(line, 0U);
+    const bool moved = found.has_value() && (found.value().begin != found.value().whole_begin ||
+                                             found.value().end != found.value().whole_end);
+    bounds.at(1) += moved ? 1U : 0U;
+}
+
+// `\zs` `\ze` を葉に混ぜた木（ADR 0184 の決定 5・固定 seed 9021・verify_branches_follow_the_model
+// の列は変えない）の当たり・パターン全体の範囲・置き直した範囲が模型と同じか（群は
+// from_bounds_violation
+// の理由で比べない）。印を抜いた木で模型と照合器が既に違う組は外す。数えるのは、
+// 当たりのある組・模型の歩数が尽きた組・`\zs` `\ze` を含む組・置き直した範囲がパターン全体の範囲と
+// 違う組・外した組（2026-11-14 の値は 1,200 組のうち 1,147・0・775・92・2）。
+void verify_bounds_follow_the_model()
+{
+    Random random{9021U};
+    std::size_t broken = 0;
+    std::array<std::size_t, 3> counts{};
+    // `\zs` `\ze` を含む組と、置き直した範囲がパターン全体の範囲と違う組の数。
+    std::array<std::size_t, 2> bounds{};
+    // 印を抜いた木で模型と照合器が既に違う組（模型の空の周の読みが Vim と違う形・数えずに外す）。
+    std::size_t outside = 0;
+    constexpr std::size_t cases = 6U * family_cases;
+    for (std::size_t round = 0; round < cases; ++round)
+    {
+        const Tree tree = random_tree(random, true);
+        const std::string line = model_line(random);
+        tree_counted(tree, line, counts);
+        bounds_counted(tree, line, bounds);
+        if (!tree_violation(without_bounds(tree), line).empty())
+        {
+            ++outside;
+            continue;
+        }
+        const std::string_view violation = bounds_violation(tree, line);
+        if (!violation.empty() && broken++ == 0U)
+        {
+            std::fprintf(stderr, "  bounds model: %.*s\n    %s on %s\n",
+                         static_cast<int>(violation.size()), violation.data(),
+                         tree_text(tree, 0).c_str(), line.c_str());
+            print_bytes("pattern", tree_text(tree, 0));
+            print_bytes("line", line);
+        }
+    }
+    expect(broken == 0U, "\\zs and \\ze place the match like the branch model");
+    expect(counts.at(0) >= cases / 4U && counts.at(1) <= cases / 20U &&
+               bounds.at(0) >= cases / 3U && bounds.at(1) >= cases / 20U && outside <= cases / 20U,
+           "the bounds model cases include matches, \\zs \\ze and moved ranges");
 }
 
 // ---------------------------------------------------------------- 状態集合の道の答え（#1584）
@@ -1470,6 +1636,7 @@ void verify_vim_pattern_property_scope()
     verify_known_cases();
     verify_quantifiers_follow_the_model();
     verify_branches_follow_the_model();
+    verify_bounds_follow_the_model();
     verify_state_route_keeps_its_answers();
 }
 } // namespace nenenib::tests
