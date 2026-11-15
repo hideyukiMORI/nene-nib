@@ -14,6 +14,8 @@ inline constexpr std::size_t maximum_decoded_document_bytes = std::size_t{64} * 
 // 退避の本文を符号化した後の最大（読み戻しの上限・ADR 0159 の決定 7・L-4）。計画は UTF-8 の本文の
 // バイト数で maximum_decoded_document_bytes まで書くので、読み戻しはその本文を最も膨らむ符号化
 // （UTF-16 は 1 バイトが 2 バイト）にして BOM（最大 3 バイト）を足した大きさまで読む。
+// 一覧の版 2（ADR 0137 の追補 #1688）の本文は UTF-8 だけなので、この上限は版 1 の残骸（文書の
+// 符号化で書いた本文）のためのもの。
 inline constexpr std::size_t maximum_encoded_autosave_bytes =
     maximum_decoded_document_bytes * 2U + 3U;
 } // namespace nenenib::core

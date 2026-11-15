@@ -1,30 +1,42 @@
-// scope `--autosave-restore-property` の性質の試験（#1290・ADR 0137 の決定 6・ADR 0042）。
-// 起動時の復元（EditorController の autosave_remnants と RestoreAutosave）に、固定 seed の決定的な
-// 生成器で作った残骸の列（本文の無い残骸・正しい UTF-8 / UTF-8 BOM / UTF-16 LE / BE の本文・
-// でたらめなバイト列・壊れた UTF-8・UTF-32 の BOM・奇数長の UTF-16・孤立したサロゲート）を替え玉の
-// port ScriptedAutosave から渡し、次を確かめる。
+// scope `--autosave-restore-property` の性質の試験（#1290・#1688・ADR 0137 の決定 6 と追補・ADR
+// 0042）。 前半（#1688）は退避 → 復元の往復。固定 seed の決定的な生成器で作った文書（UTF-8 / UTF-8
+// BOM / UTF-16 LE / BE / Shift_JIS（替え玉の CP932・CP932
+// で表せない字を含む・書きの変換は失敗を返す）・ LF / CRLF / 改行なし）を開き、Vim
+// の鍵で変え（改行なしまで削る形を含む）、保存の形（文字コード・
+// 改行の形）を選ぶことがあり、合図で退避する。その写しを次の起動の残骸（一覧は形をそのまま運ぶ）
+// として別の Editing で戻し、次を確かめる。
+//   R1. 未保存の文書は必ず退避される（CP932 で表せない字があっても）。
+//   R2. 復元 == 退避の時点の（本文・文字コード・保存の改行の形・本文の改行の形）で、未保存。
+//   R3. 戻したタブの退避は、元の退避と同じ本文のバイト列と同じ形（退避 → 復元 → 退避の往復）。
+// 後半（#1290）は前の版（beta.13 まで）が書いた形の無い残骸。残骸の列（本文の無い残骸・正しい
+// UTF-8 / UTF-8 BOM / UTF-16 LE / BE の本文・でたらめなバイト列・壊れた UTF-8・UTF-32 の BOM・
+// 奇数長の UTF-16・孤立したサロゲート）を替え玉の port ScriptedAutosave から渡し、次を確かめる。
 //   1. 戻せる残骸だけがタブになる。戻せるかの模型は「同じバイト列を開く道（OpenDocument）で
 //      開けるか」で、別の Editing で開いて決める（開くのと同じ判別と復号・決定 6）。
 //   2. 戻したタブは残骸の順に帯の末尾へ並び、パスと文字コードは開く道で開いた文書と同じで、未保存。
 //   3. 戻せなかった残骸があれば「戻せませんでした: 」の知らせが立ち、無ければ立たない。
 //   4. どの残骸も 1 回ずつ読まれ、1 回ずつ forget される（戻せたものも戻せなかったものも）。
-//   5. 戻したタブはすぐにこのプロセスの退避として書かれ、その本文のバイト列は、正しい本文なら
-//      読んだ残骸のバイト列と同じ（退避 → 復元 → 退避の往復）。正しくない本文でも、開く道で開いて
-//      同じ文字コードで保存したバイト列と同じ。どのタブも別の残骸の本文を持たない。
-// Shift_JIS の変換は CodePagePort の向こう（替え玉は空の本文を返す）なので、正しい本文の族に
-// Shift_JIS は入れない。でたらめなバイト列が Shift_JIS と判定されたときは、性質 1・2・4・5 の
+//   5. 戻したタブはすぐにこのプロセスの退避として書かれ、その本文は開く道で開いた本文の UTF-8 で、
+//      形は開く道の文字コードと本文の改行の形（保存の形は選んでいない）。正しい族の本文なら、その
+//      UTF-8 は生成器が手で作った UTF-8 と同じ。どのタブも別の残骸の本文を持たない。
+// 後半では Shift_JIS の変換は CodePagePort の向こう（替え玉は空の本文を返す）なので、正しい本文の
+// 族に Shift_JIS は入れない。でたらめなバイト列が Shift_JIS と判定されたときは、性質 1・2・4・5 の
 // 「開く道と同じ」だけを見る（本物の CP932 は adapters の --document-chunk の性質が見る）。
 // 製品の restored_bundle の 1 行を手元で壊して落ちることを確かめた（#1290・commit しない）。
 // 回数は Debug（ASan）で scope 全体が 1 秒前後で終わる値。生成器は std::mt19937_64 の剰余だけを
 // 使い、分布の型は使わない。時計と環境変数は読まない。
+#include "AutosaveForm.hpp"
 #include "AutosaveId.hpp"
 #include "AutosaveRemnant.hpp"
 #include "AutosaveSnapshot.hpp"
+#include "AutosaveTick.hpp"
+#include "CodePageFailure.hpp"
 #include "Column.hpp"
 #include "DocumentView.hpp"
 #include "Editing.hpp"
 #include "EditorFrame.hpp"
 #include "FilePath.hpp"
+#include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "OpenDocument.hpp"
 #include "RestoreAutosave.hpp"
@@ -32,22 +44,27 @@
 #include "SaveState.hpp"
 #include "Scopes.hpp"
 #include "ScriptedAutosave.hpp"
+#include "SelectDocumentFormat.hpp"
 #include "TabTitle.hpp"
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "Utf16.hpp"
+#include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <expected>
 #include <format>
 #include <optional>
 #include <random>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -64,6 +81,8 @@ constexpr std::size_t restore_cases = 40U * rounds;
 constexpr std::size_t remnant_limit = 6U;
 constexpr std::size_t piece_limit = 40U;
 constexpr std::uint64_t restore_seed = 1290U;
+constexpr std::size_t round_trip_cases = 80U * rounds;
+constexpr std::uint64_t round_trip_seed = 1688U;
 constexpr std::string_view unrestored_prefix = "戻せませんでした: ";
 
 [[nodiscard]] std::size_t below(Random &random, std::size_t bound)
@@ -165,36 +184,41 @@ void append_unit(std::string &out, std::uint32_t unit, bool little)
     return out;
 }
 
-// 残骸の本文 1
-// つ（無ければ値なし）と、それが「退避の本文として正しい（往復でバイト列が変わらない）」 族か。
-using Body = std::pair<std::optional<std::string>, bool>;
+// 残骸の本文 1 つ（無ければ値なし）と、それが正しい族なら生成器が手で作ったその UTF-8 の本文。
+using Body = std::pair<std::optional<std::string>, std::optional<std::string>>;
 // 前回のプロセスが残した 1 本と、その本文。
 using Planted = std::pair<app::AutosaveRemnant, Body>;
-// 開く道の模型の答え。開けなければ値なし、開ければ文字コードとその文字コードで保存したバイト列。
-using OpenedForm = std::pair<core::TextEncoding, std::string>;
+// 開く道の模型の答え。開けなければ値なし、開ければ文字コード・本文（UTF-8）・本文の改行の形。
+using OpenedForm = std::tuple<core::TextEncoding, std::string, core::LineEnding>;
 using Opened = std::optional<OpenedForm>;
 // 1 件の残骸の列と、それぞれの開く道の模型の答え。
 using Cases = std::pair<std::vector<Planted>, std::vector<Opened>>;
 using Make = std::string (*)(Random &);
+// 正しい族の作り手は（バイト列・その UTF-8 の本文）を返す。
+using CleanMake = std::pair<std::string, std::string> (*)(Random &);
 
-[[nodiscard]] std::string clean_utf8(Random &random)
+[[nodiscard]] std::pair<std::string, std::string> clean_utf8(Random &random)
 {
-    return utf8_of(scalars(random));
+    std::string text = utf8_of(scalars(random));
+    return {text, text};
 }
 
-[[nodiscard]] std::string clean_utf8_bom(Random &random)
+[[nodiscard]] std::pair<std::string, std::string> clean_utf8_bom(Random &random)
 {
-    return std::string(core::byte_order_mark()) + utf8_of(scalars(random));
+    std::string text = utf8_of(scalars(random));
+    return {std::string(core::byte_order_mark()) + text, text};
 }
 
-[[nodiscard]] std::string clean_utf16_le(Random &random)
+[[nodiscard]] std::pair<std::string, std::string> clean_utf16_le(Random &random)
 {
-    return utf16_of(scalars(random), true);
+    const std::u32string text = scalars(random);
+    return {utf16_of(text, true), utf8_of(text)};
 }
 
-[[nodiscard]] std::string clean_utf16_be(Random &random)
+[[nodiscard]] std::pair<std::string, std::string> clean_utf16_be(Random &random)
 {
-    return utf16_of(scalars(random), false);
+    const std::u32string text = scalars(random);
+    return {utf16_of(text, false), utf8_of(text)};
 }
 
 [[nodiscard]] std::string broken_utf8(Random &random)
@@ -219,7 +243,7 @@ using Make = std::string (*)(Random &);
 
 // 正しい族（UTF-8・UTF-8 BOM・UTF-16 LE / BE）と正しくない族（でたらめ・壊れた UTF-8・UTF-32 の
 // BOM・奇数長の UTF-16・孤立したサロゲート）。
-constexpr std::array<Make, 4> clean_makers{
+constexpr std::array<CleanMake, 4> clean_makers{
     {clean_utf8, clean_utf8_bom, clean_utf16_le, clean_utf16_be}};
 constexpr std::array<Make, 5> broken_makers{
     {random_bytes, broken_utf8, utf32_marked, odd_utf16, lone_surrogate}};
@@ -229,13 +253,14 @@ constexpr std::array<Make, 5> broken_makers{
     const std::size_t kind = below(random, 1U + clean_makers.size() + broken_makers.size());
     if (kind == 0U)
     {
-        return {std::nullopt, false};
+        return {std::nullopt, std::nullopt};
     }
     if (kind <= clean_makers.size())
     {
-        return {clean_makers.at(kind - 1U)(random), true};
+        auto [bytes, text] = clean_makers.at(kind - 1U)(random);
+        return {std::move(bytes), std::move(text)};
     }
-    return {broken_makers.at(kind - 1U - clean_makers.size())(random), false};
+    return {broken_makers.at(kind - 1U - clean_makers.size())(random), std::nullopt};
 }
 
 [[nodiscard]] std::vector<Planted> planted_of(Random &random, std::size_t index)
@@ -262,8 +287,8 @@ constexpr std::array<Make, 5> broken_makers{
     return planted;
 }
 
-// 開く道の模型: 同じバイト列を別の Editing で開き、開けたら文字コードと、その文字コードで保存した
-// バイト列を返す。
+// 開く道の模型: 同じバイト列を別の Editing で開き、開けたら文字コードと本文と本文の改行の形を
+// 返す。
 [[nodiscard]] Opened opened_of(const Body &body)
 {
     if (!body.first.has_value())
@@ -278,9 +303,8 @@ constexpr std::array<Make, 5> broken_makers{
     {
         return std::nullopt;
     }
-    const core::TextEncoding encoding = frame.document.encoding;
-    static_cast<void>(editing.controller().apply_frame(app::SaveDocument{sample_path(), encoding}));
-    return std::pair{encoding, editing.files().written()};
+    return OpenedForm{frame.document.encoding, editing.controller().text().text(),
+                      editing.controller().text().line_ending()};
 }
 
 [[nodiscard]] std::string text_of(const std::vector<std::byte> &bytes)
@@ -322,18 +346,21 @@ constexpr std::array<Make, 5> broken_makers{
 [[nodiscard]] bool tab_follows(const app::DocumentView &view, const Planted &planted,
                                const OpenedForm &model)
 {
-    return view.path == planted.first.path && view.encoding == model.first &&
+    return view.path == planted.first.path && view.encoding == std::get<0>(model) &&
            view.save_state == core::SaveState::modified;
 }
 
-// 戻したタブの退避の本文が、開く道で開いて保存した本文と同じで、正しい本文なら残骸と同じか。
+// 戻したタブの退避の本文が開く道で開いた本文の UTF-8 で、形が開く道の文字コードと本文の改行の形か。
+// 正しい族の本文なら、生成器が手で作った UTF-8 と同じか（#1688）。
 [[nodiscard]] bool snapshot_follows(const app::AutosaveSnapshot &snapshot, const Planted &planted,
                                     const OpenedForm &model)
 {
     const std::string bytes = text_of(snapshot.bytes);
     const bool clean_kept =
-        !planted.second.second || bytes == planted.second.first.value_or(std::string{});
-    return snapshot.path == planted.first.path && bytes == model.second && clean_kept;
+        !planted.second.second.has_value() || bytes == planted.second.second.value();
+    return snapshot.path == planted.first.path && bytes == std::get<1>(model) &&
+           snapshot.form.encoding == std::get<0>(model) && !snapshot.form.save.has_value() &&
+           snapshot.form.body == std::get<2>(model) && clean_kept;
 }
 
 [[nodiscard]] std::vector<Opened> models_of(const std::vector<Planted> &planted)
@@ -419,8 +446,8 @@ constexpr std::array<Make, 5> broken_makers{
     const auto restored = restored_in_order(frame, editing.autosave(), before, cases);
     if (!restored.has_value())
     {
-        return "each restored tab follows its remnant: path, encoding, unsaved and the body "
-               "opening and saving would write (a clean body byte for byte)";
+        return "each restored tab follows its remnant: path, encoding, unsaved and the UTF-8 "
+               "body and form opening gives (a clean body byte for byte)";
     }
     return settled_violation(frame, editing.autosave(), {before, restored.value()}, planted);
 }
@@ -444,9 +471,9 @@ void verify_generator_is_deterministic()
 // 開けない」の 3 つ。
 void counted(const Planted &one, std::array<std::size_t, 3> &counts)
 {
-    counts.at(0) += one.second.second ? 1U : 0U;
+    counts.at(0) += one.second.second.has_value() ? 1U : 0U;
     counts.at(1) += one.second.first.has_value() ? 0U : 1U;
-    counts.at(2) += !one.second.second && !opened_of(one.second).has_value() ? 1U : 0U;
+    counts.at(2) += !one.second.second.has_value() && !opened_of(one.second).has_value() ? 1U : 0U;
 }
 
 void verify_generator_reaches_both_sides()
@@ -472,12 +499,13 @@ void verify_known_case()
                                      nenenib::core::DisplayLanguage::japanese);
     const core::TextPosition caret{core::LineNumber{1}, core::Column{1}};
     const std::vector<Planted> planted{
-        {{"k/0", app::AutosaveId{0}, path, title, caret}, {std::string("alpha\r\nbeta"), true}},
-        {{"k/1", app::AutosaveId{1}, std::nullopt, title, caret}, {std::nullopt, false}},
+        {{"k/0", app::AutosaveId{0}, path, title, caret},
+         {std::string("alpha\r\nbeta"), std::string("alpha\r\nbeta")}},
+        {{"k/1", app::AutosaveId{1}, std::nullopt, title, caret}, {std::nullopt, std::nullopt}},
         {{"k/2", app::AutosaveId{2}, std::nullopt, title, caret},
-         {std::string("\xFF\xFE\x00\x00x", 5), false}},
+         {std::string("\xFF\xFE\x00\x00x", 5), std::nullopt}},
         {{"k/3", app::AutosaveId{3}, std::nullopt, title, caret},
-         {utf16_of(U"日本\n", false), true}}};
+         {utf16_of(U"日本\n", false), std::string("日本\n")}}};
     const auto broken = case_violation(planted);
     expect(broken.empty(), "two clean remnants come back around a missing and a UTF-32 one");
 }
@@ -500,10 +528,193 @@ void verify_known_case()
     }
     return broken;
 }
+
+// --- 前半（#1688）: 退避 → 復元の往復 ---
+
+// 開く文書のバイト列と、替え玉の CP932 が返す本文（Shift_JIS の文書のときだけ）。
+using Opening = std::pair<std::string, std::optional<std::string>>;
+// 退避した時点の値: 本文・文字コード・本文の改行の形・ステータスバーの改行の欄。
+using Kept = std::tuple<std::string, core::TextEncoding, core::LineEnding, std::string>;
+
+// Shift_JIS の文書のバイト列（正しい UTF-8 でないので Shift_JIS と判定される）。本文は替え玉の
+// CP932 が返す「日本」と生成した本文で、絵文字（CP932 で表せない字）を含み得る。
+constexpr std::string_view sjis_bytes = "\x93\xFA\x96\x7B";
+
+[[nodiscard]] Opening opening_of(Random &random)
+{
+    const std::u32string text = scalars(random);
+    const std::size_t kind = below(random, 5U);
+    if (kind == 0U)
+    {
+        return {utf8_of(text), std::nullopt};
+    }
+    if (kind == 1U)
+    {
+        return {std::string(core::byte_order_mark()) + utf8_of(text), std::nullopt};
+    }
+    if (kind == 2U || kind == 3U)
+    {
+        return {utf16_of(text, kind == 2U), std::nullopt};
+    }
+    return {std::string(sjis_bytes), "日本" + utf8_of(text)};
+}
+
+// 変える鍵（改行なしまで削る `ggdG`・行をつなぐ `J`・行を足す `o` を含む）。
+constexpr std::array<std::string_view, 7> edits{
+    {"x", "dd", "ggdG", "2x", "J", "oab<Esc>", "A<Tab><Esc>"}};
+constexpr std::array<core::TextEncoding, 5> chosen_encodings{
+    core::TextEncoding::utf8, core::TextEncoding::utf8_bom, core::TextEncoding::shift_jis,
+    core::TextEncoding::utf16_le, core::TextEncoding::utf16_be};
+
+// 文書を開いて変え、保存の形を選ぶことがある。
+void edited(Random &random, Editing &editing)
+{
+    const Opening opening = opening_of(random);
+    if (opening.second.has_value())
+    {
+        editing.code_pages().decode_to(opening.second.value());
+    }
+    open_vim_document(editing, opening.first);
+    const std::size_t count = below(random, 3U);
+    for (std::size_t at = 0; at < count; ++at)
+    {
+        vim_normal(editing.controller(), edits.at(below(random, edits.size())));
+    }
+    const std::size_t choice = below(random, 4U);
+    if (choice == 1U || choice == 3U)
+    {
+        applied(editing.controller(),
+                app::SelectDocumentFormat{below(random, 2U) == 0U ? core::LineEnding::lf
+                                                                  : core::LineEnding::crlf});
+    }
+    if (choice == 2U || choice == 3U)
+    {
+        applied(editing.controller(),
+                app::SelectDocumentFormat{chosen_encodings.at(below(random, 5U))});
+    }
+    // CP932 の書きは常に失敗を返す（表せない字の形）。退避はこの口を通らない（#1688 の決定 1）。
+    editing.code_pages().encode_to(std::unexpected(app::CodePageFailure::unencodable));
+}
+
+[[nodiscard]] Kept kept_of(Editing &editing)
+{
+    const app::EditorFrame frame = editing.controller().frame();
+    return Kept{editing.controller().text().text(), frame.document.encoding,
+                editing.controller().text().line_ending(),
+                std::string(frame.status_items.at(2).text())};
+}
+
+[[nodiscard]] bool same_form(const app::AutosaveForm &left, const app::AutosaveForm &right)
+{
+    return left.encoding == right.encoding && left.save == right.save && left.body == right.body;
+}
+
+// 写しを次の起動の残骸として戻し、戻した値と戻したタブの退避を照らす。違いの説明を返す。
+[[nodiscard]] std::string_view restored_violation(const app::AutosaveSnapshot &snapshot,
+                                                  const Kept &before)
+{
+    Editing restore;
+    applied(restore.controller(), app::VisibleLines{10});
+    restore.autosave().remain(app::AutosaveRemnant{"rt/0", snapshot.id, snapshot.path,
+                                                   snapshot.title, snapshot.caret, snapshot.form},
+                              text_of(snapshot.bytes));
+    static_cast<void>(restore.controller().autosave_remnants());
+    const app::EditorFrame frame = restore.controller().apply_frame(app::RestoreAutosave{});
+    if (frame.tabs.size() != 2U || frame.document.save_state != core::SaveState::modified ||
+        kept_of(restore) != before)
+    {
+        return "R2: the restored tab has the text, encoding, save and body line endings it was "
+               "stored with, and is unsaved";
+    }
+    const auto &again = restore.autosave().stored();
+    if (again.size() != 1U || again.back().bytes != snapshot.bytes ||
+        !same_form(again.back().form, snapshot.form))
+    {
+        return "R3: the restored tab is stored again with the same bytes and form";
+    }
+    return {};
+}
+
+// 1 件ぶん。未保存でなければ空の答え（数えない）。
+[[nodiscard]] std::pair<bool, std::string_view> round_trip_violation(Random &random)
+{
+    Editing editing;
+    edited(random, editing);
+    const bool unsaved = editing.controller().frame().document.save_state != core::SaveState::saved;
+    const Kept before = kept_of(editing);
+    applied(editing.controller(), app::AutosaveTick{});
+    const auto &stored = editing.autosave().stored();
+    if (!unsaved)
+    {
+        return {false, stored.empty() ? std::string_view{} : "a saved document is not stored"};
+    }
+    if (stored.size() != 1U)
+    {
+        return {true, "R1: an unsaved document is stored once, whatever its encoding holds"};
+    }
+    return {true, restored_violation(stored.back(), before)};
+}
+
+void verify_round_trip()
+{
+    Random random{round_trip_seed};
+    std::size_t broken = 0;
+    std::size_t unsaved = 0;
+    for (std::size_t index = 0; index < round_trip_cases; ++index)
+    {
+        const auto [counted_case, violation] = round_trip_violation(random);
+        unsaved += counted_case ? 1U : 0U;
+        if (!violation.empty())
+        {
+            ++broken;
+            std::fprintf(stderr, "round trip case %zu (seed %llu): %.*s\n", index,
+                         static_cast<unsigned long long>(round_trip_seed),
+                         static_cast<int>(violation.size()), violation.data());
+        }
+    }
+    expect(unsaved > round_trip_cases / 2U, "most generated documents are unsaved and stored");
+    expect(broken == 0U, "restoring gives back the text and the form the autosave stored (#1688)");
+}
+
+// 退避した 1 件の形を数える（5 つの文字コードと「改行なしの LF」）。
+void reached(Editing &editing, std::array<std::size_t, 5> &encodings, std::size_t &bare_lf)
+{
+    if (editing.autosave().stored().empty())
+    {
+        return;
+    }
+    const app::AutosaveForm form = editing.autosave().stored().back().form;
+    for (std::size_t at = 0; at < chosen_encodings.size(); ++at)
+    {
+        encodings.at(at) += form.encoding == chosen_encodings.at(at) ? 1U : 0U;
+    }
+    const bool no_newline = !editing.controller().text().text().contains('\n');
+    bare_lf += no_newline && form.body == core::LineEnding::lf ? 1U : 0U;
+}
+
+// 生成器が 5 つの文字コードと「改行なしの LF」の文書に届くこと（未保存で退避されたもの）。
+void verify_round_trip_reaches_forms()
+{
+    Random random{round_trip_seed};
+    std::array<std::size_t, 5> encodings{};
+    std::size_t bare_lf = 0;
+    for (std::size_t index = 0; index < round_trip_cases; ++index)
+    {
+        Editing editing;
+        edited(random, editing);
+        applied(editing.controller(), app::AutosaveTick{});
+        reached(editing, encodings, bare_lf);
+    }
+    expect(std::ranges::all_of(encodings, [](std::size_t count) { return count > 0U; }) &&
+               bare_lf > 0U,
+           "the round trip reaches every encoding and an LF document without a newline");
+}
 } // namespace
 
 void verify_autosave_restore_property_scope()
 {
+    verify_round_trip_reaches_forms();
+    verify_round_trip();
     verify_generator_is_deterministic();
     verify_generator_reaches_both_sides();
     verify_known_case();
