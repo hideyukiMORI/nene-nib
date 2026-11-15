@@ -27,14 +27,15 @@
 分岐に `default` / `else` / `_` を書かない。**書いた瞬間に検査は死ぬ。** 範囲外の enum 値はキャストで作れる（M1-clang-out-of-range-hole）ので、
 enum は境界で範囲検査してから受け取る（CPP-007）。
 
-- 機械強制: **planned** → `-Wswitch-enum`（分岐漏れ）と `-Wcovered-switch-default`（網羅済みの `default`）を `-Werror` で（M1-clang-*・実測 2026-09-15）。if/else の意味分類は未完了
+- 機械強制: **active** → `-Wswitch-enum`（分岐漏れ）と `-Wcovered-switch-default`（網羅済みの `default`）を `/WX` で（`eng/targets.cmake`・M1-clang-*・実測 2026-09-15。反例は eng/prove-gates.py の 2 本・[ADR 0187](adr/0187-rule-states-and-texts-follow-what-the-machines-enforce.md) 決定 1）
+- 守れていない部分: `if` / `else` で閉じた選択肢を分ける形の分類は未完了（レビュー事項）
 
 ### CPP-003 — 公開状態は不変
 
-公開フィールドを持たない。可変コレクション・配列・可変ビルダを外へ返さない。`const_cast` と `mutable` を書かない。
+公開フィールドを持たない。可変コレクション・配列・可変ビルダを外へ返さない。`const_cast` と `mutable` を書かない（`mutable` の例外は `src/adapters/win32` の同期原始だけ。const の読み口から取る `mutable std::mutex` の形・[ADR 0187](adr/0187-rule-states-and-texts-follow-what-the-machines-enforce.md) 決定 6）。
 外から受け取った可変データは防御的に複製して所有する。
 
-- 機械強制: **active**（C スタイルキャストと `const_cast` の 2 つ。反例は eng/prove-gates.py・2026-10-16・Issue #516）→ private への代入はコンパイルエラー（M2-private-clang）。C スタイルキャストは `-Wold-style-cast`（M2-cstyle-cast-clang）。`const_cast` は clang-tidy `cppcoreguidelines-pro-type-const-cast`（T4）。公開 aggregate はメソッドを持てば clang-tidy `misc-non-private-member-variables-in-classes`（T1-tidy-public-with-method）が拒否するが、メソッドの無い aggregate（T1-tidy-aggregate-hole）と `mutable`（M2-mutable-hole）は言語でも lint でも通る。`mutable` は CNF の字句検査で拒否する予定。公開 aggregate（`RgbColor` / `Palette`）に `= default` の `operator==` をメンバーで書くと lint が落ちるので、比較は非メンバーで書く（Issue #3 で実測）
+- 機械強制: **active**（C スタイルキャストと `const_cast` の 2 つ。反例は eng/prove-gates.py・2026-10-16・Issue #516）→ private への代入はコンパイルエラー（M2-private-clang）。C スタイルキャストは `-Wold-style-cast`（M2-cstyle-cast-clang）。`const_cast` は clang-tidy `cppcoreguidelines-pro-type-const-cast`（T4）。公開 aggregate はメソッドを持てば clang-tidy `misc-non-private-member-variables-in-classes`（T1-tidy-public-with-method）が拒否するが、メソッドの無い aggregate（T1-tidy-aggregate-hole）と `mutable`（M2-mutable-hole）は言語でも lint でも通る。`mutable` は CNF の字句検査で拒否する予定（adapters の同期原始の例外を表に持つ）。公開 aggregate（`RgbColor` / `Palette`）に `= default` の `operator==` をメンバーで書くと lint が落ちるので、比較は非メンバーで書く（Issue #3 で実測）
 
 ### CPP-004 — `null` の意味は一つ
 
@@ -55,7 +56,7 @@ enum は境界で範囲検査してから受け取る（CPP-007）。
 ### CPP-006 — 汎用データバッグを禁じる
 
 `void *` / `std::any` / 文字列キーの連想配列 / 意味を持つ値の `std::tuple` / `std::pair` で型を代用しない。名前付きの `struct` を作る。
-`void *` を許すのは Win32 のコールバック引数と COM の `IID_PPV_ARGS` を境界で受ける場所だけである。
+`void *` を許すのは Win32 のコールバック引数と COM の `IID_PPV_ARGS` を境界で受ける場所と、取り込んだ C のライブラリのコールバックの境界（md4c の `userdata` / `detail` を受ける `src/core/MarkdownParse.cpp` の 1 か所・[ADR 0187](adr/0187-rule-states-and-texts-follow-what-the-machines-enforce.md) 決定 7）だけである。
 
 - 機械強制: **planned**（`std::any` と core / application の `void *` は CNF の字句検査で拒否する予定）
 
@@ -78,11 +79,11 @@ enum は境界で範囲検査してから受け取る（CPP-007）。
 
 ### CPP-009 — 言語マジックを制限する
 
-関数風マクロ・`reinterpret_cast`・`dynamic_cast` と RTTI・`goto`・インラインアセンブリ・`#pragma`・`setjmp` / `longjmp`・
+関数風マクロ・`reinterpret_cast`・`dynamic_cast` と RTTI・`goto`・インラインアセンブリ・`#pragma once` 以外の `#pragma`・`setjmp` / `longjmp`・
 可変長引数関数の新設・ビルド時コード生成を禁じる（使うなら ADR）。オブジェクト風マクロは `#define` より `constexpr` / `enum class` を使う。
 COM の `__uuidof` / `IID_PPV_ARGS` は `src/ui/win32` と `src/adapters/win32` の境界でだけ許す。`IUnknown**` を要求する API（`DWriteCreateFactory`）は `ComPtr<IUnknown>` で受けて `As()` で問い合わせ、`reinterpret_cast` を書かない。HWND と `this` の対応や `LPARAM` の読み替えは `std::bit_cast`（Issue #3 で実測。clang-tidy が `reinterpret_cast` を一律に拒否する）。
 
-- 機械強制: **active**（`reinterpret_cast` と `#pragma`）→ `reinterpret_cast` は clang-tidy `cppcoreguidelines-pro-type-reinterpret-cast`（T5。反例は eng/prove-gates.py・2026-10-16・Issue #516）。`#pragma` は CNF-003。それ以外は CNF の字句検査で拒否する予定
+- 機械強制: **active**（`reinterpret_cast` と抑制の `#pragma`）→ `reinterpret_cast` は clang-tidy `cppcoreguidelines-pro-type-reinterpret-cast`（T5。反例は eng/prove-gates.py・2026-10-16・Issue #516）。抑制の `#pragma`（`warning`・`clang diagnostic`・`GCC diagnostic`・`_Pragma`・`__pragma`）は CNF-003。include guard は `#pragma once` の 1 つの形（[ADR 0187](adr/0187-rule-states-and-texts-follow-what-the-machines-enforce.md) 決定 5）。そのほかの `#pragma` とそれ以外の言語マジックは CNF の字句検査で拒否する予定
 
 ### CPP-010 — 名前が役割を語る
 
@@ -117,7 +118,8 @@ COM の `__uuidof` / `IID_PPV_ARGS` は `src/ui/win32` と `src/adapters/win32` 
 Vim のキー列 → 動作のような大きな分岐は `constexpr` の**表**で書く。60 分岐の `switch` は関数長で落ち、同じ表は通る（T8。[ADR 0006](adr/0006-speed-gate-simd-and-table-driven-dispatch.md)）。
 閾値を満たすためだけに意味のある処理を割るのは目的に反する。超える必要があるときは**測定可能な理由**を添えて ADR にする。
 
-- 機械強制: **planned** → clang-tidy `readability-*`（.clang-tidy）
+- 機械強制: **active** → clang-tidy `readability-function-size` と `readability-function-cognitive-complexity`（.clang-tidy・`WarningsAsErrors: '*'`。反例は eng/prove-gates.py の引数の数の 1 本・[ADR 0187](adr/0187-rule-states-and-texts-follow-what-the-machines-enforce.md) 決定 2）
+- 守れていない部分: 行数・入れ子・認知的複雑度の反例は未登録。「閾値を満たすためだけに割らない」はレビュー事項
 
 ---
 
@@ -148,7 +150,7 @@ flip model の frame latency waitable object を `WaitForSingleObjectEx` で待�
 直前行が `// SDK-ABI: <Interface>::<Method>` の `NOLINTNEXTLINE(readability-function-size)` は抑制の例外（waiver）ではなく、CPP-019 の書き方である（CNF-012 が見る）。
 
 - 機械強制: **active** → CNF-003 / CNF-004（waiver の無い行単位の抑制・ファイル単位の抑制・期限切れや範囲外の waiver を `tests/conformance` の反例で拒否。2026-10-16・Issue #571）。waiver の理由と解除条件の妥当性はレビュー事項
-- 守れていない部分: コンパイラの抑制機能そのものは止められない（`#pragma clang diagnostic ignored` は `-Werror` で指定した診断も抑制できる（M7-suppression-clang-hole）。ADR 0003）。ソースに書いた `#pragma` / `_Pragma` / `__pragma` は CNF-003 が字句で拒否する
+- 守れていない部分: コンパイラの抑制機能そのものは止められない（`#pragma clang diagnostic ignored` は `-Werror` で指定した診断も抑制できる（M7-suppression-clang-hole）。ADR 0003）。ソースに書いた抑制の `#pragma`（`warning` / `clang diagnostic` / `GCC diagnostic`）と `_Pragma` / `__pragma` は CNF-003 が字句で拒否する
 
 ---
 
@@ -158,7 +160,7 @@ flip model の frame latency waitable object を `WaitForSingleObjectEx` で待�
 
 C++ はメモリ安全を言語で保証しない。本リポジトリでは次を固定する。
 
-- 可変長配列（VLA）と生の `new` / `delete` を書かない。所有は `std::unique_ptr` / コンテナ / `ComPtr` で、借用は `std::span` / `std::string_view` で表す
+- 可変長配列（VLA）と生の `new` / `delete` を書かない（`new` の例外は、非公開のコンストラクタを持つ型を `std::unique_ptr<T>(new T(...))` の形で作るときだけ。`std::make_unique` が呼べないため・[ADR 0187](adr/0187-rule-states-and-texts-follow-what-the-machines-enforce.md) 決定 8）。所有は `std::unique_ptr` / コンテナ / `ComPtr` で、借用は `std::span` / `std::string_view` で表す
 - 生配列とポインタ演算を公開 API に出さない。境界で長さを受け取る
 - 単体テストと Debug 構成の全 target は AddressSanitizer と UndefinedBehaviorSanitizer 付きでビルドし、`-fno-sanitize-recover=all` で必ず落とす
 - 中核は `malloc` / `free` を呼ばない（許可シンボルに無い）
@@ -180,7 +182,8 @@ SIMD の組み込み関数（`<immintrin.h>` 等）は `src/core/simd/` 配下�
 target 単位の `/arch` は付けない。同じ処理には必ず組み込み関数を使わない実装を置き、どちらを使うかは合成ルートが起動時に決めて注入する
 （[ADR 0006](adr/0006-speed-gate-simd-and-table-driven-dispatch.md)）。
 
-- 機械強制: **planned** → target feature の無い関数の組み込み関数はコンパイルエラー（S1-avx2-without-target-clang。`/arch` 無しの target と `[[gnu::target]]` で S2 / S4）。SIMD ヘッダの置き場は CNF-009 の字句検査。fallback の存在はレビュー事項
+- 機械強制: **active** → target feature の無い関数の組み込み関数はコンパイルエラー（S1-avx2-without-target-clang。`/arch` 無しの target と `[[gnu::target]]` で S2 / S4。反例は eng/prove-gates.py の 1 本）。SIMD ヘッダの置き場は CNF-009 の字句検査（[ADR 0187](adr/0187-rule-states-and-texts-follow-what-the-machines-enforce.md) 決定 3）
+- 守れていない部分: fallback の存在と合成ルートが選ぶことはレビュー事項。いまは SIMD の実装が 0 件で `src/core/simd/` も無い
 
 ### CPP-019 — SDK が固定した COM の署名は境界で受けて、すぐ中へ渡す
 
@@ -199,7 +202,8 @@ Windows SDK が決めた COM のインターフェース（`IDWriteFontFallback:
 印の `Interface::Method` は `eng/sdk-abi-signatures.json` の表（interface・method・SDK の引数の数・宣言のあるヘッダ）に載っているものだけ。表に行を足すのは PR のレビュー事項。
 置き場は COM を書いてよい `src/ui/win32/` と `tests/ui/` だけ。
 
-- 機械強制: **planned** → CNF-012 が印の文法・表・次の行の抑制・定義の関数名・本体 6 行・置き場を見る（2026-10-06・Issue #299）。表の引数の数と実際の署名の照合、ループと保持を書かないことはレビュー事項
+- 機械強制: **active** → CNF-012 が印の文法・表・次の行の抑制・定義の関数名・本体 6 行・置き場を見る（2026-10-06・Issue #299。反例は `tests/conformance`・[ADR 0187](adr/0187-rule-states-and-texts-follow-what-the-machines-enforce.md) 決定 4）
+- 守れていない部分: 表の引数の数と実際の署名の照合、ループと保持を書かないことはレビュー事項
 
 ---
 
