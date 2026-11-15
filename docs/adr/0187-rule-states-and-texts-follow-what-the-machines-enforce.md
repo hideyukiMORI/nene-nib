@@ -22,8 +22,8 @@
 3. **CPP-018 を active にする。** target feature の無い関数の組み込み関数はコンパイルエラーで、`prove-gates.py` に反例が 1 本ある。SIMD ヘッダの置き場は CNF-009。守れていない部分: fallback の存在と、合成ルートが選ぶことはレビュー事項。いまは SIMD の実装が 0 件で `src/core/simd/` も無い。
 4. **CPP-019 を active にする。** CNF-012 が印の文法・表・次の行の抑制・定義の関数名・本体 6 行・置き場を見て、`tests/conformance` に反例がある。守れていない部分: 表の引数の数と実際の署名の照合、ループと保持を書かないことはレビュー事項。
 5. **CPP-009: `#pragma once` は禁じない。** include guard はこの形の 1 つだけ。禁じるのはそれ以外の `#pragma` で、機械（CNF-003）が拒否するのは抑制の pragma（`warning`・`clang diagnostic`・`GCC diagnostic`・`_Pragma`・`__pragma`）。そのほかの `#pragma`（`comment`・`pack` など）はレビュー事項。
-6. **CPP-003: `mutable` は `src/adapters/win32` の同期原始にだけ許す。** const の読み口から `std::mutex` を取る `mutable std::mutex` の形で、スレッドと同期原始を持てる場所（ARC-007 / CPP-013）の中だけ。core / application / ui / app には書かない。字句検査を足すときは、この例外を表に持つ。
-7. **CPP-006: `void *` は、取り込んだ C のライブラリのコールバックの境界にも許す。** md4c の C ABI が固定する `void *userdata` / `void *detail` を受ける `src/core/MarkdownParse.cpp` の 1 か所だけ（`md4c.h` を読む唯一の場所・ADR 0151）。受けた直後に型のある値へ写す。
+6. **CPP-003: `mutable` は `src/adapters/win32` の同期原始にだけ許す。** const の読み口から `std::mutex` を取る `mutable std::mutex` の形で（いまは 4 つの Shelf と `Win32Worker`）、スレッドと同期原始を持てる場所（ARC-007 / CPP-013）の中だけ。core / application / ui / app には書かない。字句検査を足すときは、この例外を表に持つ。
+7. **CPP-006: `void *` は、取り込んだ C のライブラリのコールバックの境界にも許す。** md4c の C ABI が固定する `void *userdata` / `void *detail` を受ける `src/core/MarkdownParse.cpp` の 1 か所だけ（`md4c.h` を読む唯一の場所・ADR 0151）。受けた直後に型のある値へ写す。`src/core/MarkdownStop.hpp` の `const void *context`（止める問いの型消去）はこの例外に含めない。直すか名指しするかは #1724 で決める。
 8. **CPP-016: `new` は、非公開のコンストラクタを持つ型を `std::unique_ptr` のコンストラクタの引数として作る形にだけ許す。** `std::make_unique` が非公開のコンストラクタを呼べないため。所有者を伴わない `new` と、`delete` は書かない。
 
 ## 強制
@@ -36,7 +36,7 @@
 ## 結果
 
 得られるもの: 規則の状態が現物と合い、席が `planned` を「任意」と読まなくなる。現物の正しい形を、規則の文を読んだ席が消しにいかない。
-失うもの・残る穴: 例外が 4 つ増える。場所を名指ししたので、同じ形を別の場所に書くときは ADR が要る。検査器は変えていないので、例外の外の `mutable` と `void *` は今までどおりレビューでしか止まらない。
+失うもの・残る穴: 例外が 4 つ増える。場所を名指ししたので、同じ形を別の場所に書くときは ADR が要る。検査器は変えていないので、例外の外の `mutable` と `void *` は今までどおりレビューでしか止まらない（現に `MarkdownStop.hpp` の `const void *` が残っている・#1724）。
 
 ## 却下した選択肢
 

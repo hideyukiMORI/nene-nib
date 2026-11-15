@@ -56,7 +56,7 @@ enum は境界で範囲検査してから受け取る（CPP-007）。
 ### CPP-006 — 汎用データバッグを禁じる
 
 `void *` / `std::any` / 文字列キーの連想配列 / 意味を持つ値の `std::tuple` / `std::pair` で型を代用しない。名前付きの `struct` を作る。
-`void *` を許すのは Win32 のコールバック引数と COM の `IID_PPV_ARGS` を境界で受ける場所と、取り込んだ C のライブラリのコールバックの境界（md4c の `userdata` / `detail` を受ける `src/core/MarkdownParse.cpp` の 1 か所・[ADR 0187](adr/0187-rule-states-and-texts-follow-what-the-machines-enforce.md) 決定 7）だけである。
+`void *` を許すのは Win32 のコールバック引数と COM の `IID_PPV_ARGS` を境界で受ける場所と、取り込んだ C のライブラリのコールバックの境界（md4c の `userdata` / `detail` を受ける `src/core/MarkdownParse.cpp` の 1 か所。`MarkdownStop.hpp` の型消去の `const void *` は例外に含めず #1724 で決める・[ADR 0187](adr/0187-rule-states-and-texts-follow-what-the-machines-enforce.md) 決定 7）だけである。
 
 - 機械強制: **planned**（`std::any` と core / application の `void *` は CNF の字句検査で拒否する予定）
 
