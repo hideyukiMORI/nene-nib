@@ -561,8 +561,10 @@ std::optional<core::VimRepeatFailure> EditorController::operator_command(const s
 // 起点は置換の前の行と行頭からのバイト数のまま（Vim の oap->start は置換で動かない・上の行が
 // 縮むと別の本文を指す）で、置換の後の本文で行かバイト数が外にあればオペレータを捨てて再生を
 // 打ち切る（Vim の nv_colon の clearopbeep・`:normal!` の続きの鍵は流れない・バイト数が行の長さ
-// ちょうどなら外でない・実測 #1683）。起点が字の途中に落ちたときも捨てる（Vim は字を割るが
-// Nib は割らない・設計席の決め）。
+// ちょうどなら外でない・実測 #1683）。起点が置換の後で字の途中に落ちたとき（単位は行と行頭からの
+// バイト数）は、`d` `c` `y` は捨てる（Vim は字を割るが Nib は割らない・設計席の決め）。ほか
+// （`>` `<` `gU` `gu` `g~`）は次のコードポイントの境目へ切り上げる（Vim 9.1 の実測）。仕分けは
+// `core::vim_pending_splits_characters`。
 std::optional<core::VimRepeatFailure>
 EditorController::operator_substituted(const std::string &text,
                                        const core::ExSubstituteRequest &request)
