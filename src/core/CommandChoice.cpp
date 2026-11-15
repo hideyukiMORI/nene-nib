@@ -65,19 +65,21 @@ namespace
 }
 
 // 設定を変えるか表示するだけの答えか（#1527・`set` の族・`colorscheme`・`syntax`）。文書の保存と
-// 終了・タブ・本文の置換・map・枠・面・印刷・行の移動・プレビューの要求を持つ答えは偽。答えの欄を
-// 構造化束縛で全部名指しするので、ExResult に欄が増えるとここがコンパイルで落ち、どちらの側かを
+// 終了・タブ・本文の置換と行の書き換え（`:d` `:y` `:g`）・map・枠・面・印刷・行の移動・プレビュー
+// の要求を持つ答えは偽。答えの欄を構造化束縛で全部名指しするので、ExResult に欄が増えるとここが
+// コンパイルで落ち、どちらの側かを
 // 決め直す（CPP-002 と同じ形・命令の名前の表は持たない）。途中で止まった複数の引数の行も偽。
 [[nodiscard]] bool settings_only(const ExResult &result) noexcept
 {
     [[maybe_unused]] const auto &[settings, highlight, incsearch, message, tab, palette, document,
                                   display, window, language, syntax, line, clipboard, root, lsp,
                                   map, format, preview, print, rechecks_window, relative_line,
-                                  substitute, display_language, wrapscan, stopped] = result;
+                                  substitute, lines, global, display_language, wrapscan, stopped] =
+        result;
     return !tab.has_value() && !palette.has_value() && !document.has_value() &&
            !window.has_value() && !line.has_value() && !map.has_value() && !preview.has_value() &&
            !print.has_value() && !relative_line.has_value() && !substitute.has_value() &&
-           !stopped.has_value();
+           !lines.has_value() && !global.has_value() && !stopped.has_value();
 }
 
 // 面が打った行を候補として出すか（#1527）。Ex の入力行と同じ評価が受け、答えが設定の族だけのとき。
