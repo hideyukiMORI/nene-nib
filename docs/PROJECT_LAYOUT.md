@@ -14,13 +14,13 @@
 
 ```text
 src/app（wWinMain）
-    合成ルート。ポートに実装を結び、SIMD の実装を選び、ワーカーを起動し、UI を起動する。端末出力と終了コードを持つ唯一の場所
+    合成ルート。ポートに実装を結び、（SIMD の実装が入ったらそれを選び、）ワーカーを起動し、UI を起動する。端末出力と終了コードを持つ唯一の場所
 
 src/ui/win32
     画面。枠なし窓・自前のタイトルバーとタブ・Direct2D / DirectWrite の描画・DXGI の提示・IME。状態を描き、意図を発行する
 
 src/adapters/win32
-    ファイル（メモリマップ・原子的な書き戻し）・設定・履歴・ブックマークの保存・ジャンプリスト・時刻ポート・固定ワーカー 1 本の実装。
+    ファイル（メモリマップ・原子的な書き戻し）・設定・履歴・ブックマークの保存・時刻ポート・固定ワーカー 1 本の実装。
     現在時刻・乱数・環境を読め、ファイルに触れ、スレッドを作れる唯一のモジュール
 
 src/application
@@ -30,7 +30,7 @@ src/core
     値・不変条件・閉じた選択肢。piece table・Vim エンジン・キーマップの表・Ctrl+P の順位付け・文字コード判別・行索引。
     配色トークン（UI の Palette・本文の SyntaxPalette・Theme と組み込み125テーマの表・整数の derive_ui・ADR 0017 / 0117）と、
     タイトルバー／ステータスバーの配置とヒットテストの純関数（DIP と物理画素の幾何・ADR 0008）。
-    標準ライブラリ以外に依存しない純関数層。src/core/simd だけが SIMD の組み込み関数を書ける（CPP-018）
+    標準ライブラリ以外に依存しない純関数層。SIMD の組み込み関数を書けるのは src/core/simd だけ（CPP-018・いまは SIMD の実装が 0 件でディレクトリも無い）
 ```
 
 取り込み依存（ソースを取り込む C のライブラリ）は `third_party/<name>` を独立したモジュールにし、そこにだけ緩い警告集合を当てる（ADR 0003）。
@@ -72,7 +72,7 @@ src/app
 - 何か -> 合成ルート: 禁止
 
 OS ライブラリは `nenenib_system_link` でだけ結び、`eng/architecture.json` の `platformLibraries` に無ければ configure が落ちる:
-`adapters_win32` は kernel32 / shell32 / advapi32 / ole32、`ui_win32` は user32 / d2d1 / dwrite / dxgi / d3d11 / dcomp / dwmapi / imm32 / ole32 / shell32（ADR 0116）/ comdlg32 / prntvpt（ADR 0177）、`app` は user32。
+正本は `eng/architecture.json` の `platformLibraries`（ここに一覧を写さない。shell32 は ADR 0116、prntvpt は ADR 0177）。
 gdi32 はどこにも無い（ADR 0002）。
 
 ---
@@ -88,7 +88,7 @@ gdi32 はどこにも無い（ADR 0002）。
 
 ### `src/core/simd`
 
-SIMD の組み込み関数を書ける唯一の場所。関数ごとに `[[gnu::target]]` を宣言し、同じ処理の fallback を持つ（CPP-018・ADR 0006）。
+SIMD の組み込み関数を書ける唯一の場所（2026-11-15 の時点で SIMD の実装は 0 件で、このディレクトリはまだ無い。最初の実装を置くときに作る）。関数ごとに `[[gnu::target]]` を宣言し、同じ処理の fallback を持つ（CPP-018・ADR 0006）。
 
 ### `src/application`
 
@@ -110,7 +110,7 @@ Ex の保存・終了は core の `ExDocumentName` の表から `ExDocumentVerb`
 
 時刻ポート・永続化ポート・ワーカーポートの実装を持つ。🔑 **決定性の禁止とスレッドの禁止を適用しない唯一のモジュール**であり（ARC-007 / CPP-013）、
 その差分は `eng/symbols.py` と `eng/conformance.py` の区画判定に明示されている。保存形式の版と移行（ARC-009）も DTO もここに閉じる。
-ファイルのメモリマップ・原子的な書き戻し・履歴・ジャンプリスト（`ICustomDestinationList`）・OS のテーマ読み取りもここだけが行う。
+ファイルのメモリマップ・原子的な書き戻し・履歴・OS のテーマ読み取りもここだけが行う（タスクバーのジャンプリストは未実装。足すならここ）。
 
 ### `src/ui/win32`
 
@@ -138,10 +138,10 @@ unit_tests の cpp や実行 target は借用せず、製品モジュールか�
 | 種類 | 置き場 |
 | --- | --- |
 | production | `src/core` / `src/application` / `src/adapters/win32` / `src/ui/win32` / `src/app`（2026-09-15 の最初の縦切りで全層を作った。ADR 0007。Win32 の版 metadata だけを `src/app` の template から build 下へ生成する） |
-| テスト | `tests/build`（C++23 基盤のスモーク）/ `tests/unit`（OS 非依存の中核。ASan / UBSan 付き。`--coverage-negative` で失敗系を省く反例。Vim の fixture もここ）/ `tests/conformance`（検査器自身の正例・反例。規約検査の対象外だが決定性の禁止は適用する）/ `tests/ui`（module `window_tests`・CTest `nib_window`。ui/win32 の描画の保持の契約を窓を作らずに試す。OS の資源は DirectWrite の factory、WIC のソフトウェアの描画先、メモリ上の DROPFILES・ADR 0077/0116）/ `tests/preview`（module `preview_tests`・exe `nib_preview_capture`・CTest に登録しない。Markdown プレビューを WIC の bitmap に製品と同じ `PreviewPainter` で描いて PNG に落とす確かめの道具・ADR 0151 の決定 18） |
+| テスト | `tests/build`（C++23 基盤のスモーク）/ `tests/unit`（OS 非依存の中核。ASan / UBSan 付き。`--coverage-negative` で失敗系を省く反例。Vim の fixture の再生もここ）/ `tests/vim`（oracle が生成した fixture の json と生成物のヘッダ・ADR 0005 / 0054）/ `tests/adapters`（module `adapter_tests`・adapters/win32 の試験）/ `tests/syntax`（構文の色分けの試験の素材）/ `tests/conformance`（検査器自身の正例・反例。規約検査の対象外だが決定性の禁止は適用する）/ `tests/ui`（module `window_tests`・CTest `nib_window`。ui/win32 の描画の保持の契約を窓を作らずに試す。OS の資源は DirectWrite の factory、WIC のソフトウェアの描画先、メモリ上の DROPFILES・ADR 0077/0116）/ `tests/preview`（module `preview_tests`・exe `nib_preview_capture`・CTest に登録しない。Markdown プレビューを WIC の bitmap に製品と同じ `PreviewPainter` で描いて PNG に落とす確かめの道具・ADR 0151 の決定 18） |
 | 検査設定 | `.clang-format` / `.clang-tidy` / `eng/*.json`。参照の一覧は `eng/config-bindings.json`（CNF-007） |
 | 実測と証明 | `eng/measure-language.ps1` ＋ `eng/probes/language.json`（Phase 0）/ `eng/prove-gates.py`（ゲートの反例の証明。`check.ps1 -Full` の中で走り、関連する変更のときに選ぶ）/ `eng/protected-diff.py`（base と head の間の保護対象の差分と scope ごとの checks 数を `out/protected/` に記録する。ゲートではない・Issue #130） / `eng/usage-report.py`（transcript の usage を席ごとに turns・文脈の最大・cache read・seat_tokens で集計し `out/usage/` に記録する。読むだけ・ゲートではない・Issue #146）。結果は `docs/quality/` |
 | アプリアイコン | 正本は `docs/design/app-icon.svg` の 1 つ。`eng/render-app-icon.py`（設定と SHA-256 は `eng/app-icon.json`）が `src/app/NeNeNib.ico`（exe の resource）・`src/app/msix/`（MSIX のロゴ 25 枚）・`docs/images/store/store-logo-300.png` を作り、生成物は commit する（ADR 0185） |
 | Store の MSIX | `eng/package-msix.ps1` → `eng/package-msix.py` が `eng/build-release.ps1` の exe（ZIP と同じバイト列）と `src/app/msix/` のロゴを包み、身元・言語・SDK の版は表 `eng/store-identity.json` の 1 つ。manifest は道具が生成し、リポジトリに置かない。手順は `docs/store/msix.md`（ADR 0186） |
 | 生成物 | `build/`（CMake・オブジェクト・検証 exe）/ `out/`（Phase 0 の実測・証明 fixture・測定ビルド・出力）。製品 C++ コードの生成は未採用 |
-| 利用者データ | `%LOCALAPPDATA%\NeNeNib\`。設定の正本は `settings.v2`（UTF-8 / version=2、テーマ・本文フォント名・pt・guide）。v2が無いときだけ旧 `settings.v1` を読み、最初の設定変更でv2だけへ保存する。v1は残す（ADR 0020 / 0079）。`session.v1`（前回のタブ・ADR 0059）と `history.v1`（閉じたファイルの履歴・ADR 0060）は採用済み。`bookmarks.v1`（明示登録・ADR 0063）も採用済み。リポジトリには入れない |
+| 利用者データ | `%LOCALAPPDATA%\NeNeNib\`。設定の正本は `settings.v4`（UTF-8・鍵の集合は ADR 0170 決定 3）。v4 が無いときだけ v3 → v2 → v1 の順に旧版を読み、最初の設定変更で v4 だけへ保存する。旧版は残す（ADR 0020 / 0079 / 0114 / 0170）。`session.v2`（前回のタブ・v1 は v2 が無いときの読み込みだけ・ADR 0059 / 0114）と `history.v1`（閉じたファイルの履歴・ADR 0060）は採用済み。`bookmarks.v1`（明示登録・ADR 0063）も採用済み。リポジトリには入れない |

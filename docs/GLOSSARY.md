@@ -31,7 +31,7 @@
 | 回数付き開行の入力記録 | o/Oで最初に開いた1行へのLF入力と残り回数。Escで反復し、移動・記録を越える削除・外部編集で破棄する | `VimInsertRepeat`、所有は `VimState`（core・ADR 0028） |
 | 位置指定のVim挿入 | p/P・o/O・Escの反復が返す挿入位置、LF本文、挿入後caret、履歴境界。同じ改行変換とreplaceを使う | `VimInsertAt`（core）→ `EditorController`（application・ADR 0028） |
 | 範囲指定のVim置換 | rが返す半開区間、LFの置換本文、LF換算の最終caret。既存の改行変換とreplaceで1つのundoにする | `VimReplaceRange`（core）→ `EditorController`（application・ADR 0029） |
-| 改行の形 | CRLF / LF の閉じた 2 つ。読んだときに本文が 1 度だけ判別して持ち回り、編集では変わらない。`\r` が改行の一部かどうかはこの形だけで決まる | `LineEnding` / `detect_line_ending`、所有は `TextBuffer`（core・ADR 0010 / 0036） |
+| 改行の形 | CRLF / LF の閉じた 2 つ。**本文の形**は読んだときに本文が 1 度だけ判別して持ち回り、編集では変わらない（`\r` が改行の一部かどうかはこの形だけで決まる）。**保存の形**は文書の値で、`:set ff=` などで選び、本文の形と違うときだけ保存のときに写す | 本文の形は `LineEnding` / `detect_line_ending`、所有は `TextBuffer`。保存の形は `Document.line_ending`（core・ADR 0010 と追補 / 0036） |
 | literal CR | LF 文書の中の `\r`。改行ではなく 1 文字で、桁を 1 つ数え（仮想桁は 2）、保存でもレジスタでも残る。Vim の `unix` の `^M` と同じ | `TextBuffer::line_end` の分岐（core・ADR 0036） |
 | 直前の変更の記録 | `.` が再生する回数1つと、回数の桁を除いた鍵の列と、VISUALなら範囲の大きさ。組み立て中の`recording` と確定した `last_change` の2つを持ち、本文・履歴・レジスタは持たない | `VimRepeatRecord`、所有は `VimState`（core・ADR 0030 / 0033） |
 | 鍵の列の再生 | `.` が返す、回数の桁を先頭に展開した鍵の列と、VISUALなら選び直す大きさ。controllerが選択を置いてから同じ `accept(VimKeyPress)` へ1つずつ流し、前後で履歴を閉じて1つのundo単位にする | `VimReplay`（core）→ `EditorController`（application・ADR 0030 / 0033） |
@@ -54,18 +54,18 @@
 | Vim の編集対象の view | 本文・選択の借用と表示領域の値を 1 回の鍵処理へ渡す入力。状態の所有者ではない | `VimEditorView` / `VimViewport`（core・ADR 0019） |
 | 画面の境界と追従 | 本文末尾を画面内に埋めるか最終行まで先頭にできるか、カーソルを最小限で追うか Vim の規則で追うかを、それぞれ明示する方針 | `ScrollExtent` / `ScrollFollow`（core・ADR 0019） |
 | 画面移動 | 選択と表示先頭行を一緒に更新する Vim の効果。本文を編集しない | `VimNavigate`（core・ADR 0019） |
-| キーマップの表 | キー列 → 動作の `constexpr` の表。巨大な `switch` を書かない | `KeyBinding`（core） |
+| キーマップの表 | キー列 → 動作の `constexpr` の表。巨大な `switch` を書かない | `VimKeyTable`（Vim の鍵）/ `operation_bindings`（操作の鍵）（core・ADR 0042 / 0078） |
 | oracle | 本物の Vim（headless）。fixture の期待値を生成する開発時の道具。製品にも CI にも要らない | `eng/`（ADR 0005） |
-| fixture | 初期テキスト・キー列・oracle が出した期待値（本文・カーソル・レジスタ）の組。単体テストが再生する | `tests/unit/`（ADR 0005） |
+| fixture | 初期テキスト・キー列・oracle が出した期待値（本文・カーソル・レジスタ）の組。単体テストが再生する | `tests/vim/`（json と生成物）、再生は `tests/unit/`（ADR 0005） |
 | ワーカー | `src/adapters/win32` が所有する固定の 1 本のスレッド。要求を受けて完了を返す | 仕事の種類ごとの port（最初は `FolderPort`）（ADR 0004 / 0062） |
 | 要求（request）/ 完了（completion） | ワーカーへ渡す不変の値と、UI スレッドへ返る版番号付きの値。完了の知らせは中身の無い合図で、中身は application が port から引く（ADR 0062） | application |
 | 版番号 | 状態の世代。古い完了を捨てる唯一の判断材料 | application |
-| 速さの基準値 | ベンチ 3 本の参照値。退行でゲートが落ちる。「baseline」とは呼ばない | `eng/perf-reference.json`（ADR 0006） |
+| 速さの基準値 | ベンチの機械ごとの参照値。退行でゲートが落ちる。「baseline」とは呼ばない | `eng/perf-reference.json`（ADR 0006） |
 | 表示文字列 | 検証済み（空・制御文字・不正 UTF-8・256 バイト超を拒否）の UTF-8 文字列。窓に描く 1 行の正本 | `DisplayText`（core） |
 | 外観 | OS のライト／ダーク設定に対応する閉じた集合 | `Appearance`（core） |
 | 配色 | 外観ごとの背景と文字の色。純関数 `palette_for` の結果 | `Palette` / `RgbColor`（core） |
 | 外観ポート | OS の外観を読む唯一の窓口。実装は adapters/win32（レジストリの `AppsUseLightTheme`） | `AppearancePort` / `Win32AppearanceAdapter` |
-| エディタ設定 | pt の文字サイズ・検証済みフォント名・任意のテーマ・操作の案内の表示。テーマ無しは OS 追従 | `EditorSettings`（core）、所有者は `EditorState`（ADR 0020 / 0079） |
+| エディタ設定 | pt の文字サイズ・検証済みフォント名・任意のテーマ・操作の案内の表示ほか、`settings.v4` に保存する値（範囲は型の定義と ADR 0170 決定 3 が正本）。テーマ無しは OS 追従 | `EditorSettings`（core）、所有者は `EditorState`（ADR 0020 / 0079） |
 | フォントサイズ | 有限の 8〜40 pt。既定 13.5 pt。DIP と既定比率は名前付き純関数で導く | `FontSize`（core） |
 | Ex入力 | 本文・undo・レジスタと独立した1行256 bytesまでのUTF-8入力。Tab補完の元prefixと位置も持つ | `CommandLine`（core）、所有者は `EditorState`（ADR 0022） |
 | Ex評価 | コマンドを検証し、任意の設定候補・タブ/一覧/文書操作の要求と結果表示、または閉じた失敗を返す純関数 | `evaluate_ex` / `ExResult` / `ExFailure`（core） |
@@ -75,16 +75,16 @@
 | コマンドpalette | 共通の一行入力、決定的な部分列照合、候補選択。候補はEx補完と同じ一覧から導く | `CommandPalette` / `CommandChoice` / `PaletteLayout`（core）、`CommandPaletteView`（application） |
 | 利用者テーマの所有値 | ファイル由来の名前・出典・配色を所有し、lvalueから既存Themeのviewを貸す | `ThemeName` / `ThemeDocument` / `OwnedThemeSource`（core、ADR 0024） |
 | テーマファイルの検証 | version/名前/必須色/任意UI色/コントラストを検証。制限付き読込は既存FilePortへ委ねる | `ThemeCodec` / `ThemeContrast`、共通 `KeyValueFields`（adapters/win32） |
-| 設定ポート | 設定の読込・保存と型付き失敗。保存形式・v1からv2への移行・競合保護は adapter、bytes の置換は FilePort | `SettingsPort` / `Win32SettingsAdapter`（ADR 0020 / 0079） |
-| エディタの依存 | controller へ注入する外観・clipboard・file・code page・設定ポートの名前付き参照 | `EditorPorts`（application / 合成は app、ADR 0020） |
-| エディタ状態 | 表示文字列と外観の唯一の所有者。不変で、次状態を返す | `EditorState`（application） |
+| 設定ポート | 設定の読込・保存と型付き失敗。保存形式・旧版（v1〜v3）から v4 への移行・競合保護は adapter、bytes の置換は FilePort | `SettingsPort` / `Win32SettingsAdapter`（ADR 0020 / 0079） |
+| エディタの依存 | controller へ注入するポートの名前付き参照（外観・clipboard・file・code page・設定ほか。一覧は型の定義が正本） | `EditorPorts`（application / 合成は app、ADR 0020） |
+| エディタ状態 | 編集の状態（アクティブな文書・ほかのタブの束・設定・外観・面など）の唯一の所有者。不変で、次状態を返す | `EditorState`（application） |
 | 通常の結合文字境界 | 基底・後続の幅 0 の文字・共通の VS までの移動単位。Backspace は mark 一つ、VS は直前の code point と消す。完全な書記素クラスタではない（D38 / ADR 0065） | `ordinary_character_boundary` / `CaretMoveRequest`（core） |
 | 通常の語の境 | 通常モードの Ctrl+← → と Ctrl+Backspace / Ctrl+Delete の止まり。同じ種類の文字の連なり＋後ろの空白が 1 語。種類は Vim の語の分類の表を 4 か所読み替えて引く。メモ帳（Office RichEdit）の実測に合わせ、漢字の辞書の切れ方は写さない（D82 / ADR 0009 の追補 #1394） | `ordinary_word_boundary`（core） |
-| エディタフレーム | 表示文字列と配色の表示値。UI はこれを写すだけ | `EditorFrame`（application） |
+| エディタフレーム | 1 回の描画に要る表示値（見えている行・配色・帯・面など）。UI はこれを写すだけ | `EditorFrame`（application） |
 | 見た目のトークン | 採用案の寸法と配色。`core::Palette` が持ち、UI が写す | `docs/design/2026-09-15-look.md`（ADR 0008） |
 | 矩形 VISUAL | `Ctrl-v` で入る 3 つめの VISUAL。選択の 2 つの角を仮想桁の矩形と読み、行ごとの範囲で編集する（ADR 0035） | `VimMode::visual_block` / `vim_block_range`（core） |
 | 矩形レジスタ | 矩形で取った本文。行を LF で結んだ本文と、覆った桁の数（幅）を持つ。短い行へ貼るときは空白で埋める | `VimRegisterKind::block` / `VimBlockWidth`（core） |
-| タイトルバーの配置 | タブ・「＋」・窓の操作の矩形とヒットテストを座標から決める純関数 | `TitleBarLayout`（ui/win32） |
+| タイトルバーの配置 | タブ・「＋」・窓の操作の矩形とヒットテストを座標から決める純関数 | `TitleBarLayout`（core） |
 | レンダラ | D3D11 → DXGI（flip・waitable・composition）→ DirectComposition → Direct2D の提示経路。`render` だけが描く | `Direct2DRenderer`（ui/win32） |
 | 規約検査（conformance） | NeNe Nib 固有の自作ゲート | `eng/conformance.py`（CNF-NNN） |
 | シンボル検査 | 中核の静的ライブラリの未定義シンボルを許可リストと照合する検査 | `eng/symbols.py`（ARC-003 / ARC-007 / CPP-013） |
