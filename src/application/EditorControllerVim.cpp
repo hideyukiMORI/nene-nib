@@ -854,15 +854,20 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpe
         return recalled_key(core::CommandEdit::history_previous);
     case core::VimSpecialKey::arrow_down:
         return recalled_key(core::CommandEdit::history_next);
+    // Vim の c_CTRL-U（行頭まで）と c_CTRL-W（語の前）。窓の Ctrl+U / Ctrl+W と同じ写し（#1550）。
+    case core::VimSpecialKey::control_u:
+        accept(EditCommand{core::CommandEdit::erase_to_start});
+        return std::nullopt;
+    case core::VimSpecialKey::control_w:
+        accept(EditCommand{core::CommandEdit::erase_word});
+        return std::nullopt;
     case core::VimSpecialKey::control_r:
     case core::VimSpecialKey::page_up:
     case core::VimSpecialKey::page_down:
     case core::VimSpecialKey::control_d:
-    case core::VimSpecialKey::control_u:
     case core::VimSpecialKey::control_f:
     case core::VimSpecialKey::control_b:
     case core::VimSpecialKey::control_v:
-    case core::VimSpecialKey::control_w:
     case core::VimSpecialKey::control_a:
     case core::VimSpecialKey::control_x:
     case core::VimSpecialKey::control_o:

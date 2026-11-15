@@ -86,12 +86,42 @@ namespace
     case core::CommandEdit::end:
     case core::CommandEdit::backspace:
     case core::CommandEdit::erase:
+    case core::CommandEdit::erase_word:
+    case core::CommandEdit::erase_to_start:
     case core::CommandEdit::complete_next:
     case core::CommandEdit::complete_previous:
     case core::CommandEdit::page_previous:
     case core::CommandEdit::page_next:
     case core::CommandEdit::list_first:
     case core::CommandEdit::list_last:
+        return false;
+    }
+    std::unreachable();
+}
+
+// Vim の入力行（`:` `/` `?`）だけの編集（c_CTRL-W と c_CTRL-U・#1550）。通常モードの「検索: 」
+// 「置換後: 」「行: 」と Ctrl+P の面は Windows の標準のまま、この鍵で何もしない（D82）。
+[[nodiscard]] constexpr bool vim_line_only(core::CommandEdit edit) noexcept
+{
+    switch (edit)
+    {
+    case core::CommandEdit::erase_word:
+    case core::CommandEdit::erase_to_start:
+        return true;
+    case core::CommandEdit::left:
+    case core::CommandEdit::right:
+    case core::CommandEdit::home:
+    case core::CommandEdit::end:
+    case core::CommandEdit::backspace:
+    case core::CommandEdit::erase:
+    case core::CommandEdit::complete_next:
+    case core::CommandEdit::complete_previous:
+    case core::CommandEdit::page_previous:
+    case core::CommandEdit::page_next:
+    case core::CommandEdit::list_first:
+    case core::CommandEdit::list_last:
+    case core::CommandEdit::history_previous:
+    case core::CommandEdit::history_next:
         return false;
     }
     std::unreachable();
@@ -192,6 +222,10 @@ constexpr std::size_t code_point_bytes = 4;
         return core::VimKey{core::VimSpecialKey::backspace};
     case core::CommandEdit::erase:
         return core::VimKey{core::VimSpecialKey::delete_key};
+    case core::CommandEdit::erase_word:
+        return core::VimKey{core::VimSpecialKey::control_w};
+    case core::CommandEdit::erase_to_start:
+        return core::VimKey{core::VimSpecialKey::control_u};
     case core::CommandEdit::complete_next:
         return core::VimKey{core::VimCharacter{U'\t'}};
     case core::CommandEdit::history_previous:
@@ -347,6 +381,10 @@ void EditorController::accept(const EditCommand &intent)
     {
         return;
     }
+    if (rerouted_edit(intent))
+    {
+        return;
+    }
     note_command_key();
     const auto recorded = recorded_edit_key(intent.edit);
     if (recorded.has_value())
@@ -381,6 +419,29 @@ void EditorController::accept(const EditCommand &intent)
     }
     reach_font_families();
     update_search_preview();
+}
+
+bool EditorController::rerouted_edit(const EditCommand &intent)
+{
+    const auto &input = state_.command_input();
+    if (!input.has_value())
+    {
+        return false;
+    }
+    const auto prompt = input_line_prompt_of(input.value());
+    const bool vim_line = prompt == core::InputLinePrompt::ex || vim_search_prompt(prompt);
+    if (vim_line_only(intent.edit) && !vim_line)
+    {
+        return true;
+    }
+    // Vim の `/` `?` の Tab は文字の Tab（Vim の nextwild は検索の行に補完が無く、Tab をふつうの
+    // 文字として入れる・#1643）。打った文字と同じ口で入れ、録画も文字の鍵で録る。
+    if (intent.edit == core::CommandEdit::complete_next && vim_search_prompt(prompt))
+    {
+        accept(CommandText{std::string{"\t"}});
+        return true;
+    }
+    return false;
 }
 
 std::optional<core::VimRepeatFailure> EditorController::recalled_key(core::CommandEdit direction)
