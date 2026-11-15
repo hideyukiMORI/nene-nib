@@ -1,6 +1,7 @@
 // 自動退避の計画と controller の結線（ADR 0137 の決定 2〜5・8）。
 #include "Appearance.hpp"
 #include "AutosaveFailure.hpp"
+#include "AutosaveForm.hpp"
 #include "AutosaveId.hpp"
 #include "AutosaveLedger.hpp"
 #include "AutosavePlan.hpp"
@@ -10,6 +11,7 @@
 #include "AutosaveTick.hpp"
 #include "CaretMotion.hpp"
 #include "CloseTab.hpp"
+#include "CodePageFailure.hpp"
 #include "Column.hpp"
 #include "DiscardAutosave.hpp"
 #include "DisplayText.hpp"
@@ -27,6 +29,7 @@
 #include "EndSession.hpp"
 #include "FilePath.hpp"
 #include "InsertText.hpp"
+#include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "MoveCaret.hpp"
 #include "NewTab.hpp"
@@ -38,6 +41,7 @@
 #include "SaveState.hpp"
 #include "Scopes.hpp"
 #include "ScriptedAutosave.hpp"
+#include "SelectDocumentFormat.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "SessionEnd.hpp"
@@ -53,6 +57,7 @@
 #include "WorkCompleted.hpp"
 
 #include <cstddef>
+#include <expected>
 #include <optional>
 #include <string>
 #include <utility>
@@ -242,8 +247,8 @@ void verify_tick_stores_changes()
            "a keystroke in the same undo unit is stored on the next tick");
 }
 
-// 保存と同じ符号化（決定 4）・保存したら消す・閉じたら消す（決定 2）・閉じる窓で片付ける（決定
-// 5）。
+// 本文は文字コードによらず UTF-8（BOM なし）で、文字コードは形に記録する（追補 #1688 の決定
+// 1・2）・ 保存したら消す・閉じたら消す（決定 2）・閉じる窓で片付ける（決定 5）。
 void verify_tick_encodes_and_discards()
 {
     Editing editing;
@@ -253,11 +258,11 @@ void verify_tick_encodes_and_discards()
     applied(controller, app::SaveDocument{sample_path(), core::TextEncoding::utf8_bom});
     applied(controller, app::InsertText{"c"});
     applied(controller, app::AutosaveTick{});
-    const std::string bom_abc = std::string(core::byte_order_mark()) + "abc";
     expect(editing.autosave().stored().size() == 1 &&
-               bytes_of(editing.autosave().stored().back()) == bom_abc &&
+               bytes_of(editing.autosave().stored().back()) == "abc" &&
+               editing.autosave().stored().back().form.encoding == core::TextEncoding::utf8_bom &&
                editing.autosave().stored().back().path.has_value(),
-           "the stored body is encoded the same way as saving");
+           "the stored body is the UTF-8 text without the BOM and the form keeps UTF-8 BOM");
     applied(controller, app::SaveDocument{sample_path(), core::TextEncoding::utf8_bom});
     applied(controller, app::AutosaveTick{});
     expect(editing.autosave().discarded() == std::vector<AutosaveId>{AutosaveId{0}},
@@ -687,6 +692,199 @@ void verify_restore_stores_before_forget()
                                                                   "forget 5e/2"},
            "restoring stores the restored tabs before it forgets any remnant");
 }
+
+// --- #1688: 退避の本文は UTF-8、文書の形は一覧に記録し、復元は検出しない（ADR 0137 の追補）。 ---
+
+// 退避の写しを、次の起動の残骸として戻す。一覧は形をそのまま運ぶ（adapters の codec の試験 (k)）。
+[[nodiscard]] app::EditorFrame restored_from(Editing &restore,
+                                             const app::AutosaveSnapshot &snapshot)
+{
+    applied(restore.controller(), app::VisibleLines{10});
+    restore.autosave().remain(app::AutosaveRemnant{"6f/0", snapshot.id, snapshot.path,
+                                                   snapshot.title, snapshot.caret, snapshot.form},
+                              bytes_of(snapshot));
+    static_cast<void>(restore.controller().autosave_remnants());
+    return restore.controller().apply_frame(app::RestoreAutosave{});
+}
+
+// 戻したタブが、退避した時点の本文・文字コード・保存の改行の形（ステータスバーの欄）・本文の改行の
+// 形と同じで、未保存か。
+[[nodiscard]] bool restored_same(Editing &before, Editing &after, const app::EditorFrame &restored)
+{
+    const app::EditorFrame was = before.controller().frame();
+    return after.controller().text().text() == before.controller().text().text() &&
+           restored.document.encoding == was.document.encoding &&
+           after.controller().text().line_ending() == before.controller().text().line_ending() &&
+           restored.status_items.at(2).text() == was.status_items.at(2).text() &&
+           restored.document.save_state == core::SaveState::modified;
+}
+
+// 合図で退避した最後の写し（無ければ値なし）。
+[[nodiscard]] std::optional<app::AutosaveSnapshot> ticked(Editing &editing)
+{
+    applied(editing.controller(), app::AutosaveTick{});
+    const auto &stored = editing.autosave().stored();
+    if (stored.empty())
+    {
+        return std::nullopt;
+    }
+    return stored.back();
+}
+
+// F2: Shift_JIS の「日本ﾃｽ」（93 FA 96 7B C3 BD）から「日本」を消すと、CP932 の本文 C3 BD は正しい
+// UTF-8（ý）でもある。退避は本文の UTF-8 と Shift_JIS の形を書き、復元は検出せずに戻す。
+void verify_sjis_restored_without_detection()
+{
+    Editing editing;
+    editing.code_pages().decode_to(std::string("日本ﾃｽ"));
+    open_vim_document(editing, "\x93\xFA\x96\x7B\xC3\xBD");
+    vim_normal(editing.controller(), "2x");
+    editing.code_pages().encode_to(std::string("\xC3\xBD"));
+    const auto stored = ticked(editing);
+    expect(stored.has_value() && bytes_of(stored.value()) == "ﾃｽ" &&
+               stored.value().form.encoding == core::TextEncoding::shift_jis,
+           "a Shift_JIS document is stored as its UTF-8 text with its encoding (F2)");
+    if (!stored.has_value())
+    {
+        return;
+    }
+    Editing restore;
+    const auto restored = restored_from(restore, stored.value());
+    expect(restored_same(editing, restore, restored) &&
+               restore.controller().text().text() == "ﾃｽ" &&
+               restored.document.encoding == core::TextEncoding::shift_jis,
+           "the restored Shift_JIS tab keeps its text and its encoding without detection (F2)");
+}
+
+// F3: ASCII だけになった Shift_JIS の文書も Shift_JIS のまま戻る（後で打った日本語を UTF-8 で
+// 保存しない）。
+void verify_sjis_ascii_keeps_encoding()
+{
+    Editing editing;
+    editing.code_pages().decode_to(std::string("日本ab"));
+    open_vim_document(editing, "\x93\xFA\x96\x7B"
+                               "ab");
+    vim_normal(editing.controller(), "2x");
+    const auto stored = ticked(editing);
+    if (!stored.has_value())
+    {
+        expect(false, "the ASCII-only Shift_JIS document is stored (F3)");
+        return;
+    }
+    Editing restore;
+    const auto restored = restored_from(restore, stored.value());
+    expect(restored_same(editing, restore, restored) &&
+               restored.document.encoding == core::TextEncoding::shift_jis,
+           "an ASCII-only Shift_JIS document comes back as Shift_JIS (F3)");
+}
+
+// F4: CP932 で表せない字のある Shift_JIS
+// の文書も退避され、字も文字コードも戻る。最後の砦（#1625）も 同じ 1 本を通るので書ける。
+void verify_sjis_unencodable_stored()
+{
+    const auto opened = [](Editing &editing)
+    {
+        editing.code_pages().decode_to(std::string("日本"));
+        editing.files().hold(std::string("\x93\xFA\x96\x7B"));
+        applied(editing.controller(), app::VisibleLines{10});
+        applied(editing.controller(), app::OpenDocument{sample_path()});
+        applied(editing.controller(), app::InsertText{"\xF0\x9F\x98\x80"});
+        editing.code_pages().encode_to(std::unexpected(app::CodePageFailure::unencodable));
+    };
+    Editing editing;
+    opened(editing);
+    const auto stored = ticked(editing);
+    expect(stored.has_value() && bytes_of(stored.value()) == "\xF0\x9F\x98\x80日本",
+           "a Shift_JIS document with a character CP932 cannot hold is stored (F4)");
+    if (stored.has_value())
+    {
+        Editing restore;
+        const auto restored = restored_from(restore, stored.value());
+        expect(restored_same(editing, restore, restored) &&
+                   restored.document.encoding == core::TextEncoding::shift_jis,
+               "the restored tab keeps the character and Shift_JIS (F4)");
+    }
+    Editing defect;
+    opened(defect);
+    expect(defect.controller().back_up_before_defect() && defect.autosave().stored().size() == 1 &&
+               defect.autosave().stored().back().form.encoding == core::TextEncoding::shift_jis,
+           "the last resort stores the same document through the same path (F4・#1625)");
+}
+
+// F8: LF の文書を改行なしまで削っても LF のまま戻る（改行の無い本文の判別は CRLF）。
+void verify_lf_without_newline_keeps_lf()
+{
+    Editing editing;
+    open_vim_document(editing, "ab\ncd");
+    vim_normal(editing.controller(), "dd");
+    const auto stored = ticked(editing);
+    if (!stored.has_value())
+    {
+        expect(false, "the emptied LF document is stored (F8)");
+        return;
+    }
+    Editing restore;
+    const auto restored = restored_from(restore, stored.value());
+    expect(restored_same(editing, restore, restored) &&
+               restore.controller().text().line_ending() == core::LineEnding::lf,
+           "an LF document edited down to no newline comes back as LF (F8)");
+}
+
+// 選んだ保存の形（文字コードと改行の形）は本文の改行の形と別に戻る。UTF-8 BOM・UTF-16
+// の文書も本文は UTF-8 で書く。
+void verify_chosen_form_restored()
+{
+    Editing editing;
+    open_vim_document(editing, "a\nb\n");
+    vim_normal(editing.controller(), "x");
+    applied(editing.controller(), app::SelectDocumentFormat{core::LineEnding::crlf});
+    applied(editing.controller(), app::SelectDocumentFormat{core::TextEncoding::utf16_be});
+    const auto stored = ticked(editing);
+    expect(
+        stored.has_value() && bytes_of(stored.value()) == "\nb\n" &&
+            stored.value().form.save == std::optional{core::LineEnding::crlf} &&
+            stored.value().form.body == core::LineEnding::lf,
+        "the chosen save form is recorded beside the body line ending, the body is not converted");
+    if (!stored.has_value())
+    {
+        return;
+    }
+    Editing restore;
+    const auto restored = restored_from(restore, stored.value());
+    expect(restored_same(editing, restore, restored) &&
+               restored.document.encoding == core::TextEncoding::utf16_be,
+           "the chosen encoding and save line ending come back with the LF body");
+    Editing bom;
+    open_vim_document(bom, std::string(core::byte_order_mark()) + "a\r\nb");
+    vim_normal(bom.controller(), "x");
+    const auto marked = ticked(bom);
+    if (!marked.has_value())
+    {
+        expect(false, "the UTF-8 BOM document is stored");
+        return;
+    }
+    Editing back;
+    const auto restored_bom = restored_from(back, marked.value());
+    expect(bytes_of(marked.value()) == "\r\nb" && restored_same(bom, back, restored_bom) &&
+               restored_bom.document.encoding == core::TextEncoding::utf8_bom,
+           "a UTF-8 BOM CRLF document is stored without the BOM and comes back with both");
+}
+
+// 形のある退避の本文が UTF-8 として読めなければ、壊れた退避として知らせて飛ばす（決定 2）。
+void verify_formed_remnant_not_utf8()
+{
+    Editing editing;
+    applied(editing.controller(), app::VisibleLines{10});
+    auto broken = remnant("7a/0", sample_path());
+    broken.form =
+        app::AutosaveForm{core::TextEncoding::shift_jis, std::nullopt, core::LineEnding::crlf};
+    editing.autosave().remain(std::move(broken), std::string("\x93\xFA"));
+    static_cast<void>(editing.controller().autosave_remnants());
+    const auto restored = editing.controller().apply_frame(app::RestoreAutosave{});
+    expect(restored.tabs.size() == 1 && notice(restored) == "戻せませんでした: note.txt" &&
+               editing.autosave().forgotten() == std::vector<std::string>{"7a/0"},
+           "a formed remnant whose body is not UTF-8 is told as unrestored and forgotten");
+}
 } // namespace
 
 void verify_autosave_contracts()
@@ -709,6 +907,12 @@ void verify_autosave_contracts()
     verify_end_session_keeps_unsaved();
     verify_end_session_flushes_unsaved();
     verify_restore_stores_before_forget();
+    verify_sjis_restored_without_detection();
+    verify_sjis_ascii_keeps_encoding();
+    verify_sjis_unencodable_stored();
+    verify_lf_without_newline_keeps_lf();
+    verify_chosen_form_restored();
+    verify_formed_remnant_not_utf8();
 }
 
 void verify_autosave_scope()

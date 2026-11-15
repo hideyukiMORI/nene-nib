@@ -8,6 +8,7 @@
 #include "AutosaveEntry.hpp"
 #include "AutosaveFailure.hpp"
 #include "AutosaveFolder.hpp"
+#include "AutosaveForm.hpp"
 #include "AutosaveId.hpp"
 #include "AutosaveOutcome.hpp"
 #include "AutosaveRemnant.hpp"
@@ -19,6 +20,7 @@
 #include "FilePort.hpp"
 #include "FileWriteMode.hpp"
 #include "FindHandle.hpp"
+#include "LineEnding.hpp"
 #include "ProcessInstance.hpp"
 #include "ProcessInstances.hpp"
 #include "ProcessQueryFailure.hpp"
@@ -53,6 +55,7 @@ namespace
 namespace core = nenenib::core;
 namespace adapters = nenenib::adapters::win32;
 using nenenib::application::AutosaveFailure;
+using nenenib::application::AutosaveForm;
 using nenenib::application::AutosaveId;
 using nenenib::application::AutosaveOutcome;
 using nenenib::application::AutosaveRemnant;
@@ -181,8 +184,37 @@ std::vector<std::byte> bytes_of(std::string_view text)
 AutosaveSnapshot snapshot(std::uint64_t id, std::optional<core::FilePath> path,
                           std::string_view title, std::string_view text)
 {
-    return AutosaveSnapshot{AutosaveId{id}, std::move(path), title_of(title), bytes_of(text),
-                            caret_at(2, 5)};
+    return AutosaveSnapshot{
+        AutosaveId{id},
+        std::move(path),
+        title_of(title),
+        bytes_of(text),
+        caret_at(2, 5),
+        AutosaveForm{core::TextEncoding::shift_jis, core::LineEnding::lf, core::LineEnding::crlf}};
+}
+
+[[nodiscard]] bool same_form(const std::optional<AutosaveForm> &left,
+                             const std::optional<AutosaveForm> &right)
+{
+    if (!left.has_value() || !right.has_value())
+    {
+        return left.has_value() == right.has_value();
+    }
+    return left.value().encoding == right.value().encoding &&
+           left.value().save == right.value().save && left.value().body == right.value().body;
+}
+
+// 形の無い行（手で並べた残骸の行）には UTF-8・LF の形を置く。書くのは版 2 だけ（#1688）。
+std::vector<adapters::AutosaveEntry> formed(std::vector<adapters::AutosaveEntry> entries)
+{
+    for (auto &entry : entries)
+    {
+        if (!entry.form.has_value())
+        {
+            entry.form = AutosaveForm{core::TextEncoding::utf8, std::nullopt, core::LineEnding::lf};
+        }
+    }
+    return entries;
 }
 
 // ワーカーは載せた順に 1 つずつ走るので、後ろに載せた合図が来れば前の仕事は終わっている。
@@ -258,6 +290,10 @@ void verify_store(adapters::Win32Worker &worker, adapters::Win32FileAdapter &fil
                text_of(entries[0].path) == "C:/work/a.txt" && entries[0].title.text() == "a.txt" &&
                entries[0].caret == caret_at(2, 5),
            "the entry keeps the id, path, title and caret");
+    const std::optional<AutosaveForm> form = entries.empty() ? std::nullopt : entries.front().form;
+    expect(same_form(form, AutosaveForm{core::TextEncoding::shift_jis, core::LineEnding::lf,
+                                        core::LineEnding::crlf}),
+           "the entry keeps the form of the document (#1688)");
     expect(entries.size() == 2 && !entries[1].path.has_value() && entries[1].title.text() == "無題",
            "an untitled entry has no path");
     autosave.store(snapshot(3, path_of("C:/work/a.txt"), "a.txt", "second"));
@@ -398,7 +434,7 @@ void verify_clear(adapters::Win32Worker &worker, adapters::Win32AutosaveAdapter 
 void write_list(adapters::Win32FileAdapter &files, std::string_view folder,
                 const std::vector<adapters::AutosaveEntry> &entries)
 {
-    const auto bytes = adapters::encode_autosave_entries(entries);
+    const auto bytes = adapters::encode_autosave_entries(formed(entries));
     expect(bytes.has_value(), "the list encodes");
     expect(files
                .write(path_of(std::format("{}/{}/autosave.v1", root_text, folder)),
@@ -518,6 +554,104 @@ void verify_read_and_forget(adapters::Win32FileAdapter &files,
     expect(!autosave.read(stray).has_value(), "a location outside the form is not read");
     expect(read_text(files, "nib-autosave-files/autosave/4/autosave.v1").size() > 0,
            "the folder of a live process is left alone");
+}
+
+[[nodiscard]] bool same_entries(const std::vector<adapters::AutosaveEntry> &left,
+                                const std::vector<adapters::AutosaveEntry> &right)
+{
+    return std::ranges::equal(
+        left, right,
+        [](const adapters::AutosaveEntry &one, const adapters::AutosaveEntry &other)
+        {
+            return one.id == other.id && one.path == other.path &&
+                   one.title.text() == other.title.text() && one.caret == other.caret &&
+                   same_form(one.form, other.form);
+        });
+}
+
+// (k) #1688: 一覧の版 2 は文書の形（文字コード・本文の改行の形・保存の改行の形）を持ち、往復で
+// 変わらない。書くのは版 2 だけで、形の無い行は書けない。版 1 の一覧は形なしで読み、形の欄が
+// 壊れた・欠けた版 2 と知らない版の一覧は全体を拒む。
+void verify_list_versions()
+{
+    const std::vector<adapters::AutosaveEntry> entries{
+        {AutosaveId{3}, path_of("C:/work/a.txt"), title_of("a.txt"), caret_at(2, 5),
+         AutosaveForm{core::TextEncoding::shift_jis, core::LineEnding::lf, core::LineEnding::crlf}},
+        {AutosaveId{4}, std::nullopt, title_of("無題"), caret_at(1, 1),
+         AutosaveForm{core::TextEncoding::utf8_bom, std::nullopt, core::LineEnding::lf}},
+        {AutosaveId{5}, path_of("C:/work/le.txt"), title_of("le.txt"), caret_at(1, 1),
+         AutosaveForm{core::TextEncoding::utf16_le, core::LineEnding::crlf, core::LineEnding::lf}},
+        {AutosaveId{6}, path_of("C:/work/be.txt"), title_of("be.txt"), caret_at(1, 1),
+         AutosaveForm{core::TextEncoding::utf16_be, std::nullopt, core::LineEnding::crlf}},
+        {AutosaveId{7}, path_of("C:/work/u.txt"), title_of("u.txt"), caret_at(1, 1),
+         AutosaveForm{core::TextEncoding::utf8, std::nullopt, core::LineEnding::lf}}};
+    const auto list = adapters::encode_autosave_entries(entries);
+    expect(list.has_value() && list.value().starts_with("version=2\n"
+                                                        "entry=3,2,5,3.body,cp932,dos,unix,"
+                                                        "C:/work/a.txt\ntitle=a.txt\n"
+                                                        "entry=4,1,1,4.body,utf-8-bom,unix,,\n"),
+           "version 2 writes the encoding, the body and the save line ending before the path");
+    const auto decoded = adapters::decode_autosave_entries(list.value_or(std::string{}));
+    expect(decoded.has_value() && same_entries(decoded.value(), entries),
+           "a version 2 list round-trips with every encoding and line ending form");
+    auto bare = entries;
+    bare.at(1).form.reset();
+    expect(!adapters::encode_autosave_entries(bare).has_value(),
+           "an entry without a form is not written");
+    const auto old = adapters::decode_autosave_entries(
+        "version=1\nentry=7,3,5,7.body,C:/work/b.txt\ntitle=b.txt\n");
+    expect(old.has_value() && old.value().size() == 1 && !old.value()[0].form.has_value() &&
+               text_of(old.value()[0].path) == "C:/work/b.txt" &&
+               old.value()[0].caret == caret_at(3, 5),
+           "a version 1 list from an earlier release is read without a form");
+    for (const std::string_view broken :
+         {"version=2\nentry=7,3,5,7.body,C:/work/b.txt\ntitle=b.txt\n",
+          "version=2\nentry=7,3,5,7.body,latin1,unix,,C:/work/b.txt\ntitle=b.txt\n",
+          "version=2\nentry=7,3,5,7.body,utf-8,mac,,C:/work/b.txt\ntitle=b.txt\n",
+          "version=2\nentry=7,3,5,7.body,utf-8,,unix,C:/work/b.txt\ntitle=b.txt\n",
+          "version=2\nentry=7,3,5,7.body,utf-8,unix,cr,C:/work/b.txt\ntitle=b.txt\n",
+          "version=3\nentry=7,3,5,7.body,utf-8,unix,,C:/work/b.txt\ntitle=b.txt\n"})
+    {
+        expect(
+            !adapters::decode_autosave_entries(broken).has_value(),
+            "a version 2 list with a missing or unknown form, or an unknown version, is refused");
+    }
+}
+
+// (k) 前の版の残骸のフォルダは形なしの残骸として出て、知らない版の一覧のフォルダは出ず、消えない。
+// deadbee9 と deadbee7 は奇数なので pid にならない。
+void verify_remnant_versions(adapters::Win32FileAdapter &files,
+                             adapters::Win32AutosaveAdapter &autosave)
+{
+    make_folder(L"deadbee9");
+    make_folder(L"deadbee7");
+    expect(files
+               .write(path_of(std::format("{}/deadbee9/autosave.v1", root_text)),
+                      "version=1\nentry=2,1,1,2.body,\ntitle=無題\n")
+               .has_value(),
+           "a version 1 list is written");
+    write_body(files, "deadbee9", 2, "\x93\xFA\x96\x7B");
+    expect(files
+               .write(path_of(std::format("{}/deadbee7/autosave.v1", root_text)),
+                      "version=3\nentry=2,1,1,2.body,utf-8,unix,,\ntitle=無題\n")
+               .has_value(),
+           "a list of an unknown version is written");
+    write_body(files, "deadbee7", 2, "newer");
+    const auto listed = autosave.remnants().value_or(std::vector<AutosaveRemnant>{});
+    const auto old = std::ranges::find_if(listed, [](const AutosaveRemnant &remnant)
+                                          { return remnant.location == "deadbee9/2"; });
+    expect(old != listed.end() && !old->form.has_value(),
+           "the remnant of a version 1 list is listed without a form");
+    expect(std::ranges::none_of(listed, [](const AutosaveRemnant &remnant)
+                                { return remnant.location.starts_with("deadbee7/"); }),
+           "the folder of an unknown version is not asked");
+    if (old != listed.end())
+    {
+        autosave.forget(*old);
+    }
+    expect(!exists(std::wstring(root) + L"/deadbee9") &&
+               exists(std::wstring(root) + L"/deadbee7/2.body"),
+           "forgetting the version 1 remnant removes it and leaves the unknown version alone");
 }
 
 // 本物のファイルの port へ渡し、read に渡された上限を覚える（#792 の上限の正本の契約）。
@@ -742,12 +876,14 @@ void verify_autosave()
         verify_remnants(worker, files, autosave);
         verify_read_limit(worker, files);
         verify_read_and_forget(files, autosave);
+        verify_remnant_versions(files, autosave);
         verify_read_back_at_limit(files, autosave);
         autosave.clear();
         expect(!exists(own_folder()), "clear removes the own folder again");
     }
     verify_reused_process_id(worker, files);
     verify_remnant_names();
+    verify_list_versions();
     remove_tree(base);
 }
 int run_tests(int argc, char **argv)

@@ -1,6 +1,7 @@
 #include "EditorController.hpp"
 #include "EditorControllerDetail.hpp"
 
+#include "AutosaveForm.hpp"
 #include "AutosaveOutcome.hpp"
 #include "AutosavePlan.hpp"
 #include "AutosaveSnapshot.hpp"
@@ -14,6 +15,8 @@
 #include "SaveState.hpp"
 #include "Selection.hpp"
 #include "TabTitle.hpp"
+#include "TextBuffer.hpp"
+#include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
@@ -220,8 +223,9 @@ void EditorController::accept(const DiscardAutosave &)
     }
 }
 
-// 開くのと同じ判別と復号（read_document と同じ DetectedText → decoded）。一覧のパスの符号化は
-// 使わず、本文の判別が決める。
+// 一覧に形があれば（追補 #1688 の決定 2）、本文を UTF-8 として読み、文字コードと 2 つの改行の形は
+// 一覧の値を置く（検出しない）。UTF-8 として読めなければ壊れた退避。形が無ければ（前の版の一覧・
+// 決定 3）、開くのと同じ判別と復号（read_document と同じ DetectedText → decoded）で読む。
 std::optional<DocumentState> EditorController::restored_bundle(const AutosaveRemnant &remnant)
 {
     const auto bytes = ports_.autosave.read(remnant);
@@ -230,8 +234,20 @@ std::optional<DocumentState> EditorController::restored_bundle(const AutosaveRem
         return std::nullopt;
     }
     const std::span<const std::byte> body = bytes.value();
-    auto detected = core::DetectedText::from_bytes(
-        std::string_view{std::bit_cast<const char *>(body.data()), body.size()});
+    const std::string_view view{std::bit_cast<const char *>(body.data()), body.size()};
+    if (remnant.form.has_value())
+    {
+        const AutosaveForm &form = remnant.form.value();
+        auto text = core::TextBuffer::from_utf8(view, form.body);
+        if (!text)
+        {
+            return std::nullopt;
+        }
+        return restored_document(std::move(text).value(),
+                                 Document{remnant.path, form.encoding, std::nullopt, form.save},
+                                 remnant.caret, state_.display_language());
+    }
+    auto detected = core::DetectedText::from_bytes(view);
     if (!detected)
     {
         return std::nullopt;
@@ -278,9 +294,10 @@ void EditorController::store_planned(AutosaveId id)
 bool EditorController::store_autosave(AutosaveId id, const core::TextBuffer &text,
                                       const Document &document, core::TextPosition caret)
 {
+    // 本文は文書の文字コードによらず UTF-8（BOM なし）・本文の改行の形のまま（写さない）で、保存と
+    // 同じ encoded_parts の 1 本で作る。形は form に記録する（追補 #1688 の決定 1・2）。
     std::string held;
-    const auto parts = encoded_parts(text, document.encoding,
-                                     save_line_ending_of(document, text.line_ending()), held);
+    const auto parts = encoded_parts(text, core::TextEncoding::utf8, text.line_ending(), held);
     if (!parts)
     {
         notify_autosave_failure();
@@ -290,7 +307,8 @@ bool EditorController::store_autosave(AutosaveId id, const core::TextBuffer &tex
     ports_.autosave.store(AutosaveSnapshot{
         id, document.path,
         core::tab_title_for(document.path, core::SaveState::modified, state_.display_language()),
-        joined_bytes(parts.value()), caret});
+        joined_bytes(parts.value()), caret,
+        AutosaveForm{document.encoding, document.line_ending, text.line_ending()}});
     return true;
 }
 

@@ -1,6 +1,8 @@
 #include "AutosaveCodec.hpp"
 
 #include "AbsolutePath.hpp"
+#include "AutosaveForm.hpp"
+#include "DocumentFormat.hpp"
 #include "TextLines.hpp"
 #include "Utf8.hpp"
 
@@ -17,7 +19,10 @@ namespace
 {
 using Failure = application::AutosaveFailure;
 using Lines = std::vector<std::string_view>;
-using Fields = std::array<std::string_view, 4>;
+using FormFields = std::array<std::string_view, 3>;
+
+constexpr std::string_view version_line_1 = "version=1";
+constexpr std::string_view version_line_2 = "version=2";
 
 // 符号も空白も無い 10 進だけを受ける。
 [[nodiscard]] std::optional<std::uint64_t> number_of(std::string_view text)
@@ -68,10 +73,11 @@ using Fields = std::array<std::string_view, 4>;
     return std::optional<core::FilePath>{std::move(path).value()};
 }
 
-// entry の値を 4 欄とパスに割る。パスは最後の欄で行末まで。
-[[nodiscard]] std::optional<Fields> fields_of(std::string_view &line)
+// entry の値の先頭から Count 欄を割り、line を残りへ進める。パスは最後の欄で行末まで。
+template <std::size_t Count>
+[[nodiscard]] std::optional<std::array<std::string_view, Count>> fields_of(std::string_view &line)
 {
-    Fields fields{};
+    std::array<std::string_view, Count> fields{};
     for (auto &field : fields)
     {
         const auto separator = line.find(',');
@@ -85,10 +91,43 @@ using Fields = std::array<std::string_view, 4>;
     return fields;
 }
 
-[[nodiscard]] std::optional<AutosaveEntry> entry_of(std::string_view entry, std::string_view title)
+// 版 2 の文書の形の 3 欄（文字コード・本文の改行の形・保存の改行の形（空は値なし））。名前は
+// `:set fenc=` `:set ff=` と同じ core の表（DocumentFormat）。知らない名前は壊れている。
+[[nodiscard]] std::optional<application::AutosaveForm> form_of(const FormFields &fields)
 {
-    const auto fields = fields_of(entry);
-    if (!fields.has_value())
+    const auto encoding = core::encoding_of_option_name(fields[0]);
+    const auto body = core::line_ending_of_option_name(fields[1]);
+    const auto save = core::line_ending_of_option_name(fields[2]);
+    if (!encoding.has_value() || !body.has_value() || (!fields[2].empty() && !save.has_value()))
+    {
+        return std::nullopt;
+    }
+    return application::AutosaveForm{encoding.value(), save, body.value()};
+}
+
+// 版 2 は 4 欄の後に形の 3 欄を読む（版 1 は形なし・追補 #1688 の決定 3）。
+[[nodiscard]] std::optional<std::optional<application::AutosaveForm>>
+entry_form_of(std::string_view &entry, bool formed)
+{
+    if (!formed)
+    {
+        return std::optional<application::AutosaveForm>{};
+    }
+    const auto fields = fields_of<3>(entry);
+    const auto form = fields.has_value() ? form_of(fields.value()) : std::nullopt;
+    if (!form.has_value())
+    {
+        return std::nullopt;
+    }
+    return std::optional<application::AutosaveForm>{form.value()};
+}
+
+[[nodiscard]] std::optional<AutosaveEntry> entry_of(std::string_view entry, std::string_view title,
+                                                    bool formed)
+{
+    const auto fields = fields_of<4>(entry);
+    const auto form = fields.has_value() ? entry_form_of(entry, formed) : std::nullopt;
+    if (!fields.has_value() || !form.has_value())
     {
         return std::nullopt;
     }
@@ -104,10 +143,12 @@ using Fields = std::array<std::string_view, 4>;
     }
     return AutosaveEntry{
         application::AutosaveId{id.value()}, std::move(path).value(), std::move(shown).value(),
-        core::TextPosition{core::LineNumber{line.value()}, core::Column{column.value()}}};
+        core::TextPosition{core::LineNumber{line.value()}, core::Column{column.value()}},
+        form.value()};
 }
 
-[[nodiscard]] std::expected<std::vector<AutosaveEntry>, Failure> entries_of(const Lines &lines)
+[[nodiscard]] std::expected<std::vector<AutosaveEntry>, Failure> entries_of(const Lines &lines,
+                                                                            bool formed)
 {
     if ((lines.size() - 1) % 2 != 0 || (lines.size() - 1) / 2 > maximum_autosave_entries)
     {
@@ -120,7 +161,7 @@ using Fields = std::array<std::string_view, 4>;
         const auto entry = header_value(lines.at(index), "entry");
         const auto title = header_value(lines.at(index + 1), "title");
         auto decoded = entry.has_value() && title.has_value()
-                           ? entry_of(entry.value(), title.value())
+                           ? entry_of(entry.value(), title.value(), formed)
                            : std::nullopt;
         if (!decoded.has_value())
         {
@@ -148,11 +189,12 @@ std::expected<std::vector<AutosaveEntry>, Failure> decode_autosave_entries(std::
         return std::unexpected(Failure::unreadable);
     }
     const Lines lines = text_lines(bytes);
-    if (lines.empty() || lines.front() != "version=1")
+    // 知らない版（新しすぎる版を含む）は壊れた一覧と同じに拒む（そのフォルダは問わず、消さない）。
+    if (lines.empty() || (lines.front() != version_line_1 && lines.front() != version_line_2))
     {
         return std::unexpected(Failure::unreadable);
     }
-    return entries_of(lines);
+    return entries_of(lines, lines.front() == version_line_2);
 }
 
 std::expected<std::string, Failure>
@@ -162,14 +204,25 @@ encode_autosave_entries(const std::vector<AutosaveEntry> &entries)
     {
         return std::unexpected(Failure::unwritable);
     }
-    std::string bytes = "version=1\n";
+    std::string bytes = std::format("{}\n", version_line_2);
     for (const AutosaveEntry &entry : entries)
     {
+        // 書くのは版 2 だけで、形の無い行は書けない（自分の一覧は版 2 の行だけ）。
+        if (!entry.form.has_value())
+        {
+            return std::unexpected(Failure::unwritable);
+        }
+        const application::AutosaveForm &form = entry.form.value();
         const std::string_view path =
             entry.path.has_value() ? entry.path.value().text() : std::string_view{};
-        bytes += std::format("entry={},{},{},{},{}\ntitle={}\n", entry.id.value,
-                             entry.caret.line.value, entry.caret.column.value,
-                             autosave_body_name(entry.id), path, entry.title.text());
+        const std::string_view save = form.save.has_value()
+                                          ? core::line_ending_option_name(form.save.value())
+                                          : std::string_view{};
+        bytes +=
+            std::format("entry={},{},{},{},{},{},{},{}\ntitle={}\n", entry.id.value,
+                        entry.caret.line.value, entry.caret.column.value,
+                        autosave_body_name(entry.id), core::encoding_option_name(form.encoding),
+                        core::line_ending_option_name(form.body), save, path, entry.title.text());
         if (bytes.size() > maximum_autosave_list_bytes)
         {
             return std::unexpected(Failure::unwritable);

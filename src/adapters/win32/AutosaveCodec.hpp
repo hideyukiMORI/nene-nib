@@ -22,10 +22,14 @@ inline constexpr std::size_t maximum_autosave_list_bytes = 1024U * 1024U;
 [[nodiscard]] std::string autosave_body_name(application::AutosaveId id);
 
 // 形式（UTF-8・書きは LF・読みは CRLF と BOM も受ける・session.v2 と同じ行の道具）:
-//   version=1
-//   entry=<番号>,<キャレットの行>,<桁>,<本文のファイル名>,<パス（無題なら空）>
+//   version=2
+//   entry=<番号>,<キャレットの行>,<桁>,<本文のファイル名>,<文字コード>,<本文の改行の形>,
+//         <保存の改行の形（選んでいなければ空）>,<パス（無題なら空）>
 //   title=<題名>
 // entry と title の 2 行で 1 タブ。パスは行の最後の欄で行末まで読む。行と桁は 1 始まり。
+// 文字コードと改行の形の名前は `:set fenc=` `:set ff=` と同じ（core の DocumentFormat・追補
+// #1688）。書くのは版 2 だけ。読みは版 2 と、前の版 1（形の 3 欄が無い・entry の form は無し）を
+// 受け、ほかの版は壊れた一覧と同じに拒む。
 // 本文のファイル名は番号から作る名前と一致しなければ拒む。壊れたものは一部だけ返さず全体を拒む。
 [[nodiscard]] std::expected<std::vector<AutosaveEntry>, application::AutosaveFailure>
 decode_autosave_entries(std::string_view bytes);

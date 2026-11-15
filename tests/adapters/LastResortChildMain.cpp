@@ -11,12 +11,15 @@
 //   nested  退避の口の中で noexcept を例外が抜ける（手続きに 2 度目に入る・既定へ渡す）
 //   lock    UI スレッドが mutex を握ったまま落ち、退避の口が同じ mutex を取りに行く
 //   real    本物の Win32AutosaveAdapter（置き場の下の work/autosave）で 1 本を退避して落ちる
+#include "AutosaveForm.hpp"
 #include "AutosaveId.hpp"
 #include "AutosaveOutcome.hpp"
 #include "AutosaveSnapshot.hpp"
 #include "DisplayText.hpp"
 #include "FilePath.hpp"
 #include "LastResortArming.hpp"
+#include "LineEnding.hpp"
+#include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "Win32AutosaveAdapter.hpp"
 #include "Win32FileAdapter.hpp"
@@ -176,7 +179,9 @@ int run_real()
         autosave.store(application::AutosaveSnapshot{
             application::AutosaveId{real_id}, std::nullopt,
             core::DisplayText::parse("無題").value(), bytes_of(real_text),
-            core::TextPosition{core::LineNumber{1}, core::Column{2}}});
+            core::TextPosition{core::LineNumber{1}, core::Column{2}},
+            application::AutosaveForm{core::TextEncoding::utf8, std::nullopt,
+                                      core::LineEnding::lf}});
         const bool flushed = autosave.flush();
         const auto outcomes = autosave.collect();
         return flushed &&
