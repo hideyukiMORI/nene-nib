@@ -119,7 +119,7 @@ records in `docs/quality/`.
   filename expansion is planned. Failed writes keep the old name and tab open (D39). See
   [ADR 0067](docs/adr/0067-ex-filenames-share-atomic-save-policy.md).
   Not yet: uppercase marks `'A`-`'Z` and `:marks`, `:g` `:v` `:sort` (FR-027), read-only registers
-  `". ": "/ "%`, NORMAL `s S R` and VISUAL `S`, autoindent, dragging into VISUAL with the mouse in Vim mode, easymotion (FR-023),
+  `". ": "/ "%`, NORMAL `R` and VISUAL `S` (reserved for surround; Vim changes the lines), autoindent, dragging into VISUAL with the mouse in Vim mode, easymotion (FR-023),
   commentary, surround and INSERT completion (FR-024).
 - **FR-004 one toggle** — the status bar switches "通常 | Vim" ("Basic | Vim" in English and "标准 | Vim" in
   Simplified Chinese, decision D89), and so does `Ctrl+Shift+Space` in either mode (D61). Done.
