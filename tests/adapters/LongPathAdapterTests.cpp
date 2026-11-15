@@ -239,7 +239,7 @@ void verify_round_trip(adapters::Win32FileAdapter &files, const std::wstring &de
     expect(!left.valid(), "no temporary is left beside the long path");
 }
 
-// 前の保存の残骸（自分の古い連番）は、長い経路でも保存の直前に回収される（ADR 0135 の決定 3）。
+// 前の保存の残骸（自分の古い連番）は、長い経路でも成功した保存の後に回収される（#1689）。
 void verify_reclaim(adapters::Win32FileAdapter &files, const std::wstring &deep)
 {
     const std::wstring target = deep + L"\\note.txt";
