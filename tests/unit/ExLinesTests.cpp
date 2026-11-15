@@ -227,6 +227,36 @@ void verify_line_notices()
            "deleting every line says the buffer is empty");
 }
 
+// `:g` の中の `c`（打った `c` と `&&` が引き継いだ `c`）は問いを開かず、本文・履歴・
+// レジスタを変えずに断る（#1743・問う形は #1744）。`c` の無い `:g/a/s//X/` は置き換える。
+void verify_global_confirm_refused()
+{
+    constexpr std::string_view refused = "Not supported: the c flag of :s in :g";
+    Editing typed;
+    open_vim_document(typed, std::string(seven_lines));
+    auto &controller = typed.controller();
+    vim_normal(controller, "$x");
+    const std::string before = whole_vim_body(controller);
+    expect(ran(controller, ":g/a/s//X/c<CR>") == refused && whole_vim_body(controller) == before &&
+               controller.vim_state().unnamed_register.value().text == "a",
+           ":g/a/s//X/c is refused before anything changes");
+    vim_normal(controller, "u");
+    expect(whole_vim_body(controller) == seven_lines,
+           "the refused :g leaves no undo unit (one u undoes the x before it)");
+    Editing kept;
+    open_vim_document(kept, std::string(seven_lines));
+    auto &again = kept.controller();
+    vim_normal(again, ":s/a/b/c<CR>q");
+    expect(whole_vim_body(again) == seven_lines, "q answers the question without replacing");
+    expect(ran(again, ":g/a/&&<CR>") == refused && whole_vim_body(again) == seven_lines,
+           "the c that :g/a/&& keeps from the last :s is refused the same way");
+    Editing plain;
+    open_vim_document(plain, std::string(seven_lines));
+    vim_normal(plain.controller(), ":g/a/s//X/<CR>");
+    expect(whole_vim_body(plain.controller()) == "l1 X\n  l2 b\nl3 X\n\tl4 b\nl5 X\n  l6 b\nl7 X",
+           ":g/a/s//X/ without c still replaces on the marked lines");
+}
+
 void verify_line_records()
 {
     Editing editing;
@@ -284,6 +314,7 @@ void verify_ex_lines_scope()
     verify_global_command_failures();
     verify_global_through_evaluate();
     verify_line_notices();
+    verify_global_confirm_refused();
     verify_line_records();
     verify_change_marks();
 }

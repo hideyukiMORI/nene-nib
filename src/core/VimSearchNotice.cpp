@@ -146,6 +146,8 @@ DisplayText vim_search_message(const VimSearchNotice &notice)
         return message_of("Not supported: the c flag of :s in a replay");
     case VimSearchNoticeKind::confirm_with_operator:
         return message_of("Not supported: the c flag of :s with an operator");
+    case VimSearchNoticeKind::confirm_in_global:
+        return message_of("Not supported: the c flag of :s in :g");
     case VimSearchNoticeKind::fewer_lines:
         return message_of(std::to_string(notice.count) + " fewer lines");
     case VimSearchNoticeKind::lines_yanked:
