@@ -1,5 +1,6 @@
 #pragma once
 
+#include "VimConfirmSubstitute.hpp"
 #include "VimInsertAt.hpp"
 #include "VimInsertBlock.hpp"
 #include "VimInsertString.hpp"
@@ -32,5 +33,5 @@ using VimEffect =
     std::variant<VimNoEffect, VimMoveTo, VimNavigate, VimSelect, VimRemoveRange, VimRemoveLines,
                  VimInsertString, VimNewLine, VimInsertAt, VimReplaceRange, VimRemoveBlock,
                  VimReplaceBlock, VimInsertBlock, VimUndo, VimRedo, VimOpenCommandLine,
-                 VimOpenSearch, VimReplay, VimSwitchTab, VimWindowCommand>;
+                 VimOpenSearch, VimReplay, VimSwitchTab, VimWindowCommand, VimConfirmSubstitute>;
 } // namespace nenenib::core

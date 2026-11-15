@@ -208,6 +208,51 @@ substituted(const TextBuffer &text, const VimPattern &pattern,
     return result;
 }
 
+std::expected<std::vector<SubstituteMatch>, SubstituteFailure>
+substitute_matches(const TextBuffer &text, const VimPattern &pattern,
+                   const SubstituteReplacement &replacement, const SubstituteRequest &request)
+{
+    const SubstituteScan scan{text,
+                              pattern,
+                              replacement,
+                              request.every,
+                              replacement.reads_subgroups() && pattern.group_count() > 0,
+                              request.capture_limit};
+    SubstituteRequest all = request;
+    all.count_only = false;
+    const auto tally = checked_tally(scan, all);
+    if (!tally)
+    {
+        return std::unexpected(tally.error());
+    }
+    const std::size_t newline = newline_of(text.line_ending()).size();
+    std::vector<SubstituteMatch> matches;
+    std::size_t growth = 0;
+    for (std::size_t line = tally.value().first; line <= tally.value().last; ++line)
+    {
+        const std::string content = text.line_text(LineNumber{line});
+        const std::size_t start = text.line_start(LineNumber{line}).value;
+        auto visit = [&](VimPatternMatch match)
+        {
+            const auto captures = captures_of(scan, content, match).value_or(match_only(match));
+            std::string utf8;
+            replacement.appended(utf8, content, captures);
+            const std::size_t added = replacement.expanded_bytes(content, captures, newline);
+            growth += added > match.end - match.begin ? added - (match.end - match.begin) : 0;
+            matches.push_back(
+                SubstituteMatch{OffsetRange{Offset{start + match.begin}, Offset{start + match.end}},
+                                std::move(utf8), LineNumber{line}});
+        };
+        each_line_match(content, pattern, request.every, visit);
+    }
+    // 増やす当たりだけを全部置いた形がいちばん大きい（どの答えの組もこれを超えない）。
+    if (!fits(text.size_bytes(), growth, request.limit))
+    {
+        return std::unexpected(SubstituteFailure::too_large);
+    }
+    return matches;
+}
+
 std::expected<Edit, SubstituteFailure> substituted_all(const TextBuffer &text,
                                                        const VimPattern &pattern,
                                                        std::string_view replacement,
