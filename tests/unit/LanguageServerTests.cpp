@@ -4,6 +4,7 @@
 // clangd も窓も使わない。
 #include "CloseTab.hpp"
 #include "Column.hpp"
+#include "CommandText.hpp"
 #include "DeleteDirection.hpp"
 #include "DeleteText.hpp"
 #include "DiagnosticCounts.hpp"
@@ -578,6 +579,40 @@ void verify_net_zero_intent()
            "the next real edit still goes out with a version above the last sent one");
 }
 
+// 決定 1 と ADR 0168 の追補 段 2a（レビュー V-1666 の M2）: `:s///c` の問いは意図をまたぎ、答えの
+// たびに didChange を送る。終わりの畳みが改訂番号を問いの途中より小さく戻すと、畳んだ後の最初の
+// 編集の版が送り済みの版以下になって捨てられ、サーバーの本文がずれる。
+void verify_question_fold_versions()
+{
+    Editing editing(lsp_settings(true));
+    editing.files().hold_at(std::string(second_path), Bytes{std::string("a\na\na\n")});
+    applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+    applied(editing.controller(), app::OpenDocument{path_of(second_path)});
+    static_cast<void>(delivered(editing, app::ServerStarted{}));
+    answered(editing);
+    auto &server = editing.language_server();
+    // 入力行が開いている間の VimKeyPress は捨てられるので、`:` の行は :normal! の口で打つ。
+    vim_normal(editing.controller(), ":%s/a/X/gc<CR>");
+    for (const std::string_view answer : {"y", "y", "q"})
+    {
+        applied(editing.controller(), app::CommandText{std::string(answer)});
+    }
+    const auto answered_changes = server.notifications("textDocument/didChange");
+    for (const auto &key : vim_keys_of("x"))
+    {
+        applied(editing.controller(), app::VimKeyPress{key});
+    }
+    const auto after = server.notifications("textDocument/didChange");
+    expect(
+        answered_changes.size() == 2 && after.size() == 3 &&
+            version_in(after.back()).value_or(0) >
+                version_in(answered_changes.back()).value_or(0) &&
+            contains(
+                after.back(),
+                R"({"range":{"start":{"line":2,"character":0},"end":{"line":2,"character":1}},"text":""})"),
+        "the first edit after the question's fold goes out with a version above every answer's");
+}
+
 // 決定 1: タブを閉じたら `didClose`。切り替えと保存では送らない（決定 8）。2 言語目は前を閉じる。
 void verify_did_close()
 {
@@ -890,6 +925,7 @@ void verify_language_server_contracts()
     verify_did_open();
     verify_did_change_bundles();
     verify_net_zero_intent();
+    verify_question_fold_versions();
     verify_did_close();
     verify_saved_as();
     verify_diagnostics_placed();

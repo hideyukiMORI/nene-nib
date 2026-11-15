@@ -2,6 +2,7 @@
 
 #include "Edit.hpp"
 #include "SubstituteFailure.hpp"
+#include "SubstituteMatch.hpp"
 #include "SubstituteReplacement.hpp"
 #include "SubstituteRequest.hpp"
 #include "SubstituteResult.hpp"
@@ -11,6 +12,7 @@
 #include <cstddef>
 #include <expected>
 #include <string_view>
+#include <vector>
 
 namespace nenenib::core
 {
@@ -26,6 +28,14 @@ namespace nenenib::core
 [[nodiscard]] std::expected<SubstituteResult, SubstituteFailure>
 substituted(const TextBuffer &text, const VimPattern &pattern,
             const SubstituteReplacement &replacement, const SubstituteRequest &request);
+
+// `:s///c` の当たりの列（ADR 0168 の決定 6・段 2a）。substituted と同じ当たりを同じ順で、当たり
+// ごとの範囲と広げた置き換えにして返す（行には畳まない）。当たりが無ければ no_match、群を引けない
+// 当たりは too_complex。どの部分集合を置いても文書が request.limit を超えないこと（増やす当たりを
+// 全部置いた大きさ）を問う前に確かめ、超えるなら too_large。request.count_only は読まない。
+[[nodiscard]] std::expected<std::vector<SubstituteMatch>, SubstituteFailure>
+substitute_matches(const TextBuffer &text, const VimPattern &pattern,
+                   const SubstituteReplacement &replacement, const SubstituteRequest &request);
 
 // 本文の当たりをすべて replacement（literal）で置き換えた 1 回の Edit（ADR 0174 の決定 7・
 // 通常モードの「すべて置換」）。substituted の全行・every と同じ当たりを、最初の当たりの始まりから
