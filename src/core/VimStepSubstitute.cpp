@@ -802,6 +802,13 @@ VimStep global_substituted(const VimState &state, const VimEditorView &view,
         next.last_substitute = std::make_shared<const VimSubstituteMemory>(std::move(memory));
         return noticed(next, notice_of(refused.value()), VimRepeatFailure::refused);
     }
+    // `:g` の中の `c`（打った `c` も `&&` が引き継いだ `c` も）は問いを開かずに断る（本文・状態は
+    // 変えない・ADR 0168 の段 3a の追補・Vim の当たりごとに問う形は #1744）。
+    if (memory.flags.confirm)
+    {
+        return noticed(state, notice_of(VimSearchNoticeKind::confirm_in_global),
+                       VimRepeatFailure::refused);
+    }
     const std::string pattern_text = pattern.value_or(std::string{});
     memory.pattern = pattern_text;
     memory.previous = vim_tilde_expanded(memory.replacement, previous_of(state));

@@ -48,6 +48,9 @@ enum class VimSearchNoticeKind : std::uint8_t
     // オペレータ待ちの `:s///c`（`d:s/a/X/gc`）は問いを開かない（Vim には無い報せ・ADR 0168 の
     // 段 2a の追補 13）。Vim は問いが終わってからオペレータを閉じるが、Nib は断る。
     confirm_with_operator,
+    // `:g` の中の `:s///c`（`:g/a/s//X/c`・`c` を引き継ぐ `:g/a/&&`）は問いを開かない（Vim には無い
+    // 報せ・ADR 0168 の段 3a の追補）。Vim は当たりごとに問うが、Nib は断る（問う形は #1744）。
+    confirm_in_global,
     // `:d` `:g/pat/d` が消した行の数（ADR 0168 の段 3a・Vim の msgmore）。N fewer lines（'report'
     // の 既定 2 を超えたときだけ）。数は count。
     fewer_lines,
