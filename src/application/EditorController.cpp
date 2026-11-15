@@ -127,8 +127,9 @@ visual_block_of(const core::TextBuffer &text, const core::Selection &selection, 
 // 描く選択（ADR 0022 の追補 #1526 の段 #1572）。VISUAL から開いた `:` の入力行の間は、前の選択
 // （`gv` が選び直す範囲・vim_last_visual_selection）を VISUAL のときと同じ 1 本（vim_visual_range
 // と vim_block_range_for）で区間にする。モード・engine の状態・`'<` `'>` は変えない（見た目だけ）。
-// それ以外（入力行が閉じた・NORMAL の `:`・`d:`）は今の選択のまま。
-[[nodiscard]] PaneSource drawn_source(const PaneSource &current)
+// それ以外（入力行が閉じた・NORMAL の `:`・`d:`）は今の選択のまま。束は値で受けて返す（return が
+// move になるので、矩形の行の列を写さない・#1583 L1）。
+[[nodiscard]] PaneSource drawn_source(PaneSource current)
 {
     const EditorState &state = current.state;
     const auto &last = state.vim_marks().last_visual;

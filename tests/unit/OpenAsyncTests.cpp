@@ -3,6 +3,7 @@
 // 裏へ回った大きなファイルは揃うまでタブを足さずステータスバーに 1 行だけ出し、今の券の結果だけを
 // 採る。失敗は値で、告げ方は呼び手ごとの今の規則。まだ読んでいないタブ・起動の復元・一覧から
 // 開く道も同じ port を通る。
+#include "BeginFind.hpp"
 #include "CancelCommand.hpp"
 #include "CaretMotion.hpp"
 #include "CloseTab.hpp"
@@ -55,6 +56,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -575,6 +577,115 @@ void verify_adopted_read_drops_wanted_x()
            "the move after an adopted read starts from the new caret, not the old wanted column");
 }
 
+// 入力行の開き方（Vim の `:` と `/`・通常モードの「検索: 」は 0）。
+void open_input_line(app::EditorController &controller, char32_t line)
+{
+    if (line == 0)
+    {
+        applied(controller, app::BeginFind{});
+    }
+    else
+    {
+        applied(controller, app::SelectEditMode{core::EditMode::vim});
+        applied(controller, app::VimKeyPress{core::VimKey{core::VimCharacter{line}}});
+    }
+    applied(controller, app::CommandText{"x"});
+}
+
+// 入力行が開いている間に開く意図（Ctrl+O・ドロップ・起動画面と一覧の open_listed は同じ
+// open_document の 1 本）が届いても、入力行の下で本文は替わらない。空の無題に開く道（blank_untitled
+// → with_opened）でも新しいタブの道でも、揃った読みは入力行が閉じる意図の終わりで採る（追補 2・
+// #1583 F1）。
+void check_open_under_input_line(char32_t line, bool blank)
+{
+    Editing editing;
+    editing.files().hold_at("C:\\work\\a.txt", Bytes{"alpha"});
+    editing.files().hold_at("C:\\work\\b.txt", Bytes{"beta"});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    if (!blank)
+    {
+        applied(controller, app::OpenDocument{path_of("C:\\work\\a.txt")});
+    }
+    open_input_line(controller, line);
+    const auto under = controller.apply_frame(app::OpenDocument{path_of("C:\\work\\b.txt")});
+    expect(under.command_line.has_value() && under.tabs.size() == 1 &&
+               first_line(under) == (blank ? "" : "alpha"),
+           "the text under an open input line does not change when a file opens (#1583)");
+    const auto closed = controller.apply_frame(app::CancelCommand{});
+    expect(!closed.command_line.has_value() && first_line(closed) == "beta" &&
+               closed.tabs.size() == (blank ? 1U : 2U),
+           "the held file opens once the input line closes (#1583)");
+}
+
+void verify_open_under_input_line()
+{
+    for (const char32_t line : {U':', U'/', char32_t{0}})
+    {
+        check_open_under_input_line(line, true);
+        check_open_under_input_line(line, false);
+    }
+}
+
+// 開いている別のタブのファイルを入力行の間に開くと、切り替えの leave_document が入力行を Esc と同じ
+// 形で閉じる。検索の preview は入力前の画面へ戻してから離れる（ADR 0041 の決定 5・#1583 F1）。
+void verify_open_tab_under_search_preview()
+{
+    Editing editing;
+    std::string many;
+    for (int number = 1; number <= 40; ++number)
+    {
+        many += "line " + std::to_string(number) + "\n";
+    }
+    editing.files().hold_at("C:\\work\\a.txt", Bytes{many});
+    editing.files().hold_at("C:\\work\\b.txt", Bytes{"beta"});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    applied(controller, app::OpenDocument{path_of("C:\\work\\b.txt")});
+    applied(controller, app::OpenDocument{path_of("C:\\work\\a.txt")});
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    applied(controller, app::VimKeyPress{core::VimKey{core::VimCharacter{U'/'}}});
+    const auto previewed = controller.apply_frame(app::CommandText{"line 30"});
+    expect(previewed.first_visible.value > 1, "incsearch scrolls the preview to the match");
+    const auto switched = controller.apply_frame(app::OpenDocument{path_of("C:\\work\\b.txt")});
+    expect(!switched.command_line.has_value() && first_line(switched) == "beta",
+           "opening a file already in a tab closes the input line and switches (#1583)");
+    const auto back = controller.apply_frame(app::SwitchTab{1});
+    expect(first_line(back) == "line 1" && back.first_visible.value == 1 &&
+               back.caret.position == core::TextPosition{core::LineNumber{1}, core::Column{1}},
+           "the left document is back at the screen before the search (#1583)");
+}
+
+// 起動の復元で見ていたタブを裏で読んでいる間に、仮に残した空の無題へ別のファイルを開くと、文書が
+// 替わったので揃った後もそのタブへは切り替えない（追補 6・空の無題の道も leave_document を通す・
+// #1583 F1）。揃ったタブは帯に残る。
+void verify_open_into_restore_placeholder()
+{
+    Editing editing(two_listed(), {},
+                    [](ScriptedFiles &files, ScriptedDocumentReads &reads)
+                    {
+                        files.hold_at("C:\\work\\a.txt", Bytes{"a"});
+                        files.hold_at("C:\\work\\b.txt", Bytes{"large body"});
+                        files.hold_at("C:\\work\\c.txt", Bytes{"c"});
+                        reads.defer_above(deferred_bytes);
+                    });
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    const std::uint64_t restored = last_ticket(editing);
+    const auto opened = controller.apply_frame(app::OpenDocument{path_of("C:\\work\\c.txt")});
+    expect(opened.tabs.size() == 3 && opened.document.title.text() == "c.txt" &&
+               first_line(opened) == "c",
+           "a small file opens into the placeholder untitled while the restored tab is read");
+    editing.reads().finish(restored);
+    const auto arrived = controller.apply_frame(app::WorkCompleted{});
+    expect(arrived.tabs.size() == 3 && arrived.document.title.text() == "c.txt" &&
+               first_line(arrived) == "c",
+           "the restored tab read does not switch away from the file opened since (#1583)");
+    const auto shown = controller.apply_frame(app::SwitchTab{2});
+    expect(shown.document.title.text() == "b.txt" && first_line(shown) == "large body",
+           "the restored tab is in the band, read");
+}
+
 } // namespace
 
 void verify_open_async_contracts()
@@ -595,6 +706,9 @@ void verify_open_async_contracts()
     verify_open_held_while_vim_waits();
     verify_walk_skips_reading_tabs();
     verify_adopted_read_drops_wanted_x();
+    verify_open_under_input_line();
+    verify_open_tab_under_search_preview();
+    verify_open_into_restore_placeholder();
 }
 
 void verify_open_async_scope()
