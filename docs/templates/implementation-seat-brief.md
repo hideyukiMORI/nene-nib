@@ -1,12 +1,12 @@
 # 依頼書の型 — 実装席
 
 > 正本は [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md)（席ごとのモデル）と [ADR 0039](../adr/0039-implementation-seat-per-step-and-small-tool-output.md)（工程ごとの席・道具出力）。
-> この型を `D:\NeNeNib\briefs\` に写して埋め（リポジトリの外の作業場所は D ドライブ・施主指示 2026-09-30。C ドライブの scratchpad と Temp は使わない）、Agent（`subagent_type: general-purpose`・`model: opus`）にパスを渡す。モデルは別名で書き、版の番号は書かない（`model` を省くと設計席のモデルを継ぐ・ADR 0038 の 2026-11-15 の追補）。小さい chore は依頼書を別に書かず、Issue 本文と ADR を指して席とモデルと工程を 1 行で伝える。
+> この型を `D:\NeNeNib\briefs\` に写して埋め（リポジトリの外の作業場所は D ドライブ・施主指示 2026-09-30。C ドライブの scratchpad と Temp は使わない）、Agent（`subagent_type: general-purpose`）にパスを渡す。モデルは設計席がその仕事を見て決め（施主指示 2026-11-15・ADR 0038 の追補）、別名（`opus` `sonnet` `haiku`）で書いて版の番号は書かない。`model` を省いた席は設計席のモデルで走る。小さい chore は依頼書を別に書かず、Issue 本文と ADR を指して席とモデルと工程を 1 行で伝える。
 
 ```markdown
 # 依頼書 #<issue> — <題>（<工程>）
 
-席・モデル・工程: 実装席 / opus / <probe | 実装 | 差し戻し対応 N 回目>
+席・モデル・工程: 実装席 / <設計席が決めた別名> / <probe | 実装 | 差し戻し対応 N 回目>
 Issue: https://github.com/hideyukiMORI/nene-nib/issues/<issue>（`gh issue view <issue>`）
 ADR: docs/adr/<NNNN>-....md（決定 1〜N が設計。変えない）
 前の工程の報告: <`out/reports/done-<issue>-<工程>.md` のパス。無ければ「無し」>
@@ -54,8 +54,8 @@ CLAUDE.md §5 を `done-<issue>-<工程>.md` に書く。親への最終報告�
 
 | 工程 | 席 | 渡すもの | 受け取るもの |
 | --- | --- | --- | --- |
-| probe（現物調査） | 新しい席（`sonnet`。読むだけ・ADR 0038） | Issue・調べる問い（15 件以内） | `probe-<issue>.md`（300 行以内） |
-| 実装 | 新しい席（`opus`） | 依頼書・probe の報告のパス | draft PR・報告ファイル・30 行の報告 |
-| 差し戻し対応 | 新しい席（`opus`）・変更 1 命題 | 依頼書（狭く）・前の報告のパス・差し戻しの 1 命題 | 同上 |
+| probe（現物調査） | 新しい席（読むだけ） | Issue・調べる問い（15 件以内） | `probe-<issue>.md`（300 行以内） |
+| 実装 | 新しい席 | 依頼書・probe の報告のパス | draft PR・報告ファイル・30 行の報告 |
+| 差し戻し対応 | 新しい席・変更 1 命題 | 依頼書（狭く）・前の報告のパス・差し戻しの 1 命題 | 同上 |
 
-同じ席を `SendMessage` で次の工程に使わない。同じ工程の続き（429 で止まった・設計の穴で止まって報告した）は、同じ席に答えを送って再開する。main が動いた後のやり直しは新しい席。`fork` は設計席のモデルと全文脈を継ぐので背景席に使わない。
+同じ席を `SendMessage` で次の工程に使わない。同じ工程の続き（429 で止まった・設計の穴で止まって報告した）は、同じ席に答えを送って再開する。main が動いた後のやり直しは新しい席。`fork` は設計席のモデルと全文脈を継ぐので、背景の実装の席には向かない。
