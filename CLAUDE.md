@@ -206,9 +206,9 @@ v4 は既存 5 鍵に `ui_language` `lsp` `explorer` `root` `features` と任意
 `DestroyWindow(window_)` を呼ぶのは `EditorWindow::leave` の 1 か所（デストラクタの作りかけの後始末を除く）。終わり方ごとの未保存の扱いは application の `exit_plan(ExitCause, 未保存の数)` が決め、ui は値に従うだけ（ADR 0133）。OS の終了（`WM_QUERYENDSESSION`）は未保存があれば `ShutdownBlockReasonCreate` で止め、`end_window` を通さず窓を壊さない。
 描画の失敗は `recover()`（古い renderer を先に解放して `start_rendering`）で 1 回だけ作り直し（`present` は device lost のときだけ、サイズ・DPI・文字組みは失敗の種類を問わず）、だめなら `abandon()` が取消の無い「描画できなくなったので閉じます。保存しますか。」を通して `leave(SessionEnd::rendering_lost)` する。
 
-### 一時ファイルは `<target>.nib-tmp-<pid>-<n>` を `CREATE_NEW` で作り、保存の直前に残骸を回収する
+### 一時ファイルは `<target>.nib-tmp-<pid>-<n>` を `CREATE_NEW` で作り、置き換えが成功した後に残骸を回収する
 
-名前と回収は `src/adapters/win32/TemporaryFiles` の 1 か所（ADR 0135）。連番はプロセスで 1 つ（`next_temporary_sequence`）で、名前が既にあれば最大 8 回まで次を試す。回収は名前が `<16 進の pid>-<10 進の連番>` の形で、pid のプロセスが生きていない（`OpenProcess`・拒否は生きている側）か、自分の古い連番のものだけ。判定は純関数 `reclaimable_temporary` の 1 本で、時刻で決めない。起動時は合成ルートが設定の置き場で `reclaim_temporaries_beside` を 1 回呼ぶ。固定名の一時ファイルを書かない。
+名前と回収は `src/adapters/win32/TemporaryFiles` の 1 か所（ADR 0135）。連番はプロセスで 1 つ（`next_temporary_sequence`）で、名前が既にあれば最大 8 回まで次を試す。回収は名前が `<16 進の pid>-<10 進の連番>` の形で、pid のプロセスが生きていない（`OpenProcess`・拒否は生きている側）か、自分の古い連番のものだけ。判定は純関数 `reclaimable_temporary` の 1 本で、時刻で決めない。起動時は合成ルートが設定の置き場で `reclaim_temporaries_beside` を 1 回呼ぶ。置けなかった後の始末は `placement_cleanup` の 1 本で決め、新しいバイト列を消さない（#1689）。固定名の一時ファイルを書かない。
 
 ### 画面の文は `ui_text` の表。直書きしない（CNF-016）
 

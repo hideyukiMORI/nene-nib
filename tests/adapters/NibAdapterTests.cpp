@@ -1603,7 +1603,7 @@ void verify_reclaimed_residue(const std::wstring &residue)
     expect(
         fresh.write(path_of("nib-adapter-files/temporaries/kept.txt"), "after residue").has_value(),
         "a save succeeds beside a residue temporary file");
-    expect(!file_exists(residue), "a residue nobody holds is reclaimed before the save");
+    expect(!file_exists(residue), "a residue nobody holds is reclaimed after a save succeeds");
 }
 
 // 決定 5 (d): 設定の保存も同じ adapter を通るので、設定の置き場の残骸も保存の後に消える。
