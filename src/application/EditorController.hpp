@@ -1038,6 +1038,11 @@ class EditorController final
     void replace(const core::OffsetRange &range, std::string_view text, core::EditBoundary boundary,
                  std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> lines =
                      core::VimLineMarks::shifted);
+    // Vim のモードで eol の旗が立つ文書の置き換えの範囲と本文（ADR 0188 の決定 3 (a)）。空の本文に
+    // 本文を足すなら最後の改行も足し、engine を通らない編集が除いた本文を全部消すなら最後の改行も
+    // 消す（空で旗が立つ本文にする）。ほかは頼まれたまま。
+    [[nodiscard]] std::pair<core::OffsetRange, std::string>
+    vim_end_of_line_kept(const core::OffsetRange &range, std::string_view text) const;
     // engine の印が残っていれば（効果が本文を置き換えなかった鍵）、空の単位を積む
     // （ADR 0181 の決定 3）。積む口はこの 1 か所。印は鍵ごとに perform_vim_effect が
     // 置き、replace が編集を積めば消す。restore は効果を写す前のキャレット。
@@ -1046,6 +1051,8 @@ class EditorController final
     void note_vim_undone(const core::Edit &edit);
     // 鍵の効果を写す 1 か所（stepped_vim から）。鍵の印を置いてから写し、残った印を空の単位にする。
     void perform_vim_effect(const core::VimStep &step);
+    // 全部の行を消した鍵（ADR 0188 の決定 3 (a)）。eol の文書なら最後の改行も消して空の本文にする。
+    void remove_every_line(const core::VimStep &step);
     void move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring,
                        core::CaretAffinity affinity = core::CaretAffinity::leading);
     void accept(const PointText &intent);

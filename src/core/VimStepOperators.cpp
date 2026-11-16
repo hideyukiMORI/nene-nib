@@ -501,6 +501,28 @@ namespace detail
     return line_of(text, selection.anchor) == line ? text.line_start(line) : selection.caret;
 }
 
+} // namespace detail
+
+namespace
+{
+// 1 行目から最後の行までを消したら行が残らない（Vim の op_delete が ML_EMPTY にする・ADR 0188 の
+// 決定 3 (a)）。バイトの範囲ではなく行で決める（最後が空の行の本文で、空の行を残す削除と全部の
+// 行の削除は同じバイトの範囲になる）。行が 1 つも無い本文は出口の lines_emptied が外す。
+[[nodiscard]] VimStep lines_left_marked(VimStep step, const TextBuffer &text,
+                                        const VimMotionRange &range)
+{
+    if (detail::line_of(text, range.range.begin).value == 1 &&
+        detail::line_of(text, range.range.end).value >= text.line_count())
+    {
+        step.lines_left = VimLinesLeft::none;
+    }
+    return step;
+}
+} // namespace
+
+namespace detail
+{
+
 // 範囲をそのまま消す。VISUAL の `d` `x` はここへ直接来る（Vim の op_delete の「奇妙な Vi の
 // 振る舞い」は `!oap->is_VIsual` で守られていて、選択からの削除には掛からない。Issue #53 で実測）。
 [[nodiscard]] VimStep removed_exactly(const VimState &state, const TextBuffer &text,
@@ -524,10 +546,12 @@ namespace detail
                                           std::move(clipboard)),
                            range.restore.value_or(range.range.begin));
     case VimRegisterKind::lines:
-        return restored_at(with_clipboard(VimStep{std::move(next),
-                                                  VimRemoveLines{removed_lines_range(text, range)}},
-                                          std::move(clipboard)),
-                           range.restore.value_or(range.range.begin));
+        return lines_left_marked(
+            restored_at(with_clipboard(VimStep{std::move(next),
+                                               VimRemoveLines{removed_lines_range(text, range)}},
+                                       std::move(clipboard)),
+                        range.restore.value_or(range.range.begin)),
+            text, range);
     }
     std::unreachable();
 }

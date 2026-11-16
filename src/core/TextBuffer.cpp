@@ -21,6 +21,7 @@ namespace nenenib::core
 namespace
 {
 constexpr char carriage_return = '\r';
+constexpr char line_feed = '\n';
 // add の chunk の大きさ（ADR 0044 の決定 2 / 7）。これより大きい 1 回の挿入はその 1 本だけの chunk
 // になる。
 constexpr std::size_t chunk_bytes = std::size_t{64} * 1024U;
@@ -417,6 +418,17 @@ std::size_t TextBuffer::size_bytes() const noexcept
 std::size_t TextBuffer::line_count() const noexcept
 {
     return newline_count_ + 1;
+}
+
+std::size_t TextBuffer::final_line_break_bytes() const noexcept
+{
+    if (size_bytes_ == 0 || byte_at(Offset{size_bytes_ - 1}) != line_feed)
+    {
+        return 0;
+    }
+    const bool crlf = ending_ == LineEnding::crlf && size_bytes_ >= 2 &&
+                      byte_at(Offset{size_bytes_ - 2}) == carriage_return;
+    return crlf ? 2 : 1;
 }
 
 std::size_t TextBuffer::piece_count() const noexcept

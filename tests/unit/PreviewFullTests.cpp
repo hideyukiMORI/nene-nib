@@ -100,6 +100,11 @@ constexpr std::string_view refused = "プレビュー中は編集できません
         }
         joined += line.text;
     }
+    // Vim のモードで描かない最後の改行（ADR 0188 の決定 4）。
+    if (frame.hidden_line_break)
+    {
+        joined += "\n";
+    }
     return joined;
 }
 
@@ -313,7 +318,8 @@ void verify_scroll_keys()
     expect(anchor_line(editing, vim_keys(controller, "<C-d>")) == 3, "Ctrl-d moves half a page");
     expect(anchor_line(editing, vim_keys(controller, "<C-f>")) == 7, "Ctrl-f moves a page");
     expect(anchor_line(editing, vim_keys(controller, "<C-b>")) == 3, "Ctrl-b moves a page back");
-    expect(anchor_line(editing, vim_keys(controller, "G")) == 41, "G goes to the last line");
+    // 改行で終わる本文の最後の行は 40 行目（Vim のモードは最後の空の行を数えない・ADR 0188）。
+    expect(anchor_line(editing, vim_keys(controller, "G")) == 40, "G goes to the last line");
     expect(anchor_line(editing, vim_keys(controller, "gg")) == 1, "gg goes to the first line");
     expect(anchor_line(editing, controller.apply_frame(app::ScrollLines{3})) == 4,
            "the wheel over the body moves the anchor");

@@ -709,7 +709,7 @@ void EditorController::finish_vim_g(const VimKeyPress &press)
     const char32_t code = character == nullptr ? U'\0' : character->code;
     if (code == U'g')
     {
-        scroll_preview(-static_cast<std::int64_t>(state_.text().line_count()));
+        scroll_preview(-static_cast<std::int64_t>(state_.vim_text().line_count()));
         return;
     }
     if (code == U't' || code == U'T')
@@ -725,7 +725,7 @@ void EditorController::run_full_preview_route(PreviewFullRoute route, const Edit
 {
     const auto page =
         static_cast<std::int64_t>(std::max<std::size_t>(state_.scroll().visible_lines, 1));
-    const auto lines = static_cast<std::int64_t>(state_.text().line_count());
+    const auto lines = static_cast<std::int64_t>(state_.vim_text().line_count());
     switch (route)
     {
     case PreviewFullRoute::pass:
@@ -797,7 +797,7 @@ void EditorController::scroll_preview(std::int64_t lines)
     const core::LineNumber top = settled_scroll().first_visible;
     const core::Offset base = view.follows ? text.line_start(top) : view.anchor;
     const auto line = static_cast<std::int64_t>(text.position_of(base).line.value);
-    const auto last = static_cast<std::int64_t>(text.line_count());
+    const auto last = static_cast<std::int64_t>(state_.vim_text().line_count());
     const auto moved = std::clamp(line + lines, std::int64_t{1}, last);
     view.anchor = text.line_start(core::LineNumber{static_cast<std::size_t>(moved)});
     view.follows = false;
