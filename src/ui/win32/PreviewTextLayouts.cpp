@@ -62,6 +62,16 @@ constexpr float unbounded_height = 1.0e7F;
     }
     std::unreachable();
 }
+// 要素の装飾の範囲（spans と同じ順）を layout の UTF-16 の範囲に写す（前から 1 回だけ数える）。
+[[nodiscard]] std::vector<DWRITE_TEXT_RANGE> span_ranges(const core::PreviewBlock &block,
+                                                         std::string_view shown)
+{
+    std::vector<PreviewByteRange> bytes;
+    bytes.reserve(block.spans.size());
+    std::ranges::transform(block.spans, std::back_inserter(bytes), [](const core::PreviewSpan &span)
+                           { return PreviewByteRange{span.begin.value, span.end.value}; });
+    return preview_unit_ranges(shown, bytes);
+}
 // layout の 1 行目の baseline（GetLineMetrics は欄が足りないと何も書かないので、全部の行を引く）。
 [[nodiscard]] std::optional<float> first_baseline(IDWriteTextLayout &layout)
 {
@@ -209,14 +219,13 @@ HRESULT PreviewTextLayouts::space(IDWriteTextLayout &layout, bool mono, float si
 }
 
 HRESULT PreviewTextLayouts::decorate(IDWriteTextLayout &layout, const core::PreviewBlock &block,
-                                     std::string_view shown)
+                                     std::span<const DWRITE_TEXT_RANGE> ranges)
 {
-    for (const auto &span : block.spans)
+    for (std::size_t index = 0; index < block.spans.size() && index < ranges.size(); ++index)
     {
-        const auto begin = preview_units(shown, span.begin.value);
-        const auto end = preview_units(shown, span.end.value);
-        if (end > begin &&
-            FAILED(styled(layout, span.style, DWRITE_TEXT_RANGE{begin, end - begin}, code_family_)))
+        const auto range = ranges[index];
+        if (range.length > 0 &&
+            FAILED(styled(layout, block.spans.at(index).style, range, code_family_)))
         {
             return E_FAIL;
         }
@@ -262,6 +271,7 @@ PreviewTextLayouts::make(const core::PreviewBlock &block, float width,
     const auto size = preview_font_pixels(style) * scale;
     const auto length = static_cast<UINT32>(wide.value().size());
     const DWRITE_TEXT_RANGE whole{0, std::max<UINT32>(length, 1)};
+    auto ranges = span_ranges(block, shown);
     TextLayout made;
     DWRITE_TEXT_METRICS metrics{};
     if (FAILED(factory_->CreateTextLayout(wide.value().c_str(), length,
@@ -271,14 +281,15 @@ PreviewTextLayouts::make(const core::PreviewBlock &block, float width,
                      FAILED(made->SetFontWeight(DWRITE_FONT_WEIGHT_BOLD, whole)))) ||
         FAILED(inlines.empty() ? space(*made.Get(), mono, size, preview_line_pixels(style) * scale)
                                : place(*made.Get(), inlines, style.dpi)) ||
-        FAILED(decorate(*made.Get(), block, shown)) || FAILED(made->GetMetrics(&metrics)))
+        FAILED(decorate(*made.Get(), block, ranges)) || FAILED(made->GetMetrics(&metrics)))
     {
         return std::unexpected(directwrite);
     }
     ++created_;
     PreviewTextLayout entry{
         block.text,        block.spans,     block.kind,     block.level, width, style,
-        boxes_of(inlines), std::move(made), metrics.height, {},          {},    0};
+        boxes_of(inlines), std::move(made), metrics.height, {},          {},    0,
+        std::move(ranges)};
     if (FAILED(locate(entry, block, inlines, style.dpi)))
     {
         return std::unexpected(directwrite);
@@ -289,46 +300,37 @@ PreviewTextLayouts::make(const core::PreviewBlock &block, float width,
 HRESULT PreviewTextLayouts::locate(PreviewTextLayout &entry, const core::PreviewBlock &block,
                                    std::span<const PreviewInlineImage> inlines, std::uint32_t dpi)
 {
-    const auto shown = core::preview_shown_text(block);
-    for (const auto &span : block.spans)
+    for (std::size_t index = 0; index < block.spans.size() && index < entry.ranges.size(); ++index)
     {
-        const auto begin = preview_units(shown, span.begin.value);
-        const auto end = preview_units(shown, span.end.value);
-        if (span.style != core::PreviewStyle::code || end <= begin)
+        const auto range = entry.ranges.at(index);
+        if (block.spans.at(index).style != core::PreviewStyle::code || range.length == 0)
         {
             continue;
         }
-        auto runs = hit_runs(*entry.layout.Get(), DWRITE_TEXT_RANGE{begin, end - begin});
+        auto runs = hit_runs(*entry.layout.Get(), range);
         if (!runs)
         {
             return E_FAIL;
         }
         entry.code_runs.insert(entry.code_runs.end(), runs.value().begin(), runs.value().end());
     }
-    entry.image_origins.reserve(inlines.size());
-    for (const auto &image : inlines)
-    {
-        entry.image_origins.push_back(preview_inline_origin(*entry.layout.Get(), image.box, dpi));
-    }
+    entry.image_origins = preview_inline_origins(*entry.layout.Get(), inlines, dpi);
     return S_OK;
 }
 
 HRESULT PreviewTextLayouts::ink(PreviewTextLayout &entry, const core::PreviewBlock &block,
                                 const PreviewBrushes &brushes)
 {
-    const auto shown = core::preview_shown_text(block);
-    for (const auto &span : block.spans)
+    for (std::size_t index = 0; index < block.spans.size() && index < entry.ranges.size(); ++index)
     {
-        const auto ink = preview_span_ink(span.style);
-        const auto begin = preview_units(shown, span.begin.value);
-        const auto end = preview_units(shown, span.end.value);
-        if (!ink.has_value() || end <= begin)
+        const auto ink = preview_span_ink(block.spans.at(index).style);
+        const auto range = entry.ranges.at(index);
+        if (!ink.has_value() || range.length == 0)
         {
             continue;
         }
         ++inked_;
-        const auto set = entry.layout->SetDrawingEffect(brushes.of(ink.value()),
-                                                        DWRITE_TEXT_RANGE{begin, end - begin});
+        const auto set = entry.layout->SetDrawingEffect(brushes.of(ink.value()), range);
         if (FAILED(set))
         {
             return set;

@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <utility>
@@ -182,6 +183,75 @@ std::uint32_t preview_units(std::string_view shown, std::size_t byte)
 {
     return static_cast<std::uint32_t>(
         core::utf16_length(shown.substr(0, std::min(byte, shown.size()))).value_or(0));
+}
+
+namespace
+{
+// 端ごとに先頭から数えた preview_units の値。
+[[nodiscard]] std::vector<std::uint32_t> units_from_start(std::string_view shown,
+                                                          std::span<const std::size_t> ends)
+{
+    std::vector<std::uint32_t> units;
+    units.reserve(ends.size());
+    std::ranges::transform(ends, std::back_inserter(units),
+                           [shown](std::size_t byte) { return preview_units(shown, byte); });
+    return units;
+}
+
+// 昇順に並べた重複の無い端（文字の長さ以下）ごとの preview_units の値。端の間の
+// 切れ端の単位数を前から足す。切れ端が正しい UTF-8 でなければ（端が code point の途中・
+// 正しくない文字）、端ごとに先頭から数える（preview_units と同じ値・正しい切れ端だけなら
+// 先頭からの数と等しい）。
+[[nodiscard]] std::vector<std::uint32_t> units_at(std::string_view shown,
+                                                  std::span<const std::size_t> ends)
+{
+    std::vector<std::uint32_t> units;
+    units.reserve(ends.size());
+    std::size_t at = 0;
+    std::size_t counted = 0;
+    for (const auto end : ends)
+    {
+        const auto piece = core::utf16_length(shown.substr(at, end - at));
+        if (!piece)
+        {
+            return units_from_start(shown, ends);
+        }
+        counted += piece.value();
+        units.push_back(static_cast<std::uint32_t>(counted));
+        at = end;
+    }
+    return units;
+}
+} // namespace
+
+std::vector<DWRITE_TEXT_RANGE> preview_unit_ranges(std::string_view shown,
+                                                   std::span<const PreviewByteRange> ranges)
+{
+    std::vector<std::size_t> ends;
+    ends.reserve(2 * ranges.size());
+    for (const auto &[begin, end] : ranges)
+    {
+        ends.push_back(std::min(begin, shown.size()));
+        ends.push_back(std::min(end, shown.size()));
+    }
+    std::ranges::sort(ends);
+    const auto repeated = std::ranges::unique(ends);
+    ends.erase(repeated.begin(), repeated.end());
+    const auto units = units_at(shown, ends);
+    const auto unit_of = [&](std::size_t byte)
+    {
+        const auto found = std::ranges::lower_bound(ends, std::min(byte, shown.size()));
+        return units.at(static_cast<std::size_t>(std::distance(ends.begin(), found)));
+    };
+    std::vector<DWRITE_TEXT_RANGE> placed;
+    placed.reserve(ranges.size());
+    for (const auto &[begin, end] : ranges)
+    {
+        const auto from = unit_of(begin);
+        const auto to = unit_of(end);
+        placed.push_back(DWRITE_TEXT_RANGE{from, to > from ? to - from : 0U});
+    }
+    return placed;
 }
 
 std::size_t preview_byte_of_units(std::string_view shown, std::uint32_t units)

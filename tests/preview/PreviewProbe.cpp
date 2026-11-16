@@ -1,28 +1,41 @@
 // Markdown プレビューの差し替えの費用の probe（#818・ADR 0155 の決定 7）。CTest に登録しない。
-// 決定的に作った Markdown を parse_markdown で読み、PreviewTextLayouts ＋ PreviewBlockTops::measure
-// で錨から 1 枠ぶん測る。製品の PreviewPane は通さない（nib_preview_capture と同じ土台）。
-// 時刻は Win32TimingAdapter の節目だけで取る（ARC-007）: parse と measure をそれぞれ
-// probe_started / probe_finished の 1 対で挟み、節目の
-// JSON（<json>.timing.json）を読み戻して差を書く。
-// --long-paragraph（#1477）は行内コードの多い 1 つの長い段落（36 KB 前後・span の数は引数）の
-// 文書を WIC の描画先に製品と同じ PreviewPainter で描く。最初の 1 回（layout を作って色を置く）と、
-// 錨を 0 と 1 で動かしながらの描き直し repaints 回を別の節目の対で測り、描き直しの間に layout を
-// 作った数・SetDrawingEffect・HitTestTextRange の数を書く（保持した layout を汚さないことの数）。
+// 決定的に作った Markdown を parse_markdown で読み、PreviewTextLayouts ＋
+// PreviewBlockTops::measure で錨から 1 枠ぶん測る。製品の PreviewPane は通さない
+// （nib_preview_capture と同じ土台）。時刻は Win32TimingAdapter の節目だけで取る
+// （ARC-007）: parse と measure をそれぞれ probe_started / probe_finished の 1 対で挟み、
+// 節目の JSON（<json>.timing.json）を読み戻して差を書く。
+// --long-paragraph（#1477）は行内コードの多い 1 つの長い段落（424 span で 23.7 KB・
+// span の数は引数）の文書を WIC の描画先に製品と同じ PreviewPainter で描く。
+// 最初の 1 回（layout を作って色を置く）と、錨を 0 と 1 で動かしながらの描き直し
+// repaints 回を別の節目の対で測り、描き直しの間に layout を作った数・SetDrawingEffect・
+// HitTestTextRange の数を書く（保持した layout を汚さないことの数）。続けて配色を変えた
+// 後の 1 回（同じ描画先で別のテーマ・D59 の配色のプレビュー）と枠の幅を 1 px 広げた
+// 後の 1 回（幅のドラッグ）も測る（#1485）。
 //
 //   nib_preview_probe <bytes> <head|middle|tail> <json の出力先>
 //   nib_preview_probe --long-paragraph <spans> <repaints> <json の出力先>
+//   nib_preview_probe --paragraph-stages <link|code|image|picture|long> <spans> <json の出力先>
 #include "PreviewProbeOutcome.hpp"
 #include "Sha256.hpp"
 
 #include "Appearance.hpp"
 #include "DevicePixels.hpp"
 #include "EditorSettings.hpp"
+#include "FilePath.hpp"
 #include "FontSize.hpp"
+#include "ImageGeometry.hpp"
+#include "ImageLimits.hpp"
+#include "ImageOutcome.hpp"
+#include "ImagePixels.hpp"
+#include "ImageSize.hpp"
 #include "MarkdownParse.hpp"
 #include "MarkdownStop.hpp"
 #include "Milestone.hpp"
 #include "PreviewBlockTops.hpp"
 #include "PreviewBrushes.hpp"
+#include "PreviewImageWindow.hpp"
+#include "PreviewImages.hpp"
+#include "PreviewMetrics.hpp"
 #include "PreviewPainter.hpp"
 #include "PreviewScene.hpp"
 #include "PreviewTextLayouts.hpp"
@@ -39,6 +52,7 @@
 #include <d2d1.h>
 #include <format>
 #include <fstream>
+#include <memory>
 #include <objbase.h>
 #include <optional>
 #include <span>
@@ -278,32 +292,36 @@ software_target(Microsoft::WRL::ComPtr<IWICBitmap> &bitmap)
     return target;
 }
 
-// 描く先と色（描き直しの間は同じ）。
-using Canvas = std::pair<ID2D1RenderTarget *, const win32::PreviewBrushes *>;
+// 描く先と色と枠の幅に足す物理画素（幅のドラッグの 1 px・#1485・ふだんは 0）と読めた画像
+// （無ければ null）。
+using Canvas = std::tuple<ID2D1RenderTarget *, const win32::PreviewBrushes *, float,
+                          const nenenib::application::PreviewImages *>;
 
 // 錨 first から測って 1 回描く。失敗は false。
 [[nodiscard]] bool paint_once(const Canvas &canvas, const core::MarkdownDocument &document,
                               win32::PreviewTextLayouts &layouts, std::size_t first)
 {
-    auto &target = *canvas.first;
+    auto &target = *std::get<0>(canvas);
     const win32::PreviewTextStyle style{
         std::string(core::default_editor_settings().font_family.text()),
         core::FontSize::default_points, viewport_dpi};
-    const auto width = pixels_of(viewport_width);
+    const auto width = pixels_of(viewport_width) + std::get<2>(canvas);
     const auto height = pixels_of(viewport_height);
     const auto tops = win32::PreviewBlockTops::measure(
-        document, layouts, style, win32::PreviewViewport{first, width, height});
+        document, layouts, style,
+        win32::PreviewViewport{first, width, height, std::get<3>(canvas)});
     if (!tops)
     {
         return false;
     }
     std::optional<win32::RenderFailure> failure;
-    win32::PreviewPainter<ID2D1RenderTarget> painter(target, layouts, *canvas.second, failure);
+    win32::PreviewPainter<ID2D1RenderTarget> painter(target, layouts, *std::get<1>(canvas),
+                                                     failure);
     target.BeginDraw();
     painter.paint(win32::PreviewScene{
         document, tops.value(), style,
         core::LayoutRect{0, 0, static_cast<std::int32_t>(width), static_cast<std::int32_t>(height)},
-        0.0F, std::nullopt});
+        0.0F, std::nullopt, std::get<3>(canvas)});
     return SUCCEEDED(target.EndDraw()) && !failure.has_value();
 }
 
@@ -314,10 +332,16 @@ using LayoutCounts = std::tuple<std::size_t, std::size_t, std::size_t>;
     return {layouts.created(), layouts.inked(), layouts.hit_tests()};
 }
 
-// 最初の 1 回と描き直しを節目の対で挟む。返すのは最初の 1 回の後と描き直しの後の数。
-[[nodiscard]] std::optional<std::pair<LayoutCounts, LayoutCounts>>
-timed_paints(const core::MarkdownDocument &document, std::size_t repaints,
-             const std::wstring &timing_path)
+// --long-paragraph の段（節目の対の順・#1485）: 最初の 1 回・錨を動かしながらの描き直し・配色を
+// 変えた後の 1 回（別のテーマで brush を作り直す・D59 の配色のプレビューと同じ道）・枠の幅を 1 px
+// 広げた後の 1 回（幅のドラッグ）。
+constexpr std::array<std::string_view, 4> long_moments{"first", "repaint", "theme", "width"};
+using MomentCounts = std::array<LayoutCounts, long_moments.size()>;
+
+// 段ごとに節目の対で挟む。返すのは各段の後の数（累計）。
+[[nodiscard]] std::optional<MomentCounts> timed_paints(const core::MarkdownDocument &document,
+                                                       std::size_t repaints,
+                                                       const std::wstring &timing_path)
 {
     Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
     const auto target = software_target(bitmap);
@@ -332,45 +356,64 @@ timed_paints(const core::MarkdownDocument &document, std::size_t repaints,
     win32::PreviewTextLayouts layouts;
     nenenib::adapters::win32::Win32TimingAdapter timing;
     timing.bind(timing_path);
+    MomentCounts counts{};
     timing.mark(core::Milestone::probe_started);
-    const Canvas canvas{target.Get(), &brushes};
+    const Canvas canvas{target.Get(), &brushes, 0.0F, nullptr};
+    const Canvas widened{target.Get(), &brushes, 1.0F, nullptr};
     bool painted = paint_once(canvas, document, layouts, 1);
     timing.mark(core::Milestone::probe_finished);
-    const auto first = counts_of(layouts);
+    counts.at(0) = counts_of(layouts);
     timing.mark(core::Milestone::probe_started);
     for (std::size_t index = 0; index < repaints && painted; ++index)
     {
         painted = paint_once(canvas, document, layouts, index % 2);
     }
     timing.mark(core::Milestone::probe_finished);
+    counts.at(1) = counts_of(layouts);
+    painted = painted &&
+              SUCCEEDED(brushes.prepare(*target.Get(),
+                                        core::selected_theme(settings, core::Appearance::light)));
+    timing.mark(core::Milestone::probe_started);
+    painted = painted && paint_once(canvas, document, layouts, 0);
+    timing.mark(core::Milestone::probe_finished);
+    counts.at(2) = counts_of(layouts);
+    timing.mark(core::Milestone::probe_started);
+    painted = painted && paint_once(widened, document, layouts, 0);
+    timing.mark(core::Milestone::probe_finished);
+    counts.at(3) = counts_of(layouts);
     if (!painted)
     {
         return std::nullopt;
     }
-    return std::pair{first, counts_of(layouts)};
+    return counts;
 }
 
-// sizes は span の数と描き直しの回数。
+// sizes は span の数と描き直しの回数。段ごとの秒と、段の間に増えた数を書く。
 [[nodiscard]] std::string long_report_of(const std::string &text,
                                          std::pair<std::size_t, std::size_t> sizes,
-                                         const std::pair<LayoutCounts, LayoutCounts> &counts,
+                                         const MomentCounts &counts,
                                          std::span<const std::int64_t> times)
 {
     const auto &[spans, repaints] = sizes;
-    const auto &[first, last] = counts;
-    return std::format(
-        "{{\"schema\":1,\"probe\":\"nib_preview_probe\",\"mode\":\"long-paragraph\","
-        "\"bytes\":{},\"sha256\":\"{}\",\"spans\":{},\"repaints\":{},\"firstPaintMs\":{},"
-        "\"repaintsMs\":{},\"firstLayoutsCreated\":{},\"firstDrawingEffects\":{},"
-        "\"firstHitTests\":{},\"repaintLayoutsCreated\":{},\"repaintDrawingEffects\":{},"
-        "\"repaintHitTests\":{},\"viewport\":{{\"widthDip\":{},\"heightDip\":{},\"dpi\":{}}},"
-        "\"commit\":\"{}\",\"dirty\":{},\"configuration\":\"{}\"}}\n",
-        text.size(), nenenib::tests::preview::sha256_hex(text), spans, repaints,
-        milliseconds_text(times[1] - times[0]), milliseconds_text(times[3] - times[2]),
-        std::get<0>(first), std::get<1>(first), std::get<2>(first),
-        std::get<0>(last) - std::get<0>(first), std::get<1>(last) - std::get<1>(first),
-        std::get<2>(last) - std::get<2>(first), viewport_width, viewport_height, viewport_dpi,
-        NIB_PROBE_COMMIT, NIB_PROBE_DIRTY, NIB_PROBE_CONFIGURATION);
+    std::string moments;
+    for (std::size_t index = 0; index < long_moments.size(); ++index)
+    {
+        const auto &[created, inked, hits] = counts.at(index);
+        const auto &[created_before, inked_before, hits_before] =
+            index == 0 ? LayoutCounts{} : counts.at(index - 1);
+        moments += std::format(",\"{}\":{{\"ms\":{},\"layoutsCreated\":{},\"drawingEffects\":{},"
+                               "\"hitTests\":{}}}",
+                               long_moments.at(index),
+                               milliseconds_text(times[2 * index + 1] - times[2 * index]),
+                               created - created_before, inked - inked_before, hits - hits_before);
+    }
+    return std::format("{{\"schema\":2,\"probe\":\"nib_preview_probe\",\"mode\":\"long-paragraph\","
+                       "\"bytes\":{},\"sha256\":\"{}\",\"spans\":{},\"repaints\":{}{},"
+                       "\"viewport\":{{\"widthDip\":{},\"heightDip\":{},\"dpi\":{}}},"
+                       "\"commit\":\"{}\",\"dirty\":{},\"configuration\":\"{}\"}}\n",
+                       text.size(), nenenib::tests::preview::sha256_hex(text), spans, repaints,
+                       moments, viewport_width, viewport_height, viewport_dpi, NIB_PROBE_COMMIT,
+                       NIB_PROBE_DIRTY, NIB_PROBE_CONFIGURATION);
 }
 
 [[nodiscard]] int long_paragraph_probe(std::size_t spans, std::size_t repaints,
@@ -384,7 +427,7 @@ timed_paints(const core::MarkdownDocument &document, std::size_t repaints,
         wide && document ? timed_paints(document.value(), repaints, wide.value()) : std::nullopt;
     const auto timing = read_text(timing_path);
     const auto times = timing ? mark_times(timing.value()) : std::vector<std::int64_t>{};
-    if (!counts || times.size() != timing_marks)
+    if (!counts || times.size() != 2U * long_moments.size())
     {
         std::fputs("preview probe: parsing, painting or the timing file failed\n", stderr);
         return 1;
@@ -392,6 +435,337 @@ timed_paints(const core::MarkdownDocument &document, std::size_t repaints,
     std::ofstream file(output, std::ios::binary);
     file << long_report_of(text, std::pair{spans, repaints}, counts.value(), times);
     return file ? 0 : 1;
+}
+
+// --paragraph-stages（#1485）: 空行の無い 1 段落に行内の要素が spans 個（1 行に 1 個・行は
+// 改行で続く）。kind は link（`line N [link](xN.md)`）・code（`line N \`cN\``）・image
+// （`line N ![i](xN.png)`・画像は読まない）・picture（`line N ![i](x.png)`・同じ経路の画像を読めた
+// 状態にする・箱になるのは最初の preview_image_limit 個）・long（--long-paragraph と同じ段落）。
+// 製品の道（錨 0 からの measure・最初の描画・描き直し 1 回・配色を変えた後の 1 回・枠の幅を 1 px
+// 広げた後の 1 回）と、同じ段落の layout に DirectWrite を直に呼ぶ段（UTF-16 の位置の写し・
+// CreateTextLayout・装飾・HitTestTextRange・SetDrawingEffect・DrawTextLayout）を節目の対で挟んで
+// 秒を分ける。
+constexpr std::array<std::string_view, 5> paragraph_kinds{"link", "code", "image", "picture",
+                                                          "long"};
+constexpr std::size_t picture_kind = 3;
+constexpr std::size_t long_kind = 4;
+
+// 文書の画像の状態で、全部の節が同じ経路 x.png を指す（1 つの entry）ものに 16 × 16 の画素を置く
+// （画像の読みは通さない・ファイルに触れない）。読めるのは最初の preview_image_limit 個の節。
+[[nodiscard]] std::shared_ptr<const nenenib::application::PreviewImages>
+loaded_images(const core::MarkdownDocument &document)
+{
+    namespace app = nenenib::application;
+    auto images = std::make_shared<app::PreviewImages>(app::PreviewImages::of(
+        document, core::FilePath::parse("C:\\docs\\readme.md").value(), nullptr));
+    std::uint64_t tickets = 0;
+    const auto request =
+        images->claim(document, app::PreviewImageWindow{0, document.blocks.size()}, true, tickets);
+    constexpr std::uint32_t side = 16;
+    const auto size = core::image_decoded_size(core::ImageSize{side, side});
+    std::vector<std::uint8_t> bgra(std::size_t{size.width} * size.height * core::image_pixel_bytes,
+                                   std::uint8_t{200});
+    if (!request.has_value() ||
+        !images->received(app::ImageOutcome{
+            request.value().ticket, std::make_shared<const app::ImagePixels>(app::ImagePixels{
+                                        core::ImageSize{side, side}, size, std::move(bgra)})}))
+    {
+        return nullptr;
+    }
+    return images;
+}
+
+[[nodiscard]] std::string paragraph_text(std::size_t kind, std::size_t spans)
+{
+    if (kind == long_kind)
+    {
+        return long_paragraph_text(spans);
+    }
+    std::string text = "# Paragraph\n\n";
+    for (std::size_t index = 0; index < spans; ++index)
+    {
+        switch (kind)
+        {
+        case 0:
+            text += std::format("line {} [link](x{}.md)\n", index, index);
+            break;
+        case 1:
+            text += std::format("line {} `c{}`\n", index, index);
+            break;
+        case 2:
+            text += std::format("line {} ![i](x{}.png)\n", index, index);
+            break;
+        case picture_kind:
+            text += std::format("line {} ![i](x.png)\n", index);
+            break;
+        }
+    }
+    text += "\n";
+    for (std::size_t index = 0; index < tail_distance; ++index)
+    {
+        text += std::format("short paragraph {}\n\n", index);
+    }
+    return text;
+}
+
+// 段の名前（節目の対の順）。
+constexpr std::array<std::string_view, 12> stage_names{
+    "parse",          "productMeasure", "productFirstPaint",
+    "productRepaint", "productTheme",   "productWidth",
+    "units",          "createPlain",    "decorate",
+    "hitTests",       "drawingEffects", "draw"};
+
+// 装飾を直に置く（ranges は spans と同じ順の UTF-16 の範囲）。
+[[nodiscard]] HRESULT decorate_direct(IDWriteTextLayout &layout, const core::PreviewBlock &block,
+                                      std::span<const DWRITE_TEXT_RANGE> ranges)
+{
+    for (std::size_t index = 0; index < block.spans.size() && index < ranges.size(); ++index)
+    {
+        const auto style = block.spans.at(index).style;
+        const auto range = ranges[index];
+        const auto result = style == core::PreviewStyle::code
+                                ? layout.SetFontFamilyName(L"Consolas", range)
+                            : style == core::PreviewStyle::link
+                                ? layout.SetUnderline(TRUE, range)
+                                : layout.SetFontStyle(DWRITE_FONT_STYLE_ITALIC, range);
+        if (range.length > 0 && FAILED(result))
+        {
+            return result;
+        }
+    }
+    return S_OK;
+}
+
+// DirectWrite を直に呼ぶ段（節目は stage_names の 5 番目から）。spans の UTF-16 の範囲は先に写す。
+[[nodiscard]] bool direct_stages(nenenib::adapters::win32::Win32TimingAdapter &timing,
+                                 ID2D1RenderTarget &target, const core::PreviewBlock &block,
+                                 ID2D1Brush *brush)
+{
+    const auto shown = core::preview_shown_text(block);
+    const auto wide = core::to_utf16(shown);
+    Microsoft::WRL::ComPtr<IDWriteFactory> factory;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> format;
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> layout;
+    if (!wide ||
+        FAILED(
+            DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), &factory)) ||
+        FAILED(factory->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL,
+                                         DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                                         18.0F, L"", &format)))
+    {
+        return false;
+    }
+    // 製品と同じ写し（preview_unit_ranges・前から 1 回だけ数える・#1485）。
+    timing.mark(core::Milestone::probe_started);
+    std::vector<win32::PreviewByteRange> bytes;
+    bytes.reserve(block.spans.size());
+    for (const auto &span : block.spans)
+    {
+        bytes.emplace_back(span.begin.value, span.end.value);
+    }
+    const auto ranges = win32::preview_unit_ranges(shown, bytes);
+    timing.mark(core::Milestone::probe_finished);
+    DWRITE_TEXT_METRICS metrics{};
+    const auto length = static_cast<UINT32>(wide.value().size());
+    timing.mark(core::Milestone::probe_started);
+    const bool made =
+        SUCCEEDED(factory->CreateTextLayout(wide.value().c_str(), length, format.Get(),
+                                            pixels_of(viewport_width), 1.0e7F, &layout)) &&
+        SUCCEEDED(layout->GetMetrics(&metrics));
+    timing.mark(core::Milestone::probe_finished);
+    timing.mark(core::Milestone::probe_started);
+    const bool decorated = made && SUCCEEDED(decorate_direct(*layout.Get(), block, ranges)) &&
+                           SUCCEEDED(layout->GetMetrics(&metrics));
+    timing.mark(core::Milestone::probe_finished);
+    timing.mark(core::Milestone::probe_started);
+    for (const auto &range : ranges)
+    {
+        UINT32 count = 0;
+        std::array<DWRITE_HIT_TEST_METRICS, 4> runs{};
+        (void)layout->HitTestTextRange(range.startPosition, range.length, 0.0F, 0.0F, runs.data(),
+                                       static_cast<UINT32>(runs.size()), &count);
+    }
+    timing.mark(core::Milestone::probe_finished);
+    timing.mark(core::Milestone::probe_started);
+    for (const auto &range : ranges)
+    {
+        (void)layout->SetDrawingEffect(brush, range);
+    }
+    timing.mark(core::Milestone::probe_finished);
+    timing.mark(core::Milestone::probe_started);
+    target.BeginDraw();
+    target.DrawTextLayout(D2D1::Point2F(0.0F, 0.0F), layout.Get(), brush,
+                          D2D1_DRAW_TEXT_OPTIONS_NONE);
+    const bool drawn = SUCCEEDED(target.EndDraw());
+    timing.mark(core::Milestone::probe_finished);
+    return decorated && drawn;
+}
+
+// picture の段落だけ画像を読めた状態にする（ほかは null）。
+[[nodiscard]] std::shared_ptr<const nenenib::application::PreviewImages>
+images_of(std::size_t kind, const core::MarkdownDocument &document)
+{
+    if (kind != picture_kind)
+    {
+        return nullptr;
+    }
+    return loaded_images(document);
+}
+
+// 製品の道と直の段を流す。返すのは製品の最初の measure・最初の描画・描き直し・配色を変えた後・
+// 枠の幅を 1 px 広げた後の数（累計）。
+[[nodiscard]] std::optional<std::array<LayoutCounts, 5>>
+staged_run(std::size_t kind, const std::string &text, const std::wstring &timing_path)
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = software_target(bitmap);
+    win32::PreviewBrushes brushes;
+    const auto settings = core::default_editor_settings();
+    if (target == nullptr ||
+        FAILED(
+            brushes.prepare(*target.Get(), core::selected_theme(settings, core::Appearance::dark))))
+    {
+        return std::nullopt;
+    }
+    nenenib::adapters::win32::Win32TimingAdapter timing;
+    timing.bind(timing_path);
+    timing.mark(core::Milestone::probe_started);
+    const auto document = core::parse_markdown(text, core::MarkdownStop::never());
+    timing.mark(core::Milestone::probe_finished);
+    if (!document)
+    {
+        return std::nullopt;
+    }
+    const win32::PreviewTextStyle style{
+        std::string(core::default_editor_settings().font_family.text()),
+        core::FontSize::default_points, viewport_dpi};
+    win32::PreviewTextLayouts layouts;
+    const auto images = images_of(kind, document.value());
+    timing.mark(core::Milestone::probe_started);
+    const auto tops = win32::PreviewBlockTops::measure(
+        document.value(), layouts, style,
+        win32::PreviewViewport{0, pixels_of(viewport_width), pixels_of(viewport_height),
+                               images.get()});
+    timing.mark(core::Milestone::probe_finished);
+    const auto measured = counts_of(layouts);
+    const Canvas canvas{target.Get(), &brushes, 0.0F, images.get()};
+    const Canvas widened{target.Get(), &brushes, 1.0F, images.get()};
+    timing.mark(core::Milestone::probe_started);
+    bool painted = tops.has_value() && paint_once(canvas, document.value(), layouts, 0);
+    timing.mark(core::Milestone::probe_finished);
+    const auto first = counts_of(layouts);
+    timing.mark(core::Milestone::probe_started);
+    painted = painted && paint_once(canvas, document.value(), layouts, 0);
+    timing.mark(core::Milestone::probe_finished);
+    const auto last = counts_of(layouts);
+    painted = painted &&
+              SUCCEEDED(brushes.prepare(*target.Get(),
+                                        core::selected_theme(settings, core::Appearance::light)));
+    timing.mark(core::Milestone::probe_started);
+    painted = painted && paint_once(canvas, document.value(), layouts, 0);
+    timing.mark(core::Milestone::probe_finished);
+    const auto themed = counts_of(layouts);
+    timing.mark(core::Milestone::probe_started);
+    painted = painted && paint_once(widened, document.value(), layouts, 0);
+    timing.mark(core::Milestone::probe_finished);
+    const auto stretched = counts_of(layouts);
+    if (!painted || document.value().blocks.size() < 2 ||
+        !direct_stages(timing, *target.Get(), document.value().blocks.at(1),
+                       brushes.of(win32::PreviewInk::accent)))
+    {
+        return std::nullopt;
+    }
+    return std::array{measured, first, last, themed, stretched};
+}
+
+// 段ごとの秒（"<段>Ms":<ms> を , でつなぐ）。
+[[nodiscard]] std::string stage_times(std::span<const std::int64_t> times)
+{
+    std::string stages;
+    for (std::size_t index = 0; index < stage_names.size(); ++index)
+    {
+        stages += std::format("{}\"{}Ms\":{}", index == 0 ? "" : ",", stage_names.at(index),
+                              milliseconds_text(times[2 * index + 1] - times[2 * index]));
+    }
+    return stages;
+}
+
+// 製品の道の段の間に増えた数（measure は 0 からの数）。
+[[nodiscard]] std::string stage_tallies(const std::array<LayoutCounts, 5> &counts)
+{
+    constexpr std::array<std::string_view, 5> moments{"measure", "firstPaint", "repaint", "theme",
+                                                      "width"};
+    std::string tallies;
+    for (std::size_t index = 0; index < moments.size(); ++index)
+    {
+        const auto &[created, inked, hits] = counts.at(index);
+        const auto &[created_before, inked_before, hits_before] =
+            index == 0 ? LayoutCounts{} : counts.at(index - 1);
+        tallies += std::format(",\"{}\":{{\"layoutsCreated\":{},\"drawingEffects\":{},"
+                               "\"hitTests\":{}}}",
+                               moments.at(index), created - created_before, inked - inked_before,
+                               hits - hits_before);
+    }
+    return tallies;
+}
+
+[[nodiscard]] int paragraph_stages_probe(std::size_t kind, std::size_t spans,
+                                         const std::string &output)
+{
+    const std::string timing_path = output + ".timing.json";
+    const auto wide = core::to_utf16(timing_path);
+    const std::string text = paragraph_text(kind, spans);
+    const auto counts = wide ? staged_run(kind, text, wide.value()) : std::nullopt;
+    const auto timing = read_text(timing_path);
+    const auto times = timing ? mark_times(timing.value()) : std::vector<std::int64_t>{};
+    if (!counts || times.size() != 2U * stage_names.size())
+    {
+        std::fputs("preview probe: the staged run or the timing file failed\n", stderr);
+        return 1;
+    }
+    std::ofstream file(output, std::ios::binary);
+    file << std::format("{{\"schema\":2,\"probe\":\"nib_preview_probe\",\"mode\":\"paragraph-"
+                        "stages\",\"kind\":\"{}\",\"spans\":{},\"bytes\":{},{}{},"
+                        "\"commit\":\"{}\",\"dirty\":{},\"configuration\":\"{}\"}}\n",
+                        paragraph_kinds.at(kind), spans, text.size(), stage_times(times),
+                        stage_tallies(counts.value()), NIB_PROBE_COMMIT, NIB_PROBE_DIRTY,
+                        NIB_PROBE_CONFIGURATION);
+    return file ? 0 : 1;
+}
+
+// --long-paragraph の引数を読んで流す（読めなければ 2）。
+[[nodiscard]] int long_paragraph_main(std::span<char *> arguments)
+{
+    const auto spans = size_of(arguments[2]);
+    const auto repaints = size_of(arguments[3]);
+    if (!spans || !repaints || FAILED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)))
+    {
+        std::fputs("usage: nib_preview_probe --long-paragraph <spans> <repaints> <json>\n", stderr);
+        return 2;
+    }
+    const int result = long_paragraph_probe(spans.value(), repaints.value(), arguments[4]);
+    CoUninitialize();
+    return result;
+}
+
+// --paragraph-stages の引数を読んで流す（読めなければ 2）。
+[[nodiscard]] int paragraph_stages_main(std::span<char *> arguments)
+{
+    const auto kind = std::ranges::find(paragraph_kinds, std::string_view(arguments[2]));
+    const auto spans = size_of(arguments[3]);
+    if (kind == paragraph_kinds.end() || !spans ||
+        FAILED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)))
+    {
+        std::fputs("usage: nib_preview_probe --paragraph-stages <link|code|image|picture|long> "
+                   "<spans> <json>\n",
+                   stderr);
+        return 2;
+    }
+    const int result = paragraph_stages_probe(
+        static_cast<std::size_t>(std::distance(paragraph_kinds.begin(), kind)), spans.value(),
+        arguments[4]);
+    CoUninitialize();
+    return result;
 }
 
 [[nodiscard]] int probe(std::size_t bytes, std::size_t anchor, const std::string &output)
@@ -423,17 +797,11 @@ int main(int argc, char **argv)
     const auto arguments = std::span(argv, static_cast<std::size_t>(argc));
     if (arguments.size() == 5 && std::string_view(arguments[1]) == "--long-paragraph")
     {
-        const auto spans = size_of(arguments[2]);
-        const auto repaints = size_of(arguments[3]);
-        if (!spans || !repaints || FAILED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)))
-        {
-            std::fputs("usage: nib_preview_probe --long-paragraph <spans> <repaints> <json>\n",
-                       stderr);
-            return 2;
-        }
-        const int result = long_paragraph_probe(spans.value(), repaints.value(), arguments[4]);
-        CoUninitialize();
-        return result;
+        return long_paragraph_main(arguments);
+    }
+    if (arguments.size() == 5 && std::string_view(arguments[1]) == "--paragraph-stages")
+    {
+        return paragraph_stages_main(arguments);
     }
     const auto bytes = arguments.size() == 4 ? size_of(arguments[1]) : std::nullopt;
     const auto anchor = arguments.size() == 4 ? anchor_of(arguments[2]) : std::nullopt;
