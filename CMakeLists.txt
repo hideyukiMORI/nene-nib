@@ -55,7 +55,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp src/core/InputHistory.cpp
     src/core/DateTimeText.cpp src/core/PrintPages.cpp src/core/KeyChord.cpp src/core/KeyMap.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/StartScreen.cpp src/core/StartScreenLayout.cpp src/core/StartPress.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/OrdinaryWordBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
     src/core/NewlineIndex.cpp src/core/ScrollBounds.cpp src/core/GutterLabels.cpp src/core/SearchLine.cpp
-    src/core/LiteralPattern.cpp src/core/ProjectSearchRules.cpp src/core/ProjectQuery.cpp src/core/ProjectHits.cpp src/core/GoToLineInput.cpp src/core/SubstituteAll.cpp src/core/SubstituteReplacement.cpp src/core/ShellRegistration.cpp src/core/WslPlaces.cpp
+    src/core/LiteralPattern.cpp src/core/ProjectSearchRules.cpp src/core/ProjectQuery.cpp src/core/ProjectHits.cpp src/core/ProjectHitRows.cpp src/core/GoToLineInput.cpp src/core/SubstituteAll.cpp src/core/SubstituteReplacement.cpp src/core/ShellRegistration.cpp src/core/WslPlaces.cpp
     src/core/StatusBarLayout.cpp src/core/StatusItems.cpp src/core/LineEndingConversion.cpp
     src/core/TabDestination.cpp src/core/TabKeyTable.cpp src/core/TabRecency.cpp src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
     src/core/TitleBarLayout.cpp src/core/UnlistedExtensions.cpp src/core/Utf16.cpp src/core/Utf8.cpp
@@ -91,7 +91,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/FileBookmarkEdit.cpp src/application/FileHistoryEdit.cpp src/application/ImeStance.cpp src/application/ExitPlan.cpp
     src/application/LineSpanEvaluation.cpp src/application/ComposedLine.cpp src/application/VisualTextView.cpp src/application/GiantLineWindow.cpp src/application/EditorControllerView.cpp
     src/application/EditorControllerEditing.cpp src/application/EditorControllerVim.cpp src/application/EditorControllerDocuments.cpp
-    src/application/EditorControllerTabs.cpp src/application/EditorControllerCommand.cpp src/application/EditorControllerPalette.cpp
+    src/application/EditorControllerTabs.cpp src/application/EditorControllerCommand.cpp src/application/EditorControllerPalette.cpp src/application/EditorControllerProjectSearch.cpp
     src/application/EditorControllerAutosave.cpp src/application/EditorControllerPreview.cpp src/application/EditorControllerDetail.cpp
     src/application/PreviewImages.cpp
     src/application/EditorControllerExplorer.cpp src/application/EditorControllerShell.cpp src/application/EditorControllerStartScreen.cpp
@@ -130,6 +130,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/ExRandomInputTests.cpp
     tests/unit/InputLineLimitTests.cpp
     tests/unit/ProjectSearchTests.cpp
+    tests/unit/ProjectSearchControllerTests.cpp
     tests/unit/CommandLineEditTests.cpp
     tests/unit/InputLinePropertyTests.cpp
     tests/unit/VimWindowTests.cpp

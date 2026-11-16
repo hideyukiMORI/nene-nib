@@ -21,6 +21,7 @@
 #include "OpenDocument.hpp"
 #include "OpenDocumentFormatList.hpp"
 #include "OpenOperationList.hpp"
+#include "OpenProjectSearch.hpp"
 #include "OperationTexts.hpp"
 #include "PrintDialog.hpp"
 #include "PrintDocument.hpp"
@@ -388,6 +389,7 @@ EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation op
         {core::EditorOperation::unregister_shell, &EditorWindow::run_unregister_shell},
         {core::EditorOperation::choose_language, &EditorWindow::run_choose_language},
         {core::EditorOperation::show_version, &EditorWindow::run_show_version},
+        {core::EditorOperation::search_project, &EditorWindow::run_search_project},
     }};
     static_assert(runners_in_order(runners),
                   "operation runners follow the order of EditorOperation and point to a function");
@@ -601,6 +603,12 @@ void EditorWindow::run_choose_language()
 void EditorWindow::run_show_version()
 {
     send(application::ShowVersion{});
+}
+
+// プロジェクトの全文検索の面（ADR 0167 の決定 1）。開き方は controller が決める。
+void EditorWindow::run_search_project()
+{
+    send(application::OpenProjectSearch{});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

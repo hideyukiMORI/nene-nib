@@ -59,6 +59,9 @@ enum class EditorOperation : std::uint8_t
     choose_language,
     // バージョン情報（施主決定 D90・#1677・ADR 0078 の追補）。鍵なしで F1 の一覧と Vim の
     // `:version` から。ステータスバーの 1 行の知らせだけで、ページを開かない。
-    show_version
+    show_version,
+    // プロジェクトの全文検索（ADR 0167 の決定 1）。Ctrl+Shift+F で両モード・F1 の一覧と Vim の
+    // `:grep` から。Ctrl+P の面を出どころ `!` で開く。
+    search_project
 };
 } // namespace nenenib::core

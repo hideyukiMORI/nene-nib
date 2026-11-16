@@ -2,6 +2,8 @@
 
 #include "CommandChoice.hpp"
 #include "DisplayText.hpp"
+#include "ProjectHitRow.hpp"
+#include "ProjectSearchView.hpp"
 
 #include <cstddef>
 #include <optional>
@@ -23,5 +25,10 @@ struct CommandPaletteView
     // ときだけ値がある（変換を始めたら消え、取り消して空に戻ればまた出る）。
     // ui は値があれば描くだけ。
     std::optional<core::DisplayText> hint;
+    // 全文検索の面（入力が `!` で始まる・ADR 0167 の決定 5）の進み具合。ほかの面では値なし。
+    std::optional<ProjectSearchView> project = std::nullopt;
+    // 全文検索の面の当たりの行の表示値。i 番目は rows の i 番目と同じ当たり（段 G3 が 2
+    // 段で描く）。 ほかの面では空。
+    std::vector<core::ProjectHitRow> hit_rows = {};
 };
 } // namespace nenenib::application
