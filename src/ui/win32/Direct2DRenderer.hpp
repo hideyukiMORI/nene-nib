@@ -32,6 +32,7 @@
 #include "PreviewPane.hpp"
 #include "PreviewPoint.hpp"
 #include "ProjectHitRow.hpp"
+#include "ProjectHitText.hpp"
 #include "RenderFailure.hpp"
 #include "RendererSources.hpp"
 #include "RgbColor.hpp"
@@ -351,6 +352,10 @@ class Direct2DRenderer final
     [[nodiscard]] static std::string_view
     empty_palette_text(const application::CommandPaletteView &palette,
                        core::DisplayLanguage language);
+    [[nodiscard]] ProjectHitText project_hit_text() const;
+    // 入力行に描く文の幅（物理画素・進み具合が検索語と重ならないかを決める・V-1773 の L-1）。
+    [[nodiscard]] std::int32_t typed_width(const application::EditorFrame &frame,
+                                           const core::LayoutRect &area);
     // 全文検索の面の入力欄の右の進み具合（探している間と、探し終えた件数）。
     void draw_palette_progress(const application::EditorFrame &frame,
                                const core::PaletteLayout &layout);

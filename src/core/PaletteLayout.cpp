@@ -126,6 +126,18 @@ LayoutRect palette_hit_place(const LayoutRect &row, std::uint32_t dpi) noexcept
                       std::min(top + to_pixels(15, dpi), row.bottom)};
 }
 
+LayoutRect palette_progress_place(const PaletteLayout &layout, std::uint32_t dpi,
+                                  std::int32_t width, std::int32_t typed) noexcept
+{
+    const auto &input = layout.input;
+    const auto left = input.right - width;
+    if (width <= 0 || input.left + typed + to_pixels(palette_hint_gap_dips, dpi) > left)
+    {
+        return LayoutRect{input.right, input.top, input.right, input.bottom};
+    }
+    return LayoutRect{left, input.top, input.right, input.bottom};
+}
+
 PaletteHintPlace palette_input_hint(const PaletteLayout &layout, std::uint32_t dpi,
                                     std::span<const std::int32_t> widths) noexcept
 {

@@ -181,7 +181,8 @@ void verify_palette(SoftwareTarget &target, IDWriteFactory2 &factory,
                     const std::vector<Format> &formats, const core::Palette &palette)
 {
     PaletteRowLayouts layouts;
-    const ProjectHitText text{&factory, formats.at(0).Get(), formats.at(1).Get(), dpi};
+    const ProjectHitText text{&factory, formats.at(0).Get(), formats.at(1).Get(),
+                              formats.at(2).Get(), dpi};
     const HitStrip strip(target, text, layouts, palette);
     const auto line = core::palette_hit_line(row, dpi);
     const auto place = core::palette_hit_place(row, dpi);
@@ -214,6 +215,39 @@ void verify_palette(SoftwareTarget &target, IDWriteFactory2 &factory,
                   palette.panel) == 0,
            "a long text line is cut inside the row");
 }
+// 入力欄の右の進み具合（V-1773 の L-1）。短い検索語の右には出し、検索語の右端と重なる長い検索語
+// では出さない（途中で切らない）。
+void verify_progress(SoftwareTarget &target, IDWriteFactory2 &factory,
+                     const std::vector<Format> &formats, const core::Palette &palette)
+{
+    PaletteRowLayouts layouts;
+    const ProjectHitText text{&factory, formats.at(0).Get(), formats.at(1).Get(),
+                              formats.at(2).Get(), dpi};
+    const core::LayoutRect input{16, 20, 624, 60};
+    const core::PaletteLayout layout{row, input, row, row, 40, 1};
+    const auto painted = [&](std::int32_t typed)
+    {
+        return target.painted(
+            [&](ID2D1RenderTarget &surface, ID2D1SolidColorBrush *brush)
+            {
+                const auto &panel = palette.panel;
+                brush->SetColor(D2D1::ColorF(static_cast<float>(panel.red) / 255.0F,
+                                             static_cast<float>(panel.green) / 255.0F,
+                                             static_cast<float>(panel.blue) / 255.0F, 1.0F));
+                surface.FillRectangle(
+                    D2D1::RectF(0.0F, 0.0F, SoftwareTarget::width, SoftwareTarget::height), brush);
+                ProjectHitPainter painter(surface, *brush, text, layouts);
+                painter.paint_progress("searching 128 / 2,310 files", layout, typed, palette.muted);
+            });
+    };
+    const core::LayoutRect right_half{320, input.top, input.right, input.bottom};
+    expect(ink_in(painted(40), right_half, palette.panel) > 0 &&
+               ink_in(painted(40), core::LayoutRect{input.left, input.top, 320, input.bottom},
+                      palette.panel) == 0,
+           "the progress sits at the right end of the input beside a short query");
+    expect(ink_in(painted(560), input, palette.panel) == 0,
+           "the progress is left out when a long query would run into it");
+}
 } // namespace
 
 void verify_project_hit_paint()
@@ -231,13 +265,16 @@ void verify_project_hit_paint()
         return;
     }
     const std::vector<Format> formats{format_of(*factory.Get(), L"Consolas", 12.5F),
-                                      format_of(*factory.Get(), L"Segoe UI", 11.0F)};
-    if (formats.at(0) == nullptr || formats.at(1) == nullptr)
+                                      format_of(*factory.Get(), L"Segoe UI", 11.0F),
+                                      format_of(*factory.Get(), L"Segoe UI", 11.5F)};
+    if (formats.at(0) == nullptr || formats.at(1) == nullptr || formats.at(2) == nullptr ||
+        FAILED(formats.at(2)->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING)))
     {
         unmeasured("the project hit formats could not be made");
         return;
     }
     verify_palette(target, *factory.Get(), formats, core::palette_for(core::Appearance::dark));
     verify_palette(target, *factory.Get(), formats, core::palette_for(core::Appearance::light));
+    verify_progress(target, *factory.Get(), formats, core::palette_for(core::Appearance::dark));
 }
 } // namespace nenenib::tests::ui

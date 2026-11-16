@@ -1076,6 +1076,22 @@ void verify_palette_hit_rows(const core::LayoutRect &row, std::uint32_t dpi)
            "a low row cuts both lines at its bottom");
 }
 
+// 全文検索の面の入力欄の右の進み具合の置き場（V-1773 の L-1）。右寄せで、検索語の右端から 24 DIP を
+// 空けて入らなければ幅 0。
+void verify_palette_progress_place(std::uint32_t dpi)
+{
+    const auto layout = core::palette_layout(1600, 1200, dpi, 13);
+    const auto &input = layout.input;
+    const auto width = to_pixels(160, dpi);
+    const auto room = core::width_of(input) - width - to_pixels(24, dpi);
+    const auto fits = core::palette_progress_place(layout, dpi, width, room);
+    expect(fits.right == input.right && width_of(fits) == width && fits.top == input.top,
+           "the progress sits at the right end of the input");
+    expect(width_of(core::palette_progress_place(layout, dpi, width, room + 1)) == 0 &&
+               width_of(core::palette_progress_place(layout, dpi, 0, 0)) == 0,
+           "a query running into the progress or an empty text leaves it out");
+}
+
 void verify_palette_notes_geometry()
 {
     verify_palette_hint_starts();
@@ -1106,6 +1122,7 @@ void verify_palette_notes_geometry()
                "a narrow row drops the note and keeps the name as before");
         verify_palette_key_note(row, dpi);
         verify_palette_hit_rows(row, dpi);
+        verify_palette_progress_place(dpi);
     }
 }
 

@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <string>
 
 namespace nenenib::ui::win32
@@ -81,6 +82,27 @@ void ProjectHitPainter::paint(const core::ProjectHitRow &hit, const core::Layout
     {
         draw(*place.Get(), place_area, palette.muted);
     }
+}
+
+void ProjectHitPainter::paint_progress(std::string_view line, const core::PaletteLayout &layout,
+                                       std::int32_t typed, core::RgbColor color)
+{
+    // 文は検索欄の幅の右寄せの layout 1 つ（記号の案内と同じ描き方）。幅を測って置き場を決める。
+    const auto shown = obtained(line, text_.progress, layout.input);
+    DWRITE_TEXT_METRICS metrics{};
+    if (!shown || FAILED(shown->GetMetrics(&metrics)))
+    {
+        return;
+    }
+    const auto place = core::palette_progress_place(
+        layout, text_.dpi, static_cast<std::int32_t>(std::ceil(metrics.width)), typed);
+    if (core::width_of(place) <= 0)
+    {
+        return;
+    }
+    target_.PushAxisAlignedClip(to_rect(place), D2D1_ANTIALIAS_MODE_ALIASED);
+    draw(*shown.Get(), layout.input, color);
+    target_.PopAxisAlignedClip();
 }
 
 void ProjectHitPainter::paint_line(const core::ProjectHitRow &hit, const core::LayoutRect &area,

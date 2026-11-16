@@ -2,12 +2,14 @@
 
 #include "LayoutRect.hpp"
 #include "Palette.hpp"
+#include "PaletteLayout.hpp"
 #include "PaletteRowLayouts.hpp"
 #include "ProjectHitRow.hpp"
 #include "ProjectHitText.hpp"
 #include "RgbColor.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <d2d1.h>
 #include <dwrite.h>
 #include <string>
@@ -35,6 +37,10 @@ class ProjectHitPainter final
     // 当たり 1 つを行 area（面の行の矩形）に描く。
     void paint(const core::ProjectHitRow &hit, const core::LayoutRect &area,
                const core::Palette &palette);
+    // 入力欄の右の進み具合の 1 行 line（color の色）。typed は打った検索語の幅（物理画素）で、
+    // 置き場は core::palette_progress_place の 1 本（長い検索語と重なるなら出さない）。
+    void paint_progress(std::string_view line, const core::PaletteLayout &layout,
+                        std::int32_t typed, core::RgbColor color);
     // 上の段の文（省いた窓は先頭に「…」）と、その中の当たりの始まり（バイト）。
     [[nodiscard]] static std::string shown_line(const core::ProjectHitRow &hit);
     [[nodiscard]] static std::size_t shown_offset(const core::ProjectHitRow &hit) noexcept;

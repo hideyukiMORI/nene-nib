@@ -2472,11 +2472,39 @@ void Direct2DRenderer::draw_palette_detail(const application::EditorFrame &frame
 void Direct2DRenderer::draw_project_hit(const application::EditorFrame &frame,
                                         const core::LayoutRect &row, const core::ProjectHitRow &hit)
 {
-    ProjectHitPainter painter(
-        *context_.Get(), *brush_.Get(),
-        ProjectHitText{dwrite_.Get(), hit_line_format_.Get(), hit_place_format_.Get(), dpi_},
-        palette_layouts_);
+    ProjectHitPainter painter(*context_.Get(), *brush_.Get(), project_hit_text(), palette_layouts_);
     painter.paint(hit, row, frame.palette);
+}
+
+ProjectHitText Direct2DRenderer::project_hit_text() const
+{
+    return ProjectHitText{dwrite_.Get(), hit_line_format_.Get(), hit_place_format_.Get(),
+                          palette_progress_format_.Get(), dpi_};
+}
+
+// 入力行に描く文（プロンプト・打った文字・変換中の文字）の幅とキャレットの棒（3 DIP）。draw_command
+// と同じ書式で測る。測れなければ欄の幅（進み具合を出さない側）。
+std::int32_t Direct2DRenderer::typed_width(const application::EditorFrame &frame,
+                                           const core::LayoutRect &area)
+{
+    if (!frame.command_line.has_value())
+    {
+        return 0;
+    }
+    const auto &command = frame.command_line.value();
+    auto shown = prompt_text(command.prompt, command.prompt_detail, frame.language) + command.text;
+    if (frame.command_composition.has_value())
+    {
+        shown += frame.command_composition.value().utf8;
+    }
+    const auto measured = text_layout(shown, command_format_.Get(), area);
+    DWRITE_TEXT_METRICS metrics{};
+    if (!measured || FAILED(measured->GetMetrics(&metrics)))
+    {
+        return core::width_of(area);
+    }
+    return static_cast<std::int32_t>(
+        std::ceil(metrics.widthIncludingTrailingWhitespace + scaled(3.0F)));
 }
 
 // 全文検索の面で、探す前・探せない状態（案内・解析できない・探す場所が無い・失敗）は、その 1 行を
@@ -2592,8 +2620,9 @@ void Direct2DRenderer::draw_palette_hint(const application::EditorFrame &frame,
 }
 
 // 探している間は「探しています… N / M ファイル」、探し終えたら件数（ADR 0167 の決定 5・採用案の
-// 「入力欄の右」）。記号の案内と同じく検索欄の右寄せで、検索欄の左端から palette_hint_gap_dips を
-// 空けた残りに入らなければ出さない（core::palette_input_hint の 1 本）。
+// 「入力欄の右」）。検索欄の右寄せで、打った検索語の右端から palette_hint_gap_dips を空けて入らな
+// ければ出さない（core::palette_progress_place の 1 本・描くのは ProjectHitPainter・V-1773 の
+// L-1）。
 void Direct2DRenderer::draw_palette_progress(const application::EditorFrame &frame,
                                              const core::PaletteLayout &layout)
 {
@@ -2606,26 +2635,9 @@ void Direct2DRenderer::draw_palette_progress(const application::EditorFrame &fra
     {
         return;
     }
-    const auto text = project.value().line.text();
-    const auto shown =
-        palette_text(text, palette_progress_format_.Get(), PaletteTextRole::trailing, layout.input);
-    DWRITE_TEXT_METRICS metrics{};
-    if (!shown || FAILED(shown->GetMetrics(&metrics)))
-    {
-        return;
-    }
-    const std::array<std::int32_t, 1> widths{static_cast<std::int32_t>(std::ceil(metrics.width))};
-    const auto place = core::palette_input_hint(layout, dpi_, widths);
-    if (core::width_of(place.area) <= 0)
-    {
-        return;
-    }
-    brush_->SetColor(to_color(frame.palette.muted));
-    context_->PushAxisAlignedClip(to_rect(place.area), D2D1_ANTIALIAS_MODE_ALIASED);
-    context_->DrawTextLayout(
-        D2D1::Point2F(static_cast<float>(layout.input.left), static_cast<float>(layout.input.top)),
-        shown.Get(), brush_.Get());
-    context_->PopAxisAlignedClip();
+    ProjectHitPainter painter(*context_.Get(), *brush_.Get(), project_hit_text(), palette_layouts_);
+    painter.paint_progress(project.value().line.text(), layout, typed_width(frame, layout.input),
+                           frame.palette.muted);
 }
 
 void Direct2DRenderer::draw_palette(const application::EditorFrame &frame,
