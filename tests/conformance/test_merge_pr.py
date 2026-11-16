@@ -343,6 +343,23 @@ class MergeBoundary(unittest.TestCase):
         self.assertEqual(result, 0, error)
         self.assertFalse(any("POST" in call for call in calls))
 
+    def test_just_dispatched_run_waits_on_not_found_then_merges(self):
+        # #1769: GitHub returned the run id before it served the run (404 on the first read).
+        not_found = (1, "HTTP 404: Not Found (https://api.github.com/repos/hideyukiMORI/nene-nib/actions/runs/101)\n")
+        result, calls, output, error = self.invoke(execute=True, read_failures={"actions/runs/101": [not_found]})
+        self.assertEqual(result, 0, error)
+        self.assertEqual(self.sleeps, [MERGE.MERGE_RETRY_SECONDS])
+        self.assertEqual(sum("POST" in call for call in calls), 1)
+        self.assertEqual([call[1] for call in calls].count("merge"), 1)
+
+    def test_resumed_run_not_found_stops_at_once(self):
+        not_found = (1, "HTTP 404: Not Found (https://api.github.com/repos/hideyukiMORI/nene-nib/actions/runs/101)\n")
+        result, calls, output, error = self.invoke(ci_run=101, execute=True,
+                                                  read_failures={"actions/runs/101": [not_found]})
+        self.assertEqual(result, 2)
+        self.assertEqual(self.sleeps, [])
+        self.assertNotIn("merge", [call[1] for call in calls])
+
     def test_queued_run_metadata_is_validated_after_completion(self):
         result, calls, output, error = self.invoke(run=[{"status": "queued"}, RUN], execute=True)
         self.assertEqual(result, 0, error)
