@@ -200,3 +200,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0186](0186-msix-is-a-second-package-of-the-same-release-exe.md) | MSIX は同じ Release の exe を包む 2 つ目の配布の形で、身元は表 1 つ・版は `project()` から導く | 提案（実装席・2026-11-13）・#1581 |
 | [0187](0187-rule-states-and-texts-follow-what-the-machines-enforce.md) | 規則の状態と文を、現に機械が強制している形に合わせる（CPP-002 / 012 / 018 / 019 を active に・CPP-003 / 006 / 009 / 016 に例外を名指しする） | 受理（施主の了承 2026-11-15）・#1718 |
 | [0188](0188-vim-mode-sees-the-body-without-the-final-line-break.md) | Vim のモードは、最後の改行を除いた本文を見る（改行で終わる本文の行の数を Vim に揃える・旗は開いたときと Vim に入ったときに決める・画面も同じ） | 受理（施主決定 D94・2026-11-15）・#1739 |
+| [0189](0189-finder-preview-pane-and-waiting-effect.md) | 探して見る面: プレビュー欄は面の配置の 1 つの値で、中身は worker が読む窓。待ちの間の演出は合図で進む純関数 | 受理（施主決定 D95 / D96・実装は段 P1〜P3・D41） |
