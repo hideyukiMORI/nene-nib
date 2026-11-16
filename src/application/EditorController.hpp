@@ -1046,6 +1046,8 @@ class EditorController final
     void note_vim_undone(const core::Edit &edit);
     // 鍵の効果を写す 1 か所（stepped_vim から）。鍵の印を置いてから写し、残った印を空の単位にする。
     void perform_vim_effect(const core::VimStep &step);
+    // 全部の行を消した鍵（ADR 0188 の決定 3 (a)）。eol の文書なら最後の改行も消して旗を下ろす。
+    void remove_every_line(const core::VimStep &step);
     void move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring,
                        core::CaretAffinity affinity = core::CaretAffinity::leading);
     void accept(const PointText &intent);
@@ -1315,6 +1317,8 @@ class EditorController final
     // 保存時点を写す after_units_folded の unsure）。起点を置く所と再生の終わりが倒す。
     bool replay_undone_ = false;
     bool replay_save_unsure_ = false;
+    // 再生の中で eol の旗を下ろしたか（ADR 0188 の決定 3 (a)）。畳んだ単位で下ろし直す。
+    bool replay_lowered_ = false;
     // 流している鍵の engine の印（ADR 0181）。stepped_vim が効果を写す間だけ置き、replace が
     // 本文を置き換える編集を積めば消す。残れば push_empty_unit が空の単位を積む。
     std::optional<core::VimChange> vim_change_;

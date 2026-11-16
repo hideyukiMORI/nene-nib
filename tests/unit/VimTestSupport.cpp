@@ -150,6 +150,12 @@ using nenenib::core::VimState;
         }
         joined += frame.lines.at(index).text;
     }
+    // Vim のモードで描かない最後の改行（ADR 0188 の決定 4）は、最後の行まで見えているときだけ足す。
+    if (frame.hidden_line_break && !frame.lines.empty() &&
+        frame.lines.back().number.value == frame.total_lines)
+    {
+        joined += "\n";
+    }
     return joined;
 }
 

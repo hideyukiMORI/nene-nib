@@ -314,7 +314,7 @@ namespace
     // （足した欄を黙って既定値にしない・#1617 のレビュー L3）。
     const auto &[text, selection, viewport, source, tabs, layout, navigation, row_landing,
                  view_marks, mark_landing, search_case, scroll_margin, document_limit,
-                 capture_limit] = view;
+                 capture_limit, empty_text] = view;
     static_cast<void>(selection);
     const VimEditorView over{.text = text,
                              .selection = selected,
@@ -329,7 +329,8 @@ namespace
                              .search_case = search_case,
                              .scroll_margin = scroll_margin,
                              .document_limit = document_limit,
-                             .capture_limit = capture_limit};
+                             .capture_limit = capture_limit,
+                             .empty_text = empty_text};
     VimStep step = visual_operator_applied(visual, over, operation_of(state));
     VimMarks marks = step.marks.value_or(*view.marks);
     marks.last_visual =

@@ -76,7 +76,8 @@ void verify_vim_open_line_undo()
     verify_open_line_round_trip("aa\r\nbb", "3Oa<BS>日<Esc>", "日\r\n日\r\n日\r\naa\r\nbb");
     verify_open_line_round_trip("aa\nbb", "j3O<BS><BS>X<Esc>", "aX\nbb");
     verify_open_line_round_trip("aa\nbb", "3o<BS>X<Esc>", "aaXXX\nbb");
-    verify_open_line_round_trip("aa\n", "GoX<Esc>", "aa\n\nX");
+    // 改行で終わる本文の `G` は最後の行（ADR 0188・Vim 9.1 は `aa\nX\n`）。
+    verify_open_line_round_trip("aa\n", "GoX<Esc>", "aa\nX\n");
     verify_open_line_round_trip("", "3O<Esc>", "\r\n\r\n\r\n");
 }
 

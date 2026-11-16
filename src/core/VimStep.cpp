@@ -2658,12 +2658,32 @@ namespace
                                 : view.text.position_of(effect.edits.front().range.begin);
 }
 
+// 行単位の削除が本文の全部の行を覆ったら、行が残らない印を立てる（ADR 0188 の決定 3 (a)・Vim の
+// op_delete が最後の行まで消すと ML_EMPTY）。行が 1 つも無い本文（ML_EMPTY）の `dd` は何も消さ
+// ない。印の立つ鍵は本文を変える（del_lines の changed_lines）ので changed の印も立てる。
+[[nodiscard]] VimStep lines_emptied(const VimEditorView &view, VimStep step)
+{
+    const auto *const removal = std::get_if<VimRemoveLines>(&step.effect);
+    if (removal == nullptr || vim_has_no_lines(view) || removal->range.begin.value != 0 ||
+        removal->range.end.value != view.text.size_bytes())
+    {
+        return step;
+    }
+    step.lines_left = VimLinesLeft::none;
+    if (!step.change.has_value() || step.change.value().kind != VimChange::changed)
+    {
+        step.change = VimChangeMark{VimChange::changed, std::nullopt};
+    }
+    return step;
+}
+
 // 本文を置き換える編集の効果を返す step の印（ADR 0181 の決定 2）。編集を返す鍵は Vim が必ず
 // u_save と changed_* を呼ぶので、印を書く所を効果ごとに散らさず出口のこの 1 か所で立てる。
 // 編集を返さない形の印（saved_only・空の範囲の changed）は効果を作る所が立てたまま残す。changed の
 // 印に位置が無ければ、ここで既定の位置（change_position）を書く（追補 #1374）。
 [[nodiscard]] VimStep change_marked(const VimEditorView &view, VimStep step)
 {
+    step = lines_emptied(view, std::move(step));
     if (vim_replaces_text(step.effect) &&
         (!step.change.has_value() || step.change.value().kind != VimChange::changed))
     {

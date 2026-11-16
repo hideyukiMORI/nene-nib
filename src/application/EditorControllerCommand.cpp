@@ -714,7 +714,7 @@ EditorController::operator_line_edited(const std::string &text, const VimStepSou
     {
         return std::nullopt;
     }
-    const core::TextBuffer &after = state_.text();
+    const core::TextBuffer &after = state_.vim_text();
     const bool outside = line.value > after.line_count() ||
                          bytes > after.line_end(line).value - after.line_start(line).value;
     const core::Offset origin{outside ? 0 : after.line_start(line).value + bytes};

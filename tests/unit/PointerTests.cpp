@@ -157,7 +157,10 @@ void verify_vim_last_empty_line()
 {
     Editing editing;
     auto &controller = editing.controller();
-    prepare_last_empty(controller);
+    // Vim のモードは最後の改行の後ろの空の行を数えない（ADR 0188）ので、空の最後の行は改行を
+    // 2 つ置いて作る。
+    static_cast<void>(controller.apply(InsertText{"foo\n\n"}));
+    static_cast<void>(controller.apply(VisibleLines{5, TextViewGeometry{400, 20, 96}}));
     static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
     press(controller, 5, 1, PointerClicks::double_);
     expect(controller.frame().vim_mode == VimMode::visual &&

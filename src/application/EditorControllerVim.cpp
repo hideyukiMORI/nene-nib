@@ -182,7 +182,7 @@ void placed_after_effect(EditorState &state, const core::VimStep &step)
     {
         return std::nullopt;
     }
-    return found_match(state.text(), pattern.value(),
+    return found_match(state.vim_text(), pattern.value(),
                        core::VimMatchRequest{from, line->direction(),
                                              core::vim_search_count(state.vim()),
                                              state.vim().wrapscan});
@@ -1071,10 +1071,35 @@ void EditorController::perform_vim_effect(const core::VimStep &step)
                                                            : std::nullopt);
     const ScopedValue<bool> effecting{in_vim_effect_, true};
     const core::Offset restore = state_.selection().caret;
-    // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
-    std::visit([this](const auto &value) { this->perform(value); }, step.effect);
+    switch (step.lines_left)
+    {
+    case core::VimLinesLeft::some:
+        // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
+        std::visit([this](const auto &value) { this->perform(value); }, step.effect);
+        break;
+    case core::VimLinesLeft::none:
+        remove_every_line(step);
+        break;
+    }
     push_empty_unit(restore);
     vim_change_ = outer_change;
+}
+
+// engine は除いた本文の全部の行を消したので、eol の文書なら最後の改行も同じ 1 つの置き換えで消して
+// 空の本文にし、旗を下ろす（ADR 0188 の決定 3 (a)・Vim の
+// ML_EMPTY）。除いていない本文は効果のまま。 旗を下ろすのはここの 1 か所。
+void EditorController::remove_every_line(const core::VimStep &step)
+{
+    if (&state_.vim_text() == &state_.text())
+    {
+        std::visit([this](const auto &value) { this->perform(value); }, step.effect);
+        return;
+    }
+    replace(core::OffsetRange{core::Offset{0}, core::Offset{state_.text().size_bytes()}},
+            std::string_view{}, core::EditBoundary::separate);
+    move_caret_to(core::Offset{0}, core::SelectionAnchoring::collapse);
+    state_ = state_.with_vim_eol_lowered();
+    replay_lowered_ = replay_history_.has_value();
 }
 
 // 鍵の前の保留の追従が無いか打った本文の追従だけなら、この鍵の追従は歩いた答えにできる
@@ -1239,7 +1264,7 @@ void EditorController::settle_vim_caret()
     case core::VimMode::normal:
         break;
     }
-    move_caret_to(core::vim_resting_caret(state_.text(), state_.selection().caret),
+    move_caret_to(core::vim_resting_caret(state_.vim_text(), state_.selection().caret),
                   core::SelectionAnchoring::collapse);
 }
 
@@ -1266,7 +1291,7 @@ void EditorController::keep_vim_character(const EditorIntent &intent)
         return;
     }
     const core::Selection selection = state_.selection();
-    const core::TextBuffer &text = state_.text();
+    const core::TextBuffer &text = state_.vim_text();
     switch (state_.vim().mode)
     {
     case core::VimMode::insert:
@@ -1417,14 +1442,14 @@ void EditorController::accept(const SearchHop &intent)
     const std::size_t count = core::vim_search_count(state_.vim());
     const bool wrapscan = state_.vim().wrapscan;
     const auto match = found_match(
-        state_.text(), pattern.value(),
+        state_.vim_text(), pattern.value(),
         core::VimMatchRequest{preview.value().match.value(), intent.relative, count, wrapscan});
     if (!match.has_value())
     {
         return;
     }
     const auto from = hop_start(
-        state_.text(), pattern.value(),
+        state_.vim_text(), pattern.value(),
         core::VimMatchRequest{match.value(), core::opposite(line->direction()), count, wrapscan});
     if (!from.has_value())
     {
@@ -1697,7 +1722,7 @@ void EditorController::perform(const core::VimReplay &effect)
     if (effect.reselect.has_value())
     {
         state_ = state_.with_selection(core::vim_visual_reselect(
-            state_.text(), state_.selection().caret, effect.reselect.value()));
+            state_.vim_text(), state_.selection().caret, effect.reselect.value()));
         follow_caret();
     }
     if (replay_depth_.has_value())
@@ -1887,7 +1912,15 @@ void EditorController::close_replayed_unit()
     {
         return;
     }
+    // 再生の中で下ろした旗は、単位を畳み直した後の履歴で下ろし直す（下ろした単位が畳んだ単位に
+    // 入る・ADR 0188 の決定 3 (a)）。再生の中の undo で戻っていれば下ろさない。
+    const bool lowered = replay_lowered_ && !state_.vim_eol();
+    replay_lowered_ = false;
     merge_replayed_edits(replay_history_.value(), replay_text_.value());
+    if (lowered)
+    {
+        state_ = state_.with_vim_eol_lowered();
+    }
 }
 
 void EditorController::reopen_replayed_unit()
@@ -2146,8 +2179,10 @@ EditorController::measured_vim_step(const VimStepSource &source)
     std::vector<core::VimLineRows> rows;
     std::vector<core::VimRowSpan> spans;
     // 表示領域は engine が求めたときだけ渡す（ADR 0129 の決定 2）。追従を解決するのはその時だけ。
+    // engine に渡す本文は Vim のモードが見る本文（eol の文書は最後の改行を除く・ADR 0188 の決定
+    // 2）。 入口はここの 1 か所で、engine の位置は本文の位置と同じ。
     core::VimEditorView view{
-        state_.text(), state_.selection(), std::nullopt,
+        state_.vim_text(), state_.selection(), std::nullopt,
         replay_depth_.has_value() ? core::VimKeySource::replayed : unit_source_,
         core::VimTabs{state_.active_tab(), state_.tab_count()},
         // 格子は常に折り返す（ADR 0140 の決定 7）。wrap off の text 形は無効のまま（gj gk は j k・
@@ -2162,6 +2197,7 @@ EditorController::measured_vim_step(const VimStepSource &source)
     view.marks = &state_.vim_marks();
     view.search_case = core::search_case(state_.settings());
     view.scroll_margin = state_.settings().scrolloff;
+    view.empty_text = state_.vim_empty_text();
     auto step = engine_step(state_.vim(), view, source);
     // どの要求も同じ 1 歩（鍵か行番号）をもう一度流す。viewport は 1 度渡したら以後も渡したまま。
     // 回数の上限は持たない。同じ問いの立て直しと viewport の二重要求は inconsistent で止まり、

@@ -104,8 +104,9 @@ void verify_vim_line_jump_text_edges()
     static_cast<void>(trailing_controller.apply_frame(OpenDocument{sample_path()}));
     static_cast<void>(trailing_controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(trailing_controller, "G");
-    expect(trailing_controller.frame().caret.position == TextPosition{LineNumber{2}, Column{1}},
-           "G reaches the trailing empty CRLF line");
+    // 改行で終わる本文の `G` は最後の行（Vim の eol・ADR 0188）。
+    expect(trailing_controller.frame().caret.position == TextPosition{LineNumber{1}, Column{1}},
+           "G stops at the last line before the final CRLF");
     static_cast<void>(
         trailing_controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(trailing.files().written() == "one\r\n",

@@ -905,7 +905,8 @@ EditorController::frame_pattern(std::reference_wrapper<const core::VimPattern> p
 LineView EditorController::line_view(const PaneSource &source, LineView view,
                                      const core::OffsetRange &range, core::Offset caret) const
 {
-    const core::TextBuffer &text = source.state.text();
+    // 選択と当たりは Vim のモードが見る本文の上で引く（engine と同じ本文・ADR 0188 の決定 4）。
+    const core::TextBuffer &text = source.state.vim_text();
     const core::VimPattern *pattern = source.pattern;
     const auto line = view.number;
     // 巨大な行は窓の中の本文だけを持つ。選択と当たりは窓の始まりから投影し、窓が行末に届かなければ
@@ -951,7 +952,9 @@ EditorController::visible_lines(const PaneSource &source, std::optional<SyntaxSt
 {
     const EditorState &state = source.state;
     const ScrollState &scroll = state.scroll();
-    const std::size_t total = state.text().line_count();
+    // 行の数は Vim のモードが見る本文の数（eol の文書は最後の空の行を数えない・ADR 0188 の決定
+    // 4）。
+    const std::size_t total = state.vim_text().line_count();
     const std::size_t first = std::min(scroll.first_visible.value, total);
     const std::size_t last =
         std::min(first + std::max<std::size_t>(scroll.visible_lines, 1) - 1, total);
@@ -1075,13 +1078,13 @@ EditorController::grid_visible_rows(const PaneSource &source,
     const core::LineNumber first{std::max<std::size_t>(scroll.first_visible.value, 1)};
     // 字句器は text の表示と同じ遡りと覚えから（#839・ADR 0156 の決定 8・9・14）。
     auto lex =
-        first.value <= state.text().line_count() && state.syntax_enabled()
+        first.value <= state.vim_text().line_count() && state.syntax_enabled()
             ? syntax_begin(state.text(),
                            SyntaxStateCache{source.tab, state.language(), first, core::LexState{}},
                            cache, tally.lexed)
             : std::nullopt;
-    for (core::LineNumber line = first; line.value <= state.text().line_count() && screen < limit;
-         ++line.value)
+    for (core::LineNumber line = first;
+         line.value <= state.vim_text().line_count() && screen < limit; ++line.value)
     {
         const auto count = cells.value().rows(line);
         const auto from = std::min(first_row, count - 1);
@@ -1216,7 +1219,7 @@ EditorFrame EditorController::frame()
                        CaretView{caret, caret_shape_for(delivered.mode, delivered.vim_mode),
                                  state_.caret_affinity()},
                        scroll.first_visible,
-                       state_.text().line_count(),
+                       state_.vim_text().line_count(),
                        delivered.appearance,
                        theme.ui,
                        theme.body,
@@ -1247,6 +1250,7 @@ EditorFrame EditorController::frame()
                        scroll.horizontal,
                        state_.display(),
                        pending};
+    result.hidden_line_break = &state_.vim_text() != &state_.text();
     finish_frame(result, source, gridded, lexed);
     return result;
 }
@@ -1362,7 +1366,7 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
                     CaretView{state.text().position_of(state.selection().caret), result.caret.shape,
                               state.caret_affinity()},
                     state.scroll().first_visible,
-                    state.text().line_count(),
+                    state.vim_text().line_count(),
                     state.scroll().horizontal,
                     state.display(),
                     {},

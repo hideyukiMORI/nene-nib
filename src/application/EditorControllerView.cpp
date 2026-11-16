@@ -529,7 +529,7 @@ void EditorController::select_clicked(core::Offset pointed, PointerClicks clicks
 // と同じく押した文字に両端を置く。
 void EditorController::select_clicked_in_vim(core::Offset pointed, PointerClicks clicks)
 {
-    const auto &text = state_.text();
+    const auto &text = state_.vim_text();
     const auto rest = core::vim_resting_caret(text, pointed);
     switch (clicks)
     {

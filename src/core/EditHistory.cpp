@@ -204,6 +204,11 @@ std::optional<Edit> EditHistory::applied(std::size_t index) const
 
 // 封じる・戻す・やり直すは束を共有したまま位置と区切りだけを変える（列を写さない・決定 2）。
 // 本文の位置は戻した・やり直した 1 件の印だけ足し引きする（ADR 0181 の決定 4）。
+bool EditHistory::shares_unit(const EditHistory &other, std::size_t index) const
+{
+    return index < size_ && index < other.size_ && &entry_at(index) == &other.entry_at(index);
+}
+
 EditHistory EditHistory::sealed() const
 {
     return EditHistory(blocks_, size_, position_, EditBoundary::separate, revision_, content_);

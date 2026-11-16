@@ -13,6 +13,7 @@
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
 #include "VimLastVisual.hpp"
+#include "VimLinesLeft.hpp"
 #include "VimMarks.hpp"
 #include "VimMode.hpp"
 #include "VimRepeatFailure.hpp"
@@ -83,6 +84,11 @@ struct VimStep
     // は改行を入れる 前に update_topline を流す（edit.c「May need to adjust w_topline to show the
     // cursor.」）。 controller は鍵の終わりの追従の前に、ここで先に 1 回追従する。ほかの鍵は空。
     std::optional<TextPosition> edit_topline = std::nullopt;
+    // 鍵が全部の行を消したか（ADR 0188 の決定 3 (a)）。none のとき controller は eol の文書の最後の
+    // 改行も消して空の本文にし、旗を下ろす。立てるのは行を消す効果を作る所（Ex の `:d`）と出口の
+    // change_marked の 2 か所で、none の鍵は changed の印も持つ（Vim の del_lines の
+    // changed_lines）。
+    VimLinesLeft lines_left = VimLinesLeft::some;
 };
 
 // 効果が本文を置き換えるか（ADR 0181 の決定 2）。範囲も本文も空の置き換え・行の無い矩形は

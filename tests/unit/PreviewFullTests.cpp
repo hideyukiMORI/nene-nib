@@ -100,6 +100,11 @@ constexpr std::string_view refused = "プレビュー中は編集できません
         }
         joined += line.text;
     }
+    // Vim のモードで描かない最後の改行（ADR 0188 の決定 4）。
+    if (frame.hidden_line_break)
+    {
+        joined += "\n";
+    }
     return joined;
 }
 

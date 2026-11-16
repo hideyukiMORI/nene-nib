@@ -785,6 +785,12 @@ void EditorController::accept(const SelectEditMode &intent)
     // INSERT の `Ctrl-o` の印も捨てる（切り替えは割り込み・ADR 0182 の決定 8）。
     core::VimState vim =
         core::vim_interrupted(core::vim_resting_from(state_.vim(), state_.vim().unnamed_register));
+    // 保留の追従は入る前の本文で解く。Vim のモードは eol の文書の最後の空の行を数えないので、
+    // 入った後に解くと frame を読んだかどうかで窓が変わる（ADR 0188 の決定 4）。
+    if (intent.mode == core::EditMode::vim && view_geometry_.width > 0)
+    {
+        settle_follow();
+    }
     state_ = state_.with_mode(intent.mode).with_vim(std::move(vim));
     switch (intent.mode)
     {
@@ -800,7 +806,7 @@ void EditorController::accept(const SelectEditMode &intent)
     // 表示形式の問いの間は今までどおりキャレットを追う。
     if (view_geometry_.width <= 0 || display_pending(state_.display_inquiry()))
     {
-        move_caret_to(core::vim_resting_caret(state_.text(), state_.selection().caret),
+        move_caret_to(core::vim_resting_caret(state_.vim_text(), state_.selection().caret),
                       core::SelectionAnchoring::collapse);
         return;
     }
@@ -811,9 +817,11 @@ void EditorController::accept(const SelectEditMode &intent)
     {
         layout_failure_ = entered.error();
     }
+    // eol の文書は最後の空の行に居られないので、除いた本文の最後の行へ上がる（ADR 0188 の決定 4・
+    // Vim の check_cursor）。
     const core::Offset caret =
-        entered ? state_.text().offset_of(entered.value().position) : state_.selection().caret;
-    const core::Offset resting = core::vim_resting_caret(state_.text(), caret);
+        entered ? state_.vim_text().offset_of(entered.value().position) : state_.selection().caret;
+    const core::Offset resting = core::vim_resting_caret(state_.vim_text(), caret);
     state_ = state_.with_selection(core::Selection{resting, resting})
                  .with_caret_affinity(core::CaretAffinity::leading);
 }
