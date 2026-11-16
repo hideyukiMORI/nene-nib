@@ -198,10 +198,10 @@ namespace
     return units;
 }
 
-// 昇順に並べた重複の無い端（文字の長さ以下）ごとの preview_units
-// の値。端の間の切れ端の単位数を前から 足す。切れ端が正しい UTF-8 でなければ（端が code point
-// の途中・正しくない文字）、端ごとに先頭から 数える（preview_units
-// と同じ値・正しい切れ端だけなら先頭からの数と等しい）。
+// 昇順に並べた重複の無い端（文字の長さ以下）ごとの preview_units の値。端の間の
+// 切れ端の単位数を前から足す。切れ端が正しい UTF-8 でなければ（端が code point の途中・
+// 正しくない文字）、端ごとに先頭から数える（preview_units と同じ値・正しい切れ端だけなら
+// 先頭からの数と等しい）。
 [[nodiscard]] std::vector<std::uint32_t> units_at(std::string_view shown,
                                                   std::span<const std::size_t> ends)
 {

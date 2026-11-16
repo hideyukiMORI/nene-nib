@@ -1,16 +1,16 @@
 // Markdown プレビューの差し替えの費用の probe（#818・ADR 0155 の決定 7）。CTest に登録しない。
-// 決定的に作った Markdown を parse_markdown で読み、PreviewTextLayouts ＋ PreviewBlockTops::measure
-// で錨から 1 枠ぶん測る。製品の PreviewPane は通さない（nib_preview_capture と同じ土台）。
-// 時刻は Win32TimingAdapter の節目だけで取る（ARC-007）: parse と measure をそれぞれ
-// probe_started / probe_finished の 1 対で挟み、節目の
-// JSON（<json>.timing.json）を読み戻して差を書く。
-// --long-paragraph（#1477）は行内コードの多い 1 つの長い段落（424 span で 23.7 KB・span
-// の数は引数）の 文書を WIC の描画先に製品と同じ PreviewPainter で描く。最初の 1 回（layout
-// を作って色を置く）と、 錨を 0 と 1 で動かしながらの描き直し repaints
-// 回を別の節目の対で測り、描き直しの間に layout を 作った数・SetDrawingEffect・HitTestTextRange
-// の数を書く（保持した layout を汚さないことの数）。 続けて配色を変えた後の 1
-// 回（同じ描画先で別のテーマ・D59 の配色のプレビュー）と枠の幅を 1 px 広げた後の 1
-// 回（幅のドラッグ）も測る（#1485）。
+// 決定的に作った Markdown を parse_markdown で読み、PreviewTextLayouts ＋
+// PreviewBlockTops::measure で錨から 1 枠ぶん測る。製品の PreviewPane は通さない
+// （nib_preview_capture と同じ土台）。時刻は Win32TimingAdapter の節目だけで取る
+// （ARC-007）: parse と measure をそれぞれ probe_started / probe_finished の 1 対で挟み、
+// 節目の JSON（<json>.timing.json）を読み戻して差を書く。
+// --long-paragraph（#1477）は行内コードの多い 1 つの長い段落（424 span で 23.7 KB・
+// span の数は引数）の文書を WIC の描画先に製品と同じ PreviewPainter で描く。
+// 最初の 1 回（layout を作って色を置く）と、錨を 0 と 1 で動かしながらの描き直し
+// repaints 回を別の節目の対で測り、描き直しの間に layout を作った数・SetDrawingEffect・
+// HitTestTextRange の数を書く（保持した layout を汚さないことの数）。続けて配色を変えた
+// 後の 1 回（同じ描画先で別のテーマ・D59 の配色のプレビュー）と枠の幅を 1 px 広げた
+// 後の 1 回（幅のドラッグ）も測る（#1485）。
 //
 //   nib_preview_probe <bytes> <head|middle|tail> <json の出力先>
 //   nib_preview_probe --long-paragraph <spans> <repaints> <json の出力先>

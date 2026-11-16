@@ -54,9 +54,9 @@ namespace nenenib::ui::win32
 [[nodiscard]] std::uint32_t preview_units(std::string_view shown, std::size_t byte);
 // 要素の文字の中のバイトの範囲（始まり・終わり）。
 using PreviewByteRange = std::pair<std::size_t, std::size_t>;
-// バイトの範囲の列 → layout の UTF-16 の範囲の列（同じ順・終わりが始まり以前なら長さ 0）。端の値は
-// preview_units と同じで、端を並べて前から 1
-// 回だけ数える（範囲ごとに先頭から数え直さない・#1485）。
+// バイトの範囲の列 → layout の UTF-16 の範囲の列（同じ順・終わりが始まり以前なら長さ 0）。
+// 端の値は preview_units と同じで、端を並べて前から 1 回だけ数える（範囲ごとに先頭から
+// 数え直さない・#1485）。
 [[nodiscard]] std::vector<DWRITE_TEXT_RANGE>
 preview_unit_ranges(std::string_view shown, std::span<const PreviewByteRange> ranges);
 // layout の UTF-16 の位置 → 要素の文字の中のバイト位置（preview_units の逆・hit test が読む）。

@@ -32,10 +32,10 @@ preview_inline_images(const core::MarkdownDocument &document,
 [[nodiscard]] std::uint32_t preview_dips_of(float pixels, std::uint32_t dpi) noexcept;
 // 箱の辺（DIP）→ 物理画素（四捨五入・1 より小さくしない）。inline の物の大きさと描く矩形が読む。
 [[nodiscard]] float preview_inline_extent(std::uint32_t dips, std::uint32_t dpi) noexcept;
-// layout の中の箱の左上の列（inlines と同じ順・layout
-// の原点から・物理画素）。箱の下端は箱のある行の baseline に置く（inline の物の baseline
-// は高さと同じ）。layout が答えない箱は nullopt。行の寸法 （GetLineMetrics）は箱の数に依らず 1
-// 回だけ引く（#1485）。
+// layout の中の箱の左上の列（inlines と同じ順・layout の原点から・物理画素）。
+// 箱の下端は箱のある行の baseline に置く（inline の物の baseline は高さと同じ）。
+// layout が答えない箱は nullopt。行の寸法（GetLineMetrics）は箱の数に依らず
+// 1 回だけ引く（#1485）。
 [[nodiscard]] std::vector<std::optional<D2D1_POINT_2F>>
 preview_inline_origins(IDWriteTextLayout &layout, std::span<const PreviewInlineImage> inlines,
                        std::uint32_t dpi);

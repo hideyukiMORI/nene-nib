@@ -21,9 +21,9 @@ namespace nenenib::ui::win32
 // 描くときに layout の書式を変えず位置も問わないため、行内コードの面の矩形（code_runs・layout の
 // 原点から）と画像の箱の左上（image_origins・inlines と同じ順）は作るときに 1 回だけ引いて持ち、
 // 色（drawing effect）は最初に描くときに 1 回だけ置く。inked はその色を置いた brush の
-// PreviewBrushes::generation（0 は未だ置いていない・#1477・ADR 0155 の追補）。ranges は spans
-// と同じ 順の layout の UTF-16 の範囲で、作るときに 1
-// 回だけ写して装飾・面の矩形・色が読む（#1485）。
+// PreviewBrushes::generation（0 は未だ置いていない・#1477・ADR 0155 の追補）。
+// ranges は spans と同じ順の layout の UTF-16 の範囲で、作るときに 1 回だけ写して
+// 装飾・面の矩形・色が読む（#1485）。
 struct PreviewTextLayout
 {
     std::string text;

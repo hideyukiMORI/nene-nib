@@ -61,9 +61,9 @@ HRESULT PreviewBrushes::prepare(ID2D1RenderTarget &target, const core::Theme &th
 {
     if (target_ == &target && brushes_.front() != nullptr)
     {
-        // 同じ描画先でテーマだけが変われば、同じ brush の色を置き直す（generation
-        // は変えない）。保持した layout に置いた drawing effect はこの brush
-        // を指したままなので、新しい色で描かれる（#1485）。
+        // 同じ描画先でテーマだけが変われば、同じ brush の色を置き直す（generation は
+        // 変えない）。保持した layout に置いた drawing effect はこの brush を指したまま
+        // なので、新しい色で描かれる（#1485）。
         if (theme_ != theme.name)
         {
             recolour(theme);
