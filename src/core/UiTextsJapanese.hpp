@@ -180,7 +180,7 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::palette_project_complete, "{0} 件（{1} ファイルを探しました）"},
     {UiMessage::palette_project_truncated, "{0} 件で打ち切りました"},
     {UiMessage::palette_project_failed, "探せませんでした"},
-    {UiMessage::notice_project_no_root,
+    {UiMessage::palette_project_no_root,
      "探す場所がありません。ルートを選ぶか、保存した文書から探してください"},
     {UiMessage::palette_mark_separator, "　"},
     {UiMessage::language_choice_system, "Windows に合わせる"},

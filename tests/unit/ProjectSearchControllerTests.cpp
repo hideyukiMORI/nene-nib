@@ -274,7 +274,7 @@ void verify_unrequested_states()
     expect(untitled.project_search().requests().empty() &&
                status_of(untitled.controller()) == app::ProjectSearchStatus::unplaced &&
                message_of(untitled.controller()) ==
-                   core::ui_text(core::UiMessage::notice_project_no_root,
+                   core::ui_text(core::UiMessage::palette_project_no_root,
                                  core::DisplayLanguage::japanese),
            "without a root an untitled document has nowhere to search");
 }
@@ -349,12 +349,21 @@ void verify_entries()
     expect(input_of(controller) == "!x" && editing.project_search().requests().size() == 2,
            "`:gr` is the shortest name");
     applied(controller, app::CancelCommand{});
+    static_cast<void>(run_ex(controller, R"(grep /foo\|bar)"));
+    expect(input_of(controller) == R"(!/foo\|bar)" &&
+               editing.project_search().requests().size() == 3,
+           "`:grep` keeps a pattern's alternation bar as part of the pattern");
+    applied(controller, app::CancelCommand{});
+    static_cast<void>(run_ex(controller, "grep a|b"));
+    expect(input_of(controller) == "!a|b" && editing.project_search().requests().size() == 4,
+           "`:grep` takes a bare `|` as part of the literal");
+    applied(controller, app::CancelCommand{});
     static_cast<void>(run_ex(controller, "grep!"));
     expect(!controller.frame().command_palette.has_value() &&
-               editing.project_search().requests().size() == 2,
+               editing.project_search().requests().size() == 4,
            "`:grep!` is refused");
     applied(controller, app::OpenProjectSearch{});
-    expect(input_of(controller) == "!" && editing.project_search().requests().size() == 2,
+    expect(input_of(controller) == "!" && editing.project_search().requests().size() == 4,
            "Ctrl+Shift+F opens an empty `!` face and asks nothing yet");
     // 当たりの行はブックマークの対象ではない（設計席の答え）。
     applied(controller, app::ToggleBookmark{});

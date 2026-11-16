@@ -175,7 +175,7 @@ enum class UiMessage : std::uint16_t
     palette_project_complete,
     palette_project_truncated,
     palette_project_failed,
-    notice_project_no_root,
+    palette_project_no_root,
     palette_mark_separator,
     language_choice_system,
     palette_no_candidates,
