@@ -94,4 +94,8 @@ class VirtualColumnIndex final
     std::size_t columns_ = 0;
     std::size_t rebuilt_ = 0;
 };
+
+// 塊 chunk の終わりの累積（塊を読まずに要約から足す・'\n' を含む塊は最後の '\n' の後ろの値）。
+// 升は索引を作った columns のもの（text の索引では桁と同じ）。
+[[nodiscard]] VirtualColumnCursor chunk_end(const VirtualColumnChunk &chunk) noexcept;
 } // namespace nenenib::core

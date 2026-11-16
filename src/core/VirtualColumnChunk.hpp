@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 namespace nenenib::core
 {
@@ -23,6 +24,12 @@ namespace nenenib::core
 // 含まない塊では 0。plain は表示できる ASCII（U+0020〜U+007E）と '\n' だけの塊で、行の中では
 // 桁＝升＝コードポイント＝バイト数（塊の中の桁は改行の索引の行頭からの引き算で、塊を読まない）。
 // Tab と制御文字を含む塊は ASCII でも plain でない。
+//
+// uniform_bytes と uniform_cells は「一様な塊」（'\n' と Tab を含まず、全部のコードポイントが同じ
+// バイト数で同じ 1 以上の桁を伸ばす・plain でない塊）のそのバイト数と桁で、ほかの塊では 0
+// （#1711・ADR 0140 の決定 4 の追補）。一様な塊は、コードポイントの境目で切ったどの部分も
+// 「字の数 × 桁」と送りの閉じた式で数えられる（application の GridCells が読む）。2 つの欄は
+// 4 つの bool の後ろの詰め物に収まり、塊の大きさは変わらない。
 struct VirtualColumnChunk
 {
     std::size_t start = 0;
@@ -41,5 +48,10 @@ struct VirtualColumnChunk
     bool tab = false;
     bool resets = false;
     bool wide = false;
+    std::uint8_t uniform_bytes = 0;
+    std::uint8_t uniform_cells = 0;
 };
+
+static_assert(sizeof(VirtualColumnChunk) == 13 * sizeof(std::size_t),
+              "the uniform fields sit in the padding after the flags");
 } // namespace nenenib::core
