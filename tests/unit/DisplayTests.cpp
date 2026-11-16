@@ -1013,6 +1013,31 @@ void verify_grid_repeated_line_walks()
     }
 }
 
+// 字の幅が混じる巨大な 1 行（全角と ASCII の交互・#1711）は 1 字ずつ歩くが、frame の GridCells は
+// 同じ行の塊の始まりを覚えるので、行を歩くのは 1 回（rows）と、キャレットと見えている範囲の端の
+// 塊の部分だけ。覚えが無ければ byte_of とキャレットと画面行の始まりがそれぞれ行頭から歩き直す。
+void verify_grid_mixed_line_walks_once()
+{
+    constexpr std::string_view unit = "\xe6\x97\xa5"
+                                      "a";
+    constexpr std::size_t unit_points = 2;
+    const auto count = (2U * 1024U * 1024U) / unit.size();
+    Editing editing;
+    editing.files().hold_at(std::string(ascii_path), Bytes{repeated(unit, count)});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10, grid_geometry});
+    applied(controller, open_of(ascii_path));
+    applied(controller, SelectDisplay{DisplayForm::grid});
+    applied(controller, app::PlaceCaret{core::TextPosition{core::LineNumber{1},
+                                                           core::Column{count * unit_points / 2}},
+                                        core::SelectionAnchoring::collapse});
+    const auto chunks = controller.text().virtual_columns().value().get().chunk_count();
+    const EditorFrame shown = controller.apply_frame(
+        app::MoveCaret{core::CaretMotion::next_character, core::SelectionAnchoring::collapse});
+    expect(!shown.grid.empty() && shown.grid_scanned <= chunks + repeated_walk_bound,
+           "a frame of a mixed giant line walks the line once and the parts at the caret");
+}
+
 // 開く道は、ファイルの 1 回の読みと文字組みのほかの port に触れない（決定 2）。
 void verify_quiet_open()
 {
@@ -1294,6 +1319,7 @@ void verify_display_contracts()
     verify_grid_search_reads_window();
     verify_grid_frames_borrow();
     verify_grid_repeated_line_walks();
+    verify_grid_mixed_line_walks_once();
     verify_quiet_open();
     verify_giant_window_length();
     verify_giant_window_steps();

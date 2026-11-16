@@ -34,6 +34,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <random>
 #include <string>
 #include <string_view>
@@ -736,21 +737,31 @@ constexpr std::array<std::string_view, 9> repeated_units{{
 // 繰り返しのバイト数（64 KiB の塊を 2 つ以上覆う）。
 constexpr std::size_t repeated_bytes = 150U * 1024U;
 constexpr std::array<std::size_t, 4> repeated_columns{{1, 3, 7, 80}};
+// 編集しない密な照合の幅（送りの空きが 0・1・2 升になる幅 2・4・5 を含む）。
+constexpr std::array<std::size_t, 6> dense_columns{{1, 2, 3, 4, 5, 80}};
+// 密な照合で 1 行に間引いて見る位置の数（ほかに塊の境目の前後を全部見る）。
+constexpr std::size_t dense_samples = 24;
+
+[[nodiscard]] std::string repeated_run(std::string_view unit)
+{
+    std::string run;
+    for (std::size_t at = 0; at < repeated_bytes; at += unit.size())
+    {
+        run += unit;
+    }
+    return run;
+}
 
 [[nodiscard]] std::string repeated_text(Random &random, std::string_view unit)
 {
-    std::string text = generated_line(random, 20) + "\n" + generated_line(random, 30);
-    for (std::size_t at = 0; at < repeated_bytes; at += unit.size())
-    {
-        text += unit;
-    }
-    return text + generated_line(random, 30) + "\n" + generated_line(random, 20);
+    return generated_line(random, 20) + "\n" + generated_line(random, 30) + repeated_run(unit) +
+           generated_line(random, 30) + "\n" + generated_line(random, 20);
 }
 
-// 繰り返しの行（2 行目）の 1 回の問い合わせは、行頭と行末の混ぜた塊の部分だけを歩く。
-[[nodiscard]] bool repeated_walks_bounded(const TextBuffer &text, std::size_t columns)
+// 繰り返しの行の 1 回の問い合わせは、行頭と行末の混ぜた塊の部分だけを歩く。
+[[nodiscard]] bool repeated_walks_bounded(const TextBuffer &text, std::size_t columns,
+                                          LineNumber line)
 {
-    const LineNumber line{2};
     application::GridCells ended(held_of(text), text, columns);
     static_cast<void>(ended.cursor_at(line, text.line_end(line)));
     application::GridCells beyond(held_of(text), text, columns);
@@ -758,10 +769,107 @@ constexpr std::array<std::size_t, 4> repeated_columns{{1, 3, 7, 80}};
     return ended.scanned() <= 2 && beyond.scanned() <= 2;
 }
 
+// 密な照合で見る字の位置: 行を dense_samples に間引いた位置と、行に掛かる塊の境目の前後の字と、
+// 内容の終わり。
+[[nodiscard]] std::vector<std::size_t> dense_picks(const VirtualColumnIndex &index,
+                                                   const LineModel &line)
+{
+    const auto count = content_count(line);
+    std::vector<std::size_t> picks;
+    const auto stride = std::max<std::size_t>(count / dense_samples, 1);
+    for (std::size_t pick = 0; pick < count; pick += stride)
+    {
+        picks.push_back(pick);
+    }
+    for (const auto &chunk : index.chunks())
+    {
+        const auto found = std::ranges::lower_bound(
+            line.second.begin(), std::next(line.second.begin(), static_cast<std::ptrdiff_t>(count)),
+            chunk.start, {}, [](const Placed &placed) { return placed.at(placed_offset); });
+        const auto at = static_cast<std::size_t>(std::distance(line.second.begin(), found));
+        for (const auto beside : {at - std::min<std::size_t>(at, 1), at, at + 1})
+        {
+            picks.push_back(std::min(beside, count));
+        }
+    }
+    picks.push_back(count);
+    return picks;
+}
+
+// 1 つの字 pick の累積・点・往復と、その字の最後の升と手前の送りの空きの升の逆引き。
+[[nodiscard]] bool dense_pick_matches(application::GridCells &cells, const LineModel &line,
+                                      const std::vector<GridPoint> &points, std::size_t pick)
+{
+    const auto columns = cells.columns();
+    const LineNumber number{line.first.at(span_number)};
+    const auto &placed = line.second.at(pick);
+    const Offset at{placed.at(placed_offset)};
+    const auto cursor = cells.cursor_at(number, at);
+    bool same = cursor.column == placed.at(placed_column) &&
+                cursor.cell == placed.at(placed_cell) &&
+                cursor.code_point == placed.at(placed_ordinal) &&
+                cells.point_of(number, at) == points.at(pick);
+    if (pick + 1 < points.size() && placed.at(placed_advance) > 0)
+    {
+        const auto last = placed.at(placed_start) + placed.at(placed_advance) - 1;
+        same = same && cells.byte_of(number, points.at(pick)) == at &&
+               cells.byte_of(number, point_at(last, columns)) == at;
+    }
+    if (placed.at(placed_start) > placed.at(placed_cell))
+    {
+        same = same && cells.byte_of(number, point_at(placed.at(placed_cell), columns)) == at;
+    }
+    return same;
+}
+
+// 繰り返しの行 number を、覚えを使い回す 1 つの GridCells で dense_picks の位置ごとに素朴な歩きと
+// 照らす（編集はしない。問いごとに作る GridCells は run_case の照合が見る）。
+[[nodiscard]] bool dense_points_match(const TextBuffer &text, std::string_view model,
+                                      std::size_t number, std::size_t columns)
+{
+    const auto line = model_of(text, model, number, columns);
+    const auto points = points_of(line, columns);
+    application::GridCells shared(held_of(text), text, columns);
+    bool same = true;
+    for (const auto pick : dense_picks(held_of(text), line))
+    {
+        same = dense_pick_matches(shared, line, points, pick) && same;
+    }
+    return same;
+}
+
+// 繰り返しの 3 つの形: 混ぜた前後に挟まれた 2 行目・行頭が本文の先頭（塊の始まり）の 1 行目・
+// 行が本文の末尾（最後の塊の終わり）で終わる 2 行目。
+void verify_repeated_shapes(Random &random, std::string_view unit)
+{
+    const auto run = repeated_run(unit);
+    const std::array<std::pair<std::string, std::size_t>, 3> shapes{{
+        {repeated_text(random, unit), 2},
+        {run + "\n" + generated_line(random, 20), 1},
+        {generated_line(random, 20) + "\n" + run, 2},
+    }};
+    for (const auto &[model, number] : shapes)
+    {
+        const auto text = buffer_of(model).with_virtual_columns();
+        for (const auto columns : dense_columns)
+        {
+            expect(dense_points_match(text, model, number, columns),
+                   "GridCells answers the naive cells densely on a repeated line");
+            expect(repeated_walks_bounded(text, columns, LineNumber{number}),
+                   "a query on a repeated line walks only the mixed ends of the line");
+        }
+    }
+}
+
 void verify_repeated_cases(Random &random)
 {
     for (const auto unit : repeated_units)
     {
+        // 密な照合はバイト数と桁の組が違う字だけ（`\x01` DEL CR は NUL と同じ 1 バイト・2 桁）。
+        if (unit != "\x01" && unit != "\x7f" && unit != "\r")
+        {
+            verify_repeated_shapes(random, unit);
+        }
         const auto initial = repeated_text(random, unit);
         const auto held = buffer_of(initial).with_virtual_columns();
         const bool tab = unit == "\t";
@@ -774,8 +882,6 @@ void verify_repeated_cases(Random &random)
                "a repeated line has a uniform chunk or a chunk of tabs only");
         for (const auto columns : repeated_columns)
         {
-            expect(repeated_walks_bounded(held, columns),
-                   "a query on a repeated line walks only the mixed ends of the line");
             static_cast<void>(run_case(random, initial, CaseShape{columns, 2, 24U * 1024U}));
         }
     }
