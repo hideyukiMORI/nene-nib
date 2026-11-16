@@ -1,22 +1,19 @@
 #include "ProjectQuery.hpp"
 
-#include "Utf8.hpp"
+#include "AsciiCase.hpp"
+#include "LiteralPattern.hpp"
 #include "VimPatternCase.hpp"
 #include "VimSearchDirection.hpp"
 
 #include <algorithm>
 #include <array>
+#include <string>
 #include <utility>
 
 namespace nenenib::core
 {
 namespace
 {
-[[nodiscard]] constexpr char ascii_lower(char byte) noexcept
-{
-    return byte >= 'A' && byte <= 'Z' ? static_cast<char>(byte - 'A' + 'a') : byte;
-}
-
 [[nodiscard]] constexpr char ascii_upper(char byte) noexcept
 {
     return byte >= 'a' && byte <= 'z' ? static_cast<char>(byte - 'a' + 'A') : byte;
@@ -31,72 +28,18 @@ namespace
            static_cast<std::size_t>(std::ranges::find_first_of(rest, heads) - rest.begin());
 }
 
-[[nodiscard]] bool has_ascii_letter(std::string_view text) noexcept
+// text の from 以降で、ASCII を小文字に畳んだ needle と ASCII を畳んで等しい最初の位置。
+[[nodiscard]] std::optional<std::size_t> folded_found(std::string_view text, std::size_t from,
+                                                      std::string_view needle)
 {
-    return std::ranges::any_of(text,
-                               [](char byte) { return ascii_lower(byte) != ascii_upper(byte); });
-}
-} // namespace
-
-ProjectQuery::ProjectQuery(std::string needle, bool folds, std::optional<VimPattern> pattern)
-    : needle_(std::move(needle)), folds_(folds), pattern_(std::move(pattern))
-{
-}
-
-std::expected<ProjectQuery, VimPatternFailure> ProjectQuery::parse(std::string_view input)
-{
-    if (!input.starts_with('/'))
-    {
-        if (!validate_utf8(input).has_value())
-        {
-            return std::unexpected(VimPatternFailure::invalid_utf8);
-        }
-        std::string folded(input);
-        std::ranges::transform(folded, folded.begin(), ascii_lower);
-        const bool folds = has_ascii_letter(folded);
-        return ProjectQuery(std::move(folded), folds, std::nullopt);
-    }
-    const std::string_view source = input.substr(1);
-    if (source.empty())
-    {
-        return ProjectQuery({}, false, std::nullopt);
-    }
-    auto pattern =
-        VimPattern::parse(source, VimSearchDirection::forward, VimPatternCase::sensitive);
-    if (!pattern.has_value())
-    {
-        return std::unexpected(pattern.error());
-    }
-    std::string bytes = pattern.value().literal_bytes().value_or(std::string{});
-    return ProjectQuery(std::move(bytes), false, std::move(pattern).value());
-}
-
-bool ProjectQuery::empty() const noexcept
-{
-    return !pattern_.has_value() && needle_.empty();
-}
-
-std::optional<std::size_t> ProjectQuery::found(std::string_view text, std::size_t from) const
-{
-    if (!folds_)
-    {
-        const std::string_view rest = text.substr(from);
-        const auto hit = std::ranges::search(rest, needle_);
-        if (hit.empty())
-        {
-            return std::nullopt;
-        }
-        return from + static_cast<std::size_t>(hit.begin() - rest.begin());
-    }
-    // 先頭のバイトの大小 2 通りを探し、残りを畳んで比べる。
-    const std::string_view rest = std::string_view{needle_}.substr(1);
-    const std::array<char, 2> heads{needle_.front(), ascii_upper(needle_.front())};
+    const std::array<char, 2> heads{needle.front(), ascii_upper(needle.front())};
     const std::string_view head{heads.data(), heads.front() == heads.back() ? 1U : 2U};
     for (std::size_t at = first_of(text, from, head); at < text.size();
          at = first_of(text, at + 1, head))
     {
-        if (text.size() - at >= needle_.size() &&
-            std::ranges::equal(text.substr(at + 1, rest.size()), rest, {}, ascii_lower))
+        if (text.size() - at >= needle.size() &&
+            std::ranges::equal(text.substr(at, needle.size()), needle, {}, ascii_folded,
+                               ascii_folded))
         {
             return at;
         }
@@ -104,39 +47,84 @@ std::optional<std::size_t> ProjectQuery::found(std::string_view text, std::size_
     return std::nullopt;
 }
 
+// 絞り込みのバイト列が from 以降に最初に現れる位置。
+[[nodiscard]] std::optional<std::size_t> needle_found(std::string_view text, std::size_t from,
+                                                      const VimPatternNeedle &needle)
+{
+    if (needle.ascii_folded)
+    {
+        return folded_found(text, from, needle.bytes);
+    }
+    const std::string_view rest = text.substr(from);
+    const auto hit = std::ranges::search(rest, needle.bytes);
+    if (hit.empty())
+    {
+        return std::nullopt;
+    }
+    return from + static_cast<std::size_t>(hit.begin() - rest.begin());
+}
+
+[[nodiscard]] std::expected<std::optional<VimPattern>, VimPatternFailure>
+pattern_of(std::string_view input)
+{
+    const bool slashed = input.starts_with('/');
+    const std::string_view source = slashed ? input.substr(1) : input;
+    if (source.empty())
+    {
+        return std::optional<VimPattern>{};
+    }
+    auto parsed =
+        slashed ? VimPattern::parse(source, VimSearchDirection::forward, VimPatternCase::sensitive)
+                : VimPattern::parse(literal_pattern(source, VimSearchDirection::forward),
+                                    VimSearchDirection::forward, VimPatternCase::ignore);
+    if (!parsed.has_value())
+    {
+        return std::unexpected(parsed.error());
+    }
+    return std::optional<VimPattern>{std::move(parsed).value()};
+}
+} // namespace
+
+ProjectQuery::ProjectQuery(std::optional<VimPattern> pattern)
+    : pattern_(std::move(pattern)),
+      needle_(pattern_.has_value() ? pattern_.value().required_bytes() : std::nullopt)
+{
+}
+
+std::expected<ProjectQuery, VimPatternFailure> ProjectQuery::parse(std::string_view input)
+{
+    auto pattern = pattern_of(input);
+    if (!pattern.has_value())
+    {
+        return std::unexpected(pattern.error());
+    }
+    return ProjectQuery(std::move(pattern).value());
+}
+
+bool ProjectQuery::empty() const noexcept
+{
+    return !pattern_.has_value();
+}
+
 std::optional<VimPatternMatch> ProjectQuery::first_in_line(std::string_view line) const
 {
-    if (pattern_.has_value())
-    {
-        return pattern_.value().matched(line, 0);
-    }
-    if (needle_.empty())
+    if (!pattern_.has_value())
     {
         return std::nullopt;
     }
-    const auto at = found(line, 0);
-    if (!at.has_value())
-    {
-        return std::nullopt;
-    }
-    const std::size_t end = at.value() + needle_.size();
-    return VimPatternMatch{at.value(), end, at.value(), end};
+    return pattern_.value().matched(line, 0);
 }
 
 std::optional<std::size_t> ProjectQuery::candidate(std::string_view text, std::size_t from) const
 {
-    if (from >= text.size())
+    if (from >= text.size() || !pattern_.has_value())
     {
         return std::nullopt;
     }
-    if (pattern_.has_value() && needle_.empty())
+    if (!needle_.has_value())
     {
         return from;
     }
-    if (needle_.empty())
-    {
-        return std::nullopt;
-    }
-    return found(text, from);
+    return needle_found(text, from, needle_.value());
 }
 } // namespace nenenib::core

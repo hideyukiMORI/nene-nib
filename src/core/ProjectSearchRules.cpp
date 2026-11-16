@@ -1,22 +1,16 @@
 #include "ProjectSearchRules.hpp"
 
+#include "AsciiCase.hpp"
+
 #include <algorithm>
 
 namespace nenenib::core
 {
-namespace
-{
-[[nodiscard]] constexpr char ascii_lower(char byte) noexcept
-{
-    return byte >= 'A' && byte <= 'Z' ? static_cast<char>(byte - 'A' + 'a') : byte;
-}
-} // namespace
-
 bool project_folder_skipped(std::string_view name) noexcept
 {
     return std::ranges::any_of(
         project_skipped_folders, [name](std::string_view skipped)
-        { return std::ranges::equal(name, skipped, {}, ascii_lower, ascii_lower); });
+        { return std::ranges::equal(name, skipped, {}, ascii_folded, ascii_folded); });
 }
 
 bool project_file_fits(std::uint64_t bytes) noexcept

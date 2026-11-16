@@ -165,7 +165,7 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::palette_mark_folder, "文件夹"},
     {UiMessage::palette_mark_settings, "设置"},
     {UiMessage::palette_mark_operations, "命令"},
-    {UiMessage::palette_mark_project, "全文"},
+    {UiMessage::palette_mark_project, "全文搜索"},
     {UiMessage::palette_mark_separator, "　"},
     {UiMessage::language_choice_system, "跟随 Windows"},
     {UiMessage::palette_no_candidates, "无匹配项"},
