@@ -61,7 +61,7 @@ namespace
 // キャレットの行の窓の始まりの仮想桁（キャレットが巨大な行に無ければ 0・ADR 0139 の決定 5）。
 [[nodiscard]] std::size_t origin_of(const EditorState &state, core::TextPosition caret)
 {
-    const auto &text = state.text();
+    const auto &text = state.vim_text();
     const auto *index = giant_line_index(text, caret.line);
     if (index == nullptr)
     {
@@ -83,7 +83,8 @@ constexpr std::size_t shown_margin = 4;
 VisualTextView::VisualTextView(const EditorState &state, TextLayoutPort &layouts,
                                core::TextViewGeometry geometry)
     : state_(state), layouts_(layouts), geometry_(geometry),
-      caret_(state.text().position_of(state.selection().caret)), advance_(window_advance(geometry))
+      caret_(state.vim_text().position_of(state.selection().caret)),
+      advance_(window_advance(geometry))
 {
     if (!gridded())
     {
@@ -110,12 +111,12 @@ LineView VisualTextView::line(core::LineNumber number) const
 
 LineView VisualTextView::line_at(core::LineNumber number, std::optional<core::Offset> anchor) const
 {
-    number.value = std::clamp<std::size_t>(number.value, 1, state_.text().line_count());
-    if (const auto *index = giant_line_index(state_.text(), number); index != nullptr)
+    number.value = std::clamp<std::size_t>(number.value, 1, state_.vim_text().line_count());
+    if (const auto *index = giant_line_index(state_.vim_text(), number); index != nullptr)
     {
         return giant_line(number, *index, anchor);
     }
-    auto text = state_.text().line_text(number);
+    auto text = state_.vim_text().line_text(number);
     auto display = core::display_line(text);
     LineView result{number, std::move(text), std::move(display), core::no_selection_span(),
                     {},     std::nullopt};
@@ -128,7 +129,7 @@ LineView VisualTextView::line_at(core::LineNumber number, std::optional<core::Of
 LineView VisualTextView::giant_line(core::LineNumber number, const core::VirtualColumnIndex &index,
                                     std::optional<core::Offset> anchor) const
 {
-    const auto &text = state_.text();
+    const auto &text = state_.vim_text();
     if (!anchor.has_value())
     {
         const auto left =
@@ -187,12 +188,12 @@ std::expected<GridCells, TextLayoutFailure> VisualTextView::grid_cells() const
     {
         return std::unexpected(grid_failure_.value_or(TextLayoutFailure::unavailable));
     }
-    const auto index = state_.text().virtual_columns();
+    const auto index = state_.vim_text().virtual_columns();
     if (!index)
     {
         return std::unexpected(TextLayoutFailure::unavailable);
     }
-    return GridCells{index.value().get(), state_.text(), grid_columns_};
+    return GridCells{index.value().get(), state_.vim_text(), grid_columns_};
 }
 
 std::expected<std::size_t, TextLayoutFailure>
@@ -203,14 +204,14 @@ VisualTextView::grid_rows(core::LineNumber number) const
     {
         return std::unexpected(cells.error());
     }
-    number.value = std::clamp<std::size_t>(number.value, 1, state_.text().line_count());
+    number.value = std::clamp<std::size_t>(number.value, 1, state_.vim_text().line_count());
     return cells.value().rows(number);
 }
 
 // 行頭に立つ trailing のキャレットは前の画面行の右端に描く（文字組みの hit と同じ見え方）。
 core::GridPoint VisualTextView::grid_point(GridCells &cells, core::TextCaret caret) const
 {
-    auto point = cells.point_of(caret.position.line, state_.text().offset_of(caret.position));
+    auto point = cells.point_of(caret.position.line, state_.vim_text().offset_of(caret.position));
     if (caret.affinity == core::CaretAffinity::trailing && point.cell == 0 && point.row > 0)
     {
         point = core::GridPoint{point.row - 1, grid_columns_};
@@ -250,7 +251,7 @@ VisualTextView::grid_caret_at(core::VisualPosition at, float x) const
     {
         return std::unexpected(cells.error());
     }
-    const auto &text = state_.text();
+    const auto &text = state_.vim_text();
     const core::LineNumber number{std::clamp<std::size_t>(at.line.value, 1, text.line_count())};
     const auto rows = cells.value().rows(number);
     const auto nearest = std::clamp((std::max(x, 0.0F) / cell_width_) + 0.5F, 0.0F,
@@ -265,7 +266,7 @@ VisualTextView::grid_caret_at(core::VisualPosition at, float x) const
 
 VisualTextView::SharedLine VisualTextView::shown(core::LineNumber number)
 {
-    number.value = std::clamp<std::size_t>(number.value, 1, state_.text().line_count());
+    number.value = std::clamp<std::size_t>(number.value, 1, state_.vim_text().line_count());
     const auto found = std::ranges::find_if(shown_, [number](const SharedLine &value)
                                             { return value->number == number; });
     if (found != shown_.end())
@@ -300,8 +301,8 @@ std::expected<std::size_t, TextLayoutFailure> VisualTextView::rows(core::LineNum
     {
         return grid_rows(number);
     }
-    number.value = std::clamp<std::size_t>(number.value, 1, state_.text().line_count());
-    if (giant_line_index(state_.text(), number) != nullptr)
+    number.value = std::clamp<std::size_t>(number.value, 1, state_.vim_text().line_count());
+    if (giant_line_index(state_.vim_text(), number) != nullptr)
     {
         return 1;
     }
@@ -320,7 +321,7 @@ std::expected<core::TextLocation, TextLayoutFailure> VisualTextView::location(co
         return grid_location(caret);
     }
     // 巨大な行は位置そのものを錨にした窓で求める（incsearch の preview も窓の中に来る）。
-    const auto &text = state_.text();
+    const auto &text = state_.vim_text();
     const auto *index = giant_line_index(text, caret.position.line);
     // 巨大な行の窓は位置ごとに錨が違うので保持を通さない（#529 の保持は既定の錨の行だけ）。
     const auto made =
@@ -354,7 +355,7 @@ std::expected<core::TextCaret, TextLayoutFailure> VisualTextView::caret_at(core:
     {
         const core::TextPosition desired{
             at.line, core::Column{static_cast<std::size_t>(std::max(x, 0.0F)) + 1}};
-        return core::TextCaret{state_.text().position_of(state_.text().offset_of(desired))};
+        return core::TextCaret{state_.vim_text().position_of(state_.vim_text().offset_of(desired))};
     }
     if (gridded())
     {
@@ -399,7 +400,7 @@ std::optional<core::TextCaret> VisualTextView::outside_window(const LineView &li
     {
         return std::nullopt;
     }
-    const auto &text = state_.text();
+    const auto &text = state_.vim_text();
     const auto *index = giant_line_index(text, line.number);
     if (index == nullptr)
     {
@@ -414,7 +415,7 @@ std::optional<core::TextCaret> VisualTextView::outside_window(const LineView &li
 std::expected<core::VimRowSpan, TextLayoutFailure>
 VisualTextView::row_span(const core::VimRowRequest &request)
 {
-    const auto &text = state_.text();
+    const auto &text = state_.vim_text();
     const core::LineNumber number{
         std::clamp<std::size_t>(request.line.value, 1, text.line_count())};
     const auto *const at = std::get_if<core::Offset>(&request.target);
@@ -445,7 +446,7 @@ VisualTextView::row_bounds(core::LineNumber number,
     {
         return grid_row_bounds(number, target);
     }
-    const auto &text = state_.text();
+    const auto &text = state_.vim_text();
     if (geometry_.width <= 0 || giant_line_index(text, number) != nullptr)
     {
         return core::VimRowSpan{number, 0, text.line_start(number), text.line_end(number), 1, 0};
@@ -462,7 +463,7 @@ VisualTextView::grid_row_bounds(core::LineNumber number,
     {
         return std::unexpected(cells.error());
     }
-    const auto &text = state_.text();
+    const auto &text = state_.vim_text();
     const auto count = cells.value().rows(number);
     const auto *const at = std::get_if<core::Offset>(&target);
     const auto row = std::min(at != nullptr ? cells.value().point_of(number, *at).row
@@ -481,7 +482,7 @@ std::expected<core::VimRowSpan, TextLayoutFailure>
 VisualTextView::text_row_bounds(core::LineNumber number,
                                 const std::variant<core::Offset, std::size_t> &target)
 {
-    const auto &text = state_.text();
+    const auto &text = state_.vim_text();
     const auto made = shown(number);
     const auto &shown_line = *made;
     std::variant<core::Column, std::size_t> asked{std::in_place_type<std::size_t>, 0};
@@ -550,7 +551,7 @@ std::size_t VisualTextView::row_columns() const
         return grid_columns_;
     }
     if (state_.settings().wrapping != core::LineWrapping::wrap || geometry_.width <= 0 ||
-        giant_line_index(state_.text(), caret_.line) != nullptr)
+        giant_line_index(state_.vim_text(), caret_.line) != nullptr)
     {
         return 0;
     }
@@ -568,7 +569,7 @@ std::size_t VisualTextView::window_columns() const
 std::expected<float, TextLayoutFailure>
 VisualTextView::horizontal_of_column(core::LineNumber number, std::size_t column)
 {
-    const auto &text = state_.text();
+    const auto &text = state_.vim_text();
     if (giant_line_index(text, number) != nullptr)
     {
         return window_x(column, origin_, advance_);
@@ -589,7 +590,7 @@ VisualTextView::horizontal_of_column(core::LineNumber number, std::size_t column
 std::expected<std::size_t, TextLayoutFailure>
 VisualTextView::column_of_horizontal(core::LineNumber number, float horizontal)
 {
-    const auto &text = state_.text();
+    const auto &text = state_.vim_text();
     if (giant_line_index(text, number) != nullptr)
     {
         return origin_ + static_cast<std::size_t>((std::max(horizontal, 0.0F) / advance_) + 0.5F);
@@ -640,14 +641,14 @@ std::expected<float, TextLayoutFailure> VisualTextView::followed_horizontal(core
 
 bool VisualTextView::scrolls_horizontally(core::LineNumber number) const
 {
-    const bool giant = giant_line_index(state_.text(), number) != nullptr;
+    const bool giant = giant_line_index(state_.vim_text(), number) != nullptr;
     return !(state_.settings().wrapping == core::LineWrapping::wrap && !giant) &&
            geometry_.width > 0 && !gridded();
 }
 
 std::expected<core::VisualPosition, TextLayoutFailure> VisualTextView::last()
 {
-    const core::LineNumber number{state_.text().line_count()};
+    const core::LineNumber number{state_.vim_text().line_count()};
     const auto count = rows(number);
     if (!count)
     {
@@ -672,7 +673,7 @@ std::expected<ShiftedPosition, TextLayoutFailure> VisualTextView::forward(core::
         {
             return ShiftedPosition{core::VisualPosition{from.line, from.row + amount}, false};
         }
-        if (from.line.value == state_.text().line_count())
+        if (from.line.value == state_.vim_text().line_count())
         {
             return ShiftedPosition{core::VisualPosition{from.line, count.value() - 1}, true};
         }
@@ -716,13 +717,14 @@ VisualTextView::shifted(core::VisualPosition from, std::int64_t amount)
 std::expected<ShiftedPosition, TextLayoutFailure> VisualTextView::reached(core::VisualPosition from,
                                                                           std::int64_t amount)
 {
-    from.line.value = std::clamp<std::size_t>(from.line.value, 1, state_.text().line_count());
+    from.line.value = std::clamp<std::size_t>(from.line.value, 1, state_.vim_text().line_count());
     const auto steps = magnitude(amount);
     // 制御文字の表示は最大6文字/byte。巨大な回数で全文書を歩かない。画面行の総数はこの上限より
     // 少ないので、ここへ来る送りは必ず端で止まる。
     const auto &composed = state_.composition();
     const auto composition = composed.has_value() ? composed.value().utf8.size() : 0;
-    const auto maximum = state_.text().size_bytes() * 6 + state_.text().line_count() + composition;
+    const auto maximum =
+        state_.vim_text().size_bytes() * 6 + state_.vim_text().line_count() + composition;
     if (steps >= maximum)
     {
         if (amount < 0)
@@ -751,7 +753,7 @@ VisualTextView::constrained(core::VisualPosition first, core::ScrollExtent exten
         break;
     }
     // 残る論理行だけで画面が埋まるなら、文書末尾の文字組みは要らない。
-    if (state_.text().line_count() - normalized.value().line.value >=
+    if (state_.vim_text().line_count() - normalized.value().line.value >=
         std::max<std::size_t>(state_.scroll().visible_lines, 1) - 1)
     {
         return normalized;
@@ -884,7 +886,7 @@ VisualTextView::vim_topline(core::LineNumber caret, core::LineNumber top,
     {
         auto asked = window;
         asked.rows = heights;
-        const auto answer = core::vim_topline_redrawn(asked, caret, state_.text().line_count());
+        const auto answer = core::vim_topline_redrawn(asked, caret, state_.vim_text().line_count());
         if (answer)
         {
             return answer.value();
@@ -989,7 +991,7 @@ float VisualTextView::horizontal_for(core::TextCaret caret, float located) const
     {
         return 0;
     }
-    const bool giant = giant_line_index(state_.text(), caret.position.line) != nullptr;
+    const bool giant = giant_line_index(state_.vim_text(), caret.position.line) != nullptr;
     const auto width = static_cast<float>(std::max(geometry_.width - 3, 1));
     const auto x = std::max(located, 0.0F);
     return giant ? giant_horizontal(caret, x, width)
@@ -1004,7 +1006,7 @@ float VisualTextView::giant_horizontal(core::TextCaret caret, float x, float wid
     const auto before = state_.scroll().horizontal;
     const auto low = std::max(x - width, 0.0F);
     auto best = std::clamp(before, low, x);
-    const auto &text = state_.text();
+    const auto &text = state_.vim_text();
     const auto *index = giant_line_index(text, caret.position.line);
     if (index == nullptr || caret.position.line != caret_.line || best == before)
     {

@@ -169,8 +169,10 @@ EditorState::EditorState(core::Appearance appearance, core::EditMode mode, Docum
       mode_(mode), vim_(core::vim_resting_state(
                        core::VimRegister{std::string{}, core::VimRegisterKind::uninitialized})),
       document_(std::move(untitled.document)), vim_marks_(untitled.marks),
+      vim_eol_(untitled.vim_eol.value_or(vim_end_of_line_decided(text_, 0))),
       settings_(core::default_editor_settings())
 {
+    refresh_vim_text(true);
 }
 
 const core::ThemeCatalog &EditorState::themes() const noexcept
@@ -199,6 +201,40 @@ EditorState EditorState::create(core::Appearance appearance, core::EditMode mode
 const core::TextBuffer &EditorState::text() const noexcept
 {
     return text_;
+}
+
+const core::TextBuffer &EditorState::vim_text() const noexcept
+{
+    return vim_text_ != nullptr ? *vim_text_ : text_;
+}
+
+core::VimEmptyText EditorState::vim_empty_text() const noexcept
+{
+    return vim_text_ != nullptr && vim_text_->size_bytes() == 0 ? core::VimEmptyText::one_line
+                                                                : core::VimEmptyText::no_lines;
+}
+
+bool EditorState::vim_eol() const noexcept
+{
+    return vim_eol_.up;
+}
+
+void EditorState::refresh_vim_text(bool text_changed)
+{
+    const std::size_t cut =
+        mode_ == core::EditMode::vim && vim_eol_.up ? text_.final_line_break_bytes() : 0;
+    if (cut == 0)
+    {
+        vim_text_.reset();
+        return;
+    }
+    if (!text_changed && vim_text_ != nullptr)
+    {
+        return;
+    }
+    const std::size_t size = text_.size_bytes();
+    vim_text_ = std::make_shared<const core::TextBuffer>(
+        text_.erase(core::Offset{size - cut}, core::Offset{size}));
 }
 
 const core::Selection &EditorState::selection() const noexcept
@@ -308,7 +344,15 @@ EditorState EditorState::with_settings_failure(std::optional<SettingsIssue> fail
 EditorState EditorState::with_mode(core::EditMode mode) const
 {
     EditorState next(*this);
+    // 通常モードから Vim のモードへ入るときにアクティブの文書の旗を決め直す（ADR 0188 の決定 1）。
+    // 置いた束は入った回数が違うので、広げるときに決め直す（spread）。
+    if (mode_ != core::EditMode::vim && mode == core::EditMode::vim)
+    {
+        ++next.vim_entries_;
+        next.vim_eol_ = vim_end_of_line_decided(text_, next.vim_entries_);
+    }
     next.mode_ = mode;
+    next.refresh_vim_text(false);
     return next;
 }
 
@@ -507,6 +551,7 @@ EditorState EditorState::with_edit(core::TextBuffer text, core::Selection select
     caret_affinity_ = core::CaretAffinity::leading;
     history_ = std::move(history);
     document_ = std::move(document);
+    refresh_vim_text(true);
     return std::move(*this);
 }
 
@@ -518,6 +563,7 @@ EditorState EditorState::with_history(core::EditHistory history) const &
 EditorState EditorState::with_history(core::EditHistory history) &&
 {
     history_ = std::move(history);
+    refresh_vim_text(false);
     return std::move(*this);
 }
 
@@ -584,6 +630,9 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
     // 開いた位置（1 行目）をジャンプの列に 1 項持って始める（ADR 0152 の追補 #1116）。
     next.vim_marks_ =
         core::vim_marks_opened(core::VimMarkPosition{core::LineNumber{first_line}, 0});
+    // 開いたときに旗を決める（ADR 0188 の決定 1）。
+    next.vim_eol_ = vim_end_of_line_decided(next.text_, vim_entries_);
+    next.refresh_vim_text(true);
     return next;
 }
 
@@ -697,6 +746,7 @@ EditorState EditorState::with_virtual_columns() const
 {
     EditorState next(*this);
     next.text_ = text_.with_virtual_columns();
+    next.refresh_vim_text(true);
     return next;
 }
 
@@ -921,12 +971,26 @@ std::shared_ptr<const DocumentState> EditorState::parked_active() const
     const auto save_state = save_state_of(document_, history.content_position());
     DocumentView view{core::tab_title_for(document_.path, save_state, display_language_),
                       document_.path, document_.encoding, save_state, std::nullopt};
-    return std::make_shared<const DocumentState>(
-        DocumentState{text_, core::collapsed_at(selection_.caret), std::move(history), document_,
-                      scroll_.first_visible, vim_.wanted_column, vim_.scroll_lines, std::move(view),
-                      scroll_.first_row, scroll_.horizontal, caret_affinity_, display_,
-                      display_inquiry_, vim_marks_, language_, syntax_enabled_, diagnostics_,
-                      diagnostics_version_, diagnostics_count_});
+    return std::make_shared<const DocumentState>(DocumentState{text_,
+                                                               core::collapsed_at(selection_.caret),
+                                                               std::move(history),
+                                                               document_,
+                                                               scroll_.first_visible,
+                                                               vim_.wanted_column,
+                                                               vim_.scroll_lines,
+                                                               std::move(view),
+                                                               scroll_.first_row,
+                                                               scroll_.horizontal,
+                                                               caret_affinity_,
+                                                               display_,
+                                                               display_inquiry_,
+                                                               vim_marks_,
+                                                               language_,
+                                                               syntax_enabled_,
+                                                               diagnostics_,
+                                                               diagnostics_version_,
+                                                               diagnostics_count_,
+                                                               vim_eol_});
 }
 
 // 広げる（決定 1・4）。見えている行数は窓全体の値なので保ち、先頭行だけを文書から取る。
@@ -948,6 +1012,12 @@ void EditorState::spread(const DocumentState &tab)
     diagnostics_version_ = tab.diagnostics_version;
     diagnostics_count_ = tab.diagnostics_count;
     vim_ = core::vim_switched_document(vim_, tab.wanted_column, tab.scroll_lines);
+    // まだ決めていない束（読んだ文書）と、決めた後に通常モードを通った束はここで本文から決める
+    // （ADR 0188 の決定 1）。Vim のモードのままのタブの切り替えでは置いた値を戻すだけ。
+    vim_eol_ = tab.vim_eol.has_value() && tab.vim_eol.value().entry == vim_entries_
+                   ? tab.vim_eol.value()
+                   : vim_end_of_line_decided(text_, vim_entries_);
+    refresh_vim_text(true);
 }
 
 EditorState EditorState::switched_to(std::size_t position, const DocumentState &target) const

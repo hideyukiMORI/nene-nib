@@ -152,6 +152,9 @@ struct EditorFrame
     // 解決済みの表示言語（ADR 0123 の追補 2026-11-13 の決定 3・#1019）。状態の display_language と
     // 同じ値で、ui は画面の文をこの言語で引く（ui は設定も OS も読まない）。
     core::DisplayLanguage language = core::DisplayLanguage::japanese;
+    // Vim のモードで描かない最後の改行があるか（eol の旗・ADR 0188 の決定 4）。lines と total_lines
+    // は除いた本文の行で、真なら最後の行の後ろに改行がもう 1 つある。renderer は読まない。
+    bool hidden_line_break = false;
 };
 
 // 変換中か（本文と入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

@@ -218,7 +218,7 @@ written_lines(const VimState &state, const TextBuffer &text, std::span<const Lin
                                     std::span<const LineChunk> chunks, std::optional<char> name)
 {
     const TextBuffer &text = view.text;
-    if (text.size_bytes() == 0)
+    if (vim_has_no_lines(view))
     {
         return VimStep{ex_rested(state), VimNoEffect{}};
     }
@@ -250,6 +250,7 @@ written_lines(const VimState &state, const TextBuffer &text, std::span<const Lin
     if (lines == text.line_count())
     {
         step.notice = notice_of(VimSearchNoticeKind::no_lines_in_buffer);
+        step.lines_left = VimLinesLeft::none;
     }
     else if (lines > report_lines)
     {

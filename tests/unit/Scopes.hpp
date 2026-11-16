@@ -291,6 +291,10 @@ void verify_vim_interrupt_discards();
 void verify_vim_open_line_contracts();
 void verify_vim_open_line_scope();
 
+// VimEndOfLineTests.cpp
+void verify_vim_eol_contracts();
+void verify_vim_eol_scope();
+
 // VimOpenLineExternalTests.cpp
 void verify_vim_open_line_external_scope();
 

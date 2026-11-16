@@ -107,6 +107,11 @@ records in `docs/quality/`.
     `Ctrl-i` and the change list `g;` `g,` (in Vim mode Ctrl+O is the jump list, so opening a file is Ctrl+Shift+O);
   - `:set relativenumber`, `:set scrolloff=`, virtual columns (Tab = 8, wide = 2), literal CR in LF files,
     Esc everywhere;
+  - a file that ends with a line break has as many lines as in Vim (`eol`): `G` `dd` `:$` `:%d` `:g/^$/d`
+    `/^$` do not see an empty line after the final break, and the Vim mode does not draw one (the Basic mode
+    still does); the saved bytes stay the same, lines added in Vim mode after deleting every line end in a
+    break as in Vim, and text typed into an empty file is saved without one, as Nib has no `fixeol`
+    ([ADR 0188](docs/adr/0188-vim-mode-sees-the-body-without-the-final-line-break.md));
   - `:set` takes Vim's short names (`hls is ic scs rnu so ws cb et sw ts`), several arguments in one line
     (`:set ic scs`; a wrong one stops the line and keeps the ones before it), `name?` `noname?` `name&`
     `name<` `name:val` `+=` `-=` `^=`, and `:se` `:setl` `:setg`; `:set nowrapscan` stops searches at the end
