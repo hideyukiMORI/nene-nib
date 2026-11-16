@@ -5,6 +5,7 @@
 #include "ProjectChunkHits.hpp"
 #include "ProjectHits.hpp"
 #include "ProjectSearchBatch.hpp"
+#include "ProjectSearchEntries.hpp"
 #include "ProjectSearchProgress.hpp"
 #include "ProjectSearchRules.hpp"
 #include "Utf16.hpp"
@@ -61,12 +62,6 @@ using Ended = std::optional<ProjectSearchPhase>;
 [[nodiscard]] bool is_folder(const WIN32_FIND_DATAW &data) noexcept
 {
     return (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-}
-
-// 歩かないフォルダ（隠し属性・ジャンクションとシンボリックリンク）。名前の表は呼び出し元が見る。
-[[nodiscard]] bool unwalked_folder(const WIN32_FIND_DATAW &data) noexcept
-{
-    return (data.dwFileAttributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_REPARSE_POINT)) != 0;
 }
 
 [[nodiscard]] std::uint64_t size_of(const WIN32_FIND_DATAW &data) noexcept
@@ -203,9 +198,11 @@ void ProjectSearchWalk::take_entry(const core::FilePath &folder, const WIN32_FIN
     {
         return;
     }
-    const bool walked =
-        is_folder(data) && !unwalked_folder(data) && !core::project_folder_skipped(name.value());
-    const bool searched = !is_folder(data) && core::project_file_fits(size_of(data));
+    const bool walked = is_folder(data) &&
+                        project_folder_walked(data.dwFileAttributes, data.dwReserved0) &&
+                        !core::project_folder_skipped(name.value());
+    const bool searched = !is_folder(data) && project_file_read(data.dwFileAttributes) &&
+                          core::project_file_fits(size_of(data));
     if (!walked && !searched)
     {
         return;

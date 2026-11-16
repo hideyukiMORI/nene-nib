@@ -17,6 +17,7 @@
 #include "ProjectQuery.hpp"
 #include "ProjectScan.hpp"
 #include "ProjectSearchBatch.hpp"
+#include "ProjectSearchEntries.hpp"
 #include "ProjectSearchHit.hpp"
 #include "ProjectSearchPhase.hpp"
 #include "ProjectSearchRequest.hpp"
@@ -29,6 +30,7 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -534,6 +536,43 @@ void verify_cancel()
     expect(search.collect().empty(), "nothing arrives after the last batch");
 }
 
+// 歩くか・読むかの判定の表（G3 の追補 2・D-1）。本物のクラウドの置き場は試験で作らないので、属性と
+// リパースのタグの組を純関数に当てる。
+void verify_entry_rules()
+{
+    constexpr DWORD folder = FILE_ATTRIBUTE_DIRECTORY;
+    constexpr DWORD reparse = FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT;
+    constexpr std::array<std::tuple<DWORD, DWORD, bool>, 7> folders{{
+        {folder, 0, true},
+        {folder | FILE_ATTRIBUTE_HIDDEN, 0, false},
+        {reparse, IO_REPARSE_TAG_MOUNT_POINT, false},
+        {reparse, IO_REPARSE_TAG_SYMLINK, false},
+        {reparse, IO_REPARSE_TAG_CLOUD, true},
+        {reparse, IO_REPARSE_TAG_CLOUD_6, true},
+        // タグは属性に REPARSE_POINT があるときだけ読む（無ければ dwReserved0
+        // の値は意味を持たない）。
+        {folder, IO_REPARSE_TAG_SYMLINK, true},
+    }};
+    expect(std::ranges::all_of(folders,
+                               [](const auto &row)
+                               {
+                                   const auto [attributes, tag, walked] = row;
+                                   return adapters::project_folder_walked(attributes, tag) ==
+                                          walked;
+                               }),
+           "only hidden folders, junctions and symbolic links are left unwalked");
+    constexpr std::array<std::pair<DWORD, bool>, 5> files{{
+        {FILE_ATTRIBUTE_NORMAL, true},
+        {FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_HIDDEN, true},
+        {FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS, false},
+        {FILE_ATTRIBUTE_OFFLINE, false},
+        {FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS, false},
+    }};
+    expect(std::ranges::all_of(files, [](const auto &row)
+                               { return adapters::project_file_read(row.first) == row.second; }),
+           "files whose contents are not on the machine are not read");
+}
+
 void verify_never_started()
 {
     adapters::Win32Worker worker;
@@ -554,6 +593,7 @@ int run_tests()
     }
     tree_root() = core::to_utf8(std::wstring_view(full)).value_or(std::string{});
     make_tree();
+    verify_entry_rules();
     verify_never_started();
     verify_whole_files();
     verify_tree();

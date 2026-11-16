@@ -54,7 +54,8 @@ telescope の live_grep・fzf の `:Rg` は「プロジェクトの中の文字�
 段 G3 で形を決めた所を書き足す（決定 1〜8 と G1 の追補は変えない）。
 
 1. **adapter の形。** `Win32ProjectSearchAdapter`（`FolderPort` の adapter と同じ形・棚 `ProjectSearchShelf`・歩き `ProjectSearchWalk`）。1 回の仕事は「フォルダ 1 つの列挙（`FindFirstFileExW`・`FindExInfoBasic`・`FIND_FIRST_EX_LARGE_FETCH`）」か「ファイルの塊 1 つ（1 MiB）の読みと照合」のどちらか 1 つで、残りがあれば自分を worker の列の後ろへ積み直す。歩く順は深さ優先で、フォルダのファイルをその下のフォルダより先に読む。進んだ仕事の後に batch を 1 つ置く（累計の進み具合と、その仕事の当たり）。cancel は今の券のときだけ歩きを止め、古い券の取消は今の要求を止めない。
-2. **飛ばすもの。** 決定 2 の隠し属性のフォルダと固定の表に加えて、リパースポイントのフォルダ（ジャンクション・シンボリックリンク・循環を避ける・設計席の答え）を歩かない。開けない下のフォルダ（拒否・経路の失敗）は黙って飛ばす（数えない）。ルートを開けなければ `failed`。長い経路は `native_path` の `\?\` の形で歩く。
+2. **飛ばすもの。** 決定 2 の隠し属性のフォルダと固定の表に加えて、ジャンクション（`IO_REPARSE_TAG_MOUNT_POINT`）とシンボリックリンク（`IO_REPARSE_TAG_SYMLINK`）のフォルダを歩かない（循環を避ける・タグは `FindFirstFileExW` の `dwReserved0`）。ほかのタグのリパースポイント（OneDrive などクラウドの置き場のフォルダ）は歩く。開けない下のフォルダ（拒否・経路の失敗）は黙って飛ばす（数えない）。ルートを開けなければ `failed`。長い経路は `native_path` の `\\?\` の形で歩く。
+   中身がまだ手元に無いファイル（`FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS`・`FILE_ATTRIBUTE_OFFLINE`）は読まずに飛ばして数えない（探すだけで取り寄せを起こさない・V-1773 の D-1 の設計席の決め・判定は純関数 `project_folder_walked` / `project_file_read`）。
 3. **数え方。** `found` は歩き終わるまで「今まで見つけた探すファイルの数」（16 MiB を超えるファイルは数えない）。最初の塊に NUL があるファイル・開けない・読めないファイルは見つけた数から外す（終わったとき `searched == found`）。
 4. **当たりのパス（V-1764 の L-5）。** ルートの文字列の後ろに `\` と名前を足した形（区切りで終わるルートには足さない・`FolderListing` と同じ）。ルートが開いた文書のフォルダか設定のルート（どちらも開く道の絶対パス）なら、当たりのパスは開く道（`absolute_file_path`）が作る形と同じ（契約 `nib_adapters_project_search`）。
 5. **面の描画。** 当たりの行は `ProjectHitPainter` が 2 段で描く（配置は core の `palette_hit_line` / `palette_hit_place`・文字組みは面の保持 `PaletteRowLayouts` から引く・構文の色は付けない）。状態の 1 行は、探している間と探し終えた件数（`searching` `complete` `truncated`）を入力欄の右（`muted`・11.5 DIP）に、探す前と探せない状態（`prompt` `failed` `unplaced` `invalid`）を候補の無い行に書く（採用案の「終わったら記号の案内」は `!` の入力が空でないので案内が出ず、件数の行を残した・設計席の判断の待ち）。

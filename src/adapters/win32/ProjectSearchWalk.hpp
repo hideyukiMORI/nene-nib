@@ -26,10 +26,11 @@ namespace nenenib::adapters::win32
 // （フォルダ 1 つの列挙か、ファイルの塊 1 つの読みと照合）だけをして、残りがあれば自分を worker の
 // 列の後ろへ積み直す（FIFO を塞がない・自動退避や device の仕事が塊の間に入れる）。
 // - 木はルートから歩く。フォルダは見つけた順に深さ優先、フォルダのファイルはその下のフォルダより
-//   先に読む。隠し属性のフォルダ・リパースポイントのフォルダ（ジャンクション・シンボリック
-//   リンク・循環を避ける）・core::project_folder_skipped の表の名前は歩かない。開けないフォルダ
+//   先に読む。project_folder_walked が断るフォルダ（隠し属性・ジャンクション・シンボリック
+//   リンク）と core::project_folder_skipped の表の名前は歩かない。開けないフォルダ
 //   （拒否・長すぎる経路）は黙って飛ばす。ルートを開けなければ failed。
-// - ファイルは core::project_file_fits を超えるものを数えずに飛ばし、最初の塊に NUL があれば
+// - ファイルは中身が手元に無いもの（project_file_read）と core::project_file_fits を超えるものを
+//   数えずに飛ばし、最初の塊に NUL があれば
 //   （core::project_text_is_binary）・開けない・読めなければ、見つけた数から外して飛ばす。
 // - 読みは core::project_search_chunk_bytes ずつ。照合は core::project_hits_in と
 //   project_hits_finished（行の境と BOM は core が扱う）。当たりのファイルのパスはルートの文字列の

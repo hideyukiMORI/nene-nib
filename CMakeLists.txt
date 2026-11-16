@@ -272,7 +272,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32TimingAdapter.cpp
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/LastResortArming.cpp src/adapters/win32/FolderShelf.cpp
     src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
-    src/adapters/win32/ProjectSearchShelf.cpp src/adapters/win32/ProjectSearchWalk.cpp src/adapters/win32/Win32ProjectSearchAdapter.cpp
+    src/adapters/win32/ProjectSearchEntries.cpp src/adapters/win32/ProjectSearchShelf.cpp src/adapters/win32/ProjectSearchWalk.cpp src/adapters/win32/Win32ProjectSearchAdapter.cpp
     src/adapters/win32/MarkdownShelf.cpp src/adapters/win32/Win32MarkdownAdapter.cpp
     src/adapters/win32/ImageShelf.cpp src/adapters/win32/ImageFileRead.cpp
     src/adapters/win32/ImageDecode.cpp src/adapters/win32/Win32ImageAdapter.cpp
