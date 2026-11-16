@@ -167,6 +167,7 @@ enum class UiMessage : std::uint16_t
     palette_mark_folder,
     palette_mark_settings,
     palette_mark_operations,
+    palette_mark_project,
     palette_mark_separator,
     language_choice_system,
     palette_no_candidates,

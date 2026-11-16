@@ -113,6 +113,10 @@ CommandPalette::Result CommandPalette::result_of(const CommandLine &input, EditM
     case PaletteScope::history:
     case PaletteScope::folder:
         return Result{listed_positions(entries, query.scope, query.query)};
+    case PaletteScope::project_hits:
+        // 入力は検索語で、面の絞り込みの文字ではない（ADR 0167 の決定 5）。当たりの候補を列の順の
+        // まま全部出す（候補を足すのは controller・段 G2）。
+        return Result{listed_positions(entries, query.scope, {})};
     }
     std::unreachable();
 }

@@ -157,6 +157,8 @@ namespace
         // 保存の形の面は記号で開く出どころではない（ADR 0010 の追補 #1049）。その面の列はこの印の
         // 候補だけなので、空の入力（files）が全部を見せる。
         return PaletteScope::files;
+    case PaletteOrigin::project_hit:
+        return PaletteScope::project_hits;
     }
     std::unreachable();
 }
@@ -181,6 +183,7 @@ namespace
     case PaletteScope::folder:
     case PaletteScope::commands:
     case PaletteScope::operations:
+    case PaletteScope::project_hits:
         return scope_of(origin.value()) == scope;
     }
     std::unreachable();
@@ -456,6 +459,8 @@ namespace
         return UiMessage::palette_origin_folder;
     case PaletteOrigin::document_format:
         return UiMessage::palette_origin_document_format;
+    case PaletteOrigin::project_hit:
+        return UiMessage::palette_mark_project;
     }
     std::unreachable();
 }

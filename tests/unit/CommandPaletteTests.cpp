@@ -513,14 +513,18 @@ void verify_palette_marks()
                query_is("/", core::PaletteScope::folder, ""),
            "the slash mark selects the same folder");
     expect(query_is("*a", core::PaletteScope::bookmarks, "a") &&
-               query_is("!a", core::PaletteScope::files, "!a"),
+               query_is("%a", core::PaletteScope::files, "%a"),
            "the star selects bookmarks while unknown marks are plain search text");
     expect(query_is("?ほぞん", core::PaletteScope::operations, "ほぞん") &&
                query_is("?", core::PaletteScope::operations, ""),
            "the question mark selects the operations");
+    expect(query_is("!foo bar", core::PaletteScope::project_hits, "foo bar") &&
+               query_is("!", core::PaletteScope::project_hits, "") &&
+               query_is(":!dir", core::PaletteScope::commands, "!dir"),
+           "the exclamation mark selects the project search and a colon keeps its own bang");
     expect(query_is("a#", core::PaletteScope::files, "a#"), "only the first character is a mark");
     expect(core::palette_mark_hint(nenenib::core::DisplayLanguage::japanese).text() ==
-               "# タブ\u3000* ブックマーク\u3000@ 履歴\u3000/ フォルダ\u3000: 設定　? 操作",
+               "# タブ\u3000* ブックマーク\u3000@ 履歴\u3000/ フォルダ\u3000: 設定　? 操作　! 全文",
            "the hint is built from the table");
     expect(core::palette_origin_label(core::PaletteOrigin::tab,
                                       nenenib::core::DisplayLanguage::japanese) == "開いているタブ",

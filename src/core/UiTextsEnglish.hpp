@@ -185,6 +185,7 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::palette_mark_folder, "Folder"},
     {UiMessage::palette_mark_settings, "Settings"},
     {UiMessage::palette_mark_operations, "Commands"},
+    {UiMessage::palette_mark_project, "Grep"},
     {UiMessage::palette_mark_separator, "   "},
     {UiMessage::language_choice_system, "Match Windows"},
     {UiMessage::palette_no_candidates, "No matches"},

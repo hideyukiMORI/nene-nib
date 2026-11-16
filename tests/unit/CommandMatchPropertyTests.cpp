@@ -100,9 +100,10 @@ constexpr std::array<Letter, 9> other_letters{{{U'é', "\xC3\xA9"},
 constexpr std::array<PaletteOrigin, 5> origins{{PaletteOrigin::tab, PaletteOrigin::bookmarked_tab,
                                                 PaletteOrigin::bookmark, PaletteOrigin::history,
                                                 PaletteOrigin::folder}};
-constexpr std::array<PaletteScope, 7> all_scopes{
+constexpr std::array<PaletteScope, 8> all_scopes{
     {PaletteScope::files, PaletteScope::tabs, PaletteScope::bookmarks, PaletteScope::history,
-     PaletteScope::folder, PaletteScope::commands, PaletteScope::operations}};
+     PaletteScope::folder, PaletteScope::commands, PaletteScope::operations,
+     PaletteScope::project_hits}};
 constexpr char32_t widening = U'日';
 
 [[nodiscard]] std::size_t below(Random &random, std::size_t bound)
@@ -310,6 +311,8 @@ constexpr char32_t widening = U'日';
         return mark == PaletteOrigin::history;
     case PaletteScope::folder:
         return mark == PaletteOrigin::folder;
+    case PaletteScope::project_hits:
+        return mark == PaletteOrigin::project_hit;
     case PaletteScope::commands:
     case PaletteScope::operations:
         return false;
