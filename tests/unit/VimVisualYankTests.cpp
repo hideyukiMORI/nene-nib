@@ -2,7 +2,7 @@
 #include "Scopes.hpp"
 #include "TestSupport.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <algorithm>
 #include <array>
@@ -25,7 +25,7 @@ void verify_vim_visual_yank_scope()
         "v-j-y-across-lines",
         "V-indented-line-keeps-the-indent-in-the-register"};
     std::size_t selected = 0;
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         if (fixture.name.starts_with("visual-yank-") ||
             std::ranges::find(boundaries, fixture.name) != boundaries.end())
