@@ -22,6 +22,8 @@ GitHub Issue が正で、ここは 1 画面の要約。日ごとの経緯は書�
 4. 1.0.1: Store 版から右クリックの登録の操作を隠す。後続の Issue #1690・#1696〜#1708。
 5. **新しい要件: 探して見る面**（hide 2026-11-15 夜・fzf / telescope / snacks.nvim / tv.nvim の良い所）。段は live grep（#1003・ADR 0167・読みは自前のままで rg を使わない、と hide が確認）＋ プレビュー欄 → ルートの下のファイル名 → 行（#1015）・全タブの本文・見出し・診断 → レジスタ・ジャンプ・変更位置・マーク。演出（攻殻機動隊・マトリックス風）は常時ではなく、探すのに時間が掛かっている間だけ（D95）。見た目は決まった（D96・2026-11-16: 右に並べる・細い窓は下・Ctrl+Shift+P で手の切り替え・演出は「解読」で走査の線なし）。形は [ADR 0189](../adr/0189-finder-preview-pane-and-waiting-effect.md)（段 P1〜P3）、採用案は [docs/design/2026-11-16-finder-look.md](../design/2026-11-16-finder-look.md)。全文検索は #1003（ADR 0167 の段 G1〜G3）。
 
+6. **イージーモーション**（#998・FR-023・[ADR 0163](../adr/0163-easymotion-labels-visible-jump-targets-through-the-engine.md)・計画 [docs/plans/2026-10-28-easymotion.md](../plans/2026-10-28-easymotion.md)）: hide の指示（2026-11-16）で実装の順に積んだ。形は受理済み（D67）なので、#1741 が入った後に段 M2〜M4 の席を出す（engine の同じファイルに触るため並べない）。
+
 手順の細部は[引き継ぎ 2026-11-15](../handoffs/2026-11-15.md)の「区切りの後の追記 3」。
 
 ## hide の返事待ち
