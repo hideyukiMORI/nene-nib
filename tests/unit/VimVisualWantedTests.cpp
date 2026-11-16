@@ -29,7 +29,7 @@
 #include "VirtualColumn.hpp"
 #include "VisibleLines.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <cstddef>
 #include <string>
@@ -66,7 +66,7 @@ using nenenib::core::VirtualColumn;
 void verify_vim_visual_wanted_fixtures()
 {
     std::size_t selected = 0;
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         if (fixture.name.starts_with("visual-wanted-"))
         {

@@ -36,7 +36,7 @@
 #include "VimWantedColumn.hpp"
 #include "VirtualColumn.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <algorithm>
 #include <array>
@@ -338,7 +338,7 @@ void verify_vim_replace_scope()
                                                           "char-search-visual-y-f-range",
                                                           "line-jump-visual-gg-yank"};
     std::size_t selected = 0;
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         if (fixture.name.starts_with("replace-char-") || fixture.name.starts_with("literal-cr-") ||
             std::ranges::find(boundaries, fixture.name) != boundaries.end())

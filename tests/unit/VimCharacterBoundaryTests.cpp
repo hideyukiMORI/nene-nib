@@ -14,7 +14,7 @@
 #include "VimWordClassTable.hpp"
 #include "VimWordMotion.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <array>
 #include <cstddef>
@@ -361,7 +361,7 @@ void verify_vim_word_class_table()
 void verify_vim_character_fixtures()
 {
     std::size_t selected = 0;
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         if (fixture.name.starts_with("combining-"))
         {
@@ -371,7 +371,7 @@ void verify_vim_character_fixtures()
     }
     expect(selected == 92, "the scope replays all 92 adopted combining-character fixtures");
     std::size_t classes = 0;
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         if (fixture.name.starts_with("word-class-"))
         {

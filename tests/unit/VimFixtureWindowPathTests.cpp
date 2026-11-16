@@ -41,8 +41,8 @@
 #include "VimTestSupport.hpp"
 
 #include "../vim/VimFixture.hpp"
-#include "../vim/VimFixtures.hpp"
 #include "../vim/VimWrapFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <array>
 #include <cstddef>
@@ -408,10 +408,10 @@ void verify_fixture_window_path(std::size_t stride)
 {
     verify_window_tables_pass_vim_keys();
     verify_skip_reasons();
-    const auto [main, chosen, pinned] = replayed_fixtures(vim_fixtures, stride);
+    const auto [main, chosen, pinned] = replayed_fixtures(vim_fixture_table(), stride);
     verify_tally(main, chosen, "fixtures");
     expect(pinned != 0U, "the window path always replays the fixtures named window-path- (#1326)");
-    expect(stride != 1U || chosen == vim_fixtures.size(),
+    expect(stride != 1U || chosen == vim_fixture_table().size(),
            "the whole run chooses every fixture (#1326)");
     const auto [wrapped, wrapped_chosen, wrapped_pinned] =
         replayed_fixtures(vim_wrap_fixtures, stride);
