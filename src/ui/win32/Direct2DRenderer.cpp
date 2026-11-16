@@ -36,6 +36,9 @@
 #include "PaneRole.hpp"
 #include "PreviewMetrics.hpp"
 #include "PreviewTextStyle.hpp"
+#include "ProjectHitPainter.hpp"
+#include "ProjectHitText.hpp"
+#include "ProjectSearchStatus.hpp"
 #include "RenderFailureOf.hpp"
 #include "ReplacedTints.hpp"
 #include "RgbaColor.hpp"
@@ -152,6 +155,25 @@ constexpr float full_channel = 255.0F;
 [[nodiscard]] UINT extent_of(LONG value) noexcept
 {
     return value > 0 ? static_cast<UINT>(value) : 1U;
+}
+
+// 全文検索の面の状態の 1 行を候補の行に書くか（探す前と探せない状態）。偽なら入力欄の右に書く
+// （探している間と探し終えた件数・ADR 0167 の決定 5）。
+[[nodiscard]] bool project_line_in_rows(application::ProjectSearchStatus status) noexcept
+{
+    switch (status)
+    {
+    case application::ProjectSearchStatus::searching:
+    case application::ProjectSearchStatus::complete:
+    case application::ProjectSearchStatus::truncated:
+        return false;
+    case application::ProjectSearchStatus::prompt:
+    case application::ProjectSearchStatus::failed:
+    case application::ProjectSearchStatus::unplaced:
+    case application::ProjectSearchStatus::invalid:
+        return true;
+    }
+    std::unreachable();
 }
 
 // バイト位置を DirectWrite の UTF-16 の位置へ。単位数は core の正典で測る（CPP-014）。
@@ -566,6 +588,30 @@ bool Direct2DRenderer::create_explorer_formats(const wchar_t *face)
     return true;
 }
 
+bool Direct2DRenderer::create_project_hit_formats(const wchar_t *body_face)
+{
+    const wchar_t *interface_face = family(L"Segoe UI Variable Text", L"Segoe UI");
+    if (FAILED(
+            make_format(body_face, hit_line_dips, DWRITE_FONT_WEIGHT_NORMAL, hit_line_format_)) ||
+        FAILED(make_format(interface_face, hit_place_dips, DWRITE_FONT_WEIGHT_NORMAL,
+                           hit_place_format_)) ||
+        FAILED(make_format(interface_face, palette_progress_dips, DWRITE_FONT_WEIGHT_NORMAL,
+                           palette_progress_format_)))
+    {
+        return false;
+    }
+    const std::array<TextFormat, 3> every{hit_line_format_, hit_place_format_,
+                                          palette_progress_format_};
+    for (const auto &format : every)
+    {
+        format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+    }
+    palette_progress_format_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
+    return SUCCEEDED(trim_by_character(hit_line_format_.Get())) &&
+           SUCCEEDED(trim_by_character(hit_place_format_.Get()));
+}
+
 std::expected<void, RenderFailure> Direct2DRenderer::create_guide_formats(const wchar_t *face)
 {
     // 鍵の箱の幅は書式で測ったものなので、書式と一緒に捨てる（#1122）。
@@ -621,7 +667,8 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     const auto made_start_title = make_format(family(L"Segoe UI Variable Display", L"Segoe UI"),
                                               core::font_size_dips(settings.font_size) * 1.5F,
                                               DWRITE_FONT_WEIGHT_NORMAL, start_title);
-    if (FAILED(made_gutter) || FAILED(made_key) || FAILED(made_start_title))
+    if (FAILED(made_gutter) || FAILED(made_key) || FAILED(made_start_title) ||
+        !create_project_hit_formats(face))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
@@ -2235,6 +2282,12 @@ void Direct2DRenderer::draw_palette_choice(const application::EditorFrame &frame
     {
         return;
     }
+    // 全文検索の面の当たりは 2 段の行（ADR 0167 の決定 5）。右端の補足は出さない。
+    if (index - palette.first < palette.hit_rows.size())
+    {
+        draw_project_hit(frame, row, palette.hit_rows.at(index - palette.first));
+        return;
+    }
     const auto &choice = palette.rows.at(index - palette.first);
     // 右端の欄は補足（印）か操作の鍵（ADR 0078 の決定 12）。両方を持つ行は無い。鍵の欄は枠の幅に
     // 合わせて core が広げ、名前と説明の欄はその左まで（#1658）。
@@ -2416,6 +2469,30 @@ void Direct2DRenderer::draw_palette_detail(const application::EditorFrame &frame
         brush_.Get());
 }
 
+void Direct2DRenderer::draw_project_hit(const application::EditorFrame &frame,
+                                        const core::LayoutRect &row, const core::ProjectHitRow &hit)
+{
+    ProjectHitPainter painter(
+        *context_.Get(), *brush_.Get(),
+        ProjectHitText{dwrite_.Get(), hit_line_format_.Get(), hit_place_format_.Get(), dpi_},
+        palette_layouts_);
+    painter.paint(hit, row, frame.palette);
+}
+
+// 全文検索の面で、探す前・探せない状態（案内・解析できない・探す場所が無い・失敗）は、その 1 行を
+// 候補の無い行に書く（ADR 0167 の決定 5 の「面の先頭の行」）。探している・探し終えた面は今の文。
+std::string_view
+Direct2DRenderer::empty_palette_text(const application::CommandPaletteView &palette,
+                                     core::DisplayLanguage language)
+{
+    const auto &project = palette.project;
+    if (project.has_value() && project_line_in_rows(project.value().status))
+    {
+        return project.value().line.text();
+    }
+    return core::ui_text(core::UiMessage::palette_no_candidates, language);
+}
+
 void Direct2DRenderer::draw_palette_choices(const application::EditorFrame &frame,
                                             const core::PaletteLayout &layout)
 {
@@ -2427,8 +2504,7 @@ void Direct2DRenderer::draw_palette_choices(const application::EditorFrame &fram
     if (palette.total == 0)
     {
         // 行の名前と同じ欄に書く（ADR 0060 の決定 9）。面の左端に寄せない。#309
-        write(core::ui_text(core::UiMessage::palette_no_candidates, frame.language),
-              mode_format_.Get(),
+        write(empty_palette_text(palette, frame.language), mode_format_.Get(),
               core::palette_row_label(core::palette_row(layout, 0), dpi_, false),
               frame.palette.muted);
         return;
@@ -2515,6 +2591,43 @@ void Direct2DRenderer::draw_palette_hint(const application::EditorFrame &frame,
     context_->PopAxisAlignedClip();
 }
 
+// 探している間は「探しています… N / M ファイル」、探し終えたら件数（ADR 0167 の決定 5・採用案の
+// 「入力欄の右」）。記号の案内と同じく検索欄の右寄せで、検索欄の左端から palette_hint_gap_dips を
+// 空けた残りに入らなければ出さない（core::palette_input_hint の 1 本）。
+void Direct2DRenderer::draw_palette_progress(const application::EditorFrame &frame,
+                                             const core::PaletteLayout &layout)
+{
+    if (!frame.command_palette.has_value())
+    {
+        return;
+    }
+    const auto &project = frame.command_palette.value().project;
+    if (!project.has_value() || project_line_in_rows(project.value().status))
+    {
+        return;
+    }
+    const auto text = project.value().line.text();
+    const auto shown =
+        palette_text(text, palette_progress_format_.Get(), PaletteTextRole::trailing, layout.input);
+    DWRITE_TEXT_METRICS metrics{};
+    if (!shown || FAILED(shown->GetMetrics(&metrics)))
+    {
+        return;
+    }
+    const std::array<std::int32_t, 1> widths{static_cast<std::int32_t>(std::ceil(metrics.width))};
+    const auto place = core::palette_input_hint(layout, dpi_, widths);
+    if (core::width_of(place.area) <= 0)
+    {
+        return;
+    }
+    brush_->SetColor(to_color(frame.palette.muted));
+    context_->PushAxisAlignedClip(to_rect(place.area), D2D1_ANTIALIAS_MODE_ALIASED);
+    context_->DrawTextLayout(
+        D2D1::Point2F(static_cast<float>(layout.input.left), static_cast<float>(layout.input.top)),
+        shown.Get(), brush_.Get());
+    context_->PopAxisAlignedClip();
+}
+
 void Direct2DRenderer::draw_palette(const application::EditorFrame &frame,
                                     const core::PaletteLayout &layout)
 {
@@ -2534,6 +2647,7 @@ void Direct2DRenderer::draw_palette(const application::EditorFrame &frame,
                        brush_.Get(), scaled(1.0F));
     // 記号の案内は入力より先に描く。出すかどうかは application が決め、ui は値があれば描く。
     draw_palette_hint(frame, layout);
+    draw_palette_progress(frame, layout);
     draw_command(frame, layout.input);
     context_->PushAxisAlignedClip(to_rect(layout.rows), D2D1_ANTIALIAS_MODE_ALIASED);
     draw_palette_choices(frame, layout);

@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "eng"))
 
 from window_driver import (cover_points, first_cover, forget_session, parse_keys, read_png,  # noqa: E402
-                           VK_ESCAPE, write_png)
+                           VK_ESCAPE, VK_F, write_png)
 
 spec = importlib.util.spec_from_file_location("compare_frames", ROOT / "eng/compare-frames.py")
 compare_frames = importlib.util.module_from_spec(spec)
@@ -219,6 +219,10 @@ class ProfileReset(unittest.TestCase):
 class KeyNotation(unittest.TestCase):
     def test_the_fixture_notation_is_read(self):
         self.assertEqual(parse_keys("ihello<Esc>"), [("text", "ihello"), ("key", VK_ESCAPE)])
+
+    def test_the_project_search_chord_is_read(self):
+        # Ctrl+Shift+F は全文検索の面を開く（ADR 0167 の決定 1・#1003）。
+        self.assertEqual(parse_keys("<C-S-f>needle"), [("shiftChord", VK_F), ("text", "needle")])
 
     def test_an_unknown_name_is_refused(self):
         with self.assertRaises(ValueError):

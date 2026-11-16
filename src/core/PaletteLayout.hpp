@@ -52,6 +52,12 @@ struct PaletteLayout
 // 内側の全部（#1658）。
 [[nodiscard]] LayoutRect palette_row_label(const LayoutRect &row, std::uint32_t dpi,
                                            const LayoutRect &note) noexcept;
+// 全文検索の当たりの行の 2 段（ADR 0167 の決定 5・採用案 docs/design/2026-11-16-finder-look.md の
+// 「当たりの行」）。どちらも行の内側（左右 16 DIP）の幅で、上の段（行の本文・12.5 DIP の字）は行の
+// 上 3 DIP から高さ 19 DIP、下の段（相対パスと行・11 DIP の字）はその下から高さ 15 DIP（行の 40 DIP
+// に収まる）。行が低ければ行の下端で切る。
+[[nodiscard]] LayoutRect palette_hit_line(const LayoutRect &row, std::uint32_t dpi) noexcept;
+[[nodiscard]] LayoutRect palette_hit_place(const LayoutRect &row, std::uint32_t dpi) noexcept;
 // 記号の案内の置き場（#1640）。widths の k 番目は組 k から最後の組までの文の幅（物理画素・描画と
 // 同じ書式で ui が測る）。検索欄の左端から palette_hint_gap_dips を空けた残りに入る最も前の組から
 // 出し、欄の幅は出す文の幅（右端は検索欄の右端）。組の途中では切らない（文の左が欄の外へ出ない）。

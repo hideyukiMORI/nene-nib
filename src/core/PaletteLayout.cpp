@@ -110,6 +110,22 @@ LayoutRect palette_row_label(const LayoutRect &row, std::uint32_t dpi,
     return LayoutRect{inside.left, inside.top, note.left - to_pixels(12, dpi), inside.bottom};
 }
 
+LayoutRect palette_hit_line(const LayoutRect &row, std::uint32_t dpi) noexcept
+{
+    const auto inside = row_inside(row, dpi);
+    const auto top = std::min(row.top + to_pixels(3, dpi), row.bottom);
+    return LayoutRect{inside.left, top, inside.right,
+                      std::min(top + to_pixels(19, dpi), row.bottom)};
+}
+
+LayoutRect palette_hit_place(const LayoutRect &row, std::uint32_t dpi) noexcept
+{
+    const auto inside = row_inside(row, dpi);
+    const auto top = palette_hit_line(row, dpi).bottom;
+    return LayoutRect{inside.left, top, inside.right,
+                      std::min(top + to_pixels(15, dpi), row.bottom)};
+}
+
 PaletteHintPlace palette_input_hint(const PaletteLayout &layout, std::uint32_t dpi,
                                     std::span<const std::int32_t> widths) noexcept
 {

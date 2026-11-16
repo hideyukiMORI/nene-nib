@@ -22,7 +22,7 @@ telescope の live_grep・fzf の `:Rg` は「プロジェクトの中の文字�
 
 ## 強制
 
-- UI スレッドで本文を読まない・照合しない: **planned**（読みと照合を worker の上で回す adapter と、それを結ぶ合成ルートは段 G3。今の合成ルートは要求を受けて何もしない口 `UnwiredProjectSearch` を結ぶ。`eng/symbols.py` は core の照合の純関数の純粋性だけを守る）。
+- UI スレッドで本文を読まない・照合しない: **planned**（段 G3 で読みと照合を worker の上で回す adapter `Win32ProjectSearchAdapter` を合成ルートに結んだ。adapter の契約 `nib_adapters_project_search` は本物の OS で当たりの集合・取消・打ち切りを確かめるが、「UI スレッドで呼ばない」こと自体を機械で守る検査は無い。`eng/symbols.py` は core の照合の純関数の純粋性だけを守る）。
 - application が全文検索に触れるのは `ProjectSearchPort` の 1 つだけで、打鍵・切り替え・保存・起動・開くの道では呼ばない: **active**（段 G2・`verify_quiet_paths` の port 0 回と、替え玉 `ScriptedProjectSearch` の契約 `--project-search-controller`: 券・途中の batch・古い券の結果を捨てる・取消・1,000 件・`open_listed` と位置・ルートが無いとき・無題・面を閉じた後に届いた batch）。
 - 面の候補は 1 列・見えている行だけ: **active**（ADR 0062 の契約の形）。
 - 8 本の速さ: **active**（QLT-014）。
@@ -48,3 +48,13 @@ telescope の live_grep・fzf の `:Rg` は「プロジェクトの中の文字�
 2. **当たりの形。** `ProjectHit{line, column, line_text, text_begin, match_begin, match_end}`。`line` は 1 始まり（`\n` で区切る）、`column` は code point の 1 始まり（行の全体で数える）で、`PlaceCaret` の `TextPosition` へそのまま渡す。本文は行末の CR とファイル先頭の UTF-8 の BOM を除いた形。`line_text` は最大 256 バイト・正しい UTF-8・code point を割らない窓で、当たりの終わりが行頭から 256 バイトを越えるときだけ、当たりの前に 64 バイトを残して当たりの側へ寄せる（始まりは code point の境へ戻す）。`text_begin` は窓が行頭から何バイト目か（正なら application が省いた印を足す）、`match_begin` / `match_end` は窓の中の当たり（バイト・半開・窓の終わりで切る）。1 行に当たりは 1 つ（最も左・Vim の `:vimgrep` の g の無い形）。塊は `project_hits_in(scan, chunk, query, room)` と終わりの `project_hits_finished(scan, query, room)` の純関数で、状態 `ProjectScan` を値で受け渡す。
 3. **1 MiB の塊の時間（決定 6 の見込みの書き換え）。** Release /O2・ソースらしい CRLF の行・room 1,000・31 回の中央値（ほかの席が動く機械・1 回限りの測り）: 絞り込みのバイト列の在る検索語は 0.1〜1.2 ms（`needle` 1.2・`NEEDLE` 1.1・`/needle` 0.14・`/ne\+dle` 0.20・`/\cneedle` 1.1・当たり無しの `zzzz` 0.22）。絞り込みのバイト列が短い・よく現れる・無い検索語は遅い（`desk` は `de` で 5.1、`kiss` は `i` で 11.1、`sks` は絞り込み無しで 12.0、`/^\s*return` は 15.1）。見込みの「1〜3 ms」は絞り込みの効く検索語だけの値で、効かない検索語は 1 塊が 5〜15 ms になる（worker の上なので UI は止まらない・FIFO の譲りは塊の単位のまま）。
 4. **限界に足す。** 正しい UTF-8 でない行（Shift_JIS などのファイル）は照合せず当たらない（文書を開く道の文字コードの判定は使わない・後続）。
+
+## 追補（2026-11-17・#1003 段 G3・adapters と合成ルートと当たりの行の描画）
+
+段 G3 で形を決めた所を書き足す（決定 1〜8 と G1 の追補は変えない）。
+
+1. **adapter の形。** `Win32ProjectSearchAdapter`（`FolderPort` の adapter と同じ形・棚 `ProjectSearchShelf`・歩き `ProjectSearchWalk`）。1 回の仕事は「フォルダ 1 つの列挙（`FindFirstFileExW`・`FindExInfoBasic`・`FIND_FIRST_EX_LARGE_FETCH`）」か「ファイルの塊 1 つ（1 MiB）の読みと照合」のどちらか 1 つで、残りがあれば自分を worker の列の後ろへ積み直す。歩く順は深さ優先で、フォルダのファイルをその下のフォルダより先に読む。進んだ仕事の後に batch を 1 つ置く（累計の進み具合と、その仕事の当たり）。cancel は今の券のときだけ歩きを止め、古い券の取消は今の要求を止めない。
+2. **飛ばすもの。** 決定 2 の隠し属性のフォルダと固定の表に加えて、リパースポイントのフォルダ（ジャンクション・シンボリックリンク・循環を避ける・設計席の答え）を歩かない。開けない下のフォルダ（拒否・経路の失敗）は黙って飛ばす（数えない）。ルートを開けなければ `failed`。長い経路は `native_path` の `\?\` の形で歩く。
+3. **数え方。** `found` は歩き終わるまで「今まで見つけた探すファイルの数」（16 MiB を超えるファイルは数えない）。最初の塊に NUL があるファイル・開けない・読めないファイルは見つけた数から外す（終わったとき `searched == found`）。
+4. **当たりのパス（V-1764 の L-5）。** ルートの文字列の後ろに `\` と名前を足した形（区切りで終わるルートには足さない・`FolderListing` と同じ）。ルートが開いた文書のフォルダか設定のルート（どちらも開く道の絶対パス）なら、当たりのパスは開く道（`absolute_file_path`）が作る形と同じ（契約 `nib_adapters_project_search`）。
+5. **面の描画。** 当たりの行は `ProjectHitPainter` が 2 段で描く（配置は core の `palette_hit_line` / `palette_hit_place`・文字組みは面の保持 `PaletteRowLayouts` から引く・構文の色は付けない）。状態の 1 行は、探している間と探し終えた件数（`searching` `complete` `truncated`）を入力欄の右（`muted`・11.5 DIP）に、探す前と探せない状態（`prompt` `failed` `unplaced` `invalid`）を候補の無い行に書く（採用案の「終わったら記号の案内」は `!` の入力が空でないので案内が出ず、件数の行を残した・設計席の判断の待ち）。

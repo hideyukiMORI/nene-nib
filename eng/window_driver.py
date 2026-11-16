@@ -141,6 +141,7 @@ VK_T = 0x54
 VK_W = 0x57
 VK_S = 0x53
 VK_SPACE = 0x20
+VK_F = 0x46
 # ローマ字で「にほんご」を打つ鍵（ADR 0014 の実機の節）。仮想キーは英字の大文字の符号。
 VK_NIHONGO = [0x4E, 0x49, 0x48, 0x4F, 0x4E, 0x47, 0x4F]
 INPUT_KEYBOARD = 1
@@ -155,7 +156,9 @@ KEY_NAMES = {"<CR>": ("key", VK_RETURN), "<Esc>": ("key", VK_ESCAPE), "<BS>": ("
              # 通常 / Vim の切り替えの鍵（D61・Issue #771）。Ctrl と Shift を両方押す。
              "<C-S-Space>": ("shiftChord", VK_SPACE),
              # 同じ鍵を Ctrl+Shift を押したまま 2 回下ろす（2 回目は反復・bit 30）。切り替えは 1 回だけ。
-             "<C-S-Space-held>": ("shiftChordHeld", VK_SPACE)}
+             "<C-S-Space-held>": ("shiftChordHeld", VK_SPACE),
+             # プロジェクトの全文検索の面を開く鍵（ADR 0167 の決定 1・#1003）。
+             "<C-S-f>": ("shiftChord", VK_F)}
 HTCAPTION = 2
 HTCLOSE = 20
 HWND_TOPMOST = c.c_void_p(-1)
@@ -819,7 +822,7 @@ def parse_keys(text: str) -> list[tuple[str, object]]:
 
 
 def send_key_sequence(window, text: str) -> None:
-    """Post the parsed steps; only <C-v> and <C-S-Space> need the foreground (they carry Ctrl)."""
+    """Post the parsed steps; only <C-v>, <C-S-Space> and <C-S-f> need the foreground (they carry Ctrl)."""
     for kind, value in parse_keys(text):
         if kind == "text":
             write_text(window, str(value))

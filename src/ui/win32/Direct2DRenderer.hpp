@@ -31,6 +31,7 @@
 #include "PaneLayouts.hpp"
 #include "PreviewPane.hpp"
 #include "PreviewPoint.hpp"
+#include "ProjectHitRow.hpp"
 #include "RenderFailure.hpp"
 #include "RendererSources.hpp"
 #include "RgbColor.hpp"
@@ -130,6 +131,10 @@ class Direct2DRenderer final
     [[nodiscard]] std::expected<void, RenderFailure> set_language(core::DisplayLanguage language);
     [[nodiscard]] std::expected<void, RenderFailure> create_guide_formats(const wchar_t *face);
     [[nodiscard]] bool create_explorer_formats(const wchar_t *face);
+    // 全文検索の当たりの行の 2 段と入力欄の右の進み具合（ADR 0167 の決定
+    // 5・採用案の寸法）。上の段は 本文の字体 body_face、下の段と進み具合は UI
+    // の字体。作れなければ偽。
+    [[nodiscard]] bool create_project_hit_formats(const wchar_t *body_face);
     [[nodiscard]] std::expected<void, RenderFailure>
     create_body_formats(const core::EditorSettings &settings);
     void align_text_formats();
@@ -339,6 +344,16 @@ class Direct2DRenderer final
     void draw_palette_detail(const application::EditorFrame &frame,
                              const core::CommandChoice &choice, const core::LayoutRect &label,
                              IDWriteTextLayout *title);
+    // 全文検索の当たりの行（ADR 0167 の決定 5）。2 段で描く経路は ProjectHitPainter の 1 本。
+    void draw_project_hit(const application::EditorFrame &frame, const core::LayoutRect &row,
+                          const core::ProjectHitRow &hit);
+    // 候補が無い面の行の文（全文検索の面で探していない・探せない状態ならその 1 行）。
+    [[nodiscard]] static std::string_view
+    empty_palette_text(const application::CommandPaletteView &palette,
+                       core::DisplayLanguage language);
+    // 全文検索の面の入力欄の右の進み具合（探している間と、探し終えた件数）。
+    void draw_palette_progress(const application::EditorFrame &frame,
+                               const core::PaletteLayout &layout);
     // 行の右端の欄の操作の鍵の文字組み（ADR 0078 の決定 12）。面の保持から引く。
     [[nodiscard]] TextLayout palette_key_text(std::string_view key, const core::LayoutRect &row);
     // 行の右端の欄（補足か鍵の枠・#1658）。鍵は枠の幅を測って core の配置に渡す。どちらも無い行は
@@ -400,6 +415,11 @@ class Direct2DRenderer final
     // 0162・#1390）。strong は semibold（ルート名とアクティブな文書）。
     TextFormat explorer_format_;
     TextFormat explorer_strong_format_;
+    // 全文検索の当たりの行の上の段（本文の字体・12.5 DIP）と下の段（UI の字体・11 DIP）。どちらも
+    // 文字単位の省略記号。進み具合は UI の字体・11.5 DIP の右寄せ（ADR 0167 の決定 5・採用案）。
+    TextFormat hit_line_format_;
+    TextFormat hit_place_format_;
+    TextFormat palette_progress_format_;
     TextFormat guide_key_format_;
     TextFormat guide_label_format_;
     TextFormat guide_note_format_;
