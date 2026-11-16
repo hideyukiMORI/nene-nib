@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
 #include <ranges>
 #include <span>
@@ -124,12 +125,44 @@ bool walked(std::string_view bytes, VirtualColumnCursor &state, std::size_t colu
     return VirtualColumnCursor{chunk.column, chunk.cell, 0, chunk.code_point, 0};
 }
 
+// Tab と '\n' を含まない bytes を walked と同じに歩き、送りの対象があったかを返す。全部の
+// コードポイントが同じバイト数で同じ 1 以上の桁を伸ばすなら、そのバイト数と桁を chunk の
+// uniform_bytes と uniform_cells に書く（#1711）。一様でなければ 0 のまま。
+bool walked_uniform(std::string_view bytes, VirtualColumnCursor &state, std::size_t columns,
+                    VirtualColumnChunk &chunk) noexcept
+{
+    bool wide = false;
+    bool uniform = !bytes.empty();
+    std::size_t unit = 0;
+    std::size_t cells = 0;
+    for (std::size_t at = 0; at < bytes.size();)
+    {
+        const auto next = next_code_point(bytes, Offset{at}).value;
+        const char32_t value = code_point_at(bytes, Offset{at});
+        const auto advance = column_advance(value, 0);
+        wide = wide || advance > 1;
+        unit = at == 0 ? next : unit;
+        cells = at == 0 ? advance : cells;
+        uniform = uniform && next - at == unit && advance == cells;
+        static_cast<void>(stepped(state, value, columns));
+        at = next;
+    }
+    if (uniform && cells > 0)
+    {
+        chunk.uniform_bytes = static_cast<std::uint8_t>(unit);
+        chunk.uniform_cells = static_cast<std::uint8_t>(cells);
+    }
+    return wide;
+}
+
 // '\n' を含まず plain でもない塊の要約。最初の Tab の手前と後ろを分けて歩く。
 void summarize_line_part(VirtualColumnChunk &chunk, std::string_view bytes, std::size_t columns)
 {
     auto state = start_of(chunk);
     const auto first_tab = bytes.find('\t');
-    chunk.wide = walked(bytes.substr(0, first_tab), state, columns);
+    chunk.wide = first_tab == std::string_view::npos
+                     ? walked_uniform(bytes, state, columns, chunk)
+                     : walked(bytes.substr(0, first_tab), state, columns);
     chunk.lead = state.column - chunk.column;
     if (first_tab != std::string_view::npos)
     {
@@ -242,6 +275,11 @@ void summarize_line_part(VirtualColumnChunk &chunk, std::string_view bytes, std:
     return copied;
 }
 } // namespace
+
+VirtualColumnCursor chunk_end(const VirtualColumnChunk &chunk) noexcept
+{
+    return end_of(chunk);
+}
 
 VirtualColumnIndex VirtualColumnIndex::from_text(const TextBuffer &text)
 {

@@ -531,7 +531,8 @@ void verify_line(const TextBuffer &text, const VirtualColumnIndex &grid, const L
 [[nodiscard]] bool same_summary(const VirtualColumnChunk &left, const VirtualColumnChunk &right)
 {
     return same_counts(left, right) && left.plain == right.plain && left.tab == right.tab &&
-           left.resets == right.resets && left.wide == right.wide;
+           left.resets == right.resets && left.wide == right.wide &&
+           left.uniform_bytes == right.uniform_bytes && left.uniform_cells == right.uniform_cells;
 }
 
 // 4. replaced で写した索引と一から作った索引の境目が同じか（違いは切り直しと合わせの規則で
@@ -717,6 +718,69 @@ void verify_crossing_cases(Random &random)
     }
 }
 
+// 1 字を繰り返した長い行（#1711）。一様な塊（uniform_bytes と uniform_cells）は閉じた式で、Tab
+// だけの塊は要約の終わりの桁から足して答えるので、行頭と行末の混ぜた部分と一緒に素朴な歩きと
+// 照らす。行の前後は混ぜた短い部分で、塊の境目が繰り返しの中に来る。繰り返す字は NUL・制御文字・
+// C1・DEL・孤立した CR・全角・絵文字・2 バイトの幅 1・Tab。
+constexpr std::array<std::string_view, 9> repeated_units{{
+    std::string_view("\0", 1),
+    "\x01",
+    "\xc2\x85",
+    "\x7f",
+    "\r",
+    "\xe6\x97\xa5",
+    "\xf0\x9f\x98\x80",
+    "\xc3\xa9",
+    "\t",
+}};
+// 繰り返しのバイト数（64 KiB の塊を 2 つ以上覆う）。
+constexpr std::size_t repeated_bytes = 150U * 1024U;
+constexpr std::array<std::size_t, 4> repeated_columns{{1, 3, 7, 80}};
+
+[[nodiscard]] std::string repeated_text(Random &random, std::string_view unit)
+{
+    std::string text = generated_line(random, 20) + "\n" + generated_line(random, 30);
+    for (std::size_t at = 0; at < repeated_bytes; at += unit.size())
+    {
+        text += unit;
+    }
+    return text + generated_line(random, 30) + "\n" + generated_line(random, 20);
+}
+
+// 繰り返しの行（2 行目）の 1 回の問い合わせは、行頭と行末の混ぜた塊の部分だけを歩く。
+[[nodiscard]] bool repeated_walks_bounded(const TextBuffer &text, std::size_t columns)
+{
+    const LineNumber line{2};
+    application::GridCells ended(held_of(text), text, columns);
+    static_cast<void>(ended.cursor_at(line, text.line_end(line)));
+    application::GridCells beyond(held_of(text), text, columns);
+    static_cast<void>(beyond.byte_of(line, GridPoint{repeated_bytes * 6, 0}));
+    return ended.scanned() <= 2 && beyond.scanned() <= 2;
+}
+
+void verify_repeated_cases(Random &random)
+{
+    for (const auto unit : repeated_units)
+    {
+        const auto initial = repeated_text(random, unit);
+        const auto held = buffer_of(initial).with_virtual_columns();
+        const bool tab = unit == "\t";
+        expect(std::ranges::any_of(held_of(held).chunks(),
+                                   [tab](const VirtualColumnChunk &chunk)
+                                   {
+                                       return tab ? !chunk.wide && !chunk.plain && chunk.tab
+                                                  : chunk.uniform_bytes != 0;
+                                   }),
+               "a repeated line has a uniform chunk or a chunk of tabs only");
+        for (const auto columns : repeated_columns)
+        {
+            expect(repeated_walks_bounded(held, columns),
+                   "a query on a repeated line walks only the mixed ends of the line");
+            static_cast<void>(run_case(random, initial, CaseShape{columns, 2, 24U * 1024U}));
+        }
+    }
+}
+
 // #936 の走りで見つけた差の最小の入力（回帰 case）。CRLF の文書 "\r\nb\r" の 2 行目は "b" で、
 // '\n' の続かない末尾の '\r' は内容の外。幅 1 では "b" が升 0 を埋めて画面行の右端にちょうど
 // 達するので、GridCells は行の終わりを {0, 1} と答える。core の grid_cell_of も line_end で終わりを
@@ -744,5 +808,6 @@ void verify_grid_cells_property_scope()
     verify_small_cases(random);
     verify_long_cases(random);
     verify_crossing_cases(random);
+    verify_repeated_cases(random);
 }
 } // namespace nenenib::tests
