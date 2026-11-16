@@ -47,6 +47,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -411,10 +412,12 @@ void check_pane_reuse()
     return pixels;
 }
 
-// 同じ文書・錨 4・枠を PreviewPainter で別の WIC の描画先に直接描いた画素（比べる相手）。
+// 同じ文書・錨 anchor・枠を PreviewPainter で別の WIC の描画先に、新しい保持と brush で直接描いた
+// 画素（比べる相手）。
 [[nodiscard]] std::vector<std::uint8_t> directly_painted(const core::MarkdownDocument &document,
                                                          const core::Theme &theme,
-                                                         const core::LayoutRect &area)
+                                                         const core::LayoutRect &area,
+                                                         std::size_t anchor = 4)
 {
     Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
     const auto target = wic_target(bitmap);
@@ -423,7 +426,7 @@ void check_pane_reuse()
     const auto style = style_of();
     const auto tops = win32::PreviewBlockTops::measure(
         document, layouts, style,
-        win32::PreviewViewport{4, static_cast<float>(core::width_of(area)),
+        win32::PreviewViewport{anchor, static_cast<float>(core::width_of(area)),
                                static_cast<float>(core::height_of(area))});
     if (target == nullptr || !tops || FAILED(brushes.prepare(*target.Get(), theme)))
     {
@@ -483,9 +486,10 @@ painted_frame(ID2D1RenderTarget &target, IWICBitmap &bitmap,
            effect_is(*layout.value().Get(), 1, brushes.of(win32::PreviewInk::string));
 }
 
-// 2 回描くと 2 回目は layout を作らず SetDrawingEffect も HitTestTextRange も呼ばず、画素は 1
-// 回目と 同じ。brush を作り直す（テーマを変える）と古い brush の色を置いた保持を捨て、新しい brush
-// で色を 置き直す。
+// 2 回描くと 2 回目は layout を作らず SetDrawingEffect も HitTestTextRange も呼ばず、
+// 画素は 1 回目と同じ。同じ描画先でテーマを変えると brush の色だけを置き直し（#1485）、
+// 保持した layout は作り直さず色も面の矩形も引き直さない。画素は新しいテーマを新しい
+// 保持で描いたものと 1 画素も違わない。
 void check_repaint_keeps_layouts_clean()
 {
     Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
@@ -528,14 +532,199 @@ void check_repaint_keeps_layouts_clean()
            "a repaint creates no layout, sets no drawing effect and hit-tests nothing");
     expect(!second.empty() && second == first && code_inked(layouts, scene, brushes),
            "a repaint has the same pixels and the inline code keeps the string ink");
-    expect(SUCCEEDED(brushes.prepare(*target.Get(), other.value().view())),
-           "the brushes are made again for another theme");
+    const auto generation = brushes.generation();
+    expect(SUCCEEDED(brushes.prepare(*target.Get(), other.value().view())) &&
+               brushes.generation() == generation,
+           "another theme on the same target recolours the same brushes");
     const auto recolored = painted_frame(*target.Get(), *bitmap.Get(), painter, scene);
-    expect(!recolored.empty() && recolored != first &&
-               std::get<0>(layout_counts(layouts)) > std::get<0>(painted) &&
-               std::get<1>(layout_counts(layouts)) > std::get<1>(painted) &&
+    expect(!recolored.empty() && recolored != first && layout_counts(layouts) == painted &&
                code_inked(layouts, scene, brushes),
-           "new brushes drop the layouts inked with the old ones and ink the new ones once");
+           "another theme keeps the layouts, their ink and their inline code rectangles");
+    expect(recolored == directly_painted(document.value(), other.value().view(),
+                                         core::LayoutRect{0, 0, 400, 200}, 0),
+           "the recoloured pixels equal painting the other theme with new layouts and brushes");
+}
+
+// 同じ PreviewBrushes を別の描く先で prepare すると brush を作り直して generation が
+// 1 進み、bind が色を置いた保持を捨てる（古い描く先の brush を指す layout を残さない・
+// ADR 0155 の決定 71・73）。次の描画は layout を作り直して色を置き直し、画素は 2 つ目の
+// 描く先に新しい保持と brush で直接描いたものと 1 画素も違わない。
+void check_target_change_drops_inked()
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> first_bitmap;
+    Microsoft::WRL::ComPtr<IWICBitmap> second_bitmap;
+    const auto first_target = wic_target(first_bitmap);
+    const auto second_target = wic_target(second_bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    const auto document = repaint_document();
+    win32::PreviewBrushes brushes;
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    if (!document.has_value())
+    {
+        expect(false, "the document for the brush checks parses");
+        return;
+    }
+    const auto tops = win32::PreviewBlockTops::measure(document.value(), layouts, style,
+                                                       win32::PreviewViewport{0, 400.0F, 200.0F});
+    if (first_target == nullptr || second_target == nullptr || !theme || !tops ||
+        FAILED(brushes.prepare(*first_target.Get(), theme.value().view())))
+    {
+        expect(false, "the target change checks prepare two targets, brushes and a document");
+        return;
+    }
+    const win32::PreviewScene scene{
+        document.value(), tops.value(), style, core::LayoutRect{0, 0, 400, 200}, 0.0F,
+        std::nullopt};
+    std::optional<win32::RenderFailure> failure;
+    win32::PreviewPainter<ID2D1RenderTarget> first(*first_target.Get(), layouts, brushes, failure);
+    const auto before = painted_frame(*first_target.Get(), *first_bitmap.Get(), first, scene);
+    const auto inked = layout_counts(layouts);
+    const auto generation = brushes.generation();
+    expect(!before.empty() && !failure.has_value() &&
+               SUCCEEDED(brushes.prepare(*second_target.Get(), theme.value().view())) &&
+               brushes.generation() == generation + 1,
+           "another target makes the brushes again and advances the generation");
+    win32::PreviewPainter<ID2D1RenderTarget> second(*second_target.Get(), layouts, brushes,
+                                                    failure);
+    const auto after = painted_frame(*second_target.Get(), *second_bitmap.Get(), second, scene);
+    expect(!after.empty() && !failure.has_value() &&
+               std::get<0>(layout_counts(layouts)) > std::get<0>(inked) &&
+               std::get<1>(layout_counts(layouts)) > std::get<1>(inked) &&
+               code_inked(layouts, scene, brushes),
+           "another target drops the layouts inked with the old brushes and inks new ones");
+    expect(after == directly_painted(document.value(), theme.value().view(),
+                                     core::LayoutRect{0, 0, 400, 200}, 0),
+           "after a target change the pixels equal painting with new layouts and brushes");
+}
+
+// 色の役割を 1 つの枠に集めた文書（見出し・行内コード・リンク・画像の代わりの字・タスクの箱の
+// 済みと未・番号・引用・コードブロック・水平線）。選択の面（selection）だけは入らない。
+[[nodiscard]] std::optional<core::MarkdownDocument> inks_document()
+{
+    auto parsed = core::parse_markdown("# Head\n\n`code` [link](x) ![alt](y.png) plain\n\n"
+                                       "- [x] done\n- [ ] open\n\n1. one\n\n> quoted\n\n"
+                                       "```\nint x;\n```\n\n---\n",
+                                       core::MarkdownStop::never());
+    return parsed ? std::optional<core::MarkdownDocument>{std::move(parsed).value()} : std::nullopt;
+}
+
+// 同じ描く先でテーマを変えた後の画素は、選択の面を除く全部の役割で、新しいテーマを新しい保持と
+// brush で描いたものと 1 画素も違わない（#1485・brush の色の置き直し）。
+void check_recolour_every_ink()
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    const auto other = catalog.find(core::ThemeName::parse("solarized-light").value());
+    const auto document = inks_document();
+    win32::PreviewBrushes brushes;
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    if (!document.has_value())
+    {
+        expect(false, "the document for the brush checks parses");
+        return;
+    }
+    const auto tops = win32::PreviewBlockTops::measure(document.value(), layouts, style,
+                                                       win32::PreviewViewport{0, 400.0F, 200.0F});
+    if (target == nullptr || !theme || !other || !tops ||
+        FAILED(brushes.prepare(*target.Get(), theme.value().view())))
+    {
+        expect(false, "the recolour checks prepare a target, brushes and a document");
+        return;
+    }
+    const win32::PreviewScene scene{
+        document.value(), tops.value(), style, core::LayoutRect{0, 0, 400, 200}, 0.0F,
+        std::nullopt};
+    std::optional<win32::RenderFailure> failure;
+    win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
+    const auto first = painted_frame(*target.Get(), *bitmap.Get(), painter, scene);
+    const auto recoloured =
+        !first.empty() && SUCCEEDED(brushes.prepare(*target.Get(), other.value().view()))
+            ? painted_frame(*target.Get(), *bitmap.Get(), painter, scene)
+            : std::vector<std::uint8_t>{};
+    expect(!recoloured.empty() && !failure.has_value() && recoloured != first &&
+               recoloured == directly_painted(document.value(), other.value().view(),
+                                              core::LayoutRect{0, 0, 400, 200}, 0),
+           "a recoloured frame of every ink but the selection equals painting the other theme");
+}
+
+// 決定的な数の列（線形合同・試験の入力を作るだけ）。
+[[nodiscard]] std::uint32_t next_number(std::uint32_t &state) noexcept
+{
+    constexpr std::uint32_t multiplier = 1664525U;
+    constexpr std::uint32_t increment = 1013904223U;
+    state = state * multiplier + increment;
+    return state >> 8U;
+}
+
+// 1 つの文字列について、範囲の列を preview_unit_ranges で写した値が、範囲ごとに先頭から数える
+// preview_units と同じか。
+[[nodiscard]] bool same_units(std::string_view shown,
+                              std::span<const win32::PreviewByteRange> ranges)
+{
+    const auto placed = win32::preview_unit_ranges(shown, ranges);
+    if (placed.size() != ranges.size())
+    {
+        return false;
+    }
+    for (std::size_t index = 0; index < ranges.size(); ++index)
+    {
+        const auto from = win32::preview_units(shown, ranges[index].first);
+        const auto to = win32::preview_units(shown, ranges[index].second);
+        if (placed.at(index).startPosition != from ||
+            placed.at(index).length != (to > from ? to - from : 0U))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// preview_unit_ranges（#1485）は範囲ごとに先頭から数える preview_units と同じ値になる。固定の表
+// （ASCII・2/3/4 バイト・結合文字・空の範囲・逆の範囲・重なり・長さを超える端・code point の途中の
+// 端・正しくない UTF-8）と、固定の seed で作った文字と範囲の列で比べる。
+void check_unit_ranges_match_units()
+{
+    // é（2 バイト）・日（3 バイト）・😀（4 バイト・サロゲートペア）・e＋結合のアキュート。
+    const std::string mixed = "a\xC3\xA9\xE6\x97\xA5\xF0\x9F\x98\x80"
+                              "e\xCC\x81z";
+    const std::vector<win32::PreviewByteRange> table{
+        {0, 1}, {1, 3},  {3, 6},  {6, 10},  {10, 13}, {13, 14}, {0, 14}, {5, 5},  {9, 4},
+        {2, 8}, {4, 12}, {0, 40}, {30, 50}, {2, 2},   {7, 8},   {1, 13}, {14, 14}};
+    expect(same_units(mixed, table), "the fixed table maps to the same units as preview_units");
+    const std::string broken = "ab\xFF"
+                               "cd\xE6\x97";
+    expect(same_units(broken, std::vector<win32::PreviewByteRange>{{0, 2}, {1, 4}, {3, 7}, {0, 6}}),
+           "invalid UTF-8 maps to the same units as preview_units");
+    expect(same_units("", std::vector<win32::PreviewByteRange>{{0, 0}, {0, 3}}) &&
+               same_units(mixed, std::vector<win32::PreviewByteRange>{}),
+           "empty text and no ranges map to the same units as preview_units");
+    constexpr std::array<std::string_view, 6> pieces{
+        "a", " ", "\xC3\xA9", "\xE6\x97\xA5", "\xF0\x9F\x98\x80", "e\xCC\x81"};
+    std::uint32_t state = 1485U;
+    bool same = true;
+    for (int round = 0; round < 200 && same; ++round)
+    {
+        std::string text;
+        const auto count = next_number(state) % 40U;
+        for (std::uint32_t at = 0; at < count; ++at)
+        {
+            text += pieces.at(next_number(state) % pieces.size());
+        }
+        std::vector<win32::PreviewByteRange> ranges;
+        const auto limit = text.size() + 3U;
+        const auto spans = next_number(state) % 12U;
+        for (std::uint32_t at = 0; at < spans; ++at)
+        {
+            ranges.emplace_back(next_number(state) % limit, next_number(state) % limit);
+        }
+        same = same_units(text, ranges);
+    }
+    expect(same, "200 seeded texts and ranges map to the same units as preview_units");
 }
 
 // 鍵が同じ 2 frame 目は要素を描かず DrawBitmap 1 回・錨が変われば描き直す（bitmap はそのまま）・
@@ -1024,6 +1213,9 @@ void verify_preview_layouts()
     check_visible_only();
     check_image_span();
     check_repaint_keeps_layouts_clean();
+    check_target_change_drops_inked();
+    check_recolour_every_ink();
+    check_unit_ranges_match_units();
     check_html_and_style();
     check_markers();
     check_pane_reuse();
