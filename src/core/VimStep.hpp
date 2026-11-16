@@ -85,9 +85,9 @@ struct VimStep
     // cursor.」）。 controller は鍵の終わりの追従の前に、ここで先に 1 回追従する。ほかの鍵は空。
     std::optional<TextPosition> edit_topline = std::nullopt;
     // 鍵が全部の行を消したか（ADR 0188 の決定 3 (a)）。none のとき controller は eol の文書の最後の
-    // 改行も消して空の本文にし、旗を下ろす。立てるのは行を消す効果を作る所（Ex の `:d`）と出口の
-    // change_marked の 2 か所で、none の鍵は changed の印も持つ（Vim の del_lines の
-    // changed_lines）。
+    // 改行も消して空の本文にする（旗は立ったまま）。立てるのは行を消す効果を作る 2 か所（Ex の `:d`
+    // と行単位の `d` の removed_exactly）で、1 行目から最後の行までを消したと行で決める。none
+    // の鍵は changed の印も持つ（Vim の del_lines の changed_lines・出口の lines_emptied）。
     VimLinesLeft lines_left = VimLinesLeft::some;
 };
 

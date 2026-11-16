@@ -1,27 +1,25 @@
 #pragma once
 
-#include "EditHistory.hpp"
 #include "TextBuffer.hpp"
 
-#include <optional>
+#include <cstdint>
 
 namespace nenenib::application
 {
 // 文書の Vim の eol に当たる旗（ADR 0188 の決定 1・3）。文書ごとの値で、設定にもタブの一覧にも
-// 入れない。opened は決めた時点（開いた・通常モードから Vim のモードへ入った）に本文が空でなく
-// 最後が改行で終わったか。lowered は全部の行を消して旗を下ろした直後の履歴で、その単位が履歴の
-// 位置より前に残っている間だけ旗は下りている（undo で消す前に戻れば旗も戻り、戻した後に別の
-// 編集を積めば下ろした単位は消えて旗は立ったまま）。どの欄も単独で妥当な値なので公開
-// aggregate（CPP-003）。
+// 入れない。up は決めた時点に本文が空でなく最後が改行で終わったか。entry は決めたときの「通常
+// モードから Vim のモードへ入った回数」で、置いた束を広げるときに今の回数と違えば（決めた後に
+// 通常モードを通った）本文から決め直す。全部の行を消しても旗は下ろさない（空で旗が立っている
+// 文書は、Vim のモードの編集で空でなくなったときに最後の改行を足し直す）。どの欄も単独で妥当な
+// 値なので公開 aggregate（CPP-003）。
 struct VimEndOfLine
 {
-    bool opened = false;
-    std::optional<core::EditHistory> lowered = std::nullopt;
+    bool up = false;
+    std::uint64_t entry = 0;
 };
 
-// 開いた・Vim のモードへ入ったときの旗（決定 1）。決める口はこの 1 本。
-[[nodiscard]] VimEndOfLine vim_end_of_line_decided(const core::TextBuffer &text);
-
-// 履歴が history のときに旗が立っているか。
-[[nodiscard]] bool vim_end_of_line_up(const VimEndOfLine &flag, const core::EditHistory &history);
+// 開いたとき・Vim のモードへ入った後に文書が最初に Vim のモードで見えるときの旗（決定 1）。
+// 決める口はこの 1 本。
+[[nodiscard]] VimEndOfLine vim_end_of_line_decided(const core::TextBuffer &text,
+                                                   std::uint64_t entry);
 } // namespace nenenib::application

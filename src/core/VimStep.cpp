@@ -2658,18 +2658,23 @@ namespace
                                 : view.text.position_of(effect.edits.front().range.begin);
 }
 
-// 行単位の削除が本文の全部の行を覆ったら、行が残らない印を立てる（ADR 0188 の決定 3 (a)・Vim の
-// op_delete が最後の行まで消すと ML_EMPTY）。行が 1 つも無い本文（ML_EMPTY）の `dd` は何も消さ
-// ない。印の立つ鍵は本文を変える（del_lines の changed_lines）ので changed の印も立てる。
+// 行単位の削除の演算子が 1 行目から最後の行までを消した印（ADR 0188 の決定 3 (a)・removed_exactly
+// が行で立てる）を仕上げる。行が 1 つも無い本文（ML_EMPTY）の `dd` は何も消さないので外し、残った
+// 印の鍵は本文を変える（del_lines の changed_lines）ので changed の印も立てる。
 [[nodiscard]] VimStep lines_emptied(const VimEditorView &view, VimStep step)
 {
-    const auto *const removal = std::get_if<VimRemoveLines>(&step.effect);
-    if (removal == nullptr || vim_has_no_lines(view) || removal->range.begin.value != 0 ||
-        removal->range.end.value != view.text.size_bytes())
+    switch (step.lines_left)
     {
+    case VimLinesLeft::some:
+        return step;
+    case VimLinesLeft::none:
+        break;
+    }
+    if (vim_has_no_lines(view))
+    {
+        step.lines_left = VimLinesLeft::some;
         return step;
     }
-    step.lines_left = VimLinesLeft::none;
     if (!step.change.has_value() || step.change.value().kind != VimChange::changed)
     {
         step.change = VimChangeMark{VimChange::changed, std::nullopt};

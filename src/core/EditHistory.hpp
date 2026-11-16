@@ -71,10 +71,6 @@ class EditHistory final
     // 単位は数えない。保存時点と比べる値で、判定は application の save_state_of の 1 か所。
     // 値は件ごとに数え直さず、積む・畳む・戻す・やり直すの 4 つで足し引きして持つ（O(1)）。
     [[nodiscard]] std::size_t content_position() const noexcept;
-    // index 番目の単位が other の index 番目と同じ単位か（積んだ後に戻して別の編集を積む・畳み直す
-    // と別の単位になる）。どちらかの範囲の外なら偽。単位の参照を比べるだけで Edit を読まない。
-    // eol の旗を下ろした単位が履歴に残っているかを application が見る（ADR 0188 の決定 3 (a)）。
-    [[nodiscard]] bool shares_unit(const EditHistory &other, std::size_t index) const;
 
   private:
     // 外部 Edit は push で防御コピーし、確定済み本文は私有の const 値として共有する（ADR 0085）。

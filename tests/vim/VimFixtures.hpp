@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 74605e0253328dccdb2fdcb3ce16b91bed174e7ce8fc3f58b9c9cddb3b7d4f76 / 6571 fixtures
+// fixtures.json: sha256 3cc2e5debacfca38bb3cc25c27f7538e6848e90d4f8dc2e7ad38732a61040650 / 6615 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 6571> vim_fixtures{{
+constexpr std::array<VimFixture, 6615> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -6583,6 +6583,50 @@ constexpr std::array<VimFixture, 6571> vim_fixtures{{
     {"eol-a-pct-s-eol", "a\n", ":%s/$/;/<CR>", "a;\n", 1, 1, "", "", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
     {"eol-a-ggdG-u-G", "a\n", "ggdGuG", "a\n", 1, 1, "a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
     {"eol-a-pct-d-u-dollar", "a\n", ":%d<CR>u:$<CR>", "a\n", 1, 1, "a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"eol-a-tail-blank-dd", "a\n\n", "dd", "\n", 1, 1, "a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-tail-blank-dgg", "a\n\n", "dgg", "\n", 1, 1, "a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-tail-blank-d-brace", "a\n\n", "d}", "\n", 1, 1, "a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-tail-blank-d-paren", "a\n\n", "d)", "\n", 1, 1, "a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-tail-blank-dip", "a\n\n", "dip", "\n", 1, 1, "a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-tail-blank-Vd", "a\n\n", "Vd", "\n", 1, 1, "a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-tail-blank-2dd", "a\n\n", "2dd", "", 1, 1, "a\n\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-tail-blank-dj", "a\n\n", "dj", "", 1, 1, "a\n\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-tail-blank-Vjd", "a\n\n", "Vjd", "", 1, 1, "a\n\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-tail-blank-jdk", "a\n\n", "jdk", "", 1, 1, "a\n\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-tail-blank-dd-dot", "a\n\n", "dd.", "", 1, 1, "\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"eol-a-tail-blank-dddd", "a\n\n", "dddd", "", 1, 1, "\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-tail-blank-ddp", "a\n\n", "ddp", "\na\n", 2, 1, "a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-tail-blank-ddix", "a\n\n", "ddix<Esc>", "x\n", 1, 1, "a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-tail-blank-ddu-redo", "a\n\n", "ddu<C-r>", "\n", 1, 1, "a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"eol-a-tail-blank-mark-ggdd", "a\n\n", "jmaggdd'a", "\n", 1, 1, "a\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-xy-tail-blank-dd", "x\ny\n\n", "dd", "y\n\n", 1, 1, "x\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-xy-tail-blank-dgg", "x\ny\n\n", "dgg", "y\n\n", 1, 1, "x\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-xy-tail-blank-d-brace", "x\ny\n\n", "d}", "\n", 1, 1, "x\ny\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-xy-tail-blank-d-paren", "x\ny\n\n", "d)", "\n", 1, 1, "x\ny\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-xy-tail-blank-dip", "x\ny\n\n", "dip", "\n", 1, 1, "x\ny\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-xy-tail-blank-Vd", "x\ny\n\n", "Vd", "y\n\n", 1, 1, "x\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-xy-tail-blank-2dd", "x\ny\n\n", "2dd", "\n", 1, 1, "x\ny\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-xy-tail-blank-dj", "x\ny\n\n", "dj", "\n", 1, 1, "x\ny\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-xy-tail-blank-Vjd", "x\ny\n\n", "Vjd", "\n", 1, 1, "x\ny\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-xy-tail-blank-jdk", "x\ny\n\n", "jdk", "\n", 1, 1, "x\ny\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-xy-tail-blank-dd-dot", "x\ny\n\n", "dd.", "\n", 1, 1, "y\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"eol-xy-tail-blank-dddd", "x\ny\n\n", "dddd", "\n", 1, 1, "y\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-xy-tail-blank-ddp", "x\ny\n\n", "ddp", "y\nx\n\n", 2, 1, "x\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-xy-tail-blank-ddix", "x\ny\n\n", "ddix<Esc>", "xy\n\n", 1, 1, "x\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-xy-tail-blank-ddu-redo", "x\ny\n\n", "ddu<C-r>", "y\n\n", 1, 1, "x\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"eol-xy-tail-blank-mark-ggdd", "x\ny\n\n", "jmaggdd'a", "y\n\n", 1, 1, "x\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-ab-ggdGp", "a\nb\n", "ggdGp", "\na\nb\n", 2, 1, "a\nb\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-ab-ggdGP", "a\nb\n", "ggdGP", "a\nb\n\n", 1, 1, "a\nb\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-ab-ggdGix", "a\nb\n", "ggdGix<Esc>", "x\n", 1, 1, "a\nb\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-ab-ggdGox", "a\nb\n", "ggdGox<Esc>", "\nx\n", 2, 1, "a\nb\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-ab-pct-d-p", "a\nb\n", ":%d<CR>p", "\na\nb\n", 2, 1, "a\nb\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-ab-ggdGu-p", "a\nb\n", "ggdGup", "a\na\nb\nb\n", 2, 1, "a\nb\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"eol-a-blank-b-ggdGp", "a\n\nb\n", "ggdGp", "\na\n\nb\n", 2, 1, "a\n\nb\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-blank-b-ggdGP", "a\n\nb\n", "ggdGP", "a\n\nb\n\n", 1, 1, "a\n\nb\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-blank-b-ggdGix", "a\n\nb\n", "ggdGix<Esc>", "x\n", 1, 1, "a\n\nb\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-blank-b-ggdGox", "a\n\nb\n", "ggdGox<Esc>", "\nx\n", 2, 1, "a\n\nb\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-blank-b-pct-d-p", "a\n\nb\n", ":%d<CR>p", "\na\n\nb\n", 2, 1, "a\n\nb\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, VimChangeFixture{true, true, true}, "set scrolloff=0"},
+    {"eol-a-blank-b-ggdGu-p", "a\n\nb\n", "ggdGup", "a\na\n\nb\n\nb\n", 2, 1, "a\n\nb\n", "V", VimViewportFixture{20, 1, 1, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
 }};
 } // namespace nenenib::tests
 // clang-format on

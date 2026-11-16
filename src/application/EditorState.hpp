@@ -65,11 +65,9 @@ class EditorState final
     [[nodiscard]] const core::TextBuffer &vim_text() const noexcept;
     // vim_text() が空のときの読み方（決定 3 (c)）。eol の文書 `\n` を除いた空なら one_line。
     [[nodiscard]] core::VimEmptyText vim_empty_text() const noexcept;
-    // 全部の行を消した鍵の後に旗を下ろす（決定 3 (a)）。今の履歴を覚え、その単位が残る間は下りた
-    // まま。下ろすのはこの 1 か所。
-    [[nodiscard]] EditorState with_vim_eol_lowered() const;
-    // 旗が立っているか（engine に除いた本文を渡す側か）。
-    [[nodiscard]] bool vim_eol() const;
+    // 旗が立っているか（決定 1）。立っている文書は、Vim のモードの編集で空の本文が空でなくなった
+    // ときに最後の改行を足し直す（決定 3 (a)・controller の replace）。
+    [[nodiscard]] bool vim_eol() const noexcept;
     [[nodiscard]] const core::Selection &selection() const noexcept;
     [[nodiscard]] const core::EditHistory &history() const noexcept;
     [[nodiscard]] const ScrollState &scroll() const noexcept;
@@ -410,6 +408,8 @@ class EditorState final
     Document document_;
     core::VimMarks vim_marks_{};
     VimEndOfLine vim_eol_{};
+    // 通常モードから Vim のモードへ入った回数（窓全体で 1 つ）。置いた束の旗を決め直すかを見る。
+    std::uint64_t vim_entries_ = 0;
     // 最後の改行を除いた本文（vim_text の正本・除かない間は空）。
     std::shared_ptr<const core::TextBuffer> vim_text_;
     std::vector<core::Diagnostic> diagnostics_;

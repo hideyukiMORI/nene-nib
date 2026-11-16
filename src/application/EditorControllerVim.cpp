@@ -1086,8 +1086,8 @@ void EditorController::perform_vim_effect(const core::VimStep &step)
 }
 
 // engine は除いた本文の全部の行を消したので、eol の文書なら最後の改行も同じ 1 つの置き換えで消して
-// 空の本文にし、旗を下ろす（ADR 0188 の決定 3 (a)・Vim の
-// ML_EMPTY）。除いていない本文は効果のまま。 旗を下ろすのはここの 1 か所。
+// 空の本文にする（ADR 0188 の決定 3 (a)・Vim の ML_EMPTY）。旗は立ったままで、Vim のモードの編集で
+// 空でなくなれば replace が最後の改行を足し直す。除いていない本文は効果のまま。
 void EditorController::remove_every_line(const core::VimStep &step)
 {
     if (&state_.vim_text() == &state_.text())
@@ -1098,8 +1098,6 @@ void EditorController::remove_every_line(const core::VimStep &step)
     replace(core::OffsetRange{core::Offset{0}, core::Offset{state_.text().size_bytes()}},
             std::string_view{}, core::EditBoundary::separate);
     move_caret_to(core::Offset{0}, core::SelectionAnchoring::collapse);
-    state_ = state_.with_vim_eol_lowered();
-    replay_lowered_ = replay_history_.has_value();
 }
 
 // 鍵の前の保留の追従が無いか打った本文の追従だけなら、この鍵の追従は歩いた答えにできる
@@ -1285,6 +1283,17 @@ void EditorController::keep_vim_character(const EditorIntent &intent)
         return;
     case core::EditMode::vim:
         break;
+    }
+    // eol の文書の隠した最後の空の行（ADR 0188 の決定 4）。Ctrl+End・Ctrl+A など engine を通らない
+    // 移動と選択が端を置いても、キャレットと選択の端は除いた本文の中へ収める。収めるのはここの
+    // 1 か所（INSERT も）。
+    const std::size_t shown = state_.vim_text().size_bytes();
+    if (state_.selection().caret.value > shown || state_.selection().anchor.value > shown)
+    {
+        const core::Selection over = state_.selection();
+        state_ =
+            state_.with_selection(core::Selection{core::Offset{std::min(over.anchor.value, shown)},
+                                                  core::Offset{std::min(over.caret.value, shown)}});
     }
     if (std::holds_alternative<VimKeyPress>(intent) && !state_.command_input().has_value())
     {
@@ -1912,15 +1921,7 @@ void EditorController::close_replayed_unit()
     {
         return;
     }
-    // 再生の中で下ろした旗は、単位を畳み直した後の履歴で下ろし直す（下ろした単位が畳んだ単位に
-    // 入る・ADR 0188 の決定 3 (a)）。再生の中の undo で戻っていれば下ろさない。
-    const bool lowered = replay_lowered_ && !state_.vim_eol();
-    replay_lowered_ = false;
     merge_replayed_edits(replay_history_.value(), replay_text_.value());
-    if (lowered)
-    {
-        state_ = state_.with_vim_eol_lowered();
-    }
 }
 
 void EditorController::reopen_replayed_unit()

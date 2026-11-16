@@ -252,13 +252,38 @@ edited_marks(const core::VimMarks &marks, const core::TextBuffer &before, const 
 }
 } // namespace
 
+std::pair<core::OffsetRange, std::string>
+EditorController::vim_end_of_line_kept(const core::OffsetRange &range, std::string_view text) const
+{
+    const core::TextBuffer &body = state_.text();
+    if (state_.mode() != core::EditMode::vim || !state_.vim_eol())
+    {
+        return {range, std::string(text)};
+    }
+    // 空で旗が立つ本文（全部の行を消した後）に足す: Vim の eol のバッファと同じく改行で終わる。
+    if (body.size_bytes() == 0 && !text.empty())
+    {
+        return {range, std::string(text) + std::string(core::newline_of(state_.line_ending()))};
+    }
+    // engine を通らない道（Ctrl+A の後の Delete など）が除いた本文の全部を消す: 最後の改行も消す。
+    const std::size_t shown = state_.vim_text().size_bytes();
+    if (!in_vim_effect_ && text.empty() && shown < body.size_bytes() && range.begin.value == 0 &&
+        range.end.value >= shown && range.end.value > range.begin.value)
+    {
+        return {core::OffsetRange{range.begin, core::Offset{body.size_bytes()}}, std::string{}};
+    }
+    return {range, std::string(text)};
+}
+
 void EditorController::replace(
-    const core::OffsetRange &range, std::string_view text, core::EditBoundary boundary,
+    const core::OffsetRange &asked, std::string_view typed, core::EditBoundary boundary,
     std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> lines)
 {
     // 編集を始める瞬間のキャレット。Vim の u と Ctrl-r の戻り先で、書くのはここだけ（ADR 0052 の
     // 決定 2）。
     const core::Offset restore = state_.selection().caret;
+    // eol の旗が立つ文書の最後の改行（ADR 0188 の決定 3 (a)）。範囲と本文を直すのはここの 1 か所。
+    const auto [range, text] = vim_end_of_line_kept(asked, typed);
     std::string removed = state_.text().text_range(range.begin, range.end);
     // 空の置き換えは本文に触れない。engine の印があれば鍵の終わりに push_empty_unit が空の単位を
     // 積む（ADR 0181 の決定 3）。
@@ -279,8 +304,9 @@ void EditorController::replace(
     // 本文を置き換える編集は Vim の印 changed と同じ（決定 2）。鍵の印はここで使い終わる。
     vim_change_.reset();
     auto next = state_.text().replaced(range.begin, range.end, text);
-    const core::Edit edit{range.begin, std::move(removed), std::string(text), restore};
-    const core::Offset caret{range.begin.value + text.size()};
+    const core::Edit edit{range.begin, std::move(removed), text, restore};
+    // 足し直した最後の改行の手前に置く（打った本文の終わり）。
+    const core::Offset caret{range.begin.value + typed.size()};
     const std::size_t before = state_.history().position();
     const std::size_t content = state_.history().content_position();
     auto history = state_.history().pushed(edit, boundary);
@@ -787,7 +813,9 @@ void EditorController::accept(const SelectEditMode &intent)
         core::vim_interrupted(core::vim_resting_from(state_.vim(), state_.vim().unnamed_register));
     // 保留の追従は入る前の本文で解く。Vim のモードは eol の文書の最後の空の行を数えないので、
     // 入った後に解くと frame を読んだかどうかで窓が変わる（ADR 0188 の決定 4）。
-    if (intent.mode == core::EditMode::vim && view_geometry_.width > 0)
+    // 解くのは通常モードから入るときで、旗が立つ（行の数が変わる）文書だけ。
+    if (state_.mode() != core::EditMode::vim && intent.mode == core::EditMode::vim &&
+        state_.text().final_line_break_bytes() > 0 && view_geometry_.width > 0)
     {
         settle_follow();
     }

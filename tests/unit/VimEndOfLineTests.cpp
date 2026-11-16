@@ -1,17 +1,26 @@
 // scope `--vim-eol` の単体テスト（ADR 0188）。改行で終わる本文を Vim のモードは最後の改行を
 // 除いて見る（旗・入口・縁 3 つ・画面）。通常モードは最後の空の行に居られる（D82）。
+#include "CaretMotion.hpp"
 #include "Column.hpp"
+#include "DeleteDirection.hpp"
+#include "DeleteText.hpp"
+#include "DeleteUnit.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
+#include "InsertText.hpp"
 #include "LineNumber.hpp"
+#include "MoveCaret.hpp"
+#include "NewTab.hpp"
 #include "OpenDocument.hpp"
 #include "PlaceCaret.hpp"
 #include "SaveDocument.hpp"
 #include "Scopes.hpp"
 #include "ScriptedFiles.hpp"
+#include "SelectAll.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
+#include "SwitchTab.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
@@ -28,12 +37,21 @@ namespace nenenib::tests
 {
 namespace
 {
+using nenenib::application::DeleteText;
+using nenenib::application::InsertText;
+using nenenib::application::MoveCaret;
+using nenenib::application::NewTab;
 using nenenib::application::OpenDocument;
 using nenenib::application::PlaceCaret;
 using nenenib::application::SaveDocument;
+using nenenib::application::SelectAll;
 using nenenib::application::SelectEditMode;
+using nenenib::application::SwitchTab;
 using nenenib::application::VisibleLines;
+using nenenib::core::CaretMotion;
 using nenenib::core::Column;
+using nenenib::core::DeleteDirection;
+using nenenib::core::DeleteUnit;
 using nenenib::core::EditMode;
 using nenenib::core::LineNumber;
 using nenenib::core::SelectionAnchoring;
@@ -126,8 +144,8 @@ void verify_vim_eol_saved_bytes()
            "dd on the last line of a CRLF body takes that line with its break");
 }
 
-// 全部の行を消すと空の本文で旗が下り（縁 a）、足した本文は改行で終わらない（縁 b）。undo で
-// 消す前に戻ると旗も戻る。
+// 全部の行を消すと最後の改行も消えて空の本文になり、旗は立ったまま（縁 a）。Vim のモードで足した
+// 本文は改行で終わる（Vim の eol のバッファと同じ）。undo で消す前に戻る。保存は 0 バイト。
 void verify_vim_eol_emptied()
 {
     Editing editing;
@@ -137,27 +155,35 @@ void verify_vim_eol_emptied()
     expect(saved(editing).empty() &&
                controller.vim_state().unnamed_register.value().text == "a\nb\n" &&
                controller.vim_state().unnamed_register.value().kind == VimRegisterKind::lines,
-           "ggdG leaves an empty body and yanks the two lines");
+           "ggdG leaves an empty body (saved as 0 bytes) and yanks the two lines");
     vim_replay(controller, "oz<Esc>");
-    expect(saved(editing) == "\nz" && controller.frame().total_lines == 2,
-           "after the flag is lowered, lines added to the empty body do not end in a break");
+    expect(saved(editing) == "\nz\n" && controller.frame().total_lines == 2,
+           "lines added to the emptied body end in a break again");
+    vim_replay(controller, "u");
+    expect(saved(editing).empty(), "undo returns to the empty body with the flag up");
+    vim_replay(controller, "p");
+    expect(saved(editing) == "\na\nb\n", "ggdGp puts the lines back below the empty line");
     vim_replay(controller, "uu");
     expect(saved(editing) == "a\nb\n", "two undos bring the body back");
     vim_replay(controller, "G");
     expect(controller.frame().total_lines == 2 && caret_line(controller) == 2,
-           "and the flag comes back with it");
-    vim_replay(controller, "<C-r>");
-    expect(saved(editing).empty(), "redo deletes every line again");
-    vim_replay(controller, "ux");
-    expect(saved(editing) == "\nb\n", "an edit after the undo drops the redo");
-    vim_replay(controller, "G");
-    expect(controller.frame().hidden_line_break && caret_line(controller) == 2,
-           "the flag stays up once the lowering unit is gone");
+           "and the last line is the last line again");
     Editing single;
     open_in(single, "a\n", EditMode::vim);
-    vim_replay(single.controller(), ":%d<CR>");
-    expect(saved(single).empty() && single.controller().frame().total_lines == 1,
-           ":%d empties a one-line body too");
+    vim_replay(single.controller(), ":%d<CR>ix<Esc>");
+    expect(saved(single) == "x\n", ":%d then typing keeps the final break");
+    // 最後が空の行の本文で、空の行を残す削除は全部の行の削除ではない（V-1761 の M1）。
+    Editing blank;
+    open_in(blank, "a\n\n", EditMode::vim);
+    vim_replay(blank.controller(), "dd");
+    expect(saved(blank) == "\n", "dd on a\\n\\n leaves the empty line with its break");
+    // 通常モードで打った本文には足さない（D82）。Vim へ入り直すと本文から決め直す。
+    Editing ordinary;
+    open_in(ordinary, "a\n", EditMode::vim);
+    vim_replay(ordinary.controller(), "dd");
+    applied(ordinary.controller(), SelectEditMode{EditMode::ordinary});
+    applied(ordinary.controller(), InsertText{"q"});
+    expect(saved(ordinary) == "q", "the Basic mode adds no break to the emptied body");
 }
 
 // 空の 1 行（`\n`）は engine に「1 行ある」と添える（縁 c）。`:d` はレジスタに `\n` を書く。
@@ -178,7 +204,7 @@ void verify_vim_eol_one_empty_line()
     expect(saved(editing).empty(), "dd deletes the one empty line as Vim does");
 }
 
-// 再生（`@a`）の中で全部の行を消したら、畳んだ単位の上でも旗は下りたまま（決定 3 (a)）。
+// 再生（`@a`）の中で全部の行を消しても旗は立ったまま（決定 3 (a)）。
 void verify_vim_eol_replayed()
 {
     Editing editing;
@@ -189,10 +215,52 @@ void verify_vim_eol_replayed()
     vim_replay(controller, "@a");
     expect(saved(editing).empty(), "the macro deletes every line");
     vim_replay(controller, "oz<Esc>");
-    expect(saved(editing) == "\nz", "the flag stays lowered after the folded unit");
+    expect(saved(editing) == "\nz\n", "the flag stays up after the folded unit");
     vim_replay(controller, "uu");
     expect(saved(editing) == "ab\ncd\n" && controller.frame().total_lines == 2,
-           "undoing the folded unit brings the body and the flag back");
+           "undoing the folded unit brings the body back");
+}
+
+// 通常モードの間に置いたタブは、Vim へ入った後に最初に見えるときに決め直す。Vim のモードのままの
+// 切り替えでは決め直さない（決定 1・V-1761 の M2）。
+void verify_vim_eol_parked_tab()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    open_in(editing, "a", EditMode::ordinary);
+    applied(controller, NewTab{});
+    applied(controller, InsertText{"p\nq\n"});
+    applied(controller, SwitchTab{0});
+    applied(controller, SelectEditMode{EditMode::vim});
+    applied(controller, SwitchTab{1});
+    expect(controller.frame().total_lines == 2 && controller.frame().hidden_line_break,
+           "a tab edited in the Basic mode decides its flag when first seen in Vim mode");
+    vim_replay(controller, "ggdG");
+    applied(controller, SwitchTab{0});
+    applied(controller, SwitchTab{1});
+    vim_replay(controller, "ix<Esc>");
+    expect(controller.frame().hidden_line_break && controller.frame().total_lines == 1,
+           "switching tabs in Vim mode keeps the flag of the emptied body");
+}
+
+// engine を通らない移動と選択は、隠した最後の空の行に端を置かない（V-1761 の軽い 1）。
+void verify_vim_eol_outside_keys()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    open_in(editing, "a\nb\n", EditMode::vim);
+    vim_replay(controller, "i");
+    applied(controller, MoveCaret{CaretMotion::document_end, SelectionAnchoring::collapse});
+    expect(caret_line(controller) == 2, "Ctrl+End in INSERT stops on the last line");
+    vim_replay(controller, "z<Esc>");
+    expect(saved(editing) == "a\nbz\n", "a character typed there goes before the final break");
+    vim_replay(controller, "i");
+    applied(controller, SelectAll{});
+    applied(controller, DeleteText{DeleteDirection::forward, DeleteUnit::character});
+    expect(saved(editing).empty(),
+           "Ctrl+A then Delete in INSERT empties the body, final break and all");
+    vim_replay(controller, "x<Esc>");
+    expect(saved(editing) == "x\n", "and the flag stays up for what is typed next");
 }
 } // namespace
 
@@ -204,6 +272,8 @@ void verify_vim_eol_contracts()
     verify_vim_eol_emptied();
     verify_vim_eol_one_empty_line();
     verify_vim_eol_replayed();
+    verify_vim_eol_parked_tab();
+    verify_vim_eol_outside_keys();
 }
 
 void verify_vim_eol_scope()
