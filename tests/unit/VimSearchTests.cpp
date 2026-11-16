@@ -42,7 +42,7 @@
 #include "VimTestSupport.hpp"
 #include "VimWordMotion.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1270,7 +1270,7 @@ void verify_vim_search_fixtures()
         "replace-char-one",    "replace-char-count", "char-search-f-count",
         "char-search-t-first", "line-jump-gg-count", "dot-remove-word"};
     std::size_t selected = 0;
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         if (fixture.name.starts_with("search-") ||
             std::ranges::find(boundaries, fixture.name) != boundaries.end())

@@ -30,7 +30,7 @@
 #include "VirtualColumn.hpp"
 #include "VisibleLines.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <algorithm>
 #include <array>
@@ -643,7 +643,7 @@ void verify_vim_dot_fixtures()
         "open-line-count-below", "open-line-count-above", "replace-char-one",  "replace-char-count",
         "char-search-f-count",   "char-search-t-first",   "line-jump-gg-count"};
     std::size_t selected = 0;
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         if (fixture.name.starts_with("dot-") || fixture.name.starts_with("visual-dot-") ||
             fixture.name.starts_with("counted-insert-") ||

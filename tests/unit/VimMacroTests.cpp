@@ -48,7 +48,7 @@
 #include "VimTestSupport.hpp"
 #include "VimViewport.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1714,7 +1714,7 @@ void verify_vim_macro_scope()
 {
     std::size_t selected = 0;
     bool named = true;
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         // macro 欄はほかの族の fixture も持つ（#1246 の insert-page-edge-・#1232 の
         // viewport-ctrl-e-・#1325 の del-key-・#1337 の dot-register-count-・#1341 の
