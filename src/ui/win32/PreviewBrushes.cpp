@@ -59,8 +59,15 @@ constexpr float full_channel = 255.0F;
 
 HRESULT PreviewBrushes::prepare(ID2D1RenderTarget &target, const core::Theme &theme)
 {
-    if (target_ == &target && theme_ == theme.name && brushes_.front() != nullptr)
+    if (target_ == &target && brushes_.front() != nullptr)
     {
+        // 同じ描画先でテーマだけが変われば、同じ brush の色を置き直す（generation
+        // は変えない）。保持した layout に置いた drawing effect はこの brush
+        // を指したままなので、新しい色で描かれる（#1485）。
+        if (theme_ != theme.name)
+        {
+            recolour(theme);
+        }
         return S_OK;
     }
     target_ = nullptr;
@@ -78,6 +85,15 @@ HRESULT PreviewBrushes::prepare(ID2D1RenderTarget &target, const core::Theme &th
     theme_ = theme.name;
     ++generation_;
     return S_OK;
+}
+
+void PreviewBrushes::recolour(const core::Theme &theme)
+{
+    for (std::size_t index = 0; index < ink_count; ++index)
+    {
+        brushes_.at(index)->SetColor(color_of(static_cast<PreviewInk>(index), theme));
+    }
+    theme_ = theme.name;
 }
 
 ID2D1SolidColorBrush *PreviewBrushes::of(PreviewInk ink) const

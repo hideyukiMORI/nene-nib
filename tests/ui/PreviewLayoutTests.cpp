@@ -411,10 +411,12 @@ void check_pane_reuse()
     return pixels;
 }
 
-// 同じ文書・錨 4・枠を PreviewPainter で別の WIC の描画先に直接描いた画素（比べる相手）。
+// 同じ文書・錨 anchor・枠を PreviewPainter で別の WIC の描画先に、新しい保持と brush で直接描いた
+// 画素（比べる相手）。
 [[nodiscard]] std::vector<std::uint8_t> directly_painted(const core::MarkdownDocument &document,
                                                          const core::Theme &theme,
-                                                         const core::LayoutRect &area)
+                                                         const core::LayoutRect &area,
+                                                         std::size_t anchor = 4)
 {
     Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
     const auto target = wic_target(bitmap);
@@ -423,7 +425,7 @@ void check_pane_reuse()
     const auto style = style_of();
     const auto tops = win32::PreviewBlockTops::measure(
         document, layouts, style,
-        win32::PreviewViewport{4, static_cast<float>(core::width_of(area)),
+        win32::PreviewViewport{anchor, static_cast<float>(core::width_of(area)),
                                static_cast<float>(core::height_of(area))});
     if (target == nullptr || !tops || FAILED(brushes.prepare(*target.Get(), theme)))
     {
@@ -484,8 +486,9 @@ painted_frame(ID2D1RenderTarget &target, IWICBitmap &bitmap,
 }
 
 // 2 回描くと 2 回目は layout を作らず SetDrawingEffect も HitTestTextRange も呼ばず、画素は 1
-// 回目と 同じ。brush を作り直す（テーマを変える）と古い brush の色を置いた保持を捨て、新しい brush
-// で色を 置き直す。
+// 回目と 同じ。同じ描画先でテーマを変えると brush の色だけを置き直し（#1485）、保持した layout は
+// 作り直さず色も面の矩形も引き直さない。画素は新しいテーマを新しい保持で描いたものと 1
+// 画素も違わない。
 void check_repaint_keeps_layouts_clean()
 {
     Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
@@ -528,14 +531,17 @@ void check_repaint_keeps_layouts_clean()
            "a repaint creates no layout, sets no drawing effect and hit-tests nothing");
     expect(!second.empty() && second == first && code_inked(layouts, scene, brushes),
            "a repaint has the same pixels and the inline code keeps the string ink");
-    expect(SUCCEEDED(brushes.prepare(*target.Get(), other.value().view())),
-           "the brushes are made again for another theme");
+    const auto generation = brushes.generation();
+    expect(SUCCEEDED(brushes.prepare(*target.Get(), other.value().view())) &&
+               brushes.generation() == generation,
+           "another theme on the same target recolours the same brushes");
     const auto recolored = painted_frame(*target.Get(), *bitmap.Get(), painter, scene);
-    expect(!recolored.empty() && recolored != first &&
-               std::get<0>(layout_counts(layouts)) > std::get<0>(painted) &&
-               std::get<1>(layout_counts(layouts)) > std::get<1>(painted) &&
+    expect(!recolored.empty() && recolored != first && layout_counts(layouts) == painted &&
                code_inked(layouts, scene, brushes),
-           "new brushes drop the layouts inked with the old ones and ink the new ones once");
+           "another theme keeps the layouts, their ink and their inline code rectangles");
+    expect(recolored == directly_painted(document.value(), other.value().view(),
+                                         core::LayoutRect{0, 0, 400, 200}, 0),
+           "the recoloured pixels equal painting the other theme with new layouts and brushes");
 }
 
 // 鍵が同じ 2 frame 目は要素を描かず DrawBitmap 1 回・錨が変われば描き直す（bitmap はそのまま）・

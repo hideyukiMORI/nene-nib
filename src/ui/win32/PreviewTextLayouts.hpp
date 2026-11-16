@@ -43,9 +43,10 @@ class PreviewTextLayouts final
     get(const core::PreviewBlock &block, float width, const PreviewTextStyle &style,
         std::span<const PreviewInlineImage> inlines = {});
     // 描く前に色の brush を結ぶ（描く所が 1 回の描画の始めに呼ぶ）。前に結んだものと違えば（別の
-    // PreviewBrushes か作り直して generation が違えば）、古い brush
-    // を指す色を置いた保持を全部捨てる （破棄の 1 か所・色を置いていない保持は残す）。brushes
-    // は次に結ぶまで生きている。
+    // PreviewBrushes か、描画先が変わって作り直して generation が違えば）、古い brush を指す色を
+    // 置いた保持を全部捨てる（破棄の 1 か所・色を置いていない保持は残す）。テーマだけの変更は
+    // PreviewBrushes が同じ brush の色を置き直すので generation
+    // が変わらず、保持はそのまま（#1485）。 brushes は次に結ぶまで生きている。
     void bind(const PreviewBrushes &brushes);
     // 描く口。get と同じ鍵で引き（無ければ作って保持し）、色がまだ結んだ brush で置かれていなければ
     // 1 回だけ置く（結んでいない・brush をまだ作っていない描く先では置かない）。返す entry は次に
@@ -98,8 +99,9 @@ class PreviewTextLayouts final
                                        std::uint32_t dpi);
     [[nodiscard]] HRESULT space(IDWriteTextLayout &layout, bool mono, float size, float line);
     [[nodiscard]] std::optional<std::pair<float, float>> natural(bool mono, float size);
+    // 装飾を置く。ranges は spans と同じ順の layout の UTF-16 の範囲（span_ranges・#1485）。
     [[nodiscard]] HRESULT decorate(IDWriteTextLayout &layout, const core::PreviewBlock &block,
-                                   std::string_view shown);
+                                   std::span<const DWRITE_TEXT_RANGE> ranges);
     // 行内コードの面の矩形と画像の箱の左上を entry に引いて置く（作った直後の汚れていない
     // layout）。
     [[nodiscard]] HRESULT locate(PreviewTextLayout &entry, const core::PreviewBlock &block,
