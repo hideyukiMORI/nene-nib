@@ -93,13 +93,15 @@ records in `docs/quality/`.
     `:set ignorecase` / `smartcase`, and Up / Down history on the `:` and search lines; matchparen highlights
     the partner bracket (on by default); patterns (shared by search and `:s`) take a `magic` subset with `*`
     and the multis on one atom `\+ \= \? \{n} \{n,} \{,m} \{n,m}` and the shortest `\{-n,m}`
-    ([ADR 0184](docs/adr/0184-vim-pattern-syntax-grows-in-stages.md) stage 1); `\|`, a multi on a group,
-    `\zs` `\ze`, `\v` and patterns across lines come in the next stages;
+    ([ADR 0184](docs/adr/0184-vim-pattern-syntax-grows-in-stages.md) stage 1) and *since beta.13* `\zs` `\ze`
+    (stage 3); `\|`, a multi on a group, `\v` and patterns across lines come in the next stages;
   - substitute `:[range]s/pat/rep/[g i I n e &] [count]` (ranges `%` `N,M` `.` `$` `'<,'>` `'a,'b` `.,.+N`,
     any non-letter delimiter, `&` `\0`-`\9` with `\( \)` groups, `~` `\r` `\u` `\U` `\l` `\L` `\e`),
     `:&` `:&&` `:~` and NORMAL `&` `g&`, one undo step each
-    ([ADR 0168](docs/adr/0168-ex-substitute-family-is-one-edit-with-visible-preview.md)); the `c` flag,
-    the typing preview and `:g` `:v` `:sort` are planned;
+    ([ADR 0168](docs/adr/0168-ex-substitute-family-is-one-edit-with-visible-preview.md)); *since beta.13* the
+    `c` flag asks `y n a q l` per match, and `:[range]d` `:[range]y`, `:g/pat/d` `:v/pat/d` and
+    `:g/pat/s//rep/` work (a `c` flag inside `:g` is refused with a notice for now); the typing preview, the
+    other `:g` commands and `:sort` are planned;
   - marks `m{a-z}` with `'{a-z}` `` `{a-z} ``, `''`, `'.` and `'^` `` `^ `` (where INSERT was last left)
     ([ADR 0152](docs/adr/0152-vim-marks-are-document-values-adjusted-by-edits.md)), the jump list `Ctrl-o`
     `Ctrl-i` and the change list `g;` `g,` (in Vim mode Ctrl+O is the jump list, so opening a file is Ctrl+Shift+O);
@@ -118,7 +120,7 @@ records in `docs/quality/`.
   `:saveas! name` is used. Japanese names, spaces and relative paths (from the process working folder) work;
   filename expansion is planned. Failed writes keep the old name and tab open (D39). See
   [ADR 0067](docs/adr/0067-ex-filenames-share-atomic-save-policy.md).
-  Not yet: uppercase marks `'A`-`'Z` and `:marks`, `:g` `:v` `:sort` (FR-027), read-only registers
+  Not yet: uppercase marks `'A`-`'Z` and `:marks`, `:sort` and the other `:g` `:v` commands (FR-027), read-only registers
   `". ": "/ "%`, NORMAL `R` and VISUAL `S` (reserved for surround; Vim changes the lines), autoindent, dragging into VISUAL with the mouse in Vim mode, easymotion (FR-023),
   commentary, surround and INSERT completion (FR-024).
 - **FR-004 one toggle** — the status bar switches "通常 | Vim" ("Basic | Vim" in English and "标准 | Vim" in
@@ -239,8 +241,9 @@ records in `docs/quality/`.
   `\\wsl.localhost\<distro>` places.
 - **FR-023 – FR-027 editing features** — matchparen (FR-024) is done and on by default. Planned: easymotion
   (FR-023), commentary, surround, autopairs and INSERT completion (FR-024), changed-line markers, indent guides
-  and a yank flash (FR-025), project-wide search (FR-026) and the rest of the `:s` family (FR-027: the `c`
-  flag, the typing preview and `:g` `:v` `:sort`; `:s` itself is under FR-003).
+  and a yank flash (FR-025), project-wide search (FR-026) and the rest of the `:s` family (FR-027: the typing
+  preview, the other `:g` `:v` commands and `:sort`; `:s` itself is under FR-003, and the `c` flag, `:d` `:y`
+  and `:g` `:v` with `d` and `s` are on main *since beta.13*).
 - **FR-029 display language** — the screen text is shown in Japanese, English or Simplified Chinese
   (Korean, Spanish and German follow in 1.1.0 and show English until then). The default follows the Windows
   display language; `:set language=ja`, `en`, `zh-hans` or `system` (also from Ctrl+P `:`, or the F1
