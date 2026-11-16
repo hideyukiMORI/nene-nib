@@ -75,7 +75,7 @@
 #include "VirtualColumnIndex.hpp"
 #include "VisibleLines.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <algorithm>
 #include <array>
@@ -159,9 +159,9 @@ using nenenib::core::VimWordWalk;
 
 void verify_vim_fixtures()
 {
-    expect(nenenib::tests::vim_fixtures.size() >= 250,
+    expect(nenenib::tests::vim_fixture_table().size() >= 250,
            "the oracle wrote at least the fixtures the Issues ask for (#22 / #43 / #53)");
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         verify_vim_fixture(fixture);
     }

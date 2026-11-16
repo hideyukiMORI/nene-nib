@@ -45,7 +45,7 @@
 #include "VimWantedColumn.hpp"
 #include "VirtualColumn.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <algorithm>
 #include <array>
@@ -601,7 +601,7 @@ void verify_vim_text_object_fixtures()
         "replace-char-one",    "replace-char-count", "char-search-f-count",
         "char-search-t-first", "line-jump-gg-count", "dot-remove-word"};
     std::size_t selected = 0;
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         if (fixture.name.starts_with("text-object-") ||
             std::ranges::find(boundaries, fixture.name) != boundaries.end())

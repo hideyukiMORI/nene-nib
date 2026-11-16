@@ -43,7 +43,7 @@
 #include "VimViewport.hpp"
 #include "VisibleLines.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <cstddef>
 #include <optional>
@@ -150,7 +150,7 @@ using nenenib::core::VimViewport;
 void verify_fixture_contract()
 {
     std::size_t broken = 0;
-    for (const VimFixture &fixture : vim_fixtures)
+    for (const VimFixture &fixture : vim_fixture_table())
     {
         broken += broken_steps(fixture);
     }

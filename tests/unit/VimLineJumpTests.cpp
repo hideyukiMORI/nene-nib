@@ -36,7 +36,7 @@
 #include "VimWantedColumn.hpp"
 #include "VirtualColumn.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <cstddef>
 #include <limits>
@@ -78,7 +78,7 @@ using nenenib::core::VirtualColumn;
 void verify_vim_line_jump_fixtures()
 {
     std::size_t selected = 0;
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         if (fixture.name.starts_with("line-jump-"))
         {

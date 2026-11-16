@@ -4,8 +4,8 @@
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 
-#include "../vim/VimFixtures.hpp"
 #include "../vim/VimWrapFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 namespace nenenib::tests
 {
@@ -31,7 +31,7 @@ void verify_vim_wrapped_scope()
 {
     verify_vim_wrapped_contracts();
     // 同じH/M/Lとページ処理の呼出元。旧fixtureのうちviewportを持つものだけを再利用する。
-    for (const auto &fixture : vim_fixtures)
+    for (const auto &fixture : vim_fixture_table())
     {
         if (fixture.viewport.has_value())
         {

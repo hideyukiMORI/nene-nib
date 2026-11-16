@@ -141,6 +141,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimMarkTests.cpp
     tests/unit/VimReplaceTests.cpp
     tests/unit/VimVisualYankTests.cpp
+    tests/unit/VimFixtureTable.cpp
     tests/unit/VimVisualWantedTests.cpp
     tests/unit/VimOpenLineTests.cpp
     tests/unit/VimEndOfLineTests.cpp

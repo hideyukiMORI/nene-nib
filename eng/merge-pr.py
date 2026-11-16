@@ -14,9 +14,10 @@ ROOT = Path(__file__).resolve().parent.parent
 REPOSITORY = "github.com/hideyukiMORI/nene-nib"
 HOST, REPO_NAME = REPOSITORY.split("/", 1)
 API_ROOT = f"repos/{REPO_NAME}"
-# ADR 0136: CI の build-and-test は Release の全 target と ctest で 7〜11 分かかる（check.yml の上限は 45 分）。
+# ADR 0136: CI の build-and-test は Release の全 target と ctest（check.yml の上限は 90 分）。
 # 600 秒だと毎回切れて --ci-run での再開が要った（#522 / #524 / #526・Issue #533）。
-WATCH_SECONDS = 2700
+# 2026-11 にはビルドだけで 25〜44 分かかり、2700 秒（45 分）で切れた（#1752）。check.yml の上限と同じ値。
+WATCH_SECONDS = 5400
 # #667: `gh run watch` can exit non-zero while the same run is still going; wait on that run again.
 WATCH_RETRIES = 3
 # #1223: a merge call can fail with a GitHub 5xx or "Merge already in progress" while GitHub is still

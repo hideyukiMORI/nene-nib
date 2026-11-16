@@ -32,7 +32,7 @@
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <array>
 #include <cstddef>
@@ -229,7 +229,7 @@ void verify_vim_open_line_edge_keys()
 void verify_vim_open_line_fixtures()
 {
     std::size_t opened = 0;
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         if (fixture.name.starts_with("open-line-"))
         {
