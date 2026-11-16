@@ -322,21 +322,29 @@ def macro_script(register: dict | None) -> list[str]:
 
 
 def probe_script(settings: list[str], keys: str, viewport: dict | None = None,
-                 register: dict | None = None, change: bool = False) -> str:
+                 register: dict | None = None, change: bool = False,
+                 empty_input: bool = False) -> str:
     # getregtype は "v"（文字単位）/ "V"（行単位）/ 一度も使っていないレジスタでは空を返す
     # (ADR 0015 decision 3). p の貼り方はその種類で決まるので、本文だけでは fixture が足りない。
+    # 最後の行に &eol と空のバッファか（wordcount().bytes が 0。ggdG の後の空は line2byte では
+    # 見分けられない）を書く（ADR 0188 の決定 6）。
     report = ("call writefile(getline(1, '$') + ['cursor=' . line('.') . ',' . col('.')]"
               " + ['regtype=' . getregtype('\"')]"
               " + ['reg=' . getreg('\"')]"
               + (" + ['topline=' . line('w0')] + ['scroll=' . &scroll]" if viewport else "")
               + (" + ['change=' . &modified . ',' . (b:changedtick > g:nib_tick) . ','"
                  " . (undotree().seq_cur > g:nib_seq)]" if change else "")
-              + ", 'out.txt')")
+              + " + ['eol=' . &eol . ',' . (wordcount().bytes == 0)]"
+              ", 'out.txt')")
     # Ex モードで開いた直後のカーソルは先頭ではないので、毎回 (1, 1) に置いてから鍵を流す。
     # -es の Vim は開いた直後のカーソル（最終行）をジャンプの列に積み、call cursor は積まない。
     # 普通に起動した Vim と同じに、1 行目の 1 項だけの列にしてから鍵を流す（#1116・ADR 0152）。
     # viewport の位置は Nib の fixture と同じに、開いた後でジャンプにならない置き方で置く（#1124）。
     setup = ["call cursor(1, 1)", "clearjumps", "normal! m'"]
+    # 0 バイトのファイルを開いた Vim は &eol が立っている。Nib は空の文書に旗を立てない（ADR 0188
+    # の決定 1）ので、空の入力だけ noeol にして同じ模型で測る。eol は書き込みにしか効かない。
+    if empty_input:
+        setup.append("setlocal noeol")
     if viewport:
         setup += ["set nowrap", f"resize {viewport['visible_lines']}",
                   f"call cursor({viewport['line']}, {viewport['column']})",
@@ -368,8 +376,8 @@ def run_vim(work: Path, text: str, keys: str, settings: list[str],
             viewport: dict | None = None, register: dict | None = None,
             change: bool = False) -> tuple[str, int, int, str, str, dict | None, dict | None]:
     (work / "input.txt").write_bytes(text.encode("utf-8"))
-    (work / "probe.vim").write_text(probe_script(settings, keys, viewport, register, change),
-                                    encoding="utf-8")
+    (work / "probe.vim").write_text(probe_script(settings, keys, viewport, register, change,
+                                                 text == ""), encoding="utf-8")
     output = work / "out.txt"
     output.unlink(missing_ok=True)
     command = [str(VIM), "-u", "NONE", "-i", "NONE", "-N", "-n"]
@@ -391,6 +399,7 @@ def run_vim(work: Path, text: str, keys: str, settings: list[str],
     lines = output.read_bytes().decode("utf-8").split("\n")
     while lines and lines[-1] == "":
         lines.pop()
+    eol, empty = (part == "1" for part in lines.pop().removeprefix("eol=").split(","))
     # writefile は文字列の中の改行を NUL で書くので、レジスタの改行をここで戻す。
     measured_change = None
     if change:
@@ -406,7 +415,10 @@ def run_vim(work: Path, text: str, keys: str, settings: list[str],
     register = lines.pop().removeprefix("reg=").replace("\x00", "\n")
     kind = lines.pop().removeprefix("regtype=")
     line, column = (int(part) for part in lines.pop().removeprefix("cursor=").split(","))
-    return "\n".join(lines), line, column, register, kind, measured_viewport, measured_change
+    # 本文はつないだ行に、eol のバッファなら最後の改行を足す（ADR 0188 の決定 6）。空のバッファは
+    # 空の行が 1 つに見えるが、本文は空である。
+    body = "" if empty else "\n".join(lines) + ("\n" if eol else "")
+    return body, line, column, register, kind, measured_viewport, measured_change
 
 
 def check_literal_cr(name: str, text: str) -> None:
@@ -433,8 +445,6 @@ def measure(work: Path, fixture: dict) -> dict:
     settings = fixture.get("settings", [])
     if not name or not keys:
         raise ValueError(f"{name!r}: a fixture needs a name and a key sequence")
-    if text.endswith("\n"):
-        raise ValueError(f"{name}: fixture text must not end with a newline")
     check_literal_cr(name, text)
     viewport = viewport_of(fixture)
     macro = register_of(fixture)
