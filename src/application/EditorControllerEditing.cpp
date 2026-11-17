@@ -326,8 +326,8 @@ void EditorController::replace(
     note_minimap_edit(next, edit);
     language_server_edit(edit);
     adjust_other(edit, next);
-    state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), std::move(history),
-                              std::move(document));
+    state_ = state_.with_words_edited(edit).with_edit(std::move(next), core::collapsed_at(caret),
+                                                      std::move(history), std::move(document));
     follow_caret();
 }
 
@@ -734,8 +734,8 @@ void EditorController::undo_edit()
     language_server_edit(undone);
     adjust_other(undone, next);
     undone_marks(undone);
-    state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().undone(),
-                              state_.document());
+    state_ = state_.with_words_edited(undone).with_edit(
+        std::move(next), core::collapsed_at(caret), state_.history().undone(), state_.document());
     follow_caret();
 }
 
@@ -763,8 +763,9 @@ void EditorController::redo_edit()
     language_server_edit(edit.value());
     adjust_other(core::Edit{at, edit.value().removed, edit.value().inserted, at}, next);
     undone_marks(edit.value());
-    state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone(),
-                              state_.document());
+    state_ = state_.with_words_edited(edit.value())
+                 .with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone(),
+                            state_.document());
     follow_caret();
 }
 

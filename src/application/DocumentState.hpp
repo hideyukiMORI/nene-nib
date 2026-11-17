@@ -16,6 +16,7 @@
 #include "VimEndOfLine.hpp"
 #include "VimMarks.hpp"
 #include "VimWantedColumn.hpp"
+#include "WordTable.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -64,5 +65,9 @@ struct DocumentState
     // Vim の eol に当たる旗（ADR 0188 の決定 1）。空は「まだ決めていない」で、読んだ文書の束は空の
     // まま置き、広げるとき（開いたとき）に本文から決める。置いた束は今の値を持つ。
     std::optional<VimEndOfLine> vim_eol = std::nullopt;
+    // INSERT の補完の語の表（ADR 0169 の決定 1）。文書の値で、脇に置いても保つ（他のタブの語の和は
+    // 読み込み済みの束のこの表から引く）。空は「作っていない」で、16 MiB 超の文書と、作る前の束
+    // （読んだ・戻した文書）。束を状態に入れる所（広げる・読み込む・足す）が本文から作る。
+    std::optional<core::WordTable> words = std::nullopt;
 };
 } // namespace nenenib::application

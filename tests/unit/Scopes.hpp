@@ -61,6 +61,8 @@ void verify_session_scope();
 // BookmarkTests.cpp
 void verify_bookmarks_contracts();
 void verify_bookmarks_scope();
+void verify_insert_completion_contracts();
+void verify_insert_completion_scope();
 
 // HistoryTests.cpp
 void verify_history_contracts();
