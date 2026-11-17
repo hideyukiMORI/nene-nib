@@ -634,14 +634,16 @@ void verify_ui_language_mapping()
     expect(observer.observe().has_value(), "observing the OS gives one of the three languages");
 }
 
-// 製品の形の問い（ADR 0178 の追補 #1809）。GetCurrentPackageFullName の「パッケージが無い」だけが
-// ZIP 版で、置き場が足りない・成功は package identity が在る。試験の exe は ZIP 版の形で動く。
+// 製品の形の問い（ADR 0178 の追補 #1809）。置き場が足りない・成功だけが package identity が在る
+// 形で、「パッケージが無い」と想定外の値は ZIP 版。試験の exe は ZIP 版の形で動く。
 void verify_distribution()
 {
     using nenenib::adapters::win32::distribution_of;
     using nenenib::core::Distribution;
     expect(distribution_of(APPMODEL_ERROR_NO_PACKAGE) == Distribution::unpackaged,
            "no package identity is the zip build");
+    expect(distribution_of(ERROR_INVALID_PARAMETER) == Distribution::unpackaged,
+           "an unexpected result falls back to the zip build");
     expect(distribution_of(ERROR_INSUFFICIENT_BUFFER) == Distribution::packaged &&
                distribution_of(ERROR_SUCCESS) == Distribution::packaged,
            "a package name (asked without room, or given) is the packaged build");
