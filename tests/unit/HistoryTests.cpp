@@ -46,6 +46,7 @@
 #include "ScriptedImages.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPrinter.hpp"
+#include "ScriptedProjectSearch.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedStartLists.hpp"
@@ -398,17 +399,18 @@ void verify_quiet_start_with_files()
     ScriptedImages images;
     ScriptedStartLists start_lists;
     ScriptedUiLanguage ui_language;
+    ScriptedProjectSearch project_search;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, code_pages};
     ScriptedLanguageServer language_server;
     EditorController controller(
-        EditorPorts{appearance,   clipboard,       files,      code_pages, settings,
-                    themes,       session,         history,    folders,    bookmarks,
-                    text_layouts, autosave,        fonts,      bell,       markdown,
-                    reads,        language_server, wall_clock, printer,    shell_registration,
-                    images,       start_lists,     ui_language},
+        EditorPorts{appearance,   clipboard,       files,       code_pages,    settings,
+                    themes,       session,         history,     folders,       bookmarks,
+                    text_layouts, autosave,        fonts,       bell,          markdown,
+                    reads,        language_server, wall_clock,  printer,       shell_registration,
+                    images,       start_lists,     ui_language, project_search},
         {work_open('a'), work_open('b')});
     // 最初の frame の合図でも、起動画面が出ていなければ起動画面の読みを頼まない（ADR 0172 の決定
     // 3）。
@@ -583,7 +585,7 @@ void verify_quiet_paths()
                editing.language_server().touches() == 0 && editing.wall_clock().calls() == 0 &&
                editing.printer().jobs().empty() && editing.shell_registration().touches() == 0 &&
                editing.images().touches() == 0 && editing.start_lists().requests() == 1 &&
-               editing.start_lists().collects() == 0,
+               editing.start_lists().collects() == 0 && editing.project_search().touches() == 0,
            "opening, switching, new tabs, saving and typing never touch the history, the folder, "
            "autosave, the bell, the clipboard, the language server (lsp off), the clock, the "
            "printer nor the preview images, and only opening asks the read port");

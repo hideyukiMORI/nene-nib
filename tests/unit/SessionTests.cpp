@@ -47,6 +47,7 @@
 #include "ScriptedImages.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPrinter.hpp"
+#include "ScriptedProjectSearch.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedStartLists.hpp"
@@ -542,17 +543,18 @@ void verify_recency_ranked()
     ScriptedImages images;
     ScriptedStartLists start_lists;
     ScriptedUiLanguage ui_language;
+    ScriptedProjectSearch project_search;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, code_pages};
     ScriptedLanguageServer language_server;
     EditorController controller(
-        EditorPorts{appearance,   clipboard,       files,      code_pages, settings,
-                    themes,       session,         history,    folders,    bookmarks,
-                    text_layouts, autosave,        fonts,      bell,       markdown,
-                    reads,        language_server, wall_clock, printer,    shell_registration,
-                    images,       start_lists,     ui_language},
+        EditorPorts{appearance,   clipboard,       files,       code_pages,    settings,
+                    themes,       session,         history,     folders,       bookmarks,
+                    text_layouts, autosave,        fonts,       bell,          markdown,
+                    reads,        language_server, wall_clock,  printer,       shell_registration,
+                    images,       start_lists,     ui_language, project_search},
         initial);
     return controller.frame();
 }

@@ -14,6 +14,7 @@
 #include "TemporaryFiles.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
+#include "UnwiredProjectSearch.hpp"
 #include "Utf16.hpp"
 #include "Win32AppearanceAdapter.hpp"
 #include "Win32AutosaveAdapter.hpp"
@@ -59,6 +60,7 @@ namespace
 {
 // 合成ルートの adapter の名前空間（run の行を関数長の上限に収める）。
 namespace nib_adapters = nenenib::adapters::win32;
+using nenenib::app::UnwiredProjectSearch;
 
 constexpr wchar_t product_name[] = L"NeNe Nib";
 
@@ -338,17 +340,17 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32ImageAdapter images(worker);
     nenenib::adapters::win32::Win32StartListAdapter start_lists(worker, history, bookmarks);
     nib_adapters::Win32UiLanguage ui_language;
+    UnwiredProjectSearch project_search;
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{
-            appearance,   clipboard,       files,      code_pages, settings,
-            themes,       session,         history,    folders,    bookmarks,
-            text_layouts, autosave,        fonts,      bell,       markdown,
-            reads,        language_server, wall_clock, printer,    shell_registration,
-            images,       start_lists,     ui_language},
+            appearance,   clipboard,       files,       code_pages,    settings,
+            themes,       session,         history,     folders,       bookmarks,
+            text_layouts, autosave,        fonts,       bell,          markdown,
+            reads,        language_server, wall_clock,  printer,       shell_registration,
+            images,       start_lists,     ui_language, project_search},
         initial_documents(given));
     const auto last_resort = last_resort_for(controller);
-    // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
-    // 復号が済んでいる（Issue #19）。
+    // 起動の最初の節目（引数の解析・adapters の構築・起動引数の読み込みと復号の後・Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);
     const auto window = nenenib::ui::win32::EditorWindow::create(
         instance, controller, {timing, wsl}, {text_layouts, warmup, controller.display_language()});

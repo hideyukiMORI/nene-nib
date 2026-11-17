@@ -87,12 +87,17 @@
 #include "OpenedDocument.hpp"
 #include "PaletteFolder.hpp"
 #include "PaletteOrigin.hpp"
+#include "PaletteProjectSearch.hpp"
 #include "PaneSide.hpp"
 #include "PaneSource.hpp"
 #include "PendingLspRequest.hpp"
 #include "PointerClicks.hpp"
 #include "PreviewFullRoute.hpp"
 #include "PreviewPlacement.hpp"
+#include "ProjectHitLanding.hpp"
+#include "ProjectHitRow.hpp"
+#include "ProjectSearchBatch.hpp"
+#include "ProjectSearchView.hpp"
 #include "ReplayLevel.hpp"
 #include "ReplayRounds.hpp"
 #include "ScrollState.hpp"
@@ -526,6 +531,33 @@ class EditorController final
     // 操作の一覧（F1・ADR 0078 の決定 9）。`:ls` と同じ口で入力 `?` の面を開く。入力行や面が
     // 開いていれば、取り消してから `?` の面に置き換える。
     void accept(const OpenOperationList &);
+    // プロジェクトの全文検索（ADR 0167 の決定 1・Ctrl+Shift+F）。`:grep` と同じ口で入力 `!` の面を
+    // 開く。入力行や面が開いていれば、取り消してから置き換える。
+    void accept(const OpenProjectSearch &);
+    // ---- 全文検索（ADR 0167・EditorControllerProjectSearch.cpp）
+    // 意図の出口と面を開く道の 1 本（決定 1）。面が `!` の出どころで検索語が前と違えば、前の券を
+    // 取り消し、前の当たりを面から外し、新しい券で頼む（検索語が空・解析できない・探す場所が無い
+    // なら頼まずに状態の 1 行だけ）。面が閉じた・ほかの出どころへ移ったら取り消して控えを消す。
+    void settle_project_search();
+    void start_project_search(std::string_view query);
+    // 今の券の要求がまだ終わっていなければ cancel する。
+    void cancel_project_search();
+    // 探す場所（決定 2）。設定のルート、無ければアクティブな文書のフォルダ、無題なら値なし。
+    [[nodiscard]] std::optional<core::FilePath> project_search_root() const;
+    // WorkCompleted の 1 本（決定 4）。今の券の batch の当たりを面の後ろへ足し、進み具合を写す。
+    void collect_project_search();
+    void adopt_project_batch(const ProjectSearchBatch &batch,
+                             std::vector<core::CommandChoice> &more);
+    // 面の当たりの index 番目を開く（決定 5・open_listed の 1 本）。
+    void open_project_hit(std::size_t index);
+    // 開いた当たりの文書がアクティブならキャレットを置く（`''` を置いてから
+    // PlaceCaret）。開く要求が 消えていれば（開けなかった）置く先を捨てる。
+    void land_project_hit();
+    // 進み具合の表示値（面が `!` の出どころのときだけ）。
+    [[nodiscard]] std::optional<ProjectSearchView> project_search_view() const;
+    // 見えている当たりの行の表示値（面が `!` の出どころのときだけ・rows と同じ窓）。
+    [[nodiscard]] std::vector<core::ProjectHitRow> project_hit_rows(std::size_t first,
+                                                                    std::size_t count) const;
     // 面を開く 2 つの意図の 1 本。前の面の残りを collect で捨て、券を進め、同じフォルダを頼む
     // （ADR 0062 の決定 14）。input と selected は CommandPalette::opened へ渡す。
     void open_palette(std::string_view input, std::size_t selected);
@@ -1348,6 +1380,17 @@ class EditorController final
     std::optional<std::uint64_t> folder_live_;
     // エクスプローラーが頼んで読み終えていないフォルダ（決定 5）。ルートを替えると捨てる。
     std::optional<ExplorerFolder> explorer_folder_;
+    // 面が全文検索を頼んだ控え（ADR 0167 の決定 1・4・5）。面が `!` の出どころの間だけ pattern を
+    // 持ち、意図の出口の settle_project_search が検索語の変化と面の閉じを拾う。
+    PaletteProjectSearch project_search_;
+    // 全文検索の券の通し番号（プロセスで 1 つ・検索語が変わるたびに進める）。
+    std::uint64_t project_tickets_ = 0;
+    // 要求の後で ProjectSearchPort にまだ batch が残っているかもしれない間は真（WorkCompleted で
+    // collect してたまりを空にする）。collect が空を返し、今の要求が終わっていれば偽に戻す。頼んで
+    // いない間は port を呼ばない（verify_quiet_paths）。
+    bool project_draining_ = false;
+    // 当たりを開いた後にキャレットを置く先（決定 5）。置いた・開けなかったら消す。
+    std::optional<ProjectHitLanding> project_landing_;
     // 面の上で押した行の節の経路（決定 4・ADR 0056 の決定 9）。離したときに同じ節かを比べて消す。
     // 「…」の行と行の外を押したときは値なし（離しても何もしない）。
     std::optional<core::FilePath> explorer_pressed_;
