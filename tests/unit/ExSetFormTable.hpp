@@ -7,9 +7,10 @@
 namespace nenenib::tests
 {
 // `:set` の形と、Vim 9.1 がその後ろの鍵を流すか（#1561）。生成物で、手で書かない:
-// D:/NeNeNib/scripts/20261113/1561/gen_table.py が measure.py の実測
-// （`-u NONE --not-a-term`・`:normal! :{形}<CR>x` の x が流れたか）から書く。
-inline constexpr std::array<std::pair<std::string_view, bool>, 362> vim_set_forms{{
+// D:/NeNeNib/scripts/20261113/1561/gen_table.py が measure.py の実測（autoindent の行は #1086 の
+// 同じ実測を 1086/forms/gen_table_1086.py が足した）（`-u NONE --not-a-term`・
+// `:normal! :{形}<CR>x` の x が流れたか）から書く。
+inline constexpr std::array<std::pair<std::string_view, bool>, 388> vim_set_forms{{
     {"set hlsearch", true},
     {"set nohlsearch", true},
     {"set hlsearch!", true},
@@ -140,6 +141,32 @@ inline constexpr std::array<std::pair<std::string_view, bool>, 362> vim_set_form
     {"set rnu+=1", false},
     {"set rnu!?", false},
     {"set nornu&", true},
+    {"set autoindent", true},
+    {"set noautoindent", true},
+    {"set autoindent!", true},
+    {"set invautoindent", true},
+    {"set autoindent&", true},
+    {"set autoindent&vim", true},
+    {"set autoindent?", true},
+    {"set noautoindent?", true},
+    {"set autoindent<", true},
+    {"set autoindent=1", false},
+    {"set autoindent+=1", false},
+    {"set autoindent!?", false},
+    {"set noautoindent&", true},
+    {"set ai", true},
+    {"set noai", true},
+    {"set ai!", true},
+    {"set invai", true},
+    {"set ai&", true},
+    {"set ai&vim", true},
+    {"set ai?", true},
+    {"set noai?", true},
+    {"set ai<", true},
+    {"set ai=1", false},
+    {"set ai+=1", false},
+    {"set ai!?", false},
+    {"set noai&", true},
     {"set wrap", true},
     {"set nowrap", true},
     {"set wrap!", true},

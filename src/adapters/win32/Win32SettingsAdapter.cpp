@@ -18,8 +18,11 @@ namespace
 using Failure = application::SettingsFailure;
 // command の行が増えるので 16 KiB（ADR 0170 の決定 3・#1044・正本は core）。
 using core::maximum_settings_bytes;
-constexpr std::array<SettingsVersion, 4> reading_order{SettingsVersion::v4, SettingsVersion::v3,
-                                                       SettingsVersion::v2, SettingsVersion::v1};
+// 読む順と lock・bytes の照合の順（v5 → v4 → v3 → v2 → v1・ADR 0170 の 2026-11-16 の追補）。
+// 書くのは先頭の版だけ。
+constexpr std::array<SettingsVersion, 5> reading_order{SettingsVersion::v5, SettingsVersion::v4,
+                                                       SettingsVersion::v3, SettingsVersion::v2,
+                                                       SettingsVersion::v1};
 
 [[nodiscard]] std::expected<std::wstring, Failure> lock_name(const core::FilePath &path)
 {
@@ -145,7 +148,7 @@ Win32SettingsAdapter::write_locked(const core::EditorSettings &settings)
         return std::unexpected(Failure::unwritable);
     }
     original_ = bytes;
-    source_ = SettingsVersion::v4;
+    source_ = reading_order.front();
     return {};
 }
 

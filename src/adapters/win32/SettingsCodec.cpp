@@ -26,19 +26,22 @@ namespace
 using Failure = application::SettingsFailure;
 using Field = std::optional<std::string_view> SettingsFields::*;
 
-// 鍵の名前と DTO の欄の対（同じ位置）。v4 だけの鍵も読むが、旧版にあれば apply_v4_fields
-// が拒否する。
-constexpr std::array<std::string_view, 17> field_names{
-    "version",     "colorscheme", "font_family",    "font_size", "guide",         "wrap",
-    "ui_language", "lsp",         "explorer",       "root",      "features",      "mapleader",
-    "ignorecase",  "smartcase",   "relativenumber", "scrolloff", "explorer_width"};
-constexpr std::array<Field, 17> field_members{
-    &SettingsFields::version,     &SettingsFields::colorscheme,   &SettingsFields::font_family,
-    &SettingsFields::font_size,   &SettingsFields::guide,         &SettingsFields::wrap,
-    &SettingsFields::ui_language, &SettingsFields::lsp,           &SettingsFields::explorer,
-    &SettingsFields::root,        &SettingsFields::features,      &SettingsFields::mapleader,
-    &SettingsFields::ignorecase,  &SettingsFields::smartcase,     &SettingsFields::relativenumber,
-    &SettingsFields::scrolloff,   &SettingsFields::explorer_width};
+// 鍵の名前と DTO の欄の対（同じ位置）。v4 と v5 だけの鍵も読むが、旧版にあれば
+// apply_v4_fields と apply_v5_fields が拒否する。
+constexpr std::array<std::string_view, 18> field_names{
+    "version",     "colorscheme", "font_family",    "font_size", "guide",          "wrap",
+    "ui_language", "lsp",         "explorer",       "root",      "features",       "mapleader",
+    "ignorecase",  "smartcase",   "relativenumber", "scrolloff", "explorer_width", "autoindent"};
+constexpr std::array<Field, 18> field_members{
+    &SettingsFields::version,        &SettingsFields::colorscheme,
+    &SettingsFields::font_family,    &SettingsFields::font_size,
+    &SettingsFields::guide,          &SettingsFields::wrap,
+    &SettingsFields::ui_language,    &SettingsFields::lsp,
+    &SettingsFields::explorer,       &SettingsFields::root,
+    &SettingsFields::features,       &SettingsFields::mapleader,
+    &SettingsFields::ignorecase,     &SettingsFields::smartcase,
+    &SettingsFields::relativenumber, &SettingsFields::scrolloff,
+    &SettingsFields::explorer_width, &SettingsFields::autoindent};
 
 // 言語ごとのサーバーの命令の鍵 `lsp.<language>.command`（ADR 0160・ADR 0170 の決定 3）。
 constexpr std::string_view lsp_prefix = "lsp.";
@@ -151,6 +154,7 @@ theme_from(std::string_view name, const core::ThemeCatalog &themes)
     case SettingsVersion::v2:
     case SettingsVersion::v3:
     case SettingsVersion::v4:
+    case SettingsVersion::v5:
         return switch_from(fields.guide).transform(guide_of);
     }
     std::unreachable();
@@ -170,6 +174,7 @@ theme_from(std::string_view name, const core::ThemeCatalog &themes)
         return core::LineWrapping::wrap;
     case SettingsVersion::v3:
     case SettingsVersion::v4:
+    case SettingsVersion::v5:
         return switch_from(fields.wrap).transform(wrapping_of);
     }
     std::unreachable();
@@ -339,13 +344,29 @@ lsp_commands_from(const SettingsFields &fields)
     return {};
 }
 
-// v4 だけの欄。旧版はどれも持たず（あれば未知の鍵として拒否）、表示言語は日本語（更新で今の表示を
-// 変えない・ADR 0123 の決定 3）、ほかは既定。v4 はどれも必須で厳密に読む。
+// v4 の鍵の集合を持つ版か（v5 は v4 の全部の鍵を同じ形で持つ・ADR 0170 の 2026-11-16 の追補）。
+[[nodiscard]] bool carries_v4_fields(SettingsVersion version) noexcept
+{
+    switch (version)
+    {
+    case SettingsVersion::v1:
+    case SettingsVersion::v2:
+    case SettingsVersion::v3:
+        return false;
+    case SettingsVersion::v4:
+    case SettingsVersion::v5:
+        return true;
+    }
+    std::unreachable();
+}
+
+// v4 からの欄。旧版はどれも持たず（あれば未知の鍵として拒否）、表示言語は日本語（更新で今の表示を
+// 変えない・ADR 0123 の決定 3）、ほかは既定。v4 と v5 はどれも必須で厳密に読む。
 [[nodiscard]] std::expected<void, Failure> apply_v4_fields(core::EditorSettings &settings,
                                                            const SettingsFields &fields,
                                                            SettingsVersion version)
 {
-    if (version != SettingsVersion::v4)
+    if (!carries_v4_fields(version))
     {
         if (has_v4_fields(fields))
         {
@@ -387,6 +408,36 @@ lsp_commands_from(const SettingsFields &fields)
     return apply_maps(settings, fields);
 }
 
+// v5 だけの鍵（ADR 0170 の 2026-11-16 の追補・施主決定 D91）。v4 以前に在れば 1.0.0 と同じく
+// 未知の鍵として拒否し（v4 の読みは 1.0.0 と同じ厳しさ）、無ければ既定を補う。v5 は後から足した
+// 鍵の形（無ければ既定・有れば厳密）で読む。
+[[nodiscard]] std::expected<void, Failure> apply_v5_fields(core::EditorSettings &settings,
+                                                           const SettingsFields &fields,
+                                                           SettingsVersion version)
+{
+    switch (version)
+    {
+    case SettingsVersion::v1:
+    case SettingsVersion::v2:
+    case SettingsVersion::v3:
+    case SettingsVersion::v4:
+        if (fields.autoindent.has_value())
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        return {};
+    case SettingsVersion::v5:
+        break;
+    }
+    const auto autoindent = later_switch_from(fields.autoindent);
+    if (!autoindent)
+    {
+        return std::unexpected(autoindent.error());
+    }
+    settings.autoindent = autoindent.value();
+    return {};
+}
+
 [[nodiscard]] std::string_view version_text(SettingsVersion version)
 {
     switch (version)
@@ -399,6 +450,8 @@ lsp_commands_from(const SettingsFields &fields)
         return "3";
     case SettingsVersion::v4:
         return "4";
+    case SettingsVersion::v5:
+        return "5";
     }
     std::unreachable();
 }
@@ -446,6 +499,11 @@ validated(const SettingsFields &fields, SettingsVersion version, const core::The
     if (!extended)
     {
         return std::unexpected(extended.error());
+    }
+    const auto later = apply_v5_fields(settings, fields, version);
+    if (!later)
+    {
+        return std::unexpected(later.error());
     }
     return settings;
 }
@@ -539,16 +597,18 @@ std::string encode_settings(const core::EditorSettings &settings)
     const auto explorer_width = settings.explorer_width.has_value()
                                     ? std::to_string(settings.explorer_width.value())
                                     : std::string{};
-    return std::format("version=4\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
+    // 書くのは v5 だけ（ADR 0170 の 2026-11-16 の追補）。v4 の鍵は同じ名前・同じ順で、v5 の鍵は
+    // `explorer_width` の後ろ・`lsp.<language>.command` の前。
+    return std::format("version=5\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
                        "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n"
                        "ignorecase={}\nsmartcase={}\nrelativenumber={}\nscrolloff={}\n"
-                       "explorer_width={}\n{}{}",
+                       "explorer_width={}\nautoindent={}\n{}{}",
                        theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
                        core::display_language_choice_name(settings.ui_language),
                        switch_text(settings.lsp), switch_text(settings.explorer), root,
                        features_text(settings.features), switch_text(settings.ignorecase),
                        switch_text(settings.smartcase), switch_text(settings.relativenumber),
-                       settings.scrolloff, explorer_width, lsp_commands_text(settings.lsp_commands),
-                       maps_text(settings));
+                       settings.scrolloff, explorer_width, switch_text(settings.autoindent),
+                       lsp_commands_text(settings.lsp_commands), maps_text(settings));
 }
 } // namespace nenenib::adapters::win32

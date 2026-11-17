@@ -208,7 +208,7 @@ namespace
     case VimOperator::remove:
         return removed_exactly(state, view.text, range);
     case VimOperator::change:
-        return changed(state, view.text, range);
+        return changed(state, view.text, range, view.autoindent);
     case VimOperator::yank:
         return yanked(state, view.text, view.selection.caret, range);
     case VimOperator::toggle_case:

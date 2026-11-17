@@ -121,6 +121,7 @@ void verify_text_buffer_property_scope();
 void verify_edit_history_property_scope();
 void verify_vim_change_mark_scope();
 void verify_vim_insert_normal_scope();
+void verify_vim_autoindent_scope();
 void verify_saved_state_property_scope();
 // ReplaySavePointTests.cpp（再生の中の :w の保存時点・ADR 0046 の追補）
 void verify_fold_save_point_scope();

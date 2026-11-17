@@ -75,6 +75,10 @@ v4 の鍵の集合に `explorer_width=<DIP の 10 進・先頭の 0 なし・120
 
 足した鍵の記録（v5）: `autoindent`（#1086・既定 off）。
 
-状態: この追補は形の決め。実装は #1086（PR #1668 を v5 の形に直す）で、それが main に入るまで製品の正本は `settings.v4` のまま（強制は **planned**・実装の PR で契約が入って active）。CLAUDE.md §2 の設定の節と README は実装の PR で合わせる。
+状態: **active**（#1086・PR #1668）。製品の正本は `settings.v5`（`SettingsVersion::v5`・読む順と照合の順は `Win32SettingsAdapter` の `reading_order` の 1 か所）。6 の契約は `nib_adapter_tests` の `verify_released_v4_settings`（1.0.0 の公開元の codec の書式で書いた `settings.v4` の見本 `released_v4_settings`・v4 の `autoindent` の拒否）と `verify_v4_migration` `verify_v4_conflicts`（v4 だけの読み・読むだけでは書かない・v5 だけを書いて v4 以下の bytes が同じ・v5 が勝つ・v4 の変更と lock・壊れた v5 は v4 へ戻らない）が守る。CLAUDE.md §2 の設定の節と README は同じ PR で合わせた。
 
 却下した形: `settings.v4` に行を足し、1.0.0 に読み飛ばさせる（1.0.0 は既に提出済みで変えられない）・鍵ごとに別のファイルに分ける（読む順と lock の照合が鍵の数だけ増える）。
+
+## 追補（2026-11-14・#1086）: `autoindent` の入口
+
+`autoindent=on|off`（Vim の `autoindent`・既定 off）の置き場は上の追補（2026-11-16）の `settings.v5`（`settings.v4` には足さない）。変えるのは `:set autoindent` `ai` `noai` `ai!` `invai` `ai&` だけで、Ctrl+P の面の `:` の候補（`set autoindent` `set noautoindent`）に出し、設定の面と `features` には出さない（`ignorecase` `relativenumber` と同じ束）。
