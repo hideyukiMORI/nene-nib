@@ -30,6 +30,7 @@ using detail::escaped_or_refused;
 using detail::exact_jump;
 using detail::failed;
 using detail::finished_input_wait;
+using detail::rerouted;
 using detail::started_prefix;
 
 namespace
@@ -75,7 +76,7 @@ constexpr char32_t backslash = 0x5C;
     }
     if (targets.size() == 1)
     {
-        return exact_jump(next, view, targets.front());
+        return exact_jump(state, view, targets.front());
     }
     std::vector<std::string> labels = easymotion_labels(targets.size());
     next.input_wait = VimInputWait{kind};
@@ -94,7 +95,7 @@ constexpr char32_t backslash = 0x5C;
 [[nodiscard]] VimStep answered(const VimState &state, const VimEditorView &view, const VimKey &,
                                const EasyMotionJump &jump)
 {
-    return exact_jump(finished_input_wait(state), view, jump.target);
+    return exact_jump(state, view, jump.target);
 }
 
 [[nodiscard]] VimStep answered(const VimState &state, const VimEditorView &, const VimKey &key,
@@ -137,14 +138,15 @@ constexpr char32_t backslash = 0x5C;
 
 namespace detail
 {
-// `\` の次の鍵（決定 1）。`\` なら動作を待ち、回数は捨てる。ほかの鍵は鳴らして保留を捨てる（Esc は
-// 鳴らさない）。
-[[nodiscard]] VimStep leader_step(const VimState &state, const VimKey &key)
+// `\` の次の鍵（決定 1）。`\` なら動作を待ち、回数は捨てる。ほかの鍵は鳴らして保留を捨て、その鍵を
+// 普通の鍵として流し直す（Esc は鳴らさない・ADR 0163 の追補 2026-11-17 の 3）。
+[[nodiscard]] VimStep leader_step(const VimState &state, const VimEditorView &view,
+                                  const VimKey &key)
 {
     const auto *const character = std::get_if<VimCharacter>(&key);
     if (character == nullptr || character->code != backslash)
     {
-        return escaped_or_refused(state, key);
+        return rerouted(state, view, key);
     }
     VimState next = state;
     next.count = std::nullopt;
@@ -152,14 +154,14 @@ namespace detail
 }
 
 // `\` `\` の次の鍵（決定 1・2）。表の動作なら跳び先を作るか文字を待ち、表に無い鍵は鳴らして保留を
-// 捨てる。
+// 捨て、その鍵を普通の鍵として流し直す（追補の 3）。
 [[nodiscard]] VimStep leader_leader_step(const VimState &state, const VimEditorView &view,
                                          const VimKey &key)
 {
     const auto kind = kind_of(key);
     if (!kind.has_value())
     {
-        return escaped_or_refused(state, key);
+        return rerouted(state, view, key);
     }
     if (!takes_character(kind.value()))
     {

@@ -72,7 +72,7 @@ namespace nenenib::core
 [[nodiscard]] bool vim_operator_doubles(VimOperator operation, VimAction action) noexcept;
 
 // `\\` の後ろの鍵 → イージーモーションの動作（ADR 0163 の決定 1・2）。表に無い鍵は
-// nullopt（鳴らして 保留を捨てる）。
+// nullopt（鳴らして保留を捨て、普通の鍵として流し直す）。
 [[nodiscard]] std::optional<EasyMotionKind> vim_easymotion_kind_for(char32_t key) noexcept;
 
 // i / a の後ろの鍵 → テキストオブジェクト（ADR 0031 の決定 1）。表に無い鍵は nullopt（取消）。

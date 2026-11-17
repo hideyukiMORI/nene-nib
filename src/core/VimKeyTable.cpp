@@ -464,7 +464,7 @@ constexpr std::array<VimTextObjectBinding, 18> text_object_bindings{
      {U't', VimTextObject::tag}}};
 
 // `\\` の後ろの鍵 → イージーモーションの動作の表（ADR 0163 の決定 1・2 / CPP-012）。ここに無い鍵は
-// 鳴らして保留を捨てる。
+// 鳴らして保留を捨て、普通の鍵として流し直す（追補 2026-11-17 の 3）。
 constexpr std::array<VimEasyMotionBinding, 9> easymotion_bindings{
     {{U'w', EasyMotionKind::word_start_after},
      {U'b', EasyMotionKind::word_start_before},

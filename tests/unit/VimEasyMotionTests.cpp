@@ -40,6 +40,7 @@
 #include "VimStep.hpp"
 #include "VimTestSupport.hpp"
 #include "VimViewport.hpp"
+#include "VirtualColumn.hpp"
 
 #include <array>
 #include <cstddef>
@@ -51,6 +52,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -209,17 +211,7 @@ void verify_prefix_keys()
     expect(!counted.next.count.has_value() &&
                waits_for_prefix(counted.next, VimPrefix::leader_leader),
            "the backslashes drop the count");
-    const auto [unknown, unmoved] = played_at("ab cd ef", 0, U"\\\\x");
-    expect(unknown.failure == VimRepeatFailure::refused && rests(unknown) && unmoved == at_start,
-           "a key outside the table beeps and drops the prefix");
-    const VimStep single = played_at("ab cd ef", 0, U"\\x").first;
-    expect(single.failure == VimRepeatFailure::refused && rests(single),
-           "a key other than the second backslash beeps");
-    const std::vector<VimKey> escaped{VimKey{VimCharacter{backslash}},
-                                      VimKey{VimCharacter{backslash}},
-                                      VimKey{VimSpecialKey::escape}};
-    const VimStep left = played(text, empty_vim_state(), at_start, escaped).first;
-    expect(!left.failure.has_value() && rests(left), "Esc drops the prefix without a beep");
+
     const VimStep inserted = played_at("ab", 0, U"i\\").first;
     expect(inserted.next.mode == VimMode::insert && !inserted.next.input_wait.has_value() &&
                std::holds_alternative<core::VimInsertString>(inserted.effect),
@@ -230,28 +222,73 @@ void verify_prefix_keys()
            "a backslash after an operator beeps and drops the operator");
 }
 
+[[nodiscard]] bool removes(const VimStep &step, std::size_t begin, std::size_t end)
+{
+    const auto *const removal = std::get_if<core::VimRemoveRange>(&step.effect);
+    return removal != nullptr && removal->range.begin == Offset{begin} &&
+           removal->range.end == Offset{end};
+}
+
+// `\` `\\` の待ちに当たらなかった鍵は、鳴らして待ちを捨て、普通の鍵として流し直す（ADR 0163 の
+// 追補 2026-11-17 の 3）。
+void verify_rerouted()
+{
+    const VimStep after_one = played_at("ab", 0, U"\\x").first;
+    expect(after_one.failure == VimRepeatFailure::refused && rests(after_one) &&
+               removes(after_one, 0, 1),
+           "\\x beeps and x still removes a character");
+    const VimStep after_two = played_at("ab", 0, U"\\\\x").first;
+    expect(after_two.failure == VimRepeatFailure::refused && rests(after_two) &&
+               removes(after_two, 0, 1),
+           "\\\\x beeps and x still removes a character");
+    const VimStep counted = played_at("abcd", 0, U"3\\x").first;
+    expect(removes(counted, 0, 1) && !counted.next.count.has_value(),
+           "the count before the backslash is dropped");
+    const VimStep named = played_at("ab", 0, U"\"a\\\\x").first;
+    expect(removes(named, 0, 1) && !named.next.selected_register.has_value() &&
+               named.next.unnamed_register.value().text == "a",
+           "the register name before the backslashes is dropped");
+    const auto [visual, visual_kept] = played_at("ab cd", 0, U"vl\\\\x");
+    expect(visual.next.mode == VimMode::normal && removes(visual, 0, 2) &&
+               visual.failure == VimRepeatFailure::refused,
+           "VISUAL \\\\x beeps and x removes the selection");
+    const TextBuffer text = buffer_of("ab");
+    const Selection at_start = core::collapsed_at(Offset{0});
+    const std::vector<VimKey> normal_escape{VimKey{VimCharacter{backslash}},
+                                            VimKey{VimSpecialKey::escape}};
+    const VimStep left = played(text, empty_vim_state(), at_start, normal_escape).first;
+    expect(!left.failure.has_value() && rests(left) && left.next.mode == VimMode::normal,
+           "Esc after a backslash is a plain Esc without a beep");
+    const std::vector<VimKey> visual_escape{
+        VimKey{VimCharacter{U'v'}}, VimKey{VimCharacter{backslash}}, VimKey{VimSpecialKey::escape}};
+    const VimStep left_visual = played(text, empty_vim_state(), at_start, visual_escape).first;
+    expect(left_visual.next.mode == VimMode::normal && !left_visual.failure.has_value(),
+           "Esc after a backslash leaves VISUAL");
+}
+
 // 9 動作の跳び先と日本語の語の切れ目・キャレットの除外（決定 2・3）。
 void verify_targets()
 {
     constexpr std::string_view body = "ab cd\n  ef\n\ngh.ij";
-    expect(targets_of(body, 3, EasyMotionKind::word_start_after) == offsets({8, 11, 12, 14, 15}),
-           "w targets word starts after the caret with the empty line and punctuation");
-    expect(targets_of(body, 8, EasyMotionKind::word_start_before) == offsets({0, 3}),
+    expect(
+        targets_of(body, 3, EasyMotionKind::word_start_after) == offsets({8, 11, 15, 14, 12}),
+        "w targets word starts after the caret nearest first with the empty line and punctuation");
+    expect(targets_of(body, 8, EasyMotionKind::word_start_before) == offsets({3, 0}),
            "b targets word starts before the caret");
     expect(targets_of(body, 0, EasyMotionKind::word_end_after) == offsets({1, 4, 9, 13, 14, 16}),
            "e targets word ends after the caret and skips the empty line");
     expect(targets_of(body, 3, EasyMotionKind::line_below) == offsets({8, 11, 12}),
            "j targets the first non-blank of the lines below");
-    expect(targets_of(body, 12, EasyMotionKind::line_above) == offsets({0, 8, 11}),
+    expect(targets_of(body, 12, EasyMotionKind::line_above) == offsets({11, 8, 0}),
            "k targets the first non-blank of the lines above");
     expect(targets_of(body, 3, EasyMotionKind::character_after, U'e') == offsets({8}),
            "f targets the character after the caret");
-    expect(targets_of("a.b.c.d", 4, EasyMotionKind::character_before, U'.') == offsets({1, 3}),
+    expect(targets_of("a.b.c.d", 4, EasyMotionKind::character_before, U'.') == offsets({3, 1}),
            "F targets the character before the caret");
-    expect(targets_of("a.b.c.d", 3, EasyMotionKind::character_around, U'.') == offsets({1, 5}),
+    expect(targets_of("a.b.c.d", 3, EasyMotionKind::character_around, U'.') == offsets({5, 1}),
            "s targets the character on both sides but not under the caret");
     expect(targets_of(body, 8, EasyMotionKind::word_start_around) ==
-               offsets({0, 3, 11, 12, 14, 15}),
+               offsets({3, 11, 0, 14, 15, 12}),
            "l targets every word start but the caret");
     expect(targets_of(body, 3, EasyMotionKind::character_after).empty(),
            "f without a character has no targets");
@@ -275,7 +312,7 @@ void verify_visible_range()
     const Selection at_c = core::collapsed_at(Offset{4});
     expect(core::easymotion_targets(VimEditorView{text, at_c, VimViewport{LineNumber{2}, 3, 0}},
                                     EasyMotionKind::word_start_around,
-                                    std::nullopt) == offsets({2, 6}),
+                                    std::nullopt) == offsets({6, 2}),
            "only the visible lines have targets");
     VimEditorView grid{text, at_c, whole_view};
     grid.layout.unit = core::VimScrollUnit::row;
@@ -411,6 +448,27 @@ void verify_visual_and_repeat()
            "the jump keeps the last change and makes no change mark");
 }
 
+// 矩形の VISUAL・レジスタの名指し・オペレータの後ろ（V-1777 の L4）。
+void verify_other_entries()
+{
+    const TextBuffer text = buffer_of("ab cd ef");
+    const std::vector<VimKey> block{
+        VimKey{VimSpecialKey::control_v}, VimKey{VimCharacter{backslash}},
+        VimKey{VimCharacter{backslash}}, VimKey{VimCharacter{U'w'}}, VimKey{VimCharacter{U's'}}};
+    const auto [blocked, block_selected] =
+        played(text, empty_vim_state(), core::collapsed_at(Offset{0}), block);
+    expect(blocked.next.mode == VimMode::visual_block &&
+               block_selected == Selection{Offset{0}, Offset{6}} && rests(blocked),
+           "VISUAL by blocks extends to the target");
+    const VimStep named = played_at("ab cd ef", 0, U"\"a\\\\ws").first;
+    expect(moved_to(named, 6) && !named.next.selected_register.has_value() && rests(named),
+           "a register name before the jump is dropped");
+    const auto [operated, operated_at] = played_at("ab cd ef", 0, U"d\\\\w");
+    expect(operated.next.mode == VimMode::normal && !operated.next.pending.has_value() &&
+               rests(operated) && operated_at == core::collapsed_at(Offset{3}),
+           "d\\\\w drops the operator and w moves as a plain key");
+}
+
 // 待ちを捨てる所（割り込み・入力行の取消・Vim のモードに入り直す）は印も捨てる（決定 4）。
 void verify_discarded()
 {
@@ -467,13 +525,44 @@ constexpr std::array<char32_t, 5> characters{U'a', U'b', U'日', U'。', U'e'};
     return starts;
 }
 
-[[nodiscard]] bool ordered_targets(const std::vector<Offset> &targets, Offset caret,
-                                   const std::set<std::size_t> &starts)
+// 行頭から at までの仮想桁（column_advance を足す・試験の側で別に数える）。
+[[nodiscard]] std::size_t column_in(const TextBuffer &text, Offset at)
+{
+    const LineNumber line = text.line_containing(at);
+    const std::string content = text.line_text(line);
+    const std::size_t end = at.value - text.line_start(line).value;
+    std::size_t column = 0;
+    for (Offset walk{0}; walk.value < end; walk = core::next_code_point(content, walk))
+    {
+        column += core::column_advance(core::code_point_at(content, walk), column);
+    }
+    return column;
+}
+
+[[nodiscard]] std::size_t apart(std::size_t left, std::size_t right) noexcept
+{
+    return left < right ? right - left : left - right;
+}
+
+using Nearness = std::tuple<std::size_t, std::size_t, bool, std::size_t>;
+
+// キャレットからの近さ（行の差・仮想桁の差・キャレットより前か・位置）。
+[[nodiscard]] Nearness nearness_of(const TextBuffer &text, Offset target, Offset caret)
+{
+    return Nearness{apart(text.line_containing(target).value, text.line_containing(caret).value),
+                    apart(column_in(text, target), column_in(text, caret)), target < caret,
+                    target.value};
+}
+
+// 跳び先は近い順（同じ近さなら後ろが先）に重複なく並び、キャレットを含まず文字の先頭にある。
+[[nodiscard]] bool ordered_targets(const TextBuffer &text, const std::vector<Offset> &targets,
+                                   Offset caret, const std::set<std::size_t> &starts)
 {
     for (std::size_t index = 0; index < targets.size(); ++index)
     {
-        const bool increasing = index == 0 || targets.at(index - 1) < targets.at(index);
-        if (!increasing || targets.at(index) == caret || !starts.contains(targets.at(index).value))
+        const bool nearer = index == 0 || nearness_of(text, targets.at(index - 1), caret) <
+                                              nearness_of(text, targets.at(index), caret);
+        if (!nearer || targets.at(index) == caret || !starts.contains(targets.at(index).value))
         {
             return false;
         }
@@ -533,7 +622,14 @@ constexpr std::array<char32_t, 5> characters{U'a', U'b', U'日', U'。', U'e'};
            std::holds_alternative<EasyMotionCancel>(escaped);
 }
 
-void verify_property_samples(Random &random, std::array<std::size_t, 3> &broken)
+// 最初の印 `a` がいちばん近い跳び先（列の先頭）に付く。
+[[nodiscard]] bool first_label_nearest(const std::vector<Offset> &targets,
+                                       const std::vector<std::string> &labels)
+{
+    return labels.size() == targets.size() && (labels.empty() || labels.front() == "a");
+}
+
+void verify_property_samples(Random &random, std::array<std::size_t, 4> &broken)
 {
     const TextBuffer text = buffer_of(random_body(random));
     const std::set<std::size_t> starts = character_starts(text);
@@ -544,8 +640,9 @@ void verify_property_samples(Random &random, std::array<std::size_t, 3> &broken)
     const auto targets = core::easymotion_targets(VimEditorView{text, selection, whole_view}, kind,
                                                   characters.at(below(random, characters.size())));
     const auto labels = core::easymotion_labels(targets.size());
-    broken.at(0) += ordered_targets(targets, caret, starts) ? 0 : 1;
+    broken.at(0) += ordered_targets(text, targets, caret, starts) ? 0 : 1;
     broken.at(1) += prefix_free(labels, targets.size()) ? 0 : 1;
+    broken.at(3) += first_label_nearest(targets, labels) ? 0 : 1;
     broken.at(2) +=
         steps_agree(EasyMotionState{kind, targets, labels, std::string{}}, random) ? 0 : 1;
 }
@@ -554,12 +651,14 @@ void verify_property_samples(Random &random, std::array<std::size_t, 3> &broken)
 void verify_vim_easymotion_contracts()
 {
     verify_prefix_keys();
+    verify_rerouted();
     verify_targets();
     verify_visible_range();
     verify_labels();
     verify_jumps();
     verify_character_wait();
     verify_visual_and_repeat();
+    verify_other_entries();
     verify_discarded();
 }
 
@@ -568,12 +667,12 @@ void verify_vim_easymotion_property_scope()
     constexpr std::uint64_t seed = 998;
     constexpr std::size_t samples = 2000;
     Random random{seed};
-    std::array<std::size_t, 3> broken{};
+    std::array<std::size_t, 4> broken{};
     for (std::size_t sample = 0; sample < samples; ++sample)
     {
         verify_property_samples(random, broken);
     }
-    expect(broken.at(0) == 0, "targets are in text order, unique, off the caret and on characters");
+    expect(broken.at(0) == 0, "targets are nearest first, unique, off the caret and on characters");
     expect(broken.at(1) == 0, "labels are unique, prefix free and as many as the targets");
     for (std::size_t count = 0; count <= core::easymotion_target_limit; ++count)
     {
@@ -581,5 +680,6 @@ void verify_vim_easymotion_property_scope()
     }
     expect(broken.at(1) == 0, "every label count up to 27 x 27 is prefix free");
     expect(broken.at(2) == 0, "every label step narrows, jumps or cancels");
+    expect(broken.at(3) == 0, "the first label goes to the nearest target");
 }
 } // namespace nenenib::tests

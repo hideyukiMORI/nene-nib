@@ -1957,6 +1957,8 @@ namespace detail
 {
 // 跳び先 landing へ `` `{name} `` と同じ着地で飛ぶ（ADR 0163 の決定 5）。`''` を置き（jump）、
 // VISUAL は選択を伸ばす。着地は view のマークの着地に置いて移動の表の 1 本（mark_exact）へ写す。
+// state は待ちを終える前の値のまま渡す（この道が表示領域や文字組みを求めるようになっても、
+// controller が流し直す鍵は同じ待ちに戻る）。
 [[nodiscard]] VimStep exact_jump(const VimState &state, const VimEditorView &view, Offset landing)
 {
     VimEditorView marked = view;
@@ -2180,7 +2182,7 @@ namespace
     case VimPrefix::bracket:
         return bracket_step(state, key);
     case VimPrefix::leader:
-        return detail::leader_step(state, key);
+        return detail::leader_step(state, view, key);
     case VimPrefix::leader_leader:
         return detail::leader_leader_step(state, view, key);
     }
@@ -2279,6 +2281,29 @@ namespace
     return std::visit([&](const auto &value) { return pressed(state, view, value); }, key);
 }
 
+} // namespace
+
+namespace detail
+{
+// `\` `\\` の待ちに当たらなかった鍵（ADR 0163 の追補 2026-11-17 の
+// 3）。待ちと回数・保留・レジスタの 名指しを捨てて鳴らし、その鍵を普通の鍵として流し直す（Vim の
+// map の待ちが当たらなかったときと 同じ）。Esc は鳴らさない Esc
+// として流す。表示領域と文字組みの要求はそのまま返す（controller が
+// 待ちのある元の状態で同じ鍵を流し直す）。
+[[nodiscard]] VimStep rerouted(const VimState &state, const VimEditorView &view, const VimKey &key)
+{
+    VimStep step = stepped(finished_input_wait(state), view, key);
+    if (is_escape(key) || step.failure.has_value() || step.viewport_request ||
+        step.layout_request.has_value() || step.row_request.has_value())
+    {
+        return step;
+    }
+    return failed(std::move(step), VimRepeatFailure::refused);
+}
+} // namespace detail
+
+namespace
+{
 // ------------------------------------------ 組み立て中の入力を捨てる（Issue #92 / ADR 0032）
 
 // 途中まで組み立てた入力を捨てた状態。engine の外の出来事（入力行の取消・外からの割り込み）の

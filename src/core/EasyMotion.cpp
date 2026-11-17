@@ -14,6 +14,7 @@
 #include "VimViewport.hpp"
 #include "VimWordClass.hpp"
 #include "VimWordMotion.hpp"
+#include "VirtualColumn.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -21,6 +22,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -32,6 +34,11 @@ namespace
 using Targets = std::vector<Offset>;
 // 1 行の跳び先を本文の順に足す走査（動作ごとに 1 つ）。character は f F s の文字。
 using LineScan = void (*)(Targets &, const TextBuffer &, LineNumber, std::optional<char32_t>);
+
+// 近さの鍵（行の差・仮想桁の差・キャレットより前か・位置）。辞書順で小さいほど近い。
+using Rank = std::tuple<std::size_t, std::size_t, bool, std::size_t>;
+// キャレットの行（1 始まり）と仮想桁。
+using Origin = std::pair<std::size_t, std::size_t>;
 
 constexpr std::uint32_t blank_class = 0;
 constexpr char32_t ascii_last = 0x7F;
@@ -186,7 +193,7 @@ void characters(Targets &out, const TextBuffer &text, LineNumber line,
     return LineNumber{std::min(viewport.first_visible.value + lines - 1, view.text.line_count())};
 }
 
-// 走査した跳び先のうち、向きに合うものだけを残す（キャレットの位置は除く）。
+// 走査した跳び先のうち、向きに合うものだけを残す（キャレットの位置は除く・本文の順のまま）。
 [[nodiscard]] Targets directed(const Targets &scanned, Offset caret, EasyMotionKind kind)
 {
     const bool after = reaches_after(kind);
@@ -200,11 +207,73 @@ void characters(Targets &out, const TextBuffer &text, LineNumber line,
             kept.push_back(target);
         }
     }
-    if (kept.size() > easymotion_target_limit)
-    {
-        kept.resize(easymotion_target_limit);
-    }
     return kept;
+}
+
+// from バイト目の桁 column から to バイト目までの桁を足した桁（Tab・全角・幅 0 は
+// column_advance）。
+[[nodiscard]] std::size_t advanced_column(std::string_view content, std::size_t from,
+                                          std::size_t column, std::size_t to) noexcept
+{
+    for (Offset at{from}; at.value < to && at.value < content.size();
+         at = next_code_point(content, at))
+    {
+        column += column_advance(code_point_at(content, at), column);
+    }
+    return column;
+}
+
+[[nodiscard]] std::size_t difference(std::size_t left, std::size_t right) noexcept
+{
+    return left < right ? right - left : left - right;
+}
+
+// キャレットの行と仮想桁（行頭から足した桁）。
+[[nodiscard]] Origin origin_of(const TextBuffer &text, Offset caret)
+{
+    const LineNumber line = text.line_containing(caret);
+    const std::string content = text.line_text(line);
+    return Origin{line.value,
+                  advanced_column(content, 0, 0, caret.value - text.line_start(line).value)};
+}
+
+// 近い順に並べてから多くとも easymotion_target_limit 個に切る（ADR 0163 の追補 2026-11-17 の 2）。
+// 距離は（行の差・仮想桁の差）の辞書順、同じならキャレットより後ろの跳び先が先。kept は本文の順
+// なので、行ごとに 1 回だけ桁を歩く。
+[[nodiscard]] Targets ranked(const TextBuffer &text, const Targets &kept, Offset caret)
+{
+    const Origin origin = origin_of(text, caret);
+    std::vector<Rank> ranks;
+    ranks.reserve(kept.size());
+    LineNumber current{0};
+    std::string content;
+    std::size_t start = 0;
+    std::size_t walked = 0;
+    std::size_t column = 0;
+    for (const Offset target : kept)
+    {
+        const LineNumber line = text.line_containing(target);
+        if (!(line == current))
+        {
+            current = line;
+            content = text.line_text(line);
+            start = text.line_start(line).value;
+            walked = 0;
+            column = 0;
+        }
+        column = advanced_column(content, walked, column, target.value - start);
+        walked = target.value - start;
+        ranks.emplace_back(difference(line.value, origin.first), difference(column, origin.second),
+                           target < caret, target.value);
+    }
+    std::sort(ranks.begin(), ranks.end());
+    Targets nearest;
+    nearest.reserve(std::min(ranks.size(), easymotion_target_limit));
+    for (std::size_t index = 0; index < ranks.size() && index < easymotion_target_limit; ++index)
+    {
+        nearest.push_back(Offset{std::get<3>(ranks.at(index))});
+    }
+    return nearest;
 }
 
 // 27 を超えたときの組の鍵の数（1 文字の印を組に替えるたびに 26 個ずつ増える・最小の数）。
@@ -259,7 +328,7 @@ std::vector<Offset> easymotion_targets(const VimEditorView &view, EasyMotionKind
             scan(scanned, view.text, line, character);
         }
     }
-    return directed(scanned, view.selection.caret, kind);
+    return ranked(view.text, directed(scanned, view.selection.caret, kind), view.selection.caret);
 }
 
 std::vector<std::string> easymotion_labels(std::size_t count)
