@@ -1,5 +1,6 @@
 #pragma once
 
+#include "EasyMotionKind.hpp"
 #include "VimAction.hpp"
 #include "VimActionGroup.hpp"
 #include "VimMotion.hpp"
@@ -69,6 +70,10 @@ namespace nenenib::core
 // 保留中のオペレータの後ろでその動作が行単位を意味するか（dd g~~ g~g~ guu gugu gUU gUgU >>
 // <<・ADR 0015 の決定 10）。
 [[nodiscard]] bool vim_operator_doubles(VimOperator operation, VimAction action) noexcept;
+
+// `\\` の後ろの鍵 → イージーモーションの動作（ADR 0163 の決定 1・2）。表に無い鍵は
+// nullopt（鳴らして 保留を捨てる）。
+[[nodiscard]] std::optional<EasyMotionKind> vim_easymotion_kind_for(char32_t key) noexcept;
 
 // i / a の後ろの鍵 → テキストオブジェクト（ADR 0031 の決定 1）。表に無い鍵は nullopt（取消）。
 [[nodiscard]] std::optional<VimTextObject> vim_text_object_for(char32_t key) noexcept;

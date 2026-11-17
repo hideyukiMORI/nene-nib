@@ -1096,11 +1096,11 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return substituted_keys(state, view, action);
 }
 
-// 次の 1 鍵を待つ接頭辞の動作 → 接頭辞（g z @ " と m ' `・ADR 0152 の決定 3・[ ]）。ほかは
-// nullopt。
+// 次の 1 鍵を待つ接頭辞の動作 → 接頭辞（g z @ " と m ' `・ADR 0152 の決定 3・[ ]・\・ADR 0163）。
+// ほかは nullopt。
 [[nodiscard]] std::optional<VimPrefix> prefix_of(VimAction action) noexcept
 {
-    constexpr std::array<std::pair<VimAction, VimPrefix>, 8> prefixes{
+    constexpr std::array<std::pair<VimAction, VimPrefix>, 9> prefixes{
         {{VimAction::prefix_g, VimPrefix::g},
          {VimAction::prefix_z, VimPrefix::z},
          {VimAction::replay_macro, VimPrefix::at},
@@ -1108,7 +1108,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
          {VimAction::set_mark, VimPrefix::mark},
          {VimAction::prefix_mark_line, VimPrefix::mark_line},
          {VimAction::prefix_mark_exact, VimPrefix::mark_exact},
-         {VimAction::prefix_bracket, VimPrefix::bracket}}};
+         {VimAction::prefix_bracket, VimPrefix::bracket},
+         {VimAction::prefix_leader, VimPrefix::leader}}};
     for (const auto &[from, prefix] : prefixes)
     {
         if (from == action)
@@ -1950,7 +1951,22 @@ namespace
     }
     std::unreachable();
 }
+} // namespace
 
+namespace detail
+{
+// 跳び先 landing へ `` `{name} `` と同じ着地で飛ぶ（ADR 0163 の決定 5）。`''` を置き（jump）、
+// VISUAL は選択を伸ばす。着地は view のマークの着地に置いて移動の表の 1 本（mark_exact）へ写す。
+[[nodiscard]] VimStep exact_jump(const VimState &state, const VimEditorView &view, Offset landing)
+{
+    VimEditorView marked = view;
+    marked.mark_landing = landing;
+    return completed_prefix(state, marked, VimAction::move_mark_exact);
+}
+} // namespace detail
+
+namespace
+{
 // g の後ろの鍵を表の文字へ。Ctrl-a と Ctrl-x は 0x01 と 0x18（`g Ctrl-a`・ADR 0015 の決定 14）。
 // ほかの特別な鍵と検索の文字列は表に無い。
 [[nodiscard]] std::optional<char32_t> g_key_code(const VimKey &key) noexcept
@@ -2163,8 +2179,20 @@ namespace
         return insert_register_step(state, view, key);
     case VimPrefix::bracket:
         return bracket_step(state, key);
+    case VimPrefix::leader:
+        return detail::leader_step(state, key);
+    case VimPrefix::leader_leader:
+        return detail::leader_leader_step(state, view, key);
     }
     std::unreachable();
+}
+
+// イージーモーションの次の 1 鍵（f F s の文字か印の鍵・ADR 0163 の決定
+// 4・5・VimStepEasyMotion.cpp）。
+[[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,
+                                   EasyMotionKind kind, VimKey key)
+{
+    return detail::easymotion_awaited(state, view, kind, key);
 }
 
 [[nodiscard]] VimStep awaiting_step(const VimState &state, const VimEditorView &view, VimKey key)
@@ -2269,6 +2297,7 @@ namespace
     next.recording = std::nullopt;
     next.insert_start = std::nullopt;
     next.block_insert = std::nullopt;
+    next.easy_motion = std::nullopt;
     return next;
 }
 } // namespace

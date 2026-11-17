@@ -25,7 +25,7 @@ vim-easymotion（`<Leader><Leader>w` など）は Vim / Neovim で最も使わ�
 
 - engine が純関数・OS に触れない: **active**（`eng/symbols.py`）。
 - 印が無いときの打鍵の道の不変と 8 本の速さ: **active**（QLT-014・A/B は PR 本文）。
-- 契約と性質の試験が既定実行に載る: **planned**（M2・M3 の PR で active）。
+- 契約と性質の試験が既定実行に載る: core の分（`--vim-easymotion`・`--vim-easymotion-property`）は **active**（M2・#1774・`tests/unit/NibTests.cpp` の `contracts`）。application の分（`--vim-easymotion-input`）は **planned**（M3）。
 - oracle の fixture: **不能**（本物の Vim に無い）。
 
 ## 結果

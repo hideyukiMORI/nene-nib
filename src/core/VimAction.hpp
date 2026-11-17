@@ -208,10 +208,12 @@ enum class VimAction : std::uint8_t
     show_character_bytes,
     // `S`（#768）。NORMAL は `cc`（Vim の nv_optrans）。VISUAL では Vim は行単位の `c` だが、
     // surround の `S{char}` に充てるので何もしない（ADR 0018 の追補・ADR 0165 の決定 5）。
-    substitute_line
+    substitute_line,
+    // `\`（ADR 0163 の決定 1）。次の `\` を待ち、その次の鍵がイージーモーションの動作。
+    prefix_leader
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::substitute_line) + 1;
+constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::prefix_leader) + 1;
 } // namespace nenenib::core
