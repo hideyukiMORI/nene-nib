@@ -1,6 +1,6 @@
 # 1.0.0 の公開（2026-11-14）
 
-公開の記録（雛形 [release-1.0.0-draft.md](release-1.0.0-draft.md) から写した・#1657）。この文書 PR で埋めたのは前半（公開元・根拠 (a)〜(e)・候補の扱い・既知の限界）だけで、「梱包」「GitHub の公開」「Microsoft Store の提出」「公開の結果」は本番の梱包の後の文書 PR で埋める。**この記録を置いた時点では、1.0.0 はまだ公開も申請もしていない**（公開版は `v0.1.0-beta.13`）。
+公開の記録（雛形 [release-1.0.0-draft.md](release-1.0.0-draft.md) から写した・#1657）。この文書 PR で埋めたのは前半（公開元・根拠 (a)〜(e)・候補の扱い・既知の限界）だけで、「梱包」「GitHub の公開」「Microsoft Store の提出」「公開の結果」は本番の梱包の後の文書 PR で埋める。**この記録を置いた時点では、1.0.0 はまだ公開も申請もしていない**（公開版は `v0.1.0-beta.13`）。**追記（2026-11-17）: 1.0.0 は Store で公開され、GitHub の `v1.0.0` も公開した。結果は下の「公開の結果」。**
 1.0.0 は Microsoft Store に出す最初の版（施主決定 D88）。GitHub は同じ exe の ZIP を tag `v1.0.0` の pre-release（題 `NeNe Nib 1.0.0 Beta`）で出す。手順の正本は [DEVELOPMENT_WORKFLOW.md](../DEVELOPMENT_WORKFLOW.md) の公開の節、Store の欄は [submission.md](../store/submission.md) と [msix.md](../store/msix.md)。
 
 **範囲**: 製品のソースは beta.13（`3d3859e6`）に、表示の直し 1 本（#1658）を足した物。beta.13 の後の commit は 6 本（#1648 `411b8cb3` 文書・#1620 `9944470c` 版 1.0.0 と梱包の道具・#1650 `1abf1869` 文書・#1655 `238d56b7` 文書・#1660 `3ba9a991` 文書・#1658 `a4c0d40b` 製品）。`git diff 3d3859e6 238d56b7 -- src third_party` は空で、#1620 で製品のビルドの入力が変わったのは `CMakeLists.txt` の版の 1 行（`project(NeNeNib VERSION 0.1.0 …)` → `1.0.0`）だけ。
@@ -156,34 +156,50 @@ beta.13 の記録の「既知の限界」をそのまま引き継ぐ（製品は
 
 ## 梱包
 
-（本番の梱包の後に埋める。道具の出力 `package.json`・`msix.json`・`SHA256SUMS` から写す）
+本番の物（公開元 `80fd7a5371de9f09bfacc12b7ed5f40ff13f6ba6`・作業木 `D:/NeNeNib/worktrees/v1.0.0`・置き場 `D:/NeNeNib/releases/v1.0.0/`）。値は席 REL-H の照合 `D:/NeNeNib/evidence/v1.0.0-release/final-verification.md`（2026-11-15）から写した（bytes と SHA-256 は `stat` と `sha256sum` で読み直してある）。上の「作り直し 2」の 2 つ目の公開元の物と、その前の物は上げていない。
 
 | 物 | 名前 | bytes | SHA-256 |
 | --- | --- | --- | --- |
-| exe（`build/release-<short>/NeNeNib.exe`） | `NeNeNib.exe` | | |
-| ZIP | `NeNeNib-1.0.0-windows-x64.zip` | | |
-| ZIP の `SHA256SUMS` | | | |
-| MSIX（Store 用・署名なし） | `NeNeNib-1.0.0.0-windows-x64-store.msix` | | |
-| MSIX の `SHA256SUMS` | | | |
+| exe（`build/release-80fd7a5/NeNeNib.exe`） | `NeNeNib.exe` | 3,642,880 | `947abac9c162c65bc4048c1f3f18a1f0519500464ee371674cf6b024d27b6ef3` |
+| ZIP | `NeNeNib-1.0.0-windows-x64.zip` | 1,507,213 | `a974fd61a2fedd005d4ecd4eb2d716990d2e7b5b53752913e4a5ee9c30274ac8` |
+| ZIP の `SHA256SUMS` | `SHA256SUMS`（1 行・CRLF） | 97 | `ab1053ccd6a6c338088807cb57866f24c0e77eb29e143ac8896d8c8e1754d390` |
+| MSIX（Store 用・署名なし） | `NeNeNib-1.0.0.0-windows-x64-store.msix` | 1,626,725 | `4f66f149f62de33a36b1ea378e1a6c3f5e0c3527f9d90398c5d36d1ebe85b59c` |
+| MSIX の `SHA256SUMS` | `SHA256SUMS`（1 行・CRLF） | 106 | `933e18f83cb175066e73a974e61a425338ae563c2f0b374d856ee9b80d773043` |
 
 照合:
 
-- [ ] `package.json` と `msix.json` の `commit` が公開元・`package.json` の `verification.path` がこの記録
-- [ ] `package.json` の `productVersion` と `version` が `1.0.0`、`metadata` の `fileVersion` `1.0.0.0` と `productVersion` `1.0.0`
-- [ ] `msix.json` の `executable.sha256` が ZIP の中の exe と同じ（`zip.executableMatches`）
-- [ ] `msix.json` の `packageVersion` が `1.0.0.0`・`store` が true
-- [ ] manifest の `Resources` が `en-US` `ja-JP` `zh-Hans` の順
-- [ ] `msix.json` の `entries` が 32 個（中身 30 個 ＝ exe・`LICENSE`・`THIRD_PARTY_NOTICES.txt`・`AppxManifest.xml`・`resources.pri`・`Assets` 25 枚、に makeappx が足す `AppxBlockMap.xml` と `[Content_Types].xml`）
-- [ ] 展開した exe の短い起動（隔離 profile）
+- [x] `package.json` と `msix.json` の `commit` が公開元 `80fd7a5371de9f09bfacc12b7ed5f40ff13f6ba6`（`git rev-parse origin/main`・作業木の HEAD も同じで `git status --porcelain` 0 行）・`package.json` の `verification.path` がこの記録
+- [x] `package.json` の `productVersion` と `version` が `1.0.0`、`metadata` の `fileVersion` `1.0.0.0` と `productVersion` `1.0.0`
+- [x] `msix.json` の `executable.sha256` が ZIP の中の exe と同じ（`zip.executableMatches`）
+- [x] `msix.json` の `packageVersion` が `1.0.0.0`・`store` が true
+- [x] manifest の `Resources` が `en-US` `ja-JP` `zh-Hans` の順
+- [x] `msix.json` の `entries` が 32 個（中身 30 個 ＝ exe・`LICENSE`・`THIRD_PARTY_NOTICES.txt`・`AppxManifest.xml`・`resources.pri`・`Assets` 25 枚、に makeappx が足す `AppxBlockMap.xml` と `[Content_Types].xml`）
+- [x] 展開した exe の短い起動（隔離 profile）: 2026-11-15 15:05・`"result": "pass"`・exit 0・`documentUnchanged true`・結果 `D:/NeNeNib/evidence/v1.0.0-smoke-80fd7a53/result.json`（根拠の全文は `final-verification.md`）
 
 ## GitHub の公開
 
-（公開の後に埋める）
+2026-11-17 20:53 JST（`publishedAt` 2026-11-17T11:53:23Z）に公開した（Store の認定の後・施主の決め 2026-11-15 18:32 のとおり）。
+
+- tag: `v1.0.0` → 公開元 `80fd7a5371de9f09bfacc12b7ed5f40ff13f6ba6`
+- Release: 題 `NeNe Nib 1.0.0 Beta`・pre-release・URL <https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.0.0>・release id 448562273。公開の文は Store のリンク入り
+- 添付: `NeNeNib-1.0.0-windows-x64.zip`（1,507,213 bytes・`a974fd61a2fedd005d4ecd4eb2d716990d2e7b5b53752913e4a5ee9c30274ac8`）と `SHA256SUMS`（97 bytes・`ab1053ccd6a6c338088807cb57866f24c0e77eb29e143ac8896d8c8e1754d390`）。上の「梱包」の表と同じ値
+- 再取得の照合: `D:/NeNeNib/evidence/v1.0.0-release/verify-publication.py` → `result: pass`（取り寄せたバイト列が手元の本番と一致・ZIP の中身が一致・短い起動は 2026-11-15 15:05 の結果を使う）。出力 `D:/NeNeNib/outputs/20261117/verify-publication-v1.0.0.txt`・公開のログ `D:/NeNeNib/outputs/20261117/publish-v1.0.0.log`。1 回目は、先に `gh release download` をしていなくて止まった（手順書 README の 5 に書いてある）。取り寄せてから回し直して通った
 
 ## Microsoft Store の提出
 
-（本番の `-store.msix` で施主が行った後に埋める。表の形は雛形のとおり）
+提出した物は MSIX `NeNeNib-1.0.0.0-windows-x64-store.msix`（1,626,725 bytes・SHA-256 `4f66f149f62de33a36b1ea378e1a6c3f5e0c3527f9d90398c5d36d1ebe85b59c`・上の「梱包」と同じ）。
+
+| 順 | 誰 | 状態 | 日時・記録 |
+| --- | --- | --- | --- |
+| 手順書 1〜9・WACK | hide | PASS | 2026-11-15（[quality-day-2026-11-15.md](quality-day-2026-11-15.md)） |
+| 申請（Submission 1） | hide | 提出 | 2026-11-15 18:21（同上） |
+| 認定・Store で公開 | Microsoft | 済 | 施主が 2026-11-17 の夜に「リリースされてる」と伝えた。認定と公開の日時は聞いていない（書かない） |
+
+ページ: <https://apps.microsoft.com/detail/9nclgdtfq529>
 
 ## 公開の結果
 
-（公開の後に埋める）
+- **公開版は 1.0.0**: Microsoft Store（認定されて公開済み・上のページ）と GitHub の Release `v1.0.0`（pre-release・2026-11-17 20:53 JST）。
+- **公開元**は main `80fd7a5371de9f09bfacc12b7ed5f40ff13f6ba6`（上の「公開元」の表の 40 桁はこれ）。公開の後の照合は `result: pass`（上の「GitHub の公開」）。
+- 公開元の後、main には 2026-11-15 夜から機能が入っている（凍結は解いた）。1.0.0 の物は公開元の commit から作った物で、main の今の機能は入っていない。
+- 次: 次の版は 1.1.0 の予定で、まとめ枝 41 を区切りに Store を更新する（施主「41 で行こう」2026-11-17 夜）。

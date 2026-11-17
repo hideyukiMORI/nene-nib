@@ -365,8 +365,8 @@ Waivers: none | WVR-NNNN
 
 **この節には、いまの状態と所在だけを書く。日ごとの経緯・入った PR・数字の積み重ねは書かない**（日報と引き継ぎと `current.md` に任せる。2026-11-15 までこの節に積もった経緯 44 KB は [docs/reports/claude-md-status-log-2026-09-15-to-2026-11-15.md](docs/reports/claude-md-status-log-2026-09-15-to-2026-11-15.md) に移した・#1716）。状態が変わったら下の箇条を書き換える（足さない）。
 
-- **版と公開**（2026-11-15）: 版は 1.0.0。公開版は [v0.1.0-beta.13](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.13)。1.0.0 は Microsoft Store に提出済みで認定中。GitHub の 1.0.0 の tag と公開は Store の認定の後（hide の決め）。公開元は main `80fd7a53`、記録は [docs/quality/release-1.0.0-2026-11-14.md](docs/quality/release-1.0.0-2026-11-14.md)。
-- **main の凍結は解いた**（hide の決め 2026-11-15 夜「Store は通る前提で進める」）。機能の PR を入れてよい。**GitHub の 1.0.0 の tag と公開だけは Store の認定の後**。公開元は `80fd7a53` のまま動かさず、Store に落ちたらその commit から枝を切って直す（main の機能を 1.0.0 に混ぜない）。
+- **版と公開**（2026-11-17）: 版は 1.0.0。**公開版は v1.0.0**（[GitHub の Release](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.0.0)・pre-release・2026-11-17 20:53 JST と [Microsoft Store](https://apps.microsoft.com/detail/9nclgdtfq529)）。公開元は main `80fd7a53`、記録は [docs/quality/release-1.0.0-2026-11-14.md](docs/quality/release-1.0.0-2026-11-14.md)。次の版は 1.1.0 の予定で、まとめ枝 41 を区切りに Store を更新する。
+- **main の凍結は解いてある**（hide の決め 2026-11-15 夜）。機能の PR を入れてよい。1.0.0 の物は公開元 `80fd7a53` から作った物で、main の今の機能は入っていない（入るのは 1.1.0）。
 - **1.0.0 の後は `settings.v4` に鍵を足さない**。足すときは版を上げる（D91・§2 の設定の節）。
 - **再開するとき**: 最新の[引き継ぎ](docs/handoffs/)の「次回の最初の手順」→ `git fetch` と `gh pr list` で照合 → [日報](docs/reports/)。施主決定は [SPECIFICATION.md](SPECIFICATION.md) の D 番号、できることの一覧は [README.md](README.md)。
 - **数字**（fixture の件数・基準値・ベンチの本数）はここに写さない。fixture は `tests/vim/fixtures.json`、速さは `eng/perf-reference.json` と `eng/measure-speed.py` の `BENCHES`、表の大きさは現物を数える。
