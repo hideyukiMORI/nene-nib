@@ -1722,9 +1722,9 @@ void verify_vim_macro_scope()
         // #1448 の mark-insert-left-・#1440 の change-mark-macro-・#1517 の insert-ctrl-o-・#1525
         // の ex-failure-・#1559 の substitute-macro-・#1561 の ex-set-form-macro-・#1617 の
         // gn-macro・#1654 の ex-global-macro ex-delete-macro-count ex-yank-macro・#1687 の
-        // block-insert-moved-macro-・#1550 の cmdline-edit-macro-・#768 の substitute-key-）。
-        // macro- には #1528 の macro-ex- を含む。名前で守るのは逆の向き: macro- の fixture は
-        // 必ず macro 欄を持つ（#1324）。
+        // block-insert-moved-macro-・#1550 の cmdline-edit-macro-・#768 の substitute-key-・#1086
+        // の autoindent- の 4 件）。macro- には #1528 の macro-ex- を含む。名前で守るのは逆の向き:
+        // macro- の fixture は必ず macro 欄を持つ（#1324）。
         named &= !fixture.name.starts_with("macro-") || fixture.macro.has_value();
         if (macro_fixture(fixture))
         {
@@ -1732,7 +1732,7 @@ void verify_vim_macro_scope()
             ++selected;
         }
     }
-    expect(selected == 222, "the scope replays the 51 macro, 108 register and 63 other "
+    expect(selected == 226, "the scope replays the 51 macro, 108 register and 67 other "
                             "fixtures with a macro register");
     expect(named, "every macro- fixture carries a macro register");
     verify_vim_macro_contracts();

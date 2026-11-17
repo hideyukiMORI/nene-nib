@@ -123,6 +123,11 @@ struct VimState
     // つで、鍵を食べ終わっても （vim_resting_from でも）保つ。書くのは vim_substituted の 1
     // か所。打鍵ごとの写しを軽くする ため不変の値を共有する。
     std::shared_ptr<const VimSubstituteMemory> last_substitute = nullptr;
+    // 字下げを写した行にまだ何も打っていないか（Vim の did_ai・#1086）。立てるのは autoindent の
+    // 改行・`o` `O`・行単位の `c`、保つのは消す鍵（消した後の桁が 2 以上）・端で動かない矢印・
+    // 空のレジスタの `Ctrl-r`、ほかの鍵は消す（auto_indent_noted の 1 か所）。真のまま Esc・上下・
+    // `Ctrl-o` を打つと、その行の字下げを消す。vim_resting_from と input_discarded は持ち越さない。
+    bool auto_indented = false;
 };
 
 // 鍵を 1 つ食べ終わったあとの NORMAL。回数・オペレータ・欲しい列は空で、無名レジスタだけ残る。

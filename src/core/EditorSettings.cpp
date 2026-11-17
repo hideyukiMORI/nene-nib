@@ -15,7 +15,7 @@ bool same_settings(const EditorSettings &left, const EditorSettings &right) noex
            left.maps == right.maps && left.mapleader == right.mapleader &&
            left.ignorecase == right.ignorecase && left.smartcase == right.smartcase &&
            left.relativenumber == right.relativenumber && left.scrolloff == right.scrolloff &&
-           left.explorer_width == right.explorer_width;
+           left.explorer_width == right.explorer_width && left.autoindent == right.autoindent;
 }
 
 VimPatternCase search_case(const EditorSettings &settings) noexcept

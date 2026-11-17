@@ -96,7 +96,7 @@ constexpr std::size_t read_limit = nenenib::core::maximum_document_bytes;
 constexpr wchar_t folder[] = L"nib-adapter-files";
 constexpr wchar_t recorded_marks[] = L"nib-adapter-files/timing.json";
 constexpr wchar_t unrecorded_marks[] = L"nib-adapter-files/silent.json";
-constexpr std::array<const wchar_t *, 14> file_names{
+constexpr std::array<const wchar_t *, 16> file_names{
     L"nib-adapter-files/utf8.txt",
     L"nib-adapter-files/bom.txt",
     L"nib-adapter-files/sjis.txt",
@@ -110,7 +110,9 @@ constexpr std::array<const wchar_t *, 14> file_names{
     L"nib-adapter-files/settings/settings.v3",
     L"nib-adapter-files/settings/settings.v3.lock",
     L"nib-adapter-files/settings/settings.v4",
-    L"nib-adapter-files/settings/settings.v4.lock"};
+    L"nib-adapter-files/settings/settings.v4.lock",
+    L"nib-adapter-files/settings/settings.v5",
+    L"nib-adapter-files/settings/settings.v5.lock"};
 
 std::size_t &failure_count()
 {
@@ -633,7 +635,7 @@ void verify_ui_language_mapping()
 void verify_settings_codec()
 {
     const auto defaults = default_editor_settings();
-    const auto decoded = decode_settings(encode_settings(defaults), SettingsVersion::v4);
+    const auto decoded = decode_settings(encode_settings(defaults), SettingsVersion::v5);
     expect(decoded.has_value() && same_settings(decoded.value(), defaults),
            "default settings round trip");
     const auto custom = decode_settings("\xEF\xBB\xBF\r\nversion = 1\r\n"
@@ -648,7 +650,7 @@ void verify_settings_codec()
     expect(custom.value().font_family.text() == "日本語 Font=Test" &&
                custom.value().font_size.points() == 21.25F,
            "custom settings retain their values");
-    const auto round_trip = decode_settings(encode_settings(custom.value()), SettingsVersion::v4);
+    const auto round_trip = decode_settings(encode_settings(custom.value()), SettingsVersion::v5);
     expect(round_trip.has_value() && same_settings(round_trip.value(), custom.value()),
            "custom settings round trip including an explicit theme");
 }
@@ -658,14 +660,14 @@ void verify_bad_settings_fields()
     const std::string valid = encode_settings(default_editor_settings());
     for (const auto suffix : {"version=1\n", "unknown=yes\n", "broken\n", "lsp.nosuch.command=x\n"})
     {
-        const auto result = decode_settings(valid + suffix, SettingsVersion::v4);
+        const auto result = decode_settings(valid + suffix, SettingsVersion::v5);
         expect(!result && result.error() == SettingsFailure::malformed,
                "duplicate keys, unknown keys and lines without equals are malformed");
     }
     const auto missing = decode_settings("version=1\n", SettingsVersion::v1);
     expect(!missing && missing.error() == SettingsFailure::malformed, "missing fields fail");
     const auto version =
-        decode_settings("version=5\n" + valid.substr(valid.find('\n') + 1), SettingsVersion::v4);
+        decode_settings("version=6\n" + valid.substr(valid.find('\n') + 1), SettingsVersion::v5);
     expect(!version && version.error() == SettingsFailure::unsupported_version,
            "an unknown version is incompatible");
     const auto theme = decode_settings("version=1\ncolorscheme=missing\nfont_family=Consolas\n"
@@ -706,14 +708,15 @@ void verify_settings_versions()
     settings.guide = nenenib::core::GuideVisibility::hidden;
     settings.wrapping = nenenib::core::LineWrapping::no_wrap;
     const auto bytes = encode_settings(settings);
-    const auto decoded = decode_settings(bytes, SettingsVersion::v4);
+    const auto decoded = decode_settings(bytes, SettingsVersion::v5);
     expect(decoded && same_settings(decoded.value(), settings),
-           "guide and wrapping round trip through v4");
-    expect(bytes.starts_with("version=4\n") &&
+           "guide and wrapping round trip through v5");
+    expect(bytes.starts_with("version=5\n") &&
                bytes.ends_with("guide=off\nwrap=off\nui_language=system\nlsp=off\nexplorer=off\n"
                                "root=\nfeatures=\nignorecase=off\nsmartcase=off\n"
-                               "relativenumber=off\nscrolloff=0\nexplorer_width=\n"),
-           "v4 writer emits the canonical sixteen-field schema");
+                               "relativenumber=off\nscrolloff=0\nexplorer_width=\n"
+                               "autoindent=off\n"),
+           "the v5 writer emits the v4 keys and autoindent after explorer_width");
     const auto v3 = decode_settings(v3_settings, SettingsVersion::v3);
     expect(v3 && v3.value().guide == nenenib::core::GuideVisibility::hidden &&
                v3.value().wrapping == nenenib::core::LineWrapping::no_wrap &&
@@ -721,24 +724,94 @@ void verify_settings_versions()
                !v3.value().lsp && !v3.value().explorer && !v3.value().root.has_value() &&
                v3.value().features.empty() && !v3.value().ignorecase && !v3.value().smartcase &&
                !v3.value().relativenumber && v3.value().scrolloff == 0 &&
-               !v3.value().explorer_width.has_value(),
-           "v3 keeps its values, stays Japanese and takes the other v4 defaults");
+               !v3.value().explorer_width.has_value() && !v3.value().autoindent,
+           "v3 keeps its values, stays Japanese and takes the other v4 and v5 defaults");
     for (const auto extra :
          {"ui_language=system\n", "lsp=off\n", "explorer=off\n", "root=\n", "features=\n",
           "ignorecase=off\n", "smartcase=off\n", "relativenumber=off\n", "scrolloff=0\n",
-          "explorer_width=\n", "explorer_width=300\n"})
+          "explorer_width=\n", "explorer_width=300\n", "autoindent=off\n", "autoindent=on\n"})
     {
         const auto refused = decode_settings(std::string(v3_settings) + extra, SettingsVersion::v3);
         expect(!refused && refused.error() == SettingsFailure::malformed,
-               "an older version rejects every v4 key as unknown");
+               "an older version rejects every v4 and v5 key as unknown");
     }
-    expect(!decode_settings(bytes + "wrap=on\n", SettingsVersion::v4), "duplicate wrap refused");
-    expect(!decode_settings(bytes + "guide=on\n", SettingsVersion::v4), "duplicate guide refused");
+    expect(!decode_settings(bytes + "wrap=on\n", SettingsVersion::v5), "duplicate wrap refused");
+    expect(!decode_settings(bytes + "guide=on\n", SettingsVersion::v5), "duplicate guide refused");
     const auto wrong_new = decode_settings(bytes, SettingsVersion::v1);
-    const auto wrong_v3 = decode_settings(v3_settings, SettingsVersion::v4);
+    const auto wrong_v3 = decode_settings(v3_settings, SettingsVersion::v5);
     expect(!wrong_new && wrong_new.error() == SettingsFailure::unsupported_version && !wrong_v3 &&
                wrong_v3.error() == SettingsFailure::unsupported_version,
            "expected filename version must match document version");
+}
+
+// 1.0.0（公開元 80fd7a53）の codec が書く形の settings.v4（ADR 0170 の 2026-11-16 の追補の 6）。
+// 1.0.0 の encode_settings の書式（version=4 から explorer_width までの 16 行・lsp の行・
+// mapleader・map の行）を、既定でない値で埋めたバイト列。後の版がこれを読めることを守る。
+constexpr std::string_view released_v4_settings =
+    "version=4\ncolorscheme=ubuntu-aubergine\nfont_family=Cascadia Mono\nfont_size=13.5\n"
+    "guide=off\nwrap=on\nui_language=en\nlsp=on\nexplorer=on\nroot=C:\\work\n"
+    "features=minimap\nignorecase=on\nsmartcase=on\nrelativenumber=on\nscrolloff=3\n"
+    "explorer_width=320\nlsp.cpp.command=C:\\llvm\\clangd.exe --log=error\n"
+    "mapleader=<Space>\nmap.i.jj=!<Esc>\n";
+
+// 1.0.0 の v4 の見本を v5 の形にした bytes（版の行を 5 にし、explorer_width の後ろに
+// autoindent=off を足す）。
+std::string released_as_v5()
+{
+    std::string bytes(released_v4_settings);
+    bytes.replace(0, std::string_view{"version=4"}.size(), "version=5");
+    const std::string_view width = "explorer_width=320\n";
+    bytes.insert(bytes.find(width) + width.size(), "autoindent=off\n");
+    return bytes;
+}
+
+// 1.0.0 の見本の値（v5 の鍵は既定の off）。
+bool released_values(const nenenib::core::EditorSettings &settings)
+{
+    return settings.theme.has_value() && settings.theme.value().name() == "ubuntu-aubergine" &&
+           settings.font_family.text() == "Cascadia Mono" && settings.font_size.points() == 13.5F &&
+           settings.guide == nenenib::core::GuideVisibility::hidden &&
+           settings.ui_language == nenenib::core::DisplayLanguageChoice::english && settings.lsp &&
+           settings.explorer && settings.root.has_value() && settings.features.size() == 1 &&
+           settings.ignorecase && settings.smartcase && settings.relativenumber &&
+           settings.scrolloff == 3 && settings.explorer_width == 320 &&
+           settings.lsp_commands.size() == 1 && settings.mapleader == "<Space>" &&
+           settings.maps.size() == 1 && !settings.autoindent;
+}
+
+// v4 の読みは 1.0.0 と同じ厳しさ（ADR 0170 の 2026-11-16 の追補の 2・6）。1.0.0 の見本を読んで
+// v5 の鍵に既定を補い、書くと v5 の形になる。v4 に v5 の鍵が在れば未知の鍵として拒否する。
+void verify_released_v4_settings()
+{
+    const auto read = decode_settings(released_v4_settings, SettingsVersion::v4);
+    expect(read && released_values(read.value()),
+           "the 1.0.0 settings.v4 is read with every value and autoindent=off");
+    expect(read && encode_settings(read.value()) == released_as_v5(),
+           "the 1.0.0 settings are written back in the v5 form with autoindent after "
+           "explorer_width");
+    for (const auto extra : {"autoindent=off\n", "autoindent=on\n"})
+    {
+        const auto refused =
+            decode_settings(std::string(released_v4_settings) + extra, SettingsVersion::v4);
+        expect(!refused && refused.error() == SettingsFailure::malformed,
+               "a v4 holding the v5 key autoindent is refused like 1.0.0 refuses it");
+    }
+    const auto as_v5 = decode_settings(released_v4_settings, SettingsVersion::v5);
+    const auto v5_as_v4 = decode_settings(released_as_v5(), SettingsVersion::v4);
+    expect(!as_v5 && as_v5.error() == SettingsFailure::unsupported_version && !v5_as_v4 &&
+               v5_as_v4.error() == SettingsFailure::unsupported_version,
+           "a v4 is not read as v5 and a v5 is not read as v4");
+    auto stripped = std::string(released_v4_settings);
+    for (const auto key :
+         {"ignorecase", "smartcase", "relativenumber", "scrolloff", "explorer_width"})
+    {
+        const auto start = stripped.find("\n" + std::string(key) + "=") + 1;
+        stripped.erase(start, stripped.find('\n', start) + 1 - start);
+    }
+    const auto older = decode_settings(stripped, SettingsVersion::v4);
+    expect(older && !older.value().ignorecase && older.value().scrolloff == 0 &&
+               !older.value().explorer_width.has_value(),
+           "a v4 from before the later v4 keys still reads them as their defaults");
 }
 
 // v2 と v1 の読み（欄が足りない版の既定と、新しい版の欄の拒否）。
@@ -779,9 +852,10 @@ void verify_older_settings_versions()
                    in_v1.error() == SettingsFailure::malformed,
                "v1 and v2 reject explorer_width");
     }
-    const auto wrong_old = decode_settings(v1, SettingsVersion::v4);
+    const auto wrong_old = decode_settings(v1, SettingsVersion::v5);
     expect(!wrong_old && wrong_old.error() == SettingsFailure::unsupported_version,
-           "a v1 document is not read as v4");
+           "a v1 document is not read as v5");
+    verify_released_v4_settings();
 }
 
 // `lsp.<language>.command` の行（ADR 0170 の決定 3・#1044）。0
@@ -793,27 +867,27 @@ void verify_settings_lsp_commands()
     settings.lsp_commands = {{"python", "C:\\py\\pylsp.exe"},
                              {"cpp", "C:\\llvm\\clangd.exe --log=error"}};
     const auto bytes = encode_settings(settings);
-    expect(bytes.ends_with(
-               "features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
-               "scrolloff=0\nexplorer_width=\nlsp.cpp.command=C:\\llvm\\clangd.exe --log=error\n"
-               "lsp.python.command=C:\\py\\pylsp.exe\n"),
+    expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
+                           "scrolloff=0\nexplorer_width=\nautoindent=off\n"
+                           "lsp.cpp.command=C:\\llvm\\clangd.exe --log=error\n"
+                           "lsp.python.command=C:\\py\\pylsp.exe\n"),
            "commands follow the fixed keys in language name order");
-    const auto decoded = decode_settings(bytes, SettingsVersion::v4);
+    const auto decoded = decode_settings(bytes, SettingsVersion::v5);
     expect(decoded && decoded.value().lsp_commands.size() == 2 &&
                decoded.value().lsp_commands.front().first == "cpp" &&
                encode_settings(decoded.value()) == bytes,
            "commands round trip in language name order");
     const auto plain = encode_settings(default_editor_settings());
-    const auto none = decode_settings(plain, SettingsVersion::v4);
+    const auto none = decode_settings(plain, SettingsVersion::v5);
     expect(none && none.value().lsp_commands.empty(), "zero command lines are accepted");
     for (const auto line : {"lsp.nosuch.command=x\n", "lsp.cpp.command=\n", "lsp..command=x\n",
                             "lsp.CPP.command=x\n", "lsp.cpp.args=x\n"})
     {
-        const auto result = decode_settings(plain + line, SettingsVersion::v4);
+        const auto result = decode_settings(plain + line, SettingsVersion::v5);
         expect(!result && result.error() == SettingsFailure::malformed,
                "unknown languages, empty values and other lsp keys are refused");
     }
-    expect(!decode_settings(plain + "lsp.cpp.command=a\nlsp.cpp.command=b\n", SettingsVersion::v4),
+    expect(!decode_settings(plain + "lsp.cpp.command=a\nlsp.cpp.command=b\n", SettingsVersion::v5),
            "a second line for the same language is refused");
     const auto old =
         decode_settings(std::string(v3_settings) + "lsp.cpp.command=x\n", SettingsVersion::v3);
@@ -836,20 +910,20 @@ void verify_settings_maps()
         MapRow{VimModeSet{true, false, true, false, false}, "<leader>w", ":w<CR>", true}};
     const auto bytes = encode_settings(settings);
     expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
-                           "scrolloff=0\nexplorer_width=\nmapleader=<Space>\n"
+                           "scrolloff=0\nexplorer_width=\nautoindent=off\nmapleader=<Space>\n"
                            "map.i.jj=!<Esc>\nmap.nv.<leader>w=:w<CR>\n"),
            "the leader and the map rows follow the other lines in order");
-    const auto decoded = decode_settings(bytes, SettingsVersion::v4);
+    const auto decoded = decode_settings(bytes, SettingsVersion::v5);
     expect(decoded && same_settings(decoded.value(), settings) &&
                encode_settings(decoded.value()) == bytes,
            "map rows and the leader round trip");
     const auto plain = encode_settings(default_editor_settings());
     expect(plain.find("map") == std::string::npos, "no rows and the default leader write nothing");
-    const auto none = decode_settings(plain, SettingsVersion::v4);
+    const auto none = decode_settings(plain, SettingsVersion::v5);
     expect(none && none.value().maps.empty() && none.value().mapleader == "\\",
            "zero rows and no leader line read as the defaults");
     const auto ordered =
-        decode_settings(plain + "map.x.q=b\nmap.n.zz=a\nmap.v.q=c\n", SettingsVersion::v4);
+        decode_settings(plain + "map.x.q=b\nmap.n.zz=a\nmap.v.q=c\n", SettingsVersion::v5);
     expect(ordered && ordered.value().maps.size() == 3 && ordered.value().maps.at(0).rhs == "b" &&
                ordered.value().maps.at(1).rhs == "a" && ordered.value().maps.at(2).rhs == "c",
            "rows keep the order of the file");
@@ -857,7 +931,7 @@ void verify_settings_maps()
                             "map.i.j=<Nope>\n", "map.ii.j=x\n", "map.i=x\n", "mapleader=ab\n",
                             "mapleader=\n", "map.i.j=a\nmap.i.j=b\n", "map.vn.x=a\nmap.nv.x=b\n"})
     {
-        const auto result = decode_settings(plain + line, SettingsVersion::v4);
+        const auto result = decode_settings(plain + line, SettingsVersion::v5);
         expect(!result && result.error() == SettingsFailure::malformed,
                "broken map rows and leaders refuse the whole settings");
     }
@@ -866,10 +940,10 @@ void verify_settings_maps()
     const auto old_leader =
         decode_settings(std::string(v3_settings) + "mapleader=,\n", SettingsVersion::v3);
     expect(!old && !old_leader, "v3 rejects map rows and the leader");
-    const auto spelled = decode_settings(plain + "mapleader=,\nmap.vn.x=a\n", SettingsVersion::v4);
+    const auto spelled = decode_settings(plain + "mapleader=,\nmap.vn.x=a\n", SettingsVersion::v5);
     expect(spelled && spelled.value().mapleader == "," &&
                encode_settings(spelled.value()) == plain + "mapleader=,\nmap.nv.x=a\n" &&
-               decode_settings(encode_settings(spelled.value()), SettingsVersion::v4),
+               decode_settings(encode_settings(spelled.value()), SettingsVersion::v5),
            "a row is written with its canonical key and a comma leader round trips");
     auto other = settings;
     other.maps.pop_back();
@@ -886,7 +960,7 @@ void verify_settings_lines()
     verify_settings_maps();
 }
 
-// 設定 v4 の 1 行を value に替えた bytes（key の行が無ければ bytes のまま）。
+// 設定 v5 の 1 行を value に替えた bytes（key の行が無ければ bytes のまま）。
 std::string with_setting(const std::string &bytes, std::string_view key, std::string_view value)
 {
     const auto line = bytes.find("\n" + std::string(key) + "=");
@@ -899,7 +973,7 @@ std::string with_setting(const std::string &bytes, std::string_view key, std::st
     return bytes.substr(0, start) + std::string(key) + "=" + std::string(value) + bytes.substr(end);
 }
 
-// 設定 v4 から key の行を除いた bytes。
+// 設定 v5 から key の行を除いた bytes。
 std::string without_setting(const std::string &bytes, std::string_view key)
 {
     const auto start = bytes.find("\n" + std::string(key) + "=") + 1;
@@ -916,27 +990,27 @@ void verify_settings_explorer_width(const std::string &bytes)
     const auto chosen = encode_settings(settings);
     expect(chosen.find("\nscrolloff=0\nexplorer_width=320\n") != std::string::npos,
            "a chosen width is written as decimal DIP after scrolloff");
-    const auto decoded = decode_settings(chosen, SettingsVersion::v4);
+    const auto decoded = decode_settings(chosen, SettingsVersion::v5);
     expect(decoded && decoded.value().explorer_width == 320 &&
                encode_settings(decoded.value()) == chosen,
            "a chosen width round trips");
     for (const auto broken : {"", "0", "119", "10000", "0320", "-5", "abc", "320px", "3 20"})
     {
         const auto read =
-            decode_settings(with_setting(bytes, "explorer_width", broken), SettingsVersion::v4);
+            decode_settings(with_setting(bytes, "explorer_width", broken), SettingsVersion::v5);
         expect(read && !read.value().explorer_width.has_value(),
                "an empty or broken width reads as the default formula");
     }
-    expect(!decode_settings(chosen + "explorer_width=200\n", SettingsVersion::v4),
+    expect(!decode_settings(chosen + "explorer_width=200\n", SettingsVersion::v5),
            "a duplicate explorer_width is refused like every key");
     for (const auto edge : {120, 9999})
     {
         const auto read = decode_settings(
-            with_setting(bytes, "explorer_width", std::to_string(edge)), SettingsVersion::v4);
+            with_setting(bytes, "explorer_width", std::to_string(edge)), SettingsVersion::v5);
         expect(read && read.value().explorer_width == edge,
                "the range edges 120 and 9999 are read as chosen widths");
     }
-    const auto empty_twice = decode_settings(bytes + "explorer_width=\n", SettingsVersion::v4);
+    const auto empty_twice = decode_settings(bytes + "explorer_width=\n", SettingsVersion::v5);
     expect(!empty_twice && empty_twice.error() == SettingsFailure::malformed,
            "two empty explorer_width lines are refused as a duplicate");
     expect(!same_settings(settings, default_editor_settings()),
@@ -945,27 +1019,43 @@ void verify_settings_explorer_width(const std::string &bytes)
 
 // v4 の鍵の集合（ADR 0170 の決定 3）。全欄の往復・必須・値の検証・features の空と 3
 // 件・重複の拒否。
-// v4 の最初の定義（#1055）の後に足した鍵（ADR 0170 決定 3 の追補・#1083）。無い v4 は既定 off で
-// 読め、書き戻すと鍵が入る。有れば厳密に読み、重複は拒否する。
+// v4 の最初の定義（#1055）の後に足した鍵（ADR 0170 決定 3 の追補・#1083）と v5 の鍵 autoindent
+// （ADR 0170 の 2026-11-16 の追補の 4）。無い v5 は既定 off で読め、書き戻すと鍵が入る。有れば
+// 厳密に読み、重複は拒否する。
 void verify_settings_v4_later_keys()
 {
     const auto bytes = encode_settings(default_editor_settings());
     auto stripped = bytes;
     for (const auto key :
-         {"ignorecase", "smartcase", "relativenumber", "scrolloff", "explorer_width"})
+         {"ignorecase", "smartcase", "relativenumber", "scrolloff", "explorer_width", "autoindent"})
     {
         stripped = without_setting(stripped, key);
     }
-    const auto older = decode_settings(stripped, SettingsVersion::v4);
+    const auto older = decode_settings(stripped, SettingsVersion::v5);
     expect(older && !older.value().ignorecase && !older.value().smartcase &&
                !older.value().relativenumber && older.value().scrolloff == 0 &&
-               !older.value().explorer_width.has_value() && encode_settings(older.value()) == bytes,
-           "a v4 without the later keys reads them as off, 0 and the default width and writes "
+               !older.value().explorer_width.has_value() && !older.value().autoindent &&
+               encode_settings(older.value()) == bytes,
+           "a v5 without the later keys reads them as off, 0 and the default width and writes "
            "them back");
-    expect(!decode_settings(bytes + "ignorecase=on\n", SettingsVersion::v4) &&
-               !decode_settings(with_setting(bytes, "smartcase", "yes"), SettingsVersion::v4) &&
-               !decode_settings(bytes + "scrolloff=0\n", SettingsVersion::v4),
+    expect(!decode_settings(bytes + "ignorecase=on\n", SettingsVersion::v5) &&
+               !decode_settings(with_setting(bytes, "smartcase", "yes"), SettingsVersion::v5) &&
+               !decode_settings(bytes + "scrolloff=0\n", SettingsVersion::v5) &&
+               !decode_settings(with_setting(bytes, "autoindent", "1"), SettingsVersion::v5) &&
+               !decode_settings(bytes + "autoindent=off\n", SettingsVersion::v5),
            "a present later key is still read strictly");
+    // v5 の鍵 autoindent（#1086）。無ければ off、on は往復し、比べにも入る。
+    auto indenting = default_editor_settings();
+    indenting.autoindent = true;
+    const auto indented = encode_settings(indenting);
+    const auto read_back = decode_settings(indented, SettingsVersion::v5);
+    expect(indented.find("\nautoindent=on\n") != std::string::npos && read_back &&
+               read_back.value().autoindent && encode_settings(read_back.value()) == indented &&
+               !same_settings(indenting, default_editor_settings()),
+           "autoindent=on round trips and takes part in the settings comparison");
+    const auto missing =
+        decode_settings(without_setting(indented, "autoindent"), SettingsVersion::v5);
+    expect(missing && !missing.value().autoindent, "a v5 without autoindent reads it as off");
     verify_settings_explorer_width(bytes);
 }
 
@@ -986,14 +1076,14 @@ void verify_settings_v4_fields()
                       "features=matchparen,change_marks,todo_marks2\nignorecase=on\nsmartcase=on\n"
                       "relativenumber=on\nscrolloff=999\n") != std::string::npos,
            "v4 writes the language, the switches, the root, the features and the Vim options");
-    const auto decoded = decode_settings(bytes, SettingsVersion::v4);
+    const auto decoded = decode_settings(bytes, SettingsVersion::v5);
     expect(decoded && same_settings(decoded.value(), settings) &&
                decoded.value().features == settings.features,
            "every v4 field round trips with three features");
     for (const auto language : {"system", "ja", "en", "zh-hans", "ko", "es", "de"})
     {
         const auto line = with_setting(bytes, "ui_language", language);
-        const auto read = decode_settings(line, SettingsVersion::v4);
+        const auto read = decode_settings(line, SettingsVersion::v5);
         expect(read && encode_settings(read.value()) == line,
                "each of the seven language values round trips");
     }
@@ -1006,30 +1096,31 @@ void verify_settings_v4_fields()
           Row{"features", ",a"}, Row{"features", "a,"}, Row{"features", "Wrap"},
           Row{"features", "a b"}, Row{"features", "a,a"}, Row{"root", "C:\\a\x01"}})
     {
-        const auto result = decode_settings(with_setting(bytes, key, value), SettingsVersion::v4);
+        const auto result = decode_settings(with_setting(bytes, key, value), SettingsVersion::v5);
         expect(!result && result.error() == SettingsFailure::malformed,
                "invalid v4 values are malformed");
     }
-    const auto empty = decode_settings(with_setting(bytes, "features", ""), SettingsVersion::v4);
+    const auto empty = decode_settings(with_setting(bytes, "features", ""), SettingsVersion::v5);
     expect(empty && empty.value().features.empty(), "an empty feature list is accepted");
-    const auto unrooted = decode_settings(with_setting(bytes, "root", ""), SettingsVersion::v4);
+    const auto unrooted = decode_settings(with_setting(bytes, "root", ""), SettingsVersion::v5);
     expect(unrooted && !unrooted.value().root.has_value(), "an empty root means no root");
     for (const auto key : {"ui_language", "lsp", "explorer", "root", "features", "wrap", "guide"})
     {
-        const auto result = decode_settings(without_setting(bytes, key), SettingsVersion::v4);
+        const auto result = decode_settings(without_setting(bytes, key), SettingsVersion::v5);
         expect(!result && result.error() == SettingsFailure::malformed, "every v4 key is required");
     }
-    expect(!decode_settings(bytes + "features=\n", SettingsVersion::v4) &&
-               !decode_settings(bytes + "root=\n", SettingsVersion::v4),
+    expect(!decode_settings(bytes + "features=\n", SettingsVersion::v5) &&
+               !decode_settings(bytes + "root=\n", SettingsVersion::v5),
            "duplicate v4 keys are refused");
     verify_settings_v4_later_keys();
 }
 
 void verify_settings_restart(Win32FileAdapter &files)
 {
-    const auto path = path_of("nib-adapter-files/settings/settings.v4");
+    const auto path = path_of("nib-adapter-files/settings/settings.v5");
     Win32SettingsAdapter first(
-        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v3"),
+        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v4"),
+                             path_of("nib-adapter-files/settings/settings.v3"),
                              path_of("nib-adapter-files/settings/settings.v2"),
                              path_of("nib-adapter-files/settings/settings.v1")});
     const auto premature = first.write(default_editor_settings());
@@ -1043,7 +1134,8 @@ void verify_settings_restart(Win32FileAdapter &files)
     settings.font_size = nenenib::core::FontSize::from_points(21.25F).value();
     expect(first.write(settings).has_value(), "first write creates the settings directory");
     Win32SettingsAdapter restarted(
-        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v3"),
+        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v4"),
+                             path_of("nib-adapter-files/settings/settings.v3"),
                              path_of("nib-adapter-files/settings/settings.v2"),
                              path_of("nib-adapter-files/settings/settings.v1")});
     const auto restored = restarted.read();
@@ -1061,15 +1153,16 @@ void verify_settings_restart(Win32FileAdapter &files)
 
 void verify_settings_lock(Win32FileAdapter &files)
 {
-    const auto path = path_of("nib-adapter-files/settings/settings.v4");
+    const auto path = path_of("nib-adapter-files/settings/settings.v5");
     Win32SettingsAdapter settings(
-        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v3"),
+        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v4"),
+                             path_of("nib-adapter-files/settings/settings.v3"),
                              path_of("nib-adapter-files/settings/settings.v2"),
                              path_of("nib-adapter-files/settings/settings.v1")});
     expect(settings.read().has_value(), "the settings adapter loads before lock checks");
     const auto before = read_text(files, path, 4096);
     {
-        const FileHandle lock(CreateFileW(L"nib-adapter-files/settings/settings.v4.lock",
+        const FileHandle lock(CreateFileW(L"nib-adapter-files/settings/settings.v5.lock",
                                           GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
                                           FILE_ATTRIBUTE_NORMAL, nullptr));
         expect(lock.valid(), "the competing lock is acquired");
@@ -1080,14 +1173,14 @@ void verify_settings_lock(Win32FileAdapter &files)
                "lock failure leaves the original bytes intact");
     }
     expect(settings.write(default_editor_settings()).has_value(), "a released lock allows retry");
-    expect(SetFileAttributesW(L"nib-adapter-files/settings/settings.v4", FILE_ATTRIBUTE_READONLY) !=
+    expect(SetFileAttributesW(L"nib-adapter-files/settings/settings.v5", FILE_ATTRIBUTE_READONLY) !=
                0,
            "the settings file becomes read only");
     const auto refused = settings.write(default_editor_settings());
     expect(!refused && refused.error() == SettingsFailure::unwritable,
            "read-only files refuse save");
     expect(read_text(files, path, 4096) == before, "failed replacement preserves settings bytes");
-    expect(SetFileAttributesW(L"nib-adapter-files/settings/settings.v4", FILE_ATTRIBUTE_NORMAL) !=
+    expect(SetFileAttributesW(L"nib-adapter-files/settings/settings.v5", FILE_ATTRIBUTE_NORMAL) !=
                0,
            "the test restores the original attributes");
 }
@@ -1095,10 +1188,11 @@ void verify_settings_lock(Win32FileAdapter &files)
 void verify_rejected_settings(Win32FileAdapter &files, std::string_view bytes,
                               SettingsFailure expected)
 {
-    const auto path = path_of("nib-adapter-files/settings/settings.v4");
+    const auto path = path_of("nib-adapter-files/settings/settings.v5");
     expect(files.write(path, bytes).has_value(), "the invalid settings fixture is written");
     Win32SettingsAdapter settings(
-        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v3"),
+        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v4"),
+                             path_of("nib-adapter-files/settings/settings.v3"),
                              path_of("nib-adapter-files/settings/settings.v2"),
                              path_of("nib-adapter-files/settings/settings.v1")});
     const auto loaded = settings.read();
@@ -1123,6 +1217,7 @@ void verify_settings_failures(Win32FileAdapter &files)
     expect(!unavailable.write(default_editor_settings()), "an unavailable location cannot save");
     Win32SettingsAdapter directory(
         files, SettingsPaths{path_of("nib-adapter-files/settings"),
+                             path_of("nib-adapter-files/settings/settings.v4"),
                              path_of("nib-adapter-files/settings/settings.v3"),
                              path_of("nib-adapter-files/settings/settings.v2"),
                              path_of("nib-adapter-files/settings/settings.v1")});
@@ -1137,7 +1232,8 @@ constexpr std::string_view previous_bytes =
 
 SettingsPaths settings_paths()
 {
-    return {path_of("nib-adapter-files/settings/settings.v4"),
+    return {path_of("nib-adapter-files/settings/settings.v5"),
+            path_of("nib-adapter-files/settings/settings.v4"),
             path_of("nib-adapter-files/settings/settings.v3"),
             path_of("nib-adapter-files/settings/settings.v2"),
             path_of("nib-adapter-files/settings/settings.v1")};
@@ -1145,6 +1241,7 @@ SettingsPaths settings_paths()
 
 void reset_settings(Win32FileAdapter &files, std::optional<std::string_view> previous)
 {
+    static_cast<void>(DeleteFileW(L"nib-adapter-files/settings/settings.v5"));
     static_cast<void>(DeleteFileW(L"nib-adapter-files/settings/settings.v4"));
     static_cast<void>(DeleteFileW(L"nib-adapter-files/settings/settings.v3"));
     static_cast<void>(DeleteFileW(L"nib-adapter-files/settings/settings.v2"));
@@ -1169,11 +1266,11 @@ void verify_migration_success(Win32FileAdapter &files)
     expect(!read_text(files, settings_paths().current, 4096),
            "loading v1 does not migrate eagerly");
     loaded.guide = nenenib::core::GuideVisibility::hidden;
-    expect(store.write(loaded).has_value(), "first changed settings migrate into v4");
+    expect(store.write(loaded).has_value(), "first changed settings migrate into v5");
     expect(read_text(files, settings_paths().legacy, 4096).value_or("") == previous_bytes,
            "migration leaves v1 bytes unchanged");
     expect(read_text(files, settings_paths().current, 4096).value_or("") == encode_settings(loaded),
-           "migration writes v4 including hidden guide");
+           "migration writes v5 including hidden guide");
     // Both reading and locking v1 now fail: current saves must not touch either.
     const FileHandle old_file(CreateFileW(L"nib-adapter-files/settings/settings.v1", GENERIC_WRITE,
                                           0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
@@ -1210,7 +1307,7 @@ void verify_migration_conflict(Win32FileAdapter &files, std::optional<std::strin
     const auto result = store.write(changed);
     expect(!result && result.error() == SettingsFailure::changed_externally,
            "v1 change creation and deletion each block migration");
-    expect(!read_text(files, settings_paths().current, 4096), "refused migration creates no v4");
+    expect(!read_text(files, settings_paths().current, 4096), "refused migration creates no v5");
     const auto remaining = read_text(files, settings_paths().legacy, 4096);
     expect(after.has_value() ? remaining && remaining.value() == after.value() : !remaining,
            "refused migration preserves externally edited v1 bytes");
@@ -1221,7 +1318,8 @@ void verify_migration_locks(Win32FileAdapter &files)
     reset_settings(files, previous_bytes);
     Win32SettingsAdapter store(files, settings_paths());
     expect(store.read().has_value(), "load migration before lock checks");
-    for (const auto name : {L"nib-adapter-files/settings/settings.v4.lock",
+    for (const auto name : {L"nib-adapter-files/settings/settings.v5.lock",
+                            L"nib-adapter-files/settings/settings.v4.lock",
                             L"nib-adapter-files/settings/settings.v3.lock",
                             L"nib-adapter-files/settings/settings.v2.lock",
                             L"nib-adapter-files/settings/settings.v1.lock"})
@@ -1243,7 +1341,7 @@ void verify_migration_locks(Win32FileAdapter &files)
     const auto result = store.write(default_editor_settings());
     expect(!result && result.error() == SettingsFailure::unreadable,
            "migration snapshot read failure blocks save");
-    expect(!read_text(files, settings_paths().current, 4096), "read failure creates no v4");
+    expect(!read_text(files, settings_paths().current, 4096), "read failure creates no v5");
 }
 
 void verify_previous_rejection(Win32FileAdapter &files, std::string_view invalid,
@@ -1285,7 +1383,7 @@ void verify_migration_write_failure(Win32FileAdapter &files)
     Win32SettingsAdapter store(fresh, settings_paths());
     expect(store.read().has_value(), "load previous before failed migration write");
     {
-        const HeldNames occupied = occupy_upcoming_names(L"nib-adapter-files/settings/settings.v4");
+        const HeldNames occupied = occupy_upcoming_names(L"nib-adapter-files/settings/settings.v5");
         const auto result = store.write(default_editor_settings());
         expect(!result && result.error() == SettingsFailure::unwritable,
                "failed atomic migration write is reported");
@@ -1294,7 +1392,7 @@ void verify_migration_write_failure(Win32FileAdapter &files)
                "failed migration write preserves current absence and previous bytes");
     }
     expect(store.write(default_editor_settings()).has_value(), "failed write keeps retry snapshot");
-    expect(no_temporaries_of(L"nib-adapter-files/settings/settings.v4"),
+    expect(no_temporaries_of(L"nib-adapter-files/settings/settings.v5"),
            "the retry reclaims the temporary names that are no longer held");
 }
 
@@ -1317,13 +1415,13 @@ void verify_v2_migration(Win32FileAdapter &files)
            "reading v2 does not migrate eagerly");
     auto changed = loaded;
     changed.wrapping = nenenib::core::LineWrapping::no_wrap;
-    expect(store.write(changed).has_value(), "v2 can migrate to v4 with wrapping disabled");
+    expect(store.write(changed).has_value(), "v2 can migrate to v5 with wrapping disabled");
     expect(read_text(files, settings_paths().previous, 4096).value_or("") == v2_bytes &&
                read_text(files, settings_paths().legacy, 4096).value_or("") == previous_bytes,
-           "v4 migration preserves both older files byte for byte");
+           "v5 migration preserves both older files byte for byte");
     const auto saved = decode_settings(
-        read_text(files, settings_paths().current, 4096).value_or(""), SettingsVersion::v4);
-    expect(saved && same_settings(saved.value(), changed), "migrated v4 holds the chosen wrapping");
+        read_text(files, settings_paths().current, 4096).value_or(""), SettingsVersion::v5);
+    expect(saved && same_settings(saved.value(), changed), "migrated v5 holds the chosen wrapping");
     const FileHandle old_lock(CreateFileW(L"nib-adapter-files/settings/settings.v2.lock",
                                           GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
                                           FILE_ATTRIBUTE_NORMAL, nullptr));
@@ -1335,7 +1433,7 @@ void verify_v2_conflicts(Win32FileAdapter &files)
 {
     reset_settings(files, previous_bytes);
     Win32SettingsAdapter old(files, settings_paths());
-    expect(old.read().has_value(), "load v1 while v2, v3 and v4 are absent");
+    expect(old.read().has_value(), "load v1 while v2, v3, v4 and v5 are absent");
     expect(files.write(settings_paths().previous, v2_bytes).has_value(),
            "another version creates v2");
     const auto raced = old.write(default_editor_settings());
@@ -1376,8 +1474,8 @@ void verify_v2_rejection(Win32FileAdapter &files)
            "a v1 change does not invalidate the higher v2 snapshot");
 }
 
-// v3 → v4 の移行（ADR 0114 の形・ADR 0170 の決定 3）。v4 が無いときだけ v3 を読み、最初の保存で
-// v4 だけを書き、古い版は元の bytes のまま残す。
+// v3 → v5 の移行（ADR 0114 の形・ADR 0170 の決定 3 と 2026-11-16 の追補）。v5 と v4 が無いときだけ
+// v3 を読み、最初の保存で v5 だけを書き、古い版は元の bytes のまま残す。
 void verify_v3_migration(Win32FileAdapter &files)
 {
     reset_settings(files, previous_bytes);
@@ -1391,22 +1489,22 @@ void verify_v3_migration(Win32FileAdapter &files)
                loaded.wrapping == nenenib::core::LineWrapping::no_wrap &&
                loaded.ui_language == nenenib::core::DisplayLanguageChoice::japanese &&
                !loaded.explorer && !loaded.root.has_value(),
-           "v3 takes precedence over v2 and v1 and fills the v4 defaults");
+           "v3 takes precedence over v2 and v1 and fills the v5 defaults");
     expect(!read_text(files, settings_paths().current, 4096),
            "reading v3 does not migrate eagerly");
     auto changed = loaded;
     changed.explorer = true;
     changed.root = nenenib::core::FilePath::parse("C:\\work").value();
     changed.features = {"matchparen"};
-    expect(store.write(changed).has_value(), "the first change migrates v3 to v4");
+    expect(store.write(changed).has_value(), "the first change migrates v3 to v5");
     expect(read_text(files, settings_paths().prior, 4096).value_or("") == v3_settings &&
                read_text(files, settings_paths().previous, 4096).value_or("") == v2_bytes &&
                read_text(files, settings_paths().legacy, 4096).value_or("") == previous_bytes,
-           "v4 migration preserves v3, v2 and v1 byte for byte");
+           "v5 migration preserves v3, v2 and v1 byte for byte");
     const auto saved = decode_settings(
-        read_text(files, settings_paths().current, 4096).value_or(""), SettingsVersion::v4);
+        read_text(files, settings_paths().current, 4096).value_or(""), SettingsVersion::v5);
     expect(saved && same_settings(saved.value(), changed),
-           "migrated v4 holds the explorer, the root and the features");
+           "migrated v5 holds the explorer, the root and the features");
     const FileHandle old_lock(CreateFileW(L"nib-adapter-files/settings/settings.v3.lock",
                                           GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
                                           FILE_ATTRIBUTE_NORMAL, nullptr));
@@ -1429,21 +1527,109 @@ void verify_v3_conflicts(Win32FileAdapter &files)
     Win32SettingsAdapter raced(files, settings_paths());
     expect(raced.read().has_value(), "load the changed v3 snapshot");
     const auto external = encode_settings(default_editor_settings());
-    expect(files.write(settings_paths().current, external).has_value(), "another window makes v4");
+    expect(files.write(settings_paths().current, external).has_value(), "another window makes v5");
     const auto stale = raced.write(default_editor_settings());
     expect(!stale && stale.error() == SettingsFailure::changed_externally &&
                read_text(files, settings_paths().current, 4096).value_or("") == external,
-           "a new v4 blocks the migration from v3 and stays intact");
-    expect(files.write(settings_paths().current, "invalid").has_value(), "break v4");
+           "a new v5 blocks the migration from v3 and stays intact");
+    expect(files.write(settings_paths().current, "invalid").has_value(), "break v5");
     Win32SettingsAdapter broken(files, settings_paths());
     const auto reading = broken.read();
     expect(!reading && reading.error() == SettingsFailure::malformed &&
                !broken.write(default_editor_settings()),
-           "a malformed v4 never falls back to a valid v3 and blocks writes");
+           "a malformed v5 never falls back to a valid v3 and blocks writes");
     expect(read_text(files, settings_paths().current, 4096).value_or("") == "invalid" &&
                read_text(files, settings_paths().prior, 4096).value_or("") ==
                    std::string(v3_settings) + "\n",
-           "a refused v4 load leaves both files untouched");
+           "a refused v5 load leaves both files untouched");
+}
+
+// v4 → v5（ADR 0170 の 2026-11-16 の追補の 2・3・6）。v5 が無いときだけ 1.0.0 の v4 を読み、
+// 読むだけでは書かず、設定を変えたときに v5 だけを書く。v4 と下の版の bytes は残す。
+void verify_v4_migration(Win32FileAdapter &files)
+{
+    reset_settings(files, previous_bytes);
+    expect(files.write(settings_paths().prior, v3_settings).has_value() &&
+               files.write(settings_paths().released, released_v4_settings).has_value(),
+           "prepare the 1.0.0 v4 above v3 and v1");
+    Win32SettingsAdapter store(files, settings_paths());
+    const auto reading = store.read();
+    expect(reading && reading.value().has_value() &&
+               released_values(reading.value().value_or(default_editor_settings())),
+           "v4 takes precedence over v3 and v1 and fills autoindent=off");
+    expect(!read_text(files, settings_paths().current, 4096) &&
+               read_text(files, settings_paths().released, 4096).value_or("") ==
+                   released_v4_settings,
+           "reading v4 neither writes v5 nor changes v4");
+    auto changed = reading.value_or(std::nullopt).value_or(default_editor_settings());
+    changed.autoindent = true;
+    expect(store.write(changed).has_value(), "the first change writes v5");
+    expect(read_text(files, settings_paths().released, 4096).value_or("") == released_v4_settings &&
+               read_text(files, settings_paths().prior, 4096).value_or("") == v3_settings &&
+               read_text(files, settings_paths().legacy, 4096).value_or("") == previous_bytes,
+           "writing v5 leaves v4, v3 and v1 byte for byte");
+    const auto saved = decode_settings(
+        read_text(files, settings_paths().current, 4096).value_or(""), SettingsVersion::v5);
+    expect(saved && same_settings(saved.value(), changed),
+           "v5 holds autoindent=on and every value read from v4");
+    const FileHandle old_lock(CreateFileW(L"nib-adapter-files/settings/settings.v4.lock",
+                                          GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
+                                          FILE_ATTRIBUTE_NORMAL, nullptr));
+    expect(old_lock.valid() && store.write(changed).has_value(),
+           "after the first v5 the v4 lock is irrelevant");
+    Win32SettingsAdapter restarted(files, settings_paths());
+    const auto again = restarted.read();
+    expect(again && again.value().has_value() &&
+               same_settings(again.value().value_or(default_editor_settings()), changed),
+           "with v5 and v4 both present v5 wins");
+}
+
+// v4 に v5 の鍵が在れば拒否し、1.0.0 が読込の後に v4 を変えたら古い写しで書かず、v4 の lock は
+// 待たずに断り、壊れた v5 は v4 へ戻らない（ADR 0170 の 2026-11-16 の追補の 2・3・6）。
+void verify_v4_conflicts(Win32FileAdapter &files)
+{
+    reset_settings(files, std::nullopt);
+    const auto keyed = std::string(released_v4_settings) + "autoindent=on\n";
+    expect(files.write(settings_paths().released, keyed).has_value(),
+           "prepare a v4 holding the v5 key");
+    Win32SettingsAdapter refused(files, settings_paths());
+    const auto reading = refused.read();
+    expect(!reading && reading.error() == SettingsFailure::malformed &&
+               !refused.write(default_editor_settings()),
+           "a v4 holding autoindent is refused and blocks writes");
+    expect(!read_text(files, settings_paths().current, 4096) &&
+               read_text(files, settings_paths().released, 4096).value_or("") == keyed,
+           "the refused v4 stays as it is and no v5 is made");
+    expect(files.write(settings_paths().released, released_v4_settings).has_value(),
+           "restore the 1.0.0 v4");
+    Win32SettingsAdapter active(files, settings_paths());
+    expect(active.read().has_value(), "load the v4 snapshot");
+    const auto edited = std::string(released_v4_settings) + "\n";
+    expect(files.write(settings_paths().released, edited).has_value(), "1.0.0 changes v4");
+    const auto stale = active.write(default_editor_settings());
+    expect(!stale && stale.error() == SettingsFailure::changed_externally &&
+               !read_text(files, settings_paths().current, 4096),
+           "a v4 change after the load blocks the stale write and makes no v5");
+    Win32SettingsAdapter locked(files, settings_paths());
+    expect(locked.read().has_value(), "load the changed v4 snapshot");
+    {
+        const FileHandle held(CreateFileW(L"nib-adapter-files/settings/settings.v4.lock",
+                                          GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
+                                          FILE_ATTRIBUTE_NORMAL, nullptr));
+        const auto result = locked.write(default_editor_settings());
+        expect(held.valid() && !result && result.error() == SettingsFailure::unwritable &&
+                   !read_text(files, settings_paths().current, 4096),
+               "a held v4 lock refuses the first v5 write without waiting");
+    }
+    expect(files.write(settings_paths().current, "invalid").has_value(), "break v5");
+    Win32SettingsAdapter broken(files, settings_paths());
+    const auto bad = broken.read();
+    expect(!bad && bad.error() == SettingsFailure::malformed &&
+               !broken.write(default_editor_settings()),
+           "a malformed v5 never falls back to a valid v4 and blocks writes");
+    expect(read_text(files, settings_paths().current, 4096).value_or("") == "invalid" &&
+               read_text(files, settings_paths().released, 4096).value_or("") == edited,
+           "a refused v5 load leaves v5 and v4 untouched");
 }
 
 // 長いルートの経路で 16 KiB を超える設定は書かない（次の読込が too_large で止まるため）。
@@ -1466,6 +1652,8 @@ void verify_oversized_settings(Win32FileAdapter &files)
 
 void verify_settings_migration(Win32FileAdapter &files)
 {
+    verify_v4_migration(files);
+    verify_v4_conflicts(files);
     verify_v3_migration(files);
     verify_v3_conflicts(files);
     verify_oversized_settings(files);
@@ -1490,14 +1678,14 @@ void verify_settings_migration(Win32FileAdapter &files)
     reset_settings(files, previous_bytes);
     verify_rejected_settings(files, "invalid", SettingsFailure::malformed);
     // Valid v1 must not conceal an unreadable current path.
-    const FileHandle current(CreateFileW(L"nib-adapter-files/settings/settings.v4", GENERIC_WRITE,
+    const FileHandle current(CreateFileW(L"nib-adapter-files/settings/settings.v5", GENERIC_WRITE,
                                          0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
                                          nullptr));
     Win32SettingsAdapter blocked(files, settings_paths());
     const auto reading = blocked.read();
     expect(current.valid() && !reading && reading.error() == SettingsFailure::unreadable,
-           "unreadable v4 never falls back to valid v1");
-    expect(!blocked.write(default_editor_settings()), "unreadable v4 blocks later writes");
+           "unreadable v5 never falls back to valid v1");
+    expect(!blocked.write(default_editor_settings()), "unreadable v5 blocks later writes");
 }
 
 void verify_absolute_path()
@@ -1534,10 +1722,11 @@ void verify_same_file(const Win32FileAdapter &files)
 constexpr wchar_t temporaries_folder[] = L"nib-adapter-files/temporaries";
 constexpr wchar_t kept_target[] = L"nib-adapter-files/temporaries/kept.txt";
 constexpr wchar_t created_target[] = L"nib-adapter-files/temporaries/created.txt";
-constexpr std::array<const wchar_t *, 9> temporaries_fixtures{
+constexpr std::array<const wchar_t *, 10> temporaries_fixtures{
     kept_target,
     created_target,
-    L"nib-adapter-files/temporaries/settings.v4",
+    L"nib-adapter-files/temporaries/settings.v5",
+    L"nib-adapter-files/temporaries/settings.v5.lock",
     L"nib-adapter-files/temporaries/settings.v4.lock",
     L"nib-adapter-files/temporaries/settings.v3.lock",
     L"nib-adapter-files/temporaries/settings.v2.lock",
@@ -1612,7 +1801,8 @@ void verify_reclaimed_settings_residue(const std::wstring &residue)
     Win32FileAdapter fresh;
     leave_residue(residue);
     Win32SettingsAdapter store(fresh,
-                               SettingsPaths{path_of("nib-adapter-files/temporaries/settings.v4"),
+                               SettingsPaths{path_of("nib-adapter-files/temporaries/settings.v5"),
+                                             path_of("nib-adapter-files/temporaries/settings.v4"),
                                              path_of("nib-adapter-files/temporaries/settings.v3"),
                                              path_of("nib-adapter-files/temporaries/settings.v2"),
                                              path_of("nib-adapter-files/temporaries/settings.v1")});
@@ -1662,7 +1852,7 @@ void verify_reclaimed_beside(std::span<const std::wstring> residues)
     {
         const FileHandle live(held_temporary(residues[2]));
         expect(live.valid(), "a live temporary file beside the settings is held");
-        reclaim_temporaries_beside(path_of("nib-adapter-files/temporaries/settings.v4"));
+        reclaim_temporaries_beside(path_of("nib-adapter-files/temporaries/settings.v5"));
         expect(!file_exists(residues[0]) && !file_exists(residues[1]),
                "start-up reclaims every residue beside the settings");
         expect(file_exists(residues[2]), "start-up keeps a temporary file someone holds");
@@ -1806,7 +1996,7 @@ void verify_temporary_files()
         temporary_beside(kept_target, L"deadbeef-1"),
         upcoming_name(kept_target, 1),
         temporary_beside(kept_target, L"deadbeef-2"),
-        temporary_beside(L"nib-adapter-files/temporaries/settings.v4", L"deadbeef-3"),
+        temporary_beside(L"nib-adapter-files/temporaries/settings.v5", L"deadbeef-3"),
         temporary_beside(L"nib-adapter-files/temporaries/history.v1", L"deadbeef-4"),
         temporary_beside(L"nib-adapter-files/temporaries/session.v2", process_hex() + L"-9"),
         temporary_beside(L"nib-adapter-files/temporaries/bookmarks.v1", L"deadbeef-5"),

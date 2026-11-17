@@ -23,7 +23,7 @@ ZIPを展開し、NeNeNib.exeを起動してください。追加ランタイム
 表示言語
   画面の文は日本語・英語・中国語（簡体字）で出ます。既定は Windows の表示言語に従います。
   「:set language=ja」「en」「zh-hans」「system」か、F1 の「表示言語を選ぶ」で
-  すぐに切り替わり、settings.v4 に保存します。「:set language?」で今の選択が分かります。
+  すぐに切り替わり、settings.v5 に保存します。「:set language?」で今の選択が分かります。
   Vim のメッセージ・モード名・鍵の名前・配色の名前は言語で変わりません。
   中国語の文は機械の訳です。直しを歓迎します。
 
@@ -54,7 +54,7 @@ ZIPを展開し、NeNeNib.exeを起動してください。追加ランタイム
   UTF-8、UTF-8 BOM、Shift_JIS、UTF-16 LE / BE（BOMつき）と、読み込んだCRLF/LFを扱います。
 
 保存先
-  設定: %LOCALAPPDATA%\NeNeNib\settings.v4
+  設定: %LOCALAPPDATA%\NeNeNib\settings.v5（1.0.0 の settings.v4 は v5 が無いときだけ読みます）
   タブと表示位置: 同フォルダのsession.v2。保存済みファイルだけ復元します。
   ブックマーク: bookmarks.v1、閉じたファイルの履歴: history.v1
   利用者の配色: themes\<name>.v1.theme、自動退避: autosave\<プロセスIDと起動時刻>\

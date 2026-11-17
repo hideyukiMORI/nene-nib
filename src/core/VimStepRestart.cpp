@@ -228,6 +228,11 @@ VimStep insert_paused(const VimState &state, const VimEditorView &view)
     }
     VimStep step{std::move(next), VimMoveTo{back}};
     step.insert_left = caret.value - back.value;
+    // 字下げを写した行なら Esc と同じに字下げを消す（#1086）。
+    if (auto trimmed = detail::auto_indent_paused(state, view, step))
+    {
+        return std::move(trimmed).value();
+    }
     return step;
 }
 
