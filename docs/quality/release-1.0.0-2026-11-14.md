@@ -134,7 +134,7 @@ beta.13 の記録の「既知の限界」をそのまま引き継ぐ（製品は
 
 1.0.0（Store 版）で増えた物:
 
-- F1 の「Windows の右クリックに登録する」は、packaged（Store 版）ではエクスプローラーから見えない見込み（読み・未実測。HKCU への書き込みがパッケージ専用の場所へ写る見込みで、製品は packaged かを見ていない）。PRIVACY と README は ZIP 版の動きを書き、Store 版は効かない見込みで未実測と書いた（#1656）。施主の packaged の確かめで見る。
+- F1 の「Windows の右クリックに登録する」は、packaged（Store 版）ではエクスプローラーから見えない見込み（読み・未実測。HKCU への書き込みがパッケージ専用の場所へ写る見込みで、製品は packaged かを見ていない）。PRIVACY と README は ZIP 版の動きを書き、Store 版は効かない見込みで未実測と書いた（#1656）。施主の packaged の確かめで見る。（追記 2026-11-17: 施主の確かめ 6-C-4 で Store 版ではエクスプローラーに出ないと確かめた。1.0.0 はこのまま提出し、次の版 1.1.0 から Store 版の F1 の一覧に 2 つの操作を出さない・#1809・ADR 0178 の追補）
 - 中国語（簡体字）の画面の文は機械の訳で、母語の人のレビューは無い（`docs/i18n/REVIEW.md`）。
 - WACK と packaged の起動はまだ（根拠 (d)）。AppxManifest の DisplayName と Description は英語の 1 つだけ（言語ごとの出し分けなし）・VERSIONINFO の CompanyName は空（REL-A の B・どちらも止めない）。
 

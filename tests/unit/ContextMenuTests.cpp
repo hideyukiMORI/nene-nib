@@ -496,18 +496,20 @@ listed_key_of(const std::vector<core::CommandChoice> &choices, core::EditorOpera
 
 void verify_vim_operation_list()
 {
-    const auto normal =
-        core::operation_choices("", core::PaletteMode{core::EditMode::vim, Mode::vim_normal},
-                                core::DisplayLanguage::japanese);
+    const auto normal = core::operation_choices(
+        "",
+        core::PaletteMode{core::EditMode::vim, Mode::vim_normal, core::Distribution::unpackaged},
+        core::DisplayLanguage::japanese);
     expect(normal.size() == 42 && !listed_key_of(normal, core::EditorOperation::cut).has_value() &&
                !listed_key_of(normal, core::EditorOperation::copy).has_value() &&
                listed_key_of(normal, core::EditorOperation::paste) == "\"+p" &&
                listed_key_of(normal, core::EditorOperation::select_all) == "ggVG" &&
                listed_key_of(normal, core::EditorOperation::find) == "",
            "the vim normal list shows the vim keys and leaves out the rows without them");
-    const auto visual =
-        core::operation_choices("", core::PaletteMode{core::EditMode::vim, Mode::vim_visual},
-                                core::DisplayLanguage::japanese);
+    const auto visual = core::operation_choices(
+        "",
+        core::PaletteMode{core::EditMode::vim, Mode::vim_visual, core::Distribution::unpackaged},
+        core::DisplayLanguage::japanese);
     expect(visual.size() == 44 && listed_key_of(visual, core::EditorOperation::copy) == "\"+y",
            "the vim visual list shows every row with the visual keys");
     expect(

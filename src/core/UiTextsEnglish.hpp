@@ -182,6 +182,8 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::notice_shell_registry_failed, "Could not read or write the registry"},
     {UiMessage::notice_shell_empty_path, "The exe path is empty"},
     {UiMessage::notice_shell_quote_in_path, "The exe path contains \""},
+    {UiMessage::notice_shell_packaged,
+     "The right-click menu registration is not available in the Store version"},
     {UiMessage::notice_pane_already_split, "Already split"},
     {UiMessage::notice_pane_preview_unreachable, "Cannot move into the preview pane"},
     {UiMessage::notice_layout_inconsistent,

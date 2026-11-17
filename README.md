@@ -287,9 +287,10 @@ records in `docs/quality/`.
   (「Windows の右クリックに登録する」) adds NeNe Nib to the File Explorer right-click menu and "Open with" under
   `HKCU` without administrator rights; "Remove from Windows Right-Click Menu" (「登録を外す」) removes it. The
   names are written in the display language of the moment you register. Nothing is written at startup. This is
-  how the ZIP version works; in the Microsoft Store (MSIX) version, Windows is expected to keep the write in the
-  package's own registry, so the entry would probably not appear in File Explorer — not yet checked on a real
-  machine (`docs/store/submission.md`, step 5). The Windows 11 top-level menu waits for a signed, packaged release
+  ZIP version only: in the Microsoft Store (MSIX) version, Windows keeps the write in the package's own registry
+  and the entry does not appear in File Explorer (checked on a real machine for 1.0.0), so from 1.1.0 the two
+  operations are left out of the F1 list there and say so in one line if reached another way. The Windows 11
+  top-level menu waits for a signed, packaged release
   ([ADR 0178](docs/adr/0178-shell-registration-is-one-port-written-only-by-an-explicit-operation-under-hkcu.md)).
 - **FR-034 Markdown task lists** — the preview draws `- [ ]` / `- [x]` checkboxes; clicking one writes the change
   into the text as one undo step, in the side pane and in the full view.
