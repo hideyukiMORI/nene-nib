@@ -225,7 +225,7 @@ class Direct2DRenderer final
     void draw_line_labels(const application::EditorFrame &frame, IDWriteTextLayout *text,
                           const core::LayoutRect &area, const application::LineView &line);
     void draw_label(const application::EditorFrame &frame, const DWRITE_HIT_TEST_METRICS &target,
-                    const core::MotionLabel &label, bool in_row);
+                    const core::MotionLabel &label);
     // 印の字の書式（本文の字体の太字・motion_label_text_dips・中央寄せ）。印が出たときに初めて
     // 作り、本文の書式を作り直す所（DPI・字体・大きさの変更）で捨てる。作れなければ偽。
     [[nodiscard]] bool ensure_label_format();

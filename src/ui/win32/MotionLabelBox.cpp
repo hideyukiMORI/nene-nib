@@ -59,14 +59,6 @@ D2D1_ROUNDED_RECT motion_label_badge(const DWRITE_HIT_TEST_METRICS &target, D2D1
     return badge_at(rounded(target.left) - core::to_pixels(side_dips, dpi), top, written, dpi);
 }
 
-D2D1_ROUNDED_RECT motion_label_badge_in_row(const DWRITE_HIT_TEST_METRICS &row, D2D1_SIZE_F written,
-                                            std::uint32_t dpi) noexcept
-{
-    const std::int32_t height = ceiled(written.height) + (2 * core::to_pixels(edge_dips, dpi));
-    const std::int32_t top = rounded(row.top) + ((rounded(row.height) - height) / 2);
-    return badge_at(rounded(row.left), top, written, dpi);
-}
-
 float motion_label_text_dips(float body_dips) noexcept
 {
     return std::max(body_dips * text_ratio, smallest_text_dips);

@@ -68,11 +68,11 @@ void Direct2DRenderer::draw_line_labels(const application::EditorFrame &frame,
         const auto runs = runs_of(text, area, range);
         if (!runs.empty())
         {
-            draw_label(frame, runs.front(), label, false);
+            draw_label(frame, runs.front(), label);
             continue;
         }
-        // 行の終わり（空の行を含む）の跳び先は字が無いので、その位置の点と行の高さから当たりを
-        // 作り、札は行の中に置く（隠す字が無いので上の行へはみ出させない）。
+        // 行の終わり（空の行を含む）の跳び先は字が無いので、その位置の点から当たりを作る（札は
+        // 字のある跳び先と同じ左肩・升の大きさに依らない）。
         const auto point =
             text_layout_point(text, range.startPosition, core::CaretAffinity::leading);
         if (!point)
@@ -84,16 +84,16 @@ void Direct2DRenderer::draw_line_labels(const application::EditorFrame &frame,
         end.left = static_cast<float>(area.left) + point.value().x;
         end.top = static_cast<float>(area.top) + point.value().y;
         end.height = static_cast<float>(body_line_height_);
-        draw_label(frame, end, label, true);
+        draw_label(frame, end, label);
     }
 }
 
-// 札は motion_label_badge（跳び先の升の左上の肩）か、字の無い跳び先（in_row）は
-// motion_label_badge_in_row（行の中）。字は印の書式の layout を測ってから札の大きさに広げて中央に
-// 置き、札に切り抜いて描く（paint_motion_label・tests/ui と同じ 1 本）。
+// 札は motion_label_badge（跳び先の升の左上の肩・空の行と行末も同じ）。字は印の書式の layout を
+// 測ってから札の大きさに広げて中央に置き、札に切り抜いて描く（paint_motion_label・tests/ui と
+// 同じ 1 本）。
 void Direct2DRenderer::draw_label(const application::EditorFrame &frame,
                                   const DWRITE_HIT_TEST_METRICS &target,
-                                  const core::MotionLabel &label, bool in_row)
+                                  const core::MotionLabel &label)
 {
     const auto written = text_layout(label.label, label_format_.Get(),
                                      core::LayoutRect{0, 0, label_room, label_room});
@@ -105,8 +105,7 @@ void Direct2DRenderer::draw_label(const application::EditorFrame &frame,
     }
     const auto size = D2D1::SizeF(measured.widthIncludingTrailingWhitespace, measured.height);
     const D2D1_ROUNDED_RECT badge =
-        in_row ? motion_label_badge_in_row(target, size, dpi_)
-               : motion_label_badge(target, size, static_cast<float>(body_top_), dpi_);
+        motion_label_badge(target, size, static_cast<float>(body_top_), dpi_);
     const auto &shape = badge.rect;
     if (FAILED(written->SetMaxWidth(shape.right - shape.left)) ||
         FAILED(written->SetMaxHeight(shape.bottom - shape.top)))
