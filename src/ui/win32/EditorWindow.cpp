@@ -13,6 +13,7 @@
 #include "PaneLayouts.hpp"
 #include "PreviewTick.hpp"
 #include "SplitLayout.hpp"
+#include "TabTipTick.hpp"
 #include "TitleBarWidth.hpp"
 #include "UiMessage.hpp"
 #include "WideUiText.hpp"
@@ -39,6 +40,7 @@ LRESULT EditorWindow::frame_message(UINT message, WPARAM word, LPARAM data)
         return 0;
     case WM_SETTINGCHANGE:
         read_wheel_setting();
+        read_hover_setting();
         refresh_appearance();
         return 0;
     case WM_SIZE:
@@ -182,6 +184,10 @@ void EditorWindow::receive_timer(WPARAM word)
         KillTimer(window_, word);
         send(application::MapTimeout{});
         return;
+    case WindowTimer::tab_tip:
+        KillTimer(window_, word);
+        send(application::TabTipTick{GetActiveWindow() == window_});
+        return;
     }
 }
 
@@ -256,6 +262,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     // 格子表示の問いも同じ（ADR 0140 の決定 2）。
     const bool display_asked = delivery.display_question;
     follow_key_map_timer(window_, delivery.map_timer);
+    follow_tab_tip_timer(window_, delivery.tab_tip_timer, hover_setting_);
     if (std::holds_alternative<application::AdjustFontSize>(intent))
     {
         announce_settings(delivery);

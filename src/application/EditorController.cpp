@@ -577,9 +577,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     fit_command_rows();
     ask_display();
     reconcile_language_server();
-    auto delivered = delivery();
-    delivered.repaint = repaint_;
-    delivered.map_timer = map_timer_;
+    auto delivered = timed(delivery());
     // 契約の破れは配達に 1 回だけ載せ、ここで消す（ADR 0133 の追補 2026-10-18）。次の apply の
     // 消去に頼らない。layout を作れない失敗は作り直しの apply で消えるまで frame に載る。
     layout_failure_ = drawing_failure(layout_failure_);
@@ -589,9 +587,11 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
 
 // 写す前に、意図をまたいで覚えた印のうち、この意図が保たないものを捨てる。上下の移動の狙いの
 // 横位置（keeps_wanted_x）と、エクスプローラーのダブルクリックの 2 打目と組む節
-// （keeps_explorer_click・#1388）と、開いている右クリックのメニュー（#1051）。
+// （keeps_explorer_click・#1388）と、開いている右クリックのメニュー（#1051）と、タブの札
+// （settle_tab_tip・#1789）。
 void EditorController::forget_unkept_marks(const EditorIntent &intent)
 {
+    settle_tab_tip(intent);
     if (!keeps_wanted_x(intent))
     {
         wanted_x_.reset();
@@ -622,6 +622,15 @@ void EditorController::settle_pending_keys(const EditorIntent &intent)
         flush_key_map_pending();
         vim_top_kept_ = false;
     }
+}
+
+// この意図だけの描き直しの要否とタイマーの頼み（`map` の待ち・タブの札の待ち）を配達に載せる。
+EditorDelivery EditorController::timed(EditorDelivery delivered) const
+{
+    delivered.repaint = repaint_;
+    delivered.map_timer = map_timer_;
+    delivered.tab_tip_timer = tab_tip_timer_;
+    return delivered;
 }
 
 EditorFrame EditorController::apply_frame(const EditorIntent &intent)
@@ -1292,6 +1301,8 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     result.mode_label =
         core::mode_label(result.mode, result.vim_mode, insert_paused(state_), result.language);
     result.guide = core::operation_guide(guide_context(), result.mode, result.language);
+    // タブの札（#1789）。札が無いときの分岐はこの 1 つ（shown_tab_tip の入口）。
+    result.tab_tip = shown_tab_tip();
     if (gridded)
     {
         GridTally tally{0, 0, lexed};

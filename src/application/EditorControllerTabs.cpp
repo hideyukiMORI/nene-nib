@@ -12,6 +12,9 @@
 #include "SplitLayout.hpp"
 #include "TabReach.hpp"
 #include "TabRecency.hpp"
+#include "TabTip.hpp"
+#include "TabTipPhase.hpp"
+#include "TabTipTimer.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
 #include "UiMessage.hpp"
@@ -27,6 +30,7 @@
 
 namespace nenenib::application
 {
+using detail::not_user_operation;
 using detail::parked_path;
 using detail::scroll_extent_for;
 
@@ -352,8 +356,83 @@ void EditorController::accept(const ScrollTabs &intent)
     state_ = state_.with_tab_scroll(core::tabs_scrolled_by(title_bar_input(), intent.notches));
 }
 
+// 載せたタブ（本体か ×）が変わったときだけ札の待ちを始め直す。タブを離れたら待ちと札を消す。同じ
+// タブの本体と × の間の動きは待ちも札も保つ（#1789）。
 void EditorController::accept(const PointTitleBar &intent)
 {
+    const auto before = core::tab_tip_tab(state_.hovered());
+    const auto after = core::tab_tip_tab(intent.target);
     state_ = state_.with_hovered(intent.target);
+    if (intent.pressed)
+    {
+        hide_tab_tip();
+        return;
+    }
+    if (before == after)
+    {
+        return;
+    }
+    if (after.has_value())
+    {
+        state_ = state_.with_tab_tip(TabTipPhase::waiting);
+        tab_tip_timer_ = TabTipTimer::start;
+        return;
+    }
+    hide_tab_tip();
+}
+
+// 待ちか札があれば消してタイマーを外す。出していなければ何もしない。
+void EditorController::hide_tab_tip()
+{
+    if (state_.tab_tip() == TabTipPhase::hidden)
+    {
+        return;
+    }
+    state_ = state_.with_tab_tip(TabTipPhase::hidden);
+    tab_tip_timer_ = TabTipTimer::stop;
+}
+
+// 待っていたタブにまだ載っていて、窓がアクティブで、面も入力行も右クリックのメニュー（#1051）も
+// 開いていなければ札を出す。何も
+// 変えなければ描き直さない（合図の形・ADR 0155 の追補・#813）。非アクティブの窓の合図は待ちを
+// 終える（載せ直すまで出さない）。
+void EditorController::accept(const TabTipTick &intent)
+{
+    repaint_ = false;
+    if (state_.tab_tip() != TabTipPhase::waiting)
+    {
+        return;
+    }
+    if (!core::tab_tip_tab(state_.hovered()).has_value() || state_.command_input().has_value() ||
+        context_menu_active() || !intent.window_active)
+    {
+        state_ = state_.with_tab_tip(TabTipPhase::hidden);
+        return;
+    }
+    repaint_ = true;
+    state_ = state_.with_tab_tip(TabTipPhase::shown);
+}
+
+// 札を消す意図を決める 1 か所（#1789）。使う人の操作（押す・鍵・ホイール・面や入力行を開く…・
+// not_user_operation でない意図）は写す前に待ちと札を消す。合図・窓の寸法・外観・帯と面の hover
+// は消さない（帯の hover は accept が載せたタブで決める）。
+void EditorController::settle_tab_tip(const EditorIntent &intent)
+{
+    tab_tip_timer_.reset();
+    if (!not_user_operation(intent))
+    {
+        hide_tab_tip();
+    }
+}
+
+std::optional<std::size_t> EditorController::shown_tab_tip() const
+{
+    const auto tab = core::tab_tip_tab(state_.hovered());
+    if (state_.tab_tip() != TabTipPhase::shown || !tab.has_value() ||
+        tab.value() >= state_.tab_count())
+    {
+        return std::nullopt;
+    }
+    return tab;
 }
 } // namespace nenenib::application
