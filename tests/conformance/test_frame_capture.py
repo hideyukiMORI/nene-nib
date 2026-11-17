@@ -228,6 +228,10 @@ class KeyNotation(unittest.TestCase):
         # 鍵の段の後の文字は入力の列から UTF-16 の単位で打つ（#1772・BMP の外は代理対）。
         self.assertEqual(utf16_units("a😀"), [0x61, 0xD83D, 0xDE00])
 
+    def test_backslashes_are_plain_characters(self):
+        # イージーモーションの `\\w`（ADR 0163・#1782）は記法を足さずに WM_CHAR の字で送れる。
+        self.assertEqual(parse_keys("\\\\ws<Esc>"), [("text", "\\\\ws"), ("key", VK_ESCAPE)])
+
     def test_an_unknown_name_is_refused(self):
         with self.assertRaises(ValueError):
             parse_keys("i<Foo>")
