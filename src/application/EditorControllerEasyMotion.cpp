@@ -83,8 +83,9 @@ void EditorController::settle_easymotion(const EditorIntent &intent)
     settle_labels(intent);
 }
 
-// engine が文字を待つのに行が無ければ開き、開いた行が確定の外で閉じられた（Esc・空の行の
-// Backspace・Enter・Ctrl+P・クリック…）なら engine の待ちを割り込みとして捨てる。待ちが無くなった
+// engine が文字を待つのに行が無ければ開き、開いた行が取り消された（Esc・空の行の Backspace・Enter）
+// なら待ちを捨てて INSERT の Ctrl-o を始め直し、ほかの入力行に置き換わった（Ctrl+P…）なら割り込み
+// として捨てる。待ちが無くなった
 // のに行が残っていれば閉じる。
 void EditorController::settle_jump_line()
 {
@@ -104,10 +105,19 @@ void EditorController::settle_jump_line()
     {
         return;
     }
-    if (jump_line_open_ || input.has_value())
+    if (input.has_value())
     {
         jump_line_open_ = false;
         state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
+        return;
+    }
+    if (jump_line_open_)
+    {
+        // 取消（Esc・Enter・空の行の Backspace）は `:` `/` の行の取消と同じ形: 待ちを捨てて INSERT
+        // の `Ctrl-o` の印は残し、INSERT を始め直す（ADR 0182 の決定 8・#1782 の追い）。
+        jump_line_open_ = false;
+        state_ = state_.with_vim(core::vim_operator_cleared(state_.vim()));
+        resume_vim_insert();
         return;
     }
     state_ = state_.with_command_input(CommandInput{JumpCharacter{waiting.value()}});

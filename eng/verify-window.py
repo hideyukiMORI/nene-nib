@@ -3398,9 +3398,7 @@ def verify_find(executable: Path, environment: dict, output: Path, frames: Path 
 
 
 # イージーモーション（ADR 0163・#1782）の見本。1 行目に跳び先の語を 3 つ、2 行目に全角の語。
-EASYMOTION_DOCUMENT = "alpha beta gamma
-日本語のテキスト
-"
+EASYMOTION_DOCUMENT = "alpha beta gamma\n日本語のテキスト\n"
 
 
 def verify_easymotion(executable: Path, environment: dict, output: Path,
@@ -3414,8 +3412,7 @@ def verify_easymotion(executable: Path, environment: dict, output: Path,
     jumps to the katakana word on the second row. Every key is a posted WM_CHAR, so the window
     never needs the foreground."""
     opened = output / "easymotion-sample.txt"
-    opened.write_text(EASYMOTION_DOCUMENT, encoding="utf-8", newline="
-")
+    opened.write_text(EASYMOTION_DOCUMENT, encoding="utf-8", newline="\n")
     process, window, _ = start(executable, environment, [str(opened)])
     try:
         raise_window(window)
