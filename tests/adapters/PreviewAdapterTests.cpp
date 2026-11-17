@@ -101,6 +101,12 @@ void write_file(const std::string &path, std::string_view bytes)
     }
     expect(written == bytes.size(), "a temporary file is written whole");
     CloseHandle(file);
+    // 書いた先がディスクの上のファイルで、大きさが書いた分か（予約名が装置を指すと書けても残らない）。
+    WIN32_FILE_ATTRIBUTE_DATA attributes{};
+    const bool on_disk =
+        GetFileAttributesExW(native.c_str(), GetFileExInfoStandard, &attributes) != 0;
+    const auto size = (std::uint64_t{attributes.nFileSizeHigh} << 32U) | attributes.nFileSizeLow;
+    expect(on_disk && size == bytes.size(), "a temporary file stays on disk with its bytes");
 }
 
 // 1 行目から count 行目まで「line N」（区切りは separator・最後も改行で終える）。
@@ -227,7 +233,7 @@ void verify_failures(Reader &reader)
 {
     expect(failed_with(reader.read("large.txt", std::nullopt), PreviewFailure::too_large),
            "a file over 16 MiB is not read");
-    expect(failed_with(reader.read("nul.bin", std::nullopt), PreviewFailure::binary),
+    expect(failed_with(reader.read("zero-byte.bin", std::nullopt), PreviewFailure::binary),
            "a file with NUL is not a text preview");
     expect(failed_with(reader.read("missing.txt", std::nullopt), PreviewFailure::unreadable),
            "a missing file cannot be read");
@@ -251,7 +257,11 @@ void make_files()
                                                 "a\0b\0\n\0",
                                                 8));
     write_file(inside("code.cpp"), "return 0; // done\n");
-    write_file(inside("nul.bin"), std::string("ab\0cd", 5));
+    // 名前に予約名（NUL・CON など）を使わない。Windows Server 2022（CI の runner）と Windows 10
+    // では `nul.bin` のような拡張子つきの予約名も GetFullPathNameW が `\\.\nul`
+    // の装置へ写し、書いても 読んでも 0 バイトになる（空の本文の窓が届き binary
+    // にならなかった・Windows 11 は予約名に 拡張子を許すので手元では起きない）。
+    write_file(inside("zero-byte.bin"), std::string("ab\0cd", 5));
     write_file(inside("large.txt"),
                std::string(static_cast<std::size_t>(core::project_search_file_limit) + 1, 'a'));
     const auto sub = adapters::native_path(core::to_utf16(inside("sub")).value_or(std::wstring{}));
