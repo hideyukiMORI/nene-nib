@@ -95,7 +95,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/EditorControllerTabs.cpp src/application/EditorControllerCommand.cpp src/application/EditorControllerPalette.cpp
     src/application/EditorControllerAutosave.cpp src/application/EditorControllerPreview.cpp src/application/EditorControllerDetail.cpp
     src/application/PreviewImages.cpp
-    src/application/EditorControllerExplorer.cpp src/application/EditorControllerShell.cpp src/application/EditorControllerStartScreen.cpp
+    src/application/EditorControllerExplorer.cpp src/application/EditorControllerShell.cpp src/application/EditorControllerStartScreen.cpp src/application/EditorControllerEasyMotion.cpp src/application/EasyMotionLabels.cpp
     src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
     src/application/AutosavePlan.cpp src/application/PasteKind.cpp src/application/VimEndOfLine.cpp
     src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp src/application/DocumentDecoding.cpp
@@ -141,6 +141,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimTextObjectTests.cpp
     tests/unit/VimMarkTests.cpp
     tests/unit/VimEasyMotionTests.cpp
+    tests/unit/VimEasyMotionInputTests.cpp
     tests/unit/VimReplaceTests.cpp
     tests/unit/VimVisualYankTests.cpp
     tests/unit/VimFixtureTable.cpp

@@ -36,6 +36,18 @@ namespace
     return core::InputLinePrompt::substitute_confirm;
 }
 
+[[nodiscard]] core::InputLinePrompt prompt_of(const JumpCharacter &)
+{
+    return core::InputLinePrompt::jump_character;
+}
+
+// 1 文字の入力行は打った文字を持たない（確定した文字はすぐ engine へ流す）。見えるのはプロンプト
+// だけで、キャレットは空の行の頭（IME の変換は入力行の差し込みとして描く）。
+[[nodiscard]] core::InputLineView view_of(const JumpCharacter &line)
+{
+    return core::InputLineView{prompt_of(line), std::string{}, core::Offset{0}, {}, std::nullopt};
+}
+
 // `:s///c` の問いの文（Vim の do_sub の文言・英語のまま訳さない・ADR 0168 の決定 6）。Vim の文の
 // `^E/^Y` は段 2a で受けないので出さない。キャレットは文の終わり（Vim は問いの後ろで待つ）。
 [[nodiscard]] core::InputLineView view_of(const SubstituteQuestion &question)
@@ -99,6 +111,11 @@ namespace
     return false;
 }
 
+[[nodiscard]] bool wants_fonts(const JumpCharacter & /*line*/)
+{
+    return false;
+}
+
 [[nodiscard]] CommandInput fonts_given(const core::CommandLine &line,
                                        const core::FontFamilies &fonts)
 {
@@ -121,6 +138,12 @@ namespace
                                        const core::FontFamilies & /*fonts*/)
 {
     return question;
+}
+
+[[nodiscard]] CommandInput fonts_given(const JumpCharacter &line,
+                                       const core::FontFamilies & /*fonts*/)
+{
+    return line;
 }
 
 [[nodiscard]] core::InputLineView view_of(const core::CommandPalette &palette)
@@ -169,6 +192,13 @@ namespace
     return question;
 }
 
+[[nodiscard]] CommandInput recalled_of(const JumpCharacter &line, const core::InputHistory & /*ex*/,
+                                       const core::InputHistory & /*search*/,
+                                       core::CommandEdit /*direction*/)
+{
+    return line;
+}
+
 [[nodiscard]] bool recalls_of(const core::CommandLine &line, const core::InputHistory &ex,
                               const core::InputHistory & /*search*/, core::CommandEdit direction)
 {
@@ -199,6 +229,13 @@ namespace
     return true;
 }
 
+[[nodiscard]] bool recalls_of(const JumpCharacter & /*line*/, const core::InputHistory & /*ex*/,
+                              const core::InputHistory & /*search*/,
+                              core::CommandEdit /*direction*/)
+{
+    return true;
+}
+
 [[nodiscard]] bool overflows_of(const core::CommandLine &line)
 {
     return line.overflowed();
@@ -219,6 +256,11 @@ namespace
     return false;
 }
 
+[[nodiscard]] bool overflows_of(const JumpCharacter & /*line*/)
+{
+    return false;
+}
+
 // 文字の差し込みと行の編集（問いは文字を答えとして controller が先に読むので、ここでは変えない）。
 template <typename Input> [[nodiscard]] auto inserted_of(const Input &input, std::string_view text)
 {
@@ -229,6 +271,13 @@ template <typename Input> [[nodiscard]] auto inserted_of(const Input &input, std
 inserted_of(const SubstituteQuestion &question, std::string_view /*text*/)
 {
     return question;
+}
+
+// 1 文字の入力行の文字は controller が先に跳び先の文字として読む（answered_jump）。
+[[nodiscard]] std::expected<JumpCharacter, core::ExFailure> inserted_of(const JumpCharacter &line,
+                                                                        std::string_view /*text*/)
+{
+    return line;
 }
 
 template <typename Input>
@@ -242,12 +291,22 @@ template <typename Input>
     return question;
 }
 
+[[nodiscard]] CommandInput edited_of(const JumpCharacter &line, core::CommandEdit /*edit*/)
+{
+    return line;
+}
+
 [[nodiscard]] std::optional<std::string> focused_of(const core::SearchLine & /*line*/)
 {
     return std::nullopt;
 }
 
 [[nodiscard]] std::optional<std::string> focused_of(const SubstituteQuestion & /*question*/)
+{
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<std::string> focused_of(const JumpCharacter & /*line*/)
 {
     return std::nullopt;
 }

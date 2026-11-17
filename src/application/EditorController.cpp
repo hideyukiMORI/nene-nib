@@ -1,4 +1,5 @@
 #include "EditorController.hpp"
+
 #include "EditorControllerDetail.hpp"
 
 #include "AutosaveId.hpp"
@@ -9,6 +10,7 @@
 #include "DiagnosticLines.hpp"
 #include "DisplayInquiry.hpp"
 #include "DisplayText.hpp"
+#include "EasyMotionLabels.hpp"
 #include "EditHistory.hpp"
 #include "ExResult.hpp"
 #include "FolderBatch.hpp"
@@ -554,6 +556,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 1・2）。
     follow_reads();
     settle_transient();
+    settle_easymotion(intent);
     settle_start_screen();
     keep_vim_character(intent);
     if (is_signal(intent) && caret_anchor_of(state_) != anchor)
@@ -1277,6 +1280,8 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     result.syntax_lexed = lexed;
     // matchparen は操作中の枠の text の表示の行だけ（ADR 0164・格子と問いの間は行が空）。
     mark_bracket(state_, state_.scroll().visible_lines, result.lines);
+    // イージーモーションの印も同じ行に写す（ADR 0163 の決定 6・格子では跳び先が無い）。
+    mark_labels(state_, result.lines);
     add_other_pane(result, source.pattern);
     result.explorer = explorer_view();
     add_minimap(result);
