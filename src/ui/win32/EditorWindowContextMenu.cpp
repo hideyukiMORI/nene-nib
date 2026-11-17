@@ -85,8 +85,14 @@ void EditorWindow::release_right(LPARAM data)
     {
         return;
     }
+    // 押した枠と離した枠が同じときだけ開く（ADR 0056 の決定 9 と同じ考え・V-1791b の K4）。
+    const bool other = in_other_text_body(point);
+    if (other != in_other_text_body(pressed.value()) || (!other && !in_text_body(pressed.value())))
+    {
+        return;
+    }
     // もう 1 つの枠の上なら、左クリックと同じくその枠へ移ってから開く（ADR 0148 の決定 11）。
-    if (in_other_text_body(point))
+    if (other)
     {
         send(application::SwitchPane{});
     }
@@ -184,6 +190,10 @@ LRESULT EditorWindow::context_menu_message(UINT message, WPARAM word, LPARAM dat
     case WM_RBUTTONUP:
         release_right(data);
         return 0;
+    // 帯の空き（クライアントの外）の右の押しでも閉じてから、既定の処理（窓のメニュー）へ。
+    case WM_NCRBUTTONDOWN:
+        close_context_menu_outside();
+        return DefWindowProcW(window_, message, word, data);
     // Shift+F10 の後の SC_KEYMENU を捨てる（ContextMenuKey.hpp）。ほかの WM_SYSCOMMAND は既定へ。
     case WM_SYSCOMMAND:
         return swallows_key_menu(word, data, controller_.context_menu_active(), held(VK_SHIFT))

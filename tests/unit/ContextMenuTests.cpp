@@ -17,6 +17,7 @@
 #include "ContextMenuView.hpp"
 #include "DevicePixels.hpp"
 #include "DisplayLanguage.hpp"
+#include "DocumentFormatKind.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -27,6 +28,7 @@
 #include "LineNumber.hpp"
 #include "MoveCaret.hpp"
 #include "OpenContextMenu.hpp"
+#include "OpenDocumentFormatList.hpp"
 #include "OpenOperationList.hpp"
 #include "OperationTexts.hpp"
 #include "PaletteMode.hpp"
@@ -48,8 +50,10 @@
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
 #include "VimMode.hpp"
+#include "VimSpecialKey.hpp"
 #include "VisibleLines.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -527,6 +531,40 @@ void verify_vim_operation_list_runs()
            "paste from the vim list runs \"+p through the engine like the menu");
 }
 
+// INSERT の Ctrl-o の後にメニューから選んでも、命令の後は INSERT へ戻る（印を保つ・ADR 0182 の
+// 決定 8・V-1791b の N1）。
+void verify_vim_insert_pause_kept()
+{
+    Editing editing;
+    auto &controller = vim_line(editing).controller();
+    editing.clipboard().hold(Content{"XY"});
+    press_keys(controller, U"i");
+    static_cast<void>(
+        controller.apply(app::VimKeyPress{core::VimKey{core::VimSpecialKey::control_o}}));
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    const auto frame = controller.apply_frame(app::ChooseContextMenu{paste_row});
+    expect(frame.vim_mode == core::VimMode::insert && editing.clipboard().reads() == 1,
+           "a menu row after Ctrl-o in insert runs and returns to insert");
+}
+
+// 文字コードと改行の選択の面で `?` を打った一覧も、Vim の NORMAL の鍵の列の形（V-1791b の K1）。
+void verify_format_list_operations()
+{
+    Editing editing;
+    auto &controller = vim_line(editing).controller();
+    static_cast<void>(
+        controller.apply(app::OpenDocumentFormatList{core::DocumentFormatKind::encoding}));
+    static_cast<void>(controller.apply(app::CommandText{"?こぴー"}));
+    const auto listed = controller.frame().command_palette.value_or(app::CommandPaletteView{});
+    expect(std::ranges::none_of(listed.rows,
+                                [](const core::CommandChoice &row)
+                                {
+                                    return row.operation == core::EditorOperation::copy ||
+                                           row.operation == core::EditorOperation::cut;
+                                }),
+           "the operation list from the format face leaves out copy and cut in vim normal");
+}
+
 // 表の Vim の鍵の列は全部 map の行と同じ読み手で読める（読めない列は何も流さない）。
 void verify_vim_columns_parse()
 {
@@ -560,5 +598,7 @@ void verify_context_menu_scope()
     verify_vim_waiting_discarded();
     verify_vim_operation_list();
     verify_vim_operation_list_runs();
+    verify_vim_insert_pause_kept();
+    verify_format_list_operations();
 }
 } // namespace nenenib::tests

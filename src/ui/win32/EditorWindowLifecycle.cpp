@@ -62,8 +62,8 @@ constexpr UINT autosave_question_message = WM_APP + 2;
 // pointer_message が受けるマウスの通知とカーソル（面と本文の境のカーソル・ADR 0162 の追補 D78）。
 // 本文の右クリックのメニューの入口（右の押しと離し・Shift+F10 とメニューキーの WM_CONTEXTMENU・
 // #1051）。
-constexpr std::array<UINT, 4> context_menu_messages{WM_RBUTTONDOWN, WM_RBUTTONUP, WM_CONTEXTMENU,
-                                                    WM_SYSCOMMAND};
+constexpr std::array<UINT, 5> context_menu_messages{WM_RBUTTONDOWN, WM_RBUTTONUP, WM_CONTEXTMENU,
+                                                    WM_SYSCOMMAND, WM_NCRBUTTONDOWN};
 constexpr std::array<UINT, 10> pointer_messages{
     WM_LBUTTONDOWN, WM_LBUTTONDBLCLK, WM_LBUTTONUP,  WM_MBUTTONDOWN,    WM_MBUTTONUP,
     WM_MOUSEMOVE,   WM_MOUSELEAVE,    WM_MOUSEWHEEL, WM_CAPTURECHANGED, WM_SETCURSOR};

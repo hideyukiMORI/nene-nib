@@ -229,8 +229,9 @@ void EditorController::run_listed_operation(core::EditorOperation operation)
 }
 
 // メニューと F1 の一覧の実行の入口の 1 本（追補 #1051）。Vim の鍵の列があれば、待ちの状態（回数・
-// オペレータ・1 鍵の引数待ち・`"` のレジスタ・`q` の名前待ち）を捨ててから（VISUAL は保つ・Vim の
-// `:amenu` が先に `<C-C>` を入れるのと同じ）Vim で同じ鍵を打ったのと同じく流す（`"+` は step_vim の
+// オペレータ・1 鍵の引数待ち・`"` のレジスタ・`q` の名前待ち）を vim_operator_cleared で捨ててから
+// （VISUAL と INSERT の Ctrl-o の印は保つ・ADR 0182 の決定 8・Vim の `:amenu` が先に `<C-C>` を
+// 入れるのと同じ）Vim で同じ鍵を打ったのと同じく流す（`"+` は step_vim の
 // 直前にクリップボードから写す・ADR 0051）。無ければ ui の run_operation（鍵と同じ 1 本）。
 void EditorController::run_operation_keys(core::EditorOperation operation, std::string_view keys)
 {
@@ -245,7 +246,7 @@ void EditorController::run_operation_keys(core::EditorOperation operation, std::
     {
         return;
     }
-    state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
+    state_ = state_.with_vim(core::vim_operator_cleared(state_.vim()));
     static_cast<void>(delivered_keys(parsed.value()));
 }
 

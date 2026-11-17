@@ -172,7 +172,7 @@ void EditorController::accept(const OpenDocumentFormatList &intent)
     auto [entries, current] = format_choices(intent.kind);
     state_ = state_.with_command_input(
         core::CommandPalette::opened(
-            entries, "", state_.mode(),
+            entries, "", core::PaletteMode{state_.mode(), context_menu_mode()},
             core::CommandLine::empty(state_.themes()).with_language(state_.display_language()))
             .selected_at(current));
 }
