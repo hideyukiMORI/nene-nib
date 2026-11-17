@@ -163,6 +163,7 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::notice_shell_registry_failed, "无法读写注册表"},
     {UiMessage::notice_shell_empty_path, "缺少 exe 的路径"},
     {UiMessage::notice_shell_quote_in_path, "exe 的路径中含有 \""},
+    {UiMessage::notice_shell_packaged, "Store 版无法使用右键菜单注册"},
     {UiMessage::notice_pane_already_split, "已经拆分"},
     {UiMessage::notice_pane_preview_unreachable, "无法进入预览窗格"},
     {UiMessage::notice_layout_inconsistent, "内部不一致：屏幕行查询（按键无效）"},

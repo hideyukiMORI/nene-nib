@@ -435,21 +435,25 @@ void verify_controller_initial_appearance()
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, code_pages};
     ScriptedLanguageServer language_server;
-    EditorController from_light(nenenib::application::EditorPorts{
-        light,        board,           files,       code_pages,     settings,
-        themes,       session,         history,     folders,        bookmarks,
-        text_layouts, autosave,        fonts,       bell,           markdown,
-        reads,        language_server, wall_clock,  printer,        shell_registration,
-        images,       start_lists,     ui_language, project_search, previews});
+    EditorController from_light(
+        nenenib::application::EditorPorts{
+            light,        board,           files,       code_pages,     settings,
+            themes,       session,         history,     folders,        bookmarks,
+            text_layouts, autosave,        fonts,       bell,           markdown,
+            reads,        language_server, wall_clock,  printer,        shell_registration,
+            images,       start_lists,     ui_language, project_search, previews},
+        nenenib::core::Distribution::unpackaged);
     expect(from_light.frame().palette.background == RgbColor{0xF4, 0xF5, 0xF7},
            "a readable light setting is used");
     ScriptedAppearance dark{Reading{Appearance::dark}};
-    EditorController from_dark(nenenib::application::EditorPorts{
-        dark,         board,           files,       code_pages,     settings,
-        themes,       session,         history,     folders,        bookmarks,
-        text_layouts, autosave,        fonts,       bell,           markdown,
-        reads,        language_server, wall_clock,  printer,        shell_registration,
-        images,       start_lists,     ui_language, project_search, previews});
+    EditorController from_dark(
+        nenenib::application::EditorPorts{
+            dark,         board,           files,       code_pages,     settings,
+            themes,       session,         history,     folders,        bookmarks,
+            text_layouts, autosave,        fonts,       bell,           markdown,
+            reads,        language_server, wall_clock,  printer,        shell_registration,
+            images,       start_lists,     ui_language, project_search, previews},
+        nenenib::core::Distribution::unpackaged);
     expect(from_dark.frame().palette.background == RgbColor{0x30, 0x0A, 0x24},
            "a readable dark setting is used");
 }
@@ -485,12 +489,14 @@ void verify_controller_read_failures()
          {AppearanceReadFailure::unavailable, AppearanceReadFailure::unreadable})
     {
         ScriptedAppearance port{Reading{std::unexpect, failure}};
-        EditorController controller(nenenib::application::EditorPorts{
-            port,         board,           files,       code_pages,     settings,
-            themes,       session,         history,     folders,        bookmarks,
-            text_layouts, autosave,        fonts,       bell,           markdown,
-            reads,        language_server, wall_clock,  printer,        shell_registration,
-            images,       start_lists,     ui_language, project_search, previews});
+        EditorController controller(
+            nenenib::application::EditorPorts{
+                port,         board,           files,       code_pages,     settings,
+                themes,       session,         history,     folders,        bookmarks,
+                text_layouts, autosave,        fonts,       bell,           markdown,
+                reads,        language_server, wall_clock,  printer,        shell_registration,
+                images,       start_lists,     ui_language, project_search, previews},
+            nenenib::core::Distribution::unpackaged);
         expect(controller.frame().palette.background == dark.background,
                "an unreadable setting falls back to dark");
     }
@@ -523,12 +529,14 @@ void verify_controller_refresh()
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, code_pages};
     ScriptedLanguageServer language_server;
-    EditorController controller(nenenib::application::EditorPorts{
-        port,         board,           files,       code_pages,     settings,
-        themes,       session,         history,     folders,        bookmarks,
-        text_layouts, autosave,        fonts,       bell,           markdown,
-        reads,        language_server, wall_clock,  printer,        shell_registration,
-        images,       start_lists,     ui_language, project_search, previews});
+    EditorController controller(
+        nenenib::application::EditorPorts{
+            port,         board,           files,       code_pages,     settings,
+            themes,       session,         history,     folders,        bookmarks,
+            text_layouts, autosave,        fonts,       bell,           markdown,
+            reads,        language_server, wall_clock,  printer,        shell_registration,
+            images,       start_lists,     ui_language, project_search, previews},
+        nenenib::core::Distribution::unpackaged);
     port.script(Reading{Appearance::dark});
     const auto frame = controller.apply_frame(RefreshAppearance{});
     expect(frame.palette.background == RgbColor{0x30, 0x0A, 0x24},

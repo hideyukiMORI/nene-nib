@@ -20,6 +20,7 @@
 #include "Diagnostic.hpp"
 #include "DiagnosticsCount.hpp"
 #include "DisplayLanguage.hpp"
+#include "Distribution.hpp"
 #include "Document.hpp"
 #include "DocumentFormatKind.hpp"
 #include "DocumentReadFinished.hpp"
@@ -34,6 +35,7 @@
 #include "EditorDelivery.hpp"
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
+#include "EditorOperation.hpp"
 #include "EditorPorts.hpp"
 #include "EditorState.hpp"
 #include "ExClipboardRequest.hpp"
@@ -189,7 +191,9 @@ class EditorController final
 {
   public:
     // 起動引数のファイルは順にタブで開く（ADR 0056 の決定 13）。どれも通常の OpenDocument を通る。
-    explicit EditorController(EditorPorts ports, const std::vector<OpenDocument> &initial = {});
+    // distribution は製品の形で、合成ルートが起動時に 1 回 OS に問うた値（ADR 0178 の追補 #1809）。
+    EditorController(EditorPorts ports, core::Distribution distribution,
+                     const std::vector<OpenDocument> &initial = {});
     [[nodiscard]] EditorDelivery apply(const EditorIntent &intent);
     // 試験が意図を流して完全な描画値を読む薄い組み合わせ（ADR 0084）。
     [[nodiscard]] EditorFrame apply_frame(const EditorIntent &intent);
@@ -1061,6 +1065,8 @@ class EditorController final
     void accept(const UnregisterShell &);
     // 登録の結果の 1 行（鳴らさない）。
     void show_shell_notice(const std::string &text);
+    // その操作が製品の形で効くか。効かなければ書かずに 1 行知らせて偽（ADR 0178 の追補 #1809）。
+    [[nodiscard]] bool shell_operation_distributed(core::EditorOperation operation);
     // バージョン情報（施主決定 D90）。core::app_about_line の 1 行を知らせにするだけで、port を
     // 呼ばない（ページを開かない・通信しない）。
     void accept(const ShowVersion &);
@@ -1359,6 +1365,8 @@ class EditorController final
     source_parts(std::string source, core::TextEncoding encoding, std::string &held);
 
     EditorPorts ports_;
+    // 製品の形（ADR 0178 の追補 #1809）。F1 の一覧と登録の 2 つの操作だけが読む。
+    core::Distribution distribution_;
     EditorState state_;
     core::TextViewGeometry view_geometry_{};
     // 窓の client の物理画素（ADR 0150 の決定 1）。0 は寸法が届く前。

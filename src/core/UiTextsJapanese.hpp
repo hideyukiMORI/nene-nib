@@ -170,6 +170,7 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::notice_shell_registry_failed, "レジストリを読み書きできませんでした"},
     {UiMessage::notice_shell_empty_path, "exe のパスがありません"},
     {UiMessage::notice_shell_quote_in_path, "exe のパスに \" があります"},
+    {UiMessage::notice_shell_packaged, "Store 版では右クリックへの登録は使えません"},
     {UiMessage::notice_pane_already_split, "もう分かれています"},
     {UiMessage::notice_pane_preview_unreachable, "プレビューの枠には入れません"},
     {UiMessage::notice_layout_inconsistent, "内部の不整合: 画面行の問い（鍵は無効）"},

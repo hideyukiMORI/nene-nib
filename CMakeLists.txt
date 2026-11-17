@@ -274,7 +274,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/SynchronousDocumentReader.cpp src/adapters/win32/Win32DocumentReader.cpp
     src/adapters/win32/DocumentReadShelf.cpp src/adapters/win32/DocumentChunkRead.cpp
     src/adapters/win32/HistoryCodec.cpp src/adapters/win32/Win32HistoryAdapter.cpp
-    src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32Bell.cpp src/adapters/win32/Win32Clock.cpp src/adapters/win32/Win32UiLanguage.cpp src/adapters/win32/Win32ShellRegistration.cpp src/adapters/win32/Win32WslDistributions.cpp
+    src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32Bell.cpp src/adapters/win32/Win32Clock.cpp src/adapters/win32/Win32UiLanguage.cpp src/adapters/win32/Win32Distribution.cpp src/adapters/win32/Win32ShellRegistration.cpp src/adapters/win32/Win32WslDistributions.cpp
     src/adapters/win32/ClipboardCalls.cpp src/adapters/win32/HtmlClipboardFormat.cpp src/adapters/win32/Win32ClipboardAdapter.cpp
     src/adapters/win32/Win32CodePageAdapter.cpp src/adapters/win32/Win32FontCollationAdapter.cpp
     src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/PlacementCleanup.cpp src/adapters/win32/TemporaryFiles.cpp src/adapters/win32/ProcessInstances.cpp

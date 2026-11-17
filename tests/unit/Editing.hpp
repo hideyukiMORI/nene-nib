@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Appearance.hpp"
+#include "Distribution.hpp"
 #include "EditorController.hpp"
 #include "EditorPorts.hpp"
 #include "OpenDocument.hpp"
@@ -47,31 +48,28 @@ class Editing final
     explicit Editing(SettingsReading reading = std::nullopt,
                      nenenib::core::ThemeCatalog themes = nenenib::core::ThemeCatalog::builtins())
         : settings_(std::move(reading)), themes_(std::move(themes)),
-          controller_(nenenib::application::EditorPorts{
-              appearance_,   clipboard_,       files_,       code_pages_,     settings_,
-              themes_,       session_,         history_,     folders_,        bookmarks_,
-              text_layouts_, autosave_,        fonts_,       bell_,           markdown_,
-              reads_,        language_server_, wall_clock_,  printer_,        shell_registration_,
-              images_,       start_lists_,     ui_language_, project_search_, previews_})
+          controller_(ports(), nenenib::core::Distribution::unpackaged)
     {
     }
 
     // OS の表示言語の観測を置いてから controller を作る口（ADR 0123 の追補 2026-11-13・#1019）。
     Editing(SettingsReading reading, std::optional<nenenib::core::DisplayLanguage> observed)
         : settings_(std::move(reading)), ui_language_(observed),
-          controller_(nenenib::application::EditorPorts{
-              appearance_,   clipboard_,       files_,       code_pages_,     settings_,
-              themes_,       session_,         history_,     folders_,        bookmarks_,
-              text_layouts_, autosave_,        fonts_,       bell_,           markdown_,
-              reads_,        language_server_, wall_clock_,  printer_,        shell_registration_,
-              images_,       start_lists_,     ui_language_, project_search_, previews_})
+          controller_(ports(), nenenib::core::Distribution::unpackaged)
+    {
+    }
+
+    // 製品の形を名指しして controller を作る口（ADR 0178 の追補 #1809）。Store 版の試験は値を渡す
+    // だけで、OS を偽装しない。
+    explicit Editing(nenenib::core::Distribution distribution) : controller_(ports(), distribution)
     {
     }
 
     // 起動で前回のタブを戻す契約の口（ADR 0059 の決定 6）。一覧の読みと、controller が起動のときに
     // 読むファイルを仕込んでから controller を作る。
     Editing(SessionReading listed, const std::function<void(ScriptedFiles &)> &prepare)
-        : session_(std::move(listed)), controller_(prepared_ports(prepare))
+        : session_(std::move(listed)),
+          controller_(prepared_ports(prepare), nenenib::core::Distribution::unpackaged)
     {
     }
 
@@ -79,7 +77,8 @@ class Editing final
     // 替え玉（裏へ回す境目）を仕込んでから controller を作る。
     Editing(SessionReading listed, const std::vector<nenenib::application::OpenDocument> &initial,
             const std::function<void(ScriptedFiles &, ScriptedDocumentReads &)> &prepare)
-        : session_(std::move(listed)), controller_(prepared_reads(prepare), initial)
+        : session_(std::move(listed)),
+          controller_(prepared_reads(prepare), nenenib::core::Distribution::unpackaged, initial)
     {
     }
 
@@ -216,6 +215,11 @@ class Editing final
     prepared_ports(const std::function<void(ScriptedFiles &)> &prepare)
     {
         prepare(files_);
+        return ports();
+    }
+
+    [[nodiscard]] nenenib::application::EditorPorts ports()
+    {
         return nenenib::application::EditorPorts{
             appearance_,   clipboard_,       files_,       code_pages_,     settings_,
             themes_,       session_,         history_,     folders_,        bookmarks_,

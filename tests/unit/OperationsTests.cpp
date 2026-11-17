@@ -2,7 +2,9 @@
 // 使わない。
 #include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
+#include "ContextMenuMode.hpp"
 #include "DisplayLanguage.hpp"
+#include "Distribution.hpp"
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
 #include "KeyChord.hpp"
@@ -11,6 +13,7 @@
 #include "OperationModes.hpp"
 #include "OperationReadings.hpp"
 #include "OperationTexts.hpp"
+#include "PaletteMode.hpp"
 #include "Scopes.hpp"
 #include "TestSupport.hpp"
 #include "UiTexts.hpp"
@@ -440,6 +443,55 @@ void verify_operation_choices()
            "a key kept with Shift is not the shown key");
 }
 
+// Store 版（パッケージ）の一覧は登録の 2 つを外し、ほかは ZIP 版と同じ順（ADR 0178 の追補 #1809）。
+// 件数はパッケージの有無で 2 通り（通常・Vim の INSERT・NORMAL・VISUAL の各モード）。
+void verify_packaged_operation_choices()
+{
+    using nenenib::core::ContextMenuMode;
+    using nenenib::core::Distribution;
+    using nenenib::core::PaletteMode;
+    const auto sizes = [](Distribution distribution)
+    {
+        std::vector<std::size_t> counted;
+        for (const PaletteMode mode :
+             {PaletteMode{EditMode::ordinary, ContextMenuMode::ordinary, distribution},
+              PaletteMode{EditMode::vim, ContextMenuMode::vim_insert, distribution},
+              PaletteMode{EditMode::vim, ContextMenuMode::vim_normal, distribution},
+              PaletteMode{EditMode::vim, ContextMenuMode::vim_visual, distribution}})
+        {
+            counted.push_back(
+                nenenib::core::operation_choices("", mode, nenenib::core::DisplayLanguage::japanese)
+                    .size());
+        }
+        return counted;
+    };
+    expect(sizes(Distribution::unpackaged) == std::vector<std::size_t>{46, 44, 42, 44} &&
+               sizes(Distribution::packaged) == std::vector<std::size_t>{44, 42, 40, 42},
+           "the packaged list has two rows fewer than the zip list in every mode");
+    const auto packaged = nenenib::core::operation_choices(
+        "", PaletteMode{EditMode::ordinary, ContextMenuMode::ordinary, Distribution::packaged},
+        nenenib::core::DisplayLanguage::japanese);
+    std::vector<Operation> expected;
+    for (const auto &text : nenenib::core::operation_texts)
+    {
+        if (text.operation != EditorOperation::register_shell &&
+            text.operation != EditorOperation::unregister_shell)
+        {
+            expected.emplace_back(text.operation);
+        }
+    }
+    expect(operations_of(packaged) == expected,
+           "the packaged list leaves out only the two registration rows and keeps the order");
+    const auto searched = operations_of(nenenib::core::operation_choices(
+        "とうろく", PaletteMode{EditMode::vim, ContextMenuMode::vim_insert, Distribution::packaged},
+        nenenib::core::DisplayLanguage::japanese));
+    expect(std::ranges::find(searched, Operation{EditorOperation::register_shell}) ==
+                   searched.end() &&
+               std::ranges::find(searched, Operation{EditorOperation::unregister_shell}) ==
+                   searched.end(),
+           "the reading of the registration does not find it in the packaged list");
+}
+
 // F5 の日時の挿入は F1 の一覧に表の行から載る（ADR 0175 の決定 3・ADR 0078）。
 void verify_date_time_choice()
 {
@@ -479,6 +531,7 @@ void verify_operations_scope()
     verify_no_shared_key();
     verify_texts();
     verify_operation_choices();
+    verify_packaged_operation_choices();
     verify_date_time_choice();
     verify_print_choice();
 }
