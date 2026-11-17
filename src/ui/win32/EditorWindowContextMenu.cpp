@@ -24,6 +24,7 @@
 
 namespace nenenib::ui::win32
 {
+using detail::held;
 using detail::high_word_of;
 using detail::low_word_of;
 
@@ -183,6 +184,11 @@ LRESULT EditorWindow::context_menu_message(UINT message, WPARAM word, LPARAM dat
     case WM_RBUTTONUP:
         release_right(data);
         return 0;
+    // Shift+F10 の後の SC_KEYMENU を捨てる（ContextMenuKey.hpp）。ほかの WM_SYSCOMMAND は既定へ。
+    case WM_SYSCOMMAND:
+        return swallows_key_menu(word, data, controller_.context_menu_active(), held(VK_SHIFT))
+                   ? 0
+                   : DefWindowProcW(window_, message, word, data);
     default:
         return open_context_menu_from_keys(data) ? 0 : DefWindowProcW(window_, message, word, data);
     }

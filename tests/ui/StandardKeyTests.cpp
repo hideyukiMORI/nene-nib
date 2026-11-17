@@ -112,6 +112,16 @@ void verify_clipboard_keys_reach_their_turn()
     expect(nenenib::ui::win32::opened_from_keys(-1) &&
                !nenenib::ui::win32::opened_from_keys(MAKELPARAM(120, 40)),
            "only the keyboard WM_CONTEXTMENU opens the menu");
+    // Shift+F10 の F10 の離しの SC_KEYMENU（窓のメニューのモード）は捨て、開いたメニューの 1 回目の
+    // Esc が閉じる。F10 単独・Alt・Alt+文字・ほかの WM_SYSCOMMAND は既定の処理のまま。
+    using nenenib::ui::win32::swallows_key_menu;
+    expect(swallows_key_menu(SC_KEYMENU, 0, false, true) &&
+               swallows_key_menu(SC_KEYMENU, 0, true, false),
+           "Shift+F10 and an open menu keep the window out of the menu mode");
+    expect(!swallows_key_menu(SC_KEYMENU, 0, false, false) &&
+               !swallows_key_menu(SC_KEYMENU, 'f', false, false) &&
+               !swallows_key_menu(SC_CLOSE, 0, true, true),
+           "F10 alone, Alt keys and other system commands keep the default");
 }
 
 void verify_new_tab_and_redo_keys()
