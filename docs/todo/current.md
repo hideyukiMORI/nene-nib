@@ -22,7 +22,7 @@ GitHub Issue が正で、ここは 1 画面の要約。日ごとの経緯は書�
 4. 1.0.1: Store 版から右クリックの登録の操作を隠す。後続の Issue #1690・#1696〜#1708。
 5. **探して見る面**（D95 / D96・[ADR 0189](../adr/0189-finder-preview-pane-and-waiting-effect.md)・採用案 [docs/design/2026-11-16-finder-look.md](../design/2026-11-16-finder-look.md)）: 全文検索（#1003）は main に入った。プレビュー欄は P1（置き方・Ctrl+Shift+P・設定）と P2（開いていないファイルを worker が読む・構文の色）がまとめ枝 40 の材料。残りは P3（待ちの間の演出「解読」）→ ルートの下のファイル名 → 行（#1015）・全タブの本文・見出し・診断 → レジスタ・ジャンプ・変更位置・マーク。
 
-6. **イージーモーション**（#998・FR-023・[ADR 0163](../adr/0163-easymotion-labels-visible-jump-targets-through-the-engine.md)）: 段 M2〜M4 が 2026-11-17 に main へ入った。残りは限界の分（オペレータの後の `d\w`・`t` `T`・split のもう 1 つの枠・回数）で、hide の試用の後に決める。
+6. **イージーモーション**（#998・FR-023・[ADR 0163](../adr/0163-easymotion-labels-visible-jump-targets-through-the-engine.md)）: 段 M2〜M4 が 2026-11-17 に main へ入った。残りは限界の分（オペレータの後の `d\\w`・`t` `T`・split のもう 1 つの枠・回数）で、hide の試用の後に決める。
 
 7. **本文の右クリックのメニュー**（#1051・D71・FR-031・PR #1791）: 切り取り・コピー・貼り付け・削除｜すべて選択｜検索・置換。通常モードは Windows の鍵、Vim の NORMAL / VISUAL は Vim の鍵の列（`"+y` `"+d` `"+p`）を engine に流す。右クリック・Shift+F10・メニューキー。レビューの直しの途中で、まとめ枝 40 で入れる。実機のクリップボードに触る確かめは hide の了承の後。
 
