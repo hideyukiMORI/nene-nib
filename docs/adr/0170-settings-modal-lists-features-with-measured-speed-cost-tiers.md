@@ -73,7 +73,7 @@ v4 の鍵の集合に `explorer_width=<DIP の 10 進・先頭の 0 なし・120
 5. **1.0.0 と並べて使ったときの見え方（受け入れる・D91）。** 同じ PC に 1.0.0（ZIP 版でも Store 版でも置き場は同じ `%LOCALAPPDATA%\NeNeNib`）と後の版が在るとき: 後の版で変えた設定は `settings.v5` に入り、1.0.0 からは見えない。`settings.v5` が出来た後に 1.0.0 で変えた設定は `settings.v4` に入り、後の版からは見えない（v5 が在るので v4 を読まない）。どちらの版も、自分の読む版のファイルを壊されないので今までどおり動く。
 6. **契約。** adapters の設定の試験に: v5 の往復・v4 だけが在るときの読み（既定を補う・v4 の bytes が変わらない）・v4 に `autoindent` が在れば拒否・v5 と v4 の両方が在れば v5 が勝つ・壊れた v5 は v4 へ戻らず保存を拒否・書いた後も v4 の bytes が同じ。「1.0.0 が書いた形の `settings.v4`」の見本（1.0.0 の公開元の codec が書くバイト列）を試験の入力に 1 つ持ち、後の版がそれを読めることを守る。
 
-足した鍵の記録（v5）: `autoindent`（#1086・既定 off）。
+足した鍵の記録（v5）: `autoindent`（#1086・既定 off）・`finder_preview`（#1785 / #1793・既定 `auto`・`autoindent` の後ろ・ADR 0189 の決定 1）。v5 を書く最初の公開版は 1.1.0 で、v5 の鍵の集合はこの 2 つを足した形で閉じる（4 の決まり・#1815・公開の記録 `docs/quality/release-1.1.0-2026-11-17.md`）。
 
 状態: **active**（#1086・PR #1668）。製品の正本は `settings.v5`（`SettingsVersion::v5`・読む順と照合の順は `Win32SettingsAdapter` の `reading_order` の 1 か所）。6 の契約は `nib_adapter_tests` の `verify_released_v4_settings`（1.0.0 の公開元の codec の書式で書いた `settings.v4` の見本 `released_v4_settings`・v4 の `autoindent` の拒否）と `verify_v4_migration` `verify_v4_conflicts`（v4 だけの読み・読むだけでは書かない・v5 だけを書いて v4 以下の bytes が同じ・v5 が勝つ・v4 の変更と lock・壊れた v5 は v4 へ戻らない）が守る。CLAUDE.md §2 の設定の節と README は同じ PR で合わせた。
 
