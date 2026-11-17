@@ -591,6 +591,7 @@ EditorState EditorState::with_intent_cleared() const
     next.closing_ = false;
     next.close_request_ = std::nullopt;
     next.operation_request_ = std::nullopt;
+    next.tab_sweep_request_ = std::nullopt;
     next.display_question_ = false;
     return next;
 }
@@ -924,6 +925,18 @@ EditorState::with_operation_request(std::optional<core::EditorOperation> operati
 {
     EditorState next(*this);
     next.operation_request_ = operation;
+    return next;
+}
+
+const std::optional<TabSweep> &EditorState::tab_sweep_request() const noexcept
+{
+    return tab_sweep_request_;
+}
+
+EditorState EditorState::with_tab_sweep_request(std::optional<TabSweep> sweep) const
+{
+    EditorState next(*this);
+    next.tab_sweep_request_ = sweep;
     return next;
 }
 

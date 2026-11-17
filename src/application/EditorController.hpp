@@ -128,6 +128,7 @@
 #include "SubstituteQuestion.hpp"
 #include "SubstituteReply.hpp"
 #include "SyntaxStateCache.hpp"
+#include "TabNamePart.hpp"
 #include "TabReach.hpp"
 #include "TextBuffer.hpp"
 #include "TextCaret.hpp"
@@ -224,6 +225,11 @@ class EditorController final
     [[nodiscard]] bool context_menu_active() const noexcept;
     // 開いているメニューの選んでいる行（マウスの動きのたびに窓が比べる安い読み）。
     [[nodiscard]] std::optional<std::size_t> context_menu_highlighted() const noexcept;
+    // 帯のタブの退避番号の並び（帯の順）とアクティブなタブの位置（ADR 0078 の追補 #1790）。窓が
+    // 「ほかのタブを閉じる」「右のタブを閉じる」で次に閉じるタブを引き直す安い読みで、frame を
+    // 作らない。
+    [[nodiscard]] const std::vector<AutosaveId> &tab_ids() const noexcept;
+    [[nodiscard]] std::size_t active_tab() const noexcept;
     // エクスプローラーの面に焦点があるか（ADR 0162 の決定 4・E4 で足した口）。窓が鍵の行き先を
     // 決めるための安い読みで、frame を作らない。面が消えていれば偽。
     [[nodiscard]] bool explorer_focused() const noexcept;
@@ -1077,6 +1083,35 @@ class EditorController final
     void run_context_menu_row(const core::ContextMenuItem &item, core::ContextMenuMode mode);
     // メニューと F1 の一覧の実行の 1 本。keys が空なら operation_request、あれば待ちを捨てて流す。
     void run_operation_keys(core::EditorOperation operation, std::string_view keys);
+    // タブの右クリックのメニュー（#1790）。開く・選んだ行の実行・帯が変わったら閉じる。
+    void accept(const OpenTabMenu &intent);
+    void accept(const CopyTabName &intent);
+    void accept(const RevealTab &);
+    // 退避番号 tab のタブに当てる（開いてから帯が変われば出口の settle_context_menu が閉じている
+    // ので、番号は帯にある）。
+    void run_tab_menu_row(core::EditorOperation operation, AutosaveId tab);
+    // 選んだ行を種類ごとの道で実行する（メニューは閉じた後）。
+    void run_chosen_row(const ContextMenuOpen &menu, std::size_t row);
+    // タブの項目の実行（帯の位置 tab のタブに当てる・表 tab_menu_runner が引く）。
+    void reveal_tab_at(std::size_t tab);
+    void copy_tab_path_at(std::size_t tab);
+    void copy_tab_file_name_at(std::size_t tab);
+    void copy_tab_name_at(std::size_t tab, TabNamePart part);
+    void save_tab_at(std::size_t tab);
+    void save_tab_as_at(std::size_t tab);
+    void close_tab_at(std::size_t tab);
+    void close_tabs_beside_at(std::size_t tab);
+    void close_tabs_right_at(std::size_t tab);
+    // 切り替えてから operation_request を立てる（保存と名前を付けて保存）。切り替えが成らなければ
+    // 何もしない。
+    void run_on_tab(std::size_t tab, core::EditorOperation operation);
+    using TabMenuRunner = void (EditorController::*)(std::size_t);
+    [[nodiscard]] static TabMenuRunner tab_menu_runner(core::EditorOperation operation) noexcept;
+    // 意図の出口で、タブのメニューの帯が開いたときと違っていれば閉じる（合図で読みが外れた など）。
+    void settle_context_menu();
+    // エクスプローラーで場所を開く頼みの失敗を受け取り、最後の 1 つを知らせる。頼んでいなければ
+    // port を呼ばない。
+    void collect_reveals();
     // F1 の一覧から選んだ操作。Vim の NORMAL / VISUAL の 5 つはメニューと同じ Vim の鍵の列。
     void run_listed_operation(core::EditorOperation operation);
     [[nodiscard]] std::optional<ContextMenuView> context_menu_view() const;
@@ -1534,8 +1569,10 @@ class EditorController final
     // 読みを頼んだ後に履歴から外した path（届いた列から外す・届いたら捨てる・#1495）。
     std::vector<core::FilePath> start_forgotten_;
     std::optional<std::size_t> start_selection_;
-    // 開いている右クリックのメニュー（ADR 0078 の追補 #1051）。
+    // 開いている右クリックのメニュー（ADR 0078 の追補 #1051 / #1790）。
     std::optional<ContextMenuOpen> context_menu_;
+    // 失敗がまだ届きうるエクスプローラーで場所を開く頼みの数（#1790・collect の呼び分け）。
+    std::size_t reveals_pending_ = 0;
     // 写している途中の意図の深さと、いちばん外の意図の入口の印（ADR 0137 の追補 #1625）。apply の
     // 入口と出口が整数を書くだけで、例外で抜けると深さは戻らない（落ちたときは「意図の中」と読む）。
     std::size_t intent_depth_ = 0;

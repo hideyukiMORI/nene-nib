@@ -1,6 +1,7 @@
 #include "EditorWindow.hpp"
 #include "EditorWindowDetail.hpp"
 
+#include "AutosaveId.hpp"
 #include "BeginFind.hpp"
 #include "BeginGoToLine.hpp"
 #include "BeginReplace.hpp"
@@ -8,6 +9,7 @@
 #include "ClipboardOperation.hpp"
 #include "ClosePane.hpp"
 #include "CloseTab.hpp"
+#include "CopyTabName.hpp"
 #include "CycleFinderPreview.hpp"
 #include "DeleteDirection.hpp"
 #include "DeleteText.hpp"
@@ -32,6 +34,7 @@
 #include "PrintDialog.hpp"
 #include "PrintDocument.hpp"
 #include "RegisterShell.hpp"
+#include "RevealTab.hpp"
 #include "SaveDocument.hpp"
 #include "SaveQuestion.hpp"
 #include "SaveState.hpp"
@@ -44,9 +47,13 @@
 #include "ShowVersion.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
+#include "SweptTab.hpp"
 #include "SwitchPane.hpp"
 #include "SwitchTab.hpp"
 #include "TabCommand.hpp"
+#include "TabNamePart.hpp"
+#include "TabSweep.hpp"
+#include "TabSweepSide.hpp"
 #include "TextEncoding.hpp"
 #include "ToggleBookmark.hpp"
 #include "ToggleExplorer.hpp"
@@ -104,6 +111,74 @@ void EditorWindow::close_tab(std::size_t tab)
         }
     }
     send(application::CloseTab{tab});
+}
+
+void EditorWindow::finish_tab_sweep(std::optional<application::TabSweep> sweep)
+{
+    // その中の send は tab_sweep が空なので再入は 1 段で止まる。
+    if (sweep.has_value() && window_ != nullptr)
+    {
+        close_tabs_beside(sweep.value());
+    }
+}
+
+// 帯の順に 1 つずつ閉じる（ADR 0078 の追補 #1790）。アクティブが閉じる相手なら先に残すタブへ切り
+// 替え、以後は閉じない側のタブ（home）を見せたまま脇のタブを閉じる（脇を閉じてもアクティブは動か
+// ず、まだ読んでいないタブを読まない）。未保存のタブは見せて確かめてから home へ戻る。取消・保存の
+// 失敗・窓が壊れた・閉じても本数が減らなかったら、そこで止める（残りは閉じない）。
+void EditorWindow::close_tabs_beside(application::TabSweep sweep)
+{
+    if (application::tab_swept(controller_.tab_ids(), sweep, controller_.active_tab()))
+    {
+        const auto keep = application::tab_position(controller_.tab_ids(), sweep.keep);
+        if (keep.has_value())
+        {
+            send(application::SwitchTab{keep.value()});
+        }
+    }
+    if (window_ == nullptr)
+    {
+        return;
+    }
+    const application::AutosaveId home = controller_.tab_ids().at(controller_.active_tab());
+    auto next = application::swept_tab(controller_.tab_ids(), sweep);
+    while (next.has_value() && close_swept_tab(next.value(), home))
+    {
+        next = application::swept_tab(controller_.tab_ids(), sweep);
+    }
+}
+
+// 帯の位置 tab のタブを閉じる。未保存なら見せて確かめてから。閉じて本数が減り、窓が残れば真。
+bool EditorWindow::close_swept_tab(std::size_t tab, application::AutosaveId home)
+{
+    const std::size_t count = controller_.tab_ids().size();
+    const application::AutosaveId closing = controller_.tab_ids().at(tab);
+    if (application::tab_unsaved(controller_.documents(), tab) && !confirm_swept_tab(tab, home))
+    {
+        return false;
+    }
+    const auto position = application::tab_position(controller_.tab_ids(), closing);
+    if (!position.has_value())
+    {
+        return false;
+    }
+    send(application::CloseTab{position.value()});
+    return window_ != nullptr && controller_.tab_ids().size() < count;
+}
+
+bool EditorWindow::confirm_swept_tab(std::size_t tab, application::AutosaveId home)
+{
+    send(application::SwitchTab{tab});
+    if (window_ == nullptr || !confirm_discard())
+    {
+        return false;
+    }
+    const auto back = application::tab_position(controller_.tab_ids(), home);
+    if (back.has_value())
+    {
+        send(application::SwitchTab{back.value()});
+    }
+    return window_ != nullptr;
 }
 
 void EditorWindow::finish_display_question(bool question)
@@ -403,6 +478,11 @@ EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation op
         {core::EditorOperation::delete_selection, &EditorWindow::run_delete_selection},
         {core::EditorOperation::select_all, &EditorWindow::run_select_all},
         {core::EditorOperation::cycle_finder_preview, &EditorWindow::run_cycle_finder_preview},
+        {core::EditorOperation::reveal_in_explorer, &EditorWindow::run_reveal_in_explorer},
+        {core::EditorOperation::copy_path, &EditorWindow::run_copy_path},
+        {core::EditorOperation::copy_file_name, &EditorWindow::run_copy_file_name},
+        {core::EditorOperation::close_other_tabs, &EditorWindow::run_close_other_tabs},
+        {core::EditorOperation::close_right_tabs, &EditorWindow::run_close_right_tabs},
     }};
     static_assert(runners_in_order(runners),
                   "operation runners follow the order of EditorOperation and point to a function");
@@ -628,6 +708,35 @@ void EditorWindow::run_search_project()
 void EditorWindow::run_cycle_finder_preview()
 {
     send(application::CycleFinderPreview{});
+}
+
+// タブの 5 つ（ADR 0078 の追補 #1790）。F1 の一覧からはアクティブなタブに効く。写すのと
+// エクスプローラーは controller の意図、まとめて閉じるのはタブのメニューと同じ close_tabs_beside。
+void EditorWindow::run_reveal_in_explorer()
+{
+    send(application::RevealTab{});
+}
+
+void EditorWindow::run_copy_path()
+{
+    send(application::CopyTabName{application::TabNamePart::path});
+}
+
+void EditorWindow::run_copy_file_name()
+{
+    send(application::CopyTabName{application::TabNamePart::file_name});
+}
+
+void EditorWindow::run_close_other_tabs()
+{
+    close_tabs_beside(application::TabSweep{controller_.tab_ids().at(controller_.active_tab()),
+                                            application::TabSweepSide::others});
+}
+
+void EditorWindow::run_close_right_tabs()
+{
+    close_tabs_beside(application::TabSweep{controller_.tab_ids().at(controller_.active_tab()),
+                                            application::TabSweepSide::right});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

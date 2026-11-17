@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Appearance.hpp"
+#include "AutosaveId.hpp"
 #include "BodyLayout.hpp"
 #include "ClosingRoute.hpp"
 #include "ClosingStep.hpp"
@@ -42,6 +43,7 @@
 #include "StartScreenView.hpp"
 #include "StatusBarHit.hpp"
 #include "TabCommand.hpp"
+#include "TabSweep.hpp"
 #include "TimingPort.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
@@ -135,6 +137,15 @@ class EditorWindow final
     // タブを閉じる流れ（未保存なら切り替えて確かめる・ADR 0056 の決定 6）。
     void close_tab(std::size_t tab);
     void finish_tab_action(std::optional<std::size_t> close_request, bool closing);
+    // タブのメニューの「ほかのタブを閉じる」「右のタブを閉じる」（ADR 0078 の追補 #1790）。帯の順に
+    // 1 つずつ × と同じ閉じる道で閉じ、未保存のタブでは「保存しますか」（ask_save）を聞いて取消で
+    // 止める。閉じる相手でないタブ（残すタブか、閉じない側のアクティブ）を見せながら閉じるので、まだ
+    // 読んでいないタブは読まずに閉じる。
+    void finish_tab_sweep(std::optional<application::TabSweep> sweep);
+    void close_tabs_beside(application::TabSweep sweep);
+    // 帯の位置 tab の未保存のタブを見せて確かめ、home へ戻る。閉じてよければ真。
+    [[nodiscard]] bool confirm_swept_tab(std::size_t tab, application::AutosaveId home);
+    [[nodiscard]] bool close_swept_tab(std::size_t tab, application::AutosaveId home);
     void finish_operation(std::optional<core::EditorOperation> operation_request);
     // 開いた文書に格子表示を聞く（ADR 0140 の決定 2）。deliver の終わりと、起動の終わり
     // （最初の frame の後）から呼ぶ。
@@ -165,6 +176,11 @@ class EditorWindow final
     // 右の押しと離し。押した点と離した点がどちらも操作中の枠の本文の中なら、離したときに開く。
     void press_right(LPARAM data);
     void release_right(LPARAM data);
+    // 帯のタブの上の右の離し（#1790）。押したタブと離したタブが同じときだけ、そのタブのメニューを
+    // 帯のすぐ下に開く。開いたら真。
+    [[nodiscard]] bool release_right_on_tab(LPARAM data);
+    // 点の下の帯のタブ（× の上もタブ）。面が開いている間とタブの外は値なし。
+    [[nodiscard]] std::optional<core::TitleBarTarget> tab_under(LPARAM data) const;
     // WM_CONTEXTMENU。鍵（Shift+F10・メニューキー）の分だけ（lParam が -1）キャレットの位置に開く。
     [[nodiscard]] bool open_context_menu_from_keys(LPARAM data);
     // メニューが開いている間の左の押しと離しとマウスの動き。開いていなければ false（今の道へ）。
@@ -411,6 +427,12 @@ class EditorWindow final
     void run_delete_selection();
     void run_select_all();
     void run_cycle_finder_preview();
+    // タブの 5 つ（ADR 0078 の追補 #1790）。F1 の一覧からはアクティブなタブに効く。
+    void run_reveal_in_explorer();
+    void run_copy_path();
+    void run_copy_file_name();
+    void run_close_other_tabs();
+    void run_close_right_tabs();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();
@@ -487,6 +509,8 @@ class EditorWindow final
     // 右の押しの点（本文の中で押したときだけ・離したら消す）と、開いたメニューの上で左を押したか
     // （#1051）。
     std::optional<POINT> right_pressed_;
+    // 右の押しを受けた帯のタブ（#1790・離したタブと比べる）。
+    std::optional<core::TitleBarTarget> tab_right_pressed_;
     bool context_menu_pressed_ = false;
     // FirstFramePresented を送ったか（窓で 1 回だけ・ADR 0172 の決定 3）。
     bool first_frame_signaled_ = false;

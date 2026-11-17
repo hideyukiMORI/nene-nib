@@ -12,6 +12,7 @@
 #include "InputLinePrompt.hpp"
 #include "MapTimer.hpp"
 #include "SettingsIssue.hpp"
+#include "TabSweep.hpp"
 #include "VimMode.hpp"
 
 #include <cstddef>
@@ -50,5 +51,9 @@ struct EditorDelivery
     // Vim の `map` の待ちのタイマー（ADR 0176 の決定 4）。この意図が待ちを始めた・積み替えたら
     // start、待ちを流して空にしたら stop、変えなかったら空。
     std::optional<MapTimer> map_timer = std::nullopt;
+    // タブのメニューの「ほかのタブを閉じる」「右のタブを閉じる」（ADR 0078 の追補 #1790）。
+    // close_request と同じく 1 意図の 1 回だけ立ち、ui は意図を送った結果を受ける 1 か所でこれを
+    // 見て、帯の順に 1 つずつ × と同じ閉じる流れを呼ぶ。controller はタブを閉じない。
+    std::optional<TabSweep> tab_sweep = std::nullopt;
 };
 } // namespace nenenib::application

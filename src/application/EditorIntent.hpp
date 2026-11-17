@@ -18,6 +18,7 @@
 #include "CommandText.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
+#include "CopyTabName.hpp"
 #include "CycleFinderPreview.hpp"
 #include "DeleteText.hpp"
 #include "DiscardAutosave.hpp"
@@ -43,6 +44,7 @@
 #include "OpenOperationList.hpp"
 #include "OpenProjectSearch.hpp"
 #include "OpenTabList.hpp"
+#include "OpenTabMenu.hpp"
 #include "PasteCommand.hpp"
 #include "PinTab.hpp"
 #include "PlaceCaret.hpp"
@@ -58,6 +60,7 @@
 #include "RegisterShell.hpp"
 #include "ResizeExplorer.hpp"
 #include "RestoreAutosave.hpp"
+#include "RevealTab.hpp"
 #include "SaveDocument.hpp"
 #include "ScrollExplorer.hpp"
 #include "ScrollLines.hpp"
@@ -114,5 +117,5 @@ using EditorIntent = std::variant<
     SetPreviewPlacement, PointPreview, PrintDocument, RegisterShell, UnregisterShell, PinTab,
     FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion, OpenProjectSearch,
     OpenContextMenu, PointContextMenu, StepContextMenu, ChooseContextMenu, CloseContextMenu,
-    CycleFinderPreview>;
+    OpenTabMenu, CopyTabName, RevealTab, CycleFinderPreview>;
 } // namespace nenenib::application

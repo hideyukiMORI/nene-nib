@@ -9,6 +9,7 @@
 #include "CommandPaletteView.hpp"
 #include "CommandText.hpp"
 #include "ContextMenu.hpp"
+#include "ContextMenuKind.hpp"
 #include "ContextMenuLayout.hpp"
 #include "ContextMenuMode.hpp"
 #include "ContextMenuRequest.hpp"
@@ -171,8 +172,8 @@ void verify_keys()
 [[nodiscard]] core::ContextMenuLayout laid(std::int32_t x, std::int32_t y, std::int32_t name,
                                            std::int32_t key)
 {
-    return core::context_menu_layout(
-        core::ContextMenuRequest{x, y, LayoutRect{0, 0, 800, 600}, name, key, 96});
+    return core::context_menu_layout(core::ContextMenuRequest{
+        x, y, LayoutRect{0, 0, 800, 600}, name, key, 96, core::ContextMenuKind::body});
 }
 
 void verify_layout_size()
@@ -187,8 +188,8 @@ void verify_layout_size()
            "a wide menu fits the widest name and key with the paddings and the gap");
     const auto keyless = laid(100, 100, 220, 0);
     expect(core::width_of(keyless.panel) == 12 + 220 + 12, "no key leaves no gap");
-    const auto scaled = core::context_menu_layout(
-        core::ContextMenuRequest{100, 100, LayoutRect{0, 0, 800, 600}, 40, 30, 144});
+    const auto scaled = core::context_menu_layout(core::ContextMenuRequest{
+        100, 100, LayoutRect{0, 0, 800, 600}, 40, 30, 144, core::ContextMenuKind::body});
     expect(core::width_of(scaled.panel) == 300 &&
                core::height_of(scaled.rows.at(0)) == core::to_pixels(30, 144),
            "the sizes follow the dpi");
@@ -213,12 +214,12 @@ void verify_layout_place()
     const auto flipped = laid(700, 550, 40, 30);
     expect(flipped.panel.right == 700 && flipped.panel.bottom == 550,
            "the menu opens to the upper left when the right and bottom edges cut it");
-    const auto crowded = core::context_menu_layout(
-        core::ContextMenuRequest{150, 100, LayoutRect{0, 0, 300, height + 20}, 40, 30, 96});
+    const auto crowded = core::context_menu_layout(core::ContextMenuRequest{
+        150, 100, LayoutRect{0, 0, 300, height + 20}, 40, 30, 96, core::ContextMenuKind::body});
     expect(crowded.panel.left == 100 && crowded.panel.top == 20,
            "a menu that fits neither way is pushed against the far edge inside the bounds");
-    const auto tiny = core::context_menu_layout(
-        core::ContextMenuRequest{50, 50, LayoutRect{10, 10, 100, 100}, 40, 30, 96});
+    const auto tiny = core::context_menu_layout(core::ContextMenuRequest{
+        50, 50, LayoutRect{10, 10, 100, 100}, 40, 30, 96, core::ContextMenuKind::body});
     expect(tiny.panel.left == 10 && tiny.panel.top == 10,
            "a menu larger than the bounds starts at their upper left");
 }
@@ -499,7 +500,7 @@ void verify_vim_operation_list()
     const auto normal =
         core::operation_choices("", core::PaletteMode{core::EditMode::vim, Mode::vim_normal},
                                 core::DisplayLanguage::japanese);
-    expect(normal.size() == 42 && !listed_key_of(normal, core::EditorOperation::cut).has_value() &&
+    expect(normal.size() == 47 && !listed_key_of(normal, core::EditorOperation::cut).has_value() &&
                !listed_key_of(normal, core::EditorOperation::copy).has_value() &&
                listed_key_of(normal, core::EditorOperation::paste) == "\"+p" &&
                listed_key_of(normal, core::EditorOperation::select_all) == "ggVG" &&
@@ -508,11 +509,11 @@ void verify_vim_operation_list()
     const auto visual =
         core::operation_choices("", core::PaletteMode{core::EditMode::vim, Mode::vim_visual},
                                 core::DisplayLanguage::japanese);
-    expect(visual.size() == 44 && listed_key_of(visual, core::EditorOperation::copy) == "\"+y",
+    expect(visual.size() == 49 && listed_key_of(visual, core::EditorOperation::copy) == "\"+y",
            "the vim visual list shows every row with the visual keys");
     expect(
         core::operation_choices("", core::EditMode::vim, core::DisplayLanguage::japanese).size() ==
-            44,
+            49,
         "a list that knows only the edit mode keeps the vim rows without vim keys");
 }
 
@@ -600,5 +601,6 @@ void verify_context_menu_scope()
     verify_vim_operation_list_runs();
     verify_vim_insert_pause_kept();
     verify_format_list_operations();
+    verify_tab_menu_contracts();
 }
 } // namespace nenenib::tests

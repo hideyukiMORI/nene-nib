@@ -43,6 +43,7 @@
 #include "ScriptedPreview.hpp"
 #include "ScriptedPrinter.hpp"
 #include "ScriptedProjectSearch.hpp"
+#include "ScriptedReveal.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedStartLists.hpp"
@@ -64,6 +65,7 @@
 
 #include <algorithm>
 #include <expected>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -237,15 +239,16 @@ static_assert(CanBorrowRecords<const core::ThemeCatalog &> &&
 static_assert(CanSelectTheme<const core::EditorSettings &> &&
               !CanSelectTheme<core::EditorSettings>);
 
-void verify_theme_startup_notice()
+// 起動引数の文書 initial.txt と settings・themes で controller を作り、check に渡す（#1790 で
+// 関数の長さの上限のため 2 つの起動の足場を 1 つにした）。
+void with_startup(ScriptedSettings &settings, ScriptedThemes &themes,
+                  const std::function<void(EditorController &)> &check)
 {
     ScriptedAppearance appearance{Reading{Appearance::dark}};
     ScriptedClipboard clipboard;
     ScriptedFiles files;
     files.hold(std::string("initial body"));
     ScriptedCodePages pages;
-    ScriptedSettings settings;
-    ScriptedThemes themes{user_catalog(), fixed_text("invalid_name.v1.theme: invalid name")};
     ScriptedSession session;
     ScriptedHistory history;
     ScriptedFolders folders;
@@ -260,42 +263,51 @@ void verify_theme_startup_notice()
     ScriptedUiLanguage ui_language;
     ScriptedProjectSearch project_search;
     ScriptedPreview previews;
+    ScriptedReveal reveal;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, pages};
     ScriptedLanguageServer language_server;
-    const std::vector initial{app::OpenDocument{FilePath::parse("initial.txt").value()}};
     EditorController controller{
-        app::EditorPorts{
-            appearance,   clipboard,       files,       pages,          settings,
-            themes,       session,         history,     folders,        bookmarks,
-            text_layouts, autosave,        fonts,       bell,           markdown,
-            reads,        language_server, wall_clock,  printer,        shell_registration,
-            images,       start_lists,     ui_language, project_search, previews},
-        initial};
-    auto frame = controller.frame();
-    expect(frame.lines.front().text == "initial body", "initial document uses normal file load");
-    expect(frame.command_message.value_or(fixed_text("none")).text() ==
-               "invalid_name.v1.theme: invalid name",
-           "startup diagnostic survives initial file opening");
-    frame = controller.apply_frame(VisibleLines{8});
-    expect(frame.command_message.has_value(), "first layout retains startup diagnostic");
-    frame = controller.apply_frame(InsertText{"x"});
-    expect(!frame.command_message.has_value() && themes.reads() == 1,
-           "user input clears notice without rereading themes");
+        app::EditorPorts{appearance,      clipboard,   files,        pages,
+                         settings,        themes,      session,      history,
+                         folders,         bookmarks,   text_layouts, autosave,
+                         fonts,           bell,        markdown,     reads,
+                         language_server, wall_clock,  printer,      shell_registration,
+                         images,          start_lists, ui_language,  project_search,
+                         previews,        reveal},
+        {app::OpenDocument{FilePath::parse("initial.txt").value()}}};
+    check(controller);
+}
+
+void verify_theme_startup_notice()
+{
+    ScriptedSettings settings;
+    ScriptedThemes themes{user_catalog(), fixed_text("invalid_name.v1.theme: invalid name")};
+    with_startup(settings, themes,
+                 [&themes](EditorController &controller)
+                 {
+                     const auto started = controller.frame();
+                     expect(started.lines.front().text == "initial body" &&
+                                started.command_message.value_or(fixed_text("none")).text() ==
+                                    "invalid_name.v1.theme: invalid name" &&
+                                controller.apply_frame(VisibleLines{8}).command_message.has_value(),
+                            "initial document uses normal file load and the startup diagnostic "
+                            "survives it");
+                     expect(!controller.apply_frame(InsertText{"x"}).command_message.has_value() &&
+                                themes.reads() == 1,
+                            "user input clears notice without rereading themes");
+                 });
     ScriptedSettings broken{SettingsReading{std::unexpect, app::SettingsFailure::malformed}};
-    EditorController unreadable{
-        app::EditorPorts{
-            appearance,   clipboard,       files,       pages,          broken,
-            themes,       session,         history,     folders,        bookmarks,
-            text_layouts, autosave,        fonts,       bell,           markdown,
-            reads,        language_server, wall_clock,  printer,        shell_registration,
-            images,       start_lists,     ui_language, project_search, previews},
-        initial};
-    expect(unreadable.frame().lines.front().text == "initial body" &&
-               unreadable.frame().settings_failure == app::SettingsFailure::malformed,
-           "failed settings do not prevent opening initial document");
+    with_startup(broken, themes,
+                 [](EditorController &unreadable)
+                 {
+                     expect(unreadable.frame().lines.front().text == "initial body" &&
+                                unreadable.frame().settings_failure ==
+                                    app::SettingsFailure::malformed,
+                            "failed settings do not prevent opening initial document");
+                 });
 }
 
 template <typename T>

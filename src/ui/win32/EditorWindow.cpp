@@ -253,6 +253,8 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     const bool closing = delivery.closing;
     // 一覧で選んだ操作も同じく意図を送った結果の delivery にだけ載る（ADR 0078 の決定 8）。
     const auto operation_request = delivery.operation_request;
+    // タブのメニューのまとめて閉じる頼みも同じ（ADR 0078 の追補 #1790）。
+    const auto tab_sweep = delivery.tab_sweep;
     // 格子表示の問いも同じ（ADR 0140 の決定 2）。
     const bool display_asked = delivery.display_question;
     follow_key_map_timer(window_, delivery.map_timer);
@@ -278,6 +280,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     finish_operation(operation_request);
     finish_display_question(display_asked);
     finish_tab_action(close_request, closing);
+    finish_tab_sweep(tab_sweep);
     release_session_block();
     follow_preview_timer();
     // 起動画面が消えたら押しの記憶を消す（押している間だけ読む・ADR 0172 の追補 24）。

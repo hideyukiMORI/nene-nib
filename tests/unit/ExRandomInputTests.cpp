@@ -662,7 +662,8 @@ void typed_steps(EditorController &controller, const std::vector<Step> &steps)
                                                  editing.start_lists(),
                                                  editing.ui_language(),
                                                  editing.project_search(),
-                                                 editing.previews()}};
+                                                 editing.previews(),
+                                                 editing.reveal()}};
     open_document(controller, editing.files(), trial.first);
     for (std::size_t index = 0; index < trial.second.size(); ++index)
     {

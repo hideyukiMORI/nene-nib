@@ -62,6 +62,11 @@ namespace
     case EditorOperation::delete_selection:
     case EditorOperation::select_all:
     case EditorOperation::cycle_finder_preview:
+    case EditorOperation::reveal_in_explorer:
+    case EditorOperation::copy_path:
+    case EditorOperation::copy_file_name:
+    case EditorOperation::close_other_tabs:
+    case EditorOperation::close_right_tabs:
         return true;
     }
     return false;

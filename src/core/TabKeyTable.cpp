@@ -5,6 +5,8 @@
 #include "OperationBindings.hpp"
 #include "OperationKey.hpp"
 
+#include <array>
+#include <optional>
 #include <utility>
 
 namespace nenenib::core
@@ -29,63 +31,26 @@ namespace
     std::unreachable();
 }
 
+// タブの操作 → 帯の操作の表（#1790 で関数の長さの上限のため switch から表へ）。載っていない操作は
+// 帯の操作ではない。
+using TabCommandRow = std::pair<EditorOperation, TabCommand>;
+constexpr std::array<TabCommandRow, 4> tab_commands{{
+    {EditorOperation::new_tab, TabCommand::open},
+    {EditorOperation::recent_tab, TabCommand::next},
+    {EditorOperation::recent_tab_back, TabCommand::previous},
+    {EditorOperation::close_tab, TabCommand::close},
+}};
+
 [[nodiscard]] std::optional<TabCommand> tab_command_of(EditorOperation operation) noexcept
 {
-    switch (operation)
+    for (const auto &[listed, command] : tab_commands)
     {
-    case EditorOperation::new_tab:
-        return TabCommand::open;
-    case EditorOperation::recent_tab:
-        return TabCommand::next;
-    case EditorOperation::recent_tab_back:
-        return TabCommand::previous;
-    case EditorOperation::close_tab:
-        return TabCommand::close;
-    case EditorOperation::open_file:
-    case EditorOperation::save:
-    case EditorOperation::save_as:
-    case EditorOperation::list_files:
-    case EditorOperation::list_operations:
-    case EditorOperation::toggle_bookmark:
-    case EditorOperation::undo:
-    case EditorOperation::redo:
-    case EditorOperation::font_larger:
-    case EditorOperation::font_smaller:
-    case EditorOperation::font_reset:
-    case EditorOperation::toggle_mode:
-    case EditorOperation::split_vertical:
-    case EditorOperation::split_horizontal:
-    case EditorOperation::next_pane:
-    case EditorOperation::close_pane:
-    case EditorOperation::toggle_preview:
-    case EditorOperation::paste_plain:
-    case EditorOperation::paste_html:
-    case EditorOperation::toggle_explorer:
-    case EditorOperation::choose_explorer_root:
-    case EditorOperation::insert_date_time:
-    case EditorOperation::choose_encoding:
-    case EditorOperation::choose_line_ending:
-    case EditorOperation::find:
-    case EditorOperation::find_next:
-    case EditorOperation::find_previous:
-    case EditorOperation::replace:
-    case EditorOperation::go_to_line:
-    case EditorOperation::preview_full:
-    case EditorOperation::print:
-    case EditorOperation::register_shell:
-    case EditorOperation::unregister_shell:
-    case EditorOperation::choose_language:
-    case EditorOperation::show_version:
-    case EditorOperation::search_project:
-    case EditorOperation::cut:
-    case EditorOperation::copy:
-    case EditorOperation::paste:
-    case EditorOperation::delete_selection:
-    case EditorOperation::select_all:
-    case EditorOperation::cycle_finder_preview:
-        return std::nullopt;
+        if (listed == operation)
+        {
+            return command;
+        }
     }
-    std::unreachable();
+    return std::nullopt;
 }
 } // namespace
 
