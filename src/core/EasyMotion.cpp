@@ -10,6 +10,7 @@
 #include "VimCaret.hpp"
 #include "VimCharacter.hpp"
 #include "VimCharacterBoundary.hpp"
+#include "VimScreenGeometry.hpp"
 #include "VimScrollUnit.hpp"
 #include "VimViewport.hpp"
 #include "VimWordClass.hpp"
@@ -186,13 +187,6 @@ void characters(Targets &out, const TextBuffer &text, LineNumber line,
     return view.layout.unit == VimScrollUnit::line && !vim_has_no_lines(view);
 }
 
-// 見えている最後の行（本文の行の数で切る・ADR 0188 の除いた本文の行の数）。
-[[nodiscard]] LineNumber last_shown_line(const VimEditorView &view, const VimViewport &viewport)
-{
-    const std::size_t lines = std::max<std::size_t>(viewport.visible_lines, 1);
-    return LineNumber{std::min(viewport.first_visible.value + lines - 1, view.text.line_count())};
-}
-
 // 走査した跳び先のうち、向きに合うものだけを残す（キャレットの位置は除く・本文の順のまま）。
 [[nodiscard]] Targets directed(const Targets &scanned, Offset caret, EasyMotionKind kind)
 {
@@ -228,22 +222,11 @@ void characters(Targets &out, const TextBuffer &text, LineNumber line,
     return left < right ? right - left : left - right;
 }
 
-// キャレットの行と仮想桁（行頭から足した桁）。
-[[nodiscard]] Origin origin_of(const TextBuffer &text, Offset caret)
+// 本文の順の跳び先それぞれの行頭からの仮想桁（行ごとに 1 回だけ歩く）。
+[[nodiscard]] std::vector<std::size_t> columns_of(const TextBuffer &text, const Targets &kept)
 {
-    const LineNumber line = text.line_containing(caret);
-    const std::string content = text.line_text(line);
-    return Origin{line.value,
-                  advanced_column(content, 0, 0, caret.value - text.line_start(line).value)};
-}
-
-// 前後両方の跳び先（s l）を（行の差・仮想桁の差）の辞書順に並べる（同じならキャレットより後ろが
-// 先）。kept は本文の順なので、行ごとに 1 回だけ桁を歩く。
-[[nodiscard]] Targets ranked_around(const TextBuffer &text, const Targets &kept, Offset caret)
-{
-    const Origin origin = origin_of(text, caret);
-    std::vector<Rank> ranks;
-    ranks.reserve(kept.size());
+    std::vector<std::size_t> columns;
+    columns.reserve(kept.size());
     LineNumber current{0};
     std::string content;
     std::size_t start = 0;
@@ -262,8 +245,34 @@ void characters(Targets &out, const TextBuffer &text, LineNumber line,
         }
         column = advanced_column(content, walked, column, target.value - start);
         walked = target.value - start;
-        ranks.emplace_back(difference(line.value, origin.first), difference(column, origin.second),
-                           target < caret, target.value);
+        columns.push_back(column);
+    }
+    return columns;
+}
+
+// キャレットの行と仮想桁（行頭から足した桁）。
+[[nodiscard]] Origin origin_of(const TextBuffer &text, Offset caret)
+{
+    const LineNumber line = text.line_containing(caret);
+    const std::string content = text.line_text(line);
+    return Origin{line.value,
+                  advanced_column(content, 0, 0, caret.value - text.line_start(line).value)};
+}
+
+// 前後両方の跳び先（s l）を（行の差・仮想桁の差）の辞書順に並べる（同じならキャレットより後ろが
+// 先）。kept は本文の順なので、行ごとに 1 回だけ桁を歩く。
+[[nodiscard]] Targets ranked_around(const TextBuffer &text, const Targets &kept, Offset caret)
+{
+    const Origin origin = origin_of(text, caret);
+    const std::vector<std::size_t> columns = columns_of(text, kept);
+    std::vector<Rank> ranks;
+    ranks.reserve(kept.size());
+    for (std::size_t index = 0; index < kept.size(); ++index)
+    {
+        const Offset target = kept.at(index);
+        ranks.emplace_back(difference(text.line_containing(target).value, origin.first),
+                           difference(columns.at(index), origin.second), target < caret,
+                           target.value);
     }
     std::sort(ranks.begin(), ranks.end());
     Targets nearest;
@@ -273,6 +282,48 @@ void characters(Targets &out, const TextBuffer &text, LineNumber line,
         nearest.push_back(Offset{std::get<3>(rank)});
     }
     return nearest;
+}
+
+// 横に送る文書（wrap off・viewport.columns が 0 でない）では、窓の横の範囲 [left_column,
+// left_column + columns) の外の桁の跳び先を除く（印を描けない跳び先は跳び先にしない・ADR 0163 の
+// 追補 2026-11-17 の 4・巨大な行の窓の外もこれで外れる）。
+[[nodiscard]] Targets on_screen(const TextBuffer &text, const Targets &kept,
+                                const VimViewport &viewport)
+{
+    if (viewport.columns == 0)
+    {
+        return kept;
+    }
+    const std::vector<std::size_t> columns = columns_of(text, kept);
+    Targets shown;
+    shown.reserve(kept.size());
+    for (std::size_t index = 0; index < kept.size(); ++index)
+    {
+        const std::size_t column = columns.at(index);
+        if (column >= viewport.left_column && column < viewport.left_column + viewport.columns)
+        {
+            shown.push_back(kept.at(index));
+        }
+    }
+    return shown;
+}
+
+// 見えている行（first_visible から窓に全部入っている最後の論理行まで）を走査する。
+[[nodiscard]] Targets scanned_lines(const VimEditorView &view, EasyMotionKind kind,
+                                    std::optional<char32_t> character, LineNumber last)
+{
+    const LineScan scan = scan_of(kind);
+    const LineNumber caret_line = view.text.line_containing(view.selection.caret);
+    Targets scanned;
+    for (LineNumber line = view.viewport.value_or(VimViewport{LineNumber{1}, 1, 0}).first_visible;
+         line.value <= last.value; ++line.value)
+    {
+        if (!(skips_caret_line(kind) && line == caret_line))
+        {
+            scan(scanned, view.text, line, character);
+        }
+    }
+    return scanned;
 }
 
 // キャレットから近い順に並べてから多くとも easymotion_target_limit 個に切る（ADR 0163 の追補
@@ -339,19 +390,15 @@ std::vector<Offset> easymotion_targets(const VimEditorView &view, EasyMotionKind
         return {};
     }
     const VimViewport viewport = view.viewport.value();
-    const LineScan scan = scan_of(kind);
-    const LineNumber caret_line = view.text.line_containing(view.selection.caret);
-    const LineNumber last = last_shown_line(view, viewport);
-    Targets scanned;
-    for (LineNumber line = viewport.first_visible; line.value <= last.value; ++line.value)
+    const auto last = vim_window_last_line(view);
+    if (!last)
     {
-        if (!(skips_caret_line(kind) && line == caret_line))
-        {
-            scan(scanned, view.text, line, character);
-        }
+        return {};
     }
-    return ranked(view.text, directed(scanned, view.selection.caret, kind), view.selection.caret,
-                  kind);
+    const Targets scanned = scanned_lines(view, kind, character, last.value());
+    const Targets kept =
+        on_screen(view.text, directed(scanned, view.selection.caret, kind), viewport);
+    return ranked(view.text, kept, view.selection.caret, kind);
 }
 
 std::vector<std::string> easymotion_labels(std::size_t count)
