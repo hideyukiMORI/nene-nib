@@ -13,6 +13,9 @@ namespace nenenib::ui::win32
 namespace
 {
 constexpr std::int32_t side_dips = 2;
+// 左右の余白は物理 1 画素より詰めない。0 にすると字の画が札の縁（background の 1 画素）に付き、
+// 札が字の上の帽子だけに見える（かなの跳び先・#1800 の実機）。
+constexpr std::int32_t minimum_side = 1;
 constexpr std::int32_t radius_dips = 2;
 constexpr std::int32_t smallest_radius = 2;
 constexpr std::int32_t largest_radius = 3;
@@ -32,7 +35,7 @@ constexpr float height_share = 0.6F;
 }
 
 // 札の幅。字の幅 + 左右の余白（2 DIP まで）で、升 × 印の字の数（全角の跳び先の升は半分の幅）を
-// 超えるなら余白を詰める（0 まで）。字の無い跳び先は升の幅が無いので 2 DIP の余白のまま。
+// 超えるなら余白を詰める（物理 1 画素まで）。字の無い跳び先は升の幅が無いので 2 DIP の余白のまま。
 [[nodiscard]] std::int32_t badge_width(const DWRITE_HIT_TEST_METRICS &target,
                                        const core::MotionLabel &label, float written,
                                        std::uint32_t dpi) noexcept
@@ -46,7 +49,7 @@ constexpr float height_share = 0.6F;
     const float cell = target.width / static_cast<float>(std::max<std::uint8_t>(label.cells, 1));
     const auto letters = static_cast<float>(std::max<std::size_t>(label.label.size(), 1));
     const auto room = static_cast<std::int32_t>(std::floor(cell * letters));
-    return text + (2 * std::clamp((room - text) / 2, 0, side));
+    return text + (2 * std::clamp((room - text) / 2, minimum_side, side));
 }
 } // namespace
 

@@ -17,8 +17,9 @@ namespace nenenib::ui::win32
 // 上端は行の上端 + 物理 1 画素（縁の 1 画素が行の上端に載る）、左端は升の左端。高さは字の行の
 // 高さ（上下の余白 0）で、行の高さの 6 割を超えるなら詰める。幅は字の幅 + 左右 2 DIP までの余白で、
 // 升 × 印の字の数（全角の跳び先は升 1 つが半分の幅・2 文字の札は全角 1 字ぶんに収まる）を超える
-// なら余白を 0 まで詰める。半角の跳び先の 2 文字の札は次の升へ出る。座標と半径は整数の物理画素で、
-// 半径は 2 DIP を DPI で丸めて 2〜3 画素に収める。
+// なら余白を物理 1 画素まで詰める（字の画を札の縁に付けない）。半角の跳び先の 2
+// 文字の札は次の升へ出る。座標と半径は整数の物理画素で、 半径は 2 DIP を DPI で丸めて 2〜3
+// 画素に収める。
 [[nodiscard]] D2D1_ROUNDED_RECT motion_label_badge(const DWRITE_HIT_TEST_METRICS &target,
                                                    const core::MotionLabel &label,
                                                    D2D1_SIZE_F written, std::uint32_t dpi) noexcept;

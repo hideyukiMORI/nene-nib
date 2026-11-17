@@ -212,15 +212,16 @@ void check_badges()
     const core::MotionLabel one{core::Column{1}, "a", 1};
     const D2D1_SIZE_F written = D2D1::SizeF(7.2F, 13.4F);
     const D2D1_ROUNDED_RECT at_96 = win32::motion_label_badge(cell, one, written, 96);
-    expect(same_box(at_96.rect, D2D1::RectF(40.0F, 21.0F, 48.0F, 33.0F)) &&
+    expect(same_box(at_96.rect, D2D1::RectF(40.0F, 21.0F, 50.0F, 33.0F)) &&
                close_to(at_96.radiusX, 2.0F) && close_to(at_96.radiusY, 2.0F),
            "the badge sits in its own row, a pixel below the top, at the cell's left edge");
     expect(same_box(win32::motion_label_badge(cell, one, D2D1::SizeF(4.2F, 13.4F), 96).rect,
                     D2D1::RectF(40.0F, 21.0F, 49.0F, 33.0F)),
            "a narrow letter keeps its side padding within one cell");
     const D2D1_ROUNDED_RECT at_144 = win32::motion_label_badge(cell, one, written, 144);
-    expect(at_144.rect.right - at_144.rect.left <= 9.0F && close_to(at_144.radiusX, 3.0F),
-           "the badge stays within one cell and the radius follows the DPI at 144");
+    expect(at_144.rect.right - at_144.rect.left <= 10.0F && close_to(at_144.radiusX, 3.0F),
+           "the badge keeps a one-pixel side padding past a tight cell and the radius follows "
+           "the DPI at 144");
     expect(close_to(win32::motion_label_badge(cell, one, written, 288).radiusX, 3.0F),
            "the badge radius stays within three pixels");
     const core::MotionLabel two{core::Column{1}, ";s", 1};
@@ -239,8 +240,8 @@ void check_badges()
                left_badge.rect.right + 1.0F <= right_badge.rect.left - 1.0F,
            "two-letter badges on adjacent wide targets do not overlap, edges included");
     expect(win32::motion_label_badge(wide, {core::Column{1}, "a", 2}, written, 96).rect.right <=
-               49.0F,
-           "a one-letter badge on a wide target stays in the left cell");
+               50.0F,
+           "a one-letter badge on a wide target stays in the left cell and one pixel past it");
     expect(win32::motion_label_badge(cell, one, D2D1::SizeF(7.2F, 30.0F), 96).rect.bottom <= 33.0F,
            "the badge is no taller than six tenths of the row");
     expect(at_96.rect.top - 1.0F >= cell.top, "nothing of the badge is above its row");
@@ -434,6 +435,59 @@ void check_empty_line(SoftwareTarget &target)
            "the badges of two stacked rows do not overlap, edges included");
 }
 
+// 全角（かな）の字を含む行の札（#1800 の実機: 2 行目の 1 文字の札が半分に欠けて見えた）。かなは
+// 代わりの字体で幅が升 2 つより狭く、1 文字の札の余白が 0 に詰まって字の画が札の縁に付き、札が
+// 字の上の帽子だけに見えた。半角の跳び先の札と同じ高さで、左右の端の列と上下の端の行が地の色で
+// 残る（字の画が縁に付かない）ことを画素で確かめる。
+void check_wide_row(SoftwareTarget &target, win32::BodyTextLayouts &layouts)
+{
+    const auto layout = body_layout(layouts, "ab \xE3\x81\xAE\xE6\x96\x87", 96, false);
+    const auto narrow = layout ? hit_of(layout.Get(), 0) : std::nullopt;
+    const auto kana = layout ? hit_of(layout.Get(), 3) : std::nullopt;
+    const auto written = label_layout(L"s");
+    if (!narrow.has_value() || !kana.has_value() || !written)
+    {
+        unmeasured("the full-width row label needs DirectWrite layouts");
+        return;
+    }
+    const auto ascii = placed_badge(written.Get(), narrow.value(), {core::Column{1}, "s", 1});
+    const auto placed = placed_badge(written.Get(), kana.value(), {core::Column{4}, "s", 2});
+    if (!ascii.has_value() || !placed.has_value())
+    {
+        unmeasured("the full-width row label needs the badge layout");
+        return;
+    }
+    const auto &shape = placed.value().rect;
+    const auto &plain = ascii.value().rect;
+    expect(close_to(shape.bottom - shape.top, plain.bottom - plain.top) &&
+               close_to(shape.top, plain.top),
+           "a badge on a kana target is as tall as one on a half-width target in the same row");
+    const auto palette = core::palette_for(core::Appearance::dark);
+    const Pixels pixels = target.painted(
+        [&](ID2D1RenderTarget &context, ID2D1SolidColorBrush *brush)
+        {
+            context.DrawTextLayout(D2D1::Point2F(0, 0), layout.Get(), brush,
+                                   D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            win32::paint_motion_label(context, brush,
+                                      win32::MotionLabelPaint{placed.value(), written.Get(),
+                                                              color_of(palette.text),
+                                                              color_of(palette.background)});
+        });
+    const auto ground = bgr_of(palette.text);
+    const auto left = static_cast<std::int32_t>(shape.left);
+    const auto right = static_cast<std::int32_t>(shape.right) - 1;
+    const auto top = static_cast<std::int32_t>(shape.top);
+    const auto bottom = static_cast<std::int32_t>(shape.bottom) - 1;
+    const auto middle = (top + bottom) / 2;
+    const auto centre = (left + right) / 2;
+    expect(near_color(pixel_at(pixels, left, middle), ground) &&
+               near_color(pixel_at(pixels, right, middle), ground),
+           "a badge on a kana target keeps ground on both sides of its letter");
+    expect(near_color(pixel_at(pixels, centre, top), ground) &&
+               near_color(pixel_at(pixels, centre, bottom), ground),
+           "a badge on a kana target keeps ground above and below its letter");
+}
+
 // 札の外（縁の 1 画素と余裕の 1 画素を除く）の画素は印の前と同じ。
 [[nodiscard]] std::size_t changed_outside(const Pixels &before, const Pixels &after,
                                           const D2D1_RECT_F &box)
@@ -536,6 +590,7 @@ void verify_motion_label_paint()
     check_paint(target, layouts, core::palette_for(core::Appearance::light), "light");
     check_unlabelled(target, layouts);
     check_empty_line(target);
+    check_wide_row(target, layouts);
     check_labelled_caret(target, layouts);
 }
 } // namespace nenenib::tests::ui
