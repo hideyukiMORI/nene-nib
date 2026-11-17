@@ -34,6 +34,11 @@ context_menu_items(const ContextMenuSituation &situation) noexcept;
 [[nodiscard]] std::string_view context_menu_vim_keys(EditorOperation operation,
                                                      ContextMenuMode mode) noexcept;
 
+// F1 の一覧から選んだ操作を、Vim の鍵の列の道（メニューと同じ）へ流すか（追補 #1051）。Vim の
+// NORMAL と VISUAL で、メニューに通常モードの条件を持って載る操作（切り取り・コピー・貼り付け・
+// 削除・すべて選択）だけ。検索と置換は今までの一覧の道（`/` と `:%s/` の入力行）のまま。
+[[nodiscard]] bool listed_vim_routed(EditorOperation operation, ContextMenuMode mode) noexcept;
+
 // 面と行と区切り線の矩形。幅は 左右の余白 ＋ 名前 ＋ 空き ＋ 鍵（最小 200 DIP）。開く点から右下へ
 // 開き、bounds の右端・下端に収まらなければ点から左・上へ開く。それでも出る分は bounds の左上に
 // 寄せる。

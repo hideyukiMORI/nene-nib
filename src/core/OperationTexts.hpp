@@ -77,7 +77,7 @@ inline constexpr std::array<OperationText, 45> operation_texts{{
      UiMessage::operation_find_previous_description},
     {EditorOperation::replace, UiMessage::operation_replace_name,
      UiMessage::operation_replace_description, std::nullopt,
-     ContextMenuSlot{2, 1, ContextMenuNeed::nothing}, ":s", ":s"},
+     ContextMenuSlot{2, 1, ContextMenuNeed::nothing}, ":%s/", ":s"},
     {EditorOperation::go_to_line, UiMessage::operation_go_to_line_name,
      UiMessage::operation_go_to_line_description},
     {EditorOperation::preview_full, UiMessage::operation_preview_full_name,

@@ -440,6 +440,11 @@ LRESULT EditorWindow::press_caption(UINT message, WPARAM word, LPARAM data) noex
 {
     // 押した窓の操作は帯と同じ left_pressed_ に覚え、離した要素と同じときだけ動かす（ADR 0056 の
     // 決定 9・#1464）。client で押して × の上で離した WM_NCLBUTTONUP だけでは閉じない。
+    // クライアントの外を押したら開いている右クリックのメニューを閉じる（#1051）。
+    if (message == WM_NCLBUTTONDOWN || message == WM_NCLBUTTONDBLCLK)
+    {
+        close_context_menu_outside();
+    }
     const auto at = caption_target_of(word);
     const auto [pressed, button] = caption_step(message, at, left_pressed_);
     left_pressed_ = pressed;

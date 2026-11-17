@@ -1931,7 +1931,7 @@ void verify_operation_list_opens()
     frame = controller.apply_frame(app::OpenOperationList{});
     const auto vim_list = frame.command_palette.value_or(app::CommandPaletteView{});
     const auto &vim_rows = vim_list.rows;
-    expect(frame.command_line.value_or(core::InputLineView{}).text == "?" && vim_list.total == 43 &&
+    expect(frame.command_line.value_or(core::InputLineView{}).text == "?" && vim_list.total == 41 &&
                std::ranges::none_of(vim_rows, [](const core::CommandChoice &row)
                                     { return row.operation == core::EditorOperation::undo; }),
            "the Ex line gives way to the vim operation list without undo");

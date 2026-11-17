@@ -1035,6 +1035,10 @@ class EditorController final
     [[nodiscard]] std::optional<core::TextCaret> pointed_caret(const PointText &intent);
     // 選んだ行を実行する。Vim の NORMAL と VISUAL は表の Vim の鍵の列を engine に流す。
     void run_context_menu_row(const core::ContextMenuItem &item, core::ContextMenuMode mode);
+    // メニューと F1 の一覧の実行の 1 本。keys が空なら operation_request、あれば待ちを捨てて流す。
+    void run_operation_keys(core::EditorOperation operation, std::string_view keys);
+    // F1 の一覧から選んだ操作。Vim の NORMAL / VISUAL の 5 つはメニューと同じ Vim の鍵の列。
+    void run_listed_operation(core::EditorOperation operation);
     [[nodiscard]] std::optional<ContextMenuView> context_menu_view() const;
 
     // ---------------------------------------------------------------- 起動画面（ADR 0172）

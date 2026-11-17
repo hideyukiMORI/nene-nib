@@ -166,13 +166,17 @@ class EditorWindow final
     void press_right(LPARAM data);
     void release_right(LPARAM data);
     // WM_CONTEXTMENU。鍵（Shift+F10・メニューキー）の分だけ（lParam が -1）キャレットの位置に開く。
-    void open_context_menu_from_keys(LPARAM data);
+    [[nodiscard]] bool open_context_menu_from_keys(LPARAM data);
     // メニューが開いている間の左の押しと離しとマウスの動き。開いていなければ false（今の道へ）。
     [[nodiscard]] bool press_context_menu(LPARAM data);
     [[nodiscard]] bool release_context_menu(LPARAM data);
     [[nodiscard]] bool point_context_menu(LPARAM data);
     // 右の押しと離しと WM_CONTEXTMENU の入口。
-    [[nodiscard]] LRESULT context_menu_message(UINT message, LPARAM data);
+    [[nodiscard]] LRESULT context_menu_message(UINT message, WPARAM word, LPARAM data);
+    // 帯の空きや窓の操作（クライアントの外）を押したら開いているメニューを閉じる。
+    void close_context_menu_outside();
+    // 点の下のもう 1 つの枠の本文か（プレビューの枠は除く・右クリックはその枠へ移ってから開く）。
+    [[nodiscard]] bool in_other_text_body(POINT point) const;
     // メニューが開いている間の鍵（上下・Enter・Esc。ほかの鍵と文字は捨てる）と、焦点を失ったときに
     // 閉じる。受けて捨てたら true（焦点を失ったときは閉じて false・今の道も通す）。
     [[nodiscard]] bool take_context_menu_key(UINT message, WPARAM word);

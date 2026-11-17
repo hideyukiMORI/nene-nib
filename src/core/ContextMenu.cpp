@@ -223,6 +223,15 @@ std::string_view context_menu_vim_keys(EditorOperation operation, ContextMenuMod
     std::unreachable();
 }
 
+bool listed_vim_routed(EditorOperation operation, ContextMenuMode mode) noexcept
+{
+    const auto &text = operation_text(operation);
+    const bool vim_resting =
+        mode == ContextMenuMode::vim_normal || mode == ContextMenuMode::vim_visual;
+    return vim_resting && text.context_menu.has_value() &&
+           slot_of(text).need != ContextMenuNeed::nothing;
+}
+
 ContextMenuLayout context_menu_layout(const ContextMenuRequest &request) noexcept
 {
     const auto dpi = request.dpi;

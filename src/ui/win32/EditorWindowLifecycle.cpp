@@ -304,7 +304,7 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     }
     if (std::ranges::find(context_menu_messages, message) != context_menu_messages.end())
     {
-        return context_menu_message(message, data);
+        return context_menu_message(message, word, data);
     }
     // OS のメッセージ番号は開いた集合なので、既定分岐だけは許される（CPP-017）。
     switch (message)

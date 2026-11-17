@@ -26,11 +26,13 @@
 #include "SelectionAnchoring.hpp"
 #include "UiTexts.hpp"
 #include "VimMode.hpp"
+#include "VimStep.hpp"
 
 #include <array>
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 
@@ -134,6 +136,8 @@ void EditorController::place_caret_for_menu(const PointText &pointed)
             return;
         }
     }
+    // 左クリックでキャレットを置くときと同じく、狙いの横位置を捨てる（keeps_wanted_x は保つ側）。
+    wanted_x_.reset();
     accept(PointText{pointed.x, pointed.row, core::SelectionAnchoring::collapse,
                      PointerClicks::single});
 }
@@ -209,24 +213,40 @@ void EditorController::accept(const CloseContextMenu &)
     context_menu_.reset();
 }
 
-// Vim の NORMAL と VISUAL は、表の鍵の列を Vim で同じ鍵を打ったのと同じく流す（`"+` は step_vim の
-// 直前にクリップボードから写す・ADR 0051）。ほかは ui の run_operation（鍵と F1 の一覧と同じ 1
-// 本）。
 void EditorController::run_context_menu_row(const core::ContextMenuItem &item,
                                             core::ContextMenuMode mode)
 {
-    const auto keys = core::context_menu_vim_keys(item.operation, mode);
+    run_operation_keys(item.operation, core::context_menu_vim_keys(item.operation, mode));
+}
+
+// F1 の一覧から選んだ操作（追補 #1051 の 7a）。Vim の NORMAL / VISUAL の 5 つだけ Vim の鍵の列。
+void EditorController::run_listed_operation(core::EditorOperation operation)
+{
+    const auto mode = context_menu_mode();
+    run_operation_keys(operation, core::listed_vim_routed(operation, mode)
+                                      ? core::context_menu_vim_keys(operation, mode)
+                                      : std::string_view{});
+}
+
+// メニューと F1 の一覧の実行の入口の 1 本（追補 #1051）。Vim の鍵の列があれば、待ちの状態（回数・
+// オペレータ・1 鍵の引数待ち・`"` のレジスタ・`q` の名前待ち）を捨ててから（VISUAL は保つ・Vim の
+// `:amenu` が先に `<C-C>` を入れるのと同じ）Vim で同じ鍵を打ったのと同じく流す（`"+` は step_vim の
+// 直前にクリップボードから写す・ADR 0051）。無ければ ui の run_operation（鍵と同じ 1 本）。
+void EditorController::run_operation_keys(core::EditorOperation operation, std::string_view keys)
+{
     if (keys.empty())
     {
-        state_ = state_.with_operation_request(item.operation);
+        state_ = state_.with_operation_request(operation);
         return;
     }
     // 表の列は試験が全部読めることを確かめている（読めない列は何も流さない）。
     const auto parsed = core::vim_keys_of_notation(keys);
-    if (parsed.has_value())
+    if (!parsed.has_value())
     {
-        static_cast<void>(delivered_keys(parsed.value()));
+        return;
     }
+    state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
+    static_cast<void>(delivered_keys(parsed.value()));
 }
 
 std::optional<ContextMenuView> EditorController::context_menu_view() const

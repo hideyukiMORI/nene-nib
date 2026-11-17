@@ -5,6 +5,9 @@
 #include "ChooseContextMenu.hpp"
 #include "CloseContextMenu.hpp"
 #include "Column.hpp"
+#include "CommandChoice.hpp"
+#include "CommandPaletteView.hpp"
+#include "CommandText.hpp"
 #include "ContextMenu.hpp"
 #include "ContextMenuLayout.hpp"
 #include "ContextMenuMode.hpp"
@@ -13,6 +16,7 @@
 #include "ContextMenuSituation.hpp"
 #include "ContextMenuView.hpp"
 #include "DevicePixels.hpp"
+#include "DisplayLanguage.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -23,7 +27,9 @@
 #include "LineNumber.hpp"
 #include "MoveCaret.hpp"
 #include "OpenContextMenu.hpp"
+#include "OpenOperationList.hpp"
 #include "OperationTexts.hpp"
+#include "PaletteMode.hpp"
 #include "PlaceCaret.hpp"
 #include "PointContextMenu.hpp"
 #include "PointText.hpp"
@@ -34,6 +40,7 @@
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "StepContextMenu.hpp"
+#include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
@@ -51,6 +58,7 @@
 #include <string_view>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -84,7 +92,7 @@ constexpr std::array<KeyRow, 7> menu_keys{{
     {EditorOperation::delete_selection, "Delete", "Delete", "x", "d"},
     {EditorOperation::select_all, "Ctrl+A", "Ctrl+A", "ggVG", "<Esc>ggVG"},
     {EditorOperation::find, "Ctrl+F", "", "/", "/"},
-    {EditorOperation::replace, "Ctrl+H", "", ":s", ":s"},
+    {EditorOperation::replace, "Ctrl+H", "", ":%s/", ":s"},
 }};
 
 // 状況 → 7 項目の使える / 使えない（menu_order の順）。
@@ -422,6 +430,103 @@ void verify_vim_insert()
            "vim insert hands the operation to run_operation like the keys");
 }
 
+// メニューから流す前に、待ちの状態を捨てる（V-1791 の M1・Vim の `:amenu` の `<C-C>` と同じ）。
+// 待ちのある NORMAL から選んだ結果は、待ちの無いときと同じ。
+[[nodiscard]] std::string pasted_after(std::u32string_view waiting, std::size_t row)
+{
+    Editing editing;
+    auto &controller = vim_line(editing).controller();
+    press_keys(controller, U"\"ayl");
+    editing.clipboard().hold(Content{"XY"});
+    press_keys(controller, waiting);
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    return applied(controller, app::ChooseContextMenu{row});
+}
+
+void verify_vim_waiting_discarded()
+{
+    const auto plain = pasted_after(U"", paste_row);
+    expect(plain == "aXYbc def", "the paste row runs \"+p after the caret");
+    expect(pasted_after(U"r", paste_row) == plain,
+           "a pending r is dropped before the menu keys run");
+    expect(pasted_after(U"d", paste_row) == plain,
+           "a pending operator is dropped before the menu keys run");
+    expect(pasted_after(U"\"a", paste_row) == plain,
+           "a named register is dropped before the menu keys run");
+    expect(pasted_after(U"2", delete_row) == pasted_after(U"", delete_row),
+           "a count is dropped before the menu keys run");
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::InsertText{"one\ntwo\nthree\nfour"}));
+    static_cast<void>(controller.apply(app::VisibleLines{5, core::TextViewGeometry{400, 20, 96}}));
+    static_cast<void>(controller.apply(app::SelectEditMode{core::EditMode::vim}));
+    press_keys(controller, U"gg3");
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    static_cast<void>(controller.apply(app::ChooseContextMenu{select_all_row}));
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    static_cast<void>(controller.apply(app::ChooseContextMenu{copy_row}));
+    // 置いた本文は文書の改行（CRLF の既定）でつながる。
+    expect(copied(editing).starts_with("one") && copied(editing).find("four") != std::string::npos,
+           "select all after a count still selects the whole document");
+    press_keys(controller, U"vli");
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    const auto visual = controller.apply_frame(app::ChooseContextMenu{copy_row});
+    expect(copied(editing) == "on" && visual.vim_mode == core::VimMode::normal,
+           "copy after a pending text object in visual copies the selection");
+}
+
+// F1 の一覧の Vim の NORMAL / VISUAL（V-1791 の M2）。5 つの操作の鍵の表示は Vim の列で、列の無い
+// 操作は出ず、選ぶとメニューと同じ Vim の鍵の列の道を通る。
+[[nodiscard]] std::optional<std::string>
+listed_key_of(const std::vector<core::CommandChoice> &choices, core::EditorOperation operation)
+{
+    for (const auto &choice : choices)
+    {
+        if (choice.operation == operation)
+        {
+            return choice.key;
+        }
+    }
+    return std::nullopt;
+}
+
+void verify_vim_operation_list()
+{
+    const auto normal =
+        core::operation_choices("", core::PaletteMode{core::EditMode::vim, Mode::vim_normal},
+                                core::DisplayLanguage::japanese);
+    expect(normal.size() == 41 && !listed_key_of(normal, core::EditorOperation::cut).has_value() &&
+               !listed_key_of(normal, core::EditorOperation::copy).has_value() &&
+               listed_key_of(normal, core::EditorOperation::paste) == "\"+p" &&
+               listed_key_of(normal, core::EditorOperation::select_all) == "ggVG" &&
+               listed_key_of(normal, core::EditorOperation::find) == "",
+           "the vim normal list shows the vim keys and leaves out the rows without them");
+    const auto visual =
+        core::operation_choices("", core::PaletteMode{core::EditMode::vim, Mode::vim_visual},
+                                core::DisplayLanguage::japanese);
+    expect(visual.size() == 43 && listed_key_of(visual, core::EditorOperation::copy) == "\"+y",
+           "the vim visual list shows every row with the visual keys");
+    expect(
+        core::operation_choices("", core::EditMode::vim, core::DisplayLanguage::japanese).size() ==
+            43,
+        "a list that knows only the edit mode keeps the vim rows without vim keys");
+}
+
+void verify_vim_operation_list_runs()
+{
+    Editing editing;
+    auto &controller = vim_line(editing).controller();
+    editing.clipboard().hold(Content{"XY"});
+    static_cast<void>(controller.apply(app::OpenOperationList{}));
+    static_cast<void>(controller.apply(app::CommandText{"はりつけ"}));
+    const auto listed = controller.frame().command_palette.value_or(app::CommandPaletteView{});
+    expect(!listed.rows.empty() && listed.rows.at(0).operation == core::EditorOperation::paste,
+           "the list finds paste first");
+    const auto text = applied(controller, app::SubmitCommand{});
+    expect(text == "aXYbc def" && !controller.frame().operation_request.has_value(),
+           "paste from the vim list runs \"+p through the engine like the menu");
+}
+
 // 表の Vim の鍵の列は全部 map の行と同じ読み手で読める（読めない列は何も流さない）。
 void verify_vim_columns_parse()
 {
@@ -452,5 +557,8 @@ void verify_context_menu_scope()
     verify_vim_visual();
     verify_vim_insert();
     verify_vim_columns_parse();
+    verify_vim_waiting_discarded();
+    verify_vim_operation_list();
+    verify_vim_operation_list_runs();
 }
 } // namespace nenenib::tests

@@ -257,13 +257,24 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // 知らせ（TitleBarWidth）も本文とキャレットに触れないので保つ（メモ帳はマウスを動かしても狙いの桁を
 // 変えない・D82・レビュー V-1428 の M-1 と F-3）。本文の寸法と DPI を運ぶ VisibleLines と外観の
 // 読み直し RefreshAppearance は、画素で持つ狙いの意味を変え得るので保たない（捨てる側のまま）。
+// 右クリックのメニューの開く・載せる・上下・閉じるはキャレットを動かさない（#1051）。開くときに
+// キャレットを置く分（通常モードの選択の外）は、左クリックと同じく place_caret_for_menu が捨てる。
+// 選んで実行する ChooseContextMenu は操作なので捨てる側。
+[[nodiscard]] bool keeps_wanted_x_for_menu(const EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<OpenContextMenu>(intent) ||
+           std::holds_alternative<PointContextMenu>(intent) ||
+           std::holds_alternative<StepContextMenu>(intent) ||
+           std::holds_alternative<CloseContextMenu>(intent);
+}
+
 [[nodiscard]] bool keeps_wanted_x(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<MoveCaret>(intent) || is_signal(intent) ||
            std::holds_alternative<ScrollPane>(intent) ||
            std::holds_alternative<PointTitleBar>(intent) ||
            std::holds_alternative<HoverExplorer>(intent) ||
-           std::holds_alternative<TitleBarWidth>(intent);
+           std::holds_alternative<TitleBarWidth>(intent) || keeps_wanted_x_for_menu(intent);
 }
 
 // エクスプローラーのダブルクリックの 2 打目と組む印（explorer_clicked_）を保つ意図（#1388・

@@ -1,5 +1,6 @@
 #include "ClipboardKeys.hpp"
 #include "ClipboardOperation.hpp"
+#include "ContextMenuKey.hpp"
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
 #include "OperationBindings.hpp"
@@ -106,6 +107,11 @@ void verify_clipboard_keys_reach_their_turn()
                "the clipboard and select-all keys of the table are not mapped to chords");
     }
     expect(operation_chord('V', true, true).has_value(), "Ctrl+Shift+V is still mapped");
+    // WM_CONTEXTMENU は鍵の分（lParam が -1）だけ開き、マウスの分（画面の座標）は既定の処理へ
+    // 渡す（帯の空きの窓のメニュー・#1051）。本文の右クリックは右の離しで開くので 2 回開かない。
+    expect(nenenib::ui::win32::opened_from_keys(-1) &&
+               !nenenib::ui::win32::opened_from_keys(MAKELPARAM(120, 40)),
+           "only the keyboard WM_CONTEXTMENU opens the menu");
 }
 
 void verify_new_tab_and_redo_keys()

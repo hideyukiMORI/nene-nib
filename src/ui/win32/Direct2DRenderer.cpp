@@ -1967,7 +1967,6 @@ void Direct2DRenderer::draw_start_screen(const application::EditorFrame &frame,
     {
         // 消えたら文字組みを捨てる。また出たら作り直す（Ctrl+P の面と同じ・#900）。
         start_layouts_.clear();
-        context_menu_layouts_.clear();
         return;
     }
     const auto &view = frame.start_screen.value();

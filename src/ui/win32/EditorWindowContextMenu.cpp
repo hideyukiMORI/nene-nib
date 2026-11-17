@@ -7,12 +7,15 @@
 
 #include "ChooseContextMenu.hpp"
 #include "CloseContextMenu.hpp"
+#include "ContextMenuKey.hpp"
 #include "LayoutRect.hpp"
 #include "OpenContextMenu.hpp"
+#include "PaneLayouts.hpp"
 #include "PointContextMenu.hpp"
 #include "PointerClicks.hpp"
 #include "SelectionAnchoring.hpp"
 #include "StepContextMenu.hpp"
+#include "SwitchPane.hpp"
 
 #include <windows.h>
 
@@ -44,6 +47,18 @@ bool EditorWindow::in_text_body(POINT point) const
     return core::contains(body.content, point.x, point.y);
 }
 
+bool EditorWindow::in_other_text_body(POINT point) const
+{
+    if (controller_.command_palette_active() || controller_.command_line_active() ||
+        controller_.explorer_focused() || previewing())
+    {
+        return false;
+    }
+    const auto other = core::other_pane_layout(body_panes(controller_.delivery().settings),
+                                               controller_.split().active_side);
+    return other.has_value() && core::contains(other.value().content, point.x, point.y);
+}
+
 void EditorWindow::press_right(LPARAM data)
 {
     const auto point = point_of(data);
@@ -57,14 +72,24 @@ void EditorWindow::press_right(LPARAM data)
         }
         send(application::CloseContextMenu{});
     }
-    right_pressed_ = in_text_body(point) ? std::optional{point} : std::nullopt;
+    right_pressed_ =
+        in_text_body(point) || in_other_text_body(point) ? std::optional{point} : std::nullopt;
 }
 
 void EditorWindow::release_right(LPARAM data)
 {
     const auto pressed = std::exchange(right_pressed_, std::nullopt);
     const auto point = point_of(data);
-    if (!pressed.has_value() || !in_text_body(point))
+    if (!pressed.has_value())
+    {
+        return;
+    }
+    // もう 1 つの枠の上なら、左クリックと同じくその枠へ移ってから開く（ADR 0148 の決定 11）。
+    if (in_other_text_body(point))
+    {
+        send(application::SwitchPane{});
+    }
+    if (!in_text_body(point))
     {
         return;
     }
@@ -73,14 +98,15 @@ void EditorWindow::release_right(LPARAM data)
         text_point(point, core::SelectionAnchoring::collapse, application::PointerClicks::single)});
 }
 
-// lParam が -1 は鍵から（Shift+F10・メニューキー・DefWindowProc が送る）。マウスの WM_CONTEXTMENU
-// は右の離しを窓が受けて DefWindowProc に渡さないので来ない（来ても開かない）。
-void EditorWindow::open_context_menu_from_keys(LPARAM data)
+// lParam が -1 は鍵から（Shift+F10・メニューキー・DefWindowProc が送る）。開いたときだけ真。本文の
+// 右クリックは窓が右の離しを受けて DefWindowProc に渡さないので WM_CONTEXTMENU は来ず、2 回開かない
+// （来ても lParam が -1 でないので開かず、既定の処理へ渡る）。
+bool EditorWindow::open_context_menu_from_keys(LPARAM data)
 {
-    if (data != -1 || controller_.command_palette_active() || controller_.command_line_active() ||
-        controller_.explorer_focused())
+    if (!opened_from_keys(data) || controller_.command_palette_active() ||
+        controller_.command_line_active() || controller_.explorer_focused())
     {
-        return;
+        return false;
     }
     const auto body = active_body(controller_.delivery().settings);
     POINT at{body.content.left, body.content.top};
@@ -90,6 +116,7 @@ void EditorWindow::open_context_menu_from_keys(LPARAM data)
         at = POINT{caret.left, caret.bottom};
     }
     send(application::OpenContextMenu{at.x, at.y, std::nullopt});
+    return true;
 }
 
 // メニューの上の左の押しは覚えるだけ（離したときに行を実行する）。外の押しは閉じるだけで、本文へ
@@ -144,21 +171,29 @@ bool EditorWindow::point_context_menu(LPARAM data)
     return true;
 }
 
-LRESULT EditorWindow::context_menu_message(UINT message, LPARAM data)
+// 開かなかった WM_CONTEXTMENU（帯の空きの右クリックの窓のメニュー・面や入力行の間の Shift+F10）は
+// 既定の処理へ渡す。
+LRESULT EditorWindow::context_menu_message(UINT message, WPARAM word, LPARAM data)
 {
     switch (message)
     {
     case WM_RBUTTONDOWN:
         press_right(data);
-        break;
+        return 0;
     case WM_RBUTTONUP:
         release_right(data);
-        break;
+        return 0;
     default:
-        open_context_menu_from_keys(data);
-        break;
+        return open_context_menu_from_keys(data) ? 0 : DefWindowProcW(window_, message, word, data);
     }
-    return 0;
+}
+
+void EditorWindow::close_context_menu_outside()
+{
+    if (controller_.context_menu_active())
+    {
+        send(application::CloseContextMenu{});
+    }
 }
 
 bool EditorWindow::take_context_menu_key(UINT message, WPARAM word)
