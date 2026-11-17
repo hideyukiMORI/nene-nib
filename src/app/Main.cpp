@@ -30,6 +30,7 @@
 #include "Win32ImageAdapter.hpp"
 #include "Win32LanguageServer.hpp"
 #include "Win32MarkdownAdapter.hpp"
+#include "Win32PreviewAdapter.hpp"
 #include "Win32Printer.hpp"
 #include "Win32ProjectSearchAdapter.hpp"
 #include "Win32SessionAdapter.hpp"
@@ -296,6 +297,8 @@ last_resort_for(nenenib::application::EditorController &controller)
 // Markdown プレビューの画像の口（ADR 0155 の追補 53・54）も同じ worker を
 // 借りてファイルを読み WIC で復号し（壊れる順は folders と同じ）、
 // 窓ができてから合図を結ぶ（bind_work_signal）。
+// Markdown の解析（ADR 0155 の決定 5・壊れる順は folders と同じ）と探して見る面のプレビューの窓
+// （ADR 0189 の決定 4）も同じワーカーを借りる。
 // 起動画面の履歴とブックマークの 1 回の読み（ADR 0172 の決定 3）も同じワーカーを借り、
 // 頼むのは最初の frame の合図のときだけ。履歴と明示登録（ADR 0063）の adapter はその仕事が
 // 借りるので、ワーカーより先に作って後に壊す。表示言語の観測（ADR 0123 の追補 2026-11-13 の決定
@@ -321,7 +324,6 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32Worker worker;
     make_device_first(worker, warmup);
     nenenib::adapters::win32::Win32FolderAdapter folders(worker);
-    // Markdown の解析も同じワーカーを借りる（ADR 0155 の決定 5・壊れる順は folders と同じ）。
     nenenib::adapters::win32::Win32MarkdownAdapter markdown(worker);
     nenenib::ui::win32::BodyTextLayouts text_layouts;
     // 字体の一覧は ui/win32 が DirectWrite から読み、adapters が OS の照合順に並べる（#696）。
@@ -339,13 +341,14 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32StartListAdapter start_lists(worker, history, bookmarks);
     nib_adapters::Win32UiLanguage ui_language;
     nib_adapters::Win32ProjectSearchAdapter project_search(worker);
+    nib_adapters::Win32PreviewAdapter previews(worker, code_pages);
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{
-            appearance,   clipboard,       files,       code_pages,    settings,
-            themes,       session,         history,     folders,       bookmarks,
-            text_layouts, autosave,        fonts,       bell,          markdown,
-            reads,        language_server, wall_clock,  printer,       shell_registration,
-            images,       start_lists,     ui_language, project_search},
+            appearance,   clipboard,       files,       code_pages,     settings,
+            themes,       session,         history,     folders,        bookmarks,
+            text_layouts, autosave,        fonts,       bell,           markdown,
+            reads,        language_server, wall_clock,  printer,        shell_registration,
+            images,       start_lists,     ui_language, project_search, previews},
         initial_documents(given));
     const auto last_resort = last_resort_for(controller);
     // 起動の最初の節目（引数の解析・adapters の構築・起動引数の読み込みと復号の後・Issue #19）。
@@ -358,7 +361,7 @@ int run(HINSTANCE instance)
     }
     bind_window_handle(*window.value(), clipboard, language_server);
     bind_work_signal(*window.value(), folders, autosave, markdown, reads, images, start_lists,
-                     project_search);
+                     project_search, previews);
     pump_messages(*window.value(), warmup, language_server);
     return window.value()->rendering_failed() ? 1 : 0;
 }

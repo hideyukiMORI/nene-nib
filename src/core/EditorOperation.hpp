@@ -71,6 +71,10 @@ enum class EditorOperation : std::uint8_t
     copy,
     paste,
     delete_selection,
-    select_all
+    select_all,
+    // 探して見る面のプレビュー欄の置き方を次へ（ADR 0189 の決定 3）。面が開いている間の
+    // Ctrl+Shift+P（ui の入力行の鍵）・見出しの右端の印・F1 の一覧から。面が閉じているときの
+    // Ctrl+Shift+P は面を開く行（list_files）が先に当たるので、表の行は鍵なし。
+    cycle_finder_preview
 };
 } // namespace nenenib::core

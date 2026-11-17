@@ -22,6 +22,7 @@
 #include "ExTabVerb.hpp"
 #include "FindPhase.hpp"
 #include "FindState.hpp"
+#include "FinderPreview.hpp"
 #include "FontFamilies.hpp"
 #include "GoToLineInput.hpp"
 #include "InputLinePrompt.hpp"
@@ -131,13 +132,15 @@ namespace
     std::unreachable();
 }
 
-// 行数が変わるときだけ替えた入力（同じなら無し・写しを作らない）。
-[[nodiscard]] std::optional<CommandInput> fitted_rows(const core::CommandPalette &palette,
-                                                      CommandWindow window)
+// 行数が変わるときだけ替えた入力（同じなら無し・写しを作らない）。行数は出どころの置き方で変わる
+// （below は最大 5 行・ADR 0189 の決定 1）。
+[[nodiscard]] std::optional<CommandInput>
+fitted_rows(const core::CommandPalette &palette, CommandWindow window, core::FinderPreview chosen)
 {
     const auto [width, height, dpi] = window;
-    const auto rows =
-        measured(window) ? core::palette_window_rows(width, height, dpi) : core::palette_row_limit;
+    const auto placement = core::palette_placement(palette.scope(), chosen);
+    const auto rows = measured(window) ? core::palette_window_rows(width, height, dpi, placement)
+                                       : core::palette_row_limit;
     if (std::max(rows, std::size_t{1}) == palette.visible())
     {
         return std::nullopt;
@@ -145,8 +148,8 @@ namespace
     return CommandInput{palette.with_visible(rows)};
 }
 
-[[nodiscard]] std::optional<CommandInput> fitted_rows(const core::CommandLine &line,
-                                                      CommandWindow window)
+[[nodiscard]] std::optional<CommandInput>
+fitted_rows(const core::CommandLine &line, CommandWindow window, core::FinderPreview /*chosen*/)
 {
     const auto [width, height, dpi] = window;
     const auto rows = measured(window)
@@ -162,19 +165,22 @@ namespace
 }
 
 [[nodiscard]] std::optional<CommandInput> fitted_rows(const core::SearchLine & /*line*/,
-                                                      CommandWindow /*window*/)
+                                                      CommandWindow /*window*/,
+                                                      core::FinderPreview /*chosen*/)
 {
     return std::nullopt;
 }
 
 [[nodiscard]] std::optional<CommandInput> fitted_rows(const SubstituteQuestion & /*question*/,
-                                                      CommandWindow /*window*/)
+                                                      CommandWindow /*window*/,
+                                                      core::FinderPreview /*chosen*/)
 {
     return std::nullopt;
 }
 
 [[nodiscard]] std::optional<CommandInput> fitted_rows(const JumpCharacter & /*line*/,
-                                                      CommandWindow /*window*/)
+                                                      CommandWindow /*window*/,
+                                                      core::FinderPreview /*chosen*/)
 {
     return std::nullopt;
 }
@@ -534,8 +540,9 @@ void EditorController::fit_command_rows()
         return;
     }
     const CommandWindow window{window_width_, window_height_, view_geometry_.dpi};
-    auto fitted = std::visit([window](const auto &value) { return fitted_rows(value, window); },
-                             input.value());
+    const auto chosen = state_.settings().finder_preview;
+    auto fitted = std::visit([window, chosen](const auto &value)
+                             { return fitted_rows(value, window, chosen); }, input.value());
     if (fitted.has_value())
     {
         state_ = state_.with_command_input(std::move(fitted).value());

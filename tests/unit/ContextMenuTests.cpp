@@ -499,7 +499,7 @@ void verify_vim_operation_list()
     const auto normal =
         core::operation_choices("", core::PaletteMode{core::EditMode::vim, Mode::vim_normal},
                                 core::DisplayLanguage::japanese);
-    expect(normal.size() == 41 && !listed_key_of(normal, core::EditorOperation::cut).has_value() &&
+    expect(normal.size() == 42 && !listed_key_of(normal, core::EditorOperation::cut).has_value() &&
                !listed_key_of(normal, core::EditorOperation::copy).has_value() &&
                listed_key_of(normal, core::EditorOperation::paste) == "\"+p" &&
                listed_key_of(normal, core::EditorOperation::select_all) == "ggVG" &&
@@ -508,11 +508,11 @@ void verify_vim_operation_list()
     const auto visual =
         core::operation_choices("", core::PaletteMode{core::EditMode::vim, Mode::vim_visual},
                                 core::DisplayLanguage::japanese);
-    expect(visual.size() == 43 && listed_key_of(visual, core::EditorOperation::copy) == "\"+y",
+    expect(visual.size() == 44 && listed_key_of(visual, core::EditorOperation::copy) == "\"+y",
            "the vim visual list shows every row with the visual keys");
     expect(
         core::operation_choices("", core::EditMode::vim, core::DisplayLanguage::japanese).size() ==
-            43,
+            44,
         "a list that knows only the edit mode keeps the vim rows without vim keys");
 }
 

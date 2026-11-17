@@ -1,6 +1,8 @@
 #pragma once
 
+#include "FinderPreview.hpp"
 #include "LayoutRect.hpp"
+#include "PaletteContent.hpp"
 #include "PaletteHintPlace.hpp"
 
 #include <cstddef>
@@ -16,6 +18,7 @@ inline constexpr std::size_t palette_row_limit = 8;
 // 検索欄の左端（キャレットの棒）と記号の案内の左端の間に空ける最小の幅（#1640）。
 inline constexpr std::int32_t palette_hint_gap_dips = 24;
 
+// 面の配置（ADR 0062・ADR 0189 の決定 1）。描画と当たりの判定は同じ値を読む。
 struct PaletteLayout
 {
     LayoutRect panel;
@@ -24,18 +27,56 @@ struct PaletteLayout
     LayoutRect footer;
     std::int32_t row_height;
     std::size_t visible_rows;
+    // 描く置き方（right / below / off・automatic にはならない）。
+    FinderPreview preview = FinderPreview::off;
+    // プレビュー欄の全体・見出し（高さ 28 DIP）・本文・見出しの右端の切り替えの印（28 DIP 四方）。
+    // off ではどれも幅 0。
+    LayoutRect pane = {};
+    LayoutRect pane_header = {};
+    LayoutRect pane_body = {};
+    LayoutRect pane_toggle = {};
 };
 
+// 置き方 placement（automatic を含む・欄を持たない出どころは呼び出し元が off にする・
+// palette_placement）と窓の大きさから面の配置を決める 1 本（ADR 0189 の決定 1）。
+// - off: 今の面のまま（幅 640 DIP・行は候補の数だけ最大 8）。
+// - right: 幅 min(1000 DIP, 窓の幅 − 32 DIP)・左の当たりの欄 400 DIP・その右がプレビュー欄（高さは
+//   行の欄と同じ）。行は窓に入るだけ最大 8（候補の数に依らない）。
+// - below: 幅 640 DIP・当たり最大 5 行・その下にプレビュー欄（見出し 28 DIP ＋ 残りの高さ・最小 6
+//   行ぶん・最大 40 行ぶん）。
+// 入らない窓では palette_preview_drawn の形に落とす（覚えた値は変えない）。
 [[nodiscard]] PaletteLayout palette_layout(std::int32_t width, std::int32_t height,
-                                           std::uint32_t dpi, std::size_t choices) noexcept;
+                                           std::uint32_t dpi, PaletteContent content) noexcept;
+// 置き方と窓の大きさから描く形（ADR 0189 の決定 1）。automatic と right は right が入れば right
+// （プレビュー欄の幅 360 DIP 以上 = 窓の幅 792 DIP 以上）、入らなければ below（当たり 3 行 ＋
+// プレビュー 6 行が窓の高さに入る）、それも入らなければ off。below は入れば below・入らなければ
+// off。off は off。
+[[nodiscard]] FinderPreview palette_preview_drawn(FinderPreview placement, std::int32_t width,
+                                                  std::int32_t height, std::uint32_t dpi) noexcept;
+// プレビュー欄の本文に入る行の数（最大 finder_preview_line_limit・行の高さ 19 DIP・上下 6 DIP）。
+[[nodiscard]] std::size_t palette_preview_lines(const PaletteLayout &layout,
+                                                std::uint32_t dpi) noexcept;
+// 本文の index 行目の矩形（欄の幅・行の高さ 19 DIP）。
+[[nodiscard]] LayoutRect palette_preview_line(const PaletteLayout &layout, std::uint32_t dpi,
+                                              std::size_t index) noexcept;
+// 行の中の行番号の欄（左から幅 40 DIP・右寄せで描く）と本文の欄（行番号の右 14 DIP から）。
+[[nodiscard]] LayoutRect palette_preview_number(const LayoutRect &line, std::uint32_t dpi) noexcept;
+[[nodiscard]] LayoutRect palette_preview_text(const LayoutRect &line, std::uint32_t dpi) noexcept;
+// 見出しの文の欄（左右 14 DIP の内側・右端は切り替えの印の手前）。
+[[nodiscard]] LayoutRect palette_preview_heading(const PaletteLayout &layout,
+                                                 std::uint32_t dpi) noexcept;
+// 点が見出しの右端の切り替えの印の上か（押すと Ctrl+Shift+P と同じ・決定 3）。
+[[nodiscard]] bool palette_toggle_hit(const PaletteLayout &layout, std::int32_t x,
+                                      std::int32_t y) noexcept;
 [[nodiscard]] LayoutRect palette_row(const PaletteLayout &layout,
                                      std::size_t visible_index) noexcept;
 [[nodiscard]] std::optional<std::size_t> palette_hit(const PaletteLayout &layout, std::int32_t x,
                                                      std::int32_t y) noexcept;
-// 窓の大きさで見えている行数（上限 palette_row_limit・ADR 0150 の決定 1）。候補の件数に依らない
-// 値で、application が面の窓の行数として渡す。描く行数は palette_layout の visible_rows。
+// 窓の大きさと置き方で見えている行数（上限 palette_row_limit・ADR 0150 の決定 1・below は 5）。
+// 候補の件数に依らない値で、application が面の窓の行数として渡す。描く行数は palette_layout の
+// visible_rows。
 [[nodiscard]] std::size_t palette_window_rows(std::int32_t width, std::int32_t height,
-                                              std::uint32_t dpi) noexcept;
+                                              std::uint32_t dpi, FinderPreview placement) noexcept;
 
 // 行の右端の補足の欄（ADR 0060 の決定 9）。行の内側（左右 16 DIP）の右端から幅 112 DIP。
 // 内側が 補足 112 + すき間 12 + 名前の最小 120 DIP より狭ければ幅 0（補足を出さない）。

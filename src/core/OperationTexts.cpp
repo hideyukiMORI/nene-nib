@@ -61,6 +61,7 @@ namespace
     case EditorOperation::paste:
     case EditorOperation::delete_selection:
     case EditorOperation::select_all:
+    case EditorOperation::cycle_finder_preview:
         return true;
     }
     return false;

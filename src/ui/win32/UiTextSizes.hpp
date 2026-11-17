@@ -21,4 +21,8 @@ inline constexpr float palette_key_padding_dips = 9.0F;
 inline constexpr float hit_line_dips = 12.5F;
 inline constexpr float hit_place_dips = 11.0F;
 inline constexpr float palette_progress_dips = 11.5F;
+// プレビュー欄の本文と行番号（本文の字体・面の行の文字と同じ 12.5 DIP・fontsize に追従しない）と
+// 見出し（UI の字体・11.5 DIP・ADR 0189 の決定 5・採用案の「プレビュー欄」）。
+inline constexpr float preview_line_dips = 12.5F;
+inline constexpr float preview_heading_dips = 11.5F;
 } // namespace nenenib::ui::win32

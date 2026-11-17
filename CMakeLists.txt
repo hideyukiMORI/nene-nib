@@ -53,7 +53,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/CommandLine.cpp src/core/FontFamilies.cpp src/core/CommandChoice.cpp src/core/SubsequenceScore.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
     src/core/BytesReservation.cpp src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExplorerLayout.cpp src/core/ExplorerMark.cpp src/core/Minimap.cpp src/core/MinimapLayout.cpp src/core/ExplorerTree.cpp src/core/ExMapCommand.cpp src/core/ExRange.cpp src/core/ExResult.cpp src/core/ExSubstituteCommand.cpp src/core/ExLineCommand.cpp src/core/FontSize.cpp
     src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp src/core/InputHistory.cpp
-    src/core/DateTimeText.cpp src/core/PrintPages.cpp src/core/KeyChord.cpp src/core/KeyMap.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/StartScreen.cpp src/core/StartScreenLayout.cpp src/core/StartPress.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/OrdinaryWordBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp src/core/ContextMenu.cpp
+    src/core/DateTimeText.cpp src/core/PrintPages.cpp src/core/KeyChord.cpp src/core/KeyMap.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/StartScreen.cpp src/core/StartScreenLayout.cpp src/core/StartPress.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/OrdinaryWordBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp src/core/ContextMenu.cpp src/core/FinderPreview.cpp
     src/core/NewlineIndex.cpp src/core/ScrollBounds.cpp src/core/GutterLabels.cpp src/core/SearchLine.cpp
     src/core/LiteralPattern.cpp src/core/ProjectSearchRules.cpp src/core/ProjectQuery.cpp src/core/ProjectHits.cpp src/core/ProjectHitRows.cpp src/core/GoToLineInput.cpp src/core/SubstituteAll.cpp src/core/SubstituteReplacement.cpp src/core/ShellRegistration.cpp src/core/WslPlaces.cpp
     src/core/StatusBarLayout.cpp src/core/StatusItems.cpp src/core/LineEndingConversion.cpp
@@ -92,7 +92,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/FileBookmarkEdit.cpp src/application/FileHistoryEdit.cpp src/application/ImeStance.cpp src/application/ExitPlan.cpp
     src/application/LineSpanEvaluation.cpp src/application/ComposedLine.cpp src/application/VisualTextView.cpp src/application/GiantLineWindow.cpp src/application/EditorControllerView.cpp
     src/application/EditorControllerEditing.cpp src/application/EditorControllerVim.cpp src/application/EditorControllerDocuments.cpp
-    src/application/EditorControllerTabs.cpp src/application/EditorControllerCommand.cpp src/application/EditorControllerPalette.cpp src/application/EditorControllerProjectSearch.cpp
+    src/application/EditorControllerTabs.cpp src/application/EditorControllerCommand.cpp src/application/EditorControllerPalette.cpp src/application/EditorControllerProjectSearch.cpp src/application/EditorControllerFinderPreview.cpp src/application/PreviewLines.cpp
     src/application/EditorControllerAutosave.cpp src/application/EditorControllerPreview.cpp src/application/EditorControllerDetail.cpp
     src/application/PreviewImages.cpp
     src/application/EditorControllerExplorer.cpp src/application/EditorControllerShell.cpp src/application/EditorControllerContextMenu.cpp src/application/EditorControllerStartScreen.cpp src/application/EditorControllerEasyMotion.cpp src/application/EasyMotionLabels.cpp
@@ -132,6 +132,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/InputLineLimitTests.cpp
     tests/unit/ProjectSearchTests.cpp
     tests/unit/ProjectSearchControllerTests.cpp
+    tests/unit/FinderLayoutTests.cpp
+    tests/unit/FinderPreviewTests.cpp
     tests/unit/CommandLineEditTests.cpp
     tests/unit/InputLinePropertyTests.cpp
     tests/unit/VimWindowTests.cpp
@@ -278,7 +280,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32TimingAdapter.cpp
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/LastResortArming.cpp src/adapters/win32/FolderShelf.cpp
     src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
-    src/adapters/win32/ProjectSearchEntries.cpp src/adapters/win32/ProjectSearchShelf.cpp src/adapters/win32/ProjectSearchWalk.cpp src/adapters/win32/Win32ProjectSearchAdapter.cpp
+    src/adapters/win32/ProjectSearchEntries.cpp src/adapters/win32/ProjectSearchShelf.cpp src/adapters/win32/ProjectSearchWalk.cpp src/adapters/win32/Win32ProjectSearchAdapter.cpp src/adapters/win32/PreviewShelf.cpp src/adapters/win32/PreviewRead.cpp src/adapters/win32/Win32PreviewAdapter.cpp
     src/adapters/win32/MarkdownShelf.cpp src/adapters/win32/Win32MarkdownAdapter.cpp
     src/adapters/win32/ImageShelf.cpp src/adapters/win32/ImageFileRead.cpp
     src/adapters/win32/ImageDecode.cpp src/adapters/win32/Win32ImageAdapter.cpp
@@ -402,6 +404,17 @@ nenenib_link(nib_project_search_adapter_tests nenenib_adapters)
 add_test(NAME nib_adapters_project_search COMMAND nib_project_search_adapter_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(nib_adapters_project_search PROPERTIES TIMEOUT 120)
 
+# Issue #1793: プレビューの窓の読み（Win32PreviewAdapter・ADR 0189 の決定 4・8）を本物のファイルと
+# ワーカー 1 本で測る。16 MiB を超える見本を書く。時刻は読まず、合図の受け皿だけを待つので、止まらない
+# ときはこの制限時間で落ちる。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
+nenenib_target(nib_preview_adapter_tests adapter_tests EXECUTABLE tests/adapters/PreviewAdapterTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
+nenenib_link(nib_preview_adapter_tests nenenib_core)
+nenenib_link(nib_preview_adapter_tests nenenib_application)
+nenenib_link(nib_preview_adapter_tests nenenib_adapters)
+add_test(NAME nib_adapters_preview COMMAND nib_preview_adapter_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_adapters_preview PROPERTIES TIMEOUT 120)
+
 # Issue #993: 開く道の読み（Win32DocumentReader）を本物のファイルとワーカー 1 本で測る（ADR 0159）。
 # 65 MiB の見本を書いて塊の仕事で読む。時刻は読まず、合図の受け皿だけを待つので、止まらないときは
 # この制限時間で落ちる。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
@@ -479,7 +492,7 @@ add_test(NAME nib_adapters_last_resort COMMAND nib_last_resort_tests $<TARGET_FI
 set_tests_properties(nib_adapters_last_resort PROPERTIES TIMEOUT 180)
 
 nenenib_target(nenenib_window ui_win32 STATIC
-    src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/Direct2DRendererContextMenu.cpp src/ui/win32/MotionLabelBox.cpp src/ui/win32/InputLinePromptText.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorWindowDetail.cpp src/ui/win32/EditorWindowLifecycle.cpp src/ui/win32/EditorWindowPointer.cpp src/ui/win32/EditorWindowKeys.cpp
+    src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/Direct2DRendererContextMenu.cpp src/ui/win32/Direct2DRendererPreview.cpp src/ui/win32/MotionLabelBox.cpp src/ui/win32/InputLinePromptText.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorWindowDetail.cpp src/ui/win32/EditorWindowLifecycle.cpp src/ui/win32/EditorWindowPointer.cpp src/ui/win32/EditorWindowKeys.cpp
     src/ui/win32/EditorWindowOperations.cpp src/ui/win32/EditorWindowContextMenu.cpp src/ui/win32/EditorWindowIme.cpp src/ui/win32/EditorWindowExplorer.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
     src/ui/win32/FileFailureText.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FallbackSegmentMemo.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
@@ -487,7 +500,7 @@ nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewMetrics.cpp
     src/ui/win32/PreviewPane.cpp src/ui/win32/MinimapPicture.cpp src/ui/win32/FullPreviewBody.cpp src/ui/win32/SaveQuestion.cpp
     src/ui/win32/PreviewInlineImages.cpp src/ui/win32/PreviewImageObject.cpp src/ui/win32/PreviewBitmaps.cpp
-    src/ui/win32/ProjectHitPainter.cpp)
+    src/ui/win32/ProjectHitPainter.cpp src/ui/win32/PreviewPanePainter.cpp)
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
 # ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。
@@ -524,7 +537,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/WordDeletionKeyTests.cpp tests/ui/PreviewImagePaintTests.cpp
     tests/ui/StartScreenPaintTests.cpp tests/ui/WindowCornerTests.cpp tests/ui/WindowBackdropTests.cpp
     tests/ui/LanguageTextTests.cpp tests/ui/ProjectHitPaintTests.cpp
-    tests/ui/ContextMenuPaintTests.cpp)
+    tests/ui/ContextMenuPaintTests.cpp tests/ui/FinderPreviewPaintTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)

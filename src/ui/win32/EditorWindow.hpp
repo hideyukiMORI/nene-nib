@@ -410,6 +410,7 @@ class EditorWindow final
     void run_paste();
     void run_delete_selection();
     void run_select_all();
+    void run_cycle_finder_preview();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();
