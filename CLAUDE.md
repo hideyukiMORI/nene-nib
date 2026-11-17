@@ -198,9 +198,9 @@ application の失敗の enum は `FileHistoryFailure`（core の `HistoryFailur
 
 通常/Vim・モード・録画・通知・右側の4項目（位置・文字コード・改行・言語）と操作の案内は描画器の固定枠で、全文・書式・幅・高さが一致するとき再利用する（ADR 0070 / 0079 / 0154）。案内は鍵と説明の4枠を使い最大11、録画とは排他なので録画時は最大8。枠の位置は `draw_status_bar` の入口で戻し、UI書式の再作成前に全枠を消す。色と原点は毎回反映する。コマンド入力のキャレットや補完のlayoutをこの保持へ入れない。
 
-### 設定の正本は `settings.v4`。旧版を読むのは新版が無いときだけ
+### 設定の正本は `settings.v5`。旧版を読むのは新版が無いときだけ
 
-v4 は既存 5 鍵に `ui_language` `lsp` `explorer` `root` `features` と任意の `lsp.<language>.command` の行（鍵の集合は ADR 0170 決定 3 で 1 回だけ決めた・上限 16 KiB・#1044）。**1.0.0 の後は `settings.v4` に鍵を足さない**。1.0.0 は知らない鍵が 1 つでもあると既定の見た目で始めて保存を断るので、項目を足すときは版を上げた `settings.v5` に書き、v4 は残す（D91）。v4 不在時だけ v3、順に v2・v1 を厳密に読み、旧版は `ui_language=ja`・`lsp=off`・`explorer=off`・wrap は既定オン・v1 の guide は既定表示に補う。設定を変更するときだけ v4 へ書き、旧ファイルを残す。存在する新版が壊れていれば旧版へ戻らず保存を拒否し、移行保存時もlockとbytesを照合する（ADR 0114）。案内の文字と鍵は `operation_text` と `shown_chord` が正本で、rendererに文字列の別表を書かない。
+v5 は v4 の全部の鍵（既存 5 鍵に `ui_language` `lsp` `explorer` `root` `features` と後から足した鍵・任意の `lsp.<language>.command` の行・ADR 0170 決定 3・上限 16 KiB）に、`explorer_width` の後ろの `autoindent` を足した版（ADR 0170 の 2026-11-16 の追補・#1086）。`settings.v4` は 1.0.0 が読み書きする版で、鍵の集合は凍結した。**v4 の読みを緩めない・v4 に鍵を足さない**（1.0.0 は知らない鍵が 1 つでもあると既定の見た目で始めて保存を断る・D91）。v5 に鍵を足すのは v5 を書く版を最初に公開するまでで、その後は `settings.v6`。版は `SettingsVersion` に 1 値、読む順と lock・bytes の照合の順は `Win32SettingsAdapter` の `reading_order` の 1 か所。v5 不在時だけ v4、順に v3・v2・v1 を厳密に読み、v4 は `autoindent=off`、旧版は `ui_language=ja`・`lsp=off`・`explorer=off`・wrap は既定オン・v1 の guide は既定表示に補う。設定を変更するときだけ v5 へ書き、旧ファイルを bytes のまま残す。存在する新版が壊れていれば旧版へ戻らず保存を拒否し、移行保存時も読込元まで lock と bytes を照合する（ADR 0114）。1.0.0 の書く v4 の見本は `nib_adapter_tests` の `released_v4_settings`。案内の文字と鍵は `operation_text` と `shown_chord` が正本で、rendererに文字列の別表を書かない。
 
 ### 本窓を壊すのは `leave` だけ。描画を失っても「保存しますか」を通す
 

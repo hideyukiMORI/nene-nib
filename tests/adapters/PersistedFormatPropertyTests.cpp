@@ -109,7 +109,10 @@ void expect(bool condition, const char *message)
 
 // --- 見本（既存の試験の見本と同じ形）---
 
-constexpr std::array<std::string_view, 6> settings_samples{{
+constexpr std::array<std::string_view, 7> settings_samples{{
+    "version=5\ncolorscheme=system\nfont_family=Consolas\nfont_size=13.5\nguide=on\nwrap=on\n"
+    "ui_language=system\nlsp=off\nexplorer=off\nroot=\nfeatures=\nignorecase=off\nsmartcase=off\n"
+    "relativenumber=off\nscrolloff=0\nexplorer_width=\nautoindent=on\n",
     "version=4\ncolorscheme=system\nfont_family=Consolas\nfont_size=13.5\nguide=on\nwrap=on\n"
     "ui_language=system\nlsp=off\nexplorer=off\nroot=\nfeatures=\nignorecase=off\nsmartcase=off\n"
     "relativenumber=off\nscrolloff=0\n",
@@ -497,10 +500,10 @@ void verify_family(const char *description, std::uint64_t seed, Make make,
         return "decoded settings break their invariants";
     }
     const auto again =
-        adapters::decode_settings(adapters::encode_settings(decoded.value()), SettingsVersion::v4);
+        adapters::decode_settings(adapters::encode_settings(decoded.value()), SettingsVersion::v5);
     if (!again || !core::same_settings(again.value(), decoded.value()))
     {
-        return "decoded settings do not round trip through v4";
+        return "decoded settings do not round trip through v5";
     }
     return holds;
 }
@@ -508,7 +511,8 @@ void verify_family(const char *description, std::uint64_t seed, Make make,
 std::string_view settings_break(std::string_view bytes)
 {
     for (const SettingsVersion version :
-         {SettingsVersion::v1, SettingsVersion::v2, SettingsVersion::v3, SettingsVersion::v4})
+         {SettingsVersion::v1, SettingsVersion::v2, SettingsVersion::v3, SettingsVersion::v4,
+          SettingsVersion::v5})
     {
         const std::string_view reason = settings_version_break(bytes, version);
         if (!reason.empty())
@@ -1052,7 +1056,8 @@ void verify_samples(Samples samples, Check check, bool (*decodes)(std::string_vi
 bool settings_decodes(std::string_view bytes)
 {
     for (const SettingsVersion version :
-         {SettingsVersion::v1, SettingsVersion::v2, SettingsVersion::v3, SettingsVersion::v4})
+         {SettingsVersion::v1, SettingsVersion::v2, SettingsVersion::v3, SettingsVersion::v4,
+          SettingsVersion::v5})
     {
         if (adapters::decode_settings(bytes, version).has_value())
         {

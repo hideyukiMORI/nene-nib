@@ -32,15 +32,17 @@ std::expected<SettingsPaths, application::SettingsFailure> local_settings_paths(
     {
         return std::unexpected(Failure::location_unavailable);
     }
-    const auto current = core::FilePath::parse(utf8.value() + "/NeNeNib/settings.v4");
+    const auto current = core::FilePath::parse(utf8.value() + "/NeNeNib/settings.v5");
+    const auto released = core::FilePath::parse(utf8.value() + "/NeNeNib/settings.v4");
     const auto prior = core::FilePath::parse(utf8.value() + "/NeNeNib/settings.v3");
     const auto previous = core::FilePath::parse(utf8.value() + "/NeNeNib/settings.v2");
     const auto legacy = core::FilePath::parse(utf8.value() + "/NeNeNib/settings.v1");
-    if (!current || !prior || !previous || !legacy)
+    if (!current || !released || !prior || !previous || !legacy)
     {
         return std::unexpected(Failure::location_unavailable);
     }
-    return SettingsPaths{current.value(), prior.value(), previous.value(), legacy.value()};
+    return SettingsPaths{current.value(), released.value(), prior.value(), previous.value(),
+                         legacy.value()};
 }
 
 std::optional<core::FilePath> beside_local_settings(std::string_view name)

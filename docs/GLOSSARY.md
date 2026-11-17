@@ -20,7 +20,7 @@
 | 選択 | anchor と caret の 2 つの位置。Shift+移動が anchor を固定する | `Selection`（core） |
 | 言語 | 文書の値で、パスの拡張子から core の 1 つの表で決まり `:set filetype=` で選び直せる。名前は Vim の filetype 名（`plain` は `text`）。設定とセッションには入れない | `Language` / `LanguageTable`（core・ADR 0154） |
 | 表示言語 | 画面の文（ステータスバー・帯・面・ダイアログ・案内）を出す言語。文書の「言語」（filetype）とは別。いまは日本語・英語・中国語（簡体字） | `DisplayLanguage`（core・ADR 0123 の 2026-11-13 の追補） |
-| 希望値（表示言語の） | 使う人が選んで `settings.v4` の `ui_language` に保存する値。`system`（Windows に合わせる）か言語の 1 つ（`ja` `en` `zh-hans`・列の無い `ko` `es` `de`） | `DisplayLanguageChoice`（core） |
+| 希望値（表示言語の） | 使う人が選んで `settings.v5` の `ui_language` に保存する値。`system`（Windows に合わせる）か言語の 1 つ（`ja` `en` `zh-hans`・列の無い `ko` `es` `de`） | `DisplayLanguageChoice`（core） |
 | 解決済みの値（表示言語の） | 希望値と OS の観測から `resolved_language` が決めた、いま画面に出す言語。状態が 1 つ持ち frame が運ぶ。列の無い言語と観測できない `system` は英語 | `EditorState::display_language()` / `EditorFrame.language`（application） |
 | 文の表 | 画面の文の名前ごとに 1 行ずつ文を持つ、言語ごとの列。読む口は `ui_text` の 1 本（CNF-016） | `UiMessage` / `UiTexts*.hpp` / `ui_text` / `ui_text_filled`（core） |
 | 編集履歴 | undo / redo の列。連続した文字入力は 1 単位 | `EditHistory`（core） |
@@ -65,7 +65,7 @@
 | 外観 | OS のライト／ダーク設定に対応する閉じた集合 | `Appearance`（core） |
 | 配色 | 外観ごとの背景と文字の色。純関数 `palette_for` の結果 | `Palette` / `RgbColor`（core） |
 | 外観ポート | OS の外観を読む唯一の窓口。実装は adapters/win32（レジストリの `AppsUseLightTheme`） | `AppearancePort` / `Win32AppearanceAdapter` |
-| エディタ設定 | pt の文字サイズ・検証済みフォント名・任意のテーマ・操作の案内の表示ほか、`settings.v4` に保存する値（範囲は型の定義と ADR 0170 決定 3 が正本）。テーマ無しは OS 追従 | `EditorSettings`（core）、所有者は `EditorState`（ADR 0020 / 0079） |
+| エディタ設定 | pt の文字サイズ・検証済みフォント名・任意のテーマ・操作の案内の表示ほか、`settings.v5` に保存する値（範囲は型の定義と ADR 0170 決定 3 と 2026-11-16 の追補が正本）。テーマ無しは OS 追従 | `EditorSettings`（core）、所有者は `EditorState`（ADR 0020 / 0079） |
 | フォントサイズ | 有限の 8〜40 pt。既定 13.5 pt。DIP と既定比率は名前付き純関数で導く | `FontSize`（core） |
 | Ex入力 | 本文・undo・レジスタと独立した1行256 bytesまでのUTF-8入力。Tab補完の元prefixと位置も持つ | `CommandLine`（core）、所有者は `EditorState`（ADR 0022） |
 | Ex評価 | コマンドを検証し、任意の設定候補・タブ/一覧/文書操作の要求と結果表示、または閉じた失敗を返す純関数 | `evaluate_ex` / `ExResult` / `ExFailure`（core） |
