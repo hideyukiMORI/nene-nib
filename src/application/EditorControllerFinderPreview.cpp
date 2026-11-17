@@ -254,6 +254,9 @@ EditorController::preview_snippet(const core::CommandPalette &palette) const
     if (path.has_value())
     {
         held_preview(preview_key_of(path.value(), anchor), snippet);
+        // 保持の窓の本文と色はそのまま、印は今の当たりから付け直す（語を打ち足して同じ行の範囲が
+        // 変わっても前の印を残さない・V-1794 の必須 2）。
+        marked_lines(snippet.lines, anchor);
     }
     return snippet;
 }
@@ -310,6 +313,7 @@ void EditorController::settle_finder_preview()
     }
     wanted.value().ticket = ++previews_.tickets;
     previews_.live = wanted.value().ticket;
+    previews_.draining = true;
     previews_.waiting = std::move(key);
     ports_.previews.request(std::move(wanted).value());
 }
@@ -323,19 +327,26 @@ void EditorController::forget_finder_previews()
     }
     if (previews_.live != 0 || !previews_.held.empty())
     {
-        previews_ = FinderPreviews{previews_.tickets, 0, std::nullopt, {}};
+        previews_ = FinderPreviews{previews_.tickets, 0, std::nullopt, {}, previews_.draining};
     }
 }
 
-// WorkCompleted の 1 本（決定 4）。頼んでいなければ port を呼ばない。今の券の窓だけを保持に足し、
+// WorkCompleted の 1 本（決定 4）。頼んだ後に棚が空と確かめるまで collect し（面を閉じた後も
+// 届いていた batch を捨てる）、頼んでいなければ port を呼ばない。今の券の窓だけを保持に足し、
 // 古い券の結果は捨てる。保持は古いものから捨てて finder_preview_held 個まで。
 void EditorController::collect_finder_preview()
 {
-    if (previews_.live == 0)
+    if (!previews_.draining)
     {
         return;
     }
-    for (PreviewBatch &batch : ports_.previews.collect())
+    auto batches = ports_.previews.collect();
+    if (batches.empty() && previews_.live == 0)
+    {
+        previews_.draining = false;
+        return;
+    }
+    for (PreviewBatch &batch : batches)
     {
         if (batch.ticket != previews_.live || !previews_.waiting.has_value())
         {

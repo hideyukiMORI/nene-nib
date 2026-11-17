@@ -20,4 +20,8 @@ namespace nenenib::application
 [[nodiscard]] std::vector<PreviewLine> preview_lines(const core::TextBuffer &text,
                                                      const std::optional<PreviewAnchor> &anchor,
                                                      core::Language language);
+// 窓の当たりの印を anchor から付け直す 1 本（ADR 0189 の決定 4）。全部の行の印を消し、anchor の行
+// だけに付ける（範囲は PreviewLine::source のバイトを描画の形へ写す）。保持した窓は本文と色を
+// そのまま使い、印は今の当たりの値から毎回付ける。preview_lines もこれで付ける。
+void marked_lines(std::vector<PreviewLine> &lines, const std::optional<PreviewAnchor> &anchor);
 } // namespace nenenib::application

@@ -73,19 +73,25 @@ std::optional<PreviewFailure> PreviewRead::open()
     {
         return PreviewFailure::unreadable;
     }
-    file_ = std::make_unique<FileHandle>(
-        CreateFileW(native_path(wide.value()).c_str(), GENERIC_READ,
-                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
-                    FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
+    // 中身が手元に無いファイルは開く前に属性で断る（取り寄せを起こさない・全文検索と同じ順）。
+    const auto native = native_path(wide.value());
+    WIN32_FILE_ATTRIBUTE_DATA attributes{};
+    if (GetFileAttributesExW(native.c_str(), GetFileExInfoStandard, &attributes) == 0)
+    {
+        return PreviewFailure::unreadable;
+    }
+    if (!project_file_read(attributes.dwFileAttributes))
+    {
+        return PreviewFailure::not_local;
+    }
+    file_ = std::make_unique<FileHandle>(CreateFileW(
+        native.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
     BY_HANDLE_FILE_INFORMATION information{};
     if (!file_->valid() || GetFileInformationByHandle(file_->get(), &information) == 0 ||
         (information.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
     {
         return PreviewFailure::unreadable;
-    }
-    if (!project_file_read(information.dwFileAttributes))
-    {
-        return PreviewFailure::not_local;
     }
     total_bytes_ = (std::uint64_t{information.nFileSizeHigh} << 32U) | information.nFileSizeLow;
     if (!core::project_file_fits(total_bytes_))

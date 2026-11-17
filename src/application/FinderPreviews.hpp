@@ -23,5 +23,9 @@ struct FinderPreviews
     std::uint64_t live = 0;
     std::optional<PreviewKey> waiting;
     std::vector<std::pair<PreviewKey, PreviewResult>> held;
+    // 頼んだ後、port の棚がまだ空になったと確かめていないか（全文検索の project_draining_ と同じ
+    // 形）。面を閉じて券を取り消しても、届いていた batch を次の WorkCompleted の collect で捨てる
+    // まで真（棚に残すと adapter の「届いた」の合図が次から出ない・V-1794 の必須 1）。
+    bool draining = false;
 };
 } // namespace nenenib::application

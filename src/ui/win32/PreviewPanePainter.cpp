@@ -13,6 +13,7 @@
 #include <cmath>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace nenenib::ui::win32
 {
@@ -52,6 +53,32 @@ constexpr std::size_t match_runs = 8;
 {
     return static_cast<UINT32>(
         core::utf16_length(text.substr(0, std::min(byte, text.size()))).value_or(0));
+}
+// 区間の全部の矩形（数を問うてから受ける・固定の上限で色を落とさない）。区間が空・失敗は空。
+[[nodiscard]] std::vector<DWRITE_HIT_TEST_METRICS>
+hit_runs(IDWriteTextLayout &layout, DWRITE_TEXT_RANGE range, const core::LayoutRect &area)
+{
+    UINT32 count = 0;
+    const auto origin_x = static_cast<float>(area.left);
+    const auto origin_y = static_cast<float>(area.top);
+    if (range.length == 0)
+    {
+        return {};
+    }
+    const auto asked = layout.HitTestTextRange(range.startPosition, range.length, origin_x,
+                                               origin_y, nullptr, 0, &count);
+    if (FAILED(asked) && asked != E_NOT_SUFFICIENT_BUFFER)
+    {
+        return {};
+    }
+    std::vector<DWRITE_HIT_TEST_METRICS> runs(count);
+    if (FAILED(layout.HitTestTextRange(range.startPosition, range.length, origin_x, origin_y,
+                                       runs.data(), count, &count)))
+    {
+        return {};
+    }
+    runs.resize(count);
+    return runs;
 }
 } // namespace
 
@@ -268,22 +295,13 @@ void PreviewPanePainter::tint_colors(IDWriteTextLayout &layout,
     {
         return;
     }
-    std::array<DWRITE_HIT_TEST_METRICS, match_runs> runs{};
     for (const application::PreviewColor &color : line.colors)
     {
         const auto begin = utf16_at(line.text, color.begin);
         const auto end = utf16_at(line.text, color.end);
-        UINT32 count = 0;
-        if (end <= begin ||
-            FAILED(layout.HitTestTextRange(begin, end - begin, static_cast<float>(area.left),
-                                           static_cast<float>(area.top), runs.data(),
-                                           static_cast<UINT32>(runs.size()), &count)))
+        for (const auto &run :
+             hit_runs(layout, DWRITE_TEXT_RANGE{begin, end > begin ? end - begin : 0U}, area))
         {
-            continue;
-        }
-        for (std::size_t index = 0; index < std::min<std::size_t>(count, runs.size()); ++index)
-        {
-            const auto &run = runs.at(index);
             target_.PushAxisAlignedClip(
                 D2D1::RectF(run.left, run.top, run.left + run.width, run.top + run.height),
                 D2D1_ANTIALIAS_MODE_ALIASED);

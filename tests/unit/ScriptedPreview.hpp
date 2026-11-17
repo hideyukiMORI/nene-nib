@@ -47,6 +47,11 @@ class ScriptedPreview final : public nenenib::application::PreviewPort
     {
         return cancels_;
     }
+    // 仕込んだまままだ collect されていない batch の数（棚に残っているか）。
+    [[nodiscard]] std::size_t pending() const noexcept
+    {
+        return batches_.size();
+    }
     [[nodiscard]] std::size_t collects() const noexcept
     {
         return collects_;

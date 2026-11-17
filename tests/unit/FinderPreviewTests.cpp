@@ -99,7 +99,9 @@ void searched(Editing &editing, std::size_t count)
 [[nodiscard]] app::PreviewBatch lines_for(std::uint64_t ticket, std::string text)
 {
     std::vector<app::PreviewLine> lines;
-    lines.push_back(app::PreviewLine{core::LineNumber{1}, std::move(text)});
+    app::PreviewLine line{core::LineNumber{1}, text};
+    line.source = std::move(text);
+    lines.push_back(std::move(line));
     return app::PreviewBatch{ticket, std::move(lines)};
 }
 
@@ -215,6 +217,62 @@ void verify_failure_and_close()
            "after closing the palette nothing is held and the same file is asked again");
 }
 
+// 面を閉じる直前に届いていた batch は、次の WorkCompleted で捨てて棚を空にする（V-1794 の必須 1）。
+// 開き直して選んだ窓はまた届く。
+void verify_drained_after_close()
+{
+    Editing editing = rooted_editing();
+    auto &controller = editing.controller();
+    searched(editing, 1);
+    auto &port = editing.previews();
+    port.serve(lines_for(port.requests().back().ticket, "late"));
+    applied(controller, app::CancelCommand{});
+    applied(controller, app::WorkCompleted{});
+    expect(port.pending() == 0, "a batch that came before the palette closed is drained");
+    searched(editing, 1);
+    port.serve(lines_for(port.requests().back().ticket, "again"));
+    applied(controller, app::WorkCompleted{});
+    expect(first_text(controller) == "again", "the window of the reopened palette arrives");
+    applied(controller, app::WorkCompleted{});
+    const auto collects = port.collects();
+    applied(controller, app::WorkCompleted{});
+    expect(port.collects() == collects, "once the shelf is empty the port is not asked again");
+}
+
+// 同じ path・同じ行で範囲の違う当たりは、保持の窓の本文を使い、印を今の当たりから付け直す
+// （V-1794 の必須 2）。
+void verify_marks_follow_the_hit()
+{
+    Editing editing = rooted_editing();
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10, core::TextViewGeometry{600, 20, 96, 0}, 1600, 1200});
+    applied(controller, app::OpenProjectSearch{});
+    auto &search = editing.project_search();
+    auto &port = editing.previews();
+    const auto found = [&](std::size_t end)
+    {
+        search.serve(app::ProjectSearchBatch{
+            search.requests().back().ticket,
+            {app::ProjectSearchHit{
+                path_of(file_of(0)),
+                core::ProjectHit{core::LineNumber{1}, core::Column{3}, "a foo", 0, 2, end}}},
+            {app::ProjectSearchPhase::complete, 1, 1}});
+        applied(controller, app::WorkCompleted{});
+    };
+    applied(controller, app::CommandText{"fo"});
+    found(4);
+    port.serve(lines_for(port.requests().back().ticket, "a foo"));
+    applied(controller, app::WorkCompleted{});
+    applied(controller, app::CommandText{"o"});
+    found(5);
+    const auto preview = preview_of(controller);
+    expect(port.requests().size() == 1 && preview.has_value() && !preview.value().lines.empty() &&
+               preview.value().lines.front().hit &&
+               preview.value().lines.front().match_begin == 2 &&
+               preview.value().lines.front().match_end == 5,
+           "a held window takes the marks of the current hit without asking the port again");
+}
+
 // 欄を描かない窓（640 × 360 DIP・automatic で off）と置き方 off では port を呼ばない。
 void verify_not_drawn()
 {
@@ -266,6 +324,8 @@ void verify_finder_preview_contracts()
     verify_tickets();
     verify_held_limit();
     verify_failure_and_close();
+    verify_drained_after_close();
+    verify_marks_follow_the_hit();
     verify_not_drawn();
     verify_window_lines();
 }

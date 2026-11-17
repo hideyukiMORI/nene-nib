@@ -153,6 +153,24 @@ class Reader final
         return previews_.collect();
     }
 
+    // 合図を受けたまま collect せずに取り消し、次の collect で棚を空にすると、次の要求の合図がまた
+    // 出る（controller が面を閉じた後に棚を空にする形・V-1794 の必須 1）。
+    [[nodiscard]] bool drained_then_signalled(std::string_view name)
+    {
+        previews_.request(PreviewRequest{core::FilePath::parse(inside(name)).value(), std::nullopt,
+                                         core::Language::plain, ++tickets_});
+        arrived_.acquire();
+        previews_.cancel(tickets_);
+        const auto stale = previews_.collect();
+        const bool emptied = previews_.collect().empty();
+        previews_.request(PreviewRequest{core::FilePath::parse(inside(name)).value(), std::nullopt,
+                                         core::Language::plain, ++tickets_});
+        arrived_.acquire();
+        const auto fresh = previews_.collect();
+        return stale.size() == 1 && emptied && fresh.size() == 1 &&
+               fresh.front().ticket == tickets_;
+    }
+
     [[nodiscard]] std::uint64_t last() const noexcept
     {
         return tickets_;
@@ -219,6 +237,8 @@ void verify_failures(Reader &reader)
     expect(twice.size() == 1 && twice.front().ticket == reader.last() &&
                twice.front().lines.has_value() && twice.front().lines.value().size() == 3,
            "a newer request keeps the older one from giving a batch");
+    expect(reader.drained_then_signalled("short.txt"),
+           "after the shelf is drained the next request signals again");
 }
 
 void make_files()

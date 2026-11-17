@@ -26,5 +26,8 @@ struct PreviewLine
     std::size_t match_end = 0;
     // 構文の色の区間（text の中のバイト・窓の先頭の行から字句器を走らせた色）。
     std::vector<PreviewColor> colors = {};
+    // 行の本文（描画の形にする前の切った本文）。当たりの印を今の当たりから付け直すときに、本文の
+    // バイトの範囲を描画の形へ写すのに読む（marked_lines）。
+    std::string source = {};
 };
 } // namespace nenenib::application

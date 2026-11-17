@@ -101,26 +101,44 @@ void color_line(std::string_view raw, const Shown &shown, PreviewLine &line,
     }
 }
 
-// 1 行の描画の形・構文の色・当たりの印。lexing は言語と次の行へ渡す字句の状態。
-[[nodiscard]] PreviewLine shown_line(std::string_view raw, core::LineNumber number,
-                                     const std::optional<PreviewAnchor> &anchor,
-                                     std::pair<core::Language, core::LexState> &lexing)
+// 本文の 1 行の描画の形と、その各コードポイントが始まるバイトの位置。
+[[nodiscard]] Shown shown_of(std::string_view raw)
 {
     auto display = core::display_line(raw);
     auto starts = byte_starts(display.text);
-    const Shown shown{std::move(display), std::move(starts)};
+    return Shown{std::move(display), std::move(starts)};
+}
+
+// 1 行の描画の形と構文の色。lexing は言語と次の行へ渡す字句の状態。印は marked_lines が付ける。
+[[nodiscard]] PreviewLine shown_line(std::string_view raw, core::LineNumber number,
+                                     std::pair<core::Language, core::LexState> &lexing)
+{
+    const Shown shown = shown_of(raw);
     PreviewLine line{number, shown.first.text};
     color_line(raw, shown, line, lexing);
-    if (anchor.has_value() && anchor.value().line == number)
-    {
-        line.hit = true;
-        line.match_begin = shown_byte(shown, column_of(raw, anchor.value().match_begin));
-        line.match_end =
-            std::max(line.match_begin, shown_byte(shown, column_of(raw, anchor.value().match_end)));
-    }
+    line.source = std::string(raw);
     return line;
 }
 } // namespace
+
+void marked_lines(std::vector<PreviewLine> &lines, const std::optional<PreviewAnchor> &anchor)
+{
+    for (PreviewLine &line : lines)
+    {
+        line.hit = false;
+        line.match_begin = 0;
+        line.match_end = 0;
+        if (!anchor.has_value() || !(anchor.value().line == line.number))
+        {
+            continue;
+        }
+        const Shown shown = shown_of(line.source);
+        line.hit = true;
+        line.match_begin = shown_byte(shown, column_of(line.source, anchor.value().match_begin));
+        line.match_end = std::max(
+            line.match_begin, shown_byte(shown, column_of(line.source, anchor.value().match_end)));
+    }
+}
 
 std::vector<PreviewLine> preview_lines(const core::TextBuffer &text,
                                        const std::optional<PreviewAnchor> &anchor,
@@ -136,8 +154,9 @@ std::vector<PreviewLine> preview_lines(const core::TextBuffer &text,
     for (std::size_t number = first; number <= last; ++number)
     {
         const core::LineNumber line{number};
-        lines.push_back(shown_line(clipped_line(text, line), line, anchor, lexing));
+        lines.push_back(shown_line(clipped_line(text, line), line, lexing));
     }
+    marked_lines(lines, anchor);
     return lines;
 }
 } // namespace nenenib::application
