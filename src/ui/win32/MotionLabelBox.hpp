@@ -16,11 +16,19 @@ namespace nenenib::ui::win32
 // 下の 1/3 が升の上端より下に掛かり（跳び先の字の上の端に掛かる程度）、残りは行の上へ出る。
 // ただし升が ceiling
 // （本文の欄の上端）の内にあれば、札の上端は ceiling より上へ出さない（見えているいちばん上の画面
-// 行の札は行の中に置く）。升の大きさ（全角・空の行・行末）に依らない。座標と半径は整数の物理画素
-// で、半径は 2 DIP を DPI で丸めて 2〜3 画素に収める。
+// 行の札は行の中に置く）。大きさは升の幅（全角）に依らない（空の行と行末は
+// motion_label_badge_in_row）。座標と半径は整数の物理画素 で、半径は 2 DIP を DPI で丸めて 2〜3
+// 画素に収める。
 [[nodiscard]] D2D1_ROUNDED_RECT motion_label_badge(const DWRITE_HIT_TEST_METRICS &target,
                                                    D2D1_SIZE_F written, float ceiling,
                                                    std::uint32_t dpi) noexcept;
+
+// 字の無い跳び先（空の行・行末）の札。隠す字が無いので上の行へはみ出させず、行の中に置く。
+// row は跳び先の位置（left と top）と行の高さ（height）。左端は升の左端、上下は行の中央に揃える。
+// 大きさと半径は motion_label_badge と同じ。
+[[nodiscard]] D2D1_ROUNDED_RECT motion_label_badge_in_row(const DWRITE_HIT_TEST_METRICS &row,
+                                                          D2D1_SIZE_F written,
+                                                          std::uint32_t dpi) noexcept;
 
 // 札の字の大きさ（DIP）。本文の 6 割で、下限は 10 DIP（それ未満は l i 1 が潰れる・字体の大きさは
 // DPI で比例する）。

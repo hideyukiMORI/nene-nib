@@ -1,4 +1,5 @@
 #include "Direct2DRenderer.hpp"
+#include "Direct2DRendererDetail.hpp"
 #include "TextLayoutPoint.hpp"
 
 #include "BlockCaretOutline.hpp"
@@ -75,7 +76,6 @@ namespace nenenib::ui::win32
 namespace
 {
 // 印の字の layout の大きさ（物理画素・地に切り抜くので印の 2 文字が収まれば足りる）。
-constexpr std::int32_t label_room = 4096;
 // 採用案の寸法（docs/design/2026-09-15-look.md 第 2 節）。色は Palette 以外に持たない（ADR 0008）。
 // 画面の文字の大きさは UiTextSizes.hpp（幅の試験と共用）。
 // text の表示の巨大な行の印 `»`（ADR 0139 の決定 2）。
@@ -104,7 +104,6 @@ constexpr float palette_key_radius_dips = 5.0F;
 // の guide_key_padding_dips。箱の幅を測る guide_key_width と描く draw_body_guide
 // が同じ値を使う（#1122）。
 constexpr DWORD latency_timeout_milliseconds = 1000;
-constexpr float full_channel = 255.0F;
 
 // 「塗らない」を表す唯一の値。ui/win32 はこれ以外の色を Palette の外から持たない（ADR 0008）。
 [[nodiscard]] constexpr D2D1_COLOR_F unpainted() noexcept
@@ -115,34 +114,6 @@ constexpr float full_channel = 255.0F;
 [[nodiscard]] RenderFailure classify(HRESULT result) noexcept
 {
     return render_failure_of(result);
-}
-
-[[nodiscard]] D2D1_COLOR_F to_color(core::RgbColor color) noexcept
-{
-    return D2D1::ColorF(static_cast<float>(color.red) / full_channel,
-                        static_cast<float>(color.green) / full_channel,
-                        static_cast<float>(color.blue) / full_channel, 1.0F);
-}
-
-[[nodiscard]] D2D1_COLOR_F to_color(core::RgbaColor color) noexcept
-{
-    D2D1_COLOR_F opaque = to_color(color.color);
-    opaque.a = static_cast<float>(color.alpha) / full_channel;
-    return opaque;
-}
-
-[[nodiscard]] D2D1_RECT_F to_rect(const core::LayoutRect &area) noexcept
-{
-    return D2D1::RectF(static_cast<float>(area.left), static_cast<float>(area.top),
-                       static_cast<float>(area.right), static_cast<float>(area.bottom));
-}
-
-// 本文のキャレットを描かないとき。入力行が開いているか、エクスプローラーの面に焦点があるとき
-// （採用案の表「焦点」・Ctrl+P の面と同じ）。
-[[nodiscard]] bool body_caret_hidden(const application::EditorFrame &frame) noexcept
-{
-    return frame.command_line.has_value() ||
-           (frame.explorer.has_value() && frame.explorer.value().focused);
 }
 
 [[nodiscard]] D2D1_POINT_2F centre_of(const core::LayoutRect &area) noexcept
@@ -227,42 +198,6 @@ constexpr float full_channel = 255.0F;
                                displayed(line, span.end)};
 }
 
-[[nodiscard]] std::int32_t row_pixel(const core::BodyLayout &body, std::int64_t row)
-{
-    const auto value =
-        static_cast<double>(body.content.top) + static_cast<double>(row) * body.line_height;
-    return static_cast<std::int32_t>(
-        std::clamp(value, static_cast<double>(std::numeric_limits<std::int32_t>::min()) / 2.0,
-                   static_cast<double>(std::numeric_limits<std::int32_t>::max()) / 2.0));
-}
-
-// 行の印を桁の順（左から右）に並べる。印の列は近い順なので、重なる札が右を上にするよう並べ直す。
-[[nodiscard]] std::vector<const core::MotionLabel *>
-labels_left_to_right(const application::LineView &line)
-{
-    std::vector<const core::MotionLabel *> ordered;
-    ordered.reserve(line.labels.size());
-    for (const auto &label : line.labels)
-    {
-        ordered.push_back(&label);
-    }
-    std::ranges::sort(ordered, [](const core::MotionLabel *left, const core::MotionLabel *right)
-                      { return left->column.value < right->column.value; });
-    return ordered;
-}
-
-// 行の文字組みの領域。原点のずれ（横の送りと巨大な行の窓の x）は application が行ごとに決める
-// （ADR 0139 の決定 5）。行の描画と印の 1 パスが同じ 1 本を通る。
-[[nodiscard]] core::LayoutRect line_area(const core::BodyLayout &body,
-                                         const application::LineView &line)
-{
-    constexpr auto reach = static_cast<float>(std::numeric_limits<std::int32_t>::max() / 2);
-    const auto left = static_cast<std::int32_t>(std::clamp(line.left, -reach, reach));
-    return core::LayoutRect{
-        body.content.left + left, row_pixel(body, line.screen_row), body.content.right,
-        row_pixel(body, line.screen_row + static_cast<std::int64_t>(line.screen_rows))};
-}
-
 // 入力行のプロンプトの文字（ADR 0032 の決定 1）。選択肢が増えたらここで落ちる（CPP-002）。
 // 長い入力行（上限 4096 バイト・#1568）は、キャレットと変換の周りの窓だけを組む。shown を窓に
 // 切り、at（入力のキャレット）と caret（変換の中のキャレット）を窓の中の位置へ移す。横の送りは
@@ -289,6 +224,12 @@ gutter_number_area(core::LayoutRect cell, core::GutterAlignment alignment, std::
     return cell;
 }
 } // namespace
+
+using detail::body_caret_hidden;
+using detail::line_area;
+using detail::row_pixel;
+using detail::to_color;
+using detail::to_rect;
 
 Direct2DRenderer::Direct2DRenderer(BodyTextLayouts &text_layouts) : body_text_(text_layouts) {}
 
@@ -1174,144 +1115,6 @@ void Direct2DRenderer::draw_current_match(const application::EditorFrame &frame,
         if (span.has_value())
         {
             outline_runs(text, area, range_of(line, span.value(), positions), scaled(1.0F));
-        }
-    }
-}
-
-void Direct2DRenderer::draw_line_labels(const application::EditorFrame &frame,
-                                        IDWriteTextLayout *text, const core::LayoutRect &area,
-                                        const application::LineView &line)
-{
-    LineUtf16Evaluation positions(line.display.text);
-    for (const auto *placed : labels_left_to_right(line))
-    {
-        const auto &label = *placed;
-        const core::SelectionSpan target{core::SelectionPresence::present, label.column,
-                                         core::Column{label.column.value + 1}};
-        const DWRITE_TEXT_RANGE range = range_of(line, target, positions);
-        const auto runs = runs_of(text, area, range);
-        if (!runs.empty())
-        {
-            draw_label(frame, runs.front(), label);
-            continue;
-        }
-        // 行の終わり（空の行を含む）の跳び先は字が無いので、その位置の点から当たりを作る（札は
-        // 升の大きさに依らない）。
-        const auto point =
-            text_layout_point(text, range.startPosition, core::CaretAffinity::leading);
-        if (!point)
-        {
-            text_failure_ = RenderFailure::directwrite;
-            continue;
-        }
-        DWRITE_HIT_TEST_METRICS end{};
-        end.left = static_cast<float>(area.left) + point.value().x;
-        end.top = static_cast<float>(area.top) + point.value().y;
-        end.height = static_cast<float>(body_line_height_);
-        draw_label(frame, end, label);
-    }
-}
-
-// 札は motion_label_badge（跳び先の升の左上の肩）、字は印の書式の layout を測ってから札の大きさ
-// に広げて中央に置き、札に切り抜いて描く（paint_motion_label・tests/ui と同じ 1 本）。
-void Direct2DRenderer::draw_label(const application::EditorFrame &frame,
-                                  const DWRITE_HIT_TEST_METRICS &target,
-                                  const core::MotionLabel &label)
-{
-    const auto written = text_layout(label.label, label_format_.Get(),
-                                     core::LayoutRect{0, 0, label_room, label_room});
-    DWRITE_TEXT_METRICS measured{};
-    if (!written || FAILED(written->GetMetrics(&measured)))
-    {
-        text_failure_ = RenderFailure::directwrite;
-        return;
-    }
-    const D2D1_ROUNDED_RECT badge = motion_label_badge(
-        target, D2D1::SizeF(measured.widthIncludingTrailingWhitespace, measured.height),
-        static_cast<float>(body_top_), dpi_);
-    const auto &shape = badge.rect;
-    if (FAILED(written->SetMaxWidth(shape.right - shape.left)) ||
-        FAILED(written->SetMaxHeight(shape.bottom - shape.top)))
-    {
-        text_failure_ = RenderFailure::directwrite;
-        return;
-    }
-    paint_motion_label(*context_.Get(), brush_.Get(),
-                       MotionLabelPaint{badge, written.Get(), to_color(frame.palette.text),
-                                        to_color(frame.palette.background)});
-}
-
-bool Direct2DRenderer::ensure_label_format()
-{
-    if (label_format_)
-    {
-        return true;
-    }
-    const std::wstring requested = core::to_utf16(formatted_family_.text()).value_or(L"");
-    const wchar_t *face = family(requested.c_str(), L"Consolas");
-    TextFormat made;
-    if (FAILED(make_format(face, motion_label_text_dips(core::font_size_dips(formatted_size_)),
-                           DWRITE_FONT_WEIGHT_BOLD, made)) ||
-        FAILED(made->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)) ||
-        FAILED(made->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)) ||
-        FAILED(made->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)))
-    {
-        return false;
-    }
-    label_format_ = std::move(made);
-    return true;
-}
-
-// 印の 1 パス（ADR 0163 の追補 #1800・案 D）。札は行の上へはみ出すので、全部の行（本文・面・枠）
-// を描いた後に、上の行から下・左から右の順に描き、後の札が上に来る。札は本文の欄（行番号の欄を
-// 除く）で切り、その後にキャレット（印が出ている間は枠だけ）を描く。印の無い frame は入口で抜ける。
-void Direct2DRenderer::draw_label_pass(const application::EditorFrame &frame, const BodyPane &pane)
-{
-    if (pane.role != PaneRole::active || !motion_labels_shown(pane.lines))
-    {
-        return;
-    }
-    if (!ensure_label_format())
-    {
-        text_failure_ = RenderFailure::directwrite;
-        return;
-    }
-    const auto &body = pane.body;
-    context_->PushAxisAlignedClip(to_rect(body.content), D2D1_ANTIALIAS_MODE_ALIASED);
-    for (const auto &line : pane.lines)
-    {
-        if (line.labels.empty() || line.composed.has_value())
-        {
-            continue;
-        }
-        const auto text = layout_of(line.display.text, body, frame.settings, line.window);
-        if (text)
-        {
-            draw_line_labels(frame, text.Get(), line_area(body, line), line);
-        }
-    }
-    draw_pass_caret(frame, pane);
-    context_->PopAxisAlignedClip();
-}
-
-// 印の 1 パスの最後のキャレット（札の後・入力行が開いていれば描かない・IME の差し込み行は
-// 差し込みの道が描く）。
-void Direct2DRenderer::draw_pass_caret(const application::EditorFrame &frame, const BodyPane &pane)
-{
-    if (body_caret_hidden(frame))
-    {
-        return;
-    }
-    for (const auto &line : pane.lines)
-    {
-        if (line.number != pane.caret.position.line || line.composed.has_value())
-        {
-            continue;
-        }
-        const auto text = layout_of(line.display.text, pane.body, frame.settings, line.window);
-        if (text)
-        {
-            draw_caret(frame, text.Get(), line_area(pane.body, line), line);
         }
     }
 }

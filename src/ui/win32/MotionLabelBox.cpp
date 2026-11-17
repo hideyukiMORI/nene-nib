@@ -29,29 +29,42 @@ constexpr std::int32_t overlap_share = 3;
 {
     return static_cast<std::int32_t>(std::ceil(value));
 }
-} // namespace
 
-D2D1_ROUNDED_RECT motion_label_badge(const DWRITE_HIT_TEST_METRICS &target, D2D1_SIZE_F written,
-                                     float ceiling, std::uint32_t dpi) noexcept
+// 左上と字の大きさから札を作る（幅と高さは字 + 余白・半径は 2〜3 画素）。
+[[nodiscard]] D2D1_ROUNDED_RECT badge_at(std::int32_t left, std::int32_t top, D2D1_SIZE_F written,
+                                         std::uint32_t dpi) noexcept
 {
-    const std::int32_t side = core::to_pixels(side_dips, dpi);
-    const std::int32_t edge = core::to_pixels(edge_dips, dpi);
-    const std::int32_t width = ceiled(written.width) + (2 * side);
-    const std::int32_t height = ceiled(written.height) + (2 * edge);
-    const std::int32_t cell_top = rounded(target.top);
-    const std::int32_t left = rounded(target.left) - side;
-    std::int32_t top = cell_top - (height - (height / overlap_share));
-    const std::int32_t limit = ceiled(ceiling);
-    if (cell_top >= limit)
-    {
-        top = std::max(top, limit);
-    }
+    const std::int32_t width = ceiled(written.width) + (2 * core::to_pixels(side_dips, dpi));
+    const std::int32_t height = ceiled(written.height) + (2 * core::to_pixels(edge_dips, dpi));
     const auto radius = static_cast<float>(
         std::clamp(core::to_pixels(radius_dips, dpi), smallest_radius, largest_radius));
     return D2D1::RoundedRect(D2D1::RectF(static_cast<float>(left), static_cast<float>(top),
                                          static_cast<float>(left + width),
                                          static_cast<float>(top + height)),
                              radius, radius);
+}
+} // namespace
+
+D2D1_ROUNDED_RECT motion_label_badge(const DWRITE_HIT_TEST_METRICS &target, D2D1_SIZE_F written,
+                                     float ceiling, std::uint32_t dpi) noexcept
+{
+    const std::int32_t height = ceiled(written.height) + (2 * core::to_pixels(edge_dips, dpi));
+    const std::int32_t cell_top = rounded(target.top);
+    std::int32_t top = cell_top - (height - (height / overlap_share));
+    const std::int32_t limit = ceiled(ceiling);
+    if (cell_top >= limit)
+    {
+        top = std::max(top, limit);
+    }
+    return badge_at(rounded(target.left) - core::to_pixels(side_dips, dpi), top, written, dpi);
+}
+
+D2D1_ROUNDED_RECT motion_label_badge_in_row(const DWRITE_HIT_TEST_METRICS &row, D2D1_SIZE_F written,
+                                            std::uint32_t dpi) noexcept
+{
+    const std::int32_t height = ceiled(written.height) + (2 * core::to_pixels(edge_dips, dpi));
+    const std::int32_t top = rounded(row.top) + ((rounded(row.height) - height) / 2);
+    return badge_at(rounded(row.left), top, written, dpi);
 }
 
 float motion_label_text_dips(float body_dips) noexcept

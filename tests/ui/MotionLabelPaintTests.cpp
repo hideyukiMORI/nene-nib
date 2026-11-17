@@ -243,11 +243,13 @@ void check_wrapped(win32::BodyTextLayouts &layouts)
            "a target on a wrapped row is labelled on that row's shoulder");
 }
 
-// 札の字の layout を作り、札を求めて大きさを広げる（製品の draw_label と同じ順）。
+// 札の字の layout を作り、札を求めて大きさを広げる（製品の draw_label と同じ順）。in_row は字の
+// 無い跳び先（行の中の札）。
 [[nodiscard]] std::optional<D2D1_ROUNDED_RECT>
-placed_badge(IDWriteTextLayout *written, const DWRITE_HIT_TEST_METRICS &target, float ceiling)
+placed_badge(IDWriteTextLayout *written, const DWRITE_HIT_TEST_METRICS &target, bool in_row)
 {
-    const auto badge = win32::motion_label_badge(target, measured(written), ceiling, 96);
+    const auto badge = in_row ? win32::motion_label_badge_in_row(target, measured(written), 96)
+                              : win32::motion_label_badge(target, measured(written), 0.0F, 96);
     if (FAILED(written->SetMaxWidth(badge.rect.right - badge.rect.left)) ||
         FAILED(written->SetMaxHeight(badge.rect.bottom - badge.rect.top)))
     {
@@ -328,7 +330,7 @@ void check_paint(SoftwareTarget &target, win32::BodyTextLayouts &layouts,
     }
     const auto row = static_cast<float>(line_height);
     const DWRITE_HIT_TEST_METRICS cell = lowered(hit.value(), row);
-    const auto placed = placed_badge(written.Get(), cell, 0.0F);
+    const auto placed = placed_badge(written.Get(), cell, false);
     if (!placed.has_value())
     {
         unmeasured("the label paint needs the badge layout");
@@ -361,7 +363,9 @@ void check_paint(SoftwareTarget &target, win32::BodyTextLayouts &layouts,
                    std::string(" (") + theme + ")");
 }
 
-// 空の行（字の無い跳び先）にも、升の左上に同じ札を置く。
+// 空の行（字の無い跳び先）の札は行の中（左端は升の左端・上下は行の中央）に置く（#1800 の
+// 設計席の決め）。以前の試験は札を升の 2 DIP 左（画面の外の x = -2）に置き、地を読む画素が
+// 画面の外になって落ちた。
 void check_empty_line(SoftwareTarget &target, win32::BodyTextLayouts &layouts)
 {
     const auto layout = body_layout(layouts, "", 96, false);
@@ -376,7 +380,8 @@ void check_empty_line(SoftwareTarget &target, win32::BodyTextLayouts &layouts)
     }
     hit.width = 0.0F;
     hit.top = static_cast<float>(line_height);
-    const auto placed = placed_badge(written.Get(), hit, 0.0F);
+    hit.height = static_cast<float>(line_height);
+    const auto placed = placed_badge(written.Get(), hit, true);
     if (!placed.has_value())
     {
         unmeasured("the empty-line label needs the badge layout");
@@ -390,9 +395,13 @@ void check_empty_line(SoftwareTarget &target, win32::BodyTextLayouts &layouts)
                                                               D2D1::ColorF(1, 0, 0),
                                                               D2D1::ColorF(0, 0, 1)});
         });
-    expect(placed.value().rect.right - placed.value().rect.left > 0.0F &&
-               ground_at(pixels, placed.value()) != 0,
+    const auto &shape = placed.value().rect;
+    expect(shape.right - shape.left > 0.0F && ground_at(pixels, placed.value()) != 0,
            "an empty line's badge is painted at the line start");
+    expect(close_to(shape.left, std::floor(hit.left + 0.5F)) && shape.top >= hit.top &&
+               shape.bottom <= hit.top + hit.height &&
+               std::abs((shape.top - hit.top) - (hit.top + hit.height - shape.bottom)) <= 1.0F,
+           "an empty line's badge sits inside its row, centred, at the cell's left edge");
 }
 
 // 札の外（縁の 1 画素と余裕の 1 画素を除く）の画素は印の前と同じ。
