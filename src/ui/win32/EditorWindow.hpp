@@ -374,6 +374,11 @@ class EditorWindow final
     void run_choose_language();
     void run_show_version();
     void run_search_project();
+    void run_cut();
+    void run_copy();
+    void run_paste();
+    void run_delete_selection();
+    void run_select_all();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();

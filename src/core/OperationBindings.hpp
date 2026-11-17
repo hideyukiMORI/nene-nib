@@ -23,7 +23,7 @@ namespace nenenib::core
 // Ctrl+Shift+O）。
 // 通常モードの Windows の標準の鍵（施主決定 D82・#1395・ADR 0009 の追補）: Ctrl+N も新しいタブ、
 // Ctrl+Shift+Z はやり直す。どちらも見せる鍵は今までどおり Ctrl+T と Ctrl+Y（先の行）。
-inline constexpr std::array<OperationBinding, 56> operation_bindings{{
+inline constexpr std::array<OperationBinding, 66> operation_bindings{{
     {EditorOperation::open_file, OperationModes::ordinary, KeyChord{true, false, OperationKey::o}},
     // 通常モードでは Shift を見ていなかった今の振る舞いを保つ行で、Vim では開くの鍵（D71）。
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, true, OperationKey::o}},
@@ -122,6 +122,20 @@ inline constexpr std::array<OperationBinding, 56> operation_bindings{{
     // プロジェクトの全文検索（ADR 0167 の決定 1）。Ctrl+Shift+F で両モード。Shift なしの Ctrl+F
     // は通常モードの検索の行のまま（Vim の Ctrl-f は半画面送りに残す）。
     {EditorOperation::search_project, OperationModes::both, KeyChord{true, true, OperationKey::f}},
+    // 切り取り・コピー・貼り付け・削除・すべて選択（ADR 0078 の追補 #1051）。鍵は通常モードの行
+    // だけで、ui は鍵を写さず今の道のまま受ける（行は一覧とメニューの鍵の表示）。Vim は鍵の無い行で
+    // 一覧とメニューに載る（メニューの鍵の表示は operation_texts の vim_hint）。
+    {EditorOperation::cut, OperationModes::ordinary, KeyChord{true, false, OperationKey::x}},
+    {EditorOperation::cut, OperationModes::vim, std::nullopt},
+    {EditorOperation::copy, OperationModes::ordinary, KeyChord{true, false, OperationKey::c}},
+    {EditorOperation::copy, OperationModes::vim, std::nullopt},
+    {EditorOperation::paste, OperationModes::ordinary, KeyChord{true, false, OperationKey::v}},
+    {EditorOperation::paste, OperationModes::vim, std::nullopt},
+    {EditorOperation::delete_selection, OperationModes::ordinary,
+     KeyChord{false, false, OperationKey::delete_key}},
+    {EditorOperation::delete_selection, OperationModes::vim, std::nullopt},
+    {EditorOperation::select_all, OperationModes::ordinary, KeyChord{true, false, OperationKey::a}},
+    {EditorOperation::select_all, OperationModes::vim, std::nullopt},
 }};
 
 // 鍵とモード → 操作。表を上から見て、鍵が同じでモードに効く最初の行。値なしは「割り当てが無い」。

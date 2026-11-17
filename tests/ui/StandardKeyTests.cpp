@@ -14,6 +14,7 @@
 #include <array>
 #include <optional>
 #include <tuple>
+#include <utility>
 
 namespace nenenib::tests::ui
 {
@@ -94,6 +95,17 @@ void verify_clipboard_keys_reach_their_turn()
         expect(!control || !tab_shortcut(key, shifted).has_value(),
                "no tab key catches an old clipboard key before clipboard_key_for");
     }
+    // 表に行のある Ctrl+X / C / V / A と Delete（#1051）は写さない。今の press_control_key と
+    // press_plain_key の道で受け、Vim の Ctrl の表とエクスプローラーの焦点の順を変えない。
+    using TableKey = std::pair<WPARAM, bool>;
+    constexpr std::array<TableKey, 5> table_keys{
+        {{'X', true}, {'C', true}, {'V', true}, {'A', true}, {VK_DELETE, false}}};
+    for (const auto &[key, control] : table_keys)
+    {
+        expect(!operation_chord(key, control, false).has_value(),
+               "the clipboard and select-all keys of the table are not mapped to chords");
+    }
+    expect(operation_chord('V', true, true).has_value(), "Ctrl+Shift+V is still mapped");
 }
 
 void verify_new_tab_and_redo_keys()

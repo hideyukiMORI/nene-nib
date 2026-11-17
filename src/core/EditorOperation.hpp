@@ -62,6 +62,15 @@ enum class EditorOperation : std::uint8_t
     show_version,
     // プロジェクトの全文検索（ADR 0167 の決定 1）。Ctrl+Shift+F で両モード・F1 の一覧と Vim の
     // `:grep` から。Ctrl+P の面を出どころ `!` で開く。
-    search_project
+    search_project,
+    // 切り取り・コピー・貼り付け・削除・すべて選択（ADR 0078 の追補 #1051）。鍵の行は通常モードの
+    // Ctrl+X / C / V・Delete・Ctrl+A で、鍵を受ける道は ui の今の分岐のまま（Vim の INSERT と
+    // エクスプローラーの焦点の振る舞いを変えない・TabShortcut と同じ形）。表の鍵は一覧と本文の
+    // 右クリックのメニューの表示に使う。
+    cut,
+    copy,
+    paste,
+    delete_selection,
+    select_all
 };
 } // namespace nenenib::core

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ContextMenuNeed.hpp"
+#include "ContextMenuSlot.hpp"
 #include "EditorOperation.hpp"
 #include "OperationText.hpp"
 #include "UiMessage.hpp"
@@ -12,7 +14,7 @@ namespace nenenib::core
 // 文は文の表の名前で持ち、画面の言語の文は ui_text が引く。EditorOperation の順に全値を 1 回ずつ
 // 持つ（OperationTexts.cpp の static_assert が守る）。鍵の表示名はここに書かず key_chord_label で
 // 作る。読み（ひらがな）は画面に出ない検索の鍵なので operation_readings（OperationReadings.hpp）。
-inline constexpr std::array<OperationText, 40> operation_texts{{
+inline constexpr std::array<OperationText, 45> operation_texts{{
     {EditorOperation::open_file, UiMessage::operation_open_file_name,
      UiMessage::operation_open_file_description},
     {EditorOperation::save, UiMessage::operation_save_name, UiMessage::operation_save_description},
@@ -67,13 +69,15 @@ inline constexpr std::array<OperationText, 40> operation_texts{{
      UiMessage::operation_choose_encoding_description},
     {EditorOperation::choose_line_ending, UiMessage::operation_choose_line_ending_name,
      UiMessage::operation_choose_line_ending_description},
-    {EditorOperation::find, UiMessage::operation_find_name, UiMessage::operation_find_description},
+    {EditorOperation::find, UiMessage::operation_find_name, UiMessage::operation_find_description,
+     std::nullopt, ContextMenuSlot{2, 0, ContextMenuNeed::nothing}, "/"},
     {EditorOperation::find_next, UiMessage::operation_find_next_name,
      UiMessage::operation_find_next_description},
     {EditorOperation::find_previous, UiMessage::operation_find_previous_name,
      UiMessage::operation_find_previous_description},
     {EditorOperation::replace, UiMessage::operation_replace_name,
-     UiMessage::operation_replace_description},
+     UiMessage::operation_replace_description, std::nullopt,
+     ContextMenuSlot{2, 1, ContextMenuNeed::nothing}, ":s"},
     {EditorOperation::go_to_line, UiMessage::operation_go_to_line_name,
      UiMessage::operation_go_to_line_description},
     {EditorOperation::preview_full, UiMessage::operation_preview_full_name,
@@ -90,6 +94,21 @@ inline constexpr std::array<OperationText, 40> operation_texts{{
      UiMessage::operation_show_version_description},
     {EditorOperation::search_project, UiMessage::operation_search_project_name,
      UiMessage::operation_search_project_description},
+    // 本文の右クリックのメニューの 5 つ（ADR 0078 の追補 #1051）。Vim の鍵は VISUAL で選んだ所に
+    // 打つ鍵（`"+` を付けない短い形）。
+    {EditorOperation::cut, UiMessage::operation_cut_name, UiMessage::operation_cut_description,
+     std::nullopt, ContextMenuSlot{0, 0, ContextMenuNeed::editable_selection}, "d"},
+    {EditorOperation::copy, UiMessage::operation_copy_name, UiMessage::operation_copy_description,
+     std::nullopt, ContextMenuSlot{0, 1, ContextMenuNeed::selection}, "y"},
+    {EditorOperation::paste, UiMessage::operation_paste_name,
+     UiMessage::operation_paste_description, std::nullopt,
+     ContextMenuSlot{0, 2, ContextMenuNeed::editable}, "p"},
+    {EditorOperation::delete_selection, UiMessage::operation_delete_selection_name,
+     UiMessage::operation_delete_selection_description, std::nullopt,
+     ContextMenuSlot{0, 3, ContextMenuNeed::editable_selection}, "x"},
+    {EditorOperation::select_all, UiMessage::operation_select_all_name,
+     UiMessage::operation_select_all_description, std::nullopt,
+     ContextMenuSlot{1, 0, ContextMenuNeed::editable}, "ggVG"},
 }};
 
 // 操作の文字の行。switch ではなく表を引く。

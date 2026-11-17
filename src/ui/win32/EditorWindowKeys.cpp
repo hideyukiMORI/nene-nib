@@ -622,7 +622,7 @@ void EditorWindow::press_plain_key(WPARAM word)
         send(application::DeleteText{core::DeleteDirection::backward, core::DeleteUnit::character});
         return;
     case VK_DELETE:
-        send(application::DeleteText{core::DeleteDirection::forward, core::DeleteUnit::character});
+        run_operation(core::EditorOperation::delete_selection);
         return;
     case VK_RETURN:
         send(application::NewLine{});
@@ -658,17 +658,19 @@ void EditorWindow::press_control_key(WPARAM word)
     }
     switch (word)
     {
+    // 表の操作（#1051）。鍵は operation_chord が写さず、ここで受けて run_operation の 1 本へ渡す
+    // （Vim の Ctrl の表とエクスプローラーの焦点より後ろの順を変えない）。
     case 'A':
-        send(application::SelectAll{});
+        run_operation(core::EditorOperation::select_all);
         return;
     case 'C':
-        send(application::ClipboardAction{application::ClipboardOperation::copy});
+        run_operation(core::EditorOperation::copy);
         return;
     case 'X':
-        send(application::ClipboardAction{application::ClipboardOperation::cut});
+        run_operation(core::EditorOperation::cut);
         return;
     case 'V':
-        send(application::ClipboardAction{application::ClipboardOperation::paste});
+        run_operation(core::EditorOperation::paste);
         return;
     case 'R':
         send_vim_redo();

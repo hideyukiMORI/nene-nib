@@ -103,3 +103,14 @@
 1. `EditorOperation::show_version` を最後に 1 値足す（名前は日本語「バージョン情報」・英語 `About NeNe Nib`・中国語 `关于 NeNe Nib`・読み「ばーじょんじょうほう」・鍵なしで両方のモード）。ui は表 `runner_of` に 1 行と `run_show_version` 1 つで、意図 `ShowVersion` を送るだけ。controller は `core::app_about_line()` の 1 行（`NeNe Nib 1.0.0 · © 2026 Hideyuki Mori · github.com/hideyukiMORI/nene-nib`）をステータスバーの知らせにし、port を呼ばない。使う人の操作なので `keeps_tab_walk` と `begin_intent` の表には書かない。
 2. Vim の `:ve[rsion]`（最短 `ve`・Vim と同じ）は Ex の表 `command_parsers` に 1 行（`version_command`）で、答えの文が同じ 1 行（同じ `app_about_line`）。Vim の `:version` は版と機能の一覧を複数行で出すが、Nib は 1 行の知らせ（違いとしてここに書く）。引数・`!`・範囲は `unsupported_argument`。Ctrl+P の面の `:` の候補にも `version` が出る（`fixed_candidates`）。再生の中では知らせを置くだけ。
 3. 文は訳さない（名前・版・`©`・名前・場所）。訳すのは操作の名前と説明だけ（`UiMessage` に 2 値・3 列に 1 行ずつ・最後の値は動かない）。
+
+## 追補（2026-11-17・#1051 段 1・下書き: 実装席 C・設計席の受理待ち）: 切り取り・コピー・貼り付け・削除・すべて選択を表へ移し、メニューの項目の列と配置を core に置く
+
+2026-10-29 の追補を、設計席の依頼書（2026-11-17）の形に合わせて実装した段 1。メニューを開く・描く・選ぶ（application の状態と意図・ui の右クリックと Shift+F10 とメニューキー・描画と当たり・画素の組）は段 2。
+
+1. `EditorOperation` の最後に `cut` `copy` `paste` `delete_selection` `select_all` の 5 値を足す（`UiMessage` に名前と説明の 10 値を `operation_search_project_description` の後ろに・3 列に 1 行ずつ・最後の値は動かない・読み「きりとり」「こぴー」「はりつけ」「さくじょ」「すべてせんたく」）。F1 の一覧にも載る（通常 45・Vim 43 件）。
+2. 鍵の行は通常モードの Ctrl+X / Ctrl+C / Ctrl+V・Delete・Ctrl+A（`OperationKey` に `x` `c` `a` `delete_key` を足す・`key_chord_label` は表引きにした）、Vim は鍵の無い行。**ui の `operation_chord` はこの鍵を写さない**（Shift なしの Ctrl+V も写さなくした）。鍵を受ける道は今の `press_control_key` と `press_plain_key` のままで、そこから `run_operation` の 1 本へ渡す。写すと表の引きが Vim の Ctrl の表（INSERT の Ctrl+V / A / X と NORMAL の数の増減・矩形）とエクスプローラーの焦点より前に来て振る舞いが変わるため（Ctrl+T / W / D / Tab を `TabShortcut` と `BookmarkKey` の道で受けるのと同じ形）。表の鍵は一覧とメニューの表示に使う。Ctrl+Insert / Shift+Insert / Shift+Delete は `clipboard_key_for` のまま。
+3. `operation_texts` の行に列 `context_menu`（`std::optional<ContextMenuSlot>`・群と群の中の順と「使えるために要るもの」`ContextMenuNeed`）と `vim_hint`（`std::string_view`・無ければ空）を足す。2026-10-29 の追補の `std::optional<std::uint8_t>` は、区切り線（群）と使えるかの条件も同じ表に持つためにこの形にした。載るのは 切り取り（d）・コピー（y）・貼り付け（p）・削除（x）｜すべて選択（ggVG）｜検索（/）・置換（:s）の 7 つ（依頼書の決め。2026-10-29 の追補の「行へ移動」と「Markdown プレビュー」は載せない）。
+4. 項目の列は core の `context_menu_items(ContextMenuSituation{mode, selected, editable})` の 1 本で、群の変わり目の行に区切り線の印を立てる。使えるかは `need`: `selection`（コピー）は選択があること、`editable`（貼り付け・すべて選択）は通常モードか Vim の INSERT で全面プレビューでないこと、`editable_selection`（切り取り・削除）は両方、`nothing`（検索・置換）はいつでも。クリップボードは開くたびに読まない（空の貼り付けは試して今の知らせ）。鍵の表示は `context_menu_key(operation, mode)`（通常は `shown_chord` → `key_chord_label`、Vim は `vim_hint`）。
+5. 配置は core の `context_menu_layout(ContextMenuRequest)` の 1 本で、描画と当たり（`context_menu_hit`）が同じ矩形を読む。行 30 DIP・左右の余白 12 DIP・最小の幅 200 DIP・区切り線は 1 DIP で上下 4 DIP の空き・面の上下の内側の空き 4 DIP・名前と鍵の間の空き 24 DIP（最後の 2 つは席の決め）。幅は ui が測った名前と鍵の最も広い幅から。開く点から右下へ開き、収まらなければ点から左・上へ、どちらにも入らなければ遠い端に寄せる。
+6. 試験: `nib_tests --context-menu`（項目の順と区切り・使える / 使えないの 6 つの状況・通常と Vim の鍵の表示・寸法と DPI・収め方・当たり）と `--operations` の表の期待値。

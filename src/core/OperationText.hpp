@@ -1,9 +1,11 @@
 #pragma once
 
+#include "ContextMenuSlot.hpp"
 #include "EditorOperation.hpp"
 #include "UiMessage.hpp"
 
 #include <optional>
+#include <string_view>
 
 namespace nenenib::core
 {
@@ -18,5 +20,9 @@ struct OperationText
     // 0079）。検索の対象にするのは英語と中国語 のときだけ（日本語は読みで探す・ADR 0123 の
     // 2026-11-13 の追補の決定 6）。
     std::optional<UiMessage> short_name{};
+    // 本文の右クリックのメニューの置き場（ADR 0078 の追補 #1051）。無ければメニューに載らない。
+    std::optional<ContextMenuSlot> context_menu{};
+    // Vim のモードでメニューの行の右端に見せる Vim の鍵（`y` `ggVG` など）。無ければ空。訳さない。
+    std::string_view vim_hint{};
 };
 } // namespace nenenib::core
