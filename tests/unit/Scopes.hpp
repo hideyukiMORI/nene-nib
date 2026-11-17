@@ -273,6 +273,9 @@ void verify_vim_mark_scope();
 void verify_vim_easymotion_contracts();
 void verify_vim_easymotion_property_scope();
 
+// VimEasyMotionInputTests.cpp
+void verify_vim_easymotion_input_contracts();
+
 // VimReplaceTests.cpp
 void verify_vim_replace_contracts();
 void verify_vim_replace_scope();
