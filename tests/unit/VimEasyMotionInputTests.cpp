@@ -219,6 +219,39 @@ void verify_final_line_break()
     expect(caret_at(jumped, 2, 1) && engine_rests(editing.controller()),
            "\\\\j jumps to the only line below without the empty last line");
 }
+// INSERT の Ctrl-o から開いた 1 文字の入力行を Esc で取り消したら INSERT へ戻る（ADR 0182 の
+// 決定 8・M3 の申し送り・#1782）。
+void verify_paused_insert()
+{
+    Editing editing;
+    open_vim_document(editing, "abc");
+    auto &controller = editing.controller();
+    static_cast<void>(typed(controller, U"i"));
+    static_cast<void>(
+        controller.apply_frame(app::VimKeyPress{core::VimKey{core::VimSpecialKey::control_o}}));
+    const auto waiting = leader_typed(controller, U"f");
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    const auto resumed = controller.frame();
+    expect(jump_line_shown(waiting) && !jump_line_shown(resumed) &&
+               resumed.vim_mode == core::VimMode::insert,
+           "Esc on the line opened from INSERT's Ctrl-o returns to INSERT");
+}
+
+// 文字の確定で跳んだ後も、INSERT の Ctrl-o の 1 命令として INSERT へ戻る（#1782 の追い）。
+void verify_paused_insert_jump()
+{
+    Editing editing;
+    open_vim_document(editing, "abcd");
+    auto &controller = editing.controller();
+    static_cast<void>(typed(controller, U"i"));
+    static_cast<void>(
+        controller.apply_frame(app::VimKeyPress{core::VimKey{core::VimSpecialKey::control_o}}));
+    static_cast<void>(leader_typed(controller, U"f"));
+    const auto jumped = text_typed(controller, "c");
+    expect(!jump_line_shown(jumped) && jumped.vim_mode == core::VimMode::insert &&
+               caret_at(jumped, 1, 3),
+           "a jump from INSERT's Ctrl-o returns to INSERT at the target");
+}
 } // namespace
 
 void verify_vim_easymotion_input_contracts()
@@ -230,5 +263,7 @@ void verify_vim_easymotion_input_contracts()
     verify_wide_cells();
     verify_discarded_labels();
     verify_final_line_break();
+    verify_paused_insert();
+    verify_paused_insert_jump();
 }
 } // namespace nenenib::tests
