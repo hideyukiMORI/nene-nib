@@ -1,8 +1,10 @@
-# Microsoft Store のスクリーンショットの撮り方 — NeNe Nib 1.0.0
+# Microsoft Store のスクリーンショットの撮り方 — NeNe Nib 1.0.0（1.1.0 で 3 枚目を差し替え）
 
 > Issue #1582・施主決定 D88。**撮影はまだしていない。** 撮影は窓を最前面に出して鍵を送るので、
 > 設計席が hide の了承を得てから回す（CLAUDE.md §2「窓を最前面に出す確認と計測は、施主に確かめてから回す」）。
 > 掲載文は [listing.md](listing.md)、申請の順番は [submission.md](submission.md)。
+
+**1.1.0（#1815）**: 3 枚目だけを、全文検索とプレビュー欄の画面に撮り直す（施主の決め 2026-11-17 夜）。1・2・4・5 枚目と、その説明は 1.0.0 の物のまま。撮った物と道具は `D:/NeNeNib/evidence/store-1.1.0/`（`manifest.json`）と `D:/NeNeNib/scripts/20261117/1815/shot3/`。
 
 ## Store の要件（Microsoft の文書・2026-11-13 に読んだ）
 
@@ -53,7 +55,7 @@ showcase-2026-10-12 と同じ隔離の形にする。
 | --- | --- | --- | --- | --- | --- |
 | 1 | 本文と Vim のモード（**メイン**） | `TextBuffer.cpp`（アクティブ）・`README.md`・`旅のメモ.md` の 3 タブ | `ubuntu-aubergine`（既定のダーク） | Vim NORMAL | 構文の色が見える位置。ステータスバーに「Vim」と NORMAL。キャレットは関数の中 |
 | 2 | Markdown プレビュー | `README.md` | `ubuntu-aubergine` | 通常 | Ctrl+Shift+M で隣の欄に表示。見出し・箇条・チェックボックス・引用・コードが上の 3 分の 2 に入る位置（プレビューは表を描かないので、見本に表を入れない・#1660） |
-| 3 | Ctrl+P の面 | 1 と同じタブ。ブックマーク 2 つ・閉じた履歴 2 つを先に作っておく | `ubuntu-aubergine` | 通常 | Ctrl+P を開いて何も打たない（タブ・ブックマーク・履歴・同じフォルダの 4 種が並ぶ） |
+| 3 | 全文検索とプレビュー欄（**1.1.0 で差し替え**・#1815） | 1 と同じタブ。エクスプローラーの起点を撮影用の `documents\` に | `ubuntu-aubergine` | 通常 | Ctrl+Shift+F で `the` と打つ（`README.md` と `TextBuffer.cpp` の当たりが並び、選んだ当たりの前後が右のプレビュー欄に出る）。窓の幅 1600 px・120 DPI は 1280 DIP で、右に置く条件（792 DIP 以上）を満たす。1.0.0 の 3 枚目は Ctrl+P を開いて何も打たない形（タブ・ブックマーク・履歴・同じフォルダの 4 種） |
 | 4 | エクスプローラーとタブ | 起点を撮影用の `documents\` にして Ctrl+Shift+E。タブ 3〜4 つ | `ubuntu-aubergine` | 通常 | 木を 1 段開いた状態。1 クリックのプレビューのタブ（斜体）は写さない |
 | 5 | 別のテーマ | `旅のメモ.md`（日本語の文章・長い段落が折り返す） | 下の候補から 1 つ | 通常 | 折り返しと日本語の表示が見える。ステータスバーに文字コードと改行 |
 
@@ -73,7 +75,7 @@ showcase-2026-10-12 と同じ隔離の形にする。
 | --- | --- | --- | --- |
 | 1 | `普通の操作と Vim の操作をキー 1 つで切り替え。構文の色分けとタブ。` | `Switch between ordinary editing and Vim editing with one key. Syntax colors and tabs.` | `一个按键即可在标准编辑和 Vim 编辑之间切换。支持语法高亮和标签页。` |
 | 2 | `編集中の Markdown を隣の欄でプレビュー。` | `Preview the Markdown you are editing in the next pane.` | `在旁边的窗格中预览正在编辑的 Markdown。` |
-| 3 | `Ctrl+P でタブ・ブックマーク・最近のファイル・同じフォルダのファイルをまとめて探す。` | `Ctrl+P finds tabs, bookmarks, recent files and files in the current folder in one list.` | `按 Ctrl+P 在一个列表中查找标签页、书签、最近的文件和当前文件夹中的文件。` |
+| 3 | `Ctrl+Shift+F でフォルダの下のファイルを全文検索。選んだ当たりの前後を隣のプレビュー欄に表示。` | `Ctrl+Shift+F searches the files under a folder, and the preview pane shows the text around the chosen match.` | `按 Ctrl+Shift+F 搜索文件夹下的文件，预览窗格显示所选匹配项前后的内容。` |
 | 4 | `左のファイルエクスプローラーとタイトルバーのタブ。` | `A file explorer on the left and tabs in the title bar.` | `左侧的文件资源管理器和标题栏中的标签页。` |
 | 5 | `125 種類のテーマ。日本語の文章も読みやすく折り返す。` | `125 themes. Japanese text wraps cleanly.` | `125 种主题。日文文本也能整齐地自动换行。` |
 
@@ -87,5 +89,5 @@ showcase-2026-10-12 と同じ隔離の形にする。
 | [TextBuffer.cpp](samples/TextBuffer.cpp) | 短い C++ のクラス（行の索引を持つ文字列） | 1・3・4 |
 | [旅のメモ.md](samples/旅のメモ.md) | 日本語の文章（長い段落が折り返す） | 1・4・5 |
 
-Ctrl+P の 3 枚目の「同じフォルダ」には、この 3 つが並ぶ。ブックマークと履歴は撮影の profile の中で、
+1.0.0 の Ctrl+P の 3 枚目の「同じフォルダ」には、この 3 つが並んだ（1.1.0 の 3 枚目の全文検索は `the` で `README.md` と `TextBuffer.cpp` に当たる）。ブックマークと履歴は撮影の profile の中で、
 この 3 つを開いて付け外し・閉じて作る（実の履歴を写さない）。
