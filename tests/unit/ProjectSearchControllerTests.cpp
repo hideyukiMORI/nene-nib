@@ -114,11 +114,16 @@ namespace core = nenenib::core;
     return frame.command_palette.value().project.value().status;
 }
 
+// 面の状態の 1 行（入力欄の右か候補の無い行に ui が描く・ADR 0167 の G3 の追補 5）。面の下の行の
+// 知らせ（command_message）には載せない。
 [[nodiscard]] std::string message_of(app::EditorController &controller)
 {
     const auto frame = controller.frame();
-    return frame.command_message.has_value() ? std::string(frame.command_message.value().text())
-                                             : std::string();
+    if (!frame.command_palette.has_value() || !frame.command_palette.value().project.has_value())
+    {
+        return std::string();
+    }
+    return std::string(frame.command_palette.value().project.value().line.text());
 }
 
 [[nodiscard]] std::string input_of(app::EditorController &controller)
@@ -168,6 +173,8 @@ void verify_tickets_and_batches()
                                         core::DisplayLanguage::japanese, {"2", "5"}),
            "the old ticket's batch is dropped and the current batch's hits arrive while "
            "searching");
+    expect(!controller.frame().command_message.has_value(),
+           "the search line is not repeated on the face's bottom row");
     const auto frame = controller.frame();
     const auto view = frame.command_palette.value_or(app::CommandPaletteView{});
     expect(view.hit_rows.size() == 2 && view.hit_rows.at(0).path == "src\\b.txt" &&
