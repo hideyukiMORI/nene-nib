@@ -33,6 +33,8 @@
 #include "PaletteTextRole.hpp"
 #include "PaneLayouts.hpp"
 #include "PreviewPane.hpp"
+#include "PreviewPanePainter.hpp"
+#include "PreviewPaneText.hpp"
 #include "PreviewPoint.hpp"
 #include "ProjectHitRow.hpp"
 #include "ProjectHitText.hpp"
@@ -145,6 +147,9 @@ class Direct2DRenderer final
     // 5・採用案の寸法）。上の段は 本文の字体 body_face、下の段と進み具合は UI
     // の字体。作れなければ偽。
     [[nodiscard]] bool create_project_hit_formats(const wchar_t *body_face);
+    // プレビュー欄の本文・行番号（本文の字体 body_face・12.5 DIP）と見出し（UI の字体・11.5 DIP・
+    // ADR 0189 の決定 5）。作れなければ偽。
+    [[nodiscard]] bool create_preview_pane_formats(const wchar_t *body_face);
     [[nodiscard]] std::expected<void, RenderFailure>
     create_body_formats(const core::EditorSettings &settings);
     void align_text_formats();
@@ -369,6 +374,13 @@ class Direct2DRenderer final
     empty_palette_text(const application::CommandPaletteView &palette,
                        core::DisplayLanguage language);
     [[nodiscard]] ProjectHitText project_hit_text() const;
+    [[nodiscard]] PreviewPaneText preview_pane_text() const;
+    // プレビュー欄（ADR 0189 の決定 5）。描く経路は PreviewPanePainter の 1 本。
+    void draw_preview_pane(const application::EditorFrame &frame,
+                           const core::PaletteLayout &layout);
+    // 面が開いていれば描き、閉じていれば文字組みの保持を捨てる。
+    void draw_open_palette(const application::EditorFrame &frame, std::int32_t width,
+                           std::int32_t height);
     // 入力行に描く文の幅（物理画素・進み具合が検索語と重ならないかを決める・V-1773 の L-1）。
     [[nodiscard]] std::int32_t typed_width(const application::EditorFrame &frame,
                                            const core::LayoutRect &area);
@@ -444,6 +456,13 @@ class Direct2DRenderer final
     TextFormat hit_line_format_;
     TextFormat hit_place_format_;
     TextFormat palette_progress_format_;
+    // プレビュー欄の本文と行番号（本文の字体・12.5 DIP・本文は折り返さず切る・行番号は右寄せ）と
+    // 見出しの名前（UI の字体・11.5 DIP の semibold・文字単位の省略記号）とほかの文（11.5 DIP）
+    // （ADR 0189 の決定 5・採用案）。
+    TextFormat preview_line_format_;
+    TextFormat preview_number_format_;
+    TextFormat preview_name_format_;
+    TextFormat preview_note_format_;
     TextFormat guide_key_format_;
     TextFormat guide_label_format_;
     TextFormat guide_note_format_;
@@ -464,6 +483,9 @@ class Direct2DRenderer final
     GutterTextLayouts gutter_layouts_;
     // Ctrl+P の面の見えている行の文字組み。書式の作り直しと面を閉じたときに捨てる（#900）。
     PaletteRowLayouts palette_layouts_;
+    // プレビュー欄の文字組み（ADR 0189 の決定 5）。面の行の保持と分け、上限は窓の行の数に合わせた
+    // PreviewPanePainter::layout_limit。書式の作り直しと面を閉じたときに捨てる。
+    PaletteRowLayouts preview_layouts_{PreviewPanePainter::layout_limit};
     // タブの題名の文字組み。同じ型で、書式・DPI の作り直しでだけ捨てる（#924）。
     PaletteRowLayouts tab_layouts_;
     // エクスプローラーの面の行の文字組み。同じ型で上限だけ大きい。書式の作り直しと面を消した

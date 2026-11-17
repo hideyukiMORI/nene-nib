@@ -40,6 +40,7 @@
 #include "ScriptedHistory.hpp"
 #include "ScriptedImages.hpp"
 #include "ScriptedMarkdown.hpp"
+#include "ScriptedPreview.hpp"
 #include "ScriptedPrinter.hpp"
 #include "ScriptedProjectSearch.hpp"
 #include "ScriptedSession.hpp"
@@ -258,6 +259,7 @@ void verify_theme_startup_notice()
     ScriptedStartLists start_lists;
     ScriptedUiLanguage ui_language;
     ScriptedProjectSearch project_search;
+    ScriptedPreview previews;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -265,12 +267,12 @@ void verify_theme_startup_notice()
     ScriptedLanguageServer language_server;
     const std::vector initial{app::OpenDocument{FilePath::parse("initial.txt").value()}};
     EditorController controller{
-        app::EditorPorts{appearance,      clipboard,   files,        pages,
-                         settings,        themes,      session,      history,
-                         folders,         bookmarks,   text_layouts, autosave,
-                         fonts,           bell,        markdown,     reads,
-                         language_server, wall_clock,  printer,      shell_registration,
-                         images,          start_lists, ui_language,  project_search},
+        app::EditorPorts{
+            appearance,   clipboard,       files,       pages,          settings,
+            themes,       session,         history,     folders,        bookmarks,
+            text_layouts, autosave,        fonts,       bell,           markdown,
+            reads,        language_server, wall_clock,  printer,        shell_registration,
+            images,       start_lists,     ui_language, project_search, previews},
         initial};
     auto frame = controller.frame();
     expect(frame.lines.front().text == "initial body", "initial document uses normal file load");
@@ -284,12 +286,12 @@ void verify_theme_startup_notice()
            "user input clears notice without rereading themes");
     ScriptedSettings broken{SettingsReading{std::unexpect, app::SettingsFailure::malformed}};
     EditorController unreadable{
-        app::EditorPorts{appearance,      clipboard,   files,        pages,
-                         broken,          themes,      session,      history,
-                         folders,         bookmarks,   text_layouts, autosave,
-                         fonts,           bell,        markdown,     reads,
-                         language_server, wall_clock,  printer,      shell_registration,
-                         images,          start_lists, ui_language,  project_search},
+        app::EditorPorts{
+            appearance,   clipboard,       files,       pages,          broken,
+            themes,       session,         history,     folders,        bookmarks,
+            text_layouts, autosave,        fonts,       bell,           markdown,
+            reads,        language_server, wall_clock,  printer,        shell_registration,
+            images,       start_lists,     ui_language, project_search, previews},
         initial};
     expect(unreadable.frame().lines.front().text == "initial body" &&
                unreadable.frame().settings_failure == app::SettingsFailure::malformed,

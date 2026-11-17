@@ -20,6 +20,7 @@
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
 #include "ExWindowName.hpp"
+#include "FinderPreview.hpp"
 #include "InputText.hpp"
 #include "LanguageTable.hpp"
 #include "Utf8.hpp"
@@ -711,6 +712,45 @@ constexpr std::array<std::string_view, 2> autoindent_names{"autoindent", "ai"};
     return ExResult{std::move(changed), std::nullopt, std::nullopt, switch_message(name, wanted)};
 }
 
+// 探して見る面のプレビュー欄の置き方（ADR 0189 の決定 1・3）。`set finderpreview=<値>`（値は
+// auto right below off）・`set finderpreview?`・`set finderpreview`（文字列の option の名前だけは
+// 問い・Vim と同じ）。短い名前 `fpv` は canonical_option が長い名前に直す。文言は
+// `finderpreview=auto` の形。保存する設定に載せる（autoindent と同じ束）。表に無い値は E474 と
+// 同じ失敗。
+constexpr std::string_view finder_preview_option_name = "finderpreview";
+
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+finder_preview_option(std::string_view option, const EditorSettings &settings)
+{
+    if (!option.starts_with(finder_preview_option_name))
+    {
+        return std::nullopt;
+    }
+    const std::string_view rest = option.substr(finder_preview_option_name.size());
+    const auto message = [](FinderPreview preview)
+    {
+        return DisplayText::parse(std::string(finder_preview_option_name) + "=" +
+                                  std::string(finder_preview_name(preview)))
+            .value();
+    };
+    if (rest.empty() || rest == "?")
+    {
+        return ExResult{std::nullopt, std::nullopt, std::nullopt, message(settings.finder_preview)};
+    }
+    if (!rest.starts_with('='))
+    {
+        return std::nullopt;
+    }
+    const auto wanted = finder_preview_named(rest.substr(1));
+    if (!wanted.has_value())
+    {
+        return std::unexpected(ExFailure::invalid_argument);
+    }
+    EditorSettings changed = settings;
+    changed.finder_preview = wanted.value();
+    return ExResult{std::move(changed), std::nullopt, std::nullopt, message(wanted.value())};
+}
+
 // 追従の余白の名前（#1041）。`set so=N` `set so?` `set so`（数の option の名前だけは問い・
 // Vim と同じ）と長い名前。値は core の scrolloff_of の 1 本で読み、範囲の外は E474 と同じ失敗。
 constexpr std::array<std::string_view, 2> scrolloff_names{"scrolloff", "so"};
@@ -800,6 +840,11 @@ view_option(std::string_view option, const EditorSettings &settings)
     if (indent.has_value())
     {
         return std::expected<ExResult, ExEvaluationFailure>{std::move(indent).value()};
+    }
+    auto preview = finder_preview_option(option, settings);
+    if (preview.has_value())
+    {
+        return std::move(preview).value();
     }
     return scrolloff_option(option, settings);
 }
@@ -1035,6 +1080,11 @@ constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
     {
         return "language=" + std::string(display_language_choice_name(defaults.ui_language));
     }
+    if (name == finder_preview_option_name)
+    {
+        return std::string(finder_preview_option_name) + "=" +
+               std::string(finder_preview_name(defaults.finder_preview));
+    }
     if (name == "guifont")
     {
         return "guifont=" + std::string(defaults.font_family.text()) + ":h" +
@@ -1109,8 +1159,8 @@ read_set_option(std::string_view option, const EditorSettings &settings)
 // ------------------------------------------------ `:set` の形（#1561・ADR 0022 の追補）
 
 // 文字列の option の Vim の短い名前（真偽と数は表の列が持つ）。
-constexpr std::array<std::pair<std::string_view, std::string_view>, 2> value_aliases{
-    {{"clipboard", "cb"}, {"guifont", "gfn"}}};
+constexpr std::array<std::pair<std::string_view, std::string_view>, 3> value_aliases{
+    {{"clipboard", "cb"}, {"guifont", "gfn"}, {"finderpreview", "fpv"}}};
 
 // 表のどれかの名前（長い名前か短い名前）なら長い名前。どれでもなければ空。
 [[nodiscard]] std::optional<std::string_view> long_name_of(std::string_view name) noexcept
@@ -2358,7 +2408,7 @@ ranged_command(std::string_view text, const EditorSettings &settings, const ExWi
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
 // 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
-constexpr std::array<std::string_view, 54> fixed_candidates{"colorscheme",
+constexpr std::array<std::string_view, 58> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -2407,6 +2457,10 @@ constexpr std::array<std::string_view, 54> fixed_candidates{"colorscheme",
                                                             "set language=en",
                                                             "set language=zh-hans",
                                                             "set language=system",
+                                                            "set finderpreview=auto",
+                                                            "set finderpreview=right",
+                                                            "set finderpreview=below",
+                                                            "set finderpreview=off",
                                                             "preview full",
                                                             "preview side",
                                                             "preview off",
