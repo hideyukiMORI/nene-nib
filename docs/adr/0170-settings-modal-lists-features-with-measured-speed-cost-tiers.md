@@ -82,3 +82,12 @@ v4 の鍵の集合に `explorer_width=<DIP の 10 進・先頭の 0 なし・120
 ## 追補（2026-11-14・#1086）: `autoindent` の入口
 
 `autoindent=on|off`（Vim の `autoindent`・既定 off）の置き場は上の追補（2026-11-16）の `settings.v5`（`settings.v4` には足さない）。変えるのは `:set autoindent` `ai` `noai` `ai!` `invai` `ai&` だけで、Ctrl+P の面の `:` の候補（`set autoindent` `set noautoindent`）に出し、設定の面と `features` には出さない（`ignorecase` `relativenumber` と同じ束）。
+
+## 追補（2026-11-18・#1826・設計席）: モーダルの実装の前に決めた 4 点
+
+v5 の鍵の集合は 1.1.0 で閉じた（上の追補 4）。設定モーダル（#1016）は新しい鍵を足さずに作る。
+
+1. **機能のオン・オフは既存の `features=` の名前の列で表す。** 既定がオフの機能は「オンのとき名前を書く」（今の `minimap` と同じ）、既定がオンの機能は「オフのとき `no_<名前>` を書く」（例 `no_matchparen`）。どちらも書いていなければ既定。名前と既定は決定 1 の表 `feature_costs` の 1 か所が持ち、`features` の読み書きは `feature_enabled(settings, feature)` と `feature_set(settings, feature, on)` の 2 本だけ（`minimap_shown` `minimap_set` はこの 2 本へ寄せる・ARC-012）。表に無い名前は読み捨てずに列に残して書き戻す（後の版が足した名前を前の版が消さない・1.1.0 の codec も名前を解釈せずに往復する）。`lsp` `explorer` `wrap` `guide` `autoindent` は自分の鍵のまま（決定 3）で、表の行は「どの鍵に写すか」を持つ。
+2. **切り替えは即時に効かせ、保存は閉じるときに 1 回。** モーダルを開いたときの設定を写しに取り、行を変えるたびに状態の設定を変えて frame を作り直す（配色・字体・大きさも本文に即時に効く・D59 / D93 と同じ考え）。ファイルへは閉じるとき（Esc・閉じるボタン・Ctrl+,）に `persist_settings` を 1 回だけ呼ぶ。「元に戻す」は写しへ戻す（ファイルは書かない）。窓を閉じる・タブを閉じるなどでモーダルが閉じるときも同じく 1 回保存する。
+3. **段（決定 2）は測った数字がある機能だけに出す。** `docs/quality/feature-costs.md` に測った日・機械・ベンチ・数字の行がある機能だけが段の印を持ち、無い機能はスイッチだけ（印の場所に「未測定」とも書かない・推測の段を出さない決定 2 のまま）。要約の 1 行と組（速さ優先 / おすすめ / 全部オン）は印のある機能だけで数える。
+4. **形（中央の窓か右の引き出しか）は /design の案を施主が選ぶ**（キャンバス https://claude.ai/artifact/5Pn1DoM2W5D4xnohsrM3FH ・設計席の推しは右の引き出しで本文が見えたまま）。core と application（項目の列・節・探す欄・組・要約・写しと保存）は形に依らないので先に作る。配置は core の純関数 1 本（`settings_layout`）にして、形の選択はその中だけで変わるようにする。
