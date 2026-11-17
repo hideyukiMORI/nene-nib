@@ -29,6 +29,7 @@
 #include "Milestone.hpp"
 #include "MinimapGrab.hpp"
 #include "PaneLayouts.hpp"
+#include "PointText.hpp"
 #include "PointerClicks.hpp"
 #include "PresentedMilestones.hpp"
 #include "PreviewTaskPress.hpp"
@@ -153,6 +154,34 @@ class EditorWindow final
     void click_body(LPARAM data, application::PointerClicks clicks);
     void point_text(POINT point, core::SelectionAnchoring anchoring,
                     application::PointerClicks clicks);
+    // 点の本文の位置の意図（point_text と右クリックのメニューの共通の 1 本）。
+    [[nodiscard]] application::PointText text_point(POINT point, core::SelectionAnchoring anchoring,
+                                                    application::PointerClicks clicks) const;
+
+    // ----------------------------------------------------------------
+    // 右クリックのメニュー（#1051） EditorWindowContextMenu.cpp の群（ADR 0078
+    // の追補）。開く・選ぶ・閉じるは意図を送るだけで、 何を出すか・何で閉じるかは controller
+    // が決める。
+    // 右の押しと離し。押した点と離した点がどちらも操作中の枠の本文の中なら、離したときに開く。
+    void press_right(LPARAM data);
+    void release_right(LPARAM data);
+    // WM_CONTEXTMENU。鍵（Shift+F10・メニューキー）の分だけ（lParam が -1）キャレットの位置に開く。
+    [[nodiscard]] bool open_context_menu_from_keys(LPARAM data);
+    // メニューが開いている間の左の押しと離しとマウスの動き。開いていなければ false（今の道へ）。
+    [[nodiscard]] bool press_context_menu(LPARAM data);
+    [[nodiscard]] bool release_context_menu(LPARAM data);
+    [[nodiscard]] bool point_context_menu(LPARAM data);
+    // 右の押しと離しと WM_CONTEXTMENU の入口。
+    [[nodiscard]] LRESULT context_menu_message(UINT message, WPARAM word, LPARAM data);
+    // 帯の空きや窓の操作（クライアントの外）を押したら開いているメニューを閉じる。
+    void close_context_menu_outside();
+    // 点の下のもう 1 つの枠の本文か（プレビューの枠は除く・右クリックはその枠へ移ってから開く）。
+    [[nodiscard]] bool in_other_text_body(POINT point) const;
+    // メニューが開いている間の鍵（上下・Enter・Esc。ほかの鍵と文字は捨てる）と、焦点を失ったときに
+    // 閉じる。受けて捨てたら true（焦点を失ったときは閉じて false・今の道も通す）。
+    [[nodiscard]] bool take_context_menu_key(UINT message, WPARAM word);
+    void press_context_menu_key(WPARAM word);
+    [[nodiscard]] bool in_text_body(POINT point) const;
     // 左の押しを続けた回数に数える（#1250）。OS のダブルクリックは 2 回目、その後に OS の
     // ダブルクリックの時間と升の中で押せば 3 回目（4 回目以降も 3
     // 回目）。時刻は押しの窓メッセージの 時刻（GetMessageTime）だけを読む。
@@ -322,6 +351,8 @@ class EditorWindow final
     void lose_explorer_divider();
     [[nodiscard]] bool cancel_explorer_divider();
     [[nodiscard]] bool take_explorer_escape(LPARAM data);
+    // 面の幅かミニマップのドラッグ中の Esc を受けたか（key_message の入口）。
+    [[nodiscard]] bool take_drag_escape(WPARAM word, LPARAM data);
     void settle_explorer_divider(LPARAM point);
     [[nodiscard]] bool explorer_divider_under(LPARAM point) const;
     [[nodiscard]] bool reset_explorer_width(LPARAM data);
@@ -374,6 +405,11 @@ class EditorWindow final
     void run_choose_language();
     void run_show_version();
     void run_search_project();
+    void run_cut();
+    void run_copy();
+    void run_paste();
+    void run_delete_selection();
+    void run_select_all();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();
@@ -447,6 +483,10 @@ class EditorWindow final
     std::optional<core::StartPress> start_pressed_;
     // 起動画面の行で始まった押しの列か（2 回目・3 回目の押しを本文へ渡さない・追補 24）。
     bool start_click_began_ = false;
+    // 右の押しの点（本文の中で押したときだけ・離したら消す）と、開いたメニューの上で左を押したか
+    // （#1051）。
+    std::optional<POINT> right_pressed_;
+    bool context_menu_pressed_ = false;
     // FirstFramePresented を送ったか（窓で 1 回だけ・ADR 0172 の決定 3）。
     bool first_frame_signaled_ = false;
     // プレビューの枠で押したチェックボックス（離したとき・次に押したときに消す）。

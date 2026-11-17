@@ -46,6 +46,12 @@ enum class OperationKey : std::uint8_t
     n,
     // Ctrl+Shift+R のルートのフォルダを選ぶ（施主決定 2026-11-11・#1495・ADR 0162 の追補）。
     // Shift なしの Ctrl+R は表に行を置かない（Vim の redo と INSERT・入力行のレジスタの挿入）。
-    r
+    r,
+    // 切り取り・コピー・すべて選択の Ctrl+X / C / A と、削除の Delete（ADR 0078 の追補 #1051）。
+    // ui の operation_chord は写さない（鍵は今の道のまま・表示だけに使う）。
+    x,
+    c,
+    a,
+    delete_key
 };
 } // namespace nenenib::core

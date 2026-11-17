@@ -46,6 +46,10 @@ map_row_of(VimModeSet modes, std::string_view lhs, std::string_view rhs, bool re
 [[nodiscard]] std::string map_line_value(const MapRow &row);
 // `mapleader` の値（鍵の記法で 1 打鍵・`<leader>` は書けない）。
 [[nodiscard]] std::expected<VimKey, KeyMapFailure> parse_map_leader(std::string_view text);
+// 鍵の記法の文字列（`"+y` `<Esc>ggVG`）を鍵の列へ。`<leader>` は書けない。map の行と同じ読み手で、
+// 本文の右クリックのメニューの Vim の鍵の列も読む（ADR 0078 の追補 #1051）。
+[[nodiscard]] std::expected<std::vector<VimKey>, KeyMapFailure>
+vim_keys_of_notation(std::string_view text);
 // 設定の `maps` と `mapleader` から表を作る（`<leader>` はここで展開する）。
 [[nodiscard]] std::expected<KeyMap, KeyMapFailure> key_map_of(const EditorSettings &settings);
 
