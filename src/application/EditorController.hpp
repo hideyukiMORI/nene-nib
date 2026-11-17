@@ -129,6 +129,7 @@
 #include "SubstituteReply.hpp"
 #include "SyntaxStateCache.hpp"
 #include "TabReach.hpp"
+#include "TabTipTimer.hpp"
 #include "TextBuffer.hpp"
 #include "TextCaret.hpp"
 #include "TextEncoding.hpp"
@@ -384,6 +385,7 @@ class EditorController final
     void discard_key_map_pending();
     // 入口で、意図を写す前に待ちの鍵を流すか捨て、Vim の先頭の判定を捨てる（#1374）。
     void settle_pending_keys(const EditorIntent &intent);
+    [[nodiscard]] EditorDelivery timed(EditorDelivery delivered) const;
     // 待ちの合図（決定 4）。積んだ鍵が無ければ何も変えない（描き直さない）。
     void accept(const MapTimeout &);
     // 設定の `maps` と `mapleader` から表を作り直す。設定を置く 2 か所（起動・persist_settings）
@@ -893,6 +895,13 @@ class EditorController final
     void accept(const TitleBarWidth &intent);
     void accept(const ScrollTabs &intent);
     void accept(const PointTitleBar &intent);
+    // タブの札（#1789・ADR 0056 の #1789 の追補）。合図で待っていたタブにまだ載っていれば出す。
+    // 消すのは入口の settle_tab_tip の 1 か所で、使う人の操作の意図（not_user_operation でない
+    // 意図）が来たら写す前に消す。札を出しているタブは shown_tab_tip が frame に写す。
+    void accept(const TabTipTick &intent);
+    void settle_tab_tip(const EditorIntent &intent);
+    void hide_tab_tip();
+    [[nodiscard]] std::optional<std::size_t> shown_tab_tip() const;
     // 帯の配置の入力（96 DPI・幅は DIP・決定 8）と、送り量をアクティブなタブが見える所へ直す
     // 1 本（切り替え・新しいタブ・閉じる・開く・帯の幅のたび）。帯の幅がまだ 0 なら送り量は 0。
     [[nodiscard]] core::TitleBarInput title_bar_input() const;
@@ -1573,5 +1582,8 @@ class EditorController final
     // この意図が頼む待ちのタイマー（EditorDelivery.map_timer）。apply の入口で空に戻し、待ちを
     // 積む・流す所だけが置く。
     std::optional<MapTimer> map_timer_;
+    // この意図が頼むタブの札の待ちのタイマー（EditorDelivery.tab_tip_timer・#1789）。apply の
+    // 入口で空に戻し、札の段を変える所（帯の hover・合図・入口の消す 1 か所）だけが置く。
+    std::optional<TabTipTimer> tab_tip_timer_;
 };
 } // namespace nenenib::application
