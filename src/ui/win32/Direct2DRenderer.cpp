@@ -4,9 +4,6 @@
 #include "BodyColors.hpp"
 #include "ColoredRun.hpp"
 #include "ComposedLine.hpp"
-#include "ContextMenu.hpp"
-#include "ContextMenuRequest.hpp"
-#include "ContextMenuText.hpp"
 #include "DevicePixels.hpp"
 #include "DiagnosticColor.hpp"
 #include "DiagnosticCounts.hpp"
@@ -2962,41 +2959,6 @@ HRESULT Direct2DRenderer::wait_for_commit() const
 std::optional<std::size_t> Direct2DRenderer::preview_task_at(std::int32_t x, std::int32_t y) const
 {
     return preview_.task_at(x, y);
-}
-
-std::optional<std::size_t> Direct2DRenderer::context_menu_row_at(std::int32_t x,
-                                                                 std::int32_t y) const
-{
-    return context_menu_layout_.has_value()
-               ? core::context_menu_hit(context_menu_layout_.value(), x, y)
-               : std::nullopt;
-}
-
-bool Direct2DRenderer::context_menu_covers(std::int32_t x, std::int32_t y) const
-{
-    return context_menu_layout_.has_value() &&
-           core::contains(context_menu_layout_.value().panel, x, y);
-}
-
-void Direct2DRenderer::draw_context_menu(const application::EditorFrame &frame, std::int32_t width,
-                                         std::int32_t height)
-{
-    if (!frame.context_menu.has_value())
-    {
-        // 閉じたら文字組みと配置を捨てる。開くたびに作り直す（Ctrl+P の面と同じ・#900）。
-        context_menu_layouts_.clear();
-        context_menu_layout_.reset();
-        return;
-    }
-    const auto &view = frame.context_menu.value();
-    ContextMenuPainter painter(
-        *context_.Get(), *brush_.Get(),
-        ContextMenuText{dwrite_.Get(), command_format_.Get(), key_format_.Get(), dpi_},
-        context_menu_layouts_);
-    const auto widths = painter.measure(view);
-    context_menu_layout_ = core::context_menu_layout(core::ContextMenuRequest{
-        view.x, view.y, core::LayoutRect{0, 0, width, height}, widths.name, widths.key, dpi_});
-    painter.paint(view, context_menu_layout_.value(), frame.palette);
 }
 
 std::optional<core::PreviewPoint> Direct2DRenderer::preview_point_at(std::int32_t x, std::int32_t y)
