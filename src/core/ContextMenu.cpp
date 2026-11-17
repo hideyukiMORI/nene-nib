@@ -1,14 +1,19 @@
 #include "ContextMenu.hpp"
 
+#include "ContextMenuMode.hpp"
 #include "ContextMenuNeed.hpp"
+#include "ContextMenuSituation.hpp"
 #include "ContextMenuSlot.hpp"
 #include "DevicePixels.hpp"
+#include "EditMode.hpp"
 #include "KeyChord.hpp"
 #include "OperationBindings.hpp"
 #include "OperationText.hpp"
 #include "OperationTexts.hpp"
 
 #include <algorithm>
+#include <string>
+#include <string_view>
 #include <utility>
 
 namespace nenenib::core
@@ -105,20 +110,46 @@ constexpr auto menu_operations = ordered_operations();
 static_assert(slots_distinct() && groups_packed(),
               "context menu slots are distinct and the groups are numbered from 0 without gaps");
 
-[[nodiscard]] bool need_met(ContextMenuNeed need, const ContextMenuSituation &situation) noexcept
+[[nodiscard]] bool need_met(ContextMenuNeed need, bool selected, bool editable) noexcept
 {
     switch (need)
     {
     case ContextMenuNeed::nothing:
         return true;
     case ContextMenuNeed::selection:
-        return situation.selected;
+        return selected;
     case ContextMenuNeed::editable:
-        return situation.editable;
+        return editable;
     case ContextMenuNeed::editable_selection:
-        return situation.editable && situation.selected;
+        return editable && selected;
     }
     std::unreachable();
+}
+
+// 項目が使えるか。通常モードと Vim の INSERT は表の need、全面プレビューは選択の要る項目（コピー）
+// だけ、Vim の NORMAL と VISUAL はそのモードの鍵の列があること。
+[[nodiscard]] bool usable(const OperationText &text, const ContextMenuSituation &situation) noexcept
+{
+    const auto need = slot_of(text).need;
+    switch (situation.mode)
+    {
+    case ContextMenuMode::ordinary:
+    case ContextMenuMode::vim_insert:
+        return need_met(need, situation.selected, true);
+    case ContextMenuMode::reading:
+        return need == ContextMenuNeed::selection && situation.selected;
+    case ContextMenuMode::vim_normal:
+        return !text.vim_normal_keys.empty();
+    case ContextMenuMode::vim_visual:
+        return !text.vim_visual_keys.empty();
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] std::string ordinary_label(EditorOperation operation)
+{
+    const auto chord = shown_chord(operation, EditMode::ordinary);
+    return chord.has_value() ? key_chord_label(chord.value()) : std::string{};
 }
 
 [[nodiscard]] std::int32_t separator_height(std::uint32_t dpi) noexcept
@@ -149,25 +180,45 @@ context_menu_items(const ContextMenuSituation &situation) noexcept
         const auto slot = slot_of(operation_text(operation));
         const bool separated =
             index > 0 && slot_of(operation_text(menu_operations.at(index - 1))).group != slot.group;
-        items.at(index) = ContextMenuItem{operation,
-                                          operation_available(operation, situation.mode) &&
-                                              need_met(slot.need, situation),
-                                          separated};
+        items.at(index) =
+            ContextMenuItem{operation, usable(operation_text(operation), situation), separated};
     }
     return items;
 }
 
-std::string context_menu_key(EditorOperation operation, EditMode mode)
+std::string context_menu_key(EditorOperation operation, ContextMenuMode mode)
 {
     switch (mode)
     {
-    case EditMode::ordinary:
-    {
-        const auto chord = shown_chord(operation, mode);
-        return chord.has_value() ? key_chord_label(chord.value()) : std::string{};
+    case ContextMenuMode::ordinary:
+    case ContextMenuMode::reading:
+        return ordinary_label(operation);
+    case ContextMenuMode::vim_insert:
+        // INSERT で効く鍵は通常モードと同じクリップボードと全選択の鍵だけ（検索・置換の鍵は Vim
+        // の鍵）。
+        return slot_of(operation_text(operation)).need == ContextMenuNeed::nothing
+                   ? std::string{}
+                   : ordinary_label(operation);
+    case ContextMenuMode::vim_normal:
+    case ContextMenuMode::vim_visual:
+        return std::string{context_menu_vim_keys(operation, mode)};
     }
-    case EditMode::vim:
-        return std::string{operation_text(operation).vim_hint};
+    std::unreachable();
+}
+
+std::string_view context_menu_vim_keys(EditorOperation operation, ContextMenuMode mode) noexcept
+{
+    const auto &text = operation_text(operation);
+    switch (mode)
+    {
+    case ContextMenuMode::vim_normal:
+        return text.vim_normal_keys;
+    case ContextMenuMode::vim_visual:
+        return text.vim_visual_keys;
+    case ContextMenuMode::ordinary:
+    case ContextMenuMode::reading:
+    case ContextMenuMode::vim_insert:
+        return {};
     }
     std::unreachable();
 }
@@ -188,7 +239,7 @@ ContextMenuLayout context_menu_layout(const ContextMenuRequest &request) noexcep
     const auto left = placed_start(request.x, width, request.bounds.left, request.bounds.right);
     const auto top = placed_start(request.y, height, request.bounds.top, request.bounds.bottom);
     ContextMenuLayout layout{LayoutRect{left, top, left + width, top + height}, {}, {}, dpi};
-    const auto items = context_menu_items(ContextMenuSituation{EditMode::ordinary, false, false});
+    const auto items = context_menu_items(ContextMenuSituation{ContextMenuMode::ordinary, false});
     auto y = top + gap;
     std::size_t separator = 0;
     for (std::size_t index = 0; index < items.size(); ++index)

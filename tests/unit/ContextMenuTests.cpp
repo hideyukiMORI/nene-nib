@@ -1,21 +1,53 @@
 // Issue #1051 / ADR 0078
 // の追補。本文の右クリックのメニューの項目の列・使えるか・鍵の表示・配置だけを 測る（core
 // の純関数）。時計・ファイル・乱数を使わない。
+#include "CaretMotion.hpp"
+#include "ChooseContextMenu.hpp"
+#include "CloseContextMenu.hpp"
+#include "Column.hpp"
 #include "ContextMenu.hpp"
 #include "ContextMenuLayout.hpp"
+#include "ContextMenuMode.hpp"
 #include "ContextMenuRequest.hpp"
 #include "ContextMenuShape.hpp"
 #include "ContextMenuSituation.hpp"
+#include "ContextMenuView.hpp"
 #include "DevicePixels.hpp"
 #include "EditMode.hpp"
+#include "Editing.hpp"
+#include "EditorController.hpp"
 #include "EditorOperation.hpp"
+#include "InsertText.hpp"
+#include "KeyMap.hpp"
 #include "LayoutRect.hpp"
+#include "LineNumber.hpp"
+#include "MoveCaret.hpp"
+#include "OpenContextMenu.hpp"
+#include "OperationTexts.hpp"
+#include "PlaceCaret.hpp"
+#include "PointContextMenu.hpp"
+#include "PointText.hpp"
+#include "PointerClicks.hpp"
 #include "Scopes.hpp"
+#include "ScriptedClipboard.hpp"
+#include "ScrollLines.hpp"
+#include "SelectEditMode.hpp"
+#include "SelectionAnchoring.hpp"
+#include "StepContextMenu.hpp"
 #include "TestSupport.hpp"
+#include "TextPosition.hpp"
+#include "TextViewGeometry.hpp"
+#include "VimCharacter.hpp"
+#include "VimKey.hpp"
+#include "VimKeyPress.hpp"
+#include "VimMode.hpp"
+#include "VisibleLines.hpp"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string>
 #include <string_view>
 #include <tuple>
 #include <utility>
@@ -24,8 +56,9 @@ namespace nenenib::tests
 {
 namespace
 {
+namespace app = nenenib::application;
 using core::ContextMenuSituation;
-using core::EditMode;
+using Mode = core::ContextMenuMode;
 using core::EditorOperation;
 using core::LayoutRect;
 
@@ -41,41 +74,44 @@ constexpr std::array<OrderRow, 7> menu_order{{
     {EditorOperation::replace, false},
 }};
 
-// 操作 → 通常モードの鍵の表示・Vim の鍵の表示。
-using KeyRow = std::tuple<EditorOperation, std::string_view, std::string_view>;
+// 操作 → 通常モード・Vim の INSERT・Vim の NORMAL・Vim の VISUAL の鍵の表示。
+using KeyRow = std::tuple<EditorOperation, std::string_view, std::string_view, std::string_view,
+                          std::string_view>;
 constexpr std::array<KeyRow, 7> menu_keys{{
-    {EditorOperation::cut, "Ctrl+X", "d"},
-    {EditorOperation::copy, "Ctrl+C", "y"},
-    {EditorOperation::paste, "Ctrl+V", "p"},
-    {EditorOperation::delete_selection, "Delete", "x"},
-    {EditorOperation::select_all, "Ctrl+A", "ggVG"},
-    {EditorOperation::find, "Ctrl+F", "/"},
-    {EditorOperation::replace, "Ctrl+H", ":s"},
+    {EditorOperation::cut, "Ctrl+X", "Ctrl+X", "", "\"+d"},
+    {EditorOperation::copy, "Ctrl+C", "Ctrl+C", "", "\"+y"},
+    {EditorOperation::paste, "Ctrl+V", "Ctrl+V", "\"+p", "\"+p"},
+    {EditorOperation::delete_selection, "Delete", "Delete", "x", "d"},
+    {EditorOperation::select_all, "Ctrl+A", "Ctrl+A", "ggVG", "<Esc>ggVG"},
+    {EditorOperation::find, "Ctrl+F", "", "/", "/"},
+    {EditorOperation::replace, "Ctrl+H", "", ":s", ":s"},
 }};
 
 // 状況 → 7 項目の使える / 使えない（menu_order の順）。
 using EnabledRow = std::pair<ContextMenuSituation, std::array<bool, 7>>;
-constexpr std::array<EnabledRow, 6> enabled_rows{{
+constexpr std::array<EnabledRow, 9> enabled_rows{{
     // 通常モードの選択あり: 全部。
-    {{EditMode::ordinary, true, true}, {true, true, true, true, true, true, true}},
+    {{Mode::ordinary, true}, {true, true, true, true, true, true, true}},
     // 選択なし: 切り取り・コピー・削除が薄い（貼り付けはクリップボードを読まずに試す）。
-    {{EditMode::ordinary, false, true}, {false, false, true, false, true, true, true}},
-    // 書き換えられない所（全面プレビュー）の選択あり: コピーと検索・置換だけ。
-    {{EditMode::ordinary, true, false}, {false, true, false, false, false, true, true}},
-    // Vim の VISUAL（OS の貼り付けをしない）: コピーと検索・置換。
-    {{EditMode::vim, true, false}, {false, true, false, false, false, true, true}},
-    // Vim の NORMAL: 検索・置換だけ。
-    {{EditMode::vim, false, false}, {false, false, false, false, false, true, true}},
-    // Vim の INSERT の選択あり: 全部。
-    {{EditMode::vim, true, true}, {true, true, true, true, true, true, true}},
+    {{Mode::ordinary, false}, {false, false, true, false, true, true, true}},
+    // 全面プレビューの選択あり: コピーだけ。選択なし: どれも薄い。
+    {{Mode::reading, true}, {false, true, false, false, false, false, false}},
+    {{Mode::reading, false}, {false, false, false, false, false, false, false}},
+    // Vim の INSERT は通常モードと同じ。
+    {{Mode::vim_insert, true}, {true, true, true, true, true, true, true}},
+    {{Mode::vim_insert, false}, {false, false, true, false, true, true, true}},
+    // Vim の NORMAL: 切り取りとコピーだけ薄い（選択が無い）。
+    {{Mode::vim_normal, false}, {false, false, true, true, true, true, true}},
+    // Vim の VISUAL: 全部（鍵の列がある）。
+    {{Mode::vim_visual, true}, {true, true, true, true, true, true, true}},
+    {{Mode::vim_visual, false}, {true, true, true, true, true, true, true}},
 }};
 
 void verify_order()
 {
     static_assert(core::context_menu_size == menu_order.size());
     static_assert(core::context_menu_separator_count == 2);
-    const auto items =
-        core::context_menu_items(ContextMenuSituation{EditMode::ordinary, true, true});
+    const auto items = core::context_menu_items(ContextMenuSituation{Mode::ordinary, true});
     for (std::size_t index = 0; index < items.size(); ++index)
     {
         expect(items.at(index).operation == menu_order.at(index).first,
@@ -100,12 +136,22 @@ void verify_enabled()
 
 void verify_keys()
 {
-    for (const auto &[operation, ordinary, vim] : menu_keys)
+    for (const auto &[operation, ordinary, insert, normal, visual] : menu_keys)
     {
-        expect(core::context_menu_key(operation, EditMode::ordinary) == ordinary,
-               "the ordinary mode shows the key label of the table");
-        expect(core::context_menu_key(operation, EditMode::vim) == vim,
-               "the vim mode shows the vim keys of the table");
+        expect(core::context_menu_key(operation, Mode::ordinary) == ordinary &&
+                   core::context_menu_key(operation, Mode::reading) == ordinary,
+               "the ordinary mode and the full preview show the key label of the table");
+        expect(core::context_menu_key(operation, Mode::vim_insert) == insert,
+               "vim insert shows the ordinary keys that work in insert");
+        expect(core::context_menu_key(operation, Mode::vim_normal) == normal &&
+                   core::context_menu_vim_keys(operation, Mode::vim_normal) == normal,
+               "vim normal shows and runs the normal keys of the table");
+        expect(core::context_menu_key(operation, Mode::vim_visual) == visual &&
+                   core::context_menu_vim_keys(operation, Mode::vim_visual) == visual,
+               "vim visual shows and runs the visual keys of the table");
+        expect(core::context_menu_vim_keys(operation, Mode::vim_insert).empty() &&
+                   core::context_menu_vim_keys(operation, Mode::ordinary).empty(),
+               "only vim normal and visual run vim keys");
     }
 }
 
@@ -176,6 +222,218 @@ void verify_hit()
                !core::context_menu_hit(layout, 99, layout.rows.at(0).top).has_value(),
            "the separators, the gaps and the outside hit nothing");
 }
+
+// ---------------------------------------------------------------- controller（application）
+
+constexpr std::size_t cut_row = 0;
+constexpr std::size_t copy_row = 1;
+constexpr std::size_t paste_row = 2;
+constexpr std::size_t delete_row = 3;
+constexpr std::size_t select_all_row = 4;
+
+// 1 行 "abc def"（升 10 px・行 20 px）の本文でキャレットを行頭に置いた足場。
+void prepare_line(app::EditorController &controller)
+{
+    static_cast<void>(controller.apply(app::InsertText{"abc def"}));
+    static_cast<void>(
+        controller.apply(app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                                         core::SelectionAnchoring::collapse}));
+    static_cast<void>(controller.apply(app::VisibleLines{5, core::TextViewGeometry{400, 20, 96}}));
+}
+
+[[nodiscard]] app::OpenContextMenu right_click(float x)
+{
+    return app::OpenContextMenu{
+        100, 40,
+        app::PointText{x, 0, core::SelectionAnchoring::collapse, app::PointerClicks::single}};
+}
+
+[[nodiscard]] std::size_t caret_column(app::EditorController &controller)
+{
+    return controller.frame().caret.position.column.value;
+}
+
+[[nodiscard]] std::string copied(Editing &editing)
+{
+    return editing.clipboard().read().value_or("");
+}
+
+void verify_open_ordinary()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    prepare_line(controller);
+    expect(!controller.context_menu_active(), "the menu starts closed");
+    const auto frame = controller.apply_frame(right_click(45.0F));
+    expect(controller.context_menu_active() && frame.context_menu.has_value(),
+           "a right click in the body opens the menu");
+    const auto &view = frame.context_menu.value_or(app::ContextMenuView{});
+    expect(view.x == 100 && view.y == 40 && !view.highlighted.has_value(),
+           "the menu opens at the point with no row chosen");
+    expect(view.rows.at(cut_row).name == "切り取り" && view.rows.at(cut_row).key == "Ctrl+X" &&
+               view.rows.at(select_all_row).separated,
+           "the rows carry the table names, the key labels and the separators");
+    expect(!view.rows.at(cut_row).enabled && !view.rows.at(copy_row).enabled &&
+               view.rows.at(paste_row).enabled && !view.rows.at(delete_row).enabled,
+           "without a selection cut, copy and delete are disabled and paste is enabled");
+    expect(caret_column(controller) == 6,
+           "a right click outside the selection places the caret at the point first");
+    expect(editing.clipboard().reads() == 0, "opening the menu does not read the clipboard");
+}
+
+void verify_keep_selection()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    prepare_line(controller);
+    static_cast<void>(controller.apply(
+        app::MoveCaret{core::CaretMotion::next_word, core::SelectionAnchoring::extend}));
+    const auto frame = controller.apply_frame(right_click(15.0F));
+    const auto &view = frame.context_menu.value_or(app::ContextMenuView{});
+    expect(view.rows.at(cut_row).enabled && view.rows.at(copy_row).enabled,
+           "a right click inside the selection keeps it and enables cut and copy");
+    const auto chosen = controller.apply_frame(app::ChooseContextMenu{copy_row});
+    expect(!controller.context_menu_active() && !chosen.context_menu.has_value() &&
+               chosen.operation_request == core::EditorOperation::copy,
+           "choosing a row closes the menu and hands the operation to run_operation");
+    expect(!controller.apply_frame(app::CloseContextMenu{}).operation_request.has_value(),
+           "the operation request lasts one intent");
+}
+
+void verify_choose_and_step()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    prepare_line(controller);
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    static_cast<void>(controller.apply(app::ChooseContextMenu{cut_row}));
+    expect(controller.context_menu_active(), "a disabled row does not run and the menu stays");
+    static_cast<void>(controller.apply(app::StepContextMenu{true}));
+    expect(controller.context_menu_highlighted() == paste_row,
+           "the down key chooses the first enabled row");
+    static_cast<void>(controller.apply(app::StepContextMenu{false}));
+    expect(controller.context_menu_highlighted() == std::size_t{6},
+           "the up key wraps over the disabled rows");
+    static_cast<void>(controller.apply(app::PointContextMenu{copy_row}));
+    expect(!controller.context_menu_highlighted().has_value(),
+           "the pointer over a disabled row chooses nothing");
+    static_cast<void>(controller.apply(app::PointContextMenu{select_all_row}));
+    const auto chosen = controller.apply_frame(app::ChooseContextMenu{std::nullopt});
+    expect(chosen.operation_request == core::EditorOperation::select_all,
+           "Enter runs the chosen row");
+}
+
+void verify_close()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    prepare_line(controller);
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    static_cast<void>(controller.apply(app::CloseContextMenu{}));
+    expect(!controller.context_menu_active(), "Esc and the outside click close the menu");
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    static_cast<void>(controller.apply(app::VisibleLines{5, core::TextViewGeometry{400, 20, 96}}));
+    expect(controller.context_menu_active(), "an intent that is not an operation keeps the menu");
+    static_cast<void>(controller.apply(app::ScrollLines{1}));
+    expect(!controller.context_menu_active(), "the wheel and any other operation close the menu");
+    static_cast<void>(controller.apply(app::VimKeyPress{core::VimKey{core::VimCharacter{U'x'}}}));
+    static_cast<void>(controller.apply(app::SelectEditMode{core::EditMode::vim}));
+    static_cast<void>(controller.apply(app::VimKeyPress{core::VimKey{core::VimCharacter{U':'}}}));
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    expect(!controller.context_menu_active(), "the menu does not open over the input line");
+}
+
+[[nodiscard]] Editing &vim_line(Editing &editing)
+{
+    prepare_line(editing.controller());
+    static_cast<void>(editing.controller().apply(app::SelectEditMode{core::EditMode::vim}));
+    return editing;
+}
+
+void press_keys(app::EditorController &controller, std::u32string_view keys)
+{
+    for (const char32_t key : keys)
+    {
+        static_cast<void>(
+            controller.apply(app::VimKeyPress{core::VimKey{core::VimCharacter{key}}}));
+    }
+}
+
+void verify_vim_normal()
+{
+    Editing editing;
+    auto &controller = vim_line(editing).controller();
+    press_keys(controller, U"l");
+    const auto frame = controller.apply_frame(right_click(55.0F));
+    const auto &view = frame.context_menu.value_or(app::ContextMenuView{});
+    expect(caret_column(controller) == 2, "vim keeps the caret when the menu opens");
+    expect(!view.rows.at(cut_row).enabled && !view.rows.at(copy_row).enabled &&
+               view.rows.at(paste_row).enabled && view.rows.at(paste_row).key == "\"+p" &&
+               view.rows.at(delete_row).key == "x" && view.rows.at(select_all_row).key == "ggVG",
+           "vim normal shows the normal keys and disables cut and copy");
+    editing.clipboard().hold(Content{"XY"});
+    const auto text = applied(controller, app::ChooseContextMenu{paste_row});
+    expect(text == "abXYc def" && editing.clipboard().reads() == 1 &&
+               !controller.frame().operation_request.has_value(),
+           "paste runs \"+p through the engine and reads the clipboard once");
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    expect(applied(controller, app::ChooseContextMenu{delete_row}) == "abXc def",
+           "delete runs x in vim normal");
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    const auto all = controller.apply_frame(app::ChooseContextMenu{select_all_row});
+    expect(all.vim_mode == core::VimMode::visual_line, "select all runs ggVG");
+}
+
+void verify_vim_visual()
+{
+    Editing editing;
+    auto &controller = vim_line(editing).controller();
+    press_keys(controller, U"vl");
+    const auto frame = controller.apply_frame(right_click(5.0F));
+    const auto &view = frame.context_menu.value_or(app::ContextMenuView{});
+    expect(view.rows.at(copy_row).enabled && view.rows.at(copy_row).key == "\"+y" &&
+               view.rows.at(cut_row).key == "\"+d" &&
+               view.rows.at(select_all_row).key == "<Esc>ggVG",
+           "vim visual shows the visual keys");
+    const auto copied_frame = controller.apply_frame(app::ChooseContextMenu{copy_row});
+    expect(copied(editing) == "ab" && copied_frame.vim_mode == core::VimMode::normal,
+           "copy runs \"+y on the visual selection");
+    press_keys(controller, U"vl");
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    expect(applied(controller, app::ChooseContextMenu{cut_row}) == "c def" &&
+               copied(editing) == "ab",
+           "cut runs \"+d on the visual selection");
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    const auto all = controller.apply_frame(app::ChooseContextMenu{select_all_row});
+    expect(all.vim_mode == core::VimMode::visual_line, "select all from normal is visual line");
+}
+
+void verify_vim_insert()
+{
+    Editing editing;
+    auto &controller = vim_line(editing).controller();
+    press_keys(controller, U"i");
+    const auto frame = controller.apply_frame(right_click(5.0F));
+    const auto &view = frame.context_menu.value_or(app::ContextMenuView{});
+    expect(view.rows.at(paste_row).key == "Ctrl+V" && view.rows.at(5).key.empty(),
+           "vim insert shows the ordinary clipboard keys");
+    const auto chosen = controller.apply_frame(app::ChooseContextMenu{paste_row});
+    expect(chosen.operation_request == core::EditorOperation::paste,
+           "vim insert hands the operation to run_operation like the keys");
+}
+
+// 表の Vim の鍵の列は全部 map の行と同じ読み手で読める（読めない列は何も流さない）。
+void verify_vim_columns_parse()
+{
+    for (const auto &text : core::operation_texts)
+    {
+        for (const auto keys : {text.vim_normal_keys, text.vim_visual_keys})
+        {
+            expect(keys.empty() || core::vim_keys_of_notation(keys).has_value(),
+                   "every vim key column of the menu parses as key notation");
+        }
+    }
+}
 } // namespace
 
 void verify_context_menu_scope()
@@ -186,5 +444,13 @@ void verify_context_menu_scope()
     verify_layout_size();
     verify_layout_place();
     verify_hit();
+    verify_open_ordinary();
+    verify_keep_selection();
+    verify_choose_and_step();
+    verify_close();
+    verify_vim_normal();
+    verify_vim_visual();
+    verify_vim_insert();
+    verify_vim_columns_parse();
 }
 } // namespace nenenib::tests

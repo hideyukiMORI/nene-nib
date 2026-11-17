@@ -22,7 +22,10 @@ struct OperationText
     std::optional<UiMessage> short_name{};
     // 本文の右クリックのメニューの置き場（ADR 0078 の追補 #1051）。無ければメニューに載らない。
     std::optional<ContextMenuSlot> context_menu{};
-    // Vim のモードでメニューの行の右端に見せる Vim の鍵（`y` `ggVG` など）。無ければ空。訳さない。
-    std::string_view vim_hint{};
+    // Vim の NORMAL と VISUAL でメニューから選ぶと engine に流す鍵の列（鍵の記法・`"+y`
+    // `<Esc>ggVG`）。
+    // 行の右端の鍵の表示も同じ文字列。空ならそのモードでは薄く出して選べない。訳さない。
+    std::string_view vim_normal_keys{};
+    std::string_view vim_visual_keys{};
 };
 } // namespace nenenib::core

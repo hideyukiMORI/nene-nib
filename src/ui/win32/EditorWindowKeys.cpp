@@ -144,6 +144,11 @@ constexpr char32_t tab_character = U'\t';
 
 LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
 {
+    // 右クリックのメニューが開いている間の鍵と文字はメニューへ（#1051）。
+    if (take_context_menu_key(message, word))
+    {
+        return 0;
+    }
     // 鍵の 3 通とフォーカスを失ったとき。Ctrl を離したとき・フォーカスを失ったときは、歩いて
     // いれば使った順を確定してから OS の既定処理へ渡す（ADR 0058 の決定 4）。
     switch (message)
@@ -151,7 +156,7 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
     case WM_KEYDOWN:
         // 面の幅のドラッグ中の Esc は押す前の幅へ戻すだけ（Issue #1413）。ミニマップのドラッグ中の
         // Esc はドラッグを終えるだけ（ADR 0171 の決定 5 の追補）。
-        if (word == VK_ESCAPE && (take_explorer_escape(data) || take_minimap_escape(data)))
+        if (take_drag_escape(word, data))
         {
             return 0;
         }
@@ -186,6 +191,12 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
         break;
     }
     return DefWindowProcW(window_, message, word, data);
+}
+
+// ドラッグ中の Esc（面の幅とミニマップ）を受けたか。
+bool EditorWindow::take_drag_escape(WPARAM word, LPARAM data)
+{
+    return word == VK_ESCAPE && (take_explorer_escape(data) || take_minimap_escape(data));
 }
 
 // 歩いていないときは意図を送らない（Ctrl+C などのたびに描き直さない・決定 4）。

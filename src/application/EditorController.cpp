@@ -578,7 +578,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
 
 // 写す前に、意図をまたいで覚えた印のうち、この意図が保たないものを捨てる。上下の移動の狙いの
 // 横位置（keeps_wanted_x）と、エクスプローラーのダブルクリックの 2 打目と組む節
-// （keeps_explorer_click・#1388）。
+// （keeps_explorer_click・#1388）と、開いている右クリックのメニュー（#1051）。
 void EditorController::forget_unkept_marks(const EditorIntent &intent)
 {
     if (!keeps_wanted_x(intent))
@@ -589,6 +589,8 @@ void EditorController::forget_unkept_marks(const EditorIntent &intent)
     {
         explorer_clicked_.reset();
     }
+    // 右クリックのメニューも、メニューの意図と使う人の操作でない意図のほかで閉じる（#1051）。
+    close_context_menu_before(intent);
 }
 
 // `map` の待ちの鍵は、待ちを保つ意図のほかは受ける前に流す（ADR 0176 の決定 4）。
@@ -1295,6 +1297,7 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     add_minimap(result);
     add_diagnostics(result);
     result.start_screen = start_screen_view();
+    result.context_menu = context_menu_view();
 }
 
 std::optional<SyntaxStateCache> &EditorController::syntax_cache(core::PaneSide side) noexcept

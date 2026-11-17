@@ -104,13 +104,26 @@
 2. Vim の `:ve[rsion]`（最短 `ve`・Vim と同じ）は Ex の表 `command_parsers` に 1 行（`version_command`）で、答えの文が同じ 1 行（同じ `app_about_line`）。Vim の `:version` は版と機能の一覧を複数行で出すが、Nib は 1 行の知らせ（違いとしてここに書く）。引数・`!`・範囲は `unsupported_argument`。Ctrl+P の面の `:` の候補にも `version` が出る（`fixed_candidates`）。再生の中では知らせを置くだけ。
 3. 文は訳さない（名前・版・`©`・名前・場所）。訳すのは操作の名前と説明だけ（`UiMessage` に 2 値・3 列に 1 行ずつ・最後の値は動かない）。
 
-## 追補（2026-11-17・#1051 段 1・下書き: 実装席 C・設計席の受理待ち）: 切り取り・コピー・貼り付け・削除・すべて選択を表へ移し、メニューの項目の列と配置を core に置く
+## 追補（2026-11-17・#1051・下書き: 実装席 C・設計席の受理待ち）: 本文の右クリックのメニュー
 
-2026-10-29 の追補を、設計席の依頼書（2026-11-17）の形に合わせて実装した段 1。メニューを開く・描く・選ぶ（application の状態と意図・ui の右クリックと Shift+F10 とメニューキー・描画と当たり・画素の組）は段 2。
+2026-10-29 の追補を、設計席の依頼書（2026-11-17）と段 1 の後の決め（Vim のモードでも項目を使える）の形で実装した。
 
 1. `EditorOperation` の最後に `cut` `copy` `paste` `delete_selection` `select_all` の 5 値を足す（`UiMessage` に名前と説明の 10 値を `operation_search_project_description` の後ろに・3 列に 1 行ずつ・最後の値は動かない・読み「きりとり」「こぴー」「はりつけ」「さくじょ」「すべてせんたく」）。F1 の一覧にも載る（通常 45・Vim 43 件）。
-2. 鍵の行は通常モードの Ctrl+X / Ctrl+C / Ctrl+V・Delete・Ctrl+A（`OperationKey` に `x` `c` `a` `delete_key` を足す・`key_chord_label` は表引きにした）、Vim は鍵の無い行。**ui の `operation_chord` はこの鍵を写さない**（Shift なしの Ctrl+V も写さなくした）。鍵を受ける道は今の `press_control_key` と `press_plain_key` のままで、そこから `run_operation` の 1 本へ渡す。写すと表の引きが Vim の Ctrl の表（INSERT の Ctrl+V / A / X と NORMAL の数の増減・矩形）とエクスプローラーの焦点より前に来て振る舞いが変わるため（Ctrl+T / W / D / Tab を `TabShortcut` と `BookmarkKey` の道で受けるのと同じ形）。表の鍵は一覧とメニューの表示に使う。Ctrl+Insert / Shift+Insert / Shift+Delete は `clipboard_key_for` のまま。
-3. `operation_texts` の行に列 `context_menu`（`std::optional<ContextMenuSlot>`・群と群の中の順と「使えるために要るもの」`ContextMenuNeed`）と `vim_hint`（`std::string_view`・無ければ空）を足す。2026-10-29 の追補の `std::optional<std::uint8_t>` は、区切り線（群）と使えるかの条件も同じ表に持つためにこの形にした。載るのは 切り取り（d）・コピー（y）・貼り付け（p）・削除（x）｜すべて選択（ggVG）｜検索（/）・置換（:s）の 7 つ（依頼書の決め。2026-10-29 の追補の「行へ移動」と「Markdown プレビュー」は載せない）。
-4. 項目の列は core の `context_menu_items(ContextMenuSituation{mode, selected, editable})` の 1 本で、群の変わり目の行に区切り線の印を立てる。使えるかは `need`: `selection`（コピー）は選択があること、`editable`（貼り付け・すべて選択）は通常モードか Vim の INSERT で全面プレビューでないこと、`editable_selection`（切り取り・削除）は両方、`nothing`（検索・置換）はいつでも。クリップボードは開くたびに読まない（空の貼り付けは試して今の知らせ）。鍵の表示は `context_menu_key(operation, mode)`（通常は `shown_chord` → `key_chord_label`、Vim は `vim_hint`）。
-5. 配置は core の `context_menu_layout(ContextMenuRequest)` の 1 本で、描画と当たり（`context_menu_hit`）が同じ矩形を読む。行 30 DIP・左右の余白 12 DIP・最小の幅 200 DIP・区切り線は 1 DIP で上下 4 DIP の空き・面の上下の内側の空き 4 DIP・名前と鍵の間の空き 24 DIP（最後の 2 つは席の決め）。幅は ui が測った名前と鍵の最も広い幅から。開く点から右下へ開き、収まらなければ点から左・上へ、どちらにも入らなければ遠い端に寄せる。
-6. 試験: `nib_tests --context-menu`（項目の順と区切り・使える / 使えないの 6 つの状況・通常と Vim の鍵の表示・寸法と DPI・収め方・当たり）と `--operations` の表の期待値。
+2. 鍵の行は通常モードの Ctrl+X / Ctrl+C / Ctrl+V・Delete・Ctrl+A（`OperationKey` に `x` `c` `a` `delete_key` を足す・`key_chord_label` は表引きにした）、Vim は鍵の無い行。**ui の `operation_chord` はこの鍵を写さない**（Shift なしの Ctrl+V も写さなくした）。鍵を受ける道は今の `press_control_key` と `press_plain_key` のままで、そこから `run_operation` の 1 本へ渡す。写すと表の引きが Vim の Ctrl の表（INSERT の Ctrl+V / A / X と NORMAL の数の増減・矩形）とエクスプローラーの焦点より前に来て振る舞いが変わるため（Ctrl+T / W / D / Tab を `TabShortcut` と `BookmarkKey` の道で受けるのと同じ形）。表の鍵は一覧とメニューの表示に使う。
+3. `operation_texts` の行に列 `context_menu`（`std::optional<ContextMenuSlot>`・群・群の中の順・通常モードで使えるために要るもの `ContextMenuNeed`）と、Vim の NORMAL と VISUAL の鍵の列 `vim_normal_keys` `vim_visual_keys`（鍵の記法の `std::string_view`・空はそのモードで使えない）を足す。2026-10-29 の追補の `std::optional<std::uint8_t>` と `vim_hint` は、区切り線と使えるかの条件と Vim のモードの実行を同じ表に持つためにこの形にした。載るのは次の 7 つ（「行へ移動」と「Markdown プレビュー」は載せない）。
+
+   | 項目 | 通常の鍵 | 通常で要るもの | Vim NORMAL | Vim VISUAL |
+   | --- | --- | --- | --- | --- |
+   | 切り取り | Ctrl+X | 選択と書き換え | （薄い） | `"+d` |
+   | コピー | Ctrl+C | 選択 | （薄い） | `"+y` |
+   | 貼り付け | Ctrl+V | 書き換え | `"+p` | `"+p` |
+   | 削除 | Delete | 選択と書き換え | `x` | `d` |
+   | すべて選択 | Ctrl+A | 書き換え | `ggVG` | `<Esc>ggVG` |
+   | 検索 | Ctrl+F | なし | `/` | `/` |
+   | 置換 | Ctrl+H | なし | `:s` | `:s` |
+
+4. 開いた所の種類 `ContextMenuMode` は 5 つ: 通常モード・全面プレビュー（`reading`・選択の要る項目＝コピーだけ）・Vim の INSERT（通常モードと同じ意図と鍵の表示・検索と置換の鍵は出さない）・Vim の NORMAL・VISUAL（3 つの VISUAL）。項目の列は core の `context_menu_items(ContextMenuSituation{mode, selected})` の 1 本、鍵の表示は `context_menu_key`、流す鍵は `context_menu_vim_keys`。クリップボードは開くたびに読まない。
+5. 実行: Vim の NORMAL と VISUAL は表の鍵の列を `vim_keys_of_notation`（map の行と同じ読み手を公開した）で鍵にし、map の右辺と同じ `delivered_keys` で engine に流す（`"+` は `step_vim` の直前に `ClipboardPort` から写す・ADR 0051・失敗は知らせ・ADR 0134）。`.` と録画は Vim で同じ鍵を打ったときと同じ。ほかのモードは `operation_request` を立て、ui の `run_operation` の 1 本（鍵と F1 の一覧と同じ）。
+6. 配置は core の `context_menu_layout(ContextMenuRequest)` の 1 本で、描画と当たりが同じ矩形を読む（renderer が描いた配置を覚え、窓は `context_menu_row_at` と `context_menu_covers` で引く）。行 30 DIP・左右の余白 12 DIP・最小の幅 200 DIP・区切り線は 1 DIP で上下 4 DIP の空き・面の上下の内側の空き 4 DIP・名前と鍵の間の空き 24 DIP。幅は描画と同じ書式で測った名前と鍵の最も広い幅から。開く点から右下へ開き、収まらなければ点から左・上へ、どちらにも入らなければ遠い端に寄せる。見た目は `ContextMenuPainter`（地 `panel`・縁 1 DIP の `panel_border`・角丸 10 DIP・選んだ行は `selection` の 6 DIP の角丸を行の左右 4 DIP の内側に・使えない名前と鍵の表示は `muted`・名前は面の行の書式・鍵は面の右端の鍵の書式で右寄せ・影なし）。
+7. 開く・閉じる: 本文の右の押しと離しが操作中の枠の本文の中のとき離しで開く（`OpenContextMenu{x, y, pointed}`）。通常モードで点が選択の外なら開く前にクリックと同じ道（`pointed_caret` を `accept(PointText)` と共用）でキャレットを置き、選択の中と Vim のモードは動かさない。Shift+F10 とメニューキーは `WM_CONTEXTMENU`（lParam が -1）で、キャレットの矩形の左下に開く。開いている間の鍵は上下（使える行を回り込む）・Enter・Esc だけで、ほかの鍵と文字は捨てる。マウスは載せた行（`PointContextMenu`）・メニューの上の左の離しで実行・外の押しは閉じるだけ（本文へ渡さない）。焦点を失うと閉じる。ほかの使う人の操作の意図（ホイール・タブ…）は controller の入口の 1 か所 `close_context_menu_before` が写す前に閉じる（使う人の操作でない意図は保つ）。メニューの 5 つの意図は使う人の操作なので `keeps_tab_walk` と `begin_intent` の表には書かず、全面プレビューの間も通す（`passes_full_preview`）。
+8. 試験: `nib_tests --context-menu`（core: 項目の順と区切り・使える / 使えないの 9 つの状況・4 つのモードの鍵の表示と流す鍵・寸法と DPI・収め方・当たり。application: 開く・選択の外のキャレット・選択を保つ・選ぶと operation_request が 1 意図・上下と載せ・閉じる意図・入力行の間は開かない・Vim NORMAL の `"+p` と `x` と `ggVG`・VISUAL の `"+y` と `"+d`・INSERT・表の列が全部読める）と `--operations` の表の期待値。`nib_window_tests --context-menu`（画素・ダークとライト）と `--standard-keys`（表の鍵を写さない）。

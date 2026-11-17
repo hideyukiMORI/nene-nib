@@ -95,7 +95,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/EditorControllerTabs.cpp src/application/EditorControllerCommand.cpp src/application/EditorControllerPalette.cpp src/application/EditorControllerProjectSearch.cpp
     src/application/EditorControllerAutosave.cpp src/application/EditorControllerPreview.cpp src/application/EditorControllerDetail.cpp
     src/application/PreviewImages.cpp
-    src/application/EditorControllerExplorer.cpp src/application/EditorControllerShell.cpp src/application/EditorControllerStartScreen.cpp src/application/EditorControllerEasyMotion.cpp src/application/EasyMotionLabels.cpp
+    src/application/EditorControllerExplorer.cpp src/application/EditorControllerShell.cpp src/application/EditorControllerContextMenu.cpp src/application/EditorControllerStartScreen.cpp src/application/EditorControllerEasyMotion.cpp src/application/EasyMotionLabels.cpp
     src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
     src/application/AutosavePlan.cpp src/application/PasteKind.cpp src/application/VimEndOfLine.cpp
     src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp src/application/DocumentDecoding.cpp
@@ -480,10 +480,10 @@ set_tests_properties(nib_adapters_last_resort PROPERTIES TIMEOUT 180)
 
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/MotionLabelBox.cpp src/ui/win32/InputLinePromptText.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorWindowDetail.cpp src/ui/win32/EditorWindowLifecycle.cpp src/ui/win32/EditorWindowPointer.cpp src/ui/win32/EditorWindowKeys.cpp
-    src/ui/win32/EditorWindowOperations.cpp src/ui/win32/EditorWindowIme.cpp src/ui/win32/EditorWindowExplorer.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
+    src/ui/win32/EditorWindowOperations.cpp src/ui/win32/EditorWindowContextMenu.cpp src/ui/win32/EditorWindowIme.cpp src/ui/win32/EditorWindowExplorer.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
     src/ui/win32/FileFailureText.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FallbackSegmentMemo.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
-    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/KeycapPainter.cpp src/ui/win32/StartScreenPainter.cpp src/ui/win32/ExplorerShapes.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp src/ui/win32/WindowCorners.cpp src/ui/win32/WindowBackdrop.cpp
+    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/KeycapPainter.cpp src/ui/win32/StartScreenPainter.cpp src/ui/win32/ContextMenuPainter.cpp src/ui/win32/ExplorerShapes.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp src/ui/win32/WindowCorners.cpp src/ui/win32/WindowBackdrop.cpp
     src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewMetrics.cpp
     src/ui/win32/PreviewPane.cpp src/ui/win32/MinimapPicture.cpp src/ui/win32/FullPreviewBody.cpp src/ui/win32/SaveQuestion.cpp
     src/ui/win32/PreviewInlineImages.cpp src/ui/win32/PreviewImageObject.cpp src/ui/win32/PreviewBitmaps.cpp
@@ -523,7 +523,8 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/StandardKeyTests.cpp
     tests/ui/WordDeletionKeyTests.cpp tests/ui/PreviewImagePaintTests.cpp
     tests/ui/StartScreenPaintTests.cpp tests/ui/WindowCornerTests.cpp tests/ui/WindowBackdropTests.cpp
-    tests/ui/LanguageTextTests.cpp tests/ui/ProjectHitPaintTests.cpp)
+    tests/ui/LanguageTextTests.cpp tests/ui/ProjectHitPaintTests.cpp
+    tests/ui/ContextMenuPaintTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)
