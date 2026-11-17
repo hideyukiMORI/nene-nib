@@ -1,9 +1,12 @@
-# Microsoft Store の申請の手順と申告の答え — NeNe Nib 1.0.0
+# Microsoft Store の申請の手順と申告の答え — NeNe Nib 1.0.0（初回）と 1.1.0（更新）
 
 > Issue #1582・施主決定 D88。Partner Center への入力・自己署名での確かめ・WACK・申請は hide の手（管理者権限が要る）。
 > ここは欄ごとの答えと順番の正本。掲載文は [listing.md](listing.md)、画像は [screenshots.md](screenshots.md)、
 > プライバシーポリシーは [PRIVACY.md](../../PRIVACY.md)。
 > 形は NeNe Loupe（`docs/release/store-listing.md`・2026-10-03 申請・10-04 公開）と NeNe Folio（`docs/release/store-listing/`）に合わせた。
+> 1.0.0 は 2026-11-15 に初回の申請（Submission 1）をして、Store で公開された（[公開の記録](../quality/release-1.0.0-2026-11-14.md)）。
+> 1.1.0 は同じ製品の「更新」の申請（#1815・下の「1.1.0 の更新の申請」）。欄の答えは 1.0.0 と同じで、変わるのはパッケージと
+> 掲載文（説明・製品の機能・このバージョンの新機能）だけ。
 
 ## 身元（Partner Center で予約済み・2026-11-12 夜・hide の手）
 
@@ -15,7 +18,7 @@
 | Publisher | `CN=C37230AA-B52D-403B-9BFD-E7980F088422`（Loupe・Folio と同じ） |
 | PublisherDisplayName | `Hideyuki Mori` |
 | Package Family Name | `HideyukiMori.NeNeNib_3sft4ch5kzywy` |
-| 版 | `1.0.0.0`（D88・`project()` の `1.0.0` に `.0`）。GitHub の ZIP も同じ素の版 `1.0.0`（tag `v1.0.0`）で、試験版であることは Release の題の「Beta」と pre-release の印で示す（#1596）。同じ版の作り直しはせず、配り直すときは版を上げる |
+| 版 | 1.1.0 は `1.1.0.0`（`project()` の `1.1.0` に `.0`・GitHub の ZIP は素の `1.1.0`・tag `v1.1.0`）。1.0.0 は `1.0.0.0`（D88・`project()` の `1.0.0` に `.0`）。GitHub の ZIP も同じ素の版 `1.0.0`（tag `v1.0.0`）で、1.0.0 は試験版であることを Release の題の「Beta」と pre-release の印で示した（#1596）。1.1.0 から GitHub の Release は Beta の題と pre-release の印を付けない（#1815）。同じ版の作り直しはせず、配り直すときは版を上げる |
 
 予約は申請しないまま 3 か月で外れる（SPECIFICATION の D88）。
 
@@ -66,7 +69,8 @@
 | Web の内容を制限なく表示する（ブラウザ） | いいえ | Web のページを開くコードが無い。Markdown プレビューは `http` / `https` の画像を取りに行かない | `src/core/ImageReference.cpp` |
 
 **答え直す条件**: 更新で通信・利用者同士のやり取り・購入や広告・Web の内容の表示のどれかを足すときは、アンケートを答え直す
-（Loupe の記録の IARC の通知の条項）。
+（Loupe の記録の IARC の通知の条項）。1.1.0 はどれも足さない（全文検索とプレビュー欄は端末の中のファイルを読むだけで、
+アプリは通信しない・PRIVACY.md）ので答え直さない。
 
 ### プライバシーの設問
 
@@ -100,7 +104,7 @@ WACK の任意の試験で FAIL や WARNING が出たら、その試験の名前
 
 ### このバージョンの新機能
 
-初回の申請では空欄（Microsoft の文書）。
+初回の申請（1.0.0）では空欄にした（Microsoft の文書）。1.1.0 の文は [listing.md](listing.md) の各言語の節（「このバージョンの新機能」）。
 
 ## 申請までの順番
 
@@ -132,9 +136,26 @@ WACK の任意の試験で FAIL や WARNING が出たら、その試験の名前
 | 保存（任意のフォルダ・一時ファイルの置き換え） | 保存できる | ADR 0135 |
 | 印刷（F1） | 印刷の窓が出る | XPS の印刷 |
 
+## 1.1.0 の更新の申請（#1815）
+
+1.0.0 の順 1〜9 の形（上の表）を 1.1.0 の本番の物で繰り返す。手は `D:/NeNeNib/evidence/v1.1.0-release/hide-checklist.md`、
+手順と道具は同じ folder の `README.md`。
+
+| 順 | 誰 | すること | 状態 |
+| --- | --- | --- | --- |
+| U1 | 席 | 版を `1.1.0` に上げ、README・PRIVACY.md・掲載文・公開の記録の下書きを今の main に合わせる | この文書の PR（#1815） |
+| U2 | 設計席 | 公開元の main（U1 の PR の merge の後の commit）で ZIP と `-Store` の MSIX を作る | 未 |
+| U3 | hide | 自己署名で入れて試す（packaged の確かめ・1.1.0 で増えた機能・1.0.0 の設定とタブを読めること）→ 外す → WACK | 未 |
+| U4 | hide | Partner Center で「更新」の申請を作り、パッケージを 1.1.0.0 に差し替え、掲載文の 3 欄を貼って提出 | 未 |
+| U5 | 設計席 | 認定の後に公開の記録（`docs/quality/release-1.1.0-2026-11-17.md`）の「梱包」「GitHub の公開」「Microsoft Store の提出」「公開の結果」を埋める | 未 |
+
+確かめていないこと（1.1.0）: Partner Center の「更新」の申請で、1.0.0.0 のパッケージを外して 1.1.0.0 を上げる画面の手順と、
+前の申請から写される欄（1.0.0 の申請の値を引き継ぐか）。Loupe と Folio の更新の記録はこのリポジトリに無い。
+Store から 1.0.0 を入れた PC に、自己署名の 1.1.0 を `Add-AppxPackage` で上書きできるか（署名が違う）。
+
 ## 出力の置き場（#1581 の道具の形）
 
-- リポジトリの外の `D:\NeNeNib\releases\v1.0.0\` に置く（道具は `D:/NeNeNib/releases`・`D:/NeNeNib/outputs` の下の新しいディレクトリにだけ書く）。
+- リポジトリの外の `D:\NeNeNib\releases\v<x.y.z>\`（1.0.0 は `v1.0.0`・1.1.0 は `v1.1.0`）に置く（道具は `D:/NeNeNib/releases`・`D:/NeNeNib/outputs` の下の新しいディレクトリにだけ書く）。
   - `zip\NeNeNib-1.0.0-windows-x64.zip`・`SHA256SUMS`・`package.json`（`eng/package-release.ps1` の出力）
   - `msix\NeNeNib-1.0.0.0-windows-x64-store.msix`・`SHA256SUMS`・`msix.json`・`layout\` `work\` `unpacked\`（`eng/package-msix.ps1 -Store` の出力。名前の版は manifest の Identity の Version と同じ 4 つ組で、`v` は付かない）
   - `wack\`（WACK の報告）

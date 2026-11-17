@@ -1,25 +1,28 @@
-# Microsoft Store の掲載文 — NeNe Nib 1.0.0
+# Microsoft Store の掲載文 — NeNe Nib 1.1.0
 
 > Issue #1582・施主決定 D88。Partner Center への入力は hide が行う。ここは入力する文面の正本である。
 > 欄の上限は [Microsoft の文書](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/add-and-edit-store-listing-info)
 > （2026-11-13 に読んだ）と、NeNe Loupe の入力で分かったこと（Loupe の `docs/release/store-listing.md`）に合わせた。
 > 申請の手順と申告の答えは [submission.md](submission.md)、スクリーンショットは [screenshots.md](screenshots.md)。
 
-製品名 `NeNe Nib`・Store ID `9NCLGDTFQ529`・発行者の表示名 `Hideyuki Mori`・版 1.0.0（GitHub の ZIP も同じ素の版 `1.0.0` で、試験版であることは Release の題の「Beta」と pre-release の印で示す・#1596）。
+製品名 `NeNe Nib`・Store ID `9NCLGDTFQ529`・発行者の表示名 `Hideyuki Mori`・版 1.1.0（Store の版は `1.1.0.0`。1.0.0 は 2026-11-15 に初回の申請をして公開済みで、1.1.0 は「更新」の申請・#1815。GitHub の ZIP も同じ素の版 `1.1.0`）。
 掲載の言語は日本語・英語・中国語（簡体字）の 3 つ（D88）。
 
 ## 書き方の約束
 
 - 各文は README の「What works today」と突き合わせた。**README に無い機能は書かない。** 予定の機能（補完・設定画面・
-  プロジェクト全体の検索・エディタの中の右クリックのメニュー）は書かない。`:s` は beta.13 から入ったので、この一覧から外し、
-  「ご注意」に今ある形（`:s` `:&` `&` `g&`）とまだ無い形（確認の `c` フラグ・`:g`・`:sort`）を書いた（#1655）。
-- F1「Windows の右クリックに登録する」は掲載文に書かない。Store 版（MSIX）では書き込みがパッケージ専用の場所に写って
-  エクスプローラーに出ない見込みで、まだ実機で確かめていない（submission.md の順 5・#1655）。
+  タブの右クリックのメニュー）は書かない。1.1.0 で入ったプロジェクトの全文検索・プレビュー欄・本文の右クリックのメニュー・
+  イージーモーション・タブの札・自動の字下げは説明と製品の機能に足し、「ご注意」の `:s` の族は 1.1.0 の形（`c` フラグ・
+  `:d` `:y`・`:g` `:v` の `d` と `s` は有り、ほかの `:g` と `:sort` は無し）に直した（#1815）。
+- F1「Windows の右クリックに登録する」は掲載文に書かない。Store 版（MSIX）ではエクスプローラーに出ないことを 1.0.0 で
+  実機で確かめ（submission.md の「packaged の実機の確かめ」）、1.1.0 から Store 版の F1 の一覧に出さない（#1809）。
 - 説明の欄には HTML・コード例・URL を入れない（Microsoft の文書）。サポートとプライバシーの URL は専用の欄に入れる。
 - 製品の機能の各項目には箇条書きの記号を付けない（Store が付ける）。
 - 最上級（「最速」「fastest」）を使わない。速さは測った値と、測った機械を添えて書く（脚注 [^speed]）。
-- **貼る前の確かめ**: 「表示は日本語・英語・中国語（簡体字）」の文は、表示言語（#1019）が main に入り（T1・beta.13 で公開済み）、申請する 1.0.0 の exe で
-  3 言語が切り替わることを確かめてから貼る。切り替わらなければ、その文を「表示は日本語と英語」などの事実に直す。
+- **貼る前の確かめ**: 「表示は日本語・英語・中国語（簡体字）」の文は 1.0.0 で確かめた。1.1.0 でも表示言語は同じ 3 つ
+  （韓国語・スペイン語・ドイツ語は後の版・施主決定 D100）。
+  新しく足した文（全文検索・プレビュー欄・右クリックのメニュー・イージーモーション）は、申請する 1.1.0 の exe で動くことを
+  施主の試用（`D:/NeNeNib/evidence/v1.1.0-release/hide-checklist.md`）で確かめてから貼る。
 - 「通常」の言い方は施主決定 D89（画面の名前は英語 `Basic`・中国語 `标准`）。中国語の文は画面と同じ `标准编辑` と書き、`普通` を使わない（Vim の「普通模式」と紛れる）。英語の説明の文は画面の名前を引かない所なので ordinary editing のまま。
 - 端末の表示からではなく、このファイルをエディタで開いてコピーする（端末からは折り返しの位置に改行が入る）。
 
@@ -27,11 +30,11 @@
 
 | 欄 | 上限 | この原稿 |
 | --- | --- | --- |
-| 説明 | 10,000 文字・必須・平文 | 日本語 約 1,300・英語 約 2,500・中国語 約 1,100 文字（#1655 で数え直した） |
+| 説明 | 10,000 文字・必須・平文 | 1.1.0 の文で数え直した値は `D:/NeNeNib/evidence/v1.1.0-release/store-listing/counts.md`（#1815） |
 | 短い説明 | 1,000 文字（表示は最初の 270 文字。270 未満を推奨） | 各言語 270 文字未満 |
-| 製品の機能 | 1 項目 200 文字・20 項目まで | 各言語 14 項目 |
+| 製品の機能 | 1 項目 200 文字・20 項目まで | 各言語 17 項目（1.1.0 で 3 項目足した） |
 | 検索語 | 7 個・各 40 文字・全体で 21 単語（Loupe の入力画面の表示） | 各言語 7 個 |
-| このバージョンの新機能 | 1,500 文字。**初回の申請では空欄にする**（Microsoft の文書） | 空欄。下の文は 1.1.0 以後の書き方の控え |
+| このバージョンの新機能 | 1,500 文字。初回の申請（1.0.0）では空欄にした（Microsoft の文書） | 1.1.0 の文（各言語 1,500 文字未満・数は counts.md） |
 | スクリーンショットの説明 | 200 文字 | screenshots.md |
 
 ---
@@ -64,6 +67,9 @@ NeNe Nib は、Windows 11 のための軽いテキストエディタです。1 �
 ■ Markdown プレビュー
 Ctrl+Shift+M で、編集中の Markdown を隣の欄に整えて表示します。もう一度押すと全面の表示、さらに押すと閉じます。端末の中の画像（PNG・JPEG・GIF の最初のコマ・BMP）を本文の流れの中に表示し、タスクリストのチェックボックスはクリックで切り替えられます。
 
+■ プロジェクトの全文検索とプレビュー
+Ctrl+Shift+F で、エクスプローラーの起点のフォルダ（無ければ開いている文書のフォルダ）の下のファイルを全文検索します。打つたびに探し直し、見つかった行が届いた順に並びます。Enter でそのファイルのその行を開きます。Ctrl+P の一覧では、選んだ候補の中身を右か下のプレビュー欄に表示します（Ctrl+Shift+P で右・下・なしを切り替え）。
+
 ■ そのほかの機能
 ・タイトルバーのタブ。次の起動で前回のタブが戻ります
 ・Ctrl+P で、開いているタブ・ブックマーク・最近閉じたファイル・同じフォルダのファイルをまとめて探せます
@@ -74,7 +80,11 @@ Ctrl+Shift+M で、編集中の Markdown を隣の欄に整えて表示します
 ・UTF-8・Shift_JIS・UTF-16 と、CRLF・LF を読んだ形のまま保存
 ・日本語入力（IME）に対応
 ・30 秒ごとの自動退避。異常終了の後に 1 回だけ戻すかを聞きます
-・F1 の一覧から、ファイル・タブ・表示・文字コード・検索・印刷などの操作を探して実行（Vim の鍵とコピー・貼り付けは一覧の外）
+・F1 の一覧から、ファイル・タブ・表示・文字コード・検索・印刷などの操作を探して実行（Vim の鍵は一覧の外）
+・本文の右クリックのメニュー（切り取り・コピー・貼り付け・削除・すべて選択・検索・置換）。Vim のモードでも使えます
+・タブにマウスを載せると、そのファイルのフルパスを小さな札で表示
+・Vim のイージーモーション: バックスラッシュを 2 回打ってから w・b・e・j・k・l や f・F・s と文字を打つと、見えている跳び先に小さな札が出て、札の文字を打つとそこへ跳びます
+・Vim の自動の字下げ（:set autoindent）
 ・言語サーバーの診断（既定はオフ。設定に書いたサーバーを起動します）
 
 ■ プライバシー
@@ -84,8 +94,9 @@ Ctrl+Shift+M で、編集中の Markdown を隣の欄に整えて表示します
 ・動作環境: Windows 11（22H2 以降・x64）。Windows 10 には対応していません。
 ・表示は日本語・英語・中国語（簡体字）です。
 ・言語サーバーは診断の表示だけで、補完・ホバー・定義へ移動はまだありません。
-・Vim の置換（:s・:&・&・g&）に対応しています。1 件ずつ確かめながら置換する c フラグ、:g、:sort はまだありません。
-・プロジェクト全体の検索、設定の画面、エディタの中の右クリックのメニューはまだありません。
+・Vim の置換（:s・:&・&・g&）と、1 件ずつ確かめながら置換する c フラグ、:d・:y、:g と :v（d と s）に対応しています。:g のほかの命令と :sort はまだありません。
+・全文検索は UTF-8 のファイルだけを探します（Shift_JIS などのファイルの中は探しません）。
+・設定の画面と、タブの右クリックのメニューはまだありません。
 ・MIT License のオープンソースです。
 ```
 
@@ -106,6 +117,9 @@ UTF-8・Shift_JIS・UTF-16 と改行の形を読んだまま保存。最大 1 Gi
 日本語入力（IME）に対応
 30 秒ごとの自動退避
 アカウント不要・利用状況の送信なし・アプリ自身は通信しない
+Ctrl+Shift+F でフォルダの下のファイルを全文検索。選んだ候補の中身をプレビュー欄に表示
+本文の右クリックのメニュー（切り取り・コピー・貼り付けなど）。Vim のモードでも使える
+Vim のイージーモーション。見えている跳び先に小さな札を出して、札の文字で跳ぶ
 ```
 
 ### 検索語
@@ -122,7 +136,18 @@ Markdown
 
 ### このバージョンの新機能
 
-初回の申請では空欄にする。1.1.0 からは変わった点を 1,500 文字以内で書く（例: `表示言語に韓国語・スペイン語・ドイツ語を加えました。`）。
+1.0.0 の初回の申請では空欄にした。1.1.0 の文（1,500 文字以内）:
+
+```text
+・プロジェクトの全文検索: Ctrl+Shift+F（Vim では :grep も）で、エクスプローラーの起点のフォルダ（無ければ開いている文書のフォルダ）の下のファイルを探します。打つたびに探し直し、Enter で見つかった行を開きます。
+・Ctrl+P の一覧にプレビュー欄: 選んだ候補の中身を右か下に表示します。Ctrl+Shift+P で右・下・なしを切り替えます。
+・本文の右クリックのメニュー: 切り取り・コピー・貼り付け・削除・すべて選択・検索・置換。Shift+F10 とメニューキーでも開き、Vim のモードでも使えます。
+・Vim のイージーモーション: バックスラッシュを 2 回打ってから w・b・e・j・k・l や f・F・s と文字を打つと、見えている跳び先に小さな札が出て、札の文字でそこへ跳びます。
+・タブにマウスを載せると、フルパスを小さな札で表示します。
+・Vim: 自動の字下げ（:set autoindent）、:s の c フラグ、:d・:y・:g・:v、検索の \zs と \ze、NORMAL の s と S、: と / の行の Ctrl+U と Ctrl+W。改行で終わるファイルの行の数を Vim と同じにしました。
+・直し: Markdown プレビューの長い段落で止まることがあったのを直しました。1 つの字を長く繰り返した巨大な行を格子表示にしたとき止まることがあったのを直しました。Windows 11 より前の Windows で nul.txt のような名前のファイルの中身が失われることがあったのを直しました。
+・Store 版では、効かない「Windows の右クリックに登録する」と「登録を外す」を F1 の一覧に出さないようにしました。
+```
 
 ---
 
@@ -154,6 +179,9 @@ Switch between ordinary editing, which works like Notepad (find, replace, go to 
 Markdown preview
 Press Ctrl+Shift+M to see the Markdown you are editing, rendered in the next pane. Press it again for a full view, and once more to close it. Local images (PNG, JPEG, the first frame of a GIF, BMP) appear in the text, and task-list checkboxes can be clicked.
 
+Project-wide search with a preview
+Press Ctrl+Shift+F to search the files under the explorer's root folder, or under the folder of the document you are editing. Every change to the search text starts a new search, the matching lines arrive as they are found, and Enter opens the file at that line. In the Ctrl+P list, a preview pane shows the chosen entry's text to the right or below (Ctrl+Shift+P switches between right, below and off).
+
 Also included
 • Tabs in the title bar, restored the next time you start
 • Ctrl+P finds open tabs, bookmarks, recently closed files and files in the current folder in one list
@@ -164,7 +192,11 @@ Also included
 • UTF-8, Shift_JIS and UTF-16, with CRLF or LF kept as read
 • Japanese input (IME)
 • Autosave every 30 seconds, offered back once after an abnormal exit
-• F1 lists the commands for files, tabs, view, encodings, find, print and more, so you can find and run them (Vim keys and copy/paste are not in the list)
+• F1 lists the commands for files, tabs, view, encodings, find, print and more, so you can find and run them (Vim keys are not in the list)
+• A right-click menu in the text (cut, copy, paste, delete, select all, find, replace), also in Vim editing
+• Rest the pointer on a tab to see the file's full path in a small tip
+• Vim easymotion: type backslash twice and then w, b, e, j, k or l, or f, F or s and a character, and every visible target gets a small label; type the label to jump there
+• Vim autoindent (:set autoindent)
 • Language-server diagnostics (off by default; starts only the server you configure)
 
 Privacy
@@ -174,8 +206,9 @@ Good to know
 • Requires Windows 11 (version 22H2 or later, x64). Windows 10 is not supported.
 • The interface is available in Japanese, English and Simplified Chinese.
 • The language server shows diagnostics only; completion, hover and go-to-definition are not available yet.
-• Vim's substitute (:s, :&, & and g&) is available; its c (confirm) flag, :g and :sort are not yet.
-• Project-wide search, a settings dialog and a right-click menu inside the editor are not available yet.
+• Vim's substitute (:s, :&, & and g&) is available with its c (confirm) flag, as are :d, :y, and :g and :v with d and s; the other :g commands and :sort are not yet.
+• Project-wide search reads UTF-8 files only (it does not search inside Shift_JIS and other files).
+• A settings dialog and a right-click menu on tabs are not available yet.
 • Open source under the MIT License.
 ```
 
@@ -196,6 +229,9 @@ Find, replace, go to line and insert date and time with Notepad's keys; print fr
 Japanese input (IME)
 Autosave every 30 seconds
 No account, no usage data, no network connections of its own
+Project-wide search with Ctrl+Shift+F, and a preview pane for the chosen entry
+A right-click menu in the text (cut, copy, paste and more), also in Vim editing
+Vim easymotion: small labels on the visible targets, type one to jump there
 ```
 
 ### Search terms
@@ -212,8 +248,18 @@ Markdown preview
 
 ### What's new in this version
 
-Leave blank for the first submission (Microsoft's guidance). From 1.1.0, describe the changes in up to 1,500
-characters (for example `Adds Korean, Spanish and German to the interface languages.`).
+Left blank for the first submission (1.0.0, Microsoft's guidance). The text for 1.1.0 (up to 1,500 characters):
+
+```text
+• Project-wide search: Ctrl+Shift+F (or :grep in Vim) searches the files under the explorer's root folder, or under the folder of the current document. Every change to the text searches again, and Enter opens the matching line.
+• A preview pane in the Ctrl+P list shows the chosen entry's text to the right or below. Ctrl+Shift+P switches between right, below and off.
+• A right-click menu in the text: cut, copy, paste, delete, select all, find and replace. Shift+F10 and the menu key open it too, and it works in Vim editing.
+• Vim easymotion: type backslash twice and then w, b, e, j, k or l, or f, F or s and a character; every visible target gets a small label, and typing the label jumps there.
+• Rest the pointer on a tab to see its full path in a small tip.
+• Vim: autoindent (:set autoindent), the c flag of :s, :d, :y, :g and :v, \zs and \ze in search patterns, NORMAL s and S, and Ctrl+U and Ctrl+W on the : and / lines. A file that ends with a line break now has as many lines as in Vim.
+• Fixes: a long paragraph in the Markdown preview could stall the editor; a giant line repeating one character could stall it in the grid display; on Windows versions before Windows 11, the text of a file named like nul.txt could be lost.
+• In the Store version, the two operations that cannot work there ("Add to Windows Right-Click Menu" and "Remove from Windows Right-Click Menu") are no longer listed in F1.
+```
 
 ---
 
@@ -248,6 +294,9 @@ NeNe Nib 是一款适用于 Windows 11 的轻量文本编辑器。只有一个�
 Markdown 预览
 按 Ctrl+Shift+M，即可在旁边的窗格中查看正在编辑的 Markdown 的排版效果。再按一次切换为全屏显示，再按一次关闭。本地图片（PNG、JPEG、GIF 的第一帧、BMP）显示在正文中，任务列表的复选框可以点击切换。
 
+项目全文搜索与预览
+按 Ctrl+Shift+F，即可搜索资源管理器的根文件夹（没有时为正在编辑的文档所在的文件夹）下的文件。每次修改搜索文字都会重新搜索，找到的行按到达的顺序列出，按 Enter 即可打开该文件的该行。在 Ctrl+P 的列表中，预览窗格会在右侧或下方显示所选项的内容（按 Ctrl+Shift+P 在右侧、下方和关闭之间切换）。
+
 其他功能
 • 标题栏中的标签页，下次启动时自动恢复
 • 按 Ctrl+P 在一个列表中查找打开的标签页、书签、最近关闭的文件和当前文件夹中的文件
@@ -258,7 +307,11 @@ Markdown 预览
 • 支持 UTF-8、Shift_JIS 和 UTF-16，按读取时的形式保留 CRLF 或 LF
 • 支持日语输入法（IME）
 • 每 30 秒自动备份，异常退出后下次启动时询问一次是否恢复
-• 按 F1 列出文件、标签页、显示、编码、查找、打印等操作，可以查找并执行（Vim 按键和复制粘贴不在列表中）
+• 按 F1 列出文件、标签页、显示、编码、查找、打印等操作，可以查找并执行（Vim 按键不在列表中）
+• 正文的右键菜单（剪切、复制、粘贴、删除、全选、查找、替换），Vim 编辑中也可使用
+• 鼠标停在标签页上时，以小提示显示文件的完整路径
+• Vim 的 easymotion：连按两次反斜杠后输入 w、b、e、j、k、l，或输入 f、F、s 加一个字符，可见的跳转目标上会出现小标签，输入标签即可跳到该处
+• Vim 的自动缩进（:set autoindent）
 • 语言服务器的诊断（默认关闭，只启动您在设置中配置的服务器）
 
 隐私
@@ -268,8 +321,9 @@ Markdown 预览
 • 系统要求：Windows 11（22H2 或更高版本，x64）。不支持 Windows 10。
 • 界面支持日语、英语和简体中文。
 • 语言服务器目前只显示诊断，尚不支持补全、悬停提示和转到定义。
-• 支持 Vim 的替换命令（:s、:&、&、g&），但尚不支持逐个确认的 c 标志、:g 和 :sort。
-• 尚不支持整个项目范围的搜索、设置对话框和编辑器内的右键菜单。
+• 支持 Vim 的替换命令（:s、:&、&、g&）及逐个确认的 c 标志，以及 :d、:y 和带 d、s 的 :g、:v；尚不支持其他 :g 命令和 :sort。
+• 项目全文搜索只搜索 UTF-8 文件（不搜索 Shift_JIS 等文件的内容）。
+• 尚不支持设置对话框和标签页的右键菜单。
 • 基于 MIT 许可证的开源软件。
 ```
 
@@ -290,6 +344,9 @@ Markdown 预览（旁边的窗格或全屏），支持本地图片和可点击�
 支持日语输入法（IME）
 每 30 秒自动备份
 无需账号，不发送使用情况数据，应用本身不连接网络
+按 Ctrl+Shift+F 搜索文件夹下的文件，并在预览窗格中显示所选项的内容
+正文的右键菜单（剪切、复制、粘贴等），Vim 编辑中也可使用
+Vim 的 easymotion：在可见的跳转目标上显示小标签，输入标签即可跳转
 ```
 
 ### 搜索词
@@ -306,7 +363,18 @@ Markdown 预览
 
 ### 此版本中的新增功能
 
-首次提交时留空（Microsoft 的说明）。从 1.1.0 起，用 1,500 字以内说明变更。
+首次提交（1.0.0）时留空（Microsoft 的说明）。1.1.0 的文字（1,500 字以内）：
+
+```text
+• 项目全文搜索：按 Ctrl+Shift+F（Vim 中也可用 :grep），搜索资源管理器的根文件夹（没有时为当前文档所在的文件夹）下的文件。每次修改文字都会重新搜索，按 Enter 打开找到的行。
+• Ctrl+P 的列表新增预览窗格，在右侧或下方显示所选项的内容。按 Ctrl+Shift+P 在右侧、下方和关闭之间切换。
+• 正文的右键菜单：剪切、复制、粘贴、删除、全选、查找和替换。也可用 Shift+F10 和菜单键打开，Vim 编辑中也可使用。
+• Vim 的 easymotion：连按两次反斜杠后输入 w、b、e、j、k、l，或输入 f、F、s 加一个字符，可见的跳转目标上会出现小标签，输入标签即可跳到该处。
+• 鼠标停在标签页上时，以小提示显示完整路径。
+• Vim：自动缩进（:set autoindent）、:s 的 c 标志、:d、:y、:g、:v、搜索模式中的 \zs 和 \ze、NORMAL 的 s 和 S，以及 : 和 / 行中的 Ctrl+U 和 Ctrl+W。以换行结尾的文件的行数现在与 Vim 相同。
+• 修复：Markdown 预览中的长段落可能使编辑器停顿；在网格显示中，重复同一个字符的超长行可能使编辑器停顿；在 Windows 11 之前的 Windows 上，名称类似 nul.txt 的文件的内容可能丢失。
+• 在 Store 版中，F1 列表不再显示无法使用的「添加到 Windows 右键菜单」和「从 Windows 右键菜单中移除」。
+```
 
 ---
 
@@ -327,4 +395,4 @@ Markdown 预览
     （`startup-first-frame` 41.886 ms・`key-to-frame-single` 0.641 ms・`open-large-file-16mib` 49.789 ms）。
     測った機械は施主の PC（Intel Core i9-10850K・NVIDIA GeForce RTX 3090・表示の倍率 125%）、
     Release の exe（main `b3e6f01`）、道具は `eng/measure-speed.py`。速さのゲートはこの値を基準に退行を落とす（QLT-014）。
-    ほかの機械では違う値になる。1.0.0 の exe で値が大きく変わったら、この文を測り直した値に直す。
+    ほかの機械では違う値になる。申請する版の exe で値が大きく変わったら、この文を測り直した値に直す（1.1.0 のまとめ枝のゲートは 8 本とも 0 regression・公開の記録 `release-1.1.0-2026-11-17.md`）。

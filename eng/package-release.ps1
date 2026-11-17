@@ -1,5 +1,5 @@
 # 配布用の正規入口。ビルドは既存の build-release.ps1 に委ねる（#413 / ADR 0115）。
-# 版は CMake の project() の素の x.y.z だけ。Beta は GitHub の Release の題と pre-release の印で、名前に入れない（#1596）。
+# 版は CMake の project() の素の x.y.z だけ。Beta や pre-release の札は名前に入れない（#1596・1.1.0 から GitHub の Release も Beta を付けない・#1815）。
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$OutputDirectory,
