@@ -4,6 +4,7 @@
 #include "DisplayLanguageChoice.hpp"
 #include "DisplayText.hpp"
 #include "FilePath.hpp"
+#include "FinderPreview.hpp"
 #include "FontSize.hpp"
 #include "GuideVisibility.hpp"
 #include "LineWrapping.hpp"
@@ -62,6 +63,9 @@ struct EditorSettings
     // INSERT の改行と `o` `O` `cc` `S` が字下げを写すか（Vim の `autoindent`・既定はオフ・#1086）。
     // `:set` だけが変え、設定の面には出さない（ignorecase などと同じ束）。
     bool autoindent = false;
+    // 探して見る面のプレビュー欄の置き方（ADR 0189 の決定 1・settings.v5 の鍵 `finder_preview`・
+    // 既定は automatic）。`:set finderpreview=` と面が開いている間の Ctrl+Shift+P が変える。
+    FinderPreview finder_preview = FinderPreview::automatic;
 };
 
 // `scrolloff` の上限（Vim の値は任意の非負だが、画面の半分で切り詰めるので 999 で足りる）。

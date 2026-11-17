@@ -12,6 +12,7 @@
 #include "ExResult.hpp"
 #include "FileBookmarkEdit.hpp"
 #include "FileFolder.hpp"
+#include "FinderPreview.hpp"
 #include "FolderRequest.hpp"
 #include "PaletteFolder.hpp"
 #include "PaletteMarks.hpp"
@@ -65,6 +66,8 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
         // 全文検索の面は当たりの行の表示値も同じ窓で載せる（ADR 0167 の決定 5・段 G3 の 2
         // 段の行）。
         auto project = project_search_view();
+        const auto placement =
+            core::palette_placement(palette->scope(), state_.settings().finder_preview);
         auto hit_rows = project.has_value() ? project_hit_rows(first, palette->visible())
                                             : std::vector<core::ProjectHitRow>{};
         return CommandPaletteView{palette->rows(first, palette->visible()),
@@ -73,7 +76,10 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
                                   palette->count(),
                                   std::move(hint),
                                   std::move(project),
-                                  std::move(hit_rows)};
+                                  std::move(hit_rows),
+                                  placement,
+                                  preview_drawn(placement) ? preview_snippet(*palette)
+                                                           : std::nullopt};
     }
     return std::nullopt;
 }
