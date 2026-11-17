@@ -40,6 +40,7 @@
 #include "VimKey.hpp"
 #include "VimMarks.hpp"
 #include "VimState.hpp"
+#include "WordTable.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -138,6 +139,16 @@ class EditorState final
                                         core::EditHistory history, Document document) const &;
     [[nodiscard]] EditorState with_edit(core::TextBuffer text, core::Selection selection,
                                         core::EditHistory history, Document document) &&;
+    // 語の表（ADR 0169 の決定 1）を、今の本文に edit を当てた後の表にする。本文はまだ変えない
+    // （続けて with_edit を呼ぶ）。本文を編集で変える 3 か所（controller の replace・undo・redo）が
+    // with_edit の直前に呼ぶ。表を作っていない文書（16 MiB 超）は何も変えない。
+    [[nodiscard]] EditorState with_words_edited(const core::Edit &edit) const &;
+    [[nodiscard]] EditorState with_words_edited(const core::Edit &edit) &&;
+    // アクティブな文書の語の表（作っていなければ空）。
+    [[nodiscard]] const std::optional<core::WordTable> &word_table() const noexcept;
+    // 読み込み済みの他のタブの語の表（帯の順・ADR 0169 の決定 1）。まだ読んでいない文書と表を
+    // 作っていない文書は含めない。指す先は次に状態を写すまで。
+    [[nodiscard]] std::vector<const core::WordTable *> parked_word_tables() const;
     [[nodiscard]] EditorState with_history(core::EditHistory history) const &;
     [[nodiscard]] EditorState with_history(core::EditHistory history) &&;
     [[nodiscard]] EditorState with_document(Document document) const &;
@@ -416,6 +427,8 @@ class EditorState final
     std::uint64_t vim_entries_ = 0;
     // 最後の改行を除いた本文（vim_text の正本・除かない間は空）。
     std::shared_ptr<const core::TextBuffer> vim_text_;
+    // INSERT の補完の語の表（ADR 0169 の決定 1）。写しは共有の参照だけ（WordTable の約束）。
+    std::optional<core::WordTable> words_;
     std::vector<core::Diagnostic> diagnostics_;
     std::uint64_t diagnostics_version_ = 0;
     core::DiagnosticsCount diagnostics_count_ = core::DiagnosticsCount::complete;
