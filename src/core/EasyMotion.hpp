@@ -23,7 +23,9 @@ inline constexpr std::string_view easymotion_keys = "asdghklqwertyuiopzxcvbnmfj;
 inline constexpr std::size_t easymotion_target_limit =
     easymotion_keys.size() * easymotion_keys.size();
 
-// 見えている行（view.viewport の最初の行から見えている行数ぶん・本文の行の数で切る）の跳び先を
+// 見えている行（view.viewport
+// の最初の行から窓に全部入っている最後の論理行まで・vim_window_last_line・ wrap off
+// なら窓の横の範囲の桁だけ・ADR 0163 の追補 2026-11-17 の 4）の跳び先を
 // キャレットから近い順に返す（w e j f は本文の順・b k F は本文の逆の順・s l
 // は（行の差・仮想桁の差） の辞書順で同じならキャレットより後ろが先・ADR 0163 の追補 2026-11-17 の
 // 2）。印は easymotion_labels の順にこの列の位置へ付く（最初の 印 `a`
@@ -32,7 +34,8 @@ inline constexpr std::size_t easymotion_target_limit =
 // vim_character_end）で、空行は語の頭。 j k は行の最初の非空白でキャレットの行を除く。f F s は
 // character と同じ code point で始まる 文字（character
 // が無ければ空）。表示領域が無い・格子の表示（VimScrollUnit::row）・行が無い
-// 本文では空。easymotion_target_limit を超えたら近い順に並べてから切る。
+// 本文・行の文字組みの値が足りない（engine が先に layout_request
+// で求める）ときは空。easymotion_target_limit を超えたら近い順に並べてから切る。
 [[nodiscard]] std::vector<Offset> easymotion_targets(const VimEditorView &view, EasyMotionKind kind,
                                                      std::optional<char32_t> character);
 
