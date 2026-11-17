@@ -216,6 +216,7 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::prompt_go_to_line, "Line: "},
     {UiMessage::prompt_replace_with, "Replace with: "},
     {UiMessage::prompt_replace_with_pattern, "Replace \"{0}\" with: "},
+    {UiMessage::prompt_jump_character, "Jump to character: "},
     {UiMessage::guide_note_disappears, "Disappears when you start typing"},
     {UiMessage::explorer_no_root, "Set the root with :set root="},
     {UiMessage::explorer_folder_unreadable, "{0} (unreadable)"},

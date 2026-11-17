@@ -204,6 +204,7 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::prompt_go_to_line, "行: "},
     {UiMessage::prompt_replace_with, "置換後: "},
     {UiMessage::prompt_replace_with_pattern, "置換後 ({0}): "},
+    {UiMessage::prompt_jump_character, "跳ぶ文字: "},
     {UiMessage::guide_note_disappears, "打ち始めると消えます"},
     {UiMessage::explorer_no_root, ":set root= でルートを決めてください"},
     {UiMessage::explorer_folder_unreadable, "{0}（読めません）"},

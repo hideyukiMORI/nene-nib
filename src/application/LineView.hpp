@@ -6,6 +6,7 @@
 #include "DisplayLine.hpp"
 #include "LineNumber.hpp"
 #include "LineWindow.hpp"
+#include "MotionLabel.hpp"
 #include "SelectionSpan.hpp"
 
 #include <cstdint>
@@ -50,6 +51,9 @@ struct LineView
     // matchparen の相手の括弧（ADR 0164 の決定 4）。桁は current_match と同じ本文の
     // 桁で、renderer は同じ枠で描く。操作中の枠でキャレットの括弧の相手が載る行だけ。
     std::optional<core::SelectionSpan> bracket{};
+    // イージーモーションの印（ADR 0163 の決定 6）。桁は colors と同じ本文の桁で、印が出ている間の
+    // 見えている行だけ（mark_labels）。renderer は字形の後に accent の地で描く（M4）。
+    std::vector<core::MotionLabel> labels{};
 };
 
 [[nodiscard]] inline std::string_view presented_text(const LineView &line) noexcept

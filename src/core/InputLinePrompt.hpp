@@ -25,6 +25,9 @@ enum class InputLinePrompt : std::uint8_t
     replace_with,
     // `:s///c` の問い（ADR 0168 の決定 6）。プロンプトの文字を出さず、文は Vim の
     // `replace with … (y/n/a/q/l)?`。文字は答えとしてだけ読む。
-    substitute_confirm
+    substitute_confirm,
+    // イージーモーションの `\\f` `\\F` `\\s` の 1 文字の入力行（ADR 0163 の決定 4）。確定した最初の
+    // 1 文字を跳び先の文字として engine へ流す。
+    jump_character
 };
 } // namespace nenenib::core

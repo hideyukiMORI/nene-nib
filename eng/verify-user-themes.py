@@ -8,8 +8,9 @@ import shutil
 import tempfile
 import time
 
-from window_driver import (acknowledge_dialog, await_dialog, close, click, press, rectangle,
-                           start, stop, user, window_title, write_text)
+from window_driver import (acknowledge_dialog, await_dialog, await_text, close, click, press,
+                           rectangle, settings_path, start, stop, user, wait_until, window_title,
+                           write_text)
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("palette_verification", ROOT / "eng/verify-palette.py")
@@ -29,10 +30,19 @@ def theme(name, light=False):
 
 
 def colours(window, output, name, background, title):
-    pixels, width, height = EX.shot(window, output, name)
     dpi = user.GetDpiForWindow(window)
-    assert VIEW.pixel(pixels, width, width // 2, height // 2) == background, "custom body background missing"
-    assert VIEW.pixel(pixels, width, width // 2, round(10 * dpi / 96)) == title, "custom title-bar override missing"
+    seen = []
+
+    def painted():
+        # The surface closes and the colours land a few frames after Enter, so the frame is taken
+        # again (bounded) until both pixels are the theme's; the asserts below still decide (#1784).
+        pixels, width, height = EX.shot(window, output, name)
+        seen[:] = [VIEW.pixel(pixels, width, width // 2, height // 2),
+                   VIEW.pixel(pixels, width, width // 2, round(10 * dpi / 96))]
+        return seen == [background, title]
+    wait_until(painted)
+    assert seen[0] == background, "custom body background missing"
+    assert seen[1] == title, "custom title-bar override missing"
     return dpi
 
 
@@ -49,7 +59,7 @@ def dialog_text(process):
 
 
 def verify_saved_error(executable, environment, document, settings, light, output):
-    before = settings.read_bytes()
+    before = EX.snapshot(settings)
     light.write_text("broken", encoding="utf-8")
     process, window, _ = start(executable, environment, [str(document)])
     try:
@@ -60,15 +70,15 @@ def verify_saved_error(executable, environment, document, settings, light, outpu
         PALETTE.execute(window, "colorscheme dracula")
         # Ex/palette write errors are inline; the direct font shortcut uses the settings dialog.
         EX.shot(window, output, "blocked-palette-write")
-        assert settings.read_bytes() == before
+        assert EX.unchanged(settings, before)
         # A default-valued command must not erase the blocked startup state.
         PALETTE.execute(window, "colorscheme system")
         EX.shot(window, output, "blocked-noop")
-        assert settings.read_bytes() == before
+        assert EX.unchanged(settings, before)
         SETTINGS.chord(window, 0xBB)
         assert "hide-light" in dialog_text(process), "save block lost original theme failure"
         assert acknowledge_dialog(process)
-        assert settings.read_bytes() == before, "broken saved theme was replaced by defaults"
+        assert EX.unchanged(settings, before), "broken saved theme was replaced by defaults"
         close(window)
         assert process.wait(timeout=5) == 0
     finally:
@@ -92,7 +102,7 @@ def main():
     light.write_text(theme("hide-light", True), encoding="utf-8")
     (directory / "broken.v1.theme").write_text("version=1\n", encoding="utf-8")
     environment = dict(os.environ, LOCALAPPDATA=str(profile), APPDATA=str(profile))
-    settings = profile / "NeNeNib/settings.v5"
+    settings = settings_path(environment)
     previous = profile / "NeNeNib/settings.v1"
     document = output / "theme-document.txt"
     original = "\nuser themes leave this document intact\n"
@@ -127,7 +137,7 @@ def main():
         press(window, 0x0D)
         time.sleep(0.25)
         dpi = colours(window, output, "user-light", [255, 248, 225], [225, 215, 180])
-        assert EX.fields(settings)["colorscheme"] == "hide-light"
+        assert EX.saved(settings, "colorscheme", "hide-light") == "hide-light"
         _, _, width, height = rectangle(window, user.GetClientRect)
         # The result message occupies the toggle: first click dismisses it, second selects Vim.
         click(window, *VIEW.toggle_points(width, height, dpi)["vim"])
@@ -140,17 +150,17 @@ def main():
         press(window, 0x0D)
         time.sleep(0.25)
         colours(window, output, "user-dark", [16, 24, 32], [23, 36, 49])
-        assert EX.fields(settings)["colorscheme"] == "hide-dark"
-        before = settings.read_bytes()
+        assert EX.saved(settings, "colorscheme", "hide-dark") == "hide-dark"
+        before = EX.snapshot(settings)
         EX.command(window, "colorscheme broken")
         EX.shot(window, output, "broken-ex")
-        assert settings.read_bytes() == before, "broken theme overwrote settings"
+        assert EX.unchanged(settings, before), "broken theme overwrote settings"
         PALETTE.execute(window, "broken")
         EX.shot(window, output, "broken-palette")
-        assert settings.read_bytes() == before
+        assert EX.unchanged(settings, before)
         EX.command(window, "colorscheme hide-light")
         SETTINGS.chord(window, ord('S'))
-        assert document.read_text(encoding="utf-8") == original, "theme selection modified body"
+        assert await_text(document, original) == original, "theme selection modified body"
         close(window)
         assert process.wait(timeout=5) == 0
     finally:

@@ -839,7 +839,7 @@ class GiantLineTests(unittest.TestCase):
             values, _ = speed.bench_minimap(Path("NeNeNib.exe"), {}, Path(folder),
                                             Path("single-cpp-1000.cpp"))
             written = (Path(folder) / speed.MINIMAP_PROFILE / "NeNeNib" /
-                       "settings.v4").read_text(encoding="utf-8")
+                       "settings.v5").read_text(encoding="utf-8")
         self.assertEqual({speed.MINIMAP_BENCH: 1.0}, values)
         self.assertEqual(speed.MINIMAP_BENCH, seen["name"])
         self.assertIn("features=minimap\n", written)
@@ -861,7 +861,7 @@ class GiantLineTests(unittest.TestCase):
             values, parts = speed.bench_minimap_burst(Path("exe"), {}, Path(folder),
                                                       Path("c.cpp"))
             written = (Path(folder) / speed.MINIMAP_PROFILE / "NeNeNib" /
-                       "settings.v4").read_text(encoding="utf-8")
+                       "settings.v5").read_text(encoding="utf-8")
         self.assertEqual({speed.MINIMAP_BURST_BENCH: 2.5}, values)
         self.assertEqual({}, parts)
         self.assertIn("features=minimap\n", written)
@@ -1481,10 +1481,10 @@ class LanguageServerBenchTests(unittest.TestCase):
             path = speed.write_settings(environment, {"lsp": "on"},
                                         {"cpp": '"C:\\b\\nib_fake_language_server.exe" --silent'})
             text = path.read_text(encoding="utf-8")
-            self.assertTrue(text.startswith("version=4\ncolorscheme=system\n"))
+            self.assertTrue(text.startswith("version=5\ncolorscheme=system\n"))
             self.assertIn("\nlsp=on\n", text)
             self.assertTrue(text.endswith(
-                'scrolloff=0\nexplorer_width=\nlsp.cpp.command="C:\\b\\nib_fake_language_server.exe" --silent\n'))
+                'scrolloff=0\nexplorer_width=\nautoindent=off\nfinder_preview=auto\nlsp.cpp.command="C:\\b\\nib_fake_language_server.exe" --silent\n'))
             with self.assertRaises(AssertionError):
                 speed.write_settings(environment, {"nosuch": "x"})
             with mock.patch.dict(speed.os.environ, {"LOCALAPPDATA": str(work / "profile")}), \

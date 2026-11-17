@@ -1,5 +1,6 @@
 #pragma once
 
+#include "EasyMotionState.hpp"
 #include "VimBlockExtent.hpp"
 #include "VimBlockInsert.hpp"
 #include "VimCharacterSearch.hpp"
@@ -128,6 +129,11 @@ struct VimState
     // 空のレジスタの `Ctrl-r`、ほかの鍵は消す（auto_indent_noted の 1 か所）。真のまま Esc・上下・
     // `Ctrl-o` を打つと、その行の字下げを消す。vim_resting_from と input_discarded は持ち越さない。
     bool auto_indented = false;
+    // イージーモーションの印が出ているあいだの値（ADR 0163 の決定 4）。input_wait が EasyMotionKind
+    // のときだけ値を持ち、置くのは跳び先が 2 つ以上のとき、絞るのは easymotion_step。命令の途中の値
+    // なので vim_resting_from は持ち越さず、待ちを終える所（finished_input_wait）と組み立て中の
+    // 入力を捨てる所でも消える。
+    std::optional<EasyMotionState> easy_motion = std::nullopt;
 };
 
 // 鍵を 1 つ食べ終わったあとの NORMAL。回数・オペレータ・欲しい列は空で、無名レジスタだけ残る。

@@ -195,6 +195,7 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::prompt_go_to_line, "行："},
     {UiMessage::prompt_replace_with, "替换为："},
     {UiMessage::prompt_replace_with_pattern, "将（{0}）替换为："},
+    {UiMessage::prompt_jump_character, "跳转到字符："},
     {UiMessage::guide_note_disappears, "开始输入后即消失"},
     {UiMessage::explorer_no_root, "请用 :set root= 设置根文件夹"},
     {UiMessage::explorer_folder_unreadable, "{0}（无法读取）"},

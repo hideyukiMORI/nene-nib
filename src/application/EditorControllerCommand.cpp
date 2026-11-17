@@ -178,6 +178,13 @@ fitted_rows(const core::CommandLine &line, CommandWindow window, core::FinderPre
     return std::nullopt;
 }
 
+[[nodiscard]] std::optional<CommandInput> fitted_rows(const JumpCharacter & /*line*/,
+                                                      CommandWindow /*window*/,
+                                                      core::FinderPreview /*chosen*/)
+{
+    return std::nullopt;
+}
+
 // Vim の `/` `?` の入力行か（engine の検索の待ちを持つ）。写し先が足りなければ落ちる（CPP-002）。
 [[nodiscard]] constexpr bool vim_search_prompt(core::InputLinePrompt prompt) noexcept
 {
@@ -192,6 +199,7 @@ fitted_rows(const core::CommandLine &line, CommandWindow window, core::FinderPre
     case core::InputLinePrompt::ex:
     case core::InputLinePrompt::palette:
     case core::InputLinePrompt::substitute_confirm:
+    case core::InputLinePrompt::jump_character:
         return false;
     }
     std::unreachable();
@@ -416,7 +424,7 @@ std::optional<core::InputLineView> EditorController::command_line_view() const
 void EditorController::accept(const CommandText &intent)
 {
     const auto &input = state_.command_input();
-    if (!input.has_value() || answered_question(intent.utf8))
+    if (!input.has_value() || answered_question(intent.utf8) || answered_jump(intent.utf8))
     {
         return;
     }
@@ -811,6 +819,7 @@ std::optional<core::VimRepeatFailure> EditorController::submit(const core::Searc
     case core::InputLinePrompt::ex:
     case core::InputLinePrompt::palette:
     case core::InputLinePrompt::substitute_confirm:
+    case core::InputLinePrompt::jump_character:
         break;
     }
     // Vim も確定の前に入力前の画面へ戻してから本当の検索をする（ex_getln.c の
@@ -914,8 +923,21 @@ void EditorController::remember(const SubstituteQuestion & /*question*/)
     // 問いの答えは履歴に足さない。
 }
 
+void EditorController::remember(const JumpCharacter & /*line*/)
+{
+    // 跳び先の文字は履歴に足さない。
+}
+
 std::optional<core::VimRepeatFailure> EditorController::submit(const SubstituteQuestion &)
 {
+    return std::nullopt;
+}
+
+// 文字を打たずに Enter を押した 1 文字の入力行は取消と同じ（閉じた行は意図の出口の
+// settle_easymotion が engine の待ちごと捨てる）。
+std::optional<core::VimRepeatFailure> EditorController::submit(const JumpCharacter &)
+{
+    close_command_input();
     return std::nullopt;
 }
 
