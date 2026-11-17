@@ -31,6 +31,7 @@
 #include "StatusBarLayout.hpp"
 #include "SwitchPane.hpp"
 #include "SwitchTab.hpp"
+#include "TabTip.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
 #include "TitleBarTarget.hpp"
@@ -324,8 +325,10 @@ bool EditorWindow::click_title_bar(LPARAM data, application::PointerClicks click
         }
         send(application::SwitchTab{target.tab});
         return true;
-    // ×・「＋」・「∨」は離したときに動かす（窓の操作と同じ）。
+    // ×・「＋」・「∨」は離したときに動かす（窓の操作と同じ）。タブの札は押した時点で消す（#1789）。
     case core::TitleBarHit::tab_close:
+        send(application::PointTitleBar{target, true});
+        return true;
     case core::TitleBarHit::add_tab:
     case core::TitleBarHit::tab_list:
         return true;
@@ -376,6 +379,12 @@ void EditorWindow::press_middle(LPARAM data)
         return;
     }
     middle_pressed_ = title_bar_target_at(data);
+    // タブの上の中ボタンは押した時点でタブの札を消す（#1789）。
+    const auto hovered = core::title_bar_hover(middle_pressed_.value());
+    if (core::tab_tip_tab(hovered).has_value())
+    {
+        send(application::PointTitleBar{hovered, true});
+    }
 }
 
 void EditorWindow::middle_click(LPARAM data)
@@ -849,6 +858,19 @@ void EditorWindow::read_wheel_setting()
         palette_wheel_remainder_ = 0;
     }
     wheel_setting_ = lines;
+}
+
+void EditorWindow::read_hover_setting()
+{
+    // 読めないか 0 なら Windows の既定の 400 ms（#1789）。時刻は読まず、待ちは OS
+    // のタイマーが数える。
+    UINT milliseconds = 0;
+    if (SystemParametersInfoW(SPI_GETMOUSEHOVERTIME, 0, &milliseconds, 0) == FALSE ||
+        milliseconds == 0)
+    {
+        milliseconds = default_tab_tip_milliseconds;
+    }
+    hover_setting_ = milliseconds;
 }
 
 bool EditorWindow::over_other_pane(LPARAM data) const
