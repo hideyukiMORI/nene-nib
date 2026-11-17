@@ -218,10 +218,10 @@ class Direct2DRenderer final
                             const core::LayoutRect &area, const application::LineView &line);
     void draw_line_selection(const application::EditorFrame &frame, IDWriteTextLayout *text,
                              const core::LayoutRect &area, const application::LineView &line);
-    // イージーモーションの印（ADR 0163 の決定 6 と追補 #1800・案 D'）。跳び先の行の中の上寄せに
-    // text の札を置き、印の字を background で札の中央に描く。行の札は左から右の順（重なれば右が
-    // 上）。印の字の layout は印の専用の書式（label_format_）から作り、共有の本文の layout の書式は
-    // 変えない（ADR 0114）。
+    // イージーモーションの印（ADR 0163 の決定 6 と追補 #1800・案 D）。跳び先の升の左上の肩に text
+    // の札を置き、印の字を background で札の中央に描く。行の札は左から右の順（重なれば右が上）。
+    // 印の字の layout は印の専用の書式（label_format_）から作り、共有の本文の layout の書式は
+    // 変えない（ADR 0114）。いちばん上の画面行の札は本文の欄の上端（body_top_）より上へ出さない。
     void draw_line_labels(const application::EditorFrame &frame, IDWriteTextLayout *text,
                           const core::LayoutRect &area, const application::LineView &line);
     void draw_label(const application::EditorFrame &frame, const DWRITE_HIT_TEST_METRICS &target,
