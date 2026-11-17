@@ -671,7 +671,14 @@ void EditorWindow::click_palette(LPARAM data)
         return;
     }
     const auto &palette = view.value();
-    const auto layout = core::palette_layout(client.right, client.bottom, dpi_, palette.total);
+    const auto layout =
+        core::palette_layout(client.right, client.bottom, dpi_, {palette.total, palette.placement});
+    // 見出しの右端の印は Ctrl+Shift+P と同じ（ADR 0189 の決定 3）。
+    if (core::palette_toggle_hit(layout, low_word_of(data), high_word_of(data)))
+    {
+        run_operation(core::EditorOperation::cycle_finder_preview);
+        return;
+    }
     const auto hit = core::palette_hit(layout, low_word_of(data), high_word_of(data));
     if (hit.has_value())
     {
@@ -766,7 +773,8 @@ void EditorWindow::scroll_palette(std::int32_t delta)
     {
         RECT client{};
         GetClientRect(window_, &client);
-        visible = core::palette_window_rows(client.right, client.bottom, dpi_);
+        visible = core::palette_window_rows(client.right, client.bottom, dpi_,
+                                            controller_.palette_placement());
     }
     const auto turn = wheel_turned(palette_wheel_remainder_, delta,
                                    wheel_lines_per_notch(wheel_setting_, visible));

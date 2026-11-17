@@ -84,10 +84,12 @@ void verify_columns()
                    "every text is non-empty and has the Japanese placeholders");
         }
     }
-    expect(core::ui_message_count == 212,
-           "the table has 212 messages (T1a 197, T1b 4, the About operation 2 of D90, the "
-           "project search mark 1 of #1003 and the project search face 8 of #1763)");
-    expect(placed == 29, "29 messages take placeholders (T1a 26 and the search progress 3)");
+    expect(core::ui_message_count == 216,
+           "the table has 216 messages (T1a 197, T1b 4, the About operation 2 of D90, the "
+           "project search mark 1 of #1003, the project search face 8 of #1763 and the finder "
+           "preview 4 of #1785)");
+    expect(placed == 30, "30 messages take placeholders (T1a 26, the search progress 3 and the "
+                         "preview line 1)");
     expect(core::ui_text(core::UiMessage::tab_untitled, core::DisplayLanguage::english) ==
                "Untitled",
            "the English column is read for english");

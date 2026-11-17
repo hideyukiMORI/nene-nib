@@ -409,6 +409,9 @@ void verify_input_line_property_scope();
 void verify_project_search_contracts();
 // ProjectSearchControllerTests.cpp（#1003 段 G2・ADR 0167 の決定 1・2・4・5・7 の application）
 void verify_project_search_controller_contracts();
+// FinderLayoutTests.cpp（#1785・ADR 0189 の段 P1 のプレビュー欄の置き方・切り替え・設定・開いている
+// タブの窓）
+void verify_finder_layout_contracts();
 
 // CommandLineEditTests.cpp（#1550・#1643・Vim の入力行の c_CTRL-U / c_CTRL-W と `/` の Tab）
 void verify_command_line_edit_scope();

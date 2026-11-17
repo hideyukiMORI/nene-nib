@@ -214,7 +214,7 @@ records in `docs/quality/`.
   `:set filetype=` / `:set ft=` changes it and `:syntax on|off` switches coloring for the document
   ([ADR 0156](docs/adr/0156-syntax-colors-are-column-spans-lexed-from-200-lines-above-and-drawn-by-cutting-glyph-runs.md)).
 - **FR-017 font size** — `Ctrl` + `+` / `-` / `0`, Ctrl + wheel (8–40 pt), `:set fontsize=` and `:set guifont=`,
-  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v5` (v4 added `ui_language`, `lsp`, `explorer`, `root`, `features` and optional `lsp.<language>.command` lines; v5 keeps every v4 key and adds `autoindent`; limit 16 KiB). The previous v4/v3/v2/v1 files are read only when newer versions are absent and are preserved; `settings.v4` is the file 1.0.0 reads and writes. Done.
+  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v5` (v4 added `ui_language`, `lsp`, `explorer`, `root`, `features` and optional `lsp.<language>.command` lines; v5 keeps every v4 key and adds `autoindent` and `finder_preview`; limit 16 KiB). The previous v4/v3/v2/v1 files are read only when newer versions are absent and are preserved; `settings.v4` is the file 1.0.0 reads and writes. Done.
 - **FR-018 operation list and hints** — F1 (or `?` in Ctrl+P) lists available operations with their names,
   descriptions and shortcuts; type to filter, then press Enter to run one. Operations without a key in a mode,
   such as find and replace in Vim mode or printing, run from here. An untouched untitled document
@@ -303,11 +303,12 @@ Use `set fontsize=18` or `set guifont=Cascadia Code:h18` for the body font. `Ent
 Press `Ctrl+P` in either editing mode and type `:` to choose the same commands from a filtered list,
 together with `set wrap` / `nowrap`, `set guide` / `noguide`, `set hlsearch` / `incsearch` and their `no`
 forms, `set ignorecase` / `smartcase` / `relativenumber` / `scrolloff=` / `autoindent` (`ai`), `set display=grid|text`,
+`set finderpreview=auto|right|below|off` (`fpv`; the Ctrl+P preview pane, also cycled by `Ctrl+Shift+P` while the list is open),
 `set filetype=`, `syntax on|off`, `set clipboard=unnamed`, `set explorer` / `root=`, `set lsp`, `set language=`,
 `preview full|side|off`, `hardcopy`, `only` and the tab commands.
 Use `set noguide` to hide shortcut hints and `set guide` to show them again (the default).
 
-Settings are saved in `settings.v5`. If it is absent, the editor reads `settings.v4` (the file 1.0.0 reads and writes; `autoindent` starts off), then `settings.v3`, then `settings.v2`, then `settings.v1`
+Settings are saved in `settings.v5`. If it is absent, the editor reads `settings.v4` (the file 1.0.0 reads and writes; `autoindent` starts off and `finder_preview` starts `auto`), then `settings.v3`, then `settings.v2`, then `settings.v1`
 only when v2 is also absent; older versions enable wrapping. The first actual settings change writes the new file; the older files are left intact for older
 versions. A settings change made in 1.0.0 after `settings.v5` exists goes to `settings.v4` and is not seen by later versions, and the other way round (ADR 0170). A broken new file is reported and blocks settings writes until repaired and restarted.
 

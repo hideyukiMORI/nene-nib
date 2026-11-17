@@ -7,6 +7,7 @@
 #include "ClipboardKeys.hpp"
 #include "EditMode.hpp"
 #include "EditorIntent.hpp"
+#include "EditorOperation.hpp"
 #include "KeyChord.hpp"
 #include "KeyMotion.hpp"
 #include "KeyVimSpecial.hpp"
@@ -442,8 +443,14 @@ void EditorWindow::press_command_control_key(WPARAM word)
     case 'W':
         send(application::EditCommand{core::CommandEdit::erase_word});
         return;
-    // 面が開いていれば Ctrl+P は前の候補（ADR 0150 の決定 2）。`:` と検索の行では面を開く。
+    // 面が開いていれば Ctrl+P は前の候補（ADR 0150 の決定 2）、Ctrl+Shift+P はプレビュー欄の置き方
+    // を次へ（ADR 0189 の決定 3・操作の 1 本 run_operation）。`:` と検索の行では面を開く。
     case 'P':
+        if (held(VK_SHIFT) && controller_.command_palette_active())
+        {
+            run_operation(core::EditorOperation::cycle_finder_preview);
+            return;
+        }
         send_palette_or(core::CommandEdit::complete_previous, application::OpenCommandPalette{});
         return;
     case 'N':

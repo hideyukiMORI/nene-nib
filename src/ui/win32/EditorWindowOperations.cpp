@@ -6,6 +6,7 @@
 #include "BeginReplace.hpp"
 #include "ClosePane.hpp"
 #include "CloseTab.hpp"
+#include "CycleFinderPreview.hpp"
 #include "DocumentFormatKind.hpp"
 #include "EditMode.hpp"
 #include "ExplorerRootChosen.hpp"
@@ -390,6 +391,7 @@ EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation op
         {core::EditorOperation::choose_language, &EditorWindow::run_choose_language},
         {core::EditorOperation::show_version, &EditorWindow::run_show_version},
         {core::EditorOperation::search_project, &EditorWindow::run_search_project},
+        {core::EditorOperation::cycle_finder_preview, &EditorWindow::run_cycle_finder_preview},
     }};
     static_assert(runners_in_order(runners),
                   "operation runners follow the order of EditorOperation and point to a function");
@@ -609,6 +611,12 @@ void EditorWindow::run_show_version()
 void EditorWindow::run_search_project()
 {
     send(application::OpenProjectSearch{});
+}
+
+// 探して見る面のプレビュー欄の置き方を次へ（ADR 0189 の決定 3）。順と覚えるのは controller。
+void EditorWindow::run_cycle_finder_preview()
+{
+    send(application::CycleFinderPreview{});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

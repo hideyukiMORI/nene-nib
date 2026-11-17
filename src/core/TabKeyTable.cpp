@@ -77,6 +77,7 @@ namespace
     case EditorOperation::choose_language:
     case EditorOperation::show_version:
     case EditorOperation::search_project:
+    case EditorOperation::cycle_finder_preview:
         return std::nullopt;
     }
     std::unreachable();

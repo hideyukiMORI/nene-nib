@@ -202,14 +202,14 @@ void verify_palette_geometry()
 {
     for (const auto dpi : {96U, 120U, 192U})
     {
-        const auto layout = core::palette_layout(1600, 1200, dpi, 13);
+        const auto layout = core::palette_layout(1600, 1200, dpi, {13, core::FinderPreview::off});
         expect(core::width_of(layout.panel) == core::to_pixels(640, dpi),
                "panel uses approved DIP width");
         expect(layout.visible_rows == 8 && layout.row_height == core::to_pixels(40, dpi),
                "row height and count bounded");
-        expect(core::palette_window_rows(1600, 1200, dpi) == 8 &&
-                   core::palette_window_rows(1600, core::to_pixels(300, dpi), dpi) <
-                       core::palette_row_limit,
+        expect(core::palette_window_rows(1600, 1200, dpi, core::FinderPreview::off) == 8 &&
+                   core::palette_window_rows(1600, core::to_pixels(300, dpi), dpi,
+                                             core::FinderPreview::off) < core::palette_row_limit,
                "the window rows are bounded by the limit and the window height");
         for (std::size_t row = 0; row < layout.visible_rows; ++row)
         {
@@ -219,19 +219,19 @@ void verify_palette_geometry()
         }
         expect(!core::palette_hit(layout, layout.input.left, layout.input.top),
                "query is not a candidate");
-        const auto narrow = core::palette_layout(350, 240, dpi, 13);
+        const auto narrow = core::palette_layout(350, 240, dpi, {13, core::FinderPreview::off});
         expect(narrow.panel.left >= 0 && narrow.panel.right <= 350 && narrow.panel.bottom <= 240,
                "narrow panel fits client");
     }
     for (const auto extent : {0, 10, 50})
     {
-        const auto tiny = core::palette_layout(extent, extent, 120, 13);
+        const auto tiny = core::palette_layout(extent, extent, 120, {13, core::FinderPreview::off});
         expect(tiny.visible_rows == 0 && core::width_of(tiny.input) >= 0 &&
                    tiny.panel.bottom <= extent,
                "tiny layout stays nonnegative and bounded");
         expect(!core::palette_hit(tiny, 0, 0), "tiny panel has no clickable row");
     }
-    expect(core::palette_layout(1000, 800, 96, 0).visible_rows == 1,
+    expect(core::palette_layout(1000, 800, 96, {0, core::FinderPreview::off}).visible_rows == 1,
            "no results reserves a hint row");
 }
 
@@ -998,7 +998,7 @@ void verify_palette_hint_starts()
 // 記号の案内の置き場（#1640）。入る最も前の組から出し、組の途中で切らない。描画と同じ配置を読む。
 void verify_palette_hint_place(std::uint32_t dpi)
 {
-    const auto layout = core::palette_layout(1600, 1200, dpi, 13);
+    const auto layout = core::palette_layout(1600, 1200, dpi, {13, core::FinderPreview::off});
     const auto &input = layout.input;
     const auto room = width_of(input) - to_pixels(core::palette_hint_gap_dips, dpi);
     const std::array<std::int32_t, 6> roomy{room / 2, room / 3, room / 4, room / 5, room / 6, 8};
@@ -1019,7 +1019,8 @@ void verify_palette_hint_place(std::uint32_t dpi)
     const auto none = core::palette_input_hint(layout, dpi, wide);
     expect(none.first == wide.size() && width_of(none.area) == 0 && none.area.right == input.right,
            "a query narrower than the last group shows no hint");
-    const auto smallest = core::palette_layout(to_pixels(360, dpi), 1200, dpi, 13);
+    const auto smallest =
+        core::palette_layout(to_pixels(360, dpi), 1200, dpi, {13, core::FinderPreview::off});
     const auto least = width_of(smallest.input) - to_pixels(core::palette_hint_gap_dips, dpi);
     const std::array<std::int32_t, 6> long_text{least + 300, least + 200, least + 100,
                                                 least,       90,          40};
@@ -1080,7 +1081,7 @@ void verify_palette_hit_rows(const core::LayoutRect &row, std::uint32_t dpi)
 // 空けて入らなければ幅 0。
 void verify_palette_progress_place(std::uint32_t dpi)
 {
-    const auto layout = core::palette_layout(1600, 1200, dpi, 13);
+    const auto layout = core::palette_layout(1600, 1200, dpi, {13, core::FinderPreview::off});
     const auto &input = layout.input;
     const auto width = to_pixels(160, dpi);
     const auto room = core::width_of(input) - width - to_pixels(24, dpi);
@@ -1098,7 +1099,7 @@ void verify_palette_notes_geometry()
     for (const auto dpi : {96U, 120U})
     {
         const auto inset = to_pixels(8, dpi) * 2;
-        const auto layout = core::palette_layout(1600, 1200, dpi, 13);
+        const auto layout = core::palette_layout(1600, 1200, dpi, {13, core::FinderPreview::off});
         const auto row = core::palette_row(layout, 0);
         const core::LayoutRect inside{row.left + inset, row.top, row.right - inset, row.bottom};
         const auto note = core::palette_row_note(row, dpi);
@@ -1863,7 +1864,7 @@ void verify_palette_visible_rows()
     applied(controller, app::SwitchTab{0});
     applied(controller, app::OpenCommandPalette{});
     applied(controller, app::EditCommand{core::CommandEdit::list_last});
-    const auto rows = core::palette_window_rows(800, 400, 96);
+    const auto rows = core::palette_window_rows(800, 400, 96, core::FinderPreview::off);
     const auto low = palette_of(controller.apply_frame(
         app::VisibleLines{3, core::TextViewGeometry{600, 20, 96, 0}, 800, 400}));
     expect(rows < core::palette_row_limit && low.rows.size() == rows && low.first == 12 - rows &&
@@ -1906,7 +1907,7 @@ void verify_operation_list_opens()
     auto frame = controller.apply_frame(app::OpenOperationList{});
     expect(frame.command_line.value_or(core::InputLineView{}).text == "?" &&
                frame.command_palette.value_or(app::CommandPaletteView{}).selected == 0 &&
-               frame.command_palette.value_or(app::CommandPaletteView{}).total == 40 &&
+               frame.command_palette.value_or(app::CommandPaletteView{}).total == 41 &&
                operation_row(frame, 0) == core::EditorOperation::open_file,
            "the operation list opens behind the question mark on the first row");
     expect(!frame.command_message.has_value(), "the operation list clears the one-line message");
@@ -1931,7 +1932,7 @@ void verify_operation_list_opens()
     frame = controller.apply_frame(app::OpenOperationList{});
     const auto vim_list = frame.command_palette.value_or(app::CommandPaletteView{});
     const auto &vim_rows = vim_list.rows;
-    expect(frame.command_line.value_or(core::InputLineView{}).text == "?" && vim_list.total == 38 &&
+    expect(frame.command_line.value_or(core::InputLineView{}).text == "?" && vim_list.total == 39 &&
                std::ranges::none_of(vim_rows, [](const core::CommandChoice &row)
                                     { return row.operation == core::EditorOperation::undo; }),
            "the Ex line gives way to the vim operation list without undo");

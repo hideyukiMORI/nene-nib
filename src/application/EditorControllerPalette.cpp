@@ -12,6 +12,7 @@
 #include "ExResult.hpp"
 #include "FileBookmarkEdit.hpp"
 #include "FileFolder.hpp"
+#include "FinderPreview.hpp"
 #include "FolderRequest.hpp"
 #include "PaletteFolder.hpp"
 #include "PaletteMarks.hpp"
@@ -66,13 +67,16 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
         auto project = project_search_view();
         auto hit_rows = project.has_value() ? project_hit_rows(first, palette->visible())
                                             : std::vector<core::ProjectHitRow>{};
-        return CommandPaletteView{palette->rows(first, palette->visible()),
-                                  first,
-                                  palette->selected(),
-                                  palette->count(),
-                                  std::move(hint),
-                                  std::move(project),
-                                  std::move(hit_rows)};
+        return CommandPaletteView{
+            palette->rows(first, palette->visible()),
+            first,
+            palette->selected(),
+            palette->count(),
+            std::move(hint),
+            std::move(project),
+            std::move(hit_rows),
+            core::palette_placement(palette->scope(), state_.settings().finder_preview),
+            preview_snippet(*palette)};
     }
     return std::nullopt;
 }

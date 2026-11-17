@@ -354,7 +354,7 @@ void verify_status_items(IDWriteFactory2 &factory, Face face)
 // Ctrl+P の面の「候補なし」（行の名前の欄）と下の案内（件数の 64 DIP を引いた残り）。
 void verify_palette_texts(IDWriteFactory2 &factory, Face face)
 {
-    const auto layout = core::palette_layout(960, 640, dpi, 0);
+    const auto layout = core::palette_layout(960, 640, dpi, {0, core::FinderPreview::off});
     const Pen pen{&factory, face, ui_text_dips, DWRITE_FONT_WEIGHT_BOLD};
     expect_all_fit(
         pen, core::width_of(core::palette_row_label(core::palette_row(layout, 0), dpi, false)),
@@ -444,7 +444,8 @@ void verify_palette_widths(IDWriteFactory2 &factory, Face face)
         const auto bold = pen_at(factory, face, at, DWRITE_FONT_WEIGHT_BOLD);
         for (const auto window : {core::to_pixels(360, at), 1280, 1920})
         {
-            const auto layout = core::palette_layout(window, 800, at, 0);
+            const auto layout =
+                core::palette_layout(window, 800, at, {0, core::FinderPreview::off});
             verify_palette_hint_at(pen, layout, at, window);
             verify_palette_notes_at(pen, bold, layout, at);
         }
@@ -504,7 +505,8 @@ void verify_palette_keys(IDWriteFactory2 &factory, Face key_face)
         const auto [cap, label] = widest_keycap(key_pen, at);
         for (const auto window : {core::to_pixels(360, at), 1280, 1920})
         {
-            const auto row = core::palette_row(core::palette_layout(window, 800, at, 0), 0);
+            const auto row = core::palette_row(
+                core::palette_layout(window, 800, at, {0, core::FinderPreview::off}), 0);
             const auto note = core::palette_row_note(row, at, cap);
             const auto name = core::palette_row_label(row, at, note);
             std::printf("  palette key dpi %u window %d px: widest %s = %d px, field %d px, "

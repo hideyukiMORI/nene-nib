@@ -23,7 +23,7 @@ namespace nenenib::core
 // Ctrl+Shift+O）。
 // 通常モードの Windows の標準の鍵（施主決定 D82・#1395・ADR 0009 の追補）: Ctrl+N も新しいタブ、
 // Ctrl+Shift+Z はやり直す。どちらも見せる鍵は今までどおり Ctrl+T と Ctrl+Y（先の行）。
-inline constexpr std::array<OperationBinding, 56> operation_bindings{{
+inline constexpr std::array<OperationBinding, 57> operation_bindings{{
     {EditorOperation::open_file, OperationModes::ordinary, KeyChord{true, false, OperationKey::o}},
     // 通常モードでは Shift を見ていなかった今の振る舞いを保つ行で、Vim では開くの鍵（D71）。
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, true, OperationKey::o}},
@@ -122,6 +122,10 @@ inline constexpr std::array<OperationBinding, 56> operation_bindings{{
     // プロジェクトの全文検索（ADR 0167 の決定 1）。Ctrl+Shift+F で両モード。Shift なしの Ctrl+F
     // は通常モードの検索の行のまま（Vim の Ctrl-f は半画面送りに残す）。
     {EditorOperation::search_project, OperationModes::both, KeyChord{true, true, OperationKey::f}},
+    // プレビュー欄の置き方を次へ（ADR 0189 の決定 3）。面が開いている間の Ctrl+Shift+P は ui の
+    // 入力行の鍵（面が閉じているときの Ctrl+Shift+P は上の list_files
+    // の行）なので、表の行は鍵なしで F1 の一覧から。
+    {EditorOperation::cycle_finder_preview, OperationModes::both, std::nullopt},
 }};
 
 // 鍵とモード → 操作。表を上から見て、鍵が同じでモードに効く最初の行。値なしは「割り当てが無い」。

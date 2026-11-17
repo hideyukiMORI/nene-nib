@@ -16,6 +16,7 @@
 #include "CommandText.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
+#include "CycleFinderPreview.hpp"
 #include "DeleteText.hpp"
 #include "DiscardAutosave.hpp"
 #include "EditCommand.hpp"
@@ -106,5 +107,6 @@ using EditorIntent = std::variant<
     HoverExplorer, LanguageServerTick, MapTimeout, InsertDateTime, SelectDocumentFormat,
     OpenDocumentFormatList, OpenDisplayLanguageList, BeginFind, BeginGoToLine, BeginReplace,
     SetPreviewPlacement, PointPreview, PrintDocument, RegisterShell, UnregisterShell, PinTab,
-    FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion, OpenProjectSearch>;
+    FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion, OpenProjectSearch,
+    CycleFinderPreview>;
 } // namespace nenenib::application

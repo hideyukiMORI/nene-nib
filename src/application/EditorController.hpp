@@ -10,6 +10,7 @@
 #include "CodePagePort.hpp"
 #include "CommandChoice.hpp"
 #include "CommandEdit.hpp"
+#include "CommandPalette.hpp"
 #include "CompositionView.hpp"
 #include "DetectedText.hpp"
 #include "Diagnostic.hpp"
@@ -59,6 +60,7 @@
 #include "FilePath.hpp"
 #include "FilePort.hpp"
 #include "FindPhase.hpp"
+#include "FinderPreview.hpp"
 #include "FolderBatch.hpp"
 #include "FontFamilies.hpp"
 #include "FontSize.hpp"
@@ -69,6 +71,7 @@
 #include "IntentMark.hpp"
 #include "JsonValue.hpp"
 #include "KeyMap.hpp"
+#include "Language.hpp"
 #include "LanguageServerLink.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
@@ -94,6 +97,7 @@
 #include "PointerClicks.hpp"
 #include "PreviewFullRoute.hpp"
 #include "PreviewPlacement.hpp"
+#include "PreviewSnippet.hpp"
 #include "ProjectHitLanding.hpp"
 #include "ProjectHitRow.hpp"
 #include "ProjectSearchBatch.hpp"
@@ -186,6 +190,8 @@ class EditorController final
     // frame と同じ tab_views の薄い入口。本文の行は作らない。
     [[nodiscard]] std::vector<DocumentView> documents() const;
     [[nodiscard]] std::optional<CommandPaletteView> command_palette_view() const;
+    // 面の配置へ渡す置き方（ADR 0189 の決定 1・2）。面が閉じている・欄を持たない出どころは off。
+    [[nodiscard]] core::FinderPreview palette_placement() const noexcept;
     // 試験の harness が Vim の鍵を 1 つ打つ口（ADR 0048 の決定 8）。窓の VimKeyPress と違い、
     // 入力行が開いていれば再生と同じ command_key の写しで入力行へ入る。
     [[nodiscard]] EditorFrame press_vim_key(const core::VimKey &key);
@@ -534,6 +540,21 @@ class EditorController final
     // プロジェクトの全文検索（ADR 0167 の決定 1・Ctrl+Shift+F）。`:grep` と同じ口で入力 `!` の面を
     // 開く。入力行や面が開いていれば、取り消してから置き換える。
     void accept(const OpenProjectSearch &);
+    // プレビュー欄の置き方を次へ（ADR 0189 の決定 3・EditorControllerFinderPreview.cpp）。設定の
+    // 1 本 persist_settings で書く（変わったときだけ）。
+    void accept(const CycleFinderPreview &);
+    // ---- 探して見る面のプレビュー欄（ADR 0189・EditorControllerFinderPreview.cpp）
+    // 面で選んでいる候補の表示値（決定 4）。欄を持たない出どころ・候補が無いときは値なし。段 P1 は
+    // 開いているタブの文書だけ手元の本文から窓を作り、ほかは見出しと 1 行の知らせ。
+    [[nodiscard]] std::optional<PreviewSnippet>
+    preview_snippet(const core::CommandPalette &palette) const;
+    // 帯の位置 position の文書の本文と言語（アクティブ・読み込み済みの脇の束）。まだ読んでいない
+    // 文書と範囲の外は値なしで、読まない（reach_tab を呼ばない・決定 4）。
+    [[nodiscard]] std::optional<std::pair<const core::TextBuffer *, core::Language>>
+    tab_text_at(std::size_t position) const;
+    // 候補が指すファイル（パスの無い候補は無し）と、それを開いているタブの帯の位置。
+    [[nodiscard]] std::pair<std::optional<core::FilePath>, std::optional<std::size_t>>
+    preview_target(const core::CommandChoice &choice) const;
     // ---- 全文検索（ADR 0167・EditorControllerProjectSearch.cpp）
     // 意図の出口と面を開く道の 1 本（決定 1）。面が `!` の出どころで検索語が前と違えば、前の券を
     // 取り消し、前の当たりを面から外し、新しい券で頼む（検索語が空・解析できない・探す場所が無い

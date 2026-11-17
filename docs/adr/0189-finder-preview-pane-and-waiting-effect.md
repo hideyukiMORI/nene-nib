@@ -37,7 +37,7 @@ D95: Ctrl+P の面で、選択を上下で動かすと隣のプレビュー欄�
 
 ## 強制
 
-- 面の配置は `palette_layout` の 1 本・描画と当たりが同じ値: **planned**（P1 の契約で active）。
+- 面の配置は `palette_layout` の 1 本・描画と当たりが同じ値: **active**（段 P1・#1785 の契約 `nib_tests --finder-layout`: 置き方 × 窓の大きさの表・落とし方・行と印の当たりと描画の矩形・切り替えの順。画素は `nib_window_tests --finder-preview`）。
 - UI スレッドでファイルを読まない・打鍵などの道で port 0 回: **planned**（P2 の `verify_quiet_paths` で active）。
 - 演出は合図と純関数・core に時計と乱数を入れない: **planned**（P3 の契約と `eng/symbols.py` で active）。
 - 色はトークンだけ: **active**（ADR 0008 決定 8・既存の検査）。
