@@ -75,7 +75,6 @@ namespace nenenib::ui::win32
 {
 namespace
 {
-// 印の字の layout の大きさ（物理画素・地に切り抜くので印の 2 文字が収まれば足りる）。
 // 採用案の寸法（docs/design/2026-09-15-look.md 第 2 節）。色は Palette 以外に持たない（ADR 0008）。
 // 画面の文字の大きさは UiTextSizes.hpp（幅の試験と共用）。
 // text の表示の巨大な行の印 `»`（ADR 0139 の決定 2）。
