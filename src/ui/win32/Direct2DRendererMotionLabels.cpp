@@ -1,4 +1,4 @@
-// イージーモーションの印の描画（ADR 0163 の追補 #1800・案 D）。札・印の書式・全部の行の後の印の
+// イージーモーションの印の描画（ADR 0163 の追補 #1800・案 D'）。札・印の書式・全部の行の後の印の
 // 1 パスとその後のキャレット。Direct2DRenderer.cpp の長さの上限（CNF-014）のため翻訳単位を分けた。
 #include "Direct2DRenderer.hpp"
 #include "Direct2DRendererDetail.hpp"
@@ -71,8 +71,8 @@ void Direct2DRenderer::draw_line_labels(const application::EditorFrame &frame,
             draw_label(frame, runs.front(), label);
             continue;
         }
-        // 行の終わり（空の行を含む）の跳び先は字が無いので、その位置の点から当たりを作る（札は
-        // 字のある跳び先と同じ左肩・升の大きさに依らない）。
+        // 行の終わり（空の行を含む）の跳び先は字が無いので、その位置の点と行の高さから当たりを
+        // 作る（札は字のある跳び先と同じく行の中の上寄せ）。
         const auto point =
             text_layout_point(text, range.startPosition, core::CaretAffinity::leading);
         if (!point)
@@ -88,7 +88,7 @@ void Direct2DRenderer::draw_line_labels(const application::EditorFrame &frame,
     }
 }
 
-// 札は motion_label_badge（跳び先の升の左上の肩・空の行と行末も同じ）。字は印の書式の layout を
+// 札は motion_label_badge（跳び先の行の中の上寄せ・空の行と行末も同じ）。字は印の書式の layout を
 // 測ってから札の大きさに広げて中央に置き、札に切り抜いて描く（paint_motion_label・tests/ui と
 // 同じ 1 本）。
 void Direct2DRenderer::draw_label(const application::EditorFrame &frame,
@@ -104,8 +104,7 @@ void Direct2DRenderer::draw_label(const application::EditorFrame &frame,
         return;
     }
     const auto size = D2D1::SizeF(measured.widthIncludingTrailingWhitespace, measured.height);
-    const D2D1_ROUNDED_RECT badge =
-        motion_label_badge(target, size, static_cast<float>(body_top_), dpi_);
+    const D2D1_ROUNDED_RECT badge = motion_label_badge(target, label, size, dpi_);
     const auto &shape = badge.rect;
     if (FAILED(written->SetMaxWidth(shape.right - shape.left)) ||
         FAILED(written->SetMaxHeight(shape.bottom - shape.top)))
@@ -139,8 +138,9 @@ bool Direct2DRenderer::ensure_label_format()
     return true;
 }
 
-// 印の 1 パス（ADR 0163 の追補 #1800・案 D）。札は行の上へはみ出すので、全部の行（本文・面・枠）
-// を描いた後に、上の行から下・左から右の順に描き、後の札が上に来る。札は本文の欄（行番号の欄を
+// 印の 1 パス（ADR 0163 の追補 #1800・案 D'）。全部の行（本文・面・枠）を描いた後に、上の行から
+// 下・左から右の順に描き、後の札が上に来る（札は行の中に収まるが、半角の跳び先の 2 文字の札は
+// 次の升へ出るので、隣の升の面と枠より上に描く順を 1 か所に保つ）。札は本文の欄（行番号の欄を
 // 除く）で切り、その後にキャレット（印が出ている間は枠だけ）を描く。印の無い frame は入口で抜ける。
 void Direct2DRenderer::draw_label_pass(const application::EditorFrame &frame, const BodyPane &pane)
 {

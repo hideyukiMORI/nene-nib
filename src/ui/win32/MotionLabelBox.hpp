@@ -1,5 +1,6 @@
 #pragma once
 
+#include "MotionLabel.hpp"
 #include "MotionLabelPaint.hpp"
 
 #include <d2d1.h>
@@ -9,19 +10,18 @@
 
 namespace nenenib::ui::win32
 {
-// 札の角丸の矩形（ADR 0163 の追補 #1800・案 D）。札は跳び先の升の左上の肩に置く。target は跳び先
-// の当たり矩形（行の layout の HitTestTextRange・字の無い跳び先は位置だけ・折り返しと横の送りと
-// DPI を含んだ位置）、written は札の字の layout の大きさ（印の書式で測った幅と行の高さ）。
-// 幅は字の幅 + 左右 2 DIP、高さは字の行の高さ + 上下 1 DIP。左端は升の左端から 2 DIP 左、札の
-// 下の 1/3 が升の上端より下に掛かり（跳び先の字の上の端に掛かる程度）、残りは行の上へ出る。
-// ただし升が ceiling
-// （本文の欄の上端）の内にあれば、札の上端は ceiling より上へ出さない（見えているいちばん上の画面
-// 行の札は行の中に置く）。全角・空の行・行末も同じ決まりで、大きさは升の幅に依らない（札は
-// どれも自分の行の上の境に並ぶので、上下の行の札と重ならない）。座標と半径は整数の物理画素で、
+// 札の角丸の矩形（ADR 0163 の追補 #1800・案 D'＝行の中の上寄せ）。札は跳び先の自分の行の中に
+// 置き、行の上へ出さない。target は跳び先の当たり矩形（行の layout の HitTestTextRange・字の無い
+// 跳び先は位置と行の高さだけ・折り返しと横の送りと DPI を含んだ位置）、label は印（字の数と
+// 跳び先の升の数）、written は札の字の layout の大きさ（印の書式で測った幅と行の高さ）。
+// 上端は行の上端 + 物理 1 画素（縁の 1 画素が行の上端に載る）、左端は升の左端。高さは字の行の
+// 高さ（上下の余白 0）で、行の高さの 6 割を超えるなら詰める。幅は字の幅 + 左右 2 DIP までの余白で、
+// 升 × 印の字の数（全角の跳び先は升 1 つが半分の幅・2 文字の札は全角 1 字ぶんに収まる）を超える
+// なら余白を 0 まで詰める。半角の跳び先の 2 文字の札は次の升へ出る。座標と半径は整数の物理画素で、
 // 半径は 2 DIP を DPI で丸めて 2〜3 画素に収める。
 [[nodiscard]] D2D1_ROUNDED_RECT motion_label_badge(const DWRITE_HIT_TEST_METRICS &target,
-                                                   D2D1_SIZE_F written, float ceiling,
-                                                   std::uint32_t dpi) noexcept;
+                                                   const core::MotionLabel &label,
+                                                   D2D1_SIZE_F written, std::uint32_t dpi) noexcept;
 
 // 札の字の大きさ（DIP）。本文の 6 割で、下限は 10 DIP（それ未満は l i 1 が潰れる・字体の大きさは
 // DPI で比例する）。
