@@ -273,7 +273,7 @@ void verify_theme_startup_notice()
             text_layouts, autosave,        fonts,       bell,           markdown,
             reads,        language_server, wall_clock,  printer,        shell_registration,
             images,       start_lists,     ui_language, project_search, previews},
-        initial};
+        nenenib::core::Distribution::unpackaged, initial};
     auto frame = controller.frame();
     expect(frame.lines.front().text == "initial body", "initial document uses normal file load");
     expect(frame.command_message.value_or(fixed_text("none")).text() ==
@@ -292,7 +292,7 @@ void verify_theme_startup_notice()
             text_layouts, autosave,        fonts,       bell,           markdown,
             reads,        language_server, wall_clock,  printer,        shell_registration,
             images,       start_lists,     ui_language, project_search, previews},
-        initial};
+        nenenib::core::Distribution::unpackaged, initial};
     expect(unreadable.frame().lines.front().text == "initial body" &&
                unreadable.frame().settings_failure == app::SettingsFailure::malformed,
            "failed settings do not prevent opening initial document");

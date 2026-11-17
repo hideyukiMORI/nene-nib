@@ -54,3 +54,12 @@ Nib は zip で配る exe で、インストーラーが無いので OS に登�
 | HKLM に書く（全ユーザー） | 管理者権限が要り、zip で配る exe の段階に合わない。段 2（インストーラー・Store）で決める |
 | `IExplorerCommand` の COM サーバーを段 1 で書く | パッケージの identity と署名が無いと Windows 11 の最上位に出ない。費用に見合わない（D73） |
 | 鍵と値を adapter が直に組み立てる | 試験が実機のレジストリに依る。純関数なら文字列で固定できる（ARC-003） |
+
+## 追補（2026-11-17・#1809）: Store 版（パッケージ）では 2 つの操作を F1 の一覧に出さない
+
+Store 版（MSIX）では HKCU の書き込みがパッケージ専用の場所へ写り、エクスプローラーに項目が出ない（1.0.0 の施主の確かめ 6-C-4）。効かない操作を一覧に置かない。ZIP 版の振る舞いは変えない。「プログラムから開く」をマニフェストで宣言する道は別の Issue。
+
+1. **製品の形は閉じた値 `core::Distribution{unpackaged, packaged}`。** OS に問うのは `src/adapters/win32/Win32Distribution` の `current_distribution()` だけで（ARC-007）、`GetCurrentPackageFullName` が `APPMODEL_ERROR_NO_PACKAGE` を返せば `unpackaged`、ほかは package identity が在るので `packaged`（写しは純関数 `distribution_of`）。合成ルートが起動時に 1 回だけ呼び、`EditorController` の構築の引数に渡す。core と application は値を受けるだけ。
+2. **どの操作がその形で効くかは core の `operation_distributed(operation, distribution)` の 1 本。** `packaged` では `register_shell` と `unregister_shell` が偽。F1 の一覧（`operation_choices`）は `PaletteMode.distribution` でこれを読んで行を外す。controller は面を開くとき `PaletteMode{mode, menu, distribution_}` を名指しで作る（`palette_mode_of(EditMode)` は編集モードだけを知る試験と測定の口で ZIP 版）。
+3. **別の道で届いても書かない。** 鍵・古い一覧の位置などから `RegisterShell` / `UnregisterShell` が届いたら、`packaged` では port を呼ばず、鳴らさない 1 行（`UiMessage::notice_shell_packaged`・3 列）で知らせる。
+4. **契約。** core `--operations`: 一覧の件数をパッケージの有無で 2 通り（通常・Vim の INSERT・NORMAL・VISUAL）、`packaged` の列は 2 つを除いて表の順。application `--shell-registration`: `packaged` の controller で一覧に 2 つが無く、2 つの意図が port に触れずに知らせる（パッケージの状態は値を渡すだけで作り、OS を偽装しない）。adapters: 写しの 3 値と、試験の exe（ZIP の形）で `unpackaged`。表の契約（`verify_no_shared_key` ほか）は不変。

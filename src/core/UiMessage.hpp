@@ -164,6 +164,7 @@ enum class UiMessage : std::uint16_t
     notice_shell_registry_failed,
     notice_shell_empty_path,
     notice_shell_quote_in_path,
+    notice_shell_packaged,
     notice_pane_already_split,
     notice_pane_preview_unreachable,
     notice_layout_inconsistent,

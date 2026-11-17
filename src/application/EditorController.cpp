@@ -383,8 +383,9 @@ shown_matches(const core::TextBuffer &text, const LineView &shown, const core::V
 }
 } // namespace
 
-EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocument> &initial)
-    : ports_(ports),
+EditorController::EditorController(EditorPorts ports, core::Distribution distribution,
+                                   const std::vector<OpenDocument> &initial)
+    : ports_(ports), distribution_(distribution),
       state_(EditorState::create(appearance_or_dark(ports.appearance), core::EditMode::ordinary))
 {
     const auto inventory = ports_.themes.read();

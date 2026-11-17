@@ -9,6 +9,7 @@
 #include "ExResult.hpp"
 #include "KeyChord.hpp"
 #include "OperationBindings.hpp"
+#include "OperationDistribution.hpp"
 #include "OperationReadings.hpp"
 #include "OperationText.hpp"
 #include "OperationTexts.hpp"
@@ -443,7 +444,8 @@ std::vector<CommandChoice> operation_choices(std::string_view query, PaletteMode
     for (const OperationText &text : operation_texts)
     {
         const auto key = listed_key(text.operation, mode);
-        if (!operation_available(text.operation, mode.edit) || !key.has_value())
+        if (!operation_available(text.operation, mode.edit) ||
+            !operation_distributed(text.operation, mode.distribution) || !key.has_value())
         {
             continue;
         }
