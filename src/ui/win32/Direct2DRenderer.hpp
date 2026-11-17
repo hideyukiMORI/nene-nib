@@ -218,13 +218,20 @@ class Direct2DRenderer final
                             const core::LayoutRect &area, const application::LineView &line);
     void draw_line_selection(const application::EditorFrame &frame, IDWriteTextLayout *text,
                              const core::LayoutRect &area, const application::LineView &line);
-    // イージーモーションの印（ADR 0163 の決定 6）。跳び先の文字の升に accent の地を敷き、印の字を
-    // on_accent で描く。印の字の layout は行の layout の書式（字体と大きさ）から別に作り、共有の
-    // 本文の layout の書式は変えない（ADR 0114）。印の無い行は 1 回の判定で抜ける。
+    // イージーモーションの印（ADR 0163 の決定 6 と追補 #1800・案 D）。跳び先の升の左上の肩に text
+    // の札を置き、印の字を background で札の中央に描く。行の札は左から右の順（重なれば右が上）。
+    // 印の字の layout は印の専用の書式（label_format_）から作り、共有の本文の layout の書式は
+    // 変えない（ADR 0114）。いちばん上の画面行の札は本文の欄の上端（body_top_）より上へ出さない。
     void draw_line_labels(const application::EditorFrame &frame, IDWriteTextLayout *text,
                           const core::LayoutRect &area, const application::LineView &line);
-    void draw_label(const application::EditorFrame &frame, IDWriteTextLayout *text,
-                    const DWRITE_HIT_TEST_METRICS &target, const core::MotionLabel &label);
+    void draw_label(const application::EditorFrame &frame, const DWRITE_HIT_TEST_METRICS &target,
+                    const core::MotionLabel &label);
+    // 印の字の書式（本文の字体の太字・motion_label_text_dips・中央寄せ）。印が出たときに初めて
+    // 作り、本文の書式を作り直す所（DPI・字体・大きさの変更）で捨てる。作れなければ偽。
+    [[nodiscard]] bool ensure_label_format();
+    // 全部の行を描いた後の印の 1 パスと、その後のキャレット。印の無い frame は入口で抜ける。
+    void draw_label_pass(const application::EditorFrame &frame, const BodyPane &pane);
+    void draw_pass_caret(const application::EditorFrame &frame, const BodyPane &pane);
     // 本文の桁の区間（begin と end を持つ Span の列）を描く layout の UTF-16 の範囲へ写す 1 本
     // （色の区間と診断の下線の共用・IME の差し込み行は #839）。返す列は spans と同じ並びと長さ。
     template <typename Span>
@@ -421,6 +428,8 @@ class Direct2DRenderer final
     TextFormat mode_format_;
     TextFormat command_format_;
     TextFormat gutter_format_;
+    // イージーモーションの印の字（ensure_label_format・#1800）。
+    TextFormat label_format_;
     // 面の行の右端の鍵。本文の字体・UI の大きさ・左寄せ（幅を測るので右寄せにしない）。
     TextFormat key_format_;
     // エクスプローラーの面の名前。UI
