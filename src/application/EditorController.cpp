@@ -642,6 +642,9 @@ void EditorController::settle_transient()
 {
     // 同じ意図の出口で、確定の外で閉じたオペレータ待ちの入力行の待ちも捨てる（#1549）。
     settle_vim_line();
+    // 全文検索の検索語の変化・面の閉じ・開いた当たりのキャレットも同じ出口で拾い、入力行の編集の
+    // 経路ごとに書かない（ADR 0167 の決定 1・5）。
+    settle_project_search();
     if (state_.transient().has_value() && !state_.transient_saved())
     {
         state_ = state_.without_transient();
@@ -680,6 +683,11 @@ std::optional<core::DisplayText> EditorController::command_message() const
     if (reading.has_value())
     {
         return reading;
+    }
+    // 全文検索の面の進み具合（ADR 0167 の決定 5）。今の 1 行の形の ui はステータスバーに出す。
+    if (auto searching = project_search_view(); searching.has_value())
+    {
+        return std::move(searching).value().line;
     }
     if (!command_palette_active() || !palette_folder_.truncated)
     {
@@ -768,6 +776,9 @@ void EditorController::accept(const WorkCompleted &)
     collect_language_server();
     // 起動画面の履歴とブックマーク（ADR 0172 の決定 3）。頼んでいなければ呼ばない。
     collect_start_lists();
+    // 全文検索（ADR 0167 の決定 4）。頼んでいなければ呼ばない。面の当たりを足すので、下の面を読む
+    // 前に呼ぶ。
+    collect_project_search();
     const auto &input = state_.command_input();
     const auto *palette =
         input.has_value() ? std::get_if<core::CommandPalette>(&input.value()) : nullptr;

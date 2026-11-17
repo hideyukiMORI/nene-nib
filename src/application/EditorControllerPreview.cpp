@@ -143,6 +143,7 @@ images_of(const core::MarkdownDocument &document, const std::optional<core::File
            std::holds_alternative<CancelCommand>(intent) ||
            std::holds_alternative<PasteCommand>(intent) ||
            std::holds_alternative<OpenCommandPalette>(intent) ||
+           std::holds_alternative<OpenProjectSearch>(intent) ||
            std::holds_alternative<ActivateCommandChoice>(intent) ||
            std::holds_alternative<SearchHop>(intent) || passes_full_preview_window(intent);
 }

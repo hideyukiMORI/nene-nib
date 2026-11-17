@@ -61,8 +61,18 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
         // 載せるのは見えている行の窓だけ（ADR 0062 の決定 2）。全件は写さない。窓の先頭は面の
         // 状態（ADR 0150 の決定 1）。
         const auto first = palette->first();
-        return CommandPaletteView{palette->rows(first, palette->visible()), first,
-                                  palette->selected(), palette->count(), std::move(hint)};
+        // 全文検索の面は当たりの行の表示値も同じ窓で載せる（ADR 0167 の決定 5・段 G3 の 2
+        // 段の行）。
+        auto project = project_search_view();
+        auto hit_rows = project.has_value() ? project_hit_rows(first, palette->visible())
+                                            : std::vector<core::ProjectHitRow>{};
+        return CommandPaletteView{palette->rows(first, palette->visible()),
+                                  first,
+                                  palette->selected(),
+                                  palette->count(),
+                                  std::move(hint),
+                                  std::move(project),
+                                  std::move(hit_rows)};
     }
     return std::nullopt;
 }
@@ -257,6 +267,9 @@ void EditorController::open_palette(std::string_view input, std::size_t selected
         state_ =
             state_.with_command_message(ui_notice(core::UiMessage::notice_bookmarks_unreadable));
     }
+    // `:grep` と Ctrl+Shift+F は入力 `!` で開くので、開いた面の検索語をここで頼む（ADR 0167 の
+    // 決定 1・意図の出口を通らない harness の道も同じ）。
+    settle_project_search();
 }
 
 void EditorController::request_folder(const std::vector<core::CommandChoice> &entries)
@@ -438,8 +451,10 @@ bool EditorController::bookmark_toggle_allowed() const
     }
     const auto *palette = std::get_if<core::CommandPalette>(&input.value());
     // 設定のコマンド（:）と操作の一覧（?）の面にはファイルが無いので、何も出さず何もしない。
+    // 全文検索（!）の当たりの行はブックマークの対象ではない（ADR 0167・設計席の決め 2026-11-16）。
     return palette != nullptr && palette->scope() != core::PaletteScope::commands &&
-           palette->scope() != core::PaletteScope::operations;
+           palette->scope() != core::PaletteScope::operations &&
+           palette->scope() != core::PaletteScope::project_hits;
 }
 
 void EditorController::accept(const ToggleBookmark &)
@@ -508,6 +523,12 @@ void EditorController::submit_palette(const core::CommandPalette &palette)
         return;
     }
     const auto &choice = chosen.value();
+    // 全文検索の当たりは、その行と桁へキャレットを置く開き方（ADR 0167 の決定 5）。
+    if (choice.origin == core::PaletteOrigin::project_hit)
+    {
+        open_project_hit(palette.selected());
+        return;
+    }
     switch (choice.kind)
     {
     case core::CommandChoiceKind::execute:

@@ -75,10 +75,12 @@ class VimPattern final
 
     // 当たる行に必ず現れるバイト列（#1003・ADR 0167 の追補）。量の付かない literal の原子が
     // 続く最も長い列（`ne\+dle` なら `dle`・`^\s*return` なら `return`）。大小を畳む原子は、
-    // ASCII で、かつ ASCII の外から畳まれて来る字が無いとき（vim_folded_only_from_ascii）だけ
-    // 列に入れ、列は ASCII を畳んだ形になる。cluster と結合文字の原子は列を切る。命令の列の道と、
-    // 列に入る原子が 1 つも無いパターンは値が無い（絞り込み無し）。今は全文検索だけが呼ぶ
-    // （`/`・Ctrl+F・hlsearch の照合の道はまだ呼ばない）。
+    // 畳みの仲間を ASCII だけを畳む比較で見分けられないとき（vim_folded_ascii_comparable）だけ
+    // 列に入れる。ASCII の字は畳んだ形で、ASCII の外で仲間の無い字（`日`）は畳まずに列へ入れる
+    // （`k` `s` と ASCII の外の大小のある字は列を切る）。cluster
+    // と結合文字の原子も列を切る。命令の列の道と、 列に入る原子が 1
+    // つも無いパターンは値が無い（絞り込み無し）。今は全文検索だけが呼ぶ （`/`・Ctrl+F・hlsearch
+    // の照合の道はまだ呼ばない）。
     [[nodiscard]] std::optional<VimPatternNeedle> required_bytes() const;
 
     // 照合器が通る道（ADR 0184 の決定 1）。matched と VimPatternEvaluation はこの答えで道を選ぶ。

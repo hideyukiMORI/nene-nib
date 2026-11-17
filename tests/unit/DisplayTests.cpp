@@ -42,6 +42,7 @@
 #include "ScriptedLanguageServer.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPrinter.hpp"
+#include "ScriptedProjectSearch.hpp"
 #include "ScriptedShellRegistration.hpp"
 #include "ScriptedStartLists.hpp"
 #include "ScriptedTextLayouts.hpp"
@@ -192,8 +193,8 @@ void verify_question_once()
            "the question itself leaves the display as text");
 }
 
-// 起動（引数・前回のタブ）は最後にアクティブになった文書だけを聞き、ほかは見るときに聞く。
-void verify_startup_question()
+// 引数も一覧も無い起動は聞かず、巨大なタブがアクティブの復元は最初の frame の前に聞く。
+void verify_startup_question_restored()
 {
     {
         Editing editing(SessionReading{std::nullopt}, hold_documents);
@@ -213,6 +214,12 @@ void verify_startup_question()
         expect(restored.controller().delivery().display_question,
                "restoring a giant active tab asks before the first frame");
     }
+}
+
+// 起動（引数・前回のタブ）は最後にアクティブになった文書だけを聞き、ほかは見るときに聞く。
+void verify_startup_question()
+{
+    verify_startup_question_restored();
     ScriptedAppearance appearance{Reading{core::Appearance::dark}};
     ScriptedClipboard clipboard;
     ScriptedFiles files;
@@ -232,17 +239,19 @@ void verify_startup_question()
     ScriptedImages images;
     ScriptedStartLists start_lists;
     ScriptedUiLanguage ui_language;
+    ScriptedProjectSearch project_search;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, code_pages};
     ScriptedLanguageServer language_server;
     app::EditorController controller(
-        app::EditorPorts{appearance,   clipboard,       files,      code_pages, settings,
-                         themes,       session,         history,    folders,    bookmarks,
-                         text_layouts, autosave,        fonts,      bell,       markdown,
-                         reads,        language_server, wall_clock, printer,    shell_registration,
-                         images,       start_lists,     ui_language},
+        app::EditorPorts{appearance,      clipboard,   files,        code_pages,
+                         settings,        themes,      session,      history,
+                         folders,         bookmarks,   text_layouts, autosave,
+                         fonts,           bell,        markdown,     reads,
+                         language_server, wall_clock,  printer,      shell_registration,
+                         images,          start_lists, ui_language,  project_search},
         {open_of(giant_path), open_of(small_path)});
     expect(!controller.delivery().display_question,
            "starting with a small file last does not ask about the giant one yet");
@@ -642,6 +651,7 @@ void verify_startup_before_layout()
     ScriptedImages images;
     ScriptedStartLists start_lists;
     ScriptedUiLanguage ui_language;
+    ScriptedProjectSearch project_search;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -652,7 +662,7 @@ void verify_startup_before_layout()
                                  folders,         bookmarks,   text_layouts, autosave,
                                  fonts,           bell,        markdown,     reads,
                                  language_server, wall_clock,  printer,      shell_registration,
-                                 images,          start_lists, ui_language};
+                                 images,          start_lists, ui_language,  project_search};
     app::EditorController started(ports, {open_of(giant_path)});
     expect(started.delivery().display_question, "starting with a giant line asks");
     const auto first = started.apply(app::VisibleLines{10, grid_geometry});

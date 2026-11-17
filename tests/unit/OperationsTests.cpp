@@ -118,7 +118,8 @@ constexpr std::array<ChordRow, 58> chord_rows{{
     {KeyChord{false, true, OperationKey::f3}, EditorOperation::find_previous, std::nullopt},
     {ctrl(OperationKey::h), EditorOperation::replace, std::nullopt},
     {ctrl(OperationKey::g), EditorOperation::go_to_line, std::nullopt},
-    {ctrl_shift(OperationKey::f), std::nullopt, std::nullopt},
+    // プロジェクトの全文検索 Ctrl+Shift+F は両モード（ADR 0167 の決定 1）。
+    {ctrl_shift(OperationKey::f), EditorOperation::search_project, EditorOperation::search_project},
     {ctrl_shift(OperationKey::g), std::nullopt, std::nullopt},
     {ctrl(OperationKey::f3), std::nullopt, std::nullopt},
     // メモ帳の新しいタブ Ctrl+N（D82・#1395）。通常モードだけで、Vim と Ctrl+Shift+N は値なし。
@@ -134,7 +135,7 @@ constexpr std::array<ChordRow, 58> chord_rows{{
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
-constexpr std::array<ShownRow, 39> shown_rows{{
+constexpr std::array<ShownRow, 40> shown_rows{{
     {EditorOperation::open_file, "Ctrl+O", "Ctrl+Shift+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
@@ -184,6 +185,8 @@ constexpr std::array<ShownRow, 39> shown_rows{{
     {EditorOperation::choose_language, "", "", true, true},
     // 鍵なし。F1 の一覧と Vim の `:version` から（施主決定 D90）。
     {EditorOperation::show_version, "", "", true, true},
+    // 両モードの Ctrl+Shift+F・F1 の一覧と Vim の `:grep` から（ADR 0167 の決定 1）。
+    {EditorOperation::search_project, "Ctrl+Shift+F", "Ctrl+Shift+F", true, true},
 }};
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
@@ -366,7 +369,7 @@ void verify_operation_choices()
 {
     const auto ordinary = japanese_choices("", EditMode::ordinary);
     const auto vim = japanese_choices("", EditMode::vim);
-    expect(ordinary.size() == 39 && vim.size() == 37,
+    expect(ordinary.size() == 40 && vim.size() == 38,
            "an empty query lists every operation available in the mode");
     std::vector<Operation> in_order;
     for (const auto &text : nenenib::core::operation_texts)

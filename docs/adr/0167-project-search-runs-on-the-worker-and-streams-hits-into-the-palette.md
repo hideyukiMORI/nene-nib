@@ -22,7 +22,8 @@ telescope の live_grep・fzf の `:Rg` は「プロジェクトの中の文字�
 
 ## 強制
 
-- UI スレッドで本文を読まない・照合しない: **planned**（port と controller が入る段 G2 の `verify_quiet_paths` と契約で active にする。今は `eng/symbols.py` が core の照合の純関数の純粋性だけを守る）。
+- UI スレッドで本文を読まない・照合しない: **planned**（読みと照合を worker の上で回す adapter と、それを結ぶ合成ルートは段 G3。今の合成ルートは要求を受けて何もしない口 `UnwiredProjectSearch` を結ぶ。`eng/symbols.py` は core の照合の純関数の純粋性だけを守る）。
+- application が全文検索に触れるのは `ProjectSearchPort` の 1 つだけで、打鍵・切り替え・保存・起動・開くの道では呼ばない: **active**（段 G2・`verify_quiet_paths` の port 0 回と、替え玉 `ScriptedProjectSearch` の契約 `--project-search-controller`: 券・途中の batch・古い券の結果を捨てる・取消・1,000 件・`open_listed` と位置・ルートが無いとき・無題・面を閉じた後に届いた batch）。
 - 面の候補は 1 列・見えている行だけ: **active**（ADR 0062 の契約の形）。
 - 8 本の速さ: **active**（QLT-014）。
 
