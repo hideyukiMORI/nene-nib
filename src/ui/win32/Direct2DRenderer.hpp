@@ -24,6 +24,7 @@
 #include "LineUtf16Evaluation.hpp"
 #include "LineView.hpp"
 #include "MinimapPicture.hpp"
+#include "MotionLabel.hpp"
 #include "OperationGuideLayout.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteRowLayouts.hpp"
@@ -211,6 +212,13 @@ class Direct2DRenderer final
                             const core::LayoutRect &area, const application::LineView &line);
     void draw_line_selection(const application::EditorFrame &frame, IDWriteTextLayout *text,
                              const core::LayoutRect &area, const application::LineView &line);
+    // イージーモーションの印（ADR 0163 の決定 6）。跳び先の文字の升に accent の地を敷き、印の字を
+    // on_accent で描く。印の字の layout は行の layout の書式（字体と大きさ）から別に作り、共有の
+    // 本文の layout の書式は変えない（ADR 0114）。印の無い行は 1 回の判定で抜ける。
+    void draw_line_labels(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                          const core::LayoutRect &area, const application::LineView &line);
+    void draw_label(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                    const DWRITE_HIT_TEST_METRICS &target, const core::MotionLabel &label);
     // 本文の桁の区間（begin と end を持つ Span の列）を描く layout の UTF-16 の範囲へ写す 1 本
     // （色の区間と診断の下線の共用・IME の差し込み行は #839）。返す列は spans と同じ並びと長さ。
     template <typename Span>

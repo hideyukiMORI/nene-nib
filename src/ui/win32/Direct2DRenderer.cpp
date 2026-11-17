@@ -28,6 +28,9 @@
 #include "Milestone.hpp"
 #include "MinimapFlush.hpp"
 #include "MinimapLayout.hpp"
+#include "MotionLabel.hpp"
+#include "MotionLabelBox.hpp"
+#include "MotionLabelPaint.hpp"
 #include "OperationGuide.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteMarks.hpp"
@@ -1097,6 +1100,50 @@ void Direct2DRenderer::draw_current_match(const application::EditorFrame &frame,
     }
 }
 
+void Direct2DRenderer::draw_line_labels(const application::EditorFrame &frame,
+                                        IDWriteTextLayout *text, const core::LayoutRect &area,
+                                        const application::LineView &line)
+{
+    if (line.labels.empty())
+    {
+        return;
+    }
+    LineUtf16Evaluation positions(line.display.text);
+    for (const auto &label : line.labels)
+    {
+        const core::SelectionSpan target{core::SelectionPresence::present, label.column,
+                                         core::Column{label.column.value + 1}};
+        const auto runs = runs_of(text, area, range_of(line, target, positions));
+        if (!runs.empty())
+        {
+            draw_label(frame, text, runs.front(), label);
+        }
+    }
+}
+
+// 地は motion_label_box（升 × max(跳び先の升の数, 印の字の数)）、字は行の layout の書式から作った
+// 別の layout で、地に切り抜いて左に寄せる（paint_motion_label・tests/ui と同じ 1 本）。
+void Direct2DRenderer::draw_label(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                                  const DWRITE_HIT_TEST_METRICS &target,
+                                  const core::MotionLabel &label)
+{
+    const D2D1_RECT_F box = motion_label_box(target, label);
+    const core::LayoutRect bounds{static_cast<std::int32_t>(std::floor(box.left)),
+                                  static_cast<std::int32_t>(std::floor(box.top)),
+                                  static_cast<std::int32_t>(std::ceil(box.right)),
+                                  static_cast<std::int32_t>(std::ceil(box.bottom))};
+    const auto written = text_layout(label.label, text, bounds);
+    if (!written || FAILED(written->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)) ||
+        FAILED(written->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING)))
+    {
+        text_failure_ = RenderFailure::directwrite;
+        return;
+    }
+    paint_motion_label(*context_.Get(), brush_.Get(),
+                       MotionLabelPaint{box, written.Get(), to_color(frame.palette.accent),
+                                        to_color(frame.palette.on_accent)});
+}
+
 void Direct2DRenderer::draw_line_selection(const application::EditorFrame &frame,
                                            IDWriteTextLayout *text, const core::LayoutRect &area,
                                            const application::LineView &line)
@@ -1506,6 +1553,8 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame, co
     draw_replaced(frame, text.Get(), area, replaced_ranges(line.display, DWRITE_TEXT_RANGE{0, 0}));
     draw_line_diagnostics(frame, text.Get(), area, line);
     draw_current_match(frame, text.Get(), area, line);
+    // 印は本文と枠の後・キャレットの前（印が出ている間もキャレットは上に描く・ADR 0163 の決定 6）。
+    draw_line_labels(frame, text.Get(), area, line);
     if (line.number != pane.caret.position.line)
     {
         return;

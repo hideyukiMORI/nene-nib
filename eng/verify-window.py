@@ -3397,6 +3397,80 @@ def verify_find(executable: Path, environment: dict, output: Path, frames: Path 
     return record
 
 
+# イージーモーション（ADR 0163・#1782）の見本。1 行目に跳び先の語を 3 つ、2 行目に全角の語。
+EASYMOTION_DOCUMENT = "alpha beta gamma
+日本語のテキスト
+"
+
+
+def verify_easymotion(executable: Path, environment: dict, output: Path,
+                      frames: Path | None) -> dict:
+    """Issue #1782 (#998 stage M4, ADR 0163 decisions 6 and 8): the easymotion labels.
+
+    The 通常 | Vim toggle is clicked (a posted click), then `\\\\w` paints the labels on the word
+    starts after the caret (the first row changes, saved as <frames>/easymotion-labels.png with
+    --capture), the label key `s` jumps to its target (the 行 X, 桁 Y item changes and the labels go
+    away, <frames>/easymotion-jumped.png), and `\\\\f` then `テ` (a committed character, as WM_CHAR)
+    jumps to the katakana word on the second row. Every key is a posted WM_CHAR, so the window
+    never needs the foreground."""
+    opened = output / "easymotion-sample.txt"
+    opened.write_text(EASYMOTION_DOCUMENT, encoding="utf-8", newline="
+")
+    process, window, _ = start(executable, environment, [str(opened)])
+    try:
+        raise_window(window)
+        time.sleep(0.6)
+        assert await_cover_gone(window), "the WARP cover child is still over the window"
+        assert_uncovered(window)
+        dpi = user.GetDpiForWindow(window)
+        client = rectangle(window, user.GetClientRect)
+        width, height = client[2] - client[0], client[3] - client[1]
+        size = (width, height)
+        body = body_points(width, height, dpi)
+        position = status_item_box(width, height, dpi, 0)
+        first = content_row_box(body, 0, width, dpi)
+        toggle = toggle_points(width, height, dpi)
+        click(window, toggle["vim"][0], toggle["vim"][1])
+        time.sleep(0.5)
+        before = capture(window, width, height)
+        snapshot(frames, window, "easymotion-before")
+        write_text(window, "\\\\w")
+        labeled = await_new_frame(window, before, size)
+        snapshot(frames, window, "easymotion-labels")
+        write_text(window, "s")
+        jumped = await_new_frame(window, labeled, size)
+        snapshot(frames, window, "easymotion-jumped")
+        write_text(window, "\\\\f")
+        prompted = await_new_frame(window, jumped, size)
+        snapshot(frames, window, "easymotion-character-line")
+        write_text(window, "テ")
+        landed = await_new_frame(window, prompted, size)
+        snapshot(frames, window, "easymotion-character-jump")
+
+        def box(pixels: bytes, area: tuple) -> list:
+            return box_pixels(pixels, width, area)
+
+        record = {
+            "driven": True, "dpi": dpi,
+            "labelsPainted": box(labeled, first) != box(before, first),
+            "caretKeptWhileLabelled": box(labeled, position) == box(before, position),
+            "labelJumped": box(jumped, position) != box(labeled, position),
+            "characterLineShown": box(prompted, status_left_box(width, height, dpi))
+            != box(jumped, status_left_box(width, height, dpi)),
+            "characterJumped": box(landed, position) != box(prompted, position),
+        }
+        print(json.dumps(record, ensure_ascii=False), file=sys.stderr)
+        for name in ("labelsPainted", "caretKeptWhileLabelled", "labelJumped",
+                     "characterLineShown", "characterJumped"):
+            assert record[name], f"easymotion: {name} did not hold"
+        close(window)
+        record["exitCode"] = process.wait(timeout=5)
+        assert record["exitCode"] == 0, record["exitCode"]
+    finally:
+        stop(process)
+    return record
+
+
 VK_DOWN = 0x28
 # 起動画面の寸法（DIP）。core の start_screen_layout（src/core/StartScreenLayout.hpp の採用値）の写し。
 START_COLUMN_DIPS = 480
@@ -3813,6 +3887,9 @@ def main() -> None:
                         "posted messages only")
     parser.add_argument("--find", action="store_true",
                         help="run the ordinary find section alone (Issue #1127); it sends Ctrl+F")
+    parser.add_argument("--easymotion", action="store_true",
+                        help="run the easymotion labels section alone (Issue #1782); posted "
+                             "messages only")
     parser.add_argument("--start-screen", action="store_true",
                         help="run the start screen section alone (Issue #1455); posted messages only")
     arguments = parser.parse_args()
@@ -3879,6 +3956,12 @@ def main() -> None:
                            or arguments.gutter or arguments.explorer
                            or arguments.keys is not None or arguments.open is not None):
         parser.error("--find runs alone")
+    if arguments.easymotion and (arguments.tabs or arguments.split or arguments.preview
+                                 or arguments.restore or arguments.grid or arguments.giant_text
+                                 or arguments.autosave or arguments.palette or arguments.syntax
+                                 or arguments.gutter or arguments.explorer or arguments.find
+                                 or arguments.keys is not None or arguments.open is not None):
+        parser.error("--easymotion runs alone")
     if arguments.double_click and (arguments.tabs or arguments.split or arguments.preview
                                    or arguments.restore or arguments.grid or arguments.giant_text
                                    or arguments.autosave or arguments.palette or arguments.syntax
@@ -3955,6 +4038,14 @@ def main() -> None:
     if arguments.double_click:
         try:
             record = verify_double_click(executable, environment, output, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.easymotion:
+        try:
+            record = verify_easymotion(executable, environment, output, frames)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)
