@@ -423,10 +423,10 @@ void verify_palette_notes_at(const Pen &pen, const Pen &bold, const core::Palett
     const auto note = core::width_of(core::palette_row_note(core::palette_row(layout, 0), at));
     for (const auto language : languages)
     {
-        for (const auto origin :
-             {core::PaletteOrigin::tab, core::PaletteOrigin::bookmarked_tab,
-              core::PaletteOrigin::bookmark, core::PaletteOrigin::history,
-              core::PaletteOrigin::folder, core::PaletteOrigin::document_format})
+        for (const auto origin : {core::PaletteOrigin::tab, core::PaletteOrigin::bookmarked_tab,
+                                  core::PaletteOrigin::bookmark, core::PaletteOrigin::history,
+                                  core::PaletteOrigin::folder, core::PaletteOrigin::document_format,
+                                  core::PaletteOrigin::project_hit})
         {
             expect_fits_in(pen, note, Said{language, core::palette_origin_label(origin, language)},
                            "the palette row note fits its 112 DIP frame");

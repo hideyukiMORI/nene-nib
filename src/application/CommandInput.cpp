@@ -74,6 +74,7 @@ namespace
     case core::PaletteScope::history:
     case core::PaletteScope::folder:
     case core::PaletteScope::operations:
+    case core::PaletteScope::project_hits:
         return {};
     }
     std::unreachable();

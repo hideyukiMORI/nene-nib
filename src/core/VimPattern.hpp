@@ -8,6 +8,7 @@
 #include "VimPatternInstruction.hpp"
 #include "VimPatternLimits.hpp"
 #include "VimPatternMatch.hpp"
+#include "VimPatternNeedle.hpp"
 #include "VimPatternRange.hpp"
 #include "VimPatternRoute.hpp"
 #include "VimSearchDirection.hpp"
@@ -71,6 +72,14 @@ class VimPattern final
     // 決める）。空のパターンと、literal 以外の原子や `*` を含むパターンは値が無い。大小を畳む
     // パターンは、英字か ASCII の外の文字を含めば値が無い（バイト列の一致で絞れない・#1041）。
     [[nodiscard]] std::optional<std::string> literal_bytes() const;
+
+    // 当たる行に必ず現れるバイト列（#1003・ADR 0167 の追補）。量の付かない literal の原子が
+    // 続く最も長い列（`ne\+dle` なら `dle`・`^\s*return` なら `return`）。大小を畳む原子は、
+    // ASCII で、かつ ASCII の外から畳まれて来る字が無いとき（vim_folded_only_from_ascii）だけ
+    // 列に入れ、列は ASCII を畳んだ形になる。cluster と結合文字の原子は列を切る。命令の列の道と、
+    // 列に入る原子が 1 つも無いパターンは値が無い（絞り込み無し）。今は全文検索だけが呼ぶ
+    // （`/`・Ctrl+F・hlsearch の照合の道はまだ呼ばない）。
+    [[nodiscard]] std::optional<VimPatternNeedle> required_bytes() const;
 
     // 照合器が通る道（ADR 0184 の決定 1）。matched と VimPatternEvaluation はこの答えで道を選ぶ。
     // 試験が「量の無いパターンは今の道のまま」を直接見るための口でもある。
