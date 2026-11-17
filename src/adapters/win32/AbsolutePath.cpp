@@ -1,31 +1,23 @@
 #include "AbsolutePath.hpp"
 
+#include "NativePath.hpp"
 #include "Utf16.hpp"
-
-#include <windows.h>
 
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace nenenib::adapters::win32
 {
 std::optional<core::FilePath> absolute_file_path(const std::wstring &path)
 {
-    const DWORD length = GetFullPathNameW(path.c_str(), 0, nullptr, nullptr);
-    if (length == 0)
-    {
-        return std::nullopt;
-    }
-    std::vector<wchar_t> buffer(length, L'\0');
-    const DWORD written = GetFullPathNameW(path.c_str(), length, buffer.data(), nullptr);
-    if (written == 0 || written >= length)
+    // 絶対にする道は native_path と同じ full_path の 1 本（予約名を装置に写さない・#1805）。
+    const std::wstring full = full_path(path);
+    if (full.empty())
     {
         return std::nullopt;
     }
     // 変換できない経路（対にならないサロゲート）は空になり、FilePath::parse が拒む。
-    auto parsed = core::FilePath::parse(
-        core::to_utf8(std::wstring_view(buffer.data(), written)).value_or(std::string{}));
+    auto parsed = core::FilePath::parse(core::to_utf8(full).value_or(std::string{}));
     if (!parsed)
     {
         return std::nullopt;

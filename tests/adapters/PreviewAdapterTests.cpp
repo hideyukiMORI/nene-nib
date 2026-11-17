@@ -260,7 +260,8 @@ void make_files()
     // 名前に予約名（NUL・CON など）を使わない。Windows Server 2022（CI の runner）と Windows 10
     // では `nul.bin` のような拡張子つきの予約名も GetFullPathNameW が `\\.\nul`
     // の装置へ写し、書いても 読んでも 0 バイトになる（空の本文の窓が届き binary
-    // にならなかった・Windows 11 は予約名に 拡張子を許すので手元では起きない）。
+    // にならなかった・Windows 11 は予約名に 拡張子を許すので手元では起きない）。#1805 で
+    // native_path は装置に写さなくなった。予約名の試験は LongPathAdapterTests が持つ。
     write_file(inside("zero-byte.bin"), std::string("ab\0cd", 5));
     write_file(inside("large.txt"),
                std::string(static_cast<std::size_t>(core::project_search_file_limit) + 1, 'a'));

@@ -2,10 +2,15 @@
 // 置き換える → 列挙する → 消す。経路の正規化は adapters の native_path の 1 本。
 // この試験の exe は manifest に longPathAware を持たないので、`\\?\` を付けない長い経路は
 // レジストリの LongPathsEnabled に依らず落ちる（反例）。製品の窓の exe は manifest でも宣言する。
+// Issue #1805: 予約名（NUL・CON・AUX・PRN・COMn・LPTn）に拡張子を付けた名前のファイルも、同じ
+// native_path の道で普通のファイルとして書いて読む。Windows 10 / Server 2022（CI の runner）の
+// GetFullPathNameW は `nul.txt` を `\\.\nul` に写すので、直す前の製品ではそこで落ちる。Windows 11
+// は拡張子つきを写さないので、手元では直す前でも通る。拡張子の無い `nul` は装置のまま。
 // 一時フォルダは
 // temporary_test_directory（#1103）の中に固定の名前で作り、冒頭で前回の残りを消して終わりに消す。
 // 時刻は読まない。待つのは合図の受け皿（セマフォ）だけで、止まらないときは CTest
 // の制限時間で落ちる。
+#include "AbsolutePath.hpp"
 #include "FilePath.hpp"
 #include "FileWriteMode.hpp"
 #include "FindHandle.hpp"
@@ -24,8 +29,11 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
+#include <optional>
 #include <semaphore>
 #include <string>
 #include <string_view>
@@ -155,7 +163,8 @@ void remove_entry(const std::wstring &folder, const WIN32_FIND_DATAW &data)
 void verify_native_form(const std::wstring &deep)
 {
     const std::wstring shallow = absolute(short_name);
-    expect(adapters::native_path(shallow) == shallow, "a short path is passed unchanged");
+    expect(adapters::native_path(shallow) == L"\\\\?\\" + shallow,
+           "a short path also gets the verbatim prefix");
     const std::wstring native = adapters::native_path(deep);
     expect(native.starts_with(L"\\\\?\\") && native.substr(4) == deep,
            "a long drive path gets the verbatim prefix");
@@ -173,12 +182,13 @@ void verify_native_form(const std::wstring &deep)
     return base + std::wstring(length - base.size(), L'a');
 }
 
-// 境界は絶対にした長さの MAX_PATH − 12。相対の経路は絶対にした後の長さで決まる。
+// 長さの境界は無い（#1805 で常に付ける）。相対の経路は絶対にした後の形に付く。
 void verify_prefix_boundary()
 {
     const std::wstring base = absolute(root_name) + L"\\";
     const std::wstring below = padded(base, prefixed_length - 1);
-    expect(adapters::native_path(below) == below, "an absolute path of 247 is not prefixed");
+    expect(adapters::native_path(below) == L"\\\\?\\" + below,
+           "an absolute path of 247 is prefixed");
     const std::wstring at = padded(base, prefixed_length);
     expect(adapters::native_path(at) == L"\\\\?\\" + at, "an absolute path of 248 is prefixed");
     const std::wstring stem = std::wstring(root_name) + L"\\";
@@ -316,6 +326,117 @@ void verify_failures(adapters::Win32FileAdapter &files, const std::wstring &deep
     expect(!missing && missing.error() == FileFailure::not_found,
            "an absent long path is not_found");
 }
+
+// 書いた先がディスクの上の普通のファイルなら、その大きさ。経路は試験が手で `\\?\` を付けた形で、
+// native_path に頼らずに確かめる（装置へ書いて「成功」した場合はここで無い）。
+[[nodiscard]] std::optional<std::uint64_t> size_on_disk(const std::wstring &path)
+{
+    WIN32_FILE_ATTRIBUTE_DATA data{};
+    if (GetFileAttributesExW((L"\\\\?\\" + path).c_str(), GetFileExInfoStandard, &data) == 0 ||
+        (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+    {
+        return std::nullopt;
+    }
+    return (std::uint64_t{data.nFileSizeHigh} << 32U) | data.nFileSizeLow;
+}
+
+constexpr std::array<std::wstring_view, 8> reserved_names{
+    L"nul.txt", L"con.md", L"aux.c", L"prn.txt", L"com1.txt", L"lpt1.txt", L"NuL.TxT", L"CON.Md",
+};
+
+// 書く → ディスクに在って大きさが同じ → 読む → 同じバイト列。2 回目は一時ファイル経由の置き換え。
+void verify_reserved_round_trip(adapters::Win32FileAdapter &files, const std::wstring &folder)
+{
+    for (const std::wstring_view name : reserved_names)
+    {
+        const std::wstring target = folder + L"\\" + std::wstring(name);
+        const std::string bytes = "reserved:" + core::to_utf8(name).value();
+        expect(files.write(path_of(target), bytes).has_value(), "a reserved name is written");
+        const auto size = size_on_disk(target);
+        expect(size.has_value() && size.value() == bytes.size(),
+               "a reserved name is a file of the written size on disk");
+        expect(read_text(files, target) == bytes, "a reserved name reads back the same bytes");
+        expect(files.write(path_of(target), bytes + "!").has_value(),
+               "a reserved name is replaced through a temporary");
+        expect(read_text(files, target) == bytes + "!", "the replaced reserved name reads back");
+    }
+    WIN32_FIND_DATAW data{};
+    const adapters::FindHandle left(
+        FindFirstFileW(adapters::native_path(folder + L"\\*.nib-tmp-*").c_str(), &data));
+    expect(!left.valid(), "no temporary is left beside the reserved names");
+}
+
+// OS は最後の段の末尾の空白とドットを落とす。予約名でも落とした名前の普通のファイルになる。
+void verify_reserved_trailing(adapters::Win32FileAdapter &files, const std::wstring &folder)
+{
+    expect(files.write(path_of(folder + L"\\aux.c. "), "trimmed").has_value(),
+           "a reserved name with trailing dot and space is written");
+    const auto size = size_on_disk(folder + L"\\aux.c");
+    expect(size.has_value() && size.value() == 7, "the trailing dot and space are dropped on disk");
+    expect(read_text(files, folder + L"\\aux.c") == "trimmed", "the trimmed name reads back");
+}
+
+// 予約名の形: 拡張子つきは装置に写さず、フォルダの絶対の形の後ろに最後の段を付ける（どの
+// Windows でも）。装置の名前そのもの（`NUL` `nul. `）は Windows 11 と同じく装置のまま。
+void verify_reserved_forms(const std::wstring &folder)
+{
+    const std::wstring current = absolute(L".");
+    expect(adapters::full_path(folder + L"/nul.txt") == folder + L"\\nul.txt",
+           "a slashed reserved name is a file in its folder");
+    expect(adapters::full_path(L"nul.txt") == current + L"\\nul.txt",
+           "a relative reserved name is a file in the current folder");
+    expect(adapters::full_path(current.substr(0, 2) + L"con.md") == current + L"\\con.md",
+           "a drive relative reserved name is a file in the drive's current folder");
+    expect(adapters::full_path(L"\\\\server\\share\\aux.c") == L"\\\\server\\share\\aux.c",
+           "a UNC reserved name is a file on the share");
+    expect(adapters::full_path(folder + L"\\prn.txt. ") == folder + L"\\prn.txt",
+           "a reserved name drops its trailing dot and space");
+    expect(adapters::native_path(folder + L"\\con.md") == L"\\\\?\\" + folder + L"\\con.md",
+           "a reserved name is passed to Win32 in the verbatim form");
+    for (const std::wstring &bare : {folder + L"\\NUL", folder + L"\\nul. ", std::wstring(L"nul")})
+    {
+        expect(adapters::full_path(bare).starts_with(L"\\\\.\\") &&
+                   adapters::native_path(bare).starts_with(L"\\\\.\\"),
+               "a bare device name stays the device as on Windows 11");
+    }
+    expect(adapters::native_path(L"\\\\.\\nul") == L"\\\\.\\nul",
+           "an explicit device path is kept");
+    const auto opened = adapters::absolute_file_path(folder + L"\\nul.txt");
+    expect(opened.has_value() &&
+               opened.value().text() == core::to_utf8(folder + L"\\nul.txt").value(),
+           "a launch argument with a reserved name keeps its plain file path");
+}
+
+// 予約名でない経路の形は変わらない: full_path は GetFullPathNameW の答えのまま、native_path は
+// それに `\\?\`（UNC は `\\?\UNC\`）を付けた形。
+void verify_plain_forms()
+{
+    const std::wstring drive = absolute(L".").substr(0, 2);
+    const std::array<std::wstring, 12> inputs{
+        L"plain.txt",
+        L".",
+        L"..",
+        L".\\a\\..\\b.txt",
+        L"a/b/c.txt",
+        drive + L"foo.txt",
+        L"\\\\server\\share\\dir\\x.txt",
+        L"folder\\",
+        L" lead and trail ",
+        L"foo. .",
+        drive + L"\\x\\..\\y\\",
+        L"\\rooted.txt",
+    };
+    for (const std::wstring &input : inputs)
+    {
+        const std::wstring os = absolute(input.c_str());
+        expect(adapters::full_path(input) == os, "a plain path resolves like GetFullPathNameW");
+        const std::wstring native =
+            os.starts_with(L"\\\\") ? L"\\\\?\\UNC\\" + os.substr(2) : L"\\\\?\\" + os;
+        expect(adapters::native_path(input) == native, "a plain path gets the verbatim prefix");
+    }
+    const std::wstring verbatim = L"\\\\?\\" + drive + L"\\x\\..\\y";
+    expect(adapters::native_path(verbatim) == verbatim, "a verbatim path is passed unchanged");
+}
 int run_tests()
 {
     const std::wstring root = absolute(root_name);
@@ -335,6 +456,10 @@ int run_tests()
     verify_reclaim(files, deep);
     verify_listing(deep);
     verify_failures(files, deep);
+    verify_reserved_round_trip(files, shallow);
+    verify_reserved_trailing(files, shallow);
+    verify_reserved_forms(shallow);
+    verify_plain_forms();
     remove_tree(root);
     remove_tree(shallow);
     expect(!exists(deep) && !exists(root), "the long folders are removed");
