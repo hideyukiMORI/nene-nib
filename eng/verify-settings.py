@@ -13,8 +13,9 @@ import shutil
 import tempfile
 import time
 
-from window_driver import (close, click, press, press_chord, rectangle, start, stop, user,
-                           VK_CONTROL, VK_S, write_text, HWND_TOPMOST, SWP_NOMOVE_NOSIZE_SHOW)
+from window_driver import (await_setting, await_text, close, click, press, press_chord, rectangle,
+                           settings_path, start, stop, user, VK_CONTROL, VK_S, wait_until,
+                           write_text, HWND_TOPMOST, SWP_NOMOVE_NOSIZE_SHOW)
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("window_verification", ROOT / "eng/verify-window.py")
@@ -22,9 +23,13 @@ VIEW = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VIEW)
 
 
-def saved_points(settings: Path) -> float:
-    fields = dict(line.split("=", 1) for line in settings.read_text(encoding="utf-8").splitlines())
-    return float(fields["font_size"])
+def saved_points(settings: Path, expected: float | None = None) -> float:
+    """The saved font_size. The product replaces the file through a temporary one (ADR 0135), so a
+    read waits (bounded) for the file to be readable and, with expected, to hold that size (#1784)."""
+    seen = await_setting(settings, "font_size",
+                         (lambda value: True) if expected is None else (lambda value: float(value) == expected))
+    assert seen is not None, f"{settings} was not readable or had no font_size"
+    return float(seen)
 
 
 def chord(window, key: int) -> None:
@@ -42,10 +47,20 @@ def geometry(window, points: float, appearance: str, output: Path, name: str) ->
     width, height = client[2], client[3]
     dpi = user.GetDpiForWindow(window)
     body = VIEW.body_points(width, height, dpi, points)
-    pixels = VIEW.capture(window, width, height)
     expected = list(VIEW.CURRENT_LINE[appearance])
     top = body["firstRowTop"]
     bottom = top + body["lineHeight"]
+    seen = []
+
+    def laid_out():
+        # The frame after a size or theme change arrives a few paints later (slower in Debug), so
+        # it is taken again (bounded) until the highlighted row is where the geometry says; the
+        # asserts below still judge the last frame (#1784).
+        seen[:] = [VIEW.capture(window, width, height)]
+        return (all(VIEW.pixel(seen[0], width, width - 4, y) == expected for y in range(top, bottom))
+                and VIEW.pixel(seen[0], width, width - 4, bottom) == list(VIEW.PALETTE[appearance]))
+    wait_until(laid_out)
+    pixels = seen[0]
     assert all(VIEW.pixel(pixels, width, width - 4, y) == expected for y in range(top, bottom)), \
         f"the highlighted row does not match {points} pt geometry"
     assert VIEW.pixel(pixels, width, width - 4, bottom) == list(VIEW.PALETTE[appearance])
@@ -67,30 +82,30 @@ def verify_keys(window, settings: Path, appearance: str, output: Path) -> dict:
     assert not settings.exists(), "startup must not create settings"
     for key, points in ((0xBB, 14.5), (0xBD, 13.5), (0x6B, 14.5), (0x6D, 13.5)):
         chord(window, key)
-        assert saved_points(settings) == points, (key, settings.read_text())
+        assert saved_points(settings, points) == points, (key, points)
     wheel(window, 60)
     assert saved_points(settings) == 13.5, "partial wheel must not resize yet"
     wheel(window, 60)
-    assert saved_points(settings) == 14.5, "two partial wheel deltas make one step"
+    assert saved_points(settings, 14.5) == 14.5, "two partial wheel deltas make one step"
     wheel(window, 120 * 40)
-    assert saved_points(settings) == 40
+    assert saved_points(settings, 40) == 40
     result["maximum"] = geometry(window, 40, appearance, output, "font-maximum")
     wheel(window, -120 * 40)
-    assert saved_points(settings) == 8
+    assert saved_points(settings, 8) == 8
     result["minimum"] = geometry(window, 8, appearance, output, "font-minimum")
     chord(window, 0x30)
-    assert saved_points(settings) == 13.5
+    assert saved_points(settings, 13.5) == 13.5
     size = result["default"]
     toggle = VIEW.toggle_points(*size["clientSize"], size["dpi"])
     click(window, *toggle["vim"])
     time.sleep(0.2)
     chord(window, 0x6B)
-    assert saved_points(settings) == 14.5, "Vim supports the same font intent"
+    assert saved_points(settings, 14.5) == 14.5, "Vim supports the same font intent"
     chord(window, 0x60)
-    assert saved_points(settings) == 13.5, "numpad zero resets in Vim"
+    assert saved_points(settings, 13.5) == 13.5, "numpad zero resets in Vim"
     click(window, *toggle["ordinary"])
     wheel(window, 120 * 8)
-    assert saved_points(settings) == 21.5
+    assert saved_points(settings, 21.5) == 21.5
     result["enlarged"] = geometry(window, 21.5, appearance, output, "font-enlarged")
     return result
 
@@ -109,12 +124,13 @@ def verify_click(window, body: dict, document: Path) -> None:
     click(window, column_four, y)
     write_text(window, "!")
     chord(window, VK_S)
-    assert document.read_text(encoding="utf-8") == "\nabcd!efghij\n三行目\n", \
+    expected = "\nabcd!efghij\n三行目\n"
+    assert await_text(document, expected) == expected, \
         "resizing changed text, injected a shortcut character, or broke click hit testing"
 
 
 def verify_font(executable: Path, environment: dict, output: Path) -> dict:
-    settings = Path(environment["LOCALAPPDATA"]) / "NeNeNib/settings.v5"
+    settings = settings_path(environment)
     document = output / "font-document.txt"
     document.write_text("\nabcdefghij\n三行目\n", encoding="utf-8", newline="\n")
     appearance = VIEW.expected_appearance()
@@ -171,7 +187,7 @@ def verify_unchanged_size(executable: Path, environment: dict, output: Path) -> 
         chord(window, 0x6B)
         after = VIEW.capture(window, width, height)
         assert before == after, "a no-op font adjustment moved the scrolled viewport"
-        assert saved_points(settings) == 40
+        assert saved_points(settings, 40) == 40
         close(window)
         assert process.wait(timeout=5) == 0
         return {"unchangedSizePreservesScrolledViewport": True}
