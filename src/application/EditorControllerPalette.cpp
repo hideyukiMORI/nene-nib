@@ -12,9 +12,11 @@
 #include "ExResult.hpp"
 #include "FileBookmarkEdit.hpp"
 #include "FileFolder.hpp"
+#include "FinderPreview.hpp"
 #include "FolderRequest.hpp"
 #include "PaletteFolder.hpp"
 #include "PaletteMarks.hpp"
+#include "PaletteMode.hpp"
 #include "PaletteOrigin.hpp"
 #include "SaveState.hpp"
 #include "TabTitle.hpp"
@@ -64,6 +66,8 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
         // 全文検索の面は当たりの行の表示値も同じ窓で載せる（ADR 0167 の決定 5・段 G3 の 2
         // 段の行）。
         auto project = project_search_view();
+        const auto placement =
+            core::palette_placement(palette->scope(), state_.settings().finder_preview);
         auto hit_rows = project.has_value() ? project_hit_rows(first, palette->visible())
                                             : std::vector<core::ProjectHitRow>{};
         return CommandPaletteView{palette->rows(first, palette->visible()),
@@ -72,7 +76,10 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
                                   palette->count(),
                                   std::move(hint),
                                   std::move(project),
-                                  std::move(hit_rows)};
+                                  std::move(hit_rows),
+                                  placement,
+                                  preview_drawn(placement) ? preview_snippet(*palette)
+                                                           : std::nullopt};
     }
     return std::nullopt;
 }
@@ -171,7 +178,7 @@ void EditorController::accept(const OpenDocumentFormatList &intent)
     auto [entries, current] = format_choices(intent.kind);
     state_ = state_.with_command_input(
         core::CommandPalette::opened(
-            entries, "", state_.mode(),
+            entries, "", core::PaletteMode{state_.mode(), context_menu_mode()},
             core::CommandLine::empty(state_.themes()).with_language(state_.display_language()))
             .selected_at(current));
 }
@@ -257,7 +264,8 @@ void EditorController::open_palette(std::string_view input, std::size_t selected
     auto entries = palette_entries(bookmarks.value_or(FileBookmarks{}));
     request_folder(entries);
     state_ = state_.with_command_input(
-        core::CommandPalette::opened(std::move(entries), input, state_.mode(),
+        core::CommandPalette::opened(std::move(entries), input,
+                                     core::PaletteMode{state_.mode(), context_menu_mode()},
                                      core::CommandLine::empty(state_.themes())
                                          .with_fonts(given_fonts())
                                          .with_language(state_.display_language()))
@@ -548,7 +556,12 @@ void EditorController::submit_palette(const core::CommandPalette &palette)
         // 面を閉じて頼まれた操作を 1 意図だけ立てる。実行は ui の run_operation で、controller は
         // 操作ごとの分岐を持たない（ADR 0078 の決定 7・8）。
         close_command_input();
-        state_ = state_.with_operation_request(choice.operation);
+        // Vim の NORMAL / VISUAL の切り取り・コピー・貼り付け・削除・すべて選択は、メニューと同じ
+        // Vim の鍵の列の道（追補 #1051）。
+        if (choice.operation.has_value())
+        {
+            run_listed_operation(choice.operation.value());
+        }
         return;
     case core::CommandChoiceKind::fill:
         break;

@@ -491,10 +491,12 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     // 書式を解放する前に比較用の借用ポインタも消す（ADR 0070）。
     status_layouts_ = {};
     palette_layouts_.clear();
+    preview_layouts_.clear();
     tab_layouts_.clear();
     explorer_layouts_.clear();
     explorer_shapes_.clear();
     start_layouts_.clear();
+    context_menu_layouts_.clear();
     Microsoft::WRL::ComPtr<IUnknown> unknown;
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory7),
                                    unknown.GetAddressOf())) ||
@@ -623,8 +625,10 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     gutter_layouts_.clear();
     label_format_.Reset();
     palette_layouts_.clear();
+    preview_layouts_.clear();
     tab_layouts_.clear();
     start_layouts_.clear();
+    context_menu_layouts_.clear();
     const std::wstring requested = core::to_utf16(settings.font_family.text()).value();
     const wchar_t *face = family(requested.c_str(), L"Consolas");
     const float ratio = core::font_size_ratio(settings.font_size);
@@ -643,7 +647,7 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
                                               core::font_size_dips(settings.font_size) * 1.5F,
                                               DWRITE_FONT_WEIGHT_NORMAL, start_title);
     if (FAILED(made_gutter) || FAILED(made_key) || FAILED(made_start_title) ||
-        !create_project_hit_formats(face))
+        !create_project_hit_formats(face) || !create_preview_pane_formats(face))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
@@ -2642,6 +2646,7 @@ void Direct2DRenderer::draw_palette(const application::EditorFrame &frame,
     context_->PushAxisAlignedClip(to_rect(layout.rows), D2D1_ANTIALIAS_MODE_ALIASED);
     draw_palette_choices(frame, layout);
     context_->PopAxisAlignedClip();
+    draw_preview_pane(frame, layout);
     draw_palette_footer(frame, layout.footer);
 }
 
@@ -2679,16 +2684,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     // 長いモードの文（`(insert) VISUAL BLOCK` など）に届く案内は出さない（#1658）。
     draw_status_guide(
         frame, core::status_guide_fitted(guide, status, dpi_, draw_status_bar(frame, status)));
-    if (frame.command_palette.has_value())
-    {
-        draw_palette(
-            frame, core::palette_layout(width, height, dpi_, frame.command_palette.value().total));
-    }
-    else
-    {
-        // 面を閉じたら行の文字組みを捨てる。開くたびに作り直す（#900）。
-        palette_layouts_.clear();
-    }
+    draw_open_palette(frame, width, height);
+    draw_context_menu(frame, width, height);
     gutter_layouts_.end();
     D2D1_TAG failed_first = 0;
     D2D1_TAG failed_second = 0;

@@ -86,6 +86,7 @@ void verify_autosave_restore_property_scope();
 
 // OperationsTests.cpp
 void verify_operations_scope();
+void verify_context_menu_scope();
 // 表示言語の文の表と読む口（ADR 0123 の追補 2026-11-13・#1019 の T1a）。
 void verify_ui_texts_scope();
 // 表示言語の解決と切り替え（ADR 0123 の追補 2026-11-13・#1019 の T1b）。
@@ -416,6 +417,11 @@ void verify_input_line_property_scope();
 void verify_project_search_contracts();
 // ProjectSearchControllerTests.cpp（#1003 段 G2・ADR 0167 の決定 1・2・4・5・7 の application）
 void verify_project_search_controller_contracts();
+// FinderLayoutTests.cpp（#1785・ADR 0189 の段 P1 のプレビュー欄の置き方・切り替え・設定・開いている
+// タブの窓）
+void verify_finder_layout_contracts();
+// FinderPreviewTests.cpp（#1793・ADR 0189 の段 P2 の開いていないファイルの窓の port と保持）
+void verify_finder_preview_contracts();
 
 // CommandLineEditTests.cpp（#1550・#1643・Vim の入力行の c_CTRL-U / c_CTRL-W と `/` の Tab）
 void verify_command_line_edit_scope();

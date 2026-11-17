@@ -341,6 +341,11 @@ std::string map_line_value(const MapRow &row)
     return row.remap ? row.rhs : "!" + row.rhs;
 }
 
+std::expected<std::vector<VimKey>, KeyMapFailure> vim_keys_of_notation(std::string_view text)
+{
+    return keys_of_notation(text, std::nullopt);
+}
+
 std::expected<VimKey, KeyMapFailure> parse_map_leader(std::string_view text)
 {
     // 端の空白は設定の行の読み手が落とすので書けない（空白の leader は `<Space>` と書く）。

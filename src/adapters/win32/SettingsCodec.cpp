@@ -3,6 +3,7 @@
 #include "BuiltinThemes.hpp"
 #include "DisplayLanguageNames.hpp"
 #include "ExplorerLayout.hpp"
+#include "FinderPreview.hpp"
 #include "KeyMap.hpp"
 #include "KeyValueFields.hpp"
 #include "LanguageTable.hpp"
@@ -28,11 +29,12 @@ using Field = std::optional<std::string_view> SettingsFields::*;
 
 // 鍵の名前と DTO の欄の対（同じ位置）。v4 と v5 だけの鍵も読むが、旧版にあれば
 // apply_v4_fields と apply_v5_fields が拒否する。
-constexpr std::array<std::string_view, 18> field_names{
-    "version",     "colorscheme", "font_family",    "font_size", "guide",          "wrap",
-    "ui_language", "lsp",         "explorer",       "root",      "features",       "mapleader",
-    "ignorecase",  "smartcase",   "relativenumber", "scrolloff", "explorer_width", "autoindent"};
-constexpr std::array<Field, 18> field_members{
+constexpr std::array<std::string_view, 19> field_names{
+    "version",   "colorscheme",    "font_family", "font_size",     "guide",
+    "wrap",      "ui_language",    "lsp",         "explorer",      "root",
+    "features",  "mapleader",      "ignorecase",  "smartcase",     "relativenumber",
+    "scrolloff", "explorer_width", "autoindent",  "finder_preview"};
+constexpr std::array<Field, 19> field_members{
     &SettingsFields::version,        &SettingsFields::colorscheme,
     &SettingsFields::font_family,    &SettingsFields::font_size,
     &SettingsFields::guide,          &SettingsFields::wrap,
@@ -41,7 +43,8 @@ constexpr std::array<Field, 18> field_members{
     &SettingsFields::features,       &SettingsFields::mapleader,
     &SettingsFields::ignorecase,     &SettingsFields::smartcase,
     &SettingsFields::relativenumber, &SettingsFields::scrolloff,
-    &SettingsFields::explorer_width, &SettingsFields::autoindent};
+    &SettingsFields::explorer_width, &SettingsFields::autoindent,
+    &SettingsFields::finder_preview};
 
 // 言語ごとのサーバーの命令の鍵 `lsp.<language>.command`（ADR 0160・ADR 0170 の決定 3）。
 constexpr std::string_view lsp_prefix = "lsp.";
@@ -421,7 +424,7 @@ lsp_commands_from(const SettingsFields &fields)
     case SettingsVersion::v2:
     case SettingsVersion::v3:
     case SettingsVersion::v4:
-        if (fields.autoindent.has_value())
+        if (fields.autoindent.has_value() || fields.finder_preview.has_value())
         {
             return std::unexpected(Failure::malformed);
         }
@@ -435,6 +438,16 @@ lsp_commands_from(const SettingsFields &fields)
         return std::unexpected(autoindent.error());
     }
     settings.autoindent = autoindent.value();
+    // プレビュー欄の置き方（ADR 0189 の決定 1）。無ければ既定の auto、有れば名前の表の 4 つだけ。
+    if (fields.finder_preview.has_value())
+    {
+        const auto preview = core::finder_preview_named(fields.finder_preview.value());
+        if (!preview.has_value())
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        settings.finder_preview = preview.value();
+    }
     return {};
 }
 
@@ -602,13 +615,14 @@ std::string encode_settings(const core::EditorSettings &settings)
     return std::format("version=5\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
                        "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n"
                        "ignorecase={}\nsmartcase={}\nrelativenumber={}\nscrolloff={}\n"
-                       "explorer_width={}\nautoindent={}\n{}{}",
+                       "explorer_width={}\nautoindent={}\nfinder_preview={}\n{}{}",
                        theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
                        core::display_language_choice_name(settings.ui_language),
                        switch_text(settings.lsp), switch_text(settings.explorer), root,
                        features_text(settings.features), switch_text(settings.ignorecase),
                        switch_text(settings.smartcase), switch_text(settings.relativenumber),
                        settings.scrolloff, explorer_width, switch_text(settings.autoindent),
+                       core::finder_preview_name(settings.finder_preview),
                        lsp_commands_text(settings.lsp_commands), maps_text(settings));
 }
 } // namespace nenenib::adapters::win32

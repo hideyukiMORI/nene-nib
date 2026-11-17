@@ -7,6 +7,7 @@
 #include "ClipboardKeys.hpp"
 #include "EditMode.hpp"
 #include "EditorIntent.hpp"
+#include "EditorOperation.hpp"
 #include "KeyChord.hpp"
 #include "KeyMotion.hpp"
 #include "KeyVimSpecial.hpp"
@@ -144,6 +145,11 @@ constexpr char32_t tab_character = U'\t';
 
 LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
 {
+    // 右クリックのメニューが開いている間の鍵と文字はメニューへ（#1051）。
+    if (take_context_menu_key(message, word))
+    {
+        return 0;
+    }
     // 鍵の 3 通とフォーカスを失ったとき。Ctrl を離したとき・フォーカスを失ったときは、歩いて
     // いれば使った順を確定してから OS の既定処理へ渡す（ADR 0058 の決定 4）。
     switch (message)
@@ -151,7 +157,7 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
     case WM_KEYDOWN:
         // 面の幅のドラッグ中の Esc は押す前の幅へ戻すだけ（Issue #1413）。ミニマップのドラッグ中の
         // Esc はドラッグを終えるだけ（ADR 0171 の決定 5 の追補）。
-        if (word == VK_ESCAPE && (take_explorer_escape(data) || take_minimap_escape(data)))
+        if (take_drag_escape(word, data))
         {
             return 0;
         }
@@ -186,6 +192,12 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
         break;
     }
     return DefWindowProcW(window_, message, word, data);
+}
+
+// ドラッグ中の Esc（面の幅とミニマップ）を受けたか。
+bool EditorWindow::take_drag_escape(WPARAM word, LPARAM data)
+{
+    return word == VK_ESCAPE && (take_explorer_escape(data) || take_minimap_escape(data));
 }
 
 // 歩いていないときは意図を送らない（Ctrl+C などのたびに描き直さない・決定 4）。
@@ -442,8 +454,14 @@ void EditorWindow::press_command_control_key(WPARAM word)
     case 'W':
         send(application::EditCommand{core::CommandEdit::erase_word});
         return;
-    // 面が開いていれば Ctrl+P は前の候補（ADR 0150 の決定 2）。`:` と検索の行では面を開く。
+    // 面が開いていれば Ctrl+P は前の候補（ADR 0150 の決定 2）、Ctrl+Shift+P はプレビュー欄の置き方
+    // を次へ（ADR 0189 の決定 3・操作の 1 本 run_operation）。`:` と検索の行では面を開く。
     case 'P':
+        if (held(VK_SHIFT) && controller_.command_palette_active())
+        {
+            run_operation(core::EditorOperation::cycle_finder_preview);
+            return;
+        }
         send_palette_or(core::CommandEdit::complete_previous, application::OpenCommandPalette{});
         return;
     case 'N':
@@ -622,7 +640,7 @@ void EditorWindow::press_plain_key(WPARAM word)
         send(application::DeleteText{core::DeleteDirection::backward, core::DeleteUnit::character});
         return;
     case VK_DELETE:
-        send(application::DeleteText{core::DeleteDirection::forward, core::DeleteUnit::character});
+        run_operation(core::EditorOperation::delete_selection);
         return;
     case VK_RETURN:
         send(application::NewLine{});
@@ -658,17 +676,19 @@ void EditorWindow::press_control_key(WPARAM word)
     }
     switch (word)
     {
+    // 表の操作（#1051）。鍵は operation_chord が写さず、ここで受けて run_operation の 1 本へ渡す
+    // （Vim の Ctrl の表とエクスプローラーの焦点より後ろの順を変えない）。
     case 'A':
-        send(application::SelectAll{});
+        run_operation(core::EditorOperation::select_all);
         return;
     case 'C':
-        send(application::ClipboardAction{application::ClipboardOperation::copy});
+        run_operation(core::EditorOperation::copy);
         return;
     case 'X':
-        send(application::ClipboardAction{application::ClipboardOperation::cut});
+        run_operation(core::EditorOperation::cut);
         return;
     case 'V':
-        send(application::ClipboardAction{application::ClipboardOperation::paste});
+        run_operation(core::EditorOperation::paste);
         return;
     case 'R':
         send_vim_redo();

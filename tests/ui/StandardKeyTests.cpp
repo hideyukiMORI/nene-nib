@@ -1,5 +1,6 @@
 #include "ClipboardKeys.hpp"
 #include "ClipboardOperation.hpp"
+#include "ContextMenuKey.hpp"
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
 #include "OperationBindings.hpp"
@@ -14,6 +15,7 @@
 #include <array>
 #include <optional>
 #include <tuple>
+#include <utility>
 
 namespace nenenib::tests::ui
 {
@@ -94,6 +96,32 @@ void verify_clipboard_keys_reach_their_turn()
         expect(!control || !tab_shortcut(key, shifted).has_value(),
                "no tab key catches an old clipboard key before clipboard_key_for");
     }
+    // 表に行のある Ctrl+X / C / V / A と Delete（#1051）は写さない。今の press_control_key と
+    // press_plain_key の道で受け、Vim の Ctrl の表とエクスプローラーの焦点の順を変えない。
+    using TableKey = std::pair<WPARAM, bool>;
+    constexpr std::array<TableKey, 5> table_keys{
+        {{'X', true}, {'C', true}, {'V', true}, {'A', true}, {VK_DELETE, false}}};
+    for (const auto &[key, control] : table_keys)
+    {
+        expect(!operation_chord(key, control, false).has_value(),
+               "the clipboard and select-all keys of the table are not mapped to chords");
+    }
+    expect(operation_chord('V', true, true).has_value(), "Ctrl+Shift+V is still mapped");
+    // WM_CONTEXTMENU は鍵の分（lParam が -1）だけ開き、マウスの分（画面の座標）は既定の処理へ
+    // 渡す（帯の空きの窓のメニュー・#1051）。本文の右クリックは右の離しで開くので 2 回開かない。
+    expect(nenenib::ui::win32::opened_from_keys(-1) &&
+               !nenenib::ui::win32::opened_from_keys(MAKELPARAM(120, 40)),
+           "only the keyboard WM_CONTEXTMENU opens the menu");
+    // Shift+F10 の F10 の離しの SC_KEYMENU（窓のメニューのモード）は捨て、開いたメニューの 1 回目の
+    // Esc が閉じる。F10 単独・Alt・Alt+文字・ほかの WM_SYSCOMMAND は既定の処理のまま。
+    using nenenib::ui::win32::swallows_key_menu;
+    expect(swallows_key_menu(SC_KEYMENU, 0, false, true) &&
+               swallows_key_menu(SC_KEYMENU, 0, true, false),
+           "Shift+F10 and an open menu keep the window out of the menu mode");
+    expect(!swallows_key_menu(SC_KEYMENU, 0, false, false) &&
+               !swallows_key_menu(SC_KEYMENU, 'f', false, false) &&
+               !swallows_key_menu(SC_CLOSE, 0, true, true),
+           "F10 alone, Alt keys and other system commands keep the default");
 }
 
 void verify_new_tab_and_redo_keys()

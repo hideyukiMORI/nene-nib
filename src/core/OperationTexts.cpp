@@ -56,6 +56,12 @@ namespace
     case EditorOperation::choose_language:
     case EditorOperation::show_version:
     case EditorOperation::search_project:
+    case EditorOperation::cut:
+    case EditorOperation::copy:
+    case EditorOperation::paste:
+    case EditorOperation::delete_selection:
+    case EditorOperation::select_all:
+    case EditorOperation::cycle_finder_preview:
         return true;
     }
     return false;
