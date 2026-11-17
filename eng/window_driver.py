@@ -247,6 +247,80 @@ SETTINGS_V4_DEFAULTS = (("version", "4"), ("colorscheme", "system"),
                         ("scrolloff", "0"), ("explorer_width", ""))
 
 
+# 製品が今の版で読み書きする設定ファイルの名前。道具が設定の置き場を決めるのはここと settings_path
+# の 1 か所で、版が上がったとき（settings.v5・#1668）はこの名前だけを直す（#1784）。
+SETTINGS_FILE = "settings.v4"
+
+
+def settings_path(environment: dict) -> Path:
+    """The settings file of the tool profile the environment names (it may not exist yet)."""
+    return Path(environment["LOCALAPPDATA"]) / "NeNeNib" / SETTINGS_FILE
+
+
+def wait_until(condition, seconds: float = 5.0, interval: float = 0.05):
+    """Ask condition() again until it returns something true or seconds have passed.
+
+    Returns the last value condition gave, so the caller's assert can say what it saw. This is a
+    bounded retry on an observed state, not a longer sleep: it ends the moment the state holds and
+    fails the way it did before (the caller asserts) once the limit is over (#1784).
+    """
+    deadline = time.monotonic() + seconds
+    value = condition()
+    while not value and time.monotonic() < deadline:
+        time.sleep(interval)
+        value = condition()
+    return value
+
+
+def read_settings_bytes(path: Path, seconds: float = 5.0) -> bytes | None:
+    """The bytes of a file the product writes by replacing a temporary one (ADR 0135).
+
+    A read that lands while the file is absent or being replaced (FileNotFoundError, or
+    PermissionError on Windows) is asked again until seconds have passed; None if it never opened.
+    """
+    def attempt():
+        try:
+            return path.read_bytes()
+        except OSError:
+            return None
+    return wait_until(attempt, seconds)
+
+
+def settings_fields(path: Path, seconds: float = 5.0) -> dict[str, str]:
+    """The key=value lines of the settings file, empty if it could not be read in seconds."""
+    data = read_settings_bytes(path, seconds)
+    if data is None:
+        return {}
+    return dict(line.split("=", 1) for line in data.decode("utf-8").splitlines() if "=" in line)
+
+
+def await_setting(path: Path, key: str, accepts, seconds: float = 5.0) -> str | None:
+    """Wait until accepts(value of key) holds in the saved file; return the last value seen (or None)."""
+    seen = []
+
+    def attempt():
+        fields = settings_fields(path, 0.0)
+        seen[:] = [fields.get(key)]
+        return key in fields and accepts(fields[key])
+    wait_until(attempt, seconds)
+    return seen[0] if seen else None
+
+
+def await_text(path: Path, expected: str, seconds: float = 5.0) -> str | None:
+    """Wait until the UTF-8 text of path is expected (a save finishing, or a file being replaced
+    under the reader); return the last text seen, None if it never opened (#1784)."""
+    seen = []
+
+    def attempt():
+        try:
+            seen[:] = [path.read_text(encoding="utf-8")]
+        except OSError:
+            return False
+        return seen[0] == expected
+    wait_until(attempt, seconds)
+    return seen[0] if seen else None
+
+
 def write_settings(environment: dict, changed: dict[str, str] | None = None,
                    lsp_commands: dict[str, str] | None = None) -> Path:
     """Write NeNeNib/settings.v4 of the tool profile the environment names; return its path.
@@ -269,7 +343,7 @@ def write_settings(environment: dict, changed: dict[str, str] | None = None,
     lines = [f"{key}={value}" for key, value in fields.items()]
     lines += [f"lsp.{language}.command={command}"
               for language, command in sorted((lsp_commands or {}).items())]
-    path = Path(profile) / "NeNeNib" / "settings.v4"
+    path = settings_path(environment)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     return path

@@ -202,7 +202,7 @@ PE の `TimeDateStamp` だけは link した時刻なので、同じ commit を�
 
 ### 窓の画（PNG）と前後の比較
 
-実機の道具が操作する窓は、`eng/window_driver.py`で起動したPID・窓class・可視性を照合して選ぶ（#448、ARC-001/012・QLT-013）。同classの先頭1窓だけで不在と判断せず、既存の通常版や別の測定プロセスを飛ばして対象を探す。編集窓と確認ダイアログは同じ所有選択を使い、`tests/conformance/test_window_owner.py`が他PID/不可視/不在とstartの接続を検査する。
+実機の道具が操作する窓は、`eng/window_driver.py`で起動したPID・窓class・可視性を照合して選ぶ（#448、ARC-001/012・QLT-013）。同classの先頭1窓だけで不在と判断せず、既存の通常版や別の測定プロセスを飛ばして対象を探す。編集窓と確認ダイアログは同じ所有選択を使い、`tests/conformance/test_window_owner.py`が他PID/不可視/不在とstartの接続を検査する。設定ファイルは製品が一時ファイルを置き換えて書く（ADR 0135）ので、道具は固定の sleep で待たず、`window_driver.py`の`settings_path`（版つきの名前は`SETTINGS_FILE`の1か所）と`wait_until`・`await_setting`で「読めて期待の値になるまで」を上限つきで確かめ直す（#1784・`tests/conformance/test_settings_wait.py`）。
 
 computer-use 無しで見た目を確かめるときは `python eng/verify-window.py --capture <dir>`（各節の後の `<dir>/<節名>.png`）か `--capture <dir> --keys "ihello<Esc>"`（`before.png` / `after.png` / 本文の矩形の `frames.json`）で撮り、`python eng/compare-frames.py before.png after.png --inside x,y,w,h` が差分の画素数と外接矩形を JSON で返す（Issue #131・閾値は持たない完全一致・PNG は `eng/window_driver.py` が `zlib` だけで読み書きする）。撮るのは画面の合成なので画面中央を空けて 1 回ずつ走らせ、ゲートには載せない（QLT-013）。
 
