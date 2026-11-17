@@ -1,0 +1,59 @@
+#pragma once
+
+#include "DisplayLanguage.hpp"
+#include "EditorFeature.hpp"
+#include "EditorSettings.hpp"
+#include "SettingsRow.hpp"
+#include "SettingsSection.hpp"
+#include "SettingsSubject.hpp"
+#include "SettingsValue.hpp"
+#include "UiMessage.hpp"
+
+#include <array>
+#include <string>
+#include <string_view>
+
+namespace nenenib::core
+{
+// 設定の面の項目の列（ADR 0170 の決定 5・2026-11-18 の追補 2・#1016 の段 1）。節の順に上から。
+// 機能の行は feature_costs の表の切れる機能と切れない機能（per_document の syntax は載せない）。
+// 面の行はこの表の 1 つから作り、ui は frame の値を読むだけ。
+inline constexpr std::array<SettingsRow, 14> settings_rows{{
+    {SettingsSection::display, SettingsValue::theme},
+    {SettingsSection::display, SettingsValue::ui_language},
+    {SettingsSection::display, EditorFeature::wrap},
+    {SettingsSection::display, EditorFeature::guide},
+    {SettingsSection::text, SettingsValue::font_family},
+    {SettingsSection::text, SettingsValue::font_size},
+    {SettingsSection::editing, EditorFeature::autoindent},
+    {SettingsSection::panes, EditorFeature::explorer},
+    {SettingsSection::panes, SettingsValue::finder_preview},
+    {SettingsSection::features, EditorFeature::matchparen},
+    {SettingsSection::features, EditorFeature::easymotion},
+    {SettingsSection::features, EditorFeature::minimap},
+    {SettingsSection::features, EditorFeature::start_screen},
+    {SettingsSection::language_server, EditorFeature::lsp},
+}};
+
+// 節の見出しの文。
+[[nodiscard]] UiMessage settings_section_title(SettingsSection section) noexcept;
+// 行の名前と 1 行の説明の文（機能は feature_costs の行・値は表の外の決まった文）。
+[[nodiscard]] UiMessage settings_row_title(const SettingsSubject &subject) noexcept;
+[[nodiscard]] UiMessage settings_row_description(const SettingsSubject &subject) noexcept;
+// 行の `:set` の名前（機能は feature_name_of・値は `colorscheme` `language` `guifont`
+// `fontsize` `finderpreview`）。探す欄が名前・説明と同じく照らす。
+[[nodiscard]] std::string_view settings_row_set_name(const SettingsSubject &subject) noexcept;
+
+// 探す欄（追補 2）。query が空なら全部の行。そうでなければ `:set` の名前・表示言語の名前・説明の
+// どれかが query を含む行（ASCII の大小は区別しない）。
+[[nodiscard]] bool settings_row_matches(const SettingsRow &row, std::string_view query,
+                                        DisplayLanguage language) noexcept;
+
+// 値の行の表示の文字（配色の名前か `system`・表示言語の名前・字体・pt・プレビューの置き方）。
+[[nodiscard]] std::string settings_value_text(const EditorSettings &settings, SettingsValue value);
+// 値を 1 つ送った設定（forward は次・大きい側）。配色は system → 組み込みの表の順 → system と
+// 回り込み、利用者のテーマを選んでいるときは最初の組み込みへ。表示言語と置き方は宣言の順で回り
+// 込む。字の大きさは 1 pt ずつで端で止まる。字体は段 1 では送らない（そのまま返す）。
+[[nodiscard]] EditorSettings settings_value_stepped(EditorSettings settings, SettingsValue value,
+                                                    bool forward);
+} // namespace nenenib::core

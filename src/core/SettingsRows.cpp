@@ -1,0 +1,283 @@
+// 設定の面の項目の列の読み口（ADR 0170 の決定 5・2026-11-18 の追補 2・#1016 の段 1）。
+#include "SettingsRows.hpp"
+
+#include "BuiltinTheme.hpp"
+#include "BuiltinThemes.hpp"
+#include "DisplayLanguage.hpp"
+#include "DisplayLanguageChoice.hpp"
+#include "DisplayLanguageNames.hpp"
+#include "EditorFeature.hpp"
+#include "EditorSettings.hpp"
+#include "FeatureCosts.hpp"
+#include "FinderPreview.hpp"
+#include "FontSize.hpp"
+#include "FontSizeAdjustment.hpp"
+#include "SettingsRow.hpp"
+#include "SettingsSection.hpp"
+#include "SettingsSubject.hpp"
+#include "SettingsValue.hpp"
+#include "ThemeChoice.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
+
+#include <array>
+#include <cstddef>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+#include <variant>
+
+namespace nenenib::core
+{
+namespace
+{
+// 置き方の送りの順（宣言の順）。
+constexpr std::array<FinderPreview, 4> finder_preview_order{
+    FinderPreview::automatic, FinderPreview::right, FinderPreview::below, FinderPreview::off};
+
+// 配色を選んでいない（system）ときの表示の名前（`:colorscheme` の答えと同じ ASCII）。
+constexpr std::string_view system_theme_name = "system";
+
+[[nodiscard]] UiMessage value_title(SettingsValue value) noexcept
+{
+    switch (value)
+    {
+    case SettingsValue::theme:
+        return UiMessage::settings_theme_name;
+    case SettingsValue::ui_language:
+        return UiMessage::settings_language_name;
+    case SettingsValue::font_family:
+        return UiMessage::settings_font_family_name;
+    case SettingsValue::font_size:
+        return UiMessage::settings_font_size_name;
+    case SettingsValue::finder_preview:
+        return UiMessage::settings_finder_preview_name;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] UiMessage value_description(SettingsValue value) noexcept
+{
+    switch (value)
+    {
+    case SettingsValue::theme:
+        return UiMessage::settings_theme_description;
+    case SettingsValue::ui_language:
+        return UiMessage::settings_language_description;
+    case SettingsValue::font_family:
+        return UiMessage::settings_font_family_description;
+    case SettingsValue::font_size:
+        return UiMessage::settings_font_size_description;
+    case SettingsValue::finder_preview:
+        return UiMessage::settings_finder_preview_description;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] std::string_view value_set_name(SettingsValue value) noexcept
+{
+    switch (value)
+    {
+    case SettingsValue::theme:
+        return "colorscheme";
+    case SettingsValue::ui_language:
+        return "language";
+    case SettingsValue::font_family:
+        return "guifont";
+    case SettingsValue::font_size:
+        return "fontsize";
+    case SettingsValue::finder_preview:
+        return "finderpreview";
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] char folded(char byte) noexcept
+{
+    return byte >= 'A' && byte <= 'Z' ? static_cast<char>(byte - 'A' + 'a') : byte;
+}
+
+// text が needle を含むか（ASCII の大小を区別しない）。部分列の探索の STL（__std_search_*）を core
+// の外へ出さないよう 1 バイトずつ比べる（ARC-003・first_slot_split と同じ理由）。
+[[nodiscard]] bool contains_folded(std::string_view text, std::string_view needle) noexcept
+{
+    if (needle.size() > text.size())
+    {
+        return false;
+    }
+    for (std::size_t start = 0; start + needle.size() <= text.size(); ++start)
+    {
+        std::size_t matched = 0;
+        while (matched < needle.size() &&
+               folded(text.at(start + matched)) == folded(needle.at(matched)))
+        {
+            ++matched;
+        }
+        if (matched == needle.size())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 列 order の中の current の次（前）の値。列に無ければ先頭。
+template <typename Value, std::size_t Count>
+[[nodiscard]] Value cycled(const std::array<Value, Count> &order, Value current,
+                           bool forward) noexcept
+{
+    for (std::size_t index = 0; index < Count; ++index)
+    {
+        if (order.at(index) == current)
+        {
+            return order.at(forward ? (index + 1) % Count : (index + Count - 1) % Count);
+        }
+    }
+    return order.front();
+}
+
+// 配色の送り。0 は system、1 からが組み込みの表の添字 + 1。
+[[nodiscard]] std::optional<ThemeChoice> theme_stepped(const std::optional<ThemeChoice> &current,
+                                                       bool forward)
+{
+    constexpr std::size_t count = builtin_themes.size() + 1;
+    std::size_t at = 0;
+    if (current.has_value())
+    {
+        const auto builtin = theme_named(current.value().name());
+        at = builtin.has_value() ? static_cast<std::size_t>(builtin.value()) + 1 : count - 1;
+    }
+    const std::size_t next = forward ? (at + 1) % count : (at + count - 1) % count;
+    if (next == 0)
+    {
+        return std::nullopt;
+    }
+    return ThemeChoice::from(static_cast<BuiltinTheme>(next - 1));
+}
+} // namespace
+
+UiMessage settings_section_title(SettingsSection section) noexcept
+{
+    switch (section)
+    {
+    case SettingsSection::display:
+        return UiMessage::settings_section_display;
+    case SettingsSection::text:
+        return UiMessage::settings_section_text;
+    case SettingsSection::editing:
+        return UiMessage::settings_section_editing;
+    case SettingsSection::panes:
+        return UiMessage::settings_section_panes;
+    case SettingsSection::features:
+        return UiMessage::settings_section_features;
+    case SettingsSection::language_server:
+        return UiMessage::settings_section_language_server;
+    }
+    std::unreachable();
+}
+
+UiMessage settings_row_title(const SettingsSubject &subject) noexcept
+{
+    return std::visit(
+        [](auto value) noexcept
+        {
+            if constexpr (std::is_same_v<decltype(value), EditorFeature>)
+            {
+                return feature_cost(value).title;
+            }
+            else
+            {
+                return value_title(value);
+            }
+        },
+        subject);
+}
+
+UiMessage settings_row_description(const SettingsSubject &subject) noexcept
+{
+    return std::visit(
+        [](auto value) noexcept
+        {
+            if constexpr (std::is_same_v<decltype(value), EditorFeature>)
+            {
+                return feature_cost(value).description;
+            }
+            else
+            {
+                return value_description(value);
+            }
+        },
+        subject);
+}
+
+std::string_view settings_row_set_name(const SettingsSubject &subject) noexcept
+{
+    return std::visit(
+        [](auto value) noexcept
+        {
+            if constexpr (std::is_same_v<decltype(value), EditorFeature>)
+            {
+                return feature_name_of(value);
+            }
+            else
+            {
+                return value_set_name(value);
+            }
+        },
+        subject);
+}
+
+bool settings_row_matches(const SettingsRow &row, std::string_view query,
+                          DisplayLanguage language) noexcept
+{
+    return query.empty() || contains_folded(settings_row_set_name(row.subject), query) ||
+           contains_folded(ui_text(settings_row_title(row.subject), language), query) ||
+           contains_folded(ui_text(settings_row_description(row.subject), language), query);
+}
+
+std::string settings_value_text(const EditorSettings &settings, SettingsValue value)
+{
+    switch (value)
+    {
+    case SettingsValue::theme:
+        return std::string(settings.theme.has_value() ? settings.theme.value().name()
+                                                      : system_theme_name);
+    case SettingsValue::ui_language:
+        return std::string(display_language_choice_name(settings.ui_language));
+    case SettingsValue::font_family:
+        return std::string(settings.font_family.text());
+    case SettingsValue::font_size:
+        return font_size_text(settings.font_size);
+    case SettingsValue::finder_preview:
+        return std::string(finder_preview_name(settings.finder_preview));
+    }
+    std::unreachable();
+}
+
+EditorSettings settings_value_stepped(EditorSettings settings, SettingsValue value, bool forward)
+{
+    switch (value)
+    {
+    case SettingsValue::theme:
+        settings.theme = theme_stepped(settings.theme, forward);
+        return settings;
+    case SettingsValue::ui_language:
+        settings.ui_language =
+            cycled(listed_display_language_choices, settings.ui_language, forward);
+        return settings;
+    case SettingsValue::font_family:
+        return settings;
+    case SettingsValue::font_size:
+        settings.font_size = adjusted_font_size(
+            settings.font_size,
+            forward ? FontSizeAdjustment::increase : FontSizeAdjustment::decrease, 1);
+        return settings;
+    case SettingsValue::finder_preview:
+        settings.finder_preview = cycled(finder_preview_order, settings.finder_preview, forward);
+        return settings;
+    }
+    std::unreachable();
+}
+} // namespace nenenib::core

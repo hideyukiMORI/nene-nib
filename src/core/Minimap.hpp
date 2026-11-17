@@ -1,7 +1,9 @@
 #pragma once
 
 #include "ColorSpan.hpp"
+#include "EditorFeature.hpp"
 #include "EditorSettings.hpp"
+#include "FeatureCosts.hpp"
 #include "LineNumber.hpp"
 #include "MinimapBlock.hpp"
 #include "MinimapWindow.hpp"
@@ -19,8 +21,8 @@ namespace nenenib::core
 // ミニマップ（ADR 0171・施主決定 D70・FR-030）の値と純関数。描くのは ui/win32、窓と行の塊を作る
 // のは application、ここはどちらも使う寸法と規則の 1 か所。
 
-// 設定 v4 の features の名前（ADR 0170 の決定 3・既定オフ・`:set minimap`）。
-inline constexpr std::string_view minimap_feature = "minimap";
+// `features=` の名前（ADR 0170 の決定 3・既定オフ・`:set minimap`）。名前と既定は機能の表の行。
+inline constexpr std::string_view minimap_feature = feature_cost(EditorFeature::minimap).name;
 // 面の幅（DIP）と 1 行の高さ（物理画素）と 1 行の桁の上限（決定 2）。1 桁 = 1 物理画素。
 inline constexpr std::int32_t minimap_width_dips = 80;
 inline constexpr std::int32_t minimap_row_pixels = 2;
@@ -45,9 +47,10 @@ inline constexpr std::int64_t minimap_face_contrast_tenths = 15;
 // 未満なら text（accent が背景とほぼ同じテーマ・synthwave-84 など）。ui は色を選ばない。
 [[nodiscard]] RgbColor minimap_face_color(const Palette &palette) noexcept;
 
-// 設定でミニマップを出すか（features に名前がある）。設定が変わったときだけ読む（決定 1）。
+// 設定でミニマップを出すか。設定が変わったときだけ読む（決定 1）。`features=` の読みは機能の表の
+// feature_enabled の 1 本（ADR 0170 の 2026-11-18 の追補 1）。
 [[nodiscard]] bool minimap_shown(const EditorSettings &settings) noexcept;
-// features の名前を足す・外した設定（ほかの名前の順は変えない・足すときは末尾）。
+// オン・オフを置いた設定（feature_set の 1 本・ほかの名前の順は変えない・足すときは末尾）。
 [[nodiscard]] EditorSettings minimap_set(EditorSettings settings, bool shown);
 
 // 1 行の塊の列（決定 3）。line は改行を含まない 1 行、colors はその行の構文の色の区間（桁は

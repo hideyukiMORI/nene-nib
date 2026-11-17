@@ -123,6 +123,8 @@
 #include "ServerMessage.hpp"
 #include "ServerStarted.hpp"
 #include "Session.hpp"
+#include "SettingsOpen.hpp"
+#include "SettingsView.hpp"
 #include "SplitState.hpp"
 #include "StartEntry.hpp"
 #include "StartLists.hpp"
@@ -227,6 +229,9 @@ class EditorController final
     // 本文の右クリックのメニューが開いているか（ADR 0078 の追補 #1051）。窓が鍵とマウスの行き先を
     // 決めるための安い読みで、frame を作らない。
     [[nodiscard]] bool context_menu_active() const noexcept;
+    // 設定の面が開いているか（ADR 0170 の 2026-11-18 の追補 2）。窓が鍵の行き先を決めるための安い
+    // 読みで、frame を作らない（鍵の振り分けは ui の工程）。
+    [[nodiscard]] bool settings_open() const noexcept;
     // 開いているメニューの選んでいる行（マウスの動きのたびに窓が比べる安い読み）。
     [[nodiscard]] std::optional<std::size_t> context_menu_highlighted() const noexcept;
     // エクスプローラーの面に焦点があるか（ADR 0162 の決定 4・E4 で足した口）。窓が鍵の行き先を
@@ -1046,6 +1051,9 @@ class EditorController final
     // 打ち切られたときの 1 行。判断はここだけ（ARC-001）。
     [[nodiscard]] std::optional<core::DisplayText> command_message() const;
     [[nodiscard]] bool persist_settings(core::EditorSettings settings);
+    // 設定を状態に置いて後ろの同期（エクスプローラー・ミニマップ・map の表・追従）を通す 1 本。
+    // persist_settings が書いた後と、設定の面の切り替え（保存しない）が共用する。
+    void adopt_settings(core::EditorSettings settings);
     // 設定が変わった後の追従と clamp の頼み（順は定義のコメント・#1432）。
     void follow_after_settings(bool reshaped);
     // Vim が窓を決め直す option（`scrolloff` `wrap` `relativenumber` `hlsearch`）を置いた時点の
@@ -1095,6 +1103,28 @@ class EditorController final
     // F1 の一覧から選んだ操作。Vim の NORMAL / VISUAL の 5 つはメニューと同じ Vim の鍵の列。
     void run_listed_operation(core::EditorOperation operation);
     [[nodiscard]] std::optional<ContextMenuView> context_menu_view() const;
+
+    // ---------------------------------------------------------------- 設定の面（ADR 0170・#1016）
+    // EditorControllerSettings.cpp の群だけが settings_ を読み書きする（2026-11-18 の追補 2）。
+    void accept(const OpenSettings &);
+    void accept(const CloseSettings &);
+    void accept(const RevertSettings &);
+    void accept(const StepSettings &intent);
+    void accept(const ChangeSetting &intent);
+    void accept(const ChooseSettingsPreset &intent);
+    void accept(const FilterSettings &intent);
+    void accept(const JumpSettingsSection &intent);
+    // 入口の 1
+    // か所（apply）。面が開いていて、意図が面の意図でも使う人の操作でない意図でもなければ、
+    // 写す前に閉じて保存する。
+    void close_settings_before(const EditorIntent &intent);
+    // 閉じて、開いたときの写しと違えば 1 回だけ書く（失敗は状態と 1 行の知らせ）。
+    void close_settings();
+    // 面の切り替えをその場で効かせる（保存しない）。
+    void preview_settings(core::EditorSettings settings);
+    [[nodiscard]] std::vector<std::size_t> visible_settings_rows() const;
+    [[nodiscard]] std::optional<std::size_t> focused_settings_row() const;
+    [[nodiscard]] std::optional<SettingsView> settings_view() const;
 
     // ---------------------------------------------------------------- 起動画面（ADR 0172）
     // EditorControllerStartScreen.cpp の群だけが読み書きする。
@@ -1553,6 +1583,8 @@ class EditorController final
     std::optional<std::size_t> start_selection_;
     // 開いている右クリックのメニュー（ADR 0078 の追補 #1051）。
     std::optional<ContextMenuOpen> context_menu_;
+    // 開いている設定の面（ADR 0170 の 2026-11-18 の追補 2）。
+    std::optional<SettingsOpen> settings_;
     // 写している途中の意図の深さと、いちばん外の意図の入口の印（ADR 0137 の追補 #1625）。apply の
     // 入口と出口が整数を書くだけで、例外で抜けると深さは戻らない（落ちたときは「意図の中」と読む）。
     std::size_t intent_depth_ = 0;
