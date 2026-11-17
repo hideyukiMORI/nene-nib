@@ -363,6 +363,11 @@ void EditorController::accept(const PointTitleBar &intent)
     const auto before = core::tab_tip_tab(state_.hovered());
     const auto after = core::tab_tip_tab(intent.target);
     state_ = state_.with_hovered(intent.target);
+    if (intent.pressed)
+    {
+        hide_tab_tip();
+        return;
+    }
     if (before == after)
     {
         return;
@@ -373,23 +378,37 @@ void EditorController::accept(const PointTitleBar &intent)
         tab_tip_timer_ = TabTipTimer::start;
         return;
     }
-    if (state_.tab_tip() != TabTipPhase::hidden)
-    {
-        state_ = state_.with_tab_tip(TabTipPhase::hidden);
-        tab_tip_timer_ = TabTipTimer::stop;
-    }
+    hide_tab_tip();
 }
 
-// 待っていたタブにまだ載っていて、面も入力行も開いていなければ札を出す。何も変えなければ描き直さ
-// ない（合図の形・ADR 0155 の追補・#813）。
-void EditorController::accept(const TabTipTick &)
+// 待ちか札があれば消してタイマーを外す。出していなければ何もしない。
+void EditorController::hide_tab_tip()
 {
-    if (state_.tab_tip() != TabTipPhase::waiting ||
-        !core::tab_tip_tab(state_.hovered()).has_value() || state_.command_input().has_value())
+    if (state_.tab_tip() == TabTipPhase::hidden)
     {
-        repaint_ = false;
         return;
     }
+    state_ = state_.with_tab_tip(TabTipPhase::hidden);
+    tab_tip_timer_ = TabTipTimer::stop;
+}
+
+// 待っていたタブにまだ載っていて、窓がアクティブで、面も入力行も開いていなければ札を出す。何も
+// 変えなければ描き直さない（合図の形・ADR 0155 の追補・#813）。非アクティブの窓の合図は待ちを
+// 終える（載せ直すまで出さない）。
+void EditorController::accept(const TabTipTick &intent)
+{
+    repaint_ = false;
+    if (state_.tab_tip() != TabTipPhase::waiting)
+    {
+        return;
+    }
+    if (!core::tab_tip_tab(state_.hovered()).has_value() || state_.command_input().has_value() ||
+        !intent.window_active)
+    {
+        state_ = state_.with_tab_tip(TabTipPhase::hidden);
+        return;
+    }
+    repaint_ = true;
     state_ = state_.with_tab_tip(TabTipPhase::shown);
 }
 
@@ -399,12 +418,10 @@ void EditorController::accept(const TabTipTick &)
 void EditorController::settle_tab_tip(const EditorIntent &intent)
 {
     tab_tip_timer_.reset();
-    if (state_.tab_tip() == TabTipPhase::hidden || not_user_operation(intent))
+    if (!not_user_operation(intent))
     {
-        return;
+        hide_tab_tip();
     }
-    state_ = state_.with_tab_tip(TabTipPhase::hidden);
-    tab_tip_timer_ = TabTipTimer::stop;
 }
 
 std::optional<std::size_t> EditorController::shown_tab_tip() const

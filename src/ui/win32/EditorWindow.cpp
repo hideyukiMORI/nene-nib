@@ -186,7 +186,7 @@ void EditorWindow::receive_timer(WPARAM word)
         return;
     case WindowTimer::tab_tip:
         KillTimer(window_, word);
-        send(application::TabTipTick{});
+        send(application::TabTipTick{GetActiveWindow() == window_});
         return;
     }
 }

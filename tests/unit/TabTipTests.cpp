@@ -129,6 +129,26 @@ void verify_middle_clipped()
     expect(middle_clipped(combined, 2) == "ae\xCC\x81…e\xCC\x81z",
            "a combining mark is never split from its base on either side");
     expect(middle_clipped(combined, 4) == "a…z", "a dropped base takes its combining mark");
+    // UNC と長いパスの形（`\\server\share\…`・`\\?\C:\…`）は先頭の区切りごと残る（V-1802 の L5）。
+    const auto unc = core::tab_tip_text(path_of("\\\\server\\share\\dir\\a.txt"),
+                                        core::DisplayLanguage::japanese);
+    expect(unc == "\\\\server\\share\\dir\\a.txt" && middle_clipped(unc, 12) == "\\\\serv…\\a.txt",
+           "a UNC path keeps its leading backslashes and the file name");
+    const auto extended = core::tab_tip_text(path_of("\\\\?\\C:\\deep\\folder\\b.txt"),
+                                             core::DisplayLanguage::japanese);
+    expect(extended == "\\\\?\\C:\\deep\\folder\\b.txt" &&
+               middle_clipped(extended, 13) == "\\\\?\\C…\\b.txt",
+           "an extended-length path keeps its prefix and the file name");
+    // ZWJ（U+200D）は仮想桁の表で unprintable（Vim は <200d> と出す）なので、それ自身が 1 文字で
+    // 絵文字に付かない（Vim の 1 文字の規則のまま）。code point は割らない。
+    const std::string_view family = "a\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D"
+                                    "\xF0\x9F\x91\xA7"
+                                    "b";
+    expect(tab_tip_characters(family) == 7, "a zero-width joiner is its own character");
+    expect(middle_clipped(family, 5) == "a…b" && middle_clipped(family, 3) ==
+                                                     "a\xF0\x9F\x91\xA8…\xF0\x9F\x91\xA7"
+                                                     "b",
+           "a ZWJ sequence is cut only between its emoji, never inside a code point");
 }
 
 [[nodiscard]] core::TitleBarLayout band(std::int32_t width, std::uint32_t dpi, std::size_t tabs,
@@ -326,6 +346,23 @@ void verify_dismissing_intents()
     expect_dismissed(app::BeginFind{}, "opening the find line hides the tip");
     expect_dismissed(app::CloseTab{0}, "closing a tab hides the tip");
     expect_dismissed(app::SelectEditMode{core::EditMode::vim}, "changing the mode hides the tip");
+    // × と中ボタンは押した時点で消す（離すのを待たない・D82・V-1802 の L3）。
+    expect_dismissed(PointTitleBar{TitleBarTarget{TitleBarHit::tab_close, 1}, true},
+                     "pressing the close button hides the tip before the release");
+    expect_dismissed(PointTitleBar{TitleBarTarget{TitleBarHit::tab, 1}, true},
+                     "pressing the tab with the middle button hides the tip");
+    // 非アクティブの窓では合図が来ても出さない（Windows の標準のツールチップ・V-1802 の L2）。
+    Editing inactive;
+    open_four_tabs(inactive.controller());
+    applied(inactive.controller(), on_tab(1));
+    expect(!inactive.controller().apply(TabTipTick{false}).repaint &&
+               !inactive.controller().frame().tab_tip.has_value() &&
+               inactive.controller().frame().hovered ==
+                   std::optional{TitleBarTarget{TitleBarHit::tab, 1}},
+           "an inactive window shows no tip and keeps the band hover");
+    applied(inactive.controller(), TabTipTick{});
+    expect(!inactive.controller().frame().tab_tip.has_value(),
+           "after an inactive tick the tip waits for the pointer to come back");
     // 待っている間の鍵も待ちを止める（合図が来ても出さない）。
     Editing editing;
     EditorController &controller = editing.controller();

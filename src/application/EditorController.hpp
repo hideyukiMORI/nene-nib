@@ -850,8 +850,9 @@ class EditorController final
     // タブの札（#1789・ADR 0056 の #1789 の追補）。合図で待っていたタブにまだ載っていれば出す。
     // 消すのは入口の settle_tab_tip の 1 か所で、使う人の操作の意図（not_user_operation でない
     // 意図）が来たら写す前に消す。札を出しているタブは shown_tab_tip が frame に写す。
-    void accept(const TabTipTick &);
+    void accept(const TabTipTick &intent);
     void settle_tab_tip(const EditorIntent &intent);
+    void hide_tab_tip();
     [[nodiscard]] std::optional<std::size_t> shown_tab_tip() const;
     // 帯の配置の入力（96 DPI・幅は DIP・決定 8）と、送り量をアクティブなタブが見える所へ直す
     // 1 本（切り替え・新しいタブ・閉じる・開く・帯の幅のたび）。帯の幅がまだ 0 なら送り量は 0。
