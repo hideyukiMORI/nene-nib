@@ -146,6 +146,7 @@ VK_F = 0x46
 VK_NIHONGO = [0x4E, 0x49, 0x48, 0x4F, 0x4E, 0x47, 0x4F]
 INPUT_KEYBOARD = 1
 KEYEVENTF_KEYUP = 0x0002
+KEYEVENTF_UNICODE = 0x0004
 SRCCOPY = 0x00CC0020
 # PNG の署名（RFC 2083）。write_png / read_png が書いて読むのは 8-bit RGB・filter 0・非 interlace だけ。
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -619,6 +620,38 @@ def key_input(key: int, flags: int) -> INPUT:
     return record
 
 
+def utf16_units(text: str) -> list[int]:
+    """The UTF-16 code units of text (a character outside the BMP gives its surrogate pair)."""
+    data = text.encode("utf-16-le")
+    return [int.from_bytes(data[index:index + 2], "little") for index in range(0, len(data), 2)]
+
+
+def unicode_input(unit: int, flags: int) -> INPUT:
+    record = INPUT()
+    record.kind = INPUT_KEYBOARD
+    record.payload.ki = KEYBDINPUT(0, unit, KEYEVENTF_UNICODE | flags, 0, None)
+    return record
+
+
+def type_through_input(window, text: str) -> bool:
+    """Type text through the raw input queue (VK_PACKET), behind any chord already sent there."""
+    if not take_foreground(window):
+        return False
+    units = utf16_units(text)
+    records = (INPUT * (2 * len(units)))(
+        *[record for unit in units for record in (unicode_input(unit, 0),
+                                                   unicode_input(unit, KEYEVENTF_KEYUP))])
+    return user.SendInput(len(records), c.byref(records), c.sizeof(INPUT)) == len(records)
+
+
+def press_through_input(window, key: int) -> bool:
+    """One key down and up through the raw input queue, behind any chord already sent there."""
+    if not take_foreground(window):
+        return False
+    records = (INPUT * 2)(key_input(key, 0), key_input(key, KEYEVENTF_KEYUP))
+    return user.SendInput(len(records), c.byref(records), c.sizeof(INPUT)) == len(records)
+
+
 def take_foreground(window, attempts: int = FOREGROUND_ATTEMPTS) -> bool:
     """SetForegroundWindow is refused unless we share the input queue of the current foreground."""
     for _ in range(attempts):
@@ -822,12 +855,26 @@ def parse_keys(text: str) -> list[tuple[str, object]]:
 
 
 def send_key_sequence(window, text: str) -> None:
-    """Post the parsed steps; only <C-v>, <C-S-Space> and <C-S-f> need the foreground (they carry Ctrl)."""
+    """Send the parsed steps in order.
+
+    Plain text and keys are posted (WM_CHAR / WM_KEYDOWN) until the first chord. <C-v>, <C-S-Space>
+    and <C-S-f> carry Ctrl, so they go through the raw input queue (SendInput) and need the
+    foreground. GetMessage hands out posted messages before input, so a posted step after a chord
+    would be read before the chord (#1772: `<C-S-f>needle` left the face at `!`). After the first
+    chord every later step goes through the same input queue, which keeps the order without
+    waiting on a clock.
+    """
+    queued = False
     for kind, value in parse_keys(text):
-        if kind == "text":
+        if kind == "text" and queued:
+            assert type_through_input(window, str(value)), "the foreground was refused for text"
+        if kind == "text" and not queued:
             write_text(window, str(value))
-        if kind == "key":
+        if kind == "key" and queued:
+            assert press_through_input(window, int(value)), "the foreground was refused for a key"
+        if kind == "key" and not queued:
             press(window, int(value))
+        queued = queued or kind in ("chord", "shiftChord", "shiftChordHeld")
         if kind == "chord":
             assert press_chord(window, VK_CONTROL, int(value)), "the foreground was refused for Ctrl"
         if kind == "shiftChord":
