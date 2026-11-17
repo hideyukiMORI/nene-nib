@@ -287,7 +287,9 @@ void characters(Targets &out, const TextBuffer &text, LineNumber line,
     }
     else if (reaches_before(kind))
     {
-        std::reverse(kept.begin(), kept.end());
+        // std::reverse は MSVC STL の __std_reverse_* を core
+        // の外へ出す（ARC-003）ので、逆順の写しを作る。
+        kept = Targets(kept.rbegin(), kept.rend());
     }
     if (kept.size() > easymotion_target_limit)
     {
