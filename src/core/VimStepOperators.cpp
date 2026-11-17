@@ -1294,6 +1294,7 @@ namespace detail
     next.pending = std::nullopt;
     next.input_wait = std::nullopt;
     next.selected_register = std::nullopt;
+    next.easy_motion = std::nullopt;
     return next;
 }
 } // namespace detail
