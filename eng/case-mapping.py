@@ -101,9 +101,50 @@ def table_rows(name: str, ranges: list[tuple[int, int, int, int]]) -> str:
             "}};\n")
 
 
+def fold_shared(upper: dict[int, int], lower: dict[int, int]) -> list[int]:
+    """The fold forms (as src/core/VimCase.cpp `vim_folded` computes them from the two tables) whose
+    fold class cannot be told apart by a byte comparison that folds only ASCII (#1003): a class with
+    members both inside and outside ASCII (`k` with KELVIN SIGN, `s` with LONG S) and a class of two
+    or more members outside ASCII (`é` with `É`). `vim_folded_ascii_comparable` is false exactly for
+    the code points whose fold form is listed."""
+    def upper_of(value: int) -> int:
+        return upper.get(value, value)
+
+    def lower_of(value: int) -> int:
+        return value if upper_of(value) != value else lower.get(value, value)
+
+    def folded(value: int) -> int:
+        if value < 0x80:
+            return value + 0x20 if 0x41 <= value <= 0x5A else value
+        if value in (0x0130, 0x0131):
+            return value
+        return lower_of(upper_of(value))
+
+    classes: dict[int, list[int]] = {}
+    for value in sorted(set(upper) | set(lower) | set(upper.values()) | set(lower.values())):
+        classes.setdefault(folded(value), []).append(value)
+    shared = []
+    for form, members in classes.items():
+        members = sorted(set(members) | ({form} if folded(form) == form else set()))
+        inside = [member for member in members if member < 0x80]
+        if (inside and len(inside) != len(members)) or (not inside and len(members) > 1):
+            shared.append(form)
+    return sorted(shared)
+
+
+def shared_rows(values: list[int]) -> str:
+    lines = [", ".join(f"U'\\x{value:X}'" for value in values[at:at + 8])
+             for at in range(0, len(values), 8)]
+    rows = ",\n".join(f"    {line}" for line in lines)
+    return (f"inline constexpr std::array<char32_t, {len(values)}> case_fold_shared{{{{\n"
+            f"{rows}\n"
+            "}};\n")
+
+
 def case_mapping_header() -> str:
     """The whole of src/core/CaseMappingTable.hpp. Needs no Vim."""
     tables = []
+    mappings = []
     for name, convert, overrides in (("case_to_upper", str.upper, SIMPLE_OVERRIDES["upper"]),
                                      ("case_to_lower", str.lower, SIMPLE_OVERRIDES["lower"])):
         mapping = simple_mapping(convert, overrides)
@@ -111,6 +152,9 @@ def case_mapping_header() -> str:
         if expanded(ranges) != mapping:
             raise ValueError(f"{name}: the folded ranges do not reproduce the mapping")
         tables.append(table_rows(name, ranges))
+        mappings.append(mapping)
+    tables.append("// 畳みの仲間を ASCII だけを畳むバイト列の比較で見分けられない畳んだ形（昇順・#1003）。\n"
+                  + shared_rows(fold_shared(mappings[0], mappings[1])))
     return ("// clang-format off\n"
             f"{BANNER}\n"
             f"// Unicode {unicodedata.unidata_version}（Python {sys.version_info.major}.{sys.version_info.minor} の unicodedata）\n"
@@ -126,6 +170,8 @@ def case_mapping_header() -> str:
             f"{tables[0]}"
             "\n"
             f"{tables[1]}"
+            "\n"
+            f"{tables[2]}"
             "} // namespace nenenib::core\n"
             "// clang-format on\n")
 

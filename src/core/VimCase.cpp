@@ -28,6 +28,7 @@ namespace
 
 static_assert(well_formed(case_to_upper), "case_to_upper must be ascending and disjoint");
 static_assert(well_formed(case_to_lower), "case_to_lower must be ascending and disjoint");
+static_assert(std::ranges::is_sorted(case_fold_shared), "case_fold_shared must be ascending");
 
 // first が value 以下の最後の行を二分探索で引き、その行の step の列に入っていれば delta を足す。
 [[nodiscard]] char32_t mapped(std::span<const CaseMappingRange> table, char32_t value) noexcept
@@ -78,5 +79,10 @@ char32_t vim_folded(char32_t value) noexcept
         return value;
     }
     return vim_to_lower(vim_to_upper(value));
+}
+
+bool vim_folded_ascii_comparable(char32_t value) noexcept
+{
+    return !std::ranges::binary_search(case_fold_shared, vim_folded(value));
 }
 } // namespace nenenib::core

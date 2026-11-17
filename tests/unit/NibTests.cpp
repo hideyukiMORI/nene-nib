@@ -138,6 +138,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 117> contracts{{
     {"--shell-registration-property", verify_shell_registration_property_scope},
     {"--input-line-limit", verify_input_line_limit_scope},
     {"--command-line-edit", verify_command_line_edit_scope},
+    {"--project-search", verify_project_search_contracts},
 }};
 
 void verify_vim_scope_contracts()
@@ -299,6 +300,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 143> scopes{{
     {"--input-line-limit", verify_input_line_limit_scope},
     {"--input-line-property", verify_input_line_property_scope},
     {"--command-line-edit", verify_command_line_edit_scope},
+    {"--project-search", verify_project_search_contracts},
 }};
 
 // 名指しの scope にしかない検査（fixture の選び方の件数と名前など）を CTest で回す入口（#1324）。
