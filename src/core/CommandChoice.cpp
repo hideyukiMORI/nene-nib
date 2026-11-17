@@ -3,6 +3,7 @@
 #include "Appearance.hpp"
 #include "AsciiCase.hpp"
 #include "CommandMatch.hpp"
+#include "ContextMenu.hpp"
 #include "DisplayLanguageNames.hpp"
 #include "EditorSettings.hpp"
 #include "ExResult.hpp"
@@ -11,6 +12,7 @@
 #include "OperationReadings.hpp"
 #include "OperationText.hpp"
 #include "OperationTexts.hpp"
+#include "PaletteMode.hpp"
 #include "SubsequenceScore.hpp"
 #include "ThemeCatalog.hpp"
 #include "UiTexts.hpp"
@@ -410,25 +412,47 @@ std::vector<CommandChoice> palette_choices(const CommandLine &input)
     return choices;
 }
 
+namespace
+{
+// 一覧の行の鍵の表示。Vim の NORMAL / VISUAL で Vim
+// の鍵の列に写す操作は列（無ければ一覧に出さない・ 値なし）、ほかは shown_chord
+// の表示名（鍵の無い行は空）。
+[[nodiscard]] std::optional<std::string> listed_key(EditorOperation operation, PaletteMode mode)
+{
+    if (listed_vim_routed(operation, mode.menu))
+    {
+        const auto keys = context_menu_vim_keys(operation, mode.menu);
+        return keys.empty() ? std::nullopt : std::optional{std::string(keys)};
+    }
+    const auto chord = shown_chord(operation, mode.edit);
+    return chord.has_value() ? key_chord_label(chord.value()) : std::string{};
+}
+} // namespace
+
 std::vector<CommandChoice> operation_choices(std::string_view query, EditMode mode,
+                                             DisplayLanguage language)
+{
+    return operation_choices(query, palette_mode_of(mode), language);
+}
+
+std::vector<CommandChoice> operation_choices(std::string_view query, PaletteMode mode,
                                              DisplayLanguage language)
 {
     std::vector<CommandChoice> available;
     std::vector<ScoredPosition> scored;
     for (const OperationText &text : operation_texts)
     {
-        if (!operation_available(text.operation, mode))
+        const auto key = listed_key(text.operation, mode);
+        if (!operation_available(text.operation, mode.edit) || !key.has_value())
         {
             continue;
         }
-        const auto chord = shown_chord(text.operation, mode);
-        auto key = chord.has_value() ? key_chord_label(chord.value()) : std::string{};
         const auto score = query.empty() ? std::optional<std::size_t>{0}
-                                         : operation_score(query, text, key, language);
+                                         : operation_score(query, text, key.value(), language);
         if (score.has_value())
         {
             scored.emplace_back(available.size(), score.value());
-            available.push_back(operation_choice_of(text, std::move(key), language));
+            available.push_back(operation_choice_of(text, key.value(), language));
         }
     }
     std::vector<CommandChoice> choices;

@@ -84,10 +84,10 @@ void verify_columns()
                    "every text is non-empty and has the Japanese placeholders");
         }
     }
-    expect(core::ui_message_count == 213,
-           "the table has 213 messages (T1a 197, T1b 4, the About operation 2 of D90, the "
-           "project search mark 1 of #1003, the project search face 8 of #1763 and the "
-           "easymotion prompt of ADR 0163)");
+    expect(core::ui_message_count == 223,
+           "the table has 223 messages (T1a 197, T1b 4, the About operation 2 of D90, the "
+           "project search mark 1 of #1003, the project search face 8 of #1763, the "
+           "easymotion prompt of ADR 0163 and the 5 context menu operations 10 of #1051)");
     expect(placed == 29, "29 messages take placeholders (T1a 26 and the search progress 3)");
     expect(core::ui_text(core::UiMessage::tab_untitled, core::DisplayLanguage::english) ==
                "Untitled",

@@ -526,6 +526,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     explorer_layouts_.clear();
     explorer_shapes_.clear();
     start_layouts_.clear();
+    context_menu_layouts_.clear();
     Microsoft::WRL::ComPtr<IUnknown> unknown;
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory7),
                                    unknown.GetAddressOf())) ||
@@ -655,6 +656,7 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     palette_layouts_.clear();
     tab_layouts_.clear();
     start_layouts_.clear();
+    context_menu_layouts_.clear();
     const std::wstring requested = core::to_utf16(settings.font_family.text()).value();
     const wchar_t *face = family(requested.c_str(), L"Consolas");
     const float ratio = core::font_size_ratio(settings.font_size);
@@ -2779,6 +2781,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
         // 面を閉じたら行の文字組みを捨てる。開くたびに作り直す（#900）。
         palette_layouts_.clear();
     }
+    draw_context_menu(frame, width, height);
     gutter_layouts_.end();
     D2D1_TAG failed_first = 0;
     D2D1_TAG failed_second = 0;

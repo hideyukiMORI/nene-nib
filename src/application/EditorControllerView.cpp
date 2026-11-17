@@ -419,12 +419,10 @@ std::expected<core::TextCaret, TextLayoutFailure> EditorController::caret_in_vie
     return view.caret_at(at < first ? first : last.value(), point.value().x);
 }
 
-void EditorController::accept(const PointText &intent)
+// 点の本文の位置（クリックと右クリックのメニューの共通の 1 本・#1051）。解けなければ layout
+// の失敗を 置いて無し。
+std::optional<core::TextCaret> EditorController::pointed_caret(const PointText &intent)
 {
-    if (state_.composition().has_value())
-    {
-        return;
-    }
     const auto &scroll = settled_scroll();
     const auto row = std::clamp<std::int64_t>(intent.row, 0,
                                               static_cast<std::int64_t>(scroll.visible_lines) - 1);
@@ -433,12 +431,26 @@ void EditorController::accept(const PointText &intent)
     if (!at)
     {
         layout_failure_ = at.error();
-        return;
+        return std::nullopt;
     }
     const auto caret = view.caret_at(at.value(), intent.x + scroll.horizontal);
     if (!caret)
     {
         layout_failure_ = caret.error();
+        return std::nullopt;
+    }
+    return caret.value();
+}
+
+void EditorController::accept(const PointText &intent)
+{
+    if (state_.composition().has_value())
+    {
+        return;
+    }
+    const auto caret = pointed_caret(intent);
+    if (!caret.has_value())
+    {
         return;
     }
     switch (intent.clicks)
@@ -450,7 +462,9 @@ void EditorController::accept(const PointText &intent)
     case PointerClicks::triple:
         break;
     }
-    const auto pointed = pointed_character(view, caret.value(), intent.x + scroll.horizontal);
+    auto view = visual_view();
+    const auto pointed =
+        pointed_character(view, caret.value(), intent.x + settled_scroll().horizontal);
     if (!pointed)
     {
         layout_failure_ = pointed.error();

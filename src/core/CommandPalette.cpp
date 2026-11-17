@@ -72,7 +72,7 @@ entry_position(const std::vector<CommandChoice> & /*choices*/, std::size_t /*sel
 } // namespace
 
 CommandPalette::CommandPalette(CommandLine input, std::size_t selected, std::size_t first,
-                               std::size_t visible, EditMode mode, Entries entries,
+                               std::size_t visible, PaletteMode mode, Entries entries,
                                std::shared_ptr<const Result> result)
     : input_(std::move(input)), selected_(selected), first_(first),
       visible_(std::max(visible, std::size_t{1})), mode_(mode), entries_(std::move(entries)),
@@ -83,11 +83,17 @@ CommandPalette::CommandPalette(CommandLine input, std::size_t selected, std::siz
 CommandPalette CommandPalette::opened(const std::vector<CommandChoice> &entries,
                                       std::string_view input, EditMode mode, CommandLine empty)
 {
+    return opened(entries, input, palette_mode_of(mode), std::move(empty));
+}
+
+CommandPalette CommandPalette::opened(const std::vector<CommandChoice> &entries,
+                                      std::string_view input, PaletteMode mode, CommandLine empty)
+{
     return filtered(empty.inserted(input).value_or(empty), palette_row_limit, mode,
                     std::make_shared<const std::vector<CommandChoice>>(entries));
 }
 
-CommandPalette CommandPalette::filtered(CommandLine input, std::size_t visible, EditMode mode,
+CommandPalette CommandPalette::filtered(CommandLine input, std::size_t visible, PaletteMode mode,
                                         Entries entries)
 {
     auto result = std::make_shared<const Result>(result_of(input, mode, *entries));
@@ -95,7 +101,7 @@ CommandPalette CommandPalette::filtered(CommandLine input, std::size_t visible, 
                           std::move(result));
 }
 
-CommandPalette::Result CommandPalette::result_of(const CommandLine &input, EditMode mode,
+CommandPalette::Result CommandPalette::result_of(const CommandLine &input, PaletteMode mode,
                                                  const std::vector<CommandChoice> &entries)
 {
     const PaletteQuery query = palette_query_of(input.text());

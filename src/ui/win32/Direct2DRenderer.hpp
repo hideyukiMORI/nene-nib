@@ -9,6 +9,8 @@
 #include "ColoredRun.hpp"
 #include "CommandChoice.hpp"
 #include "CommandLayout.hpp"
+#include "ContextMenuLayout.hpp"
+#include "ContextMenuPainter.hpp"
 #include "DeviceWarmup.hpp"
 #include "DisplayLanguage.hpp"
 #include "DisplayLine.hpp"
@@ -103,6 +105,12 @@ class Direct2DRenderer final
     // 最後に描いたプレビューの枠の点（クライアントの物理画素）の下のチェックボックスの要素の番号
     // （ADR 0155 の追補 24）。窓が押した・離した点を引く。
     [[nodiscard]] std::optional<std::size_t> preview_task_at(std::int32_t x, std::int32_t y) const;
+    // 最後に描いた右クリックのメニューの点（クライアントの物理画素）の下の行と、面の中か（ADR 0078
+    // の追補 #1051）。描いた矩形をそのまま引く（描画と当たりが同じ core::context_menu_layout）。
+    // メニューを描いていなければ無し・偽。
+    [[nodiscard]] std::optional<std::size_t> context_menu_row_at(std::int32_t x,
+                                                                 std::int32_t y) const;
+    [[nodiscard]] bool context_menu_covers(std::int32_t x, std::int32_t y) const;
     // 最後に描いたプレビューの枠の点（クライアントの物理画素）の下の文字の位置（ADR 0155 の改訂
     // 18）。全面プレビューのドラッグの選択が引く。
     [[nodiscard]] std::optional<core::PreviewPoint> preview_point_at(std::int32_t x,
@@ -393,6 +401,9 @@ class Direct2DRenderer final
     void draw_explorer(const application::EditorFrame &frame, const core::ExplorerLayout &layout);
     // ミニマップ（ADR 0171 の決定 1・2）。面が無い frame は最初の 1 行で返る。
     void draw_minimap(const application::EditorFrame &frame, const core::LayoutRect &panel);
+    // 右クリックのメニュー（#1051）。ほかの全部の上に描き、描いた配置を当たりのために覚える。
+    void draw_context_menu(const application::EditorFrame &frame, std::int32_t width,
+                           std::int32_t height);
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);
     // ミニマップの命令の失敗で落ちた frame を描き直す（1 度目は bitmap を捨てて直接、それでも
@@ -464,6 +475,10 @@ class Direct2DRenderer final
     // 起動画面の文字組み。同じ型で、書式の作り直しと起動画面が消えたときに捨てる（ADR 0172 の
     // 決定 5）。
     PaletteRowLayouts start_layouts_{StartScreenPainter::retained};
+    // 右クリックのメニューの文字組みと、最後に描いた配置（#1051）。捨てる時は start_layouts_ と同じ
+    // （メニューを閉じたときも）。
+    PaletteRowLayouts context_menu_layouts_{ContextMenuPainter::retained};
+    std::optional<core::ContextMenuLayout> context_menu_layout_;
     // other の枠のプレビュー。要素の layout の保持は frame をまたいで再利用する（ADR 0155）。
     PreviewPane preview_;
     MinimapPicture minimap_;
