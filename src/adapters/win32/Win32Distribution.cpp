@@ -8,8 +8,10 @@ namespace nenenib::adapters::win32
 {
 core::Distribution distribution_of(std::int32_t package_name_result) noexcept
 {
-    return package_name_result == APPMODEL_ERROR_NO_PACKAGE ? core::Distribution::unpackaged
-                                                            : core::Distribution::packaged;
+    // 分からない値は今までどおり（ZIP 版）に倒す。誤って packaged にすると効く機能が消える。
+    return package_name_result == ERROR_INSUFFICIENT_BUFFER || package_name_result == ERROR_SUCCESS
+               ? core::Distribution::packaged
+               : core::Distribution::unpackaged;
 }
 
 core::Distribution current_distribution() noexcept
