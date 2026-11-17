@@ -32,11 +32,10 @@ inline constexpr std::size_t finder_preview_line_bytes = 512;
 [[nodiscard]] std::string_view finder_preview_name(FinderPreview preview) noexcept;
 // 名前の逆引き。表に無い名前は値なし。
 [[nodiscard]] std::optional<FinderPreview> finder_preview_named(std::string_view name) noexcept;
-// 切り替えの次の値（決定 3）。順は right → below → off → right。chosen が automatic なら、今
-// 描いている形 drawn の次（drawn に automatic は来ない前提で、来たら off と同じく right）。
-// chosen が手で選んだ値なら、その値の次（入らない窓でその場だけ別の形に落ちていても）。
-[[nodiscard]] FinderPreview finder_preview_cycled(FinderPreview chosen,
-                                                  FinderPreview drawn) noexcept;
+// 切り替えの次の値（決定 3）。順は right → below → off → right で、選んだ値に依らず今描いている
+// 形 drawn の次（手で right を選んでいて細い窓で below に落ちていれば次は off・押せば見た目が必ず
+// 変わる）。drawn に automatic は来ない前提で、来たら off と同じく right。
+[[nodiscard]] FinderPreview finder_preview_cycled(FinderPreview drawn) noexcept;
 // 出どころがプレビュー欄を持つか（決定 2）。ファイルを指す候補の出どころ（タブ・ブックマーク・
 // 履歴・同じフォルダ・全文検索の当たりと、それらを混ぜた files）は持ち、設定 `:` と操作の一覧 `?`
 // は持たない（今の面の形）。出どころごとの答えはここの 1 か所。

@@ -47,18 +47,9 @@ std::optional<FinderPreview> finder_preview_named(std::string_view name) noexcep
     return std::nullopt;
 }
 
-FinderPreview finder_preview_cycled(FinderPreview chosen, FinderPreview drawn) noexcept
+FinderPreview finder_preview_cycled(FinderPreview drawn) noexcept
 {
-    switch (chosen)
-    {
-    case FinderPreview::automatic:
-        return after(drawn);
-    case FinderPreview::right:
-    case FinderPreview::below:
-    case FinderPreview::off:
-        return after(chosen);
-    }
-    std::unreachable();
+    return after(drawn);
 }
 
 bool palette_previews(PaletteScope scope) noexcept

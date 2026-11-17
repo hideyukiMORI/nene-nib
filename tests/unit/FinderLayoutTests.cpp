@@ -63,8 +63,10 @@ namespace app = nenenib::application;
 namespace core = nenenib::core;
 using core::FinderPreview;
 
-// 置き方 × 窓の大きさの表（DIP の窓・96 DPI）。窓の幅 792 DIP が right の境（プレビュー欄 360
-// DIP）、 窓の高さ 500 DIP が below の境（当たり 3 行 ＋ プレビュー 6 行）。
+// 置き方 × 窓の大きさの表（DIP の窓・96 と 144 DPI）。窓の幅 792 DIP が right の境（プレビュー欄
+// 360 DIP）。below の境（当たり 3 行 ＋ プレビュー 6 行）は 96 DPI で 500 DIP で、欄ごとの丸めで
+// DPI により 1〜2 画素動くので、表は境の上の 520 DIP と下の 499 DIP を置き、境そのものは
+// verify_below_layout（96 DPI）と verify_below_boundary（120・144 DPI）が見る。
 using DrawnRow = std::tuple<std::int32_t, std::int32_t, FinderPreview, FinderPreview>;
 constexpr std::array<DrawnRow, 16> drawn_rows{{
     {1600, 1200, FinderPreview::automatic, FinderPreview::right},
@@ -74,7 +76,7 @@ constexpr std::array<DrawnRow, 16> drawn_rows{{
     {792, 1200, FinderPreview::automatic, FinderPreview::right},
     {791, 1200, FinderPreview::automatic, FinderPreview::below},
     {791, 1200, FinderPreview::right, FinderPreview::below},
-    {700, 500, FinderPreview::automatic, FinderPreview::below},
+    {700, 520, FinderPreview::automatic, FinderPreview::below},
     {700, 499, FinderPreview::automatic, FinderPreview::off},
     {700, 499, FinderPreview::right, FinderPreview::off},
     {700, 499, FinderPreview::below, FinderPreview::off},
@@ -172,13 +174,13 @@ void verify_below_layout()
 }
 
 // 当たりの判定と描画は同じ矩形を読む（決定 1）。行の上は行、欄と印の上は行ではない。
-void verify_same_rectangles()
+void verify_same_rectangles_at(std::uint32_t dpi)
 {
-    constexpr std::uint32_t dpi = 96;
     for (const auto placement : {FinderPreview::right, FinderPreview::below, FinderPreview::off})
     {
         const auto layout =
-            core::palette_layout(1600, 1200, dpi, core::PaletteContent{8, placement});
+            core::palette_layout(core::to_pixels(1600, dpi), core::to_pixels(1200, dpi), dpi,
+                                 core::PaletteContent{8, placement});
         for (std::size_t index = 0; index < layout.visible_rows; ++index)
         {
             const auto row = core::palette_row(layout, index);
@@ -200,24 +202,62 @@ void verify_same_rectangles()
     }
 }
 
+// 96 DPI のほかに 125% と 150%（V-1792 の 7）。
+void verify_same_rectangles()
+{
+    for (const std::uint32_t dpi : {96U, 120U, 144U})
+    {
+        verify_same_rectangles_at(dpi);
+    }
+}
+
+// below の「入る」の判定と実際の配置は同じ丸めの式（V-1792 の 5）。125% と 150% で窓の高さを境の
+// 前後に 1 画素ずつ動かし、below で描く窓は必ず当たり 3 行とプレビュー 6 行を持ち、境の 1 画素下は
+// off に落ちる。
+// below で描く最も低い窓の高さ（無ければ 0）。below で描く窓は必ず当たり 3 行とプレビュー 6 行。
+[[nodiscard]] std::int32_t lowest_below(std::int32_t width, std::uint32_t dpi)
+{
+    std::int32_t least = 0;
+    for (auto height = core::to_pixels(470, dpi); height <= core::to_pixels(530, dpi); ++height)
+    {
+        const auto layout =
+            core::palette_layout(width, height, dpi, core::PaletteContent{3, FinderPreview::below});
+        if (layout.preview == FinderPreview::below)
+        {
+            least = least == 0 ? height : least;
+            expect(layout.visible_rows >= 3 && core::palette_preview_lines(layout, dpi) >= 6,
+                   "a below layout always holds three rows and six preview lines");
+        }
+    }
+    return least;
+}
+
+void verify_below_boundary()
+{
+    for (const std::uint32_t dpi : {120U, 144U})
+    {
+        const auto width = core::to_pixels(700, dpi);
+        const auto least = lowest_below(width, dpi);
+        expect(least > core::to_pixels(470, dpi) &&
+                   core::palette_preview_drawn(FinderPreview::below, width, least - 1, dpi) ==
+                       FinderPreview::off,
+               "one pixel below the lowest below window falls back to off");
+    }
+}
+
 void verify_cycle_and_names()
 {
-    using Cycle = std::tuple<FinderPreview, FinderPreview, FinderPreview>;
-    constexpr std::array<Cycle, 9> cycles{{
-        {FinderPreview::right, FinderPreview::right, FinderPreview::below},
-        {FinderPreview::right, FinderPreview::below, FinderPreview::below},
-        {FinderPreview::below, FinderPreview::below, FinderPreview::off},
-        {FinderPreview::below, FinderPreview::off, FinderPreview::off},
-        {FinderPreview::off, FinderPreview::off, FinderPreview::right},
-        {FinderPreview::automatic, FinderPreview::right, FinderPreview::below},
-        {FinderPreview::automatic, FinderPreview::below, FinderPreview::off},
-        {FinderPreview::automatic, FinderPreview::off, FinderPreview::right},
-        {FinderPreview::automatic, FinderPreview::automatic, FinderPreview::right},
+    using Cycle = std::pair<FinderPreview, FinderPreview>;
+    constexpr std::array<Cycle, 4> cycles{{
+        {FinderPreview::right, FinderPreview::below},
+        {FinderPreview::below, FinderPreview::off},
+        {FinderPreview::off, FinderPreview::right},
+        {FinderPreview::automatic, FinderPreview::right},
     }};
-    for (const auto &[chosen, drawn, next] : cycles)
+    for (const auto &[drawn, next] : cycles)
     {
-        expect(core::finder_preview_cycled(chosen, drawn) == next,
-               "the cycle is right, below, off and automatic steps from the drawn form");
+        expect(core::finder_preview_cycled(drawn) == next,
+               "the cycle steps right, below, off from the drawn form");
     }
     for (const auto preview :
          {FinderPreview::automatic, FinderPreview::right, FinderPreview::below, FinderPreview::off})
@@ -358,6 +398,42 @@ void verify_cycle_saves()
             narrow.settings().written().value_or(core::default_editor_settings()).finder_preview ==
                 FinderPreview::off,
         "automatic on a narrow window steps from the drawn below to off");
+    // 手で right を選んでいても、細い窓で below に落ちていれば次は off（見た目が必ず変わる）。
+    auto chosen = core::default_editor_settings();
+    chosen.finder_preview = FinderPreview::right;
+    Editing manual(chosen);
+    auto &hand = manual.controller();
+    sized(hand, 700, 1200);
+    applied(hand, app::OpenTabList{});
+    applied(hand, app::CycleFinderPreview{});
+    expect(manual.settings().written().value_or(core::default_editor_settings()).finder_preview ==
+               FinderPreview::off,
+           "a hand-picked right drawn as below on a narrow window steps to off");
+}
+
+// 選択を動かしても設定を書かない（V-1792 の 7）。automatic で窓に入らず off で描くときは欄の
+// 表示値を作らない（V-1792 の 2）。
+void verify_quiet_moves()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    sized(controller, 1600, 1200);
+    applied(controller, app::NewTab{});
+    applied(controller, app::NewTab{});
+    applied(controller, app::OpenTabList{});
+    for (const auto edit : {core::CommandEdit::complete_next, core::CommandEdit::complete_next,
+                            core::CommandEdit::complete_previous})
+    {
+        applied(controller, app::EditCommand{edit});
+    }
+    expect(editing.settings().writes() == 0 && preview_of(controller).has_value(),
+           "moving the selection shows previews and writes no settings");
+    Editing small;
+    auto &tiny = small.controller();
+    sized(tiny, 640, 360);
+    applied(tiny, app::OpenTabList{});
+    expect(placement_of(tiny) == FinderPreview::automatic && !preview_of(tiny).has_value(),
+           "a window that fits no pane draws off and makes no preview");
 }
 
 void verify_scope_placement()
@@ -503,9 +579,11 @@ void verify_finder_layout_contracts()
     verify_right_layout();
     verify_below_layout();
     verify_same_rectangles();
+    verify_below_boundary();
     verify_cycle_and_names();
     verify_ex_option();
     verify_cycle_saves();
+    verify_quiet_moves();
     verify_scope_placement();
     verify_open_tab_window();
     verify_long_line_window();

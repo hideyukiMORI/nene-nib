@@ -192,6 +192,9 @@ class EditorController final
     [[nodiscard]] std::optional<CommandPaletteView> command_palette_view() const;
     // 面の配置へ渡す置き方（ADR 0189 の決定 1・2）。面が閉じている・欄を持たない出どころは off。
     [[nodiscard]] core::FinderPreview palette_placement() const noexcept;
+    // 面の表示値にプレビュー欄の中身を載せるか（決定 1・レビュー V-1792 の 2）。置き方が off か、
+    // 寸法が届いた窓で入らずに off で描くなら偽（面の打鍵の道で描かない欄の窓を作らない）。
+    [[nodiscard]] bool preview_drawn(core::FinderPreview placement) const noexcept;
     // 試験の harness が Vim の鍵を 1 つ打つ口（ADR 0048 の決定 8）。窓の VimKeyPress と違い、
     // 入力行が開いていれば再生と同じ command_key の写しで入力行へ入る。
     [[nodiscard]] EditorFrame press_vim_key(const core::VimKey &key);

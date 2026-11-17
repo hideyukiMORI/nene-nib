@@ -51,6 +51,12 @@ namespace
     return number - 1;
 }
 
+// 寸法が届く前に描いている扱いの形（automatic は right・ほかは選んだ値）。
+[[nodiscard]] core::FinderPreview unmeasured_drawn(core::FinderPreview chosen) noexcept
+{
+    return chosen == core::FinderPreview::automatic ? core::FinderPreview::right : chosen;
+}
+
 // 見出し（名前・場所・言語）だけの表示値。パスがあればファイルの名前と場所とパスの言語、無題は
 // タブの題名だけ（言語は本文の文書の値で後から置き換える）。
 [[nodiscard]] PreviewSnippet heading_of(const core::CommandChoice &choice,
@@ -85,18 +91,29 @@ core::FinderPreview EditorController::palette_placement() const noexcept
                : core::palette_placement(palette->scope(), state_.settings().finder_preview);
 }
 
-// 今 automatic なら今描いている形の次（決定 3）。描いている形は窓の大きさで決まり、出どころには
-// 依らない（欄を持たない出どころで押しても、覚える値は窓に入る形の次）。寸法が届く前は right を
-// 描いている扱い。
+bool EditorController::preview_drawn(core::FinderPreview placement) const noexcept
+{
+    if (placement == core::FinderPreview::off)
+    {
+        return false;
+    }
+    const bool known = window_width_ > 0 && window_height_ > 0 && view_geometry_.dpi > 0;
+    return !known || core::palette_preview_drawn(placement, window_width_, window_height_,
+                                                 view_geometry_.dpi) != core::FinderPreview::off;
+}
+
+// 今描いている形の次（決定 3・選んだ値に依らない）。描いている形は窓の大きさで決まり、出どころには
+// 依らない（欄を持たない出どころで押しても、覚える値は窓に入る形の次）。寸法が届く前は選んだ値
+// （automatic なら right）を描いている扱い。
 void EditorController::accept(const CycleFinderPreview &)
 {
     const auto chosen = state_.settings().finder_preview;
     const bool known = window_width_ > 0 && window_height_ > 0 && view_geometry_.dpi > 0;
     const auto drawn = known ? core::palette_preview_drawn(chosen, window_width_, window_height_,
                                                            view_geometry_.dpi)
-                             : core::FinderPreview::right;
+                             : unmeasured_drawn(chosen);
     auto settings = state_.settings();
-    settings.finder_preview = core::finder_preview_cycled(chosen, drawn);
+    settings.finder_preview = core::finder_preview_cycled(drawn);
     static_cast<void>(persist_settings(std::move(settings)));
 }
 

@@ -27,7 +27,7 @@ constexpr std::int32_t number_dips = 40;
 constexpr std::int32_t number_gap_dips = 14;
 constexpr std::size_t below_row_limit = 5;
 constexpr std::size_t below_least_rows = 3;
-constexpr std::int32_t least_lines = 6;
+constexpr std::size_t least_lines = 6;
 
 // 面の幅（off と below は 640 DIP・right は 1000 DIP）。窓の幅から左右 16 DIP
 // を引いた幅を越えない。
@@ -49,12 +49,22 @@ constexpr std::int32_t least_lines = 6;
     return {top, bottom};
 }
 
+// lines 行の本文が入るプレビュー欄の高さ（見出し・上下の余白・行をそれぞれ丸めた和。
+// palette_preview_lines が引く式と同じ）。
+[[nodiscard]] std::int32_t pane_height(std::uint32_t dpi, std::size_t lines) noexcept
+{
+    return to_pixels(heading_dips, dpi) + to_pixels(body_pad_dips * 2, dpi) +
+           to_pixels(line_dips, dpi) * static_cast<std::int32_t>(lines);
+}
+
 // below で当たりに使える行の数（プレビューの最小の 6 行ぶんを残した残り・上限 5）。
 [[nodiscard]] std::size_t below_rows(std::int32_t height, std::uint32_t dpi) noexcept
 {
     const auto [top, bottom] = vertical_span(height, dpi);
-    const auto spare = bottom - top - to_pixels(input_dips + footer_dips + heading_dips, dpi) -
-                       to_pixels(body_pad_dips * 2 + line_dips * least_lines, dpi);
+    // 実際の配置（below_layout と palette_preview_lines）と同じく欄ごとに丸めて引く（V-1792 の
+    // 5）。
+    const auto spare = bottom - top - to_pixels(input_dips, dpi) - to_pixels(footer_dips, dpi) -
+                       pane_height(dpi, least_lines);
     if (spare <= 0)
     {
         return 0;
@@ -145,9 +155,7 @@ void place_pane(PaletteLayout &layout, const LayoutRect &pane, std::uint32_t dpi
     const auto rows_top = layout.rows.top;
     const auto rows_bottom = rows_top + static_cast<std::int32_t>(count) * layout.row_height;
     const auto footer_height = to_pixels(footer_dips, dpi);
-    const auto most =
-        to_pixels(heading_dips + body_pad_dips * 2, dpi) +
-        to_pixels(line_dips, dpi) * static_cast<std::int32_t>(finder_preview_line_limit);
+    const auto most = pane_height(dpi, finder_preview_line_limit);
     const auto pane_bottom =
         std::max(rows_bottom, std::min(bottom - footer_height, rows_bottom + most));
     const auto panel = layout.panel;
