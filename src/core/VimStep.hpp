@@ -1,8 +1,11 @@
 #pragma once
 
+#include "ExGlobalRequest.hpp"
+#include "ExLinesRequest.hpp"
 #include "ExSubstituteRequest.hpp"
 #include "Offset.hpp"
 #include "Selection.hpp"
+#include "SubstituteAnswer.hpp"
 #include "VimChangeMark.hpp"
 #include "VimCommandMotion.hpp"
 #include "VimCount.hpp"
@@ -10,6 +13,7 @@
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
 #include "VimLastVisual.hpp"
+#include "VimLinesLeft.hpp"
 #include "VimMarks.hpp"
 #include "VimMode.hpp"
 #include "VimRepeatFailure.hpp"
@@ -80,6 +84,11 @@ struct VimStep
     // は改行を入れる 前に update_topline を流す（edit.c「May need to adjust w_topline to show the
     // cursor.」）。 controller は鍵の終わりの追従の前に、ここで先に 1 回追従する。ほかの鍵は空。
     std::optional<TextPosition> edit_topline = std::nullopt;
+    // 鍵が全部の行を消したか（ADR 0188 の決定 3 (a)）。none のとき controller は eol の文書の最後の
+    // 改行も消して空の本文にする（旗は立ったまま）。立てるのは行を消す効果を作る 2 か所（Ex の `:d`
+    // と行単位の `d` の removed_exactly）で、1 行目から最後の行までを消したと行で決める。none
+    // の鍵は changed の印も持つ（Vim の del_lines の changed_lines・出口の lines_emptied）。
+    VimLinesLeft lines_left = VimLinesLeft::some;
 };
 
 // 効果が本文を置き換えるか（ADR 0181 の決定 2）。範囲も本文も空の置き換え・行の無い矩形は
@@ -104,6 +113,13 @@ struct VimStep
 // 割り込みと同じ組み立て中の入力を捨て、INSERT の `Ctrl-o` の印は残す（Vim の clearopbeep は
 // restart_edit を消さないので、Ex の行の後に INSERT へ戻る）。
 [[nodiscard]] VimState vim_operator_cleared(const VimState &state);
+
+// 保留のオペレータが、範囲の端が字の途中にあるとき字を割るか（Vim の d c y は端をバイトで切り、
+// 不正な UTF-8 を作る）。オペレータ待ちの `:s` の起点が置換の後で字の途中に落ちたとき、真なら
+// Nib は字を割らずにオペレータを捨て、偽なら起点を次の code point の境目へ切り上げて渡す（> < は
+// 行単位で桁が効かず、g~ gu gU は跨いだ字を起点が終わりなら含め始まりなら外す・#1683 の
+// Vim 9.1 の実測）。保留が無ければ偽。
+[[nodiscard]] bool vim_pending_splits_characters(const VimState &state) noexcept;
 
 // タブを切り替えたあとの状態（ADR 0056 の決定 4）。割り込みと同じく組み立て中の入力を捨て、
 // モードは NORMAL へ戻し、文書ごとの値（欲しい列と 'scroll'）は相手の文書の値に置き換える。
@@ -191,6 +207,33 @@ void vim_macro_typed(VimState &state, std::span<const VimKey> keys);
 // 積まない。controller は鍵と同じ写しの道で結果を写す。
 [[nodiscard]] VimStep vim_substituted(const VimState &state, const VimEditorView &view,
                                       const ExSubstituteRequest &request);
+// `:s///c` の問いへの 1 つの答え（ADR 0168 の決定 6・段 2a）。vim_substituted が返した問いの値と
+// 答えから、置く当たり（いまの本文の座標）・キャレット・続けて問う値を VimConfirmSubstitute
+// で返す。`y` は置いて次へ（キャレットは置いた本文の終わりの行の頭・Vim の do_sub）、`n` は
+// 飛ばして次へ、`l` は置いて終え、`a` は残りを全部置いて最後に置き換えた行の最初の非空白へ、
+// `q` は置かずに終える（キャレットは問うていた当たり）。次の当たりが無ければ終える。終えるときは
+// 置いた数が 3 つ以上なら報せを添え、置いた分の undo の戻り先を返す。鍵ではないので `.` と
+// マクロの記録には積まない。
+[[nodiscard]] VimStep vim_substitute_answered(const VimState &state, const VimEditorView &view,
+                                              const SubstituteAnswer &answer);
+
+// Ex の `:[range]d [x] [count]` と `:[range]y [x] [count]` の 1 歩（ADR 0168 の決定 1・5・段 3a）。
+// 範囲を行に解き（`:s` と同じ vim_ex_lines の 1 本・E16 E20 E493）、行単位の値をレジスタの書き手
+// （registers_written）へ渡す。`:d` は行を 1
+// つの編集で消し、キャレットは消した行の次の行（最後の行を
+// 消したなら新しい最後の行）の最初の非空白、`''` は前のキャレット、undo の戻り先は最初に消した行の
+// 最初の非空白（Vim 9.1 の実測）。`:y` はキャレットを動かさない。回数 0 は E939。3 行を超えれば
+// N fewer lines / N lines yanked を報せる。鍵ではないので `.` とマクロの記録には積まない。
+[[nodiscard]] VimStep vim_lines_edited(const VimState &state, const VimEditorView &view,
+                                       const ExLinesRequest &request);
+
+// Ex の `:[range]g/{pat}/{cmd}` `:g!` `:v` の 1 歩（ADR 0168 の決定 5・段
+// 3a）。範囲（既定は全体）の 行を 1 回走って当たる（`:v` は当たらない）行の集合を決め、`:d`
+// はその行を 1 つの編集で消し、
+// `:s` の族は置換の本体を集合の行に 1 回だけ流す（undo 1 単位）。パターンは直前の検索と置換の
+// パターンになる。当たる行が無ければ報せだけでエラーにしない（Vim の smsg・実測）。
+[[nodiscard]] VimStep vim_global(const VimState &state, const VimEditorView &view,
+                                 const ExGlobalRequest &request);
 
 // 本文のダブルクリック・トリプルクリックの VISUAL（#1250・ADR 0056 の決定 9
 // の追補）。鍵ではないので

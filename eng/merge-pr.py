@@ -14,9 +14,10 @@ ROOT = Path(__file__).resolve().parent.parent
 REPOSITORY = "github.com/hideyukiMORI/nene-nib"
 HOST, REPO_NAME = REPOSITORY.split("/", 1)
 API_ROOT = f"repos/{REPO_NAME}"
-# ADR 0136: CI の build-and-test は Release の全 target と ctest で 7〜11 分かかる（check.yml の上限は 45 分）。
+# ADR 0136: CI の build-and-test は Release の全 target と ctest（check.yml の上限は 90 分）。
 # 600 秒だと毎回切れて --ci-run での再開が要った（#522 / #524 / #526・Issue #533）。
-WATCH_SECONDS = 2700
+# 2026-11 にはビルドだけで 25〜44 分かかり、2700 秒（45 分）で切れた（#1752）。check.yml の上限と同じ値。
+WATCH_SECONDS = 5400
 # #667: `gh run watch` can exit non-zero while the same run is still going; wait on that run again.
 WATCH_RETRIES = 3
 # #1223: a merge call can fail with a GitHub 5xx or "Merge already in progress" while GitHub is still
@@ -29,6 +30,7 @@ TRANSIENT_MERGE_FAILURE = re.compile(r"(?i)\b5\d\d (?:bad gateway|service unavai
 # has already landed (#1339's compare timed out after 60 s). Those calls wait on the same table as the merge
 # call (MERGE_RETRIES x MERGE_RETRY_SECONDS). #1501: the reads before the merge (GETs, nothing done yet) wait
 # on the same table too (#1500's read during the wait for CI got a cut body); the CI dispatch POST never does.
+MISSING_GITHUB_RESOURCE = re.compile(r"\bHTTP 404\b")
 TRANSIENT_GITHUB_FAILURE = re.compile(r"(?i)\bHTTP 5\d\d\b|\b5\d\d (?:bad gateway|service unavailable|"
                                       r"gateway time-?out|internal server error)\b|unexpected end of JSON input")
 # #1503 L1: the last reads before the merge (PR, rules, compare) are read again from the start when one of them
@@ -70,11 +72,14 @@ def read_json(arguments: list[str], runner) -> object:
     return json.loads(result.stdout)
 
 
-def read_waiting(arguments: list[str], runner, waits: list[str] | None = None) -> object:
+def read_waiting(arguments: list[str], runner, waits: list[str] | None = None,
+                 missing_waits: bool = False) -> object:
     """Read (a GET) and wait on a transient failure: a timeout, a 5xx, a cut body, or exit 0 with a body that
     is not JSON (#1345 after the merge, #1501 before it; same table as the merge call, #1223).
 
     Any other failure (404, permission, a refusal) stops at once. Each wait's reason is added to `waits`.
+    `missing_waits` also waits on a 404, only for the run this call has just dispatched: GitHub can return
+    the run id before it serves the run (#1769). A run id given with --ci-run still stops at once.
     """
     retried = 0
     while True:
@@ -85,7 +90,8 @@ def read_waiting(arguments: list[str], runner, waits: list[str] | None = None) -
         else:
             if result.returncode:
                 failure = f"GitHub read failed ({result.returncode}): {result.stderr.strip()}"
-                if TRANSIENT_GITHUB_FAILURE.search(f"{result.stderr}\n{result.stdout}") is None:
+                missing = missing_waits and MISSING_GITHUB_RESOURCE.search(result.stderr) is not None
+                if not missing and TRANSIENT_GITHUB_FAILURE.search(f"{result.stderr}\n{result.stdout}") is None:
                     raise MergeRefused(failure)
             else:
                 try:
@@ -470,8 +476,11 @@ def run_ci(number: int, head: str, record: dict, runner, run_id: int | None) -> 
         if not isinstance(response, dict) or type(response.get("workflow_run_id")) is not int:
             raise MergeRefused("CI dispatch outcome unknown: inspect Actions before dispatching again")
         run_id = response["workflow_run_id"]
+        dispatched = True
+    else:
+        dispatched = False
     print(json.dumps({"ciRun": run_id, "resume": f"--ci-run {run_id}"}), flush=True)
-    run = read_waiting(api_command(f"actions/runs/{run_id}"), runner)
+    run = read_waiting(api_command(f"actions/runs/{run_id}"), runner, missing_waits=dispatched)
     # ADR 0143: the definition is main's check.yml; the PR head is proven by the input-based run name.
     expected = {"event": "workflow_dispatch", "path": ".github/workflows/check.yml",
                 "head_branch": "main", "display_title": f"Merge PR #{number} at {head}"}

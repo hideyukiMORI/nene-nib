@@ -22,6 +22,7 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
+            VALUE "CompanyName", "Hideyuki Mori\0"
             VALUE "FileDescription", "NeNe Nib\0"
             VALUE "FileVersion", NENENIB_VERSION_TEXT
             VALUE "InternalName", "NeNeNib\0"

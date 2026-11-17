@@ -1066,7 +1066,34 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return pending_action(state, action);
 }
 
-// 行に効く本文の変更（X p P D C Y J gJ）。
+// NORMAL の `s` `S`（#768）と `R`。Vim の nv_optrans は回数を前に置いた `cl` と `cc` を読み込みの
+// 列へ積むだけなので、保留の `c` を立てて `cl` の移動と `cc` の行の 1 本へそのまま流す（範囲・
+// レジスタ・`"-` と `"1` の規則・u の戻り先・INSERT の回数は `cl` `cc` と同じ道）。
+[[nodiscard]] VimStep substituted_keys(const VimState &state, const VimEditorView &view,
+                                       VimAction action)
+{
+    if (action == VimAction::replace_mode)
+    {
+        // NORMAL の `R`（REPLACE モード）は未実装。表に無い鍵と同じに打ち消す（VISUAL だけ効く・
+        // #1436・#768）。
+        return failed(cancelled(state), VimRepeatFailure::refused);
+    }
+    if (action == VimAction::substitute_line)
+    {
+        return operated_on_lines(state, view, VimOperator::change);
+    }
+    if (action == VimAction::substitute)
+    {
+        VimState with = state;
+        with.pending = VimPendingOperator{VimOperator::change, std::nullopt};
+        return operated(with, view, VimMotion::right);
+    }
+    // 行に効く動作を足して normal_line_action に枝を書き忘れたら、黙って `cl` にせずここで止める
+    // （CPP-002 の趣旨）。
+    std::unreachable();
+}
+
+// 行に効く本文の変更（X p P D C Y J gJ s S R）。
 [[nodiscard]] VimStep normal_line_action(const VimState &state, const VimEditorView &view,
                                          VimAction action)
 {
@@ -1090,12 +1117,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return operated_on_lines(state, view, VimOperator::yank);
     }
-    if (action == VimAction::substitute || action == VimAction::replace_mode)
-    {
-        // NORMAL の `s` と `R` は未実装。表に無い鍵と同じに打ち消す（VISUAL だけ効く・#1436）。
-        return failed(cancelled(state), VimRepeatFailure::refused);
-    }
-    std::unreachable();
+    return substituted_keys(state, view, action);
 }
 
 // 次の 1 鍵を待つ接頭辞の動作 → 接頭辞（g z @ " と m ' `・ADR 0152 の決定 3・[ ]）。ほかは
@@ -2298,6 +2320,28 @@ VimState vim_operator_cleared(const VimState &state)
     return input_discarded(state);
 }
 
+bool vim_pending_splits_characters(const VimState &state) noexcept
+{
+    if (!state.pending.has_value())
+    {
+        return false;
+    }
+    switch (state.pending.value().operation)
+    {
+    case VimOperator::remove:
+    case VimOperator::change:
+    case VimOperator::yank:
+        return true;
+    case VimOperator::toggle_case:
+    case VimOperator::lower_case:
+    case VimOperator::upper_case:
+    case VimOperator::shift_right:
+    case VimOperator::shift_left:
+        return false;
+    }
+    std::unreachable();
+}
+
 VimState vim_switched_document(const VimState &state, std::optional<VimWantedColumn> wanted_column,
                                std::optional<VimCount> scroll_lines)
 {
@@ -2631,6 +2675,37 @@ namespace
 {
     return caret_position(view);
 }
+// `:s///c` の答えは置いた当たりの行頭を印に書いて返す（VimStepSubstituteConfirm.cpp）。
+[[nodiscard]] TextPosition change_position(const VimEditorView &view,
+                                           const VimConfirmSubstitute &effect)
+{
+    return effect.edits.empty() ? caret_position(view)
+                                : view.text.position_of(effect.edits.front().range.begin);
+}
+
+// 行単位の削除の演算子が 1 行目から最後の行までを消した印（ADR 0188 の決定 3 (a)・removed_exactly
+// が行で立てる）を仕上げる。行が 1 つも無い本文（ML_EMPTY）の `dd` は何も消さないので外し、残った
+// 印の鍵は本文を変える（del_lines の changed_lines）ので changed の印も立てる。
+[[nodiscard]] VimStep lines_emptied(const VimEditorView &view, VimStep step)
+{
+    switch (step.lines_left)
+    {
+    case VimLinesLeft::some:
+        return step;
+    case VimLinesLeft::none:
+        break;
+    }
+    if (vim_has_no_lines(view))
+    {
+        step.lines_left = VimLinesLeft::some;
+        return step;
+    }
+    if (!step.change.has_value() || step.change.value().kind != VimChange::changed)
+    {
+        step.change = VimChangeMark{VimChange::changed, std::nullopt};
+    }
+    return step;
+}
 
 // 本文を置き換える編集の効果を返す step の印（ADR 0181 の決定 2）。編集を返す鍵は Vim が必ず
 // u_save と changed_* を呼ぶので、印を書く所を効果ごとに散らさず出口のこの 1 か所で立てる。
@@ -2638,6 +2713,7 @@ namespace
 // 印に位置が無ければ、ここで既定の位置（change_position）を書く（追補 #1374）。
 [[nodiscard]] VimStep change_marked(const VimEditorView &view, VimStep step)
 {
+    step = lines_emptied(view, std::move(step));
     if (vim_replaces_text(step.effect) &&
         (!step.change.has_value() || step.change.value().kind != VimChange::changed))
     {
@@ -2814,6 +2890,11 @@ namespace
 [[nodiscard]] bool replaces(const VimWindowCommand &) noexcept
 {
     return false;
+}
+// `:s///c` は置いた当たりがあるときだけ本文を置き換える（`n` `q` は動くだけ）。
+[[nodiscard]] bool replaces(const VimConfirmSubstitute &effect) noexcept
+{
+    return !effect.edits.empty();
 }
 } // namespace
 

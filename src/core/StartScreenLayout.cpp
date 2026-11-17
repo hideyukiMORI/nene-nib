@@ -127,6 +127,31 @@ void centered(StartScreenLayout &layout, const LayoutRect &content, std::uint32_
         move_down(key.key, delta);
         move_down(key.label, delta);
     }
+    if (layout.signature.has_value())
+    {
+        for (auto &line : layout.signature.value())
+        {
+            move_down(line, delta);
+        }
+    }
+}
+
+// 鍵の案内の下の署名の 2 行（D90）。上の 36 DIP と署名を含めたブロックが本文の
+// 欄の高さに入るときだけ置き、列の下端を署名の下端へ伸ばす。入らなければ置かない
+// （狭い窓で最初に落とす）。
+void place_signature(StartScreenLayout &layout, const LayoutRect &content,
+                     std::uint32_t dpi) noexcept
+{
+    const auto first = heading_at(
+        layout.column, layout.column.bottom + to_pixels(start_section_gap_dips, dpi), dpi);
+    const auto second = heading_at(layout.column, first.bottom, dpi);
+    const auto block = second.bottom - layout.column.top;
+    if (to_pixels(start_top_dips, dpi) + block > height_of(content))
+    {
+        return;
+    }
+    layout.signature = std::array<LayoutRect, 2>{first, second};
+    layout.column.bottom = second.bottom;
 }
 } // namespace
 
@@ -189,8 +214,33 @@ std::optional<StartScreenLayout> start_screen_layout(const BodyLayout &body, std
     place_keys(layout, keys_top, metrics,
                std::max(key_width, to_pixels(start_key_minimum_dips, dpi)));
     layout.column.bottom = keys_top + (3 * height);
+    place_signature(layout, body.content, dpi);
     centered(layout, body.content, dpi);
     return layout;
+}
+
+LayoutRect start_version_area(const LayoutRect &title, std::int32_t title_width,
+                              std::uint32_t dpi) noexcept
+{
+    const auto left = title.left + std::max(title_width, 0) + to_pixels(start_detail_gap_dips, dpi);
+    return LayoutRect{std::min(left, title.right), title.top, title.right, title.bottom};
+}
+
+StartCredit start_credit(const StartScreenLayout &layout, std::uint32_t dpi,
+                         const StartCreditWidths &widths) noexcept
+{
+    const auto fits = [](std::int32_t width, const LayoutRect &area) noexcept
+    { return width > 0 && width <= width_of(area); };
+    if (!fits(widths.version, start_version_area(layout.title, widths.title, dpi)))
+    {
+        return StartCredit::none;
+    }
+    if (!layout.signature.has_value() || !fits(widths.copyright, layout.signature.value().at(0)) ||
+        !fits(widths.homepage, layout.signature.value().at(1)))
+    {
+        return StartCredit::version;
+    }
+    return StartCredit::version_and_signature;
 }
 
 std::optional<std::size_t> start_screen_row_at(const StartScreenLayout &layout,

@@ -34,6 +34,8 @@
 #include "TextBuffer.hpp"
 #include "TitleBarTarget.hpp"
 #include "UnloadedDocument.hpp"
+#include "VimEmptyText.hpp"
+#include "VimEndOfLine.hpp"
 #include "VimKey.hpp"
 #include "VimMarks.hpp"
 #include "VimState.hpp"
@@ -56,6 +58,16 @@ class EditorState final
     [[nodiscard]] static EditorState create(core::Appearance appearance, core::EditMode mode);
 
     [[nodiscard]] const core::TextBuffer &text() const noexcept;
+    // Vim のモードが見る本文（ADR 0188 の決定 2・4）。Vim のモードで eol の旗が立ち、本文が改行で
+    // 終わる間は最後の改行を除いた本文で、ほかは text() と同じ。engine に渡す本文と画面の行の数・
+    // 位置の解決（VisualTextView）はこれを読み、編集・保存は text() を読む。除いた本文は本文か旗が
+    // 変わったときだけ作り直す（決定 7）。位置は text() と同じ（除いた後ろの改行だけが無い）。
+    [[nodiscard]] const core::TextBuffer &vim_text() const noexcept;
+    // vim_text() が空のときの読み方（決定 3 (c)）。eol の文書 `\n` を除いた空なら one_line。
+    [[nodiscard]] core::VimEmptyText vim_empty_text() const noexcept;
+    // 旗が立っているか（決定 1）。立っている文書は、Vim のモードの編集で空の本文が空でなくなった
+    // ときに最後の改行を足し直す（決定 3 (a)・controller の replace）。
+    [[nodiscard]] bool vim_eol() const noexcept;
     [[nodiscard]] const core::Selection &selection() const noexcept;
     [[nodiscard]] const core::EditHistory &history() const noexcept;
     [[nodiscard]] const ScrollState &scroll() const noexcept;
@@ -375,6 +387,9 @@ class EditorState final
     // もう 1 つの枠が tab を出していれば、アクティブの文書の先頭へ向け直す（決定
     // 5）。閉じたタブと、 本文が丸ごと替わるアクティブ（with_opened）の 2 か所。
     void restart_other_showing(AutosaveId tab);
+    // vim_text_ を今のモード・旗・本文に合わせる（決定 7）。text_changed が偽で除くかどうかも
+    // 変わらなければ作り直さない。
+    void refresh_vim_text(bool text_changed);
 
     core::TextBuffer text_;
     core::Selection selection_;
@@ -392,6 +407,11 @@ class EditorState final
     core::VimState vim_;
     Document document_;
     core::VimMarks vim_marks_{};
+    VimEndOfLine vim_eol_{};
+    // 通常モードから Vim のモードへ入った回数（窓全体で 1 つ）。置いた束の旗を決め直すかを見る。
+    std::uint64_t vim_entries_ = 0;
+    // 最後の改行を除いた本文（vim_text の正本・除かない間は空）。
+    std::shared_ptr<const core::TextBuffer> vim_text_;
     std::vector<core::Diagnostic> diagnostics_;
     std::uint64_t diagnostics_version_ = 0;
     core::DiagnosticsCount diagnostics_count_ = core::DiagnosticsCount::complete;

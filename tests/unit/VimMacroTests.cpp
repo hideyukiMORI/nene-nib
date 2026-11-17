@@ -48,7 +48,7 @@
 #include "VimTestSupport.hpp"
 #include "VimViewport.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1714,15 +1714,17 @@ void verify_vim_macro_scope()
 {
     std::size_t selected = 0;
     bool named = true;
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         // macro 欄はほかの族の fixture も持つ（#1246 の insert-page-edge-・#1232 の
         // viewport-ctrl-e-・#1325 の del-key-・#1337 の dot-register-count-・#1341 の
         // huge-count-macro-・#1369 の prefix-escape-・#1363 の viewport-insert-follow-replay-・
         // #1448 の mark-insert-left-・#1440 の change-mark-macro-・#1517 の insert-ctrl-o-・#1525
         // の ex-failure-・#1559 の substitute-macro-・#1561 の ex-set-form-macro-・#1617 の
-        // gn-macro・#1086 の autoindent- の 4 件）。macro- には #1528 の macro-ex- を含む。名前で
-        // 守るのは逆の向き: macro- の fixture は必ず macro 欄を持つ（#1324）。
+        // gn-macro・#1654 の ex-global-macro ex-delete-macro-count ex-yank-macro・#1687 の
+        // block-insert-moved-macro-・#1550 の cmdline-edit-macro-・#768 の substitute-key-・#1086
+        // の autoindent- の 4 件）。macro- には #1528 の macro-ex- を含む。名前で守るのは逆の向き:
+        // macro- の fixture は必ず macro 欄を持つ（#1324）。
         named &= !fixture.name.starts_with("macro-") || fixture.macro.has_value();
         if (macro_fixture(fixture))
         {
@@ -1730,7 +1732,7 @@ void verify_vim_macro_scope()
             ++selected;
         }
     }
-    expect(selected == 214, "the scope replays the 51 macro, 108 register and 55 other "
+    expect(selected == 226, "the scope replays the 51 macro, 108 register and 67 other "
                             "fixtures with a macro register");
     expect(named, "every macro- fixture carries a macro register");
     verify_vim_macro_contracts();

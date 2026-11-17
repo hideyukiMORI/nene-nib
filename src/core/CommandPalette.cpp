@@ -288,6 +288,8 @@ CommandPalette CommandPalette::paged(CommandEdit direction) const
     case CommandEdit::end:
     case CommandEdit::backspace:
     case CommandEdit::erase:
+    case CommandEdit::erase_word:
+    case CommandEdit::erase_to_start:
     case CommandEdit::complete_next:
     case CommandEdit::complete_previous:
     case CommandEdit::history_previous:
@@ -312,6 +314,9 @@ CommandPalette CommandPalette::edited(CommandEdit edit) const
     case CommandEdit::history_previous:
     case CommandEdit::history_next:
         // 面の上下は候補の選択（ADR 0150 の決定 2）。入力の履歴は持たない（#725）。
+    case CommandEdit::erase_word:
+    case CommandEdit::erase_to_start:
+        // 面の Ctrl+W / Ctrl+U は Windows の標準のまま何もしない（D82・#1550）。
         return *this;
     case CommandEdit::left:
     case CommandEdit::right:

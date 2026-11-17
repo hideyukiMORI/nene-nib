@@ -28,8 +28,13 @@ enum class ExFailure : std::uint8_t
     letter_delimiter,
     // `:s` の回数が INT_MAX 以上（ADR 0168 の追補 14）。文言は Vim の E1510: Value too large。
     value_too_large,
-    // `:s` のフラグと回数の後ろの余り（ADR 0168 の決定 2）。文言は Vim の E488。
-    trailing_characters
+    // `:s` のフラグと回数の後ろの余り（ADR 0168 の決定 2）。`:d` `:y` のレジスタと回数の後ろの
+    // 余りも同じ（段 3a）。文言は Vim の E488。
+    trailing_characters,
+    // `!` を取らない命令の `!`（`:d!` `:y!` `:v!`・ADR 0168 の段 3a）。文言は Vim の E477。
+    no_bang_allowed,
+    // パターンの無い `:g`（ADR 0168 の段 3a）。文言は Vim の E148。
+    global_pattern_missing
 };
 
 [[nodiscard]] DisplayText ex_failure_message(ExFailure failure);

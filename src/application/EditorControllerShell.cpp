@@ -2,6 +2,7 @@
 // 呼ぶのはこの翻訳単位だけで、起動・開く・切り替え・保存・打鍵・自動退避・F1 の一覧の道は呼ばない。
 #include "EditorController.hpp"
 
+#include "AppIdentity.hpp"
 #include "DisplayText.hpp"
 #include "ShellRegistration.hpp"
 #include "ShellRegistrationFailure.hpp"
@@ -131,6 +132,12 @@ void EditorController::accept(const UnregisterShell &)
             ? std::string(core::ui_text(core::UiMessage::notice_shell_unregistered, language))
             : failed_notice(core::UiMessage::notice_shell_unregister_failed,
                             failure_message(removed.error()), language));
+}
+
+void EditorController::accept(const ShowVersion &)
+{
+    // 名乗りの文は固定の ASCII と「©」「·」だけなので parse は必ず成功する（不変条件・ARC-010）。
+    state_ = state_.with_command_message(core::DisplayText::parse(core::app_about_line()).value());
 }
 
 void EditorController::show_shell_notice(const std::string &text)

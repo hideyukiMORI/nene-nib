@@ -20,7 +20,7 @@ namespace
 // 契約を持たない scope（--vim-visual-yank）と、既に載っている契約を別の切り口で束ねただけの scope
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 // 表は関数の外に置く（CPP-012・関数長の上限は表の行を数えない形で守る）。
-constexpr std::array<std::pair<std::string_view, void (*)()>, 112> contracts{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 118> contracts{{
     {"--vim-wrapped", verify_vim_wrapped_contracts},
     {"--wrapped-view", verify_wrapped_view_scope},
     {"--edge-arrows", verify_edge_arrows_scope},
@@ -40,6 +40,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 112> contracts{{
     {"--vim-marks", verify_vim_mark_contracts},
     {"--vim-visual-wanted", verify_vim_visual_wanted_contracts},
     {"--vim-open-lines", verify_vim_open_line_contracts},
+    {"--vim-eol", verify_vim_eol_contracts},
     {"--vim-character-search", verify_vim_character_search_contracts},
     {"--vim-line-jumps", verify_vim_line_jump_contracts},
     {"--vim-virtual-column", verify_vim_virtual_column_contracts},
@@ -70,6 +71,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 112> contracts{{
     {"--document-format", verify_document_format_contracts},
     {"--print", verify_print_contracts},
     {"--shell-registration", verify_shell_registration_contracts},
+    {"--version-info", verify_version_info_contracts},
     {"--operations", verify_operations_scope},
     {"--ui-texts", verify_ui_texts_scope},
     {"--ui-language", verify_ui_language_scope},
@@ -100,6 +102,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 112> contracts{{
     {"--vim-insert-normal", verify_vim_insert_normal_scope},
     {"--vim-autoindent", verify_vim_autoindent_scope},
     {"--saved-state-property", verify_saved_state_property_scope},
+    {"--fold-save-point", verify_fold_save_point_scope},
     {"--vim-pattern-property", verify_vim_pattern_property_scope},
     {"--title-bar-layout-property", verify_title_bar_layout_property_scope},
     {"--grid-cells-property", verify_grid_cells_property_scope},
@@ -126,6 +129,8 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 112> contracts{{
     {"--find-replace", verify_find_replace_scope},
     {"--substitute-property", verify_substitute_property_scope},
     {"--ex-substitute", verify_ex_substitute_scope},
+    {"--substitute-confirm", verify_substitute_confirm_scope},
+    {"--ex-lines", verify_ex_lines_scope},
     {"--matchparen", verify_matchparen_scope},
     {"--minimap", verify_minimap_scope},
     {"--minimap-pointer", verify_minimap_pointer_scope},
@@ -133,6 +138,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 112> contracts{{
     {"--print-pages-property", verify_print_pages_property_scope},
     {"--shell-registration-property", verify_shell_registration_property_scope},
     {"--input-line-limit", verify_input_line_limit_scope},
+    {"--command-line-edit", verify_command_line_edit_scope},
 }};
 
 void verify_vim_scope_contracts()
@@ -150,7 +156,7 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 138> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 144> scopes{{
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
@@ -185,6 +191,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 138> scopes{{
     {"--vim-visual-yank", verify_vim_visual_yank_scope},
     {"--vim-visual-wanted", verify_vim_visual_wanted_scope},
     {"--vim-open-lines", verify_vim_open_line_scope},
+    {"--vim-eol", verify_vim_eol_scope},
     {"--vim-open-line-external", verify_vim_open_line_external_scope},
     {"--vim-open-line-recovery", verify_vim_open_line_recovery},
     {"--vim-character-search", verify_vim_character_search_scope},
@@ -211,6 +218,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 138> scopes{{
     {"--document-format", verify_document_format_contracts},
     {"--print", verify_print_contracts},
     {"--shell-registration", verify_shell_registration_contracts},
+    {"--version-info", verify_version_info_contracts},
     {"--vim-visual-block", verify_vim_block_scope},
     {"--tabs", verify_tabs_scope},
     {"--split", verify_split_scope},
@@ -257,6 +265,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 138> scopes{{
     {"--vim-insert-normal", verify_vim_insert_normal_scope},
     {"--vim-autoindent", verify_vim_autoindent_scope},
     {"--saved-state-property", verify_saved_state_property_scope},
+    {"--fold-save-point", verify_fold_save_point_scope},
     {"--vim-pattern-property", verify_vim_pattern_property_scope},
     {"--title-bar-layout-property", verify_title_bar_layout_property_scope},
     {"--grid-cells-property", verify_grid_cells_property_scope},
@@ -280,6 +289,8 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 138> scopes{{
     {"--find-replace", verify_find_replace_scope},
     {"--substitute-property", verify_substitute_property_scope},
     {"--ex-substitute", verify_ex_substitute_scope},
+    {"--substitute-confirm", verify_substitute_confirm_scope},
+    {"--ex-lines", verify_ex_lines_scope},
     {"--matchparen", verify_matchparen_scope},
     {"--minimap", verify_minimap_scope},
     {"--minimap-property", verify_minimap_property_scope},
@@ -289,6 +300,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 138> scopes{{
     {"--shell-registration-property", verify_shell_registration_property_scope},
     {"--input-line-limit", verify_input_line_limit_scope},
     {"--input-line-property", verify_input_line_property_scope},
+    {"--command-line-edit", verify_command_line_edit_scope},
 }};
 
 // 名指しの scope にしかない検査（fixture の選び方の件数と名前など）を CTest で回す入口（#1324）。

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AutosaveForm.hpp"
 #include "AutosaveId.hpp"
 #include "DisplayText.hpp"
 #include "FilePath.hpp"
@@ -10,12 +11,14 @@
 namespace nenenib::adapters::win32
 {
 // 一覧 `autosave.v1` の 1 行ぶん（ADR 0137 の決定 4）。本文のファイル名は番号から決まる
-// （`<番号>.body`）。値だけを運ぶ公開 aggregate（CPP-003）。
+// （`<番号>.body`）。form は文書の形（追補 #1688・版 2 の一覧だけが持つ・版 1
+// から読んだ行は無し）。 値だけを運ぶ公開 aggregate（CPP-003）。
 struct AutosaveEntry
 {
     application::AutosaveId id;
     std::optional<core::FilePath> path;
     core::DisplayText title;
     core::TextPosition caret;
+    std::optional<application::AutosaveForm> form = std::nullopt;
 };
 } // namespace nenenib::adapters::win32

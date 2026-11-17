@@ -37,7 +37,7 @@
 #include "VimRepeatFailure.hpp"
 #include "VimTestSupport.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <cstddef>
 #include <limits>
@@ -547,7 +547,7 @@ void verify_vim_mark_contracts()
 void verify_vim_mark_scope()
 {
     std::size_t selected = 0;
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         const std::string_view name = fixture.name;
         if (name.starts_with("percent-") || name.starts_with("mark-") ||

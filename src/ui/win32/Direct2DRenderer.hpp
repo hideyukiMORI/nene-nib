@@ -307,14 +307,19 @@ class Direct2DRenderer final
     [[nodiscard]] std::int32_t start_key_width(const std::array<core::GuideEntry, 3> &keys);
     void draw_status_guide(const application::EditorFrame &frame,
                            const core::OperationGuideLayout &guide);
-    void draw_status_bar(const application::EditorFrame &frame,
-                         const core::StatusBarLayout &layout);
+    // 描いたモードの文の幅（物理画素・モードを描かない frame は 0）を返す。案内を入るかで決めるため
+    // （status_guide_fitted・#1658）。
+    [[nodiscard]] std::int32_t draw_status_bar(const application::EditorFrame &frame,
+                                               const core::StatusBarLayout &layout);
     void draw_toggle(const application::EditorFrame &frame, const core::StatusBarLayout &layout);
     void draw_status_message(const application::EditorFrame &frame, const core::LayoutRect &area);
     void draw_recording(const application::EditorFrame &frame, const core::StatusBarLayout &layout,
                         const StatusTextLayout &mode);
-    void draw_status_left(const application::EditorFrame &frame,
-                          const core::StatusBarLayout &layout);
+    // 左側を描き、モードを描いたときはその文の幅（物理画素）を、そうでなければ 0 を返す。録画の欄は
+    // position（行と桁の文字組み）と並べて測った配置（status_bar_fitted・#1658）の中に書く。
+    [[nodiscard]] std::int32_t draw_status_left(const application::EditorFrame &frame,
+                                                const core::StatusBarLayout &layout,
+                                                const StatusTextLayout &position);
     void draw_command(const application::EditorFrame &frame, const core::LayoutRect &area);
     // 入力行の変換の面と下線を文字の 1 行の上下に引き、画素に揃えた上下を返す。
     [[nodiscard]] D2D1_RECT_F draw_command_clauses(const application::EditorFrame &frame,
@@ -334,9 +339,13 @@ class Direct2DRenderer final
     void draw_palette_detail(const application::EditorFrame &frame,
                              const core::CommandChoice &choice, const core::LayoutRect &label,
                              IDWriteTextLayout *title);
-    // 行の右端の欄に操作の鍵を枠つきで描く（ADR 0078 の決定 12）。文字組みは面の保持から引く。
-    void draw_palette_key(const application::EditorFrame &frame, std::string_view key,
-                          const core::LayoutRect &note);
+    // 行の右端の欄の操作の鍵の文字組み（ADR 0078 の決定 12）。面の保持から引く。
+    [[nodiscard]] TextLayout palette_key_text(std::string_view key, const core::LayoutRect &row);
+    // 行の右端の欄（補足か鍵の枠・#1658）。鍵は枠の幅を測って core の配置に渡す。どちらも無い行は
+    // 右端の幅 0。
+    [[nodiscard]] core::LayoutRect palette_choice_note(const core::CommandChoice &choice,
+                                                       const core::LayoutRect &row,
+                                                       IDWriteTextLayout *key) const;
     void write_palette_note(std::string_view text, const core::LayoutRect &area,
                             core::RgbColor color);
     // 面の行の欄の文字組み。鍵が同じなら作り直さない（#900）。

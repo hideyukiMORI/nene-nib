@@ -41,8 +41,8 @@
 #include "VimTestSupport.hpp"
 
 #include "../vim/VimFixture.hpp"
-#include "../vim/VimFixtures.hpp"
 #include "../vim/VimWrapFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <array>
 #include <cstddef>
@@ -125,14 +125,17 @@ constexpr std::array<std::string_view, 2> skip_reasons{
         return app::EditorIntent{app::EditCommand{core::CommandEdit::history_next}};
     case core::VimSpecialKey::control_v:
         return app::EditorIntent{app::PasteCommand{}};
+    // 窓の Ctrl+U / Ctrl+W は入力行の c_CTRL-U / c_CTRL-W（press_command_control_key・#1550）。
+    case core::VimSpecialKey::control_u:
+        return app::EditorIntent{app::EditCommand{core::CommandEdit::erase_to_start}};
+    case core::VimSpecialKey::control_w:
+        return app::EditorIntent{app::EditCommand{core::CommandEdit::erase_word}};
     case core::VimSpecialKey::page_up:
     case core::VimSpecialKey::page_down:
     case core::VimSpecialKey::control_r:
     case core::VimSpecialKey::control_d:
-    case core::VimSpecialKey::control_u:
     case core::VimSpecialKey::control_f:
     case core::VimSpecialKey::control_b:
-    case core::VimSpecialKey::control_w:
     case core::VimSpecialKey::control_a:
     case core::VimSpecialKey::control_x:
     case core::VimSpecialKey::control_o:
@@ -408,10 +411,10 @@ void verify_fixture_window_path(std::size_t stride)
 {
     verify_window_tables_pass_vim_keys();
     verify_skip_reasons();
-    const auto [main, chosen, pinned] = replayed_fixtures(vim_fixtures, stride);
+    const auto [main, chosen, pinned] = replayed_fixtures(vim_fixture_table(), stride);
     verify_tally(main, chosen, "fixtures");
     expect(pinned != 0U, "the window path always replays the fixtures named window-path- (#1326)");
-    expect(stride != 1U || chosen == vim_fixtures.size(),
+    expect(stride != 1U || chosen == vim_fixture_table().size(),
            "the whole run chooses every fixture (#1326)");
     const auto [wrapped, wrapped_chosen, wrapped_pinned] =
         replayed_fixtures(vim_wrap_fixtures, stride);

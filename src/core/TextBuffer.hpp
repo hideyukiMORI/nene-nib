@@ -35,6 +35,10 @@ class TextBuffer final
     [[nodiscard]] static TextBuffer empty();
     [[nodiscard]] static std::expected<TextBuffer, TextFailure> from_utf8(std::string_view text);
     [[nodiscard]] static std::expected<TextBuffer, TextFailure> from_utf8(DetectedText text);
+    // 改行の形を判別せず、記録した形を置く（自動退避の復元だけ・ADR 0137 の追補 #1688）。形は
+    // 退避した時点の本文が持っていた値の写しで、編集では変わらないのは上と同じ。
+    [[nodiscard]] static std::expected<TextBuffer, TextFailure> from_utf8(std::string_view text,
+                                                                          LineEnding ending);
 
     [[nodiscard]] TextBuffer insert(Offset at, std::string_view text) const;
     [[nodiscard]] TextBuffer erase(Offset begin, Offset end) const;
@@ -50,6 +54,9 @@ class TextBuffer final
 
     [[nodiscard]] std::size_t size_bytes() const noexcept;
     [[nodiscard]] std::size_t line_count() const noexcept;
+    // 本文の最後の改行のバイト数（ADR 0188 の決定 1・2）。最後が LF でなければ 0、CRLF の本文で
+    // LF の直前が CR なら 2（line_end と同じ改行の模型）、ほかは 1。読むのは終わりの 2 バイトだけ。
+    [[nodiscard]] std::size_t final_line_break_bytes() const noexcept;
     [[nodiscard]] std::size_t piece_count() const noexcept;
     // 最長の行のバイト数（LF を含まず、CR は数える）。改行の索引の 512 byte の塊の要約を
     // piece の順に畳み、piece の端の塊だけを bit から数える。本文の文字は読まない（ADR 0047 /

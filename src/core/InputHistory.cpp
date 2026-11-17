@@ -111,6 +111,8 @@ std::optional<HistoryWalk> InputHistory::stepped(const InputText &typed,
     case CommandEdit::end:
     case CommandEdit::backspace:
     case CommandEdit::erase:
+    case CommandEdit::erase_word:
+    case CommandEdit::erase_to_start:
     case CommandEdit::complete_next:
     case CommandEdit::complete_previous:
     case CommandEdit::page_previous:

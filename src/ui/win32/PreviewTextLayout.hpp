@@ -22,6 +22,8 @@ namespace nenenib::ui::win32
 // 原点から）と画像の箱の左上（image_origins・inlines と同じ順）は作るときに 1 回だけ引いて持ち、
 // 色（drawing effect）は最初に描くときに 1 回だけ置く。inked はその色を置いた brush の
 // PreviewBrushes::generation（0 は未だ置いていない・#1477・ADR 0155 の追補）。
+// ranges は spans と同じ順の layout の UTF-16 の範囲で、作るときに 1 回だけ写して
+// 装飾・面の矩形・色が読む（#1485）。
 struct PreviewTextLayout
 {
     std::string text;
@@ -36,5 +38,6 @@ struct PreviewTextLayout
     std::vector<DWRITE_HIT_TEST_METRICS> code_runs;
     std::vector<std::optional<D2D1_POINT_2F>> image_origins;
     std::uint64_t inked = 0;
+    std::vector<DWRITE_TEXT_RANGE> ranges;
 };
 } // namespace nenenib::ui::win32

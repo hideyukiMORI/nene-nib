@@ -47,11 +47,11 @@ nenenib_third_party_target(nenenib_md4c third_party_md4c third_party/md4c/md4c.c
 
 # Phase 3 の縦切り（Issue #3 / ADR 0007）。5 層に正典の経路を 1 本ずつ置く。
 nenenib_target(nenenib_core core STATIC
-    src/core/ThemeName.cpp src/core/ThemeDocument.cpp src/core/ThemeChoice.cpp
+    src/core/AppIdentity.cpp src/core/ThemeName.cpp src/core/ThemeDocument.cpp src/core/ThemeChoice.cpp
     src/core/ThemeCatalog.cpp src/core/ThemeLookupFailure.cpp src/core/ExEvaluationFailure.cpp
     src/core/BookmarkKey.cpp src/core/BodyLayout.cpp src/core/PaneLayouts.cpp src/core/EditAdjust.cpp src/core/CaretMove.cpp src/core/ClipboardText.cpp src/core/CommandLayout.cpp
     src/core/CommandLine.cpp src/core/FontFamilies.cpp src/core/CommandChoice.cpp src/core/SubsequenceScore.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
-    src/core/BytesReservation.cpp src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExplorerLayout.cpp src/core/ExplorerMark.cpp src/core/Minimap.cpp src/core/MinimapLayout.cpp src/core/ExplorerTree.cpp src/core/ExMapCommand.cpp src/core/ExRange.cpp src/core/ExResult.cpp src/core/ExSubstituteCommand.cpp src/core/FontSize.cpp
+    src/core/BytesReservation.cpp src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExplorerLayout.cpp src/core/ExplorerMark.cpp src/core/Minimap.cpp src/core/MinimapLayout.cpp src/core/ExplorerTree.cpp src/core/ExMapCommand.cpp src/core/ExRange.cpp src/core/ExResult.cpp src/core/ExSubstituteCommand.cpp src/core/ExLineCommand.cpp src/core/FontSize.cpp
     src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp src/core/InputHistory.cpp
     src/core/DateTimeText.cpp src/core/PrintPages.cpp src/core/KeyChord.cpp src/core/KeyMap.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/StartScreen.cpp src/core/StartScreenLayout.cpp src/core/StartPress.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/OrdinaryWordBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
     src/core/NewlineIndex.cpp src/core/ScrollBounds.cpp src/core/GutterLabels.cpp src/core/SearchLine.cpp
@@ -62,7 +62,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimBlockRange.cpp src/core/VimCaret.cpp src/core/VimCase.cpp src/core/VimCharacterBoundary.cpp src/core/VimClipboardText.cpp src/core/VimJumpLists.cpp src/core/VimKeyTable.cpp src/core/VimMarkEdits.cpp src/core/VimMatchingPair.cpp src/core/VimNumber.cpp src/core/VimPattern.cpp src/core/VimPatternCapture.cpp src/core/VimPatternCompiler.cpp src/core/VimPatternEvaluation.cpp src/core/VimPatternMachine.cpp src/core/VimPatternTrace.cpp src/core/VimRegisterSnapshot.cpp src/core/VimRegisterText.cpp src/core/VimKeyNotation.cpp src/core/VimLineColumns.cpp
     src/core/VimSearch.cpp src/core/VimSearchNotice.cpp src/core/VimSearchObject.cpp src/core/VimSearchWalk.cpp src/core/VimSearchSnapshot.cpp src/core/VimRecordedKeys.cpp
     src/core/VimStep.cpp src/core/VimStepBlock.cpp src/core/VimStepDetail.cpp src/core/VimStepInsert.cpp src/core/VimStepMotions.cpp src/core/VimStepOperators.cpp src/core/VimStepPut.cpp
-    src/core/VimStepRanges.cpp src/core/VimStepRecording.cpp src/core/VimStepReplace.cpp src/core/VimStepRestart.cpp src/core/VimStepSearch.cpp src/core/VimStepSubstitute.cpp src/core/VimStepTextObjects.cpp src/core/VimStepVisual.cpp src/core/VimStepNumbers.cpp
+    src/core/VimStepRanges.cpp src/core/VimStepRecording.cpp src/core/VimStepReplace.cpp src/core/VimStepRestart.cpp src/core/VimStepSearch.cpp src/core/VimStepSubstitute.cpp src/core/VimStepSubstituteConfirm.cpp src/core/VimStepExLines.cpp src/core/VimStepTextObjects.cpp src/core/VimStepVisual.cpp src/core/VimStepNumbers.cpp
     src/core/VimScreenGeometry.cpp src/core/VimCursorCorrect.cpp src/core/VimScreenLine.cpp src/core/VimToplineUpdate.cpp src/core/VimScreenRows.cpp src/core/VimHorizontalScroll.cpp
     src/core/VimTextObjectRange.cpp src/core/VimParagraphObject.cpp src/core/VimParagraphStart.cpp src/core/VimSentenceObject.cpp src/core/VimTagObject.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
@@ -79,6 +79,9 @@ nenenib_target(nenenib_core core STATIC
     src/core/LspFrames.cpp src/core/LspMessages.cpp src/core/LspPosition.cpp
     src/core/LspDiagnostics.cpp src/core/DiagnosticEdits.cpp src/core/DiagnosticCounts.cpp
     src/core/NoticeLine.cpp src/core/DiagnosticNotice.cpp src/core/LspShowMessage.cpp src/core/DiagnosticColor.cpp)
+# 版を core へ渡すのはこの 1 行だけ（AppIdentity.cpp の翻訳単位だけ・D90・#1677・CNF-007 が照合する）。
+set_source_files_properties(src/core/AppIdentity.cpp PROPERTIES
+    COMPILE_DEFINITIONS "NENENIB_APP_VERSION=\"${PROJECT_VERSION}\"")
 # core の parse_markdown（#765）だけが md4c を呼ぶ。md4c.h を include するのは src/core/MarkdownParse.cpp の 1 か所（CNF-009）。
 nenenib_link(nenenib_core nenenib_md4c)
 
@@ -93,7 +96,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/PreviewImages.cpp
     src/application/EditorControllerExplorer.cpp src/application/EditorControllerShell.cpp src/application/EditorControllerStartScreen.cpp
     src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
-    src/application/AutosavePlan.cpp src/application/PasteKind.cpp
+    src/application/AutosavePlan.cpp src/application/PasteKind.cpp src/application/VimEndOfLine.cpp
     src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp src/application/DocumentDecoding.cpp
     src/application/EditorControllerLanguageServer.cpp src/application/ServerCommand.cpp
     src/application/EditorControllerLanguageDocuments.cpp src/application/DocumentUri.cpp
@@ -126,6 +129,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimRandomKeyTests.cpp
     tests/unit/ExRandomInputTests.cpp
     tests/unit/InputLineLimitTests.cpp
+    tests/unit/CommandLineEditTests.cpp
     tests/unit/InputLinePropertyTests.cpp
     tests/unit/VimWindowTests.cpp
     tests/unit/VimClipboardTests.cpp
@@ -137,8 +141,10 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimMarkTests.cpp
     tests/unit/VimReplaceTests.cpp
     tests/unit/VimVisualYankTests.cpp
+    tests/unit/VimFixtureTable.cpp
     tests/unit/VimVisualWantedTests.cpp
     tests/unit/VimOpenLineTests.cpp
+    tests/unit/VimEndOfLineTests.cpp
     tests/unit/VimOpenLineExternalTests.cpp
     tests/unit/VimOpenLineRecoveryTests.cpp
     tests/unit/VimCharacterSearchTests.cpp
@@ -151,6 +157,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimWindowPathTests.cpp
     tests/unit/VimCaseTests.cpp
     tests/unit/VimChangeMarkTests.cpp
+    tests/unit/FoldSavePointTests.cpp
     tests/unit/VimInsertNormalTests.cpp
     tests/unit/VimAutoindentTests.cpp
     tests/unit/VimNumberPropertyTests.cpp
@@ -161,7 +168,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimViewTests.cpp
     tests/unit/ExFileTests.cpp
     tests/unit/ExDocumentTests.cpp
-    tests/unit/ExWritePathTests.cpp tests/unit/BellTests.cpp tests/unit/ClockTests.cpp tests/unit/PrintTests.cpp tests/unit/ShellRegistrationTests.cpp
+    tests/unit/ExWritePathTests.cpp tests/unit/BellTests.cpp tests/unit/ClockTests.cpp tests/unit/PrintTests.cpp tests/unit/ShellRegistrationTests.cpp tests/unit/VersionInfoTests.cpp
     tests/unit/OrdinaryCharacterTests.cpp
     tests/unit/OrdinaryWordTests.cpp
     tests/unit/VimVisualBlockTests.cpp
@@ -188,7 +195,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/OperationsTests.cpp
     tests/unit/UiTextsTests.cpp
     tests/unit/UiLanguageTests.cpp
-    tests/unit/FindReplaceTests.cpp tests/unit/ExSubstituteTests.cpp tests/unit/MatchParenTests.cpp tests/unit/MinimapTests.cpp
+    tests/unit/FindReplaceTests.cpp tests/unit/ExSubstituteTests.cpp tests/unit/SubstituteConfirmTests.cpp tests/unit/ExLinesTests.cpp tests/unit/MatchParenTests.cpp tests/unit/MinimapTests.cpp
     tests/unit/MinimapPropertyTests.cpp tests/unit/MinimapPointerTests.cpp
     tests/unit/GuideTests.cpp
     tests/unit/ExitPlanTests.cpp
@@ -231,6 +238,9 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/DocumentFormatTests.cpp tests/unit/EditHistoryPropertyTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
+# 版の契約（D90・#1677）は製品と同じ PROJECT_VERSION を期待値として読む（試験の翻訳単位だけ）。
+set_source_files_properties(tests/unit/VersionInfoTests.cpp PROPERTIES
+    COMPILE_DEFINITIONS "NIB_EXPECTED_VERSION=\"${PROJECT_VERSION}\"")
 add_test(NAME nib_unit COMMAND nib_tests)
 # #1324: 名指しの scope にしかない検査を門に載せる。既定実行の契約と同じ scope は飛ばす。
 add_test(NAME nib_unit_scopes COMMAND nib_tests --every-scope)
@@ -258,7 +268,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32Bell.cpp src/adapters/win32/Win32Clock.cpp src/adapters/win32/Win32UiLanguage.cpp src/adapters/win32/Win32ShellRegistration.cpp src/adapters/win32/Win32WslDistributions.cpp
     src/adapters/win32/ClipboardCalls.cpp src/adapters/win32/HtmlClipboardFormat.cpp src/adapters/win32/Win32ClipboardAdapter.cpp
     src/adapters/win32/Win32CodePageAdapter.cpp src/adapters/win32/Win32FontCollationAdapter.cpp
-    src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/TemporaryFiles.cpp src/adapters/win32/ProcessInstances.cpp
+    src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/PlacementCleanup.cpp src/adapters/win32/TemporaryFiles.cpp src/adapters/win32/ProcessInstances.cpp
     src/adapters/win32/Win32TimingAdapter.cpp
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/LastResortArming.cpp src/adapters/win32/FolderShelf.cpp
     src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
@@ -451,7 +461,7 @@ add_test(NAME nib_adapters_last_resort COMMAND nib_last_resort_tests $<TARGET_FI
 set_tests_properties(nib_adapters_last_resort PROPERTIES TIMEOUT 180)
 
 nenenib_target(nenenib_window ui_win32 STATIC
-    src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorWindowDetail.cpp src/ui/win32/EditorWindowLifecycle.cpp src/ui/win32/EditorWindowPointer.cpp src/ui/win32/EditorWindowKeys.cpp
+    src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/InputLinePromptText.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorWindowDetail.cpp src/ui/win32/EditorWindowLifecycle.cpp src/ui/win32/EditorWindowPointer.cpp src/ui/win32/EditorWindowKeys.cpp
     src/ui/win32/EditorWindowOperations.cpp src/ui/win32/EditorWindowIme.cpp src/ui/win32/EditorWindowExplorer.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
     src/ui/win32/FileFailureText.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FallbackSegmentMemo.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
@@ -488,7 +498,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/PaletteLayoutTests.cpp tests/ui/ExplorerPaintTests.cpp tests/ui/PointerPressTests.cpp tests/ui/GuideKeyWidthTests.cpp
     tests/ui/CaptionPressTests.cpp tests/ui/WindowHitTests.cpp
     tests/ui/PrintRenderTests.cpp tests/ui/MemoryXpsTarget.cpp tests/ui/MemoryPackageTarget.cpp
-    tests/ui/MatchParenOutlineTests.cpp tests/ui/SaveQuestionTests.cpp
+    tests/ui/MatchParenOutlineTests.cpp tests/ui/SaveQuestionTests.cpp tests/ui/SubstituteConfirmPaintTests.cpp
     tests/ui/VimSpecialKeyTests.cpp tests/ui/ClosingStepsTests.cpp
     tests/ui/PreviewCycleKeyTests.cpp tests/ui/MinimapPaintTests.cpp tests/ui/MinimapPressTests.cpp
     tests/ui/StandardKeyTests.cpp
@@ -563,7 +573,7 @@ nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/WordObjectProbe.cpp
     tests/performance/VimFollowProbe.cpp tests/performance/EditedHistoryProbe.cpp
     tests/performance/PieceListProbe.cpp
-    tests/performance/SubstituteProbe.cpp tests/performance/PatternCostProbe.cpp
+    tests/performance/SubstituteProbe.cpp tests/performance/ExLinesProbe.cpp tests/performance/PatternCostProbe.cpp
     tests/performance/PatternProgramProbe.cpp
     tests/performance/SearchObjectProbe.cpp)
 nenenib_link(nib_perf_probes nenenib_core)

@@ -108,6 +108,8 @@
 #include "StartEntry.hpp"
 #include "StartLists.hpp"
 #include "StartScreenView.hpp"
+#include "SubstituteQuestion.hpp"
+#include "SubstituteReply.hpp"
 #include "SyntaxStateCache.hpp"
 #include "TabReach.hpp"
 #include "TextBuffer.hpp"
@@ -121,6 +123,7 @@
 #include "VimBlockRange.hpp"
 #include "VimChange.hpp"
 #include "VimCharacter.hpp"
+#include "VimConfirmSubstitute.hpp"
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
@@ -369,6 +372,9 @@ class EditorController final
     // 入力行の鍵の `<Up>` `<Down>`。履歴を動けなければ not_moved（Vim の beep_flush が先読みを
     // 捨てる・ex_getln.c・#1528）で、再生と :normal! の残りを打ち切る。
     [[nodiscard]] std::optional<core::VimRepeatFailure> recalled_key(core::CommandEdit direction);
+    // 入力行の種類で読み替える編集（#1550・#1643）。Vim の行でない入力の Ctrl+U / Ctrl+W は捨て、
+    // Vim の `/` `?` の Tab は文字の Tab として入れる。読み替えたら真。
+    [[nodiscard]] bool rerouted_edit(const EditCommand &intent);
     // 1 鍵を engine へ流して効果を写す唯一の経路（ADR 0030 の決定 7）。打った鍵も再生の鍵も
     // ここを通り、鍵が閉じた失敗で終わったら理由を返す（ADR 0046 の決定 3）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> step_vim(const core::VimKey &key);
@@ -840,6 +846,8 @@ class EditorController final
     [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::CommandLine &line);
     [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::CommandPalette &palette);
     [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::SearchLine &line);
+    // `:s///c` の問いの Enter は答えではない（Vim は無視する・ADR 0168 の決定 6）。
+    [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const SubstituteQuestion &question);
     [[nodiscard]] std::optional<core::VimRepeatFailure> submitted_command();
     [[nodiscard]] std::optional<core::VimRepeatFailure> confirmed_command();
     // あふれた入力の確定を断ったら真（入力行を閉じて知らせる・#1568）。
@@ -847,6 +855,18 @@ class EditorController final
     void remember(const core::CommandLine &line);
     void remember(const core::SearchLine &line);
     void remember(const core::CommandPalette &palette);
+    void remember(const SubstituteQuestion &question);
+    // `:s///c` の問い（ADR 0168 の決定 6・本体は EditorControllerCommand.cpp と畳みの
+    // EditorControllerVim.cpp）。開いている問い（無ければ空）・文字を答えとして読む（問いが開いて
+    // いれば真）・答えを engine の 1 歩で写す・答え以外の意図の前に `q` と同じに終える（入口の
+    // 1 か所）・終えるときに置いた分を 1 つの undo の単位に畳む（改訂番号は問いの間のどの値より
+    // 大きい・ADR 0168 の追補 段 2a）。
+    [[nodiscard]] const SubstituteQuestion *substitute_question() const noexcept;
+    [[nodiscard]] bool answered_question(std::string_view utf8);
+    void answer_question(core::SubstituteReply reply);
+    void record_question_key(const core::VimKey &key);
+    void end_question_before(const EditorIntent &intent);
+    void merge_question_edits(const SubstituteQuestion &question, core::Offset restore);
     void submit_palette(const core::CommandPalette &palette);
     [[nodiscard]] std::optional<core::VimRepeatFailure> evaluate_command(std::string_view text);
     [[nodiscard]] std::expected<core::ExResult, core::ExEvaluationFailure>
@@ -858,9 +878,10 @@ class EditorController final
         const std::expected<core::ExResult, core::ExEvaluationFailure> &result);
     [[nodiscard]] std::optional<core::VimRepeatFailure>
     operator_closed_in_place(const std::string &text);
-    // オペレータ待ちの `:s`（ADR 0168 の追補 16）。置換の前のキャレットから後のキャレットまで。
+    // オペレータ待ちの `:s` `:d` `:y` `:g`（ADR 0168 の追補 16 と段 3a）。命令の前のキャレットから
+    // 後のキャレットまで。
     [[nodiscard]] std::optional<core::VimRepeatFailure>
-    operator_substituted(const std::string &text, const core::ExSubstituteRequest &request);
+    operator_line_edited(const std::string &text, const VimStepSource &source);
     [[nodiscard]] std::optional<core::VimRepeatFailure>
     ran_ex_result(std::string_view text,
                   const std::expected<core::ExResult, core::ExEvaluationFailure> &result);
@@ -940,6 +961,9 @@ class EditorController final
     void accept(const UnregisterShell &);
     // 登録の結果の 1 行（鳴らさない）。
     void show_shell_notice(const std::string &text);
+    // バージョン情報（施主決定 D90）。core::app_about_line の 1 行を知らせにするだけで、port を
+    // 呼ばない（ページを開かない・通信しない）。
+    void accept(const ShowVersion &);
 
     // ---------------------------------------------------------------- 起動画面（ADR 0172）
     // EditorControllerStartScreen.cpp の群だけが読み書きする。
@@ -1003,6 +1027,8 @@ class EditorController final
     void perform(const core::VimSwitchTab &effect);
     // `Ctrl-w` の窓の命令（ADR 0148 の決定 7）。2 枠の意図が入るまで何もしない。
     void perform(const core::VimWindowCommand &command);
+    // `:s///c` の 1 歩（ADR 0168 の決定 6）。置く当たりを写し、問いを開くか続けるか終える。
+    void perform(const core::VimConfirmSubstitute &effect);
     // INSERT にいるあいだの編集は 1 つの undo 単位に吸収する（ADR 0015 の決定 5）。
     [[nodiscard]] core::EditBoundary vim_boundary() const noexcept;
 
@@ -1012,6 +1038,11 @@ class EditorController final
     void replace(const core::OffsetRange &range, std::string_view text, core::EditBoundary boundary,
                  std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> lines =
                      core::VimLineMarks::shifted);
+    // Vim のモードで eol の旗が立つ文書の置き換えの範囲と本文（ADR 0188 の決定 3 (a)）。空の本文に
+    // 本文を足すなら最後の改行も足し、engine を通らない編集が除いた本文を全部消すなら最後の改行も
+    // 消す（空で旗が立つ本文にする）。ほかは頼まれたまま。
+    [[nodiscard]] std::pair<core::OffsetRange, std::string>
+    vim_end_of_line_kept(const core::OffsetRange &range, std::string_view text) const;
     // engine の印が残っていれば（効果が本文を置き換えなかった鍵）、空の単位を積む
     // （ADR 0181 の決定 3）。積む口はこの 1 か所。印は鍵ごとに perform_vim_effect が
     // 置き、replace が編集を積めば消す。restore は効果を写す前のキャレット。
@@ -1020,6 +1051,8 @@ class EditorController final
     void note_vim_undone(const core::Edit &edit);
     // 鍵の効果を写す 1 か所（stepped_vim から）。鍵の印を置いてから写し、残った印を空の単位にする。
     void perform_vim_effect(const core::VimStep &step);
+    // 全部の行を消した鍵（ADR 0188 の決定 3 (a)）。eol の文書なら最後の改行も消して空の本文にする。
+    void remove_every_line(const core::VimStep &step);
     void move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring,
                        core::CaretAffinity affinity = core::CaretAffinity::leading);
     void accept(const PointText &intent);
@@ -1285,6 +1318,10 @@ class EditorController final
     // 再生の編集を畳む起点（ADR 0046 の決定 3）。再生の外では空。perform(VimReplay) が置いて
     // 消し、再生の中で文書が替わったら reopen_replayed_unit が入った文書の値へ置き直す。
     std::optional<core::EditHistory> replay_history_;
+    // 畳みの起点から後で undo を流したか・その後に保存したか（#1672・merge_replayed_edits が
+    // 保存時点を写す after_units_folded の unsure）。起点を置く所と再生の終わりが倒す。
+    bool replay_undone_ = false;
+    bool replay_save_unsure_ = false;
     // 流している鍵の engine の印（ADR 0181）。stepped_vim が効果を写す間だけ置き、replace が
     // 本文を置き換える編集を積めば消す。残れば push_empty_unit が空の単位を積む。
     std::optional<core::VimChange> vim_change_;

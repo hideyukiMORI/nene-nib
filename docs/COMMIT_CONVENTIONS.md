@@ -3,7 +3,7 @@
 > Status: normative（規範）/ 2026-09-15 初版
 > 出典: NeNeCommander `docs/COMMIT_CONVENTIONS.md`（GIT-001〜004・`commit-msg` フックで機械強制）
 
-変更の経路は一つである: Issue → 焦点を持つブランチ → 一貫したコミット → PR → マージ直前のCI（文書のみなら不要）→ squash merge → 同期した綺麗な `main`。
+変更の経路は一つである: Issue → 焦点を持つブランチ → 一貫したコミット → PR → マージ直前のCI（文書のみなら不要）→ squash merge（まとめ枝は rebase merge・GIT-004）→ 同期した綺麗な `main`。
 
 読み方（**active / planned / 不能 / 不採用**）は [ARCHITECTURE_CONSTITUTION.md](ARCHITECTURE_CONSTITUTION.md) 第 0 節と同じ。
 
@@ -25,7 +25,7 @@ Issue には問題と根拠・意図する結果・影響する規則 ID とモ�
 
 例: `feat/12-loupe-sampling`。`main` での直接開発・force push・既定ブランチの削除は禁止（初期化の例外を除く）。
 
-- 機械強制: **planned**（ruleset で `main` を保護。ブランチ名の形は CI が PR の head で検査する）
+- 機械強制: **planned**（ruleset で `main` を保護。ブランチ名の形は CI の `validate-git.ps1` が PR の head で検査する。文書のみの PR は CI を起動しないので、枝名は機械で検査されない）
 
 ### GIT-003 — コミットメッセージは一つの形
 
@@ -46,13 +46,13 @@ Conventional Commits を、この正確な形で書く。
 
 ### GIT-004 — PR が統合の境界
 
-PR には目的・変更の要約・使った正典経路・規則 ID・検証結果・waiver・残るリスク・`Closes #N` を書く（DEVELOPMENT_WORKFLOW 第 7 節）。
+PR の本文は行頭の `Closes #N` と必須欄を持つ（欄の正本は `eng/git-conventions.py` の `PR_FIELDS`。写しは DEVELOPMENT_WORKFLOW 第 7 節と `.github/pull_request_template.md`）。
 1 つの PR に 1 つの作業単位。マージは squash（レビュー済みの PR を 1 PR = 1 commit で積んだ**まとめ枝**だけ rebase・[ADR 0021 追補](adr/0021-diff-scoped-verification-and-result-reuse.md)・#1220）。マージ後はローカル `main` を綺麗に同期する。
 
 実装中とレビュー中は draft。必要な差分検証と結果・再利用の根拠がそろったら Ready にする（QLT-001 / QLT-012）。
 push・レビュー・merge・担当変更・文書追記・SHA 変更だけでは成功済み検証を繰り返さない。
 外部コード（`third_party/md4c/**`）は `.gitattributes` の `-whitespace` で差分の空白の検査の対象外（上流のバイト列は CNF-013 が守る・[ADR 0151](adr/0151-md4c-vendored-as-third-party-target-with-digest-check.md) の決定 13）。
-CIは非文書変更のマージ直前だけ起動し、Git規約・検証記録の存在・差分の空白を確認する。文書のみならCIを起動せず、差分と必要な目視で確認する（QLT-012・ADR 0118）。その代わり PR 本文の `検証（実行したコマンドと結果）:` の行に `eng/conformance.py` の `0 violation` を記録し、無ければ `merge-pr.py` が拒否する（#648）。記録の妥当性はレビューし、CI成功を製品テストの実行証拠とは扱わない。
+CIは非文書変更のマージ直前だけ起動し、`check` jobがconformance・Git規約・検証記録の存在・差分の空白を確認し、`build-and-test` jobがReleaseの全targetビルドとctestを回す（ADR 0136）。文書のみならCIを起動せず、差分と必要な目視で確認する（QLT-012・ADR 0118）。その代わり PR 本文の `検証（実行したコマンドと結果）:` の行に `eng/conformance.py` の `0 violation` を記録し、無ければ `merge-pr.py` が拒否する（#648）。記録の妥当性はレビューし、CI成功を製品テストの実行証拠とは扱わない。
 
 統合操作は `eng/merge-pr.py <PR番号> --expected-head <40桁SHA>` のplanを確認してから、同じ指定に `--execute` を付ける（#384）。まとめ枝は同じ道具の `--integration`（head の全 commit が GIT-003 で本文に件名と同じ `Closes #N`・枝が main の先端を含む・ruleset が rebase を許す・CI 緑 → `--rebase`・merge 後に commit の数を照合し元の PR を閉じる・#1220）。
 件名は取得したPRtitleを既存の検査器で検証し、title末尾と唯一の`Closes #N`が指すIssue番号を照合して、一字不変で渡す。

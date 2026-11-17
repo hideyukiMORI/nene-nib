@@ -182,7 +182,7 @@ void placed_after_effect(EditorState &state, const core::VimStep &step)
     {
         return std::nullopt;
     }
-    return found_match(state.text(), pattern.value(),
+    return found_match(state.vim_text(), pattern.value(),
                        core::VimMatchRequest{from, line->direction(),
                                              core::vim_search_count(state.vim()),
                                              state.vim().wrapscan});
@@ -253,7 +253,8 @@ void placed_after_effect(EditorState &state, const core::VimStep &step)
 constexpr std::string_view too_long_notice = "E1240: Resulting text too long";
 // engine を呼ぶ 1 か所の写し（Issue #1023）。鍵は vim_step・`:N` の行は vim_line_jumped・押しの
 // VISUAL は vim_pointer_selected（#1250）・オペレータ待ちの `:` の確定は
-// vim_command_operated（#1549）・`:s` の族は vim_substituted（ADR 0168）。
+// vim_command_operated（#1549）・`:s` の族は vim_substituted（ADR 0168）・`:d` `:y` は
+// vim_lines_edited・`:g` は vim_global（ADR 0168 の段 3a）。
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
                                         const core::VimEditorView &view, const core::VimKey &key)
 {
@@ -293,6 +294,27 @@ constexpr std::string_view too_long_notice = "E1240: Resulting text too long";
                                         const core::ExSubstituteRequest &request)
 {
     return core::vim_substituted(state, view, request);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
+                                        const core::SubstituteAnswer &answer)
+{
+    return core::vim_substitute_answered(state, view, answer);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
+                                        const core::ExLinesRequest &request)
+{
+    return core::vim_lines_edited(state, view, request);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
+                                        const core::ExGlobalRequest &request)
+{
+    return core::vim_global(state, view, request);
 }
 
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
@@ -365,6 +387,7 @@ measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &r
     case core::InputLinePrompt::go_to_line:
     case core::InputLinePrompt::ex:
     case core::InputLinePrompt::palette:
+    case core::InputLinePrompt::substitute_confirm:
         return std::nullopt;
     }
     std::unreachable();
@@ -854,15 +877,20 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpe
         return recalled_key(core::CommandEdit::history_previous);
     case core::VimSpecialKey::arrow_down:
         return recalled_key(core::CommandEdit::history_next);
+    // Vim の c_CTRL-U（行頭まで）と c_CTRL-W（語の前）。窓の Ctrl+U / Ctrl+W と同じ写し（#1550）。
+    case core::VimSpecialKey::control_u:
+        accept(EditCommand{core::CommandEdit::erase_to_start});
+        return std::nullopt;
+    case core::VimSpecialKey::control_w:
+        accept(EditCommand{core::CommandEdit::erase_word});
+        return std::nullopt;
     case core::VimSpecialKey::control_r:
     case core::VimSpecialKey::page_up:
     case core::VimSpecialKey::page_down:
     case core::VimSpecialKey::control_d:
-    case core::VimSpecialKey::control_u:
     case core::VimSpecialKey::control_f:
     case core::VimSpecialKey::control_b:
     case core::VimSpecialKey::control_v:
-    case core::VimSpecialKey::control_w:
     case core::VimSpecialKey::control_a:
     case core::VimSpecialKey::control_x:
     case core::VimSpecialKey::control_o:
@@ -1043,10 +1071,33 @@ void EditorController::perform_vim_effect(const core::VimStep &step)
                                                            : std::nullopt);
     const ScopedValue<bool> effecting{in_vim_effect_, true};
     const core::Offset restore = state_.selection().caret;
-    // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
-    std::visit([this](const auto &value) { this->perform(value); }, step.effect);
+    switch (step.lines_left)
+    {
+    case core::VimLinesLeft::some:
+        // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
+        std::visit([this](const auto &value) { this->perform(value); }, step.effect);
+        break;
+    case core::VimLinesLeft::none:
+        remove_every_line(step);
+        break;
+    }
     push_empty_unit(restore);
     vim_change_ = outer_change;
+}
+
+// engine は除いた本文の全部の行を消したので、eol の文書なら最後の改行も同じ 1 つの置き換えで消して
+// 空の本文にする（ADR 0188 の決定 3 (a)・Vim の ML_EMPTY）。旗は立ったままで、Vim のモードの編集で
+// 空でなくなれば replace が最後の改行を足し直す。除いていない本文は効果のまま。
+void EditorController::remove_every_line(const core::VimStep &step)
+{
+    if (&state_.vim_text() == &state_.text())
+    {
+        std::visit([this](const auto &value) { this->perform(value); }, step.effect);
+        return;
+    }
+    replace(core::OffsetRange{core::Offset{0}, core::Offset{state_.text().size_bytes()}},
+            std::string_view{}, core::EditBoundary::separate);
+    move_caret_to(core::Offset{0}, core::SelectionAnchoring::collapse);
 }
 
 // 鍵の前の保留の追従が無いか打った本文の追従だけなら、この鍵の追従は歩いた答えにできる
@@ -1211,7 +1262,7 @@ void EditorController::settle_vim_caret()
     case core::VimMode::normal:
         break;
     }
-    move_caret_to(core::vim_resting_caret(state_.text(), state_.selection().caret),
+    move_caret_to(core::vim_resting_caret(state_.vim_text(), state_.selection().caret),
                   core::SelectionAnchoring::collapse);
 }
 
@@ -1233,12 +1284,23 @@ void EditorController::keep_vim_character(const EditorIntent &intent)
     case core::EditMode::vim:
         break;
     }
+    // eol の文書の隠した最後の空の行（ADR 0188 の決定 4）。Ctrl+End・Ctrl+A など engine を通らない
+    // 移動と選択が端を置いても、キャレットと選択の端は除いた本文の中へ収める。収めるのはここの
+    // 1 か所（INSERT も）。
+    const std::size_t shown = state_.vim_text().size_bytes();
+    if (state_.selection().caret.value > shown || state_.selection().anchor.value > shown)
+    {
+        const core::Selection over = state_.selection();
+        state_ =
+            state_.with_selection(core::Selection{core::Offset{std::min(over.anchor.value, shown)},
+                                                  core::Offset{std::min(over.caret.value, shown)}});
+    }
     if (std::holds_alternative<VimKeyPress>(intent) && !state_.command_input().has_value())
     {
         return;
     }
     const core::Selection selection = state_.selection();
-    const core::TextBuffer &text = state_.text();
+    const core::TextBuffer &text = state_.vim_text();
     switch (state_.vim().mode)
     {
     case core::VimMode::insert:
@@ -1389,14 +1451,14 @@ void EditorController::accept(const SearchHop &intent)
     const std::size_t count = core::vim_search_count(state_.vim());
     const bool wrapscan = state_.vim().wrapscan;
     const auto match = found_match(
-        state_.text(), pattern.value(),
+        state_.vim_text(), pattern.value(),
         core::VimMatchRequest{preview.value().match.value(), intent.relative, count, wrapscan});
     if (!match.has_value())
     {
         return;
     }
     const auto from = hop_start(
-        state_.text(), pattern.value(),
+        state_.vim_text(), pattern.value(),
         core::VimMatchRequest{match.value(), core::opposite(line->direction()), count, wrapscan});
     if (!from.has_value())
     {
@@ -1587,9 +1649,20 @@ void EditorController::perform(const core::VimRemoveBlock &effect)
     apply_block(effect.edits, effect.caret, vim_boundary());
 }
 
+// engine が `'.` の位置を添えた効果（Ex の `:s` `:d` `:g`・Vim は命令ごとに changed_lines
+// を呼ぶ）は、 畳んだ Edit が置いた `'.` と変更の列の最後の位置を、その位置で置き直す（同じ undo
+// の単位の続きの 変更として vim_change_recorded に渡す・#1654）。
 void EditorController::perform(const core::VimReplaceBlock &effect)
 {
     apply_block(effect.edits, effect.caret, vim_boundary());
+    if (!effect.last_change.has_value() || effect.edits.empty())
+    {
+        return;
+    }
+    auto marks = state_.vim_marks();
+    marks.last_change = effect.last_change.value();
+    marks = core::vim_change_recorded(marks, effect.last_change.value(), false);
+    state_ = state_.with_vim_marks(std::move(marks));
 }
 
 // 矩形の貼付は単位を切り、矩形の INSERT の Esc は 1 行目の INSERT の単位に畳む（ADR 0035 の追補
@@ -1632,9 +1705,14 @@ void EditorController::fold_block_into_insert(const std::vector<core::VimBlockEd
     apply_block(edits, caret, core::EditBoundary::separate);
     std::string inserted =
         state_.text().text_range(open.at, core::Offset{state_.text().size_bytes() - untouched});
-    state_ = state_.with_history(
+    const std::size_t replaced = state_.history().content_position();
+    const core::EditHistory folded =
         before.pushed(core::Edit{open.at, std::move(removed), std::move(inserted), open.restore},
-                      core::EditBoundary::separate));
+                      core::EditBoundary::separate);
+    // 1 行目を打った直後の Ctrl+S の保存時点は外した単位の位置を指し、置き換えた単位と同じ数に
+    // なる（ファイルは写す前の本文）。再生の畳みと同じ 1 本で写す（#1672）。
+    state_ = state_.with_history(folded).with_document(after_units_folded(
+        state_.document(), before.content_position(), replaced, folded.content_position()));
 }
 
 // `.`（ADR 0030 の決定 7）。前後で履歴を閉じるので、再生した命令が 1 つの undo 単位になる。
@@ -1653,7 +1731,7 @@ void EditorController::perform(const core::VimReplay &effect)
     if (effect.reselect.has_value())
     {
         state_ = state_.with_selection(core::vim_visual_reselect(
-            state_.text(), state_.selection().caret, effect.reselect.value()));
+            state_.vim_text(), state_.selection().caret, effect.reselect.value()));
         follow_caret();
     }
     if (replay_depth_.has_value())
@@ -1663,6 +1741,8 @@ void EditorController::perform(const core::VimReplay &effect)
     }
     replay_history_ = state_.history();
     replay_text_ = state_.text();
+    replay_undone_ = false;
+    replay_save_unsure_ = false;
     vim_top_kept_ = false;
     replay_steps_ = 0;
     dropped_replay();
@@ -1680,6 +1760,9 @@ void EditorController::perform(const core::VimReplay &effect)
     close_replayed_unit();
     replay_history_ = std::nullopt;
     replay_text_ = std::nullopt;
+    // 再生の中の印は再生の終わりで倒す（再生の外の保存に残さない・#1672）。
+    replay_undone_ = false;
+    replay_save_unsure_ = false;
     state_ = state_.with_history(state_.history().sealed());
 }
 
@@ -1849,6 +1932,8 @@ void EditorController::reopen_replayed_unit()
     }
     replay_history_ = state_.history();
     replay_text_ = state_.text();
+    replay_undone_ = false;
+    replay_save_unsure_ = false;
 }
 
 void EditorController::queue_replay(const core::VimReplay &effect, std::size_t depth)
@@ -1936,6 +2021,8 @@ bool EditorController::replay_step_allowed()
 // （ADR 0046 の決定 3・Issue #176 の probe で実測）。履歴の 1 単位は連続した 1 つの Edit なので、
 // 2 つ以上積んだときは、再生の前後の本文の違う所をまとめて覆う 1 つの Edit に置き換える
 // （矩形の編集を 1 つの範囲の置換にする apply_block と同じ考え方）。
+// 再生の中の `:w` は畳む前の位置で保存時点を覚えるので、畳んだ履歴の同じ本文の位置へ写す
+// （after_units_folded・#1672）。写さないと、畳んだ位置がファイルに無い本文と同じ数になり得る。
 void EditorController::merge_replayed_edits(const core::EditHistory &before,
                                             const core::TextBuffer &text)
 {
@@ -1945,13 +2032,61 @@ void EditorController::merge_replayed_edits(const core::EditHistory &before,
     {
         return;
     }
+    const std::size_t replayed = state_.history().content_position();
     const auto edit = covering_edit(text.text(), state_.text().text(), first.value().restore);
-    if (!edit.has_value())
+    const core::EditHistory folded = edit.has_value()
+                                         ? before.pushed(edit.value(), core::EditBoundary::separate)
+                                         : before.sealed();
+    const auto kept =
+        replay_save_unsure_ ? std::nullopt : std::optional<std::size_t>{before.content_position()};
+    state_ = state_.with_history(folded).with_document(
+        after_units_folded(state_.document(), kept, replayed, folded.content_position()));
+}
+
+// `:s///c` の 1 歩（ADR 0168 の決定 6・段 2a）。置く当たりは矩形と同じ apply_block で写し（`y` の
+// たびに置いた本文が見え、使う人は見てから次を答える）、問いを開くか続けるなら入力行の問いを
+// 置き直し、終えるなら閉じて、置いた分を問いを開いたときの履歴の上の 1 つの undo の単位に畳む。
+void EditorController::perform(const core::VimConfirmSubstitute &effect)
+{
+    const SubstituteQuestion *open = substitute_question();
+    const bool opened = open != nullptr;
+    SubstituteQuestion question = opened ? *open
+                                         : SubstituteQuestion{core::SubstituteConfirmation{},
+                                                              state_.history(), state_.text()};
+    apply_block(effect.edits, effect.caret, core::EditBoundary::separate);
+    if (effect.asking.has_value())
     {
-        state_ = state_.with_history(before.sealed());
+        question.confirmation = effect.asking.value();
+        state_ = state_.with_command_input(CommandInput{std::move(question)});
         return;
     }
-    state_ = state_.with_history(before.pushed(edit.value(), core::EditBoundary::separate));
+    if (opened)
+    {
+        close_command_input();
+    }
+    if (effect.restore.has_value())
+    {
+        merge_question_edits(question, effect.restore.value());
+    }
+}
+
+// 問いの間に積んだ単位を、問いを開いたときの履歴の上の 1 つの Edit に置き換える（undo 1 回で全部
+// 戻る・途中で止めても 1 単位・ADR 0168 の決定 6）。戻り先は engine が Vim の uh_cursor の規則で
+// 決めた restore（ADR 0052 の決定 3 の畳み方は再生と同じ）。積んでいなければ何もしない。
+void EditorController::merge_question_edits(const SubstituteQuestion &question,
+                                            core::Offset restore)
+{
+    if (state_.history().position() <= question.history.position())
+    {
+        return;
+    }
+    // 問いは意図をまたぐので、途中の改訂番号は自動退避の帳面と LSP の版に見えている。畳んだ
+    // 履歴は今の値より大きくする（ADR 0137 の決定 2・ADR 0168 の段 2a の追補 14）。
+    const auto edit = covering_edit(question.text.text(), state_.text().text(), restore);
+    const core::EditHistory folded =
+        edit.has_value() ? question.history.pushed(edit.value(), core::EditBoundary::separate)
+                         : question.history.sealed();
+    state_ = state_.with_history(folded.revised_beyond(state_.history().revision()));
 }
 
 // Vim の u は戻した単位が覚えた戻り先（最初の編集の瞬間のキャレット）へ置き、行末の 1 つ先などの
@@ -2045,8 +2180,10 @@ EditorController::measured_vim_step(const VimStepSource &source)
     std::vector<core::VimLineRows> rows;
     std::vector<core::VimRowSpan> spans;
     // 表示領域は engine が求めたときだけ渡す（ADR 0129 の決定 2）。追従を解決するのはその時だけ。
+    // engine に渡す本文は Vim のモードが見る本文（eol の文書は最後の改行を除く・ADR 0188 の決定
+    // 2）。 入口はここの 1 か所で、engine の位置は本文の位置と同じ。
     core::VimEditorView view{
-        state_.text(), state_.selection(), std::nullopt,
+        state_.vim_text(), state_.selection(), std::nullopt,
         replay_depth_.has_value() ? core::VimKeySource::replayed : unit_source_,
         core::VimTabs{state_.active_tab(), state_.tab_count()},
         // 格子は常に折り返す（ADR 0140 の決定 7）。wrap off の text 形は無効のまま（gj gk は j k・
@@ -2062,6 +2199,7 @@ EditorController::measured_vim_step(const VimStepSource &source)
     view.search_case = core::search_case(state_.settings());
     view.scroll_margin = state_.settings().scrolloff;
     view.autoindent = state_.settings().autoindent;
+    view.empty_text = state_.vim_empty_text();
     auto step = engine_step(state_.vim(), view, source);
     // どの要求も同じ 1 歩（鍵か行番号）をもう一度流す。viewport は 1 度渡したら以後も渡したまま。
     // 回数の上限は持たない。同じ問いの立て直しと viewport の二重要求は inconsistent で止まり、

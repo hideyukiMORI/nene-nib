@@ -35,7 +35,7 @@ production コード・ビルド・依存・方針・利用者向けドキュメ
 10. 影響した規則 ID を 1 つずつ自己レビューする
 11. 必要な検証と再利用根拠を PR に記録して Ready にする。工程・文書・SHA の変更だけで測り直さない
 12. 記録の妥当性をレビューし、下記の`eng/merge-pr.py`でsquash mergeする。CIはこの実行時だけ起動し、文書のみなら起動しない（QLT-012・ADR 0118）。レビュー済みの PR が並ぶときは、まとめ枝に 1 PR = 1 commit で積んで手元の検証と CI を 1 回にし、`--integration` で rebase merge する（[ADR 0021 追補](adr/0021-diff-scoped-verification-and-result-reuse.md)・#1220）
-13. 作業木を畳み、ローカル枝を消す（remote 枝はマージで自動的に消える）
+13. 作業木を畳み、ローカル枝を消す（merge した PR の remote 枝は自動的に消える。まとめ枝で閉じた元の PR の枝は自動では消えない）
 
 ---
 
@@ -134,7 +134,8 @@ MUST / MUST NOT を変えるには次がそろう必要がある。
 ## 7. PR に書くこと
 
 ```text
-Issue:
+Closes #N
+
 目的:
 使った正典経路:
 規則 ID:
@@ -148,6 +149,7 @@ Waivers: none | WVR-NNNN
 残るリスク:
 ```
 
+先頭は行頭の `Closes #N`（`Issue:` という欄は無い）。欄の正本は `eng/git-conventions.py` の `PR_FIELDS` で、作る前に本文をファイルに書いて `python eng/git-conventions.py <ファイル> --pr-body` で確かめる。
 検証の正本は QLT-001 / QLT-012。各テストの必要性を説明できなければ実行しない。
 文書・コメント・ルール変更にはアプリの動作テストは不要。開発ツールはその道具の短い正例・反例で確認する。
 全件を選ぶ場合だけ、限定不能の理由を先に知らせ、`eng/check.ps1 -Full -Reason <理由>` を使う。定型の承認確認は増やさない。
@@ -181,7 +183,7 @@ fixture・機械の基準値・許可シンボル・規約検査の規則・保�
 
 設定ファイルとドキュメントが食い違ったら、**ドキュメントが決定の記録**である。ただし両方がそろうまで merge は止める。
 
-**日報と要約の粒度（Issue #124・2026-09-23 以降の約束。過去の節は書き換えない）**: 日報（`docs/reports/`）の Issue ごとの節は 5〜8 行の要約に留め、コマンド・件数・所要時間・SHA は `docs/quality/gate-proofs.md` の節に書いて日報からは節番号で指す。`docs/todo/current.md` は「運用・いまの Issue と次の順・いまの数字・動かないもの・段階」だけを持ち、Issue の経緯は書かない（1 画面に収める）。`README.md` の「What works today」は FR の粒度で、数字は `current.md` の値に揃える。
+**日報と要約の粒度（Issue #124・2026-09-23 以降の約束。過去の節は書き換えない）**: 日報（`docs/reports/`）の Issue ごとの節は 5〜8 行の要約に留め、コマンド・件数・所要時間・SHA は `docs/quality/gate-proofs.md` の節に書いて日報からは節番号で指す。`docs/todo/current.md` は「運用・いまの Issue と次の順・いまの数字・動かないもの・段階」だけを持ち、Issue の経緯は書かない（1 画面に収める）。`README.md` の「What works today」は FR の粒度で、数字は `current.md` の値に揃える。 `CLAUDE.md` の §6 は、いまの状態と所在の箇条だけを持ち、日ごとの経緯と数字を足さない（会話のたびに設計席と背景の席が全文を読むので、積もると全部の席の使用量になる・#1716）。
 
 **事故が起きたら、直すだけでなく再発を機械で塞ぐ規則を足し、Issue 番号と実測を規則本文に残す。**
 
@@ -220,7 +222,7 @@ GitHub の配布が試験版であることは、Release の題の「Beta」と 
 配布物の正規生成経路は次の 1 本である。
 
 ```powershell
-pwsh -NoProfile -File eng/package-release.ps1 -OutputDirectory D:/NeNeNib/releases/v<x.y.z> -Verification docs/quality/<accepted-record>.md
+pwsh -NoProfile -File eng/package-release.ps1 -OutputDirectory D:/NeNeNib/releases/v<x.y.z>/zip -Verification docs/quality/<accepted-record>.md
 ```
 
 Issue #413 / ADR 0115 / #1596。数値版はCMakeから導出し、配布物の名前は `NeNeNib-<x.y.z>-windows-x64.zip` の 1 通り（`archive_name`・版に `-` が入っていれば道具が断る）。cleanなmain（同じcommitのD側detached作業木も可）とGitHub上の現在のmainの一致を要求する。
@@ -238,7 +240,7 @@ Issue #413 / ADR 0115 / #1596。数値版はCMakeから導出し、配布物の�
 | 1 | 設計席 | 版を上げる PR（`project()` の 1 行と、版を見る文書）を main へ | 同じ |
 | 1a | 設計席 | 公開の記録（`docs/quality/release-<x.y.z>-<日付>.md`・前半の根拠だけ・雛形から写す）の文書 PR を main へ。**その merge の commit が公開元**で、梱包の `-Verification` はこの記録を指す | 同じ記録・同じ commit |
 | 2 | 設計席 | clean な main の detached 作業木で上の梱包のコマンド（Release のビルドは 1 回） | 同じ `build/release-<short>/NeNeNib.exe` から `eng/package-msix.ps1 -OutputDirectory D:/NeNeNib/releases/v<x.y.z>/msix -Zip <ZIP> -Store` |
-| 3 | 設計席 | 照合: `package.json`（exe の SHA-256・VERSIONINFO が `x.y.z`）と展開した exe の短い起動 | 照合: `msix.json`（exe の SHA-256 が ZIP と同じ・Identity の Version が `x.y.z.0`・言語は `en-US` が先頭・中身 30 個） |
+| 3 | 設計席 | 照合: `package.json`（exe の SHA-256・VERSIONINFO が `x.y.z`）と展開した exe の短い起動 | 照合: `msix.json`（exe の SHA-256 が ZIP と同じ・Identity の Version が `x.y.z.0`・言語は `en-US` が先頭・中身 30 個（`entries` は makeappx が足す 2 つを含めて 32）） |
 | 4 | 設計席 | annotated tag `v<x.y.z>` → GitHub Release（**題に「Beta」**・例 `NeNe Nib 1.0.0 Beta`・**pre-release の印**）に ZIP と `SHA256SUMS` を添付し、再取得して照合 | — |
 | 5 | hide | — | 自己署名の写しで入れて確かめる・WACK（管理者）→ Partner Center に署名なしの `-store.msix` を上げて申請（[docs/store/msix.md](store/msix.md)・[docs/store/submission.md](store/submission.md)） |
 | 6 | 設計席 | 公開の結果を同じ記録の末尾の節へ（文書 PR） | 認定の後に結果を同じ記録へ |

@@ -6,28 +6,95 @@
 #include "VimPatternInstruction.hpp"
 #include "VimPatternOpcode.hpp"
 
+#include <string_view>
 #include <utility>
 
 namespace nenenib::core
 {
+namespace
+{
+// 置き直した終わりの「`\ze` を通っていない」。
+constexpr std::size_t no_bound = std::string_view::npos;
+// bounded_ のとき積みの 1 項目が持つ語の数（項目と、置き直した始まりと終わり）。
+constexpr std::size_t bounded_entry_words = 3;
+} // namespace
+
 VimPatternMachine::VimPatternMachine(const VimPattern &pattern, std::string_view line)
     : pattern_(pattern), line_(line), at_(0), transit_(pattern.program_.size()),
-      cells_(cells_per_slot * 2 * transit_, 0)
+      cells_(cells_per_slot * 2 * transit_, 0), bounded_(pattern.bounded_),
+      bounds_(bounded_ ? cells_per_slot * 2 * transit_ : 0, 0)
 {
     current_.reserve(2 * transit_);
     next_.reserve(2 * transit_);
-    pending_.reserve(4 * transit_ + 4);
+    pending_.reserve((bounded_ ? bounded_entry_words : 1) * (4 * transit_ + 4));
+}
+
+void VimPatternMachine::pushed(std::size_t entry)
+{
+    pending_.push_back(entry);
+    if (bounded_)
+    {
+        pending_.push_back(carried_begin_);
+        pending_.push_back(carried_end_);
+    }
+}
+
+std::size_t VimPatternMachine::popped()
+{
+    if (bounded_)
+    {
+        carried_end_ = pending_.back();
+        pending_.pop_back();
+        carried_begin_ = pending_.back();
+        pending_.pop_back();
+    }
+    const std::size_t entry = pending_.back();
+    pending_.pop_back();
+    return entry;
+}
+
+void VimPatternMachine::bounds_stored(bool into_next, std::size_t slot)
+{
+    if (!bounded_)
+    {
+        return;
+    }
+    const std::size_t cell = cell_of(into_next, slot);
+    bounds_.at(cell) = carried_begin_;
+    bounds_.at(cell + 1) = carried_end_;
+}
+
+void VimPatternMachine::bounds_loaded(bool into_next, std::size_t slot)
+{
+    if (!bounded_)
+    {
+        return;
+    }
+    const std::size_t cell = cell_of(into_next, slot);
+    carried_begin_ = bounds_.at(cell);
+    carried_end_ = bounds_.at(cell + 1);
+}
+
+// 当たりの範囲。`\zs` は始まりを、`\ze` は終わりを置き直す（`\zs` は前の `\ze` を消す・Vim 9.1 の
+// addstate の NFA_ZSTART は複数行の照合で end_lnum を -1 にする・`a\ze\zsbc` は `bc`・実測）。
+VimPatternMatch VimPatternMachine::accepted(std::size_t begin) const noexcept
+{
+    if (!bounded_)
+    {
+        return VimPatternMatch{begin, at_, begin, at_};
+    }
+    return VimPatternMatch{carried_begin_, carried_end_ == no_bound ? at_ : carried_end_, begin,
+                           at_};
 }
 
 std::optional<VimPatternMatch> VimPatternMachine::placed(bool into_next, std::size_t pc,
                                                          std::size_t begin)
 {
     pending_.clear();
-    pending_.push_back(pc << 1U);
+    pushed(pc << 1U);
     while (!pending_.empty())
     {
-        const std::size_t entry = pending_.back();
-        pending_.pop_back();
+        const std::size_t entry = popped();
         const std::size_t here = entry >> 1U;
         if ((entry & 1U) != 0U)
         {
@@ -70,8 +137,8 @@ std::size_t VimPatternMachine::done_stamp(bool into_next) const noexcept
     return 2 * (into_next ? next_generation_ : current_generation_) + 1;
 }
 
-// Vim 9.1 の addstate と同じく、食べる原子・錨・群の開きは、
-// 同じ位置で 2 度目に来たら辿らない。split・jump・群の閉じ・当たりは、
+// Vim 9.1 の addstate と同じく、食べる原子・錨・群の開き・`\zs` は、
+// 同じ位置で 2 度目に来たら辿らない。split・jump・群の閉じ・`\ze`・当たりは、
 // 辿り終えるまで（途中の印の間）は辿り直す（空の周を 1 回だけ通す・
 // `\(\|a\)\+` は空の当たりが `a` を食べる道より先・実測）。
 // 辿り終えた後は、そこから着ける所にもう着いているので辿らない。
@@ -83,13 +150,14 @@ bool VimPatternMachine::entered(bool into_next, std::size_t here)
         return false;
     }
     const VimPatternOpcode opcode = pattern_.program_.at(here).opcode;
-    if (opcode == VimPatternOpcode::atom || opcode == VimPatternOpcode::open)
+    if (opcode == VimPatternOpcode::atom || opcode == VimPatternOpcode::open ||
+        opcode == VimPatternOpcode::match_begin)
     {
         stamp = done_stamp(into_next);
         return true;
     }
     stamp = done_stamp(into_next) - 1;
-    pending_.push_back((here << 1U) | 1U);
+    pushed((here << 1U) | 1U);
     return true;
 }
 
@@ -100,11 +168,12 @@ void VimPatternMachine::atom_placed(bool into_next, std::size_t here, std::size_
     {
         if (VimPattern::anchored(line_, atom, at_))
         {
-            pending_.push_back((here + 1) << 1U);
+            pushed((here + 1) << 1U);
         }
         return;
     }
     begin_of(into_next, here) = begin;
+    bounds_stored(into_next, here);
     (into_next ? next_ : current_).push_back(here);
 }
 
@@ -119,19 +188,30 @@ std::optional<VimPatternMatch> VimPatternMachine::followed(bool into_next, std::
         return std::nullopt;
     // 先の道を後に積む（先に取り出す）。
     case VimPatternOpcode::split:
-        pending_.push_back(instruction.second << 1U);
-        pending_.push_back(instruction.first << 1U);
+        pushed(instruction.second << 1U);
+        pushed(instruction.first << 1U);
         return std::nullopt;
     case VimPatternOpcode::jump:
-        pending_.push_back(instruction.first << 1U);
+        pushed(instruction.first << 1U);
         return std::nullopt;
     case VimPatternOpcode::open:
     case VimPatternOpcode::close:
-        pending_.push_back((here + 1) << 1U);
+        pushed((here + 1) << 1U);
+        return std::nullopt;
+    // `\zs` は始まりを今の位置に置き、前の `\ze` を消す。`\ze` は終わりを今の位置に置く（複数なら
+    // 最後に通った方が効く・ADR 0184 の決定 5）。
+    case VimPatternOpcode::match_begin:
+        carried_begin_ = at_;
+        carried_end_ = no_bound;
+        pushed((here + 1) << 1U);
+        return std::nullopt;
+    case VimPatternOpcode::match_end:
+        carried_end_ = at_;
+        pushed((here + 1) << 1U);
         return std::nullopt;
     // 終わりが文字の境の当たりだけを一致にする（#1138）。
     case VimPatternOpcode::accept:
-        return VimPattern::ends_a_character(line_, at_) ? std::optional{VimPatternMatch{begin, at_}}
+        return VimPattern::ends_a_character(line_, at_) ? std::optional{accepted(begin)}
                                                         : std::nullopt;
     }
     std::unreachable();
@@ -150,6 +230,7 @@ std::optional<VimPatternMatch> VimPatternMachine::arrived(std::size_t target, st
     {
         stamp_of(true, slot) = done_stamp(true);
         begin_of(true, slot) = begin;
+        bounds_stored(true, slot);
         next_.push_back(slot);
     }
     return std::nullopt;
@@ -179,6 +260,7 @@ void VimPatternMachine::advanced()
     next_.clear();
     for (const std::size_t slot : current_)
     {
+        bounds_loaded(false, slot);
         const auto match = stepped(slot, begin_of(false, slot), before, code);
         if (match.has_value())
         {
@@ -200,6 +282,8 @@ std::optional<VimPatternMatch> VimPatternMachine::matched(std::size_t from)
         // 始まりは Vim の 1 文字の先頭だけ（結合文字の上からは試さない・#1146）。
         if (!found_.has_value() && VimPattern::ends_a_character(line_, at_))
         {
+            carried_begin_ = at_;
+            carried_end_ = no_bound;
             found_ = placed(false, 0, at_);
         }
         if (at_ == line_.size())

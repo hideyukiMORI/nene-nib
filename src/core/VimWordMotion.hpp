@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string_view>
 
 namespace nenenib::core
 {
@@ -45,6 +46,12 @@ namespace nenenib::core
 // 文字の種類（Vim の cls()）。語の表はここ 1 つで、テキストオブジェクトも同じ表を引く
 // （ADR 0031 の決定 2）。0 は空白、1 は記号、2 は語の文字、それ以外はひらがな等の塊の印。
 [[nodiscard]] std::uint32_t vim_character_class(char32_t code, VimWordClass kind) noexcept;
+
+// `Ctrl-w` が消す範囲の左端（INSERT の #1040 と入力行の c_CTRL-W の #1550 の 1 本・ARC-001）。
+// content の末尾から手前の空白（Vim の vim_isspace: 空白・Tab・改行の類）を消し、その手前の
+// 文字の種類（vim_character_class の word・1 文字は vim_character_start）の連なりを消す。少なく
+// とも 1 文字は消し、floor で止まる。呼ぶ側は content.size() > floor を守る。
+[[nodiscard]] std::size_t vim_word_erase_begin(std::string_view content, std::size_t floor);
 
 // キャレットの下、無ければ同じ行の後ろにある語の範囲（Issue #100 で実測）。
 // `*` / `#` がこの範囲の本文を \<…\> のパターンにする（ADR 0032 の決定 3）。語は同じ種類の

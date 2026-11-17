@@ -111,3 +111,21 @@ IDE の「ようこそ」の面。Nib は引数も前回のタブも無い起動
 - 「はじめる」の行の鍵の枠（鍵がある行は右端に `panel` の枠・名前と補足は枠の手前）: **active**（`nib_window_tests --start-screen`・#1480）。
 
 追補 25 の細部（#1495・レビュー V-1486 の L3）: 読みが走っている間に前の一覧の行を開けずに外した（`forget`）path は、application が届くまで覚え（`start_forgotten_`・頼むときに空にする）、届いた一覧からも外す（古い読みで外した行が戻らない）。外すのは `drop_start_entry` の 1 か所。「フォルダを開く」の鍵は Ctrl+Shift+R に決まった（ADR 0162 の追補 #1495）。契約: `nib_tests --start-screen` の `verify_forget_during_reread`・`verify_press_across_read_centered`（製品の中央寄せの形）・`verify_vim_insert_cycles`・`verify_folder_row_key`、`verify_quiet_paths` の `verify_quiet_after_start_lists`（読みを届けてから静かな道）。
+
+## 追補 2026-11-14（#1677・施主決定 D90）: 題の横の版と一覧の下の署名
+
+1.0.0（Microsoft Store の最初の版）に向けて、施主が「どこかに版と署名を入れたい。GitHub の URL も」と決め、置き場所に「題の横と一覧の下」を選んだ（図は[採用案](../design/2026-10-28-start-screen-look.md)の追補）。
+
+28. **名乗りの文は core の 1 か所** — 名前 `NeNe Nib`・著作者 `Hideyuki Mori`・年 `2026`・場所 `github.com/hideyukiMORI/nene-nib` は `core::AppIdentity.hpp` の定数、版は `project(... VERSION)` の `PROJECT_VERSION` を CMake が `AppIdentity.cpp` の翻訳単位にだけ渡す compile definition（`app_version()`）。年は時刻から作らない（ARC-007）。rc（VERSIONINFO）は C++ を読めないので文字で書き、`LegalCopyright` と `CompanyName` が定数と同じ文であることを CNF-007（`eng/conformance.py` の `app_identity_checks`）が照合する。文は訳さない。
+29. **版は題の右** — 題の欄の中で、題の幅（描画が測る）と 12 DIP（`start_detail_gap_dips`）の後ろから題の欄の右端まで（`core::start_version_area`）。書式は見出しと同じ UI の字体 12 DIP（新しい書式は足さない）、色は `muted`（新しいトークンは足さない）。縦は題の 1 行目の baseline に揃える（2 つの文字組みの `GetMetrics().top + GetLineMetrics().baseline` の差だけ下げて描く）。
+30. **署名は鍵の案内の下** — ショートカットの節の 3 行目の下に 16 DIP（`start_section_gap_dips`）空けて、見出しと同じ左右と 20 DIP の高さで 2 行（`StartScreenLayout.signature`）。上下の中央寄せは署名を含めたブロックで取る（日本語の今の画面では題・文・一覧が少し上がる。横の位置とかたまりの中の並びは変えない）。署名は押せない。
+31. **狭い窓は署名 → 版の順に切らずに落とす** — 縦: 上の 36 DIP と署名を含めたブロックが本文の欄の高さに入らなければ、配置が署名を置かない（値なし・ブロックは鍵の案内まで・行の位置は署名の無い配置と同じ）。これは測った幅に依らないので、窓のクリックの当たり（幅 0 で引く）と描画が同じブロックの位置を読む。横: どこまで描くかは `core::start_credit(layout, dpi, StartCreditWidths)` の 1 本で、版は版の欄に 1 行のまま入るときだけ、署名は版を描き・配置が署名を置き・2 行とも欄に入るときだけ（片方だけ残さない）。版が入らなければ署名も描かない。題と一覧は今のまま。横で落としたときは署名の 2 行ぶんの余白が残る（中央寄せを当たりと揃えるため・確かめた集合では 360 DIP の窓でも横では落ちなかった）。
+32. **文字組みは 3 つまで** — 版 1・署名 2 を起動画面の保持（`PaletteRowLayouts`・上限 128）から引く。どれも見出しの書式で折り返さない 1 行（`single_line`）で、幅は欄に依らず全文の幅。題の文字組みは題を書いたときの保持の当たりを引き直すだけ。起動画面は最初の frame で描くので、増えるのはこの 3 つの作成と保持の照合だけ（速さは測っていない）。
+33. **場所は文字だけ** — クリックできず、ブラウザを開かない。`ShellExecute`・通信・クリップボードへの書き込みは足さない（PRIVACY.md と Store の申告の「アプリは Web のページを開かない」のまま）。
+
+強制（28〜33）:
+
+- 版の出どころと rc の署名: **active**（CNF-007・`tests/conformance` の正例 1・反例 2 を足した・`nib_tests --version-info` が `app_version()` を CMake の `PROJECT_VERSION` と比べる）。
+- 署名の置き方・縦の落とし（ちょうど入る高さで置き 1 px 足りなければ置かない・低い本文では上から 36 DIP）・落とす順（`start_credit`）: **active**（`nib_tests --start-screen`）。
+- 重ならない・切れない（版は題の右で列の中・署名は鍵の案内の下で本文の欄の中）: **active**（`nib_window_tests --language`・3 言語 × 96 / 120 DPI × 窓 6 通り（360 × 200 DIP から 1920 × 1080 DIP）× 履歴なし / 最近 5 件 / 最近 10 件とブックマーク 5 件・本物の DirectWrite の幅を `start_credit` に渡す）。
+- 場所を開かない: 機械では守っていない（exe の import に `ShellExecute*` と通信の DLL が無いことを #1677 の PR で確かめた・後続の規則にするかは設計席）。

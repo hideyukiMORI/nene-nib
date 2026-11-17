@@ -20,6 +20,7 @@ class VimOracleTests(unittest.TestCase):
         report = "text\ncursor=1,1\nregtype=\nreg=\n"
         if "-es" not in command:
             report += "topline=1\nscroll=5\n"
+        report += "eol=0,0\n"
         (work / "out.txt").write_text(report, encoding="utf-8")
         self.command, self.kwargs = command, kwargs
         return subprocess.CompletedProcess(command, 0, b"", b"")
@@ -376,7 +377,7 @@ class VimOracleTests(unittest.TestCase):
 
     def test_run_vim_keeps_a_literal_cr_out_of_the_line_split(self):
         """The report is read as bytes, so a CR Vim wrote as a character stays one (ADR 0036)."""
-        report = b"a\rb\r\nc\ncursor=1,2\nregtype=v\nreg=x\ry\n"
+        report = b"a\rb\r\nc\ncursor=1,2\nregtype=v\nreg=x\ry\neol=0,0\n"
 
         def fake_run(command, **kwargs):
             (Path(kwargs["cwd"]) / "out.txt").write_bytes(report)
@@ -392,7 +393,7 @@ class VimOracleTests(unittest.TestCase):
 
     def test_run_vim_reads_the_change_marks_only_when_asked(self):
         """The change line is the last one and reads as three booleans (ADR 0181)."""
-        report = b"abc\ncursor=1,1\nregtype=\nreg=\nchange=0,0,1\n"
+        report = b"abc\ncursor=1,1\nregtype=\nreg=\nchange=0,0,1\neol=0,0\n"
 
         def fake_run(command, **kwargs):
             (Path(kwargs["cwd"]) / "out.txt").write_bytes(report)
@@ -403,6 +404,28 @@ class VimOracleTests(unittest.TestCase):
             measured = vim_oracle.run_vim(Path(directory), "abc", "~", [], change=True)
         self.assertEqual("abc", measured[0])
         self.assertEqual({"modified": False, "changed": False, "undo": True}, measured[6])
+
+    def test_run_vim_builds_the_body_from_eol_and_the_empty_buffer(self):
+        """The last line is &eol and whether the buffer is empty (ADR 0188 decision 6)."""
+        reports = {"a\nb\n": b"a\nb\ncursor=1,1\nregtype=\nreg=\neol=1,0\n",
+                   "\n": b"\ncursor=1,1\nregtype=\nreg=\neol=1,0\n",
+                   "a\n": b"\ncursor=1,1\nregtype=V\nreg=a\x00\neol=1,1\n"}
+        expected = {"a\nb\n": "a\nb\n", "\n": "\n", "a\n": ""}
+        for text, report in reports.items():
+            def fake_run(command, report=report, **kwargs):
+                (Path(kwargs["cwd"]) / "out.txt").write_bytes(report)
+                return subprocess.CompletedProcess(command, 0, b"", b"")
+
+            with tempfile.TemporaryDirectory() as directory, \
+                    patch.object(vim_oracle.subprocess, "run", fake_run):
+                body = vim_oracle.run_vim(Path(directory), text, "h", [])[0]
+            self.assertEqual(expected[text], body)
+
+    def test_probe_script_marks_only_an_empty_input_noeol(self):
+        """A 0-byte file opens with eol set; Nib has no flag there (ADR 0188 decision 1)."""
+        self.assertIn("setlocal noeol", vim_oracle.probe_script([], "h", empty_input=True))
+        self.assertNotIn("setlocal noeol", vim_oracle.probe_script([], "h"))
+        self.assertIn("wordcount().bytes == 0", vim_oracle.probe_script([], "h"))
 
     def test_probe_script_counts_the_change_only_when_asked(self):
         lines = vim_oracle.probe_script([], "~", change=True).splitlines()

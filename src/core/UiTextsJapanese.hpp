@@ -102,6 +102,8 @@ inline constexpr UiTextColumn ui_texts_japanese{{
      "Windows の右クリックと「プログラムから開く」から NeNe Nib を外します"},
     {UiMessage::operation_choose_language_name, "表示言語を選ぶ"},
     {UiMessage::operation_choose_language_description, "画面の文字の言語を選びます"},
+    {UiMessage::operation_show_version_name, "バージョン情報"},
+    {UiMessage::operation_show_version_description, "版と著作権と GitHub の場所を知らせます"},
     {UiMessage::app_error_window_class, "ウィンドウクラスを登録できませんでした。"},
     {UiMessage::app_error_window_create, "ウィンドウを作成できませんでした。"},
     {UiMessage::app_error_rendering_start, "Direct2D で描画を始められませんでした。"},

@@ -13,6 +13,7 @@
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
 #include "VimCount.hpp"
+#include "VimEndOfLine.hpp"
 #include "VimMarks.hpp"
 #include "VimWantedColumn.hpp"
 
@@ -60,5 +61,8 @@ struct DocumentState
     std::vector<core::Diagnostic> diagnostics{};
     std::uint64_t diagnostics_version = 0;
     core::DiagnosticsCount diagnostics_count = core::DiagnosticsCount::complete;
+    // Vim の eol に当たる旗（ADR 0188 の決定 1）。空は「まだ決めていない」で、読んだ文書の束は空の
+    // まま置き、広げるとき（開いたとき）に本文から決める。置いた束は今の値を持つ。
+    std::optional<VimEndOfLine> vim_eol = std::nullopt;
 };
 } // namespace nenenib::application

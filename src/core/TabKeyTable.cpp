@@ -75,6 +75,7 @@ namespace
     case EditorOperation::register_shell:
     case EditorOperation::unregister_shell:
     case EditorOperation::choose_language:
+    case EditorOperation::show_version:
         return std::nullopt;
     }
     std::unreachable();

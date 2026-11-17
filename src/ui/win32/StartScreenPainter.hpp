@@ -13,6 +13,7 @@
 #include "StartScreenView.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <d2d1.h>
 #include <dwrite.h>
 #include <string>
@@ -29,6 +30,9 @@ namespace nenenib::ui::win32
 // 「はじめる」の行は名前のすぐ後ろに補足（muted）、鍵のある行（操作の表に鍵がある行・#1480）は
 // 右端に鍵の枠（補足は枠の手前で切る）。ショートカット
 // の節は鍵の枠をほかの行の項目と同じ左端に揃え、説明をその右に置く。
+// 題の右に版、鍵の案内の下に署名の 2 行（著作権と GitHub の場所）を、どれも muted と
+// 見出しの書式で描く（D90・版は題の baseline に揃える）。切らずに落とし、落とす順は
+// 署名 → 版（core::start_credit）。場所は文字だけで、開かない。
 // 配置は core::start_screen_layout の 1 本（窓のクリックの当たりと同じ）で、名前の幅で決まる
 // 場所と補足の左端だけを測って置く（Ctrl+P の面の場所と同じ）。行の文字組みは
 // PaletteRowLayouts の保持から引き、同じ画面は frame をまたいで作り直さない（#904 の形）。
@@ -37,8 +41,8 @@ namespace nenenib::ui::win32
 class StartScreenPainter final
 {
   public:
-    // 保持の上限。題 1・見出し 4・空の知らせ 1・印 1・行 23（名前と場所か補足・場所の全文と頭を
-    // 切った文）・「…」1・鍵 4 組で 128 に収まる。
+    // 保持の上限。題 1・版 1・見出し 4・空の知らせ 1・印 1・行 23（名前と場所か補足・場所の全文と
+    // 頭を切った文）・「…」1・鍵 4 組・署名 2 で 128 に収まる。
     static constexpr std::size_t retained = 128;
 
     StartScreenPainter(ID2D1RenderTarget &target, ID2D1SolidColorBrush &brush,
@@ -61,6 +65,19 @@ class StartScreenPainter final
     void keycap(std::string_view key, const core::LayoutRect &area, bool from_left);
     // 鍵の枠の幅（字の幅と左右の余白・物理画素）。測れなければ 0。
     [[nodiscard]] std::int32_t keycap_width(std::string_view key, const core::LayoutRect &area);
+    // 題の右の版と一覧の下の署名 2 行（D90）。title_width は題の幅（物理画素）。どこまで描くかは
+    // core::start_credit が決める。
+    void paint_credit(const core::StartScreenLayout &layout, std::int32_t title_width,
+                      core::RgbColor color);
+    // 版を版の欄 area に、題の baseline に揃えて描く。
+    void paint_version(const core::LayoutRect &title, const core::LayoutRect &area,
+                       IDWriteTextLayout &version, core::RgbColor color);
+    // 文字組みを欄 area の左上から lowered だけ下げて描く（欄で切る）。
+    void draw_at(IDWriteTextLayout &layout, const core::LayoutRect &area, float lowered,
+                 core::RgbColor color);
+    // 見出しの書式で折り返さない 1 行の文字組み（保持から引く）。
+    [[nodiscard]] PaletteRowLayouts::TextLayout single_line(std::string_view text,
+                                                            const core::LayoutRect &area);
     void paint_headings(const core::StartScreenLayout &layout, const core::Palette &palette);
     void paint_row(const core::StartEntry &entry, const core::StartRowLayout &row, bool selected,
                    const core::Palette &palette);

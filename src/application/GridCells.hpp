@@ -5,11 +5,13 @@
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "TextBuffer.hpp"
+#include "VirtualColumnChunk.hpp"
 #include "VirtualColumnCursor.hpp"
 #include "VirtualColumnIndex.hpp"
 
 #include <cstddef>
 #include <optional>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -18,7 +20,8 @@ namespace nenenib::application
 // 収まらず次の画面行へ送った空き」を足したもので、送りは幅 columns に依るので索引には持たせない。
 // 行の中を索引の塊の境目で切り、plain の塊（表示できる ASCII と '\n' だけ）の部分は長さを足すだけ、
 // そうでない部分だけ 1 文字ずつ置いて送りを数える（置き方は core の grid_placed_cell の 1 本）。
-// 1 回の位置解決の間だけ作る短い値で、1 文字ずつ歩いた部分の数を scanned に数える。
+// 1 回の位置解決の間だけ作る短い値で、1 文字ずつ歩いた部分の数を scanned に数える。同じ行への
+// 問いは、前の問いで進めた塊の始まりの累積を覚えて使い回す（本文と索引は値の寿命の間変わらない）。
 class GridCells final
 {
   public:
@@ -46,16 +49,32 @@ class GridCells final
     // 行の [begin, stop) に掛かる塊 chunk の部分。掛からなければ空。
     [[nodiscard]] core::OffsetRange part_of(std::size_t chunk, std::size_t begin,
                                             std::size_t stop) const noexcept;
-    // 部分 range を state から進める。target の升を占める文字があればその先頭を返す。plain の部分は
-    // 長さを足すだけで、そうでない部分は 1 文字ずつ置いて scanned を 1 つ数える。
-    [[nodiscard]] std::optional<std::size_t> reached(core::OffsetRange range, bool plain,
+    void remember(core::LineNumber line);
+    void noted(std::size_t ordinal, std::size_t chunk, core::OffsetRange range,
+               const core::VirtualColumnCursor &state);
+    // 塊 chunk の部分 range を state から進める。target の升を占める文字があればその先頭を返す。
+    // plain の部分は長さを足すだけ、一様な塊（VirtualColumnChunk の uniform_*）は閉じた式、送りの
+    // 対象の無い塊の全体は要約の終わりの桁から足す（target が掛からないとき）。そのほかは 1 文字
+    // ずつ置いて scanned を 1 つ数える（#1711）。
+    [[nodiscard]] std::optional<std::size_t> reached(core::OffsetRange range, std::size_t chunk,
                                                      core::VirtualColumnCursor &state,
                                                      std::size_t target);
+    [[nodiscard]] std::optional<std::size_t> uniform_reached(core::OffsetRange range,
+                                                             const core::VirtualColumnChunk &part,
+                                                             core::VirtualColumnCursor &state,
+                                                             std::size_t target) const noexcept;
+    [[nodiscard]] std::optional<std::size_t>
+    walked(core::OffsetRange range, core::VirtualColumnCursor &state, std::size_t target);
     [[nodiscard]] core::Offset previous_in_line(core::LineNumber line, core::Offset at) const;
 
     const core::VirtualColumnIndex &index_;
     const core::TextBuffer &text_;
     std::size_t columns_;
     std::size_t scanned_ = 0;
+    // 最後に問われた行（remembered_line_）の、行頭と、行の中で終わりまで進めた塊の次の塊の
+    // 始まりの累積（行頭の塊から順に）。同じ値への次の問いは、ここから歩く（frame の中で行を 1 回
+    // だけ歩く・#1711）。
+    std::size_t remembered_line_ = 0;
+    std::vector<core::VirtualColumnCursor> starts_;
 };
 } // namespace nenenib::application

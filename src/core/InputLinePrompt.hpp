@@ -22,6 +22,9 @@ enum class InputLinePrompt : std::uint8_t
     go_to_line,
     // 通常モードの置換の 2 段目（「置換後 (語): 」・ADR 0174 の決定 3・7）。置換後の語は literal
     // で、 照合器へは渡らない。
-    replace_with
+    replace_with,
+    // `:s///c` の問い（ADR 0168 の決定 6）。プロンプトの文字を出さず、文は Vim の
+    // `replace with … (y/n/a/q/l)?`。文字は答えとしてだけ読む。
+    substitute_confirm
 };
 } // namespace nenenib::core

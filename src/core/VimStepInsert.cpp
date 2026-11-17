@@ -33,6 +33,7 @@ namespace nenenib::core
 using detail::backward_characters;
 using detail::block_copied_body;
 using detail::block_insert_edit;
+using detail::block_insert_moved;
 using detail::display_view;
 using detail::erased_nothing;
 using detail::failed;
@@ -451,40 +452,9 @@ using AutoIndentTrim = std::pair<OffsetRange, Offset>;
     return first.value < caret.value && first.value > floor.value ? first : floor;
 }
 
-// Vim の vim_isspace（Tab・改行の類・空白）。語の前の空白を先に消すかを決める。
-[[nodiscard]] bool erased_blank(char32_t code) noexcept
-{
-    constexpr char32_t tab = U'\t';
-    constexpr char32_t carriage_return = U'\r';
-    return code == U' ' || (code >= tab && code <= carriage_return);
-}
-
-// INSERT の `Ctrl-w` の左端（#1040）。手前の空白を消してから、同じ種類の文字（`b` と同じ表
-// vim_character_class）の連なりを消す。Vim と同じく少なくとも 1 文字は消し、floor で止まる。
-[[nodiscard]] std::size_t word_erase_begin(std::string_view content, std::size_t floor)
-{
-    std::size_t index = content.size();
-    std::optional<std::uint32_t> kind;
-    do
-    {
-        const std::size_t previous = vim_character_start(content, Offset{index}).value;
-        const char32_t code = code_point_at(content, Offset{previous});
-        const std::uint32_t current = vim_character_class(code, VimWordClass::word);
-        if (kind.has_value() && (erased_blank(code) || current != kind.value()))
-        {
-            break;
-        }
-        if (!kind.has_value() && !erased_blank(code))
-        {
-            kind = current;
-        }
-        index = previous;
-    } while (index > floor);
-    return index;
-}
-
 // 仮想桁の索引を持つ本文の `Ctrl-w` の左端（#1258）。floor が行頭に戻ると floor から写すのは行の
-// 全体になるので（1 行 16 MiB の行）、キャレットの手前の窓だけを読んで word_erase_begin に渡し、
+// 全体になるので（1 行 16 MiB の行）、キャレットの手前の窓だけを読んで vim_word_erase_begin
+// に渡し、
 // 窓の頭で止まった（語が窓より長い）か止めた所の手前の文字が窓の頭から始まる（窓の頭は文字の頭
 // とは限らない）ときだけ窓を倍にして読み直す。窓が floor に届けば floor から写した答えと同じ。
 // 持たない本文は今のまま floor から写す（ADR 0035 の追補）。
@@ -495,7 +465,7 @@ using AutoIndentTrim = std::pair<OffsetRange, Offset>;
     {
         const Offset begin{caret.value - std::min(window, caret.value - floor.value)};
         const std::string content = text.text_range(begin, caret);
-        const std::size_t index = word_erase_begin(content, 0);
+        const std::size_t index = vim_word_erase_begin(content, 0);
         if (begin == floor || (index > 0 && vim_character_start(content, Offset{index}).value > 0))
         {
             return Offset{begin.value + index};
@@ -535,7 +505,7 @@ using AutoIndentTrim = std::pair<OffsetRange, Offset>;
     {
         // 消しうるのは floor から先だけなので、行頭からは写さない（1 行 16 MiB の行・#1040）。
         const std::string content = text.text_range(floor, caret);
-        begin = Offset{floor.value + word_erase_begin(content, 0)};
+        begin = Offset{floor.value + vim_word_erase_begin(content, 0)};
     }
     return VimStep{state, VimRemoveRange{OffsetRange{begin, caret}}};
 }
@@ -889,7 +859,8 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     const auto &[head, middle, rest] = line;
     const std::size_t length =
         (head.end.value - head.begin.value) + middle.size() + (rest.end.value - rest.begin.value);
-    if (length <= insert.line_bytes)
+    // 読み始めが入る前の 1 行目の外なら（行の外を読む）写さない（#1687）。
+    if (length <= insert.line_bytes || insert.at_byte > insert.line_bytes)
     {
         return std::nullopt;
     }
@@ -985,6 +956,11 @@ first_line_growth(const VimBlockInsert &insert, const TextBuffer &text, const Vi
     std::string body = block_carried_text(text, insert);
     body += growth.value().first;
     body = block_copied_body(insert, std::move(body));
+    // 写す本文が字の途中で始まるか切れるなら写さない（Nib は不正な UTF-8 を作らない・#1687）。
+    if (leading_continuations(body) != 0 || whole_code_points(body) != body.size())
+    {
+        return step;
+    }
     if (!block_copy_fits(text, insert, body, view.document_limit))
     {
         return std::nullopt;
@@ -1378,6 +1354,15 @@ namespace
         // を呼ばない）。
         next.insert_start = start;
         return next;
+    }
+    // 矩形の INSERT の覚えは、移動の後に打った最初の鍵（Vim の stop_arrow・Esc は呼ばない）で
+    // 打ち始めへ置き直す（#1687）。
+    if (next.block_insert.has_value())
+    {
+        const auto *const special = std::get_if<VimSpecialKey>(&key);
+        const bool escaping = special != nullptr && *special == VimSpecialKey::escape;
+        const bool stopped = start.moved && !moving && !state.input_wait.has_value() && !escaping;
+        next.block_insert = block_insert_moved(next.block_insert.value(), view, key, stopped);
     }
     if (moving)
     {

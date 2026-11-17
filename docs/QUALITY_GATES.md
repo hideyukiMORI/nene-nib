@@ -97,7 +97,7 @@ fixture は窓の道（窓が送るのと同じ意図を `apply`）でも再生�
 
 道具の版は `eng/tool-versions.json` にだけ書き、`eng/toolchain.ps1` が実際の版と照合して違えば落とす。取り込む依存は tag と SHA-256 で固定する。
 
-- 機械強制: **active**（`eng/toolchain.ps1` が cmake・ninja・LLVM の 7 道具・python・PowerShell の下限を `eng/tool-versions.json` と照合して `QLT-011:` で落とす。反例は `eng/prove-gates.py` の `prove_tool_versions`（llvm の版を 1 つずらした複製で clang-cl の照合が落ちる）。2026-10-16・Issue #571）。守れていない部分: msvcToolset は `-vcvars_ver` に渡すだけで実際の版と照合する反例は無い・vim は `tool-versions.json` にあるが照合しない（oracle は版を生成物に書くだけ）・Windows SDK は固定しない・取り込み依存（md4c）はまだ無く tag と SHA-256 の照合は未実装
+- 機械強制: **active**（`eng/toolchain.ps1` が cmake・ninja・LLVM の 7 道具・python・PowerShell の下限を `eng/tool-versions.json` と照合して `QLT-011:` で落とす。反例は `eng/prove-gates.py` の `prove_tool_versions`（llvm の版を 1 つずらした複製で clang-cl の照合が落ちる）。2026-10-16・Issue #571）。守れていない部分: msvcToolset は `-vcvars_ver` に渡すだけで実際の版と照合する反例は無い・vim は `tool-versions.json` にあるが照合しない（oracle は版を生成物に書くだけ）・Windows SDK は固定しない・取り込み依存（md4c）は 3 ファイルの SHA-256 を CNF-013 が照合し、上流の tag との照合は無い
 
 ### QLT-012 — 検証の頻度は変更に従う
 
@@ -107,7 +107,7 @@ PR に「確認する退行」「対象・依存」「検証結果（コマン�
 CIは非文書変更のマージ直前だけ、`eng/merge-pr.py --execute`が`check.yml`を手動起動する（Issue #430・[ADR 0118](adr/0118-ci-only-at-merge-except-documentation.md)）。
 PR作成・Ready・push・本文編集では起動しない。`docs/`配下、ルートの`.md`、`LICENSE`、`THIRD_PARTY_NOTICES.txt`だけの変更はマージ時もCI不要。
 文書のみは差分と必要な目視で確認し、代替の検証スクリプトや長い検証記録を作らない。renameは変更前のパスも判定する。
-CIの`check` jobはGit規約・記録の存在・空白を確認し、並列の`build-and-test` jobはPRの最終HEADをReleaseで全targetビルドしてctestを回す（[ADR 0136](adr/0136-ci-builds-product-and-tests-in-release.md)・D46。Debug（ASan / UBSan）と速さは実機のまま）。統合道具は対象runの成功とPR/head/workflowの一致を確認してからマージする。
+CIの`check` jobはconformanceの自己テストと木の検査（#568・#648）・Git規約・記録の存在・空白を確認し、並列の`build-and-test` jobはPRの最終HEADをReleaseで全targetビルドしてctestを回す（[ADR 0136](adr/0136-ci-builds-product-and-tests-in-release.md)・D46。Debug（ASan / UBSan）と速さは実機のまま）。統合道具は対象runの成功とPR/head/workflowの一致を確認してからマージする。
 CI 成功は検証記録の代わりではなく、製品の動作も保証しない。関連入力の不変性と検証の十分性はレビューし、フックや merge のために同じテストを繰り返さない。
 
 本件が原因の失敗は修正する。無関係と判断できる既存失敗は、その根拠と別 Issue を記録して本件を継続する。
@@ -125,7 +125,7 @@ ui/win32 の描画の保持の契約（CTest `nib_window`・`tests/ui`・ADR 007
 
 ### QLT-014 — 速さの退行はゲートが落とす
 
-ベンチ 4 本（起動→最初の描画 / キー→画面 / 200 打鍵 / 16 MiB を開く。基準値の鍵は 5 つで、起動の 1 回から
+既定のベンチ 8 本（`eng/measure-speed.py` の `BENCHES` が正本。起動→最初の描画 / 窓が見えるまで / 1 打鍵 / 200 打鍵 / 16 MiB を開く / 16 MiB で 200 打鍵 / 5000 件の面 / 長い行の 1 打鍵。起動の 1 回から
 「窓が見えるまで」（`startup-window-shown`・[ADR 0013](adr/0013-startup-shows-the-window-before-the-device.md)）も取る）を `eng/` の計測スクリプトで測り、`eng/perf-reference.json` の基準値からの
 退行でゲートを落とす（[ADR 0006](adr/0006-speed-gate-simd-and-table-driven-dispatch.md)）。許容退行を広げる（基準値を下げる）には ADR が要る。
 CI 機で測るとき（`check.ps1 -Full` の明示実行。必須 check は測らない・QLT-012）は同じ CI 機での相対退行だけを見て、絶対値の目標は施主の実機で記録する。
@@ -133,8 +133,8 @@ CI の共有ランナーは host の CPU 世代が混ざり、世代差は許容
 基準値の無い host は記録だけで通るが、`Speed: no reference for <指紋> (<CPU>); recorded only -- QLT-014 is not judged on this host` を出して黙らない。
 刺激が窓に届かなかった試行は値にせず**欠測**として記録し、有効な試行が 3 本に満たないベンチは「退行」ではなく**計測不能**として
 退行と別の終了コード 2 でゲートを落とす（Issue #30。どちらでも落ちるが、直す先が違うので別の文で言う）。
-長い日本語行の 1 打鍵 `key-to-frame-single-long-line`（#291 の文書を道具が作って SHA-256 で照合・`key-to-frame-single` と同じ試行・[ADR 0075](adr/0075-merge-acceptance-uses-the-speed-gate-and-effect-size.md) 決定 7・#298）は、許容に床 2 ms が効く（実機の基準値 5.431 ms の 25% は 1.36 ms で床より小さく、床は約 37% にあたる）。実機の指紋 `bc8a356f37c68491` は 2026-10-06 に基準値を採用して判定する。CI の指紋は基準値を採るまで記録だけ。
-既定の 8 本のほかに、1 行が 16 MiB の文書の任意の 2 本 `open-giant-line-16mib` と `key-to-frame-single-giant-line-16mib`（`OPTIONAL_BENCHES`・`--bench` で名指ししたときだけ測る・`compare` は判定しない・基準値は 1 回測ってから後・[ADR 0138](adr/0138-giant-line-bench.md)・#513）がある。
+長い日本語行の 1 打鍵 `key-to-frame-single-long-line`（#291 の文書を道具が作って SHA-256 で照合・`key-to-frame-single` と同じ試行・[ADR 0075](adr/0075-merge-acceptance-uses-the-speed-gate-and-effect-size.md) 決定 7・#298）は、許容に床 2 ms が効く（基準値の 25% が床より小さい。実機の基準値は `eng/perf-reference.json` が正本で、2026-10-18 の採り直しで 1.574 ms）。実機の指紋 `bc8a356f37c68491` で判定する。CI の指紋は基準値を採るまで記録だけ。
+既定の 8 本のほかに、任意のベンチ（`OPTIONAL_BENCHES`・`--bench` で名指ししたときだけ測る）がある。最初の 2 本は 1 行が 16 MiB の文書の `open-giant-line-16mib` と `key-to-frame-single-giant-line-16mib`（実機の値は 2026-10-18 に記録済み・既定の判定の 8 本には入れない・[ADR 0138](adr/0138-giant-line-bench.md)・#513）がある。
 LSP オンの速さは、オフの 8 本と混ぜない任意のベンチで記録する（施主決定 D60・[ADR 0161](adr/0161-language-server-diagnostics-are-document-values-drawn-as-underlines.md) 決定 7・#995 / #1216）。どれも `--bench` で名指ししたときだけ測り、`--record` だけを受け（`--check` `--adopt` `--values` は拒否）、基準値は L1 の試用の後に hide が採るまで無い（**planned**）。替え玉のサーバーは測る exe と同じ build の `nib_fake_language_server.exe` で、道具の profile `out/speed/profile-lsp` の `settings.v4` に `lsp=on` と `lsp.cpp.command` を書き、構文の色分けと同じ `single-cpp-1000.cpp` を開いて、替え玉が窓の子として起きて窓のスレッドが静かになってから暖機する。
 
 | ベンチ | 替え玉 | 値 |
@@ -203,7 +203,7 @@ LSP オンの速さは、オフの 8 本と混ぜない任意のベンチで記�
 `eng/config-bindings.json` の設定と参照先を照合する。文字列参照だけでは実行を証明しないため、整形・lint・CMake・リンカ検査は実ツールの反例も実行する（`eng/prove-gates.py`）。
 
 - 対応する規則: QLT-007
-- 機械強制: **active**（`eng/conformance.py`。`version_metadata_checks` が固定 manifest と版リテラルを拒否し、正例 1・反例 2 が `tests/conformance` にある。実ツールの反例は `eng/prove-gates.py`。2026-09-15・Issue #3）
+- 機械強制: **active**（`eng/conformance.py`。`version_metadata_checks` が固定 manifest と版リテラルを拒否し、正例 1・反例 2 が `tests/conformance` にある。実ツールの反例は `eng/prove-gates.py`。2026-09-15・Issue #3。2026-11-14・#1677: `app_identity_checks` が、画面に出す版を `AppIdentity.cpp` へ渡す compile definition が `PROJECT_VERSION` から導かれることと、rc の `CompanyName` / `LegalCopyright` が `src/core/AppIdentity.hpp` の著作者と年と同じ文であることを照合する。反例 2 を足した・D90）
 
 ### CNF-008 — TODO と FIXME に Issue 番号
 
@@ -214,7 +214,7 @@ LSP オンの速さは、オフの 8 本と混ぜない任意のベンチで記�
 
 ### CNF-009 — 並行性と SIMD のヘッダの置き場
 
-`src/adapters/win32` 以外の `src/` で並行性ヘッダ（`thread` `mutex` `atomic` `future` `condition_variable` `semaphore` `latch` `barrier` `stop_token` `process.h` `synchapi.h`）を
+`src/adapters/win32` 以外の `src/` で並行性ヘッダ（`thread` `mutex` `atomic` `future` `condition_variable` `semaphore` `latch` `barrier` `stop_token` `process.h` `synchapi.h` ほか。正本は `eng/conformance-rules.json` の `concurrencyHeaders`）を
 include したら CPP-013。`src/core/simd/` 以外の `src/` で SIMD ヘッダ（`immintrin.h` `intrin.h` `xmmintrin.h` 等）を include したら CPP-018。
 リンカに見えない `std::atomic`（TH2）と、コンパイラの target feature 検査（S1）の置き場の側を字句で補う。ヘッダ名だけを見るので、
 Interlocked 系の組み込みや `volatile` は見ない。tests/ は対象外。
@@ -227,7 +227,7 @@ Interlocked 系の組み込みや `volatile` は見ない。tests/ は対象外�
 
 `eng/vim-oracle.py` が生成物 `tests/vim/VimFixtures.hpp` の先頭に書いた 1 行（`fixtures.json` の SHA-256 と fixture の本数）を、
 実際の `tests/vim/fixtures.json` のバイト列の SHA-256 と配列の長さと突き合わせる。記述が無い・SHA が違う・本数が違う、のいずれも CNF-010（[ADR 0012](adr/0012-vim-engine-first-slice-and-oracle-fixtures.md) の決定 7・Issue #44）。
-SHA はファイルのバイト列そのままで、改行は正規化しない（`.gitattributes` の `eol=lf` が正本）。Vim が要らないので CI でも回せる（いまの CI の必須 check は validate-git だけで、この検査はローカルの `check.ps1` が回す・ADR 0021）。
+SHA はファイルのバイト列そのままで、改行は正規化しない（`.gitattributes` の `eol=lf` が正本）。Vim が要らないので CI でも回る（merge 直前の CI の `check` job が木の conformance を回す・#648。ローカルは `check.ps1`）。
 **期待値そのものが本物の Vim の答えかは見ない**（それは Vim のある機械での `--regenerate` と QLT-013 の記録）。
 
 fixture の鍵の記法の表（`<Esc>` `<NL>` `<Space>` など）は `eng/vim-oracle.py` の `KEY_TABLE` の 1 つだけで、C++ の表 `src/core/VimKeyNames.hpp` はその生成物である（core に置き、fixture の再生と設定の `map` の行が同じ表を読む・ADR 0176）（[ADR 0054](adr/0054-fixture-key-notation-has-one-table.md)）。
@@ -318,7 +318,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | 規則 | 状態 | 機械強制の実体 |
 | --- | --- | --- |
 | ARC-001 | planned | レビュー事項（CNF-001 が温床を減らす） |
-| ARC-002 | active | eng/targets.cmake（configure で宣言外の依存と OS ライブラリを拒否）＋ eng/conformance.py --build-dir（File API の実グラフ・include）。実ターゲット 6 つ |
+| ARC-002 | active | eng/targets.cmake（configure で宣言外の依存と OS ライブラリを拒否）＋ eng/conformance.py --build-dir（File API の実グラフ・include）。対象は `eng/architecture.json` の全モジュール |
 | ARC-003 | active | eng/symbols.py --require core application（llvm-nm ＋ eng/symbol-allowlist.json・third_party の定義で解決するのは `eng/architecture.json` の `exports` の名指しの API だけ・#772）＋ 字句検査。CI の `build-and-test` でも active（Release の .lib・ADR 0136 の決定 7） |
 | ARC-004 | planned | |
 | ARC-005 | active | clang-tidy cppcoreguidelines-avoid-non-const-global-variables（可変グローバルのみ・eng/prove-gates.py の反例）。区画の意味はレビュー |
@@ -330,24 +330,24 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | ARC-011 | planned | |
 | ARC-012 | 不能 | QLT-010 の手続き |
 | CPP-001 | planned | |
-| CPP-002 | planned | clang-cl `-Wswitch-enum` / `-Wcovered-switch-default` |
-| CPP-003 | active | `-Wold-style-cast`・clang-tidy cppcoreguidelines-pro-type-const-cast（eng/prove-gates.py の反例）。misc-non-private-member-variables はメソッドを持つ型だけで反例は未登録、メソッドの無い aggregate と `mutable` は通る |
+| CPP-002 | active | clang-cl `-Wswitch-enum` / `-Wcovered-switch-default`（eng/prove-gates.py の反例 2 本・ADR 0187）。`if` / `else` の分類はレビュー |
+| CPP-003 | active | `-Wold-style-cast`・clang-tidy cppcoreguidelines-pro-type-const-cast（eng/prove-gates.py の反例）。misc-non-private-member-variables はメソッドを持つ型だけで反例は未登録、メソッドの無い aggregate と `mutable` は通る（`mutable` の例外は adapters の同期原始だけ・ADR 0187） |
 | CPP-004 | active | `-Wzero-as-null-pointer-constant`・clang-tidy clang-analyzer-core.NullDereference / bugprone-unchecked-optional-access（`value()`）（eng/prove-gates.py の反例）。optional の `*` は落ちない（MSVC STL の穴・字句検査は planned）。`-Wuninitialized` は反例未登録 |
 | CPP-005 | active | `[[nodiscard]]`＋`-Wunused-result`（eng/prove-gates.py の反例）。結果型の選択と `catch` の広さはレビュー |
 | CPP-006 | planned | |
 | CPP-007 | planned | 非公開コンストラクタ。`malloc` は許可シンボル外 |
 | CPP-008 | planned | |
-| CPP-009 | active | clang-tidy cppcoreguidelines-pro-type-reinterpret-cast（eng/prove-gates.py の反例）・`#pragma` は CNF-003。そのほかの言語マジックの字句検査は planned |
+| CPP-009 | active | clang-tidy cppcoreguidelines-pro-type-reinterpret-cast（eng/prove-gates.py の反例）・抑制の `#pragma` は CNF-003（`#pragma once` は禁じない・ADR 0187）。そのほかの言語マジックの字句検査は planned |
 | CPP-010 | active | CNF-001（`tests/conformance` の `test_cnf001_*` 5 件・#571）。「常に禁止」の語だけ。文脈次第の語とマクロで生成した名前はレビュー |
 | CPP-011 | active | CNF-002（`tests/conformance` の `test_cnf002_*` 6 件・#571）。無名名前空間の `struct` は字句検査が名前空間として数えるが専用の反例は無い。テンプレート等の完全な分類は未完了 |
-| CPP-012 | planned | clang-tidy readability-* |
+| CPP-012 | active | clang-tidy readability-function-size / readability-function-cognitive-complexity（eng/prove-gates.py の引数の数の反例・ADR 0187）。行数・入れ子・複雑度の反例は未登録 |
 | CPP-013 | active | eng/symbols.py の concurrency 分類（core / application の実ライブラリ）＋ CNF-009 |
 | CPP-014 | planned | eng/symbols.py（setlocale / locale） |
 | CPP-015 | active | CNF-003 ＋ CNF-004（`tests/conformance` の `test_cnf003_*` 6 件・`test_cnf004_*` 6 件・#571）。waiver の理由と解除条件の妥当性はレビュー |
 | CPP-016 | active | `-Werror=vla-cxx-extension`・clang-tidy clang-analyzer-cplusplus.NewDeleteLeaks / bugprone-use-after-move（eng/prove-gates.py の反例）。ASan / UBSan は Debug に結線済みだが反例は未登録。所有と借用の型はレビュー |
 | CPP-017 | planned | platformLibraries（GDI を結べない） |
-| CPP-018 | planned | clang-cl の target feature 検査 ＋ CNF-009 |
-| CPP-019 | planned | CNF-012（表の引数の数とループ・保持はレビュー事項） |
+| CPP-018 | active | clang-cl の target feature 検査（eng/prove-gates.py の反例）＋ CNF-009（ADR 0187）。fallback の存在はレビュー。いまは SIMD の実装が 0 件 |
+| CPP-019 | active | CNF-012（`tests/conformance` の反例・ADR 0187。表の引数の数とループ・保持はレビュー事項） |
 | GIT-001 | planned | PR テンプレート＋CI（`Closes #N`） |
 | GIT-002 | planned | ruleset＋CI（head ブランチ名） |
 | GIT-003 | active | `.githooks/commit-msg` → eng/validate-commit-message.ps1 → eng/git-conventions.py ＋ CI の eng/validate-git.ps1（全コミットと PR タイトル）・tests/conformance の GitChecks |
@@ -362,10 +362,10 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | QLT-008 | planned | レビュー事項 |
 | QLT-009 | active | LLVM 計装・llvm-cov・eng/coverage.py（分岐 90%・反例） |
 | QLT-010 | 不能 | PR の手続き |
-| QLT-011 | active | eng/toolchain.ps1 ＋ eng/tool-versions.json（eng/prove-gates.py の反例・#571）。照合は cmake・ninja・LLVM・python・PowerShell の下限。msvcToolset は `-vcvars_ver` に渡すだけで実際の版と照合する反例は無い・vim は `tool-versions.json` にあるが照合しない（oracle は版を生成物に書くだけ）・Windows SDK は固定しない・取り込み依存（md4c）はまだ無く tag と SHA-256 の照合は未実装 |
+| QLT-011 | active | eng/toolchain.ps1 ＋ eng/tool-versions.json（eng/prove-gates.py の反例・#571）。照合は cmake・ninja・LLVM・python・PowerShell の下限。msvcToolset は `-vcvars_ver` に渡すだけで実際の版と照合する反例は無い・vim は `tool-versions.json` にあるが照合しない（oracle は版を生成物に書くだけ）・Windows SDK は固定しない・取り込み依存（md4c）は SHA-256 を CNF-013 が照合し、上流の tag との照合は無い |
 | QLT-012 | active | validate-git.ps1 / git-conventions.py の検証記録確認 ＋ merge-pr.py → check.yml の build-and-test（PR の最終 HEAD の Release ビルドと ctest・ADR 0136・run 38816724375 を gate-proofs 1-f に引用）。結果の真偽・再利用条件・GitHub UI の直接 merge はレビュー |
 | QLT-013 | planned | |
-| QLT-014 | active | eng/measure-speed.py / eng/perf-reference.json / eng/check.ps1 / eng/prove-gates.py。施主の実機の指紋で判定（必要な変更で選んで実行・`-Full` の明示実行）。CI の必須 check は validate-git だけでベンチを回さず（ADR 0021）、CI の指紋 `e7a87d5b` の基準値は記録として残る。打鍵 2 本（floor 2 ms に飲まれる）は planned（ADR 0016） |
+| QLT-014 | active | eng/measure-speed.py / eng/perf-reference.json / eng/check.ps1 / eng/prove-gates.py。施主の実機の指紋で判定（必要な変更で選んで実行・`-Full` の明示実行）。merge 直前の CI（`check` / `build-and-test`）はベンチを回さず（ADR 0021 / 0136）、CI の指紋 `e7a87d5b` の基準値は記録として残る。打鍵 2 本（floor 2 ms に飲まれる）は planned（ADR 0016） |
 | CNF-001 | active | eng/conformance.py / tests/conformance |
 | CNF-002 | active | eng/conformance.py / tests/conformance |
 | CNF-003 | active | eng/conformance.py / tests/conformance |
@@ -405,7 +405,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | プレビューの見た目の確かめ | Markdown プレビューの描画（案 B・D62）を設計席が画で見る。合否は判定しない | `nib_preview_capture`（tests/preview・WIC の bitmap に製品と同じ `PreviewPainter` で描いて PNG に落とす・CTest に登録しない・ADR 0151 の決定 18・#784） |
 | probe の正しさ | 窓なしの固定 workload（`nib_perf_probes`）の期待値のずれ | **active**: CTest `nib_probe_expectations`（`nib_perf_probes --expectations`・全 workload の warmup 1 回の結果を表の期待と照合・時間は測らない・Debug で 60 秒に収まらない workload は `tests/performance/ProbeMain.cpp` の表で名指しで外す・CI の ctest も回す・#1604）と `eng/probe-smoke.ps1`（外した分を含む全 workload を warmup 1 + sample 1 で流し非 0 を落とす・`-Full` だけが回す・ADR 0082 の追補・#690） |
 | カバレッジ | 中核の検証密度 | `eng/coverage.py` / `eng/coverage-policy.json`。測定ビルドで LLVM の実分岐を 90% 以上要求 |
-| 速さ | 4 本のベンチ（基準値の鍵 5 つ）の退行 | `eng/measure-speed.py --check`（一致する指紋の基準値で比較。必要な変更で選んで実行・QLT-014） |
+| 速さ | 既定の 8 本のベンチ（`measure-speed.py` の `BENCHES`）の退行 | `eng/measure-speed.py --check`（一致する指紋の基準値で比較。必要な変更で選んで実行・QLT-014） |
 | 依存 | 道具の版と実行時依存 0 | tool-versions.json / architecture.json / `/MT`（R1） |
 
 ---

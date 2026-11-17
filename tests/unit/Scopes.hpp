@@ -96,6 +96,8 @@ void verify_find_replace_scope();
 void verify_substitute_property_scope();
 // ExSubstituteTests.cpp（ADR 0168 の段 1・`:s` の族）
 void verify_ex_substitute_scope();
+void verify_substitute_confirm_scope();
+void verify_ex_lines_scope();
 // MatchParenTests.cpp（ADR 0164・matchparen）
 void verify_matchparen_scope();
 // MinimapTests.cpp（ADR 0171・ミニマップの段 1）
@@ -121,6 +123,8 @@ void verify_vim_change_mark_scope();
 void verify_vim_insert_normal_scope();
 void verify_vim_autoindent_scope();
 void verify_saved_state_property_scope();
+// ReplaySavePointTests.cpp（再生の中の :w の保存時点・ADR 0046 の追補）
+void verify_fold_save_point_scope();
 
 // VimPatternPropertyTests.cpp（#899・検索の pattern の parse と matched の性質の試験）
 void verify_vim_pattern_property_scope();
@@ -288,6 +292,10 @@ void verify_vim_interrupt_discards();
 void verify_vim_open_line_contracts();
 void verify_vim_open_line_scope();
 
+// VimEndOfLineTests.cpp
+void verify_vim_eol_contracts();
+void verify_vim_eol_scope();
+
 // VimOpenLineExternalTests.cpp
 void verify_vim_open_line_external_scope();
 
@@ -397,6 +405,9 @@ void verify_ex_random_scope();
 void verify_input_line_limit_scope();
 void verify_input_line_property_scope();
 
+// CommandLineEditTests.cpp（#1550・#1643・Vim の入力行の c_CTRL-U / c_CTRL-W と `/` の Tab）
+void verify_command_line_edit_scope();
+
 // BellTests.cpp
 void verify_bell_contracts();
 
@@ -410,6 +421,9 @@ void verify_print_contracts();
 
 // ShellRegistrationTests.cpp（ADR 0178・エクスプローラーへの登録）
 void verify_shell_registration_contracts();
+
+// VersionInfoTests.cpp（施主決定 D90・バージョン情報と :version）
+void verify_version_info_contracts();
 
 // WslPlacesTests.cpp（ADR 0162 の追補 #1450・フォルダ選びの箱の WSL の場所）
 void verify_wsl_places_scope();

@@ -8,7 +8,7 @@
 
 ## 決定
 
-CI頻度と文書のみの免除は[ADR 0118](0118-ci-only-at-merge-except-documentation.md)が更新する。以下の差分検証・結果再利用の原則は維持する。
+CI頻度と文書のみの免除は[ADR 0118](0118-ci-only-at-merge-except-documentation.md)が更新する。決定 4 の CI の中身（「必須 `check`」「PR 編集時」「製品テストは重ねて走らせない」）は ADR 0118 と [ADR 0136](0136-ci-builds-product-and-tests-in-release.md) が置き換えた（いまは required status check が無く、CI は merge 直前の `workflow_dispatch` だけで、`build-and-test` が Release のビルドと ctest を回す）。以下の差分検証・結果再利用の原則は維持する。
 
 1. 完了条件は、差分の挙動と直接の依存・呼び出し元で起こり得る退行を検出する最小限の検証と、その記録・レビュー。各テストの必要性を説明できなければ実行しない。既存の CMake target、CTest `-R`、unittest の対象指定、個別の eng コマンドを使う。
 2. 検証済みの実装・テスト・関連依存・必要な環境条件が不変なら、担当・工程・文書・コミット SHA が変わっても成功結果を再利用する。PR に対象、退行の根拠、コマンドと結果、記録の場所、再利用元と不変性の根拠を書く。関連する変更・失敗・具体的な未確認事項だけが再実行の理由になる。

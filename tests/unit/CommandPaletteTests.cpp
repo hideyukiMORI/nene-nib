@@ -1023,6 +1023,34 @@ void verify_palette_hint_place(std::uint32_t dpi)
            "the smallest window shows the trailing groups that fit");
 }
 
+// F1 の一覧の鍵の欄（#1658）。112 DIP 以下の枠は今までと同じ欄、広い枠は欄を広げて名前の欄を
+// 縮め、名前の最小 120 DIP が残らなければ欄ごと出さない（枠を途中で切らない）。
+void verify_palette_key_note(const core::LayoutRect &row, std::uint32_t dpi)
+{
+    const auto plain = core::palette_row_note(row, dpi);
+    const auto plain_label = core::palette_row_label(row, dpi, true);
+    expect(core::palette_row_note(row, dpi, 0) == plain &&
+               core::palette_row_note(row, dpi, to_pixels(112, dpi)) == plain &&
+               core::palette_row_label(row, dpi, plain) == plain_label,
+           "a key cap up to 112 DIP keeps the note and the name as before");
+    const auto wide = to_pixels(140, dpi);
+    const auto note = core::palette_row_note(row, dpi, wide);
+    const auto label = core::palette_row_label(row, dpi, note);
+    expect(note.right == plain.right && width_of(note) == wide && label.left == plain_label.left &&
+               note.left - label.right == to_pixels(12, dpi),
+           "a wider key cap widens the note to its width and narrows the name");
+    const auto inset = to_pixels(8, dpi) * 2;
+    const auto height = row.bottom - row.top;
+    const core::LayoutRect least{0, 0, wide + to_pixels(132, dpi) + inset * 2, height};
+    expect(width_of(core::palette_row_note(least, dpi, wide)) == wide,
+           "the wide note stays while the name keeps its minimum");
+    const core::LayoutRect narrow{0, 0, wide + to_pixels(132, dpi) + inset * 2 - 1, height};
+    expect(width_of(core::palette_row_note(narrow, dpi, wide)) == 0 &&
+               core::palette_row_label(narrow, dpi, core::palette_row_note(narrow, dpi, wide)) ==
+                   core::LayoutRect{inset, 0, narrow.right - inset, height},
+           "a row too narrow for the whole key cap drops it instead of cutting it");
+}
+
 // 行の右端の補足と検索欄の案内の欄（ADR 0060 の決定 9）。描画と同じ core の配置を読む。
 void verify_palette_notes_geometry()
 {
@@ -1052,6 +1080,7 @@ void verify_palette_notes_geometry()
         expect(width_of(core::palette_row_note(narrow, dpi)) == 0 &&
                    core::palette_row_label(narrow, dpi, true) == narrow_inside,
                "a narrow row drops the note and keeps the name as before");
+        verify_palette_key_note(row, dpi);
     }
 }
 
@@ -1835,7 +1864,7 @@ void verify_operation_list_opens()
     auto frame = controller.apply_frame(app::OpenOperationList{});
     expect(frame.command_line.value_or(core::InputLineView{}).text == "?" &&
                frame.command_palette.value_or(app::CommandPaletteView{}).selected == 0 &&
-               frame.command_palette.value_or(app::CommandPaletteView{}).total == 38 &&
+               frame.command_palette.value_or(app::CommandPaletteView{}).total == 39 &&
                operation_row(frame, 0) == core::EditorOperation::open_file,
            "the operation list opens behind the question mark on the first row");
     expect(!frame.command_message.has_value(), "the operation list clears the one-line message");
@@ -1860,7 +1889,7 @@ void verify_operation_list_opens()
     frame = controller.apply_frame(app::OpenOperationList{});
     const auto vim_list = frame.command_palette.value_or(app::CommandPaletteView{});
     const auto &vim_rows = vim_list.rows;
-    expect(frame.command_line.value_or(core::InputLineView{}).text == "?" && vim_list.total == 36 &&
+    expect(frame.command_line.value_or(core::InputLineView{}).text == "?" && vim_list.total == 37 &&
                std::ranges::none_of(vim_rows, [](const core::CommandChoice &row)
                                     { return row.operation == core::EditorOperation::undo; }),
            "the Ex line gives way to the vim operation list without undo");

@@ -13,13 +13,17 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > clickable task-list checkboxes; a side file explorer; two split panes; opt-in language-server diagnostics; and
 > the Vim NORMAL / INSERT / VISUAL core (motions, operators, text objects, search, marks, the jump list, `.`
 > repeat, macros, registers, blockwise VISUAL and `map`). Tabs in the title bar come back on the next start,
-> Ctrl+P lists open tabs, bookmarks, recently closed files and files in the current folder, and F1 lists every
-> operation. It starts in about 45 ms on the owner's machine, autosaves every 30 seconds and offers a grid display
+> Ctrl+P lists open tabs, bookmarks, recently closed files and files in the current folder, and F1 lists the
+> editor's commands (files, tabs, view, encodings, find, print and more; Vim keys and copy / paste are not in that
+> list). Its first frame appears about 40 ms after launch on the owner's machine (median 41.9 ms,
+> [speed adoption record](docs/quality/speed-adoption-2026-10-18.md)), it autosaves every 30 seconds and offers a grid display
 > for giant lines. New in beta.13: the screen text in Japanese, English or Simplified Chinese
 > (`:set language=`), an app icon, Vim `:s` with the multis, `\|` and groups in patterns, `gn` `gN` and
 > INSERT `Ctrl-o`, and a last resort that backs up unsaved edits before an uncaught exception ends the process.
-> Since beta.13, main carries version 1.0.0, the version planned for the first Microsoft Store submission (D88).
-> Neither the Store submission nor a v1.0.0 GitHub release has been made yet; beta.13 stays the published build.
+> Since beta.13, main carries version 1.0.0, the version planned for the first Microsoft Store submission (D88),
+> and one display fix (#1658: F1 key labels are no longer cut off, and in narrow windows the status bar drops the
+> line and column instead of overlapping the mode text). Version 1.0.0 is being prepared from this commit ([release record](docs/quality/release-1.0.0-2026-11-14.md));
+> neither the Store submission nor a v1.0.0 GitHub release has been made yet, and beta.13 stays the published build.
 
 <p>
   <img src="docs/images/nib-palette.png" width="49%" alt="NeNe Nib lists open tabs, bookmarks, recently closed files and folder files in Ctrl+P.">
@@ -89,18 +93,25 @@ records in `docs/quality/`.
     `:set ignorecase` / `smartcase`, and Up / Down history on the `:` and search lines; matchparen highlights
     the partner bracket (on by default); patterns (shared by search and `:s`) take a `magic` subset with `*`
     and the multis on one atom `\+ \= \? \{n} \{n,} \{,m} \{n,m}` and the shortest `\{-n,m}`
-    ([ADR 0184](docs/adr/0184-vim-pattern-syntax-grows-in-stages.md) stage 1); `\|`, a multi on a group,
-    `\zs` `\ze`, `\v` and patterns across lines come in the next stages;
+    ([ADR 0184](docs/adr/0184-vim-pattern-syntax-grows-in-stages.md) stage 1) and *since beta.13* `\zs` `\ze`
+    (stage 3); `\|`, a multi on a group, `\v` and patterns across lines come in the next stages;
   - substitute `:[range]s/pat/rep/[g i I n e &] [count]` (ranges `%` `N,M` `.` `$` `'<,'>` `'a,'b` `.,.+N`,
     any non-letter delimiter, `&` `\0`-`\9` with `\( \)` groups, `~` `\r` `\u` `\U` `\l` `\L` `\e`),
     `:&` `:&&` `:~` and NORMAL `&` `g&`, one undo step each
-    ([ADR 0168](docs/adr/0168-ex-substitute-family-is-one-edit-with-visible-preview.md)); the `c` flag,
-    the typing preview and `:g` `:v` `:sort` are planned;
+    ([ADR 0168](docs/adr/0168-ex-substitute-family-is-one-edit-with-visible-preview.md)); *since beta.13* the
+    `c` flag asks `y n a q l` per match, and `:[range]d` `:[range]y`, `:g/pat/d` `:v/pat/d` and
+    `:g/pat/s//rep/` work (a `c` flag inside `:g` is refused with a notice for now); the typing preview, the
+    other `:g` commands and `:sort` are planned;
   - marks `m{a-z}` with `'{a-z}` `` `{a-z} ``, `''`, `'.` and `'^` `` `^ `` (where INSERT was last left)
     ([ADR 0152](docs/adr/0152-vim-marks-are-document-values-adjusted-by-edits.md)), the jump list `Ctrl-o`
     `Ctrl-i` and the change list `g;` `g,` (in Vim mode Ctrl+O is the jump list, so opening a file is Ctrl+Shift+O);
   - `:set relativenumber`, `:set scrolloff=`, virtual columns (Tab = 8, wide = 2), literal CR in LF files,
     Esc everywhere;
+  - a file that ends with a line break has as many lines as in Vim (`eol`): `G` `dd` `:$` `:%d` `:g/^$/d`
+    `/^$` do not see an empty line after the final break, and the Vim mode does not draw one (the Basic mode
+    still does); the saved bytes stay the same, lines added in Vim mode after deleting every line end in a
+    break as in Vim, and text typed into an empty file is saved without one, as Nib has no `fixeol`
+    ([ADR 0188](docs/adr/0188-vim-mode-sees-the-body-without-the-final-line-break.md));
   - `:set` takes Vim's short names (`hls is ic scs rnu so ws cb et sw ts`), several arguments in one line
     (`:set ic scs`; a wrong one stops the line and keeps the ones before it), `name?` `noname?` `name&`
     `name<` `name:val` `+=` `-=` `^=`, and `:se` `:setl` `:setg`; `:set nowrapscan` stops searches at the end
@@ -114,10 +125,11 @@ records in `docs/quality/`.
   `:saveas! name` is used. Japanese names, spaces and relative paths (from the process working folder) work;
   filename expansion is planned. Failed writes keep the old name and tab open (D39). See
   [ADR 0067](docs/adr/0067-ex-filenames-share-atomic-save-policy.md).
-  Not yet: uppercase marks `'A`-`'Z` and `:marks`, `:g` `:v` `:sort` (FR-027), read-only registers
-  `". ": "/ "%`, NORMAL `s S R` and VISUAL `S`, autoindent, dragging into VISUAL with the mouse in Vim mode, easymotion (FR-023),
+  Not yet: uppercase marks `'A`-`'Z` and `:marks`, `:sort` and the other `:g` `:v` commands (FR-027), read-only registers
+  `". ": "/ "%`, NORMAL `R` and VISUAL `S` (reserved for surround; Vim changes the lines), autoindent, dragging into VISUAL with the mouse in Vim mode, easymotion (FR-023),
   commentary, surround and INSERT completion (FR-024).
-- **FR-004 one toggle** — the status bar switches "通常 | Vim", and so does `Ctrl+Shift+Space` in either mode (D61). Done.
+- **FR-004 one toggle** — the status bar switches "通常 | Vim" ("Basic | Vim" in English and "标准 | Vim" in
+  Simplified Chinese, decision D89), and so does `Ctrl+Shift+Space` in either mode (D61). Done.
 - **FR-005 tabs in the title bar** — several tabs in the band: click to switch, × and middle click to close, `+` to
   add, a list behind `∨` when they overflow. Ctrl+T, Ctrl+Tab (most recently used order), Ctrl+F4; Vim `gt` `gT`
   and `:tabnext` `:tabprevious` `:tabnew` `:tabclose` `:tabs`. Done; reordering by drag is planned.
@@ -145,7 +157,7 @@ records in `docs/quality/`.
   [ADR 0155](docs/adr/0155-markdown-preview-sits-in-the-other-pane-with-ticketed-port-and-tick.md)).
   Local images (PNG, JPEG, the first frame of a GIF, BMP; D79) are drawn in the text flow,
   shrunk to the pane width but never enlarged; web images and images that cannot be read stay as
-  `[画像: alt]`. A retained paragraph is laid out once and redrawn without changing its formatting, so scrolling
+  `[画像: alt]` (`[Image: alt]` in English, `[图片：alt]` in Simplified Chinese). A retained paragraph is laid out once and redrawn without changing its formatting, so scrolling
   with the preview open does not stall; the first display of a very long paragraph still takes a moment.
 - **FR-008 encodings and line endings** — UTF-8, UTF-8 BOM, Shift_JIS and UTF-16 LE / BE with BOM
   ([ADR 0149](docs/adr/0149-utf16-with-bom-is-read-and-written-back.md)); UTF-32 is refused. CRLF / LF are kept as
@@ -207,7 +219,9 @@ records in `docs/quality/`.
   descriptions and shortcuts; type to filter, then press Enter to run one. Operations without a key in a mode,
   such as find and replace in Vim mode or printing, run from here. An untouched untitled document
   shows three shortcut hints. Otherwise, the status bar shows compact hints when space permits.
-  `:set noguide` hides both; `:set guide` restores them. Done.
+  `:set noguide` hides both; `:set guide` restores them. Done. *In review*: the operation "About NeNe Nib"
+  and Vim's `:version` show the version, copyright and GitHub address in one status line, and the start screen
+  shows the version beside its title and the copyright and address under the shortcuts (text only, never a link).
 - **FR-019 wrapping** — on by default. `:set wrap` / `:set nowrap` (also in Ctrl+P settings) changes the display
   without inserting newlines. Ordinary Up/Down, Home/End and pages follow screen rows; Vim `j/k` and `0/$` keep
   logical-line meaning, `gj gk g0 g$` follow screen rows, and H/M/L and page motions use the wrapped viewport.
@@ -232,8 +246,9 @@ records in `docs/quality/`.
   `\\wsl.localhost\<distro>` places.
 - **FR-023 – FR-027 editing features** — matchparen (FR-024) is done and on by default. Planned: easymotion
   (FR-023), commentary, surround, autopairs and INSERT completion (FR-024), changed-line markers, indent guides
-  and a yank flash (FR-025), project-wide search (FR-026) and the rest of the `:s` family (FR-027: the `c`
-  flag, the typing preview and `:g` `:v` `:sort`; `:s` itself is under FR-003).
+  and a yank flash (FR-025), project-wide search (FR-026) and the rest of the `:s` family (FR-027: the typing
+  preview, the other `:g` `:v` commands and `:sort`; `:s` itself is under FR-003, and the `c` flag, `:d` `:y`
+  and `:g` `:v` with `d` and `s` are on main *since beta.13*).
 - **FR-029 display language** — the screen text is shown in Japanese, English or Simplified Chinese
   (Korean, Spanish and German follow in 1.1.0 and show English until then). The default follows the Windows
   display language; `:set language=ja`, `en`, `zh-hans` or `system` (also from Ctrl+P `:`, or the F1
@@ -271,7 +286,10 @@ records in `docs/quality/`.
 - **FR-033 Windows right-click registration** — the F1 operation "Add to Windows Right-Click Menu"
   (「Windows の右クリックに登録する」) adds NeNe Nib to the File Explorer right-click menu and "Open with" under
   `HKCU` without administrator rights; "Remove from Windows Right-Click Menu" (「登録を外す」) removes it. The
-  names are written in the display language of the moment you register. Nothing is written at startup. The Windows 11 top-level menu waits for a signed, packaged release
+  names are written in the display language of the moment you register. Nothing is written at startup. This is
+  how the ZIP version works; in the Microsoft Store (MSIX) version, Windows is expected to keep the write in the
+  package's own registry, so the entry would probably not appear in File Explorer — not yet checked on a real
+  machine (`docs/store/submission.md`, step 5). The Windows 11 top-level menu waits for a signed, packaged release
   ([ADR 0178](docs/adr/0178-shell-registration-is-one-port-written-only-by-an-explicit-operation-under-hkcu.md)).
 - **FR-034 Markdown task lists** — the preview draws `- [ ]` / `- [x]` checkboxes; clicking one writes the change
   into the text as one undo step, in the side pane and in the full view.

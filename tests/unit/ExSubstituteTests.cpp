@@ -1,6 +1,6 @@
 // scope `--ex-substitute`（ADR 0168 の段 1・Issue #1007）。`:s` の族の字面（evaluate_ex と
 // substitute_command）・範囲の字面（parsed_ex_range）・照合器の群（VimPattern::captured）・置き換えの
-// 本文（SubstituteReplacement）と、oracle の fixture にできない形（報せの文言・`c` の拒否・NUL と
+// 本文（SubstituteReplacement）と、oracle の fixture にできない形（報せの文言・NUL と
 // BS の置き換え・CRLF の文書・`.` に積まないこと・undo 1 単位）を controller の道で確かめる。
 // 本文とキャレットの答えの正本は fixture（`substitute-`・Vim 9.1 の実測）。
 #include "DisplayText.hpp"
@@ -27,6 +27,7 @@
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
 #include "VimEditorView.hpp"
+#include "VimMode.hpp"
 #include "VimNoEffect.hpp"
 #include "VimPattern.hpp"
 #include "VimPatternCaptures.hpp"
@@ -38,6 +39,7 @@
 #include "VimSearchDirection.hpp"
 #include "VimSearchNotice.hpp"
 #include "VimSearchNoticeKind.hpp"
+#include "VimState.hpp"
 #include "VimStep.hpp"
 #include "VimTestSupport.hpp"
 
@@ -126,13 +128,12 @@ void verify_substitute_command_text()
                request_of("s/a/b/ 0").value_or(unread()).count == std::optional<std::size_t>{0},
            "2147483646 and 0 are read; the engine decides 0 by the e flag");
     expect(fails_with("s/a/b/q", ExFailure::trailing_characters), "trailing text is E488");
-    for (const std::string_view text :
-         {"s/a/b/c", "s/a/b/gc", "&&c", "s/a/b/p", "s/a/b/#", "s/a/b/l", "s/a/\\=1/", "s\\/b/",
-          "s\xC3\xA9"
-          "a\xC3\xA9"})
+    for (const std::string_view text : {"s/a/b/p", "s/a/b/#", "s/a/b/l", "s/a/\\=1/", "s\\/b/",
+                                        "s\xC3\xA9"
+                                        "a\xC3\xA9"})
     {
         expect(fails_with(text, ExFailure::unsupported_argument),
-               "forms stage 1 does not take are closed failures (c is stage 2)");
+               "forms not taken yet are closed failures (p # l and the expression)");
     }
     expect(request_of("s/a/b/ \"note").has_value(), "a comment after the flags is allowed");
     expect(core::ex_failure_message(ExFailure::letter_delimiter).text() ==
@@ -142,6 +143,13 @@ void verify_substitute_command_text()
                core::ex_failure_message(ExFailure::trailing_characters).text() ==
                    "E488: Trailing characters",
            "the parse failures keep Vim's numbers and words");
+}
+
+void verify_confirm_flag_text()
+{
+    expect(request_of("s/a/b/gc").value_or(unread()).flags == "gc" &&
+               request_of("&&c").value_or(unread()).flags == "c",
+           "the c flag is read since stage 2a (ADR 0168 decision 6)");
 }
 
 void verify_substitute_ranges()
@@ -278,7 +286,7 @@ void verify_pattern_groups()
                                    std::size_t begin, std::size_t end)
 {
     core::VimPatternCaptures captures{};
-    captures.at(0) = core::VimPatternMatch{begin, end};
+    captures.at(0) = core::VimPatternMatch{begin, end, begin, end};
     std::string out;
     core::SubstituteReplacement::vim(replacement).appended(out, line, captures);
     expect(core::SubstituteReplacement::vim(replacement).expanded_bytes(line, captures) ==
@@ -343,8 +351,6 @@ void verify_substitute_notices()
                    "E493: Backwards range given" &&
                message_of(substituted(controller, ":'zs/a/X/<CR>")) == "E20: Mark not set",
            "range failures keep Vim's words");
-    expect(message_of(substituted(controller, ":s/a/X/c<CR>")) == "Not supported: s/a/X/c",
-           "the confirm flag is refused in stage 1, nothing is replaced silently");
     expect(message_of(substituted(controller, ":s/\\(a/X/<CR>")) == "E54: Unmatched \\(",
            "a broken group is a closed failure with Vim's words");
 
@@ -505,6 +511,72 @@ void verify_limit_counts_document_newlines()
         "x CRLF y CRLF b is 7 bytes: 7 fits and 6 is too large (LF counting would let 6 through)");
 }
 
+// オペレータ待ちの `:s` の鍵の列の後の本文が body で、オペレータは捨てられ、NORMAL のまま、
+// 無名レジスタは書かれていない。
+[[nodiscard]] bool operator_dropped(std::string text, std::string_view keys, std::string_view body)
+{
+    Editing editing;
+    open_vim_document(editing, std::move(text));
+    auto &controller = editing.controller();
+    vim_normal(controller, keys);
+    const bool kept = whole_vim_body(controller) == body;
+    const core::VimState vim = controller.vim_state();
+    return kept && !vim.pending.has_value() && vim.mode == core::VimMode::normal &&
+           vim.unnamed_register.value().kind == core::VimRegisterKind::uninitialized;
+}
+
+// 起点（行と行頭からのバイト数・Vim の oap->start）が置換の後で字の途中に落ちたら、Nib は字を
+// 割らずに d c y のオペレータを捨てる（Vim は字を割って不正な UTF-8 を残すので fixture にできない・
+// #1683 の D1・設計席の決め）。置換は本文に残り、同じ鍵の列の続きは流れない。
+void verify_operator_substitute_mid_character()
+{
+    expect(operator_dropped("aab", "$d:s/a/あ/<CR>", "あab"),
+           "d with the origin inside the new character keeps the substitution, drops the operator");
+    expect(operator_dropped("aab", "$y:s/a/あ/<CR>P", "あab"),
+           "y with the origin inside the new character yanks nothing and the P after it stops");
+    expect(operator_dropped("aab", "$c:s/a/あ/<CR>Z<Esc>", "あab"),
+           "c with the origin inside the new character does not start INSERT");
+    expect(operator_dropped("aaaaaaab", "$d:s/a/あ/g<CR>", "あああああああb"),
+           "a g substitution that leaves the origin inside a character drops the operator");
+    expect(operator_dropped("あいうえ", "$d:s/あ/a/<CR>", "aいうえ"),
+           "a shrinking substitution that leaves the origin inside a character drops it too");
+    Editing next;
+    open_vim_document(next, "aab");
+    vim_normal(next.controller(), "$d:s/a/あ/<CR>");
+    vim_normal(next.controller(), "x");
+    expect(
+        whole_vim_body(next.controller()) == "ab",
+        "the next key after the drop is a NORMAL command (x removes the character at the caret)");
+}
+
+// オペレータ待ちの `:s` の鍵の列の後の本文が body で、オペレータは閉じて待ちが無く NORMAL。
+[[nodiscard]] bool operator_closed(std::string text, std::string_view keys, std::string_view body)
+{
+    Editing editing;
+    open_vim_document(editing, std::move(text));
+    auto &controller = editing.controller();
+    vim_normal(controller, keys);
+    const core::VimState vim = controller.vim_state();
+    return whole_vim_body(controller) == body && !vim.pending.has_value() &&
+           vim.mode == core::VimMode::normal;
+}
+
+// 字を割らないオペレータ（> < g~ gu gU）は、字の途中の起点を捨てずに次の code point の境目へ
+// 切り上げて閉じる（#1683・Vim 9.1 の実測と同じ本文・fixture substitute-op-origin-mid-）。
+void verify_operator_substitute_mid_character_kept()
+{
+    expect(operator_closed("\t\taa\nb", "$<:s/a/あ/<CR>", "\tあa\nb"),
+           "< with the origin inside the new character still shifts the line");
+    expect(operator_closed("\t\taa\nb", "$<:s/a/あ/<CR>x", "\ta\nb"),
+           "the key after a kept < runs as a NORMAL command");
+    expect(operator_closed("aaéx", "$gU:s/a/ab/<CR>", "ABAÉx"),
+           "gU with the origin inside a character ends at the next boundary (includes it)");
+    // 本文だけを確かめる（fixture にしない）。キャレットは Vim と違う: Vim は跨いだ字の頭（1 行目の
+    // 行頭からバイト 3）・Nib は切り上げた起点（バイト 5）。既知の限界（ADR 0168 の追補 17）。
+    expect(operator_closed("aaééx\nc a", "$hgU:%s/a/ab/<CR>", "abaéÉX\nc ab"),
+           "gU with the origin inside a character starts at the next boundary (leaves it out)");
+}
+
 } // namespace
 
 void verify_ex_substitute_scope()
@@ -512,10 +584,13 @@ void verify_ex_substitute_scope()
     verify_capture_limits();
     verify_limit_counts_document_newlines();
     verify_substitute_command_text();
+    verify_confirm_flag_text();
     verify_substitute_ranges();
     verify_pattern_groups();
     verify_replacement_text();
     verify_substitute_notices();
     verify_substitute_repeat_and_bytes();
+    verify_operator_substitute_mid_character();
+    verify_operator_substitute_mid_character_kept();
 }
 } // namespace nenenib::tests

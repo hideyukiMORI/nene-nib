@@ -45,7 +45,7 @@
 #include "VimWantedColumn.hpp"
 #include "VirtualColumn.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <algorithm>
 #include <array>
@@ -229,12 +229,13 @@ void verify_vim_word_object_last_empty_line_crlf()
 {
     Editing editing;
     EditorController &controller = editing.controller();
-    editing.files().hold(Bytes{std::string{"c a.b\r\n"}});
+    // 改行で終わる本文は最後の改行を除いて見る（ADR 0188）ので、最後の空行は改行を 2 つ置いて作る。
+    editing.files().hold(Bytes{std::string{"c a.b\r\n\r\n"}});
     applied(controller, OpenDocument{sample_path()});
     applied(controller, SelectEditMode{EditMode::vim});
     vim_replay(controller, "GciwX<Esc>");
     applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
-    expect(editing.files().written() == "c a.X",
+    expect(editing.files().written() == "c a.X\r\n",
            "ciw on the last empty line of a CRLF text takes the word before it and the CRLF");
     expect(controller.vim_state().unnamed_register.value().text == "b\n",
            "the register holds the word and an LF as for an LF text");
@@ -600,7 +601,7 @@ void verify_vim_text_object_fixtures()
         "replace-char-one",    "replace-char-count", "char-search-f-count",
         "char-search-t-first", "line-jump-gg-count", "dot-remove-word"};
     std::size_t selected = 0;
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         if (fixture.name.starts_with("text-object-") ||
             std::ranges::find(boundaries, fixture.name) != boundaries.end())

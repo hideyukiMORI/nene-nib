@@ -1,6 +1,8 @@
 # ビルド出力（CMake / clang-cl）。アンカーして誤爆を防ぐ
 /build/
 /build-release/
+# 席が作る別のビルドの置き場（build-rel/ など・#1769: format-check が未追跡の生成物を見ていた）
+/build-*/
 /out/
 /.vs/
 *.user

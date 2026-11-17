@@ -41,6 +41,32 @@ enum class VimSearchNoticeKind : std::uint8_t
     positive_count,
     // E363: pattern uses more memory than 'maxmempattern'（群の範囲を引く道の升の数の上限を超える
     // 当たり・ADR 0168 の追補 13。本文は変えない）
-    pattern_too_complex
+    pattern_too_complex,
+    // `:s///c` の問いを再生（`.`・`@`）の中では開かない（Vim には無い報せ・ADR 0168 の決定 6 の
+    // 段 2a の限界）。Vim は後ろの鍵を答えとして読むが、Nib は再生を打ち切る。
+    confirm_in_replay,
+    // オペレータ待ちの `:s///c`（`d:s/a/X/gc`）は問いを開かない（Vim には無い報せ・ADR 0168 の
+    // 段 2a の追補 13）。Vim は問いが終わってからオペレータを閉じるが、Nib は断る。
+    confirm_with_operator,
+    // `:g` の中の `:s///c`（`:g/a/s//X/c`・`c` を引き継ぐ `:g/a/&&`）は問いを開かない（Vim には無い
+    // 報せ・ADR 0168 の段 3a の追補）。Vim は当たりごとに問うが、Nib は断る（問う形は #1744）。
+    confirm_in_global,
+    // `:d` `:g/pat/d` が消した行の数（ADR 0168 の段 3a・Vim の msgmore）。N fewer lines（'report'
+    // の 既定 2 を超えたときだけ）。数は count。
+    fewer_lines,
+    // `:y` が写した行の数（Vim の op_yank）。N lines yanked と、名指しなら into "x（'report' の既定
+    // 2 を 超えたときだけ）。数は count、名前は pattern（無名なら空）。
+    lines_yanked,
+    // 本文の行を全部消した（Vim の no_lines_msg）。--No lines in buffer--
+    no_lines_in_buffer,
+    // `:g` が当たる行を見つけなかった（Vim の ex_global の smsg・エラーではない）。
+    // Pattern not found: <pattern>
+    global_not_found,
+    // `:v` `:g!` の全部の行が当たった（同じくエラーではない）。Pattern found in every line:
+    // <pattern>
+    global_every_line,
+    // `:g` の中で Nib がまだ流せない形（行ごとに広がる `~` の置き換え・ADR 0168 の段 3a）。
+    // Not supported（ExFailure::unsupported_argument と同じ言葉）
+    not_supported
 };
 } // namespace nenenib::core

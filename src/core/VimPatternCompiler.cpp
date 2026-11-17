@@ -3,10 +3,31 @@
 #include "VimPatternMarkKind.hpp"
 #include "VimPatternRepeat.hpp"
 
+#include <optional>
 #include <utility>
 
 namespace nenenib::core
 {
+namespace
+{
+// `\zs` `\ze` の印の命令（ADR 0184 の決定 5）。群の端と選択の印は値なし。
+[[nodiscard]] std::optional<VimPatternOpcode> bound_opcode(VimPatternMarkKind kind) noexcept
+{
+    switch (kind)
+    {
+    case VimPatternMarkKind::match_begin:
+        return VimPatternOpcode::match_begin;
+    case VimPatternMarkKind::match_end:
+        return VimPatternOpcode::match_end;
+    case VimPatternMarkKind::open:
+    case VimPatternMarkKind::close:
+    case VimPatternMarkKind::branch:
+        return std::nullopt;
+    }
+    std::unreachable();
+}
+} // namespace
+
 VimPatternCompiler::VimPatternCompiler(std::span<const VimPatternAtom> atoms,
                                        std::span<const VimPatternMark> marks,
                                        VimPatternLimits limits)
@@ -71,6 +92,20 @@ const VimPatternMark &VimPatternCompiler::mark_of(std::size_t token) const
     return marks_[token - atoms_.size()];
 }
 
+bool VimPatternCompiler::is_branch(std::size_t token) const
+{
+    return is_mark(token) && mark_of(token).kind == VimPatternMarkKind::branch;
+}
+
+// 選択の枝を探す歩きで、並びの位置 token の次に見る位置の 1 つ手前。群の開きは対の閉じまで飛ばし、
+// 原子と `\zs` `\ze` は枝の中の項目なのでそのまま（sequence が組む）。
+std::size_t VimPatternCompiler::passed(std::size_t token) const
+{
+    const std::size_t value = tokens_.at(token);
+    return is_mark(value) && mark_of(value).kind == VimPatternMarkKind::open ? partners_.at(token)
+                                                                             : token;
+}
+
 std::size_t VimPatternCompiler::emitted(VimPatternInstruction instruction)
 {
     overflowed_ = overflowed_ || program_.size() >= limits_.instructions;
@@ -100,14 +135,9 @@ void VimPatternCompiler::alternation(std::size_t begin, std::size_t end)
     std::size_t piece = begin;
     for (std::size_t token = begin; token < end && !overflowed_; ++token)
     {
-        const std::size_t value = tokens_.at(token);
-        if (!is_mark(value))
+        if (!is_branch(tokens_.at(token)))
         {
-            continue;
-        }
-        if (mark_of(value).kind == VimPatternMarkKind::open)
-        {
-            token = partners_.at(token);
+            token = passed(token);
             continue;
         }
         // 選択: 先の枝を先の道にした split と、枝の終わりから選択の後ろへの跳び。
@@ -135,6 +165,12 @@ void VimPatternCompiler::sequence(std::size_t begin, std::size_t end)
         if (!is_mark(value))
         {
             atom_emitted(atoms_[value], value);
+            continue;
+        }
+        const auto bound = bound_opcode(mark_of(value).kind);
+        if (bound.has_value())
+        {
+            emitted(VimPatternInstruction{bound.value(), 0, 0});
             continue;
         }
         // 選択の印はここに来ない（alternation が枝に分けた）。閉じは開きが飛ばす。

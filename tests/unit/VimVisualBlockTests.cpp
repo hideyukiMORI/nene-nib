@@ -44,7 +44,7 @@
 #include "VirtualColumnIndex.hpp"
 #include "VisibleLines.hpp"
 
-#include "../vim/VimFixtures.hpp"
+#include "VimFixtureTable.hpp"
 
 #include <algorithm>
 #include <array>
@@ -305,6 +305,37 @@ void verify_vim_block_insert_interrupted()
     vim_replay(controller, "<Esc>");
     expect(vim_body(controller.frame()) == "aabdef\ngjkl\nmpqr",
            "Esc after the interruption copies nothing to the other lines");
+}
+
+// 矩形の INSERT の中でキャレットを動かしてから打つ形のうち、Vim 9.1 がほかの行へ字の途中のバイトを
+// 写して不正な UTF-8 を作る形（ADR 0035 の追補 #1687 の決定 1）。Nib は 1 行目だけに打った本文を
+// 残し、本文はいつも妥当な UTF-8。oracle は不正な UTF-8 を読めないので fixture に採れずここで測る。
+void verify_vim_block_insert_moved_keeps_utf8()
+{
+    // 本文・鍵・Nib の本文・言うこと。
+    using Case = std::array<std::string_view, 4>;
+    const std::array cases{
+        // Vim は 2・3 行目に字の途中のバイト（\xe3）を写す（実測）。
+        Case{"あいう\nかきく\nさしす", "<C-v>jjA<Right>Z<Esc>", "あいZう\nかきく\nさしす",
+             "A then Right over a wide character copies nothing"},
+        // Vim は 2・3 行目に \x82 を写す（実測）。
+        Case{"あいう\nかきく\nさしす", "l<C-v>jjlc<Left>Z<Esc>", "Zあ\nか\nさ",
+             "blockwise c then Left over a wide character copies nothing"},
+        // Vim は 2・3 行目に \x82\xe3 を写す（実測）。
+        Case{"abあいう\naあいう\nabcdef", "l<C-v>jjlA<Right>Z<Esc>", "abあいZう\naあいう\nabcdef",
+             "A with the right edge inside a wide character then Right copies nothing"},
+    };
+    for (const auto &[text, keys, wanted, what] : cases)
+    {
+        Editing editing;
+        EditorController &controller = vim_block_editor(editing, text);
+        vim_replay(controller, keys);
+        const std::string body = vim_body(controller.frame());
+        const std::string said(what);
+        expect(body == wanted, said.c_str());
+        expect(nenenib::core::validate_utf8(body).has_value(),
+               (said + ": the body stays valid UTF-8").c_str());
+    }
 }
 
 // core の純関数を直に測る。行ごとの範囲・左の桁・幅が 1 本で決まること（決定 2）。
@@ -814,7 +845,7 @@ void verify_vim_block_indexed_across_chunks()
 void verify_vim_block_fixtures()
 {
     std::size_t selected = 0;
-    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    for (const VimFixture &fixture : nenenib::tests::vim_fixture_table())
     {
         if (fixture.name.starts_with("block-"))
         {
@@ -822,7 +853,7 @@ void verify_vim_block_fixtures()
             ++selected;
         }
     }
-    expect(selected == 562, "the scope replays its 562 blockwise oracle fixtures");
+    expect(selected == 620, "the scope replays its 620 blockwise oracle fixtures");
 }
 } // namespace
 
@@ -837,6 +868,7 @@ void verify_vim_block_contracts()
     verify_vim_block_put_huge_count();
     verify_vim_block_insert_document_newlines();
     verify_vim_block_insert_interrupted();
+    verify_vim_block_insert_moved_keeps_utf8();
     verify_vim_block_range();
     verify_vim_block_reselect();
     verify_vim_block_indexed_small();

@@ -5,6 +5,7 @@
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
 #include "VimDisplayNavigation.hpp"
+#include "VimEmptyText.hpp"
 #include "VimKeySource.hpp"
 #include "VimLayoutView.hpp"
 #include "VimMarks.hpp"
@@ -16,6 +17,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <utility>
 
 namespace nenenib::core
 {
@@ -59,5 +61,25 @@ struct VimEditorView
     // 13）。製品は既定のまま、試験だけが小さな
     // 値を置いて「群を引けない当たりは置換全体を断る」を確かめる。
     std::size_t capture_limit = vim_capture_cell_limit;
+    // 空の本文の読み方（ADR 0188 の決定 3 (c)）。controller が eol の文書 `\n` の除いた本文を渡す
+    // ときだけ one_line にする。本文が空でなければ読まない。
+    VimEmptyText empty_text = VimEmptyText::no_lines;
 };
+
+// 本文に行が 1 つも無いか（Vim の ML_EMPTY・ADR 0188 の決定 3 (c)）。
+[[nodiscard]] inline bool vim_has_no_lines(const VimEditorView &view) noexcept
+{
+    if (view.text.size_bytes() > 0)
+    {
+        return false;
+    }
+    switch (view.empty_text)
+    {
+    case VimEmptyText::no_lines:
+        return true;
+    case VimEmptyText::one_line:
+        return false;
+    }
+    std::unreachable();
+}
 } // namespace nenenib::core

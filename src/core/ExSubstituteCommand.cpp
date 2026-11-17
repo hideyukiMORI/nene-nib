@@ -18,8 +18,8 @@ constexpr std::size_t substitute_count_limit = 2147483647;
 constexpr std::string_view previous_starts = "0123456789cegriIp|\"";
 // フラグの文字（Vim の ex_substitute の while）。
 constexpr std::string_view flag_letters = "gcneriIp#l";
-// 段 1 が受けないフラグ（`c` は段 2・`p` `#` `l` は表示・ADR 0168 の決定 6・10）。
-constexpr std::string_view unsupported_flags = "cp#l";
+// 受けないフラグ（`p` `#` `l` は表示・ADR 0168 の決定 10）。`c` は段 2a で受ける（決定 6）。
+constexpr std::string_view unsupported_flags = "p#l";
 
 [[nodiscard]] bool is_letter(char letter) noexcept
 {
@@ -255,5 +255,10 @@ substitute_command(std::string_view text)
         return std::nullopt;
     }
     return substitute_argument(skipped_white(text.substr(name)));
+}
+
+std::size_t ex_pattern_end(std::string_view text, char delimiter) noexcept
+{
+    return pattern_end(text, delimiter);
 }
 } // namespace nenenib::core
