@@ -21,11 +21,17 @@ void EditorWindow::point_text(POINT point, core::SelectionAnchoring anchoring,
                               application::PointerClicks clicks)
 {
     selection_point_ = point;
+    send(text_point(point, anchoring, clicks));
+}
+
+application::PointText EditorWindow::text_point(POINT point, core::SelectionAnchoring anchoring,
+                                                application::PointerClicks clicks) const
+{
     const auto body = active_body(controller_.delivery().settings);
     const auto row =
         static_cast<std::int64_t>(std::max(point.y - body.content.top, 0L) / body.line_height);
-    send(application::PointText{static_cast<float>(point.x - body.content.left), row, anchoring,
-                                clicks});
+    return application::PointText{static_cast<float>(point.x - body.content.left), row, anchoring,
+                                  clicks};
 }
 
 // プレビューの枠は移る先ではないので、押しても本文のキャレットは動かさない（ADR 0155）。押した点の

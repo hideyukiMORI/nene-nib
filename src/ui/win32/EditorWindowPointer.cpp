@@ -135,6 +135,11 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
 
 void EditorWindow::move_pointer(LPARAM data)
 {
+    // 右クリックのメニューが開いている間の動きは、載せた行だけ（#1051）。
+    if (point_context_menu(data))
+    {
+        return;
+    }
     // ミニマップを押している間の動きは面の送りだけ（帯の hover・境のカーソルを動かさない）。
     if (drag_minimap(data))
     {
@@ -149,6 +154,11 @@ void EditorWindow::move_pointer(LPARAM data)
 
 void EditorWindow::release_left(LPARAM data)
 {
+    // 右クリックのメニューの上で押した左の離しは、その行の実行だけ（#1051）。
+    if (release_context_menu(data))
+    {
+        return;
+    }
     // 窓の操作を押して捕まえていたら、離したのはその押しの終わりだけ（#1464）。
     if (release_caption(data))
     {
@@ -430,6 +440,11 @@ LRESULT EditorWindow::press_caption(UINT message, WPARAM word, LPARAM data) noex
 {
     // 押した窓の操作は帯と同じ left_pressed_ に覚え、離した要素と同じときだけ動かす（ADR 0056 の
     // 決定 9・#1464）。client で押して × の上で離した WM_NCLBUTTONUP だけでは閉じない。
+    // クライアントの外を押したら開いている右クリックのメニューを閉じる（#1051）。
+    if (message == WM_NCLBUTTONDOWN || message == WM_NCLBUTTONDBLCLK)
+    {
+        close_context_menu_outside();
+    }
     const auto at = caption_target_of(word);
     const auto [pressed, button] = caption_step(message, at, left_pressed_);
     left_pressed_ = pressed;
@@ -507,6 +522,11 @@ void EditorWindow::press_left(LPARAM data, application::PointerClicks clicks)
         return;
     }
     start_click_began_ = false;
+    // 右クリックのメニューが開いている間の押しはメニューへ（外なら閉じるだけ・#1051）。
+    if (press_context_menu(data))
+    {
+        return;
+    }
     click_client(data, clicks);
 }
 

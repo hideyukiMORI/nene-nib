@@ -4,9 +4,14 @@
 #include "BeginFind.hpp"
 #include "BeginGoToLine.hpp"
 #include "BeginReplace.hpp"
+#include "ClipboardAction.hpp"
+#include "ClipboardOperation.hpp"
 #include "ClosePane.hpp"
 #include "CloseTab.hpp"
 #include "CycleFinderPreview.hpp"
+#include "DeleteDirection.hpp"
+#include "DeleteText.hpp"
+#include "DeleteUnit.hpp"
 #include "DocumentFormatKind.hpp"
 #include "EditMode.hpp"
 #include "ExplorerRootChosen.hpp"
@@ -32,6 +37,7 @@
 #include "SaveState.hpp"
 #include "SaveStep.hpp"
 #include "SearchHop.hpp"
+#include "SelectAll.hpp"
 #include "SelectEditMode.hpp"
 #include "SetPreviewPlacement.hpp"
 #include "SettingsNotice.hpp"
@@ -391,6 +397,11 @@ EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation op
         {core::EditorOperation::choose_language, &EditorWindow::run_choose_language},
         {core::EditorOperation::show_version, &EditorWindow::run_show_version},
         {core::EditorOperation::search_project, &EditorWindow::run_search_project},
+        {core::EditorOperation::cut, &EditorWindow::run_cut},
+        {core::EditorOperation::copy, &EditorWindow::run_copy},
+        {core::EditorOperation::paste, &EditorWindow::run_paste},
+        {core::EditorOperation::delete_selection, &EditorWindow::run_delete_selection},
+        {core::EditorOperation::select_all, &EditorWindow::run_select_all},
         {core::EditorOperation::cycle_finder_preview, &EditorWindow::run_cycle_finder_preview},
     }};
     static_assert(runners_in_order(runners),
@@ -661,5 +672,34 @@ void EditorWindow::toggle_mode()
         return;
     }
     std::unreachable();
+}
+// 切り取り・コピー・貼り付け・削除・すべて選択（ADR 0078 の追補 #1051）。鍵（Ctrl+X / C / V・
+// Delete・Ctrl+A）と一覧と本文の右クリックのメニューが同じ意図を送る。何が起きるかはモードごとに
+// controller が決める。
+void EditorWindow::run_cut()
+{
+    send(application::ClipboardAction{application::ClipboardOperation::cut});
+}
+
+void EditorWindow::run_copy()
+{
+    send(application::ClipboardAction{application::ClipboardOperation::copy});
+}
+
+void EditorWindow::run_paste()
+{
+    send(application::ClipboardAction{application::ClipboardOperation::paste});
+}
+
+// 選択があれば選択を、無ければ右の 1 文字を消す（Delete の鍵と同じ意図）。メニューは選択の無い
+// ときに薄く出して選ばせない。
+void EditorWindow::run_delete_selection()
+{
+    send(application::DeleteText{core::DeleteDirection::forward, core::DeleteUnit::character});
+}
+
+void EditorWindow::run_select_all()
+{
+    send(application::SelectAll{});
 }
 } // namespace nenenib::ui::win32

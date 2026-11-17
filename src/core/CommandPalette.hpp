@@ -4,6 +4,7 @@
 #include "CommandLine.hpp"
 #include "EditMode.hpp"
 #include "FontFamilies.hpp"
+#include "PaletteMode.hpp"
 #include "PaletteOrigin.hpp"
 #include "PaletteScope.hpp"
 
@@ -29,6 +30,11 @@ class CommandPalette final
     // 生の候補は rvalue でも一度防御コピーし、移管前の可変 alias を私有値へ持ち込まない。
     [[nodiscard]] static CommandPalette opened(const std::vector<CommandChoice> &entries,
                                                std::string_view input, EditMode mode,
+                                               CommandLine empty = CommandLine::empty());
+    // Vim の NORMAL / VISUAL を知る所（controller）の口。一覧の切り取り・コピー・貼り付け・削除・
+    // すべて選択の鍵の表示を Vim の鍵の列にする（追補 #1051）。
+    [[nodiscard]] static CommandPalette opened(const std::vector<CommandChoice> &entries,
+                                               std::string_view input, PaletteMode mode,
                                                CommandLine empty = CommandLine::empty());
     [[nodiscard]] PaletteScope scope() const noexcept;
     [[nodiscard]] const CommandLine &input() const noexcept;
@@ -76,11 +82,11 @@ class CommandPalette final
     // 操作の一覧（operations）は operation_choices の値の列。
     using Result = std::variant<std::vector<std::size_t>, std::vector<CommandChoice>>;
     CommandPalette(CommandLine input, std::size_t selected, std::size_t first, std::size_t visible,
-                   EditMode mode, Entries entries, std::shared_ptr<const Result> result);
+                   PaletteMode mode, Entries entries, std::shared_ptr<const Result> result);
     // 新しい候補列は全件を一度照合する。選択と窓の先頭は先頭。
     [[nodiscard]] static CommandPalette filtered(CommandLine input, std::size_t visible,
-                                                 EditMode mode, Entries entries);
-    [[nodiscard]] static Result result_of(const CommandLine &input, EditMode mode,
+                                                 PaletteMode mode, Entries entries);
+    [[nodiscard]] static Result result_of(const CommandLine &input, PaletteMode mode,
                                           const std::vector<CommandChoice> &entries);
     // 同じ候補列での入力更新は一つの道。本文不変なら共有し、末尾延長なら前の位置だけを再採点する。
     [[nodiscard]] CommandPalette refiltered(CommandLine input) const;
@@ -102,7 +108,7 @@ class CommandPalette final
     std::size_t first_;
     std::size_t visible_;
     // 開いたときの編集モード（面を開いている間は変わらない）。
-    EditMode mode_;
+    PaletteMode mode_;
     // 開くときに受け取った候補の列（ADR 0060 の決定 1）。入力が変わっても同じ列を指し、変わるのは
     // extended が後ろへ伸ばすときだけ（ADR 0062 の決定 16）。
     Entries entries_;

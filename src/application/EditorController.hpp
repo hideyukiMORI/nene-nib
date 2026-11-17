@@ -12,6 +12,10 @@
 #include "CommandEdit.hpp"
 #include "CommandPalette.hpp"
 #include "CompositionView.hpp"
+#include "ContextMenuItem.hpp"
+#include "ContextMenuMode.hpp"
+#include "ContextMenuOpen.hpp"
+#include "ContextMenuView.hpp"
 #include "DetectedText.hpp"
 #include "Diagnostic.hpp"
 #include "DiagnosticsCount.hpp"
@@ -215,6 +219,11 @@ class EditorController final
     // 決定 6）。
     [[nodiscard]] bool find_line_active() const noexcept;
     [[nodiscard]] bool command_palette_active() const noexcept;
+    // 本文の右クリックのメニューが開いているか（ADR 0078 の追補 #1051）。窓が鍵とマウスの行き先を
+    // 決めるための安い読みで、frame を作らない。
+    [[nodiscard]] bool context_menu_active() const noexcept;
+    // 開いているメニューの選んでいる行（マウスの動きのたびに窓が比べる安い読み）。
+    [[nodiscard]] std::optional<std::size_t> context_menu_highlighted() const noexcept;
     // エクスプローラーの面に焦点があるか（ADR 0162 の決定 4・E4 で足した口）。窓が鍵の行き先を
     // 決めるための安い読みで、frame を作らない。面が消えていれば偽。
     [[nodiscard]] bool explorer_focused() const noexcept;
@@ -1047,6 +1056,31 @@ class EditorController final
     // 呼ばない（ページを開かない・通信しない）。
     void accept(const ShowVersion &);
 
+    // ----------------------------------------------------------------
+    // 右クリックのメニュー（#1051） EditorControllerContextMenu.cpp の群だけが読み書きする（ADR
+    // 0078 の追補）。
+    void accept(const OpenContextMenu &intent);
+    void accept(const PointContextMenu &intent);
+    void accept(const StepContextMenu &intent);
+    void accept(const ChooseContextMenu &intent);
+    void accept(const CloseContextMenu &);
+    // 入口の 1 か所（apply）。メニューが開いていて、意図がメニューの意図でも使う人の操作でない意図
+    // でもなければ、写す前に閉じる（ホイール・タブ・モードの切り替え…）。
+    void close_context_menu_before(const EditorIntent &intent);
+    // 開いた所の種類（全面プレビュー・通常モード・Vim の INSERT / NORMAL / VISUAL）。
+    [[nodiscard]] core::ContextMenuMode context_menu_mode() const noexcept;
+    // 通常モードの右クリックが選択の外なら、開く前にキャレットをそこへ置く（D82）。
+    void place_caret_for_menu(const PointText &pointed);
+    // 点の本文の位置（accept(PointText) と共通の 1 本）。解けなければ layout の失敗を置いて無し。
+    [[nodiscard]] std::optional<core::TextCaret> pointed_caret(const PointText &intent);
+    // 選んだ行を実行する。Vim の NORMAL と VISUAL は表の Vim の鍵の列を engine に流す。
+    void run_context_menu_row(const core::ContextMenuItem &item, core::ContextMenuMode mode);
+    // メニューと F1 の一覧の実行の 1 本。keys が空なら operation_request、あれば待ちを捨てて流す。
+    void run_operation_keys(core::EditorOperation operation, std::string_view keys);
+    // F1 の一覧から選んだ操作。Vim の NORMAL / VISUAL の 5 つはメニューと同じ Vim の鍵の列。
+    void run_listed_operation(core::EditorOperation operation);
+    [[nodiscard]] std::optional<ContextMenuView> context_menu_view() const;
+
     // ---------------------------------------------------------------- 起動画面（ADR 0172）
     // EditorControllerStartScreen.cpp の群だけが読み書きする。
     // 最初の frame の合図（決定 3）。以後は起動画面の鍵を受け、出口が起動画面を数え始める。
@@ -1500,6 +1534,8 @@ class EditorController final
     // 読みを頼んだ後に履歴から外した path（届いた列から外す・届いたら捨てる・#1495）。
     std::vector<core::FilePath> start_forgotten_;
     std::optional<std::size_t> start_selection_;
+    // 開いている右クリックのメニュー（ADR 0078 の追補 #1051）。
+    std::optional<ContextMenuOpen> context_menu_;
     // 写している途中の意図の深さと、いちばん外の意図の入口の印（ADR 0137 の追補 #1625）。apply の
     // 入口と出口が整数を書くだけで、例外で抜けると深さは戻らない（落ちたときは「意図の中」と読む）。
     std::size_t intent_depth_ = 0;

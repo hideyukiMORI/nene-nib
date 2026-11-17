@@ -5,6 +5,7 @@
 #include "CommandLine.hpp"
 #include "CommandPaletteView.hpp"
 #include "CompositionView.hpp"
+#include "ContextMenuView.hpp"
 #include "DiagnosticCounts.hpp"
 #include "DisplayForm.hpp"
 #include "DisplayLanguage.hpp"
@@ -155,6 +156,9 @@ struct EditorFrame
     // Vim のモードで描かない最後の改行があるか（eol の旗・ADR 0188 の決定 4）。lines と total_lines
     // は除いた本文の行で、真なら最後の行の後ろに改行がもう 1 つある。renderer は読まない。
     bool hidden_line_break = false;
+    // 本文の右クリックのメニュー（ADR 0078 の追補 #1051）。開いている間だけ値を持ち、renderer は
+    // ほかの全部の上に描く。
+    std::optional<ContextMenuView> context_menu{};
 };
 
 // 変換中か（本文と入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

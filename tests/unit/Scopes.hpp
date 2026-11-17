@@ -86,6 +86,7 @@ void verify_autosave_restore_property_scope();
 
 // OperationsTests.cpp
 void verify_operations_scope();
+void verify_context_menu_scope();
 // 表示言語の文の表と読む口（ADR 0123 の追補 2026-11-13・#1019 の T1a）。
 void verify_ui_texts_scope();
 // 表示言語の解決と切り替え（ADR 0123 の追補 2026-11-13・#1019 の T1b）。

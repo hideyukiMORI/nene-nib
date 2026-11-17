@@ -47,7 +47,7 @@ constexpr KeyChord ctrl_shift(OperationKey key)
 
 // 鍵 → 通常モードの操作・Vim の操作。表の全行の鍵と、表に無い鍵の組み合わせ。
 using ChordRow = std::tuple<KeyChord, Operation, Operation>;
-constexpr std::array<ChordRow, 58> chord_rows{{
+constexpr std::array<ChordRow, 62> chord_rows{{
     // Vim の Ctrl+O はジャンプの戻り（D71・#1037）。Vim の開くは Ctrl+Shift+O。
     {ctrl(OperationKey::o), EditorOperation::open_file, std::nullopt},
     {ctrl(OperationKey::s), EditorOperation::save, EditorOperation::save},
@@ -101,7 +101,8 @@ constexpr std::array<ChordRow, 58> chord_rows{{
     {ctrl(OperationKey::m), std::nullopt, std::nullopt},
     // 文字だけの貼り付け（ADR 0157 の決定 2）。Ctrl+V（Shift なし）は表の外（ui の貼り付けの道）。
     {ctrl_shift(OperationKey::v), EditorOperation::paste_plain, EditorOperation::paste_plain},
-    {ctrl(OperationKey::v), std::nullopt, std::nullopt},
+    // Shift なしの Ctrl+V は通常モードの貼り付け（#1051・ui は写さず今の道で受ける）。
+    {ctrl(OperationKey::v), EditorOperation::paste, std::nullopt},
     // エクスプローラー（ADR 0162 の決定 7）。Ctrl+E（Shift なし）は割り当てない。
     {ctrl_shift(OperationKey::e), EditorOperation::toggle_explorer,
      EditorOperation::toggle_explorer},
@@ -130,12 +131,18 @@ constexpr std::array<ChordRow, 58> chord_rows{{
     {ctrl_shift(OperationKey::r), EditorOperation::choose_explorer_root,
      EditorOperation::choose_explorer_root},
     {ctrl(OperationKey::r), std::nullopt, std::nullopt},
+    // 切り取り・コピー・削除・すべて選択（#1051）。通常モードだけで、Vim は鍵の無い行。
+    {ctrl(OperationKey::x), EditorOperation::cut, std::nullopt},
+    {ctrl(OperationKey::c), EditorOperation::copy, std::nullopt},
+    {KeyChord{false, false, OperationKey::delete_key}, EditorOperation::delete_selection,
+     std::nullopt},
+    {ctrl(OperationKey::a), EditorOperation::select_all, std::nullopt},
 }};
 
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
-constexpr std::array<ShownRow, 41> shown_rows{{
+constexpr std::array<ShownRow, 46> shown_rows{{
     {EditorOperation::open_file, "Ctrl+O", "Ctrl+Shift+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
@@ -187,13 +194,19 @@ constexpr std::array<ShownRow, 41> shown_rows{{
     {EditorOperation::show_version, "", "", true, true},
     // 両モードの Ctrl+Shift+F・F1 の一覧と Vim の `:grep` から（ADR 0167 の決定 1）。
     {EditorOperation::search_project, "Ctrl+Shift+F", "Ctrl+Shift+F", true, true},
+    // 鍵は通常モードだけ。Vim は鍵の無い行で一覧とメニューに載る（ADR 0078 の追補 #1051）。
+    {EditorOperation::cut, "Ctrl+X", "", true, true},
+    {EditorOperation::copy, "Ctrl+C", "", true, true},
+    {EditorOperation::paste, "Ctrl+V", "", true, true},
+    {EditorOperation::delete_selection, "Delete", "", true, true},
+    {EditorOperation::select_all, "Ctrl+A", "", true, true},
     // 鍵なしの行。面が開いている間の Ctrl+Shift+P は ui の入力行の鍵（ADR 0189 の決定 3）。
     {EditorOperation::cycle_finder_preview, "", "", true, true},
 }};
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
 using LabelRow = std::pair<KeyChord, std::string_view>;
-constexpr std::array<LabelRow, 34> label_rows{{
+constexpr std::array<LabelRow, 38> label_rows{{
     {ctrl(OperationKey::o), "Ctrl+O"},
     {ctrl(OperationKey::s), "Ctrl+S"},
     {ctrl(OperationKey::t), "Ctrl+T"},
@@ -228,6 +241,10 @@ constexpr std::array<LabelRow, 34> label_rows{{
     {KeyChord{false, true, OperationKey::f3}, "Shift+F3"},
     {ctrl(OperationKey::n), "Ctrl+N"},
     {ctrl_shift(OperationKey::r), "Ctrl+Shift+R"},
+    {ctrl(OperationKey::x), "Ctrl+X"},
+    {ctrl(OperationKey::c), "Ctrl+C"},
+    {ctrl(OperationKey::a), "Ctrl+A"},
+    {KeyChord{false, false, OperationKey::delete_key}, "Delete"},
 }};
 
 std::string shown_label(EditorOperation operation, EditMode mode)
@@ -371,7 +388,7 @@ void verify_operation_choices()
 {
     const auto ordinary = japanese_choices("", EditMode::ordinary);
     const auto vim = japanese_choices("", EditMode::vim);
-    expect(ordinary.size() == 41 && vim.size() == 39,
+    expect(ordinary.size() == 46 && vim.size() == 44,
            "an empty query lists every operation available in the mode");
     std::vector<Operation> in_order;
     for (const auto &text : nenenib::core::operation_texts)

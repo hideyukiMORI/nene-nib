@@ -6,6 +6,7 @@
 #include "DisplayText.hpp"
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
+#include "PaletteMode.hpp"
 #include "PaletteOrigin.hpp"
 #include "PaletteScope.hpp"
 
@@ -44,6 +45,12 @@ struct CommandChoice
 // 名前と説明は language の文、照合は名前・読み（日本語のときだけ）か短い名前（英語・中国語）・鍵の
 // 表示名（ADR 0123 の追補 2026-11-13 の決定 6）。
 [[nodiscard]] std::vector<CommandChoice> operation_choices(std::string_view query, EditMode mode,
+                                                           DisplayLanguage language);
+// Vim の NORMAL / VISUAL では、切り取り・コピー・貼り付け・削除・すべて選択（右クリックのメニューで
+// 通常モードの条件を持つ 5 つ）の鍵の表示を表の Vim
+// の鍵の列にし、そのモードの列が無い操作は出さない （ADR 0078 の追補 #1051）。EditMode の口は
+// palette_mode_of と同じ。
+[[nodiscard]] std::vector<CommandChoice> operation_choices(std::string_view query, PaletteMode mode,
                                                            DisplayLanguage language);
 // Ctrl+P の候補の列の絞り込みと順（ADR 0060 の決定 4）。scope に入る候補だけを残し（files は印の
 // ある候補の全部・commands はこの関数の外なので空）、query が空なら列の順、あれば名前に

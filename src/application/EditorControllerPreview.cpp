@@ -145,7 +145,12 @@ images_of(const core::MarkdownDocument &document, const std::optional<core::File
            std::holds_alternative<OpenCommandPalette>(intent) ||
            std::holds_alternative<OpenProjectSearch>(intent) ||
            std::holds_alternative<ActivateCommandChoice>(intent) ||
-           std::holds_alternative<SearchHop>(intent) || passes_full_preview_window(intent);
+           std::holds_alternative<SearchHop>(intent) ||
+           std::holds_alternative<OpenContextMenu>(intent) ||
+           std::holds_alternative<PointContextMenu>(intent) ||
+           std::holds_alternative<StepContextMenu>(intent) ||
+           std::holds_alternative<ChooseContextMenu>(intent) ||
+           std::holds_alternative<CloseContextMenu>(intent) || passes_full_preview_window(intent);
 }
 
 // 通常モードの矢印・PgUp / PgDn・Ctrl+Home / End（改訂 17）。左右と行頭・行末・語は届くが何も
