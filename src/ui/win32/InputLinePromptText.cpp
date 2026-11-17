@@ -28,6 +28,9 @@ std::string prompt_text(core::InputLinePrompt prompt, std::string_view detail,
     case core::InputLinePrompt::go_to_line:
         return std::string(core::ui_text(core::UiMessage::prompt_go_to_line, language));
     // 置換の 2 段目は検索語を添える（ADR 0174 の結果「置換後 (abc): 」）。
+    // イージーモーションの 1 文字の入力行（ADR 0163 の決定 4）。
+    case core::InputLinePrompt::jump_character:
+        return std::string(core::ui_text(core::UiMessage::prompt_jump_character, language));
     case core::InputLinePrompt::replace_with:
         return detail.empty()
                    ? std::string(core::ui_text(core::UiMessage::prompt_replace_with, language))

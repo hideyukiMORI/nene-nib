@@ -6,6 +6,7 @@
 #include "InputHistory.hpp"
 #include "InputLinePrompt.hpp"
 #include "InputLineView.hpp"
+#include "JumpCharacter.hpp"
 #include "SearchLine.hpp"
 #include "SubstituteQuestion.hpp"
 
@@ -17,8 +18,9 @@ namespace nenenib::application
 {
 // 同時に開ける入力は一つ。本文のモードとは独立した閉じた和型（ADR 0023 / ADR 0032）。`:s///c` の
 // 問い（ADR 0168 の決定 6）も入力行の 1 値で、文字を答えとしてだけ読む。
-using CommandInput =
-    std::variant<core::CommandLine, core::CommandPalette, core::SearchLine, SubstituteQuestion>;
+// イージーモーションの 1 文字の入力行（ADR 0163 の決定 4）も同じ 1 値。
+using CommandInput = std::variant<core::CommandLine, core::CommandPalette, core::SearchLine,
+                                  SubstituteQuestion, JumpCharacter>;
 
 // 入力行の見え方（ADR 0032 の決定 1）。どの選択肢もこの 1 つの値に畳んでから描く。
 [[nodiscard]] core::InputLineView input_line_of(const CommandInput &input);

@@ -160,6 +160,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -880,6 +881,7 @@ class EditorController final
     [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::SearchLine &line);
     // `:s///c` の問いの Enter は答えではない（Vim は無視する・ADR 0168 の決定 6）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const SubstituteQuestion &question);
+    [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const JumpCharacter &line);
     [[nodiscard]] std::optional<core::VimRepeatFailure> submitted_command();
     [[nodiscard]] std::optional<core::VimRepeatFailure> confirmed_command();
     // あふれた入力の確定を断ったら真（入力行を閉じて知らせる・#1568）。
@@ -888,6 +890,7 @@ class EditorController final
     void remember(const core::SearchLine &line);
     void remember(const core::CommandPalette &palette);
     void remember(const SubstituteQuestion &question);
+    void remember(const JumpCharacter &line);
     // `:s///c` の問い（ADR 0168 の決定 6・本体は EditorControllerCommand.cpp と畳みの
     // EditorControllerVim.cpp）。開いている問い（無ければ空）・文字を答えとして読む（問いが開いて
     // いれば真）・答えを engine の 1 歩で写す・答え以外の意図の前に `q` と同じに終える（入口の
@@ -895,6 +898,13 @@ class EditorController final
     // 大きい・ADR 0168 の追補 段 2a）。
     [[nodiscard]] const SubstituteQuestion *substitute_question() const noexcept;
     [[nodiscard]] bool answered_question(std::string_view utf8);
+    // イージーモーション（ADR 0163・EditorControllerEasyMotion.cpp）。1
+    // 文字の入力行の文字を跳び先の
+    // 文字として流す（行が開いていれば真）・意図の出口で行を開閉して印を捨てるかを決める 1 か所。
+    [[nodiscard]] bool answered_jump(std::string_view utf8);
+    void settle_easymotion(const EditorIntent &intent);
+    void settle_jump_line();
+    void settle_labels(const EditorIntent &intent);
     void answer_question(core::SubstituteReply reply);
     void record_question_key(const core::VimKey &key);
     void end_question_before(const EditorIntent &intent);
@@ -1341,6 +1351,12 @@ class EditorController final
     bool vim_top_kept_ = false;
     // engine が Vim の入力行（`:` `/` `?`）を開いた（settle_vim_line が読む・#1549・#1569）。
     bool vim_line_open_ = false;
+    // イージーモーションの 1 文字の入力行を開いた（settle_jump_line が読む・確定の外で閉じられたら
+    // engine の待ちを捨てる）。
+    bool jump_line_open_ = false;
+    // 印を出したときの本文の改訂番号・スクロール・タブ・モード（settle_labels が比べる）。
+    using LabelsGround = std::tuple<std::size_t, ScrollState, std::size_t, core::EditMode>;
+    std::optional<LabelsGround> labels_ground_;
     // 録画中に打った `:` の行を開く前の録画（note_recorded_line が置き、確定・Esc・空の行の
     // Backspace が消し、settle_vim_line が行の捨てられたときに戻す・#1569 の L1）。
     std::optional<core::VimRecordedKeys> recorded_line_;

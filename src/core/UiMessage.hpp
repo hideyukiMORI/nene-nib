@@ -189,6 +189,7 @@ enum class UiMessage : std::uint16_t
     prompt_go_to_line,
     prompt_replace_with,
     prompt_replace_with_pattern,
+    prompt_jump_character,
     guide_note_disappears,
     explorer_no_root,
     explorer_folder_unreadable,
