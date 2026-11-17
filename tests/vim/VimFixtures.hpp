@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 5b3b664d6131fc57b5ef4b7ce1fbd11cd7a6f6157c0c1aae0c6dc43b952e21f7 / 6758 fixtures
+// fixtures.json: sha256 b4676d4e8c9b0f7839b6d3465e5bb133610b1588a9674bfb430e6489bdbada5d / 6781 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 6758> vim_fixtures{{
+constexpr std::array<VimFixture, 6781> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -6196,6 +6196,29 @@ constexpr std::array<VimFixture, 6758> vim_fixtures{{
     {"autoindent-off-enter-has-no-indent", "    foo\nbar", "A<CR>x<Esc>", "    foo\nx\nbar", 2, 1, "", "", std::nullopt},
     {"autoindent-off-o-has-no-indent", "    foo\nbar", "ox<Esc>", "    foo\nx\nbar", 2, 1, "", "", std::nullopt},
     {"autoindent-off-cc-removes-indent", "    foo\nbar", "ccx<Esc>", "x\nbar", 1, 1, "    foo\n", "V", std::nullopt},
+    {"autoindent-capital-s-keeps-indent", "    foo\nbar", "Sx<Esc>", "    x\nbar", 1, 5, "    foo\n", "V", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-capital-s-escape-removes-indent", "    foo\nbar", "S<Esc>", "\nbar", 1, 1, "    foo\n", "V", std::nullopt, std::nullopt, VimChangeFixture{true, true, true}, "set autoindent"},
+    {"autoindent-capital-s-count-first-line-indent", "    foo\n  bar\nbaz", "2Sx<Esc>", "    x\nbaz", 1, 5, "    foo\n  bar\n", "V", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-capital-s-tab-indent", "\t\tfoo", "Sx<Esc>", "\t\tx", 1, 3, "\t\tfoo\n", "V", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-capital-s-dot", "    foo\n  bar", "Sx<Esc>j.", "    x\n  x", 2, 3, "  bar\n", "V", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-capital-s-undo", "    foo", "S<Esc>u", "    foo", 1, 1, "    foo\n", "V", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-capital-s-then-enter", "    foo\nbar", "Sx<CR>y<Esc>", "    x\n    y\nbar", 2, 5, "    foo\n", "V", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-capital-s-register-is-whole-line", "    foo\nbar", "Sx<Esc>jp", "    x\nbar\n    foo", 3, 5, "    foo\n", "V", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-s-on-indent-copies-nothing", "    foo", "sx<Esc>", "x   foo", 1, 1, " ", "v", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-s-count-on-indent", "    foo", "3sx<Esc>", "x foo", 1, 1, "   ", "v", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-s-then-enter", "    foo", "$sx<CR>y<Esc>", "    fox\n    y", 2, 5, "o", "v", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-s-escape-keeps-blanks", "    f", "$s<Esc>", "    ", 1, 4, "f", "v", std::nullopt, std::nullopt, VimChangeFixture{true, true, true}, "set autoindent"},
+    {"autoindent-off-capital-s-removes-indent", "    foo\nbar", "Sx<Esc>", "x\nbar", 1, 1, "    foo\n", "V", std::nullopt},
+    {"autoindent-eol-o-on-last-line", "    foo\n", "ox<Esc>", "    foo\n    x\n", 2, 5, "", "", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-eol-o-escape-on-last-line", "    foo\n", "o<Esc>", "    foo\n\n", 2, 1, "", "", std::nullopt, std::nullopt, VimChangeFixture{true, true, true}, "set autoindent"},
+    {"autoindent-eol-capital-o-on-last-line", "a\n    foo\n", "jOx<Esc>", "a\n    x\n    foo\n", 2, 5, "", "", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-eol-enter-at-end", "    foo\n", "A<CR>x<Esc>", "    foo\n    x\n", 2, 5, "", "", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-eol-enter-escape-at-end", "    foo\n", "A<CR><Esc>", "    foo\n\n", 2, 1, "", "", std::nullopt, std::nullopt, VimChangeFixture{true, true, true}, "set autoindent"},
+    {"autoindent-eol-cc-on-last-line", "  a\n    foo\n", "jccx<Esc>", "  a\n    x\n", 2, 5, "    foo\n", "V", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-eol-cc-escape-on-last-line", "  a\n    foo\n", "jcc<Esc>", "  a\n\n", 2, 1, "    foo\n", "V", std::nullopt, std::nullopt, VimChangeFixture{true, true, true}, "set autoindent"},
+    {"autoindent-eol-cc-count-to-the-end", "  a\n    foo\n", "2ccx<Esc>", "  x\n", 1, 3, "  a\n    foo\n", "V", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-eol-capital-s-on-last-line", "  a\n    foo\n", "jSx<Esc>", "  a\n    x\n", 2, 5, "    foo\n", "V", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
+    {"autoindent-eol-o-count-on-last-line", "    foo\n", "2ox<Esc>", "    foo\n    x\n    x\n", 3, 5, "", "", std::nullopt, std::nullopt, std::nullopt, "set autoindent"},
     {"cmdline-edit-ctrl-u-clears-the-visual-range", "a1 a\na2 a\na3 a\na4 a\na5 a", "vj:<C-u>s/a/X/<CR>", "X1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
     {"cmdline-edit-ctrl-u-visual-range-then-set", "a1 a\na2 a\na3 a\na4 a\na5 a", "vj:<C-u>set so=2<CR>j", "a1 a\na2 a\na3 a\na4 a\na5 a", 2, 1, "", "", std::nullopt},
     {"cmdline-edit-ctrl-u-keeps-the-text-after-the-caret", "a1 a\na2 a\na3 a\na4 a\na5 a", ":abcs/a/X/<Home><Right><Right><Right><C-u><CR>", "X1 a\na2 a\na3 a\na4 a\na5 a", 1, 1, "", "", std::nullopt},
