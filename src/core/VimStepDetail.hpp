@@ -1,5 +1,6 @@
 #pragma once
 
+#include "EasyMotionKind.hpp"
 #include "ExRange.hpp"
 #include "ExSubstituteRequest.hpp"
 #include "SubstituteConfirmation.hpp"
@@ -65,6 +66,22 @@ requested_viewport(const VimState &state, const VimEditorView &view, VimAction a
 // `<Home>` の前に回数とオペレータの回数を捨てる（`1|` に写す・Vim の nv_home・#1505）。
 [[nodiscard]] VimState home_uncounted(const VimState &state);
 [[nodiscard]] VimStep window_started(const VimState &state);
+// イージーモーション（ADR 0163・VimStepEasyMotion.cpp）。leader_step は `\` の次の鍵、
+// leader_leader_step は `\\` の次の鍵（動作）、easymotion_awaited は f F s の文字か印の鍵。
+// exact_jump は跳び先へ `` ` `` と同じ着地で飛ぶ（VimStep.cpp）。
+// `\` の 1 回目（回数・レジスタの名指しを捨てて待つ）と、`\` `\\` を待っているか（`.` の記録は
+// この待ちの鍵を積まない・ADR 0163 の追補 2026-11-17 の 3）。
+[[nodiscard]] VimStep leader_started(const VimState &state);
+[[nodiscard]] bool waits_for_leader(const VimState &state) noexcept;
+[[nodiscard]] VimStep leader_step(const VimState &state, const VimEditorView &view,
+                                  const VimKey &key);
+[[nodiscard]] VimStep leader_leader_step(const VimState &state, const VimEditorView &view,
+                                         const VimKey &key);
+[[nodiscard]] VimStep easymotion_awaited(const VimState &state, const VimEditorView &view,
+                                         EasyMotionKind kind, const VimKey &key);
+[[nodiscard]] VimStep exact_jump(const VimState &state, const VimEditorView &view, Offset landing);
+// 待ちに当たらなかった鍵を、待ちを捨てて普通の鍵として流し直す（VimStep.cpp）。
+[[nodiscard]] VimStep rerouted(const VimState &state, const VimEditorView &view, const VimKey &key);
 // 1 鍵を待つ接頭辞の後ろの Esc は打ち消し、ほかの鍵は refused（#1369・VimStep.cpp）。
 [[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key, VimStep refused);
 [[nodiscard]] VimStep escaped_or_refused(const VimState &state, const VimKey &key);

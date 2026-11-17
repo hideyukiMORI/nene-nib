@@ -45,6 +45,7 @@ using detail::started_macro;
 using detail::started_prefix;
 using detail::vim_recorded;
 using detail::visual_operated_mode;
+using detail::waits_for_leader;
 using detail::wanted_column_of;
 
 namespace detail
@@ -777,6 +778,18 @@ namespace
 }
 
 // NORMAL の記録。完了した鍵だけが効果で分かれ、途中の鍵と INSERT へ入る命令は記録を続ける。
+// 待ちの間に組み立てる記録。`\` `\\` の待ちの鍵は積まず、当たらずに流し直した鍵だけが
+// 記録になる（ADR 0163 の追補 2026-11-17 の 3）。
+[[nodiscard]] std::optional<VimRepeatRecord> kept_recording(const VimState &next,
+                                                            VimRepeatRecord record)
+{
+    if (waits_for_leader(next))
+    {
+        return std::nullopt;
+    }
+    return record;
+}
+
 [[nodiscard]] VimState normal_recorded(const VimState &before, VimState next,
                                        const VimEffect &effect, VimKey key)
 {
@@ -793,7 +806,7 @@ namespace
     }
     if (!completed(next))
     {
-        next.recording = std::move(record);
+        next.recording = kept_recording(next, std::move(record));
         return next;
     }
     if (changes_text(effect) && !repeats_substitute(before, key))
@@ -945,7 +958,7 @@ namespace
     record = appended(std::move(record), key);
     if (waiting || inserting)
     {
-        step.next.recording = std::move(record);
+        step.next.recording = kept_recording(step.next, std::move(record));
         return step;
     }
     if (changes_text(step.effect))

@@ -1,9 +1,11 @@
 #include "VimKeyTable.hpp"
 
+#include "EasyMotionKind.hpp"
 #include "VimAction.hpp"
 #include "VimActionBinding.hpp"
 #include "VimActionGroup.hpp"
 #include "VimBinding.hpp"
+#include "VimEasyMotionBinding.hpp"
 #include "VimMotion.hpp"
 #include "VimMotionBinding.hpp"
 #include "VimOperator.hpp"
@@ -42,13 +44,15 @@ constexpr char32_t control_a_character = 0x01;
 constexpr char32_t control_x_character = 0x18;
 // `g Ctrl-g`（表示だけ・#1617 のレビュー M1）。
 constexpr char32_t control_g_character = 0x07;
+// `\`（イージーモーションの接頭辞・ADR 0163 の決定 1）。
+constexpr char32_t backslash_character = 0x5C;
 // `Ctrl-i` と `<Tab>` は同じ文字（窓は Tab を文字の鍵で渡す・ADR 0152 の追補 #1037）。
 constexpr char32_t tab_character = 0x09;
 
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 83> normal_bindings{
+constexpr std::array<VimBinding, 84> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {line_feed, VimAction::move_down},
@@ -131,7 +135,8 @@ constexpr std::array<VimBinding, 83> normal_bindings{
      {U's', VimAction::substitute},
      {U'R', VimAction::replace_mode},
      {U'&', VimAction::repeat_substitute},
-     {U'S', VimAction::substitute_line}}};
+     {U'S', VimAction::substitute_line},
+     {backslash_character, VimAction::prefix_leader}}};
 
 // 動作 → 大分類の表（CPP-012 / ADR 0006）。NORMAL と VISUAL の写し先はこの分類で分かれる。
 // 行の欠落と重複は下の static_assert で落ちる（動作を足したら、この表に行を足すまで通らない）。
@@ -272,7 +277,8 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::move_sentence_backward, VimActionGroup::motion},
      {VimAction::move_sentence_forward, VimActionGroup::motion},
      {VimAction::prefix_bracket, VimActionGroup::input_wait},
-     {VimAction::substitute_line, VimActionGroup::edit_line}}};
+     {VimAction::substitute_line, VimActionGroup::edit_line},
+     {VimAction::prefix_leader, VimActionGroup::input_wait}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 42> motion_bindings{
@@ -456,6 +462,19 @@ constexpr std::array<VimTextObjectBinding, 18> text_object_bindings{
      {U'p', VimTextObject::paragraph},
      {U's', VimTextObject::sentence},
      {U't', VimTextObject::tag}}};
+
+// `\\` の後ろの鍵 → イージーモーションの動作の表（ADR 0163 の決定 1・2 / CPP-012）。ここに無い鍵は
+// 鳴らして保留を捨て、普通の鍵として流し直す（追補 2026-11-17 の 3）。
+constexpr std::array<VimEasyMotionBinding, 9> easymotion_bindings{
+    {{U'w', EasyMotionKind::word_start_after},
+     {U'b', EasyMotionKind::word_start_before},
+     {U'e', EasyMotionKind::word_end_after},
+     {U'j', EasyMotionKind::line_below},
+     {U'k', EasyMotionKind::line_above},
+     {U'f', EasyMotionKind::character_after},
+     {U'F', EasyMotionKind::character_before},
+     {U's', EasyMotionKind::character_around},
+     {U'l', EasyMotionKind::word_start_around}}};
 
 // g の後ろの特別な鍵 → 動作（Issue #1522）。Vim の nv_g_cmd は K_HOME を '0' と同じ case で
 // nv_g_home_m_cmd へ、K_END を '$' と同じ case で nv_g_dollar_cmd へ渡す。`g<Home>` は `g0` と同じ
@@ -768,6 +787,18 @@ static_assert(
         }
     }
     return false;
+}
+
+[[nodiscard]] std::optional<EasyMotionKind> vim_easymotion_kind_for(char32_t key) noexcept
+{
+    for (const VimEasyMotionBinding binding : easymotion_bindings)
+    {
+        if (binding.key == key)
+        {
+            return binding.kind;
+        }
+    }
+    return std::nullopt;
 }
 
 [[nodiscard]] std::optional<VimTextObject> vim_text_object_for(char32_t key) noexcept
