@@ -1,6 +1,7 @@
 // タブの帯（自前のタイトルバー・ADR 0056）とタブの札（#1789）の描画。Direct2DRenderer.cpp の
 // 長さの上限（CNF-014）のため翻訳単位を分けた（同じクラス・振る舞いは変えない）。
 #include "Direct2DRenderer.hpp"
+#include "Direct2DRendererDetail.hpp"
 
 #include "EditorFrame.hpp"
 #include "LayoutRect.hpp"
@@ -23,27 +24,15 @@ namespace nenenib::ui::win32
 {
 namespace
 {
-constexpr float full_channel = 255.0F;
-
-[[nodiscard]] D2D1_COLOR_F to_color(core::RgbColor color) noexcept
-{
-    return D2D1::ColorF(static_cast<float>(color.red) / full_channel,
-                        static_cast<float>(color.green) / full_channel,
-                        static_cast<float>(color.blue) / full_channel, 1.0F);
-}
-
-[[nodiscard]] D2D1_RECT_F to_rect(const core::LayoutRect &area) noexcept
-{
-    return D2D1::RectF(static_cast<float>(area.left), static_cast<float>(area.top),
-                       static_cast<float>(area.right), static_cast<float>(area.bottom));
-}
-
 [[nodiscard]] D2D1_POINT_2F centre_of(const core::LayoutRect &area) noexcept
 {
     return D2D1::Point2F(static_cast<float>(area.left + area.right) / 2.0F,
                          static_cast<float>(area.top + area.bottom) / 2.0F);
 }
 } // namespace
+
+using detail::to_color;
+using detail::to_rect;
 
 bool Direct2DRenderer::create_tab_tip_format(const wchar_t *face)
 {
