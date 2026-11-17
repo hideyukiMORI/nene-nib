@@ -1,6 +1,6 @@
 NeNe Nib @VERSION@ — Windows 11 x64
 
-GitHub で配っているこの ZIP は試験版（Beta）です。Microsoft Store 版は同じ版の同じ exe を包んだものです。
+GitHub で配っているこの ZIP の exe は、Microsoft Store 版と同じ版の同じ exe です（Store 版はこの exe を包んだもの）。
 
 ZIPを展開し、NeNeNib.exeを起動してください。追加ランタイムは不要です。
 この ZIP の exe は署名されていません。インストーラ・自動更新はありません。

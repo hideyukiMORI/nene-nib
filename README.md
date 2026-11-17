@@ -117,11 +117,11 @@ records in `docs/quality/`.
   - `:set relativenumber`, `:set scrolloff=`, virtual columns (Tab = 8, wide = 2), literal CR in LF files,
     Esc everywhere;
   - *new in 1.1.0* easymotion (FR-023, [ADR 0163](docs/adr/0163-easymotion-labels-visible-jump-targets-through-the-engine.md)):
-    in NORMAL and VISUAL, `\` (backslash twice) and then `w` `b` `e` (word starts and ends after or before the
+    in NORMAL and VISUAL, `\\` (backslash twice) and then `w` `b` `e` (word starts and ends after or before the
     caret), `j` `k` (lines below or above), `l` (every visible word start), or `f` `F` `s` and a character puts a
     small label at the top-left of every visible target (decision D99); typing a label jumps there and sets `''`,
     Esc cancels. Words are split as `w` splits them, so Japanese text has targets too. Not after an operator
-    (`d\w`), and only in the active pane;
+    (`d\\w`), and only in the active pane;
   - *new in 1.1.0*, a file that ends with a line break has as many lines as in Vim (`eol`): `G` `dd` `:$` `:%d` `:g/^$/d`
     `/^$` do not see an empty line after the final break, and the Vim mode does not draw one (the Basic mode
     still does); the saved bytes stay the same, lines added in Vim mode after deleting every line end in a
@@ -284,7 +284,7 @@ records in `docs/quality/`.
   family (FR-027: the typing preview, the other `:g` `:v` commands and `:sort`; `:s` itself is under FR-003,
   and the `c` flag, `:d` `:y` and `:g` `:v` with `d` and `s` are *new in 1.1.0*).
 - **FR-029 display language** — the screen text is shown in Japanese, English or Simplified Chinese
-  (Korean, Spanish and German are planned but not in 1.1.0, and show English until they come). The default follows the Windows
+  (Korean, Spanish and German come in a later version, decision D100, and show English until then). The default follows the Windows
   display language; `:set language=ja`, `en`, `zh-hans` or `system` (also from Ctrl+P `:`, or the F1
   operation "Choose Display Language" / 「表示言語を選ぶ」) switches at once and is saved in `settings.v5`;
   `:set language?` shows the choice and what it resolved to. Vim messages, mode names, key names and theme

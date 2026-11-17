@@ -1,7 +1,7 @@
 # 1.1.0 の公開（2026-11-17・下書き）
 
 公開の記録の下書き（席 REL・#1815・節立ては [release-1.0.0-2026-11-14.md](release-1.0.0-2026-11-14.md) と同じ）。この PR で埋めたのは「範囲」「公開元」の分かる所・「根拠」・「既知の限界」の候補だけで、**「梱包」「GitHub の公開」「Microsoft Store の提出」「公開の結果」は設計席が本番の梱包と公開の後に埋める**（`<<…>>` は埋め残しの印）。**この記録を置いた時点では、1.1.0 はまだ梱包も公開も申請もしていない**（公開版は 1.0.0・公開元 `80fd7a53`）。
-1.1.0 は Microsoft Store の 2 回目の申請（「更新」）で、施主の決め「41 で行こう」（2026-11-17 夜）のとおり、まとめ枝 41 を区切りにする。GitHub は同じ exe の ZIP を tag `v1.1.0` で出す。手順の正本は [DEVELOPMENT_WORKFLOW.md](../DEVELOPMENT_WORKFLOW.md) の公開の節、Store の欄は [submission.md](../store/submission.md) の「1.1.0 の更新の申請」と [msix.md](../store/msix.md)、リポジトリの外の手順と道具は `D:/NeNeNib/evidence/v1.1.0-release/`。
+1.1.0 は Microsoft Store の 2 回目の申請（「更新」）で、施主の決め「41 で行こう」（2026-11-17 夜）のとおり、まとめ枝 41 を区切りにする。GitHub は同じ exe の ZIP を tag `v1.1.0` で出し、**題に「Beta」を付けず pre-release の印も付けない**（題 `NeNe Nib 1.1.0`・2026-11-17 夜の施主の決め・1.0.0 は `NeNe Nib 1.0.0 Beta`・pre-release）。手順の正本は [DEVELOPMENT_WORKFLOW.md](../DEVELOPMENT_WORKFLOW.md) の公開の節、Store の欄は [submission.md](../store/submission.md) の「1.1.0 の更新の申請」と [msix.md](../store/msix.md)、リポジトリの外の手順と道具は `D:/NeNeNib/evidence/v1.1.0-release/`。
 
 **範囲**: 1.0.0 の公開元 `80fd7a5371de9f09bfacc12b7ed5f40ff13f6ba6` から、まとめ枝 41（`origin/chore/1808-integration-20261117b`・この PR の起点 `99f02b18`）までの main。`git log --oneline 80fd7a53..99f02b18` は 56 本、`git diff --stat 80fd7a53 99f02b18 -- src` は 305 ファイル（+15,059 / −886）。製品の変更は次のまとめ枝で入った（日付は JST）。**タブの右クリックのメニュー（#1790・PR #1813）は入れない**（施主の決め・まとめ枝 41 が区切り）。
 
@@ -12,11 +12,11 @@
 | 38（#1776） | #1783（2026-11-17 12:1x） | プロジェクトの全文検索 G1〜G3（#1758 #1763 #1772 / PR #1760 #1764 #1773・FR-026・ADR 0167）: Ctrl+Shift+F・`:grep`・面の出どころ `!` |
 | 39（#1788） | #1796（2026-11-17 16:5x） | 自動の字下げと `settings.v5`（#1086 / PR #1668・D91・ADR 0170 の追補）・イージーモーション M2〜M4（#1774 #1779 #1782 / PR #1777 #1781 #1786・FR-023・ADR 0163）と空の行の印の直し（#1788） |
 | 40（#1797） | #1804（2026-11-17 20:3x） | 本文の右クリックのメニュー（#1051 / PR #1791・D97）・探して見る面のプレビュー欄 P1 P2（#1785 #1793 / PR #1792 #1794・D96・ADR 0189）・試験の見本の名前（#1797） |
-| 41（#1808） | `<<まとめ枝 41 の PR と merge の時刻>>` | タブの札（#1789 / PR #1802・D98）・イージーモーションの印を左肩の札に（#1800 / PR #1801・D99）・予約名 ＋ 拡張子のファイル名（#1805 / PR #1812）・Store 版で右クリックへの登録の 2 つを F1 の一覧から隠す（#1809 / PR #1814・ADR 0178 の追補）。**#1814 は V-1814 の必須 1（`distribution_of` が分からない答えを packaged に倒す）の直しを積んでから入る**（走り書き 22:24） |
+| 41（#1808） | `<<まとめ枝 41 の PR と merge の時刻>>` | タブの札（#1789 / PR #1802・D98）・イージーモーションの印を左肩の札に（#1800 / PR #1801・D99）・予約名 ＋ 拡張子のファイル名（#1805 / PR #1812）・Store 版で右クリックへの登録の 2 つを F1 の一覧から隠す（#1809 / PR #1814・ADR 0178 の追補）。V-1814 の必須 1（`distribution_of` が分からない答えを packaged に倒す）の直しと `MotionLabel.hpp` の整形の直しを積んだまとめ枝 41 は `27ce4009`（この PR の枝は `git merge` で追いついた） |
 
 製品の外: 道具の直し（#1719 #1769 #1780 #1784）・CI の上限（#1752）・文書。版を 1.1.0 に上げたのはこの PR（`CMakeLists.txt` の `project()` の 1 行・MSIX の版は `1.1.0.0`）。
 
-**この版が書く設定の版と鍵の集合**（ADR 0170 の 2026-11-16 の追補の 4）: 1.1.0 は `settings.v5` を書く最初の公開版で、v5 の鍵の集合はここで閉じる。鍵は v4 の全部（`version` `colorscheme` `font_family` `font_size` `guide` `wrap` `ui_language` `lsp` `explorer` `root` `features` `mapleader` `ignorecase` `smartcase` `relativenumber` `scrolloff` `explorer_width`）に `autoindent`（#1086・既定 off）と `finder_preview`（#1793・既定 `auto`・ADR 0189）を足したもの、と `lsp.<language>.command` と `map.<mode>.<lhs>` の行（`src/adapters/win32/SettingsCodec.cpp` の `field_names` と接頭辞・試験 `verify_released_v4_settings` の `released_as_v5`）。**ADR 0170 の追補の「足した鍵の記録（v5）」は `autoindent` だけで、`finder_preview` が書かれていない**（ADR 0189 の決定 1 には在る・振る舞いは試験が守っている・設計席が直す）。`session.v2` `history.v1` `bookmarks.v1` `autosave.v1` の codec は 1.0.0 から変わっていない（`git diff 80fd7a53 99f02b18 -- src/adapters/win32/{Session,History,Bookmark,Autosave}Codec.*` は空）。
+**この版が書く設定の版と鍵の集合**（ADR 0170 の 2026-11-16 の追補の 4）: 1.1.0 は `settings.v5` を書く最初の公開版で、v5 の鍵の集合はここで閉じる。鍵は v4 の全部（`version` `colorscheme` `font_family` `font_size` `guide` `wrap` `ui_language` `lsp` `explorer` `root` `features` `mapleader` `ignorecase` `smartcase` `relativenumber` `scrolloff` `explorer_width`）に `autoindent`（#1086・既定 off）と `finder_preview`（#1793・既定 `auto`・ADR 0189）を足したもの、と `lsp.<language>.command` と `map.<mode>.<lhs>` の行（`src/adapters/win32/SettingsCodec.cpp` の `field_names` と接頭辞・試験 `verify_released_v4_settings` の `released_as_v5`）。ADR 0170 の追補の「足した鍵の記録（v5）」にも 2 つを書いた（この PR で `finder_preview` を足した）。1.1.0 の後は `settings.v5` に鍵を足さない（足すなら `settings.v6`・CLAUDE.md §2）。`session.v2` `history.v1` `bookmarks.v1` `autosave.v1` の codec は 1.0.0 から変わっていない（`git diff 80fd7a53 99f02b18 -- src/adapters/win32/{Session,History,Bookmark,Autosave}Codec.*` は空）。
 
 ## 公開元
 
@@ -63,7 +63,7 @@
   | #1801（#1800） | `outputs/20261117/review-1801/review.md` | 積んでよい（必須 0） |
   | #1802（#1789） | `outputs/20261117/review-1802/review.md` | 積んでよい（必須 0） |
   | #1812（#1805） | `outputs/20261117/review-1812/review.md` | 積んでよい（必須 0） |
-  | #1814（#1809） | `outputs/20261117/review-1814/review.md` | **直してから（必須 1）→ `<<直しと再確認>>`** |
+  | #1814（#1809） | `outputs/20261117/review-1814/review.md` | 直してから（必須 1）→ 直しをまとめ枝 41 の `27ce4009` までに積んだ（`<<再確認の所在>>`） |
 
 - (c) CI（merge の道具の run・どれも `check` と `build-and-test` が success）: まとめ枝 36 [43798044246](https://github.com/hideyukiMORI/nene-nib/actions/runs/43798044246)・37 [43990290226](https://github.com/hideyukiMORI/nene-nib/actions/runs/43990290226)・38 [44005218509](https://github.com/hideyukiMORI/nene-nib/actions/runs/44005218509)・39 [44036071609](https://github.com/hideyukiMORI/nene-nib/actions/runs/44036071609)・40 [44069448664](https://github.com/hideyukiMORI/nene-nib/actions/runs/44069448664)（1 回目は `nib_adapters_preview` の 1 件で failure・試験の見本 `nul.bin` が windows-2022 で予約名の装置に当たった → #1797 で直して 2 回目）・41 `<<run>>`。#1805 の付け直しの道は Windows 10 / Server 2022 でだけ働くので、意味のある証拠は CI（windows-2022）の `nib_adapters_long_paths`（PR #1812 の本文）。
 - (d) 施主の試用（D41）: 1.1.0 の機能はまだ施主が試していない（実機の絵は日報 11-17 のとおり席と設計席が撮って送った）。本番の MSIX と ZIP で `D:/NeNeNib/evidence/v1.1.0-release/hide-checklist.md` を通す → `<<結果>>`。packaged の起動・Store 版で F1 の一覧に登録の操作が出ないこと・WACK もそこで見る。
@@ -80,7 +80,7 @@
 - プレビュー欄（ADR 0189）: 16 MiB を超えるファイルは出さない・構文の色は窓の先頭から始める（複数行のコメントの途中から始まると色が違う）・境のドラッグは無い。待ちの間の演出「解読」（決定 6）は入っていない。
 - イージーモーション（ADR 0163 の決定 9）: オペレータの後（`d\\w`）・`t` `T` `n` `N`・2 枠のもう 1 つの枠・回数は無い。V-1801 の軽い指摘（左端の跳び先の札の左の縁が切れる ほか）は後続。
 - 本文の右クリックのメニュー: 項目は D97 の 7 つだけ。タブの右クリックのメニュー（D98 の (2)）は 1.1.0 に無い。
-- 表示言語は日本語・英語・中国語（簡体字）のまま。**D88 と FR-029 は「韓国語・スペイン語・ドイツ語は 1.1.0」と書いているが、1.1.0 には入っていない**（施主に確かめる・#1815 の報告）。
+- 表示言語は日本語・英語・中国語（簡体字）のまま。韓国語・スペイン語・ドイツ語は後の版（施主決定 D100・D88 と FR-029 の「1.1.0」を改めた）。
 - 予約名の直し（#1805）: 装置の名前そのもの（`NUL` `nul.`）は装置のまま。言語サーバーの `CreateProcessW` の実行ファイルの経路は `native_path` を通らない（PR #1812 の「残るリスク」）。
 - 各レビューの「後続」と「軽い指摘」のうち公開の文に書く物は `<<設計席が決める>>`。
 
@@ -100,7 +100,7 @@
 
 ## GitHub の公開
 
-`<<tag v1.1.0 → 公開元・題・pre-release か・URL・添付・再取得の照合（verify-publication.py の result）>>`
+`<<tag v1.1.0 → 公開元・題 NeNe Nib 1.1.0（pre-release なし）・URL・添付・再取得の照合（verify-publication.py の result）>>`
 
 ## Microsoft Store の提出
 
