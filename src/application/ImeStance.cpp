@@ -31,6 +31,13 @@ namespace
     return ImeStance::closed;
 }
 
+// イージーモーションの 1 文字の入力行は日本語の文字へも跳べるように IME を使う人に任せる（ADR 0163
+// の決定 4）。
+[[nodiscard]] ImeStance stance_of(const JumpCharacter &) noexcept
+{
+    return ImeStance::as_left;
+}
+
 // 入力が無いときはモードが決める（ADR 0014 の決定 5・今までの ui の ime_blocked と同じ表）。
 [[nodiscard]] ImeStance stance_of(core::EditMode mode, core::VimMode vim_mode) noexcept
 {

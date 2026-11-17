@@ -102,6 +102,13 @@ constexpr std::array<CommandInputSample, 12> cases{{
     return false;
 }
 
+// イージーモーションの 1 文字の入力行（ADR 0163 の決定 4）も打った行を持たない。
+[[nodiscard]] bool matches(const application::JumpCharacter & /*line*/, std::string_view /*text*/,
+                           std::size_t /*caret*/)
+{
+    return false;
+}
+
 [[nodiscard]] bool input_equal(const application::CommandInput &input, std::string_view text,
                                std::size_t caret, std::size_t alternative)
 {
