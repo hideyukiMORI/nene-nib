@@ -130,7 +130,7 @@ WACK の任意の試験で FAIL や WARNING が出たら、その試験の名前
 | 確かめること | 期待 | なぜ |
 | --- | --- | --- |
 | 設定・session・history・bookmarks・自動退避の置き場 | ZIP 版の `%LOCALAPPDATA%\NeNeNib` が既にあればそこ、無ければ `Packages\HideyukiMori.NeNeNib_3sft4ch5kzywy\LocalCache\Local\NeNeNib\` | Loupe の実測と同じになるはず（読み）。PRIVACY.md の Store 版の段落の根拠 |
-| F1「Windows の右クリックに登録する」 | packaged では HKCU の書き込みがパッケージ専用の場所に写され、エクスプローラーから見えない見込み（読み） | 見えなければ Store 版では操作を隠すか無効にする（別の ADR・D73 の段 2）。PRIVACY.md と README の FR-033 は「ZIP 版の動き・Store 版では効かない見込みで未実測」と書いてある（#1655）。結果に合わせて直す（2026-11-17: 1.0.0 の確かめ 6-C-4 で見えないと確かめ、1.1.0 から Store 版では F1 の一覧に出さない・#1809・ADR 0178 の追補） |
+| F1「Windows の右クリックに登録する」 | packaged ではエクスプローラーから見えない（6-C-4 で確かめた。HKCU の書き込みがパッケージ専用の場所に写るためと見ている・写り先は読み） | 見えなければ Store 版では操作を隠すか無効にする（別の ADR・D73 の段 2）。PRIVACY.md と README の FR-033 は「ZIP 版の動き・Store 版では効かない見込みで未実測」と書いてある（#1655）。結果に合わせて直す（2026-11-17: 1.0.0 の確かめ 6-C-4 で見えないと確かめ、1.1.0 から Store 版では F1 の一覧に出さない・#1809・ADR 0178 の追補） |
 | 言語サーバー（`lsp=on` と clangd の命令） | 起動して診断が出る | full trust の子プロセス（読み・未実測） |
 | `\\wsl.localhost\<distro>` を起点にする | 開ける | full trust はファイルの API を普通に使える（読み） |
 | 保存（任意のフォルダ・一時ファイルの置き換え） | 保存できる | ADR 0135 |
