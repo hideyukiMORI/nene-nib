@@ -241,19 +241,20 @@ def forget_session(environment: dict) -> bool:
     return deleted
 
 
-# settings.v4 の全部の鍵と、設定ファイルの無い起動と同じ値（ADR 0170 決定 3・#1041・#1380）。書くのは
-# 道具の profile だけで、利用者の本物の設定には書かない。
-SETTINGS_V4_DEFAULTS = (("version", "4"), ("colorscheme", "system"),
+# settings.v5 の全部の鍵と、設定ファイルの無い起動と同じ値（ADR 0170 決定 3 と 2026-11-16 の追補・#1041・
+# #1380・#1668）。書くのは道具の profile だけで、利用者の本物の設定には書かない。製品は v5 → v4 の順に読むので、
+# 道具も v5 を書く（v4 を書くと、同じ profile に残った v5 に負けて黙って効かない・#1780）。
+SETTINGS_DEFAULTS = (("version", "5"), ("colorscheme", "system"),
                         ("font_family", "Cascadia Code"), ("font_size", "13.5"), ("guide", "on"),
                         ("wrap", "on"), ("ui_language", "system"), ("lsp", "off"),
                         ("explorer", "off"), ("root", ""), ("features", ""),
                         ("ignorecase", "off"), ("smartcase", "off"), ("relativenumber", "off"),
-                        ("scrolloff", "0"), ("explorer_width", ""))
+                        ("scrolloff", "0"), ("explorer_width", ""), ("autoindent", "off"))
 
 
 # 製品が今の版で読み書きする設定ファイルの名前。道具が設定の置き場を決めるのはここと settings_path
 # の 1 か所で、版が上がったとき（settings.v5・#1668）はこの名前だけを直す（#1784）。
-SETTINGS_FILE = "settings.v4"
+SETTINGS_FILE = "settings.v5"
 
 
 def settings_path(environment: dict) -> Path:
@@ -327,7 +328,7 @@ def await_text(path: Path, expected: str, seconds: float = 5.0) -> str | None:
 
 def write_settings(environment: dict, changed: dict[str, str] | None = None,
                    lsp_commands: dict[str, str] | None = None) -> Path:
-    """Write NeNeNib/settings.v4 of the tool profile the environment names; return its path.
+    """Write NeNeNib/settings.v5 of the tool profile the environment names; return its path.
 
     Every fixed key is written with the value an editor without a settings file uses, except the
     ones named in changed; lsp_commands adds one lsp.<language>.command line per language (ADR
@@ -339,10 +340,10 @@ def write_settings(environment: dict, changed: dict[str, str] | None = None,
     if not profile or (own and os.path.normcase(os.path.abspath(profile))
                        == os.path.normcase(os.path.abspath(own))):
         raise AssertionError("write_settings only writes a tool profile, not the user's own")
-    fields = dict(SETTINGS_V4_DEFAULTS)
+    fields = dict(SETTINGS_DEFAULTS)
     unknown = set(changed or {}) - set(fields)
     if unknown:
-        raise AssertionError(f"settings.v4 has no key {sorted(unknown)}")
+        raise AssertionError(f"settings.v5 has no key {sorted(unknown)}")
     fields.update(changed or {})
     lines = [f"{key}={value}" for key, value in fields.items()]
     lines += [f"lsp.{language}.command={command}"
