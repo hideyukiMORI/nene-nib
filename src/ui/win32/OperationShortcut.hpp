@@ -17,12 +17,14 @@ namespace nenenib::ui::win32
 // Shift つきの行がある）。Alt のときは呼ばない。T W D Tab と Shift なしの F4 は写さない（タブと
 // ブックマークの鍵は TabShortcut と BookmarkKey の経路のまま）。
 // F1 と F5（日時の挿入・ADR 0175）は修飾なしだけ、F6 は Ctrl なし（Shift はそのまま入れる）。
-// Ctrl つきの M（プレビュー・ADR 0155）と V（文字だけの貼り付け・ADR 0157）も写す。
+// Ctrl つきの M（プレビュー・ADR 0155）と Shift つきの V（文字だけの貼り付け・ADR 0157）も写す。
 // 検索・置換・行へ移動の Ctrl つきの F H G と、Ctrl なしの F3（Shift はそのまま入れる）も写す
 // （ADR 0174 の決定 1・Vim モードでは表に鍵の行が無いので今までどおり Vim の鍵へ流れる）。
 // 通常モードの新しいタブの Ctrl+N も写す（D82・#1395・Vim では表に行が無く今までどおり）。
 // ルートのフォルダを選ぶ Ctrl+Shift+R の R も写す（#1495・Shift なしは表に行が無く Vim の
-// Ctrl-r のまま）。
+// Ctrl-r のまま）。Shift なしの Ctrl+V（貼り付け・#1051）は表に行があるが写さない（今の貼り付けの
+// 道のまま・Vim の矩形とエクスプローラーの焦点の振る舞いを変えない）。Ctrl+X / C / A と Delete も
+// 同じく写さない。
 [[nodiscard]] inline std::optional<core::KeyChord> function_chord(WPARAM key, bool control,
                                                                   bool shift)
 {
@@ -80,7 +82,7 @@ namespace nenenib::ui::win32
     case 'E':
         return chord(core::OperationKey::e);
     case 'V':
-        return chord(core::OperationKey::v);
+        return shift ? chord(core::OperationKey::v) : std::nullopt;
     case 'F':
         return chord(core::OperationKey::f);
     case 'H':

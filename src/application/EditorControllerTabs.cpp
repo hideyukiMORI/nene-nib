@@ -392,7 +392,8 @@ void EditorController::hide_tab_tip()
     tab_tip_timer_ = TabTipTimer::stop;
 }
 
-// 待っていたタブにまだ載っていて、窓がアクティブで、面も入力行も開いていなければ札を出す。何も
+// 待っていたタブにまだ載っていて、窓がアクティブで、面も入力行も右クリックのメニュー（#1051）も
+// 開いていなければ札を出す。何も
 // 変えなければ描き直さない（合図の形・ADR 0155 の追補・#813）。非アクティブの窓の合図は待ちを
 // 終える（載せ直すまで出さない）。
 void EditorController::accept(const TabTipTick &intent)
@@ -403,7 +404,7 @@ void EditorController::accept(const TabTipTick &intent)
         return;
     }
     if (!core::tab_tip_tab(state_.hovered()).has_value() || state_.command_input().has_value() ||
-        !intent.window_active)
+        context_menu_active() || !intent.window_active)
     {
         state_ = state_.with_tab_tip(TabTipPhase::hidden);
         return;

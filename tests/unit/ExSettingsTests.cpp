@@ -446,6 +446,12 @@ void verify_completion_window()
            "typing starts the window again and keeps its rows");
 }
 
+// `set f` で始まる候補（候補の表の順）。
+const auto completion_set_f = std::vector<std::string>{
+    "set fontsize=",          "set filetype=",           "set ft=",
+    "set finderpreview=auto", "set finderpreview=right", "set finderpreview=below",
+    "set finderpreview=off"};
+
 void verify_command_completions()
 {
     using core::CommandEdit;
@@ -472,9 +478,7 @@ void verify_command_completions()
     const auto first = core::CommandLine::empty().edited(CommandEdit::complete_previous);
     // 名前だけの候補の末尾は文書の命令の最後の `saveas`（ADR 0067）。
     expect(first.text() == "saveas", "backwards completion starts at the last command");
-    expect(core::command_completions("set f") ==
-               std::vector<std::string>{"set fontsize=", "set filetype=", "set ft="},
-           "option prefix");
+    expect(core::command_completions("set f") == completion_set_f, "option prefix");
     const auto unknown = core::CommandLine::empty().inserted("unknown").value();
     expect(unknown.edited(CommandEdit::complete_next).text() == "unknown",
            "missing candidates leave text");
@@ -1635,6 +1639,10 @@ const auto completion_ordinary = std::vector<std::string>{"colorscheme",
                                                           "set language=en",
                                                           "set language=zh-hans",
                                                           "set language=system",
+                                                          "set finderpreview=auto",
+                                                          "set finderpreview=right",
+                                                          "set finderpreview=below",
+                                                          "set finderpreview=off",
                                                           "preview full",
                                                           "preview side",
                                                           "preview off",
@@ -1954,10 +1962,10 @@ void verify_ex_command_table()
 // が分類と同じ。
 constexpr std::array<std::string_view, 4> window_rechecking_options{"wrap", "relativenumber",
                                                                     "hlsearch", "scrolloff"};
-constexpr std::array<std::string_view, 17> window_keeping_options{
-    "fontsize",  "guifont",   "incsearch", "guide",    "display",   "filetype",
-    "ft",        "clipboard", "explorer",  "root",     "lsp",       "ignorecase",
-    "smartcase", "minimap",   "language",  "wrapscan", "autoindent"};
+constexpr std::array<std::string_view, 18> window_keeping_options{
+    "fontsize",  "guifont",   "incsearch", "guide",    "display",    "filetype",
+    "ft",        "clipboard", "explorer",  "root",     "lsp",        "ignorecase",
+    "smartcase", "minimap",   "language",  "wrapscan", "autoindent", "finderpreview"};
 
 [[nodiscard]] bool listed_in(const auto &rows, std::string_view name)
 {

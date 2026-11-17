@@ -257,13 +257,24 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // 知らせ（TitleBarWidth）も本文とキャレットに触れないので保つ（メモ帳はマウスを動かしても狙いの桁を
 // 変えない・D82・レビュー V-1428 の M-1 と F-3）。本文の寸法と DPI を運ぶ VisibleLines と外観の
 // 読み直し RefreshAppearance は、画素で持つ狙いの意味を変え得るので保たない（捨てる側のまま）。
+// 右クリックのメニューの開く・載せる・上下・閉じるはキャレットを動かさない（#1051）。開くときに
+// キャレットを置く分（通常モードの選択の外）は、左クリックと同じく place_caret_for_menu が捨てる。
+// 選んで実行する ChooseContextMenu は操作なので捨てる側。
+[[nodiscard]] bool keeps_wanted_x_for_menu(const EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<OpenContextMenu>(intent) ||
+           std::holds_alternative<PointContextMenu>(intent) ||
+           std::holds_alternative<StepContextMenu>(intent) ||
+           std::holds_alternative<CloseContextMenu>(intent);
+}
+
 [[nodiscard]] bool keeps_wanted_x(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<MoveCaret>(intent) || is_signal(intent) ||
            std::holds_alternative<ScrollPane>(intent) ||
            std::holds_alternative<PointTitleBar>(intent) ||
            std::holds_alternative<HoverExplorer>(intent) ||
-           std::holds_alternative<TitleBarWidth>(intent);
+           std::holds_alternative<TitleBarWidth>(intent) || keeps_wanted_x_for_menu(intent);
 }
 
 // エクスプローラーのダブルクリックの 2 打目と組む印（explorer_clicked_）を保つ意図（#1388・
@@ -576,7 +587,8 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
 
 // 写す前に、意図をまたいで覚えた印のうち、この意図が保たないものを捨てる。上下の移動の狙いの
 // 横位置（keeps_wanted_x）と、エクスプローラーのダブルクリックの 2 打目と組む節
-// （keeps_explorer_click・#1388）と、タブの札（settle_tab_tip・#1789）。
+// （keeps_explorer_click・#1388）と、開いている右クリックのメニュー（#1051）と、タブの札
+// （settle_tab_tip・#1789）。
 void EditorController::forget_unkept_marks(const EditorIntent &intent)
 {
     settle_tab_tip(intent);
@@ -588,6 +600,8 @@ void EditorController::forget_unkept_marks(const EditorIntent &intent)
     {
         explorer_clicked_.reset();
     }
+    // 右クリックのメニューも、メニューの意図と使う人の操作でない意図のほかで閉じる（#1051）。
+    close_context_menu_before(intent);
 }
 
 // `map` の待ちの鍵は、待ちを保つ意図のほかは受ける前に流す（ADR 0176 の決定 4）。
@@ -656,6 +670,8 @@ void EditorController::settle_transient()
     // 全文検索の検索語の変化・面の閉じ・開いた当たりのキャレットも同じ出口で拾い、入力行の編集の
     // 経路ごとに書かない（ADR 0167 の決定 1・5）。
     settle_project_search();
+    // プレビュー欄の窓の要求と取消も同じ出口（選択の移動・面の閉じ・ADR 0189 の決定 4）。
+    settle_finder_preview();
     if (state_.transient().has_value() && !state_.transient_saved())
     {
         state_ = state_.without_transient();
@@ -787,6 +803,8 @@ void EditorController::accept(const WorkCompleted &)
     // 全文検索（ADR 0167 の決定 4）。頼んでいなければ呼ばない。面の当たりを足すので、下の面を読む
     // 前に呼ぶ。
     collect_project_search();
+    // プレビュー欄の窓（ADR 0189 の決定 4）。頼んでいなければ呼ばない。
+    collect_finder_preview();
     const auto &input = state_.command_input();
     const auto *palette =
         input.has_value() ? std::get_if<core::CommandPalette>(&input.value()) : nullptr;
@@ -1305,6 +1323,7 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     add_minimap(result);
     add_diagnostics(result);
     result.start_screen = start_screen_view();
+    result.context_menu = context_menu_view();
 }
 
 std::optional<SyntaxStateCache> &EditorController::syntax_cache(core::PaneSide side) noexcept

@@ -2,6 +2,8 @@
 
 #include "CommandChoice.hpp"
 #include "DisplayText.hpp"
+#include "FinderPreview.hpp"
+#include "PreviewSnippet.hpp"
 #include "ProjectHitRow.hpp"
 #include "ProjectSearchView.hpp"
 
@@ -30,5 +32,11 @@ struct CommandPaletteView
     // 全文検索の面の当たりの行の表示値。i 番目は rows の i 番目と同じ当たり（段 G3 が 2
     // 段で描く）。 ほかの面では空。
     std::vector<core::ProjectHitRow> hit_rows = {};
+    // 面の配置へ渡す置き方（ADR 0189 の決定 1・2）。欄を持たない出どころは off。ui
+    // の描画とクリックは この値で core::palette_layout を引く。
+    core::FinderPreview placement = core::FinderPreview::off;
+    // 選んでいる候補のプレビュー欄の表示値（決定
+    // 4・5）。欄を持たない出どころ・候補が無いときは値なし。
+    std::optional<PreviewSnippet> preview = std::nullopt;
 };
 } // namespace nenenib::application

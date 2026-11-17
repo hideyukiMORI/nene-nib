@@ -9,13 +9,16 @@
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
+#include "ChooseContextMenu.hpp"
 #include "ChooseStartEntry.hpp"
 #include "ClipboardAction.hpp"
+#include "CloseContextMenu.hpp"
 #include "ClosePane.hpp"
 #include "CloseTab.hpp"
 #include "CommandText.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
+#include "CycleFinderPreview.hpp"
 #include "DeleteText.hpp"
 #include "DiscardAutosave.hpp"
 #include "EditCommand.hpp"
@@ -33,6 +36,7 @@
 #include "NewLine.hpp"
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
+#include "OpenContextMenu.hpp"
 #include "OpenDisplayLanguageList.hpp"
 #include "OpenDocument.hpp"
 #include "OpenDocumentFormatList.hpp"
@@ -42,6 +46,7 @@
 #include "PasteCommand.hpp"
 #include "PinTab.hpp"
 #include "PlaceCaret.hpp"
+#include "PointContextMenu.hpp"
 #include "PointExplorer.hpp"
 #include "PointMinimap.hpp"
 #include "PointPreview.hpp"
@@ -70,6 +75,7 @@
 #include "SettleRecentTab.hpp"
 #include "ShowVersion.hpp"
 #include "SplitPane.hpp"
+#include "StepContextMenu.hpp"
 #include "StoreVimRegister.hpp"
 #include "SubmitCommand.hpp"
 #include "SwitchPane.hpp"
@@ -108,5 +114,6 @@ using EditorIntent = std::variant<
     OpenDocumentFormatList, OpenDisplayLanguageList, BeginFind, BeginGoToLine, BeginReplace,
     SetPreviewPlacement, PointPreview, PrintDocument, RegisterShell, UnregisterShell, PinTab,
     FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion, OpenProjectSearch,
-    TabTipTick>;
+    OpenContextMenu, PointContextMenu, StepContextMenu, ChooseContextMenu, CloseContextMenu,
+    CycleFinderPreview, TabTipTick>;
 } // namespace nenenib::application

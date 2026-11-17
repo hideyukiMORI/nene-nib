@@ -249,7 +249,8 @@ SETTINGS_DEFAULTS = (("version", "5"), ("colorscheme", "system"),
                         ("wrap", "on"), ("ui_language", "system"), ("lsp", "off"),
                         ("explorer", "off"), ("root", ""), ("features", ""),
                         ("ignorecase", "off"), ("smartcase", "off"), ("relativenumber", "off"),
-                        ("scrolloff", "0"), ("explorer_width", ""), ("autoindent", "off"))
+                        ("scrolloff", "0"), ("explorer_width", ""), ("autoindent", "off"),
+                        ("finder_preview", "auto"))
 
 
 # 製品が今の版で読み書きする設定ファイルの名前。道具が設定の置き場を決めるのはここと settings_path

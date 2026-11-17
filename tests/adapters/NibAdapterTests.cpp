@@ -14,6 +14,7 @@
 #include "FileHandle.hpp"
 #include "FilePath.hpp"
 #include "FindHandle.hpp"
+#include "FinderPreview.hpp"
 #include "HtmlClipboardFormat.hpp"
 #include "MapRow.hpp"
 #include "Milestone.hpp"
@@ -715,8 +716,9 @@ void verify_settings_versions()
                bytes.ends_with("guide=off\nwrap=off\nui_language=system\nlsp=off\nexplorer=off\n"
                                "root=\nfeatures=\nignorecase=off\nsmartcase=off\n"
                                "relativenumber=off\nscrolloff=0\nexplorer_width=\n"
-                               "autoindent=off\n"),
-           "the v5 writer emits the v4 keys and autoindent after explorer_width");
+                               "autoindent=off\nfinder_preview=auto\n"),
+           "the v5 writer emits the v4 keys and autoindent and finder_preview after "
+           "explorer_width");
     const auto v3 = decode_settings(v3_settings, SettingsVersion::v3);
     expect(v3 && v3.value().guide == nenenib::core::GuideVisibility::hidden &&
                v3.value().wrapping == nenenib::core::LineWrapping::no_wrap &&
@@ -724,12 +726,14 @@ void verify_settings_versions()
                !v3.value().lsp && !v3.value().explorer && !v3.value().root.has_value() &&
                v3.value().features.empty() && !v3.value().ignorecase && !v3.value().smartcase &&
                !v3.value().relativenumber && v3.value().scrolloff == 0 &&
-               !v3.value().explorer_width.has_value() && !v3.value().autoindent,
+               !v3.value().explorer_width.has_value() && !v3.value().autoindent &&
+               v3.value().finder_preview == nenenib::core::FinderPreview::automatic,
            "v3 keeps its values, stays Japanese and takes the other v4 and v5 defaults");
     for (const auto extra :
          {"ui_language=system\n", "lsp=off\n", "explorer=off\n", "root=\n", "features=\n",
           "ignorecase=off\n", "smartcase=off\n", "relativenumber=off\n", "scrolloff=0\n",
-          "explorer_width=\n", "explorer_width=300\n", "autoindent=off\n", "autoindent=on\n"})
+          "explorer_width=\n", "explorer_width=300\n", "autoindent=off\n", "autoindent=on\n",
+          "finder_preview=auto\n", "finder_preview=right\n"})
     {
         const auto refused = decode_settings(std::string(v3_settings) + extra, SettingsVersion::v3);
         expect(!refused && refused.error() == SettingsFailure::malformed,
@@ -755,13 +759,13 @@ constexpr std::string_view released_v4_settings =
     "mapleader=<Space>\nmap.i.jj=!<Esc>\n";
 
 // 1.0.0 の v4 の見本を v5 の形にした bytes（版の行を 5 にし、explorer_width の後ろに
-// autoindent=off を足す）。
+// autoindent=off と finder_preview=auto を足す）。
 std::string released_as_v5()
 {
     std::string bytes(released_v4_settings);
     bytes.replace(0, std::string_view{"version=4"}.size(), "version=5");
     const std::string_view width = "explorer_width=320\n";
-    bytes.insert(bytes.find(width) + width.size(), "autoindent=off\n");
+    bytes.insert(bytes.find(width) + width.size(), "autoindent=off\nfinder_preview=auto\n");
     return bytes;
 }
 
@@ -776,7 +780,8 @@ bool released_values(const nenenib::core::EditorSettings &settings)
            settings.ignorecase && settings.smartcase && settings.relativenumber &&
            settings.scrolloff == 3 && settings.explorer_width == 320 &&
            settings.lsp_commands.size() == 1 && settings.mapleader == "<Space>" &&
-           settings.maps.size() == 1 && !settings.autoindent;
+           settings.maps.size() == 1 && !settings.autoindent &&
+           settings.finder_preview == nenenib::core::FinderPreview::automatic;
 }
 
 // v4 の読みは 1.0.0 と同じ厳しさ（ADR 0170 の 2026-11-16 の追補の 2・6）。1.0.0 の見本を読んで
@@ -789,12 +794,14 @@ void verify_released_v4_settings()
     expect(read && encode_settings(read.value()) == released_as_v5(),
            "the 1.0.0 settings are written back in the v5 form with autoindent after "
            "explorer_width");
-    for (const auto extra : {"autoindent=off\n", "autoindent=on\n"})
+    for (const auto extra :
+         {"autoindent=off\n", "autoindent=on\n", "finder_preview=auto\n", "finder_preview=off\n"})
     {
         const auto refused =
             decode_settings(std::string(released_v4_settings) + extra, SettingsVersion::v4);
         expect(!refused && refused.error() == SettingsFailure::malformed,
-               "a v4 holding the v5 key autoindent is refused like 1.0.0 refuses it");
+               "a v4 holding a v5 key (autoindent, finder_preview) is refused like 1.0.0 refuses "
+               "it");
     }
     const auto as_v5 = decode_settings(released_v4_settings, SettingsVersion::v5);
     const auto v5_as_v4 = decode_settings(released_as_v5(), SettingsVersion::v4);
@@ -869,7 +876,7 @@ void verify_settings_lsp_commands()
     const auto bytes = encode_settings(settings);
     expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
                            "scrolloff=0\nexplorer_width=\nautoindent=off\n"
-                           "lsp.cpp.command=C:\\llvm\\clangd.exe --log=error\n"
+                           "finder_preview=auto\nlsp.cpp.command=C:\\llvm\\clangd.exe --log=error\n"
                            "lsp.python.command=C:\\py\\pylsp.exe\n"),
            "commands follow the fixed keys in language name order");
     const auto decoded = decode_settings(bytes, SettingsVersion::v5);
@@ -910,7 +917,8 @@ void verify_settings_maps()
         MapRow{VimModeSet{true, false, true, false, false}, "<leader>w", ":w<CR>", true}};
     const auto bytes = encode_settings(settings);
     expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
-                           "scrolloff=0\nexplorer_width=\nautoindent=off\nmapleader=<Space>\n"
+                           "scrolloff=0\nexplorer_width=\nautoindent=off\n"
+                           "finder_preview=auto\nmapleader=<Space>\n"
                            "map.i.jj=!<Esc>\nmap.nv.<leader>w=:w<CR>\n"),
            "the leader and the map rows follow the other lines in order");
     const auto decoded = decode_settings(bytes, SettingsVersion::v5);
@@ -1026,8 +1034,8 @@ void verify_settings_v4_later_keys()
 {
     const auto bytes = encode_settings(default_editor_settings());
     auto stripped = bytes;
-    for (const auto key :
-         {"ignorecase", "smartcase", "relativenumber", "scrolloff", "explorer_width", "autoindent"})
+    for (const auto key : {"ignorecase", "smartcase", "relativenumber", "scrolloff",
+                           "explorer_width", "autoindent", "finder_preview"})
     {
         stripped = without_setting(stripped, key);
     }
@@ -1035,15 +1043,21 @@ void verify_settings_v4_later_keys()
     expect(older && !older.value().ignorecase && !older.value().smartcase &&
                !older.value().relativenumber && older.value().scrolloff == 0 &&
                !older.value().explorer_width.has_value() && !older.value().autoindent &&
+               older.value().finder_preview == nenenib::core::FinderPreview::automatic &&
                encode_settings(older.value()) == bytes,
            "a v5 without the later keys reads them as off, 0 and the default width and writes "
            "them back");
-    expect(!decode_settings(bytes + "ignorecase=on\n", SettingsVersion::v5) &&
-               !decode_settings(with_setting(bytes, "smartcase", "yes"), SettingsVersion::v5) &&
-               !decode_settings(bytes + "scrolloff=0\n", SettingsVersion::v5) &&
-               !decode_settings(with_setting(bytes, "autoindent", "1"), SettingsVersion::v5) &&
-               !decode_settings(bytes + "autoindent=off\n", SettingsVersion::v5),
-           "a present later key is still read strictly");
+    expect(
+        !decode_settings(bytes + "ignorecase=on\n", SettingsVersion::v5) &&
+            !decode_settings(with_setting(bytes, "smartcase", "yes"), SettingsVersion::v5) &&
+            !decode_settings(bytes + "scrolloff=0\n", SettingsVersion::v5) &&
+            !decode_settings(with_setting(bytes, "autoindent", "1"), SettingsVersion::v5) &&
+            !decode_settings(bytes + "autoindent=off\n", SettingsVersion::v5) &&
+            !decode_settings(with_setting(bytes, "finder_preview", "left"), SettingsVersion::v5) &&
+            !decode_settings(with_setting(bytes, "finder_preview", "automatic"),
+                             SettingsVersion::v5) &&
+            !decode_settings(bytes + "finder_preview=auto\n", SettingsVersion::v5),
+        "a present later key is still read strictly");
     // v5 の鍵 autoindent（#1086）。無ければ off、on は往復し、比べにも入る。
     auto indenting = default_editor_settings();
     indenting.autoindent = true;
@@ -1056,6 +1070,21 @@ void verify_settings_v4_later_keys()
     const auto missing =
         decode_settings(without_setting(indented, "autoindent"), SettingsVersion::v5);
     expect(missing && !missing.value().autoindent, "a v5 without autoindent reads it as off");
+    // v5 の鍵 finder_preview（ADR 0189 の決定 1）。4 つの値が往復し、比べにも入る。
+    for (const auto preview :
+         {nenenib::core::FinderPreview::automatic, nenenib::core::FinderPreview::right,
+          nenenib::core::FinderPreview::below, nenenib::core::FinderPreview::off})
+    {
+        auto placed = default_editor_settings();
+        placed.finder_preview = preview;
+        const auto placed_bytes = encode_settings(placed);
+        const auto placed_back = decode_settings(placed_bytes, SettingsVersion::v5);
+        expect(placed_back && placed_back.value().finder_preview == preview &&
+                   encode_settings(placed_back.value()) == placed_bytes &&
+                   (preview == nenenib::core::FinderPreview::automatic) ==
+                       same_settings(placed, default_editor_settings()),
+               "finder_preview round trips its four values and takes part in the comparison");
+    }
     verify_settings_explorer_width(bytes);
 }
 

@@ -9,6 +9,8 @@
 #include "ColoredRun.hpp"
 #include "CommandChoice.hpp"
 #include "CommandLayout.hpp"
+#include "ContextMenuLayout.hpp"
+#include "ContextMenuPainter.hpp"
 #include "DeviceWarmup.hpp"
 #include "DisplayLanguage.hpp"
 #include "DisplayLine.hpp"
@@ -31,6 +33,8 @@
 #include "PaletteTextRole.hpp"
 #include "PaneLayouts.hpp"
 #include "PreviewPane.hpp"
+#include "PreviewPanePainter.hpp"
+#include "PreviewPaneText.hpp"
 #include "PreviewPoint.hpp"
 #include "ProjectHitRow.hpp"
 #include "ProjectHitText.hpp"
@@ -104,6 +108,12 @@ class Direct2DRenderer final
     // 最後に描いたプレビューの枠の点（クライアントの物理画素）の下のチェックボックスの要素の番号
     // （ADR 0155 の追補 24）。窓が押した・離した点を引く。
     [[nodiscard]] std::optional<std::size_t> preview_task_at(std::int32_t x, std::int32_t y) const;
+    // 最後に描いた右クリックのメニューの点（クライアントの物理画素）の下の行と、面の中か（ADR 0078
+    // の追補 #1051）。描いた矩形をそのまま引く（描画と当たりが同じ core::context_menu_layout）。
+    // メニューを描いていなければ無し・偽。
+    [[nodiscard]] std::optional<std::size_t> context_menu_row_at(std::int32_t x,
+                                                                 std::int32_t y) const;
+    [[nodiscard]] bool context_menu_covers(std::int32_t x, std::int32_t y) const;
     // 最後に描いたプレビューの枠の点（クライアントの物理画素）の下の文字の位置（ADR 0155 の改訂
     // 18）。全面プレビューのドラッグの選択が引く。
     [[nodiscard]] std::optional<core::PreviewPoint> preview_point_at(std::int32_t x,
@@ -140,6 +150,9 @@ class Direct2DRenderer final
     // 5・採用案の寸法）。上の段は 本文の字体 body_face、下の段と進み具合は UI
     // の字体。作れなければ偽。
     [[nodiscard]] bool create_project_hit_formats(const wchar_t *body_face);
+    // プレビュー欄の本文・行番号（本文の字体 body_face・12.5 DIP）と見出し（UI の字体・11.5 DIP・
+    // ADR 0189 の決定 5）。作れなければ偽。
+    [[nodiscard]] bool create_preview_pane_formats(const wchar_t *body_face);
     [[nodiscard]] std::expected<void, RenderFailure>
     create_body_formats(const core::EditorSettings &settings);
     void align_text_formats();
@@ -366,6 +379,13 @@ class Direct2DRenderer final
     empty_palette_text(const application::CommandPaletteView &palette,
                        core::DisplayLanguage language);
     [[nodiscard]] ProjectHitText project_hit_text() const;
+    [[nodiscard]] PreviewPaneText preview_pane_text() const;
+    // プレビュー欄（ADR 0189 の決定 5）。描く経路は PreviewPanePainter の 1 本。
+    void draw_preview_pane(const application::EditorFrame &frame,
+                           const core::PaletteLayout &layout);
+    // 面が開いていれば描き、閉じていれば文字組みの保持を捨てる。
+    void draw_open_palette(const application::EditorFrame &frame, std::int32_t width,
+                           std::int32_t height);
     // 入力行に描く文の幅（物理画素・進み具合が検索語と重ならないかを決める・V-1773 の L-1）。
     [[nodiscard]] std::int32_t typed_width(const application::EditorFrame &frame,
                                            const core::LayoutRect &area);
@@ -398,6 +418,9 @@ class Direct2DRenderer final
     void draw_explorer(const application::EditorFrame &frame, const core::ExplorerLayout &layout);
     // ミニマップ（ADR 0171 の決定 1・2）。面が無い frame は最初の 1 行で返る。
     void draw_minimap(const application::EditorFrame &frame, const core::LayoutRect &panel);
+    // 右クリックのメニュー（#1051）。ほかの全部の上に描き、描いた配置を当たりのために覚える。
+    void draw_context_menu(const application::EditorFrame &frame, std::int32_t width,
+                           std::int32_t height);
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);
     // ミニマップの命令の失敗で落ちた frame を描き直す（1 度目は bitmap を捨てて直接、それでも
@@ -438,6 +461,13 @@ class Direct2DRenderer final
     TextFormat hit_line_format_;
     TextFormat hit_place_format_;
     TextFormat palette_progress_format_;
+    // プレビュー欄の本文と行番号（本文の字体・12.5 DIP・本文は折り返さず切る・行番号は右寄せ）と
+    // 見出しの名前（UI の字体・11.5 DIP の semibold・文字単位の省略記号）とほかの文（11.5 DIP）
+    // （ADR 0189 の決定 5・採用案）。
+    TextFormat preview_line_format_;
+    TextFormat preview_number_format_;
+    TextFormat preview_name_format_;
+    TextFormat preview_note_format_;
     TextFormat guide_key_format_;
     TextFormat guide_label_format_;
     TextFormat guide_note_format_;
@@ -458,6 +488,9 @@ class Direct2DRenderer final
     GutterTextLayouts gutter_layouts_;
     // Ctrl+P の面の見えている行の文字組み。書式の作り直しと面を閉じたときに捨てる（#900）。
     PaletteRowLayouts palette_layouts_;
+    // プレビュー欄の文字組み（ADR 0189 の決定 5）。面の行の保持と分け、上限は窓の行の数に合わせた
+    // PreviewPanePainter::layout_limit。書式の作り直しと面を閉じたときに捨てる。
+    PaletteRowLayouts preview_layouts_{PreviewPanePainter::layout_limit};
     // タブの題名の文字組み。同じ型で、書式・DPI の作り直しでだけ捨てる（#924）。
     PaletteRowLayouts tab_layouts_;
     // タブの札の文の書式と文字組みの保持（#1789・上限 1）。保持は書式の作り直しで捨てる。
@@ -472,6 +505,10 @@ class Direct2DRenderer final
     // 起動画面の文字組み。同じ型で、書式の作り直しと起動画面が消えたときに捨てる（ADR 0172 の
     // 決定 5）。
     PaletteRowLayouts start_layouts_{StartScreenPainter::retained};
+    // 右クリックのメニューの文字組みと、最後に描いた配置（#1051）。捨てる時は start_layouts_ と同じ
+    // （メニューを閉じたときも）。
+    PaletteRowLayouts context_menu_layouts_{ContextMenuPainter::retained};
+    std::optional<core::ContextMenuLayout> context_menu_layout_;
     // other の枠のプレビュー。要素の layout の保持は frame をまたいで再利用する（ADR 0155）。
     PreviewPane preview_;
     MinimapPicture minimap_;

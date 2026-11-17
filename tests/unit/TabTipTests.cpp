@@ -19,6 +19,7 @@
 #include "LineNumber.hpp"
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
+#include "OpenContextMenu.hpp"
 #include "PointTitleBar.hpp"
 #include "RefreshAppearance.hpp"
 #include "Scopes.hpp"
@@ -389,6 +390,18 @@ void verify_palette_blocks_tip()
     applied(controller, on_tab(1));
     expect(!controller.apply(TabTipTick{}).repaint && !controller.frame().tab_tip.has_value(),
            "the tick shows no tip while the palette is open");
+    // 右クリックのメニュー（#1051）を開く意図は札を消し、開いている間は合図が来ても出さない
+    // （V-1802 の L4）。
+    expect_dismissed(app::OpenContextMenu{10, 40, std::nullopt},
+                     "opening the context menu hides the tip");
+    Editing menu;
+    EditorController &opened = menu.controller();
+    open_four_tabs(opened);
+    applied(opened, app::OpenContextMenu{10, 40, std::nullopt});
+    applied(opened, on_tab(1));
+    const bool menu_open = opened.frame().context_menu.has_value();
+    expect(menu_open && !opened.apply(TabTipTick{}).repaint && !opened.frame().tab_tip.has_value(),
+           "the tick shows no tip while the context menu is open");
 }
 
 // 合図は Ctrl+Tab の歩きを確定せず、Vim の待ち・録画・`.`・undo を動かさない（is_signal の 1 本）。

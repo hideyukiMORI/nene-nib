@@ -41,6 +41,7 @@
 #include "ScriptedImages.hpp"
 #include "ScriptedLanguageServer.hpp"
 #include "ScriptedMarkdown.hpp"
+#include "ScriptedPreview.hpp"
 #include "ScriptedPrinter.hpp"
 #include "ScriptedProjectSearch.hpp"
 #include "ScriptedShellRegistration.hpp"
@@ -240,18 +241,19 @@ void verify_startup_question()
     ScriptedStartLists start_lists;
     ScriptedUiLanguage ui_language;
     ScriptedProjectSearch project_search;
+    ScriptedPreview previews;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, code_pages};
     ScriptedLanguageServer language_server;
     app::EditorController controller(
-        app::EditorPorts{appearance,      clipboard,   files,        code_pages,
-                         settings,        themes,      session,      history,
-                         folders,         bookmarks,   text_layouts, autosave,
-                         fonts,           bell,        markdown,     reads,
-                         language_server, wall_clock,  printer,      shell_registration,
-                         images,          start_lists, ui_language,  project_search},
+        app::EditorPorts{
+            appearance,   clipboard,       files,       code_pages,     settings,
+            themes,       session,         history,     folders,        bookmarks,
+            text_layouts, autosave,        fonts,       bell,           markdown,
+            reads,        language_server, wall_clock,  printer,        shell_registration,
+            images,       start_lists,     ui_language, project_search, previews},
         {open_of(giant_path), open_of(small_path)});
     expect(!controller.delivery().display_question,
            "starting with a small file last does not ask about the giant one yet");
@@ -652,17 +654,18 @@ void verify_startup_before_layout()
     ScriptedStartLists start_lists;
     ScriptedUiLanguage ui_language;
     ScriptedProjectSearch project_search;
+    ScriptedPreview previews;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, code_pages};
     ScriptedLanguageServer language_server;
-    const app::EditorPorts ports{appearance,      clipboard,   files,        code_pages,
-                                 settings,        themes,      session,      history,
-                                 folders,         bookmarks,   text_layouts, autosave,
-                                 fonts,           bell,        markdown,     reads,
-                                 language_server, wall_clock,  printer,      shell_registration,
-                                 images,          start_lists, ui_language,  project_search};
+    const app::EditorPorts ports{
+        appearance,   clipboard,       files,       code_pages,     settings,
+        themes,       session,         history,     folders,        bookmarks,
+        text_layouts, autosave,        fonts,       bell,           markdown,
+        reads,        language_server, wall_clock,  printer,        shell_registration,
+        images,       start_lists,     ui_language, project_search, previews};
     app::EditorController started(ports, {open_of(giant_path)});
     expect(started.delivery().display_question, "starting with a giant line asks");
     const auto first = started.apply(app::VisibleLines{10, grid_geometry});
