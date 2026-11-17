@@ -1956,6 +1956,36 @@ palette_command(std::string_view text)
                     std::nullopt, ExPaletteRequest{row->scope, std::string(query)}};
 }
 
+// `:gr[ep] {pattern}`（ADR 0167 の決定 1・最短は Vim と同じ `gr`）。名前の後の空白を飛ばした残りの
+// 全部が検索語で（区切りは無い・行の末尾の空白は evaluate_ex が落とす）、Ctrl+P の面を出どころ `!`
+// （project_hits）のその入力で開く。検索語が空なら空の `!` の面。`!`・範囲・名前に続く空白でない
+// 文字は unsupported_argument。名前が当たらなければ値なし（ほかの命令として扱う）。
+constexpr std::string_view grep_name = "grep";
+constexpr std::size_t grep_shortest = 2;
+
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+grep_command(std::string_view text)
+{
+    const std::size_t range = leading(text, is_digit);
+    const std::size_t letters = leading(text.substr(range), is_letter);
+    if (!abbreviates(text.substr(range, letters), grep_name, grep_shortest))
+    {
+        return std::nullopt;
+    }
+    const auto suffix = text.substr(range + letters);
+    if (range > 0 || (!suffix.empty() && suffix.front() != ' '))
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    const auto first = suffix.find_first_not_of(' ');
+    const auto pattern =
+        first == std::string_view::npos ? std::string_view{} : suffix.substr(first);
+    return ExResult{
+        std::nullopt, std::nullopt,
+        std::nullopt, DisplayText::parse(grep_name).value(),
+        std::nullopt, ExPaletteRequest{PaletteScope::project_hits, std::string(pattern)}};
+}
+
 constexpr std::array<ExDocumentName, 6> document_names{{
     {"write", 1, ExDocumentVerb::write, ExDocumentVerb::write},
     {"quit", 1, ExDocumentVerb::quit, ExDocumentVerb::quit_force},
@@ -2118,10 +2148,10 @@ nohlsearch_command(std::string_view text)
 // ここに 1 行足す（無名名前空間の関数を書き忘れると -Wunused-function で落ちる）。
 using ExCommandParser =
     std::optional<std::expected<ExResult, ExEvaluationFailure>> (*)(std::string_view);
-constexpr std::array<ExCommandParser, 11> command_parsers{
+constexpr std::array<ExCommandParser, 12> command_parsers{
     line_command,    nohlsearch_command, map_command,     syntax_command,
     preview_command, tab_command,        window_command,  palette_command,
-    print_command,   version_command,    document_command};
+    grep_command,    print_command,      version_command, document_command};
 
 // 表のどの行にも当たらなければ unknown_command。
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure> remaining_command(std::string_view text)
@@ -2196,10 +2226,12 @@ lines_result(std::string_view text, const std::optional<ExRange> &range)
     return result;
 }
 
-// 命令の字面が `|` を自分で読むか（`:s` の族と `:g`・区切りの間の `|` は文字）。
+// 命令の字面が `|` を自分で読むか（`:s` の族と `:g`・区切りの間の `|` は文字。`:grep` は行の残りの
+// 全部が検索語・ADR 0167 の決定 1）。
 [[nodiscard]] bool takes_bar(std::string_view command)
 {
-    return substitute_command(command).has_value() || global_command(command).has_value();
+    return substitute_command(command).has_value() || global_command(command).has_value() ||
+           grep_command(command).has_value();
 }
 
 // 行を書き換える命令（`:s` の族・`:d` `:y`・`:g`）。どれでもなければ値なし。

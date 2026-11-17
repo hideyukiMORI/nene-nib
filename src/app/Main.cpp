@@ -31,6 +31,7 @@
 #include "Win32LanguageServer.hpp"
 #include "Win32MarkdownAdapter.hpp"
 #include "Win32Printer.hpp"
+#include "Win32ProjectSearchAdapter.hpp"
 #include "Win32SessionAdapter.hpp"
 #include "Win32SettingsAdapter.hpp"
 #include "Win32ShellRegistration.hpp"
@@ -254,7 +255,7 @@ void bind_window_handle(const nenenib::ui::win32::EditorWindow &window,
 
 // 「届いた」の合図は窓ができてから渡す。番号と HWND は ui が持ち、adapters は知らない（ADR 0062
 // の決定 7）。同じフォルダ・自動退避・Markdown のプレビュー（ADR 0155 の決定 5）・開く道の読み
-// （ADR 0159 の決定 9）・プレビューの画像（ADR 0155 の追補 54）の
+// （ADR 0159 の決定 9）・プレビューの画像（ADR 0155 の追補 54）・全文検索（ADR 0167 の決定 4）の
 // adapter が同じワーカーを借りる。起動の引数の読みは窓より先に頼まれる
 // ので、開く道の読みはそれより前に届いた結果を bind のときに 1 回知らせる。
 template <typename... Adapters>
@@ -316,7 +317,6 @@ int run(HINSTANCE instance)
     // 閉じたファイルの履歴は閉じたときに書き Ctrl+P の面を開くときに読む（ADR 0060 決定 8）。
     nib_adapters::Win32HistoryAdapter history(files, nib_adapters::local_history_path());
     nib_adapters::Win32BookmarkAdapter bookmarks(files, nib_adapters::local_bookmark_path());
-    // 裏の仕事のワーカーと device の箱（宣言の順と壊れる順は run の上の注記）。
     nenenib::ui::win32::DeviceWarmup warmup;
     nenenib::adapters::win32::Win32Worker worker;
     make_device_first(worker, warmup);
@@ -338,17 +338,17 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32ImageAdapter images(worker);
     nenenib::adapters::win32::Win32StartListAdapter start_lists(worker, history, bookmarks);
     nib_adapters::Win32UiLanguage ui_language;
+    nib_adapters::Win32ProjectSearchAdapter project_search(worker);
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{
-            appearance,   clipboard,       files,      code_pages, settings,
-            themes,       session,         history,    folders,    bookmarks,
-            text_layouts, autosave,        fonts,      bell,       markdown,
-            reads,        language_server, wall_clock, printer,    shell_registration,
-            images,       start_lists,     ui_language},
+            appearance,   clipboard,       files,       code_pages,    settings,
+            themes,       session,         history,     folders,       bookmarks,
+            text_layouts, autosave,        fonts,       bell,          markdown,
+            reads,        language_server, wall_clock,  printer,       shell_registration,
+            images,       start_lists,     ui_language, project_search},
         initial_documents(given));
     const auto last_resort = last_resort_for(controller);
-    // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
-    // 復号が済んでいる（Issue #19）。
+    // 起動の最初の節目（引数の解析・adapters の構築・起動引数の読み込みと復号の後・Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);
     const auto window = nenenib::ui::win32::EditorWindow::create(
         instance, controller, {timing, wsl}, {text_layouts, warmup, controller.display_language()});
@@ -357,7 +357,8 @@ int run(HINSTANCE instance)
         return report(reason_of(window.error()));
     }
     bind_window_handle(*window.value(), clipboard, language_server);
-    bind_work_signal(*window.value(), folders, autosave, markdown, reads, images, start_lists);
+    bind_work_signal(*window.value(), folders, autosave, markdown, reads, images, start_lists,
+                     project_search);
     pump_messages(*window.value(), warmup, language_server);
     return window.value()->rendering_failed() ? 1 : 0;
 }

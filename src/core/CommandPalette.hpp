@@ -4,6 +4,7 @@
 #include "CommandLine.hpp"
 #include "EditMode.hpp"
 #include "FontFamilies.hpp"
+#include "PaletteOrigin.hpp"
 #include "PaletteScope.hpp"
 
 #include <cstddef>
@@ -63,6 +64,10 @@ class CommandPalette final
     // 伸ばす前の結果が空なら先頭、設定のコマンド（commands）は番号のまま。入力は変えない。
     // more が空なら同じ面を返す。新しい生の候補は一度防御コピーする（ADR 0091）。
     [[nodiscard]] CommandPalette extended(const std::vector<CommandChoice> &more) const;
+    // 候補の列から出どころが origin の候補を外した面（ADR 0167 の決定 1・全文検索の検索語が変わった
+    // とき前の当たりを捨てる）。ほかの候補の順は変えず、結果は filtered の 1 本で作り直し、選択と
+    // 窓の先頭は先頭。入力は変えない。外す候補が無ければ同じ面を返す。
+    [[nodiscard]] CommandPalette dropped(PaletteOrigin origin) const;
 
   private:
     using Entries = std::shared_ptr<const std::vector<CommandChoice>>;

@@ -84,9 +84,10 @@ void verify_columns()
                    "every text is non-empty and has the Japanese placeholders");
         }
     }
-    expect(core::ui_message_count == 203,
-           "the table has 203 messages (T1a 197, T1b 4 and the About operation 2 of D90)");
-    expect(placed == 26, "26 messages take placeholders (T1a)");
+    expect(core::ui_message_count == 212,
+           "the table has 212 messages (T1a 197, T1b 4, the About operation 2 of D90, the "
+           "project search mark 1 of #1003 and the project search face 8 of #1763)");
+    expect(placed == 29, "29 messages take placeholders (T1a 26 and the search progress 3)");
     expect(core::ui_text(core::UiMessage::tab_untitled, core::DisplayLanguage::english) ==
                "Untitled",
            "the English column is read for english");
@@ -177,13 +178,14 @@ void verify_japanese_save_and_palette()
                "the Japanese save question is the product text");
     }
     using Origin = core::PaletteOrigin;
-    constexpr std::array<std::pair<Origin, Message>, 6> origins{{
+    constexpr std::array<std::pair<Origin, Message>, 7> origins{{
         {Origin::tab, Message::palette_origin_tab},
         {Origin::bookmarked_tab, Message::palette_origin_bookmarked_tab},
         {Origin::bookmark, Message::label_bookmarks},
         {Origin::history, Message::label_history},
         {Origin::folder, Message::palette_origin_folder},
         {Origin::document_format, Message::palette_origin_document_format},
+        {Origin::project_hit, Message::palette_mark_project},
     }};
     for (const auto &[origin, message] : origins)
     {
@@ -191,10 +193,11 @@ void verify_japanese_save_and_palette()
                    japanese(message),
                "the Japanese palette origin is the product text");
     }
-    constexpr std::array<Message, 6> marks{
+    constexpr std::array<Message, 7> marks{
         Message::palette_mark_tabs,     Message::label_bookmarks,
         Message::label_history,         Message::palette_mark_folder,
-        Message::palette_mark_settings, Message::palette_mark_operations};
+        Message::palette_mark_settings, Message::palette_mark_operations,
+        Message::palette_mark_project};
     for (std::size_t index = 0; index < marks.size(); ++index)
     {
         expect(core::palette_marks.at(index).name == marks.at(index),

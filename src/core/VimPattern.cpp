@@ -923,6 +923,27 @@ opened_item(std::string_view pattern, std::size_t at, VimPatternParse &parse)
     return code >= 0x80 || (code >= U'A' && code <= U'Z') || (code >= U'a' && code <= U'z');
 }
 
+// 原子が「必ず現れるバイト列」（required_bytes）に入れる code point と、ASCII を畳んで比べるか。
+// 入らない原子は値なし（列を切る）。大小を畳む原子は、畳みの仲間を ASCII の大小だけを畳んだ比較で
+// 見分けられないとき（vim_folded_ascii_comparable）だけ入れ、ASCII なら小文字の形にする。
+[[nodiscard]] std::optional<std::pair<char32_t, bool>> needle_code(const VimPatternAtom &atom,
+                                                                   bool ignore_case) noexcept
+{
+    if (atom.kind != VimPatternAtomKind::literal || atom.repeat != VimPatternRepeat::once)
+    {
+        return std::nullopt;
+    }
+    if (!ignore_case || atom.exact)
+    {
+        return std::pair{atom.code, false};
+    }
+    if (!vim_folded_ascii_comparable(atom.code))
+    {
+        return std::nullopt;
+    }
+    return atom.code < 0x80 ? std::pair{vim_folded(atom.code), true} : std::pair{atom.code, false};
+}
+
 // 項目の始まりの `\c` か `\C`（#1041）。原子を足さない。
 [[nodiscard]] bool case_escape(std::string_view pattern, std::size_t at) noexcept
 {
@@ -1271,6 +1292,38 @@ std::optional<std::size_t> VimPattern::longest_bytes() const noexcept
         bytes += atom_bytes(atom);
     }
     return bytes;
+}
+
+std::optional<VimPatternNeedle> VimPattern::required_bytes() const
+{
+    // 選択と群の量の命令の列は原子を順に並べた列ではない（ADR 0184 の決定 3）。ほかの道の原子の列は
+    // 当たりの中で順に並ぶので、量の付かない literal が続く所は当たりの中で続くバイト列になる。
+    if (route_ == VimPatternRoute::program)
+    {
+        return std::nullopt;
+    }
+    VimPatternNeedle best{{}, false};
+    VimPatternNeedle run{{}, false};
+    for (const VimPatternAtom &atom : atoms_)
+    {
+        const auto code = needle_code(atom, ignore_case_);
+        if (!code.has_value())
+        {
+            run = VimPatternNeedle{{}, false};
+            continue;
+        }
+        append_utf8(run.bytes, code.value().first);
+        run.ascii_folded = run.ascii_folded || code.value().second;
+        if (run.bytes.size() > best.bytes.size())
+        {
+            best = run;
+        }
+    }
+    if (best.bytes.empty())
+    {
+        return std::nullopt;
+    }
+    return best;
 }
 
 std::optional<std::string> VimPattern::literal_bytes() const

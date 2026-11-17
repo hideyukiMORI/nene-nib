@@ -21,4 +21,12 @@ namespace nenenib::core
 // CaseFolding の C と S）に合わせ、大文字にしてから小文字にする（`ς` と `σ` と `Σ`、`ſ` と `s`、
 // Kelvin の `K` と `k` が同じになる）。トルコ語の `İ` `ı` は CaseFolding の C / S に無く畳まない。
 [[nodiscard]] char32_t vim_folded(char32_t value) noexcept;
+
+// vim_folded で value と同じ形に畳まれる字（畳みの仲間）が、ASCII の大小だけを畳んだバイト列の
+// 比較で value と見分けられない字だけか（#1003）。ASCII の英字は仲間が自分の大小 2 つだけのとき真
+// （`k` `s` は Kelvin の `K`（U+212A）と `ſ`（U+017F）が仲間なので偽）、ASCII の外の字は仲間が
+// 自分だけのとき真（`日` は真・`é` は `É` が仲間なので偽）。表は生成物 CaseMappingTable.hpp の
+// case_fold_shared（eng/case-mapping.py が同じ 2 つの表から作る・試験が vim_folded と照合する）。
+// 大小を畳むパターンの当たりをバイト列で絞り込めるかの問い（VimPattern::required_bytes）。
+[[nodiscard]] bool vim_folded_ascii_comparable(char32_t value) noexcept;
 } // namespace nenenib::core

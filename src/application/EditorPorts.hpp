@@ -16,6 +16,7 @@
 #include "LanguageServerPort.hpp"
 #include "MarkdownPort.hpp"
 #include "PrintPort.hpp"
+#include "ProjectSearchPort.hpp"
 #include "SessionPort.hpp"
 #include "SettingsPort.hpp"
 #include "ShellRegistrationPort.hpp"
@@ -70,5 +71,8 @@ struct EditorPorts
     // OS の表示言語の観測（ADR 0123 の追補 2026-11-13 の決定 2）。起動の 1 回と `:set language=`
     // のときだけ呼ぶ。
     UiLanguagePort &ui_language;
+    // プロジェクトの全文検索を裏で行う（ADR 0167 の決定 4）。Ctrl+P の面が `!` の出どころの間だけ
+    // 呼び、打鍵・切り替え・保存・起動・開くの道では呼ばない（決定 7）。
+    ProjectSearchPort &project_search;
 };
 } // namespace nenenib::application

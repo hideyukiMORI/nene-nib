@@ -37,6 +37,7 @@
 #include "OpenDocument.hpp"
 #include "OpenDocumentFormatList.hpp"
 #include "OpenOperationList.hpp"
+#include "OpenProjectSearch.hpp"
 #include "OpenTabList.hpp"
 #include "PasteCommand.hpp"
 #include "PinTab.hpp"
@@ -105,5 +106,5 @@ using EditorIntent = std::variant<
     HoverExplorer, LanguageServerTick, MapTimeout, InsertDateTime, SelectDocumentFormat,
     OpenDocumentFormatList, OpenDisplayLanguageList, BeginFind, BeginGoToLine, BeginReplace,
     SetPreviewPlacement, PointPreview, PrintDocument, RegisterShell, UnregisterShell, PinTab,
-    FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion>;
+    FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion, OpenProjectSearch>;
 } // namespace nenenib::application

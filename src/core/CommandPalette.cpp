@@ -113,6 +113,10 @@ CommandPalette::Result CommandPalette::result_of(const CommandLine &input, EditM
     case PaletteScope::history:
     case PaletteScope::folder:
         return Result{listed_positions(entries, query.scope, query.query)};
+    case PaletteScope::project_hits:
+        // 入力は検索語で、面の絞り込みの文字ではない（ADR 0167 の決定 5）。当たりの候補を列の順の
+        // まま全部出す（候補を足すのは controller・段 G2）。
+        return Result{listed_positions(entries, query.scope, {})};
     }
     std::unreachable();
 }
@@ -141,7 +145,10 @@ CommandPalette::updated_result(const CommandLine &input,
 {
     const PaletteQuery before = palette_query_of(input_.text());
     const PaletteQuery next = palette_query_of(input.text());
-    if (next.scope == before.scope && next.query.starts_with(before.query))
+    // 全文検索の入力は検索語で、面の絞り込みの文字ではない（ADR 0167 の決定 5）。照合し直さず
+    // result_of の 1 本へ回す。
+    if (next.scope == before.scope && next.scope != PaletteScope::project_hits &&
+        next.query.starts_with(before.query))
     {
         return Result{listed_positions(*entries_, next.scope, next.query, positions)};
     }
@@ -375,5 +382,19 @@ CommandPalette CommandPalette::extended(const std::vector<CommandChoice> &more) 
         std::visit([this, kept](const auto &result)
                    { return carried_index(result, kept, selected_); }, *next.result_);
     return next.reselected(index);
+}
+
+CommandPalette CommandPalette::dropped(PaletteOrigin origin) const
+{
+    if (std::ranges::none_of(*entries_, [origin](const CommandChoice &choice)
+                             { return choice.origin == std::optional{origin}; }))
+    {
+        return *this;
+    }
+    auto kept = std::make_shared<std::vector<CommandChoice>>();
+    kept->reserve(entries_->size());
+    std::ranges::copy_if(*entries_, std::back_inserter(*kept), [origin](const CommandChoice &choice)
+                         { return choice.origin != std::optional{origin}; });
+    return filtered(input_, visible_, mode_, std::move(kept));
 }
 } // namespace nenenib::core
