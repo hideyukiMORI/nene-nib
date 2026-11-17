@@ -12,8 +12,10 @@ namespace nenenib::ui::win32
 // HitTestTextRange・折り返しと横の送りと DPI を含んだ位置）で、升は target の幅 ÷ cells。幅は
 // 升 × max(cells, 印の字の数)（半角の跳び先に 2 文字の印は次の升へはみ出す）、高さは target
 // と同じ。 角は丸めない。
+// 行の終わり（空の行を含む）の跳び先は字が無く target の幅が 0 なので、升は印の字の幅 written ÷
+// 印の字の数にする（印の字がそのまま収まる）。
 [[nodiscard]] D2D1_RECT_F motion_label_box(const DWRITE_HIT_TEST_METRICS &target,
-                                           const core::MotionLabel &label) noexcept;
+                                           const core::MotionLabel &label, float written) noexcept;
 
 // 印を 1 つ描く（地を塗り、地に切り抜いて字を左に寄せて描く）。製品の renderer と tests/ui が
 // 同じ 1 本を通る。Target は ID2D1RenderTarget（製品は device context）。

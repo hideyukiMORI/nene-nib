@@ -126,13 +126,13 @@ void check_boxes(win32::BodyTextLayouts &layouts, std::uint32_t dpi)
     const auto &a = narrow.value();
     const auto &w = wide.value();
     const std::string at = " at DPI " + std::to_string(dpi);
-    expect(same_box(win32::motion_label_box(a, {core::Column{1}, "a", 1}),
+    expect(same_box(win32::motion_label_box(a, {core::Column{1}, "a", 1}, 0.0F),
                     sized(a.left, a.top, a.width, a.height)),
            ("a one-letter label covers a narrow target" + at).c_str());
-    expect(same_box(win32::motion_label_box(a, {core::Column{1}, ";s", 1}),
+    expect(same_box(win32::motion_label_box(a, {core::Column{1}, ";s", 1}, 0.0F),
                     sized(a.left, a.top, a.width * 2.0F, a.height)),
            ("a two-letter label on a narrow target spills into the next cell" + at).c_str());
-    expect(same_box(win32::motion_label_box(w, {core::Column{2}, ";s", 2}),
+    expect(same_box(win32::motion_label_box(w, {core::Column{2}, ";s", 2}, 0.0F),
                     sized(w.left, w.top, w.width, w.height)),
            ("a wide target takes two cells for a two-letter label" + at).c_str());
 }
@@ -153,9 +153,51 @@ void check_wrapped(win32::BodyTextLayouts &layouts)
         return;
     }
     const auto &hit = last.value();
-    expect(hit.top > 0.0F && same_box(win32::motion_label_box(hit, {core::Column{16}, "a", 1}),
-                                      sized(hit.left, hit.top, hit.width, hit.height)),
+    expect(hit.top > 0.0F &&
+               same_box(win32::motion_label_box(hit, {core::Column{16}, "a", 1}, 0.0F),
+                        sized(hit.left, hit.top, hit.width, hit.height)),
            "a target on a wrapped row is boxed on that row");
+}
+
+// 空の行（字の無い跳び先）の地は印の字の幅で、行頭に 1 升ぶん敷く（V-1781-1786 の必須 1）。
+void check_empty_line(SoftwareTarget &target, win32::BodyTextLayouts &layouts)
+{
+    const auto layout = body_layout(layouts, "", 96, false);
+    auto factory = directwrite_factory();
+    if (!layout || !factory)
+    {
+        unmeasured("the empty-line label needs a DirectWrite layout and factory");
+        return;
+    }
+    DWRITE_HIT_TEST_METRICS hit{};
+    float x = 0;
+    float y = 0;
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> written;
+    DWRITE_TEXT_METRICS measured{};
+    if (FAILED(layout->HitTestTextPosition(0, FALSE, &x, &y, &hit)) ||
+        FAILED(factory->CreateTextLayout(L"a", 1, layout.Get(), 400.0F, 100.0F, &written)) ||
+        FAILED(written->GetMetrics(&measured)))
+    {
+        unmeasured("the empty-line label needs the position and the label's layout");
+        return;
+    }
+    hit.width = 0.0F;
+    hit.height = static_cast<float>(line_height);
+    const D2D1_RECT_F box = win32::motion_label_box(hit, {core::Column{1}, "a", 1},
+                                                    measured.widthIncludingTrailingWhitespace);
+    expect(box.right - box.left > 0.0F && std::abs(box.left - hit.left) < near_pixel,
+           "an empty line's label ground is as wide as its letter at the line start");
+    const Pixels pixels = target.painted(
+        [&](ID2D1RenderTarget &context, ID2D1SolidColorBrush *brush)
+        {
+            win32::paint_motion_label(context, brush,
+                                      win32::MotionLabelPaint{box, written.Get(),
+                                                              D2D1::ColorF(1, 0, 0),
+                                                              D2D1::ColorF(0, 0, 1)});
+        });
+    expect(pixel_at(pixels, static_cast<std::int32_t>(box.left) + 1,
+                    static_cast<std::int32_t>(box.top) + 1) != 0,
+           "an empty line's label ground is painted");
 }
 
 // 地の中で地の色と違う画素の数（印の字が描いた画素）。
@@ -193,7 +235,7 @@ void check_paint(SoftwareTarget &target, win32::BodyTextLayouts &layouts,
         return;
     }
     const core::MotionLabel label{core::Column{4}, "s", 1};
-    const D2D1_RECT_F box = win32::motion_label_box(hit.value(), label);
+    const D2D1_RECT_F box = win32::motion_label_box(hit.value(), label, 0.0F);
     const std::wstring wide = L"s";
     Microsoft::WRL::ComPtr<IDWriteTextLayout> written;
     if (FAILED(factory->CreateTextLayout(wide.c_str(), 1, layout.Get(), box.right - box.left,
@@ -251,7 +293,7 @@ void check_unlabelled(SoftwareTarget &target, win32::BodyTextLayouts &layouts)
         unmeasured("the unlabelled pixels need a DirectWrite layout");
         return;
     }
-    const D2D1_RECT_F box = win32::motion_label_box(hit.value(), {core::Column{4}, "a", 1});
+    const D2D1_RECT_F box = win32::motion_label_box(hit.value(), {core::Column{4}, "a", 1}, 0.0F);
     const auto text = [&](ID2D1RenderTarget &context, ID2D1SolidColorBrush *brush)
     {
         context.DrawTextLayout(D2D1::Point2F(0, 0), layout.Get(), brush,
@@ -287,5 +329,6 @@ void verify_motion_label_paint()
     check_paint(target, layouts, core::palette_for(core::Appearance::dark), "dark");
     check_paint(target, layouts, core::palette_for(core::Appearance::light), "light");
     check_unlabelled(target, layouts);
+    check_empty_line(target, layouts);
 }
 } // namespace nenenib::tests::ui

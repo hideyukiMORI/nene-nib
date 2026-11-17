@@ -52,14 +52,16 @@ void place_label(const core::TextBuffer &text, core::Offset target, std::string 
             continue;
         }
         const std::size_t begin = text.line_start(line).value + view.window.byte;
-        if (target.value < begin || target.value >= begin + view.text.size())
+        // 行の終わり（空の行の行頭を含む）の跳び先も載せる（桁は行の code point の数 + 1・1 升）。
+        if (target.value < begin || target.value > begin + view.text.size())
         {
             return;
         }
         const std::size_t at = target.value - begin;
-        const char32_t code = core::code_point_at(view.text, core::Offset{at});
-        view.labels.push_back(
-            core::MotionLabel{column_at(view.text, at), std::move(label), cells_of(code)});
+        const std::uint8_t cells = at < view.text.size()
+                                       ? cells_of(core::code_point_at(view.text, core::Offset{at}))
+                                       : narrow_cells;
+        view.labels.push_back(core::MotionLabel{column_at(view.text, at), std::move(label), cells});
         return;
     }
 }

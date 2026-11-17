@@ -905,6 +905,7 @@ class EditorController final
     void settle_easymotion(const EditorIntent &intent);
     void settle_jump_line();
     void settle_labels(const EditorIntent &intent);
+    void dropped_easymotion();
     void answer_question(core::SubstituteReply reply);
     void record_question_key(const core::VimKey &key);
     void end_question_before(const EditorIntent &intent);

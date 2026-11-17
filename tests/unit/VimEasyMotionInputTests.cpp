@@ -5,7 +5,10 @@
 // 捨てる・合図では捨てない・改行で終わる本文を見る。本物の Vim に無いので oracle は無い。
 #include "CancelCommand.hpp"
 #include "Column.hpp"
+#include "CommandEdit.hpp"
 #include "CommandText.hpp"
+#include "EditCommand.hpp"
+#include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
@@ -14,8 +17,11 @@
 #include "InputLineView.hpp"
 #include "LineView.hpp"
 #include "MotionLabel.hpp"
+#include "NewTab.hpp"
+#include "OpenCommandPalette.hpp"
 #include "Scopes.hpp"
 #include "ScrollLines.hpp"
+#include "SelectEditMode.hpp"
 #include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
 #include "VimCharacter.hpp"
@@ -252,6 +258,92 @@ void verify_paused_insert_jump()
                caret_at(jumped, 1, 3),
            "a jump from INSERT's Ctrl-o returns to INSERT at the target");
 }
+
+// 空の行の跳び先にも印が載り、打てば跳ぶ（V-1781-1786 の必須 1）。
+void verify_empty_line_label()
+{
+    Editing editing;
+    open_vim_document(editing, "ab\n\ncd");
+    auto &controller = editing.controller();
+    const auto labeled = leader_typed(controller, U"w");
+    expect(labels_on(labeled, 1) == std::vector<MotionLabel>{{Column{1}, "a", 1}},
+           "an empty line's target is labelled at its start");
+    const auto jumped = typed(controller, U"a");
+    expect(caret_at(jumped, 2, 1), "the empty line's label jumps there");
+}
+
+// 録画は打った鍵のまま（入力行の文字と印の鍵も）で、再生でも同じ所へ跳ぶ（V-1781-1786 の L4）。
+void verify_recorded_jump()
+{
+    Editing editing;
+    open_vim_document(editing, "xyz xyz");
+    auto &controller = editing.controller();
+    static_cast<void>(typed(controller, U"qa"));
+    static_cast<void>(leader_typed(controller, U"f"));
+    static_cast<void>(text_typed(controller, "z"));
+    static_cast<void>(typed(controller, U"sq0"));
+    const auto replayed = typed(controller, U"@a");
+    expect(caret_at(replayed, 1, 7) && engine_rests(controller),
+           "@a replays the backslashes, the character and the label");
+}
+
+// 空の行の Backspace は取消、Ctrl+P は入力行も印も捨てる（L4）。
+void verify_other_drops()
+{
+    Editing erased;
+    open_vim_document(erased, "abcabc");
+    static_cast<void>(leader_typed(erased.controller(), U"f"));
+    const auto after_backspace =
+        erased.controller().apply_frame(app::EditCommand{core::CommandEdit::backspace});
+    expect(!jump_line_shown(after_backspace) && engine_rests(erased.controller()),
+           "Backspace on the empty one-character line cancels the wait");
+    Editing palette;
+    open_vim_document(palette, "ab cd ef");
+    static_cast<void>(leader_typed(palette.controller(), U"w"));
+    static_cast<void>(palette.controller().apply_frame(app::OpenCommandPalette{}));
+    expect(engine_rests(palette.controller()), "Ctrl+P drops the labels");
+    Editing replaced;
+    open_vim_document(replaced, "abcabc");
+    static_cast<void>(leader_typed(replaced.controller(), U"f"));
+    static_cast<void>(replaced.controller().apply_frame(app::OpenCommandPalette{}));
+    expect(engine_rests(replaced.controller()),
+           "Ctrl+P over the one-character line drops the wait");
+    Editing tabbed;
+    open_vim_document(tabbed, "ab cd ef");
+    static_cast<void>(leader_typed(tabbed.controller(), U"w"));
+    static_cast<void>(tabbed.controller().apply_frame(app::NewTab{}));
+    expect(!tabbed.controller().vim_state().easy_motion.has_value(), "a new tab drops the labels");
+    Editing moded;
+    open_vim_document(moded, "ab cd ef");
+    static_cast<void>(leader_typed(moded.controller(), U"w"));
+    static_cast<void>(
+        moded.controller().apply_frame(app::SelectEditMode{core::EditMode::ordinary}));
+    expect(!moded.controller().vim_state().easy_motion.has_value(),
+           "leaving the Vim mode drops the labels");
+}
+
+// INSERT の Ctrl-o から出した印は、印の鍵で跳んでもスクロールで捨てても INSERT へ戻る（L2・L4）。
+void verify_paused_insert_labels()
+{
+    Editing jumped;
+    open_vim_document(jumped, "ab cd ef");
+    static_cast<void>(typed(jumped.controller(), U"i"));
+    static_cast<void>(jumped.controller().apply_frame(
+        app::VimKeyPress{core::VimKey{core::VimSpecialKey::control_o}}));
+    static_cast<void>(leader_typed(jumped.controller(), U"w"));
+    const auto landed = typed(jumped.controller(), U"s");
+    expect(landed.vim_mode == core::VimMode::insert && caret_at(landed, 1, 7),
+           "a label key from INSERT's Ctrl-o returns to INSERT at the target");
+    Editing scrolled;
+    open_vim_document(scrolled, "a\nb\nc\nd");
+    static_cast<void>(typed(scrolled.controller(), U"i"));
+    static_cast<void>(scrolled.controller().apply_frame(
+        app::VimKeyPress{core::VimKey{core::VimSpecialKey::control_o}}));
+    static_cast<void>(leader_typed(scrolled.controller(), U"j"));
+    const auto dropped = scrolled.controller().apply_frame(app::ScrollLines{1});
+    expect(dropped.vim_mode == core::VimMode::insert && no_labels(dropped),
+           "dropping the labels from INSERT's Ctrl-o returns to INSERT");
+}
 } // namespace
 
 void verify_vim_easymotion_input_contracts()
@@ -265,5 +357,9 @@ void verify_vim_easymotion_input_contracts()
     verify_final_line_break();
     verify_paused_insert();
     verify_paused_insert_jump();
+    verify_empty_line_label();
+    verify_recorded_jump();
+    verify_other_drops();
+    verify_paused_insert_labels();
 }
 } // namespace nenenib::tests

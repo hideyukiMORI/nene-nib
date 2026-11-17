@@ -13,6 +13,7 @@
 #include "VimNoEffect.hpp"
 #include "VimPrefix.hpp"
 #include "VimRepeatFailure.hpp"
+#include "VimScreenGeometry.hpp"
 
 #include <optional>
 #include <string>
@@ -30,6 +31,7 @@ using detail::escaped_or_refused;
 using detail::exact_jump;
 using detail::failed;
 using detail::finished_input_wait;
+using detail::requested_layout;
 using detail::rerouted;
 using detail::started_prefix;
 
@@ -67,6 +69,12 @@ constexpr char32_t backslash = 0x5C;
         VimStep step{state, VimNoEffect{}};
         step.viewport_request = true;
         return step;
+    }
+    // 窓に全部入る最後の論理行は折り返した行の画面行数で決まる（追補 2026-11-17 の
+    // 4）。足りなければ 状態をそのままに求め、controller が同じ鍵を流し直す。
+    if (const auto last = vim_window_last_line(view); !last)
+    {
+        return requested_layout(state, last.error());
     }
     std::vector<Offset> targets = easymotion_targets(view, kind, character);
     VimState next = finished_input_wait(state);
