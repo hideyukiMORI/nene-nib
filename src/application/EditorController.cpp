@@ -645,6 +645,8 @@ void EditorController::settle_transient()
     // 全文検索の検索語の変化・面の閉じ・開いた当たりのキャレットも同じ出口で拾い、入力行の編集の
     // 経路ごとに書かない（ADR 0167 の決定 1・5）。
     settle_project_search();
+    // プレビュー欄の窓の要求と取消も同じ出口（選択の移動・面の閉じ・ADR 0189 の決定 4）。
+    settle_finder_preview();
     if (state_.transient().has_value() && !state_.transient_saved())
     {
         state_ = state_.without_transient();
@@ -776,6 +778,8 @@ void EditorController::accept(const WorkCompleted &)
     // 全文検索（ADR 0167 の決定 4）。頼んでいなければ呼ばない。面の当たりを足すので、下の面を読む
     // 前に呼ぶ。
     collect_project_search();
+    // プレビュー欄の窓（ADR 0189 の決定 4）。頼んでいなければ呼ばない。
+    collect_finder_preview();
     const auto &input = state_.command_input();
     const auto *palette =
         input.has_value() ? std::get_if<core::CommandPalette>(&input.value()) : nullptr;

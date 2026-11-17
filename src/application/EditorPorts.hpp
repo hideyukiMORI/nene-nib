@@ -15,6 +15,7 @@
 #include "ImagePort.hpp"
 #include "LanguageServerPort.hpp"
 #include "MarkdownPort.hpp"
+#include "PreviewPort.hpp"
 #include "PrintPort.hpp"
 #include "ProjectSearchPort.hpp"
 #include "SessionPort.hpp"
@@ -74,5 +75,7 @@ struct EditorPorts
     // プロジェクトの全文検索を裏で行う（ADR 0167 の決定 4）。Ctrl+P の面が `!` の出どころの間だけ
     // 呼び、打鍵・切り替え・保存・起動・開くの道では呼ばない（決定 7）。
     ProjectSearchPort &project_search;
+    // 探して見る面のプレビューの窓の読み（ADR 0189 の決定 4）。
+    PreviewPort &previews;
 };
 } // namespace nenenib::application

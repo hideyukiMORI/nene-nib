@@ -132,6 +132,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/ProjectSearchTests.cpp
     tests/unit/ProjectSearchControllerTests.cpp
     tests/unit/FinderLayoutTests.cpp
+    tests/unit/FinderPreviewTests.cpp
     tests/unit/CommandLineEditTests.cpp
     tests/unit/InputLinePropertyTests.cpp
     tests/unit/VimWindowTests.cpp
@@ -275,7 +276,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32TimingAdapter.cpp
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/LastResortArming.cpp src/adapters/win32/FolderShelf.cpp
     src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
-    src/adapters/win32/ProjectSearchEntries.cpp src/adapters/win32/ProjectSearchShelf.cpp src/adapters/win32/ProjectSearchWalk.cpp src/adapters/win32/Win32ProjectSearchAdapter.cpp
+    src/adapters/win32/ProjectSearchEntries.cpp src/adapters/win32/ProjectSearchShelf.cpp src/adapters/win32/ProjectSearchWalk.cpp src/adapters/win32/Win32ProjectSearchAdapter.cpp src/adapters/win32/PreviewShelf.cpp src/adapters/win32/PreviewRead.cpp src/adapters/win32/Win32PreviewAdapter.cpp
     src/adapters/win32/MarkdownShelf.cpp src/adapters/win32/Win32MarkdownAdapter.cpp
     src/adapters/win32/ImageShelf.cpp src/adapters/win32/ImageFileRead.cpp
     src/adapters/win32/ImageDecode.cpp src/adapters/win32/Win32ImageAdapter.cpp
@@ -398,6 +399,17 @@ nenenib_link(nib_project_search_adapter_tests nenenib_application)
 nenenib_link(nib_project_search_adapter_tests nenenib_adapters)
 add_test(NAME nib_adapters_project_search COMMAND nib_project_search_adapter_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(nib_adapters_project_search PROPERTIES TIMEOUT 120)
+
+# Issue #1793: プレビューの窓の読み（Win32PreviewAdapter・ADR 0189 の決定 4・8）を本物のファイルと
+# ワーカー 1 本で測る。16 MiB を超える見本を書く。時刻は読まず、合図の受け皿だけを待つので、止まらない
+# ときはこの制限時間で落ちる。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
+nenenib_target(nib_preview_adapter_tests adapter_tests EXECUTABLE tests/adapters/PreviewAdapterTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
+nenenib_link(nib_preview_adapter_tests nenenib_core)
+nenenib_link(nib_preview_adapter_tests nenenib_application)
+nenenib_link(nib_preview_adapter_tests nenenib_adapters)
+add_test(NAME nib_adapters_preview COMMAND nib_preview_adapter_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_adapters_preview PROPERTIES TIMEOUT 120)
 
 # Issue #993: 開く道の読み（Win32DocumentReader）を本物のファイルとワーカー 1 本で測る（ADR 0159）。
 # 65 MiB の見本を書いて塊の仕事で読む。時刻は読まず、合図の受け皿だけを待つので、止まらないときは

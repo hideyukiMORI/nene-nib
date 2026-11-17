@@ -412,6 +412,8 @@ void verify_project_search_controller_contracts();
 // FinderLayoutTests.cpp（#1785・ADR 0189 の段 P1 のプレビュー欄の置き方・切り替え・設定・開いている
 // タブの窓）
 void verify_finder_layout_contracts();
+// FinderPreviewTests.cpp（#1793・ADR 0189 の段 P2 の開いていないファイルの窓の port と保持）
+void verify_finder_preview_contracts();
 
 // CommandLineEditTests.cpp（#1550・#1643・Vim の入力行の c_CTRL-U / c_CTRL-W と `/` の Tab）
 void verify_command_line_edit_scope();

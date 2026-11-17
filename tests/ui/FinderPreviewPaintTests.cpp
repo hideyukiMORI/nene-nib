@@ -15,11 +15,14 @@
 #include "Palette.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteRowLayouts.hpp"
+#include "PreviewColor.hpp"
 #include "PreviewLine.hpp"
 #include "PreviewPanePainter.hpp"
 #include "PreviewPaneText.hpp"
 #include "PreviewSnippet.hpp"
 #include "SoftwareTarget.hpp"
+#include "SyntaxPalette.hpp"
+#include "SyntaxRole.hpp"
 #include "WindowChecks.hpp"
 
 #include <cstddef>
@@ -156,12 +159,23 @@ constexpr std::int32_t heading = 28;
                                std::nullopt};
 }
 
+// 構文の色の試験の色（keyword だけ純粋な緑・ほかは本文の色）。
+[[nodiscard]] core::SyntaxPalette syntax_of(const core::Palette &palette)
+{
+    const auto text = palette.text;
+    auto syntax = core::SyntaxPalette{text, text, text, text, text, text, text, text,
+                                      text, text, text, text, text, text, text, text};
+    syntax.keyword = core::RgbColor{0, 255, 0};
+    return syntax;
+}
+
 class PaneStrip final
 {
   public:
     PaneStrip(SoftwareTarget &target, const PreviewPaneText &text, PaletteRowLayouts &layouts,
               const core::Palette &palette)
-        : target_(target), text_(text), layouts_(layouts), palette_(palette)
+        : target_(target), text_(text), layouts_(layouts), palette_(palette),
+          syntax_(syntax_of(palette))
     {
     }
     [[nodiscard]] Pixels operator()(const std::optional<app::PreviewSnippet> &snippet,
@@ -177,7 +191,7 @@ class PaneStrip final
                 surface.FillRectangle(
                     D2D1::RectF(0.0F, 0.0F, SoftwareTarget::width, SoftwareTarget::height), brush);
                 PreviewPanePainter painter(surface, *brush, text_, layouts_);
-                painter.paint(snippet, layout, palette_);
+                painter.paint(snippet, layout, palette_, syntax_);
             });
     }
 
@@ -186,6 +200,7 @@ class PaneStrip final
     const PreviewPaneText &text_;
     PaletteRowLayouts &layouts_;
     const core::Palette &palette_;
+    core::SyntaxPalette syntax_;
 };
 
 void verify_right(const PaneStrip &strip, PaletteRowLayouts &layouts, const core::Palette &palette)
@@ -214,6 +229,15 @@ void verify_right(const PaneStrip &strip, PaletteRowLayouts &layouts, const core
            "the hit's characters get the search face with an accent outline");
     expect(differing(marked, plain, core::palette_preview_line(layout, dpi, 0)) == 0,
            "the line before the hit is not marked");
+    // 構文の色（段 P2）: 区間の文字だけが keyword の色で描き直され、区間の外は変わらない。
+    auto colored = snippet_of(16);
+    colored.lines.at(1).colors.push_back(app::PreviewColor{4, 8, core::SyntaxRole::keyword});
+    const auto tinted = strip(colored, layout);
+    const auto keyword_area =
+        core::LayoutRect{text_area.left, text_area.top, text_area.left + 80, text_area.bottom};
+    expect(differing(tinted, plain, keyword_area) > 0 &&
+               differing(tinted, plain, core::palette_preview_line(layout, dpi, 0)) == 0,
+           "a colored span is drawn in its syntax color and the other lines stay as they were");
     const auto heading_area = core::palette_preview_heading(layout, dpi);
     expect(ink_in(marked, heading_area, palette.background) > 0 &&
                count_in(marked, layout.pane_toggle, palette.muted) > 0,

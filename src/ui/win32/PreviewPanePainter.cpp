@@ -3,7 +3,9 @@
 #include "DevicePixels.hpp"
 #include "PaletteRowKey.hpp"
 #include "PaletteTextRole.hpp"
+#include "PreviewColor.hpp"
 #include "RgbaColor.hpp"
+#include "SyntaxColor.hpp"
 #include "Utf16.hpp"
 
 #include <algorithm>
@@ -61,8 +63,10 @@ PreviewPanePainter::PreviewPanePainter(ID2D1RenderTarget &target, ID2D1SolidColo
 }
 
 void PreviewPanePainter::paint(const std::optional<application::PreviewSnippet> &snippet,
-                               const core::PaletteLayout &layout, const core::Palette &palette)
+                               const core::PaletteLayout &layout, const core::Palette &palette,
+                               const core::SyntaxPalette &syntax)
 {
+    syntax_ = &syntax;
     if (layout.preview == core::FinderPreview::off || core::width_of(layout.pane) <= 0 ||
         core::height_of(layout.pane) <= 0)
     {
@@ -252,7 +256,41 @@ void PreviewPanePainter::paint_line(const application::PreviewLine &line,
     target_.PushAxisAlignedClip(to_rect(text_area), D2D1_ANTIALIAS_MODE_ALIASED);
     mark_match(*shown.Get(), line, text_area, palette);
     draw(*shown.Get(), text_area.left, text_area.top, palette.text);
+    tint_colors(*shown.Get(), line, text_area);
     target_.PopAxisAlignedClip();
+}
+
+void PreviewPanePainter::tint_colors(IDWriteTextLayout &layout,
+                                     const application::PreviewLine &line,
+                                     const core::LayoutRect &area)
+{
+    if (syntax_ == nullptr)
+    {
+        return;
+    }
+    std::array<DWRITE_HIT_TEST_METRICS, match_runs> runs{};
+    for (const application::PreviewColor &color : line.colors)
+    {
+        const auto begin = utf16_at(line.text, color.begin);
+        const auto end = utf16_at(line.text, color.end);
+        UINT32 count = 0;
+        if (end <= begin ||
+            FAILED(layout.HitTestTextRange(begin, end - begin, static_cast<float>(area.left),
+                                           static_cast<float>(area.top), runs.data(),
+                                           static_cast<UINT32>(runs.size()), &count)))
+        {
+            continue;
+        }
+        for (std::size_t index = 0; index < std::min<std::size_t>(count, runs.size()); ++index)
+        {
+            const auto &run = runs.at(index);
+            target_.PushAxisAlignedClip(
+                D2D1::RectF(run.left, run.top, run.left + run.width, run.top + run.height),
+                D2D1_ANTIALIAS_MODE_ALIASED);
+            draw(layout, area.left, area.top, core::syntax_color(*syntax_, color.role));
+            target_.PopAxisAlignedClip();
+        }
+    }
 }
 
 // 当たりの文字の後ろに search の面と accent の 1 DIP の枠（D17 と同じ形）。

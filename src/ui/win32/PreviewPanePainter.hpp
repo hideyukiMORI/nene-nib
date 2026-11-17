@@ -9,6 +9,7 @@
 #include "PreviewPaneText.hpp"
 #include "PreviewSnippet.hpp"
 #include "RgbColor.hpp"
+#include "SyntaxPalette.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -40,8 +41,10 @@ class PreviewPanePainter final
                        const PreviewPaneText &text, PaletteRowLayouts &layouts) noexcept;
     // 欄を layout の pane に描く。layout.preview が off なら何もしない。snippet が無ければ地と線と
     // 印だけ（候補が無い・選んだ候補が欄を持たない）。
+    // 本文の色は syntax の構文のトークン（窓の行の PreviewColor の区間・段 P2）。
     void paint(const std::optional<application::PreviewSnippet> &snippet,
-               const core::PaletteLayout &layout, const core::Palette &palette);
+               const core::PaletteLayout &layout, const core::Palette &palette,
+               const core::SyntaxPalette &syntax);
 
   private:
     void paint_ground(const core::PaletteLayout &layout, const core::Palette &palette);
@@ -58,6 +61,10 @@ class PreviewPanePainter final
                     const core::Palette &palette);
     void mark_match(IDWriteTextLayout &layout, const application::PreviewLine &line,
                     const core::LayoutRect &area, const core::Palette &palette);
+    // 構文の色の区間ごとに、区間の矩形で切り抜いて layout をその色で描き直す（本文の
+    // BodyTextPainter::tint_runs と同じ道）。
+    void tint_colors(IDWriteTextLayout &layout, const application::PreviewLine &line,
+                     const core::LayoutRect &area);
     // 文の幅（物理画素・測れなければ 0）。
     [[nodiscard]] static std::int32_t measured_width(IDWriteTextLayout &layout);
     void line_between(D2D1_POINT_2F from, D2D1_POINT_2F to, core::RgbColor color);
@@ -71,5 +78,6 @@ class PreviewPanePainter final
     ID2D1SolidColorBrush &brush_;
     PreviewPaneText text_;
     PaletteRowLayouts &layouts_;
+    const core::SyntaxPalette *syntax_ = nullptr;
 };
 } // namespace nenenib::ui::win32

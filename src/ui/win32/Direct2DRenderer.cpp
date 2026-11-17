@@ -2523,7 +2523,7 @@ void Direct2DRenderer::draw_preview_pane(const application::EditorFrame &frame,
     }
     PreviewPanePainter painter(*context_.Get(), *brush_.Get(), preview_pane_text(),
                                preview_layouts_);
-    painter.paint(frame.command_palette.value().preview, layout, frame.palette);
+    painter.paint(frame.command_palette.value().preview, layout, frame.palette, frame.body);
 }
 
 ProjectHitText Direct2DRenderer::project_hit_text() const

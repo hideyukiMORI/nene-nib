@@ -30,6 +30,7 @@
 #include "PaletteContent.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteScope.hpp"
+#include "PreviewAnchor.hpp"
 #include "PreviewSnippet.hpp"
 #include "ProjectHit.hpp"
 #include "ProjectSearchBatch.hpp"
@@ -37,6 +38,7 @@
 #include "ProjectSearchPhase.hpp"
 #include "ProjectSearchProgress.hpp"
 #include "Scopes.hpp"
+#include "ScriptedPreview.hpp"
 #include "ScriptedProjectSearch.hpp"
 #include "Session.hpp"
 #include "SessionTab.hpp"
@@ -469,9 +471,10 @@ void verify_open_tab_window()
     applied(controller, app::OpenTabList{});
     const auto unsaved = preview_of(controller);
     expect(unsaved.has_value() && unsaved.value().lines.size() == 2 &&
-               unsaved.value().lines.front().text == "draft\tone x" &&
-               unsaved.value().lines.at(1).number.value == 2 && !unsaved.value().notice.has_value(),
-           "the untitled tab shows its unsaved text with control characters as spaces");
+               unsaved.value().lines.front().text == "draft\tone^Ax" &&
+               unsaved.value().lines.at(1).number.value == 2 &&
+               !unsaved.value().notice.has_value() && editing.previews().touches() == 0,
+           "the untitled tab shows its unsaved text in the body's display form without the port");
     applied(controller, app::EditCommand{core::CommandEdit::complete_previous});
     const auto parked = preview_of(controller);
     expect(parked.has_value() && parked.value().name.text() == "long.txt" &&
@@ -539,10 +542,15 @@ void verify_project_hit_window()
            "a hit in an open tab starts the window seven lines above and marks the hit");
     applied(controller, app::EditCommand{core::CommandEdit::complete_next});
     const auto closed = preview_of(controller);
+    const auto &asked = editing.previews().requests();
     expect(closed.has_value() && closed.value().name.text() == "far.txt" &&
-               closed.value().lines.empty() && closed.value().notice.has_value() &&
-               closed.value().line.has_value(),
-           "a hit in a file that is not open shows its heading and one line without content");
+               closed.value().lines.empty() && !closed.value().notice.has_value() &&
+               closed.value().line.has_value() && asked.size() == 1 &&
+               asked.back().path.text() == "C:\\proj\\far.txt" && asked.back().anchor.has_value() &&
+               asked.back()
+                       .anchor.value_or(app::PreviewAnchor{core::LineNumber{0}, 0, 0})
+                       .line.value == 3,
+           "a hit in a file that is not open shows its heading and asks the port around the hit");
 }
 
 void verify_unloaded_tab()
@@ -567,9 +575,10 @@ void verify_unloaded_tab()
     applied(controller, app::EditCommand{core::CommandEdit::complete_next});
     const auto preview = preview_of(controller);
     expect(preview.has_value() && preview.value().name.text() == "b.txt" &&
-               preview.value().lines.empty() && preview.value().notice.has_value() &&
-               editing.files().reads() == reads,
-           "a tab not read yet shows the heading only and is not read");
+               preview.value().lines.empty() && !preview.value().notice.has_value() &&
+               editing.files().reads() == reads && editing.previews().requests().size() == 1 &&
+               controller.frame().tabs.size() == 2,
+           "a tab not read yet is read by the port and not read as a tab");
 }
 } // namespace
 
