@@ -48,6 +48,8 @@
 #include "StartScreenLayout.hpp"
 #include "StartScreenText.hpp"
 #include "SyntaxColor.hpp"
+#include "TabTip.hpp"
+#include "TabTipBox.hpp"
 #include "UiLocale.hpp"
 #include "UiMessage.hpp"
 #include "UiTextSizes.hpp"
@@ -523,6 +525,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     status_layouts_ = {};
     palette_layouts_.clear();
     tab_layouts_.clear();
+    tab_tip_layout_.clear();
     explorer_layouts_.clear();
     explorer_shapes_.clear();
     start_layouts_.clear();
@@ -561,7 +564,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     }
     if (FAILED(trim_by_character(tab_format_.Get())) ||
         FAILED(trim_by_character(tab_transient_format_.Get())) ||
-        !create_explorer_formats(interface_face))
+        !create_explorer_formats(interface_face) || !create_tab_tip_format(interface_face))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
@@ -591,6 +594,15 @@ bool Direct2DRenderer::create_explorer_formats(const wchar_t *face)
         }
     }
     return true;
+}
+
+bool Direct2DRenderer::create_tab_tip_format(const wchar_t *face)
+{
+    if (FAILED(make_format(face, ui_text_dips, DWRITE_FONT_WEIGHT_NORMAL, tab_tip_format_)))
+    {
+        return false;
+    }
+    return SUCCEEDED(tab_tip_format_->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
 }
 
 bool Direct2DRenderer::create_project_hit_formats(const wchar_t *body_face)
@@ -2708,6 +2720,26 @@ void Direct2DRenderer::draw_palette_progress(const application::EditorFrame &fra
                            frame.palette.muted);
 }
 
+// 札の文はタブの経路から core が作り（無題は今の言語の「無題」）、幅の上限を超えれば真ん中を
+// 「…」で切る（TabTipLayout の 1 本）。置き場は core::tab_tip_rect で、色はトークンだけ。
+void Direct2DRenderer::draw_tab_tip(const application::EditorFrame &frame,
+                                    const core::TitleBarLayout &layout)
+{
+    if (!frame.tab_tip.has_value() || frame.tab_tip.value() >= frame.tabs.size())
+    {
+        return;
+    }
+    const std::size_t tab = frame.tab_tip.value();
+    const std::string text = core::tab_tip_text(frame.tabs.at(tab).path, frame.language);
+    static_cast<void>(tab_tip_layout_.fitted(*dwrite_.Get(), tab_tip_format_.Get(), text,
+                                             core::tab_tip_text_limit(layout.band.right, dpi_)));
+    const auto paint = tab_tip_layout_.painted(layout, tab, frame.palette, dpi_);
+    if (paint.has_value())
+    {
+        paint_tab_tip(*context_.Get(), brush_.Get(), paint.value());
+    }
+}
+
 void Direct2DRenderer::draw_palette(const application::EditorFrame &frame,
                                     const core::PaletteLayout &layout)
 {
@@ -2779,6 +2811,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
         // 面を閉じたら行の文字組みを捨てる。開くたびに作り直す（#900）。
         palette_layouts_.clear();
     }
+    draw_tab_tip(frame, title);
     gutter_layouts_.end();
     D2D1_TAG failed_first = 0;
     D2D1_TAG failed_second = 0;

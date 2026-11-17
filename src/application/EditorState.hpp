@@ -31,6 +31,7 @@
 #include "SplitLayout.hpp"
 #include "SplitState.hpp"
 #include "TabRecency.hpp"
+#include "TabTipPhase.hpp"
 #include "TextBuffer.hpp"
 #include "TitleBarTarget.hpp"
 #include "UnloadedDocument.hpp"
@@ -302,6 +303,9 @@ class EditorState final
     [[nodiscard]] EditorState with_title_bar_width(std::int32_t dip) const;
     [[nodiscard]] EditorState with_tab_scroll(std::int32_t dip) const;
     [[nodiscard]] EditorState with_hovered(std::optional<core::TitleBarTarget> hovered) const;
+    // タブの札の段（#1789・ADR 0056 の #1789 の追補）。どのタブかは hovered が持つ。
+    [[nodiscard]] TabTipPhase tab_tip() const noexcept;
+    [[nodiscard]] EditorState with_tab_tip(TabTipPhase phase) const;
 
     // 枠（ADR 0148 の決定 2・3・5・9）。操作中の枠は上の欄そのもので、もう 1 つの枠は受け身の
     // 表示 PaneView として脇に 1 つだけ置く。layout == none ⇔ other が値なしで、1 枠の active_side
@@ -447,6 +451,7 @@ class EditorState final
     std::int32_t title_bar_width_ = 0;
     std::int32_t tab_scroll_ = 0;
     std::optional<core::TitleBarTarget> hovered_;
+    TabTipPhase tab_tip_ = TabTipPhase::hidden;
     SplitState split_;
     // 全面のプレビューと、全面の前の見せ方・側の配置と側（Esc で戻す・ADR 0155 の改訂 15・16）。
     std::optional<PreviewView> full_preview_;

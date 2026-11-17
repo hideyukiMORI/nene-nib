@@ -179,6 +179,9 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
     case WM_KILLFOCUS:
         end_selection_drag();
         settle_tab_walk();
+        // 窓が非アクティブになったら帯の hover を外し、タブの札を消す（#1789）。マウスが戻れば
+        // WM_MOUSEMOVE が載せ直す。
+        hover(std::nullopt);
         // よそで Ctrl を離すと WM_KEYUP は来ないので、ここでも残りを捨てる（#1048）。
         zoom_wheel_remainder_ = 0;
         break;

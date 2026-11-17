@@ -155,6 +155,10 @@ struct EditorFrame
     // Vim のモードで描かない最後の改行があるか（eol の旗・ADR 0188 の決定 4）。lines と total_lines
     // は除いた本文の行で、真なら最後の行の後ろに改行がもう 1 つある。renderer は読まない。
     bool hidden_line_break = false;
+    // 札を出しているタブの帯の位置（#1789・ADR 0056 の #1789 の追補）。札の段が shown で、載せた
+    // 要素がタブ（本体か ×）のときだけ値を持つ。renderer は帯の配置とこの位置のタブの経路から札を
+    // 描く（文は core::tab_tip_text）。
+    std::optional<std::size_t> tab_tip{};
 };
 
 // 変換中か（本文と入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

@@ -74,6 +74,7 @@
 #include "SubmitCommand.hpp"
 #include "SwitchPane.hpp"
 #include "SwitchTab.hpp"
+#include "TabTipTick.hpp"
 #include "TitleBarWidth.hpp"
 #include "ToggleBookmark.hpp"
 #include "ToggleExplorer.hpp"
@@ -106,5 +107,6 @@ using EditorIntent = std::variant<
     HoverExplorer, LanguageServerTick, MapTimeout, InsertDateTime, SelectDocumentFormat,
     OpenDocumentFormatList, OpenDisplayLanguageList, BeginFind, BeginGoToLine, BeginReplace,
     SetPreviewPlacement, PointPreview, PrintDocument, RegisterShell, UnregisterShell, PinTab,
-    FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion, OpenProjectSearch>;
+    FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion, OpenProjectSearch,
+    TabTipTick>;
 } // namespace nenenib::application

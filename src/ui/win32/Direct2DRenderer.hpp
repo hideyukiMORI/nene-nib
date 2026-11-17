@@ -41,6 +41,7 @@
 #include "StatusBarLayout.hpp"
 #include "StatusLayoutDemand.hpp"
 #include "StatusTextLayout.hpp"
+#include "TabTipLayout.hpp"
 #include "TimingPort.hpp"
 #include "TitleBarLayout.hpp"
 #include "TitleBarTarget.hpp"
@@ -133,6 +134,8 @@ class Direct2DRenderer final
     [[nodiscard]] std::expected<void, RenderFailure> set_language(core::DisplayLanguage language);
     [[nodiscard]] std::expected<void, RenderFailure> create_guide_formats(const wchar_t *face);
     [[nodiscard]] bool create_explorer_formats(const wchar_t *face);
+    // タブの札の文（#1789）。UI の字体・12 DIP・折り返さない・左寄せ。作れなければ偽。
+    [[nodiscard]] bool create_tab_tip_format(const wchar_t *face);
     // 全文検索の当たりの行の 2 段と入力欄の右の進み具合（ADR 0167 の決定
     // 5・採用案の寸法）。上の段は 本文の字体 body_face、下の段と進み具合は UI
     // の字体。作れなければ偽。
@@ -180,6 +183,8 @@ class Direct2DRenderer final
     void draw_tabs(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_add_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_tab_list(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
+    // タブの札（#1789）。frame に札のタブがあるときだけ描く。いちばん最後に描く（本文・面の上）。
+    void draw_tab_tip(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_caption_glyphs(const core::TitleBarLayout &layout, core::RgbColor color);
     // 本文の layout を描く経路（保持した字形・範囲の描き直し・置き換え）は BodyTextPainter の
     // 1 本（ADR 0073・#531）。本文を描いている間の縦の範囲を渡した 1 回分を作る。
@@ -455,6 +460,9 @@ class Direct2DRenderer final
     PaletteRowLayouts palette_layouts_;
     // タブの題名の文字組み。同じ型で、書式・DPI の作り直しでだけ捨てる（#924）。
     PaletteRowLayouts tab_layouts_;
+    // タブの札の文の書式と文字組みの保持（#1789・上限 1）。保持は書式の作り直しで捨てる。
+    TextFormat tab_tip_format_;
+    TabTipLayout tab_tip_layout_;
     // エクスプローラーの面の行の文字組み。同じ型で上限だけ大きい。書式の作り直しと面を消した
     // ときに捨てる（ADR 0162 の決定 8）。
     PaletteRowLayouts explorer_layouts_{ExplorerPainter::retained};

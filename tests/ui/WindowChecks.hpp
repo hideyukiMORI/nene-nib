@@ -42,6 +42,8 @@ void verify_diagnostic_waves();
 void verify_matchparen_outline();
 // イージーモーションの印の地と字（ADR 0163 の決定 6・#1782）。
 void verify_motion_label_paint();
+// タブの札の文の切り方と地・縁・字（#1789）。
+void verify_tab_tip_paint();
 void verify_substitute_confirm_paint();
 // ミニマップの絵（ADR 0171 の決定 4・7・#1017 の段 1）。
 void verify_minimap_paint();

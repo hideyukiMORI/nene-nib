@@ -384,6 +384,8 @@ class EditorWindow final
     void scroll_palette(std::int32_t delta);
     void scroll_body(std::int32_t delta, LPARAM data);
     void read_wheel_setting();
+    // タブの札の待ち（#1789）に OS の載せの待ち時間を読む。起動と WM_SETTINGCHANGE の 2 か所。
+    void read_hover_setting();
     [[nodiscard]] application::VisibleLines body_view() const;
     [[nodiscard]] core::PaneLayouts body_panes(const core::EditorSettings &settings) const;
     [[nodiscard]] core::ExplorerLayout explorer_frame() const;
@@ -438,6 +440,7 @@ class EditorWindow final
     // 最後の WM_MOUSEMOVE の点が境の上だったか（カーソルを左右の矢印にする・D78）。
     bool over_explorer_divider_ = false;
     UINT wheel_setting_ = default_wheel_scroll_lines;
+    UINT hover_setting_ = default_tab_tip_milliseconds;
     // 帯で押した要素（左ボタンと中ボタンで 1 つずつ）。離した要素と同じときだけ動かし、離したら
     // 消す（ADR 0056 の決定 9）。
     std::optional<core::TitleBarTarget> left_pressed_;

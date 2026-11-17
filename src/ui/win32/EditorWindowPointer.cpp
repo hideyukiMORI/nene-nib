@@ -823,6 +823,19 @@ void EditorWindow::read_wheel_setting()
     wheel_setting_ = lines;
 }
 
+void EditorWindow::read_hover_setting()
+{
+    // 読めないか 0 なら Windows の既定の 400 ms（#1789）。時刻は読まず、待ちは OS
+    // のタイマーが数える。
+    UINT milliseconds = 0;
+    if (SystemParametersInfoW(SPI_GETMOUSEHOVERTIME, 0, &milliseconds, 0) == FALSE ||
+        milliseconds == 0)
+    {
+        milliseconds = default_tab_tip_milliseconds;
+    }
+    hover_setting_ = milliseconds;
+}
+
 bool EditorWindow::over_other_pane(LPARAM data) const
 {
     // WM_MOUSEWHEEL の位置は画面の座標なので、クライアントの座標に直してから見る。

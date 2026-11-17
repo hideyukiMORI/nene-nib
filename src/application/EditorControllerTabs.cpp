@@ -12,6 +12,9 @@
 #include "SplitLayout.hpp"
 #include "TabReach.hpp"
 #include "TabRecency.hpp"
+#include "TabTip.hpp"
+#include "TabTipPhase.hpp"
+#include "TabTipTimer.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
 #include "UiMessage.hpp"
@@ -27,6 +30,7 @@
 
 namespace nenenib::application
 {
+using detail::not_user_operation;
 using detail::parked_path;
 using detail::scroll_extent_for;
 
@@ -352,8 +356,65 @@ void EditorController::accept(const ScrollTabs &intent)
     state_ = state_.with_tab_scroll(core::tabs_scrolled_by(title_bar_input(), intent.notches));
 }
 
+// 載せたタブ（本体か ×）が変わったときだけ札の待ちを始め直す。タブを離れたら待ちと札を消す。同じ
+// タブの本体と × の間の動きは待ちも札も保つ（#1789）。
 void EditorController::accept(const PointTitleBar &intent)
 {
+    const auto before = core::tab_tip_tab(state_.hovered());
+    const auto after = core::tab_tip_tab(intent.target);
     state_ = state_.with_hovered(intent.target);
+    if (before == after)
+    {
+        return;
+    }
+    if (after.has_value())
+    {
+        state_ = state_.with_tab_tip(TabTipPhase::waiting);
+        tab_tip_timer_ = TabTipTimer::start;
+        return;
+    }
+    if (state_.tab_tip() != TabTipPhase::hidden)
+    {
+        state_ = state_.with_tab_tip(TabTipPhase::hidden);
+        tab_tip_timer_ = TabTipTimer::stop;
+    }
+}
+
+// 待っていたタブにまだ載っていて、面も入力行も開いていなければ札を出す。何も変えなければ描き直さ
+// ない（合図の形・ADR 0155 の追補・#813）。
+void EditorController::accept(const TabTipTick &)
+{
+    if (state_.tab_tip() != TabTipPhase::waiting ||
+        !core::tab_tip_tab(state_.hovered()).has_value() || state_.command_input().has_value())
+    {
+        repaint_ = false;
+        return;
+    }
+    state_ = state_.with_tab_tip(TabTipPhase::shown);
+}
+
+// 札を消す意図を決める 1 か所（#1789）。使う人の操作（押す・鍵・ホイール・面や入力行を開く…・
+// not_user_operation でない意図）は写す前に待ちと札を消す。合図・窓の寸法・外観・帯と面の hover
+// は消さない（帯の hover は accept が載せたタブで決める）。
+void EditorController::settle_tab_tip(const EditorIntent &intent)
+{
+    tab_tip_timer_.reset();
+    if (state_.tab_tip() == TabTipPhase::hidden || not_user_operation(intent))
+    {
+        return;
+    }
+    state_ = state_.with_tab_tip(TabTipPhase::hidden);
+    tab_tip_timer_ = TabTipTimer::stop;
+}
+
+std::optional<std::size_t> EditorController::shown_tab_tip() const
+{
+    const auto tab = core::tab_tip_tab(state_.hovered());
+    if (state_.tab_tip() != TabTipPhase::shown || !tab.has_value() ||
+        tab.value() >= state_.tab_count())
+    {
+        return std::nullopt;
+    }
+    return tab;
 }
 } // namespace nenenib::application
