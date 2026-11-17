@@ -929,6 +929,23 @@ std::expected<LineNumber, VimLayoutNeed> vim_line_below_window(const VimEditorVi
     return LineNumber{std::min(window.value().below.value, count)};
 }
 
+std::expected<LineNumber, VimLayoutNeed> vim_window_last_line(const VimEditorView &view)
+{
+    const std::size_t count = view.text.line_count();
+    const LineNumber first{
+        std::clamp<std::size_t>(vim_viewport_of(view).first_visible.value, 1, count)};
+    if (!view.layout.enabled || view.layout.unit == VimScrollUnit::row)
+    {
+        return LineNumber{std::min(first.value + height_of(view) - 1, count)};
+    }
+    const auto window = window_of(view, first);
+    if (!window)
+    {
+        return std::unexpected(VimLayoutNeed{window.error()});
+    }
+    return window.value().last;
+}
+
 LineNumber vim_line_above_window(const VimEditorView &view) noexcept
 {
     const VimViewport viewport = vim_viewport_of(view);

@@ -76,6 +76,15 @@ bool EditorController::answered_jump(std::string_view utf8)
     return true;
 }
 
+// 待ちか印を捨てる 1 本。`:` `/` の行の取消と同じ形で、待ちを捨てて INSERT の `Ctrl-o` の印は残し、
+// INSERT を始め直す（ADR 0182 の決定 8・ほかの入力行が開いていれば、その行が閉じた後の命令の
+// 終わりで始め直す・#1782 の追い）。
+void EditorController::dropped_easymotion()
+{
+    state_ = state_.with_vim(core::vim_operator_cleared(state_.vim()));
+    resume_vim_insert();
+}
+
 // 意図の出口の 1 か所（settle_transient の後）。
 void EditorController::settle_easymotion(const EditorIntent &intent)
 {
@@ -84,8 +93,7 @@ void EditorController::settle_easymotion(const EditorIntent &intent)
 }
 
 // engine が文字を待つのに行が無ければ開き、開いた行が取り消された（Esc・空の行の Backspace・Enter）
-// なら待ちを捨てて INSERT の Ctrl-o を始め直し、ほかの入力行に置き換わった（Ctrl+P…）なら割り込み
-// として捨てる。待ちが無くなった
+// かほかの入力行に置き換わった（Ctrl+P…）なら待ちを捨てる（dropped_easymotion）。待ちが無くなった
 // のに行が残っていれば閉じる。
 void EditorController::settle_jump_line()
 {
@@ -105,19 +113,10 @@ void EditorController::settle_jump_line()
     {
         return;
     }
-    if (input.has_value())
+    if (jump_line_open_ || input.has_value())
     {
         jump_line_open_ = false;
-        state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
-        return;
-    }
-    if (jump_line_open_)
-    {
-        // 取消（Esc・Enter・空の行の Backspace）は `:` `/` の行の取消と同じ形: 待ちを捨てて INSERT
-        // の `Ctrl-o` の印は残し、INSERT を始め直す（ADR 0182 の決定 8・#1782 の追い）。
-        jump_line_open_ = false;
-        state_ = state_.with_vim(core::vim_operator_cleared(state_.vim()));
-        resume_vim_insert();
+        dropped_easymotion();
         return;
     }
     state_ = state_.with_command_input(CommandInput{JumpCharacter{waiting.value()}});
@@ -125,7 +124,7 @@ void EditorController::settle_jump_line()
 }
 
 // 印を出している間に本文（改訂番号）・スクロールと窓の大きさ・タブ・モードが変わったか、印を保た
-// ない意図が来たら、印を割り込みとして捨てる（V-1777 の申し送り）。合図は本文も画面も変えない
+// ない意図が来たら、印を捨てる（V-1777 の申し送り）。合図は本文も画面も変えない
 // 限り保つ。
 void EditorController::settle_labels(const EditorIntent &intent)
 {
@@ -139,7 +138,7 @@ void EditorController::settle_labels(const EditorIntent &intent)
     if (labels_ground_.has_value() && (!keeps_labels(intent) || labels_ground_.value() != ground))
     {
         labels_ground_.reset();
-        state_ = state_.with_vim(core::vim_interrupted(state_.vim()));
+        dropped_easymotion();
         return;
     }
     labels_ground_ = ground;

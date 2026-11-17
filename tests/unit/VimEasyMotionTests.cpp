@@ -27,6 +27,7 @@
 #include "VimEffect.hpp"
 #include "VimInsertString.hpp"
 #include "VimKey.hpp"
+#include "VimLineRows.hpp"
 #include "VimMarkEdits.hpp"
 #include "VimMode.hpp"
 #include "VimMoveTo.hpp"
@@ -346,6 +347,39 @@ void verify_visible_range()
     expect(cut.size() == core::easymotion_target_limit && cut.front() == Offset{2} &&
                cut.back() == Offset{2 * core::easymotion_target_limit},
            "targets beyond 27 x 27 are cut from the start");
+}
+
+// 印を描けない跳び先は跳び先にしない（ADR 0163 の追補 2026-11-17 の 4）。折り返した行が窓の
+// 画面行を使えば窓に全部入らない論理行を除き、横に送る文書は窓の横の範囲の外の桁を除く。
+void verify_unseen_targets()
+{
+    const TextBuffer text = buffer_of("a\nb\nc");
+    const Selection origin = core::collapsed_at(Offset{0});
+    const std::array<core::VimLineRows, 3> rows{
+        {{LineNumber{1}, 2}, {LineNumber{2}, 1}, {LineNumber{3}, 1}}};
+    VimEditorView wrapped{text, origin, VimViewport{LineNumber{1}, 3, 0}};
+    wrapped.layout.enabled = true;
+    wrapped.layout.lines = rows;
+    expect(core::easymotion_targets(wrapped, EasyMotionKind::line_below, std::nullopt) ==
+               offsets({2}),
+           "a line below the rows the wrapped lines fill has no target");
+    const std::array<core::VimLineRows, 1> unmeasured_rows{{{LineNumber{1}, 2}}};
+    wrapped.layout.lines = unmeasured_rows;
+    const VimStep asked =
+        core::vim_step(empty_vim_state(), wrapped, VimKey{VimCharacter{backslash}});
+    const VimStep leader = core::vim_step(asked.next, wrapped, VimKey{VimCharacter{backslash}});
+    const VimStep need = core::vim_step(leader.next, wrapped, VimKey{VimCharacter{U'j'}});
+    expect(need.layout_request.has_value() && waits_for_prefix(need.next, VimPrefix::leader_leader),
+           "the engine asks for the rows of the lines before it makes the targets");
+    const TextBuffer wide = buffer_of("ab cd ef gh");
+    VimEditorView scrolled{wide, origin, VimViewport{LineNumber{1}, 3, 0, 5, 0}};
+    expect(core::easymotion_targets(scrolled, EasyMotionKind::word_start_after, std::nullopt) ==
+               offsets({3}),
+           "a target right of the window's columns has no target");
+    scrolled.viewport = VimViewport{LineNumber{1}, 3, 0, 5, 4};
+    expect(core::easymotion_targets(scrolled, EasyMotionKind::word_start_after, std::nullopt) ==
+               offsets({6}),
+           "a target left of the scrolled columns has no target");
 }
 
 // 印の割り当て（決定 3）。
@@ -686,6 +720,7 @@ void verify_vim_easymotion_contracts()
     verify_rerouted();
     verify_targets();
     verify_visible_range();
+    verify_unseen_targets();
     verify_labels();
     verify_jumps();
     verify_character_wait();

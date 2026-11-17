@@ -76,6 +76,8 @@ namespace nenenib::ui::win32
 {
 namespace
 {
+// 印の字の layout の大きさ（物理画素・地に切り抜くので印の 2 文字が収まれば足りる）。
+constexpr std::int32_t label_room = 4096;
 // 採用案の寸法（docs/design/2026-09-15-look.md 第 2 節）。色は Palette 以外に持たない（ADR 0008）。
 // 画面の文字の大きさは UiTextSizes.hpp（幅の試験と共用）。
 // text の表示の巨大な行の印 `»`（ADR 0139 の決定 2）。
@@ -1165,32 +1167,49 @@ void Direct2DRenderer::draw_line_labels(const application::EditorFrame &frame,
     {
         const core::SelectionSpan target{core::SelectionPresence::present, label.column,
                                          core::Column{label.column.value + 1}};
-        const auto runs = runs_of(text, area, range_of(line, target, positions));
+        const DWRITE_TEXT_RANGE range = range_of(line, target, positions);
+        const auto runs = runs_of(text, area, range);
         if (!runs.empty())
         {
             draw_label(frame, text, runs.front(), label);
+            continue;
         }
+        // 行の終わり（空の行を含む）の跳び先は字が無いので、その位置の点から幅 0 の当たりを作る
+        // （地の升は印の字の幅から・motion_label_box）。
+        const auto point =
+            text_layout_point(text, range.startPosition, core::CaretAffinity::leading);
+        if (!point)
+        {
+            text_failure_ = RenderFailure::directwrite;
+            continue;
+        }
+        DWRITE_HIT_TEST_METRICS end{};
+        end.left = static_cast<float>(area.left) + point.value().x;
+        end.top = static_cast<float>(area.top) + point.value().y;
+        end.height = static_cast<float>(body_line_height_);
+        draw_label(frame, text, end, label);
     }
 }
 
-// 地は motion_label_box（升 × max(跳び先の升の数, 印の字の数)）、字は行の layout の書式から作った
-// 別の layout で、地に切り抜いて左に寄せる（paint_motion_label・tests/ui と同じ 1 本）。
+// 地は motion_label_box（升 × max(跳び先の升の数,
+// 印の字の数)・字の無い跳び先の升は印の字の幅から）、 字は行の layout の書式から作った別の layout
+// で、地に切り抜いて左に寄せる（paint_motion_label・ tests/ui と同じ 1 本）。
 void Direct2DRenderer::draw_label(const application::EditorFrame &frame, IDWriteTextLayout *text,
                                   const DWRITE_HIT_TEST_METRICS &target,
                                   const core::MotionLabel &label)
 {
-    const D2D1_RECT_F box = motion_label_box(target, label);
-    const core::LayoutRect bounds{static_cast<std::int32_t>(std::floor(box.left)),
-                                  static_cast<std::int32_t>(std::floor(box.top)),
-                                  static_cast<std::int32_t>(std::ceil(box.right)),
-                                  static_cast<std::int32_t>(std::ceil(box.bottom))};
-    const auto written = text_layout(label.label, text, bounds);
+    const auto written =
+        text_layout(label.label, text, core::LayoutRect{0, 0, label_room, label_room});
+    DWRITE_TEXT_METRICS measured{};
     if (!written || FAILED(written->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)) ||
-        FAILED(written->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING)))
+        FAILED(written->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING)) ||
+        FAILED(written->GetMetrics(&measured)))
     {
         text_failure_ = RenderFailure::directwrite;
         return;
     }
+    const D2D1_RECT_F box =
+        motion_label_box(target, label, measured.widthIncludingTrailingWhitespace);
     paint_motion_label(*context_.Get(), brush_.Get(),
                        MotionLabelPaint{box, written.Get(), to_color(frame.palette.accent),
                                         to_color(frame.palette.on_accent)});
