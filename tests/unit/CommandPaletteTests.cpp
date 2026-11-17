@@ -1056,6 +1056,42 @@ void verify_palette_key_note(const core::LayoutRect &row, std::uint32_t dpi)
 }
 
 // 行の右端の補足と検索欄の案内の欄（ADR 0060 の決定 9）。描画と同じ core の配置を読む。
+// 全文検索の当たりの行の 2 段（ADR 0167 の決定 5・採用案の「当たりの行」）。上の段は行の上 3 DIP
+// から 19 DIP、下の段はその下から 15 DIP で、どちらも行の内側の幅。行が低ければ行の下端で切る。
+void verify_palette_hit_rows(const core::LayoutRect &row, std::uint32_t dpi)
+{
+    const auto inset = to_pixels(8, dpi) * 2;
+    const auto line = core::palette_hit_line(row, dpi);
+    const auto place = core::palette_hit_place(row, dpi);
+    expect(line.left == row.left + inset && line.right == row.right - inset &&
+               line.top == row.top + to_pixels(3, dpi) &&
+               core::height_of(line) == to_pixels(19, dpi),
+           "the hit's text line sits 3 DIP below the row top and is 19 DIP high");
+    expect(place.left == line.left && place.right == line.right && place.top == line.bottom &&
+               core::height_of(place) == to_pixels(15, dpi) && place.bottom <= row.bottom,
+           "the hit's place line follows the text line inside the 40 DIP row");
+    const core::LayoutRect low{row.left, row.top, row.right, row.top + to_pixels(10, dpi)};
+    expect(core::palette_hit_line(low, dpi).bottom == low.bottom &&
+               core::height_of(core::palette_hit_place(low, dpi)) == 0,
+           "a low row cuts both lines at its bottom");
+}
+
+// 全文検索の面の入力欄の右の進み具合の置き場（V-1773 の L-1）。右寄せで、検索語の右端から 24 DIP を
+// 空けて入らなければ幅 0。
+void verify_palette_progress_place(std::uint32_t dpi)
+{
+    const auto layout = core::palette_layout(1600, 1200, dpi, 13);
+    const auto &input = layout.input;
+    const auto width = to_pixels(160, dpi);
+    const auto room = core::width_of(input) - width - to_pixels(24, dpi);
+    const auto fits = core::palette_progress_place(layout, dpi, width, room);
+    expect(fits.right == input.right && width_of(fits) == width && fits.top == input.top,
+           "the progress sits at the right end of the input");
+    expect(width_of(core::palette_progress_place(layout, dpi, width, room + 1)) == 0 &&
+               width_of(core::palette_progress_place(layout, dpi, 0, 0)) == 0,
+           "a query running into the progress or an empty text leaves it out");
+}
+
 void verify_palette_notes_geometry()
 {
     verify_palette_hint_starts();
@@ -1085,6 +1121,8 @@ void verify_palette_notes_geometry()
                    core::palette_row_label(narrow, dpi, true) == narrow_inside,
                "a narrow row drops the note and keeps the name as before");
         verify_palette_key_note(row, dpi);
+        verify_palette_hit_rows(row, dpi);
+        verify_palette_progress_place(dpi);
     }
 }
 

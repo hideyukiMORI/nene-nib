@@ -110,6 +110,34 @@ LayoutRect palette_row_label(const LayoutRect &row, std::uint32_t dpi,
     return LayoutRect{inside.left, inside.top, note.left - to_pixels(12, dpi), inside.bottom};
 }
 
+LayoutRect palette_hit_line(const LayoutRect &row, std::uint32_t dpi) noexcept
+{
+    const auto inside = row_inside(row, dpi);
+    const auto top = std::min(row.top + to_pixels(3, dpi), row.bottom);
+    return LayoutRect{inside.left, top, inside.right,
+                      std::min(top + to_pixels(19, dpi), row.bottom)};
+}
+
+LayoutRect palette_hit_place(const LayoutRect &row, std::uint32_t dpi) noexcept
+{
+    const auto inside = row_inside(row, dpi);
+    const auto top = palette_hit_line(row, dpi).bottom;
+    return LayoutRect{inside.left, top, inside.right,
+                      std::min(top + to_pixels(15, dpi), row.bottom)};
+}
+
+LayoutRect palette_progress_place(const PaletteLayout &layout, std::uint32_t dpi,
+                                  std::int32_t width, std::int32_t typed) noexcept
+{
+    const auto &input = layout.input;
+    const auto left = input.right - width;
+    if (width <= 0 || input.left + typed + to_pixels(palette_hint_gap_dips, dpi) > left)
+    {
+        return LayoutRect{input.right, input.top, input.right, input.bottom};
+    }
+    return LayoutRect{left, input.top, input.right, input.bottom};
+}
+
 PaletteHintPlace palette_input_hint(const PaletteLayout &layout, std::uint32_t dpi,
                                     std::span<const std::int32_t> widths) noexcept
 {

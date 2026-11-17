@@ -684,11 +684,8 @@ std::optional<core::DisplayText> EditorController::command_message() const
     {
         return reading;
     }
-    // 全文検索の面の進み具合（ADR 0167 の決定 5）。今の 1 行の形の ui はステータスバーに出す。
-    if (auto searching = project_search_view(); searching.has_value())
-    {
-        return std::move(searching).value().line;
-    }
+    // 全文検索の面の進み具合は面の表示値（CommandPaletteView.project）だけで運び、ui が入力欄の右か
+    // 候補の無い行に描く。面の下の行の知らせには重ねない（ADR 0167 の G3 の追補 5）。
     if (!command_palette_active() || !palette_folder_.truncated)
     {
         return std::nullopt;

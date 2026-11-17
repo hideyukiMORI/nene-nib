@@ -2195,10 +2195,12 @@ lines_result(std::string_view text, const std::optional<ExRange> &range)
     return result;
 }
 
-// 命令の字面が `|` を自分で読むか（`:s` の族と `:g`・区切りの間の `|` は文字）。
+// 命令の字面が `|` を自分で読むか（`:s` の族と `:g`・区切りの間の `|` は文字。`:grep` は行の残りの
+// 全部が検索語・ADR 0167 の決定 1）。
 [[nodiscard]] bool takes_bar(std::string_view command)
 {
-    return substitute_command(command).has_value() || global_command(command).has_value();
+    return substitute_command(command).has_value() || global_command(command).has_value() ||
+           grep_command(command).has_value();
 }
 
 // 行を書き換える命令（`:s` の族・`:d` `:y`・`:g`）。どれでもなければ値なし。

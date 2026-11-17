@@ -273,6 +273,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32TimingAdapter.cpp
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/LastResortArming.cpp src/adapters/win32/FolderShelf.cpp
     src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
+    src/adapters/win32/ProjectSearchEntries.cpp src/adapters/win32/ProjectSearchShelf.cpp src/adapters/win32/ProjectSearchWalk.cpp src/adapters/win32/Win32ProjectSearchAdapter.cpp
     src/adapters/win32/MarkdownShelf.cpp src/adapters/win32/Win32MarkdownAdapter.cpp
     src/adapters/win32/ImageShelf.cpp src/adapters/win32/ImageFileRead.cpp
     src/adapters/win32/ImageDecode.cpp src/adapters/win32/Win32ImageAdapter.cpp
@@ -385,6 +386,17 @@ nenenib_link(nib_image_adapter_tests nenenib_adapters)
 add_test(NAME nib_adapters_images COMMAND nib_image_adapter_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(nib_adapters_images PROPERTIES TIMEOUT 60)
 
+# #1003 段 G3: プロジェクトの全文検索の adapter（Win32ProjectSearchAdapter）を本物のフォルダ・ファイル・
+# ワーカー 1 本で測る（ADR 0167 の決定 7）。16 MiB を超える見本を書く。時刻は読まず、合図の受け皿だけを
+# 待つので、止まらないときはこの制限時間で落ちる。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
+nenenib_target(nib_project_search_adapter_tests adapter_tests EXECUTABLE tests/adapters/ProjectSearchAdapterTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
+nenenib_link(nib_project_search_adapter_tests nenenib_core)
+nenenib_link(nib_project_search_adapter_tests nenenib_application)
+nenenib_link(nib_project_search_adapter_tests nenenib_adapters)
+add_test(NAME nib_adapters_project_search COMMAND nib_project_search_adapter_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_adapters_project_search PROPERTIES TIMEOUT 120)
+
 # Issue #993: 開く道の読み（Win32DocumentReader）を本物のファイルとワーカー 1 本で測る（ADR 0159）。
 # 65 MiB の見本を書いて塊の仕事で読む。時刻は読まず、合図の受け皿だけを待つので、止まらないときは
 # この制限時間で落ちる。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
@@ -469,7 +481,8 @@ nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/KeycapPainter.cpp src/ui/win32/StartScreenPainter.cpp src/ui/win32/ExplorerShapes.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp src/ui/win32/WindowCorners.cpp src/ui/win32/WindowBackdrop.cpp
     src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewMetrics.cpp
     src/ui/win32/PreviewPane.cpp src/ui/win32/MinimapPicture.cpp src/ui/win32/FullPreviewBody.cpp src/ui/win32/SaveQuestion.cpp
-    src/ui/win32/PreviewInlineImages.cpp src/ui/win32/PreviewImageObject.cpp src/ui/win32/PreviewBitmaps.cpp)
+    src/ui/win32/PreviewInlineImages.cpp src/ui/win32/PreviewImageObject.cpp src/ui/win32/PreviewBitmaps.cpp
+    src/ui/win32/ProjectHitPainter.cpp)
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
 # ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。
@@ -505,7 +518,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/StandardKeyTests.cpp
     tests/ui/WordDeletionKeyTests.cpp tests/ui/PreviewImagePaintTests.cpp
     tests/ui/StartScreenPaintTests.cpp tests/ui/WindowCornerTests.cpp tests/ui/WindowBackdropTests.cpp
-    tests/ui/LanguageTextTests.cpp)
+    tests/ui/LanguageTextTests.cpp tests/ui/ProjectHitPaintTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)
