@@ -48,6 +48,13 @@ vim_aligned_top(const VimEditorView &view, Offset caret, VimScreenPlace place);
 [[nodiscard]] std::expected<LineNumber, VimLayoutNeed>
 vim_line_below_window(const VimEditorView &view);
 
+// 窓に全部入っている最後の論理行（イージーモーションの跳び先の範囲・ADR 0163 の追補 2026-11-17 の
+// 4）。文字組みが無効なら first_visible + visible_lines - 1（文書の末尾で切る）、wrap on の text
+// 形は window_of の収まった最後の行（先頭の行が窓より高ければ先頭の行）。格子は跳び先を作らないので
+// 文字組みが無効のときと同じ算術。足りない文字組みの値は VimLayoutNeed。
+[[nodiscard]] std::expected<LineNumber, VimLayoutNeed>
+vim_window_last_line(const VimEditorView &view);
+
 // z^ の回数なしの行（決定 9）。窓の 1 つ上の行で、1 行目が先頭なら 1 行目。格子で先頭の画面行が
 // 行の途中（first_row > 0）なら、1 つ上の画面行は同じ行にある。
 [[nodiscard]] LineNumber vim_line_above_window(const VimEditorView &view) noexcept;
