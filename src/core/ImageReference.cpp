@@ -2,6 +2,7 @@
 
 #include "FilePath.hpp"
 #include "ImageReferenceRefusal.hpp"
+#include "PercentDecoding.hpp"
 
 #include <cstddef>
 #include <expected>
@@ -18,8 +19,6 @@ namespace
 constexpr char native_separator = '\\';
 constexpr std::string_view localhost = "localhost";
 constexpr std::size_t drive_length = 2;
-constexpr unsigned hex_radix = 16U;
-constexpr unsigned decimal_digits = 10U;
 
 [[nodiscard]] bool separator(char value) noexcept
 {
@@ -55,21 +54,6 @@ constexpr unsigned decimal_digits = 10U;
         }
     }
     return true;
-}
-
-// 16 進の 1 桁の値（16 進でなければ nullopt）。
-[[nodiscard]] std::optional<unsigned> hex_digit(char value) noexcept
-{
-    if (ascii_digit(value))
-    {
-        return static_cast<unsigned>(value - '0');
-    }
-    const char lower = ascii_lower(value);
-    if (lower >= 'a' && lower <= 'f')
-    {
-        return static_cast<unsigned>(lower - 'a') + decimal_digits;
-    }
-    return std::nullopt;
 }
 
 // `C:\` か `C:/` で始まる。
@@ -123,28 +107,6 @@ constexpr unsigned decimal_digits = 10U;
         }
     }
     return text;
-}
-
-// `%XX` を 1 バイトに解く。16 進 2 桁が続かない `%` はそのまま残す。
-[[nodiscard]] std::string percent_decoded(std::string_view text)
-{
-    std::string decoded;
-    decoded.reserve(text.size());
-    for (std::size_t index = 0; index < text.size(); ++index)
-    {
-        const auto high = text[index] == '%' && index + 2U < text.size()
-                              ? hex_digit(text[index + 1U])
-                              : std::nullopt;
-        const auto low = high.has_value() ? hex_digit(text[index + 2U]) : std::nullopt;
-        if (low.has_value())
-        {
-            decoded.push_back(static_cast<char>((high.value() * hex_radix) + low.value()));
-            index += 2U;
-            continue;
-        }
-        decoded.push_back(text[index]);
-    }
-    return decoded;
 }
 
 // 段を 1 つ積む。`.` と空の段は落とし、`..` は 1 つ上へ畳む（根より上へは出ない）。
