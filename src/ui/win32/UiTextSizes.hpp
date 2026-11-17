@@ -16,4 +16,9 @@ inline constexpr float guide_key_padding_dips = 9.0F;
 // F1 の一覧（Ctrl+P の面の `?`）の行の右端の鍵の枠の左右の余白（ADR 0078 の決定 12）。枠の幅を
 // 測る renderer と幅の試験が読む（#1658）。
 inline constexpr float palette_key_padding_dips = 9.0F;
+// 全文検索の当たりの行の上の段（本文の字体）と下の段（`相対パス:行`）と、入力欄の右の進み具合
+// （ADR 0167 の決定 5・採用案 docs/design/2026-11-16-finder-look.md の「当たりの行」）。
+inline constexpr float hit_line_dips = 12.5F;
+inline constexpr float hit_place_dips = 11.0F;
+inline constexpr float palette_progress_dips = 11.5F;
 } // namespace nenenib::ui::win32

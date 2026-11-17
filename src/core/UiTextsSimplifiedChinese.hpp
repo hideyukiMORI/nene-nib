@@ -173,7 +173,7 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::palette_project_complete, "{0} 处（已搜索 {1} 个文件）"},
     {UiMessage::palette_project_truncated, "已在 {0} 处停止"},
     {UiMessage::palette_project_failed, "无法搜索"},
-    {UiMessage::notice_project_no_root, "没有可搜索的位置。请选择根目录，或从已保存的文档中搜索"},
+    {UiMessage::palette_project_no_root, "没有可搜索的位置。请选择根目录，或从已保存的文档中搜索"},
     {UiMessage::palette_mark_separator, "　"},
     {UiMessage::language_choice_system, "跟随 Windows"},
     {UiMessage::palette_no_candidates, "无匹配项"},

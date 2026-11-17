@@ -193,7 +193,7 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::palette_project_complete, "{0} matches ({1} files searched)"},
     {UiMessage::palette_project_truncated, "Stopped at {0} matches"},
     {UiMessage::palette_project_failed, "Could not search"},
-    {UiMessage::notice_project_no_root,
+    {UiMessage::palette_project_no_root,
      "Nothing to search. Choose a root or search from a saved document"},
     {UiMessage::palette_mark_separator, "   "},
     {UiMessage::language_choice_system, "Match Windows"},

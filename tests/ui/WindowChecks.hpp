@@ -58,6 +58,8 @@ void verify_word_deletion_keys();
 void verify_preview_images();
 // 起動画面の画素と文字組みの保持（ADR 0172 の決定 5・#1455）。
 void verify_start_screen_paint();
+// 全文検索の当たりの行の 2 段の画素と文字組みの保持（ADR 0167 の決定 5・#1003 の段 G3）。
+void verify_project_hit_paint();
 // 窓の角は四角（DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_DONOTROUND・#1488）。窓は作らない。
 void verify_window_corners();
 // 描画を失って取消の無い箱を聞く間だけの窓の下地（#1499）。窓は作らない。

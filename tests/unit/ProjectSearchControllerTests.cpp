@@ -114,11 +114,16 @@ namespace core = nenenib::core;
     return frame.command_palette.value().project.value().status;
 }
 
+// 面の状態の 1 行（入力欄の右か候補の無い行に ui が描く・ADR 0167 の G3 の追補 5）。面の下の行の
+// 知らせ（command_message）には載せない。
 [[nodiscard]] std::string message_of(app::EditorController &controller)
 {
     const auto frame = controller.frame();
-    return frame.command_message.has_value() ? std::string(frame.command_message.value().text())
-                                             : std::string();
+    if (!frame.command_palette.has_value() || !frame.command_palette.value().project.has_value())
+    {
+        return std::string();
+    }
+    return std::string(frame.command_palette.value().project.value().line.text());
 }
 
 [[nodiscard]] std::string input_of(app::EditorController &controller)
@@ -168,6 +173,8 @@ void verify_tickets_and_batches()
                                         core::DisplayLanguage::japanese, {"2", "5"}),
            "the old ticket's batch is dropped and the current batch's hits arrive while "
            "searching");
+    expect(!controller.frame().command_message.has_value(),
+           "the search line is not repeated on the face's bottom row");
     const auto frame = controller.frame();
     const auto view = frame.command_palette.value_or(app::CommandPaletteView{});
     expect(view.hit_rows.size() == 2 && view.hit_rows.at(0).path == "src\\b.txt" &&
@@ -274,7 +281,7 @@ void verify_unrequested_states()
     expect(untitled.project_search().requests().empty() &&
                status_of(untitled.controller()) == app::ProjectSearchStatus::unplaced &&
                message_of(untitled.controller()) ==
-                   core::ui_text(core::UiMessage::notice_project_no_root,
+                   core::ui_text(core::UiMessage::palette_project_no_root,
                                  core::DisplayLanguage::japanese),
            "without a root an untitled document has nowhere to search");
 }
@@ -349,12 +356,21 @@ void verify_entries()
     expect(input_of(controller) == "!x" && editing.project_search().requests().size() == 2,
            "`:gr` is the shortest name");
     applied(controller, app::CancelCommand{});
+    static_cast<void>(run_ex(controller, R"(grep /foo\|bar)"));
+    expect(input_of(controller) == R"(!/foo\|bar)" &&
+               editing.project_search().requests().size() == 3,
+           "`:grep` keeps a pattern's alternation bar as part of the pattern");
+    applied(controller, app::CancelCommand{});
+    static_cast<void>(run_ex(controller, "grep a|b"));
+    expect(input_of(controller) == "!a|b" && editing.project_search().requests().size() == 4,
+           "`:grep` takes a bare `|` as part of the literal");
+    applied(controller, app::CancelCommand{});
     static_cast<void>(run_ex(controller, "grep!"));
     expect(!controller.frame().command_palette.has_value() &&
-               editing.project_search().requests().size() == 2,
+               editing.project_search().requests().size() == 4,
            "`:grep!` is refused");
     applied(controller, app::OpenProjectSearch{});
-    expect(input_of(controller) == "!" && editing.project_search().requests().size() == 2,
+    expect(input_of(controller) == "!" && editing.project_search().requests().size() == 4,
            "Ctrl+Shift+F opens an empty `!` face and asks nothing yet");
     // 当たりの行はブックマークの対象ではない（設計席の答え）。
     applied(controller, app::ToggleBookmark{});

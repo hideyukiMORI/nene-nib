@@ -324,7 +324,7 @@ std::optional<ProjectSearchView> EditorController::project_search_view() const
         case ProjectSearchStatus::failed:
             return ui_notice(core::UiMessage::palette_project_failed);
         case ProjectSearchStatus::unplaced:
-            return ui_notice(core::UiMessage::notice_project_no_root);
+            return ui_notice(core::UiMessage::palette_project_no_root);
         case ProjectSearchStatus::invalid:
             // Vim の `/` の検索が解析できないときと同じ文の出どころ（ADR 0032 の決定 5）。
             return core::vim_search_message(core::VimSearchNotice{
