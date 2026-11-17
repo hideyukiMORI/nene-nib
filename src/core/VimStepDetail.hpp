@@ -69,6 +69,10 @@ requested_viewport(const VimState &state, const VimEditorView &view, VimAction a
 // イージーモーション（ADR 0163・VimStepEasyMotion.cpp）。leader_step は `\` の次の鍵、
 // leader_leader_step は `\\` の次の鍵（動作）、easymotion_awaited は f F s の文字か印の鍵。
 // exact_jump は跳び先へ `` ` `` と同じ着地で飛ぶ（VimStep.cpp）。
+// `\` の 1 回目（回数・レジスタの名指しを捨てて待つ）と、`\` `\\` を待っているか（`.` の記録は
+// この待ちの鍵を積まない・ADR 0163 の追補 2026-11-17 の 3）。
+[[nodiscard]] VimStep leader_started(const VimState &state);
+[[nodiscard]] bool waits_for_leader(const VimState &state) noexcept;
 [[nodiscard]] VimStep leader_step(const VimState &state, const VimEditorView &view,
                                   const VimKey &key);
 [[nodiscard]] VimStep leader_leader_step(const VimState &state, const VimEditorView &view,

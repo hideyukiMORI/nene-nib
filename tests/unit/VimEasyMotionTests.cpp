@@ -248,9 +248,15 @@ void verify_rerouted()
     expect(removes(named, 0, 1) && !named.next.selected_register.has_value() &&
                named.next.unnamed_register.value().text == "a",
            "the register name before the backslashes is dropped");
+    expect(dot_record_is(after_one.next, std::nullopt, "x") &&
+               dot_record_is(after_two.next, std::nullopt, "x") &&
+               dot_record_is(counted.next, std::nullopt, "x") &&
+               dot_record_is(named.next, std::nullopt, "x"),
+           "only the rerouted key is recorded for .");
     const auto [visual, visual_kept] = played_at("ab cd", 0, U"vl\\\\x");
     expect(visual.next.mode == VimMode::normal && removes(visual, 0, 2) &&
-               visual.failure == VimRepeatFailure::refused,
+               visual.failure == VimRepeatFailure::refused &&
+               dot_record_is(visual.next, std::nullopt, "x"),
            "VISUAL \\\\x beeps and x removes the selection");
     const TextBuffer text = buffer_of("ab");
     const Selection at_start = core::collapsed_at(Offset{0});
@@ -271,8 +277,8 @@ void verify_targets()
 {
     constexpr std::string_view body = "ab cd\n  ef\n\ngh.ij";
     expect(
-        targets_of(body, 3, EasyMotionKind::word_start_after) == offsets({8, 11, 15, 14, 12}),
-        "w targets word starts after the caret nearest first with the empty line and punctuation");
+        targets_of(body, 3, EasyMotionKind::word_start_after) == offsets({8, 11, 12, 14, 15}),
+        "w targets word starts after the caret in text order with the empty line and punctuation");
     expect(targets_of(body, 8, EasyMotionKind::word_start_before) == offsets({3, 0}),
            "b targets word starts before the caret");
     expect(targets_of(body, 0, EasyMotionKind::word_end_after) == offsets({1, 4, 9, 13, 14, 16}),
@@ -546,23 +552,47 @@ constexpr std::array<char32_t, 5> characters{U'a', U'b', U'日', U'。', U'e'};
 
 using Nearness = std::tuple<std::size_t, std::size_t, bool, std::size_t>;
 
-// キャレットからの近さ（行の差・仮想桁の差・キャレットより前か・位置）。
-[[nodiscard]] Nearness nearness_of(const TextBuffer &text, Offset target, Offset caret)
+[[nodiscard]] bool goes_around(EasyMotionKind kind) noexcept
 {
+    return kind == EasyMotionKind::character_around || kind == EasyMotionKind::word_start_around;
+}
+
+// キャレットからの近さ。s l は（行の差・仮想桁の差・キャレットより前か・位置）、一方向の動作は
+// 本文の上でキャレットから離れたバイト数（w e j f は本文の順・b k F は逆の順になる）。
+[[nodiscard]] Nearness nearness_of(const TextBuffer &text, Offset target, Offset caret, bool around)
+{
+    if (!around)
+    {
+        return Nearness{0, 0, target < caret, apart(target.value, caret.value)};
+    }
     return Nearness{apart(text.line_containing(target).value, text.line_containing(caret).value),
                     apart(column_in(text, target), column_in(text, caret)), target < caret,
                     target.value};
 }
 
-// 跳び先は近い順（同じ近さなら後ろが先）に重複なく並び、キャレットを含まず文字の先頭にある。
+// 跳び先は近い順に重複なく並ぶ。
 [[nodiscard]] bool ordered_targets(const TextBuffer &text, const std::vector<Offset> &targets,
-                                   Offset caret, const std::set<std::size_t> &starts)
+                                   Offset caret, EasyMotionKind kind)
 {
-    for (std::size_t index = 0; index < targets.size(); ++index)
+    const bool around = goes_around(kind);
+    for (std::size_t index = 1; index < targets.size(); ++index)
     {
-        const bool nearer = index == 0 || nearness_of(text, targets.at(index - 1), caret) <
-                                              nearness_of(text, targets.at(index), caret);
-        if (!nearer || targets.at(index) == caret || !starts.contains(targets.at(index).value))
+        if (!(nearness_of(text, targets.at(index - 1), caret, around) <
+              nearness_of(text, targets.at(index), caret, around)))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// 跳び先はキャレットを含まず文字の先頭にある。
+[[nodiscard]] bool on_characters(const std::vector<Offset> &targets, Offset caret,
+                                 const std::set<std::size_t> &starts)
+{
+    for (const Offset target : targets)
+    {
+        if (target == caret || !starts.contains(target.value))
         {
             return false;
         }
@@ -640,7 +670,9 @@ void verify_property_samples(Random &random, std::array<std::size_t, 4> &broken)
     const auto targets = core::easymotion_targets(VimEditorView{text, selection, whole_view}, kind,
                                                   characters.at(below(random, characters.size())));
     const auto labels = core::easymotion_labels(targets.size());
-    broken.at(0) += ordered_targets(text, targets, caret, starts) ? 0 : 1;
+    broken.at(0) +=
+        ordered_targets(text, targets, caret, kind) && on_characters(targets, caret, starts) ? 0
+                                                                                             : 1;
     broken.at(1) += prefix_free(labels, targets.size()) ? 0 : 1;
     broken.at(3) += first_label_nearest(targets, labels) ? 0 : 1;
     broken.at(2) +=

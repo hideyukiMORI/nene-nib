@@ -138,6 +138,28 @@ constexpr char32_t backslash = 0x5C;
 
 namespace detail
 {
+// `\` の 1 回目（決定 1）。回数とレジスタの名指しはここで捨てる（Vim の map の待ちが当たらな
+// かったときの clearopbeep と同じで、流し直した鍵にも `.` の記録にも残らない）。
+[[nodiscard]] VimStep leader_started(const VimState &state)
+{
+    VimState next = state;
+    next.count = std::nullopt;
+    next.selected_register = std::nullopt;
+    next.register_count = std::nullopt;
+    return started_prefix(next, VimPrefix::leader);
+}
+
+[[nodiscard]] bool waits_for_leader(const VimState &state) noexcept
+{
+    if (!state.input_wait.has_value())
+    {
+        return false;
+    }
+    const auto *const prefix = std::get_if<VimPrefix>(&state.input_wait.value());
+    return prefix != nullptr &&
+           (*prefix == VimPrefix::leader || *prefix == VimPrefix::leader_leader);
+}
+
 // `\` の次の鍵（決定 1）。`\` なら動作を待ち、回数は捨てる。ほかの鍵は鳴らして保留を捨て、その鍵を
 // 普通の鍵として流し直す（Esc は鳴らさない・ADR 0163 の追補 2026-11-17 の 3）。
 [[nodiscard]] VimStep leader_step(const VimState &state, const VimEditorView &view,

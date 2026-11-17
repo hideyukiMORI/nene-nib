@@ -1096,11 +1096,11 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return substituted_keys(state, view, action);
 }
 
-// 次の 1 鍵を待つ接頭辞の動作 → 接頭辞（g z @ " と m ' `・ADR 0152 の決定 3・[ ]・\・ADR 0163）。
-// ほかは nullopt。
+// 次の 1 鍵を待つ接頭辞の動作 → 接頭辞（g z @ " と m ' `・ADR 0152 の決定 3・[ ]）。ほかは
+// nullopt（`\` は回数と名指しも捨てる leader_started・ADR 0163）。
 [[nodiscard]] std::optional<VimPrefix> prefix_of(VimAction action) noexcept
 {
-    constexpr std::array<std::pair<VimAction, VimPrefix>, 9> prefixes{
+    constexpr std::array<std::pair<VimAction, VimPrefix>, 8> prefixes{
         {{VimAction::prefix_g, VimPrefix::g},
          {VimAction::prefix_z, VimPrefix::z},
          {VimAction::replay_macro, VimPrefix::at},
@@ -1108,8 +1108,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
          {VimAction::set_mark, VimPrefix::mark},
          {VimAction::prefix_mark_line, VimPrefix::mark_line},
          {VimAction::prefix_mark_exact, VimPrefix::mark_exact},
-         {VimAction::prefix_bracket, VimPrefix::bracket},
-         {VimAction::prefix_leader, VimPrefix::leader}}};
+         {VimAction::prefix_bracket, VimPrefix::bracket}}};
     for (const auto &[from, prefix] : prefixes)
     {
         if (from == action)
@@ -1135,6 +1134,10 @@ namespace detail
     if (action == VimAction::open_command_line)
     {
         return opened_command_line(state);
+    }
+    if (action == VimAction::prefix_leader)
+    {
+        return detail::leader_started(state);
     }
     if (const auto prefix = prefix_of(action))
     {

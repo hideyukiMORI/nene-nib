@@ -24,9 +24,10 @@ inline constexpr std::size_t easymotion_target_limit =
     easymotion_keys.size() * easymotion_keys.size();
 
 // 見えている行（view.viewport の最初の行から見えている行数ぶん・本文の行の数で切る）の跳び先を
-// キャレットから近い順に返す（距離は（行の差・仮想桁の差）の辞書順・同じならキャレットより後ろが
-// 先・ADR 0163 の追補 2026-11-17 の 2）。印は easymotion_labels の順にこの列の位置へ付く（最初の
-// 印 `a` がいちばん近い跳び先）。キャレットの位置は除き、w e f j は後ろ、b F k は前、s l
+// キャレットから近い順に返す（w e j f は本文の順・b k F は本文の逆の順・s l
+// は（行の差・仮想桁の差） の辞書順で同じならキャレットより後ろが先・ADR 0163 の追補 2026-11-17 の
+// 2）。印は easymotion_labels の順にこの列の位置へ付く（最初の 印 `a`
+// がいちばん近い跳び先）。キャレットの位置は除き、w e f j は後ろ、b F k は前、s l
 // は両方。語の切れ目は `w` と同じ語の分類（vim_character_class の word・1 文字は
 // vim_character_end）で、空行は語の頭。 j k は行の最初の非空白でキャレットの行を除く。f F s は
 // character と同じ code point で始まる 文字（character
