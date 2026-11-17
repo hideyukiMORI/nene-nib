@@ -44,6 +44,8 @@ void verify_delivery_contracts();
 // TabsTests.cpp
 void verify_tabs_contracts();
 void verify_tabs_scope();
+// タブの札（#1789・ADR 0056 の #1789 の追補）。
+void verify_tab_tip_contracts();
 // TransientTabTests.cpp / TransientTabPropertyTests.cpp（#1397・ADR 0179 のプレビューのタブ）
 void verify_transient_tab_contracts();
 void verify_transient_tab_scope();

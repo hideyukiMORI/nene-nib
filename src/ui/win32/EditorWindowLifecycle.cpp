@@ -146,6 +146,7 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     timing_.mark(core::Milestone::window_created);
     dpi_ = GetDpiForWindow(window_);
     read_wheel_setting();
+    read_hover_setting();
     place_at_screen_centre();
     // 起動引数の結果を先に控える。最初の描画が出す VisibleLines の意図で last_failure は消える
     // （ADR 0010 の決定 9）。

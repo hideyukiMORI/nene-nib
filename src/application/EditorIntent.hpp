@@ -80,6 +80,7 @@
 #include "SubmitCommand.hpp"
 #include "SwitchPane.hpp"
 #include "SwitchTab.hpp"
+#include "TabTipTick.hpp"
 #include "TitleBarWidth.hpp"
 #include "ToggleBookmark.hpp"
 #include "ToggleExplorer.hpp"
@@ -114,5 +115,5 @@ using EditorIntent = std::variant<
     SetPreviewPlacement, PointPreview, PrintDocument, RegisterShell, UnregisterShell, PinTab,
     FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion, OpenProjectSearch,
     OpenContextMenu, PointContextMenu, StepContextMenu, ChooseContextMenu, CloseContextMenu,
-    CycleFinderPreview>;
+    CycleFinderPreview, TabTipTick>;
 } // namespace nenenib::application

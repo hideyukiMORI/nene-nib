@@ -12,6 +12,7 @@
 #include "InputLinePrompt.hpp"
 #include "MapTimer.hpp"
 #include "SettingsIssue.hpp"
+#include "TabTipTimer.hpp"
 #include "VimMode.hpp"
 
 #include <cstddef>
@@ -50,5 +51,8 @@ struct EditorDelivery
     // Vim の `map` の待ちのタイマー（ADR 0176 の決定 4）。この意図が待ちを始めた・積み替えたら
     // start、待ちを流して空にしたら stop、変えなかったら空。
     std::optional<MapTimer> map_timer = std::nullopt;
+    // タブの札の待ちのタイマー（#1789）。この意図が載せたタブを変えて待ちを始めたら start、待ちを
+    // 終えた（離れた・消す意図・札を出した）ら stop、変えなかったら空。
+    std::optional<TabTipTimer> tab_tip_timer = std::nullopt;
 };
 } // namespace nenenib::application

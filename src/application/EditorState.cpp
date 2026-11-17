@@ -963,6 +963,18 @@ EditorState EditorState::with_hovered(std::optional<core::TitleBarTarget> hovere
     return next;
 }
 
+TabTipPhase EditorState::tab_tip() const noexcept
+{
+    return tab_tip_;
+}
+
+EditorState EditorState::with_tab_tip(TabTipPhase phase) const
+{
+    EditorState next(*this);
+    next.tab_tip_ = phase;
+    return next;
+}
+
 // 置く（ADR 0056 の決定 1・4）。出ていく文書の選択はキャレットへ畳み（VISUAL を持ち越さない）、
 // undo の単位を閉じる。題名は置くこの 1 回だけ作り、frame は並べるだけにする。
 std::shared_ptr<const DocumentState> EditorState::parked_active() const

@@ -159,6 +159,10 @@ struct EditorFrame
     // 本文の右クリックのメニュー（ADR 0078 の追補 #1051）。開いている間だけ値を持ち、renderer は
     // ほかの全部の上に描く。
     std::optional<ContextMenuView> context_menu{};
+    // 札を出しているタブの帯の位置（#1789・ADR 0056 の #1789 の追補）。札の段が shown で、載せた
+    // 要素がタブ（本体か ×）のときだけ値を持つ。renderer は帯の配置とこの位置のタブの経路から札を
+    // 描く（文は core::tab_tip_text）。
+    std::optional<std::size_t> tab_tip{};
 };
 
 // 変換中か（本文と入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは
