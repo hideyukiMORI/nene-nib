@@ -255,6 +255,8 @@ class EditorWindow final
     void toggle_mode();
     // タブの鍵（ADR 0056 の決定 10）。扱ったら true。
     [[nodiscard]] bool press_tab_key(WPARAM word);
+    // Vim の INSERT の補完の鍵（#1845）。扱ったら true。
+    [[nodiscard]] bool press_vim_completion_key(WPARAM word);
     void run_tab_command(core::TabCommand command);
     void press_command_key(WPARAM word);
     void press_command_control_key(WPARAM word);

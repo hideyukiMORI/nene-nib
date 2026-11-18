@@ -897,6 +897,8 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpe
     case core::VimSpecialKey::control_o:
     case core::VimSpecialKey::control_e:
     case core::VimSpecialKey::control_y:
+    case core::VimSpecialKey::control_n:
+    case core::VimSpecialKey::control_p:
         return std::nullopt;
     }
     std::unreachable();
@@ -941,7 +943,12 @@ void EditorController::send_vim_clipboard(const std::optional<core::VimRegister>
 std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::VimKey &key)
 {
     load_vim_clipboard(key);
-    return stepped_vim(VimStepSource{key});
+    // 補完を始める鍵の直前に候補の写しを置き、鍵の後に engine の補完を面へ写す（#1845・ADR 0169 の
+    // 決定 3）。補完の鍵でなく面も開いていなければ、どちらも欄を 1 つ読むだけで抜ける。
+    offer_vim_completion(key);
+    const auto failure = stepped_vim(VimStepSource{key});
+    follow_vim_completion();
+    return failure;
 }
 
 std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimStepSource &source)

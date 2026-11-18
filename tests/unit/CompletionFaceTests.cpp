@@ -622,6 +622,7 @@ void verify_completion_face_contracts()
     verify_waiting();
     verify_selection_kept();
     verify_trigger_characters();
+    verify_vim_insert_completion();
 }
 
 void verify_completion_face_scope()

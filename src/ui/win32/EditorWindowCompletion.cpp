@@ -24,11 +24,12 @@ void EditorWindow::run_complete()
 
 // 面が見えている間の鍵を面が受けたか。修飾つきの鍵（Shift+矢印の選択・Ctrl の操作）は受けずに
 // 今までの道へ流し、controller がその意図の前に面を閉じる。Enter・Tab・Esc の後の WM_CHAR は
-// 制御文字なので type_character が捨てる。
+// 制御文字なので type_character が捨てる。Vim のモードの面は engine が持つので、ここでは受けず、
+// どの鍵も Vim の鍵の道へ流す（Esc は確定して INSERT を抜ける・Enter は確定して改行・#1845）。
 bool EditorWindow::take_completion_key(UINT message, WPARAM word)
 {
-    if (message != WM_KEYDOWN || !controller_.completion_active() || held(VK_CONTROL) ||
-        held(VK_MENU) || held(VK_SHIFT))
+    if (message != WM_KEYDOWN || mode_ == core::EditMode::vim || !controller_.completion_active() ||
+        held(VK_CONTROL) || held(VK_MENU) || held(VK_SHIFT))
     {
         return false;
     }

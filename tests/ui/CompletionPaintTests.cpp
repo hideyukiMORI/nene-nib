@@ -18,6 +18,8 @@
 #include "Palette.hpp"
 #include "PaletteRowLayouts.hpp"
 #include "SoftwareTarget.hpp"
+#include "VimSpecialKey.hpp"
+#include "VimSpecialKeys.hpp"
 #include "WindowChecks.hpp"
 
 #include <algorithm>
@@ -150,10 +152,39 @@ void verify_face(SoftwareTarget &target, const ContextMenuText &text, const core
     static_cast<void>(paint(view));
     expect(held > 0 && layouts.size() == held, "drawing the same face again makes no new layouts");
 }
+
+// #1845（ADR 0169 の決定 3）: Vim の INSERT の補完の鍵の振り分け。Ctrl+N は INSERT で常に engine の
+// Ctrl-n、Ctrl+P・Ctrl+E・Ctrl+Y は補完の面が開いている間だけ engine の鍵で、閉じていれば今までの道
+// （Ctrl+P はファイルの一覧）へ流す。INSERT の外・Ctrl 以外の修飾つき・ほかの鍵は写さない。
+void verify_vim_completion_keys()
+{
+    using nenenib::core::VimSpecialKey;
+    using nenenib::ui::win32::vim_completion_key;
+    expect(vim_completion_key('N', true, true, false) == VimSpecialKey::control_n &&
+               vim_completion_key('N', true, true, true) == VimSpecialKey::control_n,
+           "Ctrl+N is the engine key Ctrl-n in the Vim INSERT mode, face open or closed");
+    expect(!vim_completion_key('P', true, true, false).has_value() &&
+               !vim_completion_key('E', true, true, false).has_value() &&
+               !vim_completion_key('Y', true, true, false).has_value(),
+           "with the face closed Ctrl+P goes on to the file list and Ctrl+E / Ctrl+Y stay as "
+           "they were");
+    expect(vim_completion_key('P', true, true, true) == VimSpecialKey::control_p &&
+               vim_completion_key('E', true, true, true) == VimSpecialKey::control_e &&
+               vim_completion_key('Y', true, true, true) == VimSpecialKey::control_y,
+           "with the face open Ctrl+P is the previous candidate and Ctrl+E / Ctrl+Y end the "
+           "completion");
+    expect(!vim_completion_key('N', true, false, true).has_value() &&
+               !vim_completion_key('P', true, false, true).has_value(),
+           "outside the Vim INSERT mode no completion key is sent");
+    expect(!vim_completion_key('N', false, true, true).has_value() &&
+               !vim_completion_key('Q', true, true, true).has_value(),
+           "a key without Ctrl alone, and a key that is not a completion key, are not sent");
+}
 } // namespace
 
 void verify_completion_paint()
 {
+    verify_vim_completion_keys();
     SoftwareTarget target;
     const auto factory = directwrite_factory();
     if (!target.ready() || factory == nullptr)

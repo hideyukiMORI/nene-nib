@@ -229,6 +229,8 @@ namespace detail
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
     case VimSpecialKey::delete_key:
+    case VimSpecialKey::control_n:
+    case VimSpecialKey::control_p:
         return VimStep{finished_input_wait(state), VimNoEffect{}};
     }
     std::unreachable();

@@ -4,8 +4,10 @@
 #include "VimBlockExtent.hpp"
 #include "VimBlockInsert.hpp"
 #include "VimCharacterSearch.hpp"
+#include "VimCompletionOffer.hpp"
 #include "VimCount.hpp"
 #include "VimInputWait.hpp"
+#include "VimInsertCompletion.hpp"
 #include "VimInsertRepeat.hpp"
 #include "VimInsertRestart.hpp"
 #include "VimInsertRestartPhase.hpp"
@@ -134,6 +136,15 @@ struct VimState
     // なので vim_resting_from は持ち越さず、待ちを終える所（finished_input_wait）と組み立て中の
     // 入力を捨てる所でも消える。
     std::optional<EasyMotionState> easy_motion = std::nullopt;
+    // INSERT の補完の候補の写し（#1845・ADR 0169 の決定 3）。controller が補完を始める鍵の直前に
+    // vim_completion_offered で置き、その鍵の vim_step の出口で消える（`"+` の写しと同じく、鍵を
+    // またいで持たない）。
+    std::shared_ptr<const VimCompletionOffer> completion_offer = nullptr;
+    // 開いている INSERT の補完（#1845）。立てるのは補完を始めた Ctrl-n / Ctrl-p、動かすのは次の
+    // Ctrl-n / Ctrl-p、消すのは Ctrl-e（元の接頭辞へ戻す）・Ctrl-y とほかの鍵（確定・
+    // completion_settled の 1 か所）・組み立て中の入力を捨てる input_discarded。INSERT の外では
+    // 値を持たない（vim_resting_from は持ち越さない）。
+    std::shared_ptr<const VimInsertCompletion> insert_completion = nullptr;
 };
 
 // 鍵を 1 つ食べ終わったあとの NORMAL。回数・オペレータ・欲しい列は空で、無名レジスタだけ残る。

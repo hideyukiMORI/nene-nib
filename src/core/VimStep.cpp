@@ -149,6 +149,8 @@ constexpr char32_t control_d_character = 0x04;
 constexpr char32_t control_f_character = 0x06;
 constexpr char32_t control_e_character = 0x05;
 constexpr char32_t control_y_character = 0x19;
+constexpr char32_t control_n_character = 0x0E;
+constexpr char32_t control_p_character = 0x10;
 
 constexpr char32_t control_u_character = 0x15;
 
@@ -1825,9 +1827,12 @@ namespace
         return acted(state, view, VimAction::move_left);
     case VimSpecialKey::arrow_right:
         return acted(state, view, VimAction::move_right);
+    // `Ctrl-p` `Ctrl-n` は `k` `j`（Vim の nv_up / nv_down・#1845）。
     case VimSpecialKey::arrow_up:
+    case VimSpecialKey::control_p:
         return acted(state, view, VimAction::move_up);
     case VimSpecialKey::arrow_down:
+    case VimSpecialKey::control_n:
         return acted(state, view, VimAction::move_down);
     case VimSpecialKey::home:
         return acted(home_uncounted(state), view, VimAction::move_to_column);
@@ -1885,6 +1890,10 @@ namespace
         return control_e_character;
     case VimSpecialKey::control_y:
         return control_y_character;
+    case VimSpecialKey::control_n:
+        return control_n_character;
+    case VimSpecialKey::control_p:
+        return control_p_character;
     case VimSpecialKey::control_w:
         return vim_window_control_character(key);
     case VimSpecialKey::control_a:
@@ -2351,6 +2360,9 @@ namespace
     next.block_insert = std::nullopt;
     next.auto_indented = false;
     next.easy_motion = std::nullopt;
+    // 開いている補完は記録に足さずに閉じる（#1845・本文は選んでいた語のまま）。
+    next.completion_offer = nullptr;
+    next.insert_completion = nullptr;
     return next;
 }
 } // namespace
@@ -2814,7 +2826,10 @@ VimStep vim_pointer_selected(const VimState &state, const VimEditorView &view, S
     return step;
 }
 
-VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
+namespace
+{
+// 1 鍵の歩（開いている補完の確定の後）。
+[[nodiscard]] VimStep keyed_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
     auto step = register_count_kept(auto_indent_noted(
         state, view.text,
@@ -2829,6 +2844,19 @@ VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
         change_marked(view, macro_recorded(state, view,
                                            vim_recorded(state, view, std::move(step), key), key)),
         key);
+}
+} // namespace
+
+VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
+{
+    // 開いている INSERT の補完は、補完の鍵でない鍵の前に確定する（#1845・Vim の ins_compl_prep）。
+    // 選んだ語はもう本文に入っているので、確定は状態だけを変える（記録に打った本文として足す）。
+    // 候補の写しは鍵をまたいで持たない（`"+` の写しと同じ）。
+    VimStep step = detail::completion_ends(state, key)
+                       ? keyed_step(detail::completion_settled(state), view, std::move(key))
+                       : keyed_step(state, view, std::move(key));
+    step.next.completion_offer = nullptr;
+    return step;
 }
 
 VimStep vim_command_operated(const VimState &state, const VimEditorView &view,
