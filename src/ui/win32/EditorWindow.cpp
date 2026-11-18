@@ -245,8 +245,9 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     {
         return;
     }
-    // 後を追う段（変換の取り消し 2 つ → タイマー → 外観 → 枠 → IME の開け閉め）の順と要るかは
-    // delivery_steps の 1 本が決める（#1854）。入力行の変換の取り消しで IME が送り返す通知は
+    // 後を追う段（変換の取り消し 2 つ → タイマー → 外観 → 枠 → IME の開け閉め）の順は
+    // delivery_order、要るかは delivery_step_due が決める（#1854）。
+    // 入力行の変換の取り消しで IME が送り返す通知は
     // 変換の無い delivery に CancelComposition を送るだけ（再入は 1 段で止まる）。
     const DeliveryFacts facts{
         .command_composed =
@@ -289,7 +290,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     }
 }
 
-// 後を追う 1 段を写す（順と要るかは delivery_steps・#1854）。
+// 後を追う 1 段を写す（順は delivery_order・要るかは delivery_step_due・#1854）。
 void EditorWindow::delivery_step(DeliveryStep step, core::SplitLayout previous_layout,
                                  application::EditorDelivery &delivery)
 {

@@ -1,13 +1,22 @@
-// #1854: 意図を送った後に窓が後を追う段の列（DeliverySteps・ClosingSteps
-// の形・#1340）。窓は作らない。 設定の面を閉じる 5 つの道（×
-// と「閉じる」の離し・Esc・Ctrl+,・面の外の左の押し・面の外の右の押し）を
-// 窓の手続きと同じ純関数（SettingsInput）に流して意図を得て、面が閉じた後の値で段の列を作り、
-// 変換の取り消しの段が 1 回・IME を開け閉めする follow_ime
-// より前にあるかを数える。面が開いたままの道 （面の中の押しと離し・探す欄の打鍵・Ctrl+,
-// の長押しの反復）では 0 回。 CloseSettings で面が閉じることは application の `--settings-modal`
-// が見るので、ここでは「意図の列に CloseSettings があれば閉じた」と置く。限界:
-// EditorWindow::deliver から run_delivery_steps の呼び出しを
-// 消してもこの試験は落ちない（窓を作らない・実機の IME の確認は施主の試用の項目）。
+// #1854: 意図を送った後に窓が後を追う段の列（DeliverySteps）。
+// 形は ClosingSteps（#1340）と同じで、窓は作らない。
+//
+// 面を閉じる道は 2 種類ある。
+// - CloseSettings を出す 5 つの道: ×・「閉じる」の離し、Esc、Ctrl+,、
+//   面の外の左の押し、面の外の右の押し。
+// - application の入口 close_settings_before が閉じる意図
+//   （帯のタブの操作・EndSession など、面を開いたまま受けない意図）。
+// どちらも段の値は deliver の後の controller の settings_open() から取るので、
+// 試験の after は道を問わない。前者は窓の手続きと同じ純関数（SettingsInput）に
+// 流して意図を得る。閉じた道では変換の取り消しの段が 1 回で、IME を開け閉めする
+// follow_ime より前。開いたままの道（面の中の押しと離し・探す欄の打鍵・
+// Ctrl+, の長押しの反復）では 0 回。
+//
+// CloseSettings で面が閉じることは application の `--settings-modal` が見るので、
+// ここでは「意図の列に CloseSettings があれば閉じた」と置く。
+// 限界: 試験の外に 3 つある。EditorWindow::deliver の run_delivery_steps の呼び出し、
+// deliver で facts を組む所、delivery_step の写し（どの段が何を呼ぶか）。
+// 実機の IME の確認は施主の試用の項目。
 #include "CloseSettings.hpp"
 #include "DeliveryFacts.hpp"
 #include "DeliveryStep.hpp"

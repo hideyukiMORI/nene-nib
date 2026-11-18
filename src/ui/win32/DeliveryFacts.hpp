@@ -2,7 +2,8 @@
 
 namespace nenenib::ui::win32
 {
-// 意図を送った後の段を決める値（#1854）。窓が deliver の入口で集め、delivery_steps が読むだけ。
+// 意図を送った後の段を決める値（#1854）。窓が deliver の入口で集め、
+// delivery_step_due が読むだけ。
 struct DeliveryFacts final
 {
     // 送る前に入力行が変換を持っていたか・送った後も持っているか。

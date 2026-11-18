@@ -4,9 +4,10 @@
 
 namespace nenenib::ui::win32
 {
-// 意図を送った後に窓が後を追う 1 段（#1854・ClosingStep の形・#1340）。順と要るかは
-// DeliverySteps.hpp の delivery_steps が決め、EditorWindow::delivery_step が 1 段ずつ写す。値が
-// 増えたら写す側の `switch` が落ちる（CPP-002）。
+// 意図を送った後に窓が後を追う 1 段（#1854・ClosingStep の形・#1340）。
+// 順は DeliverySteps.hpp の delivery_order、要るかは delivery_step_due が決め、
+// run_delivery_steps が流し、EditorWindow::delivery_step が 1 段ずつ写す。
+// 値が増えたら写す側の `switch` が落ちる（CPP-002）。
 enum class DeliveryStep : std::uint8_t
 {
     // 入力行が閉じて変換が消えたら、IME の側の変換も取り消す（ADR 0061 の決定 3）。

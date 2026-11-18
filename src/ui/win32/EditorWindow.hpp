@@ -271,7 +271,7 @@ class EditorWindow final
     void send(const application::EditorIntent &intent);
     // send の本体（意図を写して frame を窓へ映す）。深さは数えない。
     void deliver(const application::EditorIntent &intent);
-    // 意図を送った後の 1 段を写す（順と要るかは delivery_steps・#1854）。
+    // 意図を送った後の 1 段を写す（順は delivery_order・要るかは delivery_step_due・#1854）。
     void delivery_step(DeliveryStep step, core::SplitLayout previous_layout,
                        application::EditorDelivery &delivery);
     // 合図のメッセージを受けた。send の途中なら覚えるだけ、そうでなければ送る。

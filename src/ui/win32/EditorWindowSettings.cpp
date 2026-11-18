@@ -123,7 +123,7 @@ const std::optional<core::SettingsLayout> &EditorWindow::settings_layout_drawn()
 }
 
 // 面が閉じた所で IME の変換を取り消す（deliver の段 cancel_settings_composition・閉じたかは
-// delivery_steps が settings_just_closed で決める・レビュー M1・#1854）。IME を開け閉めする
+// delivery_step_due が settings_just_closed で決める・レビュー M1・#1854）。IME を開け閉めする
 // follow_ime より前なので、Vim の NORMAL へ戻って IME を閉じるときには変換はもう無い（閉じるときに
 // IME が確定を本文へ送らない）。取り消しで IME が送り返す通知は、変換の無い本文の道で何もしない。
 void EditorWindow::follow_settings_closing()

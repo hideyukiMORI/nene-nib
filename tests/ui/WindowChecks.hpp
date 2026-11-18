@@ -75,8 +75,8 @@ void verify_hover_tip_paint();
 void verify_settings_panel_paint();
 // #1836 の差し戻し: 設定の面の鍵・文字・マウスの振り分け（SettingsInput の純関数・窓は作らない）。
 void verify_settings_input();
-// #1854: 意図を送った後の段の列（DeliverySteps）。設定の面を閉じる 5 つの道で変換の取り消しが 1
-// 回。
+// #1854: 意図を送った後の段の列（DeliverySteps）。
+// 設定の面を閉じる道で、変換の取り消しの段が 1 回。
 void verify_delivery_steps();
 // 窓の角は四角（DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_DONOTROUND・#1488）。窓は作らない。
 void verify_window_corners();
