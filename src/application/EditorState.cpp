@@ -975,6 +975,18 @@ EditorState EditorState::with_tab_tip(TabTipPhase phase) const
     return next;
 }
 
+const LanguageAnswers &EditorState::language_answers() const noexcept
+{
+    return language_answers_;
+}
+
+EditorState EditorState::with_language_answers(LanguageAnswers answers) const
+{
+    EditorState next(*this);
+    next.language_answers_ = std::move(answers);
+    return next;
+}
+
 // 置く（ADR 0056 の決定 1・4）。出ていく文書の選択はキャレットへ畳み（VISUAL を持ち越さない）、
 // undo の単位を閉じる。題名は置くこの 1 回だけ作り、frame は並べるだけにする。
 std::shared_ptr<const DocumentState> EditorState::parked_active() const

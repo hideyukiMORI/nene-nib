@@ -12,6 +12,12 @@
 // 1 行目から順に 1 行 1 件・range は各行の 0〜4・severity は error と warning を交互・message は
 // 「fake <番号>」。ほかの振る舞いの引数と併せると何も読まずに 4 で終わる）・--silent（did*
 // に黙る。引数なしと同じで、ベンチの 設定の行に意図を書くための名前）。
+// 答えの引数（#1825・ADR 0190 の決定 4・11）: initialize の答えは
+// completionProvider（triggerCharacters は "."）・hoverProvider・definitionProvider
+// を持つ。--completion <N>（textDocument/completion に N 件の CompletionList・label
+// は「fake<番号>」）・--hover（textDocument/hover に markdown の
+// MarkupContent・囲みの行つき）・--definition <path>（textDocument/definition に path の Location
+// 1 つ・range は 0 行目の 0〜4）。引数の無い要求には result: null で答える。
 #include <windows.h>
 
 #include <algorithm>
@@ -193,20 +199,6 @@ void publish_diagnostics(std::string_view body, std::size_t count)
     write_all(frame(published));
 }
 
-void answer(std::string_view body)
-{
-    const std::string id(request_id(body));
-    if (calls(body, "initialize"))
-    {
-        write_all(frame(R"({"jsonrpc":"2.0","id":)" + id +
-                        R"(,"result":{"capabilities":{"positionEncoding":"utf-8"}}})"));
-    }
-    else if (calls(body, "shutdown"))
-    {
-        write_all(frame(R"({"jsonrpc":"2.0","id":)" + id + R"(,"result":null})"));
-    }
-}
-
 bool has(Arguments arguments, std::string_view name)
 {
     for (const char *argument : arguments)
@@ -219,26 +211,102 @@ bool has(Arguments arguments, std::string_view name)
     return false;
 }
 
-std::optional<std::size_t> number_after(Arguments arguments, std::string_view name)
+// name の次の引数（無ければ値なし）。
+std::optional<std::string_view> text_after(Arguments arguments, std::string_view name)
 {
     for (std::size_t index = 0; index + 1 < arguments.size(); ++index)
     {
         if (name == arguments[index])
         {
-            const std::string_view value = arguments[index + 1];
-            std::size_t number = 0;
-            const auto result = std::from_chars(value.data(), value.data() + value.size(), number);
-            return result.ec == std::errc{} ? std::optional<std::size_t>{number} : std::nullopt;
+            return std::string_view(arguments[index + 1]);
         }
     }
     return std::nullopt;
+}
+
+std::optional<std::size_t> number_after(Arguments arguments, std::string_view name)
+{
+    const auto value = text_after(arguments, name);
+    if (!value.has_value())
+    {
+        return std::nullopt;
+    }
+    std::size_t number = 0;
+    const auto result =
+        std::from_chars(value.value().data(), value.value().data() + value.value().size(), number);
+    return result.ec == std::errc{} ? std::optional<std::size_t>{number} : std::nullopt;
+}
+
+// --completion N の CompletionList。
+std::string completion_result(std::size_t count)
+{
+    std::string items;
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        items += index == 0 ? "" : ",";
+        items += R"({"label":"fake)" + std::to_string(index) + R"("})";
+    }
+    return R"({"isIncomplete":false,"items":[)" + items + "]}";
+}
+
+// --definition <path> の Location（区切りの \ を / にした素朴な file: の URI）。
+std::string definition_result(std::string_view path)
+{
+    std::string uri = "file:///";
+    for (const char character : path)
+    {
+        uri.push_back(character == '\\' ? '/' : character);
+    }
+    return R"({"uri":")" + uri +
+           R"(","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}}})";
+}
+
+// 文脈つきの要求の答えの result（引数が無ければ null）。
+std::string request_result(Arguments arguments, std::string_view body)
+{
+    const auto completion = number_after(arguments, "--completion");
+    if (calls(body, "textDocument/completion") && completion.has_value())
+    {
+        return completion_result(completion.value());
+    }
+    if (calls(body, "textDocument/hover") && has(arguments, "--hover"))
+    {
+        return R"({"contents":{"kind":"markdown","value":"```cpp\nint fake()\n```\nfake hover"}})";
+    }
+    const auto definition = text_after(arguments, "--definition");
+    if (calls(body, "textDocument/definition") && definition.has_value())
+    {
+        return definition_result(definition.value());
+    }
+    return "null";
+}
+
+void answer(Arguments arguments, std::string_view body)
+{
+    const std::string id(request_id(body));
+    if (calls(body, "initialize"))
+    {
+        write_all(frame(
+            R"({"jsonrpc":"2.0","id":)" + id +
+            R"(,"result":{"capabilities":{"positionEncoding":"utf-8","completionProvider":{"triggerCharacters":["."]},"hoverProvider":true,"definitionProvider":true}}})"));
+    }
+    else if (calls(body, "shutdown"))
+    {
+        write_all(frame(R"({"jsonrpc":"2.0","id":)" + id + R"(,"result":null})"));
+    }
+    else if (calls(body, "textDocument/completion") || calls(body, "textDocument/hover") ||
+             calls(body, "textDocument/definition"))
+    {
+        write_all(frame(R"({"jsonrpc":"2.0","id":)" + id + R"(,"result":)" +
+                        request_result(arguments, body) + "}"));
+    }
 }
 
 void respond(Arguments arguments, std::string_view body)
 {
     if (!has(arguments, "--echo"))
     {
-        answer(body);
+        answer(arguments, body);
         const auto diagnostics = number_after(arguments, "--diagnostics");
         if (diagnostics.has_value())
         {

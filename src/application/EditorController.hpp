@@ -79,12 +79,16 @@
 #include "JsonValue.hpp"
 #include "KeyMap.hpp"
 #include "Language.hpp"
+#include "LanguageAnswers.hpp"
+#include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
 #include "LspNotification.hpp"
+#include "LspPosition.hpp"
 #include "LspRequest.hpp"
+#include "LspRequestContext.hpp"
 #include "LspRequestKind.hpp"
 #include "LspResponse.hpp"
 #include "MapTimer.hpp"
@@ -100,6 +104,7 @@
 #include "PaletteProjectSearch.hpp"
 #include "PaneSide.hpp"
 #include "PaneSource.hpp"
+#include "PendingLspContext.hpp"
 #include "PendingLspRequest.hpp"
 #include "PointerClicks.hpp"
 #include "PreviewAnchor.hpp"
@@ -309,6 +314,25 @@ class EditorController final
     // 読みの取消・言語サーバーには触れない（accept(EndSession) を通さない）。頼んだ退避が全部
     // 書けたら真（上限を超えて書かない文書・flush の時間切れ・書けなかった結果があれば偽）。
     [[nodiscard]] bool back_up_before_defect();
+    // 言語サーバーへの文脈つきの要求（ADR 0190 の決定 1〜3）。段 B / C の意図（補完の面・`K`・
+    // `gd`・F12）が呼ぶ口で、それまでは試験が直に呼ぶ。本体は
+    // EditorControllerLanguageRequests.cpp。サーバーが running で、その能力を持ち、アクティブな
+    // 文書を `didOpen` してあるときだけ、未送信の変更を流してから送り、同じ種類の古い要求は
+    // `$/cancelRequest` で取り消す。送れたら真。
+    // session は補完の面の通し番号、trigger はその要求を起こした `triggerCharacters` の 1 つ（手で
+    // 開いたなら値なし）。
+    [[nodiscard]] bool request_completion(std::uint64_t session,
+                                          std::optional<std::string_view> trigger = std::nullopt);
+    [[nodiscard]] bool request_hover();
+    [[nodiscard]] bool request_definition();
+    // 文脈の照合を通った最新の答え（決定 1）。状態の 1 欄を読むだけ。
+    [[nodiscard]] const LanguageAnswers &language_answers() const noexcept;
+    // `initialize` の答えから読んだサーバーの能力（決定 3）。段 B の `triggerCharacters` の照合と
+    // 試験が読む口で、子が居なければ空。
+    [[nodiscard]] const ServerAbilities &language_server_abilities() const noexcept
+    {
+        return language_server_.abilities;
+    }
 
   private:
     // 意図の前に 1 意図ぶんだけの表示（失敗・報せ）を消す。keeps_message は報せを残す意図。
@@ -833,7 +857,8 @@ class EditorController final
     void stop_language_server();
     void shut_language_server();
     void send_lsp_request(LspRequestKind kind, std::string_view method,
-                          const core::JsonValue &params);
+                          const core::JsonValue &params, PendingLspContext context = {});
+    void send_lsp_cancel(std::int64_t id);
     void language_server_failed(core::UiMessage message);
     void collect_language_server();
     void receive_server(const ServerStarted &started);
@@ -869,6 +894,18 @@ class EditorController final
     void receive_diagnostics(const core::LspNotification &notification);
     void place_diagnostics(AutosaveId tab, std::vector<core::Diagnostic> diagnostics,
                            std::uint64_t version, core::DiagnosticsCount count);
+    // 文脈つきの要求と答え（ADR 0190 の決定 1〜3）。本体は EditorControllerLanguageRequests.cpp。
+    // requestable は要求を出せるアクティブな文書（running・能力あり・`didOpen` 済み・URI が今の
+    // まま）で、未送信の変更を流してから返す。send_language_request は同じ種類の古い要求を
+    // 取り消して送る。receive_answer は文脈を照合して答えを状態に置く（合わなければ捨てる・
+    // 知らせない）。
+    [[nodiscard]] LanguageServerDocument *requestable_document(bool ability);
+    void send_language_request(LspRequestKind kind, std::string_view method, core::JsonValue params,
+                               PendingLspContext context);
+    void cancel_lsp_requests(LspRequestKind kind);
+    [[nodiscard]] core::LspPosition request_position() const;
+    [[nodiscard]] LspRequestContext request_context() const;
+    void receive_answer(const PendingLspRequest &request, const core::LspResponse &response);
     // 自動退避の合図（ADR 0137 の決定 1・2）。WorkCompleted と同じく使う人の操作の途中の状態を
     // 動かさない。
     void accept(const AutosaveTick &);

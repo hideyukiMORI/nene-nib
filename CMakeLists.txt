@@ -79,6 +79,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/JsonNumber.cpp src/core/JsonValue.cpp src/core/JsonParse.cpp src/core/JsonWrite.cpp
     src/core/LspFrames.cpp src/core/LspMessages.cpp src/core/LspPosition.cpp
     src/core/LspDiagnostics.cpp src/core/DiagnosticEdits.cpp src/core/DiagnosticCounts.cpp
+    src/core/LspJsonRead.cpp src/core/LspPositionJson.cpp src/core/LspAnswers.cpp src/core/LspSnippet.cpp src/core/FileUri.cpp src/core/FileUrl.cpp src/core/PercentDecoding.cpp
     src/core/NoticeLine.cpp src/core/DiagnosticNotice.cpp src/core/LspShowMessage.cpp src/core/DiagnosticColor.cpp)
 # 版を core へ渡すのはこの 1 行だけ（AppIdentity.cpp の翻訳単位だけ・D90・#1677・CNF-007 が照合する）。
 set_source_files_properties(src/core/AppIdentity.cpp PROPERTIES
@@ -101,6 +102,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp src/application/DocumentDecoding.cpp
     src/application/EditorControllerLanguageServer.cpp src/application/ServerCommand.cpp
     src/application/EditorControllerLanguageDocuments.cpp src/application/DocumentUri.cpp
+    src/application/EditorControllerLanguageRequests.cpp
     src/application/DiagnosticLines.cpp src/application/LastResortPlan.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
@@ -238,6 +240,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/LspFramesPropertyTests.cpp
     tests/unit/SubstitutePropertyTests.cpp
     tests/unit/LspDiagnosticsTests.cpp
+    tests/unit/LspAnswersTests.cpp
     tests/unit/LanguageServerTests.cpp
     tests/unit/TitleBarLayoutPropertyTests.cpp
     tests/unit/GridCellsPropertyTests.cpp

@@ -12,6 +12,7 @@
 #include "LanguageTable.hpp"
 #include "LspDiagnostics.hpp"
 #include "LspIncoming.hpp"
+#include "LspJsonRead.hpp"
 #include "LspMessages.hpp"
 #include "LspNotification.hpp"
 #include "LspPositionEncoding.hpp"
@@ -19,7 +20,9 @@
 #include "LspRequestKind.hpp"
 #include "LspResponse.hpp"
 #include "LspShowMessage.hpp"
+#include "PendingLspContext.hpp"
 #include "PendingLspRequest.hpp"
+#include "ServerAbilities.hpp"
 #include "ServerCommand.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
@@ -27,6 +30,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -38,16 +42,46 @@ namespace nenenib::application
 {
 namespace
 {
+[[nodiscard]] core::JsonValue text_list(std::initializer_list<std::string_view> texts)
+{
+    core::JsonArray list;
+    for (const std::string_view text : texts)
+    {
+        list.push_back(core::JsonValue{std::string{text}});
+    }
+    return core::JsonValue{std::move(list)};
+}
+
+// client の `textDocument` の能力（ADR 0190 の決定 3）。補完はスニペットを受けず説明は平文、hover
+// は 平文と markdown、定義は LocationLink を受ける。
+[[nodiscard]] core::JsonValue text_document_capabilities()
+{
+    core::JsonObject item;
+    item.emplace_back("snippetSupport", core::JsonValue{false});
+    item.emplace_back("documentationFormat", text_list({"plaintext"}));
+    core::JsonObject completion;
+    completion.emplace_back("completionItem", core::JsonValue{std::move(item)});
+    core::JsonObject hover;
+    hover.emplace_back("contentFormat", text_list({"plaintext", "markdown"}));
+    core::JsonObject definition;
+    definition.emplace_back("linkSupport", core::JsonValue{true});
+    core::JsonObject text_document;
+    text_document.emplace_back("completion", core::JsonValue{std::move(completion)});
+    text_document.emplace_back("hover", core::JsonValue{std::move(hover)});
+    text_document.emplace_back("definition", core::JsonValue{std::move(definition)});
+    return core::JsonValue{std::move(text_document)};
+}
+
 // `initialize` の params（決定 5）。位置の単位は utf-8 と utf-16 を申し出る。rootUri は起こす
-// 要求の root（設定の root か最初に開いた文書のフォルダ）の URI（ADR 0161 の決定 1）。
+// 要求の root（設定の root か最初に開いた文書のフォルダ）の URI（ADR 0161 の決定 1）。能力は
+// ADR 0190 の決定 3。
 [[nodiscard]] core::JsonValue initialize_params(const std::string &root_uri)
 {
     core::JsonObject general;
-    general.emplace_back("positionEncodings",
-                         core::JsonValue{core::JsonArray{core::JsonValue{std::string{"utf-8"}},
-                                                         core::JsonValue{std::string{"utf-16"}}}});
+    general.emplace_back("positionEncodings", text_list({"utf-8", "utf-16"}));
     core::JsonObject capabilities;
     capabilities.emplace_back("general", core::JsonValue{std::move(general)});
+    capabilities.emplace_back("textDocument", text_document_capabilities());
     core::JsonObject params;
     params.emplace_back("processId", core::JsonValue{core::JsonNull{}});
     params.emplace_back("rootUri", core::JsonValue{root_uri});
@@ -55,30 +89,67 @@ namespace
     return core::JsonValue{std::move(params)};
 }
 
-// object の鍵 key の object。無い・object でなければ nullptr。
-[[nodiscard]] const core::JsonObject *member_object(const core::JsonObject &object,
-                                                    std::string_view key)
+// `initialize` の答えの `capabilities`（無い・object でなければ nullptr）。
+[[nodiscard]] const core::JsonObject *answered_capabilities(const core::JsonValue &result)
 {
-    const auto member = core::json_member(object, key);
-    return member.has_value() ? std::get_if<core::JsonObject>(&member.value().get().value)
-                              : nullptr;
+    const auto *object = core::json_object_of(result);
+    return object != nullptr ? core::json_object_member(*object, "capabilities") : nullptr;
 }
 
-// `initialize` の答えの `capabilities.positionEncoding`（決定 5）。"utf-8" のときだけ utf8 で、
-// 無い・ほかの値は LSP の既定の utf16。
-[[nodiscard]] core::LspPositionEncoding chosen_encoding(const core::JsonValue &result)
+// `capabilities.positionEncoding`（決定 5）。"utf-8" のときだけ utf8 で、無い・ほかの値は LSP の
+// 既定の utf16。
+[[nodiscard]] core::LspPositionEncoding chosen_encoding(const core::JsonObject *capabilities)
 {
-    const auto *object = std::get_if<core::JsonObject>(&result.value);
-    const auto *capabilities = object != nullptr ? member_object(*object, "capabilities") : nullptr;
-    if (capabilities == nullptr)
-    {
-        return core::LspPositionEncoding::utf16;
-    }
-    const auto encoding = core::json_member(*capabilities, "positionEncoding");
-    const auto *name =
-        encoding.has_value() ? std::get_if<std::string>(&encoding.value().get().value) : nullptr;
+    const auto *name = capabilities != nullptr
+                           ? core::json_text_member(*capabilities, "positionEncoding")
+                           : nullptr;
     return name != nullptr && *name == "utf-8" ? core::LspPositionEncoding::utf8
                                                : core::LspPositionEncoding::utf16;
+}
+
+// 能力の欄が true か object（`HoverOptions` など）なら持つ（ADR 0190 の決定 3）。
+[[nodiscard]] bool provided(const core::JsonObject &capabilities, std::string_view key)
+{
+    const auto member = core::json_member(capabilities, key);
+    if (!member.has_value())
+    {
+        return false;
+    }
+    const auto &value = member.value().get().value;
+    const auto *flag = std::get_if<bool>(&value);
+    return (flag != nullptr && *flag) || std::holds_alternative<core::JsonObject>(value);
+}
+
+// `capabilities` → サーバーの能力（ADR 0190 の決定 3）。補完は `completionProvider` の object が
+// あるときで、`triggerCharacters` の文字列だけを届いた順に持つ。
+[[nodiscard]] ServerAbilities server_abilities(const core::JsonObject *capabilities)
+{
+    if (capabilities == nullptr)
+    {
+        return {};
+    }
+    ServerAbilities abilities{.completion = false,
+                              .trigger_characters = {},
+                              .hover = provided(*capabilities, "hoverProvider"),
+                              .definition = provided(*capabilities, "definitionProvider")};
+    const auto *completion = core::json_object_member(*capabilities, "completionProvider");
+    if (completion == nullptr)
+    {
+        return abilities;
+    }
+    abilities.completion = true;
+    const auto triggers = core::json_member(*completion, "triggerCharacters");
+    const auto *list = triggers.has_value()
+                           ? std::get_if<core::JsonArray>(&triggers.value().get().value)
+                           : nullptr;
+    for (const core::JsonValue &entry : list != nullptr ? *list : core::JsonArray{})
+    {
+        if (const auto *text = std::get_if<std::string>(&entry.value))
+        {
+            abilities.trigger_characters.push_back(*text);
+        }
+    }
+    return abilities;
 }
 
 // `$/cancelRequest` の params（決定 6）。
@@ -206,6 +277,14 @@ void EditorController::stop_language_server()
     link.phase = LanguageServerPhase::idle;
     link.language.reset();
     link.pending.clear();
+    link.abilities = {};
+    // 前の子の答えは残さない（落ちた・再起動の道もここを通る・#1825 のレビュー R4）。
+    const auto &answers = state_.language_answers();
+    if (answers.completion.has_value() || answers.hover.has_value() ||
+        answers.definition.has_value())
+    {
+        state_ = state_.with_language_answers({});
+    }
     link.considered.reset();
     link.retired = true;
     ++link.generation;
@@ -234,14 +313,21 @@ void EditorController::shut_language_server()
     }
 }
 
-// 要求 id は controller の通し番号（決定 5）。答えを待つ列に載せる。
+// 要求 id は controller の通し番号（決定 5）。答えを照合する文脈と共に、答えを待つ列に載せる
+// （ADR 0190 の決定 1）。
 void EditorController::send_lsp_request(LspRequestKind kind, std::string_view method,
-                                        const core::JsonValue &params)
+                                        const core::JsonValue &params, PendingLspContext context)
 {
     auto &link = language_server_;
     const std::int64_t id = link.next_id++;
     ports_.language_server.send(core::lsp_request_body(id, method, params));
-    link.pending.push_back(PendingLspRequest{id, kind});
+    link.pending.push_back(PendingLspRequest{id, kind, std::move(context)});
+}
+
+// 答えを待つ要求 1 つを取り消す通知（決定 6・ADR 0190 の決定 1）。列から外すのは呼び出し元。
+void EditorController::send_lsp_cancel(std::int64_t id)
+{
+    ports_.language_server.send(core::lsp_notification_body("$/cancelRequest", cancel_params(id)));
 }
 
 // 子が終わった・話せない・答えない（決定 6）。止めて 1 行知らせ、上限までは同じ言語で起こし直す。
@@ -350,9 +436,9 @@ void EditorController::receive_lsp(const core::LspResponse &response)
     {
         return;
     }
-    const LspRequestKind kind = pending->kind;
+    const PendingLspRequest request = *pending;
     link.pending.erase(pending);
-    switch (kind)
+    switch (request.kind)
     {
     case LspRequestKind::initialize:
         if (!response.result)
@@ -360,7 +446,8 @@ void EditorController::receive_lsp(const core::LspResponse &response)
             language_server_failed(core::UiMessage::notice_language_server_not_started);
             return;
         }
-        link.encoding = chosen_encoding(response.result.value());
+        link.encoding = chosen_encoding(answered_capabilities(response.result.value()));
+        link.abilities = server_abilities(answered_capabilities(response.result.value()));
         ports_.language_server.send(
             core::lsp_notification_body("initialized", core::JsonValue{core::JsonObject{}}));
         link.phase = LanguageServerPhase::running;
@@ -372,6 +459,11 @@ void EditorController::receive_lsp(const core::LspResponse &response)
             core::lsp_notification_body("exit", core::JsonValue{core::JsonNull{}}));
         stop_language_server();
         reconcile_language_server();
+        return;
+    case LspRequestKind::completion:
+    case LspRequestKind::hover:
+    case LspRequestKind::definition:
+        receive_answer(request, response);
         return;
     }
 }
@@ -428,20 +520,25 @@ void EditorController::accept(const LanguageServerTick &)
 }
 
 // 古い要求 1 つ（決定 6）。`initialize` は `$/cancelRequest` を送って捨て、答えない子として
-// 失敗に数える。`shutdown` は `exit` を送らずに止める（依頼書・追補）。
+// 失敗に数える。`shutdown` は `exit` を送らずに止める（依頼書・追補）。補完・hover・定義へは
+// `$/cancelRequest` を送って捨てるだけで、知らせは出さない（ADR 0190 の決定 1）。
 void EditorController::expire_lsp_request(const PendingLspRequest &request)
 {
     switch (request.kind)
     {
     case LspRequestKind::initialize:
-        ports_.language_server.send(
-            core::lsp_notification_body("$/cancelRequest", cancel_params(request.id)));
+        send_lsp_cancel(request.id);
         repaint_ = true;
         language_server_failed(core::UiMessage::notice_language_server_silent);
         return;
     case LspRequestKind::shutdown:
         stop_language_server();
         reconcile_language_server();
+        return;
+    case LspRequestKind::completion:
+    case LspRequestKind::hover:
+    case LspRequestKind::definition:
+        send_lsp_cancel(request.id);
         return;
     }
 }
