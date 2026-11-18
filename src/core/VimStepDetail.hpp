@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CompletionDirection.hpp"
 #include "EasyMotionKind.hpp"
 #include "ExRange.hpp"
 #include "ExSubstituteRequest.hpp"
@@ -9,7 +10,6 @@
 #include "VimAction.hpp"
 #include "VimBlockInsert.hpp"
 #include "VimBlockRange.hpp"
-#include "CompletionDirection.hpp"
 #include "VimCharacterSearchInvocation.hpp"
 #include "VimInsertCompletion.hpp"
 #include "VimKeyTable.hpp"
@@ -386,9 +386,8 @@ repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::
 // INSERT の補完の鍵の入口（insert_special が Ctrl-n Ctrl-p Ctrl-e Ctrl-y を渡す）。
 [[nodiscard]] VimStep completion_keyed(const VimState &state, const VimEditorView &view,
                                        VimSpecialKey key);
-[[nodiscard]] std::optional<VimRepeatRecord> completion_recording(const VimState &before,
-                                                                  const VimRepeatRecord &record,
-                                                                  const VimKey &key);
+[[nodiscard]] std::optional<VimRepeatRecord>
+completion_recording(const VimState &before, const VimRepeatRecord &record, const VimKey &key);
 [[nodiscard]] bool restarts_insert(VimKey key) noexcept;
 [[nodiscard]] bool erased_nothing(const VimKey &key, const VimEffect &effect) noexcept;
 [[nodiscard]] bool moved_nothing(const VimKey &key, const VimEffect &effect) noexcept;

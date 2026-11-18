@@ -1,7 +1,8 @@
-// INSERT の補完（`Ctrl-n` `Ctrl-p` `Ctrl-e` `Ctrl-y`・#1845・ADR 0169 の決定 3）。Vim の insexpand.c
-// の形を engine が持つ: 選ぶたびに選んだ語を本文に入れ、輪は「候補の列 ＋ 元の接頭辞」、`Ctrl-e` は
-// 元の接頭辞へ戻して閉じ、`Ctrl-y` とほかの鍵は確定して閉じる。候補は controller が置いた写し
-// （VimState.completion_offer）で、engine は語の表にも port にも触れない（ADR 0051 と同じ形）。
+// INSERT の補完（`Ctrl-n` `Ctrl-p` `Ctrl-e` `Ctrl-y`・#1845・ADR 0169 の決定 3）。Vim の
+// insexpand.c の形を engine が持つ: 選ぶたびに選んだ語を本文に入れ、輪は「候補の列 ＋
+// 元の接頭辞」、`Ctrl-e` は 元の接頭辞へ戻して閉じ、`Ctrl-y` とほかの鍵は確定して閉じる。候補は
+// controller が置いた写し （VimState.completion_offer）で、engine は語の表にも port
+// にも触れない（ADR 0051 と同じ形）。
 // `.` と回数の記録には補完の鍵を残さず、確定した語を打った本文として足す（Vim の
 // ins_compl_fixRedoBufForLeader・oracle で実測: `cwa<C-n><Esc>` の後の `.` は同じ語を入れる）。
 #include "VimStepDetail.hpp"
@@ -227,7 +228,8 @@ VimStep completion_stepped(const VimState &state, const VimEditorView &view,
     VimInsertCompletion completion = *state.insert_completion;
     // 輪は「候補の列 ＋ 元の接頭辞」。列の向きと同じ鍵は次へ、逆の鍵は前へ回る。
     const std::size_t ring = completion.words->size() + single_step;
-    const std::size_t advance = direction == completion.direction ? single_step : ring - single_step;
+    const std::size_t advance =
+        direction == completion.direction ? single_step : ring - single_step;
     completion.selected = (completion.selected + advance) % ring;
     return selected_step(state, view, std::move(completion));
 }
@@ -294,9 +296,8 @@ VimStep completion_keyed(const VimState &state, const VimEditorView &view, VimSp
     std::unreachable();
 }
 
-std::optional<VimRepeatRecord> completion_recording(const VimState &before,
-                                                    const VimRepeatRecord &record,
-                                                    const VimKey &key)
+std::optional<VimRepeatRecord>
+completion_recording(const VimState &before, const VimRepeatRecord &record, const VimKey &key)
 {
     if (!is_completion_key(key))
     {

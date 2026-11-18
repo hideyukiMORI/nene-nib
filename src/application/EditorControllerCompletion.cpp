@@ -744,8 +744,8 @@ EditorController::vim_completion_text(core::Offset origin, const core::Completio
         return text;
     }
     const core::Offset begin = placed.value().begin;
-    if (origin < begin || state_.text().position_of(begin).line.value !=
-                              state_.text().position_of(origin).line.value)
+    if (origin < begin ||
+        state_.text().position_of(begin).line.value != state_.text().position_of(origin).line.value)
     {
         return std::nullopt;
     }

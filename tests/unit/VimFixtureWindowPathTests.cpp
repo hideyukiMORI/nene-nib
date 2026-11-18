@@ -307,10 +307,10 @@ void prepare(Editing &editing, const VimFixture &fixture)
     EditorController &controller = editing.controller();
     for (const core::VimKey &key : vim_keys_of(fixture.keys))
     {
-        const WindowSend send = controller.command_line_active()
-                                    ? command_line_send(key)
-                                    : vim_send(key, controller.vim_state().mode,
-                                               controller.completion_open());
+        const WindowSend send =
+            controller.command_line_active()
+                ? command_line_send(key)
+                : vim_send(key, controller.vim_state().mode, controller.completion_open());
         if (!send.has_value())
         {
             return std::unexpected(send.error());
@@ -429,10 +429,8 @@ void verify_skip_reasons()
 {
     constexpr std::array<VimFixture, 6> skipping{
         {{"window-path-skip-control", "ab", "<NL>", "ab", 1, 1, "", "", std::nullopt},
-         {"window-path-skip-insert-control", "ab", "i<C-a><Esc>", "ab", 1, 1, "", "",
-          std::nullopt},
-         {"window-path-skip-closed-ctrl-e", "ab", "i<C-e><Esc>", "ab", 1, 1, "", "",
-          std::nullopt},
+         {"window-path-skip-insert-control", "ab", "i<C-a><Esc>", "ab", 1, 1, "", "", std::nullopt},
+         {"window-path-skip-closed-ctrl-e", "ab", "i<C-e><Esc>", "ab", 1, 1, "", "", std::nullopt},
          {"window-path-skip-closed-ctrl-p", "ab a", "A<C-p><Esc>", "ab ab", 1, 5, "", "",
           std::nullopt},
          {"window-path-skip-normal-ctrl-n", "ab\ncd", "<C-n>", "ab\ncd", 2, 1, "", "",

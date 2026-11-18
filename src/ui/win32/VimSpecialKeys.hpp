@@ -49,10 +49,11 @@ inline constexpr std::array<KeyVimSpecial, 12> vim_specials{
 }
 
 // Vim の INSERT の補完の鍵（#1845・ADR 0169 の決定 3）。`Ctrl+N` は Vim の INSERT で常に engine の
-// `Ctrl-n`（補完を始める・次の候補）。`Ctrl+P` `Ctrl+E` `Ctrl+Y` は補完の面が開いている間だけ engine
-// の鍵で、閉じていれば空を返して今までの道へ流す（`Ctrl+P` はファイルの一覧・`Ctrl+E` `Ctrl+Y` は
-// 通常モードの表）。control は Ctrl だけを押していること（Shift か Alt を組んだ鍵は写さない）、
-// inserting は Vim の INSERT で本文に焦点があること、face_open は補完の面が開いていること。
+// `Ctrl-n`（補完を始める・次の候補）。`Ctrl+P` `Ctrl+E` `Ctrl+Y` は補完の面が開いている間だけ
+// engine の鍵で、閉じていれば空を返して今までの道へ流す（`Ctrl+P` はファイルの一覧・`Ctrl+E`
+// `Ctrl+Y` は 通常モードの表）。control は Ctrl だけを押していること（Shift か Alt
+// を組んだ鍵は写さない）、 inserting は Vim の INSERT で本文に焦点があること、face_open
+// は補完の面が開いていること。
 [[nodiscard]] constexpr std::optional<core::VimSpecialKey>
 vim_completion_key(WPARAM key, bool control, bool inserting, bool face_open) noexcept
 {
@@ -69,8 +70,8 @@ vim_completion_key(WPARAM key, bool control, bool inserting, bool face_open) noe
         return std::nullopt;
     }
     constexpr std::array<KeyVimSpecial, 3> open_keys{{{'P', core::VimSpecialKey::control_p},
-                                                     {'E', core::VimSpecialKey::control_e},
-                                                     {'Y', core::VimSpecialKey::control_y}}};
+                                                      {'E', core::VimSpecialKey::control_e},
+                                                      {'Y', core::VimSpecialKey::control_y}}};
     for (const KeyVimSpecial entry : open_keys)
     {
         if (entry.key == key)

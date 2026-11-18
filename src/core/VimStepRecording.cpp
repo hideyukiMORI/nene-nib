@@ -702,9 +702,8 @@ namespace
 // 補完の鍵の後の記録（#1845）。補完の鍵は記録に残さない（Vim の redo は確定した語を打った本文として
 // 持つ・completion_recording）。区切った後の最初の鍵なら `i` から取り直す（Vim の ins_complete も
 // stop_arrow を呼ぶ）。補完の鍵でなければ空。
-[[nodiscard]] std::optional<VimRepeatRecord> completion_kept(const VimState &before,
-                                                             const VimRepeatRecord &record,
-                                                             const VimKey &key)
+[[nodiscard]] std::optional<VimRepeatRecord>
+completion_kept(const VimState &before, const VimRepeatRecord &record, const VimKey &key)
 {
     auto kept = detail::completion_recording(before, record, key);
     if (kept.has_value() && arrow_pending(before))

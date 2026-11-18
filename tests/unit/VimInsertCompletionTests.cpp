@@ -1,9 +1,10 @@
 // 契約 --completion-face の Vim の側（Issue #1845・ADR 0169 の決定 3・ADR 0190 の決定 5）。Vim の
-// INSERT の Ctrl-n / Ctrl-p / Ctrl-e / Ctrl-y を、窓が送るのと同じ意図 VimKeyPress で流し、補完の面の
-// 行と engine の状態と本文が合うこと・undo の 1 単位・`.` の記録・変換中は始まらない・他のタブの語・
-// 後から届いた LSP の候補が列の先頭側に足されて選んでいる語が動かないことを固定する。本文と
-// キャレットとレジスタが Vim と合うことは fixture（insert-complete-）が oracle と突き合わせる。
-// 替え玉 ScriptedLanguageServer だけを使い、本物のサーバーも窓も使わない。
+// INSERT の Ctrl-n / Ctrl-p / Ctrl-e / Ctrl-y を、窓が送るのと同じ意図 VimKeyPress
+// で流し、補完の面の 行と engine の状態と本文が合うこと・undo の 1 単位・`.`
+// の記録・変換中は始まらない・他のタブの語・ 後から届いた LSP
+// の候補が列の先頭側に足されて選んでいる語が動かないことを固定する。本文と キャレットとレジスタが
+// Vim と合うことは fixture（insert-complete-）が oracle と突き合わせる。 替え玉
+// ScriptedLanguageServer だけを使い、本物のサーバーも窓も使わない。
 #include "CaretMotion.hpp"
 #include "ChooseCompletion.hpp"
 #include "CloseCompletion.hpp"
@@ -186,7 +187,8 @@ void verify_repeat()
     Editing counted;
     open_vim_document(counted, std::string(words_text));
     static_cast<void>(pressed(counted, "fx3ia<C-n><Esc>"));
-    expect(body(counted) == "a1 a2 a1 a3a3a3x a3 a2", "a counted insert repeats the completed word");
+    expect(body(counted) == "a1 a2 a1 a3a3a3x a3 a2",
+           "a counted insert repeats the completed word");
 }
 
 // 面の行と engine の状態は 1 歩ごとに合う（候補が面の 8 行を超えても窓が選んだ行を追う）。
@@ -284,8 +286,7 @@ void verify_other_tabs()
     static_cast<void>(editing.controller().apply_frame(app::NewTab{}));
     const auto face = pressed(editing, "ize<C-n>");
     expect(rows(face) == std::vector<std::string>{"zeta1", "zeta2"} && chosen(face) == "zeta1" &&
-               face_of(face).rows.front().source ==
-                   core::CompletionSource::other_buffers &&
+               face_of(face).rows.front().source == core::CompletionSource::other_buffers &&
                body(editing) == "zeta1",
            "the words of another tab are offered after the words of this document");
 }
