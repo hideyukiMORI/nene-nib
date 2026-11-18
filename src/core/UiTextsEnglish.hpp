@@ -297,5 +297,9 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::start_new_file_detail, "Just start typing"},
     {UiMessage::start_open_folder, "Open Folder"},
     {UiMessage::start_open_folder_detail, "Choose a root and show the Explorer"},
+    {UiMessage::operation_complete_name, "Complete"},
+    {UiMessage::operation_complete_description,
+     "Suggest completions for the word being typed (Up / Down to pick, Enter or Tab to accept)"},
+    {UiMessage::notice_completion_none, "No completions"},
 }};
 } // namespace nenenib::core

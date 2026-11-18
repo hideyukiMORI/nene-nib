@@ -16,6 +16,9 @@
 #include "CompositionView.hpp"
 #include "ContextMenuItem.hpp"
 #include "ContextMenuMode.hpp"
+#include "CompletionEntry.hpp"
+#include "CompletionSession.hpp"
+#include "CompletionView.hpp"
 #include "ContextMenuOpen.hpp"
 #include "ContextMenuView.hpp"
 #include "DetectedText.hpp"
@@ -84,6 +87,7 @@
 #include "LanguageAnswers.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
+#include "LspCompletionList.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
@@ -236,6 +240,11 @@ class EditorController final
     [[nodiscard]] bool context_menu_active() const noexcept;
     // 開いているメニューの選んでいる行（マウスの動きのたびに窓が比べる安い読み）。
     [[nodiscard]] std::optional<std::size_t> context_menu_highlighted() const noexcept;
+    // 補完の面が見えているか（ADR 0190 の決定 5）。窓が上下・Enter・Tab・Esc の行き先を決めるための
+    // 安い読みで、frame を作らない。completion_open は面の状態があるか（LSP の答えを待っていて
+    // まだ見えていない面を含む・窓が非アクティブになったときに閉じるかを決める）。
+    [[nodiscard]] bool completion_active() const noexcept;
+    [[nodiscard]] bool completion_open() const noexcept;
     // エクスプローラーの面に焦点があるか（ADR 0162 の決定 4・E4 で足した口）。窓が鍵の行き先を
     // 決めるための安い読みで、frame を作らない。面が消えていれば偽。
     [[nodiscard]] bool explorer_focused() const noexcept;
@@ -1138,6 +1147,35 @@ class EditorController final
     void run_listed_operation(core::EditorOperation operation);
     [[nodiscard]] std::optional<ContextMenuView> context_menu_view() const;
 
+    // ---------------------------------------------------------------- 補完の面（ADR 0190 / 0169）
+    // EditorControllerCompletion.cpp の群だけが読み書きする。
+    void accept(const OpenCompletion &);
+    void accept(const StepCompletion &intent);
+    void accept(const ChooseCompletion &);
+    void accept(const CloseCompletion &);
+    // 入口の 1 か所（apply）。面が開いていて、開いたまま受ける意図でなければ、写す前に閉じる。
+    void close_completion_before(const EditorIntent &intent);
+    // 出口の 1 か所（apply）。成り立たなくなった面を閉じ、届いた答えを足し、打った分で絞り直す。
+    void settle_completion();
+    // 通常モードで `triggerCharacters` の 1 つを打ち終えたら開く。呼ぶのは言語サーバーが running の
+    // ときだけ（accept(InsertText) の 1 か所）。
+    void open_triggered_completion(std::string_view typed);
+    // 面を開く 1 か所。trigger が無ければ手で開いた面、あれば自動の面。
+    void start_completion(std::optional<std::string_view> trigger);
+    [[nodiscard]] bool completion_startable() const;
+    [[nodiscard]] bool completion_holds(const CompletionSession &session) const;
+    void collect_completion_words(CompletionSession &session) const;
+    void refresh_completion(CompletionSession &session);
+    [[nodiscard]] bool take_completion_answer(CompletionSession &session);
+    void merge_completion_answer(CompletionSession &session,
+                                 const core::LspCompletionList &list) const;
+    // 面を閉じる 1 か所（待っている要求の取り消しと、届いていた補完の答えの消去）。
+    void close_completion();
+    void forget_completion_answer();
+    [[nodiscard]] core::OffsetRange completion_range(core::Offset origin,
+                                                     const core::CompletionEntry &entry) const;
+    [[nodiscard]] std::optional<CompletionView> completion_view() const;
+
     // ---------------------------------------------------------------- 起動画面（ADR 0172）
     // EditorControllerStartScreen.cpp の群だけが読み書きする。
     // 最初の frame の合図（決定 3）。以後は起動画面の鍵を受け、出口が起動画面を数え始める。
@@ -1595,6 +1633,9 @@ class EditorController final
     std::optional<std::size_t> start_selection_;
     // 開いている右クリックのメニュー（ADR 0078 の追補 #1051）。
     std::optional<ContextMenuOpen> context_menu_;
+    // 開いている補完の面と、面の通し番号（ADR 0190 の決定 1・5）。
+    std::optional<CompletionSession> completion_;
+    std::uint64_t completion_sessions_ = 0;
     // 写している途中の意図の深さと、いちばん外の意図の入口の印（ADR 0137 の追補 #1625）。apply の
     // 入口と出口が整数を書くだけで、例外で抜けると深さは戻らない（落ちたときは「意図の中」と読む）。
     std::size_t intent_depth_ = 0;

@@ -181,6 +181,10 @@ class EditorWindow final
     // 閉じる。受けて捨てたら true（焦点を失ったときは閉じて false・今の道も通す）。
     [[nodiscard]] bool take_context_menu_key(UINT message, WPARAM word);
     void press_context_menu_key(WPARAM word);
+    // 補完の面（ADR 0190 の決定 5・EditorWindowCompletion.cpp）。面が見えている間の上下・PageUp /
+    // PageDown・Enter・Tab・Esc を面が受けたら真。窓が非アクティブになったら閉じる。
+    [[nodiscard]] bool take_completion_key(UINT message, WPARAM word);
+    void close_completion_outside();
     [[nodiscard]] bool in_text_body(POINT point) const;
     // 左の押しを続けた回数に数える（#1250）。OS のダブルクリックは 2 回目、その後に OS の
     // ダブルクリックの時間と升の中で押せば 3 回目（4 回目以降も 3
@@ -411,6 +415,7 @@ class EditorWindow final
     void run_delete_selection();
     void run_select_all();
     void run_cycle_finder_preview();
+    void run_complete();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();

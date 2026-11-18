@@ -278,5 +278,9 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::start_new_file_detail, "そのまま打ち始める"},
     {UiMessage::start_open_folder, "フォルダを開く"},
     {UiMessage::start_open_folder_detail, "ルートを選んでエクスプローラーを出す"},
+    {UiMessage::operation_complete_name, "補完"},
+    {UiMessage::operation_complete_description,
+     "打っている語の候補を出します（上下で選び、Enter か Tab で確定）"},
+    {UiMessage::notice_completion_none, "補完の候補がありません"},
 }};
 } // namespace nenenib::core

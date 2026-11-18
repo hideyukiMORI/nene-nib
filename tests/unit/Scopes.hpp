@@ -63,6 +63,9 @@ void verify_bookmarks_contracts();
 void verify_bookmarks_scope();
 void verify_insert_completion_contracts();
 void verify_insert_completion_scope();
+// CompletionFaceTests.cpp（#1833・ADR 0190 の決定 5・補完の面の表と通常モードの道）
+void verify_completion_face_contracts();
+void verify_completion_face_scope();
 
 // HistoryTests.cpp
 void verify_history_contracts();

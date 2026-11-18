@@ -11,6 +11,7 @@
 #include "Edit.hpp"
 #include "HtmlToMarkdown.hpp"
 #include "Language.hpp"
+#include "LanguageServerPhase.hpp"
 #include "OrdinaryCharacterBoundary.hpp"
 #include "OrdinaryWordBoundary.hpp"
 #include "PasteKind.hpp"
@@ -400,6 +401,11 @@ void EditorController::move_caret_to(core::Offset caret, core::SelectionAnchorin
 void EditorController::accept(const InsertText &intent)
 {
     replace(core::selection_range(state_.selection()), intent.utf8, core::EditBoundary::coalesce);
+    // `triggerCharacters` の照合は「言語サーバーが動いている」の真偽の後ろ（ADR 0190 の決定 10）。
+    if (language_server_.phase == LanguageServerPhase::running)
+    {
+        open_triggered_completion(intent.utf8);
+    }
 }
 
 void EditorController::accept(const MoveCaret &intent)

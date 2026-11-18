@@ -269,13 +269,23 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
            std::holds_alternative<CloseContextMenu>(intent);
 }
 
+// 補完の面の開く・上下・閉じるもキャレットを動かさない（ADR 0190 の決定 5）。確定の
+// ChooseCompletion は編集なので捨てる側。
+[[nodiscard]] bool keeps_wanted_x_for_completion(const EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<OpenCompletion>(intent) ||
+           std::holds_alternative<StepCompletion>(intent) ||
+           std::holds_alternative<CloseCompletion>(intent);
+}
+
 [[nodiscard]] bool keeps_wanted_x(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<MoveCaret>(intent) || is_signal(intent) ||
            std::holds_alternative<ScrollPane>(intent) ||
            std::holds_alternative<PointTitleBar>(intent) ||
            std::holds_alternative<HoverExplorer>(intent) ||
-           std::holds_alternative<TitleBarWidth>(intent) || keeps_wanted_x_for_menu(intent);
+           std::holds_alternative<TitleBarWidth>(intent) || keeps_wanted_x_for_menu(intent) ||
+           keeps_wanted_x_for_completion(intent);
 }
 
 // エクスプローラーのダブルクリックの 2 打目と組む印（explorer_clicked_）を保つ意図（#1388・
@@ -571,6 +581,8 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     settle_transient();
     settle_easymotion(intent);
     settle_start_screen();
+    // 開いている補完の面の絞り直しと、届いた答えの取り込み（ADR 0190 の決定 5）。
+    settle_completion();
     keep_vim_character(intent);
     if (is_signal(intent) && caret_anchor_of(state_) != anchor)
     {
@@ -604,6 +616,9 @@ void EditorController::forget_unkept_marks(const EditorIntent &intent)
     }
     // 右クリックのメニューも、メニューの意図と使う人の操作でない意図のほかで閉じる（#1051）。
     close_context_menu_before(intent);
+    // 補完の面も、面の意図・文字の入力・手前への削除・使う人の操作でない意図のほかで閉じる
+    // （ADR 0190 の決定 5）。
+    close_completion_before(intent);
 }
 
 // `map` の待ちの鍵は、待ちを保つ意図のほかは受ける前に流す（ADR 0176 の決定 4）。
@@ -1331,6 +1346,7 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     add_diagnostics(result);
     result.start_screen = start_screen_view();
     result.context_menu = context_menu_view();
+    result.completion = completion_view();
 }
 
 std::optional<SyntaxStateCache> &EditorController::syntax_cache(core::PaneSide side) noexcept

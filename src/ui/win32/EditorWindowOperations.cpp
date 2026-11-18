@@ -403,6 +403,7 @@ EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation op
         {core::EditorOperation::delete_selection, &EditorWindow::run_delete_selection},
         {core::EditorOperation::select_all, &EditorWindow::run_select_all},
         {core::EditorOperation::cycle_finder_preview, &EditorWindow::run_cycle_finder_preview},
+        {core::EditorOperation::complete, &EditorWindow::run_complete},
     }};
     static_assert(runners_in_order(runners),
                   "operation runners follow the order of EditorOperation and point to a function");

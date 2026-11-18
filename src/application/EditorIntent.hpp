@@ -9,9 +9,11 @@
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
+#include "ChooseCompletion.hpp"
 #include "ChooseContextMenu.hpp"
 #include "ChooseStartEntry.hpp"
 #include "ClipboardAction.hpp"
+#include "CloseCompletion.hpp"
 #include "CloseContextMenu.hpp"
 #include "ClosePane.hpp"
 #include "CloseTab.hpp"
@@ -36,6 +38,7 @@
 #include "NewLine.hpp"
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
+#include "OpenCompletion.hpp"
 #include "OpenContextMenu.hpp"
 #include "OpenDisplayLanguageList.hpp"
 #include "OpenDocument.hpp"
@@ -75,6 +78,7 @@
 #include "SettleRecentTab.hpp"
 #include "ShowVersion.hpp"
 #include "SplitPane.hpp"
+#include "StepCompletion.hpp"
 #include "StepContextMenu.hpp"
 #include "StoreVimRegister.hpp"
 #include "SubmitCommand.hpp"
@@ -115,5 +119,6 @@ using EditorIntent = std::variant<
     SetPreviewPlacement, PointPreview, PrintDocument, RegisterShell, UnregisterShell, PinTab,
     FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion, OpenProjectSearch,
     OpenContextMenu, PointContextMenu, StepContextMenu, ChooseContextMenu, CloseContextMenu,
-    CycleFinderPreview, TabTipTick>;
+    CycleFinderPreview, TabTipTick, OpenCompletion, StepCompletion, ChooseCompletion,
+    CloseCompletion>;
 } // namespace nenenib::application
