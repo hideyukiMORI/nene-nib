@@ -373,7 +373,8 @@ core::PreviewBlock preview_marker_block(const core::PreviewBlock &item)
                               std::nullopt,
                               std::nullopt,
                               std::nullopt,
-                              std::nullopt};
+                              std::nullopt,
+                              {}};
 }
 
 float preview_marker_layout_width() noexcept

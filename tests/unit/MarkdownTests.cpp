@@ -15,6 +15,7 @@
 #include "PreviewBlockKind.hpp"
 #include "PreviewCodeColor.hpp"
 #include "PreviewCodeColors.hpp"
+#include "PreviewLink.hpp"
 #include "PreviewSpan.hpp"
 #include "PreviewStyle.hpp"
 #include "PreviewTableAlign.hpp"
@@ -79,7 +80,8 @@ static_assert(!LendsStop<decltype(never_stop)>);
                         .task = std::nullopt,
                         .table = std::nullopt,
                         .alert = std::nullopt,
-                        .code_colors = std::nullopt};
+                        .code_colors = std::nullopt,
+                        .links = {}};
 }
 
 [[nodiscard]] PreviewBlock titled(std::uint8_t level, std::string text, std::size_t begin)
@@ -93,6 +95,18 @@ static_assert(!LendsStop<decltype(never_stop)>);
 {
     block.spans = std::move(spans);
     return block;
+}
+
+// リンクの宛先の列（#1869）。各リンクは text の中の範囲と宛先。
+[[nodiscard]] PreviewBlock linked(PreviewBlock block, std::vector<core::PreviewLink> links)
+{
+    block.links = std::move(links);
+    return block;
+}
+
+[[nodiscard]] core::PreviewLink to(std::size_t begin, std::size_t end, std::string target)
+{
+    return core::PreviewLink{Offset{begin}, Offset{end}, std::move(target)};
 }
 
 [[nodiscard]] PreviewBlock listed(PreviewBlock block, std::uint8_t depth, std::string_view marker)
@@ -157,6 +171,11 @@ void dump_table(const PreviewBlock &block)
     if (block.alert.has_value())
     {
         std::fprintf(stderr, " alert(%d)", static_cast<int>(block.alert.value()));
+    }
+    for (const auto &listed_link : block.links)
+    {
+        std::fprintf(stderr, " link(%zu,%zu,[%s])", listed_link.begin.value, listed_link.end.value,
+                     listed_link.target.c_str());
     }
 }
 
@@ -268,13 +287,15 @@ void verify_inline_code_and_links()
                   {styled(leaf(paragraph, "foo ` bar", 3U), {span(0U, 9U, inline_code)})},
                   "a double backtick code span keeps a single backtick");
     expect_blocks("[link](/uri \"title\")",
-                  {styled(leaf(paragraph, "link", 1U), {span(0U, 4U, link)})},
+                  {linked(styled(leaf(paragraph, "link", 1U), {span(0U, 4U, link)}), {to(0U, 4U, "/uri")})},
                   "an inline link keeps only its text");
     expect_blocks("<https://foo.bar.baz>",
-                  {styled(leaf(paragraph, "https://foo.bar.baz", 1U), {span(0U, 19U, link)})},
+                  {linked(styled(leaf(paragraph, "https://foo.bar.baz", 1U), {span(0U, 19U, link)}),
+                          {to(0U, 19U, "https://foo.bar.baz")})},
                   "an autolink shows its address");
     expect_blocks("[*a*](u)",
-                  {styled(leaf(paragraph, "a", 2U), {span(0U, 1U, link), span(0U, 1U, emphasis)})},
+                  {linked(styled(leaf(paragraph, "a", 2U), {span(0U, 1U, link), span(0U, 1U, emphasis)}),
+                          {to(0U, 1U, "u")})},
                   "emphasis inside a link");
     // "[画像: " は 9 バイト（[ 1・画像 6・: 1・空白 1）。
     expect_blocks(
@@ -657,13 +678,16 @@ void verify_bare_links()
 {
     expect_blocks(
         "see https://example.com/a?b=1.",
-        {styled(leaf(paragraph, "see https://example.com/a?b=1.", 0U), {span(4U, 29U, link)})},
+        {linked(styled(leaf(paragraph, "see https://example.com/a?b=1.", 0U), {span(4U, 29U, link)}),
+                {to(4U, 29U, "https://example.com/a?b=1")})},
         "a bare URL is a link without its trailing period");
     expect_blocks("www.example.com",
-                  {styled(leaf(paragraph, "www.example.com", 0U), {span(0U, 15U, link)})},
+                  {linked(styled(leaf(paragraph, "www.example.com", 0U), {span(0U, 15U, link)}),
+                          {to(0U, 15U, "http://www.example.com")})},
                   "a www address is a link shown as written");
     expect_blocks("mail a@example.com",
-                  {styled(leaf(paragraph, "mail a@example.com", 0U), {span(5U, 18U, link)})},
+                  {linked(styled(leaf(paragraph, "mail a@example.com", 0U), {span(5U, 18U, link)}),
+                          {to(5U, 18U, "mailto:a@example.com")})},
                   "an e-mail address is a link");
     expect_blocks("example.com", {leaf(paragraph, "example.com", 0U)},
                   "a host without a scheme or www is text");
@@ -734,8 +758,9 @@ void verify_tables()
     expect_blocks("| *a* | `b` |\n|---|---|\n| ~~c~~ | [d](u) |",
                   {styled(rowed("a\tb", 3U, 0U, {{0U, left}, {2U, left}}),
                           {span(0U, 1U, emphasis), span(2U, 3U, inline_code)}),
-                   styled(rowed("c\td", 28U, 1U, {{0U, left}, {2U, left}}),
-                          {span(0U, 1U, PreviewStyle::strikethrough), span(2U, 3U, link)})},
+                   linked(styled(rowed("c\td", 28U, 1U, {{0U, left}, {2U, left}}),
+                                 {span(0U, 1U, PreviewStyle::strikethrough), span(2U, 3U, link)}),
+                          {to(2U, 3U, "u")})},
                   "spans inside cells keep their style in the row text");
     expect_blocks("| a \\| b |\n|---|\n| c |",
                   {rowed("a | b", 2U, 0U, {{0U, left}}), rowed("c", 19U, 1U, {{0U, left}})},
@@ -808,6 +833,53 @@ void verify_alerts()
         {alerted(styled(quoted(leaf(paragraph, "NOTE\na", 2U), 1U), {span(0U, 4U, title)}), note),
          quoted(leaf(paragraph, "b", 17U), 1U)},
         "the next quote after a blank line is a new ordinary quote");
+}
+
+// リンクの宛先の列（ADR 0151 の追補 2026-11-19・#1869）。範囲は link の装飾と同じで、宛先は
+// 実体参照と `\` のエスケープを解いた href（`%` は解かない）。画像の宛先は載らない。
+void verify_link_targets()
+{
+    expect_blocks("[a][1]\n\n[1]: http://x.y/z \"t\"",
+                  {linked(styled(leaf(paragraph, "a", 1U), {span(0U, 1U, link)}),
+                          {to(0U, 1U, "http://x.y/z")})},
+                  "a reference link takes the destination of its definition");
+    expect_blocks(
+        "[a](1) [b](2)",
+        {linked(styled(leaf(paragraph, "a b", 1U), {span(0U, 1U, link), span(2U, 3U, link)}),
+                {to(0U, 1U, "1"), to(2U, 3U, "2")})},
+        "links are listed in the order they open");
+    expect_blocks("[a](b\\_c&amp;d%20e)",
+                  {linked(styled(leaf(paragraph, "a", 1U), {span(0U, 1U, link)}),
+                          {to(0U, 1U, "b_c&d%20e")})},
+                  "escapes and entities are resolved and percent signs are kept");
+    expect_blocks("<a@example.com>",
+                  {linked(styled(leaf(paragraph, "a@example.com", 1U), {span(0U, 13U, link)}),
+                          {to(0U, 13U, "mailto:a@example.com")})},
+                  "an e-mail autolink in angle brackets gets mailto:");
+    expect_blocks("<https://x.y/a\\_b>",
+                  {linked(styled(leaf(paragraph, "https://x.y/a\\_b", 1U), {span(0U, 16U, link)}),
+                          {to(0U, 16U, "https://x.y/a\\_b")})},
+                  "an autolink keeps its backslashes");
+    // "[画像: " は 9 バイト。
+    expect_blocks("![i](p.png) [l](q)",
+                  {linked(styled(leaf(paragraph, "[\xE7\x94\xBB\xE5\x83\x8F: i] l", 2U),
+                                 {span(0U, 11U, image), span(12U, 13U, link)}),
+                          {to(12U, 13U, "q")})},
+                  "an image destination is not listed");
+    expect_blocks("# [h](#x)",
+                  {linked(styled(titled(1U, "h", 3U), {span(0U, 1U, link)}), {to(0U, 1U, "#x")})},
+                  "a link inside a heading");
+    expect_blocks("> [!NOTE]\n> [a](u)",
+                  {linked(alerted(styled(quoted(leaf(paragraph, "NOTE\na", 2U), 1U),
+                                         {span(0U, 4U, PreviewStyle::alert_title),
+                                          span(5U, 6U, link)}),
+                                  core::PreviewAlert::note),
+                          {to(5U, 6U, "u")})},
+                  "a link after an alert marker moves with the spans");
+    expect_blocks("~a [b](u)~",
+                  {linked(styled(leaf(paragraph, "~a b~", 1U), {span(3U, 4U, link)}),
+                          {to(3U, 4U, "u")})},
+                  "a link after a restored single tilde moves with the spans");
 }
 
 void verify_html_and_line_endings()
@@ -952,6 +1024,7 @@ void verify_markdown_scope()
     verify_front_matter();
     verify_tables();
     verify_alerts();
+    verify_link_targets();
     verify_html_and_line_endings();
     verify_carriage_returns();
     verify_stop_and_size();

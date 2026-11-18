@@ -1,6 +1,7 @@
 #include "MarkdownAlert.hpp"
 
 #include "Offset.hpp"
+#include "PreviewLink.hpp"
 #include "PreviewSpan.hpp"
 #include "PreviewStyle.hpp"
 
@@ -85,6 +86,13 @@ std::optional<std::ptrdiff_t> markdown_alert_titled(PreviewBlock &block, Preview
             Offset{static_cast<std::size_t>(static_cast<std::ptrdiff_t>(span.begin.value) + shift)};
         span.end =
             Offset{static_cast<std::size_t>(static_cast<std::ptrdiff_t>(span.end.value) + shift)};
+    }
+    for (auto &link : block.links)
+    {
+        link.begin =
+            Offset{static_cast<std::size_t>(static_cast<std::ptrdiff_t>(link.begin.value) + shift)};
+        link.end =
+            Offset{static_cast<std::size_t>(static_cast<std::ptrdiff_t>(link.end.value) + shift)};
     }
     block.spans.insert(block.spans.begin(),
                        PreviewSpan{Offset{0U}, Offset{name.size()}, PreviewStyle::alert_title});

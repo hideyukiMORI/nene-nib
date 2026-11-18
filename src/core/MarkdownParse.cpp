@@ -332,13 +332,20 @@ int on_leave_block(MD_BLOCKTYPE type, void * /*detail*/, void *userdata)
     return guarded(builder, [&] { left_block(builder, type); });
 }
 
-// 画像の節は参照先と題を写して覚える（ADR 0155 の追補 47）。属性の文字列は md4c の一時の領域を指す
+// 画像の節は参照先と題を、リンクは宛先を写して覚える（ADR 0155 の追補 47・#1869）。属性の文字列は md4c の一時の領域を指す
 // ので、コールバックの中で std::string に写す。
 void entered_span(MarkdownBuilder &builder, MD_SPANTYPE type, const void *detail)
 {
     if (type == MD_SPAN_DEL)
     {
         builder.enter_strike();
+        return;
+    }
+    if (type == MD_SPAN_A)
+    {
+        // href は md4c が `\` のエスケープを解き（autolink は解かない）、`www.` に `http://`・メールに
+        // `mailto:` を前に付けた綴り（md4c.c の md_enter_leave_span_a）。実体参照は表で解く（#1869）。
+        builder.enter_link(attribute_text(static_cast<const MD_SPAN_A_DETAIL *>(detail)->href));
         return;
     }
     if (type != MD_SPAN_IMG)

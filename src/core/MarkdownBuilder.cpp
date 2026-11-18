@@ -5,6 +5,7 @@
 #include "MarkdownTask.hpp"
 #include "Offset.hpp"
 #include "PreviewCodeColors.hpp"
+#include "PreviewLink.hpp"
 #include "PreviewSpan.hpp"
 #include "PreviewTableCell.hpp"
 #include "PreviewTableRow.hpp"
@@ -439,6 +440,14 @@ void MarkdownBuilder::close_leaf()
     {
         block.source_begin = Offset{unlocated_begin()};
     }
+    // リンクの範囲は装飾の範囲（`~` を戻したずれを含む）。alert の印の置き換えは
+    // markdown_alert_titled が装飾と同じだけずらす。
+    for (auto &[span, target] : link_targets_)
+    {
+        const auto &styled = block.spans.at(span);
+        block.links.push_back(PreviewLink{styled.begin, styled.end, std::move(target)});
+    }
+    link_targets_.clear();
     mark_alert(block);
     if (block.kind == PreviewBlockKind::code && code_language_.has_value())
     {
@@ -559,6 +568,12 @@ void MarkdownBuilder::enter_image(std::string source, std::string title)
         MarkdownImage{blocks_.size(), begin, begin, std::move(source), std::move(title), {}});
 }
 
+void MarkdownBuilder::enter_link(std::string target)
+{
+    enter_span(PreviewStyle::link);
+    link_targets_.emplace_back(ensure_leaf().spans.size() - 1U, std::move(target));
+}
+
 void MarkdownBuilder::finish_image(const PreviewBlock &block, bool closed)
 {
     auto &image = images_.at(open_images_.back());
@@ -649,6 +664,7 @@ PreviewBlock MarkdownBuilder::started(PreviewBlockKind kind, std::uint8_t level)
         .table = std::nullopt,
         .alert = std::nullopt,
         .code_colors = std::nullopt,
+        .links = {},
     };
 }
 
