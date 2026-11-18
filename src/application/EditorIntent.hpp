@@ -9,8 +9,8 @@
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
-#include "ChooseCompletion.hpp"
 #include "ChangeSetting.hpp"
+#include "ChooseCompletion.hpp"
 #include "ChooseContextMenu.hpp"
 #include "ChooseSettingsPreset.hpp"
 #include "ChooseStartEntry.hpp"
@@ -64,6 +64,7 @@
 #include "PointTitleBar.hpp"
 #include "PreviewTick.hpp"
 #include "PrintDocument.hpp"
+#include "QueryLanguage.hpp"
 #include "RefreshAppearance.hpp"
 #include "RegisterShell.hpp"
 #include "ResizeExplorer.hpp"
@@ -105,6 +106,7 @@
 #include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
 #include "WalkRecentTab.hpp"
+#include "WindowDeactivated.hpp"
 #include "WorkCompleted.hpp"
 
 #include <variant>
@@ -131,8 +133,7 @@ using EditorIntent = std::variant<
     FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion, OpenProjectSearch,
     OpenContextMenu, PointContextMenu, StepContextMenu, ChooseContextMenu, CloseContextMenu,
     CycleFinderPreview, TabTipTick, OpenCompletion, StepCompletion, ChooseCompletion,
-    CloseCompletion, ScrollCompletion>;
-    CycleFinderPreview, TabTipTick, OpenSettings, CloseSettings, RevertSettings, StepSettings,
-    ChangeSetting, ChooseSettingsPreset, FilterSettings, JumpSettingsSection, FocusSettingsRow,
-    ScrollSettings>;
+    CloseCompletion, ScrollCompletion, QueryLanguage, WindowDeactivated, OpenSettings,
+    CloseSettings, RevertSettings, StepSettings, ChangeSetting, ChooseSettingsPreset,
+    FilterSettings, JumpSettingsSection, FocusSettingsRow, ScrollSettings>;
 } // namespace nenenib::application

@@ -162,6 +162,9 @@ void EditorController::accept(const OpenSettings &)
         accept(CancelCommand{});
     }
     context_menu_.reset();
+    // 補完の面と hover の札は設定の面と同時に出さない（入口でも閉じているが、ここで名指しする）。
+    close_completion();
+    drop_hover();
     settings_ = SettingsOpen{state_.settings(), {}, 0};
 }
 
@@ -290,8 +293,10 @@ void EditorController::close_settings_before(const EditorIntent &intent)
     // この意図の入口で書こうとして書けなかったか（同じ意図の中の書き直しを飛ばす・#1835 の再確認
     // R-b1）。
     settings_write_failed_now_ = false;
+    settings_closed_now_ = false;
     if (settings_.has_value() && !keeps_settings_open(intent))
     {
+        settings_closed_now_ = true;
         close_settings();
         settings_write_failed_now_ = settings_unsaved_;
     }

@@ -53,6 +53,8 @@ enum class OperationKey : std::uint8_t
     c,
     a,
     delete_key,
+    // 修飾なしの F12 の定義へ移動（ADR 0190 の決定 8・両モード）。
+    f12,
     // Ctrl+, の設定（施主決定 D102・#1836）。両方のモードで効く。
     comma
 };

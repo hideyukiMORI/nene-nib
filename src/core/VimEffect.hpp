@@ -4,6 +4,7 @@
 #include "VimInsertAt.hpp"
 #include "VimInsertBlock.hpp"
 #include "VimInsertString.hpp"
+#include "VimLanguageQuery.hpp"
 #include "VimMoveTo.hpp"
 #include "VimNavigate.hpp"
 #include "VimNewLine.hpp"
@@ -33,5 +34,6 @@ using VimEffect =
     std::variant<VimNoEffect, VimMoveTo, VimNavigate, VimSelect, VimRemoveRange, VimRemoveLines,
                  VimInsertString, VimNewLine, VimInsertAt, VimReplaceRange, VimRemoveBlock,
                  VimReplaceBlock, VimInsertBlock, VimUndo, VimRedo, VimOpenCommandLine,
-                 VimOpenSearch, VimReplay, VimSwitchTab, VimWindowCommand, VimConfirmSubstitute>;
+                 VimOpenSearch, VimReplay, VimSwitchTab, VimWindowCommand, VimConfirmSubstitute,
+                 VimLanguageQuery>;
 } // namespace nenenib::core

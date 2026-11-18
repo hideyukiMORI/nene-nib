@@ -80,6 +80,11 @@ enum class EditorOperation : std::uint8_t
     // と 同じ・D82）。Vim の INSERT の Ctrl+Space（Ctrl-@）は譲るので、Vim には行を置かない（INSERT
     // の Ctrl-n / Ctrl-p は engine の鍵・ADR 0169）。
     complete,
+    // 言語サーバーへの問いの 2 つ（ADR 0190 の決定 8）。「定義へ移動」は F12 で両モード（Vim の
+    // NORMAL の `gd` と同じ問い）、「情報を表示」は鍵なしで F1 の一覧から（Vim の NORMAL の `K` と
+    // 同じ問い）。言語サーバーが動いていない文書では 1 行知らせる。
+    go_to_definition,
+    show_information,
     // 設定の面を開く（ADR 0170 の決定 5・施主決定 D102・#1836）。Ctrl+, で両モード・F1 の一覧から。
     // 開いている間の Ctrl+, は面の鍵（閉じて保存する）。
     open_settings

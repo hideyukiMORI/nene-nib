@@ -83,14 +83,17 @@
 #include "IntentMark.hpp"
 #include "JsonValue.hpp"
 #include "KeyMap.hpp"
+#include "LandingPlace.hpp"
 #include "Language.hpp"
 #include "LanguageAnswers.hpp"
+#include "LanguageQueryKind.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
 #include "LspCompletionList.hpp"
+#include "LspLocation.hpp"
 #include "LspNotification.hpp"
 #include "LspPosition.hpp"
 #include "LspRequest.hpp"
@@ -661,6 +664,11 @@ class EditorController final
     // 開いた当たりの文書がアクティブならキャレットを置く（`''` を置いてから
     // PlaceCaret）。開く要求が 消えていれば（開けなかった）置く先を捨てる。
     void land_project_hit();
+    // 着地の位置 → アクティブな本文の行と桁（選択肢ごとの写し先を std::visit で引く・言語
+    // サーバーの Position は lsp_offset_of の 1 本）。
+    [[nodiscard]] core::TextPosition landed_position(const LandingPlace &place) const;
+    [[nodiscard]] core::TextPosition landed_position(const core::TextPosition &position) const;
+    [[nodiscard]] core::TextPosition landed_position(const core::LspPosition &position) const;
     // 進み具合の表示値（面が `!` の出どころのときだけ）。
     [[nodiscard]] std::optional<ProjectSearchView> project_search_view() const;
     // 見えている当たりの行の表示値（面が `!` の出どころのときだけ・rows と同じ窓）。
@@ -935,6 +943,29 @@ class EditorController final
     [[nodiscard]] core::LspPosition request_position() const;
     [[nodiscard]] LspRequestContext request_context() const;
     void receive_answer(const PendingLspRequest &request, const core::LspResponse &response);
+    // 問いと答えの使い方（ADR 0190 の決定 6〜8）。本体は EditorControllerLanguageQueries.cpp。
+    // query_language は操作（F12・情報を表示）と Vim の `gd` `K` の効果が入る 1 本で、出せたら真。
+    // settle_language_answers は答えが届く合図の道の中で、空の hover を知らせ、定義の答えを 1 回
+    // 使って消す。hover の札は答えを状態に置いたまま shown_hover が frame に写し、消すのは入口の
+    // settle_hover（使う人の操作の意図）と WindowDeactivated の 2 か所。
+    void accept(const QueryLanguage &intent);
+    void accept(const WindowDeactivated &);
+    void perform(const core::VimLanguageQuery &effect);
+    [[nodiscard]] bool query_language(core::LanguageQueryKind kind);
+    void settle_hover(const EditorIntent &intent);
+    void drop_hover();
+    [[nodiscard]] std::optional<std::string> shown_hover() const;
+    void settle_language_answers(LspRequestKind kind);
+    void settle_hover_answer();
+    void settle_definition_answer();
+    void land_definition(const std::vector<core::LspLocation> &locations);
+    // 答えを使ってよい状態か（#1843 のレビュー R1〜R3）。faces_closed は入力行・面・右クリックの
+    // メニュー・IME の変換・補完の面が開いていない。awaits_nothing
+    // は問いを出したときと同じ「何も待って いない」状態（Vim は NORMAL
+    // でオペレータ・回数・レジスタ・次の鍵の待ちが無い／通常モードは
+    // 選択の起点が問いのときのまま）。
+    [[nodiscard]] bool faces_closed() const noexcept;
+    [[nodiscard]] bool awaits_nothing() const noexcept;
     // 自動退避の合図（ADR 0137 の決定 1・2）。WorkCompleted と同じく使う人の操作の途中の状態を
     // 動かさない。
     void accept(const AutosaveTick &);
@@ -1217,6 +1248,8 @@ class EditorController final
     // か所（apply）。面が開いていて、意図が面の意図でも使う人の操作でない意図でもなければ、
     // 写す前に閉じて保存する。
     void close_settings_before(const EditorIntent &intent);
+    // 写す前の片付けの 3 つ（設定の面・待ちの鍵・`:s///c` の問い）を順に呼ぶ。
+    void settle_before(const EditorIntent &intent);
     // 閉じて、開いたときの写しと違えば 1 回だけ書く（失敗は状態と 1 行の知らせと覚え）。
     void close_settings();
     // 窓を閉じるとき（EndSession）に、面で変えて書けなかった設定をもう 1 回だけ書く。
@@ -1696,6 +1729,9 @@ class EditorController final
     // いまの意図の入口（close_settings_before）で面を閉じて書けなかった。同じ意図の中の
     // retry_unsaved_settings を飛ばす（書き込みは 1 回だけ・#1835 の再確認 R-b1）。
     bool settings_write_failed_now_ = false;
+    // いまの意図の入口で面を閉じた（面が開いていた）。同じ意図は補完の面も hover の札も出さず、
+    // 定義の問いも出さない（面どうしの排他・ADR 0190 の決定 5・6 と ADR 0170）。
+    bool settings_closed_now_ = false;
     // 写している途中の意図の深さと、いちばん外の意図の入口の印（ADR 0137 の追補 #1625）。apply の
     // 入口と出口が整数を書くだけで、例外で抜けると深さは戻らない（落ちたときは「意図の中」と読む）。
     std::size_t intent_depth_ = 0;
@@ -1733,6 +1769,11 @@ class EditorController final
     // この意図が頼む待ちのタイマー（EditorDelivery.map_timer）。apply の入口で空に戻し、待ちを
     // 積む・流す所だけが置く。
     std::optional<MapTimer> map_timer_;
+    // 窓が非アクティブか（WindowDeactivated で真・使う人の操作の意図で偽）。非アクティブの間に
+    // 届いた hover の答えは札にしない（#1843 のレビュー R3）。
+    bool window_inactive_ = false;
+    // 定義の問いを出したときの選択の起点（答えが届いたときに同じなら跳ぶ・R1）。
+    std::optional<core::Offset> definition_anchor_;
     // この意図が頼むタブの札の待ちのタイマー（EditorDelivery.tab_tip_timer・#1789）。apply の
     // 入口で空に戻し、札の段を変える所（帯の hover・合図・入口の消す 1 か所）だけが置く。
     std::optional<TabTipTimer> tab_tip_timer_;

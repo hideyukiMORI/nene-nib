@@ -11,6 +11,7 @@
 #include "VimJumpLists.hpp"
 #include "VimJumpMove.hpp"
 #include "VimKeyTable.hpp"
+#include "VimLanguageQuery.hpp"
 #include "VimLineEndStop.hpp"
 #include "VimMarkEdits.hpp"
 #include "VimMatchingPair.hpp"
@@ -938,6 +939,21 @@ namespace detail
 {
     step.failure = failure;
     return step;
+}
+
+// `gd` `K`（ADR 0190 の決定 8）。unbound は表に行が無かったときの歩で、NORMAL で回数もオペレータも
+// 無いときだけ、その歩に問いの効果を添える（状態と失敗の印はそのまま）。VISUAL・回数つき・
+// オペレータの後ろは unbound のまま返す。
+[[nodiscard]] VimStep language_queried(const VimState &state, LanguageQueryKind kind,
+                                       VimStep unbound)
+{
+    if (state.mode != VimMode::normal || state.pending.has_value() || state.count.has_value() ||
+        state.register_count.has_value())
+    {
+        return unbound;
+    }
+    unbound.effect = VimLanguageQuery{kind};
+    return unbound;
 }
 } // namespace detail
 

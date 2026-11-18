@@ -183,6 +183,8 @@ class EditorWindow final
     // メニューが開いている間の鍵（上下・Enter・Esc。ほかの鍵と文字は捨てる）と、焦点を失ったときに
     // 閉じる。受けて捨てたら true（焦点を失ったときは閉じて false・今の道も通す）。
     [[nodiscard]] bool take_context_menu_key(UINT message, WPARAM word);
+    // 開いている面（メニュー・設定の面・補完の面）が先に受ける鍵と文字。
+    [[nodiscard]] bool take_face_key(UINT message, WPARAM word, LPARAM data);
     void press_context_menu_key(WPARAM word);
     // 補完の面（ADR 0190 の決定 5・EditorWindowCompletion.cpp）。面が見えている間の上下・PageUp /
     // PageDown・Enter・Tab・Esc を面が受けたら真。窓が非アクティブになったら閉じる。
@@ -190,6 +192,9 @@ class EditorWindow final
     // Enter と Tab。確定が本文を変えなければ面を閉じて偽（鍵は本文へ通す）。
     [[nodiscard]] bool commit_completion();
     void close_completion_outside();
+    // 窓が焦点を失ったときの片付け（選択のドラッグ・Ctrl+Tab の歩き・帯の hover・補完の面・hover の
+    // 札・字の大きさのホイールの残り）。
+    void lose_focus();
     // 面の行のクリック（押した行と離した行が同じときだけ確定）と面の上のホイール（#1844 の R1）。
     // 面が受けたら真で、本文へ渡さない。
     [[nodiscard]] bool press_completion(LPARAM data);
@@ -452,6 +457,8 @@ class EditorWindow final
     void run_select_all();
     void run_cycle_finder_preview();
     void run_complete();
+    void run_go_to_definition();
+    void run_show_information();
     void run_open_settings();
     void run_choose_line_ending();
     void run_print();

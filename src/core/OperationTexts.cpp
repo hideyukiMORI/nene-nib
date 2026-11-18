@@ -63,6 +63,8 @@ namespace
     case EditorOperation::select_all:
     case EditorOperation::cycle_finder_preview:
     case EditorOperation::complete:
+    case EditorOperation::go_to_definition:
+    case EditorOperation::show_information:
     case EditorOperation::open_settings:
         return true;
     }

@@ -29,12 +29,14 @@
 #include "FontSizeAdjustment.hpp"
 #include "InsertText.hpp"
 #include "JumpSettingsSection.hpp"
+#include "LanguageQueryKind.hpp"
 #include "LanguageServerTick.hpp"
 #include "LineNumber.hpp"
 #include "MapTimeout.hpp"
 #include "MinimapPointing.hpp"
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
+#include "OpenCompletion.hpp"
 #include "OpenDocument.hpp"
 #include "OpenSettings.hpp"
 #include "PlaceCaret.hpp"
@@ -43,6 +45,7 @@
 #include "PointerClicks.hpp"
 #include "PreviewPlacement.hpp"
 #include "PreviewTick.hpp"
+#include "QueryLanguage.hpp"
 #include "RevertSettings.hpp"
 #include "Scopes.hpp"
 #include "ScrollExplorer.hpp"
@@ -468,6 +471,35 @@ void verify_scrolls_keep_open()
            "a click in the body closes the panel and saves");
 }
 
+// 設定の面と補完の面・hover の札・定義の問いは同時に出さない（ADR 0190 の決定 5・6 と ADR 0170 の
+// 面どうしの排他）。設定の面を開くと補完の面は閉じ、設定の面が開いている間の補完と問いの意図は、
+// 面を閉じるだけで補完の面も問いも出さない（窓は面が開いている間 Ctrl+Space と F12 を捨てる）。
+void verify_faces_are_exclusive()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::InsertText{"alpha beta alto al"}));
+    const auto face = controller.apply_frame(app::OpenCompletion{});
+    const auto panel = controller.apply_frame(app::OpenSettings{});
+    expect(face.completion.has_value() && !panel.completion.has_value() &&
+               !controller.completion_open() && panel.settings_panel.has_value(),
+           "opening the settings panel closes the completion face");
+    const auto refused = controller.apply_frame(app::OpenCompletion{});
+    expect(!refused.settings_panel.has_value() && !refused.completion.has_value() &&
+               !controller.completion_open() && !refused.command_message.has_value() &&
+               editing.settings().writes() == 0,
+           "a completion intent while the panel is open only closes the panel");
+    static_cast<void>(controller.apply(app::OpenSettings{}));
+    const auto asked =
+        controller.apply_frame(app::QueryLanguage{core::LanguageQueryKind::definition});
+    expect(!asked.settings_panel.has_value() && !asked.command_message.has_value() &&
+               editing.language_server().touches() == 0,
+           "a language query while the panel is open only closes the panel");
+    const auto reopened = controller.apply_frame(app::OpenCompletion{});
+    expect(reopened.completion.has_value(),
+           "the completion face opens again once the panel is closed");
+}
+
 // 言語サーバーを面で切り替えると、`:set lsp` と同じく起動と停止の道を通る（R7）。
 void verify_language_server_switch()
 {
@@ -580,6 +612,7 @@ void verify_settings_modal_scope()
     verify_retry_at_session_end();
     verify_open_closes_input();
     verify_scrolls_keep_open();
+    verify_faces_are_exclusive();
     verify_language_server_switch();
     verify_vim_wrap_window();
 }

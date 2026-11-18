@@ -289,7 +289,8 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
            std::holds_alternative<ScrollPane>(intent) ||
            std::holds_alternative<PointTitleBar>(intent) ||
            std::holds_alternative<HoverExplorer>(intent) ||
-           std::holds_alternative<TitleBarWidth>(intent) || keeps_wanted_x_for_menu(intent) ||
+           std::holds_alternative<TitleBarWidth>(intent) ||
+           std::holds_alternative<WindowDeactivated>(intent) || keeps_wanted_x_for_menu(intent) ||
            keeps_wanted_x_for_completion(intent);
 }
 
@@ -587,11 +588,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<ScrollTabs>(intent) ||
                  std::holds_alternative<SettleRecentTab>(intent) ||
                  std::holds_alternative<EndSession>(intent) || keeps_explorer_notice(intent));
-    close_settings_before(intent); // begin_intent の後（保存の失敗の知らせを消さない）
-    settle_pending_keys(intent);
-    // `:s///c` の問いは答えでない意図の前に `q` と同じに終える（ADR 0168 の決定 6・入口の 1
-    // か所）。
-    end_question_before(intent);
+    settle_before(intent);
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     // SelectLanguage も同じ（ADR 0154 の決定 4）。SelectSyntax も同じ（ADR 0156 の追補）。
@@ -628,13 +625,24 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     return delivered;
 }
 
+// 写す前の片付け（begin_intent の後）。設定の面は面を開いたまま受ける意図でなければ閉じて保存する
+// （保存の失敗の知らせを begin_intent が消さない順）。`:s///c` の問いは答えでない意図の前に `q` と
+// 同じに終える（ADR 0168 の決定 6・入口の 1 か所）。apply の長さの上限のため分けた。
+void EditorController::settle_before(const EditorIntent &intent)
+{
+    close_settings_before(intent);
+    settle_pending_keys(intent);
+    end_question_before(intent);
+}
+
 // 写す前に、意図をまたいで覚えた印のうち、この意図が保たないものを捨てる。上下の移動の狙いの
 // 横位置（keeps_wanted_x）と、エクスプローラーのダブルクリックの 2 打目と組む節
 // （keeps_explorer_click・#1388）と、開いている右クリックのメニュー（#1051）と、タブの札
-// （settle_tab_tip・#1789）。
+// （settle_tab_tip・#1789）と、hover の札（settle_hover・ADR 0190 の決定 6）。
 void EditorController::forget_unkept_marks(const EditorIntent &intent)
 {
     settle_tab_tip(intent);
+    settle_hover(intent);
     if (!keeps_wanted_x(intent))
     {
         wanted_x_.reset();
@@ -1371,6 +1379,8 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     result.guide = core::operation_guide(guide_context(), result.mode, result.language);
     // タブの札（#1789）。札が無いときの分岐はこの 1 つ（shown_tab_tip の入口）。
     result.tab_tip = shown_tab_tip();
+    // hover の札（ADR 0190 の決定 6）。答えが無いときの分岐はこの 1 つ（shown_hover の入口）。
+    result.hover = shown_hover();
     if (gridded)
     {
         GridTally tally{0, 0, lexed};

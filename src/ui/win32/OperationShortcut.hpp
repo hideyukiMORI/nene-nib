@@ -16,7 +16,8 @@ namespace nenenib::ui::win32
 // VK_OEM_102 の ろ）を同じ値にする（ADR 0148 の決定 6）。Shift は押されているままを入れる（表に
 // Shift つきの行がある）。Alt のときは呼ばない。T W D Tab と Shift なしの F4 は写さない（タブと
 // ブックマークの鍵は TabShortcut と BookmarkKey の経路のまま）。
-// F1 と F5（日時の挿入・ADR 0175）は修飾なしだけ、F6 は Ctrl なし（Shift はそのまま入れる）。
+// F1 と F5（日時の挿入・ADR 0175）と F12（定義へ移動・ADR 0190 の決定 8）は修飾なしだけ、F6 は
+// Ctrl なし（Shift はそのまま入れる）。
 // Ctrl つきの M（プレビュー・ADR 0155）と Shift つきの V（文字だけの貼り付け・ADR 0157）も写す。
 // 検索・置換・行へ移動の Ctrl つきの F H G と、Ctrl なしの F3（Shift はそのまま入れる）も写す
 // （ADR 0174 の決定 1・Vim モードでは表に鍵の行が無いので今までどおり Vim の鍵へ流れる）。
@@ -47,6 +48,10 @@ namespace nenenib::ui::win32
     if (key == VK_F5 && !shift)
     {
         return core::KeyChord{false, false, core::OperationKey::f5};
+    }
+    if (key == VK_F12 && !shift)
+    {
+        return core::KeyChord{false, false, core::OperationKey::f12};
     }
     return std::nullopt;
 }
@@ -85,7 +90,7 @@ namespace nenenib::ui::win32
 [[nodiscard]] inline std::optional<core::KeyChord> operation_chord(WPARAM key, bool control,
                                                                    bool shift)
 {
-    if (key == VK_F1 || key == VK_F3 || key == VK_F5 || key == VK_F6)
+    if (key == VK_F1 || key == VK_F3 || key == VK_F5 || key == VK_F6 || key == VK_F12)
     {
         return function_chord(key, control, shift);
     }

@@ -24,7 +24,7 @@ namespace nenenib::core
 // Ctrl+Shift+O）。
 // 通常モードの Windows の標準の鍵（施主決定 D82・#1395・ADR 0009 の追補）: Ctrl+N も新しいタブ、
 // Ctrl+Shift+Z はやり直す。どちらも見せる鍵は今までどおり Ctrl+T と Ctrl+Y（先の行）。
-inline constexpr std::array<OperationBinding, 68> operation_bindings{{
+inline constexpr std::array<OperationBinding, 71> operation_bindings{{
     {EditorOperation::open_file, OperationModes::ordinary, KeyChord{true, false, OperationKey::o}},
     // 通常モードでは Shift を見ていなかった今の振る舞いを保つ行で、Vim では開くの鍵（D71）。
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, true, OperationKey::o}},
@@ -144,6 +144,11 @@ inline constexpr std::array<OperationBinding, 68> operation_bindings{{
     // 補完の面（ADR 0190 の決定 5）。通常モードだけ（Vim の INSERT の Ctrl-@ に譲る）。
     {EditorOperation::complete, OperationModes::ordinary,
      KeyChord{true, false, OperationKey::space}},
+    // 定義へ移動（ADR 0190 の決定 8）。F12 で両モード（Visual Studio・VS Code
+    // と同じ）。情報を表示は 鍵なしで F1 の一覧から（鍵は試用の後に決める）。
+    {EditorOperation::go_to_definition, OperationModes::both,
+     KeyChord{false, false, OperationKey::f12}},
+    {EditorOperation::show_information, OperationModes::both, std::nullopt},
     // 設定の面を開く（施主決定 D102・#1836）。Ctrl+, で両モード。
     {EditorOperation::open_settings, OperationModes::both,
      KeyChord{true, false, OperationKey::comma}},
