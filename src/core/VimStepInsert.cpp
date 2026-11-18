@@ -269,6 +269,8 @@ using AutoIndentTrim = std::pair<OffsetRange, Offset>;
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
     case VimSpecialKey::delete_key:
+    case VimSpecialKey::control_n:
+    case VimSpecialKey::control_p:
         return false;
     }
     std::unreachable();
@@ -404,6 +406,16 @@ using AutoIndentTrim = std::pair<OffsetRange, Offset>;
     }
     return VimStep{
         state, VimRemoveRange{OffsetRange{line_end, text.line_start(LineNumber{line.value + 1})}}};
+}
+
+// `<Del>` は何も消せなくても redo に載る（ins_del の AppendCharToRedobuff）ので、回数の鍵の列にも
+// 必ず足す（erase_recorded の「止まった鍵は足さない」を通さない）。
+[[nodiscard]] VimStep insert_deleted_recorded(const VimState &state, const TextBuffer &text,
+                                              Offset caret)
+{
+    VimStep step = insert_deleted_forward(state, text, caret);
+    step.next = insert_recorded(step.next, VimKey{VimSpecialKey::delete_key});
+    return step;
 }
 
 // 始めの桁が今の本文で 1 文字の頭か（#1234）。Vim の ins_bs は 1 文字ずつ dec_cursor で戻り、
@@ -1133,14 +1145,8 @@ std::string auto_indent_of(const TextBuffer &text, Offset from, Offset limit)
         return erase_recorded(insert_cut(state, view, true), key);
     case VimSpecialKey::control_u:
         return erase_recorded(insert_cut(state, view, false), key);
-    // `<Del>` は何も消せなくても redo に載る（ins_del の AppendCharToRedobuff）ので、回数の鍵の列
-    // にも必ず足す（erase_recorded の「止まった鍵は足さない」を通さない）。
     case VimSpecialKey::delete_key:
-    {
-        VimStep step = insert_deleted_forward(state, text, caret);
-        step.next = insert_recorded(step.next, VimKey{key});
-        return step;
-    }
+        return insert_deleted_recorded(state, text, caret);
     case VimSpecialKey::control_r:
         return started_prefix(state, VimPrefix::insert_register);
     case VimSpecialKey::control_d:
@@ -1152,9 +1158,13 @@ std::string auto_indent_of(const TextBuffer &text, Offset from, Offset limit)
     // 決定 14）。窓は INSERT では写さない。
     case VimSpecialKey::control_a:
     case VimSpecialKey::control_x:
+        return VimStep{state, VimNoEffect{}};
+    // 補完の鍵（#1845）。`Ctrl-e` `Ctrl-y` は補完が閉じていれば今までどおり何もしない。
+    case VimSpecialKey::control_n:
+    case VimSpecialKey::control_p:
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
-        return VimStep{state, VimNoEffect{}};
+        return detail::completion_keyed(state, view, key);
     case VimSpecialKey::control_o:
         return insert_paused(state, view);
     case VimSpecialKey::page_up:
@@ -1251,6 +1261,8 @@ namespace
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
     case VimSpecialKey::delete_key:
+    case VimSpecialKey::control_n:
+    case VimSpecialKey::control_p:
         return false;
     }
     std::unreachable();
@@ -1310,6 +1322,8 @@ namespace
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
     case VimSpecialKey::delete_key:
+    case VimSpecialKey::control_n:
+    case VimSpecialKey::control_p:
         return false;
     }
     std::unreachable();

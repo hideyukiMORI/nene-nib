@@ -373,7 +373,8 @@ void EditorWindow::press_key(WPARAM word)
         press_command_key(word);
         return;
     }
-    if (press_tab_key(word))
+    // Vim の INSERT の補完の鍵は操作の表（Ctrl+P の一覧）より先に引く（#1845）。
+    if (press_tab_key(word) || press_vim_completion_key(word))
     {
         return;
     }
@@ -415,6 +416,22 @@ void EditorWindow::press_key(WPARAM word)
         break;
     }
     press_plain_key(word);
+}
+
+// Vim の INSERT の補完の鍵（#1845・ADR 0169 の決定 3）。どの鍵を engine へ渡すかは表の関数
+// vim_completion_key が決め、何が起きるかは engine が決める。扱ったら true。
+bool EditorWindow::press_vim_completion_key(WPARAM word)
+{
+    const bool inserting = mode_ == core::EditMode::vim && vim_mode_ == core::VimMode::insert &&
+                           !controller_.explorer_focused();
+    const auto key = vim_completion_key(word, held(VK_CONTROL) && !held(VK_SHIFT) && !held(VK_MENU),
+                                        inserting, controller_.completion_active());
+    if (!key.has_value())
+    {
+        return false;
+    }
+    send(application::VimKeyPress{core::VimKey{key.value()}});
+    return true;
 }
 
 // Vim の NORMAL / VISUAL の Ctrl+Shift+V は今までどおり矩形の入口（ADR 0035 の決定 9）。表の

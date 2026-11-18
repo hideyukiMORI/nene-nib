@@ -127,6 +127,9 @@ namespace nenenib::ui::win32
         return chord(core::OperationKey::g);
     case 'N':
         return chord(core::OperationKey::n);
+    // 通常モードの補完の 2 つ目の鍵 Ctrl+I（施主決定 D104・Vim では表に行が無い）。
+    case 'I':
+        return chord(core::OperationKey::i);
     case 'R':
         return chord(core::OperationKey::r);
     default:
