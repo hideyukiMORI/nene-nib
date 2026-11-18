@@ -313,10 +313,20 @@ enum class UiMessage : std::uint16_t
     // 操作の群の最後）。
     settings_no_match,
     settings_list_joiner,
+    // 設定の面の画面の直し（#1836 の差し戻し）: 要約の内訳（段ごとの数・合計）・段の決め方の
+    // 1 行・探す面のプレビューの値の名前・言語サーバーのコマンドが無いときの 1 行。
+    settings_summary_term,
+    settings_summary_total,
+    settings_tier_note,
+    settings_finder_preview_automatic,
+    settings_finder_preview_right,
+    settings_finder_preview_below,
+    settings_finder_preview_off,
+    settings_lsp_no_commands,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::settings_list_joiner) + 1U;
+    std::to_underlying(UiMessage::settings_lsp_no_commands) + 1U;
 } // namespace nenenib::core

@@ -37,8 +37,22 @@ namespace
 constexpr std::array<FinderPreview, 4> finder_preview_order{
     FinderPreview::automatic, FinderPreview::right, FinderPreview::below, FinderPreview::off};
 
-// 配色を選んでいない（system）ときの表示の名前（`:colorscheme` の答えと同じ ASCII）。
-constexpr std::string_view system_theme_name = "system";
+// プレビューの置き方の表示の名前。
+[[nodiscard]] UiMessage finder_preview_title(FinderPreview preview) noexcept
+{
+    switch (preview)
+    {
+    case FinderPreview::automatic:
+        return UiMessage::settings_finder_preview_automatic;
+    case FinderPreview::right:
+        return UiMessage::settings_finder_preview_right;
+    case FinderPreview::below:
+        return UiMessage::settings_finder_preview_below;
+    case FinderPreview::off:
+        return UiMessage::settings_finder_preview_off;
+    }
+    std::unreachable();
+}
 
 [[nodiscard]] UiMessage value_title(SettingsValue value) noexcept
 {
@@ -252,21 +266,23 @@ bool settings_row_matches(const SettingsRow &row, std::string_view query,
            contains_folded(ui_text(settings_row_description(row.subject), language), query);
 }
 
-std::string settings_value_text(const EditorSettings &settings, SettingsValue value)
+std::string settings_value_text(const EditorSettings &settings, SettingsValue value,
+                                DisplayLanguage language)
 {
     switch (value)
     {
     case SettingsValue::theme:
-        return std::string(settings.theme.has_value() ? settings.theme.value().name()
-                                                      : system_theme_name);
+        return std::string(settings.theme.has_value()
+                               ? settings.theme.value().name()
+                               : ui_text(UiMessage::language_choice_system, language));
     case SettingsValue::ui_language:
-        return std::string(display_language_choice_name(settings.ui_language));
+        return std::string(display_language_choice_detail(settings.ui_language, language));
     case SettingsValue::font_family:
         return std::string(settings.font_family.text());
     case SettingsValue::font_size:
         return font_size_text(settings.font_size);
     case SettingsValue::finder_preview:
-        return std::string(finder_preview_name(settings.finder_preview));
+        return std::string(ui_text(finder_preview_title(settings.finder_preview), language));
     }
     std::unreachable();
 }

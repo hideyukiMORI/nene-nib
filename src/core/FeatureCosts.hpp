@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CostTier.hpp"
+#include "DisplayLanguage.hpp"
 #include "EditorFeature.hpp"
 #include "EditorSettings.hpp"
 #include "FeatureCost.hpp"
@@ -13,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -92,4 +94,13 @@ static_assert(feature_costs_in_order(), "feature_costs follows the EditorFeature
 [[nodiscard]] EditorSettings preset_applied(EditorSettings settings, SettingsPreset preset);
 // 要約（決定 5・追補 3）。表の和で O(機能の数)。
 [[nodiscard]] SpeedSummary speed_summary(const EditorSettings &settings);
+
+// 段の語（「小」「中」「大」・none は「なし」）。行の印と要約の内訳が同じ語を引く。
+[[nodiscard]] UiMessage cost_tier_title(CostTier tier) noexcept;
+// 要約の 1 行目（採用案の形・#1836 の差し戻し）。「いまの設定での 1 打鍵の見込み: 0.64 ms ＋ 大 × 1
+// （約 0.86 ms）」。基準の 1 打鍵に、オンの印のある機能の段ごとの数（小 → 中 → 大・0
+// の段は書かない） と、足した見込みを添える。何も足さないときは基準の「0.64 ms」だけ。ms は小数 2
+// 桁の四捨五入。
+[[nodiscard]] std::string speed_estimate_text(const SpeedSummary &summary,
+                                              DisplayLanguage language);
 } // namespace nenenib::core

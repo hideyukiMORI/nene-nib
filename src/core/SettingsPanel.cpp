@@ -34,8 +34,9 @@ constexpr std::int32_t row_side_dips = 10;
 constexpr std::int32_t heading_height_dips = 25;
 constexpr std::int32_t section_bottom_dips = 4;
 constexpr std::int32_t summary_top_dips = 2;
-constexpr std::int32_t summary_height_dips = 96;
 constexpr std::int32_t summary_bottom_dips = 6;
+constexpr std::int32_t summary_note_gap_dips = 4;
+constexpr std::int32_t summary_note_height_dips = 16;
 constexpr std::int32_t summary_padding_dips = 11;
 constexpr std::int32_t preset_height_dips = 30;
 constexpr std::int32_t preset_padding_dips = 12;
@@ -157,8 +158,19 @@ void push_item(SettingsLayout &layout, std::int32_t &y, SettingsLayoutItem item,
     y += height;
 }
 
+// 要約の箱の高さ（DIP）。1 行目の文 estimate が箱の文の幅に入り切らなければ 1 行ぶん高い。
+[[nodiscard]] std::int32_t summary_height(const SettingsLayout &layout,
+                                          std::int32_t estimate) noexcept
+{
+    const auto dpi = layout.dpi;
+    const auto room =
+        width_of(layout.list) - (to_pixels(list_side_dips + settings_summary_inset_dips, dpi) * 2);
+    return settings_summary_height_dips + (estimate > room ? settings_summary_line_dips : 0);
+}
+
 // 節の見出し（機能の節は要約も）。前の節があれば下の空きを先に足す。
-void push_heading(SettingsLayout &layout, std::int32_t &y, SettingsSection section)
+void push_heading(SettingsLayout &layout, std::int32_t &y, SettingsSection section,
+                  std::int32_t estimate)
 {
     const auto dpi = layout.dpi;
     if (!layout.items.empty())
@@ -176,8 +188,33 @@ void push_heading(SettingsLayout &layout, std::int32_t &y, SettingsSection secti
     y += to_pixels(summary_top_dips, dpi);
     push_item(layout, y,
               SettingsLayoutItem{SettingsItemKind::summary, nowhere, 0, SettingsControl::fixed},
-              summary_height_dips);
+              summary_height(layout, estimate));
+    y += to_pixels(summary_note_gap_dips, dpi);
+    push_item(
+        layout, y,
+        SettingsLayoutItem{SettingsItemKind::summary_note, nowhere, 0, SettingsControl::fixed},
+        summary_note_height_dips);
     y += to_pixels(summary_bottom_dips, dpi);
+}
+
+// 言語サーバーの節（見出しと、言語ごとの命令の行か「行がありません」の 1 行）。
+void push_commands(SettingsLayout &layout, std::int32_t &y, std::size_t commands)
+{
+    push_heading(layout, y, SettingsSection::language_server, 0);
+    if (commands == 0)
+    {
+        push_item(
+            layout, y,
+            SettingsLayoutItem{SettingsItemKind::no_commands, nowhere, 0, SettingsControl::fixed},
+            command_height_dips);
+    }
+    for (std::size_t index = 0; index < commands; ++index)
+    {
+        push_item(layout, y,
+                  SettingsLayoutItem{SettingsItemKind::command, nowhere, index,
+                                     SettingsControl::readonly},
+                  command_height_dips);
+    }
 }
 
 // 送る前の位置で全部を積み、内容の下端を返す。
@@ -189,21 +226,16 @@ void push_heading(SettingsLayout &layout, std::int32_t &y, SettingsSection secti
         const auto &row = request.rows[index];
         if (index == 0 || request.rows[index - 1].section != row.section)
         {
-            push_heading(layout, y, row.section);
+            push_heading(layout, y, row.section, request.widths.estimate);
         }
         push_item(layout, y, SettingsLayoutItem{SettingsItemKind::row, nowhere, index, row.control},
                   settings_row_height_dips);
     }
-    const bool served =
-        !request.rows.empty() && request.rows.back().section == SettingsSection::language_server;
-    for (std::size_t index = 0; served && index < request.commands; ++index)
+    if (request.commands.has_value())
     {
-        push_item(layout, y,
-                  SettingsLayoutItem{SettingsItemKind::command, nowhere, index,
-                                     SettingsControl::readonly},
-                  command_height_dips);
+        push_commands(layout, y, request.commands.value());
     }
-    if (request.rows.empty())
+    if (layout.items.empty())
     {
         push_item(layout, y,
                   SettingsLayoutItem{SettingsItemKind::empty, nowhere, 0, SettingsControl::fixed},
@@ -472,9 +504,39 @@ std::int32_t settings_scroll_revealing(const SettingsLayout &layout, std::size_t
     return std::clamp(moved, 0, layout.scroll_limit);
 }
 
-std::int32_t settings_scroll_by(const SettingsLayout &layout, std::int32_t lines) noexcept
+std::int32_t settings_scroll_revealing_section(const SettingsLayout &layout,
+                                               SettingsSection section) noexcept
 {
-    const auto moved = layout.scroll + (lines * to_pixels(settings_wheel_line_dips, layout.dpi));
+    const auto heading = std::ranges::find_if(layout.items,
+                                              [section](const SettingsLayoutItem &item)
+                                              {
+                                                  return item.kind == SettingsItemKind::heading &&
+                                                         item.index == std::to_underlying(section);
+                                              });
+    if (heading == layout.items.end())
+    {
+        return layout.scroll;
+    }
+    const auto next = std::ranges::find(heading + 1, layout.items.end(), SettingsItemKind::heading,
+                                        &SettingsLayoutItem::kind);
+    const auto bottom = (next - 1)->box.bottom +
+                        (next == layout.items.end() ? to_pixels(list_bottom_dips, layout.dpi) : 0);
+    std::int32_t moved = layout.scroll;
+    if (heading->box.top < layout.list.top || bottom - heading->box.top > height_of(layout.list))
+    {
+        moved -= layout.list.top - heading->box.top;
+    }
+    else if (bottom > layout.list.bottom)
+    {
+        moved += bottom - layout.list.bottom;
+    }
+    return std::clamp(moved, 0, layout.scroll_limit);
+}
+
+std::int32_t settings_scroll_by(const SettingsLayout &layout, std::int32_t from,
+                                std::int32_t lines) noexcept
+{
+    const auto moved = from + (lines * to_pixels(settings_wheel_line_dips, layout.dpi));
     return std::clamp(moved, 0, layout.scroll_limit);
 }
 

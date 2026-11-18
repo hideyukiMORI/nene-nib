@@ -4,6 +4,7 @@
 #include "DevicePixels.hpp"
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
+#include "FeatureCosts.hpp"
 #include "KeyChord.hpp"
 #include "KeycapPainter.hpp"
 #include "KeycapStyle.hpp"
@@ -23,9 +24,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
+#include <wrl/client.h>
 
 namespace nenenib::ui::win32
 {
@@ -51,8 +54,8 @@ constexpr std::int32_t title_top_dips = 10;
 constexpr std::int32_t title_height_dips = 18;
 constexpr std::int32_t hint_gap_dips = 2;
 constexpr std::int32_t tier_gap_dips = 8;
-constexpr std::int32_t summary_padding_dips = 12;
-constexpr std::int32_t summary_line_dips = 17;
+constexpr std::int32_t summary_padding_dips = core::settings_summary_inset_dips;
+constexpr std::int32_t summary_line_dips = core::settings_summary_line_dips;
 constexpr std::int32_t summary_note_dips = 16;
 constexpr std::int32_t icon_dips = 14;
 constexpr std::int32_t command_name_dips = 110;
@@ -89,31 +92,6 @@ constexpr KeycapStyle chord_style_shape{6.0F, 20.0F, 4.0F, {}, {}, {}};
         return core::UiMessage::settings_preset_all_on;
     }
     std::unreachable();
-}
-
-[[nodiscard]] core::UiMessage tier_message(core::CostTier tier) noexcept
-{
-    switch (tier)
-    {
-    case core::CostTier::none:
-        return core::UiMessage::settings_tier_none;
-    case core::CostTier::low:
-        return core::UiMessage::settings_tier_low;
-    case core::CostTier::medium:
-        return core::UiMessage::settings_tier_medium;
-    case core::CostTier::high:
-        return core::UiMessage::settings_tier_high;
-    }
-    std::unreachable();
-}
-
-// 見込みの µs を「0.64」の形（ms・小数 2 桁・四捨五入）にする。
-[[nodiscard]] std::string milliseconds_of(std::uint32_t microseconds)
-{
-    const std::uint32_t hundredths = (microseconds + 5U) / 10U;
-    const std::uint32_t fraction = hundredths % 100U;
-    return std::to_string(hundredths / 100U) + (fraction < 10U ? ".0" : ".") +
-           std::to_string(fraction);
 }
 
 [[nodiscard]] core::LayoutRect inset(const core::LayoutRect &area, std::int32_t sides) noexcept
@@ -166,8 +144,11 @@ core::SettingsLayout SettingsPanelPainter::arranged(const application::SettingsV
     }
     widths.revert = width(said(core::UiMessage::settings_revert), text_.label);
     widths.close = width(said(core::UiMessage::settings_close), text_.label);
-    return core::settings_layout(core::SettingsLayoutRequest{
-        area, text_.dpi, rows, view.lsp_commands.size(), widths, view.scroll});
+    widths.estimate = width(core::speed_estimate_text(view.summary, text_.language), text_.strong);
+    // 言語サーバーの節（命令の行）は絞っていない間だけ出す。
+    const auto commands = view.lsp_listed ? std::optional{view.lsp_commands.size()} : std::nullopt;
+    return core::settings_layout(
+        core::SettingsLayoutRequest{area, text_.dpi, rows, commands, widths, view.scroll});
 }
 
 void SettingsPanelPainter::paint(const application::SettingsView &view,
@@ -301,6 +282,12 @@ void SettingsPanelPainter::paint_item(const application::SettingsView &view,
     case core::SettingsItemKind::summary:
         paint_summary(view, layout, item.box);
         return;
+    case core::SettingsItemKind::summary_note:
+        paint_note(core::UiMessage::settings_tier_note, item.box);
+        return;
+    case core::SettingsItemKind::no_commands:
+        paint_note(core::UiMessage::settings_lsp_no_commands, item.box);
+        return;
     case core::SettingsItemKind::row:
         if (view.focused == std::optional{item.index})
         {
@@ -328,10 +315,20 @@ void SettingsPanelPainter::paint_summary(const application::SettingsView &view,
     outline(box, row_radius_dips, palette_.panel_border);
     const auto inside = inset(box, pixels(summary_padding_dips));
     const auto top = box.top + pixels(box_padding_dips);
-    const auto middle = top + pixels(summary_line_dips);
-    write(core::ui_text_filled(core::UiMessage::settings_summary_estimate, text_.language,
-                               {milliseconds_of(view.summary.estimate_us)}),
-          text_.strong, core::LayoutRect{inside.left, top, inside.right, middle}, palette_.text);
+    // 配置が箱を高くしていれば（1 行目が入り切らない）、1 行目を 2 行に折る。
+    const auto extra = core::height_of(box) - pixels(core::settings_summary_height_dips);
+    const auto middle = top + pixels(summary_line_dips) + std::max(extra, 0);
+    const core::LayoutRect first{inside.left, top, inside.right, middle};
+    if (extra > 0)
+    {
+        write_wrapped(core::speed_estimate_text(view.summary, text_.language), text_.strong, first,
+                      palette_.text);
+    }
+    else
+    {
+        write(core::speed_estimate_text(view.summary, text_.language), text_.strong, first,
+              palette_.text);
+    }
     std::string names;
     for (const auto feature : view.summary.heavy)
     {
@@ -410,7 +407,7 @@ void SettingsPanelPainter::paint_tier(const application::SettingsRowView &row,
                             &brush_);
     }
     target_.PopAxisAlignedClip();
-    std::string label{said(tier_message(tier))};
+    std::string label{said(core::cost_tier_title(tier))};
     if (row.background)
     {
         label += said(core::UiMessage::settings_list_joiner);
@@ -515,6 +512,12 @@ void SettingsPanelPainter::paint_command(const application::SettingsView &view,
           palette_.muted);
 }
 
+// muted の小さな 1 行（要約の箱の下の段の決め方・命令の行が無いとき）。
+void SettingsPanelPainter::paint_note(core::UiMessage message, const core::LayoutRect &box)
+{
+    write(said(message), text_.note, box, palette_.muted);
+}
+
 void SettingsPanelPainter::paint_footer(const application::SettingsView &view,
                                         const core::SettingsLayout &layout)
 {
@@ -542,23 +545,57 @@ void SettingsPanelPainter::paint_button(std::string_view label, const core::Layo
 PaletteRowLayouts::TextLayout SettingsPanelPainter::line(std::string_view text,
                                                          IDWriteTextFormat *format) const
 {
-    const core::LayoutRect area{0, 0, line_width, line_height};
-    return layouts_.obtain(PaletteRowKey{format, PaletteTextRole::plain, text, area, text_.dpi},
-                           [&]() -> PaletteRowLayouts::TextLayout
-                           {
-                               const std::wstring wide =
-                                   core::to_utf16(text).value_or(std::wstring{});
-                               PaletteRowLayouts::TextLayout made;
-                               if (text_.dwrite == nullptr || format == nullptr ||
-                                   FAILED(text_.dwrite->CreateTextLayout(
-                                       wide.c_str(), static_cast<UINT32>(wide.size()), format,
-                                       static_cast<float>(line_width),
-                                       static_cast<float>(line_height), made.GetAddressOf())))
-                               {
-                                   return nullptr;
-                               }
-                               return made;
-                           });
+    return composed(text, format, core::LayoutRect{0, 0, line_width, line_height}, false);
+}
+
+PaletteRowLayouts::TextLayout SettingsPanelPainter::wrapped(std::string_view text,
+                                                            IDWriteTextFormat *format,
+                                                            std::int32_t limit) const
+{
+    return composed(text, format, core::LayoutRect{0, 0, limit, line_height * 2}, true);
+}
+
+PaletteRowLayouts::TextLayout SettingsPanelPainter::trimmed(std::string_view text,
+                                                            IDWriteTextFormat *format,
+                                                            std::int32_t limit) const
+{
+    return composed(text, format, core::LayoutRect{0, 0, limit, line_height}, true);
+}
+
+// 箱 area の文字組み。trim なら入り切らない末尾を「…」で切り、2 行ぶんの高さの箱なら幅で折り返す
+// （箱の幅と高さと役が保持の鍵に入るので、切った・折った文字組みと広い箱の文字組みは別の entry）。
+PaletteRowLayouts::TextLayout SettingsPanelPainter::composed(std::string_view text,
+                                                             IDWriteTextFormat *format,
+                                                             const core::LayoutRect &area,
+                                                             bool trim) const
+{
+    const bool folds = core::height_of(area) > line_height;
+    return layouts_.obtain(
+        PaletteRowKey{format, trim ? PaletteTextRole::trimmed : PaletteTextRole::plain, text, area,
+                      text_.dpi},
+        [&]() -> PaletteRowLayouts::TextLayout
+        {
+            const std::wstring wide = core::to_utf16(text).value_or(std::wstring{});
+            PaletteRowLayouts::TextLayout made;
+            if (text_.dwrite == nullptr || format == nullptr ||
+                FAILED(text_.dwrite->CreateTextLayout(
+                    wide.c_str(), static_cast<UINT32>(wide.size()), format,
+                    static_cast<float>(core::width_of(area)),
+                    static_cast<float>(core::height_of(area)), made.GetAddressOf())) ||
+                (folds && FAILED(made->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP))))
+            {
+                return nullptr;
+            }
+            Microsoft::WRL::ComPtr<IDWriteInlineObject> sign;
+            const DWRITE_TRIMMING trimming{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+            if (trim &&
+                (FAILED(text_.dwrite->CreateEllipsisTrimmingSign(format, sign.GetAddressOf())) ||
+                 FAILED(made->SetTrimming(&trimming, sign.Get()))))
+            {
+                return nullptr;
+            }
+            return made;
+        });
 }
 
 std::int32_t SettingsPanelPainter::width(std::string_view text, IDWriteTextFormat *format) const
@@ -575,8 +612,15 @@ std::int32_t SettingsPanelPainter::width(std::string_view text, IDWriteTextForma
 std::int32_t SettingsPanelPainter::write(std::string_view text, IDWriteTextFormat *format,
                                          const core::LayoutRect &area, core::RgbColor color)
 {
-    const auto shown = text.empty() ? nullptr : line(text, format);
-    if (shown == nullptr || core::width_of(area) <= 0 || core::height_of(area) <= 0)
+    if (text.empty() || core::width_of(area) <= 0 || core::height_of(area) <= 0)
+    {
+        return 0;
+    }
+    // 入り切らない文は末尾を「…」で切った文字組みで描く（字の途中で切らない・レビュー R3）。
+    const auto full = width(text, format);
+    const auto room = core::width_of(area);
+    const auto shown = full > room ? trimmed(text, format, room) : line(text, format);
+    if (shown == nullptr)
     {
         return 0;
     }
@@ -586,7 +630,23 @@ std::int32_t SettingsPanelPainter::write(std::string_view text, IDWriteTextForma
                       (static_cast<float>(core::height_of(area) - line_height) / 2.0F);
     target_.DrawTextLayout(D2D1::Point2F(static_cast<float>(area.left), top), shown.Get(), &brush_);
     target_.PopAxisAlignedClip();
-    return width(text, format);
+    return std::min(full, room);
+}
+
+void SettingsPanelPainter::write_wrapped(std::string_view text, IDWriteTextFormat *format,
+                                         const core::LayoutRect &area, core::RgbColor color)
+{
+    const auto shown = text.empty() ? nullptr : wrapped(text, format, core::width_of(area));
+    if (shown == nullptr || core::width_of(area) <= 0 || core::height_of(area) <= 0)
+    {
+        return;
+    }
+    brush_.SetColor(to_color(color));
+    target_.PushAxisAlignedClip(to_rect(area), D2D1_ANTIALIAS_MODE_ALIASED);
+    const float top = static_cast<float>(area.top) +
+                      (static_cast<float>(core::height_of(area) - (line_height * 2)) / 2.0F);
+    target_.DrawTextLayout(D2D1::Point2F(static_cast<float>(area.left), top), shown.Get(), &brush_);
+    target_.PopAxisAlignedClip();
 }
 
 void SettingsPanelPainter::write_centered(std::string_view text, IDWriteTextFormat *format,

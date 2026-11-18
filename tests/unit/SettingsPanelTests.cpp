@@ -76,7 +76,7 @@ constexpr core::SettingsTextWidths short_widths{{40, 40, 40, 20, 40, 60}, {60, 6
                                         const core::LayoutRect &area, std::int32_t scroll)
 {
     return core::settings_layout(
-        core::SettingsLayoutRequest{area, dpi, rows, 0, short_widths, scroll});
+        core::SettingsLayoutRequest{area, dpi, rows, std::nullopt, short_widths, scroll});
 }
 
 [[nodiscard]] std::size_t count_of(const core::SettingsLayout &layout, core::SettingsItemKind kind)
@@ -128,6 +128,7 @@ void verify_drawer()
            "the footer holds the two buttons at the right, each at least 84 DIP wide");
     expect(count_of(layout, core::SettingsItemKind::row) == rows.size() &&
                count_of(layout, core::SettingsItemKind::summary) == 1 &&
+               count_of(layout, core::SettingsItemKind::summary_note) == 1 &&
                count_of(layout, core::SettingsItemKind::empty) == 0 &&
                layout.items.front().kind == core::SettingsItemKind::heading &&
                layout.items.front().box.top == 189,
@@ -219,9 +220,14 @@ void verify_scroll()
     expect(core::settings_scroll_revealing(bottom, 0) == 0 &&
                core::settings_scroll_revealing(top, 0) == 0,
            "revealing the first row of a section also shows its heading");
-    expect(core::settings_scroll_by(top, 3) == 60 && core::settings_scroll_by(top, -3) == 0 &&
-               core::settings_scroll_by(bottom, 3) == bottom.scroll,
+    expect(core::settings_scroll_by(top, 0, 3) == 60 && core::settings_scroll_by(top, 0, -3) == 0 &&
+               core::settings_scroll_by(bottom, bottom.scroll, 3) == bottom.scroll,
            "the wheel moves 20 DIP a line and stops at the ends");
+    // 起点は渡した送り（描いた配置の送りではない）。描く前に 2 通来ても 1 通目の分が残る
+    // （#1836 のレビュー R2）。
+    const auto once = core::settings_scroll_by(top, top.scroll, 1);
+    expect(once == 20 && core::settings_scroll_by(top, once, 1) == 40,
+           "two wheel messages before a paint add up from the scroll they are given");
     expect(core::settings_paged_row(top, std::size_t{0}, true).value_or(0) > 0 &&
                core::settings_paged_row(top, last, true) == std::optional{last} &&
                core::settings_paged_row(top, std::size_t{0}, false) ==
@@ -280,7 +286,8 @@ void verify_hit()
            "a row scrolled out of the list is not hit");
 }
 
-// 当たる行が無ければ 1 行の知らせだけ。命令の行は言語サーバーの節の後ろ。
+// 当たる行が無ければ 1 行の知らせだけ。言語サーバーの節は行を持たず、見出しの下に命令の行（無ければ
+// 「行がありません」の 1 行）が並ぶ。絞っている間（値なし）は節ごと出さない。
 void verify_empty_and_commands()
 {
     const auto none = laid({}, wide_area, 0);
@@ -288,16 +295,58 @@ void verify_empty_and_commands()
                none.scroll_limit == 0 && none.presets.at(0) == core::LayoutRect{0, 0, 0, 0},
            "no visible row leaves one line for the message");
     const auto rows = every_row();
+    const auto headings = count_of(laid(rows, wide_area, 0), core::SettingsItemKind::heading);
     const auto served = core::settings_layout(
         core::SettingsLayoutRequest{wide_area, dpi, rows, 2, short_widths, 0});
+    const auto &heading = served.items.at(served.items.size() - 3);
     expect(count_of(served, core::SettingsItemKind::command) == 2 &&
-               served.items.back().kind == core::SettingsItemKind::command,
-           "the command lines follow the language server section");
-    const std::span<const core::SettingsLayoutRow> head{rows.data(), 2};
-    const auto filtered = core::settings_layout(
-        core::SettingsLayoutRequest{wide_area, dpi, head, 2, short_widths, 0});
-    expect(count_of(filtered, core::SettingsItemKind::command) == 0,
-           "the command lines are hidden with the language server section");
+               served.items.back().kind == core::SettingsItemKind::command &&
+               heading.kind == core::SettingsItemKind::heading &&
+               heading.index == std::to_underlying(core::SettingsSection::language_server) &&
+               count_of(served, core::SettingsItemKind::heading) == headings + 1 &&
+               count_of(served, core::SettingsItemKind::no_commands) == 0,
+           "the command lines follow the language server heading after the rows");
+    // 要約の 1 行目が箱に入り切らなければ、箱は 1 行ぶん（17 DIP）高い（文を 2 行に折る）。
+    auto long_widths = short_widths;
+    long_widths.estimate = 392;
+    const auto tall = core::settings_layout(
+        core::SettingsLayoutRequest{wide_area, dpi, rows, std::nullopt, long_widths, 0});
+    long_widths.estimate = 391;
+    const auto fitting = core::settings_layout(
+        core::SettingsLayoutRequest{wide_area, dpi, rows, std::nullopt, long_widths, 0});
+    const auto summary_of = [](const core::SettingsLayout &layout)
+    {
+        return std::ranges::find(layout.items, core::SettingsItemKind::summary,
+                                 &core::SettingsLayoutItem::kind)
+            ->box;
+    };
+    expect(core::height_of(summary_of(tall)) == 113 && core::height_of(summary_of(fitting)) == 96 &&
+               core::width_of(summary_of(tall)) == 391 + 24,
+           "a summary line wider than its box makes the box one line taller");
+    const auto bare = core::settings_layout(
+        core::SettingsLayoutRequest{wide_area, dpi, rows, 0, short_widths, 0});
+    expect(count_of(bare, core::SettingsItemKind::command) == 0 &&
+               bare.items.back().kind == core::SettingsItemKind::no_commands &&
+               count_of(bare, core::SettingsItemKind::heading) == headings + 1,
+           "without a command the section holds one line that says so");
+    const auto filtered = laid(rows, wide_area, 0);
+    expect(count_of(filtered, core::SettingsItemKind::command) == 0 &&
+               count_of(filtered, core::SettingsItemKind::no_commands) == 0 &&
+               filtered.items.back().kind == core::SettingsItemKind::row,
+           "the language server section is hidden while the rows are filtered");
+    // 行を持たない節は、札と Ctrl+6 が見出しから終わりまでを見せる送りで着く。
+    const core::LayoutRect small{0, 40, 1280, 440};
+    const auto top =
+        core::settings_layout(core::SettingsLayoutRequest{small, dpi, rows, 2, short_widths, 0});
+    const auto revealed =
+        core::settings_scroll_revealing_section(top, core::SettingsSection::language_server);
+    const auto shown = core::settings_layout(
+        core::SettingsLayoutRequest{small, dpi, rows, 2, short_widths, revealed});
+    expect(revealed == top.scroll_limit && shown.items.back().box.bottom <= shown.list.bottom &&
+               shown.items.at(shown.items.size() - 3).box.top >= shown.list.top &&
+               core::settings_scroll_revealing_section(laid(rows, small, 0),
+                                                       core::SettingsSection::language_server) == 0,
+           "a section without rows is revealed from its heading to its last line");
 }
 
 [[nodiscard]] const app::SettingsView &panel_of(const app::EditorFrame &frame)

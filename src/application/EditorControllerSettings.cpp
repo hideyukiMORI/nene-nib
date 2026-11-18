@@ -4,11 +4,13 @@
 // その場で状態の設定に置き（adopt_settings・保存はしない）、ファイルへは閉じるときに 1 回だけ書く。
 #include "EditorController.hpp"
 
+#include "AdjustFontSize.hpp"
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
 #include "ChangeSetting.hpp"
 #include "ChooseSettingsPreset.hpp"
 #include "CloseSettings.hpp"
+#include "DisplayLanguage.hpp"
 #include "DisplayLanguageChoice.hpp"
 #include "DisplayLanguageNames.hpp"
 #include "EditorControllerDetail.hpp"
@@ -57,10 +59,13 @@ namespace
 // 本文や面を送るだけで、文書もキャレットの置き場も選びも変えない意図（#1835 のレビュー R8・施主決定
 // D102 の引き出しは本文を隠さないので、効き目を見るために本文を送っても面を閉じない）。本文の
 // ホイール・もう 1 つの枠のホイール・ミニマップの押しとドラッグ・エクスプローラーのホイール・帯の
-// ホイール。本文のクリック・打鍵・編集・タブの切り替えはここに書かない（閉じて保存する）。
+// ホイール。Ctrl+ホイールの字の大きさも同じ（面の「文字の大きさ」の行がその場で変わる・効き目を
+// 見ながら変える・#1836 の差し戻し）。本文のクリック・打鍵・編集・タブの切り替えはここに書かない
+// （閉じて保存する）。
 [[nodiscard]] bool only_scrolls(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<ScrollLines>(intent) ||
+           std::holds_alternative<AdjustFontSize>(intent) ||
            std::holds_alternative<ScrollPane>(intent) ||
            std::holds_alternative<PointMinimap>(intent) ||
            std::holds_alternative<ScrollExplorer>(intent) ||
@@ -79,7 +84,8 @@ constexpr auto &section_order = core::settings_sections;
 
 // 表の行の表示値。
 [[nodiscard]] SettingsRowView row_view(const core::SettingsRow &row,
-                                       const core::EditorSettings &settings)
+                                       const core::EditorSettings &settings,
+                                       core::DisplayLanguage language)
 {
     SettingsRowView view{row,
                          core::settings_row_title(row.subject),
@@ -92,7 +98,7 @@ constexpr auto &section_order = core::settings_sections;
                          false};
     // 選択肢を足すと else の枝が新しい型を値の関数に渡せずコンパイルが落ちる（CPP-002）。
     std::visit(
-        [&view, &settings](auto subject)
+        [&view, &settings, language](auto subject)
         {
             if constexpr (std::is_same_v<decltype(subject), core::EditorFeature>)
             {
@@ -103,7 +109,7 @@ constexpr auto &section_order = core::settings_sections;
             }
             else
             {
-                view.value = core::settings_value_text(settings, subject);
+                view.value = core::settings_value_text(settings, subject, language);
             }
         },
         row.subject);
@@ -415,14 +421,18 @@ std::optional<SettingsView> EditorController::settings_view() const
                       core::speed_summary(settings),
                       settings.lsp_commands,
                       !core::same_settings(settings_.value().opened, settings),
-                      settings_.value().scroll};
+                      settings_.value().scroll,
+                      settings_.value().query.empty()};
     for (std::size_t tab = 0; tab < section_order.size(); ++tab)
     {
         const auto section = section_order.at(tab);
+        // 言語サーバーの節は行を持たない（命令の行だけ・絞っていない間は出ている）。
+        const bool listed = section == core::SettingsSection::language_server && view.lsp_listed;
         view.tabs.at(tab) = SettingsSectionTab{
             section, core::settings_section_title(section),
-            std::ranges::any_of(visible, [section](std::size_t index)
-                                { return core::settings_rows.at(index).section == section; })};
+            listed ||
+                std::ranges::any_of(visible, [section](std::size_t index)
+                                    { return core::settings_rows.at(index).section == section; })};
     }
     for (const std::size_t index : visible)
     {
@@ -431,7 +441,8 @@ std::optional<SettingsView> EditorController::settings_view() const
             view.focused = view.rows.size();
             view.section = core::settings_rows.at(index).section;
         }
-        view.rows.push_back(row_view(core::settings_rows.at(index), settings));
+        view.rows.push_back(
+            row_view(core::settings_rows.at(index), settings, state_.display_language()));
     }
     return view;
 }

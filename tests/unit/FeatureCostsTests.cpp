@@ -169,6 +169,22 @@ void verify_summary()
            "not counted");
     expect(heavy.preset == std::optional{core::SettingsPreset::all_on},
            "all marked features on is the all-on preset");
+    // 要約の 1 行目（採用案の形・#1836 の差し戻し）: 基準 ＋ 段ごとの数（0 の段は書かない）＋
+    // 合計。
+    using core::DisplayLanguage;
+    expect(core::speed_estimate_text(heavy, DisplayLanguage::japanese) ==
+                   "いまの設定での 1 打鍵の見込み: 0.64 ms ＋ 小 × 1 ＋ 大 × 1（約 0.86 ms）" &&
+               core::speed_estimate_text(quiet, DisplayLanguage::japanese) ==
+                   "いまの設定での 1 打鍵の見込み: 0.64 ms ＋ 小 × 1（約 0.66 ms）",
+           "the estimate line lists the base, each tier that is on and the total");
+    expect(core::speed_estimate_text(core::SpeedSummary{641, 0, 0, 0, {}, std::nullopt},
+                                     DisplayLanguage::japanese) ==
+                   "いまの設定での 1 打鍵の見込み: 0.64 ms" &&
+               core::speed_estimate_text(core::SpeedSummary{1941, 0, 2, 1, {}, std::nullopt},
+                                         DisplayLanguage::english) ==
+                   "Estimated time per keystroke with these settings: 0.64 ms + Medium × 2 + "
+                   "High × 1 (about 1.94 ms)",
+           "nothing added shows only the base and absent tiers are left out");
     const auto all = core::preset_applied(defaults, core::SettingsPreset::all_on);
     const auto speed = core::preset_applied(all, core::SettingsPreset::speed_first);
     const auto recommended = core::preset_applied(all, core::SettingsPreset::recommended);
@@ -197,7 +213,21 @@ void verify_rows()
     expect(std::ranges::is_sorted(core::settings_rows, {}, [](const core::SettingsRow &row)
                                   { return std::to_underlying(row.section); }),
            "rows follow the section order");
-    const auto lsp = core::SettingsRow{core::SettingsSection::language_server, EditorFeature::lsp};
+    // 折り返しは編集の節・言語サーバーのオン・オフは機能の節・言語サーバーの節は行を持たない
+    // （#1836 の差し戻し）。
+    const auto section_of = [](EditorFeature feature)
+    {
+        return std::ranges::find(core::settings_rows, core::SettingsSubject{feature},
+                                 &core::SettingsRow::subject)
+            ->section;
+    };
+    expect(
+        section_of(EditorFeature::wrap) == core::SettingsSection::editing &&
+            section_of(EditorFeature::lsp) == core::SettingsSection::features &&
+            std::ranges::none_of(core::settings_rows, [](const core::SettingsRow &row)
+                                 { return row.section == core::SettingsSection::language_server; }),
+        "wrap sits under editing, the language server switch under features");
+    const auto lsp = core::SettingsRow{core::SettingsSection::features, EditorFeature::lsp};
     expect(core::settings_row_matches(lsp, "", core::DisplayLanguage::japanese) &&
                core::settings_row_matches(lsp, "LSP", core::DisplayLanguage::japanese) &&
                core::settings_row_matches(lsp, "言語サーバー", core::DisplayLanguage::japanese) &&
@@ -247,13 +277,18 @@ void verify_user_theme_steps()
 // 値の送り（段 1 の値の行）。
 void verify_values()
 {
+    constexpr auto japanese = core::DisplayLanguage::japanese;
     const auto defaults = core::default_editor_settings();
     const auto themed =
         core::settings_value_stepped(defaults, core::SettingsValue::theme, true, std::nullopt);
     expect(themed.theme.has_value() &&
-               core::settings_value_text(themed, core::SettingsValue::theme) != "system" &&
-               core::settings_value_text(defaults, core::SettingsValue::theme) == "system",
-           "the theme steps from system to the first built-in theme");
+               core::settings_value_text(themed, core::SettingsValue::theme, japanese) ==
+                   themed.theme.value().name() &&
+               core::settings_value_text(defaults, core::SettingsValue::theme, japanese) ==
+                   "Windows に合わせる" &&
+               core::settings_value_text(defaults, core::SettingsValue::theme,
+                                         core::DisplayLanguage::english) == "Match Windows",
+           "the theme steps from system to the first built-in theme and shows display names");
     expect(!core::settings_value_stepped(themed, core::SettingsValue::theme, false, std::nullopt)
                 .theme.has_value(),
            "stepping back returns to system");
@@ -262,17 +297,29 @@ void verify_values()
            "stepping back from system wraps to the last built-in theme");
     const auto bigger =
         core::settings_value_stepped(defaults, core::SettingsValue::font_size, true, std::nullopt);
-    expect(core::settings_value_text(bigger, core::SettingsValue::font_size) == "14.5" &&
-               core::settings_value_text(defaults, core::SettingsValue::font_size) == "13.5",
+    expect(core::settings_value_text(bigger, core::SettingsValue::font_size, japanese) == "14.5" &&
+               core::settings_value_text(defaults, core::SettingsValue::font_size, japanese) ==
+                   "13.5",
            "the font size steps by 1 pt");
     const auto language = core::settings_value_stepped(defaults, core::SettingsValue::ui_language,
                                                        true, std::nullopt);
     expect(defaults.ui_language == core::DisplayLanguageChoice::system &&
-               language.ui_language == core::DisplayLanguageChoice::japanese,
-           "the display language wraps through the listed choices");
+               language.ui_language == core::DisplayLanguageChoice::japanese &&
+               core::settings_value_text(defaults, core::SettingsValue::ui_language, japanese) ==
+                   "Windows に合わせる" &&
+               core::settings_value_text(language, core::SettingsValue::ui_language,
+                                         core::DisplayLanguage::english) == "日本語",
+           "the display language wraps through the listed choices and shows display names");
     const auto preview = core::settings_value_stepped(defaults, core::SettingsValue::finder_preview,
                                                       false, std::nullopt);
-    expect(preview.finder_preview == core::FinderPreview::off, "the finder preview wraps backward");
+    expect(preview.finder_preview == core::FinderPreview::off &&
+               core::settings_value_text(defaults, core::SettingsValue::finder_preview, japanese) ==
+                   "自動" &&
+               core::settings_value_text(preview, core::SettingsValue::finder_preview, japanese) ==
+                   "出さない" &&
+               core::settings_value_text(preview, core::SettingsValue::finder_preview,
+                                         core::DisplayLanguage::english) == "Off",
+           "the finder preview wraps backward and shows display names, not the raw values");
     expect(core::same_settings(core::settings_value_stepped(
                                    defaults, core::SettingsValue::font_family, true, std::nullopt),
                                defaults),

@@ -444,6 +444,13 @@ void EditorController::accept(const AdjustFontSize &intent)
     auto settings = state_.settings();
     settings.font_size =
         core::adjusted_font_size(settings.font_size, intent.adjustment, intent.steps);
+    // 設定の面が開いている間は面の切り替えと同じくその場で効かせるだけで、書くのは閉じるときの
+    // 1 回（ADR 0170 の決定 6・#1836 の差し戻し）。
+    if (settings_open())
+    {
+        preview_settings(std::move(settings));
+        return;
+    }
     (void)persist_settings(std::move(settings));
 }
 

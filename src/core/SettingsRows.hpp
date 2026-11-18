@@ -21,19 +21,21 @@ namespace nenenib::core
 // 機能の行は feature_costs の表の切れる機能と、切れないが段の印のある機能（matchparen・「常に
 // オン」の行）。切れず印も無い機能（easymotion・start_screen）と per_document の syntax は載せない
 // （#1835 のレビュー R4）。面の行はこの表の 1 つから作り、ui は frame の値を読むだけ。
+// 折り返しは「編集」の節、言語サーバーのオン・オフは「機能」の節（要約と組の下に印のある行が並ぶ・
+// #1836 の差し戻し）。「言語サーバー」の節は行を持たず、言語ごとのコマンド（読むだけ）だけが並ぶ。
 inline constexpr std::array<SettingsRow, 12> settings_rows{{
     {SettingsSection::display, SettingsValue::theme},
     {SettingsSection::display, SettingsValue::ui_language},
-    {SettingsSection::display, EditorFeature::wrap},
     {SettingsSection::display, EditorFeature::guide},
     {SettingsSection::text, SettingsValue::font_family},
     {SettingsSection::text, SettingsValue::font_size},
+    {SettingsSection::editing, EditorFeature::wrap},
     {SettingsSection::editing, EditorFeature::autoindent},
     {SettingsSection::panes, EditorFeature::explorer},
     {SettingsSection::panes, SettingsValue::finder_preview},
     {SettingsSection::features, EditorFeature::matchparen},
     {SettingsSection::features, EditorFeature::minimap},
-    {SettingsSection::language_server, EditorFeature::lsp},
+    {SettingsSection::features, EditorFeature::lsp},
 }};
 
 // 節の見出しの文。
@@ -50,8 +52,12 @@ inline constexpr std::array<SettingsRow, 12> settings_rows{{
 [[nodiscard]] bool settings_row_matches(const SettingsRow &row, std::string_view query,
                                         DisplayLanguage language) noexcept;
 
-// 値の行の表示の文字（配色の名前か `system`・表示言語の名前・字体・pt・プレビューの置き方）。
-[[nodiscard]] std::string settings_value_text(const EditorSettings &settings, SettingsValue value);
+// 値の行の表示の文字（表示言語 language の名前・設定のファイルの生の値は出さない・#1836 の
+// 差し戻し）。配色は組み込みと利用者のテーマの名前そのまま・選んでいなければ「Windows に
+// 合わせる」。表示言語は言語の自称・system は「Windows に合わせる」。字体と pt はそのまま。
+// プレビューの置き方は「自動」「右」「下」「出さない」。
+[[nodiscard]] std::string settings_value_text(const EditorSettings &settings, SettingsValue value,
+                                              DisplayLanguage language);
 // 値を 1 つ送った設定（forward は次・大きい側）。配色の列は system → 組み込みの表の順 → 一覧に
 // 無い配色（今の値が利用者のテーマならそれ、でなければ kept が利用者のテーマならそれ・無ければ
 // 列に入れない）で、回り込む。今の値を列の 1 要素として扱うので、利用者のテーマから送っても戻れる

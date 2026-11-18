@@ -3,6 +3,7 @@
 // 元に戻すで書かない・ほかの操作で閉じるときも 1 回・探す欄と焦点・節の札・組・要約・配色と字の
 // 大きさがその場で frame に効く・表示言語の解決し直し・保存の失敗の知らせ。時計・ファイル・乱数の
 // 種を読まない。
+#include "AdjustFontSize.hpp"
 #include "AutosaveTick.hpp"
 #include "BuiltinTheme.hpp"
 #include "BuiltinThemes.hpp"
@@ -24,6 +25,8 @@
 #include "FilePath.hpp"
 #include "FilterSettings.hpp"
 #include "FirstFramePresented.hpp"
+#include "FontSize.hpp"
+#include "FontSizeAdjustment.hpp"
 #include "InsertText.hpp"
 #include "JumpSettingsSection.hpp"
 #include "LanguageServerTick.hpp"
@@ -196,16 +199,25 @@ void verify_filter_and_sections()
     expect(panel.query == "lsp" && panel.rows.size() == 1 &&
                panel.rows.front().row.subject == core::SettingsSubject{core::EditorFeature::lsp} &&
                panel.focused == std::optional<std::size_t>{0} &&
-               panel.section == std::optional{core::SettingsSection::language_server},
+               panel.section == std::optional{core::SettingsSection::features},
            "the search box narrows the rows and moves the focus onto a shown row");
-    expect(!panel.tabs.at(0).filled && panel.tabs.at(5).filled,
-           "tabs without shown rows are marked empty");
+    expect(!panel.tabs.at(0).filled && panel.tabs.at(4).filled && !panel.tabs.at(5).filled &&
+               !panel.lsp_listed,
+           "tabs without shown rows are marked empty and the command lines hide while filtering");
     const auto none = controller.apply_frame(app::FilterSettings{"zzzz"});
     expect(panel_of(none).rows.empty() && !panel_of(none).focused.has_value() &&
                !panel_of(none).section.has_value(),
            "nothing matches and nothing is focused");
     static_cast<void>(controller.apply(app::ChangeSetting{true}));
     static_cast<void>(controller.apply(app::FilterSettings{""}));
+    // 言語サーバーの節は行を持たない（命令の行だけ）。札は出ていて、送っても焦点は動かない。
+    const auto before = controller.frame();
+    const auto served =
+        controller.apply_frame(app::JumpSettingsSection{core::SettingsSection::language_server});
+    expect(panel_of(served).lsp_listed && panel_of(served).tabs.at(5).filled &&
+               panel_of(served).focused == panel_of(before).focused &&
+               panel_of(served).section != std::optional{core::SettingsSection::language_server},
+           "the language server section lists only commands and takes no focus");
     const auto jumped =
         controller.apply_frame(app::JumpSettingsSection{core::SettingsSection::features});
     const auto &all = panel_of(jumped);
@@ -437,6 +449,19 @@ void verify_scrolls_keep_open()
                editing.settings().writes() == 0,
            "scrolling the body, the other pane, the explorer, the tabs and the minimap keeps the "
            "panel open");
+    // Ctrl+ホイールの字の大きさも面を閉じない。大きさの行の値がその場で変わり、書くのは閉じるときの
+    // 1 回（#1836 の差し戻し）。
+    const auto before = controller.frame().settings.font_size;
+    const auto zoomed =
+        controller.apply_frame(app::AdjustFontSize{core::FontSizeAdjustment::increase, 2});
+    focus_on(controller, core::SettingsValue::font_size);
+    const auto sized = controller.frame();
+    const auto &size_row = panel_of(sized).rows.at(panel_of(sized).focused.value_or(0));
+    expect(zoomed.settings_panel.has_value() && controller.settings_open() &&
+               zoomed.settings.font_size.points() != before.points() &&
+               editing.settings().writes() == 0 &&
+               size_row.value == core::font_size_text(zoomed.settings.font_size),
+           "Ctrl+wheel changes the font size in place without closing or writing");
     static_cast<void>(controller.apply(
         app::PointText{10.0F, 0, core::SelectionAnchoring::collapse, app::PointerClicks::single}));
     expect(!controller.settings_open() && editing.settings().writes() == 1,

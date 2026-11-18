@@ -21,7 +21,9 @@ namespace nenenib::application
 // - rows: 探す欄で絞った後の見えている行（表の順）。focused は rows の中の焦点（無ければ値なし）。
 // - query: 探す欄の文字。
 // - summary: 要約の 1 行と今の組（core::speed_summary）。
-// - lsp_commands: 言語サーバーの命令の行（言語の名前と値・読むだけ）。
+// - lsp_commands: 言語サーバーの命令の行（言語の名前と値・読むだけ）。lsp_listed は「言語
+//   サーバー」の節（見出しと命令の行・無ければ「行がありません」の 1 行）を出すか（探す欄で絞って
+//   いる間は出さない・節は設定の行を持たない）。
 // - changed: 開いたときの写しと違うか（「元に戻す」が効くか）。
 // - scroll: 行の領域の送り（物理画素・配置の入力・#1836）。
 struct SettingsView
@@ -35,5 +37,6 @@ struct SettingsView
     std::vector<std::pair<std::string, std::string>> lsp_commands;
     bool changed;
     std::int32_t scroll = 0;
+    bool lsp_listed = true;
 };
 } // namespace nenenib::application

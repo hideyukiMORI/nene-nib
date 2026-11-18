@@ -28,8 +28,8 @@ namespace nenenib::ui::win32
 // current_line の面。
 // 配置は core::settings_layout の 1 本（窓の当たりと同じ矩形）で、札・組・ボタンの文字の幅は
 // arranged が測って渡す。文字組みは PaletteRowLayouts の保持から引く（1 行ぶんの広い箱で作り、
-// 中央と右寄せは幅を測って置く）。target は製品では Direct2D の描画先、tests/ui は WIC の bitmap の
-// 描画先。色は Palette のトークンと heavy だけ（ADR 0008）。
+// 中央と右寄せは幅を測って置く）。欄に入り切らない文は末尾を「…」で切る。target は製品では Direct2D
+// の描画先、tests/ui は WIC の bitmap の 描画先。色は Palette のトークンと heavy だけ（ADR 0008）。
 class SettingsPanelPainter final
 {
   public:
@@ -64,6 +64,7 @@ class SettingsPanelPainter final
                        const core::LayoutRect &box);
     void paint_command(const application::SettingsView &view, const core::LayoutRect &box,
                        std::size_t index);
+    void paint_note(core::UiMessage message, const core::LayoutRect &box);
     void paint_footer(const application::SettingsView &view, const core::SettingsLayout &layout);
     void paint_button(std::string_view label, const core::LayoutRect &box, bool filled,
                       core::RgbColor ink);
@@ -72,9 +73,23 @@ class SettingsPanelPainter final
     // 1 行の広い箱の文字組み（保持から引く）と、その幅（物理画素・切り上げ）。
     [[nodiscard]] PaletteRowLayouts::TextLayout line(std::string_view text,
                                                      IDWriteTextFormat *format) const;
+    // 幅 limit の箱の文字組み（入り切らない末尾を「…」で切る・DirectWrite の trimming・保持から
+    // 引く）。字の途中で切れた文を出さない（#1836 のレビュー R3）。
+    [[nodiscard]] PaletteRowLayouts::TextLayout
+    trimmed(std::string_view text, IDWriteTextFormat *format, std::int32_t limit) const;
+    // 幅 limit で折り返す 2 行ぶんの箱の文字組み（要約の 1 行目が入り切らないとき）。
+    [[nodiscard]] PaletteRowLayouts::TextLayout
+    wrapped(std::string_view text, IDWriteTextFormat *format, std::int32_t limit) const;
+    [[nodiscard]] PaletteRowLayouts::TextLayout composed(std::string_view text,
+                                                         IDWriteTextFormat *format,
+                                                         const core::LayoutRect &area,
+                                                         bool trim) const;
     [[nodiscard]] std::int32_t width(std::string_view text, IDWriteTextFormat *format) const;
-    // area の左端から描いて area で切る。描いた文字の幅を返す。
+    // area の左端から描く。area に入り切らなければ末尾を「…」で切る。描いた文字の幅を返す。
     std::int32_t write(std::string_view text, IDWriteTextFormat *format,
+                       const core::LayoutRect &area, core::RgbColor color);
+    // area の幅で折り返して描く（2 行まで・縦は area の中央）。
+    void write_wrapped(std::string_view text, IDWriteTextFormat *format,
                        const core::LayoutRect &area, core::RgbColor color);
     void write_centered(std::string_view text, IDWriteTextFormat *format,
                         const core::LayoutRect &area, core::RgbColor color);

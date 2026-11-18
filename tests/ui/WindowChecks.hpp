@@ -69,6 +69,8 @@ void verify_context_menu_paint();
 void verify_finder_preview_paint();
 // #1836: 設定の面（右の引き出し）の画素と鍵の振り分け（施主決定 D102）。
 void verify_settings_panel_paint();
+// #1836 の差し戻し: 設定の面の鍵・文字・マウスの振り分け（SettingsInput の純関数・窓は作らない）。
+void verify_settings_input();
 // 窓の角は四角（DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_DONOTROUND・#1488）。窓は作らない。
 void verify_window_corners();
 // 描画を失って取消の無い箱を聞く間だけの窓の下地（#1499）。窓は作らない。

@@ -85,7 +85,8 @@ constexpr float full_channel = 255.0F;
         view.background = view.tier.has_value() && core::feature_cost(feature).background;
         return view;
     }
-    view.value = core::settings_value_text(settings, std::get<core::SettingsValue>(row.subject));
+    view.value = core::settings_value_text(settings, std::get<core::SettingsValue>(row.subject),
+                                           core::DisplayLanguage::japanese);
     return view;
 }
 

@@ -143,7 +143,7 @@ constexpr std::size_t lsp_row = 5;
     view.rows.back().on = true;
     view.rows.back().switchable = false;
     view.rows.back().tier = core::CostTier::low;
-    view.rows.push_back(row_of(core::SettingsSection::language_server, core::EditorFeature::lsp));
+    view.rows.push_back(row_of(core::SettingsSection::features, core::EditorFeature::lsp));
     view.rows.back().on = true;
     view.rows.back().tier = core::CostTier::high;
     view.rows.back().background = true;

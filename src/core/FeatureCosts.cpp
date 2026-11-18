@@ -4,6 +4,7 @@
 #include "FeatureCosts.hpp"
 
 #include "CostTier.hpp"
+#include "DisplayLanguage.hpp"
 #include "EditorFeature.hpp"
 #include "EditorSettings.hpp"
 #include "FeatureStorage.hpp"
@@ -11,9 +12,12 @@
 #include "LineWrapping.hpp"
 #include "SettingsPreset.hpp"
 #include "SpeedSummary.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -182,6 +186,30 @@ void count_tier(SpeedSummary &summary, EditorFeature feature, CostTier tier)
     }
     summary.heavy.push_back(feature);
 }
+
+// µs を「0.64」の形（ms・小数 2 桁・四捨五入）にする。
+[[nodiscard]] std::string milliseconds_of(std::uint32_t microseconds)
+{
+    constexpr std::uint32_t half_hundredth_us = 5;
+    constexpr std::uint32_t hundredth_us = 10;
+    constexpr std::uint32_t hundred = 100;
+    constexpr std::uint32_t two_digits = 10;
+    const std::uint32_t hundredths = (microseconds + half_hundredth_us) / hundredth_us;
+    const std::uint32_t fraction = hundredths % hundred;
+    return std::to_string(hundredths / hundred) + (fraction < two_digits ? ".0" : ".") +
+           std::to_string(fraction);
+}
+
+// 内訳の 1 項（「 ＋ 大 × 1」）。数が 0 の段は空。
+[[nodiscard]] std::string tier_term(CostTier tier, std::size_t count, DisplayLanguage language)
+{
+    if (count == 0)
+    {
+        return {};
+    }
+    return ui_text_filled(UiMessage::settings_summary_term, language,
+                          {ui_text(cost_tier_title(tier), language), std::to_string(count)});
+}
 } // namespace
 
 std::string_view feature_name_of(EditorFeature feature) noexcept
@@ -317,5 +345,37 @@ SpeedSummary speed_summary(const EditorSettings &settings)
         count_tier(summary, row.feature, tier.value());
     }
     return summary;
+}
+
+UiMessage cost_tier_title(CostTier tier) noexcept
+{
+    switch (tier)
+    {
+    case CostTier::none:
+        return UiMessage::settings_tier_none;
+    case CostTier::low:
+        return UiMessage::settings_tier_low;
+    case CostTier::medium:
+        return UiMessage::settings_tier_medium;
+    case CostTier::high:
+        return UiMessage::settings_tier_high;
+    }
+    std::unreachable();
+}
+
+std::string speed_estimate_text(const SpeedSummary &summary, DisplayLanguage language)
+{
+    // 基準は数字と単位だけ（「0.64 ms」・単位は訳さない）。
+    std::string shown = milliseconds_of(reference_single_key_us) + " ms";
+    const std::string terms = tier_term(CostTier::low, summary.low, language) +
+                              tier_term(CostTier::medium, summary.medium, language) +
+                              tier_term(CostTier::high, summary.high, language);
+    if (!terms.empty())
+    {
+        shown += terms;
+        shown += ui_text_filled(UiMessage::settings_summary_total, language,
+                                {milliseconds_of(summary.estimate_us)});
+    }
+    return ui_text_filled(UiMessage::settings_summary_estimate, language, {shown});
 }
 } // namespace nenenib::core

@@ -5,14 +5,12 @@
 #include "DevicePixels.hpp"
 #include "EditorFrame.hpp"
 #include "LayoutRect.hpp"
-#include "SettingsItemKind.hpp"
 #include "SettingsPanel.hpp"
 #include "SettingsPanelPainter.hpp"
 #include "SettingsPart.hpp"
+#include "SettingsSection.hpp"
 #include "UiLocale.hpp"
 
-#include <algorithm>
-#include <cstddef>
 #include <cstdint>
 #include <optional>
 
@@ -24,35 +22,20 @@ core::SettingsTarget Direct2DRenderer::settings_target_at(std::int32_t x, std::i
                                         : core::SettingsTarget{core::SettingsPart::outside, 0};
 }
 
-std::optional<core::SettingsControl> Direct2DRenderer::settings_row_control(std::size_t row) const
+const std::optional<core::SettingsLayout> &Direct2DRenderer::settings_layout() const noexcept
+{
+    return settings_layout_;
+}
+
+std::optional<std::int32_t> Direct2DRenderer::settings_scrolled(std::int32_t from,
+                                                                std::int32_t lines) const
 {
     if (!settings_layout_.has_value())
     {
         return std::nullopt;
     }
-    const auto &items = settings_layout_.value().items;
-    const auto found = std::ranges::find_if(
-        items, [row](const core::SettingsLayoutItem &item)
-        { return item.kind == core::SettingsItemKind::row && item.index == row; });
-    return found == items.end() ? std::nullopt : std::optional{found->control};
-}
-
-std::optional<std::int32_t> Direct2DRenderer::settings_scrolled(std::int32_t lines) const
-{
-    if (!settings_layout_.has_value())
-    {
-        return std::nullopt;
-    }
-    const auto moved = core::settings_scroll_by(settings_layout_.value(), lines);
-    return moved == settings_layout_.value().scroll ? std::nullopt : std::optional{moved};
-}
-
-std::optional<std::size_t> Direct2DRenderer::settings_paged_row(std::optional<std::size_t> focused,
-                                                                bool down) const
-{
-    return settings_layout_.has_value()
-               ? core::settings_paged_row(settings_layout_.value(), focused, down)
-               : std::nullopt;
+    const auto moved = core::settings_scroll_by(settings_layout_.value(), from, lines);
+    return moved == from ? std::nullopt : std::optional{moved};
 }
 
 std::optional<core::LayoutRect> Direct2DRenderer::settings_search_rectangle() const
@@ -73,10 +56,12 @@ bool Direct2DRenderer::settings_formats_made()
 
 std::optional<std::int32_t>
 Direct2DRenderer::settings_revealed(const application::SettingsView &view,
-                                    core::DisplayLanguage language)
+                                    core::DisplayLanguage language,
+                                    std::optional<core::SettingsSection> section)
 {
     // 面をまだ描いていなければ帯が分からない（開いた直後は焦点が最初の行なので送りは要らない）。
-    if (!settings_layout_.has_value() || !view.focused.has_value() || !settings_formats_made())
+    const bool aimed = section.has_value() || view.focused.has_value();
+    if (!settings_layout_.has_value() || !aimed || !settings_formats_made())
     {
         return std::nullopt;
     }
@@ -84,7 +69,9 @@ Direct2DRenderer::settings_revealed(const application::SettingsView &view,
                                        settings_formats_.text(dwrite_.Get(), dpi_, language),
                                        settings_layouts_);
     const auto layout = painter.arranged(view, settings_area_);
-    const auto moved = core::settings_scroll_revealing(layout, view.focused.value());
+    const auto moved = section.has_value()
+                           ? core::settings_scroll_revealing_section(layout, section.value())
+                           : core::settings_scroll_revealing(layout, view.focused.value());
     return moved == view.scroll ? std::nullopt : std::optional{moved};
 }
 

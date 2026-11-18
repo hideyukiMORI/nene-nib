@@ -37,6 +37,7 @@
 #include "RendererSources.hpp"
 #include "RgbColor.hpp"
 #include "SessionEnd.hpp"
+#include "SettingsLayout.hpp"
 #include "SettingsTarget.hpp"
 #include "SplitLayout.hpp"
 #include "StartPress.hpp"
@@ -63,6 +64,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace nenenib::ui::win32
 {
@@ -187,14 +189,19 @@ class EditorWindow final
     // ----------------------------------------------------------------
     // 設定の面（施主決定 D102・#1836） EditorWindowSettings.cpp の群。開いている間の鍵・文字・
     // マウス・ホイール・IME を面の意図にする。開いていなければどれも false / 値なし（今の道へ）。
-    [[nodiscard]] bool take_settings_key(UINT message, WPARAM word);
-    void press_settings_key(WPARAM word);
-    void type_settings_character(WPARAM word);
-    void erase_settings_character();
-    void page_settings(bool down);
-    void turn_setting(bool forward);
+    // 鍵・文字・マウスを意図の列に写すのは SettingsInput の純関数（窓を作らずに試す）。
+    [[nodiscard]] bool take_settings_key(UINT message, WPARAM word, LPARAM data);
+    // 面の外の Ctrl+, の長押しの反復か（捨てる＝開閉を繰り返さない）。
+    [[nodiscard]] bool swallow_repeated_settings_key(WPARAM word, LPARAM data) const;
     // 面の意図を送ってから、焦点の行が見える所へ行の領域の送りを寄せる。
     void send_settings(const application::EditorIntent &intent);
+    void send_settings_all(const std::vector<application::EditorIntent> &intents);
+    [[nodiscard]] const std::optional<core::SettingsLayout> &settings_layout_drawn() const;
+    // 面が閉じた所で IME の変換を 1 回取り消す（deliver の 1 か所が呼ぶ・レビュー M1）。
+    void follow_settings_closing();
+    // 面の外を押して閉じた直後の 2 回目の押しか（読んだら消す）。
+    [[nodiscard]] bool take_settings_dismissal() noexcept;
+    void press_left_button(UINT message, LPARAM data);
     [[nodiscard]] bool press_settings(LPARAM data);
     [[nodiscard]] bool release_settings(LPARAM data);
     [[nodiscard]] bool press_settings_right(LPARAM data);
@@ -202,8 +209,6 @@ class EditorWindow final
     [[nodiscard]] bool over_settings(LPARAM data) const;
     [[nodiscard]] bool wheel_settings(std::int32_t delta, LPARAM data);
     [[nodiscard]] core::SettingsTarget settings_target_under(std::int32_t x, std::int32_t y) const;
-    void act_on_settings(core::SettingsTarget target);
-    void click_settings_row(core::SettingsTarget target);
     [[nodiscard]] std::optional<LRESULT> compose_settings(UINT message, WPARAM word, LPARAM data);
     void place_settings_composition(const core::LayoutRect &search);
     // 左の押しを続けた回数に数える（#1250）。OS のダブルクリックは 2 回目、その後に OS の
@@ -521,6 +526,9 @@ class EditorWindow final
     std::optional<core::SettingsTarget> settings_pressed_;
     std::int32_t settings_wheel_remainder_ = 0;
     wchar_t settings_high_surrogate_ = 0;
+    // 直前の delivery で面が開いていたか（閉じた所を見つける）と、面の外の押しで閉じた直後か。
+    bool settings_shown_ = false;
+    bool settings_dismissed_ = false;
     // FirstFramePresented を送ったか（窓で 1 回だけ・ADR 0172 の決定 3）。
     bool first_frame_signaled_ = false;
     // プレビューの枠で押したチェックボックス（離したとき・次に押したときに消す）。

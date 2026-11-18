@@ -45,6 +45,7 @@
 #include "SettingsLayout.hpp"
 #include "SettingsPanelFormats.hpp"
 #include "SettingsPanelPainter.hpp"
+#include "SettingsSection.hpp"
 #include "SettingsTarget.hpp"
 #include "SettingsView.hpp"
 #include "StartScreenPainter.hpp"
@@ -123,19 +124,20 @@ class Direct2DRenderer final
     // 最後に描いた設定の面（施主決定 D102・#1836）。描いた配置（core::settings_layout の 1 本）を
     // そのまま引く。面を描いていなければ outside・値なし。
     // - settings_target_at: 点（クライアントの物理画素）の下の部品。
-    // - settings_row_control: 見えている行 row の右端の部品。
-    // - settings_scrolled: ホイールで lines 行送った送り（変わらなければ値なし）。
-    // - settings_paged_row: PageUp / PageDown の行き先。
-    // - settings_revealed: view の焦点の行が見える送り（今の送りのままでよければ値なし）。配置は
-    //   最後に描いた帯で作り直す（描く前の view でも引ける）。
+    // - settings_layout: 最後に描いた配置（PageUp / PageDown の行き先を引く）。
+    // - settings_scrolled: 送り from からホイールで lines 行送った送り（変わらなければ値なし）。
+    //   from は application の状態の送り（描画の前に 2 通来ても 1 通目が消えない）。
+    // - settings_revealed: view の焦点の行（section があればその節の見出しから終わりまで）が見える
+    //   送り（今の送りのままでよければ値なし）。配置は最後に描いた帯で作り直す（描く前の view でも
+    //   引ける）。
     // - settings_search_rectangle: 探す欄（IME の変換の窓を置く所）。
     [[nodiscard]] core::SettingsTarget settings_target_at(std::int32_t x, std::int32_t y) const;
-    [[nodiscard]] std::optional<core::SettingsControl> settings_row_control(std::size_t row) const;
-    [[nodiscard]] std::optional<std::int32_t> settings_scrolled(std::int32_t lines) const;
-    [[nodiscard]] std::optional<std::size_t> settings_paged_row(std::optional<std::size_t> focused,
-                                                                bool down) const;
+    [[nodiscard]] const std::optional<core::SettingsLayout> &settings_layout() const noexcept;
+    [[nodiscard]] std::optional<std::int32_t> settings_scrolled(std::int32_t from,
+                                                                std::int32_t lines) const;
     [[nodiscard]] std::optional<std::int32_t>
-    settings_revealed(const application::SettingsView &view, core::DisplayLanguage language);
+    settings_revealed(const application::SettingsView &view, core::DisplayLanguage language,
+                      std::optional<core::SettingsSection> section);
     [[nodiscard]] std::optional<core::LayoutRect> settings_search_rectangle() const;
     // 最後に描いたプレビューの枠の点（クライアントの物理画素）の下の文字の位置（ADR 0155 の改訂
     // 18）。全面プレビューのドラッグの選択が引く。

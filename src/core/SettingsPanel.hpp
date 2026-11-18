@@ -35,6 +35,11 @@ inline constexpr std::int32_t settings_fixed_width_dips = 72;
 // 行の内側の左右の余白と、行の中の部品どうしの空き（DIP）。
 inline constexpr std::int32_t settings_row_padding_dips = 12;
 inline constexpr std::int32_t settings_row_gap_dips = 14;
+// 要約の箱（機能の節）の高さ・文の左右の余白・1 行目の高さ（DIP）。1 行目が入り切らなければ箱は
+// 1 行ぶん高い。
+inline constexpr std::int32_t settings_summary_height_dips = 96;
+inline constexpr std::int32_t settings_summary_inset_dips = 12;
+inline constexpr std::int32_t settings_summary_line_dips = 17;
 // ホイールの 1 行の送り（DIP）。
 inline constexpr std::int32_t settings_wheel_line_dips = 20;
 
@@ -72,8 +77,13 @@ inline constexpr std::array<SettingsPreset, 3> settings_presets{
 // 行が無ければ今の送り。
 [[nodiscard]] std::int32_t settings_scroll_revealing(const SettingsLayout &layout,
                                                      std::size_t row) noexcept;
-// ホイールで lines 行（正が下）送った送り。上限で止まる。
-[[nodiscard]] std::int32_t settings_scroll_by(const SettingsLayout &layout,
+// 節 section の見出しからその節の最後のものまでが行の領域に入る送り（最小の動き・入り切らなければ
+// 見出しを上端に）。行を持たない節（言語サーバー）の札と Ctrl+6 が使う。節が無ければ今の送り。
+[[nodiscard]] std::int32_t settings_scroll_revealing_section(const SettingsLayout &layout,
+                                                             SettingsSection section) noexcept;
+// 送り from からホイールで lines 行（正が下）送った送り。上限で止まる。from は application の
+// 状態の送り（最後に描いた配置の送りではない・描画の前に 2 通来ても 1 通目が消えない）。
+[[nodiscard]] std::int32_t settings_scroll_by(const SettingsLayout &layout, std::int32_t from,
                                               std::int32_t lines) noexcept;
 // PageUp / PageDown の行き先（見えている行の中の位置）。焦点から行の領域の高さぶん先の行で、端で
 // 止まる。焦点が無ければ最初の行。行が無ければ値なし。
