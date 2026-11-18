@@ -27,6 +27,7 @@
 #include "InsertText.hpp"
 #include "LanguageAnswers.hpp"
 #include "LanguageCompletion.hpp"
+#include "LanguageServerPhase.hpp"
 #include "LineEnding.hpp"
 #include "LspCompletionList.hpp"
 #include "LspDiagnostics.hpp"
@@ -334,6 +335,11 @@ void EditorController::settle_completion()
         return;
     }
     const bool answered = take_completion_answer(session);
+    // 言語サーバーが止まったら、もう答えは届かない（待っているだけの面はここで閉じる）。
+    if (language_server_.phase != LanguageServerPhase::running)
+    {
+        session.awaiting = false;
+    }
     if (session.caret != state_.selection().caret ||
         session.revision != state_.history().revision())
     {

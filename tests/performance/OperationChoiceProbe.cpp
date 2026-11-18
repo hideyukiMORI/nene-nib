@@ -336,13 +336,13 @@ constexpr std::array<OperationChoiceExpected, 47> expected_4{
       "Delete", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::select_all, 44U, "すべて選択", 5U, "文書の全体を選びます", 10U,
       "Ctrl+A", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::complete, 46U, "補完", 2U,
+      "打っている語の候補を出します（上下で選び、Enter か Tab で確定）", 37U, "Ctrl+Space", "",
+      core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::recent_tab, 5U, "前に使ったタブへ", 8U, "最近使った順にタブを移ります",
       14U, "Ctrl+Tab", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::find_previous, 30U, "前を検索", 4U,
       "最後に探した文字列の前の当たりへ移ります", 20U, "Shift+F3", "",
-      core::CommandChoiceKind::operate, std::nullopt},
-     {core::EditorOperation::complete, 46U, "補完", 2U,
-      "打っている語の候補を出します（上下で選び、Enter か Tab で確定）", 37U, "Ctrl+Space", "",
       core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::save_as, 2U, "名前を付けて保存", 8U, "別の名前のファイルに保存します",
       15U, "Ctrl+Shift+S", "", core::CommandChoiceKind::operate, std::nullopt},
@@ -442,14 +442,14 @@ constexpr std::array<OperationChoiceSample, 10> samples{
       "operation-choice-v1\nmiss-"
       "ordinary\nordinary\nqqq\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820"
       "d98\n"},
-     {"", core::EditMode::ordinary, 256U, 1683456U, expected_2,
+     {"", core::EditMode::ordinary, 256U, 1683712U, expected_2,
       "operation-choice-v1\nall-"
       "ordinary\nordinary\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98"
       "\n"},
      {"", core::EditMode::vim, 256U, 1576704U, expected_3,
       "operation-choice-v1\nall-"
       "vim\nvim\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {" ", core::EditMode::ordinary, 256U, 1683456U, expected_4,
+     {" ", core::EditMode::ordinary, 256U, 1683712U, expected_4,
       "operation-choice-v1\nspace-ordinary\nordinary\n "
       "\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
      {"cTrL+s", core::EditMode::vim, 1024U, 2013184U, expected_5,

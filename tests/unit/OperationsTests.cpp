@@ -426,8 +426,10 @@ void verify_operation_choices()
                std::vector<Operation>{EditorOperation::save, EditorOperation::save_as},
            "the reading finds save and save as, the closer one first");
     const auto keyed = japanese_choices("ctrl+s", EditMode::ordinary);
-    expect(keyed.size() >= 2 && keyed.at(0).operation == EditorOperation::save &&
-               keyed.at(1).operation == EditorOperation::save_as,
+    // Ctrl+Space（補完・ADR 0190 の決定 5）も ctrl+s に当たり、短い鍵なので間に入る。
+    expect(keyed.size() >= 3 && keyed.at(0).operation == EditorOperation::save &&
+               keyed.at(1).operation == EditorOperation::complete &&
+               keyed.at(2).operation == EditorOperation::save_as,
            "the key label finds Ctrl+S before Ctrl+Shift+S");
     expect(operations_of(japanese_choices("f1", EditMode::vim)) ==
                std::vector<Operation>{EditorOperation::list_operations},

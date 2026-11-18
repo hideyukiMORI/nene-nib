@@ -46,6 +46,7 @@
 #include "TestSupport.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
+#include "VisibleLines.hpp"
 #include "WorkCompleted.hpp"
 
 #include <cstddef>
@@ -71,6 +72,8 @@ constexpr std::string_view clangd_command = R"("C:\LLVM\bin\clangd.exe" --log=er
 constexpr std::string_view capable_answer =
     R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-8","completionProvider":{"triggerCharacters":[".","->"]}}}})";
 constexpr std::string_view completion_method = "textDocument/completion";
+// 本文の 2 行が frame に載る行数。
+constexpr std::size_t shown_lines = 4;
 
 // ------------------------------------------------------------------ core の表
 
@@ -220,6 +223,7 @@ void capable(Editing &editing)
     static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
     editing.language_server().serve(app::ServerMessage{std::string{capable_answer}});
     static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
+    static_cast<void>(editing.controller().apply(app::VisibleLines{shown_lines}));
     applied(editing.controller(), app::MoveCaret{core::CaretMotion::document_end,
                                                  core::SelectionAnchoring::collapse});
 }
@@ -247,15 +251,19 @@ void capable(Editing &editing)
     return editing.controller().apply_frame(app::WorkCompleted{});
 }
 
+// 面の表示値（面が無ければ行の無い値）。
+[[nodiscard]] app::CompletionView face_of(const app::EditorFrame &frame)
+{
+    return frame.completion.value_or(app::CompletionView{0, {}, 0, 0, 0, false});
+}
+
 [[nodiscard]] std::vector<std::string> rows(const app::EditorFrame &frame)
 {
     std::vector<std::string> labels;
-    if (frame.completion.has_value())
+    const app::CompletionView view = face_of(frame);
+    for (const app::CompletionRowView &row : view.rows)
     {
-        for (const app::CompletionRowView &row : frame.completion.value().rows)
-        {
-            labels.push_back(row.label);
-        }
+        labels.push_back(row.label);
     }
     return labels;
 }
@@ -267,7 +275,7 @@ void capable(Editing &editing)
     {
         return "<closed>";
     }
-    const auto &view = frame.completion.value();
+    const auto &view = face_of(frame);
     return view.rows.at(view.selected).label;
 }
 
@@ -300,8 +308,8 @@ void verify_buffer_words()
     static_cast<void>(typed(editing, "alpha beta alto al"));
     const auto face = opened(editing);
     expect(rows(face) == std::vector<std::string>{"alpha", "alto"} && chosen(face) == "alpha" &&
-               face.completion.value().total == 2 && !face.completion.value().detailed &&
-               face.completion.value().rows.front().source == CompletionSource::buffer,
+               face_of(face).total == 2 && !face_of(face).detailed &&
+               face_of(face).rows.front().source == CompletionSource::buffer,
            "Ctrl+Space lists the buffer words for the prefix without a language server");
     expect(editing.controller().completion_active() && editing.language_server().touches() == 0,
            "the face is open and the language server port is not touched");
@@ -354,22 +362,22 @@ void verify_steps()
     }
     static_cast<void>(typed(editing, words + "w"));
     const auto face = opened(editing);
-    expect(rows(face).size() == 8 && face.completion.value().total == 12 && chosen(face) == "wax",
+    expect(rows(face).size() == 8 && face_of(face).total == 12 && chosen(face) == "wax",
            "the face shows eight of twelve candidates and chooses the first");
     const auto wrapped = stepped(editing, app::CompletionStep::previous);
-    expect(chosen(wrapped) == "wlx" && wrapped.completion.value().first == 4,
+    expect(chosen(wrapped) == "wlx" && face_of(wrapped).first == 4,
            "Up from the first row wraps to the last and the window follows");
     const auto paged = stepped(editing, app::CompletionStep::page_previous);
-    expect(chosen(paged) == "wdx" && paged.completion.value().first == 3,
+    expect(chosen(paged) == "wdx" && face_of(paged).first == 3,
            "PageUp moves eight rows up");
     const auto top = stepped(editing, app::CompletionStep::page_previous);
-    expect(chosen(top) == "wax" && top.completion.value().first == 0, "PageUp stops at the top");
+    expect(chosen(top) == "wax" && face_of(top).first == 0, "PageUp stops at the top");
     const auto down = stepped(editing, app::CompletionStep::page_next);
-    expect(chosen(down) == "wix" && down.completion.value().first == 1,
+    expect(chosen(down) == "wix" && face_of(down).first == 1,
            "PageDown moves eight rows down");
     static_cast<void>(stepped(editing, app::CompletionStep::page_next));
     const auto first = stepped(editing, app::CompletionStep::next);
-    expect(chosen(first) == "wax" && first.completion.value().first == 0,
+    expect(chosen(first) == "wax" && face_of(first).first == 0,
            "Down from the last row wraps to the first");
 }
 
@@ -427,8 +435,8 @@ void verify_server_candidates()
            "Ctrl+Space shows the buffer words at once and asks the server at the caret");
     const auto filled = answered(
         editing,
-        R"({"isIncomplete":false,"items":[{"label":"max","sortText":"b"},{"label":"main","sortText":"a","detail":"int ()"},{"label":"zeta"}]})");
-    const auto &view = filled.completion.value();
+        R"j({"isIncomplete":false,"items":[{"label":"max","sortText":"b"},{"label":"main","sortText":"a","detail":"int ()"},{"label":"zeta"}]})j");
+    const auto &view = face_of(filled);
     expect(rows(filled) == std::vector<std::string>{"main", "max"} && chosen(filled) == "main" &&
                view.rows.front().source == CompletionSource::language_server &&
                view.rows.front().detail == "int ()" && view.detailed && view.total == 2,
@@ -453,7 +461,7 @@ void verify_text_edit_range()
     static_cast<void>(opened(editing));
     static_cast<void>(answered(
         editing,
-        R"([{"label":"mango","textEdit":{"range":{"start":{"line":1,"character":1},"end":{"line":1,"character":4}},"newText":"->mango()"}}])"));
+        R"j([{"label":"mango","textEdit":{"range":{"start":{"line":1,"character":1},"end":{"line":1,"character":4}},"newText":"->mango()"}}])j"));
     static_cast<void>(editing.controller().apply_frame(app::ChooseCompletion{}));
     expect(text_of(editing) == "int main() {}|x->mango()",
            "a text edit on the caret line replaces from its start to the caret");

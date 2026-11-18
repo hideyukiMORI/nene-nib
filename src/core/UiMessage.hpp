@@ -116,6 +116,8 @@ enum class UiMessage : std::uint16_t
     operation_select_all_description,
     operation_cycle_finder_preview_name,
     operation_cycle_finder_preview_description,
+    operation_complete_name,
+    operation_complete_description,
     app_error_window_class,
     app_error_window_create,
     app_error_rendering_start,
@@ -253,8 +255,6 @@ enum class UiMessage : std::uint16_t
     start_new_file_detail,
     start_open_folder,
     start_open_folder_detail,
-    operation_complete_name,
-    operation_complete_description,
     notice_completion_none,
 };
 

@@ -119,6 +119,9 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::operation_cycle_finder_preview_name, "プレビューの置き方を切り替える"},
     {UiMessage::operation_cycle_finder_preview_description,
      "Ctrl+P の面のプレビューを右・下・なしの順に変えます（面を開いている間は Ctrl+Shift+P）"},
+    {UiMessage::operation_complete_name, "補完"},
+    {UiMessage::operation_complete_description,
+     "打っている語の候補を出します（上下で選び、Enter か Tab で確定）"},
     {UiMessage::app_error_window_class, "ウィンドウクラスを登録できませんでした。"},
     {UiMessage::app_error_window_create, "ウィンドウを作成できませんでした。"},
     {UiMessage::app_error_rendering_start, "Direct2D で描画を始められませんでした。"},
@@ -278,9 +281,6 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::start_new_file_detail, "そのまま打ち始める"},
     {UiMessage::start_open_folder, "フォルダを開く"},
     {UiMessage::start_open_folder_detail, "ルートを選んでエクスプローラーを出す"},
-    {UiMessage::operation_complete_name, "補完"},
-    {UiMessage::operation_complete_description,
-     "打っている語の候補を出します（上下で選び、Enter か Tab で確定）"},
     {UiMessage::notice_completion_none, "補完の候補がありません"},
 }};
 } // namespace nenenib::core

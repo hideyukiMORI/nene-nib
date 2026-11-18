@@ -114,6 +114,9 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::operation_cycle_finder_preview_name, "切换预览的位置"},
     {UiMessage::operation_cycle_finder_preview_description,
      "将 Ctrl+P 面板的预览依次切换为右侧、下方、不显示（面板打开时按 Ctrl+Shift+P）"},
+    {UiMessage::operation_complete_name, "补全"},
+    {UiMessage::operation_complete_description,
+     "显示正在输入的单词的候选（上下键选择，Enter 或 Tab 确认）"},
     {UiMessage::app_error_window_class, "无法注册窗口类。"},
     {UiMessage::app_error_window_create, "无法创建窗口。"},
     {UiMessage::app_error_rendering_start, "无法使用 Direct2D 开始绘制。"},
@@ -258,9 +261,6 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::start_new_file_detail, "直接开始输入"},
     {UiMessage::start_open_folder, "打开文件夹"},
     {UiMessage::start_open_folder_detail, "选择根文件夹并显示资源管理器"},
-    {UiMessage::operation_complete_name, "补全"},
-    {UiMessage::operation_complete_description,
-     "显示正在输入的单词的候选（上下键选择，Enter 或 Tab 确认）"},
     {UiMessage::notice_completion_none, "没有补全候选"},
 }};
 } // namespace nenenib::core
