@@ -11,6 +11,12 @@
 #include "CommandLayout.hpp"
 #include "ContextMenuLayout.hpp"
 #include "ContextMenuPainter.hpp"
+#include "SettingsControl.hpp"
+#include "SettingsLayout.hpp"
+#include "SettingsPanelFormats.hpp"
+#include "SettingsPanelPainter.hpp"
+#include "SettingsTarget.hpp"
+#include "SettingsView.hpp"
 #include "DeviceWarmup.hpp"
 #include "DisplayLanguage.hpp"
 #include "DisplayLine.hpp"
@@ -114,6 +120,23 @@ class Direct2DRenderer final
     [[nodiscard]] std::optional<std::size_t> context_menu_row_at(std::int32_t x,
                                                                  std::int32_t y) const;
     [[nodiscard]] bool context_menu_covers(std::int32_t x, std::int32_t y) const;
+    // 最後に描いた設定の面（施主決定 D102・#1836）。描いた配置（core::settings_layout の 1 本）を
+    // そのまま引く。面を描いていなければ outside・値なし。
+    // - settings_target_at: 点（クライアントの物理画素）の下の部品。
+    // - settings_row_control: 見えている行 row の右端の部品。
+    // - settings_scrolled: ホイールで lines 行送った送り（変わらなければ値なし）。
+    // - settings_paged_row: PageUp / PageDown の行き先。
+    // - settings_revealed: view の焦点の行が見える送り（今の送りのままでよければ値なし）。配置は
+    //   最後に描いた帯で作り直す（描く前の view でも引ける）。
+    // - settings_search_rectangle: 探す欄（IME の変換の窓を置く所）。
+    [[nodiscard]] core::SettingsTarget settings_target_at(std::int32_t x, std::int32_t y) const;
+    [[nodiscard]] std::optional<core::SettingsControl> settings_row_control(std::size_t row) const;
+    [[nodiscard]] std::optional<std::int32_t> settings_scrolled(std::int32_t lines) const;
+    [[nodiscard]] std::optional<std::size_t>
+    settings_paged_row(std::optional<std::size_t> focused, bool down) const;
+    [[nodiscard]] std::optional<std::int32_t>
+    settings_revealed(const application::SettingsView &view, core::DisplayLanguage language);
+    [[nodiscard]] std::optional<core::LayoutRect> settings_search_rectangle() const;
     // 最後に描いたプレビューの枠の点（クライアントの物理画素）の下の文字の位置（ADR 0155 の改訂
     // 18）。全面プレビューのドラッグの選択が引く。
     [[nodiscard]] std::optional<core::PreviewPoint> preview_point_at(std::int32_t x,
@@ -428,6 +451,10 @@ class Direct2DRenderer final
     // 右クリックのメニュー（#1051）。ほかの全部の上に描き、描いた配置を当たりのために覚える。
     void draw_context_menu(const application::EditorFrame &frame, std::int32_t width,
                            std::int32_t height);
+    // 設定の面（#1836）。area はタイトルバーの下からステータスバーの上まで。面が無い frame は最初の
+    // 1 行で返る（書式も配置も作らない）。
+    void draw_settings(const application::EditorFrame &frame, const core::LayoutRect &area);
+    [[nodiscard]] bool settings_formats_made();
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);
     // ミニマップの命令の失敗で落ちた frame を描き直す（1 度目は bitmap を捨てて直接、それでも
@@ -518,6 +545,12 @@ class Direct2DRenderer final
     // （メニューを閉じたときも）。
     PaletteRowLayouts context_menu_layouts_{ContextMenuPainter::retained};
     std::optional<core::ContextMenuLayout> context_menu_layout_;
+    // 設定の面の書式（最初に描くときに作る）・文字組み・最後に描いた配置と帯（#1836）。書式の
+    // 作り直しで書式と文字組みを捨て、面を閉じたら文字組みと配置を捨てる。
+    SettingsPanelFormats settings_formats_;
+    PaletteRowLayouts settings_layouts_{SettingsPanelPainter::retained};
+    std::optional<core::SettingsLayout> settings_layout_;
+    core::LayoutRect settings_area_{};
     // other の枠のプレビュー。要素の layout の保持は frame をまたいで再利用する（ADR 0155）。
     PreviewPane preview_;
     MinimapPicture minimap_;

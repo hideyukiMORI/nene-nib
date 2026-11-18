@@ -150,6 +150,11 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
     {
         return 0;
     }
+    // 設定の面が開いている間の鍵と文字は面へ（本文へ通さない・#1836）。
+    if (take_settings_key(message, word))
+    {
+        return 0;
+    }
     // 鍵の 3 通とフォーカスを失ったとき。Ctrl を離したとき・フォーカスを失ったときは、歩いて
     // いれば使った順を確定してから OS の既定処理へ渡す（ADR 0058 の決定 4）。
     switch (message)

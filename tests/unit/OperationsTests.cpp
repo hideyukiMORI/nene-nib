@@ -145,7 +145,7 @@ constexpr std::array<ChordRow, 62> chord_rows{{
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
-constexpr std::array<ShownRow, 46> shown_rows{{
+constexpr std::array<ShownRow, 47> shown_rows{{
     {EditorOperation::open_file, "Ctrl+O", "Ctrl+Shift+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
@@ -205,6 +205,8 @@ constexpr std::array<ShownRow, 46> shown_rows{{
     {EditorOperation::select_all, "Ctrl+A", "", true, true},
     // 鍵なしの行。面が開いている間の Ctrl+Shift+P は ui の入力行の鍵（ADR 0189 の決定 3）。
     {EditorOperation::cycle_finder_preview, "", "", true, true},
+    // 設定の面は Ctrl+, で両モード（施主決定 D102・#1836）。
+    {EditorOperation::open_settings, "Ctrl+,", "Ctrl+,", true, true},
 }};
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
@@ -391,7 +393,7 @@ void verify_operation_choices()
 {
     const auto ordinary = japanese_choices("", EditMode::ordinary);
     const auto vim = japanese_choices("", EditMode::vim);
-    expect(ordinary.size() == 46 && vim.size() == 44,
+    expect(ordinary.size() == 47 && vim.size() == 45,
            "an empty query lists every operation available in the mode");
     std::vector<Operation> in_order;
     for (const auto &text : nenenib::core::operation_texts)
@@ -465,8 +467,8 @@ void verify_packaged_operation_choices()
         }
         return counted;
     };
-    expect(sizes(Distribution::unpackaged) == std::vector<std::size_t>{46, 44, 42, 44} &&
-               sizes(Distribution::packaged) == std::vector<std::size_t>{44, 42, 40, 42},
+    expect(sizes(Distribution::unpackaged) == std::vector<std::size_t>{47, 45, 43, 45} &&
+               sizes(Distribution::packaged) == std::vector<std::size_t>{45, 43, 41, 43},
            "the packaged list has two rows fewer than the zip list in every mode");
     const auto packaged = nenenib::core::operation_choices(
         "", PaletteMode{EditMode::ordinary, ContextMenuMode::ordinary, Distribution::packaged},

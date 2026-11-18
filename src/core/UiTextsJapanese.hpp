@@ -119,6 +119,8 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::operation_cycle_finder_preview_name, "プレビューの置き方を切り替える"},
     {UiMessage::operation_cycle_finder_preview_description,
      "Ctrl+P の面のプレビューを右・下・なしの順に変えます（面を開いている間は Ctrl+Shift+P）"},
+    {UiMessage::operation_open_settings_name, "設定"},
+    {UiMessage::operation_open_settings_description, "設定の面を開きます（閉じると保存します）"},
     {UiMessage::app_error_window_class, "ウィンドウクラスを登録できませんでした。"},
     {UiMessage::app_error_window_create, "ウィンドウを作成できませんでした。"},
     {UiMessage::app_error_rendering_start, "Direct2D で描画を始められませんでした。"},
@@ -335,5 +337,7 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::settings_revert, "元に戻す"},
     {UiMessage::settings_close, "閉じる"},
     {UiMessage::settings_unsaved, "設定を保存できませんでした"},
+    {UiMessage::settings_no_match, "「{0}」に当たる設定はありません"},
+    {UiMessage::settings_list_joiner, "・"},
 }};
 } // namespace nenenib::core

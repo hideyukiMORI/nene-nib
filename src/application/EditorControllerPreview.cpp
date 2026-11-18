@@ -122,7 +122,7 @@ images_of(const core::MarkdownDocument &document, const std::optional<core::File
            std::holds_alternative<PointExplorer>(intent) ||
            std::holds_alternative<ScrollExplorer>(intent) ||
            std::holds_alternative<ExplorerRootChosen>(intent) ||
-           std::holds_alternative<ResizeExplorer>(intent);
+           std::holds_alternative<ResizeExplorer>(intent) || detail::is_settings_intent(intent);
 }
 
 // 全面プレビューの間も今までどおり写す意図（ADR 0155 の改訂 17）。タブ（帯・Ctrl+Tab・`gt` は鍵の

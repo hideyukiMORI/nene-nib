@@ -127,6 +127,9 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::operation_cycle_finder_preview_name, "Switch the preview layout"},
     {UiMessage::operation_cycle_finder_preview_description,
      "Show the Ctrl+P preview on the right, below or not at all (Ctrl+Shift+P while it is open)"},
+    {UiMessage::operation_open_settings_name, "Settings"},
+    {UiMessage::operation_open_settings_description,
+     "Open the settings panel (saved when you close it)"},
     {UiMessage::app_error_window_class, "Could not register the window class."},
     {UiMessage::app_error_window_create, "Could not create the window."},
     {UiMessage::app_error_rendering_start, "Could not start drawing with Direct2D."},
@@ -359,5 +362,7 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::settings_revert, "Revert"},
     {UiMessage::settings_close, "Close"},
     {UiMessage::settings_unsaved, "Settings could not be saved"},
+    {UiMessage::settings_no_match, "No settings match \"{0}\""},
+    {UiMessage::settings_list_joiner, ", "},
 }};
 } // namespace nenenib::core

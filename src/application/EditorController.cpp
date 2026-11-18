@@ -230,7 +230,8 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // ScrollLines と同じく使う人の操作の側で、ここにも begin_intent にも keeps_wanted_x にも書かない
 // （ADR 0171 の決定 5 の追補）。設定の面の意図（OpenSettings・CloseSettings・RevertSettings・
 // StepSettings・ChangeSetting・ChooseSettingsPreset・FilterSettings・JumpSettingsSection・ADR 0170
-// の 2026-11-18 の追補 2）も使う人の操作なので、ここにも begin_intent にも書かない。
+// の 2026-11-18 の追補 2 と、画面の工程の FocusSettingsRow・ScrollSettings・#1836）も使う人の操作
+// なので、ここにも begin_intent にも書かない。
 [[nodiscard]] bool keeps_tab_walk(const EditorIntent &intent) noexcept
 {
     return not_user_operation(intent) || std::holds_alternative<WalkRecentTab>(intent) ||
@@ -1204,6 +1205,14 @@ core::EditorSettings EditorController::shown_settings() const
     return shown;
 }
 
+// IME の構え。設定の面が開いている間は探す欄のために閉じ直さない（#1836）。
+ImeStance EditorController::shown_ime_stance() const
+{
+    const auto decided = ime_stance_of(state_.mode(), state_.vim().mode, state_.command_input(),
+                                       explorer_focused());
+    return settings_open() ? ime_stance_in_settings(decided) : decided;
+}
+
 EditorDelivery EditorController::delivery() const
 {
     auto settings = shown_settings();
@@ -1212,7 +1221,7 @@ EditorDelivery EditorController::delivery() const
         theme.appearance,
         state_.mode(),
         state_.vim().mode,
-        ime_stance_of(state_.mode(), state_.vim().mode, state_.command_input(), explorer_focused()),
+        shown_ime_stance(),
         state_.command_input().transform(input_line_prompt_of),
         composed(),
         command_composed(),

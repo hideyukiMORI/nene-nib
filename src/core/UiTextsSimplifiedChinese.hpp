@@ -114,6 +114,8 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::operation_cycle_finder_preview_name, "切换预览的位置"},
     {UiMessage::operation_cycle_finder_preview_description,
      "将 Ctrl+P 面板的预览依次切换为右侧、下方、不显示（面板打开时按 Ctrl+Shift+P）"},
+    {UiMessage::operation_open_settings_name, "设置"},
+    {UiMessage::operation_open_settings_description, "打开设置面板（关闭时保存）"},
     {UiMessage::app_error_window_class, "无法注册窗口类。"},
     {UiMessage::app_error_window_create, "无法创建窗口。"},
     {UiMessage::app_error_rendering_start, "无法使用 Direct2D 开始绘制。"},
@@ -313,5 +315,7 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::settings_revert, "还原"},
     {UiMessage::settings_close, "关闭"},
     {UiMessage::settings_unsaved, "无法保存设置"},
+    {UiMessage::settings_no_match, "没有与“{0}”匹配的设置"},
+    {UiMessage::settings_list_joiner, "、"},
 }};
 } // namespace nenenib::core

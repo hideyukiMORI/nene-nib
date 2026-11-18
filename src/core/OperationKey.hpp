@@ -52,6 +52,8 @@ enum class OperationKey : std::uint8_t
     x,
     c,
     a,
-    delete_key
+    delete_key,
+    // Ctrl+, の設定（施主決定 D102・#1836）。両方のモードで効く。
+    comma
 };
 } // namespace nenenib::core

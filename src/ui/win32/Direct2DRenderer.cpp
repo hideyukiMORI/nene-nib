@@ -491,6 +491,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     explorer_shapes_.clear();
     start_layouts_.clear();
     context_menu_layouts_.clear();
+    settings_layouts_.clear();
+    settings_formats_.reset();
     Microsoft::WRL::ComPtr<IUnknown> unknown;
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory7),
                                    unknown.GetAddressOf())) ||
@@ -2518,6 +2520,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     draw_status_guide(
         frame, core::status_guide_fitted(guide, status, dpi_, draw_status_bar(frame, status)));
     draw_open_palette(frame, width, height);
+    draw_settings(frame, core::LayoutRect{0, title.band.bottom, width, status.band.top});
     // 札は面の上・右クリックのメニューの下（メニューが開いている間は出ない・#1789）。
     draw_tab_tip(frame, title);
     draw_context_menu(frame, width, height);

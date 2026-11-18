@@ -14,11 +14,14 @@
 #include "EditorSettings.hpp"
 #include "FeatureCosts.hpp"
 #include "FilterSettings.hpp"
+#include "FocusSettingsRow.hpp"
 #include "JumpSettingsSection.hpp"
 #include "OpenSettings.hpp"
 #include "ResolvedLanguage.hpp"
 #include "RevertSettings.hpp"
+#include "ScrollSettings.hpp"
 #include "SettingsOpen.hpp"
+#include "SettingsPanel.hpp"
 #include "SettingsRowView.hpp"
 #include "SettingsRows.hpp"
 #include "SettingsSection.hpp"
@@ -31,6 +34,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -40,10 +44,8 @@
 
 namespace nenenib::application
 {
-namespace
-{
-// 面の意図（開いたまま受ける側）。
-[[nodiscard]] bool is_settings_intent(const EditorIntent &intent) noexcept
+// 面の意図（開いたまま受ける側）。全面プレビューの間も写す（passes_full_preview_window）。
+bool detail::is_settings_intent(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<OpenSettings>(intent) ||
            std::holds_alternative<CloseSettings>(intent) ||
@@ -52,14 +54,15 @@ namespace
            std::holds_alternative<ChangeSetting>(intent) ||
            std::holds_alternative<ChooseSettingsPreset>(intent) ||
            std::holds_alternative<FilterSettings>(intent) ||
-           std::holds_alternative<JumpSettingsSection>(intent);
+           std::holds_alternative<JumpSettingsSection>(intent) ||
+           std::holds_alternative<FocusSettingsRow>(intent) ||
+           std::holds_alternative<ScrollSettings>(intent);
 }
 
-// 節の札の 6 つ（宣言の順）。
-constexpr std::array<core::SettingsSection, 6> section_order{
-    core::SettingsSection::display,  core::SettingsSection::text,
-    core::SettingsSection::editing,  core::SettingsSection::panes,
-    core::SettingsSection::features, core::SettingsSection::language_server};
+namespace
+{
+// 節の札の 6 つ（宣言の順・配置と同じ core の 1 つ）。
+constexpr auto &section_order = core::settings_sections;
 
 // 表の行の表示値。
 [[nodiscard]] SettingsRowView row_view(const core::SettingsRow &row,
@@ -205,12 +208,36 @@ void EditorController::accept(const JumpSettingsSection &intent)
     }
 }
 
+// 見えている行の row 番目へ焦点を置く（行のクリック・Home / End・PageUp / PageDown・#1836）。
+void EditorController::accept(const FocusSettingsRow &intent)
+{
+    if (!settings_.has_value())
+    {
+        return;
+    }
+    const auto visible = visible_settings_rows();
+    if (!visible.empty())
+    {
+        settings_.value().focus = visible.at(std::min(intent.row, visible.size() - 1));
+    }
+}
+
+// 行の領域の送り（ホイールと焦点の追従・#1836）。値は ui が配置から求める。
+void EditorController::accept(const ScrollSettings &intent)
+{
+    if (settings_.has_value())
+    {
+        settings_.value().scroll = std::max(intent.top, 0);
+    }
+}
+
 // 入口の 1 か所（apply の begin_intent の後）。面が開いていて、意図が面の意図でも使う人の操作で
 // ない意図でもなければ、写す前に閉じて保存する（窓を閉じる EndSession・タブの操作・本文の
 // クリック…・追補 2）。
 void EditorController::close_settings_before(const EditorIntent &intent)
 {
-    if (settings_.has_value() && !is_settings_intent(intent) && !detail::not_user_operation(intent))
+    if (settings_.has_value() && !detail::is_settings_intent(intent) &&
+        !detail::not_user_operation(intent))
     {
         close_settings();
     }
@@ -315,7 +342,8 @@ std::optional<SettingsView> EditorController::settings_view() const
                       settings_.value().query,
                       core::speed_summary(settings),
                       settings.lsp_commands,
-                      !core::same_settings(settings_.value().opened, settings)};
+                      !core::same_settings(settings_.value().opened, settings),
+                      settings_.value().scroll};
     for (std::size_t tab = 0; tab < section_order.size(); ++tab)
     {
         const auto section = section_order.at(tab);

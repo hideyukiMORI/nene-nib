@@ -40,6 +40,9 @@ namespace nenenib::application::detail
 // 使う人の操作ではない意図（合図・窓の寸法・外観・帯の hover）。keeps_tab_walk と
 // begin_intent と `map` の待ちと、全面プレビューの振り分け（ADR 0155 の改訂 17）が共用する 1 本。
 [[nodiscard]] bool not_user_operation(const EditorIntent &intent) noexcept;
+// 設定の面の意図（面を開いたまま受ける側・ADR 0170 の 2026-11-18 の追補 2・#1836）。入口の
+// close_settings_before と全面プレビューの振り分けが共用する（EditorControllerSettings.cpp）。
+[[nodiscard]] bool is_settings_intent(const EditorIntent &intent) noexcept;
 // アクティブな文書が何も書いていない無題か（パス無し・本文 0 バイト・履歴 0）。F1 の本文の案内
 // （guide_context の untouched_untitled・ADR 0078）と起動画面（start_screen_shown・ADR 0172 の
 // 決定 1）が同じこの 1 本を読む。隠す外側の条件はそれぞれが持つ。

@@ -75,6 +75,9 @@ enum class EditorOperation : std::uint8_t
     // 探して見る面のプレビュー欄の置き方を次へ（ADR 0189 の決定 3）。面が開いている間の
     // Ctrl+Shift+P（ui の入力行の鍵）・見出しの右端の印・F1 の一覧から。面が閉じているときの
     // Ctrl+Shift+P は面を開く行（list_files）が先に当たるので、表の行は鍵なし。
-    cycle_finder_preview
+    cycle_finder_preview,
+    // 設定の面を開く（ADR 0170 の決定 5・施主決定 D102・#1836）。Ctrl+, で両モード・F1 の一覧から。
+    // 開いている間の Ctrl+, は面の鍵（閉じて保存する）。
+    open_settings
 };
 } // namespace nenenib::core

@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
@@ -22,6 +23,7 @@ namespace nenenib::application
 // - summary: 要約の 1 行と今の組（core::speed_summary）。
 // - lsp_commands: 言語サーバーの命令の行（言語の名前と値・読むだけ）。
 // - changed: 開いたときの写しと違うか（「元に戻す」が効くか）。
+// - scroll: 行の領域の送り（物理画素・配置の入力・#1836）。
 struct SettingsView
 {
     std::array<SettingsSectionTab, 6> tabs;
@@ -32,5 +34,6 @@ struct SettingsView
     core::SpeedSummary summary;
     std::vector<std::pair<std::string, std::string>> lsp_commands;
     bool changed;
+    std::int32_t scroll = 0;
 };
 } // namespace nenenib::application

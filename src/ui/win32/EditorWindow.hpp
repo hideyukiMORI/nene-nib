@@ -37,6 +37,7 @@
 #include "RendererSources.hpp"
 #include "RgbColor.hpp"
 #include "SessionEnd.hpp"
+#include "SettingsTarget.hpp"
 #include "SplitLayout.hpp"
 #include "StartPress.hpp"
 #include "StartScreenView.hpp"
@@ -182,6 +183,29 @@ class EditorWindow final
     [[nodiscard]] bool take_context_menu_key(UINT message, WPARAM word);
     void press_context_menu_key(WPARAM word);
     [[nodiscard]] bool in_text_body(POINT point) const;
+
+    // ----------------------------------------------------------------
+    // 設定の面（施主決定 D102・#1836） EditorWindowSettings.cpp の群。開いている間の鍵・文字・
+    // マウス・ホイール・IME を面の意図にする。開いていなければどれも false / 値なし（今の道へ）。
+    [[nodiscard]] bool take_settings_key(UINT message, WPARAM word);
+    void press_settings_key(WPARAM word);
+    void type_settings_character(WPARAM word);
+    void erase_settings_character();
+    void page_settings(bool down);
+    void turn_setting(bool forward);
+    // 面の意図を送ってから、焦点の行が見える所へ行の領域の送りを寄せる。
+    void send_settings(const application::EditorIntent &intent);
+    [[nodiscard]] bool press_settings(LPARAM data);
+    [[nodiscard]] bool release_settings(LPARAM data);
+    [[nodiscard]] bool press_settings_right(LPARAM data);
+    // 点（クライアントの座標）が開いている面の上か。配置を読むだけで frame を作らない。
+    [[nodiscard]] bool over_settings(LPARAM data) const;
+    [[nodiscard]] bool wheel_settings(std::int32_t delta, LPARAM data);
+    [[nodiscard]] core::SettingsTarget settings_target_under(std::int32_t x, std::int32_t y) const;
+    void act_on_settings(core::SettingsTarget target);
+    void click_settings_row(core::SettingsTarget target);
+    [[nodiscard]] std::optional<LRESULT> compose_settings(UINT message, WPARAM word, LPARAM data);
+    void place_settings_composition(const core::LayoutRect &search);
     // 左の押しを続けた回数に数える（#1250）。OS のダブルクリックは 2 回目、その後に OS の
     // ダブルクリックの時間と升の中で押せば 3 回目（4 回目以降も 3
     // 回目）。時刻は押しの窓メッセージの 時刻（GetMessageTime）だけを読む。
@@ -411,6 +435,7 @@ class EditorWindow final
     void run_delete_selection();
     void run_select_all();
     void run_cycle_finder_preview();
+    void run_open_settings();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();
@@ -491,6 +516,11 @@ class EditorWindow final
     // （#1051）。
     std::optional<POINT> right_pressed_;
     bool context_menu_pressed_ = false;
+    // 設定の面の上で押した部品（離したときに同じ部品なら動かす）・ホイールの余り・探す欄へ打つ
+    // 文字の上位サロゲート（#1836）。
+    std::optional<core::SettingsTarget> settings_pressed_;
+    std::int32_t settings_wheel_remainder_ = 0;
+    wchar_t settings_high_surrogate_ = 0;
     // FirstFramePresented を送ったか（窓で 1 回だけ・ADR 0172 の決定 3）。
     bool first_frame_signaled_ = false;
     // プレビューの枠で押したチェックボックス（離したとき・次に押したときに消す）。

@@ -30,6 +30,7 @@
 #include "ExplorerRootChosen.hpp"
 #include "FilterSettings.hpp"
 #include "FirstFramePresented.hpp"
+#include "FocusSettingsRow.hpp"
 #include "HistoryAction.hpp"
 #include "HoverExplorer.hpp"
 #include "InsertDateTime.hpp"
@@ -70,6 +71,7 @@
 #include "ScrollLines.hpp"
 #include "ScrollPaletteList.hpp"
 #include "ScrollPane.hpp"
+#include "ScrollSettings.hpp"
 #include "ScrollTabs.hpp"
 #include "SearchHop.hpp"
 #include "SelectAll.hpp"
@@ -124,5 +126,6 @@ using EditorIntent = std::variant<
     FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion, OpenProjectSearch,
     OpenContextMenu, PointContextMenu, StepContextMenu, ChooseContextMenu, CloseContextMenu,
     CycleFinderPreview, TabTipTick, OpenSettings, CloseSettings, RevertSettings, StepSettings,
-    ChangeSetting, ChooseSettingsPreset, FilterSettings, JumpSettingsSection>;
+    ChangeSetting, ChooseSettingsPreset, FilterSettings, JumpSettingsSection, FocusSettingsRow,
+    ScrollSettings>;
 } // namespace nenenib::application

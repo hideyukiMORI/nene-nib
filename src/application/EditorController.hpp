@@ -232,6 +232,9 @@ class EditorController final
     // 設定の面が開いているか（ADR 0170 の 2026-11-18 の追補 2）。窓が鍵の行き先を決めるための安い
     // 読みで、frame を作らない（鍵の振り分けは ui の工程）。
     [[nodiscard]] bool settings_open() const noexcept;
+    // 設定の面の表示値（開いていなければ値なし）。frame に載る値と同じで、窓が鍵とマウスの後に
+    // 焦点の行と送りを読む口（本文の frame を作らない・#1836）。
+    [[nodiscard]] std::optional<SettingsView> settings_view() const;
     // 開いているメニューの選んでいる行（マウスの動きのたびに窓が比べる安い読み）。
     [[nodiscard]] std::optional<std::size_t> context_menu_highlighted() const noexcept;
     // エクスプローラーの面に焦点があるか（ADR 0162 の決定 4・E4 で足した口）。窓が鍵の行き先を
@@ -1114,6 +1117,8 @@ class EditorController final
     void accept(const ChooseSettingsPreset &intent);
     void accept(const FilterSettings &intent);
     void accept(const JumpSettingsSection &intent);
+    void accept(const FocusSettingsRow &intent);
+    void accept(const ScrollSettings &intent);
     // 入口の 1
     // か所（apply）。面が開いていて、意図が面の意図でも使う人の操作でない意図でもなければ、
     // 写す前に閉じて保存する。
@@ -1124,7 +1129,8 @@ class EditorController final
     void preview_settings(core::EditorSettings settings);
     [[nodiscard]] std::vector<std::size_t> visible_settings_rows() const;
     [[nodiscard]] std::optional<std::size_t> focused_settings_row() const;
-    [[nodiscard]] std::optional<SettingsView> settings_view() const;
+    // 配達に載せる IME の構え（面が開いている間は閉じ直さない・#1836）。
+    [[nodiscard]] ImeStance shown_ime_stance() const;
 
     // ---------------------------------------------------------------- 起動画面（ADR 0172）
     // EditorControllerStartScreen.cpp の群だけが読み書きする。

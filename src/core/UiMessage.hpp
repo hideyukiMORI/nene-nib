@@ -116,6 +116,8 @@ enum class UiMessage : std::uint16_t
     operation_select_all_description,
     operation_cycle_finder_preview_name,
     operation_cycle_finder_preview_description,
+    operation_open_settings_name,
+    operation_open_settings_description,
     app_error_window_class,
     app_error_window_create,
     app_error_rendering_start,
@@ -307,10 +309,14 @@ enum class UiMessage : std::uint16_t
     settings_revert,
     settings_close,
     settings_unsaved,
+    // 設定の面の画面（#1836）: 当たる行が無いときの 1 行・名前を並べる区切り（操作の名前と説明は
+    // 操作の群の最後）。
+    settings_no_match,
+    settings_list_joiner,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::settings_unsaved) + 1U;
+    std::to_underlying(UiMessage::settings_list_joiner) + 1U;
 } // namespace nenenib::core
