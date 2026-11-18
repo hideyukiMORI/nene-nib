@@ -7,6 +7,7 @@
 #include "TextBuffer.hpp"
 
 #include <cstddef>
+#include <string_view>
 
 namespace nenenib::core
 {
@@ -18,6 +19,13 @@ inline constexpr std::size_t completion_candidate_limit = 100;
 // 並べた後に、窓の外にある語を語の表から語の順で足す。走るのは Ctrl-n / Ctrl-p で列を作るときの
 // 1 回だけで、打鍵の道は走らない。
 inline constexpr std::size_t completion_scan_bytes = std::size_t{256} * 1024U;
+
+// content（正しい UTF-8）の caret の直前で終わる接頭辞の始まり（同じ種類の語の文字の連なり・Vim の
+// get_normal_compl_info）。直前が語の文字でなければ caret（空の接頭辞）。completion_list と、開いて
+// いる補完の面が「打った分がまだ 1 つの接頭辞か」を確かめる所が同じこの 1 本を読む（ADR 0190 の
+// 決定 5）。
+[[nodiscard]] std::size_t completion_prefix_start(std::string_view content,
+                                                  std::size_t caret) noexcept;
 
 // INSERT の Ctrl-n / Ctrl-p の候補の列（ADR 0169 の決定 2・Vim の insexpand.c の oracle の実測）。
 //

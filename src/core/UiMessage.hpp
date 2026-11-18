@@ -116,6 +116,8 @@ enum class UiMessage : std::uint16_t
     operation_select_all_description,
     operation_cycle_finder_preview_name,
     operation_cycle_finder_preview_description,
+    operation_complete_name,
+    operation_complete_description,
     app_error_window_class,
     app_error_window_create,
     app_error_rendering_start,
@@ -253,10 +255,11 @@ enum class UiMessage : std::uint16_t
     start_new_file_detail,
     start_open_folder,
     start_open_folder_detail,
+    notice_completion_none,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::start_open_folder_detail) + 1U;
+    std::to_underlying(UiMessage::notice_completion_none) + 1U;
 } // namespace nenenib::core
