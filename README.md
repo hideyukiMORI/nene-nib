@@ -183,6 +183,10 @@ records in `docs/quality/`.
   Tables (horizontal rules only, column alignment), GitHub alerts (`> [!NOTE]` and the other four kinds, a colored
   bar and title; D103), `~~strikethrough~~`, bare URLs, every HTML5 named entity and a front matter block are drawn
   ([look](docs/design/2026-11-18-markdown-table-and-alert-look.md)); a table wider than the pane is cut at the right.
+  Fenced code blocks are drawn in the editor's syntax colors, chosen by the first word of the info string
+  (a language name, a file extension such as `py` or `ts`, or an alias such as `c++`); unknown languages,
+  blocks without an info string and very long blocks (more than 2,500 colored spans, roughly 300 to 500
+  lines of ordinary code) stay in one color.
   Local images (PNG, JPEG, the first frame of a GIF, BMP; D79) are drawn in the text flow,
   shrunk to the pane width but never enlarged; web images and images that cannot be read stay as
   `[画像: alt]` (`[Image: alt]` in English, `[图片：alt]` in Simplified Chinese). A retained paragraph is laid out once and redrawn without changing its formatting, so scrolling
