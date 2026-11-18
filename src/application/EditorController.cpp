@@ -467,6 +467,17 @@ bool EditorController::persist_settings(core::EditorSettings settings)
     {
         return true;
     }
+    if (!write_settings(settings))
+    {
+        return false;
+    }
+    settings_unsaved_ = false;
+    adopt_settings(std::move(settings));
+    return true;
+}
+
+bool EditorController::write_settings(const core::EditorSettings &settings)
+{
     const auto saved = ports_.settings.write(settings);
     if (!saved)
     {
@@ -474,7 +485,6 @@ bool EditorController::persist_settings(core::EditorSettings settings)
         return false;
     }
     state_ = state_.with_settings_failure(std::nullopt);
-    adopt_settings(std::move(settings));
     return true;
 }
 

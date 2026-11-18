@@ -248,4 +248,18 @@ bool not_user_operation(const EditorIntent &intent) noexcept
            std::holds_alternative<HoverExplorer>(intent);
 }
 
+bool is_settings_intent(const EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<OpenSettings>(intent) ||
+           std::holds_alternative<CloseSettings>(intent) ||
+           std::holds_alternative<RevertSettings>(intent) ||
+           std::holds_alternative<StepSettings>(intent) ||
+           std::holds_alternative<ChangeSetting>(intent) ||
+           std::holds_alternative<ChooseSettingsPreset>(intent) ||
+           std::holds_alternative<FilterSettings>(intent) ||
+           std::holds_alternative<JumpSettingsSection>(intent) ||
+           std::holds_alternative<FocusSettingsRow>(intent) ||
+           std::holds_alternative<ScrollSettings>(intent);
+}
+
 } // namespace nenenib::application::detail

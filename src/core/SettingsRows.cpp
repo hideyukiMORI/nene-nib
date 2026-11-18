@@ -138,21 +138,36 @@ template <typename Value, std::size_t Count>
     return order.front();
 }
 
-// 配色の送り。0 は system、1 からが組み込みの表の添字 + 1。
-[[nodiscard]] std::optional<ThemeChoice> theme_stepped(const std::optional<ThemeChoice> &current,
-                                                       bool forward)
+// 組み込みの一覧に無い配色（利用者のテーマ）か。
+[[nodiscard]] bool outside_builtins(const std::optional<ThemeChoice> &theme) noexcept
 {
-    constexpr std::size_t count = builtin_themes.size() + 1;
+    return theme.has_value() && !theme_named(theme.value().name()).has_value();
+}
+
+// 配色の送り。列の 0 は system、1 からが組み込みの表の添字 + 1、最後が一覧に無い配色（あれば）。
+[[nodiscard]] std::optional<ThemeChoice> theme_stepped(const std::optional<ThemeChoice> &current,
+                                                       bool forward,
+                                                       const std::optional<ThemeChoice> &kept)
+{
+    const std::optional<ThemeChoice> extra = outside_builtins(current) ? current
+                                             : outside_builtins(kept)  ? kept
+                                                                       : std::nullopt;
+    const std::size_t builtins = builtin_themes.size();
+    const std::size_t count = builtins + 1 + (extra.has_value() ? 1 : 0);
     std::size_t at = 0;
     if (current.has_value())
     {
         const auto builtin = theme_named(current.value().name());
-        at = builtin.has_value() ? static_cast<std::size_t>(builtin.value()) + 1 : count - 1;
+        at = builtin.has_value() ? static_cast<std::size_t>(builtin.value()) + 1 : builtins + 1;
     }
     const std::size_t next = forward ? (at + 1) % count : (at + count - 1) % count;
     if (next == 0)
     {
         return std::nullopt;
+    }
+    if (next == builtins + 1)
+    {
+        return extra;
     }
     return ThemeChoice::from(static_cast<BuiltinTheme>(next - 1));
 }
@@ -256,12 +271,13 @@ std::string settings_value_text(const EditorSettings &settings, SettingsValue va
     std::unreachable();
 }
 
-EditorSettings settings_value_stepped(EditorSettings settings, SettingsValue value, bool forward)
+EditorSettings settings_value_stepped(EditorSettings settings, SettingsValue value, bool forward,
+                                      const std::optional<ThemeChoice> &kept)
 {
     switch (value)
     {
     case SettingsValue::theme:
-        settings.theme = theme_stepped(settings.theme, forward);
+        settings.theme = theme_stepped(settings.theme, forward, kept);
         return settings;
     case SettingsValue::ui_language:
         settings.ui_language =

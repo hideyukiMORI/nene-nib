@@ -122,7 +122,7 @@ images_of(const core::MarkdownDocument &document, const std::optional<core::File
            std::holds_alternative<PointExplorer>(intent) ||
            std::holds_alternative<ScrollExplorer>(intent) ||
            std::holds_alternative<ExplorerRootChosen>(intent) ||
-           std::holds_alternative<ResizeExplorer>(intent) || detail::is_settings_intent(intent);
+           std::holds_alternative<ResizeExplorer>(intent);
 }
 
 // 全面プレビューの間も今までどおり写す意図（ADR 0155 の改訂 17）。タブ（帯・Ctrl+Tab・`gt` は鍵の
@@ -130,6 +130,7 @@ images_of(const core::MarkdownDocument &document, const std::optional<core::File
 // チェックボックスのクリック（追補 24 の唯一の例外）。使う人の操作でない意図（合図・裏の仕事・窓の
 // 寸法）は not_user_operation の 1 本を経て全部通す。ここに無い意図は key_route が鍵ごとに決め、
 // どれにも当たらなければ本文に届かない（refuse）。新しい意図を足すときは、ここか key_route に書く。
+// 設定の面の意図 8 つも通す（F1 の一覧から全面の間に開ける・#1835 のレビュー M1）。
 [[nodiscard]] bool passes_full_preview(const EditorIntent &intent) noexcept
 {
     return detail::not_user_operation(intent) || std::holds_alternative<SelectEditMode>(intent) ||
@@ -150,7 +151,8 @@ images_of(const core::MarkdownDocument &document, const std::optional<core::File
            std::holds_alternative<PointContextMenu>(intent) ||
            std::holds_alternative<StepContextMenu>(intent) ||
            std::holds_alternative<ChooseContextMenu>(intent) ||
-           std::holds_alternative<CloseContextMenu>(intent) || passes_full_preview_window(intent);
+           std::holds_alternative<CloseContextMenu>(intent) || detail::is_settings_intent(intent) ||
+           passes_full_preview_window(intent);
 }
 
 // 通常モードの矢印・PgUp / PgDn・Ctrl+Home / End（改訂 17）。左右と行頭・行末・語は届くが何も
