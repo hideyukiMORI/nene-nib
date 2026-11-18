@@ -285,6 +285,9 @@ class EditorController final
     // 無ければ（1 MiB 以下なら）ここで 1 回作って状態に置き（表を作るのはこの 1 か所・設計席の追補
     // 2026-11-18）、キャレットで insert_completion_list を呼ぶ。面と鍵（#1008 の段 B）が呼ぶ口。
     [[nodiscard]] core::CompletionList insert_completion(core::CompletionDirection direction);
+    // アクティブな文書の語の表（作っていなければ空）。性質の試験が「状態の表＝本文から作り直した
+    // 表」を確かめるための読む口で、状態を変えない。
+    [[nodiscard]] const std::optional<core::WordTable> &word_table() const noexcept;
     // `@` の再生の中で `map` の左辺の途中まで読んで待った回数（起動からの累計・#1312）。性質の
     // 試験が待ちと flush の道を通ったことを確かめるための口で、状態を変えない。
     [[nodiscard]] std::size_t replay_waits() const noexcept;

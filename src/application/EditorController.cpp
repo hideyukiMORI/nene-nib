@@ -777,6 +777,11 @@ PaneSource EditorController::framed_source(const core::VimPattern *pattern) cons
                                    state_.autosave_ids().at(state_.active_tab())});
 }
 
+const std::optional<core::WordTable> &EditorController::word_table() const noexcept
+{
+    return state_.word_table();
+}
+
 core::CompletionList EditorController::insert_completion(core::CompletionDirection direction)
 {
     if (!state_.word_table().has_value() &&
