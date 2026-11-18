@@ -1,6 +1,9 @@
 // parse_markdown（ADR 0151 の決定 5〜8・#765）。入力は CommonMark 0.31 の例を 8 つの構文
 // （見出し・段落・強調・リンク・リスト・引用・コード・水平線）と実体参照・改行の範囲で写したもの。
 // 期待は CommonMark の HTML を平らな leaf の列に読み替えた値。source_begin は最初の文字の位置。
+#include "Language.hpp"
+#include "LanguageTable.hpp"
+#include "Lexer.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownFailure.hpp"
 #include "MarkdownParse.hpp"
@@ -10,13 +13,17 @@
 #include "PreviewAlert.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
+#include "PreviewCodeColor.hpp"
+#include "PreviewCodeColors.hpp"
 #include "PreviewSpan.hpp"
 #include "PreviewStyle.hpp"
 #include "PreviewTableAlign.hpp"
 #include "PreviewTableRow.hpp"
 #include "Scopes.hpp"
+#include "SyntaxRole.hpp"
 #include "TestSupport.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -71,7 +78,8 @@ static_assert(!LendsStop<decltype(never_stop)>);
                         .spans = {},
                         .task = std::nullopt,
                         .table = std::nullopt,
-                        .alert = std::nullopt};
+                        .alert = std::nullopt,
+                        .code_colors = std::nullopt};
 }
 
 [[nodiscard]] PreviewBlock titled(std::uint8_t level, std::string text, std::size_t begin)
@@ -417,6 +425,128 @@ void verify_code_blocks()
     expect_blocks("```\n```", {leaf(code, "", 0U)}, "an empty code block at the start begins at 0");
     expect_blocks("a\n\n```\n```", {leaf(paragraph, "a", 0U), leaf(code, "", 3U)},
                   "an empty code block begins on its fence line after the blank line");
+}
+
+// 囲みの最初の要素（無ければ空の要素）。
+[[nodiscard]] PreviewBlock first_block(std::string_view input)
+{
+    const auto parsed = core::parse_markdown(input, MarkdownStop::never());
+    return parsed.has_value() && !parsed.value().blocks.empty() ? parsed.value().blocks.front()
+                                                                : leaf(paragraph, "", 0U);
+}
+
+[[nodiscard]] bool colored(const PreviewBlock &block, std::size_t begin, std::size_t end,
+                           core::SyntaxRole role)
+{
+    return block.code_colors.has_value() &&
+           std::ranges::find(block.code_colors.value(),
+                             core::PreviewCodeColor{Offset{begin}, Offset{end}, role}) !=
+               block.code_colors.value().end();
+}
+
+[[nodiscard]] std::string fenced_lines(std::string_view language, std::size_t lines,
+                                       std::string_view row = "x = 1")
+{
+    std::string input = "```" + std::string(language) + "\n";
+    for (std::size_t line = 0; line < lines; ++line)
+    {
+        input += row;
+        input += "\n";
+    }
+    return input + "```\n";
+}
+
+// 区間の数の上限（#1860 のレビュー M1）と、隣り合う同じ役の区間を畳むこと。
+void verify_code_color_count()
+{
+    const auto full = first_block(fenced_lines("py", core::preview_code_color_count_limit, "1"));
+    expect(full.code_colors.has_value() &&
+               full.code_colors.value_or(std::vector<core::PreviewCodeColor>{}).size() ==
+                   core::preview_code_color_count_limit,
+           "a fence with as many colours as the limit is coloured");
+    expect(!first_block(fenced_lines("py", core::preview_code_color_count_limit + 1U, "1"))
+                .code_colors.has_value(),
+           "a fence with more colours than the limit keeps one colour");
+    expect(!first_block(fenced_lines("json", 1000U, "[1,2,3,4,5,6,7,8,9]")).code_colors.has_value(),
+           "a dense JSON fence over the colour limit keeps one colour");
+    const auto joined = first_block("```py\n\"a\"\"b\" \"c\"\n```");
+    expect(joined.code_colors == std::optional{std::vector<core::PreviewCodeColor>{
+                                     {Offset{0U}, Offset{6U}, core::SyntaxRole::string},
+                                     {Offset{7U}, Offset{10U}, core::SyntaxRole::string}}},
+           "adjacent spans of one role are joined, spans across a space are not");
+}
+
+// 囲みの始まりの状態（#1860 のレビュー R3）と、引用・リスト・CRLF・Tab・行をまたぐ文字列。
+void verify_code_color_places()
+{
+    expect(colored(first_block("```php\n$x = 1; // c\n```"), 8U, 12U, core::SyntaxRole::comment),
+           "a php fence without <?php is read as php");
+    for (const auto name : core::all_language_names())
+    {
+        const auto language = core::language_of_name(name).value_or(core::Language::plain);
+        expect(language == core::Language::php ||
+                   core::lex_start_state(language, false) == core::lex_start_state(language, true),
+               "only php starts a fence in another state");
+    }
+    expect(colored(first_block("```rust,ignore\n// c\n```"), 0U, 4U, core::SyntaxRole::comment),
+           "a comma ends the language word");
+    for (const std::string_view input :
+         {"```py\r\n# c\r\n```\r\n", "> ```py\n> # c\n> ```", "- ```py\n  # c\n  ```"})
+    {
+        expect(colored(first_block(input), 0U, 3U, core::SyntaxRole::comment),
+               "a fence after CRLF, in a quote or in an item colours its own text");
+    }
+    // md4c は行頭の Tab を空白 4 つにして渡すので、色は要素の text（空白）の位置に立つ。
+    const auto tabbed = first_block("```py\n\tx = 1  # c\n```");
+    expect(tabbed.text == "    x = 1  # c\n" &&
+               colored(tabbed, 11U, 14U, core::SyntaxRole::comment),
+           "a leading tab keeps the colours on the element text");
+    const auto raw = first_block("```cpp\nR\"(a\nb)\" x\n```");
+    expect(colored(raw, 0U, 4U, core::SyntaxRole::string) &&
+               colored(raw, 5U, 8U, core::SyntaxRole::string),
+           "a raw string carries over the line");
+    const auto triple = first_block("```py\n\"\"\"a\nb\"\"\"\n```");
+    expect(colored(triple, 0U, 4U, core::SyntaxRole::string) &&
+               colored(triple, 5U, 9U, core::SyntaxRole::string),
+           "a triple quoted string carries over the line");
+}
+
+// 囲みのコードの構文の色（#1858）。言語は info string の最初の語で本文と同じ表から引き、色の区間
+// は本文と同じ字句器の答えを要素の text のバイト位置で持つ。
+void verify_code_colors()
+{
+    const auto cpp = first_block("```cpp\nint x; // c\n```");
+    expect(cpp.kind == code && cpp.text == "int x; // c\n" && cpp.source_begin == Offset{7U} &&
+               colored(cpp, 7U, 11U, core::SyntaxRole::comment),
+           "a cpp fence colours the comment with the body lexer");
+    expect(cpp.code_colors == core::preview_code_colors(core::Language::cpp, cpp.text),
+           "the colours are the lexer's answer for the code text");
+    const auto python = first_block("```Python\n\"\xE3\x81\x82\" # x\n```");
+    expect(colored(python, 0U, 5U, core::SyntaxRole::string) &&
+               colored(python, 6U, 9U, core::SyntaxRole::comment),
+           "a folded name colours by byte offsets past a multibyte character");
+    const auto comment = first_block("```c++ title=\"x\"\n/* a\nb */ 1\n```");
+    expect(colored(comment, 0U, 4U, core::SyntaxRole::comment) &&
+               colored(comment, 5U, 9U, core::SyntaxRole::comment),
+           "an alias with more words carries a block comment over the line");
+    for (const std::string_view input :
+         {"```zig\nconst x = 1;\n```", "```\nint x;\n```", "    int x;\n", "```markdown\n# a\n```",
+          "```md\n# a\n```", "```text\nint x;\n```", "```{.cpp}\nint x;\n```"})
+    {
+        const auto block = first_block(input);
+        expect(block.kind == code && !block.code_colors.has_value(),
+               "an unknown, missing, markdown or plain language keeps one colour");
+    }
+    expect(first_block(fenced_lines("py", core::preview_code_color_line_limit, "x"))
+               .code_colors.has_value(),
+           "a fence at the line limit is coloured");
+    expect(!first_block(fenced_lines("py", core::preview_code_color_line_limit + 1U, "x"))
+                .code_colors.has_value(),
+           "a fence over the line limit keeps one colour");
+    const std::string wide =
+        "```py\n" + std::string(core::preview_code_color_byte_limit, 'a') + "\n```\n";
+    expect(!first_block(wide).code_colors.has_value(),
+           "a fence over the byte limit keeps one colour");
 }
 
 void verify_rules()
@@ -811,6 +941,9 @@ void verify_markdown_scope()
     verify_tasks();
     verify_quotes();
     verify_code_blocks();
+    verify_code_colors();
+    verify_code_color_count();
+    verify_code_color_places();
     verify_rules();
     verify_entities();
     verify_html5_entities();

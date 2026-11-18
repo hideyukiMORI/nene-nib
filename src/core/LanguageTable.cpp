@@ -146,6 +146,33 @@ constexpr std::array<LanguageExtension, 68> language_extensions{{
     {"txt", Language::plain},
 }};
 
+// 名前の表にも拡張子の表にも無い呼び名（#1858・Markdown の囲みのコードの info string で
+// よく書かれるもの）。language_of_label だけが読む。
+constexpr std::array<LanguageExtension, 8> language_aliases{{
+    {"c++", Language::cpp},
+    {"shell", Language::shell},
+    {"powershell", Language::powershell},
+    {"pwsh", Language::powershell},
+    {"golang", Language::go},
+    {"csharp", Language::cs},
+    {"c#", Language::cs},
+    {"docker", Language::dockerfile},
+}};
+
+[[nodiscard]] consteval bool aliases_are_new() noexcept
+{
+    return std::ranges::none_of(
+        language_aliases,
+        [](const LanguageExtension &alias)
+        {
+            return std::ranges::find(language_names, alias.first) != language_names.end() ||
+                   std::ranges::any_of(language_extensions, [&alias](const LanguageExtension &row)
+                                       { return row.first == alias.first; });
+        });
+}
+
+static_assert(aliases_are_new(), "language_aliases holds only names absent from the other tables");
+
 // 拡張子の列だけを写した表（ADR 0154 の追補 2026-10-28・#849）。ダイアログの絞り込みが読む。
 constexpr auto listed_extensions = []
 {
@@ -312,6 +339,27 @@ std::optional<Language> language_of_name(std::string_view name) noexcept
         return std::nullopt;
     }
     return static_cast<Language>(std::distance(language_names.begin(), found));
+}
+
+std::optional<Language> language_of_label(std::string_view label) noexcept
+{
+    const auto named = language_of_name(label);
+    if (named.has_value())
+    {
+        return named;
+    }
+    const auto row = [label](const LanguageExtension &entry) { return entry.first == label; };
+    const auto extension = std::ranges::find_if(language_extensions, row);
+    if (extension != language_extensions.end())
+    {
+        return extension->second;
+    }
+    const auto alias = std::ranges::find_if(language_aliases, row);
+    if (alias != language_aliases.end())
+    {
+        return alias->second;
+    }
+    return std::nullopt;
 }
 
 std::span<const std::string_view> all_language_names() noexcept
