@@ -67,7 +67,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimScreenGeometry.cpp src/core/VimCursorCorrect.cpp src/core/VimScreenLine.cpp src/core/VimToplineUpdate.cpp src/core/VimScreenRows.cpp src/core/VimHorizontalScroll.cpp
     src/core/VimTextObjectRange.cpp src/core/VimParagraphObject.cpp src/core/VimParagraphStart.cpp src/core/VimSentenceObject.cpp src/core/VimTagObject.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
-    src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
+    src/core/VimWordMotion.cpp src/core/VimKeywordRuns.cpp src/core/WordTable.cpp src/core/CompletionCandidates.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
     src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp src/core/SaveQuestionText.cpp src/core/LanguageTable.cpp
     src/core/ResolvedLanguage.cpp src/core/UiTexts.cpp
     src/core/DisplayLanguageNames.cpp src/core/QuantityText.cpp
@@ -103,7 +103,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/EditorControllerLanguageServer.cpp src/application/ServerCommand.cpp
     src/application/EditorControllerLanguageDocuments.cpp src/application/DocumentUri.cpp
     src/application/EditorControllerLanguageRequests.cpp
-    src/application/DiagnosticLines.cpp src/application/LastResortPlan.cpp)
+    src/application/DiagnosticLines.cpp src/application/LastResortPlan.cpp src/application/InsertCompletion.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
 nenenib_target(nib_tests unit_tests EXECUTABLE
@@ -196,6 +196,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/SplitTests.cpp
     tests/unit/SessionTests.cpp
     tests/unit/BookmarkTests.cpp
+    tests/unit/InsertCompletionTests.cpp
     tests/unit/HistoryTests.cpp
     tests/unit/BackgroundWorkTests.cpp
     tests/unit/OpenAsyncTests.cpp
