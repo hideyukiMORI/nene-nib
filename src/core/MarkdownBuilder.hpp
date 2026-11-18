@@ -5,9 +5,11 @@
 #include "MarkdownImage.hpp"
 #include "MarkdownStop.hpp"
 #include "MarkdownTask.hpp"
+#include "PreviewAlert.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
 #include "PreviewStyle.hpp"
+#include "PreviewTableAlign.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -57,6 +59,12 @@ class MarkdownBuilder final
     void enter_item(std::optional<MarkdownTask> task);
     void leave_item();
     void rule();
+    // 表（#1848・D103）。表の前の項目の記号は空の要素で出し、行の番号を 0 から数え直す。行ごとに
+    // 要素 table_row を 1 つ開き（閉じるのは close_leaf）、升ごとに始まりと揃えを足す（升の間は
+    // Tab 1 つ）。header は升が見出しの升（TH）か。
+    void enter_table();
+    void enter_row();
+    void enter_cell(PreviewTableAlign align, bool header);
     void open_leaf(PreviewBlockKind kind, std::uint8_t level);
     void close_leaf();
     // style が nullopt の装飾（打ち消しなど）は積みの対だけを保つ。
@@ -81,6 +89,11 @@ class MarkdownBuilder final
     // 開いている画像の節のいちばん内側を、要素の text の今の終わりで閉じる。closed は閉じの「]」を
     // 足した後か。
     void finish_image(const PreviewBlock &block, bool closed);
+    // 閉じる要素に alert の種類を置く。いちばん外の引用の最初の要素なら、その段落の 1 行目が
+    // alert の印の行かを見て、印を種類の名前に置き換える（#1848）。
+    void mark_alert(PreviewBlock &block);
+    // 段落 block の 1 行目が alert の印の行なら、印を種類の名前に置き換えてその種類を返す。
+    [[nodiscard]] std::optional<PreviewAlert> titled_alert(PreviewBlock &block);
 
     std::string_view input_;
     const MarkdownStop *stop_;
@@ -102,6 +115,11 @@ class MarkdownBuilder final
     // 開いている画像の節の images_ の番号（入れ子は外側が先）。
     std::vector<std::size_t> open_images_;
     std::optional<std::size_t> last_end_;
+    // 今の表の次の行の番号。
+    std::uint32_t table_row_ = 0;
+    // いちばん外の引用（リストの外）の最初の要素の番号と、その引用が alert ならその種類。
+    std::optional<std::size_t> alert_start_;
+    std::optional<PreviewAlert> alert_;
     bool stopped_ = false;
     bool exhausted_ = false;
 };

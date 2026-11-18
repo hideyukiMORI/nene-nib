@@ -78,8 +78,17 @@ constexpr win32::PreviewViewport whole{0, width, std::numeric_limits<float>::max
                                           std::vector<core::PreviewSpan> spans = {})
 {
     const std::uint8_t level = kind == core::PreviewBlockKind::heading ? 1 : 0;
-    return core::PreviewBlock{
-        kind, level, 0, 0, {}, core::Offset{0}, std::move(text), std::move(spans), std::nullopt};
+    return core::PreviewBlock{kind,
+                              level,
+                              0,
+                              0,
+                              {},
+                              core::Offset{0},
+                              std::move(text),
+                              std::move(spans),
+                              std::nullopt,
+                              std::nullopt,
+                              std::nullopt};
 }
 
 void check_reuse()
@@ -1297,6 +1306,187 @@ void check_front_matter_pixels()
                std::wstring_view(family.data()) != L"Segoe UI",
            "the front matter is monospaced and does not wrap");
 }
+
+// 枠の左上を原点にした画素の region の中で、地の色と違う画素のいちばん右の x（無ければ -1）。
+[[nodiscard]] bool inked_at(const std::vector<std::uint8_t> &pixels, std::int32_t x, std::int32_t y)
+{
+    const auto at = (static_cast<std::size_t>(y) * 400U + static_cast<std::size_t>(x)) * 4U;
+    return !std::equal(pixels.begin() + static_cast<std::ptrdiff_t>(at),
+                       pixels.begin() + static_cast<std::ptrdiff_t>(at) + 3, pixels.begin());
+}
+
+[[nodiscard]] std::int32_t rightmost_ink(const std::vector<std::uint8_t> &pixels,
+                                         const core::LayoutRect &region)
+{
+    std::int32_t right = -1;
+    for (std::int32_t at = 0; at < core::width_of(region) * core::height_of(region); ++at)
+    {
+        const auto x = region.left + (at % core::width_of(region));
+        if (inked_at(pixels, x, region.top + (at / core::width_of(region))))
+        {
+            right = std::max(right, x);
+        }
+    }
+    return right;
+}
+
+// 表（#1848・採用案 D103 の案 B）: 見出しの行の下に panel_border の 2 DIP の罫、続く行の間に 1 DIP
+// の罫（外枠と縦の罫は無い）。右揃えの列は升の文字の右端が揃う。行の高さは行高 ＋ 上下 7 DIP。
+void check_table_pixels()
+{
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    const auto parsed = core::parse_markdown("| head | n |\n|---|--:|\n| a | 1 |\n| b | 22222 |\n",
+                                             core::MarkdownStop::never());
+    if (!theme || !parsed || parsed.value().blocks.size() != 3U)
+    {
+        expect(false, "the table sample parses into three rows");
+        return;
+    }
+    const auto &document = parsed.value();
+    const auto style = style_of();
+    const core::LayoutRect area{0, 0, 400, 200};
+    const auto pixels = directly_painted(document, theme.value().view(), area, 0);
+    PreviewTextLayouts layouts;
+    const auto tops = win32::PreviewBlockTops::measure(document, layouts, style,
+                                                       win32::PreviewViewport{0, 400.0F, 200.0F});
+    const auto columns = layouts.table_columns(document, 0, style);
+    if (pixels.empty() || !tops || !columns)
+    {
+        expect(false, "the table paints and is measured");
+        return;
+    }
+    const auto &palette = theme.value().view();
+    const auto &at = tops.value();
+    const auto line = win32::preview_line_pixels(style);
+    expect(at.bottom(0) - at.top(0) == line + 14.0F && at.top(1) == at.bottom(0) &&
+               at.top(2) == at.bottom(1),
+           "a table row is the line height and 7 DIP above and below, with no gap between rows");
+    const auto left = static_cast<std::int32_t>(at.indent(0)) + 2;
+    const auto header_bottom = static_cast<std::int32_t>(at.bottom(0));
+    const auto row_top = static_cast<std::int32_t>(at.top(2));
+    expect(distance_of(pixels, left, header_bottom - 1, palette.ui.panel_border) <= 6 &&
+               distance_of(pixels, left, header_bottom - 2, palette.ui.panel_border) <= 6 &&
+               distance_of(pixels, left, header_bottom - 3, palette.body.background) <= 6,
+           "the header row has a 2 DIP rule in panel_border under it");
+    expect(distance_of(pixels, left, row_top, palette.ui.panel_border) <= 6 &&
+               distance_of(pixels, left, row_top + 1, palette.body.background) <= 6,
+           "a body row after a body row has a 1 DIP rule above it");
+    const auto table_right =
+        static_cast<std::int32_t>(at.indent(0) + win32::preview_table_width(*columns.value(), 96));
+    expect(distance_of(pixels, table_right + 3, header_bottom - 1, palette.body.background) <= 6 &&
+               distance_of(pixels, left, static_cast<std::int32_t>(at.top(0)) + 1,
+                           palette.body.background) <= 6,
+           "the rules end at the table width and there is no outer frame");
+    const auto second = static_cast<std::int32_t>(
+        at.indent(0) + win32::preview_table_cell_left(*columns.value(), 1, 96));
+    const auto band = [&at, second](std::size_t row)
+    {
+        return core::LayoutRect{second, static_cast<std::int32_t>(at.top(row)) + 2, 399,
+                                static_cast<std::int32_t>(at.bottom(row)) - 2};
+    };
+    const auto first_right = rightmost_ink(pixels, band(1));
+    const auto second_right = rightmost_ink(pixels, band(2));
+    expect(first_right > second && second_right > second && first_right - second_right <= 2 &&
+               second_right - first_right <= 2,
+           "the cells of a right aligned column end at the same right edge");
+}
+
+// alert（#1848・D103）: 左の線は 3 DIP で種類の色（WARNING は warning）、ふつうの引用は 2 DIP の
+// comment。種類の名前は太字。
+void check_alert_pixels()
+{
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    const auto alert = core::parse_markdown("> [!WARNING]\n> body\n", core::MarkdownStop::never());
+    const auto plain = core::parse_markdown("> body\n", core::MarkdownStop::never());
+    if (!theme || !alert || !plain)
+    {
+        expect(false, "the alert samples parse");
+        return;
+    }
+    const auto &palette = theme.value().view();
+    const core::LayoutRect area{0, 0, 400, 200};
+    const auto alert_pixels = directly_painted(alert.value(), palette, area, 0);
+    const auto plain_pixels = directly_painted(plain.value(), palette, area, 0);
+    if (alert_pixels.empty() || plain_pixels.empty())
+    {
+        expect(false, "both alert samples paint");
+        return;
+    }
+    const auto x = static_cast<std::int32_t>(win32::preview_quote_left(0, 96));
+    constexpr std::int32_t y = 20;
+    expect(distance_of(alert_pixels, x, y, palette.body.warning) <= 6 &&
+               distance_of(alert_pixels, x + 2, y, palette.body.warning) <= 6 &&
+               distance_of(alert_pixels, x + 3, y, palette.body.background) <= 6,
+           "the alert rule is 3 DIP in the warning ink");
+    expect(distance_of(plain_pixels, x, y, palette.body.comment) <= 6 &&
+               distance_of(plain_pixels, x + 2, y, palette.body.background) <= 6,
+           "an ordinary quote keeps the 2 DIP comment rule");
+    PreviewTextLayouts layouts;
+    const auto layout = layouts.get(alert.value().blocks.front(), width, style_of());
+    DWRITE_FONT_WEIGHT weight = DWRITE_FONT_WEIGHT_NORMAL;
+    DWRITE_FONT_WEIGHT body = DWRITE_FONT_WEIGHT_BOLD;
+    expect(layout.has_value() && SUCCEEDED(layout.value()->GetFontWeight(1, &weight)) &&
+               SUCCEEDED(layout.value()->GetFontWeight(9, &body)) &&
+               weight == DWRITE_FONT_WEIGHT_BOLD && body == DWRITE_FONT_WEIGHT_NORMAL,
+           "the kind name is bold and the body is not");
+}
+
+// 大きな表（1,000 行 × 8 列）の費用（#1848）: 列の幅は表ごとに列の数だけの一時の文字組みで 1 回
+// 測り、升の文字組みは見えている行の分だけ作る。表の前の段落を打ち替えた文書を描き直すと、表は
+// 測り直さず、作るのは打ち替えた段落の 1 つだけ。
+[[nodiscard]] std::string large_table_text()
+{
+    std::string text = "lead\n\n| h0 | h1 | h2 | h3 | h4 | h5 | h6 | h7 |\n"
+                       "|---|---|---|---|---|---|---|---|\n";
+    for (int cell = 0; cell < 8000; ++cell)
+    {
+        text +=
+            (cell % 8 == 0 ? "| " : " ") + std::to_string(cell) + (cell % 8 == 7 ? " |\n" : " |");
+    }
+    return text;
+}
+
+void check_large_table_cost()
+{
+    const auto text = large_table_text();
+    const auto before = core::parse_markdown(text, core::MarkdownStop::never());
+    const auto after = core::parse_markdown("lead!" + text.substr(4), core::MarkdownStop::never());
+    if (!before || !after || before.value().blocks.size() != 1002U)
+    {
+        expect(false, "the large table parses into a paragraph and 1,001 rows");
+        return;
+    }
+    const auto style = style_of();
+    PreviewTextLayouts layouts;
+    const auto paint = [&](const core::MarkdownDocument &document)
+    {
+        const auto tops = win32::PreviewBlockTops::measure(
+            document, layouts, style, win32::PreviewViewport{0, width, 200.0F});
+        if (!tops)
+        {
+            return false;
+        }
+        CountingTarget target;
+        const win32::PreviewBrushes brushes;
+        std::optional<win32::RenderFailure> failure;
+        win32::PreviewPainter<CountingTarget> painter(target, layouts, brushes, failure);
+        painter.paint(win32::PreviewScene{
+            document, tops.value(), style,
+            core::LayoutRect{0, 0, static_cast<std::int32_t>(width), 200}, 0.0F, std::nullopt});
+        return !failure.has_value() && target.balanced();
+    };
+    const bool first = paint(before.value());
+    const auto made = layouts.created();
+    const auto measured = layouts.measured_tables();
+    const bool second = paint(after.value());
+    expect(
+        first && second && measured == 1U && layouts.measured_tables() == 1U,
+        "the column widths of a large table are measured once and kept across an edit before it");
+    expect(made <= 1U + 8U + 8U * 6U && layouts.created() - made == 1U,
+           "only the visible cells are made and an edit before the table makes one layout");
+}
 } // namespace
 
 void verify_preview_layouts()
@@ -1331,5 +1521,8 @@ void verify_preview_layouts()
     check_selection_pixels();
     check_strikethrough_pixels();
     check_front_matter_pixels();
+    check_table_pixels();
+    check_alert_pixels();
+    check_large_table_cost();
 }
 } // namespace nenenib::tests::ui

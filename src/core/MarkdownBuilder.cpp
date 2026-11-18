@@ -1,12 +1,15 @@
 #include "MarkdownBuilder.hpp"
 
+#include "MarkdownAlert.hpp"
 #include "MarkdownImage.hpp"
 #include "MarkdownTask.hpp"
 #include "Offset.hpp"
 #include "PreviewSpan.hpp"
+#include "PreviewTableRow.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -189,6 +192,12 @@ std::size_t MarkdownBuilder::front_matter()
 void MarkdownBuilder::enter_quote()
 {
     close_implicit();
+    // alert はいちばん外の引用（リストの外）だけ（GitHub と同じ・#1848）。
+    if (quote_depth_ == 0U && lists_.empty())
+    {
+        alert_start_ = blocks_.size();
+        alert_.reset();
+    }
     ++quote_depth_;
 }
 
@@ -196,6 +205,87 @@ void MarkdownBuilder::leave_quote()
 {
     close_implicit();
     quote_depth_ -= quote_depth_ == 0U ? 0U : 1U;
+    if (quote_depth_ == 0U)
+    {
+        alert_start_.reset();
+        alert_.reset();
+    }
+}
+
+void MarkdownBuilder::mark_alert(PreviewBlock &block)
+{
+    if (!alert_start_.has_value() || quote_depth_ == 0U)
+    {
+        return;
+    }
+    const bool first = blocks_.size() == alert_start_.value();
+    if (first && quote_depth_ == 1U && block.kind == PreviewBlockKind::paragraph)
+    {
+        alert_ = titled_alert(block);
+    }
+    block.alert = alert_;
+}
+
+std::optional<PreviewAlert> MarkdownBuilder::titled_alert(PreviewBlock &block)
+{
+    if (!leaf_begin_.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto begin = leaf_begin_.value();
+    const auto kind = markdown_alert_line(input_.substr(begin, line_end(input_, begin) - begin));
+    const auto shift = kind.has_value() ? markdown_alert_titled(block, kind.value())
+                                        : std::optional<std::ptrdiff_t>{};
+    if (!shift.has_value())
+    {
+        return std::nullopt;
+    }
+    // この要素の画像の節も同じだけずらす。
+    const auto moved = [&shift](Offset offset)
+    {
+        return Offset{
+            static_cast<std::size_t>(static_cast<std::ptrdiff_t>(offset.value) + shift.value())};
+    };
+    for (auto &image : images_)
+    {
+        if (image.block == blocks_.size())
+        {
+            image.begin = moved(image.begin);
+            image.end = moved(image.end);
+        }
+    }
+    return kind;
+}
+
+void MarkdownBuilder::enter_table()
+{
+    close_implicit();
+    flush_marker();
+    table_row_ = 0U;
+}
+
+void MarkdownBuilder::enter_row()
+{
+    auto &row = opened(PreviewBlockKind::table_row, 0U);
+    row.table = PreviewTableRow{.row = table_row_, .header = false, .cells = {}, .aligns = {}};
+    ++table_row_;
+}
+
+void MarkdownBuilder::enter_cell(PreviewTableAlign align, bool header)
+{
+    auto &row = ensure_leaf();
+    if (!row.table.has_value())
+    {
+        return;
+    }
+    auto &table = row.table.value();
+    if (!table.cells.empty())
+    {
+        row.text.push_back('\t');
+    }
+    table.cells.push_back(Offset{row.text.size()});
+    table.aligns.push_back(align);
+    table.header = table.header || header;
 }
 
 void MarkdownBuilder::enter_list(std::optional<std::pair<std::uint64_t, char>> numbering)
@@ -276,6 +366,7 @@ void MarkdownBuilder::close_leaf()
     {
         block.source_begin = Offset{unlocated_begin()};
     }
+    mark_alert(block);
     blocks_.push_back(std::move(block));
     leaf_begin_.reset();
     implicit_leaf_ = false;
@@ -346,7 +437,15 @@ void MarkdownBuilder::finish_image(const PreviewBlock &block, bool closed)
 
 void MarkdownBuilder::text(std::string_view shown, std::string_view source)
 {
-    ensure_leaf().text.append(shown);
+    auto &leaf = ensure_leaf();
+    const auto from = leaf.text.size();
+    leaf.text.append(shown);
+    // 表の行の Tab は升の間だけ（升の中の Tab は空白にする・#1848）。
+    if (leaf.kind == PreviewBlockKind::table_row)
+    {
+        std::ranges::replace(leaf.text.begin() + static_cast<std::ptrdiff_t>(from), leaf.text.end(),
+                             '\t', ' ');
+    }
     const auto at = located(source);
     if (!at.has_value())
     {
@@ -408,6 +507,8 @@ PreviewBlock MarkdownBuilder::started(PreviewBlockKind kind, std::uint8_t level)
         .text = {},
         .spans = {},
         .task = std::exchange(task_, std::nullopt),
+        .table = std::nullopt,
+        .alert = std::nullopt,
     };
 }
 

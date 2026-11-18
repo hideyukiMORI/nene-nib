@@ -8,6 +8,7 @@
 #include "Utf8.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <iterator>
 #include <optional>
@@ -35,6 +36,12 @@ constexpr float points_per_inch = 72.0F;
 constexpr float first_heading_scale = 1.6F;
 constexpr float second_heading_scale = 1.35F;
 constexpr float third_heading_scale = 1.15F;
+constexpr float table_padding_x_dips = 14.0F;
+constexpr float table_padding_y_dips = 7.0F;
+constexpr float table_header_rule_dips = 2.0F;
+constexpr float table_rule_dips = 1.0F;
+constexpr float quote_rule_dips = 2.0F;
+constexpr float alert_rule_dips = 3.0F;
 constexpr std::string_view bullet = "•";
 constexpr std::string_view second_bullet = "◦";
 constexpr std::string_view deeper_bullet = "▪";
@@ -52,6 +59,7 @@ constexpr std::string_view deeper_bullet = "▪";
     case core::PreviewBlockKind::html:
     case core::PreviewBlockKind::list_item:
     case core::PreviewBlockKind::front_matter:
+    case core::PreviewBlockKind::table_row:
         return 0.0F;
     }
     std::unreachable();
@@ -70,6 +78,7 @@ constexpr std::string_view deeper_bullet = "▪";
     case core::PreviewBlockKind::html:
     case core::PreviewBlockKind::list_item:
     case core::PreviewBlockKind::front_matter:
+    case core::PreviewBlockKind::table_row:
         return line / 2.0F;
     }
     std::unreachable();
@@ -151,6 +160,59 @@ float preview_code_padding(std::uint32_t dpi) noexcept
     return preview_pixels(code_padding_dips, dpi);
 }
 
+float preview_table_padding_x(std::uint32_t dpi) noexcept
+{
+    return preview_pixels(table_padding_x_dips, dpi);
+}
+
+float preview_table_padding_y(std::uint32_t dpi) noexcept
+{
+    return preview_pixels(table_padding_y_dips, dpi);
+}
+
+float preview_table_rule(bool header, std::uint32_t dpi) noexcept
+{
+    return std::max(preview_pixels(header ? table_header_rule_dips : table_rule_dips, dpi), 1.0F);
+}
+
+float preview_table_cell_left(std::span<const float> columns, std::size_t column,
+                              std::uint32_t dpi) noexcept
+{
+    const auto padding = preview_table_padding_x(dpi);
+    float left = padding;
+    for (std::size_t at = 0; at < column && at < columns.size(); ++at)
+    {
+        left += columns[at] + 2.0F * padding;
+    }
+    return left;
+}
+
+float preview_table_width(std::span<const float> columns, std::uint32_t dpi) noexcept
+{
+    return preview_table_cell_left(columns, columns.size(), dpi) - preview_table_padding_x(dpi);
+}
+
+float preview_table_aligned(float column_width, float cell_width,
+                            core::PreviewTableAlign align) noexcept
+{
+    const auto room = std::max(column_width - cell_width, 0.0F);
+    switch (align)
+    {
+    case core::PreviewTableAlign::left:
+        return 0.0F;
+    case core::PreviewTableAlign::center:
+        return std::round(room / 2.0F);
+    case core::PreviewTableAlign::right:
+        return room;
+    }
+    std::unreachable();
+}
+
+float preview_quote_rule(bool alert, std::uint32_t dpi) noexcept
+{
+    return preview_pixels(alert ? alert_rule_dips : quote_rule_dips, dpi);
+}
+
 float preview_top_margin(std::uint32_t dpi) noexcept
 {
     return preview_pixels(top_margin_dips, dpi);
@@ -161,6 +223,12 @@ float preview_gap(const core::PreviewBlock &previous, const core::PreviewBlock &
 {
     if (same_list && previous.kind == core::PreviewBlockKind::list_item &&
         next.kind == core::PreviewBlockKind::list_item)
+    {
+        return 0.0F;
+    }
+    // 同じ表の続く行の間は 0（行の間は罫だけ）。
+    if (previous.table.has_value() && next.table.has_value() &&
+        next.table.value().row == previous.table.value().row + 1U)
     {
         return 0.0F;
     }
@@ -177,6 +245,8 @@ float preview_extent(core::PreviewBlockKind kind, float text_height, std::uint32
     case core::PreviewBlockKind::code:
     case core::PreviewBlockKind::front_matter:
         return text_height + 2.0F * preview_code_padding(dpi);
+    case core::PreviewBlockKind::table_row:
+        return text_height + 2.0F * preview_table_padding_y(dpi);
     case core::PreviewBlockKind::paragraph:
     case core::PreviewBlockKind::heading:
     case core::PreviewBlockKind::html:
@@ -292,9 +362,17 @@ std::string_view preview_marker(const core::PreviewBlock &block) noexcept
 }
 core::PreviewBlock preview_marker_block(const core::PreviewBlock &item)
 {
-    return core::PreviewBlock{
-        core::PreviewBlockKind::paragraph, 0,  0,           0, {}, item.source_begin,
-        std::string(preview_marker(item)), {}, std::nullopt};
+    return core::PreviewBlock{core::PreviewBlockKind::paragraph,
+                              0,
+                              0,
+                              0,
+                              {},
+                              item.source_begin,
+                              std::string(preview_marker(item)),
+                              {},
+                              std::nullopt,
+                              std::nullopt,
+                              std::nullopt};
 }
 
 float preview_marker_layout_width() noexcept

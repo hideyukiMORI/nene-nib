@@ -4,6 +4,7 @@
 #include "PreviewInlineImages.hpp"
 #include "PreviewMetrics.hpp"
 #include "PreviewSelectionText.hpp"
+#include "PreviewTableCell.hpp"
 #include "Utf16.hpp"
 
 #include <algorithm>
@@ -29,6 +30,57 @@ constexpr float unbounded_height = 1.0e7F;
 {
     return entry.kind == block.kind && entry.level == block.level && entry.width == width &&
            entry.text == block.text && entry.spans == block.spans && entry.style == style;
+}
+
+// 表の鍵の 1 行（文字・装飾・見出しか）。
+using TableRowKey = std::tuple<std::string, std::vector<core::PreviewSpan>, bool>;
+
+// 表の行 rows が覚えた鍵 key と同じ文字・装飾・見出しか（位置は比べない）。
+[[nodiscard]] bool same_rows(const std::vector<TableRowKey> &key,
+                             std::span<const core::PreviewBlock> rows)
+{
+    return std::ranges::equal(key, rows,
+                              [](const TableRowKey &held, const core::PreviewBlock &row)
+                              {
+                                  return std::get<0>(held) == row.text &&
+                                         std::get<1>(held) == row.spans &&
+                                         std::get<2>(held) ==
+                                             (row.table.has_value() && row.table.value().header);
+                              });
+}
+
+// 列 column の升を行の順に改行でつないだ要素（装飾は升の中から写す・幅だけを測る）。
+[[nodiscard]] core::PreviewBlock column_block(std::span<const core::PreviewBlock> rows,
+                                              std::size_t column)
+{
+    core::PreviewBlock joined{.kind = core::PreviewBlockKind::paragraph,
+                              .level = 0U,
+                              .quote_depth = 0U,
+                              .list_depth = 0U,
+                              .marker = {},
+                              .source_begin = core::Offset{0U},
+                              .text = {},
+                              .spans = {},
+                              .task = std::nullopt,
+                              .table = std::nullopt,
+                              .alert = std::nullopt};
+    for (const auto &row : rows)
+    {
+        if (!joined.text.empty())
+        {
+            joined.text.push_back('\n');
+        }
+        const auto cell = core::preview_table_cell(row, column);
+        const auto at = joined.text.size();
+        joined.text.append(cell.text);
+        for (const auto &span : cell.spans)
+        {
+            joined.spans.push_back(core::PreviewSpan{core::Offset{span.begin.value + at},
+                                                     core::Offset{span.end.value + at},
+                                                     span.style});
+        }
+    }
+    return joined;
 }
 
 [[nodiscard]] bool same_boxes(const std::vector<PreviewInlineBox> &held,
@@ -62,6 +114,8 @@ constexpr float unbounded_height = 1.0e7F;
     case core::PreviewStyle::strikethrough:
         // 線の太さと位置は DirectWrite の字体の値に任せ、色は文字の色のまま（#1840）。
         return layout.SetStrikethrough(TRUE, range);
+    case core::PreviewStyle::alert_title:
+        return layout.SetFontWeight(DWRITE_FONT_WEIGHT_BOLD, range);
     }
     std::unreachable();
 }
@@ -155,6 +209,8 @@ HRESULT PreviewTextLayouts::prepare(const PreviewTextStyle &style)
     }
     style_.reset();
     held_.clear();
+    cells_.clear();
+    tables_.clear();
     spacings_.clear();
     Microsoft::WRL::ComPtr<IUnknown> created;
     if (!factory_ && (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,
@@ -326,7 +382,11 @@ HRESULT PreviewTextLayouts::ink(PreviewTextLayout &entry, const core::PreviewBlo
 {
     for (std::size_t index = 0; index < block.spans.size() && index < entry.ranges.size(); ++index)
     {
-        const auto ink = preview_span_ink(block.spans.at(index).style);
+        const auto style = block.spans.at(index).style;
+        // alert の種類の名前は要素の alert の色（#1848）。
+        const auto ink = style == core::PreviewStyle::alert_title && block.alert.has_value()
+                             ? std::optional(preview_alert_ink(block.alert.value()))
+                             : preview_span_ink(style);
         const auto range = entry.ranges.at(index);
         if (!ink.has_value() || range.length == 0)
         {
@@ -370,8 +430,14 @@ PreviewTextLayouts::find(const core::PreviewBlock &block, float width,
                          const PreviewTextStyle &style, std::span<const PreviewInlineImage> inlines)
 {
     return std::ranges::find_if(
-        held_, [&](const PreviewTextLayout &entry)
+        pool_of(block), [&](const PreviewTextLayout &entry)
         { return same_key(entry, block, width, style) && same_boxes(entry.inlines, inlines); });
+}
+
+std::vector<PreviewTextLayout> &
+PreviewTextLayouts::pool_of(const core::PreviewBlock &block) noexcept
+{
+    return block.kind == core::PreviewBlockKind::table_row ? cells_ : held_;
 }
 
 std::expected<std::vector<PreviewTextLayout>::iterator, RenderFailure>
@@ -382,24 +448,25 @@ PreviewTextLayouts::hold(const core::PreviewBlock &block, float width,
     {
         return std::unexpected(directwrite);
     }
+    auto &pool = pool_of(block);
     const auto found = find(block, width, style, inlines);
-    if (found != held_.end())
+    if (found != pool.end())
     {
         // 最近使った順の末尾へ回す（捨てるのは先頭から）。
-        std::rotate(found, found + 1, held_.end());
-        return std::prev(held_.end());
+        std::rotate(found, found + 1, pool.end());
+        return std::prev(pool.end());
     }
     auto made = make(block, width, style, inlines);
     if (!made)
     {
         return std::unexpected(made.error());
     }
-    if (held_.size() >= capacity)
+    if (pool.size() >= (&pool == &cells_ ? cell_capacity : capacity))
     {
-        held_.erase(held_.begin());
+        pool.erase(pool.begin());
     }
-    held_.push_back(std::move(made.value()));
-    return std::prev(held_.end());
+    pool.push_back(std::move(made.value()));
+    return std::prev(pool.end());
 }
 
 std::expected<PreviewTextLayouts::TextLayout, RenderFailure>
@@ -421,6 +488,7 @@ void PreviewTextLayouts::bind(const PreviewBrushes &brushes)
         return;
     }
     std::erase_if(held_, [](const PreviewTextLayout &entry) { return entry.inked != 0; });
+    std::erase_if(cells_, [](const PreviewTextLayout &entry) { return entry.inked != 0; });
     inked_by_ = &brushes;
     inked_generation_ = brushes.generation();
 }
@@ -491,9 +559,96 @@ std::expected<float, RenderFailure> PreviewTextLayouts::advance(const core::Prev
     return metrics.widthIncludingTrailingWhitespace;
 }
 
+std::expected<float, RenderFailure>
+PreviewTextLayouts::natural_width(const core::PreviewBlock &block)
+{
+    const auto wide = core::to_utf16(block.text);
+    if (!wide)
+    {
+        return std::unexpected(directwrite);
+    }
+    TextLayout made;
+    DWRITE_TEXT_METRICS metrics{};
+    const auto ranges = span_ranges(block, block.text);
+    if (FAILED(factory_->CreateTextLayout(wide.value().c_str(),
+                                          static_cast<UINT32>(wide.value().size()), body_.Get(),
+                                          unbounded_height, unbounded_height, &made)) ||
+        FAILED(decorate(*made.Get(), block, ranges)) || FAILED(made->GetMetrics(&metrics)))
+    {
+        return std::unexpected(directwrite);
+    }
+    ++created_;
+    return metrics.width;
+}
+
+std::expected<std::vector<float>, RenderFailure>
+PreviewTextLayouts::measured_columns(std::span<const core::PreviewBlock> rows)
+{
+    std::size_t count = 0;
+    for (const auto &row : rows)
+    {
+        count = std::max(count, row.table.has_value() ? row.table.value().cells.size() : 0U);
+    }
+    std::vector<float> columns;
+    columns.reserve(count);
+    for (std::size_t column = 0; column < count; ++column)
+    {
+        const auto width = natural_width(column_block(rows, column));
+        if (!width)
+        {
+            return std::unexpected(width.error());
+        }
+        columns.push_back(width.value());
+    }
+    return columns;
+}
+
+std::expected<const std::vector<float> *, RenderFailure>
+PreviewTextLayouts::table_columns(const core::MarkdownDocument &document, std::size_t index,
+                                  const PreviewTextStyle &style)
+{
+    if (FAILED(prepare(style)))
+    {
+        return std::unexpected(directwrite);
+    }
+    const auto [first, last] = core::preview_table_rows(document, index);
+    const auto rows =
+        std::span<const core::PreviewBlock>{document.blocks}.subspan(first, last - first);
+    const auto found = std::ranges::find_if(tables_, [rows](const auto &entry)
+                                            { return same_rows(entry.first, rows); });
+    if (found != tables_.end())
+    {
+        std::rotate(found, found + 1, tables_.end());
+        return &tables_.back().second;
+    }
+    auto columns = measured_columns(rows);
+    if (!columns)
+    {
+        return std::unexpected(columns.error());
+    }
+    std::vector<TableRowKey> key;
+    key.reserve(rows.size());
+    for (const auto &row : rows)
+    {
+        key.emplace_back(row.text, row.spans, row.table.has_value() && row.table.value().header);
+    }
+    if (tables_.size() >= table_capacity)
+    {
+        tables_.erase(tables_.begin());
+    }
+    ++measured_tables_;
+    tables_.emplace_back(std::move(key), std::move(columns.value()));
+    return &tables_.back().second;
+}
+
+std::size_t PreviewTextLayouts::measured_tables() const noexcept
+{
+    return measured_tables_;
+}
+
 std::size_t PreviewTextLayouts::held() const noexcept
 {
-    return held_.size();
+    return held_.size() + cells_.size();
 }
 
 std::size_t PreviewTextLayouts::created() const noexcept

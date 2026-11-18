@@ -7,10 +7,13 @@
 #include "MarkdownStop.hpp"
 #include "MarkdownTask.hpp"
 #include "Offset.hpp"
+#include "PreviewAlert.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
 #include "PreviewSpan.hpp"
 #include "PreviewStyle.hpp"
+#include "PreviewTableAlign.hpp"
+#include "PreviewTableRow.hpp"
 #include "Scopes.hpp"
 #include "TestSupport.hpp"
 
@@ -66,7 +69,9 @@ static_assert(!LendsStop<decltype(never_stop)>);
                         .source_begin = Offset{begin},
                         .text = std::move(text),
                         .spans = {},
-                        .task = std::nullopt};
+                        .task = std::nullopt,
+                        .table = std::nullopt,
+                        .alert = std::nullopt};
 }
 
 [[nodiscard]] PreviewBlock titled(std::uint8_t level, std::string text, std::size_t begin)
@@ -102,9 +107,48 @@ static_assert(!LendsStop<decltype(never_stop)>);
     return block;
 }
 
+// 表の行（#1848）。cells は升の始まりと列の揃え。行 0 が見出しの行。
+[[nodiscard]] PreviewBlock rowed(std::string text, std::size_t begin, std::uint32_t row,
+                                 std::vector<std::pair<std::size_t, core::PreviewTableAlign>> cells)
+{
+    auto block = leaf(PreviewBlockKind::table_row, std::move(text), begin);
+    core::PreviewTableRow table{.row = row, .header = row == 0U, .cells = {}, .aligns = {}};
+    for (const auto &[cell, align] : cells)
+    {
+        table.cells.push_back(Offset{cell});
+        table.aligns.push_back(align);
+    }
+    block.table = std::move(table);
+    return block;
+}
+
+[[nodiscard]] PreviewBlock alerted(PreviewBlock block, core::PreviewAlert alert)
+{
+    block.alert = alert;
+    return block;
+}
+
 [[nodiscard]] PreviewSpan span(std::size_t begin, std::size_t end, PreviewStyle style)
 {
     return PreviewSpan{Offset{begin}, Offset{end}, style};
+}
+
+void dump_table(const PreviewBlock &block)
+{
+    if (block.table.has_value())
+    {
+        const auto &table = block.table.value();
+        std::fprintf(stderr, " row(%u,%d)", table.row, table.header ? 1 : 0);
+        for (std::size_t at = 0; at < table.cells.size() && at < table.aligns.size(); ++at)
+        {
+            std::fprintf(stderr, " cell(%zu,%d)", table.cells.at(at).value,
+                         static_cast<int>(table.aligns.at(at)));
+        }
+    }
+    if (block.alert.has_value())
+    {
+        std::fprintf(stderr, " alert(%d)", static_cast<int>(block.alert.value()));
+    }
 }
 
 void dump(const std::vector<PreviewBlock> &blocks)
@@ -124,6 +168,7 @@ void dump(const std::vector<PreviewBlock> &blocks)
             std::fprintf(stderr, " span(%zu,%zu,%d)", shown.begin.value, shown.end.value,
                          static_cast<int>(shown.style));
         }
+        dump_table(block);
         std::fprintf(stderr, "\n");
     }
 }
@@ -517,6 +562,94 @@ void verify_front_matter()
     expect_blocks("---", {leaf(rule, "", 0U)}, "a lone --- is a thematic break");
 }
 
+// 表（MD_FLAG_TABLES・#1848・D103）。行ごとに要素 table_row を 1 つ・升の間は Tab・位置は行ごと。
+void verify_tables()
+{
+    using enum core::PreviewTableAlign;
+    expect_blocks("| a | b |\n|---|--:|\n| 1 | 22 |",
+                  {rowed("a\tb", 2U, 0U, {{0U, left}, {2U, right}}),
+                   rowed("1\t22", 22U, 1U, {{0U, left}, {2U, right}})},
+                  "a table gives one element per row with the cells and the alignments");
+    expect_blocks(
+        "| l | c | r | d |\n|:--|:-:|--:|---|\n| 1 | 2 | 3 | 4 |",
+        {rowed("l\tc\tr\td", 2U, 0U, {{0U, left}, {2U, center}, {4U, right}, {6U, left}}),
+         rowed("1\t2\t3\t4", 38U, 1U, {{0U, left}, {2U, center}, {4U, right}, {6U, left}})},
+        "colons set the left, center and right alignment and none is left");
+    expect_blocks("| *a* | `b` |\n|---|---|\n| ~~c~~ | [d](u) |",
+                  {styled(rowed("a\tb", 3U, 0U, {{0U, left}, {2U, left}}),
+                          {span(0U, 1U, emphasis), span(2U, 3U, inline_code)}),
+                   styled(rowed("c\td", 28U, 1U, {{0U, left}, {2U, left}}),
+                          {span(0U, 1U, PreviewStyle::strikethrough), span(2U, 3U, link)})},
+                  "spans inside cells keep their style in the row text");
+    expect_blocks("| a \\| b |\n|---|\n| c |",
+                  {rowed("a | b", 2U, 0U, {{0U, left}}), rowed("c", 19U, 1U, {{0U, left}})},
+                  "an escaped pipe is text inside a cell");
+    expect_blocks("| a | b |\n|---|---|\n| 1 |\n| 1 | 2 | 3 |",
+                  {rowed("a\tb", 2U, 0U, {{0U, left}, {2U, left}}),
+                   rowed("1\t", 22U, 1U, {{0U, left}, {2U, left}}),
+                   rowed("1\t2", 28U, 2U, {{0U, left}, {2U, left}})},
+                  "a short row gets empty cells and a long row drops the extra cells");
+    expect_blocks("x\n\n| a |\n|---|\n| 1 |\n\ny",
+                  {leaf(paragraph, "x", 0U), rowed("a", 5U, 0U, {{0U, left}}),
+                   rowed("1", 17U, 1U, {{0U, left}}), leaf(paragraph, "y", 22U)},
+                  "paragraphs before and after a table stay paragraphs");
+    expect_blocks("| a |\n|---|\n\n| b |\n|---|",
+                  {rowed("a", 2U, 0U, {{0U, left}}), rowed("b", 15U, 0U, {{0U, left}})},
+                  "a second table counts its rows from 0 again");
+    expect_blocks("| a |\n| b |", {leaf(paragraph, "| a | | b |", 0U)},
+                  "rows without a delimiter row are not a table");
+}
+
+// GitHub の alert（#1848・D103）。いちばん外の引用の最初の行が `[!NOTE]` などだけのとき、印を種類の
+// 名前と改行に置き換えて名前に alert_title を足し、引用の中の要素に種類を置く。
+void verify_alerts()
+{
+    using enum core::PreviewAlert;
+    const PreviewStyle title = PreviewStyle::alert_title;
+    expect_blocks(
+        "> [!NOTE]\n> body",
+        {alerted(styled(quoted(leaf(paragraph, "NOTE\nbody", 2U), 1U), {span(0U, 4U, title)}),
+                 note)},
+        "a note alert shows its name on the first line");
+    expect_blocks(
+        "> [!tip]\n> x",
+        {alerted(styled(quoted(leaf(paragraph, "TIP\nx", 2U), 1U), {span(0U, 3U, title)}), tip)},
+        "the marker is matched without case and the name is upper case");
+    expect_blocks(
+        ">  [!Important]  \n> x",
+        {alerted(styled(quoted(leaf(paragraph, "IMPORTANT\nx", 3U), 1U), {span(0U, 9U, title)}),
+                 important)},
+        "spaces around the marker are allowed");
+    expect_blocks(
+        "> [!WARNING]",
+        {alerted(styled(quoted(leaf(paragraph, "WARNING", 2U), 1U), {span(0U, 7U, title)}),
+                 warning)},
+        "an alert with only the marker shows only the name");
+    expect_blocks("> [!CAUTION]\n> *a*\n>\n> - b",
+                  {alerted(styled(quoted(leaf(paragraph, "CAUTION\na", 2U), 1U),
+                                  {span(0U, 7U, title), span(8U, 9U, emphasis)}),
+                           caution),
+                   alerted(quoted(listed(leaf(list_item, "b", 25U), 1U, bullet), 1U), caution)},
+                  "every element of the alert quote keeps the kind and later spans move");
+    expect_blocks("> [!NOTE] extra\n> body",
+                  {quoted(leaf(paragraph, "[!NOTE] extra body", 2U), 1U)},
+                  "text after the marker on the first line is an ordinary quote");
+    expect_blocks("> [!NOPE]\n> body", {quoted(leaf(paragraph, "[!NOPE] body", 2U), 1U)},
+                  "an unknown kind is an ordinary quote");
+    expect_blocks("> > [!NOTE]\n> > x", {quoted(leaf(paragraph, "[!NOTE] x", 4U), 2U)},
+                  "an alert marker in a nested quote is an ordinary quote");
+    expect_blocks("- > [!NOTE]\n  > x",
+                  {quoted(listed(leaf(list_item, "[!NOTE] x", 4U), 1U, bullet), 1U)},
+                  "an alert marker in a quote inside a list is an ordinary quote");
+    expect_blocks("> # [!NOTE]", {quoted(titled(1U, "[!NOTE]", 4U), 1U)},
+                  "a heading first is an ordinary quote");
+    expect_blocks(
+        "> [!NOTE]\n> a\n\n> b",
+        {alerted(styled(quoted(leaf(paragraph, "NOTE\na", 2U), 1U), {span(0U, 4U, title)}), note),
+         quoted(leaf(paragraph, "b", 17U), 1U)},
+        "the next quote after a blank line is a new ordinary quote");
+}
+
 void verify_html_and_line_endings()
 {
     expect_blocks("<div>\n*hello*\n</div>", {leaf(html, "<div>\n*hello*\n</div>\n", 0U)},
@@ -654,6 +787,8 @@ void verify_markdown_scope()
     verify_strikethrough();
     verify_bare_links();
     verify_front_matter();
+    verify_tables();
+    verify_alerts();
     verify_html_and_line_endings();
     verify_carriage_returns();
     verify_stop_and_size();

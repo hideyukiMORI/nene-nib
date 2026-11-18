@@ -52,6 +52,14 @@ constexpr float full_channel = 255.0F;
         return to_color(theme.ui.accent);
     case PreviewInk::selection:
         return to_color(theme.ui.selection);
+    case PreviewInk::panel_border:
+        return to_color(theme.ui.panel_border);
+    case PreviewInk::number:
+        return to_color(theme.body.number);
+    case PreviewInk::warning:
+        return to_color(theme.body.warning);
+    case PreviewInk::error:
+        return to_color(theme.body.error);
     }
     std::unreachable();
 }
@@ -119,7 +127,26 @@ std::optional<PreviewInk> preview_span_ink(core::PreviewStyle style) noexcept
     case core::PreviewStyle::emphasis:
     case core::PreviewStyle::strong:
     case core::PreviewStyle::strikethrough:
+    case core::PreviewStyle::alert_title:
         return std::nullopt;
+    }
+    std::unreachable();
+}
+
+PreviewInk preview_alert_ink(core::PreviewAlert alert) noexcept
+{
+    switch (alert)
+    {
+    case core::PreviewAlert::note:
+        return PreviewInk::function;
+    case core::PreviewAlert::tip:
+        return PreviewInk::string;
+    case core::PreviewAlert::important:
+        return PreviewInk::number;
+    case core::PreviewAlert::warning:
+        return PreviewInk::warning;
+    case core::PreviewAlert::caution:
+        return PreviewInk::error;
     }
     std::unreachable();
 }

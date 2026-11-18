@@ -5,6 +5,7 @@
 #include "MarkdownTask.hpp"
 #include "PreviewBlockKind.hpp"
 #include "PreviewStyle.hpp"
+#include "PreviewTableAlign.hpp"
 
 // md4c の宣言を読むのはこの 1 ファイルだけ（ADR 0151 の決定 5・eng/conformance.py が守る）。
 #include <md4c.h>
@@ -63,16 +64,66 @@ constexpr std::string_view replacement_character = "�";
     return {list->start, list->mark_delimiter};
 }
 
-// 表（MD_BLOCK_TABLE 系）は flag を立てないので来ない。来たらセルを段落として扱う。
+// 升の揃え（指定なしは左・#1848）。
+[[nodiscard]] PreviewTableAlign cell_align(const void *detail) noexcept
+{
+    switch (static_cast<const MD_BLOCK_TD_DETAIL *>(detail)->align)
+    {
+    case MD_ALIGN_DEFAULT:
+    case MD_ALIGN_LEFT:
+        return PreviewTableAlign::left;
+    case MD_ALIGN_CENTER:
+        return PreviewTableAlign::center;
+    case MD_ALIGN_RIGHT:
+        return PreviewTableAlign::right;
+    }
+    return PreviewTableAlign::left;
+}
+
+// 表（MD_FLAG_TABLES・#1848）は行ごとに要素 table_row を 1 つ開き、升ごとに始まりと揃えを足す。
+void entered_table_block(MarkdownBuilder &builder, MD_BLOCKTYPE type, const void *detail)
+{
+    switch (type)
+    {
+    case MD_BLOCK_TABLE:
+        builder.enter_table();
+        return;
+    case MD_BLOCK_TR:
+        builder.enter_row();
+        return;
+    case MD_BLOCK_TH:
+    case MD_BLOCK_TD:
+        builder.enter_cell(cell_align(detail), type == MD_BLOCK_TH);
+        return;
+    case MD_BLOCK_DOC:
+    case MD_BLOCK_QUOTE:
+    case MD_BLOCK_UL:
+    case MD_BLOCK_OL:
+    case MD_BLOCK_LI:
+    case MD_BLOCK_HR:
+    case MD_BLOCK_H:
+    case MD_BLOCK_CODE:
+    case MD_BLOCK_HTML:
+    case MD_BLOCK_P:
+    case MD_BLOCK_THEAD:
+    case MD_BLOCK_TBODY:
+        return;
+    }
+}
+
 void entered_block(MarkdownBuilder &builder, MD_BLOCKTYPE type, const void *detail)
 {
     switch (type)
     {
     case MD_BLOCK_DOC:
-    case MD_BLOCK_TABLE:
     case MD_BLOCK_THEAD:
     case MD_BLOCK_TBODY:
+        return;
+    case MD_BLOCK_TABLE:
     case MD_BLOCK_TR:
+    case MD_BLOCK_TH:
+    case MD_BLOCK_TD:
+        entered_table_block(builder, type, detail);
         return;
     case MD_BLOCK_QUOTE:
         builder.enter_quote();
@@ -99,8 +150,6 @@ void entered_block(MarkdownBuilder &builder, MD_BLOCKTYPE type, const void *deta
         builder.open_leaf(PreviewBlockKind::html, 0U);
         return;
     case MD_BLOCK_P:
-    case MD_BLOCK_TH:
-    case MD_BLOCK_TD:
         builder.open_leaf(PreviewBlockKind::paragraph, 0U);
         return;
     }
@@ -114,7 +163,8 @@ void left_block(MarkdownBuilder &builder, MD_BLOCKTYPE type)
     case MD_BLOCK_TABLE:
     case MD_BLOCK_THEAD:
     case MD_BLOCK_TBODY:
-    case MD_BLOCK_TR:
+    case MD_BLOCK_TH:
+    case MD_BLOCK_TD:
     case MD_BLOCK_HR:
         return;
     case MD_BLOCK_QUOTE:
@@ -131,8 +181,7 @@ void left_block(MarkdownBuilder &builder, MD_BLOCKTYPE type)
     case MD_BLOCK_CODE:
     case MD_BLOCK_HTML:
     case MD_BLOCK_P:
-    case MD_BLOCK_TH:
-    case MD_BLOCK_TD:
+    case MD_BLOCK_TR:
         builder.close_leaf();
         return;
     }
@@ -325,12 +374,12 @@ parse_markdown(std::string_view text, const MarkdownStop &stop, DisplayLanguage 
     {
         return std::move(builder).finished();
     }
-    // 打ち消し線と裸の URL・www・メールの自動リンク（GFM の拡張・#1840）。
+    // 打ち消し線と裸の URL・www・メールの自動リンク（GFM の拡張・#1840）と表（#1848）。
     const MD_PARSER parser{
         .abi_version = 0U,
         .flags = MD_DIALECT_COMMONMARK | MD_FLAG_TASKLISTS | MD_FLAG_STRIKETHROUGH |
                  MD_FLAG_PERMISSIVEURLAUTOLINKS | MD_FLAG_PERMISSIVEWWWAUTOLINKS |
-                 MD_FLAG_PERMISSIVEEMAILAUTOLINKS,
+                 MD_FLAG_PERMISSIVEEMAILAUTOLINKS | MD_FLAG_TABLES,
         .enter_block = on_enter_block,
         .leave_block = on_leave_block,
         .enter_span = on_enter_span,
